@@ -1,7 +1,7 @@
 // The weapon definition (.fpsanim) Inspector.
 //
-// One collapsing section per job - Animation, Aim-Down-Sights, Gameplay, Rigs & Mount, Recoil,
-// Movement, IK - under an overview card that says at a glance whether the weapon is wired up
+// One collapsing section per job - Animation, Aim-Down-Sights, Gameplay, Barrel & Laser, Rigs &
+// Mount, Recoil, Movement, IK - under an overview card that says at a glance whether the weapon is wired up
 // (controller, socket, IK bones, ADS actions). Every committed edit is saved straight to the
 // file, where a running Play picks it up, and goes on the Inspector's own undo stack (the arrows
 // in the overview card).
@@ -666,6 +666,96 @@ void DrawIK(PropertyRows& r, WeaponIKSettings& k, WeaponContext& ctx) {
     r.ResetButton("IK", [&] { k = kDefaults.IK; });
 }
 
+// Where rounds and the laser leave the gun, where they're zeroed to, the laser and the holes.
+void DrawBarrel(PropertyRows& r, FirstPersonAnimationSet& s, const FirstPersonBarrelReport* report) {
+    FirstPersonWeaponGameplay& g = s.Gameplay;
+    FirstPersonMuzzleSettings& mz = s.Muzzle;
+    auto vec = [](const glm::vec3& v, int decimals) {
+        char buf[96];
+        std::snprintf(buf, sizeof buf, "%.*f, %.*f, %.*f", decimals, v.x, decimals, v.y, decimals, v.z);
+        return std::string(buf);
+    };
+
+    r.Heading("Muzzle");
+    if (report) {
+        if (!report->HasMuzzle)
+            PropertyRows::Badge(Status::Error, "No muzzle", (report->Problem + " Rounds hit nothing and there's no laser.").c_str());
+        else
+            PropertyRows::Badge(Status::Ok, mz.Auto ? "Muzzle found" : "Muzzle set by hand", "From the last Play.");
+        ImGui::SameLine();
+        PropertyRows::Badge(report->Detected ? Status::Ok : Status::Info, report->Detected ? "Bolt: barrel detected" : "Bolt: no barrel",
+                            "Whether Auto could find the barrel from the procedural bolt's travel.");
+    } else {
+        PropertyRows::Badge(Status::Info, "Not checked yet", "Play the weapon once: the muzzle is found (or checked) at Start.");
+    }
+    r.Check("Auto", mz.Auto,
+            "Find the barrel from the procedural bolt (Recoil > Bolt): its travel is the bore, the mesh's front face along\n"
+            "it the muzzle. Off for a weapon whose bolt doesn't run down the bore (slide, pump, revolver) or has none.");
+    if (!mz.Auto) {
+        r.Vec3("Origin", mz.Origin, 0.001f, "%.4f", "The muzzle, in the weapon root bone's space (model units).");
+        if (r.Vec3("Direction", mz.Direction, 0.001f, "%.4f", "Down the bore, in the weapon root bone's space.") &&
+            glm::length(mz.Direction) > 1e-6f)
+            mz.Direction = glm::normalize(mz.Direction);
+    }
+    if (report && report->Detected) {
+        r.Value("Detected", vec(report->DetectedOrigin, 4).c_str(), "Where Auto found the muzzle (weapon root space).");
+        if (ActionButton(ICON_FA_COPY "  Use Detected as Starting Point",
+                         "Switch Auto off and start from what the bolt found, to nudge by hand", false, ImVec2(-FLT_MIN, 0.0f))) {
+            mz.Auto = false;
+            mz.Origin = report->DetectedOrigin;
+            mz.Direction = report->DetectedDirection;
+            r.MarkChanged();
+        }
+    }
+
+    r.Heading("Zeroing");
+    r.Float("Zero Distance", g.ZeroDistance, 0.5f, 0.0f, 500.0f, "%.0f m",
+            "Rounds and the laser cross the sight line this far out: dead on the front post there, a little low closer, a little high past it. 0 = straight down the bore.");
+    if (g.HasSightLine) {
+        r.Value("Sight Line", "saved", ("Origin " + vec(g.SightOrigin, 4) + "\nDirection " + vec(g.SightDirection, 5)).c_str());
+        if (ActionButton(ICON_FA_ROTATE "  Re-measure Sight Line",
+                         "Forget the saved sight line: Play measures it again the next time the sights settle (aim, stand still, don't fire)",
+                         false, ImVec2(-FLT_MIN, 0.0f))) {
+            g.HasSightLine = false;
+            r.MarkChanged();
+        }
+    } else if (report && report->SightMeasured) {
+        r.Value("Sight Line", "measured, not saved", ("Origin " + vec(report->SightOrigin, 4) + "\nDirection " + vec(report->SightDirection, 5)).c_str());
+        if (ActionButton(ICON_FA_FLOPPY_DISK "  Save Measured Sight Line", "Keep what Play measured, so the zero is right from the first shot",
+                         false, ImVec2(-FLT_MIN, 0.0f))) {
+            g.HasSightLine = true;
+            g.SightOrigin = report->SightOrigin;
+            g.SightDirection = report->SightDirection;
+            r.MarkChanged();
+        }
+    } else {
+        r.Value("Sight Line", "not measured",
+                "In Play, aim and hold still for about two seconds without firing: the sight line is measured, and Save appears here.");
+    }
+
+    r.Heading("Laser");
+    FirstPersonLaserSettings& l = s.Laser;
+    r.Check("Enabled", l.Enabled, "A beam from the muzzle down the zeroed bore, and the dot where it lands.");
+    if (l.Enabled) {
+        r.Label("Color", "The laser's hue (linear). The beam and the dot draw at their brightness times it.");
+        // The picker popup's drags live on other item IDs, so the swatch never reports its own
+        // deactivation: save once nothing is being dragged any more.
+        static bool s_ColorPending = false;
+        if (ImGui::ColorEdit3("##laser", &l.Color.x, ImGuiColorEditFlags_Float | ImGuiColorEditFlags_NoInputs)) s_ColorPending = true;
+        if (s_ColorPending && !ImGui::IsAnyItemActive() && !ImGui::IsMouseDown(ImGuiMouseButton_Left)) {
+            s_ColorPending = false;
+            r.MarkChanged();
+        }
+        r.Float("Beam Brightness", l.BeamBrightness, 0.01f, 0.0f, 100.0f, "%.2f", "The beam through the air (dust makes it sparkle).");
+        r.Float("Dot Brightness", l.SpotBrightness, 0.05f, 0.0f, 100.0f, "%.1f", "The dot on what it hits; high enough washes its core out to white.");
+    }
+
+    r.Heading("Bullet Holes");
+    float mm = g.BulletHoleRadius * 2000.0f;
+    if (r.Float("Hole Size", mm, 0.05f, 0.0f, 100.0f, "%.1f mm", "Across the hole each round leaves, torn ring included (a little over the calibre: 9 mm for 5.45 mm rounds). 0 = none."))
+        g.BulletHoleRadius = mm / 2000.0f;
+}
+
 } // namespace
 
 void EditorLayer::DrawWeaponDefinitionEditor(const std::string& path) {
@@ -849,12 +939,11 @@ void EditorLayer::DrawWeaponDefinitionEditor(const std::string& path) {
         r.Heading("Impacts");
         r.Float("Impulse", g.ImpactImpulse, 0.1f, 0.0f, 100.0f, "%.1f N*s", "How hard each round shoves the physics body it hits, at the hit point (0 = no push).");
         r.Float("Max Speed", g.ImpactMaxSpeed, 0.1f, 0.0f, 50.0f, "%.1f m/s", "Caps the velocity one round can add, so light props fly without rocketing off.");
-        r.Heading("Zeroing");
-        r.Float("Zero Distance", g.ZeroDistance, 0.5f, 0.0f, 500.0f, "%.0f m",
-                "Rounds and the laser cross the sight line this far out: dead on the front post there, a little low closer, a little high past it. 0 = straight down the bore.");
-        r.Value("Sight Line", g.HasSightLine ? "saved" : "measured in Play the first time the sights settle",
-                "The eye's line through the sights, in weapon space. Without a saved one, Play measures it and logs the values to save in the .fpsanim.");
     }
+
+    const FirstPersonBarrelReport* barrel = FindBarrelReport(path);
+    std::snprintf(summary, sizeof summary, "%s, %s", s.Muzzle.Auto ? "auto muzzle" : "set muzzle", s.Laser.Enabled ? "laser" : "no laser");
+    if (r.Section(ICON_FA_LOCATION_CROSSHAIRS, "Barrel & Laser", summary, true)) DrawBarrel(r, s, barrel);
 
     std::snprintf(summary, sizeof summary, "socket %s", s.WeaponSocket.empty() ? "(shared pose)" : s.WeaponSocket.c_str());
     if (r.Section(ICON_FA_PERSON, "Rigs & Mount", summary)) {

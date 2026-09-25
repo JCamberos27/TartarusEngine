@@ -3500,7 +3500,7 @@
       "order": 70,
       "parentId": 518,
       "position": [
-        28.860000610351563,
+        28.860000610351562,
         0.4000000059604645,
         -3.0
       ],
@@ -4700,7 +4700,7 @@
       "order": 85,
       "parentId": 518,
       "position": [
-        28.860000610351563,
+        28.860000610351562,
         1.6019999980926514,
         -3.0
       ],
@@ -5900,7 +5900,7 @@
       "order": 100,
       "parentId": 518,
       "position": [
-        28.860000610351563,
+        28.860000610351562,
         2.803999900817871,
         -3.0
       ],
@@ -9965,7 +9965,7 @@
       "scale": [
         48.974998474121094,
         0.11999999731779099,
-        28.860000610351563
+        28.860000610351562
       ]
     },
     {
@@ -10003,7 +10003,7 @@
       "scale": [
         0.05999999865889549,
         15.0,
-        30.860000610351563
+        30.860000610351562
       ]
     },
     {
@@ -10041,7 +10041,7 @@
       "scale": [
         0.05999999865889549,
         15.0,
-        30.860000610351563
+        30.860000610351562
       ]
     },
     {
@@ -12688,7 +12688,7 @@
       "scale": [
         0.2199999988079071,
         0.5,
-        30.860000610351563
+        30.860000610351562
       ]
     },
     {
@@ -12747,7 +12747,7 @@
       "scale": [
         0.2199999988079071,
         0.5,
-        30.860000610351563
+        30.860000610351562
       ]
     },
     {
@@ -12806,7 +12806,7 @@
       "scale": [
         0.2199999988079071,
         0.5,
-        30.860000610351563
+        30.860000610351562
       ]
     },
     {
@@ -12865,7 +12865,7 @@
       "scale": [
         0.2199999988079071,
         0.5,
-        30.860000610351563
+        30.860000610351562
       ]
     },
     {
@@ -12924,7 +12924,7 @@
       "scale": [
         0.2199999988079071,
         0.5,
-        30.860000610351563
+        30.860000610351562
       ]
     },
     {
@@ -12983,7 +12983,7 @@
       "scale": [
         0.2199999988079071,
         0.5,
-        30.860000610351563
+        30.860000610351562
       ]
     },
     {
@@ -13042,7 +13042,7 @@
       "scale": [
         0.2199999988079071,
         0.5,
-        30.860000610351563
+        30.860000610351562
       ]
     },
     {
@@ -13101,7 +13101,7 @@
       "scale": [
         0.2199999988079071,
         0.5,
-        30.860000610351563
+        30.860000610351562
       ]
     },
     {
@@ -13160,7 +13160,7 @@
       "scale": [
         0.2199999988079071,
         0.5,
-        30.860000610351563
+        30.860000610351562
       ]
     },
     {
@@ -13480,7 +13480,7 @@
       "order": 348,
       "parentId": 523,
       "position": [
-        -19.672500610351563,
+        -19.672500610351562,
         3.940000057220459,
         36.810001373291016
       ],
@@ -13721,7 +13721,7 @@
       "order": 352,
       "parentId": 523,
       "position": [
-        -19.672500610351563,
+        -19.672500610351562,
         2.8299999237060547,
         36.810001373291016
       ],
@@ -14100,7 +14100,7 @@
       "order": 366,
       "parentId": 528,
       "position": [
-        19.672500610351563,
+        19.672500610351562,
         3.940000057220459,
         36.810001373291016
       ],
@@ -14341,7 +14341,7 @@
       "order": 370,
       "parentId": 528,
       "position": [
-        19.672500610351563,
+        19.672500610351562,
         2.8299999237060547,
         36.810001373291016
       ],
@@ -17345,7 +17345,28 @@
       ]
     },
     {
+      "id": 560,
+      "name": "Range Floor",
+      "order": 561,
+      "parentId": 559,
+      "position": [
+        48.0,
+        0.02,
+        27.0
+      ],
+      "rotation": [
+        0.0,
+        0.0,
+        0.0,
+        1.0
+      ],
+      "scale": [
+        24.0,
+        0.04,
+        66.0
+      ],
       "collider": {
+        "friction": 0.7,
         "isTrigger": false
       },
       "color": [
@@ -17353,21 +17374,146 @@
         1.0,
         1.0
       ],
-      "id": 559,
+      "materials": [
+        {
+          "embedded": {
+            "albedoMap": {
+              "path": "textures/proto_grid_light.png",
+              "pathGuid": "c90849c8fc6c88b0"
+            },
+            "aoMap": "",
+            "baseColor": [
+              0.46,
+              0.47,
+              0.5
+            ],
+            "emissiveColor": [
+              0,
+              0,
+              0
+            ],
+            "emissiveMap": "",
+            "emissiveStrength": 1.0,
+            "factorsScaleMaps": true,
+            "metallic": 0.0,
+            "metallicMap": "",
+            "metallicRoughnessMap": "",
+            "normalMap": "",
+            "roughness": 0.9,
+            "roughnessMap": "",
+            "triplanar": true,
+            "triplanarScale": 0.5
+          }
+        }
+      ]
+    },
+    {
+      "id": 561,
+      "name": "Firing Line Pad",
+      "order": 562,
+      "parentId": 559,
+      "position": [
+        48.0,
+        0.05,
+        -3.0
+      ],
+      "rotation": [
+        0.0,
+        0.0,
+        0.0,
+        1.0
+      ],
+      "scale": [
+        24.0,
+        0.06,
+        6.0
+      ],
+      "collider": {
+        "friction": 0.7,
+        "isTrigger": false
+      },
+      "color": [
+        1.0,
+        1.0,
+        1.0
+      ],
+      "materials": [
+        {
+          "embedded": {
+            "albedoMap": {
+              "path": "textures/proto_grid_light.png",
+              "pathGuid": "c90849c8fc6c88b0"
+            },
+            "aoMap": "",
+            "baseColor": [
+              0.16,
+              0.17,
+              0.19
+            ],
+            "emissiveColor": [
+              0,
+              0,
+              0
+            ],
+            "emissiveMap": "",
+            "emissiveStrength": 1.0,
+            "factorsScaleMaps": true,
+            "metallic": 0.0,
+            "metallicMap": "",
+            "metallicRoughnessMap": "",
+            "normalMap": "",
+            "roughness": 0.85,
+            "roughnessMap": "",
+            "triplanar": true,
+            "triplanarScale": 0.5
+          }
+        }
+      ]
+    },
+    {
+      "id": 562,
+      "name": "Shooting Bench",
+      "order": 563,
+      "parentId": 559,
+      "position": [
+        49.0,
+        0.45,
+        0.35
+      ],
+      "rotation": [
+        0.0,
+        0.0,
+        0.0,
+        1.0
+      ],
+      "scale": [
+        22.0,
+        0.9,
+        0.6
+      ],
+      "collider": {
+        "friction": 0.7,
+        "isTrigger": false
+      },
+      "color": [
+        1.0,
+        1.0,
+        1.0
+      ],
       "materials": [
         {
           "embedded": {
             "albedoMap": "",
             "aoMap": "",
             "baseColor": [
-              0.26,
-              0.28,
-              0.31
+              0.45,
+              0.3,
+              0.17
             ],
             "emissiveColor": [
-              0.0,
-              0.0,
-              0.0
+              0,
+              0,
+              0
             ],
             "emissiveMap": "",
             "emissiveStrength": 1.0,
@@ -17376,268 +17522,23 @@
             "metallicMap": "",
             "metallicRoughnessMap": "",
             "normalMap": "",
-            "roughness": 0.85,
+            "roughness": 0.75,
             "roughnessMap": "",
             "triplanar": false,
             "triplanarScale": 1.0
           }
         }
-      ],
-      "name": "Range Pad",
-      "order": 1,
-      "parentId": 558,
-      "position": [
-        44.0,
-        0.05,
-        17.0
-      ],
-      "rotation": [
-        0.0,
-        0.0,
-        0.0,
-        1.0
-      ],
-      "scale": [
-        20.0,
-        0.1,
-        26.0
       ]
     },
     {
-      "collider": {
-        "isTrigger": false
-      },
-      "color": [
-        1.0,
-        1.0,
-        1.0
-      ],
-      "id": 560,
-      "materials": [
-        {
-          "embedded": {
-            "albedoMap": {
-              "path": "textures/proto_grid_light.png",
-              "pathGuid": "c90849c8fc6c88b0"
-            },
-            "aoMap": "",
-            "baseColor": [
-              0.62,
-              0.64,
-              0.68
-            ],
-            "emissiveColor": [
-              0.0,
-              0.0,
-              0.0
-            ],
-            "emissiveMap": "",
-            "emissiveStrength": 1.0,
-            "factorsScaleMaps": true,
-            "metallic": 0.0,
-            "metallicMap": "",
-            "metallicRoughnessMap": "",
-            "normalMap": "",
-            "roughness": 0.85,
-            "roughnessMap": "",
-            "triplanar": true,
-            "triplanarScale": 0.25
-          }
-        }
-      ],
-      "name": "Range Wall",
-      "order": 2,
-      "parentId": 558,
-      "position": [
-        44.0,
-        2.0,
-        4.2
-      ],
-      "rotation": [
-        0.0,
-        0.0,
-        0.0,
-        1.0
-      ],
-      "scale": [
-        20.0,
-        4.0,
-        0.4
-      ]
-    },
-    {
-      "collider": {
-        "isTrigger": false
-      },
-      "color": [
-        1.0,
-        1.0,
-        1.0
-      ],
-      "id": 561,
-      "materials": [
-        {
-          "embedded": {
-            "albedoMap": {
-              "path": "textures/proto_grid_light.png",
-              "pathGuid": "c90849c8fc6c88b0"
-            },
-            "aoMap": "",
-            "baseColor": [
-              0.62,
-              0.64,
-              0.68
-            ],
-            "emissiveColor": [
-              0.0,
-              0.0,
-              0.0
-            ],
-            "emissiveMap": "",
-            "emissiveStrength": 1.0,
-            "factorsScaleMaps": true,
-            "metallic": 0.0,
-            "metallicMap": "",
-            "metallicRoughnessMap": "",
-            "normalMap": "",
-            "roughness": 0.85,
-            "roughnessMap": "",
-            "triplanar": true,
-            "triplanarScale": 0.25
-          }
-        }
-      ],
-      "name": "Range Low Wall",
-      "order": 3,
-      "parentId": 558,
-      "position": [
-        37.0,
-        0.55,
-        11.0
-      ],
-      "rotation": [
-        0.0,
-        0.0,
-        0.0,
-        1.0
-      ],
-      "scale": [
-        4.0,
-        1.1,
-        0.3
-      ]
-    },
-    {
-      "collider": {
-        "isTrigger": false
-      },
-      "color": [
-        1.0,
-        1.0,
-        1.0
-      ],
-      "id": 562,
-      "materials": [
-        {
-          "embedded": {
-            "albedoMap": {
-              "path": "textures/proto_grid_light.png",
-              "pathGuid": "c90849c8fc6c88b0"
-            },
-            "aoMap": "",
-            "baseColor": [
-              0.62,
-              0.64,
-              0.68
-            ],
-            "emissiveColor": [
-              0.0,
-              0.0,
-              0.0
-            ],
-            "emissiveMap": "",
-            "emissiveStrength": 1.0,
-            "factorsScaleMaps": true,
-            "metallic": 0.0,
-            "metallicMap": "",
-            "metallicRoughnessMap": "",
-            "normalMap": "",
-            "roughness": 0.85,
-            "roughnessMap": "",
-            "triplanar": true,
-            "triplanarScale": 0.25
-          }
-        }
-      ],
-      "name": "Range Pillar",
-      "order": 4,
-      "parentId": 558,
-      "position": [
-        40.5,
-        1.5,
-        19.0
-      ],
-      "rotation": [
-        0.0,
-        0.0,
-        0.0,
-        1.0
-      ],
-      "scale": [
-        0.6,
-        3.0,
-        0.6
-      ]
-    },
-    {
-      "collider": {
-        "isTrigger": false
-      },
-      "color": [
-        1.0,
-        1.0,
-        1.0
-      ],
       "id": 563,
-      "materials": [
-        {
-          "embedded": {
-            "albedoMap": {
-              "path": "textures/proto_grid_light.png",
-              "pathGuid": "c90849c8fc6c88b0"
-            },
-            "aoMap": "",
-            "baseColor": [
-              0.62,
-              0.64,
-              0.68
-            ],
-            "emissiveColor": [
-              0.0,
-              0.0,
-              0.0
-            ],
-            "emissiveMap": "",
-            "emissiveStrength": 1.0,
-            "factorsScaleMaps": true,
-            "metallic": 0.0,
-            "metallicMap": "",
-            "metallicRoughnessMap": "",
-            "normalMap": "",
-            "roughness": 0.85,
-            "roughnessMap": "",
-            "triplanar": true,
-            "triplanarScale": 0.25
-          }
-        }
-      ],
-      "name": "Range Step 1",
-      "order": 5,
-      "parentId": 558,
+      "name": "Bench Rail",
+      "order": 564,
+      "parentId": 559,
       "position": [
-        50.0,
-        0.375,
-        11.5
+        49.0,
+        0.93,
+        0.35
       ],
       "rotation": [
         0.0,
@@ -17646,13 +17547,12 @@
         1.0
       ],
       "scale": [
-        4.0,
-        0.75,
-        3.0
-      ]
-    },
-    {
+        22.0,
+        0.06,
+        0.64
+      ],
       "collider": {
+        "friction": 0.7,
         "isTrigger": false
       },
       "color": [
@@ -17660,7 +17560,66 @@
         1.0,
         1.0
       ],
+      "materials": [
+        {
+          "embedded": {
+            "albedoMap": "",
+            "aoMap": "",
+            "baseColor": [
+              0.05,
+              0.05,
+              0.05
+            ],
+            "emissiveColor": [
+              1.0,
+              0.35,
+              0.05
+            ],
+            "emissiveMap": "",
+            "emissiveStrength": 0.5,
+            "factorsScaleMaps": true,
+            "metallic": 0.0,
+            "metallicMap": "",
+            "metallicRoughnessMap": "",
+            "normalMap": "",
+            "roughness": 0.5,
+            "roughnessMap": "",
+            "triplanar": false,
+            "triplanarScale": 1.0
+          }
+        }
+      ]
+    },
+    {
       "id": 564,
+      "name": "Lane Divider 1",
+      "order": 565,
+      "parentId": 559,
+      "position": [
+        42.0,
+        0.9,
+        -0.6
+      ],
+      "rotation": [
+        0.0,
+        0.0,
+        0.0,
+        1.0
+      ],
+      "scale": [
+        0.1,
+        1.8,
+        1.6
+      ],
+      "collider": {
+        "friction": 0.7,
+        "isTrigger": false
+      },
+      "color": [
+        1.0,
+        1.0,
+        1.0
+      ],
       "materials": [
         {
           "embedded": {
@@ -17670,14 +17629,14 @@
             },
             "aoMap": "",
             "baseColor": [
-              0.62,
-              0.64,
-              0.68
+              0.16,
+              0.17,
+              0.19
             ],
             "emissiveColor": [
-              0.0,
-              0.0,
-              0.0
+              0,
+              0,
+              0
             ],
             "emissiveMap": "",
             "emissiveStrength": 1.0,
@@ -17689,79 +17648,20 @@
             "roughness": 0.85,
             "roughnessMap": "",
             "triplanar": true,
-            "triplanarScale": 0.25
+            "triplanarScale": 0.5
           }
         }
-      ],
-      "name": "Range Step 2",
-      "order": 6,
-      "parentId": 558,
-      "position": [
-        50.0,
-        0.75,
-        14.5
-      ],
-      "rotation": [
-        0.0,
-        0.0,
-        0.0,
-        1.0
-      ],
-      "scale": [
-        4.0,
-        1.5,
-        3.0
       ]
     },
     {
-      "collider": {
-        "isTrigger": false
-      },
-      "color": [
-        1.0,
-        1.0,
-        1.0
-      ],
       "id": 565,
-      "materials": [
-        {
-          "embedded": {
-            "albedoMap": {
-              "path": "textures/proto_grid_light.png",
-              "pathGuid": "c90849c8fc6c88b0"
-            },
-            "aoMap": "",
-            "baseColor": [
-              0.62,
-              0.64,
-              0.68
-            ],
-            "emissiveColor": [
-              0.0,
-              0.0,
-              0.0
-            ],
-            "emissiveMap": "",
-            "emissiveStrength": 1.0,
-            "factorsScaleMaps": true,
-            "metallic": 0.0,
-            "metallicMap": "",
-            "metallicRoughnessMap": "",
-            "normalMap": "",
-            "roughness": 0.85,
-            "roughnessMap": "",
-            "triplanar": true,
-            "triplanarScale": 0.25
-          }
-        }
-      ],
-      "name": "Range Step 3",
-      "order": 7,
-      "parentId": 558,
+      "name": "Lane Divider 2",
+      "order": 566,
+      "parentId": 559,
       "position": [
-        50.0,
-        1.125,
-        17.5
+        48.0,
+        0.9,
+        -0.6
       ],
       "rotation": [
         0.0,
@@ -17770,13 +17670,12 @@
         1.0
       ],
       "scale": [
-        4.0,
-        2.25,
-        3.0
-      ]
-    },
-    {
+        0.1,
+        1.8,
+        1.6
+      ],
       "collider": {
+        "friction": 0.7,
         "isTrigger": false
       },
       "color": [
@@ -17784,7 +17683,6 @@
         1.0,
         1.0
       ],
-      "id": 566,
       "materials": [
         {
           "embedded": {
@@ -17794,14 +17692,14 @@
             },
             "aoMap": "",
             "baseColor": [
-              0.62,
-              0.64,
-              0.68
+              0.16,
+              0.17,
+              0.19
             ],
             "emissiveColor": [
-              0.0,
-              0.0,
-              0.0
+              0,
+              0,
+              0
             ],
             "emissiveMap": "",
             "emissiveStrength": 1.0,
@@ -17813,17 +17711,20 @@
             "roughness": 0.85,
             "roughnessMap": "",
             "triplanar": true,
-            "triplanarScale": 0.25
+            "triplanarScale": 0.5
           }
         }
-      ],
-      "name": "Range Step 4",
-      "order": 8,
-      "parentId": 558,
+      ]
+    },
+    {
+      "id": 566,
+      "name": "Lane Divider 3",
+      "order": 567,
+      "parentId": 559,
       "position": [
-        50.0,
-        1.5,
-        20.5
+        54.0,
+        0.9,
+        -0.6
       ],
       "rotation": [
         0.0,
@@ -17832,13 +17733,627 @@
         1.0
       ],
       "scale": [
+        0.1,
+        1.8,
+        1.6
+      ],
+      "collider": {
+        "friction": 0.7,
+        "isTrigger": false
+      },
+      "color": [
+        1.0,
+        1.0,
+        1.0
+      ],
+      "materials": [
+        {
+          "embedded": {
+            "albedoMap": {
+              "path": "textures/proto_grid_light.png",
+              "pathGuid": "c90849c8fc6c88b0"
+            },
+            "aoMap": "",
+            "baseColor": [
+              0.16,
+              0.17,
+              0.19
+            ],
+            "emissiveColor": [
+              0,
+              0,
+              0
+            ],
+            "emissiveMap": "",
+            "emissiveStrength": 1.0,
+            "factorsScaleMaps": true,
+            "metallic": 0.0,
+            "metallicMap": "",
+            "metallicRoughnessMap": "",
+            "normalMap": "",
+            "roughness": 0.85,
+            "roughnessMap": "",
+            "triplanar": true,
+            "triplanarScale": 0.5
+          }
+        }
+      ]
+    },
+    {
+      "id": 567,
+      "name": "Canopy Post 1",
+      "order": 568,
+      "parentId": 559,
+      "position": [
+        36.3,
+        1.75,
+        -5.5
+      ],
+      "rotation": [
+        0.0,
+        0.0,
+        0.0,
+        1.0
+      ],
+      "scale": [
+        0.3,
+        3.5,
+        0.3
+      ],
+      "collider": {
+        "friction": 0.7,
+        "isTrigger": false
+      },
+      "color": [
+        1.0,
+        1.0,
+        1.0
+      ],
+      "materials": [
+        {
+          "embedded": {
+            "albedoMap": "",
+            "aoMap": "",
+            "baseColor": [
+              0.35,
+              0.36,
+              0.38
+            ],
+            "emissiveColor": [
+              0,
+              0,
+              0
+            ],
+            "emissiveMap": "",
+            "emissiveStrength": 1.0,
+            "factorsScaleMaps": true,
+            "metallic": 0.8,
+            "metallicMap": "",
+            "metallicRoughnessMap": "",
+            "normalMap": "",
+            "roughness": 0.45,
+            "roughnessMap": "",
+            "triplanar": false,
+            "triplanarScale": 1.0
+          }
+        }
+      ]
+    },
+    {
+      "id": 568,
+      "name": "Canopy Post 3",
+      "order": 569,
+      "parentId": 559,
+      "position": [
+        36.3,
+        1.75,
+        -0.4
+      ],
+      "rotation": [
+        0.0,
+        0.0,
+        0.0,
+        1.0
+      ],
+      "scale": [
+        0.3,
+        3.5,
+        0.3
+      ],
+      "collider": {
+        "friction": 0.7,
+        "isTrigger": false
+      },
+      "color": [
+        1.0,
+        1.0,
+        1.0
+      ],
+      "materials": [
+        {
+          "embedded": {
+            "albedoMap": "",
+            "aoMap": "",
+            "baseColor": [
+              0.35,
+              0.36,
+              0.38
+            ],
+            "emissiveColor": [
+              0,
+              0,
+              0
+            ],
+            "emissiveMap": "",
+            "emissiveStrength": 1.0,
+            "factorsScaleMaps": true,
+            "metallic": 0.8,
+            "metallicMap": "",
+            "metallicRoughnessMap": "",
+            "normalMap": "",
+            "roughness": 0.45,
+            "roughnessMap": "",
+            "triplanar": false,
+            "triplanarScale": 1.0
+          }
+        }
+      ]
+    },
+    {
+      "id": 569,
+      "name": "Canopy Post 2",
+      "order": 570,
+      "parentId": 559,
+      "position": [
+        59.7,
+        1.75,
+        -5.5
+      ],
+      "rotation": [
+        0.0,
+        0.0,
+        0.0,
+        1.0
+      ],
+      "scale": [
+        0.3,
+        3.5,
+        0.3
+      ],
+      "collider": {
+        "friction": 0.7,
+        "isTrigger": false
+      },
+      "color": [
+        1.0,
+        1.0,
+        1.0
+      ],
+      "materials": [
+        {
+          "embedded": {
+            "albedoMap": "",
+            "aoMap": "",
+            "baseColor": [
+              0.35,
+              0.36,
+              0.38
+            ],
+            "emissiveColor": [
+              0,
+              0,
+              0
+            ],
+            "emissiveMap": "",
+            "emissiveStrength": 1.0,
+            "factorsScaleMaps": true,
+            "metallic": 0.8,
+            "metallicMap": "",
+            "metallicRoughnessMap": "",
+            "normalMap": "",
+            "roughness": 0.45,
+            "roughnessMap": "",
+            "triplanar": false,
+            "triplanarScale": 1.0
+          }
+        }
+      ]
+    },
+    {
+      "id": 570,
+      "name": "Canopy Post 4",
+      "order": 571,
+      "parentId": 559,
+      "position": [
+        59.7,
+        1.75,
+        -0.4
+      ],
+      "rotation": [
+        0.0,
+        0.0,
+        0.0,
+        1.0
+      ],
+      "scale": [
+        0.3,
+        3.5,
+        0.3
+      ],
+      "collider": {
+        "friction": 0.7,
+        "isTrigger": false
+      },
+      "color": [
+        1.0,
+        1.0,
+        1.0
+      ],
+      "materials": [
+        {
+          "embedded": {
+            "albedoMap": "",
+            "aoMap": "",
+            "baseColor": [
+              0.35,
+              0.36,
+              0.38
+            ],
+            "emissiveColor": [
+              0,
+              0,
+              0
+            ],
+            "emissiveMap": "",
+            "emissiveStrength": 1.0,
+            "factorsScaleMaps": true,
+            "metallic": 0.8,
+            "metallicMap": "",
+            "metallicRoughnessMap": "",
+            "normalMap": "",
+            "roughness": 0.45,
+            "roughnessMap": "",
+            "triplanar": false,
+            "triplanarScale": 1.0
+          }
+        }
+      ]
+    },
+    {
+      "id": 571,
+      "name": "Canopy Roof",
+      "order": 572,
+      "parentId": 559,
+      "position": [
+        48.0,
+        3.6,
+        -2.9
+      ],
+      "rotation": [
+        0.0,
+        0.0,
+        0.0,
+        1.0
+      ],
+      "scale": [
+        24.0,
+        0.2,
+        6.2
+      ],
+      "collider": {
+        "friction": 0.7,
+        "isTrigger": false
+      },
+      "color": [
+        1.0,
+        1.0,
+        1.0
+      ],
+      "materials": [
+        {
+          "embedded": {
+            "albedoMap": {
+              "path": "textures/proto_grid_light.png",
+              "pathGuid": "c90849c8fc6c88b0"
+            },
+            "aoMap": "",
+            "baseColor": [
+              0.16,
+              0.17,
+              0.19
+            ],
+            "emissiveColor": [
+              0,
+              0,
+              0
+            ],
+            "emissiveMap": "",
+            "emissiveStrength": 1.0,
+            "factorsScaleMaps": true,
+            "metallic": 0.0,
+            "metallicMap": "",
+            "metallicRoughnessMap": "",
+            "normalMap": "",
+            "roughness": 0.85,
+            "roughnessMap": "",
+            "triplanar": true,
+            "triplanarScale": 0.5
+          }
+        }
+      ]
+    },
+    {
+      "id": 572,
+      "name": "Canopy Glow Strip",
+      "order": 573,
+      "parentId": 559,
+      "position": [
+        48.0,
+        3.48,
+        -0.2
+      ],
+      "rotation": [
+        0.0,
+        0.0,
+        0.0,
+        1.0
+      ],
+      "scale": [
+        24.0,
+        0.06,
+        0.12
+      ],
+      "collider": {
+        "friction": 0.7,
+        "isTrigger": false
+      },
+      "color": [
+        1.0,
+        1.0,
+        1.0
+      ],
+      "materials": [
+        {
+          "embedded": {
+            "albedoMap": "",
+            "aoMap": "",
+            "baseColor": [
+              0.05,
+              0.05,
+              0.05
+            ],
+            "emissiveColor": [
+              1.0,
+              0.6,
+              0.25
+            ],
+            "emissiveMap": "",
+            "emissiveStrength": 4.0,
+            "factorsScaleMaps": true,
+            "metallic": 0.0,
+            "metallicMap": "",
+            "metallicRoughnessMap": "",
+            "normalMap": "",
+            "roughness": 0.5,
+            "roughnessMap": "",
+            "triplanar": false,
+            "triplanarScale": 1.0
+          }
+        }
+      ]
+    },
+    {
+      "id": 573,
+      "name": "Side Wall West",
+      "order": 574,
+      "parentId": 559,
+      "position": [
+        35.75,
+        1.5,
+        29.0
+      ],
+      "rotation": [
+        0.0,
+        0.0,
+        0.0,
+        1.0
+      ],
+      "scale": [
+        0.5,
+        3.0,
+        60.0
+      ],
+      "collider": {
+        "friction": 0.7,
+        "isTrigger": false
+      },
+      "color": [
+        1.0,
+        1.0,
+        1.0
+      ],
+      "materials": [
+        {
+          "embedded": {
+            "albedoMap": {
+              "path": "textures/proto_grid_light.png",
+              "pathGuid": "c90849c8fc6c88b0"
+            },
+            "aoMap": "",
+            "baseColor": [
+              0.16,
+              0.17,
+              0.19
+            ],
+            "emissiveColor": [
+              0,
+              0,
+              0
+            ],
+            "emissiveMap": "",
+            "emissiveStrength": 1.0,
+            "factorsScaleMaps": true,
+            "metallic": 0.0,
+            "metallicMap": "",
+            "metallicRoughnessMap": "",
+            "normalMap": "",
+            "roughness": 0.85,
+            "roughnessMap": "",
+            "triplanar": true,
+            "triplanarScale": 0.5
+          }
+        }
+      ]
+    },
+    {
+      "id": 574,
+      "name": "Side Wall East",
+      "order": 575,
+      "parentId": 559,
+      "position": [
+        59.75,
+        1.5,
+        29.0
+      ],
+      "rotation": [
+        0.0,
+        0.0,
+        0.0,
+        1.0
+      ],
+      "scale": [
+        0.5,
+        3.0,
+        60.0
+      ],
+      "collider": {
+        "friction": 0.7,
+        "isTrigger": false
+      },
+      "color": [
+        1.0,
+        1.0,
+        1.0
+      ],
+      "materials": [
+        {
+          "embedded": {
+            "albedoMap": {
+              "path": "textures/proto_grid_light.png",
+              "pathGuid": "c90849c8fc6c88b0"
+            },
+            "aoMap": "",
+            "baseColor": [
+              0.16,
+              0.17,
+              0.19
+            ],
+            "emissiveColor": [
+              0,
+              0,
+              0
+            ],
+            "emissiveMap": "",
+            "emissiveStrength": 1.0,
+            "factorsScaleMaps": true,
+            "metallic": 0.0,
+            "metallicMap": "",
+            "metallicRoughnessMap": "",
+            "normalMap": "",
+            "roughness": 0.85,
+            "roughnessMap": "",
+            "triplanar": true,
+            "triplanarScale": 0.5
+          }
+        }
+      ]
+    },
+    {
+      "id": 575,
+      "name": "Backstop",
+      "order": 576,
+      "parentId": 559,
+      "position": [
+        48.0,
         4.0,
+        59.5
+      ],
+      "rotation": [
+        0.0,
+        0.0,
+        0.0,
+        1.0
+      ],
+      "scale": [
+        24.0,
+        8.0,
+        1.0
+      ],
+      "collider": {
+        "friction": 0.7,
+        "isTrigger": false
+      },
+      "color": [
+        1.0,
+        1.0,
+        1.0
+      ],
+      "materials": [
+        {
+          "embedded": {
+            "albedoMap": {
+              "path": "textures/proto_grid_light.png",
+              "pathGuid": "c90849c8fc6c88b0"
+            },
+            "aoMap": "",
+            "baseColor": [
+              0.3,
+              0.33,
+              0.24
+            ],
+            "emissiveColor": [
+              0,
+              0,
+              0
+            ],
+            "emissiveMap": "",
+            "emissiveStrength": 1.0,
+            "factorsScaleMaps": true,
+            "metallic": 0.0,
+            "metallicMap": "",
+            "metallicRoughnessMap": "",
+            "normalMap": "",
+            "roughness": 0.95,
+            "roughnessMap": "",
+            "triplanar": true,
+            "triplanarScale": 0.25
+          }
+        }
+      ]
+    },
+    {
+      "id": 576,
+      "name": "Berm",
+      "order": 577,
+      "parentId": 559,
+      "position": [
+        48.0,
+        1.2,
+        57.2
+      ],
+      "rotation": [
+        -0.3007057995042731,
+        0.0,
+        0.0,
+        0.9537169507482269
+      ],
+      "scale": [
+        23.5,
         3.0,
         3.0
-      ]
-    },
-    {
+      ],
       "collider": {
+        "friction": 0.7,
         "isTrigger": false
       },
       "color": [
@@ -17846,7 +18361,6 @@
         1.0,
         1.0
       ],
-      "id": 567,
       "materials": [
         {
           "embedded": {
@@ -17857,13 +18371,13 @@
             "aoMap": "",
             "baseColor": [
               0.62,
-              0.64,
-              0.68
+              0.53,
+              0.38
             ],
             "emissiveColor": [
-              0.0,
-              0.0,
-              0.0
+              0,
+              0,
+              0
             ],
             "emissiveMap": "",
             "emissiveStrength": 1.0,
@@ -17872,19 +18386,382 @@
             "metallicMap": "",
             "metallicRoughnessMap": "",
             "normalMap": "",
-            "roughness": 0.85,
+            "roughness": 0.95,
             "roughnessMap": "",
             "triplanar": true,
             "triplanarScale": 0.25
           }
         }
-      ],
-      "name": "Range Ledge",
-      "order": 9,
-      "parentId": 558,
+      ]
+    },
+    {
+      "id": 577,
+      "name": "Lane Line 1",
+      "order": 578,
+      "parentId": 559,
       "position": [
-        37.0,
-        0.5,
+        42.0,
+        0.045,
+        30.0
+      ],
+      "rotation": [
+        0.0,
+        0.0,
+        0.0,
+        1.0
+      ],
+      "scale": [
+        0.06,
+        0.01,
+        56.0
+      ],
+      "collider": {
+        "friction": 0.7,
+        "isTrigger": false
+      },
+      "color": [
+        1.0,
+        1.0,
+        1.0
+      ],
+      "materials": [
+        {
+          "embedded": {
+            "albedoMap": "",
+            "aoMap": "",
+            "baseColor": [
+              0.05,
+              0.05,
+              0.05
+            ],
+            "emissiveColor": [
+              0.9,
+              0.9,
+              0.9
+            ],
+            "emissiveMap": "",
+            "emissiveStrength": 0.6,
+            "factorsScaleMaps": true,
+            "metallic": 0.0,
+            "metallicMap": "",
+            "metallicRoughnessMap": "",
+            "normalMap": "",
+            "roughness": 0.5,
+            "roughnessMap": "",
+            "triplanar": false,
+            "triplanarScale": 1.0
+          }
+        }
+      ]
+    },
+    {
+      "id": 578,
+      "name": "Lane Line 2",
+      "order": 579,
+      "parentId": 559,
+      "position": [
+        48.0,
+        0.045,
+        30.0
+      ],
+      "rotation": [
+        0.0,
+        0.0,
+        0.0,
+        1.0
+      ],
+      "scale": [
+        0.06,
+        0.01,
+        56.0
+      ],
+      "collider": {
+        "friction": 0.7,
+        "isTrigger": false
+      },
+      "color": [
+        1.0,
+        1.0,
+        1.0
+      ],
+      "materials": [
+        {
+          "embedded": {
+            "albedoMap": "",
+            "aoMap": "",
+            "baseColor": [
+              0.05,
+              0.05,
+              0.05
+            ],
+            "emissiveColor": [
+              0.9,
+              0.9,
+              0.9
+            ],
+            "emissiveMap": "",
+            "emissiveStrength": 0.6,
+            "factorsScaleMaps": true,
+            "metallic": 0.0,
+            "metallicMap": "",
+            "metallicRoughnessMap": "",
+            "normalMap": "",
+            "roughness": 0.5,
+            "roughnessMap": "",
+            "triplanar": false,
+            "triplanarScale": 1.0
+          }
+        }
+      ]
+    },
+    {
+      "id": 579,
+      "name": "Lane Line 3",
+      "order": 580,
+      "parentId": 559,
+      "position": [
+        54.0,
+        0.045,
+        30.0
+      ],
+      "rotation": [
+        0.0,
+        0.0,
+        0.0,
+        1.0
+      ],
+      "scale": [
+        0.06,
+        0.01,
+        56.0
+      ],
+      "collider": {
+        "friction": 0.7,
+        "isTrigger": false
+      },
+      "color": [
+        1.0,
+        1.0,
+        1.0
+      ],
+      "materials": [
+        {
+          "embedded": {
+            "albedoMap": "",
+            "aoMap": "",
+            "baseColor": [
+              0.05,
+              0.05,
+              0.05
+            ],
+            "emissiveColor": [
+              0.9,
+              0.9,
+              0.9
+            ],
+            "emissiveMap": "",
+            "emissiveStrength": 0.6,
+            "factorsScaleMaps": true,
+            "metallic": 0.0,
+            "metallicMap": "",
+            "metallicRoughnessMap": "",
+            "normalMap": "",
+            "roughness": 0.5,
+            "roughnessMap": "",
+            "triplanar": false,
+            "triplanarScale": 1.0
+          }
+        }
+      ]
+    },
+    {
+      "id": 580,
+      "name": "Marker 10 m",
+      "order": 581,
+      "parentId": 559,
+      "position": [
+        48.0,
+        0.05,
+        10.0
+      ],
+      "rotation": [
+        0.0,
+        0.0,
+        0.0,
+        1.0
+      ],
+      "scale": [
+        23.4,
+        0.012,
+        0.2
+      ],
+      "collider": {
+        "friction": 0.7,
+        "isTrigger": false
+      },
+      "color": [
+        1.0,
+        1.0,
+        1.0
+      ],
+      "materials": [
+        {
+          "embedded": {
+            "albedoMap": "",
+            "aoMap": "",
+            "baseColor": [
+              0.05,
+              0.05,
+              0.05
+            ],
+            "emissiveColor": [
+              1.0,
+              1.0,
+              1.0
+            ],
+            "emissiveMap": "",
+            "emissiveStrength": 1.5,
+            "factorsScaleMaps": true,
+            "metallic": 0.0,
+            "metallicMap": "",
+            "metallicRoughnessMap": "",
+            "normalMap": "",
+            "roughness": 0.5,
+            "roughnessMap": "",
+            "triplanar": false,
+            "triplanarScale": 1.0
+          }
+        }
+      ]
+    },
+    {
+      "id": 581,
+      "name": "Marker Post 10 m W",
+      "order": 582,
+      "parentId": 559,
+      "position": [
+        36.3,
+        0.6,
+        10.0
+      ],
+      "rotation": [
+        0.0,
+        0.0,
+        0.0,
+        1.0
+      ],
+      "scale": [
+        0.16,
+        1.2,
+        0.16
+      ],
+      "collider": {
+        "friction": 0.7,
+        "isTrigger": false
+      },
+      "color": [
+        1.0,
+        1.0,
+        1.0
+      ],
+      "materials": [
+        {
+          "embedded": {
+            "albedoMap": "",
+            "aoMap": "",
+            "baseColor": [
+              0.05,
+              0.05,
+              0.05
+            ],
+            "emissiveColor": [
+              1.0,
+              1.0,
+              1.0
+            ],
+            "emissiveMap": "",
+            "emissiveStrength": 2.5,
+            "factorsScaleMaps": true,
+            "metallic": 0.0,
+            "metallicMap": "",
+            "metallicRoughnessMap": "",
+            "normalMap": "",
+            "roughness": 0.5,
+            "roughnessMap": "",
+            "triplanar": false,
+            "triplanarScale": 1.0
+          }
+        }
+      ]
+    },
+    {
+      "id": 582,
+      "name": "Marker Post 10 m E",
+      "order": 583,
+      "parentId": 559,
+      "position": [
+        59.2,
+        0.6,
+        10.0
+      ],
+      "rotation": [
+        0.0,
+        0.0,
+        0.0,
+        1.0
+      ],
+      "scale": [
+        0.16,
+        1.2,
+        0.16
+      ],
+      "collider": {
+        "friction": 0.7,
+        "isTrigger": false
+      },
+      "color": [
+        1.0,
+        1.0,
+        1.0
+      ],
+      "materials": [
+        {
+          "embedded": {
+            "albedoMap": "",
+            "aoMap": "",
+            "baseColor": [
+              0.05,
+              0.05,
+              0.05
+            ],
+            "emissiveColor": [
+              1.0,
+              1.0,
+              1.0
+            ],
+            "emissiveMap": "",
+            "emissiveStrength": 2.5,
+            "factorsScaleMaps": true,
+            "metallic": 0.0,
+            "metallicMap": "",
+            "metallicRoughnessMap": "",
+            "normalMap": "",
+            "roughness": 0.5,
+            "roughnessMap": "",
+            "triplanar": false,
+            "triplanarScale": 1.0
+          }
+        }
+      ]
+    },
+    {
+      "id": 583,
+      "name": "Marker 25 m",
+      "order": 584,
+      "parentId": 559,
+      "position": [
+        48.0,
+        0.05,
         25.0
       ],
       "rotation": [
@@ -17894,13 +18771,12 @@
         1.0
       ],
       "scale": [
-        4.0,
-        1.0,
-        4.0
-      ]
-    },
-    {
+        23.4,
+        0.012,
+        0.2
+      ],
       "collider": {
+        "friction": 0.7,
         "isTrigger": false
       },
       "color": [
@@ -17908,43 +18784,945 @@
         1.0,
         1.0
       ],
-      "id": 568,
       "materials": [
         {
           "embedded": {
             "albedoMap": "",
             "aoMap": "",
             "baseColor": [
-              0.95,
-              0.45,
-              0.12
+              0.05,
+              0.05,
+              0.05
             ],
             "emissiveColor": [
-              0.0,
-              0.0,
-              0.0
+              1.0,
+              0.85,
+              0.1
             ],
             "emissiveMap": "",
-            "emissiveStrength": 1.0,
+            "emissiveStrength": 1.5,
             "factorsScaleMaps": true,
             "metallic": 0.0,
             "metallicMap": "",
             "metallicRoughnessMap": "",
             "normalMap": "",
-            "roughness": 0.85,
+            "roughness": 0.5,
+            "roughnessMap": "",
+            "triplanar": false,
+            "triplanarScale": 1.0
+          }
+        }
+      ]
+    },
+    {
+      "id": 584,
+      "name": "Marker Post 25 m W",
+      "order": 585,
+      "parentId": 559,
+      "position": [
+        36.3,
+        0.6,
+        25.0
+      ],
+      "rotation": [
+        0.0,
+        0.0,
+        0.0,
+        1.0
+      ],
+      "scale": [
+        0.16,
+        1.2,
+        0.16
+      ],
+      "collider": {
+        "friction": 0.7,
+        "isTrigger": false
+      },
+      "color": [
+        1.0,
+        1.0,
+        1.0
+      ],
+      "materials": [
+        {
+          "embedded": {
+            "albedoMap": "",
+            "aoMap": "",
+            "baseColor": [
+              0.05,
+              0.05,
+              0.05
+            ],
+            "emissiveColor": [
+              1.0,
+              0.85,
+              0.1
+            ],
+            "emissiveMap": "",
+            "emissiveStrength": 2.5,
+            "factorsScaleMaps": true,
+            "metallic": 0.0,
+            "metallicMap": "",
+            "metallicRoughnessMap": "",
+            "normalMap": "",
+            "roughness": 0.5,
+            "roughnessMap": "",
+            "triplanar": false,
+            "triplanarScale": 1.0
+          }
+        }
+      ]
+    },
+    {
+      "id": 585,
+      "name": "Marker Post 25 m E",
+      "order": 586,
+      "parentId": 559,
+      "position": [
+        59.2,
+        0.6,
+        25.0
+      ],
+      "rotation": [
+        0.0,
+        0.0,
+        0.0,
+        1.0
+      ],
+      "scale": [
+        0.16,
+        1.2,
+        0.16
+      ],
+      "collider": {
+        "friction": 0.7,
+        "isTrigger": false
+      },
+      "color": [
+        1.0,
+        1.0,
+        1.0
+      ],
+      "materials": [
+        {
+          "embedded": {
+            "albedoMap": "",
+            "aoMap": "",
+            "baseColor": [
+              0.05,
+              0.05,
+              0.05
+            ],
+            "emissiveColor": [
+              1.0,
+              0.85,
+              0.1
+            ],
+            "emissiveMap": "",
+            "emissiveStrength": 2.5,
+            "factorsScaleMaps": true,
+            "metallic": 0.0,
+            "metallicMap": "",
+            "metallicRoughnessMap": "",
+            "normalMap": "",
+            "roughness": 0.5,
+            "roughnessMap": "",
+            "triplanar": false,
+            "triplanarScale": 1.0
+          }
+        }
+      ]
+    },
+    {
+      "id": 586,
+      "name": "Marker 50 m",
+      "order": 587,
+      "parentId": 559,
+      "position": [
+        48.0,
+        0.05,
+        50.0
+      ],
+      "rotation": [
+        0.0,
+        0.0,
+        0.0,
+        1.0
+      ],
+      "scale": [
+        23.4,
+        0.012,
+        0.2
+      ],
+      "collider": {
+        "friction": 0.7,
+        "isTrigger": false
+      },
+      "color": [
+        1.0,
+        1.0,
+        1.0
+      ],
+      "materials": [
+        {
+          "embedded": {
+            "albedoMap": "",
+            "aoMap": "",
+            "baseColor": [
+              0.05,
+              0.05,
+              0.05
+            ],
+            "emissiveColor": [
+              1.0,
+              0.15,
+              0.1
+            ],
+            "emissiveMap": "",
+            "emissiveStrength": 1.5,
+            "factorsScaleMaps": true,
+            "metallic": 0.0,
+            "metallicMap": "",
+            "metallicRoughnessMap": "",
+            "normalMap": "",
+            "roughness": 0.5,
+            "roughnessMap": "",
+            "triplanar": false,
+            "triplanarScale": 1.0
+          }
+        }
+      ]
+    },
+    {
+      "id": 587,
+      "name": "Marker Post 50 m W",
+      "order": 588,
+      "parentId": 559,
+      "position": [
+        36.3,
+        0.6,
+        50.0
+      ],
+      "rotation": [
+        0.0,
+        0.0,
+        0.0,
+        1.0
+      ],
+      "scale": [
+        0.16,
+        1.2,
+        0.16
+      ],
+      "collider": {
+        "friction": 0.7,
+        "isTrigger": false
+      },
+      "color": [
+        1.0,
+        1.0,
+        1.0
+      ],
+      "materials": [
+        {
+          "embedded": {
+            "albedoMap": "",
+            "aoMap": "",
+            "baseColor": [
+              0.05,
+              0.05,
+              0.05
+            ],
+            "emissiveColor": [
+              1.0,
+              0.15,
+              0.1
+            ],
+            "emissiveMap": "",
+            "emissiveStrength": 2.5,
+            "factorsScaleMaps": true,
+            "metallic": 0.0,
+            "metallicMap": "",
+            "metallicRoughnessMap": "",
+            "normalMap": "",
+            "roughness": 0.5,
+            "roughnessMap": "",
+            "triplanar": false,
+            "triplanarScale": 1.0
+          }
+        }
+      ]
+    },
+    {
+      "id": 588,
+      "name": "Marker Post 50 m E",
+      "order": 589,
+      "parentId": 559,
+      "position": [
+        59.2,
+        0.6,
+        50.0
+      ],
+      "rotation": [
+        0.0,
+        0.0,
+        0.0,
+        1.0
+      ],
+      "scale": [
+        0.16,
+        1.2,
+        0.16
+      ],
+      "collider": {
+        "friction": 0.7,
+        "isTrigger": false
+      },
+      "color": [
+        1.0,
+        1.0,
+        1.0
+      ],
+      "materials": [
+        {
+          "embedded": {
+            "albedoMap": "",
+            "aoMap": "",
+            "baseColor": [
+              0.05,
+              0.05,
+              0.05
+            ],
+            "emissiveColor": [
+              1.0,
+              0.15,
+              0.1
+            ],
+            "emissiveMap": "",
+            "emissiveStrength": 2.5,
+            "factorsScaleMaps": true,
+            "metallic": 0.0,
+            "metallicMap": "",
+            "metallicRoughnessMap": "",
+            "normalMap": "",
+            "roughness": 0.5,
+            "roughnessMap": "",
+            "triplanar": false,
+            "triplanarScale": 1.0
+          }
+        }
+      ]
+    },
+    {
+      "id": 590,
+      "name": "Popper Shelf",
+      "order": 591,
+      "parentId": 589,
+      "position": [
+        39.0,
+        0.45,
+        10.0
+      ],
+      "rotation": [
+        0.0,
+        0.0,
+        0.0,
+        1.0
+      ],
+      "scale": [
+        4.0,
+        0.9,
+        0.5
+      ],
+      "collider": {
+        "friction": 0.7,
+        "isTrigger": false
+      },
+      "color": [
+        1.0,
+        1.0,
+        1.0
+      ],
+      "materials": [
+        {
+          "embedded": {
+            "albedoMap": "",
+            "aoMap": "",
+            "baseColor": [
+              0.35,
+              0.36,
+              0.38
+            ],
+            "emissiveColor": [
+              0,
+              0,
+              0
+            ],
+            "emissiveMap": "",
+            "emissiveStrength": 1.0,
+            "factorsScaleMaps": true,
+            "metallic": 0.8,
+            "metallicMap": "",
+            "metallicRoughnessMap": "",
+            "normalMap": "",
+            "roughness": 0.45,
+            "roughnessMap": "",
+            "triplanar": false,
+            "triplanarScale": 1.0
+          }
+        }
+      ]
+    },
+    {
+      "id": 591,
+      "name": "Popper 1",
+      "order": 592,
+      "parentId": 589,
+      "position": [
+        37.4,
+        1.1600000000000001,
+        10.0
+      ],
+      "rotation": [
+        0.0,
+        0.0,
+        0.0,
+        1.0
+      ],
+      "scale": [
+        0.34,
+        0.5,
+        0.04
+      ],
+      "collider": {
+        "friction": 0.6,
+        "isTrigger": false
+      },
+      "color": [
+        1.0,
+        1.0,
+        1.0
+      ],
+      "materials": [
+        {
+          "embedded": {
+            "albedoMap": "",
+            "aoMap": "",
+            "baseColor": [
+              1.0,
+              0.42,
+              0.05
+            ],
+            "emissiveColor": [
+              0,
+              0,
+              0
+            ],
+            "emissiveMap": "",
+            "emissiveStrength": 1.0,
+            "factorsScaleMaps": true,
+            "metallic": 0.3,
+            "metallicMap": "",
+            "metallicRoughnessMap": "",
+            "normalMap": "",
+            "roughness": 0.5,
             "roughnessMap": "",
             "triplanar": false,
             "triplanarScale": 1.0
           }
         }
       ],
-      "name": "Range Target 1",
-      "order": 10,
-      "parentId": 558,
+      "Rigidbody": {
+        "Angular Damping": 0.1,
+        "Continuous Collision": false,
+        "Freeze Position X": false,
+        "Freeze Position Y": false,
+        "Freeze Position Z": false,
+        "Freeze Rotation X": false,
+        "Freeze Rotation Y": false,
+        "Freeze Rotation Z": false,
+        "Initial Velocity": [
+          0,
+          0,
+          0
+        ],
+        "Interpolate": "Interpolate",
+        "Is Kinematic": false,
+        "Linear Damping": 0.05,
+        "Mass": 1.2,
+        "Use Gravity": true
+      }
+    },
+    {
+      "id": 592,
+      "name": "Popper 2",
+      "order": 593,
+      "parentId": 589,
+      "position": [
+        38.04,
+        1.1600000000000001,
+        10.0
+      ],
+      "rotation": [
+        0.0,
+        0.0,
+        0.0,
+        1.0
+      ],
+      "scale": [
+        0.34,
+        0.5,
+        0.04
+      ],
+      "collider": {
+        "friction": 0.6,
+        "isTrigger": false
+      },
+      "color": [
+        1.0,
+        1.0,
+        1.0
+      ],
+      "materials": [
+        {
+          "embedded": {
+            "albedoMap": "",
+            "aoMap": "",
+            "baseColor": [
+              1.0,
+              0.42,
+              0.05
+            ],
+            "emissiveColor": [
+              0,
+              0,
+              0
+            ],
+            "emissiveMap": "",
+            "emissiveStrength": 1.0,
+            "factorsScaleMaps": true,
+            "metallic": 0.3,
+            "metallicMap": "",
+            "metallicRoughnessMap": "",
+            "normalMap": "",
+            "roughness": 0.5,
+            "roughnessMap": "",
+            "triplanar": false,
+            "triplanarScale": 1.0
+          }
+        }
+      ],
+      "Rigidbody": {
+        "Angular Damping": 0.1,
+        "Continuous Collision": false,
+        "Freeze Position X": false,
+        "Freeze Position Y": false,
+        "Freeze Position Z": false,
+        "Freeze Rotation X": false,
+        "Freeze Rotation Y": false,
+        "Freeze Rotation Z": false,
+        "Initial Velocity": [
+          0,
+          0,
+          0
+        ],
+        "Interpolate": "Interpolate",
+        "Is Kinematic": false,
+        "Linear Damping": 0.05,
+        "Mass": 1.2,
+        "Use Gravity": true
+      }
+    },
+    {
+      "id": 593,
+      "name": "Popper 3",
+      "order": 594,
+      "parentId": 589,
+      "position": [
+        38.68,
+        1.1600000000000001,
+        10.0
+      ],
+      "rotation": [
+        0.0,
+        0.0,
+        0.0,
+        1.0
+      ],
+      "scale": [
+        0.34,
+        0.5,
+        0.04
+      ],
+      "collider": {
+        "friction": 0.6,
+        "isTrigger": false
+      },
+      "color": [
+        1.0,
+        1.0,
+        1.0
+      ],
+      "materials": [
+        {
+          "embedded": {
+            "albedoMap": "",
+            "aoMap": "",
+            "baseColor": [
+              1.0,
+              0.42,
+              0.05
+            ],
+            "emissiveColor": [
+              0,
+              0,
+              0
+            ],
+            "emissiveMap": "",
+            "emissiveStrength": 1.0,
+            "factorsScaleMaps": true,
+            "metallic": 0.3,
+            "metallicMap": "",
+            "metallicRoughnessMap": "",
+            "normalMap": "",
+            "roughness": 0.5,
+            "roughnessMap": "",
+            "triplanar": false,
+            "triplanarScale": 1.0
+          }
+        }
+      ],
+      "Rigidbody": {
+        "Angular Damping": 0.1,
+        "Continuous Collision": false,
+        "Freeze Position X": false,
+        "Freeze Position Y": false,
+        "Freeze Position Z": false,
+        "Freeze Rotation X": false,
+        "Freeze Rotation Y": false,
+        "Freeze Rotation Z": false,
+        "Initial Velocity": [
+          0,
+          0,
+          0
+        ],
+        "Interpolate": "Interpolate",
+        "Is Kinematic": false,
+        "Linear Damping": 0.05,
+        "Mass": 1.2,
+        "Use Gravity": true
+      }
+    },
+    {
+      "id": 594,
+      "name": "Popper 4",
+      "order": 595,
+      "parentId": 589,
+      "position": [
+        39.32,
+        1.1600000000000001,
+        10.0
+      ],
+      "rotation": [
+        0.0,
+        0.0,
+        0.0,
+        1.0
+      ],
+      "scale": [
+        0.34,
+        0.5,
+        0.04
+      ],
+      "collider": {
+        "friction": 0.6,
+        "isTrigger": false
+      },
+      "color": [
+        1.0,
+        1.0,
+        1.0
+      ],
+      "materials": [
+        {
+          "embedded": {
+            "albedoMap": "",
+            "aoMap": "",
+            "baseColor": [
+              1.0,
+              0.42,
+              0.05
+            ],
+            "emissiveColor": [
+              0,
+              0,
+              0
+            ],
+            "emissiveMap": "",
+            "emissiveStrength": 1.0,
+            "factorsScaleMaps": true,
+            "metallic": 0.3,
+            "metallicMap": "",
+            "metallicRoughnessMap": "",
+            "normalMap": "",
+            "roughness": 0.5,
+            "roughnessMap": "",
+            "triplanar": false,
+            "triplanarScale": 1.0
+          }
+        }
+      ],
+      "Rigidbody": {
+        "Angular Damping": 0.1,
+        "Continuous Collision": false,
+        "Freeze Position X": false,
+        "Freeze Position Y": false,
+        "Freeze Position Z": false,
+        "Freeze Rotation X": false,
+        "Freeze Rotation Y": false,
+        "Freeze Rotation Z": false,
+        "Initial Velocity": [
+          0,
+          0,
+          0
+        ],
+        "Interpolate": "Interpolate",
+        "Is Kinematic": false,
+        "Linear Damping": 0.05,
+        "Mass": 1.2,
+        "Use Gravity": true
+      }
+    },
+    {
+      "id": 595,
+      "name": "Popper 5",
+      "order": 596,
+      "parentId": 589,
+      "position": [
+        39.96,
+        1.1600000000000001,
+        10.0
+      ],
+      "rotation": [
+        0.0,
+        0.0,
+        0.0,
+        1.0
+      ],
+      "scale": [
+        0.34,
+        0.5,
+        0.04
+      ],
+      "collider": {
+        "friction": 0.6,
+        "isTrigger": false
+      },
+      "color": [
+        1.0,
+        1.0,
+        1.0
+      ],
+      "materials": [
+        {
+          "embedded": {
+            "albedoMap": "",
+            "aoMap": "",
+            "baseColor": [
+              1.0,
+              0.42,
+              0.05
+            ],
+            "emissiveColor": [
+              0,
+              0,
+              0
+            ],
+            "emissiveMap": "",
+            "emissiveStrength": 1.0,
+            "factorsScaleMaps": true,
+            "metallic": 0.3,
+            "metallicMap": "",
+            "metallicRoughnessMap": "",
+            "normalMap": "",
+            "roughness": 0.5,
+            "roughnessMap": "",
+            "triplanar": false,
+            "triplanarScale": 1.0
+          }
+        }
+      ],
+      "Rigidbody": {
+        "Angular Damping": 0.1,
+        "Continuous Collision": false,
+        "Freeze Position X": false,
+        "Freeze Position Y": false,
+        "Freeze Position Z": false,
+        "Freeze Rotation X": false,
+        "Freeze Rotation Y": false,
+        "Freeze Rotation Z": false,
+        "Initial Velocity": [
+          0,
+          0,
+          0
+        ],
+        "Interpolate": "Interpolate",
+        "Is Kinematic": false,
+        "Linear Damping": 0.05,
+        "Mass": 1.2,
+        "Use Gravity": true
+      }
+    },
+    {
+      "id": 596,
+      "name": "Popper 6",
+      "order": 597,
+      "parentId": 589,
+      "position": [
+        40.6,
+        1.1600000000000001,
+        10.0
+      ],
+      "rotation": [
+        0.0,
+        0.0,
+        0.0,
+        1.0
+      ],
+      "scale": [
+        0.34,
+        0.5,
+        0.04
+      ],
+      "collider": {
+        "friction": 0.6,
+        "isTrigger": false
+      },
+      "color": [
+        1.0,
+        1.0,
+        1.0
+      ],
+      "materials": [
+        {
+          "embedded": {
+            "albedoMap": "",
+            "aoMap": "",
+            "baseColor": [
+              1.0,
+              0.42,
+              0.05
+            ],
+            "emissiveColor": [
+              0,
+              0,
+              0
+            ],
+            "emissiveMap": "",
+            "emissiveStrength": 1.0,
+            "factorsScaleMaps": true,
+            "metallic": 0.3,
+            "metallicMap": "",
+            "metallicRoughnessMap": "",
+            "normalMap": "",
+            "roughness": 0.5,
+            "roughnessMap": "",
+            "triplanar": false,
+            "triplanarScale": 1.0
+          }
+        }
+      ],
+      "Rigidbody": {
+        "Angular Damping": 0.1,
+        "Continuous Collision": false,
+        "Freeze Position X": false,
+        "Freeze Position Y": false,
+        "Freeze Position Z": false,
+        "Freeze Rotation X": false,
+        "Freeze Rotation Y": false,
+        "Freeze Rotation Z": false,
+        "Initial Velocity": [
+          0,
+          0,
+          0
+        ],
+        "Interpolate": "Interpolate",
+        "Is Kinematic": false,
+        "Linear Damping": 0.05,
+        "Mass": 1.2,
+        "Use Gravity": true
+      }
+    },
+    {
+      "id": 597,
+      "name": "Balloon Post 1",
+      "order": 598,
+      "parentId": 589,
+      "position": [
+        37.0,
+        0.5,
+        20.0
+      ],
+      "rotation": [
+        0.0,
+        0.0,
+        0.0,
+        1.0
+      ],
+      "scale": [
+        0.08,
+        1.0,
+        0.08
+      ],
+      "collider": {
+        "friction": 0.7,
+        "isTrigger": false
+      },
+      "color": [
+        1.0,
+        1.0,
+        1.0
+      ],
+      "materials": [
+        {
+          "embedded": {
+            "albedoMap": "",
+            "aoMap": "",
+            "baseColor": [
+              0.35,
+              0.36,
+              0.38
+            ],
+            "emissiveColor": [
+              0,
+              0,
+              0
+            ],
+            "emissiveMap": "",
+            "emissiveStrength": 1.0,
+            "factorsScaleMaps": true,
+            "metallic": 0.8,
+            "metallicMap": "",
+            "metallicRoughnessMap": "",
+            "normalMap": "",
+            "roughness": 0.45,
+            "roughnessMap": "",
+            "triplanar": false,
+            "triplanarScale": 1.0
+          }
+        }
+      ]
+    },
+    {
+      "id": 599,
+      "name": "Balloon Post 2",
+      "order": 600,
+      "parentId": 589,
       "position": [
         38.0,
-        1.2,
-        29.6
+        0.65,
+        20.0
       ],
       "rotation": [
         0.0,
@@ -17953,13 +19731,12 @@
         1.0
       ],
       "scale": [
-        1.0,
-        2.4,
-        0.2
-      ]
-    },
-    {
+        0.08,
+        1.3,
+        0.08
+      ],
       "collider": {
+        "friction": 0.7,
         "isTrigger": false
       },
       "color": [
@@ -17967,43 +19744,45 @@
         1.0,
         1.0
       ],
-      "id": 569,
       "materials": [
         {
           "embedded": {
             "albedoMap": "",
             "aoMap": "",
             "baseColor": [
-              0.95,
-              0.45,
-              0.12
+              0.35,
+              0.36,
+              0.38
             ],
             "emissiveColor": [
-              0.0,
-              0.0,
-              0.0
+              0,
+              0,
+              0
             ],
             "emissiveMap": "",
             "emissiveStrength": 1.0,
             "factorsScaleMaps": true,
-            "metallic": 0.0,
+            "metallic": 0.8,
             "metallicMap": "",
             "metallicRoughnessMap": "",
             "normalMap": "",
-            "roughness": 0.85,
+            "roughness": 0.45,
             "roughnessMap": "",
             "triplanar": false,
             "triplanarScale": 1.0
           }
         }
-      ],
-      "name": "Range Target 2",
-      "order": 11,
-      "parentId": 558,
+      ]
+    },
+    {
+      "id": 601,
+      "name": "Balloon Post 3",
+      "order": 602,
+      "parentId": 589,
       "position": [
-        44.0,
-        1.2,
-        29.6
+        39.0,
+        0.5,
+        20.0
       ],
       "rotation": [
         0.0,
@@ -18012,13 +19791,12 @@
         1.0
       ],
       "scale": [
+        0.08,
         1.0,
-        2.4,
-        0.2
-      ]
-    },
-    {
+        0.08
+      ],
       "collider": {
+        "friction": 0.7,
         "isTrigger": false
       },
       "color": [
@@ -18026,43 +19804,45 @@
         1.0,
         1.0
       ],
-      "id": 570,
       "materials": [
         {
           "embedded": {
             "albedoMap": "",
             "aoMap": "",
             "baseColor": [
-              0.95,
-              0.45,
-              0.12
+              0.35,
+              0.36,
+              0.38
             ],
             "emissiveColor": [
-              0.0,
-              0.0,
-              0.0
+              0,
+              0,
+              0
             ],
             "emissiveMap": "",
             "emissiveStrength": 1.0,
             "factorsScaleMaps": true,
-            "metallic": 0.0,
+            "metallic": 0.8,
             "metallicMap": "",
             "metallicRoughnessMap": "",
             "normalMap": "",
-            "roughness": 0.85,
+            "roughness": 0.45,
             "roughnessMap": "",
             "triplanar": false,
             "triplanarScale": 1.0
           }
         }
-      ],
-      "name": "Range Target 3",
-      "order": 12,
-      "parentId": 558,
+      ]
+    },
+    {
+      "id": 603,
+      "name": "Balloon Post 4",
+      "order": 604,
+      "parentId": 589,
       "position": [
-        50.0,
-        1.2,
-        29.6
+        40.0,
+        0.65,
+        20.0
       ],
       "rotation": [
         0.0,
@@ -18071,13 +19851,12 @@
         1.0
       ],
       "scale": [
-        1.0,
-        2.4,
-        0.2
-      ]
-    },
-    {
+        0.08,
+        1.3,
+        0.08
+      ],
       "collider": {
+        "friction": 0.7,
         "isTrigger": false
       },
       "color": [
@@ -18085,46 +19864,45 @@
         1.0,
         1.0
       ],
-      "id": 571,
       "materials": [
         {
           "embedded": {
-            "albedoMap": {
-              "path": "textures/proto_grid_light.png",
-              "pathGuid": "c90849c8fc6c88b0"
-            },
+            "albedoMap": "",
             "aoMap": "",
             "baseColor": [
-              0.62,
-              0.64,
-              0.68
+              0.35,
+              0.36,
+              0.38
             ],
             "emissiveColor": [
-              0.0,
-              0.0,
-              0.0
+              0,
+              0,
+              0
             ],
             "emissiveMap": "",
             "emissiveStrength": 1.0,
             "factorsScaleMaps": true,
-            "metallic": 0.0,
+            "metallic": 0.8,
             "metallicMap": "",
             "metallicRoughnessMap": "",
             "normalMap": "",
-            "roughness": 0.85,
+            "roughness": 0.45,
             "roughnessMap": "",
-            "triplanar": true,
-            "triplanarScale": 0.25
+            "triplanar": false,
+            "triplanarScale": 1.0
           }
         }
-      ],
-      "name": "Range Cover",
-      "order": 13,
-      "parentId": 558,
+      ]
+    },
+    {
+      "id": 605,
+      "name": "Balloon Post 5",
+      "order": 606,
+      "parentId": 589,
       "position": [
-        44.0,
-        1.25,
-        24.0
+        41.0,
+        0.5,
+        20.0
       ],
       "rotation": [
         0.0,
@@ -18133,9 +19911,2060 @@
         1.0
       ],
       "scale": [
-        2.4,
-        2.5,
-        0.4
+        0.08,
+        1.0,
+        0.08
+      ],
+      "collider": {
+        "friction": 0.7,
+        "isTrigger": false
+      },
+      "color": [
+        1.0,
+        1.0,
+        1.0
+      ],
+      "materials": [
+        {
+          "embedded": {
+            "albedoMap": "",
+            "aoMap": "",
+            "baseColor": [
+              0.35,
+              0.36,
+              0.38
+            ],
+            "emissiveColor": [
+              0,
+              0,
+              0
+            ],
+            "emissiveMap": "",
+            "emissiveStrength": 1.0,
+            "factorsScaleMaps": true,
+            "metallic": 0.8,
+            "metallicMap": "",
+            "metallicRoughnessMap": "",
+            "normalMap": "",
+            "roughness": 0.45,
+            "roughnessMap": "",
+            "triplanar": false,
+            "triplanarScale": 1.0
+          }
+        }
+      ]
+    },
+    {
+      "id": 608,
+      "name": "Can Table",
+      "order": 609,
+      "parentId": 607,
+      "position": [
+        43.8,
+        0.45,
+        15.0
+      ],
+      "rotation": [
+        0.0,
+        0.0,
+        0.0,
+        1.0
+      ],
+      "scale": [
+        2.6,
+        0.9,
+        1.0
+      ],
+      "collider": {
+        "friction": 0.7,
+        "isTrigger": false
+      },
+      "color": [
+        1.0,
+        1.0,
+        1.0
+      ],
+      "materials": [
+        {
+          "embedded": {
+            "albedoMap": "",
+            "aoMap": "",
+            "baseColor": [
+              0.45,
+              0.3,
+              0.17
+            ],
+            "emissiveColor": [
+              0,
+              0,
+              0
+            ],
+            "emissiveMap": "",
+            "emissiveStrength": 1.0,
+            "factorsScaleMaps": true,
+            "metallic": 0.0,
+            "metallicMap": "",
+            "metallicRoughnessMap": "",
+            "normalMap": "",
+            "roughness": 0.75,
+            "roughnessMap": "",
+            "triplanar": false,
+            "triplanarScale": 1.0
+          }
+        }
+      ]
+    },
+    {
+      "id": 619,
+      "name": "Zero Target Stand",
+      "order": 620,
+      "parentId": 607,
+      "position": [
+        46.5,
+        0.7,
+        25.2
+      ],
+      "rotation": [
+        0.0,
+        0.0,
+        0.0,
+        1.0
+      ],
+      "scale": [
+        0.12,
+        1.4,
+        0.12
+      ],
+      "collider": {
+        "friction": 0.7,
+        "isTrigger": false
+      },
+      "color": [
+        1.0,
+        1.0,
+        1.0
+      ],
+      "materials": [
+        {
+          "embedded": {
+            "albedoMap": "",
+            "aoMap": "",
+            "baseColor": [
+              0.35,
+              0.36,
+              0.38
+            ],
+            "emissiveColor": [
+              0,
+              0,
+              0
+            ],
+            "emissiveMap": "",
+            "emissiveStrength": 1.0,
+            "factorsScaleMaps": true,
+            "metallic": 0.8,
+            "metallicMap": "",
+            "metallicRoughnessMap": "",
+            "normalMap": "",
+            "roughness": 0.45,
+            "roughnessMap": "",
+            "triplanar": false,
+            "triplanarScale": 1.0
+          }
+        }
+      ]
+    },
+    {
+      "id": 620,
+      "name": "Zero Target Board",
+      "order": 621,
+      "parentId": 607,
+      "position": [
+        46.5,
+        1.6,
+        25.1
+      ],
+      "rotation": [
+        0.0,
+        0.0,
+        0.0,
+        1.0
+      ],
+      "scale": [
+        1.2,
+        1.2,
+        0.05
+      ],
+      "collider": {
+        "friction": 0.7,
+        "isTrigger": false
+      },
+      "color": [
+        1.0,
+        1.0,
+        1.0
+      ],
+      "materials": [
+        {
+          "embedded": {
+            "albedoMap": "",
+            "aoMap": "",
+            "baseColor": [
+              0.92,
+              0.92,
+              0.9
+            ],
+            "emissiveColor": [
+              0,
+              0,
+              0
+            ],
+            "emissiveMap": "",
+            "emissiveStrength": 1.0,
+            "factorsScaleMaps": true,
+            "metallic": 0.2,
+            "metallicMap": "",
+            "metallicRoughnessMap": "",
+            "normalMap": "",
+            "roughness": 0.5,
+            "roughnessMap": "",
+            "triplanar": false,
+            "triplanarScale": 1.0
+          }
+        }
+      ]
+    },
+    {
+      "id": 626,
+      "name": "Flipper Post 1",
+      "order": 627,
+      "parentId": 625,
+      "position": [
+        49.8,
+        0.6,
+        15.3
+      ],
+      "rotation": [
+        0.0,
+        0.0,
+        0.0,
+        1.0
+      ],
+      "scale": [
+        0.1,
+        1.2,
+        0.1
+      ],
+      "collider": {
+        "friction": 0.7,
+        "isTrigger": false
+      },
+      "color": [
+        1.0,
+        1.0,
+        1.0
+      ],
+      "materials": [
+        {
+          "embedded": {
+            "albedoMap": "",
+            "aoMap": "",
+            "baseColor": [
+              0.35,
+              0.36,
+              0.38
+            ],
+            "emissiveColor": [
+              0,
+              0,
+              0
+            ],
+            "emissiveMap": "",
+            "emissiveStrength": 1.0,
+            "factorsScaleMaps": true,
+            "metallic": 0.8,
+            "metallicMap": "",
+            "metallicRoughnessMap": "",
+            "normalMap": "",
+            "roughness": 0.45,
+            "roughnessMap": "",
+            "triplanar": false,
+            "triplanarScale": 1.0
+          }
+        }
+      ]
+    },
+    {
+      "id": 627,
+      "name": "Flipper 1",
+      "order": 628,
+      "parentId": 625,
+      "position": [
+        49.8,
+        1.55,
+        15.0
+      ],
+      "rotation": [
+        0.0,
+        0.0,
+        0.0,
+        1.0
+      ],
+      "scale": [
+        0.45,
+        0.45,
+        0.04
+      ],
+      "collider": {
+        "friction": 0.7,
+        "isTrigger": false
+      },
+      "color": [
+        1.0,
+        1.0,
+        1.0
+      ],
+      "materials": [
+        {
+          "embedded": {
+            "albedoMap": "",
+            "aoMap": "",
+            "baseColor": [
+              1.0,
+              0.42,
+              0.05
+            ],
+            "emissiveColor": [
+              0,
+              0,
+              0
+            ],
+            "emissiveMap": "",
+            "emissiveStrength": 1.0,
+            "factorsScaleMaps": true,
+            "metallic": 0.3,
+            "metallicMap": "",
+            "metallicRoughnessMap": "",
+            "normalMap": "",
+            "roughness": 0.5,
+            "roughnessMap": "",
+            "triplanar": false,
+            "triplanarScale": 1.0
+          }
+        }
+      ],
+      "Rigidbody": {
+        "Angular Damping": 0.15,
+        "Continuous Collision": false,
+        "Freeze Position X": false,
+        "Freeze Position Y": false,
+        "Freeze Position Z": false,
+        "Freeze Rotation X": false,
+        "Freeze Rotation Y": false,
+        "Freeze Rotation Z": false,
+        "Initial Velocity": [
+          0,
+          0,
+          0
+        ],
+        "Interpolate": "Interpolate",
+        "Is Kinematic": false,
+        "Linear Damping": 0.05,
+        "Mass": 0.8,
+        "Use Gravity": true
+      },
+      "joint": {
+        "anchor": [
+          0.0,
+          0.06,
+          0.0
+        ],
+        "axis": [
+          1.0,
+          0.0,
+          0.0
+        ],
+        "breakForce": 0.0,
+        "breakTorque": 0.0,
+        "connectedOrder": -1,
+        "limitLower": 0.0,
+        "limitUpper": 0.0,
+        "type": 1,
+        "useLimit": false
+      }
+    },
+    {
+      "id": 628,
+      "name": "Flipper Post 2",
+      "order": 629,
+      "parentId": 625,
+      "position": [
+        52.2,
+        0.6,
+        15.3
+      ],
+      "rotation": [
+        0.0,
+        0.0,
+        0.0,
+        1.0
+      ],
+      "scale": [
+        0.1,
+        1.2,
+        0.1
+      ],
+      "collider": {
+        "friction": 0.7,
+        "isTrigger": false
+      },
+      "color": [
+        1.0,
+        1.0,
+        1.0
+      ],
+      "materials": [
+        {
+          "embedded": {
+            "albedoMap": "",
+            "aoMap": "",
+            "baseColor": [
+              0.35,
+              0.36,
+              0.38
+            ],
+            "emissiveColor": [
+              0,
+              0,
+              0
+            ],
+            "emissiveMap": "",
+            "emissiveStrength": 1.0,
+            "factorsScaleMaps": true,
+            "metallic": 0.8,
+            "metallicMap": "",
+            "metallicRoughnessMap": "",
+            "normalMap": "",
+            "roughness": 0.45,
+            "roughnessMap": "",
+            "triplanar": false,
+            "triplanarScale": 1.0
+          }
+        }
+      ]
+    },
+    {
+      "id": 629,
+      "name": "Flipper 2",
+      "order": 630,
+      "parentId": 625,
+      "position": [
+        52.2,
+        1.55,
+        15.0
+      ],
+      "rotation": [
+        0.0,
+        0.0,
+        0.0,
+        1.0
+      ],
+      "scale": [
+        0.45,
+        0.45,
+        0.04
+      ],
+      "collider": {
+        "friction": 0.7,
+        "isTrigger": false
+      },
+      "color": [
+        1.0,
+        1.0,
+        1.0
+      ],
+      "materials": [
+        {
+          "embedded": {
+            "albedoMap": "",
+            "aoMap": "",
+            "baseColor": [
+              1.0,
+              0.42,
+              0.05
+            ],
+            "emissiveColor": [
+              0,
+              0,
+              0
+            ],
+            "emissiveMap": "",
+            "emissiveStrength": 1.0,
+            "factorsScaleMaps": true,
+            "metallic": 0.3,
+            "metallicMap": "",
+            "metallicRoughnessMap": "",
+            "normalMap": "",
+            "roughness": 0.5,
+            "roughnessMap": "",
+            "triplanar": false,
+            "triplanarScale": 1.0
+          }
+        }
+      ],
+      "Rigidbody": {
+        "Angular Damping": 0.15,
+        "Continuous Collision": false,
+        "Freeze Position X": false,
+        "Freeze Position Y": false,
+        "Freeze Position Z": false,
+        "Freeze Rotation X": false,
+        "Freeze Rotation Y": false,
+        "Freeze Rotation Z": false,
+        "Initial Velocity": [
+          0,
+          0,
+          0
+        ],
+        "Interpolate": "Interpolate",
+        "Is Kinematic": false,
+        "Linear Damping": 0.05,
+        "Mass": 0.8,
+        "Use Gravity": true
+      },
+      "joint": {
+        "anchor": [
+          0.0,
+          0.06,
+          0.0
+        ],
+        "axis": [
+          1.0,
+          0.0,
+          0.0
+        ],
+        "breakForce": 0.0,
+        "breakTorque": 0.0,
+        "connectedOrder": -1,
+        "limitLower": 0.0,
+        "limitUpper": 0.0,
+        "type": 1,
+        "useLimit": false
+      }
+    },
+    {
+      "id": 630,
+      "name": "Swing Frame Post 1",
+      "order": 631,
+      "parentId": 625,
+      "position": [
+        48.8,
+        1.4,
+        25.0
+      ],
+      "rotation": [
+        0.0,
+        0.0,
+        0.0,
+        1.0
+      ],
+      "scale": [
+        0.15,
+        2.8,
+        0.15
+      ],
+      "collider": {
+        "friction": 0.7,
+        "isTrigger": false
+      },
+      "color": [
+        1.0,
+        1.0,
+        1.0
+      ],
+      "materials": [
+        {
+          "embedded": {
+            "albedoMap": "",
+            "aoMap": "",
+            "baseColor": [
+              0.35,
+              0.36,
+              0.38
+            ],
+            "emissiveColor": [
+              0,
+              0,
+              0
+            ],
+            "emissiveMap": "",
+            "emissiveStrength": 1.0,
+            "factorsScaleMaps": true,
+            "metallic": 0.8,
+            "metallicMap": "",
+            "metallicRoughnessMap": "",
+            "normalMap": "",
+            "roughness": 0.45,
+            "roughnessMap": "",
+            "triplanar": false,
+            "triplanarScale": 1.0
+          }
+        }
+      ]
+    },
+    {
+      "id": 631,
+      "name": "Swing Frame Post 2",
+      "order": 632,
+      "parentId": 625,
+      "position": [
+        53.2,
+        1.4,
+        25.0
+      ],
+      "rotation": [
+        0.0,
+        0.0,
+        0.0,
+        1.0
+      ],
+      "scale": [
+        0.15,
+        2.8,
+        0.15
+      ],
+      "collider": {
+        "friction": 0.7,
+        "isTrigger": false
+      },
+      "color": [
+        1.0,
+        1.0,
+        1.0
+      ],
+      "materials": [
+        {
+          "embedded": {
+            "albedoMap": "",
+            "aoMap": "",
+            "baseColor": [
+              0.35,
+              0.36,
+              0.38
+            ],
+            "emissiveColor": [
+              0,
+              0,
+              0
+            ],
+            "emissiveMap": "",
+            "emissiveStrength": 1.0,
+            "factorsScaleMaps": true,
+            "metallic": 0.8,
+            "metallicMap": "",
+            "metallicRoughnessMap": "",
+            "normalMap": "",
+            "roughness": 0.45,
+            "roughnessMap": "",
+            "triplanar": false,
+            "triplanarScale": 1.0
+          }
+        }
+      ]
+    },
+    {
+      "id": 632,
+      "name": "Swing Frame Bar",
+      "order": 633,
+      "parentId": 625,
+      "position": [
+        51.0,
+        2.85,
+        25.0
+      ],
+      "rotation": [
+        0.0,
+        0.0,
+        0.0,
+        1.0
+      ],
+      "scale": [
+        4.6,
+        0.12,
+        0.12
+      ],
+      "collider": {
+        "friction": 0.7,
+        "isTrigger": false
+      },
+      "color": [
+        1.0,
+        1.0,
+        1.0
+      ],
+      "materials": [
+        {
+          "embedded": {
+            "albedoMap": "",
+            "aoMap": "",
+            "baseColor": [
+              0.35,
+              0.36,
+              0.38
+            ],
+            "emissiveColor": [
+              0,
+              0,
+              0
+            ],
+            "emissiveMap": "",
+            "emissiveStrength": 1.0,
+            "factorsScaleMaps": true,
+            "metallic": 0.8,
+            "metallicMap": "",
+            "metallicRoughnessMap": "",
+            "normalMap": "",
+            "roughness": 0.45,
+            "roughnessMap": "",
+            "triplanar": false,
+            "triplanarScale": 1.0
+          }
+        }
+      ]
+    },
+    {
+      "id": 633,
+      "name": "Swing Plate 1",
+      "order": 634,
+      "parentId": 625,
+      "position": [
+        49.7,
+        2.49,
+        25.0
+      ],
+      "rotation": [
+        0.0,
+        0.0,
+        0.0,
+        1.0
+      ],
+      "scale": [
+        0.6,
+        0.6,
+        0.04
+      ],
+      "collider": {
+        "friction": 0.7,
+        "isTrigger": false
+      },
+      "color": [
+        1.0,
+        1.0,
+        1.0
+      ],
+      "materials": [
+        {
+          "embedded": {
+            "albedoMap": "",
+            "aoMap": "",
+            "baseColor": [
+              0.92,
+              0.92,
+              0.9
+            ],
+            "emissiveColor": [
+              0,
+              0,
+              0
+            ],
+            "emissiveMap": "",
+            "emissiveStrength": 1.0,
+            "factorsScaleMaps": true,
+            "metallic": 0.2,
+            "metallicMap": "",
+            "metallicRoughnessMap": "",
+            "normalMap": "",
+            "roughness": 0.5,
+            "roughnessMap": "",
+            "triplanar": false,
+            "triplanarScale": 1.0
+          }
+        }
+      ],
+      "Rigidbody": {
+        "Angular Damping": 0.05,
+        "Continuous Collision": false,
+        "Freeze Position X": false,
+        "Freeze Position Y": false,
+        "Freeze Position Z": false,
+        "Freeze Rotation X": false,
+        "Freeze Rotation Y": false,
+        "Freeze Rotation Z": false,
+        "Initial Velocity": [
+          0,
+          0,
+          0
+        ],
+        "Interpolate": "Interpolate",
+        "Is Kinematic": false,
+        "Linear Damping": 0.05,
+        "Mass": 1.5,
+        "Use Gravity": true
+      },
+      "joint": {
+        "anchor": [
+          0.0,
+          0.2999999999999998,
+          0.0
+        ],
+        "axis": [
+          1.0,
+          0.0,
+          0.0
+        ],
+        "breakForce": 0.0,
+        "breakTorque": 0.0,
+        "connectedOrder": -1,
+        "limitLower": 0.0,
+        "limitUpper": 0.0,
+        "type": 1,
+        "useLimit": false
+      }
+    },
+    {
+      "id": 634,
+      "name": "Swing Plate 2",
+      "order": 635,
+      "parentId": 625,
+      "position": [
+        51.0,
+        2.59,
+        25.0
+      ],
+      "rotation": [
+        0.0,
+        0.0,
+        0.0,
+        1.0
+      ],
+      "scale": [
+        0.4,
+        0.4,
+        0.04
+      ],
+      "collider": {
+        "friction": 0.7,
+        "isTrigger": false
+      },
+      "color": [
+        1.0,
+        1.0,
+        1.0
+      ],
+      "materials": [
+        {
+          "embedded": {
+            "albedoMap": "",
+            "aoMap": "",
+            "baseColor": [
+              1.0,
+              0.42,
+              0.05
+            ],
+            "emissiveColor": [
+              0,
+              0,
+              0
+            ],
+            "emissiveMap": "",
+            "emissiveStrength": 1.0,
+            "factorsScaleMaps": true,
+            "metallic": 0.3,
+            "metallicMap": "",
+            "metallicRoughnessMap": "",
+            "normalMap": "",
+            "roughness": 0.5,
+            "roughnessMap": "",
+            "triplanar": false,
+            "triplanarScale": 1.0
+          }
+        }
+      ],
+      "Rigidbody": {
+        "Angular Damping": 0.05,
+        "Continuous Collision": false,
+        "Freeze Position X": false,
+        "Freeze Position Y": false,
+        "Freeze Position Z": false,
+        "Freeze Rotation X": false,
+        "Freeze Rotation Y": false,
+        "Freeze Rotation Z": false,
+        "Initial Velocity": [
+          0,
+          0,
+          0
+        ],
+        "Interpolate": "Interpolate",
+        "Is Kinematic": false,
+        "Linear Damping": 0.05,
+        "Mass": 1.5,
+        "Use Gravity": true
+      },
+      "joint": {
+        "anchor": [
+          0.0,
+          0.20000000000000018,
+          0.0
+        ],
+        "axis": [
+          1.0,
+          0.0,
+          0.0
+        ],
+        "breakForce": 0.0,
+        "breakTorque": 0.0,
+        "connectedOrder": -1,
+        "limitLower": 0.0,
+        "limitUpper": 0.0,
+        "type": 1,
+        "useLimit": false
+      }
+    },
+    {
+      "id": 635,
+      "name": "Swing Plate 3",
+      "order": 636,
+      "parentId": 625,
+      "position": [
+        52.3,
+        2.49,
+        25.0
+      ],
+      "rotation": [
+        0.0,
+        0.0,
+        0.0,
+        1.0
+      ],
+      "scale": [
+        0.6,
+        0.6,
+        0.04
+      ],
+      "collider": {
+        "friction": 0.7,
+        "isTrigger": false
+      },
+      "color": [
+        1.0,
+        1.0,
+        1.0
+      ],
+      "materials": [
+        {
+          "embedded": {
+            "albedoMap": "",
+            "aoMap": "",
+            "baseColor": [
+              0.92,
+              0.92,
+              0.9
+            ],
+            "emissiveColor": [
+              0,
+              0,
+              0
+            ],
+            "emissiveMap": "",
+            "emissiveStrength": 1.0,
+            "factorsScaleMaps": true,
+            "metallic": 0.2,
+            "metallicMap": "",
+            "metallicRoughnessMap": "",
+            "normalMap": "",
+            "roughness": 0.5,
+            "roughnessMap": "",
+            "triplanar": false,
+            "triplanarScale": 1.0
+          }
+        }
+      ],
+      "Rigidbody": {
+        "Angular Damping": 0.05,
+        "Continuous Collision": false,
+        "Freeze Position X": false,
+        "Freeze Position Y": false,
+        "Freeze Position Z": false,
+        "Freeze Rotation X": false,
+        "Freeze Rotation Y": false,
+        "Freeze Rotation Z": false,
+        "Initial Velocity": [
+          0,
+          0,
+          0
+        ],
+        "Interpolate": "Interpolate",
+        "Is Kinematic": false,
+        "Linear Damping": 0.05,
+        "Mass": 1.5,
+        "Use Gravity": true
+      },
+      "joint": {
+        "anchor": [
+          0.0,
+          0.2999999999999998,
+          0.0
+        ],
+        "axis": [
+          1.0,
+          0.0,
+          0.0
+        ],
+        "breakForce": 0.0,
+        "breakTorque": 0.0,
+        "connectedOrder": -1,
+        "limitLower": 0.0,
+        "limitUpper": 0.0,
+        "type": 1,
+        "useLimit": false
+      }
+    },
+    {
+      "id": 636,
+      "name": "Mover Frame Post 1",
+      "order": 637,
+      "parentId": 625,
+      "position": [
+        48.6,
+        1.8,
+        35.0
+      ],
+      "rotation": [
+        0.0,
+        0.0,
+        0.0,
+        1.0
+      ],
+      "scale": [
+        0.15,
+        3.6,
+        0.15
+      ],
+      "collider": {
+        "friction": 0.7,
+        "isTrigger": false
+      },
+      "color": [
+        1.0,
+        1.0,
+        1.0
+      ],
+      "materials": [
+        {
+          "embedded": {
+            "albedoMap": "",
+            "aoMap": "",
+            "baseColor": [
+              0.35,
+              0.36,
+              0.38
+            ],
+            "emissiveColor": [
+              0,
+              0,
+              0
+            ],
+            "emissiveMap": "",
+            "emissiveStrength": 1.0,
+            "factorsScaleMaps": true,
+            "metallic": 0.8,
+            "metallicMap": "",
+            "metallicRoughnessMap": "",
+            "normalMap": "",
+            "roughness": 0.45,
+            "roughnessMap": "",
+            "triplanar": false,
+            "triplanarScale": 1.0
+          }
+        }
+      ]
+    },
+    {
+      "id": 637,
+      "name": "Mover Frame Post 2",
+      "order": 638,
+      "parentId": 625,
+      "position": [
+        53.4,
+        1.8,
+        35.0
+      ],
+      "rotation": [
+        0.0,
+        0.0,
+        0.0,
+        1.0
+      ],
+      "scale": [
+        0.15,
+        3.6,
+        0.15
+      ],
+      "collider": {
+        "friction": 0.7,
+        "isTrigger": false
+      },
+      "color": [
+        1.0,
+        1.0,
+        1.0
+      ],
+      "materials": [
+        {
+          "embedded": {
+            "albedoMap": "",
+            "aoMap": "",
+            "baseColor": [
+              0.35,
+              0.36,
+              0.38
+            ],
+            "emissiveColor": [
+              0,
+              0,
+              0
+            ],
+            "emissiveMap": "",
+            "emissiveStrength": 1.0,
+            "factorsScaleMaps": true,
+            "metallic": 0.8,
+            "metallicMap": "",
+            "metallicRoughnessMap": "",
+            "normalMap": "",
+            "roughness": 0.45,
+            "roughnessMap": "",
+            "triplanar": false,
+            "triplanarScale": 1.0
+          }
+        }
+      ]
+    },
+    {
+      "id": 638,
+      "name": "Mover Frame Bar",
+      "order": 639,
+      "parentId": 625,
+      "position": [
+        51.0,
+        3.65,
+        35.0
+      ],
+      "rotation": [
+        0.0,
+        0.0,
+        0.0,
+        1.0
+      ],
+      "scale": [
+        5.0,
+        0.12,
+        0.12
+      ],
+      "collider": {
+        "friction": 0.7,
+        "isTrigger": false
+      },
+      "color": [
+        1.0,
+        1.0,
+        1.0
+      ],
+      "materials": [
+        {
+          "embedded": {
+            "albedoMap": "",
+            "aoMap": "",
+            "baseColor": [
+              0.35,
+              0.36,
+              0.38
+            ],
+            "emissiveColor": [
+              0,
+              0,
+              0
+            ],
+            "emissiveMap": "",
+            "emissiveStrength": 1.0,
+            "factorsScaleMaps": true,
+            "metallic": 0.8,
+            "metallicMap": "",
+            "metallicRoughnessMap": "",
+            "normalMap": "",
+            "roughness": 0.45,
+            "roughnessMap": "",
+            "triplanar": false,
+            "triplanarScale": 1.0
+          }
+        }
+      ]
+    },
+    {
+      "id": 639,
+      "name": "Mover Arm",
+      "order": 640,
+      "parentId": 625,
+      "position": [
+        51.0,
+        2.7399999999999998,
+        35.0
+      ],
+      "rotation": [
+        0.0,
+        0.0,
+        0.0,
+        1.0
+      ],
+      "scale": [
+        0.04,
+        1.7,
+        0.04
+      ],
+      "collider": {
+        "friction": 0.7,
+        "isTrigger": false
+      },
+      "color": [
+        1.0,
+        1.0,
+        1.0
+      ],
+      "materials": [
+        {
+          "embedded": {
+            "albedoMap": "",
+            "aoMap": "",
+            "baseColor": [
+              0.35,
+              0.36,
+              0.38
+            ],
+            "emissiveColor": [
+              0,
+              0,
+              0
+            ],
+            "emissiveMap": "",
+            "emissiveStrength": 1.0,
+            "factorsScaleMaps": true,
+            "metallic": 0.8,
+            "metallicMap": "",
+            "metallicRoughnessMap": "",
+            "normalMap": "",
+            "roughness": 0.45,
+            "roughnessMap": "",
+            "triplanar": false,
+            "triplanarScale": 1.0
+          }
+        }
+      ],
+      "Rigidbody": {
+        "Angular Damping": 0.0,
+        "Continuous Collision": false,
+        "Freeze Position X": false,
+        "Freeze Position Y": false,
+        "Freeze Position Z": false,
+        "Freeze Rotation X": false,
+        "Freeze Rotation Y": false,
+        "Freeze Rotation Z": false,
+        "Initial Velocity": [
+          1.8307692307692307,
+          0.0,
+          0.0
+        ],
+        "Interpolate": "Interpolate",
+        "Is Kinematic": false,
+        "Linear Damping": 0.0,
+        "Mass": 0.3,
+        "Use Gravity": true
+      },
+      "joint": {
+        "anchor": [
+          0.0,
+          0.85,
+          0.0
+        ],
+        "axis": [
+          0.0,
+          0.0,
+          1.0
+        ],
+        "breakForce": 0.0,
+        "breakTorque": 0.0,
+        "connectedOrder": -1,
+        "limitLower": 0.0,
+        "limitUpper": 0.0,
+        "type": 1,
+        "useLimit": false
+      }
+    },
+    {
+      "id": 640,
+      "name": "Mover Plate",
+      "order": 641,
+      "parentId": 625,
+      "position": [
+        51.0,
+        1.64,
+        35.0
+      ],
+      "rotation": [
+        0.0,
+        0.0,
+        0.0,
+        1.0
+      ],
+      "scale": [
+        0.5,
+        0.5,
+        0.05
+      ],
+      "collider": {
+        "friction": 0.7,
+        "isTrigger": false
+      },
+      "color": [
+        1.0,
+        1.0,
+        1.0
+      ],
+      "materials": [
+        {
+          "embedded": {
+            "albedoMap": "",
+            "aoMap": "",
+            "baseColor": [
+              0.1,
+              0.9,
+              1.0
+            ],
+            "emissiveColor": [
+              0.0,
+              0.5,
+              0.7
+            ],
+            "emissiveMap": "",
+            "emissiveStrength": 1.5,
+            "factorsScaleMaps": true,
+            "metallic": 0.0,
+            "metallicMap": "",
+            "metallicRoughnessMap": "",
+            "normalMap": "",
+            "roughness": 0.4,
+            "roughnessMap": "",
+            "triplanar": false,
+            "triplanarScale": 1.0
+          }
+        }
+      ],
+      "Rigidbody": {
+        "Angular Damping": 0.0,
+        "Continuous Collision": false,
+        "Freeze Position X": false,
+        "Freeze Position Y": false,
+        "Freeze Position Z": false,
+        "Freeze Rotation X": false,
+        "Freeze Rotation Y": false,
+        "Freeze Rotation Z": false,
+        "Initial Velocity": [
+          4.2,
+          0.0,
+          0.0
+        ],
+        "Interpolate": "Interpolate",
+        "Is Kinematic": false,
+        "Linear Damping": 0.0,
+        "Mass": 2.0,
+        "Use Gravity": true
+      },
+      "joint": {
+        "anchor": [
+          0.0,
+          0.25,
+          0.0
+        ],
+        "axis": [
+          1.0,
+          0.0,
+          0.0
+        ],
+        "breakForce": 0.0,
+        "breakTorque": 0.0,
+        "connectedOrder": 640,
+        "limitLower": 0.0,
+        "limitUpper": 0.0,
+        "type": 0,
+        "useLimit": false
+      }
+    },
+    {
+      "id": 642,
+      "name": "Crate 1",
+      "order": 643,
+      "parentId": 641,
+      "position": [
+        56.36,
+        0.33999999999999997,
+        35.0
+      ],
+      "rotation": [
+        0.0,
+        0.0,
+        0.0,
+        1.0
+      ],
+      "scale": [
+        0.6,
+        0.6,
+        0.6
+      ],
+      "collider": {
+        "friction": 0.7,
+        "isTrigger": false
+      },
+      "color": [
+        1.0,
+        1.0,
+        1.0
+      ],
+      "materials": [
+        {
+          "embedded": {
+            "albedoMap": "",
+            "aoMap": "",
+            "baseColor": [
+              0.72,
+              0.52,
+              0.28
+            ],
+            "emissiveColor": [
+              0,
+              0,
+              0
+            ],
+            "emissiveMap": "",
+            "emissiveStrength": 1.0,
+            "factorsScaleMaps": true,
+            "metallic": 0.0,
+            "metallicMap": "",
+            "metallicRoughnessMap": "",
+            "normalMap": "",
+            "roughness": 0.8,
+            "roughnessMap": "",
+            "triplanar": false,
+            "triplanarScale": 1.0
+          }
+        }
+      ],
+      "Rigidbody": {
+        "Angular Damping": 0.1,
+        "Continuous Collision": false,
+        "Freeze Position X": false,
+        "Freeze Position Y": false,
+        "Freeze Position Z": false,
+        "Freeze Rotation X": false,
+        "Freeze Rotation Y": false,
+        "Freeze Rotation Z": false,
+        "Initial Velocity": [
+          0,
+          0,
+          0
+        ],
+        "Interpolate": "Interpolate",
+        "Is Kinematic": false,
+        "Linear Damping": 0.05,
+        "Mass": 1.5,
+        "Use Gravity": true
+      }
+    },
+    {
+      "id": 643,
+      "name": "Crate 2",
+      "order": 644,
+      "parentId": 641,
+      "position": [
+        57.0,
+        0.33999999999999997,
+        35.0
+      ],
+      "rotation": [
+        0.0,
+        0.0,
+        0.0,
+        1.0
+      ],
+      "scale": [
+        0.6,
+        0.6,
+        0.6
+      ],
+      "collider": {
+        "friction": 0.7,
+        "isTrigger": false
+      },
+      "color": [
+        1.0,
+        1.0,
+        1.0
+      ],
+      "materials": [
+        {
+          "embedded": {
+            "albedoMap": "",
+            "aoMap": "",
+            "baseColor": [
+              0.72,
+              0.52,
+              0.28
+            ],
+            "emissiveColor": [
+              0,
+              0,
+              0
+            ],
+            "emissiveMap": "",
+            "emissiveStrength": 1.0,
+            "factorsScaleMaps": true,
+            "metallic": 0.0,
+            "metallicMap": "",
+            "metallicRoughnessMap": "",
+            "normalMap": "",
+            "roughness": 0.8,
+            "roughnessMap": "",
+            "triplanar": false,
+            "triplanarScale": 1.0
+          }
+        }
+      ],
+      "Rigidbody": {
+        "Angular Damping": 0.1,
+        "Continuous Collision": false,
+        "Freeze Position X": false,
+        "Freeze Position Y": false,
+        "Freeze Position Z": false,
+        "Freeze Rotation X": false,
+        "Freeze Rotation Y": false,
+        "Freeze Rotation Z": false,
+        "Initial Velocity": [
+          0,
+          0,
+          0
+        ],
+        "Interpolate": "Interpolate",
+        "Is Kinematic": false,
+        "Linear Damping": 0.05,
+        "Mass": 1.5,
+        "Use Gravity": true
+      }
+    },
+    {
+      "id": 644,
+      "name": "Crate 3",
+      "order": 645,
+      "parentId": 641,
+      "position": [
+        57.64,
+        0.33999999999999997,
+        35.0
+      ],
+      "rotation": [
+        0.0,
+        0.0,
+        0.0,
+        1.0
+      ],
+      "scale": [
+        0.6,
+        0.6,
+        0.6
+      ],
+      "collider": {
+        "friction": 0.7,
+        "isTrigger": false
+      },
+      "color": [
+        1.0,
+        1.0,
+        1.0
+      ],
+      "materials": [
+        {
+          "embedded": {
+            "albedoMap": "",
+            "aoMap": "",
+            "baseColor": [
+              0.72,
+              0.52,
+              0.28
+            ],
+            "emissiveColor": [
+              0,
+              0,
+              0
+            ],
+            "emissiveMap": "",
+            "emissiveStrength": 1.0,
+            "factorsScaleMaps": true,
+            "metallic": 0.0,
+            "metallicMap": "",
+            "metallicRoughnessMap": "",
+            "normalMap": "",
+            "roughness": 0.8,
+            "roughnessMap": "",
+            "triplanar": false,
+            "triplanarScale": 1.0
+          }
+        }
+      ],
+      "Rigidbody": {
+        "Angular Damping": 0.1,
+        "Continuous Collision": false,
+        "Freeze Position X": false,
+        "Freeze Position Y": false,
+        "Freeze Position Z": false,
+        "Freeze Rotation X": false,
+        "Freeze Rotation Y": false,
+        "Freeze Rotation Z": false,
+        "Initial Velocity": [
+          0,
+          0,
+          0
+        ],
+        "Interpolate": "Interpolate",
+        "Is Kinematic": false,
+        "Linear Damping": 0.05,
+        "Mass": 1.5,
+        "Use Gravity": true
+      }
+    },
+    {
+      "id": 645,
+      "name": "Crate 4",
+      "order": 646,
+      "parentId": 641,
+      "position": [
+        56.68,
+        0.94,
+        35.0
+      ],
+      "rotation": [
+        0.0,
+        0.0,
+        0.0,
+        1.0
+      ],
+      "scale": [
+        0.6,
+        0.6,
+        0.6
+      ],
+      "collider": {
+        "friction": 0.7,
+        "isTrigger": false
+      },
+      "color": [
+        1.0,
+        1.0,
+        1.0
+      ],
+      "materials": [
+        {
+          "embedded": {
+            "albedoMap": "",
+            "aoMap": "",
+            "baseColor": [
+              0.72,
+              0.52,
+              0.28
+            ],
+            "emissiveColor": [
+              0,
+              0,
+              0
+            ],
+            "emissiveMap": "",
+            "emissiveStrength": 1.0,
+            "factorsScaleMaps": true,
+            "metallic": 0.0,
+            "metallicMap": "",
+            "metallicRoughnessMap": "",
+            "normalMap": "",
+            "roughness": 0.8,
+            "roughnessMap": "",
+            "triplanar": false,
+            "triplanarScale": 1.0
+          }
+        }
+      ],
+      "Rigidbody": {
+        "Angular Damping": 0.1,
+        "Continuous Collision": false,
+        "Freeze Position X": false,
+        "Freeze Position Y": false,
+        "Freeze Position Z": false,
+        "Freeze Rotation X": false,
+        "Freeze Rotation Y": false,
+        "Freeze Rotation Z": false,
+        "Initial Velocity": [
+          0,
+          0,
+          0
+        ],
+        "Interpolate": "Interpolate",
+        "Is Kinematic": false,
+        "Linear Damping": 0.05,
+        "Mass": 1.5,
+        "Use Gravity": true
+      }
+    },
+    {
+      "id": 646,
+      "name": "Crate 5",
+      "order": 647,
+      "parentId": 641,
+      "position": [
+        57.32,
+        0.94,
+        35.0
+      ],
+      "rotation": [
+        0.0,
+        0.0,
+        0.0,
+        1.0
+      ],
+      "scale": [
+        0.6,
+        0.6,
+        0.6
+      ],
+      "collider": {
+        "friction": 0.7,
+        "isTrigger": false
+      },
+      "color": [
+        1.0,
+        1.0,
+        1.0
+      ],
+      "materials": [
+        {
+          "embedded": {
+            "albedoMap": "",
+            "aoMap": "",
+            "baseColor": [
+              0.72,
+              0.52,
+              0.28
+            ],
+            "emissiveColor": [
+              0,
+              0,
+              0
+            ],
+            "emissiveMap": "",
+            "emissiveStrength": 1.0,
+            "factorsScaleMaps": true,
+            "metallic": 0.0,
+            "metallicMap": "",
+            "metallicRoughnessMap": "",
+            "normalMap": "",
+            "roughness": 0.8,
+            "roughnessMap": "",
+            "triplanar": false,
+            "triplanarScale": 1.0
+          }
+        }
+      ],
+      "Rigidbody": {
+        "Angular Damping": 0.1,
+        "Continuous Collision": false,
+        "Freeze Position X": false,
+        "Freeze Position Y": false,
+        "Freeze Position Z": false,
+        "Freeze Rotation X": false,
+        "Freeze Rotation Y": false,
+        "Freeze Rotation Z": false,
+        "Initial Velocity": [
+          0,
+          0,
+          0
+        ],
+        "Interpolate": "Interpolate",
+        "Is Kinematic": false,
+        "Linear Damping": 0.05,
+        "Mass": 1.5,
+        "Use Gravity": true
+      }
+    },
+    {
+      "id": 647,
+      "name": "Crate 6",
+      "order": 648,
+      "parentId": 641,
+      "position": [
+        57.0,
+        1.54,
+        35.0
+      ],
+      "rotation": [
+        0.0,
+        0.0,
+        0.0,
+        1.0
+      ],
+      "scale": [
+        0.6,
+        0.6,
+        0.6
+      ],
+      "collider": {
+        "friction": 0.7,
+        "isTrigger": false
+      },
+      "color": [
+        1.0,
+        1.0,
+        1.0
+      ],
+      "materials": [
+        {
+          "embedded": {
+            "albedoMap": "",
+            "aoMap": "",
+            "baseColor": [
+              0.72,
+              0.52,
+              0.28
+            ],
+            "emissiveColor": [
+              0,
+              0,
+              0
+            ],
+            "emissiveMap": "",
+            "emissiveStrength": 1.0,
+            "factorsScaleMaps": true,
+            "metallic": 0.0,
+            "metallicMap": "",
+            "metallicRoughnessMap": "",
+            "normalMap": "",
+            "roughness": 0.8,
+            "roughnessMap": "",
+            "triplanar": false,
+            "triplanarScale": 1.0
+          }
+        }
+      ],
+      "Rigidbody": {
+        "Angular Damping": 0.1,
+        "Continuous Collision": false,
+        "Freeze Position X": false,
+        "Freeze Position Y": false,
+        "Freeze Position Z": false,
+        "Freeze Rotation X": false,
+        "Freeze Rotation Y": false,
+        "Freeze Rotation Z": false,
+        "Initial Velocity": [
+          0,
+          0,
+          0
+        ],
+        "Interpolate": "Interpolate",
+        "Is Kinematic": false,
+        "Linear Damping": 0.05,
+        "Mass": 1.5,
+        "Use Gravity": true
+      }
+    },
+    {
+      "id": 648,
+      "name": "Gong Frame Post 1",
+      "order": 649,
+      "parentId": 641,
+      "position": [
+        55.7,
+        1.75,
+        50.0
+      ],
+      "rotation": [
+        0.0,
+        0.0,
+        0.0,
+        1.0
+      ],
+      "scale": [
+        0.2,
+        3.5,
+        0.2
+      ],
+      "collider": {
+        "friction": 0.7,
+        "isTrigger": false
+      },
+      "color": [
+        1.0,
+        1.0,
+        1.0
+      ],
+      "materials": [
+        {
+          "embedded": {
+            "albedoMap": "",
+            "aoMap": "",
+            "baseColor": [
+              0.45,
+              0.3,
+              0.17
+            ],
+            "emissiveColor": [
+              0,
+              0,
+              0
+            ],
+            "emissiveMap": "",
+            "emissiveStrength": 1.0,
+            "factorsScaleMaps": true,
+            "metallic": 0.0,
+            "metallicMap": "",
+            "metallicRoughnessMap": "",
+            "normalMap": "",
+            "roughness": 0.75,
+            "roughnessMap": "",
+            "triplanar": false,
+            "triplanarScale": 1.0
+          }
+        }
+      ]
+    },
+    {
+      "id": 649,
+      "name": "Gong Frame Post 2",
+      "order": 650,
+      "parentId": 641,
+      "position": [
+        58.3,
+        1.75,
+        50.0
+      ],
+      "rotation": [
+        0.0,
+        0.0,
+        0.0,
+        1.0
+      ],
+      "scale": [
+        0.2,
+        3.5,
+        0.2
+      ],
+      "collider": {
+        "friction": 0.7,
+        "isTrigger": false
+      },
+      "color": [
+        1.0,
+        1.0,
+        1.0
+      ],
+      "materials": [
+        {
+          "embedded": {
+            "albedoMap": "",
+            "aoMap": "",
+            "baseColor": [
+              0.45,
+              0.3,
+              0.17
+            ],
+            "emissiveColor": [
+              0,
+              0,
+              0
+            ],
+            "emissiveMap": "",
+            "emissiveStrength": 1.0,
+            "factorsScaleMaps": true,
+            "metallic": 0.0,
+            "metallicMap": "",
+            "metallicRoughnessMap": "",
+            "normalMap": "",
+            "roughness": 0.75,
+            "roughnessMap": "",
+            "triplanar": false,
+            "triplanarScale": 1.0
+          }
+        }
+      ]
+    },
+    {
+      "id": 650,
+      "name": "Gong Frame Bar",
+      "order": 651,
+      "parentId": 641,
+      "position": [
+        57.0,
+        3.55,
+        50.0
+      ],
+      "rotation": [
+        0.0,
+        0.0,
+        0.0,
+        1.0
+      ],
+      "scale": [
+        2.9,
+        0.2,
+        0.2
+      ],
+      "collider": {
+        "friction": 0.7,
+        "isTrigger": false
+      },
+      "color": [
+        1.0,
+        1.0,
+        1.0
+      ],
+      "materials": [
+        {
+          "embedded": {
+            "albedoMap": "",
+            "aoMap": "",
+            "baseColor": [
+              0.45,
+              0.3,
+              0.17
+            ],
+            "emissiveColor": [
+              0,
+              0,
+              0
+            ],
+            "emissiveMap": "",
+            "emissiveStrength": 1.0,
+            "factorsScaleMaps": true,
+            "metallic": 0.0,
+            "metallicMap": "",
+            "metallicRoughnessMap": "",
+            "normalMap": "",
+            "roughness": 0.75,
+            "roughnessMap": "",
+            "triplanar": false,
+            "triplanarScale": 1.0
+          }
+        }
       ]
     }
   ],
@@ -19486,7 +23315,7 @@
         "Size": [
           50.974998474121094,
           8.0,
-          30.860000610351563
+          30.860000610351562
         ]
       },
       "id": 549,
@@ -19551,9 +23380,9 @@
       "order": 492,
       "parentId": -1,
       "position": [
-        0.0,
-        0.019999999552965164,
-        16.8799991607666
+        45.0,
+        0.1,
+        -2.5
       ],
       "rotation": [
         0.0,
@@ -19799,9 +23628,119 @@
     },
     {
       "id": 558,
-      "name": "Weapon Feel Range",
+      "name": "Shooting Range",
       "order": 559,
       "parentId": -1,
+      "position": [
+        0.0,
+        0.0,
+        0.0
+      ],
+      "rotation": [
+        0.0,
+        0.0,
+        0.0,
+        1.0
+      ],
+      "scale": [
+        1.0,
+        1.0,
+        1.0
+      ]
+    },
+    {
+      "id": 559,
+      "name": "Range Structure",
+      "order": 560,
+      "parentId": 558,
+      "position": [
+        0.0,
+        0.0,
+        0.0
+      ],
+      "rotation": [
+        0.0,
+        0.0,
+        0.0,
+        1.0
+      ],
+      "scale": [
+        1.0,
+        1.0,
+        1.0
+      ]
+    },
+    {
+      "id": 589,
+      "name": "Lane 1 - Poppers",
+      "order": 590,
+      "parentId": 558,
+      "position": [
+        0.0,
+        0.0,
+        0.0
+      ],
+      "rotation": [
+        0.0,
+        0.0,
+        0.0,
+        1.0
+      ],
+      "scale": [
+        1.0,
+        1.0,
+        1.0
+      ]
+    },
+    {
+      "id": 607,
+      "name": "Lane 2 - Cans & Zero",
+      "order": 608,
+      "parentId": 558,
+      "position": [
+        0.0,
+        0.0,
+        0.0
+      ],
+      "rotation": [
+        0.0,
+        0.0,
+        0.0,
+        1.0
+      ],
+      "scale": [
+        1.0,
+        1.0,
+        1.0
+      ]
+    },
+    {
+      "id": 625,
+      "name": "Lane 3 - Swingers",
+      "order": 626,
+      "parentId": 558,
+      "position": [
+        0.0,
+        0.0,
+        0.0
+      ],
+      "rotation": [
+        0.0,
+        0.0,
+        0.0,
+        1.0
+      ],
+      "scale": [
+        1.0,
+        1.0,
+        1.0
+      ]
+    },
+    {
+      "id": 641,
+      "name": "Lane 4 - Crates & Gong",
+      "order": 642,
+      "parentId": 558,
       "position": [
         0.0,
         0.0,
@@ -22784,7 +26723,7 @@
       "position": [
         -0.5842999815940857,
         1.5,
-        -19.861099243164063
+        -19.861099243164062
       ],
       "rotation": [
         0.0,
@@ -25938,7 +29877,7 @@
       "position": [
         -0.739300012588501,
         2.799999952316284,
-        -17.427200317382813
+        -17.427200317382812
       ],
       "rotation": [
         0.0,
@@ -27513,7 +31452,7 @@
       "parentId": 519,
       "path": "primitive://sphere#s218",
       "position": [
-        3.1847000122070313,
+        3.1847000122070312,
         2.799999952316284,
         -16.065000534057617
       ],
@@ -36478,7 +40417,7 @@
       "position": [
         27.200000762939453,
         6.076300144195557,
-        -10.204299926757813
+        -10.204299926757812
       ],
       "rotation": [
         0.8870108127593994,
@@ -36789,6 +40728,1515 @@
         0.30000001192092896,
         3.5999999046325684
       ]
+    },
+    {
+      "id": 598,
+      "name": "Balloon 1",
+      "order": 599,
+      "parentId": 589,
+      "position": [
+        37.0,
+        1.19,
+        20.0
+      ],
+      "rotation": [
+        0.0,
+        0.0,
+        0.0,
+        1.0
+      ],
+      "scale": [
+        0.36,
+        0.36,
+        0.36
+      ],
+      "path": "primitive://sphere#p599",
+      "collider": {
+        "bounciness": 0.6,
+        "friction": 0.4,
+        "halfExtents": [
+          0.5,
+          0.0,
+          0.0
+        ],
+        "shape": 1,
+        "isTrigger": false
+      },
+      "materials": [
+        {
+          "embedded": {
+            "albedoMap": "",
+            "aoMap": "",
+            "baseColor": [
+              1.0,
+              0.2,
+              0.3
+            ],
+            "emissiveColor": [
+              0,
+              0,
+              0
+            ],
+            "emissiveMap": "",
+            "emissiveStrength": 1.0,
+            "factorsScaleMaps": true,
+            "metallic": 0.0,
+            "metallicMap": "",
+            "metallicRoughnessMap": "",
+            "normalMap": "",
+            "roughness": 0.3,
+            "roughnessMap": "",
+            "triplanar": false,
+            "triplanarScale": 1.0
+          }
+        }
+      ],
+      "Rigidbody": {
+        "Angular Damping": 0.3,
+        "Continuous Collision": true,
+        "Freeze Position X": false,
+        "Freeze Position Y": false,
+        "Freeze Position Z": false,
+        "Freeze Rotation X": false,
+        "Freeze Rotation Y": false,
+        "Freeze Rotation Z": false,
+        "Initial Velocity": [
+          0,
+          0,
+          0
+        ],
+        "Interpolate": "Interpolate",
+        "Is Kinematic": false,
+        "Linear Damping": 0.3,
+        "Mass": 0.25,
+        "Use Gravity": true
+      }
+    },
+    {
+      "id": 600,
+      "name": "Balloon 2",
+      "order": 601,
+      "parentId": 589,
+      "position": [
+        38.0,
+        1.49,
+        20.0
+      ],
+      "rotation": [
+        0.0,
+        0.0,
+        0.0,
+        1.0
+      ],
+      "scale": [
+        0.36,
+        0.36,
+        0.36
+      ],
+      "path": "primitive://sphere#p601",
+      "collider": {
+        "bounciness": 0.6,
+        "friction": 0.4,
+        "halfExtents": [
+          0.5,
+          0.0,
+          0.0
+        ],
+        "shape": 1,
+        "isTrigger": false
+      },
+      "materials": [
+        {
+          "embedded": {
+            "albedoMap": "",
+            "aoMap": "",
+            "baseColor": [
+              0.2,
+              0.8,
+              1.0
+            ],
+            "emissiveColor": [
+              0,
+              0,
+              0
+            ],
+            "emissiveMap": "",
+            "emissiveStrength": 1.0,
+            "factorsScaleMaps": true,
+            "metallic": 0.0,
+            "metallicMap": "",
+            "metallicRoughnessMap": "",
+            "normalMap": "",
+            "roughness": 0.3,
+            "roughnessMap": "",
+            "triplanar": false,
+            "triplanarScale": 1.0
+          }
+        }
+      ],
+      "Rigidbody": {
+        "Angular Damping": 0.3,
+        "Continuous Collision": true,
+        "Freeze Position X": false,
+        "Freeze Position Y": false,
+        "Freeze Position Z": false,
+        "Freeze Rotation X": false,
+        "Freeze Rotation Y": false,
+        "Freeze Rotation Z": false,
+        "Initial Velocity": [
+          0,
+          0,
+          0
+        ],
+        "Interpolate": "Interpolate",
+        "Is Kinematic": false,
+        "Linear Damping": 0.3,
+        "Mass": 0.25,
+        "Use Gravity": true
+      }
+    },
+    {
+      "id": 602,
+      "name": "Balloon 3",
+      "order": 603,
+      "parentId": 589,
+      "position": [
+        39.0,
+        1.19,
+        20.0
+      ],
+      "rotation": [
+        0.0,
+        0.0,
+        0.0,
+        1.0
+      ],
+      "scale": [
+        0.36,
+        0.36,
+        0.36
+      ],
+      "path": "primitive://sphere#p603",
+      "collider": {
+        "bounciness": 0.6,
+        "friction": 0.4,
+        "halfExtents": [
+          0.5,
+          0.0,
+          0.0
+        ],
+        "shape": 1,
+        "isTrigger": false
+      },
+      "materials": [
+        {
+          "embedded": {
+            "albedoMap": "",
+            "aoMap": "",
+            "baseColor": [
+              1.0,
+              0.85,
+              0.1
+            ],
+            "emissiveColor": [
+              0,
+              0,
+              0
+            ],
+            "emissiveMap": "",
+            "emissiveStrength": 1.0,
+            "factorsScaleMaps": true,
+            "metallic": 0.0,
+            "metallicMap": "",
+            "metallicRoughnessMap": "",
+            "normalMap": "",
+            "roughness": 0.3,
+            "roughnessMap": "",
+            "triplanar": false,
+            "triplanarScale": 1.0
+          }
+        }
+      ],
+      "Rigidbody": {
+        "Angular Damping": 0.3,
+        "Continuous Collision": true,
+        "Freeze Position X": false,
+        "Freeze Position Y": false,
+        "Freeze Position Z": false,
+        "Freeze Rotation X": false,
+        "Freeze Rotation Y": false,
+        "Freeze Rotation Z": false,
+        "Initial Velocity": [
+          0,
+          0,
+          0
+        ],
+        "Interpolate": "Interpolate",
+        "Is Kinematic": false,
+        "Linear Damping": 0.3,
+        "Mass": 0.25,
+        "Use Gravity": true
+      }
+    },
+    {
+      "id": 604,
+      "name": "Balloon 4",
+      "order": 605,
+      "parentId": 589,
+      "position": [
+        40.0,
+        1.49,
+        20.0
+      ],
+      "rotation": [
+        0.0,
+        0.0,
+        0.0,
+        1.0
+      ],
+      "scale": [
+        0.36,
+        0.36,
+        0.36
+      ],
+      "path": "primitive://sphere#p605",
+      "collider": {
+        "bounciness": 0.6,
+        "friction": 0.4,
+        "halfExtents": [
+          0.5,
+          0.0,
+          0.0
+        ],
+        "shape": 1,
+        "isTrigger": false
+      },
+      "materials": [
+        {
+          "embedded": {
+            "albedoMap": "",
+            "aoMap": "",
+            "baseColor": [
+              0.4,
+              1.0,
+              0.3
+            ],
+            "emissiveColor": [
+              0,
+              0,
+              0
+            ],
+            "emissiveMap": "",
+            "emissiveStrength": 1.0,
+            "factorsScaleMaps": true,
+            "metallic": 0.0,
+            "metallicMap": "",
+            "metallicRoughnessMap": "",
+            "normalMap": "",
+            "roughness": 0.3,
+            "roughnessMap": "",
+            "triplanar": false,
+            "triplanarScale": 1.0
+          }
+        }
+      ],
+      "Rigidbody": {
+        "Angular Damping": 0.3,
+        "Continuous Collision": true,
+        "Freeze Position X": false,
+        "Freeze Position Y": false,
+        "Freeze Position Z": false,
+        "Freeze Rotation X": false,
+        "Freeze Rotation Y": false,
+        "Freeze Rotation Z": false,
+        "Initial Velocity": [
+          0,
+          0,
+          0
+        ],
+        "Interpolate": "Interpolate",
+        "Is Kinematic": false,
+        "Linear Damping": 0.3,
+        "Mass": 0.25,
+        "Use Gravity": true
+      }
+    },
+    {
+      "id": 606,
+      "name": "Balloon 5",
+      "order": 607,
+      "parentId": 589,
+      "position": [
+        41.0,
+        1.19,
+        20.0
+      ],
+      "rotation": [
+        0.0,
+        0.0,
+        0.0,
+        1.0
+      ],
+      "scale": [
+        0.36,
+        0.36,
+        0.36
+      ],
+      "path": "primitive://sphere#p607",
+      "collider": {
+        "bounciness": 0.6,
+        "friction": 0.4,
+        "halfExtents": [
+          0.5,
+          0.0,
+          0.0
+        ],
+        "shape": 1,
+        "isTrigger": false
+      },
+      "materials": [
+        {
+          "embedded": {
+            "albedoMap": "",
+            "aoMap": "",
+            "baseColor": [
+              1.0,
+              0.5,
+              0.1
+            ],
+            "emissiveColor": [
+              0,
+              0,
+              0
+            ],
+            "emissiveMap": "",
+            "emissiveStrength": 1.0,
+            "factorsScaleMaps": true,
+            "metallic": 0.0,
+            "metallicMap": "",
+            "metallicRoughnessMap": "",
+            "normalMap": "",
+            "roughness": 0.3,
+            "roughnessMap": "",
+            "triplanar": false,
+            "triplanarScale": 1.0
+          }
+        }
+      ],
+      "Rigidbody": {
+        "Angular Damping": 0.3,
+        "Continuous Collision": true,
+        "Freeze Position X": false,
+        "Freeze Position Y": false,
+        "Freeze Position Z": false,
+        "Freeze Rotation X": false,
+        "Freeze Rotation Y": false,
+        "Freeze Rotation Z": false,
+        "Initial Velocity": [
+          0,
+          0,
+          0
+        ],
+        "Interpolate": "Interpolate",
+        "Is Kinematic": false,
+        "Linear Damping": 0.3,
+        "Mass": 0.25,
+        "Use Gravity": true
+      }
+    },
+    {
+      "id": 609,
+      "name": "Can 1",
+      "order": 610,
+      "parentId": 607,
+      "position": [
+        43.41,
+        1.03,
+        15.0
+      ],
+      "rotation": [
+        0.0,
+        0.0,
+        0.0,
+        1.0
+      ],
+      "scale": [
+        0.24,
+        0.26,
+        0.24
+      ],
+      "path": "primitive://cylinder#p610",
+      "collider": {
+        "friction": 0.5,
+        "shape": 3,
+        "isTrigger": false
+      },
+      "materials": [
+        {
+          "embedded": {
+            "albedoMap": "",
+            "aoMap": "",
+            "baseColor": [
+              0.9,
+              0.12,
+              0.1
+            ],
+            "emissiveColor": [
+              0,
+              0,
+              0
+            ],
+            "emissiveMap": "",
+            "emissiveStrength": 1.0,
+            "factorsScaleMaps": true,
+            "metallic": 0.6,
+            "metallicMap": "",
+            "metallicRoughnessMap": "",
+            "normalMap": "",
+            "roughness": 0.35,
+            "roughnessMap": "",
+            "triplanar": false,
+            "triplanarScale": 1.0
+          }
+        }
+      ],
+      "Rigidbody": {
+        "Angular Damping": 0.1,
+        "Continuous Collision": false,
+        "Freeze Position X": false,
+        "Freeze Position Y": false,
+        "Freeze Position Z": false,
+        "Freeze Rotation X": false,
+        "Freeze Rotation Y": false,
+        "Freeze Rotation Z": false,
+        "Initial Velocity": [
+          0,
+          0,
+          0
+        ],
+        "Interpolate": "Interpolate",
+        "Is Kinematic": false,
+        "Linear Damping": 0.05,
+        "Mass": 0.4,
+        "Use Gravity": true
+      }
+    },
+    {
+      "id": 610,
+      "name": "Can 2",
+      "order": 611,
+      "parentId": 607,
+      "position": [
+        43.669999999999995,
+        1.03,
+        15.0
+      ],
+      "rotation": [
+        0.0,
+        0.0,
+        0.0,
+        1.0
+      ],
+      "scale": [
+        0.24,
+        0.26,
+        0.24
+      ],
+      "path": "primitive://cylinder#p611",
+      "collider": {
+        "friction": 0.5,
+        "shape": 3,
+        "isTrigger": false
+      },
+      "materials": [
+        {
+          "embedded": {
+            "albedoMap": "",
+            "aoMap": "",
+            "baseColor": [
+              0.1,
+              0.45,
+              0.95
+            ],
+            "emissiveColor": [
+              0,
+              0,
+              0
+            ],
+            "emissiveMap": "",
+            "emissiveStrength": 1.0,
+            "factorsScaleMaps": true,
+            "metallic": 0.6,
+            "metallicMap": "",
+            "metallicRoughnessMap": "",
+            "normalMap": "",
+            "roughness": 0.35,
+            "roughnessMap": "",
+            "triplanar": false,
+            "triplanarScale": 1.0
+          }
+        }
+      ],
+      "Rigidbody": {
+        "Angular Damping": 0.1,
+        "Continuous Collision": false,
+        "Freeze Position X": false,
+        "Freeze Position Y": false,
+        "Freeze Position Z": false,
+        "Freeze Rotation X": false,
+        "Freeze Rotation Y": false,
+        "Freeze Rotation Z": false,
+        "Initial Velocity": [
+          0,
+          0,
+          0
+        ],
+        "Interpolate": "Interpolate",
+        "Is Kinematic": false,
+        "Linear Damping": 0.05,
+        "Mass": 0.4,
+        "Use Gravity": true
+      }
+    },
+    {
+      "id": 611,
+      "name": "Can 3",
+      "order": 612,
+      "parentId": 607,
+      "position": [
+        43.93,
+        1.03,
+        15.0
+      ],
+      "rotation": [
+        0.0,
+        0.0,
+        0.0,
+        1.0
+      ],
+      "scale": [
+        0.24,
+        0.26,
+        0.24
+      ],
+      "path": "primitive://cylinder#p612",
+      "collider": {
+        "friction": 0.5,
+        "shape": 3,
+        "isTrigger": false
+      },
+      "materials": [
+        {
+          "embedded": {
+            "albedoMap": "",
+            "aoMap": "",
+            "baseColor": [
+              0.15,
+              0.8,
+              0.25
+            ],
+            "emissiveColor": [
+              0,
+              0,
+              0
+            ],
+            "emissiveMap": "",
+            "emissiveStrength": 1.0,
+            "factorsScaleMaps": true,
+            "metallic": 0.6,
+            "metallicMap": "",
+            "metallicRoughnessMap": "",
+            "normalMap": "",
+            "roughness": 0.35,
+            "roughnessMap": "",
+            "triplanar": false,
+            "triplanarScale": 1.0
+          }
+        }
+      ],
+      "Rigidbody": {
+        "Angular Damping": 0.1,
+        "Continuous Collision": false,
+        "Freeze Position X": false,
+        "Freeze Position Y": false,
+        "Freeze Position Z": false,
+        "Freeze Rotation X": false,
+        "Freeze Rotation Y": false,
+        "Freeze Rotation Z": false,
+        "Initial Velocity": [
+          0,
+          0,
+          0
+        ],
+        "Interpolate": "Interpolate",
+        "Is Kinematic": false,
+        "Linear Damping": 0.05,
+        "Mass": 0.4,
+        "Use Gravity": true
+      }
+    },
+    {
+      "id": 612,
+      "name": "Can 4",
+      "order": 613,
+      "parentId": 607,
+      "position": [
+        44.19,
+        1.03,
+        15.0
+      ],
+      "rotation": [
+        0.0,
+        0.0,
+        0.0,
+        1.0
+      ],
+      "scale": [
+        0.24,
+        0.26,
+        0.24
+      ],
+      "path": "primitive://cylinder#p613",
+      "collider": {
+        "friction": 0.5,
+        "shape": 3,
+        "isTrigger": false
+      },
+      "materials": [
+        {
+          "embedded": {
+            "albedoMap": "",
+            "aoMap": "",
+            "baseColor": [
+              0.98,
+              0.85,
+              0.1
+            ],
+            "emissiveColor": [
+              0,
+              0,
+              0
+            ],
+            "emissiveMap": "",
+            "emissiveStrength": 1.0,
+            "factorsScaleMaps": true,
+            "metallic": 0.6,
+            "metallicMap": "",
+            "metallicRoughnessMap": "",
+            "normalMap": "",
+            "roughness": 0.35,
+            "roughnessMap": "",
+            "triplanar": false,
+            "triplanarScale": 1.0
+          }
+        }
+      ],
+      "Rigidbody": {
+        "Angular Damping": 0.1,
+        "Continuous Collision": false,
+        "Freeze Position X": false,
+        "Freeze Position Y": false,
+        "Freeze Position Z": false,
+        "Freeze Rotation X": false,
+        "Freeze Rotation Y": false,
+        "Freeze Rotation Z": false,
+        "Initial Velocity": [
+          0,
+          0,
+          0
+        ],
+        "Interpolate": "Interpolate",
+        "Is Kinematic": false,
+        "Linear Damping": 0.05,
+        "Mass": 0.4,
+        "Use Gravity": true
+      }
+    },
+    {
+      "id": 613,
+      "name": "Can 5",
+      "order": 614,
+      "parentId": 607,
+      "position": [
+        43.54,
+        1.295,
+        15.0
+      ],
+      "rotation": [
+        0.0,
+        0.0,
+        0.0,
+        1.0
+      ],
+      "scale": [
+        0.24,
+        0.26,
+        0.24
+      ],
+      "path": "primitive://cylinder#p614",
+      "collider": {
+        "friction": 0.5,
+        "shape": 3,
+        "isTrigger": false
+      },
+      "materials": [
+        {
+          "embedded": {
+            "albedoMap": "",
+            "aoMap": "",
+            "baseColor": [
+              0.8,
+              0.2,
+              0.85
+            ],
+            "emissiveColor": [
+              0,
+              0,
+              0
+            ],
+            "emissiveMap": "",
+            "emissiveStrength": 1.0,
+            "factorsScaleMaps": true,
+            "metallic": 0.6,
+            "metallicMap": "",
+            "metallicRoughnessMap": "",
+            "normalMap": "",
+            "roughness": 0.35,
+            "roughnessMap": "",
+            "triplanar": false,
+            "triplanarScale": 1.0
+          }
+        }
+      ],
+      "Rigidbody": {
+        "Angular Damping": 0.1,
+        "Continuous Collision": false,
+        "Freeze Position X": false,
+        "Freeze Position Y": false,
+        "Freeze Position Z": false,
+        "Freeze Rotation X": false,
+        "Freeze Rotation Y": false,
+        "Freeze Rotation Z": false,
+        "Initial Velocity": [
+          0,
+          0,
+          0
+        ],
+        "Interpolate": "Interpolate",
+        "Is Kinematic": false,
+        "Linear Damping": 0.05,
+        "Mass": 0.4,
+        "Use Gravity": true
+      }
+    },
+    {
+      "id": 614,
+      "name": "Can 6",
+      "order": 615,
+      "parentId": 607,
+      "position": [
+        43.8,
+        1.295,
+        15.0
+      ],
+      "rotation": [
+        0.0,
+        0.0,
+        0.0,
+        1.0
+      ],
+      "scale": [
+        0.24,
+        0.26,
+        0.24
+      ],
+      "path": "primitive://cylinder#p615",
+      "collider": {
+        "friction": 0.5,
+        "shape": 3,
+        "isTrigger": false
+      },
+      "materials": [
+        {
+          "embedded": {
+            "albedoMap": "",
+            "aoMap": "",
+            "baseColor": [
+              0.9,
+              0.12,
+              0.1
+            ],
+            "emissiveColor": [
+              0,
+              0,
+              0
+            ],
+            "emissiveMap": "",
+            "emissiveStrength": 1.0,
+            "factorsScaleMaps": true,
+            "metallic": 0.6,
+            "metallicMap": "",
+            "metallicRoughnessMap": "",
+            "normalMap": "",
+            "roughness": 0.35,
+            "roughnessMap": "",
+            "triplanar": false,
+            "triplanarScale": 1.0
+          }
+        }
+      ],
+      "Rigidbody": {
+        "Angular Damping": 0.1,
+        "Continuous Collision": false,
+        "Freeze Position X": false,
+        "Freeze Position Y": false,
+        "Freeze Position Z": false,
+        "Freeze Rotation X": false,
+        "Freeze Rotation Y": false,
+        "Freeze Rotation Z": false,
+        "Initial Velocity": [
+          0,
+          0,
+          0
+        ],
+        "Interpolate": "Interpolate",
+        "Is Kinematic": false,
+        "Linear Damping": 0.05,
+        "Mass": 0.4,
+        "Use Gravity": true
+      }
+    },
+    {
+      "id": 615,
+      "name": "Can 7",
+      "order": 616,
+      "parentId": 607,
+      "position": [
+        44.059999999999995,
+        1.295,
+        15.0
+      ],
+      "rotation": [
+        0.0,
+        0.0,
+        0.0,
+        1.0
+      ],
+      "scale": [
+        0.24,
+        0.26,
+        0.24
+      ],
+      "path": "primitive://cylinder#p616",
+      "collider": {
+        "friction": 0.5,
+        "shape": 3,
+        "isTrigger": false
+      },
+      "materials": [
+        {
+          "embedded": {
+            "albedoMap": "",
+            "aoMap": "",
+            "baseColor": [
+              0.1,
+              0.45,
+              0.95
+            ],
+            "emissiveColor": [
+              0,
+              0,
+              0
+            ],
+            "emissiveMap": "",
+            "emissiveStrength": 1.0,
+            "factorsScaleMaps": true,
+            "metallic": 0.6,
+            "metallicMap": "",
+            "metallicRoughnessMap": "",
+            "normalMap": "",
+            "roughness": 0.35,
+            "roughnessMap": "",
+            "triplanar": false,
+            "triplanarScale": 1.0
+          }
+        }
+      ],
+      "Rigidbody": {
+        "Angular Damping": 0.1,
+        "Continuous Collision": false,
+        "Freeze Position X": false,
+        "Freeze Position Y": false,
+        "Freeze Position Z": false,
+        "Freeze Rotation X": false,
+        "Freeze Rotation Y": false,
+        "Freeze Rotation Z": false,
+        "Initial Velocity": [
+          0,
+          0,
+          0
+        ],
+        "Interpolate": "Interpolate",
+        "Is Kinematic": false,
+        "Linear Damping": 0.05,
+        "Mass": 0.4,
+        "Use Gravity": true
+      }
+    },
+    {
+      "id": 616,
+      "name": "Can 8",
+      "order": 617,
+      "parentId": 607,
+      "position": [
+        43.669999999999995,
+        1.56,
+        15.0
+      ],
+      "rotation": [
+        0.0,
+        0.0,
+        0.0,
+        1.0
+      ],
+      "scale": [
+        0.24,
+        0.26,
+        0.24
+      ],
+      "path": "primitive://cylinder#p617",
+      "collider": {
+        "friction": 0.5,
+        "shape": 3,
+        "isTrigger": false
+      },
+      "materials": [
+        {
+          "embedded": {
+            "albedoMap": "",
+            "aoMap": "",
+            "baseColor": [
+              0.15,
+              0.8,
+              0.25
+            ],
+            "emissiveColor": [
+              0,
+              0,
+              0
+            ],
+            "emissiveMap": "",
+            "emissiveStrength": 1.0,
+            "factorsScaleMaps": true,
+            "metallic": 0.6,
+            "metallicMap": "",
+            "metallicRoughnessMap": "",
+            "normalMap": "",
+            "roughness": 0.35,
+            "roughnessMap": "",
+            "triplanar": false,
+            "triplanarScale": 1.0
+          }
+        }
+      ],
+      "Rigidbody": {
+        "Angular Damping": 0.1,
+        "Continuous Collision": false,
+        "Freeze Position X": false,
+        "Freeze Position Y": false,
+        "Freeze Position Z": false,
+        "Freeze Rotation X": false,
+        "Freeze Rotation Y": false,
+        "Freeze Rotation Z": false,
+        "Initial Velocity": [
+          0,
+          0,
+          0
+        ],
+        "Interpolate": "Interpolate",
+        "Is Kinematic": false,
+        "Linear Damping": 0.05,
+        "Mass": 0.4,
+        "Use Gravity": true
+      }
+    },
+    {
+      "id": 617,
+      "name": "Can 9",
+      "order": 618,
+      "parentId": 607,
+      "position": [
+        43.93,
+        1.56,
+        15.0
+      ],
+      "rotation": [
+        0.0,
+        0.0,
+        0.0,
+        1.0
+      ],
+      "scale": [
+        0.24,
+        0.26,
+        0.24
+      ],
+      "path": "primitive://cylinder#p618",
+      "collider": {
+        "friction": 0.5,
+        "shape": 3,
+        "isTrigger": false
+      },
+      "materials": [
+        {
+          "embedded": {
+            "albedoMap": "",
+            "aoMap": "",
+            "baseColor": [
+              0.98,
+              0.85,
+              0.1
+            ],
+            "emissiveColor": [
+              0,
+              0,
+              0
+            ],
+            "emissiveMap": "",
+            "emissiveStrength": 1.0,
+            "factorsScaleMaps": true,
+            "metallic": 0.6,
+            "metallicMap": "",
+            "metallicRoughnessMap": "",
+            "normalMap": "",
+            "roughness": 0.35,
+            "roughnessMap": "",
+            "triplanar": false,
+            "triplanarScale": 1.0
+          }
+        }
+      ],
+      "Rigidbody": {
+        "Angular Damping": 0.1,
+        "Continuous Collision": false,
+        "Freeze Position X": false,
+        "Freeze Position Y": false,
+        "Freeze Position Z": false,
+        "Freeze Rotation X": false,
+        "Freeze Rotation Y": false,
+        "Freeze Rotation Z": false,
+        "Initial Velocity": [
+          0,
+          0,
+          0
+        ],
+        "Interpolate": "Interpolate",
+        "Is Kinematic": false,
+        "Linear Damping": 0.05,
+        "Mass": 0.4,
+        "Use Gravity": true
+      }
+    },
+    {
+      "id": 618,
+      "name": "Can 10",
+      "order": 619,
+      "parentId": 607,
+      "position": [
+        43.8,
+        1.8250000000000002,
+        15.0
+      ],
+      "rotation": [
+        0.0,
+        0.0,
+        0.0,
+        1.0
+      ],
+      "scale": [
+        0.24,
+        0.26,
+        0.24
+      ],
+      "path": "primitive://cylinder#p619",
+      "collider": {
+        "friction": 0.5,
+        "shape": 3,
+        "isTrigger": false
+      },
+      "materials": [
+        {
+          "embedded": {
+            "albedoMap": "",
+            "aoMap": "",
+            "baseColor": [
+              0.8,
+              0.2,
+              0.85
+            ],
+            "emissiveColor": [
+              0,
+              0,
+              0
+            ],
+            "emissiveMap": "",
+            "emissiveStrength": 1.0,
+            "factorsScaleMaps": true,
+            "metallic": 0.6,
+            "metallicMap": "",
+            "metallicRoughnessMap": "",
+            "normalMap": "",
+            "roughness": 0.35,
+            "roughnessMap": "",
+            "triplanar": false,
+            "triplanarScale": 1.0
+          }
+        }
+      ],
+      "Rigidbody": {
+        "Angular Damping": 0.1,
+        "Continuous Collision": false,
+        "Freeze Position X": false,
+        "Freeze Position Y": false,
+        "Freeze Position Z": false,
+        "Freeze Rotation X": false,
+        "Freeze Rotation Y": false,
+        "Freeze Rotation Z": false,
+        "Initial Velocity": [
+          0,
+          0,
+          0
+        ],
+        "Interpolate": "Interpolate",
+        "Is Kinematic": false,
+        "Linear Damping": 0.05,
+        "Mass": 0.4,
+        "Use Gravity": true
+      }
+    },
+    {
+      "id": 621,
+      "name": "Zero Ring 1",
+      "order": 622,
+      "parentId": 607,
+      "position": [
+        46.5,
+        1.6,
+        25.064
+      ],
+      "rotation": [
+        0.7071067811865476,
+        0.0,
+        0.0,
+        0.7071067811865476
+      ],
+      "scale": [
+        1.0,
+        0.006,
+        1.0
+      ],
+      "path": "primitive://cylinder#p622",
+      "collider": {
+        "shape": 3,
+        "isTrigger": false
+      },
+      "materials": [
+        {
+          "embedded": {
+            "albedoMap": "",
+            "aoMap": "",
+            "baseColor": [
+              0.05,
+              0.05,
+              0.05
+            ],
+            "emissiveColor": [
+              0,
+              0,
+              0
+            ],
+            "emissiveMap": "",
+            "emissiveStrength": 1.0,
+            "factorsScaleMaps": true,
+            "metallic": 0.0,
+            "metallicMap": "",
+            "metallicRoughnessMap": "",
+            "normalMap": "",
+            "roughness": 0.8,
+            "roughnessMap": "",
+            "triplanar": false,
+            "triplanarScale": 1.0
+          }
+        }
+      ],
+      "Rigidbody": null
+    },
+    {
+      "id": 622,
+      "name": "Zero Ring 2",
+      "order": 623,
+      "parentId": 607,
+      "position": [
+        46.5,
+        1.6,
+        25.058
+      ],
+      "rotation": [
+        0.7071067811865476,
+        0.0,
+        0.0,
+        0.7071067811865476
+      ],
+      "scale": [
+        0.7,
+        0.006,
+        0.7
+      ],
+      "path": "primitive://cylinder#p623",
+      "collider": {
+        "shape": 3,
+        "isTrigger": false
+      },
+      "materials": [
+        {
+          "embedded": {
+            "albedoMap": "",
+            "aoMap": "",
+            "baseColor": [
+              0.95,
+              0.95,
+              0.95
+            ],
+            "emissiveColor": [
+              0,
+              0,
+              0
+            ],
+            "emissiveMap": "",
+            "emissiveStrength": 1.0,
+            "factorsScaleMaps": true,
+            "metallic": 0.0,
+            "metallicMap": "",
+            "metallicRoughnessMap": "",
+            "normalMap": "",
+            "roughness": 0.8,
+            "roughnessMap": "",
+            "triplanar": false,
+            "triplanarScale": 1.0
+          }
+        }
+      ],
+      "Rigidbody": null
+    },
+    {
+      "id": 623,
+      "name": "Zero Ring 3",
+      "order": 624,
+      "parentId": 607,
+      "position": [
+        46.5,
+        1.6,
+        25.052
+      ],
+      "rotation": [
+        0.7071067811865476,
+        0.0,
+        0.0,
+        0.7071067811865476
+      ],
+      "scale": [
+        0.45,
+        0.006,
+        0.45
+      ],
+      "path": "primitive://cylinder#p624",
+      "collider": {
+        "shape": 3,
+        "isTrigger": false
+      },
+      "materials": [
+        {
+          "embedded": {
+            "albedoMap": "",
+            "aoMap": "",
+            "baseColor": [
+              0.05,
+              0.05,
+              0.05
+            ],
+            "emissiveColor": [
+              0,
+              0,
+              0
+            ],
+            "emissiveMap": "",
+            "emissiveStrength": 1.0,
+            "factorsScaleMaps": true,
+            "metallic": 0.0,
+            "metallicMap": "",
+            "metallicRoughnessMap": "",
+            "normalMap": "",
+            "roughness": 0.8,
+            "roughnessMap": "",
+            "triplanar": false,
+            "triplanarScale": 1.0
+          }
+        }
+      ],
+      "Rigidbody": null
+    },
+    {
+      "id": 624,
+      "name": "Zero Ring 4",
+      "order": 625,
+      "parentId": 607,
+      "position": [
+        46.5,
+        1.6,
+        25.046
+      ],
+      "rotation": [
+        0.7071067811865476,
+        0.0,
+        0.0,
+        0.7071067811865476
+      ],
+      "scale": [
+        0.2,
+        0.006,
+        0.2
+      ],
+      "path": "primitive://cylinder#p625",
+      "collider": {
+        "shape": 3,
+        "isTrigger": false
+      },
+      "materials": [
+        {
+          "embedded": {
+            "albedoMap": "",
+            "aoMap": "",
+            "baseColor": [
+              0.9,
+              0.1,
+              0.08
+            ],
+            "emissiveColor": [
+              0,
+              0,
+              0
+            ],
+            "emissiveMap": "",
+            "emissiveStrength": 1.0,
+            "factorsScaleMaps": true,
+            "metallic": 0.0,
+            "metallicMap": "",
+            "metallicRoughnessMap": "",
+            "normalMap": "",
+            "roughness": 0.8,
+            "roughnessMap": "",
+            "triplanar": false,
+            "triplanarScale": 1.0
+          }
+        }
+      ],
+      "Rigidbody": null
+    },
+    {
+      "id": 651,
+      "name": "Gong",
+      "order": 652,
+      "parentId": 641,
+      "position": [
+        57.0,
+        2.68,
+        50.0
+      ],
+      "rotation": [
+        0.7071067811865476,
+        0.0,
+        0.0,
+        0.7071067811865476
+      ],
+      "scale": [
+        1.5,
+        0.08,
+        1.5
+      ],
+      "path": "primitive://cylinder#p652",
+      "collider": {
+        "friction": 0.5,
+        "shape": 3,
+        "isTrigger": false
+      },
+      "materials": [
+        {
+          "embedded": {
+            "albedoMap": "",
+            "aoMap": "",
+            "baseColor": [
+              0.95,
+              0.68,
+              0.22
+            ],
+            "emissiveColor": [
+              0,
+              0,
+              0
+            ],
+            "emissiveMap": "",
+            "emissiveStrength": 1.0,
+            "factorsScaleMaps": true,
+            "metallic": 1.0,
+            "metallicMap": "",
+            "metallicRoughnessMap": "",
+            "normalMap": "",
+            "roughness": 0.3,
+            "roughnessMap": "",
+            "triplanar": false,
+            "triplanarScale": 1.0
+          }
+        }
+      ],
+      "Rigidbody": {
+        "Angular Damping": 0.08,
+        "Continuous Collision": false,
+        "Freeze Position X": false,
+        "Freeze Position Y": false,
+        "Freeze Position Z": false,
+        "Freeze Rotation X": false,
+        "Freeze Rotation Y": false,
+        "Freeze Rotation Z": false,
+        "Initial Velocity": [
+          0,
+          0,
+          0
+        ],
+        "Interpolate": "Interpolate",
+        "Is Kinematic": false,
+        "Linear Damping": 0.05,
+        "Mass": 6.0,
+        "Use Gravity": true
+      },
+      "joint": {
+        "anchor": [
+          0.0,
+          0.0,
+          -0.77
+        ],
+        "axis": [
+          1.0,
+          0.0,
+          0.0
+        ],
+        "breakForce": 0.0,
+        "breakTorque": 0.0,
+        "connectedOrder": -1,
+        "limitLower": 0.0,
+        "limitUpper": 0.0,
+        "type": 1,
+        "useLimit": false
+      }
     }
   ],
   "motionBlur": false,

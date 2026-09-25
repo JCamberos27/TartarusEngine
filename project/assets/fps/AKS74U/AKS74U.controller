@@ -49,7 +49,10 @@
             120.0
           ],
           "speed": 1.0,
-          "speedParam": "WalkRate"
+          "speedParam": "WalkRate",
+          "tags": [
+            "Ready"
+          ]
         },
         {
           "loop": true,
@@ -172,7 +175,10 @@
             -330.0
           ],
           "priority": 2,
-          "speed": 1.0
+          "speed": 1.0,
+          "tags": [
+            "Ready"
+          ]
         },
         {
           "loop": false,

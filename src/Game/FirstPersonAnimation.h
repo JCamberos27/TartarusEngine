@@ -41,6 +41,8 @@ struct FirstPersonWeaponGameplay {
     // so light props don't rocket off. 0 = rounds push nothing.
     float ImpactImpulse = 0.0f;
     float ImpactMaxSpeed = 8.0f;
+    // The holes rounds leave, metres across the bore (a 5.45 mm round's, a touch torn).
+    float BulletHoleRadius = 0.0045f;
     // Zeroing: rounds (and the laser) leave the muzzle aimed to cross the sight line
     // ZeroDistance metres out, like a sighted-in rifle - dead on the front post there, a little
     // low closer, a little high past it. 0 = straight down the bore as modelled.
@@ -51,6 +53,41 @@ struct FirstPersonWeaponGameplay {
     bool HasSightLine = false;
     glm::vec3 SightOrigin{0.0f}, SightDirection{0.0f, 0.0f, -1.0f};
 };
+
+// Where rounds (and the laser) leave the gun. Auto finds the barrel from the procedural bolt's
+// stroke (recoil.boltBone, measured from the Fire clip): the bolt rides the bore, so its travel
+// is the barrel's axis, and the muzzle is the mesh's front face along it. A weapon whose bolt
+// doesn't run down the bore (a pistol slide, a pump, a revolver) or that has no bolt sets the
+// muzzle by hand instead: Origin and Direction in the weapon root's space (model units), which
+// the Inspector can fill from what Auto detected.
+struct FirstPersonMuzzleSettings {
+    bool Auto = true;
+    glm::vec3 Origin{0.0f};
+    glm::vec3 Direction{0.0f, 0.0f, -1.0f};
+};
+
+// The weapon's laser: a beam from the muzzle down the (zeroed) bore and the dot where it lands.
+// Color is the hue (linear); the beam draws at BeamBrightness times it and the dot, which a
+// camera sees washing out towards white, at SpotBrightness.
+struct FirstPersonLaserSettings {
+    bool Enabled = true;
+    glm::vec3 Color{1.0f, 0.0227f, 0.0136f};
+    float BeamBrightness = 1.1f;
+    float SpotBrightness = 9.0f;
+};
+
+// What Play found for a weapon's barrel and sights, kept per weapon definition (by file path)
+// after Play stops so the weapon Inspector can show it and save it.
+struct FirstPersonBarrelReport {
+    bool Detected = false;            // Auto found a muzzle from the bolt
+    glm::vec3 DetectedOrigin{0.0f}, DetectedDirection{0.0f, 0.0f, -1.0f}; // weapon-root space
+    bool HasMuzzle = false;           // rounds and the laser have a muzzle to leave from
+    std::string Problem;              // why there's no muzzle (empty = there is one)
+    bool SightMeasured = false;       // Play measured the sight line (no saved one)
+    glm::vec3 SightOrigin{0.0f}, SightDirection{0.0f, 0.0f, -1.0f};
+};
+void PublishBarrelReport(const std::string& weaponPath, const FirstPersonBarrelReport& report);
+const FirstPersonBarrelReport* FindBarrelReport(const std::string& weaponPath);
 
 // Aim-down-sights. Two ways a weapon's actions (reloads, mag check, ...) can play with the
 // sights up, and a weapon can mix them per action:
@@ -92,7 +129,8 @@ struct FirstPersonAdsSettings {
         float Rotation = 0.0f;
         float Position = 0.0f;
     };
-    std::vector<GunMotion> GunMotions{{"MagCheck", 0.6f, 0.2f}};
+    // The defaults: the reloads sway a little with their clip, the mag check tips the mag into view.
+    std::vector<GunMotion> GunMotions{{"TacReload", 0.18f, 0.25f}, {"EmptyReload", 0.18f, 0.25f}, {"MagCheck", 0.6f, 0.2f}};
     float SightPivot = 0.25f;
     const GunMotion* GunMotionFor(const std::string& state) const {
         for (const GunMotion& m : GunMotions)
@@ -133,6 +171,8 @@ struct FirstPersonAnimationSet {
     std::vector<std::pair<std::string, std::string>> WeaponMaterials;
     FirstPersonWeaponGameplay Gameplay;
     FirstPersonAdsSettings Ads;
+    FirstPersonMuzzleSettings Muzzle;
+    FirstPersonLaserSettings Laser;
     // Recoil, sway, bob, breathing, aim, per-state offsets, lean and IK (FirstPersonProcedural.h).
     // Files from before it existed load their old gameplay.recoil / adsBob numbers into it.
     WeaponProceduralSettings Procedural = WeaponProceduralSettings::Defaults();
@@ -178,6 +218,7 @@ inline constexpr const char* kTagReload = "Reload";  // a reload is running (R d
 inline constexpr const char* kTagBusy = "Busy";      // hands busy (mag check, inspect, melee): no firing
 inline constexpr const char* kTagHidden = "Hidden";  // unarmed: both rigs hidden
 inline constexpr const char* kTagIdle = "Idle";      // settled idle: counts toward the Fidget
+inline constexpr const char* kTagReady = "Ready";    // gun simply held (walk, hip fire): like Idle, minus the Fidget
 inline constexpr const char* kTagIKOff = "IKOff";    // the default procedural IK off tag: plays as authored
 
 // Every tag above, with what it does - for the editors' tag pickers and tooltips.
@@ -190,6 +231,8 @@ inline constexpr KnownTag kKnownTags[] = {
     {kTagReload, "A reload is running: R does nothing and the gun can't fire."},
     {kTagBusy, "The hands are busy (mag check, inspect, melee): the gun can't fire."},
     {kTagIdle, "A settled idle: standing in it long enough plays the Fidget."},
+    {kTagReady, "The gun is simply being held (walking, hip fire): hip rounds kick procedurally (recoil.hipProcedural) "
+                "and the barrel's aim point shows, as in Idle, but no Fidget."},
     {kTagHidden, "Unarmed: both rigs are hidden."},
     {kTagIKOff, "Plays exactly as animated: the hand IK and procedural motion fade out (the weapon's IK Off Tag)."},
 };

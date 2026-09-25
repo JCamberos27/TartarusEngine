@@ -308,13 +308,23 @@ void FirstPersonPresentation::SetupBolt(AssetLibrary& assets, const AnimatorCont
     if (!m_World || !m_WeaponModel) return;
     const int bolt = m_WeaponModel->NodeIndex(r.BoltBone);
     const int weaponTrack = ctrl.TrackIndex(TrackOr(ctrl, "weapon", 1));
+    // A fresh Play measures its own sight line (a saved one wins anyway).
+    m_SightMeasured = m_SightLogged = false;
+    m_SightSettled = 0.0f;
+    m_Barrel = {};
+    // The hip-fire clip: the state with the Shot event (else one named Fire) that moves the gun.
     int clip = -1;
-    for (const auto& L : ctrl.Layers)
-        for (const auto& st : L.States)
-            if (st.Name == "Fire" && clip < 0 && !st.MotionFor(weaponTrack).Clip.empty())
-                clip = ResolveAnimationClip(*m_WeaponModel, st.MotionFor(weaponTrack).Clip, assets);
+    for (int pass = 0; pass < 2 && clip < 0; ++pass)
+        for (const auto& L : ctrl.Layers)
+            for (const auto& st : L.States) {
+                const bool shot = std::any_of(st.Events.begin(), st.Events.end(),
+                                              [](const AnimatorController::Event& ev) { return ev.Name == K::kEventShot; });
+                if (clip < 0 && (pass == 0 ? shot : st.Name == "Fire") && !st.MotionFor(weaponTrack).Clip.empty())
+                    clip = ResolveAnimationClip(*m_WeaponModel, st.MotionFor(weaponTrack).Clip, assets);
+            }
     if (bolt < 0 || clip < 0) {
-        Log::Warn("First-person presentation: no '" + r.BoltBone + "' bone or weapon Fire clip to measure the bolt from; no procedural bolt.");
+        Log::Warn("First-person presentation: no '" + r.BoltBone + "' bone or weapon hip-fire clip to measure the bolt from; no procedural bolt.");
+        SetupMuzzle(-1);
         return;
     }
     std::vector<int> parents(m_WeaponModel->NodeCount());
@@ -330,7 +340,7 @@ void FirstPersonPresentation::SetupBolt(AssetLibrary& assets, const AnimatorCont
         if (k == 0) start = at;
         else if (glm::length(at - start) > glm::length(m_BoltStroke)) m_BoltStroke = at - start;
     }
-    SetupMuzzle(bolt, parents);
+    SetupMuzzle(bolt);
     if (r.BoltCycle <= 0.0f) return;
     auto& rig = m_World->Registry.emplace_or_replace<IKRigComponent>(m_Weapon);
     rig.Offsets.assign(1, IKBoneOffset{});
@@ -390,58 +400,86 @@ AdsCarrySample FirstPersonPresentation::SampleAdsCarry(float dt) const {
     return EvaluateAdsCarry(ac->Layers[0], m_AdsCarry.Actions, dt, m_AdsHold);
 }
 
-// The bolt rides the bore, so its travel is the barrel's axis. The muzzle is the front face of the
-// weapon mesh along that axis: the verts nearest the tip and within a few cm of the line, averaged
-// (the booster's ring centres on the bore even if the bolt bone sits a little off it). Both are
-// kept in the weapon root's space, which is what the socket moves.
-void FirstPersonPresentation::SetupMuzzle(int bolt, const std::vector<int>& parents) {
-    if (glm::length(m_BoltStroke) < 1e-5f) return;
-    const int root = m_WeaponModel->NodeIndex(m_Set.WeaponRoot.empty() ? std::string("root") : m_Set.WeaponRoot);
-    std::vector<LocalTRS> bind;
-    std::vector<glm::mat4> globals;
-    m_WeaponModel->BindLocalPose(bind);
-    IK::ComputeGlobals(bind, parents, globals);
-    const glm::vec3 axis = -glm::normalize(m_BoltStroke);
-    const glm::vec3 origin = IK::Position(globals[bolt]);
-    std::vector<glm::vec3> verts;
-    std::vector<unsigned int> indices;
-    m_WeaponModel->CollisionGeometry(verts, indices);
-    const float stroke = glm::length(m_BoltStroke); // ~9 cm on an AK: a scale-free yardstick
-    const float radius = stroke * 0.45f;
-    float tip = -1e30f;
-    const auto offLine = [&](const glm::vec3& v, float t) { return glm::length(v - origin - axis * t); };
-    for (const glm::vec3& v : verts) {
-        const float t = glm::dot(v - origin, axis);
-        if (offLine(v, t) < radius) tip = std::max(tip, t);
+// Auto: the bolt rides the bore, so its travel is the barrel's axis. The muzzle is the front face
+// of the weapon mesh along that axis: the verts nearest the tip and within a few cm of the line,
+// averaged (the booster's ring centres on the bore even if the bolt bone sits a little off it).
+// Both are kept in the weapon root's space, which is what the socket moves. A hand-set muzzle
+// (muzzle.auto off) wins; what Auto found is still reported, for the Inspector to copy.
+void FirstPersonPresentation::SetupMuzzle(int bolt) {
+    m_HaveMuzzle = false;
+    m_Barrel.Detected = m_Barrel.HasMuzzle = false;
+    m_Barrel.Problem.clear();
+    if (m_WeaponModel && bolt >= 0 && glm::length(m_BoltStroke) >= 1e-5f) {
+        std::vector<int> parents(m_WeaponModel->NodeCount());
+        for (int i = 0; i < (int)parents.size(); ++i) parents[i] = m_WeaponModel->NodeParent(i);
+        const int root = m_WeaponModel->NodeIndex(m_Set.WeaponRoot.empty() ? std::string("root") : m_Set.WeaponRoot);
+        std::vector<LocalTRS> bind;
+        std::vector<glm::mat4> globals;
+        m_WeaponModel->BindLocalPose(bind);
+        IK::ComputeGlobals(bind, parents, globals);
+        const glm::vec3 axis = -glm::normalize(m_BoltStroke);
+        const glm::vec3 origin = IK::Position(globals[bolt]);
+        std::vector<glm::vec3> verts;
+        std::vector<unsigned int> indices;
+        m_WeaponModel->CollisionGeometry(verts, indices);
+        const float stroke = glm::length(m_BoltStroke); // ~9 cm on an AK: a scale-free yardstick
+        const float radius = stroke * 0.45f;
+        float tip = -1e30f;
+        const auto offLine = [&](const glm::vec3& v, float t) { return glm::length(v - origin - axis * t); };
+        for (const glm::vec3& v : verts) {
+            const float t = glm::dot(v - origin, axis);
+            if (offLine(v, t) < radius) tip = std::max(tip, t);
+        }
+        if (tip >= 0.0f) {
+            glm::vec3 sum(0.0f);
+            int n = 0;
+            for (const glm::vec3& v : verts) {
+                const float t = glm::dot(v - origin, axis);
+                if (t > tip - stroke * 0.06f && offLine(v, t) < radius) { sum += v; ++n; }
+            }
+            const glm::mat4 rootInv = root >= 0 ? glm::inverse(globals[root]) : glm::mat4(1.0f);
+            m_Barrel.Detected = true;
+            m_Barrel.DetectedOrigin = glm::vec3(rootInv * glm::vec4(sum / (float)n, 1.0f));
+            m_Barrel.DetectedDirection = glm::normalize(glm::mat3(rootInv) * axis);
+            char msg[160];
+            std::snprintf(msg, sizeof msg, "First-person: bolt stroke %.1f, muzzle %.1f ahead of the bolt (model units x100).",
+                          stroke * 100.0f, tip * 100.0f);
+            Log::Info(msg);
+        }
     }
-    if (tip < 0.0f) return;
-    glm::vec3 sum(0.0f);
-    int n = 0;
-    for (const glm::vec3& v : verts) {
-        const float t = glm::dot(v - origin, axis);
-        if (t > tip - stroke * 0.06f && offLine(v, t) < radius) { sum += v; ++n; }
+    const FirstPersonMuzzleSettings& mz = m_Set.Muzzle;
+    if (!mz.Auto && glm::length(mz.Direction) > 1e-6f) {
+        m_MuzzleLocal = mz.Origin;
+        m_BoreLocal = glm::normalize(mz.Direction);
+        m_HaveMuzzle = true;
+    } else if (mz.Auto && m_Barrel.Detected) {
+        m_MuzzleLocal = m_Barrel.DetectedOrigin;
+        m_BoreLocal = m_Barrel.DetectedDirection;
+        m_HaveMuzzle = true;
+    } else {
+        m_Barrel.Problem = bolt < 0 || glm::length(m_BoltStroke) < 1e-5f
+                               ? "Auto needs the procedural bolt (recoil.boltBone, moved by the hip-fire clip) to find the barrel."
+                               : "Auto couldn't find the weapon mesh's front face along the bolt's travel.";
+        Log::Warn("First-person: no muzzle - " + m_Barrel.Problem +
+                  " Rounds hit nothing and there's no laser; set the muzzle by hand in the weapon Inspector (Barrel & Laser).");
     }
-    const glm::mat4 rootInv = root >= 0 ? glm::inverse(globals[root]) : glm::mat4(1.0f);
-    m_MuzzleLocal = glm::vec3(rootInv * glm::vec4(sum / (float)n, 1.0f));
-    m_BoreLocal = glm::normalize(glm::mat3(rootInv) * axis);
-    m_HaveMuzzle = true;
-    char msg[160];
-    std::snprintf(msg, sizeof msg, "First-person: bolt stroke %.1f, muzzle %.1f ahead of the bolt (model units x100).",
-                  stroke * 100.0f, tip * 100.0f);
-    Log::Info(msg);
+    m_Barrel.HasMuzzle = m_HaveMuzzle;
+    PublishBarrelReport(m_SetFile.u8string(), m_Barrel);
 }
 
 bool FirstPersonPresentation::BarrelAimPoint(glm::vec3& out) const {
     const auto* ac = Animator();
     if (!m_AimPointValid || !ac || !m_Equipped) return false;
-    if (!(ac->HasTag(K::kTagIdle) || ac->StateName == "Walk" || ac->StateName == "Fire")) return false;
+    if (!(ac->HasTag(K::kTagIdle) || ac->HasTag(K::kTagReady))) return false;
     out = m_AimPoint;
     return true;
 }
 
 bool FirstPersonPresentation::LaserBeam(Laser& out) const {
     const auto* ac = Animator();
-    if (!m_AimPointValid || !ac || !m_Equipped || ac->HasTag(K::kTagHidden)) return false;
+    if (!m_Set.Laser.Enabled || !m_AimPointValid || !ac || !m_Equipped || ac->HasTag(K::kTagHidden)) return false;
+    out.BeamColor = m_Set.Laser.Color * m_Set.Laser.BeamBrightness;
+    out.SpotColor = m_Set.Laser.Color * m_Set.Laser.SpotBrightness;
     out.From = m_Muzzle;
     out.To = m_AimPoint;
     out.Normal = m_AimNormal;
@@ -557,12 +595,27 @@ void FirstPersonPresentation::ReloadIfChanged(float dt) {
     // Numbers (and the IK bones) only: the rigs and controller need a restart of Play to change.
     const bool rebuildIK = !SameIKSetup(m_Set.Procedural.IK, fresh.Procedural.IK);
     const FirstPersonAdsSettings& oldAds = m_Set.Ads;
+    const FirstPersonMuzzleSettings& oldMuzzle = m_Set.Muzzle;
+    const bool remuzzle = oldMuzzle.Auto != fresh.Muzzle.Auto || oldMuzzle.Origin != fresh.Muzzle.Origin ||
+                          oldMuzzle.Direction != fresh.Muzzle.Direction;
+    // The saved sight line cleared (Re-measure in the Inspector): measure it afresh.
+    const bool resight = m_Set.Gameplay.HasSightLine && !fresh.Gameplay.HasSightLine;
     const bool remeasure = rebuildIK || oldAds.ReferenceState != fresh.Ads.ReferenceState ||
                            oldAds.CarryTag != fresh.Ads.CarryTag || oldAds.MatchElbows != fresh.Ads.MatchElbows ||
                            oldAds.MatchTwist != fresh.Ads.MatchTwist || oldAds.ActionBones != fresh.Ads.ActionBones;
     m_Set.Gameplay = fresh.Gameplay;
     m_Set.Ads = fresh.Ads;
     m_Set.Procedural = fresh.Procedural;
+    m_Set.Muzzle = fresh.Muzzle;
+    m_Set.Laser = fresh.Laser;
+    if (remuzzle && m_WeaponModel)
+        SetupMuzzle(glm::length(m_BoltStroke) >= 1e-5f ? m_WeaponModel->NodeIndex(m_Set.Procedural.Recoil.BoltBone) : -1);
+    if (resight) {
+        m_SightMeasured = m_SightLogged = false;
+        m_SightSettled = 0.0f;
+        m_Barrel.SightMeasured = false;
+        PublishBarrelReport(m_SetFile.u8string(), m_Barrel);
+    }
     if (rebuildIK && m_World && m_World->Registry.valid(m_Arms)) {
         m_World->Registry.remove<IKRigComponent>(m_Arms);
         m_UsesIK = SetupIK();
@@ -624,7 +677,7 @@ bool FirstPersonPresentation::Fire() {
     // being held (idle, walking, or still settling from a shot); anywhere else (sprinting, an
     // inspect) the trigger still goes through the controller's Fire state, which cuts it short.
     const bool hipProcedural = m_Set.Procedural.Recoil.HipProcedural &&
-                               (ac->HasTag(K::kTagIdle) || ac->StateName == "Walk" || ac->StateName == "Fire");
+                               (ac->HasTag(K::kTagIdle) || ac->HasTag(K::kTagReady));
     if (ads || hipProcedural) {
         // Each round starts its own recoil curves; full-auto overlaps them into a climb.
         m_Procedural.OnShot(m_Set.Procedural, ads);
@@ -655,7 +708,7 @@ void FirstPersonPresentation::ShotImpact() {
     // Bounded, in case nothing drains it (no renderer this session).
     if (m_ShotHits.size() < 256)
         m_ShotHits.push_back({glm::vec3(hit.Point[0], hit.Point[1], hit.Point[2]),
-                              glm::vec3(hit.Normal[0], hit.Normal[1], hit.Normal[2]), hit.Entity});
+                              glm::vec3(hit.Normal[0], hit.Normal[1], hit.Normal[2]), hit.Entity, g.BulletHoleRadius});
     if (g.ImpactImpulse <= 0.0f) return;
     const auto e = static_cast<entt::entity>(hit.Entity);
     const auto* rb = m_World->Registry.valid(e) ? m_World->Registry.try_get<RigidbodyComponent>(e) : nullptr;
@@ -1122,6 +1175,11 @@ void FirstPersonPresentation::PlaceRigs(World& world, const Camera& camera) {
                 m_SightMeasured = true;
                 if (!m_SightLogged && m_SightSettled > 1.5f) {
                     m_SightLogged = true;
+                    // For the Inspector's Save Measured Sight Line.
+                    m_Barrel.SightMeasured = true;
+                    m_Barrel.SightOrigin = m_SightOrigin;
+                    m_Barrel.SightDirection = m_SightDirection;
+                    PublishBarrelReport(m_SetFile.u8string(), m_Barrel);
                     char msg[320];
                     std::snprintf(msg, sizeof msg,
                                   "First-person: sight line measured - save it in the .fpsanim's gameplay block: "

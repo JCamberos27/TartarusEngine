@@ -735,10 +735,9 @@ int main(int argc, char** argv) {
                                  int h) -> std::function<void()> {
             if (!on) return {};
             return [&, v, p, eye, h] {
-                constexpr float kHoleRadius = 0.0045f; // a 5.45 mm round's hole, a touch torn
                 bulletHoles.Resolve(world, placedHoles);
                 for (const BulletHoleList::Placed& hole : placedHoles)
-                    weaponFx.AddHole(hole.Position, hole.Normal, hole.Tangent, kHoleRadius, hole.Seed);
+                    weaponFx.AddHole(hole.Position, hole.Normal, hole.Tangent, hole.Radius, hole.Seed);
                 FirstPersonPresentation::Laser laser;
                 if (firstPersonPresentation.IsActive() && firstPersonPresentation.LaserBeam(laser)) {
                     // The gun draws through its own FOV: the beam's near end goes through the same
@@ -749,8 +748,8 @@ int main(int argc, char** argv) {
                     const float vmFov = firstPersonPresentation.ViewModelFov();
                     if (vmFov > 0.0f && std::abs(p[1][1]) > 1e-4f)
                         emitterScale = (1.0f / p[1][1]) / std::tan(glm::radians(vmFov) * 0.5f);
-                    weaponFx.AddBeam(laser.From, laser.To, glm::vec3(1.1f, 0.025f, 0.015f), emitterScale);
-                    if (laser.Hit) weaponFx.AddSpot(laser.To, laser.Normal, glm::vec3(9.0f, 0.35f, 0.2f));
+                    weaponFx.AddBeam(laser.From, laser.To, laser.BeamColor, emitterScale);
+                    if (laser.Hit) weaponFx.AddSpot(laser.To, laser.Normal, laser.SpotColor);
                 }
                 weaponFx.Draw(v, p, eye, h, (float)glfwGetTime());
             };
@@ -2277,7 +2276,7 @@ int main(int argc, char** argv) {
                     firstPersonPresentation.LateUpdate(world, player.Cam);
                     // This frame's rounds, down the bore from the muzzle: a hole where each struck.
                     for (const FirstPersonPresentation::ShotHit& hit : firstPersonPresentation.TakeShotHits())
-                        bulletHoles.Add(world, static_cast<entt::entity>(hit.Entity), hit.Point, hit.Normal);
+                        bulletHoles.Add(world, static_cast<entt::entity>(hit.Entity), hit.Point, hit.Normal, hit.HoleRadius);
                 }
             }
 
