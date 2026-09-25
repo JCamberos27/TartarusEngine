@@ -23792,6 +23792,7 @@
         "Head Bone": "head",
         "Hidden Bones": "",
         "Hidden Parts": "Head",
+        "Max Turn Rate": 120.0,
         "Parameter Smoothing": 0.12,
         "Responsiveness": 0.0,
         "Run Speed": 3.26,

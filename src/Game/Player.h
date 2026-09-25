@@ -36,6 +36,13 @@ public:
     // 1 = root motion only). Set before each Update; zero weight is the plain controller.
     glm::vec3 RootMotionVelocity{0.0f};
     float RootMotionWeight = 0.0f;
+    // The most the view may turn (yaw, degrees / second) beyond YawFreeRange degrees either side
+    // of YawFreeCenter (Camera::Yaw degrees) - what a body turning on the spot can keep up with.
+    // Inside the range, and back toward it, the view is free. 0 = unlimited. Set before each Update;
+    // the turn beyond the limit is dropped.
+    float MaxYawRate = 0.0f;
+    float YawFreeCenter = 0.0f;
+    float YawFreeRange = 0.0f;
     // Out, per Update: the input as a horizontal velocity (m/s, world - what the player asked
     // for, before root motion), and whether a jump started this frame.
     glm::vec3 WishVelocity{0.0f};

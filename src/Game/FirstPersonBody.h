@@ -76,6 +76,9 @@ private:
     std::string m_LastError;
     float m_ViewYaw = 0.0f;        // the view's heading, radians (the body's turns aim at it)
     bool m_HaveHeading = false;
+    bool m_Still = false;          // standing still at the last Tick (the view's turn is then limited)
+    float m_MaxTurnRate = 0.0f;    // the component's, from the last Tick
+    float m_TurnThreshold = 0.0f;
     bool m_Turning = false;        // a turn-in-place clip is carrying the body round
     float m_TurnTime = 0.0f;       // seconds into it
     float m_TurnDone = 0.0f;       // radians the clip has turned the body so far
