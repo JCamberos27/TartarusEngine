@@ -1,4 +1,5 @@
 #include "FirstPersonBody.h"
+#include "FirstPersonBodyContract.h"
 
 #include "Camera.h"
 #include "Components.h"
@@ -40,7 +41,7 @@ void CopyArmShape(const Model& m, const Model& rig, float weight, IK::Pose& pose
     const IK::Pose& rigPose = rig.AppliedLocalPose();
     if ((int)rigPose.size() != rig.NodeCount()) return;
     std::vector<char> under(pose.size(), 0);
-    for (const char* clavicle : {"clavicle_l", "clavicle_r"})
+    for (const char* clavicle : {FPBody::kBoneClavicle[0], FPBody::kBoneClavicle[1]})
         if (const int c = m.NodeIndex(clavicle); c >= 0) under[c] = 1;
     for (int i = 0; i < (int)pose.size(); ++i) {
         if (!under[i] && parents[i] >= 0 && under[parents[i]]) under[i] = 1;
@@ -139,8 +140,8 @@ bool FirstPersonBody::Start(World& world, Player& player) {
     else
         m_RestHead = glm::vec3(model.SampleNodeModelSpace(-1, 0.0f, AnimationWrapMode::ClampForever, m_HeadNode)[3]);
 
-    m_ShoulderNode[0] = model.NodeIndex("upperarm_l");
-    m_ShoulderNode[1] = model.NodeIndex("upperarm_r");
+    m_ShoulderNode[0] = model.NodeIndex(FPBody::kBoneUpperArm[0]);
+    m_ShoulderNode[1] = model.NodeIndex(FPBody::kBoneUpperArm[1]);
 
     auto names = [](const std::string& csv) {
         std::vector<std::string> out;
@@ -267,7 +268,7 @@ void FirstPersonBody::Tick(World& world, const Player& player, const Camera& cam
     if (!holdForStop) m_Move += (target - m_Move) * Follow(dt, cfg.ParamSmoothing);
     m_AirTime = player.Grounded ? 0.0f : m_AirTime + dt;
     m_Grounded = player.Grounded;
-    m_InLand = reg.valid(m_Driver) && reg.get<AnimatorControllerComponent>(m_Driver).InState("Land");
+    m_InLand = reg.valid(m_Driver) && reg.get<AnimatorControllerComponent>(m_Driver).InState(FPBody::kStateLand);
 
     if (!reg.valid(m_Driver)) { m_Body = entt::null; return; }
     auto& ac = reg.get<AnimatorControllerComponent>(m_Driver);
@@ -286,7 +287,7 @@ void FirstPersonBody::Tick(World& world, const Player& player, const Camera& cam
         m_Turning = false;
     } else if (m_Turning) {
         m_TurnTime += dt;
-        if (ac.InState("Turn") || ac.InState("CrouchTurn")) {
+        if (ac.InState(FPBody::kStateTurn) || ac.InState(FPBody::kStateCrouchTurn)) {
             const float step = glm::radians(ac.RootMotion.DeltaYaw);
             m_Yaw += step;
             m_TurnDone += step;
@@ -294,7 +295,7 @@ void FirstPersonBody::Tick(World& world, const Player& player, const Camera& cam
         offset = FirstPersonBodyWrapAngle(m_ViewYaw - m_Yaw);
         // Done when the clip has played out (a 180 takes longer than a 90), the view is reached, or
         // the player moves off; the timeout is only a guard.
-        const bool clipDone = m_TurnTime > 0.3f && (!ac.InState("Turn") || ac.StateTime >= 0.97f);
+        const bool clipDone = m_TurnTime > 0.3f && (!ac.InState(FPBody::kStateTurn) || ac.StateTime >= 0.97f);
         if (!still || std::abs(offset) < glm::radians(8.0f) || clipDone || m_TurnTime > 4.0f) {
             Log::Info("First Person Body: turned " + std::to_string(glm::degrees(m_TurnDone)).substr(0, 6) + " deg in " +
                       std::to_string(m_TurnTime).substr(0, 4) + " s, " + std::to_string(glm::degrees(offset)).substr(0, 6) + " deg off the view.");
@@ -305,7 +306,7 @@ void FirstPersonBody::Tick(World& world, const Player& player, const Camera& cam
             m_Turning = true;
             m_TurnTime = 0.0f;
             m_TurnDone = 0.0f;
-            ac.SetFloat("TurnAngle", std::clamp(glm::degrees(offset), -180.0f, 180.0f));
+            ac.SetFloat(FPBody::kTurnAngle, std::clamp(glm::degrees(offset), -180.0f, 180.0f));
         }
     } else {
         m_Yaw += offset * Follow(dt, 0.08f);
@@ -319,7 +320,7 @@ void FirstPersonBody::Tick(World& world, const Player& player, const Camera& cam
     m_Yaw = FirstPersonBodyWrapAngle(m_Yaw);
     m_Twist = FirstPersonBodyWrapAngle(m_ViewYaw - m_Yaw);
     world.SetWorldPose(m_Body, m_Feet, YawRotation(m_Yaw));
-    ac.SetBool("Turning", m_Turning);
+    ac.SetBool(FPBody::kTurning, m_Turning);
 
     // Starting and stopping: a clip for each, picked by the direction, only from plain locomotion (a
     // trigger fired elsewhere would wait and go off later). A stop needs a moment of no input
@@ -328,17 +329,17 @@ void FirstPersonBody::Tick(World& world, const Player& player, const Camera& cam
         const glm::vec2 wishLocal = FirstPersonBodyLocalMove(player.WishVelocity, m_Yaw);
         const float wishLen = glm::length(wishLocal);
         const bool wantsMove = wishLen > 0.1f;
-        const bool plain = cfg.StartStopClips && player.Grounded && (ac.InState("Locomotion") || ac.InState("CrouchLoco")) && !m_Turning;
-        ac.SetBool("Moving", wantsMove);
+        const bool plain = cfg.StartStopClips && player.Grounded && (ac.InState(FPBody::kStateLocomotion) || ac.InState(FPBody::kStateCrouchLoco)) && !m_Turning;
+        ac.SetBool(FPBody::kMoving, wantsMove);
         // Standing still, dropping into or rising out of a crouch plays its transition clip; on the
         // move it is just the crossfade between the gaits.
         if (cfg.StartStopClips && player.Grounded && !wantsMove && glm::length(m_Move) < 0.4f && player.Crouched != m_WasCrouched) {
-            if (player.Crouched && ac.InState("Locomotion")) ac.SetTrigger("CrouchDown");
-            if (!player.Crouched && ac.InState("CrouchLoco")) ac.SetTrigger("CrouchUp");
+            if (player.Crouched && ac.InState(FPBody::kStateLocomotion)) ac.SetTrigger(FPBody::kCrouchDown);
+            if (!player.Crouched && ac.InState(FPBody::kStateCrouchLoco)) ac.SetTrigger(FPBody::kCrouchUp);
         }
         m_WasCrouched = player.Crouched;
         // How far the clips carry the body: logged, to tune them against the feel.
-        const bool inStop = ac.InState("Stop") || ac.InState("StopRun"), inStart = ac.InState("Start");
+        const bool inStop = ac.InState(FPBody::kStateStop) || ac.InState(FPBody::kStateStopRun), inStart = ac.InState(FPBody::kStateStart);
         const float travel = glm::length(glm::vec2(ac.RootMotion.DeltaPosition.x, ac.RootMotion.DeltaPosition.z));
         if (inStop) m_StopDistance += travel;
         else if (m_StopDistance > 0.0f) {
@@ -353,9 +354,9 @@ void FirstPersonBody::Tick(World& world, const Player& player, const Camera& cam
         if (wantsMove) {
             const glm::vec2 dir = wishLocal / wishLen;
             if (plain && m_IdleTime >= 0.25f && glm::length(m_Move) < 0.6f) {
-                ac.SetFloat("StartX", dir.x);
-                ac.SetFloat("StartY", dir.y);
-                ac.SetTrigger("Start");
+                ac.SetFloat(FPBody::kStartX, dir.x);
+                ac.SetFloat(FPBody::kStartY, dir.y);
+                ac.SetTrigger(FPBody::kStart);
             }
             m_LastDir = dir;
             m_LastSprint = glm::length(glm::vec2(player.WishVelocity.x, player.WishVelocity.z)) > m_RunSpeed * 1.05f;
@@ -368,22 +369,22 @@ void FirstPersonBody::Tick(World& world, const Player& player, const Camera& cam
             const bool ranEnough = m_MoveTime >= (player.Crouched ? 0.7f : 0.6f);
             if (before < 0.05f && m_IdleTime >= 0.05f) m_MoveTime = 0.0f;
             if (plain && ranEnough && before < 0.05f && m_IdleTime >= 0.05f && glm::length(m_Move) > (player.Crouched ? 0.6f : 1.2f)) {
-                ac.SetFloat("StopX", m_LastDir.x);
-                ac.SetFloat("StopY", m_LastDir.y);
-                ac.SetTrigger(m_LastSprint && m_LastDir.y > 0.7f ? "StopRun" : "Stop");
+                ac.SetFloat(FPBody::kStopX, m_LastDir.x);
+                ac.SetFloat(FPBody::kStopY, m_LastDir.y);
+                ac.SetTrigger(m_LastSprint && m_LastDir.y > 0.7f ? FPBody::kStopRun : FPBody::kStop);
             }
         }
     }
 
-    ac.SetFloat("MoveX", m_Move.x);
-    ac.SetFloat("MoveY", m_Move.y);
-    ac.SetFloat("Speed", glm::length(m_Move));
-    ac.SetBool("Sprint", glm::length(glm::vec2(player.WishVelocity.x, player.WishVelocity.z)) > m_RunSpeed * 1.05f);
-    ac.SetBool("Grounded", player.Grounded);
-    ac.SetBool("Crouched", player.Crouched);
+    ac.SetFloat(FPBody::kMoveX, m_Move.x);
+    ac.SetFloat(FPBody::kMoveY, m_Move.y);
+    ac.SetFloat(FPBody::kSpeed, glm::length(m_Move));
+    ac.SetBool(FPBody::kSprint, glm::length(glm::vec2(player.WishVelocity.x, player.WishVelocity.z)) > m_RunSpeed * 1.05f);
+    ac.SetBool(FPBody::kGrounded, player.Grounded);
+    ac.SetBool(FPBody::kCrouched, player.Crouched);
     // Off the ground for a moment (not a step down a stair): falling.
-    ac.SetBool("Airborne", m_AirTime > 0.15f);
-    if (player.Jumped) ac.SetTrigger("Jump");
+    ac.SetBool(FPBody::kAirborne, m_AirTime > 0.15f);
+    if (player.Jumped) ac.SetTrigger(FPBody::kJump);
 }
 
 void FirstPersonBody::LateUpdate(World& world, Camera& camera, float dt, entt::entity weaponArms,
@@ -430,7 +431,7 @@ void FirstPersonBody::LateUpdate(World& world, Camera& camera, float dt, entt::e
             if (name.find(want) == std::string::npos) continue;
             const Model& m = *m_Models[k];
             IK::Pose pose = m.AppliedLocalPose();
-            const int ul = m.NodeIndex("upperarm_l"), ur = m.NodeIndex("upperarm_r");
+            const int ul = m.NodeIndex(FPBody::kBoneUpperArm[0]), ur = m.NodeIndex(FPBody::kBoneUpperArm[1]);
             if (pose.empty() || (int)pose.size() != m.NodeCount() || ul < 0 || ur < 0) break;
             std::vector<int> parents(pose.size());
             for (int i = 0; i < (int)pose.size(); ++i) parents[i] = m.NodeParent(i);
@@ -485,7 +486,7 @@ void FirstPersonBody::LateUpdate(World& world, Camera& camera, float dt, entt::e
         reg.all_of<RenderableComponent>(weaponArms)) {
         const Model* rig = reg.get<RenderableComponent>(weaponArms).ModelRef.get();
         glm::mat4 sl(1.0f), sr(1.0f), cb(1.0f);
-        if (rig && rig->NodeTransform("upperarm_l", sl) && rig->NodeTransform("upperarm_r", sr)) {
+        if (rig && rig->NodeTransform(FPBody::kBoneUpperArm[0], sl) && rig->NodeTransform(FPBody::kBoneUpperArm[1], sr)) {
             if (!rigCameraBone.empty()) rig->NodeTransform(rigCameraBone, cb);
             const glm::mat4 rigWorld = world.ComposeWorldTransform(weaponArms);
             const glm::vec3 fromEye = glm::mat3(rigWorld) * (0.5f * (glm::vec3(sl[3]) + glm::vec3(sr[3])) - glm::vec3(cb[3]));
@@ -535,7 +536,7 @@ void FirstPersonBody::LateUpdate(World& world, Camera& camera, float dt, entt::e
 void FirstPersonBody::ApplyFootIK(World& world, const FirstPersonBodyComponent& cfg, float dt) {
     auto& reg = world.Registry;
     const bool on = cfg.FootIK && m_Grounded && PhysicsWorld::HasCharacter() && reg.valid(m_Driver) &&
-                    !reg.get<AnimatorControllerComponent>(m_Driver).HasTag("Airborne");
+                    !reg.get<AnimatorControllerComponent>(m_Driver).HasTag(FPBody::kTagAirborne);
     m_FootWeight += ((on ? 1.0f : 0.0f) - m_FootWeight) * Follow(dt, 0.1f);
     if (m_FootWeight < 1e-3f) {
         m_HaveFoot = false;
@@ -548,7 +549,7 @@ void FirstPersonBody::ApplyFootIK(World& world, const FirstPersonBodyComponent& 
     const Model& drv = *rc->ModelRef;
     const IK::Pose driverPose = drv.AppliedLocalPose();
     if (driverPose.empty() || (int)driverPose.size() != drv.NodeCount()) return;
-    const int footNode[2] = {drv.NodeIndex("foot_l"), drv.NodeIndex("foot_r")};
+    const int footNode[2] = {drv.NodeIndex(FPBody::kBoneFoot[0]), drv.NodeIndex(FPBody::kBoneFoot[1])};
     if (footNode[0] < 0 || footNode[1] < 0) return;
 
     const auto& t = reg.get<TransformComponent>(m_Body);
@@ -599,13 +600,13 @@ void FirstPersonBody::ApplyFootIK(World& world, const FirstPersonBodyComponent& 
     m_HaveFoot = true;
 
     const float pelvisDelta = FirstPersonBodyFootPelvis(m_FootOffset[0], m_FootOffset[1], maxDrop, 0.0f) * m_FootWeight;
-    static const char* const kLegs[2][3] = {{"thigh_l", "calf_l", "foot_l"}, {"thigh_r", "calf_r", "foot_r"}};
+    static const char* const kLegs[2][3] = {{FPBody::kBoneThigh[0], FPBody::kBoneCalf[0], FPBody::kBoneFoot[0]}, {FPBody::kBoneThigh[1], FPBody::kBoneCalf[1], FPBody::kBoneFoot[1]}};
     const glm::quat yawInverse = glm::inverse(yaw);
     for (const auto& mp : m_Models) {
         Model& m = *mp;
         IK::Pose pose = m.AppliedLocalPose();
         if (pose.empty() || (int)pose.size() != m.NodeCount()) continue;
-        const int pelvis = m.NodeIndex("pelvis");
+        const int pelvis = m.NodeIndex(FPBody::kBonePelvis);
         if (pelvis < 0) continue;
         parents.resize(pose.size());
         for (int i = 0; i < (int)pose.size(); ++i) parents[i] = m.NodeParent(i);
@@ -637,7 +638,7 @@ void FirstPersonBody::ApplyFootIK(World& world, const FirstPersonBodyComponent& 
 // the model's X axis, twist about Y), on every piece so they stay one skeleton.
 void FirstPersonBody::ApplySpineAim(const Camera& camera, float amount, float twist) {
     const float pitch = std::asin(std::clamp(camera.Front().y, -1.0f, 1.0f)); // up is positive
-    static const char* const kSpine[] = {"spine_01", "spine_02", "spine_03", "spine_04", "spine_05"};
+    const char* const* kSpine = FPBody::kBoneSpine;
     std::vector<int> parents;
     std::vector<glm::mat4> globals;
     for (const auto& mp : m_Models) {
@@ -645,7 +646,7 @@ void FirstPersonBody::ApplySpineAim(const Camera& camera, float amount, float tw
         IK::Pose pose = m.AppliedLocalPose();
         if (pose.empty() || (int)pose.size() != m.NodeCount()) continue;
         std::vector<int> bones;
-        for (const char* name : kSpine)
+        for (const char* name : {kSpine[0], kSpine[1], kSpine[2], kSpine[3], kSpine[4]})
             if (const int i = m.NodeIndex(name); i >= 0) bones.push_back(i);
         if (bones.empty()) continue;
         parents.resize(pose.size());
@@ -715,8 +716,8 @@ void FirstPersonBody::ArmsLateUpdate(World& world, entt::entity weaponArms, floa
     const glm::mat4 rigWorld = world.ComposeWorldTransform(weaponArms);
 
     struct Side { const char *Clavicle, *Upper, *Lower, *Hand; };
-    static const Side kSides[2] = {{"clavicle_l", "upperarm_l", "lowerarm_l", "hand_l"},
-                                   {"clavicle_r", "upperarm_r", "lowerarm_r", "hand_r"}};
+    static const Side kSides[2] = {{FPBody::kBoneClavicle[0], FPBody::kBoneUpperArm[0], FPBody::kBoneLowerArm[0], FPBody::kBoneHand[0]},
+                                   {FPBody::kBoneClavicle[1], FPBody::kBoneUpperArm[1], FPBody::kBoneLowerArm[1], FPBody::kBoneHand[1]}};
     // The rig's hands, exactly: the arms piece is drawn with the gun in the same projection.
     glm::vec3 handPos[2]{};
     glm::quat handRot[2]{};
