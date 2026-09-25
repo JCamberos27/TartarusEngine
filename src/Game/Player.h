@@ -47,6 +47,11 @@ public:
     float CrouchHeight = 0.0f;
     float CrouchSpeedMultiplier = 0.45f;
     bool Crouched = false;
+    // A jump pressed this long before landing still happens on landing, and one pressed this long
+    // after stepping off an edge still counts (seconds).
+    float JumpBufferTime = 0.12f;
+    float CoyoteTime = 0.10f;
+    float m_SinceGrounded = 0.0f, m_JumpBuffer = 0.0f;
     float CrouchBlend = 0.0f; // 0 standing .. 1 crouched: eases the eye height
     float YawFreeCenter = 0.0f;
     float YawFreeRange = 0.0f;
