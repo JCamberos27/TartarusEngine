@@ -23799,6 +23799,7 @@
         "Spine Aim": 0.6,
         "Spine Twist": 1.0,
         "Sprint Speed": 4.72,
+        "Start Stop Clips": true,
         "Turn Threshold": 55.0,
         "Weapon Arms": true
       },

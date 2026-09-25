@@ -240,7 +240,10 @@ void FirstPersonBody::Tick(World& world, const Player& player, const Camera& cam
 
     // The movement, in the body's frame, eased so the gait changes smoothly.
     const glm::vec2 target = FirstPersonBodyLocalMove(player.WishVelocity, m_Yaw);
-    m_Move += (target - m_Move) * Follow(dt, cfg.ParamSmoothing);
+    // Letting go at speed, the gait holds for the moment a stop clip is being picked (the blend would
+    // otherwise slow the body on its own first, and the stop clip's own travel come on top of it).
+    const bool holdForStop = cfg.StartStopClips && glm::length(target) < 0.01f && m_IdleTime < 0.05f && glm::length(m_Move) > 1.2f;
+    if (!holdForStop) m_Move += (target - m_Move) * Follow(dt, cfg.ParamSmoothing);
     m_AirTime = player.Grounded ? 0.0f : m_AirTime + dt;
 
     if (!reg.valid(m_Driver)) { m_Body = entt::null; return; }
@@ -294,6 +297,49 @@ void FirstPersonBody::Tick(World& world, const Player& player, const Camera& cam
     m_Twist = FirstPersonBodyWrapAngle(m_ViewYaw - m_Yaw);
     world.SetWorldPose(m_Body, m_Feet, YawRotation(m_Yaw));
     ac.SetBool("Turning", m_Turning);
+
+    // Starting and stopping: a clip for each, picked by the direction, only from plain locomotion (a
+    // trigger fired elsewhere would wait and go off later). A stop needs a moment of no input
+    // (tapping between keys isn't one: 50 ms) and some speed to shed.
+    {
+        const glm::vec2 wishLocal = FirstPersonBodyLocalMove(player.WishVelocity, m_Yaw);
+        const float wishLen = glm::length(wishLocal);
+        const bool wantsMove = wishLen > 0.1f;
+        const bool plain = cfg.StartStopClips && player.Grounded && ac.InState("Locomotion") && !m_Turning;
+        ac.SetBool("Moving", wantsMove);
+        // How far the clips carry the body: logged, to tune them against the feel.
+        const bool inStop = ac.InState("Stop") || ac.InState("StopRun"), inStart = ac.InState("Start");
+        const float travel = glm::length(glm::vec2(ac.RootMotion.DeltaPosition.x, ac.RootMotion.DeltaPosition.z));
+        if (inStop) m_StopDistance += travel;
+        else if (m_StopDistance > 0.0f) {
+            Log::Info("First Person Body: the stop clip carried the body " + std::to_string(m_StopDistance).substr(0, 4) + " m.");
+            m_StopDistance = 0.0f;
+        }
+        if (inStart) m_StartDistance += travel;
+        else if (m_StartDistance > 0.0f) {
+            Log::Info("First Person Body: the start clip carried the body " + std::to_string(m_StartDistance).substr(0, 4) + " m.");
+            m_StartDistance = 0.0f;
+        }
+        if (wantsMove) {
+            const glm::vec2 dir = wishLocal / wishLen;
+            if (plain && m_IdleTime >= 0.25f && glm::length(m_Move) < 0.6f) {
+                ac.SetFloat("StartX", dir.x);
+                ac.SetFloat("StartY", dir.y);
+                ac.SetTrigger("Start");
+            }
+            m_LastDir = dir;
+            m_LastSprint = glm::length(glm::vec2(player.WishVelocity.x, player.WishVelocity.z)) > m_RunSpeed * 1.05f;
+            m_IdleTime = 0.0f;
+        } else {
+            const float before = m_IdleTime;
+            m_IdleTime += dt;
+            if (plain && before < 0.05f && m_IdleTime >= 0.05f && glm::length(m_Move) > 1.2f) {
+                ac.SetFloat("StopX", m_LastDir.x);
+                ac.SetFloat("StopY", m_LastDir.y);
+                ac.SetTrigger(m_LastSprint && m_LastDir.y > 0.7f ? "StopRun" : "Stop");
+            }
+        }
+    }
 
     ac.SetFloat("MoveX", m_Move.x);
     ac.SetFloat("MoveY", m_Move.y);
@@ -421,6 +467,12 @@ void FirstPersonBody::LateUpdate(World& world, Camera& camera, float dt, entt::e
             m_ShouldersSlow += (shouldersAnimated - m_ShouldersSlow) * Follow(dt, 0.5f);
             const glm::vec3 shoulderTarget = m_ShouldersSlow + (shouldersAnimated - m_ShouldersSlow) * std::clamp(cfg.HeadBob, 0.0f, 1.0f);
             m_Shoulders += (shoulderTarget - m_Shoulders) * Follow(dt, cfg.CameraSmoothing);
+            // The eye may trail or under-follow the shoulders by only this much: a clip that throws the
+            // shoulders about (a stop pulling the body back) would otherwise carry them out of the
+            // arms' reach and a hand would come off the gun. Bigger motions move the camera with them.
+            constexpr float kReachSlack = 0.035f;
+            const glm::vec3 gap = shouldersAnimated - m_Shoulders;
+            if (const float gapLen = glm::length(gap); gapLen > kReachSlack) m_Shoulders = shouldersAnimated - gap / gapLen * kReachSlack;
             const glm::vec3 offset = camera.Right() * m_RigEyeToShoulders.x + camera.Up() * m_RigEyeToShoulders.y +
                                      camera.Front() * m_RigEyeToShoulders.z;
             const glm::vec3 fromShoulders = m_Feet + yaw * (t.Scale * (m_Shoulders + toRest)) - offset;
