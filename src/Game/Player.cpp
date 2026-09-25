@@ -73,9 +73,24 @@ void Player::Update(float dt, World& world, GLFWwindow* window, bool readInput) 
 
     const bool wasGrounded = Grounded;
     Jumped = false;
-    if (readInput && Grounded && !Crouched && InputMap::GetButtonDown("Jump")) {
-        Velocity.y = JumpSpeed; // one impulse; the capsule move below integrates the arc
-        Jumped = true;
+    m_SinceGrounded = Grounded ? 0.0f : m_SinceGrounded + dt;
+    m_JumpBuffer = readInput && InputMap::GetButtonDown("Jump") ? JumpBufferTime : std::max(0.0f, m_JumpBuffer - dt);
+    if (readInput && m_JumpBuffer > 0.0f && (Grounded || m_SinceGrounded < CoyoteTime) && Velocity.y <= 0.1f) {
+        // Out of a crouch: stand first, which needs headroom.
+        bool canStand = true;
+        if (Crouched) {
+            canStand = PhysicsWorld::HasCharacter() && PhysicsWorld::CharacterFitsAt(standCylHalf);
+            if (canStand) {
+                PhysicsWorld::ResizeCharacter(standCylHalf);
+                Crouched = false;
+            }
+        }
+        if (canStand) {
+            Velocity.y = JumpSpeed; // one impulse; the capsule move below integrates the arc
+            Jumped = true;
+            m_JumpBuffer = 0.0f;
+            m_SinceGrounded = 1000.0f; // no second jump out of the same coyote window
+        }
     }
 
     Velocity.y += Gravity * dt;

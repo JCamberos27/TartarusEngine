@@ -225,7 +225,8 @@ void FirstPersonBody::BeforePlayerMove(Player& player, Camera& camera) {
     }
     // Airborne, the input steers (there is no travel in a fall clip to follow).
     player.RootMotionVelocity = m_RootVelocity;
-    player.RootMotionWeight = player.Grounded ? 1.0f - std::clamp(m_Responsiveness, 0.0f, 1.0f) : 0.0f;
+    // The landing clip's own travel would stop a running player dead: while it plays, the input steers.
+    player.RootMotionWeight = player.Grounded && !m_InLand ? 1.0f - std::clamp(m_Responsiveness, 0.0f, 1.0f) : 0.0f;
 }
 
 void FirstPersonBody::Tick(World& world, const Player& player, const Camera& camera, float dt) {
@@ -265,6 +266,7 @@ void FirstPersonBody::Tick(World& world, const Player& player, const Camera& cam
     if (!holdForStop) m_Move += (target - m_Move) * Follow(dt, cfg.ParamSmoothing);
     m_AirTime = player.Grounded ? 0.0f : m_AirTime + dt;
     m_Grounded = player.Grounded;
+    m_InLand = reg.valid(m_Driver) && reg.get<AnimatorControllerComponent>(m_Driver).InState("Land");
 
     if (!reg.valid(m_Driver)) { m_Body = entt::null; return; }
     auto& ac = reg.get<AnimatorControllerComponent>(m_Driver);
