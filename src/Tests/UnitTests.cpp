@@ -1391,6 +1391,10 @@ void TestBlendTree2D() {
     CHECK(near(FirstPersonBodyWrapAngle(0.4f), 0.4f) && near(FirstPersonBodyWrapAngle(6.2831853f + 0.4f), 0.4f));
     CHECK(!FirstPersonBodyShouldTurn(glm::radians(40.0f), 55.0f) && FirstPersonBodyShouldTurn(glm::radians(-60.0f), 55.0f));
     CHECK(!FirstPersonBodyShouldTurn(glm::radians(170.0f), 0.0f)); // 0 = always faces the view
+
+    // Foot IK: the pelvis drops to the lower foot (capped), rises a little when both are up.
+    CHECK(near(FirstPersonBodyFootPelvis(-0.1f, 0.0f, 0.35f, 0.15f), -0.1f) && near(FirstPersonBodyFootPelvis(0.05f, -0.5f, 0.35f, 0.15f), -0.35f));
+    CHECK(near(FirstPersonBodyFootPelvis(0.2f, 0.3f, 0.35f, 0.15f), 0.15f) && near(FirstPersonBodyFootPelvis(0.0f, 0.0f, 0.35f, 0.15f), 0.0f));
 }
 
 void TestRootMotion() {
