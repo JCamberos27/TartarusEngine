@@ -272,6 +272,21 @@ std::string FirstPersonAnimationSet::ToJsonString() const {
     j["armsModel"] = ArmsModel;
     j["weaponModel"] = WeaponModel;
     j["controller"] = Controller;
+    // A v1 file's clip list and default state: without them an edit saved here would leave a file
+    // that no longer loads (no controller, no clips).
+    if (!Clips.empty()) {
+        json clips = json::array();
+        for (const FirstPersonAnimationClip& c : Clips) {
+            json item = {{"name", c.Name}, {"arms", c.ArmsClip}};
+            if (c.ArmsBindPose) item["armsBindPose"] = true;
+            if (!c.WeaponClip.empty()) item["weapon"] = c.WeaponClip;
+            if (c.Loop) item["loop"] = true;
+            item["fade"] = c.Fade;
+            clips.push_back(std::move(item));
+        }
+        j["clips"] = std::move(clips);
+        if (!DefaultState.empty()) j["defaultState"] = DefaultState;
+    }
     j["viewRotation"] = vec3(ViewRotation);
     if (!WeaponSocket.empty()) {
         j["weaponSocket"] = WeaponSocket;
