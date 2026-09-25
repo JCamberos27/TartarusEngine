@@ -21,6 +21,7 @@
 #include "Log.h"
 #include "AnimationSystem.h" // Animation component clip references (#175)
 #include "IK.h"              // IK Rig bone validation
+#include "FirstPersonBodyContract.h" // First Person Body setup check
 #include "EditorSettings.h"
 #include "EditorUIHelpers.h"
 #include "AssetImporterInspector.h"
@@ -3319,6 +3320,88 @@ void EditorLayer::DrawReflectedComponentExtra(const char* componentName, World& 
         } else if (auto* ac = registry.try_get<AnimatorControllerComponent>(entity)) {
             DrawRootMotionExtra(world, entity, ac->RootMotion, model);
         }
+        return;
+    }
+
+    // First Person Body: check the setup against what the body needs (the controller's parameters and
+    // states, bones, piece names) so a missing piece is said out loud instead of a feature silently
+    // doing nothing. FPBody::Validate is the same table the docs (BODY_SETUP.md) are written from.
+    if (std::strcmp(componentName, "First Person Body") == 0 && phase == ReflectExtraPhase::Top) {
+        const auto* cfg = registry.try_get<FirstPersonBodyComponent>(entity);
+        if (!cfg) return;
+        FPBody::ValidationInput in;
+        in.Config = cfg;
+        in.BodyCount = (int)registry.view<FirstPersonBodyComponent>().size();
+        std::vector<entt::entity> pieces;
+        auto rigged = [&](entt::entity e) {
+            const auto* rc = registry.try_get<RenderableComponent>(e);
+            return rc && rc->ModelRef && rc->ModelRef->NodeCount() > 0;
+        };
+        if (rigged(entity)) pieces.push_back(entity);
+        if (const auto* h = registry.try_get<HierarchyComponent>(entity))
+            for (entt::entity child : h->Children)
+                if (registry.valid(child) && rigged(child)) pieces.push_back(child);
+        in.HasPieces = !pieces.empty();
+        entt::entity driver = entt::null;
+        for (entt::entity e : pieces)
+            if (registry.all_of<AnimatorControllerComponent>(e)) { driver = e; break; }
+        in.HasDriverPiece = driver != entt::null;
+        for (entt::entity e : pieces)
+            if (const auto* n = registry.try_get<NameComponent>(e)) in.PieceNames.push_back(n->Name);
+        // The controller, re-read twice a second at most (the Animator window saves on every edit).
+        static std::string s_ctrlPath;
+        static AnimatorController s_ctrl;
+        static bool s_ctrlLoaded = false;
+        static double s_ctrlAt = -10.0;
+        Model* driverModel = nullptr;
+        if (driver != entt::null) {
+            const auto& ac = registry.get<AnimatorControllerComponent>(driver);
+            in.ControllerSet = !ac.Controller.empty();
+            driverModel = registry.get<RenderableComponent>(driver).ModelRef.get();
+            const double now = ImGui::GetTime();
+            if (in.ControllerSet && (ac.Controller != s_ctrlPath || now - s_ctrlAt > 0.5)) {
+                s_ctrlPath = ac.Controller;
+                s_ctrlAt = now;
+                AnimatorController loaded;
+                s_ctrlLoaded = AnimatorController::LoadFile(ProjectPaths::Resolve(ac.Controller), loaded);
+                if (s_ctrlLoaded) s_ctrl = std::move(loaded);
+            }
+            if (in.ControllerSet && s_ctrlLoaded && s_ctrlPath == ac.Controller) in.Controller = &s_ctrl;
+        }
+        if (driverModel) in.HasBone = [driverModel](const std::string& b) { return driverModel->NodeIndex(b) >= 0; };
+
+        const std::vector<FPBody::Check> checks = FPBody::Validate(in);
+        const FPBody::Severity worst = FPBody::Worst(checks);
+        // Only real problems make the header alarming: notes (Info) stay quiet.
+        int problems = 0;
+        for (const FPBody::Check& c : checks)
+            if ((int)c.Level >= (int)FPBody::Severity::Warning) ++problems;
+        ImVec4 col = EditorUIPrimitives::SuccessColor();
+        const char* icon = ICON_FA_CIRCLE_CHECK;
+        if (worst == FPBody::Severity::Error) { col = EditorUIPrimitives::DangerColor(); icon = ICON_FA_CIRCLE_XMARK; }
+        else if (problems > 0) { col = EditorUIPrimitives::WarningColor(); icon = ICON_FA_TRIANGLE_EXCLAMATION; }
+        ImGui::TextColored(col, "%s", icon);
+        ImGui::SameLine();
+        ImGui::TextUnformatted(problems == 0 ? "Setup: everything the body needs is there"
+                                             : (problems == 1 ? "Setup: 1 problem" : "Setup: problems"));
+        if (problems > 1) { ImGui::SameLine(); ImGui::TextDisabled("(%d)", problems); }
+        if (!checks.empty() && ImGui::TreeNodeEx("##bodysetup", (problems > 0 ? ImGuiTreeNodeFlags_DefaultOpen : 0) | ImGuiTreeNodeFlags_SpanAvailWidth,
+                                                 "Details (%d)", (int)checks.size())) {
+            for (const FPBody::Check& c : checks) {
+                ImVec4 cc = ImGui::GetStyleColorVec4(ImGuiCol_TextDisabled);
+                const char* ci = ICON_FA_CIRCLE_INFO;
+                if (c.Level == FPBody::Severity::Error) { cc = EditorUIPrimitives::DangerColor(); ci = ICON_FA_CIRCLE_XMARK; }
+                else if (c.Level == FPBody::Severity::Warning) { cc = EditorUIPrimitives::WarningColor(); ci = ICON_FA_TRIANGLE_EXCLAMATION; }
+                ImGui::TextColored(cc, "%s", ci);
+                ImGui::SameLine();
+                ImGui::PushTextWrapPos(0.0f);
+                ImGui::TextUnformatted(c.Message.c_str());
+                if (!c.Hint.empty()) ImGui::TextDisabled("    %s", c.Hint.c_str());
+                ImGui::PopTextWrapPos();
+            }
+            ImGui::TreePop();
+        }
+        ImGui::Spacing();
         return;
     }
 
