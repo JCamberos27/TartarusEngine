@@ -117,7 +117,7 @@ void ApplyRootMotion(World& world, entt::entity entity, RootMotionOptions& opts,
         opts.Speed += (glm::length(glm::vec2(worldDelta.x, worldDelta.z)) / dt - opts.Speed) * k;
         opts.TurnRate += (opts.DeltaYaw / dt - opts.TurnRate) * k;
     }
-    if (opts.Mode != (int)RootMotionMode::Apply || motion.IsZero()) return;
+    if (opts.Mode != (int)RootMotionMode::Apply) return;
     // The player's controller owns its own movement.
     if (world.Registry.all_of<FirstPersonControllerComponent>(entity)) return;
 
@@ -127,7 +127,8 @@ void ApplyRootMotion(World& world, entt::entity entity, RootMotionOptions& opts,
     const unsigned id = (unsigned)entt::to_integral(entity);
     if (body && !body->IsKinematic && dt > 0.0f && PhysicsWorld::GetBodyState(id, state) && state.Valid) {
         // A simulated body is steered, not teleported: the travel becomes its velocity (gravity
-        // keeps the vertical unless Vertical is on), so walls and slopes still stop it.
+        // keeps the vertical unless Vertical is on), so walls and slopes still stop it. Set every
+        // frame, zero included, so the body stops when the clip does instead of sliding on.
         glm::vec3 v = worldDelta / dt;
         if (!opts.Vertical) v.y = state.Velocity[1];
         const float vv[3] = {v.x, v.y, v.z};
@@ -142,6 +143,7 @@ void ApplyRootMotion(World& world, entt::entity entity, RootMotionOptions& opts,
         return;
     }
     // Everything else (a kinematic body follows its transform on the next physics step).
+    if (motion.IsZero()) return;
     transform->Position += parentDelta;
     if (motion.Yaw != 0.0f) transform->SetRotationQuaternion(turned);
 }

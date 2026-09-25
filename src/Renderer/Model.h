@@ -340,6 +340,9 @@ private:
     int m_RootMotionNode = -1;
     RootMotionSettings m_RootMotionSettings;
     RootMotionDelta m_RootMotionPending;
+    // FindRootMotionNode's auto pick, for the import it was found on.
+    mutable const SharedData* m_AutoRootMotionFor = nullptr;
+    mutable int m_AutoRootMotionNode = -1;
 
     // Last engine frame index on which TickAnimationOnce() actually advanced this model; an
     // impossible sentinel (uint64_t max) so frame index 0 doesn't look "already ticked".
