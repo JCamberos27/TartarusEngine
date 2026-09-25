@@ -1303,6 +1303,60 @@ void TestComponentRegistry() {
     }
 }
 
+// A weapon setup is checked against the driver's contract: a full controller is clean, each missing
+// piece (event, tag, parameter, bone) is named.
+void TestFirstPersonWeaponValidate() {
+    using namespace FirstPersonAnimatorContract;
+    using PT = AnimatorController::ParamType;
+    FirstPersonAnimationSet set;
+    set.Controller = "c.controller";
+    AnimatorController ctrl;
+    for (const char* n : {kSpeed, kWalkRate, kSprintRate}) ctrl.Parameters.push_back({n, PT::Float, 0.0f});
+    for (const char* n : {kSprint, kAim, kEquipped}) ctrl.Parameters.push_back({n, PT::Bool, 0.0f});
+    ctrl.Parameters.push_back({kAmmo, PT::Int, 0.0f});
+    for (const char* n : {kFire, kReload, kMagCheck, kInspect, kMelee, kFidget}) ctrl.Parameters.push_back({n, PT::Trigger, 0.0f});
+    AnimatorController::State idle, fire, reload, aim, hidden;
+    idle.Name = "Idle"; idle.Tags = {kTagIdle, kTagReady};
+    fire.Name = "Fire"; fire.Events.push_back({kEventShot, 0.1f});
+    reload.Name = "Reload"; reload.Tags = {kTagReload, kTagBusy}; reload.Events.push_back({kEventRefill, 0.7f});
+    aim.Name = "Aim"; aim.Tags = {kTagAds};
+    hidden.Name = "Holstered"; hidden.Tags = {kTagHidden};
+    ctrl.Layers[0].States = {idle, fire, reload, aim, hidden};
+    set.Ads.ReferenceState = "Aim";
+    FirstPersonWeaponCheckInput in;
+    in.Set = &set;
+    in.Controller = &ctrl;
+    in.HasArmsBone = [](const std::string&) { return true; };
+    in.HasWeaponBone = [](const std::string&) { return true; };
+    auto count = [](const std::vector<FPBody::Check>& c, FPBody::Severity l) {
+        int n = 0;
+        for (const auto& x : c) n += x.Level == l;
+        return n;
+    };
+    auto has = [](const std::vector<FPBody::Check>& c, const char* t) {
+        for (const auto& x : c) if (x.Message.find(t) != std::string::npos) return true;
+        return false;
+    };
+    std::vector<FPBody::Check> r = FirstPersonWeaponValidate(in);
+    CHECK(count(r, FPBody::Severity::Warning) == 0 && count(r, FPBody::Severity::Error) == 0);
+
+    AnimatorController broken = ctrl;
+    broken.Layers[0].States[1].Events.clear();                     // no Shot
+    broken.Layers[0].States[4].Tags.clear();                       // no Hidden
+    broken.Parameters.erase(broken.Parameters.begin());            // no Speed
+    in.Controller = &broken;
+    in.HasArmsBone = [](const std::string& b) { return b != "ik_hand_gun"; };
+    r = FirstPersonWeaponValidate(in);
+    CHECK(has(r, "'Shot' event") && has(r, "'Hidden'") && has(r, "'Speed'") && has(r, "'ik_hand_gun'"));
+    CHECK(r.front().Level == FPBody::Severity::Warning);
+
+    FirstPersonWeaponCheckInput none;
+    none.Set = &set;
+    set.Controller.clear();
+    r = FirstPersonWeaponValidate(none);
+    CHECK(!r.empty() && r.front().Level == FPBody::Severity::Error);
+}
+
 // The body's tuning fields: every float has a tooltip, a range that holds its default, and the
 // defaults are the values the body was tuned with (so a scene saved before they existed plays the same).
 void TestFirstPersonBodyTuning() {
@@ -3072,6 +3126,7 @@ int RunUnitTests() {
         {"RootMotion", TestRootMotion},
         {"FirstPersonBodyValidate", TestFirstPersonBodyValidate},
         {"FirstPersonBodyTuning", TestFirstPersonBodyTuning},
+        {"FirstPersonWeaponValidate", TestFirstPersonWeaponValidate},
         {"BlendTree2D", TestBlendTree2D},
         {"FirstPersonAnimationSet", TestFirstPersonAnimationSet},
         {"FirstPersonAnimationFSM", TestFirstPersonAnimationFSM},

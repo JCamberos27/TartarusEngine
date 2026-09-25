@@ -1,9 +1,11 @@
 #pragma once
 
+#include "FirstPersonBodyContract.h" // FPBody::Check: the weapon setup check reuses the body's result type
 #include "FirstPersonProcedural.h"
 
 #include <glm/glm.hpp>
 
+#include <functional>
 #include <string>
 #include <vector>
 
@@ -241,6 +243,18 @@ const char* KnownTagDescription(const std::string& tag); // nullptr for a custom
 inline constexpr const char* kEventShot = "Shot";    // a round leaves the gun (hip fire)
 inline constexpr const char* kEventRefill = "Refill";// the magazine is full again
 } // namespace FirstPersonAnimatorContract
+
+// A weapon setup checked against the contract above and its own definition, worst first (the Weapon
+// Inspector shows them, Play start logs the warnings): the controller must carry the parameters,
+// triggers, tags and events the driver uses, and the rigs the bones the IK and mount name. A check
+// whose input is missing is skipped. Reuses the body's result type.
+struct FirstPersonWeaponCheckInput {
+    const FirstPersonAnimationSet* Set = nullptr;
+    const AnimatorController* Controller = nullptr;        // null = none loaded (a v1 file, or a bad path)
+    std::function<bool(const std::string&)> HasArmsBone;   // on the arms rig (empty = skip)
+    std::function<bool(const std::string&)> HasWeaponBone; // on the weapon model (empty = skip)
+};
+std::vector<FPBody::Check> FirstPersonWeaponValidate(const FirstPersonWeaponCheckInput& in);
 
 // The standard first-person graph for a v1 clip list (the AKS-74U's 15 states): locomotion with
 // Idle<->Sprint transition clips, ADS, one-shots returning through Exit, reloads/melee that
