@@ -24,6 +24,8 @@ using System.Runtime.InteropServices;
 public static class TartarusLaunchConsole {
     [StructLayout(LayoutKind.Sequential)] public struct RECT { public int Left, Top, Right, Bottom; }
     [StructLayout(LayoutKind.Sequential)] public struct COORD { public short X, Y; }
+    [StructLayout(LayoutKind.Sequential)] public struct POINT { public int X, Y; }
+    [StructLayout(LayoutKind.Sequential)] struct MONITORINFO { public int Size; public RECT Monitor, Work; public uint Flags; }
     [StructLayout(LayoutKind.Sequential, CharSet = CharSet.Unicode)] public struct CONSOLE_FONT_INFOEX {
         public uint Size; public uint Font; public COORD FontSize; public int Family, Weight;
         [MarshalAs(UnmanagedType.ByValTStr, SizeConst = 32)] public string FaceName;
@@ -40,9 +42,45 @@ public static class TartarusLaunchConsole {
     [DllImport("user32.dll")] static extern bool ShowWindow(IntPtr hWnd, int cmd);
     [DllImport("user32.dll")] static extern bool IsIconic(IntPtr hWnd);
     [DllImport("user32.dll")] static extern bool SetForegroundWindow(IntPtr hWnd);
+    [DllImport("user32.dll")] static extern bool GetCursorPos(out POINT p);
+    [DllImport("user32.dll")] static extern IntPtr MonitorFromPoint(POINT p, uint flags);
+    [DllImport("user32.dll")] static extern bool GetMonitorInfo(IntPtr monitor, ref MONITORINFO info);
+    [DllImport("user32.dll", CharSet = CharSet.Unicode)] static extern IntPtr LoadImage(IntPtr instance, string name, uint type, int cx, int cy, uint flags);
+    [DllImport("user32.dll")] static extern IntPtr SendMessage(IntPtr hWnd, int msg, IntPtr wParam, IntPtr lParam);
+    // The work area of the monitor under the mouse: the screen is shown where the user is looking.
+    static bool Work(out RECT work) {
+        POINT p; MONITORINFO info = new MONITORINFO(); info.Size = Marshal.SizeOf(typeof(MONITORINFO));
+        if (GetCursorPos(out p) && GetMonitorInfo(MonitorFromPoint(p, 1), ref info)) { work = info.Work; return true; }
+        return SystemParametersInfo(48, 0, out work, 0);
+    }
     public static int[] WorkArea() {
-        RECT work; if (!SystemParametersInfo(48, 0, out work, 0)) return new int[] { 1920, 1040 };
+        RECT work; if (!Work(out work)) return new int[] { 1920, 1040 };
         return new int[] { work.Right - work.Left, work.Bottom - work.Top };
+    }
+    // The engine's icon on the window and its taskbar button, in place of the console's.
+    public static void SetIcon(string path) {
+        IntPtr window = GetConsoleWindow(); if (window == IntPtr.Zero) return;
+        IntPtr big = LoadImage(IntPtr.Zero, path, 1, 32, 32, 0x10), small = LoadImage(IntPtr.Zero, path, 1, 16, 16, 0x10);
+        if (big != IntPtr.Zero) SendMessage(window, 0x0080, (IntPtr)1, big);    // WM_SETICON, ICON_BIG
+        if (small != IntPtr.Zero) SendMessage(window, 0x0080, IntPtr.Zero, small);
+    }
+    [ComImport, Guid("ea1afb91-9e28-4b86-90e9-9e9f8a5eefaf"), InterfaceType(ComInterfaceType.InterfaceIsIUnknown)]
+    interface ITaskbarList3 {
+        void HrInit(); void AddTab(IntPtr h); void DeleteTab(IntPtr h); void ActivateTab(IntPtr h); void SetActiveAlt(IntPtr h);
+        void MarkFullscreenWindow(IntPtr h, int fullscreen);
+        void SetProgressValue(IntPtr h, ulong completed, ulong total);
+        void SetProgressState(IntPtr h, int state);
+    }
+    [ComImport, Guid("56FDF344-FD6D-11d0-958A-006097C9A090"), ClassInterface(ClassInterfaceType.None)] class TaskbarList { }
+    static ITaskbarList3 taskbar;
+    // The build's progress on the taskbar button too. States: 0 none, 2 normal, 4 error.
+    public static void TaskbarProgress(int state, double fraction) {
+        try {
+            IntPtr window = GetConsoleWindow(); if (window == IntPtr.Zero) return;
+            if (taskbar == null) { taskbar = (ITaskbarList3)new TaskbarList(); taskbar.HrInit(); }
+            taskbar.SetProgressState(window, state);
+            if (state != 0) taskbar.SetProgressValue(window, (ulong)(Math.Max(0.0, Math.Min(1.0, fraction)) * 1000), 1000);
+        } catch { }
     }
     public static void UseFontHeight(short height) {
         CONSOLE_FONT_INFOEX info = new CONSOLE_FONT_INFOEX();
@@ -73,7 +111,7 @@ public static class TartarusLaunchConsole {
     public static void ShowCentered() {
         IntPtr window = GetConsoleWindow(); if (window == IntPtr.Zero) return;
         RECT work, bounds;
-        if (SystemParametersInfo(48, 0, out work, 0) && GetWindowRect(window, out bounds)) {
+        if (Work(out work) && GetWindowRect(window, out bounds)) {
             int width = bounds.Right - bounds.Left, height = bounds.Bottom - bounds.Top;
             int x = work.Left + Math.Max(0, (work.Right - work.Left - width) / 2);
             int y = work.Top + Math.Max(0, (work.Bottom - work.Top - height) / 2);
@@ -205,6 +243,8 @@ try { [Console]::CursorVisible = $false } catch {}
 $out.Write("$black$E[2J$E[3J$E[H")
 Set-LaunchConsoleLayout $cols $rows
 $out.Write("$black$E[2J$E[3J$E[H")
+try { [Console]::Title = 'Tartarus Engine' } catch {}
+try { [TartarusLaunchConsole]::SetIcon((Join-Path $root 'extern\branding\tartarus_icon.ico')) } catch {}
 try { [TartarusLaunchConsole]::ShowCentered() } catch {}
 
 $winW = $cols; $winH = $rows
@@ -369,16 +409,20 @@ if ($buildProc) {
         Draw-Banner ($bannerWidth + 10) (1.0 - $flicker * 0.18) $flicker
         if ($tick % 5 -eq 0) { Draw-Status ('BUILDING' + ('.' * (($tick / 5) % 4)).PadRight(3)) $dim }
         Draw-Bar $shown
+        [TartarusLaunchConsole]::TaskbarProgress(2, $shown)
         $tick++
         Start-Sleep -Milliseconds 70
     }
     $buildProc.WaitForExit()
     $buildExitCode = $buildProc.ExitCode
+    $buildSeconds = 0.0
+    try { $buildSeconds = ($buildProc.ExitTime - $buildProc.StartTime).TotalSeconds } catch {}
     Draw-Banner ($bannerWidth + 10)
 }
 
 # --- a failed build: the errors, on screen, and a choice -------------------------------------------
 if ($buildExitCode -ne 0) {
+    try { [TartarusLaunchConsole]::TaskbarProgress(4, 1.0) } catch {}
     foreach ($level in 0.7, 0.45, 0.25, 0.1, 0.0) { Draw-Art $level; Start-Sleep -Milliseconds 40 }
     $log = Read-BuildLog
     $prefix = [string]$root + '\'
@@ -428,7 +472,11 @@ if ($buildExitCode -ne 0) {
 
 # --- done: fill the bar, READY, and fade the whole screen to black ---------------------------------
 if ($buildProc) {
-    while ($shown -lt 0.995) { $shown += (1 - $shown) * 0.45; Draw-Bar $shown; Start-Sleep -Milliseconds 25 }
+    while ($shown -lt 0.995) {
+        $shown += (1 - $shown) * 0.45; Draw-Bar $shown
+        try { [TartarusLaunchConsole]::TaskbarProgress(2, $shown) } catch {}
+        Start-Sleep -Milliseconds 25
+    }
     Draw-Bar 1.0
     # Next launch's progress estimate. A build that was only up to date says little; keep the old.
     $projects = Count-Projects (Read-BuildLog)
@@ -438,12 +486,27 @@ if ($buildProc) {
         } catch {}
     }
 }
-Draw-Status 'READY' (Rgb 120 220 140)
-Start-Sleep -Milliseconds 650
+# READY, and how long the build took.
+$builtIn = ''
+if ($buildProc -and $buildSeconds -gt 0) {
+    $builtIn = if ($buildSeconds -ge 60) { '{0} min {1} s' -f [int][Math]::Floor($buildSeconds / 60), [int]($buildSeconds % 60) }
+               else { $buildSeconds.ToString('0.0', [Globalization.CultureInfo]::InvariantCulture) + ' s' }
+    $builtIn = "built in $builtIn"
+}
+function Draw-Ready([double]$level = 1.0) {
+    $word = 'READY'.ToCharArray() -join ' '
+    $tail = if ($builtIn) { "     $builtIn" } else { '' }
+    $col = [Math]::Max(1, [int](($winW - $word.Length - $tail.Length) / 2) + 1)
+    $out.Write("$(At $statusRow 1)$E[2K$(At $statusRow $col)$(Rgb (120 * $level) (220 * $level) (140 * $level))$word" +
+               "$(Rgb (96 * $level) (96 * $level) (104 * $level))$tail")
+}
+Draw-Ready
+try { [TartarusLaunchConsole]::TaskbarProgress(0, 0) } catch {}
+Start-Sleep -Milliseconds 750
 foreach ($level in 0.8, 0.6, 0.42, 0.26, 0.13, 0.04, 0.0) {
     Draw-Art $level
     Draw-Banner ($bannerWidth + 10) $level
-    Draw-Status 'READY' (Rgb (120 * $level) (220 * $level) (140 * $level))
+    Draw-Ready $level
     if ($buildProc) { Draw-Bar 1.0 $level }
     Draw-Version $level
     Start-Sleep -Milliseconds 45
