@@ -481,6 +481,10 @@ void RegisterEngineComponents() {
         m.Fields.push_back({ "Spine Twist", T::Float, TARTARUS_REFLECT_FIELD(FirstPersonBodyComponent, SpineTwist), 0.01f,
               "How much of the view's twist off the body's heading the spine takes: the chest faces the\n"
               "view while the feet have not turned yet.", 0.0f, 1.0f });
+        m.Fields.push_back({ "Max Turn Rate", T::Float, TARTARUS_REFLECT_FIELD(FirstPersonBodyComponent, MaxTurnRate), 5.0f,
+              "Standing still, the view turns no faster than this (degrees a second) past the Turn Threshold, where the feet must step round: what\n"
+              "the turn clips can keep up with, so the feet don't slide. 0 = no limit.", 0.0f, 720.0f });
+        m.Fields[m.Fields.size() - 3].Group = "Turning";
         m.Fields[m.Fields.size() - 2].Group = "Turning";
         m.Fields.back().Group = "Turning";
         Register<FirstPersonBodyComponent>(std::move(m));

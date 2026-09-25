@@ -204,7 +204,16 @@ void FirstPersonBody::Stop(World& world) {
 void FirstPersonBody::BeforePlayerMove(Player& player, Camera& camera) {
     camera.Position -= m_CameraApplied;
     m_CameraApplied = glm::vec3(0.0f);
+    player.MaxYawRate = 0.0f;
     if (!IsActive()) return;
+    if (m_Still) {
+        // Aiming is free within the turn threshold either side of the body; the limit is on the turn
+        // beyond it, which is what the feet have to step round to (the body's yaw is atan2(x, z) of the
+        // view, and Camera::Yaw is measured from +X toward +Z: 90 degrees minus it).
+        player.MaxYawRate = m_MaxTurnRate;
+        player.YawFreeCenter = 90.0f - glm::degrees(m_Yaw);
+        player.YawFreeRange = m_TurnThreshold;
+    }
     // Airborne, the input steers (there is no travel in a fall clip to follow).
     player.RootMotionVelocity = m_RootVelocity;
     player.RootMotionWeight = player.Grounded ? 1.0f - std::clamp(m_Responsiveness, 0.0f, 1.0f) : 0.0f;
@@ -242,6 +251,9 @@ void FirstPersonBody::Tick(World& world, const Player& player, const Camera& cam
     // it round (the clip's own yaw turns it, so the feet plant).
     const bool still = player.Grounded && glm::length(glm::vec2(player.WishVelocity.x, player.WishVelocity.z)) < 0.1f &&
                        glm::length(m_Move) < 0.2f;
+    m_Still = still && cfg.TurnThreshold > 0.0f;
+    m_MaxTurnRate = cfg.MaxTurnRate;
+    m_TurnThreshold = cfg.TurnThreshold;
     float offset = FirstPersonBodyWrapAngle(m_ViewYaw - m_Yaw);
     if (cfg.TurnThreshold <= 0.0f) {
         m_Yaw = m_ViewYaw;
@@ -319,9 +331,13 @@ void FirstPersonBody::LateUpdate(World& world, Camera& camera, float dt, entt::e
     const Model* armRig = weaponArms != entt::null && reg.valid(weaponArms) && reg.all_of<RenderableComponent>(weaponArms)
                               ? reg.get<RenderableComponent>(weaponArms).ModelRef.get()
                               : nullptr;
-    auto shouldersNow = [&]() {
-        glm::vec3 mid = haveShoulders ? 0.5f * (ModelPoint(*model, m_ShoulderNode[0]) + ModelPoint(*model, m_ShoulderNode[1])) : glm::vec3(0.0f);
-        if (!armRig || armRig->AppliedLocalPose().empty()) return mid;
+    auto shoulderPair = [&](glm::vec3& left, glm::vec3& right) {
+        left = right = glm::vec3(0.0f);
+        if (haveShoulders) {
+            left = ModelPoint(*model, m_ShoulderNode[0]);
+            right = ModelPoint(*model, m_ShoulderNode[1]);
+        }
+        if (!armRig || armRig->AppliedLocalPose().empty()) return;
         std::string want = cfg.ArmsPiece;
         for (char& c : want) c = (char)std::tolower((unsigned char)c);
         for (size_t k = 0; k < m_Pieces.size() && !want.empty(); ++k) {
@@ -338,13 +354,31 @@ void FirstPersonBody::LateUpdate(World& world, Camera& camera, float dt, entt::e
             CopyArmShape(m, *armRig, m_ArmsWeight, pose, parents);
             std::vector<glm::mat4> globals;
             IK::ComputeGlobals(pose, parents, globals);
-            mid = 0.5f * (IK::Position(globals[ul]) + IK::Position(globals[ur]));
+            left = IK::Position(globals[ul]);
+            right = IK::Position(globals[ur]);
             break;
         }
-        return mid;
+    };
+    auto shouldersNow = [&]() {
+        glm::vec3 l, r;
+        shoulderPair(l, r);
+        return 0.5f * (l + r);
     };
     const glm::vec3 shouldersAnimated = shouldersNow();
     if (cfg.SpineAim > 0.0f || cfg.SpineTwist > 0.0f) ApplySpineAim(camera, cfg.SpineAim, m_Twist * cfg.SpineTwist);
+    // Close the loop on the chest's heading: the clips' own spine yaw (a turn leads with the chest)
+    // and the pitch tilt would leave the shoulder line off the view's, and one shoulder then sits
+    // further from the gun than the other (the arm stretches). Turn the spine by what is left.
+    if (cfg.SpineTwist > 0.0f) {
+        glm::vec3 l, r;
+        shoulderPair(l, r);
+        const glm::vec3 across = l - r; // model +X (the mannequin's left) when the chest faces forward
+        if (across.x * across.x + across.z * across.z > 1e-6f) {
+            const float chestYaw = std::atan2(-across.z, across.x); // rotating +X about +Y by t gives z = -sin t
+            const float error = FirstPersonBodyWrapAngle(m_Twist - chestYaw);
+            if (std::abs(error) > 0.002f) ApplySpineAim(camera, 0.0f, error * std::min(cfg.SpineTwist, 1.0f));
+        }
+    }
     if (!haveHead) return;
 
     // The camera into the head: smoothed in the body's own frame, so it never trails the move.

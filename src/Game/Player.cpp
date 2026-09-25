@@ -11,6 +11,7 @@ void Player::Update(float dt, World& world, GLFWwindow* window, bool readInput) 
     (void)window; // kept in the signature for a future direct-input path; unused today
 
     if (readInput) {
+        const float yawBefore = Cam.Yaw;
         Cam.ProcessMouseLook((float)Input::GetMouseDeltaX(),
                              (float)Input::GetMouseDeltaY() * (InvertY ? -1.0f : 1.0f), MouseSensitivity);
         // #145 - gamepad right stick: a turn rate, not a delta. Stick Y is +down, look is +up.
@@ -20,6 +21,13 @@ void Player::Update(float dt, World& world, GLFWwindow* window, bool readInput) 
         if (lx != 0.0f || ly != 0.0f)
             Cam.ProcessMouseLook(lx * kStickLookDegPerSec * dt,
                                  ly * kStickLookDegPerSec * dt * (InvertY ? -1.0f : 1.0f), 1.0f);
+        if (MaxYawRate > 0.0f && dt > 0.0f) {
+            auto wrap = [](float d) { d = std::fmod(d, 360.0f); return d > 180.0f ? d - 360.0f : (d <= -180.0f ? d + 360.0f : d); };
+            const float before = wrap(yawBefore - YawFreeCenter), after = wrap(Cam.Yaw - YawFreeCenter);
+            // Further out than it was (and than the free range): only as fast as the limit.
+            const float reach = std::max(std::abs(before), YawFreeRange) + MaxYawRate * dt;
+            if (std::abs(after) > reach) Cam.Yaw = YawFreeCenter + std::copysign(reach, after);
+        }
     }
 
     // Planar move input, relative to look yaw.
