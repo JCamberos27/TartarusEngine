@@ -647,6 +647,27 @@ void EditorLayer::DrawAnimatorWindow(World& world) {
             }
             ImGui::PopID();
 
+            // Transitions whose source or target state is gone are not drawn in the graph (so they can't be
+            // selected): say so, and let them be removed.
+            {
+                AC::Layer& cur = D.Layers[std::clamp(W.Layer, 0, (int)D.Layers.size() - 1)];
+                auto broken = [&](const AC::Transition& t) {
+                    if (t.FromKind == AC::Source::State && cur.FindState(t.From) < 0) return true;
+                    return t.To != AC::kExitState && cur.FindState(t.To) < 0;
+                };
+                int n = 0;
+                for (const auto& t : cur.Transitions) n += broken(t);
+                if (n > 0) {
+                    ImGui::TextColored(EditorUIPrimitives::WarningColor(), ICON_FA_TRIANGLE_EXCLAMATION "  %d transition%s point%s at a state that no longer exists.",
+                                       n, n == 1 ? "" : "s", n == 1 ? "s" : "");
+                    if (ActionButton(ICON_FA_TRASH " Remove them", "They are not drawn in the graph and never fire.")) {
+                        cur.Transitions.erase(std::remove_if(cur.Transitions.begin(), cur.Transitions.end(), broken), cur.Transitions.end());
+                        W.ClearSelection();
+                        changed = true;
+                    }
+                }
+            }
+
             // Tracks
             ImGui::SeparatorText("Tracks");
             ImGui::TextDisabled("Clip sets per state, for rigs animated together\n(e.g. arms + weapon). An object picks one with\nits component's Track field.");
@@ -657,10 +678,19 @@ void EditorLayer::DrawAnimatorWindow(World& world) {
                 if (RemoveButton("Remove this track and its clips")) removeTrack = t;
                 ImGui::EndDisabled();
                 ImGui::SameLine();
-                if (InputName("##tname", D.Tracks[t], -FLT_MIN)) changed = true;
+                const std::string trackBefore = D.Tracks[t];
+                if (InputName("##tname", D.Tracks[t], -FLT_MIN)) {
+                    // Objects on this controller that picked the track by name follow the rename.
+                    for (auto [e, ac] : world.Registry.view<AnimatorControllerComponent>().each())
+                        if (ac.Controller == W.Rel && ac.Track == trackBefore) ac.Track = D.Tracks[t];
+                    changed = true;
+                }
                 ImGui::PopID();
             }
             if (removeTrack >= 0) {
+                // Objects that used it fall back to the first track (an unknown name did that silently).
+                for (auto [e, ac] : world.Registry.view<AnimatorControllerComponent>().each())
+                    if (ac.Controller == W.Rel && ac.Track == D.Tracks[removeTrack]) ac.Track.clear();
                 D.Tracks.erase(D.Tracks.begin() + removeTrack);
                 for (auto& Lr : D.Layers)
                     for (auto& s : Lr.States)
@@ -692,7 +722,10 @@ void EditorLayer::DrawAnimatorWindow(World& world) {
                             for (auto& cond : t.Conditions) if (cond.Param == before) cond.Param = p.Name;
                         for (auto& s : Lr.States) {
                             if (s.SpeedParam == before) s.SpeedParam = p.Name;
-                            for (auto& m : s.Motions) if (m.BlendParam == before) m.BlendParam = p.Name;
+                            for (auto& m : s.Motions) {
+                                if (m.BlendParam == before) m.BlendParam = p.Name;
+                                if (m.BlendParamY == before) m.BlendParamY = p.Name;
+                            }
                         }
                     }
                     changed = true;
@@ -712,7 +745,60 @@ void EditorLayer::DrawAnimatorWindow(World& world) {
                 }
                 ImGui::PopID();
             }
-            if (remove >= 0) { D.Parameters.erase(D.Parameters.begin() + remove); changed = true; }
+            // What still uses a parameter: transition conditions, a state's speed parameter, blend-tree axes.
+            auto usesOf = [&](const std::string& name, int& conditions, int& speeds, int& blends) {
+                conditions = speeds = blends = 0;
+                for (const auto& Lr : D.Layers) {
+                    for (const auto& t : Lr.Transitions)
+                        for (const auto& cond : t.Conditions) conditions += cond.Param == name;
+                    for (const auto& st : Lr.States) {
+                        speeds += st.SpeedParam == name;
+                        for (const auto& m : st.Motions) blends += (m.BlendParam == name) + (m.BlendParamY == name);
+                    }
+                }
+            };
+            auto dropParam = [&](int index) {
+                const std::string name = D.Parameters[index].Name;
+                for (auto& Lr : D.Layers) {
+                    for (auto& t : Lr.Transitions)
+                        t.Conditions.erase(std::remove_if(t.Conditions.begin(), t.Conditions.end(),
+                                                          [&](const AC::Condition& c) { return c.Param == name; }), t.Conditions.end());
+                    for (auto& st : Lr.States) {
+                        if (st.SpeedParam == name) st.SpeedParam.clear();
+                        for (auto& m : st.Motions) {
+                            if (m.BlendParam == name) m.BlendParam.clear();
+                            if (m.BlendParamY == name) m.BlendParamY.clear();
+                        }
+                    }
+                }
+                D.Parameters.erase(D.Parameters.begin() + index);
+                changed = true;
+            };
+            static int s_pendingRemove = -1;
+            if (remove >= 0) {
+                int c, sp, bl;
+                usesOf(D.Parameters[remove].Name, c, sp, bl);
+                if (c + sp + bl == 0) dropParam(remove);
+                else { s_pendingRemove = remove; ImGui::OpenPopup("Remove parameter?"); }
+            }
+            if (ImGui::BeginPopupModal("Remove parameter?", nullptr, ImGuiWindowFlags_AlwaysAutoResize)) {
+                if (s_pendingRemove >= 0 && s_pendingRemove < (int)D.Parameters.size()) {
+                    int c, sp, bl;
+                    usesOf(D.Parameters[s_pendingRemove].Name, c, sp, bl);
+                    ImGui::Text("'%s' is still used by:", D.Parameters[s_pendingRemove].Name.c_str());
+                    if (c) ImGui::BulletText("%d transition condition%s (they are removed: the transition then fires on its other conditions)", c, c == 1 ? "" : "s");
+                    if (sp) ImGui::BulletText("%d state speed parameter%s (cleared)", sp, sp == 1 ? "" : "s");
+                    if (bl) ImGui::BulletText("%d blend-tree axis%s (cleared: the tree stops blending)", bl, bl == 1 ? "" : "es");
+                    ImGui::Spacing();
+                    if (ImGui::Button("Remove it and those uses")) { dropParam(s_pendingRemove); s_pendingRemove = -1; ImGui::CloseCurrentPopup(); }
+                    ImGui::SameLine();
+                    if (ImGui::Button("Cancel")) { s_pendingRemove = -1; ImGui::CloseCurrentPopup(); }
+                } else {
+                    s_pendingRemove = -1;
+                    ImGui::CloseCurrentPopup();
+                }
+                ImGui::EndPopup();
+            }
             if (ActionButton(ICON_FA_PLUS " Parameter", "Add a parameter game code can set (SetFloat / SetInt / SetBool / SetTrigger)")) {
                 std::vector<std::string> names;
                 for (const auto& p : D.Parameters) names.push_back(p.Name);
