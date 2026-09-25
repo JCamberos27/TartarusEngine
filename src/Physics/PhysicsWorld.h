@@ -131,6 +131,9 @@ bool SphereCastFiltered(const float origin[3], const float dir[3], float radius,
 // SphereCastFiltered that only hits the solid world: statics and kinematic bodies (doors,
 // platforms), not simulated props - for the weapon's wall and corner probes, so a rolling ball
 // isn't cover. Engine-side only (not in the gameplay-module API).
+// RaycastFiltered that only hits the solid world (statics and kinematic bodies), not simulated props:
+// for the foot IK's ground probe, so a rolling ball is not ground. Engine-side only.
+bool RaycastSolid(const float origin[3], const float dir[3], float maxDistance, const QueryFilter& f, RaycastHit& outHit);
 bool SphereCastSolid(const float origin[3], const float dir[3], float radius, float maxDistance,
                      const QueryFilter& f, RaycastHit& outHit);
 bool BoxCast(const float center[3], const float halfExtents[3], const float rotation[4], const float dir[3],
