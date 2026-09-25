@@ -1414,10 +1414,10 @@ void EditorLayer::DrawAnimatorWindow(World& world) {
             ImGui::PushID(t);
             ImGui::SeparatorText((ICON_FA_FILM "  Motion: " + D.Tracks[t]).c_str());
             row("Type");
-            int kind = m.IsBlendTree() ? 1 : 0;
+            int kind = !m.IsBlendTree() ? 0 : m.Is2D() ? 2 : 1;
             ImGui::SetNextItemWidth(-FLT_MIN);
-            if (ImGui::Combo("##mkind", &kind, "Clip\0Blend Tree 1D\0")) {
-                if (kind == 1 && !m.IsBlendTree()) {
+            if (ImGui::Combo("##mkind", &kind, "Clip\0Blend Tree 1D\0Blend Tree 2D\0")) {
+                if (kind >= 1 && !m.IsBlendTree()) {
                     m.Children = {{m.Clip, 0.0f, 1.0f}, {"", 1.0f, 1.0f}};
                     m.Clip.clear();
                     for (const auto& p : D.Parameters) if (p.Type == AC::ParamType::Float) { m.BlendParam = p.Name; break; }
@@ -1425,6 +1425,15 @@ void EditorLayer::DrawAnimatorWindow(World& world) {
                     m.Clip = m.Children.front().Clip;
                     m.Children.clear();
                     m.BlendParam.clear();
+                    m.BlendParamY.clear();
+                }
+                if (kind == 2 && !m.Is2D()) {
+                    // A second Float parameter for Y (the first that isn't X).
+                    for (const auto& p : D.Parameters)
+                        if (p.Type == AC::ParamType::Float && p.Name != m.BlendParam) { m.BlendParamY = p.Name; break; }
+                    if (m.BlendParamY.empty()) m.BlendParamY = "MoveY";
+                } else if (kind == 1) {
+                    m.BlendParamY.clear();
                 }
                 changed = true;
             }
@@ -1433,12 +1442,22 @@ void EditorLayer::DrawAnimatorWindow(World& world) {
                 if (clipSlot("##mclip", m.Clip)) changed = true;
                 if (m.Empty()) ImGui::TextDisabled(W.Layer == 0 ? "No clip: this track holds its bind pose." : "No clip: this layer leaves the pose alone.");
             } else {
-                row("Parameter");
+                const bool is2D = m.Is2D();
+                row(is2D ? "Parameter X" : "Parameter");
                 if (paramCombo("##bparam", m.BlendParam, true, false)) changed = true;
+                if (is2D) {
+                    row("Parameter Y");
+                    if (paramCombo("##bparamy", m.BlendParamY, true, false)) changed = true;
+                    if (ImGui::IsItemHovered())
+                        EditorUI::SetTooltip("2D freeform blend: each child sits at an (X, Y) point and blends by how\n"
+                                             "close the two parameters are to it - e.g. MoveX / MoveY in m/s, with\n"
+                                             "each clip at its own measured velocity.");
+                }
                 int remove = -1;
-                if (ImGui::BeginTable("##children", 4, ImGuiTableFlags_SizingStretchProp | ImGuiTableFlags_RowBg)) {
+                if (ImGui::BeginTable("##children", is2D ? 5 : 4, ImGuiTableFlags_SizingStretchProp | ImGuiTableFlags_RowBg)) {
                     ImGui::TableSetupColumn("Clip", ImGuiTableColumnFlags_WidthStretch, 3.0f);
-                    ImGui::TableSetupColumn("Threshold", ImGuiTableColumnFlags_WidthStretch, 1.2f);
+                    ImGui::TableSetupColumn(is2D ? "X" : "Threshold", ImGuiTableColumnFlags_WidthStretch, 1.2f);
+                    if (is2D) ImGui::TableSetupColumn("Y", ImGuiTableColumnFlags_WidthStretch, 1.2f);
                     ImGui::TableSetupColumn("Speed", ImGuiTableColumnFlags_WidthStretch, 1.0f);
                     ImGui::TableSetupColumn("", ImGuiTableColumnFlags_WidthFixed, ImGui::GetFrameHeight());
                     ImGui::TableHeadersRow();
@@ -1452,6 +1471,12 @@ void EditorLayer::DrawAnimatorWindow(World& world) {
                         ImGui::SetNextItemWidth(-FLT_MIN);
                         ImGui::DragFloat("##cthr", &ch.Threshold, 0.01f);
                         if (ImGui::IsItemDeactivatedAfterEdit()) changed = true;
+                        if (is2D) {
+                            ImGui::TableNextColumn();
+                            ImGui::SetNextItemWidth(-FLT_MIN);
+                            ImGui::DragFloat("##cthry", &ch.ThresholdY, 0.01f);
+                            if (ImGui::IsItemDeactivatedAfterEdit()) changed = true;
+                        }
                         ImGui::TableNextColumn();
                         ImGui::SetNextItemWidth(-FLT_MIN);
                         ImGui::DragFloat("##cspd", &ch.Speed, 0.01f, 0.01f, 10.0f, "%.2f");
@@ -1468,12 +1493,20 @@ void EditorLayer::DrawAnimatorWindow(World& world) {
                     m.Children.push_back({"", next, 1.0f});
                     changed = true;
                 }
-                // Preview of the weights at the live (or default) parameter value.
-                float v = 0.0f;
-                if (const auto* p = D.FindParameter(m.BlendParam)) v = p->Default;
-                if (live) v = live->GetFloat(m.BlendParam);
-                const auto w = AnimatorBlendWeights(m.Children, v);
-                ImGui::TextDisabled("At %s = %.2f:", m.BlendParam.empty() ? "?" : m.BlendParam.c_str(), v);
+                // Preview of the weights at the live (or default) parameter values.
+                auto valueOf = [&](const std::string& name) {
+                    float v = 0.0f;
+                    if (const auto* p = D.FindParameter(name)) v = p->Default;
+                    if (live) v = live->GetFloat(name);
+                    return v;
+                };
+                const float v = valueOf(m.BlendParam), vy = is2D ? valueOf(m.BlendParamY) : 0.0f;
+                const auto w = is2D ? AnimatorBlendWeights2D(m.Children, v, vy) : AnimatorBlendWeights(m.Children, v);
+                if (is2D)
+                    ImGui::TextDisabled("At %s = %.2f, %s = %.2f:", m.BlendParam.empty() ? "?" : m.BlendParam.c_str(), v,
+                                        m.BlendParamY.c_str(), vy);
+                else
+                    ImGui::TextDisabled("At %s = %.2f:", m.BlendParam.empty() ? "?" : m.BlendParam.c_str(), v);
                 for (size_t k = 0; k < m.Children.size(); ++k) {
                     ImGui::ProgressBar(w[k], ImVec2(-FLT_MIN, 0.0f), ClipLabel(m.Children[k].Clip).c_str());
                 }

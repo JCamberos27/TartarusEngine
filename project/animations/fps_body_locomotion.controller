@@ -1,0 +1,350 @@
+{
+  "version": 2,
+  "parameters": [
+    {
+      "name": "MoveX",
+      "type": "float",
+      "default": 0.0
+    },
+    {
+      "name": "MoveY",
+      "type": "float",
+      "default": 0.0
+    },
+    {
+      "name": "Speed",
+      "type": "float",
+      "default": 0.0
+    },
+    {
+      "name": "Sprint",
+      "type": "bool",
+      "default": 0.0
+    },
+    {
+      "name": "Grounded",
+      "type": "bool",
+      "default": 1.0
+    },
+    {
+      "name": "Airborne",
+      "type": "bool",
+      "default": 0.0
+    },
+    {
+      "name": "Jump",
+      "type": "trigger",
+      "default": 0.0
+    }
+  ],
+  "tracks": [
+    "main"
+  ],
+  "layers": [
+    {
+      "name": "Base Layer",
+      "weight": 1.0,
+      "blending": "override",
+      "defaultState": "Locomotion",
+      "entryPosition": [
+        -260.0,
+        0.0
+      ],
+      "anyPosition": [
+        -260.0,
+        -140.0
+      ],
+      "exitPosition": [
+        760.0,
+        0.0
+      ],
+      "states": [
+        {
+          "name": "Locomotion",
+          "loop": true,
+          "speed": 1.0,
+          "position": [
+            0.0,
+            0.0
+          ],
+          "tags": [
+            "Locomotion"
+          ],
+          "motions": {
+            "main": {
+              "blendParam": "MoveX",
+              "blendParamY": "MoveY",
+              "children": [
+                {
+                  "clip": "assets/animations/mc_core_motion/Idle/AM_Stand_Idle_01.fbx",
+                  "clipGuid": "cbec7c424d8c6f82",
+                  "threshold": 0.0,
+                  "thresholdY": 0.0,
+                  "speed": 1.0
+                },
+                {
+                  "clip": "assets/animations/mc_core_motion/Locomotion_V2/AM_Walk/AM_Loco_Walk_Fwd.fbx",
+                  "clipGuid": "2f725c6d0ecc731b",
+                  "threshold": 0.0,
+                  "thresholdY": 1.53,
+                  "speed": 1.0
+                },
+                {
+                  "clip": "assets/animations/mc_core_motion/Locomotion_V2/AM_Walk/AM_Loco_Walk_Fwd_Left.fbx",
+                  "clipGuid": "52c90411529c91c3",
+                  "threshold": -1.082,
+                  "thresholdY": 1.082,
+                  "speed": 1.0
+                },
+                {
+                  "clip": "assets/animations/mc_core_motion/Locomotion_V2/AM_Walk/AM_Loco_Walk_Fwd_Right.fbx",
+                  "clipGuid": "93bc5b9065345d9e",
+                  "threshold": 1.082,
+                  "thresholdY": 1.082,
+                  "speed": 1.0
+                },
+                {
+                  "clip": "assets/animations/mc_core_motion/Locomotion_V2/AM_Walk/AM_Loco_Walk_Left.fbx",
+                  "clipGuid": "f39adef33b72b5e1",
+                  "threshold": -1.346,
+                  "thresholdY": 0.0,
+                  "speed": 1.0
+                },
+                {
+                  "clip": "assets/animations/mc_core_motion/Locomotion_V2/AM_Walk/AM_Loco_Walk_Right.fbx",
+                  "clipGuid": "fa653474f4c4cc71",
+                  "threshold": 1.586,
+                  "thresholdY": 0.0,
+                  "speed": 1.0
+                },
+                {
+                  "clip": "assets/animations/mc_core_motion/Locomotion_V2/AM_Walk/AM_Loco_Walk_Bwd.fbx",
+                  "clipGuid": "c0adf8ca675de297",
+                  "threshold": 0.0,
+                  "thresholdY": -1.195,
+                  "speed": 1.0
+                },
+                {
+                  "clip": "assets/animations/mc_core_motion/Locomotion_V2/AM_Walk/AM_Loco_Walk_Bwd_Left.fbx",
+                  "clipGuid": "d9bba94a847fc1fe",
+                  "threshold": -0.845,
+                  "thresholdY": -0.845,
+                  "speed": 1.0
+                },
+                {
+                  "clip": "assets/animations/mc_core_motion/Locomotion_V2/AM_Walk/AM_Loco_Walk_Bwd_Right.fbx",
+                  "clipGuid": "f9f0f26c140addb8",
+                  "threshold": 0.845,
+                  "thresholdY": -0.845,
+                  "speed": 1.0
+                },
+                {
+                  "clip": "assets/animations/mc_core_motion/Locomotion_V2/AM_Jog/AM_Loco_Jog_Fwd.fbx",
+                  "clipGuid": "b34ad32375c7191b",
+                  "threshold": 0.0,
+                  "thresholdY": 3.264,
+                  "speed": 1.0
+                },
+                {
+                  "clip": "assets/animations/mc_core_motion/Locomotion_V2/AM_Jog/AM_Loco_Jog_Fwd_Left.fbx",
+                  "clipGuid": "e0ed2f1bc132f6a8",
+                  "threshold": -2.308,
+                  "thresholdY": 2.308,
+                  "speed": 1.0
+                },
+                {
+                  "clip": "assets/animations/mc_core_motion/Locomotion_V2/AM_Jog/AM_Loco_Jog_Fwd_Right.fbx",
+                  "clipGuid": "a2c0da63f8d8dbd7",
+                  "threshold": 2.308,
+                  "thresholdY": 2.308,
+                  "speed": 1.0
+                },
+                {
+                  "clip": "assets/animations/mc_core_motion/Locomotion_V2/AM_Jog/AM_Loco_Jog_Left.fbx",
+                  "clipGuid": "a1c36c5b252282a4",
+                  "threshold": -2.3,
+                  "thresholdY": 0.0,
+                  "speed": 1.0
+                },
+                {
+                  "clip": "assets/animations/mc_core_motion/Locomotion_V2/AM_Jog/AM_Loco_Jog_Right.fbx",
+                  "clipGuid": "40a6acc6bc0284b1",
+                  "threshold": 2.945,
+                  "thresholdY": 0.0,
+                  "speed": 1.0
+                },
+                {
+                  "clip": "assets/animations/mc_core_motion/Locomotion_V2/AM_Jog/AM_Loco_Jog_Bwd.fbx",
+                  "clipGuid": "5ed68e19d0aa1f55",
+                  "threshold": 0.0,
+                  "thresholdY": -2.261,
+                  "speed": 1.0
+                },
+                {
+                  "clip": "assets/animations/mc_core_motion/Locomotion_V2/AM_Jog/AM_Loco_Jog_Bwd_Left.fbx",
+                  "clipGuid": "8bebb836de70e21a",
+                  "threshold": -1.599,
+                  "thresholdY": -1.599,
+                  "speed": 1.0
+                },
+                {
+                  "clip": "assets/animations/mc_core_motion/Locomotion_V2/AM_Jog/AM_Loco_Jog_Bwd_Right.fbx",
+                  "clipGuid": "7e9963070bcd70f7",
+                  "threshold": 1.599,
+                  "thresholdY": -1.599,
+                  "speed": 1.0
+                },
+                {
+                  "clip": "assets/animations/mc_core_motion/Locomotion_V2/AM_Run/AM_Loco_Run_Fwd.fbx",
+                  "clipGuid": "6ffa5affd5def353",
+                  "threshold": 0.0,
+                  "thresholdY": 4.736,
+                  "speed": 1.0
+                }
+              ]
+            }
+          }
+        },
+        {
+          "name": "Jump",
+          "loop": false,
+          "speed": 1.0,
+          "position": [
+            260.0,
+            -140.0
+          ],
+          "motions": {
+            "main": {
+              "clip": "assets/animations/mc_core_motion/Jump/AM_Jump.fbx",
+              "clipGuid": "d50e5115458fb134"
+            }
+          },
+          "tags": [
+            "Airborne"
+          ]
+        },
+        {
+          "name": "Fall",
+          "loop": true,
+          "speed": 1.0,
+          "position": [
+            520.0,
+            -140.0
+          ],
+          "motions": {
+            "main": {
+              "clip": "assets/animations/mc_core_motion/Jump/AM_Jump_Fall_Loop.fbx",
+              "clipGuid": "0cb61f754798296f"
+            }
+          },
+          "tags": [
+            "Airborne"
+          ]
+        },
+        {
+          "name": "Land",
+          "loop": false,
+          "speed": 1.0,
+          "position": [
+            260.0,
+            140.0
+          ],
+          "motions": {
+            "main": {
+              "clip": "assets/animations/mc_core_motion/Jump/AM_Jump_Land_Recovery.fbx",
+              "clipGuid": "149625c5c5d35512"
+            }
+          }
+        }
+      ],
+      "transitions": [
+        {
+          "from": "Locomotion",
+          "to": "Jump",
+          "duration": 0.1,
+          "conditions": [
+            {
+              "mode": "if",
+              "param": "Jump",
+              "threshold": 0.0
+            }
+          ],
+          "hasExitTime": false,
+          "exitTime": 1.0
+        },
+        {
+          "from": "Locomotion",
+          "to": "Fall",
+          "duration": 0.25,
+          "conditions": [
+            {
+              "mode": "if",
+              "param": "Airborne",
+              "threshold": 0.0
+            }
+          ],
+          "hasExitTime": false,
+          "exitTime": 1.0
+        },
+        {
+          "from": "Jump",
+          "to": "Fall",
+          "duration": 0.2,
+          "conditions": [],
+          "hasExitTime": true,
+          "exitTime": 0.85
+        },
+        {
+          "from": "Jump",
+          "to": "Land",
+          "duration": 0.1,
+          "conditions": [
+            {
+              "mode": "if",
+              "param": "Grounded",
+              "threshold": 0.0
+            }
+          ],
+          "hasExitTime": true,
+          "exitTime": 0.3
+        },
+        {
+          "from": "Fall",
+          "to": "Land",
+          "duration": 0.1,
+          "conditions": [
+            {
+              "mode": "if",
+              "param": "Grounded",
+              "threshold": 0.0
+            }
+          ],
+          "hasExitTime": false,
+          "exitTime": 1.0
+        },
+        {
+          "from": "Land",
+          "to": "Locomotion",
+          "duration": 0.2,
+          "conditions": [
+            {
+              "mode": "greater",
+              "param": "Speed",
+              "threshold": 0.5
+            }
+          ],
+          "hasExitTime": true,
+          "exitTime": 0.15
+        },
+        {
+          "from": "Land",
+          "to": "Locomotion",
+          "duration": 0.3,
+          "conditions": [],
+          "hasExitTime": true,
+          "exitTime": 0.3
+        }
+      ]
+    }
+  ]
+}
