@@ -16,6 +16,7 @@
 #include "UnitTests.h"
 
 #include "AnimatorController.h"
+#include "AnimatorLint.h"
 #include "RootMotion.h"
 #include "FirstPersonBody.h"
 #include "FirstPersonBodyContract.h"
@@ -1301,6 +1302,55 @@ void TestComponentRegistry() {
             }
         }
     }
+}
+
+// The Animator linter: a sound controller is clean; each structural mistake is named and located.
+void TestAnimatorLint() {
+    using AC = AnimatorController;
+    auto has = [](const std::vector<AnimatorLint::Issue>& v, const char* t) {
+        for (const auto& i : v) if (i.Message.find(t) != std::string::npos) return true;
+        return false;
+    };
+    AC c;
+    c.Parameters = {{"Speed", AC::ParamType::Float, 0}, {"Go", AC::ParamType::Trigger, 0}, {"On", AC::ParamType::Bool, 0}};
+    AC::State idle, run, dead;
+    idle.Name = "Idle"; idle.Motions = {AC::Motion{"idle.fbx#i"}};
+    run.Name = "Run"; run.Motions = {AC::Motion{"run.fbx#r"}};
+    dead.Name = "Orphan"; dead.Motions = {AC::Motion{"o.fbx#o"}};
+    c.Layers[0].States = {idle, run, dead};
+    c.Layers[0].DefaultState = "Idle";
+    AC::Transition t;
+    t.From = "Idle"; t.To = "Run"; t.Conditions = {{"Go", AC::Op::If, 0}};
+    AC::Transition back = t;
+    back.From = "Run"; back.To = "Idle"; back.Conditions = {{"Speed", AC::Op::Less, 0.1f}};
+    c.Layers[0].Transitions = {t, back};
+    auto r = AnimatorLint::Check(c);
+    CHECK(has(r, "'Orphan' can never be reached") && !has(r, "'Run' can never"));
+    // a state's speed parameter and a condition on a missing parameter, a numeric test on a Bool
+    c.Layers[0].States[0].SpeedParam = "Nope";
+    c.Layers[0].Transitions[1].Conditions = {{"On", AC::Op::Greater, 0.5f}};
+    c.Layers[0].Transitions[0].Conditions = {{"Gone", AC::Op::If, 0}};
+    r = AnimatorLint::Check(c);
+    CHECK(has(r, "speed parameter 'Nope'") && has(r, "tests 'Gone'") && has(r, "compares 'On'"));
+    CHECK(r.front().Severity == AnimatorLint::Level::Error);
+    // a transition to a deleted state, and two parameters with one name
+    c.Layers[0].Transitions[0].To = "Deleted";
+    c.Parameters.push_back({"Speed", AC::ParamType::Float, 0});
+    r = AnimatorLint::Check(c);
+    CHECK(has(r, "doesn't exist") && has(r, "Two parameters are named 'Speed'"));
+    bool located = false;
+    for (const auto& i : r) if (i.Message.find("points at a state") != std::string::npos && i.Transition == 0) located = true;
+    CHECK(located);
+    // a state that doesn't loop and nothing leaves; a no-condition no-exit-time transition
+    AC d;
+    AC::State a, b;
+    a.Name = "A"; a.Motions = {AC::Motion{"a#a"}};
+    b.Name = "B"; b.Loop = false; b.Motions = {AC::Motion{"b#b"}};
+    d.Layers[0].States = {a, b};
+    AC::Transition ab; ab.From = "A"; ab.To = "B";
+    d.Layers[0].Transitions = {ab};
+    r = AnimatorLint::Check(d);
+    CHECK(has(r, "'B' doesn't loop") && has(r, "never fires"));
 }
 
 // The body's tuning fields: every float has a tooltip, a range that holds its default, and the
@@ -3072,6 +3122,7 @@ int RunUnitTests() {
         {"RootMotion", TestRootMotion},
         {"FirstPersonBodyValidate", TestFirstPersonBodyValidate},
         {"FirstPersonBodyTuning", TestFirstPersonBodyTuning},
+        {"AnimatorLint", TestAnimatorLint},
         {"BlendTree2D", TestBlendTree2D},
         {"FirstPersonAnimationSet", TestFirstPersonAnimationSet},
         {"FirstPersonAnimationFSM", TestFirstPersonAnimationFSM},
