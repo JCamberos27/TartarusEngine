@@ -13,8 +13,8 @@ lockup with the status, a progress bar and the version line (`v0.1.0 · branch @
 2. The art fades up, lit by the density of each glyph. The lockup wipes in behind a gold edge.
 3. **Building.** `B U I L D I N G` pulses and the bar fills. The lockup flickers faintly, like
    candlelight, and the taskbar button shows the same progress.
-4. **Ready.** `R E A D Y` shows with the build time. The tube powers off (the picture collapses
-   to a line, then to a point) and the editor starts.
+4. **Ready.** `R E A D Y` shows with the build time, the hum fades, and the window closes
+   (no power-off) as the editor starts.
 5. **If the build fails**, the art makes way for the errors: paths made relative, duplicates
    merged, at most 14 lines. Then it asks: **Y** (or click) launches the previous build, **N**
    or Esc closes.
@@ -62,10 +62,9 @@ Any key or a click skips the intro. **M** mutes the sound; the choice is remembe
 
   Without ps_3_0 hardware, the window plays without the tube.
 - **Sound.** Nothing is recorded; every sound is synthesized when the screen starts:
-  - power on: a relay clunk, a degauss swell and static;
-  - while lit: the high-voltage whine and mains hum, a seamless loop that rises and falls with
-    the picture;
-  - power off: a falling zap and a thump.
+  - power on: a relay clunk and a degauss swell;
+  - while lit: the high-voltage whine and mains hum, a seamless loop that rises with the
+    picture and fades as the window closes.
 
   It is mixed live into a `waveOut` stream. No audio device just means silence.
 - **Progress.** MSBuild prints one `Project.vcxproj -> output` line per finished project. The bar
