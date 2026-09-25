@@ -475,6 +475,14 @@ void RegisterEngineComponents() {
         m.Fields[m.Fields.size() - 3].Group = "Arms";
         m.Fields[m.Fields.size() - 2].Group = "Arms";
         m.Fields.back().Group = "Arms";
+        m.Fields.push_back({ "Turn Threshold", T::Float, TARTARUS_REFLECT_FIELD(FirstPersonBodyComponent, TurnThreshold), 1.0f,
+              "Standing still, the body keeps its heading until the view is this many degrees off it,\n"
+              "then turns on the spot with the turn clips. 0 = the body always faces the view.", 0.0f, 170.0f });
+        m.Fields.push_back({ "Spine Twist", T::Float, TARTARUS_REFLECT_FIELD(FirstPersonBodyComponent, SpineTwist), 0.01f,
+              "How much of the view's twist off the body's heading the spine takes: the chest faces the\n"
+              "view while the feet have not turned yet.", 0.0f, 1.0f });
+        m.Fields[m.Fields.size() - 2].Group = "Turning";
+        m.Fields.back().Group = "Turning";
         Register<FirstPersonBodyComponent>(std::move(m));
     }
 
