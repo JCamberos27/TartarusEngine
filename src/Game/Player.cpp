@@ -41,8 +41,28 @@ void Player::Update(float dt, World& world, GLFWwindow* window, bool readInput) 
         wish = right * InputMap::GetAxis("Horizontal") + forward * InputMap::GetAxis("Vertical");
         if (glm::length(wish) > 1.0f) wish = glm::normalize(wish);
     }
-    const bool sprint = readInput && InputMap::GetButton("Sprint");
-    float speed = MoveSpeed * (sprint ? SprintMultiplier : 1.0f);
+    // Crouch: held; standing up needs headroom. Only from the ground, so the capsule never changes
+    // shape mid-jump.
+    const float standCylHalf = std::max(0.05f, Size.y * 0.5f - std::max(0.05f, Size.x * 0.5f));
+    const float crouchCylHalf = std::max(0.05f, CrouchHeight * 0.5f - std::max(0.05f, Size.x * 0.5f));
+    if (CrouchHeight <= 0.0f) {
+        if (Crouched && PhysicsWorld::HasCharacter()) PhysicsWorld::ResizeCharacter(standCylHalf);
+        Crouched = false;
+    } else if (PhysicsWorld::HasCharacter()) {
+        const bool wantCrouch = readInput && InputMap::GetButton("Crouch");
+        if (wantCrouch && !Crouched && Grounded) {
+            if (PhysicsWorld::ResizeCharacter(crouchCylHalf)) Crouched = true;
+        } else if (!wantCrouch && Crouched && PhysicsWorld::CharacterFitsAt(standCylHalf)) {
+            PhysicsWorld::ResizeCharacter(standCylHalf);
+            Crouched = false;
+        }
+    }
+    CrouchBlend += ((Crouched ? 1.0f : 0.0f) - CrouchBlend) * std::min(1.0f, dt * 10.0f);
+    // The eye follows the capsule down (a body's head bone overrides it; without one this is it).
+    const float eye = EyeHeight * (1.0f - CrouchBlend * (1.0f - std::clamp(CrouchHeight / std::max(0.1f, Size.y), 0.0f, 1.0f)) * (CrouchHeight > 0.0f ? 1.0f : 0.0f));
+
+    const bool sprint = readInput && !Crouched && InputMap::GetButton("Sprint");
+    float speed = MoveSpeed * (sprint ? SprintMultiplier : 1.0f) * (Crouched ? CrouchSpeedMultiplier : 1.0f);
     wish *= speed;
     WishVelocity = wish;
     // Root motion (a first-person body) takes over the horizontal move by its weight.
@@ -52,14 +72,14 @@ void Player::Update(float dt, World& world, GLFWwindow* window, bool readInput) 
     Velocity.z = horizontal.z;
 
     Jumped = false;
-    if (readInput && Grounded && InputMap::GetButtonDown("Jump")) {
+    if (readInput && Grounded && !Crouched && InputMap::GetButtonDown("Jump")) {
         Velocity.y = JumpSpeed; // one impulse; the capsule move below integrates the arc
         Jumped = true;
     }
 
     Velocity.y += Gravity * dt;
 
-    glm::vec3 feet = Cam.Position - glm::vec3(0, EyeHeight, 0);
+    glm::vec3 feet = Cam.Position - glm::vec3(0, eye, 0);
 
     // No PhysX world (init failed) — fall back to a free-fly integrate so Play still works.
     if (!PhysicsWorld::IsActive()) {
@@ -89,14 +109,14 @@ void Player::Update(float dt, World& world, GLFWwindow* window, bool readInput) 
 
     float out[3] = {feet.x, feet.y, feet.z};
     PhysicsWorld::GetCharacterFootPosition(out);
-    Cam.Position = glm::vec3(out[0], out[1], out[2]) + glm::vec3(0, EyeHeight, 0);
+    Cam.Position = glm::vec3(out[0], out[1], out[2]) + glm::vec3(0, eye, 0);
 
     // Kill plane (#165: per scene): a fall through a gap respawns at the spawn point.
     if (Cam.Position.y < KillY) {
         const glm::vec3 resetFeet = RespawnFeet;
         const float rf[3] = {resetFeet.x, resetFeet.y, resetFeet.z};
         PhysicsWorld::SetCharacterFootPosition(rf);
-        Cam.Position = resetFeet + glm::vec3(0, EyeHeight, 0);
+        Cam.Position = resetFeet + glm::vec3(0, eye, 0);
         Velocity = glm::vec3(0.0f);
     }
 }

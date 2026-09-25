@@ -76,6 +76,7 @@ private:
     std::string m_LastError;
     float m_ViewYaw = 0.0f;        // the view's heading, radians (the body's turns aim at it)
     bool m_HaveHeading = false;
+    float m_CrouchHeight = 0.0f, m_CrouchSpeed = 0.42f; // the component's, from Start
     float m_IdleTime = 1.0f;       // seconds with no move input (a start clip needs a real pause)
     glm::vec2 m_LastDir{0.0f, 1.0f}; // the last move direction (body frame) and whether it was a sprint
     bool m_LastSprint = false;

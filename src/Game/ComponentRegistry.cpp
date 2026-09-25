@@ -484,12 +484,19 @@ void RegisterEngineComponents() {
         m.Fields.push_back({ "Max Turn Rate", T::Float, TARTARUS_REFLECT_FIELD(FirstPersonBodyComponent, MaxTurnRate), 5.0f,
               "Standing still, the view turns no faster than this (degrees a second) past the Turn Threshold, where the feet must step round: what\n"
               "the turn clips can keep up with, so the feet don't slide. 0 = no limit.", 0.0f, 720.0f });
+        m.Fields.push_back({ "Crouch Height", T::Float, TARTARUS_REFLECT_FIELD(FirstPersonBodyComponent, CrouchHeight), 0.01f,
+              "The capsule's height while crouching (hold Crouch, Left Ctrl by default). 0 = no crouching.", 0.0f, 3.0f });
+        m.Fields.push_back({ "Crouch Speed", T::Float, TARTARUS_REFLECT_FIELD(FirstPersonBodyComponent, CrouchSpeed), 0.01f,
+              "The move speed while crouched, as a fraction of Run Speed. The crouch-walk clips travel\n"
+              "about 1.35 m/s, so Run Speed x this should be near that or the feet slide.", 0.05f, 1.0f });
         m.Fields.push_back({ "Start Stop Clips", T::Bool, TARTARUS_REFLECT_FIELD(FirstPersonBodyComponent, StartStopClips), 0.0f,
               "Starting and stopping play their own clips (a push-off, a braking step) instead of blending\n"
               "straight between idle and the gait; their root motion eases the capsule up to speed and down." });
+        m.Fields[m.Fields.size() - 6].Group = "Turning";
+        m.Fields[m.Fields.size() - 5].Group = "Turning";
         m.Fields[m.Fields.size() - 4].Group = "Turning";
-        m.Fields[m.Fields.size() - 3].Group = "Turning";
-        m.Fields[m.Fields.size() - 2].Group = "Turning";
+        m.Fields[m.Fields.size() - 3].Group = "Crouch";
+        m.Fields[m.Fields.size() - 2].Group = "Crouch";
         m.Fields.back().Group = "Locomotion";
         Register<FirstPersonBodyComponent>(std::move(m));
     }
