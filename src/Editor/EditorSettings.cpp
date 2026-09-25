@@ -118,6 +118,9 @@ void EditorSettings::Load() {
             if (!moved.empty() && std::filesystem::exists(moved, ec)) s.LastScenePath = moved;
         }
     }
+    s.RecentScenes.clear();
+    if (auto it = root.find("recentScenes"); it != root.end() && it->is_array())
+        for (const auto& p : *it) if (p.is_string() && !p.get<std::string>().empty()) s.RecentScenes.push_back(p.get<std::string>());
     s.GameViewMaximizeOnPlay = SafeValue(root, "gameViewMaximizeOnPlay", s.GameViewMaximizeOnPlay);
     s.GameViewShowStats = SafeValue(root, "gameViewShowStats", s.GameViewShowStats);
     s.SceneShowStats = SafeValue(root, "sceneShowStats", s.SceneShowStats);
@@ -255,6 +258,17 @@ void EditorSettings::Flush() {
     root["gridShowAxisLines"] = Get().GridShowAxisLines;
     root["gridAxisThickness"] = Get().GridAxisThickness;
     root["lastScenePath"] = Get().LastScenePath;
+    {
+        auto& recent = Get().RecentScenes;
+        if (!Get().LastScenePath.empty()) {
+            const std::string& last = Get().LastScenePath;
+            recent.erase(std::remove(recent.begin(), recent.end(), last), recent.end());
+            recent.insert(recent.begin(), last);
+        }
+        constexpr size_t kMaxRecent = 8;
+        if (recent.size() > kMaxRecent) recent.resize(kMaxRecent);
+        root["recentScenes"] = recent;
+    }
     if (!Get().LastScenePath.empty()) { // #132
         const AssetGuid g = AssetDatabase::GuidForPath(Get().LastScenePath);
         if (g.IsValid()) root["lastSceneGuid"] = g.ToString();
