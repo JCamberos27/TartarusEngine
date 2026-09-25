@@ -1385,6 +1385,12 @@ void TestBlendTree2D() {
     CHECK(near(eye.x, 0.02f - 0.1f) && near(eye.y, 1.6f) && near(eye.z, 0.3f));
     eye = FirstPersonBodyEye(rest, head, 0.5f, glm::vec3(0.0f));
     CHECK(near(eye.y, 1.575f) && near(eye.z, 0.05f));
+
+    // Turn in place: angles wrap to (-pi, pi]; the body turns once the view is past the threshold.
+    CHECK(near(FirstPersonBodyWrapAngle(3.5f), 3.5f - 6.2831853f) && near(FirstPersonBodyWrapAngle(-3.5f), -3.5f + 6.2831853f));
+    CHECK(near(FirstPersonBodyWrapAngle(0.4f), 0.4f) && near(FirstPersonBodyWrapAngle(6.2831853f + 0.4f), 0.4f));
+    CHECK(!FirstPersonBodyShouldTurn(glm::radians(40.0f), 55.0f) && FirstPersonBodyShouldTurn(glm::radians(-60.0f), 55.0f));
+    CHECK(!FirstPersonBodyShouldTurn(glm::radians(170.0f), 0.0f)); // 0 = always faces the view
 }
 
 void TestRootMotion() {
