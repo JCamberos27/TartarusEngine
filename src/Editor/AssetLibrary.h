@@ -150,6 +150,12 @@ public:
     // Writes m_Folders back to project/settings.json (#121).
     void PersistFolders();
 
+    // An asset whose .meta never chose a folder (loaded by a scene or a weapon file rather than
+    // imported through the Asset Browser) is filed under its folder on disk, so it doesn't land
+    // loose in the root. Reuses a registered folder of the same name in any case, and registers
+    // the rest. In memory only; a folder chosen in the browser (even the root) always wins.
+    void AdoptDiskFolder(const std::string& path);
+
     // For SceneSerializer: every asset key currently known to have a folder and/or display
     // name override, so the file format only needs to store what's actually customized.
     const std::map<std::string, std::string>& AssetFolders() const { return m_AssetFolder; }

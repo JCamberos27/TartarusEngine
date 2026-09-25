@@ -2630,9 +2630,16 @@ void EditorLayer::DrawInspectorBody(World& world, AssetLibrary& assets) {
             const float meshPingW = ImGui::GetFrameHeight();
             const float meshButtonW = ImGui::GetContentRegionAvail().x - (meshPingW + ImGui::GetStyle().ItemInnerSpacing.x);
             if (missingMesh) ImGui::PushStyleColor(ImGuiCol_Text, EditorUIPrimitives::DangerColor());
+            // Drawn like the field it is (left-aligned on a frame), not a centred bare label.
+            ImGui::PushStyleVar(ImGuiStyleVar_ButtonTextAlign, ImVec2(0.0f, 0.5f));
+            ImGui::PushStyleColor(ImGuiCol_Button, ImGui::GetStyleColorVec4(ImGuiCol_FrameBg));
+            ImGui::PushStyleColor(ImGuiCol_ButtonHovered, ImGui::GetStyleColorVec4(ImGuiCol_FrameBgHovered));
+            ImGui::PushStyleColor(ImGuiCol_ButtonActive, ImGui::GetStyleColorVec4(ImGuiCol_FrameBgActive));
             if (ImGui::Button(meshName.c_str(), ImVec2(meshButtonW, 0.0f))) {
                 ImGui::OpenPopup("##ChangeMesh");
             }
+            ImGui::PopStyleColor(3);
+            ImGui::PopStyleVar();
             if (missingMesh) ImGui::PopStyleColor();
             if (ImGui::IsItemHovered() && !ImGui::IsPopupOpen("##ChangeMesh")) {
                 if (missingMesh) {
