@@ -484,6 +484,10 @@ struct FirstPersonBodyComponent {
     // straight between idle and the gait; the clips' root motion then eases the capsule up to
     // speed and down again.
     bool StartStopClips = false;
+    // Crouching (hold the Crouch action): the capsule's height while crouched (0 = no crouching) and
+    // the move speed as a fraction of Run Speed (the crouch-walk clips travel about 1.35 m/s).
+    float CrouchHeight = 0.0f;
+    float CrouchSpeed = 0.42f;
 };
 
 // Procedural runtime animation: spin, orbit, bob, and (for a LightComponent entity) hue
