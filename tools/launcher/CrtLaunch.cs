@@ -146,8 +146,8 @@ public static class CrtLaunchGit {
 }
 
 // The tube's sounds, synthesized (no audio assets) and mixed live into a waveOut stream: the relay
-// clunk and degauss swell of power on, the high-voltage whine and mains hum while it's lit (a
-// seamless loop that fades), and the collapse of power off. Any audio failure just means silence.
+// clunk and degauss swell of power on, and the high-voltage whine and mains hum while it's lit (a
+// seamless loop that fades). Any audio failure just means silence.
 public sealed class CrtLaunchSound : IDisposable {
     const int Rate = 44100;
     const int BlockSamples = 1024, Blocks = 4;             // ~23 ms blocks, ~90 ms of latency
@@ -169,7 +169,7 @@ public sealed class CrtLaunchSound : IDisposable {
 
     readonly object gate = new object();
     readonly List<Voice> voices = new List<Voice>();
-    float[] on, hum, off;
+    float[] on, hum;
     Voice humVoice;
     float humLevel, humTarget, master = 1, masterTarget = 1;
     IntPtr device = IntPtr.Zero;
@@ -184,7 +184,6 @@ public sealed class CrtLaunchSound : IDisposable {
         thread.Start();
     }
     public void PowerOnSound() { Add(() => on, false, 0.8f); }
-    public void PowerOffSound() { Add(() => off, false, 0.9f); }
     public void SetHum(float level) { lock (gate) humTarget = Math.Max(0, Math.Min(1, level)); }
     public void SetMuted(bool muted) { lock (gate) masterTarget = muted ? 0 : 1; }
 
@@ -201,9 +200,9 @@ public sealed class CrtLaunchSound : IDisposable {
         IntPtr[] buffers = new IntPtr[Blocks];
         int headerSize = Marshal.SizeOf(typeof(WAVEHDR));
         try {
-            float[] a = PowerOn(), b = Hum(), c = PowerOff();
+            float[] a = PowerOn(), b = Hum();
             lock (gate) {
-                on = a; hum = b; off = c;
+                on = a; hum = b;
                 humVoice = new Voice { Data = hum, Loop = true, Gain = 0.55f };
                 voices.Add(humVoice);
                 foreach (var p in pending) voices.Add(new Voice { Data = p.Key(), Gain = p.Value });
@@ -281,7 +280,7 @@ public sealed class CrtLaunchSound : IDisposable {
         var rnd = new Random(7);
         int n = (int)(Rate * 1.8);
         var s = new float[n];
-        double low = 0, crackle = 0;
+        double low = 0;
         for (int i = 0; i < n; i++) {
             double t = i / (double)Rate;
             // The relay: a low thud with a short burst of filtered noise.
@@ -291,11 +290,7 @@ public sealed class CrtLaunchSound : IDisposable {
             double swell = Smooth(0.03, 0.14, t) * Math.Exp(-Math.Max(0, t - 0.14) * 2.4);
             double buzz = (Math.Sin(Tau * 100 * t) + 0.55 * Math.Sin(Tau * 200 * t) + 0.3 * Math.Sin(Tau * 300 * t) + 0.35 * Math.Sin(Tau * 50 * t))
                           * swell * 0.2 * (1 + 0.35 * Math.Sin(Tau * 6.5 * t));
-            // Static as the charge builds on the glass.
-            if (t < 1.0 && rnd.NextDouble() < 0.0016 * (1 - t)) crackle = 0.25 + rnd.NextDouble() * 0.25;
-            crackle *= 0.9;
-            double pop = crackle * (rnd.NextDouble() * 2 - 1);
-            s[i] = (float)Math.Tanh(clunk + buzz + pop);
+            s[i] = (float)Math.Tanh(clunk + buzz);
         }
         return Fade(s, 0.002, 0.25);
     }
@@ -318,25 +313,6 @@ public sealed class CrtLaunchSound : IDisposable {
             loop[i] = (float)(s[i] * w + (i < overlap ? s[n + i] * (1 - w) : 0));
         }
         return loop;
-    }
-
-    static float[] PowerOff() {
-        var rnd = new Random(3);
-        int n = (int)(Rate * 0.9);
-        var s = new float[n];
-        double phase = 0, crackle = 0;
-        for (int i = 0; i < n; i++) {
-            double t = i / (double)Rate;
-            // The picture collapsing: a falling zap.
-            double f = 40 + 1400 * Math.Exp(-t * 11);
-            phase += Tau * f / Rate;
-            double zap = Math.Sin(phase) * Math.Exp(-t * 6) * 0.28;
-            double thump = Math.Sin(Tau * 42 * t) * Math.Exp(-t * 9) * 0.4 * Smooth(0.0, 0.01, t);
-            if (t < 0.3 && rnd.NextDouble() < 0.003) crackle = 0.3;
-            crackle *= 0.88;
-            s[i] = (float)Math.Tanh(zap + thump + crackle * (rnd.NextDouble() * 2 - 1));
-        }
-        return Fade(s, 0.001, 0.2);
     }
 
     static float[] Fade(float[] s, double inSeconds, double outSeconds) {
