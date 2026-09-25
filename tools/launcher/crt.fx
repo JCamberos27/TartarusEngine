@@ -44,14 +44,18 @@ float4 main(float2 screen : TEXCOORD) : COLOR
                 + Tap(uv + px * float2(9.0, 0)) + Tap(uv - px * float2(9.0, 0));
     col += glow * 0.06 + halo * 0.03;
 
-    // Scanlines, about three device pixels apart; bright lines bloom over the gap.
-    float scan = sin(uv.y * size.y * 3.14159265 / 1.5);
+    // Scanlines: a fixed 540-line picture, the same on any monitor, never finer than 2.5 device
+    // pixels a line (below that they'd alias). Bright lines bloom over the gap.
+    float lines = min(540.0, size.y / 2.5);
+    float scan = sin(uv.y * lines * 6.2831853);
     float lum = dot(col, float3(0.3, 0.59, 0.11));
     col *= lerp(0.62, 1.0, saturate(0.5 + 0.5 * scan + lum * 0.35));
 
-    // Aperture grille: vertical red, green and blue stripes.
-    float stripe = fmod(floor(screen.x * size.x), 3.0);
-    float3 mask = stripe < 1.0 ? float3(1.0, 0.8, 0.8) : (stripe < 2.0 ? float3(0.8, 1.0, 0.8) : float3(0.8, 0.8, 1.0));
+    // Aperture grille: 720 red-green-blue triads across (at least 3 device pixels each), as
+    // smooth stripes so they don't shimmer when the triad isn't a whole number of pixels.
+    float triads = min(720.0, size.x / 3.0);
+    float f = frac(screen.x * triads);
+    float3 mask = 0.8 + 0.2 * float3(cos(6.2831853 * (f - 0.1667)), cos(6.2831853 * (f - 0.5)), cos(6.2831853 * (f - 0.8333)));
     col *= mask * 1.12;
 
     // A slow refresh band rolling down the glass, and the tube's faint flicker.

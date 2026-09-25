@@ -1,7 +1,8 @@
 # The launch screen on a CRT: the same composition as launch-screen.ps1 (the art on the left; the
 # lockup, status, progress bar and version on the right) drawn in a borderless WPF window, with a
 # pixel shader (crt.fx / crt.ps) turning the whole window into a curved, scanlined tube that
-# powers on and off. The build runs in the background the whole time. Any key skips the intro.
+# powers on and off, with its sounds. The build runs in the background the whole time. Any key
+# (or a click) skips the intro; M mutes the sound, and is remembered.
 #
 #   launch-crt.ps1 [-Build]
 #     Exit codes: 0 built (or no -Build); on a failed build the screen lists the errors and asks -
@@ -13,86 +14,48 @@ $ErrorActionPreference = 'Stop'
 $root = Resolve-Path (Join-Path $PSScriptRoot '..\..')
 $buildLog = Join-Path $root 'build\last-build.log'
 $progressFile = Join-Path $root 'build\launch-progress.txt'
+$settingsFile = Join-Path $root 'build\launch-settings.txt'
 $invariant = [Globalization.CultureInfo]::InvariantCulture
 
 # --- everything that can fail before the build starts: a failure here means "use the console" ---
 try {
-    Add-Type -TypeDefinition @'
-using System;
-using System.Runtime.InteropServices;
-public static class CrtLaunchNative {
-    [DllImport("user32.dll")] public static extern bool SetProcessDPIAware();
-    [DllImport("kernel32.dll")] public static extern IntPtr GetConsoleWindow();
-    [DllImport("user32.dll")] public static extern bool ShowWindow(IntPtr hWnd, int cmd);
-    public static void HideConsole() { IntPtr w = GetConsoleWindow(); if (w != IntPtr.Zero) ShowWindow(w, 0); }
-    [DllImport("user32.dll")] static extern bool SetForegroundWindow(IntPtr hWnd);
-    [DllImport("user32.dll")] static extern void keybd_event(byte vk, byte scan, int flags, IntPtr extra);
-    // Windows refuses the foreground to a window started in the background (the minimized
-    // console's child), which would leave the Y / N keys going elsewhere. A tap of Alt is the
-    // documented way to be allowed it.
-    public static void TakeForeground(IntPtr hWnd) {
-        keybd_event(0x12, 0, 0, IntPtr.Zero); keybd_event(0x12, 0, 2, IntPtr.Zero);
-        SetForegroundWindow(hWnd);
-    }
-}
-'@
-    # Before any window exists: render at the display's real resolution, not a stretched bitmap.
-    [void][CrtLaunchNative]::SetProcessDPIAware()
+    # The native side (CrtLaunch.cs) is compiled once and cached by a hash of its source: loading
+    # the cached DLL takes milliseconds where compiling takes about half a second.
     Add-Type -AssemblyName PresentationFramework, PresentationCore, WindowsBase, System.Xaml, System.Windows.Forms, System.Drawing
-
+    $helperSource = [IO.File]::ReadAllText((Join-Path $PSScriptRoot 'CrtLaunch.cs'))
+    $sha = [Security.Cryptography.SHA256]::Create()
+    $key = [BitConverter]::ToString($sha.ComputeHash([Text.Encoding]::UTF8.GetBytes($helperSource + [Environment]::Version))).Replace('-', '').Substring(0, 12)
+    $cacheDir = if (Test-Path (Join-Path $root 'build')) { Join-Path $root 'build\launcher-cache' } else { Join-Path $env:TEMP 'tartarus-launcher-cache' }
+    $helperDll = Join-Path $cacheDir "CrtLaunch-$key.dll"
     $refs = @([System.Windows.Media.Visual].Assembly.Location, [System.Windows.DependencyObject].Assembly.Location,
               [System.Windows.Window].Assembly.Location, [System.Xaml.XamlType].Assembly.Location)
-    Add-Type -ReferencedAssemblies $refs -TypeDefinition @'
-using System;
-using System.IO;
-using System.Windows;
-using System.Windows.Media;
-using System.Windows.Media.Effects;
-public class CrtEffect : ShaderEffect {
-    public static readonly DependencyProperty InputProperty = ShaderEffect.RegisterPixelShaderSamplerProperty("Input", typeof(CrtEffect), 0);
-    public static readonly DependencyProperty TimeProperty = DependencyProperty.Register("Time", typeof(double), typeof(CrtEffect),
-        new UIPropertyMetadata(0.0, PixelShaderConstantCallback(0)));
-    public static readonly DependencyProperty SizeProperty = DependencyProperty.Register("Size", typeof(Point), typeof(CrtEffect),
-        new UIPropertyMetadata(new Point(1600, 1000), PixelShaderConstantCallback(1)));
-    public CrtEffect(string shaderPath) {
-        PixelShader shader = new PixelShader();
-        using (FileStream stream = File.OpenRead(shaderPath)) shader.SetStreamSource(stream);
-        PixelShader = shader;
-        UpdateShaderValue(InputProperty); UpdateShaderValue(TimeProperty); UpdateShaderValue(SizeProperty);
+    $loaded = $false
+    if (Test-Path $helperDll) { try { Add-Type -Path $helperDll; $loaded = $true } catch {} }
+    if (-not $loaded) {
+        try {
+            New-Item -ItemType Directory -Force $cacheDir | Out-Null
+            Get-ChildItem $cacheDir -Filter 'CrtLaunch-*.dll' -ErrorAction SilentlyContinue | Remove-Item -ErrorAction SilentlyContinue
+            Add-Type -TypeDefinition $helperSource -ReferencedAssemblies $refs -OutputAssembly $helperDll -OutputType Library
+            Add-Type -Path $helperDll
+        } catch {
+            Add-Type -TypeDefinition $helperSource -ReferencedAssemblies $refs   # an unwritable cache: compile in memory
+        }
     }
-    public Brush Input { get { return (Brush)GetValue(InputProperty); } set { SetValue(InputProperty, value); } }
-    public double Time { get { return (double)GetValue(TimeProperty); } set { SetValue(TimeProperty, value); } }
-    public Point Size { get { return (Point)GetValue(SizeProperty); } set { SetValue(SizeProperty, value); } }
-}
-'@
+    # Before any window exists: render at the display's real resolution, not a stretched bitmap.
+    [void][CrtLaunchNative]::SetProcessDPIAware()
 
     # --- the text ------------------------------------------------------------------------------
-    $sections = @{}; $current = $null
-    foreach ($line in [IO.File]::ReadAllLines((Join-Path $PSScriptRoot 'TartarusEngineAscii.txt'))) {
-        if ($line.StartsWith('::')) { $current = $line.Substring(2); $sections[$current] = New-Object System.Collections.Generic.List[string]; continue }
-        if ($current) { $sections[$current].Add($line) }
-    }
-    function Trim-Block([string[]]$lines) {
-        $lines = @($lines | ForEach-Object { $_.TrimEnd() })
-        $first = 0; while ($first -lt $lines.Count -and -not $lines[$first]) { $first++ }
-        $last = $lines.Count - 1; while ($last -ge $first -and -not $lines[$last]) { $last-- }
-        $lines = $lines[$first..$last]
-        $lead = ($lines | Where-Object { $_ } | ForEach-Object { $_.Length - $_.TrimStart().Length } | Measure-Object -Minimum).Minimum
-        @($lines | ForEach-Object { if ($_.Length -gt $lead) { $_.Substring($lead) } else { '' } })
-    }
-    $art = @(Trim-Block $sections['art'])
-    $banner = @(Trim-Block $sections['banner'])
+    $sections = [CrtLaunchArt]::ReadSections((Join-Path $PSScriptRoot 'TartarusEngineAscii.txt'))
+    $art = $sections['art']
+    $banner = $sections['banner']
 
     $versionText = ''
     try {
         $cmake = [IO.File]::ReadAllText((Join-Path $root 'CMakeLists.txt'))
         if ($cmake -match 'project\(\s*\w+\s+VERSION\s+([\d.]+)') { $versionText = "v$($Matches[1])" }
     } catch {}
-    try {
-        $branch = (& git -C $root rev-parse --abbrev-ref HEAD 2>$null | Select-Object -First 1)
-        $commit = (& git -C $root rev-parse --short HEAD 2>$null | Select-Object -First 1)
-        if ($branch -and $commit) { $versionText = (@($versionText, "$branch @ $commit") | Where-Object { $_ }) -join "   $([char]0x00B7)   " }
-    } catch {}
+    $git = [CrtLaunchGit]::Describe([string]$root)
+    if ($git) { $versionText = (@($versionText, $git) | Where-Object { $_ }) -join "   $([char]0x00B7)   " }
 
     # --- the window ------------------------------------------------------------------------------
     # The stage is laid out once at 1650 x 1100 (3:2) and scaled to the window by a Viewbox. The
@@ -147,6 +110,8 @@ public class CrtEffect : ShaderEffect {
             </StackPanel>
           </StackPanel>
         </Grid>
+        <TextBlock x:Name="SoundHint" HorizontalAlignment="Right" VerticalAlignment="Bottom" Margin="0,0,70,52"
+                   Foreground="#6A6A72" FontSize="10" LineHeight="12" Opacity="0"/>
         <Rectangle x:Name="Flash" Fill="#F4F7FF" Opacity="0" IsHitTestVisible="False"/>
       </Grid>
     </Viewbox>
@@ -155,40 +120,11 @@ public class CrtEffect : ShaderEffect {
 '@
     $window = [Windows.Markup.XamlReader]::Parse($xaml)
     $ui = @{}
-    foreach ($n in 'Tube', 'Stage', 'Power', 'Glow', 'Art', 'Errors', 'ErrorList', 'Banner', 'Status', 'Bar', 'BarFill', 'Prompt', 'PromptYes', 'PromptNo', 'Version', 'Flash') {
+    foreach ($n in 'Tube', 'Stage', 'Power', 'Glow', 'Art', 'Errors', 'ErrorList', 'Banner', 'Status', 'Bar', 'BarFill', 'Prompt', 'PromptYes', 'PromptNo', 'Version', 'SoundHint', 'Flash') {
         $ui[$n] = $window.FindName($n)
     }
 
-    # The art, one run per stretch of equal density, each lit by its density.
-    $tone = @{ '.' = 0.34; ':' = 0.46; '-' = 0.56; '=' = 0.66; '+' = 0.74; '*' = 0.82; '#' = 0.90; '%' = 0.96; '@' = 1.0 }
-    $brushes = @{}
-    function Tone-Brush([double]$t) {
-        if (-not $brushes.ContainsKey($t)) {
-            $v = [byte][Math]::Round(255 * $t)
-            $b = New-Object Windows.Media.SolidColorBrush ([Windows.Media.Color]::FromRgb($v, $v, [byte][Math]::Min(255, $v + 6)))
-            $b.Freeze(); $brushes[$t] = $b
-        }
-        $brushes[$t]
-    }
-    for ($i = 0; $i -lt $art.Count; $i++) {
-        $line = $art[$i]; $j = 0
-        while ($j -lt $line.Length) {
-            $ch = [string]$line[$j]
-            $t = if ($ch -eq ' ') { -1.0 } elseif ($tone.ContainsKey($ch)) { $tone[$ch] } else { 1.0 }
-            $k = $j + 1
-            while ($k -lt $line.Length) {
-                $c = [string]$line[$k]
-                $u = if ($c -eq ' ') { -1.0 } elseif ($tone.ContainsKey($c)) { $tone[$c] } else { 1.0 }
-                if ($u -ne $t) { break }
-                $k++
-            }
-            $run = New-Object Windows.Documents.Run ($line.Substring($j, $k - $j))
-            if ($t -ge 0) { $run.Foreground = Tone-Brush $t }
-            $ui.Art.Inlines.Add($run)
-            $j = $k
-        }
-        if ($i -lt $art.Count - 1) { $ui.Art.Inlines.Add((New-Object Windows.Documents.LineBreak)) }
-    }
+    [CrtLaunchArt]::Fill($ui.Art, $art)
 
     # The lockup is painted by a gradient that is also its wipe: solid up to the edge, a gold
     # leading edge, clear beyond it.
@@ -242,6 +178,13 @@ public class CrtEffect : ShaderEffect {
     } catch {}
     $taskbar = New-Object Windows.Shell.TaskbarItemInfo
     $window.TaskbarItemInfo = $taskbar
+
+    # The tube's sounds (CrtLaunchSound: synthesized and mixed on its own thread). A missing sound
+    # never stops the show.
+    $muted = $false
+    try { $muted = ([IO.File]::ReadAllText($settingsFile)) -match 'sound\s*=\s*off' } catch {}
+    $sound = $null
+    try { $sound = New-Object CrtLaunchSound; $sound.SetMuted($muted); $sound.Start() } catch { $sound = $null }
 } catch {
     exit 99
 }
@@ -279,12 +222,17 @@ $candle = [Windows.Media.Color]::FromRgb(255, 222, 170)
 $S = @{
     Phase = 'intro'; Skip = 0.0; PhaseAt = 0.0; Shown = 0.0; Projects = 0; LastPoll = -1.0
     Flicker = 0.12; FlickerTarget = 0.12; NextFlicker = 0.0; ExitCode = 0; BuildSeconds = 0.0; Crash = $null
-    Rand = (New-Object Random); Closing = $false; Started = $false
+    Rand = (New-Object Random); Closing = $false; Started = $false; OffSoundAt = $null
 }
 $clock = [Diagnostics.Stopwatch]::StartNew()
 $introEnd = 2.7
 
-function Enter-Phase([string]$name) { $S.Phase = $name; $S.PhaseAt = $clock.Elapsed.TotalSeconds + $S.Skip }
+function Enter-Phase([string]$name) {
+    $S.Phase = $name; $S.PhaseAt = $clock.Elapsed.TotalSeconds + $S.Skip
+    if ($name -eq 'off' -and $sound) { $S.OffSoundAt = [Diagnostics.Stopwatch]::StartNew(); $sound.PowerOffSound() }
+}
+function Set-SoundHint { $ui.SoundHint.Text = if ($muted) { 'M   sound on' } else { 'M   mute' } }
+Set-SoundHint
 
 function Show-Failure {
     $log = Read-BuildLog
@@ -318,6 +266,10 @@ function Update-Frame {
         $crt.Size = New-Object Windows.Point ($ui.Tube.ActualWidth * $scale), ($ui.Tube.ActualHeight * $scale)
     }
     $since = $t - $S.PhaseAt
+    # The whine and hum rise with the picture and die with it.
+    if ($sound) {
+        $sound.SetHum($(switch ($S.Phase) { 'intro' { Clamp01 (($t - 0.25) / 1.1) } 'off' { 1.0 - (Clamp01 ($since / 0.3)) } default { 1.0 } }))
+    }
 
     switch ($S.Phase) {
         'intro' {
@@ -329,6 +281,7 @@ function Update-Frame {
             Set-Wipe (1.08 * (Clamp01 (($t - 1.7) / 0.75))) $white
             $late = Clamp01 (($t - 2.35) / 0.35)
             $ui.Version.Opacity = $late; $ui.Status.Opacity = $late; $ui.Bar.Opacity = $late
+            if ($sound) { $ui.SoundHint.Opacity = $late }
             if ($buildProc) { $ui.Status.Text = 'B U I L D I N G' }
             if ($t -ge $introEnd) { Enter-Phase 'build' }
         }
@@ -408,6 +361,13 @@ function Update-Frame {
 
 $window.Add_KeyDown({
     param($sender, $e)
+    if ($e.Key -eq 'M' -and $sound) {
+        $script:muted = -not $muted
+        Set-SoundHint
+        $sound.SetMuted($muted)
+        try { [IO.File]::WriteAllText($settingsFile, $(if ($muted) { "sound=off`r`n" } else { "sound=on`r`n" })) } catch {}
+        return
+    }
     if ($S.Phase -eq 'intro') {
         $S.Skip = $introEnd - $clock.Elapsed.TotalSeconds     # jump straight to the finished frame
     } elseif ($S.Phase -eq 'failed') {
@@ -431,7 +391,10 @@ $onFrame = [EventHandler] {
     if ($S.Closing) { return }
     # The show's clock starts with the first frame on screen, so none of the power-on is lost to
     # the window's own start-up.
-    if (-not $S.Started) { $S.Started = $true; $clock.Restart() }
+    if (-not $S.Started) {
+        $S.Started = $true; $clock.Restart()
+        if ($sound) { $sound.PowerOnSound() }
+    }
     try { Update-Frame } catch { $S.Crash = $_; $S.Closing = $true; $window.Close() }
 }
 $window.Add_ContentRendered({
@@ -442,6 +405,14 @@ $window.Add_ContentRendered({
 [Windows.Media.CompositionTarget]::add_Rendering($onFrame)
 try { [void]$window.ShowDialog() } catch { $S.Crash = $_ }
 [Windows.Media.CompositionTarget]::remove_Rendering($onFrame)
+# Let power-off's sound finish before the process (and its audio) ends.
+if ($sound) {
+    if ($S.OffSoundAt -and -not $muted) {
+        $left = 800 - $S.OffSoundAt.ElapsedMilliseconds
+        if ($left -gt 0) { Start-Sleep -Milliseconds $left }
+    }
+    $sound.Dispose()
+}
 
 # The screen broke mid-show: still report the build honestly (run-editor.cmd prints the log).
 if ($S.Crash) {
