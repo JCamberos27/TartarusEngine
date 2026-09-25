@@ -101,7 +101,7 @@ a frame never mixes two placements.
 | `src/Game/AnimationSystem.{h,cpp}` | `ApplyRootMotion`: a clip's travel moves the object (a dynamic Rigidbody's velocity, or the Transform), or is only reported (In Place) |
 | `src/Game/FirstPersonAdsCarry.{h,cpp}` | Carrying hip clips onto the sights: `BuildAdsCarry` (measures each `ADSCarry` state against the aim pose), `EvaluateAdsCarry` (how much of the crossfade stack a carried action owns), and the per-weapon report the Inspector shows |
 | `src/Game/FirstPersonBodyContract.{h,cpp}` | The body's contract with its controller: the parameter / state / tag / bone names `FirstPersonBody` uses, which body option needs each, and `FPBody::Validate` (drives the Setup box on the First Person Body component) |
-| `src/Game/Components.h` | `AnimatorControllerComponent` (params, tags, events, `Track`, `Driver`, `RootMotion`), `FirstPersonControllerComponent`, `FirstPersonBodyComponent`, `ViewModelTag` |
+| `src/Game/Components.h` | `AnimatorControllerComponent` (params, tags, events, `Track`, `Driver`, `RootMotion`), `FirstPersonControllerComponent`, `FirstPersonBodyComponent`, `ViewModelTag`, `PoseSourceTag` |
 | `src/Editor/EditorLayer_Animator.cpp` | The Animator window (state tags as chips with a known-tag picker), the component's Inspector section, and the `.controller` asset inspector |
 | `src/Editor/EditorLayer_WeaponInspector.cpp` | The `.fpsanim` weapon Inspector: overview badges, undo/redo, and the Animation / Aim-Down-Sights / Gameplay / Rigs / Recoil / Movement / IK sections |
 | `src/Editor/EditorPropertyRows.{h,cpp}` | `PropertyRows`: the shared label-column rows, sections, badges and reset buttons the weapon Inspector is built from |
@@ -112,7 +112,7 @@ a frame never mixes two placements.
 | `src/main.cpp` | Play-loop wiring; `--upgrade-fpsanim` (v1 → controller) |
 | `project/animations/fps_body_locomotion.controller` | The body's locomotion: a 2D blend of idle, walk and jog in eight directions and run, plus Jump / Fall / Land (MC Core Motion clips, `project/assets/animations/mc_core_motion/`) |
 | `tools/assimp_patches/` + `tools/apply_assimp_patches.cmake` | Local assimp fix, applied at configure time |
-| `tools/component_registration_allowlist.txt` | `ViewModelTag` is allow-listed (runtime-only). CI fails without it |
+| `tools/component_registration_allowlist.txt` | `ViewModelTag` and `PoseSourceTag` are allow-listed (runtime-only). CI fails without them |
 
 ---
 
