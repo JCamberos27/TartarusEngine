@@ -5,6 +5,14 @@ rem checked out. The desktop "Tartarus Engine" shortcut points here so a double-
 rem can never run a stale exe again.
 cd /d "%~dp0"
 
+rem Windows Terminal (the default console on Windows 11) ignores the launch screen's window
+rem sizing, font and centring, so reopen in the classic console window. The desktop shortcut
+rem starts conhost with "classic" itself, which skips the hop.
+if /i not "%~1"=="classic" (
+  start "" conhost.exe cmd /c ""%~f0" classic"
+  exit /b 0
+)
+
 echo Closing any running Tartarus Engine instances...
 taskkill /F /IM TartarusEngine.exe >nul 2>&1
 
