@@ -499,6 +499,27 @@ void EditorLayer::DrawFileMenuBody(World& world, AssetLibrary& assets) {
                 RequestOpenScene(world, assets, FileDialog::OpenFile(
                     "Scene Files\0*.json\0All Files\0*.*\0", m_Window));
             }
+            {
+                // Scenes that no longer exist are hidden rather than offered and then refused.
+                std::vector<std::string> recent;
+                std::error_code ec;
+                for (const std::string& p : EditorSettings::Get().RecentScenes)
+                    if (std::filesystem::exists(p, ec)) recent.push_back(p);
+                if (ImGui::BeginMenu(ICON_FA_CLOCK_ROTATE_LEFT "  Open Recent", !recent.empty() && !m_InPlayMode)) {
+                    for (size_t i = 0; i < recent.size(); ++i) {
+                        const std::string name = std::filesystem::path(recent[i]).filename().string();
+                        const bool isCurrent = std::filesystem::equivalent(recent[i], m_CurrentScenePath, ec);
+                        ImGui::PushID((int)i);
+                        if (ImGui::MenuItem(name.c_str(), nullptr, isCurrent) && !isCurrent)
+                            RequestOpenScene(world, assets, recent[i]);
+                        if (ImGui::IsItemHovered()) EditorUI::SetTooltip("%s", recent[i].c_str());
+                        ImGui::PopID();
+                    }
+                    ImGui::EndMenu();
+                }
+                if (m_InPlayMode && ImGui::IsItemHovered(ImGuiHoveredFlags_AllowWhenDisabled))
+                    EditorUI::SetTooltip("Stop Play mode to open another scene.");
+            }
             // Q12 (Phase 4 / #6) — disabled while Playing rather than left live: a Play-mode edit
             // reverts on Stop anyway (OnEnterPlayMode snapshots the scene), so saving mid-Play
             // would either silently discard that guarantee or persist a state the user never
@@ -558,6 +579,10 @@ void EditorLayer::DrawFileMenuBody(World& world, AssetLibrary& assets) {
                 if (ImGui::IsItemHovered()) EditorUI::SetTooltip("WAV / MP3 / OGG / FLAC");
                 ImGui::EndMenu();
             }
+            ImGui::Separator();
+            // Same path as the window's close button, so unsaved changes still prompt first.
+            if (ImGui::MenuItem(ICON_FA_RIGHT_FROM_BRACKET "  Exit", "Alt+F4") && m_Window)
+                glfwSetWindowShouldClose(m_Window, GLFW_TRUE);
 }
 
 void EditorLayer::DrawViewMenuBody(World& world, Camera& editorCamera) {
