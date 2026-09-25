@@ -85,6 +85,11 @@
       "name": "StopY",
       "type": "float",
       "default": 1.0
+    },
+    {
+      "name": "Crouched",
+      "type": "bool",
+      "default": 0.0
     }
   ],
   "tracks": [
@@ -486,6 +491,157 @@
           "tags": [
             "Stop"
           ]
+        },
+        {
+          "name": "CrouchLoco",
+          "loop": true,
+          "speed": 1.5,
+          "position": [
+            0.0,
+            400.0
+          ],
+          "motions": {
+            "main": {
+              "blendParam": "MoveX",
+              "blendParamY": "MoveY",
+              "children": [
+                {
+                  "clip": "assets/animations/mc_core_motion/Crouch/AM_Crouch_Idle_01.fbx",
+                  "clipGuid": "5bbbc16c5a7e53cb",
+                  "threshold": 0.0,
+                  "thresholdY": 0.0,
+                  "speed": 1.0
+                },
+                {
+                  "clip": "assets/animations/mc_core_motion/Locomotion_V2/AM_Crouch_Walk/AM_Crouch_Loco_Walk_Fwd.fbx",
+                  "clipGuid": "15acb8dbcc868cd2",
+                  "threshold": 0.0,
+                  "thresholdY": 1.355,
+                  "speed": 1.0
+                },
+                {
+                  "clip": "assets/animations/mc_core_motion/Locomotion_V2/AM_Crouch_Walk/AM_Crouch_Loco_Walk_Fwd_Left.fbx",
+                  "clipGuid": "263c5ce0379edfa8",
+                  "threshold": -0.957,
+                  "thresholdY": 0.957,
+                  "speed": 1.0
+                },
+                {
+                  "clip": "assets/animations/mc_core_motion/Locomotion_V2/AM_Crouch_Walk/AM_Crouch_Loco_Walk_Fwd_Right.fbx",
+                  "clipGuid": "b667084faf565701",
+                  "threshold": 0.957,
+                  "thresholdY": 0.957,
+                  "speed": 1.0
+                },
+                {
+                  "clip": "assets/animations/mc_core_motion/Locomotion_V2/AM_Crouch_Walk/AM_Crouch_Loco_Walk_Left.fbx",
+                  "clipGuid": "1a9d5c1c02701f5e",
+                  "threshold": -1.155,
+                  "thresholdY": 0.0,
+                  "speed": 1.0
+                },
+                {
+                  "clip": "assets/animations/mc_core_motion/Locomotion_V2/AM_Crouch_Walk/AM_Crouch_Loco_Walk_Right.fbx",
+                  "clipGuid": "7e7b97b9e1892026",
+                  "threshold": 1.133,
+                  "thresholdY": 0.0,
+                  "speed": 1.0
+                },
+                {
+                  "clip": "assets/animations/mc_core_motion/Locomotion_V2/AM_Crouch_Walk/AM_Crouch_Loco_Walk_Bwd.fbx",
+                  "clipGuid": "1b5d05a364c08afd",
+                  "threshold": 0.0,
+                  "thresholdY": -1.123,
+                  "speed": 1.0
+                },
+                {
+                  "clip": "assets/animations/mc_core_motion/Locomotion_V2/AM_Crouch_Walk/AM_Crouch_Loco_Walk_Bwd_Left.fbx",
+                  "clipGuid": "64ef3a056ff93ce0",
+                  "threshold": -0.794,
+                  "thresholdY": -0.794,
+                  "speed": 1.0
+                },
+                {
+                  "clip": "assets/animations/mc_core_motion/Locomotion_V2/AM_Crouch_Walk/AM_Crouch_Loco_Walk_Bwd_Right.fbx",
+                  "clipGuid": "4b6dc3b6f1e41038",
+                  "threshold": 0.794,
+                  "thresholdY": -0.794,
+                  "speed": 1.0
+                }
+              ]
+            }
+          },
+          "tags": [
+            "Crouch"
+          ]
+        },
+        {
+          "name": "CrouchTurn",
+          "loop": false,
+          "speed": 1.0,
+          "position": [
+            260.0,
+            400.0
+          ],
+          "motions": {
+            "main": {
+              "blendParam": "TurnAngle",
+              "children": [
+                {
+                  "clip": "assets/animations/mc_core_motion/Crouch/AM_Crouch_Idle_Turn_R180.fbx",
+                  "clipGuid": "52b24811ec0f0372",
+                  "threshold": -180.0,
+                  "speed": 1.0
+                },
+                {
+                  "clip": "assets/animations/mc_core_motion/Crouch/AM_Crouch_Idle_Turn_R135.fbx",
+                  "clipGuid": "219732f3629879ea",
+                  "threshold": -135.0,
+                  "speed": 1.0
+                },
+                {
+                  "clip": "assets/animations/mc_core_motion/Crouch/AM_Crouch_Idle_Turn_R090.fbx",
+                  "clipGuid": "f3f461f6ff4e9dfb",
+                  "threshold": -90.0,
+                  "speed": 1.0
+                },
+                {
+                  "clip": "assets/animations/mc_core_motion/Crouch/AM_Crouch_Idle_Turn_R045.fbx",
+                  "clipGuid": "ef42cbd093a44da7",
+                  "threshold": -45.0,
+                  "speed": 1.0
+                },
+                {
+                  "clip": "assets/animations/mc_core_motion/Crouch/AM_Crouch_Idle_Turn_L045.fbx",
+                  "clipGuid": "59c12678a0458cf5",
+                  "threshold": 45.0,
+                  "speed": 1.0
+                },
+                {
+                  "clip": "assets/animations/mc_core_motion/Crouch/AM_Crouch_Idle_Turn_L090.fbx",
+                  "clipGuid": "1ba9e255270bd6ad",
+                  "threshold": 90.0,
+                  "speed": 1.0
+                },
+                {
+                  "clip": "assets/animations/mc_core_motion/Crouch/AM_Crouch_Idle_Turn_L135.fbx",
+                  "clipGuid": "99bd3ca75283494a",
+                  "threshold": 135.0,
+                  "speed": 1.0
+                },
+                {
+                  "clip": "assets/animations/mc_core_motion/Crouch/AM_Crouch_Idle_Turn_L180.fbx",
+                  "clipGuid": "85205c3b409224e3",
+                  "threshold": 180.0,
+                  "speed": 1.0
+                }
+              ]
+            }
+          },
+          "tags": [
+            "Crouch",
+            "Turn"
+          ]
         }
       ],
       "transitions": [
@@ -771,6 +927,160 @@
         },
         {
           "from": "StopRun",
+          "to": "Fall",
+          "duration": 0.25,
+          "conditions": [
+            {
+              "mode": "if",
+              "param": "Airborne",
+              "threshold": 0.0
+            }
+          ],
+          "hasExitTime": false,
+          "exitTime": 1.0
+        },
+        {
+          "from": "Locomotion",
+          "to": "CrouchLoco",
+          "duration": 0.25,
+          "conditions": [
+            {
+              "mode": "if",
+              "param": "Crouched",
+              "threshold": 0.0
+            }
+          ],
+          "hasExitTime": false,
+          "exitTime": 1.0
+        },
+        {
+          "from": "Turn",
+          "to": "CrouchLoco",
+          "duration": 0.25,
+          "conditions": [
+            {
+              "mode": "if",
+              "param": "Crouched",
+              "threshold": 0.0
+            }
+          ],
+          "hasExitTime": false,
+          "exitTime": 1.0
+        },
+        {
+          "from": "Start",
+          "to": "CrouchLoco",
+          "duration": 0.25,
+          "conditions": [
+            {
+              "mode": "if",
+              "param": "Crouched",
+              "threshold": 0.0
+            }
+          ],
+          "hasExitTime": false,
+          "exitTime": 1.0
+        },
+        {
+          "from": "Stop",
+          "to": "CrouchLoco",
+          "duration": 0.25,
+          "conditions": [
+            {
+              "mode": "if",
+              "param": "Crouched",
+              "threshold": 0.0
+            }
+          ],
+          "hasExitTime": false,
+          "exitTime": 1.0
+        },
+        {
+          "from": "StopRun",
+          "to": "CrouchLoco",
+          "duration": 0.25,
+          "conditions": [
+            {
+              "mode": "if",
+              "param": "Crouched",
+              "threshold": 0.0
+            }
+          ],
+          "hasExitTime": false,
+          "exitTime": 1.0
+        },
+        {
+          "from": "CrouchLoco",
+          "to": "Locomotion",
+          "duration": 0.25,
+          "conditions": [
+            {
+              "mode": "ifNot",
+              "param": "Crouched",
+              "threshold": 0.0
+            }
+          ],
+          "hasExitTime": false,
+          "exitTime": 1.0
+        },
+        {
+          "from": "CrouchLoco",
+          "to": "CrouchTurn",
+          "duration": 0.15,
+          "conditions": [
+            {
+              "mode": "if",
+              "param": "Turning",
+              "threshold": 0.0
+            }
+          ],
+          "hasExitTime": false,
+          "exitTime": 1.0
+        },
+        {
+          "from": "CrouchTurn",
+          "to": "CrouchLoco",
+          "duration": 0.25,
+          "conditions": [
+            {
+              "mode": "ifNot",
+              "param": "Turning",
+              "threshold": 0.0
+            }
+          ],
+          "hasExitTime": false,
+          "exitTime": 1.0
+        },
+        {
+          "from": "CrouchTurn",
+          "to": "Locomotion",
+          "duration": 0.25,
+          "conditions": [
+            {
+              "mode": "ifNot",
+              "param": "Crouched",
+              "threshold": 0.0
+            }
+          ],
+          "hasExitTime": false,
+          "exitTime": 1.0
+        },
+        {
+          "from": "CrouchLoco",
+          "to": "Fall",
+          "duration": 0.25,
+          "conditions": [
+            {
+              "mode": "if",
+              "param": "Airborne",
+              "threshold": 0.0
+            }
+          ],
+          "hasExitTime": false,
+          "exitTime": 1.0
+        },
+        {
+          "from": "CrouchTurn",
           "to": "Fall",
           "duration": 0.25,
           "conditions": [

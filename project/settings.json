@@ -77,7 +77,17 @@
     },
     {
       "altNegative": -1,
-      "altPositive": 341,
+      "altPositive": -1,
+      "gamepadAxis": -1,
+      "gamepadButton": 8,
+      "invertGamepadAxis": false,
+      "name": "Crouch",
+      "negative": -1,
+      "positive": 341
+    },
+    {
+      "altNegative": -1,
+      "altPositive": -1,
       "gamepadAxis": -1,
       "gamepadButton": 5,
       "invertGamepadAxis": false,
