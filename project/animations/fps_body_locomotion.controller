@@ -950,6 +950,20 @@
         {
           "from": "Start",
           "to": "Locomotion",
+          "duration": 0.15,
+          "conditions": [
+            {
+              "mode": "ifNot",
+              "param": "Moving",
+              "threshold": 0.0
+            }
+          ],
+          "hasExitTime": false,
+          "exitTime": 1.0
+        },
+        {
+          "from": "Start",
+          "to": "Locomotion",
           "duration": 0.2,
           "conditions": [],
           "hasExitTime": true,
@@ -1221,6 +1235,20 @@
             {
               "mode": "ifNot",
               "param": "Crouched",
+              "threshold": 0.0
+            }
+          ],
+          "hasExitTime": false,
+          "exitTime": 1.0
+        },
+        {
+          "from": "CrouchStart",
+          "to": "CrouchLoco",
+          "duration": 0.15,
+          "conditions": [
+            {
+              "mode": "ifNot",
+              "param": "Moving",
               "threshold": 0.0
             }
           ],

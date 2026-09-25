@@ -341,10 +341,14 @@ void FirstPersonBody::Tick(World& world, const Player& player, const Camera& cam
             m_LastDir = dir;
             m_LastSprint = glm::length(glm::vec2(player.WishVelocity.x, player.WishVelocity.z)) > m_RunSpeed * 1.05f;
             m_IdleTime = 0.0f;
+            m_MoveTime += dt;
         } else {
             const float before = m_IdleTime;
             m_IdleTime += dt;
-            if (plain && before < 0.05f && m_IdleTime >= 0.05f && glm::length(m_Move) > (player.Crouched ? 0.6f : 1.2f)) {
+            // A stop needs a run to stop from: a tap of the keys (or a step or two) just eases to a halt.
+            const bool ranEnough = m_MoveTime >= (player.Crouched ? 0.7f : 0.6f);
+            if (before < 0.05f && m_IdleTime >= 0.05f) m_MoveTime = 0.0f;
+            if (plain && ranEnough && before < 0.05f && m_IdleTime >= 0.05f && glm::length(m_Move) > (player.Crouched ? 0.6f : 1.2f)) {
                 ac.SetFloat("StopX", m_LastDir.x);
                 ac.SetFloat("StopY", m_LastDir.y);
                 ac.SetTrigger(m_LastSprint && m_LastDir.y > 0.7f ? "StopRun" : "Stop");
