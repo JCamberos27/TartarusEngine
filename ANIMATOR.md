@@ -9,7 +9,7 @@ The Animator Controller is the engine's animation state machine, modelled on Uni
 
 In each layer:
 
-- **States** play a clip or a 1D blend tree.
+- **States** play a clip or a blend tree (1D along one parameter, or 2D over two).
 - **Transitions** crossfade from one state to another when their conditions hold.
 
 An object runs a controller through its **Animator Controller** component. In Play, the
@@ -114,6 +114,16 @@ A blend-tree state blends clips along one Float parameter:
 - At a given value, the two neighbouring children are mixed linearly. Below the lowest threshold or above the highest, the end clip plays alone.
 - Children play phase-synced, so a walk and a run keep their feet in step.
 - The properties panel previews the child weights at the parameter's current value.
+
+### 2D blend trees
+
+A 2D blend tree blends clips over two Float parameters, e.g. a directional walk / jog on `MoveX` (right) and `MoveY` (forward):
+
+- Pick **Blend Tree 2D** as the motion type, then **Parameter X** and **Parameter Y**.
+- Each child sits at a point **(X, Y)**. Put each locomotion clip at its own velocity: walk forward at (0, 1.53), jog left at (-2.30, 0), idle at (0, 0). The state panel's root-motion readout measures these for you.
+- The weights are *freeform cartesian* (gradient-band interpolation, as Unity's Freeform Cartesian): a child has all the weight on its own point and fades toward each of its neighbours. Past the outermost children the nearest edge plays, so asking a jog to strafe faster than its clip just plays the strafe.
+- Root motion mixes the children's travel by the same weights, so the body moves the way the blended pose does.
+- File format: the motion gets `"blendParamY"`, and each child a `"thresholdY"` next to its `"threshold"` (X).
 
 ### Layers and bone masks
 
@@ -240,7 +250,7 @@ if (anim.EventFired("Refill")) ammo = magazine;
 
 ## 5. Not supported yet
 
-- 2D blend trees, sub-state machines and animation curves.
+- Sub-state machines, animation curves, and 2D blend types other than freeform cartesian (simple / freeform directional).
 - Per-transition interruption source (Unity's *Current / Next / ordered* settings). This system has only *Interruptible* on/off plus priorities.
 - A preview of motions in the window while in Edit mode.
 - Root motion on higher layers, and extracting a curve (e.g. a speed parameter) from it.

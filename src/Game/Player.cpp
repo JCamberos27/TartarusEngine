@@ -36,11 +36,18 @@ void Player::Update(float dt, World& world, GLFWwindow* window, bool readInput) 
     const bool sprint = readInput && InputMap::GetButton("Sprint");
     float speed = MoveSpeed * (sprint ? SprintMultiplier : 1.0f);
     wish *= speed;
-    Velocity.x = wish.x;
-    Velocity.z = wish.z;
+    WishVelocity = wish;
+    // Root motion (a first-person body) takes over the horizontal move by its weight.
+    const float rm = std::clamp(RootMotionWeight, 0.0f, 1.0f);
+    const glm::vec3 horizontal = wish + (glm::vec3(RootMotionVelocity.x, 0.0f, RootMotionVelocity.z) - wish) * rm;
+    Velocity.x = horizontal.x;
+    Velocity.z = horizontal.z;
 
-    if (readInput && Grounded && InputMap::GetButtonDown("Jump"))
+    Jumped = false;
+    if (readInput && Grounded && InputMap::GetButtonDown("Jump")) {
         Velocity.y = JumpSpeed; // one impulse; the capsule move below integrates the arc
+        Jumped = true;
+    }
 
     Velocity.y += Gravity * dt;
 
