@@ -1276,6 +1276,9 @@ int main(int argc, char** argv) {
                 // gravity gun also on, that becomes the unarmed slot - see gravityGunLive.
                 firstPersonPresentation.Start(world, assets, fp);
                 firstPersonBody.Start(world, player); // a First Person Body in the scene: root-motion movement
+                // The weapon's walk / sprint clip rates follow what the player really moves at (the body's speeds).
+                if (firstPersonBody.IsActive() && firstPersonPresentation.IsActive())
+                    firstPersonPresentation.SetLocomotionSpeeds(player.MoveSpeed, player.MoveSpeed * player.SprintMultiplier);
             } else if ((playCameraEntity = FindActiveSceneCamera(world)) != entt::null) {
                 playUsesPlayer = false;
                 playGravityGun = false;
