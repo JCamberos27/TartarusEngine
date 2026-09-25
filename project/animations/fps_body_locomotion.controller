@@ -35,6 +35,16 @@
       "name": "Jump",
       "type": "trigger",
       "default": 0.0
+    },
+    {
+      "name": "Turning",
+      "type": "bool",
+      "default": 0.0
+    },
+    {
+      "name": "TurnAngle",
+      "type": "float",
+      "default": 0.0
     }
   ],
   "tracks": [
@@ -255,6 +265,73 @@
               "clipGuid": "149625c5c5d35512"
             }
           }
+        },
+        {
+          "name": "Turn",
+          "loop": false,
+          "speed": 1.0,
+          "position": [
+            0.0,
+            140.0
+          ],
+          "motions": {
+            "main": {
+              "blendParam": "TurnAngle",
+              "children": [
+                {
+                  "clip": "assets/animations/mc_core_motion/Turn/AM_Stand_Idle_Turn_R180.fbx",
+                  "clipGuid": "4685634606e07d4e",
+                  "threshold": -180.0,
+                  "speed": 1.0
+                },
+                {
+                  "clip": "assets/animations/mc_core_motion/Turn/AM_Stand_Idle_Turn_R135.fbx",
+                  "clipGuid": "aa3fbc64fad3f8b5",
+                  "threshold": -135.0,
+                  "speed": 1.0
+                },
+                {
+                  "clip": "assets/animations/mc_core_motion/Turn/AM_Stand_Idle_Turn_R090.fbx",
+                  "clipGuid": "9cb7124f15924003",
+                  "threshold": -90.0,
+                  "speed": 1.0
+                },
+                {
+                  "clip": "assets/animations/mc_core_motion/Turn/AM_Stand_Idle_Turn_R045.fbx",
+                  "clipGuid": "931eadf7c2b109a6",
+                  "threshold": -45.0,
+                  "speed": 1.0
+                },
+                {
+                  "clip": "assets/animations/mc_core_motion/Turn/AM_Stand_Idle_Turn_L045.fbx",
+                  "clipGuid": "17e8a43d4fd11432",
+                  "threshold": 45.0,
+                  "speed": 1.0
+                },
+                {
+                  "clip": "assets/animations/mc_core_motion/Turn/AM_Stand_Idle_Turn_L090.fbx",
+                  "clipGuid": "df03b6fd87d5fc7e",
+                  "threshold": 90.0,
+                  "speed": 1.0
+                },
+                {
+                  "clip": "assets/animations/mc_core_motion/Turn/AM_Stand_Idle_Turn_L135.fbx",
+                  "clipGuid": "8a41eb401d24b425",
+                  "threshold": 135.0,
+                  "speed": 1.0
+                },
+                {
+                  "clip": "assets/animations/mc_core_motion/Turn/AM_Stand_Idle_Turn_L180.fbx",
+                  "clipGuid": "c24904de04270a8f",
+                  "threshold": 180.0,
+                  "speed": 1.0
+                }
+              ]
+            }
+          },
+          "tags": [
+            "Turn"
+          ]
         }
       ],
       "transitions": [
@@ -343,6 +420,34 @@
           "conditions": [],
           "hasExitTime": true,
           "exitTime": 0.3
+        },
+        {
+          "from": "Locomotion",
+          "to": "Turn",
+          "duration": 0.15,
+          "conditions": [
+            {
+              "mode": "if",
+              "param": "Turning",
+              "threshold": 0.0
+            }
+          ],
+          "hasExitTime": false,
+          "exitTime": 1.0
+        },
+        {
+          "from": "Turn",
+          "to": "Locomotion",
+          "duration": 0.25,
+          "conditions": [
+            {
+              "mode": "ifNot",
+              "param": "Turning",
+              "threshold": 0.0
+            }
+          ],
+          "hasExitTime": false,
+          "exitTime": 1.0
         }
       ]
     }
