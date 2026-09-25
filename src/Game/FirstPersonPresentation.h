@@ -97,6 +97,9 @@ public:
     // The arms rig node the play camera is pinned to (empty = the rig's root sits on the camera).
     const std::string& CameraBone() const { return m_CameraBone; }
     bool IsEquipped() const { return m_Equipped; }
+    // The speeds (m/s) the walk and sprint clips play at: the controller's Move Speed / Sprint Multiplier, or - with a
+    // First Person Body - the body's Run / Sprint Speed (what the player really moves at). Call after Start.
+    void SetLocomotionSpeeds(float walk, float sprint) { m_WalkSpeed = walk; m_SprintSpeed = sprint; }
     // Where the barrel points (world space): down the bore from the muzzle to the first surface.
     // False while the gun isn't simply held at the hip (ADS, sprinting, reloading, holstered).
     bool BarrelAimPoint(glm::vec3& out) const;
