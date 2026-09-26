@@ -120,7 +120,8 @@ void AssetImporterInspector::DrawTextureSettings(TextureImportSettings& settings
     ImGui::PopItemWidth();
 }
 
-void AssetImporterInspector::DrawModelSettings(ModelImportSettings& settings, bool& isDirty) {
+void AssetImporterInspector::DrawModelSettings(ModelImportSettings& settings, bool& isDirty,
+                                               const std::vector<std::pair<std::string, float>>* clips) {
     ImGui::PushItemWidth(-1.0f);
 
     Row("Import Scale", "Multiplies whatever unit-scale correction Assimp already derives\nfrom the file's own metadata (FBX/glTF commonly embed one; plain .obj\nusually doesn't). 1.0 = no extra correction.");
@@ -140,6 +141,43 @@ void AssetImporterInspector::DrawModelSettings(ModelImportSettings& settings, bo
 
     Row("Import Skeleton", "Reads bone weights so the mesh can be posed/animated. Off\nimports every mesh as static geometry, baked at its bind pose -\ncheaper, but Import Animation has nothing to play without this.");
     isDirty |= EditorUIPrimitives::Checkbox("##ImportSkeleton", &settings.ImportSkeleton);
+
+    // Clip trims: cut a clip to a range of its take.
+    Row("Clip Trims", "Cut a clip to a range (seconds) of the source take: only that range plays, and it is the\nclip's length everywhere (loops, blend trees, root motion, the Animator's analysis).\nEnd 0 = to the end of the take. Apply to reimport.");
+    {
+        int remove = -1;
+        for (int i = 0; i < (int)settings.ClipTrims.size(); ++i) {
+            auto& t = settings.ClipTrims[i];
+            ImGui::PushID(i);
+            char len[32] = "";
+            if (clips)
+                for (const auto& c : *clips)
+                    if (c.first == t.Clip) std::snprintf(len, sizeof len, " (%.2f s)", c.second);
+            ImGui::TextUnformatted((t.Clip + len).c_str());
+            ImGui::SetNextItemWidth(ImGui::GetContentRegionAvail().x * 0.4f);
+            isDirty |= ImGui::DragFloat("##ts", &t.StartSeconds, 0.01f, 0.0f, 10000.0f, "start %.2f s");
+            ImGui::SameLine();
+            ImGui::SetNextItemWidth(ImGui::GetContentRegionAvail().x - ImGui::GetFrameHeight() - ImGui::GetStyle().ItemSpacing.x);
+            isDirty |= ImGui::DragFloat("##te", &t.EndSeconds, 0.01f, 0.0f, 10000.0f, "end %.2f s");
+            ImGui::SameLine();
+            if (ImGui::Button(ICON_FA_XMARK)) remove = i;
+            ImGui::PopID();
+        }
+        if (remove >= 0) { settings.ClipTrims.erase(settings.ClipTrims.begin() + remove); isDirty = true; }
+        if (ImGui::BeginCombo("##addtrim", "+ Trim a clip...")) {
+            if (clips)
+                for (const auto& c : *clips) {
+                    bool have = false;
+                    for (const auto& t : settings.ClipTrims) have |= t.Clip == c.first;
+                    if (!have && ImGui::Selectable(c.first.c_str())) {
+                        settings.ClipTrims.push_back({c.first, 0.0f, c.second});
+                        isDirty = true;
+                    }
+                }
+            else ImGui::TextDisabled("Select the model in the Asset Browser to list its clips.");
+            ImGui::EndCombo();
+        }
+    }
 
     ImGui::Spacing();
     ImGui::SeparatorText("Materials");

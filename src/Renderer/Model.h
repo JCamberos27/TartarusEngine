@@ -47,6 +47,15 @@ struct ModelImportSettings {
     bool ImportSkeleton = true;  // false imports every mesh as static (no bone weights)
     bool OptimizeGraph = true;   // aiProcess_JoinIdenticalVertices + OptimizeMeshes
     MaterialMode MaterialImportMode = MaterialMode::ImportEmbedded;
+    // Clips cut to a range of the source (seconds): the take is longer than the motion you want, or holds
+    // two motions. Only the range plays, and it is the clip's length everywhere (looping, blend trees,
+    // root motion, the Animator's analysis). End <= 0 = to the end of the clip.
+    struct ClipTrim {
+        std::string Clip;
+        float StartSeconds = 0.0f;
+        float EndSeconds = 0.0f;
+    };
+    std::vector<ClipTrim> ClipTrims;
 };
 
 // An imported 3D asset (FBX/glTF/OBJ via Assimp): one or more meshes, optional skeleton,

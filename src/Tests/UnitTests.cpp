@@ -1451,6 +1451,26 @@ void TestFirstPersonBodyBoneMap() {
     CHECK(!hasBoneWarning(FPBody::Validate(in)));                // mapped: every foot IK bone is found
 }
 
+// A clip trim: only the range plays, and it is the clip's length; time 0 is the range's start.
+void TestClipTrim() {
+    AnimationClip clip;
+    clip.DurationTicks = 100.0f;
+    clip.TicksPerSecond = 50.0f;                       // a 2 s take
+    CHECK(std::abs(clip.LengthSeconds() - 2.0f) < 1e-5f);
+    CHECK(std::abs(WrappedClipTicks(clip, 0.5f, AnimationWrapMode::Loop) - 25.0f) < 1e-4f);
+    clip.StartTicks = 25.0f;                           // 0.5 s .. the end
+    CHECK(std::abs(clip.LengthSeconds() - 1.5f) < 1e-5f);
+    CHECK(std::abs(WrappedClipTicks(clip, 0.0f, AnimationWrapMode::Loop) - 25.0f) < 1e-4f);
+    CHECK(std::abs(WrappedClipTicks(clip, 1.0f, AnimationWrapMode::Loop) - 75.0f) < 1e-4f);
+    CHECK(std::abs(WrappedClipTicks(clip, 1.6f, AnimationWrapMode::Loop) - 30.0f) < 1e-4f);    // wraps inside the range
+    CHECK(std::abs(WrappedClipTicks(clip, 9.0f, AnimationWrapMode::ClampForever) - 100.0f) < 1e-4f);
+    clip.EndTicks = 75.0f;                             // 0.5 s .. 1.5 s
+    CHECK(std::abs(clip.LengthSeconds() - 1.0f) < 1e-5f);
+    CHECK(std::abs(WrappedClipTicks(clip, 9.0f, AnimationWrapMode::ClampForever) - 75.0f) < 1e-4f);
+    clip.EndTicks = 500.0f;                            // past the take: clamped to it
+    CHECK(std::abs(clip.LengthSeconds() - 1.5f) < 1e-5f);
+}
+
 // A weapon setup is checked against the driver's contract: a full controller is clean, each missing
 // piece (event, tag, parameter, bone) is named.
 void TestFirstPersonWeaponValidate() {
@@ -3278,6 +3298,7 @@ int RunUnitTests() {
         {"FirstPersonBodyValidate", TestFirstPersonBodyValidate},
         {"FirstPersonBodyTuning", TestFirstPersonBodyTuning},
         {"FirstPersonWeaponValidate", TestFirstPersonWeaponValidate},
+        {"ClipTrim", TestClipTrim},
         {"FirstPersonBodyBoneMap", TestFirstPersonBodyBoneMap},
         {"ClipContactDebounce", TestClipContactDebounce},
         {"FirstPersonBodyController", TestFirstPersonBodyController},
