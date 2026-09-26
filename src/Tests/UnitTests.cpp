@@ -23,6 +23,7 @@
 #include "Curve.h"
 #include "IK.h"
 #include "FirstPersonWeaponWizard.h"
+#include "ClipAnalysis.h"
 #include "FirstPersonAnimation.h"
 #include "FirstPersonAdsCarry.h"
 #include "AudioEngine.h"
@@ -1408,6 +1409,22 @@ void TestFirstPersonBodyController() {
     // Role matching: "Loco_Walk_Fwd" is that file, not the Fwd_Left one.
     CHECK(FPBody::PickLocomotionClip("Loco_Walk_Fwd", {"a/AM_Loco_Walk_Fwd_Left.fbx", "a/AM_Loco_Walk_Fwd.fbx"}) == "a/AM_Loco_Walk_Fwd.fbx");
     CHECK(FPBody::PickLocomotionClip("Loco_Walk_Fwd", {"a/AM_Loco_Walk_Fwd_Left.fbx"}).empty());
+}
+
+// A foot near the contact threshold chatters: the debounce fills short gaps and drops short blips (cyclic).
+void TestClipContactDebounce() {
+    auto run = [](const char* bits, int minRun) {
+        std::vector<char> v;
+        for (const char* c = bits; *c; ++c) v.push_back(*c == '1');
+        ClipAnalysis::Debounce(v, minRun);
+        std::string out;
+        for (char b : v) out += b ? '1' : '0';
+        return out;
+    };
+    CHECK(run("0011010111000000", 2) == "0011111111000000");   // the 0 gaps inside the contact are filled
+    CHECK(run("0000100000111000", 2) == "0000000000111000");   // a one-sample blip is dropped
+    CHECK(run("1110000000000111", 2) == "1110000000000111");   // a run wrapping the ends stays one run
+    CHECK(run("1111", 2) == "1111" && run("0000", 2) == "0000");
 }
 
 // A weapon setup is checked against the driver's contract: a full controller is clean, each missing
@@ -3237,6 +3254,7 @@ int RunUnitTests() {
         {"FirstPersonBodyValidate", TestFirstPersonBodyValidate},
         {"FirstPersonBodyTuning", TestFirstPersonBodyTuning},
         {"FirstPersonWeaponValidate", TestFirstPersonWeaponValidate},
+        {"ClipContactDebounce", TestClipContactDebounce},
         {"FirstPersonBodyController", TestFirstPersonBodyController},
         {"FirstPersonWeaponWizard", TestFirstPersonWeaponWizard},
         {"AnimatorLint", TestAnimatorLint},
