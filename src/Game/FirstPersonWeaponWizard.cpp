@@ -51,6 +51,8 @@ std::vector<std::string> Words(const std::string& path) {
         }
     }
     if (!cur.empty()) out.push_back(Lower(cur));
+    // A trailing take / variant number ("Stand_Idle_01") is not part of the name.
+    while (out.size() > 1 && std::all_of(out.back().begin(), out.back().end(), [](unsigned char c) { return std::isdigit(c); })) out.pop_back();
     return out;
 }
 

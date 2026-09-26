@@ -2379,11 +2379,19 @@ void EditorLayer::HandleAssetGridBackground(World& world, AssetLibrary& assets) 
         auto dirCombo = [&](const char* id, std::string& dir) {
             bool changed = false;
             ImGui::SetNextItemWidth(-FLT_MIN);
+            ImGui::SetNextWindowSizeConstraints(ImVec2(ImGui::GetFontSize() * 20.0f, 0.0f), ImVec2(FLT_MAX, ImGui::GetFontSize() * 24.0f));
             if (ImGui::BeginCombo(id, dir.empty() ? "(pick a folder)" : dir.c_str())) {
+                static char filter[64] = "";
+                if (ImGui::IsWindowAppearing()) { filter[0] = 0; ImGui::SetKeyboardFocusHere(); }
+                ImGui::SetNextItemWidth(-FLT_MIN);
+                ImGui::InputTextWithHint("##f", ICON_FA_MAGNIFYING_GLASS " search", filter, sizeof filter);
                 std::set<std::string> dirs;
                 for (const std::string& f : ProjectModelFiles()) dirs.insert(parentOf(f));
-                for (const std::string& d : dirs)
-                    if (ImGui::Selectable((d.empty() ? std::string("(project root)") : d).c_str(), d == dir)) { dir = d; changed = true; }
+                for (const std::string& d : dirs) {
+                    if (!ClipFilterMatch(filter, d)) continue;
+                    const std::string label = (d.empty() ? std::string("(project root)") : d) + "##dir" + d;
+                    if (ImGui::Selectable(label.c_str(), d == dir)) { dir = d; changed = true; ImGui::CloseCurrentPopup(); }
+                }
                 ImGui::EndCombo();
             }
             return changed;
@@ -2402,6 +2410,7 @@ void EditorLayer::HandleAssetGridBackground(World& world, AssetLibrary& assets) 
         if (m_OpenWeaponWizard) {
             m_OpenWeaponWizard = false;
             w = Wizard{};
+            autoAssign();
             ImGui::OpenPopup("New First-Person Weapon");
         }
         ImGui::SetNextWindowSize(ImVec2(620.0f * m_UIScale, 640.0f * m_UIScale), ImGuiCond_Appearing);
