@@ -7,6 +7,31 @@
 
 namespace ClipAnalysis {
 
+// A cyclic on/off signal with its flicker taken out: gaps of `minRun` samples or fewer between two "on" runs are
+// filled, then "on" runs shorter than `minRun` dropped (a foot near the height threshold chatters).
+void Debounce(std::vector<char>& v, int minRun) {
+    const int n = (int)v.size();
+    if (n == 0 || minRun < 1) return;
+    auto flipRuns = [&](char value) {
+        // Find a start that is not inside a `value` run, so every run is seen whole.
+        int start = -1;
+        for (int i = 0; i < n; ++i)
+            if (v[i] != value) { start = i; break; }
+        if (start < 0) return; // all `value`
+        for (int k = 0; k < n;) {
+            const int i = (start + k) % n;
+            if (v[i] != value) { ++k; continue; }
+            int len = 0;
+            while (k + len < n && v[(start + k + len) % n] == value) ++len;
+            // A gap (value == off) is filled only between two "on" neighbours, which a cyclic run always has.
+            if (len <= minRun) for (int j = 0; j < len; ++j) v[(start + k + j) % n] = !value;
+            k += len;
+        }
+    };
+    flipRuns(0); // fill short gaps
+    flipRuns(1); // drop short contacts
+}
+
 namespace {
 
 glm::vec3 Pos(const glm::mat4& m) { return glm::vec3(m[3]); }
@@ -68,8 +93,10 @@ Result Analyze(const Model& model, int clip, int rootNode, const RootMotionSetti
         }
         const float limit = lo + 0.2f * (hi - lo);
         std::vector<char> down(n);
+        for (int i = 0; i < n; ++i) down[i] = hi - lo > 0.02f && p[i].y <= limit;
+        Debounce(down, n / 16);
         int planted = 0;
-        for (int i = 0; i < n; ++i) { down[i] = hi - lo > 0.02f && p[i].y <= limit; planted += down[i]; }
+        for (int i = 0; i < n; ++i) planted += down[i];
         foot.ContactFraction = (float)planted / n;
         for (int i = 0; i < n; ++i)
             if (down[i] && !down[(i + n - 1) % n]) foot.ContactStarts.push_back((float)i / n);
