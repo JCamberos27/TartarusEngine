@@ -100,6 +100,8 @@ std::string ClipLabel(const std::string& ref) {
     return label.empty() ? ref : label;
 }
 
+char g_stateSearch[64] = "";
+
 const char* kParamTypeLabels = "Float\0Int\0Bool\0Trigger\0";
 const char* kOpLabels = "Greater\0Less\0Equals\0Not Equal\0Is True\0Is False\0";
 
@@ -190,6 +192,7 @@ struct EditorLayer::AnimatorWindowState {
     ImVec2 Pan{0.0f, 0.0f};
     float Zoom = 1.0f;
     bool FramePending = true;
+    std::string CenterOn; // a state to pan to on the next draw (from the search box)
 
     bool Linking = false;
     NodeRef LinkFrom;
@@ -467,6 +470,15 @@ void EditorLayer::DrawAnimatorWindow(World& world) {
             if (ActionButton(ICON_FA_EXPAND, "Frame all nodes (F)")) W.FramePending = true;
             ImGui::SameLine();
             ImGui::TextDisabled("%.0f%%", W.Zoom * 100.0f);
+            ImGui::SameLine();
+            ImGui::SetNextItemWidth(130.0f * S);
+            ImGui::InputTextWithHint("##statesearch", ICON_FA_MAGNIFYING_GLASS " find state", g_stateSearch, sizeof g_stateSearch);
+            if (ImGui::IsItemHovered()) EditorUI::SetTooltip("Highlights states whose name contains this text. Enter selects the first and pans to it.");
+            if (ImGui::IsItemDeactivated() && ImGui::IsKeyPressed(ImGuiKey_Enter) && g_stateSearch[0]) {
+                const AC::Layer& sl = W.L();
+                for (int i = 0; i < (int)sl.States.size(); ++i)
+                    if (ClipFilterMatch(g_stateSearch, sl.States[i].Name)) { W.ClearSelection(); W.SelStates = {i}; W.CenterOn = sl.States[i].Name; break; }
+            }
 
             // The rig the clip pickers test against and whose playback is shown live.
             ImGui::SameLine();
@@ -957,6 +969,17 @@ void EditorLayer::DrawAnimatorWindow(World& world) {
         W.Pan = csz * 0.5f - ImVec2(mid.x, mid.y) * W.Zoom;
     }
 
+    if (!W.CenterOn.empty()) {
+        const int ci = Ly.FindState(W.CenterOn);
+        W.CenterOn.clear();
+        if (ci >= 0 && csz.x > 10.0f) {
+            const NodeRef cn{NodeKind::State, ci};
+            const glm::vec2 p = nodeWorldPos(cn);
+            const ImVec2 sz = nodeSize(cn);
+            W.Pan = csz * 0.5f - ImVec2(p.x + sz.x * 0.5f, p.y + sz.y * 0.5f) * W.Zoom;
+        }
+    }
+
     // Grid
     dl->PushClipRect(c0, c1, true);
     dl->AddRectFilled(c0, c1, IM_COL32(32, 32, 34, 255));
@@ -1144,6 +1167,8 @@ void EditorLayer::DrawAnimatorWindow(World& world) {
         const ImU32 border = selected ? ImGui::GetColorU32(EditorUIPrimitives::ActiveAccentColor())
                            : (n == hoveredNode ? IM_COL32(220, 220, 220, 200) : IM_COL32(20, 20, 20, 200));
         dl->AddRect(a, b, border, round, 0, selected ? 2.5f : 1.0f);
+        if (n.Kind == NodeKind::State && g_stateSearch[0] && ClipFilterMatch(g_stateSearch, label))
+            dl->AddRect(a - ImVec2(3, 3), b + ImVec2(3, 3), IM_COL32(255, 210, 60, 255), round + 2.0f, 0, 2.0f);
         if (n.Kind == NodeKind::State && n.Index == liveCurrent) {
             const float h = 4.0f * W.Zoom;
             dl->AddRectFilled(ImVec2(a.x + round, b.y - h - 3.0f * W.Zoom),
@@ -1255,6 +1280,51 @@ void EditorLayer::DrawAnimatorWindow(World& world) {
                 if (to) n.To = *to;
                 Ly.Transitions.push_back(std::move(n));
             }
+        }
+        W.ClearSelection();
+        W.SelStates = fresh;
+        changed = true;
+    };
+    // Copy / paste: the selected states with the transitions between them, kept across controllers (the
+    // clipboard outlives the window's controller). Parameters they use are not copied - Lint names any
+    // the target lacks.
+    struct Clipboard { std::vector<AC::State> States; std::vector<AC::Transition> Transitions; };
+    static Clipboard s_clip;
+    auto copyStates = [&]() {
+        s_clip = {};
+        for (int i : W.SelStates)
+            if (i >= 0 && i < (int)Ly.States.size()) s_clip.States.push_back(Ly.States[i]);
+        for (const auto& t : Ly.Transitions) {
+            if (t.FromKind != AC::Source::State) continue;
+            bool from = false, to = false;
+            for (const auto& c : s_clip.States) { from |= c.Name == t.From; to |= c.Name == t.To; }
+            if (from && to) s_clip.Transitions.push_back(t);
+        }
+    };
+    auto pasteStates = [&]() {
+        if (s_clip.States.empty()) return;
+        std::vector<std::string> names;
+        for (const auto& s : Ly.States) names.push_back(s.Name);
+        std::vector<std::pair<std::string, std::string>> renamed;
+        std::vector<int> fresh;
+        for (AC::State copy : s_clip.States) {
+            const std::string original = copy.Name;
+            copy.Name = UniqueName(copy.Name, names);
+            names.push_back(copy.Name);
+            renamed.push_back({original, copy.Name});
+            copy.Position += glm::vec2(30.0f, 30.0f);
+            copy.Motions.resize(D.Tracks.size()); // the target may have a different number of tracks
+            Ly.States.push_back(std::move(copy));
+            fresh.push_back((int)Ly.States.size() - 1);
+        }
+        auto renamedTo = [&](const std::string& n) {
+            for (const auto& r : renamed) if (r.first == n) return r.second;
+            return n;
+        };
+        for (AC::Transition t : s_clip.Transitions) {
+            t.From = renamedTo(t.From);
+            t.To = renamedTo(t.To);
+            Ly.Transitions.push_back(std::move(t));
         }
         W.ClearSelection();
         W.SelStates = fresh;
@@ -1379,6 +1449,7 @@ void EditorLayer::DrawAnimatorWindow(World& world) {
                 }
                 if (ImGui::MenuItem(ICON_FA_COPY "  Duplicate", "Ctrl+D")) duplicateStates(false);
                 if (ImGui::MenuItem(ICON_FA_COPY "  Duplicate with transitions", "Ctrl+Shift+D")) duplicateStates(true);
+                if (ImGui::MenuItem(ICON_FA_COPY "  Copy", "Ctrl+C")) copyStates();
                 if (ImGui::MenuItem(ICON_FA_TRASH "  Delete", "Del")) deleteStates(W.SelStates);
             }
         } else if (W.ContextTransition >= 0) {
@@ -1390,6 +1461,7 @@ void EditorLayer::DrawAnimatorWindow(World& world) {
         } else {
             if (ImGui::MenuItem(ICON_FA_SQUARE_PLUS "  Create State")) createState(W.ContextWorld, false);
             if (ImGui::MenuItem(ICON_FA_SLIDERS "  Create Blend Tree State")) createState(W.ContextWorld, true);
+            if (ImGui::MenuItem(ICON_FA_PASTE "  Paste", "Ctrl+V", false, !s_clip.States.empty())) pasteStates();
             ImGui::Separator();
             if (ImGui::MenuItem(ICON_FA_EXPAND "  Frame All", "F")) W.FramePending = true;
         }
@@ -1408,6 +1480,8 @@ void EditorLayer::DrawAnimatorWindow(World& world) {
             }
         }
         if (io.KeyCtrl && ImGui::IsKeyPressed(ImGuiKey_D) && !W.SelStates.empty()) duplicateStates(io.KeyShift);
+        if (io.KeyCtrl && ImGui::IsKeyPressed(ImGuiKey_C) && !W.SelStates.empty()) copyStates();
+        if (io.KeyCtrl && ImGui::IsKeyPressed(ImGuiKey_V)) pasteStates();
         if (io.KeyCtrl && ImGui::IsKeyPressed(ImGuiKey_Z)) { if (io.KeyShift) W.Step(W.Redo, W.Undo); else W.Step(W.Undo, W.Redo); }
         if (io.KeyCtrl && ImGui::IsKeyPressed(ImGuiKey_Y)) W.Step(W.Redo, W.Undo);
         if (!io.KeyCtrl && ImGui::IsKeyPressed(ImGuiKey_F)) W.FramePending = true;
