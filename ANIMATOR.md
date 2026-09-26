@@ -58,7 +58,7 @@ The first-person weapon uses this system. See `FPS_ANIMATION_SYSTEM.md` for that
 - **Colours**
   - Orange: the layer's default state. Green: Entry. Teal: Any State. Red: Exit.
   - In Play: blue for the playing state, with a progress bar. States still fading out are tinted, and the transition that is crossfading turns blue.
-- **Saving**: every edit is saved to the file immediately and pushed onto the window's undo stack. A running Play picks up the change within half a second.
+- **Saving**: every edit is saved to the file immediately and pushed onto the editor's undo stack (History panel, **Ctrl+Z / Ctrl+Y**, the same one as scene edits; it also works in Play, where scene edits can't be undone). A running Play picks up the change within half a second.
 
 ---
 
