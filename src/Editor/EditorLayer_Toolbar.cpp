@@ -664,6 +664,10 @@ void EditorLayer::DrawWindowMenuBody() {
             ImGui::MenuItem(ICON_FA_SITEMAP "  Scene Hierarchy", nullptr, &m_ShowHierarchy);
             ImGui::MenuItem(ICON_FA_SLIDERS "  Inspector", nullptr, &m_ShowInspector);
             ImGui::MenuItem(ICON_FA_FOLDER_TREE "  Asset Browser", nullptr, &m_ShowAssetBrowser);
+            if (ImGui::MenuItem(ICON_FA_BOX_ARCHIVE "  Asset Library", nullptr, &EditorSettings::Get().ShowAssetLibrary))
+                EditorSettings::Save();
+            if (ImGui::IsItemHovered())
+                EditorUI::SetTooltip("Browse an asset collection outside the project and import packs from it.");
             ImGui::MenuItem(ICON_FA_DIAGRAM_PROJECT "  Animator", nullptr, &m_ShowAnimator);
             if (ImGui::IsItemHovered())
                 EditorUI::SetTooltip("The Animator Controller graph editor: states, transitions, layers and parameters.");

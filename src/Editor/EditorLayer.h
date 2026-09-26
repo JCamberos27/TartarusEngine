@@ -1028,6 +1028,7 @@ private:
     // that were split between Preferences ▸ Environment and Preferences ▸ Performance. The three
     // section helpers are shared, so Preferences renders the same widgets.
     void DrawLightingPanel(World& world);
+    void DrawAssetLibraryPanel(World& world, AssetLibrary& assets); // EditorLayer_AssetLibraryPanel.cpp
     void DrawEnvironmentSettings(World& world, float itemWidth);
     void DrawPostProcessSettings(World& world, float itemWidth);
     void DrawShadowSettings(World& world, float itemWidth);
