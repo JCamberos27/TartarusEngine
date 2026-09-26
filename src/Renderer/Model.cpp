@@ -24,6 +24,10 @@
 #include <cctype>
 #include <fstream>
 #include <set>
+#include <cstring>
+#include <map>
+#include <mutex>
+#include <chrono>
 
 namespace {
 // A hidden node's scale: its subtree folds into its pivot (tiny, not zero, so nothing divides by it).
@@ -424,9 +428,18 @@ std::vector<std::pair<std::string, std::string>> Model::SourceDependencies(const
         const fs::path f = fs::absolute(file, ec).lexically_normal();
         if (ec || f == model || !fs::is_regular_file(f, ec)) return;
         if (!seen.insert(f.generic_string()).second) return;
-        const fs::path rel = f.lexically_relative(dir);
-        const bool inside = !rel.empty() && !rel.is_absolute() && *rel.begin() != fs::path("..");
-        out.emplace_back(f.string(), (inside ? rel : f.filename()).generic_string());
+        auto under = [&](const fs::path& base, fs::path& rel) {
+            rel = f.lexically_relative(base);
+            return !base.empty() && !rel.empty() && !rel.is_absolute() && *rel.begin() != fs::path("..");
+        };
+        // Beside/below the model: keep the layout. Found through the folder above (a pack's
+        // Models/ + Textures/ siblings): keep the layout relative to that folder, so the copy
+        // lands in a subfolder of the model's new folder, where the resolver finds it again and
+        // two same-named maps from different subfolders can't overwrite each other. Anything
+        // else goes beside the model by name.
+        fs::path rel;
+        if (!under(dir, rel) && !under(dir.parent_path(), rel)) rel = f.filename();
+        out.emplace_back(f.string(), rel.generic_string());
     };
     auto uriDecode = [](const std::string& u) {
         std::string r;
@@ -485,6 +498,14 @@ std::vector<std::pair<std::string, std::string>> Model::SourceDependencies(const
                     if (!resolved.empty()) add(fs::path(resolved));
                 }
             }
+            // The maps an import fills from the material's texture set (see ExtractMaterial).
+            if (ext != ".gltf" && ext != ".glb") {
+                const std::vector<std::string> setNames{mat->GetName().C_Str(), model.stem().string()};
+                for (int k = 0; k <= (int)TextureSetMap::Emissive; ++k) {
+                    const std::string found = FindTextureSetMap(dir.string(), setNames, (TextureSetMap)k);
+                    if (!found.empty()) add(fs::path(found));
+                }
+            }
         }
     }
     return out;
@@ -492,6 +513,184 @@ std::vector<std::pair<std::string, std::string>> Model::SourceDependencies(const
 
 std::string Model::ResolveTexturePath(const std::string& raw) const {
     return ResolveTexturePathIn(m_D->Directory, raw);
+}
+
+namespace {
+// "Foo_Normal.PNG" -> "foo_normal.png".
+std::string LowerTextureName(const std::filesystem::path& name) {
+    std::string s = name.string();
+    for (char& c : s) c = (char)std::tolower((unsigned char)c);
+    return s;
+}
+
+// The stem with case, separators and punctuation dropped: "AKS74U_Albedo-Transparency.png" ->
+// "aks74ualbedotransparency". Two names with the same key are the same texture under a
+// different spelling or format.
+std::string LooseTextureKey(const std::filesystem::path& name) {
+    std::string out;
+    for (char c : name.stem().string())
+        if (std::isalnum((unsigned char)c)) out += (char)std::tolower((unsigned char)c);
+    return out;
+}
+
+bool IsTextureFileExt(std::string ext) {
+    for (char& c : ext) c = (char)std::tolower((unsigned char)c);
+    return ext == ".png" || ext == ".jpg" || ext == ".jpeg" || ext == ".tga" || ext == ".bmp" ||
+           ext == ".psd" || ext == ".gif" || ext == ".hdr" || ext == ".pic" || ext == ".pnm";
+}
+
+// Every image file up to three folders below `root`, shallowest first. Scene loads resolve many
+// textures for many models in the same few folders, so listings are cached briefly: long enough
+// to cover one load or one import batch, short enough that files copied in a moment ago show up.
+// The walk is capped so a model sitting near a huge folder can't stall an import.
+std::shared_ptr<const std::vector<std::filesystem::path>> ImageFilesUnder(const std::filesystem::path& root) {
+    namespace fs = std::filesystem;
+    using Clock = std::chrono::steady_clock;
+    struct Listing { Clock::time_point Built; std::shared_ptr<const std::vector<fs::path>> Files; };
+    static std::mutex s_Mutex;
+    static std::map<std::string, Listing> s_Cache;
+    constexpr auto kLifetime = std::chrono::seconds(3);
+    constexpr int kMaxDepth = 3;
+    constexpr size_t kMaxVisited = 20000;
+
+    const std::string key = root.lexically_normal().generic_string();
+    const Clock::time_point now = Clock::now();
+    std::lock_guard<std::mutex> lock(s_Mutex);
+    auto it = s_Cache.find(key);
+    if (it != s_Cache.end() && now - it->second.Built < kLifetime) return it->second.Files;
+
+    std::vector<std::pair<int, fs::path>> found;
+    std::error_code ec;
+    if (fs::is_directory(root, ec)) {
+        size_t visited = 0;
+        fs::recursive_directory_iterator walk(root, fs::directory_options::skip_permission_denied, ec), end;
+        for (; !ec && walk != end && visited < kMaxVisited; walk.increment(ec), ++visited) {
+            std::error_code fec;
+            if (walk->is_directory(fec)) {
+                if (walk.depth() >= kMaxDepth - 1) walk.disable_recursion_pending();
+                continue;
+            }
+            if (walk->is_regular_file(fec) && IsTextureFileExt(walk->path().extension().string()))
+                found.emplace_back(walk.depth(), walk->path());
+        }
+    }
+    std::stable_sort(found.begin(), found.end(), [](const auto& a, const auto& b) { return a.first < b.first; });
+    auto files = std::make_shared<std::vector<fs::path>>();
+    files->reserve(found.size());
+    for (auto& f : found) files->push_back(std::move(f.second));
+    if (s_Cache.size() > 256) s_Cache.clear();
+    s_Cache[key] = Listing{now, files};
+    return files;
+}
+
+// Where a model's textures are looked for: its own folder tree, then the folder above - but only
+// when the model sits in a models-only folder of its asset (<Asset>/Models/x.fbx beside
+// <Asset>/Textures/) or its own tree has no images at all. A model placed directly in its asset
+// folder (<Category>/<Asset>/x.fbx) must not reach into the whole category and pick up a
+// neighbouring asset's texture.
+std::vector<std::filesystem::path> TextureSearchRoots(const std::filesystem::path& modelDir) {
+    namespace fs = std::filesystem;
+    std::vector<fs::path> roots{modelDir};
+    const fs::path parent = modelDir.parent_path();
+    if (parent.empty() || parent == modelDir || parent == parent.root_path()) return roots;
+    std::string name = modelDir.filename().string();
+    for (char& c : name) c = (char)std::tolower((unsigned char)c);
+    static const char* kModelFolders[] = {"models", "model", "meshes", "mesh", "fbx", "obj",
+                                          "geometry", "geo", "export", "exports"};
+    const bool modelsFolder = std::any_of(std::begin(kModelFolders), std::end(kModelFolders),
+                                          [&](const char* f) { return name == f; });
+    if (modelsFolder || ImageFilesUnder(modelDir)->empty()) roots.push_back(parent);
+    return roots;
+}
+
+// LooseTextureKey for a name that isn't a file name (a material's).
+std::string LooseName(const std::string& name) {
+    std::string out;
+    for (char c : name)
+        if (std::isalnum((unsigned char)c)) out += (char)std::tolower((unsigned char)c);
+    return out;
+}
+} // namespace
+
+namespace {
+// "M_Garage_Props_Mat" -> "garageprops": the material's texture-set name, compared loosely.
+std::string TextureSetKey(std::string name) {
+    auto lower = [](std::string v) { for (char& c : v) c = (char)std::tolower((unsigned char)c); return v; };
+    const std::string l = lower(name);
+    for (const char* pre : {"mi_", "m_", "mat_"})
+        if (l.rfind(pre, 0) == 0 && l.size() > std::strlen(pre)) { name = name.substr(std::strlen(pre)); break; }
+    const std::string l2 = lower(name);
+    for (const char* suf : {"_material", "_mat", "_mtl"}) {
+        const size_t n = std::strlen(suf);
+        if (l2.size() > n && l2.compare(l2.size() - n, n, suf) == 0) { name = name.substr(0, name.size() - n); break; }
+    }
+    return LooseName(name);
+}
+} // namespace
+
+std::string Model::FindTextureSetMap(const std::string& modelDirStr, const std::vector<std::string>& setNames,
+                                     TextureSetMap kind) {
+    namespace fs = std::filesystem;
+    // Map-type suffixes, loose, longest first so "albedotransparency" wins over "albedo".
+    static const std::vector<std::vector<std::string>> kSuffixes = {
+        {"albedotransparency", "basecolour", "basecolor", "albedo", "diffuse", "colour", "color", "diff"},
+        {"normalopengl", "normalgl", "normal", "norgl", "norm", "nrm", "nor"},
+        {"metallic", "metalness", "metal"},
+        {"roughness", "rough"},
+        {"ambientocclusion", "occlusion", "ao"},
+        {"emissive", "emission"},
+    };
+    const std::vector<std::string>& suffixes = kSuffixes[(size_t)kind];
+
+    // Each name as written ("Mat_Sofa_Vintage_03" is that set's real name), then without its
+    // material prefix / suffix ("Door_Mat" -> "door").
+    std::vector<std::string> keys;
+    auto addKey = [&](const std::string& k) {
+        if (!k.empty() && std::find(keys.begin(), keys.end(), k) == keys.end()) keys.push_back(k);
+    };
+    for (const std::string& n : setNames) {
+        addKey(LooseName(n));
+        addKey(TextureSetKey(n));
+    }
+    if (keys.empty()) return {};
+
+    const std::vector<fs::path> roots = TextureSearchRoots(fs::path(modelDirStr));
+
+    // Every map of this kind nearby, as {set name, file}, shallowest first.
+    std::vector<std::pair<std::string, fs::path>> maps;
+    for (const fs::path& root : roots) {
+        const auto files = ImageFilesUnder(root);
+        for (const fs::path& f : *files) {
+            std::string stem = f.stem().string();
+            if (stem.size() > 2 && (stem[0] == 'T' || stem[0] == 't') && stem[1] == '_') stem = stem.substr(2);
+            const std::string loose = LooseName(stem);
+            for (const std::string& suf : suffixes) {
+                if (loose.size() <= suf.size() || loose.compare(loose.size() - suf.size(), suf.size(), suf) != 0) continue;
+                maps.emplace_back(loose.substr(0, loose.size() - suf.size()), f);
+                break; // this file's map type is `suf`
+            }
+        }
+    }
+
+    // 1. A set named exactly like the material (or model).
+    for (const std::string& key : keys)
+        for (const auto& [set, f] : maps)
+            if (set == key) return f.string();
+    // 2. A set whose name extends it with a variant ("Bed_blanket" -> "Bed_Blanket_Clean"), but
+    //    only when exactly one set does - two candidates is a guess, and a wrong texture is
+    //    worse than none.
+    for (const std::string& key : keys) {
+        const fs::path* only = nullptr;
+        std::string onlySet;
+        bool ambiguous = false;
+        for (const auto& [set, f] : maps) {
+            if (set.size() <= key.size() || set.compare(0, key.size(), key) != 0) continue;
+            if (!only) { only = &f; onlySet = set; }
+            else if (set != onlySet) { ambiguous = true; break; }
+        }
+        if (only && !ambiguous) return only->string();
+    }
+    return {};
 }
 
 std::string Model::ResolveTexturePathIn(const std::string& modelDirStr, const std::string& raw) {
@@ -531,15 +730,23 @@ std::string Model::ResolveTexturePathIn(const std::string& modelDirStr, const st
         const fs::path byName = modelDir / filename;
         if (fs::exists(byName, ec)) return byName.string();
 
-        // 4. The filename one level down, through the model directory's immediate subfolders
-        //    ("textures/", "maps/", ...). Non-recursive and cheap; resolves most "textures are
-        //    in a sibling subfolder the baked path didn't name" cases.
-        if (fs::is_directory(modelDir, ec)) {
-            for (fs::directory_iterator it(modelDir, ec), end; it != end && !ec; it.increment(ec)) {
-                if (!it->is_directory(ec)) continue;
-                const fs::path candidate = it->path() / filename;
-                if (fs::exists(candidate, ec)) return candidate.string();
-            }
+        // 4. Search the asset's own folder tree: everything under the model's folder, then under
+        //    the folder above it (see TextureSearchRoots). Asset packs almost always ship as
+        //    <Asset>/Models/x.fbx next to <Asset>/Textures/.../x_Normal.png, and the path the
+        //    FBX baked in points at the author's machine, so neither step 2 nor 3 finds it.
+        //    Within each tree the exact filename wins (case-insensitive), then a loose match
+        //    that ignores case, separators and the extension ("aks74u_AlbedoTransparency.tga"
+        //    finds "AKS74U_Albedo_Transparency.png"). Shallower files win ties.
+        const std::vector<fs::path> roots = TextureSearchRoots(modelDir);
+        const std::string wantName = LowerTextureName(filename);
+        const std::string wantLoose = LooseTextureKey(filename);
+        for (const fs::path& root : roots) {
+            const auto files = ImageFilesUnder(root);
+            for (const fs::path& f : *files)
+                if (LowerTextureName(f.filename()) == wantName) return f.string();
+            if (wantLoose.empty()) continue;
+            for (const fs::path& f : *files)
+                if (LooseTextureKey(f.filename()) == wantLoose) return f.string();
         }
     }
 
@@ -593,6 +800,11 @@ Material Model::ExtractMaterial(const aiScene* scene, unsigned int materialIndex
     aiString str_unused;
     mat.Name = material->GetName().C_Str();
 
+    // Textures the file names that aren't on disk: {what it names, the path it resolved to}.
+    // Reported after the texture-set fallback below, and only if that couldn't fill the slot.
+    std::vector<std::pair<std::string, std::string>> missing;
+    const std::shared_ptr<Texture>* slotTarget = nullptr;
+    std::vector<const std::shared_ptr<Texture>*> missingSlot;
     auto loadSlot = [&](aiTextureType type, TextureRole role) -> std::shared_ptr<Texture> {
         if (material->GetTextureCount(type) == 0) return nullptr;
         aiString str;
@@ -609,27 +821,86 @@ Material Model::ExtractMaterial(const aiScene* scene, unsigned int materialIndex
                       " which the file doesn't contain - that map slot will be blank.", LogContext::Asset(m_Path));
             return nullptr;
         }
+        std::error_code ec;
+        if (!std::filesystem::exists(resolved, ec)) {
+            missing.emplace_back(str.C_Str(), resolved);
+            missingSlot.push_back(slotTarget);
+            return nullptr;
+        }
         return LoadCachedTexture(resolved, role);
     };
 
+    slotTarget = &mat.AlbedoMap;
     mat.AlbedoMap = loadSlot(aiTextureType_DIFFUSE, TextureRole::Color);
     if (!mat.AlbedoMap) mat.AlbedoMap = loadSlot(aiTextureType_BASE_COLOR, TextureRole::Color); // glTF2 alt slot
+    slotTarget = &mat.NormalMap;
     mat.NormalMap = loadSlot(aiTextureType_NORMALS, TextureRole::Normal);
     // assimp puts glTF2's packed metal-rough map in UNKNOWN (and, in newer versions, also in
     // GLTF_METALLIC_ROUGHNESS). FBX uses UNKNOWN for arbitrary unmapped slots, which must not be
     // read as metal-rough (#113) — only trust it for glTF materials.
     const bool isGltf = material->Get(AI_MATKEY_GLTF_ALPHAMODE, str_unused) == AI_SUCCESS ||
                         IsGltfPath(m_Path);
+    slotTarget = &mat.MetallicRoughnessMap;
     if (isGltf) mat.MetallicRoughnessMap = loadSlot(aiTextureType_UNKNOWN, TextureRole::Data);
     // Standalone maps — NOT the packed slot above, which is a different (G=rough, B=metal)
     // texture layout that a plain grayscale roughness/metalness map would be misread against.
+    slotTarget = &mat.RoughnessMap;
     mat.RoughnessMap = loadSlot(aiTextureType_DIFFUSE_ROUGHNESS, TextureRole::Data);
+    slotTarget = &mat.MetallicMap;
     mat.MetallicMap = loadSlot(aiTextureType_METALNESS, TextureRole::Data);
     // #113 — the real AO slot first; glTF occlusion arrives as LIGHTMAP in assimp, so that stays
     // a fallback (a true FBX lightmap is baked lighting, not occlusion, but is rarely shipped).
+    slotTarget = &mat.AOMap;
     mat.AOMap = loadSlot(aiTextureType_AMBIENT_OCCLUSION, TextureRole::Data);
     if (!mat.AOMap) mat.AOMap = loadSlot(aiTextureType_LIGHTMAP, TextureRole::Data);
+    slotTarget = &mat.EmissiveMap;
     mat.EmissiveMap = loadSlot(aiTextureType_EMISSIVE, TextureRole::Color);
+    slotTarget = nullptr;
+
+    // Slots still empty are filled from the texture set named after the material (or, failing
+    // that, the model): a pack whose textures were renamed to <Set>_<MapType> after export
+    // otherwise imports untextured. Also fills maps the file never named but the pack ships
+    // (roughness / metallic / AO beside an FBX that only knew its diffuse). Not for glTF, whose
+    // materials are explicit and whose packed metal-rough map these would conflict with.
+    int fromSet = 0;
+    if (!isGltf) {
+        const std::vector<std::string> setNames{mat.Name, std::filesystem::path(m_Path).stem().string()};
+        auto fill = [&](std::shared_ptr<Texture>& slot, TextureSetMap kind, TextureRole role) {
+            if (slot) return;
+            const std::string found = FindTextureSetMap(m_D->Directory, setNames, kind);
+            if (found.empty()) return;
+            slot = LoadCachedTexture(found, role);
+            if (slot) ++fromSet;
+        };
+        fill(mat.AlbedoMap, TextureSetMap::Albedo, TextureRole::Color);
+        fill(mat.NormalMap, TextureSetMap::Normal, TextureRole::Normal);
+        fill(mat.MetallicMap, TextureSetMap::Metallic, TextureRole::Data);
+        fill(mat.RoughnessMap, TextureSetMap::Roughness, TextureRole::Data);
+        fill(mat.AOMap, TextureSetMap::Occlusion, TextureRole::Data);
+        fill(mat.EmissiveMap, TextureSetMap::Emissive, TextureRole::Color);
+    }
+
+    // A texture that isn't on disk is an asset-pack problem, not a load failure: say so once
+    // per texture, as a warning, instead of an error from every model and every reload that
+    // references it (one animation pack's FBX files used to log the same two lines ~20 times
+    // per launch). Nothing to say when the texture-set fallback filled the slot anyway.
+    {
+        static std::mutex s_ReportedMutex;
+        static std::set<std::string> s_Reported;
+        std::lock_guard<std::mutex> lock(s_ReportedMutex);
+        for (size_t i = 0; i < missing.size(); ++i) {
+            if (missingSlot[i] && *missingSlot[i]) continue;
+            if (!s_Reported.insert(missing[i].second).second) continue;
+            Log::Warn("Model: '" + m_Path + "' uses texture '" + missing[i].first + "', which isn't in the "
+                      "model's folder, the folder above it, or their subfolders - that map slot will be "
+                      "blank. Put the texture beside the model or assign a material.", LogContext::Asset(m_Path));
+        }
+        // Once per folder and material: an animation pack's clips all share one material.
+        if (fromSet > 0 && s_Reported.insert(m_D->Directory + "|" + mat.Name + "|set").second)
+            Log::Info("Model: material '" + mat.Name + "' in '" + std::filesystem::path(m_Path).filename().string() +
+                      "' - " + std::to_string(fromSet) + " texture map(s) matched by name from its texture set.",
+                      LogContext::Asset(m_Path));
+    }
 
     aiColor4D color;
     if (material->Get(AI_MATKEY_COLOR_DIFFUSE, color) == AI_SUCCESS) {

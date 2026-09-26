@@ -94,6 +94,20 @@ public:
     // under the model's directory, else just its filename (where the import also looks).
     static std::vector<std::pair<std::string, std::string>> SourceDependencies(const std::string& modelPath);
 
+    // The texture-path resolver behind every import (see Model.cpp for the full order). Public
+    // so the unit tests can drive it against a scratch folder layout.
+    static std::string ResolveTexturePathIn(const std::string& modelDir, const std::string& raw);
+
+    // Asset packs are often re-exported with their textures renamed to <Set>_<MapType>
+    // ("Garage_Props_Base_Color.png") while the model still names the originals. This finds the
+    // map of `kind` whose <Set> is one of `setNames` (tried in order; a material name, then the
+    // model's name), searching where ResolveTexturePathIn searches. Names compare loosely: case,
+    // separators, a "M_" / "_Mat" on the material and a "T_" on the texture don't matter.
+    // Returns "" when there is no such map.
+    enum class TextureSetMap { Albedo, Normal, Metallic, Roughness, Occlusion, Emissive };
+    static std::string FindTextureSetMap(const std::string& modelDir, const std::vector<std::string>& setNames,
+                                         TextureSetMap kind);
+
     // Backward-compat: no material slots → uses every submesh's imported Material.
     void Draw(Shader& shader) { Draw(shader, {}); }
 
@@ -386,7 +400,6 @@ private:
     // ("*0") reference is returned unchanged for the caller to handle. See Model.cpp for the
     // full resolution order.
     std::string ResolveTexturePath(const std::string& raw) const;
-    static std::string ResolveTexturePathIn(const std::string& modelDir, const std::string& raw);
     void ExtractBoneWeights(std::vector<ModelVertex>& vertices, aiMesh* mesh);
     void ReadHierarchy(const aiNode* node, int parent);
     void ReadAnimations(const aiScene* scene);

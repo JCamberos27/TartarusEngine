@@ -49,6 +49,8 @@
 #include "ProjectPaths.h"
 #include "ProjectWatcher.h"
 #include "TextureCache.h"
+#include "Model.h"       // texture-path resolver
+#include "AssetImport.h" // folder import
 #include "SceneSerializer.h" // #121
 #include "AnimationSystem.h"           // #123 - the spin systems, driven frame by frame below
 #include "HotReloadGameModule.h"      // Spin / Transform Controller run inside TartarusGame.dll, not the exe
@@ -3285,12 +3287,98 @@ void TestIKSolver() {
 
 } // namespace
 
+// --- Importing an asset pack laid out <Asset>/Models/x.fbx + <Asset>/Textures/.../x_*.png -----
+void TestAssetPackImport() {
+    namespace fs = std::filesystem;
+    const fs::path base = TempDir() / "asset_pack_import";
+    std::error_code ec;
+    fs::remove_all(base, ec);
+    const fs::path pack = base / "Library" / "Gun";
+    auto touch = [](const fs::path& p) {
+        std::error_code e;
+        fs::create_directories(p.parent_path(), e);
+        std::ofstream(p, std::ios::binary) << "x";
+    };
+    touch(pack / "Models" / "Gun.fbx");
+    touch(pack / "Textures" / "Gun_Textures" / "Gun_Albedo_Transparency.png");
+    touch(pack / "Textures" / "Gun_Normal.png");
+    touch(pack / "Textures" / "Detail.png");
+    touch(pack / "Models" / "Detail.png"); // closer to the model: must win over Textures/Detail.png
+    touch(pack / "Source" / "Gun.blend");
+    const std::string models = (pack / "Models").string();
+    auto same = [](const std::string& a, const fs::path& b) {
+        std::error_code e;
+        return fs::equivalent(a, b, e);
+    };
+
+    // The FBX points at the author's machine; the file sits in the sibling Textures/ tree.
+    CHECK(same(Model::ResolveTexturePathIn(models, "C:\\Users\\author\\Gun_Normal.png"), pack / "Textures" / "Gun_Normal.png"));
+    // Case differs and it's two folders down.
+    CHECK(same(Model::ResolveTexturePathIn(models, "gun_albedo_transparency.png"), pack / "Textures" / "Gun_Textures" / "Gun_Albedo_Transparency.png"));
+    // Spelling and format differ: separators dropped, .tga shipped as .png.
+    CHECK(same(Model::ResolveTexturePathIn(models, "D:/tex/gun_AlbedoTransparency.tga"), pack / "Textures" / "Gun_Textures" / "Gun_Albedo_Transparency.png"));
+    CHECK(same(Model::ResolveTexturePathIn(models, "Detail.png"), pack / "Models" / "Detail.png"));
+    // Not anywhere: a clean path that doesn't exist, never a wrong file.
+    CHECK(!fs::exists(Model::ResolveTexturePathIn(models, "Missing_Roughness.png"), ec));
+
+    // Textures renamed to <Set>_<MapType> after export: found through the material's name.
+    using Map = Model::TextureSetMap;
+    const fs::path garage = base / "Library" / "Garage";
+    touch(garage / "Models" / "Crate.fbx");
+    touch(garage / "Textures" / "Garage_Props" / "Garage_Props_Base_Color.png");
+    touch(garage / "Textures" / "Garage_Props" / "Garage_Props_Normal.png");
+    touch(garage / "Textures" / "Garage_Props_Dark" / "Garage_Props_Dark_Base_Color.png");
+    touch(garage / "Textures" / "Bed_Blanket_Clean" / "Bed_Blanket_Clean_Base_Color.png");
+    touch(garage / "Textures" / "Bed_Frame_A_Base_Color.png");
+    touch(garage / "Textures" / "Bed_Frame_B_Base_Color.png");
+    touch(garage / "Textures" / "Mat_Sofa_Base_Color.png");
+    touch(garage / "Textures" / "T_Crate_AO.png");
+    const std::string gm = (garage / "Models").string();
+    CHECK(same(Model::FindTextureSetMap(gm, {"Garage_props", "Crate"}, Map::Albedo),
+               garage / "Textures" / "Garage_Props" / "Garage_Props_Base_Color.png")); // exact set beats "_Dark"
+    CHECK(same(Model::FindTextureSetMap(gm, {"M_Garage_Props_Mat"}, Map::Normal),
+               garage / "Textures" / "Garage_Props" / "Garage_Props_Normal.png"));
+    CHECK(Model::FindTextureSetMap(gm, {"Garage_props"}, Map::Roughness).empty());
+    CHECK(same(Model::FindTextureSetMap(gm, {"Bed_blanket"}, Map::Albedo),
+               garage / "Textures" / "Bed_Blanket_Clean" / "Bed_Blanket_Clean_Base_Color.png")); // one variant
+    CHECK(Model::FindTextureSetMap(gm, {"Bed_Frame"}, Map::Albedo).empty());                   // two: no guess
+    CHECK(same(Model::FindTextureSetMap(gm, {"mat_sofa"}, Map::Albedo), garage / "Textures" / "Mat_Sofa_Base_Color.png"));
+    CHECK(same(Model::FindTextureSetMap(gm, {"1364", "Crate"}, Map::Occlusion), garage / "Textures" / "T_Crate_AO.png"));
+
+    // Classification.
+    CHECK(AssetImport::ImportKind("a/b.FBX") == "model");
+    CHECK(AssetImport::ImportKind("a/b.Png") == "texture");
+    CHECK(AssetImport::ImportKind("a/manifest.json").empty());
+    CHECK(AssetImport::IsSourceOnlyFile("a/Gun.blend"));
+    CHECK(AssetImport::IsSourceOnlyFile("a/Thumbs.db"));
+    CHECK(!AssetImport::IsSourceOnlyFile("a/Gun.fbx"));
+
+    // A dropped folder is copied whole, layout kept, source files left behind.
+    const fs::path assets = base / "project" / "assets";
+    const AssetImport::FolderCopy first = AssetImport::CopyFolderInto(pack.string(), assets.string());
+    CHECK(first.Error.empty());
+    CHECK(same(first.Folder, assets / "Gun"));
+    CHECK(first.Files.size() == 5);
+    CHECK(first.Skipped == 1);
+    CHECK(fs::exists(assets / "Gun" / "Textures" / "Gun_Textures" / "Gun_Albedo_Transparency.png", ec));
+    CHECK(!fs::exists(assets / "Gun" / "Source" / "Gun.blend", ec));
+    // ...and the copied model still finds its textures.
+    CHECK(same(Model::ResolveTexturePathIn((assets / "Gun" / "Models").string(), "C:/elsewhere/Gun_Normal.png"),
+               assets / "Gun" / "Textures" / "Gun_Normal.png"));
+    // A second drop of the same folder never overwrites the first.
+    const AssetImport::FolderCopy second = AssetImport::CopyFolderInto(pack.string(), assets.string());
+    CHECK(same(second.Folder, assets / "Gun (2)"));
+
+    fs::remove_all(base, ec);
+}
+
 int RunUnitTests() {
     const std::vector<std::pair<const char*, std::function<void()>>> tests = {
         {"AssetGuid", TestAssetGuid},
         {"UndoDeltaChain", TestUndoDeltaChain},
         {"AtomicFile", TestAtomicFile},
         {"TextureCacheHash", TestTextureCacheHash},
+        {"AssetPackImport", TestAssetPackImport},
         {"MaterialRobustness", TestMaterialRobustness},
         {"ComponentRegistry", TestComponentRegistry},
         {"AnimatorController", TestAnimatorController},
