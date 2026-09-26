@@ -2,6 +2,7 @@
 #include <glm/glm.hpp>
 
 #include <functional>
+#include <map>
 #include <memory>
 #include <string>
 #include <vector>
@@ -10,6 +11,8 @@ class World;
 class AssetLibrary;
 class Model;
 struct AnimatorParam;
+struct LocalTRS;
+struct RootMotionSettings;
 struct AnimatorControllerComponent;
 
 // #175 Part B / Animator v2 - Unity's Animator Controller: layered state machines of clips.
@@ -167,6 +170,22 @@ std::vector<float> AnimatorBlendWeights(const std::vector<AnimatorController::Bl
 std::vector<float> AnimatorBlendWeights2D(const std::vector<AnimatorController::BlendChild>& children, float x, float y);
 // The weights of `m`'s children for the current parameter values (1D or 2D).
 std::vector<float> AnimatorMotionWeights(const AnimatorController::Motion& m, const std::vector<AnimatorParam>& params);
+
+// The pose of one motion (a clip, or a blend tree at `weights`, one per child) at `phase` (0..1 of the
+// state, `stateLen` seconds long). Blend-tree children are phase-synced, each at its own clip length; a
+// single clip plays in real time. `stripRoot` && rootNode >= 0 samples in place. False (out untouched)
+// when nothing resolves. `scratch` is working space; `longestClip` (optional) gets the longest clip
+// that contributed. The one place a motion is turned into a pose: Play and the Animator's previews both use it.
+bool AnimatorSampleMotion(Model& model, AssetLibrary& assets, const AnimatorController::Motion& m,
+                          const std::vector<float>& weights, bool loop, bool stripRoot, int rootNode,
+                          const RootMotionSettings& rm, float phase, float stateLen, std::vector<LocalTRS>& out,
+                          std::vector<LocalTRS>& scratch, float* longestClip = nullptr);
+// A state's pose on `track` at `phase`, blend trees at `params` (a parameter's default when missing): the
+// editor's way in to AnimatorSampleMotion, for previews outside Play.
+bool AnimatorSampleState(Model& model, AssetLibrary& assets, const AnimatorController& controller,
+                         const AnimatorController::State& st, int track, float phase,
+                         const std::map<std::string, float>& params, int rootNode, const RootMotionSettings& rm,
+                         std::vector<LocalTRS>& pose, float* longestClip = nullptr);
 
 // How much each entry of a crossfade stack shows in the final pose, given each entry's Fade
 // (bottom first): the entries blend in order, each over everything below it, eased by
