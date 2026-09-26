@@ -192,24 +192,6 @@ box('Plaza Trim South', (0, 0.15, 5.15), (16.3, 0.3, 0.3), m=ACCENT, parent=g_pl
 box('Plaza Trim East', (8.15, 0.15, 0), (0.3, 0.3, 10.6), m=ACCENT, parent=g_plaza)
 box('Plaza Trim West', (-8.15, 0.15, 0), (0.3, 0.3, 10.6), m=ACCENT, parent=g_plaza)
 
-YBOT = 'assets/characters/ybot/Y Bot.fbx'
-clips = [('Y Bot - Idle', 'idle.fbx'), ('Y Bot - Walk', 'walking.fbx'), ('Y Bot - Run', 'standard run.fbx'),
-         ('Y Bot - Strafe', 'left strafe walking.fbx'), ('Y Bot - Jump', 'jump.fbx')]
-for k, (name, clip) in enumerate(clips):
-    x = -7 + k * 2.8
-    i = nid()
-    ents['models'].append({'path': YBOT, 'name': name, 'id': i, 'parentId': g_plaza, 'order': i,
-                           'position': [x, 0.2, 0.5], 'rotation': [0, 0, 0], 'scale': [1, 1, 1],
-                           'Animation': {'Clip': 'assets/characters/ybot/' + clip, 'Play Automatically': True,
-                                         'Wrap Mode': 'Loop', 'Speed': 1.0, 'Cross Fade': 0.25}})
-    box(name + ' Plinth', (x, 0.21, 0.5), (1.4, 0.02, 1.4), m=mat((0.85, 0.47, 0.18), 0.5), parent=g_plaza)
-# The sixth runs animations/ybot_showcase.controller: Idle -> Walk -> Run -> Jump -> Idle on exit
-# times, crossfading between them (#175 Animator Controller).
-model('Y Bot - Animator Controller', YBOT, (7, 0.2, 0.5), parent=g_plaza,
-      extra={'Animator Controller': {'Controller': 'animations/ybot_showcase.controller', 'Speed': 1.0}})
-box('Y Bot - Animator Controller Plinth', (7, 0.21, 0.5), (1.4, 0.02, 1.4), m=mat((0.16, 0.58, 0.60), 0.5),
-    parent=g_plaza)
-
 # Lamp posts at the plaza corners: warm, unshadowed fills that read at dusk and don't fight the sun.
 for k, (x, z) in enumerate(((-8.8, -5.8), (8.8, -5.8), (-8.8, 5.8), (8.8, 5.8))):
     box(f'Lamp Post {k + 1}', (x, 1.6, z), (0.16, 3.2, 0.16), m=mat((0.12, 0.12, 0.13), 0.4, 0.9), parent=g_plaza)
@@ -631,9 +613,7 @@ prim('cylinder', 'Turntable', (-19.0, 0.25, 10.4), (3.6, 0.3, 3.6), ACCENT, pare
 # ---------------------------------------------------------------- scene file
 scene = {
     'formatVersion': 3,
-    '_comment': 'Tartarus Sandbox - the default testing scene. Centre: animated Mixamo Y Bots (idle/walk/run/'
-                'strafe/jump + one on an Animator Controller; assets in project/assets/characters/ybot, not in '
-                'git). South: glass-walled basketball arena (an NBA court at 1.5x with 2x hoops and balls, goal '
+    '_comment': 'Tartarus Sandbox - the default testing scene. Centre: the plaza. South: glass-walled basketball arena (an NBA court at 1.5x with 2x hoops and balls, goal '
                 'triggers, scoreboard) - Play spawns you at its door with the AKS-74U; press 2 (or Holster) for '
                 'the gravity gun - right mouse grabs a ball, hold left mouse to charge a shot - and 1 for the AK '
                 'again. Between: fountain (particles). North: material gallery, then the ball '

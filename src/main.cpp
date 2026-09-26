@@ -401,6 +401,9 @@ int main(int argc, char** argv) {
     // nonzero code if any failed — parsed here, before anything else, so it can never be
     // confused with a scene-path or other future argument.
     bool smokeTestMode = false;
+    // --perf-bench [dir]: the smoke-test harness with VSync, the FPS cap and GL debug output off,
+    // a longer per-scene run, and an averaged CPU/GPU profiler breakdown printed per scene.
+    bool perfBenchMode = false;
     // --resave <in.json> <out.json>: load a scene and immediately re-serialize it, then exit.
     // The one headless path that exercises the SAVE side of the serializer — round-trip tests
     // (prefab overrides #302 Part B, the reflected-component migrations, ...) all need it. Still
@@ -426,8 +429,9 @@ int main(int argc, char** argv) {
     std::string buildOutArg;
     for (int i = 1; i < argc; ++i) {
         std::string a = argv[i];
-        if (a == "--smoke-test") {
+        if (a == "--smoke-test" || a == "--perf-bench") {
             smokeTestMode = true;
+            perfBenchMode = a == "--perf-bench";
             if (i + 1 < argc && argv[i + 1][0] != '-') smokeScenesDirArg = argv[++i];
         }
         else if (a == "--resave" && i + 2 < argc) { resaveIn = argv[i + 1]; resaveOut = argv[i + 2]; i += 2; }
@@ -564,7 +568,7 @@ int main(int argc, char** argv) {
         // for it regardless of build config / env (audit #356) — otherwise newGlErrors is
         // structurally always 0 in a Release run and the harness only checks "did it draw".
         // Set before the Window exists: it decides whether to request a debug context (#157).
-        if (smokeTestMode) GLDebug::ForceEnable();
+        if (smokeTestMode && !perfBenchMode) GLDebug::ForceEnable();
         Window window(1280, 720, playerMode ? playerCfg.ProductName : std::string("Tartarus Engine"));
         // #174 - the product's own icon, if the build was given one. The editor keeps the icon
         // compiled into the exe's resources (app_icon.rc), which is also what a player falls
@@ -760,8 +764,7 @@ int main(int argc, char** argv) {
         entt::entity playCameraEntity = entt::null;
         Camera playSceneCam;
         // Default spawn/editor-camera start: south of the Sandbox's Character Plaza, looking north
-        // over the animated Y Bots with the physics playground (east) and movement course (west)
-        // in view either side.
+        // over it with the physics playground (east) and movement course (west) in view either side.
         player.Cam.Position = glm::vec3(0.0f, 3.0f, 13.0f);
         player.Cam.Yaw = -90.0f;  // faces -Z, toward the plaza
         player.Cam.Pitch = -8.0f;
@@ -1340,7 +1343,19 @@ int main(int argc, char** argv) {
         // per-frame path (light gather, shadow passes, drawScene, editor.Draw/EndFrame) as an
         // interactive session — the whole point of the harness is catching a regression that
         // path could introduce, not a hand-rolled approximation of it.
-        constexpr int kSmokeTestFrames = 100;
+        // --perf-bench measures each scene twice: kPerfPhaseFrames in edit mode, then as many in Play.
+        constexpr int kPerfPhaseFrames = 600;
+        constexpr int kPerfBenchWarmup = 100; // frames skipped at the start of each phase
+        const int kSmokeTestFrames = perfBenchMode ? 2 * kPerfPhaseFrames : 100;
+        struct PerfAccum { double Sum = 0.0; double Max = 0.0; int N = 0; };
+        std::vector<std::pair<std::string, PerfAccum>> perfCpu, perfGpu;
+        PerfAccum perfFrame;
+        auto perfLastFrameEnd = std::chrono::steady_clock::now();
+        auto perfAdd = [](std::vector<std::pair<std::string, PerfAccum>>& v, const std::string& name, double ms) {
+            auto it = std::find_if(v.begin(), v.end(), [&](const auto& p) { return p.first == name; });
+            if (it == v.end()) { v.emplace_back(name, PerfAccum{}); it = v.end() - 1; }
+            it->second.Sum += ms; it->second.Max = std::max(it->second.Max, ms); ++it->second.N;
+        };
         struct SmokeResult { std::string scenePath; int frames; int newGlErrors; int newLogErrors;
                              int drawCalls; bool loadOk; bool pass; std::string cause; };
         std::vector<std::string> smokeScenePaths;
@@ -1950,10 +1965,11 @@ int main(int argc, char** argv) {
             }
             Profiler::BeginFrame();
             GLStateCache::ResetFrameStats();
+            Model::BeginRenderFrame(); // next slice of the bone-palette ring
 
             // Frame-pacing preferences are live: changing VSync / FPS Limit in Preferences takes
             // effect on the very next frame. SetVSync only touches the driver on an actual change.
-            if (const int wantVSync = playerMode ? (playerCfg.VSync ? 1 : 0) : EditorSettings::Get().VSyncMode;
+            if (const int wantVSync = perfBenchMode ? 0 : playerMode ? (playerCfg.VSync ? 1 : 0) : EditorSettings::Get().VSyncMode;
                 wantVSync != appliedVSyncMode) {
                 appliedVSyncMode = wantVSync;
                 window.SetVSync(appliedVSyncMode);
@@ -2212,8 +2228,11 @@ int main(int argc, char** argv) {
                 // then the sim, then dynamic bodies' poses written back into theirs.
                 // Everything in this block runs on the time-scaled step (#169: slow-mo used to
                 // reach physics only). The game module's FixedUpdate rides the physics sub-steps.
+                {
+                PROFILE_SCOPE("Physics Step");
                 PhysicsWorld::Step(gameDt, world,
                                    [&](float fixedDt) { gameModule.FixedTick(world, fixedDt); });
+                }
                 if (playUsesPlayer) {
                     // The weapon's view punch / lean comes off before the player integrates
                     // its own look and position, and goes back on in Update below.
@@ -2288,10 +2307,14 @@ int main(int argc, char** argv) {
                 // Procedural spin/orbit/bob/light-hue. Play-only: edit mode keeps the authored
                 // pose, and the play-mode snapshot restores everything this touched on Stop.
                 UpdateAnimators(world, gameDt);
+                {
+                PROFILE_SCOPE("Animators");
                 UpdateSkeletalAnimations(world, assets, gameDt); // #175 — Animation components drive their models' clips
                 UpdateAnimatorControllers(world, assets, gameDt); // #175 Part B — state machines
+                }
                 // The arms are posed now (clips + IK): seat the gun in this frame's hands.
                 if (playUsesPlayer) {
+                    PROFILE_SCOPE("First Person IK");
                     firstPersonBody.LateUpdate(world, player.Cam, gameDt, firstPersonPresentation.ArmsEntity(),
                                                firstPersonPresentation.CameraBone()); // camera into the body's head
                     firstPersonPresentation.LateUpdate(world, player.Cam);
@@ -2521,23 +2544,47 @@ int main(int argc, char** argv) {
                 glGetIntegerv(GL_VIEWPORT, prevViewport);
 
                 shadowMap.Configure(world.ShadowResolution, world.ShadowCascades);
-                // #160 — world bounds of everything that can cast, so the cascades' near planes
-                // reach every occluder (animated models padded like the main pass's culling).
+                // Gather the casters once - registry lookups, world transform, world bounds - and
+                // reuse the list for every cascade (it used to redo all of it per cascade).
+                struct SunCaster {
+                    Model* model;
+                    const std::vector<std::shared_ptr<MaterialAsset>>* materials;
+                    glm::mat4 xform;
+                    AABB bounds;
+                    bool bounded, twoSided;
+                };
+                static std::vector<SunCaster> sunCasters;
+                sunCasters.clear();
+                // #160 — world bounds of everything that casts, so the cascades' near planes
+                // reach every occluder.
                 glm::vec3 casterMin(std::numeric_limits<float>::max()), casterMax(-std::numeric_limits<float>::max());
                 for (auto entity : world.Registry.view<TransformComponent, RenderableComponent>()) {
                     if (world.Registry.any_of<InactiveTag, LodCulledTag, PoseSourceTag>(entity)) continue;
-                    const auto& r = world.Registry.get<RenderableComponent>(entity);
-                    if (!r.ModelRef) continue;
-                    glm::vec3 bmin = r.ModelRef->BoundsMin(), bmax = r.ModelRef->BoundsMax();
-                    if (!(bmin.x <= bmax.x && bmin.y <= bmax.y && bmin.z <= bmax.z)) continue;
-                    if (r.ModelRef->HasAnimations()) {
+                    auto& r = world.Registry.get<RenderableComponent>(entity);
+                    // #163 - Cast Shadows: Off skips; Two Sided draws without back-face culling.
+                    if (!r.ModelRef || r.CastShadows == RenderableComponent::ShadowCasting::Off) continue;
+                    SunCaster& sc = sunCasters.emplace_back();
+                    sc.model = r.ModelRef.get();
+                    sc.materials = &r.Materials;
+                    sc.xform = world.GetCachedWorldTransform(entity);
+                    sc.twoSided = r.CastShadows == RenderableComponent::ShadowCasting::TwoSided;
+                    glm::vec3 bmin = sc.model->BoundsMin(), bmax = sc.model->BoundsMax();
+                    sc.bounded = bmin.x <= bmax.x && bmin.y <= bmax.y && bmin.z <= bmax.z;
+                    if (!sc.bounded) continue;
+                    // Bounds are bind-pose only (#113): pad animated models around the centre so
+                    // a swinging limb stays inside, the same inflation the main pass culls with.
+                    if (sc.model->HasAnimations()) {
                         const glm::vec3 c = (bmin + bmax) * 0.5f, h = (bmax - bmin) * 0.5f * 1.75f;
                         bmin = c - h; bmax = c + h;
                     }
-                    const AABB wb = AABB{bmin, bmax}.Transformed(world.GetCachedWorldTransform(entity));
-                    casterMin = glm::min(casterMin, wb.Min);
-                    casterMax = glm::max(casterMax, wb.Max);
+                    sc.bounds = AABB{bmin, bmax}.Transformed(sc.xform);
+                    casterMin = glm::min(casterMin, sc.bounds.Min);
+                    casterMax = glm::max(casterMax, sc.bounds.Max);
                 }
+                // Consecutive draws of the same model share its VAO and (usually) its material,
+                // which the state cache then skips rebinding.
+                std::sort(sunCasters.begin(), sunCasters.end(),
+                          [](const SunCaster& a, const SunCaster& b) { return a.model < b.model; });
                 shadowMap.Update(fitView, fitProj, frameSunDir, world.ShadowDistance, &casterMin, &casterMax);
 
                 glEnable(GL_DEPTH_TEST);
@@ -2554,38 +2601,64 @@ int main(int argc, char** argv) {
                 glPolygonOffset(1.0f, 2.0f);
 
                 shadowShader.Bind();
-                auto casters = world.Registry.view<TransformComponent, RenderableComponent>();
-                // #194: resolve these two hot uniform locations once, outside the 6-face(ish)
-                // x N-caster loop below, instead of hashing "uLightViewProj"/"uModel" every call.
+                // #194: resolve these two hot uniform locations once, outside the cascade x
+                // caster loop below, instead of hashing "uLightViewProj"/"uModel" every call.
                 int shadowLightViewProjLoc = shadowShader.Loc("uLightViewProj");
                 int shadowModelLoc = shadowShader.Loc("uModel");
-                for (int c = 0; c < shadowMap.Count(); ++c) {
+                const int cascadeCount = shadowMap.Count();
+                if (CascadedShadowMap::LayeredSupported()) {
+                    // One pass for every cascade: each caster is drawn once, instanced over the
+                    // consecutive cascades its bounds touch, and the vertex shader routes each
+                    // instance to its layer (gl_Layer) — a quarter of the draw calls of the
+                    // per-cascade loop below, which remains the fallback.
+                    shadowMap.BeginLayered();
+                    Frustum cascadeFrustums[CascadedShadowMap::kMaxCascades];
+                    glm::mat4 cascadeVP[CascadedShadowMap::kMaxCascades];
+                    for (int c = 0; c < cascadeCount; ++c) {
+                        cascadeVP[c] = shadowMap.LightViewProj(c);
+                        cascadeFrustums[c] = Frustum::FromViewProj(cascadeVP[c]);
+                    }
+                    shadowShader.SetMat4Array("uCascadeViewProj[0]", cascadeCount, cascadeVP);
+                    shadowShader.SetInt("uCascadeLayered", 1);
+                    const int firstLoc = shadowShader.Loc("uCascadeFirst");
+                    int boundFirst = -1;
+                    for (const SunCaster& sc : sunCasters) {
+                        unsigned mask = 0;
+                        for (int c = 0; c < cascadeCount; ++c)
+                            if (!sc.bounded || cascadeFrustums[c].Intersects(sc.bounds)) mask |= 1u << c;
+                        if (!mask) continue;
+                        shadowShader.SetMat4(shadowModelLoc, sc.xform);
+                        if (sc.twoSided) glDisable(GL_CULL_FACE);
+                        // One instanced draw per run of consecutive cascades (almost always one run).
+                        for (int c = 0; c < cascadeCount;) {
+                            if (!(mask & (1u << c))) { ++c; continue; }
+                            int end = c;
+                            while (end + 1 < cascadeCount && (mask & (1u << (end + 1)))) ++end;
+                            if (c != boundFirst) { shadowShader.SetInt(firstLoc, c); boundFirst = c; }
+                            sc.model->DrawDepthOnly(shadowShader, *sc.materials, end - c + 1);
+                            c = end + 1;
+                        }
+                        if (sc.twoSided) glEnable(GL_CULL_FACE);
+                    }
+                    // The SSAO depth pre-pass reuses this program with uLightViewProj.
+                    shadowShader.SetInt("uCascadeLayered", 0);
+                }
+                else for (int c = 0; c < cascadeCount; ++c) {
                     shadowMap.Begin(c);
                     shadowShader.SetMat4(shadowLightViewProjLoc, shadowMap.LightViewProj(c));
                     // Cull each cascade's caster list against that cascade's own ortho frustum —
                     // the near slice covers a few metres yet used to redraw the whole level x4.
-                    Frustum cascadeFrustum = Frustum::FromViewProj(shadowMap.LightViewProj(c));
-                    for (auto entity : casters) {
-                        if (world.Registry.any_of<InactiveTag, LodCulledTag, PoseSourceTag>(entity)) continue;
-                        auto& renderable = world.Registry.get<RenderableComponent>(entity);
-                        // #163 - Cast Shadows: Off skips; Two Sided draws without back-face culling.
-                        if (renderable.CastShadows == RenderableComponent::ShadowCasting::Off) continue;
-                        const bool twoSided = renderable.CastShadows == RenderableComponent::ShadowCasting::TwoSided;
-                        glm::mat4 model = world.GetCachedWorldTransform(entity);
-                        glm::vec3 bmin = renderable.ModelRef->BoundsMin();
-                        glm::vec3 bmax = renderable.ModelRef->BoundsMax();
-                        bool validBounds = bmin.x <= bmax.x && bmin.y <= bmax.y && bmin.z <= bmax.z;
-                        // Bounds are bind-pose only (#113), so an animated limb can swing
-                        // outside them — conservatively keep every skinned caster rather than
-                        // risk its shadow popping at a cascade edge. Static geometry culls.
-                        if (validBounds && !renderable.ModelRef->HasAnimations() &&
-                            !cascadeFrustum.Intersects(AABB{bmin, bmax}.Transformed(model)))
-                            continue;
-                        shadowShader.SetMat4(shadowModelLoc, model);
-                        const bool cullWasOn = twoSided && glIsEnabled(GL_CULL_FACE);
-                        if (cullWasOn) glDisable(GL_CULL_FACE);
-                        renderable.ModelRef->DrawDepthOnly(shadowShader, renderable.Materials);
-                        if (cullWasOn) glEnable(GL_CULL_FACE);
+                    // Animated casters cull on their padded bounds too; they used to be drawn
+                    // into every cascade regardless.
+                    const Frustum cascadeFrustum = Frustum::FromViewProj(shadowMap.LightViewProj(c));
+                    for (const SunCaster& sc : sunCasters) {
+                        if (sc.bounded && !cascadeFrustum.Intersects(sc.bounds)) continue;
+                        shadowShader.SetMat4(shadowModelLoc, sc.xform);
+                        // Cull is on for the whole pass (DrawDepthOnly's per-mesh overrides put
+                        // it back), so Two Sided just turns it off around its own draw.
+                        if (sc.twoSided) glDisable(GL_CULL_FACE);
+                        sc.model->DrawDepthOnly(shadowShader, *sc.materials);
+                        if (sc.twoSided) glEnable(GL_CULL_FACE);
                     }
                 }
 
@@ -3626,7 +3699,7 @@ int main(int argc, char** argv) {
             // Software frame cap. Runs whatever the VSync mode is, but it's really for VSync Off
             // (with VSync On the driver already blocks in SwapBuffers). 0 = uncapped.
             // #143: in the background and not playing, hold to the (lower) Background FPS too.
-            int fpsCap = EditorSettings::Get().FpsLimit;
+            int fpsCap = perfBenchMode ? 0 : EditorSettings::Get().FpsLimit;
             const int bgCap = EditorSettings::Get().UnfocusedFpsLimit;
             if (bgCap > 0 && !playing && !headless && !glfwGetWindowAttrib(window.Handle(), GLFW_FOCUSED))
                 fpsCap = fpsCap > 0 ? std::min(fpsCap, bgCap) : bgCap;
@@ -3655,6 +3728,33 @@ int main(int argc, char** argv) {
             // score it (new GL errors + draw count) and advance to the next scene.
             if (smokeTestMode && smokeSceneActive) {
                 ++smokeFramesRendered;
+                if (perfBenchMode) {
+                    const auto now = std::chrono::steady_clock::now();
+                    const double frameMs = std::chrono::duration<double, std::milli>(now - perfLastFrameEnd).count();
+                    perfLastFrameEnd = now;
+                    const int phaseFrame = (smokeFramesRendered - 1) % kPerfPhaseFrames + 1;
+                    if (phaseFrame > kPerfBenchWarmup) {
+                        perfFrame.Sum += frameMs; perfFrame.Max = std::max(perfFrame.Max, frameMs); ++perfFrame.N;
+                        for (const Profiler::Entry& e : Profiler::GetLastFrame()) perfAdd(perfCpu, e.Name, e.Milliseconds);
+                        for (const Profiler::Entry& e : Profiler::GetLastFrameGpu()) perfAdd(perfGpu, e.Name, e.Milliseconds);
+                    }
+                    if (phaseFrame == kPerfPhaseFrames) {
+                        std::printf("[PerfBench] %s (%s)  frames=%d  avg=%.3f ms (%.1f fps)  worst=%.3f ms  draws=%d\n",
+                                    std::filesystem::path(smokeScenePaths[smokeSceneIndex]).filename().string().c_str(),
+                                    playing ? "play" : "edit", perfFrame.N, perfFrame.N ? perfFrame.Sum / perfFrame.N : 0.0,
+                                    perfFrame.Sum > 0.0 ? 1000.0 * perfFrame.N / perfFrame.Sum : 0.0,
+                                    perfFrame.Max, editor.GetRenderStats().DrawCalls);
+                        for (auto* v : {&perfCpu, &perfGpu}) {
+                            std::sort(v->begin(), v->end(), [](const auto& a, const auto& b) { return a.second.Sum > b.second.Sum; });
+                            for (const auto& [name, acc] : *v)
+                                std::printf("[PerfBench]   %s %-34s avg=%8.3f ms  max=%8.3f ms\n", v == &perfCpu ? "CPU" : "GPU",
+                                            name.c_str(), acc.Sum / std::max(perfFrame.N, 1), acc.Max);
+                        }
+                        std::fflush(stdout);
+                        perfCpu.clear(); perfGpu.clear(); perfFrame = {};
+                        if (!playing && smokeFramesRendered < kSmokeTestFrames) togglePlay();
+                    }
+                }
                 if (smokeFramesRendered >= kSmokeTestFrames) {
                     int newErrors    = GLDebug::ErrorCount() - smokeBaselineGlErrors;
                     int newLogErrors = Log::CountOf(LogLevel::Error) - smokeBaselineLogErrors;

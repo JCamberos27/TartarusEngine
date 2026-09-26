@@ -85,9 +85,10 @@ glm::quat Rotation(const glm::mat4& global) {
     return glm::normalize(glm::quat_cast(basis));
 }
 
-void SetGlobal(Pose& pose, const std::vector<int>& parents, std::vector<glm::mat4>& globals, int i,
-               const glm::vec3& pos, const glm::quat& rot) {
-    if (!ValidNode(pose, i)) return;
+namespace {
+// SetGlobal's pose write, without refreshing any global.
+void SetLocalFromGlobal(Pose& pose, const std::vector<int>& parents, const std::vector<glm::mat4>& globals, int i,
+                        const glm::vec3& pos, const glm::quat& rot) {
     const int p = parents[i];
     if (p >= 0) {
         pose[i].T = glm::vec3(glm::inverse(globals[p]) * glm::vec4(pos, 1.0f));
@@ -96,6 +97,13 @@ void SetGlobal(Pose& pose, const std::vector<int>& parents, std::vector<glm::mat
         pose[i].T = pos;
         pose[i].R = glm::normalize(rot);
     }
+}
+} // namespace
+
+void SetGlobal(Pose& pose, const std::vector<int>& parents, std::vector<glm::mat4>& globals, int i,
+               const glm::vec3& pos, const glm::quat& rot) {
+    if (!ValidNode(pose, i)) return;
+    SetLocalFromGlobal(pose, parents, globals, i, pos, rot);
     RefreshGlobals(pose, parents, globals, i);
 }
 
@@ -105,6 +113,29 @@ void OffsetBone(Pose& pose, const std::vector<int>& parents, std::vector<glm::ma
     const glm::vec3 pos = Position(globals[i]);
     const glm::quat rot = Rotation(globals[i]);
     SetGlobal(pose, parents, globals, i, pivot + deltaRot * (pos - pivot) + deltaPos, glm::normalize(deltaRot * rot));
+}
+
+void OffsetBoneOnly(Pose& pose, const std::vector<int>& parents, std::vector<glm::mat4>& globals, int i,
+                    const glm::vec3& deltaPos, const glm::quat& deltaRot, const glm::vec3& pivot) {
+    if (!ValidNode(pose, i)) return;
+    const glm::vec3 pos = Position(globals[i]);
+    const glm::quat rot = Rotation(globals[i]);
+    SetLocalFromGlobal(pose, parents, globals, i, pivot + deltaRot * (pos - pivot) + deltaPos, glm::normalize(deltaRot * rot));
+    const int p = parents[i];
+    const glm::mat4 local = pose[i].ToMatrix();
+    globals[i] = p >= 0 ? globals[p] * local : local;
+}
+
+void RefreshPath(const Pose& pose, const std::vector<int>& parents, std::vector<glm::mat4>& globals, int from, int node) {
+    if (!ValidNode(pose, node)) return;
+    thread_local std::vector<int> path;
+    path.clear();
+    for (int n = node; n >= 0 && n != from; n = parents[n]) path.push_back(n);
+    for (auto it = path.rbegin(); it != path.rend(); ++it) {
+        const int p = parents[*it];
+        const glm::mat4 local = pose[*it].ToMatrix();
+        globals[*it] = p >= 0 ? globals[p] * local : local;
+    }
 }
 
 bool SolveTwoBone(Pose& pose, const std::vector<int>& parents, std::vector<glm::mat4>& globals,

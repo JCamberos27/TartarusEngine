@@ -1,5 +1,16 @@
 {
- "guid": "a08baba2ccf8fe83",
- "metaVersion": 1,
- "type": "texture"
+  "folder": "textures/apartment",
+  "guid": "a08baba2ccf8fe83",
+  "importer": {
+    "anisoLevel": 8,
+    "compression": 0,
+    "filterMode": 1,
+    "generateMipmaps": true,
+    "isSRGB": false,
+    "maxTextureSize": 2048,
+    "textureType": 0,
+    "wrapMode": 0
+  },
+  "metaVersion": 1,
+  "type": "texture"
 }
