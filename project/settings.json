@@ -7,7 +7,15 @@
     "assets/fps",
     "assets/fps/AKS74U",
     "assets/fps/AKS74U/FirstPerson",
-    "Animation"
+    "Animation",
+    "models",
+    "models/basketball",
+    "assets/fps/AKS74U/Weapon",
+    "textures",
+    "textures/basketball",
+    "assets/fps/AKS74U/Textures",
+    "materials",
+    "materials/sandbox"
   ],
   "audio": {
     "busVolumes": [

@@ -14,6 +14,7 @@
 #include <glm/gtc/quaternion.hpp>
 
 #include <algorithm>
+#include <cstdio>
 #include <chrono>
 #include <cmath>
 #include <filesystem>
@@ -637,6 +638,7 @@ void SyncBaseLayerFields(const AnimatorController& ctrl, AnimatorControllerCompo
 void AdvanceAnimator(const AnimatorController& ctrl, AnimatorControllerComponent& ac, float dt,
                      const std::function<float(int, int)>& stateLength) {
     ac.FiredEvents.clear();
+    ac.Clock += dt;
     if (!ac.Started) {
         ac.Started = true;
         // Declared parameters get their defaults unless game code already set them.
@@ -704,6 +706,28 @@ void AdvanceAnimator(const AnimatorController& ctrl, AnimatorControllerComponent
         if (t < 0) continue;
         const auto& tr = L.Transitions[t];
         const int to = tr.To == AnimatorController::kExitState ? ctrl.PickEntry(li, ac.Params) : L.FindState(tr.To);
+        {
+            AnimatorTransitionLog log;
+            log.Time = ac.Clock;
+            log.Layer = li;
+            log.Transition = t;
+            log.From = L.States[top.State].Name;
+            log.To = to >= 0 ? L.States[to].Name : std::string("?");
+            static const char* kOps[] = {">", "<", "==", "!=", "", "not "};
+            for (const auto& c : tr.Conditions) {
+                char b[96];
+                const float v = ParamValue(ac.Params, c.Param, 0.0f);
+                if (c.Mode == AnimatorController::Op::If || c.Mode == AnimatorController::Op::IfNot)
+                    std::snprintf(b, sizeof b, "%s%s", kOps[(int)c.Mode], c.Param.c_str());
+                else
+                    std::snprintf(b, sizeof b, "%s %s %.2f (is %.2f)", c.Param.c_str(), kOps[(int)c.Mode], c.Threshold, v);
+                log.Why += (log.Why.empty() ? "" : ", ") + std::string(b);
+            }
+            if (tr.HasExitTime) log.Why += (log.Why.empty() ? "" : ", ") + std::string("exit time");
+            if (log.Why.empty()) log.Why = "no conditions";
+            ac.History.push_back(std::move(log));
+            if (ac.History.size() > 24) ac.History.erase(ac.History.begin());
+        }
         EnterState(L, rt, to, tr.Duration, tr.Offset, t, tr.Interruptible, ac.FiredEvents);
     }
     SyncBaseLayerFields(ctrl, ac);

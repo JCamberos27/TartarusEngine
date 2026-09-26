@@ -812,6 +812,23 @@ void EditorLayer::DrawAnimatorWindow(World& world) {
             ImGui::EndTabItem();
         }
         // Lint: the mistakes a controller loads fine with and then quietly doesn't do what it was built to.
+        if (live && ImGui::BeginTabItem("History")) {
+            ImGui::TextDisabled("Every transition this object's controller took, newest first (Play).");
+            if (ActionButton(ICON_FA_TRASH " Clear", "Empty the list")) live->History.clear();
+            if (live->History.empty()) ImGui::TextDisabled("Nothing yet.");
+            for (int i = (int)live->History.size() - 1; i >= 0; --i) {
+                const auto& h = live->History[i];
+                ImGui::PushID(i);
+                const std::string head = std::to_string(live->Clock - h.Time).substr(0, 4) + " s ago   " + h.From + "  " ICON_FA_ARROW_RIGHT "  " + h.To;
+                ImGui::TextUnformatted(head.c_str());
+                const bool ok = h.Layer < (int)D.Layers.size() && h.Transition < (int)D.Layers[h.Layer].Transitions.size();
+                if (ok && ImGui::IsItemHovered()) ImGui::SetMouseCursor(ImGuiMouseCursor_Hand);
+                if (ok && ImGui::IsItemClicked()) { W.Layer = h.Layer; W.ClearSelection(); W.SelTransition = h.Transition; }
+                ImGui::TextDisabled("    because: %s", h.Why.c_str());
+                ImGui::PopID();
+            }
+            ImGui::EndTabItem();
+        }
         {
             const std::vector<AnimatorLint::Issue> issues = AnimatorLint::Check(D);
             int problems = 0;

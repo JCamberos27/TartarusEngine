@@ -1902,6 +1902,9 @@ void TestAnimatorController() {
     CHECK(rc.EventFired("Refill"));
     CHECK(rc.StateName == "Idle" && rc.InTransition);        // back through Entry to the default
     CHECK(rc.Layers[0].Stack.size() == 2);                   // Reload still fading out underneath
+    CHECK(rc.History.size() == 2 && rc.History[0].From == "Idle" && rc.History[0].To == "Reload" && rc.History[0].Transition == 0);
+    CHECK(rc.History[0].Why.find("Ammo < 30.00 (is 3.00)") != std::string::npos);
+    CHECK(rc.History[1].From == "Reload" && rc.History[1].Why == "exit time");
     rc.SetTrigger("Go");
     rc.SetInt("Ammo", 30);                                   // full: Reload's condition fails, Fire wins
     AdvanceAnimator(run, rc, 0.05f, oneSecond);
