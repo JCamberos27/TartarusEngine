@@ -1536,6 +1536,72 @@ float Model::NormalizedTime() const {
 }
 
 namespace {
+// #194: per-material uniform locations for one Draw() call, resolved ONCE before the per-mesh
+// loop (below) instead of re-hashing all these literal names for every mesh of every model.
+struct MaterialLocs {
+    int baseColor, metallic, roughness, emissiveColor, triplanar, triplanarScale;
+    int hasAlbedo, albedoMap;
+    int hasNormal, normalMap;
+    int hasMetallicRoughness, metallicRoughnessMap;
+    int hasMetallic, metallicMap;
+    int hasRoughness, roughnessMap;
+    int hasAO, aoMap;
+    int hasEmissive, emissiveMap;
+    int alphaClip, alphaCutoff; // #101
+    int hasHeight, heightMap, hasDetailAlbedo, detailAlbedoMap, hasDetailNormal, detailNormalMap; // #102
+    // UploadBoneMatrices and DrawDepthOnly (the shadow / depth pre-pass programs).
+    int useSkinning, uvTiling, uvOffset, depthAlbedo, alphaTest;
+};
+
+MaterialLocs ResolveMaterialLocs(Shader& shader) {
+    MaterialLocs L;
+    L.baseColor = shader.Loc("uBaseColor");
+    L.alphaClip = shader.Loc("uAlphaClip");
+    L.alphaCutoff = shader.Loc("uAlphaCutoff");
+    L.metallic = shader.Loc("uMetallic");
+    L.roughness = shader.Loc("uRoughness");
+    L.emissiveColor = shader.Loc("uEmissiveColor");
+    L.triplanar = shader.Loc("uTriplanar");
+    L.triplanarScale = shader.Loc("uTriplanarScale");
+    L.hasAlbedo = shader.Loc("uHasAlbedoMap");
+    L.albedoMap = shader.Loc("uAlbedoMap");
+    L.hasNormal = shader.Loc("uHasNormalMap");
+    L.normalMap = shader.Loc("uNormalMap");
+    L.hasMetallicRoughness = shader.Loc("uHasMetallicRoughnessMap");
+    L.metallicRoughnessMap = shader.Loc("uMetallicRoughnessMap");
+    L.hasMetallic = shader.Loc("uHasMetallicMap");
+    L.metallicMap = shader.Loc("uMetallicMap");
+    L.hasRoughness = shader.Loc("uHasRoughnessMap");
+    L.roughnessMap = shader.Loc("uRoughnessMap");
+    L.hasAO = shader.Loc("uHasAOMap");
+    L.aoMap = shader.Loc("uAOMap");
+    L.hasEmissive = shader.Loc("uHasEmissiveMap");
+    L.emissiveMap = shader.Loc("uEmissiveMap");
+    L.hasHeight = shader.Loc("uHasHeightMap");
+    L.heightMap = shader.Loc("uHeightMap");
+    L.hasDetailAlbedo = shader.Loc("uHasDetailAlbedoMap");
+    L.detailAlbedoMap = shader.Loc("uDetailAlbedoMap");
+    L.hasDetailNormal = shader.Loc("uHasDetailNormalMap");
+    L.detailNormalMap = shader.Loc("uDetailNormalMap");
+    L.useSkinning = shader.Loc("uUseSkinning");
+    L.uvTiling = shader.Loc("uUVTiling");
+    L.uvOffset = shader.Loc("uUVOffset");
+    L.depthAlbedo = shader.Loc("uAlbedo");
+    L.alphaTest = shader.Loc("uAlphaTest");
+    return L;
+}
+
+// ResolveMaterialLocs once per program rather than once per draw.
+const MaterialLocs& CachedMaterialLocs(Shader& shader) {
+    if (const void* block = shader.LocationBlock()) return *static_cast<const MaterialLocs*>(block);
+    auto block = std::make_shared<MaterialLocs>(ResolveMaterialLocs(shader));
+    const MaterialLocs& locs = *block;
+    shader.SetLocationBlock(std::move(block));
+    return locs;
+}
+} // namespace
+
+namespace {
 // Bone palettes (SSBO binding 1, #104) live in one ring buffer split into per-frame slices. Each
 // skinned model uploads its palette once per frame into its own range of the current slice and
 // binds that range; the shadow cascades, depth pre-pass and main pass that follow only rebind
@@ -1580,7 +1646,7 @@ void Model::BeginRenderFrame() {
 void Model::UploadBoneMatrices(Shader& shader) const {
     // #98 — skin whenever there are bones: the clip's pose while playing, else the bind pose.
     const bool skinning = m_D->BoneCounter > 0;
-    shader.SetInt("uUseSkinning", skinning ? 1 : 0);
+    shader.SetInt(CachedMaterialLocs(shader).useSkinning, skinning ? 1 : 0);
 
     EnsureBoneRing();
     const GLsizeiptr matBytes = (GLsizeiptr)sizeof(glm::mat4);
@@ -1613,21 +1679,6 @@ void Model::UploadBoneMatrices(Shader& shader) const {
 }
 
 namespace {
-// #194: per-material uniform locations for one Draw() call, resolved ONCE before the per-mesh
-// loop (below) instead of re-hashing all these literal names for every mesh of every model.
-struct MaterialLocs {
-    int baseColor, metallic, roughness, emissiveColor, triplanar, triplanarScale;
-    int hasAlbedo, albedoMap;
-    int hasNormal, normalMap;
-    int hasMetallicRoughness, metallicRoughnessMap;
-    int hasMetallic, metallicMap;
-    int hasRoughness, roughnessMap;
-    int hasAO, aoMap;
-    int hasEmissive, emissiveMap;
-    int alphaClip, alphaCutoff; // #101
-    int hasHeight, heightMap, hasDetailAlbedo, detailAlbedoMap, hasDetailNormal, detailNormalMap; // #102
-};
-
 // #102 / #113 — the surface-option uniforms, set for BOTH the built-in and the data-driven
 // (Standard.shader) paths so a shader that declares them gets them either way.
 void SetSurfaceOptions(Shader& shader, const Material& mat) {
@@ -1641,48 +1692,6 @@ void SetSurfaceOptions(Shader& shader, const Material& mat) {
     shader.SetInt("uNoGlossyReflections", mat.GlossyReflections ? 0 : 1);
     shader.SetFloat("uParallaxScale", mat.ParallaxScale);
     shader.SetVec2("uDetailTiling", mat.DetailTiling);
-}
-
-MaterialLocs ResolveMaterialLocs(Shader& shader) {
-    MaterialLocs L;
-    L.baseColor = shader.Loc("uBaseColor");
-    L.alphaClip = shader.Loc("uAlphaClip");
-    L.alphaCutoff = shader.Loc("uAlphaCutoff");
-    L.metallic = shader.Loc("uMetallic");
-    L.roughness = shader.Loc("uRoughness");
-    L.emissiveColor = shader.Loc("uEmissiveColor");
-    L.triplanar = shader.Loc("uTriplanar");
-    L.triplanarScale = shader.Loc("uTriplanarScale");
-    L.hasAlbedo = shader.Loc("uHasAlbedoMap");
-    L.albedoMap = shader.Loc("uAlbedoMap");
-    L.hasNormal = shader.Loc("uHasNormalMap");
-    L.normalMap = shader.Loc("uNormalMap");
-    L.hasMetallicRoughness = shader.Loc("uHasMetallicRoughnessMap");
-    L.metallicRoughnessMap = shader.Loc("uMetallicRoughnessMap");
-    L.hasMetallic = shader.Loc("uHasMetallicMap");
-    L.metallicMap = shader.Loc("uMetallicMap");
-    L.hasRoughness = shader.Loc("uHasRoughnessMap");
-    L.roughnessMap = shader.Loc("uRoughnessMap");
-    L.hasAO = shader.Loc("uHasAOMap");
-    L.aoMap = shader.Loc("uAOMap");
-    L.hasEmissive = shader.Loc("uHasEmissiveMap");
-    L.emissiveMap = shader.Loc("uEmissiveMap");
-    L.hasHeight = shader.Loc("uHasHeightMap");
-    L.heightMap = shader.Loc("uHeightMap");
-    L.hasDetailAlbedo = shader.Loc("uHasDetailAlbedoMap");
-    L.detailAlbedoMap = shader.Loc("uDetailAlbedoMap");
-    L.hasDetailNormal = shader.Loc("uHasDetailNormalMap");
-    L.detailNormalMap = shader.Loc("uDetailNormalMap");
-    return L;
-}
-
-// ResolveMaterialLocs once per program rather than once per draw.
-const MaterialLocs& CachedMaterialLocs(Shader& shader) {
-    if (const void* block = shader.LocationBlock()) return *static_cast<const MaterialLocs*>(block);
-    auto block = std::make_shared<MaterialLocs>(ResolveMaterialLocs(shader));
-    const MaterialLocs& locs = *block;
-    shader.SetLocationBlock(std::move(block));
-    return locs;
 }
 
 void BindMaterial(Shader& shader, const Material& mat, const MaterialLocs& locs) {
@@ -1965,11 +1974,9 @@ void Model::DrawSelected(Shader& fallback, const glm::mat4& xform,
     }
 }
 
-void Model::DrawDepthOnly(Shader& shader, const std::vector<std::shared_ptr<MaterialAsset>>& slots) {
+void Model::DrawDepthOnly(Shader& shader, const std::vector<std::shared_ptr<MaterialAsset>>& slots, int instances) {
     UploadBoneMatrices(shader);
-    int albedoLoc = shader.Loc("uAlbedo");
-    int alphaTestLoc = shader.Loc("uAlphaTest");
-    int alphaCutoffLoc = shader.Loc("uAlphaCutoff");
+    const MaterialLocs& locs = CachedMaterialLocs(shader);
     ShaderStateScope stateScope; // #104 — a Cull Off (double-sided) shader casts from both sides
     for (int i = 0; i < (int)m_D->Meshes.size(); ++i) {
         bool hasSlot = i < (int)slots.size() && slots[i];
@@ -1985,23 +1992,23 @@ void Model::DrawDepthOnly(Shader& shader, const std::vector<std::shared_ptr<Mate
         // in this pass drew with the same material.
         const bool clip = mat.AlphaClip || (hasSlot && slots[i]->RenderQueue == MaterialAsset::Queue::AlphaTest);
         if (!GLStateCache::MaterialAlreadyBound(mat.Hash() ^ (clip ? 0x5bd1e995ull : 0ull), shader.Program())) {
-            shader.SetVec2("uUVTiling", mat.UVTiling); // #102 — the cutout follows the material's tiling
-            shader.SetVec2("uUVOffset", mat.UVOffset);
+            shader.SetVec2(locs.uvTiling, mat.UVTiling); // #102 — the cutout follows the material's tiling
+            shader.SetVec2(locs.uvOffset, mat.UVOffset);
             if (clip && mat.AlbedoMap && mat.AlbedoMap->IsValid()) {
                 mat.AlbedoMap->Bind(0);
-                shader.SetInt(alphaTestLoc, 1);
-                shader.SetFloat(alphaCutoffLoc, mat.AlphaCutoff);
+                shader.SetInt(locs.alphaTest, 1);
+                shader.SetFloat(locs.alphaCutoff, mat.AlphaCutoff);
             } else {
                 // uAlphaTest = 0 means the sampler result is never read, but the ShadowDepth
                 // program still declares `sampler2D uAlbedo`, so unit 0 must hold a real texture
                 // or the driver reports KHR 131204 ("texture 0 ... cannot be used") every draw —
                 // the residual load-time warnings after PR #370 (audit GL-101 / #366 on unit 0).
                 GLStateCache::BindTexture2D(0, DefaultTextures::White());
-                shader.SetInt(alphaTestLoc, 0);
+                shader.SetInt(locs.alphaTest, 0);
             }
-            shader.SetInt(albedoLoc, 0);
+            shader.SetInt(locs.depthAlbedo, 0);
         }
-        m_D->Meshes[i]->Draw();
+        m_D->Meshes[i]->Draw(instances);
     }
 }
 

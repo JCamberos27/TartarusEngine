@@ -10,7 +10,8 @@ public:
     ModelMesh(const std::vector<ModelVertex>& vertices, const std::vector<unsigned int>& indices);
     ~ModelMesh();
 
-    void Draw() const;
+    // `instances` > 1 draws that many instances (the sun's layered cascade pass).
+    void Draw(int instances = 1) const;
 
     Material Mat;
 
