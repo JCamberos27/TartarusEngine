@@ -240,7 +240,16 @@ public:
     void EnsureNextOrderAtLeast(int value) { if (value > m_NextOrder) m_NextOrder = value; }
 
 private:
-    std::unordered_map<entt::entity, glm::mat4> m_WorldTransformCache;
+    // Flat, indexed by entity slot (entt::to_entity) rather than hashed: every render pass reads
+    // it once per drawable, so a hash lookup per read added up. m_WorldTransformKeys holds the
+    // full entity (slot + version) each slot was filled for; a mismatch (entt::null, or a slot
+    // since recycled by a newer entity) means "not cached" and falls back to composing.
+    std::vector<glm::mat4> m_WorldTransformCache;
+    std::vector<entt::entity> m_WorldTransformKeys;
+    bool IsWorldTransformCached(entt::entity e) const {
+        const auto i = (size_t)entt::to_entity(e);
+        return i < m_WorldTransformKeys.size() && m_WorldTransformKeys[i] == e;
+    }
     // Entities ComposeWorldTransform/RebuildWorldTransformCache have already logged a
     // parentId-cycle warning for (audit #74) — each one gets exactly one Console line, ever, not
     // one per frame. Never explicitly cleared on scene load: it only ever holds ids that were
