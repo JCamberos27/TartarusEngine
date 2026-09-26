@@ -40,6 +40,16 @@ void SetGlobal(Pose& pose, const std::vector<int>& parents, std::vector<glm::mat
 void OffsetBone(Pose& pose, const std::vector<int>& parents, std::vector<glm::mat4>& globals, int i,
                 const glm::vec3& deltaPos, const glm::quat& deltaRot, const glm::vec3& pivot);
 
+// OffsetBone that refreshes only node `i`'s own global and leaves everything below it stale -
+// for offsetting several bones down one chain (the spine), where re-deriving every descendant
+// (arms, fingers) after each one was most of the cost. Follow each with RefreshPath to the next
+// bone to be read; the pose itself comes out identical to calling OffsetBone each time.
+void OffsetBoneOnly(Pose& pose, const std::vector<int>& parents, std::vector<glm::mat4>& globals, int i,
+                    const glm::vec3& deltaPos, const glm::quat& deltaRot, const glm::vec3& pivot);
+// Recomputes the globals on the parent path down to `node`, starting below `from` when `from` is
+// one of its ancestors (whose own global is current), else from the root.
+void RefreshPath(const Pose& pose, const std::vector<int>& parents, std::vector<glm::mat4>& globals, int from, int node);
+
 // Two-bone IK (shoulder-elbow-hand, hip-knee-foot). Bends `upper` and `lower` so `end` reaches
 // `targetPos`, keeping the bend plane the pose already has (the animated elbow is the pole).
 // Out-of-reach targets are reached for along the straightened chain. With `targetRot`, the

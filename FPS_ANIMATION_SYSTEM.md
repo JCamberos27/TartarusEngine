@@ -587,7 +587,7 @@ at and set aside - see issue #424 for why.
    scene lives in `project/scenes/` and is only smoke-tested locally. Adding an FPS smoke
    scene would gate `.fpsanim` loading and clip attachment on every push.
 8. **Materials/textures are out of scope.** Untextured rendering is expected;
-   `Texture: failed to load ...` and `Y Bot.fbx` import errors are known noise.
+   `Texture: failed to load ...` errors are known noise.
 9. **The true-FPS body has its phases 1-3 merged** (#405): body, weapon arms, turn in place, start/stop,
    crouch, foot IK. See §8b, `BODY_SETUP.md` (setup and tuning) and issue #426 (authoring tools).
 

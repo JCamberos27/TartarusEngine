@@ -110,6 +110,7 @@ void Model::ImportFromFile(const ModelImportSettings& settings) {
             m_D->BoundsMax = glm::vec3(0.0f);
         }
         if (m_FinalBoneMatrices.empty()) m_FinalBoneMatrices.assign(MAX_BONES, glm::mat4(1.0f));
+        ++m_PoseVersion;
         return;
     }
 
@@ -137,6 +138,7 @@ void Model::ImportFromFile(const ModelImportSettings& settings) {
     m_AnimFrom = {};
     m_FadeDuration = m_FadeElapsed = 0.0f;
     m_FinalBoneMatrices.assign(MAX_BONES, glm::mat4(1.0f));
+    ++m_PoseVersion;
 }
 
 void Model::CollectNodeGlobals(const aiNode* node, const glm::mat4& parentTransform) {
@@ -1075,6 +1077,7 @@ void Model::ReadHierarchy(const aiNode* node, int parent) {
         n.BoneOffset = bone->second.OffsetMatrix;
     }
     const int self = (int)m_D->Nodes.size();
+    m_D->NodeLookup.emplace(n.Name, self);
     m_D->Nodes.push_back(std::move(n));
     for (unsigned int i = 0; i < node->mNumChildren; ++i) ReadHierarchy(node->mChildren[i], self);
 }
@@ -1302,11 +1305,9 @@ void Model::UpdateAnimation(float dt) {
 
 bool Model::NodeTransform(const std::string& name, glm::mat4& out) const {
     const auto& nodes = m_D->Nodes;
-    size_t idx = nodes.size();
-    for (size_t i = 0; i < nodes.size(); ++i) {
-        if (nodes[i].Name == name) { idx = i; break; }
-    }
-    if (idx == nodes.size()) return false;
+    const int found = NodeIndex(name);
+    if (found < 0) return false;
+    const size_t idx = (size_t)found;
 
     // Same "is a pose live?" test UploadBoneMatrices uses, plus m_NodeGlobals being populated:
     // it is scratch filled by EvaluatePose, so before the first evaluation (or after a
@@ -1328,6 +1329,7 @@ void Model::EvaluatePose() {
     const auto& nodes = m_D->Nodes;
     m_NodeGlobals.resize(nodes.size());
     if (m_FinalBoneMatrices.size() < (size_t)MAX_BONES) m_FinalBoneMatrices.assign(MAX_BONES, glm::mat4(1.0f));
+    ++m_PoseVersion;
 
     const std::vector<int>* curMap = nullptr;
     const std::vector<int>* fromMap = nullptr;
@@ -1384,10 +1386,8 @@ void Model::EvaluatePose() {
 }
 
 int Model::NodeIndex(const std::string& name) const {
-    const auto& nodes = m_D->Nodes;
-    for (int i = 0; i < (int)nodes.size(); ++i)
-        if (nodes[i].Name == name) return i;
-    return -1;
+    const auto it = m_D->NodeLookup.find(name);
+    return it != m_D->NodeLookup.end() ? it->second : -1;
 }
 
 void Model::BindLocalPose(std::vector<LocalTRS>& out) const {
@@ -1422,6 +1422,7 @@ void Model::ApplyLocalPose(const std::vector<LocalTRS>& pose) {
     m_AppliedPose = pose;
     m_NodeGlobals.resize(nodes.size());
     if (m_FinalBoneMatrices.size() < (size_t)MAX_BONES) m_FinalBoneMatrices.assign(MAX_BONES, glm::mat4(1.0f));
+    ++m_PoseVersion;
     for (size_t i = 0; i < nodes.size(); ++i) {
         const AnimNode& n = nodes[i];
         const glm::mat4 local = pose[i].ToMatrix();
@@ -1535,38 +1536,6 @@ float Model::NormalizedTime() const {
 }
 
 namespace {
-// One shared bone-palette SSBO (binding 1), re-uploaded before each skinned draw. Replaces the
-// 100-element glUniformMatrix4fv array (#104). Single-threaded, sequential draws, so one buffer
-// is enough; process-lifetime, never freed (like the other engine-lifetime GL objects).
-unsigned int g_BoneSsbo = 0;
-void EnsureBoneSsbo() {
-    if (g_BoneSsbo) return;
-    glCreateBuffers(1, &g_BoneSsbo);
-    glNamedBufferStorage(g_BoneSsbo, MAX_BONES * (GLsizeiptr)sizeof(glm::mat4), nullptr, GL_DYNAMIC_STORAGE_BIT);
-}
-} // namespace
-
-void Model::UploadBoneMatrices(Shader& shader) const {
-    // #98 — skin whenever there are bones: the clip's pose while playing, else the bind pose.
-    const bool skinning = m_D->BoneCounter > 0;
-    shader.SetInt("uUseSkinning", skinning ? 1 : 0);
-
-    EnsureBoneSsbo();
-    if (skinning) {
-        const bool posed = m_ExternalPose || (m_Anim.Clip >= 0 && m_Anim.Clip < AnimationCount()) || m_FadeDuration > 0.0f;
-        const std::vector<glm::mat4>& palette =
-            posed && m_FinalBoneMatrices.size() >= (size_t)MAX_BONES ? m_FinalBoneMatrices : m_D->BindPoseBones;
-        // Only the rig's own bones (#113), not the whole MAX_BONES palette.
-        const int count = std::clamp(m_D->BoneCounter, 1, MAX_BONES);
-        if (palette.size() >= (size_t)count)
-            glNamedBufferSubData(g_BoneSsbo, 0, count * (GLsizeiptr)sizeof(glm::mat4), palette.data());
-    }
-    // Bind even when not skinning: the vertex shader still declares the block, and leaving
-    // binding 1 dangling from a previous model is asking for trouble on stricter drivers.
-    glBindBufferBase(GL_SHADER_STORAGE_BUFFER, 1, g_BoneSsbo);
-}
-
-namespace {
 // #194: per-material uniform locations for one Draw() call, resolved ONCE before the per-mesh
 // loop (below) instead of re-hashing all these literal names for every mesh of every model.
 struct MaterialLocs {
@@ -1580,22 +1549,9 @@ struct MaterialLocs {
     int hasEmissive, emissiveMap;
     int alphaClip, alphaCutoff; // #101
     int hasHeight, heightMap, hasDetailAlbedo, detailAlbedoMap, hasDetailNormal, detailNormalMap; // #102
+    // UploadBoneMatrices and DrawDepthOnly (the shadow / depth pre-pass programs).
+    int useSkinning, uvTiling, uvOffset, depthAlbedo, alphaTest;
 };
-
-// #102 / #113 — the surface-option uniforms, set for BOTH the built-in and the data-driven
-// (Standard.shader) paths so a shader that declares them gets them either way.
-void SetSurfaceOptions(Shader& shader, const Material& mat) {
-    shader.SetVec2("uUVTiling", mat.UVTiling);
-    shader.SetVec2("uUVOffset", mat.UVOffset);
-    shader.SetFloat("uNormalStrength", mat.NormalStrength);
-    shader.SetInt("uNormalFlipY", mat.NormalFlipY ? 1 : 0);
-    shader.SetInt("uDoubleSided", mat.DoubleSided ? 1 : 0);
-    shader.SetInt("uUseVertexColor", mat.UseVertexColor ? 1 : 0);
-    shader.SetInt("uNoSpecularHighlights", mat.SpecularHighlights ? 0 : 1);
-    shader.SetInt("uNoGlossyReflections", mat.GlossyReflections ? 0 : 1);
-    shader.SetFloat("uParallaxScale", mat.ParallaxScale);
-    shader.SetVec2("uDetailTiling", mat.DetailTiling);
-}
 
 MaterialLocs ResolveMaterialLocs(Shader& shader) {
     MaterialLocs L;
@@ -1627,7 +1583,115 @@ MaterialLocs ResolveMaterialLocs(Shader& shader) {
     L.detailAlbedoMap = shader.Loc("uDetailAlbedoMap");
     L.hasDetailNormal = shader.Loc("uHasDetailNormalMap");
     L.detailNormalMap = shader.Loc("uDetailNormalMap");
+    L.useSkinning = shader.Loc("uUseSkinning");
+    L.uvTiling = shader.Loc("uUVTiling");
+    L.uvOffset = shader.Loc("uUVOffset");
+    L.depthAlbedo = shader.Loc("uAlbedo");
+    L.alphaTest = shader.Loc("uAlphaTest");
     return L;
+}
+
+// ResolveMaterialLocs once per program rather than once per draw.
+const MaterialLocs& CachedMaterialLocs(Shader& shader) {
+    if (const void* block = shader.LocationBlock()) return *static_cast<const MaterialLocs*>(block);
+    auto block = std::make_shared<MaterialLocs>(ResolveMaterialLocs(shader));
+    const MaterialLocs& locs = *block;
+    shader.SetLocationBlock(std::move(block));
+    return locs;
+}
+} // namespace
+
+namespace {
+// Bone palettes (SSBO binding 1, #104) live in one ring buffer split into per-frame slices. Each
+// skinned model uploads its palette once per frame into its own range of the current slice and
+// binds that range; the shadow cascades, depth pre-pass and main pass that follow only rebind
+// it. It used to be one MAX_BONES buffer rewritten before every skinned draw, so each upload had
+// to wait on (or be copied around) the draws still queued against the previous contents.
+// Process-lifetime, never freed (like the other engine-lifetime GL objects).
+constexpr int kBoneRingSlices = 3; // frames in flight a slice waits out before it's rewritten
+constexpr GLsizeiptr kBoneSliceBytes = 2 * 1024 * 1024; // 32768 matrices per frame
+unsigned int g_BoneRing = 0;
+GLsizeiptr g_BoneAlign = 256;
+int g_BoneSlice = 0;
+GLsizeiptr g_BoneCursor = 0;
+// Advances at every new frame and whenever a full slice wraps onto itself mid-frame, so a model's
+// remembered range (Model::BoneUpload) is only trusted while nothing can have overwritten it.
+std::uint64_t g_BoneEpoch = 0;
+GLintptr g_BoundOffset = -1;
+GLsizeiptr g_BoundSize = 0;
+
+void EnsureBoneRing() {
+    if (g_BoneRing) return;
+    glCreateBuffers(1, &g_BoneRing);
+    glNamedBufferStorage(g_BoneRing, kBoneRingSlices * kBoneSliceBytes, nullptr, GL_DYNAMIC_STORAGE_BIT);
+    GLint align = 0;
+    glGetIntegerv(GL_SHADER_STORAGE_BUFFER_OFFSET_ALIGNMENT, &align);
+    if (align > 0) g_BoneAlign = align;
+}
+
+void BindBoneRange(GLintptr offset, GLsizeiptr size) {
+    if (offset == g_BoundOffset && size == g_BoundSize) return;
+    glBindBufferRange(GL_SHADER_STORAGE_BUFFER, 1, g_BoneRing, offset, size);
+    g_BoundOffset = offset;
+    g_BoundSize = size;
+}
+} // namespace
+
+void Model::BeginRenderFrame() {
+    g_BoneSlice = (g_BoneSlice + 1) % kBoneRingSlices;
+    g_BoneCursor = 0;
+    ++g_BoneEpoch;
+}
+
+void Model::UploadBoneMatrices(Shader& shader) const {
+    // #98 — skin whenever there are bones: the clip's pose while playing, else the bind pose.
+    const bool skinning = m_D->BoneCounter > 0;
+    shader.SetInt(CachedMaterialLocs(shader).useSkinning, skinning ? 1 : 0);
+
+    EnsureBoneRing();
+    const GLsizeiptr matBytes = (GLsizeiptr)sizeof(glm::mat4);
+    if (!skinning) {
+        // The vertex shader still declares the block: keep binding 1 on a real range (whatever
+        // palette was bound last is fine - it's never read), never dangling.
+        if (g_BoundOffset < 0) BindBoneRange(0, matBytes);
+        return;
+    }
+    const bool posed = m_ExternalPose || (m_Anim.Clip >= 0 && m_Anim.Clip < AnimationCount()) || m_FadeDuration > 0.0f;
+    const std::vector<glm::mat4>& palette =
+        posed && m_FinalBoneMatrices.size() >= (size_t)MAX_BONES ? m_FinalBoneMatrices : m_D->BindPoseBones;
+    // Only the rig's own bones (#113), not the whole MAX_BONES palette.
+    const int count = std::clamp(m_D->BoneCounter, 1, MAX_BONES);
+    if (palette.size() < (size_t)count) return;
+    const GLsizeiptr bytes = count * matBytes;
+    BoneUpload& u = m_BoneUpload;
+    if (u.Epoch != g_BoneEpoch || u.Version != m_PoseVersion || u.Palette != palette.data() || u.Count != count) {
+        const GLsizeiptr slot = (bytes + g_BoneAlign - 1) / g_BoneAlign * g_BoneAlign;
+        if (g_BoneCursor + slot > kBoneSliceBytes) { g_BoneCursor = 0; ++g_BoneEpoch; } // slice full: reuse it
+        u.Offset = (std::ptrdiff_t)(g_BoneSlice * kBoneSliceBytes + g_BoneCursor);
+        g_BoneCursor += slot;
+        glNamedBufferSubData(g_BoneRing, (GLintptr)u.Offset, bytes, palette.data());
+        u.Epoch = g_BoneEpoch;
+        u.Version = m_PoseVersion;
+        u.Palette = palette.data();
+        u.Count = count;
+    }
+    BindBoneRange((GLintptr)u.Offset, bytes);
+}
+
+namespace {
+// #102 / #113 — the surface-option uniforms, set for BOTH the built-in and the data-driven
+// (Standard.shader) paths so a shader that declares them gets them either way.
+void SetSurfaceOptions(Shader& shader, const Material& mat) {
+    shader.SetVec2("uUVTiling", mat.UVTiling);
+    shader.SetVec2("uUVOffset", mat.UVOffset);
+    shader.SetFloat("uNormalStrength", mat.NormalStrength);
+    shader.SetInt("uNormalFlipY", mat.NormalFlipY ? 1 : 0);
+    shader.SetInt("uDoubleSided", mat.DoubleSided ? 1 : 0);
+    shader.SetInt("uUseVertexColor", mat.UseVertexColor ? 1 : 0);
+    shader.SetInt("uNoSpecularHighlights", mat.SpecularHighlights ? 0 : 1);
+    shader.SetInt("uNoGlossyReflections", mat.GlossyReflections ? 0 : 1);
+    shader.SetFloat("uParallaxScale", mat.ParallaxScale);
+    shader.SetVec2("uDetailTiling", mat.DetailTiling);
 }
 
 void BindMaterial(Shader& shader, const Material& mat, const MaterialLocs& locs) {
@@ -1773,7 +1837,7 @@ void BindMaterialDataDriven(Shader& shader, const MaterialAsset& ma, const Shade
 
 void Model::Draw(Shader& shader, const std::vector<std::shared_ptr<MaterialAsset>>& slots) {
     UploadBoneMatrices(shader);
-    MaterialLocs locs = ResolveMaterialLocs(shader);
+    const MaterialLocs& locs = CachedMaterialLocs(shader);
     for (int i = 0; i < (int)m_D->Meshes.size(); ++i) {
         bool hasSlot = i < (int)slots.size() && slots[i];
         const Material& mat = hasSlot ? slots[i]->Mat : m_D->Meshes[i]->Mat;
@@ -1872,8 +1936,8 @@ void Model::DrawSelected(Shader& fallback, const glm::mat4& xform,
                          const std::function<void(Shader&)>& onProgramBound, MeshPass pass) {
     const glm::mat4 nrm = glm::mat4(glm::transpose(glm::inverse(glm::mat3(xform))));
 
-    Shader*      lastProg = nullptr;
-    MaterialLocs locs{};
+    Shader*             lastProg = nullptr;
+    const MaterialLocs* locs = nullptr;
     ShaderStateScope stateScope; // #104
 
     for (int i = 0; i < (int)m_D->Meshes.size(); ++i) {
@@ -1890,7 +1954,7 @@ void Model::DrawSelected(Shader& fallback, const glm::mat4& xform,
             // glUniform* always targets the currently bound program.
             prog->Bind();
             UploadBoneMatrices(*prog);           // uUseSkinning + bone SSBO
-            locs = ResolveMaterialLocs(*prog);
+            locs = &CachedMaterialLocs(*prog);
             prog->SetMat4(prog->Loc("uModel"), xform);
             prog->SetMat4(prog->Loc("uNormalMatrix"), nrm);
             if (onProgramBound) onProgramBound(*prog); // per-draw uniforms, e.g. probes (#108)
@@ -1905,16 +1969,14 @@ void Model::DrawSelected(Shader& fallback, const glm::mat4& xform,
         if (hasSlot && slots[i]->Shader)
             BindMaterialDataDriven(*prog, *slots[i], *slots[i]->Shader);
         else
-            BindMaterial(*prog, mat, locs);
+            BindMaterial(*prog, mat, *locs);
         m_D->Meshes[i]->Draw();
     }
 }
 
-void Model::DrawDepthOnly(Shader& shader, const std::vector<std::shared_ptr<MaterialAsset>>& slots) {
+void Model::DrawDepthOnly(Shader& shader, const std::vector<std::shared_ptr<MaterialAsset>>& slots, int instances) {
     UploadBoneMatrices(shader);
-    int albedoLoc = shader.Loc("uAlbedo");
-    int alphaTestLoc = shader.Loc("uAlphaTest");
-    int alphaCutoffLoc = shader.Loc("uAlphaCutoff");
+    const MaterialLocs& locs = CachedMaterialLocs(shader);
     ShaderStateScope stateScope; // #104 — a Cull Off (double-sided) shader casts from both sides
     for (int i = 0; i < (int)m_D->Meshes.size(); ++i) {
         bool hasSlot = i < (int)slots.size() && slots[i];
@@ -1930,23 +1992,23 @@ void Model::DrawDepthOnly(Shader& shader, const std::vector<std::shared_ptr<Mate
         // in this pass drew with the same material.
         const bool clip = mat.AlphaClip || (hasSlot && slots[i]->RenderQueue == MaterialAsset::Queue::AlphaTest);
         if (!GLStateCache::MaterialAlreadyBound(mat.Hash() ^ (clip ? 0x5bd1e995ull : 0ull), shader.Program())) {
-            shader.SetVec2("uUVTiling", mat.UVTiling); // #102 — the cutout follows the material's tiling
-            shader.SetVec2("uUVOffset", mat.UVOffset);
+            shader.SetVec2(locs.uvTiling, mat.UVTiling); // #102 — the cutout follows the material's tiling
+            shader.SetVec2(locs.uvOffset, mat.UVOffset);
             if (clip && mat.AlbedoMap && mat.AlbedoMap->IsValid()) {
                 mat.AlbedoMap->Bind(0);
-                shader.SetInt(alphaTestLoc, 1);
-                shader.SetFloat(alphaCutoffLoc, mat.AlphaCutoff);
+                shader.SetInt(locs.alphaTest, 1);
+                shader.SetFloat(locs.alphaCutoff, mat.AlphaCutoff);
             } else {
                 // uAlphaTest = 0 means the sampler result is never read, but the ShadowDepth
                 // program still declares `sampler2D uAlbedo`, so unit 0 must hold a real texture
                 // or the driver reports KHR 131204 ("texture 0 ... cannot be used") every draw —
                 // the residual load-time warnings after PR #370 (audit GL-101 / #366 on unit 0).
                 GLStateCache::BindTexture2D(0, DefaultTextures::White());
-                shader.SetInt(alphaTestLoc, 0);
+                shader.SetInt(locs.alphaTest, 0);
             }
-            shader.SetInt(albedoLoc, 0);
+            shader.SetInt(locs.depthAlbedo, 0);
         }
-        m_D->Meshes[i]->Draw();
+        m_D->Meshes[i]->Draw(instances);
     }
 }
 

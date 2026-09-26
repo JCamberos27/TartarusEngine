@@ -6,12 +6,15 @@
 #include <glm/gtc/matrix_transform.hpp>
 #include <algorithm>
 #include <cmath>
+#include <cstring>
 #include <string>
 
 CascadedShadowMap::~CascadedShadowMap() { Release(); }
 
 void CascadedShadowMap::Release() {
-    if (m_Fbo)        { glDeleteFramebuffers(1, &m_Fbo);   m_Fbo = 0; }
+    for (unsigned int& fbo : m_Fbos)
+        if (fbo) { glDeleteFramebuffers(1, &fbo); fbo = 0; }
+    if (m_LayeredFbo) { glDeleteFramebuffers(1, &m_LayeredFbo); m_LayeredFbo = 0; }
     if (m_DepthArray) { glDeleteTextures(1, &m_DepthArray); m_DepthArray = 0; }
 }
 
@@ -36,14 +39,18 @@ void CascadedShadowMap::Configure(int resolution, int count) {
     glTextureParameteri(m_DepthArray, GL_TEXTURE_COMPARE_MODE, GL_COMPARE_REF_TO_TEXTURE);
     glTextureParameteri(m_DepthArray, GL_TEXTURE_COMPARE_FUNC, GL_LEQUAL);
 
-    glCreateFramebuffers(1, &m_Fbo);
-    glNamedFramebufferDrawBuffers(m_Fbo, 0, nullptr); // depth only
-    // Attachment is (re)pointed at a specific layer in Begin(); the completeness check moved
-    // there too (audit GL-204) — a layered depth FBO only reports COMPLETE once a layer is
-    // attached, so checking here always spuriously "failed" and the result was ignored anyway.
+    glCreateFramebuffers(count, m_Fbos.data());
+    for (int i = 0; i < count; ++i) {
+        glNamedFramebufferDrawBuffers(m_Fbos[i], 0, nullptr); // depth only
+        glNamedFramebufferTextureLayer(m_Fbos[i], GL_DEPTH_ATTACHMENT, m_DepthArray, 0, i);
+    }
+    glCreateFramebuffers(1, &m_LayeredFbo);
+    glNamedFramebufferDrawBuffers(m_LayeredFbo, 0, nullptr);
+    glNamedFramebufferTexture(m_LayeredFbo, GL_DEPTH_ATTACHMENT, m_DepthArray, 0);
+    // The completeness check stays in Begin() (audit GL-204), once per Configure().
     m_CompleteChecked = false; // re-check after a resolution/count change
 
-    if (!m_Fbo || !m_DepthArray)
+    if (!m_Fbos[0] || !m_DepthArray)
         Log::Error("CascadedShadowMap: failed to create depth array (" +
                    std::to_string(resolution) + "x" + std::to_string(count) + ")");
 }
@@ -134,16 +141,41 @@ void CascadedShadowMap::Update(const glm::mat4& camView, const glm::mat4& camPro
 
 void CascadedShadowMap::Begin(int i) const {
     i = std::clamp(i, 0, m_Count - 1);
-    glBindFramebuffer(GL_FRAMEBUFFER, m_Fbo);
-    glNamedFramebufferTextureLayer(m_Fbo, GL_DEPTH_ATTACHMENT, m_DepthArray, 0, i);
-    // audit GL-204 — a layered depth FBO only reports COMPLETE once a layer is attached, so the
-    // check belongs here, once, rather than in Configure().
+    glBindFramebuffer(GL_FRAMEBUFFER, m_Fbos[i]);
+    // audit GL-204 — one-shot completeness check of every cascade's FBO.
     if (!m_CompleteChecked) {
         m_CompleteChecked = true;
-        GLFramebufferCheck::Complete("CascadedShadowMap", m_Fbo, m_Resolution, m_Resolution);
+        for (int c = 0; c < m_Count; ++c)
+            GLFramebufferCheck::Complete("CascadedShadowMap", m_Fbos[c], m_Resolution, m_Resolution);
     }
     glViewport(0, 0, m_Resolution, m_Resolution);
     glClear(GL_DEPTH_BUFFER_BIT);
+}
+
+void CascadedShadowMap::BeginLayered() const {
+    glBindFramebuffer(GL_FRAMEBUFFER, m_LayeredFbo);
+    if (!m_CompleteChecked) {
+        m_CompleteChecked = true;
+        GLFramebufferCheck::Complete("CascadedShadowMap (layered)", m_LayeredFbo, m_Resolution, m_Resolution);
+    }
+    glViewport(0, 0, m_Resolution, m_Resolution);
+    glClear(GL_DEPTH_BUFFER_BIT); // every layer of a layered attachment
+}
+
+bool CascadedShadowMap::LayeredSupported() {
+    static const bool supported = [] {
+        GLint n = 0;
+        glGetIntegerv(GL_NUM_EXTENSIONS, &n);
+        for (GLint i = 0; i < n; ++i) {
+            const char* ext = reinterpret_cast<const char*>(glGetStringi(GL_EXTENSIONS, (GLuint)i));
+            if (!ext) continue;
+            if (std::strcmp(ext, "GL_ARB_shader_viewport_layer_array") == 0 ||
+                std::strcmp(ext, "GL_AMD_vertex_shader_layer") == 0)
+                return true;
+        }
+        return false;
+    }();
+    return supported;
 }
 
 glm::vec4 CascadedShadowMap::SplitDepthsVec4() const {
