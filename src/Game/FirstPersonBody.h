@@ -3,6 +3,9 @@
 #include <entt/entt.hpp>
 #include <glm/glm.hpp>
 
+#include "FirstPersonBodyContract.h"
+
+#include <map>
 #include <memory>
 #include <string>
 #include <vector>
@@ -36,6 +39,8 @@ public:
     // no-op) when there is none or it can't run - see LastError. Sets the player's move speeds
     // to the body's Run / Sprint speeds, so the input asks the blend tree for what it has.
     bool Start(World& world, Player& player);
+    // The rig's name for a standard bone (the Bone Map; the standard name when unmapped).
+    const std::string& Bone(const std::string& standard) const { return FPBody::MappedBone(m_BoneMap, standard); }
     void Stop(World& world);
     bool IsActive() const { return m_Body != entt::null; }
     const std::string& LastError() const { return m_LastError; }
@@ -68,6 +73,7 @@ private:
     std::vector<std::shared_ptr<Model>> m_Models; // every piece's model (Stop un-hides their bones)
     std::vector<entt::entity> m_Pieces;           // ... and its entity, in step with m_Models
     float m_ArmsWeight = 0.0f;                    // 0..1: how much the arms follow the weapon's
+    std::map<std::string, std::string> m_BoneMap; // the Bone Map, parsed at Start
     int m_ShoulderNode[2] = {-1, -1};             // upperarm_l / upperarm_r on the driver
     glm::vec3 m_ShouldersSlow{0.0f};              // their midpoint in model space, a slow average (the standing height)
     glm::vec3 m_Shoulders{0.0f};                  // ... the part of the clips' motion the eye follows, smoothed

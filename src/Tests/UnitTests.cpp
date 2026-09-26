@@ -1428,6 +1428,29 @@ void TestClipContactDebounce() {
     CHECK(run("1111", 2) == "1111" && run("0000", 2) == "0000");
 }
 
+// A Bone Map renames the standard bones to a rig's own: parsed leniently, and the validator looks for the mapped names.
+void TestFirstPersonBodyBoneMap() {
+    const auto m = FPBody::ParseBoneMap(" pelvis = Hips ,foot_l=LeftFoot\nfoot_r = RightFoot, junk, =x, y=");
+    CHECK(m.size() == 3 && m.at("pelvis") == "Hips" && m.at("foot_l") == "LeftFoot" && m.at("foot_r") == "RightFoot");
+    CHECK(FPBody::MappedBone(m, "pelvis") == "Hips" && FPBody::MappedBone(m, "spine_01") == "spine_01");
+
+    FirstPersonBodyComponent cfg;
+    cfg.FootIK = true;
+    FPBody::ValidationInput in;
+    in.Config = &cfg;
+    in.HasPieces = in.HasDriverPiece = in.ControllerSet = true;
+    const std::set<std::string> rigBones = {"head", "Hips", "thigh_l", "calf_l", "LeftFoot", "thigh_r", "calf_r", "RightFoot"};
+    in.HasBone = [&](const std::string& b) { return rigBones.count(b) > 0; };
+    auto hasBoneWarning = [](const std::vector<FPBody::Check>& r) {
+        for (const auto& c : r)
+            if (c.Message.find("no bone") != std::string::npos) return true;
+        return false;
+    };
+    CHECK(hasBoneWarning(FPBody::Validate(in)));                 // "pelvis", "foot_l" ... are not on this rig
+    cfg.BoneMap = "pelvis = Hips, foot_l = LeftFoot, foot_r = RightFoot";
+    CHECK(!hasBoneWarning(FPBody::Validate(in)));                // mapped: every foot IK bone is found
+}
+
 // A weapon setup is checked against the driver's contract: a full controller is clean, each missing
 // piece (event, tag, parameter, bone) is named.
 void TestFirstPersonWeaponValidate() {
@@ -3255,6 +3278,7 @@ int RunUnitTests() {
         {"FirstPersonBodyValidate", TestFirstPersonBodyValidate},
         {"FirstPersonBodyTuning", TestFirstPersonBodyTuning},
         {"FirstPersonWeaponValidate", TestFirstPersonWeaponValidate},
+        {"FirstPersonBodyBoneMap", TestFirstPersonBodyBoneMap},
         {"ClipContactDebounce", TestClipContactDebounce},
         {"FirstPersonBodyController", TestFirstPersonBodyController},
         {"FirstPersonWeaponWizard", TestFirstPersonWeaponWizard},

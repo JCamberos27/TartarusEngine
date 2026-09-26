@@ -40,6 +40,11 @@ ever disagree, the header wins.
 `thigh/calf/foot _l/_r`, and the **Head Bone** (default `head`). Missing bones switch the feature that
 needs them off; the Setup box says which.
 
+**Different bone names?** Fill the **Bone Map** on the First Person Body (`pelvis = Hips, foot_l = LeftFoot, foot_r = RightFoot`,
+comma or line separated): the body's foot IK, pelvis drop, spine aim and arm solve then look for your rig's names, and the Setup
+box checks them. Head Bone is its own field. Weapon Arms still copies the arms rig's pose by bone name, so the body's arms and the
+first-person arms rig must share names.
+
 Check any controller against this in the Animator: **Lint** tab > "Also check it as a first-person body
 controller".
 
