@@ -9,6 +9,7 @@
 #include "World.h"
 #include "Camera.h"
 #include "Model.h"
+#include "FirstPersonWeaponWizard.h"
 #include "Texture.h"
 #include "Material.h"
 #include "AudioEngine.h"
@@ -2277,6 +2278,7 @@ void EditorLayer::HandleAssetGridBackground(World& world, AssetLibrary& assets) 
                 Log::Error("Create Material: couldn't write '" + candidate + "'.");
             }
         }
+        if (ImGui::MenuItem(ICON_FA_GUN "  Create First-Person Weapon...")) m_OpenWeaponWizard = true;
         if (ImGui::MenuItem(ICON_FA_DIAGRAM_PROJECT "  Create Animator Controller")) {
             // Under project/animators/, like Create Material's materials/; listed in the virtual
             // Animation folder and opened straight into the Animator window.
@@ -2300,6 +2302,153 @@ void EditorLayer::HandleAssetGridBackground(World& world, AssetLibrary& assets) 
             }
         }
         ImGui::EndPopup();
+    }
+
+    // --- New First-Person Weapon wizard ----------------------------------------------------------
+    // Arms + weapon model, the folders holding their animation files, one clip per state (guessed from the
+    // file names, editable), then: <weapons/Name/Name.fpsanim> and the standard first-person controller.
+    {
+        struct Wizard {
+            bool Open = false;
+            char Name[64] = "New Weapon";
+            std::string ArmsModel, WeaponModel, ArmsDir, WeaponDir;
+            std::vector<FPWizard::Pick> Picks;
+            std::string Error;
+        };
+        static Wizard w;
+        auto parentOf = [](const std::string& p) {
+            const size_t s = p.find_last_of('/');
+            return s == std::string::npos ? std::string() : p.substr(0, s);
+        };
+        auto filesIn = [&](const std::string& dir) {
+            std::vector<std::string> out;
+            for (const std::string& f : ProjectModelFiles())
+                if (parentOf(f) == dir) out.push_back(f);
+            return out;
+        };
+        auto autoAssign = [&]() {
+            const std::vector<std::string> armsFiles = filesIn(w.ArmsDir), weaponFiles = filesIn(w.WeaponDir);
+            w.Picks.clear();
+            for (const auto& s : FPWizard::States())
+                w.Picks.push_back({s.State, FPWizard::PickClip(s.State, armsFiles), FPWizard::PickClip(s.State, weaponFiles)});
+        };
+        // A model file combo.
+        auto modelCombo = [&](const char* id, std::string& path) {
+            bool changed = false;
+            ImGui::SetNextItemWidth(-FLT_MIN);
+            ImGui::SetNextWindowSizeConstraints(ImVec2(ImGui::GetFontSize() * 20.0f, 0.0f), ImVec2(FLT_MAX, ImGui::GetFontSize() * 24.0f));
+            if (ImGui::BeginCombo(id, path.empty() ? "(none)" : path.c_str())) {
+                static char filter[64] = "";
+                if (ImGui::IsWindowAppearing()) { filter[0] = 0; ImGui::SetKeyboardFocusHere(); }
+                ImGui::SetNextItemWidth(-FLT_MIN);
+                ImGui::InputTextWithHint("##f", ICON_FA_MAGNIFYING_GLASS " search", filter, sizeof filter);
+                std::string picked = path;
+                if (ProjectClipFileList(filter, picked, 200) && picked != path) { path = picked; changed = true; ImGui::CloseCurrentPopup(); }
+                ImGui::EndCombo();
+            }
+            return changed;
+        };
+        // A folder combo: every project folder that holds model files.
+        auto dirCombo = [&](const char* id, std::string& dir) {
+            bool changed = false;
+            ImGui::SetNextItemWidth(-FLT_MIN);
+            if (ImGui::BeginCombo(id, dir.empty() ? "(pick a folder)" : dir.c_str())) {
+                std::set<std::string> dirs;
+                for (const std::string& f : ProjectModelFiles()) dirs.insert(parentOf(f));
+                for (const std::string& d : dirs)
+                    if (ImGui::Selectable((d.empty() ? std::string("(project root)") : d).c_str(), d == dir)) { dir = d; changed = true; }
+                ImGui::EndCombo();
+            }
+            return changed;
+        };
+        auto clipCombo = [&](const char* id, std::string& clip, const std::string& dir) {
+            ImGui::SetNextItemWidth(-FLT_MIN);
+            const std::string shown = clip.empty() ? std::string("(none)") : std::filesystem::u8path(clip).stem().u8string();
+            if (ImGui::BeginCombo(id, shown.c_str())) {
+                if (ImGui::Selectable("(none)", clip.empty())) clip.clear();
+                for (const std::string& f : filesIn(dir))
+                    if (ImGui::Selectable(std::filesystem::u8path(f).stem().u8string().c_str(), f == clip)) clip = f;
+                ImGui::EndCombo();
+            }
+        };
+
+        if (m_OpenWeaponWizard) {
+            m_OpenWeaponWizard = false;
+            w = Wizard{};
+            ImGui::OpenPopup("New First-Person Weapon");
+        }
+        ImGui::SetNextWindowSize(ImVec2(620.0f * m_UIScale, 640.0f * m_UIScale), ImGuiCond_Appearing);
+        if (ImGui::BeginPopupModal("New First-Person Weapon", nullptr, ImGuiWindowFlags_NoSavedSettings)) {
+            ImGui::TextWrapped("Pick the arms and weapon models and the folders holding their animation files. Clips are matched to the "
+                               "standard first-person states by file name; fix any that are wrong, then Create.");
+            ImGui::Spacing();
+            ImGui::InputText("Name", w.Name, sizeof w.Name);
+            ImGui::TextUnformatted("Arms model");
+            modelCombo("##wa", w.ArmsModel);
+            ImGui::TextUnformatted("Weapon model");
+            modelCombo("##ww", w.WeaponModel);
+            ImGui::TextUnformatted("Arms animations folder");
+            if (dirCombo("##wad", w.ArmsDir)) autoAssign();
+            ImGui::TextUnformatted("Weapon animations folder");
+            if (dirCombo("##wwd", w.WeaponDir)) autoAssign();
+            if (ImGui::SmallButton("Re-match by name")) autoAssign();
+            ImGui::Separator();
+            if (ImGui::BeginChild("##wclips", ImVec2(0.0f, -ImGui::GetFrameHeightWithSpacing() * 2.5f), ImGuiChildFlags_Borders)) {
+                if (ImGui::BeginTable("##wt", 3, ImGuiTableFlags_RowBg | ImGuiTableFlags_SizingStretchProp)) {
+                    ImGui::TableSetupColumn("State", ImGuiTableColumnFlags_WidthStretch, 1.0f);
+                    ImGui::TableSetupColumn("Arms clip", ImGuiTableColumnFlags_WidthStretch, 2.0f);
+                    ImGui::TableSetupColumn("Weapon clip", ImGuiTableColumnFlags_WidthStretch, 2.0f);
+                    ImGui::TableHeadersRow();
+                    for (size_t i = 0; i < w.Picks.size(); ++i) {
+                        ImGui::PushID((int)i);
+                        ImGui::TableNextRow();
+                        ImGui::TableNextColumn();
+                        ImGui::TextUnformatted(w.Picks[i].State.c_str());
+                        ImGui::TableNextColumn();
+                        clipCombo("##a", w.Picks[i].ArmsClip, w.ArmsDir);
+                        ImGui::TableNextColumn();
+                        clipCombo("##w", w.Picks[i].WeaponClip, w.WeaponDir);
+                        ImGui::PopID();
+                    }
+                    ImGui::EndTable();
+                }
+            }
+            ImGui::EndChild();
+            int filled = 0;
+            for (const auto& p : w.Picks) filled += !p.ArmsClip.empty() || !p.WeaponClip.empty();
+            const bool ready = w.Name[0] && !w.ArmsModel.empty() && !w.WeaponModel.empty() && filled > 0;
+            ImGui::TextDisabled("%d of %d states have a clip. Missing ones play the bind pose / nothing (Idle and Fire matter most).", filled, (int)w.Picks.size());
+            if (!w.Error.empty()) ImGui::TextColored(EditorUIPrimitives::DangerColor(), "%s", w.Error.c_str());
+            ImGui::BeginDisabled(!ready);
+            if (ImGui::Button("Create")) {
+                std::string safe = w.Name;
+                for (char& c : safe) if (!std::isalnum((unsigned char)c) && c != '_' && c != '-' && c != ' ') c = '_';
+                const std::string dirRel = "weapons/" + safe;
+                const std::string setRel = dirRel + "/" + safe + ".fpsanim", ctrlRel = dirRel + "/" + safe + ".controller";
+                std::error_code ec;
+                std::filesystem::create_directories(std::filesystem::u8path(ProjectPaths::Resolve(dirRel)), ec);
+                FirstPersonAnimationSet set = FPWizard::Build(w.ArmsModel, w.WeaponModel, w.Picks);
+                if (std::filesystem::exists(std::filesystem::u8path(ProjectPaths::Resolve(setRel)), ec)) {
+                    w.Error = "'" + setRel + "' already exists: pick another name.";
+                } else if (!BuildFirstPersonController(set).SaveFile(ProjectPaths::Resolve(ctrlRel))) {
+                    w.Error = "Couldn't write '" + ctrlRel + "'.";
+                } else {
+                    set.Controller = ctrlRel;
+                    set.Clips.clear();
+                    if (set.SaveFile(ProjectPaths::Resolve(setRel))) {
+                        InvalidateAnimationListing();
+                        Log::Info("Created weapon " + setRel + " (controller " + ctrlRel + "). Select it in the Asset Browser to tune it.");
+                        ImGui::CloseCurrentPopup();
+                    } else {
+                        w.Error = "Couldn't write '" + setRel + "'.";
+                    }
+                }
+            }
+            ImGui::EndDisabled();
+            ImGui::SameLine();
+            if (ImGui::Button("Cancel")) ImGui::CloseCurrentPopup();
+            ImGui::EndPopup();
+        }
     }
 }
 
