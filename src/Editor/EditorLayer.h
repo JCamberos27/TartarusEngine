@@ -61,6 +61,8 @@ struct AssetGridCell {
 // while the editor is open.
 namespace BuildPipeline { struct Report; } // #174
 
+struct AnimatorWindowState; // the Animator window's state (EditorLayer_Animator*.cpp)
+
 class EditorLayer {
 public:
     // Declared (rather than left implicit) and defined in the .cpp — a stylistic match for the
@@ -1908,7 +1910,6 @@ private:
     void DrawWeaponDefinitionEditor(const std::string& path);
     void DrawControllerAssetInspector(const std::string& path);
     bool m_ShowAnimator = false;
-    struct AnimatorWindowState;
     std::shared_ptr<AnimatorWindowState> m_AnimatorWin; // shared_ptr: the type is only complete in EditorLayer_Animator.cpp
     void DrawReflectedComponentExtra(const char* componentName, World& world, entt::entity entity,
                                      ReflectExtraPhase phase);
