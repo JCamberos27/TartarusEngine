@@ -4,6 +4,7 @@
 #include <algorithm>
 #include <cctype>
 #include <filesystem>
+#include <vector>
 
 namespace fs = std::filesystem;
 
@@ -35,6 +36,43 @@ bool IsSourceOnlyFile(const std::string& path) {
     std::string name = fs::path(path).filename().string();
     std::transform(name.begin(), name.end(), name.begin(), [](unsigned char c) { return (char)std::tolower(c); });
     return name == "thumbs.db" || name == "desktop.ini" || name == ".ds_store";
+}
+
+TextureKind GuessTextureKind(const std::string& path) {
+    // Lower-case words of the stem, split on anything that isn't a letter or digit.
+    std::vector<std::string> words;
+    std::string cur;
+    for (char c : fs::path(path).stem().string()) {
+        if (std::isalnum((unsigned char)c)) cur += (char)std::tolower((unsigned char)c);
+        else if (!cur.empty()) { words.push_back(cur); cur.clear(); }
+    }
+    if (!cur.empty()) words.push_back(cur);
+
+    static const char* kQualifiers[] = {"opengl", "gl", "ogl", "directx", "dx", "unity", "unreal", "ue", "ue4",
+                                        "ue5", "hd", "lod0", "hi", "high", "low", "final", "baked"};
+    auto isQualifier = [&](const std::string& w) {
+        if (std::all_of(w.begin(), w.end(), [](char c) { return std::isdigit((unsigned char)c); })) return true; // UDIM, 1024
+        if (w.size() <= 3 && w.back() == 'k' && std::isdigit((unsigned char)w[0])) return true;                 // 2k, 4k
+        return std::any_of(std::begin(kQualifiers), std::end(kQualifiers), [&](const char* q) { return w == q; });
+    };
+    static const char* kNormal[] = {"normal", "normals", "normalmap", "nrm", "nor", "norm", "nm", "nml", "normalgl", "normaldx"};
+    static const char* kData[] = {"roughness", "rough", "rgh", "metallic", "metalness", "metal", "ao",
+                                  "occlusion", "ambientocclusion", "height", "heightmap", "displacement", "disp",
+                                  "bump", "mask", "maskmap", "orm", "rma", "arm", "mra", "smoothness", "gloss",
+                                  "glossiness", "opacity", "cavity", "curvature", "thickness", "rm", "mm", "hm"};
+    auto in = [](const std::string& w, const auto& list) {
+        return std::any_of(std::begin(list), std::end(list), [&](const char* x) { return w == x; });
+    };
+    // The last two meaningful words ("Ambient_Occlusion", "Normal_Map", "Base_Color").
+    for (size_t i = words.size(); i-- > 0;) {
+        if (isQualifier(words[i])) continue;
+        const std::string& w = words[i];
+        const std::string pair = i > 0 ? words[i - 1] + w : w;
+        if (in(w, kNormal) || in(pair, kNormal)) return TextureKind::Normal;
+        if (in(w, kData) || in(pair, kData)) return TextureKind::Data;
+        return TextureKind::Color;
+    }
+    return TextureKind::Color;
 }
 
 FolderCopy CopyFolderInto(const std::string& sourceDir, const std::string& destParent) {
