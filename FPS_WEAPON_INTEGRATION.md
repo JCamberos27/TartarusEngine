@@ -10,6 +10,13 @@ for a weapon that behaves like a normal firearm. The whole setup happens in the 
 
 Use the checklist at the bottom as the PR checklist.
 
+**Fastest path:** in the Asset Browser, right-click > **Create First-Person Weapon...** Pick the arms and weapon
+models and the folders holding their animation files; the wizard matches clips to states by file name, then
+writes the `.fpsanim` and the standard controller. Then finish in the Weapon Inspector: its **Setup** box lists
+what the driver still needs (events, tags, parameters, bones) and **Rigs & Mount** has model pickers, bone
+dropdowns and **Measure Mount Rotation**. **Copy Settings From...** takes tuned numbers from another weapon.
+The sections below explain what each piece is and what the wizard cannot know.
+
 References:
 - **`ANIMATOR.md`**: the Animator window, states and transitions.
 - **`FPS_ANIMATION_SYSTEM.md`** (cited below as `SYSTEM §n`): how the runtime works.
@@ -250,10 +257,13 @@ retune only if the weapon's weight calls for it:
    - they don't float (otherwise fix Camera Bone)
    - the gun stays in the hands through Sprint, Draw and Holster (otherwise fix the socket or mount)
 3. **Centre the ADS sights.**
-   - Hold `Fire2` and adjust **View Model Offset** and **View Model Rotation** until the sights sit on screen centre.
+   - Use the weapon Inspector's **Aim-Down-Sights > Sight Alignment** to centre the sights (it writes to the weapon
+     definition). View Model Offset / Rotation on the controller are scene-level extras on top of it, and a value
+     tuned during Play reverts on Stop.
    - To solve it exactly, use `work/sight_align_probe.cpp` (SYSTEM §5).
    - Write the final values into the scene file: Play-mode edits revert.
-4. View-model fields and the weapon definition are read when Play starts, so **Stop and Play again** after each change. Controller edits apply live.
+4. View-model fields and the weapon definition are read when Play starts, so **Stop and Play again** after each change to the models, socket, root, mount, view rotation, materials or
+   controller. Only the numbers in the Inspector's tuning sections apply live.
 
 ---
 
