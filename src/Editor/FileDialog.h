@@ -18,6 +18,9 @@ namespace FileDialog {
     // Same, with multi-select (#139): every picked path, or an empty list if cancelled.
     std::vector<std::string> OpenFiles(const char* filter, GLFWwindow* owner);
 
+    // Opens the native folder picker. Returns the chosen folder, or an empty string if cancelled.
+    std::string PickFolder(GLFWwindow* owner);
+
     // Opens the native Windows "Save File" dialog. `defaultExt` (no leading dot, e.g. "json")
     // is appended automatically if the typed filename doesn't already have an extension.
     // Returns the chosen path, or an empty string if the user canceled.
