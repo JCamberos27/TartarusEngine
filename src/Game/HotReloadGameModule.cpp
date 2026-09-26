@@ -213,7 +213,9 @@ bool HotReloadGameModule::Reload(bool initialLoad) {
         }
     }
 
-    const fs::path copyPath = cacheDir / ("TartarusGame_" + std::to_string(++m_Generation) + ".dll");
+    // Named per process: a second instance (another editor, the unit tests) shares this folder, and a bare
+    // generation number would collide with the copy the first one has loaded and locked.
+    const fs::path copyPath = cacheDir / ("TartarusGame_" + std::to_string(::GetCurrentProcessId()) + "_" + std::to_string(++m_Generation) + ".dll");
     fs::copy_file(m_SourceModule, copyPath, fs::copy_options::overwrite_existing, ec);
     if (ec) {
         Log::Warn("Hot reload: TartarusGame.dll is still being written; will retry.");
