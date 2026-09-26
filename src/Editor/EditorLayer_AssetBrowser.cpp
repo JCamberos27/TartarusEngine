@@ -2169,6 +2169,11 @@ void EditorLayer::DrawAssetCell(World& world, AssetLibrary& assets, int index, f
                         else Log::Error("Reimport failed for '" + cell.key + "' - see Console.");
                     }
                 }
+                if (cell.kind == Cell::Kind::Model && ImGui::MenuItem(ICON_FA_DROPLET "  Extract Materials"))
+                    ExtractMaterialsFor(world, assets, cell.key);
+                if (cell.kind == Cell::Kind::Model && ImGui::IsItemHovered())
+                    EditorUI::SetTooltip("Write one editable .mat per material this model uses (into the\n"
+                                         "asset's Materials folder) and use them on its placed objects.");
             }
 
             // Everything currently selected, whenever the right-clicked item is part of a

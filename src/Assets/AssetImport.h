@@ -16,6 +16,13 @@ std::string ImportKind(const std::string& path);
 // the engine can't load them, and they are often most of an asset pack's size.
 bool IsSourceOnlyFile(const std::string& path);
 
+// What a texture holds, guessed from the map-type word at the end of its file name, the way
+// asset packs name them: "Crate_Normal.png" / "Door_Nm.tga" -> Normal, "Crate_Roughness.png",
+// "_Metallic", "_AO", "_Height", "_Mask" -> Data (linear), anything else -> Color (sRGB).
+// Trailing qualifiers are skipped: "Arms_Unity_Normal.1003.png", "Sofa_Normal_OpenGL_4K.png".
+enum class TextureKind { Color, Normal, Data };
+TextureKind GuessTextureKind(const std::string& path);
+
 struct FolderCopy {
     std::string Folder;             // the new folder in the project; empty on failure
     std::vector<std::string> Files; // every file copied, absolute

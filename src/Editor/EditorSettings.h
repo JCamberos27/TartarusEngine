@@ -178,6 +178,10 @@ struct EditorSettings {
 
     // --- Physics visual debugger (#185) --------------------------------------------------
     bool     ShowPhysicsPanel      = false;  // the dockable Physics debug window
+    // The Asset Library panel: an asset collection outside the project (a folder of packs laid
+    // out <Category>/<Asset>/) to browse and import from. Per machine, like the other paths here.
+    bool        ShowAssetLibrary = false;
+    std::string AssetLibraryPath;
     bool     PhysicsHudOverlay     = false;  // corner stats overlay while playing
     unsigned PhysicsDebugDrawFlags = 0;      // PhysicsWorld::PhysicsDebugDrawFlag bitmask
     bool LogPhysicsEvents = false;           // #169 - trigger / hit / joint-break lines in the Console
