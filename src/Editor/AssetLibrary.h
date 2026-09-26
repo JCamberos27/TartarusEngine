@@ -26,6 +26,10 @@ public:
     // explicit "importer" block in the texture's .meta always wins.
     enum class TextureUse { Color, Data, Normal };
     std::shared_ptr<Texture> LoadTexture(const std::string& path, TextureUse use = TextureUse::Color);
+    // What a texture's file name says it holds ("_Normal", "_Roughness", ...; see
+    // AssetImport::GuessTextureKind), and the import settings that follow from it.
+    static TextureUse GuessTextureUse(const std::string& path);
+    static TextureImportSettings DefaultTextureSettings(const std::string& path);
     // The settings half of LoadTexture, split out so it can be tested without a GL context:
     // reads the .meta importer block if there is one, else applies the default for `use`.
     // Does nothing if settings for `path` are already known (in-memory settings win).
