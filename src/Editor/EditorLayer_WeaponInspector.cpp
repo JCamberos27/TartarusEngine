@@ -47,7 +47,45 @@ struct WeaponContext {
     std::vector<std::string> Bones;
     bool CanLoadArms = false;
     bool LoadArms = false;                   // out: the user asked to load it
+    const Model* Weapon = nullptr;           // null until the weapon rig is loaded
+    std::vector<std::string> WeaponBones;
+    bool CanLoadWeapon = false;
+    bool LoadWeapon = false;                 // out: load it
 };
+
+// A model file slot: a picker over the project's model files (with a search box) and a drop target for
+// a model dragged from the Asset Browser. Returns true when the path changed.
+bool ModelRow(PropertyRows& r, const char* label, std::string& path, const char* tip) {
+    bool changed = false;
+    ImGui::PushID(label);
+    r.Label(label, tip);
+    ImGui::SetNextItemWidth(-FLT_MIN);
+    const std::string shown = path.empty() ? std::string("(none)") : fs::u8path(path).filename().u8string();
+    ImGui::SetNextWindowSizeConstraints(ImVec2(ImGui::GetFontSize() * 18.0f, 0.0f), ImVec2(FLT_MAX, ImGui::GetFontSize() * 24.0f));
+    if (ImGui::BeginCombo("##model", shown.c_str())) {
+        static char filter[64] = "";
+        if (ImGui::IsWindowAppearing()) { filter[0] = '\0'; ImGui::SetKeyboardFocusHere(); }
+        ImGui::SetNextItemWidth(-FLT_MIN);
+        ImGui::InputTextWithHint("##f", ICON_FA_MAGNIFYING_GLASS " search", filter, sizeof filter);
+        std::string picked = path;
+        if (ProjectClipFileList(filter, picked, 200) && picked != path) {
+            path = picked;
+            changed = true;
+            ImGui::CloseCurrentPopup();
+        }
+        ImGui::EndCombo();
+    }
+    if (ImGui::IsItemHovered()) EditorUI::SetTooltip("%s\n\n%s\nPick a file, or drag one here from the Asset Browser.", path.empty() ? "(none)" : path.c_str(), tip);
+    if (ImGui::BeginDragDropTarget()) {
+        if (const ImGuiPayload* pl = ImGui::AcceptDragDropPayload("ASSET_MODEL_PATH")) {
+            path = ProjectPaths::Relativize(std::string((const char*)pl->Data));
+            changed = true;
+        }
+        ImGui::EndDragDropTarget();
+    }
+    ImGui::PopID();
+    return changed;
+}
 
 void SortUnique(std::vector<std::string>& v) {
     std::sort(v.begin(), v.end());
@@ -848,6 +886,18 @@ void EditorLayer::DrawWeaponDefinitionEditor(const std::string& path) {
         ctx.Arms = arms.get();
         for (int i = 0; i < arms->NodeCount(); ++i) ctx.Bones.push_back(arms->NodeName(i));
     }
+    std::shared_ptr<Model> weaponModel;
+    const std::string weaponPath = s.WeaponModel.empty() ? std::string() : ProjectPaths::Resolve(s.WeaponModel);
+    if (!weaponPath.empty() && m_AssetsPtr) {
+        const fs::path want = fs::u8path(weaponPath).lexically_normal();
+        for (const auto& m : m_AssetsPtr->Models())
+            if (m && fs::u8path(m->Path()).lexically_normal() == want) { weaponModel = m; break; }
+        ctx.CanLoadWeapon = !weaponModel && fs::exists(want, ec);
+    }
+    if (weaponModel) {
+        ctx.Weapon = weaponModel.get();
+        for (int i = 0; i < weaponModel->NodeCount(); ++i) ctx.WeaponBones.push_back(weaponModel->NodeName(i));
+    }
 
     // Status chips.
     {
@@ -957,12 +1007,16 @@ void EditorLayer::DrawWeaponDefinitionEditor(const std::string& path) {
 
     std::snprintf(summary, sizeof summary, "socket %s", s.WeaponSocket.empty() ? "(shared pose)" : s.WeaponSocket.c_str());
     if (r.Section(ICON_FA_PERSON, "Rigs & Mount", summary)) {
-        r.Value("Arms Model", s.ArmsModel.c_str(), "The arms FBX: mesh, skeleton and a rest bind pose.");
-        r.Value("Weapon Model", s.WeaponModel.c_str(), "The weapon FBX: mesh and its own armature.");
+        // The rigs load when this section opens, so the bone lists below are always there.
+        ctx.LoadArms = ctx.CanLoadArms;
+        ctx.LoadWeapon = ctx.CanLoadWeapon;
+        ModelRow(r, "Arms Model", s.ArmsModel, "The arms FBX: mesh, skeleton and a rest bind pose. Takes effect on the next Play.") && (changed = true);
+        ModelRow(r, "Weapon Model", s.WeaponModel, "The weapon FBX: mesh and its own armature. Takes effect on the next Play.") && (changed = true);
         r.Vec3("View Rotation", s.ViewRotation, 0.5f, "%.1f", "Y-X-Z degrees that face the rigs down the camera's -Z (180 Y for a Blender -Y rig).");
         r.Name("Weapon Socket", s.WeaponSocket, ctx.Bones, ctx.Arms != nullptr,
                "Bone on the ARMS rig the gun rides (empty = the weapon shares the arms' pose).", "The arms rig has no bone named '%s'.");
-        r.Text("Weapon Root", s.WeaponRoot, "Bone on the WEAPON rig that lands on the socket.");
+        r.Name("Weapon Root", s.WeaponRoot, ctx.WeaponBones, ctx.Weapon != nullptr, "Bone on the WEAPON rig that lands on the socket.",
+               "The weapon rig has no bone named '%s'.");
         r.Vec3("Mount Rotation", s.WeaponMountRotation, 0.5f, "%.1f", "Fixed socket -> weapon root rotation, Y-X-Z degrees.");
     }
 
@@ -977,6 +1031,8 @@ void EditorLayer::DrawWeaponDefinitionEditor(const std::string& path) {
 
     if (ctx.LoadArms && m_AssetsPtr && !m_AssetsPtr->LoadModel(armsPath))
         Log::Warn("Couldn't load the arms model '" + s.ArmsModel + "' to check bone names.");
+    if (ctx.LoadWeapon && m_AssetsPtr && !m_AssetsPtr->LoadModel(weaponPath))
+        Log::Warn("Couldn't load the weapon model '" + s.WeaponModel + "' to check bone names.");
 
     ImGui::Spacing();
     r.Note("Edits save immediately. Numbers apply live in Play; the rigs and controller on the next Play.");
