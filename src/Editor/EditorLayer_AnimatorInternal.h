@@ -150,10 +150,6 @@ std::string UniqueName(const std::string& base, const std::vector<std::string>& 
 std::vector<std::pair<std::string, std::string>> ClipChoices(Model& model, AssetLibrary& assets);
 std::vector<std::pair<std::string, std::string>> AllClipChoices(AssetLibrary& assets);
 std::string ClipLabel(const std::string& ref);
-// The pose of `st` on `track` at `phase` (0..1), blend trees at `params` (defaults for any missing).
-bool SampleStatePose(Model& model, AssetLibrary& assets, const AnimatorController& D, const AnimatorController::State& st, int track,
-                     float phase, const std::map<std::string, float>& params, int rootNode, const RootMotionSettings& rms,
-                     std::vector<LocalTRS>& pose);
 // Live parameter widget (Inspector section and the Animator window's Parameters tab).
 void LiveParamWidget(AnimatorParam& p, float width);
 // Removes states (and every transition touching them) from a layer.
