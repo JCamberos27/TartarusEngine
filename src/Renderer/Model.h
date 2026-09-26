@@ -3,6 +3,7 @@
 #include <string>
 #include <vector>
 #include <map>
+#include <unordered_map>
 #include <memory>
 #include <functional>
 #include <glm/glm.hpp>
@@ -161,6 +162,10 @@ public:
     // Skins whenever the model has bones: the current clip's pose while one plays, otherwise the
     // bind pose (#98 — a rig with no clip playing used to render in raw mesh space).
     void UploadBoneMatrices(Shader& shader) const;
+    // Call once at the top of each rendered frame: starts the next slice of the bone-palette ring
+    // UploadBoneMatrices writes into (each skinned model's palette goes up once per frame and
+    // every later pass that frame - shadow cascades, depth pre-pass, main pass - rebinds it).
+    static void BeginRenderFrame();
     bool IsPlayingAnimation() const { return m_Anim.Clip >= 0; }
     // Has the current clip run out? True when nothing is set to play, false while a wrapping clip
     // runs, and - unlike IsPlayingAnimation(), which a ClampForever clip never clears - true for a
@@ -322,6 +327,10 @@ private:
         int BoneCounter = 0;
         glm::mat4 GlobalInverseTransform{1.0f};
         std::vector<AnimNode> Nodes; // flattened hierarchy, parents first (#113)
+        // Name -> index into Nodes (the first node of a repeated name, as a scan would find), so
+        // NodeIndex / NodeTransform are a hash lookup: the first-person IK resolves bones by name
+        // for every arm bone of every body piece each frame, and a linear string scan was ~ms.
+        std::unordered_map<std::string, int> NodeLookup;
         std::vector<AnimationClip> Animations;
         std::vector<glm::mat4> BindPoseBones; // #98 — palette with no clip playing
         glm::vec3 BoundsMin{1e30f}, BoundsMax{-1e30f};
@@ -345,6 +354,15 @@ private:
     bool m_ExternalPose = false;   // ApplyLocalPose owns the pose until the next PlayAnimation
     std::vector<LocalTRS> m_AppliedPose; // ... and what it was given (AppliedLocalPose)
     std::vector<glm::mat4> m_FinalBoneMatrices;
+    std::uint64_t m_PoseVersion = 1; // bumped whenever m_FinalBoneMatrices is rewritten
+    // Where this frame's palette already sits in the bone ring (UploadBoneMatrices), and for what.
+    struct BoneUpload {
+        std::uint64_t Epoch = ~0ull, Version = 0;
+        const void* Palette = nullptr;
+        std::ptrdiff_t Offset = 0;
+        int Count = 0;
+    };
+    mutable BoneUpload m_BoneUpload;
     std::vector<glm::mat4> m_NodeGlobals; // scratch, one per AnimNode
 
     // #175 — clips borrowed from other model files, retargeted by node name.
