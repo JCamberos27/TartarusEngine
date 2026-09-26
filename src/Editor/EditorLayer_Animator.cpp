@@ -2040,7 +2040,49 @@ void EditorLayer::DrawAnimatorWindow(World& world) {
             W.LinkFrom = {NodeKind::State, si};
         }
     } else if (W.SelStates.size() > 1) {
-        ImGui::TextDisabled("%d states selected.", (int)W.SelStates.size());
+        ImGui::TextDisabled("%d states selected. Changes below apply to all of them.", (int)W.SelStates.size());
+        auto each = [&](const std::function<void(AC::State&)>& f) {
+            for (int i : W.SelStates)
+                if (i >= 0 && i < (int)L.States.size()) f(L.States[i]);
+            changed = true;
+        };
+        static float s_speed = 1.0f;
+        static int s_priority = 0;
+        static char s_tag[64] = "";
+        ImGui::SeparatorText("Playback");
+        row("Speed");
+        ImGui::SetNextItemWidth(ImGui::GetContentRegionAvail().x - 70.0f * S);
+        ImGui::DragFloat("##bspeed", &s_speed, 0.01f, 0.0f, 10.0f, "x%.2f");
+        ImGui::SameLine();
+        if (ActionButton("Apply##bs", "Set every selected state's Speed")) each([&](AC::State& st) { st.Speed = s_speed; });
+        row("Loop");
+        if (ActionButton("On##bl", "Loop every selected state")) each([](AC::State& st) { st.Loop = true; });
+        ImGui::SameLine();
+        if (ActionButton("Off##bl", "Stop looping every selected state")) each([](AC::State& st) { st.Loop = false; });
+        row("Root Motion");
+        if (ActionButton("On##br", "Let every selected state move the object by root motion")) each([](AC::State& st) { st.RootMotion = true; });
+        ImGui::SameLine();
+        if (ActionButton("Off##br", "Keep every selected state's travel in the pose")) each([](AC::State& st) { st.RootMotion = false; });
+        row("Priority");
+        ImGui::SetNextItemWidth(ImGui::GetContentRegionAvail().x - 70.0f * S);
+        ImGui::InputInt("##bprio", &s_priority);
+        ImGui::SameLine();
+        if (ActionButton("Apply##bp", "Set every selected state's Priority")) each([&](AC::State& st) { st.Priority = s_priority; });
+        ImGui::SeparatorText("Tags");
+        ImGui::SetNextItemWidth(-FLT_MIN);
+        ImGui::InputTextWithHint("##btag", "tag name", s_tag, sizeof s_tag);
+        const bool haveTag = s_tag[0] != 0;
+        ImGui::BeginDisabled(!haveTag);
+        if (ActionButton(ICON_FA_PLUS " Add to all", "Give every selected state this tag")) {
+            each([&](AC::State& st) {
+                if (std::find(st.Tags.begin(), st.Tags.end(), std::string(s_tag)) == st.Tags.end()) st.Tags.push_back(s_tag);
+            });
+        }
+        ImGui::SameLine();
+        if (ActionButton(ICON_FA_MINUS " Remove from all", "Take this tag off every selected state"))
+            each([&](AC::State& st) { st.Tags.erase(std::remove(st.Tags.begin(), st.Tags.end(), std::string(s_tag)), st.Tags.end()); });
+        ImGui::EndDisabled();
+        ImGui::Spacing();
         if (ActionButton(ICON_FA_TRASH " Delete", "Delete the selected states and their transitions")) deleteStates(W.SelStates);
     } else if (W.SelTransition >= 0 && W.SelTransition < (int)L.Transitions.size()) {
         AC::Transition& t = L.Transitions[W.SelTransition];
