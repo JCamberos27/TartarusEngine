@@ -155,6 +155,8 @@ void EditorSettings::Load() {
     s.ToolPaletteCollapsed = SafeValue(root, "toolPaletteCollapsed", s.ToolPaletteCollapsed);
     s.PhysicsDebugInput = SafeValue(root, "physicsDebugInput", s.PhysicsDebugInput);
     s.ShowPhysicsPanel = SafeValue(root, "showPhysicsPanel", s.ShowPhysicsPanel);
+    s.ShowAssetLibrary = SafeValue(root, "showAssetLibrary", s.ShowAssetLibrary);
+    s.AssetLibraryPath = SafeValue(root, "assetLibraryPath", s.AssetLibraryPath);
     s.PhysicsHudOverlay = SafeValue(root, "physicsHudOverlay", s.PhysicsHudOverlay);
     s.PhysicsDebugDrawFlags = SafeValue(root, "physicsDebugDrawFlags", s.PhysicsDebugDrawFlags);
     s.LogPhysicsEvents = SafeValue(root, "logPhysicsEvents", s.LogPhysicsEvents);
@@ -308,6 +310,8 @@ void EditorSettings::Flush() {
     root["toolPaletteCollapsed"] = Get().ToolPaletteCollapsed;
     root["physicsDebugInput"] = Get().PhysicsDebugInput;
     root["showPhysicsPanel"] = Get().ShowPhysicsPanel;
+    root["showAssetLibrary"] = Get().ShowAssetLibrary;
+    root["assetLibraryPath"] = Get().AssetLibraryPath;
     root["physicsHudOverlay"] = Get().PhysicsHudOverlay;
     root["physicsDebugDrawFlags"] = Get().PhysicsDebugDrawFlags;
     root["logPhysicsEvents"] = Get().LogPhysicsEvents;
