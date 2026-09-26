@@ -27,4 +27,8 @@ bool WriteJson(const std::filesystem::path& path, const nlohmann::json& j, int i
 // milliseconds. The project file watcher uses it to ignore the editor's own saves.
 bool WrittenBySelfRecently(const std::filesystem::path& path, int withinMs = 3000);
 
+// Records that this process just wrote `path` some other way (the importer copying a file into
+// the project), so the watcher treats the change as the editor's own, as for WriteBytes.
+void NoteSelfWrite(const std::filesystem::path& path);
+
 } // namespace AtomicFile

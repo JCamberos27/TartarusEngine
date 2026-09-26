@@ -5,6 +5,7 @@
 #include <iterator>
 #include "MaterialAsset.h"
 #include "AtomicFile.h"
+#include "AssetImport.h"
 #include "EditorLayer.h"
 #include "EditorLayerInternal.h"
 #include "FileDialog.h"
@@ -995,6 +996,7 @@ std::string EditorLayer::CopyAssetIntoProject(const std::string& sourcePath, con
         for (int n = 2; fs::exists(folder, ec); ++n) folder = fs::path(destDir) / (stem + " (" + std::to_string(n) + ")");
         fs::create_directories(folder, ec);
         const fs::path dest = folder / abs.filename();
+        AtomicFile::NoteSelfWrite(dest); // imported below; the watcher mustn't reimport it
         if (!ec) fs::copy_file(abs, dest, ec);
         if (ec) {
             Log::Error("Couldn't copy '" + sourcePath + "' into the project (" + ec.message() +
@@ -1020,6 +1022,7 @@ std::string EditorLayer::CopyAssetIntoProject(const std::string& sourcePath, con
         dest = fs::path(destDir) / (stem + " (" + std::to_string(n) + ")" + ext);
     }
 
+    AtomicFile::NoteSelfWrite(dest);
     fs::copy_file(abs, dest, ec);
     if (ec) {
         Log::Error("Couldn't copy '" + sourcePath + "' into the project (" + ec.message() +
@@ -1129,7 +1132,28 @@ void EditorLayer::HandleDroppedFiles(World& world, AssetLibrary& assets, Camera&
         // upstream of this treats them differently, so without this branch a dropped folder
         // just fell through to the "unrecognized extension" case below (a folder path has no
         // extension) and silently did nothing.
+        // A folder from outside the project is copied in whole first, keeping its layout, the
+        // way Unity imports a folder. Asset packs keep textures in a sibling of the model's
+        // folder (Models/ + Textures/); copying file by file scattered them into
+        // assets/models/<name>/ and assets/textures/, copied every texture twice, and lost the
+        // companion files (.bin, .mtl) the import queue doesn't load itself.
         std::filesystem::path root(path);
+        std::error_code rootErr;
+        const std::string projectRoot = std::filesystem::path(ProjectPaths::Root()).lexically_normal().generic_string();
+        const std::string rootAbs = std::filesystem::absolute(root, rootErr).lexically_normal().generic_string();
+        auto lower = [](std::string v) { for (char& c : v) c = (char)std::tolower((unsigned char)c); return v; };
+        if (lower(rootAbs).rfind(lower(projectRoot) + "/", 0) != 0) {
+            const AssetImport::FolderCopy copy = AssetImport::CopyFolderInto(path, ProjectPaths::Resolve("assets"));
+            if (copy.Folder.empty()) {
+                Log::Error("Couldn't copy the folder '" + path + "' into the project (" + copy.Error + ").");
+                continue;
+            }
+            Log::Info("Copied '" + root.filename().string() + "' into '" + ProjectPaths::Relativize(copy.Folder) + "': " +
+                      std::to_string(copy.Files.size()) + " file(s)" +
+                      (copy.Skipped ? ", " + std::to_string(copy.Skipped) + " source/archive file(s) (.blend, .spp, .zip, ...) left behind" : "") + ".");
+            if (!copy.Error.empty()) Log::Warn("Some files in '" + path + "' couldn't be copied: " + copy.Error);
+            root = copy.Folder;
+        }
         std::string rootFolder = m_CurrentAssetFolder.empty()
             ? root.filename().string()
             : m_CurrentAssetFolder + "/" + root.filename().string();
@@ -1153,7 +1177,10 @@ void EditorLayer::HandleDroppedFiles(World& world, AssetLibrary& assets, Camera&
 
             if (entry.is_directory()) {
                 assets.CreateFolder(virtualFolder + "/" + entry.path().filename().string());
-            } else if (entry.is_regular_file()) {
+            } else if (entry.is_regular_file() && !AssetImport::ImportKind(entry.path().string()).empty()) {
+                // Only files the importer loads. The rest (.bin, .mtl, .meta, readmes, a pack's
+                // manifest .json - which ImportDroppedFile would try to open as a scene) are
+                // companion data that sits beside them.
                 assets.CreateFolder(virtualFolder);
                 queueFile(entry.path().string(), virtualFolder);
             }

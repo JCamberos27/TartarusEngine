@@ -99,6 +99,7 @@ std::string SelfWriteKey(const std::filesystem::path& p) {
 #endif
     return k;
 }
+} // namespace
 
 void NoteSelfWrite(const std::filesystem::path& p) {
     const auto now = std::chrono::steady_clock::now();
@@ -108,7 +109,6 @@ void NoteSelfWrite(const std::filesystem::path& p) {
         for (auto it = g_SelfWrites.begin(); it != g_SelfWrites.end();)
             it = now - it->second > std::chrono::seconds(30) ? g_SelfWrites.erase(it) : std::next(it);
 }
-} // namespace
 
 bool WrittenBySelfRecently(const std::filesystem::path& path, int withinMs) {
     std::lock_guard<std::mutex> lk(g_SelfWritesMutex);
