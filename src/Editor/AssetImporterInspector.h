@@ -11,7 +11,9 @@
 class AssetImporterInspector {
 public:
     static void DrawTextureSettings(TextureImportSettings& settings, bool& isDirty);
-    static void DrawModelSettings(ModelImportSettings& settings, bool& isDirty);
+    // `clips` (optional): the model's clips as (name, length in seconds), so a trim is picked from a list.
+    static void DrawModelSettings(ModelImportSettings& settings, bool& isDirty,
+                                  const std::vector<std::pair<std::string, float>>* clips = nullptr);
 
     // isDirty gates both buttons the way Unity's AssetImporterEditor does — Apply/Revert only
     // make sense once something has actually changed from what's on disk. onApply/onRevert are

@@ -49,12 +49,20 @@ struct AnimationClip {
     std::string Name;
     float DurationTicks = 0.0f;
     float TicksPerSecond = 25.0f;
+    // A trim (Model Import Settings > Clip Trims): only [StartTicks, EndTicks] of the source plays; EndTicks <= 0 = to the end.
+    float StartTicks = 0.0f;
+    float EndTicks = 0.0f;
     std::vector<BoneAnimChannel> Channels;
     // Channel index per AnimNode (-1 = the clip doesn't animate that node), resolved once at
     // import (#113: was a std::map<string> lookup per node per frame).
     std::vector<int> NodeChannel;
 
-    float LengthSeconds() const { return TicksPerSecond > 0.0f ? DurationTicks / TicksPerSecond : 0.0f; }
+    // The ticks that play: the whole clip, or the trimmed range.
+    float EffectiveTicks() const {
+        const float end = EndTicks > 0.0f ? std::min(EndTicks, DurationTicks) : DurationTicks;
+        return std::max(0.0f, end - std::min(StartTicks, end));
+    }
+    float LengthSeconds() const { return TicksPerSecond > 0.0f ? EffectiveTicks() / TicksPerSecond : 0.0f; }
 };
 
 // Clip-local time in ticks for a playback position of `seconds`, under `wrap`.

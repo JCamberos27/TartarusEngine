@@ -42,6 +42,11 @@ bool ParseModelImporter(const json& j, ModelImportSettings& s) {
     s.OptimizeGraph      = imp.value("optimizeGraph",     true);
     s.MaterialImportMode = (ModelImportSettings::MaterialMode)imp.value("materialImportMode",
                                (int)ModelImportSettings::MaterialMode::ImportEmbedded);
+    s.ClipTrims.clear();
+    if (imp.contains("clipTrims") && imp["clipTrims"].is_array())
+        for (const auto& t : imp["clipTrims"])
+            if (t.is_object() && t.value("clip", std::string()).size())
+                s.ClipTrims.push_back({t.value("clip", std::string()), t.value("start", 0.0f), t.value("end", 0.0f)});
     return true;
 }
 
@@ -587,6 +592,11 @@ void AssetLibrary::SetModelSettings(const std::string& path, const ModelImportSe
     imp["importSkeleton"]    = settings.ImportSkeleton;
     imp["optimizeGraph"]     = settings.OptimizeGraph;
     imp["materialImportMode"]= (int)settings.MaterialImportMode;
+    if (!settings.ClipTrims.empty()) {
+        json trims = json::array();
+        for (const auto& t : settings.ClipTrims) trims.push_back({{"clip", t.Clip}, {"start", t.StartSeconds}, {"end", t.EndSeconds}});
+        imp["clipTrims"] = trims;
+    }
     AssetDatabase::MergeMetaFields(path, json{{"importer", imp}}.dump());
 }
 
