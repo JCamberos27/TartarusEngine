@@ -533,6 +533,8 @@ component, its children the body pieces - `Quantum_Head`, `_Torso`, `_UnderPants
 the others follow it (`AnimatorControllerComponent::Driver`, set in Play). Pieces whose names
 match **Hidden Parts** (default `Head`) cast shadows but aren't drawn.
 
+Step-by-step setup, the controller contract and tuning: `BODY_SETUP.md`.
+
 **Per frame** (`FirstPersonBody`, `src/Game/FirstPersonBody.h`), around `Player::Update`:
 
 1. `BeforePlayerMove` takes the camera back out of the head and hands the Player last step's root
@@ -586,11 +588,8 @@ at and set aside - see issue #424 for why.
    scene would gate `.fpsanim` loading and clip attachment on every push.
 8. **Materials/textures are out of scope.** Untextured rendering is expected;
    `Texture: failed to load ...` and `Y Bot.fbx` import errors are known noise.
-9. **The true-FPS body is phase 1 of #405.** The body walks by root motion under the
-   camera, but the arms still come from the separate view model (the modular Quantum pieces
-   have none). Phase 2 is arms on the body (camera-relative hand IK, a spine aim offset,
-   retiring the separate arms). Phase 3 is polish: turn in place, starts and stops, crouch,
-   foot IK. See §8b and the issue.
+9. **The true-FPS body has its phases 1-3 merged** (#405): body, weapon arms, turn in place, start/stop,
+   crouch, foot IK. See §8b, `BODY_SETUP.md` (setup and tuning) and issue #426 (authoring tools).
 
 ---
 
