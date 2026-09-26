@@ -130,6 +130,7 @@ void Shader::Reload(const std::string& vertFile, const std::string& fragFile) {
     glDeleteProgram(m_Program);
     m_Program = newProg;
     m_UniformCache.clear();
+    m_LocationBlock.reset();
 }
 
 void Shader::DispatchCompute(unsigned int gx, unsigned int gy, unsigned int gz) const {
@@ -157,47 +158,50 @@ void Shader::Bind() const {
     GLStateCache::UseProgram(m_Program);
 }
 
-int Shader::Loc(const std::string& name) const {
-    auto it = m_UniformCache.find(name);
-    if (it != m_UniformCache.end()) return it->second;
-    int loc = glGetUniformLocation(m_Program, name.c_str());
-    m_UniformCache.emplace(name, loc);
+int Shader::Loc(std::string_view name) const {
+    std::uint64_t h = 1469598103934665603ull; // FNV-1a
+    for (const char c : name) { h ^= (unsigned char)c; h *= 1099511628211ull; }
+    auto it = m_UniformCache.find(h);
+    if (it != m_UniformCache.end() && it->second.Name == name) return it->second.Loc;
+    std::string owned(name);
+    const int loc = glGetUniformLocation(m_Program, owned.c_str());
+    if (it == m_UniformCache.end()) m_UniformCache.emplace(h, CachedUniform{std::move(owned), loc});
     return loc;
 }
 
-void Shader::SetMat4(const std::string& name, const glm::mat4& m) const {
+void Shader::SetMat4(std::string_view name, const glm::mat4& m) const {
     glUniformMatrix4fv(Loc(name), 1, GL_FALSE, glm::value_ptr(m));
 }
 
-void Shader::SetMat4Array(const std::string& name, int count, const glm::mat4* data) const {
+void Shader::SetMat4Array(std::string_view name, int count, const glm::mat4* data) const {
     glUniformMatrix4fv(Loc(name), count, GL_FALSE, glm::value_ptr(data[0]));
 }
 
-void Shader::SetVec3Array(const std::string& name, int count, const glm::vec3* data) const {
+void Shader::SetVec3Array(std::string_view name, int count, const glm::vec3* data) const {
     if (count > 0) glUniform3fv(Loc(name), count, glm::value_ptr(data[0]));
 }
 
-void Shader::SetFloatArray(const std::string& name, int count, const float* data) const {
+void Shader::SetFloatArray(std::string_view name, int count, const float* data) const {
     if (count > 0) glUniform1fv(Loc(name), count, data);
 }
 
-void Shader::SetVec2(const std::string& name, const glm::vec2& v) const {
+void Shader::SetVec2(std::string_view name, const glm::vec2& v) const {
     glUniform2f(Loc(name), v.x, v.y);
 }
 
-void Shader::SetVec3(const std::string& name, const glm::vec3& v) const {
+void Shader::SetVec3(std::string_view name, const glm::vec3& v) const {
     glUniform3f(Loc(name), v.x, v.y, v.z);
 }
 
-void Shader::SetVec4(const std::string& name, const glm::vec4& v) const {
+void Shader::SetVec4(std::string_view name, const glm::vec4& v) const {
     glUniform4f(Loc(name), v.x, v.y, v.z, v.w);
 }
 
-void Shader::SetFloat(const std::string& name, float v) const {
+void Shader::SetFloat(std::string_view name, float v) const {
     glUniform1f(Loc(name), v);
 }
 
-void Shader::SetInt(const std::string& name, int v) const {
+void Shader::SetInt(std::string_view name, int v) const {
     glUniform1i(Loc(name), v);
 }
 

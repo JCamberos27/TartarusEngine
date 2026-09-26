@@ -727,7 +727,13 @@ void FirstPersonBody::ApplySpineAim(const Camera& camera, float amount, float tw
         // The twist about the model's up turns the chest toward the view (positive = to the left).
         const glm::quat step = glm::angleAxis(twist / (float)bones.size(), glm::vec3(0.0f, 1.0f, 0.0f)) *
                                glm::angleAxis(-pitch * amount / (float)bones.size(), glm::vec3(1.0f, 0.0f, 0.0f));
-        for (int i : bones) IK::OffsetBone(pose, parents, globals, i, glm::vec3(0.0f), step, IK::Position(globals[i]));
+        // Only the next spine bone's global is read before ApplyLocalPose re-derives the lot, so
+        // refresh just the path to it rather than the whole upper body after every bone.
+        for (size_t b = 0; b < bones.size(); ++b) {
+            const int i = bones[b];
+            if (b > 0) IK::RefreshPath(pose, parents, globals, bones[b - 1], i);
+            IK::OffsetBoneOnly(pose, parents, globals, i, glm::vec3(0.0f), step, IK::Position(globals[i]));
+        }
         m.ApplyLocalPose(pose);
     }
 }

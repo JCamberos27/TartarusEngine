@@ -236,14 +236,16 @@ void World::SyncActiveInHierarchy() {
 
 void World::RebuildWorldTransformCache() {
     SyncActiveInHierarchy();
-    m_WorldTransformCache.clear();
     auto view = Registry.view<TransformComponent>();
-    m_WorldTransformCache.reserve(view.size());
+    size_t slots = 0;
+    for (entt::entity entity : view) slots = std::max(slots, (size_t)entt::to_entity(entity) + 1);
+    m_WorldTransformKeys.assign(slots, entt::null);
+    m_WorldTransformCache.resize(slots);
 
     // Chain scratch, reused across entities so a deep hierarchy doesn't allocate per entity.
     std::vector<entt::entity> chain;
     for (entt::entity entity : view) {
-        if (m_WorldTransformCache.count(entity)) continue; // already filled as some ancestor
+        if (IsWorldTransformCached(entity)) continue; // already filled as some ancestor
 
         // Walk UP collecting the uncached part of the parent chain, then compose DOWN from the
         // topmost one. Every entity is therefore composed exactly once per rebuild, no matter
@@ -251,8 +253,7 @@ void World::RebuildWorldTransformCache() {
         chain.clear();
         glm::mat4 base(1.0f);
         for (entt::entity walk = entity; walk != entt::null; ) {
-            auto cached = m_WorldTransformCache.find(walk);
-            if (cached != m_WorldTransformCache.end()) { base = cached->second; break; }
+            if (IsWorldTransformCached(walk)) { base = m_WorldTransformCache[(size_t)entt::to_entity(walk)]; break; }
             chain.push_back(walk);
             const auto* h = Registry.try_get<HierarchyComponent>(walk);
             entt::entity next = h ? h->Parent : entt::null;
@@ -278,7 +279,13 @@ void World::RebuildWorldTransformCache() {
             // every entity the editor can create has one, but the cache must not be the thing
             // that crashes on a hand-edited or future component layout.
             if (const auto* t = Registry.try_get<TransformComponent>(*it)) base = base * ComposeTransform(*t);
-            m_WorldTransformCache[*it] = base;
+            const auto slot = (size_t)entt::to_entity(*it);
+            if (slot >= m_WorldTransformKeys.size()) { // a Transform-less ancestor past the view's highest slot
+                m_WorldTransformKeys.resize(slot + 1, entt::null);
+                m_WorldTransformCache.resize(slot + 1);
+            }
+            m_WorldTransformKeys[slot] = *it;
+            m_WorldTransformCache[slot] = base;
         }
     }
 }
@@ -312,8 +319,7 @@ void World::SetWorldPose(entt::entity entity, const glm::vec3& worldPosition, co
 }
 
 glm::mat4 World::GetCachedWorldTransform(entt::entity entity) const {
-    auto it = m_WorldTransformCache.find(entity);
-    if (it != m_WorldTransformCache.end()) return it->second;
+    if (IsWorldTransformCached(entity)) return m_WorldTransformCache[(size_t)entt::to_entity(entity)];
     return ComposeWorldTransform(entity); // spawned since the rebuild, or none has run yet
 }
 

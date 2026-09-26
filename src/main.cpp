@@ -401,6 +401,9 @@ int main(int argc, char** argv) {
     // nonzero code if any failed — parsed here, before anything else, so it can never be
     // confused with a scene-path or other future argument.
     bool smokeTestMode = false;
+    // --perf-bench [dir]: the smoke-test harness with VSync, the FPS cap and GL debug output off,
+    // a longer per-scene run, and an averaged CPU/GPU profiler breakdown printed per scene.
+    bool perfBenchMode = false;
     // --resave <in.json> <out.json>: load a scene and immediately re-serialize it, then exit.
     // The one headless path that exercises the SAVE side of the serializer — round-trip tests
     // (prefab overrides #302 Part B, the reflected-component migrations, ...) all need it. Still
@@ -426,8 +429,9 @@ int main(int argc, char** argv) {
     std::string buildOutArg;
     for (int i = 1; i < argc; ++i) {
         std::string a = argv[i];
-        if (a == "--smoke-test") {
+        if (a == "--smoke-test" || a == "--perf-bench") {
             smokeTestMode = true;
+            perfBenchMode = a == "--perf-bench";
             if (i + 1 < argc && argv[i + 1][0] != '-') smokeScenesDirArg = argv[++i];
         }
         else if (a == "--resave" && i + 2 < argc) { resaveIn = argv[i + 1]; resaveOut = argv[i + 2]; i += 2; }
@@ -564,7 +568,7 @@ int main(int argc, char** argv) {
         // for it regardless of build config / env (audit #356) — otherwise newGlErrors is
         // structurally always 0 in a Release run and the harness only checks "did it draw".
         // Set before the Window exists: it decides whether to request a debug context (#157).
-        if (smokeTestMode) GLDebug::ForceEnable();
+        if (smokeTestMode && !perfBenchMode) GLDebug::ForceEnable();
         Window window(1280, 720, playerMode ? playerCfg.ProductName : std::string("Tartarus Engine"));
         // #174 - the product's own icon, if the build was given one. The editor keeps the icon
         // compiled into the exe's resources (app_icon.rc), which is also what a player falls
@@ -1340,7 +1344,19 @@ int main(int argc, char** argv) {
         // per-frame path (light gather, shadow passes, drawScene, editor.Draw/EndFrame) as an
         // interactive session — the whole point of the harness is catching a regression that
         // path could introduce, not a hand-rolled approximation of it.
-        constexpr int kSmokeTestFrames = 100;
+        // --perf-bench measures each scene twice: kPerfPhaseFrames in edit mode, then as many in Play.
+        constexpr int kPerfPhaseFrames = 600;
+        constexpr int kPerfBenchWarmup = 100; // frames skipped at the start of each phase
+        const int kSmokeTestFrames = perfBenchMode ? 2 * kPerfPhaseFrames : 100;
+        struct PerfAccum { double Sum = 0.0; double Max = 0.0; int N = 0; };
+        std::vector<std::pair<std::string, PerfAccum>> perfCpu, perfGpu;
+        PerfAccum perfFrame;
+        auto perfLastFrameEnd = std::chrono::steady_clock::now();
+        auto perfAdd = [](std::vector<std::pair<std::string, PerfAccum>>& v, const std::string& name, double ms) {
+            auto it = std::find_if(v.begin(), v.end(), [&](const auto& p) { return p.first == name; });
+            if (it == v.end()) { v.emplace_back(name, PerfAccum{}); it = v.end() - 1; }
+            it->second.Sum += ms; it->second.Max = std::max(it->second.Max, ms); ++it->second.N;
+        };
         struct SmokeResult { std::string scenePath; int frames; int newGlErrors; int newLogErrors;
                              int drawCalls; bool loadOk; bool pass; std::string cause; };
         std::vector<std::string> smokeScenePaths;
@@ -1950,10 +1966,11 @@ int main(int argc, char** argv) {
             }
             Profiler::BeginFrame();
             GLStateCache::ResetFrameStats();
+            Model::BeginRenderFrame(); // next slice of the bone-palette ring
 
             // Frame-pacing preferences are live: changing VSync / FPS Limit in Preferences takes
             // effect on the very next frame. SetVSync only touches the driver on an actual change.
-            if (const int wantVSync = playerMode ? (playerCfg.VSync ? 1 : 0) : EditorSettings::Get().VSyncMode;
+            if (const int wantVSync = perfBenchMode ? 0 : playerMode ? (playerCfg.VSync ? 1 : 0) : EditorSettings::Get().VSyncMode;
                 wantVSync != appliedVSyncMode) {
                 appliedVSyncMode = wantVSync;
                 window.SetVSync(appliedVSyncMode);
@@ -2212,8 +2229,11 @@ int main(int argc, char** argv) {
                 // then the sim, then dynamic bodies' poses written back into theirs.
                 // Everything in this block runs on the time-scaled step (#169: slow-mo used to
                 // reach physics only). The game module's FixedUpdate rides the physics sub-steps.
+                {
+                PROFILE_SCOPE("Physics Step");
                 PhysicsWorld::Step(gameDt, world,
                                    [&](float fixedDt) { gameModule.FixedTick(world, fixedDt); });
+                }
                 if (playUsesPlayer) {
                     // The weapon's view punch / lean comes off before the player integrates
                     // its own look and position, and goes back on in Update below.
@@ -2288,10 +2308,14 @@ int main(int argc, char** argv) {
                 // Procedural spin/orbit/bob/light-hue. Play-only: edit mode keeps the authored
                 // pose, and the play-mode snapshot restores everything this touched on Stop.
                 UpdateAnimators(world, gameDt);
+                {
+                PROFILE_SCOPE("Animators");
                 UpdateSkeletalAnimations(world, assets, gameDt); // #175 — Animation components drive their models' clips
                 UpdateAnimatorControllers(world, assets, gameDt); // #175 Part B — state machines
+                }
                 // The arms are posed now (clips + IK): seat the gun in this frame's hands.
                 if (playUsesPlayer) {
+                    PROFILE_SCOPE("First Person IK");
                     firstPersonBody.LateUpdate(world, player.Cam, gameDt, firstPersonPresentation.ArmsEntity(),
                                                firstPersonPresentation.CameraBone()); // camera into the body's head
                     firstPersonPresentation.LateUpdate(world, player.Cam);
@@ -3626,7 +3650,7 @@ int main(int argc, char** argv) {
             // Software frame cap. Runs whatever the VSync mode is, but it's really for VSync Off
             // (with VSync On the driver already blocks in SwapBuffers). 0 = uncapped.
             // #143: in the background and not playing, hold to the (lower) Background FPS too.
-            int fpsCap = EditorSettings::Get().FpsLimit;
+            int fpsCap = perfBenchMode ? 0 : EditorSettings::Get().FpsLimit;
             const int bgCap = EditorSettings::Get().UnfocusedFpsLimit;
             if (bgCap > 0 && !playing && !headless && !glfwGetWindowAttrib(window.Handle(), GLFW_FOCUSED))
                 fpsCap = fpsCap > 0 ? std::min(fpsCap, bgCap) : bgCap;
@@ -3655,6 +3679,33 @@ int main(int argc, char** argv) {
             // score it (new GL errors + draw count) and advance to the next scene.
             if (smokeTestMode && smokeSceneActive) {
                 ++smokeFramesRendered;
+                if (perfBenchMode) {
+                    const auto now = std::chrono::steady_clock::now();
+                    const double frameMs = std::chrono::duration<double, std::milli>(now - perfLastFrameEnd).count();
+                    perfLastFrameEnd = now;
+                    const int phaseFrame = (smokeFramesRendered - 1) % kPerfPhaseFrames + 1;
+                    if (phaseFrame > kPerfBenchWarmup) {
+                        perfFrame.Sum += frameMs; perfFrame.Max = std::max(perfFrame.Max, frameMs); ++perfFrame.N;
+                        for (const Profiler::Entry& e : Profiler::GetLastFrame()) perfAdd(perfCpu, e.Name, e.Milliseconds);
+                        for (const Profiler::Entry& e : Profiler::GetLastFrameGpu()) perfAdd(perfGpu, e.Name, e.Milliseconds);
+                    }
+                    if (phaseFrame == kPerfPhaseFrames) {
+                        std::printf("[PerfBench] %s (%s)  frames=%d  avg=%.3f ms (%.1f fps)  worst=%.3f ms  draws=%d\n",
+                                    std::filesystem::path(smokeScenePaths[smokeSceneIndex]).filename().string().c_str(),
+                                    playing ? "play" : "edit", perfFrame.N, perfFrame.N ? perfFrame.Sum / perfFrame.N : 0.0,
+                                    perfFrame.Sum > 0.0 ? 1000.0 * perfFrame.N / perfFrame.Sum : 0.0,
+                                    perfFrame.Max, editor.GetRenderStats().DrawCalls);
+                        for (auto* v : {&perfCpu, &perfGpu}) {
+                            std::sort(v->begin(), v->end(), [](const auto& a, const auto& b) { return a.second.Sum > b.second.Sum; });
+                            for (const auto& [name, acc] : *v)
+                                std::printf("[PerfBench]   %s %-34s avg=%8.3f ms  max=%8.3f ms\n", v == &perfCpu ? "CPU" : "GPU",
+                                            name.c_str(), acc.Sum / std::max(perfFrame.N, 1), acc.Max);
+                        }
+                        std::fflush(stdout);
+                        perfCpu.clear(); perfGpu.clear(); perfFrame = {};
+                        if (!playing && smokeFramesRendered < kSmokeTestFrames) togglePlay();
+                    }
+                }
                 if (smokeFramesRendered >= kSmokeTestFrames) {
                     int newErrors    = GLDebug::ErrorCount() - smokeBaselineGlErrors;
                     int newLogErrors = Log::CountOf(LogLevel::Error) - smokeBaselineLogErrors;
