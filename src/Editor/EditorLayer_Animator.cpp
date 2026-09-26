@@ -1658,7 +1658,8 @@ void EditorLayer::DrawAnimatorWindow(World& world) {
                             ImGui::TextColored(bad ? EditorUIPrimitives::WarningColor() : ImGui::GetStyleColorVec4(ImGuiCol_TextDisabled),
                                                "Loop seam %.1f cm (%s)%s", a.LoopSeam * 100.0f, a.LoopSeamBone.c_str(), bad ? "  - visible pop when it loops" : "");
                         }
-                        ImGui::PlotLines("##speed", a.SpeedProfile.data(), (int)a.SpeedProfile.size(), 0, "ground speed over the clip", 0.0f, FLT_MAX, ImVec2(-FLT_MIN, 50.0f));
+                        ImGui::PlotLines("##speed", a.SpeedProfile.data(), (int)a.SpeedProfile.size(), 0, "ground speed over the clip", 0.0f,
+                                         std::max(0.5f, 1.15f * *std::max_element(a.SpeedProfile.begin(), a.SpeedProfile.end())), ImVec2(-FLT_MIN, 50.0f));
                         // Contact strips: filled where the foot is planted.
                         const ImVec2 origin = ImGui::GetCursorScreenPos();
                         const float w = ImGui::GetContentRegionAvail().x, h = 10.0f;
