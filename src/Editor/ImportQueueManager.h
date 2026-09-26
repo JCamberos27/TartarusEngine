@@ -3,6 +3,7 @@
 #include <vector>
 #include <string>
 #include <functional>
+#include <map>
 
 // Queues dropped/imported files and drains a few of them per frame, so a large batch drop shows
 // real, animated progress instead of one big synchronous stall.
@@ -17,7 +18,9 @@
 // frames instead, which is safe with zero new GL-threading risk.
 class ImportQueueManager {
 public:
-    using ImportFn = std::function<void(const std::string& path)>;
+    // Imports one file; returns what it imported ("model", "texture", "sound", ...) or "" when
+    // it failed or wasn't something the importer handles.
+    using ImportFn = std::function<std::string(const std::string& path)>;
 
     // Adds files to the queue and logs a one-line breakdown of what's about to import, by
     // resolved type (e.g. "Queued 3 textures and 1 model for import...") - the closest honest
@@ -37,11 +40,24 @@ public:
 
     // Draws the compact, non-modal progress window (bottom-right) while a batch is in flight:
     // current file, an X/N counter, an ImGui::ProgressBar, and the Cancel Remaining button.
-    // No-op when IsActive() is false.
-    void DrawProgressUI();
+    // Once a batch finishes, the same corner shows its summary (what was imported, what failed,
+    // how many warnings / errors it logged) for a few seconds, with a button that runs
+    // `openConsole`. No-op when neither applies.
+    void DrawProgressUI(const std::function<void()>& openConsole = {});
+
+    // The last finished batch's one-line summary ("" before any), for tests and the log.
+    const std::string& LastSummary() const { return m_Summary; }
 
 private:
+    void FinishBatch(int cancelled);
+
     std::deque<std::string> m_Pending;
+    std::map<std::string, int> m_Imported; // per kind, this batch
+    int m_Failed = 0;
+    int m_WarningsAtStart = 0, m_ErrorsAtStart = 0;
+    int m_BatchWarnings = 0, m_BatchErrors = 0;
+    std::string m_Summary;
+    double m_SummaryShownAt = -1.0;
     int m_TotalInBatch = 0;
     int m_ProcessedInBatch = 0;
     std::string m_LastProcessed;
