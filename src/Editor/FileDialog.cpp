@@ -137,6 +137,23 @@ std::vector<std::string> Open(const char* filter, GLFWwindow* owner, bool multi)
 }
 }
 
+std::string FileDialog::PickFolder(GLFWwindow* owner) {
+    std::string out;
+    RunOnStaThread([&] {
+        IFileOpenDialog* dlg = nullptr;
+        if (FAILED(CoCreateInstance(CLSID_FileOpenDialog, nullptr, CLSCTX_INPROC_SERVER, IID_PPV_ARGS(&dlg))))
+            return;
+        IShellItem* item = nullptr;
+        if (Show(dlg, nullptr, owner, FOS_PICKFOLDERS | FOS_PATHMUSTEXIST) && SUCCEEDED(dlg->GetResult(&item))) {
+            const std::wstring w = ItemPath(item);
+            item->Release();
+            if (!w.empty()) out = Narrow(w);
+        }
+        dlg->Release();
+    });
+    return out;
+}
+
 void FileDialog::SetDefaultDirectory(const std::string& dir) {
     std::error_code ec;
     const std::wstring w = Widen(dir);

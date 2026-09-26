@@ -874,8 +874,13 @@ Material Model::ExtractMaterial(const aiScene* scene, unsigned int materialIndex
         };
         fill(mat.AlbedoMap, TextureSetMap::Albedo, TextureRole::Color);
         fill(mat.NormalMap, TextureSetMap::Normal, TextureRole::Normal);
+        // Factors multiply their maps (#102). The file's own factor was chosen with no map in
+        // mind (an FBX's roughness comes from its shininess), so a map found here shows as-is.
+        const bool hadMetallicMap = (bool)mat.MetallicMap, hadRoughnessMap = (bool)mat.RoughnessMap;
         fill(mat.MetallicMap, TextureSetMap::Metallic, TextureRole::Data);
         fill(mat.RoughnessMap, TextureSetMap::Roughness, TextureRole::Data);
+        if (!hadMetallicMap && mat.MetallicMap) mat.Metallic = 1.0f;
+        if (!hadRoughnessMap && mat.RoughnessMap) mat.Roughness = 1.0f;
         fill(mat.AOMap, TextureSetMap::Occlusion, TextureRole::Data);
         fill(mat.EmissiveMap, TextureSetMap::Emissive, TextureRole::Color);
     }

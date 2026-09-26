@@ -6,6 +6,7 @@
 #include "MaterialAsset.h"
 #include "AtomicFile.h"
 #include "AssetImport.h"
+#include "AssetDatabase.h"
 #include "EditorLayer.h"
 #include "EditorLayerInternal.h"
 #include "FileDialog.h"
@@ -1032,6 +1033,36 @@ std::string EditorLayer::CopyAssetIntoProject(const std::string& sourcePath, con
     return dest.generic_string();
 }
 
+// Extract Materials for one model (Asset Browser context menu / Inspector): every material,
+// textured or not, then the new .mat files go into the empty slots of each placed object that
+// uses this model, so the result shows immediately. Undoable.
+void EditorLayer::ExtractMaterialsFor(World& world, AssetLibrary& assets, const std::string& modelKey) {
+    const auto ex = assets.ExtractModelMaterials(modelKey, false);
+    const std::string file = std::filesystem::path(modelKey).filename().string();
+    if (ex.Created + ex.Reused == 0) {
+        Log::Warn("'" + file + "' has no materials to extract.");
+        return;
+    }
+    // Placed objects using this model with at least one slot the new materials would fill.
+    const std::string key = AssetDatabase::PathKey(modelKey);
+    std::vector<entt::entity> targets;
+    for (auto [e, rc] : world.Registry.view<RenderableComponent>().each()) {
+        if (!rc.ModelRef || AssetDatabase::PathKey(rc.ModelRef->Path()) != key) continue;
+        std::vector<std::shared_ptr<MaterialAsset>> probe = rc.Materials;
+        if (assets.ApplyMaterialRemap(*rc.ModelRef, probe) > 0) targets.push_back(e);
+    }
+    if (!targets.empty()) {
+        PushUndo(world, "Extract Materials");
+        for (entt::entity e : targets) {
+            auto& rc = world.Registry.get<RenderableComponent>(e);
+            assets.ApplyMaterialRemap(*rc.ModelRef, rc.Materials);
+        }
+    }
+    Log::Info("Extracted materials for '" + file + "': " + std::to_string(ex.Created) + " created, " +
+              std::to_string(ex.Reused) + " already there, in '" + ProjectPaths::Relativize(ex.Folder) + "'" +
+              (targets.empty() ? "." : "; now used by " + std::to_string(targets.size()) + " object(s) in the scene."));
+}
+
 void EditorLayer::ImportFileIntoProject(World& world, AssetLibrary& assets, const std::string& path) {
     Camera unusedCamera; // ImportDroppedFile keeps a Camera& only for signature symmetry
     ImportDroppedFile(world, assets, m_EditorCameraPtr ? *m_EditorCameraPtr : unusedCamera, path, m_CurrentAssetFolder);
@@ -1057,9 +1088,27 @@ void EditorLayer::ImportDroppedFile(World& world, AssetLibrary& assets, Camera& 
         // Browser -> Viewport drag (DrawViewportDropTarget's live ghost preview).
         assets.LoadModel(projectPath);
         assets.SetAssetFolder(projectPath, targetFolder);
+        // Editable materials straight away: one .mat per textured material, in the asset's
+        // Materials/ folder, used by every instance placed from now on. Only for files that
+        // landed in the project (never writes next to a file outside it).
+        if (!std::filesystem::path(ProjectPaths::Relativize(projectPath)).is_absolute()) {
+            const auto ex = assets.ExtractModelMaterials(projectPath, true);
+            if (ex.Created > 0)
+                Log::Info("Created " + std::to_string(ex.Created) + " material(s) for '" + name + "' in '" +
+                          ProjectPaths::Relativize(ex.Folder) + "'.");
+        }
         Log::Info("Imported model '" + name + "'.");
     } else if (ext == ".png" || ext == ".jpg" || ext == ".jpeg" || ext == ".tga" || ext == ".bmp") {
         std::string projectPath = CopyAssetIntoProject(path, "textures");
+        // A normal / data map (by its name: "_Normal", "_Roughness", "_AO", ...) is saved as one
+        // in its .meta on import, so it's right in the Inspector and every later load, not only
+        // once a material happens to use it. An existing importer block (the file came with its
+        // .meta) is left alone.
+        if (AssetLibrary::GuessTextureUse(projectPath) != AssetLibrary::TextureUse::Color &&
+            AssetDatabase::ReadMetaFields(projectPath).find("\"importer\"") == std::string::npos) {
+            AssetDatabase::EnsureGuid(projectPath);
+            assets.SetTextureSettings(projectPath, AssetLibrary::DefaultTextureSettings(projectPath));
+        }
         auto tex = assets.LoadTexture(projectPath);
         if (tex) {
             assets.SetAssetFolder(projectPath, targetFolder);

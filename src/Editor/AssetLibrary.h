@@ -26,6 +26,10 @@ public:
     // explicit "importer" block in the texture's .meta always wins.
     enum class TextureUse { Color, Data, Normal };
     std::shared_ptr<Texture> LoadTexture(const std::string& path, TextureUse use = TextureUse::Color);
+    // What a texture's file name says it holds ("_Normal", "_Roughness", ...; see
+    // AssetImport::GuessTextureKind), and the import settings that follow from it.
+    static TextureUse GuessTextureUse(const std::string& path);
+    static TextureImportSettings DefaultTextureSettings(const std::string& path);
     // The settings half of LoadTexture, split out so it can be tested without a GL context:
     // reads the .meta importer block if there is one, else applies the default for `use`.
     // Does nothing if settings for `path` are already known (in-memory settings win).
@@ -66,6 +70,21 @@ public:
 
     // Loads a .mat file and registers it in the material library (no-op if already loaded).
     std::shared_ptr<MaterialAsset> LoadMaterial(const std::string& path);
+
+    // Extract Materials (Unity's): writes one editable .mat per material the model imported,
+    // into the asset's Materials/ folder (beside a Models/ folder, else beside the model), with
+    // the maps the import found. An existing .mat of that name is kept, never overwritten, so
+    // re-extracting (or a second clip of the same pack) reuses the one already edited. The
+    // name -> .mat mapping is saved in the model's .meta ("materialRemap") and placed instances
+    // of the model start with those materials in their slots. `onlyTextured` skips materials
+    // with no texture map (plain colours), for the automatic extraction on import.
+    struct MaterialExtraction { int Created = 0, Reused = 0; std::string Folder; };
+    MaterialExtraction ExtractModelMaterials(const std::string& modelPath, bool onlyTextured);
+    // The model's saved material name -> .mat path (project-relative) mapping; empty if none.
+    std::map<std::string, std::string> MaterialRemap(const std::string& modelPath) const;
+    // Fills every empty slot of `slots` whose submesh's imported material has a remapped .mat.
+    // Returns how many slots it filled.
+    int ApplyMaterialRemap(const Model& model, std::vector<std::shared_ptr<MaterialAsset>>& slots);
 
     // Loads a .shader asset and caches it by path (no-op if already loaded). Returns nullptr
     // on parse failure. Cached indefinitely; hot-reload via ShaderAsset::Variant(key).
@@ -219,6 +238,8 @@ private:
 
     std::map<std::string, TextureImportSettings> m_TextureSettings;
     std::map<std::string, ModelImportSettings> m_ModelSettings;
+    // Material remaps read from model .meta files, keyed by AssetDatabase::PathKey.
+    mutable std::map<std::string, std::map<std::string, std::string>> m_MaterialRemap;
     std::map<std::string, std::set<std::string>> m_Labels;
 
     // Cache for AllKnownLabels() (#177) — rebuilt lazily on next read after any mutation that
