@@ -6,6 +6,7 @@
 #include "MaterialAsset.h"
 #include "AtomicFile.h"
 #include "AssetImport.h"
+#include "AssetDatabase.h"
 #include "EditorLayer.h"
 #include "EditorLayerInternal.h"
 #include "FileDialog.h"
@@ -1060,6 +1061,15 @@ void EditorLayer::ImportDroppedFile(World& world, AssetLibrary& assets, Camera& 
         Log::Info("Imported model '" + name + "'.");
     } else if (ext == ".png" || ext == ".jpg" || ext == ".jpeg" || ext == ".tga" || ext == ".bmp") {
         std::string projectPath = CopyAssetIntoProject(path, "textures");
+        // A normal / data map (by its name: "_Normal", "_Roughness", "_AO", ...) is saved as one
+        // in its .meta on import, so it's right in the Inspector and every later load, not only
+        // once a material happens to use it. An existing importer block (the file came with its
+        // .meta) is left alone.
+        if (AssetLibrary::GuessTextureUse(projectPath) != AssetLibrary::TextureUse::Color &&
+            AssetDatabase::ReadMetaFields(projectPath).find("\"importer\"") == std::string::npos) {
+            AssetDatabase::EnsureGuid(projectPath);
+            assets.SetTextureSettings(projectPath, AssetLibrary::DefaultTextureSettings(projectPath));
+        }
         auto tex = assets.LoadTexture(projectPath);
         if (tex) {
             assets.SetAssetFolder(projectPath, targetFolder);
