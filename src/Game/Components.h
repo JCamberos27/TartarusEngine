@@ -613,6 +613,15 @@ struct AnimatorLayerRuntime {
     bool Interruptible = true;     // false while a non-interruptible transition fades
 };
 
+// One transition the controller took, for the Animator window's History tab.
+struct AnimatorTransitionLog {
+    float Time = 0.0f;       // seconds since the controller started
+    int   Layer = 0;
+    int   Transition = -1;   // index in the layer's transition list
+    std::string From, To;    // state names
+    std::string Why;         // the transition's conditions with the parameter values at that moment
+};
+
 // #175 Part B - drives this entity's model from an Animator Controller asset (.controller):
 // clips (or 1D blend trees) as states on one or more layers, crossfaded transitions on parameter
 // conditions. While playing it takes over from an Animation component on the same entity. Game
@@ -657,6 +666,8 @@ struct AnimatorControllerComponent {
     bool  InTransition = false;        // base layer: a crossfade is still running
     std::vector<std::string> FiredEvents;
     std::vector<AnimatorLayerRuntime> Layers;
+    std::vector<AnimatorTransitionLog> History; // newest last, capped
+    float Clock = 0.0f;                         // seconds since the controller started
     // Follower mode: when set, this entity mirrors the driver's layers/states/times exactly and
     // evaluates no transitions of its own - the way a weapon rig stays locked to the arms.
     entt::entity Driver = entt::null;
