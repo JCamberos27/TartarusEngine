@@ -1437,18 +1437,33 @@ void EditorLayer::DrawAnimatorWindow(World& world) {
         return edited;
     };
     // A clip slot: pick from the list, type a reference, or drop a model from the Asset Browser.
+    // Length in seconds of a clip on the chosen rig (0 when there is none or it does not resolve).
+    auto clipLength = [&](const std::string& r) {
+        if (r.empty() || !assets || W.Entity == entt::null || !world.Registry.valid(W.Entity)) return 0.0f;
+        const auto* rc = world.Registry.try_get<RenderableComponent>(W.Entity);
+        if (!rc || !rc->ModelRef) return 0.0f;
+        const int c = ResolveAnimationClip(*rc->ModelRef, r, *assets);
+        return c >= 0 ? rc->ModelRef->AnimationLength(c) : 0.0f;
+    };
     auto clipSlot = [&](const char* id, std::string& ref) {
         bool edited = false;
         ImGui::PushID(id);
         ImGui::SetNextItemWidth(-FLT_MIN);
-        if (ImGui::BeginCombo("##clip", ClipLabel(ref).c_str(), ImGuiComboFlags_HeightLarge)) {
+        std::string preview = ClipLabel(ref);
+        if (const float len = clipLength(ref); len > 0.0f) { char b[24]; std::snprintf(b, sizeof b, "  (%.2f s)", len); preview += b; }
+        if (ImGui::BeginCombo("##clip", preview.c_str(), ImGuiComboFlags_HeightLarge)) {
             static char filter[128] = "";
             ClipFilterBox(filter, sizeof filter);
             if (!filter[0] && ImGui::Selectable("(none)", ref.empty())) { ref.clear(); edited = true; }
             for (const auto& [r, label] : W.Clips)
-                if (ClipFilterMatch(filter, label + " " + r) && ImGui::Selectable((label + "##" + r).c_str(), r == ref)) {
-                    ref = r;
-                    edited = true;
+                if (ClipFilterMatch(filter, label + " " + r)) {
+                    if (ImGui::Selectable((label + "##" + r).c_str(), r == ref)) { ref = r; edited = true; }
+                    if (const float len = clipLength(r); len > 0.0f) {
+                        char b[16];
+                        std::snprintf(b, sizeof b, "%.2f s", len);
+                        ImGui::SameLine(ImGui::GetContentRegionMax().x - ImGui::CalcTextSize(b).x - 8.0f);
+                        ImGui::TextDisabled("%s", b);
+                    }
                 }
             // Files no scene has loaded yet (e.g. an imported animation pack).
             std::string picked = ref;
