@@ -6,7 +6,7 @@
 //    the left, the layer's state machine as a pan/zoom graph in the middle (Entry / Any State /
 //    Exit nodes, transitions as arrows), and the selection's properties on the right. Every edit
 //    is saved straight to the file (a running Play picks it up within a second) and goes on the
-//    window's own undo stack (Ctrl+Z / Ctrl+Y while the window is focused).
+//    editor's undo stack (Ctrl+Z / Ctrl+Y, the History panel), as an asset-only entry.
 #include "EditorLayer.h"
 #include "EditorLayer_AnimatorInternal.h"
 #include "EditorLayerInternal.h"
@@ -51,8 +51,6 @@ void EditorLayer::OpenAnimatorWindow(const std::string& controllerRel, entt::ent
     if (!m_AnimatorWin) m_AnimatorWin = std::make_shared<AnimatorWindowState>();
     auto& w = *m_AnimatorWin;
     if (w.Rel != controllerRel || !w.Loaded) {
-        w.Undo.clear();
-        w.Redo.clear();
         w.Layer = 0;
         w.FramePending = true;
         w.Load(controllerRel);
@@ -253,12 +251,13 @@ void EditorLayer::DrawAnimatorWindow(World& world) {
         if (ImGui::IsItemHovered()) EditorUI::SetTooltip("The .controller being edited. Create one from the Asset Browser's right-click menu.");
         if (W.Loaded) {
             ImGui::SameLine();
-            ImGui::BeginDisabled(W.Undo.empty());
-            if (ActionButton(ICON_FA_ROTATE_LEFT, "Undo (Ctrl+Z)")) W.Step(W.Undo, W.Redo);
+            // The editor's own undo: controller edits are entries on the same stack as scene edits.
+            ImGui::BeginDisabled(m_UndoStack.empty());
+            if (ActionButton(ICON_FA_ROTATE_LEFT, "Undo (Ctrl+Z)")) Undo(world, *m_AssetsPtr);
             ImGui::EndDisabled();
             ImGui::SameLine();
-            ImGui::BeginDisabled(W.Redo.empty());
-            if (ActionButton(ICON_FA_ROTATE_RIGHT, "Redo (Ctrl+Y)")) W.Step(W.Redo, W.Undo);
+            ImGui::BeginDisabled(m_RedoStack.empty());
+            if (ActionButton(ICON_FA_ROTATE_RIGHT, "Redo (Ctrl+Y)")) Redo(world, *m_AssetsPtr);
             ImGui::EndDisabled();
             ImGui::SameLine();
             if (ActionButton(ICON_FA_EXPAND, "Frame all nodes (F)")) W.FramePending = true;
@@ -313,8 +312,7 @@ void EditorLayer::DrawAnimatorWindow(World& world) {
         std::error_code ec;
         const auto stamp = fs::last_write_time(fs::u8path(W.Abs), ec);
         if (!ec && stamp != W.Stamp && !W.MovingNodes) {
-            const auto undo = W.Undo;
-            if (W.Load(W.Rel)) W.Undo = undo;
+            W.Load(W.Rel);
         }
     }
 
@@ -351,7 +349,11 @@ void EditorLayer::DrawAnimatorWindow(World& world) {
     DrawLayersAndParameters(ctx);
     DrawGraphCanvas(ctx);
     DrawSelectionPanel(ctx);
-    if (ctx.changed) W.Commit();
+    if (ctx.changed) {
+        const std::string before = W.Commit();
+        if (!before.empty() && m_AssetsPtr)
+            PushAssetUndo(world, W.Abs, before, "Edit " + fs::u8path(W.Rel).stem().u8string(), /*assetOnly=*/true);
+    }
     ImGui::End();
 }
 

@@ -46,8 +46,7 @@ struct AnimatorWindowState {
     AC Doc;
     bool Loaded = false;
     std::string Error;
-    std::string Saved; // the document as last saved: the undo baseline
-    std::vector<std::string> Undo, Redo;
+    std::string Saved; // the document as last saved: the baseline the next edit is diffed against
 
     entt::entity Entity = entt::null; // rig for clip pickers / live view
     int Layer = 0;
@@ -102,25 +101,15 @@ struct AnimatorWindowState {
         std::error_code ec;
         Stamp = fs::last_write_time(fs::u8path(Abs), ec);
     }
-    // Records the edit on the undo stack and saves. Call after any change is complete.
-    void Commit() {
+    // Saves the edit. Returns the document as it was before (the undo entry the editor's history wants), or
+    // empty when nothing changed. Call after any change is complete.
+    std::string Commit() {
         std::string now = Doc.ToJsonString();
-        if (now == Saved) return;
-        Undo.push_back(std::move(Saved));
-        if (Undo.size() > 200) Undo.erase(Undo.begin());
-        Redo.clear();
+        if (now == Saved) return {};
+        std::string before = std::move(Saved);
         Saved = std::move(now);
         Write();
-    }
-    void Step(std::vector<std::string>& from, std::vector<std::string>& to) {
-        if (from.empty()) return;
-        to.push_back(Saved);
-        Saved = std::move(from.back());
-        from.pop_back();
-        AC::FromJsonString(Saved, Doc);
-        Layer = std::clamp(Layer, 0, (int)Doc.Layers.size() - 1);
-        ClearSelection();
-        Write();
+        return before;
     }
 };
 
