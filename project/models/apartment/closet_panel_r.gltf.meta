@@ -1,5 +1,6 @@
 {
- "guid": "ff9588b8180ea86b",
- "metaVersion": 1,
- "type": "model"
+  "folder": "models/apartment",
+  "guid": "ff9588b8180ea86b",
+  "metaVersion": 1,
+  "type": "model"
 }
