@@ -23,6 +23,9 @@ bool IsSourceOnlyFile(const std::string& path);
 enum class TextureKind { Color, Normal, Data };
 TextureKind GuessTextureKind(const std::string& path);
 
+// True when both files exist and hold the same bytes (size first, then contents).
+bool SameContents(const std::string& a, const std::string& b);
+
 struct FolderCopy {
     std::string Folder;             // the new folder in the project; empty on failure
     std::vector<std::string> Files; // every file copied, absolute

@@ -5,6 +5,8 @@
 #include <cctype>
 #include <filesystem>
 #include <vector>
+#include <fstream>
+#include <cstring>
 
 namespace fs = std::filesystem;
 
@@ -73,6 +75,23 @@ TextureKind GuessTextureKind(const std::string& path) {
         return TextureKind::Color;
     }
     return TextureKind::Color;
+}
+
+bool SameContents(const std::string& a, const std::string& b) {
+    std::error_code ec1, ec2;
+    const uintmax_t sa = fs::file_size(a, ec1), sb = fs::file_size(b, ec2);
+    if (ec1 || ec2 || sa != sb) return false;
+    std::ifstream fa(fs::path(a), std::ios::binary), fb(fs::path(b), std::ios::binary);
+    if (!fa || !fb) return false;
+    std::vector<char> ba(1 << 16), bb(1 << 16);
+    while (fa && fb) {
+        fa.read(ba.data(), (std::streamsize)ba.size());
+        fb.read(bb.data(), (std::streamsize)bb.size());
+        const std::streamsize na = fa.gcount(), nb = fb.gcount();
+        if (na != nb || std::memcmp(ba.data(), bb.data(), (size_t)na) != 0) return false;
+        if (na == 0) break;
+    }
+    return true;
 }
 
 FolderCopy CopyFolderInto(const std::string& sourceDir, const std::string& destParent) {

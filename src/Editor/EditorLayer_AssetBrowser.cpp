@@ -1275,8 +1275,8 @@ void EditorLayer::AssetBrowserImportViaDialog(World& world, AssetLibrary& assets
                     "All Assets\0*.fbx;*.obj;*.gltf;*.glb;*.png;*.jpg;*.jpeg;*.tga;*.bmp;"
                     "*.wav;*.mp3;*.ogg;*.flac\0All Files\0*.*\0";
     if (!m_EditorCameraPtr) return;
-    for (const std::string& p : FileDialog::OpenFiles(filter, m_Window)) // #139 — multi-select
-        ImportDroppedFile(world, assets, *m_EditorCameraPtr, p, intoFolder);
+    (void)world; (void)assets;
+    EnqueueImports(FileDialog::OpenFiles(filter, m_Window), intoFolder); // #139 — multi-select
 }
 
 void EditorLayer::SetAssetTreeWidthPx(float px, bool commit) {

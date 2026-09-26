@@ -562,19 +562,19 @@ void EditorLayer::DrawFileMenuBody(World& world, AssetLibrary& assets) {
                     // Drag it from the Asset Browser into the Viewport to place one. #125 — same
                     // pipeline as drag-drop: copied into the project (with its companion files)
                     // and filed into the open Asset Browser folder.
-                    for (const std::string& path : paths) ImportFileIntoProject(world, assets, path);
+                    EnqueueImports(paths, m_CurrentAssetFolder);
                 }
                 if (ImGui::IsItemHovered()) EditorUI::SetTooltip("FBX / OBJ / glTF - added to the asset library");
                 if (ImGui::MenuItem(ICON_FA_IMAGE "  Texture...")) {
                     const std::vector<std::string> paths = FileDialog::OpenFiles( // #139 multi-select
                         "Images\0*.png;*.jpg;*.jpeg;*.tga;*.bmp\0All Files\0*.*\0", m_Window);
-                    for (const std::string& path : paths) ImportFileIntoProject(world, assets, path); // #125
+                    EnqueueImports(paths, m_CurrentAssetFolder); // #125
                 }
                 if (ImGui::IsItemHovered()) EditorUI::SetTooltip("PNG / JPG / TGA / BMP");
                 if (ImGui::MenuItem(ICON_FA_MUSIC "  Sound...")) {
                     const std::vector<std::string> paths = FileDialog::OpenFiles( // #139 multi-select
                         "Audio\0*.wav;*.mp3;*.ogg;*.flac\0All Files\0*.*\0", m_Window);
-                    for (const std::string& path : paths) ImportFileIntoProject(world, assets, path); // #125
+                    EnqueueImports(paths, m_CurrentAssetFolder); // #125
                 }
                 if (ImGui::IsItemHovered()) EditorUI::SetTooltip("WAV / MP3 / OGG / FLAC");
                 ImGui::EndMenu();
