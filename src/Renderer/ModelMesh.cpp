@@ -55,7 +55,10 @@ ModelMesh::~ModelMesh() {
     glDeleteVertexArrays(1, &m_VAO);
 }
 
-void ModelMesh::Draw() const {
+void ModelMesh::Draw(int instances) const {
     GLStateCache::BindVertexArray(m_VAO);
-    glDrawElements(GL_TRIANGLES, m_IndexCount, GL_UNSIGNED_INT, nullptr);
+    if (instances > 1)
+        glDrawElementsInstanced(GL_TRIANGLES, m_IndexCount, GL_UNSIGNED_INT, nullptr, instances);
+    else
+        glDrawElements(GL_TRIANGLES, m_IndexCount, GL_UNSIGNED_INT, nullptr);
 }

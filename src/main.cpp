@@ -2544,23 +2544,47 @@ int main(int argc, char** argv) {
                 glGetIntegerv(GL_VIEWPORT, prevViewport);
 
                 shadowMap.Configure(world.ShadowResolution, world.ShadowCascades);
-                // #160 — world bounds of everything that can cast, so the cascades' near planes
-                // reach every occluder (animated models padded like the main pass's culling).
+                // Gather the casters once - registry lookups, world transform, world bounds - and
+                // reuse the list for every cascade (it used to redo all of it per cascade).
+                struct SunCaster {
+                    Model* model;
+                    const std::vector<std::shared_ptr<MaterialAsset>>* materials;
+                    glm::mat4 xform;
+                    AABB bounds;
+                    bool bounded, twoSided;
+                };
+                static std::vector<SunCaster> sunCasters;
+                sunCasters.clear();
+                // #160 — world bounds of everything that casts, so the cascades' near planes
+                // reach every occluder.
                 glm::vec3 casterMin(std::numeric_limits<float>::max()), casterMax(-std::numeric_limits<float>::max());
                 for (auto entity : world.Registry.view<TransformComponent, RenderableComponent>()) {
                     if (world.Registry.any_of<InactiveTag, LodCulledTag, PoseSourceTag>(entity)) continue;
-                    const auto& r = world.Registry.get<RenderableComponent>(entity);
-                    if (!r.ModelRef) continue;
-                    glm::vec3 bmin = r.ModelRef->BoundsMin(), bmax = r.ModelRef->BoundsMax();
-                    if (!(bmin.x <= bmax.x && bmin.y <= bmax.y && bmin.z <= bmax.z)) continue;
-                    if (r.ModelRef->HasAnimations()) {
+                    auto& r = world.Registry.get<RenderableComponent>(entity);
+                    // #163 - Cast Shadows: Off skips; Two Sided draws without back-face culling.
+                    if (!r.ModelRef || r.CastShadows == RenderableComponent::ShadowCasting::Off) continue;
+                    SunCaster& sc = sunCasters.emplace_back();
+                    sc.model = r.ModelRef.get();
+                    sc.materials = &r.Materials;
+                    sc.xform = world.GetCachedWorldTransform(entity);
+                    sc.twoSided = r.CastShadows == RenderableComponent::ShadowCasting::TwoSided;
+                    glm::vec3 bmin = sc.model->BoundsMin(), bmax = sc.model->BoundsMax();
+                    sc.bounded = bmin.x <= bmax.x && bmin.y <= bmax.y && bmin.z <= bmax.z;
+                    if (!sc.bounded) continue;
+                    // Bounds are bind-pose only (#113): pad animated models around the centre so
+                    // a swinging limb stays inside, the same inflation the main pass culls with.
+                    if (sc.model->HasAnimations()) {
                         const glm::vec3 c = (bmin + bmax) * 0.5f, h = (bmax - bmin) * 0.5f * 1.75f;
                         bmin = c - h; bmax = c + h;
                     }
-                    const AABB wb = AABB{bmin, bmax}.Transformed(world.GetCachedWorldTransform(entity));
-                    casterMin = glm::min(casterMin, wb.Min);
-                    casterMax = glm::max(casterMax, wb.Max);
+                    sc.bounds = AABB{bmin, bmax}.Transformed(sc.xform);
+                    casterMin = glm::min(casterMin, sc.bounds.Min);
+                    casterMax = glm::max(casterMax, sc.bounds.Max);
                 }
+                // Consecutive draws of the same model share its VAO and (usually) its material,
+                // which the state cache then skips rebinding.
+                std::sort(sunCasters.begin(), sunCasters.end(),
+                          [](const SunCaster& a, const SunCaster& b) { return a.model < b.model; });
                 shadowMap.Update(fitView, fitProj, frameSunDir, world.ShadowDistance, &casterMin, &casterMax);
 
                 glEnable(GL_DEPTH_TEST);
@@ -2577,38 +2601,64 @@ int main(int argc, char** argv) {
                 glPolygonOffset(1.0f, 2.0f);
 
                 shadowShader.Bind();
-                auto casters = world.Registry.view<TransformComponent, RenderableComponent>();
-                // #194: resolve these two hot uniform locations once, outside the 6-face(ish)
-                // x N-caster loop below, instead of hashing "uLightViewProj"/"uModel" every call.
+                // #194: resolve these two hot uniform locations once, outside the cascade x
+                // caster loop below, instead of hashing "uLightViewProj"/"uModel" every call.
                 int shadowLightViewProjLoc = shadowShader.Loc("uLightViewProj");
                 int shadowModelLoc = shadowShader.Loc("uModel");
-                for (int c = 0; c < shadowMap.Count(); ++c) {
+                const int cascadeCount = shadowMap.Count();
+                if (CascadedShadowMap::LayeredSupported()) {
+                    // One pass for every cascade: each caster is drawn once, instanced over the
+                    // consecutive cascades its bounds touch, and the vertex shader routes each
+                    // instance to its layer (gl_Layer) — a quarter of the draw calls of the
+                    // per-cascade loop below, which remains the fallback.
+                    shadowMap.BeginLayered();
+                    Frustum cascadeFrustums[CascadedShadowMap::kMaxCascades];
+                    glm::mat4 cascadeVP[CascadedShadowMap::kMaxCascades];
+                    for (int c = 0; c < cascadeCount; ++c) {
+                        cascadeVP[c] = shadowMap.LightViewProj(c);
+                        cascadeFrustums[c] = Frustum::FromViewProj(cascadeVP[c]);
+                    }
+                    shadowShader.SetMat4Array("uCascadeViewProj[0]", cascadeCount, cascadeVP);
+                    shadowShader.SetInt("uCascadeLayered", 1);
+                    const int firstLoc = shadowShader.Loc("uCascadeFirst");
+                    int boundFirst = -1;
+                    for (const SunCaster& sc : sunCasters) {
+                        unsigned mask = 0;
+                        for (int c = 0; c < cascadeCount; ++c)
+                            if (!sc.bounded || cascadeFrustums[c].Intersects(sc.bounds)) mask |= 1u << c;
+                        if (!mask) continue;
+                        shadowShader.SetMat4(shadowModelLoc, sc.xform);
+                        if (sc.twoSided) glDisable(GL_CULL_FACE);
+                        // One instanced draw per run of consecutive cascades (almost always one run).
+                        for (int c = 0; c < cascadeCount;) {
+                            if (!(mask & (1u << c))) { ++c; continue; }
+                            int end = c;
+                            while (end + 1 < cascadeCount && (mask & (1u << (end + 1)))) ++end;
+                            if (c != boundFirst) { shadowShader.SetInt(firstLoc, c); boundFirst = c; }
+                            sc.model->DrawDepthOnly(shadowShader, *sc.materials, end - c + 1);
+                            c = end + 1;
+                        }
+                        if (sc.twoSided) glEnable(GL_CULL_FACE);
+                    }
+                    // The SSAO depth pre-pass reuses this program with uLightViewProj.
+                    shadowShader.SetInt("uCascadeLayered", 0);
+                }
+                else for (int c = 0; c < cascadeCount; ++c) {
                     shadowMap.Begin(c);
                     shadowShader.SetMat4(shadowLightViewProjLoc, shadowMap.LightViewProj(c));
                     // Cull each cascade's caster list against that cascade's own ortho frustum —
                     // the near slice covers a few metres yet used to redraw the whole level x4.
-                    Frustum cascadeFrustum = Frustum::FromViewProj(shadowMap.LightViewProj(c));
-                    for (auto entity : casters) {
-                        if (world.Registry.any_of<InactiveTag, LodCulledTag, PoseSourceTag>(entity)) continue;
-                        auto& renderable = world.Registry.get<RenderableComponent>(entity);
-                        // #163 - Cast Shadows: Off skips; Two Sided draws without back-face culling.
-                        if (renderable.CastShadows == RenderableComponent::ShadowCasting::Off) continue;
-                        const bool twoSided = renderable.CastShadows == RenderableComponent::ShadowCasting::TwoSided;
-                        glm::mat4 model = world.GetCachedWorldTransform(entity);
-                        glm::vec3 bmin = renderable.ModelRef->BoundsMin();
-                        glm::vec3 bmax = renderable.ModelRef->BoundsMax();
-                        bool validBounds = bmin.x <= bmax.x && bmin.y <= bmax.y && bmin.z <= bmax.z;
-                        // Bounds are bind-pose only (#113), so an animated limb can swing
-                        // outside them — conservatively keep every skinned caster rather than
-                        // risk its shadow popping at a cascade edge. Static geometry culls.
-                        if (validBounds && !renderable.ModelRef->HasAnimations() &&
-                            !cascadeFrustum.Intersects(AABB{bmin, bmax}.Transformed(model)))
-                            continue;
-                        shadowShader.SetMat4(shadowModelLoc, model);
-                        const bool cullWasOn = twoSided && glIsEnabled(GL_CULL_FACE);
-                        if (cullWasOn) glDisable(GL_CULL_FACE);
-                        renderable.ModelRef->DrawDepthOnly(shadowShader, renderable.Materials);
-                        if (cullWasOn) glEnable(GL_CULL_FACE);
+                    // Animated casters cull on their padded bounds too; they used to be drawn
+                    // into every cascade regardless.
+                    const Frustum cascadeFrustum = Frustum::FromViewProj(shadowMap.LightViewProj(c));
+                    for (const SunCaster& sc : sunCasters) {
+                        if (sc.bounded && !cascadeFrustum.Intersects(sc.bounds)) continue;
+                        shadowShader.SetMat4(shadowModelLoc, sc.xform);
+                        // Cull is on for the whole pass (DrawDepthOnly's per-mesh overrides put
+                        // it back), so Two Sided just turns it off around its own draw.
+                        if (sc.twoSided) glDisable(GL_CULL_FACE);
+                        sc.model->DrawDepthOnly(shadowShader, *sc.materials);
+                        if (sc.twoSided) glEnable(GL_CULL_FACE);
                     }
                 }
 

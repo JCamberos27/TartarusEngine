@@ -41,6 +41,15 @@ public:
     // framebuffer — the caller captured and restores it.
     void Begin(int i) const;
 
+    // Single-pass alternative to Begin(i): binds an FBO with the whole array attached (a layered
+    // target), sets the viewport and clears every cascade at once. The caster draws then pick
+    // their layer in the vertex shader (gl_Layer), one instance per cascade. Only valid when
+    // LayeredSupported().
+    void BeginLayered() const;
+    // Whether the driver lets a vertex shader write gl_Layer (ARB_shader_viewport_layer_array or
+    // AMD_vertex_shader_layer). Checked once; needs a current GL context.
+    static bool LayeredSupported();
+
     unsigned int DepthArray() const { return m_DepthArray; }
     int Resolution() const { return m_Resolution; }
     int Count() const { return m_Count; }
@@ -55,7 +64,10 @@ public:
 
 private:
     unsigned int m_DepthArray = 0;
-    unsigned int m_Fbo = 0;
+    // One FBO per cascade, each attached to its own layer once in Configure(). Re-pointing a
+    // single FBO's attachment in every Begin() made the driver revalidate it once per cascade.
+    std::array<unsigned int, kMaxCascades> m_Fbos{};
+    unsigned int m_LayeredFbo = 0; // every layer attached, for BeginLayered()
     int m_Resolution = 2048;
     int m_Count = 4;
 
