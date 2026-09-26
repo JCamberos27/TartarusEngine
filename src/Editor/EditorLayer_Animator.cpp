@@ -209,7 +209,7 @@ void Arrowhead(ImDrawList* dl, ImVec2 at, ImVec2 dir, float size, ImU32 col) {
 
 // --- window state -----------------------------------------------------------------------------
 
-struct EditorLayer::AnimatorWindowState {
+struct AnimatorWindowState {
     std::string Rel, Abs;
     fs::file_time_type Stamp{};
     double LastStat = 0.0;
@@ -475,126 +475,51 @@ void EditorLayer::DrawRootMotionExtra(World& world, entt::entity entity, RootMot
 
 // --- Animator window -------------------------------------------------------------------------
 
-void EditorLayer::DrawAnimatorWindow(World& world) {
-    if (!m_ShowAnimator) return;
-    if (!m_AnimatorWin) m_AnimatorWin = std::make_shared<AnimatorWindowState>();
-    AnimatorWindowState& W = *m_AnimatorWin;
-    AssetLibrary* assets = m_AssetsPtr;
+// --- the window's three panels -----------------------------------------------------------------
+// Each draws into the window's layout (left, middle, right) from the shared per-frame context.
 
-    ImGui::SetNextWindowSize(ImVec2(1100.0f * m_UIScale, 620.0f * m_UIScale), ImGuiCond_FirstUseEver);
-    PushTabChromeText();
-    const bool open = ImGui::Begin(ICON_FA_DIAGRAM_PROJECT "  Animator", &m_ShowAnimator);
-    PopTabChromeText();
-    if (!open) { ImGui::End(); return; }
-    const float S = m_UIScale;
+namespace {
 
-    // --- top bar: file picker, undo/redo, live target -----------------------------------------
-    {
-        ImGui::SetNextItemWidth(260.0f * S);
-        if (ImGui::BeginCombo("##animfile", W.Rel.empty() ? "(open a controller)" : W.Rel.c_str())) {
-            for (const std::string& path : FindAnimatorControllers())
-                if (ImGui::Selectable(path.c_str(), path == W.Rel)) OpenAnimatorWindow(path);
-            ImGui::EndCombo();
-        }
-        if (ImGui::IsItemHovered()) EditorUI::SetTooltip("The .controller being edited. Create one from the Asset Browser's right-click menu.");
-        if (W.Loaded) {
-            ImGui::SameLine();
-            ImGui::BeginDisabled(W.Undo.empty());
-            if (ActionButton(ICON_FA_ROTATE_LEFT, "Undo (Ctrl+Z)")) W.Step(W.Undo, W.Redo);
-            ImGui::EndDisabled();
-            ImGui::SameLine();
-            ImGui::BeginDisabled(W.Redo.empty());
-            if (ActionButton(ICON_FA_ROTATE_RIGHT, "Redo (Ctrl+Y)")) W.Step(W.Redo, W.Undo);
-            ImGui::EndDisabled();
-            ImGui::SameLine();
-            if (ActionButton(ICON_FA_EXPAND, "Frame all nodes (F)")) W.FramePending = true;
-            ImGui::SameLine();
-            ImGui::TextDisabled("%.0f%%", W.Zoom * 100.0f);
-            ImGui::SameLine();
-            ImGui::SetNextItemWidth(130.0f * S);
-            ImGui::InputTextWithHint("##statesearch", ICON_FA_MAGNIFYING_GLASS " find state", g_stateSearch, sizeof g_stateSearch);
-            if (ImGui::IsItemHovered()) EditorUI::SetTooltip("Highlights states whose name contains this text. Enter selects the first and pans to it.");
-            if (ImGui::IsItemDeactivated() && ImGui::IsKeyPressed(ImGuiKey_Enter) && g_stateSearch[0]) {
-                const AC::Layer& sl = W.L();
-                for (int i = 0; i < (int)sl.States.size(); ++i)
-                    if (ClipFilterMatch(g_stateSearch, sl.States[i].Name)) { W.ClearSelection(); W.SelStates = {i}; W.CenterOn = sl.States[i].Name; break; }
-            }
+struct AnimCtx {
+    World& world;
+    AnimatorWindowState& W;
+    AssetLibrary* assets = nullptr;
+    AnimatorControllerComponent* live = nullptr; // the rig's runtime while playing
+    Model* rig = nullptr;                        // the rig's model (clip pickers, previews)
+    float S = 1.0f, leftW = 0.0f, rightW = 0.0f, bodyH = 0.0f;
+    bool changed = false;                        // a discrete edit this frame: committed at the end
+};
 
-            // The rig the clip pickers test against and whose playback is shown live.
-            ImGui::SameLine();
-            std::string targetLabel = "(no rig)";
-            if (W.Entity != entt::null && world.Registry.valid(W.Entity))
-                if (const auto* nc = world.Registry.try_get<NameComponent>(W.Entity)) targetLabel = nc->Name;
-            ImGui::SetNextItemWidth(220.0f * S);
-            if (ImGui::BeginCombo("##animtarget", targetLabel.c_str())) {
-                if (ImGui::Selectable("(no rig)", W.Entity == entt::null)) W.Entity = entt::null;
-                const std::string absSel = ProjectPaths::Resolve(W.Rel);
-                for (auto [e, ac] : world.Registry.view<AnimatorControllerComponent>().each()) {
-                    if (ac.Controller.empty() || ProjectPaths::Resolve(ac.Controller) != absSel) continue;
-                    const auto* nc = world.Registry.try_get<NameComponent>(e);
-                    const std::string label = (nc ? nc->Name : std::string("Entity")) + "##" + std::to_string(entt::to_integral(e));
-                    if (ImGui::Selectable(label.c_str(), e == W.Entity)) W.Entity = e;
-                }
-                ImGui::EndCombo();
-            }
-            if (ImGui::IsItemHovered())
-                EditorUI::SetTooltip("An object using this controller: its model's clips fill the pickers, and in Play its\n"
-                                     "current state is highlighted in the graph.");
-        }
+// Removes states (and every transition touching them) from `layer`.
+void DeleteStates(AnimCtx& c, AC::Layer& Ly, std::vector<int> which) {
+    std::sort(which.rbegin(), which.rend());
+    for (int s : which) {
+        if (s < 0 || s >= (int)Ly.States.size()) continue;
+        const std::string gone = Ly.States[s].Name;
+        Ly.States.erase(Ly.States.begin() + s);
+        Ly.Transitions.erase(std::remove_if(Ly.Transitions.begin(), Ly.Transitions.end(),
+                                            [&](const AC::Transition& t) {
+                                                return (t.FromKind == AC::Source::State && t.From == gone) || t.To == gone;
+                                            }),
+                             Ly.Transitions.end());
+        if (Ly.DefaultState == gone) Ly.DefaultState.clear();
     }
-    if (!W.Loaded) {
-        if (!W.Rel.empty())
-            ImGui::TextColored(EditorUIPrimitives::WarningColor(), ICON_FA_TRIANGLE_EXCLAMATION "  Can't read %s: %s",
-                               W.Rel.c_str(), W.Error.c_str());
-        else
-            ImGui::TextDisabled("Pick a controller above, double-click one in the Asset Browser's Animation folder,\n"
-                                "or use Open Animator on an Animator Controller component.");
-        ImGui::End();
-        return;
-    }
+    c.W.ClearSelection();
+    c.changed = true;
+}
 
-    // Reload when the file changed on disk under us (another tool, or version control).
-    if (ImGui::GetTime() - W.LastStat > 0.5) {
-        W.LastStat = ImGui::GetTime();
-        std::error_code ec;
-        const auto stamp = fs::last_write_time(fs::u8path(W.Abs), ec);
-        if (!ec && stamp != W.Stamp && !W.MovingNodes) {
-            const auto undo = W.Undo;
-            if (W.Load(W.Rel)) W.Undo = undo;
-        }
-    }
 
-    // Live runtime of the chosen rig (Play only).
-    AnimatorControllerComponent* live = nullptr;
-    if (m_InPlayMode && W.Entity != entt::null && world.Registry.valid(W.Entity))
-        if (auto* ac = world.Registry.try_get<AnimatorControllerComponent>(W.Entity); ac && ac->Started) live = ac;
-    if (m_InPlayMode && !live) {
-        // Nothing picked: follow the first object running this controller.
-        const std::string absSel = W.Abs;
-        for (auto [e, ac] : world.Registry.view<AnimatorControllerComponent>().each())
-            if (ac.Started && !ac.Controller.empty() && ProjectPaths::Resolve(ac.Controller) == absSel) {
-                W.Entity = e;
-                live = &ac;
-                break;
-            }
-    }
-
-    // Clip choices come from the rig when there is one, else every clip the project has loaded.
-    Model* rig = nullptr;
-    if (W.Entity != entt::null && world.Registry.valid(W.Entity))
-        if (const auto* rc = world.Registry.try_get<RenderableComponent>(W.Entity)) rig = rc->ModelRef.get();
-    if (assets && (W.ClipsSource != (const void*)rig || W.ClipsModelCount != (int)assets->Models().size())) {
-        W.Clips = rig ? ClipChoices(*rig, *assets) : AllClipChoices(*assets);
-        W.ClipsSource = rig;
-        W.ClipsModelCount = (int)assets->Models().size();
-    }
-
+// Left: layers, parameters, and (while playing) the transition history.
+void DrawLayersAndParameters(AnimCtx& cx) {
+    World& world = cx.world;
+    AnimatorWindowState& W = cx.W;
     AC& D = W.Doc;
-    bool changed = false; // a discrete edit this frame: committed at the end
-
-    const float leftW = 250.0f * S, rightW = 320.0f * S;
-    const float bodyH = ImGui::GetContentRegionAvail().y;
-
+    AssetLibrary* assets = cx.assets;
+    AnimatorControllerComponent* live = cx.live;
+    Model* rig = cx.rig;
+    const float S = cx.S, leftW = cx.leftW, rightW = cx.rightW, bodyH = cx.bodyH;
+    bool& changed = cx.changed;
+    (void)world; (void)assets; (void)live; (void)rig; (void)S; (void)leftW; (void)rightW; (void)bodyH; (void)D;
     // ============================ left: layers / parameters ===================================
     ImGui::BeginChild("##animleft", ImVec2(leftW, bodyH), ImGuiChildFlags_Borders);
     if (ImGui::BeginTabBar("##animlefttabs")) {
@@ -956,6 +881,19 @@ void EditorLayer::DrawAnimatorWindow(World& world) {
     ImGui::EndChild();
     ImGui::SameLine();
 
+}
+
+// Middle: the state graph - nodes, edges, linking, selection, the context menu.
+void DrawGraphCanvas(AnimCtx& cx) {
+    World& world = cx.world;
+    AnimatorWindowState& W = cx.W;
+    AC& D = W.Doc;
+    AssetLibrary* assets = cx.assets;
+    AnimatorControllerComponent* live = cx.live;
+    Model* rig = cx.rig;
+    const float S = cx.S, leftW = cx.leftW, rightW = cx.rightW, bodyH = cx.bodyH;
+    bool& changed = cx.changed;
+    (void)world; (void)assets; (void)live; (void)rig; (void)S; (void)leftW; (void)rightW; (void)bodyH; (void)D;
     // ================================ middle: the graph =======================================
     AC::Layer& Ly = W.L();
     const float canvasW = std::max(100.0f, ImGui::GetContentRegionAvail().x - rightW - ImGui::GetStyle().ItemSpacing.x);
@@ -1270,22 +1208,7 @@ void EditorLayer::DrawAnimatorWindow(World& world) {
         W.SelTransition = (int)Ly.Transitions.size() - 1;
         changed = true;
     };
-    auto deleteStates = [&](std::vector<int> which) {
-        std::sort(which.rbegin(), which.rend());
-        for (int s : which) {
-            if (s < 0 || s >= (int)Ly.States.size()) continue;
-            const std::string gone = Ly.States[s].Name;
-            Ly.States.erase(Ly.States.begin() + s);
-            Ly.Transitions.erase(std::remove_if(Ly.Transitions.begin(), Ly.Transitions.end(),
-                                                [&](const AC::Transition& t) {
-                                                    return (t.FromKind == AC::Source::State && t.From == gone) || t.To == gone;
-                                                }),
-                                 Ly.Transitions.end());
-            if (Ly.DefaultState == gone) Ly.DefaultState.clear();
-        }
-        W.ClearSelection();
-        changed = true;
-    };
+    auto deleteStates = [&](std::vector<int> which) { DeleteStates(cx, Ly, std::move(which)); };
     // withTransitions: the copies also get the transitions of the originals - between two copied states
     // they connect the copies; to or from a state that isn't copied they connect the copy to that state.
     auto duplicateStates = [&](bool withTransitions) {
@@ -1529,6 +1452,19 @@ void EditorLayer::DrawAnimatorWindow(World& world) {
     ImGui::EndChild();
     ImGui::SameLine();
 
+}
+
+// Right: the selection's properties (state, transition, or the layer's defaults).
+void DrawSelectionPanel(AnimCtx& cx) {
+    World& world = cx.world;
+    AnimatorWindowState& W = cx.W;
+    AC& D = W.Doc;
+    AssetLibrary* assets = cx.assets;
+    AnimatorControllerComponent* live = cx.live;
+    Model* rig = cx.rig;
+    const float S = cx.S, leftW = cx.leftW, rightW = cx.rightW, bodyH = cx.bodyH;
+    bool& changed = cx.changed;
+    (void)world; (void)assets; (void)live; (void)rig; (void)S; (void)leftW; (void)rightW; (void)bodyH; (void)D;
     // ============================ right: the selection's properties ===========================
     ImGui::BeginChild("##animright", ImVec2(0.0f, bodyH), ImGuiChildFlags_Borders);
     AC::Layer& L = W.L(); // may have changed layers above
@@ -2124,7 +2060,7 @@ void EditorLayer::DrawAnimatorWindow(World& world) {
             each([&](AC::State& st) { st.Tags.erase(std::remove(st.Tags.begin(), st.Tags.end(), std::string(s_tag)), st.Tags.end()); });
         ImGui::EndDisabled();
         ImGui::Spacing();
-        if (ActionButton(ICON_FA_TRASH " Delete", "Delete the selected states and their transitions")) deleteStates(W.SelStates);
+        if (ActionButton(ICON_FA_TRASH " Delete", "Delete the selected states and their transitions")) DeleteStates(cx, L, W.SelStates);
     } else if (W.SelTransition >= 0 && W.SelTransition < (int)L.Transitions.size()) {
         AC::Transition& t = L.Transitions[W.SelTransition];
         const std::string fromLabel = t.FromKind == AC::Source::Any ? "Any State" : t.FromKind == AC::Source::Entry ? "Entry" : t.From;
@@ -2353,7 +2289,133 @@ void EditorLayer::DrawAnimatorWindow(World& world) {
     }
     ImGui::EndChild();
 
-    if (changed) W.Commit();
+}
+
+} // namespace
+
+void EditorLayer::DrawAnimatorWindow(World& world) {
+    if (!m_ShowAnimator) return;
+    if (!m_AnimatorWin) m_AnimatorWin = std::make_shared<AnimatorWindowState>();
+    AnimatorWindowState& W = *m_AnimatorWin;
+    AssetLibrary* assets = m_AssetsPtr;
+
+    ImGui::SetNextWindowSize(ImVec2(1100.0f * m_UIScale, 620.0f * m_UIScale), ImGuiCond_FirstUseEver);
+    PushTabChromeText();
+    const bool open = ImGui::Begin(ICON_FA_DIAGRAM_PROJECT "  Animator", &m_ShowAnimator);
+    PopTabChromeText();
+    if (!open) { ImGui::End(); return; }
+    const float S = m_UIScale;
+
+    // --- top bar: file picker, undo/redo, live target -----------------------------------------
+    {
+        ImGui::SetNextItemWidth(260.0f * S);
+        if (ImGui::BeginCombo("##animfile", W.Rel.empty() ? "(open a controller)" : W.Rel.c_str())) {
+            for (const std::string& path : FindAnimatorControllers())
+                if (ImGui::Selectable(path.c_str(), path == W.Rel)) OpenAnimatorWindow(path);
+            ImGui::EndCombo();
+        }
+        if (ImGui::IsItemHovered()) EditorUI::SetTooltip("The .controller being edited. Create one from the Asset Browser's right-click menu.");
+        if (W.Loaded) {
+            ImGui::SameLine();
+            ImGui::BeginDisabled(W.Undo.empty());
+            if (ActionButton(ICON_FA_ROTATE_LEFT, "Undo (Ctrl+Z)")) W.Step(W.Undo, W.Redo);
+            ImGui::EndDisabled();
+            ImGui::SameLine();
+            ImGui::BeginDisabled(W.Redo.empty());
+            if (ActionButton(ICON_FA_ROTATE_RIGHT, "Redo (Ctrl+Y)")) W.Step(W.Redo, W.Undo);
+            ImGui::EndDisabled();
+            ImGui::SameLine();
+            if (ActionButton(ICON_FA_EXPAND, "Frame all nodes (F)")) W.FramePending = true;
+            ImGui::SameLine();
+            ImGui::TextDisabled("%.0f%%", W.Zoom * 100.0f);
+            ImGui::SameLine();
+            ImGui::SetNextItemWidth(130.0f * S);
+            ImGui::InputTextWithHint("##statesearch", ICON_FA_MAGNIFYING_GLASS " find state", g_stateSearch, sizeof g_stateSearch);
+            if (ImGui::IsItemHovered()) EditorUI::SetTooltip("Highlights states whose name contains this text. Enter selects the first and pans to it.");
+            if (ImGui::IsItemDeactivated() && ImGui::IsKeyPressed(ImGuiKey_Enter) && g_stateSearch[0]) {
+                const AC::Layer& sl = W.L();
+                for (int i = 0; i < (int)sl.States.size(); ++i)
+                    if (ClipFilterMatch(g_stateSearch, sl.States[i].Name)) { W.ClearSelection(); W.SelStates = {i}; W.CenterOn = sl.States[i].Name; break; }
+            }
+
+            // The rig the clip pickers test against and whose playback is shown live.
+            ImGui::SameLine();
+            std::string targetLabel = "(no rig)";
+            if (W.Entity != entt::null && world.Registry.valid(W.Entity))
+                if (const auto* nc = world.Registry.try_get<NameComponent>(W.Entity)) targetLabel = nc->Name;
+            ImGui::SetNextItemWidth(220.0f * S);
+            if (ImGui::BeginCombo("##animtarget", targetLabel.c_str())) {
+                if (ImGui::Selectable("(no rig)", W.Entity == entt::null)) W.Entity = entt::null;
+                const std::string absSel = ProjectPaths::Resolve(W.Rel);
+                for (auto [e, ac] : world.Registry.view<AnimatorControllerComponent>().each()) {
+                    if (ac.Controller.empty() || ProjectPaths::Resolve(ac.Controller) != absSel) continue;
+                    const auto* nc = world.Registry.try_get<NameComponent>(e);
+                    const std::string label = (nc ? nc->Name : std::string("Entity")) + "##" + std::to_string(entt::to_integral(e));
+                    if (ImGui::Selectable(label.c_str(), e == W.Entity)) W.Entity = e;
+                }
+                ImGui::EndCombo();
+            }
+            if (ImGui::IsItemHovered())
+                EditorUI::SetTooltip("An object using this controller: its model's clips fill the pickers, and in Play its\n"
+                                     "current state is highlighted in the graph.");
+        }
+    }
+    if (!W.Loaded) {
+        if (!W.Rel.empty())
+            ImGui::TextColored(EditorUIPrimitives::WarningColor(), ICON_FA_TRIANGLE_EXCLAMATION "  Can't read %s: %s",
+                               W.Rel.c_str(), W.Error.c_str());
+        else
+            ImGui::TextDisabled("Pick a controller above, double-click one in the Asset Browser's Animation folder,\n"
+                                "or use Open Animator on an Animator Controller component.");
+        ImGui::End();
+        return;
+    }
+
+    // Reload when the file changed on disk under us (another tool, or version control).
+    if (ImGui::GetTime() - W.LastStat > 0.5) {
+        W.LastStat = ImGui::GetTime();
+        std::error_code ec;
+        const auto stamp = fs::last_write_time(fs::u8path(W.Abs), ec);
+        if (!ec && stamp != W.Stamp && !W.MovingNodes) {
+            const auto undo = W.Undo;
+            if (W.Load(W.Rel)) W.Undo = undo;
+        }
+    }
+
+    // Live runtime of the chosen rig (Play only).
+    AnimatorControllerComponent* live = nullptr;
+    if (m_InPlayMode && W.Entity != entt::null && world.Registry.valid(W.Entity))
+        if (auto* ac = world.Registry.try_get<AnimatorControllerComponent>(W.Entity); ac && ac->Started) live = ac;
+    if (m_InPlayMode && !live) {
+        // Nothing picked: follow the first object running this controller.
+        const std::string absSel = W.Abs;
+        for (auto [e, ac] : world.Registry.view<AnimatorControllerComponent>().each())
+            if (ac.Started && !ac.Controller.empty() && ProjectPaths::Resolve(ac.Controller) == absSel) {
+                W.Entity = e;
+                live = &ac;
+                break;
+            }
+    }
+
+    // Clip choices come from the rig when there is one, else every clip the project has loaded.
+    Model* rig = nullptr;
+    if (W.Entity != entt::null && world.Registry.valid(W.Entity))
+        if (const auto* rc = world.Registry.try_get<RenderableComponent>(W.Entity)) rig = rc->ModelRef.get();
+    if (assets && (W.ClipsSource != (const void*)rig || W.ClipsModelCount != (int)assets->Models().size())) {
+        W.Clips = rig ? ClipChoices(*rig, *assets) : AllClipChoices(*assets);
+        W.ClipsSource = rig;
+        W.ClipsModelCount = (int)assets->Models().size();
+    }
+
+
+    const float leftW = 250.0f * S, rightW = 320.0f * S;
+    const float bodyH = ImGui::GetContentRegionAvail().y;
+
+    AnimCtx ctx{world, W, assets, live, rig, S, leftW, rightW, bodyH};
+    DrawLayersAndParameters(ctx);
+    DrawGraphCanvas(ctx);
+    DrawSelectionPanel(ctx);
+    if (ctx.changed) W.Commit();
     ImGui::End();
 }
 
