@@ -2,14 +2,18 @@
 
 The first-person weapon plays its clips exactly as authored. A stack of procedural layers then moves the arms rig's **gun bone** (`ik_hand_gun` on the Manny rig), and **two-bone IK** keeps both hands on it. The weapon is socketed to that bone, so it follows. This is the approach Kinemation's CAS takes.
 
+**The player's body** has its own procedural layers (spine aim, foot IK, the arms following the rig's hands):
+see `BODY_SETUP.md` and `FPS_ANIMATION_SYSTEM.md` §8b. Their tuning fields are on the First Person Body component.
+
 Everything is tuned per weapon in the weapon definition (`.fpsanim`). To open it, either:
 
 - select the player object and press **Edit Weapon Definition** at the bottom of its First Person Controller, or
 - select the file in the Asset Browser's **Animation** folder.
 
-Then open **Procedural** in the Inspector. Edits save immediately and apply **live in Play**: the running game re-reads the file within a quarter second, and that includes changes to the IK bone names.
+Then open the **Recoil**, **Movement** and **IK** sections in the Inspector. Edits save immediately and apply **live in Play**: the running game re-reads the file within a quarter second, and that includes changes to the IK bone names.
 
-Every field explains itself when you hover its label. Each section has a **Reset to Defaults** button, which asks before it resets anything, because these edits can't be undone.
+Every field explains itself when you hover its label. Each section has a **Reset to Defaults** button, which asks before it resets anything. The header's **Undo** button steps back through every change to the weapon,
+including a reset.
 
 ## Axes and units
 
