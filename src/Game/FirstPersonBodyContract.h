@@ -3,6 +3,7 @@
 #include "AnimatorController.h"
 
 #include <functional>
+#include <map>
 #include <string>
 #include <vector>
 
@@ -65,6 +66,15 @@ inline constexpr const char* kBoneClavicle[2] = {"clavicle_l", "clavicle_r"};
 inline constexpr const char* kBoneThigh[2] = {"thigh_l", "thigh_r"};
 inline constexpr const char* kBoneCalf[2] = {"calf_l", "calf_r"};
 inline constexpr const char* kBoneFoot[2] = {"foot_l", "foot_r"};
+
+// A Bone Map turns the standard (UE5 mannequin) bone names into a rig's own: "hand_l = LeftHand, foot_l = LeftFoot".
+// Entries are separated by commas or new lines; unlisted bones keep their standard name.
+std::map<std::string, std::string> ParseBoneMap(const std::string& text);
+// The rig's name for a standard bone.
+inline const std::string& MappedBone(const std::map<std::string, std::string>& map, const std::string& standard) {
+    auto it = map.find(standard);
+    return it == map.end() ? standard : it->second;
+}
 
 // Which body option needs a name.
 enum class Feature { Core, Turning, StartStop, Crouch, FootIK, WeaponArms, SpineAim };
