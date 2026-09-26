@@ -735,6 +735,73 @@ void AdvanceAnimator(const AnimatorController& ctrl, AnimatorControllerComponent
 
 // --- sampling --------------------------------------------------------------------------------
 
+bool AnimatorSampleMotion(Model& M, AssetLibrary& assets, const AnimatorController::Motion& m,
+                          const std::vector<float>& weights, bool loop, bool stripRoot, int rootNode,
+                          const RootMotionSettings& rm, float phase, float stateLen, std::vector<LocalTRS>& out,
+                          std::vector<LocalTRS>& scratch, float* longestClip) {
+    if (longestClip) *longestClip = 0.0f;
+    if (m.Empty()) return false;
+    const AnimationWrapMode wrap = loop ? AnimationWrapMode::Loop : AnimationWrapMode::ClampForever;
+    const bool strip = rootNode >= 0 && stripRoot;
+    auto clip = [&](const std::string& ref) { return ref.empty() ? -1 : ResolveAnimationClip(M, ref, assets); };
+    if (!m.IsBlendTree()) {
+        const int c = clip(m.Clip);
+        if (c < 0) return false;
+        // Real time, not stretched: tracks of different lengths each play at their own rate
+        // and a shorter one holds (or loops) - how the paired arms/weapon clips were authored.
+        M.SampleLocalPose(c, phase * stateLen, wrap, out);
+        if (strip) M.StripRootMotion(out, c, rootNode, rm);
+        if (longestClip) *longestClip = M.AnimationLength(c);
+        return true;
+    }
+    // Blend tree: children are phase-synced, so a walk and a run keep their feet in step.
+    bool any = false;
+    float acc = 0.0f;
+    for (size_t i = 0; i < m.Children.size() && i < weights.size(); ++i) {
+        if (weights[i] <= 0.0f) continue;
+        const int c = clip(m.Children[i].Clip);
+        if (c < 0) continue;
+        const float len = M.AnimationLength(c);
+        std::vector<LocalTRS>& dst = any ? scratch : out;
+        M.SampleLocalPose(c, phase * len, wrap, dst);
+        if (strip) M.StripRootMotion(dst, c, rootNode, rm);
+        if (any) {
+            const float w = weights[i] / (acc + weights[i]);
+            for (size_t b = 0; b < out.size() && b < scratch.size(); ++b) out[b] = LocalTRS::Blend(out[b], scratch[b], w);
+        }
+        acc += weights[i];
+        any = true;
+        if (longestClip) *longestClip = std::max(*longestClip, len);
+    }
+    return any;
+}
+
+bool AnimatorSampleState(Model& M, AssetLibrary& assets, const AnimatorController& D, const AnimatorController::State& st,
+                         int track, float phase, const std::map<std::string, float>& params, int rootNode,
+                         const RootMotionSettings& rm, std::vector<LocalTRS>& pose, float* longestClip) {
+    const AnimatorController::Motion& m = st.MotionFor(track);
+    if (longestClip) *longestClip = 0.0f;
+    if (m.Empty()) return false;
+    auto valueOf = [&](const std::string& name) {
+        auto it = params.find(name);
+        if (it != params.end()) return it->second;
+        const auto* prm = D.FindParameter(name);
+        return prm ? prm->Default : 0.0f;
+    };
+    std::vector<float> weights;
+    float stateLen = 0.0f;
+    if (m.IsBlendTree())
+        weights = m.Is2D() ? AnimatorBlendWeights2D(m.Children, valueOf(m.BlendParam), valueOf(m.BlendParamY))
+                           : AnimatorBlendWeights(m.Children, valueOf(m.BlendParam));
+    else if (const int c = m.Clip.empty() ? -1 : ResolveAnimationClip(M, m.Clip, assets); c >= 0)
+        stateLen = M.AnimationLength(c);
+    // A looping state wraps at 1: keep the end of the slider on the last pose rather than the first.
+    phase = std::clamp(phase, 0.0f, st.Loop ? 0.9999f : 1.0f);
+    std::vector<LocalTRS> scratch;
+    M.BindLocalPose(pose);
+    return AnimatorSampleMotion(M, assets, m, weights, st.Loop, st.RootMotion, rootNode, rm, phase, stateLen, pose, scratch, longestClip);
+}
+
 namespace {
 
 using Pose = std::vector<LocalTRS>;
@@ -773,37 +840,13 @@ struct Sampler {
         return len;
     }
 
-    // `base` is what an empty motion leaves in place. Returns false when the motion is empty.
+    // Returns false when the motion is empty or nothing resolves.
     bool Sample(const AnimatorController::State& s, float phase, float stateLen,
                 const std::vector<AnimatorParam>& params, Pose& out) {
         const auto& m = s.MotionFor(Track);
         if (m.Empty()) return false;
-        const AnimationWrapMode wrap = s.Loop ? AnimationWrapMode::Loop : AnimationWrapMode::ClampForever;
-        const bool strip = RootNode >= 0 && s.RootMotion;
-        if (!m.IsBlendTree()) {
-            const int c = Clip(m.Clip);
-            if (c < 0) return false;
-            // Real time, not stretched: tracks of different lengths each play at their own rate
-            // and a shorter one holds (or loops) - how the paired arms/weapon clips were authored.
-            M.SampleLocalPose(c, phase * stateLen, wrap, out);
-            if (strip) M.StripRootMotion(out, c, RootNode, RM);
-            return true;
-        }
-        // Blend tree: children are phase-synced, so a walk and a run keep their feet in step.
-        const auto w = AnimatorMotionWeights(m, params);
-        bool any = false;
-        float acc = 0.0f;
-        for (size_t i = 0; i < m.Children.size(); ++i) {
-            if (w[i] <= 0.0f) continue;
-            const int c = Clip(m.Children[i].Clip);
-            if (c < 0) continue;
-            M.SampleLocalPose(c, phase * M.AnimationLength(c), wrap, any ? Tmp2 : out);
-            if (strip) M.StripRootMotion(any ? Tmp2 : out, c, RootNode, RM);
-            if (any) BlendInto(out, Tmp2, w[i] / (acc + w[i]));
-            acc += w[i];
-            any = true;
-        }
-        return any;
+        const std::vector<float> w = m.IsBlendTree() ? AnimatorMotionWeights(m, params) : std::vector<float>{};
+        return AnimatorSampleMotion(M, Assets, m, w, s.Loop, s.RootMotion, RootNode, RM, phase, stateLen, out, Tmp2);
     }
 
     // The root's travel in state `s` between two phases, timed exactly as Sample plays it.

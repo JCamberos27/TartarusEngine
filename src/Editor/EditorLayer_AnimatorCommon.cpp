@@ -94,45 +94,6 @@ std::string ClipLabel(const std::string& ref) {
 
 char g_stateSearch[64] = "";
 
-// The pose of `st` on `track` at `phase` (0..1 of the state), blend trees at the values in `params` (defaults for
-// any missing). Each contributing clip plays at its own length times the phase, so they stay in step. False when
-// nothing contributes.
-bool SampleStatePose(Model& model, AssetLibrary& assets, const AnimatorController& D, const AnimatorController::State& st, int track,
-                     float phase, const std::map<std::string, float>& params, int rootNode, const RootMotionSettings& rms,
-                     std::vector<LocalTRS>& pose) {
-    using AC = AnimatorController;
-    const AC::Motion& m = st.MotionFor(track);
-    if (m.Empty()) return false;
-    auto valueOf = [&](const std::string& name) {
-        auto it = params.find(name);
-        if (it != params.end()) return it->second;
-        const auto* prm = D.FindParameter(name);
-        return prm ? prm->Default : 0.0f;
-    };
-    std::vector<float> weights;
-    std::vector<std::string> refs;
-    if (!m.IsBlendTree()) { weights = {1.0f}; refs = {m.Clip}; }
-    else {
-        weights = m.Is2D() ? AnimatorBlendWeights2D(m.Children, valueOf(m.BlendParam), valueOf(m.BlendParamY))
-                           : AnimatorBlendWeights(m.Children, valueOf(m.BlendParam));
-        for (const auto& ch : m.Children) refs.push_back(ch.Clip);
-    }
-    std::vector<LocalTRS> tmp;
-    model.BindLocalPose(pose);
-    float acc = 0.0f;
-    for (size_t i = 0; i < refs.size() && i < weights.size(); ++i) {
-        if (weights[i] <= 0.0f) continue;
-        const int c = ResolveAnimationClip(model, refs[i], assets);
-        const float len = c >= 0 ? model.AnimationLength(c) : 0.0f;
-        if (!(len > 0.0f) || !model.SampleLocalPose(c, std::clamp(phase, 0.0f, 1.0f) * len, AnimationWrapMode::ClampForever, tmp)) continue;
-        if (st.RootMotion && rootNode >= 0) model.StripRootMotion(tmp, c, rootNode, rms);
-        acc += weights[i];
-        if (acc == weights[i]) pose = tmp;
-        else for (size_t b = 0; b < pose.size() && b < tmp.size(); ++b) pose[b] = LocalTRS::Blend(pose[b], tmp[b], weights[i] / acc);
-    }
-    return acc > 0.0f;
-}
-
 // Live parameter widgets (Inspector section and the Animator window's Parameters tab).
 void LiveParamWidget(AnimatorParam& p, float width) {
     ImGui::PushID(p.Name.c_str());
