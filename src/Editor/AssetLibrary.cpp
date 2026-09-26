@@ -4,6 +4,7 @@
 #include "Model.h"
 #include "Texture.h"
 #include "AssetDatabase.h"
+#include "AssetImport.h"
 #include "ProjectSettings.h" // #121 - virtual folders are project data, not scene data
 #include "ProjectPaths.h"
 #include <algorithm>
@@ -174,6 +175,22 @@ std::shared_ptr<Model> AssetLibrary::InstantiateModel(const std::string& path) {
     return CloneModel(LoadModel(path));
 }
 
+AssetLibrary::TextureUse AssetLibrary::GuessTextureUse(const std::string& path) {
+    switch (AssetImport::GuessTextureKind(path)) {
+        case AssetImport::TextureKind::Normal: return TextureUse::Normal;
+        case AssetImport::TextureKind::Data:   return TextureUse::Data;
+        default:                               return TextureUse::Color;
+    }
+}
+
+TextureImportSettings AssetLibrary::DefaultTextureSettings(const std::string& path) {
+    TextureImportSettings s;
+    const TextureUse use = GuessTextureUse(path);
+    if (use != TextureUse::Color) s.IsSRGB = false;
+    if (use == TextureUse::Normal) s.TextureType = TextureImportSettings::Type::NormalMap;
+    return s;
+}
+
 void AssetLibrary::ResolveTextureSettings(const std::string& path, TextureUse use) {
     // Populate settings and browser metadata from .meta before constructing the texture, so
     // that the first import uses the persisted settings rather than requiring a Reimport.
@@ -196,6 +213,10 @@ void AssetLibrary::ResolveTextureSettings(const std::string& path, TextureUse us
     // Gamma-decoding a normal map bends every normal - lighting on a rolling ball shifted with
     // its orientation. Kept in memory only: loading a material must not write .meta files. The
     // Inspector does the same for a map assigned by hand, but a .mat only names its textures.
+    // Nothing chose settings and nothing says what it's used for: go by the file name, so
+    // "Crate_Normal.png" dragged in on its own isn't gamma-decoded as colour either.
+    if (use == TextureUse::Color && m_TextureSettings.find(path) == m_TextureSettings.end())
+        use = GuessTextureUse(path);
     if (use != TextureUse::Color && m_TextureSettings.find(path) == m_TextureSettings.end()) {
         TextureImportSettings s;
         s.IsSRGB = false;
