@@ -850,6 +850,11 @@ void EditorLayer::DrawShaderPreviewInspector(AssetLibrary& assets, const std::st
 // scene entity) is selected in the Asset Browser. Only textures and models have any settings to
 // show — sounds/prefabs/scenes just get a name/path readout, matching Unity (not every asset
 // type has an importer with configurable options).
+namespace {
+// The model whose clip is playing in the Inspector preview (see DrawAssetImportInspector).
+std::weak_ptr<Model> s_PreviewPlaying;
+} // namespace
+
 void EditorLayer::DrawAssetImportInspector(World& world, AssetLibrary& assets, const std::string& key) {
     std::string ext = LowerExt(key);
     bool isTexture = (ext == ".png" || ext == ".jpg" || ext == ".jpeg" || ext == ".tga" || ext == ".bmp");
@@ -955,6 +960,15 @@ void EditorLayer::DrawAssetImportInspector(World& world, AssetLibrary& assets, c
             ImGui::Text("%u triangles, %u vertices, %d mesh(es)", model->TriangleCount(), model->VertexCount(), model->MeshCount());
             if (model->HasAnimations()) ImGui::Text("%d animation clip(s)", model->AnimationCount());
 
+            // A clip played from the list below animates this preview. Only one model plays at a
+            // time: selecting another asset stops the previous one, so its thumbnail and later
+            // previews start from the rest pose again.
+            if (auto prev = s_PreviewPlaying.lock(); prev && prev != model) {
+                prev->StopAnimation();
+                s_PreviewPlaying.reset();
+            }
+            if (model->IsPlayingAnimation()) model->UpdateAnimation(ImGui::GetIO().DeltaTime);
+
             float previewSize = 220.0f;
             ImVec2 previewDims(previewSize, previewSize);
             unsigned int handle = m_ModelPreview.Render(*model, m_ModelPreviewYaw, m_ModelPreviewPitch,
@@ -1042,14 +1056,33 @@ void EditorLayer::DrawAssetImportInspector(World& world, AssetLibrary& assets, c
                     if (ImGui::IsItemHovered())
                         EditorUI::SetTooltip("Texture maps found on import: %s", maps.empty() ? "none" : maps.c_str());
                     ImGui::TableNextColumn();
+                    // The cell is a drop target: drag a .mat from the Asset Browser onto it to use that
+                    // material for every placed object from now on (for packs whose textures the
+                    // import couldn't match). Right-click clears it.
                     auto it = remap.find(m.Name);
+                    const std::string cellId = "##matslot" + std::to_string(i);
                     if (it != remap.end()) {
-                        ImGui::TextUnformatted((ICON_FA_DROPLET " " + std::filesystem::path(it->second).filename().string()).c_str());
-                        if (ImGui::IsItemHovered()) EditorUI::SetTooltip("%s\n\nPlaced objects start with this material.", it->second.c_str());
-                    } else if (maps.empty()) {
-                        ImGui::TextDisabled("No textures");
+                        ImGui::Selectable((ICON_FA_DROPLET " " + std::filesystem::path(it->second).filename().string() + cellId).c_str(), false);
+                        if (ImGui::IsItemHovered())
+                            EditorUI::SetTooltip("%s\n\nPlaced objects start with this material.\nDrop another .mat here to change it; right-click to clear.", it->second.c_str());
                     } else {
-                        ImGui::TextDisabled("%s", maps.c_str());
+                        ImGui::PushStyleColor(ImGuiCol_Text, ImGui::GetStyleColorVec4(ImGuiCol_TextDisabled));
+                        ImGui::Selectable(((maps.empty() ? std::string("No textures") : maps) + cellId).c_str(), false);
+                        ImGui::PopStyleColor();
+                        if (ImGui::IsItemHovered())
+                            EditorUI::SetTooltip("Uses the maps the import found.\nDrop a .mat here to use that material instead.");
+                    }
+                    if (ImGui::BeginDragDropTarget()) {
+                        if (const ImGuiPayload* p = ImGui::AcceptDragDropPayload("ASSET_MATERIAL_PATH")) {
+                            assets.SetMaterialRemap(key, m.Name, (const char*)p->Data);
+                            Log::Info("'" + m.Name + "' in '" + std::filesystem::path(key).filename().string() + "' now uses '" +
+                                      std::filesystem::path((const char*)p->Data).filename().string() + "' for newly placed objects.");
+                        }
+                        ImGui::EndDragDropTarget();
+                    }
+                    if (it != remap.end() && ImGui::BeginPopupContextItem(cellId.c_str())) {
+                        if (ImGui::MenuItem("Clear")) assets.SetMaterialRemap(key, m.Name, "");
+                        ImGui::EndPopup();
                     }
                 }
                 ImGui::EndTable();
@@ -1059,6 +1092,49 @@ void EditorLayer::DrawAssetImportInspector(World& world, AssetLibrary& assets, c
                              "(existing ones are kept) and use them on this model's placed objects.",
                              false, ImVec2(-1.0f, 0.0f)))
                 ExtractMaterialsFor(world, assets, key);
+        }
+
+        // Its animation clips: name and length, and (when there's a mesh to see) play / stop in
+        // the preview above. Clips attached from other files are listed too, marked as such.
+        if (model && model->HasAnimations()) {
+            ImGui::Spacing();
+            char clipsHeader[48];
+            std::snprintf(clipsHeader, sizeof(clipsHeader), "Animation Clips (%d)###animclips", model->AnimationCount());
+            if (ImGui::CollapsingHeader(clipsHeader, ImGuiTreeNodeFlags_DefaultOpen)) {
+                const bool canPreview = model->MeshCount() > 0;
+                if (!canPreview) ImGui::TextDisabled("Animation only - place it on a matching character to see it.");
+                if (ImGui::BeginTable("##animclipstbl", canPreview ? 3 : 2, ImGuiTableFlags_RowBg | ImGuiTableFlags_SizingStretchProp)) {
+                    ImGui::TableSetupColumn("Clip", ImGuiTableColumnFlags_WidthStretch, 0.7f);
+                    ImGui::TableSetupColumn("Length", ImGuiTableColumnFlags_WidthStretch, 0.3f);
+                    if (canPreview) ImGui::TableSetupColumn("##play", ImGuiTableColumnFlags_WidthFixed, ImGui::GetFrameHeight());
+                    for (int c = 0; c < model->AnimationCount(); ++c) {
+                        ImGui::TableNextRow();
+                        ImGui::TableNextColumn();
+                        const std::string& clipName = model->AnimationName(c);
+                        ImGui::TextUnformatted(clipName.empty() ? "(unnamed)" : clipName.c_str());
+                        if (c >= model->OwnAnimationCount() && ImGui::IsItemHovered())
+                            EditorUI::SetTooltip("Attached from another file.");
+                        ImGui::TableNextColumn();
+                        ImGui::Text("%.2f s", model->AnimationLength(c));
+                        if (canPreview) {
+                            ImGui::TableNextColumn();
+                            ImGui::PushID(c);
+                            const bool playing = model->CurrentAnimation() == c;
+                            if (ActionButton(playing ? ICON_FA_STOP : ICON_FA_PLAY, playing ? "Stop" : "Play in the preview", playing)) {
+                                if (playing) {
+                                    model->StopAnimation();
+                                    s_PreviewPlaying.reset();
+                                } else {
+                                    model->PlayAnimation(c);
+                                    s_PreviewPlaying = model;
+                                }
+                            }
+                            ImGui::PopID();
+                        }
+                    }
+                    ImGui::EndTable();
+                }
+            }
         }
 
         // Sub-asset list (#236 G): the meshes this file imported to, with their geometry counts
