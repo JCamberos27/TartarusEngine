@@ -5,6 +5,8 @@
 // (controller, socket, IK bones, ADS actions). Every committed edit is saved straight to the
 // file, where a running Play picks it up, and goes on the Inspector's own undo stack (the arrows
 // in the overview card).
+#include "AnimationSystem.h"
+#include "RotationMath.h"
 #include "SetupChecksUI.h"
 #include "EditorLayer.h"
 #include "EditorLayerInternal.h"
@@ -852,6 +854,48 @@ void EditorLayer::DrawWeaponDefinitionEditor(const std::string& path) {
         ImGui::EndDisabled();
         ImGui::TextDisabled("%s", ProjectPaths::Relativize(path).c_str());
     }
+    // Copy tuning from another weapon: pick the sections, then the weapon. Undo takes it back.
+    static bool s_copyGameplay = true, s_copyAds = true, s_copyBarrel = true, s_copyRecoil = true, s_copyMovement = true, s_copyIK = false;
+    bool copied = false;
+    if (ActionButton(ICON_FA_COPY "  Copy Settings From...", "Take gameplay, ADS, recoil and movement numbers from another weapon", false, ImVec2(-FLT_MIN, 0.0f)))
+        ImGui::OpenPopup("##copyfrom");
+    if (ImGui::BeginPopup("##copyfrom")) {
+        ImGui::TextDisabled("Sections to copy");
+        ImGui::Checkbox("Gameplay (magazine, fire rate, impacts)", &s_copyGameplay);
+        ImGui::Checkbox("Aim-down-sights", &s_copyAds);
+        ImGui::Checkbox("Barrel and laser", &s_copyBarrel);
+        ImGui::Checkbox("Recoil", &s_copyRecoil);
+        ImGui::Checkbox("Movement (sway, bob, breathing, camera, walls)", &s_copyMovement);
+        ImGui::Checkbox("IK (bone names: only for the same arms rig)", &s_copyIK);
+        ImGui::SeparatorText("From");
+        RefreshAnimationListingIfNeeded();
+        for (const std::string& other : m_AnimationListingCache.paths) {
+            if (fs::u8path(other).extension() != ".fpsanim" || fs::u8path(other).lexically_normal() == fs::u8path(path).lexically_normal()) continue;
+            if (!ImGui::Selectable(fs::u8path(other).stem().u8string().c_str())) continue;
+            FirstPersonAnimationSet from;
+            std::string err;
+            if (!FirstPersonAnimationSet::LoadFile(other, from, &err)) {
+                Log::Warn("Copy Settings: couldn't read '" + other + "': " + err);
+                continue;
+            }
+            if (s_copyGameplay) s.Gameplay = from.Gameplay;
+            if (s_copyAds) s.Ads = from.Ads;
+            if (s_copyBarrel) { s.Muzzle = from.Muzzle; s.Laser = from.Laser; }
+            WeaponProceduralSettings merged = from.Procedural;
+            if (!s_copyRecoil) merged.Recoil = s.Procedural.Recoil;
+            if (!s_copyIK) merged.IK = s.Procedural.IK;
+            if (!s_copyMovement) {
+                WeaponProceduralSettings keep = s.Procedural;
+                keep.Recoil = merged.Recoil;
+                keep.IK = merged.IK;
+                merged = keep;
+            }
+            s.Procedural = merged;
+            copied = true;
+            ImGui::CloseCurrentPopup();
+        }
+        ImGui::EndPopup();
+    }
     if (!cache.Error.empty()) {
         ImGui::PushTextWrapPos(0.0f);
         ImGui::TextColored(EditorUIPrimitives::WarningColor(), ICON_FA_TRIANGLE_EXCLAMATION "  %s", cache.Error.c_str());
@@ -1018,6 +1062,49 @@ void EditorLayer::DrawWeaponDefinitionEditor(const std::string& path) {
         r.Name("Weapon Root", s.WeaponRoot, ctx.WeaponBones, ctx.Weapon != nullptr, "Bone on the WEAPON rig that lands on the socket.",
                "The weapon rig has no bone named '%s'.");
         r.Vec3("Mount Rotation", s.WeaponMountRotation, 0.5f, "%.1f", "Fixed socket -> weapon root rotation, Y-X-Z degrees.");
+        // Measure it: the rotation between the socket and the weapon root at the first frame of the default
+        // state's clips (how the two files were authored to sit together), Y-X-Z degrees.
+        {
+            const bool can = arms && weaponModel && ctx.Controller && !s.WeaponSocket.empty() && !s.WeaponRoot.empty() && m_AssetsPtr;
+            ImGui::BeginDisabled(!can);
+            if (ActionButton(ICON_FA_RULER "  Measure Mount Rotation",
+                             "Reads the socket's and the weapon root's orientation on the first frame of the default state's clips\n"
+                             "and sets Mount Rotation to the fixed turn between them (needs the rigs loaded and a socket / root set).",
+                             false, ImVec2(-FLT_MIN, 0.0f))) {
+                const AnimatorController& ac = *ctx.Controller;
+                const AnimatorController::Layer& layer = ac.Layers[0];
+                const int di = layer.DefaultStateIndex() >= 0 ? layer.DefaultStateIndex() : 0;
+                std::string armsRef, weaponRef;
+                if (di < (int)layer.States.size()) {
+                    const auto& st = layer.States[di];
+                    const int at = ac.TrackIndex("arms"), wt = ac.TrackIndex("weapon");
+                    if (at < (int)st.Motions.size()) armsRef = st.Motions[at].Clip;
+                    if (wt < (int)st.Motions.size()) weaponRef = st.Motions[wt].Clip;
+                }
+                const int ac0 = armsRef.empty() ? -1 : ResolveAnimationClip(*arms, armsRef, *m_AssetsPtr);
+                const int wc0 = weaponRef.empty() ? -1 : ResolveAnimationClip(*weaponModel, weaponRef, *m_AssetsPtr);
+                const int sn = arms->NodeIndex(s.WeaponSocket), rn = weaponModel->NodeIndex(s.WeaponRoot);
+                if (sn < 0 || rn < 0) {
+                    Log::Warn("Measure Mount Rotation: the socket or the weapon root is not on its rig.");
+                } else {
+                    // A missing clip (no weapon clip for the default state) measures the bind pose.
+                    const glm::mat4 sock = arms->SampleNodeModelSpace(ac0, 0.0f, AnimationWrapMode::ClampForever, sn);
+                    const glm::mat4 root = weaponModel->SampleNodeModelSpace(wc0, 0.0f, AnimationWrapMode::ClampForever, rn);
+                    auto rot = [](const glm::mat4& m) {
+                        glm::mat3 b(m);
+                        for (int c = 0; c < 3; ++c) b[c] = glm::normalize(b[c]);
+                        return glm::normalize(glm::quat_cast(b));
+                    };
+                    const glm::vec3 e = EulerYXZFromQuaternion(glm::inverse(rot(sock)) * rot(root));
+                    auto snap = [](float v) { const float q = std::round(v / 90.0f) * 90.0f; return std::abs(v - q) < 0.05f ? q : std::round(v * 100.0f) / 100.0f; };
+                    s.WeaponMountRotation = {snap(e.x), snap(e.y), snap(e.z)};
+                    changed = true;
+                    Log::Info("Measured mount rotation (Y-X-Z): " + std::to_string(s.WeaponMountRotation.x) + ", " +
+                              std::to_string(s.WeaponMountRotation.y) + ", " + std::to_string(s.WeaponMountRotation.z));
+                }
+            }
+            ImGui::EndDisabled();
+        }
     }
 
     const auto& rc = s.Procedural.Recoil;
@@ -1036,6 +1123,7 @@ void EditorLayer::DrawWeaponDefinitionEditor(const std::string& path) {
 
     ImGui::Spacing();
     r.Note("Edits save immediately. Numbers apply live in Play; the rigs and controller on the next Play.");
+    if (copied) changed = true;
     if (changed) {
         cache.Undo.push_back(cache.Saved);
         if (cache.Undo.size() > 100) cache.Undo.erase(cache.Undo.begin());
