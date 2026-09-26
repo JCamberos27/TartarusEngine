@@ -1202,6 +1202,9 @@ private:
         // .mat file is already saved.
         std::string AssetPath;
         std::string AssetJson;
+        // An edit to a non-scene file (an Animator Controller): popping it only rewrites the file,
+        // and never reloads the scene - so it also works in Play, where the scene must not be touched.
+        bool AssetOnly = false;
         bool CountsAsSceneEdit() const { return !SelectionOnly && AssetPath.empty(); }
     };
     std::vector<UndoEntry> m_UndoStack;
@@ -1241,7 +1244,9 @@ private:
     // the NEW one, not the pre-change snapshot every UndoEntry is supposed to hold.
     // #107 — records a .mat asset edit: `before` is the file's contents before the save that
     // just happened. Undo/Redo swap the file back and reload the material in place.
-    void PushAssetUndo(const World& world, const std::string& matPath, std::string before, const std::string& label);
+    // `assetOnly`: the edit is to a non-scene file (an Animator Controller), see UndoEntry::AssetOnly.
+    void PushAssetUndo(const World& world, const std::string& matPath, std::string before, const std::string& label,
+                       bool assetOnly = false);
     // Writes `json` to the .mat at `path` and reloads the library's MaterialAsset in place, so
     // every renderer sharing it updates.
     void RestoreMaterialFile(AssetLibrary& assets, const std::string& path, const std::string& json);
