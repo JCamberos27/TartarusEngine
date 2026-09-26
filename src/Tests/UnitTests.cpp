@@ -1375,6 +1375,41 @@ void TestFirstPersonWeaponWizard() {
     CHECK(BuildFirstPersonController(set).Layers[0].FindState("Fire") >= 0);
 }
 
+// The standard body locomotion graph: the builder gives the tuned reference (14 states, 20 parameters,
+// 63 transitions), passes the lint and the body contract, and its clips are filled by role.
+void TestFirstPersonBodyController() {
+    const std::vector<std::string> roles = FPBody::LocomotionRoles();
+    CHECK(roles.size() > 40 && std::find(roles.begin(), roles.end(), std::string("Loco_Walk_Fwd")) != roles.end());
+    AnimatorController c = FPBody::BuildLocomotionController([](const std::string& r) { return "clips/AM_" + r + ".fbx"; });
+    CHECK(c.Layers[0].States.size() == 14 && c.Parameters.size() == 20 && c.Layers[0].Transitions.size() == 63);
+    CHECK(c.Layers[0].DefaultState == "Locomotion" && c.Layers[0].FindState("CrouchStop") >= 0);
+    // The tuned numbers survived: Stop leaves Locomotion at 0.36, the jog forward child sits at 3.264 m/s.
+    bool stop = false;
+    for (const auto& t : c.Layers[0].Transitions)
+        if (t.From == "Locomotion" && t.To == "Stop") stop = std::abs(t.Offset - 0.36f) < 1e-5f;
+    CHECK(stop);
+    const auto& loco = c.Layers[0].States[c.Layers[0].FindState("Locomotion")].Motions[0];
+    CHECK(loco.Is2D() && loco.Children.size() == 18 && loco.Children[9].Clip == "clips/AM_Loco_Jog_Fwd.fbx" &&
+          std::abs(loco.Children[9].ThresholdY - 3.264f) < 1e-4f);
+    // Round trip through the file format, then the checks: nothing to report.
+    AnimatorController back;
+    CHECK(AnimatorController::FromJsonString(c.ToJsonString(), back));
+    CHECK(back.Layers[0].Transitions.size() == 63);
+    int problems = 0;
+    for (const auto& i : AnimatorLint::Check(c)) problems += i.Severity != AnimatorLint::Level::Info;
+    CHECK(problems == 0);
+    FirstPersonBodyComponent all;
+    all.TurnThreshold = 55.0f; all.StartStopClips = true; all.CrouchHeight = 1.2f; all.FootIK = true; all.WeaponArms = true;
+    FPBody::ValidationInput in;
+    in.Config = &all;
+    in.HasPieces = in.HasDriverPiece = in.ControllerSet = true;
+    in.Controller = &c;
+    for (const auto& k : FPBody::Validate(in)) CHECK(k.Level != FPBody::Severity::Warning && k.Level != FPBody::Severity::Error);
+    // Role matching: "Loco_Walk_Fwd" is that file, not the Fwd_Left one.
+    CHECK(FPBody::PickLocomotionClip("Loco_Walk_Fwd", {"a/AM_Loco_Walk_Fwd_Left.fbx", "a/AM_Loco_Walk_Fwd.fbx"}) == "a/AM_Loco_Walk_Fwd.fbx");
+    CHECK(FPBody::PickLocomotionClip("Loco_Walk_Fwd", {"a/AM_Loco_Walk_Fwd_Left.fbx"}).empty());
+}
+
 // A weapon setup is checked against the driver's contract: a full controller is clean, each missing
 // piece (event, tag, parameter, bone) is named.
 void TestFirstPersonWeaponValidate() {
@@ -3202,6 +3237,7 @@ int RunUnitTests() {
         {"FirstPersonBodyValidate", TestFirstPersonBodyValidate},
         {"FirstPersonBodyTuning", TestFirstPersonBodyTuning},
         {"FirstPersonWeaponValidate", TestFirstPersonWeaponValidate},
+        {"FirstPersonBodyController", TestFirstPersonBodyController},
         {"FirstPersonWeaponWizard", TestFirstPersonWeaponWizard},
         {"AnimatorLint", TestAnimatorLint},
         {"BlendTree2D", TestBlendTree2D},
