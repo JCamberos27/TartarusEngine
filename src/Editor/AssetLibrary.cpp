@@ -808,6 +808,16 @@ std::map<std::string, std::string> AssetLibrary::MaterialRemap(const std::string
     return remap;
 }
 
+void AssetLibrary::SetMaterialRemap(const std::string& modelPath, const std::string& materialName,
+                                    const std::string& matPath) {
+    auto remap = MaterialRemap(modelPath);
+    if (matPath.empty()) remap.erase(materialName);
+    else remap[materialName] = ProjectPaths::Relativize(matPath);
+    AssetDatabase::EnsureGuid(modelPath);
+    AssetDatabase::MergeMetaFields(modelPath, json{{"materialRemap", remap.empty() ? json::object() : json(remap)}}.dump());
+    m_MaterialRemap[AssetDatabase::PathKey(modelPath)] = remap;
+}
+
 int AssetLibrary::ApplyMaterialRemap(const Model& model, std::vector<std::shared_ptr<MaterialAsset>>& slots) {
     const auto remap = MaterialRemap(model.Path());
     if (remap.empty()) return 0;
