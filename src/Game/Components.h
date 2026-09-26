@@ -500,6 +500,10 @@ struct FirstPersonBodyComponent {
     // foot (at most FootIKMaxDrop metres) and the legs are re-solved, so the feet meet stairs and slopes.
     bool FootIK = false;
     float FootIKMaxDrop = 0.35f;
+    // The body's bones are found by the UE5 mannequin's names. A rig that names them differently maps
+    // them here, "standard = theirs", comma or line separated: "pelvis = Hips, foot_l = LeftFoot, foot_r = RightFoot".
+    // (The weapon-arms feature still needs the body and the arms rig to share bone names.)
+    std::string BoneMap;
     // --- Advanced tuning (defaults are the values the body was tuned with) ---
     float EyeSlack = 0.035f; // Eye Slack
     float ReachSlack = 0.04f; // Reach Slack

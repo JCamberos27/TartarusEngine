@@ -7,6 +7,27 @@
 
 namespace FPBody {
 
+std::map<std::string, std::string> ParseBoneMap(const std::string& text) {
+    std::map<std::string, std::string> out;
+    auto trim = [](std::string v) {
+        const size_t a = v.find_first_not_of(" \t\r");
+        const size_t b = v.find_last_not_of(" \t\r");
+        return a == std::string::npos ? std::string() : v.substr(a, b - a + 1);
+    };
+    size_t start = 0;
+    while (start <= text.size()) {
+        size_t end = text.find_first_of(",\n", start);
+        if (end == std::string::npos) end = text.size();
+        const std::string entry = text.substr(start, end - start);
+        if (const size_t eq = entry.find('='); eq != std::string::npos) {
+            const std::string from = trim(entry.substr(0, eq)), to = trim(entry.substr(eq + 1));
+            if (!from.empty() && !to.empty()) out[from] = to;
+        }
+        start = end + 1;
+    }
+    return out;
+}
+
 using PT = AnimatorController::ParamType;
 
 const char* FeatureName(Feature f) {
@@ -215,10 +236,12 @@ std::vector<Check> Validate(const ValidationInput& in) {
     }
 
     if (in.HasBone) {
-        auto need = [&](const std::string& bone, Feature f, const char* what) {
+        const auto boneMap = ParseBoneMap(cfg.BoneMap);
+        auto need = [&](const std::string& standard, Feature f, const char* what) {
+            const std::string& bone = MappedBone(boneMap, standard);
             if (!FeatureEnabled(f, cfg) || in.HasBone(bone)) return;
             Add(out, Severity::Warning, "The body has no bone '" + bone + "'. " + what,
-                std::string(FeatureName(f)) + " is skipped (or partly skipped) without it. Use the UE5 mannequin's bone names.");
+                std::string(FeatureName(f)) + " is skipped (or partly skipped) without it. Use the UE5 mannequin's bone names, or map them in Bone Map.");
         };
         if (!cfg.HeadBone.empty() && !in.HasBone(cfg.HeadBone))
             Add(out, Severity::Warning, "The body has no bone '" + cfg.HeadBone + "' (Head Bone).",
