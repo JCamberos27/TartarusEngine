@@ -713,6 +713,16 @@ void EditorLayer::DrawAddEntityItems(World& world, AssetLibrary& assets, Camera&
     if (ImGui::MenuItem(ICON_FA_SUN "  Directional Light")) {
         MakeDirectionalLight(world, CreateEmptyAt(world, &editorCamera, "Directional Light", true));
     }
+    if (ImGui::MenuItem(ICON_FA_PERSON "  First Person Player")) {
+        // The player root: a First Person Controller (capsule, look, weapon) and a First Person Body. Add the
+        // rigged body pieces as its children and an Animator Controller on one of them (Asset Browser > Create >
+        // Create Body Locomotion Controller); the body's Setup box lists what is still missing.
+        entt::entity e = CreateEmptyAt(world, &editorCamera, "Player Spawn", false);
+        world.Registry.emplace_or_replace<FirstPersonControllerComponent>(e);
+        world.Registry.emplace_or_replace<FirstPersonBodyComponent>(e);
+        SelectItem(e, false);
+        Log::Info("Added a Player Spawn with a First Person Controller and Body. Next: add the body pieces as children and a locomotion controller (see BODY_SETUP.md); the Body's Setup box lists what is missing.");
+    }
     if (ImGui::MenuItem(ICON_FA_VIDEO "  Camera")) {
         entt::entity e = CreateEmptyAt(world, &editorCamera, "Camera", false);
         world.Registry.emplace<CameraComponent>(e);
