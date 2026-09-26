@@ -1367,6 +1367,7 @@ void TestFirstPersonWeaponWizard() {
     CHECK(FPWizard::PickClip("TacReload", files) == "a/AKS-74U_A_FP_Tac_Reload.fbx");
     CHECK(FPWizard::PickClip("EmptyReload", files) == "a/AKS-74U_A_FP_Empty_Reload.fbx");
     CHECK(FPWizard::PickClip("Melee", files).empty());
+    CHECK(FPWizard::PickClip("Idle", {"a/AM_Stand_Idle_01.fbx", "a/AM_Stand_Idle_Turn_L090.fbx"}) == "a/AM_Stand_Idle_01.fbx"); // numbered take
     CHECK(FPWizard::PickClip("Nonsense", files).empty());
     // "reload" alone is the tactical reload when there is no better name.
     CHECK(FPWizard::PickClip("TacReload", {"x/Reload.fbx"}) == "x/Reload.fbx");
