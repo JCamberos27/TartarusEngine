@@ -5,6 +5,7 @@
 #include "Texture.h"
 #include "AssetDatabase.h"
 #include "AssetImport.h"
+#include "Log.h"
 #include "ProjectSettings.h" // #121 - virtual folders are project data, not scene data
 #include "ProjectPaths.h"
 #include <algorithm>
@@ -712,4 +713,104 @@ bool AssetLibrary::ReimportModel(const std::string& path) {
     auto it = m_ModelCache.find(path);
     if (it == m_ModelCache.end()) return false;
     return it->second->Reimport(GetModelSettings(path));
+}
+
+namespace {
+// "Door Mat:1/2" -> "Door_Mat_1_2": a material name made safe for a file name.
+std::string MaterialFileName(const std::string& name, int index) {
+    std::string out;
+    for (char c : name) out += (std::isalnum((unsigned char)c) || c == '-' || c == '_') ? c : '_';
+    while (!out.empty() && out.back() == '_') out.pop_back();
+    if (out.empty()) out = "Material_" + std::to_string(index);
+    return out;
+}
+} // namespace
+
+AssetLibrary::MaterialExtraction AssetLibrary::ExtractModelMaterials(const std::string& modelPath, bool onlyTextured) {
+    namespace fs = std::filesystem;
+    MaterialExtraction result;
+    auto model = LoadModel(modelPath);
+    if (!model || model->MeshCount() == 0) return result;
+
+    const fs::path abs = fs::path(ProjectPaths::Resolve(ProjectPaths::Relativize(modelPath))).lexically_normal();
+    const fs::path dir = abs.parent_path();
+    std::string dirName = dir.filename().string();
+    for (char& c : dirName) c = (char)std::tolower((unsigned char)c);
+    const bool modelsFolder = dirName == "models" || dirName == "model" || dirName == "meshes" ||
+                              dirName == "mesh" || dirName == "fbx" || dirName == "obj";
+    const fs::path folder = (modelsFolder ? dir.parent_path() : dir) / "Materials";
+    result.Folder = folder.string();
+
+    std::map<std::string, std::string> remap = MaterialRemap(modelPath);
+    std::set<std::string> done;
+    for (int i = 0; i < model->MeshCount(); ++i) {
+        const Material& src = model->MeshMaterial(i);
+        if (!done.insert(src.Name).second) continue;
+        const bool textured = src.AlbedoMap || src.NormalMap || src.MetallicRoughnessMap || src.MetallicMap ||
+                              src.RoughnessMap || src.AOMap || src.EmissiveMap;
+        if (onlyTextured && !textured) continue;
+
+        const fs::path matPath = folder / (MaterialFileName(src.Name, i) + ".mat");
+        std::error_code ec;
+        if (fs::exists(matPath, ec)) {
+            ++result.Reused;
+        } else {
+            fs::create_directories(folder, ec);
+            auto ma = MaterialAsset::CreateDefault(matPath.string());
+            if (!ma) {
+                Log::Error("Extract Materials: couldn't write '" + matPath.string() + "'.");
+                continue;
+            }
+            ma->Name = src.Name.empty() ? matPath.stem().string() : src.Name;
+            ma->Mat = src;
+            if (src.AlphaClip) ma->RenderQueue = MaterialAsset::Queue::AlphaTest;
+            ma->SyncTexturePathsFromMat();
+            if (!ma->Save()) {
+                Log::Error("Extract Materials: couldn't write '" + matPath.string() + "'.");
+                continue;
+            }
+            ++result.Created;
+        }
+        LoadMaterial(matPath.string());
+        remap[src.Name] = ProjectPaths::Relativize(matPath.string());
+    }
+
+    if (!remap.empty()) {
+        AssetDatabase::EnsureGuid(modelPath);
+        AssetDatabase::MergeMetaFields(modelPath, json{{"materialRemap", remap}}.dump());
+        m_MaterialRemap[AssetDatabase::PathKey(modelPath)] = remap;
+    }
+    return result;
+}
+
+std::map<std::string, std::string> AssetLibrary::MaterialRemap(const std::string& modelPath) const {
+    const std::string key = AssetDatabase::PathKey(modelPath);
+    auto it = m_MaterialRemap.find(key);
+    if (it != m_MaterialRemap.end()) return it->second;
+    std::map<std::string, std::string> remap;
+    try {
+        const json j = json::parse(AssetDatabase::ReadMetaFields(modelPath));
+        if (j.contains("materialRemap") && j["materialRemap"].is_object())
+            for (const auto& [name, v] : j["materialRemap"].items())
+                if (v.is_string() && !v.get<std::string>().empty()) remap[name] = v.get<std::string>();
+    } catch (...) {}
+    m_MaterialRemap[key] = remap;
+    return remap;
+}
+
+int AssetLibrary::ApplyMaterialRemap(const Model& model, std::vector<std::shared_ptr<MaterialAsset>>& slots) {
+    const auto remap = MaterialRemap(model.Path());
+    if (remap.empty()) return 0;
+    int filled = 0;
+    for (int i = 0; i < model.MeshCount(); ++i) {
+        if (i < (int)slots.size() && slots[i]) continue;
+        auto it = remap.find(model.MeshMaterial(i).Name);
+        if (it == remap.end()) continue;
+        auto mat = LoadMaterial(ProjectPaths::Resolve(it->second));
+        if (!mat || mat->Missing) continue;
+        if (i >= (int)slots.size()) slots.resize(i + 1);
+        slots[i] = mat;
+        ++filled;
+    }
+    return filled;
 }

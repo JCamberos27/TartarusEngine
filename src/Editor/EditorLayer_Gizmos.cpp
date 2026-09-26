@@ -818,6 +818,8 @@ void EditorLayer::DrawViewportDropTarget(World& world, AssetLibrary& assets, Cam
                 glm::vec3 position = ComputeModelDropPosition(world, *model, editorCamera);
                 std::string name = std::filesystem::path(path).stem().string();
                 entt::entity e = world.CreateModelEntity(model, position, glm::vec3(0.0f), glm::vec3(1.0f), UniqueNameFor(world, name));
+                if (auto* rc = world.Registry.try_get<RenderableComponent>(e); rc && rc->ModelRef)
+                    assets.ApplyMaterialRemap(*rc->ModelRef, rc->Materials); // its extracted .mat files
                 SelectItem(e, false);
             } else {
                 glm::vec3 position = ComputeDropRayPosition(world, editorCamera);
