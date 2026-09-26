@@ -51,6 +51,7 @@
 #include "TextureCache.h"
 #include "Model.h"       // texture-path resolver
 #include "AssetImport.h" // folder import
+#include "ImportQueueManager.h"
 #include "SceneSerializer.h" // #121
 #include "AnimationSystem.h"           // #123 - the spin systems, driven frame by frame below
 #include "HotReloadGameModule.h"      // Spin / Transform Controller run inside TartarusGame.dll, not the exe
@@ -3385,6 +3386,34 @@ void TestAssetPackImport() {
     // ...and the copied model still finds its textures.
     CHECK(same(Model::ResolveTexturePathIn((assets / "Gun" / "Models").string(), "C:/elsewhere/Gun_Normal.png"),
                assets / "Gun" / "Textures" / "Gun_Normal.png"));
+    // Identical-file check behind "already in the project - using that copy".
+    touch(base / "same_a.bin");
+    touch(base / "same_b.bin");
+    { std::ofstream(base / "diff.bin", std::ios::binary) << "y"; }
+    CHECK(AssetImport::SameContents((base / "same_a.bin").string(), (base / "same_b.bin").string()));
+    CHECK(!AssetImport::SameContents((base / "same_a.bin").string(), (base / "diff.bin").string()));
+    CHECK(!AssetImport::SameContents((base / "same_a.bin").string(), (base / "missing.bin").string()));
+
+    // A batch's summary counts what each import returned.
+    {
+        ImportQueueManager queue;
+        queue.Enqueue({"a.fbx", "b.fbx", "c.png", "d.txt"});
+        int calls = 0;
+        queue.Update([&](const std::string& p) -> std::string {
+            ++calls;
+            return p == "d.txt" ? "" : p == "c.png" ? "texture" : "model";
+        }, 10);
+        CHECK(calls == 4);
+        CHECK(!queue.IsActive());
+        CHECK(queue.LastSummary().find("2 models, 1 texture") != std::string::npos);
+        CHECK(queue.LastSummary().find("1 failed") != std::string::npos);
+        queue.Enqueue({"e.fbx", "f.fbx"});
+        queue.Update([](const std::string&) -> std::string { return "model"; }, 1);
+        queue.CancelRemaining();
+        CHECK(queue.LastSummary().find("1 model") != std::string::npos);
+        CHECK(queue.LastSummary().find("1 cancelled") != std::string::npos);
+    }
+
     // A second drop of the same folder never overwrites the first.
     const AssetImport::FolderCopy second = AssetImport::CopyFolderInto(pack.string(), assets.string());
     CHECK(same(second.Folder, assets / "Gun (2)"));

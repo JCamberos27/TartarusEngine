@@ -993,6 +993,16 @@ std::string EditorLayer::CopyAssetIntoProject(const std::string& sourcePath, con
     std::vector<std::pair<std::string, std::string>> deps;
     if (subfolder == "models") deps = Model::SourceDependencies(abs.string());
     if (!deps.empty()) {
+        // The same file imported before: reuse that copy rather than add "<name> (2)".
+        for (int n = 1; n < 100; ++n) {
+            const fs::path prior = fs::path(destDir) / (n == 1 ? stem : stem + " (" + std::to_string(n) + ")") / abs.filename();
+            if (!fs::exists(prior, ec)) break;
+            if (AssetImport::SameContents(abs.string(), prior.string())) {
+                Log::Info("'" + abs.filename().string() + "' is already in the project as '" +
+                          ProjectPaths::Relativize(prior.string()) + "' - using that copy.");
+                return prior.generic_string();
+            }
+        }
         fs::path folder = fs::path(destDir) / stem;
         for (int n = 2; fs::exists(folder, ec); ++n) folder = fs::path(destDir) / (stem + " (" + std::to_string(n) + ")");
         fs::create_directories(folder, ec);
@@ -1020,6 +1030,11 @@ std::string EditorLayer::CopyAssetIntoProject(const std::string& sourcePath, con
 
     fs::path dest = fs::path(destDir) / abs.filename();
     for (int n = 2; fs::exists(dest, ec); ++n) {
+        if (AssetImport::SameContents(abs.string(), dest.string())) { // imported before, unchanged
+            Log::Info("'" + abs.filename().string() + "' is already in the project as '" +
+                      ProjectPaths::Relativize(dest.string()) + "' - using that copy.");
+            return dest.generic_string();
+        }
         dest = fs::path(destDir) / (stem + " (" + std::to_string(n) + ")" + ext);
     }
 
@@ -1063,12 +1078,7 @@ void EditorLayer::ExtractMaterialsFor(World& world, AssetLibrary& assets, const 
               (targets.empty() ? "." : "; now used by " + std::to_string(targets.size()) + " object(s) in the scene."));
 }
 
-void EditorLayer::ImportFileIntoProject(World& world, AssetLibrary& assets, const std::string& path) {
-    Camera unusedCamera; // ImportDroppedFile keeps a Camera& only for signature symmetry
-    ImportDroppedFile(world, assets, m_EditorCameraPtr ? *m_EditorCameraPtr : unusedCamera, path, m_CurrentAssetFolder);
-}
-
-void EditorLayer::ImportDroppedFile(World& world, AssetLibrary& assets, Camera& editorCamera,
+std::string EditorLayer::ImportDroppedFile(World& world, AssetLibrary& assets, Camera& editorCamera,
     const std::string& path, const std::string& targetFolder) {
     (void)editorCamera; // kept for signature symmetry with HandleDroppedFiles; not needed here
     std::string ext = std::filesystem::path(path).extension().string();
@@ -1086,7 +1096,11 @@ void EditorLayer::ImportDroppedFile(World& world, AssetLibrary& assets, Camera& 
         // it meant every dropped/imported model needed an undo (or a manual delete) if you only
         // wanted it available to drag in later. Explicit placement is now always the Asset
         // Browser -> Viewport drag (DrawViewportDropTarget's live ghost preview).
-        assets.LoadModel(projectPath);
+        const auto model = assets.LoadModel(projectPath);
+        if (!model || (model->MeshCount() == 0 && !model->HasAnimations())) {
+            Log::Error("Failed to import model '" + path + "' - see the lines above.");
+            return {};
+        }
         assets.SetAssetFolder(projectPath, targetFolder);
         // Editable materials straight away: one .mat per textured material, in the asset's
         // Materials/ folder, used by every instance placed from now on. Only for files that
@@ -1098,6 +1112,7 @@ void EditorLayer::ImportDroppedFile(World& world, AssetLibrary& assets, Camera& 
                           ProjectPaths::Relativize(ex.Folder) + "'.");
         }
         Log::Info("Imported model '" + name + "'.");
+        return model->MeshCount() == 0 ? "animation" : "model";
     } else if (ext == ".png" || ext == ".jpg" || ext == ".jpeg" || ext == ".tga" || ext == ".bmp") {
         std::string projectPath = CopyAssetIntoProject(path, "textures");
         // A normal / data map (by its name: "_Normal", "_Roughness", "_AO", ...) is saved as one
@@ -1113,22 +1128,23 @@ void EditorLayer::ImportDroppedFile(World& world, AssetLibrary& assets, Camera& 
         if (tex) {
             assets.SetAssetFolder(projectPath, targetFolder);
             Log::Info("Imported texture '" + name + "'.");
-        } else {
-            Log::Error("Failed to load texture '" + path + "'.");
+            return "texture";
         }
+        Log::Error("Failed to load texture '" + path + "'.");
     } else if (ext == ".wav" || ext == ".mp3" || ext == ".ogg" || ext == ".flac") {
         std::string projectPath = CopyAssetIntoProject(path, "audio");
         if (AudioEngine::Load(projectPath)) {
             assets.RegisterSound(projectPath);
             assets.SetAssetFolder(projectPath, targetFolder);
             Log::Info("Imported sound '" + name + "'.");
-        } else {
-            Log::Error("Failed to load sound '" + path + "'.");
+            return "sound";
         }
+        Log::Error("Failed to load sound '" + path + "'.");
     } else if (ext == ".json") {
         // A dropped scene file offers to open it rather than silently doing nothing —
         // "import" has no other meaning for a whole scene.
         RequestOpenScene(world, assets, path);
+        return "scene";
     } else if (ext == ".prefab") {
         entt::entity e = SceneSerializer::InstantiatePrefab(world, assets, path);
         if (e != entt::null) {
@@ -1137,6 +1153,7 @@ void EditorLayer::ImportDroppedFile(World& world, AssetLibrary& assets, Camera& 
             assets.SetAssetFolder(path, targetFolder);
             SelectItem(e, false);
             Log::Info("Instantiated prefab '" + name + "'.");
+            return "prefab";
         } else {
             Log::Error("Failed to load prefab '" + path + "'.");
         }
@@ -1145,6 +1162,13 @@ void EditorLayer::ImportDroppedFile(World& world, AssetLibrary& assets, Camera& 
     } else {
         Log::Warn("Don't know how to import '" + path + "' (unrecognized extension \"" + ext + "\").");
     }
+    return {};
+}
+
+void EditorLayer::EnqueueImports(const std::vector<std::string>& paths, const std::string& targetFolder) {
+    if (paths.empty()) return;
+    for (const std::string& p : paths) m_ImportTargetFolder[p] = targetFolder;
+    m_ImportQueue.Enqueue(paths);
 }
 
 void EditorLayer::HandleDroppedFiles(World& world, AssetLibrary& assets, Camera& editorCamera,

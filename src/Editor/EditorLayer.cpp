@@ -2994,9 +2994,9 @@ void EditorLayer::Draw(World& world, AssetLibrary& assets, Camera& editorCamera,
             folder = it->second;
             m_ImportTargetFolder.erase(it);
         }
-        ImportDroppedFile(world, assets, editorCamera, path, folder);
+        return ImportDroppedFile(world, assets, editorCamera, path, folder);
     });
-    m_ImportQueue.DrawProgressUI();
+    m_ImportQueue.DrawProgressUI([] { EditorModuleHost::ConsoleState().Visible = true; });
 
     DrawViewportDropTarget(world, assets, editorCamera);
 
