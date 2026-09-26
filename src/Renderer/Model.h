@@ -253,7 +253,8 @@ public:
     // Draw with per-submesh MaterialAsset slots (PR5). slot[i] non-null overrides submesh i's
     // imported material. Empty or short slots fall back to the imported mesh material.
     void Draw(Shader& shader, const std::vector<std::shared_ptr<MaterialAsset>>& slots);
-    void DrawDepthOnly(Shader& shader, const std::vector<std::shared_ptr<MaterialAsset>>& slots);
+    // `instances` > 1 draws every mesh instanced (the sun's single-pass layered cascades).
+    void DrawDepthOnly(Shader& shader, const std::vector<std::shared_ptr<MaterialAsset>>& slots, int instances = 1);
 
     // Scene-path draw (audit #354): per submesh, `selectProgram(slot)` picks the program (a
     // ShaderAsset variant, or `fallback` when it returns null / there's no linked shader). This

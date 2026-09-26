@@ -379,6 +379,7 @@ typedef void (__stdcall* PFNGLNAMEDBUFFERSUBDATAPROC)(GLuint, GLintptr, GLsizeip
 typedef void (__stdcall* PFNGLNAMEDBUFFERDATAPROC)(GLuint, GLsizeiptr, const void*, GLenum);
 typedef void (__stdcall* PFNGLVERTEXARRAYBINDINGDIVISORPROC)(GLuint, GLuint, GLuint);
 typedef void (__stdcall* PFNGLDRAWARRAYSINSTANCEDBASEINSTANCEPROC)(GLenum, GLint, GLsizei, GLsizei, GLuint);
+typedef void (__stdcall* PFNGLDRAWELEMENTSINSTANCEDPROC)(GLenum, GLsizei, GLenum, const void*, GLsizei);
 typedef void (__stdcall* PFNGLGETNAMEDBUFFERSUBDATAPROC)(GLuint, GLintptr, GLsizeiptr, void*);
 // DSA — textures.
 typedef void (__stdcall* PFNGLCREATETEXTURESPROC)(GLenum, GLsizei, GLuint*);
@@ -482,6 +483,7 @@ extern PFNGLNAMEDBUFFERSUBDATAPROC glNamedBufferSubData;
 extern PFNGLNAMEDBUFFERDATAPROC glNamedBufferData;
 extern PFNGLVERTEXARRAYBINDINGDIVISORPROC glVertexArrayBindingDivisor;
 extern PFNGLDRAWARRAYSINSTANCEDBASEINSTANCEPROC glDrawArraysInstancedBaseInstance;
+extern PFNGLDRAWELEMENTSINSTANCEDPROC glDrawElementsInstanced;
 extern PFNGLGETNAMEDBUFFERSUBDATAPROC glGetNamedBufferSubData;
 extern PFNGLCREATETEXTURESPROC glCreateTextures;
 extern PFNGLTEXTURESTORAGE2DPROC glTextureStorage2D;
