@@ -62,21 +62,22 @@ glm::mat4 BoneAnimChannel::Interpolate(float timeTicks) const {
 }
 
 float WrappedClipTicks(const AnimationClip& clip, float seconds, AnimationWrapMode wrap) {
-    const float d = clip.DurationTicks;
+    const float d = clip.EffectiveTicks();
     if (d <= 0.0f) return 0.0f;
     const float t = seconds * clip.TicksPerSecond;
+    const float from = clip.StartTicks; // 0 unless trimmed
     switch (wrap) {
     case AnimationWrapMode::Loop: {
         float m = std::fmod(t, d);
-        return m < 0.0f ? m + d : m;
+        return from + (m < 0.0f ? m + d : m);
     }
     case AnimationWrapMode::PingPong: {
         float m = std::fmod(std::fabs(t), 2.0f * d);
-        return m > d ? 2.0f * d - m : m;
+        return from + (m > d ? 2.0f * d - m : m);
     }
     case AnimationWrapMode::Once:
     case AnimationWrapMode::ClampForever:
     default:
-        return std::clamp(t, 0.0f, d);
+        return from + std::clamp(t, 0.0f, d);
     }
 }

@@ -810,6 +810,11 @@ void Model::ReadAnimations(const aiScene* scene) {
         clip.Name = anim->mName.length ? anim->mName.C_Str() : ("Animation_" + std::to_string(i));
         clip.DurationTicks = (float)anim->mDuration;
         clip.TicksPerSecond = anim->mTicksPerSecond != 0 ? (float)anim->mTicksPerSecond : 25.0f;
+        for (const auto& trim : m_D->Settings.ClipTrims)
+            if (trim.Clip == clip.Name) {
+                clip.StartTicks = std::max(0.0f, trim.StartSeconds * clip.TicksPerSecond);
+                clip.EndTicks = trim.EndSeconds > 0.0f ? trim.EndSeconds * clip.TicksPerSecond : 0.0f;
+            }
 
         for (unsigned int c = 0; c < anim->mNumChannels; ++c) {
             aiNodeAnim* channel = anim->mChannels[c];
