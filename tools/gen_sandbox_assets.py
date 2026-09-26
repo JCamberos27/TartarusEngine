@@ -3,8 +3,7 @@
 # net meshes, the materials (.mat: the court on engine://Standard.shader, Unity's Standard layout;
 # the material gallery on engine://StandardAdvanced.shader for clear coat / sheen / transmission /
 # anisotropy / subsurface), synthesized sounds (not used by the Sandbox itself; the
-# smoke_play_basketball smoke scene plays them), and the Y Bot animator controller. Everything is
-# procedural (PIL + the standard library only), so it can be re-run.
+# smoke_play_basketball smoke scene plays them). Everything is procedural (PIL + the standard library only), so it can be re-run.
 # Usage: python tools/gen_sandbox_assets.py <repo root>
 import json, math, os, random, struct, sys, wave
 from PIL import Image, ImageDraw, ImageFilter, ImageFont, ImageChops, ImageOps
@@ -551,33 +550,10 @@ def build_sounds():
         s[k] = s[k] * a + s[n - xf + k] * (1 - a)
     write_wav('fountain_loop.wav', s[:n - xf], 0.7)
 
-# =============================================================================== animator controller
-def build_controller():
-    Y = 'assets/characters/ybot/'
-    c = {
-        'defaultState': 'Idle',
-        'parameters': [],
-        'states': [
-            {'name': 'Idle', 'clip': Y + 'idle.fbx', 'speed': 1.0, 'loop': True},
-            {'name': 'Walk', 'clip': Y + 'walking.fbx', 'speed': 1.0, 'loop': True},
-            {'name': 'Run', 'clip': Y + 'standard run.fbx', 'speed': 1.0, 'loop': True},
-            {'name': 'Jump', 'clip': Y + 'jump.fbx', 'speed': 1.0, 'loop': False},
-        ],
-        'transitions': [
-            {'from': 'Idle', 'to': 'Walk', 'hasExitTime': True, 'exitTime': 2.0, 'duration': 0.35, 'conditions': []},
-            {'from': 'Walk', 'to': 'Run', 'hasExitTime': True, 'exitTime': 3.0, 'duration': 0.3, 'conditions': []},
-            {'from': 'Run', 'to': 'Jump', 'hasExitTime': True, 'exitTime': 3.0, 'duration': 0.2, 'conditions': []},
-            {'from': 'Jump', 'to': 'Idle', 'hasExitTime': True, 'exitTime': 0.92, 'duration': 0.3, 'conditions': []},
-        ],
-    }
-    with open(P('animations', 'ybot_showcase.controller'), 'w', newline='\n') as f:
-        json.dump(c, f, indent=2)
-
 if __name__ == '__main__':
     steps = [('court', build_court), ('floor detail', build_floor_detail), ('ball', build_ball),
              ('backboard', build_backboard), ('sphere', build_sphere_obj), ('rim', build_rim_obj),
-             ('net', build_net_obj), ('materials', build_materials), ('sounds', build_sounds),
-             ('controller', build_controller)]
+             ('net', build_net_obj), ('materials', build_materials), ('sounds', build_sounds)]
     only = set(sys.argv[2:])
     for name, fn in steps:
         if only and name not in only: continue

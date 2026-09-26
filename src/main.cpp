@@ -764,8 +764,7 @@ int main(int argc, char** argv) {
         entt::entity playCameraEntity = entt::null;
         Camera playSceneCam;
         // Default spawn/editor-camera start: south of the Sandbox's Character Plaza, looking north
-        // over the animated Y Bots with the physics playground (east) and movement course (west)
-        // in view either side.
+        // over it with the physics playground (east) and movement course (west) in view either side.
         player.Cam.Position = glm::vec3(0.0f, 3.0f, 13.0f);
         player.Cam.Yaw = -90.0f;  // faces -Z, toward the plaza
         player.Cam.Pitch = -8.0f;

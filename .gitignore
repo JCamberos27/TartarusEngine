@@ -33,11 +33,6 @@ work/rebake0/
 work/pairtest/
 work/*.txt
 
-# Mixamo characters/animations used by the Sandbox scene (project/scenes/Sandbox.json). Mixamo's
-# licence doesn't allow redistributing the raw FBX files, so they stay local: download Y Bot +
-# the Male Locomotion Pack from mixamo.com into project/assets/characters/ybot/.
-project/assets/characters/
-
 # HDRI skies (Poly Haven, CC0) used by the Sandbox scene - too big for git; download into
 # project/assets/sky/ (see project/scenes/Sandbox.json skyHdriPath).
 project/assets/sky/

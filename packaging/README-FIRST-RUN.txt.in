@@ -21,23 +21,19 @@ Your own settings (preferences, shortcuts, panel layout, logs) do NOT live here.
 build, and your setup carries over.
 
 
-THE SAMPLE PROJECT IS MISSING TWO SETS OF FILES
------------------------------------------------
-The Sandbox scene opens on first run, and two kinds of asset it uses cannot be redistributed
+THE SAMPLE PROJECT IS MISSING ITS SKY
+-------------------------------------
+The Sandbox scene opens on first run, and one kind of asset it uses cannot be redistributed
 in this download:
-
-  * Characters and animations (project/assets/characters/)
-    Mixamo's licence does not allow redistributing the FBX files. Download "Y Bot" and the
-    "Male Locomotion Pack" from mixamo.com into project/assets/characters/ybot/.
 
   * Sky HDRIs (project/assets/sky/)
     CC0 from Poly Haven, but too large to ship here. The scene names the file it wants
     (see "skyHdriPath" in project/scenes/Sandbox.json); download it from polyhaven.com
     into project/assets/sky/.
 
-The scene loads without them. The Console will warn about each missing asset, the characters
-will not appear, and the sky falls back to a procedural gradient. Everything else - the arena,
-physics, the gravity gun, lighting and post-processing - works as shipped.
+The scene loads without it. The Console will warn about the missing file and the sky falls
+back to a procedural gradient. Everything else - the arena, physics, the gravity gun, lighting
+and post-processing - works as shipped.
 
 
 IF IT WILL NOT START
