@@ -82,6 +82,8 @@ public:
     MaterialExtraction ExtractModelMaterials(const std::string& modelPath, bool onlyTextured);
     // The model's saved material name -> .mat path (project-relative) mapping; empty if none.
     std::map<std::string, std::string> MaterialRemap(const std::string& modelPath) const;
+    // Sets (or, with an empty `matPath`, removes) one material's entry in that mapping.
+    void SetMaterialRemap(const std::string& modelPath, const std::string& materialName, const std::string& matPath);
     // Fills every empty slot of `slots` whose submesh's imported material has a remapped .mat.
     // Returns how many slots it filled.
     int ApplyMaterialRemap(const Model& model, std::vector<std::shared_ptr<MaterialAsset>>& slots);

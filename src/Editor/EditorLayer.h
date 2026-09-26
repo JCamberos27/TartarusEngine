@@ -717,16 +717,18 @@ private:
     // into `targetFolder`, a '/'-joined virtual Asset Browser path. Split out so a dropped
     // folder can route each of its contents into its own mirrored subfolder.
     void ExtractMaterialsFor(World& world, AssetLibrary& assets, const std::string& modelKey);
-    void ImportDroppedFile(World& world, AssetLibrary& assets, Camera& editorCamera,
+    // Returns what it imported ("model", "animation", "texture", "sound", "prefab", "scene"),
+    // or "" when the file failed or isn't something the importer handles.
+    std::string ImportDroppedFile(World& world, AssetLibrary& assets, Camera& editorCamera,
         const std::string& path, const std::string& targetFolder);
+    // Queues files for import into `targetFolder` (progress window, summary when done) instead
+    // of importing them all in one frame. File > Import and the Asset Browser's Import use it.
+    void EnqueueImports(const std::vector<std::string>& paths, const std::string& targetFolder);
     // Phase 5 item 11 — physically copies an imported model/texture/sound into
     // project/assets/{models,textures,audio}/ so it stops referencing an arbitrary external path
     // forever. Returns `sourcePath` unchanged (no copy) when it's already inside the project, or
     // if the copy itself fails. `subfolder` is "models"/"textures"/"audio".
     std::string CopyAssetIntoProject(const std::string& sourcePath, const std::string& subfolder);
-    // #125 — File > Import: the drag-drop pipeline (copy into the project with companion files,
-    // register, file into the open Asset Browser folder).
-    void ImportFileIntoProject(World& world, AssetLibrary& assets, const std::string& path);
 
     GLFWwindow* m_Window = nullptr;
 
