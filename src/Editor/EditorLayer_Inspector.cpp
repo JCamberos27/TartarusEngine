@@ -998,7 +998,10 @@ void EditorLayer::DrawAssetImportInspector(World& world, AssetLibrary& assets, c
 
         ImGui::Spacing();
         ImGui::SeparatorText("Model Import Settings");
-        AssetImporterInspector::DrawModelSettings(m_PendingModelSettings, m_ImportSettingsDirty);
+        std::vector<std::pair<std::string, float>> clipList;
+        if (model)
+            for (int ci = 0; ci < model->OwnAnimationCount(); ++ci) clipList.push_back({model->AnimationName(ci), model->AnimationLength(ci)});
+        AssetImporterInspector::DrawModelSettings(m_PendingModelSettings, m_ImportSettingsDirty, &clipList);
         AssetImporterInspector::DrawApplyRevertFooter(m_ImportSettingsDirty,
             [&]() {
                 PushUndo(world, "Reimport Model");
