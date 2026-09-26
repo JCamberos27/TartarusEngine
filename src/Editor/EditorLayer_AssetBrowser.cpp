@@ -10,6 +10,7 @@
 #include "Camera.h"
 #include "Model.h"
 #include "FirstPersonWeaponWizard.h"
+#include "FirstPersonBodyContract.h"
 #include "Texture.h"
 #include "Material.h"
 #include "AudioEngine.h"
@@ -2279,6 +2280,32 @@ void EditorLayer::HandleAssetGridBackground(World& world, AssetLibrary& assets) 
             }
         }
         if (ImGui::MenuItem(ICON_FA_GUN "  Create First-Person Weapon...")) m_OpenWeaponWizard = true;
+        if (ImGui::MenuItem(ICON_FA_PERSON_WALKING "  Create Body Locomotion Controller")) {
+            // The standard first-person body graph (14 states, 63 tuned transitions), its clips found by name
+            // among the project's animation files (the MC Core Motion pack's names: Loco_Walk_Fwd, ...).
+            // Roles with no file are left empty for the Animator; its Lint tab lists them.
+            std::error_code ec;
+            std::filesystem::create_directories(std::filesystem::u8path(ProjectPaths::Resolve("animators")), ec);
+            std::string rel = "animators/Body Locomotion.controller";
+            for (int n = 1; std::filesystem::exists(std::filesystem::u8path(ProjectPaths::Resolve(rel)), ec); ++n)
+                rel = "animators/Body Locomotion (" + std::to_string(n) + ").controller";
+            const std::vector<std::string>& files = ProjectModelFiles();
+            int found = 0, total = 0;
+            const AnimatorController c = FPBody::BuildLocomotionController([&](const std::string& role) {
+                ++total;
+                const std::string f = FPBody::PickLocomotionClip(role, files);
+                found += !f.empty();
+                return f;
+            });
+            if (c.SaveFile(ProjectPaths::Resolve(rel))) {
+                InvalidateAnimationListing();
+                OpenAnimatorWindow(rel);
+                Log::Info("Created " + rel + ": " + std::to_string(found) + " of " + std::to_string(total) +
+                          " clip slots filled by name. Fill the rest in the Animator (Lint lists them).");
+            } else {
+                Log::Error("Create Body Locomotion Controller: couldn't write '" + rel + "'.");
+            }
+        }
         if (ImGui::MenuItem(ICON_FA_DIAGRAM_PROJECT "  Create Animator Controller")) {
             // Under project/animators/, like Create Material's materials/; listed in the virtual
             // Animation folder and opened straight into the Animator window.
