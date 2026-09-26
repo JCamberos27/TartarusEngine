@@ -1589,6 +1589,7 @@ private:
     void InvalidateShotsListing() { m_ShotsListingCache.valid = false; }
     void InvalidateShadersListing() { m_ShadersListingCache.valid = false; }
     void InvalidateAnimationListing() { m_AnimationListingCache.valid = false; }
+    bool m_OpenWeaponWizard = false; // the Asset Browser's "Create First-Person Weapon" was chosen
 public:
     // #236 G — Refresh / Reimport All (Ctrl+R): bust every Asset Browser cache so the next frame
     // re-scans the scenes/ and screenshots/ folders and re-renders thumbnails from disk.
