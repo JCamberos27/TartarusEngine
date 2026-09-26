@@ -480,7 +480,10 @@ void AssetLibrary::AdoptDiskFolder(const std::string& path) {
         else { folder = wanted; m_Folders.push_back(folder); added = true; }
         start = end + 1;
     }
-    if (added) PersistFolders();
+    // Not persisted: these folders are derived from where the files sit and are found again on every load
+    // (saving them rewrote the tracked project/settings.json each time an asset was first seen). Folders
+    // the user makes or renames in the browser still persist (CreateFolder / RenameFolder).
+    (void)added;
     m_AssetFolder[path] = folder;
 }
 
