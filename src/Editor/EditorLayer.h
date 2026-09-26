@@ -714,6 +714,7 @@ private:
     // The single-file half of HandleDroppedFiles' logic - imports one file (never a directory)
     // into `targetFolder`, a '/'-joined virtual Asset Browser path. Split out so a dropped
     // folder can route each of its contents into its own mirrored subfolder.
+    void ExtractMaterialsFor(World& world, AssetLibrary& assets, const std::string& modelKey);
     void ImportDroppedFile(World& world, AssetLibrary& assets, Camera& editorCamera,
         const std::string& path, const std::string& targetFolder);
     // Phase 5 item 11 — physically copies an imported model/texture/sound into
