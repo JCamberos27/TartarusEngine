@@ -286,32 +286,12 @@ void DrawSelectionPanel(AnimCtx& cx) {
                                 ImGui::PopID();
                             }
                         }
-                        // The pose: each contributing clip at its own length times T (phase-synced), blended.
-                        std::vector<float> weights;
-                        std::vector<std::string> refs;
-                        if (!m.IsBlendTree()) { weights = {1.0f}; refs = {m.Clip}; }
-                        else {
-                            weights = m.Is2D() ? AnimatorBlendWeights2D(m.Children, paramOf(m.BlendParam), paramOf(m.BlendParamY))
-                                               : AnimatorBlendWeights(m.Children, paramOf(m.BlendParam));
-                            for (const auto& ch : m.Children) refs.push_back(ch.Clip);
-                        }
-                        std::vector<LocalTRS> pose, tmp;
-                        rigModel->BindLocalPose(pose);
-                        float acc = 0.0f;
+                        // The pose Play would make: the runtime's own sampler, at T of the state.
+                        std::vector<LocalTRS> pose;
                         float lenForPlay = 0.0f;
-                        for (size_t i = 0; i < refs.size() && i < weights.size(); ++i) {
-                            if (weights[i] <= 0.0f) continue;
-                            const int c = ResolveAnimationClip(*rigModel, refs[i], *assets);
-                            const float len = c >= 0 ? rigModel->AnimationLength(c) : 0.0f;
-                            if (!(len > 0.0f) || !rigModel->SampleLocalPose(c, pv.T * len, AnimationWrapMode::ClampForever, tmp)) continue;
-                            if (s.RootMotion) rigModel->StripRootMotion(tmp, c, node, rms);
-                            acc += weights[i];
-                            const float w = weights[i] / acc; // running weighted average
-                            if (acc == weights[i]) pose = tmp;
-                            else for (size_t b = 0; b < pose.size() && b < tmp.size(); ++b) pose[b] = LocalTRS::Blend(pose[b], tmp[b], w);
-                            lenForPlay = std::max(lenForPlay, len);
-                        }
-                        if (acc > 0.0f) rigModel->ApplyLocalPose(pose);
+                        if (AnimatorSampleState(*rigModel, *assets, D, s, D.TrackIndex(rigAc ? rigAc->Track : std::string()),
+                                                pv.T, pv.Params, node, rms, pose, &lenForPlay))
+                            rigModel->ApplyLocalPose(pose);
                         if (pv.Play && lenForPlay > 0.0f) {
                             pv.T += ImGui::GetIO().DeltaTime * std::max(0.05f, s.Speed) / lenForPlay;
                             if (pv.T > 1.0f) pv.T -= 1.0f;
@@ -748,7 +728,7 @@ void DrawSelectionPanel(AnimCtx& cx) {
                         std::vector<LocalTRS> a, b;
                         const std::map<std::string, float> none;
                         const float fromPhase = tr.HasExitTime ? std::min(tr.ExitTime, 1.0f) : 0.0f;
-                        const bool haveA = SampleStatePose(*pm, *assets, D, L.States[fi], track, fromPhase, none, pnode, rms, a);
+                        const bool haveA = AnimatorSampleState(*pm, *assets, D, L.States[fi], track, fromPhase, none, pnode, rms, a);
                         // The destination has advanced by the fade so far: t * Duration seconds of its own length.
                         float destLen = 0.0f;
                         {
@@ -759,7 +739,7 @@ void DrawSelectionPanel(AnimCtx& cx) {
                         }
                         const float tf = s_t / 100.0f;
                         const float advance = destLen > 0.0f ? tf * tr.Duration / (destLen / std::max(0.01f, L.States[ti].Speed)) : 0.0f;
-                        const bool haveB = SampleStatePose(*pm, *assets, D, L.States[ti], track, tr.Offset + advance, none, pnode, rms, b);
+                        const bool haveB = AnimatorSampleState(*pm, *assets, D, L.States[ti], track, tr.Offset + advance, none, pnode, rms, b);
                         if (haveA && haveB) {
                             for (size_t k = 0; k < a.size() && k < b.size(); ++k) a[k] = LocalTRS::Blend(a[k], b[k], tf);
                             pm->ApplyLocalPose(a);
