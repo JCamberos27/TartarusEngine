@@ -13,10 +13,13 @@
 #include "EditorUIPrimitives.h"
 #include "AnimationSystem.h"
 #include "AnimatorController.h"
+#include "AnimatorLint.h"
+#include "ClipAnalysis.h"
+#include "FirstPersonBodyContract.h"
+#include "FirstPersonAnimation.h"
+#include "Components.h"
 #include "CurveEditor.h"
 #include "AssetLibrary.h"
-#include "Components.h"
-#include "FirstPersonAnimation.h"
 #include "Log.h"
 #include "Model.h"
 #include "ProjectPaths.h"
@@ -34,6 +37,7 @@
 #include <filesystem>
 #include <functional>
 #include <map>
+#include <unordered_map>
 
 using namespace EditorInternal;
 namespace fs = std::filesystem;
@@ -807,6 +811,77 @@ void EditorLayer::DrawAnimatorWindow(World& world) {
             }
             ImGui::EndTabItem();
         }
+        // Lint: the mistakes a controller loads fine with and then quietly doesn't do what it was built to.
+        {
+            const std::vector<AnimatorLint::Issue> issues = AnimatorLint::Check(D);
+            int problems = 0;
+            for (const auto& i : issues) problems += i.Severity != AnimatorLint::Level::Info;
+            char tab[48];
+            std::snprintf(tab, sizeof tab, problems ? "Lint (%d)###lint" : "Lint###lint", problems);
+            if (ImGui::BeginTabItem(tab)) {
+                static int s_against = 0; // 0 none, 1 body, 2 weapon
+                ImGui::SetNextItemWidth(-FLT_MIN);
+                ImGui::Combo("##against", &s_against, "Check the graph only\0Also check it as a first-person body controller\0Also check it as a first-person weapon controller\0");
+                std::vector<FPBody::Check> contract;
+                if (s_against == 1) {
+                    FirstPersonBodyComponent all;
+                    all.TurnThreshold = 55.0f; all.StartStopClips = true; all.CrouchHeight = 1.2f; all.FootIK = true; all.WeaponArms = true;
+                    FPBody::ValidationInput in;
+                    in.Config = &all;
+                    in.HasPieces = in.HasDriverPiece = in.ControllerSet = true;
+                    in.Controller = &D;
+                    contract = FPBody::Validate(in);
+                } else if (s_against == 2) {
+                    FirstPersonAnimationSet set;
+                    set.Controller = W.Rel;
+                    FirstPersonWeaponCheckInput in;
+                    in.Set = &set;
+                    in.Controller = &D;
+                    contract = FirstPersonWeaponValidate(in);
+                }
+                if (issues.empty() && contract.empty()) {
+                    ImGui::TextColored(EditorUIPrimitives::SuccessColor(), ICON_FA_CIRCLE_CHECK "  Nothing to report.");
+                }
+                for (const auto& iss : issues) {
+                    ImVec4 col = ImGui::GetStyleColorVec4(ImGuiCol_TextDisabled);
+                    const char* icon = ICON_FA_CIRCLE_INFO;
+                    if (iss.Severity == AnimatorLint::Level::Error) { col = EditorUIPrimitives::DangerColor(); icon = ICON_FA_CIRCLE_XMARK; }
+                    else if (iss.Severity == AnimatorLint::Level::Warning) { col = EditorUIPrimitives::WarningColor(); icon = ICON_FA_TRIANGLE_EXCLAMATION; }
+                    ImGui::PushID((int)(&iss - issues.data()) + 5000);
+                    ImGui::TextColored(col, "%s", icon);
+                    ImGui::SameLine();
+                    ImGui::PushTextWrapPos(0.0f);
+                    ImGui::TextUnformatted(iss.Message.c_str());
+                    ImGui::PopTextWrapPos();
+                    const bool clickable = iss.State >= 0 || iss.Transition >= 0;
+                    if (clickable && ImGui::IsItemHovered()) ImGui::SetMouseCursor(ImGuiMouseCursor_Hand);
+                    if (clickable && ImGui::IsItemClicked()) {
+                        if (iss.Layer >= 0 && iss.Layer < (int)D.Layers.size()) W.Layer = iss.Layer;
+                        W.ClearSelection();
+                        if (iss.Transition >= 0) W.SelTransition = iss.Transition;
+                        else W.SelStates = {iss.State};
+                    }
+                    if (!iss.Hint.empty()) ImGui::TextDisabled("    %s", iss.Hint.c_str());
+                    ImGui::PopID();
+                }
+                if (!contract.empty()) {
+                    ImGui::SeparatorText(s_against == 1 ? "As a body controller" : "As a weapon controller");
+                    for (const auto& c : contract) {
+                        ImVec4 col = ImGui::GetStyleColorVec4(ImGuiCol_TextDisabled);
+                        const char* icon = ICON_FA_CIRCLE_INFO;
+                        if (c.Level == FPBody::Severity::Error) { col = EditorUIPrimitives::DangerColor(); icon = ICON_FA_CIRCLE_XMARK; }
+                        else if (c.Level == FPBody::Severity::Warning) { col = EditorUIPrimitives::WarningColor(); icon = ICON_FA_TRIANGLE_EXCLAMATION; }
+                        ImGui::TextColored(col, "%s", icon);
+                        ImGui::SameLine();
+                        ImGui::PushTextWrapPos(0.0f);
+                        ImGui::TextUnformatted(c.Message.c_str());
+                        if (!c.Hint.empty()) ImGui::TextDisabled("    %s", c.Hint.c_str());
+                        ImGui::PopTextWrapPos();
+                    }
+                }
+                ImGui::EndTabItem();
+            }
+        }
         ImGui::EndTabBar();
     }
     ImGui::EndChild();
@@ -1129,18 +1204,40 @@ void EditorLayer::DrawAnimatorWindow(World& world) {
         W.ClearSelection();
         changed = true;
     };
-    auto duplicateStates = [&]() {
+    // withTransitions: the copies also get the transitions of the originals - between two copied states
+    // they connect the copies; to or from a state that isn't copied they connect the copy to that state.
+    auto duplicateStates = [&](bool withTransitions) {
         std::vector<std::string> names;
         for (const auto& s : Ly.States) names.push_back(s.Name);
         std::vector<int> fresh;
+        std::vector<std::pair<std::string, std::string>> renamed; // original name -> copy name
         for (int s : W.SelStates) {
             if (s < 0 || s >= (int)Ly.States.size()) continue;
             AC::State copy = Ly.States[s];
+            const std::string original = copy.Name;
             copy.Name = UniqueName(copy.Name, names);
             names.push_back(copy.Name);
+            renamed.push_back({original, copy.Name});
             copy.Position += glm::vec2(30.0f, 30.0f);
             Ly.States.push_back(std::move(copy));
             fresh.push_back((int)Ly.States.size() - 1);
+        }
+        if (withTransitions) {
+            auto copyOf = [&](const std::string& n) -> const std::string* {
+                for (const auto& r : renamed) if (r.first == n) return &r.second;
+                return nullptr;
+            };
+            const size_t count = Ly.Transitions.size();
+            for (size_t i = 0; i < count; ++i) {
+                const AC::Transition t = Ly.Transitions[i];
+                const std::string* from = t.FromKind == AC::Source::State ? copyOf(t.From) : nullptr;
+                const std::string* to = t.To == AC::kExitState ? nullptr : copyOf(t.To);
+                if (!from && !to) continue;
+                AC::Transition n = t;
+                if (from) n.From = *from;
+                if (to) n.To = *to;
+                Ly.Transitions.push_back(std::move(n));
+            }
         }
         W.ClearSelection();
         W.SelStates = fresh;
@@ -1263,7 +1360,8 @@ void EditorLayer::DrawAnimatorWindow(World& world) {
                     Ly.DefaultState = Ly.States[n.Index].Name;
                     changed = true;
                 }
-                if (ImGui::MenuItem(ICON_FA_COPY "  Duplicate", "Ctrl+D")) duplicateStates();
+                if (ImGui::MenuItem(ICON_FA_COPY "  Duplicate", "Ctrl+D")) duplicateStates(false);
+                if (ImGui::MenuItem(ICON_FA_COPY "  Duplicate with transitions", "Ctrl+Shift+D")) duplicateStates(true);
                 if (ImGui::MenuItem(ICON_FA_TRASH "  Delete", "Del")) deleteStates(W.SelStates);
             }
         } else if (W.ContextTransition >= 0) {
@@ -1292,7 +1390,7 @@ void EditorLayer::DrawAnimatorWindow(World& world) {
                 changed = true;
             }
         }
-        if (io.KeyCtrl && ImGui::IsKeyPressed(ImGuiKey_D) && !W.SelStates.empty()) duplicateStates();
+        if (io.KeyCtrl && ImGui::IsKeyPressed(ImGuiKey_D) && !W.SelStates.empty()) duplicateStates(io.KeyShift);
         if (io.KeyCtrl && ImGui::IsKeyPressed(ImGuiKey_Z)) { if (io.KeyShift) W.Step(W.Redo, W.Undo); else W.Step(W.Undo, W.Redo); }
         if (io.KeyCtrl && ImGui::IsKeyPressed(ImGuiKey_Y)) W.Step(W.Redo, W.Undo);
         if (!io.KeyCtrl && ImGui::IsKeyPressed(ImGuiKey_F)) W.FramePending = true;
@@ -1415,14 +1513,70 @@ void EditorLayer::DrawAnimatorWindow(World& world) {
                     if (dist < 0.005f && std::abs(d.Yaw) < 0.01f) ImGui::TextDisabled("%sin place", prefix);
                     else ImGui::TextDisabled("%s%.2f m, %+.0f deg per pass  (%.2f m/s)", prefix, dist, glm::degrees(d.Yaw), dist / len);
                 };
+                // Full measurement of one clip: travel, foot contacts, stride, loop seam and a speed plot.
+                auto analyse = [&](const std::string& ref, const char* label) {
+                    const int c = ResolveAnimationClip(*rigModel, ref, *assets);
+                    if (c < 0) return;
+                    struct Cached { const Model* M = nullptr; int Clip = -1, Node = -1; bool Rot = false, Vert = false; ClipAnalysis::Result R; };
+                    static std::unordered_map<std::string, Cached> s_cache;
+                    Cached& e = s_cache[std::string(label) + "|" + ref];
+                    if (e.M != rigModel || e.Clip != c || e.Node != node || e.Rot != rms.Rotation || e.Vert != rms.Vertical) {
+                        const std::string feet[2] = {FPBody::kBoneFoot[0], FPBody::kBoneFoot[1]};
+                        std::vector<std::string> seam = {FPBody::kBoneFoot[0], FPBody::kBoneFoot[1], FPBody::kBoneHand[0], FPBody::kBoneHand[1], "head"};
+                        e = {rigModel, c, node, rms.Rotation, rms.Vertical, ClipAnalysis::Analyze(*rigModel, c, node, rms, feet, seam)};
+                    }
+                    const ClipAnalysis::Result& a = e.R;
+                    if (!a.Valid) return;
+                    ImGui::PushID(label);
+                    if (ImGui::TreeNode("##analysis", ICON_FA_CHART_LINE "  Analyse %s", label[0] ? label : "clip")) {
+                        ImGui::Text("Length %.2f s   travel %.2f m   speed %.2f m/s   turn %+.0f deg", a.Length, a.Distance, a.Speed, a.YawDegrees);
+                        if (std::abs(a.VerticalDelta) > 0.01f) ImGui::Text("Net height change %+.2f m", a.VerticalDelta);
+                        if (a.LoopSeam > 0.0f) {
+                            const bool bad = a.LoopSeam > 0.03f;
+                            ImGui::TextColored(bad ? EditorUIPrimitives::WarningColor() : ImGui::GetStyleColorVec4(ImGuiCol_TextDisabled),
+                                               "Loop seam %.1f cm (%s)%s", a.LoopSeam * 100.0f, a.LoopSeamBone.c_str(), bad ? "  - visible pop when it loops" : "");
+                        }
+                        ImGui::PlotLines("##speed", a.SpeedProfile.data(), (int)a.SpeedProfile.size(), 0, "ground speed over the clip", 0.0f, FLT_MAX, ImVec2(-FLT_MIN, 50.0f));
+                        // Contact strips: filled where the foot is planted.
+                        const ImVec2 origin = ImGui::GetCursorScreenPos();
+                        const float w = ImGui::GetContentRegionAvail().x, h = 10.0f;
+                        ImDrawList* dl = ImGui::GetWindowDrawList();
+                        for (int f = 0; f < 2; ++f) {
+                            const ClipAnalysis::Foot& ft = a.Feet[f];
+                            const float y = origin.y + f * (h + 3.0f);
+                            dl->AddRectFilled({origin.x, y}, {origin.x + w, y + h}, IM_COL32(60, 60, 60, 160));
+                            if (!ft.Found) continue;
+                            // Draw each contact as a bar from its start for ContactFraction / plants of the clip.
+                            const float each = ft.ContactStarts.empty() ? 0.0f : ft.ContactFraction / ft.ContactStarts.size();
+                            for (float st : ft.ContactStarts) {
+                                const float x0 = origin.x + st * w, x1 = origin.x + std::min(1.0f, st + each) * w;
+                                dl->AddRectFilled({x0, y}, {x1, y + h}, f == 0 ? IM_COL32(90, 170, 255, 220) : IM_COL32(255, 170, 90, 220));
+                                if (st + each > 1.0f) dl->AddRectFilled({origin.x, y}, {origin.x + (st + each - 1.0f) * w, y + h}, f == 0 ? IM_COL32(90, 170, 255, 220) : IM_COL32(255, 170, 90, 220));
+                            }
+                        }
+                        ImGui::Dummy({w, 2 * h + 3.0f});
+                        for (int f = 0; f < 2; ++f) {
+                            const ClipAnalysis::Foot& ft = a.Feet[f];
+                            if (!ft.Found) { ImGui::TextDisabled("%s: bone not found on this rig", ft.Bone.c_str()); continue; }
+                            std::string starts;
+                            for (float st : ft.ContactStarts) { char b[16]; std::snprintf(b, sizeof b, "%s%.2f", starts.empty() ? "" : ", ", st); starts += b; }
+                            ImGui::Text("%s: plants at %s (of 1.0), down %.0f%%, stride %.2f m", ft.Bone.c_str(), starts.empty() ? "-" : starts.c_str(), ft.ContactFraction * 100.0f, ft.Stride);
+                        }
+                        ImGui::TextDisabled("Blue = left foot planted, orange = right. Use the plant times for Stop transition offsets \nand Start exit times; the stride against the speed tells if the feet will slide.");
+                        ImGui::TreePop();
+                    }
+                    ImGui::PopID();
+                };
                 row("");
-                if (!m.IsBlendTree()) describe(m.Clip, "");
+                if (!m.IsBlendTree()) { describe(m.Clip, ""); row(""); analyse(m.Clip, ""); }
                 else {
                     ImGui::TextDisabled("Per child:");
                     for (const auto& child : m.Children) {
                         row("");
                         const std::string prefix = ClipLabel(child.Clip) + ": ";
                         describe(child.Clip, prefix.c_str());
+                        row("");
+                        analyse(child.Clip, ClipLabel(child.Clip).c_str());
                     }
                 }
                 if (ImGui::IsItemHovered())
