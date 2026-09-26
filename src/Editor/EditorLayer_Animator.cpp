@@ -100,6 +100,8 @@ std::string ClipLabel(const std::string& ref) {
     return label.empty() ? ref : label;
 }
 
+char g_stateSearch[64] = "";
+
 const char* kParamTypeLabels = "Float\0Int\0Bool\0Trigger\0";
 const char* kOpLabels = "Greater\0Less\0Equals\0Not Equal\0Is True\0Is False\0";
 
@@ -190,6 +192,7 @@ struct EditorLayer::AnimatorWindowState {
     ImVec2 Pan{0.0f, 0.0f};
     float Zoom = 1.0f;
     bool FramePending = true;
+    std::string CenterOn; // a state to pan to on the next draw (from the search box)
 
     bool Linking = false;
     NodeRef LinkFrom;
@@ -467,6 +470,15 @@ void EditorLayer::DrawAnimatorWindow(World& world) {
             if (ActionButton(ICON_FA_EXPAND, "Frame all nodes (F)")) W.FramePending = true;
             ImGui::SameLine();
             ImGui::TextDisabled("%.0f%%", W.Zoom * 100.0f);
+            ImGui::SameLine();
+            ImGui::SetNextItemWidth(130.0f * S);
+            ImGui::InputTextWithHint("##statesearch", ICON_FA_MAGNIFYING_GLASS " find state", g_stateSearch, sizeof g_stateSearch);
+            if (ImGui::IsItemHovered()) EditorUI::SetTooltip("Highlights states whose name contains this text. Enter selects the first and pans to it.");
+            if (ImGui::IsItemDeactivated() && ImGui::IsKeyPressed(ImGuiKey_Enter) && g_stateSearch[0]) {
+                const AC::Layer& sl = W.L();
+                for (int i = 0; i < (int)sl.States.size(); ++i)
+                    if (ClipFilterMatch(g_stateSearch, sl.States[i].Name)) { W.ClearSelection(); W.SelStates = {i}; W.CenterOn = sl.States[i].Name; break; }
+            }
 
             // The rig the clip pickers test against and whose playback is shown live.
             ImGui::SameLine();
@@ -957,6 +969,17 @@ void EditorLayer::DrawAnimatorWindow(World& world) {
         W.Pan = csz * 0.5f - ImVec2(mid.x, mid.y) * W.Zoom;
     }
 
+    if (!W.CenterOn.empty()) {
+        const int ci = Ly.FindState(W.CenterOn);
+        W.CenterOn.clear();
+        if (ci >= 0 && csz.x > 10.0f) {
+            const NodeRef cn{NodeKind::State, ci};
+            const glm::vec2 p = nodeWorldPos(cn);
+            const ImVec2 sz = nodeSize(cn);
+            W.Pan = csz * 0.5f - ImVec2(p.x + sz.x * 0.5f, p.y + sz.y * 0.5f) * W.Zoom;
+        }
+    }
+
     // Grid
     dl->PushClipRect(c0, c1, true);
     dl->AddRectFilled(c0, c1, IM_COL32(32, 32, 34, 255));
@@ -1144,6 +1167,8 @@ void EditorLayer::DrawAnimatorWindow(World& world) {
         const ImU32 border = selected ? ImGui::GetColorU32(EditorUIPrimitives::ActiveAccentColor())
                            : (n == hoveredNode ? IM_COL32(220, 220, 220, 200) : IM_COL32(20, 20, 20, 200));
         dl->AddRect(a, b, border, round, 0, selected ? 2.5f : 1.0f);
+        if (n.Kind == NodeKind::State && g_stateSearch[0] && ClipFilterMatch(g_stateSearch, label))
+            dl->AddRect(a - ImVec2(3, 3), b + ImVec2(3, 3), IM_COL32(255, 210, 60, 255), round + 2.0f, 0, 2.0f);
         if (n.Kind == NodeKind::State && n.Index == liveCurrent) {
             const float h = 4.0f * W.Zoom;
             dl->AddRectFilled(ImVec2(a.x + round, b.y - h - 3.0f * W.Zoom),
