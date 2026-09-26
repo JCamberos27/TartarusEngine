@@ -1260,6 +1260,51 @@ void EditorLayer::DrawAnimatorWindow(World& world) {
         W.SelStates = fresh;
         changed = true;
     };
+    // Copy / paste: the selected states with the transitions between them, kept across controllers (the
+    // clipboard outlives the window's controller). Parameters they use are not copied - Lint names any
+    // the target lacks.
+    struct Clipboard { std::vector<AC::State> States; std::vector<AC::Transition> Transitions; };
+    static Clipboard s_clip;
+    auto copyStates = [&]() {
+        s_clip = {};
+        for (int i : W.SelStates)
+            if (i >= 0 && i < (int)Ly.States.size()) s_clip.States.push_back(Ly.States[i]);
+        for (const auto& t : Ly.Transitions) {
+            if (t.FromKind != AC::Source::State) continue;
+            bool from = false, to = false;
+            for (const auto& c : s_clip.States) { from |= c.Name == t.From; to |= c.Name == t.To; }
+            if (from && to) s_clip.Transitions.push_back(t);
+        }
+    };
+    auto pasteStates = [&]() {
+        if (s_clip.States.empty()) return;
+        std::vector<std::string> names;
+        for (const auto& s : Ly.States) names.push_back(s.Name);
+        std::vector<std::pair<std::string, std::string>> renamed;
+        std::vector<int> fresh;
+        for (AC::State copy : s_clip.States) {
+            const std::string original = copy.Name;
+            copy.Name = UniqueName(copy.Name, names);
+            names.push_back(copy.Name);
+            renamed.push_back({original, copy.Name});
+            copy.Position += glm::vec2(30.0f, 30.0f);
+            copy.Motions.resize(D.Tracks.size()); // the target may have a different number of tracks
+            Ly.States.push_back(std::move(copy));
+            fresh.push_back((int)Ly.States.size() - 1);
+        }
+        auto renamedTo = [&](const std::string& n) {
+            for (const auto& r : renamed) if (r.first == n) return r.second;
+            return n;
+        };
+        for (AC::Transition t : s_clip.Transitions) {
+            t.From = renamedTo(t.From);
+            t.To = renamedTo(t.To);
+            Ly.Transitions.push_back(std::move(t));
+        }
+        W.ClearSelection();
+        W.SelStates = fresh;
+        changed = true;
+    };
     auto createState = [&](glm::vec2 at, bool blendTree) {
         std::vector<std::string> names;
         for (const auto& s : Ly.States) names.push_back(s.Name);
@@ -1379,6 +1424,7 @@ void EditorLayer::DrawAnimatorWindow(World& world) {
                 }
                 if (ImGui::MenuItem(ICON_FA_COPY "  Duplicate", "Ctrl+D")) duplicateStates(false);
                 if (ImGui::MenuItem(ICON_FA_COPY "  Duplicate with transitions", "Ctrl+Shift+D")) duplicateStates(true);
+                if (ImGui::MenuItem(ICON_FA_COPY "  Copy", "Ctrl+C")) copyStates();
                 if (ImGui::MenuItem(ICON_FA_TRASH "  Delete", "Del")) deleteStates(W.SelStates);
             }
         } else if (W.ContextTransition >= 0) {
@@ -1390,6 +1436,7 @@ void EditorLayer::DrawAnimatorWindow(World& world) {
         } else {
             if (ImGui::MenuItem(ICON_FA_SQUARE_PLUS "  Create State")) createState(W.ContextWorld, false);
             if (ImGui::MenuItem(ICON_FA_SLIDERS "  Create Blend Tree State")) createState(W.ContextWorld, true);
+            if (ImGui::MenuItem(ICON_FA_PASTE "  Paste", "Ctrl+V", false, !s_clip.States.empty())) pasteStates();
             ImGui::Separator();
             if (ImGui::MenuItem(ICON_FA_EXPAND "  Frame All", "F")) W.FramePending = true;
         }
@@ -1408,6 +1455,8 @@ void EditorLayer::DrawAnimatorWindow(World& world) {
             }
         }
         if (io.KeyCtrl && ImGui::IsKeyPressed(ImGuiKey_D) && !W.SelStates.empty()) duplicateStates(io.KeyShift);
+        if (io.KeyCtrl && ImGui::IsKeyPressed(ImGuiKey_C) && !W.SelStates.empty()) copyStates();
+        if (io.KeyCtrl && ImGui::IsKeyPressed(ImGuiKey_V)) pasteStates();
         if (io.KeyCtrl && ImGui::IsKeyPressed(ImGuiKey_Z)) { if (io.KeyShift) W.Step(W.Redo, W.Undo); else W.Step(W.Undo, W.Redo); }
         if (io.KeyCtrl && ImGui::IsKeyPressed(ImGuiKey_Y)) W.Step(W.Redo, W.Undo);
         if (!io.KeyCtrl && ImGui::IsKeyPressed(ImGuiKey_F)) W.FramePending = true;
