@@ -1013,6 +1013,51 @@ void EditorLayer::DrawAssetImportInspector(World& world, AssetLibrary& assets, c
                 m_ImportSettingsDirty = false;
             });
 
+        // Its materials: each one's name, which texture maps the import found for it, and the
+        // editable .mat it's extracted to (if any), with the Extract Materials action.
+        if (model && model->MeshCount() > 0) {
+            ImGui::Spacing();
+            ImGui::SeparatorText("Materials");
+            const auto remap = assets.MaterialRemap(key);
+            std::set<std::string> shown;
+            if (ImGui::BeginTable("##modelmats", 2, ImGuiTableFlags_RowBg | ImGuiTableFlags_SizingStretchProp)) {
+                ImGui::TableSetupColumn("Material", ImGuiTableColumnFlags_WidthStretch, 0.45f);
+                ImGui::TableSetupColumn("Uses", ImGuiTableColumnFlags_WidthStretch, 0.55f);
+                for (int i = 0; i < model->MeshCount(); ++i) {
+                    const Material& m = model->MeshMaterial(i);
+                    if (!shown.insert(m.Name).second) continue;
+                    ImGui::TableNextRow();
+                    ImGui::TableNextColumn();
+                    ImGui::TextUnformatted(m.Name.empty() ? "(unnamed)" : m.Name.c_str());
+                    std::string maps;
+                    auto add = [&](const std::shared_ptr<Texture>& t, const char* n) {
+                        if (t && t->IsValid()) maps += (maps.empty() ? "" : ", ") + std::string(n);
+                    };
+                    add(m.AlbedoMap, "Albedo"); add(m.NormalMap, "Normal"); add(m.MetallicMap, "Metallic");
+                    add(m.RoughnessMap, "Roughness"); add(m.MetallicRoughnessMap, "Metal-Rough");
+                    add(m.AOMap, "AO"); add(m.EmissiveMap, "Emissive");
+                    if (ImGui::IsItemHovered())
+                        EditorUI::SetTooltip("Texture maps found on import: %s", maps.empty() ? "none" : maps.c_str());
+                    ImGui::TableNextColumn();
+                    auto it = remap.find(m.Name);
+                    if (it != remap.end()) {
+                        ImGui::TextUnformatted((ICON_FA_DROPLET " " + std::filesystem::path(it->second).filename().string()).c_str());
+                        if (ImGui::IsItemHovered()) EditorUI::SetTooltip("%s\n\nPlaced objects start with this material.", it->second.c_str());
+                    } else if (maps.empty()) {
+                        ImGui::TextDisabled("No textures");
+                    } else {
+                        ImGui::TextDisabled("%s", maps.c_str());
+                    }
+                }
+                ImGui::EndTable();
+            }
+            if (ActionButton(ICON_FA_DROPLET "  Extract Materials",
+                             "Write one editable .mat per material into the asset's Materials folder\n"
+                             "(existing ones are kept) and use them on this model's placed objects.",
+                             false, ImVec2(-1.0f, 0.0f)))
+                ExtractMaterialsFor(world, assets, key);
+        }
+
         // Sub-asset list (#236 G): the meshes this file imported to, with their geometry counts
         // and material tint — a read-only breakdown of what's inside the model.
         if (model && model->MeshCount() > 0) {
