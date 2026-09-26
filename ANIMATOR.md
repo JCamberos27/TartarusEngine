@@ -45,16 +45,16 @@ The first-person weapon uses this system. See `FPS_ANIMATION_SYSTEM.md` for that
 ```
 
 - **Top bar**
-  - Controller file, undo/redo, frame all, and zoom.
+  - Controller file, undo/redo, frame all, zoom, and a **find state** box (matches get a yellow outline; Enter selects the first and pans to it).
   - **Rig**: an object that uses this controller. Its model's clips fill the clip pickers and its bone tree fills the mask picker. In Play, its live state is highlighted in the graph.
 - **Graph**
   - Middle-drag pans. The mouse wheel zooms around the cursor. **F** frames everything.
   - **Right-click empty space** gives *Create State*, *Create Blend Tree State* and *Frame All*.
-  - **Right-click a state** gives *Make Transition* (then click the target state or Exit), *Set as Layer Default State*, *Duplicate* and *Delete*.
+  - **Right-click a state** gives *Make Transition* (then click the target state or Exit), *Set as Layer Default State*, *Duplicate*, *Duplicate with transitions*, *Copy* and *Delete*. **Right-click empty space** also offers *Paste*.
   - Right-click **Entry** or **Any State** and choose *Make Transition* to make a transition from it.
   - Click to select. Ctrl/Shift+click adds to the selection. Drag on empty space to box-select. Drag a node to move it (all selected nodes move together).
   - Click a transition arrow to select it. An arrow with three chevrons holds several transitions; click it again to cycle through them.
-  - **Del** deletes, **Ctrl+D** duplicates, **Ctrl+Z / Ctrl+Y** undo and redo, **Esc** cancels a transition you are drawing.
+  - **Del** deletes, **Ctrl+D** duplicates, **Ctrl+Shift+D** duplicates with the transitions (between copied states they connect the copies; to other states they connect the copy), **Ctrl+C / Ctrl+V** copy and paste states with the transitions between them (also into another controller), **Ctrl+Z / Ctrl+Y** undo and redo, **Esc** cancels a transition you are drawing.
 - **Colours**
   - Orange: the layer's default state. Green: Entry. Teal: Any State. Red: Exit.
   - In Play: blue for the playing state, with a progress bar. States still fading out are tinted, and the transition that is crossfading turns blue.
@@ -114,16 +114,25 @@ A blend-tree state blends clips along one Float parameter:
 - At a given value, the two neighbouring children are mixed linearly. Below the lowest threshold or above the highest, the end clip plays alone.
 - Children play phase-synced, so a walk and a run keep their feet in step.
 - The properties panel previews the child weights at the parameter's current value.
+- **Sort** orders the children by threshold. **Thresholds from clip speed** sets each child's threshold to the ground speed its clip travels at, measured on the chosen rig (in-place clips keep theirs).
 
 ### 2D blend trees
 
 A 2D blend tree blends clips over two Float parameters, e.g. a directional walk / jog on `MoveX` (right) and `MoveY` (forward):
 
 - Pick **Blend Tree 2D** as the motion type, then **Parameter X** and **Parameter Y**.
+- The properties panel draws the **blend space**: children as dots (bigger = more weight) and the current parameter point as a cross. In Play, drag in it to steer the live parameters.
 - Each child sits at a point **(X, Y)**. Put each locomotion clip at its own velocity: walk forward at (0, 1.53), jog left at (-2.30, 0), idle at (0, 0). The state panel's root-motion readout measures these for you.
 - The weights are *freeform cartesian* (gradient-band interpolation, as Unity's Freeform Cartesian): a child has all the weight on its own point and fades toward each of its neighbours. Past the outermost children the nearest edge plays, so asking a jog to strafe faster than its clip just plays the strafe.
 - Root motion mixes the children's travel by the same weights, so the body moves the way the blended pose does.
 - File format: the motion gets `"blendParamY"`, and each child a `"thresholdY"` next to its `"threshold"` (X).
+
+### Checking and debugging
+
+- **Lint** tab: unreachable states, states with no way out, missing / duplicate / wrongly typed parameters, blend children stacked on one point, events outside 0..1, transitions that never fire or point at deleted states. Click an issue to select the state or transition. The dropdown can also check the controller against the first-person **body** or **weapon** contract.
+- **History** tab (Play): every transition the rig's controller took, how long ago, and the conditions with the parameter values at that moment. Click one to select the transition.
+- **Analyse** (state panel, under Root Motion): per clip, the travel, ground speed, turn, a ground-speed plot, when each foot plants, the stride and the loop seam (how far the last frame is from the first, relative to the root - a visible pop when it loops). Use the plant times for Stop transition offsets and Start exit times, and the speeds for blend thresholds.
+- The clip pickers show each clip's length.
 
 ### Layers and bone masks
 
@@ -227,12 +236,13 @@ if (anim.EventFired("Refill")) ammo = magazine;
     "maskInclude": [], "maskExclude": [],
     "states": [{
       "name": "Idle", "loop": true, "speed": 1, "priority": 0, "tags": ["Idle"],
-      "position": [0, 0],
+      "position": [0, 0], "rootMotion": true, "speedParam": "",
       "motions": { "arms": { "clip": "assets/.../FP_Idle.fbx", "clipGuid": "…" } },
       "events": [{ "name": "Refill", "time": 1.0 }]
     }],
     "transitions": [
-      { "from": "Idle", "to": "Walk", "duration": 0.1, "hasExitTime": false, "exitTime": 0.9,
+      { "from": "Idle", "to": "Walk", "duration": 0.1, "offset": 0, "interruptible": true,
+        "hasExitTime": false, "exitTime": 0.9,
         "conditions": [{ "param": "Speed", "mode": "greater", "threshold": 0.05 }] },
       { "fromAny": true, "to": "Fire", "respectPriority": true, "canTransitionToSelf": true, … },
       { "fromEntry": true, "to": "Sprint", … },
@@ -242,7 +252,8 @@ if (anim.EventFired("Refill")) ammo = magazine;
 }
 ```
 
-- A blend-tree motion is written as `{ "blendParam": "Speed", "children": [{ "clip": …, "threshold": 0, "speed": 1 }] }`.
+- A blend-tree motion is written as `{ "blendParam": "Speed", "children": [{ "clip": …, "threshold": 0, "speed": 1 }] }`; a 2D one adds `"blendParamY"` and a `"thresholdY"` per child.
+- `speedParam` (a Float that multiplies the state's speed), `rootMotion` (false keeps this state's travel in the pose), `offset` (the destination's start time, normalized) and `interruptible` are per state / transition. The layer's `entryPosition`, `anyPosition` and `exitPosition` only place the special nodes in the graph.
 - v1 files (a flat `states` / `transitions` list, with `"from": "Any"`) still load as a single base layer.
 - Floats are saved rounded to 6 decimals, so the files stay easy to hand-edit and diff.
 
@@ -252,5 +263,5 @@ if (anim.EventFired("Refill")) ammo = magazine;
 
 - Sub-state machines, animation curves, and 2D blend types other than freeform cartesian (simple / freeform directional).
 - Per-transition interruption source (Unity's *Current / Next / ordered* settings). This system has only *Interruptible* on/off plus priorities.
-- A preview of motions in the window while in Edit mode.
+- A preview of motions in the window while in Edit mode (Play shows the live state; the blend-space plot shows the weights).
 - Root motion on higher layers, and extracting a curve (e.g. a speed parameter) from it.
