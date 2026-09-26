@@ -1798,6 +1798,8 @@ entt::entity EditorLayer::InstantiateAssetDropInHierarchy(World& world, AssetLib
         const glm::vec3 pos = (toRoot && m_EditorCameraPtr) ? SafeSpawnInFrontOf(*m_EditorCameraPtr) : glm::vec3(0.0f);
         e = world.CreateModelEntity(model, pos, glm::vec3(0.0f), glm::vec3(1.0f),
                                     UniqueNameFor(world, name));
+        if (auto* rc = world.Registry.try_get<RenderableComponent>(e); rc && rc->ModelRef)
+            assets.ApplyMaterialRemap(*rc->ModelRef, rc->Materials); // its extracted .mat files
     } else if (prefabPath && *prefabPath) {
         PushUndo(world, "Place Prefab Instance");
         e = SceneSerializer::InstantiatePrefab(world, assets, prefabPath);

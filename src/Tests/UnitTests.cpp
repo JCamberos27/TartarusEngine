@@ -3353,6 +3353,26 @@ void TestAssetPackImport() {
     CHECK(AssetImport::IsSourceOnlyFile("a/Thumbs.db"));
     CHECK(!AssetImport::IsSourceOnlyFile("a/Gun.fbx"));
 
+    // Texture kind from the file name.
+    using TK = AssetImport::TextureKind;
+    CHECK(AssetImport::GuessTextureKind("a/Crate_Normal.png") == TK::Normal);
+    CHECK(AssetImport::GuessTextureKind("a/Door_1_W_1_K_Nm.tga") == TK::Normal);
+    CHECK(AssetImport::GuessTextureKind("a/T_Quantum_Arms_Unity_Normal.1003.png") == TK::Normal);
+    CHECK(AssetImport::GuessTextureKind("a/Sofa_Normal_OpenGL_4K.png") == TK::Normal);
+    CHECK(AssetImport::GuessTextureKind("a/Wall_Normal_Map.png") == TK::Normal);
+    CHECK(AssetImport::GuessTextureKind("a/Crate_Roughness.png") == TK::Data);
+    CHECK(AssetImport::GuessTextureKind("a/Mat_Sofa_Ambient_Occlusion.png") == TK::Data);
+    CHECK(AssetImport::GuessTextureKind("a/T_Body.1002_Occlusion.png") == TK::Data);
+    CHECK(AssetImport::GuessTextureKind("a/Floor_Mask_Map.png") == TK::Data);
+    CHECK(AssetImport::GuessTextureKind("a/AKS74U_Metallic.png") == TK::Data);
+    CHECK(AssetImport::GuessTextureKind("a/AKS74U_Albedo_Transparency.png") == TK::Color);
+    CHECK(AssetImport::GuessTextureKind("a/Garage_Props_Base_Color.png") == TK::Color);
+    CHECK(AssetImport::GuessTextureKind("a/Clocks_Emissive.png") == TK::Color);
+    CHECK(AssetImport::GuessTextureKind("a/proto_grid_dark.png") == TK::Color);
+    CHECK(!AssetLibrary::DefaultTextureSettings("a/Crate_Roughness.png").IsSRGB);
+    CHECK(AssetLibrary::DefaultTextureSettings("a/Crate_Normal.png").TextureType == TextureImportSettings::Type::NormalMap);
+    CHECK(AssetLibrary::DefaultTextureSettings("a/Crate_Albedo.png").IsSRGB);
+
     // A dropped folder is copied whole, layout kept, source files left behind.
     const fs::path assets = base / "project" / "assets";
     const AssetImport::FolderCopy first = AssetImport::CopyFolderInto(pack.string(), assets.string());
