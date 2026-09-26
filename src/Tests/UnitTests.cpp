@@ -22,6 +22,7 @@
 #include "FirstPersonBodyContract.h"
 #include "Curve.h"
 #include "IK.h"
+#include "FirstPersonWeaponWizard.h"
 #include "FirstPersonAnimation.h"
 #include "FirstPersonAdsCarry.h"
 #include "AudioEngine.h"
@@ -1351,6 +1352,27 @@ void TestAnimatorLint() {
     d.Layers[0].Transitions = {ab};
     r = AnimatorLint::Check(d);
     CHECK(has(r, "'B' doesn't loop") && has(r, "never fires"));
+}
+
+// The new-weapon wizard matches animation files to the graph's states by the tail of their names.
+void TestFirstPersonWeaponWizard() {
+    const std::vector<std::string> files = {
+        "a/AKS-74U_A_FP_Idle.fbx", "a/AKS-74U_A_FP_IdleToSprint.fbx", "a/AKS-74U_A_FP_Sprint.fbx",
+        "a/AKS-74U_A_FP_Mag_Check.fbx", "a/AKS-74U_A_FP_Tac_Reload.fbx", "a/AKS-74U_A_FP_Empty_Reload.fbx",
+        "a/AKS-74U_A_FP_Fire.fbx", "a/AKS-74U_A_FP_Holster.fbx"};
+    CHECK(FPWizard::PickClip("Idle", files) == "a/AKS-74U_A_FP_Idle.fbx");
+    CHECK(FPWizard::PickClip("Sprint", files) == "a/AKS-74U_A_FP_Sprint.fbx");        // not IdleToSprint
+    CHECK(FPWizard::PickClip("IdleToSprint", files) == "a/AKS-74U_A_FP_IdleToSprint.fbx");
+    CHECK(FPWizard::PickClip("MagCheck", files) == "a/AKS-74U_A_FP_Mag_Check.fbx");   // two words
+    CHECK(FPWizard::PickClip("TacReload", files) == "a/AKS-74U_A_FP_Tac_Reload.fbx");
+    CHECK(FPWizard::PickClip("EmptyReload", files) == "a/AKS-74U_A_FP_Empty_Reload.fbx");
+    CHECK(FPWizard::PickClip("Melee", files).empty());
+    CHECK(FPWizard::PickClip("Nonsense", files).empty());
+    // "reload" alone is the tactical reload when there is no better name.
+    CHECK(FPWizard::PickClip("TacReload", {"x/Reload.fbx"}) == "x/Reload.fbx");
+    const auto set = FPWizard::Build("arms.fbx", "gun.fbx", {{"Idle", "i.fbx", ""}, {"Fire", "f.fbx", "wf.fbx"}, {"Melee", "", ""}});
+    CHECK(set.Clips.size() == 2 && set.Clips[0].Loop && !set.Clips[1].Loop && set.Find("Fire")->WeaponClip == "wf.fbx");
+    CHECK(BuildFirstPersonController(set).Layers[0].FindState("Fire") >= 0);
 }
 
 // A weapon setup is checked against the driver's contract: a full controller is clean, each missing
@@ -3180,6 +3202,7 @@ int RunUnitTests() {
         {"FirstPersonBodyValidate", TestFirstPersonBodyValidate},
         {"FirstPersonBodyTuning", TestFirstPersonBodyTuning},
         {"FirstPersonWeaponValidate", TestFirstPersonWeaponValidate},
+        {"FirstPersonWeaponWizard", TestFirstPersonWeaponWizard},
         {"AnimatorLint", TestAnimatorLint},
         {"BlendTree2D", TestBlendTree2D},
         {"FirstPersonAnimationSet", TestFirstPersonAnimationSet},
