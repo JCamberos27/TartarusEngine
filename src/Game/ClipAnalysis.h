@@ -39,6 +39,10 @@ struct Result {
     std::vector<float> SpeedProfile; // ground speed at each sample (m/s), for a plot
 };
 
+// A cyclic on/off signal with its flicker taken out: gaps of `minRun` samples or fewer between "on" runs are
+// filled, then "on" runs of `minRun` or fewer dropped.
+void Debounce(std::vector<char>& v, int minRun);
+
 // `footBones` / `seamBones` are node names. Returns Valid = false when the clip or root node is missing.
 Result Analyze(const Model& model, int clip, int rootNode, const RootMotionSettings& rm,
                const std::string footBones[2], const std::vector<std::string>& seamBones);
