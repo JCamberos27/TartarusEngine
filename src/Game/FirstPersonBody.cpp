@@ -38,12 +38,13 @@ glm::vec3 ModelPoint(const Model& m, int node) {
 
 // The rig's arm shapes onto `pose` (rotations only, every node under the clavicles: the body keeps
 // its own bone lengths), blended by `weight`.
-void CopyArmShape(const Model& m, const Model& rig, float weight, IK::Pose& pose, const std::vector<int>& parents) {
+void CopyArmShape(const Model& m, const Model& rig, float weight, IK::Pose& pose, const std::vector<int>& parents,
+                  const std::map<std::string, std::string>& boneMap) {
     const IK::Pose& rigPose = rig.AppliedLocalPose();
     if ((int)rigPose.size() != rig.NodeCount()) return;
     std::vector<char> under(pose.size(), 0);
     for (const char* clavicle : {FPBody::kBoneClavicle[0], FPBody::kBoneClavicle[1]})
-        if (const int c = m.NodeIndex(clavicle); c >= 0) under[c] = 1;
+        if (const int c = m.NodeIndex(FPBody::MappedBone(boneMap, clavicle)); c >= 0) under[c] = 1;
     for (int i = 0; i < (int)pose.size(); ++i) {
         if (!under[i] && parents[i] >= 0 && under[parents[i]]) under[i] = 1;
         if (!under[i]) continue;
@@ -142,8 +143,9 @@ bool FirstPersonBody::Start(World& world, Player& player) {
     else
         m_RestHead = glm::vec3(model.SampleNodeModelSpace(-1, 0.0f, AnimationWrapMode::ClampForever, m_HeadNode)[3]);
 
-    m_ShoulderNode[0] = model.NodeIndex(FPBody::kBoneUpperArm[0]);
-    m_ShoulderNode[1] = model.NodeIndex(FPBody::kBoneUpperArm[1]);
+    m_BoneMap = FPBody::ParseBoneMap(cfg.BoneMap);
+    m_ShoulderNode[0] = model.NodeIndex(Bone(FPBody::kBoneUpperArm[0]));
+    m_ShoulderNode[1] = model.NodeIndex(Bone(FPBody::kBoneUpperArm[1]));
 
     auto names = [](const std::string& csv) {
         std::vector<std::string> out;
@@ -479,11 +481,11 @@ void FirstPersonBody::LateUpdate(World& world, Camera& camera, float dt, entt::e
             if (name.find(want) == std::string::npos) continue;
             const Model& m = *m_Models[k];
             IK::Pose pose = m.AppliedLocalPose();
-            const int ul = m.NodeIndex(FPBody::kBoneUpperArm[0]), ur = m.NodeIndex(FPBody::kBoneUpperArm[1]);
+            const int ul = m.NodeIndex(Bone(FPBody::kBoneUpperArm[0])), ur = m.NodeIndex(Bone(FPBody::kBoneUpperArm[1]));
             if (pose.empty() || (int)pose.size() != m.NodeCount() || ul < 0 || ur < 0) break;
             std::vector<int> parents(pose.size());
             for (int i = 0; i < (int)pose.size(); ++i) parents[i] = m.NodeParent(i);
-            CopyArmShape(m, *armRig, m_ArmsWeight, pose, parents);
+            CopyArmShape(m, *armRig, m_ArmsWeight, pose, parents, m_BoneMap);
             std::vector<glm::mat4> globals;
             IK::ComputeGlobals(pose, parents, globals);
             left = IK::Position(globals[ul]);
@@ -604,7 +606,7 @@ void FirstPersonBody::ApplyFootIK(World& world, const FirstPersonBodyComponent& 
     const Model& drv = *rc->ModelRef;
     const IK::Pose driverPose = drv.AppliedLocalPose();
     if (driverPose.empty() || (int)driverPose.size() != drv.NodeCount()) return;
-    const int footNode[2] = {drv.NodeIndex(FPBody::kBoneFoot[0]), drv.NodeIndex(FPBody::kBoneFoot[1])};
+    const int footNode[2] = {drv.NodeIndex(Bone(FPBody::kBoneFoot[0])), drv.NodeIndex(Bone(FPBody::kBoneFoot[1]))};
     if (footNode[0] < 0 || footNode[1] < 0) return;
 
     const auto& t = reg.get<TransformComponent>(m_Body);
@@ -675,7 +677,7 @@ void FirstPersonBody::ApplyFootIK(World& world, const FirstPersonBodyComponent& 
         Model& m = *mp;
         IK::Pose pose = m.AppliedLocalPose();
         if (pose.empty() || (int)pose.size() != m.NodeCount()) continue;
-        const int pelvis = m.NodeIndex(FPBody::kBonePelvis);
+        const int pelvis = m.NodeIndex(Bone(FPBody::kBonePelvis));
         if (pelvis < 0) continue;
         parents.resize(pose.size());
         for (int i = 0; i < (int)pose.size(); ++i) parents[i] = m.NodeParent(i);
@@ -683,7 +685,7 @@ void FirstPersonBody::ApplyFootIK(World& world, const FirstPersonBodyComponent& 
         IK::OffsetBone(pose, parents, globals, pelvis, glm::vec3(0.0f, pelvisDelta / scale, 0.0f),
                        glm::quat(1.0f, 0.0f, 0.0f, 0.0f), glm::vec3(0.0f));
         for (int s = 0; s < 2; ++s) {
-            const int thigh = m.NodeIndex(kLegs[s][0]), calf = m.NodeIndex(kLegs[s][1]), foot = m.NodeIndex(kLegs[s][2]);
+            const int thigh = m.NodeIndex(Bone(kLegs[s][0])), calf = m.NodeIndex(Bone(kLegs[s][1])), foot = m.NodeIndex(Bone(kLegs[s][2]));
             if (thigh < 0 || calf < 0 || foot < 0) continue;
             const glm::vec3 target = IK::Position(globals[foot]) +
                                      glm::vec3(0.0f, (m_FootOffset[s] * m_FootWeight - pelvisDelta) / scale, 0.0f) +
@@ -715,7 +717,7 @@ void FirstPersonBody::ApplySpineAim(const Camera& camera, float amount, float tw
         IK::Pose pose = m.AppliedLocalPose();
         if (pose.empty() || (int)pose.size() != m.NodeCount()) continue;
         std::vector<int> bones;
-        for (const char* name : {kSpine[0], kSpine[1], kSpine[2], kSpine[3], kSpine[4]})
+        for (const std::string& name : {Bone(kSpine[0]), Bone(kSpine[1]), Bone(kSpine[2]), Bone(kSpine[3]), Bone(kSpine[4])})
             if (const int i = m.NodeIndex(name); i >= 0) bones.push_back(i);
         if (bones.empty()) continue;
         parents.resize(pose.size());
@@ -812,21 +814,21 @@ void FirstPersonBody::ArmsLateUpdate(World& world, entt::entity weaponArms, floa
 
         // The rig's arm shapes first, so the elbows bend the way the animation has them; the solve
         // then only fixes the hands.
-        CopyArmShape(m, *rig, m_ArmsWeight, pose, parents);
+        CopyArmShape(m, *rig, m_ArmsWeight, pose, parents, m_BoneMap);
 
         const glm::mat4 toModel = glm::inverse(world.ComposeWorldTransform(m_Pieces[k]));
         const glm::quat toModelRot = IK::Rotation(toModel);
         IK::ComputeGlobals(pose, parents, globals);
         for (int s = 0; s < 2; ++s) {
             if (!haveHand[s]) continue;
-            const int upper = m.NodeIndex(kSides[s].Upper), lower = m.NodeIndex(kSides[s].Lower),
-                      hand = m.NodeIndex(kSides[s].Hand);
+            const int upper = m.NodeIndex(Bone(kSides[s].Upper)), lower = m.NodeIndex(Bone(kSides[s].Lower)),
+                      hand = m.NodeIndex(Bone(kSides[s].Hand));
             if (upper < 0 || lower < 0 || hand < 0) continue;
             const glm::vec3 target = glm::vec3(toModel * glm::vec4(handPos[s], 1.0f));
             const glm::quat rot = glm::normalize(toModelRot * handRot[s]);
             // A hand beyond the arm's reach: the shoulder shrugs toward it instead of the arm
             // stretching (the two skeletons' shoulders can sit a little apart).
-            if (const int clav = m.NodeIndex(kSides[s].Clavicle); clav >= 0) {
+            if (const int clav = m.NodeIndex(Bone(kSides[s].Clavicle)); clav >= 0) {
                 const glm::vec3 a = IK::Position(globals[upper]);
                 const float armLen = glm::length(IK::Position(globals[lower]) - a) + glm::length(IK::Position(globals[hand]) - IK::Position(globals[lower]));
                 const glm::vec3 toTarget = target - a;
