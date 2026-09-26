@@ -546,7 +546,7 @@ void EditorLayer::PushUndo(const World& world, const std::string& label, bool se
 }
 
 void EditorLayer::PushAssetUndo(const World& world, const std::string& matPath, std::string before,
-                                const std::string& label) {
+                                const std::string& label, bool assetOnly) {
     CancelEyedropper(); // #93
     const std::string sceneJson = m_AssetsPtr ? SceneSerializer::SaveToString(world, *m_AssetsPtr)
                                               : SceneSerializer::SaveToString(world);
@@ -556,6 +556,7 @@ void EditorLayer::PushAssetUndo(const World& world, const std::string& matPath, 
     entry.Label = label;
     entry.AssetPath = matPath;
     entry.AssetJson = std::move(before);
+    entry.AssetOnly = assetOnly;
     PushHistoryEntry(m_UndoStack, m_UndoBaseJson, std::move(entry), sceneJson);
     if (m_UndoStack.size() > kMaxHistory) {
         const bool evictedWasContent = m_UndoStack.front().CountsAsSceneEdit();
@@ -581,6 +582,9 @@ void EditorLayer::RestoreMaterialFile(AssetLibrary& assets, const std::string& p
         Log::Error("Undo: couldn't write '" + path + "'.");
         return;
     }
+    // A controller is read from disk each time it changes (the Animator window and a running Play both
+    // watch the file), so writing it back is the whole restore.
+    if (std::filesystem::path(path).extension() == ".controller") return;
     // Reload in place: renderers and the Inspector hold this same shared_ptr.
     if (auto fresh = MaterialAsset::Load(path, &assets)) {
         std::shared_ptr<MaterialAsset> live = assets.LoadMaterial(path);
@@ -655,7 +659,8 @@ void EditorLayer::Undo(World& world, AssetLibrary& assets) {
     // #91 — Undo reloads the whole registry from a snapshot, which under a live PhysicsWorld
     // (actors keyed by entity id) scrambles the simulation; and anything done in Play reverts on
     // Stop anyway.
-    if (m_InPlayMode) { Log::Info("Undo is disabled while Playing - Stop reverts Play-mode changes."); return; }
+    // (An asset-only entry - an Animator Controller edit - never touches the scene, so it works in Play.)
+    if (m_InPlayMode && !m_UndoStack.back().AssetOnly) { Log::Info("Undo is disabled while Playing - Stop reverts Play-mode changes."); return; }
 
     const std::string currentJson = SceneSerializer::SaveToString(world, assets);
     UndoEntry redoEntry;
@@ -665,6 +670,7 @@ void EditorLayer::Undo(World& world, AssetLibrary& assets) {
     redoEntry.SelectionOnly = m_UndoStack.back().SelectionOnly; // Q6 — carry the flag across stacks
     // #107 — an asset entry's redo side holds the file as it is NOW, before we roll it back.
     redoEntry.AssetPath = m_UndoStack.back().AssetPath;
+    redoEntry.AssetOnly = m_UndoStack.back().AssetOnly;
     if (!redoEntry.AssetPath.empty()) redoEntry.AssetJson = ReadTextFile(redoEntry.AssetPath);
     PushHistoryEntry(m_RedoStack, m_RedoBaseJson, std::move(redoEntry), currentJson);
 
@@ -675,7 +681,7 @@ void EditorLayer::Undo(World& world, AssetLibrary& assets) {
     if (!entry.AssetPath.empty()) RestoreMaterialFile(assets, entry.AssetPath, entry.AssetJson); // #107
     // An asset-only step leaves the scene as it is — skip the full registry rebuild. So does a
     // selection-only step (#138): its stored state is only a placeholder (see PushUndo).
-    if (!entry.SelectionOnly && (entry.AssetPath.empty() || HashSceneJson(currentJson) != entry.Hash)) {
+    if (!entry.SelectionOnly && !entry.AssetOnly && (entry.AssetPath.empty() || HashSceneJson(currentJson) != entry.Hash)) {
         if (!SceneSerializer::LoadFromString(world, assets, targetJson)) {
             // #83 — a snapshot that can't be applied must not leave a half-loaded world.
             Log::Error("Undo failed - the scene was left as it was.");
@@ -690,7 +696,7 @@ void EditorLayer::Undo(World& world, AssetLibrary& assets) {
 void EditorLayer::Redo(World& world, AssetLibrary& assets) {
     CancelEyedropper(); // #93
     if (m_RedoStack.empty()) return;
-    if (m_InPlayMode) { Log::Info("Redo is disabled while Playing - Stop reverts Play-mode changes."); return; } // #91
+    if (m_InPlayMode && !m_RedoStack.back().AssetOnly) { Log::Info("Redo is disabled while Playing - Stop reverts Play-mode changes."); return; } // #91
 
     const std::string currentJson = SceneSerializer::SaveToString(world, assets);
     UndoEntry undoEntry;
@@ -699,6 +705,7 @@ void EditorLayer::Redo(World& world, AssetLibrary& assets) {
     undoEntry.Label = m_RedoStack.back().Label;
     undoEntry.SelectionOnly = m_RedoStack.back().SelectionOnly; // Q6 — carry the flag across stacks
     undoEntry.AssetPath = m_RedoStack.back().AssetPath; // #107 — see Undo()
+    undoEntry.AssetOnly = m_RedoStack.back().AssetOnly;
     if (!undoEntry.AssetPath.empty()) undoEntry.AssetJson = ReadTextFile(undoEntry.AssetPath);
     if (undoEntry.CountsAsSceneEdit()) m_ContentDepth++; // Q6 — a real-edit entry is returning to the live stack
     PushHistoryEntry(m_UndoStack, m_UndoBaseJson, std::move(undoEntry), currentJson);
@@ -707,7 +714,7 @@ void EditorLayer::Redo(World& world, AssetLibrary& assets) {
     std::string targetJson;
     if (!PopHistoryEntry(m_RedoStack, m_RedoBaseJson, entry, targetJson)) return;
     if (!entry.AssetPath.empty()) RestoreMaterialFile(assets, entry.AssetPath, entry.AssetJson); // #107
-    if (!entry.SelectionOnly && (entry.AssetPath.empty() || HashSceneJson(currentJson) != entry.Hash)) { // #138
+    if (!entry.SelectionOnly && !entry.AssetOnly && (entry.AssetPath.empty() || HashSceneJson(currentJson) != entry.Hash)) { // #138
         if (!SceneSerializer::LoadFromString(world, assets, targetJson)) {
             Log::Error("Redo failed - the scene was left as it was."); // #83
             SceneSerializer::LoadFromString(world, assets, currentJson);
