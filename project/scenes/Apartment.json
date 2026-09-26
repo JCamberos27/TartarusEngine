@@ -565,10 +565,6 @@
  ],
  "libraryModels": [
   {
-   "path": "assets/characters/ybot/Y Bot.fbx",
-   "pathGuid": "d52a89e336a9220a"
-  },
-  {
    "path": "models/basketball/rim.obj",
    "pathGuid": "aa06bf914b4a03c0"
   },
@@ -579,26 +575,6 @@
   {
    "path": "models/basketball/basketball.obj",
    "pathGuid": "3e65fa8b4567e911"
-  },
-  {
-   "path": "assets/characters/ybot/jump.fbx",
-   "pathGuid": "47989bc921f5169a"
-  },
-  {
-   "path": "assets/characters/ybot/left strafe walking.fbx",
-   "pathGuid": "0680ed3abdd0e509"
-  },
-  {
-   "path": "assets/characters/ybot/standard run.fbx",
-   "pathGuid": "eb6288377db03bdb"
-  },
-  {
-   "path": "assets/characters/ybot/walking.fbx",
-   "pathGuid": "b47100444710726a"
-  },
-  {
-   "path": "assets/characters/ybot/idle.fbx",
-   "pathGuid": "ffab44c3075cc1c3"
   },
   {
    "path": "models/apartment/closet_panel_l.gltf",

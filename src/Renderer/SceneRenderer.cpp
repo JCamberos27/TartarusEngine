@@ -564,7 +564,7 @@ void SceneRenderer::RenderScene(World& world, const RenderFrameContext& ctx,
         vmCtx.Proj = vmProj;
         FrameState vmFs = GatherFrameState(world, vmCtx, in);
         // The SSAO map was built from the world's depth pre-pass, which skips the view model, so
-        // sampling it here stamps whatever stands behind the gun (a Y Bot, a wall) onto it as
+        // sampling it here stamps whatever stands behind the gun (a character, a wall) onto it as
         // occlusion - the weapon read as see-through. The view model gets no screen-space AO.
         vmFs.ssaoOn = false;
         if (vmFs.clusterOn) {
