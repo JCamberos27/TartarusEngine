@@ -1519,6 +1519,22 @@ void EditorLayer::DrawAnimatorWindow(World& world) {
         const int c = ResolveAnimationClip(*rc->ModelRef, r, *assets);
         return c >= 0 ? rc->ModelRef->AnimationLength(c) : 0.0f;
     };
+    // Ground speed a clip travels at on the chosen rig, in m/s (-1 when it can't be measured).
+    auto clipSpeed = [&](const std::string& r) {
+        if (r.empty() || !assets || W.Entity == entt::null || !world.Registry.valid(W.Entity)) return -1.0f;
+        const auto* rc = world.Registry.try_get<RenderableComponent>(W.Entity);
+        if (!rc || !rc->ModelRef) return -1.0f;
+        Model& mdl = *rc->ModelRef;
+        const auto* ac = world.Registry.try_get<AnimatorControllerComponent>(W.Entity);
+        const int node = mdl.FindRootMotionNode(ac ? ac->RootMotion.Bone : std::string());
+        const int c = ResolveAnimationClip(mdl, r, *assets);
+        const float len = c >= 0 ? mdl.AnimationLength(c) : 0.0f;
+        if (node < 0 || !(len > 0.0f)) return -1.0f;
+        RootMotionSettings rms;
+        if (ac) { rms.Rotation = ac->RootMotion.Rotation; rms.Vertical = ac->RootMotion.Vertical; }
+        const RootMotionDelta d = mdl.ClipRootMotion(c, 0.0f, len, AnimationWrapMode::ClampForever, node, rms);
+        return glm::length(glm::vec2(d.Translation.x, d.Translation.z)) / len;
+    };
     auto clipSlot = [&](const char* id, std::string& ref) {
         bool edited = false;
         ImGui::PushID(id);
@@ -1839,6 +1855,24 @@ void EditorLayer::DrawAnimatorWindow(World& world) {
                     m.Children.push_back({"", next, 1.0f});
                     changed = true;
                 }
+                if (!is2D) {
+                    ImGui::SameLine();
+                    if (ActionButton(ICON_FA_ARROW_DOWN_1_9 " Sort", "Order the children by threshold")) {
+                        std::stable_sort(m.Children.begin(), m.Children.end(),
+                                         [](const AC::BlendChild& a, const AC::BlendChild& b) { return a.Threshold < b.Threshold; });
+                        changed = true;
+                    }
+                    ImGui::SameLine();
+                    if (ActionButton(ICON_FA_GAUGE " Thresholds from clip speed",
+                                     "Set each child's threshold to the ground speed its clip travels at, measured on the chosen rig\n"
+                                     "(clips that stay in place or can't be measured keep theirs). For a tree driven by a speed parameter.")) {
+                        for (auto& ch : m.Children) {
+                            const float v = clipSpeed(ch.Clip);
+                            if (v >= 0.05f) ch.Threshold = std::round(v * 100.0f) / 100.0f;
+                        }
+                        changed = true;
+                    }
+                }
                 // Preview of the weights at the live (or default) parameter values.
                 auto valueOf = [&](const std::string& name) {
                     float v = 0.0f;
@@ -1855,6 +1889,43 @@ void EditorLayer::DrawAnimatorWindow(World& world) {
                     ImGui::TextDisabled("At %s = %.2f:", m.BlendParam.empty() ? "?" : m.BlendParam.c_str(), v);
                 for (size_t k = 0; k < m.Children.size(); ++k) {
                     ImGui::ProgressBar(w[k], ImVec2(-FLT_MIN, 0.0f), ClipLabel(m.Children[k].Clip).c_str());
+                }
+                if (is2D && !m.Children.empty()) {
+                    // The blend space: children as dots (bigger = more weight), the current point as a cross.
+                    // Dragging in it steers the live parameters in Play.
+                    float x0 = 1e9f, x1 = -1e9f, y0 = 1e9f, y1 = -1e9f;
+                    for (const auto& ch : m.Children) {
+                        x0 = std::min(x0, ch.Threshold); x1 = std::max(x1, ch.Threshold);
+                        y0 = std::min(y0, ch.ThresholdY); y1 = std::max(y1, ch.ThresholdY);
+                    }
+                    x0 = std::min(x0, v); x1 = std::max(x1, v); y0 = std::min(y0, vy); y1 = std::max(y1, vy);
+                    const float padX = std::max(0.5f, (x1 - x0) * 0.15f), padY = std::max(0.5f, (y1 - y0) * 0.15f);
+                    x0 -= padX; x1 += padX; y0 -= padY; y1 += padY;
+                    const float side = std::min(ImGui::GetContentRegionAvail().x, 260.0f * S);
+                    const ImVec2 o = ImGui::GetCursorScreenPos();
+                    ImGui::InvisibleButton("##space", ImVec2(side, side));
+                    ImDrawList* pl = ImGui::GetWindowDrawList();
+                    auto spaceToScreen = [&](float px, float py) {
+                        return ImVec2(o.x + (px - x0) / (x1 - x0) * side, o.y + (1.0f - (py - y0) / (y1 - y0)) * side);
+                    };
+                    pl->AddRectFilled(o, o + ImVec2(side, side), IM_COL32(24, 24, 26, 255));
+                    pl->AddRect(o, o + ImVec2(side, side), IM_COL32(90, 90, 96, 255));
+                    if (x0 < 0 && x1 > 0) pl->AddLine(spaceToScreen(0, y0), spaceToScreen(0, y1), IM_COL32(255, 255, 255, 30));
+                    if (y0 < 0 && y1 > 0) pl->AddLine(spaceToScreen(x0, 0), spaceToScreen(x1, 0), IM_COL32(255, 255, 255, 30));
+                    for (size_t k = 0; k < m.Children.size(); ++k) {
+                        const ImVec2 c = spaceToScreen(m.Children[k].Threshold, m.Children[k].ThresholdY);
+                        pl->AddCircleFilled(c, 3.0f + 9.0f * w[k], IM_COL32(70, 140, 230, 200));
+                        pl->AddText(c + ImVec2(6, -14), IM_COL32(210, 210, 215, 255), ClipLabel(m.Children[k].Clip).c_str());
+                    }
+                    const ImVec2 cur = spaceToScreen(v, vy);
+                    pl->AddLine(cur - ImVec2(6, 0), cur + ImVec2(6, 0), IM_COL32(255, 210, 60, 255), 2.0f);
+                    pl->AddLine(cur - ImVec2(0, 6), cur + ImVec2(0, 6), IM_COL32(255, 210, 60, 255), 2.0f);
+                    if (live && ImGui::IsItemActive()) {
+                        const ImVec2 mp = ImGui::GetIO().MousePos;
+                        live->SetFloat(m.BlendParam, x0 + (mp.x - o.x) / side * (x1 - x0));
+                        live->SetFloat(m.BlendParamY, y0 + (1.0f - (mp.y - o.y) / side) * (y1 - y0));
+                    }
+                    if (ImGui::IsItemHovered()) EditorUI::SetTooltip(live ? "Drag to steer the live parameters." : "Children as dots, the current parameter point as a cross.\nDrag in Play to steer.");
                 }
             }
             ImGui::PopID();
