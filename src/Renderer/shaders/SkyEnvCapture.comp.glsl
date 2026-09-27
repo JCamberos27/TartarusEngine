@@ -4,6 +4,7 @@
 // reflections. Face orientation matches IblProbe's kFaces table exactly; get it wrong and
 // reflections come out mirrored.
 #define ATMOSPHERE_LUTS
+#define SKY_VIEW_LUTS
 #include "AtmosphereCommon.glsl"
 #include "CloudsCommon.glsl"
 
@@ -24,22 +25,19 @@ void main() {
     vec3 dir = normalize(kForward[id.z] + p.x * kRight[id.z] + p.y * kUp[id.z]);
 
     vec3 cam = ClampToAtmosphere(uAtmCamera.xyz);
-    vec3 L = texture(uSkyViewSunLut, SkyViewUv(cam, dir, uAtmSunDir.xyz)).rgb
-           + texture(uSkyViewMoonLut, SkyViewUv(cam, dir, uAtmMoonDir.xyz)).rgb;
+    vec3 L = SkyRadiance(cam, dir);
     // Below the horizon the sky-view LUT holds the atmosphere between the camera and the ground
     // but not the ground itself; add the sun- and sky-lit ground so the lower hemisphere of the
     // ambient light isn't black (a scene's own floor still occludes it through SSAO/probes).
     float gHit = RaySphereNearest(cam, dir, vec3(0.0), uAtmRadii.x);
-    if (gHit >= 0.0) {
-        vec3 up = normalize(cam);
-        vec3 skyZenith = texture(uSkyViewSunLut, SkyViewUv(cam, up, uAtmSunDir.xyz)).rgb
-                       + texture(uSkyViewMoonLut, SkyViewUv(cam, up, uAtmMoonDir.xyz)).rgb;
-        L += GroundRadiance(cam, dir, gHit, skyZenith * PI);
-    }
+    if (gHit >= 0.0) L += GroundRadiance(cam, dir, gHit, SkyAmbientTerm(0));
     L *= uAtmRadii.z;
 
     if (uClouds == 1) {
-        CloudResult c = MarchClouds(cam, dir, 24, 3, 0.5, false);
+        vec3 ambTop, ambBottom;
+        CloudAmbientColors(ambTop, ambBottom);
+        // A cube face spans 90 degrees over uSize texels.
+        CloudResult c = MarchClouds(cam, dir, 24, 3, 0.5, false, 2.0 / float(uSize), ambTop, ambBottom);
         L = L * c.transmittance + c.radiance * uAtmRadii.z;
     }
     imageStore(uOut, id, vec4(min(L, vec3(500.0)), 1.0));
