@@ -1,0 +1,37 @@
+{
+  "factorsScaleMaps": true,
+  "matVersion": 2,
+  "name": "M_Bracelet",
+  "properties": {
+    "_AOMap": "assets/quantum/Textures/Clothing/Accessories/F_Bracelet/T_Bracelet_Occlusion.png",
+    "_AlbedoMap": "assets/quantum/Textures/Clothing/Accessories/F_Bracelet/T_Bracelet_BaseColor.png",
+    "_BaseColor": [
+      1.0,
+      1.0,
+      1.0
+    ],
+    "_DoubleSided": false,
+    "_EmissiveColor": [
+      0.0,
+      0.0,
+      0.0
+    ],
+    "_EmissiveMap": "",
+    "_EmissiveStrength": 1.0,
+    "_Metallic": 0.0,
+    "_MetallicMap": "",
+    "_MetallicRoughnessMap": "",
+    "_NormalMap": "assets/quantum/Textures/Clothing/Accessories/F_Bracelet/T_Bracelet_Unity_Normal.png",
+    "_Roughness": 1.0,
+    "_RoughnessMap": "assets/quantum/Textures/Clothing/Accessories/F_Bracelet/T_Bracelet_Roughness.png",
+    "_Triplanar": false,
+    "_TriplanarScale": 1.0
+  },
+  "shader": "engine://Standard.shader",
+  "textureGuids": {
+    "_AOMap": "6b077394e64663e2",
+    "_AlbedoMap": "0f3c19989d27717d",
+    "_NormalMap": "d68f2da85566da89",
+    "_RoughnessMap": "a610fee2fbcdff43"
+  }
+}

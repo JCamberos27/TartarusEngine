@@ -1,0 +1,9 @@
+{
+  "folder": "assets/quantum/Models/Clothing/Female/Shoes",
+  "guid": "16fd4119c4409da2",
+  "materialRemap": {
+    "M_Snaekers": "assets/quantum/Materials/Clothing/Shoes/Sneakers/Sneakers_Leather/M_F_Sneakers_Leather_Black.mat"
+  },
+  "metaVersion": 1,
+  "type": "model"
+}

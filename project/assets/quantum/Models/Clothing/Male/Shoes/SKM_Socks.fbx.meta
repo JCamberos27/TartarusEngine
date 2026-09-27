@@ -1,0 +1,9 @@
+{
+  "folder": "assets/quantum/Models/Clothing/Male/Shoes",
+  "guid": "d2d9305f1b150870",
+  "materialRemap": {
+    "M_Socks": "assets/quantum/Materials/Clothing/Shoes/Socks/M_Socks_White.mat"
+  },
+  "metaVersion": 1,
+  "type": "model"
+}

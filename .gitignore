@@ -44,3 +44,8 @@ project/screenshots/*
 !project/screenshots/.shutter.wav
 !project/screenshots/.shutter.wav.meta
 
+
+# Quantum clothing textures (~9 GB) - too big for git, same as the sky HDRIs above. The .meta files stay
+# tracked so GUIDs are stable; the PNGs come from the "Quantum Characters" pack (see
+# project/assets/quantum/_import/IMPORT_NOTES.md for how to restore them).
+project/assets/quantum/Textures/Clothing/**/*.png

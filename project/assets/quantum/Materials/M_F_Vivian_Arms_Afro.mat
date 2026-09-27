@@ -1,0 +1,37 @@
+{
+  "factorsScaleMaps": true,
+  "matVersion": 2,
+  "name": "M_F_Vivian_Arms_Afro",
+  "properties": {
+    "_AOMap": "assets/quantum/Textures/Female/Afro/Arms/T_F_Vivian_Basemesh_Arms_Afro_Occlusion.1003.png",
+    "_AlbedoMap": "assets/quantum/Textures/Female/Afro/Arms/T_F_Vivian_Basemesh_Arms_Afro_BaseColor.1003.png",
+    "_BaseColor": [
+      1.0,
+      1.0,
+      1.0
+    ],
+    "_DoubleSided": false,
+    "_EmissiveColor": [
+      0.0,
+      0.0,
+      0.0
+    ],
+    "_EmissiveMap": "",
+    "_EmissiveStrength": 1.0,
+    "_Metallic": 0.0,
+    "_MetallicMap": "",
+    "_MetallicRoughnessMap": "",
+    "_NormalMap": "assets/quantum/Textures/Female/Afro/Arms/T_F_Vivian_Basemesh_Arms_Afro_Unity_Normal.1003.png",
+    "_Roughness": 1.0,
+    "_RoughnessMap": "assets/quantum/Textures/Female/Afro/Arms/T_F_Vivian_Basemesh_Arms_Afro_Roughness.1003.png",
+    "_Triplanar": false,
+    "_TriplanarScale": 1.0
+  },
+  "shader": "engine://Standard.shader",
+  "textureGuids": {
+    "_AOMap": "74dbb726373809aa",
+    "_AlbedoMap": "d73f865664869b30",
+    "_NormalMap": "0343ea0642826404",
+    "_RoughnessMap": "a2dc5484d39fff23"
+  }
+}

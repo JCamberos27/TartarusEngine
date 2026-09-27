@@ -1,0 +1,9 @@
+{
+  "folder": "assets/quantum/Models/Clothing/Female/Shoes",
+  "guid": "d2e5b0736e7268dd",
+  "materialRemap": {
+    "Raboch_M_Socks1": "assets/quantum/Materials/Clothing/Shoes/Socks/M_Socks_White.mat"
+  },
+  "metaVersion": 1,
+  "type": "model"
+}

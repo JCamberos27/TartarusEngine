@@ -1,0 +1,8 @@
+{
+  "guid": "c61e8a60edfef0ff",
+  "materialRemap": {
+    "MI_F_Vivian_Basemesh_Head": "assets/quantum/Materials/M_F_Vivian_Head.mat"
+  },
+  "metaVersion": 1,
+  "type": "model"
+}

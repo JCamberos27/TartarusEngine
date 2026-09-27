@@ -1,0 +1,9 @@
+{
+  "folder": "assets/quantum/Models/Clothing/Female/Outerwear",
+  "guid": "0233b750334ea470",
+  "materialRemap": {
+    "M_Puffy_Vest": "assets/quantum/Materials/Clothing/Outerwear/F_Vests_Puffy/M_F_Puffy_Vest_Black.mat"
+  },
+  "metaVersion": 1,
+  "type": "model"
+}

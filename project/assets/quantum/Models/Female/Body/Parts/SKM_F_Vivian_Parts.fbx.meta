@@ -1,0 +1,10 @@
+{
+  "guid": "89d4a263f74dbe26",
+  "materialRemap": {
+    "MI_F_Vivian_Basemesh_Arms39": "assets/quantum/Materials/M_F_Vivian_Arms.mat",
+    "MI_F_Vivian_Basemesh_Body11": "assets/quantum/Materials/M_F_Vivian_Body.mat",
+    "MI_F_Vivian_Basemesh_Head40": "assets/quantum/Materials/M_F_Vivian_Head.mat"
+  },
+  "metaVersion": 1,
+  "type": "model"
+}
