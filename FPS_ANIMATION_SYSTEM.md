@@ -555,7 +555,11 @@ each child at its clip's measured velocity (walk forward 1.53 m/s, jog forward 3
 **Phases 2 and 3.** The body has arms (the `ArmsPiece`, an arms-only Quantum piece). It copies the
 arms rig's arm shapes and solves its hands to the rig's hands (`FirstPersonBody::ArmsLateUpdate`),
 the camera is anchored to the shoulders while armed (`kEyeSlack`, `kReachSlack`, the shrug), and it
-keeps that height unarmed. Drawn, the arms take the rig's hands from the first frame; holstered
+keeps that height unarmed. The eye hangs off the shoulders in the *chest's* frame (the view's heading at
+Spine Aim of its pitch), not the view's, and comes forward over the chest looking down (Look Down Push),
+so the camera never ends up inside the torso. Arm Steadiness keeps the gait out of the arms: each
+shoulder is held at a slow average of where it sits in that frame (Arm Steady Time / Max) and each
+elbow is turned into the rig's bend plane after the hand solve. Drawn, the arms take the rig's hands from the first frame; holstered
 they leave the view-model pass at once. Phase 3 added turn in place with a turn-rate cap, start /
 stop clips, crouch, foot IK with foot lock, stair easing and jump / land polish.
 

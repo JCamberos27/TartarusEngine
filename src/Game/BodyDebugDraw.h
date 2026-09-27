@@ -30,6 +30,7 @@ struct Snapshot {
     float StepOffset = 0.0f;      // m the body is off the capsule's height (stair easing)
     float ArmsWeight = 0.0f;      // 0..1: how much the body's arms follow the weapon rig
     float EyeSlack = 0.0f;        // m the eye is off the shoulders' motion (bounded by Eye Slack)
+    float ArmSteadyShift[2] = {0, 0}; // m each shoulder is held off the gait's sway (Arm Steadiness, bounded by Arm Steady Max)
     std::string LastTrigger;      // the last start / stop / crouch / jump trigger the body fired
     float LastTriggerAgo = 0.0f;  // seconds since
 };

@@ -1802,6 +1802,11 @@ void TestBlendTree2D() {
     // Foot IK: the pelvis drops to the lower foot (capped), rises a little when both are up.
     CHECK(near(FirstPersonBodyFootPelvis(-0.1f, 0.0f, 0.35f, 0.15f), -0.1f) && near(FirstPersonBodyFootPelvis(0.05f, -0.5f, 0.35f, 0.15f), -0.35f));
     CHECK(near(FirstPersonBodyFootPelvis(0.2f, 0.3f, 0.35f, 0.15f), 0.15f) && near(FirstPersonBodyFootPelvis(0.0f, 0.0f, 0.35f, 0.15f), 0.0f));
+    // The look-down push: none at or above its start, all of it straight down, rising as a sine between.
+    CHECK(near(FirstPersonBodyLookDown(0.0f, 25.0f), 0.0f) && near(FirstPersonBodyLookDown(glm::radians(30.0f), 25.0f), 0.0f));
+    CHECK(near(FirstPersonBodyLookDown(glm::radians(-25.0f), 25.0f), 0.0f) && near(FirstPersonBodyLookDown(glm::radians(-90.0f), 25.0f), 1.0f));
+    CHECK(near(FirstPersonBodyLookDown(glm::radians(-57.5f), 25.0f), std::sqrt(0.5f)));
+    CHECK(FirstPersonBodyLookDown(glm::radians(-40.0f), 25.0f) < FirstPersonBodyLookDown(glm::radians(-70.0f), 25.0f));
 }
 
 // The body's setup check: a controller built from the contract tables passes; one missing piece is named.
