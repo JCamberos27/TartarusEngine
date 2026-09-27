@@ -196,9 +196,38 @@ static void Scan(const aiScene* s, const aiNode* n, const glm::mat4& p, std::vec
     for (unsigned i = 0; i < n->mNumChildren; ++i) Scan(s, n->mChildren[i], N, frames);
 }
 
+// --bones: per dominant bone, how many vertices it moves most and their mean bind height (Y).
+static void Bones(const aiScene* s) {
+    for (unsigned mi = 0; mi < s->mNumMeshes; ++mi) {
+        const aiMesh* m = s->mMeshes[mi];
+        std::vector<int> best(m->mNumVertices, -1);
+        std::vector<float> bw(m->mNumVertices, 0.0f);
+        for (unsigned bi = 0; bi < m->mNumBones; ++bi)
+            for (unsigned k = 0; k < m->mBones[bi]->mNumWeights; ++k) {
+                const auto& w = m->mBones[bi]->mWeights[k];
+                if (w.mWeight > bw[w.mVertexId]) { bw[w.mVertexId] = w.mWeight; best[w.mVertexId] = (int)bi; }
+            }
+        std::map<std::string, std::pair<int, float>> stat;
+        for (unsigned v = 0; v < m->mNumVertices; ++v) {
+            if (best[v] < 0) continue;
+            auto& st = stat[m->mBones[best[v]]->mName.C_Str()];
+            st.first++;
+            st.second += m->mVertices[v].z; // FBX Z-up source space; relative heights are what matter
+        }
+        std::printf("mesh %s\n", m->mName.C_Str());
+        for (auto& [n, st] : stat) std::printf("  %-28s %6d verts  mean %.3f\n", n.c_str(), st.first, st.second / st.first);
+    }
+}
+
 int main(int argc, char** argv) {
     const bool sim = argc > 1 && std::string(argv[1]) == "--sim";
     const bool scan = argc > 1 && std::string(argv[1]) == "--scan";
+    if (argc > 2 && std::string(argv[1]) == "--bones") {
+        Assimp::Importer imp;
+        const aiScene* s = imp.ReadFile(argv[2], aiProcess_Triangulate);
+        if (s) Bones(s);
+        return 0;
+    }
     for (int a = (sim || scan) ? 2 : 1; a < argc; ++a) {
         Assimp::Importer imp;
         imp.SetPropertyFloat(AI_CONFIG_GLOBAL_SCALE_FACTOR_KEY, 1.0f);

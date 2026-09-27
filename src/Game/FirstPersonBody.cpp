@@ -201,23 +201,39 @@ bool FirstPersonBody::Start(World& world, Player& player) {
         }
         // Clothing (an outfit piece that isn't a body part): its sleeves go into the view-model pass with
         // the arms (PlayerBodyTag). The sleeve bones: the Camera Hidden Bones and everything under them.
-        bodyTag.HasSleeves = false;
+        bodyTag.HasSleeves = bodyTag.HasHeadBones = false;
         std::fill(std::begin(bodyTag.SleeveBones), std::end(bodyTag.SleeveBones), 0u);
+        std::fill(std::begin(bodyTag.HeadBones), std::end(bodyTag.HeadBones), 0u);
         const auto* piece = reg.try_get<OutfitPieceComponent>(e);
         if (!isArms && piece && !(piece->Flags & OutfitPieceBodyPart)) {
-            std::vector<std::string> roots;
-            for (const std::string& b : names(cfg.CameraHiddenBones)) roots.push_back(Bone(b));
-            std::vector<char> under((size_t)m->NodeCount(), 0);
-            for (int i = 0; i < m->NodeCount(); ++i) { // parents come before their children
-                const int p = m->NodeParent(i);
-                under[(size_t)i] = (p >= 0 && under[(size_t)p]) ||
-                                   std::find(roots.begin(), roots.end(), m->NodeName(i)) != roots.end();
-                if (!under[(size_t)i]) continue;
-                const int id = m->BoneId(m->NodeName(i));
-                if (id < 0 || id >= 16 * 32) continue;
-                bodyTag.SleeveBones[id >> 5] |= 1u << (id & 31);
-                bodyTag.HasSleeves = true;
+            // Marks the palette bones at and under `roots` in `bits`; true if any.
+            auto markUnder = [&](const std::vector<std::string>& roots, std::uint32_t (&bits)[16]) {
+                bool any = false;
+                std::vector<char> under((size_t)m->NodeCount(), 0);
+                for (int i = 0; i < m->NodeCount(); ++i) { // parents come before their children
+                    const int p = m->NodeParent(i);
+                    under[(size_t)i] = (p >= 0 && under[(size_t)p]) ||
+                                       std::find(roots.begin(), roots.end(), m->NodeName(i)) != roots.end();
+                    if (!under[(size_t)i]) continue;
+                    const int id = m->BoneId(m->NodeName(i));
+                    if (id < 0 || id >= 16 * 32) continue;
+                    bits[id >> 5] |= 1u << (id & 31);
+                    any = true;
+                }
+                return any;
+            };
+            std::vector<std::string> sleeveRoots;
+            for (const std::string& b : names(cfg.CameraHiddenBones)) sleeveRoots.push_back(Bone(b));
+            bodyTag.HasSleeves = markUnder(sleeveRoots, bodyTag.SleeveBones);
+            // The neck (the head bone's parent, when it is one) and all above it; else the head alone.
+            std::string headRoot = Bone(cfg.HeadBone);
+            if (const int h = m->NodeIndex(headRoot); h >= 0 && m->NodeParent(h) >= 0) {
+                std::string parent = m->NodeName(m->NodeParent(h));
+                std::string lowerParent = parent;
+                for (char& c : lowerParent) c = (char)std::tolower((unsigned char)c);
+                if (lowerParent.find("neck") != std::string::npos) headRoot = parent;
             }
+            bodyTag.HasHeadBones = markUnder({headRoot}, bodyTag.HeadBones);
         }
         m_Models.push_back(reg.get<RenderableComponent>(e).ModelRef);
         m_Pieces.push_back(e);
