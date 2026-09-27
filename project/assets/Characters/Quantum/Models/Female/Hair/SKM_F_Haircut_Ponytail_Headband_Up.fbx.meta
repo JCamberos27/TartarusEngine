@@ -1,0 +1,9 @@
+{
+  "guid": "c2daa377dd9704c7",
+  "materialRemap": {
+    "MI_F_Headband": "assets/Characters/Quantum/Materials/Clothing/Generated/M_Headband.mat",
+    "lambert1": "assets/Characters/Quantum/Materials/Characters/M_Hair_Dark.mat"
+  },
+  "metaVersion": 1,
+  "type": "model"
+}

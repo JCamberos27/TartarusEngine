@@ -1,0 +1,31 @@
+{
+  "factorsScaleMaps": true,
+  "matVersion": 2,
+  "name": "M_Cartilage",
+  "properties": {
+    "_AOMap": "",
+    "_AlbedoMap": "",
+    "_BaseColor": [
+      0.7,
+      0.48,
+      0.43
+    ],
+    "_DoubleSided": false,
+    "_EmissiveColor": [
+      0.0,
+      0.0,
+      0.0
+    ],
+    "_EmissiveMap": "",
+    "_EmissiveStrength": 1.0,
+    "_Metallic": 0.0,
+    "_MetallicMap": "",
+    "_MetallicRoughnessMap": "",
+    "_NormalMap": "",
+    "_Roughness": 0.45,
+    "_RoughnessMap": "",
+    "_Triplanar": false,
+    "_TriplanarScale": 1.0
+  },
+  "shader": "engine://Standard.shader"
+}

@@ -1,0 +1,37 @@
+{
+  "factorsScaleMaps": true,
+  "matVersion": 2,
+  "name": "M_F_Vivian_Body",
+  "properties": {
+    "_AOMap": "assets/Characters/Quantum/Textures/Female/European/Body/T_F_Vivian_Basemesh_Body_Occlusion.1002.png",
+    "_AlbedoMap": "assets/Characters/Quantum/Textures/Female/European/Body/T_F_Vivian_Basemesh_Body_BaseColor.1002.png",
+    "_BaseColor": [
+      1.0,
+      1.0,
+      1.0
+    ],
+    "_DoubleSided": false,
+    "_EmissiveColor": [
+      0.0,
+      0.0,
+      0.0
+    ],
+    "_EmissiveMap": "",
+    "_EmissiveStrength": 1.0,
+    "_Metallic": 0.0,
+    "_MetallicMap": "",
+    "_MetallicRoughnessMap": "",
+    "_NormalMap": "assets/Characters/Quantum/Textures/Female/European/Body/T_F_Vivian_Basemesh_Body_Unity_Normal.1002.png",
+    "_Roughness": 1.0,
+    "_RoughnessMap": "assets/Characters/Quantum/Textures/Female/European/Body/T_F_Vivian_Basemesh_Body_Roughness.1002.png",
+    "_Triplanar": false,
+    "_TriplanarScale": 1.0
+  },
+  "shader": "engine://Standard.shader",
+  "textureGuids": {
+    "_AOMap": "ba11a704037f8756",
+    "_AlbedoMap": "702175dee165572a",
+    "_NormalMap": "214a4199cd7f4424",
+    "_RoughnessMap": "e58e97a6fb8a3492"
+  }
+}

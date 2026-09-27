@@ -1,0 +1,8 @@
+{
+  "guid": "b6b6bcc4e383bbbe",
+  "materialRemap": {
+    "M_Jacket_M65": "assets/Characters/Quantum/Materials/Clothing/Generated/M_Jacket_M65.mat"
+  },
+  "metaVersion": 1,
+  "type": "model"
+}

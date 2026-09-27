@@ -1,8 +1,0 @@
-{
-  "guid": "58807d91fafa1437",
-  "materialRemap": {
-    "M_Quantum_Head": "assets/quantum/Materials/M_Quantum_Head_Old.mat"
-  },
-  "metaVersion": 1,
-  "type": "model"
-}

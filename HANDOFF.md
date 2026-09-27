@@ -59,7 +59,7 @@ GPU cost at Medium on an RTX 4060: about 0.6 ms for sky and clouds. The Sandbox 
 ## 2. Open issues (not fixed)
 
 1. **Fountain water and other transmission materials look pink or orange at night.**
-   - Materials: `project/materials/sandbox/water.mat`, `StandardAdvanced` with transmission 0.75.
+   - Materials: `project/assets/Environments/Sandbox/Materials/water.mat`, `StandardAdvanced` with transmission 0.75.
    - Findings so far:
      - The colour comes from the transmission branch in `ModelFragment.glsl`: setting
        `_TransmissionStrength` to 0 makes the water look right (blue).

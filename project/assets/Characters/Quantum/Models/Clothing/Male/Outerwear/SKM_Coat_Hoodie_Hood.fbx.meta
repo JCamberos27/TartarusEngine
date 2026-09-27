@@ -1,0 +1,10 @@
+{
+  "folder": "assets/Characters/Quantum/Models/Clothing/Male/Outerwear",
+  "guid": "fb2142933541bac1",
+  "materialRemap": {
+    "M_Coat": "assets/Characters/Quantum/Materials/Clothing/Outerwear/Coat/Fabric/M_Coat_Fabric_Black.mat",
+    "lambert2": "assets/Characters/Quantum/Materials/Clothing/Outerwear/Coat/Fabric/M_Coat_Fabric_Black.mat"
+  },
+  "metaVersion": 1,
+  "type": "model"
+}

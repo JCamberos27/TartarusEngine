@@ -1,0 +1,37 @@
+{
+  "factorsScaleMaps": true,
+  "matVersion": 2,
+  "name": "M_Sunglasses_Brown",
+  "properties": {
+    "_AOMap": "assets/Characters/Quantum/Textures/Clothing/Glasses/Glasses Aviator/T_Sunglasses_Camo_Occlusion.png",
+    "_AlbedoMap": "assets/Characters/Quantum/Textures/Clothing/Glasses/Glasses Aviator/T_Sunglasses_Brown_BaseColor.png",
+    "_BaseColor": [
+      1.0,
+      1.0,
+      1.0
+    ],
+    "_DoubleSided": false,
+    "_EmissiveColor": [
+      0.0,
+      0.0,
+      0.0
+    ],
+    "_EmissiveMap": "",
+    "_EmissiveStrength": 1.0,
+    "_Metallic": 0.0,
+    "_MetallicMap": "",
+    "_MetallicRoughnessMap": "",
+    "_NormalMap": "assets/Characters/Quantum/Textures/Clothing/Glasses/Glasses Aviator/T_Sunglasses_Camo_Unity_Normal.png",
+    "_Roughness": 1.0,
+    "_RoughnessMap": "assets/Characters/Quantum/Textures/Clothing/Glasses/Glasses Aviator/T_Sunglasses_Camo_Roughness.png",
+    "_Triplanar": false,
+    "_TriplanarScale": 1.0
+  },
+  "shader": "engine://Standard.shader",
+  "textureGuids": {
+    "_AOMap": "52cb6702c8f831e9",
+    "_AlbedoMap": "c6a8af0d16bc8ecf",
+    "_NormalMap": "9f4421afee71ea4a",
+    "_RoughnessMap": "a0da97fbf52d24ad"
+  }
+}

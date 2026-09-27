@@ -1,0 +1,8 @@
+{
+  "guid": "b85b8287c699cbe4",
+  "materialRemap": {
+    "MI_F_Vivian_Basemesh_Body": "assets/Characters/Quantum/Materials/Characters/M_F_Vivian_Body.mat"
+  },
+  "metaVersion": 1,
+  "type": "model"
+}

@@ -3,7 +3,7 @@
 How to give the player a full body under the camera, what it needs, and what to change when
 something looks wrong. The design and per-frame order are in `FPS_ANIMATION_SYSTEM.md` §8b; this
 file is the hands-on guide. The reference setup is the Sandbox scene's **Player Spawn** and
-`project/animations/fps_body_locomotion.controller`.
+`project/assets/Animations/Controllers/fps_body_locomotion.controller`.
 
 ## 1. What you need
 

@@ -1,9 +1,0 @@
-{
-  "folder": "assets/quantum/Models/Clothing/Female/Tops",
-  "guid": "5b2b6b1313c842bb",
-  "materialRemap": {
-    "M_woman_jersey1": "assets/quantum/Materials/Clothing/Tops/F_Jersey/M_Woman_Jersey_Black.mat"
-  },
-  "metaVersion": 1,
-  "type": "model"
-}

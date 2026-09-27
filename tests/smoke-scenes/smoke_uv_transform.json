@@ -112,7 +112,7 @@
  ],
  "models": [
   {
-   "path": "models/uvtransform/uv_transform_quad.gltf",
+   "path": "assets/Test/UVTransform/uv_transform_quad.gltf",
    "name": "UV Transform Quad",
    "id": 7,
    "parentId": -1,
@@ -135,6 +135,6 @@
   }
  ],
  "libraryModels": [
-  "models/uvtransform/uv_transform_quad.gltf"
+  "assets/Test/UVTransform/uv_transform_quad.gltf"
  ]
 }

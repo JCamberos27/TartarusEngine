@@ -1,0 +1,8 @@
+{
+  "guid": "014065dea064e4d1",
+  "materialRemap": {
+    "M_Shirt_Adventure": "assets/Characters/Quantum/Materials/Clothing/Generated/M_Shirt_Adventure.mat"
+  },
+  "metaVersion": 1,
+  "type": "model"
+}

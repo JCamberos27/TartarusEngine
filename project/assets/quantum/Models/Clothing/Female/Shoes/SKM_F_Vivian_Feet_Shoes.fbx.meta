@@ -1,9 +1,0 @@
-{
-  "folder": "assets/quantum/Models/Clothing/Female/Shoes",
-  "guid": "84c9375cab5467ee",
-  "materialRemap": {
-    "MI_F_Vivian_Basemesh_Body": "assets/quantum/Materials/M_F_Vivian_Body.mat"
-  },
-  "metaVersion": 1,
-  "type": "model"
-}

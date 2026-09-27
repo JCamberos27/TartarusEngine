@@ -1,0 +1,17 @@
+{
+  "matVersion": 2,
+  "name": "AKS-74U Dark Metal",
+  "_comment": "Alternate look: darker, glossier steel (Dark_Metal albedo + Bright roughness). Swap it in via weaponMaterials in AKS74U.fpsanim.",
+  "shader": "engine://Standard.shader",
+  "properties": {
+    "_BaseColor": [1, 1, 1],
+    "_Metallic": 1.0,
+    "_Roughness": 1.0,
+    "_DoubleSided": true,
+    "_AlbedoMap": "assets/Weapons/AKS74U/Textures/AKS74U_Dark_Metal_Albedo_Transparency.png",
+    "_NormalMap": "assets/Weapons/AKS74U/Textures/AKS74U_Normal.png",
+    "_MetallicMap": "assets/Weapons/AKS74U/Textures/AKS74U_Metallic.png",
+    "_RoughnessMap": "assets/Weapons/AKS74U/Textures/AKS74U_Bright_Roughness.png",
+    "_AOMap": "assets/Weapons/AKS74U/Textures/AKS74U_Occlusion.png"
+  }
+}

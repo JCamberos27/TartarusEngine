@@ -1,0 +1,10 @@
+{
+  "folder": "assets/Characters/Quantum/Models/Clothing/Male/Outerwear",
+  "guid": "b4789ffba422a8e6",
+  "materialRemap": {
+    "M_Jacket_Classic1": "assets/Characters/Quantum/Materials/Clothing/Outerwear/Jacket_Classic/M_Jacket_Classic_Black.mat",
+    "M_TShirt": "assets/Characters/Quantum/Materials/Clothing/Tops/TShirt/M_TShirt_Black.mat"
+  },
+  "metaVersion": 1,
+  "type": "model"
+}

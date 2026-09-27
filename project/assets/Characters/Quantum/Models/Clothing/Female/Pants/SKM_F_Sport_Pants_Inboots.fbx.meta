@@ -1,0 +1,9 @@
+{
+  "folder": "assets/Characters/Quantum/Models/Clothing/Female/Pants",
+  "guid": "133557e1e597cb05",
+  "materialRemap": {
+    "M_Sport_Pants1": "assets/Characters/Quantum/Materials/Clothing/Pants/Pants_Sport/M_Sport_Pants_Black.mat"
+  },
+  "metaVersion": 1,
+  "type": "model"
+}

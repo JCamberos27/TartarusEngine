@@ -1,0 +1,10 @@
+{
+  "guid": "af85316cc0de5c82",
+  "materialRemap": {
+    "M_Phone": "assets/Animations/Mocap/Objects/Phone/Materials/M_Phone.mat",
+    "M_Phone_Button": "assets/Animations/Mocap/Objects/Phone/Materials/M_Phone_Button.mat",
+    "M_Phone_Screen": "assets/Animations/Mocap/Objects/Phone/Materials/M_Phone_Screen.mat"
+  },
+  "metaVersion": 1,
+  "type": "model"
+}

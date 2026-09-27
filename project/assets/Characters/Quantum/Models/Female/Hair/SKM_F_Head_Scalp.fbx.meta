@@ -1,0 +1,8 @@
+{
+  "guid": "cc3cb5824b5f2512",
+  "materialRemap": {
+    "MI_F_Vivian_Head_Scalp": "assets/Characters/Quantum/Materials/Characters/M_Hair_Dark.mat"
+  },
+  "metaVersion": 1,
+  "type": "model"
+}

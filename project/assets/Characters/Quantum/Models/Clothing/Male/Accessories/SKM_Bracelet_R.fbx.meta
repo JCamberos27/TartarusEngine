@@ -1,0 +1,8 @@
+{
+  "guid": "9d2521f87d59fdda",
+  "materialRemap": {
+    "M_Bracelet1": "assets/Characters/Quantum/Materials/Clothing/Accessories/F_Bracelet/M_Bracelet.mat"
+  },
+  "metaVersion": 1,
+  "type": "model"
+}

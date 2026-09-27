@@ -72,7 +72,7 @@ to the `.fpsanim` and **Gravity Gun** is off.
 **Folder layout** (mirror the AK):
 
 ```
-project/assets/fps/<Weapon>/
+project/assets/Weapons/<Weapon>/
 ├── <Weapon>.fpsanim
 ├── <Weapon>.controller
 ├── export_manifest.json
@@ -313,7 +313,7 @@ in `InputMap::Defaults()` **and** `project/settings.json`.
 - [ ] Arms base exported at REST, with meshes; clips exported channels-only
 - [ ] Arms clips baked against the paired weapon action (hand_probe path lengths look sane)
 - [ ] Frame ranges recorded in export_manifest.json
-- [ ] FBX + .controller + .fpsanim, each with its .meta, committed under project/assets/fps/<Weapon>/
+- [ ] FBX + .controller + .fpsanim, each with its .meta, committed under project/assets/Weapons/<Weapon>/
 - [ ] Source .blend untouched, or the change was approved
 
 **Controller**

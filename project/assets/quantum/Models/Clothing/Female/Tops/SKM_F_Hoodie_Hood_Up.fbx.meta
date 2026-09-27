@@ -1,9 +1,0 @@
-{
-  "folder": "assets/quantum/Models/Clothing/Female/Tops",
-  "guid": "f36c805a2e17dbe1",
-  "materialRemap": {
-    "M_Hoodie_HoodUp": "assets/quantum/Materials/Clothing/Tops/Hoodie_Hood_Up/M_Hoodie_Hood_Up_Black.mat"
-  },
-  "metaVersion": 1,
-  "type": "model"
-}

@@ -1,0 +1,9 @@
+{
+  "folder": "assets/Characters/Quantum/Models/Clothing/Female/Hats",
+  "guid": "7c3021ef6dfd88b9",
+  "materialRemap": {
+    "M_Cap5": "assets/Characters/Quantum/Materials/Clothing/Hats/Cap/M_Cap_Black.mat"
+  },
+  "metaVersion": 1,
+  "type": "model"
+}
