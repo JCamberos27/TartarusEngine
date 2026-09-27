@@ -24,4 +24,8 @@ unsigned int Black();       // 1x1 RGBA8 (0,0,0,1)
 unsigned int DepthArray();      // GL_TEXTURE_2D_ARRAY, one layer
 unsigned int DepthCubeArray();  // GL_TEXTURE_CUBE_MAP_ARRAY, one cube
 
+// 1x1x1 GL_TEXTURE_3D RGBA8 (0,0,0,1): the physical sky's aerial-perspective volume when there
+// is none (no in-scattered light, full transmittance).
+unsigned int Volume();
+
 } // namespace DefaultTextures

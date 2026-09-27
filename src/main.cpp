@@ -31,6 +31,7 @@
 #include "Grid.h"
 #include "ColliderGizmo.h" // #185 PR 2 — collider wireframe overlay
 #include "Sky.h"
+#include "SkyAtmosphere.h"
 #include "ShaderLibrary.h"
 #include "TintOverlayRenderer.h"
 #include "HdrTarget.h"
@@ -427,6 +428,10 @@ int main(int argc, char** argv) {
     // Uses Project Settings > Build; outDir overrides its Output Folder. Exit 0 on success.
     bool buildMode = false;
     std::string buildOutArg;
+    // --smoke-shots <dir> (with --smoke-test): saves three Scene-view PNGs per scene - toward the
+    // horizon, a higher angle behind, and up at the sky - for reviewing rendering changes (the
+    // physical sky's, first) without driving the editor.
+    std::string smokeShotsDir;
     for (int i = 1; i < argc; ++i) {
         std::string a = argv[i];
         if (a == "--smoke-test" || a == "--perf-bench") {
@@ -434,6 +439,7 @@ int main(int argc, char** argv) {
             perfBenchMode = a == "--perf-bench";
             if (i + 1 < argc && argv[i + 1][0] != '-') smokeScenesDirArg = argv[++i];
         }
+        else if (a == "--smoke-shots" && i + 1 < argc) { smokeShotsDir = argv[++i]; }
         else if (a == "--resave" && i + 2 < argc) { resaveIn = argv[i + 1]; resaveOut = argv[i + 2]; i += 2; }
         else if (a == "--undo-bench") { undoBenchMode = true; }
         else if (a == "--asset-load-bench") { assetLoadBenchMode = true; }
@@ -611,12 +617,14 @@ int main(int argc, char** argv) {
         Grid grid;
         ColliderGizmo colliderGizmo; // #185 PR 2
         Sky sky;
+        SkyAtmosphere skyAtmosphere; // the physical sky (World::SkySource::Atmosphere)
         IblProbe iblProbe; // #196: sky-baked irradiance / prefiltered specular / BRDF LUT
         // PR13: HDRI state — non-null when an HDRI is loaded, path tracks the loaded file
         std::shared_ptr<Cubemap> hdriCube;
         std::string               hdriCubePath;
         bool                      hdriNeedsBake = false; // #200 — set when hdriCube is (re)loaded
         bool                      prevWasHdri = false;
+        bool                      prevWasAtmosphere = false;
         // PR14: reflection probe array — rebuilt from scene each frame, bound per drawScene
         ReflectionProbeArray probeArray;
         // PR15: SSAO — depth pre-pass FBO + compute + blur shaders (all scene-view only)
@@ -2454,6 +2462,15 @@ int main(int argc, char** argv) {
                 editor.SetShadowOverBudget(std::move(overBudget), spotShadowBudget, pointShadowBudget);
             }
 
+            // Physical sky: its clock places the sun and moon, and the first lit directional light
+            // takes the resolved direction and the atmosphere-filtered colour (SkyAtmosphere) -
+            // warm and dim at sunset, the moon's by night.
+            const bool physicalSky = world.SkySourceMode == World::SkySource::Atmosphere;
+            const glm::vec3 skyCameraPos = (playing ? *gameCam : editorCamera).Position;
+            if (physicalSky) skyAtmosphere.Tick(world.Sky, playing ? gameDt : dt, playing);
+            SkyLighting frameSky;
+            bool frameSkyResolved = false;
+
             for (auto e : world.Registry.view<TransformComponent, LightComponent>()) {
                 if (lightBuffer.Count() >= LightBuffer::kMaxLights) { lightBuffer.MarkOverflowed(); break; }
                 if (world.Registry.all_of<InactiveTag>(e)) continue;
@@ -2464,8 +2481,18 @@ int main(int argc, char** argv) {
                 glm::vec3 pos = glm::vec3(m[3]);
                 glm::vec3 aim = glm::normalize(glm::vec3(m * glm::vec4(0, 0, -1, 0)));
                 if (lc.Kind == LightComponent::Type::Directional) {
+                    glm::vec3 dirColor = lc.Color;
+                    float dirIntensity = lc.Intensity;
+                    if (physicalSky && !frameSkyResolved && lc.Intensity > 0.0f) {
+                        frameSky = skyAtmosphere.ResolveLighting(world.Sky, aim, lc.Color * lc.Intensity,
+                                                                 lc.AngularSizeDegrees, skyCameraPos);
+                        frameSkyResolved = true;
+                        aim = -frameSky.LightDir;
+                        dirColor = frameSky.LightRadiance;
+                        dirIntensity = 1.0f;
+                    }
                     // Only the first lit directional drives the cascade pass (below) - it alone samples it.
-                    lightBuffer.AddDirectional(aim, lc.Color, lc.Intensity, !frameHaveDirectional && lc.Intensity > 0.0f,
+                    lightBuffer.AddDirectional(aim, dirColor, dirIntensity, !frameHaveDirectional && lc.Intensity > 0.0f,
                                                ~(std::uint32_t)lc.CullingMask); // #203
                     // A zero-intensity sun contributes no light, so it must not drive the
                     // cascaded shadow pass either — it's the way a scene opts out of having a
@@ -2806,6 +2833,18 @@ int main(int argc, char** argv) {
                 GLStateCache::Invalidate();
             }
 
+            // Physical sky: the frame's LUTs, cloud shadows and (when the sky has changed) the
+            // environment capture the IBL bake below convolves. A scene without a lit directional
+            // light still gets a sun in its sky, just no light from it.
+            if (physicalSky) {
+                if (!frameSkyResolved)
+                    frameSky = skyAtmosphere.ResolveLighting(world.Sky, glm::normalize(lightDir),
+                                                             glm::vec3(1.0f, 0.95f, 0.85f) * 5.0f, 0.53f, skyCameraPos);
+                if (!prevWasAtmosphere) skyAtmosphere.ForceEnvironmentCapture();
+                skyAtmosphere.PrepareFrame(world.Sky, frameSky, skyCameraPos);
+                editor.SetSkyClock(frameSky.ClockHours, skyAtmosphere.ClockOffsetHours() != 0.0f);
+            }
+
             // --- IBL probes (#196) — baked from the sky, NOT per frame ------------------------
             // NeedsBake() compares against the colours the probes were last baked with, so this
             // is a couple of vec3 compares on the overwhelming majority of frames and a ~1 ms
@@ -2841,6 +2880,21 @@ int main(int argc, char** argv) {
                     GLStateCache::Invalidate();
                 }
                 prevWasHdri = true;
+            } else if (physicalSky) {
+                if (prevWasHdri) {
+                    hdriCube.reset();
+                    hdriCubePath.clear();
+                }
+                prevWasHdri = false;
+                if (skyAtmosphere.EnvironmentDirty()) {
+                    PROFILE_SCOPE("IBL Bake (Sky)");
+                    PROFILE_GPU_SCOPE("IBL Bake (Sky)");
+                    iblProbe.BakeFromCubemap(skyAtmosphere.EnvironmentCube(), SkyAtmosphere::kEnvSize, 0.0f, 0.0f);
+                    skyAtmosphere.MarkEnvironmentBaked();
+                    glBindFramebuffer(GL_FRAMEBUFFER, 0);
+                    glViewport(0, 0, window.GetWidth(), window.GetHeight());
+                    GLStateCache::Invalidate();
+                }
             } else {
                 if (prevWasHdri) {
                     // Switched back to procedural — clear hdriCube so it's reloaded if HDRI is re-selected
@@ -2857,6 +2911,8 @@ int main(int argc, char** argv) {
                     GLStateCache::Invalidate();
                 }
             }
+
+            prevWasAtmosphere = physicalSky;
 
             // PR14: rebuild probe list from scene (cheap CPU gather, once per frame)
             probeArray.Update(world);
@@ -2876,6 +2932,7 @@ int main(int argc, char** argv) {
             // have populated the frame* state), then handed to every viewport's draw call below.
             SceneRenderInputs sceneInputs;
             sceneInputs.sky                = &sky;
+            sceneInputs.skyAtmosphere      = physicalSky ? &skyAtmosphere : nullptr;
             sceneInputs.modelShader        = &modelShader;
             sceneInputs.clusterBuildShader = &clusterBuildShader;
             sceneInputs.clusterCullShader  = &clusterCullShader;
@@ -3728,6 +3785,33 @@ int main(int argc, char** argv) {
             // score it (new GL errors + draw count) and advance to the next scene.
             if (smokeTestMode && smokeSceneActive) {
                 ++smokeFramesRendered;
+                if (!smokeShotsDir.empty() && !perfBenchMode) {
+                    // Frames 40 / 70 / 100 are captured after 30+ frames at each pose, so
+                    // temporally accumulated effects have converged; the pose for the NEXT frame
+                    // is set here too.
+                    struct ShotPose { int CaptureFrame; float Yaw, Pitch; };
+                    static const ShotPose kPoses[3] = {{40, 180.0f, 5.0f}, {70, 0.0f, 10.0f}, {100, 90.0f, 50.0f}};
+                    for (int p = 0; p < 3; ++p) {
+                        if (smokeFramesRendered != kPoses[p].CaptureFrame || !sceneFramebuffer.IsValid()) continue;
+                        const int w = sceneFramebuffer.Width(), h = sceneFramebuffer.Height();
+                        glBindFramebuffer(GL_READ_FRAMEBUFFER, sceneFramebuffer.Handle());
+                        std::vector<unsigned char> px = Screenshot::GrabRegion(0, 0, w, h);
+                        glBindFramebuffer(GL_READ_FRAMEBUFFER, 0);
+                        std::vector<unsigned char> flipped(px.size());
+                        for (int y = 0; y < h; ++y)
+                            std::memcpy(&flipped[(size_t)y * w * 4], &px[(size_t)(h - 1 - y) * w * 4], (size_t)w * 4);
+                        std::error_code ec;
+                        std::filesystem::create_directories(smokeShotsDir, ec);
+                        const std::string stem = std::filesystem::path(smokeScenePaths[smokeSceneIndex]).stem().string();
+                        const std::string out = (std::filesystem::path(smokeShotsDir) / (stem + "_" + std::to_string(p) + ".png")).string();
+                        stbi_write_png(out.c_str(), w, h, 4, flipped.data(), w * 4);
+                    }
+                    const int next = smokeFramesRendered + 1;
+                    const ShotPose& pose = kPoses[next <= 40 ? 0 : next <= 70 ? 1 : 2];
+                    editorCamera.Position = glm::vec3(0.0f, 2.0f, 12.0f);
+                    editorCamera.Yaw = pose.Yaw;
+                    editorCamera.Pitch = pose.Pitch;
+                }
                 if (perfBenchMode) {
                     const auto now = std::chrono::steady_clock::now();
                     const double frameMs = std::chrono::duration<double, std::milli>(now - perfLastFrameEnd).count();

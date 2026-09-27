@@ -68,6 +68,9 @@
 #include "World.h"
 #include "BulletHoles.h"
 #include "RotationMath.h"
+#include "SkyAtmosphere.h"
+#include "SkySettings.h"
+#include "TimeOfDay.h"
 
 #include <glm/gtc/matrix_transform.hpp>
 
@@ -1057,6 +1060,132 @@ void TestPhysicsWorldSync() {
 // --- #202 / #122: a scene survives save -> load -> save unchanged ---------------------------
 // The serializer is the one place where a silent mistake costs authored work: a field dropped on
 // load, an unstable entity order, a component written but not read. None of that shows up as a
+// The physical sky (World::SkySource::Atmosphere): the clock's sun/moon/star placement, the
+// CPU transmittance the directional light is filtered by, the day/night light hand-off, the
+// presets, and the scene file round trip. All CPU-side - the GPU passes are covered by the
+// smoke_sky_* scenes.
+void TestPhysicalSky() {
+    using namespace TimeOfDay;
+    auto near = [](float a, float b, float eps) { return std::abs(a - b) <= eps; };
+
+    // Equinox at the equator: the noon sun is overhead, 06:00 on the eastern horizon (+X),
+    // 18:00 on the western (-X).
+    const glm::vec3 noon = SunDirection(12.0f, 80.0f, 0.0f, 0.0f);
+    CHECK(noon.y > 0.99f);
+    const glm::vec3 dawn = SunDirection(6.0f, 80.0f, 0.0f, 0.0f);
+    CHECK(std::abs(dawn.y) < 0.03f && dawn.x > 0.95f);
+    CHECK(SunDirection(18.0f, 80.0f, 0.0f, 0.0f).x < -0.95f);
+    // 38 N at the June solstice: noon elevation 90 - 38 + 23.44 = 75.4 deg, due south (+Z).
+    const glm::vec3 june = SunDirection(12.0f, 172.0f, 38.0f, 0.0f);
+    CHECK(near(glm::degrees(Elevation(june)), 75.44f, 0.6f));
+    CHECK(june.z > 0.0f && std::abs(june.x) < 1e-3f);
+    // Turning the compass rotates the sky about +Y and nothing else.
+    const glm::vec3 turned = SunDirection(12.0f, 172.0f, 38.0f, 90.0f);
+    CHECK(near(glm::length(turned), 1.0f, 1e-4f) && near(turned.y, june.y, 1e-5f));
+    CHECK(std::abs(turned.z) < 1e-3f);
+    // Day length: 12 h at the equinox anywhere, polar day and night past the circles.
+    CHECK(near(SunsetHour(80.0f, 45.0f), 18.0f, 0.1f));
+    CHECK(SunsetHour(172.0f, 80.0f) == 24.0f);
+    CHECK(SunsetHour(355.0f, 80.0f) == 12.0f);
+    CHECK(SunsetHour(172.0f, 38.0f) > 19.0f && SunsetHour(172.0f, 38.0f) < 19.6f);
+
+    // The moon: new = dark, full = lit, and a full moon sits opposite the sun.
+    CHECK(MoonIllumination(0.0f) < 1e-4f && MoonIllumination(0.5f) > 0.9999f);
+    CHECK(near(MoonIllumination(0.25f), 0.5f, 1e-4f));
+    const glm::vec3 fullMoon = MoonDirection(0.0f, 80.0f, 0.0f, 0.0f, 0.5f);
+    CHECK(glm::dot(fullMoon, SunDirection(0.0f, 80.0f, 0.0f, 0.0f)) < -0.9f);
+    CHECK(MoonPhase(80.0f, 0.0f, 0.3f) >= 0.0f && MoonPhase(80.0f, 0.0f, 0.3f) < 1.0f);
+
+    // The star field turns rigidly about the celestial pole, which stays put.
+    const glm::mat3 stars = StarRotation(3.0f, 100.0f, 38.0f, 0.0f);
+    CHECK(near(glm::determinant(stars), 1.0f, 1e-4f));
+    const glm::vec3 pole(0.0f, std::sin(glm::radians(38.0f)), -std::cos(glm::radians(38.0f)));
+    CHECK(glm::length(stars * pole - pole) < 1e-4f);
+
+    // Transmittance: blue is scattered most, the horizon passes far less than the zenith, the
+    // planet blocks everything below it, and thinner air higher up lets more through.
+    SkySettings s;
+    const glm::vec3 zenith = SkyAtmosphere::Transmittance(s, 0.0f, glm::vec3(0, 1, 0));
+    CHECK(zenith.b < zenith.g && zenith.g < zenith.r);
+    CHECK(zenith.r > 0.9f && zenith.b > 0.7f && zenith.b < 0.82f);
+    const glm::vec3 horizon = SkyAtmosphere::Transmittance(s, 0.0f, glm::normalize(glm::vec3(0.0f, 0.02f, 1.0f)));
+    CHECK(horizon.r < zenith.r * 0.7f && horizon.b < horizon.r * 0.5f);
+    CHECK(glm::length(SkyAtmosphere::Transmittance(s, 0.0f, glm::normalize(glm::vec3(0.0f, -0.2f, 1.0f)))) == 0.0f);
+    CHECK(SkyAtmosphere::Transmittance(s, 5.0f, glm::vec3(0, 1, 0)).b > zenith.b);
+    s.RayleighScale = 0.0f; s.MieScale = 0.0f; s.OzoneScale = 0.0f;
+    CHECK(glm::length(SkyAtmosphere::Transmittance(s, 0.0f, glm::vec3(0, 1, 0)) - glm::vec3(1.0f)) < 1e-5f);
+
+    // Resolved lighting: a warm, dimmed sun by day; the moon (brightened for the night) after.
+    SkyAtmosphere sky; // no GL until PrepareFrame
+    SkySettings clock;
+    clock.TimeOfDayHours = 12.0f;
+    SkyLighting day = sky.ResolveLighting(clock, glm::vec3(0, -1, 0), glm::vec3(5.0f), 0.53f, glm::vec3(0, 2, 0));
+    CHECK(!day.LightIsMoon && day.LightDir.y > 0.9f && day.NightBoost == 1.0f);
+    CHECK(day.LightRadiance.r > day.LightRadiance.b && day.LightRadiance.r < 5.0f && day.LightRadiance.b > 3.0f);
+    clock.TimeOfDayHours = 0.5f;
+    const float phase = MoonPhase(clock.DayOfYear, clock.TimeOfDayHours, 0.0f);
+    clock.MoonPhaseOffset = 0.5f - phase - std::floor(0.5f - phase); // full moon
+    SkyLighting night = sky.ResolveLighting(clock, glm::vec3(0, -1, 0), glm::vec3(5.0f), 0.53f, glm::vec3(0, 2, 0));
+    CHECK(night.LightIsMoon && night.LightDir.y > 0.2f && night.MoonLitFraction > 0.99f);
+    CHECK(night.NightBoost > 16.0f);
+    CHECK(glm::length(night.LightRadiance) < glm::length(day.LightRadiance));
+    CHECK(night.SunDir.y < 0.0f);
+    clock.MoonEnabled = false;
+    night = sky.ResolveLighting(clock, glm::vec3(0, -1, 0), glm::vec3(5.0f), 0.53f, glm::vec3(0, 2, 0));
+    CHECK(!night.LightIsMoon && glm::length(night.LightRadiance) == 0.0f);
+    // Clock off: the directional light's own aim is the sun.
+    SkySettings authored;
+    authored.TimeOfDayEnabled = false;
+    const glm::vec3 aim = glm::normalize(glm::vec3(-0.3f, -0.8f, -0.5f));
+    const SkyLighting fixed = sky.ResolveLighting(authored, aim, glm::vec3(5.0f), 0.53f, glm::vec3(0.0f));
+    CHECK(glm::dot(fixed.SunDir, -aim) > 0.9999f && glm::dot(fixed.LightDir, -aim) > 0.9999f);
+
+    // Presets change the look but keep the location and quality; the timed ones land where named.
+    SkySettings p;
+    p.LatitudeDegrees = -33.0f;
+    p.CloudQuality = 3;
+    ApplySkyPreset(p, SkyPreset::Overcast);
+    CHECK(p.CloudCoverage > 0.9f && p.LatitudeDegrees == -33.0f && p.CloudQuality == 3);
+    ApplySkyPreset(p, SkyPreset::Sunset);
+    const float sunsetElev = glm::degrees(Elevation(SunDirection(p.TimeOfDayHours, p.DayOfYear, p.LatitudeDegrees, 0.0f)));
+    CHECK(sunsetElev > -0.5f && sunsetElev < 4.0f);
+    ApplySkyPreset(p, SkyPreset::Night);
+    CHECK(MoonIllumination(MoonPhase(p.DayOfYear, p.TimeOfDayHours, p.MoonPhaseOffset)) > 0.99f);
+    CHECK(SunDirection(p.TimeOfDayHours, p.DayOfYear, p.LatitudeDegrees, 0.0f).y < 0.0f);
+    SkySettings untouched = p;
+    ApplySkyPreset(untouched, SkyPreset::Custom);
+    CHECK(untouched == p);
+    for (int i = 0; i < (int)SkyPreset::Count; ++i) CHECK(std::string(SkyPresetName((SkyPreset)i)) != "?");
+
+    // Scene files: every field round-trips, old scenes load the defaults, bad values clamp.
+    World w;
+    w.SkySourceMode = World::SkySource::Atmosphere;
+    w.Sky.CloudCoverage = 0.77f;
+    w.Sky.RayleighTint = glm::vec3(0.5f, 1.0f, 0.625f);
+    w.Sky.CloudQuality = 2;
+    w.Sky.MoonEnabled = false;
+    w.Sky.NightBrightness = 2.5f;
+    w.Sky.TimeOfDayHours = 17.25f;
+    AssetLibrary assets;
+    const std::string saved = SceneSerializer::SaveToString(w, assets);
+    World r;
+    AssetLibrary assets2;
+    CHECK(SceneSerializer::LoadFromString(r, assets2, saved));
+    CHECK(r.SkySourceMode == World::SkySource::Atmosphere);
+    CHECK(r.Sky == w.Sky);
+    World old;
+    AssetLibrary assets3;
+    CHECK(SceneSerializer::LoadFromString(old, assets3, R"({"formatVersion":4,"skySource":2})"));
+    CHECK(old.SkySourceMode == World::SkySource::Atmosphere && old.Sky == SkySettings{});
+    World clamped;
+    AssetLibrary assets4;
+    CHECK(SceneSerializer::LoadFromString(clamped, assets4,
+        R"({"formatVersion":4,"skySource":9,"sky":{"cloudCoverage":7,"cloudQuality":9,"latitude":-400,"clouds":"yes"}})"));
+    CHECK(clamped.SkySourceMode == World::SkySource::Atmosphere);
+    CHECK(clamped.Sky.CloudCoverage == 1.0f && clamped.Sky.CloudQuality == 3 && clamped.Sky.LatitudeDegrees == -90.0f);
+    CHECK(clamped.Sky.CloudsEnabled); // a non-boolean is ignored, keeping the default
+}
+
 // crash - the scene just quietly comes back different. Round-tripping and comparing the two
 // documents catches the whole class at once, which is what #202 asks for under "scene
 // round-trips" and what #121/#342 changed enough of to be worth pinning down.
@@ -3472,6 +3601,7 @@ int RunUnitTests() {
         {"SceneRoundTrip", TestSceneRoundTrip},
         {"PlayerConfigRoundTrip", TestPlayerConfigRoundTrip},
         {"PhysicsWorldSync", TestPhysicsWorldSync},
+        {"PhysicalSky", TestPhysicalSky},
     };
     for (const auto& [name, fn] : tests) {
         g_CurrentTest = name;
