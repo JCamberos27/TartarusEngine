@@ -470,6 +470,12 @@ void RegisterEngineComponents() {
         m.Fields.push_back({ "Spine Aim", T::Float, TARTARUS_REFLECT_FIELD(FirstPersonBodyComponent, SpineAim), 0.01f,
               "How much of the camera's pitch the spine takes: 0 = upright, 1 = the chest tilts as far\n"
               "as the view. The shoulders follow the view, so the hands stay in reach.", 0.0f, 1.0f });
+        m.Fields.push_back({ "Spine Aim Down", T::Float, TARTARUS_REFLECT_FIELD(FirstPersonBodyComponent, SpineAimDown), 0.01f,
+              "Spine Aim for looking down. Armed, the camera hangs off the shoulders as the arms rig's does, so it clears the\n"
+              "chest looking down only as far as the chest pitches with the view: lower it and the torso may be seen from inside.", 0.0f, 1.0f });
+        m.Fields.push_back({ "Shoulder Line Match", T::Float, TARTARUS_REFLECT_FIELD(FirstPersonBodyComponent, ShoulderLineMatch), 0.01f,
+              "Armed, how far the chest takes the arms rig's stance - its shoulder line (bladed, the support shoulder forward) -\n"
+              "instead of squaring to the view. 1 = the rig's: both hands then reach the gun without the shoulders moving.", 0.0f, 1.0f });
         m.Fields.push_back({ "Bone Map", T::String, TARTARUS_REFLECT_FIELD(FirstPersonBodyComponent, BoneMap), 0.0f,
               "For a rig whose bones are not named like the UE5 mannequin: 'standard = theirs', comma or line\n"
               "separated, e.g. pelvis = Hips, foot_l = LeftFoot, foot_r = RightFoot. Unlisted bones keep the\n"
@@ -510,6 +516,14 @@ void RegisterEngineComponents() {
         m.Fields.push_back({ "Shrug Max", T::Float, TARTARUS_REFLECT_FIELD(FirstPersonBodyComponent, ShrugMax), 0.005f,
               "The most (metres) a shoulder may shrug toward the gun.", 0.0f, 0.4f });
         m.Fields.back().Group = "Camera & Arms (advanced)";
+        m.Fields.push_back({ "Shoulder Max Angle", T::Float, TARTARUS_REFLECT_FIELD(FirstPersonBodyComponent, ShoulderMaxAngle), 0.5f,
+              "The most (degrees) a collarbone turns to move its shoulder, shrug and steadying together. The shoulder turns about the\n"
+              "collarbone's inner end, like a real one; past this the arm straightens instead.", 0.0f, 60.0f });
+        m.Fields.back().Group = "Camera & Arms (advanced)";
+        m.Fields.push_back({ "Reach Lean Max", T::Float, TARTARUS_REFLECT_FIELD(FirstPersonBodyComponent, ReachLeanMax), 0.5f,
+              "The most (degrees) the chest leans toward a hand still out of reach once its collarbone has turned all it may\n"
+              "(looking far up or down, the gun moves further than the chest). 0 = off.", 0.0f, 45.0f });
+        m.Fields.back().Group = "Camera & Arms (advanced)";
         m.Fields.push_back({ "Arm Steadiness", T::Float, TARTARUS_REFLECT_FIELD(FirstPersonBodyComponent, ArmSteadiness), 0.01f,
               "How much the arms ignore the body's walk and run sway (Weapon Arms): 1 = the shoulders are held steady against the view and the\n"
               "elbows bend the way the rig's do, so the gait never reaches the elbows; 0 = the arms follow the chest.", 0.0f, 1.0f });
@@ -521,11 +535,16 @@ void RegisterEngineComponents() {
               "The most (metres) a shoulder is held off where the body's pose puts it; past this it is carried along.", 0.0f, 0.3f });
         m.Fields.back().Group = "Camera & Arms (advanced)";
         m.Fields.push_back({ "Look Down Push", T::Float, TARTARUS_REFLECT_FIELD(FirstPersonBodyComponent, LookDownPush), 0.005f,
-              "Looking down, the eye comes this far (metres) forward over the chest, as a head pitching at the neck does, so the camera\n"
-              "stays out of the torso. Straight down gets all of it. Raise it if the body is seen through when looking down.", 0.0f, 0.4f });
+              "Looking down, the eye comes this far (metres) forward over the chest. It moves the gun with it, away from the shoulders,\n"
+              "so it costs the arms their reach - prefer Spine Aim Down. Straight down gets all of it. 0 = off.", 0.0f, 0.4f });
         m.Fields.back().Group = "Camera & Arms (advanced)";
         m.Fields.push_back({ "Look Down Start", T::Float, TARTARUS_REFLECT_FIELD(FirstPersonBodyComponent, LookDownStart), 1.0f,
               "Degrees below level where the look-down push begins; it eases in from here to straight down.", 0.0f, 85.0f });
+        m.Fields.back().Group = "Camera & Arms (advanced)";
+        m.Fields.push_back({ "Camera Hidden Bones", T::String, TARTARUS_REFLECT_FIELD(FirstPersonBodyComponent, CameraHiddenBones), 0.0f,
+              "Bones whose skin isn't drawn in the camera's own view on the pieces other than the arms, comma\n"
+              "separated (at most 8): the torso's shoulders, which move with the arms' so the arms stay on them\n"
+              "in every other view - but would bulge into the camera, where the arms are drawn over them." });
         m.Fields.back().Group = "Camera & Arms (advanced)";
         m.Fields.push_back({ "Near Hide", T::Float, TARTARUS_REFLECT_FIELD(FirstPersonBodyComponent, NearHide), 0.005f,
               "Whatever of the body comes within this many metres of the eye is not drawn in the camera's view (its shadow stays). The camera\n"
@@ -628,7 +647,7 @@ void RegisterEngineComponents() {
         {
             static const std::pair<const char*, const char*> kGroups[] = {
                 {"Head Bone", "Camera"}, {"Camera Offset", "Camera"}, {"Head Bob", "Camera"}, {"Camera Smoothing", "Camera"},
-                {"Weapon Arms", "Arms"}, {"Spine Aim", "Arms"}, {"Arms Piece", "Arms"},
+                {"Weapon Arms", "Arms"}, {"Spine Aim", "Arms"}, {"Spine Aim Down", "Arms"}, {"Shoulder Line Match", "Arms"}, {"Arms Piece", "Arms"},
                 {"Turn Threshold", "Turning"}, {"Spine Twist", "Turning"}, {"Max Turn Rate", "Turning"},
                 {"Crouch Height", "Crouch"}, {"Crouch Speed", "Crouch"},
                 {"Foot IK", "Foot IK"}, {"Foot IK Max Drop", "Foot IK"}, {"Bone Map", "Camera"}, {"Start Stop Clips", "Locomotion"},

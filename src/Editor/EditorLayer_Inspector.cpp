@@ -3512,6 +3512,11 @@ void EditorLayer::DrawReflectedComponentExtra(const char* componentName, World& 
             row("Stair ease", "%+.1f cm", d.StepOffset * 100.0f);
             row("Arms / eye", "arms follow weapon %.0f%%,  eye off shoulders %.1f cm", d.ArmsWeight * 100.0f, d.EyeSlack * 100.0f);
             row("Arm steadying", "shoulders held L %.1f cm  R %.1f cm", d.ArmSteadyShift[0] * 100.0f, d.ArmSteadyShift[1] * 100.0f);
+            row("Shoulder shrug", "toward the gun L %.1f cm  R %.1f cm", d.ShrugShift[0] * 100.0f, d.ShrugShift[1] * 100.0f);
+            row("Reach", "L %.0f%%  R %.0f%% of the arm", d.Reach[0] * 100.0f, d.Reach[1] * 100.0f);
+            row("Shoulders vs rig", "L %.1f cm  R %.1f cm", d.ShoulderGap[0] * 100.0f, d.ShoulderGap[1] * 100.0f);
+            row("Shoulder line", "rig %+.1f deg  chest %+.1f deg", d.RigBlade, d.ChestBlade);
+            row("Reach lean", "chest toward the gun %.1f deg", d.ReachLean);
             row("Scene overlay", "%s   %d lines", BodyDebug::Enabled() ? "on" : "off (Gizmos > Player body)", (int)(BodyDebug::Verts().size() / 14));
             ImGui::TreePop();
         }
