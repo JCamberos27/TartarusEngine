@@ -21668,12 +21668,12 @@
         "Cast Shadows": true,
         "Color": [
           1.0,
-          0.98,
-          0.95
+          1.0,
+          1.0
         ],
         "ColorTempK": 0.0,
         "Culling Mask": -1,
-        "Intensity": 3.2,
+        "Intensity": 3.0,
         "Range": 200.0,
         "Shadow Bias": 1.0,
         "Shadow Near Plane": 0.05000000074505806,
@@ -23501,7 +23501,7 @@
   ],
   "gradeContrast": 8.0,
   "gradeSaturation": 6.0,
-  "gradeTemperature": 6.0,
+  "gradeTemperature": -6.0,
   "gradeTint": 0.0,
   "libraryMaterials": [
     {
@@ -42085,7 +42085,7 @@
     "dayOfYear": 200.0,
     "latitude": 38.0,
     "mieAnisotropy": 0.8,
-    "mieScale": 1.3,
+    "mieScale": 1.0,
     "moon": true,
     "nightBrightness": 5.0,
     "northOffset": 0.0,
@@ -42094,7 +42094,7 @@
     "sunDiscBrightness": 1.0,
     "sunDiscScale": 1.0,
     "timeOfDay": true,
-    "timeOfDayHours": 17.0
+    "timeOfDayHours": 16.0
   },
   "skyAmbientIntensity": 1.0,
   "skyHdriGuid": "28043ea394433649",
