@@ -1322,7 +1322,7 @@ void TestAssetGuid() {
 }
 
 // --- UndoDelta chain: push three states, pop them back in reverse ---------------------------
-struct TestEntry { std::string Delta; int Tag = 0; };
+struct TestEntry { UndoDelta::Patch Delta; int Tag = 0; };
 
 void TestUndoDeltaChain() {
     const std::string s1 = R"({"entities":[{"name":"A","x":1}],"sky":1})";

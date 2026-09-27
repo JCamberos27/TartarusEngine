@@ -1,6 +1,9 @@
 #pragma once
 #include <json.hpp>
+#include <future>
+#include <memory>
 #include <string>
+#include <thread>
 #include <vector>
 #include <utility>
 
@@ -35,7 +38,11 @@
 // Everything here goes through parse/dump, so what round-trips is the parsed document - textual
 // formatting never matters, and the scene loader re-parses anyway.
 //
-// `Entry` is any struct with a `std::string Delta` member (see EditorLayer::UndoEntry).
+// `Entry` is any struct with an `UndoDelta::Patch Delta` member (see EditorLayer::UndoEntry).
+//
+// The patch is worked out on a background thread (Patch::Start): the diff of two ~1 MB scenes
+// took ~27 ms, on every undoable edit, on the main thread. Pop - the only reader - waits for it,
+// and in practice it's long finished by then.
 namespace UndoDelta {
 
 // JSON Patch that turns `fromJson` into `toJson`. Returns "" if either side won't parse, which
@@ -52,6 +59,43 @@ inline std::string MakePatch(const std::string& fromJson, const std::string& toJ
 
 // Applies `patchJson` to `sourceJson`, writing the result to `out`. False (leaving `out`
 // untouched) on any failure, including the "" sentinel above.
+// A JSON Patch's text, possibly still being worked out on a background thread.
+class Patch {
+public:
+    Patch() = default;
+    Patch(std::string text) : m_Text(std::move(text)) {}
+
+    // Diffs `fromJson` -> `toJson` on a background thread. The strings are copied in, so the
+    // caller's may change or go straight away.
+    void Start(std::string fromJson, std::string toJson) {
+        m_Text.clear();
+        auto promise = std::make_shared<std::promise<std::string>>();
+        m_Job = promise->get_future().share();
+        // Detached, with a promise rather than std::async: dropping an entry (history trimmed,
+        // redo cleared) then never blocks on a diff still running.
+        std::thread([promise, from = std::move(fromJson), to = std::move(toJson)] {
+            promise->set_value(MakePatch(from, to));
+        }).detach();
+    }
+    // The patch text (waiting for a background diff to finish).
+    const std::string& Text() const {
+        if (m_Job.valid()) {
+            m_Text = m_Job.get();
+            m_Job = {};
+        }
+        return m_Text;
+    }
+    bool empty() const { return !m_Job.valid() && m_Text.empty(); }
+    void clear() {
+        m_Text.clear();
+        m_Job = {};
+    }
+
+private:
+    mutable std::string m_Text;
+    mutable std::shared_future<std::string> m_Job;
+};
+
 inline bool ApplyPatch(const std::string& sourceJson, const std::string& patchJson, std::string& out) {
     if (patchJson.empty()) return false;
     try {
@@ -70,7 +114,7 @@ void Push(std::vector<Entry>& stack, std::string& baseJson, Entry&& entry,
     if (!stack.empty()) {
         // The outgoing top's full state is `baseJson`; from here on it's reachable only as a
         // patch applied to the incoming top, which is the one now held in full.
-        stack.back().Delta = MakePatch(newFullJson, baseJson);
+        stack.back().Delta.Start(newFullJson, baseJson);
     }
     entry.Delta.clear(); // the top entry is always the one held in full
     stack.push_back(std::move(entry));
@@ -98,7 +142,7 @@ PopResult Pop(std::vector<Entry>& stack, std::string& baseJson, Entry& outEntry,
         return PopResult::Ok;
     }
     // Re-anchor on the entry that's now on top by walking its patch back one step.
-    if (!ApplyPatch(outFullJson, stack.back().Delta, baseJson)) {
+    if (!ApplyPatch(outFullJson, stack.back().Delta.Text(), baseJson)) {
         // Can't happen in practice (every link is built from our own serializer's output), but
         // if the chain ever did break, drop the unreachable tail rather than hand back a wrong
         // scene: the entry just popped still restores correctly, only the history behind it

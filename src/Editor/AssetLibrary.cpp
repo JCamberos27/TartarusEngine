@@ -101,13 +101,21 @@ void RenameInList(std::vector<std::string>& v, const std::string& oldPath, const
 }
 } // namespace
 
-// The entry of `cache` for `path` under any spelling of it (slashes, case), or end().
-template <typename Map>
-typename Map::iterator FindAnySpelling(Map& cache, const std::string& path) {
+// The entry of `cache` for `path` under any spelling of it (slashes, case), or end(). `index`
+// is the cache's AssetLibrary::KeyIndex, rebuilt here when it's out of date.
+template <typename Map, typename Index>
+typename Map::iterator FindAnySpelling(Map& cache, Index& index, std::uint64_t epoch, const std::string& path) {
     auto it = cache.find(path);
-    if (it != cache.end()) return it;
-    for (it = cache.begin(); it != cache.end(); ++it) if (SamePath(it->first, path)) return it;
-    return cache.end();
+    if (it != cache.end() || path.empty()) return it;
+    if (index.Size != cache.size() || index.Epoch != epoch) {
+        index.Keys.clear();
+        for (const auto& [k, v] : cache)
+            if (!k.empty()) index.Keys.emplace(AssetDatabase::PathKey(k), k);
+        index.Size = cache.size();
+        index.Epoch = epoch;
+    }
+    const auto f = index.Keys.find(AssetDatabase::PathKey(path));
+    return f == index.Keys.end() ? cache.end() : cache.find(f->second);
 }
 
 std::shared_ptr<Model> AssetLibrary::LoadModel(const std::string& path) {
@@ -125,16 +133,16 @@ std::shared_ptr<Model> AssetLibrary::LoadModel(const std::string& path) {
 
     // #132 - any spelling of the same file ("a/b.fbx", "a\b.fbx", different case) is one entry;
     // a second spelling used to import the file a second time.
-    auto it = FindAnySpelling(m_ModelCache, path);
+    auto it = FindAnySpelling(m_ModelCache, m_ModelKeys, m_KeyEpoch, path);
     if (it != m_ModelCache.end()) return it->second;
 
     PrepareModelImport(path);
     return RegisterModel(path, std::make_shared<Model>(path, GetModelSettings(path)));
 }
 
-bool AssetLibrary::HasModel(const std::string& path) { return FindAnySpelling(m_ModelCache, path) != m_ModelCache.end(); }
-bool AssetLibrary::HasTexture(const std::string& path) { return FindAnySpelling(m_TextureCache, path) != m_TextureCache.end(); }
-bool AssetLibrary::HasMaterial(const std::string& path) { return FindAnySpelling(m_MaterialCache, path) != m_MaterialCache.end(); }
+bool AssetLibrary::HasModel(const std::string& path) { return FindAnySpelling(m_ModelCache, m_ModelKeys, m_KeyEpoch, path) != m_ModelCache.end(); }
+bool AssetLibrary::HasTexture(const std::string& path) { return FindAnySpelling(m_TextureCache, m_TextureKeys, m_KeyEpoch, path) != m_TextureCache.end(); }
+bool AssetLibrary::HasMaterial(const std::string& path) { return FindAnySpelling(m_MaterialCache, m_MaterialKeys, m_KeyEpoch, path) != m_MaterialCache.end(); }
 
 void AssetLibrary::PrepareModelImport(const std::string& path) {
     // Populate settings and browser metadata from .meta before constructing the model, so
@@ -204,13 +212,13 @@ TextureImportSettings AssetLibrary::DefaultTextureSettings(const std::string& pa
     return s;
 }
 
-void AssetLibrary::ResolveTextureSettings(const std::string& path, TextureUse use) {
+void AssetLibrary::ResolveTextureSettings(const std::string& path, TextureUse use, const std::string* metaJson) {
     // Populate settings and browser metadata from .meta before constructing the texture, so
     // that the first import uses the persisted settings rather than requiring a Reimport.
     // If settings were already set in-memory (e.g. from a scene's assetMeta block applied
     // before this call), skip the .meta read — in-memory wins for the current session.
     if (m_TextureSettings.find(path) == m_TextureSettings.end()) {
-        std::string metaStr = AssetDatabase::ReadMetaFields(path);
+        std::string metaStr = metaJson ? *metaJson : AssetDatabase::ReadMetaFields(path);
         if (metaStr != "{}") {
             try {
                 json j = json::parse(metaStr);
@@ -239,7 +247,7 @@ void AssetLibrary::ResolveTextureSettings(const std::string& path, TextureUse us
 }
 
 std::shared_ptr<Texture> AssetLibrary::LoadTexture(const std::string& path, TextureUse use) {
-    auto it = FindAnySpelling(m_TextureCache, path); // #132 - see LoadModel
+    auto it = FindAnySpelling(m_TextureCache, m_TextureKeys, m_KeyEpoch, path); // #132 - see LoadModel
     if (it != m_TextureCache.end()) return it->second;
 
     ResolveTextureSettings(path, use);
@@ -286,6 +294,7 @@ void AssetLibrary::RegisterSound(const std::string& path) {
 }
 
 void AssetLibrary::RemoveModel(const std::shared_ptr<Model>& model) {
+    ++m_KeyEpoch; // cache keys may change without the size changing
     if (!model) return;
     m_ModelCache.erase(model->Path());
     m_ModelList.erase(std::remove(m_ModelList.begin(), m_ModelList.end(), model), m_ModelList.end());
@@ -297,6 +306,7 @@ void AssetLibrary::RemoveModel(const std::shared_ptr<Model>& model) {
 }
 
 void AssetLibrary::RemoveTexture(const std::shared_ptr<Texture>& texture) {
+    ++m_KeyEpoch; // cache keys may change without the size changing
     if (!texture) return;
     m_TextureCache.erase(texture->Path());
     m_TextureWriteTime.erase(texture->Path());
@@ -318,7 +328,7 @@ void AssetLibrary::RemoveSound(const std::string& path) {
 }
 
 std::shared_ptr<MaterialAsset> AssetLibrary::LoadMaterial(const std::string& path) {
-    auto it = FindAnySpelling(m_MaterialCache, path); // #132 - see LoadModel
+    auto it = FindAnySpelling(m_MaterialCache, m_MaterialKeys, m_KeyEpoch, path); // #132 - see LoadModel
     if (it != m_MaterialCache.end()) return it->second;
 
     auto ma = MaterialAsset::Load(path, this);
@@ -356,6 +366,7 @@ int AssetLibrary::HotReloadShaders(const std::vector<std::string>& changedKeys) 
 }
 
 void AssetLibrary::RemoveMaterial(const std::shared_ptr<MaterialAsset>& mat) {
+    ++m_KeyEpoch; // cache keys may change without the size changing
     if (!mat) return;
     m_MaterialCache.erase(mat->Path);
     m_MaterialList.erase(std::remove(m_MaterialList.begin(), m_MaterialList.end(), mat), m_MaterialList.end());
@@ -487,10 +498,10 @@ void AssetLibrary::ClearMetadataOnly() {
     m_AllLabelsDirty = true;
 }
 
-void AssetLibrary::AdoptDiskFolder(const std::string& path) {
+void AssetLibrary::AdoptDiskFolder(const std::string& path, const std::string* metaJson) {
     if (path.empty() || path.find("://") != std::string::npos || m_AssetFolder.count(path)) return;
     try {
-        const json j = json::parse(AssetDatabase::ReadMetaFields(path));
+        const json j = json::parse(metaJson ? *metaJson : AssetDatabase::ReadMetaFields(path));
         if (j.contains("folder")) return;                            // chosen in the browser
     } catch (...) {}
     const std::string folder = DiskFolderFor(path);
@@ -693,6 +704,7 @@ std::string AssetLibrary::FindListed(const std::string& path) const {
 }
 
 bool AssetLibrary::RenamePath(const std::string& oldPath, const std::string& newPath) {
+    ++m_KeyEpoch; // cache keys may change without the size changing
     const std::string listed = FindListed(oldPath);
     for (auto& [k, model] : m_ModelCache) if (SamePath(k, oldPath) && model) model->SetPath(newPath);
     bool textureMoved = false;
@@ -722,6 +734,7 @@ bool AssetLibrary::RenamePath(const std::string& oldPath, const std::string& new
 }
 
 int AssetLibrary::ForgetRemoved(const std::string& path) {
+    ++m_KeyEpoch; // cache keys may change without the size changing
     auto gone = [&](const std::string& p) { return SamePath(p, path) || UnderPath(p, path); };
     int count = 0;
     std::vector<std::shared_ptr<Model>> models;
