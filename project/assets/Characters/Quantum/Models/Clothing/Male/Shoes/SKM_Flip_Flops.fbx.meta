@@ -1,0 +1,10 @@
+{
+  "folder": "assets/Characters/Quantum/Models/Clothing/Male/Shoes",
+  "guid": "4e4355bc8fe9fcda",
+  "materialRemap": {
+    "M_Quantum_Body3": "assets/Characters/Quantum/Materials/Characters/M_Quantum_Body.mat",
+    "M_Shorts_Breeches1": "assets/Characters/Quantum/Materials/Clothing/Pants/Shorts_Breeches/M_Shorts_Breeches_Gray.mat"
+  },
+  "metaVersion": 1,
+  "type": "model"
+}

@@ -615,15 +615,18 @@ install(FILES
 
 # The sample project, as an ALLOW-LIST of directories rather than "project/ minus exclusions".
 #
-# That choice is load-bearing. project/assets/characters/ (Mixamo) and project/assets/sky/
-# (Poly Haven HDRIs) are gitignored and absent on CI, but they DO exist in a developer's working
-# tree - and Mixamo's licence does not permit redistributing those FBX files. An exclude-list
-# that someone later edits wrongly ships them; an allow-list that someone later forgets to extend
-# merely omits a folder from the sample. Wrong in the safe direction.
+# That choice is load-bearing. project/assets/sky/ (Poly Haven HDRIs) is gitignored and absent
+# on CI, but it DOES exist in a developer's working tree; and the third-party packs under
+# assets/Characters/, assets/Weapons/ and assets/Animations/Mocap/ were never part of the sample
+# (Mixamo-style licences don't allow redistributing such files). An exclude-list that someone
+# later edits wrongly ships them; an allow-list
+# that someone later forgets to extend merely omits a folder from the sample. Wrong in the safe
+# direction.
 #
 # Library/ and screenshots/ are per-user output, not content. .shutter.wav is the exception -
 # the Screenshots folder's own sound, which is tracked and has to come along.
-foreach(_projdir scenes materials models textures sounds animations scripts)
+foreach(_projdir scenes scripts assets/Audio assets/Environments assets/Props assets/Materials assets/Test
+                 assets/Animations/Controllers)
   if(EXISTS "${CMAKE_SOURCE_DIR}/project/${_projdir}")
     install(DIRECTORY "${CMAKE_SOURCE_DIR}/project/${_projdir}/"
             DESTINATION "project/${_projdir}"

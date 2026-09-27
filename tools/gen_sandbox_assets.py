@@ -10,7 +10,9 @@ from PIL import Image, ImageDraw, ImageFilter, ImageFont, ImageChops, ImageOps
 
 ROOT = sys.argv[1]
 P = lambda *a: os.path.join(ROOT, 'project', *a)
-for d in ('textures/basketball', 'models/basketball', 'materials/sandbox', 'sounds', 'animations'):
+BASKETBALL_MATS = ('basketball.mat', 'rim.mat', 'net.mat', 'backboard_glass.mat')
+for d in ('assets/Props/Basketball/Textures', 'assets/Props/Basketball/Models', 'assets/Props/Basketball/Materials',
+          'assets/Environments/Sandbox/Materials', 'assets/Audio'):
     os.makedirs(P(*d.split('/')), exist_ok=True)
 random.seed(42)
 
@@ -203,7 +205,7 @@ def build_court():
     # Apron lettering: south apron reads from the north, north apron from the south.
     stamp(floor, text_patch('TARTARUS ENGINE', 0.9, None), 0, COURT_W / 2 + APRON / 2, (238, 226, 200), 'north')
     stamp(floor, text_patch('TARTARUS ENGINE', 0.9, None), 0, -COURT_W / 2 - APRON / 2, (238, 226, 200), 'south')
-    floor.save(P('textures', 'basketball', 'court_floor.jpg'), quality=90, optimize=True)
+    floor.save(P('assets', 'Props', 'Basketball', 'Textures', 'court_floor.jpg'), quality=90, optimize=True)
 
 def build_floor_detail():
     # Neutral (50% grey) grain for the x2 detail albedo, and board-seam grooves as a detail
@@ -212,7 +214,7 @@ def build_floor_detail():
     g = Image.effect_noise((size // 16, size), 30).resize((size, size), Image.BILINEAR)
     g = g.filter(ImageFilter.GaussianBlur(0.6))
     g = Image.eval(g, lambda v: int(128 + (v - 128) * 0.35))
-    Image.merge('RGB', (g, g, g)).save(P('textures', 'basketball', 'wood_detail.png'))
+    Image.merge('RGB', (g, g, g)).save(P('assets', 'Props', 'Basketball', 'Textures', 'wood_detail.png'))
     # Height: a shallow V-groove at each board edge (rows every size/14 px).
     h = Image.new('L', (size, size), 200)
     d = ImageDraw.Draw(h)
@@ -221,7 +223,7 @@ def build_floor_detail():
         y = k * per
         d.line([(0, y), (size, y)], fill=60, width=2)
     h = h.filter(ImageFilter.GaussianBlur(1.2))
-    normal_from_height(h, 2.0).save(P('textures', 'basketball', 'wood_seams_normal.png'))
+    normal_from_height(h, 2.0).save(P('assets', 'Props', 'Basketball', 'Textures', 'wood_seams_normal.png'))
 
 def normal_from_height(h, strength):
     kx = ImageFilter.Kernel((3, 3), [-1, 0, 1, -2, 0, 2, -1, 0, 1], scale=8.0 / strength, offset=128)
@@ -272,8 +274,8 @@ def build_ball():
         d.ellipse([i - rx, j - ry, i + rx, j + ry], fill=205)
     height = height.filter(ImageFilter.GaussianBlur(0.9))
     alb = alb.filter(ImageFilter.GaussianBlur(0.4))
-    alb.save(P('textures', 'basketball', 'basketball_albedo.png'))
-    normal_from_height(height, 1.6).save(P('textures', 'basketball', 'basketball_normal.png'))
+    alb.save(P('assets', 'Props', 'Basketball', 'Textures', 'basketball_albedo.png'))
+    normal_from_height(height, 1.6).save(P('assets', 'Props', 'Basketball', 'Textures', 'basketball_normal.png'))
 
 # =============================================================================== backboard
 def build_backboard():
@@ -294,7 +296,7 @@ def build_backboard():
     d.rectangle([x0, y0 + sh - lw, x0 + sw, y0 + sh], fill=white)
     d.rectangle([x0, y0, x0 + lw, y0 + sh], fill=white)
     d.rectangle([x0 + sw - lw, y0, x0 + sw, y0 + sh], fill=white)
-    img.save(P('textures', 'basketball', 'backboard.png'))
+    img.save(P('assets', 'Props', 'Basketball', 'Textures', 'backboard.png'))
 
 # =============================================================================== meshes (OBJ)
 def write_obj(path, verts, uvs, normals, faces, comment):
@@ -321,7 +323,7 @@ def build_sphere_obj():
             a = j * (LON + 1) + i; b = a + 1; c = a + LON + 1; dd = c + 1
             if j != 0: faces.append([(a, a, a), (c, c, c), (b, b, b)])
             if j != LAT - 1: faces.append([(b, b, b), (c, c, c), (dd, dd, dd)])
-    write_obj(P('models', 'basketball', 'basketball.obj'), verts, uvs, norms, faces,
+    write_obj(P('assets', 'Props', 'Basketball', 'Models', 'basketball.obj'), verts, uvs, norms, faces,
               'Unit-diameter UV sphere (64 x 32), equirect UVs, for the basketball.')
 
 def torus(major, minor, nu, nv):
@@ -344,7 +346,7 @@ def torus(major, minor, nu, nv):
 def build_rim_obj():
     # 18" (0.4572 m) inner diameter, 5/8" steel: tube radius ~0.009 m.
     v, t, n, f = torus(0.2286 + 0.009, 0.009, 64, 12)
-    write_obj(P('models', 'basketball', 'rim.obj'), v, t, n, f,
+    write_obj(P('assets', 'Props', 'Basketball', 'Models', 'rim.obj'), v, t, n, f,
               'Basketball rim: 0.457 m inner diameter, 18 mm steel tube. Origin at the ring centre.')
 
 def build_net_obj():
@@ -388,7 +390,7 @@ def build_net_obj():
     # Top loop the net hangs from, just under the ring.
     for i in range(N):
         strand(pt(i, 0), pt(i + 1, 0))
-    write_obj(P('models', 'basketball', 'net.obj'), verts, uvs, norms, faces,
+    write_obj(P('assets', 'Props', 'Basketball', 'Models', 'net.obj'), verts, uvs, norms, faces,
               'Basketball net: diamond mesh, 12 loops x 6 rows, 0.44 m long. Origin at the rim centre.')
 
 # =============================================================================== materials
@@ -399,11 +401,13 @@ def mat(name, file, props, queue=None, comment=None, opacity=None, advanced=Fals
     if queue is not None: m['renderQueue'] = queue
     if opacity is not None: m['opacity'] = opacity
     m['properties'] = props
-    with open(P('materials', 'sandbox', file), 'w', newline='\n') as f:
+    # The basketball's own materials sit with it; the rest are the Sandbox environment's.
+    folder = ('Props', 'Basketball') if file in BASKETBALL_MATS else ('Environments', 'Sandbox')
+    with open(P('assets', *folder, 'Materials', file), 'w', newline='\n') as f:
         json.dump(m, f, indent=2)
 
 def build_materials():
-    T = 'textures/basketball/'
+    T = 'assets/Props/Basketball/Textures/'
     # The scene lays this floor out at COURT_SCALE x the regulation size (gen_sandbox_scene.py's
     # COURT_S); the detail maps tile per 0.8 m of the scaled floor.
     COURT_SCALE = 1.5
@@ -453,7 +457,7 @@ SR = 44100
 def write_wav(name, samples, peak=0.9):
     m = max(1e-9, max(abs(s) for s in samples))
     k = peak / m
-    with wave.open(P('sounds', name), 'wb') as w:
+    with wave.open(P('assets', 'Audio', name), 'wb') as w:
         w.setnchannels(1); w.setsampwidth(2); w.setframerate(SR)
         w.writeframes(b''.join(struct.pack('<h', int(max(-1, min(1, s * k)) * 32767)) for s in samples))
 

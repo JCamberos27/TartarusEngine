@@ -1,9 +1,0 @@
-{
-  "folder": "assets/quantum/Models/Clothing/Female/Tops",
-  "guid": "410596be2ca29a27",
-  "materialRemap": {
-    "MI_F_Shirt_RolledUp": "assets/quantum/Materials/Clothing/Tops/Shirt_RolledUp/M_Shirt_RolledUp_Gray.mat"
-  },
-  "metaVersion": 1,
-  "type": "model"
-}

@@ -1,0 +1,9 @@
+{
+  "folder": "assets/Characters/Quantum/Models/Clothing/Female/Accessories",
+  "guid": "8777df48920337b3",
+  "materialRemap": {
+    "MI_F_Watches_Military1": "assets/Characters/Quantum/Materials/Clothing/Accessories/Watches_Military/M_Watches_Military_Black.mat"
+  },
+  "metaVersion": 1,
+  "type": "model"
+}

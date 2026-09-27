@@ -1,0 +1,11 @@
+{
+  "folder": "assets/Characters/Quantum/Models/Clothing/Male/Outerwear",
+  "guid": "de2326a617509611",
+  "materialRemap": {
+    "M_Jacket_Winter": "assets/Characters/Quantum/Materials/Clothing/Outerwear/Jacket_Winter/M_Jacket_Winter_Black.mat",
+    "M_Jacket_Winter_Fur": "assets/Characters/Quantum/Materials/Clothing/Generated/M_Fur.mat",
+    "M_Tshirt_Tucked": "assets/Characters/Quantum/Materials/Clothing/Tops/TShirt_Tucked/M_TShirt_Tucked_Black.mat"
+  },
+  "metaVersion": 1,
+  "type": "model"
+}

@@ -1,9 +1,0 @@
-{
-  "folder": "assets/quantum/Models/Clothing/Female/Hats",
-  "guid": "fe1cbcfca665882a",
-  "materialRemap": {
-    "M_Warm_Hat1": "assets/quantum/Materials/Clothing/Hats/Hat_Warm/M_Warm_Hat_Black.mat"
-  },
-  "metaVersion": 1,
-  "type": "model"
-}

@@ -177,7 +177,7 @@ void Model::CollisionGeometry(std::vector<glm::vec3>& outVertices,
 }
 
 bool Model::RaycastTriangles(const glm::mat4& modelMatrix, const glm::vec3& worldOrigin, const glm::vec3& worldDir,
-                             float& outT, glm::vec3* outNormal, float minT) const {
+                             float& outT, glm::vec3* outNormal, float minT, int* outMeshIndex) const {
     const float dirLen = glm::length(worldDir);
     if (dirLen < 1e-12f) return false;
     const glm::vec3 wd = worldDir / dirLen;
@@ -189,7 +189,9 @@ bool Model::RaycastTriangles(const glm::mat4& modelMatrix, const glm::vec3& worl
     float bestWorldT = 1e30f;
     glm::vec3 bestLocalN(0.0f);
     bool hit = false;
+    int bestMesh = -1, meshIndex = -1;
     for (const auto& mesh : m_D->Meshes) {
+        ++meshIndex;
         const auto& pos = mesh->LocalPositions();
         const auto& idx = mesh->LocalIndices();
         for (size_t i = 0; i + 2 < idx.size(); i += 3) {
@@ -216,11 +218,13 @@ bool Model::RaycastTriangles(const glm::mat4& modelMatrix, const glm::vec3& worl
             if (tw < minT || tw >= bestWorldT) continue;
             bestWorldT = tw;
             bestLocalN = glm::cross(e1, e2);
+            bestMesh = meshIndex;
             hit = true;
         }
     }
     if (!hit) return false;
     outT = bestWorldT;
+    if (outMeshIndex) *outMeshIndex = bestMesh;
     if (outNormal) {
         glm::vec3 n = glm::normalize(glm::transpose(glm::inverse(glm::mat3(modelMatrix))) * bestLocalN);
         if (glm::dot(n, wd) > 0.0f) n = -n; // face the ray origin

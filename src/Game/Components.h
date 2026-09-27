@@ -441,7 +441,7 @@ struct FirstPersonControllerComponent {
 // play camera. Put it on the body's root object, anywhere in a scene with a First Person
 // Controller. The body is modular: the root's children are its pieces (head, torso, legs, feet -
 // or clothing in their place), each a rigged model on the same skeleton. The first piece with an
-// Animator Controller (a locomotion controller - see animations/fps_body_locomotion.controller)
+// Animator Controller (a locomotion controller - see assets/Animations/Controllers/fps_body_locomotion.controller)
 // drives; every other piece follows it. The root may itself be that piece.
 // In Play the body stands at the player's feet facing the view, the controller gets the player's
 // movement as parameters (MoveX / MoveY / Speed / Sprint / Grounded / Airborne / Jump), and the

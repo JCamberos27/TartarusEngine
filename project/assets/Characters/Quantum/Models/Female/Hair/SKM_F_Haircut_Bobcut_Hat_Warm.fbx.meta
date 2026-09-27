@@ -1,0 +1,9 @@
+{
+  "guid": "c02a99699e6f6d05",
+  "materialRemap": {
+    "M_Warm_Hat": "assets/Characters/Quantum/Materials/Clothing/Hats/Hat_Warm/M_Warm_Hat_Black.mat",
+    "lambert5": "assets/Characters/Quantum/Materials/Characters/M_Hair_Dark.mat"
+  },
+  "metaVersion": 1,
+  "type": "model"
+}

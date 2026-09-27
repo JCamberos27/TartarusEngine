@@ -124,6 +124,20 @@ bool Load(const std::string& path, int size, std::uint64_t key, std::vector<unsi
     return true;
 }
 
+bool LoadAnyVersion(const std::string& path, int size, std::vector<unsigned char>& outPixels) {
+    if (path.empty() || AssetDatabase::IsSynthetic(path)) return false;
+    const AssetGuid guid = AssetDatabase::GuidForPath(path);
+    if (!guid.IsValid()) return false;
+    const std::string cachePath = ProjectPaths::Resolve("Library/thumbnails/" + guid.ToString() + ".png");
+    int w = 0, h = 0, channels = 0;
+    unsigned char* data = stbi_load(cachePath.c_str(), &w, &h, &channels, 4);
+    if (!data) return false;
+    const bool ok = w == size && h == size;
+    if (ok) outPixels.assign(data, data + (size_t)size * size * 4);
+    stbi_image_free(data);
+    return ok;
+}
+
 void Save(const std::string& path, int size, std::uint64_t key, const unsigned char* pixels) {
     const std::string cachePath = CacheFilePath(path);
     if (cachePath.empty() || !pixels) return;

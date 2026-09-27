@@ -1,0 +1,10 @@
+{
+  "folder": "assets/Characters/Quantum/Models/Clothing/Female/Tops",
+  "guid": "da4d55a292f080a3",
+  "materialRemap": {
+    "M_F_Tank_Top5": "assets/Characters/Quantum/Materials/Clothing/Generated/M_Tank_Top.mat",
+    "M_Shirt_Hawaii3": "assets/Characters/Quantum/Materials/Clothing/Tops/Shirt_Hawaiian/M_Hawaii_Shirt_Red_White_Line.mat"
+  },
+  "metaVersion": 1,
+  "type": "model"
+}

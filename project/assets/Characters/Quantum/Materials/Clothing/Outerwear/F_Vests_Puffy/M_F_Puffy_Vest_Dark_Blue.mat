@@ -1,0 +1,37 @@
+{
+  "factorsScaleMaps": true,
+  "matVersion": 2,
+  "name": "M_F_Puffy_Vest_Dark_Blue",
+  "properties": {
+    "_AOMap": "assets/Characters/Quantum/Textures/Clothing/Outerwear/F_Vests_Puffy/T_F_Puffy_Vest_Occlusion.png",
+    "_AlbedoMap": "assets/Characters/Quantum/Textures/Clothing/Outerwear/F_Vests_Puffy/T_F_Puffy_Vest_Dark_Blue_BaseColor.png",
+    "_BaseColor": [
+      1.0,
+      1.0,
+      1.0
+    ],
+    "_DoubleSided": false,
+    "_EmissiveColor": [
+      0.0,
+      0.0,
+      0.0
+    ],
+    "_EmissiveMap": "",
+    "_EmissiveStrength": 1.0,
+    "_Metallic": 0.0,
+    "_MetallicMap": "",
+    "_MetallicRoughnessMap": "",
+    "_NormalMap": "assets/Characters/Quantum/Textures/Clothing/Outerwear/F_Vests_Puffy/T_F_Puffy_Vest_Unity_Normal.png",
+    "_Roughness": 1.0,
+    "_RoughnessMap": "assets/Characters/Quantum/Textures/Clothing/Outerwear/F_Vests_Puffy/T_F_Puffy_Vest_Roughness.png",
+    "_Triplanar": false,
+    "_TriplanarScale": 1.0
+  },
+  "shader": "engine://Standard.shader",
+  "textureGuids": {
+    "_AOMap": "4835207b825f6466",
+    "_AlbedoMap": "c70561af0f64e849",
+    "_NormalMap": "abe2a5131c438f1d",
+    "_RoughnessMap": "dc5740759c2b51ff"
+  }
+}

@@ -1,9 +1,0 @@
-{
-  "folder": "assets/quantum/Models/Clothing/Female/Shoes",
-  "guid": "5537e93e5d6bc618",
-  "materialRemap": {
-    "MI_F_Shorts_Boots1": "assets/quantum/Materials/Clothing/Pants/F_Shorts_Boots/M_F_Shorts_Boots_Black.mat"
-  },
-  "metaVersion": 1,
-  "type": "model"
-}

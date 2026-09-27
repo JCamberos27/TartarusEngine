@@ -1558,6 +1558,10 @@ bool ApplySceneJsonImpl(World& world, AssetLibrary& assets, const json& root,
             auto& rc = world.Registry.get<RenderableComponent>(e);
 
             ReadMaterialSlots(assets, m, rc);
+            // A slot the scene leaves empty uses the model's material remap (its .mat per imported
+            // material, Unity's importer remap), as a newly placed copy does - so remap edits reach
+            // objects placed before them. Slots the scene sets are kept.
+            if (rc.ModelRef) assets.ApplyMaterialRemap(*rc.ModelRef, rc.Materials);
             ReadRendererFlags(m, rc); // #163
             ReadCommonComponents(m, world, assets, e); // handles the "Audio Source" block + the legacy "sound*" shim
             applyOrder(e, m);

@@ -80,7 +80,7 @@ add-on**. The `.blend` source file
   bones, every single one prefixed `CB_` — `CB_ik_hand_r`, `CB_ik_hand_l`,
   `CB_pole_elbow_l`, finger `CB_*` bones, `CB_Gun`, etc. — **zero** keys on
   any bare deform bone). The exported per-state `.fbx` files
-  (`project/assets/fps/AKS74U/FirstPerson/AKS-74U_A_FP_*.fbx`) only contain
+  (`project/assets/Weapons/AKS74U/FirstPerson/AKS-74U_A_FP_*.fbx`) only contain
   the 89 bare deform bones with **baked** keyframes (action name
   `Armature|Scene`, the tell-tale sign of Blender's "Bake Animation" export
   option, which flattens constraint-solved motion onto the deform bones and
@@ -204,7 +204,7 @@ should return `0`.
   (`boneId=51`) were confirmed present with valid `hasChan=Y`.)
 - **`Model::AttachClip`'s name-based channel matching is the exact same
   code path already used successfully by the pre-existing, working
-  Mixamo/ybot character animations** (`project/animations/ybot_showcase.controller`,
+  Mixamo/ybot character animations** (`project/assets/Animations/Controllers/ybot_showcase.controller`,
   `assets/characters/ybot/*.fbx`, gitignored per Mixamo license so not
   directly byte-inspectable in this repo, but the code path is provably
   identical). This is not a structural difference between the working and
@@ -718,7 +718,7 @@ Reported alongside UPDATE 5, from a Play-mode recording: **during `MagCheck` the
 floats in space, detached, while the left hand stays planted** somewhere else. The right
 hand and the weapon looked fine.
 
-**Where the data came from.** Every arm clip in `project/assets/fps/AKS74U/FirstPerson/`
+**Where the data came from.** Every arm clip in `project/assets/Weapons/AKS74U/FirstPerson/`
 falls into one of two batches by file timestamp:
 
 | batch | clips | channels |
@@ -811,7 +811,7 @@ with the editor open (they race on the scene round-trip files) — closing `Tart
 restored 804/0. **Confirmed by the user in Play mode:** the magazine now meets the left
 hand.
 
-**Rollback:** every file is git-tracked, so `git checkout -- project/assets/fps/AKS74U/FirstPerson/`
+**Rollback:** every file is git-tracked, so `git checkout -- project/assets/Weapons/AKS74U/FirstPerson/`
 restores all ten; the original `Mag_Check` is also kept as `work/AKS-74U_A_FP_Mag_Check_ORIGINAL.fbx`.
 
 ### Closing the door: the `.blend` is now saved on a neutral pairing

@@ -314,7 +314,8 @@ public:
     // normalize(dir) and the world-space face normal (facing the ray origin). Hits behind the
     // origin, and within minT of it, are ignored.
     bool RaycastTriangles(const glm::mat4& modelMatrix, const glm::vec3& worldOrigin, const glm::vec3& worldDir,
-                          float& outT, glm::vec3* outNormal = nullptr, float minT = 1e-4f) const;
+                          float& outT, glm::vec3* outNormal = nullptr, float minT = 1e-4f,
+                          int* outMeshIndex = nullptr) const; // the mesh (= material slot) hit
 
 private:
     Model() = default; // used only by CreatePrimitive; file-based loading always goes through the path constructor

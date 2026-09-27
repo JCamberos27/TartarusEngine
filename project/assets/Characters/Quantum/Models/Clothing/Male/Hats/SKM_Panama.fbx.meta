@@ -1,0 +1,9 @@
+{
+  "folder": "assets/Characters/Quantum/Models/Clothing/Male/Hats",
+  "guid": "5d1760b41dff67fc",
+  "materialRemap": {
+    "M_Panama": "assets/Characters/Quantum/Materials/Clothing/Hats/Panama/M_Panama_Gray.mat"
+  },
+  "metaVersion": 1,
+  "type": "model"
+}
