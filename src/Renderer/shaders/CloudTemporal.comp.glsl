@@ -62,6 +62,7 @@ void main() {
     vec4 result = cur;
     if (all(greaterThanEqual(prevUv, vec2(0.0))) && all(lessThanEqual(prevUv, vec2(1.0)))) {
         vec4 hist = texture(uHistory, prevUv);
+        if (any(isnan(hist)) || any(isinf(hist))) hist = cur;
         hist.rgb = RgbToYCoCg(hist.rgb);
         hist = clamp(hist, mn, mx);
         hist.rgb = YCoCgToRgb(hist.rgb);

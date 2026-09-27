@@ -241,6 +241,9 @@ unsigned int VolumetricClouds::RenderView(ViewState& st, const SkySettings& s, c
     m_RaymarchShader->SetFloat("uFrame", frame);
     m_RaymarchShader->SetInt("uSteps", q.Steps);
     m_RaymarchShader->SetInt("uLightSteps", q.LightSteps);
+    // The angle one target pixel spans (the vertical field of view over its height), which
+    // picks the noise mips for distant clouds.
+    m_RaymarchShader->SetFloat("uPixelAngle", 2.0f / (std::max(std::abs(proj[1][1]), 1e-3f) * (float)h));
     glBindImageTexture(0, st.Color, 0, GL_FALSE, 0, GL_WRITE_ONLY, GL_RGBA16F);
     glBindImageTexture(1, st.Depth, 0, GL_FALSE, 0, GL_WRITE_ONLY, GL_R32F);
     m_RaymarchShader->DispatchCompute(Groups(w, 8), Groups(h, 8), 1);
