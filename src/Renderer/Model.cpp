@@ -46,6 +46,19 @@ glm::mat4 AiToGlm(const aiMatrix4x4& from) {
     return to;
 }
 
+// Element-wise, relative to the matrices' size (translations can be in centimetres).
+bool NearlyEqual(const glm::mat4& a, const glm::mat4& b) {
+    float scale = 1.0f;
+    for (int c = 0; c < 4; ++c)
+        for (int r = 0; r < 4; ++r) scale = std::max(scale, std::max(std::abs(a[c][r]), std::abs(b[c][r])));
+    for (int c = 0; c < 4; ++c)
+        for (int r = 0; r < 4; ++r)
+            if (std::abs(a[c][r] - b[c][r]) > 1e-3f * scale) return false;
+    return true;
+}
+
+bool IsNearlyIdentity(const glm::mat4& m) { return NearlyEqual(m, glm::mat4(1.0f)); }
+
 glm::vec3 AiToGlm(const aiVector3D& v) { return {v.x, v.y, v.z}; }
 glm::quat AiToGlm(const aiQuaternion& q) { return {q.w, q.x, q.y, q.z}; }
 
@@ -308,7 +321,29 @@ std::unique_ptr<ModelMesh> Model::ProcessMesh(aiMesh* mesh, const aiScene* scene
     // node transform cannot tear anything - it just uniformly rotates the mesh. Only once a clip
     // plays does each bone apply its own delta to that un-rotated vertex, blowing a 0.02 m edge
     // apart into 0.5 m blades.
-    const glm::mat4& bake = nodeTransform;
+    //
+    // The exception: a skin whose offsets already carry the mesh node's frame. Some FBX exports
+    // (the Quantum pack's female parts: meshes under a group node with a -90 X pre-rotation, heads
+    // with pivots) write the mesh's global bind matrix as the cluster's Transform, so at bind
+    // C == nodeTransform itself - baking it too applied it twice (the body lay on its back, the head
+    // floated off). Only when C is that exact matrix, and not the identity, is it corrected; every
+    // other file (C == I at bind, or a posed import's delta) bakes as before.
+    //
+    // The correction goes on the offsets, not the bake: those offsets are stored once per bone
+    // NAME for the whole model (first mesh wins, ExtractBoneWeights), and one file can mix both
+    // kinds - the Vivian heads' eyes and teeth have C == I, the skin and lashes C == N - so a
+    // per-mesh "skip the bake" would skin a later mesh with an earlier mesh's offsets. Folding
+    // inverse(nodeTransform) into this mesh's offsets instead makes C == I for it too, so every
+    // mesh bakes nodeTransform and every bone's stored offset means the same thing.
+    const glm::mat4 bake = nodeTransform;
+    glm::mat4 offsetFix(1.0f);
+    if (skinned && !IsNearlyIdentity(nodeTransform)) {
+        const aiBone* first = mesh->mBones[0];
+        if (auto g = m_ImportNodeGlobals.find(first->mName.C_Str()); g != m_ImportNodeGlobals.end()) {
+            const glm::mat4 c = m_D->GlobalInverseTransform * g->second * AiToGlm(first->mOffsetMatrix);
+            if (NearlyEqual(c, nodeTransform)) offsetFix = glm::inverse(nodeTransform);
+        }
+    }
     glm::mat3 normalMatrix = glm::transpose(glm::inverse(glm::mat3(bake)));
 
     for (unsigned int i = 0; i < mesh->mNumVertices; ++i) {
@@ -365,7 +400,7 @@ std::unique_ptr<ModelMesh> Model::ProcessMesh(aiMesh* mesh, const aiScene* scene
         }
     }
 
-    if (m_D->Settings.ImportSkeleton) ExtractBoneWeights(vertices, mesh);
+    if (m_D->Settings.ImportSkeleton) ExtractBoneWeights(vertices, mesh, offsetFix);
 
     auto gpuMesh = std::make_unique<ModelMesh>(vertices, indices);
     if (skinned) {
@@ -1000,7 +1035,7 @@ Material Model::ExtractMaterial(const aiScene* scene, unsigned int materialIndex
     return mat;
 }
 
-void Model::ExtractBoneWeights(std::vector<ModelVertex>& vertices, aiMesh* mesh) {
+void Model::ExtractBoneWeights(std::vector<ModelVertex>& vertices, aiMesh* mesh, const glm::mat4& offsetFix) {
     bool overflowWarned = false;
     for (unsigned int boneIdx = 0; boneIdx < mesh->mNumBones; ++boneIdx) {
         aiBone* bone = mesh->mBones[boneIdx];
@@ -1020,7 +1055,7 @@ void Model::ExtractBoneWeights(std::vector<ModelVertex>& vertices, aiMesh* mesh)
                 }
                 continue;
             }
-            BoneInfo info{m_D->BoneCounter, AiToGlm(bone->mOffsetMatrix)};
+            BoneInfo info{m_D->BoneCounter, AiToGlm(bone->mOffsetMatrix) * offsetFix};
             m_D->BoneInfoMap[boneName] = info;
             if (auto g = m_ImportNodeGlobals.find(boneName); g != m_ImportNodeGlobals.end())
                 m_D->BindPoseBones[info.ID] = m_D->GlobalInverseTransform * g->second * info.OffsetMatrix; // #98
