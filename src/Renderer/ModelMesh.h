@@ -8,7 +8,13 @@
 class ModelMesh {
 public:
     ModelMesh(const std::vector<ModelVertex>& vertices, const std::vector<unsigned int>& indices);
+    // Deferred: keeps the vertices on the CPU and creates no GL objects, so an import can run on
+    // a worker thread (AsyncAssetLoader). FinishUpload() creates the buffers later, main thread.
+    ModelMesh(std::vector<ModelVertex>&& vertices, const std::vector<unsigned int>& indices, bool deferUpload);
     ~ModelMesh();
+
+    bool NeedsUpload() const { return m_VAO == 0; }
+    void FinishUpload();
 
     // `instances` > 1 draws that many instances (the sun's layered cascade pass).
     void Draw(int instances = 1) const;
@@ -34,6 +40,9 @@ public:
     unsigned int VertexCount() const { return (unsigned int)m_LocalPositions.size(); }
 
 private:
+    void CreateGpu(const std::vector<ModelVertex>& vertices);
+
+    std::vector<ModelVertex> m_PendingVertices; // deferred meshes only, until FinishUpload
     unsigned int m_VAO = 0, m_VBO = 0, m_EBO = 0;
     unsigned int m_IndexCount = 0;
     std::vector<glm::vec3> m_LocalPositions;

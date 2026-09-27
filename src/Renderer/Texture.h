@@ -1,4 +1,6 @@
 #pragma once
+#include <cstdint>
+#include <memory>
 #include <string>
 #include <vector>
 
@@ -37,11 +39,11 @@ struct TextureImportSettings {
     Compression CompressionMode = Compression::None;
 };
 
-// Cumulative timing across every Texture::UploadFromFile call this process has made (audit
-// ARCH-201 / #375). Decode covers the TextureCache hit-or-miss path (stb_image + DownsampleBox on
-// a miss); Upload covers the glCreateTextures/.../glGenerateTextureMipmap block. Not thread-safe —
-// fine today since all texture loading is main-thread-only (that's the ARCH-201 finding). Reset()
-// lets a caller (e.g. --asset-load-bench) isolate one batch's cost instead of the process total.
+// Cumulative timing across every texture this process has loaded (audit ARCH-201 / #375).
+// Decode covers the TextureCache hit-or-miss path (stb_image + DownsampleBox on a miss), which
+// may run on an AsyncAssetLoader worker; Upload covers the GL block, always on the main thread.
+// Add() is locked so workers can report; Get()/Reset() are for a single-threaded reader such as
+// --asset-load-bench, which isolates one batch's cost instead of the process total.
 struct TextureLoadStats {
     int Count = 0;
     double DecodeMs = 0.0;
@@ -49,6 +51,27 @@ struct TextureLoadStats {
 
     static TextureLoadStats& Get();
     static void Reset() { Get() = TextureLoadStats{}; }
+    static void AddDecode(double ms);
+    static void AddUpload(double ms); // also counts the texture
+};
+
+// A texture decoded on the CPU and ready for upload: everything Texture's GL half needs and
+// nothing that touches GL, so it can be produced on any thread (Texture::DecodeFile/DecodeMemory)
+// and turned into a Texture later on the main thread (Texture(TextureCpuData&&)).
+struct TextureCpuData {
+    std::string Path;                 // file path, or the embedded texture's name
+    TextureImportSettings Settings;   // as requested (the cache key), not the effective ones
+    bool Ok = false;
+    int SourceWidth = 0, SourceHeight = 0, Channels = 0; // as authored
+    int Width = 0, Height = 0;                           // as uploaded (after Max Size)
+    // Tightly packed Width*Height*Channels bytes, or - when GLFormat != 0 - every BCn mip level's
+    // blocks back to back, LevelSizes[i] bytes each.
+    std::vector<unsigned char> Pixels;
+    uint32_t GLFormat = 0;
+    std::vector<uint32_t> LevelSizes;
+    // #113 - an embedded source is kept so the texture can be reimported later.
+    std::vector<unsigned char> Memory;
+    int MemRawW = 0, MemRawH = 0;
 };
 
 // A single 2D GL texture loaded from disk via stb_image (PNG/JPG/TGA/BMP/...).
@@ -62,7 +85,27 @@ public:
     // cache (keyed by file path) is bypassed.
     Texture(const std::string& name, std::vector<unsigned char> bytes, int rawWidth, int rawHeight,
             const TextureImportSettings& settings);
+    // Uploads pixels decoded earlier, possibly on another thread. Main thread only (GL). A failed
+    // decode (data.Ok false) gives an invalid texture, exactly like a failed file load.
+    explicit Texture(TextureCpuData&& data);
+    // A texture whose pixels are decoded but not uploaded yet: no GL, so it can be created on a
+    // worker and handed to a Material, which keeps the same pointer when FinishUpload() (main
+    // thread) turns it into a real GL texture. Null if the decode failed.
+    static std::shared_ptr<Texture> CreatePending(TextureCpuData&& data);
+    bool IsPendingUpload() const { return m_Pending != nullptr; }
+    void FinishUpload();
     ~Texture();
+
+    // The CPU half of loading a texture: TextureCache lookup, or stb_image decode + Max Size
+    // downsample + optional BCn encode + TextureCache store on a miss. No GL, so safe on any
+    // thread once InitGpuCaps() has run on the main thread (the BCn formats depend on the driver).
+    static TextureCpuData DecodeFile(const std::string& path, const TextureImportSettings& settings);
+    static TextureCpuData DecodeMemory(const std::string& name, std::vector<unsigned char> bytes, int rawWidth,
+                                       int rawHeight, const TextureImportSettings& settings);
+    // Queries the driver capabilities DecodeFile/DecodeMemory need. Main thread, once a GL context
+    // is current; called by the first texture upload anyway, and by AsyncAssetLoader before it
+    // starts its workers.
+    static void InitGpuCaps();
 
     void Bind(unsigned int unit = 0) const;
 
@@ -89,7 +132,13 @@ public:
 
 private:
     void UploadFromFile(const TextureImportSettings& settings);
+    // The GL half: creates m_ID from `data` and fills the size/format fields. Leaves m_ID 0 if
+    // the decode failed.
+    void Upload(const TextureCpuData& data);
 
+    Texture() = default; // CreatePending
+
+    std::unique_ptr<TextureCpuData> m_Pending; // CreatePending, until FinishUpload
     std::vector<unsigned char> m_Memory; // #113 — embedded source, empty for file textures
     int m_MemRawW = 0, m_MemRawH = 0;
 
