@@ -2390,6 +2390,10 @@ int main(int argc, char** argv) {
             // Entities SPAWNED after this point still resolve correctly — GetCachedWorldTransform
             // falls back to composing on demand for anything the cache doesn't hold.
             world.RebuildWorldTransformCache();
+            // Background asset loads: a few ms of GL uploads per frame, then any outfit change whose
+            // models and materials are now all in memory lands in one frame.
+            assets.PumpAsync(3.0);
+            OutfitSystem::UpdatePending(world, assets);
             OutfitSystem::UpdateHiding(world); // outfit skin under clothing (only when an outfit's pieces changed)
 
             glm::vec3 lightDir(-0.4f, -1.0f, -0.3f);

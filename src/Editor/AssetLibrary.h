@@ -229,7 +229,40 @@ public:
     const std::map<std::string, ModelImportSettings>& ModelSettingsMap() const { return m_ModelSettings; }
     const std::map<std::string, std::set<std::string>>& LabelsMap() const { return m_Labels; }
 
+    // --- Async loading -------------------------------------------------------------------------
+    // Starts loading an asset on worker threads (Assimp import, texture decode and TextureCache
+    // bake, all off the main thread). The ticket turns ready once the asset is in this library's
+    // caches, after which LoadModel / InstantiateModel / LoadMaterial / LoadTexture for it are
+    // instant cache hits. GL uploads happen in PumpAsync, a few milliseconds per frame. Main
+    // thread only. Something already loaded gives a ticket that is ready at once. Dropping a
+    // ticket doesn't cancel: the asset still lands in the cache, since it was wanted.
+    // A material's ticket covers its texture maps (not textures only a custom shader property
+    // names; those load when the material does).
+    class AsyncTicket;
+    using AsyncHandle = std::shared_ptr<AsyncTicket>;
+    AsyncHandle RequestModelAsync(const std::string& path);
+    AsyncHandle RequestMaterialAsync(const std::string& path);
+    AsyncHandle RequestTextureAsync(const std::string& path, TextureUse use = TextureUse::Color);
+    static bool IsReady(const AsyncHandle& ticket);
+    // Uploads finished work for about `budgetMs` (at least one step, so it always progresses)
+    // and completes tickets. Call once per frame. Returns how many loads are still in flight.
+    int PumpAsync(double budgetMs = 3.0);
+    int AsyncInFlight() const;
+
+    ~AssetLibrary();
+
 private:
+    struct AsyncLoader;
+    std::unique_ptr<AsyncLoader> m_Async;
+    AsyncLoader& Async();
+    // LoadModel / LoadTexture's halves, shared with the async path.
+    void PrepareModelImport(const std::string& path);
+    std::shared_ptr<Model> RegisterModel(const std::string& path, std::shared_ptr<Model> model);
+    std::shared_ptr<Texture> RegisterTexture(const std::string& path, std::shared_ptr<Texture> tex);
+    bool HasModel(const std::string& path);    // in the cache, under any spelling (#132)
+    bool HasTexture(const std::string& path);
+    bool HasMaterial(const std::string& path);
+
     std::map<std::string, std::shared_ptr<Model>> m_ModelCache;
     std::map<std::string, std::shared_ptr<Texture>> m_TextureCache;
     std::map<std::string, std::shared_ptr<MaterialAsset>> m_MaterialCache;

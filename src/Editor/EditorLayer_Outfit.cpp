@@ -41,13 +41,17 @@ struct OutfitUiState {
 std::unordered_map<entt::id_type, OutfitUiState> g_OutfitUi;
 
 // Thumbnails of items nothing has loaded: the cached render if there is one, else the model is loaded
-// (a couple a frame, cards on screen only) and rendered once - after that the cache has it.
+// in the background (cards on screen only) and rendered once it's in - after that the cache has it.
 struct ItemThumbs {
     std::map<std::string, int> AskedFrame;       // path -> the frame it was first asked for
     std::map<std::string, unsigned> Rendered;    // path -> ModelThumbnail texture
+    std::map<std::string, AssetLibrary::AsyncHandle> Loading; // path -> its background load
     int Frame = 0, LoadsThisFrame = 0;
 };
 ItemThumbs g_Thumbs;
+
+// Colourway swatches' materials, loaded in the background the first time they're shown.
+std::map<std::string, AssetLibrary::AsyncHandle> g_SwatchLoads;
 
 const char* SlotIcon(const std::string& icon) {
     if (icon == "hair") return ICON_FA_SCISSORS;
@@ -109,7 +113,7 @@ void EditorLayer::DrawCharacterOutfitEditor(World& world, entt::entity root) {
             // Torso, Legs, Head ...). Apply only sees tagged pieces, so without this it built a
             // second body on top of the untagged one - a female body hidden inside the male one.
             const int adopted = OutfitSystem::AdoptExisting(world, assets, root);
-            report(OutfitSystem::Apply(world, assets, root, OutfitSystem::CurrentRequest(world, root)));
+            report(OutfitSystem::Submit(world, assets, root, OutfitSystem::CurrentRequest(world, root)));
             if (adopted) ui.Notes.insert(ui.Notes.begin(), "Adopted " + std::to_string(adopted) + " existing pieces");
         }
         ImGui::SameLine();
@@ -183,7 +187,7 @@ void EditorLayer::DrawCharacterOutfitEditor(World& world, entt::entity root) {
                 PushUndo(world, "Clear Outfit");
                 Wardrobe::Request req = OutfitSystem::CurrentRequest(world, root);
                 req.Items.clear();
-                report(OutfitSystem::Apply(world, assets, root, req));
+                report(OutfitSystem::Submit(world, assets, root, req));
             }
             if (ImGui::MenuItem(ICON_FA_ROTATE "  Rescan wardrobe")) OutfitSystem::LoadCatalog(assets, outfit->Wardrobe, true);
             ImGui::MenuItem("Show fitted cuts", nullptr, &ui.ShowVariants);
@@ -211,6 +215,11 @@ void EditorLayer::DrawCharacterOutfitEditor(World& world, entt::entity root) {
             ImGui::PopID();
         }
         ImGui::TextDisabled("%s", outfit->Race.c_str());
+
+        // A change still loading: the current pieces stay until everything it needs is in memory.
+        int done = 0, total = 0;
+        if (OutfitSystem::IsPending(world, root, &done, &total))
+            ImGui::TextColored(InfoColor(), ICON_FA_SPINNER "  Loading... %d / %d", done, total);
     }
 
     // --- Slot tabs ---------------------------------------------------------------------------------
@@ -283,10 +292,16 @@ void EditorLayer::DrawCharacterOutfitEditor(World& world, entt::entity root) {
         const AssetThumbnailLoader::Thumb t = m_AssetThumbs.Get(ProjectPaths::Resolve(it.Path), AssetThumbnailLoader::Source::Cached);
         if (t.Tex) { flip = t.FlipV; return t.Tex; }
         auto asked = g_Thumbs.AskedFrame.emplace(it.Path, frame).first;
-        // No cached render after a moment: load and render it (on screen only, two a frame).
-        if (visible && frame - asked->second > 20 && g_Thumbs.LoadsThisFrame < 2) {
+        // No cached render after a moment: load the model in the background (on screen only), then
+        // render it once it's in (one a frame - that's a draw, no loading).
+        if (!visible || frame - asked->second <= 20) return 0;
+        const std::string abs = ProjectPaths::Resolve(it.Path);
+        auto loading = g_Thumbs.Loading.find(it.Path);
+        if (loading == g_Thumbs.Loading.end()) loading = g_Thumbs.Loading.emplace(it.Path, assets.RequestModelAsync(abs)).first;
+        if (AssetLibrary::IsReady(loading->second) && g_Thumbs.LoadsThisFrame < 1) {
             ++g_Thumbs.LoadsThisFrame;
-            if (auto model = assets.LoadModel(ProjectPaths::Resolve(it.Path)))
+            g_Thumbs.Loading.erase(loading);
+            if (auto model = assets.LoadModel(abs))
                 if (const unsigned tex = ModelThumbnail(*model)) { g_Thumbs.Rendered[it.Path] = tex; return tex; }
         }
         return 0;
@@ -361,10 +376,14 @@ void EditorLayer::DrawCharacterOutfitEditor(World& world, entt::entity root) {
                 const bool on = g.Options[k] == g.Current;
                 if (ImGui::InvisibleButton("##sw", ImVec2(sw, sw)) && !on) {
                     PushUndo(world, "Change Colourway");
-                    OutfitSystem::SetColourway(world, assets, worn->second, g.Source, g.Options[k]);
+                    OutfitSystem::SubmitColourway(world, assets, root, worn->second, g.Source, g.Options[k]);
                 }
                 const ImVec2 c(p.x + sw * 0.5f, p.y + sw * 0.5f);
-                auto mat = assets.LoadMaterial(ProjectPaths::Resolve(g.Options[k]));
+                // The swatch's material loads in the background; a plain ring until it's in.
+                const std::string matPath = ProjectPaths::Resolve(g.Options[k]);
+                auto load = g_SwatchLoads.find(matPath);
+                if (load == g_SwatchLoads.end()) load = g_SwatchLoads.emplace(matPath, assets.RequestMaterialAsync(matPath)).first;
+                auto mat = AssetLibrary::IsReady(load->second) ? assets.LoadMaterial(matPath) : nullptr;
                 const unsigned tex = mat ? MaterialThumbnail(mat) : 0u;
                 if (tex) dl->AddImageRounded((ImTextureID)(intptr_t)tex, ImVec2(c.x - sw * 0.5f + 2.0f, c.y - sw * 0.5f + 2.0f),
                                              ImVec2(c.x + sw * 0.5f - 2.0f, c.y + sw * 0.5f - 2.0f), ImVec2(0, 1), ImVec2(1, 0),
