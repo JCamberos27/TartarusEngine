@@ -688,14 +688,20 @@ void EditorLayer::DrawEnvironmentSettings(World& world, float w) {
         if (ImGui::RadioButton("Procedural", src == 0)) { src = 0; changed = true; }
         ImGui::SameLine();
         if (ImGui::RadioButton("HDRI", src == 1)) { src = 1; changed = true; }
+        ImGui::SameLine();
+        if (ImGui::RadioButton("Physical", src == 2)) { src = 2; changed = true; }
         if (changed) {
             PushUndo(world, "Change Sky Source");
             world.SkySourceMode = (World::SkySource)src;
         }
-        if (ImGui::IsItemHovered()) EditorUI::SetTooltip("Sky source: procedural gradient or an equirectangular .hdr file.");
+        if (ImGui::IsItemHovered())
+            EditorUI::SetTooltip("Sky source: a procedural gradient, an equirectangular .hdr file, or the physical\n"
+                                 "sky - atmosphere, volumetric clouds, sun, moon and stars on a time-of-day clock.");
     }
 
-    if (world.SkySourceMode == World::SkySource::Hdri) {
+    if (world.SkySourceMode == World::SkySource::Atmosphere) {
+        DrawPhysicalSkySettings(world, w);
+    } else if (world.SkySourceMode == World::SkySource::Hdri) {
         // HDRI path input
         static char hdriPathBuf[1024] = {};
         // Sync buffer when path changes externally (scene load)

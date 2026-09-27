@@ -99,6 +99,8 @@ PFNGLVERTEXARRAYVERTEXBUFFERPROC glVertexArrayVertexBuffer = nullptr;
 PFNGLVERTEXARRAYELEMENTBUFFERPROC glVertexArrayElementBuffer = nullptr;
 PFNGLDISPATCHCOMPUTEPROC glDispatchCompute = nullptr;
 PFNGLMEMORYBARRIERPROC glMemoryBarrier = nullptr;
+PFNGLBINDIMAGETEXTUREPROC glBindImageTexture = nullptr;
+PFNGLUNIFORM2IPROC glUniform2i = nullptr;
 
 // GPU timer queries — Profiler's GPU-side timing (#197).
 PFNGLGENQUERIESPROC glGenQueries = nullptr;
@@ -234,6 +236,8 @@ bool GLLoader_Init() {
     LOAD(PFNGLVERTEXARRAYELEMENTBUFFERPROC, glVertexArrayElementBuffer)
     LOAD(PFNGLDISPATCHCOMPUTEPROC, glDispatchCompute)
     LOAD(PFNGLMEMORYBARRIERPROC, glMemoryBarrier)
+    LOAD(PFNGLBINDIMAGETEXTUREPROC, glBindImageTexture)
+    LOAD(PFNGLUNIFORM2IPROC, glUniform2i)
 
     // GPU timer queries — Profiler's GPU-side timing (#197).
     LOAD(PFNGLGENQUERIESPROC, glGenQueries)

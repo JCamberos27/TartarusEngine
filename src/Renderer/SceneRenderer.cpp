@@ -4,6 +4,7 @@
 #include "World.h"
 #include "Components.h"
 #include "Sky.h"
+#include "SkyAtmosphere.h"
 #include "Shader.h"
 #include "Cubemap.h"
 #include "CascadedShadowMap.h"
@@ -178,6 +179,13 @@ void SceneRenderer::ApplyFrameState(Shader& program, const FrameState& fs) const
     }
     program.SetInt("uIBLEnabled", fs.iblOn ? 1 : 0);
 
+    // Physical sky: aerial perspective (unit 30) and cloud shadows (unit 31). Neutral textures
+    // and both switched off for the other sky modes.
+    if (in.skyAtmosphere && !ctx.Unlit)
+        in.skyAtmosphere->ApplyToProgram(program, ctx.TxHdr, fs.vp);
+    else
+        SkyAtmosphere::ApplyDisabled(program);
+
     // #162 - fog.
     program.SetInt("uFogMode", fs.world && fs.world->FogEnabled ? std::clamp(fs.world->FogMode, 1, 3) : 0);
     if (fs.world && fs.world->FogEnabled) {
@@ -234,8 +242,11 @@ void SceneRenderer::RenderScene(World& world, const RenderFrameContext& ctx,
     LightBuffer& lightBuffer = *in.lightBuffer;
     ClusterGrid& clusterGrid = *in.clusterGrid;
 
-    // PR13: sky draw — HDRI cubemap or procedural gradient.
-    if (world.SkySourceMode == World::SkySource::Hdri && in.hdriCube) {
+    // PR13: sky draw — HDRI cubemap or procedural gradient; or the physical sky, which also
+    // renders this view's aerial perspective and clouds first (compute passes, no FBO change).
+    if (in.skyAtmosphere) {
+        in.skyAtmosphere->RenderView(ctx.TxHdr, ctx.View, ctx.Proj, ctx.ViewPos);
+    } else if (world.SkySourceMode == World::SkySource::Hdri && in.hdriCube) {
         float rotRad = glm::radians(world.SkyRotationDegrees);
         sky.DrawHdri(in.hdriCube->Texture(), rotRad, ctx.View, ctx.Proj);
     } else {
