@@ -20,22 +20,10 @@ uniform int uSteps;
 uniform int uLightSteps;
 uniform float uPixelAngle; // radians per pixel of this (reduced-resolution) target
 
-// Radical inverse of i in the given base, in [0, 1).
-float Halton(int i, int base) {
-    float r = 0.0, f = 1.0 / float(base);
-    for (; i > 0; i /= base) { r += float(i % base) * f; f /= float(base); }
-    return r;
-}
-
 void main() {
     ivec2 px = ivec2(gl_GlobalInvocationID.xy);
     if (any(greaterThanEqual(px, uSize))) return;
-    // Each frame the ray goes through a different point of its pixel (a Halton 2,3 sequence), and
-    // the temporal pass averages them: supersampled, anti-aliased cloud edges instead of the
-    // stair-steps of a reduced-resolution target sampled at fixed centres.
-    int fi = int(uFrame) % 8 + 1;
-    vec2 sub = vec2(Halton(fi, 2), Halton(fi, 3));
-    vec2 ndc = (vec2(px) + sub) / vec2(uSize) * 2.0 - 1.0;
+    vec2 ndc = (vec2(px) + 0.5) / vec2(uSize) * 2.0 - 1.0;
     vec4 nearP = uInvViewProj * vec4(ndc, -1.0, 1.0);
     vec4 farP = uInvViewProj * vec4(ndc, 1.0, 1.0);
     vec3 rd = normalize(farP.xyz / farP.w - nearP.xyz / nearP.w);
