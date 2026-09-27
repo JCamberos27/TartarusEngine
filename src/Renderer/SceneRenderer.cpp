@@ -17,6 +17,7 @@
 #include "HdrTarget.h"
 #include "OpaqueColorCopy.h"
 #include "Ssao.h"
+#include "SkinHideBuffer.h"
 #include "Model.h"
 #include "MaterialAsset.h"
 #include "ShaderVariant.h"
@@ -351,6 +352,7 @@ void SceneRenderer::RenderScene(World& world, const RenderFrameContext& ctx,
         float NearHide = 0.0f; // PlayerBodyTag: metres around the eye not drawn (the player's own body)
         const int* HideBones = nullptr; // PlayerBodyTag::CameraHideBones in the camera's view, else none
         bool NoSsao = false;  // left out of the SSAO depth pre-pass (main.cpp), so it must not sample the map
+        unsigned HideVerts = 0; // OutfitHideTag: the piece's covered vertices (SkinHideBuffer), 0 = none
     };
     static std::vector<DrawItem> drawList;
     static std::vector<DrawItem> transparentList;
@@ -390,6 +392,8 @@ void SceneRenderer::RenderScene(World& world, const RenderFrameContext& ctx,
         // The SSAO pre-pass skips view-model geometry always and the camera's own body (its hidden parts
         // would occlude): read at their pixels, the map holds whatever stands behind them - see-through AO.
         const bool noSsao = cameraBody || world.Registry.all_of<ViewModelTag>(entity);
+        const auto* outfitHide = world.Registry.try_get<OutfitHideTag>(entity);
+        const unsigned hideVerts = outfitHide && outfitHide->Buffer ? outfitHide->Buffer->Id() : 0u;
         glm::mat4 model = world.GetCachedWorldTransform(entity);
 
         // Frustum culling: skip the draw call entirely for anything outside the camera's view.
@@ -454,14 +458,14 @@ void SceneRenderer::RenderScene(World& world, const RenderFrameContext& ctx,
             const DrawItem item{ model, m, &slots, matKey, prog,
                 m->MeshCount(), (int)m->TriangleCount(), (int)m->VertexCount(),
                 MaterialAsset::Queue::Transparent, qi, viewDepth, centre, Model::MeshPass::Transparent,
-                renderable.ReceiveShadows, layerBit, nearHide, hideBones, noSsao };
+                renderable.ReceiveShadows, layerBit, nearHide, hideBones, noSsao, hideVerts };
             (isViewModel ? viewModelTransparentList : transparentList).push_back(item);
         }
         if (anyOpaque) {
             const DrawItem item{ model, m, &slots, matKey, prog,
                 m->MeshCount(), (int)m->TriangleCount(), (int)m->VertexCount(),
                 MaterialAsset::Queue::Opaque, 2000, viewDepth, centre, opaquePass,
-                renderable.ReceiveShadows, layerBit, nearHide, hideBones, noSsao };
+                renderable.ReceiveShadows, layerBit, nearHide, hideBones, noSsao, hideVerts };
             (isViewModel ? viewModelList : drawList).push_back(item);
         }
     }
@@ -495,6 +499,8 @@ void SceneRenderer::RenderScene(World& world, const RenderFrameContext& ctx,
             for (; hideCount < 8 && probeItem->HideBones[hideCount] >= 0; ++hideCount) prog.SetInt(kHideBone[hideCount], probeItem->HideBones[hideCount]);
         prog.SetInt("uHideBoneCount", hideCount);
         prog.SetInt("uSSAOEnabled", activeFs->ssaoOn && !probeItem->NoSsao ? 1 : 0);
+        SkinHideBuffer::Bind(probeItem->HideVerts);
+        prog.SetInt("uHideVerts", probeItem->HideVerts ? 1 : 0);
     };
 
     passAlphaBlend = 0;

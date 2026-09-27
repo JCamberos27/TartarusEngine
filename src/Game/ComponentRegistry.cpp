@@ -659,6 +659,44 @@ void RegisterEngineComponents() {
         Register<FirstPersonBodyComponent>(std::move(m));
     }
 
+    // Character outfits (CHARACTER_OUTFITS.md): the Inspector's outfit editor draws the choices.
+    {
+        ReflectComponent m;
+        m.Name = "Character Outfit"; m.Icon = ICON_FA_PERSON_DRESS; m.Category = "Gameplay";
+        m.Tooltip = "Dresses a modular character from a wardrobe: body, gender, race, hair and clothes.\n"
+                    "Put it on the body's root. The outfit is its children with an Outfit Piece; the\n"
+                    "editor below builds and swaps them. Works with First Person Body on the same object.";
+        m.Fields = {
+            { "Wardrobe", T::String, TARTARUS_REFLECT_FIELD(CharacterOutfitComponent, Wardrobe), 0.0f,
+              "The pack's .wardrobe file: its bodies, races, slots and pairing rules." },
+            { "Gender", T::Enum, TARTARUS_REFLECT_FIELD(CharacterOutfitComponent, Gender), 0.0f, "The body's gender." },
+            { "Race", T::String, TARTARUS_REFLECT_FIELD(CharacterOutfitComponent, Race), 0.0f, "The head and skin." },
+            { "Locks", T::String, TARTARUS_REFLECT_FIELD(CharacterOutfitComponent, Locks), 0.0f,
+              "Slots Randomize leaves alone, comma separated." },
+            { "Auto Hide Skin", T::Bool, TARTARUS_REFLECT_FIELD(CharacterOutfitComponent, AutoHide), 0.0f,
+              "Skin covered by clothing (and a shirt under a jacket) isn't drawn, so it can't poke\n"
+              "through as the body moves. Worked out from the models once per outfit change." },
+        };
+        m.Fields[0].AssetPath = true;
+        m.Fields[1].EnumLabels = "Male\0Female\0"; m.Fields[1].EnumCount = 2;
+        for (int i = 1; i < 4; ++i) m.Fields[i].EditorHidden = true;
+        Register<CharacterOutfitComponent>(std::move(m));
+    }
+    {
+        ReflectComponent m;
+        m.Name = "Outfit Piece"; m.Icon = ICON_FA_SHIRT; m.Category = "Gameplay";
+        m.Tooltip = "One piece of the parent's Character Outfit (a body part or an item). Managed by the\n"
+                    "parent's outfit editor; remove it to take the object out of the outfit.";
+        m.Fields = {
+            { "Slot", T::String, TARTARUS_REFLECT_FIELD(OutfitPieceComponent, Slot), 0.0f, "Where it's worn." },
+            { "Item", T::String, TARTARUS_REFLECT_FIELD(OutfitPieceComponent, Item), 0.0f, "The model it was built from." },
+            { "Flags", T::Int, TARTARUS_REFLECT_FIELD(OutfitPieceComponent, Flags), 0.0f, "Body part / head attached." },
+        };
+        m.Fields[1].AssetPath = true;
+        m.Fields[2].EditorHidden = true;
+        Register<OutfitPieceComponent>(std::move(m));
+    }
+
     // #177 - a basic CPU particle emitter (fire, sparks, smoke, dust). Simulated every frame,
     // in the editor as well as Play, so it can be tuned live; the live particles aren't saved.
     {
