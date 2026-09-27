@@ -1687,7 +1687,7 @@ void TestFirstPersonBodyTuning() {
     FirstPersonBodyComponent body;
     FirstPersonControllerComponent ctrl;
     auto near = [](float a, float b) { return std::abs(a - b) < 1e-5f; };
-    CHECK(near(body.EyeSlack, 0.035f) && near(body.ReachSlack, 0.04f) && near(body.ShrugStart, 0.9f) && near(body.ShrugMax, 0.12f));
+    CHECK(near(body.EyeSlack, 0.035f) && near(body.ReachSlack, 0.04f) && near(body.ShrugStart, 0.98f) && near(body.ShrugMax, 0.12f));
     CHECK(near(body.TurnLagFloor, 90.0f) && near(body.TurnLagMargin, 5.0f) && near(body.TurnEndAngle, 8.0f) && near(body.TurnMinTime, 0.3f) &&
           near(body.TurnTimeout, 4.0f) && near(body.TurnMoveEase, 0.08f));
     CHECK(near(body.StartIdleTime, 0.25f) && near(body.StartMaxMove, 0.6f) && near(body.StopMinRunTime, 0.6f) && near(body.StopMinRunTimeCrouched, 0.7f) &&
@@ -1807,6 +1807,20 @@ void TestBlendTree2D() {
     CHECK(near(FirstPersonBodyLookDown(glm::radians(-25.0f), 25.0f), 0.0f) && near(FirstPersonBodyLookDown(glm::radians(-90.0f), 25.0f), 1.0f));
     CHECK(near(FirstPersonBodyLookDown(glm::radians(-57.5f), 25.0f), std::sqrt(0.5f)));
     CHECK(FirstPersonBodyLookDown(glm::radians(-40.0f), 25.0f) < FirstPersonBodyLookDown(glm::radians(-70.0f), 25.0f));
+    // The chest onto the arms rig's stance: a squared shoulder line turned onto one bladed 20 degrees (left
+    // forward) is a 20 degree yaw; none at weight 0 or for a degenerate line.
+    {
+        const glm::vec3 squared(1.0f, 0.0f, 0.0f), bladed(std::cos(glm::radians(20.0f)), 0.0f, std::sin(glm::radians(20.0f)));
+        const glm::quat q = FirstPersonBodyShoulderLineTurn(squared * 0.38f, bladed * 0.37f, 1.0f);
+        CHECK(glm::length(q * squared - bladed) < 1e-4f);
+        CHECK(std::abs(glm::degrees(2.0f * std::acos(std::clamp(std::abs(q.w), 0.0f, 1.0f))) - 20.0f) < 0.01f);
+        const glm::quat half = FirstPersonBodyShoulderLineTurn(squared, bladed, 0.5f);
+        CHECK(std::abs(glm::degrees(2.0f * std::acos(std::clamp(std::abs(half.w), 0.0f, 1.0f))) - 10.0f) < 0.01f);
+        CHECK(near(FirstPersonBodyShoulderLineTurn(squared, bladed, 0.0f).w, 1.0f));
+        CHECK(near(FirstPersonBodyShoulderLineTurn(glm::vec3(0.0f), bladed, 1.0f).w, 1.0f));
+    }
+    // The spine's share of the pitch: Spine Aim up, Spine Aim Down down.
+    CHECK(near(FirstPersonBodySpineAim(glm::radians(30.0f), 0.6f, 0.9f), 0.6f) && near(FirstPersonBodySpineAim(glm::radians(-30.0f), 0.6f, 0.9f), 0.9f));
 }
 
 // The body's setup check: a controller built from the contract tables passes; one missing piece is named.

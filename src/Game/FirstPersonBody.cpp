@@ -67,6 +67,18 @@ float FirstPersonBodyYaw(const glm::vec3& front, float fallback) {
     return std::atan2(front.x, front.z); // rotating +Z by this about +Y gives (sin, 0, cos)
 }
 
+glm::quat FirstPersonBodyShoulderLineTurn(const glm::vec3& bodyAcross, const glm::vec3& rigAcross, float weight) {
+    const glm::quat none(1.0f, 0.0f, 0.0f, 0.0f);
+    weight = std::clamp(weight, 0.0f, 1.0f);
+    if (weight <= 0.0f || glm::dot(bodyAcross, bodyAcross) < 1e-10f || glm::dot(rigAcross, rigAcross) < 1e-10f) return none;
+    const glm::quat full(glm::normalize(bodyAcross), glm::normalize(rigAcross));
+    return glm::normalize(glm::slerp(none, full, weight));
+}
+
+float FirstPersonBodySpineAim(float pitchRadians, float spineAim, float spineAimDown) {
+    return std::clamp(pitchRadians < 0.0f ? spineAimDown : spineAim, 0.0f, 1.0f);
+}
+
 float FirstPersonBodyWrapAngle(float radians) {
     const float twoPi = 6.28318530718f;
     radians = std::fmod(radians, twoPi);
@@ -175,7 +187,16 @@ bool FirstPersonBody::Start(World& world, Player& player) {
             else if (e == m_Driver) Log::Warn("First Person Body: Hidden Bones names '" + b + "', which the body doesn't have.");
         }
         m->SetHiddenNodes(nodes);
-        reg.emplace_or_replace<PlayerBodyTag>(e).NearHide = std::max(cfg.NearHide, 0.0f);
+        auto& bodyTag = reg.emplace_or_replace<PlayerBodyTag>(e);
+        bodyTag.NearHide = std::max(cfg.NearHide, 0.0f);
+        // The torso's shoulders, out of the camera's view (the arms piece keeps its own).
+        const std::string pieceName = lower(reg.all_of<NameComponent>(e) ? reg.get<NameComponent>(e).Name : std::string());
+        const std::string armsName = lower(cfg.ArmsPiece);
+        if (armsName.empty() || pieceName.find(armsName) == std::string::npos) {
+            int count = 0;
+            for (const std::string& b : names(cfg.CameraHiddenBones))
+                if (const int id = m->BoneId(Bone(b)); id >= 0 && count < 8) bodyTag.CameraHideBones[count++] = id;
+        }
         m_Models.push_back(reg.get<RenderableComponent>(e).ModelRef);
         m_Pieces.push_back(e);
         if (e != m_Driver)
@@ -510,11 +531,47 @@ void FirstPersonBody::LateUpdate(World& world, Camera& camera, float dt, entt::e
         return 0.5f * (l + r);
     };
     const glm::vec3 shouldersAnimated = shouldersNow();
-    if (cfg.SpineAim > 0.0f || cfg.SpineTwist > 0.0f) ApplySpineAim(camera, cfg.SpineAim, m_Twist * cfg.SpineTwist);
+    const float viewPitch = std::asin(std::clamp(camera.Front().y, -1.0f, 1.0f));
+    const float spineAim = FirstPersonBodySpineAim(viewPitch, cfg.SpineAim, cfg.SpineAimDown);
+    if (spineAim > 0.0f || cfg.SpineTwist > 0.0f) ApplySpineAim(camera, spineAim, m_Twist * cfg.SpineTwist);
+    // Armed, the chest takes the arms rig's stance: its shoulder line, measured against the camera. The
+    // rig is authored bladed (the left shoulder ~13 cm ahead of the right, ~20 degrees): squared to the
+    // view, the body's left shoulder sat ~7 cm behind the rig's, and the support hand came off the gun.
+    const float lineMatch = std::clamp(cfg.ShoulderLineMatch, 0.0f, 1.0f) * std::clamp(m_ArmsWeight, 0.0f, 1.0f);
+    bool matched = false;
+    if (armRig && lineMatch > 1e-3f && reg.valid(weaponArms)) {
+        glm::mat4 sl(1.0f), sr(1.0f);
+        if (armRig->NodeTransform(FPBody::kBoneUpperArm[0], sl) && armRig->NodeTransform(FPBody::kBoneUpperArm[1], sr)) {
+            const glm::vec3 across = glm::mat3(world.ComposeWorldTransform(weaponArms)) * (glm::vec3(sl[3]) - glm::vec3(sr[3]));
+            const glm::vec3 inCamera(glm::dot(across, camera.Right()), glm::dot(across, camera.Up()), glm::dot(across, camera.Front()));
+            if (!m_HaveRigShoulderLine) { m_RigShoulderLine = inCamera; m_HaveRigShoulderLine = true; }
+            m_RigShoulderLine += (inCamera - m_RigShoulderLine) * Follow(dt, 0.15f);
+            const glm::vec3 rigWorld = camera.Right() * m_RigShoulderLine.x + camera.Up() * m_RigShoulderLine.y + camera.Front() * m_RigShoulderLine.z;
+            const glm::vec3 rigModel = glm::inverse(YawRotation(m_Yaw)) * rigWorld;
+            // Unarmed the chest squares to the view; easing between, the target is between the two.
+            const glm::vec3 square(std::cos(m_Twist), 0.0f, -std::sin(m_Twist));
+            const glm::vec3 target = glm::mix(square * glm::length(rigModel), rigModel, lineMatch);
+            // Twice: the clavicles the rig lends the arms move the shoulders a little as the chest turns.
+            for (int pass = 0; pass < 2; ++pass) {
+                glm::vec3 l, r;
+                shoulderPair(l, r);
+                const glm::quat turn = FirstPersonBodyShoulderLineTurn(l - r, target, 1.0f);
+                if (2.0f * std::acos(std::clamp(std::abs(turn.w), 0.0f, 1.0f)) > 0.002f) ApplySpineRotation(turn);
+            }
+            matched = true;
+            auto blade = [](const glm::vec3& v) { return glm::degrees(std::atan2(v.z, v.x)); }; // + = left shoulder forward
+            glm::vec3 l, r;
+            shoulderPair(l, r);
+            const glm::vec3 chest = YawRotation(m_Yaw) * (l - r);
+            BodyDebug::Info().RigBlade = blade(m_RigShoulderLine);
+            BodyDebug::Info().ChestBlade = blade(glm::vec3(glm::dot(chest, camera.Right()), 0.0f, glm::dot(chest, camera.Front())));
+        }
+    }
+    if (!matched) m_HaveRigShoulderLine = false;
     // Close the loop on the chest's heading: the clips' own spine yaw (a turn leads with the chest)
     // and the pitch tilt would leave the shoulder line off the view's, and one shoulder then sits
     // further from the gun than the other (the arm stretches). Turn the spine by what is left.
-    if (cfg.SpineTwist > 0.0f) {
+    if (cfg.SpineTwist > 0.0f && !matched) {
         glm::vec3 l, r;
         shoulderPair(l, r);
         const glm::vec3 across = l - r; // model +X (the mannequin's left) when the chest faces forward
@@ -539,12 +596,11 @@ void FirstPersonBody::LateUpdate(World& world, Camera& camera, float dt, entt::e
     const glm::quat yaw = YawRotation(m_Yaw);
     glm::vec3 eyeWorld = m_Feet + yaw * (t.Scale * (m_Eye + tilt));
 
-    // The chest's view: the view's heading, pitched only as far as the chest is (Spine Aim of the view's
-    // pitch). The eye is hung off the shoulders in this frame rather than the view's: turned by the whole
-    // view pitch, the rig's eye-to-shoulders offset swung the eye forward and down into the chest when
-    // looking down (Spine Aim below 1 leaves the chest behind), and the body was seen from inside.
-    const float viewPitch = std::asin(std::clamp(camera.Front().y, -1.0f, 1.0f));
-    const float chestPitch = viewPitch * std::clamp(cfg.SpineAim, 0.0f, 1.0f);
+    // The chest's view: the view's heading, pitched only as far as the chest is (its share of the view's
+    // pitch). Arm Steadiness holds the shoulders in it. (The eye is hung off the shoulders in the view's
+    // own frame - the rig's shoulders pivot with the whole view, so that is where the hands are reached
+    // from; looking down, the chest pitching further, Spine Aim Down, keeps the camera out of it.)
+    const float chestPitch = viewPitch * spineAim;
     const glm::vec3 flat(std::sin(m_ViewYaw), 0.0f, std::cos(m_ViewYaw));
     const glm::vec3 chestFront = flat * std::cos(chestPitch) + glm::vec3(0.0f, std::sin(chestPitch), 0.0f);
     const glm::quat toChest(camera.Front(), chestFront); // the view's frame onto the chest's (about the view's right)
@@ -587,8 +643,8 @@ void FirstPersonBody::LateUpdate(World& world, Camera& camera, float dt, entt::e
             // A little slack: the shoulders sit this much further toward the gun than the rig's, so the
             // support arm is never at full stretch (a straight arm jumps at every small motion).
             const float kReachSlack = cfg.ReachSlack;
-            const glm::vec3 offset = chestRight * m_RigEyeToShoulders.x + chestUp * m_RigEyeToShoulders.y +
-                                     chestFront * (m_RigEyeToShoulders.z + kReachSlack);
+            const glm::vec3 offset = camera.Right() * m_RigEyeToShoulders.x + camera.Up() * m_RigEyeToShoulders.y +
+                                     camera.Front() * (m_RigEyeToShoulders.z + kReachSlack);
             const glm::vec3 fromShoulders = m_Feet + yaw * (t.Scale * (m_Shoulders + toRest)) - offset;
             // Remember where this puts the eye against the head's: unarmed the eye keeps that height, or
             // the camera would jump when the gun is holstered.
@@ -739,6 +795,20 @@ void FirstPersonBody::ApplyFootIK(World& world, const FirstPersonBodyComponent& 
 // the model's X axis, twist about Y), on every piece so they stay one skeleton.
 void FirstPersonBody::ApplySpineAim(const Camera& camera, float amount, float twist) {
     const float pitch = std::asin(std::clamp(camera.Front().y, -1.0f, 1.0f)); // up is positive
+    // Rotating +Z about +X by theta gives (0, -sin, cos): looking up needs a negative angle.
+    // The twist about the model's up turns the chest toward the view (positive = to the left).
+    RotateSpine([&](int n) {
+        return glm::angleAxis(twist / (float)n, glm::vec3(0.0f, 1.0f, 0.0f)) *
+               glm::angleAxis(-pitch * amount / (float)n, glm::vec3(1.0f, 0.0f, 0.0f));
+    });
+}
+
+void FirstPersonBody::ApplySpineRotation(const glm::quat& modelDelta) {
+    const glm::quat none(1.0f, 0.0f, 0.0f, 0.0f);
+    RotateSpine([&](int n) { return glm::normalize(glm::slerp(none, modelDelta, 1.0f / (float)n)); });
+}
+
+void FirstPersonBody::RotateSpine(const std::function<glm::quat(int)>& stepFor) {
     const char* const* kSpine = FPBody::kBoneSpine;
     std::vector<int> parents;
     std::vector<glm::mat4> globals;
@@ -753,10 +823,7 @@ void FirstPersonBody::ApplySpineAim(const Camera& camera, float amount, float tw
         parents.resize(pose.size());
         for (int i = 0; i < (int)pose.size(); ++i) parents[i] = m.NodeParent(i);
         IK::ComputeGlobals(pose, parents, globals);
-        // Rotating +Z about +X by theta gives (0, -sin, cos): looking up needs a negative angle.
-        // The twist about the model's up turns the chest toward the view (positive = to the left).
-        const glm::quat step = glm::angleAxis(twist / (float)bones.size(), glm::vec3(0.0f, 1.0f, 0.0f)) *
-                               glm::angleAxis(-pitch * amount / (float)bones.size(), glm::vec3(1.0f, 0.0f, 0.0f));
+        const glm::quat step = stepFor((int)bones.size());
         // Only the next spine bone's global is read before ApplyLocalPose re-derives the lot, so
         // refresh just the path to it rather than the whole upper body after every bone.
         for (size_t b = 0; b < bones.size(); ++b) {
@@ -856,9 +923,49 @@ void FirstPersonBody::ArmsLateUpdate(World& world, entt::entity weaponArms, floa
         }
     }
 
+    // The shoulders' moves (steadying, shrug) are worked out on one piece - the arms, else the first - and
+    // the same world offset is given to every piece's clavicle, so the arms stay on the torso's shoulders.
+    // Worked out per piece, the arms came off the chest (in any view but the camera's, and in shadows).
+    std::vector<size_t> order;
+    for (size_t k = 0; k < m_Models.size(); ++k) {
+        bool isArms = false;
+        if (!armsName.empty() && reg.valid(m_Pieces[k]) && reg.all_of<NameComponent>(m_Pieces[k])) {
+            std::string name = reg.get<NameComponent>(m_Pieces[k]).Name;
+            for (char& c : name) c = (char)std::tolower((unsigned char)c);
+            isArms = name.find(armsName) != std::string::npos;
+        }
+        if (isArms) order.insert(order.begin(), k);
+        else order.push_back(k);
+    }
+    glm::quat clavTurn[2] = {glm::quat(1.0f, 0.0f, 0.0f, 0.0f), glm::quat(1.0f, 0.0f, 0.0f, 0.0f)}; // world: the source's, given to the rest
+    bool sourceDone = false;
+    // The shoulders move by turning each clavicle about its root (the collarbone's inner end) - never by
+    // sliding it, which stretched the skin between the neck and the shoulder into a hunch. Turned so the
+    // upper arm heads for `want` (model space), by at most `maxAngle`; returns the turn made (model space).
+    const float shoulderMax = glm::radians(std::clamp(cfg.ShoulderMaxAngle, 0.0f, 90.0f));
+    auto turnClavicle = [](IK::Pose& pose, const std::vector<int>& parents, std::vector<glm::mat4>& globals, int clav, int upper,
+                           const glm::vec3& want, float maxAngle) {
+        const glm::quat none(1.0f, 0.0f, 0.0f, 0.0f);
+        const glm::vec3 root = IK::Position(globals[clav]);
+        const glm::vec3 from = IK::Position(globals[upper]) - root, to = want - root;
+        if (maxAngle <= 0.0f || glm::dot(from, from) < 1e-8f || glm::dot(to, to) < 1e-8f) return none;
+        glm::quat q(glm::normalize(from), glm::normalize(to));
+        const float angle = 2.0f * std::acos(std::clamp(std::abs(q.w), 0.0f, 1.0f));
+        if (angle < 1e-5f) return none;
+        if (angle > maxAngle) q = glm::slerp(none, q, maxAngle / angle);
+        IK::OffsetBone(pose, parents, globals, clav, glm::vec3(0.0f), q, root);
+        return q;
+    };
+    auto angleOf = [](const glm::quat& q) { return 2.0f * std::acos(std::clamp(std::abs(q.w), 0.0f, 1.0f)); };
+    // Reach Lean: a hand still out of reach once its collarbone has turned all it may (the gun pitches
+    // with the whole view, the chest only by Spine Aim) - the chest leans toward it, at the top of the
+    // spine, by at most Reach Lean Max. Worked out on the source piece like the shoulders, given to all.
+    glm::quat chestTurn(1.0f, 0.0f, 0.0f, 0.0f); // world
+    const float leanMax = glm::radians(std::clamp(cfg.ReachLeanMax, 0.0f, 60.0f));
+
     std::vector<int> parents;
     std::vector<glm::mat4> globals;
-    for (size_t k = 0; k < m_Models.size(); ++k) {
+    for (size_t k : order) {
         Model& m = *m_Models[k];
         IK::Pose pose = m.AppliedLocalPose();
         if (pose.empty() || (int)pose.size() != m.NodeCount() || !reg.valid(m_Pieces[k])) continue;
@@ -871,17 +978,46 @@ void FirstPersonBody::ArmsLateUpdate(World& world, entt::entity weaponArms, floa
 
         const glm::mat4 pieceWorld = world.ComposeWorldTransform(m_Pieces[k]);
         const glm::mat4 toModel = glm::inverse(pieceWorld);
-        // Only the arms piece has its shoulders moved (held steady, shrugged): it is drawn in the view-model
-        // pass, where the seam with the chest never shows. Moved on the torso too, its shoulder skin was
-        // pulled into the camera (a landing: the chest drops, the shoulders stay).
-        bool isArms = false;
-        if (!armsName.empty() && reg.all_of<NameComponent>(m_Pieces[k])) {
-            std::string name = reg.get<NameComponent>(m_Pieces[k]).Name;
-            for (char& c : name) c = (char)std::tolower((unsigned char)c);
-            isArms = name.find(armsName) != std::string::npos;
-        }
+        // The first piece in `order` works the shoulder moves out; the rest copy them. (What of the torso's
+        // shoulder that comes near the eye is left undrawn - Near Hide.)
+        const bool isSource = !sourceDone;
+        sourceDone = true;
         const glm::quat toModelRot = IK::Rotation(toModel);
         IK::ComputeGlobals(pose, parents, globals);
+        int chest = -1; // the top spine bone the piece has
+        for (int b = 4; b >= 0 && chest < 0; --b) chest = m.NodeIndex(Bone(FPBody::kBoneSpine[b]));
+        if (chest >= 0 && isSource && leanMax > 0.0f) {
+            // The side furthest out of reach, counting what its collarbone can still give.
+            glm::vec3 from(0.0f), to(0.0f);
+            float worst = 0.0f;
+            for (int s = 0; s < 2; ++s) {
+                if (!haveHand[s]) continue;
+                const int upper = m.NodeIndex(Bone(kSides[s].Upper)), lower = m.NodeIndex(Bone(kSides[s].Lower)),
+                          hand = m.NodeIndex(Bone(kSides[s].Hand)), clav = m.NodeIndex(Bone(kSides[s].Clavicle));
+                if (upper < 0 || lower < 0 || hand < 0) continue;
+                const glm::vec3 a = IK::Position(globals[upper]);
+                const float armLen = glm::length(IK::Position(globals[lower]) - a) + glm::length(IK::Position(globals[hand]) - IK::Position(globals[lower]));
+                const float clavReach = clav >= 0 ? glm::length(a - IK::Position(globals[clav])) * shoulderMax : 0.0f;
+                const glm::vec3 target = glm::vec3(toModel * glm::vec4(handPos[s], 1.0f));
+                const float dist = glm::length(target - a);
+                const float excess = dist - armLen * 0.995f - clavReach;
+                if (excess > worst && dist > 1e-5f) { worst = excess; from = a; to = a + (target - a) / dist * excess; }
+            }
+            if (worst > 1e-4f) {
+                const glm::vec3 root = IK::Position(globals[chest]);
+                if (glm::dot(from - root, from - root) > 1e-8f && glm::dot(to - root, to - root) > 1e-8f) {
+                    glm::quat q(glm::normalize(from - root), glm::normalize(to - root));
+                    if (const float angle = angleOf(q); angle > leanMax) q = glm::slerp(glm::quat(1.0f, 0.0f, 0.0f, 0.0f), q, leanMax / angle);
+                    q = glm::slerp(glm::quat(1.0f, 0.0f, 0.0f, 0.0f), q, m_ArmsWeight);
+                    IK::OffsetBone(pose, parents, globals, chest, glm::vec3(0.0f), q, root);
+                    chestTurn = glm::normalize(glm::inverse(toModelRot) * q * toModelRot);
+                    BodyDebug::Info().ReachLean = glm::degrees(angleOf(q));
+                }
+            }
+        } else if (chest >= 0 && !isSource && angleOf(chestTurn) > 1e-5f) {
+            IK::OffsetBone(pose, parents, globals, chest, glm::vec3(0.0f), glm::normalize(toModelRot * chestTurn * glm::inverse(toModelRot)),
+                           IK::Position(globals[chest]));
+        }
         for (int s = 0; s < 2; ++s) {
             if (!haveHand[s]) continue;
             const int upper = m.NodeIndex(Bone(kSides[s].Upper)), lower = m.NodeIndex(Bone(kSides[s].Lower)),
@@ -890,10 +1026,23 @@ void FirstPersonBody::ArmsLateUpdate(World& world, entt::entity weaponArms, floa
             const glm::vec3 target = glm::vec3(toModel * glm::vec4(handPos[s], 1.0f));
             const glm::quat rot = glm::normalize(toModelRot * handRot[s]);
             const int clav = m.NodeIndex(Bone(kSides[s].Clavicle));
+            if (isSource) {
+                // Before any shoulder move: how far the hand is, of the arm's length, and how far the body's
+                // shoulder is from the rig's.
+                const glm::vec3 a = IK::Position(globals[upper]);
+                const float armLen = glm::length(IK::Position(globals[lower]) - a) + glm::length(IK::Position(globals[hand]) - IK::Position(globals[lower]));
+                if (armLen > 1e-5f) BodyDebug::Info().Reach[s] = glm::length(target - a) / armLen;
+                if (haveRigElbow[s]) BodyDebug::Info().ShoulderGap[s] = glm::length(glm::vec3(pieceWorld * glm::vec4(a, 1.0f)) - rigShoulder[s]);
+            }
+            if (!isSource && clav >= 0 && angleOf(clavTurn[s]) > 1e-5f)
+                IK::OffsetBone(pose, parents, globals, clav, glm::vec3(0.0f), glm::normalize(toModelRot * clavTurn[s] * glm::inverse(toModelRot)),
+                               IK::Position(globals[clav]));
+            const glm::quat pieceRot = glm::inverse(toModelRot);
+            float turned = 0.0f; // radians the source's clavicle has turned so far this frame
             // Steady: the shoulder back to its slow average in the anchor frame, so the gait's sway doesn't
             // reach the arm. Bigger departures (a crouch, a stop clip) are followed, trailing by at most
             // Arm Steady Max.
-            if (steady > 0.0f && clav >= 0 && isArms) {
+            if (steady > 0.0f && clav >= 0 && isSource) {
                 const glm::vec3 shoulderWorld = glm::vec3(pieceWorld * glm::vec4(IK::Position(globals[upper]), 1.0f));
                 const glm::vec3 inFrame = glm::vec3(anchorInverse * glm::vec4(shoulderWorld, 1.0f));
                 if (!m_HaveShoulderAnchor[s]) { m_ShoulderAnchor[s] = inFrame; m_HaveShoulderAnchor[s] = true; }
@@ -905,23 +1054,26 @@ void FirstPersonBody::ArmsLateUpdate(World& world, entt::entity weaponArms, floa
                     shift *= len > 1e-6f ? maxShift / len : 0.0f;
                     m_ShoulderAnchor[s] = glm::vec3(anchorInverse * glm::vec4(shoulderWorld + shift, 1.0f));
                 }
-                const glm::vec3 delta = glm::mat3(toModel) * shift * steady;
-                if (glm::dot(delta, delta) > 1e-12f)
-                    IK::OffsetBone(pose, parents, globals, clav, delta, glm::quat(1.0f, 0.0f, 0.0f, 0.0f), glm::vec3(0.0f));
+                const glm::vec3 want = IK::Position(globals[upper]) + glm::mat3(toModel) * shift * steady;
+                const glm::quat q = turnClavicle(pose, parents, globals, clav, upper, want, shoulderMax);
+                clavTurn[s] = glm::normalize(pieceRot * q * toModelRot) * clavTurn[s];
+                turned += angleOf(q);
                 BodyDebug::Info().ArmSteadyShift[s] = glm::length(shift);
             }
             // A hand beyond the arm's reach: the shoulder shrugs toward it instead of the arm
-            // stretching (the two skeletons' shoulders can sit a little apart). Like the steadying, only
-            // on the arms piece: shrugged on the torso, its shoulder slid forward past the camera and was
-            // cut by the near plane (turning left, looking down, landing - whenever the reach grows).
-            if (clav >= 0 && isArms) {
+            // stretching (the two skeletons' shoulders can sit a little apart).
+            if (clav >= 0 && isSource) {
                 const glm::vec3 a = IK::Position(globals[upper]);
                 const float armLen = glm::length(IK::Position(globals[lower]) - a) + glm::length(IK::Position(globals[hand]) - IK::Position(globals[lower]));
                 const glm::vec3 toTarget = target - a;
                 const float dist = glm::length(toTarget);
                 const float excess = std::min(dist - armLen * cfg.ShrugStart, cfg.ShrugMax);
-                if (excess > 1e-4f && dist > 1e-5f)
-                    IK::OffsetBone(pose, parents, globals, clav, toTarget / dist * excess * m_ArmsWeight, glm::quat(1.0f, 0.0f, 0.0f, 0.0f), glm::vec3(0.0f));
+                if (excess > 1e-4f && dist > 1e-5f) {
+                    const glm::vec3 want = a + toTarget / dist * excess * m_ArmsWeight;
+                    const glm::quat q = turnClavicle(pose, parents, globals, clav, upper, want, shoulderMax - turned);
+                    clavTurn[s] = glm::normalize(pieceRot * q * toModelRot) * clavTurn[s];
+                    BodyDebug::Info().ShrugShift[s] = glm::length(glm::mat3(pieceWorld) * (IK::Position(globals[upper]) - a));
+                }
             }
             IK::SolveTwoBone(pose, parents, globals, upper, lower, hand, target, &rot, m_ArmsWeight);
             // Steady: the elbow into the rig's bend plane. The solve keeps the plane the copied arm shape
