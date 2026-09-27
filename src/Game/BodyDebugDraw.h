@@ -30,6 +30,11 @@ struct Snapshot {
     float StepOffset = 0.0f;      // m the body is off the capsule's height (stair easing)
     float ArmsWeight = 0.0f;      // 0..1: how much the body's arms follow the weapon rig
     float EyeSlack = 0.0f;        // m the eye is off the shoulders' motion (bounded by Eye Slack)
+    float Reach[2] = {0, 0};          // each hand's distance from its shoulder, of the arm's length (before any shoulder move)
+    float ShoulderGap[2] = {0, 0};    // m between each body shoulder and the arms rig's
+    float RigBlade = 0.0f, ChestBlade = 0.0f; // degrees the rig's / the chest's shoulder line is turned off the view (+ = left forward)
+    float ReachLean = 0.0f;           // degrees the chest leans toward an out-of-reach hand (Reach Lean Max)
+    float ShrugShift[2] = {0, 0};     // m each shoulder shrugs toward an out-of-reach hand (Shrug Start / Max)
     float ArmSteadyShift[2] = {0, 0}; // m each shoulder is held off the gait's sway (Arm Steadiness, bounded by Arm Steady Max)
     std::string LastTrigger;      // the last start / stop / crouch / jump trigger the body fired
     float LastTriggerAgo = 0.0f;  // seconds since
