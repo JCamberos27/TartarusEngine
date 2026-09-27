@@ -1,0 +1,10 @@
+{
+  "folder": "assets/quantum/Models/Clothing/Female/Outerwear",
+  "guid": "722eda974b49df5b",
+  "materialRemap": {
+    "F_Coat1:M_Coat": "assets/quantum/Materials/Clothing/Outerwear/Coat/Fabric/M_Coat_Fabric_Black.mat",
+    "M_F_Tshirt_Tucked1": "assets/quantum/Materials/Clothing/Tops/F_Tshirt_Tucked/M_F_Tshirt_Tucked_Black.mat"
+  },
+  "metaVersion": 1,
+  "type": "model"
+}

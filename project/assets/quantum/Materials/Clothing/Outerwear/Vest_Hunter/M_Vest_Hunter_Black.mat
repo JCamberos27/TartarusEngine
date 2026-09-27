@@ -1,0 +1,37 @@
+{
+  "factorsScaleMaps": true,
+  "matVersion": 2,
+  "name": "M_Vest_Hunter_Black",
+  "properties": {
+    "_AOMap": "assets/quantum/Textures/Clothing/Outerwear/Vest_Hunter/T_Vest_Hunter_Occlusion.png",
+    "_AlbedoMap": "assets/quantum/Textures/Clothing/Outerwear/Vest_Hunter/T_Vest_Hunter_Black_BaseColor.png",
+    "_BaseColor": [
+      1.0,
+      1.0,
+      1.0
+    ],
+    "_DoubleSided": false,
+    "_EmissiveColor": [
+      0.0,
+      0.0,
+      0.0
+    ],
+    "_EmissiveMap": "",
+    "_EmissiveStrength": 1.0,
+    "_Metallic": 0.0,
+    "_MetallicMap": "",
+    "_MetallicRoughnessMap": "",
+    "_NormalMap": "assets/quantum/Textures/Clothing/Outerwear/Vest_Hunter/T_Vest_Hunter_Unity_Normal.png",
+    "_Roughness": 1.0,
+    "_RoughnessMap": "assets/quantum/Textures/Clothing/Outerwear/Vest_Hunter/T_Vest_Hunter_Roughness.png",
+    "_Triplanar": false,
+    "_TriplanarScale": 1.0
+  },
+  "shader": "engine://Standard.shader",
+  "textureGuids": {
+    "_AOMap": "5896f28b3c4667fb",
+    "_AlbedoMap": "e866b7d7787d2bd9",
+    "_NormalMap": "59a37c01a1bdf366",
+    "_RoughnessMap": "92e27083d84d9cd3"
+  }
+}

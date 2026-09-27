@@ -1,0 +1,37 @@
+{
+  "factorsScaleMaps": true,
+  "matVersion": 2,
+  "name": "M_Hoodie_Hood_Up_Burgundy_Print",
+  "properties": {
+    "_AOMap": "assets/quantum/Textures/Clothing/Tops/Hoodie_Hood_Up/T_Hoodie_Hood_Up_Burgundy_Print_Occlusion.png",
+    "_AlbedoMap": "assets/quantum/Textures/Clothing/Tops/Hoodie_Hood_Up/T_Hoodie_Hood_Up_Burgundy_Print_BaseColor.png",
+    "_BaseColor": [
+      1.0,
+      1.0,
+      1.0
+    ],
+    "_DoubleSided": false,
+    "_EmissiveColor": [
+      0.0,
+      0.0,
+      0.0
+    ],
+    "_EmissiveMap": "",
+    "_EmissiveStrength": 1.0,
+    "_Metallic": 0.0,
+    "_MetallicMap": "",
+    "_MetallicRoughnessMap": "",
+    "_NormalMap": "assets/quantum/Textures/Clothing/Tops/Hoodie_Hood_Up/T_Hoodie_Hood_Up_Burgundy_Print_Unity_Normal.png",
+    "_Roughness": 1.0,
+    "_RoughnessMap": "assets/quantum/Textures/Clothing/Tops/Hoodie_Hood_Up/T_Hoodie_Hood_Up_Burgundy_Print_Roughness.png",
+    "_Triplanar": false,
+    "_TriplanarScale": 1.0
+  },
+  "shader": "engine://Standard.shader",
+  "textureGuids": {
+    "_AOMap": "5648e32951ea7052",
+    "_AlbedoMap": "bcc2ce817597a771",
+    "_NormalMap": "cb2d9a963e7c8ad8",
+    "_RoughnessMap": "44f41799b55a596d"
+  }
+}

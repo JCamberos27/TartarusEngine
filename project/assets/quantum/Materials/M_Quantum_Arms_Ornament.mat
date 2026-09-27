@@ -3,8 +3,8 @@
   "matVersion": 2,
   "name": "M_Quantum_Arms_Ornament",
   "properties": {
-    "_AOMap": "assets/quantum/Textures/Arms/T_Quantum_Basemesh_Arms_AO.1003_Occlusion.png",
-    "_AlbedoMap": "assets/quantum/Textures/Arms/T_Quantum_Basemesh_Arms_Ornament_BaseColor.1003.png",
+    "_AOMap": "assets/quantum/Textures/European/Arms/T_Quantum_Basemesh_Arms_Occlusion.1003.png",
+    "_AlbedoMap": "assets/quantum/Textures/European/Arms/T_Quantum_Basemesh_Arms_Ornament_BaseColor.1003.png",
     "_BaseColor": [
       1.0,
       1.0,
@@ -21,9 +21,9 @@
     "_Metallic": 0.0,
     "_MetallicMap": "",
     "_MetallicRoughnessMap": "",
-    "_NormalMap": "assets/quantum/Textures/Arms/T_Quantum_Basemesh_Arms_Unity_Normal.1003.png",
+    "_NormalMap": "assets/quantum/Textures/European/Arms/T_Quantum_Basemesh_Arms_Unity_Normal.1003.png",
     "_Roughness": 1.0,
-    "_RoughnessMap": "assets/quantum/Textures/Arms/T_Quantum_Basemesh_Arms_Roughness.1003.png",
+    "_RoughnessMap": "assets/quantum/Textures/European/Arms/T_Quantum_Basemesh_Arms_Roughness.1003.png",
     "_Triplanar": false,
     "_TriplanarScale": 1.0
   },

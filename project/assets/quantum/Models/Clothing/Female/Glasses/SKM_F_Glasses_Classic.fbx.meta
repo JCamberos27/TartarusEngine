@@ -1,0 +1,10 @@
+{
+  "folder": "assets/quantum/Models/Clothing/Female/Glasses",
+  "guid": "d0dc6ed971c44511",
+  "materialRemap": {
+    "M_Classic_Glasses": "assets/quantum/Materials/Clothing/Glasses/Glasses_Classic/M_Classic_Glasses.mat",
+    "M_Classic_Glasses_Glass": "assets/quantum/Materials/Clothing/Glasses/Glasses_Classic/M_Classic_Glasses.mat"
+  },
+  "metaVersion": 1,
+  "type": "model"
+}

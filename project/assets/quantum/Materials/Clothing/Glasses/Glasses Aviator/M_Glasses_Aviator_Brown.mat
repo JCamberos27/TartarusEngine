@@ -1,0 +1,37 @@
+{
+  "factorsScaleMaps": true,
+  "matVersion": 2,
+  "name": "M_Glasses_Aviator_Brown",
+  "properties": {
+    "_AOMap": "assets/quantum/Textures/Clothing/Glasses/Glasses Aviator/T_Glasses_Aviator_Gold_Occlusion.png",
+    "_AlbedoMap": "assets/quantum/Textures/Clothing/Glasses/Glasses Aviator/T_Glasses_Aviator_Brown_BaseColor.png",
+    "_BaseColor": [
+      1.0,
+      1.0,
+      1.0
+    ],
+    "_DoubleSided": false,
+    "_EmissiveColor": [
+      0.0,
+      0.0,
+      0.0
+    ],
+    "_EmissiveMap": "",
+    "_EmissiveStrength": 1.0,
+    "_Metallic": 0.0,
+    "_MetallicMap": "",
+    "_MetallicRoughnessMap": "",
+    "_NormalMap": "assets/quantum/Textures/Clothing/Glasses/Glasses Aviator/T_Glasses_Aviator_Gold_Unity_Normal.png",
+    "_Roughness": 1.0,
+    "_RoughnessMap": "assets/quantum/Textures/Clothing/Glasses/Glasses Aviator/T_Glasses_Aviator_Gold_Roughness.png",
+    "_Triplanar": false,
+    "_TriplanarScale": 1.0
+  },
+  "shader": "engine://Standard.shader",
+  "textureGuids": {
+    "_AOMap": "ed4eecf9d5033f2c",
+    "_AlbedoMap": "447382421a76f57d",
+    "_NormalMap": "d95925de22104abf",
+    "_RoughnessMap": "c4091c06d0d19acd"
+  }
+}
