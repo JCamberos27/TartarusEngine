@@ -1,0 +1,16 @@
+{
+  "folder": "assets/Characters/Quantum/Textures/Clothing/Shoes/Sneakers/Sneakers_Leather",
+  "guid": "9b18ad03ad5ec47b",
+  "importer": {
+    "anisoLevel": 16,
+    "compression": 2,
+    "filterMode": 2,
+    "generateMipmaps": true,
+    "isSRGB": false,
+    "maxTextureSize": 4096,
+    "textureType": 0,
+    "wrapMode": 0
+  },
+  "metaVersion": 1,
+  "type": "texture"
+}

@@ -1,0 +1,37 @@
+{
+  "factorsScaleMaps": true,
+  "matVersion": 2,
+  "name": "M_F_Pants_Jeans_Torn_Blue_Dark",
+  "properties": {
+    "_AOMap": "assets/Characters/Quantum/Textures/Clothing/Pants/F_Pants_Jeans/T_F_Pants_Jeans_Torn_Occlusion.png",
+    "_AlbedoMap": "assets/Characters/Quantum/Textures/Clothing/Pants/F_Pants_Jeans/T_F_Pants_Jeans_Torn_Blue_Dark_BaseColor.png",
+    "_BaseColor": [
+      1.0,
+      1.0,
+      1.0
+    ],
+    "_DoubleSided": false,
+    "_EmissiveColor": [
+      0.0,
+      0.0,
+      0.0
+    ],
+    "_EmissiveMap": "",
+    "_EmissiveStrength": 1.0,
+    "_Metallic": 0.0,
+    "_MetallicMap": "",
+    "_MetallicRoughnessMap": "",
+    "_NormalMap": "assets/Characters/Quantum/Textures/Clothing/Pants/F_Pants_Jeans/T_F_Pants_Jeans_Torn_Unity_Normal.png",
+    "_Roughness": 1.0,
+    "_RoughnessMap": "assets/Characters/Quantum/Textures/Clothing/Pants/F_Pants_Jeans/T_F_Pants_Jeans_Torn_Roughness.png",
+    "_Triplanar": false,
+    "_TriplanarScale": 1.0
+  },
+  "shader": "engine://Standard.shader",
+  "textureGuids": {
+    "_AOMap": "e8504680a237a3ad",
+    "_AlbedoMap": "69e3e7b16d4b38ad",
+    "_NormalMap": "6ba5b8681c492cf6",
+    "_RoughnessMap": "1d6d99e6656824e8"
+  }
+}

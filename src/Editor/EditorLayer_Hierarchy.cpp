@@ -1284,39 +1284,12 @@ void EditorLayer::DrawHierarchyRowBody(World& world, AssetLibrary& assets, entt:
                 mdl ? (const char*)mdl->Data : nullptr,
                 pfb ? (const char*)pfb->Data : nullptr, entity);
         }
-        // Dropping a material asset assigns it to slot 0 of the renderer.
-        if (const ImGuiPayload* payload = ImGui::AcceptDragDropPayload("ASSET_MATERIAL_PATH")) {
-            std::string matPath((const char*)payload->Data);
-            if (auto* renderable = world.Registry.try_get<RenderableComponent>(entity)) {
-                PushUndo(world, "Set Material Slot");
-                auto ma = assets.LoadMaterial(matPath);
-                if (renderable->Materials.empty()) renderable->Materials.push_back(ma);
-                else renderable->Materials[0] = ma;
-            }
-        }
-        // Existing behavior: dropping a texture from the Asset Browser assigns it as Albedo.
-        if (const ImGuiPayload* payload = ImGui::AcceptDragDropPayload("ASSET_TEXTURE_PATH")) {
-            std::string texPath((const char*)payload->Data);
-            if (auto* renderable = world.Registry.try_get<RenderableComponent>(entity)) {
-                PushUndo(world, "Set Albedo Map");
-                Model* model = renderable->ModelRef.get();
-                std::shared_ptr<MaterialAsset> slot0;
-                if (!renderable->Materials.empty()) slot0 = renderable->Materials[0];
-                if (!slot0) {
-                    slot0 = std::make_shared<MaterialAsset>();
-                    if (model->MeshCount() > 0) {
-                        const Material& imported = model->MeshMaterial(0);
-                        slot0->Mat.NormalMap    = imported.NormalMap;
-                        slot0->Mat.MetallicMap  = imported.MetallicMap;
-                        slot0->Mat.RoughnessMap = imported.RoughnessMap;
-                        slot0->Mat.AOMap        = imported.AOMap;
-                        slot0->Mat.EmissiveMap  = imported.EmissiveMap;
-                    }
-                    if (renderable->Materials.empty()) renderable->Materials.push_back(slot0);
-                    else renderable->Materials[0] = slot0;
-                }
-                slot0->Mat.AlbedoMap = assets.LoadTexture(texPath);
-            }
+        // A material (slot 0), a texture (slot 0's albedo), a sound, an Animator Controller, a
+        // weapon definition or a script onto the row's object - the viewport's drop, minus the
+        // slot under the cursor (EditorLayer_AssetDrop.cpp).
+        for (const char* type : {"ASSET_MATERIAL_PATH", "ASSET_TEXTURE_PATH", "ASSET_SOUND_PATH", "ASSET_FILE_PATH"}) {
+            if (const ImGuiPayload* payload = ImGui::AcceptDragDropPayload(type))
+                ApplyAssetDrop(world, assets, entity, type, (const char*)payload->Data, 0, glm::vec3(0.0f));
         }
         ImGui::EndDragDropTarget();
     }

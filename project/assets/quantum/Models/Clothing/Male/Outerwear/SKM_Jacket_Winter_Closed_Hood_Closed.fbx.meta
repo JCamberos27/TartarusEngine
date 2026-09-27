@@ -1,9 +1,0 @@
-{
-  "folder": "assets/quantum/Models/Clothing/Male/Outerwear",
-  "guid": "b361906c7abb7751",
-  "materialRemap": {
-    "M_Jacket_Winter": "assets/quantum/Materials/Clothing/Outerwear/Jacket_Winter/M_Jacket_Winter_Black.mat"
-  },
-  "metaVersion": 1,
-  "type": "model"
-}

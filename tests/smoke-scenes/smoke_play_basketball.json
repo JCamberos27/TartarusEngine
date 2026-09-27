@@ -81,7 +81,7 @@
  ],
  "models": [
   {
-   "path": "models/basketball/rim.obj",
+   "path": "assets/Props/Basketball/Models/rim.obj",
    "name": "Rim",
    "id": 3,
    "parentId": -1,
@@ -103,7 +103,7 @@
    ],
    "materials": [
     {
-     "path": "materials/sandbox/rim.mat"
+     "path": "assets/Props/Basketball/Materials/rim.mat"
     }
    ],
    "collider": {
@@ -114,7 +114,7 @@
    }
   },
   {
-   "path": "models/basketball/basketball.obj",
+   "path": "assets/Props/Basketball/Models/basketball.obj",
    "name": "Basketball",
    "id": 6,
    "parentId": -1,
@@ -136,7 +136,7 @@
    ],
    "materials": [
     {
-     "path": "materials/sandbox/basketball.mat"
+     "path": "assets/Props/Basketball/Materials/basketball.mat"
     }
    ],
    "tag": "Basketball",
@@ -167,7 +167,7 @@
     "Interpolate": "Interpolate"
    },
    "Impact Sound": {
-    "Clip": "sounds/basketball_bounce.wav",
+    "Clip": "assets/Audio/basketball_bounce.wav",
     "Volume": 0.9,
     "Min Speed": 0.5,
     "Max Speed": 7.0,
@@ -212,7 +212,7 @@
     "Three Points": 3,
     "Three Point Distance": 6.9,
     "Require Downward": true,
-    "Score Sound": "sounds/basket_score.wav",
+    "Score Sound": "assets/Audio/basket_score.wav",
     "Flash Intensity": 40.0
    }
   },

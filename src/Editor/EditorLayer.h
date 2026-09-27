@@ -15,11 +15,14 @@
 #include <memory>
 #include <functional>
 #include <algorithm>
+#include <chrono>
+#include <future>
 #include "Shortcuts.h" // Shortcuts::Chord - Preferences > Shortcuts capture state below
 #include "Texture.h" // TextureImportSettings - stored by value in the Import Settings panel state
 #include "Model.h"   // ModelImportSettings - same
 #include "RenderStats.h" // ::RenderStats, re-exported below as EditorLayer::RenderStats (#359)
 #include "ImportQueueManager.h"
+#include "AssetThumbnailLoader.h"
 #include "ChannelPreviewRenderer.h"
 #include "ModelPreviewRenderer.h"
 #include "MaterialPreviewRenderer.h"
@@ -45,15 +48,19 @@ enum class GizmoOp { Translate, Rotate, Scale, Rect, Universal }; // Universal (
 // DrawAssetCell(index) callback.
 struct MaterialAsset; // defined in MaterialAsset.h, included by AssetLibrary.h
 struct RegisteredComponent; // ComponentRegistry.h
+enum class ReflectAssetKind; // ComponentReflection.h
 struct ReflectField;        // ComponentReflection.h
 
 struct AssetGridCell {
-    enum class Kind { Folder, Model, Texture, Material, Sound, Scene, Prefab, Screenshot, Shader, Animator, Weapon } kind;
+    enum class Kind { Folder, Model, Texture, Material, Sound, Scene, Prefab, Screenshot, Shader, Animator, Weapon, Hdri, Script } kind;
     std::string key;
     std::string display;
     std::shared_ptr<Model> model;
     std::shared_ptr<Texture> texture;
     std::shared_ptr<MaterialAsset> material;
+    // A file on disk nothing has loaded yet (EditorLayer::m_ProjectAssetIndex): model / texture /
+    // material are null until the user acts on it (EditorLayer::LoadUnloadedAsset).
+    bool unloaded = false;
 };
 
 // In-game editor overlay (Dear ImGui + ImGuizmo): import assets, place/inspect
@@ -1603,6 +1610,43 @@ private:
     void InvalidateShotsListing() { m_ShotsListingCache.valid = false; }
     void InvalidateShadersListing() { m_ShadersListingCache.valid = false; }
     void InvalidateAnimationListing() { m_AnimationListingCache.valid = false; }
+    // Every model / texture / material / sound / prefab file under the project, so the grid lists
+    // the ones nothing has loaded yet (like Unity's Project window) - without loading them - plus
+    // the files that are never library entries (Animator Controllers, weapon definitions, HDRIs,
+    // scripts), which the grid lists straight from here, in their folder on disk. Rescanned
+    // on a worker thread (~0.5 s for a few thousand files) only when invalidated: asset files or
+    // folders changing on disk (SyncProjectChanges), Refresh, a rename. The last scan stays listed
+    // meanwhile.
+    struct ProjectAssetFile {
+        std::string Path;   // the grid key (lexically_normal)
+        std::string Key;    // AssetDatabase::PathKey(Path), matched against what the library lists
+        std::string Name;
+        std::string Folder; // Asset Browser folder: its .meta's chosen folder, else its folder on disk
+        bool MetaFolder = false; // Folder came from the .meta (still to register, worker side)
+        AssetGridCell::Kind Kind = AssetGridCell::Kind::Model;
+    };
+    struct {
+        std::vector<ProjectAssetFile> files;
+        bool valid = false; // false = scan again (when the one in flight, if any, finishes)
+        std::future<std::vector<ProjectAssetFile>> scan;
+        std::chrono::steady_clock::time_point scanStarted;
+    } m_ProjectAssetIndex;
+    // PathKeys of everything the library lists, rebuilt when its list sizes change.
+    std::unordered_set<std::string> m_ListedAssetKeys;
+    size_t m_ListedAssetSignature = (size_t)-1;
+    AssetThumbnailLoader m_AssetThumbs; // tiles of unloaded assets
+    void RefreshProjectAssetIndexIfNeeded(AssetLibrary& assets);
+    // What an Inspector asset field of `kind` offers: every such file in the project (loaded or
+    // not) plus anything loaded from outside it, sorted by file name.
+    std::vector<std::string> AssetRefChoices(AssetLibrary& assets, ReflectAssetKind kind);
+    // Project-relative folder a newly created asset goes in: the Asset Browser folder being viewed
+    // when it's a real folder under the project (like Unity), else `fallback`.
+    std::string NewAssetFolder(const std::string& fallback) const;
+    static std::vector<ProjectAssetFile> ScanProjectAssetFiles(const std::string& root); // worker thread
+    void InvalidateProjectAssetIndex() { m_ProjectAssetIndex.valid = false; }
+    // An unloaded tile the user is acting on (click, drag, right-click): load it into the library
+    // so the rest of the cell code sees a normal asset. False if it failed to load.
+    bool LoadUnloadedAsset(AssetLibrary& assets, AssetGridCell& cell);
     bool m_OpenWeaponWizard = false; // the Asset Browser's "Create First-Person Weapon" was chosen
 public:
     // #236 G — Refresh / Reimport All (Ctrl+R): bust every Asset Browser cache so the next frame
@@ -2067,6 +2111,29 @@ private:
     // instance, active only while a drag from the Asset Browser is in progress so it never
     // otherwise sits on top of the viewport intercepting camera input.
     void DrawViewportDropTarget(World& world, AssetLibrary& assets, Camera& editorCamera);
+    // The object (and its material slot) under the mouse in the viewport; null if none.
+    entt::entity ObjectUnderMouse(World& world, Camera& editorCamera, int& outSlot) const;
+
+    // Dropping an Asset Browser item onto an object (EditorLayer_AssetDrop.cpp): a material onto
+    // the slot under the cursor, a texture as its albedo, a sound as its Audio Source (or a new
+    // one at `dropPosition` when `target` is null), an Animator Controller / weapon definition /
+    // script onto its component, an .hdr as the sky. `payloadType` is the ImGui drag type.
+    // AssetDropHint is what it would do (""= nothing), for the hover text.
+    std::string AssetDropHint(World& world, entt::entity target, const std::string& payloadType,
+                              const std::string& path, int slot) const;
+    bool ApplyAssetDrop(World& world, AssetLibrary& assets, entt::entity target, const std::string& payloadType,
+                        const std::string& path, int slot, const glm::vec3& dropPosition);
+    // Live preview while a material is dragged over an object: the hovered slot shows it until the
+    // cursor moves off (Restore puts the original back; it runs before the real, undoable apply).
+    struct MaterialDropPreview {
+        entt::entity Entity = entt::null;
+        int Slot = -1;
+        std::shared_ptr<MaterialAsset> Original;
+        size_t OriginalSlotCount = 0;
+        std::string Path;
+        bool Active = false;
+    } m_MaterialDropPreview;
+    void RestoreMaterialDropPreview(World& world);
 
     // Raycasts from the mouse through the viewport (existing box colliders first, then the
     // Y=0 ground plane, then a fixed fallback distance if neither hits) and applies grid

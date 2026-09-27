@@ -1,0 +1,9 @@
+{
+  "guid": "f0b97e397a6f92fd",
+  "materialRemap": {
+    "French_Pit_Helmet": "assets/Characters/Quantum/Materials/Clothing/Generated/M_Pith_Helmet.mat",
+    "lambert2": "assets/Characters/Quantum/Materials/Clothing/Generated/M_Pith_Helmet.mat"
+  },
+  "metaVersion": 1,
+  "type": "model"
+}

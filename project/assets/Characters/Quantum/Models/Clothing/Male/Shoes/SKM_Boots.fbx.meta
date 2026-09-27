@@ -1,0 +1,9 @@
+{
+  "folder": "assets/Characters/Quantum/Models/Clothing/Male/Shoes",
+  "guid": "aef13b658dce688a",
+  "materialRemap": {
+    "T_Shoorts3": "assets/Characters/Quantum/Materials/Clothing/Shoes/Boots/M_Boots_Black.mat"
+  },
+  "metaVersion": 1,
+  "type": "model"
+}

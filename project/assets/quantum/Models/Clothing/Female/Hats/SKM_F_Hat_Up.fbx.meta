@@ -1,9 +1,0 @@
-{
-  "folder": "assets/quantum/Models/Clothing/Female/Hats",
-  "guid": "081617bb8ee5c2fb",
-  "materialRemap": {
-    "M_Hat_Up": "assets/quantum/Materials/Clothing/Hats/Hat_Up/M_Hat_Up.mat"
-  },
-  "metaVersion": 1,
-  "type": "model"
-}

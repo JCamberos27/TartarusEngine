@@ -111,7 +111,7 @@ a frame never mixes two placements.
 | `src/Core/InputMap.{h,cpp}` | Default bindings and `MergeDefaults` |
 | `src/Tests/UnitTests.cpp` | `TestAnimatorController`, `TestFirstPersonAnimationSet`, `TestFirstPersonAnimationFSM` (drives the AK graph through the real runtime), `TestFirstPersonAds` (the `ads` block, ADS variants, carry weights), `TestBlendTree2D` (2D weights, JSON, the body's frame maths), `TestInputMap` |
 | `src/main.cpp` | Play-loop wiring; `--upgrade-fpsanim` (v1 → controller) |
-| `project/animations/fps_body_locomotion.controller` | The body's locomotion: a 2D blend of idle, walk and jog in eight directions and run, plus Jump / Fall / Land (MC Core Motion clips, `project/assets/animations/mc_core_motion/`) |
+| `project/assets/Animations/Controllers/fps_body_locomotion.controller` | The body's locomotion: a 2D blend of idle, walk and jog in eight directions and run, plus Jump / Fall / Land (MC Core Motion clips, `project/assets/Animations/Mocap/`) |
 | `tools/assimp_patches/` + `tools/apply_assimp_patches.cmake` | Local assimp fix, applied at configure time |
 | `tools/component_registration_allowlist.txt` | `ViewModelTag` and `PoseSourceTag` are allow-listed (runtime-only). CI fails without them |
 
@@ -119,14 +119,14 @@ a frame never mixes two placements.
 
 ## 2. The weapon definition (`.fpsanim`)
 
-The shipped definition is `project/assets/fps/AKS74U/AKS74U.fpsanim`. Select it in the
+The shipped definition is `project/assets/Weapons/AKS74U/AKS74U.fpsanim`. Select it in the
 Asset Browser's **Animation** folder to edit it in the Inspector.
 
 ```jsonc
 {
-  "armsModel":   "assets/fps/AKS74U/FirstPerson/AKS-74U_A_FP_ADS.fbx",  // required: mesh + skeleton + REST bind pose
-  "weaponModel": "assets/fps/AKS74U/Weapon/AKS-74U_A_W_ADS.fbx",        // required
-  "controller":  "assets/fps/AKS74U/AKS74U.controller",                 // the Animator Controller (tracks "arms" + "weapon")
+  "armsModel":   "assets/Weapons/AKS74U/FirstPerson/AKS-74U_A_FP_ADS.fbx",  // required: mesh + skeleton + REST bind pose
+  "weaponModel": "assets/Weapons/AKS74U/Weapon/AKS-74U_A_W_ADS.fbx",        // required
+  "controller":  "assets/Weapons/AKS74U/AKS74U.controller",                 // the Animator Controller (tracks "arms" + "weapon")
   "viewRotation": [0, 180, 0],        // Y-X-Z degrees: the FBXs' axis convention (§6)
   "weaponSocket": "ik_hand_gun",      // bone on the ARMS rig the gun rides
   "weaponRoot":   "root",             // bone on the WEAPON rig that lands on the socket
@@ -400,7 +400,7 @@ Axis reference used throughout: Blender (Z-up, cm) → engine (Y-up, m) is
 C:\Users\jacob\OneDrive\Desktop\AKS-74U 60fps (Revised).blend      (read-only ground truth)
         │  work/export_clip.py (headless Blender), ranges in export_manifest.json
         ▼
-project/assets/fps/AKS74U/
+project/assets/Weapons/AKS74U/
 ├── AKS74U.fpsanim                       the state contract (15 states)
 ├── export_manifest.json                 which .blend, which frame range per clip
 ├── verification_report.json             per-FBX import check ("ok": true for all)
@@ -529,7 +529,7 @@ first-person clips (down to the fingers and `ik_hand_gun`), which phase 2 builds
 **Setup (the Sandbox's Player Spawn has one).** A root object with a **First Person Body**
 component, its children the body pieces - `Quantum_Head`, `_Torso`, `_UnderPants`, `_Legs`,
 `_Feet` today, clothing later - each a rigged model with an Animator Controller on
-`animations/fps_body_locomotion.controller`. The first piece with an Animator Controller drives;
+`assets/Animations/Controllers/fps_body_locomotion.controller`. The first piece with an Animator Controller drives;
 the others follow it (`AnimatorControllerComponent::Driver`, set in Play). Pieces whose names
 match **Hidden Parts** (default `Head`) cast shadows but aren't drawn.
 

@@ -1,0 +1,9 @@
+{
+  "guid": "b1ca0624186be515",
+  "materialRemap": {
+    "M_Haircut_Braids_Big": "assets/Characters/Quantum/Materials/Characters/M_Hair_Dark.mat",
+    "M_Haircut_Braids_Small": "assets/Characters/Quantum/Materials/Characters/M_Hair_Dark.mat"
+  },
+  "metaVersion": 1,
+  "type": "model"
+}

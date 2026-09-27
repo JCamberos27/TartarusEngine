@@ -30,6 +30,11 @@ std::uint64_t DependencyKey(const std::string& path, const std::vector<std::stri
 // (something it depends on changed), a dimension mismatch, or a decode failure.
 bool Load(const std::string& path, int size, std::uint64_t key, std::vector<unsigned char>& outPixels);
 
+// Like Load, but takes whatever thumbnail is cached regardless of its key - a possibly stale
+// preview for an asset that isn't loaded, so its current key can't be computed (a model's key
+// needs the textures its materials use). Never creates a GUID or .meta for `path`.
+bool LoadAnyVersion(const std::string& path, int size, std::vector<unsigned char>& outPixels);
+
 // Writes a `size` x `size` RGBA8 thumbnail for `path` plus its key sidecar. Best-effort: I/O
 // failures are logged, not fatal — a missing persistent cache just means the in-RAM render
 // happens again next launch, not a correctness problem.

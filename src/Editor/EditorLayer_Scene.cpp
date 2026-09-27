@@ -1097,7 +1097,7 @@ std::string EditorLayer::ImportDroppedFile(World& world, AssetLibrary& assets, C
     if (ext == ".fbx" || ext == ".obj" || ext == ".gltf" || ext == ".glb") {
         // Phase 5 item 11 — copied into project/assets/models/ first (unless already inside the
         // project), rather than left referencing wherever the source file happened to sit.
-        std::string projectPath = CopyAssetIntoProject(path, "models");
+        std::string projectPath = CopyAssetIntoProject(path, "Models");
         // Imports into the library only - it shows up in the Asset Browser, nothing more.
         // Deliberately NOT placed into the scene: that used to happen automatically here, but
         // it meant every dropped/imported model needed an undo (or a manual delete) if you only
@@ -1121,7 +1121,7 @@ std::string EditorLayer::ImportDroppedFile(World& world, AssetLibrary& assets, C
         Log::Info("Imported model '" + name + "'.");
         return model->MeshCount() == 0 ? "animation" : "model";
     } else if (ext == ".png" || ext == ".jpg" || ext == ".jpeg" || ext == ".tga" || ext == ".bmp") {
-        std::string projectPath = CopyAssetIntoProject(path, "textures");
+        std::string projectPath = CopyAssetIntoProject(path, "Textures");
         // A normal / data map (by its name: "_Normal", "_Roughness", "_AO", ...) is saved as one
         // in its .meta on import, so it's right in the Inspector and every later load, not only
         // once a material happens to use it. An existing importer block (the file came with its
@@ -1139,7 +1139,7 @@ std::string EditorLayer::ImportDroppedFile(World& world, AssetLibrary& assets, C
         }
         Log::Error("Failed to load texture '" + path + "'.");
     } else if (ext == ".wav" || ext == ".mp3" || ext == ".ogg" || ext == ".flac") {
-        std::string projectPath = CopyAssetIntoProject(path, "audio");
+        std::string projectPath = CopyAssetIntoProject(path, "Audio");
         if (AudioEngine::Load(projectPath)) {
             assets.RegisterSound(projectPath);
             assets.SetAssetFolder(projectPath, targetFolder);

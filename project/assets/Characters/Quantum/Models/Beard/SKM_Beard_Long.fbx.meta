@@ -1,0 +1,8 @@
+{
+  "guid": "916e53e7e8a563ec",
+  "materialRemap": {
+    "M_Beard": "assets/Characters/Quantum/Materials/Characters/M_Beard_Dark.mat"
+  },
+  "metaVersion": 1,
+  "type": "model"
+}

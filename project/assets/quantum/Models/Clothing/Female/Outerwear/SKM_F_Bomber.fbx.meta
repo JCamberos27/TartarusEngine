@@ -1,9 +1,0 @@
-{
-  "folder": "assets/quantum/Models/Clothing/Female/Outerwear",
-  "guid": "bd076fe1da083f20",
-  "materialRemap": {
-    "MI_F_Bomber": "assets/quantum/Materials/Clothing/Outerwear/Bomber/M_Bomber_Black.mat"
-  },
-  "metaVersion": 1,
-  "type": "model"
-}

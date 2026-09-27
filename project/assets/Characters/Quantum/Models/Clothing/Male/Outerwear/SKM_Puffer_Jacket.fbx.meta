@@ -1,0 +1,9 @@
+{
+  "folder": "assets/Characters/Quantum/Models/Clothing/Male/Outerwear",
+  "guid": "fda610663454cf17",
+  "materialRemap": {
+    "M_Puffer_Jacket": "assets/Characters/Quantum/Materials/Clothing/Outerwear/Puffer_Jacket/M_Puffer_Jacket_Black_Clear.mat"
+  },
+  "metaVersion": 1,
+  "type": "model"
+}
