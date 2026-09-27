@@ -14,9 +14,14 @@
 #include <json.hpp>
 
 #include <algorithm>
+#include <atomic>
 #include <cctype>
+#include <chrono>
+#include <cstdio>
+#include <cstring>
 #include <filesystem>
 #include <fstream>
+#include <future>
 #include <random>
 #include <set>
 #include <sstream>
@@ -150,8 +155,10 @@ const Wardrobe::Item* Catalog::Find(const std::string& path) const {
     return nullptr;
 }
 
-std::vector<const Wardrobe::Item*> Catalog::ForSlot(const std::string& slot, Wardrobe::Gender g) const {
-    std::vector<const Wardrobe::Item*> out;
+const std::vector<const Wardrobe::Item*>& Catalog::ForSlot(const std::string& slot, Wardrobe::Gender g) const {
+    const auto key = std::make_pair(slot, (int)g);
+    if (auto it = m_SlotLists.find(key); it != m_SlotLists.end()) return it->second;
+    std::vector<const Wardrobe::Item*>& out = m_SlotLists[key];
     for (const auto& it : Items) if (it.Slot == slot && it.Sex == g) out.push_back(&it);
     std::sort(out.begin(), out.end(), [](const Wardrobe::Item* a, const Wardrobe::Item* b) { return Lower(a->Name) < Lower(b->Name); });
     return out;
@@ -309,19 +316,181 @@ Result Apply(World& world, AssetLibrary& assets, entt::entity root, const Wardro
     return r;
 }
 
+// --- Waiting changes --------------------------------------------------------------------------
+
+namespace {
+
+using Then = std::function<void(World&, AssetLibrary&, entt::entity)>;
+
+// A change waiting for its assets. HasRequest false = only `After` (a colourway step).
+struct PendingChange {
+    const World* W = nullptr;
+    entt::entity Root = entt::null;
+    bool HasRequest = true;
+    Wardrobe::Request Request;
+    std::vector<AssetLibrary::AsyncHandle> Tickets;
+    Then After;
+};
+
+std::vector<PendingChange>& Waiting() {
+    static std::vector<PendingChange> list;
+    return list;
+}
+
+bool AllReady(const std::vector<AssetLibrary::AsyncHandle>& tickets) {
+    return std::all_of(tickets.begin(), tickets.end(), [](const auto& t) { return AssetLibrary::IsReady(t); });
+}
+
+void RequestMaterial(AssetLibrary& assets, const std::string& rel, std::vector<AssetLibrary::AsyncHandle>& out) {
+    if (!rel.empty() && Exists(rel)) out.push_back(assets.RequestMaterialAsync(ProjectPaths::Resolve(Rel(rel))));
+}
+
+// Starts loading what `request` will put on `root`: every piece's model, and the materials DressPiece
+// and the race's skin will choose for them (their remap's, and its skin variant). Anything this misses
+// still loads when the change is applied - correct, just not seamless.
+std::vector<AssetLibrary::AsyncHandle> Prefetch(World& world, AssetLibrary& assets, entt::entity root, const Catalog& cat,
+                                                const Wardrobe::Request& request, std::vector<std::string>& notes) {
+    std::vector<AssetLibrary::AsyncHandle> out;
+    const Wardrobe::RaceDef* race = Wardrobe::FindRace(cat.W, request.Sex, request.Race);
+    const Wardrobe::Resolved resolved = Wardrobe::Resolve(cat.W, cat.Items, request);
+    notes = resolved.Notes;
+    std::set<std::string> mats;
+    auto want = [&](const std::string& path) {
+        if (path.empty()) return;
+        const std::string rel = Rel(path);
+        mats.insert(rel);
+        if (race) mats.insert(Wardrobe::SkinMaterialFor(cat.W, *race, rel, Exists));
+    };
+    for (const auto& p : resolved.Pieces) {
+        const std::string abs = ProjectPaths::Resolve(p.Path);
+        out.push_back(assets.RequestModelAsync(abs));
+        for (const auto& [name, mat] : assets.MaterialRemap(abs)) want(mat);
+    }
+    // A race change re-skins the materials already on the pieces.
+    for (const auto& [slot, e] : Pieces(world, root))
+        if (const auto* rc = world.Registry.try_get<RenderableComponent>(e))
+            for (const auto& m : rc->Materials)
+                if (m) want(m->Path);
+    for (const auto& m : mats) RequestMaterial(assets, m, out);
+    return out;
+}
+
+// Runs `after` now if every ticket is ready, else once they are (UpdatePending).
+void WhenReady(World& world, AssetLibrary& assets, entt::entity root, std::vector<AssetLibrary::AsyncHandle> tickets,
+               Then after) {
+    if (AllReady(tickets)) { after(world, assets, root); return; }
+    PendingChange pc;
+    pc.W = &world;
+    pc.Root = root;
+    pc.HasRequest = false;
+    pc.Tickets = std::move(tickets);
+    pc.After = std::move(after);
+    Waiting().push_back(std::move(pc));
+}
+
+} // namespace
+
+Result Submit(World& world, AssetLibrary& assets, entt::entity root, const Wardrobe::Request& request, Then then) {
+    Result r;
+    auto cat = CatalogFor(world, assets, root, r);
+    if (!cat) return r;
+    // A newer change replaces whatever this outfit was still waiting for (clicking through items fast).
+    auto& list = Waiting();
+    list.erase(std::remove_if(list.begin(), list.end(),
+                              [&](const PendingChange& pc) { return pc.W == &world && pc.Root == root; }),
+               list.end());
+
+    PendingChange pc;
+    pc.W = &world;
+    pc.Root = root;
+    pc.Request = request;
+    pc.Tickets = Prefetch(world, assets, root, *cat, request, r.Notes);
+    pc.After = std::move(then);
+    if (AllReady(pc.Tickets)) {
+        r = Apply(world, assets, root, request);
+        if (r.Ok && pc.After) pc.After(world, assets, root);
+        return r;
+    }
+    list.push_back(std::move(pc));
+    r.Ok = true;
+    r.Pending = true;
+    return r;
+}
+
+bool IsPending(const World& world, entt::entity root, int* done, int* total) {
+    int d = 0, t = 0;
+    bool any = false;
+    for (const auto& pc : Waiting()) {
+        if (pc.W != &world || pc.Root != root) continue;
+        any = true;
+        t += (int)pc.Tickets.size();
+        for (const auto& ticket : pc.Tickets) d += AssetLibrary::IsReady(ticket) ? 1 : 0;
+    }
+    if (done) *done = d;
+    if (total) *total = t;
+    return any;
+}
+
+void UpdatePending(World& world, AssetLibrary& assets) {
+    auto& list = Waiting();
+    for (size_t i = 0; i < list.size();) {
+        PendingChange& pc = list[i];
+        if (pc.W != &world) { ++i; continue; }
+        const auto& reg = world.Registry;
+        if (!reg.valid(pc.Root) || !reg.all_of<CharacterOutfitComponent>(pc.Root)) {
+            list.erase(list.begin() + (std::ptrdiff_t)i);
+            continue;
+        }
+        if (!AllReady(pc.Tickets)) { ++i; continue; }
+        // Out of the list before running it: `After` may queue a follow-up step.
+        PendingChange ready = std::move(pc);
+        list.erase(list.begin() + (std::ptrdiff_t)i);
+        if (ready.HasRequest) {
+            const Result r = Apply(world, assets, ready.Root, ready.Request);
+            if (!r.Ok) { Log::Warn("Character Outfit: " + r.Error); continue; }
+        }
+        if (ready.After) ready.After(world, assets, ready.Root);
+    }
+}
+
+namespace {
+// What the next change builds on: the change still waiting to load, if any, else what's worn now - so
+// clicking Female then a hat before the body has loaded keeps both.
+Wardrobe::Request BaseRequest(const World& world, entt::entity root) {
+    for (const auto& pc : Waiting())
+        if (pc.W == &world && pc.Root == root && pc.HasRequest) return pc.Request;
+    return CurrentRequest(world, root);
+}
+} // namespace
+
+void CancelPending(const World& world) {
+    auto& list = Waiting();
+    list.erase(std::remove_if(list.begin(), list.end(), [&](const PendingChange& pc) { return pc.W == &world; }),
+               list.end());
+}
+
+void SubmitColourway(World& world, AssetLibrary& assets, entt::entity root, entt::entity piece,
+                     const std::string& source, const std::string& variant) {
+    std::vector<AssetLibrary::AsyncHandle> tickets;
+    RequestMaterial(assets, variant, tickets);
+    WhenReady(world, assets, root, std::move(tickets), [piece, source, variant](World& w, AssetLibrary& a, entt::entity) {
+        if (w.Registry.valid(piece)) SetColourway(w, a, piece, source, variant);
+    });
+}
+
 Result Equip(World& world, AssetLibrary& assets, entt::entity root, const std::string& slot, const std::string& item) {
-    Wardrobe::Request req = CurrentRequest(world, root);
+    Wardrobe::Request req = BaseRequest(world, root);
     if (item.empty()) req.Items.erase(slot);
     else req.Items[slot] = item;
-    return Apply(world, assets, root, req);
+    return Submit(world, assets, root, req);
 }
 
 Result SetGender(World& world, AssetLibrary& assets, entt::entity root, Wardrobe::Gender gender) {
     Result r;
     auto cat = CatalogFor(world, assets, root, r);
     if (!cat) return r;
-    Wardrobe::Request req = CurrentRequest(world, root);
-    if (req.Sex == gender) return Apply(world, assets, root, req);
+    Wardrobe::Request req = BaseRequest(world, root);
+    if (req.Sex == gender) return Submit(world, assets, root, req);
     Wardrobe::Request next;
     next.Sex = gender;
     next.Race = req.Race; // FindRace falls back to the first when the other body has no such race
@@ -331,13 +500,13 @@ Result SetGender(World& world, AssetLibrary& assets, entt::entity root, Wardrobe
         for (const auto* it : cat->ForSlot(slot, gender))
             if (CutName(it->Stem) == CutName(from->Stem)) { next.Items[slot] = it->Path; break; }
     }
-    return Apply(world, assets, root, next);
+    return Submit(world, assets, root, next);
 }
 
 Result SetRace(World& world, AssetLibrary& assets, entt::entity root, const std::string& race) {
-    Wardrobe::Request req = CurrentRequest(world, root);
+    Wardrobe::Request req = BaseRequest(world, root);
     req.Race = race;
-    return Apply(world, assets, root, req);
+    return Submit(world, assets, root, req);
 }
 
 std::vector<std::string> ParseLocks(const std::string& locks) {
@@ -360,8 +529,7 @@ Result Randomize(World& world, AssetLibrary& assets, entt::entity root, std::uin
     const auto locks = ParseLocks(world.Registry.get<CharacterOutfitComponent>(root).Locks);
     auto locked = [&](const std::string& s) { return std::find(locks.begin(), locks.end(), s) != locks.end(); };
 
-    const Wardrobe::Request cur = CurrentRequest(world, root);
-    Wardrobe::Request req = cur;
+    Wardrobe::Request req = BaseRequest(world, root);
     const auto& races = cat->W.Body(req.Sex).Races;
     if (!locked("Race") && !races.empty()) req.Race = races[rng() % races.size()].Name;
     // How often a slot is filled: the basics always, the rest now and then.
@@ -375,14 +543,26 @@ Result Randomize(World& world, AssetLibrary& assets, entt::entity root, std::uin
         if (items.empty() || !chance(f == kFill.end() ? 0.3f : f->second)) { req.Items.erase(slot.Id); continue; }
         req.Items[slot.Id] = items[rng() % items.size()]->Path;
     }
-    r = Apply(world, assets, root, req);
-    if (!r.Ok) return r;
-    for (const auto& [slot, e] : Pieces(world, root)) {
-        if (locked(slot) || (world.Registry.get<OutfitPieceComponent>(e).Flags & OutfitPieceBodyPart)) continue;
-        for (const auto& g : ColourGroups(world, assets, e))
-            if (!g.Options.empty()) SetColourway(world, assets, e, g.Source, g.Options[rng() % g.Options.size()]);
-    }
-    return r;
+    // Colourways once the pieces are on: pick them, load them in the background, then put them on.
+    return Submit(world, assets, root, req, [rng, locks](World& w, AssetLibrary& a, entt::entity e) mutable {
+        struct Pick { entt::entity Piece; std::string Source, Variant; };
+        std::vector<Pick> picks;
+        std::vector<AssetLibrary::AsyncHandle> tickets;
+        for (const auto& [slot, piece] : Pieces(w, e)) {
+            if (std::find(locks.begin(), locks.end(), slot) != locks.end() ||
+                (w.Registry.get<OutfitPieceComponent>(piece).Flags & OutfitPieceBodyPart))
+                continue;
+            for (const auto& g : ColourGroups(w, a, piece)) {
+                if (g.Options.empty()) continue;
+                picks.push_back({piece, g.Source, g.Options[rng() % g.Options.size()]});
+                RequestMaterial(a, picks.back().Variant, tickets);
+            }
+        }
+        WhenReady(w, a, e, std::move(tickets), [picks](World& w2, AssetLibrary& a2, entt::entity) {
+            for (const auto& p : picks)
+                if (w2.Registry.valid(p.Piece)) SetColourway(w2, a2, p.Piece, p.Source, p.Variant);
+        });
+    });
 }
 
 // --- Colourways -------------------------------------------------------------------------------
@@ -507,15 +687,23 @@ Result LoadPreset(World& world, AssetLibrary& assets, entt::entity root, const s
             req.Items[slot] = v["item"].get<std::string>();
             if (v.contains("colours")) colours[slot] = v["colours"];
         }
-    r = Apply(world, assets, root, req);
+    std::vector<AssetLibrary::AsyncHandle> colourTickets;
+    for (const auto& [slot, c] : colours)
+        if (c.is_object())
+            for (const auto& [source, variant] : c.items())
+                if (variant.is_string()) RequestMaterial(assets, variant.get<std::string>(), colourTickets);
+    r = Submit(world, assets, root, req, [colours, colourTickets](World& w, AssetLibrary& a, entt::entity e) {
+        WhenReady(w, a, e, colourTickets, [colours](World& w2, AssetLibrary& a2, entt::entity e2) {
+            const auto pieces = Pieces(w2, e2);
+            for (const auto& [slot, c] : colours) {
+                auto it = pieces.find(slot);
+                if (it == pieces.end() || !c.is_object()) continue;
+                for (const auto& [source, variant] : c.items())
+                    if (variant.is_string()) SetColourway(w2, a2, it->second, source, variant.get<std::string>());
+            }
+        });
+    });
     if (!r.Ok) return r;
-    const auto pieces = Pieces(world, root);
-    for (const auto& [slot, c] : colours) {
-        auto it = pieces.find(slot);
-        if (it == pieces.end() || !c.is_object()) continue;
-        for (const auto& [source, variant] : c.items())
-            if (variant.is_string()) SetColourway(world, assets, it->second, source, variant.get<std::string>());
-    }
     return r;
 }
 
@@ -557,46 +745,160 @@ std::uint64_t HideSignature(const World& world, const CharacterOutfitComponent& 
 
 } // namespace
 
+namespace {
+
+// Coverage per (under model, over model) pair, by project-relative lower-case path. Worked out on a
+// background thread and kept in Library/OutfitCoverage, so a pair is computed once per machine, not once
+// per editor session, and never on the main thread.
+using CoverageKey = std::pair<std::string, std::string>;
+struct CoverageStore {
+    std::map<CoverageKey, std::vector<std::uint8_t>> Done;
+    std::map<CoverageKey, std::future<std::vector<std::uint8_t>>> Running;
+};
+CoverageStore& Coverage() {
+    static CoverageStore s;
+    return s;
+}
+
+constexpr std::uint32_t kCoverageVersion = 1; // bump when Covered/Erode or their settings change
+
+struct FileStamp {
+    std::uint64_t Size = 0;
+    std::int64_t Time = 0;
+};
+FileStamp StampOf(const std::string& rel) {
+    FileStamp s;
+    std::error_code ec;
+    const fs::path p = ProjectPaths::Resolve(rel);
+    s.Size = (std::uint64_t)fs::file_size(p, ec);
+    if (ec) s.Size = 0;
+    const auto t = fs::last_write_time(p, ec);
+    if (!ec) s.Time = (std::int64_t)t.time_since_epoch().count();
+    return s;
+}
+
+fs::path CoverageFile(const CoverageKey& k) {
+    std::uint64_t h = 1469598103934665603ull;
+    for (const std::string* s : {&k.first, &k.second}) {
+        for (char c : *s) h = (h ^ (unsigned char)c) * 1099511628211ull;
+        h = (h ^ 0xffu) * 1099511628211ull;
+    }
+    char name[32];
+    std::snprintf(name, sizeof(name), "%016llx.cov", (unsigned long long)h);
+    return fs::path(ProjectPaths::Resolve("Library/OutfitCoverage")) / name;
+}
+
+struct CoverageHeader {
+    char Magic[4] = {'T', 'O', 'C', 'V'};
+    std::uint32_t Version = kCoverageVersion;
+    FileStamp Under, Over;
+    std::uint32_t Count = 0;
+};
+
+bool LoadCoverage(const CoverageKey& k, const FileStamp& under, const FileStamp& over, std::vector<std::uint8_t>& out) {
+    std::ifstream in(CoverageFile(k), std::ios::binary);
+    if (!in) return false;
+    CoverageHeader h, want;
+    if (!in.read(reinterpret_cast<char*>(&h), sizeof(h))) return false;
+    if (std::memcmp(h.Magic, want.Magic, 4) != 0 || h.Version != kCoverageVersion || h.Under.Size != under.Size ||
+        h.Under.Time != under.Time || h.Over.Size != over.Size || h.Over.Time != over.Time)
+        return false;
+    out.resize(h.Count);
+    return (bool)in.read(reinterpret_cast<char*>(out.data()), (std::streamsize)h.Count);
+}
+
+// Any thread. Written beside and renamed into place, so a reader never sees half a file.
+void SaveCoverage(const CoverageKey& k, const FileStamp& under, const FileStamp& over, const std::vector<std::uint8_t>& data) {
+    const fs::path file = CoverageFile(k);
+    std::error_code ec;
+    fs::create_directories(file.parent_path(), ec);
+    static std::atomic<unsigned> counter{0};
+    fs::path tmp = file;
+    tmp += ".tmp" + std::to_string(counter++);
+    {
+        std::ofstream out(tmp, std::ios::binary);
+        if (!out) return;
+        CoverageHeader h;
+        h.Under = under;
+        h.Over = over;
+        h.Count = (std::uint32_t)data.size();
+        out.write(reinterpret_cast<const char*>(&h), sizeof(h));
+        out.write(reinterpret_cast<const char*>(data.data()), (std::streamsize)data.size());
+        if (!out) { out.close(); fs::remove(tmp, ec); return; }
+    }
+    fs::rename(tmp, file, ec);
+    if (ec) fs::remove(tmp, ec);
+}
+
+// The pair's covered vertices if they're known (memory, then disk); else starts working them out in the
+// background and returns null - ask again next frame.
+const std::vector<std::uint8_t>* PairCoverage(const World& world, entt::entity under, entt::entity over,
+                                              const std::string& underModel, const std::string& overModel) {
+    CoverageStore& store = Coverage();
+    const CoverageKey key{Lower(Rel(underModel)), Lower(Rel(overModel))};
+    if (auto it = store.Done.find(key); it != store.Done.end()) return &it->second;
+    if (auto it = store.Running.find(key); it != store.Running.end()) {
+        if (it->second.wait_for(std::chrono::seconds(0)) != std::future_status::ready) return nullptr;
+        auto done = store.Done.emplace(key, it->second.get()).first;
+        store.Running.erase(it);
+        return &done->second;
+    }
+    const FileStamp us = StampOf(key.first), os = StampOf(key.second);
+    std::vector<std::uint8_t> loaded;
+    if (LoadCoverage(key, us, os, loaded)) return &store.Done.emplace(key, std::move(loaded)).first->second;
+    // The geometry is copied here (main thread); the maths and the save run on their own thread.
+    store.Running.emplace(key, std::async(std::launch::async,
+                                          [key, us, os, body = Geometry(world, under), cloth = Geometry(world, over)] {
+                                              std::vector<std::uint8_t> covered = OutfitCoverage::Covered(body, cloth);
+                                              OutfitCoverage::Erode(body, covered, 1);
+                                              SaveCoverage(key, us, os, covered);
+                                              return covered;
+                                          }));
+    return nullptr;
+}
+
+} // namespace
+
 void UpdateHiding(World& world) {
     auto& reg = world.Registry;
-    // Each (under, over) pair's covered vertices, by model path: an outfit change only works out new pairs.
-    static std::map<std::pair<std::string, std::string>, std::vector<std::uint8_t>> cache;
     for (entt::entity root : reg.view<CharacterOutfitComponent>()) {
         auto& outfit = reg.get<CharacterOutfitComponent>(root);
         const auto pieces = Pieces(world, root);
         if (HideSignature(world, outfit, pieces) == outfit.HideSignature) continue;
 
+        // Old tags go at once (a re-modelled piece must not keep bits for another mesh); new ones go
+        // on when every pair they need is known. Until then the skin just isn't hidden.
         for (const auto& [slot, e] : pieces) reg.remove<OutfitHideTag>(e);
+        bool waiting = false;
+        std::vector<std::pair<entt::entity, std::vector<std::uint8_t>>> tags;
         if (outfit.AutoHide)
             for (const auto& [slot, under] : pieces) {
                 const auto& u = reg.get<OutfitPieceComponent>(under);
                 const auto* urc = reg.try_get<RenderableComponent>(under);
                 if (!urc || !urc->ModelRef) continue;
-                OutfitCoverage::Mesh body;
                 std::vector<std::uint8_t> hidden;
                 for (const auto& [overSlot, over] : pieces) {
                     const auto& o = reg.get<OutfitPieceComponent>(over);
                     const auto* orc = reg.try_get<RenderableComponent>(over);
                     if (!Covers(o, u) || !orc || !orc->ModelRef) continue;
-                    const auto key = std::make_pair(Lower(Rel(urc->ModelRef->Path())), Lower(Rel(orc->ModelRef->Path())));
-                    auto it = cache.find(key);
-                    if (it == cache.end()) {
-                        if (body.Positions.empty()) body = Geometry(world, under);
-                        std::vector<std::uint8_t> covered = OutfitCoverage::Covered(body, Geometry(world, over));
-                        OutfitCoverage::Erode(body, covered, 1);
-                        it = cache.emplace(key, std::move(covered)).first;
-                    }
-                    if (hidden.empty()) hidden = it->second;
+                    const auto* covered = PairCoverage(world, under, over, urc->ModelRef->Path(), orc->ModelRef->Path());
+                    if (!covered) { waiting = true; continue; }
+                    if (hidden.empty()) hidden = *covered;
                     else
-                        for (size_t i = 0; i < hidden.size() && i < it->second.size(); ++i) hidden[i] |= it->second[i];
+                        for (size_t i = 0; i < hidden.size() && i < covered->size(); ++i) hidden[i] |= (*covered)[i];
                 }
-                const int count = (int)std::count(hidden.begin(), hidden.end(), (std::uint8_t)1);
-                if (!count) continue;
-                auto& tag = reg.emplace<OutfitHideTag>(under);
-                tag.Buffer = std::make_shared<SkinHideBuffer>(OutfitCoverage::Pack(hidden));
-                tag.Hidden = count;
-                tag.Total = (int)hidden.size();
+                tags.emplace_back(under, std::move(hidden));
             }
+        if (waiting) continue; // this outfit's signature stays stale, so it's looked at again next frame
+
+        for (auto& [under, hidden] : tags) {
+            const int count = (int)std::count(hidden.begin(), hidden.end(), (std::uint8_t)1);
+            if (!count) continue;
+            auto& tag = reg.emplace<OutfitHideTag>(under);
+            tag.Buffer = std::make_shared<SkinHideBuffer>(OutfitCoverage::Pack(hidden));
+            tag.Hidden = count;
+            tag.Total = (int)hidden.size();
+        }
         outfit.HideSignature = HideSignature(world, outfit, pieces);
     }
 }

@@ -77,6 +77,31 @@ Model::Model(const std::string& path, const ModelImportSettings& settings)
     ImportFromFile(settings);
 }
 
+std::shared_ptr<Model> Model::ImportDeferred(const std::string& path, const ModelImportSettings& settings) {
+    std::shared_ptr<Model> model(new Model());
+    model->m_Path = path;
+    model->m_D->Directory = DirectoryOf(path);
+    model->m_DeferGpu = true;
+    model->ImportFromFile(settings);
+    model->m_DeferGpu = false;
+    model->m_GpuPending = true;
+    return model;
+}
+
+void Model::FinishGpuUpload() {
+    while (!FinishGpuUploadStep()) {}
+}
+
+bool Model::FinishGpuUploadStep() {
+    if (!m_GpuPending) return true;
+    for (auto& mesh : m_D->Meshes)
+        if (mesh->NeedsUpload()) { mesh->FinishUpload(); return false; }
+    for (auto& [key, tex] : m_D->TextureCache)
+        if (tex && tex->IsPendingUpload()) { tex->FinishUpload(); return false; }
+    m_GpuPending = false;
+    return true;
+}
+
 std::shared_ptr<Model> Model::CreateInstance() const {
     std::shared_ptr<Model> inst(new Model());
     inst->m_D = m_D;       // #96 — shared import: no Assimp, no new GPU buffers or textures
@@ -284,14 +309,15 @@ void Model::ProcessNode(aiNode* node, const aiScene* scene, const glm::mat4& par
 
     for (unsigned int i = 0; i < node->mNumMeshes; ++i) {
         aiMesh* mesh = scene->mMeshes[node->mMeshes[i]];
-        m_D->Meshes.push_back(ProcessMesh(mesh, scene, nodeTransform));
+        m_D->Meshes.push_back(ProcessMesh(mesh, scene, nodeTransform, node));
     }
     for (unsigned int i = 0; i < node->mNumChildren; ++i) {
         ProcessNode(node->mChildren[i], scene, nodeTransform);
     }
 }
 
-std::unique_ptr<ModelMesh> Model::ProcessMesh(aiMesh* mesh, const aiScene* scene, const glm::mat4& nodeTransform) {
+std::unique_ptr<ModelMesh> Model::ProcessMesh(aiMesh* mesh, const aiScene* scene, const glm::mat4& nodeTransform,
+                                              const aiNode* node) {
     std::vector<ModelVertex> vertices(mesh->mNumVertices);
 
     // Gated on m_D->Settings.ImportSkeleton too: with skeleton import off, ExtractBoneWeights below
@@ -322,26 +348,35 @@ std::unique_ptr<ModelMesh> Model::ProcessMesh(aiMesh* mesh, const aiScene* scene
     // plays does each bone apply its own delta to that un-rotated vertex, blowing a 0.02 m edge
     // apart into 0.5 m blades.
     //
-    // The exception: a skin whose offsets already carry the mesh node's frame. Some FBX exports
-    // (the Quantum pack's female parts: meshes under a group node with a -90 X pre-rotation, heads
-    // with pivots) write the mesh's global bind matrix as the cluster's Transform, so at bind
-    // C == nodeTransform itself - baking it too applied it twice (the body lay on its back, the head
-    // floated off). Only when C is that exact matrix, and not the identity, is it corrected; every
-    // other file (C == I at bind, or a posed import's delta) bakes as before.
+    // The exception: a skin whose offsets already carry a node's frame. Some FBX exports write a
+    // node's global bind matrix as the cluster's Transform, so at bind C is that frame and baking
+    // on top applied it twice. The Quantum pack does it two ways: the female parts use the mesh
+    // node's own frame (C == nodeTransform: the body lay on its back, the head floated off), and
+    // several jackets use their "Cloth" group's (a -90 X group, with the mesh node undoing it:
+    // nodeTransform == I, C == the group's frame - the jacket lay on the floor). So: when C is the
+    // global frame of the mesh node or any node above it, and not the identity, it is folded back
+    // out; every other file (C == I at bind, or a posed import's per-bone delta, which is no node's
+    // frame) bakes as before. work/female_bake_probe.cpp --scan checks a pack against this.
     //
     // The correction goes on the offsets, not the bake: those offsets are stored once per bone
     // NAME for the whole model (first mesh wins, ExtractBoneWeights), and one file can mix both
     // kinds - the Vivian heads' eyes and teeth have C == I, the skin and lashes C == N - so a
     // per-mesh "skip the bake" would skin a later mesh with an earlier mesh's offsets. Folding
-    // inverse(nodeTransform) into this mesh's offsets instead makes C == I for it too, so every
-    // mesh bakes nodeTransform and every bone's stored offset means the same thing.
+    // inverse(C) into this mesh's offsets instead makes C == I for it too, so every mesh bakes
+    // nodeTransform and every bone's stored offset means the same thing.
     const glm::mat4 bake = nodeTransform;
     glm::mat4 offsetFix(1.0f);
-    if (skinned && !IsNearlyIdentity(nodeTransform)) {
+    if (skinned) {
         const aiBone* first = mesh->mBones[0];
         if (auto g = m_ImportNodeGlobals.find(first->mName.C_Str()); g != m_ImportNodeGlobals.end()) {
             const glm::mat4 c = m_D->GlobalInverseTransform * g->second * AiToGlm(first->mOffsetMatrix);
-            if (NearlyEqual(c, nodeTransform)) offsetFix = glm::inverse(nodeTransform);
+            if (!IsNearlyIdentity(c)) {
+                bool nodeFrame = NearlyEqual(c, nodeTransform);
+                for (const aiNode* a = node ? node->mParent : nullptr; a && !nodeFrame; a = a->mParent)
+                    if (auto ag = m_ImportNodeGlobals.find(a->mName.C_Str()); ag != m_ImportNodeGlobals.end())
+                        nodeFrame = NearlyEqual(c, ag->second);
+                if (nodeFrame) offsetFix = glm::inverse(c);
+            }
         }
     }
     glm::mat3 normalMatrix = glm::transpose(glm::inverse(glm::mat3(bake)));
@@ -402,12 +437,11 @@ std::unique_ptr<ModelMesh> Model::ProcessMesh(aiMesh* mesh, const aiScene* scene
 
     if (m_D->Settings.ImportSkeleton) ExtractBoneWeights(vertices, mesh, offsetFix);
 
-    auto gpuMesh = std::make_unique<ModelMesh>(vertices, indices);
+    // #98 — bounds, picking, snapping and collider cooking are rebuilt from this CPU copy at
+    // the bind pose (same blend as the vertex shader), so they track whatever `bake` folded
+    // into the GPU vertices above and never drift out of step with what's on screen.
+    std::vector<glm::vec3> posed;
     if (skinned) {
-        // #98 — bounds, picking, snapping and collider cooking are rebuilt from this CPU copy at
-        // the bind pose (same blend as the vertex shader), so they track whatever `bake` folded
-        // into the GPU vertices above and never drift out of step with what's on screen.
-        std::vector<glm::vec3> posed;
         posed.reserve(vertices.size());
         for (const ModelVertex& v : vertices) {
             glm::mat4 skin(0.0f);
@@ -423,8 +457,11 @@ std::unique_ptr<ModelMesh> Model::ProcessMesh(aiMesh* mesh, const aiScene* scene
             m_D->BoundsMin = glm::min(m_D->BoundsMin, p);
             m_D->BoundsMax = glm::max(m_D->BoundsMax, p);
         }
-        gpuMesh->SetLocalPositions(std::move(posed));
     }
+    // Deferred (ImportDeferred on a worker): keep the vertices for FinishGpuUpload, no GL here.
+    auto gpuMesh = m_DeferGpu ? std::make_unique<ModelMesh>(std::move(vertices), indices, true)
+                              : std::make_unique<ModelMesh>(vertices, indices);
+    if (skinned) gpuMesh->SetLocalPositions(std::move(posed));
     if (m_D->Settings.MaterialImportMode == ModelImportSettings::MaterialMode::ImportEmbedded) {
         if (mesh->mMaterialIndex < scene->mNumMaterials) {
             gpuMesh->Mat = ExtractMaterial(scene, mesh->mMaterialIndex);
@@ -452,8 +489,10 @@ std::shared_ptr<Texture> Model::LoadCachedTexture(const std::string& fullPath, T
     TextureImportSettings settings;
     settings.IsSRGB = role == TextureRole::Color;
     if (role == TextureRole::Normal) settings.TextureType = TextureImportSettings::Type::NormalMap;
-    auto tex = std::make_shared<Texture>(fullPath, settings);
-    if (!tex->IsValid()) return nullptr;
+    // Deferred: decode now (this thread), upload in FinishGpuUpload.
+    auto tex = m_DeferGpu ? Texture::CreatePending(Texture::DecodeFile(fullPath, settings))
+                          : std::make_shared<Texture>(fullPath, settings);
+    if (!tex || (!tex->IsValid() && !tex->IsPendingUpload())) return nullptr;
     m_D->TextureCache[key] = tex;
     return tex;
 }
@@ -829,8 +868,10 @@ std::shared_ptr<Texture> Model::LoadEmbeddedTexture(const aiTexture* tex, const 
     TextureImportSettings settings;
     settings.IsSRGB = role == TextureRole::Color;
     if (role == TextureRole::Normal) settings.TextureType = TextureImportSettings::Type::NormalMap;
-    auto out = std::make_shared<Texture>(m_Path + "#" + ref, std::move(bytes), rawW, rawH, settings);
-    if (!out->IsValid()) return nullptr;
+    auto out = m_DeferGpu
+        ? Texture::CreatePending(Texture::DecodeMemory(m_Path + "#" + ref, std::move(bytes), rawW, rawH, settings))
+        : std::make_shared<Texture>(m_Path + "#" + ref, std::move(bytes), rawW, rawH, settings);
+    if (!out || (!out->IsValid() && !out->IsPendingUpload())) return nullptr;
     m_D->TextureCache[key] = out;
     return out;
 }

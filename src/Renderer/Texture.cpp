@@ -7,16 +7,33 @@
 #include "stb_dxt.h"
 #include <algorithm>
 #include <array>
+#include <atomic>
 #include <cmath>
 #include <chrono>
 #include <cstdint>
 #include <cstdlib>
 #include <cstring>
+#include <mutex>
 #include <vector>
+
+namespace {
+std::mutex& StatsMutex() { static std::mutex m; return m; }
+}
 
 TextureLoadStats& TextureLoadStats::Get() {
     static TextureLoadStats s_Stats;
     return s_Stats;
+}
+
+void TextureLoadStats::AddDecode(double ms) {
+    std::lock_guard<std::mutex> lk(StatsMutex());
+    Get().DecodeMs += ms;
+}
+
+void TextureLoadStats::AddUpload(double ms) {
+    std::lock_guard<std::mutex> lk(StatsMutex());
+    Get().Count += 1;
+    Get().UploadMs += ms;
 }
 
 namespace {
@@ -98,18 +115,12 @@ std::vector<unsigned char> DownsampleBox(const unsigned char* src, int srcW, int
 
 // #156 - S3TC (BC1/BC3) is an extension; RGTC (BC4/BC5) is core. Every desktop driver ships it,
 // but check rather than upload a format the driver would reject.
-bool HasS3tc() {
-    static const bool s_Has = [] {
-        GLint n = 0;
-        glGetIntegerv(GL_NUM_EXTENSIONS, &n);
-        for (GLint i = 0; i < n; ++i) {
-            const char* e = (const char*)glGetStringi(GL_EXTENSIONS, (GLuint)i);
-            if (e && std::strcmp(e, "GL_EXT_texture_compression_s3tc") == 0) return true;
-        }
-        return false;
-    }();
-    return s_Has;
-}
+// Queried once on the main thread (Texture::InitGpuCaps) and read from any thread after. A
+// worker that somehow runs first sees "unknown" and treats it as absent: the texture uploads
+// uncompressed, which is always valid, rather than calling GL off the main thread.
+std::atomic<int> s_S3tc{-1};
+
+bool HasS3tc() { return s_S3tc.load(std::memory_order_acquire) == 1; }
 
 const char* FormatName(GLenum f) {
     switch (f) {
@@ -209,6 +220,18 @@ bool EncodeBlockCompressed(const unsigned char* px, int w, int h, int channels, 
 
 } // namespace
 
+void Texture::InitGpuCaps() {
+    if (s_S3tc.load(std::memory_order_acquire) >= 0) return;
+    GLint n = 0;
+    glGetIntegerv(GL_NUM_EXTENSIONS, &n);
+    int has = 0;
+    for (GLint i = 0; i < n && !has; ++i) {
+        const char* e = (const char*)glGetStringi(GL_EXTENSIONS, (GLuint)i);
+        if (e && std::strcmp(e, "GL_EXT_texture_compression_s3tc") == 0) has = 1;
+    }
+    s_S3tc.store(has, std::memory_order_release);
+}
+
 Texture::Texture(const std::string& path) : Texture(path, TextureImportSettings{}) {}
 
 Texture::Texture(const std::string& path, const TextureImportSettings& settings)
@@ -222,13 +245,42 @@ Texture::Texture(const std::string& name, std::vector<unsigned char> bytes, int 
     UploadFromFile(settings);
 }
 
-void Texture::UploadFromFile(const TextureImportSettings& settings) {
-    // TextureType now actually drives behavior (#198), authoritative regardless of the individual
-    // toggles — so a texture typed NormalMap can never upload as sRGB (the Inspector already
-    // flips the checkbox when you pick the type, but this covers scenes saved before that existed
-    // too), and Sprite2D gets the clamp-to-edge/no-mipmap treatment a sprite atlas wants by
-    // default. Only affects GL upload parameters below, not the decoded pixels, so the cache
-    // lookups a few lines down stay keyed on the original `settings`.
+Texture::Texture(TextureCpuData&& data)
+    : m_Memory(std::move(data.Memory)), m_MemRawW(data.MemRawW), m_MemRawH(data.MemRawH), m_Path(data.Path),
+      m_Settings(data.Settings) {
+    Upload(data);
+}
+
+std::shared_ptr<Texture> Texture::CreatePending(TextureCpuData&& data) {
+    if (!data.Ok) return nullptr;
+    std::shared_ptr<Texture> t(new Texture());
+    t->m_Path = data.Path;
+    t->m_Settings = data.Settings;
+    // Sizes are known now, so anything reading them before the upload (importer readouts) is right.
+    t->m_Width = data.SourceWidth;
+    t->m_Height = data.SourceHeight;
+    t->m_Channels = data.Channels;
+    t->m_Memory = std::move(data.Memory);
+    t->m_MemRawW = data.MemRawW;
+    t->m_MemRawH = data.MemRawH;
+    t->m_Pending = std::make_unique<TextureCpuData>(std::move(data));
+    return t;
+}
+
+void Texture::FinishUpload() {
+    if (!m_Pending) return;
+    const std::unique_ptr<TextureCpuData> data = std::move(m_Pending);
+    Upload(*data);
+}
+
+namespace {
+
+// TextureType now actually drives behavior (#198), authoritative regardless of the individual
+// toggles — so a texture typed NormalMap can never upload as sRGB (the Inspector already flips
+// the checkbox when you pick the type, but this covers scenes saved before that existed too),
+// and Sprite2D gets the clamp-to-edge/no-mipmap treatment a sprite atlas wants by default. The
+// cache stays keyed on the original settings.
+TextureImportSettings Effective(const TextureImportSettings& settings) {
     TextureImportSettings effective = settings;
     if (effective.TextureType == TextureImportSettings::Type::NormalMap) {
         effective.IsSRGB = false;
@@ -236,101 +288,137 @@ void Texture::UploadFromFile(const TextureImportSettings& settings) {
         effective.WrapMode = TextureImportSettings::Wrap::ClampToEdge;
         effective.GenerateMipmaps = false;
     }
+    return effective;
+}
 
-    // ARCH-201 / #375: cumulative decode-vs-upload timing, read by --asset-load-bench and anything
-    // else that wants to know where scene-load time actually goes. decodeStart covers both the
-    // TextureCache hit path and the stb_image + DownsampleBox miss path below; uploadStart begins
-    // right after (see the matching TextureLoadStats::Get() update after the GL block).
-    const auto decodeStart = std::chrono::steady_clock::now();
+void CopyEntry(TextureCache::Image& entry, TextureCpuData& out) {
+    out.SourceWidth = entry.SourceWidth;
+    out.SourceHeight = entry.SourceHeight;
+    out.Channels = entry.Channels;
+    out.Width = entry.Width;
+    out.Height = entry.Height;
+    out.Pixels = std::move(entry.Pixels);
+    out.GLFormat = entry.GLFormat;
+    out.LevelSizes = std::move(entry.LevelSizes);
+    out.Ok = true;
+}
+
+double MsSince(std::chrono::steady_clock::time_point start) {
+    return std::chrono::duration<double, std::milli>(std::chrono::steady_clock::now() - start).count();
+}
+
+// The CPU half shared by DecodeFile and DecodeMemory. `memory` empty = read `path` from disk.
+TextureCpuData Decode(const std::string& path, std::vector<unsigned char> memory, int rawW, int rawH,
+                      const TextureImportSettings& settings) {
+    const auto start = std::chrono::steady_clock::now();
+    TextureCpuData out;
+    out.Path = path;
+    out.Settings = settings;
+    out.MemRawW = rawW;
+    out.MemRawH = rawH;
+    const TextureImportSettings effective = Effective(settings);
+    const bool fromMemory = !memory.empty(); // #113 — embedded: no file, no disk cache
 
     // Warm path: pixels already decoded and downsampled by a previous run. PNG decode dominates
     // scene-load time (measured ~4.6s of a ~5.6s cold boot on a 22-texture library), so skipping
     // it is the single biggest startup win available. See TextureCache.h.
-    TextureCache::Image cached;
-    const bool fromMemory = !m_Memory.empty(); // #113 — embedded: no file, no disk cache
-    bool fromCache = !fromMemory && TextureCache::Load(m_Path, settings, cached);
-
-    // Owns the decoded pixels only on a cache miss; `uploadData` points into either this, the
-    // cache entry, or stb's buffer.
-    unsigned char* data = nullptr;
-    std::vector<unsigned char> resized;
-    const unsigned char* uploadData = nullptr;
-    int uploadW = 0, uploadH = 0;
-    // #156 - set when the pixels are BCn blocks (from the cache, or encoded below).
-    const TextureCache::Image* compressed = nullptr;
-    TextureCache::Image encoded;
-
-    if (fromCache) {
-        if (cached.GLFormat != 0) compressed = &cached;
-        m_Width = cached.SourceWidth;
-        m_Height = cached.SourceHeight;
-        m_Channels = cached.Channels;
-        uploadW = cached.Width;
-        uploadH = cached.Height;
-        uploadData = cached.Pixels.data();
-    } else {
-        // Do NOT flip on load: Model.cpp already applies Assimp's aiProcess_FlipUVs to correct
-        // the top-left-origin (FBX/glTF) vs bottom-left-origin (OpenGL) mismatch on the mesh's
-        // own UVs. Flipping the image here too double-corrects it, leaving UV islands sampling
-        // the wrong region of the texture (mirrored vertically relative to where they should be).
-        stbi_set_flip_vertically_on_load(false);
-        if (fromMemory && m_MemRawW > 0) {
-            // Raw RGBA8 from the model file. malloc'd so the stbi_image_free below owns it too.
-            const size_t n = (size_t)m_MemRawW * m_MemRawH * 4;
-            if (m_Memory.size() >= n && (data = (unsigned char*)malloc(n)) != nullptr) {
-                std::memcpy(data, m_Memory.data(), n);
-                m_Width = m_MemRawW; m_Height = m_MemRawH; m_Channels = 4;
-            }
-        } else if (fromMemory) {
-            data = stbi_load_from_memory(m_Memory.data(), (int)m_Memory.size(), &m_Width, &m_Height, &m_Channels, 0);
-        } else {
-            data = stbi_load(m_Path.c_str(), &m_Width, &m_Height, &m_Channels, 0);
-        }
-        if (!data) {
-            Log::Error("Texture: failed to load '" + m_Path + "'.", LogContext::Asset(m_Path));
-            return;
-        }
-
-        uploadData = data;
-        uploadW = m_Width;
-        uploadH = m_Height;
-        if (settings.MaxTextureSize > 0 && (m_Width > settings.MaxTextureSize || m_Height > settings.MaxTextureSize)) {
-            resized = DownsampleBox(data, m_Width, m_Height, m_Channels, settings.MaxTextureSize, uploadW, uploadH,
-                                    effective.IsSRGB);
-            uploadData = resized.data();
-        }
-
-        // #156 - block-compress on import. Falls back to the raw upload if the format isn't
-        // available (no S3TC), which is then what gets cached under these settings.
-        if (settings.CompressionMode != TextureImportSettings::Compression::None &&
-            EncodeBlockCompressed(uploadData, uploadW, uploadH, m_Channels, effective.IsSRGB,
-                                  effective.GenerateMipmaps,
-                                  settings.CompressionMode == TextureImportSettings::Compression::HighQuality,
-                                  encoded)) {
-            compressed = &encoded;
-        }
-
-        // Bake the result for next time — post-downsample (and post-encode), so the cache
-        // stores exactly the bytes the upload below receives.
-        TextureCache::Image entry;
-        entry.SourceWidth = m_Width;
-        entry.SourceHeight = m_Height;
-        entry.Width = uploadW;
-        entry.Height = uploadH;
-        entry.Channels = m_Channels;
-        if (!fromMemory) {
-            if (compressed) {
-                entry.GLFormat = encoded.GLFormat;
-                entry.LevelSizes = encoded.LevelSizes;
-                entry.Pixels = encoded.Pixels;
-            } else {
-                entry.Pixels.assign(uploadData, uploadData + (size_t)uploadW * uploadH * m_Channels);
-            }
-            TextureCache::Store(m_Path, settings, entry);
-        }
+    TextureCache::Image entry;
+    if (!fromMemory && TextureCache::Load(path, settings, entry)) {
+        CopyEntry(entry, out);
+        TextureLoadStats::AddDecode(MsSince(start));
+        return out;
     }
 
+    // Do NOT flip on load: Model.cpp already applies Assimp's aiProcess_FlipUVs to correct the
+    // top-left-origin (FBX/glTF) vs bottom-left-origin (OpenGL) mismatch on the mesh's own UVs.
+    // Flipping the image here too double-corrects it. The per-thread setter, since this can run
+    // on several AsyncAssetLoader workers at once.
+    stbi_set_flip_vertically_on_load_thread(0);
+    int w = 0, h = 0, c = 0;
+    unsigned char* data = nullptr;
+    const unsigned char* src = nullptr;
+    if (fromMemory && rawW > 0) {
+        // Raw RGBA8 from the model file.
+        if (memory.size() >= (size_t)rawW * rawH * 4) { src = memory.data(); w = rawW; h = rawH; c = 4; }
+    } else if (fromMemory) {
+        data = stbi_load_from_memory(memory.data(), (int)memory.size(), &w, &h, &c, 0);
+        src = data;
+    } else {
+        data = stbi_load(path.c_str(), &w, &h, &c, 0);
+        src = data;
+    }
+    if (!src) {
+        Log::Error("Texture: failed to load '" + path + "'.", LogContext::Asset(path));
+        out.Memory = std::move(memory);
+        return out;
+    }
+
+    entry.SourceWidth = entry.Width = w;
+    entry.SourceHeight = entry.Height = h;
+    entry.Channels = c;
+    std::vector<unsigned char> resized;
+    const unsigned char* pixels = src;
+    if (settings.MaxTextureSize > 0 && (w > settings.MaxTextureSize || h > settings.MaxTextureSize)) {
+        resized = DownsampleBox(src, w, h, c, settings.MaxTextureSize, entry.Width, entry.Height, effective.IsSRGB);
+        pixels = resized.data();
+    }
+
+    // #156 - block-compress on import. Falls back to the raw upload if the format isn't available
+    // (no S3TC), which is then what gets cached under these settings.
+    TextureCache::Image encoded;
+    if (settings.CompressionMode != TextureImportSettings::Compression::None &&
+        EncodeBlockCompressed(pixels, entry.Width, entry.Height, c, effective.IsSRGB, effective.GenerateMipmaps,
+                              settings.CompressionMode == TextureImportSettings::Compression::HighQuality, encoded)) {
+        entry.GLFormat = encoded.GLFormat;
+        entry.LevelSizes = std::move(encoded.LevelSizes);
+        entry.Pixels = std::move(encoded.Pixels);
+    } else if (!resized.empty()) {
+        entry.Pixels = std::move(resized);
+    } else {
+        entry.Pixels.assign(pixels, pixels + (size_t)entry.Width * entry.Height * c);
+    }
+    if (data) stbi_image_free(data);
+
+    // Bake the result for next time — post-downsample (and post-encode), so the cache stores
+    // exactly the bytes the upload receives.
+    if (!fromMemory) TextureCache::Store(path, settings, entry);
+
+    CopyEntry(entry, out);
+    out.Memory = std::move(memory);
+    TextureLoadStats::AddDecode(MsSince(start));
+    return out;
+}
+
+} // namespace
+
+TextureCpuData Texture::DecodeFile(const std::string& path, const TextureImportSettings& settings) {
+    return Decode(path, {}, 0, 0, settings);
+}
+
+TextureCpuData Texture::DecodeMemory(const std::string& name, std::vector<unsigned char> bytes, int rawWidth,
+                                     int rawHeight, const TextureImportSettings& settings) {
+    return Decode(name, std::move(bytes), rawWidth, rawHeight, settings);
+}
+
+void Texture::UploadFromFile(const TextureImportSettings& settings) {
+    InitGpuCaps();
+    // An embedded source is copied into the decode, so this Texture keeps its own for Reimport.
+    const TextureCpuData data = m_Memory.empty() ? DecodeFile(m_Path, settings)
+                                                 : DecodeMemory(m_Path, m_Memory, m_MemRawW, m_MemRawH, settings);
+    Upload(data);
+}
+
+void Texture::Upload(const TextureCpuData& data) {
+    InitGpuCaps();
+    if (!data.Ok) return;
     const auto uploadStart = std::chrono::steady_clock::now();
+    const TextureImportSettings effective = Effective(data.Settings);
+    m_Width = data.SourceWidth;
+    m_Height = data.SourceHeight;
+    m_Channels = data.Channels;
+    const int uploadW = data.Width, uploadH = data.Height;
+    const unsigned char* uploadData = data.Pixels.data();
+    const TextureCpuData* compressed = data.GLFormat != 0 ? &data : nullptr;
 
     // Sized internal formats on both branches (#100) — the sRGB branch already used them;
     // the linear branch used to pass bare GL_RGB/GL_RGBA/GL_RED, leaving precision to the driver
@@ -390,7 +478,7 @@ void Texture::UploadFromFile(const TextureImportSettings& settings) {
     if (compressed) {
         // #156 - BCn: every mip level was built and encoded on the CPU; upload them as-is.
         // Grey sRGB images were expanded to RGBA before encoding (and so aren't swizzled).
-        const GLenum cf = (GLenum)compressed->GLFormat;
+        const GLenum cf = (GLenum)data.GLFormat;
         levels = (int)compressed->LevelSizes.size();
         glTextureStorage2D(m_ID, levels, cf, uploadW, uploadH);
         const unsigned char* blocks = compressed->Pixels.data();
@@ -472,14 +560,8 @@ void Texture::UploadFromFile(const TextureImportSettings& settings) {
         }
     }
 
-    if (data) stbi_image_free(data); // null on the cache-hit path, where stb never ran
-    m_Settings = settings;
-
-    const auto uploadEnd = std::chrono::steady_clock::now();
-    TextureLoadStats& stats = TextureLoadStats::Get();
-    stats.Count += 1;
-    stats.DecodeMs += std::chrono::duration<double, std::milli>(uploadStart - decodeStart).count();
-    stats.UploadMs += std::chrono::duration<double, std::milli>(uploadEnd - uploadStart).count();
+    m_Settings = data.Settings;
+    TextureLoadStats::AddUpload(MsSince(uploadStart));
 }
 
 bool Texture::Reimport(const TextureImportSettings& settings) {

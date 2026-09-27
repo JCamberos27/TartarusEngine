@@ -13,7 +13,27 @@ ModelMesh::ModelMesh(const std::vector<ModelVertex>& vertices, const std::vector
     m_LocalPositions.reserve(vertices.size());
     for (const auto& v : vertices) m_LocalPositions.push_back(v.Position);
     m_LocalIndices = indices; // kept for #185 PR 6 mesh-collider cooking
+    CreateGpu(vertices);
+}
 
+ModelMesh::ModelMesh(std::vector<ModelVertex>&& vertices, const std::vector<unsigned int>& indices, bool deferUpload) {
+    m_IndexCount = static_cast<unsigned int>(indices.size());
+    m_LocalPositions.reserve(vertices.size());
+    for (const auto& v : vertices) m_LocalPositions.push_back(v.Position);
+    m_LocalIndices = indices;
+    if (deferUpload) m_PendingVertices = std::move(vertices);
+    else CreateGpu(vertices);
+}
+
+void ModelMesh::FinishUpload() {
+    if (m_VAO) return;
+    CreateGpu(m_PendingVertices);
+    m_PendingVertices.clear();
+    m_PendingVertices.shrink_to_fit();
+}
+
+void ModelMesh::CreateGpu(const std::vector<ModelVertex>& vertices) {
+    const std::vector<unsigned int>& indices = m_LocalIndices;
     // glNamedBufferStorage rejects a zero size; a degenerate empty sub-mesh still needs a
     // valid buffer name for the VAO bindings, so floor the allocation at one element.
     const GLsizeiptr vboBytes = static_cast<GLsizeiptr>(
@@ -50,12 +70,14 @@ ModelMesh::ModelMesh(const std::vector<ModelVertex>& vertices, const std::vector
 }
 
 ModelMesh::~ModelMesh() {
+    if (!m_VAO) return; // deferred and never uploaded: no GL objects (and maybe no GL thread)
     glDeleteBuffers(1, &m_VBO);
     glDeleteBuffers(1, &m_EBO);
     glDeleteVertexArrays(1, &m_VAO);
 }
 
 void ModelMesh::Draw(int instances) const {
+    if (!m_VAO) return; // still deferred
     GLStateCache::BindVertexArray(m_VAO);
     if (instances > 1)
         glDrawElementsInstanced(GL_TRIANGLES, m_IndexCount, GL_UNSIGNED_INT, nullptr, instances);

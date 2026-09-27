@@ -82,6 +82,17 @@ public:
     // slots on the RenderableComponent.
     std::shared_ptr<Model> CreateInstance() const;
 
+    // Async import (AsyncAssetLoader): the whole Assimp import and every texture decode, with no
+    // GL at all, so it can run on a worker thread. The result has its meshes and textures
+    // decoded but not uploaded; FinishGpuUpload() (main thread) creates the GL objects, and no one
+    // may draw or instance it before that. Settings as for the path constructor.
+    static std::shared_ptr<Model> ImportDeferred(const std::string& path, const ModelImportSettings& settings);
+    bool NeedsGpuUpload() const { return m_GpuPending; }
+    void FinishGpuUpload();
+    // One mesh or one texture per call, so a loader can spread a big model over several frames.
+    // Returns true once everything is uploaded.
+    bool FinishGpuUploadStep();
+
     // Builds a procedural primitive (kind: "cube"/"sphere"/"cylinder"/"cone"/"plane") instead
     // of importing a file. `path` is stored as this Model's Path() so the editor's usual
     // per-path asset cache and scene-save/load round-trip both work unmodified — the caller
@@ -357,6 +368,8 @@ private:
     PlaybackState m_Anim;          // what's playing
     PlaybackState m_AnimFrom;      // what's being faded out (Clip -1 = the bind pose)
     float m_FadeElapsed = 0.0f, m_FadeDuration = 0.0f; // crossfade progress; duration 0 = none
+    bool m_DeferGpu = false;       // ImportDeferred: build meshes/textures without GL
+    bool m_GpuPending = false;     // ImportDeferred's result, until FinishGpuUpload
     bool m_PosePending = false;    // a fade to "stopped" still needs final matrices this frame
     bool m_ExternalPose = false;   // ApplyLocalPose owns the pose until the next PlayAnimation
     std::vector<LocalTRS> m_AppliedPose; // ... and what it was given (AppliedLocalPose)
@@ -411,7 +424,8 @@ private:
 
     void ImportFromFile(const ModelImportSettings& settings);
     void ProcessNode(aiNode* node, const aiScene* scene, const glm::mat4& parentTransform);
-    std::unique_ptr<ModelMesh> ProcessMesh(aiMesh* mesh, const aiScene* scene, const glm::mat4& nodeTransform);
+    std::unique_ptr<ModelMesh> ProcessMesh(aiMesh* mesh, const aiScene* scene, const glm::mat4& nodeTransform,
+                                           const aiNode* node);
     Material ExtractMaterial(const aiScene* scene, unsigned int materialIndex);
     // #95 — what a material slot's texture holds, which decides its colour space.
     enum class TextureRole { Color, Normal, Data };
