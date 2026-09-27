@@ -105,7 +105,12 @@ void EditorLayer::DrawCharacterOutfitEditor(World& world, entt::entity root) {
         ImGui::Spacing();
         if (PrimaryButton(ICON_FA_PERSON "  Build body")) {
             PushUndo(world, "Build Outfit Body");
+            // Take over the body parts already under this object first (an existing Player Body's
+            // Torso, Legs, Head ...). Apply only sees tagged pieces, so without this it built a
+            // second body on top of the untagged one - a female body hidden inside the male one.
+            const int adopted = OutfitSystem::AdoptExisting(world, assets, root);
             report(OutfitSystem::Apply(world, assets, root, OutfitSystem::CurrentRequest(world, root)));
+            if (adopted) ui.Notes.insert(ui.Notes.begin(), "Adopted " + std::to_string(adopted) + " existing pieces");
         }
         ImGui::SameLine();
         if (ImGui::Button(ICON_FA_WAND_MAGIC_SPARKLES "  Adopt existing")) {
@@ -281,7 +286,7 @@ void EditorLayer::DrawCharacterOutfitEditor(World& world, entt::entity root) {
         // No cached render after a moment: load and render it (on screen only, two a frame).
         if (visible && frame - asked->second > 20 && g_Thumbs.LoadsThisFrame < 2) {
             ++g_Thumbs.LoadsThisFrame;
-            if (auto model = assets.LoadModel(it.Path))
+            if (auto model = assets.LoadModel(ProjectPaths::Resolve(it.Path)))
                 if (const unsigned tex = ModelThumbnail(*model)) { g_Thumbs.Rendered[it.Path] = tex; return tex; }
         }
         return 0;

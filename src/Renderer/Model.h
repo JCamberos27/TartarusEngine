@@ -425,7 +425,8 @@ private:
     // ("*0") reference is returned unchanged for the caller to handle. See Model.cpp for the
     // full resolution order.
     std::string ResolveTexturePath(const std::string& raw) const;
-    void ExtractBoneWeights(std::vector<ModelVertex>& vertices, aiMesh* mesh);
+    // offsetFix: folded into the offsets of bones this mesh registers (see ProcessMesh's bake).
+    void ExtractBoneWeights(std::vector<ModelVertex>& vertices, aiMesh* mesh, const glm::mat4& offsetFix);
     void ReadHierarchy(const aiNode* node, int parent);
     void ReadAnimations(const aiScene* scene);
     void EvaluatePose(); // current (and fading-out) clip -> m_FinalBoneMatrices
