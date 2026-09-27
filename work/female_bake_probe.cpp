@@ -16,6 +16,7 @@
 #include <cstdio>
 #include <map>
 #include <string>
+#include <vector>
 
 static glm::mat4 AiToGlm(const aiMatrix4x4& m) {
     glm::mat4 t;
@@ -137,15 +138,82 @@ static void Simulate(const aiScene* s, const aiNode* n, const glm::mat4& p, int 
     for (unsigned i = 0; i < n->mNumChildren; ++i) Simulate(s, n->mChildren[i], N, rule);
 }
 
+// --scan: is each skinned mesh where its bones are? For every vertex, the distance from its bind-pose
+// position (the engine's current rule, rule 2 above) to the bind position of the bone weighting it most.
+// A mesh that imports lying down or floating off sits far from its bones; one that's right sits within a
+// few centimetres. Prints one line per mesh: median distance for the engine's bake (N) and for no bake (I).
+static std::string g_File;
+static void Scan(const aiScene* s, const aiNode* n, const glm::mat4& p, std::vector<glm::mat4> frames = {}) {
+    glm::mat4 N = p * AiToGlm(n->mTransformation);
+    frames.push_back(N); // this node and its ancestors, for the engine rule below
+    for (unsigned mi = 0; mi < n->mNumMeshes; ++mi) {
+        const aiMesh* m = s->mMeshes[n->mMeshes[mi]];
+        if (!m->mNumBones) continue;
+        const aiBone* b0 = m->mBones[0];
+        const glm::mat4 C = GI * g_Globals[b0->mName.C_Str()] * AiToGlm(b0->mOffsetMatrix);
+        const bool cIsN = NearlyEqual(C, N), cIsI = NearlyEqual(C, glm::mat4(1.0f));
+        std::vector<int> mainBone(m->mNumVertices, -1);
+        std::vector<float> mainW(m->mNumVertices, 0.0f);
+        for (unsigned bi = 0; bi < m->mNumBones; ++bi)
+            for (unsigned k = 0; k < m->mBones[bi]->mNumWeights; ++k) {
+                const auto& wt = m->mBones[bi]->mWeights[k];
+                if (wt.mWeight > mainW[wt.mVertexId]) { mainW[wt.mVertexId] = wt.mWeight; mainBone[wt.mVertexId] = (int)bi; }
+            }
+        auto median = [&](const glm::mat4& bake, const glm::mat4& offsetFix) {
+            std::vector<float> d;
+            std::vector<glm::vec3> acc(m->mNumVertices, glm::vec3(0));
+            std::vector<float> w(m->mNumVertices, 0.0f);
+            for (unsigned bi = 0; bi < m->mNumBones; ++bi) {
+                const aiBone* b = m->mBones[bi];
+                const glm::mat4 pal = GI * g_Globals[b->mName.C_Str()] * AiToGlm(b->mOffsetMatrix) * offsetFix;
+                for (unsigned k = 0; k < b->mNumWeights; ++k) {
+                    const unsigned vi = b->mWeights[k].mVertexId;
+                    const aiVector3D& v = m->mVertices[vi];
+                    acc[vi] += b->mWeights[k].mWeight * glm::vec3(pal * bake * glm::vec4(v.x, v.y, v.z, 1));
+                    w[vi] += b->mWeights[k].mWeight;
+                }
+            }
+            for (unsigned vi = 0; vi < m->mNumVertices; vi += 7) {
+                if (mainBone[vi] < 0 || w[vi] <= 0) continue;
+                const glm::vec3 bone = glm::vec3((GI * g_Globals[m->mBones[mainBone[vi]]->mName.C_Str()])[3]);
+                d.push_back(glm::length(acc[vi] / w[vi] - bone));
+            }
+            if (d.empty()) return -1.0f;
+            std::nth_element(d.begin(), d.begin() + d.size() / 2, d.end());
+            return d[d.size() / 2];
+        };
+        // The engine's rule: bake N; when C is the frame of the mesh node or one of its ancestors (and not
+        // I), the offsets get inverse(C) folded in.
+        bool fix = false;
+        if (!cIsI)
+            for (const auto& f : frames) fix = fix || NearlyEqual(C, f);
+        const float engine = median(N, fix ? glm::inverse(C) : glm::mat4(1.0f));
+        const float noBake = median(glm::mat4(1.0f), glm::mat4(1.0f));
+        std::printf("%s | %-28s | C==N %d C==I %d | engine %.3f | noBake %.3f%s\n", g_File.c_str(), m->mName.C_Str(), cIsN,
+                    cIsI, engine, noBake, engine > 0.25f ? "   <-- OFF" : "");
+        if (fix && !cIsN) std::printf("%s | %-28s | ANCESTOR-FRAME FIX\n", g_File.c_str(), m->mName.C_Str());
+    }
+    for (unsigned i = 0; i < n->mNumChildren; ++i) Scan(s, n->mChildren[i], N, frames);
+}
+
 int main(int argc, char** argv) {
     const bool sim = argc > 1 && std::string(argv[1]) == "--sim";
-    for (int a = sim ? 2 : 1; a < argc; ++a) {
+    const bool scan = argc > 1 && std::string(argv[1]) == "--scan";
+    for (int a = (sim || scan) ? 2 : 1; a < argc; ++a) {
         Assimp::Importer imp;
         imp.SetPropertyFloat(AI_CONFIG_GLOBAL_SCALE_FACTOR_KEY, 1.0f);
         imp.SetPropertyBool(AI_CONFIG_IMPORT_FBX_PRESERVE_PIVOTS, false);
         const aiScene* s = imp.ReadFile(argv[a], aiProcess_Triangulate | aiProcess_FlipUVs | aiProcess_GlobalScale |
                                                      aiProcess_LimitBoneWeights);
         if (!s) { std::printf("%s: %s\n", argv[a], imp.GetErrorString()); continue; }
+        if (scan) {
+            g_Globals.clear();
+            Collect(s->mRootNode, glm::mat4(1));
+            GI = glm::inverse(AiToGlm(s->mRootNode->mTransformation));
+            g_File = argv[a];
+            Scan(s, s->mRootNode, glm::mat4(1));
+            continue;
+        }
         std::printf("== %s\n", argv[a]);
         g_Globals.clear();
         Collect(s->mRootNode, glm::mat4(1));

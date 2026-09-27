@@ -345,6 +345,15 @@ void EditorLayer::DrawViewportStatusBar(World& world, Camera& editorCamera) {
             EditorSettings::Get().SceneShowStats = !EditorSettings::Get().SceneShowStats;
             EditorSettings::Save();
         }
+        // A hitch - one frame over 33 ms in the recent history - stays visible for as long as it's in
+        // the history, which the smoothed figure hides (a 2 s freeze barely moves it).
+        float worst = 0.0f;
+        for (int i = 0; i < m_FrameTimeHistoryFilled; ++i) worst = std::max(worst, m_FrameTimeHistory[i]);
+        if (worst > 33.0f) {
+            ImGui::SameLine();
+            ImGui::TextColored(EditorUIPrimitives::WarningColor(), "(hitch %.0f ms)", worst);
+            if (ImGui::IsItemHovered()) EditorUI::SetTooltip("Slowest frame in the last %d", m_FrameTimeHistoryFilled);
+        }
         sep(); ImGui::Text("%s draws", compact(m_RenderStats.DrawCalls).c_str());
         if (clickable("Open the Statistics panel")) {
             EditorSettings::Get().SceneShowStats = !EditorSettings::Get().SceneShowStats;
