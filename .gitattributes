@@ -53,3 +53,4 @@ extern/stb_image_write.h  linguist-vendored
 extern/json.hpp           linguist-vendored
 extern/IconsFontAwesome6.h linguist-vendored
 extern/ImViewGuizmo.h     linguist-vendored
+*.sh     text eol=lf

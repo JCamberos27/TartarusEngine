@@ -4,6 +4,7 @@
 // fragment back along the light onto this square (see CloudShadow() in ModelFragment.glsl) and
 // dims the sun/moon by it, so moving clouds cast moving shadows across the scene.
 #define ATMOSPHERE_LUTS
+#define SKY_VIEW_LUTS
 #include "AtmosphereCommon.glsl"
 #include "CloudsCommon.glsl"
 
@@ -33,7 +34,7 @@ void main() {
         float od = 0.0;
         for (int i = 0; i < kSteps; ++i) {
             vec3 p = ground + L * (tStart + (float(i) + 0.5) * dt);
-            od += CloudDensity(p, i % 2 == 0, 1.0) * dt;
+            od += CloudDensity(p, i % 2 == 0, ShapeTexelKm() * 2.0) * dt;
         }
         // Multiple scattering lets more light through thick cloud than Beer-Lambert alone.
         T = max(exp(-od), 0.25 * exp(-od * 0.25));
@@ -43,7 +44,7 @@ void main() {
             vec3 p = ground + L * max(c1, 0.0);
             vec2 w = uCloudWindDir.xy;
             vec2 q = vec2(dot(p.xz, w), dot(p.xz, vec2(-w.y, w.x))) + uCloudMisc2.xy;
-            vec4 wm = textureLod(uCloudWeather, q * uCloudMisc.w, 0.0);
+            vec4 wm = textureLod(uCloudWeather, q * uCloudMisc.w, 2.0); // a soft veil
             float d = Saturate(Remap(wm.b, 1.0 - uCloudMisc.y, 1.0, 0.0, 1.0));
             T *= mix(1.0, 0.75, d);
         }
