@@ -1,4 +1,5 @@
 #include "SceneRenderer.h"
+#include <array>
 #include "RenderFrameContext.h"
 
 #include "World.h"
@@ -353,10 +354,11 @@ void SceneRenderer::RenderScene(World& world, const RenderFrameContext& ctx,
         const int* HideBones = nullptr; // PlayerBodyTag::CameraHideBones in the camera's view, else none
         bool NoSsao = false;  // left out of the SSAO depth pre-pass (main.cpp), so it must not sample the map
         unsigned HideVerts = 0; // OutfitHideTag: the piece's covered vertices (SkinHideBuffer), 0 = none
-        // PlayerBodyTag sleeves: 1 = drop the vertices weighted mostly to SleeveBones (the world pass),
-        // 2 = draw only those (the view-model pass). 0 = the whole piece.
-        int SleeveMode = 0;
-        const std::uint32_t* SleeveBones = nullptr;
+        // PlayerBodyTag bone masks: 1 = drop the vertices weighted mostly to BoneMask's bones (the camera's
+        // world pass: the head's surroundings, and the sleeves while they're in the view-model pass),
+        // 2 = draw only those (the view-model pass's copy of the sleeves). 0 = the whole piece.
+        int BoneMaskMode = 0;
+        std::array<std::uint32_t, 16> BoneMask{};
     };
     static std::vector<DrawItem> drawList;
     static std::vector<DrawItem> transparentList;
@@ -399,6 +401,17 @@ void SceneRenderer::RenderScene(World& world, const RenderFrameContext& ctx,
         // Clothing on the player's arms while they're in the view-model pass: the sleeves are drawn there
         // too (a second copy, only them), the rest here without them - see PlayerBodyTag.
         const bool splitSleeves = viewModelPass && cameraBody && bodyTag->SleevesInViewModel;
+        // What the camera's world pass leaves out of this piece: around the head, and the sleeves when split.
+        std::array<std::uint32_t, 16> cameraMask{};
+        bool anyCameraMask = false;
+        if (cameraBody && bodyTag->HasHeadBones) {
+            for (int w = 0; w < 16; ++w) cameraMask[w] |= bodyTag->HeadBones[w];
+            anyCameraMask = true;
+        }
+        if (splitSleeves) {
+            for (int w = 0; w < 16; ++w) cameraMask[w] |= bodyTag->SleeveBones[w];
+            anyCameraMask = true;
+        }
         const auto* outfitHide = world.Registry.try_get<OutfitHideTag>(entity);
         const unsigned hideVerts = outfitHide && outfitHide->Buffer ? outfitHide->Buffer->Id() : 0u;
         glm::mat4 model = world.GetCachedWorldTransform(entity);
@@ -468,12 +481,16 @@ void SceneRenderer::RenderScene(World& world, const RenderFrameContext& ctx,
                 m->MeshCount(), (int)m->TriangleCount(), (int)m->VertexCount(),
                 MaterialAsset::Queue::Transparent, qi, viewDepth, centre, Model::MeshPass::Transparent,
                 renderable.ReceiveShadows, layerBit, nearHide, hideBones, noSsao, hideVerts };
+            if (anyCameraMask) {
+                item.BoneMaskMode = 1;
+                item.BoneMask = cameraMask;
+            }
             if (splitSleeves) {
-                item.SleeveMode = 1;
-                item.SleeveBones = bodyTag->SleeveBones;
                 DrawItem sleeves = item;
-                sleeves.SleeveMode = 2;
-                sleeves.NearHide = 0.0f;
+                sleeves.BoneMaskMode = 2;
+                std::copy(std::begin(bodyTag->SleeveBones), std::end(bodyTag->SleeveBones), sleeves.BoneMask.begin());
+                // Keeps the piece's Near Hide: the sleeve's top reaches the shoulder, at the eye in this
+                // projection, and its open end showed as black slivers there.
                 sleeves.HideBones = nullptr;
                 viewModelTransparentList.push_back(sleeves);
             }
@@ -484,12 +501,16 @@ void SceneRenderer::RenderScene(World& world, const RenderFrameContext& ctx,
                 m->MeshCount(), (int)m->TriangleCount(), (int)m->VertexCount(),
                 MaterialAsset::Queue::Opaque, 2000, viewDepth, centre, opaquePass,
                 renderable.ReceiveShadows, layerBit, nearHide, hideBones, noSsao, hideVerts };
+            if (anyCameraMask) {
+                item.BoneMaskMode = 1;
+                item.BoneMask = cameraMask;
+            }
             if (splitSleeves) {
-                item.SleeveMode = 1;
-                item.SleeveBones = bodyTag->SleeveBones;
                 DrawItem sleeves = item;
-                sleeves.SleeveMode = 2;
-                sleeves.NearHide = 0.0f;
+                sleeves.BoneMaskMode = 2;
+                std::copy(std::begin(bodyTag->SleeveBones), std::end(bodyTag->SleeveBones), sleeves.BoneMask.begin());
+                // Keeps the piece's Near Hide: the sleeve's top reaches the shoulder, at the eye in this
+                // projection, and its open end showed as black slivers there.
                 sleeves.HideBones = nullptr;
                 viewModelList.push_back(sleeves);
             }
@@ -525,14 +546,14 @@ void SceneRenderer::RenderScene(World& world, const RenderFrameContext& ctx,
         if (probeItem->HideBones)
             for (; hideCount < 8 && probeItem->HideBones[hideCount] >= 0; ++hideCount) prog.SetInt(kHideBone[hideCount], probeItem->HideBones[hideCount]);
         prog.SetInt("uHideBoneCount", hideCount);
-        prog.SetInt("uSleeveMode", probeItem->SleeveBones ? probeItem->SleeveMode : 0);
-        if (probeItem->SleeveBones && probeItem->SleeveMode) {
-            static const char* const kSleeve[16] = {
-                "uSleeveBones[0]",  "uSleeveBones[1]",  "uSleeveBones[2]",  "uSleeveBones[3]",
-                "uSleeveBones[4]",  "uSleeveBones[5]",  "uSleeveBones[6]",  "uSleeveBones[7]",
-                "uSleeveBones[8]",  "uSleeveBones[9]",  "uSleeveBones[10]", "uSleeveBones[11]",
-                "uSleeveBones[12]", "uSleeveBones[13]", "uSleeveBones[14]", "uSleeveBones[15]"};
-            for (int w = 0; w < 16; ++w) prog.SetInt(kSleeve[w], (int)probeItem->SleeveBones[w]); // the bits, as GLSL ints
+        prog.SetInt("uBoneMaskMode", probeItem->BoneMaskMode);
+        if (probeItem->BoneMaskMode) {
+            static const char* const kMask[16] = {
+                "uBoneMask[0]",  "uBoneMask[1]",  "uBoneMask[2]",  "uBoneMask[3]",
+                "uBoneMask[4]",  "uBoneMask[5]",  "uBoneMask[6]",  "uBoneMask[7]",
+                "uBoneMask[8]",  "uBoneMask[9]",  "uBoneMask[10]", "uBoneMask[11]",
+                "uBoneMask[12]", "uBoneMask[13]", "uBoneMask[14]", "uBoneMask[15]"};
+            for (int w = 0; w < 16; ++w) prog.SetInt(kMask[w], (int)probeItem->BoneMask[w]); // the bits, as GLSL ints
         }
         prog.SetInt("uSSAOEnabled", activeFs->ssaoOn && !probeItem->NoSsao ? 1 : 0);
         SkinHideBuffer::Bind(probeItem->HideVerts);
