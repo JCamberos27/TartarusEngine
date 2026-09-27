@@ -193,10 +193,31 @@ bool FirstPersonBody::Start(World& world, Player& player) {
         // The torso's shoulders, out of the camera's view (the arms piece keeps its own).
         const std::string pieceName = lower(reg.all_of<NameComponent>(e) ? reg.get<NameComponent>(e).Name : std::string());
         const std::string armsName = lower(cfg.ArmsPiece);
-        if (armsName.empty() || pieceName.find(armsName) == std::string::npos) {
+        const bool isArms = !armsName.empty() && pieceName.find(armsName) != std::string::npos;
+        if (!isArms) {
             int count = 0;
             for (const std::string& b : names(cfg.CameraHiddenBones))
                 if (const int id = m->BoneId(Bone(b)); id >= 0 && count < 8) bodyTag.CameraHideBones[count++] = id;
+        }
+        // Clothing (an outfit piece that isn't a body part): its sleeves go into the view-model pass with
+        // the arms (PlayerBodyTag). The sleeve bones: the Camera Hidden Bones and everything under them.
+        bodyTag.HasSleeves = false;
+        std::fill(std::begin(bodyTag.SleeveBones), std::end(bodyTag.SleeveBones), 0u);
+        const auto* piece = reg.try_get<OutfitPieceComponent>(e);
+        if (!isArms && piece && !(piece->Flags & OutfitPieceBodyPart)) {
+            std::vector<std::string> roots;
+            for (const std::string& b : names(cfg.CameraHiddenBones)) roots.push_back(Bone(b));
+            std::vector<char> under((size_t)m->NodeCount(), 0);
+            for (int i = 0; i < m->NodeCount(); ++i) { // parents come before their children
+                const int p = m->NodeParent(i);
+                under[(size_t)i] = (p >= 0 && under[(size_t)p]) ||
+                                   std::find(roots.begin(), roots.end(), m->NodeName(i)) != roots.end();
+                if (!under[(size_t)i]) continue;
+                const int id = m->BoneId(m->NodeName(i));
+                if (id < 0 || id >= 16 * 32) continue;
+                bodyTag.SleeveBones[id >> 5] |= 1u << (id & 31);
+                bodyTag.HasSleeves = true;
+            }
         }
         m_Models.push_back(reg.get<RenderableComponent>(e).ModelRef);
         m_Pieces.push_back(e);
@@ -869,6 +890,9 @@ void FirstPersonBody::ArmsLateUpdate(World& world, entt::entity weaponArms, floa
     if (follow) m_ArmsWeight = 1.0f;
     else m_ArmsWeight -= m_ArmsWeight * Follow(dt, cfg.ArmsEaseOut);
     const bool viewModelArms = follow;
+    // Clothing's sleeves go with the arms (PlayerBodyTag::SleeveBones).
+    for (entt::entity e : m_Pieces)
+        if (auto* tag = reg.valid(e) ? reg.try_get<PlayerBodyTag>(e) : nullptr) tag->SleevesInViewModel = viewModelArms && tag->HasSleeves;
     // The body's arms piece goes into the view-model pass with the gun (its hands then sit where the
     // rig's do); off, it is an ordinary piece of the body again.
     for (size_t k = 0; k < m_Pieces.size(); ++k) {

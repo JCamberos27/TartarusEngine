@@ -353,6 +353,10 @@ void SceneRenderer::RenderScene(World& world, const RenderFrameContext& ctx,
         const int* HideBones = nullptr; // PlayerBodyTag::CameraHideBones in the camera's view, else none
         bool NoSsao = false;  // left out of the SSAO depth pre-pass (main.cpp), so it must not sample the map
         unsigned HideVerts = 0; // OutfitHideTag: the piece's covered vertices (SkinHideBuffer), 0 = none
+        // PlayerBodyTag sleeves: 1 = drop the vertices weighted mostly to SleeveBones (the world pass),
+        // 2 = draw only those (the view-model pass). 0 = the whole piece.
+        int SleeveMode = 0;
+        const std::uint32_t* SleeveBones = nullptr;
     };
     static std::vector<DrawItem> drawList;
     static std::vector<DrawItem> transparentList;
@@ -392,6 +396,9 @@ void SceneRenderer::RenderScene(World& world, const RenderFrameContext& ctx,
         // The SSAO pre-pass skips view-model geometry always and the camera's own body (its hidden parts
         // would occlude): read at their pixels, the map holds whatever stands behind them - see-through AO.
         const bool noSsao = cameraBody || world.Registry.all_of<ViewModelTag>(entity);
+        // Clothing on the player's arms while they're in the view-model pass: the sleeves are drawn there
+        // too (a second copy, only them), the rest here without them - see PlayerBodyTag.
+        const bool splitSleeves = viewModelPass && cameraBody && bodyTag->SleevesInViewModel;
         const auto* outfitHide = world.Registry.try_get<OutfitHideTag>(entity);
         const unsigned hideVerts = outfitHide && outfitHide->Buffer ? outfitHide->Buffer->Id() : 0u;
         glm::mat4 model = world.GetCachedWorldTransform(entity);
@@ -412,7 +419,9 @@ void SceneRenderer::RenderScene(World& world, const RenderFrameContext& ctx,
                 boundsMax = c + h;
             }
             AABB worldBounds = AABB{boundsMin, boundsMax}.Transformed(model);
-            if (!(isViewModel ? vmFrustum : camFrustum).Intersects(worldBounds)) {
+            const bool seen = (isViewModel ? vmFrustum : camFrustum).Intersects(worldBounds) ||
+                              (splitSleeves && vmFrustum.Intersects(worldBounds));
+            if (!seen) {
                 localStats.Culled++;
                 continue;
             }
@@ -455,17 +464,35 @@ void SceneRenderer::RenderScene(World& world, const RenderFrameContext& ctx,
                     anyTransmission = slots[i]->Mat.TransmissionStrength > 0.0f;
                 }
             }
-            const DrawItem item{ model, m, &slots, matKey, prog,
+            DrawItem item{ model, m, &slots, matKey, prog,
                 m->MeshCount(), (int)m->TriangleCount(), (int)m->VertexCount(),
                 MaterialAsset::Queue::Transparent, qi, viewDepth, centre, Model::MeshPass::Transparent,
                 renderable.ReceiveShadows, layerBit, nearHide, hideBones, noSsao, hideVerts };
+            if (splitSleeves) {
+                item.SleeveMode = 1;
+                item.SleeveBones = bodyTag->SleeveBones;
+                DrawItem sleeves = item;
+                sleeves.SleeveMode = 2;
+                sleeves.NearHide = 0.0f;
+                sleeves.HideBones = nullptr;
+                viewModelTransparentList.push_back(sleeves);
+            }
             (isViewModel ? viewModelTransparentList : transparentList).push_back(item);
         }
         if (anyOpaque) {
-            const DrawItem item{ model, m, &slots, matKey, prog,
+            DrawItem item{ model, m, &slots, matKey, prog,
                 m->MeshCount(), (int)m->TriangleCount(), (int)m->VertexCount(),
                 MaterialAsset::Queue::Opaque, 2000, viewDepth, centre, opaquePass,
                 renderable.ReceiveShadows, layerBit, nearHide, hideBones, noSsao, hideVerts };
+            if (splitSleeves) {
+                item.SleeveMode = 1;
+                item.SleeveBones = bodyTag->SleeveBones;
+                DrawItem sleeves = item;
+                sleeves.SleeveMode = 2;
+                sleeves.NearHide = 0.0f;
+                sleeves.HideBones = nullptr;
+                viewModelList.push_back(sleeves);
+            }
             (isViewModel ? viewModelList : drawList).push_back(item);
         }
     }
@@ -498,6 +525,15 @@ void SceneRenderer::RenderScene(World& world, const RenderFrameContext& ctx,
         if (probeItem->HideBones)
             for (; hideCount < 8 && probeItem->HideBones[hideCount] >= 0; ++hideCount) prog.SetInt(kHideBone[hideCount], probeItem->HideBones[hideCount]);
         prog.SetInt("uHideBoneCount", hideCount);
+        prog.SetInt("uSleeveMode", probeItem->SleeveBones ? probeItem->SleeveMode : 0);
+        if (probeItem->SleeveBones && probeItem->SleeveMode) {
+            static const char* const kSleeve[16] = {
+                "uSleeveBones[0]",  "uSleeveBones[1]",  "uSleeveBones[2]",  "uSleeveBones[3]",
+                "uSleeveBones[4]",  "uSleeveBones[5]",  "uSleeveBones[6]",  "uSleeveBones[7]",
+                "uSleeveBones[8]",  "uSleeveBones[9]",  "uSleeveBones[10]", "uSleeveBones[11]",
+                "uSleeveBones[12]", "uSleeveBones[13]", "uSleeveBones[14]", "uSleeveBones[15]"};
+            for (int w = 0; w < 16; ++w) prog.SetInt(kSleeve[w], (int)probeItem->SleeveBones[w]); // the bits, as GLSL ints
+        }
         prog.SetInt("uSSAOEnabled", activeFs->ssaoOn && !probeItem->NoSsao ? 1 : 0);
         SkinHideBuffer::Bind(probeItem->HideVerts);
         prog.SetInt("uHideVerts", probeItem->HideVerts ? 1 : 0);

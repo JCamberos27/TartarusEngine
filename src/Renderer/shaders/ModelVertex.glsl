@@ -27,6 +27,11 @@ out vec4 vColor;
 uniform int uHideBoneCount;
 uniform int uHideBones[8];
 out float vHidden;
+// An outfit's sleeves while the player's arms are in the view-model pass (PlayerBodyTag): 1 = the world
+// pass drops what the sleeve bones (a bit per palette bone) mostly move, 2 = the view-model pass draws
+// only that. Both cut at the same 0.5, so the two halves meet without a gap.
+uniform int uSleeveMode;
+uniform int uSleeveBones[16]; // bit patterns
 // An outfit piece's vertices covered by clothing (SkinHideBuffer): one bit per vertex of the model, the
 // sub-mesh's first at uHideVertBase. Not drawn in any camera pass.
 layout(std430, binding = 20) readonly buffer HideVertBlock { uint uHideVertBits[]; };
@@ -48,6 +53,14 @@ void main() {
         for (int i = 0; i < 4; ++i)
             for (int k = 0; k < uHideBoneCount; ++k)
                 if (aBoneIDs[i] >= 0 && aBoneIDs[i] == uHideBones[k]) vHidden += aWeights[i];
+        if (uSleeveMode != 0) {
+            float sleeve = 0.0;
+            for (int i = 0; i < 4; ++i) {
+                int b = aBoneIDs[i];
+                if (b >= 0 && b < 512 && ((uint(uSleeveBones[b >> 5]) >> uint(b & 31)) & 1u) != 0u) sleeve += aWeights[i];
+            }
+            vHidden += uSleeveMode == 1 ? sleeve : 1.0 - sleeve;
+        }
         mat4 skinMat = mat4(0.0);
         float totalWeight = 0.0;
         for (int i = 0; i < 4; ++i) {
