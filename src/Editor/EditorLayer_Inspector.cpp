@@ -4120,6 +4120,22 @@ void EditorLayer::DrawAddComponentMenu(World& world, AssetLibrary& assets, entt:
         reflectedFor("Scripts");
     }
 
+    // Every other category (Gameplay: First Person Body, Character Outfit, Goal Trigger ...), in the
+    // order they were registered - a component in a new category is never missing from the menu.
+    std::vector<const char*> others;
+    for (const auto& rc : ComponentRegistry::All()) {
+        const char* cat = rc.Meta.Category;
+        if (!rc.Meta.GenericInspector) continue;
+        bool known = false;
+        for (const char* k : {"Rendering", "Physics", "Audio", "Scripts"}) known = known || std::strcmp(cat, k) == 0;
+        for (const char* o : others) known = known || std::strcmp(cat, o) == 0;
+        if (!known) others.push_back(cat);
+    }
+    for (const char* cat : others) {
+        section(cat);
+        reflectedFor(cat);
+    }
+
     ImGui::EndPopup();
 }
 
