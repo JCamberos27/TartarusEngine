@@ -1,0 +1,17 @@
+{
+  "matVersion": 2,
+  "name": "5.45x39mm Cartridge",
+  "_comment": "Brass-look steel-case cartridge.",
+  "shader": "engine://Standard.shader",
+  "properties": {
+    "_BaseColor": [1, 1, 1],
+    "_Metallic": 1.0,
+    "_Roughness": 1.0,
+    "_DoubleSided": true,
+    "_AlbedoMap": "assets/Weapons/AKS74U/Textures/Cartridge_545x39mm_Albedo_Transparency.png",
+    "_NormalMap": "assets/Weapons/AKS74U/Textures/Cartridge_545x39mm_Normal.png",
+    "_MetallicMap": "assets/Weapons/AKS74U/Textures/Cartridge_545x39mm_Metallic.png",
+    "_RoughnessMap": "assets/Weapons/AKS74U/Textures/Cartridge_545x39mm_Roughness.png",
+    "_AOMap": "assets/Weapons/AKS74U/Textures/Cartridge_545x39mm_Occlusion.png"
+  }
+}

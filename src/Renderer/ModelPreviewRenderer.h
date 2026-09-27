@@ -1,9 +1,11 @@
 #pragma once
 #include <memory>
+#include <vector>
 #include <glm/glm.hpp>
 #include "LightBuffer.h"
 
 class Model;
+struct MaterialAsset;
 class Shader;
 
 // Renders a Model into an offscreen texture from an orbiting camera, for the Inspector's "Model
@@ -21,7 +23,10 @@ public:
     // bounding-box center, framed automatically by ComputeFramingDistance() below. Renders every
     // call (unlike ChannelPreviewRenderer, this one needs to redraw whenever the orbit camera
     // moves, which — while dragging — is most frames, so there's no render-state cache here).
-    unsigned int Render(Model& model, float yaw, float pitch, float distance, int previewW, int previewH);
+    // `slots`: per-mesh materials to draw with (a null / missing slot = the imported one), e.g. the
+    // model's material remap, so the preview matches what placing it gives.
+    unsigned int Render(Model& model, float yaw, float pitch, float distance, int previewW, int previewH,
+                        const std::vector<std::shared_ptr<MaterialAsset>>& slots = {});
 
     // A starting distance that frames the model's whole bounding box in a ~45-degree-FOV camera,
     // for initializing a freshly-selected model's orbit state before the user has zoomed at all.

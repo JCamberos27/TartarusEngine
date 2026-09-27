@@ -24,7 +24,7 @@
         {
           "embedded": {
             "albedoMap": {
-              "path": "textures/proto_grid_light.png",
+              "path": "assets/Materials/Prototype/proto_grid_light.png",
               "pathGuid": "c90849c8fc6c88b0"
             },
             "aoMap": "",
@@ -86,7 +86,7 @@
         {
           "embedded": {
             "albedoMap": {
-              "path": "textures/proto_grid_dark.png",
+              "path": "assets/Materials/Prototype/proto_grid_dark.png",
               "pathGuid": "2b60657ce9aa4555"
             },
             "aoMap": "",
@@ -148,7 +148,7 @@
         {
           "embedded": {
             "albedoMap": {
-              "path": "textures/proto_grid_dark.png",
+              "path": "assets/Materials/Prototype/proto_grid_dark.png",
               "pathGuid": "2b60657ce9aa4555"
             },
             "aoMap": "",
@@ -210,7 +210,7 @@
         {
           "embedded": {
             "albedoMap": {
-              "path": "textures/proto_grid_dark.png",
+              "path": "assets/Materials/Prototype/proto_grid_dark.png",
               "pathGuid": "2b60657ce9aa4555"
             },
             "aoMap": "",
@@ -272,7 +272,7 @@
         {
           "embedded": {
             "albedoMap": {
-              "path": "textures/proto_grid_dark.png",
+              "path": "assets/Materials/Prototype/proto_grid_dark.png",
               "pathGuid": "2b60657ce9aa4555"
             },
             "aoMap": "",
@@ -393,7 +393,7 @@
         {
           "embedded": {
             "albedoMap": {
-              "path": "textures/proto_grid_orange.png",
+              "path": "assets/Materials/Prototype/proto_grid_orange.png",
               "pathGuid": "c389fb6bc574bb89"
             },
             "aoMap": "",
@@ -455,7 +455,7 @@
         {
           "embedded": {
             "albedoMap": {
-              "path": "textures/proto_grid_orange.png",
+              "path": "assets/Materials/Prototype/proto_grid_orange.png",
               "pathGuid": "c389fb6bc574bb89"
             },
             "aoMap": "",
@@ -517,7 +517,7 @@
         {
           "embedded": {
             "albedoMap": {
-              "path": "textures/proto_grid_orange.png",
+              "path": "assets/Materials/Prototype/proto_grid_orange.png",
               "pathGuid": "c389fb6bc574bb89"
             },
             "aoMap": "",
@@ -579,7 +579,7 @@
         {
           "embedded": {
             "albedoMap": {
-              "path": "textures/proto_grid_orange.png",
+              "path": "assets/Materials/Prototype/proto_grid_orange.png",
               "pathGuid": "c389fb6bc574bb89"
             },
             "aoMap": "",
@@ -6217,7 +6217,7 @@
         {
           "embedded": {
             "albedoMap": {
-              "path": "textures/proto_grid_orange.png",
+              "path": "assets/Materials/Prototype/proto_grid_orange.png",
               "pathGuid": "c389fb6bc574bb89"
             },
             "aoMap": "",
@@ -6279,7 +6279,7 @@
         {
           "embedded": {
             "albedoMap": {
-              "path": "textures/proto_grid_dark.png",
+              "path": "assets/Materials/Prototype/proto_grid_dark.png",
               "pathGuid": "2b60657ce9aa4555"
             },
             "aoMap": "",
@@ -7781,7 +7781,7 @@
         {
           "embedded": {
             "albedoMap": {
-              "path": "textures/proto_grid_orange.png",
+              "path": "assets/Materials/Prototype/proto_grid_orange.png",
               "pathGuid": "c389fb6bc574bb89"
             },
             "aoMap": "",
@@ -7843,7 +7843,7 @@
         {
           "embedded": {
             "albedoMap": {
-              "path": "textures/proto_grid_dark.png",
+              "path": "assets/Materials/Prototype/proto_grid_dark.png",
               "pathGuid": "2b60657ce9aa4555"
             },
             "aoMap": "",
@@ -7905,7 +7905,7 @@
         {
           "embedded": {
             "albedoMap": {
-              "path": "textures/proto_grid_dark.png",
+              "path": "assets/Materials/Prototype/proto_grid_dark.png",
               "pathGuid": "2b60657ce9aa4555"
             },
             "aoMap": "",
@@ -7967,7 +7967,7 @@
         {
           "embedded": {
             "albedoMap": {
-              "path": "textures/proto_grid_dark.png",
+              "path": "assets/Materials/Prototype/proto_grid_dark.png",
               "pathGuid": "2b60657ce9aa4555"
             },
             "aoMap": "",
@@ -8029,7 +8029,7 @@
         {
           "embedded": {
             "albedoMap": {
-              "path": "textures/proto_grid_dark.png",
+              "path": "assets/Materials/Prototype/proto_grid_dark.png",
               "pathGuid": "2b60657ce9aa4555"
             },
             "aoMap": "",
@@ -8740,7 +8740,7 @@
         {
           "embedded": {
             "albedoMap": {
-              "path": "textures/proto_grid_dark.png",
+              "path": "assets/Materials/Prototype/proto_grid_dark.png",
               "pathGuid": "2b60657ce9aa4555"
             },
             "aoMap": "",
@@ -8802,7 +8802,7 @@
         {
           "embedded": {
             "albedoMap": {
-              "path": "textures/proto_grid_orange.png",
+              "path": "assets/Materials/Prototype/proto_grid_orange.png",
               "pathGuid": "c389fb6bc574bb89"
             },
             "aoMap": "",
@@ -8864,7 +8864,7 @@
         {
           "embedded": {
             "albedoMap": {
-              "path": "textures/proto_grid_orange.png",
+              "path": "assets/Materials/Prototype/proto_grid_orange.png",
               "pathGuid": "c389fb6bc574bb89"
             },
             "aoMap": "",
@@ -8926,7 +8926,7 @@
         {
           "embedded": {
             "albedoMap": {
-              "path": "textures/proto_grid_orange.png",
+              "path": "assets/Materials/Prototype/proto_grid_orange.png",
               "pathGuid": "c389fb6bc574bb89"
             },
             "aoMap": "",
@@ -9342,7 +9342,7 @@
         {
           "embedded": {
             "albedoMap": {
-              "path": "textures/proto_grid_dark.png",
+              "path": "assets/Materials/Prototype/proto_grid_dark.png",
               "pathGuid": "2b60657ce9aa4555"
             },
             "aoMap": "",
@@ -9404,7 +9404,7 @@
         {
           "embedded": {
             "albedoMap": {
-              "path": "textures/proto_grid_dark.png",
+              "path": "assets/Materials/Prototype/proto_grid_dark.png",
               "pathGuid": "2b60657ce9aa4555"
             },
             "aoMap": "",
@@ -9466,7 +9466,7 @@
         {
           "embedded": {
             "albedoMap": {
-              "path": "textures/proto_grid_dark.png",
+              "path": "assets/Materials/Prototype/proto_grid_dark.png",
               "pathGuid": "2b60657ce9aa4555"
             },
             "aoMap": "",
@@ -9528,7 +9528,7 @@
         {
           "embedded": {
             "albedoMap": {
-              "path": "textures/proto_grid_dark.png",
+              "path": "assets/Materials/Prototype/proto_grid_dark.png",
               "pathGuid": "2b60657ce9aa4555"
             },
             "aoMap": "",
@@ -9591,7 +9591,7 @@
       "materials": [
         {
           "guid": "af2c57edb9eeead3",
-          "path": "materials/sandbox/court_floor.mat"
+          "path": "assets/Environments/Sandbox/Materials/court_floor.mat"
         }
       ],
       "name": "Court Floor",
@@ -9629,7 +9629,7 @@
       "materials": [
         {
           "guid": "2b02bddbbc176106",
-          "path": "materials/sandbox/arena_glass.mat"
+          "path": "assets/Environments/Sandbox/Materials/arena_glass.mat"
         }
       ],
       "name": "Glass Wall West",
@@ -9667,7 +9667,7 @@
       "materials": [
         {
           "guid": "2b02bddbbc176106",
-          "path": "materials/sandbox/arena_glass.mat"
+          "path": "assets/Environments/Sandbox/Materials/arena_glass.mat"
         }
       ],
       "name": "Glass Wall East",
@@ -9705,7 +9705,7 @@
       "materials": [
         {
           "guid": "2b02bddbbc176106",
-          "path": "materials/sandbox/arena_glass.mat"
+          "path": "assets/Environments/Sandbox/Materials/arena_glass.mat"
         }
       ],
       "name": "Glass Wall South",
@@ -9743,7 +9743,7 @@
       "materials": [
         {
           "guid": "2b02bddbbc176106",
-          "path": "materials/sandbox/arena_glass.mat"
+          "path": "assets/Environments/Sandbox/Materials/arena_glass.mat"
         }
       ],
       "name": "Glass Wall North West",
@@ -9781,7 +9781,7 @@
       "materials": [
         {
           "guid": "2b02bddbbc176106",
-          "path": "materials/sandbox/arena_glass.mat"
+          "path": "assets/Environments/Sandbox/Materials/arena_glass.mat"
         }
       ],
       "name": "Glass Wall North East",
@@ -9819,7 +9819,7 @@
       "materials": [
         {
           "guid": "2b02bddbbc176106",
-          "path": "materials/sandbox/arena_glass.mat"
+          "path": "assets/Environments/Sandbox/Materials/arena_glass.mat"
         }
       ],
       "name": "Glass Door Header",
@@ -9857,7 +9857,7 @@
       "materials": [
         {
           "guid": "2b02bddbbc176106",
-          "path": "materials/sandbox/arena_glass.mat"
+          "path": "assets/Environments/Sandbox/Materials/arena_glass.mat"
         }
       ],
       "name": "Glass Roof",
@@ -9895,7 +9895,7 @@
       "materials": [
         {
           "guid": "2b02bddbbc176106",
-          "path": "materials/sandbox/arena_glass.mat"
+          "path": "assets/Environments/Sandbox/Materials/arena_glass.mat"
         }
       ],
       "name": "Glass Door Baffle",
@@ -13119,7 +13119,7 @@
       "materials": [
         {
           "guid": "a00f0b02ee9bb028",
-          "path": "materials/sandbox/backboard_glass.mat"
+          "path": "assets/Props/Basketball/Materials/backboard_glass.mat"
         }
       ],
       "name": "Backboard West",
@@ -13396,7 +13396,7 @@
       "materials": [
         {
           "guid": "e62f07d31b9df2ce",
-          "path": "materials/sandbox/rim.mat"
+          "path": "assets/Props/Basketball/Materials/rim.mat"
         }
       ],
       "name": "Rim Bracket West",
@@ -13739,7 +13739,7 @@
       "materials": [
         {
           "guid": "a00f0b02ee9bb028",
-          "path": "materials/sandbox/backboard_glass.mat"
+          "path": "assets/Props/Basketball/Materials/backboard_glass.mat"
         }
       ],
       "name": "Backboard East",
@@ -14016,7 +14016,7 @@
       "materials": [
         {
           "guid": "e62f07d31b9df2ce",
-          "path": "materials/sandbox/rim.mat"
+          "path": "assets/Props/Basketball/Materials/rim.mat"
         }
       ],
       "name": "Rim Bracket East",
@@ -16942,7 +16942,7 @@
         {
           "embedded": {
             "albedoMap": {
-              "path": "textures/proto_grid_orange.png",
+              "path": "assets/Materials/Prototype/proto_grid_orange.png",
               "pathGuid": "c389fb6bc574bb89"
             },
             "aoMap": "",
@@ -17024,7 +17024,7 @@
         {
           "embedded": {
             "albedoMap": {
-              "path": "textures/proto_grid_light.png",
+              "path": "assets/Materials/Prototype/proto_grid_light.png",
               "pathGuid": "c90849c8fc6c88b0"
             },
             "aoMap": "",
@@ -17087,7 +17087,7 @@
         {
           "embedded": {
             "albedoMap": {
-              "path": "textures/proto_grid_light.png",
+              "path": "assets/Materials/Prototype/proto_grid_light.png",
               "pathGuid": "c90849c8fc6c88b0"
             },
             "aoMap": "",
@@ -17270,7 +17270,7 @@
         {
           "embedded": {
             "albedoMap": {
-              "path": "textures/proto_grid_light.png",
+              "path": "assets/Materials/Prototype/proto_grid_light.png",
               "pathGuid": "c90849c8fc6c88b0"
             },
             "aoMap": "",
@@ -17333,7 +17333,7 @@
         {
           "embedded": {
             "albedoMap": {
-              "path": "textures/proto_grid_light.png",
+              "path": "assets/Materials/Prototype/proto_grid_light.png",
               "pathGuid": "c90849c8fc6c88b0"
             },
             "aoMap": "",
@@ -17396,7 +17396,7 @@
         {
           "embedded": {
             "albedoMap": {
-              "path": "textures/proto_grid_light.png",
+              "path": "assets/Materials/Prototype/proto_grid_light.png",
               "pathGuid": "c90849c8fc6c88b0"
             },
             "aoMap": "",
@@ -17699,7 +17699,7 @@
         {
           "embedded": {
             "albedoMap": {
-              "path": "textures/proto_grid_light.png",
+              "path": "assets/Materials/Prototype/proto_grid_light.png",
               "pathGuid": "c90849c8fc6c88b0"
             },
             "aoMap": "",
@@ -17822,7 +17822,7 @@
         {
           "embedded": {
             "albedoMap": {
-              "path": "textures/proto_grid_light.png",
+              "path": "assets/Materials/Prototype/proto_grid_light.png",
               "pathGuid": "c90849c8fc6c88b0"
             },
             "aoMap": "",
@@ -17885,7 +17885,7 @@
         {
           "embedded": {
             "albedoMap": {
-              "path": "textures/proto_grid_light.png",
+              "path": "assets/Materials/Prototype/proto_grid_light.png",
               "pathGuid": "c90849c8fc6c88b0"
             },
             "aoMap": "",
@@ -17948,7 +17948,7 @@
         {
           "embedded": {
             "albedoMap": {
-              "path": "textures/proto_grid_light.png",
+              "path": "assets/Materials/Prototype/proto_grid_light.png",
               "pathGuid": "c90849c8fc6c88b0"
             },
             "aoMap": "",
@@ -18011,7 +18011,7 @@
         {
           "embedded": {
             "albedoMap": {
-              "path": "textures/proto_grid_light.png",
+              "path": "assets/Materials/Prototype/proto_grid_light.png",
               "pathGuid": "c90849c8fc6c88b0"
             },
             "aoMap": "",
@@ -22988,7 +22988,7 @@
     {
       "First Person Controller": {
         "Animation Set": {
-          "path": "assets/fps/AKS74U/AKS74U.fpsanim",
+          "path": "assets/Weapons/AKS74U/AKS74U.fpsanim",
           "pathGuid": "c0ff631aac421f76"
         },
         "Camera Bone": "head",
@@ -23505,193 +23505,193 @@
   "gradeTint": 0.0,
   "libraryMaterials": [
     {
-      "path": "materials/sandbox/court_floor.mat",
+      "path": "assets/Environments/Sandbox/Materials/court_floor.mat",
       "pathGuid": "af2c57edb9eeead3"
     },
     {
-      "path": "materials/sandbox/arena_glass.mat",
+      "path": "assets/Environments/Sandbox/Materials/arena_glass.mat",
       "pathGuid": "2b02bddbbc176106"
     },
     {
-      "path": "materials/sandbox/backboard_glass.mat",
+      "path": "assets/Props/Basketball/Materials/backboard_glass.mat",
       "pathGuid": "a00f0b02ee9bb028"
     },
     {
-      "path": "materials/sandbox/rim.mat",
+      "path": "assets/Props/Basketball/Materials/rim.mat",
       "pathGuid": "e62f07d31b9df2ce"
     },
     {
-      "path": "materials/sandbox/net.mat",
+      "path": "assets/Props/Basketball/Materials/net.mat",
       "pathGuid": "9a60da12561af3f2"
     },
     {
-      "path": "materials/sandbox/basketball.mat",
+      "path": "assets/Props/Basketball/Materials/basketball.mat",
       "pathGuid": "9ec0856b3181ad4f"
     },
     {
-      "path": "materials/sandbox/water.mat",
+      "path": "assets/Environments/Sandbox/Materials/water.mat",
       "pathGuid": "7b94769ce0f84595"
     },
     {
-      "path": "materials/sandbox/gallery_chrome.mat",
+      "path": "assets/Environments/Sandbox/Materials/gallery_chrome.mat",
       "pathGuid": "d43b10aee251de3c"
     },
     {
-      "path": "materials/sandbox/gallery_gold.mat",
+      "path": "assets/Environments/Sandbox/Materials/gallery_gold.mat",
       "pathGuid": "6cd312ca7538ce16"
     },
     {
-      "path": "materials/sandbox/gallery_brushed.mat",
+      "path": "assets/Environments/Sandbox/Materials/gallery_brushed.mat",
       "pathGuid": "b30f3b5631a2c4d1"
     },
     {
-      "path": "materials/sandbox/gallery_carpaint.mat",
+      "path": "assets/Environments/Sandbox/Materials/gallery_carpaint.mat",
       "pathGuid": "5af22ea260759521"
     },
     {
-      "path": "materials/sandbox/gallery_velvet.mat",
+      "path": "assets/Environments/Sandbox/Materials/gallery_velvet.mat",
       "pathGuid": "2c58a10670b0ee18"
     },
     {
-      "path": "materials/sandbox/gallery_jade.mat",
+      "path": "assets/Environments/Sandbox/Materials/gallery_jade.mat",
       "pathGuid": "79947b909dfe220a"
     },
     {
-      "path": "materials/sandbox/gallery_glass.mat",
+      "path": "assets/Environments/Sandbox/Materials/gallery_glass.mat",
       "pathGuid": "66f617b3879ddb59"
     },
     {
-      "path": "materials/sandbox/gallery_neon.mat",
+      "path": "assets/Environments/Sandbox/Materials/gallery_neon.mat",
       "pathGuid": "eb13ea79fff0ea7e"
     },
     {
-      "path": "assets/fps/AKS74U/Materials/AKS74U.mat",
+      "path": "assets/Weapons/AKS74U/Materials/AKS74U.mat",
       "pathGuid": "43edbab5337788c2"
     },
     {
-      "path": "assets/fps/AKS74U/Materials/Cartridge_545x39mm.mat",
+      "path": "assets/Weapons/AKS74U/Materials/Cartridge_545x39mm.mat",
       "pathGuid": "97e35a4f8b04858c"
     }
   ],
   "libraryModels": [
     {
-      "path": "models/basketball/rim.obj",
+      "path": "assets/Props/Basketball/Models/rim.obj",
       "pathGuid": "aa06bf914b4a03c0"
     },
     {
-      "path": "models/basketball/net.obj",
+      "path": "assets/Props/Basketball/Models/net.obj",
       "pathGuid": "9f5eb74f6735cbca"
     },
     {
-      "path": "models/basketball/basketball.obj",
+      "path": "assets/Props/Basketball/Models/basketball.obj",
       "pathGuid": "3e65fa8b4567e911"
     },
     {
-      "path": "assets/fps/AKS74U/FirstPerson/AKS-74U_A_FP_ADS.fbx",
+      "path": "assets/Weapons/AKS74U/FirstPerson/AKS-74U_A_FP_ADS.fbx",
       "pathGuid": "101cd70269fca765"
     },
     {
-      "path": "assets/fps/AKS74U/Weapon/AKS-74U_A_W_ADS.fbx",
+      "path": "assets/Weapons/AKS74U/Weapon/AKS-74U_A_W_ADS.fbx",
       "pathGuid": "6f35fb7e3ac4ee7b"
     },
     {
-      "path": "assets/fps/AKS74U/FirstPerson/AKS-74U_A_FP_Idle.fbx",
+      "path": "assets/Weapons/AKS74U/FirstPerson/AKS-74U_A_FP_Idle.fbx",
       "pathGuid": "4168495e7bad8625"
     },
     {
-      "path": "assets/fps/AKS74U/FirstPerson/AKS-74U_A_FP_Walk.fbx",
+      "path": "assets/Weapons/AKS74U/FirstPerson/AKS-74U_A_FP_Walk.fbx",
       "pathGuid": "6e8123547b7ff1e4"
     },
     {
-      "path": "assets/fps/AKS74U/FirstPerson/AKS-74U_A_FP_IdleToSprint.fbx",
+      "path": "assets/Weapons/AKS74U/FirstPerson/AKS-74U_A_FP_IdleToSprint.fbx",
       "pathGuid": "e9c31ac6116dfd06"
     },
     {
-      "path": "assets/fps/AKS74U/Weapon/AKS-74U_A_W_IdleToSprint.fbx",
+      "path": "assets/Weapons/AKS74U/Weapon/AKS-74U_A_W_IdleToSprint.fbx",
       "pathGuid": "971a40ef2e78a7a9"
     },
     {
-      "path": "assets/fps/AKS74U/FirstPerson/AKS-74U_A_FP_Sprint.fbx",
+      "path": "assets/Weapons/AKS74U/FirstPerson/AKS-74U_A_FP_Sprint.fbx",
       "pathGuid": "3862c30a005b6f45"
     },
     {
-      "path": "assets/fps/AKS74U/Weapon/AKS-74U_A_W_Sprint.fbx",
+      "path": "assets/Weapons/AKS74U/Weapon/AKS-74U_A_W_Sprint.fbx",
       "pathGuid": "438b9b2758b79a49"
     },
     {
-      "path": "assets/fps/AKS74U/FirstPerson/AKS-74U_A_FP_SprintToIdle.fbx",
+      "path": "assets/Weapons/AKS74U/FirstPerson/AKS-74U_A_FP_SprintToIdle.fbx",
       "pathGuid": "b1146b87d6885ed2"
     },
     {
-      "path": "assets/fps/AKS74U/Weapon/AKS-74U_A_W_SprintToIdle.fbx",
+      "path": "assets/Weapons/AKS74U/Weapon/AKS-74U_A_W_SprintToIdle.fbx",
       "pathGuid": "c5582401991a3963"
     },
     {
-      "path": "assets/fps/AKS74U/FirstPerson/AKS-74U_A_FP_Draw.fbx",
+      "path": "assets/Weapons/AKS74U/FirstPerson/AKS-74U_A_FP_Draw.fbx",
       "pathGuid": "1938b9509f147780"
     },
     {
-      "path": "assets/fps/AKS74U/FirstPerson/AKS-74U_A_FP_Holster.fbx",
+      "path": "assets/Weapons/AKS74U/FirstPerson/AKS-74U_A_FP_Holster.fbx",
       "pathGuid": "8d4c78b10f9caed1"
     },
     {
-      "path": "assets/fps/AKS74U/Weapon/AKS-74U_A_W_Holster.fbx",
+      "path": "assets/Weapons/AKS74U/Weapon/AKS-74U_A_W_Holster.fbx",
       "pathGuid": "2a62a06dbf117169"
     },
     {
-      "path": "assets/fps/AKS74U/FirstPerson/AKS-74U_A_FP_Fire.fbx",
+      "path": "assets/Weapons/AKS74U/FirstPerson/AKS-74U_A_FP_Fire.fbx",
       "pathGuid": "818ad9a16cc62d87"
     },
     {
-      "path": "assets/fps/AKS74U/Weapon/AKS-74U_A_W_Fire.fbx",
+      "path": "assets/Weapons/AKS74U/Weapon/AKS-74U_A_W_Fire.fbx",
       "pathGuid": "77923d570c4ce1c5"
     },
     {
-      "path": "assets/fps/AKS74U/FirstPerson/AKS-74U_A_FP_Tac_Reload.fbx",
+      "path": "assets/Weapons/AKS74U/FirstPerson/AKS-74U_A_FP_Tac_Reload.fbx",
       "pathGuid": "007cce9507dc0627"
     },
     {
-      "path": "assets/fps/AKS74U/Weapon/AKS-74U_A_W_Tac_Reload.fbx",
+      "path": "assets/Weapons/AKS74U/Weapon/AKS-74U_A_W_Tac_Reload.fbx",
       "pathGuid": "81b5689d2228d3a9"
     },
     {
-      "path": "assets/fps/AKS74U/FirstPerson/AKS-74U_A_FP_Empty_Reload.fbx",
+      "path": "assets/Weapons/AKS74U/FirstPerson/AKS-74U_A_FP_Empty_Reload.fbx",
       "pathGuid": "3348386df4b6a44b"
     },
     {
-      "path": "assets/fps/AKS74U/Weapon/AKS-74U_A_W_Empty_Reload.fbx",
+      "path": "assets/Weapons/AKS74U/Weapon/AKS-74U_A_W_Empty_Reload.fbx",
       "pathGuid": "d0dfc9ab0c48a48d"
     },
     {
-      "path": "assets/fps/AKS74U/FirstPerson/AKS-74U_A_FP_Inspect.fbx",
+      "path": "assets/Weapons/AKS74U/FirstPerson/AKS-74U_A_FP_Inspect.fbx",
       "pathGuid": "19f07109f9ebb97d"
     },
     {
-      "path": "assets/fps/AKS74U/Weapon/AKS-74U_A_W_Inspect.fbx",
+      "path": "assets/Weapons/AKS74U/Weapon/AKS-74U_A_W_Inspect.fbx",
       "pathGuid": "0b328cb32a01d270"
     },
     {
-      "path": "assets/fps/AKS74U/FirstPerson/AKS-74U_A_FP_Mag_Check.fbx",
+      "path": "assets/Weapons/AKS74U/FirstPerson/AKS-74U_A_FP_Mag_Check.fbx",
       "pathGuid": "58a7ef1b4bd1ae0e"
     },
     {
-      "path": "assets/fps/AKS74U/Weapon/AKS-74U_A_W_Mag_Check.fbx",
+      "path": "assets/Weapons/AKS74U/Weapon/AKS-74U_A_W_Mag_Check.fbx",
       "pathGuid": "a01aa15f799151d3"
     },
     {
-      "path": "assets/fps/AKS74U/FirstPerson/AKS-74U_A_FP_Melee.fbx",
+      "path": "assets/Weapons/AKS74U/FirstPerson/AKS-74U_A_FP_Melee.fbx",
       "pathGuid": "48e798f1913d3f54"
     },
     {
-      "path": "assets/fps/AKS74U/Weapon/AKS-74U_A_W_Melee.fbx",
+      "path": "assets/Weapons/AKS74U/Weapon/AKS-74U_A_W_Melee.fbx",
       "pathGuid": "6fb7b6fdfc2b4941"
     },
     {
-      "path": "assets/fps/AKS74U/FirstPerson/AKS-74U_A_FP_Regrip.fbx",
+      "path": "assets/Weapons/AKS74U/FirstPerson/AKS-74U_A_FP_Regrip.fbx",
       "pathGuid": "c10ae2c34481e1f7"
     },
     {
-      "path": "assets/fps/AKS74U/FirstPerson/AKS-74U_A_FP_Aim.fbx",
+      "path": "assets/Weapons/AKS74U/FirstPerson/AKS-74U_A_FP_Aim.fbx",
       "pathGuid": "9004884db6cdfb0e"
     }
   ],
@@ -23699,79 +23699,79 @@
   "librarySounds": [],
   "libraryTextures": [
     {
-      "path": "textures/proto_grid_light.png",
+      "path": "assets/Materials/Prototype/proto_grid_light.png",
       "pathGuid": "c90849c8fc6c88b0"
     },
     {
-      "path": "textures/proto_grid_dark.png",
+      "path": "assets/Materials/Prototype/proto_grid_dark.png",
       "pathGuid": "2b60657ce9aa4555"
     },
     {
-      "path": "textures/proto_grid_orange.png",
+      "path": "assets/Materials/Prototype/proto_grid_orange.png",
       "pathGuid": "c389fb6bc574bb89"
     },
     {
-      "path": "textures/basketball/court_floor.jpg",
+      "path": "assets/Props/Basketball/Textures/court_floor.jpg",
       "pathGuid": "fd3b90b6c8f0b253"
     },
     {
-      "path": "textures/basketball/wood_detail.png",
+      "path": "assets/Props/Basketball/Textures/wood_detail.png",
       "pathGuid": "e5f0e29613cac82f"
     },
     {
-      "path": "textures/basketball/wood_seams_normal.png",
+      "path": "assets/Props/Basketball/Textures/wood_seams_normal.png",
       "pathGuid": "346137cb492678b5"
     },
     {
-      "path": "textures/basketball/backboard.png",
+      "path": "assets/Props/Basketball/Textures/backboard.png",
       "pathGuid": "caf13370e27a0035"
     },
     {
-      "path": "textures/basketball/basketball_albedo.png",
+      "path": "assets/Props/Basketball/Textures/basketball_albedo.png",
       "pathGuid": "3821385da1bbeb84"
     },
     {
-      "path": "textures/basketball/basketball_normal.png",
+      "path": "assets/Props/Basketball/Textures/basketball_normal.png",
       "pathGuid": "a631a899eff1effb"
     },
     {
-      "path": "assets/fps/AKS74U/Textures/AKS74U_Albedo_Transparency.png",
+      "path": "assets/Weapons/AKS74U/Textures/AKS74U_Albedo_Transparency.png",
       "pathGuid": "7b7ff3d89a801e9b"
     },
     {
-      "path": "assets/fps/AKS74U/Textures/AKS74U_Normal.png",
+      "path": "assets/Weapons/AKS74U/Textures/AKS74U_Normal.png",
       "pathGuid": "ddf9f803479dcf51"
     },
     {
-      "path": "assets/fps/AKS74U/Textures/AKS74U_Metallic.png",
+      "path": "assets/Weapons/AKS74U/Textures/AKS74U_Metallic.png",
       "pathGuid": "fe12ee5959aa01e3"
     },
     {
-      "path": "assets/fps/AKS74U/Textures/AKS74U_Roughness.png",
+      "path": "assets/Weapons/AKS74U/Textures/AKS74U_Roughness.png",
       "pathGuid": "3478f940ace06417"
     },
     {
-      "path": "assets/fps/AKS74U/Textures/AKS74U_Occlusion.png",
+      "path": "assets/Weapons/AKS74U/Textures/AKS74U_Occlusion.png",
       "pathGuid": "533e95bf9b3a528b"
     },
     {
-      "path": "assets/fps/AKS74U/Textures/Cartridge_545x39mm_Albedo_Transparency.png",
+      "path": "assets/Weapons/AKS74U/Textures/Cartridge_545x39mm_Albedo_Transparency.png",
       "pathGuid": "cf91557a2170ebb2"
     },
     {
-      "path": "assets/fps/AKS74U/Textures/Cartridge_545x39mm_Normal.png",
+      "path": "assets/Weapons/AKS74U/Textures/Cartridge_545x39mm_Normal.png",
       "pathGuid": "5f5e9c41e791adff"
     },
     {
-      "path": "assets/fps/AKS74U/Textures/Cartridge_545x39mm_Metallic.png",
+      "path": "assets/Weapons/AKS74U/Textures/Cartridge_545x39mm_Metallic.png",
       "pathGuid": "47fe55433568f31a"
     },
     {
-      "path": "assets/fps/AKS74U/Textures/Cartridge_545x39mm_Roughness.png",
+      "path": "assets/Weapons/AKS74U/Textures/Cartridge_545x39mm_Roughness.png",
       "pathGuid": "304561875618662e"
     },
     {
-      "path": "assets/fps/AKS74U/Textures/Cartridge_545x39mm_Occlusion.png",
+      "path": "assets/Weapons/AKS74U/Textures/Cartridge_545x39mm_Occlusion.png",
       "pathGuid": "2c708ddb3e919ee4"
     }
   ],
@@ -34040,13 +34040,13 @@
       "materials": [
         {
           "guid": "e62f07d31b9df2ce",
-          "path": "materials/sandbox/rim.mat"
+          "path": "assets/Props/Basketball/Materials/rim.mat"
         }
       ],
       "name": "Rim West",
       "order": 353,
       "parentId": 523,
-      "path": "models/basketball/rim.obj",
+      "path": "assets/Props/Basketball/Models/rim.obj",
       "pathGuid": "aa06bf914b4a03c0",
       "position": [
         -19.087499618530273,
@@ -34070,13 +34070,13 @@
       "materials": [
         {
           "guid": "9a60da12561af3f2",
-          "path": "materials/sandbox/net.mat"
+          "path": "assets/Props/Basketball/Materials/net.mat"
         }
       ],
       "name": "Net West",
       "order": 355,
       "parentId": 523,
-      "path": "models/basketball/net.obj",
+      "path": "assets/Props/Basketball/Models/net.obj",
       "pathGuid": "9f5eb74f6735cbca",
       "position": [
         -19.087499618530273,
@@ -34106,13 +34106,13 @@
       "materials": [
         {
           "guid": "e62f07d31b9df2ce",
-          "path": "materials/sandbox/rim.mat"
+          "path": "assets/Props/Basketball/Materials/rim.mat"
         }
       ],
       "name": "Rim East",
       "order": 371,
       "parentId": 528,
-      "path": "models/basketball/rim.obj",
+      "path": "assets/Props/Basketball/Models/rim.obj",
       "pathGuid": "aa06bf914b4a03c0",
       "position": [
         19.087499618530273,
@@ -34136,13 +34136,13 @@
       "materials": [
         {
           "guid": "9a60da12561af3f2",
-          "path": "materials/sandbox/net.mat"
+          "path": "assets/Props/Basketball/Materials/net.mat"
         }
       ],
       "name": "Net East",
       "order": 373,
       "parentId": 528,
-      "path": "models/basketball/net.obj",
+      "path": "assets/Props/Basketball/Models/net.obj",
       "pathGuid": "9f5eb74f6735cbca",
       "position": [
         19.087499618530273,
@@ -37110,13 +37110,13 @@
       "materials": [
         {
           "guid": "9ec0856b3181ad4f",
-          "path": "materials/sandbox/basketball.mat"
+          "path": "assets/Props/Basketball/Materials/basketball.mat"
         }
       ],
       "name": "Basketball 1",
       "order": 466,
       "parentId": 543,
-      "path": "models/basketball/basketball.obj",
+      "path": "assets/Props/Basketball/Models/basketball.obj",
       "pathGuid": "3e65fa8b4567e911",
       "position": [
         7.8856000900268555,
@@ -37173,13 +37173,13 @@
       "materials": [
         {
           "guid": "9ec0856b3181ad4f",
-          "path": "materials/sandbox/basketball.mat"
+          "path": "assets/Props/Basketball/Materials/basketball.mat"
         }
       ],
       "name": "Basketball 2",
       "order": 467,
       "parentId": 543,
-      "path": "models/basketball/basketball.obj",
+      "path": "assets/Props/Basketball/Models/basketball.obj",
       "pathGuid": "3e65fa8b4567e911",
       "position": [
         8.44279956817627,
@@ -37236,13 +37236,13 @@
       "materials": [
         {
           "guid": "9ec0856b3181ad4f",
-          "path": "materials/sandbox/basketball.mat"
+          "path": "assets/Props/Basketball/Materials/basketball.mat"
         }
       ],
       "name": "Basketball 3",
       "order": 468,
       "parentId": 543,
-      "path": "models/basketball/basketball.obj",
+      "path": "assets/Props/Basketball/Models/basketball.obj",
       "pathGuid": "3e65fa8b4567e911",
       "position": [
         9.0,
@@ -37299,13 +37299,13 @@
       "materials": [
         {
           "guid": "9ec0856b3181ad4f",
-          "path": "materials/sandbox/basketball.mat"
+          "path": "assets/Props/Basketball/Materials/basketball.mat"
         }
       ],
       "name": "Basketball 4",
       "order": 469,
       "parentId": 543,
-      "path": "models/basketball/basketball.obj",
+      "path": "assets/Props/Basketball/Models/basketball.obj",
       "pathGuid": "3e65fa8b4567e911",
       "position": [
         9.55720043182373,
@@ -37362,13 +37362,13 @@
       "materials": [
         {
           "guid": "9ec0856b3181ad4f",
-          "path": "materials/sandbox/basketball.mat"
+          "path": "assets/Props/Basketball/Materials/basketball.mat"
         }
       ],
       "name": "Basketball 5",
       "order": 470,
       "parentId": 543,
-      "path": "models/basketball/basketball.obj",
+      "path": "assets/Props/Basketball/Models/basketball.obj",
       "pathGuid": "3e65fa8b4567e911",
       "position": [
         10.114399909973145,
@@ -37425,13 +37425,13 @@
       "materials": [
         {
           "guid": "9ec0856b3181ad4f",
-          "path": "materials/sandbox/basketball.mat"
+          "path": "assets/Props/Basketball/Materials/basketball.mat"
         }
       ],
       "name": "Basketball 6",
       "order": 474,
       "parentId": 543,
-      "path": "models/basketball/basketball.obj",
+      "path": "assets/Props/Basketball/Models/basketball.obj",
       "pathGuid": "3e65fa8b4567e911",
       "position": [
         7.8856000900268555,
@@ -37488,13 +37488,13 @@
       "materials": [
         {
           "guid": "9ec0856b3181ad4f",
-          "path": "materials/sandbox/basketball.mat"
+          "path": "assets/Props/Basketball/Materials/basketball.mat"
         }
       ],
       "name": "Basketball 7",
       "order": 475,
       "parentId": 543,
-      "path": "models/basketball/basketball.obj",
+      "path": "assets/Props/Basketball/Models/basketball.obj",
       "pathGuid": "3e65fa8b4567e911",
       "position": [
         8.44279956817627,
@@ -37551,13 +37551,13 @@
       "materials": [
         {
           "guid": "9ec0856b3181ad4f",
-          "path": "materials/sandbox/basketball.mat"
+          "path": "assets/Props/Basketball/Materials/basketball.mat"
         }
       ],
       "name": "Basketball 8",
       "order": 476,
       "parentId": 543,
-      "path": "models/basketball/basketball.obj",
+      "path": "assets/Props/Basketball/Models/basketball.obj",
       "pathGuid": "3e65fa8b4567e911",
       "position": [
         9.0,
@@ -37614,13 +37614,13 @@
       "materials": [
         {
           "guid": "9ec0856b3181ad4f",
-          "path": "materials/sandbox/basketball.mat"
+          "path": "assets/Props/Basketball/Materials/basketball.mat"
         }
       ],
       "name": "Basketball 9",
       "order": 477,
       "parentId": 543,
-      "path": "models/basketball/basketball.obj",
+      "path": "assets/Props/Basketball/Models/basketball.obj",
       "pathGuid": "3e65fa8b4567e911",
       "position": [
         9.55720043182373,
@@ -37677,13 +37677,13 @@
       "materials": [
         {
           "guid": "9ec0856b3181ad4f",
-          "path": "materials/sandbox/basketball.mat"
+          "path": "assets/Props/Basketball/Materials/basketball.mat"
         }
       ],
       "name": "Basketball 10",
       "order": 478,
       "parentId": 543,
-      "path": "models/basketball/basketball.obj",
+      "path": "assets/Props/Basketball/Models/basketball.obj",
       "pathGuid": "3e65fa8b4567e911",
       "position": [
         10.114399909973145,
@@ -37740,13 +37740,13 @@
       "materials": [
         {
           "guid": "9ec0856b3181ad4f",
-          "path": "materials/sandbox/basketball.mat"
+          "path": "assets/Props/Basketball/Materials/basketball.mat"
         }
       ],
       "name": "Basketball Centre Court",
       "order": 479,
       "parentId": 543,
-      "path": "models/basketball/basketball.obj",
+      "path": "assets/Props/Basketball/Models/basketball.obj",
       "pathGuid": "3e65fa8b4567e911",
       "position": [
         0.0,
@@ -37803,13 +37803,13 @@
       "materials": [
         {
           "guid": "9ec0856b3181ad4f",
-          "path": "materials/sandbox/basketball.mat"
+          "path": "assets/Props/Basketball/Materials/basketball.mat"
         }
       ],
       "name": "Basketball Free Throw West",
       "order": 480,
       "parentId": 543,
-      "path": "models/basketball/basketball.obj",
+      "path": "assets/Props/Basketball/Models/basketball.obj",
       "pathGuid": "3e65fa8b4567e911",
       "position": [
         -12.5024995803833,
@@ -37866,13 +37866,13 @@
       "materials": [
         {
           "guid": "9ec0856b3181ad4f",
-          "path": "materials/sandbox/basketball.mat"
+          "path": "assets/Props/Basketball/Materials/basketball.mat"
         }
       ],
       "name": "Basketball Free Throw East",
       "order": 481,
       "parentId": 543,
-      "path": "models/basketball/basketball.obj",
+      "path": "assets/Props/Basketball/Models/basketball.obj",
       "pathGuid": "3e65fa8b4567e911",
       "position": [
         12.5024995803833,
@@ -37953,7 +37953,7 @@
       "materials": [
         {
           "guid": "7b94769ce0f84595",
-          "path": "materials/sandbox/water.mat"
+          "path": "assets/Environments/Sandbox/Materials/water.mat"
         }
       ],
       "name": "Fountain Water",
@@ -38261,7 +38261,7 @@
       "materials": [
         {
           "guid": "d43b10aee251de3c",
-          "path": "materials/sandbox/gallery_chrome.mat"
+          "path": "assets/Environments/Sandbox/Materials/gallery_chrome.mat"
         }
       ],
       "name": "Gallery Chrome",
@@ -38409,7 +38409,7 @@
       "materials": [
         {
           "guid": "6cd312ca7538ce16",
-          "path": "materials/sandbox/gallery_gold.mat"
+          "path": "assets/Environments/Sandbox/Materials/gallery_gold.mat"
         }
       ],
       "name": "Gallery Gold",
@@ -38557,7 +38557,7 @@
       "materials": [
         {
           "guid": "b30f3b5631a2c4d1",
-          "path": "materials/sandbox/gallery_brushed.mat"
+          "path": "assets/Environments/Sandbox/Materials/gallery_brushed.mat"
         }
       ],
       "name": "Gallery Brushed Steel",
@@ -38705,7 +38705,7 @@
       "materials": [
         {
           "guid": "5af22ea260759521",
-          "path": "materials/sandbox/gallery_carpaint.mat"
+          "path": "assets/Environments/Sandbox/Materials/gallery_carpaint.mat"
         }
       ],
       "name": "Gallery Car Paint",
@@ -38853,7 +38853,7 @@
       "materials": [
         {
           "guid": "2c58a10670b0ee18",
-          "path": "materials/sandbox/gallery_velvet.mat"
+          "path": "assets/Environments/Sandbox/Materials/gallery_velvet.mat"
         }
       ],
       "name": "Gallery Velvet",
@@ -39001,7 +39001,7 @@
       "materials": [
         {
           "guid": "79947b909dfe220a",
-          "path": "materials/sandbox/gallery_jade.mat"
+          "path": "assets/Environments/Sandbox/Materials/gallery_jade.mat"
         }
       ],
       "name": "Gallery Jade",
@@ -39149,7 +39149,7 @@
       "materials": [
         {
           "guid": "66f617b3879ddb59",
-          "path": "materials/sandbox/gallery_glass.mat"
+          "path": "assets/Environments/Sandbox/Materials/gallery_glass.mat"
         }
       ],
       "name": "Gallery Glass",
@@ -39297,7 +39297,7 @@
       "materials": [
         {
           "guid": "eb13ea79fff0ea7e",
-          "path": "materials/sandbox/gallery_neon.mat"
+          "path": "assets/Environments/Sandbox/Materials/gallery_neon.mat"
         }
       ],
       "name": "Gallery Neon",
@@ -40170,7 +40170,7 @@
         {
           "embedded": {
             "albedoMap": {
-              "path": "textures/proto_grid_orange.png",
+              "path": "assets/Materials/Prototype/proto_grid_orange.png",
               "pathGuid": "c389fb6bc574bb89"
             },
             "aoMap": "",
@@ -41730,7 +41730,7 @@
     },
     {
       "Animator Controller": {
-        "Controller": "animations/quantum_root_motion.controller",
+        "Controller": "assets/Animations/Controllers/quantum_root_motion.controller",
         "Speed": 1.0,
         "Track": "",
         "rootMotion": 1,
@@ -41742,7 +41742,7 @@
       "name": "Quantum - Root Motion On",
       "order": 654,
       "parentId": 652,
-      "path": "assets/quantum/Models/European/Quantum_Body_Full.fbx",
+      "path": "assets/Characters/Quantum/Models/European/Quantum_Body_Full.fbx",
       "pathGuid": "5ec75801d215e72f",
       "position": [
         -2.0,
@@ -41763,7 +41763,7 @@
     },
     {
       "Animator Controller": {
-        "Controller": "animations/quantum_root_motion.controller",
+        "Controller": "assets/Animations/Controllers/quantum_root_motion.controller",
         "Speed": 1.0,
         "Track": "",
         "rootMotion": 2,
@@ -41775,7 +41775,7 @@
       "name": "Quantum - Root Motion On Head",
       "order": 655,
       "parentId": 653,
-      "path": "assets/quantum/Models/European/Quantum_Head.fbx",
+      "path": "assets/Characters/Quantum/Models/European/Quantum_Head.fbx",
       "pathGuid": "372aa659f6e66c47",
       "position": [
         0,
@@ -41796,7 +41796,7 @@
     },
     {
       "Animator Controller": {
-        "Controller": "animations/quantum_root_motion.controller",
+        "Controller": "assets/Animations/Controllers/quantum_root_motion.controller",
         "Speed": 1.0,
         "Track": "",
         "rootMotion": 0,
@@ -41808,7 +41808,7 @@
       "name": "Quantum - Root Motion Off",
       "order": 656,
       "parentId": 652,
-      "path": "assets/quantum/Models/European/Quantum_Body_Full.fbx",
+      "path": "assets/Characters/Quantum/Models/European/Quantum_Body_Full.fbx",
       "pathGuid": "5ec75801d215e72f",
       "position": [
         2.0,
@@ -41829,7 +41829,7 @@
     },
     {
       "Animator Controller": {
-        "Controller": "animations/quantum_root_motion.controller",
+        "Controller": "assets/Animations/Controllers/quantum_root_motion.controller",
         "Speed": 1.0,
         "Track": "",
         "rootMotion": 0,
@@ -41841,7 +41841,7 @@
       "name": "Quantum - Root Motion Off Head",
       "order": 657,
       "parentId": 655,
-      "path": "assets/quantum/Models/European/Quantum_Head.fbx",
+      "path": "assets/Characters/Quantum/Models/European/Quantum_Head.fbx",
       "pathGuid": "372aa659f6e66c47",
       "position": [
         0,
@@ -41862,7 +41862,7 @@
     },
     {
       "Animator Controller": {
-        "Controller": "animations/fps_body_locomotion.controller",
+        "Controller": "assets/Animations/Controllers/fps_body_locomotion.controller",
         "Speed": 1.0,
         "Track": "",
         "rootMotion": 2,
@@ -41874,7 +41874,7 @@
       "name": "Torso",
       "order": 659,
       "parentId": 657,
-      "path": "assets/quantum/Models/European/Quantum_Torso.fbx",
+      "path": "assets/Characters/Quantum/Models/European/Quantum_Torso.fbx",
       "pathGuid": "34f0109f85dae259",
       "position": [
         0,
@@ -41895,7 +41895,7 @@
     },
     {
       "Animator Controller": {
-        "Controller": "animations/fps_body_locomotion.controller",
+        "Controller": "assets/Animations/Controllers/fps_body_locomotion.controller",
         "Speed": 1.0,
         "Track": "",
         "rootMotion": 2,
@@ -41907,7 +41907,7 @@
       "name": "UnderPants",
       "order": 660,
       "parentId": 657,
-      "path": "assets/quantum/Models/European/Quantum_UnderPants.fbx",
+      "path": "assets/Characters/Quantum/Models/European/Quantum_UnderPants.fbx",
       "pathGuid": "2aeb5f71b8365204",
       "position": [
         0,
@@ -41928,7 +41928,7 @@
     },
     {
       "Animator Controller": {
-        "Controller": "animations/fps_body_locomotion.controller",
+        "Controller": "assets/Animations/Controllers/fps_body_locomotion.controller",
         "Speed": 1.0,
         "Track": "",
         "rootMotion": 2,
@@ -41940,7 +41940,7 @@
       "name": "Legs",
       "order": 661,
       "parentId": 657,
-      "path": "assets/quantum/Models/European/Quantum_Legs.fbx",
+      "path": "assets/Characters/Quantum/Models/European/Quantum_Legs.fbx",
       "pathGuid": "c36e291cf458911c",
       "position": [
         0,
@@ -41961,7 +41961,7 @@
     },
     {
       "Animator Controller": {
-        "Controller": "animations/fps_body_locomotion.controller",
+        "Controller": "assets/Animations/Controllers/fps_body_locomotion.controller",
         "Speed": 1.0,
         "Track": "",
         "rootMotion": 2,
@@ -41973,7 +41973,7 @@
       "name": "Feet",
       "order": 662,
       "parentId": 657,
-      "path": "assets/quantum/Models/European/Quantum_Feet.fbx",
+      "path": "assets/Characters/Quantum/Models/European/Quantum_Feet.fbx",
       "pathGuid": "94a5ede2259c1ecf",
       "position": [
         0,
@@ -41994,7 +41994,7 @@
     },
     {
       "Animator Controller": {
-        "Controller": "animations/fps_body_locomotion.controller",
+        "Controller": "assets/Animations/Controllers/fps_body_locomotion.controller",
         "Speed": 1.0,
         "Track": "",
         "rootMotion": 2,
@@ -42006,7 +42006,7 @@
       "name": "Head",
       "order": 663,
       "parentId": 657,
-      "path": "assets/quantum/Models/European/Quantum_Head.fbx",
+      "path": "assets/Characters/Quantum/Models/European/Quantum_Head.fbx",
       "pathGuid": "372aa659f6e66c47",
       "position": [
         0,
@@ -42027,7 +42027,7 @@
     },
     {
       "Animator Controller": {
-        "Controller": "animations/fps_body_locomotion.controller",
+        "Controller": "assets/Animations/Controllers/fps_body_locomotion.controller",
         "Speed": 1.0,
         "Track": "",
         "rootMotion": 2,
@@ -42039,7 +42039,7 @@
       "name": "Arms",
       "order": 664,
       "parentId": 657,
-      "path": "assets/quantum/FirstPerson/Quantum_Arms_FP.fbx",
+      "path": "assets/Characters/Quantum/FirstPerson/Quantum_Arms_FP.fbx",
       "pathGuid": "19bbef7e387a5ef4",
       "position": [
         0,

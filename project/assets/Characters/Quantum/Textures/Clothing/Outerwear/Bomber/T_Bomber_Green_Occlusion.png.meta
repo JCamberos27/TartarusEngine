@@ -1,0 +1,16 @@
+{
+  "folder": "assets/Characters/Quantum/Textures/Clothing/Outerwear/Bomber",
+  "guid": "a742992150c0dd0f",
+  "importer": {
+    "anisoLevel": 16,
+    "compression": 2,
+    "filterMode": 2,
+    "generateMipmaps": true,
+    "isSRGB": false,
+    "maxTextureSize": 4096,
+    "textureType": 0,
+    "wrapMode": 0
+  },
+  "metaVersion": 1,
+  "type": "texture"
+}

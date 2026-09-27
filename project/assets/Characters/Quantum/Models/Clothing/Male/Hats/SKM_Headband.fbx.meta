@@ -1,0 +1,8 @@
+{
+  "guid": "6bb0ffd7e9f9e7ee",
+  "materialRemap": {
+    "SKM_Headband1": "assets/Characters/Quantum/Materials/Clothing/Generated/M_Headband.mat"
+  },
+  "metaVersion": 1,
+  "type": "model"
+}

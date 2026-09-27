@@ -1,0 +1,37 @@
+{
+  "factorsScaleMaps": true,
+  "matVersion": 2,
+  "name": "M_Shirt_RolledUp_Red",
+  "properties": {
+    "_AOMap": "assets/Characters/Quantum/Textures/Clothing/Tops/Shirt_RolledUp/T_Shirt_RolledUp_Occlusion.png",
+    "_AlbedoMap": "assets/Characters/Quantum/Textures/Clothing/Tops/Shirt_RolledUp/T_Shirt_RolledUp_Red_BaseColor.png",
+    "_BaseColor": [
+      1.0,
+      1.0,
+      1.0
+    ],
+    "_DoubleSided": false,
+    "_EmissiveColor": [
+      0.0,
+      0.0,
+      0.0
+    ],
+    "_EmissiveMap": "",
+    "_EmissiveStrength": 1.0,
+    "_Metallic": 0.0,
+    "_MetallicMap": "",
+    "_MetallicRoughnessMap": "",
+    "_NormalMap": "assets/Characters/Quantum/Textures/Clothing/Tops/Shirt_RolledUp/T_Shirt_RolledUp_Unity_Normal.png",
+    "_Roughness": 1.0,
+    "_RoughnessMap": "assets/Characters/Quantum/Textures/Clothing/Tops/Shirt_RolledUp/T_Shirt_RolledUp_Roughness.png",
+    "_Triplanar": false,
+    "_TriplanarScale": 1.0
+  },
+  "shader": "engine://Standard.shader",
+  "textureGuids": {
+    "_AOMap": "ffa2862be055ad94",
+    "_AlbedoMap": "ea782c55309753b3",
+    "_NormalMap": "4400b21c68f1813e",
+    "_RoughnessMap": "a863f7b6cd17b847"
+  }
+}

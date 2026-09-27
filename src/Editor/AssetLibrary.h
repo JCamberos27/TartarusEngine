@@ -176,6 +176,15 @@ public:
     // loose in the root. Reuses a registered folder of the same name in any case, and registers
     // the rest. In memory only; a folder chosen in the browser (even the root) always wins.
     void AdoptDiskFolder(const std::string& path);
+    // The Asset Browser folder `path` shows in without loading it (the browser lists unloaded files
+    // too): the folder it's filed in, its .meta's chosen folder, else DiskFolderFor.
+    std::string BrowserFolderFor(const std::string& path);
+    // The folder mirroring `path`'s directory on disk (registered in memory as AdoptDiskFolder
+    // does); "" at the project root or outside the project.
+    std::string DiskFolderFor(const std::string& path);
+    // Registers "a/b/c" and each parent in memory, reusing a registered folder of the same name
+    // in any case; returns the registered spelling.
+    std::string AddFolderPath(const std::string& dir);
 
     // For SceneSerializer: every asset key currently known to have a folder and/or display
     // name override, so the file format only needs to store what's actually customized.

@@ -1,4 +1,4 @@
-// GENERATED from project/animations/fps_body_locomotion.controller by scratchpad/gen_body.py, then kept by hand:
+// GENERATED from project/assets/Animations/Controllers/fps_body_locomotion.controller by scratchpad/gen_body.py, then kept by hand:
 // the unit test TestFirstPersonBodyController compares the result with that file, so edit both together.
 #include "FirstPersonBodyContract.h"
 #include "AnimatorController.h"

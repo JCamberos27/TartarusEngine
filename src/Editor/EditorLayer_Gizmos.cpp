@@ -140,6 +140,7 @@ struct SurfaceHit {
     entt::entity Entity = entt::null;
     float T = 1e30f;
     glm::vec3 Normal{0.0f, 1.0f, 0.0f};
+    int Mesh = -1; // index into the model's meshes = its material slot
 };
 template <class SkipFn>
 SurfaceHit RaycastRenderables(const World& world, const glm::vec3& origin, const glm::vec3& dir, SkipFn skip,
@@ -157,10 +158,12 @@ SurfaceHit RaycastRenderables(const World& world, const glm::vec3& origin, const
         if (!wb.RayIntersect(origin, dir, boxT) || boxT >= best.T) continue; // broadphase
         float t;
         glm::vec3 n;
-        if (r.ModelRef->RaycastTriangles(model, origin, dir, t, &n) && t < best.T) {
+        int mesh = -1;
+        if (r.ModelRef->RaycastTriangles(model, origin, dir, t, &n, 1e-4f, &mesh) && t < best.T) {
             best.Entity = entity;
             best.T = t;
             best.Normal = n;
+            best.Mesh = mesh;
         }
     }
     return best;
@@ -741,19 +744,49 @@ glm::vec3 EditorLayer::ComputeModelDropPosition(World& world, Model& model, Came
     return position;
 }
 
+entt::entity EditorLayer::ObjectUnderMouse(World& world, Camera& editorCamera, int& outSlot) const {
+    outSlot = -1;
+    if (m_ViewportSize.x <= 0.0f || m_ViewportSize.y <= 0.0f) return entt::null;
+    const glm::mat4 invVP = glm::inverse(editorCamera.ProjectionMatrix(m_ViewportSize.x / m_ViewportSize.y) *
+                                         editorCamera.ViewMatrix());
+    const ImVec2 mouse = ImGui::GetMousePos();
+    const float ndcX = (2.0f * (mouse.x - m_ViewportPos.x)) / m_ViewportSize.x - 1.0f;
+    const float ndcY = 1.0f - (2.0f * (mouse.y - m_ViewportPos.y)) / m_ViewportSize.y;
+    glm::vec4 nearP = invVP * glm::vec4(ndcX, ndcY, -1.0f, 1.0f);
+    glm::vec4 farP = invVP * glm::vec4(ndcX, ndcY, 1.0f, 1.0f);
+    nearP /= nearP.w;
+    farP /= farP.w;
+    const SurfaceHit h = RaycastRenderables(world, glm::vec3(nearP), glm::normalize(glm::vec3(farP - nearP)),
+                                            [](entt::entity) { return false; }, 5000.0f);
+    outSlot = h.Mesh;
+    return h.Entity;
+}
+
+void EditorLayer::RestoreMaterialDropPreview(World& world) {
+    auto& p = m_MaterialDropPreview;
+    if (!p.Active) return;
+    p.Active = false;
+    if (!world.Registry.valid(p.Entity)) return;
+    auto* rc = world.Registry.try_get<RenderableComponent>(p.Entity);
+    if (!rc || p.Slot < 0 || p.Slot >= (int)rc->Materials.size()) return;
+    rc->Materials[p.Slot] = p.Original;
+    if (rc->Materials.size() > p.OriginalSlotCount) rc->Materials.resize(p.OriginalSlotCount);
+}
+
 void EditorLayer::DrawViewportDropTarget(World& world, AssetLibrary& assets, Camera& editorCamera) {
     const ImGuiPayload* peek = ImGui::GetDragDropPayload();
     bool isModelDrag = peek && peek->IsDataType("ASSET_MODEL_PATH");
     bool isPrefabDrag = peek && peek->IsDataType("ASSET_PREFAB_PATH");
-    // Only active while a placeable asset is actually being dragged, so this fullscreen overlay
-    // never otherwise sits over the viewport intercepting camera input.
-    if (!isModelDrag && !isPrefabDrag) {
+    // Everything else the Asset Browser drags applies to what's under the cursor (or, for an
+    // .hdr / a sound, to the scene) - see ApplyAssetDrop.
+    const char* applyType = nullptr;
+    for (const char* t : {"ASSET_MATERIAL_PATH", "ASSET_TEXTURE_PATH", "ASSET_SOUND_PATH", "ASSET_FILE_PATH"})
+        if (peek && peek->IsDataType(t)) applyType = t;
+    // Only active while an asset is actually being dragged, so this fullscreen overlay never
+    // otherwise sits over the viewport intercepting camera input.
+    if ((!isModelDrag && !isPrefabDrag && !applyType) || m_ViewportSize.x <= 0.0f || m_ViewportSize.y <= 0.0f) {
         m_DragPreview.Active = false;
-        return;
-    }
-
-    if (m_ViewportSize.x <= 0.0f || m_ViewportSize.y <= 0.0f) {
-        m_DragPreview.Active = false;
+        RestoreMaterialDropPreview(world); // the drag ended somewhere else, or was cancelled
         return;
     }
 
@@ -805,7 +838,56 @@ void EditorLayer::DrawViewportDropTarget(World& world, AssetLibrary& assets, Cam
         m_DragPreview.Active = false;
     }
 
+    // Material / texture / sound / controller / script / HDRI: find what's under the cursor, show
+    // what the drop would do beside it, and preview a material on the hovered part (Unity does).
+    entt::entity applyTarget = entt::null;
+    int applySlot = -1;
+    if (applyType && hoveringViewport) {
+        const std::string path((const char*)peek->Data);
+        applyTarget = ObjectUnderMouse(world, editorCamera, applySlot);
+        const std::string hint = AssetDropHint(world, applyTarget, applyType, path, applySlot);
+
+        auto& pv = m_MaterialDropPreview;
+        const bool wantPreview = !hint.empty() && std::string(applyType) == "ASSET_MATERIAL_PATH";
+        int slot = applySlot;
+        auto* rc = wantPreview ? world.Registry.try_get<RenderableComponent>(applyTarget) : nullptr;
+        if (rc && rc->ModelRef && (slot < 0 || slot >= rc->ModelRef->MeshCount())) slot = 0;
+        const bool samePreview = pv.Active && pv.Entity == applyTarget && pv.Slot == slot && pv.Path == path;
+        if (!samePreview) {
+            RestoreMaterialDropPreview(world);
+            if (rc && rc->ModelRef) {
+                if (auto mat = assets.LoadMaterial(path); mat && !mat->Missing) {
+                    pv = {applyTarget, slot, slot < (int)rc->Materials.size() ? rc->Materials[slot] : nullptr,
+                          rc->Materials.size(), path, true};
+                    if ((int)rc->Materials.size() <= slot) rc->Materials.resize(slot + 1);
+                    rc->Materials[slot] = mat;
+                }
+            }
+        }
+
+        if (!hint.empty()) {
+            const ImVec2 m = ImGui::GetMousePos();
+            const ImVec2 at(m.x + 18.0f * m_UIScale, m.y + 22.0f * m_UIScale);
+            const ImVec2 ts = ImGui::CalcTextSize(hint.c_str());
+            const ImVec2 pad(6.0f * m_UIScale, 3.0f * m_UIScale);
+            ImDrawList* fg = ImGui::GetForegroundDrawList();
+            fg->AddRectFilled(ImVec2(at.x - pad.x, at.y - pad.y), ImVec2(at.x + ts.x + pad.x, at.y + ts.y + pad.y),
+                              IM_COL32(20, 22, 28, 230), 4.0f);
+            fg->AddText(at, IM_COL32(240, 240, 245, 255), hint.c_str());
+        }
+    } else {
+        RestoreMaterialDropPreview(world);
+    }
+
     if (ImGui::BeginDragDropTarget()) {
+        if (applyType) {
+            if (const ImGuiPayload* p = ImGui::AcceptDragDropPayload(applyType)) {
+                const std::string path((const char*)p->Data);
+                RestoreMaterialDropPreview(world); // so the undo step records the real "before"
+                ApplyAssetDrop(world, assets, applyTarget, applyType, path, applySlot,
+                               ComputeDropRayPosition(world, editorCamera));
+            }
+        }
         const ImGuiPayload* modelPayload = ImGui::AcceptDragDropPayload("ASSET_MODEL_PATH");
         const ImGuiPayload* prefabPayload = modelPayload ? nullptr : ImGui::AcceptDragDropPayload("ASSET_PREFAB_PATH");
 

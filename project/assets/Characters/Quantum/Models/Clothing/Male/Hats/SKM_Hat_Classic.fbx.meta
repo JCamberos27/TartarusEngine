@@ -1,0 +1,9 @@
+{
+  "folder": "assets/Characters/Quantum/Models/Clothing/Male/Hats",
+  "guid": "f76ba89836a858dd",
+  "materialRemap": {
+    "M_Hat_Classic": "assets/Characters/Quantum/Materials/Clothing/Hats/Hat_Classic/Beach/M_Hat_Beach.mat"
+  },
+  "metaVersion": 1,
+  "type": "model"
+}

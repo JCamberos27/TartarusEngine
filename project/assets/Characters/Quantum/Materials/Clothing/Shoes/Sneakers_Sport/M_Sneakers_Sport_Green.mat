@@ -1,0 +1,37 @@
+{
+  "factorsScaleMaps": true,
+  "matVersion": 2,
+  "name": "M_Sneakers_Sport_Green",
+  "properties": {
+    "_AOMap": "assets/Characters/Quantum/Textures/Clothing/Shoes/Sneakers_Sport/T_Sneakers_Sport_Occlusion.png",
+    "_AlbedoMap": "assets/Characters/Quantum/Textures/Clothing/Shoes/Sneakers_Sport/T_Sneakers_Sport_Green_BaseColor.png",
+    "_BaseColor": [
+      1.0,
+      1.0,
+      1.0
+    ],
+    "_DoubleSided": false,
+    "_EmissiveColor": [
+      0.0,
+      0.0,
+      0.0
+    ],
+    "_EmissiveMap": "",
+    "_EmissiveStrength": 1.0,
+    "_Metallic": 0.0,
+    "_MetallicMap": "",
+    "_MetallicRoughnessMap": "",
+    "_NormalMap": "assets/Characters/Quantum/Textures/Clothing/Shoes/Sneakers_Sport/T_Sneakers_Sport_Unity_Normal.png",
+    "_Roughness": 1.0,
+    "_RoughnessMap": "assets/Characters/Quantum/Textures/Clothing/Shoes/Sneakers_Sport/T_Sneakers_Sport_Roughness.png",
+    "_Triplanar": false,
+    "_TriplanarScale": 1.0
+  },
+  "shader": "engine://Standard.shader",
+  "textureGuids": {
+    "_AOMap": "54a42d19285dc2f2",
+    "_AlbedoMap": "d6ad0fa6966c96e2",
+    "_NormalMap": "4ef1eb5bd210c5de",
+    "_RoughnessMap": "72196ffc4a90d408"
+  }
+}

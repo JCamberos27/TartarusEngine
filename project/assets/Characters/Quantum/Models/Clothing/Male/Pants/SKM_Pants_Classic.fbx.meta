@@ -1,0 +1,9 @@
+{
+  "folder": "assets/Characters/Quantum/Models/Clothing/Male/Pants",
+  "guid": "599cbc13ca312f56",
+  "materialRemap": {
+    "M_Pants_Classic": "assets/Characters/Quantum/Materials/Clothing/Pants/Pants Classic/M_Pants_Classic_Black.mat"
+  },
+  "metaVersion": 1,
+  "type": "model"
+}
