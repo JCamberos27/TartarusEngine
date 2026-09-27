@@ -331,6 +331,11 @@ struct PlayerBodyTag {
     bool HasSleeves = false;            // SleeveBones is set (a clothing piece with arm bones)
     bool SleevesInViewModel = false;    // FirstPersonBody: the arms are in the view-model pass right now
     std::uint32_t SleeveBones[16] = {}; // bit per palette bone (MAX_BONES = 512)
+    // Clothing around the head (a hood, a collar, a scarf): the camera sits inside the head, so what the
+    // neck and everything above it mostly move isn't drawn in the camera's world pass - it swept across
+    // the view as big dark flaps, swinging with every step. Shadows and other views keep it.
+    bool HasHeadBones = false;
+    std::uint32_t HeadBones[16] = {};   // bit per palette bone
 };
 
 // A dynamic light. Point/Spot use the entity's world position; Directional (the sun) ignores
