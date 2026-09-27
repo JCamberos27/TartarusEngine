@@ -489,7 +489,8 @@ void SceneRenderer::RenderScene(World& world, const RenderFrameContext& ctx,
                 DrawItem sleeves = item;
                 sleeves.BoneMaskMode = 2;
                 std::copy(std::begin(bodyTag->SleeveBones), std::end(bodyTag->SleeveBones), sleeves.BoneMask.begin());
-                sleeves.NearHide = 0.0f;
+                // Keeps the piece's Near Hide: the sleeve's top reaches the shoulder, at the eye in this
+                // projection, and its open end showed as black slivers there.
                 sleeves.HideBones = nullptr;
                 viewModelTransparentList.push_back(sleeves);
             }
@@ -508,7 +509,8 @@ void SceneRenderer::RenderScene(World& world, const RenderFrameContext& ctx,
                 DrawItem sleeves = item;
                 sleeves.BoneMaskMode = 2;
                 std::copy(std::begin(bodyTag->SleeveBones), std::end(bodyTag->SleeveBones), sleeves.BoneMask.begin());
-                sleeves.NearHide = 0.0f;
+                // Keeps the piece's Near Hide: the sleeve's top reaches the shoulder, at the eye in this
+                // projection, and its open end showed as black slivers there.
                 sleeves.HideBones = nullptr;
                 viewModelList.push_back(sleeves);
             }
