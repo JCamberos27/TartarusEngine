@@ -318,9 +318,19 @@ struct PoseSourceTag {};
 // CameraHideBones: skin weighted mostly to these bones (palette IDs, -1 = unused) isn't drawn in that pass
 // either - the torso's shoulders, which move with the arms (so the arms stay on them in every other view)
 // but which the view-model arms draw over in the camera's, at their own FOV.
+//
+// Sleeves (an outfit's clothing: a top, a jacket, gloves): while the arms are in the view-model pass, the
+// clothing's arm part must be too, or it's projected at the world's FOV and hangs off the arms - a sleeve
+// floating beside the hand. SleeveBones marks the palette bones the arms carry (the Camera Hidden Bones and
+// everything under them); with SleevesInViewModel set, the renderer draws the piece twice: the world pass
+// without the vertices weighted mostly to them, the view-model pass with only those. The seam is where the
+// bare arms meet the torso too - at the shoulder, out of view.
 struct PlayerBodyTag {
     float NearHide = 0.1f;
     int CameraHideBones[8] = {-1, -1, -1, -1, -1, -1, -1, -1};
+    bool HasSleeves = false;            // SleeveBones is set (a clothing piece with arm bones)
+    bool SleevesInViewModel = false;    // FirstPersonBody: the arms are in the view-model pass right now
+    std::uint32_t SleeveBones[16] = {}; // bit per palette bone (MAX_BONES = 512)
 };
 
 // A dynamic light. Point/Spot use the entity's world position; Directional (the sun) ignores
