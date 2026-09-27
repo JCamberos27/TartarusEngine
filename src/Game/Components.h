@@ -310,6 +310,14 @@ struct ViewModelTag {};
 // what casts the shadow. Runtime only, like ViewModelTag.
 struct PoseSourceTag {};
 
+// The player's own body (FirstPersonBody, in Play): the camera sits in it, so whatever of it comes within
+// NearHide metres of the eye is not drawn in the camera's world pass (shadows keep it). Near the eye the
+// near plane would otherwise slice the mesh into slivers - the neck and shoulders on a landing, the chest
+// looking down. Runtime only, like ViewModelTag.
+struct PlayerBodyTag {
+    float NearHide = 0.1f;
+};
+
 // A dynamic light. Point/Spot use the entity's world position; Directional (the sun) ignores
 // position and takes its travel direction from the entity's -Z axis (rotate the entity to aim
 // it), matching the spot-cone convention. Every kind goes through the same LightBuffer SSBO and
@@ -509,6 +517,19 @@ struct FirstPersonBodyComponent {
     float ReachSlack = 0.04f; // Reach Slack
     float ShrugStart = 0.9f; // Shrug Start
     float ShrugMax = 0.12f; // Shrug Max
+    // Arm Steadiness (Weapon Arms): how much the arms ignore the body's locomotion sway, 0..1. The shoulders
+    // are held at a slow average of where they sit relative to the view (Arm Steady Time), by at most Arm
+    // Steady Max metres, and the elbows bend in the rig's plane. 0 = the arms follow the chest (the old behaviour).
+    float ArmSteadiness = 1.0f; // Arm Steadiness
+    float ArmSteadyTime = 0.5f; // Arm Steady Time
+    float ArmSteadyMax = 0.04f; // Arm Steady Max
+    // Looking down, the eye moves this far (metres) forward over the chest, eased in from Look Down Start
+    // degrees below level to straight down - the head pitching at the neck. Keeps the camera out of the torso.
+    float LookDownPush = 0.16f; // Look Down Push
+    float LookDownStart = 0.0f; // Look Down Start
+    // Whatever of the body comes within this many metres of the eye isn't drawn in the camera's view (its
+    // shadow stays): the near plane would slice it into slivers. 0 = off.
+    float NearHide = 0.1f; // Near Hide
     float ArmsEaseOut = 0.1f; // Arms Ease Out
     float TurnLagFloor = 90.0f; // Turn Lag Floor
     float TurnLagMargin = 5.0f; // Turn Lag Margin

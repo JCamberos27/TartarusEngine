@@ -3511,6 +3511,7 @@ void EditorLayer::DrawReflectedComponentExtra(const char* componentName, World& 
                 d.FootOffset[1] * 100.0f, d.FootPlanted[1] ? "planted" : "air", d.FootLock[1] * 100.0f);
             row("Stair ease", "%+.1f cm", d.StepOffset * 100.0f);
             row("Arms / eye", "arms follow weapon %.0f%%,  eye off shoulders %.1f cm", d.ArmsWeight * 100.0f, d.EyeSlack * 100.0f);
+            row("Arm steadying", "shoulders held L %.1f cm  R %.1f cm", d.ArmSteadyShift[0] * 100.0f, d.ArmSteadyShift[1] * 100.0f);
             row("Scene overlay", "%s   %d lines", BodyDebug::Enabled() ? "on" : "off (Gizmos > Player body)", (int)(BodyDebug::Verts().size() / 14));
             ImGui::TreePop();
         }
