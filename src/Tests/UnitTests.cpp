@@ -87,6 +87,8 @@
 #include "Wardrobe.h"
 #include "OutfitCoverage.h"
 #include "OutfitSystem.h"
+#include "Texture.h"
+#include <stb_image_write.h> // async decode test fixture
 #include <set>
 #include <string>
 #include <thread>
@@ -2050,6 +2052,49 @@ void TestWardrobeQuantum() {
     CHECK(pieceFor(r, "Hair") == "SKM_F_Haircut_Bobcut_Cap" && pieceFor(r, "Torso") == "SKM_F_Vivian_Body");
 }
 
+// Async loading's CPU halves (AssetLibrary::RequestModelAsync's workers run these): no GL anywhere, so
+// they work here, headless. A deferred import is complete except for its GPU objects, and a texture decode
+// honours Max Size. The Vivian head/body also pin the female-import fix: upright, at head height.
+void TestAsyncImportCpu() {
+    auto deferred = [](const std::string& rel) {
+        return Model::ImportDeferred(ProjectPaths::Resolve(rel), ModelImportSettings{});
+    };
+    // The model half needs the Quantum pack (project content, absent from a packaged engine).
+    const bool quantum = std::filesystem::exists(ProjectPaths::Resolve("assets/Characters/Quantum"));
+    if (quantum) {
+        const auto head = deferred("assets/Characters/Quantum/Models/Female/Body/Heads/SKM_F_Vivian_Head.fbx");
+        CHECK(head && head->NeedsGpuUpload());
+        CHECK(head && head->MeshCount() > 1);
+        CHECK(head && head->BoundsMax().y > 1.6f && head->BoundsMin().y > 1.3f); // on the neck, not lying at the feet
+        const auto body = deferred("assets/Characters/Quantum/Models/Female/Body/Parts/SKM_F_Vivian_Body.fbx");
+        CHECK(body && body->BoundsMax().y > 1.4f && body->BoundsMax().z < 0.5f); // upright, not stretched along Z
+        // Offsets carrying a group node's frame, not the mesh node's (the jackets' "Cloth" group): chest height.
+        const auto m65 = deferred("assets/Characters/Quantum/Models/Clothing/Male/Outerwear/SKM_Jacket_M65.fbx");
+        CHECK(m65 && m65->BoundsMax().y > 1.3f && m65->BoundsMax().z < 0.6f);
+        const auto oldHead = deferred("assets/Characters/Quantum/Models/Female/Body/Heads/SKM_F_Vivian_Head_Old.fbx");
+        CHECK(oldHead && oldHead->BoundsMax().y > 1.6f && oldHead->BoundsMin().y > 1.3f);
+    } else {
+        Log::Info("AsyncImportCpu: no Quantum pack - model checks skipped.");
+    } // the models are destroyed here with nothing uploaded, which must not touch GL
+
+    std::error_code ec;
+    const auto dir = std::filesystem::temp_directory_path(ec) / "TartarusUnitTests";
+    std::filesystem::create_directories(dir, ec);
+    const std::string png = (dir / "async_decode.png").string();
+    std::vector<unsigned char> px(64 * 32 * 4);
+    for (size_t i = 0; i < px.size(); ++i) px[i] = (unsigned char)(i * 7);
+    CHECK(stbi_write_png(png.c_str(), 64, 32, 4, px.data(), 64 * 4) != 0);
+    TextureImportSettings s;
+    s.MaxTextureSize = 16;
+    TextureCpuData d = Texture::DecodeFile(png, s);
+    CHECK(d.Ok && d.SourceWidth == 64 && d.SourceHeight == 32 && d.Width == 16 && d.Height == 8 && d.Channels == 4);
+    CHECK(d.Pixels.size() == (size_t)16 * 8 * 4 && d.GLFormat == 0);
+    const auto pending = Texture::CreatePending(std::move(d));
+    CHECK(pending && pending->IsPendingUpload() && !pending->IsValid() && pending->Width() == 64);
+    CHECK(Texture::CreatePending(Texture::DecodeFile((dir / "missing.png").string(), s)) == nullptr);
+    std::filesystem::remove(png, ec);
+}
+
 // The body's setup check: a controller built from the contract tables passes; one missing piece is named.
 void TestFirstPersonBodyValidate() {
     FirstPersonBodyComponent cfg;
@@ -3834,6 +3879,7 @@ int RunUnitTests() {
         {"Wardrobe", TestWardrobe},
         {"OutfitCoverage", TestOutfitCoverage},
         {"WardrobeQuantum", TestWardrobeQuantum},
+        {"AsyncImportCpu", TestAsyncImportCpu},
         {"FirstPersonBodyTuning", TestFirstPersonBodyTuning},
         {"FirstPersonWeaponValidate", TestFirstPersonWeaponValidate},
         {"ClipTrim", TestClipTrim},

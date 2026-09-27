@@ -128,25 +128,32 @@ std::shared_ptr<Model> AssetLibrary::LoadModel(const std::string& path) {
     auto it = FindAnySpelling(m_ModelCache, path);
     if (it != m_ModelCache.end()) return it->second;
 
-    std::shared_ptr<Model> model;
-    {
-        // Populate settings and browser metadata from .meta before constructing the model, so
-        // that the first import uses the persisted settings rather than requiring a Reimport.
-        if (m_ModelSettings.find(path) == m_ModelSettings.end()) {
-            std::string metaStr = AssetDatabase::ReadMetaFields(path);
-            if (metaStr != "{}") {
-                try {
-                    json j = json::parse(metaStr);
-                    ModelImportSettings s;
-                    if (ParseModelImporter(j, s)) m_ModelSettings[path] = s;
-                    ApplyMetaBrowserData(j, path, m_AssetFolder, m_DisplayNames, m_Labels, m_AllLabelsDirty);
-                } catch (...) {}
-            }
-        }
-        AdoptDiskFolder(path);
-        model = std::make_shared<Model>(path, GetModelSettings(path));
-    }
+    PrepareModelImport(path);
+    return RegisterModel(path, std::make_shared<Model>(path, GetModelSettings(path)));
+}
 
+bool AssetLibrary::HasModel(const std::string& path) { return FindAnySpelling(m_ModelCache, path) != m_ModelCache.end(); }
+bool AssetLibrary::HasTexture(const std::string& path) { return FindAnySpelling(m_TextureCache, path) != m_TextureCache.end(); }
+bool AssetLibrary::HasMaterial(const std::string& path) { return FindAnySpelling(m_MaterialCache, path) != m_MaterialCache.end(); }
+
+void AssetLibrary::PrepareModelImport(const std::string& path) {
+    // Populate settings and browser metadata from .meta before constructing the model, so
+    // that the first import uses the persisted settings rather than requiring a Reimport.
+    if (m_ModelSettings.find(path) == m_ModelSettings.end()) {
+        std::string metaStr = AssetDatabase::ReadMetaFields(path);
+        if (metaStr != "{}") {
+            try {
+                json j = json::parse(metaStr);
+                ModelImportSettings s;
+                if (ParseModelImporter(j, s)) m_ModelSettings[path] = s;
+                ApplyMetaBrowserData(j, path, m_AssetFolder, m_DisplayNames, m_Labels, m_AllLabelsDirty);
+            } catch (...) {}
+        }
+    }
+    AdoptDiskFolder(path);
+}
+
+std::shared_ptr<Model> AssetLibrary::RegisterModel(const std::string& path, std::shared_ptr<Model> model) {
     m_ModelCache[path] = model;
     m_ModelList.push_back(model);
     AssetDatabase::EnsureGuid(path);
@@ -250,7 +257,10 @@ std::shared_ptr<Texture> AssetLibrary::LoadTexture(const std::string& path, Text
     // texture is ever loaded — but anything loaded from outside that scan (freshly imported
     // files, or --asset-load-bench's synthetic textures) hit it on every single load.
     AssetDatabase::EnsureGuid(path);
-    auto tex = std::make_shared<Texture>(path, GetTextureSettings(path));
+    return RegisterTexture(path, std::make_shared<Texture>(path, GetTextureSettings(path)));
+}
+
+std::shared_ptr<Texture> AssetLibrary::RegisterTexture(const std::string& path, std::shared_ptr<Texture> tex) {
     m_TextureCache[path] = tex;
     m_TextureList.push_back(tex);
     m_TexturePaths.push_back(path);
@@ -461,7 +471,7 @@ void AssetLibrary::PruneToKeepSet(const std::set<std::string>& modelPaths, const
 
 // #121 - the folder list lives in project/settings.json. AssetLibrary keeps a working copy
 // (the Asset Browser reads it every frame) and writes it back on every change.
-AssetLibrary::AssetLibrary() : m_Folders(ProjectSettings::AssetFolders()) {}
+// The constructor lives in AssetLibraryAsync.cpp, where AsyncLoader is a complete type.
 
 void AssetLibrary::PersistFolders() {
     ProjectSettings::SetAssetFolders(m_Folders);

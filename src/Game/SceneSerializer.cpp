@@ -16,6 +16,7 @@
 #include "Log.h"
 #include "SpotShadowMap.h"
 #include "PointShadowMap.h"
+#include "OutfitSystem.h"
 
 #include <json.hpp>
 #include <fstream>
@@ -2076,6 +2077,7 @@ std::string SceneSerializer::TakeLoadWarning() {
 }
 
 bool SceneSerializer::Load(World& world, AssetLibrary& assets, const std::string& path, bool persistMigration) {
+    OutfitSystem::CancelPending(world); // the registry is about to be replaced
     struct SyncActiveOnExit { World& W; ~SyncActiveOnExit() { W.SyncActiveInHierarchy(); } } syncActive{world}; // #201
     std::ifstream in(path);
     if (!in.is_open()) return false;
@@ -2175,6 +2177,7 @@ std::string SceneSerializer::SaveToString(const World& world, const AssetLibrary
 }
 
 bool SceneSerializer::LoadFromString(World& world, AssetLibrary& assets, const std::string& data) {
+    OutfitSystem::CancelPending(world); // the registry is about to be replaced
     struct SyncActiveOnExit { World& W; ~SyncActiveOnExit() { W.SyncActiveInHierarchy(); } } syncActive{world}; // #201
     json root;
     try {
