@@ -146,6 +146,7 @@ bool FirstPersonBody::Start(World& world, Player& player) {
         return false;
     }
     m_Body = body;
+    if (const auto* outfit = reg.try_get<CharacterOutfitComponent>(body)) m_OutfitVersion = outfit->Version;
 
     // The clips' travel comes out of the pose and is handed to the Player - never applied to
     // an object: this class places the body itself. Turns stay in the pose: the view owns the yaw.
@@ -210,14 +211,16 @@ bool FirstPersonBody::Start(World& world, Player& player) {
                 pac->RootMotion.Rotation = dm.Rotation;
                 pac->RootMotion.Vertical = dm.Vertical;
             }
-        // A hidden piece still casts its shadow; the camera is inside the head.
+        // A hidden piece still casts its shadow; the camera is inside the head - and so is whatever an
+        // outfit hangs on it (hair, a hat, glasses).
         const std::string name = lower(reg.all_of<NameComponent>(e) ? reg.get<NameComponent>(e).Name : std::string());
-        for (const std::string& part : hiddenParts)
-            if (e != body && name.find(lower(part)) != std::string::npos) {
-                reg.get<RenderableComponent>(e).CastShadows = RenderableComponent::ShadowCasting::ShadowsOnly;
-                ++shadowOnly;
-                break;
-            }
+        const auto* outfitPiece = reg.try_get<OutfitPieceComponent>(e);
+        bool hide = outfitPiece && (outfitPiece->Flags & OutfitPieceHeadAttached);
+        for (const std::string& part : hiddenParts) hide = hide || name.find(lower(part)) != std::string::npos;
+        if (e != body && hide) {
+            reg.get<RenderableComponent>(e).CastShadows = RenderableComponent::ShadowCasting::ShadowsOnly;
+            ++shadowOnly;
+        }
     }
 
     // The input asks the blend tree for speeds its clips have.
@@ -231,6 +234,12 @@ bool FirstPersonBody::Start(World& world, Player& player) {
               "' is the player's body - " + std::to_string(pieces.size()) + " pieces, " + std::to_string(shadowOnly) +
               " shadow-only, root motion at responsiveness " + std::to_string(cfg.Responsiveness).substr(0, 4) + ".");
     return true;
+}
+
+bool FirstPersonBody::OutfitChanged(const World& world) const {
+    if (m_Body == entt::null || !world.Registry.valid(m_Body)) return false;
+    const auto* outfit = world.Registry.try_get<CharacterOutfitComponent>(m_Body);
+    return outfit && outfit->Version != m_OutfitVersion;
 }
 
 void FirstPersonBody::Stop(World& world) {

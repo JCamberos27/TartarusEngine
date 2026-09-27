@@ -583,6 +583,39 @@ struct FirstPersonBodyComponent {
     float StairEase = 0.09f; // Stair Ease
 };
 
+// A character dressed from a wardrobe (CHARACTER_OUTFITS.md): put it on the body's root. Its children
+// tagged with an Outfit Piece are the outfit - body parts (torso, arms, legs, feet, head) and items
+// (hair, tops, pants, shoes, hats ...) - and the Inspector's outfit editor builds and swaps them from
+// the wardrobe's catalog. The children are the record of what is worn (each piece's model and its
+// materials, i.e. its colourway); this holds the choices the pieces don't: gender and race.
+struct CharacterOutfitComponent {
+    std::string Wardrobe = "assets/Characters/Quantum/Quantum.wardrobe"; // the pack's .wardrobe file
+    int Gender = 0;                  // Wardrobe::Gender: 0 male, 1 female
+    std::string Race = "European";   // a race of that gender's body (head + skin)
+    std::string Locks;               // slots Randomize leaves alone, comma separated
+    bool AutoHide = true;            // skin (and under-layers) covered by clothing isn't drawn
+    int Version = 0;                 // runtime: bumped on every change (FirstPersonBody re-reads its pieces)
+    std::uint64_t HideSignature = 0; // runtime: the pieces the hiding was last worked out for
+};
+
+// One piece of a Character Outfit (a child of the object with the Character Outfit component). Set by
+// the outfit editor; `Item` is the model the piece was built from, so a piece whose model was swapped
+// by hand is noticed and rebuilt.
+struct OutfitPieceComponent {
+    std::string Slot;                // "Torso", "Hair", "Top", "Wrist L" ...
+    std::string Item;                // project-relative model path
+    int Flags = 0;                   // OutfitPieceFlags
+};
+enum OutfitPieceFlags { OutfitPieceBodyPart = 1, OutfitPieceHeadAttached = 2 };
+
+// The vertices of an outfit piece that clothing covers (OutfitSystem::UpdateHiding): not drawn, so skin
+// can't poke through the cloth. Runtime only - rebuilt from the outfit whenever its pieces change.
+class SkinHideBuffer;
+struct OutfitHideTag {
+    std::shared_ptr<SkinHideBuffer> Buffer; // one bit per vertex (SkinHideBuffer.h)
+    int Hidden = 0, Total = 0;              // vertices hidden / in the model (the Inspector's readout)
+};
+
 // Procedural runtime animation: spin, orbit, bob, and (for a LightComponent entity) hue
 // cycling. Applied only while the scene is playing — edit mode always shows the authored
 // pose. All parameters are authored/serialized; the Base* fields and Initialized are runtime

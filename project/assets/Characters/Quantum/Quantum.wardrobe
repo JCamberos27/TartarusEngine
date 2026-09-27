@@ -1,0 +1,80 @@
+{
+  "name": "Quantum",
+  "root": "assets/Characters/Quantum",
+  "itemFolders": ["Models/Clothing", "Models/Hair", "Models/Female/Hair", "Models/Beard"],
+  "excludeFolders": ["StaticMesh"],
+  "skinMaterials": ["M_Quantum_Body", "M_Quantum_Arms", "M_Quantum_Head", "M_F_Vivian_Body", "M_F_Vivian_Arms", "M_F_Vivian_Head"],
+  "slots": [
+    { "id": "Hair",      "label": "Hair",       "icon": "hair",      "folders": ["Hair"],               "headAttached": true },
+    { "id": "Beard",     "label": "Beard",      "icon": "beard",     "folders": ["Beard"],              "headAttached": true },
+    { "id": "Hat",       "label": "Hats",       "icon": "hat",       "folders": ["Hats", "WithHair"],   "headAttached": true },
+    { "id": "Glasses",   "label": "Glasses",    "icon": "glasses",   "folders": ["Glasses"],            "headAttached": true },
+    { "id": "Top",       "label": "Tops",       "icon": "shirt",     "folders": ["Tops"] },
+    { "id": "Outerwear", "label": "Outerwear",  "icon": "jacket",    "folders": ["Outerwear"] },
+    { "id": "Collar",    "label": "Collars",    "icon": "collar",    "folders": ["Fur"] },
+    { "id": "Pants",     "label": "Pants",      "icon": "pants",     "folders": ["Pants"] },
+    { "id": "Shoes",     "label": "Shoes",      "icon": "shoe",      "folders": ["Shoes"] },
+    { "id": "Bag",       "label": "Bags",       "icon": "bag",       "folders": ["Bags"] },
+    { "id": "Wrist L",   "label": "Left wrist", "icon": "watch",     "folders": ["Accessories"], "nameSuffix": "_L" },
+    { "id": "Wrist R",   "label": "Right wrist","icon": "watch",     "folders": ["Accessories"], "nameSuffix": "_R" }
+  ],
+  "bodies": {
+    "Male": {
+      "parts": [
+        { "part": "Torso",      "model": "Models/European/Quantum_Torso.fbx" },
+        { "part": "Arms",       "model": "FirstPerson/Quantum_Arms_FP.fbx" },
+        { "part": "Legs",       "model": "Models/European/Quantum_Legs.fbx" },
+        { "part": "Feet",       "model": "Models/European/Quantum_Feet.fbx" },
+        { "part": "UnderPants", "model": "Models/European/Quantum_UnderPants.fbx" }
+      ],
+      "alternates": { "ShoeFeet": "Models/Clothing/Male/Shoes/Quantum_Feet_Shoes.fbx" },
+      "races": [
+        { "name": "European", "head": "Models/European/Quantum_Head.fbx", "skin": "",      "tone": [0.86, 0.66, 0.54] },
+        { "name": "Afro",     "head": "Models/Afro/Quantum_Head_Afro.fbx", "skin": "_Afro", "tone": [0.40, 0.26, 0.18],
+          "parts": { "Torso": "Models/Afro/Quantum_Torso_Afro.fbx", "Legs": "Models/Afro/Quantum_Legs_Afro.fbx",
+                     "Feet": "Models/Afro/Quantum_Feet_Afro.fbx", "UnderPants": "Models/Afro/Quantum_UnderPants_Afro.fbx" } },
+        { "name": "Asian",    "head": "Models/Asian/Quantum_Head_Asian.fbx", "skin": "",    "tone": [0.88, 0.72, 0.56] },
+        { "name": "Old",      "head": "Models/Old/Quantum_Old_Head.fbx",     "skin": "_Old", "tone": [0.80, 0.63, 0.53] },
+        { "name": "Young",    "head": "Models/Young/Quantum_Young_Head.fbx", "skin": "",    "tone": [0.91, 0.73, 0.61] }
+      ]
+    },
+    "Female": {
+      "parts": [
+        { "part": "Torso",      "model": "Models/Female/Body/Parts/SKM_F_Vivian_Body.fbx" },
+        { "part": "Arms",       "model": "Models/Female/Body/Parts/SKM_F_Vivian_Arms_Full.fbx" },
+        { "part": "Legs",       "model": "Models/Female/Body/Parts/SKM_F_Vivian_Legs.fbx" },
+        { "part": "Feet",       "model": "Models/Female/Body/Parts/SKM_F_Vivian_Feet.fbx" },
+        { "part": "UnderPants", "model": "Models/Female/Body/Parts/SKM_F_Vivian_Trousers.fbx" }
+      ],
+      "alternates": { "ShoeFeet": "Models/Clothing/Female/Shoes/SKM_F_Vivian_Feet_Shoes.fbx" },
+      "races": [
+        { "name": "European", "head": "Models/Female/Body/Heads/SKM_F_Vivian_Head.fbx",      "skin": "",      "tone": [0.88, 0.69, 0.58] },
+        { "name": "Afro",     "head": "Models/Female/Body/Heads/SKM_F_Vivian_Head_Afro.fbx", "skin": "_Afro", "tone": [0.42, 0.27, 0.19] },
+        { "name": "Old",      "head": "Models/Female/Body/Heads/SKM_F_Vivian_Head_Old.fbx",  "skin": "_Old",  "tone": [0.82, 0.65, 0.55] }
+      ]
+    }
+  },
+  "covers": [
+    { "slot": "Pants", "skin": false, "nameLacksAll": ["Shorts", "Breeches"], "hide": ["Legs", "UnderPants"] },
+    { "slot": "Pants", "skin": true, "hide": ["Legs", "UnderPants"] },
+    { "slot": "Pants", "skin": false, "nameHasAny": ["Shorts", "Breeches"], "hide": ["UnderPants"] },
+    { "slot": "Shoes", "skin": false, "nameLacksAll": ["Flip_Flops"], "replace": "Feet", "with": "ShoeFeet" },
+    { "slot": "Shoes", "skin": true, "hide": ["Feet"] }
+  ],
+  "clears": [
+    { "slot": "Hat", "pathHasAny": ["/WithHair/"], "clear": "Hair" },
+    { "slot": "Outerwear", "nameHasAny": ["Shirt", "Hoodie", "Tie"], "clear": "Top" },
+    { "slot": "Top", "nameHasAny": ["Hood_Up"], "clear": "Hat" }
+  ],
+  "pairs": [
+    { "whenSlot": "Shoes", "whenNameHas": "Boots", "slot": "Pants", "suffix": "_Inboots" }
+  ],
+  "items": [
+    { "path": "Models/Clothing/Male/Shoes/Quantum_Feet_Shoes.fbx", "hidden": true },
+    { "path": "Models/Clothing/Female/Shoes/SKM_F_Vivian_Feet_Shoes.fbx", "hidden": true },
+    { "path": "Models/Clothing/Female/Shoes/SKM_F_Vivian_Feet_Shoes_Long.fbx", "hidden": true },
+    { "path": "Models/Clothing/Female/Accessories/SKM_F_Vivian_Wrist.fbx", "hidden": true },
+    { "path": "Models/Female/Hair/SKM_F_Head_Scalp.fbx", "name": "Shaved" },
+    { "path": "Models/Hair/SKM_Hair_Skin.fbx", "name": "Shaved" }
+  ]
+}
