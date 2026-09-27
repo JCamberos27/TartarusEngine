@@ -555,10 +555,15 @@ each child at its clip's measured velocity (walk forward 1.53 m/s, jog forward 3
 **Phases 2 and 3.** The body has arms (the `ArmsPiece`, an arms-only Quantum piece). It copies the
 arms rig's arm shapes and solves its hands to the rig's hands (`FirstPersonBody::ArmsLateUpdate`),
 the camera is anchored to the shoulders while armed (`kEyeSlack`, `kReachSlack`, the shrug), and it
-keeps that height unarmed. The eye hangs off the shoulders in the *chest's* frame (the view's heading at
-Spine Aim of its pitch), not the view's, and comes forward over the chest looking down (Look Down Push),
-so the camera never ends up inside the torso. Arm Steadiness keeps the gait out of the arms: each
-shoulder is held at a slow average of where it sits in that frame (Arm Steady Time / Max) and each
+keeps that height unarmed. The eye hangs off the shoulders in the *view's* frame, as the rig's does (its
+shoulders pivot with the whole view), so the body's shoulder midpoint is the rig's at every pitch; looking
+down the chest pitches further (Spine Aim Down, 0.9) so the camera stays out of the torso. Armed, the chest
+also takes the rig's *stance*: the rig is authored bladed (left shoulder ~13 cm ahead of the right, ~20
+degrees), and squared to the view the body's left shoulder sat ~7 cm behind it - with the rig's left arm
+already at 91% of its 55 cm reach, the support hand came off the handguard. The chest is turned (spread
+down the spine) until its shoulder line is the rig's (Shoulder Line Match). The collarbone turn (Shrug
+Start 0.98) and chest lean are then only a last resort. Arm Steadiness keeps the gait out of the arms: each
+shoulder is held at a slow average of where it sits in the chest's frame (Arm Steady Time / Max) and each
 elbow is turned into the rig's bend plane after the hand solve. Drawn, the arms take the rig's hands from the first frame; holstered
 they leave the view-model pass at once. Phase 3 added turn in place with a turn-rate cap, start /
 stop clips, crouch, foot IK with foot lock, stair easing and jump / land polish.

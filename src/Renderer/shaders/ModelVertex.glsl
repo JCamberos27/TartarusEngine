@@ -22,13 +22,22 @@ out vec3 vNormal;
 out vec2 vUV;
 out mat3 vTBN;
 out vec4 vColor;
+// The player's own body in the camera's view (PlayerBodyTag): skin weighted to these palette bones isn't
+// drawn - vHidden carries how much of the vertex they move, and the fragment shader drops > 0.5.
+uniform int uHideBoneCount;
+uniform int uHideBones[8];
+out float vHidden;
 
 void main() {
     vec4 localPos = vec4(aPos, 1.0);
     vec3 localNormal = aNormal;
     vec3 localTangent = aTangent;
 
+    vHidden = 0.0;
     if (uUseSkinning == 1) {
+        for (int i = 0; i < 4; ++i)
+            for (int k = 0; k < uHideBoneCount; ++k)
+                if (aBoneIDs[i] >= 0 && aBoneIDs[i] == uHideBones[k]) vHidden += aWeights[i];
         mat4 skinMat = mat4(0.0);
         float totalWeight = 0.0;
         for (int i = 0; i < 4; ++i) {

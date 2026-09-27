@@ -314,8 +314,13 @@ struct PoseSourceTag {};
 // NearHide metres of the eye is not drawn in the camera's world pass (shadows keep it). Near the eye the
 // near plane would otherwise slice the mesh into slivers - the neck and shoulders on a landing, the chest
 // looking down. Runtime only, like ViewModelTag.
+//
+// CameraHideBones: skin weighted mostly to these bones (palette IDs, -1 = unused) isn't drawn in that pass
+// either - the torso's shoulders, which move with the arms (so the arms stay on them in every other view)
+// but which the view-model arms draw over in the camera's, at their own FOV.
 struct PlayerBodyTag {
     float NearHide = 0.1f;
+    int CameraHideBones[8] = {-1, -1, -1, -1, -1, -1, -1, -1};
 };
 
 // A dynamic light. Point/Spot use the entity's world position; Directional (the sun) ignores
@@ -486,6 +491,12 @@ struct FirstPersonBodyComponent {
     // How much of the camera's pitch the spine takes (0 = the body stays upright, 1 = the chest
     // tilts as far as the view), so the shoulders follow the view and the hands stay in reach.
     float SpineAim = 0.0f;
+    // The same looking down. Armed, the eye hangs off the shoulders as the arms rig's does, so looking
+    // down it comes over the chest only as far as the chest pitches with it.
+    float SpineAimDown = 0.9f;
+    // Armed, how far the chest takes the arms rig's stance (its shoulder line, e.g. bladed with the
+    // support shoulder forward) rather than squaring to the view: 1 = the rig's, so both hands reach.
+    float ShoulderLineMatch = 1.0f;
     // Standing still, the body keeps its heading until the view is this many degrees off it, then
     // turns on the spot (the turn clips). 0 = the body always faces the view.
     float TurnThreshold = 0.0f;
@@ -515,8 +526,13 @@ struct FirstPersonBodyComponent {
     // --- Advanced tuning (defaults are the values the body was tuned with) ---
     float EyeSlack = 0.035f; // Eye Slack
     float ReachSlack = 0.04f; // Reach Slack
-    float ShrugStart = 0.9f; // Shrug Start
+    float ShrugStart = 0.98f; // Shrug Start
     float ShrugMax = 0.12f; // Shrug Max
+    // The most (degrees) a collarbone turns to move its shoulder (shrug and steadying together): the shoulder
+    // turns about the collarbone's inner end, like a real one, rather than sliding.
+    float ShoulderMaxAngle = 25.0f; // Shoulder Max Angle
+    // The most (degrees) the chest leans toward a hand still out of reach after its collarbone has turned.
+    float ReachLeanMax = 15.0f; // Reach Lean Max
     // Arm Steadiness (Weapon Arms): how much the arms ignore the body's locomotion sway, 0..1. The shoulders
     // are held at a slow average of where they sit relative to the view (Arm Steady Time), by at most Arm
     // Steady Max metres, and the elbows bend in the rig's plane. 0 = the arms follow the chest (the old behaviour).
@@ -525,11 +541,15 @@ struct FirstPersonBodyComponent {
     float ArmSteadyMax = 0.04f; // Arm Steady Max
     // Looking down, the eye moves this far (metres) forward over the chest, eased in from Look Down Start
     // degrees below level to straight down - the head pitching at the neck. Keeps the camera out of the torso.
-    float LookDownPush = 0.16f; // Look Down Push
+    float LookDownPush = 0.0f; // Look Down Push
     float LookDownStart = 0.0f; // Look Down Start
     // Whatever of the body comes within this many metres of the eye isn't drawn in the camera's view (its
     // shadow stays): the near plane would slice it into slivers. 0 = off.
     float NearHide = 0.1f; // Near Hide
+    // Bones whose skin isn't drawn in the camera's own view on the body pieces other than the arms,
+    // comma separated (at most 8): the torso's shoulders. They follow the arms' shoulders (so the arms
+    // stay attached), which reach toward the gun - in view they'd bulge into the camera.
+    std::string CameraHiddenBones = "clavicle_l, clavicle_r, upperarm_l, upperarm_r"; // Camera Hidden Bones
     float ArmsEaseOut = 0.1f; // Arms Ease Out
     float TurnLagFloor = 90.0f; // Turn Lag Floor
     float TurnLagMargin = 5.0f; // Turn Lag Margin
