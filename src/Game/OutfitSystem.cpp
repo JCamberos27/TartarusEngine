@@ -186,7 +186,7 @@ std::shared_ptr<const Catalog> LoadCatalog(AssetLibrary& assets, const std::stri
             if (ext != ".fbx" && ext != ".glb" && ext != ".gltf") continue;
             const std::string rel = Rel(it->path().string());
             std::vector<std::string> materials;
-            for (const auto& [name, mat] : assets.MaterialRemap(rel)) materials.push_back(Rel(mat));
+            for (const auto& [name, mat] : assets.MaterialRemap(it->path().string())) materials.push_back(Rel(mat));
             Wardrobe::Item item;
             if (Wardrobe::Classify(cat->W, rel, materials, item)) cat->Items.push_back(std::move(item));
         }
@@ -262,7 +262,7 @@ Result Apply(World& world, AssetLibrary& assets, entt::entity root, const Wardro
         return (p.BodyPart ? OutfitPieceBodyPart : 0) | (p.HeadAttached ? OutfitPieceHeadAttached : 0);
     };
     for (const auto& p : diff.Create) {
-        auto model = assets.InstantiateModel(p.Path);
+        auto model = assets.InstantiateModel(ProjectPaths::Resolve(p.Path));
         if (!model) { r.Notes.push_back("can't load " + p.Path); continue; }
         const entt::entity e = world.CreateModelEntity(model, glm::vec3(0.0f), glm::vec3(0.0f), glm::vec3(1.0f), p.Slot);
         world.AttachChildRaw(e, root);
@@ -274,7 +274,7 @@ Result Apply(World& world, AssetLibrary& assets, entt::entity root, const Wardro
     }
     for (const auto& p : diff.Remodel) {
         const entt::entity e = pieces[p.Slot];
-        auto model = assets.InstantiateModel(p.Path);
+        auto model = assets.InstantiateModel(ProjectPaths::Resolve(p.Path));
         if (!model) { r.Notes.push_back("can't load " + p.Path); continue; }
         auto& rc = reg.get<RenderableComponent>(e);
         const Picks previous = PickedColourways(assets, cat->W, rc);
