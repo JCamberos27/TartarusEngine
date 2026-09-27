@@ -39,7 +39,20 @@ std::string Lower(std::string s) {
 
 // A path as the scene stores it: project-relative, forward slashes.
 std::string Rel(const std::string& path) {
-    std::string p = ProjectPaths::Relativize(path);
+    std::string p = path;
+    std::replace(p.begin(), p.end(), '\\', '/');
+    if (!fs::path(p).is_absolute()) return p; // already project-relative
+    // Lexically, when the path is under the project root: Relativize goes through
+    // std::filesystem::relative, which hits the disk, and this runs for every material and piece of
+    // an outfit change (it was a good part of the click's hitch).
+    static const std::string root = [] {
+        std::string r = ProjectPaths::Root();
+        std::replace(r.begin(), r.end(), '\\', '/');
+        while (!r.empty() && r.back() == '/') r.pop_back();
+        return Lower(r) + "/";
+    }();
+    if (p.size() > root.size() && Lower(p.substr(0, root.size())) == root) return p.substr(root.size());
+    p = ProjectPaths::Relativize(path);
     std::replace(p.begin(), p.end(), '\\', '/');
     return p;
 }
