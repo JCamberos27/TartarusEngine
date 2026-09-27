@@ -85,28 +85,40 @@ const vec3 kMaria[22] = vec3[](
 
 float BrightSpot(vec2 q, vec2 c, float sharpness) { vec2 d = q - c; return exp(-dot(d, d) * sharpness); }
 
+// Fractal value noise in about [-0.5, 0.5].
+float MoonFbm(vec3 p, int octaves) {
+    float sum = 0.0, amp = 0.5, norm = 0.0;
+    for (int i = 0; i < octaves; ++i) {
+        sum += amp * (ValueNoise3(p) - 0.5);
+        norm += amp;
+        p = p * 2.03 + 1.7;
+        amp *= 0.5;
+    }
+    return sum / norm;
+}
+
 // Lunar albedo at disc point q (|q| <= 1) whose surface normal is n: dark maria of varying
-// depth on cratered highlands, with the bright young craters Tycho (and its rays), Copernicus,
-// Aristarchus and Kepler.
+// depth on bright highlands, with Tycho's rays and the brightest young craters.
 float MoonAlbedo(vec2 q, vec3 n) {
+    // Warp the lookup so the seas come out as irregular, flowing shapes - evaluated straight, the
+    // blobs they're built from read as stamped-on circles.
+    vec2 w = q + 0.45 * vec2(MoonFbm(n * 2.5, 4), MoonFbm(n * 2.5 + 5.2, 4));
     float field = 0.0;
     for (int i = 0; i < 22; ++i) {
-        vec2 d = (q - kMaria[i].xy) / kMaria[i].z;
-        field += exp(-dot(d, d) * 1.3);
+        vec2 d = (w - kMaria[i].xy) / kMaria[i].z;
+        field += exp(-dot(d, d) * 1.1);
     }
-    float ragged = (ValueNoise3(n * 5.0) - 0.5) + 0.5 * (ValueNoise3(n * 13.0) - 0.5) + 0.25 * (ValueNoise3(n * 31.0) - 0.5);
-    float mare = smoothstep(0.30, 0.60, field + ragged * 0.30);
-    float depth = mare * (0.40 + 0.18 * ValueNoise3(n * 3.0 + 7.0)); // some seas darker than others
-    float mottle = ValueNoise3(n * 13.0) * 0.6 + ValueNoise3(n * 29.0) * 0.4;
-    float speck = ValueNoise3(n * 40.0) * 0.6 + ValueNoise3(n * 90.0) * 0.4; // highland craters
-    float albedo = (1.0 - depth) * (0.86 + 0.2 * mottle + 0.14 * speck * (1.0 - mare));
-    // Tycho's rays: noise over the direction away from it (a vector, so there's no seam).
+    // Soft, ragged shorelines, and shading within each sea.
+    float mare = smoothstep(0.1, 1.0, field + MoonFbm(n * 9.0, 4) * 0.6);
+    float depth = mare * (0.44 + 0.4 * MoonFbm(n * 6.0 + 3.0, 3));
+    float albedo = (1.0 - depth) * (0.93 + 0.18 * MoonFbm(n * 24.0, 3));
+    // Tycho's rays (noise over the direction away from it - a vector, so there's no seam) and
+    // the brightest craters, all kept faint: at the moon's size they're a glint, not a dot.
     vec2 t = q - vec2(-0.12, -0.68);
     float tl = length(t);
     float rays = pow(ValueNoise3(vec3(t / max(tl, 1e-4) * 9.0, 3.1)), 3.0) * exp(-tl * 2.2);
-    albedo += 0.35 * rays + 0.6 * BrightSpot(q, vec2(-0.12, -0.68), 900.0)
-            + 0.4 * BrightSpot(q, vec2(-0.22, 0.22), 1100.0) + 0.5 * BrightSpot(q, vec2(-0.60, 0.38), 2500.0)
-            + 0.25 * BrightSpot(q, vec2(-0.48, 0.18), 2000.0);
+    albedo += 0.5 * (0.25 * rays + 0.25 * BrightSpot(q, vec2(-0.12, -0.68), 400.0)
+                   + 0.15 * BrightSpot(q, vec2(-0.22, 0.22), 500.0) + 0.2 * BrightSpot(q, vec2(-0.60, 0.38), 1200.0));
     return albedo;
 }
 
