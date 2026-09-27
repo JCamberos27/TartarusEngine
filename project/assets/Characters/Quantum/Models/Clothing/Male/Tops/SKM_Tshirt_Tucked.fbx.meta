@@ -1,0 +1,9 @@
+{
+  "folder": "assets/Characters/Quantum/Models/Clothing/Male/Tops",
+  "guid": "9aa86361160887db",
+  "materialRemap": {
+    "M_Tshirt_Tucked7": "assets/Characters/Quantum/Materials/Clothing/Tops/TShirt_Tucked/M_TShirt_Tucked_Black.mat"
+  },
+  "metaVersion": 1,
+  "type": "model"
+}

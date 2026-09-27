@@ -1,0 +1,8 @@
+{
+  "guid": "d083f581cb7009a2",
+  "materialRemap": {
+    "M_Hair_Long": "assets/Characters/Quantum/Materials/Characters/M_Hair_Dark.mat"
+  },
+  "metaVersion": 1,
+  "type": "model"
+}

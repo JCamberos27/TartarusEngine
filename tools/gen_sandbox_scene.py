@@ -1,5 +1,5 @@
 # Generates the default testing scene, project/scenes/Sandbox.json, and its prototype grid
-# textures (project/textures/proto_grid_*.png). Usage: python tools/gen_sandbox_scene.py <repo root>
+# textures (project/assets/Materials/Prototype/proto_grid_*.png). Usage: python tools/gen_sandbox_scene.py <repo root>
 # Hand edits made in the editor are lost if this is re-run - it's the scene's starting point.
 # The scene's other assets (court, basketball, materials, animator controller) come from
 # tools/gen_sandbox_assets.py; run that first on a fresh checkout.
@@ -307,10 +307,10 @@ CZ = 21.38 + HALL_Z                         # court centre z: the north (door) w
 RIM_Y = FLOOR_TOP + 3.05
 STEEL = mat((0.16, 0.17, 0.19), 0.4, 0.85)
 NAVY_PAD = mat((0.10, 0.17, 0.38), 0.75, sheen=[0.2, 0.25, 0.4])
-GLASS = matref('materials/sandbox/arena_glass.mat')
+GLASS = matref('assets/Environments/Sandbox/Materials/arena_glass.mat')
 glass_col = col('box', friction=0.3, bounce=0.6)
 
-box('Court Floor', (0, FLOOR_TOP / 2, CZ), (FLOOR_L, FLOOR_TOP, FLOOR_W), m=matref('materials/sandbox/court_floor.mat'),
+box('Court Floor', (0, FLOOR_TOP / 2, CZ), (FLOOR_L, FLOOR_TOP, FLOOR_W), m=matref('assets/Environments/Sandbox/Materials/court_floor.mat'),
     collider=col('box', friction=0.6, static=0.75, bounce=0.84), parent=g_arena)
 
 # Glass walls: east / west full, north with a doorway, the roof on top. Steel mullions every
@@ -383,7 +383,7 @@ for side, team, label in ((-1, 'Home', 'West'), (1, 'Away', 'East')):
     board_bot = RIM_Y - 0.15 * HOOP_S
     board_y = board_bot + BH / 2
     box(f'Backboard {label}', (board_x, board_y, CZ), (0.03, BH, BW),
-        m=matref('materials/sandbox/backboard_glass.mat'), collider=col('box', friction=0.4, bounce=0.45),
+        m=matref('assets/Props/Basketball/Materials/backboard_glass.mat'), collider=col('box', friction=0.4, bounce=0.45),
         parent=g_hoop)
     fx = board_x + side * 0.03
     for n, c, s in (('Top', (fx, board_bot + BH + 0.02, CZ), (0.05, 0.05, BW + 0.05)),
@@ -393,12 +393,12 @@ for side, team, label in ((-1, 'Home', 'West'), (1, 'Away', 'East')):
     box(f'Backboard Pad {label}', (board_x, board_bot - 0.04, CZ), (0.08, 0.12, BW + 0.05), m=NAVY_PAD, parent=g_hoop)
     # Rim + bracket + net (the OBJs are regulation size; scaled by HOOP_S).
     RING_R = 0.2376 * HOOP_S                       # outer radius of the ring tube
-    model(f'Rim {label}', 'models/basketball/rim.obj', (bx, RIM_Y, CZ), scale=(HOOP_S,) * 3,
-          m=matref('materials/sandbox/rim.mat'), collider=col('mesh', friction=0.5, bounce=0.35), parent=g_hoop)
+    model(f'Rim {label}', 'assets/Props/Basketball/Models/rim.obj', (bx, RIM_Y, CZ), scale=(HOOP_S,) * 3,
+          m=matref('assets/Props/Basketball/Materials/rim.mat'), collider=col('mesh', friction=0.5, bounce=0.35), parent=g_hoop)
     box(f'Rim Bracket {label}', (bx + side * (RING_R + (abs(face - bx) - RING_R) / 2), RIM_Y - 0.03, CZ),
-        (abs(face - bx) - RING_R + 0.02, 0.08, 0.3), m=matref('materials/sandbox/rim.mat'), parent=g_hoop)
-    model(f'Net {label}', 'models/basketball/net.obj', (bx, RIM_Y, CZ), scale=(HOOP_S,) * 3,
-          m=matref('materials/sandbox/net.mat'), parent=g_hoop)
+        (abs(face - bx) - RING_R + 0.02, 0.08, 0.3), m=matref('assets/Props/Basketball/Materials/rim.mat'), parent=g_hoop)
+    model(f'Net {label}', 'assets/Props/Basketball/Models/net.obj', (bx, RIM_Y, CZ), scale=(HOOP_S,) * 3,
+          m=matref('assets/Props/Basketball/Materials/net.mat'), parent=g_hoop)
     # Stanchion behind the baseline: padded base, post, arm to the board, diagonal brace.
     post_x = side * (COURT_L / 2 + 1.35)
     box(f'Stanchion Base {label}', (side * (COURT_L / 2 + 1.55), FLOOR_TOP + 0.5, CZ), (1.1, 1.0, 1.6), m=NAVY_PAD,
@@ -465,8 +465,8 @@ for face in (-1, 1):                         # -1 north face (seen from the nort
 # --- basketballs: a rack on the north apron, one at centre court, one on each free-throw line.
 BALL_R = 0.1193 * HOOP_S
 def basketball(name, pos, parent):
-    return model(name, 'models/basketball/basketball.obj', pos, rot=(random.uniform(0, 360), random.uniform(0, 360), 0),
-                 scale=(2 * BALL_R,) * 3, m=matref('materials/sandbox/basketball.mat'),
+    return model(name, 'assets/Props/Basketball/Models/basketball.obj', pos, rot=(random.uniform(0, 360), random.uniform(0, 360), 0),
+                 scale=(2 * BALL_R,) * 3, m=matref('assets/Props/Basketball/Materials/basketball.mat'),
                  collider=col('sphere', half=(0.5, 0, 0), friction=0.55, static=0.7, bounce=0.84),
                  body=rigidbody(0.62, 0.1, 0.25, ccd=True), parent=parent,
                  extra={'tag': BALL_TAG})
@@ -515,7 +515,7 @@ empty('Player Spawn', (0, 0.02, CZ - HALL_Z - 4.5), (0, 180, 0), extra={'First P
     'Gravity': 18.0, 'Gravity Gun': True, 'Min Throw Speed': 3.5, 'Max Throw Speed': 16.0, 'Throw Charge Time': 1.1,
     'Throw Backspin': 2.0,
     # The AKS-74U in hand; the gravity gun is the unarmed slot (2 / Holster puts the AK away).
-    'Animation Set': {'path': 'assets/fps/AKS74U/AKS74U.fpsanim', 'pathGuid': 'c0ff631aac421f76'},
+    'Animation Set': {'path': 'assets/Weapons/AKS74U/AKS74U.fpsanim', 'pathGuid': 'c0ff631aac421f76'},
     'Camera Bone': 'head', 'View Model FOV': 50.0, 'View Model Offset': [0.0562, -0.032, 0.0],
     'View Model Rotation': [-0.24, 0.39, 0.0], 'View Model Scale': 1.0}})
 cam_pos = (-15.0 * COURT_S, 7.2 * COURT_S, CZ - 8.2 * COURT_S)
@@ -536,7 +536,7 @@ for k in range(16):  # the basin wall: a 16-gon of stone blocks
     x, z = 2.3 * math.cos(a), FZ + 2.3 * math.sin(a)
     box(f'Fountain Wall {k + 1}', (x, 0.3, z), (0.93, 0.6, 0.3), rot=(0, -math.degrees(a) + 90, 0), m=STONE,
         parent=g_fount)
-prim('cylinder', 'Fountain Water', (0, 0.42, FZ), (4.3, 0.02, 4.3), matref('materials/sandbox/water.mat'),
+prim('cylinder', 'Fountain Water', (0, 0.42, FZ), (4.3, 0.02, 4.3), matref('assets/Environments/Sandbox/Materials/water.mat'),
      parent=g_fount)
 prim('cylinder', 'Fountain Column', (0, 0.75, FZ), (0.5, 1.5, 0.5), STONE, parent=g_fount, collider=col('convex'))
 prim('donut', 'Fountain Bowl', (0, 1.5, FZ), (2.0, 1.2, 2.0), STONE, parent=g_fount)
@@ -563,7 +563,7 @@ for k, (label, file) in enumerate(GALLERY):
          parent=g_gal, collider=col('convex'))
     prim('cylinder', f'Pedestal Cap {label}', (x, 1.02, -9), (0.8, 0.04, 0.8), mat((0.72, 0.55, 0.3), 0.3, 1.0),
          parent=g_gal)
-    sphere(f'Gallery {label}', (x, 1.5, -9), 0.45, matref(f'materials/sandbox/{file}.mat'), parent=g_gal,
+    sphere(f'Gallery {label}', (x, 1.5, -9), 0.45, matref(f'assets/Environments/Sandbox/Materials/{file}.mat'), parent=g_gal,
            friction=0.4, bounce=0.2)
 box('Gallery Plinth', (0, 0.05, -9), (17, 0.1, 2.2), m=mat((0.26, 0.28, 0.31), 0.6), parent=g_gal)
 

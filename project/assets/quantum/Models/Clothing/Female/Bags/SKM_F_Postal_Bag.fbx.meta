@@ -1,9 +1,0 @@
-{
-  "folder": "assets/quantum/Models/Clothing/Female/Bags",
-  "guid": "233f02e50bc784e6",
-  "materialRemap": {
-    "M_Postal_Bag": "assets/quantum/Materials/Clothing/Bags/Bag_Postal/M_Postal_Bag_Beige.mat"
-  },
-  "metaVersion": 1,
-  "type": "model"
-}

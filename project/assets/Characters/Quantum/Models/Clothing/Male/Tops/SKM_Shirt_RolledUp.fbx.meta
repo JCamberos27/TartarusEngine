@@ -1,0 +1,9 @@
+{
+  "folder": "assets/Characters/Quantum/Models/Clothing/Male/Tops",
+  "guid": "106ceb81f7534c7b",
+  "materialRemap": {
+    "M_Shirt_RolledUp1": "assets/Characters/Quantum/Materials/Clothing/Tops/Shirt_RolledUp/M_Shirt_RolledUp_Gray.mat"
+  },
+  "metaVersion": 1,
+  "type": "model"
+}

@@ -1,0 +1,16 @@
+{
+  "folder": "assets/Environments/Apartment/Textures",
+  "guid": "19e290809aabc316",
+  "importer": {
+    "anisoLevel": 8,
+    "compression": 0,
+    "filterMode": 1,
+    "generateMipmaps": true,
+    "isSRGB": false,
+    "maxTextureSize": 2048,
+    "textureType": 1,
+    "wrapMode": 0
+  },
+  "metaVersion": 1,
+  "type": "texture"
+}

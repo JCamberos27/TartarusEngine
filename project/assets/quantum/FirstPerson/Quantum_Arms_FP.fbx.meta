@@ -1,9 +1,0 @@
-{
-  "folder": "assets/quantum/FirstPerson",
-  "guid": "19bbef7e387a5ef4",
-  "materialRemap": {
-    "M_Quantum_Arms": "assets/quantum/Materials/M_Quantum_Arms.mat"
-  },
-  "metaVersion": 1,
-  "type": "model"
-}

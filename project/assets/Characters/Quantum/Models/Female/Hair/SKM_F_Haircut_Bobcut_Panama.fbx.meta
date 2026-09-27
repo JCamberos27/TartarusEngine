@@ -1,0 +1,9 @@
+{
+  "guid": "4b8802de7f8a3776",
+  "materialRemap": {
+    "M_Panama": "assets/Characters/Quantum/Materials/Clothing/Hats/Panama/M_Panama_Gray.mat",
+    "lambert6": "assets/Characters/Quantum/Materials/Characters/M_Hair_Dark.mat"
+  },
+  "metaVersion": 1,
+  "type": "model"
+}
