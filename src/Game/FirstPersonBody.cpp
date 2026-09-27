@@ -222,18 +222,37 @@ bool FirstPersonBody::Start(World& world, Player& player) {
                 }
                 return any;
             };
-            std::vector<std::string> sleeveRoots;
-            for (const std::string& b : names(cfg.CameraHiddenBones)) sleeveRoots.push_back(Bone(b));
-            bodyTag.HasSleeves = markUnder(sleeveRoots, bodyTag.SleeveBones);
-            // The neck (the head bone's parent, when it is one) and all above it; else the head alone.
-            std::string headRoot = Bone(cfg.HeadBone);
+            // The sleeves: the arm proper, from the upper arm down. Not the collarbones - with the gun up
+            // they turn toward the eye, and a garment's shoulder (bulkier than skin) then wrapped the camera:
+            // its inside showed as a black flap, swinging with the walk.
+            const std::vector<std::string> arms = {Bone(FPBody::kBoneUpperArm[0]), Bone(FPBody::kBoneUpperArm[1])};
+            bodyTag.HasSleeves = markUnder(arms, bodyTag.SleeveBones);
+            // Never in the camera's view, like the bare torso's shoulders (Camera Hidden Bones): the neck and
+            // everything above it (a hood, a collar), the collarbones' cloth (the shoulder tops), and what the
+            // neck's parent moves alone (the collar's base, right under the eye).
+            std::string headRoot = Bone(cfg.HeadBone), collarBase;
             if (const int h = m->NodeIndex(headRoot); h >= 0 && m->NodeParent(h) >= 0) {
-                std::string parent = m->NodeName(m->NodeParent(h));
-                std::string lowerParent = parent;
-                for (char& c : lowerParent) c = (char)std::tolower((unsigned char)c);
-                if (lowerParent.find("neck") != std::string::npos) headRoot = parent;
+                const int neck = m->NodeParent(h);
+                std::string lowerNeck = m->NodeName(neck);
+                for (char& c : lowerNeck) c = (char)std::tolower((unsigned char)c);
+                if (lowerNeck.find("neck") != std::string::npos) {
+                    headRoot = m->NodeName(neck);
+                    if (m->NodeParent(neck) >= 0) collarBase = m->NodeName(m->NodeParent(neck));
+                }
             }
-            bodyTag.HasHeadBones = markUnder({headRoot}, bodyTag.HeadBones);
+            bodyTag.HasHeadBones = markUnder({headRoot, Bone(FPBody::kBoneClavicle[0]), Bone(FPBody::kBoneClavicle[1])},
+                                             bodyTag.HeadBones);
+            // ... minus the arms (the collarbones' subtree holds them): those are the sleeves' to show or hide.
+            for (int w = 0; w < 16; ++w) bodyTag.HeadBones[w] &= ~bodyTag.SleeveBones[w];
+            if (!collarBase.empty())
+                if (const int id = m->BoneId(collarBase); id >= 0 && id < 16 * 32) {
+                    bodyTag.HeadBones[id >> 5] |= 1u << (id & 31);
+                    bodyTag.HasHeadBones = true;
+                }
+            // Bones can't tell everything: some packs skin a hood or a scarf to the chest bone (the Quantum
+            // open-hood winter jacket, the warm hat's braids). Clothing within 20 cm of the eye isn't drawn in
+            // the camera's view either; the chest, ~25-30 cm below and ahead, still is when looking down.
+            bodyTag.NearHide = std::max(bodyTag.NearHide, 0.2f);
         }
         m_Models.push_back(reg.get<RenderableComponent>(e).ModelRef);
         m_Pieces.push_back(e);
