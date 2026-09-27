@@ -1,0 +1,37 @@
+{
+  "factorsScaleMaps": true,
+  "matVersion": 2,
+  "name": "M_F_Pants_Jeans_Camo",
+  "properties": {
+    "_AOMap": "assets/quantum/Textures/Clothing/Pants/F_Pants_Jeans/T_F_Pants_Jeans_Occlusion.png",
+    "_AlbedoMap": "assets/quantum/Textures/Clothing/Pants/F_Pants_Jeans/T_F_Pants_Jeans_Camo_BaseColor.png",
+    "_BaseColor": [
+      1.0,
+      1.0,
+      1.0
+    ],
+    "_DoubleSided": false,
+    "_EmissiveColor": [
+      0.0,
+      0.0,
+      0.0
+    ],
+    "_EmissiveMap": "",
+    "_EmissiveStrength": 1.0,
+    "_Metallic": 0.0,
+    "_MetallicMap": "",
+    "_MetallicRoughnessMap": "",
+    "_NormalMap": "assets/quantum/Textures/Clothing/Pants/F_Pants_Jeans/T_F_Pants_Jeans_Unity_Normal.png",
+    "_Roughness": 1.0,
+    "_RoughnessMap": "assets/quantum/Textures/Clothing/Pants/F_Pants_Jeans/T_F_Pants_Jeans_Roughness.png",
+    "_Triplanar": false,
+    "_TriplanarScale": 1.0
+  },
+  "shader": "engine://Standard.shader",
+  "textureGuids": {
+    "_AOMap": "b81b7e7dee893e0b",
+    "_AlbedoMap": "a8ecc7716ef56f3d",
+    "_NormalMap": "35f417d76cdf13e7",
+    "_RoughnessMap": "16d7fa99963c90b0"
+  }
+}

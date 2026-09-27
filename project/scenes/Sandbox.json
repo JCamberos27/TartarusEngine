@@ -41742,7 +41742,7 @@
       "name": "Quantum - Root Motion On",
       "order": 654,
       "parentId": 652,
-      "path": "assets/quantum/Models/Quantum_Body_Full.fbx",
+      "path": "assets/quantum/Models/European/Quantum_Body_Full.fbx",
       "pathGuid": "5ec75801d215e72f",
       "position": [
         -2.0,
@@ -41775,7 +41775,7 @@
       "name": "Quantum - Root Motion On Head",
       "order": 655,
       "parentId": 653,
-      "path": "assets/quantum/Models/Quantum_Head.fbx",
+      "path": "assets/quantum/Models/European/Quantum_Head.fbx",
       "pathGuid": "372aa659f6e66c47",
       "position": [
         0,
@@ -41808,7 +41808,7 @@
       "name": "Quantum - Root Motion Off",
       "order": 656,
       "parentId": 652,
-      "path": "assets/quantum/Models/Quantum_Body_Full.fbx",
+      "path": "assets/quantum/Models/European/Quantum_Body_Full.fbx",
       "pathGuid": "5ec75801d215e72f",
       "position": [
         2.0,
@@ -41841,7 +41841,7 @@
       "name": "Quantum - Root Motion Off Head",
       "order": 657,
       "parentId": 655,
-      "path": "assets/quantum/Models/Quantum_Head.fbx",
+      "path": "assets/quantum/Models/European/Quantum_Head.fbx",
       "pathGuid": "372aa659f6e66c47",
       "position": [
         0,
@@ -41874,7 +41874,7 @@
       "name": "Torso",
       "order": 659,
       "parentId": 657,
-      "path": "assets/quantum/Models/Quantum_Torso.fbx",
+      "path": "assets/quantum/Models/European/Quantum_Torso.fbx",
       "pathGuid": "34f0109f85dae259",
       "position": [
         0,
@@ -41907,7 +41907,7 @@
       "name": "UnderPants",
       "order": 660,
       "parentId": 657,
-      "path": "assets/quantum/Models/Quantum_UnderPants.fbx",
+      "path": "assets/quantum/Models/European/Quantum_UnderPants.fbx",
       "pathGuid": "2aeb5f71b8365204",
       "position": [
         0,
@@ -41940,7 +41940,7 @@
       "name": "Legs",
       "order": 661,
       "parentId": 657,
-      "path": "assets/quantum/Models/Quantum_Legs.fbx",
+      "path": "assets/quantum/Models/European/Quantum_Legs.fbx",
       "pathGuid": "c36e291cf458911c",
       "position": [
         0,
@@ -41973,7 +41973,7 @@
       "name": "Feet",
       "order": 662,
       "parentId": 657,
-      "path": "assets/quantum/Models/Quantum_Feet.fbx",
+      "path": "assets/quantum/Models/European/Quantum_Feet.fbx",
       "pathGuid": "94a5ede2259c1ecf",
       "position": [
         0,
@@ -42006,7 +42006,7 @@
       "name": "Head",
       "order": 663,
       "parentId": 657,
-      "path": "assets/quantum/Models/Quantum_Head.fbx",
+      "path": "assets/quantum/Models/European/Quantum_Head.fbx",
       "pathGuid": "372aa659f6e66c47",
       "position": [
         0,

@@ -1,0 +1,16 @@
+{
+  "folder": "assets/quantum/Textures/Clothing/Tops/F_Tshirt_Tucked",
+  "guid": "4d2f5152f8c6c3c4",
+  "importer": {
+    "anisoLevel": 16,
+    "compression": 2,
+    "filterMode": 2,
+    "generateMipmaps": true,
+    "isSRGB": false,
+    "maxTextureSize": 4096,
+    "textureType": 0,
+    "wrapMode": 0
+  },
+  "metaVersion": 1,
+  "type": "texture"
+}

@@ -1,0 +1,10 @@
+{
+  "folder": "assets/quantum/Models/Clothing/Male/Glasses",
+  "guid": "419c95648a834765",
+  "materialRemap": {
+    "M_Classic_Glasses1": "assets/quantum/Materials/Clothing/Glasses/Glasses_Classic/M_Classic_Glasses.mat",
+    "M_Classic_Glasses_Glass1": "assets/quantum/Materials/Clothing/Glasses/Glasses_Classic/M_Classic_Glasses.mat"
+  },
+  "metaVersion": 1,
+  "type": "model"
+}

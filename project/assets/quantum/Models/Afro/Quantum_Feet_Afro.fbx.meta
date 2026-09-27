@@ -1,0 +1,10 @@
+{
+  "guid": "c9ce8488fa2f6276",
+  "materialRemap": {
+    "M_Quantum_Arms": "assets/quantum/Materials/M_Quantum_Arms_Afro.mat",
+    "M_Quantum_Body": "assets/quantum/Materials/M_Quantum_Body_Afro.mat",
+    "M_Quantum_Head": "assets/quantum/Materials/M_Quantum_Head_Afro.mat"
+  },
+  "metaVersion": 1,
+  "type": "model"
+}

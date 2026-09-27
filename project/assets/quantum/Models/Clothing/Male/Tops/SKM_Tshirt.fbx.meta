@@ -1,0 +1,9 @@
+{
+  "folder": "assets/quantum/Models/Clothing/Male/Tops",
+  "guid": "cbc683d30726b7fe",
+  "materialRemap": {
+    "M_TShirt": "assets/quantum/Materials/Clothing/Tops/TShirt/M_TShirt_Black.mat"
+  },
+  "metaVersion": 1,
+  "type": "model"
+}

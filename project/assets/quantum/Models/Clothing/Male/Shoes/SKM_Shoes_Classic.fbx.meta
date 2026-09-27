@@ -1,0 +1,9 @@
+{
+  "folder": "assets/quantum/Models/Clothing/Male/Shoes",
+  "guid": "1f7752e3e611def9",
+  "materialRemap": {
+    "M_Pants_Classic": "assets/quantum/Materials/Clothing/Pants/Pants Classic/M_Pants_Classic_Black.mat"
+  },
+  "metaVersion": 1,
+  "type": "model"
+}

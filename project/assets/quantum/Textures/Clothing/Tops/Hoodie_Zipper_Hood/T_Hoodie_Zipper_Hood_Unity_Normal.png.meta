@@ -1,0 +1,16 @@
+{
+  "folder": "assets/quantum/Textures/Clothing/Tops/Hoodie_Zipper_Hood",
+  "guid": "76283441e76c9538",
+  "importer": {
+    "anisoLevel": 16,
+    "compression": 2,
+    "filterMode": 2,
+    "generateMipmaps": true,
+    "isSRGB": false,
+    "maxTextureSize": 4096,
+    "textureType": 1,
+    "wrapMode": 0
+  },
+  "metaVersion": 1,
+  "type": "texture"
+}

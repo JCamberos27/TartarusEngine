@@ -1,0 +1,10 @@
+{
+  "folder": "assets/quantum/Models/Clothing/Female/Pants",
+  "guid": "9ef5d4c6734bb07f",
+  "materialRemap": {
+    "MI_F_Shorts_Boots": "assets/quantum/Materials/Clothing/Pants/F_Shorts_Boots/M_F_Shorts_Boots_Black.mat",
+    "MI_F_Vivian_Basemesh_Body2": "assets/quantum/Materials/M_F_Vivian_Body.mat"
+  },
+  "metaVersion": 1,
+  "type": "model"
+}

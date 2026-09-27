@@ -1,0 +1,9 @@
+{
+  "folder": "assets/quantum/Models/Clothing/Female/Bags",
+  "guid": "ed28d6ca0fcf67b5",
+  "materialRemap": {
+    "M_Backpack_Casual1": "assets/quantum/Materials/Clothing/Bags/Backpack_Casual/M_F_Backpack_Casual_Black.mat"
+  },
+  "metaVersion": 1,
+  "type": "model"
+}

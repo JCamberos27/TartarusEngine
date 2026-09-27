@@ -1,0 +1,16 @@
+{
+  "folder": "assets/quantum/Textures/Clothing/Tops/Shirt_Hawaiian",
+  "guid": "185eb43771970b57",
+  "importer": {
+    "anisoLevel": 16,
+    "compression": 2,
+    "filterMode": 2,
+    "generateMipmaps": true,
+    "isSRGB": true,
+    "maxTextureSize": 4096,
+    "textureType": 0,
+    "wrapMode": 0
+  },
+  "metaVersion": 1,
+  "type": "texture"
+}
