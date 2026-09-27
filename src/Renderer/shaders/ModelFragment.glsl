@@ -39,6 +39,44 @@ vec3 ApplyFog(vec3 c) {
     return mix(c, uFogColor, clamp(fog, 0.0, 1.0));
 }
 
+// Physical sky (SkyAtmosphere): aerial perspective and cloud shadows. Both default to off
+// (uniform 0) and their units always hold a valid neutral texture, so other sky modes and the
+// preview renderers pay nothing. Units 30/31 sit above everything material maps can use.
+uniform int  uAerialOn;
+uniform vec4 uAerialViewport;   // x, y, width, height of this view in the framebuffer
+uniform float uAerialInvRange;  // 1 / world distance covered by the volume's last slice
+layout(binding = 30) uniform sampler3D uAerialVolume; // rgb in-scattered light, a transmittance
+uniform int  uCloudShadowOn;
+uniform vec4 uCloudShadowParams; // xy = world XZ at the map's centre, z = 1 / world extent, w = sea level Y
+uniform vec3 uCloudShadowLightDir;
+layout(binding = 31) uniform sampler2D uCloudShadowMap;
+
+// The atmosphere between the camera and this surface: the same haze and colour shift the sky
+// shows at that distance. The volume's slices are spaced quadratically (slice s ends at
+// range * ((s+1)/32)^2), so depth maps to sqrt(distance / range).
+vec3 ApplyAerialPerspective(vec3 c) {
+    if (uAerialOn == 0) return c;
+    float d = length(vWorldPos - uViewPos) * uAerialInvRange;
+    float w = sqrt(clamp(d, 0.0, 1.0));
+    vec2 uv = (gl_FragCoord.xy - uAerialViewport.xy) / uAerialViewport.zw;
+    const float kSlices = 32.0;
+    vec4 ap = texture(uAerialVolume, vec3(uv, max(w - 0.5 / kSlices, 0.5 / kSlices)));
+    // In front of the first slice, fade in from "no atmosphere".
+    ap = mix(vec4(0.0, 0.0, 0.0, 1.0), ap, clamp(w * kSlices, 0.0, 1.0));
+    return c * ap.a + ap.rgb;
+}
+
+// How much of the sun (or moon) gets through the clouds to this point: project it along the
+// light onto sea level, where the shadow map was traced from.
+float CloudShadow(vec3 p) {
+    if (uCloudShadowOn == 0) return 1.0;
+    vec3 L = uCloudShadowLightDir;
+    float ly = max(L.y, 0.05);
+    vec2 g = p.xz - L.xz * ((p.y - uCloudShadowParams.w) / ly);
+    vec2 uv = (g - uCloudShadowParams.xy) * uCloudShadowParams.z + 0.5;
+    return texture(uCloudShadowMap, uv).r;
+}
+
 // Every scene light (directional sun, point, spot) in one std430 SSBO — filled by LightBuffer
 // on the CPU, bound at binding = 0. This is the layout the clustered-forward cull pass will
 // consume later, so it doesn't change again when that lands.
@@ -890,7 +928,7 @@ void main() {
         vec3 L = normalize(-uLights[i].DirCutoff.xyz); // DirCutoff.xyz travels forward; L points back
         // #102 — only the directional light that owns the cascade map samples it (Params.y 0);
         // any other directional used to be shadowed by the primary sun's map.
-        vec3 radiance = uLights[i].ColorRange.rgb * (uLights[i].Params.y >= 0.0 ? SunShadow(vWorldPos, N, L) : 1.0);
+        vec3 radiance = uLights[i].ColorRange.rgb * (uLights[i].Params.y >= 0.0 ? SunShadow(vWorldPos, N, L) * CloudShadow(vWorldPos) : 1.0);
 #ifdef _ANISO
         Lo += ShadeLightAniso(N, V, L, radiance, albedo, F0, metallic, roughness, anisoT, anisoB);
 #else
@@ -1058,6 +1096,7 @@ void main() {
     }
 #endif
     color = ApplyFog(color); // #162
+    color = ApplyAerialPerspective(color);
 
     if (uApplyTonemap == 1) {
         color = color / (color + vec3(1.0)); // Reinhard tonemap

@@ -241,6 +241,31 @@
 #define GL_SHADER_STORAGE_BARRIER_BIT 0x00002000
 #define GL_BUFFER_UPDATE_BARRIER_BIT 0x00000200
 #define GL_ALL_BARRIER_BITS 0xFFFFFFFF
+// Image load/store + 3D textures (the physical sky's compute passes).
+#ifndef GL_TEXTURE_3D
+#define GL_TEXTURE_3D 0x806F
+#endif
+#ifndef GL_READ_ONLY
+#define GL_READ_ONLY 0x88B8
+#endif
+#ifndef GL_WRITE_ONLY
+#define GL_WRITE_ONLY 0x88B9
+#endif
+#ifndef GL_READ_WRITE
+#define GL_READ_WRITE 0x88BA
+#endif
+#ifndef GL_R32F
+#define GL_R32F 0x822E
+#endif
+#ifndef GL_MIRRORED_REPEAT
+#define GL_MIRRORED_REPEAT 0x8370
+#endif
+#ifndef GL_SHADER_IMAGE_ACCESS_BARRIER_BIT
+#define GL_SHADER_IMAGE_ACCESS_BARRIER_BIT 0x00000020
+#endif
+#ifndef GL_TEXTURE_FETCH_BARRIER_BIT
+#define GL_TEXTURE_FETCH_BARRIER_BIT 0x00000008
+#endif
 #define GL_MAX_COMPUTE_WORK_GROUP_INVOCATIONS 0x90EB
 
 // GPU timer queries — Profiler's GPU-side timing (#197).
@@ -414,6 +439,8 @@ typedef void (__stdcall* PFNGLVERTEXARRAYELEMENTBUFFERPROC)(GLuint, GLuint);
 // Compute dispatch + memory barrier (GL 4.3) — clustered light culling (#120).
 typedef void (__stdcall* PFNGLDISPATCHCOMPUTEPROC)(GLuint, GLuint, GLuint);
 typedef void (__stdcall* PFNGLMEMORYBARRIERPROC)(GLbitfield);
+typedef void (__stdcall* PFNGLUNIFORM2IPROC)(GLint, GLint, GLint);
+typedef void (__stdcall* PFNGLBINDIMAGETEXTUREPROC)(GLuint, GLuint, GLint, GLboolean, GLint, GLenum, GLenum);
 
 extern PFNGLGENVERTEXARRAYSPROC glGenVertexArrays;
 extern PFNGLBINDVERTEXARRAYPROC glBindVertexArray;
@@ -513,6 +540,8 @@ extern PFNGLVERTEXARRAYVERTEXBUFFERPROC glVertexArrayVertexBuffer;
 extern PFNGLVERTEXARRAYELEMENTBUFFERPROC glVertexArrayElementBuffer;
 extern PFNGLDISPATCHCOMPUTEPROC glDispatchCompute;
 extern PFNGLMEMORYBARRIERPROC glMemoryBarrier;
+extern PFNGLBINDIMAGETEXTUREPROC glBindImageTexture;
+extern PFNGLUNIFORM2IPROC glUniform2i;
 
 // GPU timer queries — Profiler's GPU-side timing (#197).
 typedef void (__stdcall* PFNGLGENQUERIESPROC)(GLsizei, GLuint*);

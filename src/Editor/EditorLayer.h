@@ -695,6 +695,8 @@ public:
     // EditorLayer::RenderStats for the existing call sites (audit #359).
     using RenderStats = ::RenderStats;
     void SetRenderStats(const RenderStats& stats) { m_RenderStats = stats; }
+    // The physical sky's clock as shown this frame (Lighting > Environment reads it back).
+    void SetSkyClock(float hours, bool running) { m_SkyClockHours = hours; m_SkyClockRunning = running; }
     // Last frame's stats, as set above — read by the --smoke-test harness (main.cpp) to check
     // a loaded scene actually issued draw calls rather than rendering silently empty.
     const RenderStats& GetRenderStats() const { return m_RenderStats; }
@@ -1034,6 +1036,7 @@ private:
     void DrawLightingPanel(World& world);
     void DrawAssetLibraryPanel(World& world, AssetLibrary& assets); // EditorLayer_AssetLibraryPanel.cpp
     void DrawEnvironmentSettings(World& world, float itemWidth);
+    void DrawPhysicalSkySettings(World& world, float itemWidth); // EditorLayer_Sky.cpp
     void DrawPostProcessSettings(World& world, float itemWidth);
     void DrawShadowSettings(World& world, float itemWidth);
     // Phase 6 item 9 — the Solo/Mute mixer row list. m_SoloLights/m_MutedLights and
@@ -1798,6 +1801,8 @@ private:
     void DrawPlayTransportButtons(bool playing, bool maximized, bool paused);
     // Panel visibility lives in EditorSettings::SceneShowStats (persisted), not a plain member.
     RenderStats m_RenderStats;
+    float m_SkyClockHours = 0.0f;
+    bool m_SkyClockRunning = false;
     // Smoothed so the number is readable instead of flickering every frame.
     float m_SmoothedFrameMs = 16.6f;
     // Raw per-frame ms ring buffer backing FrameTimeHistory() (Phase 6 item 5's sparkline) —
