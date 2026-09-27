@@ -27,6 +27,11 @@ out vec4 vColor;
 uniform int uHideBoneCount;
 uniform int uHideBones[8];
 out float vHidden;
+// An outfit piece's vertices covered by clothing (SkinHideBuffer): one bit per vertex of the model, the
+// sub-mesh's first at uHideVertBase. Not drawn in any camera pass.
+layout(std430, binding = 20) readonly buffer HideVertBlock { uint uHideVertBits[]; };
+uniform int uHideVerts;
+uniform int uHideVertBase;
 
 void main() {
     vec4 localPos = vec4(aPos, 1.0);
@@ -34,6 +39,11 @@ void main() {
     vec3 localTangent = aTangent;
 
     vHidden = 0.0;
+    if (uHideVerts == 1) {
+        int id = gl_VertexID + uHideVertBase;
+        uint word = uHideVertBits[clamp(id >> 5, 0, uHideVertBits.length() - 1)];
+        if (((word >> uint(id & 31)) & 1u) != 0u) vHidden = 1.0;
+    }
     if (uUseSkinning == 1) {
         for (int i = 0; i < 4; ++i)
             for (int k = 0; k < uHideBoneCount; ++k)
