@@ -13,6 +13,7 @@ constexpr GLenum kRGBA                 = 0x1908; // GL_RGBA
 constexpr GLenum kUnsignedByte         = 0x1401; // GL_UNSIGNED_BYTE
 constexpr GLenum kDepthComponent       = 0x1902; // GL_DEPTH_COMPONENT
 constexpr GLenum kFloat                = 0x1406; // GL_FLOAT
+constexpr GLenum kTexture3D            = 0x806F; // GL_TEXTURE_3D
 
 unsigned int MakeColor2D(unsigned char r, unsigned char g, unsigned char b, unsigned char a) {
     GLuint tex = 0;
@@ -61,6 +62,19 @@ unsigned int DepthArray() {
 }
 unsigned int DepthCubeArray() {
     static const unsigned int t = MakeDepth(kTextureCubeMapArray, 6);
+    return t;
+}
+unsigned int Volume() {
+    static const unsigned int t = [] {
+        GLuint tex = 0;
+        glCreateTextures(kTexture3D, 1, &tex);
+        glTextureStorage3D(tex, 1, GL_RGBA8, 1, 1, 1);
+        const unsigned char px[4] = {0, 0, 0, 255};
+        glTextureSubImage3D(tex, 0, 0, 0, 0, 1, 1, 1, kRGBA, kUnsignedByte, px);
+        glTextureParameteri(tex, GL_TEXTURE_MIN_FILTER, GL_NEAREST);
+        glTextureParameteri(tex, kTexMagFilter, GL_NEAREST);
+        return tex;
+    }();
     return t;
 }
 

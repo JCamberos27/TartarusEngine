@@ -914,6 +914,103 @@ std::vector<entt::entity> InCreationOrder(const entt::registry& reg, View view) 
 // flattenPrefabInstances: write prefab-instance subtrees in full (as plain entities, no stub,
 // no link) instead of collapsing them to a stub. Used when saving a .prefab file — a prefab
 // asset must be self-contained; nested prefab links are stage 4.
+// The physical sky's settings (World::Sky) <-> a "sky" JSON object. One table of fields so the
+// two directions can't drift apart; anything missing on load keeps its default, so older scenes
+// and hand-edited files load cleanly.
+struct SkyFloatField { const char* key; float SkySettings::* member; float lo, hi; };
+struct SkyBoolField { const char* key; bool SkySettings::* member; };
+struct SkyVec3Field { const char* key; glm::vec3 SkySettings::* member; };
+const SkyFloatField kSkyFloatFields[] = {
+    {"timeOfDayHours", &SkySettings::TimeOfDayHours, 0.0f, 24.0f},
+    {"dayOfYear", &SkySettings::DayOfYear, 1.0f, 365.0f},
+    {"latitude", &SkySettings::LatitudeDegrees, -90.0f, 90.0f},
+    {"northOffset", &SkySettings::NorthOffsetDegrees, -360.0f, 360.0f},
+    {"dayLengthMinutes", &SkySettings::DayLengthMinutes, 0.0f, 1440.0f},
+    {"sunDiscBrightness", &SkySettings::SunDiscBrightness, 0.0f, 100.0f},
+    {"sunDiscScale", &SkySettings::SunDiscScale, 0.05f, 50.0f},
+    {"moonBrightness", &SkySettings::MoonBrightness, 0.0f, 1.0f},
+    {"moonPhaseOffset", &SkySettings::MoonPhaseOffset, 0.0f, 1.0f},
+    {"moonDiscScale", &SkySettings::MoonDiscScale, 0.05f, 50.0f},
+    {"starsBrightness", &SkySettings::StarsBrightness, 0.0f, 100.0f},
+    {"nightGlow", &SkySettings::NightGlow, 0.0f, 10.0f},
+    {"nightBrightness", &SkySettings::NightBrightness, 0.0f, 12.0f},
+    {"skyIntensity", &SkySettings::SkyIntensity, 0.0f, 100.0f},
+    {"rayleighScale", &SkySettings::RayleighScale, 0.0f, 100.0f},
+    {"mieScale", &SkySettings::MieScale, 0.0f, 100.0f},
+    {"mieAnisotropy", &SkySettings::MieAnisotropy, 0.0f, 0.99f},
+    {"mieAbsorption", &SkySettings::MieAbsorption, 0.0f, 100.0f},
+    {"ozoneScale", &SkySettings::OzoneScale, 0.0f, 100.0f},
+    {"planetRadiusKm", &SkySettings::PlanetRadiusKm, 10.0f, 100000.0f},
+    {"atmosphereHeightKm", &SkySettings::AtmosphereHeightKm, 1.0f, 1000.0f},
+    {"rayleighHeightKm", &SkySettings::RayleighHeightKm, 0.1f, 100.0f},
+    {"mieHeightKm", &SkySettings::MieHeightKm, 0.05f, 100.0f},
+    {"multipleScattering", &SkySettings::MultipleScattering, 0.0f, 10.0f},
+    {"aerialPerspectiveScale", &SkySettings::AerialPerspectiveScale, 0.0f, 1000.0f},
+    {"seaLevel", &SkySettings::SeaLevel, -1.0e6f, 1.0e6f},
+    {"altitudeOffsetMeters", &SkySettings::AltitudeOffsetMeters, -1000.0f, 50000.0f},
+    {"cloudCoverage", &SkySettings::CloudCoverage, 0.0f, 1.0f},
+    {"cloudDensity", &SkySettings::CloudDensity, 0.0f, 20.0f},
+    {"cloudType", &SkySettings::CloudType, 0.0f, 1.0f},
+    {"cloudBaseMeters", &SkySettings::CloudBaseMeters, 0.0f, 20000.0f},
+    {"cloudThicknessMeters", &SkySettings::CloudThicknessMeters, 50.0f, 20000.0f},
+    {"cloudScale", &SkySettings::CloudScale, 0.05f, 20.0f},
+    {"cloudDetail", &SkySettings::CloudDetail, 0.0f, 1.0f},
+    {"cloudWindSpeed", &SkySettings::CloudWindSpeed, 0.0f, 500.0f},
+    {"cloudWindDirection", &SkySettings::CloudWindDirectionDegrees, -360.0f, 360.0f},
+    {"cloudWindShear", &SkySettings::CloudWindShear, 0.0f, 20.0f},
+    {"cloudForwardScattering", &SkySettings::CloudForwardScattering, 0.0f, 0.95f},
+    {"cloudAmbient", &SkySettings::CloudAmbient, 0.0f, 10.0f},
+    {"cloudPowder", &SkySettings::CloudPowder, 0.0f, 1.0f},
+    {"cloudMultiScattering", &SkySettings::CloudMultiScattering, 0.0f, 1.5f},
+    {"cloudHorizonHaze", &SkySettings::CloudHorizonHaze, 0.0f, 1.0f},
+    {"cloudSeed", &SkySettings::CloudSeed, -1.0e6f, 1.0e6f},
+    {"cloudShadowStrength", &SkySettings::CloudShadowStrength, 0.0f, 1.0f},
+    {"cirrusCoverage", &SkySettings::CirrusCoverage, 0.0f, 1.0f},
+    {"cirrusAltitudeMeters", &SkySettings::CirrusAltitudeMeters, 1000.0f, 30000.0f},
+    {"cirrusScale", &SkySettings::CirrusScale, 0.05f, 20.0f},
+};
+const SkyBoolField kSkyBoolFields[] = {
+    {"timeOfDay", &SkySettings::TimeOfDayEnabled},
+    {"animateInEditor", &SkySettings::AnimateInEditor},
+    {"atmosphereTintsSun", &SkySettings::AtmosphereTintsSun},
+    {"moon", &SkySettings::MoonEnabled},
+    {"clouds", &SkySettings::CloudsEnabled},
+    {"cloudShadows", &SkySettings::CloudShadows},
+};
+const SkyVec3Field kSkyVec3Fields[] = {
+    {"rayleighTint", &SkySettings::RayleighTint},
+    {"groundAlbedo", &SkySettings::GroundAlbedo},
+};
+
+json SkySettingsToJson(const SkySettings& s) {
+    json j;
+    for (const auto& f : kSkyFloatFields) j[f.key] = s.*(f.member);
+    for (const auto& f : kSkyBoolFields) j[f.key] = s.*(f.member);
+    for (const auto& f : kSkyVec3Fields) j[f.key] = Vec3ToJson(s.*(f.member));
+    j["cloudQuality"] = s.CloudQuality;
+    return j;
+}
+
+SkySettings SkySettingsFromJson(const json& j) {
+    SkySettings s;
+    if (!j.is_object()) return s;
+    for (const auto& f : kSkyFloatFields) {
+        auto it = j.find(f.key);
+        if (it != j.end() && it->is_number()) s.*(f.member) = std::clamp(it->get<float>(), f.lo, f.hi);
+    }
+    for (const auto& f : kSkyBoolFields) {
+        auto it = j.find(f.key);
+        if (it != j.end() && it->is_boolean()) s.*(f.member) = it->get<bool>();
+    }
+    for (const auto& f : kSkyVec3Fields) {
+        auto it = j.find(f.key);
+        if (it != j.end()) s.*(f.member) = glm::max(JsonToVec3(*it, s.*(f.member)), glm::vec3(0.0f));
+    }
+    if (auto it = j.find("cloudQuality"); it != j.end() && it->is_number_integer())
+        s.CloudQuality = std::clamp(it->get<int>(), 0, 3);
+    return s;
+}
+
 json BuildSceneJson(const World& world, const std::set<entt::entity>* only = nullptr,
                     bool flattenPrefabInstances = false) {
     json root;
@@ -928,6 +1025,9 @@ json BuildSceneJson(const World& world, const std::set<entt::entity>* only = nul
         // PR13: HDRI sky source (defaults omitted for backwards compatibility)
         if (world.SkySourceMode != World::SkySource::Procedural)
             root["skySource"] = (int)world.SkySourceMode;
+        // The physical sky's settings: written when the scene uses it or has changed them.
+        if (world.SkySourceMode == World::SkySource::Atmosphere || !(world.Sky == SkySettings{}))
+            root["sky"] = SkySettingsToJson(world.Sky);
         if (!world.SkyHdriPath.empty()) {
             root["skyHdriPath"] = AssetPathForWrite(world.SkyHdriPath); // audit #364 — was stored absolute
             // #132 — and by GUID, so renaming/moving the .hdr doesn't break the sky.
@@ -1303,7 +1403,8 @@ bool ApplySceneJsonImpl(World& world, AssetLibrary& assets, const json& root,
     if (clearFirst) {
         world.SkyAmbientIntensity    = root.value("skyAmbientIntensity",    1.0f);
         // PR13: HDRI sky source fields (absent in old scenes → Procedural defaults)
-        world.SkySourceMode          = (World::SkySource)std::clamp(root.value("skySource", 0), 0, 1); // #122
+        world.SkySourceMode          = (World::SkySource)std::clamp(root.value("skySource", 0), 0, 2); // #122
+        world.Sky                    = SkySettingsFromJson(root.value("sky", json::object()));
         world.SkyHdriPath            = ResolveAssetRef(root, "skyHdriPath", "skyHdriGuid"); // audit #364, #132
         world.SkyRotationDegrees     = root.value("skyRotationDegrees",     0.0f);
         world.SkyHdriSun             = (World::HdriSunMode)std::clamp(root.value("skyHdriSun", 0), 0, 2); // #277
