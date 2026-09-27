@@ -5,6 +5,8 @@
 #include <memory>
 #include <map>
 #include <set>
+#include <cstdint>
+#include <unordered_map>
 #include "Texture.h"       // TextureImportSettings - stored by value below, needs the full definition
 #include "Model.h"         // ModelImportSettings - same
 #include "MaterialAsset.h" // MaterialAsset - owned by the library
@@ -33,7 +35,8 @@ public:
     // The settings half of LoadTexture, split out so it can be tested without a GL context:
     // reads the .meta importer block if there is one, else applies the default for `use`.
     // Does nothing if settings for `path` are already known (in-memory settings win).
-    void ResolveTextureSettings(const std::string& path, TextureUse use);
+    // `metaJson`: the texture's .meta, already read (AsyncAssetLoader reads it on a worker).
+    void ResolveTextureSettings(const std::string& path, TextureUse use, const std::string* metaJson = nullptr);
     void RegisterSound(const std::string& path); // sounds are played by path via AudioEngine
     // Prefabs are tracked by path only (like sounds) rather than loaded into memory — a prefab
     // file is read fresh on each instantiate, so editing one on disk affects the next instance.
@@ -175,7 +178,7 @@ public:
     // imported through the Asset Browser) is filed under its folder on disk, so it doesn't land
     // loose in the root. Reuses a registered folder of the same name in any case, and registers
     // the rest. In memory only; a folder chosen in the browser (even the root) always wins.
-    void AdoptDiskFolder(const std::string& path);
+    void AdoptDiskFolder(const std::string& path, const std::string* metaJson = nullptr);
     // The Asset Browser folder `path` shows in without loading it (the browser lists unloaded files
     // too): the folder it's filed in, its .meta's chosen folder, else DiskFolderFor.
     std::string BrowserFolderFor(const std::string& path);
@@ -259,9 +262,22 @@ private:
     void PrepareModelImport(const std::string& path);
     std::shared_ptr<Model> RegisterModel(const std::string& path, std::shared_ptr<Model> model);
     std::shared_ptr<Texture> RegisterTexture(const std::string& path, std::shared_ptr<Texture> tex);
+    AsyncHandle RequestTextureAsync(const std::string& path, TextureUse use, const std::string* metaJson);
     bool HasModel(const std::string& path);    // in the cache, under any spelling (#132)
     bool HasTexture(const std::string& path);
     bool HasMaterial(const std::string& path);
+
+    // #132 any-spelling lookups: each cache's entries by AssetDatabase::PathKey, so a miss is one hash
+    // lookup instead of keying every entry (with a few hundred assets loaded, an outfit change's
+    // misses cost ~25 ms of that). Rebuilt when the cache's size changes or m_KeyEpoch moves
+    // (renames and removals, which can swap keys without changing the size).
+    struct KeyIndex {
+        size_t Size = (size_t)-1;
+        std::uint64_t Epoch = ~0ull;
+        std::unordered_map<std::string, std::string> Keys; // PathKey -> the cache's own key
+    };
+    KeyIndex m_ModelKeys, m_TextureKeys, m_MaterialKeys;
+    std::uint64_t m_KeyEpoch = 0;
 
     std::map<std::string, std::shared_ptr<Model>> m_ModelCache;
     std::map<std::string, std::shared_ptr<Texture>> m_TextureCache;

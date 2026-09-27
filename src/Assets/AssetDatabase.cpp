@@ -172,13 +172,31 @@ bool WriteMetaFile(const std::string& metaPath, AssetGuid guid, const std::strin
 // "Project/A.png" were three different keys for one file, so GuidForPath missed and one asset
 // could be registered several times. Lexical only (no filesystem hit), so it stays cheap on
 // hot lookups. g_GuidToPath keeps the caller's own spelling for display/IO.
+//
+// Memoised for absolute inputs: std::filesystem::absolute is a system call on Windows (~1.6 us),
+// and AssetLibrary's any-spelling cache lookups key every entry on a miss - with a few hundred
+// assets loaded, one outfit change made tens of thousands of these calls (a ~100 ms hitch). An
+// absolute path's key never changes; a relative one depends on the working directory, so it isn't
+// memoised.
 std::string Key(const std::string& path) {
+    static std::mutex s_MemoMutex;
+    static std::unordered_map<std::string, std::string> s_Memo;
+    const bool memo = std::filesystem::path(path).is_absolute();
+    if (memo) {
+        std::lock_guard<std::mutex> lk(s_MemoMutex);
+        if (auto it = s_Memo.find(path); it != s_Memo.end()) return it->second;
+    }
     std::error_code ec;
     std::string k = std::filesystem::absolute(path, ec).lexically_normal().generic_string();
     if (ec || k.empty()) k = std::filesystem::path(path).lexically_normal().generic_string();
 #ifdef _WIN32
     for (char& c : k) c = (char)std::tolower((unsigned char)c);
 #endif
+    if (memo) {
+        std::lock_guard<std::mutex> lk(s_MemoMutex);
+        if (s_Memo.size() > 200000) s_Memo.clear(); // bounded; a real project is far below this
+        s_Memo.emplace(path, k);
+    }
     return k;
 }
 
