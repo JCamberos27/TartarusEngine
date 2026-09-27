@@ -15,6 +15,7 @@ void ResetVariantDrawCounts();
 
 class World;
 class Sky;
+class SkyAtmosphere;
 class Shader;
 class Cubemap;
 class CascadedShadowMap;
@@ -36,6 +37,7 @@ struct RenderFrameContext;
 struct SceneRenderInputs {
     // --- stable engine resources ---
     Sky*                 sky            = nullptr;
+    SkyAtmosphere*       skyAtmosphere  = nullptr; // non-null => the physical sky draws and lights this frame
     Shader*              modelShader    = nullptr;
     Shader*              clusterBuildShader = nullptr;
     Shader*              clusterCullShader  = nullptr;

@@ -371,12 +371,13 @@ void ShaderAsset::BuildBindings() {
     // SceneRenderer::ApplyFrameState). #207 — the budget used to stop at 7, which left the
     // Standard shader's clear-coat / thickness maps (#206) with nowhere to go; units from 16 up
     // to the driver's GL_MAX_TEXTURE_IMAGE_UNITS (capped at 32) are now used too. Anything past
-    // that still gets no unit and a warning (#354).
+    // that still gets no unit and a warning (#354). Units 30 and 31 are the physical sky's
+    // (SkyAtmosphere::kAerialUnit / kCloudShadowUnit), so materials stop at 29.
     static int s_MaxUnits = 0;
     if (s_MaxUnits == 0) {
         GLint n = 16;
         glGetIntegerv(GL_MAX_TEXTURE_IMAGE_UNITS, &n);
-        s_MaxUnits = std::clamp((int)n, 16, 32);
+        s_MaxUnits = std::clamp((int)n, 16, 30);
     }
     int unit = 1;
     for (int i = 0; i < (int)m_Props.size(); ++i) {

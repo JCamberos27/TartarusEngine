@@ -9,6 +9,7 @@
 #include <entt/entt.hpp>
 #include "AABB.h"
 #include "Components.h"
+#include "SkySettings.h"
 
 class Model;
 
@@ -35,7 +36,9 @@ public:
 
     // PR13: sky source — default Procedural (gradient) or Hdri (equirectangular .hdr file).
     // Procedural is the backwards-compatible default; existing scenes are unaffected.
-    enum class SkySource { Procedural = 0, Hdri = 1 };
+    // Atmosphere: the physical sky - atmospheric scattering, volumetric clouds, sun, moon, stars
+    // and a time-of-day clock, all set in Sky below (SkyAtmosphere renders it).
+    enum class SkySource { Procedural = 0, Hdri = 1, Atmosphere = 2 };
     SkySource   SkySourceMode{SkySource::Procedural};
     std::string SkyHdriPath;               // absolute or project-relative path to a .hdr file
     float       SkyRotationDegrees{0.0f};  // Y-axis rotation of the HDRI in degrees [0, 360)
@@ -59,6 +62,10 @@ public:
     // by a bright authored sky can want the ambient pulled back without darkening the sky
     // itself. Purely a shader uniform — changing it does NOT rebake the probes.
     float SkyAmbientIntensity{1.0f};
+
+    // The physical sky's settings (SkySource::Atmosphere). Kept whatever the source, so
+    // switching away and back doesn't lose them.
+    SkySettings Sky;
 
     // Post-processing / shadow settings (#9, Phase M item 1) — scene-authored content, moved off
     // EditorSettings/editor_prefs.json onto the scene itself: these are look choices the scene's
