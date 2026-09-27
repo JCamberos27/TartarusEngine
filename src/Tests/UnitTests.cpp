@@ -2000,6 +2000,12 @@ void TestOutfitCoverage() {
 // files: every body part it names exists, each slot finds items, and the pack's pairs resolve. (Coverage
 // on the real meshes needs them loaded - GL - so it's checked in the editor, not here.)
 void TestWardrobeQuantum() {
+    // The Quantum pack is project content, not engine data: a packaged engine (CI's standalone check)
+    // runs without it, and then there's nothing to test.
+    if (!std::filesystem::exists(ProjectPaths::Resolve("assets/Characters/Quantum/Quantum.wardrobe"))) {
+        Log::Info("WardrobeQuantum: no Quantum pack in this project - skipped.");
+        return;
+    }
     AssetLibrary assets;
     std::string err;
     const auto cat = OutfitSystem::LoadCatalog(assets, "assets/Characters/Quantum/Quantum.wardrobe", true, &err);
