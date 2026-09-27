@@ -124,7 +124,7 @@ bool FirstPersonBody::Start(World& world, Player& player) {
         if (reg.all_of<AnimatorControllerComponent>(e)) { m_Driver = e; break; }
     if (pieces.empty()) { Fail("needs rigged body pieces (the object's own model, or child objects with models)."); return false; }
     if (m_Driver == entt::null) {
-        Fail("needs an Animator Controller on one of its pieces (e.g. animations/fps_body_locomotion.controller).");
+        Fail("needs an Animator Controller on one of its pieces (e.g. assets/Animations/Controllers/fps_body_locomotion.controller).");
         return false;
     }
     m_Body = body;

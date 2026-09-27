@@ -183,10 +183,10 @@ std::vector<Check> Validate(const ValidationInput& in) {
             "Give this object a rigged model, or add child objects with rigged models (head, torso, legs...).");
     else if (!in.HasDriverPiece)
         Add(out, Severity::Error, "No piece has an Animator Controller.",
-            "Add an Animator Controller to one piece (e.g. animations/fps_body_locomotion.controller). The others follow it.");
+            "Add an Animator Controller to one piece (e.g. assets/Animations/Controllers/fps_body_locomotion.controller). The others follow it.");
     else if (!in.ControllerSet)
         Add(out, Severity::Error, "The driving piece's Animator Controller has no controller file.",
-            "Set its Controller to a locomotion controller (e.g. animations/fps_body_locomotion.controller).");
+            "Set its Controller to a locomotion controller (e.g. assets/Animations/Controllers/fps_body_locomotion.controller).");
     else if (!in.Controller)
         Add(out, Severity::Error, "The driving piece's controller file could not be loaded.",
             "Check the path and that the file is valid (open it in the Animator window).");

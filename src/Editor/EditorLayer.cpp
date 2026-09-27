@@ -546,6 +546,7 @@ void EditorLayer::FreeGpuResources() {
     m_ModelThumbnails.clear();
     m_ThumbnailLRU.clear();
     ClearMaterialThumbnails(); // #107
+    m_AssetThumbs.Clear();
     if (m_ThumbnailBlitFbo) { glDeleteFramebuffers(1, &m_ThumbnailBlitFbo); m_ThumbnailBlitFbo = 0; }
 }
 
@@ -2689,6 +2690,7 @@ void EditorLayer::Draw(World& world, AssetLibrary& assets, Camera& editorCamera,
 
     m_ThumbnailBudgetThisFrame = 3; // at most this many new Asset Browser model thumbnails per frame
     m_ScreenshotThumbBudgetThisFrame = 8; // at most this many new Asset Browser screenshot thumbnails per frame (#176)
+    m_AssetThumbs.Pump(8); // unloaded assets' tiles, decoded off-thread: upload a few per frame
 
     if (m_AssetRefreshFlash > 0.0f) m_AssetRefreshFlash = std::max(0.0f, m_AssetRefreshFlash - dt); // #236 G
     SyncViewportPrefs();

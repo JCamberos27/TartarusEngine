@@ -70,17 +70,6 @@ using namespace EditorInternal;
 
 namespace {
 
-// #302 Wave 3 / #333 PR4: the asset paths a reflected AssetRef field of the given kind picks from.
-const std::vector<std::string>& AssetRefPathList(const AssetLibrary& assets, ReflectAssetKind kind) {
-    static const std::vector<std::string> kEmpty;
-    switch (kind) {
-        case ReflectAssetKind::Sound:    return assets.Sounds();
-        case ReflectAssetKind::Texture:  return assets.TexturePaths();
-        case ReflectAssetKind::Material: return assets.MaterialPaths();
-        default: return kEmpty;
-    }
-}
-
 // Approximate blackbody colour (linear RGB, normalised so the brightest channel is 1) for a
 // colour temperature in Kelvin. Cheap piecewise fit — good enough for authoring a warm lamp vs
 // a cool overcast sky; not a physically exact locus. Clamped to 1000-40000 K.
@@ -848,7 +837,7 @@ void EditorLayer::DrawShaderPreviewInspector(AssetLibrary& assets, const std::st
 
 // Unity-AssetImporter-style Import Settings panel, shown in the Inspector when an asset (not a
 // scene entity) is selected in the Asset Browser. Only textures and models have any settings to
-// show — sounds/prefabs/scenes just get a name/path readout, matching Unity (not every asset
+// show — assets/Audio/prefabs/scenes just get a name/path readout, matching Unity (not every asset
 // type has an importer with configurable options).
 namespace {
 // The model whose clip is playing in the Inspector preview (see DrawAssetImportInspector).
@@ -971,8 +960,11 @@ void EditorLayer::DrawAssetImportInspector(World& world, AssetLibrary& assets, c
 
             float previewSize = 220.0f;
             ImVec2 previewDims(previewSize, previewSize);
+            // With its material remap, like a placed copy (cached materials: cheap per frame).
+            std::vector<std::shared_ptr<MaterialAsset>> previewSlots;
+            assets.ApplyMaterialRemap(*model, previewSlots);
             unsigned int handle = m_ModelPreview.Render(*model, m_ModelPreviewYaw, m_ModelPreviewPitch,
-                m_ModelPreviewDistance, (int)previewDims.x * 2, (int)previewDims.y * 2);
+                m_ModelPreviewDistance, (int)previewDims.x * 2, (int)previewDims.y * 2, previewSlots);
             ImGui::Image((ImTextureID)(intptr_t)handle, previewDims, ImVec2(0, 1), ImVec2(1, 0)); // bottom-up FBO
 
             // Left-drag to orbit, scroll to zoom - the same mouse language as the main viewport's
@@ -1868,16 +1860,19 @@ void EditorLayer::DrawReflectedField(World& world, AssetLibrary& assets, const R
             if (missing) ImGui::PopStyleColor();
             if (missing && ImGui::IsItemHovered())
                 EditorUI::SetTooltip("Missing: %s\nThe referenced file no longer exists at this path.", shared.c_str());
-            // The AssetKind -> payload-type mapping the Asset Browser's own drag sources already
-            // use (EditorLayer_AssetBrowser.cpp) — Model/Script have no Asset Browser cell kind of
-            // their own yet, so nothing drags for those (matches AssetRefPathList's own gap: no
-            // picker choices for them either).
+            // The AssetKind -> payload-type mapping the Asset Browser's own drag sources use
+            // (EditorLayer_AssetBrowser.cpp). Scripts drag as plain files, so only a .tescript counts.
             const char* payloadType = f.AssetKind == ReflectAssetKind::Sound    ? "ASSET_SOUND_PATH"
                                      : f.AssetKind == ReflectAssetKind::Texture ? "ASSET_TEXTURE_PATH"
                                      : f.AssetKind == ReflectAssetKind::Material ? "ASSET_MATERIAL_PATH"
+                                     : f.AssetKind == ReflectAssetKind::Model   ? "ASSET_MODEL_PATH"
+                                     : f.AssetKind == ReflectAssetKind::Script  ? "ASSET_FILE_PATH"
                                      : nullptr;
             if (payloadType && ImGui::BeginDragDropTarget()) {
-                if (const ImGuiPayload* p = ImGui::AcceptDragDropPayload(payloadType)) {
+                const ImGuiPayload* p = ImGui::AcceptDragDropPayload(payloadType);
+                if (p && f.AssetKind == ReflectAssetKind::Script &&
+                    std::filesystem::path((const char*)p->Data).extension() != ".tescript") p = nullptr;
+                if (p) {
                     std::string path((const char*)p->Data);
                     StageUndo(world);
                     forEach([&](entt::entity e) { *reinterpret_cast<std::string*>(fieldPtr(e)) = path; });
@@ -1891,7 +1886,7 @@ void EditorLayer::DrawReflectedField(World& world, AssetLibrary& assets, const R
                     forEach([&](entt::entity e) { reinterpret_cast<std::string*>(fieldPtr(e))->clear(); });
                     CommitStagedUndo(world, std::string("Edit ") + rc.Meta.Name);
                 }
-                for (const std::string& a : AssetRefPathList(assets, f.AssetKind))
+                for (const std::string& a : AssetRefChoices(assets, f.AssetKind))
                     if (ImGui::Selectable(std::filesystem::path(a).filename().string().c_str(), !mixed && a == shared)) {
                         StageUndo(world);
                         forEach([&](entt::entity e) { *reinterpret_cast<std::string*>(fieldPtr(e)) = a; });

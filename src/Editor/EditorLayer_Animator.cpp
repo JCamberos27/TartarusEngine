@@ -117,10 +117,10 @@ void EditorLayer::DrawAnimatorControllerExtra(World& world, entt::entity entity)
         std::string base = nc && !nc->Name.empty() ? nc->Name : std::string("Animator");
         for (char& ch : base) if (std::strchr("<>:\"/\\|?*", ch)) ch = '_';
         std::error_code ec;
-        fs::create_directories(fs::u8path(ProjectPaths::Resolve("animators")), ec);
-        std::string rel = "animators/" + base + ".controller";
+        fs::create_directories(fs::u8path(ProjectPaths::Resolve("assets/Animations/Controllers")), ec);
+        std::string rel = "assets/Animations/Controllers/" + base + ".controller";
         for (int n = 2; fs::exists(fs::u8path(ProjectPaths::Resolve(rel)), ec); ++n)
-            rel = "animators/" + base + " " + std::to_string(n) + ".controller";
+            rel = "assets/Animations/Controllers/" + base + " " + std::to_string(n) + ".controller";
         if (c.SaveFile(ProjectPaths::Resolve(rel))) {
             PushUndo(world, "New Animator Controller");
             ac->Controller = rel;

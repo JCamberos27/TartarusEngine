@@ -80,6 +80,21 @@ int RetargetSceneReferences(World& world, const std::string& oldPath, const std:
     return n;
 }
 
+// Whether a file or folder appearing / going / moving changes what EditorLayer's project asset
+// index lists: an asset file of a listed kind, or a folder (no extension - it may hold some).
+// Library/ never counts: thumbnails are written there while the browser is open.
+bool ChangesAssetIndex(const std::string& path) {
+    std::string rel = ProjectPaths::Relativize(path);
+    std::replace(rel.begin(), rel.end(), '\\', '/');
+    for (char& ch : rel) ch = (char)std::tolower((unsigned char)ch);
+    if (rel == "library" || rel.rfind("library/", 0) == 0) return false;
+    const std::string type = AssetDatabase::AssetType(path);
+    if (type == "model" || type == "texture" || type == "material" || type == "audio" || type == "prefab" ||
+        type == "animatorcontroller" || type == "firstpersonanimationset" || type == "hdri" || type == "script")
+        return true;
+    return type.empty() && fs::path(path).extension().empty();
+}
+
 } // namespace
 
 void EditorLayer::SyncProjectChanges(World& world, AssetLibrary& assets) {
@@ -91,9 +106,13 @@ void EditorLayer::SyncProjectChanges(World& world, AssetLibrary& assets) {
         Log::Info("Project watcher: many files changed at once - rescanning the project.");
         AssetDatabase::ScanProject();
         InvalidateScenesListing();
+        InvalidateProjectAssetIndex();
     }
     for (const auto& c : changes) {
         using K = ProjectWatcher::Change::Kind;
+        if (c.Type == K::Modified) m_AssetThumbs.Invalidate(fs::path(c.Path).lexically_normal().string());
+        else if (ChangesAssetIndex(c.Path) || (c.Type == K::Renamed && ChangesAssetIndex(c.OldPath)))
+            InvalidateProjectAssetIndex(); // the Asset Browser's list of files on disk
         switch (c.Type) {
             case K::Renamed:  OnExternalMove(world, assets, c.OldPath, c.Path); break;
             case K::Added:    OnExternalAdd(world, assets, c.Path); break;
@@ -184,6 +203,8 @@ bool EditorLayer::RenameAssetFile(World& world, AssetLibrary& assets, const std:
     const int refs = ApplyAssetMove(world, assets, oldAbs, newAbs, listed);
     if (m_AssetFavorites.erase(oldKey)) { m_AssetFavorites.insert(newKey); SaveAssetFavorites(); }
     m_ShotThumbs.erase(oldKey);
+    m_AssetThumbs.Invalidate(oldKey);
+    InvalidateProjectAssetIndex();
     InvalidateScenesListing();
     InvalidateShotsListing();
     Log::Info("Renamed '" + fs::path(oldAbs).filename().string() + "' to '" + fs::path(newAbs).filename().string() + "'" +
