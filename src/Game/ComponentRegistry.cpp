@@ -510,6 +510,27 @@ void RegisterEngineComponents() {
         m.Fields.push_back({ "Shrug Max", T::Float, TARTARUS_REFLECT_FIELD(FirstPersonBodyComponent, ShrugMax), 0.005f,
               "The most (metres) a shoulder may shrug toward the gun.", 0.0f, 0.4f });
         m.Fields.back().Group = "Camera & Arms (advanced)";
+        m.Fields.push_back({ "Arm Steadiness", T::Float, TARTARUS_REFLECT_FIELD(FirstPersonBodyComponent, ArmSteadiness), 0.01f,
+              "How much the arms ignore the body's walk and run sway (Weapon Arms): 1 = the shoulders are held steady against the view and the\n"
+              "elbows bend the way the rig's do, so the gait never reaches the elbows; 0 = the arms follow the chest.", 0.0f, 1.0f });
+        m.Fields.back().Group = "Camera & Arms (advanced)";
+        m.Fields.push_back({ "Arm Steady Time", T::Float, TARTARUS_REFLECT_FIELD(FirstPersonBodyComponent, ArmSteadyTime), 0.01f,
+              "Seconds the steadied shoulders take to follow a lasting change (a crouch, the view pitching). Longer than a step so the sway is filtered out.", 0.05f, 2.0f });
+        m.Fields.back().Group = "Camera & Arms (advanced)";
+        m.Fields.push_back({ "Arm Steady Max", T::Float, TARTARUS_REFLECT_FIELD(FirstPersonBodyComponent, ArmSteadyMax), 0.005f,
+              "The most (metres) a shoulder is held off where the body's pose puts it; past this it is carried along.", 0.0f, 0.3f });
+        m.Fields.back().Group = "Camera & Arms (advanced)";
+        m.Fields.push_back({ "Look Down Push", T::Float, TARTARUS_REFLECT_FIELD(FirstPersonBodyComponent, LookDownPush), 0.005f,
+              "Looking down, the eye comes this far (metres) forward over the chest, as a head pitching at the neck does, so the camera\n"
+              "stays out of the torso. Straight down gets all of it. Raise it if the body is seen through when looking down.", 0.0f, 0.4f });
+        m.Fields.back().Group = "Camera & Arms (advanced)";
+        m.Fields.push_back({ "Look Down Start", T::Float, TARTARUS_REFLECT_FIELD(FirstPersonBodyComponent, LookDownStart), 1.0f,
+              "Degrees below level where the look-down push begins; it eases in from here to straight down.", 0.0f, 85.0f });
+        m.Fields.back().Group = "Camera & Arms (advanced)";
+        m.Fields.push_back({ "Near Hide", T::Float, TARTARUS_REFLECT_FIELD(FirstPersonBodyComponent, NearHide), 0.005f,
+              "Whatever of the body comes within this many metres of the eye is not drawn in the camera's view (its shadow stays). The camera\n"
+              "sits in the body, and the near plane would otherwise slice the neck and shoulders into slivers. 0 = off.", 0.0f, 0.3f });
+        m.Fields.back().Group = "Camera & Arms (advanced)";
         m.Fields.push_back({ "Arms Ease Out", T::Float, TARTARUS_REFLECT_FIELD(FirstPersonBodyComponent, ArmsEaseOut), 0.005f,
               "Seconds the body's arms take to ease back to the locomotion pose once the gun is holstered.", 0.01f, 1.0f });
         m.Fields.back().Group = "Camera & Arms (advanced)";
