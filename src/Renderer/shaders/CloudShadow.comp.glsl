@@ -44,7 +44,7 @@ void main() {
             vec3 p = ground + L * max(c1, 0.0);
             vec2 w = uCloudWindDir.xy;
             vec2 q = vec2(dot(p.xz, w), dot(p.xz, vec2(-w.y, w.x))) + uCloudMisc2.xy;
-            vec4 wm = textureLod(uCloudWeather, q * uCloudMisc.w, 0.0);
+            vec4 wm = textureLod(uCloudWeather, q * uCloudMisc.w, 2.0); // a soft veil
             float d = Saturate(Remap(wm.b, 1.0 - uCloudMisc.y, 1.0, 0.0, 1.0));
             T *= mix(1.0, 0.75, d);
         }
