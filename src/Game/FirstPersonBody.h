@@ -45,6 +45,8 @@ public:
     const std::string& Bone(const std::string& standard) const { return FPBody::MappedBone(m_BoneMap, standard); }
     void Stop(World& world);
     bool IsActive() const { return m_Body != entt::null; }
+    // The body's Character Outfit changed its pieces since Start (Stop + Start again to take them).
+    bool OutfitChanged(const World& world) const;
     const std::string& LastError() const { return m_LastError; }
 
     void BeforePlayerMove(Player& player, Camera& camera);
@@ -94,6 +96,7 @@ private:
     bool m_HaveRigShoulderLine = false;
     std::vector<entt::entity> m_ArmsTagged;       // pieces given the ViewModelTag
     std::string m_LastError;
+    int m_OutfitVersion = 0;       // CharacterOutfitComponent::Version at Start
     float m_ViewYaw = 0.0f;        // the view's heading, radians (the body's turns aim at it)
     bool m_HaveHeading = false;
     float m_CrouchHeight = 0.0f, m_CrouchSpeed = 0.42f; // the component's, from Start
