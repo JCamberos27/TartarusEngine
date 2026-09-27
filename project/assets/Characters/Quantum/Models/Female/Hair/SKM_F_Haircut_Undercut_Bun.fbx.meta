@@ -1,0 +1,9 @@
+{
+  "guid": "ed3474996bf9a899",
+  "materialRemap": {
+    "GSCTMAT_curveGrp_0_Geo_shader": "assets/Characters/Quantum/Materials/Characters/M_Hair_Dark.mat",
+    "lambert35": "assets/Characters/Quantum/Materials/Characters/M_Hair_Dark.mat"
+  },
+  "metaVersion": 1,
+  "type": "model"
+}

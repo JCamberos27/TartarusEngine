@@ -1,0 +1,9 @@
+{
+  "folder": "assets/Characters/Quantum/Models/Clothing/Male/Shoes",
+  "guid": "907719222c820ea8",
+  "materialRemap": {
+    "M_Sneakers": "assets/Characters/Quantum/Materials/Clothing/Shoes/Sneakers/Sneakers_Leather/M_F_Sneakers_Leather_Black.mat"
+  },
+  "metaVersion": 1,
+  "type": "model"
+}

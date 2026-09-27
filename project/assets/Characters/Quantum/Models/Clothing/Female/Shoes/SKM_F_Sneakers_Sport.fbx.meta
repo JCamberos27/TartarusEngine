@@ -1,0 +1,9 @@
+{
+  "folder": "assets/Characters/Quantum/Models/Clothing/Female/Shoes",
+  "guid": "51b5b309913c405d",
+  "materialRemap": {
+    "Raboch_M_Sneakers_Sport": "assets/Characters/Quantum/Materials/Clothing/Shoes/Sneakers_Sport/M_Sneakers_Sport_Black.mat"
+  },
+  "metaVersion": 1,
+  "type": "model"
+}

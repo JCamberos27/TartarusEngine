@@ -68,7 +68,7 @@ The first-person weapon uses this system. See `FPS_ANIMATION_SYSTEM.md` for that
 
 | Field | Meaning |
 |---|---|
-| Motion (one per track) | A **Clip**, or a **Blend Tree 1D**. Pick a clip from the list (type to search; **Project files** lists animation files no scene has loaded yet, such as `assets/animations/mc_core_motion`), or drag an FBX from the Asset Browser onto the slot. If there is no clip on the base layer, that track holds its bind pose. On a higher layer, no clip means the state adds nothing. |
+| Motion (one per track) | A **Clip**, or a **Blend Tree 1D**. Pick a clip from the list (type to search; **Project files** lists animation files no scene has loaded yet, such as `assets/Animations/Mocap`), or drag an FBX from the Asset Browser onto the slot. If there is no clip on the base layer, that track holds its bind pose. On a higher layer, no clip means the state adds nothing. |
 | Speed / Speed Param | Playback rate. The optional Float parameter multiplies it. |
 | Loop | Loops (on) or holds the last frame (off). |
 | Root Motion | With the component's Root Motion on, this state's travel moves the object. Off keeps the travel in the pose. Under the checkbox, the window shows how far the clip travels and turns per pass, and its speed, measured on the selected rig. |

@@ -1,0 +1,10 @@
+{
+  "folder": "assets/Characters/Quantum/Models/Clothing/Male/Tops",
+  "guid": "185d1bccc28f3373",
+  "materialRemap": {
+    "M_Hoodie_Zipper_HoodUp": "assets/Characters/Quantum/Materials/Clothing/Tops/Hoodie_Zipper_Hood/M_Hoodie_Zipper_Hood_Black.mat",
+    "M_Tshirt_Tucked2": "assets/Characters/Quantum/Materials/Clothing/Tops/TShirt_Tucked/M_TShirt_Tucked_Black.mat"
+  },
+  "metaVersion": 1,
+  "type": "model"
+}

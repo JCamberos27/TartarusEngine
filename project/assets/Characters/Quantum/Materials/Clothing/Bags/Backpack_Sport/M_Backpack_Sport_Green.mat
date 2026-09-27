@@ -1,0 +1,37 @@
+{
+  "factorsScaleMaps": true,
+  "matVersion": 2,
+  "name": "M_Backpack_Sport_Green",
+  "properties": {
+    "_AOMap": "assets/Characters/Quantum/Textures/Clothing/Bags/Backpack_Sport/T_Backpack_Sport_Occlusion.png",
+    "_AlbedoMap": "assets/Characters/Quantum/Textures/Clothing/Bags/Backpack_Sport/T_Backpack_Sport_Green_BaseColor.png",
+    "_BaseColor": [
+      1.0,
+      1.0,
+      1.0
+    ],
+    "_DoubleSided": false,
+    "_EmissiveColor": [
+      0.0,
+      0.0,
+      0.0
+    ],
+    "_EmissiveMap": "",
+    "_EmissiveStrength": 1.0,
+    "_Metallic": 0.0,
+    "_MetallicMap": "",
+    "_MetallicRoughnessMap": "",
+    "_NormalMap": "assets/Characters/Quantum/Textures/Clothing/Bags/Backpack_Sport/T_Backpack_Sport_Unity_Normal.png",
+    "_Roughness": 1.0,
+    "_RoughnessMap": "assets/Characters/Quantum/Textures/Clothing/Bags/Backpack_Sport/T_Backpack_Sport_Roughness.png",
+    "_Triplanar": false,
+    "_TriplanarScale": 1.0
+  },
+  "shader": "engine://Standard.shader",
+  "textureGuids": {
+    "_AOMap": "9a48afd51b097ccd",
+    "_AlbedoMap": "6513b9ead19b0fe8",
+    "_NormalMap": "bff3e0e8971549ac",
+    "_RoughnessMap": "ffaa17bf0f7ddac7"
+  }
+}

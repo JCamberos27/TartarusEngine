@@ -1,0 +1,9 @@
+{
+  "folder": "assets/Characters/Quantum/Models/Clothing/Male/Hats",
+  "guid": "912e02da7d9bf8a1",
+  "materialRemap": {
+    "lambert3": "assets/Characters/Quantum/Materials/Clothing/Hats/Headphones/M_Headphones_Black.mat"
+  },
+  "metaVersion": 1,
+  "type": "model"
+}

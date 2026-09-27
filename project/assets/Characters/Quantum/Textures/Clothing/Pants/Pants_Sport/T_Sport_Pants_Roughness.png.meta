@@ -1,0 +1,16 @@
+{
+  "folder": "assets/Characters/Quantum/Textures/Clothing/Pants/Pants_Sport",
+  "guid": "a344f2e9a18e398b",
+  "importer": {
+    "anisoLevel": 16,
+    "compression": 2,
+    "filterMode": 2,
+    "generateMipmaps": true,
+    "isSRGB": false,
+    "maxTextureSize": 4096,
+    "textureType": 0,
+    "wrapMode": 0
+  },
+  "metaVersion": 1,
+  "type": "texture"
+}

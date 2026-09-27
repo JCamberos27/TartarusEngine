@@ -1,0 +1,10 @@
+{
+  "folder": "assets/Characters/Quantum/Models/Clothing/Female/Outerwear",
+  "guid": "8ad2d5a529456e8b",
+  "materialRemap": {
+    "M_Jacket_Winter3": "assets/Characters/Quantum/Materials/Clothing/Outerwear/Jacket_Winter/M_Jacket_Winter_Black.mat",
+    "M_Jacket_Winter_Fur3": "assets/Characters/Quantum/Materials/Clothing/Generated/M_Fur.mat"
+  },
+  "metaVersion": 1,
+  "type": "model"
+}

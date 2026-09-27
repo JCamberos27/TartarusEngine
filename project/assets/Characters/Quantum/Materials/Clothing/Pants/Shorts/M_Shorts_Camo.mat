@@ -1,0 +1,37 @@
+{
+  "factorsScaleMaps": true,
+  "matVersion": 2,
+  "name": "M_Shorts_Camo",
+  "properties": {
+    "_AOMap": "assets/Characters/Quantum/Textures/Clothing/Pants/Shorts/T_Shorts_Occlusion.png",
+    "_AlbedoMap": "assets/Characters/Quantum/Textures/Clothing/Pants/Shorts/T_Shorts_Camo_BaseColor.png",
+    "_BaseColor": [
+      1.0,
+      1.0,
+      1.0
+    ],
+    "_DoubleSided": false,
+    "_EmissiveColor": [
+      0.0,
+      0.0,
+      0.0
+    ],
+    "_EmissiveMap": "",
+    "_EmissiveStrength": 1.0,
+    "_Metallic": 0.0,
+    "_MetallicMap": "",
+    "_MetallicRoughnessMap": "",
+    "_NormalMap": "assets/Characters/Quantum/Textures/Clothing/Pants/Shorts/T_Shorts_Unity_Normal.png",
+    "_Roughness": 1.0,
+    "_RoughnessMap": "assets/Characters/Quantum/Textures/Clothing/Pants/Shorts/T_Shorts_Roughness.png",
+    "_Triplanar": false,
+    "_TriplanarScale": 1.0
+  },
+  "shader": "engine://Standard.shader",
+  "textureGuids": {
+    "_AOMap": "031840e40f8501c5",
+    "_AlbedoMap": "913966fc4108c18e",
+    "_NormalMap": "2bb2efaf1d881acc",
+    "_RoughnessMap": "fa28a58627142f57"
+  }
+}

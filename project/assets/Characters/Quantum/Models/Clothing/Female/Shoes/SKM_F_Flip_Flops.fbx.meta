@@ -1,0 +1,8 @@
+{
+  "guid": "6f7f214d711aaba3",
+  "materialRemap": {
+    "M_Flip_Flops": "assets/Characters/Quantum/Materials/Clothing/Generated/M_Flip_Flops.mat"
+  },
+  "metaVersion": 1,
+  "type": "model"
+}

@@ -1,0 +1,8 @@
+{
+  "guid": "407b4b9ff4610c24",
+  "materialRemap": {
+    "Fur_New": "assets/Characters/Quantum/Materials/Clothing/Generated/M_Fur.mat"
+  },
+  "metaVersion": 1,
+  "type": "model"
+}

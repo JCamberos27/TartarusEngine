@@ -1,0 +1,37 @@
+{
+  "factorsScaleMaps": true,
+  "matVersion": 2,
+  "name": "M_Jacket_Winter_Black",
+  "properties": {
+    "_AOMap": "assets/Characters/Quantum/Textures/Clothing/Outerwear/Jacket_Winter/T_Jacket_Winter_Occlusion.png",
+    "_AlbedoMap": "assets/Characters/Quantum/Textures/Clothing/Outerwear/Jacket_Winter/T_Jacket_Winter_Black_BaseColor.png",
+    "_BaseColor": [
+      1.0,
+      1.0,
+      1.0
+    ],
+    "_DoubleSided": false,
+    "_EmissiveColor": [
+      0.0,
+      0.0,
+      0.0
+    ],
+    "_EmissiveMap": "",
+    "_EmissiveStrength": 1.0,
+    "_Metallic": 0.0,
+    "_MetallicMap": "",
+    "_MetallicRoughnessMap": "",
+    "_NormalMap": "assets/Characters/Quantum/Textures/Clothing/Outerwear/Jacket_Winter/T_Jacket_Winter_Unity_Normal.png",
+    "_Roughness": 1.0,
+    "_RoughnessMap": "assets/Characters/Quantum/Textures/Clothing/Outerwear/Jacket_Winter/T_Jacket_Winter_Roughness.png",
+    "_Triplanar": false,
+    "_TriplanarScale": 1.0
+  },
+  "shader": "engine://Standard.shader",
+  "textureGuids": {
+    "_AOMap": "2dd2d982ee601930",
+    "_AlbedoMap": "c8cfb124337fa86e",
+    "_NormalMap": "079be415ae92267f",
+    "_RoughnessMap": "79e808cd1140ef77"
+  }
+}

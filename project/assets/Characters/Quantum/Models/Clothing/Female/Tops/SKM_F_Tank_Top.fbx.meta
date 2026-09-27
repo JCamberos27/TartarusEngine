@@ -1,0 +1,12 @@
+{
+  "folder": "assets/Characters/Quantum/Models/Clothing/Female/Tops",
+  "guid": "b973960874c7f2c4",
+  "materialRemap": {
+    "MI_F_Vivian_Basemesh_Arms40": "assets/Characters/Quantum/Materials/Characters/M_F_Vivian_Arms.mat",
+    "MI_F_Vivian_Basemesh_Body12": "assets/Characters/Quantum/Materials/Characters/M_F_Vivian_Body.mat",
+    "MI_F_Vivian_Basemesh_Head41": "assets/Characters/Quantum/Materials/Characters/M_F_Vivian_Head.mat",
+    "M_F_Tank_Top2": "assets/Characters/Quantum/Materials/Clothing/Generated/M_Tank_Top.mat"
+  },
+  "metaVersion": 1,
+  "type": "model"
+}

@@ -503,125 +503,125 @@
  "gradeTint": 0.0,
  "libraryMaterials": [
   {
-   "path": "materials/sandbox/court_floor.mat",
+   "path": "assets/Environments/Sandbox/Materials/court_floor.mat",
    "pathGuid": "af2c57edb9eeead3"
   },
   {
-   "path": "materials/sandbox/arena_glass.mat",
+   "path": "assets/Environments/Sandbox/Materials/arena_glass.mat",
    "pathGuid": "2b02bddbbc176106"
   },
   {
-   "path": "materials/sandbox/backboard_glass.mat",
+   "path": "assets/Props/Basketball/Materials/backboard_glass.mat",
    "pathGuid": "a00f0b02ee9bb028"
   },
   {
-   "path": "materials/sandbox/rim.mat",
+   "path": "assets/Props/Basketball/Materials/rim.mat",
    "pathGuid": "e62f07d31b9df2ce"
   },
   {
-   "path": "materials/sandbox/net.mat",
+   "path": "assets/Props/Basketball/Materials/net.mat",
    "pathGuid": "9a60da12561af3f2"
   },
   {
-   "path": "materials/sandbox/basketball.mat",
+   "path": "assets/Props/Basketball/Materials/basketball.mat",
    "pathGuid": "9ec0856b3181ad4f"
   },
   {
-   "path": "materials/sandbox/water.mat",
+   "path": "assets/Environments/Sandbox/Materials/water.mat",
    "pathGuid": "7b94769ce0f84595"
   },
   {
-   "path": "materials/sandbox/gallery_chrome.mat",
+   "path": "assets/Environments/Sandbox/Materials/gallery_chrome.mat",
    "pathGuid": "d43b10aee251de3c"
   },
   {
-   "path": "materials/sandbox/gallery_gold.mat",
+   "path": "assets/Environments/Sandbox/Materials/gallery_gold.mat",
    "pathGuid": "6cd312ca7538ce16"
   },
   {
-   "path": "materials/sandbox/gallery_brushed.mat",
+   "path": "assets/Environments/Sandbox/Materials/gallery_brushed.mat",
    "pathGuid": "b30f3b5631a2c4d1"
   },
   {
-   "path": "materials/sandbox/gallery_carpaint.mat",
+   "path": "assets/Environments/Sandbox/Materials/gallery_carpaint.mat",
    "pathGuid": "5af22ea260759521"
   },
   {
-   "path": "materials/sandbox/gallery_velvet.mat",
+   "path": "assets/Environments/Sandbox/Materials/gallery_velvet.mat",
    "pathGuid": "2c58a10670b0ee18"
   },
   {
-   "path": "materials/sandbox/gallery_jade.mat",
+   "path": "assets/Environments/Sandbox/Materials/gallery_jade.mat",
    "pathGuid": "79947b909dfe220a"
   },
   {
-   "path": "materials/sandbox/gallery_glass.mat",
+   "path": "assets/Environments/Sandbox/Materials/gallery_glass.mat",
    "pathGuid": "66f617b3879ddb59"
   },
   {
-   "path": "materials/sandbox/gallery_neon.mat",
+   "path": "assets/Environments/Sandbox/Materials/gallery_neon.mat",
    "pathGuid": "eb13ea79fff0ea7e"
   }
  ],
  "libraryModels": [
   {
-   "path": "models/basketball/rim.obj",
+   "path": "assets/Props/Basketball/Models/rim.obj",
    "pathGuid": "aa06bf914b4a03c0"
   },
   {
-   "path": "models/basketball/net.obj",
+   "path": "assets/Props/Basketball/Models/net.obj",
    "pathGuid": "9f5eb74f6735cbca"
   },
   {
-   "path": "models/basketball/basketball.obj",
+   "path": "assets/Props/Basketball/Models/basketball.obj",
    "pathGuid": "3e65fa8b4567e911"
   },
   {
-   "path": "models/apartment/closet_panel_l.gltf",
+   "path": "assets/Environments/Apartment/Models/closet_panel_l.gltf",
    "pathGuid": "e68647094c5d45d1"
   },
   {
-   "path": "models/apartment/closet_panel_r.gltf",
+   "path": "assets/Environments/Apartment/Models/closet_panel_r.gltf",
    "pathGuid": "ff9588b8180ea86b"
   },
   {
-   "path": "models/apartment/ceiling.gltf",
+   "path": "assets/Environments/Apartment/Models/ceiling.gltf",
    "pathGuid": "fde4415934272c05"
   },
   {
-   "path": "models/apartment/floor.gltf",
+   "path": "assets/Environments/Apartment/Models/floor.gltf",
    "pathGuid": "87bf86c89d7687ae"
   },
   {
-   "path": "models/apartment/glass.gltf",
+   "path": "assets/Environments/Apartment/Models/glass.gltf",
    "pathGuid": "6ae49f9e6b2e1da0"
   },
   {
-   "path": "models/apartment/walls.gltf",
+   "path": "assets/Environments/Apartment/Models/walls.gltf",
    "pathGuid": "ada7d8a3ca2eb9bf"
   },
   {
-   "path": "models/apartment/baseboard.gltf",
+   "path": "assets/Environments/Apartment/Models/baseboard.gltf",
    "pathGuid": "f19d5babe8c1798a"
   },
   {
-   "path": "models/apartment/door_bath_leaf.gltf",
+   "path": "assets/Environments/Apartment/Models/door_bath_leaf.gltf",
    "pathGuid": "dee8840ba25217cd"
   },
   {
-   "path": "models/apartment/window_frames.gltf",
+   "path": "assets/Environments/Apartment/Models/window_frames.gltf",
    "pathGuid": "2efa0131754d69f7"
   },
   {
-   "path": "models/apartment/door_entry_frame.gltf",
+   "path": "assets/Environments/Apartment/Models/door_entry_frame.gltf",
    "pathGuid": "e140a880a3e51fa4"
   },
   {
-   "path": "models/apartment/door_bath_frame.gltf",
+   "path": "assets/Environments/Apartment/Models/door_bath_frame.gltf",
    "pathGuid": "18288dc16c39846f"
   },
   {
-   "path": "models/apartment/door_entry_leaf.gltf",
+   "path": "assets/Environments/Apartment/Models/door_entry_leaf.gltf",
    "pathGuid": "71da43ca47d7dad3"
   }
  ],
@@ -629,51 +629,51 @@
  "librarySounds": [],
  "libraryTextures": [
   {
-   "path": "textures/proto_grid_light.png",
+   "path": "assets/Materials/Prototype/proto_grid_light.png",
    "pathGuid": "c90849c8fc6c88b0"
   },
   {
-   "path": "textures/proto_grid_dark.png",
+   "path": "assets/Materials/Prototype/proto_grid_dark.png",
    "pathGuid": "2b60657ce9aa4555"
   },
   {
-   "path": "textures/proto_grid_orange.png",
+   "path": "assets/Materials/Prototype/proto_grid_orange.png",
    "pathGuid": "c389fb6bc574bb89"
   },
   {
-   "path": "textures/basketball/court_floor.jpg",
+   "path": "assets/Props/Basketball/Textures/court_floor.jpg",
    "pathGuid": "fd3b90b6c8f0b253"
   },
   {
-   "path": "textures/basketball/wood_detail.png",
+   "path": "assets/Props/Basketball/Textures/wood_detail.png",
    "pathGuid": "e5f0e29613cac82f"
   },
   {
-   "path": "textures/basketball/wood_seams_normal.png",
+   "path": "assets/Props/Basketball/Textures/wood_seams_normal.png",
    "pathGuid": "346137cb492678b5"
   },
   {
-   "path": "textures/basketball/backboard.png",
+   "path": "assets/Props/Basketball/Textures/backboard.png",
    "pathGuid": "caf13370e27a0035"
   },
   {
-   "path": "textures/basketball/basketball_albedo.png",
+   "path": "assets/Props/Basketball/Textures/basketball_albedo.png",
    "pathGuid": "3821385da1bbeb84"
   },
   {
-   "path": "textures/basketball/basketball_normal.png",
+   "path": "assets/Props/Basketball/Textures/basketball_normal.png",
    "pathGuid": "a631a899eff1effb"
   },
   {
-   "path": "textures/apartment/apt_floor_albedo.png",
+   "path": "assets/Environments/Apartment/Textures/apt_floor_albedo.png",
    "pathGuid": "288670b76ceda1cf"
   },
   {
-   "path": "textures/apartment/apt_floor_normal.png",
+   "path": "assets/Environments/Apartment/Textures/apt_floor_normal.png",
    "pathGuid": "19e290809aabc316"
   },
   {
-   "path": "textures/apartment/apt_floor_roughness.png",
+   "path": "assets/Environments/Apartment/Textures/apt_floor_roughness.png",
    "pathGuid": "a08baba2ccf8fe83"
   }
  ],
@@ -719,7 +719,7 @@
    "name": "Walls",
    "order": 3,
    "parentId": 13,
-   "path": "models/apartment/walls.gltf",
+   "path": "assets/Environments/Apartment/Models/walls.gltf",
    "pathGuid": "ada7d8a3ca2eb9bf",
    "position": [
     0.0,
@@ -777,7 +777,7 @@
    "name": "Floor",
    "order": 4,
    "parentId": 13,
-   "path": "models/apartment/floor.gltf",
+   "path": "assets/Environments/Apartment/Models/floor.gltf",
    "pathGuid": "87bf86c89d7687ae",
    "position": [
     0.0,
@@ -835,7 +835,7 @@
    "name": "Ceiling",
    "order": 5,
    "parentId": 13,
-   "path": "models/apartment/ceiling.gltf",
+   "path": "assets/Environments/Apartment/Models/ceiling.gltf",
    "pathGuid": "fde4415934272c05",
    "position": [
     0.0,
@@ -888,7 +888,7 @@
    "name": "Baseboard",
    "order": 6,
    "parentId": 13,
-   "path": "models/apartment/baseboard.gltf",
+   "path": "assets/Environments/Apartment/Models/baseboard.gltf",
    "pathGuid": "f19d5babe8c1798a",
    "position": [
     0.0,
@@ -941,7 +941,7 @@
    "name": "Window Frames",
    "order": 7,
    "parentId": 13,
-   "path": "models/apartment/window_frames.gltf",
+   "path": "assets/Environments/Apartment/Models/window_frames.gltf",
    "pathGuid": "2efa0131754d69f7",
    "position": [
     0.0,
@@ -965,7 +965,7 @@
    "name": "Glass",
    "order": 8,
    "parentId": 13,
-   "path": "models/apartment/glass.gltf",
+   "path": "assets/Environments/Apartment/Models/glass.gltf",
    "pathGuid": "6ae49f9e6b2e1da0",
    "position": [
     0.0,
@@ -989,7 +989,7 @@
    "name": "Door Frame - Entry",
    "order": 10,
    "parentId": 14,
-   "path": "models/apartment/door_entry_frame.gltf",
+   "path": "assets/Environments/Apartment/Models/door_entry_frame.gltf",
    "pathGuid": "e140a880a3e51fa4",
    "position": [
     0.0,
@@ -1013,7 +1013,7 @@
    "name": "Door Frame - Bathroom",
    "order": 11,
    "parentId": 14,
-   "path": "models/apartment/door_bath_frame.gltf",
+   "path": "assets/Environments/Apartment/Models/door_bath_frame.gltf",
    "pathGuid": "18288dc16c39846f",
    "position": [
     0.0,
@@ -1040,7 +1040,7 @@
    "name": "Door Leaf - Entry",
    "order": 12,
    "parentId": 14,
-   "path": "models/apartment/door_entry_leaf.gltf",
+   "path": "assets/Environments/Apartment/Models/door_entry_leaf.gltf",
    "pathGuid": "71da43ca47d7dad3",
    "position": [
     4.394999980926514,
@@ -1066,7 +1066,7 @@
    "name": "Door Leaf - Bathroom",
    "order": 13,
    "parentId": 14,
-   "path": "models/apartment/door_bath_leaf.gltf",
+   "path": "assets/Environments/Apartment/Models/door_bath_leaf.gltf",
    "pathGuid": "dee8840ba25217cd",
    "position": [
     1.9299999475479126,
@@ -1092,7 +1092,7 @@
    "name": "Closet Panel L",
    "order": 14,
    "parentId": 14,
-   "path": "models/apartment/closet_panel_l.gltf",
+   "path": "assets/Environments/Apartment/Models/closet_panel_l.gltf",
    "pathGuid": "e68647094c5d45d1",
    "position": [
     2.240000009536743,
@@ -1118,7 +1118,7 @@
    "name": "Closet Panel R",
    "order": 15,
    "parentId": 14,
-   "path": "models/apartment/closet_panel_r.gltf",
+   "path": "assets/Environments/Apartment/Models/closet_panel_r.gltf",
    "pathGuid": "ff9588b8180ea86b",
    "position": [
     3.369999885559082,

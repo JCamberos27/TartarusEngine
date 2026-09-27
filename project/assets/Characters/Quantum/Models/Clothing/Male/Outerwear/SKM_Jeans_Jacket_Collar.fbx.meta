@@ -1,0 +1,11 @@
+{
+  "folder": "assets/Characters/Quantum/Models/Clothing/Male/Outerwear",
+  "guid": "68d681bd32eaef7a",
+  "materialRemap": {
+    "M_Jeans_Jacket": "assets/Characters/Quantum/Materials/Clothing/Outerwear/Jacket_Jeans/Jeans_Jacket/M_Jeans_Jacket_Black.mat",
+    "M_Jeans_Jacket1": "assets/Characters/Quantum/Materials/Clothing/Outerwear/Jacket_Jeans/Jeans_Jacket/M_Jeans_Jacket_Black.mat",
+    "M_Tshirt_Tucked5": "assets/Characters/Quantum/Materials/Clothing/Tops/TShirt_Tucked/M_TShirt_Tucked_Black.mat"
+  },
+  "metaVersion": 1,
+  "type": "model"
+}

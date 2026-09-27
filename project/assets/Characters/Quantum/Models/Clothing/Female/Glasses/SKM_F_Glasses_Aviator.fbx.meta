@@ -1,0 +1,10 @@
+{
+  "folder": "assets/Characters/Quantum/Models/Clothing/Female/Glasses",
+  "guid": "0a80f0c7ed3e1f49",
+  "materialRemap": {
+    "M_Aviator": "assets/Characters/Quantum/Materials/Clothing/Glasses/Glasses Aviator/M_Sunglasses_Brown.mat",
+    "M_Aviator_Glass": "assets/Characters/Quantum/Materials/Clothing/Glasses/Glasses Aviator/M_Sunglasses_Brown.mat"
+  },
+  "metaVersion": 1,
+  "type": "model"
+}
