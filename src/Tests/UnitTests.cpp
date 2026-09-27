@@ -84,6 +84,9 @@
 #include <functional>
 #include <iostream>
 #include <iterator>
+#include "Wardrobe.h"
+#include "OutfitCoverage.h"
+#include "OutfitSystem.h"
 #include <set>
 #include <string>
 #include <thread>
@@ -1821,6 +1824,224 @@ void TestBlendTree2D() {
     }
     // The spine's share of the pitch: Spine Aim up, Spine Aim Down down.
     CHECK(near(FirstPersonBodySpineAim(glm::radians(30.0f), 0.6f, 0.9f), 0.6f) && near(FirstPersonBodySpineAim(glm::radians(-30.0f), 0.6f, 0.9f), 0.9f));
+}
+
+// Character outfits: a small wardrobe's items are classified from their folders, and the rules
+// (pairs, a hat's fitted haircut, clears, covers, skin) resolve an outfit to the right pieces.
+void TestWardrobe() {
+    const char* text = R"({
+      "root": "assets/Chars",
+      "skinMaterials": ["M_Body", "M_Head"],
+      "excludeFolders": ["StaticMesh"],
+      "slots": [
+        {"id": "Hair", "folders": ["Hair"], "headAttached": true},
+        {"id": "Hat", "folders": ["Hats", "WithHair"], "headAttached": true},
+        {"id": "Top", "folders": ["Tops"]},
+        {"id": "Outerwear", "folders": ["Outerwear"]},
+        {"id": "Pants", "folders": ["Pants"]},
+        {"id": "Shoes", "folders": ["Shoes"]},
+        {"id": "Wrist L", "folders": ["Accessories"], "nameSuffix": "_L"}
+      ],
+      "bodies": {
+        "Male": {"parts": [{"part": "Torso", "model": "Body/Torso.fbx"}, {"part": "Legs", "model": "Body/Legs.fbx"},
+                           {"part": "Feet", "model": "Body/Feet.fbx"}],
+                 "alternates": {"ShoeFeet": "Body/Feet_Shoes.fbx"},
+                 "races": [{"name": "European", "head": "Body/Head.fbx", "skin": ""},
+                           {"name": "Afro", "head": "Body/Head_Afro.fbx", "skin": "_Afro", "parts": {"Torso": "Body/Torso_Afro.fbx"}}]},
+        "Female": {"parts": [{"part": "Torso", "model": "F/Body.fbx"}], "races": [{"name": "European", "head": "F/Head.fbx"}]}
+      },
+      "covers": [{"slot": "Pants", "nameLacksAll": ["Shorts"], "hide": ["Legs"]},
+                 {"slot": "Shoes", "skin": false, "replace": "Feet", "with": "ShoeFeet"}],
+      "clears": [{"slot": "Hat", "pathHasAny": ["/WithHair/"], "clear": "Hair"},
+                 {"slot": "Outerwear", "nameHasAny": ["Shirt"], "clear": "Top"}],
+      "pairs": [{"whenSlot": "Shoes", "whenNameHas": "Boots", "slot": "Pants", "suffix": "_Inboots"}],
+      "items": [{"path": "Clothing/Male/Tops/SKM_Secret.fbx", "hidden": true}]
+    })";
+    Wardrobe::Wardrobe w;
+    std::string err;
+    CHECK(Wardrobe::Parse(text, w, &err));
+    CHECK(w.Bodies[0].Parts.size() == 3 && w.Bodies[0].Parts[0].second == "assets/Chars/Body/Torso.fbx");
+    CHECK(!Wardrobe::Parse("{}", w, &err) && !err.empty());
+    CHECK(Wardrobe::Parse(text, w, &err));
+
+    CHECK(Wardrobe::PrettyName("SKM_F_Hoodie_Zipper_Hood") == "Hoodie Zipper Hood");
+    CHECK(Wardrobe::PrettyName("SKM_Tshirt_Tucked") == "T-Shirt Tucked");
+    CHECK(Wardrobe::SkinBase(w, "assets/M/M_Body_Afro.mat") == "M_Body" && Wardrobe::SkinBase(w, "assets/M/M_Cap.mat").empty());
+
+    std::vector<Wardrobe::Item> cat;
+    auto add = [&](const std::string& rel, std::vector<std::string> mats = {}) {
+        Wardrobe::Item it;
+        const bool ok = Wardrobe::Classify(w, "assets/Chars/" + rel, mats, it);
+        if (ok) cat.push_back(it);
+        return ok;
+    };
+    CHECK(add("Clothing/Male/Pants/SKM_Jeans.fbx"));
+    CHECK(add("Clothing/Male/Pants/SKM_Jeans_Inboots.fbx"));
+    CHECK(add("Clothing/Male/Pants/SKM_Shorts.fbx"));
+    CHECK(add("Clothing/Male/Shoes/SKM_Boots.fbx"));
+    CHECK(add("Clothing/Male/Shoes/SKM_Sneakers.fbx"));
+    CHECK(add("Clothing/Male/Shoes/SKM_Flip_Flops.fbx", {"assets/M/M_Body.mat"}));
+    CHECK(add("Clothing/Male/Hats/SKM_Cap.fbx"));
+    CHECK(add("Clothing/Male/Hats/WithHair/SKM_Cap_Hair.fbx"));
+    CHECK(add("Hair/SKM_Bobcut.fbx"));
+    CHECK(add("Hair/SKM_Bobcut_Cap.fbx"));
+    CHECK(add("Clothing/Male/Tops/SKM_Tshirt.fbx"));
+    CHECK(add("Clothing/Male/Outerwear/SKM_Jacket_Shirt.fbx"));
+    CHECK(add("Clothing/Female/Tops/SKM_F_Tshirt.fbx"));
+    CHECK(add("Clothing/Male/Accessories/SKM_Watch_L.fbx"));
+    CHECK(!add("Clothing/Male/Accessories/SKM_Watch_R.fbx"));      // no Wrist R slot
+    CHECK(!add("Clothing/Male/Glasses/StaticMesh/SM_Glasses.fbx")); // excluded folder
+    CHECK(!add("Clothing/Male/Tops/SKM_Secret.fbx"));              // hidden override
+    CHECK(cat.back().Slot == "Wrist L");
+    CHECK(cat[7].Slot == "Hat" && cat[12].Sex == Wardrobe::Gender::Female && cat[5].Skin && !cat[4].Skin);
+    Wardrobe::MarkVariants(w, cat);
+    CHECK(cat[1].Variant && !cat[0].Variant && cat[9].Variant && !cat[8].Variant); // Jeans_Inboots, Bobcut_Cap
+
+    auto pieceFor = [](const Wardrobe::Resolved& r, const std::string& slot) {
+        for (const auto& p : r.Pieces) if (p.Slot == slot) return p.Path;
+        return std::string();
+    };
+    Wardrobe::Request req;
+    req.Race = "European";
+    req.Items = {{"Pants", "assets/Chars/Clothing/Male/Pants/SKM_Jeans.fbx"}, {"Shoes", "assets/Chars/Clothing/Male/Shoes/SKM_Boots.fbx"},
+                 {"Hair", "assets/Chars/Hair/SKM_Bobcut.fbx"}, {"Hat", "assets/Chars/Clothing/Male/Hats/SKM_Cap.fbx"},
+                 {"Top", "assets/Chars/Clothing/Male/Tops/SKM_Tshirt.fbx"}};
+    Wardrobe::Resolved r = Wardrobe::Resolve(w, cat, req);
+    CHECK(Wardrobe::Stem(pieceFor(r, "Pants")) == "SKM_Jeans_Inboots");  // boots -> the pants cut for them
+    CHECK(Wardrobe::Stem(pieceFor(r, "Hair")) == "SKM_Bobcut_Cap");      // a cap -> the haircut fitted to it
+    CHECK(pieceFor(r, "Legs").empty());                                   // pants cover the legs
+    CHECK(Wardrobe::Stem(pieceFor(r, "Feet")) == "Feet_Shoes");           // shoes -> feet cut for shoes
+    CHECK(Wardrobe::Stem(pieceFor(r, "Head")) == "Head" && !pieceFor(r, "Top").empty());
+    // And back: sneakers take the plain jeans, no hat the plain cut; a WithHair cap clears the hair.
+    req.Items["Pants"] = "assets/Chars/Clothing/Male/Pants/SKM_Jeans_Inboots.fbx";
+    req.Items["Shoes"] = "assets/Chars/Clothing/Male/Shoes/SKM_Sneakers.fbx";
+    req.Items["Hair"] = "assets/Chars/Hair/SKM_Bobcut_Cap.fbx";
+    req.Items["Hat"] = "assets/Chars/Clothing/Male/Hats/WithHair/SKM_Cap_Hair.fbx";
+    req.Items["Outerwear"] = "assets/Chars/Clothing/Male/Outerwear/SKM_Jacket_Shirt.fbx";
+    r = Wardrobe::Resolve(w, cat, req);
+    CHECK(Wardrobe::Stem(pieceFor(r, "Pants")) == "SKM_Jeans");
+    CHECK(pieceFor(r, "Hair").empty() && pieceFor(r, "Top").empty() && !pieceFor(r, "Outerwear").empty());
+    req.Items.erase("Hat");
+    r = Wardrobe::Resolve(w, cat, req);
+    CHECK(Wardrobe::Stem(pieceFor(r, "Hair")) == "SKM_Bobcut");          // no hat: the plain cut again
+    // Flip-flops carry skin: the feet stay; shorts leave the legs; the Afro race brings its torso and head.
+    req.Items = {{"Shoes", "assets/Chars/Clothing/Male/Shoes/SKM_Flip_Flops.fbx"}, {"Pants", "assets/Chars/Clothing/Male/Pants/SKM_Shorts.fbx"}};
+    req.Race = "Afro";
+    r = Wardrobe::Resolve(w, cat, req);
+    CHECK(Wardrobe::Stem(pieceFor(r, "Feet")) == "Feet" && !pieceFor(r, "Legs").empty());
+    CHECK(Wardrobe::Stem(pieceFor(r, "Torso")) == "Torso_Afro" && Wardrobe::Stem(pieceFor(r, "Head")) == "Head_Afro");
+    // A female request ignores male items.
+    req.Sex = Wardrobe::Gender::Female;
+    req.Items = {{"Top", "assets/Chars/Clothing/Male/Tops/SKM_Tshirt.fbx"}};
+    r = Wardrobe::Resolve(w, cat, req);
+    CHECK(pieceFor(r, "Top").empty() && Wardrobe::Stem(pieceFor(r, "Torso")) == "Body");
+
+    // Skin: the race's variant when it exists, else the base.
+    const Wardrobe::RaceDef& afro = w.Bodies[0].Races[1];
+    CHECK(Wardrobe::SkinMaterialFor(w, afro, "assets/M/M_Body.mat", [](const std::string&) { return true; }) == "assets/M/M_Body_Afro.mat");
+    CHECK(Wardrobe::SkinMaterialFor(w, afro, "assets/M/M_Head.mat", [](const std::string&) { return false; }) == "assets/M/M_Head.mat");
+    CHECK(Wardrobe::SkinMaterialFor(w, w.Bodies[0].Races[0], "assets/M/M_Body_Afro.mat", nullptr) == "assets/M/M_Body.mat");
+    CHECK(Wardrobe::SkinMaterialFor(w, afro, "assets/M/M_Cap.mat", nullptr) == "assets/M/M_Cap.mat");
+
+    const auto colours = Wardrobe::Colourways("a/M_Hoodie_Blue.mat", {"a/M_Hoodie_Red.mat", "a/readme.txt", "a/M_Hoodie_Black.mat"});
+    CHECK(colours.size() == 3 && Wardrobe::Stem(colours[0]) == "M_Hoodie_Black");
+
+    const Wardrobe::Diff d = Wardrobe::MakeDiff({{"Torso", "a/T.fbx"}, {"Hat", "a/Cap.fbx"}, {"Hair", "a/H.fbx"}},
+                                                {{"Torso", "a/T.fbx"}, {"Hair", "a/H2.fbx"}, {"Top", "a/Top.fbx"}});
+    CHECK(d.Create.size() == 1 && d.Create[0].Slot == "Top" && d.Remodel.size() == 1 && d.Remodel[0].Slot == "Hair");
+    CHECK(d.Destroy.size() == 1 && d.Destroy[0] == "Hat");
+}
+
+// Skin hiding: a sphere of skin under a cap of cloth - the covered half is found, the uncovered half
+// isn't, erosion opens the edge ring, and the bits pack 32 to a word.
+void TestOutfitCoverage() {
+    auto sphere = [](float r, bool upperOnly) {
+        OutfitCoverage::Mesh m;
+        const int rings = 16, segs = 24;
+        for (int i = 0; i <= rings; ++i)
+            for (int j = 0; j < segs; ++j) {
+                const float th = glm::pi<float>() * (float)i / rings, ph = glm::two_pi<float>() * (float)j / segs;
+                m.Positions.push_back(r * glm::vec3(std::sin(th) * std::cos(ph), std::cos(th), std::sin(th) * std::sin(ph)));
+            }
+        for (int i = 0; i < rings; ++i)
+            for (int j = 0; j < segs; ++j) {
+                const unsigned a = (unsigned)(i * segs + j), b = (unsigned)(i * segs + (j + 1) % segs);
+                const unsigned c = a + segs, d = b + segs;
+                if (upperOnly && i >= rings / 2) continue;
+                // Outward-facing winding (the normals point away from the centre).
+                m.Indices.insert(m.Indices.end(), {a, b, c, b, d, c});
+            }
+        return m;
+    };
+    const OutfitCoverage::Mesh skin = sphere(0.10f, false), cap = sphere(0.12f, true);
+    const auto normals = OutfitCoverage::VertexNormals(skin);
+    CHECK(glm::dot(normals[(size_t)(4 * 24)], glm::normalize(skin.Positions[(size_t)(4 * 24)])) > 0.9f);
+    std::vector<std::uint8_t> covered = OutfitCoverage::Covered(skin, cap);
+    int upper = 0, upperCovered = 0, lower = 0, lowerCovered = 0;
+    for (size_t v = 0; v < skin.Positions.size(); ++v) {
+        const float y = skin.Positions[v].y;
+        if (y > 0.03f) { ++upper; upperCovered += covered[v]; }
+        if (y < -0.03f) { ++lower; lowerCovered += covered[v]; }
+    }
+    CHECK(upper > 0 && upperCovered == upper);
+    CHECK(lower > 0 && lowerCovered == 0);
+    // Cloth 1.5 cm inside the skin (skin poking through) still counts; 10 cm away doesn't.
+    CHECK(OutfitCoverage::Covered(skin, sphere(0.085f, true))[(size_t)(2 * 24)] == 1);
+    CHECK(OutfitCoverage::Covered(skin, sphere(0.20f, true))[(size_t)(2 * 24)] == 0);
+    const int before = (int)std::count(covered.begin(), covered.end(), (std::uint8_t)1);
+    OutfitCoverage::Erode(skin, covered, 1);
+    const int after = (int)std::count(covered.begin(), covered.end(), (std::uint8_t)1);
+    CHECK(after < before && after > 0 && covered[0] == 1); // the pole stays, the hem ring opens
+    const auto bits = OutfitCoverage::Pack({1, 0, 0, 1, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 1});
+    CHECK(bits.size() == 2 && bits[0] == 0x9u && bits[1] == 0x1u);
+}
+
+// The Quantum pack's wardrobe (project/assets/Characters/Quantum/Quantum.wardrobe) against the real
+// files: every body part it names exists, each slot finds items, and the pack's pairs resolve. (Coverage
+// on the real meshes needs them loaded - GL - so it's checked in the editor, not here.)
+void TestWardrobeQuantum() {
+    AssetLibrary assets;
+    std::string err;
+    const auto cat = OutfitSystem::LoadCatalog(assets, "assets/Characters/Quantum/Quantum.wardrobe", true, &err);
+    CHECK(cat != nullptr);
+    if (!cat) { Log::Warn("Quantum wardrobe: " + err); return; }
+    CHECK(cat->Items.size() > 150);
+    auto exists = [](const std::string& rel) { return std::filesystem::exists(ProjectPaths::Resolve(rel)); };
+    for (const auto& body : cat->W.Bodies) {
+        for (const auto& [part, model] : body.Parts) CHECK(exists(model));
+        for (const auto& race : body.Races) {
+            CHECK(exists(race.Head));
+            for (const auto& [part, model] : race.Parts) CHECK(exists(model));
+        }
+        for (const auto& [name, model] : body.Alternates) CHECK(exists(model));
+    }
+    for (const auto& slot : cat->W.Slots)
+        for (int g = 0; g < 2; ++g) {
+            const auto n = cat->ForSlot(slot.Id, (Wardrobe::Gender)g).size();
+            Log::Info("Quantum wardrobe: " + slot.Id + " " + Wardrobe::GenderName((Wardrobe::Gender)g) + " " + std::to_string(n));
+            if (!(slot.Id == "Beard" && g == 1) && slot.Id != "Collar") CHECK(n > 0);
+        }
+    auto item = [&](const std::string& rel) {
+        const auto* it = cat->Find("assets/Characters/Quantum/Models/" + rel);
+        CHECK(it != nullptr);
+        return it ? it->Path : std::string();
+    };
+    auto pieceFor = [](const Wardrobe::Resolved& r, const std::string& slot) {
+        for (const auto& p : r.Pieces) if (p.Slot == slot) return Wardrobe::Stem(p.Path);
+        return std::string();
+    };
+    Wardrobe::Request req;
+    req.Race = "Afro";
+    req.Items = {{"Pants", item("Clothing/Male/Pants/SKM_Jeans.fbx")}, {"Shoes", item("Clothing/Male/Shoes/SKM_Boots.fbx")},
+                 {"Top", item("Clothing/Male/Tops/SKM_Tshirt.fbx")}, {"Hair", item("Hair/SKM_Hair_Short.fbx")}};
+    Wardrobe::Resolved r = Wardrobe::Resolve(cat->W, cat->Items, req);
+    CHECK(pieceFor(r, "Pants") == "SKM_Jeans_Inboots" && pieceFor(r, "Feet") == "Quantum_Feet_Shoes");
+    CHECK(pieceFor(r, "Legs").empty() && pieceFor(r, "Head") == "Quantum_Head_Afro" && pieceFor(r, "Torso") == "Quantum_Torso_Afro");
+    req = {};
+    req.Sex = Wardrobe::Gender::Female;
+    req.Items = {{"Hair", item("Female/Hair/SKM_F_Haircut_Bobcut.fbx")}, {"Hat", item("Clothing/Female/Hats/SKM_F_Cap.fbx")}};
+    r = Wardrobe::Resolve(cat->W, cat->Items, req);
+    CHECK(pieceFor(r, "Hair") == "SKM_F_Haircut_Bobcut_Cap" && pieceFor(r, "Torso") == "SKM_F_Vivian_Body");
 }
 
 // The body's setup check: a controller built from the contract tables passes; one missing piece is named.
@@ -3604,6 +3825,9 @@ int RunUnitTests() {
         {"AnimatorController", TestAnimatorController},
         {"RootMotion", TestRootMotion},
         {"FirstPersonBodyValidate", TestFirstPersonBodyValidate},
+        {"Wardrobe", TestWardrobe},
+        {"OutfitCoverage", TestOutfitCoverage},
+        {"WardrobeQuantum", TestWardrobeQuantum},
         {"FirstPersonBodyTuning", TestFirstPersonBodyTuning},
         {"FirstPersonWeaponValidate", TestFirstPersonWeaponValidate},
         {"ClipTrim", TestClipTrim},

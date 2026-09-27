@@ -48,6 +48,7 @@
 #include "IblProbe.h"
 #include "Cubemap.h"               // PR13: HDRI environment cubemap
 #include "ReflectionProbeArray.h"  // PR14: placed reflection probes
+#include "OutfitSystem.h"          // character outfits: skin hidden under clothing
 #include "Ssao.h"                  // PR15: depth pre-pass + screen-space ambient occlusion
 #include "RenderFrameContext.h"    // audit #359 — per-viewport scene-draw inputs
 #include "SceneRenderer.h"         // audit #359 pass 2 — host-owned scene-draw pass
@@ -2249,6 +2250,10 @@ int main(int argc, char** argv) {
                     player.MouseSensitivity = playBaseSensitivity * firstPersonPresentation.LookScale(playBaseFov);
                     firstPersonBody.BeforePlayerMove(player, player.Cam); // camera out of the head, root motion in
                     player.Update(gameDt, world, window.Handle(), gameHasInput);
+                    if (firstPersonBody.OutfitChanged(world)) { // an outfit piece changed in Play: take the new pieces
+                        firstPersonBody.Stop(world);
+                        firstPersonBody.Start(world, player);
+                    }
                     firstPersonBody.Tick(world, player, player.Cam, gameDt);
                     if (firstPersonPresentation.IsActive()) {
                         firstPersonPresentation.Update(world, player.Cam);
@@ -2385,6 +2390,7 @@ int main(int argc, char** argv) {
             // Entities SPAWNED after this point still resolve correctly — GetCachedWorldTransform
             // falls back to composing on demand for anything the cache doesn't hold.
             world.RebuildWorldTransformCache();
+            OutfitSystem::UpdateHiding(world); // outfit skin under clothing (only when an outfit's pieces changed)
 
             glm::vec3 lightDir(-0.4f, -1.0f, -0.3f);
 
