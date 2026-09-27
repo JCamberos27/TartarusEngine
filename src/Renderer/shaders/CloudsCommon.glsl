@@ -1,5 +1,5 @@
 // Volumetric clouds - shared definitions (see VolumetricClouds.h). Include after
-// AtmosphereCommon.glsl with ATMOSPHERE_LUTS defined: cloud lighting uses the atmosphere's
+// AtmosphereCommon.glsl with ATMOSPHERE_LUTS and SKY_VIEW_LUTS defined: cloud lighting uses the atmosphere's
 // transmittance (so sunset light is red by the time it reaches the clouds) and its sky-view LUT
 // (for the sky's ambient light on them).
 //
@@ -25,8 +25,6 @@ layout(std140, binding = 3) uniform CloudBlock {
     vec4 uCloudWindDir;    // xy unit wind direction (x, z); z = anvil bulge, w = horizon haze strength
 };
 
-layout(binding = 2) uniform sampler2D uSkyViewSunLut;
-layout(binding = 3) uniform sampler2D uSkyViewMoonLut;
 layout(binding = 4) uniform sampler3D uCloudShapeNoise;
 layout(binding = 5) uniform sampler3D uCloudDetailNoise;
 layout(binding = 6) uniform sampler2D uCloudWeather;
@@ -37,11 +35,13 @@ float Saturate(float x) { return clamp(x, 0.0, 1.0); }
 // Vertical density profile for a cloud type, over the normalized layer height h (0 = base, 1 =
 // top). 0 = stratus (a thin sheet low in the layer), 0.5 = cumulus (puffy, flat-bottomed),
 // 1 = cumulonimbus (towers the full height).
-float HeightProfile(float h, float type) {
+// `top` receives the height where the profile reaches zero.
+float HeightProfile(float h, float type, out float top) {
     const vec4 kStratus      = vec4(0.00, 0.06, 0.12, 0.22);
     const vec4 kCumulus      = vec4(0.00, 0.12, 0.40, 0.72);
     const vec4 kCumulonimbus = vec4(0.00, 0.08, 0.78, 1.00);
     vec4 g = type < 0.5 ? mix(kStratus, kCumulus, type * 2.0) : mix(kCumulus, kCumulonimbus, type * 2.0 - 1.0);
+    top = g.w;
     return smoothstep(g.x, g.y, h) * (1.0 - smoothstep(g.z, g.w, h));
 }
 
@@ -54,17 +54,31 @@ vec4 SampleWeather(vec3 p) {
 // The weather map decides where clouds may form - fields of cloud with clear sky between, a
 // larger share of the sky as the slider rises - and how much of the base noise fills in there.
 // Near 1 it closes up into an unbroken deck.
-float LocalCoverage(vec4 weather) {
+//
+// `hTop` is the height within the cloud (0 = base, 1 = its type's top). Higher up, a point has
+// to sit deeper inside the field, so a cloud narrows toward its top in a dome. Without that its
+// sides rose as straight walls under a flat top, which at a distance read as rectangular slabs
+// stacked along the horizon.
+float LocalCoverage(vec4 weather, float hTop) {
     float c = uCloudLayer.w;
     if (c <= 0.001) return 0.0;
     float field = smoothstep(1.0 - c - 0.18, 1.0 - c + 0.18, weather.r);
+    float dome = 0.7 * smoothstep(0.15, 1.0, hTop);
+    field = Saturate(Remap(field, dome, 1.0, 0.0, 1.0));
     float fill = 0.25 + 0.45 * c;
     return mix(field * fill, 0.58, smoothstep(0.85, 1.0, c));
 }
 
+// Size (km) of one texel of the shape noise (128^3) and of the detail noise (32^3).
+float ShapeTexelKm()  { return 1.0 / (uCloudShape.x * 128.0); }
+float DetailTexelKm() { return 1.0 / (uCloudShape.y * 32.0); }
+
 // Cloud extinction (1/km) at atmosphere-space point p. `detail` adds the high-frequency
 // erosion - skipped by cheap passes (light march tail, shadow map) where it can't be seen.
-float CloudDensity(vec3 p, bool detail, float lod) {
+// `footprintKm` is how much space one sample stands for (a pixel's width at that distance, or
+// a light-march step): the noise is read from the mip that matches it, so distant clouds stay
+// soft instead of sparkling with detail no pixel can resolve.
+float CloudDensity(vec3 p, bool detail, float footprintKm) {
     float r = length(p);
     float h = (r - uCloudLayer.x) / uCloudLayer.z;
     if (h <= 0.0 || h >= 1.0) return 0.0;
@@ -73,16 +87,17 @@ float CloudDensity(vec3 p, bool detail, float lod) {
     // A ragged base: the fine weather channel lifts it by up to a few percent of the layer.
     h -= (weather.a - 0.5) * 0.06;
     if (h <= 0.0) return 0.0;
-    float coverage = LocalCoverage(weather);
-    if (coverage <= 0.0) return 0.0;
     float type = Saturate(uCloudLightDir.w + (weather.g - 0.5) * 0.45);
-    float profile = HeightProfile(h, type);
+    float top;
+    float profile = HeightProfile(h, type, top);
     if (profile <= 0.0) return 0.0;
+    float coverage = LocalCoverage(weather, h / top);
+    if (coverage <= 0.0) return 0.0;
 
     // Clouds lean downwind with height, and the shape noise drifts with the wind.
     vec3 sp = p;
     sp.xz += uCloudWindDir.xy * (h * uCloudMisc2.z) + uCloudWind.zw;
-    vec4 n = textureLod(uCloudShapeNoise, sp * uCloudShape.x, lod);
+    vec4 n = textureLod(uCloudShapeNoise, sp * uCloudShape.x, max(log2(footprintKm / ShapeTexelKm()), 0.0));
     float fbm = n.g * 0.625 + n.b * 0.25 + n.a * 0.125;
     float base = Remap(n.r, -(1.0 - fbm), 1.0, 0.0, 1.0);
     base *= profile;
@@ -94,7 +109,7 @@ float CloudDensity(vec3 p, bool detail, float lod) {
 
     if (detail) {
         vec3 dp = sp * uCloudShape.y + vec3(0.0, uCloudWind.z * 0.3, 0.0);
-        vec3 d = textureLod(uCloudDetailNoise, dp, lod).rgb;
+        vec3 d = textureLod(uCloudDetailNoise, dp, max(log2(footprintKm / DetailTexelKm()), 0.0)).rgb;
         float dfbm = d.r * 0.625 + d.g * 0.25 + d.b * 0.125;
         // Wispy near the base, billowy toward the top.
         float erode = mix(dfbm, 1.0 - dfbm, Saturate(h * 5.0)) * uCloudShape.z;
@@ -114,8 +129,8 @@ const vec3 kConeKernel[6] = vec3[](
 
 // Optical depth from p toward the light: up to six steps of growing length through the layer,
 // spread over a cone, the last two without detail erosion. `lightSteps` scales down for cheap
-// passes.
-float LightOpticalDepth(vec3 p, int lightSteps) {
+// passes; `footprintKm` is the view sample's own footprint (see CloudDensity).
+float LightOpticalDepth(vec3 p, int lightSteps, float footprintKm) {
     vec3 L = uCloudLightDir.xyz;
     float od = 0.0;
     float stepLen = uCloudLayer.z * 0.035;
@@ -124,7 +139,7 @@ float LightOpticalDepth(vec3 p, int lightSteps) {
         float len = stepLen * pow(1.9, float(i));
         t += len;
         vec3 q = p + L * (t - len * 0.5) + kConeKernel[i % 6] * (len * 0.6);
-        od += CloudDensity(q, i < lightSteps - 2, float(i) * 0.5) * len;
+        od += CloudDensity(q, i < lightSteps - 2, max(footprintKm, ShapeTexelKm() * exp2(float(i) * 0.5))) * len;
     }
     return od;
 }
@@ -175,16 +190,12 @@ struct CloudResult {
     float depth;         // transmittance-weighted distance to the clouds (km), for reprojection
 };
 
-// Sky light for the cloud ambient term: the sky-view LUT straight up (top) and at the horizon
-// (bottom, standing in for the ground-lit underside).
-void CloudAmbientColors(vec3 cam, out vec3 top, out vec3 bottom) {
-    vec3 up = normalize(cam);
-    vec3 side = normalize(cross(up, vec3(0.0, 0.0, 1.0)) + vec3(1e-4));
-    vec3 horizon = normalize(side + up * 0.05);
-    top = texture(uSkyViewSunLut, SkyViewUv(cam, up, uAtmSunDir.xyz)).rgb
-        + texture(uSkyViewMoonLut, SkyViewUv(cam, up, uAtmMoonDir.xyz)).rgb;
-    bottom = texture(uSkyViewSunLut, SkyViewUv(cam, horizon, uAtmSunDir.xyz)).rgb
-           + texture(uSkyViewMoonLut, SkyViewUv(cam, horizon, uAtmMoonDir.xyz)).rgb;
+// Sky light for the cloud ambient term: the sky-view LUT straight up (top) and around the
+// horizon (bottom, standing in for the ground-lit underside) - averaged over azimuth, so the
+// underside doesn't depend on which way the sun happens to sit relative to the world axes.
+void CloudAmbientColors(out vec3 top, out vec3 bottom) {
+    top = SkyAmbientTerm(1);
+    bottom = SkyAmbientTerm(2);
     // Isotropic in-scattering of a uniform radiance field returns that radiance, so the sky's
     // radiance is the ambient term as-is; the underside mostly sees the darker horizon/ground.
     bottom *= 0.5;
@@ -227,9 +238,11 @@ vec4 CirrusLayer(vec3 ro, vec3 rd, vec3 lightRadianceTop, vec3 ambientTop) {
 }
 
 // March the cloud layer along ro + rd. `baseSteps` sets the quality; `jitter` in [0,1) offsets
-// the start to trade banding for noise (resolved by temporal accumulation). tLimit caps the
-// march (km), e.g. at scene depth.
-CloudResult MarchClouds(vec3 ro, vec3 rd, int baseSteps, int lightSteps, float jitter, bool detail) {
+// the start to trade banding for noise (resolved by temporal accumulation). `pixelAngle` is the
+// angle one output pixel subtends (radians), which picks the noise mip at each distance.
+// `ambTop` / `ambBottom` come from CloudAmbientColors().
+CloudResult MarchClouds(vec3 ro, vec3 rd, int baseSteps, int lightSteps, float jitter, bool detail,
+                        float pixelAngle, vec3 ambTop, vec3 ambBottom) {
     CloudResult res;
     res.radiance = vec3(0.0);
     res.transmittance = 1.0;
@@ -268,8 +281,6 @@ CloudResult MarchClouds(vec3 ro, vec3 rd, int baseSteps, int lightSteps, float j
 
     vec3 lightDir = uCloudLightDir.xyz;
     float cosTheta = dot(rd, lightDir);
-    vec3 ambTop, ambBottom;
-    CloudAmbientColors(ClampToAtmosphere(ro), ambTop, ambBottom);
 
     float T = 1.0;
     vec3 L = vec3(0.0);
@@ -279,18 +290,19 @@ CloudResult MarchClouds(vec3 ro, vec3 rd, int baseSteps, int lightSteps, float j
     for (int i = 0; i < steps; ++i) {
         if (t >= tEnd) break;
         vec3 p = ro + rd * t;
-        // Cheap probe first; take full-detail samples only inside cloud.
-        float probe = CloudDensity(p, false, 1.0);
+        float footprint = max(t * pixelAngle, 1e-4);
+        // Cheap probe first (a mip coarser); take full-detail samples only inside cloud.
+        float probe = CloudDensity(p, false, max(footprint, ShapeTexelKm() * 2.0));
         if (probe <= 0.0) {
             ++emptySteps;
             t += dt * (emptySteps > 4 ? 1.5 : 1.0);
             continue;
         }
         emptySteps = 0;
-        float density = detail ? CloudDensity(p, true, 0.0) : probe;
+        float density = detail ? CloudDensity(p, true, footprint) : probe;
         if (density > 0.0) {
             float h = Saturate((length(p) - rIn) / uCloudLayer.z);
-            float od = LightOpticalDepth(p, lightSteps);
+            float od = LightOpticalDepth(p, lightSteps, footprint);
             vec3 lightRad = uCloudLightIllum.rgb * TransmittanceToSpace(ClampToAtmosphere(p), lightDir);
             vec3 amb = mix(ambBottom, ambTop, h);
             vec3 S = CloudLighting(od, cosTheta, density, lightRad, amb, h) * density;

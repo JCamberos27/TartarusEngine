@@ -120,6 +120,7 @@ public:
 private:
     struct ViewResources {
         unsigned int SkyViewSun = 0, SkyViewMoon = 0, Aerial = 0;
+        unsigned int SkyAmbient = 0; // 3 x 1, SkyAmbient.comp.glsl
         VolumetricClouds::ViewState Clouds;
         unsigned int CloudTexture = 0; // this frame's resolved clouds (owned by Clouds)
         bool CloudsValid = false;
@@ -139,6 +140,7 @@ private:
     std::unique_ptr<Shader> m_TransmittanceShader;
     std::unique_ptr<Shader> m_MultiScatterShader;
     std::unique_ptr<Shader> m_SkyViewShader;
+    std::unique_ptr<Shader> m_SkyAmbientShader;
     std::unique_ptr<Shader> m_AerialShader;
     std::unique_ptr<Shader> m_EnvShader;
     std::unique_ptr<Shader> m_CompositeShader;
