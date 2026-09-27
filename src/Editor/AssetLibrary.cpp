@@ -479,17 +479,38 @@ void AssetLibrary::ClearMetadataOnly() {
 
 void AssetLibrary::AdoptDiskFolder(const std::string& path) {
     if (path.empty() || path.find("://") != std::string::npos || m_AssetFolder.count(path)) return;
-    std::string dir = ProjectPaths::Relativize(path);
-    std::replace(dir.begin(), dir.end(), '\\', '/');
-    if (dir.empty() || dir.find(':') != std::string::npos || dir[0] == '/') return; // outside the project
-    const size_t slash = dir.find_last_of('/');
-    if (slash == std::string::npos) return;                          // already at the root
-    dir.resize(slash);
     try {
         const json j = json::parse(AssetDatabase::ReadMetaFields(path));
         if (j.contains("folder")) return;                            // chosen in the browser
     } catch (...) {}
+    const std::string folder = DiskFolderFor(path);
+    if (!folder.empty()) m_AssetFolder[path] = folder;
+}
 
+std::string AssetLibrary::BrowserFolderFor(const std::string& path) {
+    auto it = m_AssetFolder.find(path);
+    if (it != m_AssetFolder.end()) return it->second;
+    try {
+        const json j = json::parse(AssetDatabase::ReadMetaFields(path));
+        if (j.contains("folder") && j["folder"].is_string()) return AddFolderPath(j["folder"].get<std::string>());
+    } catch (...) {}
+    return DiskFolderFor(path);
+}
+
+std::string AssetLibrary::DiskFolderFor(const std::string& path) {
+    if (path.empty() || path.find("://") != std::string::npos) return {};
+    std::string dir = ProjectPaths::Relativize(path);
+    std::replace(dir.begin(), dir.end(), '\\', '/');
+    if (dir.empty() || dir.find(':') != std::string::npos || dir[0] == '/') return {}; // outside the project
+    const size_t slash = dir.find_last_of('/');
+    if (slash == std::string::npos) return {};                       // already at the root
+    dir.resize(slash);
+    return AddFolderPath(dir);
+}
+
+std::string AssetLibrary::AddFolderPath(const std::string& dir) {
+    if (dir.empty()) return {};
+    if (std::find(m_Folders.begin(), m_Folders.end(), dir) != m_Folders.end()) return dir; // the common case
     auto sameName = [](const std::string& a, const std::string& b) {
         return a.size() == b.size() && std::equal(a.begin(), a.end(), b.begin(), [](char x, char y) {
             return std::tolower((unsigned char)x) == std::tolower((unsigned char)y); });
@@ -511,7 +532,7 @@ void AssetLibrary::AdoptDiskFolder(const std::string& path) {
     // (saving them rewrote the tracked project/settings.json each time an asset was first seen). Folders
     // the user makes or renames in the browser still persist (CreateFolder / RenameFolder).
     (void)added;
-    m_AssetFolder[path] = folder;
+    return folder;
 }
 
 void AssetLibrary::CreateFolder(const std::string& folderPath) {

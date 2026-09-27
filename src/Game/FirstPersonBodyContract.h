@@ -13,7 +13,7 @@ struct FirstPersonBodyComponent;
 // that animates it: the parameters it drives, the states it watches, the tag it reads, and the
 // bones it poses. FirstPersonBody.cpp uses these names, and FirstPersonBodyValidate checks a
 // setup against them - so a missing state or bone is reported instead of silently doing nothing.
-// The reference controller is project/animations/fps_body_locomotion.controller.
+// The reference controller is project/assets/Animations/Controllers/fps_body_locomotion.controller.
 namespace FPBody {
 
 // Parameters the body sets every frame (Float unless noted).
@@ -128,7 +128,7 @@ std::vector<Check> Validate(const ValidationInput& in);
 // The worst severity in a result (Ok when empty).
 Severity Worst(const std::vector<Check>& checks);
 
-// The standard locomotion graph (the reference project/animations/fps_body_locomotion.controller): its
+// The standard locomotion graph (the reference project/assets/Animations/Controllers/fps_body_locomotion.controller): its
 // 14 states, 20 parameters and 63 tuned transitions (start / stop offsets, exit times, crossfades), one
 // "main" track. Clips are named by role - the reference clip's file name without the "AM_" prefix, e.g.
 // "Loco_Walk_Fwd" - and `clipForRole` gives the path for each (empty = none yet, for the Animator to fill).

@@ -32,7 +32,8 @@ float ModelPreviewRenderer::ComputeFramingDistance(const Model& model) {
     return radius / std::sin(glm::radians(45.0f) * 0.5f) * 1.6f;
 }
 
-unsigned int ModelPreviewRenderer::Render(Model& model, float yaw, float pitch, float distance, int previewW, int previewH) {
+unsigned int ModelPreviewRenderer::Render(Model& model, float yaw, float pitch, float distance, int previewW, int previewH,
+                                          const std::vector<std::shared_ptr<MaterialAsset>>& slots) {
     if (!m_Shader) {
         m_Shader = std::make_unique<Shader>(ShaderLibrary::ReadFile("ModelVertex.glsl"),
                                             ShaderLibrary::ReadFile("ModelFragment.glsl"));
@@ -123,7 +124,7 @@ unsigned int ModelPreviewRenderer::Render(Model& model, float yaw, float pitch, 
     m_Shader->SetInt("uSpotShadowCount", 0);
     m_Shader->SetInt("uPointShadowCount", 0);
 
-    model.Draw(*m_Shader);
+    model.Draw(*m_Shader, slots);
 
     if (!prevDepthTest) glDisable(GL_DEPTH_TEST);
     glBindFramebuffer(GL_FRAMEBUFFER, (unsigned int)prevFBO);

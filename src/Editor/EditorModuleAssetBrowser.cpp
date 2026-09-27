@@ -209,7 +209,8 @@ void DrawFolderNode(const EditorModuleHostAPI& host, const std::vector<std::stri
     if (ImGui::BeginDragDropTarget()) {
         for (const char* type : {"ASSET_MODEL_PATH", "ASSET_TEXTURE_PATH",
                                  "ASSET_SOUND_PATH", "ASSET_PREFAB_PATH",
-                                 "ASSET_MATERIAL_PATH"}) { // #184 - materials were missing
+                                 "ASSET_MATERIAL_PATH", // #184 - materials were missing
+                                 "ASSET_FILE_PATH"}) {  // controllers, weapon definitions, scripts
             if (const ImGuiPayload* p = ImGui::AcceptDragDropPayload(type)) {
                 if (host.MoveAssetToFolderUndoable)
                     host.MoveAssetToFolderUndoable((const char*)p->Data, folderPath.c_str());
