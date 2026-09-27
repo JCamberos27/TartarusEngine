@@ -373,6 +373,10 @@ unsigned int MaterialPreviewRenderer::Render(const std::shared_ptr<MaterialAsset
     glBindTexture(GL_TEXTURE_2D, m_BackdropTex);
     glActiveTexture(GL_TEXTURE0 + 15);
     glBindTexture(GL_TEXTURE_2D, DefaultTextures::White());
+    glActiveTexture(GL_TEXTURE0 + 30); // physical sky: aerial perspective (off here)
+    glBindTexture(0x806F /* GL_TEXTURE_3D */, DefaultTextures::Volume());
+    glActiveTexture(GL_TEXTURE0 + 31); // physical sky: cloud shadows (off here)
+    glBindTexture(GL_TEXTURE_2D, DefaultTextures::White());
     glActiveTexture(GL_TEXTURE0);
 
     glEnable(GL_DEPTH_TEST);
