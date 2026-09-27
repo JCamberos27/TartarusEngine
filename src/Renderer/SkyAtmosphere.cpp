@@ -16,6 +16,7 @@ constexpr int kTransmittanceW = 256, kTransmittanceH = 64;
 constexpr int kMultiScatterSize = 32;
 constexpr int kSkyViewW = 192, kSkyViewH = 108;
 constexpr int kAerialSize = 32;
+constexpr int kSkyAmbientUnit = 10; // SkyAmbient.comp.glsl's output (uSkyAmbientLut)
 constexpr float kAerialRangeKm = 32.0f;
 constexpr float kKmPerWorldUnit = 0.001f; // 1 world unit = 1 m
 constexpr float kPi = 3.14159265358979f;
@@ -133,10 +134,10 @@ float WrapHours(float h) { return h - 24.0f * std::floor(h / 24.0f); }
 // ------------------------------------------------------------------------------------------
 
 void SkyAtmosphere::ViewResources::Release() {
-    unsigned int texs[3] = {SkyViewSun, SkyViewMoon, Aerial};
+    unsigned int texs[4] = {SkyViewSun, SkyViewMoon, Aerial, SkyAmbient};
     for (unsigned int t : texs)
         if (t) glDeleteTextures(1, &t);
-    SkyViewSun = SkyViewMoon = Aerial = 0;
+    SkyViewSun = SkyViewMoon = Aerial = SkyAmbient = 0;
     Clouds.Release();
     CloudTexture = 0;
     CloudsValid = false;
@@ -158,6 +159,7 @@ void SkyAtmosphere::EnsureResources() {
     m_TransmittanceShader = std::make_unique<Shader>(ShaderLibrary::ReadFileRequired("AtmosphereTransmittance.comp.glsl"), "AtmosphereTransmittance");
     m_MultiScatterShader = std::make_unique<Shader>(ShaderLibrary::ReadFileRequired("AtmosphereMultiScatter.comp.glsl"), "AtmosphereMultiScatter");
     m_SkyViewShader = std::make_unique<Shader>(ShaderLibrary::ReadFileRequired("AtmosphereSkyView.comp.glsl"), "AtmosphereSkyView");
+    m_SkyAmbientShader = std::make_unique<Shader>(ShaderLibrary::ReadFileRequired("SkyAmbient.comp.glsl"), "SkyAmbient");
     m_AerialShader = std::make_unique<Shader>(ShaderLibrary::ReadFileRequired("AtmosphereAerial.comp.glsl"), "AtmosphereAerial");
     m_EnvShader = std::make_unique<Shader>(ShaderLibrary::ReadFileRequired("SkyEnvCapture.comp.glsl"), "SkyEnvCapture");
     m_CompositeShader = std::make_unique<Shader>(ShaderLibrary::ReadFileRequired("Sky.vert.glsl"),
@@ -330,12 +332,16 @@ void SkyAtmosphere::BindLuts(const ViewResources& vr) {
     glBindTextureUnit(1, m_MultiScatterLut);
     glBindTextureUnit(2, vr.SkyViewSun);
     glBindTextureUnit(3, vr.SkyViewMoon);
+    glBindTextureUnit(kSkyAmbientUnit, vr.SkyAmbient);
 }
 
 void SkyAtmosphere::RenderSkyViewLuts(ViewResources& vr) {
     if (!vr.SkyViewSun) {
         vr.SkyViewSun = MakeLut2D(kSkyViewW, kSkyViewH);
         vr.SkyViewMoon = MakeLut2D(kSkyViewW, kSkyViewH);
+        vr.SkyAmbient = MakeLut2D(3, 1);
+        glTextureParameteri(vr.SkyAmbient, GL_TEXTURE_MIN_FILTER, GL_NEAREST);
+        glTextureParameteri(vr.SkyAmbient, GL_TEXTURE_MAG_FILTER, GL_NEAREST);
     }
     m_SkyViewShader->Bind();
     glBindTextureUnit(0, m_TransmittanceLut);
@@ -351,6 +357,14 @@ void SkyAtmosphere::RenderSkyViewLuts(ViewResources& vr) {
     m_SkyViewShader->SetVec3("uLightIllum", m_Settings.MoonEnabled ? lit.MoonIlluminance * lit.MoonLitFraction : glm::vec3(0.0f));
     glBindImageTexture(0, vr.SkyViewMoon, 0, GL_FALSE, 0, GL_WRITE_ONLY, GL_RGBA16F);
     m_SkyViewShader->DispatchCompute(Groups(kSkyViewW, 8), Groups(kSkyViewH, 8), 1);
+    glMemoryBarrier(GL_TEXTURE_FETCH_BARRIER_BIT | GL_SHADER_IMAGE_ACCESS_BARRIER_BIT);
+
+    // The sky's ambient terms, from the LUTs just written (see SkyAmbient.comp.glsl).
+    m_SkyAmbientShader->Bind();
+    glBindTextureUnit(2, vr.SkyViewSun);
+    glBindTextureUnit(3, vr.SkyViewMoon);
+    glBindImageTexture(0, vr.SkyAmbient, 0, GL_FALSE, 0, GL_WRITE_ONLY, GL_RGBA16F);
+    m_SkyAmbientShader->DispatchCompute(1, 1, 1);
     glMemoryBarrier(GL_TEXTURE_FETCH_BARRIER_BIT | GL_SHADER_IMAGE_ACCESS_BARRIER_BIT);
 }
 
