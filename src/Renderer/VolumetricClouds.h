@@ -72,6 +72,10 @@ public:
 
     bool NoiseReady() const { return m_NoiseReady; }
 
+    // The wind's texture offsets (km), wrapped at whole tiles. For tests.
+    glm::vec2 WeatherOffset() const { return m_WeatherOffset; }
+    glm::vec2 ShapeOffset() const { return m_ShapeOffset; }
+
 private:
     void EnsureResources();
     void GenerateNoise();

@@ -14,6 +14,22 @@ namespace {
 constexpr int kShapeSize = 128;
 constexpr int kDetailSize = 32;
 constexpr int kWeatherSize = 512;
+// How far (km, at CloudScale / CirrusScale 1) each texture repeats. The wind offsets wrap at
+// these exact periods, so wrapping never moves the pattern.
+constexpr float kWeatherTileKm = 45.0f;
+constexpr float kShapeTileKm = 7.0f;   // the detail noise (0.7 km) repeats 10x inside it
+constexpr float kDetailTileKm = 0.7f;
+constexpr float kCirrusTileKm = 25.0f;
+
+float CloudScale(const SkySettings& s) { return std::max(s.CloudScale, 0.05f); }
+float CirrusScale(const SkySettings& s) { return std::max(s.CirrusScale, 0.05f); }
+
+// v mod period, per component, in [0, period).
+void WrapOffset(glm::vec2& v, float period) {
+    v -= glm::floor(v / period) * period;
+    for (int i = 0; i < 2; ++i)
+        if (v[i] >= period || v[i] < 0.0f) v[i] = 0.0f; // rounding at the ends
+}
 
 // std140 mirror of CloudBlock in CloudsCommon.glsl.
 struct CloudUbo {
@@ -146,11 +162,15 @@ void VolumetricClouds::Tick(const SkySettings& s, float dt) {
     m_WeatherOffset -= velKm * dt;
     m_ShapeOffset -= velKm * dt * 1.3f;
     m_CirrusOffset -= glm::vec2(glm::length(velKm) * 2.5f, 0.0f) * dt;
-    // Keep the offsets bounded so float precision never degrades (the textures tile).
-    auto wrap = [](glm::vec2& v, float period) { v -= glm::floor(v / period) * period; };
-    wrap(m_WeatherOffset, 40000.0f);
-    wrap(m_ShapeOffset, 6000.0f);
-    wrap(m_CirrusOffset, 20000.0f);
+    // Keep the offsets small, wrapping each at a whole number of its texture's tiles so the wrap
+    // itself never shows. (They used to wrap at thousands of km, which isn't a whole number of
+    // tiles: a frame's tiny step then rounded away against the large value, the offset flipped
+    // between 0 and the period every frame, and the whole cloud field jumped back and forth
+    // between two layouts instead of drifting.) The cirrus's second octave is 3.1x its first:
+    // ten tiles keep both whole.
+    WrapOffset(m_WeatherOffset, kWeatherTileKm * CloudScale(s));
+    WrapOffset(m_ShapeOffset, kShapeTileKm * CloudScale(s));
+    WrapOffset(m_CirrusOffset, kCirrusTileKm * 10.0f * CirrusScale(s));
 }
 
 void VolumetricClouds::UpdateUniforms(const SkySettings& s, const SkyLighting& lit) {
@@ -158,24 +178,24 @@ void VolumetricClouds::UpdateUniforms(const SkySettings& s, const SkyLighting& l
     const float bottomRadius = std::max(s.PlanetRadiusKm, 10.0f);
     const float baseKm = std::max(s.CloudBaseMeters, 0.0f) * 0.001f;
     const float thicknessKm = std::max(s.CloudThicknessMeters, 50.0f) * 0.001f;
-    const float scale = std::max(s.CloudScale, 0.05f);
+    const float scale = CloudScale(s);
     const glm::vec2 windDir = BearingToXZ(s.CloudWindDirectionDegrees, s.NorthOffsetDegrees);
 
     CloudUbo u{};
     u.Layer = glm::vec4(bottomRadius + baseKm, bottomRadius + baseKm + thicknessKm, thicknessKm,
                         s.CloudsEnabled ? std::clamp(s.CloudCoverage, 0.0f, 1.0f) : 0.0f);
     // Shape noise tiles every ~7 km (puffs of ~1-2 km), detail every ~0.7 km, weather every ~45 km.
-    u.Shape = glm::vec4(1.0f / (7.0f * scale), 1.0f / (0.7f * scale), std::clamp(s.CloudDetail, 0.0f, 1.0f),
+    u.Shape = glm::vec4(1.0f / (kShapeTileKm * scale), 1.0f / (kDetailTileKm * scale), std::clamp(s.CloudDetail, 0.0f, 1.0f),
                         40.0f * std::max(s.CloudDensity, 0.0f));
     // Wind offsets in km (the shader adds them before scaling by each texture's frequency).
     u.Wind = glm::vec4(m_WeatherOffset, m_ShapeOffset);
     u.LightDir = glm::vec4(lit.CloudLightDir, std::clamp(s.CloudType, 0.0f, 1.0f));
     u.LightIllum = glm::vec4(lit.CloudLightIlluminance, std::clamp(s.CloudForwardScattering, 0.0f, 0.95f));
     u.Ambient = glm::vec4(std::max(s.CloudAmbient, 0.0f), std::clamp(s.CloudPowder, 0.0f, 1.0f),
-                          1.0f / (45.0f * scale), std::clamp(s.CloudMultiScattering, 0.0f, 1.5f));
+                          1.0f / (kWeatherTileKm * scale), std::clamp(s.CloudMultiScattering, 0.0f, 1.5f));
     u.Misc = glm::vec4(60.0f, s.CloudsEnabled ? std::clamp(s.CirrusCoverage, 0.0f, 1.0f) : 0.0f,
                        std::max(s.CirrusAltitudeMeters, s.CloudBaseMeters + s.CloudThicknessMeters + 100.0f) * 0.001f,
-                       1.0f / (25.0f * std::max(s.CirrusScale, 0.05f)));
+                       1.0f / (kCirrusTileKm * CirrusScale(s)));
     u.Misc2 = glm::vec4(m_CirrusOffset, std::max(s.CloudWindShear, 0.0f), s.CloudSeed * 0.1317f);
     u.WindDir = glm::vec4(windDir, 0.5f, std::max(s.CloudHorizonHaze, 0.0f));
     glNamedBufferSubData(m_Ubo, 0, sizeof(u), &u);
