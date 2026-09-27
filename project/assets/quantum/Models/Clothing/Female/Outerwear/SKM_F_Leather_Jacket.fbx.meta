@@ -1,0 +1,10 @@
+{
+  "folder": "assets/quantum/Models/Clothing/Female/Outerwear",
+  "guid": "2e479f8ff4882b66",
+  "materialRemap": {
+    "M_F_Leather_Jacket": "assets/quantum/Materials/Clothing/Outerwear/F_Jacket_Leather/M_F_Leather_Jacket_Black.mat",
+    "M_F_Tshirt_Tucked": "assets/quantum/Materials/Clothing/Tops/F_Tshirt_Tucked/M_F_Tshirt_Tucked_Black.mat"
+  },
+  "metaVersion": 1,
+  "type": "model"
+}

@@ -1,0 +1,16 @@
+{
+  "folder": "assets/quantum/Textures/Clothing/Shoes/Sneakers/Sneakers_Leather/New_Black",
+  "guid": "8041c9a8e3cb5890",
+  "importer": {
+    "anisoLevel": 16,
+    "compression": 2,
+    "filterMode": 2,
+    "generateMipmaps": true,
+    "isSRGB": false,
+    "maxTextureSize": 4096,
+    "textureType": 0,
+    "wrapMode": 0
+  },
+  "metaVersion": 1,
+  "type": "texture"
+}

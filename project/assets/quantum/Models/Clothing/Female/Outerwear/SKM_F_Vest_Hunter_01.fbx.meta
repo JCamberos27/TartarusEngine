@@ -1,0 +1,9 @@
+{
+  "folder": "assets/quantum/Models/Clothing/Female/Outerwear",
+  "guid": "193ce57779abf666",
+  "materialRemap": {
+    "M_Vest_Hunter": "assets/quantum/Materials/Clothing/Outerwear/Vest_Hunter/M_Vest_Hunter_Black.mat"
+  },
+  "metaVersion": 1,
+  "type": "model"
+}

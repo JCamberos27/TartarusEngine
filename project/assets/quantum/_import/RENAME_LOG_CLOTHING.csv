@@ -1,0 +1,71 @@
+old,new
+assets/quantum/Materials/Clothing/Glasses/Glasses Aviator/M_Sunglasses_brown.mat,assets/quantum/Materials/Clothing/Glasses/Glasses Aviator/M_Sunglasses_Brown.mat
+assets/quantum/Materials/Clothing/Glasses/Glasses Aviator/M_Sunglasses_Commo.mat,assets/quantum/Materials/Clothing/Glasses/Glasses Aviator/M_Sunglasses_Camo.mat
+assets/quantum/Materials/Clothing/Outerwear/Jacket_Classic/Leather/M_jacket_Classik_Leather.mat,assets/quantum/Materials/Clothing/Outerwear/Jacket_Classic/Leather/M_Jacket_Classic_Leather.mat
+assets/quantum/Materials/Clothing/Outerwear/Jacket_Leather/M_M_Leather_Jacket_Black.mat,assets/quantum/Materials/Clothing/Outerwear/Jacket_Leather/M_Leather_Jacket_Black.mat
+assets/quantum/Materials/Clothing/Outerwear/Jacket_Leather/M_M_Leather_Jacket_Brown.mat,assets/quantum/Materials/Clothing/Outerwear/Jacket_Leather/M_Leather_Jacket_Brown.mat
+assets/quantum/Materials/Clothing/Outerwear/Vests_Puffy/M_M_Puffy_Vest_Beige.mat,assets/quantum/Materials/Clothing/Outerwear/Vests_Puffy/M_Puffy_Vest_Beige.mat
+assets/quantum/Materials/Clothing/Outerwear/Vests_Puffy/M_M_Puffy_Vest_Black.mat,assets/quantum/Materials/Clothing/Outerwear/Vests_Puffy/M_Puffy_Vest_Black.mat
+assets/quantum/Materials/Clothing/Outerwear/Vests_Puffy/M_M_Puffy_Vest_Brown.mat,assets/quantum/Materials/Clothing/Outerwear/Vests_Puffy/M_Puffy_Vest_Brown.mat
+assets/quantum/Materials/Clothing/Outerwear/Vests_Puffy/M_M_Puffy_Vest_Dark_Blue.mat,assets/quantum/Materials/Clothing/Outerwear/Vests_Puffy/M_Puffy_Vest_Dark_Blue.mat
+assets/quantum/Materials/Clothing/Outerwear/Vests_Puffy/M_M_Puffy_Vest_Green.mat,assets/quantum/Materials/Clothing/Outerwear/Vests_Puffy/M_Puffy_Vest_Green.mat
+assets/quantum/Materials/Clothing/Outerwear/Vests_Puffy/M_M_Puffy_Vest_Yellow.mat,assets/quantum/Materials/Clothing/Outerwear/Vests_Puffy/M_Puffy_Vest_Yellow.mat
+assets/quantum/Materials/Clothing/Pants/Shorts_Breeches/M_Shorts_Breeches_bege.mat,assets/quantum/Materials/Clothing/Pants/Shorts_Breeches/M_Shorts_Breeches_Beige.mat
+assets/quantum/Materials/Clothing/Shoes/Flip_Flops/M_Shorts_Breeches_bege.mat,assets/quantum/Materials/Clothing/Shoes/Flip_Flops/M_Shorts_Breeches_Beige.mat
+assets/quantum/Materials/Clothing/Tops/F_Jersey/M_woman_jersey_bege.mat,assets/quantum/Materials/Clothing/Tops/F_Jersey/M_Woman_Jersey_Beige.mat
+assets/quantum/Materials/Clothing/Tops/F_Jersey/M_woman_jersey_black.mat,assets/quantum/Materials/Clothing/Tops/F_Jersey/M_Woman_Jersey_Black.mat
+assets/quantum/Materials/Clothing/Tops/F_Jersey/M_woman_jersey_bordo.mat,assets/quantum/Materials/Clothing/Tops/F_Jersey/M_Woman_Jersey_Burgundy.mat
+assets/quantum/Materials/Clothing/Tops/F_Jersey/M_woman_jersey_green.mat,assets/quantum/Materials/Clothing/Tops/F_Jersey/M_Woman_Jersey_Green.mat
+assets/quantum/Materials/Clothing/Tops/F_Jersey/M_woman_jersey_grey.mat,assets/quantum/Materials/Clothing/Tops/F_Jersey/M_Woman_Jersey_Gray.mat
+assets/quantum/Materials/Clothing/Tops/M_Jersey/M_M_Jersey_Beige.mat,assets/quantum/Materials/Clothing/Tops/M_Jersey/M_Jersey_Beige.mat
+assets/quantum/Materials/Clothing/Tops/M_Jersey/M_M_Jersey_Black.mat,assets/quantum/Materials/Clothing/Tops/M_Jersey/M_Jersey_Black.mat
+assets/quantum/Materials/Clothing/Tops/M_Jersey/M_M_Jersey_Blue.mat,assets/quantum/Materials/Clothing/Tops/M_Jersey/M_Jersey_Blue.mat
+assets/quantum/Materials/Clothing/Tops/M_Jersey/M_M_Jersey_Burgundy.mat,assets/quantum/Materials/Clothing/Tops/M_Jersey/M_Jersey_Burgundy.mat
+assets/quantum/Materials/Clothing/Tops/M_Jersey/M_M_Jersey_Camel.mat,assets/quantum/Materials/Clothing/Tops/M_Jersey/M_Jersey_Camel.mat
+assets/quantum/Materials/Clothing/Tops/M_Jersey/M_M_Jersey_Olive.mat,assets/quantum/Materials/Clothing/Tops/M_Jersey/M_Jersey_Olive.mat
+assets/quantum/Materials/Clothing/Tops/M_Jersey/M_M_Jersey_Red.mat,assets/quantum/Materials/Clothing/Tops/M_Jersey/M_Jersey_Red.mat
+assets/quantum/Materials/Clothing/Tops/M_Jersey/M_M_Jersey_White.mat,assets/quantum/Materials/Clothing/Tops/M_Jersey/M_Jersey_White.mat
+assets/quantum/Textures/Clothing/Glasses/Glasses Aviator/T_Sunglasses_brown_BaseColor.png,assets/quantum/Textures/Clothing/Glasses/Glasses Aviator/T_Sunglasses_Brown_BaseColor.png
+assets/quantum/Textures/Clothing/Glasses/Glasses Aviator/T_Sunglasses_Commo_BaseColor.png,assets/quantum/Textures/Clothing/Glasses/Glasses Aviator/T_Sunglasses_Camo_BaseColor.png
+assets/quantum/Textures/Clothing/Glasses/Glasses Aviator/T_Sunglasses_Commo_Occlusion.png,assets/quantum/Textures/Clothing/Glasses/Glasses Aviator/T_Sunglasses_Camo_Occlusion.png
+assets/quantum/Textures/Clothing/Glasses/Glasses Aviator/T_Sunglasses_Commo_Roughness.png,assets/quantum/Textures/Clothing/Glasses/Glasses Aviator/T_Sunglasses_Camo_Roughness.png
+assets/quantum/Textures/Clothing/Glasses/Glasses Aviator/T_Sunglasses_Commo_Unity_Normal.png,assets/quantum/Textures/Clothing/Glasses/Glasses Aviator/T_Sunglasses_Camo_Unity_Normal.png
+assets/quantum/Textures/Clothing/Outerwear/Jacket_Classic/Leather/T_jacket_Classik_Leather_BaseColor.png,assets/quantum/Textures/Clothing/Outerwear/Jacket_Classic/Leather/T_Jacket_Classic_Leather_BaseColor.png
+assets/quantum/Textures/Clothing/Outerwear/Jacket_Classic/Leather/T_jacket_Classik_Leather_Occlusion.png,assets/quantum/Textures/Clothing/Outerwear/Jacket_Classic/Leather/T_Jacket_Classic_Leather_Occlusion.png
+assets/quantum/Textures/Clothing/Outerwear/Jacket_Classic/Leather/T_jacket_Classik_Leather_Roughness.png,assets/quantum/Textures/Clothing/Outerwear/Jacket_Classic/Leather/T_Jacket_Classic_Leather_Roughness.png
+assets/quantum/Textures/Clothing/Outerwear/Jacket_Classic/Leather/T_jacket_Classik_Leather_Unity_Normal.png,assets/quantum/Textures/Clothing/Outerwear/Jacket_Classic/Leather/T_Jacket_Classic_Leather_Unity_Normal.png
+assets/quantum/Textures/Clothing/Outerwear/Jacket_Leather/T_M_Leather_Jacket_Black_BaseColor.png,assets/quantum/Textures/Clothing/Outerwear/Jacket_Leather/T_Leather_Jacket_Black_BaseColor.png
+assets/quantum/Textures/Clothing/Outerwear/Jacket_Leather/T_M_Leather_Jacket_Brown_BaseColor.png,assets/quantum/Textures/Clothing/Outerwear/Jacket_Leather/T_Leather_Jacket_Brown_BaseColor.png
+assets/quantum/Textures/Clothing/Outerwear/Jacket_Leather/T_M_Leather_Jacket_Occlusion.png,assets/quantum/Textures/Clothing/Outerwear/Jacket_Leather/T_Leather_Jacket_Occlusion.png
+assets/quantum/Textures/Clothing/Outerwear/Jacket_Leather/T_M_Leather_Jacket_Roughness.png,assets/quantum/Textures/Clothing/Outerwear/Jacket_Leather/T_Leather_Jacket_Roughness.png
+assets/quantum/Textures/Clothing/Outerwear/Jacket_Leather/T_M_Leather_Jacket_Unity_Normal.png,assets/quantum/Textures/Clothing/Outerwear/Jacket_Leather/T_Leather_Jacket_Unity_Normal.png
+assets/quantum/Textures/Clothing/Outerwear/Vests_Puffy/T_M_Puffy_Vest_Beige_BaseColor.png,assets/quantum/Textures/Clothing/Outerwear/Vests_Puffy/T_Puffy_Vest_Beige_BaseColor.png
+assets/quantum/Textures/Clothing/Outerwear/Vests_Puffy/T_M_Puffy_Vest_Black_BaseColor.png,assets/quantum/Textures/Clothing/Outerwear/Vests_Puffy/T_Puffy_Vest_Black_BaseColor.png
+assets/quantum/Textures/Clothing/Outerwear/Vests_Puffy/T_M_Puffy_Vest_Brown_BaseColor.png,assets/quantum/Textures/Clothing/Outerwear/Vests_Puffy/T_Puffy_Vest_Brown_BaseColor.png
+assets/quantum/Textures/Clothing/Outerwear/Vests_Puffy/T_M_Puffy_Vest_Dark_Blue_BaseColor.png,assets/quantum/Textures/Clothing/Outerwear/Vests_Puffy/T_Puffy_Vest_Dark_Blue_BaseColor.png
+assets/quantum/Textures/Clothing/Outerwear/Vests_Puffy/T_M_Puffy_Vest_Green_BaseColor.png,assets/quantum/Textures/Clothing/Outerwear/Vests_Puffy/T_Puffy_Vest_Green_BaseColor.png
+assets/quantum/Textures/Clothing/Outerwear/Vests_Puffy/T_M_Puffy_Vest_Occlusion.png,assets/quantum/Textures/Clothing/Outerwear/Vests_Puffy/T_Puffy_Vest_Occlusion.png
+assets/quantum/Textures/Clothing/Outerwear/Vests_Puffy/T_M_Puffy_Vest_Roughness.png,assets/quantum/Textures/Clothing/Outerwear/Vests_Puffy/T_Puffy_Vest_Roughness.png
+assets/quantum/Textures/Clothing/Outerwear/Vests_Puffy/T_M_Puffy_Vest_Unity_Normal.png,assets/quantum/Textures/Clothing/Outerwear/Vests_Puffy/T_Puffy_Vest_Unity_Normal.png
+assets/quantum/Textures/Clothing/Outerwear/Vests_Puffy/T_M_Puffy_Vest_Yellow_BaseColor.png,assets/quantum/Textures/Clothing/Outerwear/Vests_Puffy/T_Puffy_Vest_Yellow_BaseColor.png
+assets/quantum/Textures/Clothing/Pants/Shorts_Breeches/T_Shorts_Breeches_bege_BaseColor.png,assets/quantum/Textures/Clothing/Pants/Shorts_Breeches/T_Shorts_Breeches_Beige_BaseColor.png
+assets/quantum/Textures/Clothing/Shoes/Flip_Flops/T_Shorts_Breeches_bege_BaseColor.png,assets/quantum/Textures/Clothing/Shoes/Flip_Flops/T_Shorts_Breeches_Beige_BaseColor.png
+assets/quantum/Textures/Clothing/Tops/F_Jersey/T_woman_jersey_bege_BaseColor.png,assets/quantum/Textures/Clothing/Tops/F_Jersey/T_Woman_Jersey_Beige_BaseColor.png
+assets/quantum/Textures/Clothing/Tops/F_Jersey/T_woman_jersey_black_BaseColor.png,assets/quantum/Textures/Clothing/Tops/F_Jersey/T_Woman_Jersey_Black_BaseColor.png
+assets/quantum/Textures/Clothing/Tops/F_Jersey/T_woman_jersey_bordo_BaseColor.png,assets/quantum/Textures/Clothing/Tops/F_Jersey/T_Woman_Jersey_Burgundy_BaseColor.png
+assets/quantum/Textures/Clothing/Tops/F_Jersey/T_woman_jersey_green_BaseColor.png,assets/quantum/Textures/Clothing/Tops/F_Jersey/T_Woman_Jersey_Green_BaseColor.png
+assets/quantum/Textures/Clothing/Tops/F_Jersey/T_woman_jersey_grey_BaseColor.png,assets/quantum/Textures/Clothing/Tops/F_Jersey/T_Woman_Jersey_Gray_BaseColor.png
+assets/quantum/Textures/Clothing/Tops/F_Jersey/T_woman_jersey_Occlusion.png,assets/quantum/Textures/Clothing/Tops/F_Jersey/T_Woman_Jersey_Occlusion.png
+assets/quantum/Textures/Clothing/Tops/F_Jersey/T_woman_jersey_Roughness.png,assets/quantum/Textures/Clothing/Tops/F_Jersey/T_Woman_Jersey_Roughness.png
+assets/quantum/Textures/Clothing/Tops/F_Jersey/T_woman_jersey_Unity_Normal.png,assets/quantum/Textures/Clothing/Tops/F_Jersey/T_Woman_Jersey_Unity_Normal.png
+assets/quantum/Textures/Clothing/Tops/M_Jersey/T_M_Jersey_Beige_BaseColor.png,assets/quantum/Textures/Clothing/Tops/M_Jersey/T_Jersey_Beige_BaseColor.png
+assets/quantum/Textures/Clothing/Tops/M_Jersey/T_M_Jersey_Black_BaseColor.png,assets/quantum/Textures/Clothing/Tops/M_Jersey/T_Jersey_Black_BaseColor.png
+assets/quantum/Textures/Clothing/Tops/M_Jersey/T_M_Jersey_Blue_BaseColor.png,assets/quantum/Textures/Clothing/Tops/M_Jersey/T_Jersey_Blue_BaseColor.png
+assets/quantum/Textures/Clothing/Tops/M_Jersey/T_M_Jersey_Burgundy_BaseColor.png,assets/quantum/Textures/Clothing/Tops/M_Jersey/T_Jersey_Burgundy_BaseColor.png
+assets/quantum/Textures/Clothing/Tops/M_Jersey/T_M_Jersey_Camel_BaseColor.png,assets/quantum/Textures/Clothing/Tops/M_Jersey/T_Jersey_Camel_BaseColor.png
+assets/quantum/Textures/Clothing/Tops/M_Jersey/T_M_Jersey_Occlusion.png,assets/quantum/Textures/Clothing/Tops/M_Jersey/T_Jersey_Occlusion.png
+assets/quantum/Textures/Clothing/Tops/M_Jersey/T_M_Jersey_Olive_BaseColor.png,assets/quantum/Textures/Clothing/Tops/M_Jersey/T_Jersey_Olive_BaseColor.png
+assets/quantum/Textures/Clothing/Tops/M_Jersey/T_M_Jersey_Red_BaseColor.png,assets/quantum/Textures/Clothing/Tops/M_Jersey/T_Jersey_Red_BaseColor.png
+assets/quantum/Textures/Clothing/Tops/M_Jersey/T_M_Jersey_Roughness.png,assets/quantum/Textures/Clothing/Tops/M_Jersey/T_Jersey_Roughness.png
+assets/quantum/Textures/Clothing/Tops/M_Jersey/T_M_Jersey_Unity_Normal.png,assets/quantum/Textures/Clothing/Tops/M_Jersey/T_Jersey_Unity_Normal.png
+assets/quantum/Textures/Clothing/Tops/M_Jersey/T_M_Jersey_White_BaseColor.png,assets/quantum/Textures/Clothing/Tops/M_Jersey/T_Jersey_White_BaseColor.png

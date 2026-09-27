@@ -1,0 +1,16 @@
+{
+  "folder": "assets/quantum/Textures/Clothing/Tops/Hoodie_Hood",
+  "guid": "098ea2c4a0a5b9ca",
+  "importer": {
+    "anisoLevel": 16,
+    "compression": 2,
+    "filterMode": 2,
+    "generateMipmaps": true,
+    "isSRGB": false,
+    "maxTextureSize": 4096,
+    "textureType": 0,
+    "wrapMode": 0
+  },
+  "metaVersion": 1,
+  "type": "texture"
+}
