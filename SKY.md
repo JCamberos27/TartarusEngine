@@ -41,9 +41,15 @@ The editor grid and gizmos aren't part of the sky. The Game view shows exactly w
 
 ### Sun, Moon and Stars
 - **Atmosphere colours the sun**: filter the directional light through the air (on by default).
-- **Sun disc brightness / size**: affect only the visible disc.
+- **Sun disc brightness / size**: affect only the visible disc. The disc is drawn at the light's
+  **Angular Size**, which also sets how soft the shadows are. For soft shadows with a true-size
+  sun (0.53°), raise Angular Size and lower **Sun disc size** to match. Near the horizon the disc
+  flattens and turns orange, as the real one does.
 - **Moon**: phases follow the date, and **Moon phase** shifts the cycle. The lit side faces the
-  sun. By night the moon lights the scene and the clouds.
+  sun. By night the moon lights the scene and the clouds. The disc shows the near side's
+  familiar pattern of maria, is evenly bright to its rim at full, and fades to a pale ghost by
+  day. **Moon size** 1 is its real size, which looks small in a game view, so 1.5-2 reads as
+  the moon people remember.
 - **Stars, Night glow**: a procedural star field with a Milky Way that turns about the
   celestial pole through the night, plus faint airglow.
 - **Night brightness** (stops): after sunset it brightens everything the sky lights, the way
@@ -103,7 +109,7 @@ Measured on an RTX 4060 at 1467×741, Medium quality, averaged per frame:
 
 | Work | GPU time |
 |---|---|
-| Sky + clouds + haze, per view | ~0.7 ms (clouds ~0.5 ms) |
+| Sky + clouds + haze, per view | ~0.6 ms (clouds ~0.4 ms) |
 | Per frame (LUTs, cloud shadows) | ~0.1 ms |
 | Environment re-capture + IBL bake | spikes of ~1 ms, only when the sky changes: sun moves > 0.35°, settings edited, or every 4 s while clouds drift |
 
@@ -126,11 +132,16 @@ The Scene view and the Game view each render their own sky while both are visibl
   - a weather map, per-type height profiles, Perlin-Worley base noise and Worley erosion
     noise, all generated once at startup (`CloudNoise.comp.glsl`);
   - lighting from a cone march toward the light, dual-lobe phase, Wrenninge's
-    multiple-scattering octaves, a two-stream diffuse term for thick decks, a powder term,
-    and sky ambient.
+    multiple-scattering octaves, a two-stream diffuse term (stronger for closed decks than for
+    lone cumulus, which lose light out of their sides), a powder term, and sky ambient;
+  - sky light occluded by the cloud above each point, which darkens bases and interiors.
 
-  The clouds are raymarched at reduced resolution with a per-frame jitter. Each frame is
-  reprojected and accumulated with a variance-bounded history (`CloudTemporal.comp.glsl`).
+  Noise and weather-map mips follow each sample's pixel footprint, so distant clouds don't
+  sparkle. The clouds are raymarched at reduced resolution with a per-frame jitter along the
+  ray. Each frame is reprojected and accumulated with a variance-bounded history
+  (`CloudTemporal.comp.glsl`), then upsampled to the screen with a cubic B-spline.
+  - **Wind:** the texture offsets wrap at whole tiles. Wrapping anywhere else once made the cloud
+    field jump between two layouts.
 - **Scene lighting**:
   - `SkyAtmosphere::ResolveLighting` (CPU) picks the sun or the moon and filters it through
     the same transmittance the shaders use.
@@ -147,4 +158,5 @@ The Scene view and the Game view each render their own sky while both are visibl
   smoke scenes.
 - **Reviewing changes**: `TartarusEngine.exe --smoke-test <dir> --smoke-shots <out>` saves three
   Scene-view screenshots per scene (toward the west horizon, the east, and up), so rendering
-  changes can be compared without opening the editor.
+  changes can be compared without opening the editor. `tools/sky-review/` wraps this with seven
+  time-of-day scenes and a side-by-side compare script.
