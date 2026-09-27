@@ -75,6 +75,9 @@ Everything in **(advanced)** groups has a tooltip; defaults are the values the b
 | Push-off plays when the move is short | **Start Idle Time**, **Start Max Move**. |
 | Camera bounces on stairs | **Head Bob** down, **Camera Smoothing** up; **Stair Pop Rise/Rate/Ease** for the pop detector. |
 | Left hand detaches from the gun | **Eye Slack**, **Reach Slack**, **Shrug Start / Max** (Weapon Arms). |
+| Elbows swing or jerk while walking / running | **Arm Steadiness** up (1 = the gait never reaches the arms: shoulders held against the view, elbows in the rig's bend plane); **Arm Steady Time** longer than a step; **Arm Steady Max** bounds how far a shoulder is held. |
+| Looking down shows the body from inside (legs seen through the torso) | **Look Down Push** up (the eye comes forward over the chest), **Look Down Start** lower. |
+| Slivers of skin at the edge of the view (turning, landing, looking down) | **Near Hide** up: that much of the body around the eye isn't drawn (the shadow stays). |
 | Camera rises or drops on holster | **Arms Ease Out**; the body keeps the armed eye height unarmed. |
 | Feet float over steps / sink into slopes | **Foot IK**, **Foot Ray Up/Length**, **Foot Max Raise**, **Pelvis Max Raise**, **Foot IK Max Drop**. |
 | Foot slides while planted | **Foot Lock Drift**, **Foot Planted Height**, **Foot Lock Ease In/Out**. |
