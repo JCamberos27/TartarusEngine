@@ -13,7 +13,10 @@
 namespace {
 constexpr int kShapeSize = 128;
 constexpr int kDetailSize = 32;
-constexpr int kWeatherSize = 512;
+// 2048 texels over the weather map's ~45 km: ~22 m each. At 512 (~88 m) the cloud outlines, which
+// threshold this map, showed its bilinear texels as straight segments. Mipmapped, so distant
+// clouds read a level that matches their footprint. CloudsCommon.glsl's kWeatherTexels mirrors it.
+constexpr int kWeatherSize = 2048;
 // How far (km, at CloudScale / CirrusScale 1) each texture repeats. The wind offsets wrap at
 // these exact periods, so wrapping never moves the pattern.
 constexpr float kWeatherTileKm = 45.0f;
@@ -121,7 +124,12 @@ void VolumetricClouds::EnsureResources() {
 
     m_ShapeNoise = MakeNoise3D(kShapeSize);
     m_DetailNoise = MakeNoise3D(kDetailSize);
-    m_Weather = MakeTexture2D(GL_RGBA8, kWeatherSize, kWeatherSize, GL_REPEAT);
+    glCreateTextures(GL_TEXTURE_2D, 1, &m_Weather);
+    glTextureStorage2D(m_Weather, 1 + (int)std::floor(std::log2((float)kWeatherSize)), GL_RGBA8, kWeatherSize, kWeatherSize);
+    glTextureParameteri(m_Weather, GL_TEXTURE_MIN_FILTER, GL_LINEAR_MIPMAP_LINEAR);
+    glTextureParameteri(m_Weather, GL_TEXTURE_MAG_FILTER, GL_LINEAR);
+    glTextureParameteri(m_Weather, GL_TEXTURE_WRAP_S, GL_REPEAT);
+    glTextureParameteri(m_Weather, GL_TEXTURE_WRAP_T, GL_REPEAT);
     m_ShadowMap = MakeTexture2D(GL_R16F, kShadowMapSize, kShadowMapSize, GL_CLAMP_TO_EDGE);
     GenerateNoise();
 }
@@ -149,6 +157,7 @@ void VolumetricClouds::GenerateNoise() {
     glMemoryBarrier(GL_TEXTURE_FETCH_BARRIER_BIT | GL_SHADER_IMAGE_ACCESS_BARRIER_BIT);
     glGenerateTextureMipmap(m_ShapeNoise);
     glGenerateTextureMipmap(m_DetailNoise);
+    glGenerateTextureMipmap(m_Weather);
     m_NoiseReady = true;
 }
 
