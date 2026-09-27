@@ -7,6 +7,9 @@ in vec4 vColor; // #113
 out vec4 FragColor;
 
 uniform vec3 uViewPos;
+// The player's own body (PlayerBodyTag): nothing of it within this many metres of the eye is drawn - the
+// near plane would slice it into slivers. 0 for everything else.
+uniform float uNearHide;
 
 // #162 - distance fog (Unity's Lighting > Fog), applied to lit surfaces in linear HDR. The sky
 // isn't fogged (same as Unity), so pick a fog colour close to the horizon.
@@ -779,6 +782,7 @@ uint clusterIndex() {
 }
 
 void main() {
+    if (uNearHide > 0.0 && distance(vWorldPos, uViewPos) < uNearHide) discard;
     // Triplanar mode skips the mesh's own UVs entirely (they're what's stretching), sampling
     // every map from world position/normal instead. Normal maps are the one exception - proper
     // triplanar normal blending needs a whiteout-blend reconstruction per plane, which no

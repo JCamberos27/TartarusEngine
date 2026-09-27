@@ -78,6 +78,10 @@ private:
     glm::vec3 m_ShouldersSlow{0.0f};              // their midpoint in model space, a slow average (the standing height)
     glm::vec3 m_Shoulders{0.0f};                  // ... the part of the clips' motion the eye follows, smoothed
     bool m_HaveShoulders = false;
+    glm::vec3 m_ShoulderAnchor[2] = {glm::vec3(0.0f), glm::vec3(0.0f)}; // Arm Steadiness: each upper arm in m_ChestView's frame (slow)
+    bool m_HaveShoulderAnchor[2] = {false, false};
+    glm::mat4 m_ChestView{1.0f};     // LateUpdate's eye, facing the view's heading at the chest's pitch (columns: right, up, front, eye)
+    bool m_HaveChestView = false;
     glm::vec3 m_RigEyeToShoulders{0.0f};          // rig: camera bone to its shoulders, in the camera's frame (smoothed)
     bool m_HaveRigOffset = false;
     std::vector<entt::entity> m_ArmsTagged;       // pieces given the ViewModelTag
@@ -147,5 +151,8 @@ glm::vec2 FirstPersonBodyLocalMove(const glm::vec3& worldVelocity, float yaw);
 // from it, plus `offset` given in the body's frame (x right, y up, z forward).
 // How far the pelvis moves (metres, + up) to put the feet on ground `offL` / `offR` above the
 // capsule's: down to the lower foot (at most `maxDrop`), up a little (`maxRaise`) when both are higher.
+// How far into the look-down push the view is: 0 until it pitches `startDegrees` below level, 1 straight
+// down, rising as a sine between (fast at first, like a head pitching forward). `pitchRadians` is + up.
+float FirstPersonBodyLookDown(float pitchRadians, float startDegrees);
 float FirstPersonBodyFootPelvis(float offL, float offR, float maxDrop, float maxRaise);
 glm::vec3 FirstPersonBodyEye(const glm::vec3& restHead, const glm::vec3& head, float bob, const glm::vec3& offset);

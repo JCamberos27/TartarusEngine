@@ -348,6 +348,7 @@ void SceneRenderer::RenderScene(World& world, const RenderFrameContext& ctx,
         Model::MeshPass Pass; // #112 — which of the model's submeshes this item draws
         bool ReceiveShadows;  // #163
         int  LayerBit;        // #203 - 1 << Layer, tested against each light's excluded layers
+        float NearHide = 0.0f; // PlayerBodyTag: metres around the eye not drawn (the player's own body)
     };
     static std::vector<DrawItem> drawList;
     static std::vector<DrawItem> transparentList;
@@ -379,6 +380,9 @@ void SceneRenderer::RenderScene(World& world, const RenderFrameContext& ctx,
         // sub-pass this view draws it here like anything else. `isViewModel` is therefore just
         // "route to the other list", not "hide".
         const bool isViewModel = viewModelPass && world.Registry.all_of<ViewModelTag>(entity);
+        // The player's own body, around the camera: not in the view-model pass (its arms must be whole there).
+        const auto* bodyTag = world.Registry.try_get<PlayerBodyTag>(entity);
+        const float nearHide = bodyTag && !isViewModel && !ctx.EditorView ? bodyTag->NearHide : 0.0f;
         glm::mat4 model = world.GetCachedWorldTransform(entity);
 
         // Frustum culling: skip the draw call entirely for anything outside the camera's view.
@@ -443,14 +447,14 @@ void SceneRenderer::RenderScene(World& world, const RenderFrameContext& ctx,
             const DrawItem item{ model, m, &slots, matKey, prog,
                 m->MeshCount(), (int)m->TriangleCount(), (int)m->VertexCount(),
                 MaterialAsset::Queue::Transparent, qi, viewDepth, centre, Model::MeshPass::Transparent,
-                renderable.ReceiveShadows, layerBit };
+                renderable.ReceiveShadows, layerBit, nearHide };
             (isViewModel ? viewModelTransparentList : transparentList).push_back(item);
         }
         if (anyOpaque) {
             const DrawItem item{ model, m, &slots, matKey, prog,
                 m->MeshCount(), (int)m->TriangleCount(), (int)m->VertexCount(),
                 MaterialAsset::Queue::Opaque, 2000, viewDepth, centre, opaquePass,
-                renderable.ReceiveShadows, layerBit };
+                renderable.ReceiveShadows, layerBit, nearHide };
             (isViewModel ? viewModelList : drawList).push_back(item);
         }
     }
@@ -476,6 +480,7 @@ void SceneRenderer::RenderScene(World& world, const RenderFrameContext& ctx,
         if (anyProbes) in.probeArray->Bind(prog, probeItem->Centre);
         prog.SetInt("uNoReceiveShadows", probeItem->ReceiveShadows ? 0 : 1);
         prog.SetInt("uObjectLayerBit", probeItem->LayerBit); // #203
+        prog.SetFloat("uNearHide", probeItem->NearHide);
     };
 
     passAlphaBlend = 0;
@@ -567,6 +572,11 @@ void SceneRenderer::RenderScene(World& world, const RenderFrameContext& ctx,
         // sharing one depth range with the scene is exactly what would clip them into it.
         glDepthMask(GL_TRUE);
         glClear(GL_DEPTH_BUFFER_BIT);
+        // Nothing here is clipped at the near plane: a view model reaches back past it (the player
+        // body's arms piece has its shoulders at the eye), and clipped it showed as an open cut through
+        // the shoulder. Depth clamp pins those fragments to the near plane instead, keeping the
+        // projection - and so the depth that depth of field and motion blur read - unchanged.
+        glEnable(0x864F /*GL_DEPTH_CLAMP, core since 3.2; not in this loader*/);
 
         // Re-fit the froxel lists to this projection. They were culled for the world's FOV, so
         // reading them as-is would light the arms from slices built for a different one. Safe
@@ -647,6 +657,7 @@ void SceneRenderer::RenderScene(World& world, const RenderFrameContext& ctx,
             for (Shader* p : appliedPrograms) { p->Bind(); p->SetInt("uAlphaBlend", 0); }
         }
 
+        glDisable(0x864F /*GL_DEPTH_CLAMP*/);
         activeFs = &fs; // nothing below reads it; leave the selector on the caller's state
     }
     } // end "Scene Draw" profile scope
