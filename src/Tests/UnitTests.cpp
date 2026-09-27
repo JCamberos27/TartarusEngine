@@ -2059,18 +2059,23 @@ void TestAsyncImportCpu() {
     auto deferred = [](const std::string& rel) {
         return Model::ImportDeferred(ProjectPaths::Resolve(rel), ModelImportSettings{});
     };
-    const auto head = deferred("assets/Characters/Quantum/Models/Female/Body/Heads/SKM_F_Vivian_Head.fbx");
-    CHECK(head && head->NeedsGpuUpload());
-    CHECK(head && head->MeshCount() > 1);
-    CHECK(head && head->BoundsMax().y > 1.6f && head->BoundsMin().y > 1.3f); // on the neck, not lying at the feet
-    const auto body = deferred("assets/Characters/Quantum/Models/Female/Body/Parts/SKM_F_Vivian_Body.fbx");
-    CHECK(body && body->BoundsMax().y > 1.4f && body->BoundsMax().z < 0.5f); // upright, not stretched along Z
-    // Offsets carrying a group node's frame, not the mesh node's (the jackets' "Cloth" group): chest height.
-    const auto m65 = deferred("assets/Characters/Quantum/Models/Clothing/Male/Outerwear/SKM_Jacket_M65.fbx");
-    CHECK(m65 && m65->BoundsMax().y > 1.3f && m65->BoundsMax().z < 0.6f);
-    const auto oldHead = deferred("assets/Characters/Quantum/Models/Female/Body/Heads/SKM_F_Vivian_Head_Old.fbx");
-    CHECK(oldHead && oldHead->BoundsMax().y > 1.6f && oldHead->BoundsMin().y > 1.3f);
-    // Both are destroyed here with nothing uploaded, which must not touch GL.
+    // The model half needs the Quantum pack (project content, absent from a packaged engine).
+    const bool quantum = std::filesystem::exists(ProjectPaths::Resolve("assets/Characters/Quantum"));
+    if (quantum) {
+        const auto head = deferred("assets/Characters/Quantum/Models/Female/Body/Heads/SKM_F_Vivian_Head.fbx");
+        CHECK(head && head->NeedsGpuUpload());
+        CHECK(head && head->MeshCount() > 1);
+        CHECK(head && head->BoundsMax().y > 1.6f && head->BoundsMin().y > 1.3f); // on the neck, not lying at the feet
+        const auto body = deferred("assets/Characters/Quantum/Models/Female/Body/Parts/SKM_F_Vivian_Body.fbx");
+        CHECK(body && body->BoundsMax().y > 1.4f && body->BoundsMax().z < 0.5f); // upright, not stretched along Z
+        // Offsets carrying a group node's frame, not the mesh node's (the jackets' "Cloth" group): chest height.
+        const auto m65 = deferred("assets/Characters/Quantum/Models/Clothing/Male/Outerwear/SKM_Jacket_M65.fbx");
+        CHECK(m65 && m65->BoundsMax().y > 1.3f && m65->BoundsMax().z < 0.6f);
+        const auto oldHead = deferred("assets/Characters/Quantum/Models/Female/Body/Heads/SKM_F_Vivian_Head_Old.fbx");
+        CHECK(oldHead && oldHead->BoundsMax().y > 1.6f && oldHead->BoundsMin().y > 1.3f);
+    } else {
+        Log::Info("AsyncImportCpu: no Quantum pack - model checks skipped.");
+    } // the models are destroyed here with nothing uploaded, which must not touch GL
 
     std::error_code ec;
     const auto dir = std::filesystem::temp_directory_path(ec) / "TartarusUnitTests";
