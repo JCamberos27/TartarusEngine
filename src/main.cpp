@@ -3000,6 +3000,10 @@ int main(int argc, char** argv) {
                 for (auto entity : world.Registry.view<TransformComponent, RenderableComponent>()) {
                     if (world.Registry.any_of<InactiveTag, LodCulledTag>(entity)) continue;
                     if (world.Registry.any_of<ViewModelTag, PoseSourceTag>(entity)) continue; // see note above
+                    // The player's own body in the camera's view: its shoulders and whatever is within Near
+                    // Hide are discarded in the main pass, so here they would occlude from nowhere. The main
+                    // pass gives these pieces no SSAO to match (SceneRenderer, DrawItem::NoSsao).
+                    if (!editorView && world.Registry.all_of<PlayerBodyTag>(entity)) continue;
                     if (editorView) {
                         if (world.Registry.all_of<HiddenInSceneTag>(entity)) continue;
                         const auto* lc = world.Registry.try_get<LayerComponent>(entity);
