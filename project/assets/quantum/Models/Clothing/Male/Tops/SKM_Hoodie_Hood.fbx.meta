@@ -1,0 +1,9 @@
+{
+  "folder": "assets/quantum/Models/Clothing/Male/Tops",
+  "guid": "aa2df8a7b73456bd",
+  "materialRemap": {
+    "M_Hoodie_Hood": "assets/quantum/Materials/Clothing/Tops/Hoodie_Hood/M_Hoodie_Hood_Black.mat"
+  },
+  "metaVersion": 1,
+  "type": "model"
+}

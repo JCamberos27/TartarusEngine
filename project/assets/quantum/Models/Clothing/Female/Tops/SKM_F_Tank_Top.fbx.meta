@@ -1,0 +1,11 @@
+{
+  "folder": "assets/quantum/Models/Clothing/Female/Tops",
+  "guid": "b973960874c7f2c4",
+  "materialRemap": {
+    "MI_F_Vivian_Basemesh_Arms40": "assets/quantum/Materials/M_F_Vivian_Arms.mat",
+    "MI_F_Vivian_Basemesh_Body12": "assets/quantum/Materials/M_F_Vivian_Body.mat",
+    "MI_F_Vivian_Basemesh_Head41": "assets/quantum/Materials/M_F_Vivian_Head.mat"
+  },
+  "metaVersion": 1,
+  "type": "model"
+}

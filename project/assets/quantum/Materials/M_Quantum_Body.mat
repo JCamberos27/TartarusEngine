@@ -3,8 +3,8 @@
   "matVersion": 2,
   "name": "M_Quantum_Body",
   "properties": {
-    "_AOMap": "assets/quantum/Textures/Body/T_Quantum_Basemesh_Body_OcclusionRoughnessMetallic.1002_Occlusion.png",
-    "_AlbedoMap": "assets/quantum/Textures/Body/T_Quantum_Basemesh_Body_BaseColor.1002.png",
+    "_AOMap": "assets/quantum/Textures/European/Body/T_Quantum_Basemesh_Body_Occlusion.1002.png",
+    "_AlbedoMap": "assets/quantum/Textures/European/Body/T_Quantum_Basemesh_Body_BaseColor.1002.png",
     "_BaseColor": [
       1.0,
       1.0,
@@ -21,9 +21,9 @@
     "_Metallic": 0.0,
     "_MetallicMap": "",
     "_MetallicRoughnessMap": "",
-    "_NormalMap": "assets/quantum/Textures/Body/T_Quantum_Basemesh_Body_Unity_Normal.1002.png",
+    "_NormalMap": "assets/quantum/Textures/European/Body/T_Quantum_Basemesh_Body_Unity_Normal.1002.png",
     "_Roughness": 1.0,
-    "_RoughnessMap": "assets/quantum/Textures/Body/T_Quantum_Basemesh_Body_Roughness.1002.png",
+    "_RoughnessMap": "assets/quantum/Textures/European/Body/T_Quantum_Basemesh_Body_Roughness.1002.png",
     "_Triplanar": false,
     "_TriplanarScale": 1.0
   },

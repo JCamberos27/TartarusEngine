@@ -1,0 +1,9 @@
+{
+  "folder": "assets/quantum/Models/Clothing/Female/Pants",
+  "guid": "631d5ac005439759",
+  "materialRemap": {
+    "M_Pants_Cargo_Straight": "assets/quantum/Materials/Clothing/Pants/Pants_Cargo/M_Pants_Cargo_Black.mat"
+  },
+  "metaVersion": 1,
+  "type": "model"
+}

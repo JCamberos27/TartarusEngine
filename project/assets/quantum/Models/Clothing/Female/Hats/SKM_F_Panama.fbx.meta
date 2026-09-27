@@ -1,0 +1,9 @@
+{
+  "folder": "assets/quantum/Models/Clothing/Female/Hats",
+  "guid": "76060a95d96fd4a7",
+  "materialRemap": {
+    "M_Panama": "assets/quantum/Materials/Clothing/Hats/Panama/M_Panama_Gray.mat"
+  },
+  "metaVersion": 1,
+  "type": "model"
+}

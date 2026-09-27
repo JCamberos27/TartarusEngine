@@ -1,0 +1,37 @@
+{
+  "factorsScaleMaps": true,
+  "matVersion": 2,
+  "name": "M_Jersey_Burgundy",
+  "properties": {
+    "_AOMap": "assets/quantum/Textures/Clothing/Tops/M_Jersey/T_Jersey_Occlusion.png",
+    "_AlbedoMap": "assets/quantum/Textures/Clothing/Tops/M_Jersey/T_Jersey_Burgundy_BaseColor.png",
+    "_BaseColor": [
+      1.0,
+      1.0,
+      1.0
+    ],
+    "_DoubleSided": false,
+    "_EmissiveColor": [
+      0.0,
+      0.0,
+      0.0
+    ],
+    "_EmissiveMap": "",
+    "_EmissiveStrength": 1.0,
+    "_Metallic": 0.0,
+    "_MetallicMap": "",
+    "_MetallicRoughnessMap": "",
+    "_NormalMap": "assets/quantum/Textures/Clothing/Tops/M_Jersey/T_Jersey_Unity_Normal.png",
+    "_Roughness": 1.0,
+    "_RoughnessMap": "assets/quantum/Textures/Clothing/Tops/M_Jersey/T_Jersey_Roughness.png",
+    "_Triplanar": false,
+    "_TriplanarScale": 1.0
+  },
+  "shader": "engine://Standard.shader",
+  "textureGuids": {
+    "_AOMap": "35d6e57ebece7ae3",
+    "_AlbedoMap": "a1bc396c5cb21136",
+    "_NormalMap": "f92502287b30de63",
+    "_RoughnessMap": "884d81bc53d7e237"
+  }
+}

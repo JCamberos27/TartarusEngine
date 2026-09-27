@@ -1,0 +1,37 @@
+{
+  "factorsScaleMaps": true,
+  "matVersion": 2,
+  "name": "M_Headphones_Blue",
+  "properties": {
+    "_AOMap": "assets/quantum/Textures/Clothing/Hats/Headphones/T_Headphones_Occlusion.png",
+    "_AlbedoMap": "assets/quantum/Textures/Clothing/Hats/Headphones/T_Headphones_Blue_BaseColor.png",
+    "_BaseColor": [
+      1.0,
+      1.0,
+      1.0
+    ],
+    "_DoubleSided": false,
+    "_EmissiveColor": [
+      0.0,
+      0.0,
+      0.0
+    ],
+    "_EmissiveMap": "",
+    "_EmissiveStrength": 1.0,
+    "_Metallic": 0.0,
+    "_MetallicMap": "",
+    "_MetallicRoughnessMap": "",
+    "_NormalMap": "assets/quantum/Textures/Clothing/Hats/Headphones/T_Headphones_Unity_Normal.png",
+    "_Roughness": 1.0,
+    "_RoughnessMap": "assets/quantum/Textures/Clothing/Hats/Headphones/T_Headphones_Roughness.png",
+    "_Triplanar": false,
+    "_TriplanarScale": 1.0
+  },
+  "shader": "engine://Standard.shader",
+  "textureGuids": {
+    "_AOMap": "8856863a69dbabd1",
+    "_AlbedoMap": "b5876a04d4a8d874",
+    "_NormalMap": "025ff0703a9fa9ae",
+    "_RoughnessMap": "b8f031b65741f80a"
+  }
+}

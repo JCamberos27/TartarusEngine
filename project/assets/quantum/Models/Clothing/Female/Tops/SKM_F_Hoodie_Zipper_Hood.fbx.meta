@@ -1,0 +1,9 @@
+{
+  "folder": "assets/quantum/Models/Clothing/Female/Tops",
+  "guid": "2e00c4808d2ca8ee",
+  "materialRemap": {
+    "M_Hoodie_Zipper_HoodUp": "assets/quantum/Materials/Clothing/Tops/Hoodie_Zipper_Hood/M_Hoodie_Zipper_Hood_Black.mat"
+  },
+  "metaVersion": 1,
+  "type": "model"
+}

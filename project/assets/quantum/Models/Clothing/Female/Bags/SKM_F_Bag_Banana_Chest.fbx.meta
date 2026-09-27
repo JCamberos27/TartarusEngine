@@ -1,0 +1,9 @@
+{
+  "folder": "assets/quantum/Models/Clothing/Female/Bags",
+  "guid": "f1c2bf8f8a54810d",
+  "materialRemap": {
+    "M_Bag_Banana": "assets/quantum/Materials/Clothing/Bags/Bag_Banana/M_Bag_Banana_Black.mat"
+  },
+  "metaVersion": 1,
+  "type": "model"
+}
