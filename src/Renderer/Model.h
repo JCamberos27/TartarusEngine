@@ -195,6 +195,11 @@ public:
     // LocalTRS per node, in the flattened parents-first order of NodeName()/NodeParent().
     int NodeCount() const { return (int)m_D->Nodes.size(); }
     int NodeIndex(const std::string& name) const; // -1 when absent
+    // The skinning palette index of a bone (what a vertex's bone IDs refer to), -1 when absent.
+    int BoneId(const std::string& name) const {
+        const auto it = m_D->BoneInfoMap.find(name);
+        return it != m_D->BoneInfoMap.end() ? it->second.ID : -1;
+    }
     const std::string& NodeName(int i) const { return m_D->Nodes[i].Name; }
     int NodeParent(int i) const { return m_D->Nodes[i].Parent; }
     // Every node at its authored bind-local transform.

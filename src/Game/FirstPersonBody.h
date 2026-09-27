@@ -2,9 +2,11 @@
 
 #include <entt/entt.hpp>
 #include <glm/glm.hpp>
+#include <glm/gtc/quaternion.hpp>
 
 #include "FirstPersonBodyContract.h"
 
+#include <functional>
 #include <map>
 #include <memory>
 #include <string>
@@ -66,6 +68,10 @@ public:
 private:
     void Fail(const std::string& message);
     void ApplySpineAim(const Camera& camera, float amount, float twist);
+    // Turns the chest by `modelDelta` (model space), spread evenly down the spine bones, on every piece.
+    void ApplySpineRotation(const glm::quat& modelDelta);
+    // The spine's per-bone turn for a spine of `n` bones, applied bone by bone on every piece.
+    void RotateSpine(const std::function<glm::quat(int)>& stepFor);
     void ApplyFootIK(World& world, const FirstPersonBodyComponent& cfg, float dt);
 
     entt::entity m_Body = entt::null;   // the root: placed at the feet, its pieces ride along
@@ -84,6 +90,8 @@ private:
     bool m_HaveChestView = false;
     glm::vec3 m_RigEyeToShoulders{0.0f};          // rig: camera bone to its shoulders, in the camera's frame (smoothed)
     bool m_HaveRigOffset = false;
+    glm::vec3 m_RigShoulderLine{1.0f, 0.0f, 0.0f}; // rig: right to left upper arm, in the camera's frame (smoothed) - its stance
+    bool m_HaveRigShoulderLine = false;
     std::vector<entt::entity> m_ArmsTagged;       // pieces given the ViewModelTag
     std::string m_LastError;
     float m_ViewYaw = 0.0f;        // the view's heading, radians (the body's turns aim at it)
@@ -154,5 +162,10 @@ glm::vec2 FirstPersonBodyLocalMove(const glm::vec3& worldVelocity, float yaw);
 // How far into the look-down push the view is: 0 until it pitches `startDegrees` below level, 1 straight
 // down, rising as a sine between (fast at first, like a head pitching forward). `pitchRadians` is + up.
 float FirstPersonBodyLookDown(float pitchRadians, float startDegrees);
+// The turn (model space) that brings the body's shoulder line `bodyAcross` (right to left upper arm) onto
+// the arms rig's `rigAcross`, `weight` of the way (0..1). Identity when either is degenerate.
+glm::quat FirstPersonBodyShoulderLineTurn(const glm::vec3& bodyAcross, const glm::vec3& rigAcross, float weight);
+// The share of the view's pitch the spine takes: Spine Aim looking up, Spine Aim Down looking down.
+float FirstPersonBodySpineAim(float pitchRadians, float spineAim, float spineAimDown);
 float FirstPersonBodyFootPelvis(float offL, float offR, float maxDrop, float maxRaise);
 glm::vec3 FirstPersonBodyEye(const glm::vec3& restHead, const glm::vec3& head, float bob, const glm::vec3& offset);
