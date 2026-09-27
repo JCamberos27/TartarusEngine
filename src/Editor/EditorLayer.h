@@ -1,4 +1,5 @@
 #pragma once
+#include "UndoDeltaChain.h" // UndoEntry::Delta
 #include "AnimatorController.h" // #175 Part B - m_CtrlEdit
 #include <filesystem>
 #include <imgui.h> // ImGuiID (GetSceneGameDockNodeId)
@@ -1193,8 +1194,8 @@ private:
     struct UndoEntry {
         // JSON Patch from the entry above this one to this one. Empty on the top entry (its
         // full state is the base string) and, as a failure sentinel, on an entry whose patch
-        // could not be produced - see ApplyScenePatch.
-        std::string Delta;
+        // could not be produced - see ApplyScenePatch. Worked out on a background thread.
+        UndoDelta::Patch Delta;
         std::vector<int> SelectedOrders;
         std::string Label;
         // Cheap FNV-1a hash of this entry's full scene JSON (#174 stage 1), used instead of a
