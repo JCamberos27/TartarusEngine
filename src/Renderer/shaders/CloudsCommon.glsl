@@ -45,9 +45,13 @@ float HeightProfile(float h, float type, out float top) {
     return smoothstep(g.x, g.y, h) * (1.0 - smoothstep(g.z, g.w, h));
 }
 
-vec4 SampleWeather(vec3 p) {
+const float kWeatherTexels = 2048.0; // the weather map's size (VolumetricClouds.cpp)
+
+// The weather map at p, from the mip matching a footprint of `footprintKm`.
+vec4 SampleWeather(vec3 p, float footprintKm) {
     vec2 uv = (p.xz + uCloudWind.xy) * uCloudAmbient.z + uCloudMisc2.w;
-    return textureLod(uCloudWeather, uv, 0.0);
+    float texelKm = 1.0 / (uCloudAmbient.z * kWeatherTexels);
+    return textureLod(uCloudWeather, uv, max(log2(footprintKm / texelKm), 0.0));
 }
 
 // Local coverage: the global Coverage slider moves the threshold on the weather map's field.
@@ -83,7 +87,7 @@ float CloudDensity(vec3 p, bool detail, float footprintKm) {
     float h = (r - uCloudLayer.x) / uCloudLayer.z;
     if (h <= 0.0 || h >= 1.0) return 0.0;
 
-    vec4 weather = SampleWeather(p);
+    vec4 weather = SampleWeather(p, footprintKm);
     // A ragged base: the fine weather channel lifts it by up to a few percent of the layer.
     h -= (weather.a - 0.5) * 0.06;
     if (h <= 0.0) return 0.0;
@@ -214,7 +218,8 @@ void CloudAmbientColors(out vec3 top, out vec3 bottom) {
 }
 
 // High-altitude cirrus: a thin 2D sheet at its own altitude, streaked along the wind.
-vec4 CirrusLayer(vec3 ro, vec3 rd, vec3 lightRadianceTop, vec3 ambientTop) {
+// `pixelAngle` (radians) picks the weather map's mip at the sheet's distance.
+vec4 CirrusLayer(vec3 ro, vec3 rd, vec3 lightRadianceTop, vec3 ambientTop, float pixelAngle) {
     if (uCloudMisc.y <= 0.001) return vec4(0.0, 0.0, 0.0, 1.0);
     float radius = uAtmRadii.x + uCloudMisc.z;
     float t0, t1;
@@ -225,8 +230,11 @@ vec4 CirrusLayer(vec3 ro, vec3 rd, vec3 lightRadianceTop, vec3 ambientTop) {
     // Rotate into the wind frame so the streaks run along it.
     vec2 w = uCloudWindDir.xy;
     vec2 q = vec2(dot(p.xz, w), dot(p.xz, vec2(-w.y, w.x))) + uCloudMisc2.xy;
-    vec4 wm = textureLod(uCloudWeather, q * uCloudMisc.w, 0.0);
-    vec4 wm2 = textureLod(uCloudWeather, q * uCloudMisc.w * 3.1 + 0.37, 0.0);
+    // The sheet is seen at a grazing angle toward the horizon, which stretches a pixel's footprint.
+    float footprint = t * pixelAngle / max(abs(dot(rd, normalize(p))), 0.05);
+    float lod = log2(max(footprint * uCloudMisc.w * kWeatherTexels, 1.0));
+    vec4 wm = textureLod(uCloudWeather, q * uCloudMisc.w, lod);
+    vec4 wm2 = textureLod(uCloudWeather, q * uCloudMisc.w * 3.1 + 0.37, lod + log2(3.1));
     float field = wm.b * 0.7 + wm2.a * 0.3;
     float cov = uCloudMisc.y;
     float density = Saturate(Remap(field, 1.0 - cov, 1.0, 0.0, 1.0));
