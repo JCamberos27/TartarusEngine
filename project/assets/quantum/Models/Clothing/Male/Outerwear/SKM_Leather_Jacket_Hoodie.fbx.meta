@@ -1,0 +1,10 @@
+{
+  "folder": "assets/quantum/Models/Clothing/Male/Outerwear",
+  "guid": "14626e7a8c8b4ff7",
+  "materialRemap": {
+    "M_Hoodie_Hood1": "assets/quantum/Materials/Clothing/Tops/Hoodie_Hood/M_Hoodie_Hood_Black.mat",
+    "M_M_Leather_Jacket1": "assets/quantum/Materials/Clothing/Outerwear/Jacket_Leather/M_Leather_Jacket_Black.mat"
+  },
+  "metaVersion": 1,
+  "type": "model"
+}

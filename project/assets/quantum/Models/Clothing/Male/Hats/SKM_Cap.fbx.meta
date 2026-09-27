@@ -1,0 +1,9 @@
+{
+  "folder": "assets/quantum/Models/Clothing/Male/Hats",
+  "guid": "27e02de81ac399c6",
+  "materialRemap": {
+    "M_Cap": "assets/quantum/Materials/Clothing/Hats/Cap/M_Cap_Black.mat"
+  },
+  "metaVersion": 1,
+  "type": "model"
+}

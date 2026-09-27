@@ -1,0 +1,10 @@
+{
+  "folder": "assets/quantum/Models/Clothing/Male/Outerwear",
+  "guid": "355097640abd81a0",
+  "materialRemap": {
+    "M_Bomber": "assets/quantum/Materials/Clothing/Outerwear/Bomber/M_Bomber_Black.mat",
+    "M_Shirt_RolledUp": "assets/quantum/Materials/Clothing/Tops/Shirt_RolledUp/M_Shirt_RolledUp_Gray.mat"
+  },
+  "metaVersion": 1,
+  "type": "model"
+}

@@ -1,0 +1,9 @@
+{
+  "folder": "assets/quantum/Models/Clothing/Male/Hats",
+  "guid": "2559fc642cfd5de1",
+  "materialRemap": {
+    "M_Flat_Hat": "assets/quantum/Materials/Clothing/Hats/Flat_Hat/M_Flat_Hat_Gray.mat"
+  },
+  "metaVersion": 1,
+  "type": "model"
+}

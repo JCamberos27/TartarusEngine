@@ -1,0 +1,37 @@
+{
+  "factorsScaleMaps": true,
+  "matVersion": 2,
+  "name": "M_TShirt_Burgundy_Print",
+  "properties": {
+    "_AOMap": "assets/quantum/Textures/Clothing/Tops/TShirt/T_TShirt_Burgundy_Print_Occlusion.png",
+    "_AlbedoMap": "assets/quantum/Textures/Clothing/Tops/TShirt/T_TShirt_Burgundy_Print_BaseColor.png",
+    "_BaseColor": [
+      1.0,
+      1.0,
+      1.0
+    ],
+    "_DoubleSided": false,
+    "_EmissiveColor": [
+      0.0,
+      0.0,
+      0.0
+    ],
+    "_EmissiveMap": "",
+    "_EmissiveStrength": 1.0,
+    "_Metallic": 0.0,
+    "_MetallicMap": "",
+    "_MetallicRoughnessMap": "",
+    "_NormalMap": "assets/quantum/Textures/Clothing/Tops/TShirt/T_TShirt_Burgundy_Print_Unity_Normal.png",
+    "_Roughness": 1.0,
+    "_RoughnessMap": "assets/quantum/Textures/Clothing/Tops/TShirt/T_TShirt_Burgundy_Print_Roughness.png",
+    "_Triplanar": false,
+    "_TriplanarScale": 1.0
+  },
+  "shader": "engine://Standard.shader",
+  "textureGuids": {
+    "_AOMap": "d701d811c8d401d6",
+    "_AlbedoMap": "7f1ec7fe8e4f44a1",
+    "_NormalMap": "79f5d669f590440c",
+    "_RoughnessMap": "600adb40ca455053"
+  }
+}
