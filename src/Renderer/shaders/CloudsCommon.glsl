@@ -115,6 +115,9 @@ float CloudDensity(vec3 p, bool detail, float footprintKm) {
         float erode = mix(dfbm, 1.0 - dfbm, Saturate(h * 5.0)) * uCloudShape.z;
         cloud = Saturate(Remap(cloud, erode, 1.0, 0.0, 1.0));
     }
+    // Real cloud boundaries are sharp: the water content climbs quickly past the edge. Lifting
+    // the thin outer values firms the silhouette into billows instead of a wide soft falloff.
+    cloud = sqrt(cloud);
     // Soft bottom so the base isn't a hard slice.
     cloud *= Saturate(h * 12.0);
     return cloud * uCloudShape.w;
@@ -168,8 +171,12 @@ vec3 CloudLighting(float lightOD, float cosTheta, float density, vec3 lightRadia
     // through: two-stream theory gives a diffuse transmittance of ~1 / (1 + 0.75 tau (1 - g)).
     // It's what makes the underside of a storm dark grey rather than black, and brighter where
     // the cloud above is thinner - the structure you see from below a deck.
+    // That diffuse light leaves isotropically (~1/4pi). A separate cumulus loses much of it out
+    // of its sides, so its base is distinctly grey; in a closed deck the neighbouring cloud
+    // sends it back, so decks keep more (up to twice as much, at full coverage).
     float diffuse = 1.0 / (1.0 + 0.75 * lightOD * (1.0 - 0.85));
-    scatter += 0.25 * msStrength * diffuse * smoothstep(2.0, 25.0, lightOD);
+    float diffuseK = mix(0.12, 0.25, smoothstep(0.7, 1.0, uCloudLayer.w));
+    scatter += diffuseK * msStrength * diffuse * smoothstep(2.0, 25.0, lightOD);
     // Cloud droplets barely absorb (albedo ~0.99): light scattered many times inside still comes
     // back out, which is what makes a cloud facing away from the sun read white rather than
     // grey. The octaves above undercount that for thick cloud; this restores it.
@@ -203,7 +210,7 @@ void CloudAmbientColors(out vec3 top, out vec3 bottom) {
     // mostly scattered sunlight, greyer, and the base of it is dim.
     float c = uCloudLayer.w;
     top = mix(top, vec3(dot(top, vec3(0.2126, 0.7152, 0.0722))), c * 0.6);
-    bottom = mix(bottom, vec3(dot(bottom, vec3(0.2126, 0.7152, 0.0722))), c * 0.6) * mix(1.0, 0.3, c * c);
+    bottom = mix(bottom, vec3(dot(bottom, vec3(0.2126, 0.7152, 0.0722))), c * 0.6) * mix(1.0, 0.55, c * c);
 }
 
 // High-altitude cirrus: a thin 2D sheet at its own altitude, streaked along the wind.
@@ -303,8 +310,15 @@ CloudResult MarchClouds(vec3 ro, vec3 rd, int baseSteps, int lightSteps, float j
         if (density > 0.0) {
             float h = Saturate((length(p) - rIn) / uCloudLayer.z);
             float od = LightOpticalDepth(p, lightSteps, footprint);
+            // Sky-light occlusion: cloud above a point hides the sky from it, so interiors and
+            // bases are darker than the tops - the shading that gives a cloud its volume. Two
+            // cheap samples straight up.
+            vec3 upDir = p / length(p);
+            float upStep = uCloudLayer.z * 0.12;
+            float odUp = (CloudDensity(p + upDir * upStep, false, max(footprint, ShapeTexelKm() * 2.0))
+                        + CloudDensity(p + upDir * upStep * 3.0, false, max(footprint, ShapeTexelKm() * 4.0)) * 2.0) * upStep;
             vec3 lightRad = uCloudLightIllum.rgb * TransmittanceToSpace(ClampToAtmosphere(p), lightDir);
-            vec3 amb = mix(ambBottom, ambTop, h);
+            vec3 amb = mix(ambBottom, ambTop, h) * mix(0.3, 1.0, exp(-odUp * 0.5));
             vec3 S = CloudLighting(od, cosTheta, density, lightRad, amb, h) * density;
             float sampleT = exp(-density * dt);
             vec3 Sint = (S - S * sampleT) / max(density, 1e-6);
