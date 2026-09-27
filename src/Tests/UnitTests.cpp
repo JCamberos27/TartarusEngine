@@ -1140,6 +1140,29 @@ void TestPhysicalSky() {
     const SkyLighting fixed = sky.ResolveLighting(authored, aim, glm::vec3(5.0f), 0.53f, glm::vec3(0.0f));
     CHECK(glm::dot(fixed.SunDir, -aim) > 0.9999f && glm::dot(fixed.LightDir, -aim) > 0.9999f);
 
+    // Cloud wind at a high frame rate: each frame's step is tiny, and the texture offsets must
+    // still advance steadily. (They once wrapped at a period that wasn't a whole number of tiles
+    // and, with the step lost to rounding, flipped between two layouts every frame.)
+    {
+        SkyAtmosphere windSky; // Tick touches no GL
+        SkySettings w;
+        w.CloudWindSpeed = 8.0f;
+        const float tile = 45.0f; // the weather map's period at CloudScale 1
+        glm::vec2 prev = windSky.Clouds().WeatherOffset();
+        float travelled = 0.0f, worstStep = 0.0f;
+        for (int i = 0; i < 2400; ++i) { // 10 s at 240 fps
+            windSky.Tick(w, 1.0f / 240.0f, false);
+            const glm::vec2 cur = windSky.Clouds().WeatherOffset();
+            glm::vec2 step = cur - prev;
+            step -= glm::round(step / tile) * tile; // wrapping by a whole tile is invisible
+            travelled += glm::length(step);
+            worstStep = std::max(worstStep, glm::length(step));
+            prev = cur;
+        }
+        CHECK(worstStep < 1e-3f);                  // no jumps
+        CHECK(near(travelled, 0.08f, 0.004f));     // 8 m/s for 10 s
+    }
+
     // Presets change the look but keep the location and quality; the timed ones land where named.
     SkySettings p;
     p.LatitudeDegrees = -33.0f;

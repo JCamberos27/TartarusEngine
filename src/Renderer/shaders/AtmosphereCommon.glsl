@@ -320,6 +320,43 @@ vec2 SkyViewUv(vec3 camPos, vec3 dir, vec3 lightDir) {
     return SkyViewParamsToUv(intersectGround, viewZenithCos, lightViewCos, viewHeight);
 }
 
+#if defined(ATMOSPHERE_LUTS) && defined(SKY_VIEW_LUTS)
+// This view's sky-view LUTs (the moon's is always written, black when the moon is off).
+layout(binding = 2) uniform sampler2D uSkyViewSunLut;
+layout(binding = 3) uniform sampler2D uSkyViewMoonLut;
+// SkyAmbient.comp's per-view terms (3 x 1): 0 = SkyIrradianceUp, 1 = zenith radiance,
+// 2 = SkyRing at the horizon.
+layout(binding = 10) uniform sampler2D uSkyAmbientLut;
+
+vec3 SkyAmbientTerm(int i) { return texelFetch(uSkyAmbientLut, ivec2(i, 0), 0).rgb; }
+
+// The sky's radiance along `dir`, lit by the sun and the moon.
+vec3 SkyRadiance(vec3 cam, vec3 dir) {
+    return texture(uSkyViewSunLut, SkyViewUv(cam, dir, uAtmSunDir.xyz)).rgb
+         + texture(uSkyViewMoonLut, SkyViewUv(cam, dir, uAtmMoonDir.xyz)).rgb;
+}
+
+// Mean sky radiance over a ring of four azimuths at elevation asin(sinElev). Averaging over
+// azimuth matters at sunrise and sunset, when one side of the sky is far brighter than the other.
+vec3 SkyRing(vec3 cam, float sinElev) {
+    vec3 up = normalize(cam);
+    vec3 t1 = normalize(cross(up, abs(up.z) < 0.9 ? vec3(0.0, 0.0, 1.0) : vec3(1.0, 0.0, 0.0)));
+    vec3 t2 = cross(up, t1);
+    float cosElev = sqrt(max(1.0 - sinElev * sinElev, 0.0));
+    return 0.25 * (SkyRadiance(cam, up * sinElev + t1 * cosElev) + SkyRadiance(cam, up * sinElev - t1 * cosElev)
+                 + SkyRadiance(cam, up * sinElev + t2 * cosElev) + SkyRadiance(cam, up * sinElev - t2 * cosElev));
+}
+
+// Irradiance the sky delivers to an upward-facing surface: the cosine-weighted hemisphere
+// split into three bands (0-30, 30-60 and 60-90 degrees of elevation carry 1/4, 1/2 and 1/4 of
+// it), each sampled near its middle. The zenith alone badly underestimates it at dusk, when the
+// light is all low in the sky.
+vec3 SkyIrradianceUp(vec3 cam) {
+    vec3 up = normalize(cam);
+    return PI * (0.25 * SkyRing(cam, 0.2588) + 0.5 * SkyRing(cam, 0.7071) + 0.25 * SkyRadiance(cam, up));
+}
+#endif
+
 // ------------------------------------------------------------------------------------------
 // Hashing / noise shared by the sky, stars and clouds.
 
