@@ -13,6 +13,26 @@ out vec4 FragColor;
 layout(binding = 4) uniform sampler2D uClouds; // this view's resolved clouds: rgb radiance, a transmittance
 
 uniform int uCloudsOn;
+
+// Cubic B-spline upsampling of the reduced-resolution clouds in four bilinear taps (Sigg &
+// Hadwiger, GPU Gems 2 ch. 20). Plain bilinear left the crisp cloud edges stair-stepped at the
+// target's pixel size; the B-spline rounds them off smoothly, and unlike sub-pixel jitter it
+// depends on nothing but this frame, so edges hold still while the camera moves.
+vec4 SampleCloudsCubic(sampler2D tex, vec2 uv) {
+    vec2 size = vec2(textureSize(tex, 0));
+    vec2 st = uv * size - 0.5;
+    vec2 i = floor(st), f = st - i;
+    vec2 f2 = f * f, f3 = f2 * f;
+    vec2 w0 = (1.0 - 3.0 * f + 3.0 * f2 - f3) / 6.0;
+    vec2 w1 = (4.0 - 6.0 * f2 + 3.0 * f3) / 6.0;
+    vec2 w2 = (1.0 + 3.0 * f + 3.0 * f2 - 3.0 * f3) / 6.0;
+    vec2 w3 = f3 / 6.0;
+    vec2 g0 = w0 + w1, g1 = w2 + w3;
+    vec2 h0 = (i - 0.5 + w1 / g0) / size; // texel centres + the bilinear offsets
+    vec2 h1 = (i + 1.5 + w3 / g1) / size;
+    return g0.y * (g0.x * texture(tex, vec2(h0.x, h0.y)) + g1.x * texture(tex, vec2(h1.x, h0.y)))
+         + g1.y * (g0.x * texture(tex, vec2(h0.x, h1.y)) + g1.x * texture(tex, vec2(h1.x, h1.y)));
+}
 uniform vec4 uViewportRect; // x, y, width, height of the view in the framebuffer
 uniform float uFrame;
 
@@ -237,7 +257,7 @@ void main() {
 
     if (uCloudsOn == 1) {
         vec2 uv = (gl_FragCoord.xy - uViewportRect.xy) / uViewportRect.zw;
-        vec4 c = texture(uClouds, uv);
+        vec4 c = SampleCloudsCubic(uClouds, uv);
         L = L * c.a + c.rgb;
     }
 
