@@ -31,11 +31,21 @@ struct Snapshot {
     float ArmsWeight = 0.0f;      // 0..1: how much the body's arms follow the weapon rig
     float EyeSlack = 0.0f;        // m the eye is off the shoulders' motion (bounded by Eye Slack)
     float Reach[2] = {0, 0};          // each hand's distance from its shoulder, of the arm's length (before any shoulder move)
+    float HandGap[2] = {0, 0};        // m each of the body's hands ends up from the rig's (off the gun when > ~1 cm)
     float ShoulderGap[2] = {0, 0};    // m between each body shoulder and the arms rig's
     float RigBlade = 0.0f, ChestBlade = 0.0f; // degrees the rig's / the chest's shoulder line is turned off the view (+ = left forward)
     float ReachLean = 0.0f;           // degrees the chest leans toward an out-of-reach hand (Reach Lean Max)
     float ShrugShift[2] = {0, 0};     // m each shoulder shrugs toward an out-of-reach hand (Shrug Start / Max)
     float ArmSteadyShift[2] = {0, 0}; // m each shoulder is held off the gait's sway (Arm Steadiness, bounded by Arm Steady Max)
+    // How close each upper arm (shoulder to elbow bone line) comes to the eye - the arms rig's and the body's.
+    // The mesh is a few cm thicker than the bone line.
+    float EyeToUpperArmRig[2] = {0, 0}, EyeToUpperArmBody[2] = {0, 0};
+    float NearPlane = 0.0f;
+    // FirstPersonBody's camera probe (overlay on): the piece the camera sees nearest the eye, how far ahead
+    // (along the view) and the bone that mostly moves that spot; which pass draws it.
+    std::string ProbePiece, ProbeBone;
+    float ProbeDepth = 0.0f;
+    bool ProbeViewModel = false;
     std::string LastTrigger;      // the last start / stop / crouch / jump trigger the body fired
     float LastTriggerAgo = 0.0f;  // seconds since
 };
