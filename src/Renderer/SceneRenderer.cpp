@@ -395,6 +395,7 @@ void SceneRenderer::RenderScene(World& world, const RenderFrameContext& ctx,
         // The player's own body, around the camera: not in the view-model pass (its arms must be whole there).
         const auto* bodyTag = world.Registry.try_get<PlayerBodyTag>(entity);
         const bool cameraBody = bodyTag && !isViewModel && !ctx.EditorView && ctx.OwnerView;
+        if (cameraBody && bodyTag->CameraHidden) continue; // the head: only the player's own camera skips it
         const float nearHide = cameraBody ? bodyTag->NearHide : 0.0f;
         const int* hideBones = cameraBody && bodyTag->CameraHideBones[0] >= 0 ? bodyTag->CameraHideBones : nullptr;
         // The SSAO pre-pass skips view-model geometry always and the camera's own body (its hidden parts
