@@ -32,15 +32,17 @@ void main() {
         FragColor = vec4(c * (core + glow) * flicker, 1.0);
     } else {
         // Bullet hole: a black bore with a slightly ragged edge in a soft darkened ring (the
-        // crushed, scorched surface round it). uv 1 = the quad's edge = 2.5 hole radii.
+        // crushed, scorched surface round it). uv 1 = the quad's edge = 2.5 hole radii. The colour
+        // carries the distance fade (WeaponFxRenderer), the alpha the hole's seed.
         float seed = vColor.a * 40.0;
         float ang = atan(vUV.y, vUV.x);
         float r = length(vUV) * 2.5;
         float ragged = 1.0 + 0.10 * sin(ang * 5.0 + seed) + 0.06 * sin(ang * 11.0 + seed * 2.3);
         float bore = 1.0 - smoothstep(0.82, 1.0, r / ragged);
         float ring = (1.0 - smoothstep(1.0, 2.5, r / (0.9 + 0.1 * ragged)));
-        float a = max(bore, ring * ring * 0.55);
+        float a = max(bore, ring * ring * 0.55) * vColor.r;
         if (a < 0.003) discard;
-        FragColor = vec4(vColor.rgb * (1.0 - bore * 0.9), a);
+        const vec3 kHole = vec3(0.015, 0.013, 0.012);
+        FragColor = vec4(kHole * (1.0 - bore * 0.9), a);
     }
 }
