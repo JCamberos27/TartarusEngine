@@ -3519,9 +3519,16 @@ void EditorLayer::DrawReflectedComponentExtra(const char* componentName, World& 
             row("Arm steadying", "shoulders held L %.1f cm  R %.1f cm", d.ArmSteadyShift[0] * 100.0f, d.ArmSteadyShift[1] * 100.0f);
             row("Shoulder shrug", "toward the gun L %.1f cm  R %.1f cm", d.ShrugShift[0] * 100.0f, d.ShrugShift[1] * 100.0f);
             row("Reach", "L %.0f%%  R %.0f%% of the arm", d.Reach[0] * 100.0f, d.Reach[1] * 100.0f);
+            row("Hands off the gun", "L %.1f cm  R %.1f cm", d.HandGap[0] * 100.0f, d.HandGap[1] * 100.0f);
             row("Shoulders vs rig", "L %.1f cm  R %.1f cm", d.ShoulderGap[0] * 100.0f, d.ShoulderGap[1] * 100.0f);
             row("Shoulder line", "rig %+.1f deg  chest %+.1f deg", d.RigBlade, d.ChestBlade);
             row("Reach lean", "chest toward the gun %.1f deg", d.ReachLean);
+            row("Eye to upper arm", "rig's L %.1f cm  R %.1f cm   body's L %.1f cm  R %.1f cm   (near plane %.1f cm)",
+                d.EyeToUpperArmRig[0] * 100.0f, d.EyeToUpperArmRig[1] * 100.0f, d.EyeToUpperArmBody[0] * 100.0f,
+                d.EyeToUpperArmBody[1] * 100.0f, d.NearPlane * 100.0f);
+            if (!d.ProbePiece.empty())
+                row("Nearest in view", "%s  %.1f cm ahead  (bone %s, %s pass)", d.ProbePiece.c_str(), d.ProbeDepth * 100.0f,
+                    d.ProbeBone.c_str(), d.ProbeViewModel ? "view-model" : "world");
             row("Scene overlay", "%s   %d lines", BodyDebug::Enabled() ? "on" : "off (Gizmos > Player body)", (int)(BodyDebug::Verts().size() / 14));
             ImGui::TreePop();
         }
