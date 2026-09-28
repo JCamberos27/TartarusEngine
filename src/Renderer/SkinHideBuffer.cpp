@@ -12,11 +12,11 @@ SkinHideBuffer::~SkinHideBuffer() {
     if (m_Buffer) glDeleteBuffers(1, &m_Buffer);
 }
 
-void SkinHideBuffer::Bind(unsigned buffer) {
+void SkinHideBuffer::Bind(unsigned buffer, unsigned binding) {
     static SkinHideBuffer* empty = nullptr; // deliberately leaked: freed with the context, not at exit
     if (!buffer) {
         if (!empty) empty = new SkinHideBuffer({});
         buffer = empty->Id();
     }
-    glBindBufferBase(GL_SHADER_STORAGE_BUFFER, kBinding, buffer);
+    glBindBufferBase(GL_SHADER_STORAGE_BUFFER, binding, buffer);
 }
