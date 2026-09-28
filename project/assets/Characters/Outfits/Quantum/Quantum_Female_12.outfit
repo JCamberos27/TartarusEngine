@@ -1,0 +1,28 @@
+{
+  "wardrobe": "assets/Characters/Quantum/Quantum.wardrobe",
+  "gender": "Female",
+  "race": "European",
+  "items": {
+    "Glasses": {
+      "item": "assets/Characters/Quantum/Models/Clothing/Female/Glasses/SKM_F_Glasses_Classic.fbx"
+    },
+    "Hair": {
+      "item": "assets/Characters/Quantum/Models/Female/Hair/SKM_F_Haircut_Ponytail_Straight.fbx"
+    },
+    "Outerwear": {
+      "item": "assets/Characters/Quantum/Models/Clothing/Female/Outerwear/SKM_F_Jeans_Vest.fbx"
+    },
+    "Pants": {
+      "item": "assets/Characters/Quantum/Models/Clothing/Female/Pants/SKM_F_Pants_Jeans.fbx"
+    },
+    "Shoes": {
+      "item": "assets/Characters/Quantum/Models/Clothing/Female/Shoes/SKM_F_Sneakers.fbx"
+    },
+    "Socks": {
+      "item": "assets/Characters/Quantum/Models/Clothing/Female/Shoes/SKM_F_Socks.fbx"
+    },
+    "Wrist L": {
+      "item": "assets/Characters/Quantum/Models/Clothing/Female/Accessories/SKM_F_Bracelet_L.fbx"
+    }
+  }
+}
