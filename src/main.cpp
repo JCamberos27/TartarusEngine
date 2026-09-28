@@ -756,21 +756,18 @@ int main(int argc, char** argv) {
                     weaponFx.AddHole(hole.Position, hole.Normal, hole.Tangent, hole.Radius, hole.Seed);
                 FirstPersonPresentation::Laser laser;
                 if (firstPersonPresentation.IsActive() && firstPersonPresentation.LaserBeam(laser)) {
-                    // The gun draws through its own FOV: the beam's near end goes through the same
-                    // scale (a point's on-screen spot under the view model's projection, at its own
-                    // depth), so it leaves the barrel the player sees along that barrel's line. It
-                    // still ends on what the bore really hits.
-                    float emitterScale = 1.0f;
-                    const float vmFov = firstPersonPresentation.ViewModelFov();
-                    if (vmFov > 0.0f && std::abs(p[1][1]) > 1e-4f)
-                        emitterScale = (1.0f / p[1][1]) / std::tan(glm::radians(vmFov) * 0.5f);
-                    weaponFx.AddBeam(laser.From, laser.To, laser.BeamColor, emitterScale);
+                    // Already from the barrel as seen (FirstPersonPresentation aims from the view
+                    // model's on-screen barrel), so the beam is a straight line.
+                    weaponFx.AddBeam(laser.From, laser.To, laser.BeamColor, 1.0f);
                     if (laser.Hit) weaponFx.AddSpot(laser.To, laser.Normal, laser.SpotColor);
                 }
                 weaponFx.Draw(v, p, eye, h, (float)glfwGetTime());
             };
         };
         entt::entity playCameraEntity = entt::null;
+        // The scene's First Person Controller while Playing: it rides the player's feet and yaw, so
+        // selecting it (and Shift+F in the Scene view) tracks the player. Play reverts it on Stop.
+        entt::entity playControllerEntity = entt::null;
         Camera playSceneCam;
         // Default spawn/editor-camera start: south of the Sandbox's Character Plaza, looking north
         // over it with the physics playground (east) and movement course (west) in view either side.

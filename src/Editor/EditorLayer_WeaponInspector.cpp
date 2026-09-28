@@ -793,7 +793,7 @@ void DrawBarrel(PropertyRows& r, FirstPersonAnimationSet& s, const FirstPersonBa
 
     r.Heading("Bullet Holes");
     float mm = g.BulletHoleRadius * 2000.0f;
-    if (r.Float("Hole Size", mm, 0.05f, 0.0f, 100.0f, "%.1f mm", "Across the hole each round leaves, torn ring included (a little over the calibre: 9 mm for 5.45 mm rounds). 0 = none."))
+    if (r.Float("Hole Size", mm, 0.05f, 0.0f, 100.0f, "%.1f mm", "Across the hole each round leaves, torn ring included (24 mm reads well in play; a true 5.45 mm hole is ~9 mm and hard to see). 0 = none."))
         g.BulletHoleRadius = mm / 2000.0f;
 }
 

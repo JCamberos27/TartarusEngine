@@ -43,8 +43,9 @@ struct FirstPersonWeaponGameplay {
     // so light props don't rocket off. 0 = rounds push nothing.
     float ImpactImpulse = 0.0f;
     float ImpactMaxSpeed = 8.0f;
-    // The holes rounds leave, metres across the bore (a 5.45 mm round's, a touch torn).
-    float BulletHoleRadius = 0.0045f;
+    // The holes rounds leave: radius in metres. Game-sized rather than calibre-sized (a real
+    // 5.45 mm hole, 4.5 mm, was too small to see past a few metres).
+    float BulletHoleRadius = 0.012f;
     // Zeroing: rounds (and the laser) leave the muzzle aimed to cross the sight line
     // ZeroDistance metres out, like a sighted-in rifle - dead on the front post there, a little
     // low closer, a little high past it. 0 = straight down the bore as modelled.

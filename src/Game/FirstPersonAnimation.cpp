@@ -126,7 +126,7 @@ bool FirstPersonAnimationSet::FromJsonString(const std::string& text, FirstPerso
         gp.ImpactMaxSpeed = std::max(0.0f, Number(*g, "impactMaxSpeed", gp.ImpactMaxSpeed));
         gp.ZeroDistance = std::max(0.0f, Number(*g, "zeroDistance", gp.ZeroDistance));
         gp.BulletHoleRadius = Number(*g, "bulletHoleRadius", gp.BulletHoleRadius);
-        gp.BulletHoleRadius = std::clamp(std::isfinite(gp.BulletHoleRadius) ? gp.BulletHoleRadius : 0.0045f, 0.0f, 0.1f);
+        gp.BulletHoleRadius = std::clamp(std::isfinite(gp.BulletHoleRadius) ? gp.BulletHoleRadius : 0.012f, 0.0f, 0.1f);
         if (const auto sl = g->find("sightLine"); sl != g->end() && sl->is_object()) {
             const glm::vec3 o = Vec3(*sl, "origin", glm::vec3(0.0f)), d = Vec3(*sl, "direction", glm::vec3(0.0f));
             if (Finite(o) && Finite(d) && glm::length(d) > 1e-6f) {
