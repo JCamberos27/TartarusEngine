@@ -1259,7 +1259,8 @@ int main(int argc, char** argv) {
             gravityGun.Reset();
             gravityGun.Settings = GravityGunSettings{};
             playCameraEntity = entt::null;
-            if (entt::entity ctrl = FindFirstPersonController(world); ctrl != entt::null) {
+            playControllerEntity = FindFirstPersonController(world);
+            if (entt::entity ctrl = playControllerEntity; ctrl != entt::null) {
                 const auto& fp = world.Registry.get<FirstPersonControllerComponent>(ctrl);
                 player.MoveSpeed = fp.MoveSpeed;
                 player.Gravity = -std::abs(fp.Gravity);
@@ -2250,6 +2251,12 @@ int main(int argc, char** argv) {
                     player.MouseSensitivity = playBaseSensitivity * firstPersonPresentation.LookScale(playBaseFov);
                     firstPersonBody.BeforePlayerMove(player, player.Cam); // camera out of the head, root motion in
                     player.Update(gameDt, world, window.Handle(), gameHasInput);
+                    // Before the body places itself: it is the controller's child, posed in world space.
+                    if (playControllerEntity != entt::null && world.Registry.valid(playControllerEntity)) {
+                        const float yaw = glm::radians(player.Cam.Yaw); // Camera forward = (cos, 0, sin)
+                        world.SetWorldPose(playControllerEntity, player.Cam.Position - glm::vec3(0.0f, player.EyeHeight, 0.0f),
+                                           glm::angleAxis(std::atan2(-std::cos(yaw), -std::sin(yaw)), glm::vec3(0.0f, 1.0f, 0.0f)));
+                    }
                     if (firstPersonBody.OutfitChanged(world)) { // an outfit piece changed in Play: take the new pieces
                         firstPersonBody.Stop(world);
                         firstPersonBody.Start(world, player);
@@ -3159,7 +3166,7 @@ int main(int argc, char** argv) {
                 auto selection = editor.GetSelectedItems();
                 if (!selection.empty() && !editor.OverlaysHidden()) {
                     const glm::vec3 kOutlineColor(1.0f, 0.55f, 0.1f);
-                    const int kOutlinePixels = 3;
+                    const int kOutlinePixels = 1; // a thin ring, like Unity's (3 read as a thick band)
 
                     std::vector<glm::mat4> xforms;
                     std::vector<Model*> models;
@@ -3177,8 +3184,24 @@ int main(int argc, char** argv) {
                         // --- Silhouette mask pass: flat white where a selected mesh is, into its
                         // own target. Depth test off so a partly-occluded selection is still fully
                         // outlined (Unity's behaviour).
-                        selectionMaskFbo.Resize(scW, scH);
-                        selectionMaskFbo.Bind();
+                        // Drawn at 2x the scene size with 4x MSAA, then resolved: a linear fetch at a
+                        // scene pixel centre averages 2x2 texels of 4 samples, i.e. 16-sample edge
+                        // coverage for the anti-aliased ring (OutlineDilate.frag.glsl).
+                        const int maskW = scW * 2, maskH = scH * 2;
+                        selectionMaskFbo.Resize(maskW, maskH);
+                        static GLuint maskMsFbo = 0, maskMsColor = 0;
+                        static int maskMsW = 0, maskMsH = 0;
+                        if (maskMsW != maskW || maskMsH != maskH) {
+                            if (maskMsFbo) { glDeleteFramebuffers(1, &maskMsFbo); glDeleteTextures(1, &maskMsColor); }
+                            glCreateTextures(GL_TEXTURE_2D_MULTISAMPLE, 1, &maskMsColor);
+                            glTextureStorage2DMultisample(maskMsColor, 4, GL_RGB8, maskW, maskH, GL_TRUE);
+                            glCreateFramebuffers(1, &maskMsFbo);
+                            glNamedFramebufferTexture(maskMsFbo, GL_COLOR_ATTACHMENT0, maskMsColor, 0);
+                            maskMsW = maskW;
+                            maskMsH = maskH;
+                        }
+                        glBindFramebuffer(GL_FRAMEBUFFER, maskMsFbo);
+                        glViewport(0, 0, maskW, maskH);
                         glClearColor(0.0f, 0.0f, 0.0f, 1.0f);
                         glClear(GL_COLOR_BUFFER_BIT);
                         glDisable(GL_DEPTH_TEST);
@@ -3194,6 +3217,8 @@ int main(int argc, char** argv) {
                             models[i]->Draw(outlineModelShader);
                         }
                         if (sceneWireframe) glPolygonMode(GL_FRONT_AND_BACK, GL_LINE);
+                        glBlitNamedFramebuffer(maskMsFbo, selectionMaskFbo.Handle(), 0, 0, maskW, maskH, 0, 0, maskW, maskH,
+                                               GL_COLOR_BUFFER_BIT, GL_NEAREST); // MSAA resolve (same RGB8 format as the Framebuffer)
 
                         // --- Dilate pass: back to the scene target, paint the ring.
                         sceneHdr.BindForRender();
