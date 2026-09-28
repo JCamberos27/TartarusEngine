@@ -3453,7 +3453,8 @@ int main(int argc, char** argv) {
                               /*EditorView=*/false, /*DebugView=*/0,
                               &gameHdr, &gameOpaqueColor, &gameSsao,
                               firstPersonPresentation.ViewModelFov(),
-                              weaponOverlay(playing && playUsesPlayer, gvView, gvProj, gvEye, gvHeight) },
+                              weaponOverlay(playing && playUsesPlayer, gvView, gvProj, gvEye, gvHeight),
+                              /*OwnerView=*/playing && playUsesPlayer },
                           &gvRenderStats);
 
                 // Physics debug overlay over the game view (#185, F5) — depth-tested, no depth write.
@@ -3624,7 +3625,8 @@ int main(int argc, char** argv) {
                               /*EditorView=*/false, /*DebugView=*/0,
                               &gameHdr, &gameOpaqueColor, &gameSsao,
                               firstPersonPresentation.ViewModelFov(),
-                              weaponOverlay(playing && playUsesPlayer, view, proj, gameCam->Position, mh) },
+                              weaponOverlay(playing && playUsesPlayer, view, proj, gameCam->Position, mh),
+                              /*OwnerView=*/playing && playUsesPlayer },
                           &stats);
                 editor.SetRenderStats(stats);
                 // Physics debug overlay over the game view (#185, F5).

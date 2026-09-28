@@ -6,6 +6,7 @@
 
 #include "FirstPersonBodyContract.h"
 
+#include <cstdint>
 #include <functional>
 #include <map>
 #include <memory>
@@ -88,6 +89,8 @@ private:
     bool m_HaveShoulders = false;
     glm::vec3 m_ShoulderAnchor[2] = {glm::vec3(0.0f), glm::vec3(0.0f)}; // Arm Steadiness: each upper arm in m_ChestView's frame (slow)
     bool m_HaveShoulderAnchor[2] = {false, false};
+    glm::vec3 m_ElbowAim[2] = {glm::vec3(0.0f), glm::vec3(0.0f)}; // Weapon Arms: where each elbow heads, in m_ChestView's frame (eased)
+    bool m_HaveElbowAim[2] = {false, false};
     glm::mat4 m_ChestView{1.0f};     // LateUpdate's eye, facing the view's heading at the chest's pitch (columns: right, up, front, eye)
     bool m_HaveChestView = false;
     glm::vec3 m_RigEyeToShoulders{0.0f};          // rig: camera bone to its shoulders, in the camera's frame (smoothed)
@@ -172,3 +175,13 @@ glm::quat FirstPersonBodyShoulderLineTurn(const glm::vec3& bodyAcross, const glm
 float FirstPersonBodySpineAim(float pitchRadians, float spineAim, float spineAimDown);
 float FirstPersonBodyFootPelvis(float offL, float offR, float maxDrop, float maxRaise);
 glm::vec3 FirstPersonBodyEye(const glm::vec3& restHead, const glm::vec3& head, float bob, const glm::vec3& offset);
+// A piece's Near Hide: the body's, and for clothing at least Clothing Near Hide.
+float FirstPersonBodyPieceNearHide(float nearHide, float clothingNearHide, bool clothing);
+// Whether world point `p` is inside the near-eye hide (as ModelFragment.glsl tests it): within `radius` of
+// `eye`, stretched to `width` along `right` (a unit vector, the view's flat right). width <= 0: a sphere.
+bool FirstPersonBodyNearHidden(const glm::vec3& p, const glm::vec3& eye, const glm::vec3& right, float radius, float width);
+// A clothing piece's vertices around the neck in its bind pose (model space): at or above the shoulder
+// joints less `drop`, between them (a little past, for the shoulder tops) and within 30 cm of the neck
+// front to back. 1 = hide. Empty when `drop` < 0 or the shoulders are degenerate.
+std::vector<std::uint8_t> FirstPersonBodyCollarVertices(const std::vector<glm::vec3>& bindPositions, const glm::vec3& neck,
+                                                        const glm::vec3& shoulderL, const glm::vec3& shoulderR, float drop);

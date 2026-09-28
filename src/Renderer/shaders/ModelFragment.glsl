@@ -10,6 +10,10 @@ uniform vec3 uViewPos;
 // The player's own body (PlayerBodyTag): nothing of it within this many metres of the eye is drawn - the
 // near plane would slice it into slivers. 0 for everything else.
 uniform float uNearHide;
+// Clothing's Near Hide reaches further to the sides (PlayerBodyTag::NearHideWidth, 0 = a sphere), along the
+// view's flat right, uNearHideRight.
+uniform float uNearHideWidth;
+uniform vec3 uNearHideRight;
 in float vHidden; // ModelVertex: the share of the vertex moved by uHideBones
 
 // #162 - distance fog (Unity's Lighting > Fog), applied to lit surfaces in linear HDR. The sky
@@ -783,7 +787,16 @@ uint clusterIndex() {
 }
 
 void main() {
-    if (uNearHide > 0.0 && distance(vWorldPos, uViewPos) < uNearHide) discard;
+    if (uNearHide > 0.0) {
+        vec3 d = vWorldPos - uViewPos;
+        if (uNearHideWidth > 0.0) { // FirstPersonBodyNearHidden
+            float side = dot(d, uNearHideRight);
+            vec3 rest = d - uNearHideRight * side;
+            if ((side * side) / (uNearHideWidth * uNearHideWidth) + dot(rest, rest) / (uNearHide * uNearHide) < 1.0) discard;
+        } else if (dot(d, d) < uNearHide * uNearHide) {
+            discard;
+        }
+    }
     if (vHidden > 0.5) discard;
     // Triplanar mode skips the mesh's own UVs entirely (they're what's stretching), sampling
     // every map from world position/normal instead. Normal maps are the one exception - proper

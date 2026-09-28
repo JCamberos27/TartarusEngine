@@ -15,7 +15,9 @@ Skin.
 
 New pieces get a follower Animator Controller copied from the body's driver. First Person Body picks up
 head-attached pieces (hair, hats, glasses, beards) as shadow-only, and it restarts its piece list when the
-outfit changes in Play.
+outfit changes in Play. In the player's own view it also trims clothing around the camera, for any pack:
+what sits around the neck in the garment's bind pose (a hood, a collar, the shoulder tops), and whatever
+comes within **Clothing Near Hide** of the eye (wider to the sides). See [BODY_SETUP.md](BODY_SETUP.md).
 
 ## Wardrobes (`*.wardrobe`)
 A JSON file describing one character pack
