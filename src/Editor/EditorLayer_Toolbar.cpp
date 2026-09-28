@@ -928,7 +928,7 @@ void EditorLayer::DrawGizmosPopupBody() {
         EditorSettings::Save();
     }
     if (ImGui::IsItemHovered())
-        EditorUI::SetTooltip("In Play, in the Scene viewport: the true-first-person body's foot IK rays (green = hit, red = miss,\nplanted feet green, pinned point cyan), body heading (yellow) vs view (white) with the turn threshold wedge,\nroot-motion velocity (cyan), stair easing (magenta), and the camera (white cross) on its shoulders (magenta).");
+        EditorUI::SetTooltip("In Play, in the Scene viewport: the true-first-person body's foot IK rays (green = hit, red = miss,\nplanted feet green, pinned point cyan), body heading (yellow) vs view (white) with the turn threshold wedge,\nroot-motion velocity (cyan), stair easing (magenta), and the camera (white cross) on its shoulders (magenta).\nAlso the play camera's near planes and frustums, the arms rig's arm bones (yellow) vs the body's (magenta), and\nthe camera probe: the body part nearest the eye in view, in the Inspector's Live readout and the log.");
 
     bool physDbg = EditorSettings::Get().PhysicsDebugInput;
     if (EditorUIPrimitives::Checkbox("Physics debug input", &physDbg)) {

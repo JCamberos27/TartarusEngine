@@ -35,7 +35,10 @@ behind the scenes (they animate the reload, inspect, aim and so on), but
 what you see is the body's own arms following their hands, so it is one
 connected character. Where the camera sits comes from the body's
 shoulders, so the gun stays within the arms' reach: no stretched arms and
-no hand pulling off the gun. Holstering hides the arms, draw and Play both
+no hand pulling off the gun. Near level the camera is lifted back up to
+where eyes really are (the weapon's animation rig puts it much lower), so
+the player's own chest and collar never show at the edge of the view,
+including mid-reload, while looking down, or turning. Holstering hides the arms, draw and Play both
 bring them straight onto the gun, and the camera keeps the same height
 armed or unarmed.
 
