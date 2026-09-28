@@ -65,6 +65,8 @@ const char* SlotIcon(const std::string& icon) {
     if (icon == "shoe") return ICON_FA_SHOE_PRINTS;
     if (icon == "bag") return ICON_FA_BAG_SHOPPING;
     if (icon == "watch") return ICON_FA_CLOCK;
+    if (icon == "headphones") return ICON_FA_HEADPHONES;
+    if (icon == "socks") return ICON_FA_SOCKS;
     return ICON_FA_CIRCLE;
 }
 
@@ -257,6 +259,19 @@ void EditorLayer::DrawCharacterOutfitEditor(World& world, entt::entity root) {
     auto worn = pieces.find(ui.Slot);
     const std::string current = worn != pieces.end() ? reg.get<OutfitPieceComponent>(worn->second).Item : std::string();
     const Wardrobe::Item* wornItem = current.empty() ? nullptr : cat->Find(current);
+    // What's worn in the other slots, to mark the cards that don't go with it (Wardrobe::Conflicts).
+    std::vector<const Wardrobe::Item*> others;
+    for (const auto& [s, e] : pieces)
+        if (s != ui.Slot)
+            if (const auto* it = cat->Find(reg.get<OutfitPieceComponent>(e).Item)) others.push_back(it);
+    // The first worn item `it` can't go with (hard: equipping takes it off) or only looks odd with.
+    auto clashWith = [&](const Wardrobe::Item& it, bool& hard) -> const Wardrobe::Item* {
+        for (const auto* o : others)
+            if (Wardrobe::Conflicts(cat->W, it, *o, false)) { hard = true; return o; }
+        for (const auto* o : others)
+            if (Wardrobe::Conflicts(cat->W, it, *o, true)) { hard = false; return o; }
+        return nullptr;
+    };
     ImGui::Spacing();
     ImGui::AlignTextToFramePadding();
     ImGui::Text("%s  %s", SlotIcon(slot->Icon), slot->Label.c_str());
@@ -339,6 +354,13 @@ void EditorLayer::DrawCharacterOutfitEditor(World& world, entt::entity root) {
             const ImVec2 sz = ImGui::CalcTextSize(none);
             gdl->AddText(ImVec2((t0.x + t1.x - sz.x) * 0.5f, (t0.y + t1.y - sz.y) * 0.5f), Col(style.Colors[ImGuiCol_TextDisabled]), none);
         }
+        bool hardClash = false;
+        const Wardrobe::Item* clash = it && !selected ? clashWith(*it, hardClash) : nullptr;
+        if (clash) {
+            const ImVec2 cs = ImGui::CalcTextSize(ICON_FA_TRIANGLE_EXCLAMATION);
+            gdl->AddText(ImVec2(q.x - cs.x - 5.0f, p.y + 4.0f),
+                         Col(hardClash ? WarningColor() : style.Colors[ImGuiCol_TextDisabled]), ICON_FA_TRIANGLE_EXCLAMATION);
+        }
         const std::string label = it ? it->Name : "None";
         const ImVec2 ls = ImGui::CalcTextSize(label.c_str());
         const ImVec4 clip(p.x + 3.0f, p.y, q.x - 3.0f, q.y);
@@ -352,6 +374,8 @@ void EditorLayer::DrawCharacterOutfitEditor(World& world, entt::entity root) {
             ImGui::TextUnformatted(it->Name.c_str());
             ImGui::TextDisabled("%s", it->Path.c_str());
             if (it->Variant) ImGui::TextDisabled("A fitted cut - usually picked by the wardrobe's rules");
+            if (clash && hardClash) ImGui::TextColored(WarningColor(), ICON_FA_TRIANGLE_EXCLAMATION "  Doesn't go with %s - one of them comes off", clash->Name.c_str());
+            else if (clash) ImGui::TextDisabled(ICON_FA_TRIANGLE_EXCLAMATION "  An odd pairing with %s", clash->Name.c_str());
             ImGui::EndTooltip();
         }
         ImGui::PopID();

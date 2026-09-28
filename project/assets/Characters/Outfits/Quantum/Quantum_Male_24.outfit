@@ -1,0 +1,22 @@
+{
+  "wardrobe": "assets/Characters/Quantum/Quantum.wardrobe",
+  "gender": "Male",
+  "race": "Afro",
+  "items": {
+    "Hat": {
+      "item": "assets/Characters/Quantum/Models/Clothing/Male/Hats/SKM_Hat_Warm.fbx"
+    },
+    "Outerwear": {
+      "item": "assets/Characters/Quantum/Models/Clothing/Male/Outerwear/SKM_Vest_Hunter.fbx"
+    },
+    "Pants": {
+      "item": "assets/Characters/Quantum/Models/Clothing/Male/Pants/SKM_Pants_Cargo_Straight.fbx"
+    },
+    "Shoes": {
+      "item": "assets/Characters/Quantum/Models/Clothing/Male/Shoes/SKM_Boots_Inboots.fbx"
+    },
+    "Top": {
+      "item": "assets/Characters/Quantum/Models/Clothing/Male/Tops/SKM_Jersey.fbx"
+    }
+  }
+}

@@ -1,0 +1,25 @@
+{
+  "wardrobe": "assets/Characters/Quantum/Quantum.wardrobe",
+  "gender": "Female",
+  "race": "Old",
+  "items": {
+    "Glasses": {
+      "item": "assets/Characters/Quantum/Models/Clothing/Female/Glasses/SKM_F_Glasses_Classic.fbx"
+    },
+    "Hat": {
+      "item": "assets/Characters/Quantum/Models/Clothing/Female/Hats/SKM_F_Hat_Ushanka.fbx"
+    },
+    "Outerwear": {
+      "item": "assets/Characters/Quantum/Models/Clothing/Female/Outerwear/SKM_F_Jacket_Winter_Open_Hood_Open.fbx"
+    },
+    "Pants": {
+      "item": "assets/Characters/Quantum/Models/Clothing/Female/Pants/SKM_F_Pants_Cargo_Straight.fbx"
+    },
+    "Shoes": {
+      "item": "assets/Characters/Quantum/Models/Clothing/Female/Shoes/SKM_F_Boots_Inboots.fbx"
+    },
+    "Socks": {
+      "item": "assets/Characters/Quantum/Models/Clothing/Female/Shoes/SKM_F_Socks.fbx"
+    }
+  }
+}
