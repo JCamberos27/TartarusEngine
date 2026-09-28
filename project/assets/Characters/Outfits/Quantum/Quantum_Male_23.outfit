@@ -1,0 +1,22 @@
+{
+  "wardrobe": "assets/Characters/Quantum/Quantum.wardrobe",
+  "gender": "Male",
+  "race": "European",
+  "items": {
+    "Beard": {
+      "item": "assets/Characters/Quantum/Models/Beard/SKM_Beard_02.fbx"
+    },
+    "Hat": {
+      "item": "assets/Characters/Quantum/Models/Clothing/Male/Hats/SKM_Flat_Hat.fbx"
+    },
+    "Pants": {
+      "item": "assets/Characters/Quantum/Models/Clothing/Male/Pants/SKM_Jeans.fbx"
+    },
+    "Shoes": {
+      "item": "assets/Characters/Quantum/Models/Clothing/Male/Shoes/SKM_Sneakers.fbx"
+    },
+    "Top": {
+      "item": "assets/Characters/Quantum/Models/Clothing/Male/Tops/SKM_Shirt_RolledUp.fbx"
+    }
+  }
+}

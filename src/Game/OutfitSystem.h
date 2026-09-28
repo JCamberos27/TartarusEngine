@@ -76,7 +76,9 @@ Result Equip(World& world, AssetLibrary& assets, entt::entity root, const std::s
 Result SetGender(World& world, AssetLibrary& assets, entt::entity root, Wardrobe::Gender gender);
 Result SetRace(World& world, AssetLibrary& assets, entt::entity root, const std::string& race);
 // A random outfit (and race, and colourways) for the current gender; the Character Outfit's Locks are kept.
-Result Randomize(World& world, AssetLibrary& assets, entt::entity root, std::uint32_t seed);
+// Dressed in one style (Wardrobe::Randomize): `style` names it, "" = picked by the wardrobe's weights.
+Result Randomize(World& world, AssetLibrary& assets, entt::entity root, std::uint32_t seed,
+                 const std::string& style = std::string());
 
 // A piece's colourways: one group per material the piece's model is remapped to.
 struct ColourGroup {
@@ -102,9 +104,10 @@ bool SavePreset(const World& world, AssetLibrary& assets, entt::entity root, con
                 std::string* error = nullptr);
 Result LoadPreset(World& world, AssetLibrary& assets, entt::entity root, const std::string& path);
 
-// Keeps every outfit's hidden skin in step with its pieces (OutfitHideTag): body parts under clothing,
-// and a top under outerwear. Call once per frame, after the world transform cache is rebuilt; it only
-// works when an outfit's pieces changed (an edit, an undo, a scene load), and remembers each pair.
+// Keeps every outfit's hidden vertices in step with its pieces (OutfitHideTag): what pokes through a
+// layer worn over it (Wardrobe::LayerOf - body, head, shirts, hair ...). Call once per frame, after the
+// world transform cache is rebuilt; it only works when an outfit's pieces changed (an edit, an undo, a
+// scene load), and remembers each pair.
 void UpdateHiding(World& world);
 
 // The locked slots of a Locks string ("Hair, Top").

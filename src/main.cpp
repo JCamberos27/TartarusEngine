@@ -40,6 +40,8 @@
 #include "Tonemapper.h"
 #include "GameModuleAPI.h" // #170 smoke: QueryFilter / RaycastHit
 #include "Tests/UnitTests.h" // #173
+#include "OutfitAudit.h"
+#include "OutfitTestScene.h"             // --outfit-audit
 #include "LightBuffer.h"
 #include "ClusterGrid.h"
 #include "CascadedShadowMap.h"
@@ -433,6 +435,13 @@ int main(int argc, char** argv) {
     // horizon, a higher angle behind, and up at the sky - for reviewing rendering changes (the
     // physical sky's, first) without driving the editor.
     std::string smokeShotsDir;
+    // --outfit-audit [wardrobe] [report.csv]: the wardrobe's rules (presets, Randomize) and every pair of
+    // outfit pieces worn one over the other, checked for clipping (OutfitAudit); --outfit-rules: the rules
+    // only. Exit code: 0 clean, 1 problems.
+    bool outfitAuditMode = false, outfitAuditGeometry = true;
+    // --gen-outfit-scenes: builds project/scenes/OutfitTest/*.json with the outfit system (OutfitTestScene).
+    bool outfitScenesMode = false;
+    std::string outfitAuditWardrobe = "assets/Characters/Quantum/Quantum.wardrobe", outfitAuditCsv;
     for (int i = 1; i < argc; ++i) {
         std::string a = argv[i];
         if (a == "--smoke-test" || a == "--perf-bench") {
@@ -443,6 +452,13 @@ int main(int argc, char** argv) {
         else if (a == "--smoke-shots" && i + 1 < argc) { smokeShotsDir = argv[++i]; }
         else if (a == "--resave" && i + 2 < argc) { resaveIn = argv[i + 1]; resaveOut = argv[i + 2]; i += 2; }
         else if (a == "--undo-bench") { undoBenchMode = true; }
+        else if (a == "--gen-outfit-scenes") { outfitScenesMode = true; }
+        else if (a == "--outfit-audit" || a == "--outfit-rules") {
+            outfitAuditMode = true;
+            outfitAuditGeometry = a == "--outfit-audit";
+            if (i + 1 < argc && argv[i + 1][0] != '-') outfitAuditWardrobe = argv[++i];
+            if (i + 1 < argc && argv[i + 1][0] != '-') outfitAuditCsv = argv[++i];
+        }
         else if (a == "--asset-load-bench") { assetLoadBenchMode = true; }
         else if (a == "--build") {
             buildMode = true;
@@ -488,7 +504,7 @@ int main(int argc, char** argv) {
     // --smoke-test and --resave are non-interactive: no splash, and fatal errors go to stderr +
     // a nonzero exit instead of a modal MessageBox that a headless/CI desktop never dismisses
     // (audit BUG-102).
-    const bool headless = smokeTestMode || resaveMode || undoBenchMode || assetLoadBenchMode;
+    const bool headless = smokeTestMode || resaveMode || undoBenchMode || assetLoadBenchMode || outfitAuditMode || outfitScenesMode;
     CrashHandler::SetInteractive(!headless); // #148: no crash dialog on an unattended run
 
     // #148: `--crash-test <kind>` deliberately crashes through one path so the handler (dump,
@@ -826,6 +842,13 @@ int main(int argc, char** argv) {
             }
             std::cout << "[Resave] " << resaveIn << " -> " << resaveOut << "\n";
             return 0;
+        }
+
+        if (outfitScenesMode) return OutfitTestScene::Generate(assets);
+
+        if (outfitAuditMode) {
+            const int clipping = OutfitAudit::Run(assets, outfitAuditWardrobe, outfitAuditCsv, outfitAuditGeometry);
+            return clipping < 0 ? 2 : (clipping > 0 ? 1 : 0);
         }
 
         if (undoBenchMode) {
