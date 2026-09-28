@@ -146,7 +146,11 @@ private:
     void SetupMuzzle(int bolt);
     void SetupAdsCarry();
     AdsCarrySample SampleAdsCarry(float dt) const;
-    void ShotImpact(); // a round leaves the bore: note where it hits and shove that
+    // A round leaves the bore. Queued, and fired in LateUpdate from the gun as the frame renders it
+    // (after the body has put the camera in its head), so it goes where the laser points.
+    void ShotImpact() { ++m_PendingShots; }
+    void FireShot(); // one queued round: note where it hits and shove that
+    int m_PendingShots = 0;
     void ReloadIfChanged(float dt);
     // Hides the spare magazine bones unless the left hand holds them (FirstPersonAnimationSet).
     void UpdateSpareMagazine(const glm::vec3& armsPos, const glm::quat& armsRot, const glm::vec3& weaponPos,

@@ -84,7 +84,8 @@ void WeaponFxRenderer::Draw(const glm::mat4& view, const glm::mat4& proj, const 
     };
 
     // Holes first (alpha-blended, darkening), then the light (additive) over them.
-    for (const Decal& h : m_Holes) decal(h, h.Radius * kHoleQuad, 2.0f, h.Seed);
+    // Never under about two pixels across, so a far hole still reads.
+    for (const Decal& h : m_Holes) decal(h, std::max(h.Radius, 1.0f * pixelAt(h.Center)) * kHoleQuad, 2.0f, h.Seed);
     const size_t holeVerts = V.size() / kStride;
 
     const glm::mat4 viewInv = glm::inverse(view);

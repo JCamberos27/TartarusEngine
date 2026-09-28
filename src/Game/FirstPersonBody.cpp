@@ -381,14 +381,15 @@ bool FirstPersonBody::Start(World& world, Player& player) {
                 pac->RootMotion.Rotation = dm.Rotation;
                 pac->RootMotion.Vertical = dm.Vertical;
             }
-        // A hidden piece still casts its shadow; the camera is inside the head - and so is whatever an
-        // outfit hangs on it (hair, a hat, glasses).
+        // A hidden piece is only left out of the camera's own view (the camera is inside the head - and so
+        // is whatever an outfit hangs on it: hair, a hat, glasses). Its shadow, the Scene view and other
+        // views keep it.
         const std::string name = lower(reg.all_of<NameComponent>(e) ? reg.get<NameComponent>(e).Name : std::string());
         const auto* outfitPiece = reg.try_get<OutfitPieceComponent>(e);
         bool hide = outfitPiece && (outfitPiece->Flags & OutfitPieceHeadAttached);
         for (const std::string& part : hiddenParts) hide = hide || name.find(lower(part)) != std::string::npos;
         if (e != body && hide) {
-            reg.get<RenderableComponent>(e).CastShadows = RenderableComponent::ShadowCasting::ShadowsOnly;
+            reg.get_or_emplace<PlayerBodyTag>(e).CameraHidden = true;
             ++shadowOnly;
         }
     }
@@ -402,7 +403,7 @@ bool FirstPersonBody::Start(World& world, Player& player) {
 
     Log::Info("First Person Body: '" + (reg.all_of<NameComponent>(body) ? reg.get<NameComponent>(body).Name : std::string("body")) +
               "' is the player's body - " + std::to_string(pieces.size()) + " pieces, " + std::to_string(shadowOnly) +
-              " shadow-only, root motion at responsiveness " + std::to_string(cfg.Responsiveness).substr(0, 4) + ".");
+              " hidden from the camera, root motion at responsiveness " + std::to_string(cfg.Responsiveness).substr(0, 4) + ".");
     return true;
 }
 
@@ -1440,7 +1441,7 @@ void FirstPersonBody::CameraProbe(World& world, const Camera& camera, float view
         if (!m_Models[k] || !reg.valid(e) || reg.all_of<InactiveTag>(e)) continue;
         const auto* rc = reg.try_get<RenderableComponent>(e);
         const auto* tag = reg.try_get<PlayerBodyTag>(e);
-        if (!rc || !tag || rc->CastShadows == RenderableComponent::ShadowCasting::ShadowsOnly) continue;
+        if (!rc || !tag || tag->CameraHidden || rc->CastShadows == RenderableComponent::ShadowCasting::ShadowsOnly) continue;
         const Model& m = *m_Models[k];
         const glm::mat4 pieceWorld = world.ComposeWorldTransform(e);
         const bool pieceViewModel = reg.all_of<ViewModelTag>(e) && viewModelFov > 0.0f;
