@@ -84,8 +84,16 @@ void WeaponFxRenderer::Draw(const glm::mat4& view, const glm::mat4& proj, const 
     };
 
     // Holes first (alpha-blended, darkening), then the light (additive) over them.
-    // Never under about two pixels across, so a far hole still reads.
-    for (const Decal& h : m_Holes) decal(h, std::max(h.Radius, 1.0f * pixelAt(h.Center)) * kHoleQuad, 2.0f, h.Seed);
+    // Always their real size; a far hole fades out as it shrinks to a few pixels across instead of
+    // flickering as a sub-pixel speck. The fade rides in the colour (the alpha is the edge seed).
+    for (Decal h : m_Holes) {
+        const float acrossPx = 2.0f * h.Radius / std::max(pixelAt(h.Center), 1e-6f);
+        const float t = std::clamp((acrossPx - 0.75f) / (3.0f - 0.75f), 0.0f, 1.0f);
+        const float fade = t * t * (3.0f - 2.0f * t);
+        if (fade <= 0.0f) continue;
+        h.Color = glm::vec3(fade);
+        decal(h, h.Radius * kHoleQuad, 2.0f, h.Seed);
+    }
     const size_t holeVerts = V.size() / kStride;
 
     const glm::mat4 viewInv = glm::inverse(view);
