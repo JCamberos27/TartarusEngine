@@ -20,6 +20,7 @@
 #include <array>
 #include <cctype>
 #include <cmath>
+#include <cstdio>
 #include <sstream>
 
 namespace {
@@ -50,51 +51,64 @@ bool BindPoint(const Model& piece, const Model& driver, const std::string& node,
     return false;
 }
 
-// A clothing piece's collar (FirstPersonBodyCollarVertices) as a hide buffer; null when none of it is. Cached
-// per model and drop: an outfit change in Play restarts the body, and the pieces it keeps mustn't hitch.
+// A clothing piece's collar (FirstPersonBodyCollarVertices) as a hide buffer; null when none of it is. `bitsOut`, when
+// given, gets the same bits on the CPU (the camera probe). Cached per model and drop: an outfit change in Play
+// restarts the body, and the pieces it keeps mustn't hitch.
 std::shared_ptr<SkinHideBuffer> CollarVerts(const std::shared_ptr<Model>& pieceRef, const Model& driver, const std::string& neckBone,
-                                            const std::array<std::string, 2>& shoulderBones, float drop) {
+                                            const std::array<std::string, 2>& shoulderBones, float drop,
+                                            std::shared_ptr<const std::vector<std::uint8_t>>* bitsOut = nullptr) {
+    if (bitsOut) bitsOut->reset();
     if (drop < 0.0f || !pieceRef) return nullptr;
     struct Entry {
         float Drop;
         std::weak_ptr<Model> Alive; // the key's model, while it lives (a freed address can be reused)
         std::shared_ptr<SkinHideBuffer> Buffer;
+        std::shared_ptr<const std::vector<std::uint8_t>> Bits;
     };
     // Deliberately leaked, like SkinHideBuffer's empty buffer: its buffers go with the GL context, not at exit.
     static auto& cache = *new std::map<const Model*, Entry>();
     for (auto it = cache.begin(); it != cache.end();) it = it->second.Alive.expired() ? cache.erase(it) : std::next(it);
     const Model& piece = *pieceRef;
-    if (auto it = cache.find(&piece); it != cache.end() && it->second.Drop == drop) return it->second.Buffer;
+    if (auto it = cache.find(&piece); it != cache.end() && it->second.Drop == drop) {
+        if (bitsOut) *bitsOut = it->second.Bits;
+        return it->second.Buffer;
+    }
 
     std::shared_ptr<SkinHideBuffer> buffer;
+    std::shared_ptr<const std::vector<std::uint8_t>> bits;
     glm::vec3 neck, shoulderL, shoulderR;
     if (BindPoint(piece, driver, neckBone, neck) && BindPoint(piece, driver, shoulderBones[0], shoulderL) &&
         BindPoint(piece, driver, shoulderBones[1], shoulderR)) {
         std::vector<glm::vec3> positions;
         std::vector<unsigned int> indices;
         piece.CollisionGeometry(positions, indices);
-        const auto collar = FirstPersonBodyCollarVertices(positions, neck, shoulderL, shoulderR, drop);
-        if (std::find(collar.begin(), collar.end(), (std::uint8_t)1) != collar.end())
+        auto collar = FirstPersonBodyCollarVertices(positions, neck, shoulderL, shoulderR, drop);
+        if (std::find(collar.begin(), collar.end(), (std::uint8_t)1) != collar.end()) {
             buffer = std::make_shared<SkinHideBuffer>(OutfitCoverage::Pack(collar));
+            bits = std::make_shared<const std::vector<std::uint8_t>>(std::move(collar));
+        }
     }
-    cache[&piece] = Entry{drop, pieceRef, buffer};
+    cache[&piece] = Entry{drop, pieceRef, buffer, bits};
+    if (bitsOut) *bitsOut = bits;
     return buffer;
 }
 
 // The rig's arm shapes onto `pose` (rotations only, every node under the clavicles: the body keeps
-// its own bone lengths), blended by `weight`.
+// its own bone lengths), blended by `weight` - the clavicles themselves by `weight * clavicleWeight`
+// (Clavicle Follow: the rig's collarbones swing freely, with no torso or head in their way).
 void CopyArmShape(const Model& m, const Model& rig, float weight, IK::Pose& pose, const std::vector<int>& parents,
-                  const std::map<std::string, std::string>& boneMap) {
+                  const std::map<std::string, std::string>& boneMap, float clavicleWeight) {
     const IK::Pose& rigPose = rig.AppliedLocalPose();
     if ((int)rigPose.size() != rig.NodeCount()) return;
-    std::vector<char> under(pose.size(), 0);
-    for (const char* clavicle : {FPBody::kBoneClavicle[0], FPBody::kBoneClavicle[1]})
-        if (const int c = m.NodeIndex(FPBody::MappedBone(boneMap, clavicle)); c >= 0) under[c] = 1;
+    std::vector<char> under(pose.size(), 0), clavicle(pose.size(), 0);
+    for (const char* name : {FPBody::kBoneClavicle[0], FPBody::kBoneClavicle[1]})
+        if (const int c = m.NodeIndex(FPBody::MappedBone(boneMap, name)); c >= 0) under[c] = clavicle[c] = 1;
+    const float clavWeight = weight * std::clamp(clavicleWeight, 0.0f, 1.0f);
     for (int i = 0; i < (int)pose.size(); ++i) {
         if (!under[i] && parents[i] >= 0 && under[parents[i]]) under[i] = 1;
         if (!under[i]) continue;
         const int r = rig.NodeIndex(m.NodeName(i));
-        if (r >= 0) pose[i].R = glm::normalize(glm::slerp(pose[i].R, rigPose[r].R, weight));
+        if (r >= 0) pose[i].R = glm::normalize(glm::slerp(pose[i].R, rigPose[r].R, clavicle[i] ? clavWeight : weight));
     }
 }
 
@@ -118,6 +132,22 @@ glm::quat FirstPersonBodyShoulderLineTurn(const glm::vec3& bodyAcross, const glm
     if (weight <= 0.0f || glm::dot(bodyAcross, bodyAcross) < 1e-10f || glm::dot(rigAcross, rigAcross) < 1e-10f) return none;
     const glm::quat full(glm::normalize(bodyAcross), glm::normalize(rigAcross));
     return glm::normalize(glm::slerp(none, full, weight));
+}
+
+glm::vec3 FirstPersonBodyShoulderLineTilt(const glm::vec3& bodyAcross, const glm::vec3& rigAcross, float tilt) {
+    const float lb = glm::length(bodyAcross), lr = glm::length(rigAcross);
+    if (lb < 1e-5f || lr < 1e-5f) return rigAcross;
+    const glm::vec3 b = bodyAcross / lb, r = rigAcross / lr;
+    const glm::vec2 flat(r.x, r.z);
+    const float flatLen = glm::length(flat);
+    if (flatLen < 1e-5f) return rigAcross; // a vertical line has no blade to keep
+    const float y = glm::mix(b.y, r.y, std::clamp(tilt, 0.0f, 1.0f));
+    const float horiz = std::sqrt(std::max(1.0f - y * y, 0.0f));
+    return glm::vec3(flat.x / flatLen * horiz, y, flat.y / flatLen * horiz) * lr;
+}
+
+float FirstPersonBodyArmedEyeLift(float pitchRadians) {
+    return 1.0f - glm::smoothstep(glm::radians(25.0f), glm::radians(60.0f), std::abs(pitchRadians));
 }
 
 float FirstPersonBodySpineAim(float pitchRadians, float spineAim, float spineAimDown) {
@@ -335,7 +365,8 @@ bool FirstPersonBody::Start(World& world, Player& player) {
             bodyTag.NearHideWidth = std::max(cfg.ClothingNearHideWidth, 0.0f);
             // ... and by where it sits rather than what moves it: what's around the neck in the bind pose.
             bodyTag.CollarVerts = CollarVerts(reg.get<RenderableComponent>(e).ModelRef, *reg.get<RenderableComponent>(m_Driver).ModelRef, headRoot,
-                                              {Bone(FPBody::kBoneUpperArm[0]), Bone(FPBody::kBoneUpperArm[1])}, cfg.CollarHideDrop);
+                                              {Bone(FPBody::kBoneUpperArm[0]), Bone(FPBody::kBoneUpperArm[1])}, cfg.CollarHideDrop,
+                                              &bodyTag.CollarBits);
         }
         m_Models.push_back(reg.get<RenderableComponent>(e).ModelRef);
         m_Pieces.push_back(e);
@@ -669,7 +700,7 @@ void FirstPersonBody::LateUpdate(World& world, Camera& camera, float dt, entt::e
             if (pose.empty() || (int)pose.size() != m.NodeCount() || ul < 0 || ur < 0) break;
             std::vector<int> parents(pose.size());
             for (int i = 0; i < (int)pose.size(); ++i) parents[i] = m.NodeParent(i);
-            CopyArmShape(m, *armRig, m_ArmsWeight, pose, parents, m_BoneMap);
+            CopyArmShape(m, *armRig, m_ArmsWeight, pose, parents, m_BoneMap, cfg.ClavicleFollow);
             std::vector<glm::mat4> globals;
             IK::ComputeGlobals(pose, parents, globals);
             left = IK::Position(globals[ul]);
@@ -707,7 +738,11 @@ void FirstPersonBody::LateUpdate(World& world, Camera& camera, float dt, entt::e
             for (int pass = 0; pass < 2; ++pass) {
                 glm::vec3 l, r;
                 shoulderPair(l, r);
-                const glm::quat turn = FirstPersonBodyShoulderLineTurn(l - r, target, 1.0f);
+                // The rig's line tilts as its collarbones swing (a reload's reach lifts its support shoulder):
+                // matched whole, the chest rolled that shoulder up at the camera. The body takes the rig's tilt
+                // only by Clavicle Follow; the stance's blade (its turn about the vertical) is matched in full.
+                const glm::vec3 lineTarget = FirstPersonBodyShoulderLineTilt(l - r, target, cfg.ClavicleFollow);
+                const glm::quat turn = FirstPersonBodyShoulderLineTurn(l - r, lineTarget, 1.0f);
                 if (2.0f * std::acos(std::clamp(std::abs(turn.w), 0.0f, 1.0f)) > 0.002f) ApplySpineRotation(turn);
             }
             matched = true;
@@ -797,7 +832,13 @@ void FirstPersonBody::LateUpdate(World& world, Camera& camera, float dt, entt::e
             const float kReachSlack = cfg.ReachSlack;
             const glm::vec3 offset = camera.Right() * m_RigEyeToShoulders.x + camera.Up() * m_RigEyeToShoulders.y +
                                      camera.Front() * (m_RigEyeToShoulders.z + kReachSlack);
-            const glm::vec3 fromShoulders = m_Feet + yaw * (t.Scale * (m_Shoulders + toRest)) - offset;
+            // Armed Eye Offset: the rig's camera sits lower against its shoulders than an eye does; lifted back up -
+            // looking level, where the chest's top was in the view's corner. It goes looking down (the chest is then
+            // under the eye, and lifted, part of it came out of Near Hide and its cut edge showed) and looking up (the
+            // lifted gun took the support hand past its reach, off the handguard).
+            const glm::vec3 lift = (kRight * cfg.ArmedEyeOffset.x + glm::vec3(0.0f, cfg.ArmedEyeOffset.y, 0.0f) + kForward * cfg.ArmedEyeOffset.z) *
+                                   FirstPersonBodyArmedEyeLift(viewPitch);
+            const glm::vec3 fromShoulders = m_Feet + yaw * (t.Scale * (m_Shoulders + toRest + lift)) - offset;
             // Remember where this puts the eye against the head's: unarmed the eye keeps that height, or
             // the camera would jump when the gun is holstered.
             const glm::vec3 delta = glm::inverse(yaw) * (fromShoulders - eyeWorld);
@@ -987,7 +1028,7 @@ void FirstPersonBody::RotateSpine(const std::function<glm::quat(int)>& stepFor) 
     }
 }
 
-void FirstPersonBody::ArmsLateUpdate(World& world, entt::entity weaponArms, float viewModelFov, float dt) {
+void FirstPersonBody::ArmsLateUpdate(World& world, entt::entity weaponArms, float viewModelFov, float dt, const Camera* camera) {
     if (!IsActive()) return;
     auto& reg = world.Registry;
     if (!reg.valid(m_Body)) return;
@@ -1131,11 +1172,21 @@ void FirstPersonBody::ArmsLateUpdate(World& world, entt::entity weaponArms, floa
         parents.resize(pose.size());
         for (int i = 0; i < (int)pose.size(); ++i) parents[i] = m.NodeParent(i);
 
+        const glm::mat4 pieceWorld = world.ComposeWorldTransform(m_Pieces[k]);
+        // Arm Steadiness filters the walk's sway, so it reads the shoulders as the body's own clips have them:
+        // read after the rig's arm shapes, a reload's shoulder move was held back like sway and eased home late.
+        glm::vec3 ownShoulder[2]{};
+        if (!sourceDone) {
+            IK::ComputeGlobals(pose, parents, globals);
+            for (int s = 0; s < 2; ++s)
+                if (const int u = m.NodeIndex(Bone(kSides[s].Upper)); u >= 0)
+                    ownShoulder[s] = glm::vec3(pieceWorld * glm::vec4(IK::Position(globals[u]), 1.0f));
+        }
+
         // The rig's arm shapes first, so the elbows bend the way the animation has them; the solve
         // then only fixes the hands.
-        CopyArmShape(m, *rig, m_ArmsWeight, pose, parents, m_BoneMap);
+        CopyArmShape(m, *rig, m_ArmsWeight, pose, parents, m_BoneMap, cfg.ClavicleFollow);
 
-        const glm::mat4 pieceWorld = world.ComposeWorldTransform(m_Pieces[k]);
         const glm::mat4 toModel = glm::inverse(pieceWorld);
         // The first piece in `order` works the shoulder moves out; the rest copy them. (What of the torso's
         // shoulder that comes near the eye is left undrawn - Near Hide.)
@@ -1202,7 +1253,7 @@ void FirstPersonBody::ArmsLateUpdate(World& world, entt::entity weaponArms, floa
             // reach the arm. Bigger departures (a crouch, a stop clip) are followed, trailing by at most
             // Arm Steady Max.
             if (steady > 0.0f && clav >= 0 && isSource) {
-                const glm::vec3 shoulderWorld = glm::vec3(pieceWorld * glm::vec4(IK::Position(globals[upper]), 1.0f));
+                const glm::vec3 shoulderWorld = ownShoulder[s];
                 const glm::vec3 inFrame = glm::vec3(anchorInverse * glm::vec4(shoulderWorld, 1.0f));
                 if (!m_HaveShoulderAnchor[s]) { m_ShoulderAnchor[s] = inFrame; m_HaveShoulderAnchor[s] = true; }
                 m_ShoulderAnchor[s] += (inFrame - m_ShoulderAnchor[s]) * Follow(dt, cfg.ArmSteadyTime);
@@ -1296,6 +1347,176 @@ void FirstPersonBody::ArmsLateUpdate(World& world, entt::entity weaponArms, floa
                 }
             }
         }
+        // Debug: how far each of the body's hands ended up from the rig's (off the gun, when the arm can't reach).
+        if (isSource)
+            for (int s = 0; s < 2; ++s)
+                if (const int hand = m.NodeIndex(Bone(kSides[s].Hand)); haveHand[s] && hand >= 0)
+                    BodyDebug::Info().HandGap[s] = glm::length(glm::vec3(pieceWorld * glm::vec4(IK::Position(globals[hand]), 1.0f)) - handPos[s]);
         m.ApplyLocalPose(pose);
     }
+
+    // Debug (the Inspector's readout, and the Scene overlay's Gizmos > Player body): the play camera's view
+    // and each arm as the arms rig has it (yellow) against the body's (magenta).
+    if (camera) {
+        const glm::vec3 eye = camera->Position, f = camera->Front(), r = camera->Right(), u = camera->Up();
+        BodyDebug::Info().NearPlane = camera->NearPlane;
+        if (BodyDebug::Enabled()) {
+            // Near plane (red), then the world's frustum (grey) and the view-model pass's (cyan) out to 40 cm.
+            const float aspect = 16.0f / 9.0f;
+            auto frustum = [&](float fovDeg, float dist, const glm::vec4& c, bool spokes) {
+                const float h = std::tan(glm::radians(fovDeg) * 0.5f) * dist, w = h * aspect;
+                const glm::vec3 m = eye + f * dist, p[4] = {m - r * w - u * h, m + r * w - u * h, m + r * w + u * h, m - r * w + u * h};
+                for (int i = 0; i < 4; ++i) {
+                    BodyDebug::Line(p[i], p[(i + 1) % 4], c);
+                    if (spokes) BodyDebug::Line(eye, p[i], c);
+                }
+            };
+            frustum(camera->Fov, camera->NearPlane, glm::vec4(1.0f, 0.1f, 0.1f, 1.0f), false);
+            frustum(camera->Fov, 0.4f, glm::vec4(0.8f, 0.8f, 0.8f, 1.0f), true);
+            if (viewModelFov > 0.0f) {
+                frustum(viewModelFov, camera->NearPlane, glm::vec4(1.0f, 0.4f, 0.1f, 1.0f), false);
+                frustum(viewModelFov, 0.4f, glm::vec4(0.1f, 0.9f, 1.0f, 1.0f), true);
+            }
+            BodyDebug::Cross(eye, 0.02f, glm::vec4(1.0f, 1.0f, 0.0f, 1.0f));
+        }
+        auto segDist = [&](const glm::vec3& a, const glm::vec3& b) {
+            const glm::vec3 ab = b - a;
+            const float t = glm::dot(ab, ab) > 1e-10f ? std::clamp(glm::dot(eye - a, ab) / glm::dot(ab, ab), 0.0f, 1.0f) : 0.0f;
+            return glm::length(eye - (a + ab * t));
+        };
+        // One side's clavicle -> upper arm -> forearm -> hand, world, as `m` stands in `modelWorld`.
+        auto chain = [&](const Model& m, const glm::mat4& modelWorld, int s, glm::vec3 (&p)[4]) {
+            const IK::Pose& pose = m.AppliedLocalPose();
+            if ((int)pose.size() != m.NodeCount()) return false;
+            const char* names[4] = {kSides[s].Clavicle, kSides[s].Upper, kSides[s].Lower, kSides[s].Hand};
+            for (int j = 0; j < 4; ++j) {
+                const int node = m.NodeIndex(Bone(names[j]));
+                if (node < 0) return false;
+                p[j] = glm::vec3(modelWorld * m.PoseNodeModelSpace(pose, node)[3]);
+            }
+            return true;
+        };
+        size_t armsK = m_Models.size();
+        for (size_t k = 0; k < m_Pieces.size() && k < m_Models.size(); ++k) {
+            if (!m_Models[k] || !reg.valid(m_Pieces[k]) || !reg.all_of<NameComponent>(m_Pieces[k])) continue;
+            std::string name = reg.get<NameComponent>(m_Pieces[k]).Name;
+            for (char& c : name) c = (char)std::tolower((unsigned char)c);
+            if (!armsName.empty() && name.find(armsName) != std::string::npos) { armsK = k; break; }
+        }
+        for (int s = 0; s < 2; ++s) {
+            glm::vec3 p[4];
+            if (chain(*rig, rigWorld, s, p)) {
+                BodyDebug::Info().EyeToUpperArmRig[s] = segDist(p[1], p[2]);
+                for (int j = 0; j < 3; ++j) BodyDebug::Line(p[j], p[j + 1], glm::vec4(1.0f, 0.9f, 0.1f, 1.0f)); // the rig's
+            }
+            if (armsK < m_Models.size() && chain(*m_Models[armsK], world.ComposeWorldTransform(m_Pieces[armsK]), s, p)) {
+                BodyDebug::Info().EyeToUpperArmBody[s] = segDist(p[1], p[2]);
+                for (int j = 0; j < 3; ++j) BodyDebug::Line(p[j], p[j + 1], glm::vec4(1.0f, 0.3f, 0.9f, 1.0f)); // the body's
+            }
+        }
+        if (BodyDebug::Enabled()) CameraProbe(world, *camera, viewModelFov, dt);
+    }
+}
+
+// Which of the body's pieces the camera actually sees nearest the eye, and the bone that moves it there. Every
+// piece is skinned on the CPU with this frame's pose and put through the renderer's own hides (Camera Hidden
+// Bones, Near Hide, clothing's head, sleeve and collar masks); what's left
+// inside the view's frustum (the world's FOV, or the view-model pass's for the arms) is measured. Overlay
+// only: the Inspector's readout, and a log line whenever something is within 12 cm of the eye.
+void FirstPersonBody::CameraProbe(World& world, const Camera& camera, float viewModelFov, float dt) {
+    auto& reg = world.Registry;
+    const glm::vec3 eye = camera.Position, f = camera.Front(), r = camera.Right(), u = camera.Up();
+    constexpr float kAspect = 16.0f / 9.0f, kClose = 0.12f;
+    glm::vec3 flatRight(r.x, 0.0f, r.z);
+    flatRight = glm::dot(flatRight, flatRight) > 1e-8f ? glm::normalize(flatRight) : glm::vec3(1.0f, 0.0f, 0.0f);
+    auto bit = [](const std::uint32_t (&bits)[16], int b) { return b >= 0 && b < 16 * 32 && ((bits[b >> 5] >> (b & 31)) & 1u) != 0u; };
+
+    float bestDepth = 1e9f, bestDist = 0.0f;
+    int bestBone = -1, close = 0;
+    size_t bestPiece = 0;
+    bool bestViewModel = false;
+    for (size_t k = 0; k < m_Pieces.size() && k < m_Models.size(); ++k) {
+        const entt::entity e = m_Pieces[k];
+        if (!m_Models[k] || !reg.valid(e) || reg.all_of<InactiveTag>(e)) continue;
+        const auto* rc = reg.try_get<RenderableComponent>(e);
+        const auto* tag = reg.try_get<PlayerBodyTag>(e);
+        if (!rc || !tag || rc->CastShadows == RenderableComponent::ShadowCasting::ShadowsOnly) continue;
+        const Model& m = *m_Models[k];
+        const glm::mat4 pieceWorld = world.ComposeWorldTransform(e);
+        const bool pieceViewModel = reg.all_of<ViewModelTag>(e) && viewModelFov > 0.0f;
+        const std::vector<std::uint8_t>* collar = tag->CollarBits.get();
+        size_t vertexIndex = 0; // across the sub-meshes, as the collar's bits count them
+        for (int mi = 0; mi < m.MeshCount(); ++mi) {
+            for (const ModelMesh::SkinVertex& v : m.MeshSkinVertices(mi)) {
+                const bool inCollar = collar && vertexIndex < collar->size() && (*collar)[vertexIndex];
+                ++vertexIndex;
+                glm::mat4 skin(0.0f);
+                float total = 0.0f, hideBones = 0.0f, head = 0.0f, sleeve = 0.0f, top = 0.0f;
+                int bone = -1;
+                for (int i = 0; i < MAX_BONE_INFLUENCE; ++i) {
+                    const int b = v.BoneIDs[i];
+                    if (b < 0) continue;
+                    const float w = v.Weights[i];
+                    skin += m.FinalBoneMatrix(b) * w;
+                    total += w;
+                    for (int h = 0; h < 8 && tag->CameraHideBones[h] >= 0; ++h)
+                        if (tag->CameraHideBones[h] == b) hideBones += w;
+                    if (bit(tag->HeadBones, b)) head += w;
+                    if (bit(tag->SleeveBones, b)) sleeve += w;
+                    if (w > top) { top = w; bone = b; }
+                }
+                if (total <= 1e-4f) continue;
+                // Skin mostly on a Hidden Bone is collapsed to a point (Model::SetHiddenNodes): nothing is drawn there.
+                if (glm::length(glm::vec3(skin[0])) < 0.5f * total) continue;
+                // Which pass draws it, and so which hides and which FOV apply (SceneRenderer).
+                const bool sleeveInViewModel = tag->SleevesInViewModel && sleeve > 0.5f;
+                const bool viewModel = pieceViewModel || sleeveInViewModel;
+                if (!viewModel) {
+                    if (inCollar || hideBones > 0.5f) continue;
+                    if (tag->HasHeadBones && head > 0.5f) continue;
+                }
+                const glm::vec3 p = glm::vec3(pieceWorld * skin * glm::vec4(v.Position, 1.0f));
+                const glm::vec3 d = p - eye;
+                if (pieceViewModel) {
+                    // The arms piece: drawn whole in the view-model pass.
+                } else if (sleeveInViewModel) {
+                    if (glm::dot(d, d) < tag->NearHide * tag->NearHide) continue;
+                } else if (FirstPersonBodyNearHidden(p, eye, flatRight, tag->NearHide, tag->NearHideWidth)) {
+                    continue;
+                }
+                const float z = glm::dot(d, f);
+                if (z <= 0.0f) continue;
+                const float tanHalf = std::tan(glm::radians(viewModel ? viewModelFov : camera.Fov) * 0.5f);
+                if (std::abs(glm::dot(d, u)) > z * tanHalf || std::abs(glm::dot(d, r)) > z * tanHalf * kAspect) continue;
+                if (z < kClose) ++close;
+                if (z < bestDepth) {
+                    bestDepth = z; bestDist = glm::length(d); bestBone = bone; bestPiece = k; bestViewModel = viewModel;
+                }
+            }
+        }
+    }
+
+    auto& info = BodyDebug::Info();
+    info.ProbeDepth = bestDepth < 1e8f ? bestDepth : 0.0f;
+    info.ProbePiece.clear();
+    info.ProbeBone.clear();
+    if (bestDepth >= 1e8f) return;
+    const Model& m = *m_Models[bestPiece];
+    for (int i = 0; i < m.NodeCount(); ++i)
+        if (m.BoneId(m.NodeName(i)) == bestBone) { info.ProbeBone = m.NodeName(i); break; }
+    if (reg.all_of<NameComponent>(m_Pieces[bestPiece])) info.ProbePiece = reg.get<NameComponent>(m_Pieces[bestPiece]).Name;
+    info.ProbeViewModel = bestViewModel;
+    // A line while something is close, at most five a second (and at once for anything nearer than the last).
+    m_ProbeLogTimer -= dt;
+    if (bestDepth < kClose && (m_ProbeLogTimer <= 0.0f || bestDepth < m_ProbeLogged - 0.01f)) {
+        char line[320];
+        std::snprintf(line, sizeof(line),
+                      "Camera probe: '%s' in view %.1f cm ahead of the eye (%.1f cm away), mostly moved by '%s', %d vertices within %.0f cm - %s pass.",
+                      info.ProbePiece.c_str(), bestDepth * 100.0f, bestDist * 100.0f, info.ProbeBone.c_str(), close, kClose * 100.0f,
+                      bestViewModel ? "view-model" : "world");
+        Log::Info(line);
+        m_ProbeLogTimer = 0.2f;
+        m_ProbeLogged = bestDepth;
+    }
+    if (m_ProbeLogTimer <= 0.0f) m_ProbeLogged = 1e9f;
 }

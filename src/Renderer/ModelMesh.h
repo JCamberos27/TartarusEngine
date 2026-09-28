@@ -35,6 +35,15 @@ public:
     // cooking (#185 PR 6). size() == IndexCount().
     const std::vector<unsigned int>& LocalIndices() const { return m_LocalIndices; }
 
+    // A skinned mesh's vertices as the vertex shader takes them (mesh space, up to four bone influences), kept on
+    // the CPU for queries of the posed surface (the first-person body's camera probe). Empty when not skinned.
+    struct SkinVertex {
+        glm::vec3 Position{0.0f};
+        int BoneIDs[MAX_BONE_INFLUENCE] = {-1, -1, -1, -1};
+        float Weights[MAX_BONE_INFLUENCE] = {0, 0, 0, 0};
+    };
+    const std::vector<SkinVertex>& SkinVertices() const { return m_Skin; }
+
     // Geometry counts for the editor's statistics overlay.
     unsigned int IndexCount() const { return m_IndexCount; }
     unsigned int VertexCount() const { return (unsigned int)m_LocalPositions.size(); }
@@ -47,4 +56,6 @@ private:
     unsigned int m_IndexCount = 0;
     std::vector<glm::vec3> m_LocalPositions;
     std::vector<unsigned int> m_LocalIndices;
+    std::vector<SkinVertex> m_Skin;
+    void KeepSkin(const std::vector<ModelVertex>& vertices);
 };

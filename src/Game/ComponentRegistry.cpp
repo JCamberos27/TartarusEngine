@@ -452,6 +452,12 @@ void RegisterEngineComponents() {
               "The bone the camera sits on." },
             { "Camera Offset", T::Vec3, TARTARUS_REFLECT_FIELD(FirstPersonBodyComponent, CameraOffset), 0.005f,
               "The eyes from the head bone, in the body's frame (X right, Y up, Z forward), metres." },
+            { "Armed Eye Offset", T::Vec3, TARTARUS_REFLECT_FIELD(FirstPersonBodyComponent, ArmedEyeOffset), 0.005f,
+              "With the gun out, the eye goes where the weapon's arms rig has its camera against its shoulders, which is\n"
+              "low (a first-person rig's camera sits just over its shoulders). This lifts it back toward the eyes (body\n"
+              "frame: X right, Y up, Z forward, metres) so the chest and collar stay out of view. The gun doesn't move on\n"
+              "screen; the body sits lower under it, and the hands reach further. Too much and a hand comes off the gun.\n"
+              "Applies near level; it eases out looking up or down (gone by 60 degrees), where it isn't needed." },
             { "Head Bob", T::Float, TARTARUS_REFLECT_FIELD(FirstPersonBodyComponent, HeadBob), 0.01f,
               "How much of the head's own motion the camera follows: 0 = steady at the head's standing\n"
               "height, 1 = locked to the head bone.", 0.0f, 1.0f },
@@ -519,6 +525,11 @@ void RegisterEngineComponents() {
         m.Fields.push_back({ "Shoulder Max Angle", T::Float, TARTARUS_REFLECT_FIELD(FirstPersonBodyComponent, ShoulderMaxAngle), 0.5f,
               "The most (degrees) a collarbone turns to move its shoulder, shrug and steadying together. The shoulder turns about the\n"
               "collarbone's inner end, like a real one; past this the arm straightens instead.", 0.0f, 60.0f });
+        m.Fields.back().Group = "Camera & Arms (advanced)";
+        m.Fields.push_back({ "Clavicle Follow", T::Float, TARTARUS_REFLECT_FIELD(FirstPersonBodyComponent, ClavicleFollow), 0.01f,
+              "How much of the arms rig's collarbone motion the body takes (its arms and its chest's stance). The rig has no torso or\n"
+              "head in the way, so a reload swings its collarbones freely: taken whole, the body's shoulder hunched up at the camera.\n"
+              "1 = all of it, 0 = the body's own pose. The hands stay on the gun either way.", 0.0f, 1.0f });
         m.Fields.back().Group = "Camera & Arms (advanced)";
         m.Fields.push_back({ "Reach Lean Max", T::Float, TARTARUS_REFLECT_FIELD(FirstPersonBodyComponent, ReachLeanMax), 0.5f,
               "The most (degrees) the chest leans toward a hand still out of reach once its collarbone has turned all it may\n"
@@ -659,7 +670,7 @@ void RegisterEngineComponents() {
         // Groups, by name (not by position: reordering fields must not move them).
         {
             static const std::pair<const char*, const char*> kGroups[] = {
-                {"Head Bone", "Camera"}, {"Camera Offset", "Camera"}, {"Head Bob", "Camera"}, {"Camera Smoothing", "Camera"},
+                {"Head Bone", "Camera"}, {"Camera Offset", "Camera"}, {"Armed Eye Offset", "Camera"}, {"Head Bob", "Camera"}, {"Camera Smoothing", "Camera"},
                 {"Weapon Arms", "Arms"}, {"Spine Aim", "Arms"}, {"Spine Aim Down", "Arms"}, {"Shoulder Line Match", "Arms"}, {"Arms Piece", "Arms"},
                 {"Turn Threshold", "Turning"}, {"Spine Twist", "Turning"}, {"Max Turn Rate", "Turning"},
                 {"Crouch Height", "Crouch"}, {"Crouch Speed", "Crouch"},

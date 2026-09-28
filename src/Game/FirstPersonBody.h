@@ -61,7 +61,8 @@ public:
     // body's arms take that rig's arm pose and reach their hands onto its hands (Weapon Arms).
     // `weaponArms` is the presentation's arms entity (null = none), `viewModelFov` its sub-pass
     // FOV in degrees. The arms rig stops being drawn while this holds; the gun still is.
-    void ArmsLateUpdate(World& world, entt::entity weaponArms, float viewModelFov, float dt);
+    // `camera` (optional) is the view it's drawn from: the Scene overlay's frustum and the eye distances.
+    void ArmsLateUpdate(World& world, entt::entity weaponArms, float viewModelFov, float dt, const Camera* camera = nullptr);
 
     // The controller parameters of the last Tick (body frame: x right, y forward, m/s).
     glm::vec2 Move() const { return m_Move; }
@@ -98,6 +99,8 @@ private:
     glm::vec3 m_RigShoulderLine{1.0f, 0.0f, 0.0f}; // rig: right to left upper arm, in the camera's frame (smoothed) - its stance
     bool m_HaveRigShoulderLine = false;
     std::vector<entt::entity> m_ArmsTagged;       // pieces given the ViewModelTag
+    float m_ProbeLogTimer = 0.0f, m_ProbeLogged = 1e9f; // CameraProbe's log throttle
+    void CameraProbe(World& world, const Camera& camera, float viewModelFov, float dt);
     std::string m_LastError;
     int m_OutfitVersion = 0;       // CharacterOutfitComponent::Version at Start
     float m_ViewYaw = 0.0f;        // the view's heading, radians (the body's turns aim at it)
@@ -171,6 +174,12 @@ float FirstPersonBodyLookDown(float pitchRadians, float startDegrees);
 // The turn (model space) that brings the body's shoulder line `bodyAcross` (right to left upper arm) onto
 // the arms rig's `rigAcross`, `weight` of the way (0..1). Identity when either is degenerate.
 glm::quat FirstPersonBodyShoulderLineTurn(const glm::vec3& bodyAcross, const glm::vec3& rigAcross, float weight);
+// The rig's shoulder line `rigAcross` (model space, +Y up) with its tilt out of the horizontal taken only by
+// `tilt` (0..1, the rest the body's own `bodyAcross` tilt); its heading (the blade) and length are kept.
+glm::vec3 FirstPersonBodyShoulderLineTilt(const glm::vec3& bodyAcross, const glm::vec3& rigAcross, float tilt);
+// How much of Armed Eye Offset applies at view pitch `pitchRadians` (+ = up): all of it within 25 degrees of
+// level, none from 60 degrees up or down, eased between.
+float FirstPersonBodyArmedEyeLift(float pitchRadians);
 // The share of the view's pitch the spine takes: Spine Aim looking up, Spine Aim Down looking down.
 float FirstPersonBodySpineAim(float pitchRadians, float spineAim, float spineAimDown);
 float FirstPersonBodyFootPelvis(float offL, float offR, float maxDrop, float maxRaise);
