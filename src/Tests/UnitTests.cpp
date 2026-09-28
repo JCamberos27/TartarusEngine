@@ -1970,6 +1970,62 @@ void TestWardrobe() {
     const auto colours = Wardrobe::Colourways("a/M_Hoodie_Blue.mat", {"a/M_Hoodie_Red.mat", "a/readme.txt", "a/M_Hoodie_Black.mat"});
     CHECK(colours.size() == 3 && Wardrobe::Stem(colours[0]) == "M_Hoodie_Black");
 
+    // Layers: each hides what pokes through it from the layers under it - and nothing else.
+    Wardrobe::Wardrobe lw;
+    CHECK(Wardrobe::Parse(R"({"slots": [{"id": "Top"}, {"id": "Outerwear"}, {"id": "Pants"}, {"id": "Shoes"},
+                                        {"id": "Hair", "headAttached": true}, {"id": "Bag", "layer": 1, "hides": false}],
+                              "bodies": {"Male": {"parts": [{"part": "Torso", "model": "T.fbx"}]}},
+                              "layers": [{"slot": "Top", "nameHasAny": ["Tucked"], "layer": 2},
+                                         {"slot": "Shoes", "nameHasAny": ["Boots"], "layer": 5},
+                                         {"slot": "Top", "nameHasAny": ["Hood_Up"], "over": ["Hair"]}]})", lw, &err));
+    auto layer = [&](const char* slot, const char* item, bool body = false) { return Wardrobe::LayerOf(lw, slot, item, body); };
+    const auto head = layer("Head", "a/Head.fbx", true), hair = layer("Hair", "a/SKM_Hair_Long.fbx");
+    const auto tee = layer("Top", "a/SKM_Tshirt.fbx"), tucked = layer("Top", "a/SKM_Tshirt_Tucked.fbx");
+    const auto hoodUp = layer("Top", "a/SKM_Hoodie_Hood_Up.fbx"), jacket = layer("Outerwear", "a/SKM_Jacket.fbx");
+    const auto jeans = layer("Pants", "a/SKM_Jeans.fbx"), sneakers = layer("Shoes", "a/SKM_Sneakers.fbx"), boots = layer("Shoes", "a/SKM_Boots.fbx");
+    CHECK(Wardrobe::Hides(jacket, "Top", tee) && !Wardrobe::Hides(tee, "Outerwear", jacket)); // the shirt under the jacket
+    CHECK(Wardrobe::Hides(tee, "Head", head) && !Wardrobe::Hides(head, "Top", tee));          // the body under everything
+    CHECK(Wardrobe::Hides(hoodUp, "Hair", hair) && !Wardrobe::Hides(tee, "Hair", hair));      // a hood that's up takes the hair
+    CHECK(!Wardrobe::Hides(hair, "Head", head));                                              // hair cards hide nothing
+    CHECK(Wardrobe::Hides(tee, "Pants", jeans) && Wardrobe::Hides(jeans, "Top", tucked));     // tucked or not
+    CHECK(Wardrobe::Hides(jeans, "Shoes", sneakers) && Wardrobe::Hides(boots, "Pants", jeans)); // hems over shoes, into boots
+    CHECK(!Wardrobe::Hides(layer("Bag", "a/SKM_Bag.fbx"), "Torso", head) && !Wardrobe::Hides(tee, "Top", tee));
+
+    // Compatibility rules: tags from names, materials and earlier tags; hard and soft excludes; styles.
+    Wardrobe::Wardrobe cw;
+    CHECK(Wardrobe::Parse(R"({"slots": [{"id": "Top", "folders": ["Tops"]}, {"id": "Outerwear", "folders": ["Outerwear"]},
+                                        {"id": "Shoes", "folders": ["Shoes"]}],
+                              "bodies": {"Male": {"parts": [{"part": "Torso", "model": "T.fbx"}]}},
+                              "tags": [{"slot": "Outerwear", "materialHasAny": ["Shirt"], "add": ["BuiltInTop"]},
+                                       {"slot": "Outerwear", "lacksTags": ["BuiltInTop"], "add": ["Open"]},
+                                       {"slot": "Top", "nameHasAny": ["Hoodie"], "add": ["Thick", "Sport"]},
+                                       {"slot": "Shoes", "nameHasAny": ["Flip"], "add": ["Summer"]}],
+                              "clears": [{"slot": "Outerwear", "tags": ["BuiltInTop"], "clear": "Top"}],
+                              "excludes": [{"a": {"tags": ["Open"]}, "b": {"tags": ["Thick"]}},
+                                           {"soft": true, "a": {"slot": "Outerwear"}, "b": {"slot": "Shoes", "nameHasAny": ["Flip"]}}],
+                              "styles": [{"name": "Sport", "fill": {"Top": 1.0}}, {"name": "Summer", "fill": {"Shoes": 1.0}}]})", cw, &err));
+    std::vector<Wardrobe::Item> ci;
+    auto addc = [&](const std::string& rel, std::vector<std::string> mats = {}) {
+        Wardrobe::Item it;
+        CHECK(Wardrobe::Classify(cw, rel, mats, it));
+        ci.push_back(it);
+    };
+    addc("Tops/SKM_Hoodie.fbx");
+    addc("Tops/SKM_Tee.fbx");
+    addc("Outerwear/SKM_Jacket.fbx", {"m/M_Jacket.mat", "m/M_TShirt_Black.mat"});
+    addc("Outerwear/SKM_Bomber.fbx", {"m/M_Bomber.mat"});
+    addc("Shoes/SKM_Flip_Flops.fbx");
+    CHECK(Wardrobe::HasTag(ci[2], "BuiltInTop") && !Wardrobe::HasTag(ci[2], "Open") && Wardrobe::HasTag(ci[3], "Open"));
+    CHECK(Wardrobe::Conflicts(cw, ci[3], ci[0]) && !Wardrobe::Conflicts(cw, ci[3], ci[1])); // open jacket: no hoodie
+    CHECK(Wardrobe::Conflicts(cw, ci[2], ci[1]));                                            // it clears the top
+    CHECK(Wardrobe::Conflicts(cw, ci[3], ci[4]) && !Wardrobe::Conflicts(cw, ci[3], ci[4], false)); // soft
+    CHECK(Wardrobe::InStyle(cw, ci[0], cw.Styles[0]) && !Wardrobe::InStyle(cw, ci[4], cw.Styles[0]) &&
+          Wardrobe::InStyle(cw, ci[1], cw.Styles[1])); // untagged fits any style
+    Wardrobe::Request cr;
+    cr.Items = {{"Outerwear", ci[3].Path}, {"Top", ci[0].Path}, {"Shoes", ci[4].Path}};
+    const auto cres = Wardrobe::Resolve(cw, ci, cr);
+    CHECK(cres.Dropped == std::vector<std::string>{"Top"} && cres.Clashes.size() == 1);
+
     const Wardrobe::Diff d = Wardrobe::MakeDiff({{"Torso", "a/T.fbx"}, {"Hat", "a/Cap.fbx"}, {"Hair", "a/H.fbx"}},
                                                 {{"Torso", "a/T.fbx"}, {"Hair", "a/H2.fbx"}, {"Top", "a/Top.fbx"}});
     CHECK(d.Create.size() == 1 && d.Create[0].Slot == "Top" && d.Remodel.size() == 1 && d.Remodel[0].Slot == "Hair");
@@ -2011,6 +2067,8 @@ void TestOutfitCoverage() {
     CHECK(lower > 0 && lowerCovered == 0);
     // Cloth 1.5 cm inside the skin (skin poking through) still counts; 10 cm away doesn't.
     CHECK(OutfitCoverage::Covered(skin, sphere(0.085f, true))[(size_t)(2 * 24)] == 1);
+    CHECK(OutfitCoverage::Covered(skin, sphere(0.075f, true))[(size_t)(2 * 24)] == 1); // a shirt 2.5 cm out through a jacket
+    CHECK(OutfitCoverage::Covered(skin, sphere(0.06f, true))[(size_t)(2 * 24)] == 0);
     CHECK(OutfitCoverage::Covered(skin, sphere(0.20f, true))[(size_t)(2 * 24)] == 0);
     const int before = (int)std::count(covered.begin(), covered.end(), (std::uint8_t)1);
     OutfitCoverage::Erode(skin, covered, 1);
@@ -2071,7 +2129,53 @@ void TestWardrobeQuantum() {
     req.Sex = Wardrobe::Gender::Female;
     req.Items = {{"Hair", item("Female/Hair/SKM_F_Haircut_Bobcut.fbx")}, {"Hat", item("Clothing/Female/Hats/SKM_F_Cap.fbx")}};
     r = Wardrobe::Resolve(cat->W, cat->Items, req);
-    CHECK(pieceFor(r, "Hair") == "SKM_F_Haircut_Bobcut_Cap" && pieceFor(r, "Torso") == "SKM_F_Vivian_Body");
+    // The fitted cut carries its own cap, so the separate cap comes off (no double cap).
+    CHECK(pieceFor(r, "Hair") == "SKM_F_Haircut_Bobcut_Cap" && pieceFor(r, "Hat").empty() && pieceFor(r, "Torso") == "SKM_F_Vivian_Body");
+
+    // What goes together: jackets with a top of their own take the top off, an open one keeps a thin top
+    // but not a hoodie, boots cut to go under the pants keep the plain pants, socks are their own slot.
+    auto male = [&](std::map<std::string, std::string> items) {
+        Wardrobe::Request m;
+        m.Items = std::move(items);
+        return Wardrobe::Resolve(cat->W, cat->Items, m);
+    };
+    r = male({{"Outerwear", item("Clothing/Male/Outerwear/SKM_Leather_Jacket.fbx")}, {"Top", item("Clothing/Male/Tops/SKM_Hoodie.fbx")}});
+    CHECK(pieceFor(r, "Top").empty() && r.Dropped.size() == 1);
+    r = male({{"Outerwear", item("Clothing/Male/Outerwear/SKM_Jacket_M65.fbx")}, {"Top", item("Clothing/Male/Tops/SKM_Hoodie.fbx")}});
+    CHECK(pieceFor(r, "Top").empty() && !pieceFor(r, "Outerwear").empty());
+    r = male({{"Outerwear", item("Clothing/Male/Outerwear/SKM_Jacket_M65.fbx")}, {"Top", item("Clothing/Male/Tops/SKM_Tshirt.fbx")}});
+    CHECK(pieceFor(r, "Top") == "SKM_Tshirt" && r.Dropped.empty());
+    r = male({{"Shoes", item("Clothing/Male/Shoes/SKM_Boots_Inboots.fbx")}, {"Pants", item("Clothing/Male/Pants/SKM_Jeans.fbx")},
+              {"Socks", item("Clothing/Male/Shoes/SKM_Socks.fbx")}});
+    CHECK(pieceFor(r, "Pants") == "SKM_Jeans" && pieceFor(r, "Socks") == "SKM_Socks" && pieceFor(r, "Shoes") == "SKM_Boots_Inboots");
+    r = male({{"Top", item("Clothing/Male/Tops/SKM_Hoodie_Hood_Up.fbx")}, {"Hair", item("Hair/SKM_Hair_Long.fbx")},
+              {"Hat", item("Clothing/Male/Hats/SKM_Hat_Cowboy.fbx")}, {"Headphones", item("Clothing/Male/Hats/SKM_Headphones.fbx")}});
+    CHECK(pieceFor(r, "Hair").empty() && pieceFor(r, "Hat").empty() && pieceFor(r, "Headphones").empty());
+    r = male({{"Hat", item("Clothing/Male/Hats/SKM_Cap.fbx")}, {"Headphones", item("Clothing/Male/Hats/SKM_Headphones.fbx")}});
+    CHECK(pieceFor(r, "Hat") == "SKM_Cap" && pieceFor(r, "Headphones") == "SKM_Headphones");
+    r = male({{"Outerwear", item("Clothing/Male/Outerwear/SKM_Jacket_Classic_Tie.fbx")},
+              {"Shoes", item("Clothing/Male/Shoes/SKM_Flip_Flops.fbx")}});
+    CHECK(!pieceFor(r, "Shoes").empty() && r.Clashes.size() == 1); // a style clash warns, it doesn't undress
+
+    // Randomize: whole outfits (top or a jacket that covers the chest, pants, shoes), nothing the rules
+    // must take off, no clash, no variant picked directly - and the same seed gives the same outfit.
+    for (int g = 0; g < 2; ++g)
+        for (unsigned seed = 1; seed <= 300; ++seed) {
+            Wardrobe::Request base;
+            base.Sex = (Wardrobe::Gender)g;
+            std::string style;
+            const auto want = Wardrobe::Randomize(cat->W, cat->Items, base, seed, {}, "", &style);
+            CHECK(!style.empty() && Wardrobe::Randomize(cat->W, cat->Items, base, seed).Items == want.Items);
+            const auto got = Wardrobe::Resolve(cat->W, cat->Items, want);
+            CHECK(got.Dropped.empty() && got.Clashes.empty());
+            CHECK(!pieceFor(got, "Pants").empty() && !pieceFor(got, "Shoes").empty());
+            for (const auto& [slot, path] : want.Items) CHECK(cat->Find(path) && !cat->Find(path)->Variant);
+        }
+    // Locked slots stay as they are.
+    Wardrobe::Request locked;
+    locked.Items = {{"Top", item("Clothing/Male/Tops/SKM_Shirt_Hawaii.fbx")}};
+    CHECK(Wardrobe::Randomize(cat->W, cat->Items, locked, 7, {"Top"}).Items.at("Top") == locked.Items["Top"]);
+    CHECK(Wardrobe::FindStyle(cat->W, "Formal") && Wardrobe::FindStyle(cat->W, "Formal")->Gender == 0);
 }
 
 // Async loading's CPU halves (AssetLibrary::RequestModelAsync's workers run these): no GL anywhere, so

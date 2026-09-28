@@ -1,0 +1,25 @@
+{
+  "wardrobe": "assets/Characters/Quantum/Quantum.wardrobe",
+  "gender": "Male",
+  "race": "Young",
+  "items": {
+    "Glasses": {
+      "item": "assets/Characters/Quantum/Models/Clothing/Male/Glasses/SKM_Glasses_Classic.fbx"
+    },
+    "Hair": {
+      "item": "assets/Characters/Quantum/Models/Hair/SKM_Hair_Short.fbx"
+    },
+    "Pants": {
+      "item": "assets/Characters/Quantum/Models/Clothing/Male/Pants/SKM_Pants_Cargo_Straight.fbx"
+    },
+    "Shoes": {
+      "item": "assets/Characters/Quantum/Models/Clothing/Male/Shoes/SKM_Sneakers_Sport.fbx"
+    },
+    "Top": {
+      "item": "assets/Characters/Quantum/Models/Clothing/Male/Tops/SKM_Shirt_Hawaii.fbx"
+    },
+    "Wrist L": {
+      "item": "assets/Characters/Quantum/Models/Clothing/Male/Accessories/SKM_Watch_L.fbx"
+    }
+  }
+}

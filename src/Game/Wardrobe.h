@@ -28,6 +28,18 @@ struct SlotDef {
     std::vector<std::string> Folders;  // folder names (any depth under an item folder) whose models fill it
     std::string NameSuffix;            // and whose file name ends with this (before .fbx), if set - e.g. "_L"
     bool HeadAttached = false;         // rides on the head: shadow-only in first person, like the head
+    int Layer = 0;                     // how far out it's worn (body parts are 0): it hides lower layers' pokes
+    bool Hides = true;                 // false for see-through items (hair cards, beards, glasses): never hide
+};
+
+// A slot's layer changed for some of its items: a tucked shirt goes under the pants, boots over them,
+// a hood that's up over the hair (`Over`: slots it hides whatever their layer).
+struct LayerRule {
+    std::string Slot;
+    std::vector<std::string> NameHasAny; // empty = every item in the slot
+    std::vector<std::string> NameLacksAll;
+    int Layer = -1;                      // -1 = the slot's
+    std::vector<std::string> Over;
 };
 
 // A race: the head it wears and the skin its body parts take.
@@ -56,11 +68,44 @@ struct CoverRule {
     std::string Replace, With;             // part -> body alternate (BodyDef::Alternates)
 };
 
+// Which items a rule is about: in `Slot` (empty = any), whose file name has one of `NameHasAny` and none
+// of `NameLacksAll`, with a material named like one of `MaterialHasAny`, carrying one of `Tags` and none
+// of `LacksTags`. An empty list doesn't narrow it.
+struct Match {
+    std::string Slot;
+    std::vector<std::string> NameHasAny, NameLacksAll, MaterialHasAny, Tags, LacksTags;
+};
+
+// Tags put on the items a match finds: styles ("Formal") and kinds the other rules use ("BuiltInTop").
+struct TagRule {
+    Match When;
+    std::vector<std::string> Tags;
+};
+
+// Two items that don't go together. `B` is taken off when both are asked for. A `Soft` one (a style
+// clash: a suit jacket with flip-flops) is only kept out of Randomize; asked for by hand, it stays.
+struct ExcludeRule {
+    Match A, B;
+    bool Soft = false;
+    std::string Why; // the Inspector's note
+};
+
+// A look Randomize dresses a character in: how likely each slot is filled, and only items tagged with
+// the style's name (or with no style tag at all).
+struct Style {
+    std::string Name;
+    float Weight = 1.0f;
+    int Gender = -1;                    // -1 both, else only this Gender
+    std::map<std::string, float> Fill;  // slot -> chance it's filled
+    float DefaultFill = 0.0f;           // for slots not listed
+};
+
 // A slot emptied by an item (a hat that brings its own hair, a jacket with its own shirt).
 struct ClearRule {
     std::string Slot;
     std::vector<std::string> NameHasAny;
     std::vector<std::string> PathHasAny;
+    std::vector<std::string> Tags; // or the item carries one of these
     std::string Clear;
 };
 
@@ -69,6 +114,7 @@ struct ClearRule {
 // back for the plain one.
 struct PairRule {
     std::string WhenSlot, WhenNameHas, Slot, Suffix;
+    std::string WhenNameLacks; // ... unless it also contains this ("Boots_Inboots" go under plain pants)
 };
 
 struct ItemOverride {
@@ -89,6 +135,11 @@ struct Wardrobe {
     std::vector<CoverRule> Covers;
     std::vector<ClearRule> Clears;
     std::vector<PairRule> Pairs;
+    std::vector<LayerRule> Layers;
+    std::vector<TagRule> TagRules;
+    std::vector<ExcludeRule> Excludes;
+    std::vector<Style> Styles;
+    std::vector<std::string> RandomOrder; // the order Randomize fills slots in (empty = Slots' order)
     std::string HatSlot = "Hat", HairSlot = "Hair"; // a hat takes the haircut fitted to it
     std::vector<ItemOverride> Items;
 
@@ -109,6 +160,7 @@ struct Item {
     Gender Sex = Gender::Male;
     bool Skin = false;                // carries skin of its own (a skin material among its materials)
     bool Variant = false;             // a cut made for another item (Bobcut_Cap, Jeans_Inboots): the rules pick it
+    std::vector<std::string> Tags;    // from the wardrobe's tag rules (TagRule)
     std::vector<std::string> Materials; // its remapped .mat paths (the colourway sources)
 };
 
@@ -131,6 +183,24 @@ bool Classify(const Wardrobe& w, const std::string& path, const std::vector<std:
 // rule swaps in (when its plain cut exists too).
 void MarkVariants(const Wardrobe& w, std::vector<Item>& items);
 
+// --- Layers -----------------------------------------------------------------------------------
+
+// A slot's layer and whether it hides, when the .wardrobe doesn't say: body 0, shoes, tucked tops, pants,
+// tops, outerwear, collars, bags, then hair, beards and glasses (which drape over it all but hide
+// nothing), then hats.
+int DefaultLayer(const std::string& slot);
+bool DefaultHides(const std::string& slot);
+
+// Where a worn piece sits: its layer (after the rules), whether it hides, the slots it hides regardless.
+struct Layering {
+    int Layer = 0;
+    bool Hides = false;
+    std::vector<std::string> Over;
+};
+Layering LayerOf(const Wardrobe& w, const std::string& slot, const std::string& itemPath, bool bodyPart);
+// Whether `over` hides the parts of `under` that poke through it (body parts never hide anything).
+bool Hides(const Layering& over, const std::string& underSlot, const Layering& under);
+
 // --- Outfits ----------------------------------------------------------------------------------
 
 // What the character asks for: a gender, a race and an item per slot (slot -> item path).
@@ -150,8 +220,29 @@ struct Piece {
 
 struct Resolved {
     std::vector<Piece> Pieces;
-    std::vector<std::string> Notes; // what the rules did, for the Inspector ("Feet -> ShoeFeet")
+    std::vector<std::string> Notes;   // what the rules did, for the Inspector ("Feet -> ShoeFeet")
+    std::vector<std::string> Dropped; // slots asked for that the rules took off (clears, excludes)
+    std::vector<std::string> Clashes; // soft excludes left on ("Jacket Classic Tie with Flip Flops")
 };
+
+// --- Compatibility ----------------------------------------------------------------------------
+
+bool Matches(const Match& m, const Item& item);
+bool HasTag(const Item& item, const std::string& tag);
+// Whether `a` and `b` can't be worn together: an exclude between them (soft ones only if `soft`), or
+// one clears the other's slot.
+bool Conflicts(const Wardrobe& w, const Item& a, const Item& b, bool soft = true);
+// Whether `style` may dress a character in `item`: tagged with it, or with no style at all.
+bool InStyle(const Wardrobe& w, const Item& item, const Style& style);
+const Style* FindStyle(const Wardrobe& w, const std::string& name);
+
+// A random outfit for gender `g` from `seed`: a style (by weight, for the gender; `style` names one,
+// "" = any), then slot by slot in RandomOrder, each filled by chance with an item of the style that
+// isn't a variant and goes with everything chosen so far. The slots in `keep` stay as `base` has them.
+// The chosen style's name goes to `styleOut`.
+Request Randomize(const Wardrobe& w, const std::vector<Item>& catalog, const Request& base, unsigned seed,
+                  const std::vector<std::string>& keep = {}, const std::string& style = std::string(),
+                  std::string* styleOut = nullptr);
 
 // The race called `name` for gender `g`, or the first one (nullptr if the body has none).
 const RaceDef* FindRace(const Wardrobe& w, Gender g, const std::string& name);
