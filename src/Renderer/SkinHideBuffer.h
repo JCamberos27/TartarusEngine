@@ -9,6 +9,8 @@
 class SkinHideBuffer {
 public:
     static constexpr unsigned kBinding = 20;
+    // The player's collar in the camera's own view (PlayerBodyTag::CollarVerts): the same layout, another block.
+    static constexpr unsigned kCollarBinding = 21;
 
     explicit SkinHideBuffer(const std::vector<std::uint32_t>& bits);
     ~SkinHideBuffer();
@@ -16,8 +18,8 @@ public:
     SkinHideBuffer& operator=(const SkinHideBuffer&) = delete;
 
     unsigned Id() const { return m_Buffer; }
-    // Binds `buffer` (0 = a one-word empty buffer, so the block is never unbound) at kBinding.
-    static void Bind(unsigned buffer);
+    // Binds `buffer` (0 = a one-word empty buffer, so the block is never unbound) at `binding`.
+    static void Bind(unsigned buffer, unsigned binding = kBinding);
 
 private:
     unsigned m_Buffer = 0;

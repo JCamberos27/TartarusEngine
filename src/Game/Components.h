@@ -10,6 +10,7 @@
 #include "Animation.h" // LocalTRS
 #include <entt/entt.hpp>
 
+class SkinHideBuffer; // OutfitHideTag, PlayerBodyTag
 class Model;
 struct MaterialAsset; // full definition in MaterialAsset.h; shared_ptr<MaterialAsset> is valid here
 
@@ -326,6 +327,13 @@ struct PoseSourceTag {};
 // vertices weighted mostly to them, the view-model pass with only those. The seam is at the shoulder.
 struct PlayerBodyTag {
     float NearHide = 0.1f;
+    // Clothing (not a body part): its Near Hide is FirstPersonBodyComponent::ClothingNearHide and it
+    // stretches NearHideWidth metres to either side of the view (0 = a sphere of NearHide).
+    bool Clothing = false;
+    float NearHideWidth = 0.0f;
+    // Clothing's vertices around the neck in its bind pose (FirstPersonBodyCollarVertices), not drawn in
+    // the camera's world pass. Null = none.
+    std::shared_ptr<SkinHideBuffer> CollarVerts;
     int CameraHideBones[8] = {-1, -1, -1, -1, -1, -1, -1, -1};
     bool HasSleeves = false;            // SleeveBones is set (a clothing piece with arm bones)
     bool SleevesInViewModel = false;    // FirstPersonBody: the arms are in the view-model pass right now
@@ -561,6 +569,16 @@ struct FirstPersonBodyComponent {
     // Whatever of the body comes within this many metres of the eye isn't drawn in the camera's view (its
     // shadow stays): the near plane would slice it into slivers. 0 = off.
     float NearHide = 0.1f; // Near Hide
+    // Clothing (outfit pieces that aren't body parts) is hidden further out than the body: within this many
+    // metres of the eye above, below and ahead (never less than Near Hide), and Clothing Near Hide Width to
+    // either side. Clothing is bulkier than skin and swings with the walk, so a hood's rim or a shoulder top
+    // would otherwise sweep across the view's edges.
+    float ClothingNearHide = 0.2f; // Clothing Near Hide
+    float ClothingNearHideWidth = 0.28f; // Clothing Near Hide Width
+    // Clothing that sits around the neck in the bind pose - at or above the shoulder joints, less this many
+    // metres, and between them - isn't drawn in the camera's view whatever bones move it (a hood or a
+    // scarf skinned to the chest). < 0 = off.
+    float CollarHideDrop = 0.02f; // Collar Hide Drop
     // Bones whose skin isn't drawn in the camera's own view on the body pieces other than the arms,
     // comma separated (at most 8): the torso's shoulders. They follow the arms' shoulders (so the arms
     // stay attached), which reach toward the gun - in view they'd bulge into the camera.
@@ -625,7 +643,6 @@ enum OutfitPieceFlags { OutfitPieceBodyPart = 1, OutfitPieceHeadAttached = 2 };
 
 // The vertices of an outfit piece that clothing covers (OutfitSystem::UpdateHiding): not drawn, so skin
 // can't poke through the cloth. Runtime only - rebuilt from the outfit whenever its pieces change.
-class SkinHideBuffer;
 struct OutfitHideTag {
     std::shared_ptr<SkinHideBuffer> Buffer; // one bit per vertex (SkinHideBuffer.h)
     int Hidden = 0, Total = 0;              // vertices hidden / in the model (the Inspector's readout)
