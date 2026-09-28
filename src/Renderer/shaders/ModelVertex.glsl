@@ -37,6 +37,9 @@ uniform int uBoneMask[16]; // bit patterns
 layout(std430, binding = 20) readonly buffer HideVertBlock { uint uHideVertBits[]; };
 uniform int uHideVerts;
 uniform int uHideVertBase;
+// The player's collar (PlayerBodyTag::CollarVerts): the same layout, dropped in the camera's own view only.
+layout(std430, binding = 21) readonly buffer CollarVertBlock { uint uCollarVertBits[]; };
+uniform int uCollarVerts;
 
 void main() {
     vec4 localPos = vec4(aPos, 1.0);
@@ -47,6 +50,11 @@ void main() {
     if (uHideVerts == 1) {
         int id = gl_VertexID + uHideVertBase;
         uint word = uHideVertBits[clamp(id >> 5, 0, uHideVertBits.length() - 1)];
+        if (((word >> uint(id & 31)) & 1u) != 0u) vHidden = 1.0;
+    }
+    if (uCollarVerts == 1) {
+        int id = gl_VertexID + uHideVertBase;
+        uint word = uCollarVertBits[clamp(id >> 5, 0, uCollarVertBits.length() - 1)];
         if (((word >> uint(id & 31)) & 1u) != 0u) vHidden = 1.0;
     }
     if (uUseSkinning == 1) {

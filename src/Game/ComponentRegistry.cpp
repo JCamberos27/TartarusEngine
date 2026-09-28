@@ -550,6 +550,19 @@ void RegisterEngineComponents() {
               "Whatever of the body comes within this many metres of the eye is not drawn in the camera's view (its shadow stays). The camera\n"
               "sits in the body, and the near plane would otherwise slice the neck and shoulders into slivers. 0 = off.", 0.0f, 0.3f });
         m.Fields.back().Group = "Camera & Arms (advanced)";
+        m.Fields.push_back({ "Clothing Near Hide", T::Float, TARTARUS_REFLECT_FIELD(FirstPersonBodyComponent, ClothingNearHide), 0.005f,
+              "Near Hide for clothing (outfit pieces that aren't body parts), above, below and ahead of the eye - never less than Near Hide.\n"
+              "Clothing is bulkier than skin and swings with the walk: a hood's rim or a jacket's shoulder would sweep across the view.", 0.0f, 0.4f });
+        m.Fields.back().Group = "Camera & Arms (advanced)";
+        m.Fields.push_back({ "Clothing Near Hide Width", T::Float, TARTARUS_REFLECT_FIELD(FirstPersonBodyComponent, ClothingNearHideWidth), 0.005f,
+              "How far to either side of the eye clothing is hidden (metres): the shoulders' cloth sits off to the sides, at the\n"
+              "view's edges, while the chest seen looking down is below. 0 = as far as Clothing Near Hide.", 0.0f, 0.5f });
+        m.Fields.back().Group = "Camera & Arms (advanced)";
+        m.Fields.push_back({ "Collar Hide Drop", T::Float, TARTARUS_REFLECT_FIELD(FirstPersonBodyComponent, CollarHideDrop), 0.005f,
+              "Clothing that sits around the neck in its bind pose - between the shoulder joints and no lower than this many metres\n"
+              "below them - isn't drawn in the camera's view, whatever bones the pack skinned it to (a hood or a scarf on the chest).\n"
+              "Up hides more of the collar; below 0 = off.", -0.01f, 0.2f });
+        m.Fields.back().Group = "Camera & Arms (advanced)";
         m.Fields.push_back({ "Arms Ease Out", T::Float, TARTARUS_REFLECT_FIELD(FirstPersonBodyComponent, ArmsEaseOut), 0.005f,
               "Seconds the body's arms take to ease back to the locomotion pose once the gun is holstered.", 0.01f, 1.0f });
         m.Fields.back().Group = "Camera & Arms (advanced)";
