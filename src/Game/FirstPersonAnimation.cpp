@@ -83,6 +83,13 @@ bool FirstPersonAnimationSet::FromJsonString(const std::string& text, FirstPerso
     parsed.WeaponSocket = String(root, "weaponSocket");
     parsed.WeaponRoot = String(root, "weaponRoot");
     parsed.WeaponMountRotation = Vec3(root, "weaponMountRotation", glm::vec3(0.0f));
+    if (const auto it = root.find("spareMagazine"); it != root.end() && it->is_object()) {
+        parsed.SpareMagazineBones.clear();
+        if (const auto b = it->find("bones"); b != it->end() && b->is_array())
+            for (const auto& n : *b) if (n.is_string()) parsed.SpareMagazineBones.push_back(n.get<std::string>());
+        if (const auto d = it->find("grabDistance"); d != it->end() && d->is_number())
+            parsed.SpareMagazineGrabDistance = d->get<float>();
+    }
     if (parsed.ArmsModel.empty()) return Fail(error, "missing required string 'armsModel'");
     if (parsed.WeaponModel.empty()) return Fail(error, "missing required string 'weaponModel'");
     if (!Finite(parsed.ViewRotation))
@@ -119,7 +126,7 @@ bool FirstPersonAnimationSet::FromJsonString(const std::string& text, FirstPerso
         gp.ImpactMaxSpeed = std::max(0.0f, Number(*g, "impactMaxSpeed", gp.ImpactMaxSpeed));
         gp.ZeroDistance = std::max(0.0f, Number(*g, "zeroDistance", gp.ZeroDistance));
         gp.BulletHoleRadius = Number(*g, "bulletHoleRadius", gp.BulletHoleRadius);
-        gp.BulletHoleRadius = std::clamp(std::isfinite(gp.BulletHoleRadius) ? gp.BulletHoleRadius : 0.0045f, 0.0f, 0.1f);
+        gp.BulletHoleRadius = std::clamp(std::isfinite(gp.BulletHoleRadius) ? gp.BulletHoleRadius : 0.012f, 0.0f, 0.1f);
         if (const auto sl = g->find("sightLine"); sl != g->end() && sl->is_object()) {
             const glm::vec3 o = Vec3(*sl, "origin", glm::vec3(0.0f)), d = Vec3(*sl, "direction", glm::vec3(0.0f));
             if (Finite(o) && Finite(d) && glm::length(d) > 1e-6f) {
@@ -293,6 +300,7 @@ std::string FirstPersonAnimationSet::ToJsonString() const {
         j["weaponRoot"] = WeaponRoot;
         j["weaponMountRotation"] = vec3(WeaponMountRotation);
     }
+    j["spareMagazine"] = {{"bones", SpareMagazineBones}, {"grabDistance", SpareMagazineGrabDistance}};
     for (auto [key, src] : {std::pair{"armsMaterials", &ArmsMaterials}, std::pair{"weaponMaterials", &WeaponMaterials}}) {
         if (src->empty()) continue;
         json m = json::object();

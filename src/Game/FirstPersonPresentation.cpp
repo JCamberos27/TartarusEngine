@@ -117,8 +117,10 @@ bool FirstPersonPresentation::Start(World& world, AssetLibrary& assets,
                                        glm::vec3(config.ViewModelScale), "[Runtime] First Person Weapon");
     for (entt::entity e : {m_Arms, m_Weapon}) {
         auto& renderable = world.Registry.get<RenderableComponent>(e);
-        renderable.CastShadows = RenderableComponent::ShadowCasting::Off;
-        renderable.ReceiveShadows = false;
+        // The weapon casts its shadow from where it really is (in the hands); the arms rig doesn't - with
+        // a First Person Body its arms are the body's, which cast their own.
+        renderable.CastShadows = e == m_Weapon ? RenderableComponent::ShadowCasting::On : RenderableComponent::ShadowCasting::Off;
+        renderable.ReceiveShadows = e == m_Weapon;
         // Routes them into the renderer's view-model sub-pass (own FOV, depth cleared) rather
         // than the world pass. Runtime-only tag: these entities are created here and destroyed
         // by Stop(), so it never reaches a scene file.
@@ -200,8 +202,11 @@ void FirstPersonPresentation::Stop(World& world) {
     if (m_Arms != entt::null && world.Registry.valid(m_Arms)) world.DestroyEntityAndChildren(m_Arms);
     if (m_Weapon != entt::null && world.Registry.valid(m_Weapon)) world.DestroyEntityAndChildren(m_Weapon);
     m_World = nullptr;
+    m_PendingShots = 0;
     m_Arms = entt::null;
     m_Weapon = entt::null;
+    if (m_WeaponModel) m_WeaponModel->SetHiddenNodes({}); // the model outlives Play
+    m_SpareMagHidden.clear();
     m_ArmsModel.reset();
     m_WeaponModel.reset();
     m_Set = {};
@@ -707,7 +712,7 @@ bool FirstPersonPresentation::Fire() {
     return true;
 }
 
-void FirstPersonPresentation::ShotImpact() {
+void FirstPersonPresentation::FireShot() {
     const auto& g = m_Set.Gameplay;
     if (!m_World || !m_AimPointValid) return;
     const float o[3] = {m_Muzzle.x, m_Muzzle.y, m_Muzzle.z}, d[3] = {m_BoreDir.x, m_BoreDir.y, m_BoreDir.z};
@@ -1053,6 +1058,7 @@ void FirstPersonPresentation::LateUpdate(World& world, const Camera& camera) {
     // otherwise render visible, in Holstered's pose (Holster's first frame).
     ApplyHidden(world);
     PlaceRigs(world, camera);
+    for (; m_PendingShots > 0; --m_PendingShots) FireShot();
 }
 
 // Unarmed hides the rigs the way an unticked "active" box does. DeactivatedTag is what keeps
@@ -1077,6 +1083,31 @@ void FirstPersonPresentation::ApplyHidden(World& world) {
 // posed node globals. Update runs it before the animators have posed this frame, so on its own
 // the gun rode last frame's hands - a frame behind every clip, sway and bob change, which read as
 // the left hand sliding on the handguard. LateUpdate runs it again once they have.
+void FirstPersonPresentation::UpdateSpareMagazine(const glm::vec3& armsPos, const glm::quat& armsRot,
+                                                  const glm::vec3& weaponPos, const glm::quat& weaponRot) {
+    if (!m_ArmsModel || !m_WeaponModel || m_Set.SpareMagazineBones.empty()) return;
+    glm::mat4 hand(1.0f);
+    if (!m_ArmsModel->NodeTransform(m_Set.Procedural.IK.LeftHand, hand)) return;
+    const glm::vec3 handWorld = armsPos + armsRot * (m_Scale * glm::vec3(hand[3]));
+    const float scale = std::max(m_Scale, 1e-6f);
+    std::vector<int> hide;
+    for (const std::string& bone : m_Set.SpareMagazineBones) {
+        glm::mat4 g(1.0f);
+        const int n = m_WeaponModel->NodeIndex(bone);
+        if (n < 0 || !m_WeaponModel->NodeTransform(bone, g)) continue; // a collapsed node keeps its pivot
+        const glm::vec3 w = weaponPos + weaponRot * (m_Scale * glm::vec3(g[3]));
+        if (glm::length(w - handWorld) / scale > m_Set.SpareMagazineGrabDistance) hide.push_back(n);
+    }
+    if (hide == m_SpareMagHidden) return;
+    m_SpareMagHidden = hide;
+    m_WeaponModel->SetHiddenNodes(hide);
+    // Re-derive this frame's palette from the animator's pose, so it shows or goes this frame.
+    if (m_WeaponModel->HasExternalPose()) {
+        const std::vector<LocalTRS> pose = m_WeaponModel->AppliedLocalPose();
+        m_WeaponModel->ApplyLocalPose(pose);
+    }
+}
+
 void FirstPersonPresentation::PlaceRigs(World& world, const Camera& camera) {
     const glm::quat cameraRotation = CameraRotation(camera);
     // Without IK (switched off, or a rig lacking the gun bone or arm chains) the procedural pose
@@ -1161,6 +1192,7 @@ void FirstPersonPresentation::PlaceRigs(World& world, const Camera& camera) {
 
     world.SetWorldPose(m_Weapon, weaponPosition, weaponRotation);
     world.Registry.get<TransformComponent>(m_Weapon).Scale = glm::vec3(m_Scale);
+    UpdateSpareMagazine(position, rigRotation, weaponPosition, weaponRotation);
 
     // Where the barrel points: down the bore from the muzzle to the first thing it meets.
     m_AimPointValid = false;
@@ -1169,8 +1201,21 @@ void FirstPersonPresentation::PlaceRigs(World& world, const Camera& camera) {
     if (m_HaveMuzzle && m_WeaponModel->NodeTransform(m_Set.WeaponRoot.empty() ? std::string("root") : m_Set.WeaponRoot, rootPose)) {
         const glm::mat4 W = glm::translate(glm::mat4(1.0f), weaponPosition) * glm::mat4_cast(weaponRotation) *
                             glm::scale(glm::mat4(1.0f), glm::vec3(m_Scale)) * rootPose;
-        const glm::vec3 muzzle = glm::vec3(W * glm::vec4(m_MuzzleLocal, 1.0f));
-        const glm::vec3 bore = glm::normalize(glm::mat3(W) * m_BoreLocal);
+        // The gun is drawn at its own FOV (the view-model pass). On screen that is the world
+        // projection of the gun stretched about the view axis: view-space x and y times
+        // tan(worldFov/2) / tan(viewModelFov/2), at the same depth. Aim from the barrel as SEEN -
+        // the muzzle, bore and sight line through that same stretch - so the rounds, the laser and
+        // its dot leave the barrel the player sees and the beam is a straight line. On the sights
+        // (the view axis, which the stretch leaves where it is) nothing moves.
+        glm::mat4 seen(1.0f);
+        if (const float vmFov = ViewModelFov(); vmFov > 0.0f && camera.Fov > 0.0f) {
+            const float k = std::tan(glm::radians(camera.Fov) * 0.5f) / std::tan(glm::radians(vmFov) * 0.5f);
+            const glm::mat4 V = camera.ViewMatrix();
+            seen = glm::inverse(V) * glm::scale(glm::mat4(1.0f), glm::vec3(k, k, 1.0f)) * V;
+        }
+        const glm::mat4 SW = seen * W;
+        const glm::vec3 muzzle = glm::vec3(SW * glm::vec4(m_MuzzleLocal, 1.0f));
+        const glm::vec3 bore = glm::normalize(glm::mat3(SW) * m_BoreLocal);
         const FirstPersonWeaponGameplay& gp = m_Set.Gameplay;
         // No saved sight line: measure it while the sights are up and steady (settled on the
         // sights, standing still, not just fired, not peeking) - the eye then looks straight
@@ -1208,8 +1253,8 @@ void FirstPersonPresentation::PlaceRigs(World& world, const Camera& camera) {
         // Zeroed: from the muzzle to the point ZeroDistance metres down the sight line.
         glm::vec3 dir = bore;
         if (gp.ZeroDistance > 0.0f && (gp.HasSightLine || m_SightMeasured)) {
-            const glm::vec3 so = glm::vec3(W * glm::vec4(gp.HasSightLine ? gp.SightOrigin : m_SightOrigin, 1.0f));
-            const glm::vec3 sd = glm::normalize(glm::mat3(W) * (gp.HasSightLine ? gp.SightDirection : m_SightDirection));
+            const glm::vec3 so = glm::vec3(SW * glm::vec4(gp.HasSightLine ? gp.SightOrigin : m_SightOrigin, 1.0f));
+            const glm::vec3 sd = glm::normalize(glm::mat3(SW) * (gp.HasSightLine ? gp.SightDirection : m_SightDirection));
             const glm::vec3 zeroAt = so + sd * gp.ZeroDistance;
             if (glm::length(zeroAt - muzzle) > 1e-3f) dir = glm::normalize(zeroAt - muzzle);
         }
