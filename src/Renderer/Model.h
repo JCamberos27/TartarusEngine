@@ -286,6 +286,8 @@ public:
                       const std::function<void(Shader&)>& onProgramBound = {},
                       MeshPass pass = MeshPass::All);
     int MeshCount() const { return (int)m_D->Meshes.size(); }
+    // Sub-mesh `index`'s skinned vertices (ModelMesh::SkinVertices): empty when it isn't skinned.
+    const std::vector<ModelMesh::SkinVertex>& MeshSkinVertices(int index) const { return m_D->Meshes[index]->SkinVertices(); }
     Material& MeshMaterial(int index) { return m_D->Meshes[index]->Mat; }
     const Material& MeshMaterial(int index) const { return m_D->Meshes[index]->Mat; }
     // Editor sub-asset list (#236 G): per-mesh geometry counts.

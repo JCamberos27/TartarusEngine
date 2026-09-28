@@ -13,6 +13,7 @@ ModelMesh::ModelMesh(const std::vector<ModelVertex>& vertices, const std::vector
     m_LocalPositions.reserve(vertices.size());
     for (const auto& v : vertices) m_LocalPositions.push_back(v.Position);
     m_LocalIndices = indices; // kept for #185 PR 6 mesh-collider cooking
+    KeepSkin(vertices);
     CreateGpu(vertices);
 }
 
@@ -21,8 +22,24 @@ ModelMesh::ModelMesh(std::vector<ModelVertex>&& vertices, const std::vector<unsi
     m_LocalPositions.reserve(vertices.size());
     for (const auto& v : vertices) m_LocalPositions.push_back(v.Position);
     m_LocalIndices = indices;
+    KeepSkin(vertices);
     if (deferUpload) m_PendingVertices = std::move(vertices);
     else CreateGpu(vertices);
+}
+
+void ModelMesh::KeepSkin(const std::vector<ModelVertex>& vertices) {
+    bool skinned = false;
+    for (const auto& v : vertices)
+        if (v.BoneIDs[0] >= 0) { skinned = true; break; }
+    if (!skinned) return;
+    m_Skin.resize(vertices.size());
+    for (size_t i = 0; i < vertices.size(); ++i) {
+        m_Skin[i].Position = vertices[i].Position;
+        for (int k = 0; k < MAX_BONE_INFLUENCE; ++k) {
+            m_Skin[i].BoneIDs[k] = vertices[i].BoneIDs[k];
+            m_Skin[i].Weights[k] = vertices[i].Weights[k];
+        }
+    }
 }
 
 void ModelMesh::FinishUpload() {

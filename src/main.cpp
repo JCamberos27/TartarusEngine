@@ -2333,7 +2333,7 @@ int main(int argc, char** argv) {
                     firstPersonPresentation.LateUpdate(world, player.Cam);
                     // The body's hands onto the arms rig's, now that the rig is seated.
                     firstPersonBody.ArmsLateUpdate(world, firstPersonPresentation.ArmsEntity(),
-                                                   firstPersonPresentation.ViewModelFov(), gameDt);
+                                                   firstPersonPresentation.ViewModelFov(), gameDt, &player.Cam);
                     // This frame's rounds, down the bore from the muzzle: a hole where each struck.
                     for (const FirstPersonPresentation::ShotHit& hit : firstPersonPresentation.TakeShotHits())
                         bulletHoles.Add(world, static_cast<entt::entity>(hit.Entity), hit.Point, hit.Normal, hit.HoleRadius);

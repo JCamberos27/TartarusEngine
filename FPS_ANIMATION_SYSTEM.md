@@ -100,7 +100,7 @@ a frame never mixes two placements.
 | `src/Game/FirstPersonBody.{h,cpp}` | The player's body (§8b): stands it at the capsule's feet, feeds its locomotion controller, hands its root motion to the Player and puts the camera in its head |
 | `src/Game/AnimationSystem.{h,cpp}` | `ApplyRootMotion`: a clip's travel moves the object (a dynamic Rigidbody's velocity, or the Transform), or is only reported (In Place) |
 | `src/Game/FirstPersonAdsCarry.{h,cpp}` | Carrying hip clips onto the sights: `BuildAdsCarry` (measures each `ADSCarry` state against the aim pose), `EvaluateAdsCarry` (how much of the crossfade stack a carried action owns), and the per-weapon report the Inspector shows |
-| `src/Game/BodyDebugDraw.h` | What the body shows about itself: `BodyDebug::Info()` (the Inspector's Live readout on the First Person Body component) and world-space debug lines (Gizmos > Player body: foot IK rays and pinned feet, body heading vs view with the turn-threshold wedge, root-motion arrow, stair easing, the camera on its shoulders) drawn by `ColliderGizmo` in the Scene view while playing |
+| `src/Game/BodyDebugDraw.h` | What the body shows about itself: `BodyDebug::Info()` (the Inspector's Live readout on the First Person Body component) and world-space debug lines (Gizmos > Player body: foot IK rays and pinned feet, body heading vs view with the turn-threshold wedge, root-motion arrow, stair easing, the camera on its shoulders, the play camera's frustums and both arms' bones) drawn by `ColliderGizmo` in the Scene view while playing; `FirstPersonBody::CameraProbe` fills its nearest-body-part-in-view readout and `Camera probe` log lines |
 | `src/Game/FirstPersonBodyContract.{h,cpp}` | The body's contract with its controller: the parameter / state / tag / bone names `FirstPersonBody` uses, which body option needs each, and `FPBody::Validate` (drives the Setup box on the First Person Body component) |
 | `src/Game/Components.h` | `AnimatorControllerComponent` (params, tags, events, `Track`, `Driver`, `RootMotion`), `FirstPersonControllerComponent`, `FirstPersonBodyComponent`, `ViewModelTag`, `PoseSourceTag` |
 | `src/Editor/EditorLayer_Animator.cpp` | The Animator window (state tags as chips with a known-tag picker), the component's Inspector section, and the `.controller` asset inspector |
@@ -557,14 +557,22 @@ arms rig's arm shapes and solves its hands to the rig's hands (`FirstPersonBody:
 the camera is anchored to the shoulders while armed (`kEyeSlack`, `kReachSlack`, the shrug), and it
 keeps that height unarmed. The eye hangs off the shoulders in the *view's* frame, as the rig's does (its
 shoulders pivot with the whole view), so the body's shoulder midpoint is the rig's at every pitch; looking
-down the chest pitches further (Spine Aim Down, 0.9) so the camera stays out of the torso. Armed, the chest
+down the chest pitches further (Spine Aim Down, 0.9) so the camera stays out of the torso. The rig's camera
+sits much lower against its shoulders than an eye does (the AKS74U's 8 cm, an eye's ~27), which sank the
+eye into the neck with the chest's top in the view's corner: **Armed Eye Offset** (0 / 0.10 / 0.04 m) lifts
+it back, near level only - it eases out by 60 degrees up (the lifted gun outreached the support hand) or
+down (part of the chest came out of Near Hide). **Look Down Push** (0.06 in the Sandbox) keeps turn clips
+from rotating the chest under the eye when looking down. Armed, the chest
 also takes the rig's *stance*: the rig is authored bladed (left shoulder ~13 cm ahead of the right, ~20
 degrees), and squared to the view the body's left shoulder sat ~7 cm behind it - with the rig's left arm
 already at 91% of its 55 cm reach, the support hand came off the handguard. The chest is turned (spread
 down the spine) until its shoulder line is the rig's (Shoulder Line Match). The collarbone turn (Shrug
-Start 0.98) and chest lean are then only a last resort. Arm Steadiness keeps the gait out of the arms: each
-shoulder is held at a slow average of where it sits in the chest's frame (Arm Steady Time / Max) and each
-elbow is turned into the rig's bend plane after the hand solve. Drawn, the arms take the rig's hands from the first frame; holstered
+Start 0.98) and chest lean are then only a last resort. The rig's clips swing its collarbones freely (it has
+no torso to hit); the body takes only **Clavicle Follow** (0.35) of that, in its arms and in the shoulder
+line's tilt, or a reload hunched the shoulder up toward the head. Arm Steadiness keeps the gait out of the
+arms: each shoulder is held at a slow average of where the body's own clips put it in the chest's frame (Arm
+Steady Time / Max) - read before the rig's arm shapes, so a clip's deliberate shoulder move isn't held back
+like sway - and each elbow is turned into the rig's bend plane after the hand solve. Drawn, the arms take the rig's hands from the first frame; holstered
 they leave the view-model pass at once. Phase 3 added turn in place with a turn-rate cap, start /
 stop clips, crouch, foot IK with foot lock, stair easing and jump / land polish.
 

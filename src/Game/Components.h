@@ -334,6 +334,7 @@ struct PlayerBodyTag {
     // Clothing's vertices around the neck in its bind pose (FirstPersonBodyCollarVertices), not drawn in
     // the camera's world pass. Null = none.
     std::shared_ptr<SkinHideBuffer> CollarVerts;
+    std::shared_ptr<const std::vector<std::uint8_t>> CollarBits; // the same, on the CPU (FirstPersonBody's camera probe)
     int CameraHideBones[8] = {-1, -1, -1, -1, -1, -1, -1, -1};
     bool HasSleeves = false;            // SleeveBones is set (a clothing piece with arm bones)
     bool SleevesInViewModel = false;    // FirstPersonBody: the arms are in the view-model pass right now
@@ -492,6 +493,14 @@ struct FirstPersonBodyComponent {
     std::string HeadBone = "head";
     // The eyes, from the head bone, in the body's frame (x right, y up, z forward), metres.
     glm::vec3 CameraOffset{0.0f, 0.08f, 0.1f};
+    // With the gun out the eye is placed from the arms rig - where its camera sits against its shoulders, put on
+    // the body's - so the hands are within reach. A first-person rig's camera sits low and back (the AKS74U's:
+    // 8 cm over its shoulders, a real eye's ~27): the eye sank into the neck and the chest's top was in front of
+    // it, in the view's corner. This lifts it back toward the eyes (body frame: X right, Y up, Z forward, metres).
+    // The gun and arms stay on the camera; the body sits lower under them, so the hands reach a little further.
+    // All of it within 25 degrees of level; none past 60 up or down (the chest under the eye looking down, the
+    // support hand past its reach looking up), eased between.
+    glm::vec3 ArmedEyeOffset{0.0f, 0.10f, 0.04f}; // Armed Eye Offset
     // How much of the head's own motion (bob, sway, lean) the camera follows: 0 = it rides at
     // the head's standing height, steady; 1 = locked to the head bone.
     float HeadBob = 0.5f;
@@ -554,6 +563,11 @@ struct FirstPersonBodyComponent {
     // The most (degrees) a collarbone turns to move its shoulder (shrug and steadying together): the shoulder
     // turns about the collarbone's inner end, like a real one, rather than sliding.
     float ShoulderMaxAngle = 25.0f; // Shoulder Max Angle
+    // How much of the arms rig's collarbone turn the body's arms (and the chest's stance, Shoulder Line Match)
+    // take, 0..1. The rig has no torso or head to hit, so its clips swing the collarbones freely - a reload's
+    // reach hunched the body's shoulder up at the camera. 1 = all of it, 0 = the body's own clip pose; the
+    // hands stay on the rig's either way (the shrug turns a collarbone as far as a hand needs).
+    float ClavicleFollow = 0.35f; // Clavicle Follow
     // The most (degrees) the chest leans toward a hand still out of reach after its collarbone has turned.
     float ReachLeanMax = 15.0f; // Reach Lean Max
     // Arm Steadiness (Weapon Arms): how much the arms ignore the body's locomotion sway, 0..1. The shoulders

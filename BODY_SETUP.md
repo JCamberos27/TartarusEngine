@@ -74,11 +74,14 @@ Everything in **(advanced)** groups has a tooltip; defaults are the values the b
 | Stop clip plays on a tap | **Stop Min Run Time**, **Stop Min Speed**, **Stop Debounce**. |
 | Push-off plays when the move is short | **Start Idle Time**, **Start Max Move**. |
 | Camera bounces on stairs | **Head Bob** down, **Camera Smoothing** up; **Stair Pop Rise/Rate/Ease** for the pop detector. |
-| Left hand detaches from the gun | Check the live readout: **Reach** over ~98% or **Shoulders vs rig** over a few cm. **Shoulder Line Match** at 1 (the chest takes the rig's bladed stance); then **Reach Slack**, **Eye Slack**; the collarbone turn (**Shrug Start / Max**, **Shoulder Max Angle**) and **Reach Lean Max** are only a last resort. Keep **Look Down Push** at 0 - it moves the gun away from the shoulders. |
+| Left hand detaches from the gun | Check the live readout: **Reach** over ~98% or **Shoulders vs rig** over a few cm. **Shoulder Line Match** at 1 (the chest takes the rig's bladed stance); then **Reach Slack**, **Eye Slack**; the collarbone turn (**Shrug Start / Max**, **Shoulder Max Angle**) and **Reach Lean Max** are only a last resort. Keep **Look Down Push** small (0.06 in the Sandbox) - it moves the gun away from the shoulders; the **Hands off the gun** readout shows the gap. |
 | Elbows swing or jerk while walking / running | **Arm Steadiness** up (1 = the gait never reaches the arms: shoulders held against the view, elbows in the rig's bend plane); **Arm Steady Time** longer than a step; **Arm Steady Max** bounds how far a shoulder is held. |
 | Looking down shows the body from inside (legs seen through the torso) | **Spine Aim Down** up (the chest pitches further with the view), **Near Hide** up. **Look Down Push** also works but costs the arms their reach. |
+| Looking down and turning, sheets of the torso sweep across the view (the turn clip rotates the chest under the eye) | **Look Down Push** up a little (0.06 clears it for the Quantum body): the eye moves forward over the chest as the view pitches down. |
 | Slivers of skin at the edge of the view (turning, landing, looking down) | **Near Hide** up: that much of the body around the eye isn't drawn (the shadow stays). |
 | Dark flaps of clothing at the edge of the view (a hood, a collar, a jacket's shoulders) | **Clothing Near Hide** up (above, below and ahead of the eye), **Clothing Near Hide Width** up (to the sides); **Collar Hide Drop** up hides more of what sits around the neck in the garment's bind pose. All three apply only in the player's own view: shadows, the Scene tab and other cameras keep the whole outfit. |
+| Skin (the chest, the collar) at the bottom corner of the view with the gun out, sliced by the near plane | **Armed Eye Offset** up (Y): with the gun out the eye is placed from the weapon's arms rig, whose camera sits lower against its shoulders than an eye does, which sinks it into the neck. The gun doesn't move on screen. Too much and a hand strains off the gun. Gizmos > Player body shows the camera's frustum and logs the nearest body part in view ("Camera probe") to find what's clipping. |
+| The body's shoulder hunches up toward the head during a reload (Scene view, shadow), or drifts back into place after | **Clavicle Follow** down: how much of the arms rig's collarbone swing the body (and its chest's stance) takes. The hands stay on the gun; the shrug turns a collarbone only as far as a hand needs. Arm Steadiness filters only the walk's sway, so a clip's own shoulder moves aren't held back. |
 | Camera rises or drops on holster | **Arms Ease Out**; the body keeps the armed eye height unarmed. |
 | Feet float over steps / sink into slopes | **Foot IK**, **Foot Ray Up/Length**, **Foot Max Raise**, **Pelvis Max Raise**, **Foot IK Max Drop**. |
 | Foot slides while planted | **Foot Lock Drift**, **Foot Planted Height**, **Foot Lock Ease In/Out**. |
@@ -89,7 +92,12 @@ Everything in **(advanced)** groups has a tooltip; defaults are the values the b
 - **Setup box** (Inspector): contract check, live.
 - **Live (Play)** section (Inspector): current state, `Turning`/`TurnAngle`/`Moving`, the last trigger fired.
 - **Gizmos > Player body** (toolbar, Play): body vs view heading, turn wedge, root-motion arrow, stair
-  detector line, foot rays with hit points and planted/locked markers, eye and shoulder cross.
+  detector line, foot rays with hit points and planted/locked markers, eye and shoulder cross. Also the
+  play camera: its near plane (red / orange) and the world's (grey) and view-model pass's (cyan) frustums,
+  the arms rig's arm bones (yellow) against the body's (magenta), and the **camera probe**: every body
+  piece skinned on the CPU and put through the renderer's own hides, the nearest part in view shown in the
+  Live readout (**Nearest in view**) and logged as `Camera probe: ...` whenever it is within 12 cm of the
+  eye. That names the mesh and bone behind any clipping. The readout also shows **Hands off the gun**.
 - **Animator window**:
   - **Lint** tab: structure and contract checks, click an issue to select the node.
   - **History** tab (Play): every transition taken, and the conditions and parameter values behind it.
