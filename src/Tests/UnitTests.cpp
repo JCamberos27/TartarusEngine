@@ -1823,6 +1823,28 @@ void TestBlendTree2D() {
         CHECK(std::abs(glm::degrees(2.0f * std::acos(std::clamp(std::abs(half.w), 0.0f, 1.0f))) - 10.0f) < 0.01f);
         CHECK(near(FirstPersonBodyShoulderLineTurn(squared, bladed, 0.0f).w, 1.0f));
         CHECK(near(FirstPersonBodyShoulderLineTurn(glm::vec3(0.0f), bladed, 1.0f).w, 1.0f));
+        // The rig's tilt (a reload lifting its left shoulder, 30 degrees) is taken only by Clavicle Follow; its
+        // blade and length are kept whatever the share.
+        const glm::vec3 lifted = glm::vec3(bladed.x * std::cos(glm::radians(30.0f)), std::sin(glm::radians(30.0f)),
+                                           bladed.z * std::cos(glm::radians(30.0f))) * 0.37f;
+        const glm::vec3 none = FirstPersonBodyShoulderLineTilt(squared * 0.38f, lifted, 0.0f);
+        const glm::vec3 all = FirstPersonBodyShoulderLineTilt(squared * 0.38f, lifted, 1.0f);
+        const glm::vec3 some = FirstPersonBodyShoulderLineTilt(squared * 0.38f, lifted, 0.5f);
+        CHECK(glm::length(none - bladed * 0.37f) < 1e-4f); // the body's level line, the rig's blade
+        CHECK(glm::length(all - lifted) < 1e-4f);
+        CHECK(near(glm::length(some), 0.37f) && near(some.y / 0.37f, 0.25f)); // halfway in sine: 0.5 * sin 30
+        CHECK(near(std::atan2(some.z, some.x), glm::radians(20.0f)));
+        CHECK(glm::length(FirstPersonBodyShoulderLineTilt(glm::vec3(0.0f), lifted, 0.0f) - lifted) < 1e-4f); // degenerate: unchanged
+    }
+    // Armed Eye Offset: all of it within 25 degrees of level, none from 60 up or down, eased between - the same both ways.
+    {
+        CHECK(near(FirstPersonBodyArmedEyeLift(0.0f), 1.0f) && near(FirstPersonBodyArmedEyeLift(glm::radians(25.0f)), 1.0f));
+        CHECK(near(FirstPersonBodyArmedEyeLift(glm::radians(-25.0f)), 1.0f));
+        CHECK(near(FirstPersonBodyArmedEyeLift(glm::radians(-60.0f)), 0.0f) && near(FirstPersonBodyArmedEyeLift(glm::radians(-89.0f)), 0.0f));
+        CHECK(near(FirstPersonBodyArmedEyeLift(glm::radians(60.0f)), 0.0f) && near(FirstPersonBodyArmedEyeLift(glm::radians(89.0f)), 0.0f));
+        const float mid = FirstPersonBodyArmedEyeLift(glm::radians(-42.5f));
+        CHECK(mid > 0.4f && mid < 0.6f && near(FirstPersonBodyArmedEyeLift(glm::radians(42.5f)), mid));
+        CHECK(FirstPersonBodyArmedEyeLift(glm::radians(-35.0f)) > FirstPersonBodyArmedEyeLift(glm::radians(-50.0f)));
     }
     // The spine's share of the pitch: Spine Aim up, Spine Aim Down down.
     CHECK(near(FirstPersonBodySpineAim(glm::radians(30.0f), 0.6f, 0.9f), 0.6f) && near(FirstPersonBodySpineAim(glm::radians(-30.0f), 0.6f, 0.9f), 0.9f));
