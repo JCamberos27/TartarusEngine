@@ -148,6 +148,10 @@ private:
     AdsCarrySample SampleAdsCarry(float dt) const;
     void ShotImpact(); // a round leaves the bore: note where it hits and shove that
     void ReloadIfChanged(float dt);
+    // Hides the spare magazine bones unless the left hand holds them (FirstPersonAnimationSet).
+    void UpdateSpareMagazine(const glm::vec3& armsPos, const glm::quat& armsRot, const glm::vec3& weaponPos,
+                             const glm::quat& weaponRot);
+    std::vector<int> m_SpareMagHidden; // weapon nodes currently collapsed
 
     World* m_World = nullptr;
     FirstPersonAnimationSet m_Set;
