@@ -326,6 +326,9 @@ struct PoseSourceTag {};
 // them); with SleevesInViewModel set, the renderer draws the piece twice: the world pass without the
 // vertices weighted mostly to them, the view-model pass with only those. The seam is at the shoulder.
 struct PlayerBodyTag {
+    // Not drawn in the camera's world pass at all (the head, and what an outfit hangs on it): the camera is
+    // inside it. Shadows, the Scene view and every other view still draw it.
+    bool CameraHidden = false;
     float NearHide = 0.1f;
     // Clothing (not a body part): its Near Hide is FirstPersonBodyComponent::ClothingNearHide and it
     // stretches NearHideWidth metres to either side of the view (0 = a sphere of NearHide).
