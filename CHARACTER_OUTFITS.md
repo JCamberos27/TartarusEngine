@@ -38,16 +38,61 @@ only what the folders can't say:
 Rules that need no configuration:
 - **Gender** comes from a `Female` folder or an `SKM_F_` prefix.
 - **Hat-fitted haircuts:** with a hat on, the hair swaps to the cut named after it (`Bobcut` + `Cap` →
-  `Bobcut_Cap`). Those fitted cuts and `_Inboots` pants count as *variants*: the rules pick them, so they
-  aren't offered in the lists.
+  `Bobcut_Cap`). In the Quantum pack those cuts carry the hat in the mesh, so the separate hat comes off.
+  Fitted cuts and `_Inboots` pants count as *variants*: the rules pick them, so they aren't offered in the
+  lists.
 - **Colourways** are the `.mat` files next to an item's remapped material.
 
+## What goes together
+The pack's own 60 preset characters are the reference: they were rebuilt as outfit presets
+(`assets/Characters/Outfits/Quantum/*.outfit`, by `tools/quantum/import_quantum_presets.py`, which reads the
+pack's preset FBXs for the item names - nothing is copied), and every rule below lets all 60 through.
+
+| Key | What it does |
+|---|---|
+| `tags` | Tags items by slot, name (`nameHasAny`/`nameLacksAll`), material (`materialHasAny`) or earlier tags (`tags`/`lacksTags`), e.g. every jacket with a shirt material is `BuiltInTop`. |
+| `clears` | An item empties another slot (`tags` or name/path): a jacket with its own top, a hat with its own hair, a hood that's up. |
+| `excludes` | Two items that don't go together (`a`, `b` are matches); asking for both takes `b` off. `"soft": true` only keeps them apart in Randomize and warns in the Inspector ("Odd pairing"). |
+| `styles` | Casual, Sport, Formal (male), Winter, Summer: a weight, and each slot's chance to be filled. Items tagged with a style's name only appear in that style; untagged ones (hair, glasses...) in any. |
+| `randomOrder` | The order Randomize fills slots in (jackets before tops, shoes before pants). |
+
+In the Quantum pack:
+- **Jackets and tops.** Jackets with a top in the mesh (Leather Jacket, Jeans Jacket, Bombers, Coats with a
+  shirt, Winter Open...) and closed ones (Puffer, Winter Closed, Jacket Classic) take the Top off. Open
+  jackets (M65, female Bomber) keep a thin top but not a hoodie. Vests go over anything.
+- **Heads.** A hood that's up takes the hair off and allows only small hats (caps, bandanas, beanies).
+  Haircuts with a hat, headband or glasses built in take those slots off. Big hats leave no room for
+  headphones.
+- **Feet.** Socks (their own slot) go under sneakers and boots, not flip-flops or classic shoes. Plain boots
+  take the `_Inboots` pants; `Boots_Inboots` go under plain pants.
+- **Style clashes** (soft): suit jackets or trousers with shorts, sport pants, flip-flops or sport sneakers;
+  winter jackets and hats with shorts or flip-flops.
+
+`Wardrobe::Randomize` picks a style, then fills slots in `randomOrder`, each by the style's chance, from items
+of that style that aren't variants and don't conflict with anything already chosen. The Inspector marks
+item cards that clash with what's worn (amber: one comes off; grey: an odd pairing).
+
+## Checking it
+- `TartarusEngine --outfit-rules`: every preset goes through the rules unchanged, and 5000 Randomize outfits
+  per gender are whole (top, pants, shoes) with nothing taken off and no clash. `--outfit-audit` adds the
+  clipping check below over every pair the rules allow.
+- `TartarusEngine --gen-outfit-scenes` rebuilds `scenes/OutfitTest/`: **Presets** (the artist's 60),
+  **Items** (one character per item on a plain outfit, a row per slot) and **Randomized** (eight per style
+  and gender). Select any character and use the Inspector to change or re-roll it.
+
 ## Skin hiding
-With **Auto Hide Skin** on, each body part (and a top under outerwear) doesn't draw the vertices that
-clothing covers, so skin can't poke through as the body moves:
-- `OutfitCoverage` works out coverage once per (part, item) pair: in bind pose, each vertex looks 2 cm
-  inward and 5 cm outward along its normal for the cloth. The covered area is then shrunk by one ring of
-  vertices so hems don't open holes.
+With **Auto Hide Skin** on, each piece doesn't draw the vertices that poke through the layers worn over it,
+so the body, the head, a shirt under a jacket or hair under a hood can't clip through as the character moves:
+- Every slot has a `layer` (body parts and the head are 0): shoes 2, pants 3, tops 4, outerwear 6, collars 7,
+  bags and wrists 8, hair/beards/glasses 9, hats 10. A piece hides what pokes through it from every lower layer.
+- `"hides": false` on a slot (hair, beards, glasses) means its items never hide anything - they're see-through
+  cards, and hiding the scalp under them would open holes.
+- `"layers"` rules change that per item: `{"slot": "Top", "nameHasAny": ["Tucked"], "layer": 2}` puts tucked
+  tops under the pants, boots go over them, and `"over": ["Hair"]` lets a hood that's up hide the hair.
+- `OutfitCoverage` works out coverage once per (part, item) pair, in bind pose: each vertex looks 3 cm
+  inward and 5 cm outward along its normal for the cloth, and that covered area is shrunk by one ring of
+  vertices so hems don't open holes. Anything sitting outside the cloth (up to 10 cm, with the cloth
+  right behind it and facing the same way) is hidden too.
 - Coverage is stored as a per-vertex bit buffer (`OutfitHideTag` / `SkinHideBuffer`, SSBO binding 20), which
   `ModelVertex.glsl` reads.
 - `OutfitSystem::UpdateHiding` runs every frame but only does work when an outfit's pieces change (an edit,
@@ -60,5 +105,7 @@ clothing covers, so skin can't poke through as the body moves:
   in-game character creator.
 - [`src/Game/OutfitCoverage.h`](src/Game/OutfitCoverage.h): coverage geometry (pure, unit tested).
 - [`src/Editor/EditorLayer_Outfit.cpp`](src/Editor/EditorLayer_Outfit.cpp): the Inspector editor.
+- [`src/Game/OutfitAudit.h`](src/Game/OutfitAudit.h), [`src/Game/OutfitTestScene.h`](src/Game/OutfitTestScene.h):
+  `--outfit-audit` / `--outfit-rules` and `--gen-outfit-scenes`.
 
 Female bodies play the male mocap clips as-is, without proportion retargeting.

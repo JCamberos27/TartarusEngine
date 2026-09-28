@@ -1,0 +1,28 @@
+{
+  "wardrobe": "assets/Characters/Quantum/Quantum.wardrobe",
+  "gender": "Female",
+  "race": "Afro",
+  "items": {
+    "Glasses": {
+      "item": "assets/Characters/Quantum/Models/Clothing/Female/Glasses/SKM_F_Glasses_Classic.fbx"
+    },
+    "Hair": {
+      "item": "assets/Characters/Quantum/Models/Female/Hair/SKM_F_Haircut_Braids.fbx"
+    },
+    "Headphones": {
+      "item": "assets/Characters/Quantum/Models/Clothing/Female/Hats/SKM_F_Headphones.fbx"
+    },
+    "Outerwear": {
+      "item": "assets/Characters/Quantum/Models/Clothing/Female/Outerwear/SKM_F_Leather_Jacket_Hoodie.fbx"
+    },
+    "Pants": {
+      "item": "assets/Characters/Quantum/Models/Clothing/Female/Pants/SKM_F_Pants_Jeans.fbx"
+    },
+    "Shoes": {
+      "item": "assets/Characters/Quantum/Models/Clothing/Female/Shoes/SKM_F_Sneakers.fbx"
+    },
+    "Socks": {
+      "item": "assets/Characters/Quantum/Models/Clothing/Female/Shoes/SKM_F_Socks.fbx"
+    }
+  }
+}

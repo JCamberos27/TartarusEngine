@@ -3,6 +3,7 @@
 #include <json.hpp>
 
 #include <algorithm>
+#include <random>
 #include <cctype>
 #include <set>
 #include <sstream>
@@ -49,6 +50,17 @@ std::vector<std::string> Strings(const json& j, const char* key) {
 
 std::string String(const json& j, const char* key, const std::string& fallback = std::string()) {
     return j.contains(key) && j[key].is_string() ? j[key].get<std::string>() : fallback;
+}
+
+Match ReadMatch(const json& j) {
+    Match m;
+    m.Slot = String(j, "slot");
+    m.NameHasAny = Strings(j, "nameHasAny");
+    m.NameLacksAll = Strings(j, "nameLacksAll");
+    m.MaterialHasAny = Strings(j, "materialHasAny");
+    m.Tags = Strings(j, "tags");
+    m.LacksTags = Strings(j, "lacksTags");
+    return m;
 }
 
 bool AnyIn(const std::string& name, const std::vector<std::string>& tokens) {
@@ -146,6 +158,8 @@ bool Parse(const std::string& jsonText, Wardrobe& out, std::string* error) {
             d.Folders = Strings(s, "folders");
             d.NameSuffix = String(s, "nameSuffix");
             d.HeadAttached = s.value("headAttached", false);
+            d.Layer = s.contains("layer") && s["layer"].is_number() ? s["layer"].get<int>() : DefaultLayer(d.Id);
+            d.Hides = s.contains("hides") && s["hides"].is_boolean() ? s["hides"].get<bool>() : DefaultHides(d.Id);
             w.Slots.push_back(std::move(d));
         }
 
@@ -197,14 +211,56 @@ bool Parse(const std::string& jsonText, Wardrobe& out, std::string* error) {
             r.Slot = String(c, "slot");
             r.NameHasAny = Strings(c, "nameHasAny");
             r.PathHasAny = Strings(c, "pathHasAny");
+            r.Tags = Strings(c, "tags");
             r.Clear = String(c, "clear");
             if (!r.Slot.empty() && !r.Clear.empty()) w.Clears.push_back(std::move(r));
         }
     if (j.contains("pairs") && j["pairs"].is_array())
         for (const auto& c : j["pairs"]) {
-            PairRule r{String(c, "whenSlot"), String(c, "whenNameHas"), String(c, "slot"), String(c, "suffix")};
+            PairRule r{String(c, "whenSlot"), String(c, "whenNameHas"), String(c, "slot"), String(c, "suffix"),
+                       String(c, "whenNameLacks")};
             if (!r.WhenSlot.empty() && !r.Slot.empty() && !r.Suffix.empty()) w.Pairs.push_back(std::move(r));
         }
+    if (j.contains("layers") && j["layers"].is_array())
+        for (const auto& c : j["layers"]) {
+            LayerRule r;
+            r.Slot = String(c, "slot");
+            r.NameHasAny = Strings(c, "nameHasAny");
+            r.NameLacksAll = Strings(c, "nameLacksAll");
+            r.Layer = c.contains("layer") && c["layer"].is_number() ? c["layer"].get<int>() : -1;
+            r.Over = Strings(c, "over");
+            if (!r.Slot.empty()) w.Layers.push_back(std::move(r));
+        }
+    if (j.contains("tags") && j["tags"].is_array())
+        for (const auto& c : j["tags"]) {
+            TagRule r{ReadMatch(c), Strings(c, "add")};
+            if (!r.Tags.empty()) w.TagRules.push_back(std::move(r));
+        }
+    if (j.contains("excludes") && j["excludes"].is_array())
+        for (const auto& c : j["excludes"]) {
+            if (!c.contains("a") || !c.contains("b")) continue;
+            ExcludeRule r;
+            r.A = ReadMatch(c["a"]);
+            r.B = ReadMatch(c["b"]);
+            r.Soft = c.value("soft", false);
+            r.Why = String(c, "why");
+            w.Excludes.push_back(std::move(r));
+        }
+    if (j.contains("styles") && j["styles"].is_array())
+        for (const auto& c : j["styles"]) {
+            Style st;
+            st.Name = String(c, "name");
+            if (st.Name.empty()) continue;
+            st.Weight = c.value("weight", 1.0f);
+            const std::string g = String(c, "gender");
+            st.Gender = IEquals(g, "Female") ? 1 : IEquals(g, "Male") ? 0 : -1;
+            st.DefaultFill = c.value("defaultFill", 0.0f);
+            if (c.contains("fill") && c["fill"].is_object())
+                for (const auto& [slot, v] : c["fill"].items())
+                    if (v.is_number()) st.Fill[slot] = v.get<float>();
+            w.Styles.push_back(std::move(st));
+        }
+    w.RandomOrder = Strings(j, "randomOrder");
     if (j.contains("items") && j["items"].is_array())
         for (const auto& c : j["items"]) {
             ItemOverride o;
@@ -248,6 +304,10 @@ bool Classify(const Wardrobe& w, const std::string& path, const std::vector<std:
     if (ov && ov->Gender >= 0) item.Sex = (Gender)ov->Gender;
     item.Name = ov && !ov->Name.empty() ? ov->Name : PrettyName(item.Stem);
     item.Skin = std::any_of(materials.begin(), materials.end(), [&](const std::string& m) { return !SkinBase(w, m).empty(); });
+    for (const auto& rule : w.TagRules) // in order: a rule may match the tags an earlier one gave
+        if (Matches(rule.When, item))
+            for (const auto& t : rule.Tags)
+                if (!HasTag(item, t)) item.Tags.push_back(t);
     out = std::move(item);
     return true;
 }
@@ -303,7 +363,8 @@ Resolved Resolve(const Wardrobe& w, const std::vector<Item>& catalog, const Requ
         auto target = chosen.find(rule.Slot);
         if (target == chosen.end()) continue;
         auto when = chosen.find(rule.WhenSlot);
-        const bool want = when != chosen.end() && Contains(when->second->Stem, rule.WhenNameHas);
+        const bool want = when != chosen.end() && Contains(when->second->Stem, rule.WhenNameHas) &&
+                          !Contains(when->second->Stem, rule.WhenNameLacks);
         const std::string stem = target->second->Stem;
         const std::string base = EndsWithI(stem, rule.Suffix) ? stem.substr(0, stem.size() - rule.Suffix.size()) : stem;
         const std::string desired = want ? base + rule.Suffix : base;
@@ -333,6 +394,16 @@ Resolved Resolve(const Wardrobe& w, const std::vector<Item>& catalog, const Requ
                 result.Notes.push_back(hair->second->Name + " -> " + alt->Name);
                 hair->second = alt;
             }
+        // A fitted cut that carries the hat itself (the pack's Bobcut_Cap has the cap in it): the hat goes.
+        auto builtIn = [&](const Item& cut, const Item& hat) {
+            return std::any_of(w.Excludes.begin(), w.Excludes.end(), [&](const ExcludeRule& e) {
+                return !e.Soft && Matches(e.A, cut) && Matches(e.B, hat);
+            });
+        };
+        if (auto hat = chosen.find(w.HatSlot); hat != chosen.end() && builtIn(*hair->second, *hat->second)) {
+            result.Notes.push_back(hair->second->Name + " has the " + hat->second->Name + " built in");
+            chosen.erase(hat);
+        }
     }
 
     // Clears: a hat with its own hair, a jacket with its own shirt.
@@ -341,10 +412,27 @@ Resolved Resolve(const Wardrobe& w, const std::vector<Item>& catalog, const Requ
         if (it == chosen.end() || !chosen.count(rule.Clear)) continue;
         const bool byName = AnyIn(it->second->Stem, rule.NameHasAny);
         const bool byPath = AnyIn(it->second->Path, rule.PathHasAny);
-        if (!byName && !byPath) continue;
-        result.Notes.push_back(it->second->Name + " replaces " + rule.Clear);
+        const bool byTag = std::any_of(rule.Tags.begin(), rule.Tags.end(), [&](const std::string& t) { return HasTag(*it->second, t); });
+        if (!byName && !byPath && !byTag) continue;
+        result.Notes.push_back(it->second->Name + " replaces " + chosen[rule.Clear]->Name);
+        result.Dropped.push_back(rule.Clear);
         chosen.erase(rule.Clear);
     }
+
+    // Excludes: the second of two items that don't go together comes off (a soft one only warns).
+    for (const auto& rule : w.Excludes)
+        for (auto a = chosen.begin(); a != chosen.end(); ++a) {
+            if (!Matches(rule.A, *a->second)) continue;
+            for (auto b = chosen.begin(); b != chosen.end(); ++b) {
+                if (a == b || !Matches(rule.B, *b->second)) continue;
+                const std::string why = rule.Why.empty() ? std::string() : " (" + rule.Why + ")";
+                if (rule.Soft) { result.Clashes.push_back(a->second->Name + " with " + b->second->Name + why); continue; }
+                result.Notes.push_back(b->second->Name + " doesn't go with " + a->second->Name + why);
+                result.Dropped.push_back(b->first);
+                chosen.erase(b);
+                break;
+            }
+        }
 
     // The body: the gender's parts, the race's own, its head.
     std::vector<std::pair<std::string, std::string>> parts = body.Parts;
@@ -384,6 +472,149 @@ Resolved Resolve(const Wardrobe& w, const std::vector<Item>& catalog, const Requ
         if (auto it = chosen.find(slot.Id); it != chosen.end())
             result.Pieces.push_back({slot.Id, it->second->Path, false, slot.HeadAttached});
     return result;
+}
+
+bool HasTag(const Item& item, const std::string& tag) {
+    return std::any_of(item.Tags.begin(), item.Tags.end(), [&](const std::string& t) { return IEquals(t, tag); });
+}
+
+bool Matches(const Match& m, const Item& item) {
+    if (!m.Slot.empty() && !IEquals(m.Slot, item.Slot)) return false;
+    if (!m.NameHasAny.empty() && !AnyIn(item.Stem, m.NameHasAny)) return false;
+    if (AnyIn(item.Stem, m.NameLacksAll)) return false;
+    if (!m.MaterialHasAny.empty() &&
+        std::none_of(item.Materials.begin(), item.Materials.end(), [&](const std::string& mat) { return AnyIn(Stem(mat), m.MaterialHasAny); }))
+        return false;
+    if (!m.Tags.empty() && std::none_of(m.Tags.begin(), m.Tags.end(), [&](const std::string& t) { return HasTag(item, t); })) return false;
+    return std::none_of(m.LacksTags.begin(), m.LacksTags.end(), [&](const std::string& t) { return HasTag(item, t); });
+}
+
+namespace {
+bool Clears(const ClearRule& rule, const Item& item, const Item& other) {
+    if (!IEquals(rule.Slot, item.Slot) || !IEquals(rule.Clear, other.Slot)) return false;
+    return AnyIn(item.Stem, rule.NameHasAny) || AnyIn(item.Path, rule.PathHasAny) ||
+           std::any_of(rule.Tags.begin(), rule.Tags.end(), [&](const std::string& t) { return HasTag(item, t); });
+}
+} // namespace
+
+bool Conflicts(const Wardrobe& w, const Item& a, const Item& b, bool soft) {
+    for (const auto& rule : w.Excludes) {
+        if (rule.Soft && !soft) continue;
+        if ((Matches(rule.A, a) && Matches(rule.B, b)) || (Matches(rule.A, b) && Matches(rule.B, a))) return true;
+    }
+    for (const auto& rule : w.Clears)
+        if (Clears(rule, a, b) || Clears(rule, b, a)) return true;
+    return false;
+}
+
+bool InStyle(const Wardrobe& w, const Item& item, const Style& style) {
+    if (HasTag(item, style.Name)) return true;
+    return std::none_of(w.Styles.begin(), w.Styles.end(), [&](const Style& s) { return HasTag(item, s.Name); });
+}
+
+const Style* FindStyle(const Wardrobe& w, const std::string& name) {
+    for (const auto& s : w.Styles) if (IEquals(s.Name, name)) return &s;
+    return nullptr;
+}
+
+Request Randomize(const Wardrobe& w, const std::vector<Item>& catalog, const Request& base, unsigned seed,
+                  const std::vector<std::string>& keep, const std::string& style, std::string* styleOut) {
+    std::mt19937 rng(seed);
+    auto chance = [&](float p) { return std::uniform_real_distribution<float>(0.0f, 1.0f)(rng) < p; };
+    auto kept = [&](const std::string& s) { return std::any_of(keep.begin(), keep.end(), [&](const std::string& k) { return IEquals(k, s); }); };
+    Request req = base;
+
+    const auto& races = w.Body(req.Sex).Races;
+    if (!kept("Race") && !races.empty()) req.Race = races[rng() % races.size()].Name;
+
+    // The style: the one asked for, else one for this gender by weight.
+    const Style* st = style.empty() ? nullptr : FindStyle(w, style);
+    if (!st) {
+        std::vector<const Style*> pool;
+        float total = 0.0f;
+        for (const auto& s : w.Styles)
+            if (s.Gender < 0 || s.Gender == (int)req.Sex) { pool.push_back(&s); total += std::max(s.Weight, 0.0f); }
+        float pick = std::uniform_real_distribution<float>(0.0f, total)(rng);
+        for (const Style* s : pool) {
+            st = s;
+            if ((pick -= std::max(s->Weight, 0.0f)) <= 0.0f) break;
+        }
+    }
+    if (styleOut) *styleOut = st ? st->Name : std::string();
+
+    std::vector<std::string> order = w.RandomOrder;
+    for (const auto& s : w.Slots)
+        if (std::none_of(order.begin(), order.end(), [&](const std::string& o) { return IEquals(o, s.Id); })) order.push_back(s.Id);
+
+    // What's on so far (kept slots first), to check each new pick against.
+    std::vector<const Item*> worn;
+    auto item = [&](const std::string& path) -> const Item* {
+        for (const auto& it : catalog) if (it.Sex == req.Sex && IEquals(it.Path, Normalize(path))) return &it;
+        return nullptr;
+    };
+    for (const auto& [slot, path] : req.Items)
+        if (kept(slot))
+            if (const Item* it = item(path)) worn.push_back(it);
+
+    for (const auto& slot : order) {
+        if (!w.Slot(slot) || kept(slot)) continue;
+        req.Items.erase(slot);
+        float p = 0.3f;
+        if (st) {
+            const auto f = st->Fill.find(slot);
+            p = f != st->Fill.end() ? f->second : st->DefaultFill;
+        }
+        if (!chance(p)) continue;
+        std::vector<const Item*> options;
+        for (const auto& it : catalog) {
+            if (it.Sex != req.Sex || it.Slot != slot || it.Variant || (st && !InStyle(w, it, *st))) continue;
+            if (std::any_of(worn.begin(), worn.end(), [&](const Item* o) { return Conflicts(w, it, *o); })) continue;
+            options.push_back(&it);
+        }
+        if (options.empty()) continue;
+        const Item* pick = options[rng() % options.size()];
+        req.Items[slot] = pick->Path;
+        worn.push_back(pick);
+    }
+    return req;
+}
+
+int DefaultLayer(const std::string& slot) {
+    static const std::pair<const char*, int> layers[] = {
+        {"Shoes", 2}, {"Pants", 3}, {"Top", 4}, {"Outerwear", 6}, {"Collar", 7}, {"Bag", 8}, {"Wrist L", 8},
+        {"Wrist R", 8}, {"Hair", 9}, {"Beard", 9}, {"Glasses", 9}, {"Hat", 10},
+    };
+    for (const auto& [name, layer] : layers)
+        if (IEquals(slot, name)) return layer;
+    return 5;
+}
+
+bool DefaultHides(const std::string& slot) {
+    return !IEquals(slot, "Hair") && !IEquals(slot, "Beard") && !IEquals(slot, "Glasses");
+}
+
+Layering LayerOf(const Wardrobe& w, const std::string& slot, const std::string& itemPath, bool bodyPart) {
+    Layering l;
+    if (bodyPart) return l;
+    const SlotDef* def = w.Slot(slot);
+    l.Layer = def ? def->Layer : DefaultLayer(slot);
+    l.Hides = def ? def->Hides : DefaultHides(slot);
+    const std::string stem = Stem(itemPath);
+    for (const auto& rule : w.Layers) {
+        if (!IEquals(rule.Slot, slot) || (!rule.NameHasAny.empty() && !AnyIn(stem, rule.NameHasAny)) ||
+            AnyIn(stem, rule.NameLacksAll))
+            continue;
+        if (rule.Layer >= 0) l.Layer = rule.Layer;
+        l.Over.insert(l.Over.end(), rule.Over.begin(), rule.Over.end());
+    }
+    return l;
+}
+
+bool Hides(const Layering& over, const std::string& underSlot, const Layering& under) {
+    if (!over.Hides) return false;
+    for (const auto& s : over.Over)
+        if (IEquals(s, underSlot)) return true;
+    return over.Layer > under.Layer;
 }
 
 std::string SkinMaterialFor(const Wardrobe& w, const RaceDef& race, const std::string& matPath,

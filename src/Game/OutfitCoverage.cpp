@@ -7,7 +7,8 @@ namespace OutfitCoverage {
 namespace {
 
 // Segment p->p+d (t in [0,1]) against a triangle, Möller-Trumbore, two-sided.
-bool SegmentHitsTriangle(const glm::vec3& p, const glm::vec3& d, const glm::vec3& a, const glm::vec3& b, const glm::vec3& c) {
+bool SegmentHitsTriangle(const glm::vec3& p, const glm::vec3& d, const glm::vec3& a, const glm::vec3& b, const glm::vec3& c,
+                         float* at = nullptr) {
     const glm::vec3 e1 = b - a, e2 = c - a;
     const glm::vec3 h = glm::cross(d, e2);
     const float det = glm::dot(e1, h);
@@ -20,6 +21,7 @@ bool SegmentHitsTriangle(const glm::vec3& p, const glm::vec3& d, const glm::vec3
     const float v = glm::dot(d, q) * inv;
     if (v < 0.0f || u + v > 1.0f) return false;
     const float t = glm::dot(e2, q) * inv;
+    if (at) *at = t;
     return t >= 0.0f && t <= 1.0f;
 }
 
@@ -103,6 +105,55 @@ std::vector<std::uint8_t> Covered(const Mesh& body, const Mesh& cloth, const Set
     return out;
 }
 
+namespace {
+
+// The first triangle of `mesh` the segment p->p+d meets (t in (minT, 1]), skipping those with vertex
+// `skip` (its own); its t and how far its face turns toward `n`. False when there's none.
+bool FirstHit(const Mesh& mesh, const Grid& grid, const glm::vec3& p, const glm::vec3& d, const glm::vec3& n, float minT,
+              unsigned skip, float& outT, float& outFacing) {
+    const glm::ivec3 c0 = grid.CellOf(glm::min(p, p + d)), c1 = grid.CellOf(glm::max(p, p + d));
+    outT = 2.0f;
+    for (int z = c0.z; z <= c1.z; ++z)
+        for (int y = c0.y; y <= c1.y; ++y)
+            for (int x = c0.x; x <= c1.x; ++x)
+                for (int tri : grid.Cells[(size_t)grid.Index({x, y, z})]) {
+                    const size_t t = (size_t)tri * 3;
+                    const unsigned i0 = mesh.Indices[t], i1 = mesh.Indices[t + 1], i2 = mesh.Indices[t + 2];
+                    if (i0 == skip || i1 == skip || i2 == skip) continue;
+                    const glm::vec3 &a = mesh.Positions[i0], &b = mesh.Positions[i1], &c = mesh.Positions[i2];
+                    float hit;
+                    if (!SegmentHitsTriangle(p, d, a, b, c, &hit) || hit <= minT || hit >= outT) continue;
+                    outT = hit;
+                    const glm::vec3 fn = glm::cross(b - a, c - a);
+                    const float l = glm::length(fn);
+                    outFacing = l > 1e-12f ? glm::dot(fn / l, n) : 0.0f;
+                }
+    return outT <= 1.0f;
+}
+
+} // namespace
+
+std::vector<float> PokeDepth(const Mesh& body, const Mesh& cloth, float maxDepth) {
+    std::vector<float> out(body.Positions.size(), 0.0f);
+    if (body.Positions.empty() || cloth.Positions.empty() || cloth.Indices.size() < 3) return out;
+    const Grid grid = Build(cloth, maxDepth), self = Build(body, maxDepth);
+    const std::vector<glm::vec3> normals = VertexNormals(body);
+    const float minSelf = 0.001f / maxDepth; // closer than a millimetre is the vertex's own surface
+    for (size_t v = 0; v < body.Positions.size(); ++v) {
+        const glm::vec3& n = normals[v];
+        if (n == glm::vec3(0.0f)) continue;
+        const glm::vec3 p = body.Positions[v], d = -n * maxDepth;
+        float t, facing;
+        // The cloth just behind the vertex, facing out the way it does: the vertex is outside it...
+        if (!FirstHit(cloth, grid, p, d, n, 0.0f, ~0u, t, facing) || facing <= 0.3f) continue;
+        // ... unless the look back left the piece's own volume first (through a head to a hood's far side).
+        float selfT, selfFacing;
+        if (FirstHit(body, self, p, d, n, minSelf, (unsigned)v, selfT, selfFacing) && selfT < t && selfFacing < -0.3f) continue;
+        out[v] = t * maxDepth;
+    }
+    return out;
+}
+
 void Erode(const Mesh& body, std::vector<std::uint8_t>& covered, int rings) {
     for (int r = 0; r < rings; ++r) {
         std::vector<std::uint8_t> next = covered;
@@ -114,6 +165,17 @@ void Erode(const Mesh& body, std::vector<std::uint8_t>& covered, int rings) {
         }
         covered.swap(next);
     }
+}
+
+std::vector<std::uint8_t> Hidden(const Mesh& under, const Mesh& over) {
+    // Covered from outside: the edge ring stays, so a hem never opens a hole. Poking out: all of it
+    // goes - the cloth is right behind it.
+    std::vector<std::uint8_t> covered = Covered(under, over);
+    Erode(under, covered, 1);
+    const std::vector<float> poke = PokeDepth(under, over, kPokeReach);
+    for (size_t v = 0; v < covered.size(); ++v)
+        if (poke[v] > 0.0f) covered[v] = 1;
+    return covered;
 }
 
 std::vector<std::uint32_t> Pack(const std::vector<std::uint8_t>& covered) {
