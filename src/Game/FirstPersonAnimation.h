@@ -167,6 +167,11 @@ struct FirstPersonAnimationSet {
     std::string WeaponSocket;
     std::string WeaponRoot;
     glm::vec3 WeaponMountRotation{0.0f};
+    // Spare magazine: weapon bones whose mesh only shows while the arms' left hand is within
+    // `SpareMagazineGrabDistance` (model metres) of them. The AKS-74U parks `mag2` ~0.63 m off
+    // the gun (the pouch) outside the tactical reload; the hand is ~0.19 m from it while held.
+    std::vector<std::string> SpareMagazineBones{"mag2"};
+    float SpareMagazineGrabDistance = 0.21f;
     // Optional .mat overrides, keyed by the source FBX's material name ("aks74u" -> a .mat path).
     // Every submesh using that material draws with the .mat; unlisted materials keep the import.
     std::vector<std::pair<std::string, std::string>> ArmsMaterials;

@@ -202,6 +202,8 @@ void FirstPersonPresentation::Stop(World& world) {
     m_World = nullptr;
     m_Arms = entt::null;
     m_Weapon = entt::null;
+    if (m_WeaponModel) m_WeaponModel->SetHiddenNodes({}); // the model outlives Play
+    m_SpareMagHidden.clear();
     m_ArmsModel.reset();
     m_WeaponModel.reset();
     m_Set = {};
@@ -1077,6 +1079,31 @@ void FirstPersonPresentation::ApplyHidden(World& world) {
 // posed node globals. Update runs it before the animators have posed this frame, so on its own
 // the gun rode last frame's hands - a frame behind every clip, sway and bob change, which read as
 // the left hand sliding on the handguard. LateUpdate runs it again once they have.
+void FirstPersonPresentation::UpdateSpareMagazine(const glm::vec3& armsPos, const glm::quat& armsRot,
+                                                  const glm::vec3& weaponPos, const glm::quat& weaponRot) {
+    if (!m_ArmsModel || !m_WeaponModel || m_Set.SpareMagazineBones.empty()) return;
+    glm::mat4 hand(1.0f);
+    if (!m_ArmsModel->NodeTransform(m_Set.Procedural.IK.LeftHand, hand)) return;
+    const glm::vec3 handWorld = armsPos + armsRot * (m_Scale * glm::vec3(hand[3]));
+    const float scale = std::max(m_Scale, 1e-6f);
+    std::vector<int> hide;
+    for (const std::string& bone : m_Set.SpareMagazineBones) {
+        glm::mat4 g(1.0f);
+        const int n = m_WeaponModel->NodeIndex(bone);
+        if (n < 0 || !m_WeaponModel->NodeTransform(bone, g)) continue; // a collapsed node keeps its pivot
+        const glm::vec3 w = weaponPos + weaponRot * (m_Scale * glm::vec3(g[3]));
+        if (glm::length(w - handWorld) / scale > m_Set.SpareMagazineGrabDistance) hide.push_back(n);
+    }
+    if (hide == m_SpareMagHidden) return;
+    m_SpareMagHidden = hide;
+    m_WeaponModel->SetHiddenNodes(hide);
+    // Re-derive this frame's palette from the animator's pose, so it shows or goes this frame.
+    if (m_WeaponModel->HasExternalPose()) {
+        const std::vector<LocalTRS> pose = m_WeaponModel->AppliedLocalPose();
+        m_WeaponModel->ApplyLocalPose(pose);
+    }
+}
+
 void FirstPersonPresentation::PlaceRigs(World& world, const Camera& camera) {
     const glm::quat cameraRotation = CameraRotation(camera);
     // Without IK (switched off, or a rig lacking the gun bone or arm chains) the procedural pose
@@ -1161,6 +1188,7 @@ void FirstPersonPresentation::PlaceRigs(World& world, const Camera& camera) {
 
     world.SetWorldPose(m_Weapon, weaponPosition, weaponRotation);
     world.Registry.get<TransformComponent>(m_Weapon).Scale = glm::vec3(m_Scale);
+    UpdateSpareMagazine(position, rigRotation, weaponPosition, weaponRotation);
 
     // Where the barrel points: down the bore from the muzzle to the first thing it meets.
     m_AimPointValid = false;
