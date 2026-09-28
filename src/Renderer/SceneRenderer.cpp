@@ -354,6 +354,8 @@ void SceneRenderer::RenderScene(World& world, const RenderFrameContext& ctx,
         const int* HideBones = nullptr; // PlayerBodyTag::CameraHideBones in the camera's view, else none
         bool NoSsao = false;  // left out of the SSAO depth pre-pass (main.cpp), so it must not sample the map
         unsigned HideVerts = 0; // OutfitHideTag: the piece's covered vertices (SkinHideBuffer), 0 = none
+        float NearHideWidth = 0.0f; // PlayerBodyTag: clothing's Near Hide to either side (0 = a sphere)
+        unsigned CollarVerts = 0;   // PlayerBodyTag::CollarVerts in the camera's world pass, 0 = none
         // PlayerBodyTag bone masks: 1 = drop the vertices weighted mostly to BoneMask's bones (the camera's
         // world pass: the head's surroundings, and the sleeves while they're in the view-model pass),
         // 2 = draw only those (the view-model pass's copy of the sleeves). 0 = the whole piece.
@@ -392,7 +394,7 @@ void SceneRenderer::RenderScene(World& world, const RenderFrameContext& ctx,
         const bool isViewModel = viewModelPass && world.Registry.all_of<ViewModelTag>(entity);
         // The player's own body, around the camera: not in the view-model pass (its arms must be whole there).
         const auto* bodyTag = world.Registry.try_get<PlayerBodyTag>(entity);
-        const bool cameraBody = bodyTag && !isViewModel && !ctx.EditorView;
+        const bool cameraBody = bodyTag && !isViewModel && !ctx.EditorView && ctx.OwnerView;
         const float nearHide = cameraBody ? bodyTag->NearHide : 0.0f;
         const int* hideBones = cameraBody && bodyTag->CameraHideBones[0] >= 0 ? bodyTag->CameraHideBones : nullptr;
         // The SSAO pre-pass skips view-model geometry always and the camera's own body (its hidden parts
@@ -412,6 +414,8 @@ void SceneRenderer::RenderScene(World& world, const RenderFrameContext& ctx,
             for (int w = 0; w < 16; ++w) cameraMask[w] |= bodyTag->SleeveBones[w];
             anyCameraMask = true;
         }
+        const float nearHideWidth = cameraBody ? bodyTag->NearHideWidth : 0.0f;
+        const unsigned collarVerts = cameraBody && bodyTag->CollarVerts ? bodyTag->CollarVerts->Id() : 0u;
         const auto* outfitHide = world.Registry.try_get<OutfitHideTag>(entity);
         const unsigned hideVerts = outfitHide && outfitHide->Buffer ? outfitHide->Buffer->Id() : 0u;
         glm::mat4 model = world.GetCachedWorldTransform(entity);
@@ -480,7 +484,7 @@ void SceneRenderer::RenderScene(World& world, const RenderFrameContext& ctx,
             DrawItem item{ model, m, &slots, matKey, prog,
                 m->MeshCount(), (int)m->TriangleCount(), (int)m->VertexCount(),
                 MaterialAsset::Queue::Transparent, qi, viewDepth, centre, Model::MeshPass::Transparent,
-                renderable.ReceiveShadows, layerBit, nearHide, hideBones, noSsao, hideVerts };
+                renderable.ReceiveShadows, layerBit, nearHide, hideBones, noSsao, hideVerts, nearHideWidth, collarVerts };
             if (anyCameraMask) {
                 item.BoneMaskMode = 1;
                 item.BoneMask = cameraMask;
@@ -492,6 +496,9 @@ void SceneRenderer::RenderScene(World& world, const RenderFrameContext& ctx,
                 // Keeps the piece's Near Hide: the sleeve's top reaches the shoulder, at the eye in this
                 // projection, and its open end showed as black slivers there.
                 sleeves.HideBones = nullptr;
+                // The sleeves are the arms' own: not the collar, and their Near Hide a plain sphere.
+                sleeves.CollarVerts = 0;
+                sleeves.NearHideWidth = 0.0f;
                 viewModelTransparentList.push_back(sleeves);
             }
             (isViewModel ? viewModelTransparentList : transparentList).push_back(item);
@@ -500,7 +507,7 @@ void SceneRenderer::RenderScene(World& world, const RenderFrameContext& ctx,
             DrawItem item{ model, m, &slots, matKey, prog,
                 m->MeshCount(), (int)m->TriangleCount(), (int)m->VertexCount(),
                 MaterialAsset::Queue::Opaque, 2000, viewDepth, centre, opaquePass,
-                renderable.ReceiveShadows, layerBit, nearHide, hideBones, noSsao, hideVerts };
+                renderable.ReceiveShadows, layerBit, nearHide, hideBones, noSsao, hideVerts, nearHideWidth, collarVerts };
             if (anyCameraMask) {
                 item.BoneMaskMode = 1;
                 item.BoneMask = cameraMask;
@@ -512,6 +519,9 @@ void SceneRenderer::RenderScene(World& world, const RenderFrameContext& ctx,
                 // Keeps the piece's Near Hide: the sleeve's top reaches the shoulder, at the eye in this
                 // projection, and its open end showed as black slivers there.
                 sleeves.HideBones = nullptr;
+                // The sleeves are the arms' own: not the collar, and their Near Hide a plain sphere.
+                sleeves.CollarVerts = 0;
+                sleeves.NearHideWidth = 0.0f;
                 viewModelList.push_back(sleeves);
             }
             (isViewModel ? viewModelList : drawList).push_back(item);
@@ -535,11 +545,17 @@ void SceneRenderer::RenderScene(World& world, const RenderFrameContext& ctx,
     // #163 - and Receive Shadows is per object too; both go through this per-draw hook.
     const DrawItem* probeItem = nullptr;
     const bool anyProbes = in.probeArray->Count() > 0;
+    // The view's right, flattened: clothing's Near Hide stretches along it (to the shoulders), and it stays
+    // level looking down, so the chest below the eye isn't swept into it. The view matrix's first row.
+    glm::vec3 nearHideRight(ctx.View[0][0], 0.0f, ctx.View[2][0]);
+    nearHideRight = glm::dot(nearHideRight, nearHideRight) > 1e-8f ? glm::normalize(nearHideRight) : glm::vec3(1.0f, 0.0f, 0.0f);
     const std::function<void(Shader&)> perDraw = [&](Shader& prog) {
         if (anyProbes) in.probeArray->Bind(prog, probeItem->Centre);
         prog.SetInt("uNoReceiveShadows", probeItem->ReceiveShadows ? 0 : 1);
         prog.SetInt("uObjectLayerBit", probeItem->LayerBit); // #203
         prog.SetFloat("uNearHide", probeItem->NearHide);
+        prog.SetFloat("uNearHideWidth", probeItem->NearHideWidth);
+        prog.SetVec3("uNearHideRight", nearHideRight);
         static const char* const kHideBone[8] = {"uHideBones[0]", "uHideBones[1]", "uHideBones[2]", "uHideBones[3]",
                                                  "uHideBones[4]", "uHideBones[5]", "uHideBones[6]", "uHideBones[7]"};
         int hideCount = 0;
@@ -558,6 +574,8 @@ void SceneRenderer::RenderScene(World& world, const RenderFrameContext& ctx,
         prog.SetInt("uSSAOEnabled", activeFs->ssaoOn && !probeItem->NoSsao ? 1 : 0);
         SkinHideBuffer::Bind(probeItem->HideVerts);
         prog.SetInt("uHideVerts", probeItem->HideVerts ? 1 : 0);
+        SkinHideBuffer::Bind(probeItem->CollarVerts, SkinHideBuffer::kCollarBinding);
+        prog.SetInt("uCollarVerts", probeItem->CollarVerts ? 1 : 0);
     };
 
     passAlphaBlend = 0;

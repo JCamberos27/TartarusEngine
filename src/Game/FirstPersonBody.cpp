@@ -8,13 +8,16 @@
 #include "IK.h"
 #include "Log.h"
 #include "Model.h"
+#include "OutfitCoverage.h"
 #include "PhysicsWorld.h"
 #include "Player.h"
+#include "SkinHideBuffer.h"
 #include "World.h"
 
 #include <glm/gtc/quaternion.hpp>
 
 #include <algorithm>
+#include <array>
 #include <cctype>
 #include <cmath>
 #include <sstream>
@@ -34,6 +37,48 @@ float Follow(float dt, float seconds) { return seconds > 1e-4f ? 1.0f - std::exp
 glm::vec3 ModelPoint(const Model& m, int node) {
     glm::mat4 g(1.0f);
     return m.NodeTransform(m.NodeName(node), g) ? glm::vec3(g[3]) : glm::vec3(0.0f);
+}
+
+// A node's position in its model's bind pose; the driver's when the piece lacks it (one skeleton). False
+// when neither has it.
+bool BindPoint(const Model& piece, const Model& driver, const std::string& node, glm::vec3& out) {
+    for (const Model* m : {&piece, &driver})
+        if (const int n = m->NodeIndex(node); n >= 0) {
+            out = glm::vec3(m->SampleNodeModelSpace(-1, 0.0f, AnimationWrapMode::ClampForever, n)[3]);
+            return true;
+        }
+    return false;
+}
+
+// A clothing piece's collar (FirstPersonBodyCollarVertices) as a hide buffer; null when none of it is. Cached
+// per model and drop: an outfit change in Play restarts the body, and the pieces it keeps mustn't hitch.
+std::shared_ptr<SkinHideBuffer> CollarVerts(const std::shared_ptr<Model>& pieceRef, const Model& driver, const std::string& neckBone,
+                                            const std::array<std::string, 2>& shoulderBones, float drop) {
+    if (drop < 0.0f || !pieceRef) return nullptr;
+    struct Entry {
+        float Drop;
+        std::weak_ptr<Model> Alive; // the key's model, while it lives (a freed address can be reused)
+        std::shared_ptr<SkinHideBuffer> Buffer;
+    };
+    // Deliberately leaked, like SkinHideBuffer's empty buffer: its buffers go with the GL context, not at exit.
+    static auto& cache = *new std::map<const Model*, Entry>();
+    for (auto it = cache.begin(); it != cache.end();) it = it->second.Alive.expired() ? cache.erase(it) : std::next(it);
+    const Model& piece = *pieceRef;
+    if (auto it = cache.find(&piece); it != cache.end() && it->second.Drop == drop) return it->second.Buffer;
+
+    std::shared_ptr<SkinHideBuffer> buffer;
+    glm::vec3 neck, shoulderL, shoulderR;
+    if (BindPoint(piece, driver, neckBone, neck) && BindPoint(piece, driver, shoulderBones[0], shoulderL) &&
+        BindPoint(piece, driver, shoulderBones[1], shoulderR)) {
+        std::vector<glm::vec3> positions;
+        std::vector<unsigned int> indices;
+        piece.CollisionGeometry(positions, indices);
+        const auto collar = FirstPersonBodyCollarVertices(positions, neck, shoulderL, shoulderR, drop);
+        if (std::find(collar.begin(), collar.end(), (std::uint8_t)1) != collar.end())
+            buffer = std::make_shared<SkinHideBuffer>(OutfitCoverage::Pack(collar));
+    }
+    cache[&piece] = Entry{drop, pieceRef, buffer};
+    return buffer;
 }
 
 // The rig's arm shapes onto `pose` (rotations only, every node under the clavicles: the body keeps
@@ -110,6 +155,38 @@ float FirstPersonBodyFootPelvis(float offL, float offR, float maxDrop, float max
 glm::vec3 FirstPersonBodyEye(const glm::vec3& restHead, const glm::vec3& head, float bob, const glm::vec3& offset) {
     const float b = std::clamp(bob, 0.0f, 1.0f);
     return restHead + (head - restHead) * b + kRight * offset.x + glm::vec3(0.0f, offset.y, 0.0f) + kForward * offset.z;
+}
+
+float FirstPersonBodyPieceNearHide(float nearHide, float clothingNearHide, bool clothing) {
+    const float body = std::max(nearHide, 0.0f);
+    return clothing ? std::max(body, clothingNearHide) : body;
+}
+
+bool FirstPersonBodyNearHidden(const glm::vec3& p, const glm::vec3& eye, const glm::vec3& right, float radius, float width) {
+    if (radius <= 0.0f) return false;
+    const glm::vec3 d = p - eye;
+    if (width <= 0.0f) return glm::dot(d, d) < radius * radius;
+    const float side = glm::dot(d, right);
+    const glm::vec3 rest = d - right * side;
+    return (side * side) / (width * width) + glm::dot(rest, rest) / (radius * radius) < 1.0f;
+}
+
+std::vector<std::uint8_t> FirstPersonBodyCollarVertices(const std::vector<glm::vec3>& bindPositions, const glm::vec3& neck,
+                                                        const glm::vec3& shoulderL, const glm::vec3& shoulderR, float drop) {
+    const glm::vec2 line(shoulderL.x - shoulderR.x, shoulderL.z - shoulderR.z);
+    const float span = glm::length(line);
+    if (drop < 0.0f || span < 1e-3f) return {};
+    const glm::vec2 across = line / span, ahead(-across.y, across.x);
+    // A little past the shoulder joints: the cloth over them (the shoulder tops) turns up toward the eye.
+    const float halfWidth = span * 0.5f * 1.15f, halfDepth = 0.3f;
+    const float floor = std::min(shoulderL.y, shoulderR.y) - drop;
+    std::vector<std::uint8_t> out(bindPositions.size(), 0);
+    for (size_t i = 0; i < bindPositions.size(); ++i) {
+        const glm::vec3& p = bindPositions[i];
+        const glm::vec2 d(p.x - neck.x, p.z - neck.z);
+        out[i] = p.y >= floor && std::abs(glm::dot(d, across)) <= halfWidth && std::abs(glm::dot(d, ahead)) <= halfDepth;
+    }
+    return out;
 }
 
 void FirstPersonBody::Fail(const std::string& message) {
@@ -250,9 +327,15 @@ bool FirstPersonBody::Start(World& world, Player& player) {
                     bodyTag.HasHeadBones = true;
                 }
             // Bones can't tell everything: some packs skin a hood or a scarf to the chest bone (the Quantum
-            // open-hood winter jacket, the warm hat's braids). Clothing within 20 cm of the eye isn't drawn in
-            // the camera's view either; the chest, ~25-30 cm below and ahead, still is when looking down.
-            bodyTag.NearHide = std::max(bodyTag.NearHide, 0.2f);
+            // open-hood winter jacket, the warm hat's braids). Clothing near the eye isn't drawn in the camera's
+            // view either (Clothing Near Hide, wider to the sides); the chest, ~25-30 cm below and ahead, still
+            // is when looking down. Tick keeps these up to date with the component.
+            bodyTag.Clothing = true;
+            bodyTag.NearHide = FirstPersonBodyPieceNearHide(cfg.NearHide, cfg.ClothingNearHide, true);
+            bodyTag.NearHideWidth = std::max(cfg.ClothingNearHideWidth, 0.0f);
+            // ... and by where it sits rather than what moves it: what's around the neck in the bind pose.
+            bodyTag.CollarVerts = CollarVerts(reg.get<RenderableComponent>(e).ModelRef, *reg.get<RenderableComponent>(m_Driver).ModelRef, headRoot,
+                                              {Bone(FPBody::kBoneUpperArm[0]), Bone(FPBody::kBoneUpperArm[1])}, cfg.CollarHideDrop);
         }
         m_Models.push_back(reg.get<RenderableComponent>(e).ModelRef);
         m_Pieces.push_back(e);
@@ -339,7 +422,11 @@ void FirstPersonBody::Tick(World& world, const Player& player, const Camera& cam
     const auto& cfg = reg.get<FirstPersonBodyComponent>(m_Body);
     m_Responsiveness = cfg.Responsiveness;
     for (entt::entity e : m_Pieces)
-        if (auto* tag = reg.valid(e) ? reg.try_get<PlayerBodyTag>(e) : nullptr) tag->NearHide = std::max(cfg.NearHide, 0.0f);
+        if (auto* tag = reg.valid(e) ? reg.try_get<PlayerBodyTag>(e) : nullptr) {
+            // Live, for the Inspector - clothing keeping its own (Start's), not reset to the body's.
+            tag->NearHide = FirstPersonBodyPieceNearHide(cfg.NearHide, cfg.ClothingNearHide, tag->Clothing);
+            tag->NearHideWidth = tag->Clothing ? std::max(cfg.ClothingNearHideWidth, 0.0f) : 0.0f;
+        }
     BodyDebug::Clear();
     m_SinceTrigger += dt;
 
@@ -950,7 +1037,11 @@ void FirstPersonBody::ArmsLateUpdate(World& world, entt::entity weaponArms, floa
         if (easeOut) rc.CastShadows = RenderableComponent::ShadowCasting::ShadowsOnly;
         else if (m_ArmsEasedOut) { rc.CastShadows = (RenderableComponent::ShadowCasting)m_ArmsShadow; m_ArmsEasedOut = false; }
     }
-    if (m_ArmsWeight < 1e-3f || !haveRig) { m_HaveShoulderAnchor[0] = m_HaveShoulderAnchor[1] = false; return; }
+    if (m_ArmsWeight < 1e-3f || !haveRig) {
+        m_HaveShoulderAnchor[0] = m_HaveShoulderAnchor[1] = false;
+        m_HaveElbowAim[0] = m_HaveElbowAim[1] = false;
+        return;
+    }
 
     const Model* rig = reg.get<RenderableComponent>(weaponArms).ModelRef.get();
     if (!rig || rig->AppliedLocalPose().empty()) return;
@@ -1156,12 +1247,50 @@ void FirstPersonBody::ArmsLateUpdate(World& world, entt::entity weaponArms, floa
                     const glm::vec3 rigBend = glm::mat3(toModel) * (rigElbow[s] - rigShoulder[s]);
                     const glm::vec3 have = (b - a) - axis * glm::dot(b - a, axis);
                     const glm::vec3 want = rigBend - axis * glm::dot(rigBend, axis);
-                    if (glm::dot(have, have) > 1e-8f && glm::dot(want, want) > 1e-8f) {
-                        const glm::vec3 h = glm::normalize(have), w = glm::normalize(want);
+                    // A near-straight rig arm (the melee's thrust and its recovery) has no bend plane to speak of:
+                    // its elbow's few millimetres off the line swing anywhere frame to frame, while the body's arm
+                    // (its shoulder nearer the hand) is already well bent. Turned onto that noise the elbow spun;
+                    // left alone it looped out behind the back. So the elbow heads down and a little out - where
+                    // an elbow hangs under a rifle - and onto the rig's plane as the rig's arm bends: how far its
+                    // elbow stands off the line, as a share of its upper arm, none under 5%, all of it from 20%.
+                    const float upperLen = std::max(glm::length(b - a), 1e-4f), rigLen = std::max(glm::length(rigBend), 1e-4f);
+                    const float rigTrust = glm::smoothstep(0.05f, 0.2f, glm::length(want) / rigLen);
+                    const glm::vec3 outward = s == 0 ? -kRight : kRight; // the upper arm's side (_l is the body's left)
+                    glm::vec3 pole = glm::vec3(0.0f, -1.0f, 0.0f) + outward * 0.5f;
+                    pole -= axis * glm::dot(pole, axis);
+                    glm::vec3 aim = rigTrust > 0.0f ? glm::normalize(want) * rigTrust : glm::vec3(0.0f);
+                    if (glm::dot(pole, pole) > 1e-8f) aim += glm::normalize(pole) * (1.0f - rigTrust);
+                    // Where the elbow heads is eased, and turns at most so fast: the rig's clips jump (the melee's
+                    // 2-frame blend in), and in a tight fold - the melee's recovery, the body's shoulder nearer the
+                    // gun than the rig's - the aim swings as fast as the shoulder-to-hand line does. Followed
+                    // outright, the elbow whipped round. Held in the chest's view frame, worked out once a frame
+                    // (on the source piece) and given to the rest, so every piece's elbow agrees.
+                    const glm::mat3 modelToAnchor = glm::mat3(anchorInverse) * glm::mat3(pieceWorld);
+                    if (isSource && glm::dot(aim, aim) > 1e-8f) {
+                        const glm::vec3 aimTo = glm::normalize(modelToAnchor * aim);
+                        if (!m_HaveElbowAim[s]) { m_ElbowAim[s] = aimTo; m_HaveElbowAim[s] = true; }
+                        const float angle = std::acos(std::clamp(glm::dot(m_ElbowAim[s], aimTo), -1.0f, 1.0f));
+                        if (angle > 1e-5f) {
+                            constexpr float kElbowEase = 0.06f, kElbowMaxRate = glm::radians(540.0f); // seconds; per second
+                            const float step = std::min(angle * Follow(dt, kElbowEase), kElbowMaxRate * dt);
+                            glm::vec3 turnAxis = glm::cross(m_ElbowAim[s], aimTo);
+                            if (glm::dot(turnAxis, turnAxis) < 1e-10f) turnAxis = glm::cross(m_ElbowAim[s], glm::vec3(0.0f, 1.0f, 0.0f));
+                            if (glm::dot(turnAxis, turnAxis) < 1e-10f) turnAxis = glm::vec3(1.0f, 0.0f, 0.0f);
+                            m_ElbowAim[s] = glm::normalize(glm::angleAxis(step, glm::normalize(turnAxis)) * m_ElbowAim[s]);
+                        }
+                    }
+                    if (m_HaveElbowAim[s]) {
+                        const glm::vec3 eased = glm::inverse(modelToAnchor) * m_ElbowAim[s];
+                        aim = eased - axis * glm::dot(eased, axis);
+                    }
+                    // The body's own elbow must stand off the line for the turn to mean anything (2% .. 8%).
+                    const float bodyTrust = glm::smoothstep(0.02f, 0.08f, glm::length(have) / upperLen);
+                    if (bodyTrust > 0.0f && glm::dot(aim, aim) > 1e-8f) {
+                        const glm::vec3 h = glm::normalize(have), w = glm::normalize(aim);
                         const float swivel = std::atan2(glm::dot(glm::cross(h, w), axis), glm::dot(h, w));
                         if (std::abs(swivel) > 1e-4f) {
                             const glm::quat keep = IK::Rotation(globals[hand]);
-                            IK::SolveTwoBone(pose, parents, globals, upper, lower, hand, c, &keep, 1.0f, swivel * steady);
+                            IK::SolveTwoBone(pose, parents, globals, upper, lower, hand, c, &keep, 1.0f, swivel * steady * bodyTrust);
                         }
                     }
                 }
