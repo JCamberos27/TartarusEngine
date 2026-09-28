@@ -177,6 +177,33 @@ const std::vector<const Wardrobe::Item*>& Catalog::ForSlot(const std::string& sl
     return out;
 }
 
+namespace {
+
+// The wardrobes the skin hiding reads its layers from, by lower-case project-relative path: a loaded
+// catalog's (a rescan replaces it), else the .wardrobe parsed on its own - the hiding needs no item scan.
+std::map<std::string, std::shared_ptr<const Wardrobe::Wardrobe>>& LayerWardrobes() {
+    static std::map<std::string, std::shared_ptr<const Wardrobe::Wardrobe>> s;
+    return s;
+}
+
+// Null when the file can't be read or parsed (then nothing is layered, only body parts are hidden).
+std::shared_ptr<const Wardrobe::Wardrobe> LayerWardrobe(const std::string& path) {
+    auto& all = LayerWardrobes();
+    const std::string key = Lower(Rel(path));
+    if (auto it = all.find(key); it != all.end()) return it->second;
+    std::shared_ptr<Wardrobe::Wardrobe> w;
+    std::ifstream in(ProjectPaths::Resolve(Rel(path)), std::ios::binary);
+    if (in) {
+        std::stringstream text;
+        text << in.rdbuf();
+        w = std::make_shared<Wardrobe::Wardrobe>();
+        if (!Wardrobe::Parse(text.str(), *w)) w.reset();
+    }
+    return all[key] = w;
+}
+
+} // namespace
+
 std::shared_ptr<const Catalog> LoadCatalog(AssetLibrary& assets, const std::string& path, bool rescan, std::string* error) {
     static std::map<std::string, std::shared_ptr<const Catalog>> cache;
     const std::string key = Lower(Rel(path));
@@ -214,6 +241,7 @@ std::shared_ptr<const Catalog> LoadCatalog(AssetLibrary& assets, const std::stri
     Wardrobe::MarkVariants(cat->W, cat->Items);
     Log::Info("Wardrobe " + cat->W.Name + ": " + std::to_string(cat->Items.size()) + " items");
     cache[key] = cat;
+    LayerWardrobes()[key] = std::shared_ptr<const Wardrobe::Wardrobe>(cat, &cat->W);
     return cat;
 }
 
@@ -252,6 +280,7 @@ Result Apply(World& world, AssetLibrary& assets, entt::entity root, const Wardro
     const Wardrobe::RaceDef* race = Wardrobe::FindRace(cat->W, request.Sex, request.Race);
     const Wardrobe::Resolved resolved = Wardrobe::Resolve(cat->W, cat->Items, request);
     r.Notes = resolved.Notes;
+    for (const auto& c : resolved.Clashes) r.Notes.push_back("Odd pairing: " + c);
 
     // What's there now: a piece whose model was swapped by hand counts as its model, so it's rebuilt.
     auto pieces = Pieces(world, root);
@@ -367,6 +396,7 @@ std::vector<AssetLibrary::AsyncHandle> Prefetch(World& world, AssetLibrary& asse
     const Wardrobe::RaceDef* race = Wardrobe::FindRace(cat.W, request.Sex, request.Race);
     const Wardrobe::Resolved resolved = Wardrobe::Resolve(cat.W, cat.Items, request);
     notes = resolved.Notes;
+    for (const auto& c : resolved.Clashes) notes.push_back("Odd pairing: " + c);
     std::set<std::string> mats;
     auto want = [&](const std::string& path) {
         if (path.empty()) return;
@@ -533,31 +563,18 @@ std::vector<std::string> ParseLocks(const std::string& locks) {
     return out;
 }
 
-Result Randomize(World& world, AssetLibrary& assets, entt::entity root, std::uint32_t seed) {
+Result Randomize(World& world, AssetLibrary& assets, entt::entity root, std::uint32_t seed, const std::string& style) {
     Result r;
     auto cat = CatalogFor(world, assets, root, r);
     if (!cat) return r;
-    std::mt19937 rng(seed);
-    auto chance = [&](float p) { return std::uniform_real_distribution<float>(0.0f, 1.0f)(rng) < p; };
+    std::mt19937 rng(seed ^ 0x9e3779b9u); // the colourways' own stream
     const auto locks = ParseLocks(world.Registry.get<CharacterOutfitComponent>(root).Locks);
-    auto locked = [&](const std::string& s) { return std::find(locks.begin(), locks.end(), s) != locks.end(); };
-
-    Wardrobe::Request req = BaseRequest(world, root);
-    const auto& races = cat->W.Body(req.Sex).Races;
-    if (!locked("Race") && !races.empty()) req.Race = races[rng() % races.size()].Name;
-    // How often a slot is filled: the basics always, the rest now and then.
-    static const std::map<std::string, float> kFill = {{"Hair", 0.9f}, {"Top", 1.0f}, {"Pants", 1.0f}, {"Shoes", 1.0f},
-                                                       {"Outerwear", 0.45f}, {"Hat", 0.3f}, {"Glasses", 0.2f}, {"Beard", 0.4f},
-                                                       {"Bag", 0.15f}, {"Collar", 0.1f}, {"Wrist L", 0.2f}, {"Wrist R", 0.2f}};
-    for (const auto& slot : cat->W.Slots) {
-        if (locked(slot.Id)) continue;
-        const auto items = cat->ForSlot(slot.Id, req.Sex);
-        const auto f = kFill.find(slot.Id);
-        if (items.empty() || !chance(f == kFill.end() ? 0.3f : f->second)) { req.Items.erase(slot.Id); continue; }
-        req.Items[slot.Id] = items[rng() % items.size()]->Path;
-    }
+    // The outfit itself: a style, then slot by slot only what goes with the rest (Wardrobe::Randomize).
+    std::string picked;
+    const Wardrobe::Request req = Wardrobe::Randomize(cat->W, cat->Items, BaseRequest(world, root), seed, locks, style, &picked);
+    if (!picked.empty()) r.Notes.push_back("Style: " + picked);
     // Colourways once the pieces are on: pick them, load them in the background, then put them on.
-    return Submit(world, assets, root, req, [rng, locks](World& w, AssetLibrary& a, entt::entity e) mutable {
+    Result submitted = Submit(world, assets, root, req, [rng, locks](World& w, AssetLibrary& a, entt::entity e) mutable {
         struct Pick { entt::entity Piece; std::string Source, Variant; };
         std::vector<Pick> picks;
         std::vector<AssetLibrary::AsyncHandle> tickets;
@@ -576,6 +593,8 @@ Result Randomize(World& world, AssetLibrary& assets, entt::entity root, std::uin
                 if (w2.Registry.valid(p.Piece)) SetColourway(w2, a2, p.Piece, p.Source, p.Variant);
         });
     });
+    submitted.Notes.insert(submitted.Notes.begin(), r.Notes.begin(), r.Notes.end());
+    return submitted;
 }
 
 // --- Colourways -------------------------------------------------------------------------------
@@ -735,18 +754,19 @@ OutfitCoverage::Mesh Geometry(const World& world, entt::entity e) {
     return m;
 }
 
-// What covers what: body parts are covered by every item but those on the head; a top by outerwear.
-bool Covers(const OutfitPieceComponent& over, const OutfitPieceComponent& under) {
-    if (&over == &under || (over.Flags & (OutfitPieceBodyPart | OutfitPieceHeadAttached))) return false;
-    if (under.Flags & OutfitPieceBodyPart) return !(under.Flags & OutfitPieceHeadAttached);
-    return under.Slot == "Top" && over.Slot == "Outerwear";
+// Where a piece is worn (Wardrobe::LayerOf); with no wardrobe, by the default layers of its slot.
+Wardrobe::Layering PieceLayer(const Wardrobe::Wardrobe* w, const OutfitPieceComponent& p) {
+    static const Wardrobe::Wardrobe none;
+    return Wardrobe::LayerOf(w ? *w : none, p.Slot, p.Item, (p.Flags & OutfitPieceBodyPart) != 0);
 }
 
-// The pieces as the hiding last saw them: entities, models, which carry a hide tag (an undo drops them).
+// The pieces as the hiding last saw them: entities, models, which carry a hide tag (an undo drops them),
+// and the wardrobe their layers came from (a rescan brings a new one).
 std::uint64_t HideSignature(const World& world, const CharacterOutfitComponent& outfit,
-                            const std::map<std::string, entt::entity>& pieces) {
+                            const std::map<std::string, entt::entity>& pieces, const Wardrobe::Wardrobe* w) {
     std::uint64_t sig = outfit.AutoHide ? 1469598103934665603ull : 7ull;
     auto mix = [&](std::uint64_t v) { sig = (sig ^ v) * 1099511628211ull; };
+    mix((std::uint64_t)(std::uintptr_t)w);
     for (const auto& [slot, e] : pieces) {
         mix((std::uint64_t)entt::to_integral(e));
         const auto* rc = world.Registry.try_get<RenderableComponent>(e);
@@ -773,7 +793,7 @@ CoverageStore& Coverage() {
     return s;
 }
 
-constexpr std::uint32_t kCoverageVersion = 1; // bump when Covered/Erode or their settings change
+constexpr std::uint32_t kCoverageVersion = 3; // bump when Covered/Erode or their settings change
 
 struct FileStamp {
     std::uint64_t Size = 0;
@@ -862,8 +882,7 @@ const std::vector<std::uint8_t>* PairCoverage(const World& world, entt::entity u
     // The geometry is copied here (main thread); the maths and the save run on their own thread.
     store.Running.emplace(key, std::async(std::launch::async,
                                           [key, us, os, body = Geometry(world, under), cloth = Geometry(world, over)] {
-                                              std::vector<std::uint8_t> covered = OutfitCoverage::Covered(body, cloth);
-                                              OutfitCoverage::Erode(body, covered, 1);
+                                              std::vector<std::uint8_t> covered = OutfitCoverage::Hidden(body, cloth);
                                               SaveCoverage(key, us, os, covered);
                                               return covered;
                                           }));
@@ -877,7 +896,10 @@ void UpdateHiding(World& world) {
     for (entt::entity root : reg.view<CharacterOutfitComponent>()) {
         auto& outfit = reg.get<CharacterOutfitComponent>(root);
         const auto pieces = Pieces(world, root);
-        if (HideSignature(world, outfit, pieces) == outfit.HideSignature) continue;
+        const auto wardrobe = LayerWardrobe(outfit.Wardrobe);
+        if (HideSignature(world, outfit, pieces, wardrobe.get()) == outfit.HideSignature) continue;
+        std::map<entt::entity, Wardrobe::Layering> layers;
+        for (const auto& [slot, e] : pieces) layers[e] = PieceLayer(wardrobe.get(), reg.get<OutfitPieceComponent>(e));
 
         // Old tags go at once (a re-modelled piece must not keep bits for another mesh); new ones go
         // on when every pair they need is known. Until then the skin just isn't hidden.
@@ -886,14 +908,12 @@ void UpdateHiding(World& world) {
         std::vector<std::pair<entt::entity, std::vector<std::uint8_t>>> tags;
         if (outfit.AutoHide)
             for (const auto& [slot, under] : pieces) {
-                const auto& u = reg.get<OutfitPieceComponent>(under);
                 const auto* urc = reg.try_get<RenderableComponent>(under);
                 if (!urc || !urc->ModelRef) continue;
                 std::vector<std::uint8_t> hidden;
                 for (const auto& [overSlot, over] : pieces) {
-                    const auto& o = reg.get<OutfitPieceComponent>(over);
                     const auto* orc = reg.try_get<RenderableComponent>(over);
-                    if (!Covers(o, u) || !orc || !orc->ModelRef) continue;
+                    if (over == under || !orc || !orc->ModelRef || !Wardrobe::Hides(layers[over], slot, layers[under])) continue;
                     const auto* covered = PairCoverage(world, under, over, urc->ModelRef->Path(), orc->ModelRef->Path());
                     if (!covered) { waiting = true; continue; }
                     if (hidden.empty()) hidden = *covered;
@@ -912,7 +932,7 @@ void UpdateHiding(World& world) {
             tag.Hidden = count;
             tag.Total = (int)hidden.size();
         }
-        outfit.HideSignature = HideSignature(world, outfit, pieces);
+        outfit.HideSignature = HideSignature(world, outfit, pieces, wardrobe.get());
     }
 }
 
