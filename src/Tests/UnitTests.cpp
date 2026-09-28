@@ -2095,6 +2095,87 @@ void TestAsyncImportCpu() {
     std::filesystem::remove(png, ec);
 }
 
+// The player's clothing around the camera (#480): its Near Hide survives the per-frame refresh and reaches
+// the shoulders to the sides, and a garment's collar is found by where it sits in the bind pose.
+void TestFirstPersonBodyClothingHide() {
+    auto near = [](float a, float b) { return std::abs(a - b) < 1e-4f; };
+    // The body keeps the component's Near Hide; clothing at least Clothing Near Hide - never less than the body's.
+    CHECK(near(FirstPersonBodyPieceNearHide(0.1f, 0.2f, false), 0.1f) && near(FirstPersonBodyPieceNearHide(0.1f, 0.2f, true), 0.2f));
+    CHECK(near(FirstPersonBodyPieceNearHide(0.25f, 0.2f, true), 0.25f) && near(FirstPersonBodyPieceNearHide(-1.0f, 0.0f, false), 0.0f));
+    // What Tick applies every frame: a clothing piece keeps its own (the regression: it was reset to the body's).
+    {
+        FirstPersonBodyComponent cfg;
+        PlayerBodyTag cloth, skin;
+        cloth.Clothing = true;
+        for (PlayerBodyTag* t : {&cloth, &skin}) t->NearHide = FirstPersonBodyPieceNearHide(cfg.NearHide, cfg.ClothingNearHide, t->Clothing);
+        CHECK(near(cloth.NearHide, cfg.ClothingNearHide) && near(skin.NearHide, cfg.NearHide) && cloth.NearHide > skin.NearHide);
+    }
+    // The hide: a sphere with no width; stretched to the sides with one, but no further below (the chest).
+    const glm::vec3 eye(0.0f, 1.6f, 0.0f), right(1.0f, 0.0f, 0.0f);
+    CHECK(FirstPersonBodyNearHidden(eye + glm::vec3(0.0f, -0.15f, 0.0f), eye, right, 0.2f, 0.0f));
+    CHECK(!FirstPersonBodyNearHidden(eye + glm::vec3(0.22f, -0.05f, 0.0f), eye, right, 0.2f, 0.0f));
+    CHECK(FirstPersonBodyNearHidden(eye + glm::vec3(0.22f, -0.05f, 0.0f), eye, right, 0.2f, 0.28f)); // a shoulder top
+    CHECK(FirstPersonBodyNearHidden(eye + glm::vec3(-0.2f, -0.1f, 0.05f), eye, right, 0.2f, 0.28f));
+    CHECK(!FirstPersonBodyNearHidden(eye + glm::vec3(0.0f, -0.28f, 0.1f), eye, right, 0.2f, 0.28f)); // the chest, looking down
+    CHECK(!FirstPersonBodyNearHidden(eye + glm::vec3(0.3f, 0.0f, 0.0f), eye, right, 0.2f, 0.28f));
+    CHECK(!FirstPersonBodyNearHidden(eye, eye, right, 0.0f, 0.28f)); // off
+
+    // The collar, in a mannequin's frame (+Z ahead, shoulders 0.36 m apart at 1.45 m, the neck above them).
+    const glm::vec3 neck(0.0f, 1.52f, -0.02f), shoulderL(0.18f, 1.45f, 0.0f), shoulderR(-0.18f, 1.45f, 0.0f);
+    const std::vector<glm::vec3> points = {
+        {0.0f, 1.55f, 0.08f},  // the collar's front
+        {0.0f, 1.62f, -0.15f}, // a hood lying on the back
+        {0.15f, 1.5f, 0.0f},   // a shoulder top
+        {0.0f, 1.3f, 0.12f},   // the chest
+        {0.4f, 1.46f, 0.0f},   // a sleeve, out along a T-pose arm
+        {0.0f, 1.0f, 0.1f},    // the hem
+    };
+    auto collar = FirstPersonBodyCollarVertices(points, neck, shoulderL, shoulderR, 0.02f);
+    CHECK(collar == std::vector<std::uint8_t>({1, 1, 1, 0, 0, 0}));
+    CHECK(FirstPersonBodyCollarVertices(points, neck, shoulderL, shoulderR, -1.0f).empty()); // off
+    CHECK(FirstPersonBodyCollarVertices(points, neck, shoulderL, shoulderL, 0.02f).empty()); // no shoulder line
+
+    // The Quantum pack's winter jacket, hood up: its hood and collar are found, its body and sleeves aren't. Needs the pack (project content).
+    const std::string jacketPath = "assets/Characters/Quantum/Models/Clothing/Male/Outerwear/SKM_Jacket_Winter_Open_Hood_Closed.fbx";
+    if (!std::filesystem::exists(ProjectPaths::Resolve(jacketPath))) {
+        Log::Info("FirstPersonBodyClothingHide: no Quantum pack - model checks skipped.");
+        return;
+    }
+    const auto jacket = Model::ImportDeferred(ProjectPaths::Resolve(jacketPath), ModelImportSettings{});
+    CHECK(jacket != nullptr);
+    if (!jacket) return;
+    auto bind = [&](const char* name, glm::vec3& out) {
+        const int n = jacket->NodeIndex(name);
+        if (n >= 0) out = glm::vec3(jacket->SampleNodeModelSpace(-1, 0.0f, AnimationWrapMode::ClampForever, n)[3]);
+        return n >= 0;
+    };
+    glm::vec3 jNeck, jL, jR;
+    CHECK(bind("neck_01", jNeck) && bind("upperarm_l", jL) && bind("upperarm_r", jR));
+    std::vector<glm::vec3> pos;
+    std::vector<unsigned int> idx;
+    jacket->CollisionGeometry(pos, idx);
+    CHECK(!pos.empty());
+    collar = FirstPersonBodyCollarVertices(pos, jNeck, jL, jR, 0.02f);
+    CHECK(collar.size() == pos.size());
+    size_t hidden = 0, top = 0, topHidden = 0, low = 0, head = 0, headHidden = 0;
+    float yMax = -1e9f;
+    for (const auto& p : pos) yMax = std::max(yMax, p.y);
+    for (size_t i = 0; i < pos.size(); ++i) {
+        hidden += collar[i];
+        if (pos[i].y > yMax - 0.05f) { ++top; topHidden += collar[i]; }             // the hood's crown / collar rim
+        if (pos[i].y < std::min(jL.y, jR.y) - 0.1f && collar[i]) ++low;          // nothing from the chest down
+        if (pos[i].y > jNeck.y) { ++head; headHidden += collar[i]; }                 // the hood, up round the head
+    }
+    Log::Info("FirstPersonBodyClothingHide: winter jacket " + std::to_string(hidden) + " / " + std::to_string(pos.size()) +
+              " collar vertices; shoulders at " + std::to_string(jL.y) + " m, neck " + std::to_string(jNeck.y) + " m, top " +
+              std::to_string(yMax) + " m.");
+    CHECK(jL.y > 1.2f && jL.y < 1.7f && jNeck.y > jL.y); // bones and vertices share the model's upright, metre frame
+    // This jacket's hood is up: its fur is most of the mesh, and all of it is round the camera.
+    CHECK(hidden > 0 && hidden < pos.size() && head > 0 && headHidden == head);
+    CHECK(top > 0 && topHidden == top);
+    CHECK(low == 0);
+}
+
 // The body's setup check: a controller built from the contract tables passes; one missing piece is named.
 void TestFirstPersonBodyValidate() {
     FirstPersonBodyComponent cfg;
@@ -3876,6 +3957,7 @@ int RunUnitTests() {
         {"AnimatorController", TestAnimatorController},
         {"RootMotion", TestRootMotion},
         {"FirstPersonBodyValidate", TestFirstPersonBodyValidate},
+        {"FirstPersonBodyClothingHide", TestFirstPersonBodyClothingHide},
         {"Wardrobe", TestWardrobe},
         {"OutfitCoverage", TestOutfitCoverage},
         {"WardrobeQuantum", TestWardrobeQuantum},

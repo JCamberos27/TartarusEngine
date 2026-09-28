@@ -490,7 +490,7 @@
               "threshold": 0.0
             }
           ],
-          "duration": 0.04,
+          "duration": 0.1,
           "exitTime": 1.0,
           "fromAny": true,
           "hasExitTime": false,

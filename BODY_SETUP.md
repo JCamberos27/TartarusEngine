@@ -78,6 +78,7 @@ Everything in **(advanced)** groups has a tooltip; defaults are the values the b
 | Elbows swing or jerk while walking / running | **Arm Steadiness** up (1 = the gait never reaches the arms: shoulders held against the view, elbows in the rig's bend plane); **Arm Steady Time** longer than a step; **Arm Steady Max** bounds how far a shoulder is held. |
 | Looking down shows the body from inside (legs seen through the torso) | **Spine Aim Down** up (the chest pitches further with the view), **Near Hide** up. **Look Down Push** also works but costs the arms their reach. |
 | Slivers of skin at the edge of the view (turning, landing, looking down) | **Near Hide** up: that much of the body around the eye isn't drawn (the shadow stays). |
+| Dark flaps of clothing at the edge of the view (a hood, a collar, a jacket's shoulders) | **Clothing Near Hide** up (above, below and ahead of the eye), **Clothing Near Hide Width** up (to the sides); **Collar Hide Drop** up hides more of what sits around the neck in the garment's bind pose. All three apply only in the player's own view: shadows, the Scene tab and other cameras keep the whole outfit. |
 | Camera rises or drops on holster | **Arms Ease Out**; the body keeps the armed eye height unarmed. |
 | Feet float over steps / sink into slopes | **Foot IK**, **Foot Ray Up/Length**, **Foot Max Raise**, **Pelvis Max Raise**, **Foot IK Max Drop**. |
 | Foot slides while planted | **Foot Lock Drift**, **Foot Planted Height**, **Foot Lock Ease In/Out**. |

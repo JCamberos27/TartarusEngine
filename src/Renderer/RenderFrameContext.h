@@ -55,4 +55,9 @@ struct RenderFrameContext {
     // sub-pass clears depth: world-space effects that need the scene's depth - bullet holes, the
     // weapon's laser - and that the arms and gun then cover. Empty = nothing.
     std::function<void()> WorldOverlay;
+
+    // The player's own first-person view (Play, through the player's camera): only here is the player's
+    // body trimmed around the eye (PlayerBodyTag). Every other view - the Scene tab, a scene camera, a
+    // reflection or a mirror - draws the whole outfit.
+    bool OwnerView = false;
 };
