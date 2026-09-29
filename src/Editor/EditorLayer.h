@@ -202,6 +202,9 @@ public:
     bool ShowHistory() const { return m_ShowHistory; }
     void SetShowHistory(bool on) { m_ShowHistory = on; }
     void RequestResetLayout() { m_ResetLayoutRequested = true; }
+    // Scene and Game side by side (Scene left) when they share a tab strip - for --stock-probe,
+    // which captures both. Done on the next frame's dock pass.
+    void RequestSceneGameSplit() { m_SplitSceneGameRequested = true; }
     // Phase 6 item 10 — the four shipped panel arrangements offered alongside user-saved
     // layout presets. Wide/Tall favor ultrawide/portrait monitors; Focus hides the Hierarchy
     // and Inspector to maximize the Scene viewport.
@@ -778,6 +781,7 @@ private:
     // Set by Settings > Reset Layout; consumed at the top of Draw()'s dockspace setup to
     // rebuild the default panel arrangement from scratch.
     bool m_ResetLayoutRequested = false;
+    bool m_SplitSceneGameRequested = false;
     // Which shipped arrangement m_ResetLayoutRequested rebuilds to (Phase 6 item 10). Reset
     // Layout without a EditorSettings::DefaultLayoutPreset override always uses Default.
     LayoutKind m_ResetLayoutKind = LayoutKind::Default;

@@ -264,6 +264,7 @@ json WeaponProceduralSettings::ToJson() const {
         {"spring", SpringJson(ob.Spring)},
     };
     j["aim"] = {{"position", Vec(Aim.Position)}, {"rotation", Vec(Aim.Rotation)},
+                {"hipPosition", Vec(Aim.HipPosition)}, {"hipRotation", Vec(Aim.HipRotation)},
                 {"blendTime", Aim.BlendTime}, {"blend", Aim.Blend.ToJson()}};
     json offsets = json::array();
     for (const auto& o : StateOffsets)
@@ -425,6 +426,8 @@ bool WeaponProceduralSettings::FromJson(const json& j, WeaponProceduralSettings&
     root.Object("aim", [&](Reader& r) {
         r.Vector("position", s.Aim.Position);
         r.Vector("rotation", s.Aim.Rotation);
+        r.Vector("hipPosition", s.Aim.HipPosition);
+        r.Vector("hipRotation", s.Aim.HipRotation);
         r.Number("blendTime", s.Aim.BlendTime);
         r.CurveField("blend", s.Aim.Blend);
     });
@@ -768,7 +771,8 @@ const WeaponProceduralPose& WeaponProceduralState::Update(const WeaponProcedural
         pose.CameraRoll += m_CamMotion.X.z;
     }
 
-    // ADS aim offset.
+    // ADS aim offset. (The hip carry, Aim.Hip*, is placed on the whole rig by the presentation:
+    // through IK it would fade out with the IK in Draw and Regrip.)
     pose.Position += s.Aim.Position * ads;
     pose.Rotation += s.Aim.Rotation * ads;
 

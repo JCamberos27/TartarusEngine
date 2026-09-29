@@ -228,6 +228,8 @@ bool FirstPersonPresentation::StartSet(World& world, AssetLibrary& assets, int s
 }
 
 void FirstPersonPresentation::StopSet(World& world) {
+    if (m_WorldWeapon != entt::null && world.Registry.valid(m_WorldWeapon)) world.DestroyEntityAndChildren(m_WorldWeapon);
+    m_WorldWeapon = entt::null;
     if (m_Arms != entt::null && world.Registry.valid(m_Arms)) world.DestroyEntityAndChildren(m_Arms);
     if (m_Weapon != entt::null && world.Registry.valid(m_Weapon)) world.DestroyEntityAndChildren(m_Weapon);
     m_World = nullptr;
@@ -649,6 +651,99 @@ bool FirstPersonPresentation::WeaponNodeInView(const std::string& node, glm::vec
     if (!m_WeaponModel || !m_WeaponModel->NodeTransform(node, m)) return false;
     out = glm::vec3(m_View * m_WeaponWorld * m[3]);
     return true;
+}
+
+bool FirstPersonPresentation::StockWorld(glm::vec3& butt, glm::vec3& forward) const {
+    if (!m_WeaponModel || m_Set.WeaponRoot.empty()) return false;
+    const Model& m = *m_WeaponModel;
+    glm::mat4 root(1.0f);
+    if (!m.NodeTransform(m_Set.WeaponRoot, root)) return false;
+    auto skinned = [&](int mesh, int v) {
+        const ModelMesh::SkinVertex& sv = m.MeshSkinVertices(mesh)[v];
+        glm::vec4 p(0.0f);
+        float total = 0.0f;
+        for (int k = 0; k < MAX_BONE_INFLUENCE; ++k)
+            if (sv.BoneIDs[k] >= 0 && sv.Weights[k] > 0.0f) {
+                p += sv.Weights[k] * (m.FinalBoneMatrix(sv.BoneIDs[k]) * glm::vec4(sv.Position, 1.0f));
+                total += sv.Weights[k];
+            }
+        return total > 0.0f ? glm::vec3(p) / total : sv.Position;
+    };
+    // The bore is the root's -Z; the butt is what lies furthest along +Z (within 1.5 cm of the end).
+    const glm::vec3 back = glm::normalize(glm::vec3(root[2]));
+    if (m_StockModel != &m) {
+        m_StockModel = &m;
+        m_StockVerts.clear();
+        float far = -1e9f;
+        for (int i = 0; i < m.MeshCount(); ++i)
+            for (int v = 0; v < (int)m.MeshSkinVertices(i).size(); ++v) far = std::max(far, glm::dot(skinned(i, v), back));
+        for (int i = 0; i < m.MeshCount(); ++i)
+            for (int v = 0; v < (int)m.MeshSkinVertices(i).size(); ++v)
+                if (glm::dot(skinned(i, v), back) > far - 0.015f / std::max(m_Scale, 1e-6f)) m_StockVerts.push_back({i, v});
+    }
+    if (m_StockVerts.empty()) return false;
+    glm::vec3 sum(0.0f);
+    for (const auto& [i, v] : m_StockVerts) sum += skinned(i, v);
+    butt = glm::vec3(m_WeaponWorld * glm::vec4(sum / (float)m_StockVerts.size(), 1.0f));
+    forward = -glm::normalize(glm::mat3(m_WeaponWorld) * back);
+    return true;
+}
+
+bool FirstPersonPresentation::WorldGunInput(FirstPersonWorldGunInput& out) const {
+    if (!m_Equipped) return false;
+    glm::vec3 butt, forward;
+    if (!StockWorld(butt, forward)) return false;
+    const FirstPersonStockLockSettings& sl = m_Set.StockLock;
+    const float x = sl.Enabled ? m_StockLockWeight : 0.0f;
+    out.ButtWorld = butt;
+    out.ForwardWorld = forward;
+    out.Shouldered = x * x * (3.0f - 2.0f * x); // eased in and out
+    out.Pocket = sl.Pocket;
+    out.MaxShift = sl.MaxShift;
+    out.HeadTiltDegrees = sl.HeadTilt;
+    out.NeckRadius = sl.NeckRadius;
+    out.HeadRadius = sl.HeadRadius;
+    out.GunLength = sl.GunLength;
+    return true;
+}
+
+void FirstPersonPresentation::PlaceWorldWeapon(World& world, bool split, const glm::vec3& shift) {
+    auto& reg = world.Registry;
+    const bool haveWeapon = m_Weapon != entt::null && reg.valid(m_Weapon);
+    if (!split || !haveWeapon) {
+        if (m_WorldWeapon != entt::null && reg.valid(m_WorldWeapon)) world.DestroyEntityAndChildren(m_WorldWeapon);
+        m_WorldWeapon = entt::null;
+        if (haveWeapon) reg.remove<OwnerViewOnlyTag>(m_Weapon);
+        return;
+    }
+    if (m_WorldWeapon == entt::null || !reg.valid(m_WorldWeapon)) {
+        // The same model object as the first-person gun: one pose (the pump, the shells), drawn twice.
+        const RenderableComponent src = reg.get<RenderableComponent>(m_Weapon); // by value: the create below can move the storage
+        m_WorldWeapon = world.CreateModelEntity(src.ModelRef, glm::vec3(0.0f), glm::vec3(0.0f), glm::vec3(m_Scale),
+                                                "[Runtime] First Person Weapon (world)");
+        auto& dst = reg.get<RenderableComponent>(m_WorldWeapon);
+        dst.Materials = src.Materials;
+        dst.CastShadows = RenderableComponent::ShadowCasting::On;
+        dst.ReceiveShadows = true;
+        reg.emplace_or_replace<HiddenFromOwnerTag>(m_WorldWeapon);
+        reg.emplace_or_replace<OwnerViewOnlyTag>(m_Weapon);
+    }
+    const glm::vec3 scale(glm::length(glm::vec3(m_WeaponWorld[0])), glm::length(glm::vec3(m_WeaponWorld[1])),
+                          glm::length(glm::vec3(m_WeaponWorld[2])));
+    const glm::mat3 r(glm::vec3(m_WeaponWorld[0]) / std::max(scale.x, 1e-6f), glm::vec3(m_WeaponWorld[1]) / std::max(scale.y, 1e-6f),
+                      glm::vec3(m_WeaponWorld[2]) / std::max(scale.z, 1e-6f));
+    world.SetWorldPose(m_WorldWeapon, glm::vec3(m_WeaponWorld[3]) + shift, glm::normalize(glm::quat_cast(r)));
+    reg.get<TransformComponent>(m_WorldWeapon).Scale = scale;
+    // Hidden (holstered, unarmed) with the first-person gun.
+    const bool hidden = reg.any_of<InactiveTag, DeactivatedTag>(m_Weapon);
+    if (hidden != reg.all_of<DeactivatedTag>(m_WorldWeapon)) {
+        if (hidden) {
+            reg.emplace_or_replace<DeactivatedTag>(m_WorldWeapon);
+            reg.emplace_or_replace<InactiveTag>(m_WorldWeapon);
+        } else {
+            reg.remove<DeactivatedTag, InactiveTag>(m_WorldWeapon);
+        }
+    }
 }
 
 bool FirstPersonPresentation::BarrelAimPoint(glm::vec3& out) const {
@@ -1083,6 +1178,17 @@ void FirstPersonPresentation::Tick(float dt, const glm::vec3& velocity, bool spr
             m_Zoom = std::clamp(target + next, 0.0f, 1.0f);
         }
     }
+    // Stock lock: shouldered in the weapon's listed states, or anything carried on the sights.
+    {
+        const FirstPersonStockLockSettings& sl = m_Set.StockLock;
+        bool shouldered = false;
+        if (sl.Enabled && m_Equipped && !ac->HasTag(K::kTagHidden)) {
+            shouldered = m_Zoom > 0.5f;
+            for (const std::string& tag : sl.Tags) shouldered = shouldered || ac->HasTag(tag.c_str());
+        }
+        const float step = sl.BlendTime > 0.0f ? dt / sl.BlendTime : 1.0f;
+        m_StockLockWeight = std::clamp(m_StockLockWeight + (shouldered ? step : -step), 0.0f, 1.0f);
+    }
     ac->SetBool(K::kEquipped, m_Equipped);
     ac->SetInt(K::kAmmo, m_Ammo);
     // A tube loaded a round at a time: the load loop leaves on LastRound (load it and finish) or
@@ -1423,7 +1529,7 @@ void FirstPersonPresentation::PlaceRigs(World& world, const Camera& camera) {
         actionR = carry.R;
         actionT = carry.T;
     }
-    const glm::quat rigRotation = NormalizeRotation(rotation * actionR);
+    glm::quat rigRotation = NormalizeRotation(rotation * actionR);
     position += rotation * (m_Scale * actionT);
     glm::mat4 anchor(1.0f);
     if (!m_CameraBone.empty() && m_ArmsModel && m_ArmsModel->NodeTransform(m_CameraBone, anchor)) {
@@ -1434,6 +1540,28 @@ void FirstPersonPresentation::PlaceRigs(World& world, const Camera& camera) {
                   "' bone; placing the view model's root on the camera instead.");
     }
     position += cameraRotation * (m_Offset + procPosition);
+
+    // The hip carry (Aim.HipPosition / HipRotation): the whole rig, arms and gun together, turned
+    // about the gun socket and moved in the camera's frame, by how far the sights are down. Rigid,
+    // so every hand contact holds; applied here rather than through IK so Draw and Regrip (IK
+    // off) carry it too instead of the gun settling onto it afterwards. "Sights down" is the
+    // zoom's, not the ADS tag's: a pump or reload carried on the sights isn't tagged ADS, and
+    // the offset fading back in there dropped the gun after every aimed shot.
+    const WeaponAimSettings& aim = m_Set.Procedural.Aim;
+    const float hip = 1.0f - std::clamp(m_Zoom, 0.0f, 1.0f);
+    if (hip > 0.0f && (aim.HipPosition != glm::vec3(0.0f) || aim.HipRotation != glm::vec3(0.0f))) {
+        WeaponProceduralPose h;
+        h.Rotation = aim.HipRotation;
+        const glm::quat turn = NormalizeRotation(cameraRotation * glm::slerp(identity, h.RotationQuat(), hip) *
+                                                 glm::inverse(cameraRotation));
+        glm::vec3 pivot = position;
+        glm::mat4 socket(1.0f);
+        const std::string& gun = m_Set.WeaponSocket.empty() ? m_Set.Procedural.IK.GunBone : m_Set.WeaponSocket;
+        if (m_ArmsModel && !gun.empty() && m_ArmsModel->NodeTransform(gun, socket))
+            pivot = position + rigRotation * (m_Scale * glm::vec3(socket[3]));
+        position = pivot + turn * (position - pivot) + cameraRotation * (aim.HipPosition * hip);
+        rigRotation = NormalizeRotation(turn * rigRotation);
+    }
 
     world.SetWorldPose(m_Arms, position, rigRotation);
     world.Registry.get<TransformComponent>(m_Arms).Scale = glm::vec3(m_Scale);

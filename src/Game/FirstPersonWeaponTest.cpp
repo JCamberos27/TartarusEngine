@@ -1,10 +1,14 @@
 #include "FirstPersonWeaponTest.h"
 
+#include "Camera.h"
+#include "FirstPersonBody.h"
 #include "FirstPersonPresentation.h"
+#include "World.h"
 
 #include <glm/glm.hpp>
 
 #include <algorithm>
+#include <cctype>
 #include <cmath>
 #include <memory>
 #include <cstdio>
@@ -27,7 +31,7 @@ bool FirstPersonWeaponTest::Ctx::Saw(const std::string& state) const {
 
 const std::string& FirstPersonWeaponTest::Ctx::State() const { return P->CurrentState(); }
 
-FirstPersonWeaponTest::FirstPersonWeaponTest() {
+FirstPersonWeaponTest::FirstPersonWeaponTest(bool stockProbe) : m_Probe(stockProbe) {
     // Shared between steps.
     struct Mem { int AkAmmo = 0, ShotgunAmmo = 0, Ammo = 0, Stage = 0; bool Held = false; float HipHand = 0.0f; };
     auto mem = std::make_shared<Mem>();
@@ -213,7 +217,162 @@ FirstPersonWeaponTest::FirstPersonWeaponTest() {
     };
     // Full-auto hold, read by Drive.
     m_Held = [mem] { return mem->Held; };
+    if (m_Probe) BuildProbe();
 }
+
+// --- Stock probe ------------------------------------------------------------------------------
+
+namespace {
+float SegmentDistance(const glm::vec3& p, const glm::vec3& a, const glm::vec3& b) {
+    const glm::vec3 ab = b - a;
+    const float t = std::clamp(glm::dot(p - a, ab) / std::max(glm::dot(ab, ab), 1e-9f), 0.0f, 1.0f);
+    return glm::length(p - (a + ab * t));
+}
+
+std::string ShotStem(const std::string& s) {
+    std::string n;
+    for (char ch : s) n += (std::isalnum((unsigned char)ch) || ch == '-') ? ch : '_';
+    return n;
+}
+} // namespace
+
+void FirstPersonWeaponTest::BuildProbe() {
+    using C = Ctx;
+    auto hold = [](float s) { return [s](C& c) { return c.Time >= s; }; };
+    std::vector<Step> steps = {
+        {"AK in hand at Play", nullptr, [](C& c) { return c.State() == "Idle"; }, 30.0f, nullptr},
+        {"3: switch to the Remington", [](C& c) { c.P->SelectSlot(1); c.Cam->Pitch = 0.0f; },
+         [](C& c) { return c.P->Slot() == 1 && c.State() == "Idle"; }, 180.0f, nullptr},
+        {"settle", nullptr, hold(2.0f), 5.0f, nullptr},
+    };
+    // Held still at each pitch: the settled pose, and a capture.
+    for (float pitch : {-75.0f, -60.0f, -45.0f, -30.0f, -15.0f, 0.0f, 15.0f, 30.0f, 45.0f, 60.0f}) {
+        const std::string name = "idle pitch " + std::to_string((int)pitch);
+        steps.push_back({name, [pitch](C& c) { c.Cam->Pitch = pitch; }, hold(1.2f), 5.0f,
+                         [this, name, pitch](C& c) { PrintSample(name); c.Shot = ShotStem("idle_pitch_" + std::to_string((int)pitch)); }});
+    }
+    steps.push_back({"level", [](C& c) { c.Cam->Pitch = 0.0f; }, hold(1.0f), 5.0f, nullptr});
+    // Turning at a steady rate (the body lags the view), then stopping.
+    for (float rate : {90.0f, 180.0f, 360.0f, -180.0f}) {
+        const std::string name = "turn " + std::to_string((int)rate) + " deg/s";
+        steps.push_back({name, [name](C& c) { c.LogEvery = 6; c.Label = name; },
+                         [rate](C& c) {
+                             c.Cam->Yaw += rate * c.Dt;
+                             if (std::fabs(c.Time - 0.6f) < c.Dt * 0.5f) c.Shot = ShotStem("turn_" + std::to_string((int)rate));
+                             return c.Time >= 1.2f;
+                         }, 5.0f, [](C& c) { c.LogEvery = 0; }});
+        steps.push_back({"stopped", [](C& c) { c.LogEvery = 12; c.Label = "stopped"; }, hold(1.0f), 5.0f,
+                         [this, name](C& c) { c.LogEvery = 0; PrintSample("stopped after " + name); }});
+    }
+    // Sweeping the pitch.
+    struct Sweep { float From, To, Rate; };
+    for (const Sweep& s : {Sweep{0.0f, -75.0f, 120.0f}, Sweep{-75.0f, 60.0f, 120.0f}, Sweep{60.0f, 0.0f, 120.0f}}) {
+        const std::string name = "sweep " + std::to_string((int)s.From) + " -> " + std::to_string((int)s.To);
+        steps.push_back({name, [s, name](C& c) { c.Cam->Pitch = s.From; c.LogEvery = 6; c.Label = name; },
+                         [s](C& c) {
+                             const float dir = s.To > s.From ? 1.0f : -1.0f;
+                             c.Cam->Pitch = std::clamp(c.Cam->Pitch + dir * s.Rate * c.Dt, std::min(s.From, s.To), std::max(s.From, s.To));
+                             return c.Cam->Pitch == s.To;
+                         }, 5.0f, [](C& c) { c.LogEvery = 0; }});
+    }
+    // A round and its pump at three pitches, sampled through, captured along the way.
+    for (float pitch : {0.0f, -45.0f, 30.0f}) {
+        const std::string name = "fire+pump pitch " + std::to_string((int)pitch);
+        steps.push_back({"to pitch " + std::to_string((int)pitch), [pitch](C& c) { c.Cam->Pitch = pitch; }, hold(1.0f), 5.0f, nullptr});
+        steps.push_back({name, [name](C& c) { c.LogEvery = 6; c.Label = name; ++c.Pulls; },
+                         [pitch](C& c) {
+                             const int f = (int)std::lround(c.Time / std::max(c.Dt, 1e-4f));
+                             if (f % 12 == 0) c.Shot = ShotStem("fire_p" + std::to_string((int)pitch) + "_" + std::to_string(1000 + f).substr(1));
+                             return c.Saw("Pump") && c.State() == "Idle" && c.P->Chambered();
+                         }, 6.0f, [](C& c) { c.LogEvery = 0; }});
+    }
+    // On the sights at three pitches.
+    for (float pitch : {0.0f, -45.0f, 30.0f}) {
+        const std::string name = "aim pitch " + std::to_string((int)pitch);
+        steps.push_back({name, [pitch](C& c) { c.Aim = true; c.Cam->Pitch = pitch; },
+                         [](C& c) { return c.State() == "Aim" && c.Time >= 1.2f; }, 5.0f,
+                         [this, name, pitch](C& c) { PrintSample(name); c.Shot = ShotStem("aim_p" + std::to_string((int)pitch)); }});
+    }
+    steps.push_back({"sights down", [](C& c) { c.Aim = false; c.Cam->Pitch = 0.0f; },
+                     [](C& c) { return c.State() == "Idle" && c.Time > 0.5f; }, 3.0f, nullptr});
+    m_Steps = std::move(steps);
+}
+
+void FirstPersonWeaponTest::AfterPose(const World& world, const FirstPersonBody& body, const FirstPersonPresentation& p) {
+    if (!m_Probe || !m_Ctx.Cam) return;
+    ++m_Frame;
+    const Camera& cam = *m_Ctx.Cam;
+    Sample s;
+    s.Pitch = cam.Pitch;
+    s.Yaw = cam.Yaw;
+    if (m_HaveYaw && m_Ctx.Dt > 0.0f) s.YawRate = std::remainder(cam.Yaw - m_LastYaw, 360.0f) / m_Ctx.Dt;
+    m_LastYaw = cam.Yaw;
+    m_HaveYaw = true;
+    s.TwistDeg = glm::degrees(body.Twist());
+    s.State = p.CurrentState();
+    glm::vec3 butt, fwd, upper, clav, neck, head;
+    // The world gun (split poses): the first-person one moved by the body's world gun shift.
+    if (p.StockWorld(butt, fwd) && ((butt += body.WorldGunShift()), true) && body.BoneWorld(world, "upperarm_r", upper) && body.BoneWorld(world, "clavicle_r", clav) &&
+        body.BoneWorld(world, "neck_01", neck) && body.BoneWorld(world, "head", head)) {
+        const glm::vec3 up(0.0f, 1.0f, 0.0f);
+        glm::vec3 front = cam.Front();
+        front.y = 0.0f;
+        front = glm::length(front) > 1e-4f ? glm::normalize(front) : glm::vec3(0.0f, 0.0f, -1.0f);
+        const glm::vec3 right = glm::normalize(glm::cross(front, up));
+        const glm::vec3 d = butt - upper;
+        s.StockFromShoulder = glm::vec3(glm::dot(d, right), d.y, glm::dot(d, front));
+        s.Shoulder = glm::length(d);
+        s.Clavicle = glm::length(butt - clav);
+        s.Neck = glm::length(butt - neck);
+        s.Head = glm::length(butt - head);
+        const glm::vec3 rear = butt + fwd * 0.30f;
+        s.NeckGap = SegmentDistance(neck, butt, rear);
+        s.HeadGap = SegmentDistance(head, butt, rear);
+        // The world hands against the world gun's grips (the rig's hands, moved with it).
+        for (int h = 0; h < 2; ++h) {
+            glm::vec3 v, bodyHand;
+            if (p.ArmsNodeInView(h == 0 ? "hand_l" : "hand_r", v) && body.BoneWorld(world, h == 0 ? "hand_l" : "hand_r", bodyHand)) {
+                const glm::vec3 rigHand = glm::vec3(glm::inverse(cam.ViewMatrix()) * glm::vec4(v, 1.0f)) + body.WorldGunShift();
+                s.HandGap[h] = glm::length(bodyHand - rigHand);
+            }
+        }
+        s.GunShift = glm::length(body.WorldGunShift());
+        s.Valid = true;
+        // The Scene camera: in front of the body and to its right, on the gun's rear and the shoulder.
+        const glm::vec3 target = 0.5f * (butt + 0.5f * (neck + upper)) + fwd * 0.08f;
+        m_SceneCamPos = target + front * 1.05f + right * 0.75f + up * 0.12f;
+        const glm::vec3 look = glm::normalize(target - m_SceneCamPos);
+        m_SceneCamYaw = glm::degrees(std::atan2(look.z, look.x));
+        m_SceneCamPitch = glm::degrees(std::asin(std::clamp(look.y, -1.0f, 1.0f)));
+        m_HaveSceneCam = true;
+    }
+    m_Sample = s;
+    if (m_Ctx.LogEvery > 0 && m_Frame % m_Ctx.LogEvery == 0) PrintSample(m_Ctx.Label);
+}
+
+bool FirstPersonWeaponTest::SceneCamera(glm::vec3& position, float& yaw, float& pitch) const {
+    if (!m_Probe || !m_HaveSceneCam) return false;
+    position = m_SceneCamPos;
+    yaw = m_SceneCamYaw;
+    pitch = m_SceneCamPitch;
+    return true;
+}
+
+void FirstPersonWeaponTest::PrintSample(const std::string& label) const {
+    const Sample& s = m_Sample;
+    if (!s.Valid) {
+        std::printf("[StockProbe] %-24s (no sample: body or stock not found)\n", label.c_str());
+        return;
+    }
+    std::printf("[StockProbe] %-24s pitch %6.1f yawRate %5.0f twist %6.1f %-9s | butt-shoulder R %+5.1f U %+5.1f F %+5.1f (%4.1f) | "
+                "clav %4.1f neck %4.1f head %4.1f | rear 30cm to neck %4.1f head %4.1f | shift %4.1f hands off L %4.1f R %4.1f cm\n",
+                label.c_str(), s.Pitch, s.YawRate, s.TwistDeg, s.State.c_str(), s.StockFromShoulder.x * 100.0f,
+                s.StockFromShoulder.y * 100.0f, s.StockFromShoulder.z * 100.0f, s.Shoulder * 100.0f, s.Clavicle * 100.0f,
+                s.Neck * 100.0f, s.Head * 100.0f, s.NeckGap * 100.0f, s.HeadGap * 100.0f, s.GunShift * 100.0f,
+                s.HandGap[0] * 100.0f, s.HandGap[1] * 100.0f);
+    std::fflush(stdout);
+}
+
 
 void FirstPersonWeaponTest::OnHit(const glm::vec3& point) {
     m_Ctx.Hits.push_back(point);
@@ -261,7 +420,11 @@ void FirstPersonWeaponTest::Drive(FirstPersonPresentation& p, float dt) {
         }
     }
     m_Shot.clear();
-    if (glm::vec3 v; p.CurrentState().rfind("Reload", 0) == 0 && p.ArmsNodeInView("hand_l", v)) {
+    if (!c.Shot.empty()) {
+        m_Shot = c.Shot;
+        c.Shot.clear();
+    }
+    if (glm::vec3 v; !m_Probe && p.CurrentState().rfind("Reload", 0) == 0 && p.ArmsNodeInView("hand_l", v)) {
         if (c.Hand.size() % 10 == 0 && !Done()) {
             char name[64];
             std::snprintf(name, sizeof name, "%s_%03d", c.Aim ? "ads" : "hip", (int)c.Hand.size());

@@ -409,6 +409,10 @@ int main(int argc, char** argv) {
     // --weapon-test: the smoke harness on the Sandbox only, with the weapons played through by
     // script in Play (FirstPersonWeaponTest) on a fixed 60 Hz step. Exit code 0 = every check passed.
     bool weaponTestMode = false;
+    // --stock-probe: the same harness with the stock probe script (FirstPersonWeaponTest): the
+    // Remington held through pitches, turns, a round and the sights, the butt measured against the
+    // body; with --smoke-shots each capture is the Scene view (on the gun and shoulder) beside the Game view.
+    bool stockProbeMode = false;
     // --perf-bench [dir]: the smoke-test harness with VSync, the FPS cap and GL debug output off,
     // a longer per-scene run, and an averaged CPU/GPU profiler breakdown printed per scene.
     bool perfBenchMode = false;
@@ -454,6 +458,7 @@ int main(int argc, char** argv) {
             if (i + 1 < argc && argv[i + 1][0] != '-') smokeScenesDirArg = argv[++i];
         }
         else if (a == "--weapon-test") { smokeTestMode = true; weaponTestMode = true; }
+        else if (a == "--stock-probe") { smokeTestMode = true; weaponTestMode = true; stockProbeMode = true; }
         else if (a == "--smoke-shots" && i + 1 < argc) { smokeShotsDir = argv[++i]; }
         else if (a == "--resave" && i + 2 < argc) { resaveIn = argv[i + 1]; resaveOut = argv[i + 2]; i += 2; }
         else if (a == "--undo-bench") { undoBenchMode = true; }
@@ -729,7 +734,7 @@ int main(int argc, char** argv) {
         Player player;
         FirstPersonPresentation firstPersonPresentation;
         std::unique_ptr<FirstPersonWeaponTest> weaponTest;
-        if (weaponTestMode) weaponTest = std::make_unique<FirstPersonWeaponTest>();
+        if (weaponTestMode) weaponTest = std::make_unique<FirstPersonWeaponTest>(stockProbeMode);
         FirstPersonBody firstPersonBody; // #405 - true first person: the player's own body
         GravityGun gravityGun;
         CrosshairOverlay crosshair; // Play-mode crosshair + gravity gun hold / throw-charge indicator
@@ -978,6 +983,8 @@ int main(int argc, char** argv) {
         }
 
         EditorLayer editor;
+        // --stock-probe captures the Scene view (the body) beside the Game view (the first-person view).
+        if (stockProbeMode) editor.RequestSceneGameSplit();
         editor.Init(window.Handle());
         // #148: a hard crash (access violation, stack overflow, abort...) never reaches the
         // exception-path EmergencyRecoverySave, so the crash handler gets its own hook. Pointers
@@ -2333,6 +2340,7 @@ int main(int argc, char** argv) {
                         firstPersonPresentation.Update(world, player.Cam);
                         if (weaponTest) {
                             // The script is the player: its trigger, aim and weapon keys, nothing else.
+                            weaponTest->SetCamera(&player.Cam);
                             weaponTest->Drive(firstPersonPresentation, gameDt);
                             firstPersonPresentation.Tick(gameDt, player.Velocity, false, weaponTest->Aim(), 0.0f, player.Grounded);
                         } else {
@@ -2417,8 +2425,14 @@ int main(int argc, char** argv) {
                                                firstPersonPresentation.CameraBone()); // camera into the body's head
                     firstPersonPresentation.LateUpdate(world, player.Cam);
                     // The body's hands onto the arms rig's, now that the rig is seated.
+                    // Split poses: the body's world twins reach the world gun, placed off the first-person one.
+                    FirstPersonWorldGunInput worldGun;
+                    const bool haveGun = firstPersonPresentation.IsActive() && firstPersonPresentation.WorldGunInput(worldGun);
                     firstPersonBody.ArmsLateUpdate(world, firstPersonPresentation.ArmsEntity(),
-                                                   firstPersonPresentation.ViewModelFov(), gameDt, &player.Cam);
+                                                   firstPersonPresentation.ViewModelFov(), gameDt, &player.Cam, haveGun ? &worldGun : nullptr);
+                    if (firstPersonPresentation.IsActive())
+                        firstPersonPresentation.PlaceWorldWeapon(world, firstPersonBody.SplitPoses(), firstPersonBody.WorldGunShift());
+                    if (weaponTest) weaponTest->AfterPose(world, firstPersonBody, firstPersonPresentation);
                     // This frame's rounds, down the bore from the muzzle: a hole where each struck.
                     for (const FirstPersonPresentation::ShotHit& hit : firstPersonPresentation.TakeShotHits()) {
                         if (weaponTest) weaponTest->OnHit(hit.Point);
@@ -2684,7 +2698,7 @@ int main(int argc, char** argv) {
                 // reach every occluder.
                 glm::vec3 casterMin(std::numeric_limits<float>::max()), casterMax(-std::numeric_limits<float>::max());
                 for (auto entity : world.Registry.view<TransformComponent, RenderableComponent>()) {
-                    if (world.Registry.any_of<InactiveTag, LodCulledTag, PoseSourceTag>(entity)) continue;
+                    if (world.Registry.any_of<InactiveTag, LodCulledTag, PoseSourceTag, OwnerViewOnlyTag>(entity)) continue;
                     auto& r = world.Registry.get<RenderableComponent>(entity);
                     // #163 - Cast Shadows: Off skips; Two Sided draws without back-face culling.
                     if (!r.ModelRef || r.CastShadows == RenderableComponent::ShadowCasting::Off) continue;
@@ -2836,7 +2850,7 @@ int main(int argc, char** argv) {
                     localShadowShader.SetFloat(localFarLoc, spotShadowFar[s]);
                     Frustum lf = Frustum::FromViewProj(spotShadowVP[s]);
                     for (auto entity : casters) {
-                        if (world.Registry.any_of<InactiveTag, LodCulledTag, PoseSourceTag>(entity)) continue;
+                        if (world.Registry.any_of<InactiveTag, LodCulledTag, PoseSourceTag, OwnerViewOnlyTag>(entity)) continue;
                         auto& r = world.Registry.get<RenderableComponent>(entity);
                         if (r.CastShadows == RenderableComponent::ShadowCasting::Off) continue; // #163
                         const bool twoSided = r.CastShadows == RenderableComponent::ShadowCasting::TwoSided;
@@ -2903,7 +2917,7 @@ int main(int argc, char** argv) {
                         localShadowShader.SetMat4(cubeLightViewProjLoc, vp);
                         Frustum lf = Frustum::FromViewProj(vp);
                         for (auto entity : casters) {
-                            if (world.Registry.any_of<InactiveTag, LodCulledTag, PoseSourceTag>(entity)) continue;
+                            if (world.Registry.any_of<InactiveTag, LodCulledTag, PoseSourceTag, OwnerViewOnlyTag>(entity)) continue;
                             auto& r = world.Registry.get<RenderableComponent>(entity);
                             if (r.CastShadows == RenderableComponent::ShadowCasting::Off) continue; // #163
                             const bool twoSided = r.CastShadows == RenderableComponent::ShadowCasting::TwoSided;
@@ -3098,6 +3112,8 @@ int main(int argc, char** argv) {
                 for (auto entity : world.Registry.view<TransformComponent, RenderableComponent>()) {
                     if (world.Registry.any_of<InactiveTag, LodCulledTag>(entity)) continue;
                     if (world.Registry.any_of<ViewModelTag, PoseSourceTag>(entity)) continue; // see note above
+                    // Split poses: each view's own copy (the player's camera the first-person one).
+                    if (editorView ? world.Registry.all_of<OwnerViewOnlyTag>(entity) : world.Registry.all_of<HiddenFromOwnerTag>(entity)) continue;
                     // The player's own body in the camera's view: its shoulders and whatever is within Near
                     // Hide are discarded in the main pass, so here they would occlude from nowhere. The main
                     // pass gives these pieces no SSAO to match (SceneRenderer, DrawItem::NoSsao).
@@ -3224,7 +3240,7 @@ int main(int argc, char** argv) {
                 if (editor.SceneSearchActive() && !editor.OverlaysHidden()) {
                     if (sceneWireframe) glPolygonMode(GL_FRONT_AND_BACK, GL_FILL);
                     for (auto e : world.Registry.view<const TransformComponent, const RenderableComponent>()) {
-                        if (world.Registry.any_of<InactiveTag, LodCulledTag, HiddenInSceneTag, PoseSourceTag>(e)) continue;
+                        if (world.Registry.any_of<InactiveTag, LodCulledTag, HiddenInSceneTag, PoseSourceTag, OwnerViewOnlyTag>(e)) continue;
                         if (editor.MatchesSceneSearch(world, e)) continue;
                         const auto& r = world.Registry.get<const RenderableComponent>(e);
                         if (!r.ModelRef || r.CastShadows == RenderableComponent::ShadowCasting::ShadowsOnly) continue;
@@ -3603,15 +3619,36 @@ int main(int argc, char** argv) {
                                    crosshairDot(gvView, gvProj, gvWidth, gvHeight));
                 // --weapon-test --smoke-shots <dir>: the Game view through the reloads.
                 if (weaponTest && !smokeShotsDir.empty() && !weaponTest->ShotName().empty()) {
-                    glBindFramebuffer(GL_READ_FRAMEBUFFER, gameView.GetFramebuffer().Handle());
-                    std::vector<unsigned char> px = Screenshot::GrabRegion(0, 0, gvWidth, gvHeight);
-                    std::vector<unsigned char> flipped(px.size());
-                    for (int y = 0; y < gvHeight; ++y)
-                        std::memcpy(&flipped[(size_t)y * gvWidth * 4], &px[(size_t)(gvHeight - 1 - y) * gvWidth * 4], (size_t)gvWidth * 4);
+                    // With --stock-probe the Scene view goes on the left, as the editor is laid out.
+                    auto grab = [](unsigned fbo, int w, int h) {
+                        glBindFramebuffer(GL_READ_FRAMEBUFFER, fbo);
+                        std::vector<unsigned char> px = Screenshot::GrabRegion(0, 0, w, h);
+                        std::vector<unsigned char> flipped(px.size());
+                        for (int y = 0; y < h; ++y)
+                            std::memcpy(&flipped[(size_t)y * w * 4], &px[(size_t)(h - 1 - y) * w * 4], (size_t)w * 4);
+                        return flipped;
+                    };
+                    std::vector<unsigned char> game = grab(gameView.GetFramebuffer().Handle(), gvWidth, gvHeight);
+                    int outW = gvWidth, outH = gvHeight;
+                    std::vector<unsigned char> image = std::move(game);
+                    if (stockProbeMode && sceneFramebuffer.IsValid()) {
+                        const int sw = sceneFramebuffer.Width(), sh = sceneFramebuffer.Height();
+                        std::vector<unsigned char> scene = grab(sceneFramebuffer.Handle(), sw, sh);
+                        outW = sw + 8 + gvWidth;
+                        outH = std::max(sh, gvHeight);
+                        std::vector<unsigned char> both((size_t)outW * outH * 4, 0);
+                        for (size_t i = 3; i < both.size(); i += 4) both[i] = 255;
+                        for (int y = 0; y < sh; ++y)
+                            std::memcpy(&both[((size_t)y * outW) * 4], &scene[(size_t)y * sw * 4], (size_t)sw * 4);
+                        for (int y = 0; y < gvHeight; ++y)
+                            std::memcpy(&both[((size_t)y * outW + sw + 8) * 4], &image[(size_t)y * gvWidth * 4], (size_t)gvWidth * 4);
+                        image = std::move(both);
+                    }
+                    glBindFramebuffer(GL_READ_FRAMEBUFFER, 0);
                     std::error_code ec;
                     std::filesystem::create_directories(smokeShotsDir, ec);
                     const std::string out = (std::filesystem::path(smokeShotsDir) / (weaponTest->ShotName() + ".png")).string();
-                    stbi_write_png(out.c_str(), gvWidth, gvHeight, 4, flipped.data(), gvWidth * 4);
+                    stbi_write_png(out.c_str(), outW, outH, 4, image.data(), outW * 4);
                 }
                 Framebuffer::BindDefault(window.GetWidth(), window.GetHeight());
 
@@ -3945,6 +3982,16 @@ int main(int argc, char** argv) {
                     editorCamera.Position = glm::vec3(0.0f, 2.0f, 12.0f);
                     editorCamera.Yaw = pose.Yaw;
                     editorCamera.Pitch = pose.Pitch;
+                }
+                // --stock-probe: the Scene view framed on the gun's rear and the body's right shoulder.
+                if (weaponTest) {
+                    glm::vec3 p;
+                    float yaw, pitch;
+                    if (weaponTest->SceneCamera(p, yaw, pitch)) {
+                        editorCamera.Position = p;
+                        editorCamera.Yaw = yaw;
+                        editorCamera.Pitch = pitch;
+                    }
                 }
                 if (perfBenchMode) {
                     const auto now = std::chrono::steady_clock::now();

@@ -567,5 +567,25 @@
     ],
     "beamBrightness": 1.1,
     "spotBrightness": 9.0
+  },
+  "stockLock": {
+    "enabled": true,
+    "tags": [
+      "Idle",
+      "Ready",
+      "ADS",
+      "Cycling"
+    ],
+    "pocket": [
+      -0.045,
+      0.03,
+      0.05
+    ],
+    "maxShift": 0.3,
+    "headTilt": 25.0,
+    "blendTime": 0.2,
+    "neckRadius": 0.09,
+    "headRadius": 0.14,
+    "gunLength": 0.45
   }
 }

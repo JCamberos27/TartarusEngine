@@ -323,6 +323,7 @@ What's different from the AK:
 - **ADS reloads roll the gun.** The Remington's shells go into the tube from underneath. Held level on the sights, the left hand worked out of sight behind the right hand. The reload states keep all of the clip's roll (`gunMotion` 1.0 / 1.0) about the sights, so the port and the hand show, as at the hip.
 - **ADS hand anchor** (`ads.handAnchor`). The clip keys the free hand and the `Shell` bone relative to the gun. With the gun on the sights, the spot where the hand fetches a shell from the belt rose with the gun, to behind the camera, and the left arm left the view. When the hand, or a listed bone, is more than `far` (0.15 m) from the gun's box, it goes where it is relative to the eye at the hip. Within `near` (0.05 m) it follows the gun, easing between the two.
 - **Tested by script.** `--weapon-test` plays both weapons through in Play (FPS_ANIMATION_SYSTEM.md §10).
+- **World pose** (`stockLock`). With a true first-person body, first person shows the animations' own pose, and every other view shows a world copy. In that copy the gun's butt sits in the body's right shoulder pocket and the gun is kept clear of the neck and hood. See `SPLIT_POSES_HANDOFF.md`.
 
 ## 6. When a weapon does need code
 

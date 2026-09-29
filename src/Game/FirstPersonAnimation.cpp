@@ -246,6 +246,27 @@ bool FirstPersonAnimationSet::FromJsonString(const std::string& text, FirstPerso
         if (glm::length(d) > 1e-6f) mz.Direction = glm::normalize(d);
         else if (!mz.Auto) return Fail(error, "'muzzle.direction' can't be zero when 'muzzle.auto' is false");
     }
+    if (const auto s = root.find("stockLock"); s != root.end() && s->is_object()) {
+        FirstPersonStockLockSettings& sl = parsed.StockLock;
+        sl.Enabled = Bool(*s, "enabled", sl.Enabled);
+        if (const auto t = s->find("tags"); t != s->end() && t->is_array()) {
+            sl.Tags.clear();
+            for (const auto& e : *t)
+                if (e.is_string()) sl.Tags.push_back(e.get<std::string>());
+        }
+        const glm::vec3 pocket = Vec3(*s, "pocket", sl.Pocket);
+        if (Finite(pocket)) sl.Pocket = pocket;
+        auto clampNum = [&](const char* key, float& v, float lo, float hi) {
+            const float x = Number(*s, key, v);
+            if (std::isfinite(x)) v = std::clamp(x, lo, hi);
+        };
+        clampNum("maxShift", sl.MaxShift, 0.0f, 0.6f);
+        clampNum("neckRadius", sl.NeckRadius, 0.0f, 0.4f);
+        clampNum("headRadius", sl.HeadRadius, 0.0f, 0.5f);
+        clampNum("gunLength", sl.GunLength, 0.0f, 1.5f);
+        clampNum("headTilt", sl.HeadTilt, 0.0f, 60.0f);
+        clampNum("blendTime", sl.BlendTime, 0.0f, 2.0f);
+    }
     if (const auto l = root.find("laser"); l != root.end() && l->is_object()) {
         FirstPersonLaserSettings& ls = parsed.Laser;
         ls.Enabled = Bool(*l, "enabled", ls.Enabled);
@@ -376,6 +397,9 @@ std::string FirstPersonAnimationSet::ToJsonString() const {
     if (Ads.Anchor.Enabled)
         j["ads"]["handAnchor"] = {{"near", Ads.Anchor.Near}, {"far", Ads.Anchor.Far}, {"bones", Ads.Anchor.Bones}};
     j["muzzle"] = {{"auto", Muzzle.Auto}, {"origin", vec3(Muzzle.Origin)}, {"direction", vec3(Muzzle.Direction)}};
+    j["stockLock"] = {{"enabled", StockLock.Enabled}, {"tags", StockLock.Tags}, {"pocket", vec3(StockLock.Pocket)},
+                      {"maxShift", StockLock.MaxShift}, {"headTilt", StockLock.HeadTilt}, {"blendTime", StockLock.BlendTime},
+                      {"neckRadius", StockLock.NeckRadius}, {"headRadius", StockLock.HeadRadius}, {"gunLength", StockLock.GunLength}};
     j["laser"] = {{"enabled", Laser.Enabled},
                   {"color", vec3(Laser.Color)},
                   {"beamBrightness", Laser.BeamBrightness},
