@@ -2093,7 +2093,10 @@ void TestOutfitCoverage() {
     CHECK(glm::dot(OutfitCoverage::VertexNormals(neck)[(size_t)(8 * 24)], glm::vec3(1.0f, 0.0f, 0.0f)) > 0.9f);
     const size_t underRim = (size_t)(8 * 24); // y = 8 cm, facing +X
     const OutfitCoverage::Mesh collar = tube(0.09f, -0.30f, 0.10f), wrap = tube(0.09f, -0.30f, 0.50f);
-    CHECK(OutfitCoverage::Hidden(neck, collar)[underRim] == 1);       // the old rule hides it
+    // 2 cm under the rim is inside the edge band (kEdgeBand): drawn, so a collar swinging off it opens no hole.
+    // 6 cm under it, the band is past and it's hidden.
+    CHECK(OutfitCoverage::Hidden(neck, collar)[underRim] == 0);
+    CHECK(OutfitCoverage::Hidden(neck, collar)[(size_t)(4 * 24)] == 1);
     CHECK(OutfitCoverage::Hidden(neck, collar, true)[underRim] == 0); // the head's keeps it
     CHECK(OutfitCoverage::Hidden(neck, wrap, true)[underRim] == 1);
     // Skin poking 5 mm through a shirt front: from every way it's seen, the shirt's right behind it.
@@ -3999,6 +4002,125 @@ void TestIKSolver() {
 } // namespace
 
 // --- Importing an asset pack laid out <Asset>/Models/x.fbx + <Asset>/Textures/.../x_*.png -----
+// The Quantum Hawaiian shirt's loose short sleeve over the arms: the skin Hidden works out in the bind pose
+// must stay under the cloth once the arms swing down (both meshes CPU-skinned, every bone under upperarm_l/_r
+// turned about its shoulder). With a one-ring edge, 13-30 hidden arm vertices came out as holes. Needs the pack.
+void TestOutfitEdgeBandPosed() {
+    const char* armsPath = "assets/Characters/Quantum/FirstPerson/Quantum_Arms_FP.fbx";
+    const char* shirtPath = "assets/Characters/Quantum/Models/Clothing/Male/Tops/SKM_Shirt_Hawaii.fbx";
+    if (!std::filesystem::exists(ProjectPaths::Resolve(armsPath)) || !std::filesystem::exists(ProjectPaths::Resolve(shirtPath))) {
+        Log::Info("OutfitEdgeBandPosed: no Quantum pack - skipped.");
+        return;
+    }
+    // The model's geometry with its upper arms turned down by `deg` (0 = the bind pose).
+    auto posed = [](const char* path, float deg, OutfitCoverage::Mesh& out) {
+        auto model = Model::ImportDeferred(ProjectPaths::Resolve(path), ModelImportSettings{});
+        if (!model) return false;
+        out = {};
+        model->CollisionGeometry(out.Positions, out.Indices);
+        std::vector<glm::mat4> boneM(512, glm::mat4(1.0f));
+        for (const char* side : {"_l", "_r"}) {
+            const int ua = model->NodeIndex(std::string("upperarm") + side), la = model->NodeIndex(std::string("lowerarm") + side);
+            if (ua < 0 || la < 0) return false;
+            const glm::vec3 s(model->SampleNodeModelSpace(-1, 0.0f, AnimationWrapMode::ClampForever, ua)[3]);
+            const glm::vec3 e(model->SampleNodeModelSpace(-1, 0.0f, AnimationWrapMode::ClampForever, la)[3]);
+            const glm::vec3 axis = glm::normalize(glm::cross(e - s, glm::vec3(0.0f, -1.0f, 0.0f)));
+            const glm::mat4 r = glm::translate(glm::mat4(1.0f), s) * glm::rotate(glm::mat4(1.0f), glm::radians(deg), axis) *
+                                glm::translate(glm::mat4(1.0f), -s);
+            std::vector<char> under((size_t)model->NodeCount(), 0);
+            for (int i = 0; i < model->NodeCount(); ++i) { // parents come before their children
+                const int p = model->NodeParent(i);
+                under[(size_t)i] = i == ua || (p >= 0 && under[(size_t)p]);
+                const int id = under[(size_t)i] ? model->BoneId(model->NodeName(i)) : -1;
+                if (id >= 0 && id < 512) boneM[(size_t)id] = r;
+            }
+        }
+        size_t k = 0;
+        for (int mi = 0; mi < model->MeshCount(); ++mi)
+            for (const auto& v : model->MeshSkinVertices(mi)) {
+                glm::mat4 m(0.0f);
+                float tw = 0.0f;
+                for (int i = 0; i < MAX_BONE_INFLUENCE; ++i)
+                    if (v.BoneIDs[i] >= 0 && v.BoneIDs[i] < 512) { m += boneM[(size_t)v.BoneIDs[i]] * v.Weights[i]; tw += v.Weights[i]; }
+                if (k < out.Positions.size() && tw > 1e-4f) out.Positions[k] = glm::vec3(m * glm::vec4(out.Positions[k], 1.0f));
+                ++k;
+            }
+        return k == out.Positions.size();
+    };
+    OutfitCoverage::Mesh arms, shirt;
+    CHECK(posed(armsPath, 0.0f, arms) && posed(shirtPath, 0.0f, shirt));
+    const auto hidden = OutfitCoverage::Hidden(arms, shirt);
+    const size_t hiddenN = std::count(hidden.begin(), hidden.end(), (std::uint8_t)1);
+    CHECK(hiddenN > 300); // the sleeves' skin is still hidden - the band isn't the whole arm
+    // Nothing hidden past the sleeve near its hem: the rolled cuff sits over ~20 arm vertices only in the bind
+    // pose (they "poke through" it there), and hiding them opened the black patch in the Scene view.
+    {
+        const auto shirtCov = OutfitCoverage::Covered(arms, shirt);
+        std::map<std::pair<unsigned, unsigned>, int> edges;
+        for (size_t t = 0; t + 2 < shirt.Indices.size(); t += 3)
+            for (int k = 0; k < 3; ++k) {
+                const unsigned x = shirt.Indices[t + k], y = shirt.Indices[t + (k + 1) % 3];
+                ++edges[{std::min(x, y), std::max(x, y)}];
+            }
+        std::vector<glm::vec3> hem; // the open edges out along the arms: the sleeves' hems (UV seams are harmless here)
+        for (const auto& [e, n] : edges)
+            if (n == 1)
+                for (unsigned v : {e.first, e.second})
+                    if (std::abs(shirt.Positions[v].x) > 0.25f) hem.push_back(shirt.Positions[v]);
+        CHECK(!hem.empty());
+        size_t pastHem = 0;
+        for (size_t v = 0; v < hidden.size(); ++v) {
+            if (!hidden[v] || shirtCov[v]) continue;
+            for (const auto& q : hem)
+                if (glm::distance(q, arms.Positions[v]) < OutfitCoverage::kEdgeBand) { ++pastHem; break; }
+        }
+        CHECK(pastHem == 0);
+    }
+    for (float deg : {20.0f, 35.0f, 50.0f}) {
+        OutfitCoverage::Mesh pa, ps;
+        CHECK(posed(armsPath, deg, pa) && posed(shirtPath, deg, ps));
+        const auto covered = OutfitCoverage::Covered(pa, ps);
+        const auto poke = OutfitCoverage::PokeDepth(pa, ps, OutfitCoverage::kPokeReach);
+        size_t holes = 0;
+        for (size_t v = 0; v < hidden.size() && v < covered.size(); ++v) holes += hidden[v] && !covered[v] && poke[v] <= 0.0f;
+        Log::Info("OutfitEdgeBandPosed: " + std::to_string(hiddenN) + " arm vertices hidden; " + std::to_string((int)deg) +
+                  " deg down, " + std::to_string(holes) + " out from under the sleeve.");
+        CHECK(holes == 0);
+    }
+}
+
+// The balaclava rides the head bone under a hood that's up: only what pokes out through the hood is hidden
+// (Hidden's `rigid`). Hiding the covered rest showed through the hood's face opening as missing balaclava
+// round the ears, the ears behind it. And the ears stay hidden under the balaclava. Needs the Quantum pack.
+void TestOutfitRigidUnderHood() {
+    const std::string C = "assets/Characters/Quantum/Models/Clothing/Male/";
+    const std::string headPath = "assets/Characters/Quantum/Models/Young/Quantum_Young_Head.fbx";
+    if (!std::filesystem::exists(ProjectPaths::Resolve(C + "Tops/SKM_Hoodie_Hood_Up.fbx")) || !std::filesystem::exists(ProjectPaths::Resolve(headPath))) {
+        Log::Info("OutfitRigidUnderHood: no Quantum pack - skipped.");
+        return;
+    }
+    auto geo = [](const std::string& rel) {
+        OutfitCoverage::Mesh m;
+        auto mm = Model::ImportDeferred(ProjectPaths::Resolve(rel), ModelImportSettings{});
+        if (mm) mm->CollisionGeometry(m.Positions, m.Indices);
+        return m;
+    };
+    const auto bala = geo(C + "Balaclava/SM_Balaclava_Crime.fbx"), hood = geo(C + "Tops/SKM_Hoodie_Hood_Up.fbx"), head = geo(headPath);
+    auto roundEars = [](const glm::vec3& p) { return std::abs(p.x) > 0.06f && p.y > 1.58f && p.y < 1.76f; };
+    const auto hb = OutfitCoverage::Hidden(bala, hood, false, true);
+    size_t n = 0, hidden = 0;
+    for (size_t v = 0; v < hb.size(); ++v)
+        if (roundEars(bala.Positions[v])) { ++n; hidden += hb[v]; }
+    const auto hh = OutfitCoverage::Hidden(head, bala, true);
+    size_t en = 0, ehidden = 0;
+    for (size_t v = 0; v < hh.size(); ++v)
+        if (roundEars(head.Positions[v])) { ++en; ehidden += hh[v]; }
+    Log::Info("OutfitRigidUnderHood: balaclava round the ears " + std::to_string(hidden) + " / " + std::to_string(n) + " hidden by the hood; head " +
+              std::to_string(ehidden) + " / " + std::to_string(en) + " by the balaclava.");
+    CHECK(n > 0 && hidden * 20 < n);   // was 631 / 824
+    CHECK(en > 0 && ehidden * 10 > en * 8); // the ears: ~89 % (5012 of 5647 once, when the band covered the head)
+}
+
 void TestAssetPackImport() {
     namespace fs = std::filesystem;
     const fs::path base = TempDir() / "asset_pack_import";
@@ -4137,6 +4259,8 @@ int RunUnitTests() {
         {"UndoDeltaChain", TestUndoDeltaChain},
         {"AtomicFile", TestAtomicFile},
         {"TextureCacheHash", TestTextureCacheHash},
+        {"OutfitEdgeBandPosed", TestOutfitEdgeBandPosed},
+        {"OutfitRigidUnderHood", TestOutfitRigidUnderHood},
         {"AssetPackImport", TestAssetPackImport},
         {"MaterialRobustness", TestMaterialRobustness},
         {"ComponentRegistry", TestComponentRegistry},
