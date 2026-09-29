@@ -234,6 +234,13 @@ struct WeaponAimSettings {
     // leaves the authored sight picture exactly as it is.
     glm::vec3 Position{0.0f};
     glm::vec3 Rotation{0.0f};
+    // Added to the gun with the sights DOWN, faded out as they come up (by the ADS zoom, which
+    // also counts a pump or reload carried on the sights): how the gun is carried
+    // at the hip (a shotgun lower in the shoulder pocket, muzzle dipped, canted in). The arms
+    // and gun move together (turned about the gun socket), so the hands stay on it in every clip,
+    // and it's faded by the sights alone - never by the IK weight. The sight picture is untouched.
+    glm::vec3 HipPosition{0.0f};
+    glm::vec3 HipRotation{0.0f};
     float BlendTime = 0.18f;       // seconds in and out
     Curve Blend;                   // 0..1 easing over the blend
 };

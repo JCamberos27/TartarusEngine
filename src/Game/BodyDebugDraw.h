@@ -29,6 +29,7 @@ struct Snapshot {
     float FootLock[2] = {0, 0};   // 0..1: how firmly each foot is pinned
     float StepOffset = 0.0f;      // m the body is off the capsule's height (stair easing)
     float ArmsWeight = 0.0f;      // 0..1: how much the body's arms follow the weapon rig
+    float WorldGunShift = 0.0f;   // m the world gun sits off the first-person one (split poses)
     float EyeSlack = 0.0f;        // m the eye is off the shoulders' motion (bounded by Eye Slack)
     float Reach[2] = {0, 0};          // each hand's distance from its shoulder, of the arm's length (before any shoulder move)
     float HandGap[2] = {0, 0};        // m each of the body's hands ends up from the rig's (off the gun when > ~1 cm)

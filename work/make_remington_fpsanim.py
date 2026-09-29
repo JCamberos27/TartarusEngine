@@ -69,6 +69,15 @@ a["gunMotion"] = {
 }
 
 
+# The world gun (split poses): first person shows the animations' own pose; every other view (the
+# Scene view, other players, the shadow) shows the gun with its butt in the body's right shoulder pocket
+# while shouldered, and kept clear of the neck and head (a hood) always - sprinting included. The rig
+# holds the stock in by the chin, which on the body went through the neck and hood (--stock-probe).
+d["stockLock"] = {"enabled": True, "tags": ["Idle", "Ready", "ADS", "Cycling"], "pocket": [-0.045, 0.03, 0.05],
+                  "maxShift": 0.3, "headTilt": 25.0, "blendTime": 0.2,
+                  "neckRadius": 0.09, "headRadius": 0.14, "gunLength": 0.45}
+
+
 def scale_curve(keys, k):
     return [[t, v * k, i * k, o * k] for t, v, i, o in keys]
 

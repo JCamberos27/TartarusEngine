@@ -311,6 +311,15 @@ struct ViewModelTag {};
 // what casts the shadow. Runtime only, like ViewModelTag.
 struct PoseSourceTag {};
 
+// Split first-person / world poses (FirstPersonBody with Weapon Arms, in Play). The player's own camera
+// shows the first-person pose - the arms and gun exactly as the animations have them - while every other
+// view (the Scene view, other players) and every shadow shows the world copy: the same animations, the gun
+// placed on the body's shoulder and clear of its head, the body's hands on it there. Runtime only.
+//   OwnerViewOnlyTag   - drawn only in the player's own camera; no other view, no shadow, no SSAO elsewhere.
+//   HiddenFromOwnerTag - the world copy: every view but the player's own camera; casts the shadows.
+struct OwnerViewOnlyTag {};
+struct HiddenFromOwnerTag {};
+
 // The player's own body (FirstPersonBody, in Play): the camera sits in it, so whatever of it comes within
 // NearHide metres of the eye is not drawn in the camera's world pass (shadows keep it). Near the eye the
 // near plane would otherwise slice the mesh into slivers - the neck and shoulders on a landing, the chest

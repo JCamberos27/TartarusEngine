@@ -6,13 +6,20 @@
 #include <string>
 #include <vector>
 
+class Camera;
+class FirstPersonBody;
 class FirstPersonPresentation;
+class World;
 
 // `--weapon-test`: the Sandbox's weapons played through by script, in the real Play loop (the
 // smoke-test harness: real scene, rigs, controllers, IK and physics raycasts) on a fixed step.
 // Each frame Drive() stands in for the player's weapon input - trigger, aim, R, weapon keys - and
 // checks what the weapon did: states, ammo, the pump, pellets, reloads, the sights, slot swaps.
 // Prints one [WeaponTest] line per check; Failures() counts the failed ones.
+//
+// `--stock-probe` runs a different script on the same harness: the Remington held while the view
+// is pitched, turned, fired and aimed, logging where the gun's butt sits against the body's right
+// shoulder, neck and head ([StockProbe] lines), with Scene + Game view captures under --smoke-shots.
 class FirstPersonWeaponTest {
 public:
     // What a step sees and does.
@@ -29,6 +36,10 @@ public:
         std::vector<glm::vec4> Hand;
         std::vector<glm::vec3> Shell; // ... and the weapon's Shell bone, same frames (view space, m)
         std::function<void(bool, const std::string&)> Check;
+        Camera* Cam = nullptr;             // the play camera (the script may set its yaw / pitch)
+        int LogEvery = 0;                  // stock probe: print a sample every this many frames (0 = off)
+        std::string Label;                 // ... tagged with this
+        std::string Shot;                  // a capture name for this frame (--smoke-shots)
         bool Saw(const std::string& state) const;
         const std::string& State() const;
     };
@@ -40,7 +51,13 @@ public:
         std::function<void(Ctx&)> End;     // once, when Until holds: the step's checks
     };
 
-    FirstPersonWeaponTest();
+    explicit FirstPersonWeaponTest(bool stockProbe = false);
+    void SetCamera(Camera* cam) { m_Ctx.Cam = cam; }
+    // Stock probe, once the body's arms are on the rig (after FirstPersonBody::ArmsLateUpdate):
+    // measures this frame's pose and places the Scene camera on the gun and shoulder.
+    void AfterPose(const World& world, const FirstPersonBody& body, const FirstPersonPresentation& p);
+    // Where the Scene view should look from this frame (stock probe), false = leave it.
+    bool SceneCamera(glm::vec3& position, float& yaw, float& pitch) const;
     // Once per Play frame, in place of the weapon input block (after the presentation's Update).
     void Drive(FirstPersonPresentation& p, float dt);
     bool Aim() const { return m_Ctx.Aim; }
@@ -61,4 +78,23 @@ private:
     std::function<bool()> m_Held; // full auto: the trigger held down
     int m_Failures = 0, m_Checks = 0;
     std::string m_Shot;
+    bool m_Probe = false;
+    struct Sample {
+        bool Valid = false;
+        float Pitch = 0.0f, Yaw = 0.0f, YawRate = 0.0f, TwistDeg = 0.0f;
+        glm::vec3 StockFromShoulder{0.0f}; // butt - upperarm_r, view's flat frame (right, up, forward), m
+        float Shoulder = 0.0f, Clavicle = 0.0f, Neck = 0.0f, Head = 0.0f; // butt to each, m
+        float NeckGap = 0.0f, HeadGap = 0.0f; // nearest the gun's rear 30 cm comes to the neck / head bone, m
+        float GunShift = 0.0f;                // the world gun off the first-person one, m
+        float HandGap[2] = {0.0f, 0.0f};      // the world hands off the world gun's grips (L, R), m
+        std::string State;
+    } m_Sample;
+    int m_Frame = 0;
+    float m_LastYaw = 0.0f;
+    bool m_HaveYaw = false;
+    bool m_HaveSceneCam = false;
+    glm::vec3 m_SceneCamPos{0.0f};
+    float m_SceneCamYaw = 0.0f, m_SceneCamPitch = 0.0f;
+    void PrintSample(const std::string& label) const;
+    void BuildProbe();
 };

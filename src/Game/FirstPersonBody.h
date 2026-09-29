@@ -19,6 +19,21 @@ class Player;
 class World;
 struct FirstPersonBodyComponent;
 
+// The world gun this frame (FirstPersonPresentation::WorldGunInput): the first-person gun's butt and
+// bore (world), and how the world copy is placed off it - its butt into the body's right shoulder
+// pocket while shouldered, and always clear of the neck and head (see ArmsLateUpdate).
+struct FirstPersonWorldGunInput {
+    glm::vec3 ButtWorld{0.0f};
+    glm::vec3 ForwardWorld{0.0f, 0.0f, -1.0f};
+    float Shouldered = 0.0f;       // 0..1 (eased): the pocket lock's weight
+    glm::vec3 Pocket{0.0f};        // from the right upper arm, chest frame (x right, y up, z forward), m
+    float MaxShift = 0.3f;         // the most the world gun is moved off the first-person one, m
+    float HeadTiltDegrees = 0.0f;  // the world head's tilt over the stock, at most
+    float NeckRadius = 0.09f;      // keep-outs around the neck and head bones, m
+    float HeadRadius = 0.14f;
+    float GunLength = 0.45f;       // how much of the gun, from the butt forward, is kept clear, m
+};
+
 // True first person (#405, phase 1): the player's own body, drawn in the world under the play
 // camera and walked by its clips' root motion.
 //
@@ -62,7 +77,23 @@ public:
     // `weaponArms` is the presentation's arms entity (null = none), `viewModelFov` its sub-pass
     // FOV in degrees. The arms rig stops being drawn while this holds; the gun still is.
     // `camera` (optional) is the view it's drawn from: the Scene overlay's frustum and the eye distances.
-    void ArmsLateUpdate(World& world, entt::entity weaponArms, float viewModelFov, float dt, const Camera* camera = nullptr);
+    //
+    // Split poses (Weapon Arms): the body's pieces are what the player's own camera shows, posed onto the
+    // rig's hands (first person, exactly as the animations have it). Each piece has a world twin - the same
+    // model, its own pose - which every other view and every shadow shows: the same animations, the arms
+    // reaching the world gun (`gun`: the first-person gun moved by WorldGunShift) instead. Works for any
+    // body and outfit: the twins are made from whatever pieces the body has at Start.
+    void ArmsLateUpdate(World& world, entt::entity weaponArms, float viewModelFov, float dt, const Camera* camera = nullptr,
+                        const FirstPersonWorldGunInput* gun = nullptr);
+    // How far the world gun sits off the first-person one this frame (world, m); zero with no split.
+    glm::vec3 WorldGunShift() const { return m_WorldGunShift; }
+    bool SplitPoses() const { return !m_Twins.empty(); }
+
+    // Diagnostics (--stock-probe): a standard bone's world position as last posed - from the arms
+    // piece when it has the bone (the arms after ArmsLateUpdate), else the driver.
+    bool BoneWorld(const World& world, const std::string& standard, glm::vec3& out) const;
+    float Yaw() const { return m_Yaw; }     // body heading, radians about +Y (model +Z faces the view)
+    float Twist() const { return m_Twist; } // view heading minus body heading, radians
 
     // The controller parameters of the last Tick (body frame: x right, y forward, m/s).
     glm::vec2 Move() const { return m_Move; }
@@ -76,6 +107,11 @@ private:
     void ApplySpineRotation(const glm::quat& modelDelta);
     // The spine's per-bone turn for a spine of `n` bones, applied bone by bone on every piece.
     void RotateSpine(const std::function<glm::quat(int)>& stepFor);
+    // The same over any chain of (standard-named) bones, root first - on `models` (default: the pieces).
+    void RotateChain(const std::vector<std::string>& bones, const std::function<glm::quat(int)>& stepFor,
+                     const std::vector<std::shared_ptr<Model>>* models = nullptr);
+    void MakeTwins(World& world);
+    void SyncTwins(World& world); // each twin onto its piece: transform, and the pose as posed so far
     void ApplyFootIK(World& world, const FirstPersonBodyComponent& cfg, float dt);
 
     entt::entity m_Body = entt::null;   // the root: placed at the feet, its pieces ride along
@@ -141,6 +177,15 @@ private:
     glm::vec3 m_RestHead{0.0f};   // head bone, model space, in the bind pose
     glm::vec3 m_Eye{0.0f};        // the smoothed eye, model space
     bool m_HaveEye = false;
+    // Split poses: each piece's world twin (m_Twins[k] for m_Pieces[k]) and its model instance.
+    std::vector<entt::entity> m_Twins;
+    std::vector<std::shared_ptr<Model>> m_TwinModels;
+    glm::vec3 m_WorldGunShift{0.0f};   // the world gun off the first-person one (world, eased)
+    // The twins' own Arm Steadiness / elbow state (the pieces' is m_ShoulderAnchor ... m_ElbowAim).
+    glm::vec3 m_WorldShoulderAnchor[2] = {glm::vec3(0.0f), glm::vec3(0.0f)};
+    bool m_WorldHaveShoulderAnchor[2] = {false, false};
+    glm::vec3 m_WorldElbowAim[2] = {glm::vec3(0.0f), glm::vec3(0.0f)};
+    bool m_WorldHaveElbowAim[2] = {false, false};
     glm::vec3 m_CameraApplied{0.0f}; // what LateUpdate added to the camera (BeforePlayerMove takes it off)
     glm::vec3 m_Feet{0.0f};
     float m_Yaw = 0.0f;           // body heading, radians about +Y (model +Z faces the view)
