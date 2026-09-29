@@ -3,8 +3,11 @@
   "gender": "Female",
   "race": "European",
   "items": {
-    "Hair": {
-      "item": "assets/Characters/Quantum/Models/Female/Hair/SKM_F_Haircut_Undercut_Bun.fbx"
+    "Balaclava": {
+      "item": "assets/Characters/Quantum/Models/Clothing/Female/Balaclava/SM_F_Balaclava_Crime.fbx",
+      "colours": {
+        "assets/Characters/Quantum/Materials/Clothing/Balaclava/M_Balaclava_Crime_Black.mat": "assets/Characters/Quantum/Materials/Clothing/Balaclava/M_Balaclava_Crime_Print.mat"
+      }
     },
     "Outerwear": {
       "item": "assets/Characters/Quantum/Models/Clothing/Female/Outerwear/SKM_F_Puffy_Vest.fbx"

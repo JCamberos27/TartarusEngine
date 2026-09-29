@@ -1997,12 +1997,12 @@ const ShaderRenderState* SlotRenderState(const std::vector<std::shared_ptr<Mater
     return &slots[i]->Shader->RenderState();
 }
 
-// The shader's state plus the material's Double Sided (#113): culling off unless the shader
-// itself says otherwise. Returns a pointer to a per-call scratch copy when it needs one.
+// The shader's state plus the material's Double Sided (#113), or the caller's (`force`): culling off
+// unless the shader itself says otherwise. Returns a pointer to a per-call scratch copy when it needs one.
 const ShaderRenderState* EffectiveRenderState(const std::vector<std::shared_ptr<MaterialAsset>>& slots, int i,
-                                              const Material& mat) {
+                                              const Material& mat, bool force = false) {
     const ShaderRenderState* st = SlotRenderState(slots, i);
-    if (!mat.DoubleSided || (st && st->Cull != ShaderRenderState::CullMode::Unset)) return st;
+    if (!(mat.DoubleSided || force) || (st && st->Cull != ShaderRenderState::CullMode::Unset)) return st;
     static thread_local ShaderRenderState scratch;
     scratch = st ? *st : ShaderRenderState{};
     scratch.Cull = ShaderRenderState::CullMode::Off;
@@ -2013,7 +2013,7 @@ const ShaderRenderState* EffectiveRenderState(const std::vector<std::shared_ptr<
 void Model::DrawSelected(Shader& fallback, const glm::mat4& xform,
                          const std::vector<std::shared_ptr<MaterialAsset>>& slots,
                          const ProgramSelector& selectProgram, float opacity,
-                         const std::function<void(Shader&)>& onProgramBound, MeshPass pass) {
+                         const std::function<void(Shader&)>& onProgramBound, MeshPass pass, bool forceDoubleSided) {
     const glm::mat4 nrm = glm::mat4(glm::transpose(glm::inverse(glm::mat3(xform))));
 
     Shader*             lastProg = nullptr;
@@ -2027,7 +2027,7 @@ void Model::DrawSelected(Shader& fallback, const glm::mat4& xform,
         const bool hasSlot = i < (int)slots.size() && slots[i];
         const bool transparent = hasSlot && slots[i]->RenderQueue == MaterialAsset::Queue::Transparent;
         if ((pass == MeshPass::Opaque && transparent) || (pass == MeshPass::Transparent && !transparent)) continue;
-        stateScope.Apply(EffectiveRenderState(slots, i, hasSlot ? slots[i]->Mat : m_D->Meshes[i]->Mat));
+        stateScope.Apply(EffectiveRenderState(slots, i, hasSlot ? slots[i]->Mat : m_D->Meshes[i]->Mat, forceDoubleSided));
         Shader* prog = &fallback;
         if (Shader* p = selectProgram(hasSlot ? slots[i].get() : nullptr)) prog = p;
 
@@ -2054,6 +2054,9 @@ void Model::DrawSelected(Shader& fallback, const glm::mat4& xform,
             BindMaterialDataDriven(*prog, *slots[i], *slots[i]->Shader);
         else
             BindMaterial(*prog, mat, *locs);
+        // After the bind (which a repeat of the same material skips): back faces lit with a flipped normal.
+        prog->SetInt("uDoubleSided", forceDoubleSided || mat.DoubleSided ? 1 : 0);
+        prog->SetInt("uClothInterior", forceDoubleSided && !mat.DoubleSided ? 1 : 0); // not hair cards: both sides are hair
         m_D->Meshes[i]->Draw();
     }
 }

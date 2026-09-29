@@ -3,11 +3,14 @@
   "gender": "Female",
   "race": "Old",
   "items": {
+    "Balaclava": {
+      "item": "assets/Characters/Quantum/Models/Clothing/Female/Balaclava/SM_F_Balaclava_Crime.fbx",
+      "colours": {
+        "assets/Characters/Quantum/Materials/Clothing/Balaclava/M_Balaclava_Crime_Black.mat": "assets/Characters/Quantum/Materials/Clothing/Balaclava/M_Balaclava_Crime_Green.mat"
+      }
+    },
     "Glasses": {
       "item": "assets/Characters/Quantum/Models/Clothing/Female/Glasses/SKM_F_Glasses_Aviator.fbx"
-    },
-    "Hair": {
-      "item": "assets/Characters/Quantum/Models/Female/Hair/SKM_F_Haircut_Ponytail.fbx"
     },
     "Pants": {
       "item": "assets/Characters/Quantum/Models/Clothing/Female/Pants/SKM_F_Pants_Cargo_Straight.fbx"

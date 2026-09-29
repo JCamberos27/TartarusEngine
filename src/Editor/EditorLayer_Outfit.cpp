@@ -54,6 +54,7 @@ ItemThumbs g_Thumbs;
 std::map<std::string, AssetLibrary::AsyncHandle> g_SwatchLoads;
 
 const char* SlotIcon(const std::string& icon) {
+    if (icon == "mask") return ICON_FA_USER_NINJA;
     if (icon == "hair") return ICON_FA_SCISSORS;
     if (icon == "beard") return ICON_FA_USER_TIE;
     if (icon == "hat") return ICON_FA_HAT_COWBOY;

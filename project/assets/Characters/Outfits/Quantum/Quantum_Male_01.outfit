@@ -3,8 +3,8 @@
   "gender": "Male",
   "race": "Afro",
   "items": {
-    "Beard": {
-      "item": "assets/Characters/Quantum/Models/Beard/SKM_Beard.fbx"
+    "Balaclava": {
+      "item": "assets/Characters/Quantum/Models/Clothing/Male/Balaclava/SM_Balaclava_Crime.fbx"
     },
     "Outerwear": {
       "item": "assets/Characters/Quantum/Models/Clothing/Male/Outerwear/SKM_Jeans_Jacket.fbx"
