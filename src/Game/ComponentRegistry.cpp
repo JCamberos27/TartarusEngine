@@ -410,6 +410,9 @@ void RegisterEngineComponents() {
               "Only round (sphere collider) bodies get it.", 0.0f, 20.0f },
             { "Animation Set", T::String, TARTARUS_REFLECT_FIELD(FirstPersonControllerComponent, AnimationSet), 0.0f,
               "Optional .fpsanim asset for a camera-bound first-person arms and weapon presentation." },
+            { "Secondary Animation Set", T::String, TARTARUS_REFLECT_FIELD(FirstPersonControllerComponent, SecondaryAnimationSet), 0.0f,
+              "Optional second weapon (.fpsanim). In Play, 1 draws the Animation Set, 3 this one and 2 goes\n"
+              "unarmed; switching holsters the weapon in hand first, and each weapon keeps its own ammo." },
             { "View Model Offset", T::Vec3, TARTARUS_REFLECT_FIELD(FirstPersonControllerComponent, ViewModelOffset), 0.01f,
               "Residual nudge, in the play camera's frame, applied on top of the Camera Bone\n"
               "anchor. Leave at zero unless you are deliberately nudging the view model." },
@@ -1171,6 +1174,7 @@ void RegisterEngineComponents() {
         {"Animator Controller", "Controller"},
         {"Transform Controller", "Script Path"},
         {"First Person Controller", "Animation Set"},
+        {"First Person Controller", "Secondary Animation Set"},
     };
     for (const auto& [component, field] : kAssetPathFields)
         for (RegisteredComponent& rc : Storage())

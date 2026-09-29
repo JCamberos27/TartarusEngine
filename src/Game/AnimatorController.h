@@ -216,6 +216,11 @@ std::vector<std::string> FindAnimatorControllers();
 void AdvanceAnimator(const AnimatorController& ctrl, AnimatorControllerComponent& ac, float dt,
                      const std::function<float(int, int)>& stateLength);
 
+// Starts `ac` in the base layer's `state` (at the end of its first pass) instead of letting Entry pick,
+// with the declared parameters at their defaults where not already set - e.g. a weapon swapped in that
+// has to come out of its holstered state. False (nothing changed) when there's no such state.
+bool AnimatorStartInState(const AnimatorController& ctrl, AnimatorControllerComponent& ac, const std::string& state);
+
 // Runs every Animator Controller component for one Play frame: advances the state machines,
 // then samples and blends every layer and poses each entity's model. Followers (Driver set)
 // mirror their driver. Entities with one skip the plain Animation component. `dt` is the game

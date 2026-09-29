@@ -83,6 +83,7 @@ bool FirstPersonAnimationSet::FromJsonString(const std::string& text, FirstPerso
     parsed.WeaponSocket = String(root, "weaponSocket");
     parsed.WeaponRoot = String(root, "weaponRoot");
     parsed.WeaponMountRotation = Vec3(root, "weaponMountRotation", glm::vec3(0.0f));
+    parsed.WeaponMountOffset = Vec3(root, "weaponMountOffset", glm::vec3(0.0f));
     if (const auto it = root.find("spareMagazine"); it != root.end() && it->is_object()) {
         parsed.SpareMagazineBones.clear();
         if (const auto b = it->find("bones"); b != it->end() && b->is_array())
@@ -96,6 +97,8 @@ bool FirstPersonAnimationSet::FromJsonString(const std::string& text, FirstPerso
         return Fail(error, "'viewRotation' must be three finite numbers (Y-X-Z degrees)");
     if (!Finite(parsed.WeaponMountRotation))
         return Fail(error, "'weaponMountRotation' must be three finite numbers (Y-X-Z degrees)");
+    if (!Finite(parsed.WeaponMountOffset))
+        return Fail(error, "'weaponMountOffset' must be three finite numbers (metres, socket frame)");
     if (parsed.WeaponSocket.empty() != parsed.WeaponRoot.empty())
         return Fail(error, "'weaponSocket' and 'weaponRoot' must be given together (or both omitted)");
     for (auto [key, dst] : {std::pair{"armsMaterials", &parsed.ArmsMaterials},
@@ -135,6 +138,23 @@ bool FirstPersonAnimationSet::FromJsonString(const std::string& text, FirstPerso
                 gp.SightDirection = glm::normalize(d);
             }
         }
+        gp.Pellets = std::clamp((int)Number(*g, "pellets", (float)gp.Pellets), 1, 64);
+        if (const auto sp = g->find("spread"); sp != g->end() && sp->is_object()) {
+            gp.SpreadHip = Number(*sp, "hip", gp.SpreadHip);
+            gp.SpreadAds = Number(*sp, "ads", gp.SpreadAds);
+        }
+        gp.SpreadHip = std::clamp(std::isfinite(gp.SpreadHip) ? gp.SpreadHip : 0.0f, 0.0f, 45.0f);
+        gp.SpreadAds = std::clamp(std::isfinite(gp.SpreadAds) ? gp.SpreadAds : 0.0f, 0.0f, 45.0f);
+        if (const std::string mode = String(*g, "reload"); !mode.empty()) {
+            if (mode == "magazine") gp.Reload = FirstPersonWeaponGameplay::ReloadMode::Magazine;
+            else if (mode == "perRound") gp.Reload = FirstPersonWeaponGameplay::ReloadMode::PerRound;
+            else return Fail(error, "'gameplay.reload' must be \"magazine\" or \"perRound\"");
+        }
+        if (const auto cy = g->find("cycle"); cy != g->end() && cy->is_object()) {
+            gp.CycleAfterShot = Bool(*cy, "enabled", gp.CycleAfterShot);
+            gp.CycleDelay = Number(*cy, "delay", gp.CycleDelay);
+        }
+        gp.CycleDelay = std::clamp(std::isfinite(gp.CycleDelay) ? gp.CycleDelay : 0.1f, 0.0f, 2.0f);
         if (!(gp.RoundsPerMinute > 0.0f) || !std::isfinite(gp.RoundsPerMinute))
             return Fail(error, "'gameplay.rpm' must be a positive number");
         if (!(gp.ReloadHoldSeconds > 0.0f)) return Fail(error, "'gameplay.reloadHoldSeconds' must be positive");
@@ -299,6 +319,7 @@ std::string FirstPersonAnimationSet::ToJsonString() const {
         j["weaponSocket"] = WeaponSocket;
         j["weaponRoot"] = WeaponRoot;
         j["weaponMountRotation"] = vec3(WeaponMountRotation);
+        if (WeaponMountOffset != glm::vec3(0.0f)) j["weaponMountOffset"] = vec3(WeaponMountOffset);
     }
     j["spareMagazine"] = {{"bones", SpareMagazineBones}, {"grabDistance", SpareMagazineGrabDistance}};
     for (auto [key, src] : {std::pair{"armsMaterials", &ArmsMaterials}, std::pair{"weaponMaterials", &WeaponMaterials}}) {
@@ -319,6 +340,13 @@ std::string FirstPersonAnimationSet::ToJsonString() const {
         {"zeroDistance", gp.ZeroDistance},
         {"bulletHoleRadius", gp.BulletHoleRadius},
     };
+    // The shotgun fields only when they're not the plain rifle's, so an AK file round-trips as it was.
+    if (gp.Pellets != 1 || gp.SpreadHip != 0.0f || gp.SpreadAds != 0.0f) {
+        j["gameplay"]["pellets"] = gp.Pellets;
+        j["gameplay"]["spread"] = {{"hip", gp.SpreadHip}, {"ads", gp.SpreadAds}};
+    }
+    if (gp.Reload == FirstPersonWeaponGameplay::ReloadMode::PerRound) j["gameplay"]["reload"] = "perRound";
+    if (gp.CycleAfterShot) j["gameplay"]["cycle"] = {{"enabled", true}, {"delay", gp.CycleDelay}};
     if (gp.HasSightLine)
         j["gameplay"]["sightLine"] = {{"origin", vec3(gp.SightOrigin)}, {"direction", vec3(gp.SightDirection)}};
     j["ads"] = {
@@ -555,6 +583,18 @@ float FirstPersonRegripDelay(float unit01, float minSeconds, float maxSeconds) {
     return minSeconds + (maxSeconds - minSeconds) * std::clamp(unit01, 0.0f, 1.0f);
 }
 
+glm::vec3 FirstPersonPelletDirection(const glm::vec3& dir, float halfAngleDegrees, float u1, float u2) {
+    if (!(halfAngleDegrees > 0.0f)) return dir;
+    // Any two axes square to the bore.
+    const glm::vec3 helper = std::fabs(dir.y) < 0.9f ? glm::vec3(0.0f, 1.0f, 0.0f) : glm::vec3(1.0f, 0.0f, 0.0f);
+    const glm::vec3 side = glm::normalize(glm::cross(dir, helper));
+    const glm::vec3 up = glm::cross(side, dir);
+    // sqrt: even over the disc the cone cuts at unit distance, not bunched in the middle.
+    const float r = std::tan(glm::radians(halfAngleDegrees)) * std::sqrt(std::clamp(u1, 0.0f, 1.0f));
+    const float a = 6.28318530718f * u2;
+    return glm::normalize(dir + side * (r * std::cos(a)) + up * (r * std::sin(a)));
+}
+
 FirstPersonReloadInput FirstPersonReloadButton::Update(bool down, float dt) {
     if (down) {
         if (!Down) {
@@ -630,9 +670,30 @@ std::vector<FPBody::Check> FirstPersonWeaponValidate(const FirstPersonWeaponChec
         if (!hasEvent(kEventShot))
             add(Sev::Warning, std::string("No state has a '") + kEventShot + "' event.",
                 "Add a 'Shot' event on the fire clip at the moment a round leaves the gun; without it hip fire spends no ammo.");
-        if (!hasEvent(kEventRefill))
+        const FirstPersonWeaponGameplay& gp = set.Gameplay;
+        if (gp.Reload == FirstPersonWeaponGameplay::ReloadMode::Magazine && !hasEvent(kEventRefill))
             add(Sev::Warning, std::string("No state has a '") + kEventRefill + "' event.",
                 "Add a 'Refill' event on the reload clips at the moment the magazine is in; without it a reload never refills.");
+        if (gp.Reload == FirstPersonWeaponGameplay::ReloadMode::PerRound) {
+            if (!hasEvent(kEventLoadRound))
+                add(Sev::Warning, std::string("Per-round reload, but no state has a '") + kEventLoadRound + "' event.",
+                    "Add a 'LoadRound' event on each load clip at the moment the round goes in; without it a reload loads nothing.");
+            for (const char* p : {kLastRound, kStopReload}) {
+                const AnimatorController::Parameter* found = c.FindParameter(p);
+                if (!found || found->Type != PT::Bool)
+                    add(Sev::Warning, std::string("Per-round reload, but the controller has no Bool '") + p + "'.",
+                        "Add it in the Parameters tab: the load loop exits on LastRound, and on StopReload when the trigger is pulled.");
+            }
+        }
+        if (gp.CycleAfterShot) {
+            const AnimatorController::Parameter* cycle = c.FindParameter(kCycle);
+            if (!cycle || cycle->Type != PT::Trigger)
+                add(Sev::Warning, std::string("The action cycles after each round, but the controller has no Trigger '") + kCycle + "'.",
+                    "Add it, with an Any State transition to the pump / bolt state.");
+            if (!hasTag(kTagCycling))
+                add(Sev::Warning, std::string("The action cycles after each round, but no state is tagged '") + kTagCycling + "'.",
+                    "Tag the pump / bolt state 'Cycling': the gun is chambered again once it has played.");
+        }
         if (!hasTag(kTagHidden))
             add(Sev::Warning, std::string("No state is tagged '") + kTagHidden + "'.",
                 "Tag the unarmed (Holstered) state 'Hidden' so both rigs hide when the weapon is put away.");

@@ -6,7 +6,7 @@
 // weapon's `root`, over a clip. If ik_hand_gun's delta from bind is non-trivial while the
 // weapon's root sits still, the gun cannot follow the hands and will visibly float.
 //
-//   socket_probe <armsBase> <armsClip|-> <weaponBase> <weaponClip|->
+//   socket_probe <armsBase> <armsClip|-> <weaponBase> <weaponClip|-> [weaponRoot=root]
 #include <assimp/Importer.hpp>
 #include <assimp/postprocess.h>
 #include <assimp/scene.h>
@@ -148,7 +148,8 @@ static void Vec(const char* label, const glm::mat4& m) {
 }
 
 int main(int argc, char** argv) {
-    if (argc < 5) { printf("usage: socket_probe <armsBase> <armsClip|-> <weaponBase> <weaponClip|->\n"); return 1; }
+    if (argc < 5) { printf("usage: socket_probe <armsBase> <armsClip|-> <weaponBase> <weaponClip|-> [weaponRoot=root]\n"); return 1; }
+    const std::string rootName = argc > 5 ? argv[5] : "root";
     Loaded armsBase, armsClip, wBase, wClip;
     if (!LoadRig(argv[1], armsBase)) return 1;
     if (std::string(argv[2]) != "-" && !LoadRig(argv[2], armsClip)) return 1;
@@ -165,14 +166,14 @@ int main(int argc, char** argv) {
         printf("  arms base has %-14s = %s | clip drives it = %s\n", n,
                Find(armsBase.nodes, n) >= 0 ? "Y" : "N",
                armsClip.channels.count(n) ? "Y" : "N");
-    for (const char* n : {"root", "bolt", "trigger"})
+    for (const char* n : {rootName.c_str(), "bolt", "trigger"})
         printf("  weapon base has %-13s = %s | clip drives it = %s\n", n,
                Find(wBase.nodes, n) >= 0 ? "Y" : "N",
                wClip.channels.count(n) ? "Y" : "N");
 
     const int igA = Find(armsBase.nodes, "ik_hand_gun");
     const int hrA = Find(armsBase.nodes, "hand_r");
-    const int rtW = Find(wBase.nodes, "root");
+    const int rtW = Find(wBase.nodes, rootName);
 
     const float dur = armsClip.ok ? armsClip.duration : 0.0f;
     const float ticks[] = {0.0f, dur * 0.25f, dur * 0.5f, dur * 0.75f, dur};

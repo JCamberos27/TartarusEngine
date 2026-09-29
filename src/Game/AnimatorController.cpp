@@ -733,6 +733,27 @@ void AdvanceAnimator(const AnimatorController& ctrl, AnimatorControllerComponent
     SyncBaseLayerFields(ctrl, ac);
 }
 
+bool AnimatorStartInState(const AnimatorController& ctrl, AnimatorControllerComponent& ac, const std::string& state) {
+    if (ctrl.Layers.empty()) return false;
+    const int s = ctrl.Layers[0].FindState(state);
+    if (s < 0) return false;
+    // What the first AdvanceAnimator would do, minus picking the entry state.
+    for (const auto& p : ctrl.Parameters) {
+        bool found = false;
+        for (auto& q : ac.Params)
+            if (q.Name == p.Name) { q.Type = (int)p.Type; found = true; }
+        if (!found) ac.Params.push_back({p.Name, (int)p.Type, p.Default});
+    }
+    ac.Started = true;
+    ac.Layers.assign(ctrl.Layers.size(), AnimatorLayerRuntime{});
+    AnimatorLayerRuntime::Item item;
+    item.State = s;
+    item.Phase = 1.0f; // its end: a holstered state holds the holster's last frame
+    ac.Layers[0].Stack.push_back(item);
+    SyncBaseLayerFields(ctrl, ac);
+    return true;
+}
+
 // --- sampling --------------------------------------------------------------------------------
 
 bool AnimatorSampleMotion(Model& M, AssetLibrary& assets, const AnimatorController::Motion& m,

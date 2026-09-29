@@ -1,0 +1,38 @@
+{
+  "factorsScaleMaps": true,
+  "matVersion": 2,
+  "name": "Remington 870",
+  "properties": {
+    "_AOMap": "assets/Weapons/Remington870/Textures/Remington870_AO.png",
+    "_AlbedoMap": "assets/Weapons/Remington870/Textures/Remington870_BaseColor.png",
+    "_BaseColor": [
+      1.0,
+      1.0,
+      1.0
+    ],
+    "_DoubleSided": true,
+    "_EmissiveColor": [
+      0.0,
+      0.0,
+      0.0
+    ],
+    "_EmissiveMap": "",
+    "_EmissiveStrength": 1.0,
+    "_Metallic": 1.0,
+    "_MetallicMap": "assets/Weapons/Remington870/Textures/Remington870_Metallic.png",
+    "_MetallicRoughnessMap": "",
+    "_NormalMap": "assets/Weapons/Remington870/Textures/Remington870_Normal.png",
+    "_Roughness": 1.0,
+    "_RoughnessMap": "assets/Weapons/Remington870/Textures/Remington870_Roughness.png",
+    "_Triplanar": false,
+    "_TriplanarScale": 1.0
+  },
+  "shader": "engine://Standard.shader",
+  "textureGuids": {
+    "_AOMap": "4294419ced9a748d",
+    "_AlbedoMap": "b122b6d22413e876",
+    "_MetallicMap": "e773732e2166cecf",
+    "_NormalMap": "07f6d8765cae4d98",
+    "_RoughnessMap": "e5b357053798f8ec"
+  }
+}

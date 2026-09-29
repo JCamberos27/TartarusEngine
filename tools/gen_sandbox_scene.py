@@ -514,8 +514,9 @@ empty('Player Spawn', (0, 0.02, CZ - HALL_Z - 4.5), (0, 180, 0), extra={'First P
     'Capsule Height': 1.85, 'Mouse Sensitivity': 0.1, 'Invert Y': False, 'Field of View': 90.0, 'Kill Height': -20.0,
     'Gravity': 18.0, 'Gravity Gun': True, 'Min Throw Speed': 3.5, 'Max Throw Speed': 16.0, 'Throw Charge Time': 1.1,
     'Throw Backspin': 2.0,
-    # The AKS-74U in hand; the gravity gun is the unarmed slot (2 / Holster puts the AK away).
+    # The AKS-74U in hand (1), the Remington 870 on 3; the gravity gun is the unarmed slot (2 / Holster).
     'Animation Set': {'path': 'assets/Weapons/AKS74U/AKS74U.fpsanim', 'pathGuid': 'c0ff631aac421f76'},
+    'Secondary Animation Set': {'path': 'assets/Weapons/Remington870/Remington870.fpsanim', 'pathGuid': '4e3925bded078f9a'},
     'Camera Bone': 'head', 'View Model FOV': 50.0, 'View Model Offset': [0.0562, -0.032, 0.0],
     'View Model Rotation': [-0.24, 0.39, 0.0], 'View Model Scale': 1.0}})
 cam_pos = (-15.0 * COURT_S, 7.2 * COURT_S, CZ - 8.2 * COURT_S)
@@ -614,9 +615,9 @@ prim('cylinder', 'Turntable', (-19.0, 0.25, 10.4), (3.6, 0.3, 3.6), ACCENT, pare
 scene = {
     'formatVersion': 3,
     '_comment': 'Tartarus Sandbox - the default testing scene. Centre: the plaza. South: glass-walled basketball arena (an NBA court at 1.5x with 2x hoops and balls, goal '
-                'triggers, scoreboard) - Play spawns you at its door with the AKS-74U; press 2 (or Holster) for '
-                'the gravity gun - right mouse grabs a ball, hold left mouse to charge a shot - and 1 for the AK '
-                'again. Between: fountain (particles). North: material gallery, then the ball '
+                'triggers, scoreboard) - Play spawns you at its door with the AKS-74U; press 3 for the Remington 870, '
+                '2 (or Holster) for the gravity gun - right mouse grabs a ball, hold left mouse to charge a shot - '
+                'and 1 for the AK again. Between: fountain (particles). North: material gallery, then the ball '
                 'pit. East: physics playground (crate pyramid, brick wall + wrecking ball on a chain of joints, '
                 'ball ramp, domino run). West: movement course (stairs, ramps, step blocks, lift, turntable). '
                 'Late-afternoon sun, sky ambient, light fog, colour grading. Regenerate with '

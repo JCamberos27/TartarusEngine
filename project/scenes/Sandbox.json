@@ -23001,6 +23001,10 @@
         "Min Throw Speed": 3.5,
         "Mouse Sensitivity": 0.05000000074505806,
         "Move Speed": 4.0,
+        "Secondary Animation Set": {
+          "path": "assets/Weapons/Remington870/Remington870.fpsanim",
+          "pathGuid": "4e3925bded078f9a"
+        },
         "Sprint Multiplier": 1.600000023841858,
         "Throw Backspin": 2.0,
         "Throw Charge Time": 1.100000023841858,
@@ -23637,6 +23641,10 @@
       "pathGuid": "97e35a4f8b04858c"
     },
     {
+      "path": "assets/Weapons/Remington870/Materials/Remington870.mat",
+      "pathGuid": "79551bbef4999400"
+    },
+    {
       "path": "assets/Characters/Quantum/Materials/Characters/M_Quantum_Head.mat",
       "pathGuid": "00f2f285376c0e56"
     },
@@ -23851,6 +23859,118 @@
       "pathGuid": "9004884db6cdfb0e"
     },
     {
+      "path": "assets/Weapons/Remington870/Weapon/Remington870_A_W_Idle.fbx",
+      "pathGuid": "abfe8981a8954dee"
+    },
+    {
+      "path": "assets/Weapons/Remington870/FirstPerson/Remington870_A_FP_Aim.fbx",
+      "pathGuid": "52de15e71a89b276"
+    },
+    {
+      "path": "assets/Weapons/Remington870/FirstPerson/Remington870_A_FP_Draw.fbx",
+      "pathGuid": "0ab534d75ac5b4b2"
+    },
+    {
+      "path": "assets/Weapons/Remington870/FirstPerson/Remington870_A_FP_Fire.fbx",
+      "pathGuid": "bfe7581f369eec20"
+    },
+    {
+      "path": "assets/Weapons/Remington870/FirstPerson/Remington870_A_FP_Holster.fbx",
+      "pathGuid": "3540eaf8772d8f2d"
+    },
+    {
+      "path": "assets/Weapons/Remington870/FirstPerson/Remington870_A_FP_Idle.fbx",
+      "pathGuid": "d568615aaab5910b"
+    },
+    {
+      "path": "assets/Weapons/Remington870/FirstPerson/Remington870_A_FP_IdleToSprint.fbx",
+      "pathGuid": "ec955e725647bbc5"
+    },
+    {
+      "path": "assets/Weapons/Remington870/FirstPerson/Remington870_A_FP_Inspect.fbx",
+      "pathGuid": "e6bf6388a2176467"
+    },
+    {
+      "path": "assets/Weapons/Remington870/FirstPerson/Remington870_A_FP_Mag_Check.fbx",
+      "pathGuid": "224b6e16aa983595"
+    },
+    {
+      "path": "assets/Weapons/Remington870/FirstPerson/Remington870_A_FP_Melee.fbx",
+      "pathGuid": "3602f7cb46301867"
+    },
+    {
+      "path": "assets/Weapons/Remington870/FirstPerson/Remington870_A_FP_Pump.fbx",
+      "pathGuid": "633d907c5142af8e"
+    },
+    {
+      "path": "assets/Weapons/Remington870/FirstPerson/Remington870_A_FP_Regrip.fbx",
+      "pathGuid": "ffa839d49c013802"
+    },
+    {
+      "path": "assets/Weapons/Remington870/FirstPerson/Remington870_A_FP_Reload_End.fbx",
+      "pathGuid": "5567b6b62a617120"
+    },
+    {
+      "path": "assets/Weapons/Remington870/FirstPerson/Remington870_A_FP_Reload_Loop.fbx",
+      "pathGuid": "39d7c92a7e788f28"
+    },
+    {
+      "path": "assets/Weapons/Remington870/FirstPerson/Remington870_A_FP_Reload_Loop_End.fbx",
+      "pathGuid": "eedb360ee929c541"
+    },
+    {
+      "path": "assets/Weapons/Remington870/FirstPerson/Remington870_A_FP_Reload_Start.fbx",
+      "pathGuid": "a2aef5ce7b1e915a"
+    },
+    {
+      "path": "assets/Weapons/Remington870/FirstPerson/Remington870_A_FP_Reload_Start_Empty.fbx",
+      "pathGuid": "69616d0572a4981b"
+    },
+    {
+      "path": "assets/Weapons/Remington870/FirstPerson/Remington870_A_FP_Sprint.fbx",
+      "pathGuid": "b548d762261e5f5f"
+    },
+    {
+      "path": "assets/Weapons/Remington870/FirstPerson/Remington870_A_FP_SprintToIdle.fbx",
+      "pathGuid": "18773d2bc32d2c08"
+    },
+    {
+      "path": "assets/Weapons/Remington870/FirstPerson/Remington870_A_FP_Walk.fbx",
+      "pathGuid": "804d61b2efd90493"
+    },
+    {
+      "path": "assets/Weapons/Remington870/Weapon/Remington870_A_W_Inspect.fbx",
+      "pathGuid": "66576fcdd35fc5ba"
+    },
+    {
+      "path": "assets/Weapons/Remington870/Weapon/Remington870_A_W_Mag_Check.fbx",
+      "pathGuid": "421117bd9c7c899f"
+    },
+    {
+      "path": "assets/Weapons/Remington870/Weapon/Remington870_A_W_Pump.fbx",
+      "pathGuid": "21361368df1fe439"
+    },
+    {
+      "path": "assets/Weapons/Remington870/Weapon/Remington870_A_W_Reload_End.fbx",
+      "pathGuid": "ca979c2223c6ddae"
+    },
+    {
+      "path": "assets/Weapons/Remington870/Weapon/Remington870_A_W_Reload_Loop.fbx",
+      "pathGuid": "848f46e7578d8189"
+    },
+    {
+      "path": "assets/Weapons/Remington870/Weapon/Remington870_A_W_Reload_Loop_End.fbx",
+      "pathGuid": "0c7074d53b52d312"
+    },
+    {
+      "path": "assets/Weapons/Remington870/Weapon/Remington870_A_W_Reload_Start.fbx",
+      "pathGuid": "fffbcc7419088411"
+    },
+    {
+      "path": "assets/Weapons/Remington870/Weapon/Remington870_A_W_Reload_Start_Empty.fbx",
+      "pathGuid": "f0216597d55e5ac4"
+    },
+    {
       "path": "assets/Characters/Quantum/Models/European/Quantum_Body_Full.fbx",
       "pathGuid": "5ec75801d215e72f"
     },
@@ -23985,6 +24105,26 @@
     {
       "path": "assets/Weapons/AKS74U/Textures/Cartridge_545x39mm_Occlusion.png",
       "pathGuid": "2c708ddb3e919ee4"
+    },
+    {
+      "path": "assets/Weapons/Remington870/Textures/Remington870_BaseColor.png",
+      "pathGuid": "b122b6d22413e876"
+    },
+    {
+      "path": "assets/Weapons/Remington870/Textures/Remington870_Normal.png",
+      "pathGuid": "07f6d8765cae4d98"
+    },
+    {
+      "path": "assets/Weapons/Remington870/Textures/Remington870_Metallic.png",
+      "pathGuid": "e773732e2166cecf"
+    },
+    {
+      "path": "assets/Weapons/Remington870/Textures/Remington870_Roughness.png",
+      "pathGuid": "e5b357053798f8ec"
+    },
+    {
+      "path": "assets/Weapons/Remington870/Textures/Remington870_AO.png",
+      "pathGuid": "4294419ced9a748d"
     },
     {
       "path": "assets/Characters/Quantum/Textures/European/Head/T_Quantum_Basemesh_Head_BaseColor.1001.png",

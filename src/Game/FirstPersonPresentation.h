@@ -86,17 +86,30 @@ public:
     // Sets a one-frame trigger (MagCheck, Inspect, Melee, ...) on the controller.
     bool TriggerAction(const std::string& trigger);
     // Wants the weapon in hand (true) or holstered (false). The controller plays Draw/Holster;
-    // while it is in a state tagged Hidden both rigs are hidden.
+    // while it is in a state tagged Hidden both rigs are hidden. Holstering cancels a pending swap.
     void SetEquipped(bool equipped);
 
+    // Weapon slots: the controller's Animation Set is slot 0, its Secondary Animation Set slot 1.
+    // Selecting the slot in hand just draws it; another one holsters this weapon, then swaps the
+    // rigs over and draws that one (see Tick). Each slot keeps its own ammo.
+    int SlotCount() const { return (int)m_SlotSets.size(); }
+    int Slot() const { return m_Slot; }
+    void SelectSlot(int slot);
+    // The scroll wheel: through the slots, then unarmed, and round again (`step` +1 / -1).
+    void CycleSlot(int step);
+
     int Ammo() const { return m_Ammo; }
+    // False while the action still has to be worked after a round (gameplay.cycle).
+    bool Chambered() const { return m_Chambered; }
     int MagazineSize() const { return m_Set.Gameplay.Magazine; }
     bool IsActive() const { return m_Arms != entt::null; }
     // The runtime arms rig's entity (null when inactive) - the body's arms take their hands from it.
     entt::entity ArmsEntity() const { return m_Arms; }
     // The arms rig node the play camera is pinned to (empty = the rig's root sits on the camera).
     const std::string& CameraBone() const { return m_CameraBone; }
-    bool IsEquipped() const { return m_Equipped; }
+    // Mid-swap counts as equipped: the weapon is only being traded for another, so e.g. the gravity
+    // gun mustn't take the mouse in between.
+    bool IsEquipped() const { return m_Equipped || m_PendingSlot >= 0; }
     // The speeds (m/s) the walk and sprint clips play at: the controller's Move Speed / Sprint Multiplier, or - with a
     // First Person Body - the body's Run / Sprint Speed (what the player really moves at). Call after Start.
     void SetLocomotionSpeeds(float walk, float sprint) { m_WalkSpeed = walk; m_SprintSpeed = sprint; }
@@ -133,6 +146,12 @@ public:
     const AdsCarryReport& AdsReport() const { return m_AdsCarry.Report; }
 
 private:
+    // One weapon's rigs up or down; Start / Stop add the slot list around them.
+    bool StartSet(World& world, AssetLibrary& assets, int slot, bool holstered);
+    void StopSet(World& world);
+    void SwapToPendingSlot();
+    // A round just left: a manual action now has to be worked before the next (gameplay.cycle).
+    void OnRoundSpent();
     bool AttachAndValidate(AssetLibrary& assets, const AnimatorController& ctrl);
     AnimatorControllerComponent* Animator() const;
     bool HasTag(const char* tag) const;
@@ -199,6 +218,21 @@ private:
     float m_AdsHoldLast = 0.0f;   // ... its weight while the action played
     float m_AdsReleaseT = 0.0f;   // ... and seconds since the action faded out
     int m_Ammo = 30;
+    // Manual action (gameplay.cycle): a round is chambered; if not, the Cycle trigger goes on once
+    // m_CycleWait runs out and stays on until a Cycling state has been seen to play through.
+    bool m_Chambered = true;
+    float m_CycleWait = 0.0f;
+    bool m_CycleSeen = false;
+    // Per-round reload: the trigger was pulled mid-reload (StopReload until the reload ends).
+    bool m_StopReload = false;
+    // Weapon slots (SelectSlot): the .fpsanim of each, the ammo each was left with (-1 = full),
+    // the one in hand and the one to swap to once this one is holstered (-1 = none).
+    std::vector<std::string> m_SlotSets;
+    std::vector<int> m_SlotAmmo;
+    int m_Slot = 0;
+    int m_PendingSlot = -1;
+    AssetLibrary* m_SlotAssets = nullptr;
+    std::shared_ptr<FirstPersonControllerComponent> m_Config; // the controller's settings, for a swap
     bool m_FullAuto = false;
     float m_FireCooldown = 0.0f;  // full-auto: seconds until the next round may go
     float m_IdleTime = 0.0f;      // settled Idle, for the Fidget
