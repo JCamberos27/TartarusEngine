@@ -3,8 +3,8 @@
   "gender": "Female",
   "race": "European",
   "items": {
-    "Hair": {
-      "item": "assets/Characters/Quantum/Models/Female/Hair/SKM_F_Haircut_Pixie_Cut.fbx"
+    "Balaclava": {
+      "item": "assets/Characters/Quantum/Models/Clothing/Female/Balaclava/SM_F_Balaclava_Crime.fbx"
     },
     "Pants": {
       "item": "assets/Characters/Quantum/Models/Clothing/Female/Pants/SKM_F_Shorts.fbx"

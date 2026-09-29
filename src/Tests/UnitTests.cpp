@@ -2070,6 +2070,49 @@ void TestOutfitCoverage() {
     CHECK(OutfitCoverage::Covered(skin, sphere(0.075f, true))[(size_t)(2 * 24)] == 1); // a shirt 2.5 cm out through a jacket
     CHECK(OutfitCoverage::Covered(skin, sphere(0.06f, true))[(size_t)(2 * 24)] == 0);
     CHECK(OutfitCoverage::Covered(skin, sphere(0.20f, true))[(size_t)(2 * 24)] == 0);
+    // The head's rule (Backed): a neck in a collar standing 3 cm off it. Just under the rim the skin can be
+    // seen over it with nothing behind (the torso's hidden too): hiding it would open a hole, so it stays.
+    // Deep in a tube reaching well past it, nothing sees it. Poking through a shirt, the shirt's behind.
+    auto tube = [](float r, float y0, float y1) {
+        OutfitCoverage::Mesh m;
+        const int rings = 20, segs = 24;
+        for (int i = 0; i <= rings; ++i)
+            for (int j = 0; j < segs; ++j) {
+                const float ph = glm::two_pi<float>() * (float)j / segs;
+                m.Positions.emplace_back(r * std::cos(ph), y0 + (y1 - y0) * (float)i / rings, r * std::sin(ph));
+            }
+        for (int i = 0; i < rings; ++i)
+            for (int j = 0; j < segs; ++j) {
+                const unsigned a = (unsigned)(i * segs + j), b = (unsigned)(i * segs + (j + 1) % segs);
+                const unsigned c = a + segs, d = b + segs;
+                m.Indices.insert(m.Indices.end(), {a, c, b, b, c, d}); // outward-facing
+            }
+        return m;
+    };
+    const OutfitCoverage::Mesh neck = tube(0.06f, 0.0f, 0.20f);
+    CHECK(glm::dot(OutfitCoverage::VertexNormals(neck)[(size_t)(8 * 24)], glm::vec3(1.0f, 0.0f, 0.0f)) > 0.9f);
+    const size_t underRim = (size_t)(8 * 24); // y = 8 cm, facing +X
+    const OutfitCoverage::Mesh collar = tube(0.09f, -0.30f, 0.10f), wrap = tube(0.09f, -0.30f, 0.50f);
+    CHECK(OutfitCoverage::Hidden(neck, collar)[underRim] == 1);       // the old rule hides it
+    CHECK(OutfitCoverage::Hidden(neck, collar, true)[underRim] == 0); // the head's keeps it
+    CHECK(OutfitCoverage::Hidden(neck, wrap, true)[underRim] == 1);
+    // Skin poking 5 mm through a shirt front: from every way it's seen, the shirt's right behind it.
+    auto sheet = [](float half, float z) {
+        OutfitCoverage::Mesh m;
+        const int n = 20;
+        for (int i = 0; i <= n; ++i)
+            for (int j = 0; j <= n; ++j) m.Positions.emplace_back(-half + 2 * half * j / n, -half + 2 * half * i / n, z);
+        for (int i = 0; i < n; ++i)
+            for (int j = 0; j < n; ++j) {
+                const unsigned a = (unsigned)(i * (n + 1) + j), b = a + 1, c = a + n + 1, d = c + 1;
+                m.Indices.insert(m.Indices.end(), {a, b, c, b, d, c}); // facing +Z
+            }
+        return m;
+    };
+    const OutfitCoverage::Mesh chest = sheet(0.05f, 0.0f), shirt = sheet(0.30f, -0.005f);
+    const size_t middle = (size_t)(10 * 21 + 10);
+    CHECK(OutfitCoverage::PokeDepth(chest, shirt, OutfitCoverage::kPokeReach)[middle] > 0.0f);
+    CHECK(OutfitCoverage::Hidden(chest, shirt, true)[middle] == 1);
     const int before = (int)std::count(covered.begin(), covered.end(), (std::uint8_t)1);
     OutfitCoverage::Erode(skin, covered, 1);
     const int after = (int)std::count(covered.begin(), covered.end(), (std::uint8_t)1);
@@ -2093,7 +2136,7 @@ void TestWardrobeQuantum() {
     const auto cat = OutfitSystem::LoadCatalog(assets, "assets/Characters/Quantum/Quantum.wardrobe", true, &err);
     CHECK(cat != nullptr);
     if (!cat) { Log::Warn("Quantum wardrobe: " + err); return; }
-    CHECK(cat->Items.size() > 150);
+    CHECK(cat->Items.size() > 100);
     auto exists = [](const std::string& rel) { return std::filesystem::exists(ProjectPaths::Resolve(rel)); };
     for (const auto& body : cat->W.Bodies) {
         for (const auto& [part, model] : body.Parts) CHECK(exists(model));
@@ -2107,7 +2150,7 @@ void TestWardrobeQuantum() {
         for (int g = 0; g < 2; ++g) {
             const auto n = cat->ForSlot(slot.Id, (Wardrobe::Gender)g).size();
             Log::Info("Quantum wardrobe: " + slot.Id + " " + Wardrobe::GenderName((Wardrobe::Gender)g) + " " + std::to_string(n));
-            if (!(slot.Id == "Beard" && g == 1) && slot.Id != "Collar") CHECK(n > 0);
+            if (slot.Id != "Collar") CHECK(n > 0);
         }
     auto item = [&](const std::string& rel) {
         const auto* it = cat->Find("assets/Characters/Quantum/Models/" + rel);
@@ -2121,16 +2164,18 @@ void TestWardrobeQuantum() {
     Wardrobe::Request req;
     req.Race = "Afro";
     req.Items = {{"Pants", item("Clothing/Male/Pants/SKM_Jeans.fbx")}, {"Shoes", item("Clothing/Male/Shoes/SKM_Boots.fbx")},
-                 {"Top", item("Clothing/Male/Tops/SKM_Tshirt.fbx")}, {"Hair", item("Hair/SKM_Hair_Short.fbx")}};
+                 {"Top", item("Clothing/Male/Tops/SKM_Tshirt.fbx")}, {"Balaclava", item("Clothing/Male/Balaclava/SM_Balaclava_Crime.fbx")}};
     Wardrobe::Resolved r = Wardrobe::Resolve(cat->W, cat->Items, req);
     CHECK(pieceFor(r, "Pants") == "SKM_Jeans_Inboots" && pieceFor(r, "Feet") == "Quantum_Feet_Shoes");
     CHECK(pieceFor(r, "Legs").empty() && pieceFor(r, "Head") == "Quantum_Head_Afro" && pieceFor(r, "Torso") == "Quantum_Torso_Afro");
+    CHECK(pieceFor(r, "Balaclava") == "SM_Balaclava_Crime");
+    // No hair in this wardrobe: a balaclava under a cap, both kept.
     req = {};
     req.Sex = Wardrobe::Gender::Female;
-    req.Items = {{"Hair", item("Female/Hair/SKM_F_Haircut_Bobcut.fbx")}, {"Hat", item("Clothing/Female/Hats/SKM_F_Cap.fbx")}};
+    req.Items = {{"Balaclava", item("Clothing/Female/Balaclava/SM_F_Balaclava_Crime.fbx")}, {"Hat", item("Clothing/Female/Hats/SKM_F_Cap.fbx")}};
     r = Wardrobe::Resolve(cat->W, cat->Items, req);
-    // The fitted cut carries its own cap, so the separate cap comes off (no double cap).
-    CHECK(pieceFor(r, "Hair") == "SKM_F_Haircut_Bobcut_Cap" && pieceFor(r, "Hat").empty() && pieceFor(r, "Torso") == "SKM_F_Vivian_Body");
+    CHECK(pieceFor(r, "Balaclava") == "SM_F_Balaclava_Crime" && pieceFor(r, "Hat") == "SKM_F_Cap" && pieceFor(r, "Torso") == "SKM_F_Vivian_Body");
+    CHECK(cat->Find("assets/Characters/Quantum/Models/Hair/SKM_Hair_Short.fbx") == nullptr);
 
     // What goes together: jackets with a top of their own take the top off, an open one keeps a thin top
     // but not a hoodie, boots cut to go under the pants keep the plain pants, socks are their own slot.
@@ -2148,9 +2193,10 @@ void TestWardrobeQuantum() {
     r = male({{"Shoes", item("Clothing/Male/Shoes/SKM_Boots_Inboots.fbx")}, {"Pants", item("Clothing/Male/Pants/SKM_Jeans.fbx")},
               {"Socks", item("Clothing/Male/Shoes/SKM_Socks.fbx")}});
     CHECK(pieceFor(r, "Pants") == "SKM_Jeans" && pieceFor(r, "Socks") == "SKM_Socks" && pieceFor(r, "Shoes") == "SKM_Boots_Inboots");
-    r = male({{"Top", item("Clothing/Male/Tops/SKM_Hoodie_Hood_Up.fbx")}, {"Hair", item("Hair/SKM_Hair_Long.fbx")},
+    // A hood that's up: no big hat or headphones, but the balaclava stays under it (the hood's layered over it).
+    r = male({{"Top", item("Clothing/Male/Tops/SKM_Hoodie_Hood_Up.fbx")}, {"Balaclava", item("Clothing/Male/Balaclava/SM_Balaclava_Crime.fbx")},
               {"Hat", item("Clothing/Male/Hats/SKM_Hat_Cowboy.fbx")}, {"Headphones", item("Clothing/Male/Hats/SKM_Headphones.fbx")}});
-    CHECK(pieceFor(r, "Hair").empty() && pieceFor(r, "Hat").empty() && pieceFor(r, "Headphones").empty());
+    CHECK(pieceFor(r, "Balaclava") == "SM_Balaclava_Crime" && pieceFor(r, "Hat").empty() && pieceFor(r, "Headphones").empty());
     r = male({{"Hat", item("Clothing/Male/Hats/SKM_Cap.fbx")}, {"Headphones", item("Clothing/Male/Hats/SKM_Headphones.fbx")}});
     CHECK(pieceFor(r, "Hat") == "SKM_Cap" && pieceFor(r, "Headphones") == "SKM_Headphones");
     r = male({{"Outerwear", item("Clothing/Male/Outerwear/SKM_Jacket_Classic_Tie.fbx")},

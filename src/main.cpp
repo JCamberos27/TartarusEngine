@@ -2416,6 +2416,7 @@ int main(int argc, char** argv) {
             // did not: both views now agree on one snapshot instead of tearing between them.
             // Entities SPAWNED after this point still resolve correctly — GetCachedWorldTransform
             // falls back to composing on demand for anything the cache doesn't hold.
+            OutfitSystem::UpdateAttachments(world); // rigid head wear onto the head bone, now it's posed
             world.RebuildWorldTransformCache();
             // Background asset loads: a few ms of GL uploads per frame, then any outfit change whose
             // models and materials are now all in memory lands in one frame.

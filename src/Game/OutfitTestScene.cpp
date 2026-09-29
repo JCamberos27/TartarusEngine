@@ -105,7 +105,7 @@ Wardrobe::Request BaseOutfit(const OutfitSystem::Catalog& cat, Wardrobe::Gender 
     const bool f = g == Wardrobe::Gender::Female;
     const std::pair<const char*, const char*> base[] = {
         {"Top", f ? "SKM_F_Tshirt_Tucked" : "SKM_Tshirt"}, {"Pants", f ? "SKM_F_Pants_Jeans" : "SKM_Jeans"},
-        {"Shoes", f ? "SKM_F_Sneakers" : "SKM_Sneakers"}, {"Hair", f ? "SKM_F_Haircut_Bobcut" : "SKM_Hair_Short"}};
+        {"Shoes", f ? "SKM_F_Sneakers" : "SKM_Sneakers"}, {"Balaclava", f ? "SM_F_Balaclava_Crime" : "SM_Balaclava_Crime"}};
     for (const auto& [slot, stem] : base)
         if (const auto* it = ByStem(cat, g, stem)) req.Items[slot] = it->Path;
     return req;

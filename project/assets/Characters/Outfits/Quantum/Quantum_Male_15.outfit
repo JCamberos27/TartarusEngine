@@ -3,8 +3,11 @@
   "gender": "Male",
   "race": "Afro",
   "items": {
-    "Hair": {
-      "item": "assets/Characters/Quantum/Models/Hair/SKM_Haircut_Braids.fbx"
+    "Balaclava": {
+      "item": "assets/Characters/Quantum/Models/Clothing/Male/Balaclava/SM_Balaclava_Crime.fbx",
+      "colours": {
+        "assets/Characters/Quantum/Materials/Clothing/Balaclava/M_Balaclava_Crime_Black.mat": "assets/Characters/Quantum/Materials/Clothing/Balaclava/M_Balaclava_Crime_Green.mat"
+      }
     },
     "Shoes": {
       "item": "assets/Characters/Quantum/Models/Clothing/Male/Shoes/SKM_Sneakers_Sport.fbx"
