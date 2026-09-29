@@ -391,6 +391,8 @@ void SceneRenderer::RenderScene(World& world, const RenderFrameContext& ctx,
         // #163 - Shadows Only: drawn by the shadow passes, never in the camera view.
         if (renderable.CastShadows == RenderableComponent::ShadowCasting::ShadowsOnly) continue;
         if (world.Registry.all_of<PoseSourceTag>(entity)) continue; // animated only (the first-person arms rig)
+        // Split poses: the first-person copy only in the player's own camera, the world copy everywhere else.
+        if (ctx.OwnerView ? world.Registry.all_of<HiddenFromOwnerTag>(entity) : world.Registry.all_of<OwnerViewOnlyTag>(entity)) continue;
         // Tagged view-model geometry belongs to the sub-pass below when there is one; with no
         // sub-pass this view draws it here like anything else. `isViewModel` is therefore just
         // "route to the other list", not "hide".

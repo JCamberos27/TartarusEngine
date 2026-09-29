@@ -2,6 +2,7 @@
 
 #include "FirstPersonAdsCarry.h"
 #include "FirstPersonAnimation.h"
+#include "FirstPersonBody.h" // FirstPersonStockLockInput
 
 #include <entt/entt.hpp>
 #include <glm/glm.hpp>
@@ -149,6 +150,16 @@ public:
     // Where an arms-rig node was drawn last frame, in the camera's view space (-Z ahead; metres).
     bool ArmsNodeInView(const std::string& node, glm::vec3& out) const;
     bool WeaponNodeInView(const std::string& node, glm::vec3& out) const;
+    // Diagnostics (--stock-probe): the gun's butt - its mesh's rearmost vertices along the bore,
+    // skinned as posed - and the bore's forward, world space, as last drawn.
+    bool StockWorld(glm::vec3& butt, glm::vec3& forward) const;
+    // Split poses: this frame's first-person gun and how the world copy is placed off it, for
+    // FirstPersonBody::ArmsLateUpdate. False with no gun in hand.
+    bool WorldGunInput(FirstPersonWorldGunInput& out) const;
+    // Split poses: the world copy of the gun (every view but the player's camera, and the shadow) at the
+    // first-person gun moved by `shift`; the first-person gun is then the player's camera's only. Off
+    // (no body to split for): the one gun shows everywhere, as before.
+    void PlaceWorldWeapon(World& world, bool split, const glm::vec3& shift);
     // The barrel and sight line found this Play (the muzzle, and the sights' measurement while aiming).
     const FirstPersonBarrelReport& BarrelReport() const { return m_Barrel; }
     // Where rounds leave from this frame, world space: the muzzle and the (zeroed) bore.
@@ -283,6 +294,9 @@ private:
     std::vector<int> m_AnchorBones;
     float m_AnchorWeight = 0.0f; // this frame's (for the weapon test)
     glm::mat4 m_ArmsWorld{1.0f}, m_WeaponWorld{1.0f}, m_View{1.0f}; // PlaceRigs': the arms entity's pose and the camera's view
+    entt::entity m_WorldWeapon = entt::null; // split poses: the gun every other view sees
+    mutable std::vector<std::pair<int, int>> m_StockVerts; // StockWorld's butt vertices (mesh, vertex), found once per model
+    mutable const Model* m_StockModel = nullptr;
     static constexpr int kWeaponAnchorOffset = 1;
     float m_AdsHold = 0.0f;       // 0..1, eased toward "aim held" over Ads.AimHoldTime
     float m_SinceUnhidden = 0.0f; // seconds the weapon has been out of its Hidden state (the laser waits for the gun to be up)
@@ -290,6 +304,7 @@ private:
     // IK rig offset slots on the arms: the ADS-action gun correction, then the procedural pose.
     static constexpr int kAdsOffset = 0, kProceduralOffset = 1;
     float m_Zoom = 0.0f, m_ZoomRate = 0.0f; // ADS zoom 0..1, critically damped spring
+    float m_StockLockWeight = 0.0f;           // 0..1: how shouldered the gun is (the stock lock's weight)
     bool m_AimPointValid = false;
     float m_LookYaw = 0.0f, m_LookPitch = 0.0f, m_PrevLookYaw = 0.0f, m_PrevLookPitch = 0.0f;
     bool m_HaveLook = false;

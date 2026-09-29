@@ -2875,6 +2875,19 @@ void EditorLayer::Draw(World& world, AssetLibrary& assets, Camera& editorCamera,
         m_SceneGameDockNodeId = center;
         m_SelectAssetBrowserTabFrames = 90;  // land on Asset Browser, not Console
     }
+    if (m_SplitSceneGameRequested) {
+        m_SplitSceneGameRequested = false;
+        ImGuiWindow* scene = ImGui::FindWindowByName("Scene");
+        ImGuiWindow* game = ImGui::FindWindowByName("Game");
+        ImGuiID node = scene && scene->DockId ? scene->DockId : m_SceneGameDockNodeId;
+        if (node && (!game || game->DockId == node || game->DockId == 0)) {
+            ImGuiID left = 0;
+            const ImGuiID right = ImGui::DockBuilderSplitNode(node, ImGuiDir_Right, 0.5f, nullptr, &left);
+            ImGui::DockBuilderDockWindow("Scene", left);
+            ImGui::DockBuilderDockWindow("Game", right);
+            ImGui::DockBuilderFinish(dockspaceId);
+        }
+    }
     // NoWindowMenuButton drops the little "▼" tab-list button from every dock node's tab bar —
     // it only listed the tabs already visible right next to it, so it was pure clutter.
     ImGui::DockSpace(dockspaceId, ImVec2(0, 0), ImGuiDockNodeFlags_NoWindowMenuButton);

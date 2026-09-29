@@ -157,8 +157,13 @@ void DrawAds(PropertyRows& r, FirstPersonAnimationSet& s, const WeaponContext& c
     r.Float("Gun Zoom", ads.ViewModelZoom, 0.01f, 1.0f, 4.0f, "%.2fx", "How much the gun itself magnifies with the sights up (1 = none).");
     r.Float("Zoom Time", ads.ZoomTime, 0.01f, 0.0f, 2.0f, "%.2f s", "Roughly how long the zoom takes to settle in or out (eased at both ends).");
 
-    r.Heading("Sight Alignment");
     auto& aim = s.Procedural.Aim;
+    r.Heading("Hip Pose");
+    r.Vec3("Hip Position", aim.HipPosition, 0.0005f, "%.4f", "Metres added to the gun with the sights down (camera frame: +X right, +Y up, +Z back).\n"
+                                                           "Moves the arms and gun together, so the hands stay on it. Fades out as the sights come up.");
+    r.Vec3("Hip Rotation", aim.HipRotation, 0.05f, "%.2f", "Degrees (pitch, yaw, roll) added with the sights down, turning the gun about its socket (the right hand).", "PYR");
+
+    r.Heading("Sight Alignment");
     r.Vec3("Position", aim.Position, 0.0005f, "%.4f", "Metres added to the gun with the sights up, on top of the aim clip.\n"
                                                       "Zero keeps the clip's sight picture exactly.");
     r.Vec3("Rotation", aim.Rotation, 0.05f, "%.2f", "Degrees (pitch, yaw, roll) added with the sights up.", "PYR");

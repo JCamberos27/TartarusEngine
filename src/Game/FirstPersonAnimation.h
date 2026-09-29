@@ -96,6 +96,26 @@ struct FirstPersonLaserSettings {
     float SpotBrightness = 9.0f;
 };
 
+// The world gun (true first person, split poses - FirstPersonBody::ArmsLateUpdate): what every view
+// but the player's own camera shows is the first-person gun moved so its butt sits in the body's right
+// shoulder pocket while shouldered (Enabled + Tags), and always clear of the neck and head; the body's
+// hands hold it there and its head tilts over the stock. The first-person view is the animations' own.
+// A first-person rig holds the stock in by the chin and the gun high across the chest sprinting: shown
+// on the body as-is, it went through the neck and the hood.
+struct FirstPersonStockLockSettings {
+    bool Enabled = false;    // the shoulder-pocket lock (the keep-outs always apply)
+    // Shouldered: a state with any of these tags, or anything carried on the sights.
+    std::vector<std::string> Tags{"Idle", "Ready", "ADS", "Cycling"};
+    // The pocket, from the right upper arm's joint in the chest's frame (x right, y up, z forward), metres.
+    glm::vec3 Pocket{-0.045f, 0.03f, 0.05f};
+    float MaxShift = 0.3f;     // the most the world gun is moved off the first-person one (metres)
+    float HeadTilt = 25.0f;    // the most the neck tilts the world head over the stock (degrees)
+    float BlendTime = 0.2f;    // seconds in and out
+    float NeckRadius = 0.09f;  // keep-outs: the gun stays this far from the neck bone ...
+    float HeadRadius = 0.14f;  // ... and from the head (a hood on it), metres
+    float GunLength = 0.45f;   // how much of the gun, from the butt forward, is kept clear (metres)
+};
+
 // What Play found for a weapon's barrel and sights, kept per weapon definition (by file path)
 // after Play stops so the weapon Inspector can show it and save it.
 struct FirstPersonBarrelReport {
@@ -214,6 +234,7 @@ struct FirstPersonAnimationSet {
     FirstPersonAdsSettings Ads;
     FirstPersonMuzzleSettings Muzzle;
     FirstPersonLaserSettings Laser;
+    FirstPersonStockLockSettings StockLock;
     // Recoil, sway, bob, breathing, aim, per-state offsets, lean and IK (FirstPersonProcedural.h).
     // Files from before it existed load their old gameplay.recoil / adsBob numbers into it.
     WeaponProceduralSettings Procedural = WeaponProceduralSettings::Defaults();
