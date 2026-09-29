@@ -25,6 +25,9 @@ public:
         std::vector<float> HitAngles;      // ... each one's angle off the (zeroed) bore at the muzzle, degrees
         int Pulls = 0;                     // trigger pulls this frame (a press)
         bool Aim = false;                  // held until a step changes it
+        // Through reload states this step: the left hand in view space (m) and the ADS hand anchor's weight.
+        std::vector<glm::vec4> Hand;
+        std::vector<glm::vec3> Shell; // ... and the weapon's Shell bone, same frames (view space, m)
         std::function<void(bool, const std::string&)> Check;
         bool Saw(const std::string& state) const;
         const std::string& State() const;
@@ -45,6 +48,9 @@ public:
     bool Done() const { return m_Step >= m_Steps.size(); }
     int Failures() const { return m_Failures; }
     int Checks() const { return m_Checks; }
+    // With --smoke-shots: a name when the Game view should be saved this frame (every 10th frame
+    // of the reload steps), else empty.
+    const std::string& ShotName() const { return m_Shot; }
 
 private:
     std::vector<Step> m_Steps;
@@ -54,4 +60,5 @@ private:
     Ctx m_Ctx;
     std::function<bool()> m_Held; // full auto: the trigger held down
     int m_Failures = 0, m_Checks = 0;
+    std::string m_Shot;
 };

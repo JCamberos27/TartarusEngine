@@ -38,6 +38,7 @@ struct AdsCarryAction {
     // For AdsGunMotion: the arms clip, the state's length (its longest motion, which its phase
     // counts in), and the gun relative to the eye in the clip's first frame and in the aim pose.
     int Clip = -1;
+    int WeaponClip = -1; // its weapon clip (-1 = none), for the bones the hand anchor carries
     float Length = 1.0f;
     glm::mat4 Hip{1.0f}, Aim{1.0f};
 };
@@ -119,3 +120,13 @@ bool AdsGunMotion(Model& arms, const AdsCarrySample& sample, int gunBone, int ca
 // eye), played from `aim` about `pivot`, as a move in the eye's frame (aim -> the moved gun).
 glm::mat4 AdsGunMotionMove(const glm::mat4& aim, const glm::mat4& hip, const glm::mat4& hipNow, const glm::vec3& pivot,
                            float keepRotation, float keepPosition);
+
+// The hand anchor (FirstPersonAdsSettings::Anchor): the move that takes a free hand from where its
+// clip puts it relative to the gun to where it is relative to the eye at the hip, by `weight`
+// (eased about the gun-relative hand). The clip's head / socket / hand (hip*) against the solved
+// pose's head and socket (arms model space); the rig's turn is the view's, so only the head's
+// position is matched. Identity at weight 0.
+glm::mat4 AdsHandAnchorMove(const glm::mat4& hipHead, const glm::mat4& hipSocket, const glm::mat4& hipHand,
+                            const glm::vec3& head, const glm::mat4& socket, float weight);
+// How far `p` is outside the box (0 inside).
+float AdsBoxDistance(const glm::vec3& p, const glm::vec3& boxMin, const glm::vec3& boxMax);

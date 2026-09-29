@@ -290,8 +290,8 @@ void ApplyRig(const IKRigComponent& rig, const Model& model, Pose& pose, const P
 
     for (int n = 0; n < limbCount; ++n) {
         const Limb& limb = limbs[n];
-        const glm::mat4 goal = limb.Settings->KeepAnimatedOffset ? globals[limb.Target] * limb.Relative
-                                                                 : globals[limb.Target];
+        const glm::mat4 goal = limb.Settings->GoalMove * (limb.Settings->KeepAnimatedOffset ? globals[limb.Target] * limb.Relative
+                                                                                            : globals[limb.Target]);
         const glm::quat goalRot = Rotation(goal);
         SolveTwoBone(pose, parents, globals, limb.Upper, limb.Lower, limb.End, Position(goal),
                      limb.Settings->MatchRotation ? &goalRot : nullptr, limb.Settings->Weight * w,

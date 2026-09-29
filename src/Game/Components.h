@@ -827,6 +827,9 @@ struct IKLimb {
     // Runtime: radians to swing the solved limb about its root->end line (the elbow's "door"),
     // after the solve - the end stays put. Game code writes it (first-person ADS actions do).
     float Swivel = 0.0f;
+    // Runtime: a model-space move applied to the end's goal after it is found (identity = none).
+    // First-person ADS writes it to keep a hand that has left the gun where the body is.
+    glm::mat4 GoalMove{1.0f};
 };
 
 // A procedural rigid move of one bone and everything under it, in model space. Runtime only:
