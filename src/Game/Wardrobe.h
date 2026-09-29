@@ -199,7 +199,7 @@ struct Layering {
 };
 Layering LayerOf(const Wardrobe& w, const std::string& slot, const std::string& itemPath, bool bodyPart);
 // Whether `over` hides the parts of `under` that poke through it (body parts never hide anything).
-bool Hides(const Layering& over, const std::string& underSlot, const Layering& under);
+bool Hides(const Layering& over, const std::string& underSlot, const Layering& under, const std::string& overSlot = {});
 
 // --- Outfits ----------------------------------------------------------------------------------
 

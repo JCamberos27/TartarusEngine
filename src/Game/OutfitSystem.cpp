@@ -926,7 +926,7 @@ void UpdateHiding(World& world) {
                 std::vector<std::uint8_t> hidden;
                 for (const auto& [overSlot, over] : pieces) {
                     const auto* orc = reg.try_get<RenderableComponent>(over);
-                    if (over == under || !orc || !orc->ModelRef || !Wardrobe::Hides(layers[over], slot, layers[under])) continue;
+                    if (over == under || !orc || !orc->ModelRef || !Wardrobe::Hides(layers[over], slot, layers[under], overSlot)) continue;
                     const auto* covered = PairCoverage(world, under, over, urc->ModelRef->Path(), orc->ModelRef->Path(), exposed);
                     if (!covered) { waiting = true; continue; }
                     if (hidden.empty()) hidden = *covered;
