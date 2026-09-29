@@ -2,7 +2,7 @@
   "name": "Quantum",
   "root": "assets/Characters/Quantum",
   "itemFolders": ["Models/Clothing"],
-  "excludeFolders": ["StaticMesh"],
+  "excludeFolders": ["StaticMesh", "WithHair"],
   "skinMaterials": ["M_Quantum_Body", "M_Quantum_Arms", "M_Quantum_Head", "M_F_Vivian_Body", "M_F_Vivian_Arms", "M_F_Vivian_Head"],
   "slots": [
     { "id": "Balaclava", "label": "Balaclava",  "icon": "mask",      "folders": ["Balaclava"],          "headAttached": true, "layer": 8 },
@@ -69,8 +69,9 @@
     { "slot": "Outerwear", "nameHasAny": ["Vest"], "lacksTags": ["BuiltInTop"],    "add": ["Vest"] },
     { "slot": "Outerwear", "nameHasAny": ["M65", "SKM_F_Bomber"], "lacksTags": ["BuiltInTop"], "add": ["OpenJacket"] },
     { "slot": "Outerwear", "lacksTags": ["BuiltInTop", "Vest", "OpenJacket"],      "add": ["ClosedJacket"] },
-    { "slot": "Outerwear", "nameHasAny": ["Hood_Closed"],                          "add": ["HoodUp"] },
-    { "slot": "Top",       "nameHasAny": ["Hood_Up"],                              "add": ["HoodUp"] },
+    { "slot": "Outerwear", "nameHasAny": ["Hood_Closed", "Coat_Hoodie_Hood", "Jacket_Winter_Open_Hood_Open"], "add": ["HoodUp"] },
+    { "slot": "Top",       "nameHasAny": ["Hood_Up", "Hoodie_Zipper_Hood"],        "add": ["HoodUp"] },
+    { "slot": "Outerwear", "nameHasAny": ["Jacket_Winter"],                        "add": ["Parka"] },
     { "slot": "Top",       "nameHasAny": ["Hoodie"],                               "add": ["Thick"] },
     { "slot": "Hat",       "nameHasAny": ["Cap", "Bandana", "Headband", "Hat_Warm"], "add": ["UnderHood"] },
     { "slot": "Hat",       "nameHasAny": ["Hat_Classic", "Cowboy", "Panama", "French_Pith", "Hat_Up", "Ushanka"], "add": ["BigHat"] },
@@ -113,7 +114,11 @@
 
   "excludes": [
     { "a": { "slot": "Outerwear", "tags": ["OpenJacket"] }, "b": { "slot": "Top", "tags": ["Thick"] }, "why": "a hoodie is too thick for it" },
+    { "a": { "slot": "Balaclava" }, "b": { "slot": "Hat" }, "why": "the balaclava covers the head" },
+    { "a": { "slot": "Balaclava" }, "b": { "slot": "Headphones" }, "why": "the balaclava covers the ears" },
     { "a": { "tags": ["HoodUp"] }, "b": { "slot": "Hat", "lacksTags": ["UnderHood"] }, "why": "the hood is up" },
+    { "a": { "tags": ["HoodUp"] }, "b": { "slot": "Collar" }, "why": "the hood is up" },
+    { "a": { "slot": "Outerwear", "tags": ["Parka"] }, "b": { "slot": "Bag" }, "why": "too bulky for a bag" },
     { "a": { "tags": ["HoodUp"] }, "b": { "slot": "Headphones" }, "why": "the hood is up" },
     { "a": { "slot": "Hat", "tags": ["BigHat"] }, "b": { "slot": "Headphones" }, "why": "no room under the hat" },
     { "a": { "slot": "Shoes", "nameHasAny": ["Flip_Flops", "Shoes_Classic", "Boots_Socks"] }, "b": { "slot": "Socks" }, "why": "not with these shoes" },
@@ -133,8 +138,8 @@
   "layers": [
     { "slot": "Top",       "nameHasAny": ["Tucked", "Shirt_Classic", "Shirt_Adventure", "Tank_Top", "F_Jersey"], "layer": 2 },
     { "slot": "Shoes",     "nameHasAny": ["Boots"], "nameLacksAll": ["Boots_Inboots"], "layer": 5 },
-    { "slot": "Top",       "nameHasAny": ["Hood_Up"],     "over": ["Balaclava"] },
-    { "slot": "Outerwear", "nameHasAny": ["Hood_Closed"], "over": ["Balaclava"] }
+    { "slot": "Top",       "nameHasAny": ["Hood_Up", "Hoodie_Zipper_Hood"], "over": ["Balaclava"] },
+    { "slot": "Outerwear", "nameHasAny": ["Hood_Closed", "Coat_Hoodie_Hood", "Jacket_Winter_Open_Hood_Open"], "over": ["Balaclava"] }
   ],
   "pairs": [
     { "whenSlot": "Shoes", "whenNameHas": "Boots", "whenNameLacks": "Boots_Inboots", "slot": "Pants", "suffix": "_Inboots" }
