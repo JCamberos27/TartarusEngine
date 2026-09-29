@@ -213,7 +213,9 @@ int Run(AssetLibrary& assets, const std::string& wardrobe, const std::string& cs
                 Pair& p = pairs[i];
                 const auto& u = meshes.at(p.Under->Path);
                 const auto& o = meshes.at(p.Over->Path);
-                const auto hidden = OutfitCoverage::Hidden(u, o, p.Under->BodyPart && p.Under->Slot == "Head");
+                const Wardrobe::SlotDef* us = w.Slot(p.Under->Slot);
+                const bool rigid = !p.Under->BodyPart && us && us->HeadAttached; // the game's rule (OutfitSystem::UpdateHiding)
+                const auto hidden = OutfitCoverage::Hidden(u, o, p.Under->BodyPart && p.Under->Slot == "Head", rigid);
                 const auto poke = OutfitCoverage::PokeDepth(u, o, kMaxDepth);
                 p.Verts = (int)u.Positions.size();
                 for (size_t v = 0; v < hidden.size(); ++v) {

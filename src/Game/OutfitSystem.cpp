@@ -803,7 +803,7 @@ CoverageStore& Coverage() {
     return s;
 }
 
-constexpr std::uint32_t kCoverageVersion = 7; // bump when Covered/Erode or their settings change
+constexpr std::uint32_t kCoverageVersion = 14; // bump when Covered/Erode or their settings change
 
 struct FileStamp {
     std::uint64_t Size = 0;
@@ -875,11 +875,13 @@ void SaveCoverage(const CoverageKey& k, const FileStamp& under, const FileStamp&
 
 // The pair's covered vertices if they're known (memory, then disk); else starts working them out in the
 // background and returns null - ask again next frame.
-// `exposed`: `under` is the head (OutfitCoverage::Hidden) - its own entry, keyed apart.
+// `exposed`: `under` is the head; `rigid`: headwear on the head bone (OutfitCoverage::Hidden) - each its own
+// entry, keyed apart.
 const std::vector<std::uint8_t>* PairCoverage(const World& world, entt::entity under, entt::entity over,
-                                              const std::string& underModel, const std::string& overModel, bool exposed) {
+                                              const std::string& underModel, const std::string& overModel, bool exposed,
+                                              bool rigid) {
     CoverageStore& store = Coverage();
-    const CoverageKey key{Lower(Rel(underModel)) + (exposed ? "|exposed" : ""), Lower(Rel(overModel))};
+    const CoverageKey key{Lower(Rel(underModel)) + (exposed ? "|exposed" : "") + (rigid ? "|rigid" : ""), Lower(Rel(overModel))};
     if (auto it = store.Done.find(key); it != store.Done.end()) return &it->second;
     if (auto it = store.Running.find(key); it != store.Running.end()) {
         if (it->second.wait_for(std::chrono::seconds(0)) != std::future_status::ready) return nullptr;
@@ -892,8 +894,8 @@ const std::vector<std::uint8_t>* PairCoverage(const World& world, entt::entity u
     if (LoadCoverage(key, us, os, loaded)) return &store.Done.emplace(key, std::move(loaded)).first->second;
     // The geometry is copied here (main thread); the maths and the save run on their own thread.
     store.Running.emplace(key, std::async(std::launch::async,
-                                          [key, us, os, exposed, body = Geometry(world, under), cloth = Geometry(world, over)] {
-                                              std::vector<std::uint8_t> covered = OutfitCoverage::Hidden(body, cloth, exposed);
+                                          [key, us, os, exposed, rigid, body = Geometry(world, under), cloth = Geometry(world, over)] {
+                                              std::vector<std::uint8_t> covered = OutfitCoverage::Hidden(body, cloth, exposed, rigid);
                                               SaveCoverage(key, us, os, covered);
                                               return covered;
                                           }));
@@ -923,11 +925,12 @@ void UpdateHiding(World& world) {
                 if (!urc || !urc->ModelRef) continue;
                 const int flags = reg.get<OutfitPieceComponent>(under).Flags;
                 const bool exposed = (flags & OutfitPieceBodyPart) && (flags & OutfitPieceHeadAttached);
+                const bool rigid = !(flags & OutfitPieceBodyPart) && (flags & OutfitPieceHeadAttached);
                 std::vector<std::uint8_t> hidden;
                 for (const auto& [overSlot, over] : pieces) {
                     const auto* orc = reg.try_get<RenderableComponent>(over);
                     if (over == under || !orc || !orc->ModelRef || !Wardrobe::Hides(layers[over], slot, layers[under], overSlot)) continue;
-                    const auto* covered = PairCoverage(world, under, over, urc->ModelRef->Path(), orc->ModelRef->Path(), exposed);
+                    const auto* covered = PairCoverage(world, under, over, urc->ModelRef->Path(), orc->ModelRef->Path(), exposed, rigid);
                     if (!covered) { waiting = true; continue; }
                     if (hidden.empty()) hidden = *covered;
                     else
