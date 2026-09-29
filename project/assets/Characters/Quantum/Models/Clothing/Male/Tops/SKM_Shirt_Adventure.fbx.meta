@@ -1,4 +1,5 @@
 {
+  "folder": "assets/Characters/Quantum/Models/Clothing/Male/Tops",
   "guid": "df0eff907226f7e3",
   "materialRemap": {
     "M_Police_Shirt_Short": "assets/Characters/Quantum/Materials/Clothing/Generated/M_Shirt_Adventure.mat"

@@ -186,8 +186,9 @@ void MarkVariants(const Wardrobe& w, std::vector<Item>& items);
 // --- Layers -----------------------------------------------------------------------------------
 
 // A slot's layer and whether it hides, when the .wardrobe doesn't say: body 0, shoes, tucked tops, pants,
-// tops, outerwear, collars, bags, then hair, beards and glasses (which drape over it all but hide
-// nothing), then hats.
+// tops, outerwear, collars, bags and wrists, then hair, beards and glasses (which drape over it all but
+// hide nothing), then hats. Wrists hide nothing either: a watch or bead bracelet shows the skin through
+// its gaps, and the arm posed away from the bind pose slides the hidden band out from under it.
 int DefaultLayer(const std::string& slot);
 bool DefaultHides(const std::string& slot);
 

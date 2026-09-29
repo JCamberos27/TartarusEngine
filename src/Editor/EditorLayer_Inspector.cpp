@@ -2251,7 +2251,7 @@ void EditorLayer::DrawInspectorBody(World& world, AssetLibrary& assets) {
             if (!rc.Meta.GenericInspector) continue; // Mesh Renderer: hand-coded, no multi-select section
 
             ImGui::Spacing();
-            if (BeginComponentSection(rc.Meta.Icon, rc.Meta.Name, false, mrm, /*defaultOpen=*/true, rc.Meta.Tooltip)) {
+            if (BeginComponentSection(rc.Meta.Icon, rc.Meta.Name, false, mrm, rc.Meta.Tooltip)) {
                 auto fieldPtr = [&](entt::entity e, const ReflectField& f) -> void* {
                     return f.Address(rc.Get(world.Registry, e));
                 };
@@ -2285,7 +2285,6 @@ void EditorLayer::DrawInspectorBody(World& world, AssetLibrary& assets) {
         if (allMesh) {
             ImGui::Spacing();
             bool matOpen = BeginComponentSection(ICON_FA_PALETTE, "Material", false, mrm,
-                /*defaultOpen=*/true,
                 "Shared PBR material and texture maps for every selected mesh.\n"
                 "A field showing \xE2\x80\x94 differs across the selection.");
             if (matOpen) {
@@ -2596,7 +2595,7 @@ void EditorLayer::DrawInspectorBody(World& world, AssetLibrary& assets) {
     // --- Transform (every entity has one; not removable, same as Unity) --------------------
     bool removed = false, tfReset = false, tfCopy = false, tfPaste = false;
     if (BeginComponentSection(ICON_FA_UP_DOWN_LEFT_RIGHT, "Transform", false, removed,
-            /*defaultOpen=*/true, "Position, rotation, and scale in the world. Every object has one.",
+            "Position, rotation, and scale in the world. Every object has one.",
             &tfReset, &tfCopy, &tfPaste)) {
 
         // Stage on first touch, commit on release — one History entry per edit, and a
@@ -2679,7 +2678,7 @@ void EditorLayer::DrawInspectorBody(World& world, AssetLibrary& assets) {
         // Not removable on level geometry: a box IS its cube mesh, and removing it would leave
         // an invisible collider that the Hierarchy still lists under "Level Geometry".
         if (BeginComponentSection(ICON_FA_DRAW_POLYGON, "Mesh Renderer", !isLevelGeometry, removed,
-                /*defaultOpen=*/true, "The mesh this object draws, and its material color/texture options.")) {
+                "The mesh this object draws, and its material color/texture options.")) {
             const std::string& modelPath = renderable->ModelRef->Path();
             std::string meshName;
             // Defect #5 — a procedural primitive's Path() is "primitive://<kind>#<counter>": the
@@ -2854,7 +2853,7 @@ void EditorLayer::DrawInspectorBody(World& world, AssetLibrary& assets) {
     // detachable component).
     if (registry.all_of<RenderableComponent>(entity)) {
         bool matRemoved = false;
-        if (BeginComponentSection(ICON_FA_PALETTE, "Material", false, matRemoved, /*defaultOpen=*/false,
+        if (BeginComponentSection(ICON_FA_PALETTE, "Material", false, matRemoved,
                 "Surface appearance: color, metallic/roughness, emissive glow, and texture maps.")) {
             DrawMaterialEditor(world, assets, {m_Selected});
             EndComponentSection();
@@ -2902,7 +2901,7 @@ void EditorLayer::DrawInspectorBody(World& world, AssetLibrary& assets) {
         const bool compAdded = SceneSerializer::IsPrefabComponentAdded(world, entity, rc.Meta.Name);
         bool reflPfRevert = false, reflPfApply = false;
         const bool reflOpen = BeginComponentSection(rc.Meta.Icon, rc.Meta.Name, true, reflRemoved,
-            /*defaultOpen=*/true, rc.Meta.Tooltip, &reflReset, &reflCopy, &reflPaste,
+            rc.Meta.Tooltip, &reflReset, &reflCopy, &reflPaste,
             compAdded ? &reflPfRevert : nullptr, compAdded ? &reflPfApply : nullptr,
             // #178 - every generically-inspected component is also generically serialised, so
             // all of them can round-trip through a preset.
@@ -3096,7 +3095,7 @@ std::string EditorLayer::SaveComponentPreset(const World& world, entt::entity en
 }
 
 bool EditorLayer::BeginComponentSection(const char* icon,
-    const char* label, bool removable, bool& removedOut, bool defaultOpen, const char* tooltip,
+    const char* label, bool removable, bool& removedOut, const char* tooltip,
     bool* resetOut, bool* copyOut, bool* pasteOut, bool* prefabRevertOut, bool* prefabApplyOut,
     bool* savePresetOut, std::string* applyPresetOut) {
     removedOut = false;
@@ -3113,7 +3112,9 @@ bool EditorLayer::BeginComponentSection(const char* icon,
     // AllowOverlap the "x" button drawn on top of that same row below never actually receives
     // the click — it lands on the header's own collapse-toggle instead, which is exactly why
     // pressing it only expanded/collapsed the section instead of removing anything.
-    ImGuiTreeNodeFlags flags = ImGuiTreeNodeFlags_AllowOverlap | (defaultOpen ? ImGuiTreeNodeFlags_DefaultOpen : 0);
+    // Every component starts collapsed: selecting an object shows the list of what it has at a glance,
+    // and only what's opened takes room. ImGui remembers each header's state (keyed by label) for the session.
+    ImGuiTreeNodeFlags flags = ImGuiTreeNodeFlags_AllowOverlap;
     // Component headers get a dark filled bar (matching Unity's own Inspector, where each
     // component's title strip is visibly darker than the panel it sits on) so adjacent components
     // are easy to tell apart at a glance, rather than the flat #155 no-fill treatment this used to

@@ -1220,6 +1220,19 @@ int main(int argc, char** argv) {
         editorCamera.Position = player.Cam.Position;
         editorCamera.Yaw = player.Cam.Yaw;
         editorCamera.Pitch = player.Cam.Pitch;
+        // A scene with a First Person Body opens looking at it from the front, a couple of metres off,
+        // so its outfit is in view from the start.
+        for (entt::entity body : world.Registry.view<FirstPersonBodyComponent>(entt::exclude<InactiveTag>)) {
+            const glm::mat4 xf = world.ComposeWorldTransform(body);
+            const glm::vec3 feet(xf[3]);
+            glm::vec3 ahead(xf[2].x, 0.0f, xf[2].z); // the body faces its +Z
+            ahead = glm::length(ahead) > 1e-4f ? glm::normalize(ahead) : glm::vec3(0.0f, 0.0f, 1.0f);
+            editorCamera.Position = feet + ahead * 2.6f + glm::vec3(0.0f, 1.45f, 0.0f);
+            const glm::vec3 look = glm::normalize(feet + glm::vec3(0.0f, 1.0f, 0.0f) - editorCamera.Position);
+            editorCamera.Yaw = glm::degrees(std::atan2(look.z, look.x));
+            editorCamera.Pitch = glm::degrees(std::asin(std::clamp(look.y, -1.0f, 1.0f)));
+            break;
+        }
         editorCamera.Fov = EditorSettings::Get().SceneCameraFov; // #236 R2 — persisted editor camera
         editorCamera.NearPlane = EditorSettings::Get().SceneCameraNear;
         editorCamera.FarPlane = EditorSettings::Get().SceneCameraFar;
@@ -1258,6 +1271,18 @@ int main(int argc, char** argv) {
             if (editor.InPrefabMode()) editor.ExitPrefabMode(world, assets); // #176 - Play runs the scene
             if (EditorModuleHost::ConsoleState().ClearOnPlay) Log::Clear(); // #236 A5
             editor.OnEnterPlayMode(world);
+            // Character Outfit's Randomize On Play: dressed afresh, after the snapshot so Stop brings the
+            // edited outfit back. It loads in the background; FirstPersonBody takes the new pieces once
+            // they're on (OutfitChanged). A body not built yet (untagged parts) is adopted first, or
+            // Randomize would build a second body over it.
+            for (auto [e, outfit] : world.Registry.view<CharacterOutfitComponent>(entt::exclude<InactiveTag>).each()) {
+                if (!outfit.RandomizeOnPlay) continue;
+                if (OutfitSystem::Pieces(world, e).empty()) OutfitSystem::AdoptExisting(world, assets, e);
+                const auto r = OutfitSystem::Randomize(world, assets, e,
+                                                       (std::uint32_t)std::chrono::steady_clock::now().time_since_epoch().count() ^
+                                                           (std::uint32_t)entt::to_integral(e));
+                if (!r.Ok) Log::Warn("Character Outfit: Randomize On Play - " + r.Error);
+            }
             Time::SetTimeScale(ProjectSettings::Time().TimeScale); // #144 - each run starts from the project's scale
             errPauseSeen = Log::CountOf(LogLevel::Error); // ignore errors that predate this run
             playing = true;
