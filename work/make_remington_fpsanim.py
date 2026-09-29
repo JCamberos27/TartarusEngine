@@ -52,14 +52,20 @@ g.update({
 
 a = d["ads"]
 a["zoom"] = 1.2
+# The shell comes off the belt: keyed relative to the gun, with the gun on the sights that spot
+# would swing up in front of the face. Anchored, the hand fetches it from where it is at the hip.
+a["handAnchor"] = {"near": 0.05, "far": 0.15, "bones": ["Shell"]}
+# The reloads keep all of the clip's roll about the sights: the shells go in from underneath, so
+# held level on the sights the left hand works hidden behind the right. Rolled as at the hip, the
+# loading port and the hand come into view (the chain keeps the start's roll through the loop).
 a["gunMotion"] = {
     "Pump": {"rotation": 0.35, "position": 0.4},
     "MagCheck": {"rotation": 0.6, "position": 0.2},
-    "ReloadStart": {"rotation": 0.18, "position": 0.25},
-    "ReloadStartEmpty": {"rotation": 0.18, "position": 0.25},
-    "ReloadLoop": {"rotation": 0.18, "position": 0.25},
-    "ReloadLoopEnd": {"rotation": 0.18, "position": 0.25},
-    "ReloadEnd": {"rotation": 0.18, "position": 0.25},
+    "ReloadStart": {"rotation": 1.0, "position": 1.0},
+    "ReloadStartEmpty": {"rotation": 1.0, "position": 1.0},
+    "ReloadLoop": {"rotation": 1.0, "position": 1.0},
+    "ReloadLoopEnd": {"rotation": 1.0, "position": 1.0},
+    "ReloadEnd": {"rotation": 1.0, "position": 1.0},
 }
 
 

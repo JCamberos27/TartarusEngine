@@ -144,6 +144,11 @@ public:
     // What the ADS carry measured at Start (and on live edits): per carried state, the gun move
     // onto the sights and the arm matching - for the weapon Inspector.
     const AdsCarryReport& AdsReport() const { return m_AdsCarry.Report; }
+    // How far the ADS hand anchor holds the free hand to the body this frame (0 = on the gun).
+    float HandAnchorWeight() const { return m_AnchorWeight; }
+    // Where an arms-rig node was drawn last frame, in the camera's view space (-Z ahead; metres).
+    bool ArmsNodeInView(const std::string& node, glm::vec3& out) const;
+    bool WeaponNodeInView(const std::string& node, glm::vec3& out) const;
     // The barrel and sight line found this Play (the muzzle, and the sights' measurement while aiming).
     const FirstPersonBarrelReport& BarrelReport() const { return m_Barrel; }
     // Where rounds leave from this frame, world space: the muzzle and the (zeroed) bore.
@@ -172,6 +177,9 @@ private:
     void SetupBolt(AssetLibrary& assets, const AnimatorController& ctrl);
     void SetupMuzzle(int bolt);
     void SetupAdsCarry();
+    // The ADS hand anchor (FirstPersonAdsSettings::Anchor): found with the carry, written with it.
+    void SetupHandAnchor();
+    void WriteHandAnchor(IKRigComponent& rig, const AdsCarrySample& carry, const glm::quat& adsR, const glm::vec3& adsT);
     AdsCarrySample SampleAdsCarry(float dt) const;
     // A round leaves the bore. Queued, and fired in LateUpdate from the gun as the frame renders it
     // (after the body has put the camera in its head), so it goes where the laser points.
@@ -267,6 +275,15 @@ private:
     glm::vec3 m_Muzzle{0.0f}, m_BoreDir{0.0f, 0.0f, -1.0f}; // world, from the last PlaceRigs
     // Actions carried onto the sights while aiming (FirstPersonAdsCarry.h).
     AdsCarryResult m_AdsCarry;
+    // The hand anchor: the free (not held) limb (0 = LimbA, 1 = LimbB, -1 = none), the gun mesh's
+    // box in its root's space, and the weapon nodes it carries (weapon rig offsets from
+    // kWeaponAnchorOffset on; the bolt has slot 0).
+    int m_AnchorLimb = -1;
+    glm::vec3 m_GunBoxMin{0.0f}, m_GunBoxMax{0.0f};
+    std::vector<int> m_AnchorBones;
+    float m_AnchorWeight = 0.0f; // this frame's (for the weapon test)
+    glm::mat4 m_ArmsWorld{1.0f}, m_WeaponWorld{1.0f}, m_View{1.0f}; // PlaceRigs': the arms entity's pose and the camera's view
+    static constexpr int kWeaponAnchorOffset = 1;
     float m_AdsHold = 0.0f;       // 0..1, eased toward "aim held" over Ads.AimHoldTime
     float m_SinceUnhidden = 0.0f; // seconds the weapon has been out of its Hidden state (the laser waits for the gun to be up)
     float m_TickDt = 0.0f;        // the last Tick's dt: the step the animators take next

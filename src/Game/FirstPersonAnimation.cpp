@@ -213,6 +213,14 @@ bool FirstPersonAnimationSet::FromJsonString(const std::string& text, FirstPerso
             }
         }
         ads.SightPivot = Number(*a, "sightPivot", ads.SightPivot);
+        if (const auto h = a->find("handAnchor"); h != a->end() && h->is_object()) {
+            ads.Anchor.Enabled = Bool(*h, "enabled", true);
+            ads.Anchor.Near = Number(*h, "near", ads.Anchor.Near);
+            ads.Anchor.Far = Number(*h, "far", ads.Anchor.Far);
+            if (const auto b = h->find("bones"); b != h->end() && b->is_array())
+                for (const auto& bone : *b)
+                    if (bone.is_string() && !bone.get<std::string>().empty()) ads.Anchor.Bones.push_back(bone.get<std::string>());
+        }
         if (const auto b = a->find("actionBones"); b != a->end() && b->is_array()) {
             ads.ActionBones.clear();
             for (const auto& bone : *b)
@@ -226,6 +234,8 @@ bool FirstPersonAnimationSet::FromJsonString(const std::string& text, FirstPerso
         ads.ZoomTime = std::clamp(std::isfinite(ads.ZoomTime) ? ads.ZoomTime : 0.2f, 0.0f, 2.0f);
         ads.AimHoldTime = std::clamp(std::isfinite(ads.AimHoldTime) ? ads.AimHoldTime : 0.15f, 0.0f, 2.0f);
         ads.SightPivot = std::clamp(std::isfinite(ads.SightPivot) ? ads.SightPivot : 0.25f, 0.0f, 2.0f);
+        ads.Anchor.Near = std::clamp(std::isfinite(ads.Anchor.Near) ? ads.Anchor.Near : 0.05f, 0.0f, 2.0f);
+        ads.Anchor.Far = std::clamp(std::isfinite(ads.Anchor.Far) ? ads.Anchor.Far : 0.15f, ads.Anchor.Near + 1e-3f, 2.0f);
     }
     if (const auto m = root.find("muzzle"); m != root.end() && m->is_object()) {
         FirstPersonMuzzleSettings& mz = parsed.Muzzle;
@@ -363,6 +373,8 @@ std::string FirstPersonAnimationSet::ToJsonString() const {
     };
     j["ads"]["gunMotion"] = json::object();
     for (const auto& m : Ads.GunMotions) j["ads"]["gunMotion"][m.State] = {{"rotation", m.Rotation}, {"position", m.Position}};
+    if (Ads.Anchor.Enabled)
+        j["ads"]["handAnchor"] = {{"near", Ads.Anchor.Near}, {"far", Ads.Anchor.Far}, {"bones", Ads.Anchor.Bones}};
     j["muzzle"] = {{"auto", Muzzle.Auto}, {"origin", vec3(Muzzle.Origin)}, {"direction", vec3(Muzzle.Direction)}};
     j["laser"] = {{"enabled", Laser.Enabled},
                   {"color", vec3(Laser.Color)},

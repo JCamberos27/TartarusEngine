@@ -3601,6 +3601,18 @@ int main(int argc, char** argv) {
                                    gravityGunLive() && gravityGun.IsHolding(),
                                    gravityGunLive() && gravityGun.IsCharging() ? gravityGun.Charge() : -1.0f,
                                    crosshairDot(gvView, gvProj, gvWidth, gvHeight));
+                // --weapon-test --smoke-shots <dir>: the Game view through the reloads.
+                if (weaponTest && !smokeShotsDir.empty() && !weaponTest->ShotName().empty()) {
+                    glBindFramebuffer(GL_READ_FRAMEBUFFER, gameView.GetFramebuffer().Handle());
+                    std::vector<unsigned char> px = Screenshot::GrabRegion(0, 0, gvWidth, gvHeight);
+                    std::vector<unsigned char> flipped(px.size());
+                    for (int y = 0; y < gvHeight; ++y)
+                        std::memcpy(&flipped[(size_t)y * gvWidth * 4], &px[(size_t)(gvHeight - 1 - y) * gvWidth * 4], (size_t)gvWidth * 4);
+                    std::error_code ec;
+                    std::filesystem::create_directories(smokeShotsDir, ec);
+                    const std::string out = (std::filesystem::path(smokeShotsDir) / (weaponTest->ShotName() + ".png")).string();
+                    stbi_write_png(out.c_str(), gvWidth, gvHeight, 4, flipped.data(), gvWidth * 4);
+                }
                 Framebuffer::BindDefault(window.GetWidth(), window.GetHeight());
 
                 // #143: exponentially smoothed (same 0.92/0.08 blend as the Scene view's status

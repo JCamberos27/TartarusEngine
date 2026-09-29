@@ -29,13 +29,37 @@ const std::string& FirstPersonWeaponTest::Ctx::State() const { return P->Current
 
 FirstPersonWeaponTest::FirstPersonWeaponTest() {
     // Shared between steps.
-    struct Mem { int AkAmmo = 0, ShotgunAmmo = 0, Ammo = 0, Stage = 0; bool Held = false; };
+    struct Mem { int AkAmmo = 0, ShotgunAmmo = 0, Ammo = 0, Stage = 0; bool Held = false; float HipHand = 0.0f; };
     auto mem = std::make_shared<Mem>();
     using C = Ctx;
     auto fire = [](C& c) { ++c.Pulls; };
     auto settled = [](C& c, const char* rest) { return c.State() == rest && c.P->Chambered(); };
     auto check = [](C& c, bool ok, const std::string& what) { c.Check(ok, what); };
     auto ammoIs = [check](C& c, int n) { check(c, c.P->Ammo() == n, "ammo " + std::to_string(c.P->Ammo()) + " (want " + std::to_string(n) + ")"); };
+    // How much of a reload the left hand spends in the middle of the view, close up (where it
+    // covers the sights): the share of frames it is within 22 deg of the view axis and 0.45 m.
+    auto handInTheWay = [](C& c, const char* label) {
+        int blocking = 0;
+        float nearest = 1e9f, anchored = 0.0f;
+        for (const glm::vec4& h : c.Hand) {
+            const glm::vec3 v(h);
+            const float d = glm::length(v);
+            const float off = glm::degrees(std::atan2(glm::length(glm::vec2(v.x, v.y)), -v.z));
+            if (v.z < 0.0f && d < 0.45f && off < 22.0f) ++blocking;
+            nearest = std::min(nearest, d);
+            anchored = std::max(anchored, h.w);
+        }
+        for (size_t i = 0; i < c.Hand.size(); i += 12) {
+            const glm::vec3 v(c.Hand[i]);
+            std::printf("[WeaponTest]       %s f%3d view (%.2f %.2f %.2f) right %.0f up %.0f deg, anchor %.2f, shell %.2f m off the hand\n", label, (int)i, v.x, v.y, v.z,
+                        glm::degrees(std::atan2(v.x, -v.z)), glm::degrees(std::atan2(v.y, -v.z)), c.Hand[i].w,
+                        i < c.Shell.size() ? glm::length(c.Shell[i] - v) : -1.0f);
+        }
+        const float share = c.Hand.empty() ? 0.0f : (float)blocking / (float)c.Hand.size();
+        std::printf("[WeaponTest]     %s: left hand in the way %.0f%% of %d reload frames, nearest %.2f m, anchor up to %.2f\n",
+                    label, share * 100.0f, (int)c.Hand.size(), nearest, anchored);
+        return share;
+    };
     auto pelletsInCone = [check](C& c, float cone) {
         // Every pellet struck something, each inside the spread cone about the bore, and they
         // spread (not all down one line).
@@ -90,6 +114,7 @@ FirstPersonWeaponTest::FirstPersonWeaponTest() {
          [=](C& c) { ammoIs(c, mem->Ammo - 1); }},
         {"partial reload (4 -> 6)", [](C& c) { c.P->Reload(); }, [](C& c) { return c.Saw("ReloadStart") && c.State() == "Idle"; }, 12.0f,
          [=](C& c) {
+             mem->HipHand = handInTheWay(c, "hip");
              ammoIs(c, kShotgunShells);
              check(c, c.Saw("ReloadLoop") && c.Saw("ReloadLoopEnd"), "start -> loop -> last shell");
          }},
@@ -154,7 +179,11 @@ FirstPersonWeaponTest::FirstPersonWeaponTest() {
          }},
         {"ADS reload (from empty)", [](C& c) { c.P->Reload(); },
          [](C& c) { return (c.Saw("ReloadStart") || c.Saw("ReloadStartEmpty")) && c.State() == "Aim"; }, 20.0f,
-         [=](C& c) { ammoIs(c, kShotgunShells); check(c, c.Saw("ReloadStartEmpty"), "empty start, on the sights"); }},
+         [=](C& c) {
+             ammoIs(c, kShotgunShells);
+             check(c, c.Saw("ReloadStartEmpty"), "empty start, on the sights");
+             handInTheWay(c, "ADS");
+         }},
         {"sights down", [](C& c) { c.Aim = false; }, [](C& c) { return c.State() == "Idle"; }, 3.0f, nullptr},
         {"two rounds before the swap (a loop needs 2+ to load)", nullptr,
          [=](C& c) {
@@ -209,6 +238,8 @@ void FirstPersonWeaponTest::Drive(FirstPersonPresentation& p, float dt) {
             c.States.assign(1, p.CurrentState());
             c.Hits.clear();
             c.HitAngles.clear();
+            c.Hand.clear();
+            c.Shell.clear();
             std::printf("[WeaponTest] %s\n", s.Name.c_str());
             if (s.Begin) s.Begin(c);
         } else {
@@ -229,6 +260,16 @@ void FirstPersonWeaponTest::Drive(FirstPersonPresentation& p, float dt) {
             m_Step = m_Steps.size(); // later steps assume this one happened
         }
     }
+    m_Shot.clear();
+    if (glm::vec3 v; p.CurrentState().rfind("Reload", 0) == 0 && p.ArmsNodeInView("hand_l", v)) {
+        if (c.Hand.size() % 10 == 0 && !Done()) {
+            char name[64];
+            std::snprintf(name, sizeof name, "%s_%03d", c.Aim ? "ads" : "hip", (int)c.Hand.size());
+            m_Shot = name;
+        }
+        c.Hand.push_back(glm::vec4(v, p.HandAnchorWeight()));
+    }
+    if (glm::vec3 v; c.Shell.size() < c.Hand.size() && p.WeaponNodeInView("Shell", v)) c.Shell.push_back(v);
     const bool held = m_Held && m_Held();
     p.UpdateTrigger(c.Pulls > 0 || held, c.Pulls > 0 || held);
     c.Pulls = 0;
