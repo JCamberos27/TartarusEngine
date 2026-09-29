@@ -296,11 +296,14 @@ void DrawAds(PropertyRows& r, FirstPersonAnimationSet& s, const WeaponContext& c
                     } else if (!entry->Problem.empty()) {
                         ImGui::TextColored(EditorUIPrimitives::WarningColor(), "%s", entry->Problem.c_str());
                     } else if (report->HoldsAim) {
-                        ImGui::Text("elbow %.0f deg, %d twist", entry->SwivelDeg[1], entry->MatchedBones);
+                        if (entry->ContinuesFrom.empty()) ImGui::Text("elbow %.0f deg, %d twist", entry->SwivelDeg[1], entry->MatchedBones);
+                        else ImGui::Text("elbow %.0f deg (as %s)", entry->SwivelDeg[1], entry->ContinuesFrom.c_str());
                         if (ImGui::IsItemHovered())
                             EditorUI::SetTooltip("The gun and the other hand stay in the aim pose; the action bones play the clip.\n"
-                                                 "Elbow swing: right %.1f deg, left %.1f deg. Twist bones matched: %d.",
-                                                 entry->SwivelDeg[0], entry->SwivelDeg[1], entry->MatchedBones);
+                                                 "Elbow swing: right %.1f deg, left %.1f deg. Twist bones matched: %d.%s",
+                                                 entry->SwivelDeg[0], entry->SwivelDeg[1], entry->MatchedBones,
+                                                 entry->ContinuesFrom.empty() ? ""
+                                                     : "\nOnly entered from another carried state, so it keeps that state's arm match.");
                     } else {
                         ImGui::Text("gun %.1f cm, %.0f deg", entry->GunOffsetCm, entry->GunTurnDeg);
                         if (ImGui::IsItemHovered())

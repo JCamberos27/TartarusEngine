@@ -9,6 +9,7 @@
 #include "Camera.h"
 #include "Player.h"
 #include "FirstPersonPresentation.h"
+#include "FirstPersonWeaponTest.h" // --weapon-test
 #include "BodyDebugDraw.h"
 #include "FirstPersonBody.h"
 #include "World.h"
@@ -405,6 +406,9 @@ int main(int argc, char** argv) {
     // nonzero code if any failed — parsed here, before anything else, so it can never be
     // confused with a scene-path or other future argument.
     bool smokeTestMode = false;
+    // --weapon-test: the smoke harness on the Sandbox only, with the weapons played through by
+    // script in Play (FirstPersonWeaponTest) on a fixed 60 Hz step. Exit code 0 = every check passed.
+    bool weaponTestMode = false;
     // --perf-bench [dir]: the smoke-test harness with VSync, the FPS cap and GL debug output off,
     // a longer per-scene run, and an averaged CPU/GPU profiler breakdown printed per scene.
     bool perfBenchMode = false;
@@ -449,6 +453,7 @@ int main(int argc, char** argv) {
             perfBenchMode = a == "--perf-bench";
             if (i + 1 < argc && argv[i + 1][0] != '-') smokeScenesDirArg = argv[++i];
         }
+        else if (a == "--weapon-test") { smokeTestMode = true; weaponTestMode = true; }
         else if (a == "--smoke-shots" && i + 1 < argc) { smokeShotsDir = argv[++i]; }
         else if (a == "--resave" && i + 2 < argc) { resaveIn = argv[i + 1]; resaveOut = argv[i + 2]; i += 2; }
         else if (a == "--undo-bench") { undoBenchMode = true; }
@@ -723,6 +728,8 @@ int main(int argc, char** argv) {
         }
         Player player;
         FirstPersonPresentation firstPersonPresentation;
+        std::unique_ptr<FirstPersonWeaponTest> weaponTest;
+        if (weaponTestMode) weaponTest = std::make_unique<FirstPersonWeaponTest>();
         FirstPersonBody firstPersonBody; // #405 - true first person: the player's own body
         GravityGun gravityGun;
         CrosshairOverlay crosshair; // Play-mode crosshair + gravity gun hold / throw-charge indicator
@@ -1402,7 +1409,8 @@ int main(int argc, char** argv) {
         // --perf-bench measures each scene twice: kPerfPhaseFrames in edit mode, then as many in Play.
         constexpr int kPerfPhaseFrames = 600;
         constexpr int kPerfBenchWarmup = 100; // frames skipped at the start of each phase
-        const int kSmokeTestFrames = perfBenchMode ? 2 * kPerfPhaseFrames : 100;
+        // --weapon-test ends its scene itself when the script is done; this is only its safety cap (6 min at 60 Hz).
+        const int kSmokeTestFrames = weaponTestMode ? 60 * 60 * 6 : perfBenchMode ? 2 * kPerfPhaseFrames : 100;
         struct PerfAccum { double Sum = 0.0; double Max = 0.0; int N = 0; };
         std::vector<std::pair<std::string, PerfAccum>> perfCpu, perfGpu;
         PerfAccum perfFrame;
@@ -1448,6 +1456,7 @@ int main(int argc, char** argv) {
                     smokeScenePaths.push_back(entry.path().string());
             }
             std::sort(smokeScenePaths.begin(), smokeScenePaths.end());
+            if (weaponTestMode) smokeScenePaths.assign(1, ProjectPaths::Resolve("scenes/Sandbox.json"));
             std::cout << "[SmokeTest] Found " << smokeScenePaths.size() << " scene(s) under "
                       << scenesDir << std::endl;
             if (smokeScenePaths.empty()) {
@@ -1835,6 +1844,12 @@ int main(int argc, char** argv) {
                 // Play-mode cycles for a smoke_play* scene: enter at 20 / 55, stop at 40 / 75,
                 // within the kSmokeTestFrames budget. togglePlay() is the same entry the F1 key
                 // and the toolbar button use.
+                // --weapon-test: into Play once the scene has settled; the script runs from there,
+                // and the scene is scored as soon as it's done.
+                if (smokeSceneActive && weaponTest) {
+                    if (smokeFramesRendered == 20 && !playing) { std::cout << "[WeaponTest] -> Play" << std::endl; togglePlay(); }
+                    if (weaponTest->Done()) smokeFramesRendered = std::max(smokeFramesRendered, kSmokeTestFrames - 1);
+                }
                 if (smokeSceneActive && smokePlayScene) {
                     const int f = smokeFramesRendered;
                     if ((f == 20 || f == 55) && !playing) { std::cout << "[SmokeTest]   -> Play\n";  togglePlay(); }
@@ -2011,7 +2026,8 @@ int main(int argc, char** argv) {
             Time::SetDebugTimeScale(EditorSettings::Get().PhysicsSimTimeScale);
             Time::BeginFrame();
             const float dt = Time::UnscaledDeltaTime();
-            const float gameDt = Time::DeltaTime();
+            // --weapon-test runs on a fixed step, so its timings don't depend on the machine.
+            const float gameDt = weaponTestMode ? (playing ? 1.0f / 60.0f : 0.0f) : Time::DeltaTime();
 
             // #158 — shader hot reload (editor only; the scan itself runs at ~4 Hz). Engine
             // programs and material shaders recompile when any file they were built from changes;
@@ -2315,6 +2331,11 @@ int main(int argc, char** argv) {
                     firstPersonBody.Tick(world, player, player.Cam, gameDt);
                     if (firstPersonPresentation.IsActive()) {
                         firstPersonPresentation.Update(world, player.Cam);
+                        if (weaponTest) {
+                            // The script is the player: its trigger, aim and weapon keys, nothing else.
+                            weaponTest->Drive(firstPersonPresentation, gameDt);
+                            firstPersonPresentation.Tick(gameDt, player.Velocity, false, weaponTest->Aim(), 0.0f, player.Grounded);
+                        } else {
                         // The weapon owns Fire1/Fire2/FireMode/Reload/Inspect/Melee while it's in
                         // hand. With the gravity gun on the controller, holstering hands the mouse
                         // to it instead (gravityGunLive), so the two never read the same frame.
@@ -2352,6 +2373,7 @@ int main(int argc, char** argv) {
                         // No lean key: aiming at a corner peeks around it (the presentation's corner peek).
                         firstPersonPresentation.Tick(gameDt, player.Velocity, gameHasInput && InputMap::GetButton("Sprint"),
                                                      weaponInput && InputMap::GetButton("Fire2"), 0.0f, player.Grounded);
+                        }
                     }
                     player.Cam.Fov = firstPersonPresentation.WorldFov(playBaseFov);
                 }
@@ -2398,8 +2420,10 @@ int main(int argc, char** argv) {
                     firstPersonBody.ArmsLateUpdate(world, firstPersonPresentation.ArmsEntity(),
                                                    firstPersonPresentation.ViewModelFov(), gameDt, &player.Cam);
                     // This frame's rounds, down the bore from the muzzle: a hole where each struck.
-                    for (const FirstPersonPresentation::ShotHit& hit : firstPersonPresentation.TakeShotHits())
+                    for (const FirstPersonPresentation::ShotHit& hit : firstPersonPresentation.TakeShotHits()) {
+                        if (weaponTest) weaponTest->OnHit(hit.Point);
                         bulletHoles.Add(world, static_cast<entt::entity>(hit.Entity), hit.Point, hit.Normal, hit.HoleRadius);
+                    }
                 }
             }
 
@@ -3950,6 +3974,12 @@ int main(int argc, char** argv) {
                     std::string cause;
                     if (!smokeSceneLoadOk)   cause += "Load() failed; ";
                     if (newLogErrors > 0)    cause += std::to_string(newLogErrors) + " new log error(s); ";
+                    if (weaponTest) {
+                        if (!weaponTest->Done()) cause += "weapon test didn't finish; ";
+                        if (weaponTest->Failures() > 0)
+                            cause += std::to_string(weaponTest->Failures()) + " of " + std::to_string(weaponTest->Checks()) + " weapon check(s) failed; ";
+                        std::cout << "[WeaponTest] " << weaponTest->Checks() << " checks, " << weaponTest->Failures() << " failure(s)" << std::endl;
+                    }
                     if (newErrors > 0)       cause += std::to_string(newErrors) + " new GL error(s); ";
                     if (drawCalls <= 0)      cause += "zero draw calls; ";
                     // A smoke_play* scene must actually have completed its Play -> Stop cycles.
