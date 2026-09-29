@@ -1221,9 +1221,11 @@ int main(int argc, char** argv) {
         editorCamera.Yaw = player.Cam.Yaw;
         editorCamera.Pitch = player.Cam.Pitch;
         // A scene with a First Person Body opens looking at it from the front, a couple of metres off,
-        // so its outfit is in view from the start.
-        for (entt::entity body : world.Registry.view<FirstPersonBodyComponent>(entt::exclude<InactiveTag>)) {
-            const glm::mat4 xf = world.ComposeWorldTransform(body);
+        // so its outfit is in view from the start. The interactive editor only: the smoke test goes on to
+        // load its own scenes through this camera, and aimed at the startup scene's player it saw nothing.
+        if (auto bodies = world.Registry.view<FirstPersonBodyComponent>(entt::exclude<InactiveTag>);
+            !headless && bodies.begin() != bodies.end()) {
+            const glm::mat4 xf = world.ComposeWorldTransform(*bodies.begin());
             const glm::vec3 feet(xf[3]);
             glm::vec3 ahead(xf[2].x, 0.0f, xf[2].z); // the body faces its +Z
             ahead = glm::length(ahead) > 1e-4f ? glm::normalize(ahead) : glm::vec3(0.0f, 0.0f, 1.0f);
@@ -1231,7 +1233,6 @@ int main(int argc, char** argv) {
             const glm::vec3 look = glm::normalize(feet + glm::vec3(0.0f, 1.0f, 0.0f) - editorCamera.Position);
             editorCamera.Yaw = glm::degrees(std::atan2(look.z, look.x));
             editorCamera.Pitch = glm::degrees(std::asin(std::clamp(look.y, -1.0f, 1.0f)));
-            break;
         }
         editorCamera.Fov = EditorSettings::Get().SceneCameraFov; // #236 R2 — persisted editor camera
         editorCamera.NearPlane = EditorSettings::Get().SceneCameraNear;
@@ -1700,7 +1701,12 @@ int main(int argc, char** argv) {
                     std::error_code pe;
                     const fs::path outDir = fs::temp_directory_path(pe) / "TartarusSmokeMaterialPreview";
                     fs::create_directories(outDir, pe);
-                    std::vector<std::shared_ptr<MaterialAsset>> mats(assets.Materials().begin(), assets.Materials().end());
+                    // The scene's own materials: whatever else is still loaded (the startup scene's - the Sandbox
+                    // player's black clothing, near the backdrop's colour) isn't what this scene tests.
+                    std::vector<std::shared_ptr<MaterialAsset>> mats;
+                    for (auto [e, rc] : world.Registry.view<RenderableComponent>().each())
+                        for (const auto& m : rc.Materials)
+                            if (m && std::find(mats.begin(), mats.end(), m) == mats.end()) mats.push_back(m);
                     auto extra = [&](const char* name, auto setup) {
                         auto m = std::make_shared<MaterialAsset>();
                         m->Name = name;
