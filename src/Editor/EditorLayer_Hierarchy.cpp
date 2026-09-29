@@ -360,7 +360,7 @@ void EditorLayer::HandleHierarchyKeyboardNav(World& world) {
         for (size_t i = 0; i < chain.size(); ++i) ImGui::PopID();
         return id;
     };
-    auto nodeOpen    = [&](entt::entity e) { return ImGui::GetStateStorage()->GetInt(nodeId(e), 1) != 0; };
+    auto nodeOpen    = [&](entt::entity e) { return ImGui::GetStateStorage()->GetInt(nodeId(e), 0) != 0; };
     auto setNodeOpen = [&](entt::entity e, bool open) { ImGui::GetStateStorage()->SetInt(nodeId(e), open ? 1 : 0); };
 
     int idx = -1;
@@ -763,6 +763,27 @@ void EditorLayer::DrawHierarchyTreeBody(World& world, AssetLibrary& assets) {
     if (const ImGuiPayload* d = ImGui::GetDragDropPayload(); !d || !d->IsDataType("HIERARCHY_ENTITY"))
         m_HierarchySpringRow = entt::null;
 
+    // Rows start collapsed, so a selection made elsewhere (a Scene-view pick, the Inspector) can sit
+    // under a closed parent: open its ancestors, once per new selection, and scroll to it.
+    if (m_Selected != m_HierarchyRevealed) {
+        m_HierarchyRevealed = m_Selected;
+        std::vector<entt::entity> chain; // the selection's ancestors, nearest first
+        for (entt::entity w = m_Selected; world.Registry.valid(w);) {
+            const auto* h = world.Registry.try_get<HierarchyComponent>(w);
+            w = h ? h->Parent : entt::null;
+            if (w != entt::null) chain.push_back(w);
+        }
+        bool opened = false;
+        for (size_t depth = 0; depth < chain.size(); ++depth) { // root first
+            for (size_t i = chain.size(); i-- > chain.size() - 1 - depth;) ImGui::PushID((int)entt::to_integral(chain[i]));
+            ImGuiStorage* st = ImGui::GetStateStorage();
+            const ImGuiID id = ImGui::GetID("##node");
+            if (st->GetInt(id, 0) == 0) { st->SetInt(id, 1); opened = true; }
+            for (size_t i = 0; i <= depth; ++i) ImGui::PopID();
+        }
+        if (opened) m_HierarchyScrollToEntity = m_Selected;
+    }
+
     // Phase 5 item 6 — a type-filter chip narrows the list exactly like a text filter does: rows
     // that match show flat, ignoring parent/child structure, same as a name/tag search.
     const bool filtering = !m_HierarchyFilter.empty() || EditorSettings::Get().HierarchyTypeFilterMask != 0;
@@ -989,7 +1010,7 @@ void EditorLayer::FlattenHierarchyRows(World& world, entt::entity entity, int de
     // Same PushID(entity)/"##node" lookup DrawHierarchyRowBody uses when it actually draws this
     // row — both sides must agree on the open/closed flag's ID.
     ImGui::PushID((int)entt::to_integral(entity));
-    bool open = ImGui::GetStateStorage()->GetInt(ImGui::GetID("##node"), 1) != 0;
+    bool open = ImGui::GetStateStorage()->GetInt(ImGui::GetID("##node"), 0) != 0;
     if (open) {
         // Sorted by OrderComponent (not raw HierarchyComponent::Children insertion order) so
         // sibling reordering shows.
@@ -1127,7 +1148,7 @@ void EditorLayer::DrawHierarchyRowBody(World& world, AssetLibrary& assets, entt:
         (selected ? ImGuiTreeNodeFlags_Selected : 0);
 
     const ImGuiID nodeStateId = ImGui::GetID("##node");
-    bool open = hasChildren && ImGui::GetStateStorage()->GetInt(nodeStateId, 1) != 0;
+    bool open = hasChildren && ImGui::GetStateStorage()->GetInt(nodeStateId, 0) != 0;
 
     // Empty label: the tree node owns the indent / full-row hitbox and every interaction handler
     // below; the chevron + glyph slot + name are painted afterward at a constant X.

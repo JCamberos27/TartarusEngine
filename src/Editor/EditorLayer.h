@@ -908,6 +908,9 @@ private:
     // Set by the keyboard nav when it moves the selection: the next frame's row draw scrolls this
     // entity into view, then clears it.
     entt::entity m_HierarchyScrollToEntity = entt::null;
+    // The selection the Hierarchy last opened the parents of (DrawHierarchyTreeBody): rows start
+    // collapsed, so a new selection made elsewhere gets its ancestors opened once.
+    entt::entity m_HierarchyRevealed = entt::null;
     // Type-to-select: accumulated prefix and the time of the last keystroke (buffer resets after
     // a short idle gap, matching every OS file list).
     std::string m_HierarchyTypeAhead;
@@ -2002,7 +2005,7 @@ private:
     // Used by both the single-select and multi-select Inspector paths (#155) so they share one
     // heading language — hence no entity argument. Collapse state is keyed by `label`.
     bool BeginComponentSection(const char* icon, const char* label,
-        bool removable, bool& removedOut, bool defaultOpen = true, const char* tooltip = nullptr,
+        bool removable, bool& removedOut, const char* tooltip = nullptr,
         bool* resetOut = nullptr, bool* copyOut = nullptr, bool* pasteOut = nullptr,
         // #315 B4b — when non-null, the header's right-click menu gains "Revert to Prefab" /
         // "Apply to Prefab" for a component this instance added on top of its .prefab.

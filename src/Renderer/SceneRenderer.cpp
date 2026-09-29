@@ -432,7 +432,11 @@ void SceneRenderer::RenderScene(World& world, const RenderFrameContext& ctx,
         glm::vec3 boundsMin = renderable.ModelRef->BoundsMin();
         glm::vec3 boundsMax = renderable.ModelRef->BoundsMax();
         bool validBounds = boundsMin.x <= boundsMax.x && boundsMin.y <= boundsMax.y && boundsMin.z <= boundsMax.z;
-        if (validBounds) {
+        // The player's own body in their camera (world or view-model pass) is never culled: the camera sits
+        // inside it, and a small piece's bind-pose bounds (a watch, a bracelet at the A-pose wrist, beside
+        // and below the eye) missed the frustum while the posed hand was right in front of it.
+        const bool playerBody = bodyTag && !ctx.EditorView && ctx.OwnerView;
+        if (validBounds && !playerBody) {
             // Bounds are bind-pose only. A skinned model's limbs can swing well past them, so
             // inflate around the centre before the frustum test for animated models (#113).
             if (renderable.ModelRef->HasAnimations()) {
