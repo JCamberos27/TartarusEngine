@@ -32,6 +32,9 @@ struct AdsCarryAction {
     glm::vec3 T{0.0f};
     float Swivel[2] = {0.0f, 0.0f}; // radians, IK limb A (right) and B (left)
     std::vector<std::pair<std::string, glm::quat>> Locals;
+    // Set when the state is only entered from another carried state: its elbow / twist match is
+    // that state's, not measured on its own first frame (see BuildAdsCarry).
+    std::string ContinuesFrom;
     // For AdsGunMotion: the arms clip, the state's length (its longest motion, which its phase
     // counts in), and the gun relative to the eye in the clip's first frame and in the aim pose.
     int Clip = -1;
@@ -48,6 +51,7 @@ struct AdsCarryReport {
         float GunTurnDeg = 0.0f;
         float SwivelDeg[2] = {0.0f, 0.0f};
         int MatchedBones = 0;         // twist helpers corrected
+        std::string ContinuesFrom;    // the carried state whose arm match this one keeps ("" = its own)
     };
     std::string Reference;            // the aim state measured against ("" = none found)
     bool UsesIK = false;              // false: the whole rig is carried instead of just the gun

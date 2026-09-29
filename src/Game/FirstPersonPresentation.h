@@ -144,6 +144,14 @@ public:
     // What the ADS carry measured at Start (and on live edits): per carried state, the gun move
     // onto the sights and the arm matching - for the weapon Inspector.
     const AdsCarryReport& AdsReport() const { return m_AdsCarry.Report; }
+    // The barrel and sight line found this Play (the muzzle, and the sights' measurement while aiming).
+    const FirstPersonBarrelReport& BarrelReport() const { return m_Barrel; }
+    // Where rounds leave from this frame, world space: the muzzle and the (zeroed) bore.
+    bool MuzzleRay(glm::vec3& origin, glm::vec3& direction) const {
+        origin = m_Muzzle;
+        direction = m_BoreDir;
+        return m_AimPointValid;
+    }
 
 private:
     // One weapon's rigs up or down; Start / Stop add the slot list around them.

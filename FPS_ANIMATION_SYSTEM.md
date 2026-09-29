@@ -633,6 +633,18 @@ $p = Start-Process build\Release\TartarusEngine.exe -ArgumentList "--smoke-test"
 Release is a GUI-subsystem binary: run it through `Start-Process -Wait` with redirected
 output or you get no output and no exit code.
 
+**Play the weapons by script: `--weapon-test`.** This is the smoke harness on `Sandbox.json`, run in the real Play loop on a fixed 60 Hz step. It takes about 90 s and exits 0 when every check passes. `FirstPersonWeaponTest` stands in for the player's weapon input and checks the result:
+- **AK:** hip, full-auto and ADS rounds, and a reload.
+- **Remington, firing:** the 1 → 3 swap, pellet count and cone, the pump (no round mid-pump), and a dry trigger.
+- **Remington, reloads:** partial and empty reloads, and stopping a reload with the trigger.
+- **Actions and ADS:** shell check, inspect (fire refused) and melee. On the sights: centring, with each carried action's elbow match within 45°. ADS fire and ADS reload.
+- **Slots:** switching mid-reload (ammo kept per slot), unarmed, and the idle fidget.
+
+```powershell
+$p = Start-Process build\Release\TartarusEngine.exe -ArgumentList "--weapon-test" -Wait -PassThru `
+       -RedirectStandardOutput build\probe\weapon.txt; $p.ExitCode   # 0 = every check passed
+```
+
 Expected: unit tests exit 0. The AK is tested in `Sandbox.json` (its Player Spawn carries
 it); Sandbox and `Apartment` need the gitignored Mixamo characters and HDRI sky locally, or
 their smoke runs fail on the missing assets.

@@ -205,6 +205,49 @@ AdsCarryResult BuildAdsCarry(const AdsCarryInputs& in) {
         result.Actions.push_back(std::move(a));
         report.Entries.push_back(entry);
     }
+
+    // A carried state only ever entered from other carried states - a reload's loop and ending,
+    // chained off its start - continues its source's arms. Measured on its own first frame (the
+    // hand already off the gun, holding the next shell) the elbow match would swing the arm there
+    // for the whole clip: 117 degrees on the Remington's ReloadLoop. It takes its source's elbow
+    // and twist match instead, so the chain keeps one correction from start to finish.
+    auto actionOf = [&](const std::string& name) -> AdsCarryAction* {
+        for (AdsCarryAction& x : result.Actions)
+            if (x.StateName == name) return &x;
+        return nullptr;
+    };
+    for (int pass = 0; pass < (int)result.Actions.size(); ++pass) {
+        bool changed = false;
+        for (AdsCarryAction& a : result.Actions) {
+            const AdsCarryAction* source = nullptr;
+            bool chained = true, any = false;
+            for (const auto& t : L.Transitions) {
+                if (t.To != a.StateName) continue;
+                if (t.FromKind != AnimatorController::Source::State) { chained = false; break; }
+                if (t.From == a.StateName) continue; // looping on itself
+                const AdsCarryAction* from = actionOf(t.From);
+                if (!from) { chained = false; break; }
+                any = true;
+                if (!source) source = from;
+            }
+            if (!chained || !any || !source || (a.Swivel[0] == source->Swivel[0] && a.Swivel[1] == source->Swivel[1] &&
+                                                a.Locals.size() == source->Locals.size() && a.ContinuesFrom == source->StateName))
+                continue;
+            a.Swivel[0] = source->Swivel[0];
+            a.Swivel[1] = source->Swivel[1];
+            a.Locals = source->Locals;
+            a.ContinuesFrom = source->StateName;
+            changed = true;
+        }
+        if (!changed) break;
+    }
+    for (AdsCarryReport::Entry& e : report.Entries)
+        if (const AdsCarryAction* a = actionOf(e.State); a && !a->ContinuesFrom.empty()) {
+            e.SwivelDeg[0] = glm::degrees(a->Swivel[0]);
+            e.SwivelDeg[1] = glm::degrees(a->Swivel[1]);
+            e.MatchedBones = (int)a->Locals.size();
+            e.ContinuesFrom = a->ContinuesFrom;
+        }
     return result;
 }
 
