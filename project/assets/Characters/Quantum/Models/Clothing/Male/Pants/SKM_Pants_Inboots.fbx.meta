@@ -1,4 +1,5 @@
 {
+  "folder": "assets/Characters/Quantum/Models/Clothing/Male/Pants",
   "guid": "1ff2d077391aa637",
   "materialRemap": {
     "M_Pants_Inboots": "assets/Characters/Quantum/Materials/Clothing/Generated/M_Pants_Inboots.mat"
