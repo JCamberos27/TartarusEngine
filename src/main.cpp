@@ -2322,10 +2322,15 @@ int main(int argc, char** argv) {
                         const bool weaponInput = gameHasInput && !gravityGunLive();
                         if (gameHasInput) {
                             const bool wasEquipped = firstPersonPresentation.IsEquipped();
-                            if (InputMap::GetButtonDown("Weapon1")) firstPersonPresentation.SetEquipped(true);
+                            // 1 = the Animation Set, 3 = the Secondary Animation Set, 2 = unarmed.
+                            if (InputMap::GetButtonDown("Weapon1")) firstPersonPresentation.SelectSlot(0);
+                            if (InputMap::GetButtonDown("Weapon3")) firstPersonPresentation.SelectSlot(1);
                             if (InputMap::GetButtonDown("Weapon2")) firstPersonPresentation.SetEquipped(false);
-                            // The wheel is the gravity gun's hold distance, so it only switches without one.
-                            if ((!playGravityGun && Input::GetScrollDeltaY() != 0.0) || InputMap::GetButtonDown("Holster"))
+                            // The wheel is the gravity gun's hold distance, so it only switches without one:
+                            // through the weapons, then unarmed.
+                            if (!playGravityGun && Input::GetScrollDeltaY() != 0.0)
+                                firstPersonPresentation.CycleSlot(Input::GetScrollDeltaY() < 0.0 ? 1 : -1);
+                            if (InputMap::GetButtonDown("Holster"))
                                 firstPersonPresentation.SetEquipped(!firstPersonPresentation.IsEquipped());
                             // Drawing the weapon drops whatever the gravity gun was holding.
                             if (playGravityGun && !wasEquipped && firstPersonPresentation.IsEquipped()) {

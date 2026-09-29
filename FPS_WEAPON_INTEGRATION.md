@@ -66,7 +66,8 @@ to the `.fpsanim` and **Gravity Gun** is off.
 
 **Tooling:**
 - `work/export_clip.py` implements rules 2–3, but it hard-codes the AK's object names (`Armature`, `AK`), the `A_FP_` / `A_W_` prefixes and a mesh list. For a new rig, copy it and change those.
-- Weapon-rig clip exports have no tracked script yet.
+- `work/export_remington.py` is the whole-weapon version (the Remington 870): every arms clip and weapon clip in one headless run, each baked against its pair, plus the weapon model and `export_manifest.json`. Copy it for the next weapon.
+- **Export a static pose over 2 frames (0–1), never 1.** A one-frame take comes out of the FBX with no animation, and a state that uses it as a clip fails to attach at Play.
 - **Ask before modifying any source `.blend`.** Drive Blender headless (`--background`).
 
 **Folder layout** (mirror the AK):
@@ -289,14 +290,44 @@ Run the build, unit tests and smoke test as in SYSTEM §10. Then:
 
 ---
 
+## A shotgun: the Remington 870
+
+`project/assets/Weapons/Remington870/` is the second weapon, a pump shotgun on the same Quantum arms. It needed no new code
+beyond the shotgun options, and it's regenerated from scripts:
+
+| Step | Script | Notes |
+|---|---|---|
+| Export | `work/export_remington.py` | The source `.blend` is read-only. The file has no ADS action, so the Aim pose is solved in memory: the gun's sight line is put on the AK's measured one (the two weapons share the scene's view-model offset). It is then corrected by what Play measured (`SIGHT_CORRECTION`) |
+| Textures, material, metas | `work/make_remington_assets.py` | Re-running keeps every GUID |
+| Controller | `work/make_remington_controller.py` | The AK's graph, with its two reloads replaced by the per-round loop and a `Pump` state |
+| Definition | `work/make_remington_fpsanim.py` | The AK's tuning, then the measured mount and muzzle and the 12-gauge numbers |
+
+What's different from the AK:
+
+- **Mount.** The rig's `Main` sits 1.6 cm off `CB_Gun`, so the definition sets `weaponMountOffset` (the socket_probe's mount `t`). Measure Mount Rotation now fills it too.
+- **Every state has a weapon clip.** The rest pose leaves the loose shell in the port, and `A_W_Idle` parks it.
+- **The muzzle is set by hand.** There's no bolt, so `recoil.boltBone` is empty, and the muzzle is the barrel's front face in `Main` space.
+- **Gameplay:**
+  ```json
+  "gameplay": { "magazine": 6, "allowFullAuto": false, "pellets": 8, "spread": {"hip": 3.5, "ads": 2.2},
+                "reload": "perRound", "cycle": {"enabled": true, "delay": 0.12} }
+  ```
+- **The per-round loop.** After `ReloadStart` / `ReloadStartEmpty` / `ReloadLoop` end, the order is:
+  1. `StopReload` → `ReloadEnd`
+  2. `LastRound` → `ReloadLoopEnd`
+  3. otherwise → `ReloadLoop`
+
+  `LoadRound` sits where each clip's shell disappears into the gun. `ReloadStartEmpty` loads (and chambers) the first round.
+- **The pump.** Any State → `Pump` on `Cycle`, at priority 3, so firing can't cut it short. It's tagged `Cycling` and `ADSCarry`, so it plays on the sights while aiming.
+
 ## 6. When a weapon does need code
 
 | Still in code | Where | To generalise |
 |---|---|---|
-| Two slots: 1 = this weapon, 2 = unarmed | `main.cpp` input block, `FirstPersonPresentation` | A list of weapon definitions on the controller, swapped on Holster → Draw |
+| Two weapon slots: 1 = Animation Set, 3 = Secondary Animation Set, 2 = unarmed | `FirstPersonPresentation::SelectSlot` | A third weapon needs a list field on the controller (the reflection system has no list type) |
 | The input → parameter mapping | `FirstPersonPresentation` (`FirstPersonAnimatorContract`) | New inputs, e.g. a fire-mode selector animation, need a new parameter name there |
 | ADS fire and walk bob are procedural | `FirstPersonPresentation::Fire` / `Tick` / `Update` | If a weapon ships real ADS fire/walk clips, drop the `ADS` tag from its aim state and build the logic in the graph |
-| One round per shot, hitscan | `FirstPersonPresentation::ShotImpact` | A shotgun's pellets or a projectile need a spread / ballistics option |
+| Hitscan only | `FirstPersonPresentation::FireShot` | A projectile needs ballistics. Pellets, per-round reloads and pump / bolt actions are data now (see [A shotgun](#a-shotgun-the-remington-870)) |
 | No HUD | `Ammo()`, `IsFullAuto()` exist | A HUD overlay that reads them |
 
 If you add a new `*Tag` or `*Component` to `Components.h`, register it or allow-list it in

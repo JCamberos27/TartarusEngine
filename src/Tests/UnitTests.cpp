@@ -2854,6 +2854,217 @@ void TestFirstPersonAnimationSet() {
     CHECK(error.find("weaponMaterials.aks74u") != std::string::npos);
 }
 
+// The shotgun options (Remington 870): pellets and spread, a per-round reload, a pump worked after every
+// round, and a mount with a translation - parsed, written back, and defaulting to the plain rifle's.
+void TestFirstPersonShotgunSet() {
+    using G = FirstPersonWeaponGameplay;
+    FirstPersonAnimationSet set;
+    std::string error;
+    // An AK-style file: none of it set, and none of it written back.
+    CHECK(FirstPersonAnimationSet::FromJsonString(
+        R"({"armsModel":"a.fbx","weaponModel":"w.fbx","controller":"c.controller","weaponSocket":"ik_hand_gun","weaponRoot":"root",
+            "weaponMountRotation":[0,90,90],"gameplay":{"magazine":30}})", set, &error));
+    CHECK(set.Gameplay.Pellets == 1 && set.Gameplay.SpreadHip == 0.0f && set.Gameplay.SpreadAds == 0.0f);
+    CHECK(set.Gameplay.Reload == G::ReloadMode::Magazine && !set.Gameplay.CycleAfterShot);
+    CHECK(set.WeaponMountOffset == glm::vec3(0.0f));
+    {
+        const std::string text = set.ToJsonString();
+        for (const char* key : {"pellets", "spread", "\"reload\"", "cycle", "weaponMountOffset"})
+            CHECK(text.find(key) == std::string::npos);
+    }
+
+    CHECK(FirstPersonAnimationSet::FromJsonString(
+        R"({"armsModel":"a.fbx","weaponModel":"w.fbx","controller":"c.controller","weaponSocket":"ik_hand_gun","weaponRoot":"Main",
+            "weaponMountRotation":[-90,90,90],"weaponMountOffset":[0,0,-0.016],
+            "gameplay":{"magazine":6,"allowFullAuto":false,"pellets":8,"spread":{"hip":3.5,"ads":2.2},
+                        "reload":"perRound","cycle":{"enabled":true,"delay":0.12}}})", set, &error));
+    CHECK(set.Gameplay.Pellets == 8 && std::abs(set.Gameplay.SpreadHip - 3.5f) < 1e-5f && std::abs(set.Gameplay.SpreadAds - 2.2f) < 1e-5f);
+    CHECK(set.Gameplay.Reload == G::ReloadMode::PerRound);
+    CHECK(set.Gameplay.CycleAfterShot && std::abs(set.Gameplay.CycleDelay - 0.12f) < 1e-5f);
+    CHECK(std::abs(set.WeaponMountOffset.z + 0.016f) < 1e-6f);
+    FirstPersonAnimationSet back;
+    CHECK(FirstPersonAnimationSet::FromJsonString(set.ToJsonString(), back, &error));
+    CHECK(back.Gameplay.Pellets == 8 && back.Gameplay.Reload == G::ReloadMode::PerRound && back.Gameplay.CycleAfterShot);
+    CHECK(std::abs(back.Gameplay.SpreadAds - 2.2f) < 1e-5f && std::abs(back.WeaponMountOffset.z + 0.016f) < 1e-6f);
+
+    // Out-of-range numbers clamp; an unknown reload mode is a typo worth failing the load for.
+    CHECK(FirstPersonAnimationSet::FromJsonString(
+        R"({"armsModel":"a.fbx","weaponModel":"w.fbx","controller":"c.controller","gameplay":{"pellets":0,"spread":{"hip":-4,"ads":90}}})",
+        set, &error));
+    CHECK(set.Gameplay.Pellets == 1 && set.Gameplay.SpreadHip == 0.0f && set.Gameplay.SpreadAds == 45.0f);
+    CHECK(!FirstPersonAnimationSet::FromJsonString(
+        R"({"armsModel":"a.fbx","weaponModel":"w.fbx","controller":"c.controller","gameplay":{"reload":"tube"}})", set, &error));
+    CHECK(error.find("gameplay.reload") != std::string::npos);
+
+    // Pellets stay inside their cone, and fill it (not all bunched at the centre).
+    const glm::vec3 bore = glm::normalize(glm::vec3(0.2f, -0.1f, -1.0f));
+    CHECK(FirstPersonPelletDirection(bore, 0.0f, 0.7f, 0.3f) == bore);
+    float widest = 0.0f;
+    bool inside = true;
+    for (int i = 0; i < 400; ++i) {
+        const glm::vec3 d = FirstPersonPelletDirection(bore, 3.0f, (float)(i % 20) / 19.0f, (float)(i / 20) / 20.0f);
+        const float deg = glm::degrees(std::acos(std::clamp(glm::dot(d, bore), -1.0f, 1.0f)));
+        inside = inside && deg <= 3.0f + 1e-3f && std::abs(glm::length(d) - 1.0f) < 1e-4f;
+        widest = std::max(widest, deg);
+    }
+    CHECK(inside);
+    CHECK(widest > 2.9f);
+    // Straight up or down the bore still has a cone (no degenerate cross product).
+    CHECK(std::abs(glm::degrees(std::acos(glm::dot(FirstPersonPelletDirection(glm::vec3(0, 1, 0), 2.0f, 1.0f, 0.25f),
+                                                    glm::vec3(0, 1, 0)))) - 2.0f) < 1e-2f);
+
+    // The setup check asks a per-round / pump weapon's controller for what the driver will use.
+    {
+        FirstPersonAnimationSet shotgun;
+        shotgun.Gameplay.Reload = G::ReloadMode::PerRound;
+        shotgun.Gameplay.CycleAfterShot = true;
+        AnimatorController bare;
+        FirstPersonWeaponCheckInput in;
+        in.Set = &shotgun;
+        in.Controller = &bare;
+        std::string all;
+        for (const FPBody::Check& c : FirstPersonWeaponValidate(in)) all += c.Message + "\n";
+        CHECK(all.find("LoadRound") != std::string::npos && all.find("LastRound") != std::string::npos &&
+              all.find("StopReload") != std::string::npos && all.find("Cycling") != std::string::npos &&
+              all.find("'Cycle'") != std::string::npos);
+        CHECK(all.find("Refill") == std::string::npos); // a tube has no magazine to refill
+    }
+}
+
+// The Remington 870's own controller (project/assets/Weapons/Remington870), driven the way
+// FirstPersonPresentation drives it - every state 1 s long: the pump after a round, a reload loading
+// one shell per LoadRound until LastRound, an empty start chambering its round, the trigger stopping a
+// reload after the shell in hand, and a swapped-in weapon drawing out of Holstered.
+void TestRemingtonController() {
+    namespace K = FirstPersonAnimatorContract;
+    const std::string path = ProjectPaths::Resolve("assets/Weapons/Remington870/Remington870.controller");
+    AnimatorController ctrl;
+    if (!AnimatorController::LoadFile(path, ctrl)) {
+        std::printf("  (skipped: no %s)\n", path.c_str());
+        return;
+    }
+    constexpr int kMagazine = 6;
+    AnimatorControllerComponent ac;
+    const auto oneSecond = [](int, int) { return 1.0f; };
+    int ammo = kMagazine, loads = 0;
+    bool stop = false;
+    auto step = [&](float seconds) {
+        for (float t = 0.0f; t < seconds - 1e-4f; t += 1.0f / 60.0f) {
+            ac.SetInt(K::kAmmo, ammo);
+            ac.SetBool(K::kLastRound, ammo >= kMagazine - 1);
+            ac.SetBool(K::kStopReload, stop);
+            AdvanceAnimator(ctrl, ac, 1.0f / 60.0f, oneSecond);
+            for (const std::string& e : ac.FiredEvents)
+                if (e == K::kEventLoadRound) { ammo = std::min(kMagazine, ammo + 1); ++loads; }
+            for (const char* tr : {K::kFire, K::kReload, K::kCycle}) ac.ResetTrigger(tr);
+        }
+    };
+    ac.SetBool(K::kEquipped, true);
+    step(0.5f);
+    CHECK(ac.StateName == "Idle");
+
+    // The pump: Cycle plays it (tagged Cycling, so no firing), and it returns to Idle.
+    ac.SetTrigger(K::kCycle);
+    step(0.1f);
+    CHECK(ac.StateName == "Pump" && ac.HasTag(K::kTagCycling));
+    ac.SetTrigger(K::kFire);
+    step(0.1f);
+    CHECK(ac.StateName == "Pump"); // a round can't interrupt the pump
+    step(1.5f);
+    CHECK(ac.StateName == "Idle");
+
+    // Partial: 2 of 6 -> start, three loops, the last shell, back to Idle full.
+    ammo = 2;
+    loads = 0;
+    ac.SetTrigger(K::kReload);
+    step(0.1f);
+    CHECK(ac.StateName == "ReloadStart" && ac.HasTag(K::kTagReload));
+    ac.SetTrigger(K::kCycle); // a pump owed from before waits the reload out
+    step(0.1f);
+    CHECK(ac.StateName == "ReloadStart");
+    step(6.0f);
+    CHECK(ammo == kMagazine && loads == 4);
+    CHECK(ac.StateName == "Idle");
+
+    // Empty: the empty start chambers one (LoadRound), then loads on.
+    ammo = 0;
+    loads = 0;
+    ac.SetTrigger(K::kReload);
+    step(0.1f);
+    CHECK(ac.StateName == "ReloadStartEmpty");
+    step(1.0f);
+    CHECK(ammo == 1);
+    // The trigger mid-reload: the shell in hand goes in, then the hand goes back to the pump.
+    step(0.3f);
+    CHECK(ac.StateName == "ReloadLoop");
+    stop = true;
+    step(1.0f);
+    CHECK(ac.StateName == "ReloadEnd" && ammo == 2);
+    stop = false;
+    step(1.5f);
+    CHECK(ac.StateName == "Idle" && ammo == 2);
+
+    // One short of full: straight from the start to the last shell.
+    ammo = kMagazine - 1;
+    loads = 0;
+    ac.SetTrigger(K::kReload);
+    step(1.2f);
+    CHECK(ac.StateName == "ReloadLoopEnd");
+    step(1.5f);
+    CHECK(ammo == kMagazine && loads == 1 && ac.StateName == "Idle");
+
+    // A weapon swapped in starts holstered (hidden) and draws.
+    AnimatorControllerComponent swapped;
+    swapped.SetBool(K::kEquipped, true);
+    CHECK(AnimatorStartInState(ctrl, swapped, "Holstered"));
+    CHECK(swapped.StateName == "Holstered" && swapped.HasTag(K::kTagHidden));
+    AdvanceAnimator(ctrl, swapped, 1.0f / 60.0f, oneSecond);
+    CHECK(swapped.StateName == "Draw");
+    CHECK(!AnimatorStartInState(ctrl, swapped, "NoSuchState"));
+
+    // The definition beside it loads, and asks nothing of this controller it lacks.
+    FirstPersonAnimationSet set;
+    std::string error;
+    CHECK(FirstPersonAnimationSet::LoadFile(ProjectPaths::Resolve("assets/Weapons/Remington870/Remington870.fpsanim"), set, &error));
+
+    // Every state's clips attach to the rigs they play on - what Play checks before the weapon may
+    // start (a one-frame export, say, carries no take and wouldn't). Needs the arms (Quantum pack).
+    if (std::filesystem::exists(ProjectPaths::Resolve(set.ArmsModel))) {
+        const auto arms = Model::ImportDeferred(ProjectPaths::Resolve(set.ArmsModel), ModelImportSettings{});
+        const auto weapon = Model::ImportDeferred(ProjectPaths::Resolve(set.WeaponModel), ModelImportSettings{});
+        CHECK(arms && weapon);
+        if (arms && weapon) {
+            // ResolveAnimationClip's steps, headless: the clip file has a take, and it attaches to the rig.
+            std::map<std::string, std::shared_ptr<Model>> clips;
+            auto attaches = [&](Model& target, const std::string& ref) {
+                auto& src = clips[ref];
+                if (!src) src = Model::ImportDeferred(ProjectPaths::Resolve(ref), ModelImportSettings{});
+                return src && src->OwnAnimationCount() > 0 && target.AttachClip(*src, 0, ref, ref) >= 0;
+            };
+            const int at = ctrl.TrackIndex("arms"), wt = ctrl.TrackIndex("weapon");
+            for (const auto& st : ctrl.Layers[0].States) {
+                const bool armsOk = attaches(*arms, st.MotionFor(at).Clip);
+                const bool weaponOk = attaches(*weapon, st.MotionFor(wt).Clip);
+                CHECK(armsOk && weaponOk);
+                if (!armsOk || !weaponOk) std::printf("  state '%s' can't attach its %s clip\n", st.Name.c_str(), armsOk ? "weapon" : "arms");
+            }
+            CHECK(arms->NodeIndex(set.WeaponSocket) >= 0 && weapon->NodeIndex(set.WeaponRoot) >= 0);
+            bool material = false;
+            for (int i = 0; i < weapon->MeshCount(); ++i) material = material || weapon->MeshMaterial(i).Name == set.WeaponMaterials[0].first;
+            CHECK(material);
+        }
+    }
+    CHECK(set.Gameplay.Magazine == kMagazine && set.Gameplay.Reload == FirstPersonWeaponGameplay::ReloadMode::PerRound &&
+          set.Gameplay.CycleAfterShot && set.Gameplay.Pellets > 1 && !set.Muzzle.Auto);
+    FirstPersonWeaponCheckInput in;
+    in.Set = &set;
+    in.Controller = &ctrl;
+    for (const FPBody::Check& c : FirstPersonWeaponValidate(in)) {
+        CHECK(c.Level != FPBody::Severity::Warning && c.Level != FPBody::Severity::Error);
+        if (c.Level == FPBody::Severity::Warning || c.Level == FPBody::Severity::Error) std::printf("  %s\n", c.Message.c_str());
+    }
+}
+
 // Animator v2 - the standard first-person graph (BuildFirstPersonController), driven through the
 // real controller runtime exactly as FirstPersonPresentation drives it, without a World or Model:
 // every state lasts 1 s. This pins the behaviour the old hard-coded C++ state machine had.
@@ -4283,6 +4494,8 @@ int RunUnitTests() {
         {"BlendTree2D", TestBlendTree2D},
         {"FirstPersonAnimationSet", TestFirstPersonAnimationSet},
         {"FirstPersonAnimationFSM", TestFirstPersonAnimationFSM},
+        {"FirstPersonShotgunSet", TestFirstPersonShotgunSet},
+        {"RemingtonController", TestRemingtonController},
         {"FirstPersonAds", TestFirstPersonAds},
         {"BulletHoles", TestBulletHoles},
         {"WeaponZero", TestWeaponZero},

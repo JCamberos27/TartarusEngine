@@ -1,0 +1,317 @@
+{
+  "source": "C:\\Users\\Jacob\\Desktop\\Remington 870 60fps(Revised).blend",
+  "fps": 60,
+  "armsSkeleton": "Armature",
+  "weaponSkeleton": "Armature.001",
+  "weaponMesh": "Remington870",
+  "exports": [
+    {
+      "file": "Weapon/Remington870_A_W_Idle.fbx",
+      "action": "A_W_Idle",
+      "pairedWith": "A_FP_Idle",
+      "frameStart": 0,
+      "frameEnd": 1,
+      "skeleton": "Armature.001",
+      "meshes": [
+        "Remington870"
+      ],
+      "bytes": 429372,
+      "note": "Weapon model and the weapon clip of every state whose gun doesn't move by itself."
+    },
+    {
+      "file": "FirstPerson/Remington870_A_FP_Idle.fbx",
+      "action": "A_FP_Idle",
+      "pairedWith": "A_W_Idle",
+      "frameStart": 0,
+      "frameEnd": 118,
+      "skeleton": "Armature",
+      "meshes": [],
+      "bytes": 3314892
+    },
+    {
+      "file": "FirstPerson/Remington870_A_FP_Walk.fbx",
+      "action": "A_FP_Walk",
+      "pairedWith": "A_W_Idle",
+      "frameStart": 0,
+      "frameEnd": 44,
+      "skeleton": "Armature",
+      "meshes": [],
+      "bytes": 2278540
+    },
+    {
+      "file": "FirstPerson/Remington870_A_FP_Sprint.fbx",
+      "action": "A_FP_Sprint",
+      "pairedWith": "A_W_Idle",
+      "frameStart": 0,
+      "frameEnd": 44,
+      "skeleton": "Armature",
+      "meshes": [],
+      "bytes": 2280956
+    },
+    {
+      "file": "FirstPerson/Remington870_A_FP_IdleToSprint.fbx",
+      "action": "A_FP_Sprint_start",
+      "pairedWith": "A_W_Idle",
+      "frameStart": 0,
+      "frameEnd": 18,
+      "skeleton": "Armature",
+      "meshes": [],
+      "bytes": 1941084
+    },
+    {
+      "file": "FirstPerson/Remington870_A_FP_SprintToIdle.fbx",
+      "action": "A_FP_Sprint_end",
+      "pairedWith": "A_W_Idle",
+      "frameStart": 0,
+      "frameEnd": 34,
+      "skeleton": "Armature",
+      "meshes": [],
+      "bytes": 2119212
+    },
+    {
+      "file": "FirstPerson/Remington870_A_FP_Fire.fbx",
+      "action": "A_FP_Fire",
+      "pairedWith": "A_W_Idle",
+      "frameStart": 0,
+      "frameEnd": 42,
+      "skeleton": "Armature",
+      "meshes": [],
+      "bytes": 2250028
+    },
+    {
+      "file": "FirstPerson/Remington870_A_FP_Pump.fbx",
+      "action": "A_FP_Pump",
+      "pairedWith": "A_W_Pump",
+      "frameStart": 0,
+      "frameEnd": 44,
+      "skeleton": "Armature",
+      "meshes": [],
+      "bytes": 2282972
+    },
+    {
+      "file": "Weapon/Remington870_A_W_Pump.fbx",
+      "action": "A_W_Pump",
+      "pairedWith": "A_FP_Pump",
+      "frameStart": 0,
+      "frameEnd": 44,
+      "skeleton": "Armature.001",
+      "meshes": [],
+      "bytes": 64588,
+      "note": "Exported over the arms clip's range (the weapon action holds its last key)."
+    },
+    {
+      "file": "FirstPerson/Remington870_A_FP_Regrip.fbx",
+      "action": "A_FP_Regrip",
+      "pairedWith": "A_W_Idle",
+      "frameStart": 0,
+      "frameEnd": 38,
+      "skeleton": "Armature",
+      "meshes": [],
+      "bytes": 2184188
+    },
+    {
+      "file": "FirstPerson/Remington870_A_FP_Inspect.fbx",
+      "action": "A_FP_Inspect",
+      "pairedWith": "A_W_Inspect",
+      "frameStart": 0,
+      "frameEnd": 300,
+      "skeleton": "Armature",
+      "meshes": [],
+      "bytes": 5883228
+    },
+    {
+      "file": "Weapon/Remington870_A_W_Inspect.fbx",
+      "action": "A_W_Inspect",
+      "pairedWith": "A_FP_Inspect",
+      "frameStart": 0,
+      "frameEnd": 300,
+      "skeleton": "Armature.001",
+      "meshes": [],
+      "bytes": 153020,
+      "note": "Exported over the arms clip's range (the weapon action holds its last key)."
+    },
+    {
+      "file": "FirstPerson/Remington870_A_FP_Mag_Check.fbx",
+      "action": "A_FP_Mag_Check",
+      "pairedWith": "A_W_Mag_Check",
+      "frameStart": 0,
+      "frameEnd": 144,
+      "skeleton": "Armature",
+      "meshes": [],
+      "bytes": 3711788
+    },
+    {
+      "file": "Weapon/Remington870_A_W_Mag_Check.fbx",
+      "action": "A_W_Mag_Check",
+      "pairedWith": "A_FP_Mag_Check",
+      "frameStart": 0,
+      "frameEnd": 144,
+      "skeleton": "Armature.001",
+      "meshes": [],
+      "bytes": 99980,
+      "note": "Exported over the arms clip's range (the weapon action holds its last key)."
+    },
+    {
+      "file": "FirstPerson/Remington870_A_FP_Melee.fbx",
+      "action": "A_FP_Melee",
+      "pairedWith": "A_W_Idle",
+      "frameStart": 0,
+      "frameEnd": 67,
+      "skeleton": "Armature",
+      "meshes": [],
+      "bytes": 2633724
+    },
+    {
+      "file": "FirstPerson/Remington870_A_FP_Reload_Start.fbx",
+      "action": "A_FP_reload_start",
+      "pairedWith": "A_W_Reload_start",
+      "frameStart": 0,
+      "frameEnd": 30,
+      "skeleton": "Armature",
+      "meshes": [],
+      "bytes": 2226204
+    },
+    {
+      "file": "Weapon/Remington870_A_W_Reload_Start.fbx",
+      "action": "A_W_Reload_start",
+      "pairedWith": "A_FP_reload_start",
+      "frameStart": 0,
+      "frameEnd": 30,
+      "skeleton": "Armature.001",
+      "meshes": [],
+      "bytes": 61612,
+      "note": "Exported over the arms clip's range (the weapon action holds its last key)."
+    },
+    {
+      "file": "FirstPerson/Remington870_A_FP_Reload_Start_Empty.fbx",
+      "action": "A_FP_Reload_start_empty",
+      "pairedWith": "A_W_Reload_start_empty",
+      "frameStart": 0,
+      "frameEnd": 160,
+      "skeleton": "Armature",
+      "meshes": [],
+      "bytes": 3988044
+    },
+    {
+      "file": "Weapon/Remington870_A_W_Reload_Start_Empty.fbx",
+      "action": "A_W_Reload_start_empty",
+      "pairedWith": "A_FP_Reload_start_empty",
+      "frameStart": 0,
+      "frameEnd": 160,
+      "skeleton": "Armature.001",
+      "meshes": [],
+      "bytes": 107132,
+      "note": "Exported over the arms clip's range (the weapon action holds its last key)."
+    },
+    {
+      "file": "FirstPerson/Remington870_A_FP_Reload_Loop.fbx",
+      "action": "A_FP_Reload_loop",
+      "pairedWith": "A_W_Reload_loop",
+      "frameStart": 0,
+      "frameEnd": 70,
+      "skeleton": "Armature",
+      "meshes": [],
+      "bytes": 2669884
+    },
+    {
+      "file": "Weapon/Remington870_A_W_Reload_Loop.fbx",
+      "action": "A_W_Reload_loop",
+      "pairedWith": "A_FP_Reload_loop",
+      "frameStart": 0,
+      "frameEnd": 70,
+      "skeleton": "Armature.001",
+      "meshes": [],
+      "bytes": 74108,
+      "note": "Exported over the arms clip's range (the weapon action holds its last key)."
+    },
+    {
+      "file": "FirstPerson/Remington870_A_FP_Reload_Loop_End.fbx",
+      "action": "A_FP_Reload_loop_end",
+      "pairedWith": "A_W_Reload_loop_end",
+      "frameStart": 0,
+      "frameEnd": 98,
+      "skeleton": "Armature",
+      "meshes": [],
+      "bytes": 3102316
+    },
+    {
+      "file": "Weapon/Remington870_A_W_Reload_Loop_End.fbx",
+      "action": "A_W_Reload_loop_end",
+      "pairedWith": "A_FP_Reload_loop_end",
+      "frameStart": 0,
+      "frameEnd": 98,
+      "skeleton": "Armature.001",
+      "meshes": [],
+      "bytes": 85276,
+      "note": "Exported over the arms clip's range (the weapon action holds its last key)."
+    },
+    {
+      "file": "FirstPerson/Remington870_A_FP_Reload_End.fbx",
+      "action": "A_FP_Reload_end",
+      "pairedWith": "A_W_Reload_end",
+      "frameStart": 0,
+      "frameEnd": 50,
+      "skeleton": "Armature",
+      "meshes": [],
+      "bytes": 2393676
+    },
+    {
+      "file": "Weapon/Remington870_A_W_Reload_End.fbx",
+      "action": "A_W_Reload_end",
+      "pairedWith": "A_FP_Reload_end",
+      "frameStart": 0,
+      "frameEnd": 50,
+      "skeleton": "Armature.001",
+      "meshes": [],
+      "bytes": 67036,
+      "note": "Exported over the arms clip's range (the weapon action holds its last key)."
+    },
+    {
+      "file": "FirstPerson/Remington870_A_FP_Draw.fbx",
+      "action": "A_FP_Draw",
+      "pairedWith": "A_W_Idle",
+      "frameStart": 0,
+      "frameEnd": 46,
+      "skeleton": "Armature",
+      "meshes": [],
+      "bytes": 2320428
+    },
+    {
+      "file": "FirstPerson/Remington870_A_FP_Holster.fbx",
+      "action": "A_FP_Holster",
+      "pairedWith": "A_W_Idle",
+      "frameStart": 0,
+      "frameEnd": 28,
+      "skeleton": "Armature",
+      "meshes": [],
+      "bytes": 2181068
+    },
+    {
+      "file": "FirstPerson/Remington870_A_FP_Aim.fbx",
+      "action": "A_FP_Idle (frame 0) + solved CB_Gun",
+      "pairedWith": "A_W_Idle",
+      "frameStart": 0,
+      "frameEnd": 1,
+      "skeleton": "Armature",
+      "meshes": [],
+      "bytes": 1532412,
+      "solve": {
+        "mainError": 4.76837158203125e-07,
+        "rightGripDrift": 0.00013013461768755986,
+        "leftHandFromShell": 46.03598071182626,
+        "eye": [
+          1.1425000429153442,
+          -9.53499984741211,
+          158.92909240722656
+        ],
+        "sightPoint": [
+          -0.19651785492897034,
+          -9.53075885772705,
+          160.4657745361328
+        ]
+      },
+      "note": "The source file has no ADS action. Solved in memory (never saved): A_FP_Idle's frame-0 pose with CB_Gun moved so the ghost ring and front post (6.6 cm over Main's axis) lie on the AKS-74U's measured ADS sight line, the grip 28 cm down it."
+    }
+  ],
+  "errors": []
+}

@@ -182,6 +182,10 @@ any transitions, as long as it uses these names (`FirstPersonAnimatorContract`):
 | Tag | `Idle` | Settled idle: counts toward `Fidget` |
 | Event | `Shot` | A round leaves the gun (hip fire). Put it at time 0 on the fire state |
 | Event | `Refill` | The magazine is full again. Put it at time 1 on each reload state, so a reload cut short doesn't count |
+| Event | `LoadRound` | One round goes in (`gameplay.reload: "perRound"`, a tube). Put it where the round disappears into the gun on each load clip. Into an empty gun it also chambers |
+| Bool params | `LastRound`, `StopReload` | Per-round reload only. `LastRound`: one short of full, so load the last round and finish. `StopReload`: the trigger was pulled mid-reload, so finish the round in hand and stop |
+| Trigger | `Cycle` | `gameplay.cycle`: set `cycle.delay` s after each round and retried until taken. Route it (Any State) to the pump or bolt state |
+| Tag | `Cycling` | The action is being worked: the gun can't fire until this state has played through |
 
 ### ADS actions: authored clips or carried hip clips
 
@@ -264,14 +268,20 @@ This lives in `FirstPersonPresentation`, and its numbers come from the definitio
 | `Reload` tap | R | Sets the `Reload` trigger when the magazine isn't full and no `Reload`-tagged state is playing |
 | `Reload` hold ≥ `reloadHoldSeconds` | R | Sets the `MagCheck` trigger |
 | `Inspect` / `Melee` | I / Q | Set those triggers |
-| `Weapon1` / `Weapon2` | 1 / 2 | Set `Equipped` true / false |
-| scroll wheel, `Holster` | wheel / H | Toggle `Equipped` |
+| `Weapon1` / `Weapon3` | 1 / 3 | Draw the controller's Animation Set / Secondary Animation Set. Switching weapons holsters the one in hand, swaps the rigs once it's `Hidden`, and draws the other from its `Holstered` state. Each keeps its ammo |
+| `Weapon2` | 2 | Unarmed (`Equipped` false) |
+| scroll wheel | wheel | Steps through the weapons, then unarmed (only without the gravity gun) |
+| `Holster` | H | Toggle `Equipped` |
 | `Sprint` | L-Shift | The `Sprint` parameter. Sprinting drops ADS |
 
 Defaults live in `InputMap::Defaults()`. `project/settings.json` holds the saved list and
 **wins** per action, and `InputMap::MergeDefaults` tops it up with any default it lacks. To
 change a default key, edit both places, or delete that action from `settings.json`.
 
+- **Shotguns** (`gameplay.pellets`, `spread`, `reload: "perRound"`, `cycle`; the Remington 870):
+  - Each round is `pellets` rays, spread evenly over a cone of `spread.hip` / `spread.ads` degrees (half angle) about the zeroed bore. Each ray leaves its own hole, and the round's `impactImpulse` is shared between them.
+  - `cycle.enabled`: after every round (hip or ADS) the `Cycle` trigger goes on after `cycle.delay`. `Fire()` refuses until a `Cycling` state has played through.
+  - `reload: "perRound"`: `LoadRound` adds one round. Pulling the trigger mid-reload sets `StopReload` (the next pull fires). The graph's loop is described in `work/make_remington_controller.py`.
 - **Magazine.** Refilled on the controller's `Refill` event. Anything that cuts a reload short, such as Holster, leaves the count unchanged. There is no reserve ammo, and running dry never auto-reloads.
 - **Triggers last one controller update.** `Update()` resets them each frame, so fire pressed during a reload is dropped rather than firing when the reload ends. The same happened in the old code.
 - **Fidget.** After `regripMin`–`regripMax` s (uniformly random, re-rolled each time) in a state tagged `Idle`, with no crossfade running.
@@ -585,11 +595,11 @@ at and set aside - see issue #424 for why.
 
 ## 9. Known gaps / next steps
 
-1. **One weapon per player.** The two slots are "1 = the definition, 2 = unarmed". A real
-   inventory means several definitions on the controller and swapping them on
-   Holster → Draw. `FPS_WEAPON_INTEGRATION.md` §6 lists what that needs. Per-weapon
-   numbers and animation logic are already data (the `.fpsanim` gameplay block and the
-   `.controller`).
+1. **Two weapons per player.** Slots are "1 = Animation Set, 3 = Secondary Animation Set, 2 = unarmed",
+   swapped on Holster → Draw (`FirstPersonPresentation::SelectSlot`). A longer inventory needs a list
+   field on the controller (the reflection system has no list type yet). The swap loads the other
+   weapon's models on first use: fast once they're in the asset cache (the Sandbox preloads them),
+   a long hitch right after re-exporting its FBXs.
 2. **`Idle`, `Walk`, `Aim`, `Draw`, `Regrip` have no weapon clips** — the `A_W_Idle` /
    `A_W_Walk` actions don't exist in the `.blend` (verified with
    `work/bl_idle_probe2.py`), so closing the gap means authoring animation. Ask first.

@@ -1,0 +1,1320 @@
+{
+  "layers": [
+    {
+      "anyPosition": [
+        -330.0,
+        -260.0
+      ],
+      "blending": "override",
+      "defaultState": "Idle",
+      "entryPosition": [
+        -330.0,
+        60.0
+      ],
+      "exitPosition": [
+        980.0,
+        -60.0
+      ],
+      "name": "Base Layer",
+      "states": [
+        {
+          "loop": true,
+          "motions": {
+            "arms": {
+              "clip": "assets/Weapons/Remington870/FirstPerson/Remington870_A_FP_Idle.fbx",
+              "clipGuid": "d568615aaab5910b"
+            },
+            "weapon": {
+              "clip": "assets/Weapons/Remington870/Weapon/Remington870_A_W_Idle.fbx",
+              "clipGuid": "abfe8981a8954dee"
+            }
+          },
+          "name": "Idle",
+          "position": [
+            0.0,
+            0.0
+          ],
+          "speed": 1.0,
+          "tags": [
+            "Idle"
+          ]
+        },
+        {
+          "loop": true,
+          "motions": {
+            "arms": {
+              "clip": "assets/Weapons/Remington870/FirstPerson/Remington870_A_FP_Walk.fbx",
+              "clipGuid": "804d61b2efd90493"
+            },
+            "weapon": {
+              "clip": "assets/Weapons/Remington870/Weapon/Remington870_A_W_Idle.fbx",
+              "clipGuid": "abfe8981a8954dee"
+            }
+          },
+          "name": "Walk",
+          "position": [
+            0.0,
+            120.0
+          ],
+          "speed": 1.0,
+          "speedParam": "WalkRate",
+          "tags": [
+            "Ready"
+          ]
+        },
+        {
+          "loop": true,
+          "motions": {
+            "arms": {
+              "clip": "assets/Weapons/Remington870/FirstPerson/Remington870_A_FP_Sprint.fbx",
+              "clipGuid": "b548d762261e5f5f"
+            },
+            "weapon": {
+              "clip": "assets/Weapons/Remington870/Weapon/Remington870_A_W_Idle.fbx",
+              "clipGuid": "abfe8981a8954dee"
+            }
+          },
+          "name": "Sprint",
+          "position": [
+            330.0,
+            120.0
+          ],
+          "speed": 1.0,
+          "speedParam": "SprintRate"
+        },
+        {
+          "loop": true,
+          "motions": {
+            "arms": {
+              "clip": "assets/Weapons/Remington870/FirstPerson/Remington870_A_FP_Aim.fbx",
+              "clipGuid": "52de15e71a89b276"
+            },
+            "weapon": {
+              "clip": "assets/Weapons/Remington870/Weapon/Remington870_A_W_Idle.fbx",
+              "clipGuid": "abfe8981a8954dee"
+            }
+          },
+          "name": "Aim",
+          "position": [
+            0.0,
+            240.0
+          ],
+          "speed": 1.0,
+          "tags": [
+            "ADS"
+          ]
+        },
+        {
+          "loop": false,
+          "motions": {
+            "arms": {
+              "clip": "assets/Weapons/Remington870/FirstPerson/Remington870_A_FP_IdleToSprint.fbx",
+              "clipGuid": "ec955e725647bbc5"
+            },
+            "weapon": {
+              "clip": "assets/Weapons/Remington870/Weapon/Remington870_A_W_Idle.fbx",
+              "clipGuid": "abfe8981a8954dee"
+            }
+          },
+          "name": "IdleToSprint",
+          "position": [
+            330.0,
+            0.0
+          ],
+          "priority": 1,
+          "speed": 1.0
+        },
+        {
+          "loop": false,
+          "motions": {
+            "arms": {
+              "clip": "assets/Weapons/Remington870/FirstPerson/Remington870_A_FP_SprintToIdle.fbx",
+              "clipGuid": "18773d2bc32d2c08"
+            },
+            "weapon": {
+              "clip": "assets/Weapons/Remington870/Weapon/Remington870_A_W_Idle.fbx",
+              "clipGuid": "abfe8981a8954dee"
+            }
+          },
+          "name": "SprintToIdle",
+          "position": [
+            330.0,
+            240.0
+          ],
+          "priority": 1,
+          "speed": 1.0
+        },
+        {
+          "loop": false,
+          "motions": {
+            "arms": {
+              "clip": "assets/Weapons/Remington870/FirstPerson/Remington870_A_FP_Regrip.fbx",
+              "clipGuid": "ffa839d49c013802"
+            },
+            "weapon": {
+              "clip": "assets/Weapons/Remington870/Weapon/Remington870_A_W_Idle.fbx",
+              "clipGuid": "abfe8981a8954dee"
+            }
+          },
+          "name": "Regrip",
+          "position": [
+            0.0,
+            -140.0
+          ],
+          "priority": 2,
+          "speed": 1.0,
+          "tags": [
+            "IKOff"
+          ]
+        },
+        {
+          "events": [
+            {
+              "name": "Shot",
+              "time": 0.0
+            }
+          ],
+          "loop": false,
+          "motions": {
+            "arms": {
+              "clip": "assets/Weapons/Remington870/FirstPerson/Remington870_A_FP_Fire.fbx",
+              "clipGuid": "bfe7581f369eec20"
+            },
+            "weapon": {
+              "clip": "assets/Weapons/Remington870/Weapon/Remington870_A_W_Idle.fbx",
+              "clipGuid": "abfe8981a8954dee"
+            }
+          },
+          "name": "Fire",
+          "position": [
+            660.0,
+            -330.0
+          ],
+          "priority": 2,
+          "speed": 1.0,
+          "tags": [
+            "Ready"
+          ]
+        },
+        {
+          "loop": false,
+          "motions": {
+            "arms": {
+              "clip": "assets/Weapons/Remington870/FirstPerson/Remington870_A_FP_Inspect.fbx",
+              "clipGuid": "e6bf6388a2176467"
+            },
+            "weapon": {
+              "clip": "assets/Weapons/Remington870/Weapon/Remington870_A_W_Inspect.fbx",
+              "clipGuid": "66576fcdd35fc5ba"
+            }
+          },
+          "name": "Inspect",
+          "position": [
+            660.0,
+            -255.0
+          ],
+          "priority": 2,
+          "speed": 1.0,
+          "tags": [
+            "Busy"
+          ]
+        },
+        {
+          "loop": false,
+          "motions": {
+            "arms": {
+              "clip": "assets/Weapons/Remington870/FirstPerson/Remington870_A_FP_Mag_Check.fbx",
+              "clipGuid": "224b6e16aa983595"
+            },
+            "weapon": {
+              "clip": "assets/Weapons/Remington870/Weapon/Remington870_A_W_Mag_Check.fbx",
+              "clipGuid": "421117bd9c7c899f"
+            }
+          },
+          "name": "MagCheck",
+          "position": [
+            660.0,
+            -180.0
+          ],
+          "priority": 2,
+          "speed": 1.0,
+          "tags": [
+            "Busy",
+            "ADSCarry"
+          ]
+        },
+        {
+          "loop": false,
+          "motions": {
+            "arms": {
+              "clip": "assets/Weapons/Remington870/FirstPerson/Remington870_A_FP_Melee.fbx",
+              "clipGuid": "3602f7cb46301867"
+            },
+            "weapon": {
+              "clip": "assets/Weapons/Remington870/Weapon/Remington870_A_W_Idle.fbx",
+              "clipGuid": "abfe8981a8954dee"
+            }
+          },
+          "name": "Melee",
+          "position": [
+            660.0,
+            -105.0
+          ],
+          "priority": 3,
+          "speed": 1.0,
+          "tags": [
+            "Busy"
+          ]
+        },
+        {
+          "loop": false,
+          "motions": {
+            "arms": {
+              "clip": "assets/Weapons/Remington870/FirstPerson/Remington870_A_FP_Draw.fbx",
+              "clipGuid": "0ab534d75ac5b4b2"
+            },
+            "weapon": {
+              "clip": "assets/Weapons/Remington870/Weapon/Remington870_A_W_Idle.fbx",
+              "clipGuid": "abfe8981a8954dee"
+            }
+          },
+          "name": "Draw",
+          "position": [
+            -330.0,
+            330.0
+          ],
+          "priority": 4,
+          "speed": 1.0,
+          "tags": [
+            "IKOff"
+          ]
+        },
+        {
+          "loop": false,
+          "motions": {
+            "arms": {
+              "clip": "assets/Weapons/Remington870/FirstPerson/Remington870_A_FP_Holster.fbx",
+              "clipGuid": "3540eaf8772d8f2d"
+            },
+            "weapon": {
+              "clip": "assets/Weapons/Remington870/Weapon/Remington870_A_W_Idle.fbx",
+              "clipGuid": "abfe8981a8954dee"
+            }
+          },
+          "name": "Holster",
+          "position": [
+            330.0,
+            400.0
+          ],
+          "priority": 4,
+          "speed": 1.0,
+          "tags": [
+            "IKOff"
+          ]
+        },
+        {
+          "loop": false,
+          "motions": {
+            "arms": {
+              "clip": "assets/Weapons/Remington870/FirstPerson/Remington870_A_FP_Holster.fbx",
+              "clipGuid": "3540eaf8772d8f2d"
+            },
+            "weapon": {
+              "clip": "assets/Weapons/Remington870/Weapon/Remington870_A_W_Idle.fbx",
+              "clipGuid": "abfe8981a8954dee"
+            }
+          },
+          "name": "Holstered",
+          "position": [
+            0.0,
+            440.0
+          ],
+          "priority": 5,
+          "speed": 1.0,
+          "tags": [
+            "Hidden"
+          ]
+        },
+        {
+          "loop": false,
+          "motions": {
+            "arms": {
+              "clip": "assets/Weapons/Remington870/FirstPerson/Remington870_A_FP_Pump.fbx",
+              "clipGuid": "633d907c5142af8e"
+            },
+            "weapon": {
+              "clip": "assets/Weapons/Remington870/Weapon/Remington870_A_W_Pump.fbx",
+              "clipGuid": "21361368df1fe439"
+            }
+          },
+          "name": "Pump",
+          "position": [
+            990,
+            -330
+          ],
+          "priority": 3,
+          "speed": 1.0,
+          "tags": [
+            "Cycling",
+            "ADSCarry"
+          ]
+        },
+        {
+          "loop": false,
+          "motions": {
+            "arms": {
+              "clip": "assets/Weapons/Remington870/FirstPerson/Remington870_A_FP_Reload_Start.fbx",
+              "clipGuid": "a2aef5ce7b1e915a"
+            },
+            "weapon": {
+              "clip": "assets/Weapons/Remington870/Weapon/Remington870_A_W_Reload_Start.fbx",
+              "clipGuid": "fffbcc7419088411"
+            }
+          },
+          "name": "ReloadStart",
+          "position": [
+            660,
+            -30
+          ],
+          "priority": 3,
+          "speed": 1.0,
+          "tags": [
+            "Reload",
+            "ADSCarry"
+          ]
+        },
+        {
+          "events": [
+            {
+              "name": "LoadRound",
+              "time": 0.74
+            }
+          ],
+          "loop": false,
+          "motions": {
+            "arms": {
+              "clip": "assets/Weapons/Remington870/FirstPerson/Remington870_A_FP_Reload_Start_Empty.fbx",
+              "clipGuid": "69616d0572a4981b"
+            },
+            "weapon": {
+              "clip": "assets/Weapons/Remington870/Weapon/Remington870_A_W_Reload_Start_Empty.fbx",
+              "clipGuid": "f0216597d55e5ac4"
+            }
+          },
+          "name": "ReloadStartEmpty",
+          "position": [
+            660,
+            45
+          ],
+          "priority": 3,
+          "speed": 1.0,
+          "tags": [
+            "Reload",
+            "ADSCarry"
+          ]
+        },
+        {
+          "events": [
+            {
+              "name": "LoadRound",
+              "time": 0.6
+            }
+          ],
+          "loop": false,
+          "motions": {
+            "arms": {
+              "clip": "assets/Weapons/Remington870/FirstPerson/Remington870_A_FP_Reload_Loop.fbx",
+              "clipGuid": "39d7c92a7e788f28"
+            },
+            "weapon": {
+              "clip": "assets/Weapons/Remington870/Weapon/Remington870_A_W_Reload_Loop.fbx",
+              "clipGuid": "848f46e7578d8189"
+            }
+          },
+          "name": "ReloadLoop",
+          "position": [
+            990,
+            5
+          ],
+          "priority": 3,
+          "speed": 1.0,
+          "tags": [
+            "Reload",
+            "ADSCarry"
+          ]
+        },
+        {
+          "events": [
+            {
+              "name": "LoadRound",
+              "time": 0.43
+            }
+          ],
+          "loop": false,
+          "motions": {
+            "arms": {
+              "clip": "assets/Weapons/Remington870/FirstPerson/Remington870_A_FP_Reload_Loop_End.fbx",
+              "clipGuid": "eedb360ee929c541"
+            },
+            "weapon": {
+              "clip": "assets/Weapons/Remington870/Weapon/Remington870_A_W_Reload_Loop_End.fbx",
+              "clipGuid": "0c7074d53b52d312"
+            }
+          },
+          "name": "ReloadLoopEnd",
+          "position": [
+            1320,
+            -30
+          ],
+          "priority": 3,
+          "speed": 1.0,
+          "tags": [
+            "Reload",
+            "ADSCarry"
+          ]
+        },
+        {
+          "loop": false,
+          "motions": {
+            "arms": {
+              "clip": "assets/Weapons/Remington870/FirstPerson/Remington870_A_FP_Reload_End.fbx",
+              "clipGuid": "5567b6b62a617120"
+            },
+            "weapon": {
+              "clip": "assets/Weapons/Remington870/Weapon/Remington870_A_W_Reload_End.fbx",
+              "clipGuid": "ca979c2223c6ddae"
+            }
+          },
+          "name": "ReloadEnd",
+          "position": [
+            1320,
+            45
+          ],
+          "priority": 3,
+          "speed": 1.0,
+          "tags": [
+            "Reload",
+            "ADSCarry"
+          ]
+        }
+      ],
+      "transitions": [
+        {
+          "conditions": [
+            {
+              "mode": "if",
+              "param": "Sprint",
+              "threshold": 0.0
+            },
+            {
+              "mode": "greater",
+              "param": "Speed",
+              "threshold": 0.05
+            }
+          ],
+          "duration": 0.0,
+          "exitTime": 1.0,
+          "fromEntry": true,
+          "hasExitTime": false,
+          "to": "Sprint"
+        },
+        {
+          "conditions": [
+            {
+              "mode": "if",
+              "param": "Aim",
+              "threshold": 0.0
+            }
+          ],
+          "duration": 0.0,
+          "exitTime": 1.0,
+          "fromEntry": true,
+          "hasExitTime": false,
+          "to": "Aim"
+        },
+        {
+          "conditions": [
+            {
+              "mode": "greater",
+              "param": "Speed",
+              "threshold": 0.05
+            }
+          ],
+          "duration": 0.0,
+          "exitTime": 1.0,
+          "fromEntry": true,
+          "hasExitTime": false,
+          "to": "Walk"
+        },
+        {
+          "conditions": [
+            {
+              "mode": "ifNot",
+              "param": "Equipped",
+              "threshold": 0.0
+            }
+          ],
+          "duration": 0.05,
+          "exitTime": 1.0,
+          "fromAny": true,
+          "hasExitTime": false,
+          "respectPriority": true,
+          "to": "Holster"
+        },
+        {
+          "canTransitionToSelf": true,
+          "conditions": [
+            {
+              "mode": "if",
+              "param": "Reload",
+              "threshold": 0.0
+            },
+            {
+              "mode": "less",
+              "param": "Ammo",
+              "threshold": 0.5
+            }
+          ],
+          "duration": 0.05,
+          "exitTime": 1.0,
+          "fromAny": true,
+          "hasExitTime": false,
+          "respectPriority": true,
+          "to": "ReloadStartEmpty"
+        },
+        {
+          "canTransitionToSelf": true,
+          "conditions": [
+            {
+              "mode": "if",
+              "param": "Reload",
+              "threshold": 0.0
+            },
+            {
+              "mode": "greater",
+              "param": "Ammo",
+              "threshold": 0.5
+            }
+          ],
+          "duration": 0.05,
+          "exitTime": 1.0,
+          "fromAny": true,
+          "hasExitTime": false,
+          "respectPriority": true,
+          "to": "ReloadStart"
+        },
+        {
+          "canTransitionToSelf": false,
+          "conditions": [
+            {
+              "mode": "if",
+              "param": "Cycle",
+              "threshold": 0.0
+            }
+          ],
+          "duration": 0.05,
+          "exitTime": 1.0,
+          "fromAny": true,
+          "hasExitTime": false,
+          "respectPriority": true,
+          "to": "Pump"
+        },
+        {
+          "canTransitionToSelf": true,
+          "conditions": [
+            {
+              "mode": "if",
+              "param": "Melee",
+              "threshold": 0.0
+            }
+          ],
+          "duration": 0.1,
+          "exitTime": 1.0,
+          "fromAny": true,
+          "hasExitTime": false,
+          "respectPriority": true,
+          "to": "Melee"
+        },
+        {
+          "canTransitionToSelf": true,
+          "conditions": [
+            {
+              "mode": "if",
+              "param": "Fire",
+              "threshold": 0.0
+            }
+          ],
+          "duration": 0.03,
+          "exitTime": 1.0,
+          "fromAny": true,
+          "hasExitTime": false,
+          "respectPriority": true,
+          "to": "Fire"
+        },
+        {
+          "canTransitionToSelf": true,
+          "conditions": [
+            {
+              "mode": "if",
+              "param": "Inspect",
+              "threshold": 0.0
+            }
+          ],
+          "duration": 0.08,
+          "exitTime": 1.0,
+          "fromAny": true,
+          "hasExitTime": false,
+          "respectPriority": true,
+          "to": "Inspect"
+        },
+        {
+          "canTransitionToSelf": true,
+          "conditions": [
+            {
+              "mode": "if",
+              "param": "MagCheck",
+              "threshold": 0.0
+            }
+          ],
+          "duration": 0.06,
+          "exitTime": 1.0,
+          "fromAny": true,
+          "hasExitTime": false,
+          "respectPriority": true,
+          "to": "MagCheck"
+        },
+        {
+          "conditions": [
+            {
+              "mode": "if",
+              "param": "Sprint",
+              "threshold": 0.0
+            },
+            {
+              "mode": "greater",
+              "param": "Speed",
+              "threshold": 0.05
+            }
+          ],
+          "duration": 0.05,
+          "exitTime": 1.0,
+          "from": "Idle",
+          "hasExitTime": false,
+          "to": "IdleToSprint"
+        },
+        {
+          "conditions": [
+            {
+              "mode": "if",
+              "param": "Aim",
+              "threshold": 0.0
+            }
+          ],
+          "duration": 0.1,
+          "exitTime": 1.0,
+          "from": "Idle",
+          "hasExitTime": false,
+          "to": "Aim"
+        },
+        {
+          "conditions": [
+            {
+              "mode": "greater",
+              "param": "Speed",
+              "threshold": 0.05
+            }
+          ],
+          "duration": 0.1,
+          "exitTime": 1.0,
+          "from": "Idle",
+          "hasExitTime": false,
+          "to": "Walk"
+        },
+        {
+          "conditions": [
+            {
+              "mode": "if",
+              "param": "Fidget",
+              "threshold": 0.0
+            }
+          ],
+          "duration": 0.06,
+          "exitTime": 1.0,
+          "from": "Idle",
+          "hasExitTime": false,
+          "to": "Regrip"
+        },
+        {
+          "conditions": [
+            {
+              "mode": "if",
+              "param": "Sprint",
+              "threshold": 0.0
+            },
+            {
+              "mode": "greater",
+              "param": "Speed",
+              "threshold": 0.05
+            }
+          ],
+          "duration": 0.08,
+          "exitTime": 1.0,
+          "from": "Walk",
+          "hasExitTime": false,
+          "to": "Sprint"
+        },
+        {
+          "conditions": [
+            {
+              "mode": "if",
+              "param": "Aim",
+              "threshold": 0.0
+            }
+          ],
+          "duration": 0.1,
+          "exitTime": 1.0,
+          "from": "Walk",
+          "hasExitTime": false,
+          "to": "Aim"
+        },
+        {
+          "conditions": [
+            {
+              "mode": "less",
+              "param": "Speed",
+              "threshold": 0.05
+            }
+          ],
+          "duration": 0.12,
+          "exitTime": 1.0,
+          "from": "Walk",
+          "hasExitTime": false,
+          "to": "Idle"
+        },
+        {
+          "conditions": [
+            {
+              "mode": "if",
+              "param": "Sprint",
+              "threshold": 0.0
+            },
+            {
+              "mode": "greater",
+              "param": "Speed",
+              "threshold": 0.05
+            }
+          ],
+          "duration": 0.08,
+          "exitTime": 1.0,
+          "from": "Aim",
+          "hasExitTime": false,
+          "to": "Sprint"
+        },
+        {
+          "conditions": [
+            {
+              "mode": "ifNot",
+              "param": "Aim",
+              "threshold": 0.0
+            },
+            {
+              "mode": "greater",
+              "param": "Speed",
+              "threshold": 0.05
+            }
+          ],
+          "duration": 0.1,
+          "exitTime": 1.0,
+          "from": "Aim",
+          "hasExitTime": false,
+          "to": "Walk"
+        },
+        {
+          "conditions": [
+            {
+              "mode": "ifNot",
+              "param": "Aim",
+              "threshold": 0.0
+            },
+            {
+              "mode": "less",
+              "param": "Speed",
+              "threshold": 0.05
+            }
+          ],
+          "duration": 0.12,
+          "exitTime": 1.0,
+          "from": "Aim",
+          "hasExitTime": false,
+          "to": "Idle"
+        },
+        {
+          "conditions": [
+            {
+              "mode": "if",
+              "param": "Aim",
+              "threshold": 0.0
+            },
+            {
+              "mode": "ifNot",
+              "param": "Sprint",
+              "threshold": 0.0
+            }
+          ],
+          "duration": 0.1,
+          "exitTime": 1.0,
+          "from": "Sprint",
+          "hasExitTime": false,
+          "to": "Aim"
+        },
+        {
+          "conditions": [
+            {
+              "mode": "if",
+              "param": "Aim",
+              "threshold": 0.0
+            },
+            {
+              "mode": "less",
+              "param": "Speed",
+              "threshold": 0.05
+            }
+          ],
+          "duration": 0.1,
+          "exitTime": 1.0,
+          "from": "Sprint",
+          "hasExitTime": false,
+          "to": "Aim"
+        },
+        {
+          "conditions": [
+            {
+              "mode": "ifNot",
+              "param": "Sprint",
+              "threshold": 0.0
+            }
+          ],
+          "duration": 0.05,
+          "exitTime": 1.0,
+          "from": "Sprint",
+          "hasExitTime": false,
+          "to": "SprintToIdle"
+        },
+        {
+          "conditions": [
+            {
+              "mode": "less",
+              "param": "Speed",
+              "threshold": 0.05
+            }
+          ],
+          "duration": 0.05,
+          "exitTime": 1.0,
+          "from": "Sprint",
+          "hasExitTime": false,
+          "to": "SprintToIdle"
+        },
+        {
+          "conditions": [],
+          "duration": 0.1,
+          "exitTime": 1.0,
+          "from": "IdleToSprint",
+          "hasExitTime": true,
+          "to": "Exit"
+        },
+        {
+          "conditions": [],
+          "duration": 0.1,
+          "exitTime": 1.0,
+          "from": "SprintToIdle",
+          "hasExitTime": true,
+          "to": "Exit"
+        },
+        {
+          "conditions": [],
+          "duration": 0.1,
+          "exitTime": 1.0,
+          "from": "Regrip",
+          "hasExitTime": true,
+          "to": "Exit"
+        },
+        {
+          "conditions": [],
+          "duration": 0.1,
+          "exitTime": 1.0,
+          "from": "Fire",
+          "hasExitTime": true,
+          "to": "Exit"
+        },
+        {
+          "conditions": [],
+          "duration": 0.1,
+          "exitTime": 1.0,
+          "from": "Inspect",
+          "hasExitTime": true,
+          "to": "Exit"
+        },
+        {
+          "conditions": [],
+          "duration": 0.3,
+          "exitTime": 1.0,
+          "from": "MagCheck",
+          "hasExitTime": true,
+          "to": "Exit"
+        },
+        {
+          "conditions": [],
+          "duration": 0.1,
+          "exitTime": 1.0,
+          "from": "Melee",
+          "hasExitTime": true,
+          "to": "Exit"
+        },
+        {
+          "conditions": [],
+          "duration": 0.1,
+          "exitTime": 1.0,
+          "from": "Draw",
+          "hasExitTime": true,
+          "to": "Exit"
+        },
+        {
+          "conditions": [],
+          "duration": 0.0,
+          "exitTime": 1.0,
+          "from": "Holster",
+          "hasExitTime": true,
+          "to": "Holstered"
+        },
+        {
+          "conditions": [
+            {
+              "mode": "if",
+              "param": "Equipped",
+              "threshold": 0.0
+            }
+          ],
+          "duration": 0.05,
+          "exitTime": 1.0,
+          "from": "Holstered",
+          "hasExitTime": false,
+          "to": "Draw"
+        },
+        {
+          "conditions": [
+            {
+              "mode": "if",
+              "param": "Sprint",
+              "threshold": 0.0
+            },
+            {
+              "mode": "greater",
+              "param": "Speed",
+              "threshold": 0.05
+            }
+          ],
+          "duration": 0.1,
+          "exitTime": 1.0,
+          "from": "SprintToIdle",
+          "hasExitTime": false,
+          "to": "Sprint"
+        },
+        {
+          "conditions": [
+            {
+              "mode": "if",
+              "param": "Aim",
+              "threshold": 0.0
+            },
+            {
+              "mode": "ifNot",
+              "param": "Sprint",
+              "threshold": 0.0
+            }
+          ],
+          "duration": 0.1,
+          "exitTime": 1.0,
+          "from": "SprintToIdle",
+          "hasExitTime": false,
+          "to": "Aim"
+        },
+        {
+          "conditions": [
+            {
+              "mode": "ifNot",
+              "param": "Sprint",
+              "threshold": 0.0
+            }
+          ],
+          "duration": 0.15,
+          "exitTime": 1.0,
+          "from": "IdleToSprint",
+          "hasExitTime": false,
+          "to": "Exit"
+        },
+        {
+          "conditions": [
+            {
+              "mode": "less",
+              "param": "Speed",
+              "threshold": 0.05
+            }
+          ],
+          "duration": 0.15,
+          "exitTime": 1.0,
+          "from": "IdleToSprint",
+          "hasExitTime": false,
+          "to": "Exit"
+        },
+        {
+          "conditions": [
+            {
+              "mode": "greater",
+              "param": "Speed",
+              "threshold": 0.05
+            }
+          ],
+          "duration": 0.15,
+          "exitTime": 1.0,
+          "from": "Regrip",
+          "hasExitTime": false,
+          "to": "Exit"
+        },
+        {
+          "conditions": [
+            {
+              "mode": "if",
+              "param": "Aim",
+              "threshold": 0.0
+            }
+          ],
+          "duration": 0.15,
+          "exitTime": 1.0,
+          "from": "Regrip",
+          "hasExitTime": false,
+          "to": "Exit"
+        },
+        {
+          "conditions": [
+            {
+              "mode": "if",
+              "param": "StopReload",
+              "threshold": 0.0
+            }
+          ],
+          "duration": 0.04,
+          "exitTime": 1.0,
+          "from": "ReloadStart",
+          "hasExitTime": true,
+          "to": "ReloadEnd"
+        },
+        {
+          "conditions": [
+            {
+              "mode": "if",
+              "param": "LastRound",
+              "threshold": 0.0
+            }
+          ],
+          "duration": 0.04,
+          "exitTime": 1.0,
+          "from": "ReloadStart",
+          "hasExitTime": true,
+          "to": "ReloadLoopEnd"
+        },
+        {
+          "conditions": [],
+          "duration": 0.04,
+          "exitTime": 1.0,
+          "from": "ReloadStart",
+          "hasExitTime": true,
+          "to": "ReloadLoop"
+        },
+        {
+          "conditions": [
+            {
+              "mode": "if",
+              "param": "StopReload",
+              "threshold": 0.0
+            }
+          ],
+          "duration": 0.04,
+          "exitTime": 1.0,
+          "from": "ReloadStartEmpty",
+          "hasExitTime": true,
+          "to": "ReloadEnd"
+        },
+        {
+          "conditions": [
+            {
+              "mode": "if",
+              "param": "LastRound",
+              "threshold": 0.0
+            }
+          ],
+          "duration": 0.04,
+          "exitTime": 1.0,
+          "from": "ReloadStartEmpty",
+          "hasExitTime": true,
+          "to": "ReloadLoopEnd"
+        },
+        {
+          "conditions": [],
+          "duration": 0.04,
+          "exitTime": 1.0,
+          "from": "ReloadStartEmpty",
+          "hasExitTime": true,
+          "to": "ReloadLoop"
+        },
+        {
+          "conditions": [
+            {
+              "mode": "if",
+              "param": "StopReload",
+              "threshold": 0.0
+            }
+          ],
+          "duration": 0.04,
+          "exitTime": 1.0,
+          "from": "ReloadLoop",
+          "hasExitTime": true,
+          "to": "ReloadEnd"
+        },
+        {
+          "conditions": [
+            {
+              "mode": "if",
+              "param": "LastRound",
+              "threshold": 0.0
+            }
+          ],
+          "duration": 0.04,
+          "exitTime": 1.0,
+          "from": "ReloadLoop",
+          "hasExitTime": true,
+          "to": "ReloadLoopEnd"
+        },
+        {
+          "conditions": [],
+          "duration": 0.04,
+          "exitTime": 1.0,
+          "from": "ReloadLoop",
+          "hasExitTime": true,
+          "to": "ReloadLoop"
+        },
+        {
+          "conditions": [],
+          "duration": 0.25,
+          "exitTime": 1.0,
+          "from": "ReloadLoopEnd",
+          "hasExitTime": true,
+          "to": "Exit"
+        },
+        {
+          "conditions": [],
+          "duration": 0.25,
+          "exitTime": 1.0,
+          "from": "ReloadEnd",
+          "hasExitTime": true,
+          "to": "Exit"
+        },
+        {
+          "conditions": [],
+          "duration": 0.1,
+          "exitTime": 1.0,
+          "from": "Pump",
+          "hasExitTime": true,
+          "to": "Exit"
+        }
+      ],
+      "weight": 1.0
+    }
+  ],
+  "parameters": [
+    {
+      "default": 0.0,
+      "name": "Speed",
+      "type": "float"
+    },
+    {
+      "default": 1.0,
+      "name": "WalkRate",
+      "type": "float"
+    },
+    {
+      "default": 1.0,
+      "name": "SprintRate",
+      "type": "float"
+    },
+    {
+      "default": 0.0,
+      "name": "Sprint",
+      "type": "bool"
+    },
+    {
+      "default": 0.0,
+      "name": "Aim",
+      "type": "bool"
+    },
+    {
+      "default": 1.0,
+      "name": "Equipped",
+      "type": "bool"
+    },
+    {
+      "default": 6.0,
+      "name": "Ammo",
+      "type": "int"
+    },
+    {
+      "default": 0.0,
+      "name": "Fire",
+      "type": "trigger"
+    },
+    {
+      "default": 0.0,
+      "name": "Reload",
+      "type": "trigger"
+    },
+    {
+      "default": 0.0,
+      "name": "MagCheck",
+      "type": "trigger"
+    },
+    {
+      "default": 0.0,
+      "name": "Inspect",
+      "type": "trigger"
+    },
+    {
+      "default": 0.0,
+      "name": "Melee",
+      "type": "trigger"
+    },
+    {
+      "default": 0.0,
+      "name": "Fidget",
+      "type": "trigger"
+    },
+    {
+      "default": 0.0,
+      "name": "Cycle",
+      "type": "trigger"
+    },
+    {
+      "default": 0.0,
+      "name": "LastRound",
+      "type": "bool"
+    },
+    {
+      "default": 0.0,
+      "name": "StopReload",
+      "type": "bool"
+    }
+  ],
+  "tracks": [
+    "arms",
+    "weapon"
+  ],
+  "version": 2
+}

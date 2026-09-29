@@ -61,16 +61,44 @@ bool FirstPersonPresentation::Start(World& world, AssetLibrary& assets,
                                     const FirstPersonControllerComponent& config) {
     Stop(world);
     m_LastError.clear();
-    if (config.AnimationSet.empty()) return true;
+    for (const std::string* set : {&config.AnimationSet, &config.SecondaryAnimationSet})
+        if (!set->empty()) m_SlotSets.push_back(*set);
+    if (m_SlotSets.empty()) return true;
+    m_SlotAmmo.assign(m_SlotSets.size(), -1);
+    m_Config = std::make_shared<FirstPersonControllerComponent>(config);
+    m_SlotAssets = &assets;
+    m_Slot = 0;
+    m_PendingSlot = -1;
+    m_WalkSpeed = config.MoveSpeed;
+    m_SprintSpeed = config.MoveSpeed * config.SprintMultiplier;
+    return StartSet(world, assets, 0, false);
+}
 
-    const std::string setPath = ProjectPaths::Resolve(config.AnimationSet);
+void FirstPersonPresentation::Stop(World& world) {
+    StopSet(world);
+    m_SlotSets.clear();
+    m_SlotAmmo.clear();
+    m_Slot = 0;
+    m_PendingSlot = -1;
+    m_SlotAssets = nullptr;
+    m_Config.reset();
+}
+
+bool FirstPersonPresentation::StartSet(World& world, AssetLibrary& assets, int slot, bool holstered) {
+    StopSet(world);
+    m_LastError.clear();
+    const FirstPersonControllerComponent& config = *m_Config;
+    const std::string& animationSet = m_SlotSets[slot];
+    m_Slot = slot;
+
+    const std::string setPath = ProjectPaths::Resolve(animationSet);
     m_SetFile = std::filesystem::u8path(setPath);
     {
         std::error_code ec;
         m_SetFileTime = std::filesystem::last_write_time(m_SetFile, ec);
     }
     if (!FirstPersonAnimationSet::LoadFile(setPath, m_Set, &m_LastError)) {
-        SetError("could not load '" + config.AnimationSet + "': " + m_LastError);
+        SetError("could not load '" + animationSet + "': " + m_LastError);
         return false;
     }
     if (!FinitePositive(config.ViewModelScale)) {
@@ -85,16 +113,16 @@ bool FirstPersonPresentation::Start(World& world, AssetLibrary& assets,
         m_ControllerPath = m_Set.Controller;
         ctrl = GetAnimatorController(m_ControllerPath);
         if (!ctrl) {
-            SetError("could not load the Animator Controller '" + m_Set.Controller + "' named by '" + config.AnimationSet + "'");
+            SetError("could not load the Animator Controller '" + m_Set.Controller + "' named by '" + animationSet + "'");
             return false;
         }
     } else {
-        m_ControllerPath = "memory:" + config.AnimationSet;
+        m_ControllerPath = "memory:" + animationSet;
         ctrl = std::make_shared<const AnimatorController>(BuildFirstPersonController(m_Set));
         RegisterAnimatorController(m_ControllerPath, ctrl);
     }
     if (ctrl->Layers.empty() || ctrl->Layers[0].States.empty()) {
-        SetError("the Animator Controller for '" + config.AnimationSet + "' has no states");
+        SetError("the Animator Controller for '" + animationSet + "' has no states");
         return false;
     }
 
@@ -103,7 +131,7 @@ bool FirstPersonPresentation::Start(World& world, AssetLibrary& assets,
     auto arms = assets.InstantiateModel(armsPath);
     auto weapon = assets.InstantiateModel(weaponPath);
     if (!arms || !weapon) {
-        SetError("could not instantiate arms or weapon model from '" + config.AnimationSet + "'");
+        SetError("could not instantiate arms or weapon model from '" + animationSet + "'");
         return false;
     }
 
@@ -133,7 +161,7 @@ bool FirstPersonPresentation::Start(World& world, AssetLibrary& assets,
             auto mat = assets.LoadMaterial(ProjectPaths::Resolve(matPath));
             if (!mat || mat->Missing) {
                 Log::Warn("First-person: material '" + matPath + "' for '" + name + "' could not be loaded.",
-                          LogContext::Asset(config.AnimationSet));
+                          LogContext::Asset(animationSet));
                 continue;
             }
             bool used = false;
@@ -145,7 +173,7 @@ bool FirstPersonPresentation::Start(World& world, AssetLibrary& assets,
             }
             if (!used)
                 Log::Warn("First-person: no submesh uses a material named '" + name + "' (from '" +
-                          config.AnimationSet + "').", LogContext::Asset(config.AnimationSet));
+                          animationSet + "').", LogContext::Asset(animationSet));
         }
     };
     applyMaterials(m_Arms, m_Set.ArmsMaterials);
@@ -165,22 +193,23 @@ bool FirstPersonPresentation::Start(World& world, AssetLibrary& assets,
     m_Offset = config.ViewModelOffset;
     m_Rotation = config.ViewModelRotation;
     m_Scale = config.ViewModelScale;
-    m_WalkSpeed = config.MoveSpeed;
-    m_SprintSpeed = config.MoveSpeed * config.SprintMultiplier;
     // Not validated here: MakePerspective is the engine's one guarded projection constructor
     // (#202) and corrects every degenerate FOV, so an out-of-range value costs a wrong-looking
     // view model, never a broken frame. The Inspector already clamps it to 20..150.
     m_ViewModelFov = config.ViewModelFov;
     m_CameraBone = config.CameraBone;
-    m_Ammo = m_Set.Gameplay.Magazine;
+    m_Ammo = m_SlotAmmo[slot] >= 0 ? std::min(m_SlotAmmo[slot], m_Set.Gameplay.Magazine) : m_Set.Gameplay.Magazine;
     ResetReloadKey();
     m_RegripDelay = FirstPersonRegripDelay(std::uniform_real_distribution<float>(0.0f, 1.0f)(m_Rng),
                                            m_Set.Gameplay.RegripMin, m_Set.Gameplay.RegripMax);
     armsAnim.SetInt(K::kAmmo, m_Ammo);
     armsAnim.SetBool(K::kEquipped, true);
+    // A weapon swapped in comes out of its holster (Draw) rather than appearing in the hands.
+    if (holstered && !AnimatorStartInState(*ctrl, armsAnim, "Holstered"))
+        Log::Warn("First-person presentation: '" + animationSet + "' has no 'Holstered' state; it appears without a draw.");
 
     if (!AttachAndValidate(assets, *ctrl)) {
-        Stop(world);
+        StopSet(world); // this weapon's rigs only: the slot list stays for a fallback
         return false;
     }
     m_Procedural.Reset();
@@ -192,13 +221,13 @@ bool FirstPersonPresentation::Start(World& world, AssetLibrary& assets,
     SetupAdsCarry();
     int states = 0;
     for (const auto& L : ctrl->Layers) states += (int)L.States.size();
-    Log::Info("First-person presentation loaded '" + config.AnimationSet + "' (" +
+    Log::Info("First-person presentation loaded '" + animationSet + "' (" +
               (m_Set.Controller.empty() ? std::string("v1 clip list") : m_Set.Controller) + ", " +
               std::to_string(states) + " states).");
     return true;
 }
 
-void FirstPersonPresentation::Stop(World& world) {
+void FirstPersonPresentation::StopSet(World& world) {
     if (m_Arms != entt::null && world.Registry.valid(m_Arms)) world.DestroyEntityAndChildren(m_Arms);
     if (m_Weapon != entt::null && world.Registry.valid(m_Weapon)) world.DestroyEntityAndChildren(m_Weapon);
     m_World = nullptr;
@@ -222,6 +251,10 @@ void FirstPersonPresentation::Stop(World& world) {
     m_Equipped = true;
     m_HiddenApplied = false;
     m_Ammo = m_Set.Gameplay.Magazine;
+    m_Chambered = true;
+    m_CycleWait = 0.0f;
+    m_CycleSeen = false;
+    m_StopReload = false;
     m_FullAuto = false;
     m_FireCooldown = 0.0f;
     m_IdleTime = 0.0f;
@@ -327,6 +360,10 @@ void FirstPersonPresentation::SetupBolt(AssetLibrary& assets, const AnimatorCont
                 if (clip < 0 && (pass == 0 ? shot : st.Name == "Fire") && !st.MotionFor(weaponTrack).Clip.empty())
                     clip = ResolveAnimationClip(*m_WeaponModel, st.MotionFor(weaponTrack).Clip, assets);
             }
+    if (r.BoltBone.empty()) { // no bolt (a pump, a revolver): nothing to measure, the muzzle is set by hand
+        SetupMuzzle(-1);
+        return;
+    }
     if (bolt < 0 || clip < 0) {
         Log::Warn("First-person presentation: no '" + r.BoltBone + "' bone or weapon hip-fire clip to measure the bolt from; no procedural bolt.");
         SetupMuzzle(-1);
@@ -686,7 +723,14 @@ const std::string& FirstPersonPresentation::CurrentState() const {
 bool FirstPersonPresentation::Fire() {
     auto* ac = Animator();
     if (!ac || !m_Equipped || HasTag(K::kTagHidden)) return false;
+    // A tube being loaded a round at a time: the trigger ends the reload after the round in hand
+    // (StopReload), and the next pull fires.
+    if (m_Set.Gameplay.Reload == FirstPersonWeaponGameplay::ReloadMode::PerRound && ac->HasTag(K::kTagReload)) {
+        m_StopReload = m_Ammo > 0;
+        return false;
+    }
     if (m_Ammo <= 0) return false; // dry: the player has to press Reload themselves
+    if (!m_Chambered || ac->HasTag(K::kTagCycling)) return false; // the pump / bolt hasn't been worked yet
     if (WallBlocked()) return false; // tucked off a wall: the muzzle is in it
     // Reloading or otherwise busy hands: no round, whether the state is a hip clip the controller
     // would refuse to interrupt anyway or an ADS one that would otherwise kick procedurally.
@@ -703,6 +747,7 @@ bool FirstPersonPresentation::Fire() {
         m_SinceShot = 0.0f;
         --m_Ammo;
         ShotImpact();
+        OnRoundSpent();
         m_IdleTime = 0.0f; // shooting isn't settling: no fidget mid-burst
         return true;
     }
@@ -715,29 +760,86 @@ bool FirstPersonPresentation::Fire() {
 void FirstPersonPresentation::FireShot() {
     const auto& g = m_Set.Gameplay;
     if (!m_World || !m_AimPointValid) return;
-    const float o[3] = {m_Muzzle.x, m_Muzzle.y, m_Muzzle.z}, d[3] = {m_BoreDir.x, m_BoreDir.y, m_BoreDir.z};
-    RaycastHit hit;
-    QueryFilter filter;
-    filter.HitTriggers = 0;
-    const bool recording = PhysicsWorld::GetQueryRecording();
-    PhysicsWorld::SetQueryRecording(false);
-    const bool struck = PhysicsWorld::RaycastFiltered(o, d, 300.0f, filter, hit) && hit.Hit;
-    PhysicsWorld::SetQueryRecording(recording);
-    if (!struck) return;
-    // Bounded, in case nothing drains it (no renderer this session).
-    if (m_ShotHits.size() < 256)
-        m_ShotHits.push_back({glm::vec3(hit.Point[0], hit.Point[1], hit.Point[2]),
-                              glm::vec3(hit.Normal[0], hit.Normal[1], hit.Normal[2]), hit.Entity, g.BulletHoleRadius});
-    if (g.ImpactImpulse <= 0.0f) return;
-    const auto e = static_cast<entt::entity>(hit.Entity);
-    const auto* rb = m_World->Registry.valid(e) ? m_World->Registry.try_get<RigidbodyComponent>(e) : nullptr;
-    if (!rb || rb->IsKinematic) return;
-    // Light props: capped at ImpactMaxSpeed of velocity change; heavy ones just get the impulse.
-    float impulse = g.ImpactImpulse;
-    if (g.ImpactMaxSpeed > 0.0f) impulse = std::min(impulse, g.ImpactMaxSpeed * std::max(rb->Mass, 0.01f));
-    const glm::vec3 j = m_BoreDir * impulse;
-    const float jv[3] = {j.x, j.y, j.z};
-    PhysicsWorld::AddForceAtPosition(hit.Entity, jv, hit.Point, ForceMode::Impulse);
+    // A shotgun's round is several pellets, each down its own line inside the spread cone; the
+    // round's shove is shared between them.
+    const float spread = HasTag(K::kTagAds) ? g.SpreadAds : g.SpreadHip;
+    const int pellets = std::max(1, g.Pellets);
+    std::uniform_real_distribution<float> unit(0.0f, 1.0f);
+    for (int p = 0; p < pellets; ++p) {
+        const glm::vec3 dir = pellets > 1 || spread > 0.0f ? FirstPersonPelletDirection(m_BoreDir, spread, unit(m_Rng), unit(m_Rng))
+                                                           : m_BoreDir;
+        const float o[3] = {m_Muzzle.x, m_Muzzle.y, m_Muzzle.z}, d[3] = {dir.x, dir.y, dir.z};
+        RaycastHit hit;
+        QueryFilter filter;
+        filter.HitTriggers = 0;
+        const bool recording = PhysicsWorld::GetQueryRecording();
+        PhysicsWorld::SetQueryRecording(false);
+        const bool struck = PhysicsWorld::RaycastFiltered(o, d, 300.0f, filter, hit) && hit.Hit;
+        PhysicsWorld::SetQueryRecording(recording);
+        if (!struck) continue;
+        // Bounded, in case nothing drains it (no renderer this session).
+        if (m_ShotHits.size() < 256)
+            m_ShotHits.push_back({glm::vec3(hit.Point[0], hit.Point[1], hit.Point[2]),
+                                  glm::vec3(hit.Normal[0], hit.Normal[1], hit.Normal[2]), hit.Entity, g.BulletHoleRadius});
+        if (g.ImpactImpulse <= 0.0f) continue;
+        const auto e = static_cast<entt::entity>(hit.Entity);
+        const auto* rb = m_World->Registry.valid(e) ? m_World->Registry.try_get<RigidbodyComponent>(e) : nullptr;
+        if (!rb || rb->IsKinematic) continue;
+        // Light props: capped at ImpactMaxSpeed of velocity change; heavy ones just get the impulse.
+        float impulse = g.ImpactImpulse;
+        if (g.ImpactMaxSpeed > 0.0f) impulse = std::min(impulse, g.ImpactMaxSpeed * std::max(rb->Mass, 0.01f));
+        const glm::vec3 j = dir * (impulse / (float)pellets);
+        const float jv[3] = {j.x, j.y, j.z};
+        PhysicsWorld::AddForceAtPosition(hit.Entity, jv, hit.Point, ForceMode::Impulse);
+    }
+}
+
+void FirstPersonPresentation::OnRoundSpent() {
+    if (!m_Set.Gameplay.CycleAfterShot) return;
+    m_Chambered = false;
+    m_CycleSeen = false;
+    m_CycleWait = m_Set.Gameplay.CycleDelay;
+}
+
+void FirstPersonPresentation::SelectSlot(int slot) {
+    if (!IsActive() || slot < 0 || slot >= SlotCount()) return;
+    if (slot == m_Slot) {
+        m_PendingSlot = -1;
+        SetEquipped(true);
+        return;
+    }
+    // Put this one away first; Tick swaps the rigs once it's holstered (at once if it already is).
+    m_PendingSlot = slot;
+    m_Equipped = false;
+    if (auto* ac = Animator()) ac->SetBool(K::kEquipped, false);
+}
+
+void FirstPersonPresentation::CycleSlot(int step) {
+    if (!IsActive() || step == 0) return;
+    // Positions 0..n-1 are the slots, n is unarmed.
+    const int n = SlotCount();
+    const int at = m_PendingSlot >= 0 ? m_PendingSlot : (m_Equipped ? m_Slot : n);
+    const int next = ((at + (step > 0 ? 1 : -1)) % (n + 1) + (n + 1)) % (n + 1);
+    if (next == n) SetEquipped(false);
+    else SelectSlot(next);
+}
+
+void FirstPersonPresentation::SwapToPendingSlot() {
+    if (m_PendingSlot < 0 || !m_World || !m_SlotAssets || !m_Config) return;
+    World& world = *m_World;
+    const int slot = m_PendingSlot, previous = m_Slot;
+    m_PendingSlot = -1;
+    m_SlotAmmo[previous] = m_Ammo;
+    const float walk = m_WalkSpeed, sprint = m_SprintSpeed;
+    if (!StartSet(world, *m_SlotAssets, slot, true)) {
+        // Keep the weapon that was in hand rather than leaving the player with nothing.
+        Log::Error("First-person presentation: couldn't switch to '" + m_SlotSets[slot] + "'; keeping '" +
+                   m_SlotSets[previous] + "'.");
+        if (!StartSet(world, *m_SlotAssets, previous, true)) return;
+    }
+    m_WalkSpeed = walk;
+    m_SprintSpeed = sprint;
+    SetEquipped(true);
 }
 
 void FirstPersonPresentation::ToggleFireMode() {
@@ -770,6 +872,8 @@ void FirstPersonPresentation::UpdateReloadKey(bool down, float dt) {
 bool FirstPersonPresentation::Reload() {
     auto* ac = Animator();
     if (!ac || !m_Equipped || ac->HasTag(K::kTagReload) || m_Ammo >= m_Set.Gameplay.Magazine) return false;
+    m_StopReload = false;
+    ac->SetBool(K::kStopReload, false);
     ac->SetInt(K::kAmmo, m_Ammo);
     ac->SetTrigger(K::kReload);
     return true;
@@ -784,6 +888,7 @@ bool FirstPersonPresentation::TriggerAction(const std::string& trigger) {
 
 void FirstPersonPresentation::SetEquipped(bool equipped) {
     if (!IsActive()) return;
+    if (!equipped) m_PendingSlot = -1;
     m_Equipped = equipped;
     if (auto* ac = Animator()) ac->SetBool(K::kEquipped, equipped);
 }
@@ -791,6 +896,11 @@ void FirstPersonPresentation::SetEquipped(bool equipped) {
 void FirstPersonPresentation::Tick(float dt, const glm::vec3& velocity, bool sprinting, bool aiming, float lean, bool grounded) {
     auto* ac = Animator();
     if (!ac) return;
+    // Switching weapons: once the one in hand is put away, the other one's rigs come in.
+    if (m_PendingSlot >= 0 && ac->HasTag(K::kTagHidden) && !ac->InTransition) {
+        SwapToPendingSlot();
+        return;
+    }
     ReloadIfChanged(dt);
     const FirstPersonWeaponGameplay& g = m_Set.Gameplay;
     const float planarSpeed = glm::length(glm::vec2(velocity.x, velocity.z));
@@ -832,6 +942,25 @@ void FirstPersonPresentation::Tick(float dt, const glm::vec3& velocity, bool spr
     }
     ac->SetBool(K::kEquipped, m_Equipped);
     ac->SetInt(K::kAmmo, m_Ammo);
+    // A tube loaded a round at a time: the load loop leaves on LastRound (load it and finish) or
+    // StopReload (the trigger was pulled: finish the round in hand), which lasts the reload out.
+    if (g.Reload == FirstPersonWeaponGameplay::ReloadMode::PerRound) {
+        if (!ac->HasTag(K::kTagReload)) m_StopReload = false;
+        ac->SetBool(K::kLastRound, m_Ammo >= g.Magazine - 1);
+        ac->SetBool(K::kStopReload, m_StopReload);
+    }
+    // A manual action: CycleDelay after the round, work it (the Cycle trigger, retried until the
+    // controller takes it - it waits out a reload or a draw); chambered once that state is done.
+    if (g.CycleAfterShot && !m_Chambered) {
+        if (ac->HasTag(K::kTagCycling)) {
+            m_CycleSeen = true;
+        } else if (m_CycleSeen) {
+            m_Chambered = true;
+        } else {
+            m_CycleWait -= dt;
+            if (m_CycleWait <= 0.0f && m_Equipped && !ac->HasTag(K::kTagHidden)) ac->SetTrigger(K::kCycle);
+        }
+    }
 
     // The procedural stack, fed from what the controller is doing and how the camera moved.
     WeaponProceduralInput in;
@@ -976,12 +1105,18 @@ void FirstPersonPresentation::Update(World& world, Camera& camera) {
             m_Procedural.OnShot(m_Set.Procedural, false, /*cycleBolt=*/false); // the Fire clip cycles it
             m_SinceShot = 0.0f;
             ShotImpact();
+            OnRoundSpent();
         }
         if (ac->EventFired(K::kEventRefill)) m_Ammo = m_Set.Gameplay.Magazine;
+        if (ac->EventFired(K::kEventLoadRound)) {
+            // Into an empty gun the load clip chambers it itself (the empty start works the pump).
+            if (m_Ammo == 0) m_Chambered = true;
+            m_Ammo = std::min(m_Set.Gameplay.Magazine, m_Ammo + 1);
+        }
         ac->FiredEvents.clear();
         // Triggers live for exactly one controller update: an input the controller refused
         // (fire during a reload, say) is dropped rather than firing late.
-        for (const char* t : {K::kFire, K::kReload, K::kMagCheck, K::kInspect, K::kMelee, K::kFidget}) ac->ResetTrigger(t);
+        for (const char* t : {K::kFire, K::kReload, K::kMagCheck, K::kInspect, K::kMelee, K::kFidget, K::kCycle}) ac->ResetTrigger(t);
     }
 
     ApplyHidden(world);
@@ -1178,8 +1313,8 @@ void FirstPersonPresentation::PlaceRigs(World& world, const Camera& camera) {
         if (m_ArmsModel->NodeTransform(m_Set.WeaponSocket, socket) &&
             m_WeaponModel->NodeTransform(m_Set.WeaponRoot, weaponRoot)) {
             const glm::mat4 mount =
-                socket * glm::mat4_cast(QuaternionFromEulerYXZ(m_Set.WeaponMountRotation)) *
-                glm::inverse(weaponRoot);
+                socket * glm::translate(glm::mat4(1.0f), m_Set.WeaponMountOffset) *
+                glm::mat4_cast(QuaternionFromEulerYXZ(m_Set.WeaponMountRotation)) * glm::inverse(weaponRoot);
             weaponPosition = position + rigRotation * (m_Scale * glm::vec3(mount[3]));
             weaponRotation = NormalizeRotation(rigRotation * QuaternionFromMatrix(mount));
         } else if (!m_WeaponSocketWarned) {
