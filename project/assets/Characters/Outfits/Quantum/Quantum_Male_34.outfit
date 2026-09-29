@@ -3,11 +3,8 @@
   "gender": "Male",
   "race": "Old",
   "items": {
-    "Beard": {
-      "item": "assets/Characters/Quantum/Models/Beard/SKM_Beard_Long.fbx"
-    },
-    "Hair": {
-      "item": "assets/Characters/Quantum/Models/Hair/SKM_Hair_Short.fbx"
+    "Balaclava": {
+      "item": "assets/Characters/Quantum/Models/Clothing/Male/Balaclava/SM_Balaclava_Crime.fbx"
     },
     "Outerwear": {
       "item": "assets/Characters/Quantum/Models/Clothing/Male/Outerwear/SKM_Jacket_Shirt.fbx"

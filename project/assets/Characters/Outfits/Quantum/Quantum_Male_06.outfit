@@ -3,14 +3,11 @@
   "gender": "Male",
   "race": "European",
   "items": {
-    "Beard": {
-      "item": "assets/Characters/Quantum/Models/Beard/SKM_Beard.fbx"
+    "Balaclava": {
+      "item": "assets/Characters/Quantum/Models/Clothing/Male/Balaclava/SM_Balaclava_Crime.fbx"
     },
     "Glasses": {
       "item": "assets/Characters/Quantum/Models/Clothing/Male/Glasses/SKM_Glasses_Aviator.fbx"
-    },
-    "Hair": {
-      "item": "assets/Characters/Quantum/Models/Hair/SKM_Hair_Skin.fbx"
     },
     "Pants": {
       "item": "assets/Characters/Quantum/Models/Clothing/Male/Pants/SKM_Pants_Cargo_Straight.fbx"

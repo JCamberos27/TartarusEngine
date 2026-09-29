@@ -3,11 +3,14 @@
   "gender": "Female",
   "race": "Afro",
   "items": {
+    "Balaclava": {
+      "item": "assets/Characters/Quantum/Models/Clothing/Female/Balaclava/SM_F_Balaclava_Crime.fbx",
+      "colours": {
+        "assets/Characters/Quantum/Materials/Clothing/Balaclava/M_Balaclava_Crime_Black.mat": "assets/Characters/Quantum/Materials/Clothing/Balaclava/M_Balaclava_Crime_Print.mat"
+      }
+    },
     "Glasses": {
       "item": "assets/Characters/Quantum/Models/Clothing/Female/Glasses/SKM_F_Glasses_Classic.fbx"
-    },
-    "Hair": {
-      "item": "assets/Characters/Quantum/Models/Female/Hair/SKM_F_Haircut_Braids.fbx"
     },
     "Headphones": {
       "item": "assets/Characters/Quantum/Models/Clothing/Female/Hats/SKM_F_Headphones.fbx"

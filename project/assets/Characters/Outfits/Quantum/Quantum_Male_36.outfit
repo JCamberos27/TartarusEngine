@@ -3,6 +3,12 @@
   "gender": "Male",
   "race": "Afro",
   "items": {
+    "Balaclava": {
+      "item": "assets/Characters/Quantum/Models/Clothing/Male/Balaclava/SM_Balaclava_Crime.fbx",
+      "colours": {
+        "assets/Characters/Quantum/Materials/Clothing/Balaclava/M_Balaclava_Crime_Black.mat": "assets/Characters/Quantum/Materials/Clothing/Balaclava/M_Balaclava_Crime_Print.mat"
+      }
+    },
     "Glasses": {
       "item": "assets/Characters/Quantum/Models/Clothing/Male/Glasses/SKM_Glasses_Aviator.fbx"
     },

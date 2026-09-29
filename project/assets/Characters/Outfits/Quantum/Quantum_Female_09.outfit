@@ -3,8 +3,8 @@
   "gender": "Female",
   "race": "Old",
   "items": {
-    "Hair": {
-      "item": "assets/Characters/Quantum/Models/Female/Hair/SKM_F_Headband_Haircut_Half_Up_Bandana.fbx"
+    "Balaclava": {
+      "item": "assets/Characters/Quantum/Models/Clothing/Female/Balaclava/SM_F_Balaclava_Crime.fbx"
     },
     "Pants": {
       "item": "assets/Characters/Quantum/Models/Clothing/Female/Pants/SKM_F_Pants_Jeans.fbx"
