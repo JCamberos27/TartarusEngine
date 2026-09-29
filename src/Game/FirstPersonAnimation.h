@@ -55,6 +55,23 @@ struct FirstPersonWeaponGameplay {
     // log prints the values to save here.
     bool HasSightLine = false;
     glm::vec3 SightOrigin{0.0f}, SightDirection{0.0f, 0.0f, -1.0f};
+
+    // A shotgun: each round is Pellets rays, each inside a cone of SpreadHip / SpreadAds degrees
+    // (the cone's half angle; hip applies whenever the sights aren't up) about the zeroed bore.
+    // ImpactImpulse and ImpactMaxSpeed are the whole round's, shared between its pellets.
+    int Pellets = 1;
+    float SpreadHip = 0.0f, SpreadAds = 0.0f;
+    // How a reload fills the gun. Magazine: the reload state's Refill event fills it at once.
+    // PerRound (a tube): each LoadRound event adds one round; the controller loops its load state
+    // until the LastRound parameter is set, and exits early when StopReload is (the trigger was
+    // pulled mid-reload). See FirstPersonAnimatorContract.
+    enum class ReloadMode { Magazine, PerRound };
+    ReloadMode Reload = ReloadMode::Magazine;
+    // A manual action (pump, bolt, lever): after every round the Cycle trigger is set CycleDelay
+    // seconds later, until a state tagged Cycling has played through; the gun can't fire in
+    // between. A round loaded into an empty gun (LoadRound at 0 rounds) is chambered by its clip.
+    bool CycleAfterShot = false;
+    float CycleDelay = 0.1f;
 };
 
 // Where rounds (and the laser) leave the gun. Auto finds the barrel from the procedural bolt's
@@ -168,6 +185,10 @@ struct FirstPersonAnimationSet {
     std::string WeaponSocket;
     std::string WeaponRoot;
     glm::vec3 WeaponMountRotation{0.0f};
+    // The mount's translation, in the socket's frame (model metres), for a rig whose weapon root
+    // doesn't sit exactly on the socket - socket_probe prints it as the mount's `t`. The
+    // Remington 870's Main rides 1.6 cm off its CB_Gun. Zero for the AKS-74U.
+    glm::vec3 WeaponMountOffset{0.0f};
     // Spare magazine: weapon bones whose mesh only shows while the arms' left hand is within
     // `SpareMagazineGrabDistance` (model metres) of them. The AKS-74U parks `mag2` ~0.63 m off
     // the gun (the pouch) outside the tactical reload; the hand is ~0.19 m from it while held.
@@ -219,6 +240,10 @@ inline constexpr const char* kMagCheck = "MagCheck";
 inline constexpr const char* kInspect = "Inspect";
 inline constexpr const char* kMelee = "Melee";
 inline constexpr const char* kFidget = "Fidget";     // after RegripMin..Max s in a state tagged Idle
+inline constexpr const char* kCycle = "Cycle";       // gameplay.cycle: work the action after a round (until a Cycling state plays)
+// Bools the driver sets every frame for a per-round (tube) reload: gameplay.reload = perRound.
+inline constexpr const char* kLastRound = "LastRound";   // one round short of full: load the last one and finish
+inline constexpr const char* kStopReload = "StopReload"; // the trigger was pulled mid-reload: finish the current round and stop
 // State tags the driver reads.
 inline constexpr const char* kTagAds = "ADS";        // sights up: fire is a procedural kick, aim offset on
 inline constexpr const char* kTagAdsCarry = "ADSCarry"; // hip clip carried onto the sights while aiming
@@ -228,6 +253,7 @@ inline constexpr const char* kTagHidden = "Hidden";  // unarmed: both rigs hidde
 inline constexpr const char* kTagIdle = "Idle";      // settled idle: counts toward the Fidget
 inline constexpr const char* kTagReady = "Ready";    // gun simply held (walk, hip fire): like Idle, minus the Fidget
 inline constexpr const char* kTagIKOff = "IKOff";    // the default procedural IK off tag: plays as authored
+inline constexpr const char* kTagCycling = "Cycling";// the action is being worked (pump / bolt): no firing until it's done
 
 // Every tag above, with what it does - for the editors' tag pickers and tooltips.
 struct KnownTag { const char* Name; const char* Description; };
@@ -243,11 +269,14 @@ inline constexpr KnownTag kKnownTags[] = {
                 "and the barrel's aim point shows, as in Idle, but no Fidget."},
     {kTagHidden, "Unarmed: both rigs are hidden."},
     {kTagIKOff, "Plays exactly as animated: the hand IK and procedural motion fade out (the weapon's IK Off Tag)."},
+    {kTagCycling, "The action is being worked (a pump or bolt, gameplay.cycle): the gun can't fire until this state "
+                  "has played through and the next round is chambered."},
 };
 const char* KnownTagDescription(const std::string& tag); // nullptr for a custom tag
 // Events the driver reacts to.
 inline constexpr const char* kEventShot = "Shot";    // a round leaves the gun (hip fire)
 inline constexpr const char* kEventRefill = "Refill";// the magazine is full again
+inline constexpr const char* kEventLoadRound = "LoadRound"; // one round goes in (a per-round reload)
 } // namespace FirstPersonAnimatorContract
 
 // A weapon setup checked against the contract above and its own definition, worst first (the Weapon
@@ -270,6 +299,10 @@ AnimatorController BuildFirstPersonController(const FirstPersonAnimationSet& set
 
 // Seconds of settled Idle before the next Fidget, from a uniform [0,1] sample.
 float FirstPersonRegripDelay(float unit01, float minSeconds = 10.0f, float maxSeconds = 20.0f);
+
+// One pellet's direction: `dir` (unit) turned by up to `halfAngleDegrees`, spread evenly over the
+// cone's disc by two uniform [0,1] samples (u1: how far out, u2: which way round).
+glm::vec3 FirstPersonPelletDirection(const glm::vec3& dir, float halfAngleDegrees, float u1, float u2);
 
 // The reload key is overloaded: a tap reloads, a hold checks the magazine. A tap only resolves
 // on release (until then it can't be told from the start of a hold); a hold fires MagCheck the

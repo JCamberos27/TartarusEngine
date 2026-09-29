@@ -1040,8 +1040,22 @@ void EditorLayer::DrawWeaponDefinitionEditor(const std::string& path) {
         glm::vec2 fidget(g.RegripMin, g.RegripMax);
         if (r.Range("Fidget After", fidget, 0.1f, "%.1f s", "Seconds of settled idle before the fidget plays (random between min and max)."))
             g.RegripMin = std::max(0.0f, fidget.x), g.RegripMax = std::max(g.RegripMin, fidget.y);
+        bool perRound = g.Reload == FirstPersonWeaponGameplay::ReloadMode::PerRound;
+        if (r.Check("Per-Round Reload", perRound,
+                    "A tube loaded a round at a time: each LoadRound event adds one, the load state loops until LastRound,\n"
+                    "and pulling the trigger (StopReload) finishes the round in hand and stops. Off: Refill fills the magazine."))
+            g.Reload = perRound ? FirstPersonWeaponGameplay::ReloadMode::PerRound : FirstPersonWeaponGameplay::ReloadMode::Magazine;
+        r.Check("Cycle After Shot", g.CycleAfterShot,
+                "A pump or bolt: after each round the Cycle trigger plays the state tagged Cycling, and the gun can't fire until it has.");
+        if (g.CycleAfterShot)
+            r.Float("Cycle Delay", g.CycleDelay, 0.01f, 0.0f, 2.0f, "%.2f s", "Seconds after the shot before the action is worked.");
+        r.Heading("Pellets");
+        r.Int("Pellets", g.Pellets, 1, 64, "Rays per round: 1 for a rifle, a shotgun's pellet count (00 buckshot: 8-9).");
+        r.Float("Spread (Hip)", g.SpreadHip, 0.05f, 0.0f, 45.0f, "%.2f deg", "Half angle of the cone the pellets leave in, sights down.");
+        r.Float("Spread (ADS)", g.SpreadAds, 0.05f, 0.0f, 45.0f, "%.2f deg", "... and with the sights up.");
         r.Heading("Impacts");
-        r.Float("Impulse", g.ImpactImpulse, 0.1f, 0.0f, 100.0f, "%.1f N*s", "How hard each round shoves the physics body it hits, at the hit point (0 = no push).");
+        r.Float("Impulse", g.ImpactImpulse, 0.1f, 0.0f, 100.0f, "%.1f N*s",
+                "How hard each round shoves the physics body it hits, at the hit point (0 = no push); a shotgun's pellets share it.");
         r.Float("Max Speed", g.ImpactMaxSpeed, 0.1f, 0.0f, 50.0f, "%.1f m/s", "Caps the velocity one round can add, so light props fly without rocketing off.");
     }
 
@@ -1062,6 +1076,8 @@ void EditorLayer::DrawWeaponDefinitionEditor(const std::string& path) {
         r.Name("Weapon Root", s.WeaponRoot, ctx.WeaponBones, ctx.Weapon != nullptr, "Bone on the WEAPON rig that lands on the socket.",
                "The weapon rig has no bone named '%s'.");
         r.Vec3("Mount Rotation", s.WeaponMountRotation, 0.5f, "%.1f", "Fixed socket -> weapon root rotation, Y-X-Z degrees.");
+        r.Vec3("Mount Offset", s.WeaponMountOffset, 0.0005f, "%.4f",
+               "Fixed socket -> weapon root translation, in the socket's frame (metres). Zero when the root sits on the socket.");
         // Measure it: the rotation between the socket and the weapon root at the first frame of the default
         // state's clips (how the two files were authored to sit together), Y-X-Z degrees.
         {
@@ -1069,7 +1085,8 @@ void EditorLayer::DrawWeaponDefinitionEditor(const std::string& path) {
             ImGui::BeginDisabled(!can);
             if (ActionButton(ICON_FA_RULER "  Measure Mount Rotation",
                              "Reads the socket's and the weapon root's orientation on the first frame of the default state's clips\n"
-                             "and sets Mount Rotation to the fixed turn between them (needs the rigs loaded and a socket / root set).",
+                             "and sets Mount Rotation to the fixed turn between them, and Mount Offset to where the root sits\n"
+                             "from the socket (needs the rigs loaded and a socket / root set).",
                              false, ImVec2(-FLT_MIN, 0.0f))) {
                 const AnimatorController& ac = *ctx.Controller;
                 const AnimatorController::Layer& layer = ac.Layers[0];
@@ -1098,9 +1115,14 @@ void EditorLayer::DrawWeaponDefinitionEditor(const std::string& path) {
                     const glm::vec3 e = EulerYXZFromQuaternion(glm::inverse(rot(sock)) * rot(root));
                     auto snap = [](float v) { const float q = std::round(v / 90.0f) * 90.0f; return std::abs(v - q) < 0.05f ? q : std::round(v * 100.0f) / 100.0f; };
                     s.WeaponMountRotation = {snap(e.x), snap(e.y), snap(e.z)};
+                    // And where the root sits from the socket, in the socket's frame (sub-0.1 mm is noise).
+                    glm::vec3 t = glm::vec3(glm::inverse(sock) * root[3]);
+                    for (int i = 0; i < 3; ++i) t[i] = std::abs(t[i]) < 1e-4f ? 0.0f : std::round(t[i] * 1e5f) / 1e5f;
+                    s.WeaponMountOffset = t;
                     changed = true;
                     Log::Info("Measured mount rotation (Y-X-Z): " + std::to_string(s.WeaponMountRotation.x) + ", " +
-                              std::to_string(s.WeaponMountRotation.y) + ", " + std::to_string(s.WeaponMountRotation.z));
+                              std::to_string(s.WeaponMountRotation.y) + ", " + std::to_string(s.WeaponMountRotation.z) +
+                              ", offset " + std::to_string(t.x) + ", " + std::to_string(t.y) + ", " + std::to_string(t.z) + " m");
                 }
             }
             ImGui::EndDisabled();

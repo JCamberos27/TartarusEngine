@@ -7,6 +7,8 @@
     "assets/Weapons",
     "assets/Weapons/AKS74U",
     "assets/Weapons/AKS74U/FirstPerson",
+    "assets/Weapons/Remington870",
+    "assets/Weapons/Remington870/FirstPerson",
     "Animation"
   ],
   "audio": {
@@ -184,6 +186,16 @@
       "name": "Weapon2",
       "negative": -1,
       "positive": 50
+    },
+    {
+      "altNegative": -1,
+      "altPositive": -1,
+      "gamepadAxis": -1,
+      "gamepadButton": -1,
+      "invertGamepadAxis": false,
+      "name": "Weapon3",
+      "negative": -1,
+      "positive": 51
     },
     {
       "altNegative": -1,
