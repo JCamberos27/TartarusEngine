@@ -63,8 +63,8 @@ In the Quantum pack:
 - **Heads.** A hood that's up takes the hair off and allows only small hats (caps, bandanas, beanies).
   Haircuts with a hat, headband or glasses built in take those slots off. Big hats leave no room for
   headphones.
-- **Feet.** Socks (their own slot) go under sneakers and boots, not flip-flops or classic shoes. Plain boots
-  take the `_Inboots` pants; `Boots_Inboots` go under plain pants.
+- **Feet.** Socks (their own slot) go under every shoe but flip-flops and `Boots_Socks` (socks built in);
+  every style fills them. Plain boots take the `_Inboots` pants; `Boots_Inboots` go under plain pants.
 - **Style clashes** (soft): suit jackets or trousers with shorts, sport pants, flip-flops or sport sneakers;
   winter jackets and hats with shorts or flip-flops.
 
@@ -83,16 +83,25 @@ item cards that clash with what's worn (amber: one comes off; grey: an odd pairi
 ## Skin hiding
 With **Auto Hide Skin** on, each piece doesn't draw the vertices that poke through the layers worn over it,
 so the body, the head, a shirt under a jacket or hair under a hood can't clip through as the character moves:
-- Every slot has a `layer` (body parts and the head are 0): shoes 2, pants 3, tops 4, outerwear 6, collars 7,
+- Every slot has a `layer` (body parts and the head are 0): balaclavas 1 (their neck skirt tucks under
+  every top and jacket, so collars lie over it), shoes 2, pants 3, tops 4, outerwear 6, collars 7,
   bags and wrists 8, hair/beards/glasses 9, hats 10. A piece hides what pokes through it from every lower layer.
-- `"hides": false` on a slot (hair, beards, glasses) means its items never hide anything - they're see-through
-  cards, and hiding the scalp under them would open holes.
+- `"hides": false` on a slot (hair, beards, glasses, wrists) means its items never hide anything - they're see-through
+  cards (or a watch strap / bead bracelet with gaps), and hiding the skin under them would open holes.
 - `"layers"` rules change that per item: `{"slot": "Top", "nameHasAny": ["Tucked"], "layer": 2}` puts tucked
   tops under the pants, boots go over them, and `"over": ["Hair"]` lets a hood that's up hide the hair.
 - `OutfitCoverage` works out coverage once per (part, item) pair, in bind pose: each vertex looks 3 cm
-  inward and 5 cm outward along its normal for the cloth, and that covered area is shrunk by one ring of
-  vertices so hems don't open holes. Anything sitting outside the cloth (up to 10 cm, with the cloth
-  right behind it and facing the same way) is hidden too.
+  inward and 5 cm outward along its normal for the cloth. The covered area is shrunk by one ring of
+  vertices, then (on the body, not the head) by a 4 cm band of skin that's under the cloth (`kEdgeBand`):
+  a loose sleeve or collar swings further off the skin than one ring once the character moves. Anything
+  sitting outside the cloth (up to 10 cm, with the cloth right behind it and facing the same way) is hidden
+  too - unless, 5 cm or more in, the look back reaches the body's own far side within 2 cm
+  (`kFarWallDepth` / `kFarWallSlack`): that's cloth sunk into the far side of a limb, not skin outside it.
+- The head keeps skin that would leave a hole if hidden (`Backed`). Headwear on the head bone (a balaclava,
+  a hat under a hood) only hides what pokes out through the cloth over it: it can't deform out from under
+  it, and its covered rest can be in view (a balaclava's sides through a hood's face opening).
+- `OutfitEdgeBandPosed` and `OutfitRigidUnderHood` check these on the real Quantum meshes; `--outfit-audit`
+  reports every pair's poke-through, to compare before and after a change.
 - Coverage is stored as a per-vertex bit buffer (`OutfitHideTag` / `SkinHideBuffer`, SSBO binding 20), which
   `ModelVertex.glsl` reads.
 - `OutfitSystem::UpdateHiding` runs every frame but only does work when an outfit's pieces change (an edit,

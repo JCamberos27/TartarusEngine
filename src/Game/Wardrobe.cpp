@@ -590,7 +590,8 @@ int DefaultLayer(const std::string& slot) {
 }
 
 bool DefaultHides(const std::string& slot) {
-    return !IEquals(slot, "Hair") && !IEquals(slot, "Beard") && !IEquals(slot, "Glasses");
+    return !IEquals(slot, "Hair") && !IEquals(slot, "Beard") && !IEquals(slot, "Glasses") && !IEquals(slot, "Wrist L") &&
+           !IEquals(slot, "Wrist R");
 }
 
 Layering LayerOf(const Wardrobe& w, const std::string& slot, const std::string& itemPath, bool bodyPart) {

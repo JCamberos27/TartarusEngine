@@ -2,6 +2,8 @@
 
 #include <algorithm>
 #include <cmath>
+#include <cstdint>
+#include <unordered_map>
 
 namespace OutfitCoverage {
 namespace {
@@ -136,9 +138,10 @@ bool FirstHit(const Mesh& mesh, const Grid& grid, const glm::vec3& p, const glm:
 std::vector<float> PokeDepth(const Mesh& body, const Mesh& cloth, float maxDepth) {
     std::vector<float> out(body.Positions.size(), 0.0f);
     if (body.Positions.empty() || cloth.Positions.empty() || cloth.Indices.size() < 3) return out;
-    const Grid grid = Build(cloth, maxDepth), self = Build(body, maxDepth);
+    const float selfReach = maxDepth + kFarWallSlack; // the far side is looked for a little past the cloth's reach
+    const Grid grid = Build(cloth, maxDepth), self = Build(body, selfReach);
     const std::vector<glm::vec3> normals = VertexNormals(body);
-    const float minSelf = 0.001f / maxDepth; // closer than a millimetre is the vertex's own surface
+    const float minSelf = 0.001f / selfReach; // closer than a millimetre is the vertex's own surface
     for (size_t v = 0; v < body.Positions.size(); ++v) {
         const glm::vec3& n = normals[v];
         if (n == glm::vec3(0.0f)) continue;
@@ -146,9 +149,17 @@ std::vector<float> PokeDepth(const Mesh& body, const Mesh& cloth, float maxDepth
         float t, facing;
         // The cloth just behind the vertex, facing out the way it does: the vertex is outside it...
         if (!FirstHit(cloth, grid, p, d, n, 0.0f, ~0u, t, facing) || facing <= 0.3f) continue;
-        // ... unless the look back left the piece's own volume first (through a head to a hood's far side).
+        // ... unless the look back left the piece's own volume first (through a head to a hood's far side), or
+        // all but, deep in: cloth just short of a far wall kFarWallDepth or more away is cloth sunk into the
+        // far side of a limb (the Hawaiian shirt's loose sleeve dips ~1 cm into the underside of the arm in the
+        // bind pose, ~9.5 cm in), not the skin outside it - the whole arm read as poking through, and the
+        // hidden skin past the hem opened a hole. Not near: an ear is thinner than the slack, and one poking
+        // through a balaclava must still go.
         float selfT, selfFacing;
-        if (FirstHit(body, self, p, d, n, minSelf, (unsigned)v, selfT, selfFacing) && selfT < t && selfFacing < -0.3f) continue;
+        if (FirstHit(body, self, p, -n * selfReach, n, minSelf, (unsigned)v, selfT, selfFacing) && selfFacing < -0.3f) {
+            const float clothAt = t * maxDepth, wallAt = selfT * selfReach;
+            if (wallAt < clothAt || (clothAt >= kFarWallDepth && wallAt < clothAt + kFarWallSlack)) continue;
+        }
         out[v] = t * maxDepth;
     }
     return out;
@@ -165,6 +176,56 @@ void Erode(const Mesh& body, std::vector<std::uint8_t>& covered, int rings) {
         }
         covered.swap(next);
     }
+}
+
+namespace {
+
+// Points bucketed in cells `radius` wide: Near asks whether any lies within `radius` of p.
+struct PointGrid {
+    float Radius;
+    std::unordered_map<std::uint64_t, std::vector<glm::vec3>> Cells;
+    explicit PointGrid(float radius) : Radius(radius) {}
+    glm::ivec3 CellOf(const glm::vec3& p) const { return glm::ivec3(glm::floor(p / Radius)); }
+    static std::uint64_t Key(const glm::ivec3& c) {
+        return ((std::uint64_t)(std::uint32_t)(c.x + (1 << 20)) << 42) ^ ((std::uint64_t)(std::uint32_t)(c.y + (1 << 20)) << 21) ^
+               (std::uint64_t)(std::uint32_t)(c.z + (1 << 20));
+    }
+    void Add(const glm::vec3& p) { Cells[Key(CellOf(p))].push_back(p); }
+    bool Empty() const { return Cells.empty(); }
+    bool Near(const glm::vec3& p) const {
+        const glm::ivec3 c = CellOf(p);
+        const float r2 = Radius * Radius;
+        for (int dx = -1; dx <= 1; ++dx)
+            for (int dy = -1; dy <= 1; ++dy)
+                for (int dz = -1; dz <= 1; ++dz) {
+                    const auto it = Cells.find(Key(c + glm::ivec3(dx, dy, dz)));
+                    if (it == Cells.end()) continue;
+                    for (const glm::vec3& q : it->second)
+                        if (glm::dot(q - p, q - p) < r2) return true;
+                }
+        return false;
+    }
+};
+
+} // namespace
+
+void ErodeWithin(const Mesh& body, std::vector<std::uint8_t>& covered, float radius, const std::vector<std::uint8_t>* only) {
+    if (radius <= 0.0f) return;
+    // The uncovered vertices of the triangles on the edge are the band's inner line.
+    PointGrid edge(radius);
+    for (size_t t = 0; t + 2 < body.Indices.size(); t += 3) {
+        const unsigned i[3] = {body.Indices[t], body.Indices[t + 1], body.Indices[t + 2]};
+        if (i[0] >= covered.size() || i[1] >= covered.size() || i[2] >= covered.size()) continue;
+        const int c = covered[i[0]] + covered[i[1]] + covered[i[2]];
+        if (c == 0 || c == 3) continue;
+        for (unsigned v : i)
+            if (!covered[v]) edge.Add(body.Positions[v]);
+    }
+    if (edge.Empty()) return;
+    std::vector<std::uint8_t> next = covered;
+    for (size_t v = 0; v < covered.size(); ++v)
+        if (covered[v] && (!only || (v < only->size() && (*only)[v])) && edge.Near(body.Positions[v])) next[v] = 0;
+    covered.swap(next);
 }
 
 namespace {
@@ -274,11 +335,27 @@ std::vector<std::uint8_t> Backed(const Mesh& body, const Mesh& cloth, const std:
     return out;
 }
 
-std::vector<std::uint8_t> Hidden(const Mesh& under, const Mesh& over, bool exposed) {
-    // Covered from outside: the edge ring stays, so a hem never opens a hole. Poking out: all of it
+std::vector<std::uint8_t> Hidden(const Mesh& under, const Mesh& over, bool exposed, bool rigid) {
+    if (rigid) {
+        const std::vector<float> poke = PokeDepth(under, over, kPokeReach);
+        std::vector<std::uint8_t> out(poke.size(), 0);
+        for (size_t v = 0; v < poke.size(); ++v) out[v] = poke[v] > 0.0f;
+        return out;
+    }
+    // Covered from outside: a band inside the edge stays, so a hem never opens a hole. Poking out: all of it
     // goes - the cloth is right behind it.
+    // The band only draws skin that's under the cloth (it's there outward of it): skin a little outside it
+    // counts as covered too (Settings::Inward), and drawn, it shows. Not on the head (`exposed`): what's worn
+    // there rides the head bone and can't swing off it, and the head is full of small uncovered spots (ear
+    // canals, eye sockets, the mouth) - a band round each drew the ears, out through the balaclava.
     std::vector<std::uint8_t> covered = Covered(under, over);
     Erode(under, covered, 1);
+    if (!exposed) {
+        Settings outwardOnly;
+        outwardOnly.Inward = 0.0f;
+        const std::vector<std::uint8_t> underCloth = Covered(under, over, outwardOnly);
+        ErodeWithin(under, covered, kEdgeBand, &underCloth);
+    }
     const std::vector<float> poke = PokeDepth(under, over, kPokeReach);
     for (size_t v = 0; v < covered.size(); ++v)
         if (poke[v] > 0.0f) covered[v] = 1;
