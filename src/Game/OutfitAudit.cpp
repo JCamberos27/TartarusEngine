@@ -184,7 +184,7 @@ int Run(AssetLibrary& assets, const std::string& wardrobe, const std::string& cs
             for (const auto& under : list) {
                 if (under.Slot == over.Slot) continue;
                 const auto lu = Wardrobe::LayerOf(w, under.Slot, under.Path, under.BodyPart);
-                if (!Wardrobe::Hides(lo, under.Slot, lu)) continue;
+                if (!Wardrobe::Hides(lo, under.Slot, lu, over.Slot)) continue;
                 // Only pairs the rules let one character wear together, as they are.
                 Wardrobe::Request req;
                 req.Sex = sex;

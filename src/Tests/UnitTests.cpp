@@ -2169,13 +2169,27 @@ void TestWardrobeQuantum() {
     CHECK(pieceFor(r, "Pants") == "SKM_Jeans_Inboots" && pieceFor(r, "Feet") == "Quantum_Feet_Shoes");
     CHECK(pieceFor(r, "Legs").empty() && pieceFor(r, "Head") == "Quantum_Head_Afro" && pieceFor(r, "Torso") == "Quantum_Torso_Afro");
     CHECK(pieceFor(r, "Balaclava") == "SM_Balaclava_Crime");
-    // No hair in this wardrobe: a balaclava under a cap, both kept.
+    // No hair in this wardrobe (nor the caps with hair in them), and the balaclava takes hats and headphones off.
     req = {};
     req.Sex = Wardrobe::Gender::Female;
-    req.Items = {{"Balaclava", item("Clothing/Female/Balaclava/SM_F_Balaclava_Crime.fbx")}, {"Hat", item("Clothing/Female/Hats/SKM_F_Cap.fbx")}};
+    req.Items = {{"Balaclava", item("Clothing/Female/Balaclava/SM_F_Balaclava_Crime.fbx")}, {"Hat", item("Clothing/Female/Hats/SKM_F_Cap.fbx")},
+                 {"Headphones", item("Clothing/Female/Hats/SKM_F_Headphones.fbx")}};
     r = Wardrobe::Resolve(cat->W, cat->Items, req);
-    CHECK(pieceFor(r, "Balaclava") == "SM_F_Balaclava_Crime" && pieceFor(r, "Hat") == "SKM_F_Cap" && pieceFor(r, "Torso") == "SKM_F_Vivian_Body");
+    CHECK(pieceFor(r, "Balaclava") == "SM_F_Balaclava_Crime" && pieceFor(r, "Hat").empty() && pieceFor(r, "Headphones").empty());
+    CHECK(pieceFor(r, "Torso") == "SKM_F_Vivian_Body");
     CHECK(cat->Find("assets/Characters/Quantum/Models/Hair/SKM_Hair_Short.fbx") == nullptr);
+    CHECK(cat->Find("assets/Characters/Quantum/Models/Clothing/Male/Hats/WithHair/SKM_Cap_Hair.fbx") == nullptr);
+    // A hood that's up goes over the balaclava, and only that way round (else each cuts holes in the other).
+    for (const char* hood : {"Tops/SKM_Hoodie_Hood_Up", "Tops/SKM_Hoodie_Zipper_Hood", "Outerwear/SKM_Coat_Hoodie_Hood"}) {
+        const std::string slot = std::string(hood).rfind("Tops", 0) == 0 ? "Top" : "Outerwear";
+        const auto h = Wardrobe::LayerOf(cat->W, slot, item(std::string("Clothing/Male/") + hood + ".fbx"), false);
+        const auto b = Wardrobe::LayerOf(cat->W, "Balaclava", item("Clothing/Male/Balaclava/SM_Balaclava_Crime.fbx"), false);
+        CHECK(Wardrobe::Hides(h, "Balaclava", b, slot) && !Wardrobe::Hides(b, slot, h, "Balaclava"));
+    }
+    // A parka is too bulky for a bag.
+    r = Wardrobe::Resolve(cat->W, cat->Items, [&] { Wardrobe::Request m; m.Items = {{"Outerwear", item("Clothing/Male/Outerwear/SKM_Jacket_Winter_Closed_Hood_Closed.fbx")},
+                                                                                  {"Bag", item("Clothing/Male/Bags/SKM_Backpack_Sport.fbx")}}; return m; }());
+    CHECK(pieceFor(r, "Bag").empty() && !pieceFor(r, "Outerwear").empty());
 
     // What goes together: jackets with a top of their own take the top off, an open one keeps a thin top
     // but not a hoodie, boots cut to go under the pants keep the plain pants, socks are their own slot.
