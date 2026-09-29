@@ -319,6 +319,8 @@ What's different from the AK:
 
   `LoadRound` sits where each clip's shell disappears into the gun. `ReloadStartEmpty` loads (and chambers) the first round.
 - **The pump.** Any State → `Pump` on `Cycle`, at priority 3, so firing can't cut it short. It's tagged `Cycling` and `ADSCarry`, so it plays on the sights while aiming.
+- **Chained ADS actions.** `ReloadLoop`, `ReloadLoopEnd` and `ReloadEnd` are only entered from other carried states. So the ADS carry gives them their source's elbow and twist match, instead of measuring their own first frame, where the hand is already off the gun (the Inspector shows "as ReloadStart"). Measured on its own, `ReloadLoop` swung the left elbow 117°.
+- **Tested by script.** `--weapon-test` plays both weapons through in Play (FPS_ANIMATION_SYSTEM.md §10).
 
 ## 6. When a weapon does need code
 
