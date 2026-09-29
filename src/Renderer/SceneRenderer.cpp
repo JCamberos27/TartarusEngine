@@ -361,6 +361,9 @@ void SceneRenderer::RenderScene(World& world, const RenderFrameContext& ctx,
         // 2 = draw only those (the view-model pass's copy of the sleeves). 0 = the whole piece.
         int BoneMaskMode = 0;
         std::array<std::uint32_t, 16> BoneMask{};
+        // Clothing (an outfit piece, not a body part): drawn double-sided, so a collar's or cuff's inside
+        // isn't culled away to show straight through it.
+        bool DoubleSided = false;
     };
     static std::vector<DrawItem> drawList;
     static std::vector<DrawItem> transparentList;
@@ -419,6 +422,8 @@ void SceneRenderer::RenderScene(World& world, const RenderFrameContext& ctx,
         const unsigned collarVerts = cameraBody && bodyTag->CollarVerts ? bodyTag->CollarVerts->Id() : 0u;
         const auto* outfitHide = world.Registry.try_get<OutfitHideTag>(entity);
         const unsigned hideVerts = outfitHide && outfitHide->Buffer ? outfitHide->Buffer->Id() : 0u;
+        const auto* outfitPiece = world.Registry.try_get<OutfitPieceComponent>(entity);
+        const bool clothing = outfitPiece && !(outfitPiece->Flags & OutfitPieceBodyPart);
         glm::mat4 model = world.GetCachedWorldTransform(entity);
 
         // Frustum culling: skip the draw call entirely for anything outside the camera's view.
@@ -486,6 +491,7 @@ void SceneRenderer::RenderScene(World& world, const RenderFrameContext& ctx,
                 m->MeshCount(), (int)m->TriangleCount(), (int)m->VertexCount(),
                 MaterialAsset::Queue::Transparent, qi, viewDepth, centre, Model::MeshPass::Transparent,
                 renderable.ReceiveShadows, layerBit, nearHide, hideBones, noSsao, hideVerts, nearHideWidth, collarVerts };
+            item.DoubleSided = clothing;
             if (anyCameraMask) {
                 item.BoneMaskMode = 1;
                 item.BoneMask = cameraMask;
@@ -509,6 +515,7 @@ void SceneRenderer::RenderScene(World& world, const RenderFrameContext& ctx,
                 m->MeshCount(), (int)m->TriangleCount(), (int)m->VertexCount(),
                 MaterialAsset::Queue::Opaque, 2000, viewDepth, centre, opaquePass,
                 renderable.ReceiveShadows, layerBit, nearHide, hideBones, noSsao, hideVerts, nearHideWidth, collarVerts };
+            item.DoubleSided = clothing;
             if (anyCameraMask) {
                 item.BoneMaskMode = 1;
                 item.BoneMask = cameraMask;
@@ -583,7 +590,7 @@ void SceneRenderer::RenderScene(World& world, const RenderFrameContext& ctx,
     modelShader.SetInt("uAlphaBlend", 0); // explicit: ensure opaque pass outputs alpha=1
     for (const DrawItem& it : drawList) {
         probeItem = &it;
-        it.Ref->DrawSelected(modelShader, it.Xform, *it.Slots, selectProgram, 1.0f, perDraw, it.Pass);
+        it.Ref->DrawSelected(modelShader, it.Xform, *it.Slots, selectProgram, 1.0f, perDraw, it.Pass, it.DoubleSided);
 
         localStats.DrawCalls += it.Meshes;
         localStats.Triangles += it.Tris;
@@ -630,7 +637,7 @@ void SceneRenderer::RenderScene(World& world, const RenderFrameContext& ctx,
         for (const DrawItem& it : transparentList) {
             probeItem = &it;
             // Opacity comes from each transparent submesh's own slot (#112).
-            it.Ref->DrawSelected(modelShader, it.Xform, *it.Slots, selectProgram, 1.0f, perDraw, it.Pass);
+            it.Ref->DrawSelected(modelShader, it.Xform, *it.Slots, selectProgram, 1.0f, perDraw, it.Pass, it.DoubleSided);
 
             localStats.DrawCalls += it.Meshes;
             localStats.Triangles += it.Tris;
@@ -701,7 +708,7 @@ void SceneRenderer::RenderScene(World& world, const RenderFrameContext& ctx,
         std::sort(viewModelList.begin(), viewModelList.end(), opaqueOrder);
         for (const DrawItem& it : viewModelList) {
             probeItem = &it;
-            it.Ref->DrawSelected(modelShader, it.Xform, *it.Slots, selectProgram, 1.0f, perDraw, it.Pass);
+            it.Ref->DrawSelected(modelShader, it.Xform, *it.Slots, selectProgram, 1.0f, perDraw, it.Pass, it.DoubleSided);
 
             localStats.DrawCalls += it.Meshes;
             localStats.Triangles += it.Tris;
@@ -742,7 +749,7 @@ void SceneRenderer::RenderScene(World& world, const RenderFrameContext& ctx,
                                 0x0001/*GL_ONE*/, GL_ONE_MINUS_SRC_ALPHA);
             for (const DrawItem& it : viewModelTransparentList) {
                 probeItem = &it;
-                it.Ref->DrawSelected(modelShader, it.Xform, *it.Slots, selectProgram, 1.0f, perDraw, it.Pass);
+                it.Ref->DrawSelected(modelShader, it.Xform, *it.Slots, selectProgram, 1.0f, perDraw, it.Pass, it.DoubleSided);
 
                 localStats.DrawCalls += it.Meshes;
                 localStats.Triangles += it.Tris;

@@ -242,6 +242,7 @@ uniform vec2  uUVOffset;
 uniform float uNormalStrength; // 0 = unset -> 1
 uniform int   uNormalFlipY;    // 1: DirectX-style normal map (green down)
 uniform int   uDoubleSided;    // 1: back faces are lit as front faces (culling is off for them)
+uniform int   uClothInterior;  // 1: clothing drawn double-sided - its back faces are the garment's inside, in its shadow
 // Unity Standard's Forward Rendering Options, as "off" flags so a caller that never sets them (a
 // preview renderer) keeps both: 1 drops the lights' specular highlight / the sky and probe
 // reflection, for a fully matte surface.
@@ -857,6 +858,9 @@ void main() {
     }
     float ao = uHasAOMap == 1 ? (tri ? SampleTriplanar(uAOMap, vWorldPos, triW, uTriplanarScale)
                                       : texture(uAOMap, uv)).r : 1.0;
+    // A garment's inside (a collar's, a tucked shirt's past the waistband) is lit by what little gets in:
+    // lit like the outside it read as a bright band.
+    if (backFace && uClothInterior == 1) { albedo *= 0.3; ao *= 0.4; }
 
     vec3 N = normalize(vNormal);
     if (uHasNormalMap == 1 || uHasDetailNormalMap == 1) {
