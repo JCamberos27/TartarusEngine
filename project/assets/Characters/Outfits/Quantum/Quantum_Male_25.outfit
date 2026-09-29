@@ -3,6 +3,9 @@
   "gender": "Male",
   "race": "Asian",
   "items": {
+    "Balaclava": {
+      "item": "assets/Characters/Quantum/Models/Clothing/Male/Balaclava/SM_Balaclava_Crime.fbx"
+    },
     "Hat": {
       "item": "assets/Characters/Quantum/Models/Clothing/Male/Hats/SKM_Hat_Ushanka.fbx"
     },

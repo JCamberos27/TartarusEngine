@@ -3,8 +3,8 @@
   "gender": "Male",
   "race": "Asian",
   "items": {
-    "Hair": {
-      "item": "assets/Characters/Quantum/Models/Hair/SKM_Hair_Long.fbx"
+    "Balaclava": {
+      "item": "assets/Characters/Quantum/Models/Clothing/Male/Balaclava/SM_Balaclava_Crime.fbx"
     },
     "Outerwear": {
       "item": "assets/Characters/Quantum/Models/Clothing/Male/Outerwear/SKM_Jacket_Classic_Close.fbx"

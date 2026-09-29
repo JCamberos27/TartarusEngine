@@ -6,8 +6,11 @@
     "Bag": {
       "item": "assets/Characters/Quantum/Models/Clothing/Male/Bags/SKM_Backpack_Casual.fbx"
     },
-    "Hat": {
-      "item": "assets/Characters/Quantum/Models/Clothing/Male/Hats/WithHair/SKM_Cap_Hair.fbx"
+    "Balaclava": {
+      "item": "assets/Characters/Quantum/Models/Clothing/Male/Balaclava/SM_Balaclava_Crime.fbx",
+      "colours": {
+        "assets/Characters/Quantum/Materials/Clothing/Balaclava/M_Balaclava_Crime_Black.mat": "assets/Characters/Quantum/Materials/Clothing/Balaclava/M_Balaclava_Crime_Green.mat"
+      }
     },
     "Headphones": {
       "item": "assets/Characters/Quantum/Models/Clothing/Male/Hats/SKM_Headphones.fbx"

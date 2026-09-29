@@ -1,13 +1,12 @@
 {
   "name": "Quantum",
   "root": "assets/Characters/Quantum",
-  "itemFolders": ["Models/Clothing", "Models/Hair", "Models/Female/Hair", "Models/Beard"],
+  "itemFolders": ["Models/Clothing"],
   "excludeFolders": ["StaticMesh"],
   "skinMaterials": ["M_Quantum_Body", "M_Quantum_Arms", "M_Quantum_Head", "M_F_Vivian_Body", "M_F_Vivian_Arms", "M_F_Vivian_Head"],
   "slots": [
-    { "id": "Hair",      "label": "Hair",       "icon": "hair",      "folders": ["Hair"],               "headAttached": true, "layer": 9, "hides": false },
-    { "id": "Beard",     "label": "Beard",      "icon": "beard",     "folders": ["Beard"],              "headAttached": true, "layer": 9, "hides": false },
-    { "id": "Hat",       "label": "Hats",       "icon": "hat",       "folders": ["Hats", "WithHair"],   "headAttached": true, "layer": 10 },
+    { "id": "Balaclava", "label": "Balaclava",  "icon": "mask",      "folders": ["Balaclava"],          "headAttached": true, "layer": 8 },
+    { "id": "Hat",       "label": "Hats",       "icon": "hat",       "folders": ["Hats"],   "headAttached": true, "layer": 10 },
     { "id": "Headphones","label": "Headphones", "icon": "headphones","folders": [],                   "headAttached": true, "layer": 11 },
     { "id": "Glasses",   "label": "Glasses",    "icon": "glasses",   "folders": ["Glasses"],            "headAttached": true, "layer": 9, "hides": false },
     { "id": "Top",       "label": "Tops",       "icon": "shirt",     "folders": ["Tops"], "layer": 4 },
@@ -73,11 +72,8 @@
     { "slot": "Outerwear", "nameHasAny": ["Hood_Closed"],                          "add": ["HoodUp"] },
     { "slot": "Top",       "nameHasAny": ["Hood_Up"],                              "add": ["HoodUp"] },
     { "slot": "Top",       "nameHasAny": ["Hoodie"],                               "add": ["Thick"] },
-    { "slot": "Hat",       "materialHasAny": ["M_Hair"],                           "add": ["HairBuiltIn"] },
     { "slot": "Hat",       "nameHasAny": ["Cap", "Bandana", "Headband", "Hat_Warm"], "add": ["UnderHood"] },
     { "slot": "Hat",       "nameHasAny": ["Hat_Classic", "Cowboy", "Panama", "French_Pith", "Hat_Up", "Ushanka"], "add": ["BigHat"] },
-    { "slot": "Hair",      "materialHasAny": ["Cap", "Panama", "Warm_Hat", "Headband"], "add": ["HatBuiltIn"] },
-    { "slot": "Hair",      "materialHasAny": ["Sunglasses"],                       "add": ["GlassesBuiltIn"] },
 
     { "slot": "Top",       "nameHasAny": ["Shirt_Classic"],                        "add": ["Formal"] },
     { "slot": "Top",       "nameHasAny": ["Tshirt", "Shirt_RolledUp", "Shirt_Adventure", "Hoodie", "Jersey"], "add": ["Casual"] },
@@ -112,19 +108,13 @@
   ],
 
   "clears": [
-    { "slot": "Hat",       "pathHasAny": ["/WithHair/"],           "clear": "Hair" },
-    { "slot": "Hat",       "tags": ["HairBuiltIn"],                "clear": "Hair" },
-    { "slot": "Outerwear", "tags": ["BuiltInTop", "ClosedJacket"], "clear": "Top" },
-    { "slot": "Top",       "tags": ["HoodUp"],                     "clear": "Hair" },
-    { "slot": "Outerwear", "tags": ["HoodUp"],                     "clear": "Hair" }
+    { "slot": "Outerwear", "tags": ["BuiltInTop", "ClosedJacket"], "clear": "Top" }
   ],
 
   "excludes": [
     { "a": { "slot": "Outerwear", "tags": ["OpenJacket"] }, "b": { "slot": "Top", "tags": ["Thick"] }, "why": "a hoodie is too thick for it" },
     { "a": { "tags": ["HoodUp"] }, "b": { "slot": "Hat", "lacksTags": ["UnderHood"] }, "why": "the hood is up" },
     { "a": { "tags": ["HoodUp"] }, "b": { "slot": "Headphones" }, "why": "the hood is up" },
-    { "a": { "slot": "Hair", "tags": ["HatBuiltIn"] }, "b": { "slot": "Hat" }, "why": "the haircut has its own" },
-    { "a": { "slot": "Hair", "tags": ["GlassesBuiltIn"] }, "b": { "slot": "Glasses" }, "why": "the haircut has its own" },
     { "a": { "slot": "Hat", "tags": ["BigHat"] }, "b": { "slot": "Headphones" }, "why": "no room under the hat" },
     { "a": { "slot": "Shoes", "nameHasAny": ["Flip_Flops", "Shoes_Classic", "Boots_Socks"] }, "b": { "slot": "Socks" }, "why": "not with these shoes" },
 
@@ -141,32 +131,32 @@
   ],
 
   "layers": [
-    { "slot": "Top",       "nameHasAny": ["Tucked"],      "layer": 2 },
+    { "slot": "Top",       "nameHasAny": ["Tucked", "Shirt_Classic", "Shirt_Adventure", "Tank_Top", "F_Jersey"], "layer": 2 },
     { "slot": "Shoes",     "nameHasAny": ["Boots"], "nameLacksAll": ["Boots_Inboots"], "layer": 5 },
-    { "slot": "Top",       "nameHasAny": ["Hood_Up"],     "over": ["Hair"] },
-    { "slot": "Outerwear", "nameHasAny": ["Hood_Closed"], "over": ["Hair"] }
+    { "slot": "Top",       "nameHasAny": ["Hood_Up"],     "over": ["Balaclava"] },
+    { "slot": "Outerwear", "nameHasAny": ["Hood_Closed"], "over": ["Balaclava"] }
   ],
   "pairs": [
     { "whenSlot": "Shoes", "whenNameHas": "Boots", "whenNameLacks": "Boots_Inboots", "slot": "Pants", "suffix": "_Inboots" }
   ],
 
-  "randomOrder": ["Outerwear", "Top", "Shoes", "Pants", "Socks", "Hair", "Hat", "Headphones", "Beard", "Glasses", "Collar", "Bag", "Wrist L", "Wrist R"],
+  "randomOrder": ["Outerwear", "Top", "Shoes", "Pants", "Socks", "Balaclava", "Hat", "Headphones", "Glasses", "Collar", "Bag", "Wrist L", "Wrist R"],
   "styles": [
     { "name": "Casual", "weight": 3.0,
-      "fill": { "Outerwear": 0.45, "Top": 1.0, "Shoes": 1.0, "Pants": 1.0, "Socks": 0.7, "Hair": 0.9, "Hat": 0.25, "Headphones": 0.1,
-                "Beard": 0.4, "Glasses": 0.2, "Bag": 0.2, "Wrist L": 0.2, "Wrist R": 0.1 } },
+      "fill": { "Outerwear": 0.45, "Top": 1.0, "Shoes": 1.0, "Pants": 1.0, "Socks": 0.7, "Balaclava": 1.0, "Hat": 0.25, "Headphones": 0.1,
+                "Glasses": 0.2, "Bag": 0.2, "Wrist L": 0.2, "Wrist R": 0.1 } },
     { "name": "Sport", "weight": 2.0,
-      "fill": { "Outerwear": 0.2, "Top": 1.0, "Shoes": 1.0, "Pants": 1.0, "Socks": 0.9, "Hair": 0.9, "Hat": 0.35, "Headphones": 0.3,
-                "Beard": 0.3, "Glasses": 0.1, "Bag": 0.3, "Wrist L": 0.3, "Wrist R": 0.1 } },
+      "fill": { "Outerwear": 0.2, "Top": 1.0, "Shoes": 1.0, "Pants": 1.0, "Socks": 0.9, "Balaclava": 1.0, "Hat": 0.35, "Headphones": 0.3,
+                "Glasses": 0.1, "Bag": 0.3, "Wrist L": 0.3, "Wrist R": 0.1 } },
     { "name": "Formal", "weight": 1.0, "gender": "Male",
-      "fill": { "Outerwear": 0.75, "Top": 1.0, "Shoes": 1.0, "Pants": 1.0, "Hair": 0.95,
-                "Beard": 0.4, "Glasses": 0.35, "Wrist L": 0.4 } },
+      "fill": { "Outerwear": 0.75, "Top": 1.0, "Shoes": 1.0, "Pants": 1.0, "Balaclava": 1.0,
+                "Glasses": 0.35, "Wrist L": 0.4 } },
     { "name": "Winter", "weight": 1.5,
-      "fill": { "Outerwear": 1.0, "Top": 1.0, "Shoes": 1.0, "Pants": 1.0, "Socks": 0.5, "Hair": 0.9, "Hat": 0.7, "Headphones": 0.1,
-                "Beard": 0.5, "Glasses": 0.1, "Collar": 0.3, "Bag": 0.15, "Wrist L": 0.1 } },
+      "fill": { "Outerwear": 1.0, "Top": 1.0, "Shoes": 1.0, "Pants": 1.0, "Socks": 0.5, "Balaclava": 1.0, "Hat": 0.7, "Headphones": 0.1,
+                "Glasses": 0.1, "Collar": 0.3, "Bag": 0.15, "Wrist L": 0.1 } },
     { "name": "Summer", "weight": 1.5,
-      "fill": { "Top": 1.0, "Shoes": 1.0, "Pants": 1.0, "Socks": 0.3, "Hair": 0.9, "Hat": 0.4,
-                "Beard": 0.3, "Glasses": 0.5, "Bag": 0.15, "Wrist L": 0.3, "Wrist R": 0.2 } }
+      "fill": { "Top": 1.0, "Shoes": 1.0, "Pants": 1.0, "Socks": 0.3, "Balaclava": 1.0, "Hat": 0.4,
+                "Glasses": 0.5, "Bag": 0.15, "Wrist L": 0.3, "Wrist R": 0.2 } }
   ],
 
   "items": [
@@ -174,8 +164,7 @@
     { "path": "Models/Clothing/Female/Shoes/SKM_F_Vivian_Feet_Shoes.fbx", "hidden": true },
     { "path": "Models/Clothing/Female/Shoes/SKM_F_Vivian_Feet_Shoes_Long.fbx", "hidden": true },
     { "path": "Models/Clothing/Female/Accessories/SKM_F_Vivian_Wrist.fbx", "hidden": true },
-    { "path": "Models/Female/Hair/SKM_F_Head_Scalp.fbx", "name": "Shaved" },
-    { "path": "Models/Hair/SKM_Hair_Skin.fbx", "name": "Shaved" },
+    { "path": "Models/Clothing/Female/Hats/SKM_F_Hat_Warm_Braids.fbx", "hidden": true },
     { "path": "Models/Clothing/Male/Shoes/SKM_Socks.fbx", "slot": "Socks" },
     { "path": "Models/Clothing/Female/Shoes/SKM_F_Socks.fbx", "slot": "Socks" },
     { "path": "Models/Clothing/Female/Shoes/SKM_F_Socks_V2.fbx", "slot": "Socks", "name": "Socks Long" },
