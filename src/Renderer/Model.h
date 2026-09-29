@@ -277,6 +277,8 @@ public:
     // owns the per-program uModel / uNormalMatrix / bone upload so a mesh can draw through a
     // different program than its neighbour. `xform` is the entity's world transform.
     using ProgramSelector = std::function<Shader*(const MaterialAsset*)>;
+    // `forceDoubleSided` draws every sub-mesh as if its material were Double Sided (clothing: a collar's
+    // inside is a single-sided shell you'd otherwise see straight through).
     // #112 — which submeshes a DrawSelected call draws: the render queue is per material slot,
     // so a model can have opaque and transparent parts that belong in different passes.
     enum class MeshPass { All, Opaque, Transparent };
@@ -284,7 +286,7 @@ public:
                       const std::vector<std::shared_ptr<MaterialAsset>>& slots,
                       const ProgramSelector& selectProgram, float opacity = 1.0f,
                       const std::function<void(Shader&)>& onProgramBound = {},
-                      MeshPass pass = MeshPass::All);
+                      MeshPass pass = MeshPass::All, bool forceDoubleSided = false);
     int MeshCount() const { return (int)m_D->Meshes.size(); }
     // Sub-mesh `index`'s skinned vertices (ModelMesh::SkinVertices): empty when it isn't skinned.
     const std::vector<ModelMesh::SkinVertex>& MeshSkinVertices(int index) const { return m_D->Meshes[index]->SkinVertices(); }

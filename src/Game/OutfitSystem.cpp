@@ -11,6 +11,8 @@
 #include "ProjectPaths.h"
 #include "World.h"
 
+#include <glm/gtc/matrix_transform.hpp>
+#include <glm/gtc/quaternion.hpp>
 #include <json.hpp>
 
 #include <algorithm>
@@ -603,6 +605,9 @@ std::vector<ColourGroup> ColourGroups(const World& world, AssetLibrary& assets, 
     std::vector<ColourGroup> out;
     const auto* rc = world.Registry.try_get<RenderableComponent>(piece);
     if (!rc || !rc->ModelRef) return out;
+    // Body parts take the race's skin (Wardrobe::SkinMaterialFor), not a colourway: their materials share a
+    // folder with every other skin, eye and teeth material, which aren't choices for them.
+    if (const auto* p = world.Registry.try_get<OutfitPieceComponent>(piece); p && (p->Flags & OutfitPieceBodyPart)) return out;
     const auto sources = SlotSources(assets, *rc->ModelRef);
     for (size_t i = 0; i < sources.size(); ++i) {
         if (sources[i].empty()) continue;
@@ -610,6 +615,11 @@ std::vector<ColourGroup> ColourGroups(const World& world, AssetLibrary& assets, 
         ColourGroup g;
         g.Source = sources[i];
         g.Current = i < rc->Materials.size() && rc->Materials[i] ? Rel(rc->Materials[i]->Path) : sources[i];
+        // Colourways are the materials beside it (Materials/Clothing/<Category>/<Item>/),
+        // except in shared folders: skin, eyes and teeth (Materials/Characters) are no one's colourway, and
+        // Materials/Clothing/Generated holds one plain material per untextured item.
+        const std::string folder = Lower(Folder(sources[i]));
+        if (folder.find("/materials/characters") != std::string::npos || folder.find("/generated") != std::string::npos) continue;
         g.Options = Wardrobe::Colourways(sources[i], Siblings(sources[i]));
         if (g.Options.size() < 2) continue; // nothing to choose (skin, a single material)
         out.push_back(std::move(g));
@@ -793,7 +803,7 @@ CoverageStore& Coverage() {
     return s;
 }
 
-constexpr std::uint32_t kCoverageVersion = 3; // bump when Covered/Erode or their settings change
+constexpr std::uint32_t kCoverageVersion = 7; // bump when Covered/Erode or their settings change
 
 struct FileStamp {
     std::uint64_t Size = 0;
@@ -865,10 +875,11 @@ void SaveCoverage(const CoverageKey& k, const FileStamp& under, const FileStamp&
 
 // The pair's covered vertices if they're known (memory, then disk); else starts working them out in the
 // background and returns null - ask again next frame.
+// `exposed`: `under` is the head (OutfitCoverage::Hidden) - its own entry, keyed apart.
 const std::vector<std::uint8_t>* PairCoverage(const World& world, entt::entity under, entt::entity over,
-                                              const std::string& underModel, const std::string& overModel) {
+                                              const std::string& underModel, const std::string& overModel, bool exposed) {
     CoverageStore& store = Coverage();
-    const CoverageKey key{Lower(Rel(underModel)), Lower(Rel(overModel))};
+    const CoverageKey key{Lower(Rel(underModel)) + (exposed ? "|exposed" : ""), Lower(Rel(overModel))};
     if (auto it = store.Done.find(key); it != store.Done.end()) return &it->second;
     if (auto it = store.Running.find(key); it != store.Running.end()) {
         if (it->second.wait_for(std::chrono::seconds(0)) != std::future_status::ready) return nullptr;
@@ -876,13 +887,13 @@ const std::vector<std::uint8_t>* PairCoverage(const World& world, entt::entity u
         store.Running.erase(it);
         return &done->second;
     }
-    const FileStamp us = StampOf(key.first), os = StampOf(key.second);
+    const FileStamp us = StampOf(Lower(Rel(underModel))), os = StampOf(key.second);
     std::vector<std::uint8_t> loaded;
     if (LoadCoverage(key, us, os, loaded)) return &store.Done.emplace(key, std::move(loaded)).first->second;
     // The geometry is copied here (main thread); the maths and the save run on their own thread.
     store.Running.emplace(key, std::async(std::launch::async,
-                                          [key, us, os, body = Geometry(world, under), cloth = Geometry(world, over)] {
-                                              std::vector<std::uint8_t> covered = OutfitCoverage::Hidden(body, cloth);
+                                          [key, us, os, exposed, body = Geometry(world, under), cloth = Geometry(world, over)] {
+                                              std::vector<std::uint8_t> covered = OutfitCoverage::Hidden(body, cloth, exposed);
                                               SaveCoverage(key, us, os, covered);
                                               return covered;
                                           }));
@@ -910,11 +921,13 @@ void UpdateHiding(World& world) {
             for (const auto& [slot, under] : pieces) {
                 const auto* urc = reg.try_get<RenderableComponent>(under);
                 if (!urc || !urc->ModelRef) continue;
+                const int flags = reg.get<OutfitPieceComponent>(under).Flags;
+                const bool exposed = (flags & OutfitPieceBodyPart) && (flags & OutfitPieceHeadAttached);
                 std::vector<std::uint8_t> hidden;
                 for (const auto& [overSlot, over] : pieces) {
                     const auto* orc = reg.try_get<RenderableComponent>(over);
                     if (over == under || !orc || !orc->ModelRef || !Wardrobe::Hides(layers[over], slot, layers[under])) continue;
-                    const auto* covered = PairCoverage(world, under, over, urc->ModelRef->Path(), orc->ModelRef->Path());
+                    const auto* covered = PairCoverage(world, under, over, urc->ModelRef->Path(), orc->ModelRef->Path(), exposed);
                     if (!covered) { waiting = true; continue; }
                     if (hidden.empty()) hidden = *covered;
                     else
@@ -933,6 +946,36 @@ void UpdateHiding(World& world) {
             tag.Total = (int)hidden.size();
         }
         outfit.HideSignature = HideSignature(world, outfit, pieces, wardrobe.get());
+    }
+}
+
+void UpdateAttachments(World& world) {
+    auto& reg = world.Registry;
+    for (entt::entity root : reg.view<CharacterOutfitComponent>()) {
+        const auto pieces = Pieces(world, root);
+        const auto head = pieces.find("Head");
+        if (head == pieces.end()) continue;
+        const auto* hrc = reg.try_get<RenderableComponent>(head->second);
+        const int bone = hrc && hrc->ModelRef ? hrc->ModelRef->BoneId("head") : -1;
+        if (bone < 0) continue;
+        // The head piece's own place under the root (identity as the outfit builds it), then its head bone's
+        // skinning matrix: bind-pose model space -> where the head is now.
+        const auto& ht = reg.get<TransformComponent>(head->second);
+        const glm::mat4 follow = glm::translate(glm::mat4(1.0f), ht.Position) * glm::mat4_cast(ht.Rotation) *
+                                 glm::scale(glm::mat4(1.0f), ht.Scale) * hrc->ModelRef->FinalBoneMatrix(bone);
+        glm::vec3 pos(follow[3]);
+        glm::vec3 scale(glm::length(glm::vec3(follow[0])), glm::length(glm::vec3(follow[1])), glm::length(glm::vec3(follow[2])));
+        const glm::mat3 rot(glm::vec3(follow[0]) / scale.x, glm::vec3(follow[1]) / scale.y, glm::vec3(follow[2]) / scale.z);
+        for (const auto& [slot, e] : pieces) {
+            const auto& p = reg.get<OutfitPieceComponent>(e);
+            if (!(p.Flags & OutfitPieceHeadAttached) || (p.Flags & OutfitPieceBodyPart)) continue;
+            const auto* rc = reg.try_get<RenderableComponent>(e);
+            if (!rc || !rc->ModelRef || rc->ModelRef->BoneCount() > 0) continue; // skinned: it follows by its bones
+            auto& t = reg.get<TransformComponent>(e);
+            t.Position = pos;
+            t.Rotation = glm::normalize(glm::quat_cast(rot));
+            t.Scale = scale;
+        }
     }
 }
 

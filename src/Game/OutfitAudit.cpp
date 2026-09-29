@@ -213,7 +213,7 @@ int Run(AssetLibrary& assets, const std::string& wardrobe, const std::string& cs
                 Pair& p = pairs[i];
                 const auto& u = meshes.at(p.Under->Path);
                 const auto& o = meshes.at(p.Over->Path);
-                const auto hidden = OutfitCoverage::Hidden(u, o);
+                const auto hidden = OutfitCoverage::Hidden(u, o, p.Under->BodyPart && p.Under->Slot == "Head");
                 const auto poke = OutfitCoverage::PokeDepth(u, o, kMaxDepth);
                 p.Verts = (int)u.Positions.size();
                 for (size_t v = 0; v < hidden.size(); ++v) {

@@ -110,6 +110,11 @@ Result LoadPreset(World& world, AssetLibrary& assets, entt::entity root, const s
 // scene load), and remembers each pair.
 void UpdateHiding(World& world);
 
+// Rigid head wear (a static mesh in a head-attached slot, like a balaclava): no skeleton of its own, so each
+// frame it's placed by the head bone's skinning matrix - modelled in the head's bind pose, that's where it sits.
+// Once per frame after the animation (and the first-person body's late pose), before the transform cache.
+void UpdateAttachments(World& world);
+
 // The locked slots of a Locks string ("Hair, Top").
 std::vector<std::string> ParseLocks(const std::string& locks);
 

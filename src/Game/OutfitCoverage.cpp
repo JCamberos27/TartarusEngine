@@ -167,7 +167,114 @@ void Erode(const Mesh& body, std::vector<std::uint8_t>& covered, int rings) {
     }
 }
 
-std::vector<std::uint8_t> Hidden(const Mesh& under, const Mesh& over) {
+namespace {
+
+// The grid's cells the segment p->p+d passes through, in order (Amanatides-Woo), each handed to `visit`
+// (its index) until that returns true. The segment is clipped to the grid first.
+template <class Visit>
+void Walk(const Grid& g, const glm::vec3& p, const glm::vec3& d, Visit&& visit) {
+    const glm::vec3 lo = g.Min, hi = g.Min + glm::vec3(g.Size) * g.Cell;
+    float t0 = 0.0f, t1 = 1.0f;
+    for (int i = 0; i < 3; ++i) {
+        if (std::abs(d[i]) < 1e-12f) {
+            if (p[i] < lo[i] || p[i] > hi[i]) return;
+            continue;
+        }
+        float a = (lo[i] - p[i]) / d[i], b = (hi[i] - p[i]) / d[i];
+        if (a > b) std::swap(a, b);
+        t0 = std::max(t0, a);
+        t1 = std::min(t1, b);
+    }
+    if (t0 > t1) return;
+    glm::ivec3 c = g.CellOf(p + d * t0), step(0);
+    glm::vec3 tMax(1e30f), tDelta(1e30f);
+    for (int i = 0; i < 3; ++i) {
+        if (d[i] > 0.0f) {
+            step[i] = 1;
+            tMax[i] = (g.Min[i] + (float)(c[i] + 1) * g.Cell - p[i]) / d[i];
+            tDelta[i] = g.Cell / d[i];
+        } else if (d[i] < 0.0f) {
+            step[i] = -1;
+            tMax[i] = (g.Min[i] + (float)c[i] * g.Cell - p[i]) / d[i];
+            tDelta[i] = -g.Cell / d[i];
+        }
+    }
+    for (;;) {
+        if (visit(g.Index(c))) return;
+        const int a = tMax.x < tMax.y ? (tMax.x < tMax.z ? 0 : 2) : (tMax.y < tMax.z ? 1 : 2);
+        if (tMax[a] > t1) return;
+        c[a] += step[a];
+        if (c[a] < 0 || c[a] >= g.Size[a]) return;
+        tMax[a] += tDelta[a];
+    }
+}
+
+// Whether p->p+d meets a triangle of `mesh` (past minT, not one of vertex `skip`'s own); with `facing`, only
+// one whose front turns that way (a back face isn't drawn).
+bool AnyHit(const Mesh& mesh, const Grid& grid, const glm::vec3& p, const glm::vec3& d, float minT, unsigned skip,
+            const glm::vec3* facing = nullptr) {
+    bool hit = false;
+    Walk(grid, p, d, [&](int cell) {
+        for (int tri : grid.Cells[(size_t)cell]) {
+            const size_t t = (size_t)tri * 3;
+            const unsigned i0 = mesh.Indices[t], i1 = mesh.Indices[t + 1], i2 = mesh.Indices[t + 2];
+            if (i0 == skip || i1 == skip || i2 == skip) continue;
+            const glm::vec3 &a = mesh.Positions[i0], &b = mesh.Positions[i1], &c = mesh.Positions[i2];
+            if (facing && glm::dot(glm::cross(b - a, c - a), *facing) <= 0.0f) continue;
+            float at;
+            if (SegmentHitsTriangle(p, d, a, b, c, &at) && at > minT) {
+                hit = true;
+                return true;
+            }
+        }
+        return false;
+    });
+    return hit;
+}
+
+} // namespace
+
+std::vector<std::uint8_t> Backed(const Mesh& body, const Mesh& cloth, const std::vector<std::uint8_t>& only, float reach) {
+    std::vector<std::uint8_t> out(body.Positions.size(), 0);
+    if (body.Positions.empty() || cloth.Positions.empty() || cloth.Indices.size() < 3) return out;
+    const Grid clothGrid = Build(cloth, reach), bodyGrid = Build(body, reach);
+    const std::vector<glm::vec3> normals = VertexNormals(body);
+    // The looks, spread evenly over a hemisphere about +Z (a Fibonacci spiral), out to ~78 degrees off the
+    // normal: past that the view catches only a sliver of the skin, edge on.
+    std::vector<glm::vec3> looks;
+    for (int k = 0; k < kBackedRays; ++k) {
+        const float z = 1.0f - 0.8f * ((float)k + 0.5f) / (float)kBackedRays; // cos from ~1 down to 0.2
+        const float r = std::sqrt(std::max(0.0f, 1.0f - z * z)), a = 2.39996323f * (float)k; // golden angle
+        looks.emplace_back(r * std::cos(a), r * std::sin(a), z);
+    }
+    const float minT = 0.001f / reach; // closer than a millimetre is the vertex's own surface
+    for (size_t v = 0; v < body.Positions.size(); ++v) {
+        if (!only.empty() && (v >= only.size() || !only[v])) continue;
+        const glm::vec3& n = normals[v];
+        if (n == glm::vec3(0.0f)) continue;
+        const glm::vec3 t = glm::normalize(glm::cross(n, std::abs(n.x) < 0.9f ? glm::vec3(1, 0, 0) : glm::vec3(0, 1, 0)));
+        const glm::vec3 b = glm::cross(n, t), p = body.Positions[v];
+        bool backed = true;
+        for (const glm::vec3& l : looks) {
+            const glm::vec3 dir = l.x * t + l.y * b + l.z * n, d = dir * reach;
+            // Seen from out along `dir` only if nothing's in the way...
+            if (AnyHit(cloth, clothGrid, p, d, 0.0f, ~0u) || AnyHit(body, bodyGrid, p, d, minT, (unsigned)v)) continue;
+            // ... and then, without it, the view goes on through: cloth (drawn both sides) or the body's
+            // outside must be right there to see instead - found far down inside a shirt, it's a dark hole.
+            const glm::vec3 behind = -dir * kBackedBehind;
+            // Only a surface facing the view counts: past a collar's rim the view meets the collar's inside
+            // (drawn, but dark) - a hole all the same.
+            if (AnyHit(cloth, clothGrid, p, behind, 0.0f, ~0u, &dir) || AnyHit(body, bodyGrid, p, behind, 0.001f / kBackedBehind, (unsigned)v, &dir))
+                continue;
+            backed = false;
+            break;
+        }
+        out[v] = backed ? 1 : 0;
+    }
+    return out;
+}
+
+std::vector<std::uint8_t> Hidden(const Mesh& under, const Mesh& over, bool exposed) {
     // Covered from outside: the edge ring stays, so a hem never opens a hole. Poking out: all of it
     // goes - the cloth is right behind it.
     std::vector<std::uint8_t> covered = Covered(under, over);
@@ -175,6 +282,10 @@ std::vector<std::uint8_t> Hidden(const Mesh& under, const Mesh& over) {
     const std::vector<float> poke = PokeDepth(under, over, kPokeReach);
     for (size_t v = 0; v < covered.size(); ++v)
         if (poke[v] > 0.0f) covered[v] = 1;
+    if (exposed) {
+        const std::vector<std::uint8_t> backed = Backed(under, over, covered);
+        for (size_t v = 0; v < covered.size(); ++v) covered[v] &= backed[v];
+    }
     return covered;
 }
 

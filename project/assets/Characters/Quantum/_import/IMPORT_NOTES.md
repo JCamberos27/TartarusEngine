@@ -23,6 +23,21 @@ inboots pants, tank tops) - use plain PBR materials - body parts in `Materials/C
 transparent, hair cards double-sided). `tools/quantum/fill_quantum_materials.py` wires them, and the slots whose .mat
 exists under another name (Vivian Afro skin, caps, hats, glasses, watches); it only fills slots missing from a remap.
 
+## Hair and beards: not used - balaclavas instead
+Hair, beards and the hats with built-in hair are out of the wardrobe (the models stay on disk; the pack ships the hair cards
+without usable textures). Every character wears a balaclava (`Models/Clothing/<Male|Female>/Balaclava/`, a static mesh
+modelled on the Quantum head; `OutfitSystem::UpdateAttachments` rides it on the head bone). Colourways:
+`Materials/Clothing/Balaclava/` (Black, Green, Print); textures in `Textures/Clothing/Balaclava/` (git-ignored like
+the other clothing PNGs; source: `textures.zip` beside `sm_balaclava_crime.fbx`).
+
+## Eyes, brows and lashes
+The pack has no eye, brow or lash textures. `Textures/Eyes/T_Eye_<Colour>.png` (Hazel, Brown, DarkBrown, Blue, Green, Gray) are
+built from an iris macro photo by Grégoire Hervé-Bazin on Unsplash (https://unsplash.com/photos/0YMnASP4N0I, Unsplash License:
+free for commercial use, no attribution required): the iris rewrapped concentric with a clean pupil, on a generated sclera,
+sized to the Quantum eyeball's spherical UV (limbus at UV radius 0.135). Materials `Materials/Characters/Eyes/M_Eye_<Colour>.mat`;
+each head picks one (`M_Eye.mat` = Brown). Brows and lashes are hair cards: `T_Brows_Lashes.png` / `T_F_Brows_Lashes.png` are
+generated strands fitted to the male / female card layouts (alpha cutout; `M_Brows_Lashes`, `M_F_Brows_Lashes`, grey for Old).
+
 ## Naming fixed
 Tatto->Tattoo, Qunatum->Quantum, Fase->Face, Glassses->Glasses, Tshist->Tshirt, Vivan->Vivian, Hight->High,
 FacerRig->FaceRig, Irokez->Mohawk, Snikers->Sneakers, Classik->Classic, Bordo->Burgundy, Bege->Beige, Grey->Gray, Commo->Camo,

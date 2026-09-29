@@ -7,9 +7,9 @@
     "MI_F_Saliva29": "assets/Characters/Quantum/Materials/Characters/M_Saliva.mat",
     "MI_F_Teeth29": "assets/Characters/Quantum/Materials/Characters/M_Teeth.mat",
     "MI_F_Vivian_Basemesh_Head": "assets/Characters/Quantum/Materials/Characters/M_F_Vivian_Head.mat",
-    "MI_Hair_Eyebrows_Eyelids36": "assets/Characters/Quantum/Materials/Characters/M_Brows_Lashes.mat",
-    "eyeLeft_lod0_mesh33": "assets/Characters/Quantum/Materials/Characters/M_Eye.mat",
-    "eyeRight_lod0_mesh33": "assets/Characters/Quantum/Materials/Characters/M_Eye.mat"
+    "MI_Hair_Eyebrows_Eyelids36": "assets/Characters/Quantum/Materials/Characters/M_F_Brows_Lashes.mat",
+    "eyeLeft_lod0_mesh33": "assets/Characters/Quantum/Materials/Characters/Eyes/M_Eye_Green.mat",
+    "eyeRight_lod0_mesh33": "assets/Characters/Quantum/Materials/Characters/Eyes/M_Eye_Green.mat"
   },
   "metaVersion": 1,
   "type": "model"

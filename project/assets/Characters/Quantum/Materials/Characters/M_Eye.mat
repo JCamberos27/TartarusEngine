@@ -4,11 +4,11 @@
   "name": "M_Eye",
   "properties": {
     "_AOMap": "",
-    "_AlbedoMap": "",
+    "_AlbedoMap": "assets/Characters/Quantum/Textures/Eyes/T_Eye_Brown.png",
     "_BaseColor": [
-      0.1,
-      0.07,
-      0.05
+      1.0,
+      1.0,
+      1.0
     ],
     "_DoubleSided": false,
     "_EmissiveColor": [
@@ -22,7 +22,7 @@
     "_MetallicMap": "",
     "_MetallicRoughnessMap": "",
     "_NormalMap": "",
-    "_Roughness": 0.08,
+    "_Roughness": 0.18,
     "_RoughnessMap": "",
     "_Triplanar": false,
     "_TriplanarScale": 1.0
