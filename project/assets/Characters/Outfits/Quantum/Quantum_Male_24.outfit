@@ -9,9 +9,6 @@
         "assets/Characters/Quantum/Materials/Clothing/Balaclava/M_Balaclava_Crime_Black.mat": "assets/Characters/Quantum/Materials/Clothing/Balaclava/M_Balaclava_Crime_Print.mat"
       }
     },
-    "Hat": {
-      "item": "assets/Characters/Quantum/Models/Clothing/Male/Hats/SKM_Hat_Warm.fbx"
-    },
     "Outerwear": {
       "item": "assets/Characters/Quantum/Models/Clothing/Male/Outerwear/SKM_Vest_Hunter.fbx"
     },

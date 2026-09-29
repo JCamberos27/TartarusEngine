@@ -610,8 +610,11 @@ Layering LayerOf(const Wardrobe& w, const std::string& slot, const std::string& 
     return l;
 }
 
-bool Hides(const Layering& over, const std::string& underSlot, const Layering& under) {
+bool Hides(const Layering& over, const std::string& underSlot, const Layering& under, const std::string& overSlot) {
     if (!over.Hides) return false;
+    // A piece moved over this one (a hood that's up, over the balaclava) isn't under it as well.
+    for (const auto& s : under.Over)
+        if (!overSlot.empty() && IEquals(s, overSlot)) return false;
     for (const auto& s : over.Over)
         if (IEquals(s, underSlot)) return true;
     return over.Layer > under.Layer;
