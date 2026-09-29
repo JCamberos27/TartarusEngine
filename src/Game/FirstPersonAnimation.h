@@ -152,6 +152,18 @@ struct FirstPersonAdsSettings {
     // The defaults: the reloads sway a little with their clip, the mag check tips the mag into view.
     std::vector<GunMotion> GunMotions{{"TacReload", 0.18f, 0.25f}, {"EmptyReload", 0.18f, 0.25f}, {"MagCheck", 0.6f, 0.2f}};
     float SightPivot = 0.25f;
+    // The free hand off the gun. Its clip keys it relative to the gun, so with the gun held on the
+    // sights a spot the hand reaches for away from it (a shell on the belt, a mag in a pouch) swings
+    // along with the gun - in front of the face. Anchored, a hand more than Far metres from the gun
+    // (its mesh's box) goes where it is relative to the eye at the hip instead, and within Near
+    // follows the gun, easing between; Bones (weapon-rig bones it carries off the gun: the shell)
+    // move with it. Off = the whole action relative to the gun.
+    struct HandAnchor {
+        bool Enabled = false;
+        float Near = 0.05f;
+        float Far = 0.15f;
+        std::vector<std::string> Bones;
+    } Anchor;
     const GunMotion* GunMotionFor(const std::string& state) const {
         for (const GunMotion& m : GunMotions)
             if (m.State == state) return &m;

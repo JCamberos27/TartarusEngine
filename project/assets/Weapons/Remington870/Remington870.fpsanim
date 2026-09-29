@@ -26,27 +26,34 @@
         "position": 0.2
       },
       "ReloadStart": {
-        "rotation": 0.18,
-        "position": 0.25
+        "rotation": 1.0,
+        "position": 1.0
       },
       "ReloadStartEmpty": {
-        "rotation": 0.18,
-        "position": 0.25
+        "rotation": 1.0,
+        "position": 1.0
       },
       "ReloadLoop": {
-        "rotation": 0.18,
-        "position": 0.25
+        "rotation": 1.0,
+        "position": 1.0
       },
       "ReloadLoopEnd": {
-        "rotation": 0.18,
-        "position": 0.25
+        "rotation": 1.0,
+        "position": 1.0
       },
       "ReloadEnd": {
-        "rotation": 0.18,
-        "position": 0.25
+        "rotation": 1.0,
+        "position": 1.0
       }
     },
-    "sightPivot": 0.25
+    "sightPivot": 0.25,
+    "handAnchor": {
+      "near": 0.05,
+      "far": 0.15,
+      "bones": [
+        "Shell"
+      ]
+    }
   },
   "gameplay": {
     "allowFullAuto": false,

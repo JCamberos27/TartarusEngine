@@ -86,11 +86,14 @@ AdsCarryResult BuildAdsCarry(const AdsCarryInputs& in) {
     std::vector<glm::mat4> aimGlobals;
     IK::ComputeGlobals(aimPose, parents, aimGlobals);
     // A state's length, the way the controller counts its phase: its longest motion.
+    int lastWeaponClip = -1;
     auto stateLength = [&](int state, int armsClip) {
+        lastWeaponClip = -1;
         float len = arms.AnimationLength(armsClip);
         if (in.Weapon && weaponTrack >= 0) {
             const std::string& wpath = L.States[state].MotionFor(weaponTrack).Clip;
             const int wclip = wpath.empty() ? -1 : ResolveAnimationClip(*in.Weapon, wpath, *in.Assets);
+            lastWeaponClip = wclip;
             if (wclip >= 0) len = std::max(len, in.Weapon->AnimationLength(wclip));
         }
         return len > 1e-4f ? len : 1.0f;
@@ -136,6 +139,7 @@ AdsCarryResult BuildAdsCarry(const AdsCarryInputs& in) {
         a.StateName = entry.State;
         a.Clip = clip;
         a.Length = stateLength(state, clip);
+        a.WeaponClip = lastWeaponClip;
         a.Hip = hip;
         a.Aim = aim;
         if (!report.HoldsAim) { // the hold keeps the gun on the sights itself
@@ -154,6 +158,7 @@ AdsCarryResult BuildAdsCarry(const AdsCarryInputs& in) {
             probe.Offsets[in.AdsOffset].Position = a.T;
             probe.Offsets[in.ProceduralOffset] = IKBoneOffset{in.Rig->Offsets[in.ProceduralOffset].Bone};
             probe.LimbA.Swivel = probe.LimbB.Swivel = 0.0f;
+            probe.LimbA.GoalMove = probe.LimbB.GoalMove = glm::mat4(1.0f);
             probe.LocalRotations.clear();
             if (report.HoldsAim) {
                 probe.HoldPose = aimPose;
@@ -231,11 +236,16 @@ AdsCarryResult BuildAdsCarry(const AdsCarryInputs& in) {
                 if (!source) source = from;
             }
             if (!chained || !any || !source || (a.Swivel[0] == source->Swivel[0] && a.Swivel[1] == source->Swivel[1] &&
-                                                a.Locals.size() == source->Locals.size() && a.ContinuesFrom == source->StateName))
+                                                a.Locals.size() == source->Locals.size() && a.Hip == source->Hip &&
+                                                a.ContinuesFrom == source->StateName))
                 continue;
             a.Swivel[0] = source->Swivel[0];
             a.Swivel[1] = source->Swivel[1];
             a.Locals = source->Locals;
+            // ... and its gun reference: ads.gunMotion keeps a share of the gun's motion since the
+            // chain's start, so a roll the start put in (the shotgun canted to its loading port)
+            // stays through the loop instead of every shell measuring from an already rolled gun.
+            a.Hip = source->Hip;
             a.ContinuesFrom = source->StateName;
             changed = true;
         }
@@ -332,4 +342,21 @@ bool AdsGunMotion(Model& arms, const AdsCarrySample& sample, int gunBone, int ca
     r = glm::slerp(glm::quat(1.0f, 0.0f, 0.0f, 0.0f), QuaternionFromMatrix(m), sample.Weight);
     t = glm::vec3(m[3]) * sample.Weight;
     return true;
+}
+
+glm::mat4 AdsHandAnchorMove(const glm::mat4& hipHead, const glm::mat4& hipSocket, const glm::mat4& hipHand,
+                            const glm::vec3& head, const glm::mat4& socket, float weight) {
+    weight = std::clamp(weight, 0.0f, 1.0f);
+    if (weight <= 0.0f) return glm::mat4(1.0f);
+    const glm::mat4 onGun = socket * glm::inverse(hipSocket) * hipHand;
+    const glm::mat4 onBody = glm::translate(glm::mat4(1.0f), head - IK::Position(hipHead)) * hipHand;
+    const glm::mat4 d = onBody * glm::inverse(onGun);
+    const glm::vec3 p = IK::Position(onGun);
+    const glm::vec3 to = glm::vec3(d * glm::vec4(p, 1.0f));
+    const glm::quat r = glm::slerp(glm::quat(1.0f, 0.0f, 0.0f, 0.0f), QuaternionFromMatrix(d), weight);
+    return glm::translate(glm::mat4(1.0f), p + (to - p) * weight) * glm::mat4_cast(r) * glm::translate(glm::mat4(1.0f), -p);
+}
+
+float AdsBoxDistance(const glm::vec3& p, const glm::vec3& boxMin, const glm::vec3& boxMax) {
+    return glm::length(glm::max(glm::max(boxMin - p, p - boxMax), glm::vec3(0.0f)));
 }
