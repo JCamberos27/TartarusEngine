@@ -6,6 +6,7 @@
 #include "Shader.h"
 #include "ShaderLibrary.h"
 #include "Log.h"
+#include "MaterialAsset.h"
 
 #include <fstream>
 #include <sstream>
@@ -385,6 +386,10 @@ void ShaderAsset::BuildBindings() {
         b.Type      = m_Props[i].Type;
         b.PropIndex = i;
         b.TextureUnit = -1;
+        const std::string stem = m_Props[i].Name.empty() ? std::string() : m_Props[i].Name.substr(1);
+        b.Uniform = "u" + stem;
+        b.HasUniform = "uHas" + stem;
+        b.Builtin = MaterialAsset::IsBuiltinProp(m_Props[i].Name);
         if (m_Props[i].Type == ShaderPropType::Texture2D) {
             if (unit == 8) unit = 16; // skip the engine's reserved 8..15
             if (unit >= s_MaxUnits) {
