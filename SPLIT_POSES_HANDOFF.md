@@ -168,6 +168,52 @@ unchanged.
   left hand ends 1.5 cm off the pushed gun (out of reach). The probe now pitches to -89 and logs the torso gap,
   the head tilt and the head's bend, and plays the hip reload, inspect, shell check, melee and an ADS reload.
 
+### The AKS-74U (2026-09-29, third pass)
+
+- **The AK's butt was wrong.** `StockWorld` took the bore as the weapon root's -Z. The AK's `root` bone doesn't
+  point down its barrel: its "stock forward" was at right angles to the real bore (dot 0.001). Along the right
+  axis, the furthest-back geometry was the **spare magazine** (`mag2`, on the belt), 40 cm off the bore. So every
+  AK keep-out had been measuring from the spare mag. `StockWorld` now takes the bore from the muzzle
+  (`m_BoreLocal`, which is the Remington's -Z, so the Remington is unchanged) and skips vertices skinned mostly to
+  `spareMagazine.bones`. The AK's butt is now its `stock` bone: 72.2 cm behind the muzzle and 2.5 cm off the
+  bore. The probe prints a `gun:` line per weapon to check this.
+- **Shoulder lock on:** `AKS74U.fpsanim` has `stockLock` with the Remington's values, except `gunLength` 0.4
+  (a shorter gun). The butt now sits in the pocket (7 cm from `upperarm_r`, the pocket's own offset); before,
+  it floated 15 cm off. On the sights, the cheek weld is 25 degrees, as on the Remington.
+- **Torso keep-out whenever not shouldered** (both guns): `TorsoKeepOut = 1 - Shouldered`, not `1 - held`. A
+  hip reload tucks the butt under the arm, and it went 1-2 cm into the chest on both guns (bore line 0.0 cm
+  from the torso). Now 2.4-3.0 cm; inspect and mag / shell check about 5 cm. A weapon with no pocket lock keeps
+  off the torso always. The cost: the left hand is up to 1-2 cm off the pushed gun for 1-3 frames of a reload,
+  at full reach. The -85 degree torso gap is now 4.5 (Remington) / 5.2 (AK) cm, and at -89 the hands stay on
+  the gun.
+- **`--stock-probe ak`** (`--stock-probe` / `--stock-probe remington` is the Remington, as before): the same
+  shared steps, plus:
+  - single rounds settling to Idle (no pump);
+  - 0.6 s full-auto bursts at the hip and on the sights, level and at -30 (`Ctx::Trigger` holds the trigger);
+  - a hip tactical reload, the magazine emptied and an empty reload, the inspect, the mag check, the melee,
+    and a tactical reload on the sights.
+- **AK results**, lock on (lock off → on):
+
+  | Case | Butt to pocket | Hood mesh gap | Elbow to torso L / R | Torso gap |
+  |---|---|---|---|---|
+  | Hip idle, pitch 0 | 15.0 → 7.4 cm from `upperarm_r` (in the pocket) | 5.2 → 8.7 | 7.6 / 6.9 → 7.8 / 6.8 | – |
+  | Looking down, -89 / -85 | in the pocket, let go | 13.6 | 7.4 / 7.1 | 5.1 / 5.2 |
+  | Bursts, hip and ADS | 6.7-7.3 | 7.2-8.7 | 7.7+ / 6.3+ | – |
+  | Sprint | 6.4-6.9 | 3.6-4.2 (Remington 3.7-4.1) | 7.3+ / 6.6+ | – |
+  | ADS walk / strafe / turn | 4.2-7.1 | 2.3-7.8 | 6.8+ / **0.0-0.5 → 6.0+** | – |
+  | Hip reloads | – | 8.0 | 5.7+ / 6.1+ | **0.0 → 2.5-3.0** |
+
+  World hands are 0.0 cm off the gun except the reload frames above.
+- **Known and left as is:**
+  - ADS-walk hood gap of 2.3-2.8 cm on both guns: the cheek is welded to the stock on the sights, so the hood's
+    side 13 cm up the stock is meant to be close.
+  - The left elbow dips to about 2 cm for 1-2 frames when the hand whips to the magazine in an ADS tactical
+    reload (Remington ADS reload: 0.1-0.9). Elbow Clearance eases in over 0.03 s, a frame or two behind.
+  - The head bends up to 47 degrees in ADS walking (both guns; 27 standing on the sights).
+- **Also fixed:** a rigid outfit piece (the balaclava) under a body's controller logged "no skeleton-node
+  matches" for every clip, every frame: 297,000 lines in one probe run, and the same in the editor during Play.
+  `Model::AttachClip` now remembers a (ref, source) pair that matched nothing.
+
 ## 5. What still needs doing
 
 1. ~~Sprint still clips the hood~~ - fixed by the mesh keep-out above; confirm by eye.
@@ -177,14 +223,14 @@ unchanged.
    - The numbers aren't affected.
    - Check the Scene window's dock ID in the loaded `imgui.ini`, and `m_SceneViewportVisible` during
      Play.
-3. **World muzzle flash and tracers** still come from the first-person gun. Rounds do too, which is the
-   usual shooter approach. If the flash is visible in other views, give it the world gun's muzzle
-   (first-person muzzle plus `WorldGunShift`).
+3. **Weapon effects in other views:** there is no muzzle flash or tracer yet. The laser and bullet holes
+   draw only in the owner's Game view (`weaponOverlay`), so nothing in the Scene view comes from the wrong
+   muzzle. When a flash or tracer is added, or other players see the laser, start it at the world gun's
+   muzzle (the first-person muzzle plus `WorldGunShift`). Rounds keep firing from the camera.
 4. **Vertical pocket error:** fixed by the split (the world gun moves in 3D). No action needed; noted
    because the old body-slide version couldn't.
 5. **Feet:** unaffected. The body no longer moves.
-6. **The AKS-74U** gets the keep-outs but not the pocket lock. Set `stockLock.enabled` in its `.fpsanim`
-   if it should sit in the shoulder too.
+6. ~~The AKS-74U gets the keep-outs but not the pocket lock~~ - done (third pass, above). Confirm by eye.
 7. **Tests:** `--unit-tests` (7221 checks), `--weapon-test` (45 checks) and `--stock-probe` pass with the fixes above. Run `--stock-probe`
    after any change to the world gun or the twins.
 
@@ -192,7 +238,7 @@ unchanged.
 
 ```
 build\Release\TartarusEngine.exe --weapon-test [--smoke-shots <dir>]   # scripted weapon checks, ~90 s
-build\Release\TartarusEngine.exe --stock-probe [--smoke-shots <dir>]   # butt / neck / head / hands, ~90 s
+build\Release\TartarusEngine.exe --stock-probe [remington|ak] [--smoke-shots <dir>]   # butt / neck / head / hands, ~3 min
 build\Release\TartarusEngine.exe --unit-tests
 ```
 

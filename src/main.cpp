@@ -409,10 +409,10 @@ int main(int argc, char** argv) {
     // --weapon-test: the smoke harness on the Sandbox only, with the weapons played through by
     // script in Play (FirstPersonWeaponTest) on a fixed 60 Hz step. Exit code 0 = every check passed.
     bool weaponTestMode = false;
-    // --stock-probe: the same harness with the stock probe script (FirstPersonWeaponTest): the
-    // Remington held through pitches, turns, a round and the sights, the butt measured against the
-    // body; with --smoke-shots each capture is the Scene view (on the gun and shoulder) beside the Game view.
-    bool stockProbeMode = false;
+    // --stock-probe [remington|ak]: the same harness with the stock probe script (FirstPersonWeaponTest):
+    // the weapon (default the Remington) held through pitches, turns, rounds and the sights, the butt measured
+    // against the body; with --smoke-shots each capture is the Scene view (on the gun and shoulder) beside the Game view.
+    bool stockProbeMode = false, stockProbeAk = false;
     // --perf-bench [dir]: the smoke-test harness with VSync, the FPS cap and GL debug output off,
     // a longer per-scene run, and an averaged CPU/GPU profiler breakdown printed per scene.
     bool perfBenchMode = false;
@@ -458,7 +458,10 @@ int main(int argc, char** argv) {
             if (i + 1 < argc && argv[i + 1][0] != '-') smokeScenesDirArg = argv[++i];
         }
         else if (a == "--weapon-test") { smokeTestMode = true; weaponTestMode = true; }
-        else if (a == "--stock-probe") { smokeTestMode = true; weaponTestMode = true; stockProbeMode = true; }
+        else if (a == "--stock-probe") {
+            smokeTestMode = true; weaponTestMode = true; stockProbeMode = true;
+            if (i + 1 < argc && (std::string(argv[i + 1]) == "ak" || std::string(argv[i + 1]) == "remington")) stockProbeAk = std::string(argv[++i]) == "ak";
+        }
         else if (a == "--smoke-shots" && i + 1 < argc) { smokeShotsDir = argv[++i]; }
         else if (a == "--resave" && i + 2 < argc) { resaveIn = argv[i + 1]; resaveOut = argv[i + 2]; i += 2; }
         else if (a == "--undo-bench") { undoBenchMode = true; }
@@ -734,7 +737,7 @@ int main(int argc, char** argv) {
         Player player;
         FirstPersonPresentation firstPersonPresentation;
         std::unique_ptr<FirstPersonWeaponTest> weaponTest;
-        if (weaponTestMode) weaponTest = std::make_unique<FirstPersonWeaponTest>(stockProbeMode);
+        if (weaponTestMode) weaponTest = std::make_unique<FirstPersonWeaponTest>(stockProbeMode, stockProbeAk);
         FirstPersonBody firstPersonBody; // #405 - true first person: the player's own body
         GravityGun gravityGun;
         CrosshairOverlay crosshair; // Play-mode crosshair + gravity gun hold / throw-charge indicator
