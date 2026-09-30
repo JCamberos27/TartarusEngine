@@ -263,13 +263,39 @@ list(REMOVE_ITEM ENGINE_SOURCES
   ${CMAKE_SOURCE_DIR}/src/Editor/EditorModuleStats.cpp
 )
 
+# The GLFW backend sets every viewport's GLFW_MOUSE_PASSTHROUGH each frame, and GLFW applies it
+# unconditionally: a SetWindowLongW + SetLayeredWindowAttributes round trip per window per frame
+# (~0.3 ms in the Sandbox). Compile a copy that only sets it when it changes. A copy in the build
+# tree, so the fetched source (or a FETCHCONTENT_SOURCE_DIR_IMGUI override) is never modified;
+# if the line isn't there (a newer imgui), the original compiles unchanged.
+set(IMGUI_GLFW_BACKEND ${imgui_SOURCE_DIR}/backends/imgui_impl_glfw.cpp)
+file(READ ${IMGUI_GLFW_BACKEND} _imgui_glfw_src)
+set(_imgui_passthrough_line "glfwSetWindowAttrib(window, GLFW_MOUSE_PASSTHROUGH, window_no_input);")
+string(FIND "${_imgui_glfw_src}" "${_imgui_passthrough_line}" _imgui_passthrough_at)
+if(_imgui_passthrough_at GREATER -1)
+  string(REPLACE "${_imgui_passthrough_line}"
+    "if (glfwGetWindowAttrib(window, GLFW_MOUSE_PASSTHROUGH) != (window_no_input ? 1 : 0)) ${_imgui_passthrough_line}"
+    _imgui_glfw_src "${_imgui_glfw_src}")
+  set(IMGUI_GLFW_BACKEND ${CMAKE_BINARY_DIR}/imgui_patched/imgui_impl_glfw.cpp)
+  set(_imgui_glfw_old "")
+  if(EXISTS ${IMGUI_GLFW_BACKEND})
+    file(READ ${IMGUI_GLFW_BACKEND} _imgui_glfw_old)
+  endif()
+  if(NOT _imgui_glfw_old STREQUAL _imgui_glfw_src) # rewrite only on change: no rebuild per configure
+    file(WRITE ${IMGUI_GLFW_BACKEND} "${_imgui_glfw_src}")
+  endif()
+else()
+  message(WARNING "imgui_impl_glfw.cpp: mouse-passthrough line not found; building it unpatched")
+endif()
+set_property(DIRECTORY APPEND PROPERTY CMAKE_CONFIGURE_DEPENDS ${imgui_SOURCE_DIR}/backends/imgui_impl_glfw.cpp)
+
 set(IMGUI_SOURCES
   ${imgui_SOURCE_DIR}/imgui.cpp
   ${imgui_SOURCE_DIR}/imgui_draw.cpp
   ${imgui_SOURCE_DIR}/imgui_tables.cpp
   ${imgui_SOURCE_DIR}/imgui_widgets.cpp
   ${imgui_SOURCE_DIR}/imgui_demo.cpp
-  ${imgui_SOURCE_DIR}/backends/imgui_impl_glfw.cpp
+  ${IMGUI_GLFW_BACKEND}
   ${imgui_SOURCE_DIR}/backends/imgui_impl_opengl3.cpp
   ${imguizmo_SOURCE_DIR}/src/ImGuizmo.cpp
 )

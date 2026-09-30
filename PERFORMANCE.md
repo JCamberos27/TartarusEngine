@@ -13,7 +13,12 @@ Runs 600 frames each of **edit**, **play** (docked Game view) and **play-max** (
 skipping 100 warm-up frames per phase, with VSync / FPS cap / GL debug off. Prints average and worst
 frame time and every CPU/GPU profiler scope. Release builds have no console: redirect stdout to a file.
 
-## Results so far (Phase 1, 4K window)
+Add `--perf-sample` for a statistical CPU profile of the main thread per phase (it suspends the thread
+about every 1 ms and symbolizes the stack via dbghelp). It prints the top functions by self time,
+inclusive time, and "external" time (which engine function was calling into a DLL such as the GL
+driver or PhysX). `TARTARUS_SAMPLE_FOCUS=<function>` also prints the call chains that reach it.
+
+## Phase 1 results (PR #490, 4K window)
 
 | Phase | Before | After |
 |---|---|---|
@@ -86,45 +91,100 @@ Play is now roughly balanced: ~8 ms CPU vs ~4.4 ms GPU for the Game view at 4K.
 `--smoke-test` (19 scenes pass; one run flaked on `smoke_materials` with 0 draws and did not repeat in
 three reruns).
 
+## Phase 2 results
+
+`--perf-bench` Sandbox, `--perf-res` as listed (window 1942x1136), average fps (worst frame):
+
+| Resolution | Phase | Phase 1 | Phase 2 |
+|---|---|---|---|
+| 1920x1080 | Edit | 129 (12.2 ms) | 173 (10.2 ms) |
+| 1920x1080 | Play (docked) | 101 (31.1 ms) | 142 (12.8 ms) |
+| 1920x1080 | Play (maximized) | 132 (27.9 ms) | **203** (9.4 ms) |
+| 2560x1440 | Edit | 135 (11.7 ms) | 177 (10.0 ms) |
+| 2560x1440 | Play (docked) | 98 (31.0 ms) | 136 (13.1 ms) |
+| 2560x1440 | Play (maximized) | 131 (31.4 ms) | **200** (8.8 ms) |
+| 3840x2160 | Play (maximized) | 127 (28.5 ms) | 193 (8.8 ms) |
+
+The 1440p target (144+) is met. 1080p reaches ~203 of the 240 target. The engine is CPU/driver-bound
+at every resolution: GPU time barely changes from 1080p to 4K.
+
+### Biggest finding: GL state reads stall the frame
+
+NVIDIA's driver runs its own worker thread. Every `glGet*` / `glIsEnabled` / fence poll / buffer map
+makes the engine thread wait until that worker has drained everything queued so far. The renderer's
+save/restore reads were scattered across ~15 places (per-mesh render-state scopes, sky, particles,
+tonemapper, crosshair, shadow passes), and the sampler put ~20% of the main thread in that wait.
+Removing only some of them just moves the wait to the next one, so the fix had to be total:
+
+- `extern/glloader` now shadows the render state (viewport, toggled caps, depth func/mask, cull mode,
+  blend funcs, framebuffer bindings) as it is set. Reads are answered from the shadow and redundant
+  sets are dropped. Code that changes that state behind the loader and leaves it changed must call
+  `GLStateShadow_Invalidate()`. Dear ImGui's backend has its own loader but restores everything.
+- The cluster-overflow fence poll and map run every 16th cull instead of every cull.
+
+Result: play-max 1080p 6.5 → 4.95 ms.
+
+### Done (Phase 2)
+
+- **Sky after opaque**: `SkyAtmosphere::RenderView` only computes (LUTs, aerial, clouds). `DrawSky`
+  composites at the far plane under `GL_LEQUAL` after the opaque pass (also HDRI and gradient skies).
+  Sky composite 0.35 → 0.08 ms GPU.
+- **Checkerboarded clouds**: a 2x2 Bayer pattern raymarches a quarter of the texels per frame. The
+  temporal pass clamps against freshly marched neighbours and keeps history elsewhere. Resets march
+  everything. Clouds 0.99 → 0.45 ms GPU; thin wisps are slightly grainier at 1:1.
+- **Amortized IBL rebake**: the drifting-cloud rebake runs over 7 frames into staging cubes that are
+  swapped in at the end. Forced and first bakes stay immediate. The 4 s spike went from 6.4 to 1.6 ms.
+- **Clip warm-up**: the first time a rig meets a controller, every clip of every state is resolved.
+  Play worst frame 33 → 16 ms.
+- **Unresolvable clip refs** back off for 1 s instead of hitting the disk every frame.
+- **ImGui GLFW backend** (build-tree patch): mouse passthrough is only re-applied when it changes, not
+  per viewport per frame.
+- **FP IK**: the two-bone solve refreshes the limb path once; the elbow gap search uses SSE with a
+  block early-out. FP IK 2.34 → 1.78 ms.
+- **GL state shadow** and **throttled cluster readback** (above).
+- **`--perf-sample`** profiler.
+
+**Tried, not kept**
+- Sun CSM amortization (far cascades every 2nd/4th frame): only 4 → 3 refits per frame, ~0.09 ms GPU,
+  no CPU gain.
+- Per-pass declared state for `ShaderStateScope`: worked (0.3 ms), but each pass's one remaining
+  query still drained the driver queue. Superseded by the loader shadow.
+
+**Verification**: `--unit-tests` (7221 checks pass), `--weapon-test` (45 checks pass), Sandbox
+`--smoke-test` passes with no GL errors; smoke screenshots match the previous build apart from
+run-to-run noise in the animated shot.
+
 ## To do
 
-Ranked by expected payoff; the `--perf-bench` breakdown decides the order.
+Ranked by the `--perf-sample` breakdown of play-max at 1080p (main thread).
 
-**GPU (4K Game view ≈ 4.4 ms)**
-1. Draw the sky after opaque geometry (z = far, `GL_LEQUAL`). Today the full atmosphere/cloud/star
-   shader runs under every pixel first (`SceneRenderer.cpp` `RenderScene`). Sky Atmosphere GPU is
-   1.3 ms in play and 2.2 ms in edit.
-2. Volumetric clouds: raymarch 1/4 of pixels per frame with reprojection (history already exists).
-   Only redraw cloud shadows when the sun or wind moves a texel. Don't build sky-view LUTs twice for
-   the main view.
-3. Spread the environment capture and IBL rebake that fire every 4 s while clouds drift across frames.
-   That's the periodic ~7 ms spike.
-4. Depth prepass into the MSAA HDR target, reused by SSAO (drop SSAO's own geometry pass, 0.65 ms).
-   Move the near-hide / hidden-vertex / alpha-clip `discard`s into shader variants so ordinary opaque
-   draws keep early-Z.
-5. SSAO at half resolution with depth-aware upsample.
-6. Spot shadows still redraw every frame where an NPC stands in the spot (0.66 ms GPU). Keep a static
-   layer and draw only dynamic casters over a copy of it. Drop the `gl_FragDepth` write in
-   `ShadowDepthLocal.frag`.
-7. Sun CSM: update far cascades every 2nd/4th frame; skip sub-texel casters in far cascades.
+**Driver / GL**
+1. Dear ImGui's GL backend backs up ~20 GL states with `glGet*` every render (~9%). Options: build the
+   backend against the engine loader and shadow its remaining states (program, texture, VAO, buffer,
+   scissor, blend equation), or patch its backup out and restore known state. Standalone game builds
+   without the editor don't pay this.
+2. GL call volume: share one mesh per primitive kind and draw identical mesh+material runs instanced
+   (~560 primitives are each their own Model; needs a per-instance material SSBO).
+3. Per-draw uniforms: cache per-program uniform locations for `perDraw` (`Shader::Loc` ~4%), array
+   uploads for `uBoneMask`/`uHideBones`, no string building in `BindMaterialDataDriven`.
 
 **CPU**
-8. Animator followers: sample the driver once and copy to outfit pieces through a node remap.
-9. Remaining FP body cost (~2.4 ms): elbow swivel search (0.5–0.6 ms, vectorize or coarse-to-fine),
-   twins' arm solve, foot IK per piece.
-10. Per-draw CPU: cached per-program uniform locations for `perDraw`, array uploads for
-    `uBoneMask`/`uHideBones`, no string building in `BindMaterialDataDriven`, `ShaderStateScope`
-    `glGet*` reads replaced with cached state.
-11. Physics step (0.7–1.0 ms): sleeping bodies still get pose write-back; `SyncEntities` allocates.
+4. PhysX `fetchResults` waits ~6%: overlap simulate with animation / render prep instead of waiting
+   right after it.
+5. FP body: `SkinnedPoints` ~6%, `ApplyLocalPose` / IK globals ~7%, elbow swivel ~3%. Multithread
+   the per-piece work, or sample the driver once and copy to followers through a node remap.
+6. `glfwWindowVisible` / `WindowFromPoint` in the ImGui GLFW backend ~2.4%.
+
+**GPU (only matters once the CPU is under ~4 ms)**
+7. Depth prepass into the MSAA HDR target reused by SSAO; move the `discard`s into shader variants so
+   ordinary opaque draws keep early-Z. SSAO at half resolution.
+8. Spot shadows where an NPC stands: static layer plus dynamic casters; drop the `gl_FragDepth` write.
 
 **Hitches**
-12. `Animator Controllers` max ~20 ms: a first-time clip load on entering a new state in Play. Pre-warm
-    every clip a controller references at Start.
-13. Sun shadow pass 126 ms spike on the first edit frames (one-off; investigate).
+9. Edit-mode SSAO prepass ~117 ms first use (shader compile); sun shadow pass spike on the first edit
+   frames.
 
-**Scene / assets**
-14. Character LODs (meshoptimizer) for NPCs (109k-tri bodies, 81k-tri heads) and a lower LOD for
-    shadow passes; the player's own view keeps LOD 0.
-15. Share one mesh per primitive kind and instance identical mesh+material runs (~560 primitives are
-    each their own Model today).
-16. Review whether all 4 arena spots need shadows, and set small props to not cast into spot lights.
+**Scene**
+10. Review whether all 4 arena spots need shadows; small props need not cast into spot lights.
+
+Character LODs are out of scope for this pass.

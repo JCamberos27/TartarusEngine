@@ -6,7 +6,8 @@ class Shader;
 
 // Shader-based vertical gradient sky: draws a single full-screen triangle pair with no
 // vertex buffer (same "unproject near/far per-pixel" technique as Grid), so it's resolution-
-// and camera-independent. Draw first, before any scene geometry, with depth writes off.
+// and camera-independent. Draw after the opaque geometry: it tests GL_LEQUAL at the far plane,
+// so only uncovered pixels shade, and never writes depth.
 class Sky {
 public:
     Sky();

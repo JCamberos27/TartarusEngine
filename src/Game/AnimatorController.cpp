@@ -7,6 +7,7 @@
 #include "IK.h"
 #include "Log.h"
 #include "Model.h"
+#include "Profiler.h"
 #include "ProjectPaths.h"
 #include "World.h"
 
@@ -19,8 +20,10 @@
 #include <cmath>
 #include <filesystem>
 #include <fstream>
+#include <cstdint>
 #include <sstream>
 #include <unordered_map>
+#include <unordered_set>
 
 using json = nlohmann::json;
 namespace fs = std::filesystem;
@@ -1029,6 +1032,23 @@ void UpdateAnimatorControllers(World& world, AssetLibrary& assets, float dt) {
         samplers.reserve(group.size());
         for (const Rig& r : group)
             if (r.M) samplers.push_back({*r.M, assets, ctrl->TrackIndex(r.AC->Track), {}, {}});
+        // Resolve every clip a rig's track can reach the first time the rig meets this controller:
+        // a clip in another file loads (and attaches) on first use, and entering a new state
+        // mid-Play used to hitch a frame by ~20 ms. A pointer reused by a later model only skips
+        // the warm-up; clips still resolve lazily.
+        static std::unordered_set<std::uint64_t> s_Warmed;
+        for (Sampler& smp : samplers) {
+            const std::uint64_t key = (std::uint64_t)(std::uintptr_t)&smp.M * 1099511628211ull ^
+                                      (std::uint64_t)(std::uintptr_t)ctrl.get() * 31ull ^ (std::uint64_t)smp.Track;
+            if (!s_Warmed.insert(key).second) continue;
+            PROFILE_SCOPE("Animator Clip Warm-up");
+            for (const auto& L : ctrl->Layers)
+                for (const auto& s : L.States) {
+                    const auto& m = s.MotionFor(smp.Track);
+                    if (!m.IsBlendTree()) smp.Clip(m.Clip);
+                    for (const auto& child : m.Children) smp.Clip(child.Clip);
+                }
+        }
         // Once the animator has advanced, the parameters are fixed for the frame, and so is each state's
         // length: every rig's pose asks for the same few (per crossfade entry, per layer), each a pass
         // over every rig's clips, so they are worked out once.
