@@ -139,6 +139,10 @@ bool FirstPersonPresentation::StartSet(World& world, AssetLibrary& assets, int s
     m_World = &world;
     m_ArmsModel = arms;
     m_WeaponModel = weapon;
+    // StockWorld's vertices belong to the last weapon: a new one can be allocated where it was freed (a
+    // weapon swap), so a pointer compare alone would read the old weapon's indices into the new one's mesh.
+    m_StockModel = nullptr;
+    m_StockVerts.clear();
     m_Arms = world.CreateModelEntity(std::move(arms), glm::vec3(0.0f), glm::vec3(0.0f),
                                      glm::vec3(config.ViewModelScale), "[Runtime] First Person Arms");
     m_Weapon = world.CreateModelEntity(std::move(weapon), glm::vec3(0.0f), glm::vec3(0.0f),
@@ -697,13 +701,25 @@ bool FirstPersonPresentation::WorldGunInput(FirstPersonWorldGunInput& out) const
     const float x = sl.Enabled ? m_StockLockWeight : 0.0f;
     out.ButtWorld = butt;
     out.ForwardWorld = forward;
-    out.Shouldered = x * x * (3.0f - 2.0f * x); // eased in and out
+    // Looking steeply down the pocket lets go (all of it by Release End), and the gun keeps off the torso instead.
+    float held = 1.0f;
+    if (sl.ReleaseStart > sl.ReleaseEnd) {
+        const float r = std::clamp((m_LookPitch - sl.ReleaseEnd) / (sl.ReleaseStart - sl.ReleaseEnd), 0.0f, 1.0f);
+        held = r * r * (3.0f - 2.0f * r);
+    }
+    out.Shouldered = x * x * (3.0f - 2.0f * x) * held; // eased in and out
+    out.TorsoKeepOut = 1.0f - held;
+    // The cheek weld is for the sights: at the hip the head stays as the clips have it, so a reload or an inspect
+    // starting and ending (states the pocket lock lets go in) no longer nods it 25 degrees each way.
+    const float z = std::clamp(m_Zoom, 0.0f, 1.0f);
+    out.CheekWeld = (sl.Enabled ? z * z * (3.0f - 2.0f * z) : 0.0f) * held;
     out.Pocket = sl.Pocket;
     out.MaxShift = sl.MaxShift;
     out.HeadTiltDegrees = sl.HeadTilt;
     out.NeckRadius = sl.NeckRadius;
     out.HeadRadius = sl.HeadRadius;
     out.GunLength = sl.GunLength;
+    out.MeshClearance = sl.MeshClearance;
     return true;
 }
 
