@@ -26,13 +26,16 @@ struct AABB {
     // World-space AABB enclosing this local-space box after a (possibly rotating) transform.
     // Rotation means the result isn't tight, but it's exact for the axis-aligned case and a
     // safe conservative bound otherwise — good enough for picking/dropping/snapping queries.
+    // The same box as transforming the 8 corners (Arvo, Graphics Gems 1990): along each world axis the
+    // extreme corner takes, per local axis, whichever of Min and Max pushes further - three products
+    // pairs instead of eight full corner transforms. Called for every caster in every pass.
     AABB Transformed(const glm::mat4& transform) const {
-        glm::vec3 newMin(1e30f), newMax(-1e30f);
-        for (int c = 0; c < 8; ++c) {
-            glm::vec3 corner((c & 1) ? Max.x : Min.x, (c & 2) ? Max.y : Min.y, (c & 4) ? Max.z : Min.z);
-            glm::vec3 worldCorner = glm::vec3(transform * glm::vec4(corner, 1.0f));
-            newMin = glm::min(newMin, worldCorner);
-            newMax = glm::max(newMax, worldCorner);
+        glm::vec3 newMin(transform[3]), newMax(transform[3]);
+        for (int j = 0; j < 3; ++j) {
+            const glm::vec3 axis(transform[j]);
+            const glm::vec3 a = axis * Min[j], b = axis * Max[j];
+            newMin += glm::min(a, b);
+            newMax += glm::max(a, b);
         }
         return AABB{newMin, newMax};
     }
