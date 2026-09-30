@@ -2,7 +2,7 @@
 # locomotion, re-pointed at the Remington's clips, with the AK's two magazine reloads replaced by a
 # tube loaded a round at a time and a pump worked after every shot.
 #
-#   python work/make_remington_controller.py
+#   python tools/weapons/make_remington_controller.py
 #
 # Per-round reload (gameplay.reload = perRound; the driver sets LastRound / StopReload):
 #   Reload & Ammo < 0.5 -> ReloadStartEmpty (pumps a round into the chamber: LoadRound)
@@ -18,7 +18,7 @@ import copy
 import json
 import os
 
-REPO = os.path.dirname(os.path.dirname(os.path.abspath(__file__)))
+REPO = os.path.dirname(os.path.dirname(os.path.dirname(os.path.abspath(__file__))))
 AK = os.path.join(REPO, "project/assets/Weapons/AKS74U/AKS74U.controller")
 OUT = os.path.join(REPO, "project/assets/Weapons/Remington870/Remington870.controller")
 BASE = "assets/Weapons/Remington870"
@@ -41,7 +41,7 @@ GUIDS = guids()
 def motion(clip):
     path = "%s/%s" % (BASE, clip)
     if path not in GUIDS:
-        raise SystemExit("no exported clip %s (run work/export_remington.py first)" % path)
+        raise SystemExit("no exported clip %s (run tools/weapons/export_remington.py first)" % path)
     return {"clip": path, "clipGuid": GUIDS[path]}
 
 

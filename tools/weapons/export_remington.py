@@ -1,9 +1,9 @@
 # Exports the whole Remington 870 first-person set from its source .blend, without ever saving it.
 #
-#   blender --background "<Remington 870 60fps(Revised).blend>" --python work/export_remington.py -- \
+#   blender --background "<Remington 870 60fps(Revised).blend>" --python tools/weapons/export_remington.py -- \
 #           <out dir: project/assets/Weapons/Remington870> [only <Name>[,<Name>...]]
 #
-# The same rules as work/export_clip.py (the AKS-74U's exporter), for this file's rig names:
+# The same rules as tools/weapons/export_clip.py (the AKS-74U's exporter), for this file's rig names:
 #
 #  - Arms rig `Armature` (the shared Manny/Quantum rig), weapon rig `Armature.001` (bones Main,
 #    Trigger, Shell, LoadingPort, Pump), weapon mesh `Remington870`.

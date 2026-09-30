@@ -10,7 +10,7 @@
 # Equal numbers => the shipped clip is fine; a large divergence => re-export it.
 # Nothing is saved: actions / NLA / pose_position / frame are restored in memory, no .save().
 #
-#   blender.exe --background "<blend>" --python work/bl_pair_check.py
+#   blender.exe --background "<blend>" --python tools/weapons/bl_pair_check.py
 import bpy
 
 ARMS, WEAP = "Armature", "AK"

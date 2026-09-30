@@ -9,7 +9,7 @@
 # and reports the resulting left-arm motion, plus the magazine's own motion.
 # Nothing is saved: every action / influence / frame is restored in memory, no .save().
 #
-#   blender.exe --background "<blend>" --python work/bl_idle_probe2.py
+#   blender.exe --background "<blend>" --python tools/weapons/bl_idle_probe2.py
 import bpy
 
 ARMS = "Armature"

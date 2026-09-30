@@ -1,6 +1,6 @@
 # Character Outfits: remaining work
 
-What's left after the outfit audit (phases 1–4b, [OUTFIT_AUDIT.md](OUTFIT_AUDIT.md)). The system itself is
+What's left after the outfit audit (phases 1–4b, PRs #494–#498). The system itself is
 described in [CHARACTER_OUTFITS.md](CHARACTER_OUTFITS.md). Items are in rough priority order within each
 section. Each one says what's wrong, where to look, a suggested approach, and how to check it's done.
 
@@ -192,11 +192,3 @@ triangles not drawn. Not done:
   under a balaclava) would cut shadow-pass cost. There are no LODs in the engine yet.
 - Items at 54 fps is the stress case (134 characters, about 3000 draws). Draw count is the CPU limit there:
   instancing identical pieces is the next step if crowds matter.
-
-## 5. Merge and follow-up
-- PRs #494 (tools/baseline), #495 (correctness), #496 (runtime perf), #497 (assets) and the clipping PR
-  (4b) are stacked. Merge in order when you say so.
-- After merging: pull and build `Desktop\TartarusEngine-SightAlign` (your test shortcut). Its clothing
-  textures are git-ignored, so they stay; the `.meta` 2K caps come with the pull, and the first run
-  re-imports the textures at 2K (slow once).
-- The first run after the merge re-works coverage (version 17): characters draw unhidden for a few seconds.

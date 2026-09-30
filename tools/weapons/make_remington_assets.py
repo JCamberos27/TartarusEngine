@@ -1,14 +1,14 @@
 # Writes the Remington 870's textures, material and .meta sidecars (the shapes the editor writes
-# for the AKS-74U's), after work/export_remington.py has produced the FBXs. Re-running keeps
+# for the AKS-74U's), after tools/weapons/export_remington.py has produced the FBXs. Re-running keeps
 # every GUID already issued.
 #
-#   python work/make_remington_assets.py
+#   python tools/weapons/make_remington_assets.py
 import json
 import os
 import secrets
 import shutil
 
-REPO = os.path.dirname(os.path.dirname(os.path.abspath(__file__)))
+REPO = os.path.dirname(os.path.dirname(os.path.dirname(os.path.abspath(__file__))))
 os.chdir(REPO)
 root = "project/assets/Weapons/Remington870"
 SOURCE_TEXTURES = os.path.expanduser("~/Desktop/Remington_870_Textures")

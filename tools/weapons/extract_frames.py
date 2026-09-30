@@ -1,5 +1,5 @@
 # Render frames out of a screen recording so they can be inspected as stills.
-# Usage: blender.exe -b -P work/extract_frames.py -- <video> <outdir> [maxFrames]
+# Usage: blender.exe -b -P tools/weapons/extract_frames.py -- <video> <outdir> [maxFrames]
 # There is no ffmpeg on this box, but Blender ships an FFmpeg decoder and the
 # sequencer renders a movie strip straight to PNG without needing a render engine.
 import os
