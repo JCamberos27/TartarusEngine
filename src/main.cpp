@@ -1213,6 +1213,15 @@ int main(int argc, char** argv) {
 
         GameViewPanel gameView;
         gameView.LoadSettings();
+        // --perf-bench: the Game view renders at the benchmarked size, not whatever the saved preset
+        // is (a saved "1920x1080 FHD" rendered every --perf-res at 1080p): --perf-res exactly, else
+        // the whole window.
+        if (perfBenchMode) {
+            ResolutionPreset bench = ResolutionManager::BuiltInPresets()[0]; // Free Aspect
+            if (perfResW > 0 && perfResH > 0)
+                bench = {"Perf Bench", AspectRatioMode::FixedResolution, perfResW, perfResH, (float)perfResW / (float)perfResH};
+            gameView.UsePresetThisSession(bench);
+        }
         // The editor's own "Scene" tab renders into this rather than straight into the
         // backbuffer — see the "Scene tab offscreen pass" comment below for why.
         Framebuffer sceneFramebuffer;   // LDR: tonemap output the Scene tab shows via ImGui::Image
