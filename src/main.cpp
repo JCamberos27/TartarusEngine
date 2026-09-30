@@ -96,6 +96,7 @@
 #include <algorithm>
 #include <cmath>
 #include <cctype>
+#include <sstream>
 #include <cstdint>
 #include <thread>
 #include <vector>
@@ -448,12 +449,22 @@ int main(int argc, char** argv) {
     // horizon, a higher angle behind, and up at the sky - for reviewing rendering changes (the
     // physical sky's, first) without driving the editor.
     std::string smokeShotsDir;
+    // --outfit-shots <dir> [scene.json|dir]: the smoke test, with the Scene view framed on the scene's
+    // characters instead (CharacterOutfitComponent): the first row, then each picked character full length
+    // from the front and back and its head close up - for reviewing outfit and skin-hiding changes.
+    // Characters are picked spread along each row, or by name with TARTARUS_SHOT_NAMES="Name1,Name2".
+    std::string outfitShotsDir;
     // --outfit-audit [wardrobe] [report.csv]: the wardrobe's rules (presets, Randomize) and every pair of
     // outfit pieces worn one over the other, checked for clipping (OutfitAudit); --outfit-rules: the rules
     // only. Exit code: 0 clean, 1 problems.
     bool outfitAuditMode = false, outfitAuditGeometry = true;
     // --gen-outfit-scenes: builds project/scenes/OutfitTest/*.json with the outfit system (OutfitTestScene).
     bool outfitScenesMode = false;
+    // --outfit-cost [scene.json ...]: draw cost of the wardrobe's models and of each scene (OutfitAudit::RunCost).
+    bool outfitCostMode = false;
+    // --outfit-selftest: the OutfitSystem API end to end on the real wardrobe (OutfitAudit::RunSelfTest).
+    bool outfitSelfTestMode = false;
+    std::vector<std::string> outfitCostScenes;
     std::string outfitAuditWardrobe = "assets/Characters/Quantum/Quantum.wardrobe", outfitAuditCsv;
     for (int i = 1; i < argc; ++i) {
         std::string a = argv[i];
@@ -473,6 +484,11 @@ int main(int argc, char** argv) {
             if (i + 1 < argc && (std::string(argv[i + 1]) == "ak" || std::string(argv[i + 1]) == "remington")) stockProbeAk = std::string(argv[++i]) == "ak";
         }
         else if (a == "--smoke-shots" && i + 1 < argc) { smokeShotsDir = argv[++i]; }
+        else if (a == "--outfit-shots" && i + 1 < argc) {
+            smokeTestMode = true;
+            outfitShotsDir = argv[++i];
+            if (i + 1 < argc && argv[i + 1][0] != '-') smokeScenesDirArg = argv[++i];
+        }
         else if (a == "--resave" && i + 2 < argc) { resaveIn = argv[i + 1]; resaveOut = argv[i + 2]; i += 2; }
         else if (a == "--undo-bench") { undoBenchMode = true; }
         else if (a == "--gen-outfit-scenes") { outfitScenesMode = true; }
@@ -481,6 +497,11 @@ int main(int argc, char** argv) {
             outfitAuditGeometry = a == "--outfit-audit";
             if (i + 1 < argc && argv[i + 1][0] != '-') outfitAuditWardrobe = argv[++i];
             if (i + 1 < argc && argv[i + 1][0] != '-') outfitAuditCsv = argv[++i];
+        }
+        else if (a == "--outfit-selftest") { outfitSelfTestMode = true; }
+        else if (a == "--outfit-cost") {
+            outfitCostMode = true;
+            while (i + 1 < argc && argv[i + 1][0] != '-') outfitCostScenes.push_back(argv[++i]);
         }
         else if (a == "--asset-load-bench") { assetLoadBenchMode = true; }
         else if (a == "--build") {
@@ -527,7 +548,7 @@ int main(int argc, char** argv) {
     // --smoke-test and --resave are non-interactive: no splash, and fatal errors go to stderr +
     // a nonzero exit instead of a modal MessageBox that a headless/CI desktop never dismisses
     // (audit BUG-102).
-    const bool headless = smokeTestMode || resaveMode || undoBenchMode || assetLoadBenchMode || outfitAuditMode || outfitScenesMode;
+    const bool headless = smokeTestMode || resaveMode || undoBenchMode || assetLoadBenchMode || outfitAuditMode || outfitScenesMode || outfitCostMode || outfitSelfTestMode;
     CrashHandler::SetInteractive(!headless); // #148: no crash dialog on an unattended run
 
     // #148: `--crash-test <kind>` deliberately crashes through one path so the handler (dump,
@@ -874,6 +895,18 @@ int main(int argc, char** argv) {
         }
 
         if (outfitScenesMode) return OutfitTestScene::Generate(assets);
+
+        if (outfitSelfTestMode) {
+            const int failures = OutfitAudit::RunSelfTest(assets, outfitAuditWardrobe);
+            return failures < 0 ? 2 : (failures > 0 ? 1 : 0);
+        }
+
+        if (outfitCostMode) {
+            if (outfitCostScenes.empty())
+                for (const char* s : {"scenes/OutfitTest/Presets.json", "scenes/OutfitTest/Randomized.json", "scenes/OutfitTest/Items.json"})
+                    outfitCostScenes.push_back(s);
+            return OutfitAudit::RunCost(assets, outfitAuditWardrobe, outfitCostScenes) < 0 ? 2 : 0;
+        }
 
         if (outfitAuditMode) {
             const int clipping = OutfitAudit::Run(assets, outfitAuditWardrobe, outfitAuditCsv, outfitAuditGeometry);
@@ -1443,7 +1476,12 @@ int main(int argc, char** argv) {
         constexpr int kPerfPhaseFrames = 600;
         constexpr int kPerfBenchWarmup = 100; // frames skipped at the start of each phase
         // --weapon-test ends its scene itself when the script is done; this is only its safety cap (6 min at 60 Hz).
-        const int kSmokeTestFrames = weaponTestMode ? 60 * 60 * 6 : perfBenchMode ? 3 * kPerfPhaseFrames : 100;
+        // --outfit-shots: kOutfitShotSettle frames on each pose before it's captured (temporal effects converge).
+        constexpr int kOutfitShotStart = 60, kOutfitShotSettle = 20, kOutfitShotMax = 24;
+        const int kSmokeTestFrames = weaponTestMode ? 60 * 60 * 6 : perfBenchMode ? 3 * kPerfPhaseFrames
+                                   : !outfitShotsDir.empty() ? kOutfitShotStart + kOutfitShotSettle * kOutfitShotMax + 1 : 100;
+        struct OutfitShot { std::string Name; glm::vec3 Position; float Yaw, Pitch; };
+        std::vector<OutfitShot> outfitShots;
         struct PerfAccum { double Sum = 0.0; double Max = 0.0; int N = 0; };
         std::vector<std::pair<std::string, PerfAccum>> perfCpu, perfGpu;
         PerfAccum perfFrame;
@@ -4171,7 +4209,70 @@ int main(int argc, char** argv) {
             // score it (new GL errors + draw count) and advance to the next scene.
             if (smokeTestMode && smokeSceneActive) {
                 ++smokeFramesRendered;
-                if (!smokeShotsDir.empty() && !perfBenchMode) {
+                if (!outfitShotsDir.empty()) {
+                    // Poses from the characters as the scene loaded them (rows run along +X, one behind another).
+                    if (smokeFramesRendered == 1) {
+                        outfitShots.clear();
+                        struct Guy { std::string Name; glm::vec3 P; };
+                        std::vector<Guy> guys;
+                        for (auto [e, outfit] : world.Registry.view<CharacterOutfitComponent>().each()) {
+                            const auto* name = world.Registry.try_get<NameComponent>(e);
+                            guys.push_back({name ? name->Name : std::string(), glm::vec3(world.ComposeWorldTransform(e)[3])});
+                        }
+                        std::sort(guys.begin(), guys.end(), [](const Guy& a, const Guy& b) {
+                            return a.P.z != b.P.z ? a.P.z > b.P.z : a.P.x < b.P.x;
+                        });
+                        std::vector<const Guy*> picked;
+                        if (const char* names = std::getenv("TARTARUS_SHOT_NAMES")) {
+                            std::stringstream ss(names);
+                            for (std::string n; std::getline(ss, n, ',');)
+                                for (const auto& g : guys)
+                                    if (!n.empty() && g.Name.find(n) != std::string::npos) { picked.push_back(&g); break; }
+                        } else if (!guys.empty()) {
+                            const size_t want = std::min<size_t>(6, guys.size());
+                            for (size_t k = 0; k < want; ++k) picked.push_back(&guys[k * guys.size() / want]);
+                        }
+                        if (!guys.empty()) {
+                            float maxX = guys[0].P.x;
+                            for (const auto& g : guys) if (g.P.z == guys[0].P.z) maxX = std::max(maxX, g.P.x);
+                            const float span = maxX - guys[0].P.x;
+                            outfitShots.push_back({"row", glm::vec3((guys[0].P.x + maxX) * 0.5f, 1.4f, guys[0].P.z + 1.2f + span * 0.9f), -90.0f, -4.0f});
+                        }
+                        auto safe = [](std::string n) { for (char& c : n) if (!std::isalnum((unsigned char)c) && c != '-') c = '_'; return n; };
+                        for (const Guy* g : picked) {
+                            const std::string n = safe(g->Name.empty() ? "character" + std::to_string(g - guys.data()) : g->Name);
+                            outfitShots.push_back({n + "_front", g->P + glm::vec3(0.0f, 0.95f, 1.9f), -90.0f, 0.0f});
+                            outfitShots.push_back({n + "_back", g->P + glm::vec3(0.0f, 0.95f, -1.9f), 90.0f, 0.0f});
+                            outfitShots.push_back({n + "_head", g->P + glm::vec3(0.0f, 1.62f, 0.55f), -90.0f, 0.0f});
+                            if ((int)outfitShots.size() + 3 > kOutfitShotMax) break;
+                        }
+                    }
+                    const int rel = smokeFramesRendered - kOutfitShotStart;
+                    const int shot = rel / kOutfitShotSettle;
+                    if (rel >= 0 && rel % kOutfitShotSettle == kOutfitShotSettle - 1 && shot < (int)outfitShots.size() &&
+                        sceneFramebuffer.IsValid()) {
+                        const int w = sceneFramebuffer.Width(), h = sceneFramebuffer.Height();
+                        glBindFramebuffer(GL_READ_FRAMEBUFFER, sceneFramebuffer.Handle());
+                        std::vector<unsigned char> px = Screenshot::GrabRegion(0, 0, w, h);
+                        glBindFramebuffer(GL_READ_FRAMEBUFFER, 0);
+                        std::vector<unsigned char> flipped(px.size());
+                        for (int y = 0; y < h; ++y)
+                            std::memcpy(&flipped[(size_t)y * w * 4], &px[(size_t)(h - 1 - y) * w * 4], (size_t)w * 4);
+                        std::error_code ec;
+                        std::filesystem::create_directories(outfitShotsDir, ec);
+                        const std::string stem = std::filesystem::path(smokeScenePaths[smokeSceneIndex]).stem().string();
+                        const std::string out = (std::filesystem::path(outfitShotsDir) / (stem + "_" + outfitShots[shot].Name + ".png")).string();
+                        stbi_write_png(out.c_str(), w, h, 4, flipped.data(), w * 4);
+                    }
+                    const int next = std::max(0, smokeFramesRendered + 1 - kOutfitShotStart) / kOutfitShotSettle;
+                    if (next < (int)outfitShots.size()) {
+                        editorCamera.Position = outfitShots[next].Position;
+                        editorCamera.Yaw = outfitShots[next].Yaw;
+                        editorCamera.Pitch = outfitShots[next].Pitch;
+                    } else if (smokeFramesRendered > kOutfitShotStart) {
+                        smokeFramesRendered = std::max(smokeFramesRendered, kSmokeTestFrames - 1); // all taken
+                    }
+                } else if (!smokeShotsDir.empty() && !perfBenchMode) {
                     // Frames 40 / 70 / 100 are captured after 30+ frames at each pose, so
                     // temporally accumulated effects have converged; the pose for the NEXT frame
                     // is set here too.
