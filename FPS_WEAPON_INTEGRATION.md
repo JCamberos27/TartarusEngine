@@ -329,7 +329,7 @@ What's different from the AK:
 
 | Still in code | Where | To generalise |
 |---|---|---|
-| Two weapon slots: 1 = Animation Set, 3 = Secondary Animation Set, 2 = unarmed | `FirstPersonPresentation::SelectSlot` | A third weapon needs a list field on the controller (the reflection system has no list type) |
+| Two weapon slots: 1 = Animation Set, 2 = Secondary Animation Set, 3 = unarmed | `FirstPersonPresentation::SelectSlot` | A third weapon needs a list field on the controller (the reflection system has no list type) |
 | The input → parameter mapping | `FirstPersonPresentation` (`FirstPersonAnimatorContract`) | New inputs, e.g. a fire-mode selector animation, need a new parameter name there |
 | ADS fire and walk bob are procedural | `FirstPersonPresentation::Fire` / `Tick` / `Update` | If a weapon ships real ADS fire/walk clips, drop the `ADS` tag from its aim state and build the logic in the graph |
 | Hitscan only | `FirstPersonPresentation::FireShot` | A projectile needs ballistics. Pellets, per-round reloads and pump / bolt actions are data now (see [A shotgun](#a-shotgun-the-remington-870)) |

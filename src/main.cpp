@@ -2356,14 +2356,14 @@ int main(int argc, char** argv) {
                         // The weapon owns Fire1/Fire2/FireMode/Reload/Inspect/Melee while it's in
                         // hand. With the gravity gun on the controller, holstering hands the mouse
                         // to it instead (gravityGunLive), so the two never read the same frame.
-                        // Weapon1/Weapon2/Holster always switch between them.
+                        // Weapon1/Weapon2/Weapon3/Holster always switch between them.
                         const bool weaponInput = gameHasInput && !gravityGunLive();
                         if (gameHasInput) {
                             const bool wasEquipped = firstPersonPresentation.IsEquipped();
-                            // 1 = the Animation Set, 3 = the Secondary Animation Set, 2 = unarmed.
+                            // 1 = the Animation Set, 2 = the Secondary Animation Set, 3 = unarmed (the gravity gun).
                             if (InputMap::GetButtonDown("Weapon1")) firstPersonPresentation.SelectSlot(0);
-                            if (InputMap::GetButtonDown("Weapon3")) firstPersonPresentation.SelectSlot(1);
-                            if (InputMap::GetButtonDown("Weapon2")) firstPersonPresentation.SetEquipped(false);
+                            if (InputMap::GetButtonDown("Weapon2")) firstPersonPresentation.SelectSlot(1);
+                            if (InputMap::GetButtonDown("Weapon3")) firstPersonPresentation.SetEquipped(false);
                             // The wheel is the gravity gun's hold distance, so it only switches without one:
                             // through the weapons, then unarmed.
                             if (!playGravityGun && Input::GetScrollDeltaY() != 0.0)
