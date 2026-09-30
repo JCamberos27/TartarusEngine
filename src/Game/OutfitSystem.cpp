@@ -28,6 +28,7 @@
 #include <set>
 #include <sstream>
 #include <stdexcept>
+#include <thread>
 
 using json = nlohmann::json;
 namespace fs = std::filesystem;
@@ -229,6 +230,12 @@ namespace {
 
 // The wardrobes the skin hiding reads its layers from, by lower-case project-relative path: a loaded
 // catalog's (a rescan replaces it), else the .wardrobe parsed on its own - the hiding needs no item scan.
+// Bumped whenever a wardrobe is (re)loaded, so what caches one knows to look again.
+int& WardrobeGeneration() {
+    static int g = 0;
+    return g;
+}
+
 std::map<std::string, std::shared_ptr<const Wardrobe::Wardrobe>>& LayerWardrobes() {
     static std::map<std::string, std::shared_ptr<const Wardrobe::Wardrobe>> s;
     return s;
@@ -305,6 +312,7 @@ std::shared_ptr<const Catalog> LoadCatalog(AssetLibrary& assets, const std::stri
     Log::Info("Wardrobe " + cat->W.Name + ": " + std::to_string(cat->Items.size()) + " items");
     cache[key] = cat;
     LayerWardrobes()[key] = std::shared_ptr<const Wardrobe::Wardrobe>(cat, &cat->W);
+    ++WardrobeGeneration();
     return cat;
 }
 
@@ -898,8 +906,9 @@ Wardrobe::Layering PieceLayer(const Wardrobe::Wardrobe* w, const OutfitPieceComp
 
 // The pieces as the hiding last saw them: entities, models, which carry a hide tag (an undo drops them),
 // and the wardrobe their layers came from (a rescan brings a new one).
-std::uint64_t HideSignature(const World& world, const CharacterOutfitComponent& outfit,
-                            const std::map<std::string, entt::entity>& pieces, const Wardrobe::Wardrobe* w) {
+// Straight off the root's children (no map built: it runs for every outfit, every frame).
+std::uint64_t HideSignature(const World& world, const CharacterOutfitComponent& outfit, entt::entity root,
+                            const Wardrobe::Wardrobe* w) {
     std::uint64_t sig = outfit.AutoHide ? 1469598103934665603ull : 7ull;
     auto mix = [&](std::uint64_t v) { sig = (sig ^ v) * 1099511628211ull; };
     mix((std::uint64_t)(std::uintptr_t)w);
@@ -907,10 +916,15 @@ std::uint64_t HideSignature(const World& world, const CharacterOutfitComponent& 
         for (char c : t) mix((unsigned char)c);
         mix(0xffull);
     };
-    for (const auto& [slot, e] : pieces) {
+    const auto* h = world.Registry.try_get<HierarchyComponent>(root);
+    if (!h) return sig;
+    for (entt::entity e : h->Children) {
+        if (!world.Registry.valid(e)) continue;
+        const auto* p = world.Registry.try_get<OutfitPieceComponent>(e);
+        if (!p) continue;
         mix((std::uint64_t)entt::to_integral(e));
         // What its layer comes from (PieceLayer): an edit in the Inspector changes these without a new model.
-        const auto& piece = world.Registry.get<OutfitPieceComponent>(e);
+        const auto& piece = *p;
         mixText(piece.Slot);
         mixText(piece.Item);
         mix((std::uint64_t)piece.Flags);
@@ -1038,6 +1052,19 @@ const std::vector<std::uint8_t>* PairCoverage(const World& world, entt::entity u
     const FileStamp us = StampOf(Lower(Rel(underModel))), os = StampOf(key.second);
     std::vector<std::uint8_t> loaded;
     if (LoadCoverage(key, us, os, loaded)) return &store.Done.emplace(key, std::move(loaded)).first->second;
+    // A few at a time: a scene of new outfits with a cold Library/OutfitCoverage used to start a thread
+    // per pair (hundreds). The rest are started as these finish (UpdateHiding asks again).
+    static const size_t kMaxRunning = std::thread::hardware_concurrency() > 1 ? std::thread::hardware_concurrency() - 1 : 1;
+    if (store.Running.size() >= kMaxRunning) {
+        for (auto it = store.Running.begin(); it != store.Running.end();)
+            if (it->second.wait_for(std::chrono::seconds(0)) == std::future_status::ready) {
+                store.Done.emplace(it->first, it->second.get());
+                it = store.Running.erase(it);
+            } else {
+                ++it;
+            }
+        if (store.Running.size() >= kMaxRunning) return nullptr;
+    }
     // The geometry is copied here (main thread); the maths and the save run on their own thread.
     store.Running.emplace(key, std::async(std::launch::async,
                                           [key, us, os, exposed, rigid, body = Geometry(world, under), cloth = Geometry(world, over)] {
@@ -1048,15 +1075,64 @@ const std::vector<std::uint8_t>* PairCoverage(const World& world, entt::entity u
     return nullptr;
 }
 
+// The triangles of `model` not covered entirely (a vertex of them visible), shared by every piece with the
+// same model and bits - characters in the same outfit draw from one buffer.
+std::shared_ptr<VisibleIndexBuffer> VisibleTriangles(const Model& model, const std::vector<std::uint32_t>& bits) {
+    static std::map<std::pair<const void*, std::uint64_t>, std::weak_ptr<VisibleIndexBuffer>> cache;
+    std::uint64_t h = 1469598103934665603ull;
+    for (std::uint32_t w : bits) h = (h ^ w) * 1099511628211ull;
+    // Instances share their mesh data (and its first mesh's index list), so that's the model's identity.
+    const void* id = model.MeshCount() ? (const void*)model.MeshLocalIndices(0).data() : (const void*)&model;
+    const auto key = std::make_pair(id, h ^ (std::uint64_t)bits.size());
+    if (auto it = cache.find(key); it != cache.end())
+        if (auto live = it->second.lock()) return live;
+    auto hidden = [&](std::uint32_t v) { return (v >> 5) < bits.size() && ((bits[v >> 5] >> (v & 31)) & 1u); };
+    std::vector<std::vector<std::uint32_t>> perMesh((size_t)model.MeshCount());
+    std::uint32_t first = 0;
+    size_t kept = 0, total = 0;
+    for (int m = 0; m < model.MeshCount(); ++m) {
+        const auto& idx = model.MeshLocalIndices(m);
+        auto& out = perMesh[(size_t)m];
+        out.reserve(idx.size());
+        for (size_t i = 0; i + 2 < idx.size(); i += 3)
+            if (!hidden(first + idx[i]) || !hidden(first + idx[i + 1]) || !hidden(first + idx[i + 2]))
+                out.insert(out.end(), {idx[i], idx[i + 1], idx[i + 2]});
+        kept += out.size();
+        total += idx.size();
+        first += (std::uint32_t)model.MeshVertexCount(m);
+    }
+    if (kept == total) return nullptr; // nothing covered entirely: the mesh's own indices are the same
+    auto buffer = std::make_shared<VisibleIndexBuffer>(perMesh);
+    // Drop entries whose buffers are gone, now and then (outfits change; the map shouldn't grow forever).
+    if (cache.size() > 256)
+        for (auto it = cache.begin(); it != cache.end();) it = it->second.expired() ? cache.erase(it) : std::next(it);
+    cache[key] = buffer;
+    return buffer;
+}
+
 } // namespace
 
 void UpdateHiding(World& world) {
     auto& reg = world.Registry;
+    static std::uint64_t frame = 0;
+    ++frame;
+    // The wardrobe of the last outfit looked at: nearly every outfit in a scene shares one.
+    static std::string lastPath;
+    static std::shared_ptr<const Wardrobe::Wardrobe> lastWardrobe;
+    static int lastGeneration = -1;
     for (entt::entity root : reg.view<CharacterOutfitComponent>()) {
         auto& outfit = reg.get<CharacterOutfitComponent>(root);
+        if (outfit.Wardrobe != lastPath || !lastWardrobe || lastGeneration != WardrobeGeneration()) {
+            lastPath = outfit.Wardrobe;
+            lastWardrobe = LayerWardrobe(outfit.Wardrobe);
+            lastGeneration = WardrobeGeneration();
+        }
+        const auto wardrobe = lastWardrobe;
+        const std::uint64_t signature = HideSignature(world, outfit, root, wardrobe.get());
+        if (signature == outfit.HideSignature) continue;
+        // Still waiting for coverage worked out in the background: look again every few frames, not every one.
+        if (signature == outfit.HideWaiting && frame < outfit.HideRetryFrame) continue;
         const auto pieces = Pieces(world, root);
-        const auto wardrobe = LayerWardrobe(outfit.Wardrobe);
-        if (HideSignature(world, outfit, pieces, wardrobe.get()) == outfit.HideSignature) continue;
         std::map<entt::entity, Wardrobe::Layering> layers;
         for (const auto& [slot, e] : pieces) layers[e] = PieceLayer(wardrobe.get(), reg.get<OutfitPieceComponent>(e));
 
@@ -1084,7 +1160,11 @@ void UpdateHiding(World& world) {
                 }
                 tags.emplace_back(under, std::move(hidden));
             }
-        if (waiting) continue; // this outfit's signature stays stale, so it's looked at again next frame
+        if (waiting) { // this outfit's signature stays stale, so it's looked at again soon
+            outfit.HideWaiting = signature;
+            outfit.HideRetryFrame = frame + 8;
+            continue;
+        }
 
         for (auto& [under, hidden] : tags) {
             const int count = (int)std::count(hidden.begin(), hidden.end(), (std::uint8_t)1);
@@ -1092,11 +1172,13 @@ void UpdateHiding(World& world) {
             auto& tag = reg.emplace<OutfitHideTag>(under);
             auto bits = std::make_shared<const std::vector<std::uint32_t>>(OutfitCoverage::Pack(hidden));
             tag.Buffer = std::make_shared<SkinHideBuffer>(*bits);
+            if (const auto* rc = reg.try_get<RenderableComponent>(under); rc && rc->ModelRef)
+                tag.Visible = VisibleTriangles(*rc->ModelRef, *bits);
             tag.Bits = std::move(bits);
             tag.Hidden = count;
             tag.Total = (int)hidden.size();
         }
-        outfit.HideSignature = HideSignature(world, outfit, pieces, wardrobe.get());
+        outfit.HideSignature = signature;
     }
 }
 
@@ -1108,23 +1190,33 @@ void UpdateAttachments(World& world) {
             LinkFollowers(world, root, DriverEntity(world, root));
             outfit.LinkedVersion = outfit.Version;
         }
-        const auto pieces = Pieces(world, root);
-        const auto head = pieces.find("Head");
-        if (head == pieces.end()) continue;
-        const auto* hrc = reg.try_get<RenderableComponent>(head->second);
-        const int bone = hrc && hrc->ModelRef ? hrc->ModelRef->BoneId("head") : -1;
+        // The root's children as they are (no map: this runs for every outfit, every frame).
+        const auto* h = reg.try_get<HierarchyComponent>(root);
+        if (!h) continue;
+        entt::entity head = entt::null;
+        bool anyRigid = false;
+        for (entt::entity c : h->Children) {
+            const auto* p = reg.valid(c) ? reg.try_get<OutfitPieceComponent>(c) : nullptr;
+            if (!p) continue;
+            if (head == entt::null && p->Slot == "Head") head = c;
+            if ((p->Flags & OutfitPieceHeadAttached) && !(p->Flags & OutfitPieceBodyPart)) anyRigid = true;
+        }
+        if (head == entt::null || !anyRigid) continue;
+        const auto* hrc = reg.try_get<RenderableComponent>(head);
+        static const std::string kHeadBone = "head";
+        const int bone = hrc && hrc->ModelRef ? hrc->ModelRef->BoneId(kHeadBone) : -1;
         if (bone < 0) continue;
         // The head piece's own place under the root (identity as the outfit builds it), then its head bone's
         // skinning matrix: bind-pose model space -> where the head is now.
-        const auto& ht = reg.get<TransformComponent>(head->second);
+        const auto& ht = reg.get<TransformComponent>(head);
         const glm::mat4 follow = glm::translate(glm::mat4(1.0f), ht.Position) * glm::mat4_cast(ht.Rotation) *
                                  glm::scale(glm::mat4(1.0f), ht.Scale) * hrc->ModelRef->FinalBoneMatrix(bone);
         glm::vec3 pos(follow[3]);
         glm::vec3 scale(glm::length(glm::vec3(follow[0])), glm::length(glm::vec3(follow[1])), glm::length(glm::vec3(follow[2])));
         const glm::mat3 rot(glm::vec3(follow[0]) / scale.x, glm::vec3(follow[1]) / scale.y, glm::vec3(follow[2]) / scale.z);
-        for (const auto& [slot, e] : pieces) {
-            const auto& p = reg.get<OutfitPieceComponent>(e);
-            if (!(p.Flags & OutfitPieceHeadAttached) || (p.Flags & OutfitPieceBodyPart)) continue;
+        for (entt::entity e : h->Children) {
+            const auto* p = reg.valid(e) ? reg.try_get<OutfitPieceComponent>(e) : nullptr;
+            if (!p || !(p->Flags & OutfitPieceHeadAttached) || (p->Flags & OutfitPieceBodyPart)) continue;
             const auto* rc = reg.try_get<RenderableComponent>(e);
             if (!rc || !rc->ModelRef || rc->ModelRef->BoneCount() > 0) continue; // skinned: it follows by its bones
             auto& t = reg.get<TransformComponent>(e);

@@ -1,4 +1,5 @@
 #pragma once
+#include <cstdint>
 #include <vector>
 #include "ModelVertex.h"
 #include "Material.h"
@@ -18,6 +19,9 @@ public:
 
     // `instances` > 1 draws that many instances (the sun's layered cascade pass).
     void Draw(int instances = 1) const;
+    // Draws `count` indices at byte `offset` of another element buffer over this mesh's vertices (an outfit
+    // piece's visible triangles, VisibleIndexBuffer); the mesh's own buffer is bound again after.
+    void DrawIndices(unsigned elementBuffer, std::uint32_t offset, std::uint32_t count, int instances = 1) const;
 
     Material Mat;
 
