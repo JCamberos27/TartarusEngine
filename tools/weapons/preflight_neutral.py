@@ -2,7 +2,7 @@ import bpy, gzip, zlib
 
 # Read-only preflight: what Blender version wrote this file, and is the rig saved in
 # POSE or REST position? Never saves.
-# Run as: blender -b "<blend>" --python work\preflight_neutral.py
+# Run as: blender -b "<blend>" --python tools\weapons\preflight_neutral.py
 path = bpy.data.filepath
 with open(path, "rb") as f:
     magic = f.read(4)

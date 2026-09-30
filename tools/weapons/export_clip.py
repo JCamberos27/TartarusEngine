@@ -1,6 +1,6 @@
 # Exports ONE action from the AKS-74U rig as an FBX clip, without ever saving the .blend.
 #
-#   blender --background "<blend>" --python work/export_clip.py -- \
+#   blender --background "<blend>" --python tools/weapons/export_clip.py -- \
 #           <action> <out.fbx> <frame_start> <frame_end> <meshes 0|1> [weapon <A_W_x>|none|auto]
 #
 # THE WEAPON ACTION MATTERS. CB_ik_hand_l carries CHILD_OF -> AK:magazine at influence 1.0, so

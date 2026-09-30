@@ -516,7 +516,7 @@ int main(int argc, char** argv) {
             // node transform the way Model::ProcessMesh does, so a constant offset-matrix mismatch
             // between the `magazine` and `mag2` bones shows up here as extra separation that the
             // engine does not render. For the number that matters - how far the rig JUMPS when it
-            // reverts to bind - use work/bind_probe.cpp (node globals vs node globals), which
+            // reverts to bind - use tools/probes/bind_probe.cpp (node globals vs node globals), which
             // reports 121.8 mm.
             printf("  >> |mag2 - magazine| = %.4f   (vertex space - see comment; for the jump use "
                    "bind_probe)\n", glm::length(m2.cen - mg.cen));

@@ -13,7 +13,7 @@
 #
 # Nothing is saved: actions / NLA / pose_position / frame are restored in memory, no .save().
 #
-#   blender --background "<blend>" --python work/bl_mag_probe.py
+#   blender --background "<blend>" --python tools/weapons/bl_mag_probe.py
 import bpy
 
 ARMS, WEAP = "Armature", "AK"
