@@ -944,7 +944,9 @@ void UpdateHiding(World& world) {
             const int count = (int)std::count(hidden.begin(), hidden.end(), (std::uint8_t)1);
             if (!count) continue;
             auto& tag = reg.emplace<OutfitHideTag>(under);
-            tag.Buffer = std::make_shared<SkinHideBuffer>(OutfitCoverage::Pack(hidden));
+            auto bits = std::make_shared<const std::vector<std::uint32_t>>(OutfitCoverage::Pack(hidden));
+            tag.Buffer = std::make_shared<SkinHideBuffer>(*bits);
+            tag.Bits = std::move(bits);
             tag.Hidden = count;
             tag.Total = (int)hidden.size();
         }
