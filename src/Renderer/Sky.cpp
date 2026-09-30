@@ -1,7 +1,31 @@
 #include "Sky.h"
 #include "Shader.h"
 #include "ShaderLibrary.h"
+#include "GLStateCache.h"
 #include "gl.h"
+
+namespace {
+// Sky pixels only: depth test GL_LEQUAL against the far-plane quad, no depth writes. Saves
+// exactly what it mutates (#112) and restores it on scope exit.
+struct SkyDepthScope {
+    GLboolean WasDepthTest;
+    GLint PrevMask = GL_TRUE, PrevFunc = GL_LESS;
+    SkyDepthScope() {
+        WasDepthTest = glIsEnabled(GL_DEPTH_TEST);
+        glGetIntegerv(GL_DEPTH_WRITEMASK, &PrevMask);
+        glGetIntegerv(GL_DEPTH_FUNC, &PrevFunc);
+        glDepthMask(GL_FALSE);
+        glEnable(GL_DEPTH_TEST);
+        glDepthFunc(GL_LEQUAL);
+    }
+    ~SkyDepthScope() {
+        glDepthFunc((GLenum)PrevFunc);
+        if (!WasDepthTest) glDisable(GL_DEPTH_TEST);
+        glDepthMask((GLboolean)PrevMask);
+        GLStateCache::Invalidate(); // raw VAO / texture binds below
+    }
+};
+}
 
 Sky::Sky() {
     m_Shader = std::make_unique<Shader>(ShaderLibrary::ReadFile("Sky.vert.glsl"),
@@ -19,14 +43,7 @@ void Sky::Draw(const glm::mat4& view, const glm::mat4& proj,
                const glm::vec3& horizonColor, const glm::vec3& zenithColor) {
     glm::mat4 invViewProj = glm::inverse(proj * view);
 
-    // Save exactly what this pass mutates (#112) — the unconditional glEnable(GL_DEPTH_TEST)
-    // at the end is wrong if depth test was off on entry; it only works because of call order.
-    const GLboolean wasDepthTest = glIsEnabled(GL_DEPTH_TEST);
-    GLint prevDepthMask = GL_TRUE;
-    glGetIntegerv(GL_DEPTH_WRITEMASK, &prevDepthMask);
-
-    glDepthMask(GL_FALSE);
-    glDisable(GL_DEPTH_TEST);
+    SkyDepthScope depth;
 
     m_Shader->Bind();
     m_Shader->SetMat4("uInvViewProj", invViewProj);
@@ -35,20 +52,13 @@ void Sky::Draw(const glm::mat4& view, const glm::mat4& proj,
 
     glBindVertexArray(m_VAO);
     glDrawArrays(GL_TRIANGLES, 0, 6);
-
-    if (wasDepthTest) glEnable(GL_DEPTH_TEST);
-    glDepthMask((GLboolean)prevDepthMask);
 }
 
 void Sky::DrawHdri(unsigned int cubeTex, float rotationRadians,
                    const glm::mat4& view, const glm::mat4& proj) {
     glm::mat4 invViewProj = glm::inverse(proj * view);
 
-    const GLboolean wasDepthTest = glIsEnabled(GL_DEPTH_TEST);
-    GLint prevDepthMask = GL_TRUE;
-    glGetIntegerv(GL_DEPTH_WRITEMASK, &prevDepthMask);
-    glDepthMask(GL_FALSE);
-    glDisable(GL_DEPTH_TEST);
+    SkyDepthScope depth;
 
     glActiveTexture(GL_TEXTURE0);
     glBindTexture(GL_TEXTURE_CUBE_MAP, cubeTex);
@@ -59,7 +69,4 @@ void Sky::DrawHdri(unsigned int cubeTex, float rotationRadians,
 
     glBindVertexArray(m_VAO);
     glDrawArrays(GL_TRIANGLES, 0, 6);
-
-    if (wasDepthTest) glEnable(GL_DEPTH_TEST);
-    glDepthMask((GLboolean)prevDepthMask);
 }
