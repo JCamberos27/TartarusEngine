@@ -220,28 +220,92 @@ are 7–8 ms. At 1080p the CPU and GPU are now about even (~3.9 ms each); 1440p 
 `--smoke-test` passes with no GL errors. Smoke screenshots match phase 2 except the Scene-view shot
 facing the sun, which differs between runs of the same build too (clouds drift in real time).
 
+## Phase 4 results
+
+Same procedure as phase 3 (Game view at `--perf-res`), two runs each, averaged. Average ms (fps):
+
+| Resolution | Phase | Phase 3 | Phase 4 |
+|---|---|---|---|
+| 1920x1080 | Play (maximized) | 4.06 (246) | **3.87 (258)** |
+| 2560x1440 | Play (maximized) | 5.88 (170) | **5.20 (192)** |
+
+Edit and docked play moved within run-to-run noise (docked play at 1080p ranged 5.4–6.4 ms across
+runs). Both targets stay met. 1080p play-max is now GPU-bound (GPU ≈ 3.9 ms, the same as the frame),
+so CPU savings there no longer show up as fps.
+
+### Where the GPU time goes (knockout tests, 1440p play-max)
+
+Each test disabled one thing in a scratch build and compared GPU scopes:
+- Lighting and shading are cheap: flat shading or a constant colour only saves ~0.3 ms of Scene Draw.
+- Skinning math is cheap: removing it from the shadow shader saves ~0.03 ms. (Removing it from the
+  model shader looked like a 1 ms win, but the bind pose moved the bodies off screen.) So GPU pre-skinning
+  wasn't worth building.
+- The player's own body costs ~0 to draw. The NPCs cost ~0.3 ms and the rest of the scene ~0.8 ms.
+- Sun shadows were vertex/triangle-bound: halving the resolution only saved 0.2 of 0.78 ms.
+
+### Done (Phase 4)
+
+- **Vertex cache order**: `ModelMesh` reorders every mesh's triangles with meshoptimizer's vertex cache
+  optimizer (vertices and their IDs untouched). Imported meshes kept authoring order: the Quantum heads
+  shaded ~2.1 vertices per triangle, most skinned meshes 0.85–1.4; now ~0.65. 1440p play-max
+  5.94 → 5.64 ms.
+- **Sun cascade slice culling**: each cascade's light box is a square around a sphere around its view
+  slice, so every character near the camera went into all four cascades (~420k triangles each). A caster
+  now goes into a cascade only if its light-space footprint, grown by the PCF kernel and normal offset,
+  overlaps the part of the view frustum that reads that cascade (including the 12% cross-fade band).
+  Cascade 0 keeps the box test (view-model fragments can be outside the world frustum). Sun Shadow Pass
+  0.76 → 0.38 ms GPU. Screenshots with and without it differ only by cloud drift.
+- **CPU**: `Material::Hash` over four independent lanes; `Shader::Loc`'s by-address table 256 slots on a
+  multiplicative hash (64 slots thrashed); data-driven material binds reuse uniform names built once per
+  shader binding; ImGui's GLFW backend skips the per-frame `WindowFromPoint` hover test while the cursor
+  is captured and refreshes the monitor list every 0.5 s. Scene Draw CPU 0.53 → 0.44 ms.
+
+**Tried, not kept**
+- **Cascade fit fix** (see to-do 1): correct, but costs ~0.25 ms at 1080p with no visible change.
+
+**Verification**: `--unit-tests` (7222 checks pass), `--weapon-test` (45 checks pass), Sandbox
+`--smoke-test` passes.
+
 ## To do
 
-At 1080p the CPU (main thread) and GPU are about even; 1440p and up are GPU-bound.
+What is left, roughly by expected value. At 1080p the GPU is the limit, at 1440p more so.
 
 **GPU**
-1. Model fragment shader cost: the view model (arms + gun, a small part of the screen) takes
-   0.5 ms at 1080p and scene draw 1.4 ms. Profile the shader (clustered lights, shadow taps, IBL).
-2. Depth prepass into the MSAA HDR target reused by SSAO (the SSAO prepass excludes different
-   entities than the main pass, so it needs its own exclusions); move the `discard`s into shader
-   variants so ordinary opaque draws keep early-Z.
-3. SSAO: 32 taps at full resolution, fetch-bound. Half resolution or fewer taps would trade quality.
-4. Sun shadows 0.7 ms (vertex/submission-bound): skip sub-texel casters in far cascades.
+1. **Sun cascade fit bug.** `CascadedShadowMap::Update` interpolates each slice's corners along the full
+   camera frustum (to the 500 m far plane) with fractions taken against the 150 m shadow range, so each
+   cascade is fitted ~3.3x deeper than the depths that select it (cascade 0 covers 0–33 m but serves
+   0–10 m). Fixing it means taking the fractions against the far plane and fitting from 0.88x the previous
+   split (the cross-fade band); the last cascade must keep reaching the far plane or shadows beyond the
+   shadow distance vanish. The PCF radius and the depth/normal biases are in texels, so they must be
+   scaled by old/new fit radius to keep the look (unscaled they turn to acne and 3x narrower penumbrae).
+   Done that way, it looked identical and cost ~0.25 ms at 1080p (characters fill 3x more texels per
+   axis). It is only worth doing together with a lower `ShadowResolution` (same texel density as now,
+   less fill), or if sharper shadows are wanted.
+2. **Depth prepass shared with SSAO.** The SSAO prepass (0.6 ms at 1080p incl. compute) draws depth for
+   the same view the main pass then draws. Rendering it into the MSAA HDR target's depth and resolving
+   for SSAO would give the main pass early-Z on everything, but shading is only ~0.3 ms total, so the
+   saving is small unless the prepass itself gets cheaper. Needs `invariant gl_Position` and matching
+   vertex math in both shaders, or holes appear.
+3. **SSAO** (~0.55 ms at 1080p): 32 taps at full resolution, fetch-bound. Half resolution with a
+   depth-aware upsample or fewer taps would trade some quality.
+4. **Clouds** (~0.5 ms): already a quarter of texels per frame. Skipping texels behind opaque geometry
+   needs history handling so moving objects don't leave holes.
+5. **Static geometry** (~0.8 ms of Scene Draw at 1440p): primitives are one Model per entity (139
+   spheres at 1152 triangles each, 56 cubes, 36 cylinders). Share one mesh per primitive kind and draw
+   identical mesh+material runs instanced, in the main, SSAO and shadow passes. Also cuts CPU draw calls.
+6. **Characters' bounds**: characters whose clips live in other files report `HasAnimations() == false`,
+   so they are culled on unpadded bind-pose bounds in the main, SSAO and shadow passes. Harmless in the
+   Sandbox, but a limb reaching out of the bind box could be culled. Use "has bones" for the padding.
 
-**CPU**
-5. FP body ~1.4 ms: `ApplyLocalPose` / IK globals / clip sampling. Multithread the per-piece work,
-   or sample the driver once and copy to followers through a node remap.
-6. PhysX `fetchResults` wait: overlap simulate with animation / render prep.
-7. GL call volume: share one mesh per primitive kind and draw identical mesh+material runs instanced.
-8. `Material::Hash` ~2.5%, `glfwWindowVisible` / `WindowFromPoint` ~1.7%.
+**CPU** (worth it once the GPU is lighter, or on slower CPUs)
+7. First-person body ~1.4 ms: `ApplyLocalPose` (the final bone matrices do two generic 4x4 products per
+   bone; both are affine), IK global refreshes, clip sampling. Multithread the per-piece work, or sample
+   the driver once and copy to followers through a node remap.
+8. PhysX `fetchResults` wait (~0.45 ms): overlap simulation with animation and render prep.
+9. Animator controllers ~0.46 ms.
 
 **Hitches**
-9. Edit-mode SSAO prepass ~117 ms on first use (shader compile); sun shadow pass spike on the first
-   edit frames.
+10. Edit-mode SSAO prepass ~117 ms on first use (shader compile); sun shadow pass spike on the first
+    edit frames.
 
 Character LODs are out of scope for this pass.
