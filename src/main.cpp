@@ -3110,11 +3110,24 @@ int main(int argc, char** argv) {
                     hdriCubePath.clear();
                 }
                 prevWasHdri = false;
-                if (skyAtmosphere.EnvironmentDirty()) {
+                // A forced capture (scene load, entering this mode) convolves at once; the periodic
+                // re-captures (drifting clouds every 4 s, the sun moving, edits) are small changes,
+                // so their convolution is spread over the next 7 frames instead of spiking one.
+                const bool urgent = skyAtmosphere.EnvironmentDirty() &&
+                                    (skyAtmosphere.EnvironmentUrgent() || !iblProbe.IsValid());
+                if (skyAtmosphere.EnvironmentDirty() && !urgent) {
+                    iblProbe.RequestAmortizedBake();
+                    skyAtmosphere.MarkEnvironmentBaked();
+                }
+                if (urgent || iblProbe.AmortizedBakeRunning()) {
                     PROFILE_SCOPE("IBL Bake (Sky)");
                     PROFILE_GPU_SCOPE("IBL Bake (Sky)");
-                    iblProbe.BakeFromCubemap(skyAtmosphere.EnvironmentCube(), SkyAtmosphere::kEnvSize, 0.0f, 0.0f);
-                    skyAtmosphere.MarkEnvironmentBaked();
+                    if (urgent) {
+                        iblProbe.BakeFromCubemap(skyAtmosphere.EnvironmentCube(), SkyAtmosphere::kEnvSize, 0.0f, 0.0f);
+                        skyAtmosphere.MarkEnvironmentBaked();
+                    } else {
+                        iblProbe.StepAmortizedBake(skyAtmosphere.EnvironmentCube(), SkyAtmosphere::kEnvSize, 0.0f, 0.0f);
+                    }
                     glBindFramebuffer(GL_FRAMEBUFFER, 0);
                     glViewport(0, 0, window.GetWidth(), window.GetHeight());
                     GLStateCache::Invalidate();
