@@ -585,8 +585,9 @@ bool GLLoader_Init();
 // through the renderer cost ~20% of a Sandbox frame that way. The state they ask about is tracked
 // here as the engine sets it, so those reads are answered without the driver, and a set that
 // changes nothing is dropped. The GL names below route through it in every engine file. Code that
-// changes GL state behind its back (Dear ImGui's backend has its own loader) calls
-// GLStateShadow_Invalidate() after, and the next read of each value asks the driver once.
+// changes GL state behind its back and leaves it changed must call GLStateShadow_Invalidate()
+// after; the next read of each value then asks the driver once. (Dear ImGui's backend has its own
+// loader but puts back everything it changes - EditorLayer::EndFrame.)
 namespace glshadow {
 void __stdcall Viewport(GLint x, GLint y, GLsizei w, GLsizei h);
 void __stdcall Enable(GLenum cap);
