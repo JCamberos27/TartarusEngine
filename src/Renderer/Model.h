@@ -349,6 +349,7 @@ private:
         int BoneCounter = 0;
         glm::mat4 GlobalInverseTransform{1.0f};
         std::vector<AnimNode> Nodes; // flattened hierarchy, parents first (#113)
+        std::vector<unsigned char> SkinPath; // Model::SkinPath, worked out on first use
         // Name -> index into Nodes (the first node of a repeated name, as a scan would find), so
         // NodeIndex / NodeTransform are a hash lookup: the first-person IK resolves bones by name
         // for every arm bone of every body piece each frame, and a linear string scan was ~ms.
@@ -387,7 +388,13 @@ private:
         int Count = 0;
     };
     mutable BoneUpload m_BoneUpload;
-    std::vector<glm::mat4> m_NodeGlobals; // scratch, one per AnimNode
+    mutable std::vector<glm::mat4> m_NodeGlobals; // scratch, one per AnimNode
+    // ApplyLocalPose fills only the globals the skinning palette needs (bones and their ancestors: a
+    // clothing piece carries the whole ~350-node skeleton to skin a few dozen of it); NodeTransform
+    // derives any other from the applied pose when asked. 1 = current; empty = every one is.
+    mutable std::vector<unsigned char> m_GlobalValid;
+    void ResolveNodeGlobal(int node) const;
+    const std::vector<unsigned char>& SkinPath() const; // per node: a bone, or an ancestor of one
 
     // #175 — clips borrowed from other model files, retargeted by node name.
     struct ExternalClip {

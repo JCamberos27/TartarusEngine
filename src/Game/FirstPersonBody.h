@@ -209,6 +209,13 @@ private:
     float MeshGap(const World& world, BodyRegion region, const glm::vec3& a, const glm::vec3& b, std::string* piece, float* along) const;
     float m_WorldHeadTiltDeg = 0.0f, m_WorldHeadTiltWeight = 0.0f; // the cheek weld as last applied (diagnostics)
     mutable std::map<const Model*, std::vector<std::pair<int, int>>> m_HeadVerts, m_TorsoVerts;
+    // Per model: does it skin anything the arms' solve moves (under its top spine bone or the clavicles)?
+    // Legs, feet and rigid pieces don't, so the solve leaves them be (nothing of theirs it moves is drawn).
+    std::map<const Model*, bool> m_SkinsUpperBody;
+    bool SkinsUpperBody(const Model& m);
+    // The same question for any set of roots (a chain's bones), cached by the chain's first name.
+    std::map<std::pair<const Model*, std::string>, bool> m_SkinsUnder;
+    bool SkinsUnder(const Model& m, const std::vector<int>& roots, const std::string& key);
     void SkinnedPoints(const World& world, BodyRegion region, std::vector<glm::vec3>& points, std::vector<int>* pieceOf = nullptr) const;
     std::vector<glm::vec3> m_HeadPointBuffer, m_TorsoPointBuffer; // ArmsLateUpdate's, kept so the frame doesn't allocate
     glm::vec3 m_WorldGunShift{0.0f};   // the world gun off the first-person one (world, eased)
@@ -266,6 +273,9 @@ float FirstPersonBodyClearPush(const std::vector<glm::vec3>& points, const glm::
 // How close `points` come to an elbow: the arm from half-way down the upper arm (`shoulder` to `elbow`), through
 // the elbow, to half-way down the forearm (to `hand`). A large number when there are no points.
 float FirstPersonBodyElbowGap(const std::vector<glm::vec3>& points, const glm::vec3& shoulder, const glm::vec3& elbow, const glm::vec3& hand);
+// The same, but free to stop early with any value <= floor once the gap is known to be at most `floor`.
+float FirstPersonBodyElbowGapAbove(const std::vector<glm::vec3>& points, const glm::vec3& shoulder, const glm::vec3& elbow,
+                                   const glm::vec3& hand, float floor);
 // The swivel (radians, about the shoulder-to-hand line, right-handed) that takes the elbow at least `clearance`
 // from every one of `points`, the hand staying put: the smallest of +-step, +-2 step ... up to `maxAngle`, and
 // where none clears, the one that comes clearest. 0 when the elbow is already clear. At each size the side of

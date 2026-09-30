@@ -413,9 +413,12 @@ int main(int argc, char** argv) {
     // the weapon (default the Remington) held through pitches, turns, rounds and the sights, the butt measured
     // against the body; with --smoke-shots each capture is the Scene view (on the gun and shoulder) beside the Game view.
     bool stockProbeMode = false, stockProbeAk = false;
-    // --perf-bench [dir]: the smoke-test harness with VSync, the FPS cap and GL debug output off,
-    // a longer per-scene run, and an averaged CPU/GPU profiler breakdown printed per scene.
+    // --perf-bench [dir|scene.json]: the smoke-test harness with VSync, the FPS cap and GL debug output
+    // off, a longer per-scene run, and an averaged CPU/GPU profiler breakdown printed per scene: edit
+    // mode, then Play in the docked Game view, then Play maximized. --perf-res WxH sizes the window
+    // (default: maximized) so runs at a given resolution are repeatable.
     bool perfBenchMode = false;
+    int perfResW = 0, perfResH = 0;
     // --resave <in.json> <out.json>: load a scene and immediately re-serialize it, then exit.
     // The one headless path that exercises the SAVE side of the serializer — round-trip tests
     // (prefab overrides #302 Part B, the reflected-component migrations, ...) all need it. Still
@@ -456,6 +459,10 @@ int main(int argc, char** argv) {
             smokeTestMode = true;
             perfBenchMode = a == "--perf-bench";
             if (i + 1 < argc && argv[i + 1][0] != '-') smokeScenesDirArg = argv[++i];
+        }
+        else if (a == "--perf-res" && i + 1 < argc) {
+            if (std::sscanf(argv[++i], "%dx%d", &perfResW, &perfResH) != 2 || perfResW <= 0 || perfResH <= 0)
+                perfResW = perfResH = 0;
         }
         else if (a == "--weapon-test") { smokeTestMode = true; weaponTestMode = true; }
         else if (a == "--stock-probe") {
@@ -828,6 +835,10 @@ int main(int argc, char** argv) {
             placement.Height = es.WindowHeight;
             placement.Maximized = es.WindowMaximized;
             if (!playerMode && !window.ApplyPlacement(placement)) window.Maximize();
+            if (perfBenchMode && perfResW > 0) {
+                glfwRestoreWindow(window.Handle());
+                glfwSetWindowSize(window.Handle(), perfResW, perfResH);
+            }
         }
         LayerRegistry::Load(); // LayerComponent slot names (#236 A1)
         ProjectSettings::Load(); // physics + tags (#236 A4); project/settings.json
@@ -1420,7 +1431,7 @@ int main(int argc, char** argv) {
         constexpr int kPerfPhaseFrames = 600;
         constexpr int kPerfBenchWarmup = 100; // frames skipped at the start of each phase
         // --weapon-test ends its scene itself when the script is done; this is only its safety cap (6 min at 60 Hz).
-        const int kSmokeTestFrames = weaponTestMode ? 60 * 60 * 6 : perfBenchMode ? 2 * kPerfPhaseFrames : 100;
+        const int kSmokeTestFrames = weaponTestMode ? 60 * 60 * 6 : perfBenchMode ? 3 * kPerfPhaseFrames : 100;
         struct PerfAccum { double Sum = 0.0; double Max = 0.0; int N = 0; };
         std::vector<std::pair<std::string, PerfAccum>> perfCpu, perfGpu;
         PerfAccum perfFrame;
@@ -1460,7 +1471,8 @@ int main(int argc, char** argv) {
                 scenesDir = haveEngineScenes ? engineScenes : ProjectPaths::Resolve("scenes");
             }
             std::error_code dirEc;
-            for (auto& entry : std::filesystem::directory_iterator(scenesDir, dirEc)) {
+            if (std::filesystem::is_regular_file(scenesDir, dirEc)) smokeScenePaths.push_back(scenesDir);
+            else for (auto& entry : std::filesystem::directory_iterator(scenesDir, dirEc)) {
                 if (dirEc) break;
                 if (entry.is_regular_file() && entry.path().extension() == ".json")
                     smokeScenePaths.push_back(entry.path().string());
@@ -2321,6 +2333,7 @@ int main(int argc, char** argv) {
                                    [&](float fixedDt) { gameModule.FixedTick(world, fixedDt); });
                 }
                 if (playUsesPlayer) {
+                    PROFILE_SCOPE("Player + FP Update");
                     // The weapon's view punch / lean comes off before the player integrates
                     // its own look and position, and goes back on in Update below.
                     firstPersonPresentation.RemoveViewKick(player.Cam);
@@ -2425,14 +2438,22 @@ int main(int argc, char** argv) {
                 {
                 PROFILE_SCOPE("Animators");
                 UpdateSkeletalAnimations(world, assets, gameDt); // #175 — Animation components drive their models' clips
+                PROFILE_SCOPE("Animator Controllers");
                 UpdateAnimatorControllers(world, assets, gameDt); // #175 Part B — state machines
                 }
                 // The arms are posed now (clips + IK): seat the gun in this frame's hands.
                 if (playUsesPlayer) {
                     PROFILE_SCOPE("First Person IK");
+                    {
+                    PROFILE_SCOPE("FP Body LateUpdate");
                     firstPersonBody.LateUpdate(world, player.Cam, gameDt, firstPersonPresentation.ArmsEntity(),
                                                firstPersonPresentation.CameraBone()); // camera into the body's head
+                    }
+                    {
+                    PROFILE_SCOPE("FP Presentation LateUpdate");
                     firstPersonPresentation.LateUpdate(world, player.Cam);
+                    }
+                    PROFILE_SCOPE("FP Arms + World Gun");
                     // The body's hands onto the arms rig's, now that the rig is seated.
                     // Split poses: the body's world twins reach the world gun, placed off the first-person one.
                     FirstPersonWorldGunInput worldGun;
@@ -2453,7 +2474,10 @@ int main(int argc, char** argv) {
             // The gameplay DLL watches its freshly-built source copy even while editing, and
             // only runs game systems during Play. Rebuilding TartarusGame swaps the module
             // without closing the editor or discarding this World.
-            gameModule.Tick(world, gameDt, simThisFrame);
+            {
+                PROFILE_SCOPE("Game Module Tick");
+                gameModule.Tick(world, gameDt, simThisFrame);
+            }
 
             // #177 - particles run while editing too (real time) so an emitter can be tuned live;
             // in Play they follow the game clock and freeze while paused.
@@ -2499,13 +2523,19 @@ int main(int argc, char** argv) {
             // did not: both views now agree on one snapshot instead of tearing between them.
             // Entities SPAWNED after this point still resolve correctly — GetCachedWorldTransform
             // falls back to composing on demand for anything the cache doesn't hold.
+            {
+            PROFILE_SCOPE("Outfits + Transform Cache");
             OutfitSystem::UpdateAttachments(world); // rigid head wear onto the head bone, now it's posed
             world.RebuildWorldTransformCache();
+            }
             // Background asset loads: a few ms of GL uploads per frame, then any outfit change whose
             // models and materials are now all in memory lands in one frame.
+            {
+            PROFILE_SCOPE("Asset Pump + Outfit Hiding");
             assets.PumpAsync(3.0);
             OutfitSystem::UpdatePending(world, assets);
             OutfitSystem::UpdateHiding(world); // outfit skin under clothing (only when an outfit's pieces changed)
+            }
 
             glm::vec3 lightDir(-0.4f, -1.0f, -0.3f);
 
@@ -2832,6 +2862,62 @@ int main(int argc, char** argv) {
                 const Camera& lodCam = playing ? *gameCam : editorCamera;
                 world.ApplyLod(lodCam.Position, lodCam.ProjectionMatrix(1.0f));
             }
+            // Spot and point casters, gathered once for every light and cube face (each used to
+            // walk the whole registry again). Animated models are culled on bounds padded around
+            // the centre, like the sun and main passes, instead of being drawn into every map.
+            struct LocalCaster {
+                Model* model;
+                const std::vector<std::shared_ptr<MaterialAsset>>* materials;
+                glm::mat4 xform;
+                AABB bounds;
+                std::uint32_t id;
+                bool bounded, twoSided, animated;
+            };
+            static std::vector<LocalCaster> localCasters;
+            localCasters.clear();
+            if (world.ShadowsEnabled && (spotShadowCount > 0 || pointShadowCount > 0)) {
+                PROFILE_SCOPE("Local Shadow Gather");
+                for (auto entity : world.Registry.view<TransformComponent, RenderableComponent>()) {
+                    if (world.Registry.any_of<InactiveTag, LodCulledTag, PoseSourceTag, OwnerViewOnlyTag>(entity)) continue;
+                    auto& r = world.Registry.get<RenderableComponent>(entity);
+                    if (!r.ModelRef || r.CastShadows == RenderableComponent::ShadowCasting::Off) continue; // #163
+                    LocalCaster& lc = localCasters.emplace_back();
+                    lc.model = r.ModelRef.get();
+                    lc.materials = &r.Materials;
+                    lc.xform = world.GetCachedWorldTransform(entity);
+                    lc.id = static_cast<std::uint32_t>(entity);
+                    lc.twoSided = r.CastShadows == RenderableComponent::ShadowCasting::TwoSided;
+                    lc.animated = lc.model->HasAnimations();
+                    glm::vec3 bmin = lc.model->BoundsMin(), bmax = lc.model->BoundsMax();
+                    lc.bounded = bmin.x <= bmax.x && bmin.y <= bmax.y && bmin.z <= bmax.z;
+                    if (!lc.bounded) continue;
+                    if (lc.animated) { // bind-pose bounds (#113): room for a swinging limb
+                        const glm::vec3 c = (bmin + bmax) * 0.5f, h = (bmax - bmin) * 0.5f * 1.75f;
+                        bmin = c - h; bmax = c + h;
+                    }
+                    lc.bounds = AABB{bmin, bmax}.Transformed(lc.xform);
+                }
+            }
+            // A local shadow map is only redrawn when something it sees changed: its light, the
+            // map itself, or any caster inside it (moved, swapped model or materials, or animated).
+            // Everything static - most lamps, most of the time - keeps last frame's depth.
+            auto hashBytes = [](std::uint64_t h, const void* data, size_t n) {
+                const unsigned char* p = static_cast<const unsigned char*>(data);
+                for (size_t i = 0; i < n; ++i) { h ^= p[i]; h *= 1099511628211ull; }
+                return h;
+            };
+            auto hashCaster = [&](std::uint64_t h, const LocalCaster& c) {
+                h = hashBytes(h, &c.id, sizeof c.id);
+                h = hashBytes(h, &c.model, sizeof c.model);
+                const void* mats = c.materials->empty() ? nullptr : c.materials->front().get();
+                h = hashBytes(h, &mats, sizeof mats);
+                const size_t matCount = c.materials->size();
+                h = hashBytes(h, &matCount, sizeof matCount);
+                h = hashBytes(h, &c.xform, sizeof c.xform);
+                return hashBytes(h, &c.twoSided, sizeof c.twoSided);
+            };
+            static std::uint64_t s_SpotShadowSig[SpotShadowMap::kMaxSpots] = {};
+            static std::uint64_t s_PointShadowSig[PointShadowMap::kMaxPoints] = {};
             if (world.ShadowsEnabled && spotShadowCount > 0) {
                 PROFILE_SCOPE("Spot Shadow Pass");
                 PROFILE_GPU_SCOPE("Spot Shadow Pass");
@@ -2843,38 +2929,45 @@ int main(int argc, char** argv) {
                 // that culling front faces detached the contact shadow — the sphere gap in #134.
                 // gl_FragDepth is written linearly here, so glPolygonOffset does nothing; the
                 // bias lives entirely in SpotShadow()'s texel-proportional `ref` term.
+                glEnable(GL_CULL_FACE);
                 glCullFace(GL_BACK);
 
                 localShadowShader.Bind(); // linear distance-to-light depth
-                auto casters = world.Registry.view<TransformComponent, RenderableComponent>();
                 // #194: resolve once, outside the per-spot x per-caster loop.
                 int localLightViewProjLoc = localShadowShader.Loc("uLightViewProj");
                 int localLightPosLoc = localShadowShader.Loc("uShadowLightPos");
                 int localFarLoc = localShadowShader.Loc("uShadowFar");
                 int localModelLoc = localShadowShader.Loc("uModel");
+                static std::vector<const LocalCaster*> visible;
                 for (int s = 0; s < spotShadowCount; ++s) {
+                    Frustum lf = Frustum::FromViewProj(spotShadowVP[s]);
+                    visible.clear();
+                    bool animated = false;
+                    std::uint64_t sig = 1469598103934665603ull;
+                    const unsigned int map = spotShadowMap.DepthArray();
+                    const int res = spotShadowMap.Resolution() * 64 + spotShadowMap.Layers(); // a reallocation
+                    sig = hashBytes(sig, &map, sizeof map);
+                    sig = hashBytes(sig, &res, sizeof res);
+                    sig = hashBytes(sig, &spotShadowVP[s], sizeof spotShadowVP[s]);
+                    sig = hashBytes(sig, &spotShadowPos[s], sizeof spotShadowPos[s]);
+                    sig = hashBytes(sig, &spotShadowFar[s], sizeof spotShadowFar[s]);
+                    for (const LocalCaster& c : localCasters) {
+                        if (c.bounded && !lf.Intersects(c.bounds)) continue;
+                        visible.push_back(&c);
+                        animated = animated || c.animated;
+                        sig = hashCaster(sig, c);
+                    }
+                    if (!animated && sig == s_SpotShadowSig[s]) continue; // unchanged: keep the layer
+                    s_SpotShadowSig[s] = animated ? 0 : sig;
                     spotShadowMap.Begin(s);
                     localShadowShader.SetMat4(localLightViewProjLoc, spotShadowVP[s]);
                     localShadowShader.SetVec3(localLightPosLoc, spotShadowPos[s]);
                     localShadowShader.SetFloat(localFarLoc, spotShadowFar[s]);
-                    Frustum lf = Frustum::FromViewProj(spotShadowVP[s]);
-                    for (auto entity : casters) {
-                        if (world.Registry.any_of<InactiveTag, LodCulledTag, PoseSourceTag, OwnerViewOnlyTag>(entity)) continue;
-                        auto& r = world.Registry.get<RenderableComponent>(entity);
-                        if (r.CastShadows == RenderableComponent::ShadowCasting::Off) continue; // #163
-                        const bool twoSided = r.CastShadows == RenderableComponent::ShadowCasting::TwoSided;
-                        glm::mat4 model = world.GetCachedWorldTransform(entity);
-                        glm::vec3 bmin = r.ModelRef->BoundsMin();
-                        glm::vec3 bmax = r.ModelRef->BoundsMax();
-                        bool vb = bmin.x <= bmax.x && bmin.y <= bmax.y && bmin.z <= bmax.z;
-                        if (vb && !r.ModelRef->HasAnimations() &&
-                            !lf.Intersects(AABB{bmin, bmax}.Transformed(model)))
-                            continue;
-                        localShadowShader.SetMat4(localModelLoc, model);
-                        const bool cullWasOn = twoSided && glIsEnabled(GL_CULL_FACE);
-                        if (cullWasOn) glDisable(GL_CULL_FACE);
-                        r.ModelRef->DrawDepthOnly(localShadowShader, r.Materials);
-                        if (cullWasOn) glEnable(GL_CULL_FACE);
+                    for (const LocalCaster* c : visible) {
+                        localShadowShader.SetMat4(localModelLoc, c->xform);
+                        if (c->twoSided) glDisable(GL_CULL_FACE);
+                        c->model->DrawDepthOnly(localShadowShader, *c->materials);
+                        if (c->twoSided) glEnable(GL_CULL_FACE);
                     }
                 }
 
@@ -2909,39 +3002,49 @@ int main(int argc, char** argv) {
                 glCullFace(GL_BACK);
 
                 localShadowShader.Bind(); // linear distance-to-light depth
-                auto casters = world.Registry.view<TransformComponent, RenderableComponent>();
                 // #194: resolve once, outside the per-point x 6-face x per-caster loop.
                 int cubeLightPosLoc = localShadowShader.Loc("uShadowLightPos");
                 int cubeFarLoc = localShadowShader.Loc("uShadowFar");
                 int cubeLightViewProjLoc = localShadowShader.Loc("uLightViewProj");
                 int cubeModelLoc = localShadowShader.Loc("uModel");
+                static std::vector<const LocalCaster*> inRange;
                 for (int s = 0; s < pointShadowCount; ++s) {
-                    glm::mat4 proj = MakePerspective(90.0f, 1.0f, pointShadowNear[s], pointShadowFar[s]); // #202
-                    localShadowShader.SetVec3(cubeLightPosLoc, pointShadowPos[s]);
-                    localShadowShader.SetFloat(cubeFarLoc, pointShadowFar[s]);
+                    // The light's whole reach: casters outside it can't show on any face.
+                    const glm::vec3 lp = pointShadowPos[s];
+                    const float reach = pointShadowFar[s];
+                    const AABB range{lp - glm::vec3(reach), lp + glm::vec3(reach)};
+                    inRange.clear();
+                    bool animated = false;
+                    std::uint64_t sig = 1469598103934665603ull;
+                    const unsigned int map = pointShadowMap.DepthCubeArray();
+                    const int res = pointShadowMap.Resolution() * 64 + pointShadowMap.Cubes(); // a reallocation
+                    sig = hashBytes(sig, &map, sizeof map);
+                    sig = hashBytes(sig, &res, sizeof res);
+                    sig = hashBytes(sig, &lp, sizeof lp);
+                    sig = hashBytes(sig, &pointShadowNear[s], sizeof pointShadowNear[s]);
+                    sig = hashBytes(sig, &reach, sizeof reach);
+                    for (const LocalCaster& c : localCasters) {
+                        if (c.bounded && !range.Intersects(c.bounds)) continue;
+                        inRange.push_back(&c);
+                        animated = animated || c.animated;
+                        sig = hashCaster(sig, c);
+                    }
+                    if (!animated && sig == s_PointShadowSig[s]) continue; // unchanged: keep the cube
+                    s_PointShadowSig[s] = animated ? 0 : sig;
+                    glm::mat4 proj = MakePerspective(90.0f, 1.0f, pointShadowNear[s], reach); // #202
+                    localShadowShader.SetVec3(cubeLightPosLoc, lp);
+                    localShadowShader.SetFloat(cubeFarLoc, reach);
                     for (int f = 0; f < 6; ++f) {
                         pointShadowMap.BeginFace(s, f);
-                        glm::mat4 vp = proj * glm::lookAt(pointShadowPos[s],
-                                                         pointShadowPos[s] + kFaceDir[f], kFaceUp[f]);
+                        glm::mat4 vp = proj * glm::lookAt(lp, lp + kFaceDir[f], kFaceUp[f]);
                         localShadowShader.SetMat4(cubeLightViewProjLoc, vp);
                         Frustum lf = Frustum::FromViewProj(vp);
-                        for (auto entity : casters) {
-                            if (world.Registry.any_of<InactiveTag, LodCulledTag, PoseSourceTag, OwnerViewOnlyTag>(entity)) continue;
-                            auto& r = world.Registry.get<RenderableComponent>(entity);
-                            if (r.CastShadows == RenderableComponent::ShadowCasting::Off) continue; // #163
-                            const bool twoSided = r.CastShadows == RenderableComponent::ShadowCasting::TwoSided;
-                            glm::mat4 model = world.GetCachedWorldTransform(entity);
-                            glm::vec3 bmin = r.ModelRef->BoundsMin();
-                            glm::vec3 bmax = r.ModelRef->BoundsMax();
-                            bool vb = bmin.x <= bmax.x && bmin.y <= bmax.y && bmin.z <= bmax.z;
-                            if (vb && !r.ModelRef->HasAnimations() &&
-                                !lf.Intersects(AABB{bmin, bmax}.Transformed(model)))
-                                continue;
-                            localShadowShader.SetMat4(cubeModelLoc, model);
-                            const bool cullWasOn = twoSided && glIsEnabled(GL_CULL_FACE);
-                            if (cullWasOn) glDisable(GL_CULL_FACE);
-                            r.ModelRef->DrawDepthOnly(localShadowShader, r.Materials);
-                            if (cullWasOn) glEnable(GL_CULL_FACE);
+                        for (const LocalCaster* c : inRange) {
+                            if (c->bounded && !lf.Intersects(c->bounds)) continue;
+                            localShadowShader.SetMat4(cubeModelLoc, c->xform);
+                            if (c->twoSided) glDisable(GL_CULL_FACE);
+                            c->model->DrawDepthOnly(localShadowShader, *c->materials);
+                            if (c->twoSided) glEnable(GL_CULL_FACE);
                         }
                     }
                 }
@@ -3036,7 +3139,10 @@ int main(int argc, char** argv) {
             prevWasAtmosphere = physicalSky;
 
             // PR14: rebuild probe list from scene (cheap CPU gather, once per frame)
-            probeArray.Update(world);
+            {
+                PROFILE_SCOPE("Probe Gather");
+                probeArray.Update(world);
+            }
 
             // Renders the lit scene (sky + every Transform+Renderable entity) into whatever
             // framebuffer/viewport is currently bound. Shared by the real on-screen pass below
@@ -3183,6 +3289,7 @@ int main(int argc, char** argv) {
             // per-frame render cost in the common case (editing in one tab or the other).
             if (editorUIVisible && editor.IsSceneViewportVisible()) {
                 PROFILE_SCOPE("Scene View Render");
+                PROFILE_GPU_SCOPE("Scene View Render");
                 glm::vec2 available = editor.GetLastSceneContentRegion();
                 if (available.x < 1.0f || available.y < 1.0f) {
                     available = {(float)window.GetWidth(), (float)window.GetHeight()};
@@ -3535,6 +3642,8 @@ int main(int argc, char** argv) {
             bool gameTabVisible = editorUIVisible && gameView.IsVisible();
             GameViewStats gameViewStats{};
             if (gameTabVisible || playMaxLocked) {
+                PROFILE_SCOPE("Game View Render");
+                PROFILE_GPU_SCOPE("Game View Render");
                 ImVec2 available = gameTabVisible ? gameView.GetLastAvailableRegion() : ImVec2(0.0f, 0.0f);
                 if (available.x < 1.0f || available.y < 1.0f) {
                     available = ImVec2((float)window.GetWidth(), (float)window.GetHeight());
@@ -3762,6 +3871,8 @@ int main(int argc, char** argv) {
                     GL_COLOR_BUFFER_BIT, GL_LINEAR);
                 glBindFramebuffer(GL_FRAMEBUFFER, 0);
             } else if (playMaximized) {
+                PROFILE_SCOPE("Game View Render");
+                PROFILE_GPU_SCOPE("Game View Render");
                 // Free-Aspect maximized play: render the scene into the HDR target at the
                 // window's native aspect, then tonemap straight onto the backbuffer.
                 int mw = window.GetWidth(), mh = window.GetHeight();
@@ -3832,6 +3943,7 @@ int main(int argc, char** argv) {
 
             {
                 PROFILE_SCOPE("ImGui Render");
+                PROFILE_GPU_SCOPE("ImGui Render");
                 editor.EndFrame(); // flushes the ImGui frame (empty when not in editor mode)
             }
             // Dear ImGui's OpenGL3 backend just made its own raw glUseProgram/glBindTexture
@@ -3931,7 +4043,10 @@ int main(int argc, char** argv) {
                 editor.SetHideOverlaysThisFrame(false);
             }
 
-            window.SwapBuffers();
+            {
+                PROFILE_SCOPE("Swap Buffers");
+                window.SwapBuffers();
+            }
 
             // Software frame cap. Runs whatever the VSync mode is, but it's really for VSync Off
             // (with VSync On the driver already blocks in SwapBuffers). 0 = uncapped.
@@ -4013,11 +4128,11 @@ int main(int argc, char** argv) {
                         for (const Profiler::Entry& e : Profiler::GetLastFrameGpu()) perfAdd(perfGpu, e.Name, e.Milliseconds);
                     }
                     if (phaseFrame == kPerfPhaseFrames) {
-                        std::printf("[PerfBench] %s (%s)  frames=%d  avg=%.3f ms (%.1f fps)  worst=%.3f ms  draws=%d\n",
+                        std::printf("[PerfBench] %s (%s)  frames=%d  avg=%.3f ms (%.1f fps)  worst=%.3f ms  draws=%d  window=%dx%d\n",
                                     std::filesystem::path(smokeScenePaths[smokeSceneIndex]).filename().string().c_str(),
-                                    playing ? "play" : "edit", perfFrame.N, perfFrame.N ? perfFrame.Sum / perfFrame.N : 0.0,
+                                    !playing ? "edit" : playMaximized ? "play-max" : "play", perfFrame.N, perfFrame.N ? perfFrame.Sum / perfFrame.N : 0.0,
                                     perfFrame.Sum > 0.0 ? 1000.0 * perfFrame.N / perfFrame.Sum : 0.0,
-                                    perfFrame.Max, editor.GetRenderStats().DrawCalls);
+                                    perfFrame.Max, editor.GetRenderStats().DrawCalls, window.GetWidth(), window.GetHeight());
                         for (auto* v : {&perfCpu, &perfGpu}) {
                             std::sort(v->begin(), v->end(), [](const auto& a, const auto& b) { return a.second.Sum > b.second.Sum; });
                             for (const auto& [name, acc] : *v)
@@ -4026,7 +4141,10 @@ int main(int argc, char** argv) {
                         }
                         std::fflush(stdout);
                         perfCpu.clear(); perfGpu.clear(); perfFrame = {};
-                        if (!playing && smokeFramesRendered < kSmokeTestFrames) togglePlay();
+                        if (smokeFramesRendered < kSmokeTestFrames) {
+                            if (!playing) togglePlay();
+                            else if (!playMaximized) setMaximized(true);
+                        }
                     }
                 }
                 if (smokeFramesRendered >= kSmokeTestFrames) {
