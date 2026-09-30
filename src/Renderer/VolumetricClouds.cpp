@@ -260,6 +260,19 @@ unsigned int VolumetricClouds::RenderView(ViewState& st, const SkySettings& s, c
     }
     const glm::mat4 viewProj = proj * view;
     const glm::mat4 invViewProj = glm::inverse(viewProj);
+    // A big camera jump (teleport, switching views) invalidates the history.
+    const bool cut = glm::length(cameraWorld - st.PrevCamera) > worldUnitsPerKm * 0.5f;
+    const bool reset = !st.HasHistory || cut;
+    // With history, march one texel of each 2x2 block per frame (in the order of a 2x2 Bayer
+    // matrix, so every texel refreshes every 4th frame) and reproject the rest; a reset marches
+    // them all.
+    static const glm::ivec2 kChecker[4] = {{0, 0}, {1, 1}, {1, 0}, {0, 1}};
+    const unsigned int phase = st.Phase++;
+    const glm::ivec2 checker = reset ? glm::ivec2(-1) : kChecker[phase & 3];
+    const int marchW = reset ? w : (w + 1) / 2, marchH = reset ? h : (h + 1) / 2;
+    // A fresh texel arrives every 4th frame: weigh it up (1.5x, not 4x) so history still averages
+    // ~7 jittered marches while tracking drifting clouds within ~25 frames.
+    const float blend = reset ? q.Blend : std::min(1.0f, q.Blend * 1.5f);
 
     // --- Raymarch ---
     BindNoise();
@@ -273,14 +286,14 @@ unsigned int VolumetricClouds::RenderView(ViewState& st, const SkySettings& s, c
     // The angle one target pixel spans (the vertical field of view over its height), which
     // picks the noise mips for distant clouds.
     m_RaymarchShader->SetFloat("uPixelAngle", 2.0f / (std::max(std::abs(proj[1][1]), 1e-3f) * (float)h));
+    glUniform2i(m_RaymarchShader->Loc("uChecker"), checker.x, checker.y);
+    m_RaymarchShader->SetFloat("uMarchIndex", (float)((phase >> 2) & 1023u));
     glBindImageTexture(0, st.Color, 0, GL_FALSE, 0, GL_WRITE_ONLY, GL_RGBA16F);
     glBindImageTexture(1, st.Depth, 0, GL_FALSE, 0, GL_WRITE_ONLY, GL_R32F);
-    m_RaymarchShader->DispatchCompute(Groups(w, 8), Groups(h, 8), 1);
+    m_RaymarchShader->DispatchCompute(Groups(marchW, 8), Groups(marchH, 8), 1);
     glMemoryBarrier(GL_TEXTURE_FETCH_BARRIER_BIT | GL_SHADER_IMAGE_ACCESS_BARRIER_BIT);
 
     // --- Temporal resolve into the other history target ---
-    // A big camera jump (teleport, switching views) invalidates the history.
-    const bool cut = glm::length(cameraWorld - st.PrevCamera) > worldUnitsPerKm * 0.5f;
     const int dst = st.Current ^ 1;
     m_TemporalShader->Bind();
     glBindTextureUnit(7, st.Color);
@@ -291,8 +304,9 @@ unsigned int VolumetricClouds::RenderView(ViewState& st, const SkySettings& s, c
     m_TemporalShader->SetVec3("uCameraWorld", cameraWorld);
     m_TemporalShader->SetFloat("uKmToWorld", worldUnitsPerKm);
     glUniform2i(m_TemporalShader->Loc("uSize"), w, h);
-    m_TemporalShader->SetFloat("uBlend", q.Blend);
-    m_TemporalShader->SetInt("uReset", (!st.HasHistory || cut) ? 1 : 0);
+    m_TemporalShader->SetFloat("uBlend", blend);
+    m_TemporalShader->SetInt("uReset", reset ? 1 : 0);
+    glUniform2i(m_TemporalShader->Loc("uChecker"), checker.x, checker.y);
     glBindImageTexture(0, st.History[dst], 0, GL_FALSE, 0, GL_WRITE_ONLY, GL_RGBA16F);
     m_TemporalShader->DispatchCompute(Groups(w, 8), Groups(h, 8), 1);
     glMemoryBarrier(GL_TEXTURE_FETCH_BARRIER_BIT | GL_SHADER_IMAGE_ACCESS_BARRIER_BIT);
