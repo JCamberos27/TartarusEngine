@@ -295,7 +295,15 @@ void EditorLayer::DrawCharacterOutfitEditor(World& world, entt::entity root) {
     ImGui::InputTextWithHint("##outfitSearch", ICON_FA_MAGNIFYING_GLASS "  Search", ui.Search, sizeof(ui.Search));
 
     // Card grid.
-    const float card = 84.0f, thumb = 64.0f, gap = 6.0f;
+    const float card = 92.0f, thumb = 78.0f, gap = 6.0f;
+    // Model thumbnails frame the model's bounding sphere with headroom (ModelPreviewRenderer::
+    // ComputeFramingDistance): the sphere spans the middle 59% of the image, so the rest is empty
+    // background. Show only the middle 64% - the item comes out ~1.6x bigger and nothing is cut off.
+    static constexpr float kCrop = 0.18f;
+    auto thumbUV = [](bool flip, ImVec2& uv0, ImVec2& uv1) {
+        uv0 = ImVec2(kCrop, flip ? 1.0f - kCrop : kCrop);
+        uv1 = ImVec2(1.0f - kCrop, flip ? kCrop : 1.0f - kCrop);
+    };
     const float width = ImGui::GetContentRegionAvail().x;
     const int columns = std::max(1, (int)((width + gap) / (card + gap)));
     std::vector<const Wardrobe::Item*> items;
@@ -344,9 +352,11 @@ void EditorLayer::DrawCharacterOutfitEditor(World& world, entt::entity root) {
         const ImVec2 t0(p.x + (card - thumb) * 0.5f, p.y + 6.0f), t1(t0.x + thumb, t0.y + thumb);
         if (it) {
             bool flip = true;
-            if (const unsigned tex = thumbFor(*it, visible, flip))
-                gdl->AddImage((ImTextureID)(intptr_t)tex, t0, t1, ImVec2(0.0f, flip ? 1.0f : 0.0f), ImVec2(1.0f, flip ? 0.0f : 1.0f));
-            else {
+            if (const unsigned tex = thumbFor(*it, visible, flip)) {
+                ImVec2 uv0, uv1;
+                thumbUV(flip, uv0, uv1);
+                gdl->AddImageRounded((ImTextureID)(intptr_t)tex, t0, t1, uv0, uv1, IM_COL32_WHITE, 4.0f);
+            } else {
                 const ImVec2 sz = ImGui::CalcTextSize(SlotIcon(slot->Icon));
                 gdl->AddText(ImVec2((t0.x + t1.x - sz.x) * 0.5f, (t0.y + t1.y - sz.y) * 0.5f), Col(style.Colors[ImGuiCol_TextDisabled]), SlotIcon(slot->Icon));
             }
@@ -370,8 +380,11 @@ void EditorLayer::DrawCharacterOutfitEditor(World& world, entt::entity root) {
         if (hovered && it) {
             ImGui::BeginTooltip();
             bool flip = true;
-            if (const unsigned tex = thumbFor(*it, true, flip))
-                ImGui::Image((ImTextureID)(intptr_t)tex, ImVec2(160.0f, 160.0f), ImVec2(0.0f, flip ? 1.0f : 0.0f), ImVec2(1.0f, flip ? 0.0f : 1.0f));
+            if (const unsigned tex = thumbFor(*it, true, flip)) {
+                ImVec2 uv0, uv1;
+                thumbUV(flip, uv0, uv1);
+                ImGui::Image((ImTextureID)(intptr_t)tex, ImVec2(160.0f, 160.0f), uv0, uv1);
+            }
             ImGui::TextUnformatted(it->Name.c_str());
             ImGui::TextDisabled("%s", it->Path.c_str());
             if (it->Variant) ImGui::TextDisabled("A fitted cut - usually picked by the wardrobe's rules");
