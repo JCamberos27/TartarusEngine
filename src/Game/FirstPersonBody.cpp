@@ -23,6 +23,7 @@
 #include <cmath>
 #include <unordered_set>
 #include <cstdio>
+#include <emmintrin.h> // SSE2: the elbow-gap point loop
 #include <sstream>
 
 namespace {
@@ -201,6 +202,50 @@ float FirstPersonBodyClearPush(const std::vector<glm::vec3>& points, const glm::
     return maxPush;
 }
 
+namespace {
+// The elbow-gap points as structure-of-arrays, padded to a multiple of 4 with far-off dummies, for
+// the SSE loop below: the swivel search measures a few thousand torso points at up to 37 angles.
+struct PointsSoA {
+    std::vector<float> X, Y, Z;
+    void Assign(const glm::vec3* p, size_t n) {
+        const size_t padded = (n + 3) & ~size_t(3);
+        X.resize(padded); Y.resize(padded); Z.resize(padded);
+        for (size_t i = 0; i < n; ++i) { X[i] = p[i].x; Y[i] = p[i].y; Z[i] = p[i].z; }
+        for (size_t i = n; i < padded; ++i) X[i] = Y[i] = Z[i] = 1e15f; // never nearest
+    }
+};
+
+// The squared distance of four points to the segment s0 -> s0 + d, in the scalar code's operation
+// order (glm's dot is (x + y) + z, no fused multiply-add), so each lane is bit-identical to it.
+inline __m128 SegDist2(__m128 px, __m128 py, __m128 pz, const glm::vec3& s0, const glm::vec3& d, float dd) {
+    const __m128 dx = _mm_set1_ps(d.x), dy = _mm_set1_ps(d.y), dz = _mm_set1_ps(d.z);
+    const __m128 sx = _mm_set1_ps(s0.x), sy = _mm_set1_ps(s0.y), sz = _mm_set1_ps(s0.z);
+    const __m128 dot = _mm_add_ps(_mm_add_ps(_mm_mul_ps(_mm_sub_ps(px, sx), dx), _mm_mul_ps(_mm_sub_ps(py, sy), dy)),
+                                  _mm_mul_ps(_mm_sub_ps(pz, sz), dz));
+    const __m128 t = _mm_min_ps(_mm_max_ps(_mm_div_ps(dot, _mm_set1_ps(dd)), _mm_setzero_ps()), _mm_set1_ps(1.0f));
+    const __m128 ex = _mm_sub_ps(px, _mm_add_ps(sx, _mm_mul_ps(dx, t)));
+    const __m128 ey = _mm_sub_ps(py, _mm_add_ps(sy, _mm_mul_ps(dy, t)));
+    const __m128 ez = _mm_sub_ps(pz, _mm_add_ps(sz, _mm_mul_ps(dz, t)));
+    return _mm_add_ps(_mm_add_ps(_mm_mul_ps(ex, ex), _mm_mul_ps(ey, ey)), _mm_mul_ps(ez, ez));
+}
+
+// Squared elbow gap (see FirstPersonBodyElbowGapAbove), stopping once it is at most floor2.
+float ElbowGap2(const PointsSoA& pts, const glm::vec3& shoulder, const glm::vec3& elbow, const glm::vec3& hand, float floor2) {
+    const glm::vec3 a = shoulder + (elbow - shoulder) * 0.5f, c = elbow + (hand - elbow) * 0.5f;
+    const glm::vec3 d0 = elbow - a, d1 = c - elbow;
+    const float dd0 = std::max(glm::dot(d0, d0), 1e-9f), dd1 = std::max(glm::dot(d1, d1), 1e-9f);
+    __m128 best = _mm_set1_ps(1e18f);
+    for (size_t i = 0; i < pts.X.size(); i += 4) {
+        const __m128 px = _mm_loadu_ps(&pts.X[i]), py = _mm_loadu_ps(&pts.Y[i]), pz = _mm_loadu_ps(&pts.Z[i]);
+        best = _mm_min_ps(best, _mm_min_ps(SegDist2(px, py, pz, a, d0, dd0), SegDist2(px, py, pz, elbow, d1, dd1)));
+        if (floor2 >= 0.0f && _mm_movemask_ps(_mm_cmple_ps(best, _mm_set1_ps(floor2)))) break;
+    }
+    alignas(16) float lanes[4];
+    _mm_store_ps(lanes, best);
+    return std::min(std::min(lanes[0], lanes[1]), std::min(lanes[2], lanes[3]));
+}
+} // namespace
+
 float FirstPersonBodyElbowGap(const std::vector<glm::vec3>& points, const glm::vec3& shoulder, const glm::vec3& elbow, const glm::vec3& hand) {
     return FirstPersonBodyElbowGapAbove(points, shoulder, elbow, hand, -1.0f);
 }
@@ -209,20 +254,9 @@ float FirstPersonBodyElbowGapAbove(const std::vector<glm::vec3>& points, const g
                                    const glm::vec3& hand, float floor) {
     // Stops as soon as the gap is known to be at most `floor` (a point that close): the search only
     // asks whether an angle beats the best so far.
-    const float floor2 = floor >= 0.0f ? floor * floor : -1.0f;
-    const glm::vec3 a = shoulder + (elbow - shoulder) * 0.5f, c = elbow + (hand - elbow) * 0.5f;
-    auto seg2 = [](const glm::vec3& p, const glm::vec3& s0, const glm::vec3& s1) {
-        const glm::vec3 d = s1 - s0;
-        const float t = std::clamp(glm::dot(p - s0, d) / std::max(glm::dot(d, d), 1e-9f), 0.0f, 1.0f);
-        const glm::vec3 e = p - (s0 + d * t);
-        return glm::dot(e, e);
-    };
-    float best = 1e18f;
-    for (const glm::vec3& p : points) {
-        best = std::min(best, std::min(seg2(p, a, elbow), seg2(p, elbow, c)));
-        if (best <= floor2) break;
-    }
-    return std::sqrt(best);
+    thread_local PointsSoA soa;
+    soa.Assign(points.data(), points.size());
+    return std::sqrt(ElbowGap2(soa, shoulder, elbow, hand, floor >= 0.0f ? floor * floor : -1.0f));
 }
 
 float FirstPersonBodyElbowClearSwivel(const std::vector<glm::vec3>& points, const glm::vec3& shoulder, const glm::vec3& elbow,
@@ -238,9 +272,11 @@ float FirstPersonBodyElbowClearSwivel(const std::vector<glm::vec3>& points, cons
     nearby.clear();
     for (const glm::vec3& p : points)
         if (glm::all(glm::greaterThanEqual(p, lo)) && glm::all(glm::lessThanEqual(p, hi))) nearby.push_back(p);
+    thread_local PointsSoA soa;
+    soa.Assign(nearby.data(), nearby.size());
     auto gapAt = [&](float angle, float floor) {
         const glm::vec3 e = shoulder + glm::angleAxis(angle, axis) * (elbow - shoulder);
-        return FirstPersonBodyElbowGapAbove(nearby, shoulder, e, hand, floor);
+        return std::sqrt(ElbowGap2(soa, shoulder, e, hand, floor >= 0.0f ? floor * floor : -1.0f));
     };
     const float here = gapAt(0.0f, -1.0f);
     if (here >= clearance) return 0.0f;

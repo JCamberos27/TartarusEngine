@@ -1,3 +1,5 @@
+// The loader defines and calls the real entry points; the shadow is at the bottom.
+#define TARTARUS_GL_NO_STATE_SHADOW
 #include "gl.h"
 #include <windows.h>
 
@@ -260,3 +262,180 @@ bool GLLoader_Init() {
 #undef LOAD
     return ok;
 }
+
+// --- Render-state shadow (gl.h) ---------------------------------------------------------------
+namespace {
+struct Tracked {
+    bool Valid = false;
+    GLint V[4] = {};
+};
+struct Cap {
+    GLenum Id;
+    bool Valid;
+    bool On;
+};
+// The capabilities the engine toggles; any other passes straight through untracked.
+Cap g_Caps[] = {
+    {0x0B71, false, false}, // GL_DEPTH_TEST
+    {0x0B44, false, false}, // GL_CULL_FACE
+    {0x0BE2, false, false}, // GL_BLEND
+    {0x0C11, false, false}, // GL_SCISSOR_TEST
+    {0x8037, false, false}, // GL_POLYGON_OFFSET_FILL
+    {0x864F, false, false}, // GL_DEPTH_CLAMP
+    {0x0B90, false, false}, // GL_STENCIL_TEST
+    {0x8DB9, false, false}, // GL_FRAMEBUFFER_SRGB
+    {0x809D, false, false}, // GL_MULTISAMPLE
+    {0x809E, false, false}, // GL_SAMPLE_ALPHA_TO_COVERAGE
+    {0x884F, false, false}, // GL_TEXTURE_CUBE_MAP_SEAMLESS
+    {0x8F9D, false, false}, // GL_PRIMITIVE_RESTART
+};
+Tracked g_Viewport, g_DepthFunc, g_DepthMask, g_CullMode, g_Blend, g_DrawFbo, g_ReadFbo;
+
+Cap* FindCap(GLenum id) {
+    for (Cap& c : g_Caps)
+        if (c.Id == id) return &c;
+    return nullptr;
+}
+bool CapOn(Cap& c) {
+    if (!c.Valid) {
+        c.On = ::glIsEnabled(c.Id) == GL_TRUE;
+        c.Valid = true;
+    }
+    return c.On;
+}
+// The tracked value `pname` reads, filled from the driver the first time after an invalidate.
+const GLint* Read(Tracked& t, GLenum pname) {
+    if (!t.Valid) {
+        ::glGetIntegerv(pname, t.V);
+        t.Valid = true;
+    }
+    return t.V;
+}
+const GLint* ReadBlend() {
+    if (!g_Blend.Valid) {
+        ::glGetIntegerv(0x80C9, &g_Blend.V[0]); // GL_BLEND_SRC_RGB
+        ::glGetIntegerv(0x80C8, &g_Blend.V[1]); // GL_BLEND_DST_RGB
+        ::glGetIntegerv(0x80CB, &g_Blend.V[2]); // GL_BLEND_SRC_ALPHA
+        ::glGetIntegerv(0x80CA, &g_Blend.V[3]); // GL_BLEND_DST_ALPHA
+        g_Blend.Valid = true;
+    }
+    return g_Blend.V;
+}
+// Records a single-value state; false when it already held `v` (the GL call can be skipped).
+bool Set1(Tracked& t, GLint v) {
+    if (t.Valid && t.V[0] == v) return false;
+    t.V[0] = v;
+    t.Valid = true;
+    return true;
+}
+} // namespace
+
+void GLStateShadow_Invalidate() {
+    for (Cap& c : g_Caps) c.Valid = false;
+    Tracked* const all[] = {&g_Viewport, &g_DepthFunc, &g_DepthMask, &g_CullMode, &g_Blend, &g_DrawFbo, &g_ReadFbo};
+    for (Tracked* t : all) t->Valid = false;
+}
+
+namespace glshadow {
+
+void __stdcall Viewport(GLint x, GLint y, GLsizei w, GLsizei h) {
+    GLint* v = g_Viewport.V;
+    if (g_Viewport.Valid && v[0] == x && v[1] == y && v[2] == w && v[3] == h) return;
+    ::glViewport(x, y, w, h);
+    v[0] = x; v[1] = y; v[2] = w; v[3] = h;
+    g_Viewport.Valid = true;
+}
+
+void __stdcall Enable(GLenum cap) {
+    Cap* c = FindCap(cap);
+    if (c && c->Valid && c->On) return;
+    ::glEnable(cap);
+    if (c) { c->Valid = true; c->On = true; }
+}
+
+void __stdcall Disable(GLenum cap) {
+    Cap* c = FindCap(cap);
+    if (c && c->Valid && !c->On) return;
+    ::glDisable(cap);
+    if (c) { c->Valid = true; c->On = false; }
+}
+
+GLboolean __stdcall IsEnabled(GLenum cap) {
+    Cap* c = FindCap(cap);
+    if (!c) return ::glIsEnabled(cap);
+    return CapOn(*c) ? GL_TRUE : GL_FALSE;
+}
+
+void __stdcall DepthFunc(GLenum func) {
+    if (Set1(g_DepthFunc, (GLint)func)) ::glDepthFunc(func);
+}
+
+void __stdcall DepthMask(GLboolean flag) {
+    if (Set1(g_DepthMask, flag ? 1 : 0)) ::glDepthMask(flag);
+}
+
+void __stdcall CullFace(GLenum mode) {
+    if (Set1(g_CullMode, (GLint)mode)) ::glCullFace(mode);
+}
+
+void __stdcall BlendFuncSeparate(GLenum srcRgb, GLenum dstRgb, GLenum srcA, GLenum dstA) {
+    GLint* v = g_Blend.V;
+    if (g_Blend.Valid && v[0] == (GLint)srcRgb && v[1] == (GLint)dstRgb && v[2] == (GLint)srcA && v[3] == (GLint)dstA)
+        return;
+    ::glBlendFuncSeparate(srcRgb, dstRgb, srcA, dstA);
+    v[0] = (GLint)srcRgb; v[1] = (GLint)dstRgb; v[2] = (GLint)srcA; v[3] = (GLint)dstA;
+    g_Blend.Valid = true;
+}
+
+void __stdcall BlendFunc(GLenum src, GLenum dst) { BlendFuncSeparate(src, dst, src, dst); }
+
+void __stdcall BindFramebuffer(GLenum target, GLuint framebuffer) {
+    const bool draw = target == 0x8D40 || target == 0x8CA9; // GL_FRAMEBUFFER / GL_DRAW_FRAMEBUFFER
+    const bool read = target == 0x8D40 || target == 0x8CA8; // GL_FRAMEBUFFER / GL_READ_FRAMEBUFFER
+    const GLint fb = (GLint)framebuffer;
+    if ((!draw || (g_DrawFbo.Valid && g_DrawFbo.V[0] == fb)) && (!read || (g_ReadFbo.Valid && g_ReadFbo.V[0] == fb)))
+        return;
+    ::glBindFramebuffer(target, framebuffer);
+    if (draw) { g_DrawFbo.V[0] = fb; g_DrawFbo.Valid = true; }
+    if (read) { g_ReadFbo.V[0] = fb; g_ReadFbo.Valid = true; }
+}
+
+void __stdcall DeleteFramebuffers(GLsizei n, const GLuint* framebuffers) {
+    ::glDeleteFramebuffers(n, framebuffers);
+    // Deleting a bound framebuffer reverts that binding to the default one.
+    for (GLsizei i = 0; i < n; ++i) {
+        if (framebuffers[i] == 0) continue;
+        if (g_DrawFbo.Valid && g_DrawFbo.V[0] == (GLint)framebuffers[i]) g_DrawFbo.V[0] = 0;
+        if (g_ReadFbo.Valid && g_ReadFbo.V[0] == (GLint)framebuffers[i]) g_ReadFbo.V[0] = 0;
+    }
+}
+
+void __stdcall GetIntegerv(GLenum pname, GLint* data) {
+    const GLint* v = nullptr;
+    int count = 1;
+    switch (pname) {
+    case 0x0BA2: v = Read(g_Viewport, pname); count = 4; break; // GL_VIEWPORT
+    case 0x0B74: v = Read(g_DepthFunc, pname); break;           // GL_DEPTH_FUNC
+    case 0x0B72: v = Read(g_DepthMask, pname); break;           // GL_DEPTH_WRITEMASK
+    case 0x0B45: v = Read(g_CullMode, pname); break;            // GL_CULL_FACE_MODE
+    case 0x8CA6: v = Read(g_DrawFbo, pname); break;             // GL_(DRAW_)FRAMEBUFFER_BINDING
+    case 0x8CAA: v = Read(g_ReadFbo, pname); break;             // GL_READ_FRAMEBUFFER_BINDING
+    case 0x80C9: v = ReadBlend() + 0; break;                     // GL_BLEND_SRC_RGB
+    case 0x80C8: v = ReadBlend() + 1; break;                     // GL_BLEND_DST_RGB
+    case 0x80CB: v = ReadBlend() + 2; break;                     // GL_BLEND_SRC_ALPHA
+    case 0x80CA: v = ReadBlend() + 3; break;                     // GL_BLEND_DST_ALPHA
+    default:
+        if (Cap* c = FindCap(pname)) { *data = CapOn(*c) ? 1 : 0; return; }
+        ::glGetIntegerv(pname, data);
+        return;
+    }
+    for (int i = 0; i < count; ++i) data[i] = v[i];
+}
+
+void __stdcall GetBooleanv(GLenum pname, GLboolean* data) {
+    if (pname == 0x0B72) { *data = Read(g_DepthMask, pname)[0] ? GL_TRUE : GL_FALSE; return; }
+    if (Cap* c = FindCap(pname)) { *data = CapOn(*c) ? GL_TRUE : GL_FALSE; return; }
+    ::glGetBooleanv(pname, data);
+}
+
+} // namespace glshadow

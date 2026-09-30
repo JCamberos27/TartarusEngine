@@ -32,6 +32,7 @@ public:
         unsigned int Color = 0, Depth = 0; // this frame's raymarch
         unsigned int History[2] = {0, 0};
         int Current = 0;                   // History[Current] holds the latest resolved result
+        unsigned int Phase = 0;            // checkerboard step (RenderView)
         int Width = 0, Height = 0;
         bool HasHistory = false;
         glm::mat4 PrevViewProj{1.0f};

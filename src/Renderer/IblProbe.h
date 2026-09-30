@@ -68,6 +68,16 @@ public:
     // convolutions, which removes an HDRI's sun from ambient/reflections when a directional
     // light already provides it. 0 = no clamp.
     void BakeFromCubemap(unsigned int envCube, int faceSize, float rotationRadians, float radianceClamp = 0.0f);
+
+    // The same bake spread over frames, for an environment that keeps changing a little (the
+    // physical sky's clouds drifting): RequestAmortizedBake() starts one (or queues the next when
+    // one is running), then StepAmortizedBake() once per frame convolves one irradiance face,
+    // and finally the whole specular chain, into staging cubes. The live maps swap to them
+    // together when the last step lands, so a half-baked probe is never sampled. envCube is read
+    // at every step. Returns true on the frame the swap happens. BakeFromCubemap cancels it.
+    void RequestAmortizedBake();
+    bool StepAmortizedBake(unsigned int envCube, int faceSize, float rotationRadians, float radianceClamp = 0.0f);
+    bool AmortizedBakeRunning() const { return m_Step >= 0; }
     float BakedRotation() const { return m_BakedRotation; }
     float BakedRadianceClamp() const { return m_BakedRadianceClamp; }
 
@@ -90,10 +100,20 @@ private:
     void BeginCubeFace(unsigned int tex, int face, int mip, int size) const;
     // Uploads the six face-basis uniforms (uFaceForward / uFaceRight / uFaceUp) for `face`.
     static void SetFaceBasis(const Shader& shader, int face);
+    // Convolution steps [first, last] into the given cubes: 0-5 = irradiance face, 6 = every
+    // specular mip and face. False when the FBO failed its completeness check (step 0 only).
+    static constexpr int kBakeSteps = 7;
+    bool Convolve(unsigned int irradiance, unsigned int specular, unsigned int envCube, int faceSize,
+                  float rotationRadians, float radianceClamp, int first, int last);
+    static unsigned int CreateIrradianceCube();
+    static unsigned int CreateSpecularCube();
 
     unsigned int m_EnvCube = 0;
     unsigned int m_IrradianceCube = 0;
     unsigned int m_SpecularCube = 0;
+    unsigned int m_StageIrradiance = 0, m_StageSpecular = 0; // amortized bake targets
+    int m_Step = -1;             // next amortized step, -1 = idle
+    bool m_StepQueued = false;   // another amortized bake requested while one ran
     unsigned int m_BrdfLut = 0;
     unsigned int m_Fbo = 0;
     unsigned int m_Vao = 0; // attribute-less full-screen triangle pair, like Sky/Grid

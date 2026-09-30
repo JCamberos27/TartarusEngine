@@ -578,3 +578,45 @@ extern PFNGLDELETESYNCPROC glDeleteSync;
 
 // Call once after a GL context is current (e.g. right after glfwMakeContextCurrent).
 bool GLLoader_Init();
+
+// --- Render-state shadow ----------------------------------------------------------------------
+// A threaded driver (NVIDIA's) answers every glGet* / glIsEnabled by making the calling thread
+// wait until its worker has drained everything queued so far; the save/restore reads scattered
+// through the renderer cost ~20% of a Sandbox frame that way. The state they ask about is tracked
+// here as the engine sets it, so those reads are answered without the driver, and a set that
+// changes nothing is dropped. The GL names below route through it in every engine file. Code that
+// changes GL state behind its back and leaves it changed must call GLStateShadow_Invalidate()
+// after; the next read of each value then asks the driver once. (Dear ImGui's backend has its own
+// loader but puts back everything it changes - EditorLayer::EndFrame.)
+namespace glshadow {
+void __stdcall Viewport(GLint x, GLint y, GLsizei w, GLsizei h);
+void __stdcall Enable(GLenum cap);
+void __stdcall Disable(GLenum cap);
+GLboolean __stdcall IsEnabled(GLenum cap);
+void __stdcall DepthFunc(GLenum func);
+void __stdcall DepthMask(GLboolean flag);
+void __stdcall CullFace(GLenum mode);
+void __stdcall BlendFunc(GLenum src, GLenum dst);
+void __stdcall BlendFuncSeparate(GLenum srcRgb, GLenum dstRgb, GLenum srcA, GLenum dstA);
+void __stdcall BindFramebuffer(GLenum target, GLuint framebuffer);
+void __stdcall DeleteFramebuffers(GLsizei n, const GLuint* framebuffers);
+void __stdcall GetIntegerv(GLenum pname, GLint* data);
+void __stdcall GetBooleanv(GLenum pname, GLboolean* data);
+}
+void GLStateShadow_Invalidate();
+
+#ifndef TARTARUS_GL_NO_STATE_SHADOW
+#define glViewport glshadow::Viewport
+#define glEnable glshadow::Enable
+#define glDisable glshadow::Disable
+#define glIsEnabled glshadow::IsEnabled
+#define glDepthFunc glshadow::DepthFunc
+#define glDepthMask glshadow::DepthMask
+#define glCullFace glshadow::CullFace
+#define glBlendFunc glshadow::BlendFunc
+#define glBlendFuncSeparate glshadow::BlendFuncSeparate
+#define glBindFramebuffer glshadow::BindFramebuffer
+#define glDeleteFramebuffers glshadow::DeleteFramebuffers
+#define glGetIntegerv glshadow::GetIntegerv
+#define glGetBooleanv glshadow::GetBooleanv
+#endif

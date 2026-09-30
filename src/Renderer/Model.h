@@ -144,6 +144,14 @@ public:
     // the existing index. Per instance: other instances of this model don't see it.
     int AttachClip(const Model& source, int sourceIndex, const std::string& ref, const std::string& displayName);
     int FindClipByRef(const std::string& ref) const;
+    // ResolveAnimationClip's negative cache: a clip ref that didn't resolve (missing file, no such
+    // clip, animates none of this model's nodes) isn't looked up again until `untilSeconds`
+    // (steady-clock seconds), so a controller naming it doesn't stat the file every frame.
+    bool ClipLookupBackedOff(const std::string& ref, double nowSeconds) const {
+        auto it = m_ClipMissUntil.find(ref);
+        return it != m_ClipMissUntil.end() && nowSeconds < it->second;
+    }
+    void BackOffClipLookup(const std::string& ref, double untilSeconds) { m_ClipMissUntil[ref] = untilSeconds; }
 
     // #113 / #175 — playback. `fadeSeconds` > 0 crossfades from whatever is playing (or the bind
     // pose) instead of snapping. Index -1 stops. Speed may be negative (plays backwards).
@@ -414,6 +422,7 @@ private:
     // Clips (ref, source) that animate none of this model's nodes - a rigid outfit piece under a body's
     // controller - so AttachClip answers -1 again without rescanning or re-logging it every frame.
     std::vector<std::pair<std::string, const SharedData*>> m_UnmatchedClips;
+    std::unordered_map<std::string, double> m_ClipMissUntil; // ClipLookupBackedOff
     // The clip at combined index `i` and its node->channel map for this model (nullptr if none).
     const AnimationClip* ClipAt(int i, const std::vector<int>** nodeChannel) const;
     // Clip `clipIndex`'s channel `channel` sampled for node `node` at `ticks`, with the attached
