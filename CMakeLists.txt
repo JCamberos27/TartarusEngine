@@ -289,6 +289,17 @@ if(_imgui_passthrough_at GREATER -1)
   string(REPLACE "${_imgui_passthrough_line}"
     "if (glfwGetWindowAttrib(window, GLFW_MOUSE_PASSTHROUGH) != (window_no_input ? 1 : 0)) ${_imgui_passthrough_line}"
     _imgui_glfw_src "${_imgui_glfw_src}")
+  # Two more per-frame Win32 round trips, each only where the line is found:
+  # - GLFW_HOVERED is a WindowFromPoint per viewport per frame (~3% of the play frame). While the
+  #   game has captured the cursor (GLFW_CURSOR_DISABLED) no viewport is hovered in any useful sense.
+  # - The monitor list (EnumDisplaySettings per monitor) is rebuilt every frame: every 0.5 s is
+  #   plenty to follow a display change.
+  string(REPLACE "if (glfwGetWindowAttrib(window, GLFW_HOVERED))"
+    "if (glfwGetInputMode(window, GLFW_CURSOR) != GLFW_CURSOR_DISABLED && glfwGetWindowAttrib(window, GLFW_HOVERED))"
+    _imgui_glfw_src "${_imgui_glfw_src}")
+  string(REPLACE "&io.DisplayFramebufferScale);\n    ImGui_ImplGlfw_UpdateMonitors();"
+    "&io.DisplayFramebufferScale);\n    { static double s_NextMonitors = 0.0; const double now = glfwGetTime(); if (now >= s_NextMonitors) { s_NextMonitors = now + 0.5; ImGui_ImplGlfw_UpdateMonitors(); } }"
+    _imgui_glfw_src "${_imgui_glfw_src}")
   set(IMGUI_GLFW_BACKEND ${CMAKE_BINARY_DIR}/imgui_patched/imgui_impl_glfw.cpp)
   set(_imgui_glfw_old "")
   if(EXISTS ${IMGUI_GLFW_BACKEND})

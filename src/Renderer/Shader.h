@@ -89,7 +89,10 @@ private:
     // the same literal each draw, so a hit costs a pointer hash and a short compare of the stored
     // name (which also makes a reused buffer holding a different name a plain miss).
     struct FastUniform { const char* Ptr = nullptr; std::uint32_t Len = 0; int Loc = -1; char Name[40]; };
-    mutable FastUniform m_FastUniforms[64];
+    // 256 slots, hashed multiplicatively: the model shader's per-draw setters alone pass ~50 distinct
+    // literals, and 64 slots on a shift-xor of the address had them evicting each other every draw.
+    static constexpr int kFastUniforms = 256;
+    mutable FastUniform m_FastUniforms[kFastUniforms];
     int LocSlow(std::string_view name) const;
     // The last value each scalar / vector uniform was given, by location: a draw loop sets the same
     // few dozen per draw, mostly unchanged since the last, and those skip the driver call. Only a
