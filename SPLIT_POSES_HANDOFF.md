@@ -112,20 +112,65 @@ The butt sits within about 1–3 cm of the pocket at every pitch, through turns 
 gun moves up to 14 cm from the first-person one when aiming, and 3–11 cm at the hip. First person is
 unchanged.
 
+### Sprint (2026-09-29, second pass)
+
+- **Measured.** The probe now walks and sprints (below). Sprinting, the Remington's bore line went
+  *through* the drawn head and hood (0.0–0.1 cm from their vertices, 7–22 cm from the butt, on the `Head`
+  and `Top` pieces) while the bone spheres still read as clear: the hood sphere's centre stayed 12–15 cm
+  off, so the shift was only 0–3 cm. The spheres were the wrong shape, not the length: `gunLength` was
+  never the limit, and the sprint states aren't `IKOff`.
+- **Fix: a mesh keep-out** (`stockLock.meshClearance`, default 0.05 m, 0 = off). After the spheres, the
+  world gun's rear `gunLength` is pushed straight away from the hood sphere's centre until its bore line is
+  `meshClearance` from every twin vertex skinned mostly to `neck_01`, `neck_02` or the head bone (the
+  hood, collar, face - whatever the outfit), within `maxShift`. `FirstPersonBody::HeadPoints` skins them
+  (indices cached per model, cleared at Stop); `FirstPersonBodyClearPush` is the search (unit-tested).
+- **Results:** sprinting at pitch 0 / -30 / 20 and turning 90 °/s, the nearest head / hood vertex is now
+  3.7–4.1 cm at worst, ~5.5 cm on average (was 0.0). Walk 4.7 cm (was 2.5). The world gun moves up to
+  12 cm; the world hands stay on it (0.0 cm). Idle, turns, fire and aim are unchanged (already clear).
+- **Probe additions:** `Player::ScriptedMove` / `ScriptMove` / `ScriptSprint` let the harness hold the move
+  keys (`Ctx::Move`, `Ctx::Sprint`; the presentation's Tick gets the sprint flag too). Each sample adds the
+  speed and, along the whole gun (butt to muzzle): the neck bone, the hood sphere's centre, and the
+  head / neck / hood mesh gap with the piece and where along the gun (`FirstPersonBody::HeadMeshGap`).
+- **Also fixed:** a crash on weapon swap in `FirstPersonPresentation::StockWorld` - its butt vertices were
+  cached by `Model*`, and the new weapon could be allocated where the old one was freed. The cache is now
+  reset when the weapon model is set.
+- **Not yet eyeballed:** the Scene capture is still stale (item 2), so this is by the numbers. Check it in
+  the editor: sprint and watch the Scene view.
+
+### Hands-on fixes (2026-09-29, from the user's recordings)
+
+- **Balaclava off the face** (any rigid head wear): the world head tilts over the stock (Head Tilt), but a rigid
+  head-attached piece was placed by `OutfitSystem::UpdateAttachments` on the *first-person* head and copied to its
+  twin a frame late. `FirstPersonBody::PlaceHeadAttachedTwins` now puts those twins on the head twin's head bone
+  after the tilt, the same way `UpdateAttachments` places the pieces.
+- **Head swivelling with the view**: the upper body took the whole view twist (Spine Twist 1) over a 55-90 degree
+  window before the feet turned. Sandbox's Player Body now has Turn Threshold 30 (was 55) and Turn Lag Floor 45
+  (was 90).
+- **Trigger elbow in the chest**: the world arms keep the rig's bend plane, and the view-model rig tucks its elbows
+  to a narrower body - the right elbow's joint line sat 0.0-0.5 cm from the drawn torso in ADS (1.5-3 cm at the hip).
+  New body setting **Elbow Clearance** (Camera & Arms (advanced), default 0.06 m, 0 = off): each world elbow swings
+  about its shoulder-to-hand line (the hand stays on the gun) until the arm around it clears every twin vertex
+  skinned mostly to the pelvis or spine (thinned to 3,000 per piece), eased in fast and out slower, keeping to one
+  side. `FirstPersonBodyElbowGap` / `FirstPersonBodyElbowClearSwivel` are unit-tested. Probe: right elbow now
+  6.3 cm+ everywhere; the swing is 20-40 degrees at the hip and 55-88 degrees on the sights while moving (the probe
+  logs `elbow to torso` and `swung` per sample, and has ADS walk / strafe / back / turn steps). Needs judging by
+  eye: a big swing reads as a raised trigger elbow; lower the clearance to trade clipping for less swing.
+
+- **Head nodding in animations**: the cheek weld (Head Tilt) followed the pocket lock, which lets go in every
+  state outside `tags` - so a hip reload, inspect, shell check or melee tilted the head 25 degrees off at its start
+  and back on at its end. The weld now follows the sights only (`CheekWeld` = the eased ADS zoom): 0 at the hip,
+  25 degrees on the sights (an ADS reload holds it). Probe: tilt 0.0 through every hip animation.
+- **Stock in the chest looking down**: at -89 degrees the pocket still held the butt in the shoulder with the
+  barrel at the feet, so the gun lay down the chest (bore line 1.8 cm from the torso). New `stockLock`
+  `releaseStart` / `releaseEnd` (-40 / -70 degrees): the pocket lets go as the view pitches down, and let go the
+  gun keeps `meshClearance` from the drawn torso too (`TorsoKeepOut`), pushed straight out from the chest.
+  Probe: 4.7-5.4 cm at -89 / -80 / -75 (-85 only 3.0: the chest's Reach Lean comes after the push). At -89 the
+  left hand ends 1.5 cm off the pushed gun (out of reach). The probe now pitches to -89 and logs the torso gap,
+  the head tilt and the head's bend, and plays the hip reload, inspect, shell check, melee and an ADS reload.
+
 ## 5. What still needs doing
 
-1. **Sprint still clips the hood**, as the user reported after testing. The probe can't sprint, so this
-   isn't measured yet. Next steps:
-   - Add a sprint step to `--stock-probe`: drive the Sprint input plus movement, or `TriggerAction` into
-     the sprint states.
-   - Log the keep-out distance along the **whole** gun, not just the rear `gunLength`. Sprinting, the
-     part of the gun near the hood may be further forward than 45 cm.
-   - Candidate fixes:
-     - raise `gunLength` toward the full gun (~1 m);
-     - add a keep-out for the hood's back and sides: a capsule from the neck to above the head rather than
-       two spheres;
-     - a per-state world offset for Sprint (lower and forward);
-     - check whether the sprint states are tagged `IKOff`, and whether the world solve reaches in them.
+1. ~~Sprint still clips the hood~~ - fixed by the mesh keep-out above; confirm by eye.
 2. **The probe's Scene capture is stale.**
    - `EditorLayer::RequestSceneGameSplit` asks for Scene and Game side by side, but in the headless run
      the Scene tab still didn't render during Play. The capture's left half is a frame from before Play.
@@ -140,7 +185,7 @@ unchanged.
 5. **Feet:** unaffected. The body no longer moves.
 6. **The AKS-74U** gets the keep-outs but not the pocket lock. Set `stockLock.enabled` in its `.fpsanim`
    if it should sit in the shoulder too.
-7. **Tests:** `--unit-tests` (7205 checks) and `--weapon-test` pass on this commit. Run `--stock-probe`
+7. **Tests:** `--unit-tests` (7221 checks), `--weapon-test` (45 checks) and `--stock-probe` pass with the fixes above. Run `--stock-probe`
    after any change to the world gun or the twins.
 
 ## 6. Tools

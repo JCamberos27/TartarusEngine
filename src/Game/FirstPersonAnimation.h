@@ -114,6 +114,14 @@ struct FirstPersonStockLockSettings {
     float NeckRadius = 0.09f;  // keep-outs: the gun stays this far from the neck bone ...
     float HeadRadius = 0.14f;  // ... and from the head (a hood on it), metres
     float GunLength = 0.45f;   // how much of the gun, from the butt forward, is kept clear (metres)
+    // ... and the drawn head, neck and hood themselves: the gun's bore line stays this far from every
+    // vertex the body's pieces skin to the neck or head, whatever the outfit (metres, 0 = the spheres only).
+    float MeshClearance = 0.05f;
+    // Looking down, the pocket lets go: all of it down to ReleaseStart degrees of pitch, none from ReleaseEnd (a stock
+    // held in the shoulder with the barrel at the feet lies down the chest). Let go, the gun keeps MeshClearance
+    // from the drawn torso too. Start <= End disables the release.
+    float ReleaseStart = -40.0f;
+    float ReleaseEnd = -70.0f;
 };
 
 // What Play found for a weapon's barrel and sights, kept per weapon definition (by file path)

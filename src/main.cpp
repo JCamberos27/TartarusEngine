@@ -2324,6 +2324,12 @@ int main(int argc, char** argv) {
                     // Last frame's ADS zoom: the look slows with the view so the sights track the same.
                     player.MouseSensitivity = playBaseSensitivity * firstPersonPresentation.LookScale(playBaseFov);
                     firstPersonBody.BeforePlayerMove(player, player.Cam); // camera out of the head, root motion in
+                    // --weapon-test / --stock-probe: the script holds the move keys (last frame's Drive).
+                    player.ScriptedMove = weaponTest != nullptr;
+                    if (weaponTest) {
+                        player.ScriptMove = weaponTest->Move();
+                        player.ScriptSprint = weaponTest->Sprint();
+                    }
                     player.Update(gameDt, world, window.Handle(), gameHasInput);
                     // Before the body places itself: it is the controller's child, posed in world space.
                     if (playControllerEntity != entt::null && world.Registry.valid(playControllerEntity)) {
@@ -2342,7 +2348,7 @@ int main(int argc, char** argv) {
                             // The script is the player: its trigger, aim and weapon keys, nothing else.
                             weaponTest->SetCamera(&player.Cam);
                             weaponTest->Drive(firstPersonPresentation, gameDt);
-                            firstPersonPresentation.Tick(gameDt, player.Velocity, false, weaponTest->Aim(), 0.0f, player.Grounded);
+                            firstPersonPresentation.Tick(gameDt, player.Velocity, weaponTest->Sprint(), weaponTest->Aim(), 0.0f, player.Grounded);
                         } else {
                         // The weapon owns Fire1/Fire2/FireMode/Reload/Inspect/Melee while it's in
                         // hand. With the gravity gun on the controller, holstering hands the mouse
