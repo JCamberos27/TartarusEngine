@@ -181,17 +181,20 @@ bool SolveTwoBone(Pose& pose, const std::vector<int>& parents, std::vector<glm::
     const glm::quat endRot = Rotation(globals[end]);
     const glm::quat newGa = glm::normalize(q2 * q0 * ga);
     pose[upper].R = glm::normalize(glm::inverse(ParentRotation(parents, globals, upper)) * newGa);
-    RefreshGlobals(pose, parents, globals, upper);
+    // Between the three bone writes only the chain down to the next bone's parent needs fresh
+    // globals; the whole limb (twist bones, fingers) is refreshed once at the end, from the same
+    // final locals - the result is identical to refreshing every subtree after every write.
+    RefreshPath(pose, parents, globals, parents[upper], parents[lower]);
     // Set against the (moved) parent rather than assuming lower hangs straight off upper, so
     // rigs with a twist or roll bone in between solve the same.
     pose[lower].R = glm::normalize(glm::inverse(ParentRotation(parents, globals, lower)) * (q2 * q1 * q0 * gb));
-    RefreshGlobals(pose, parents, globals, lower);
+    RefreshPath(pose, parents, globals, parents[lower], parents[end]);
 
     // The end keeps its model-space rotation unless told otherwise: a hand that the arm swings
     // under should still hold the grip, not spin with the forearm.
     const glm::quat wantEnd = targetRot ? glm::slerp(endRot, *targetRot, weight) : endRot;
     pose[end].R = glm::normalize(glm::inverse(ParentRotation(parents, globals, end)) * wantEnd);
-    RefreshGlobals(pose, parents, globals, end);
+    RefreshGlobals(pose, parents, globals, upper);
     return true;
 }
 
