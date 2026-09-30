@@ -31,7 +31,7 @@ bool FirstPersonWeaponTest::Ctx::Saw(const std::string& state) const {
 
 const std::string& FirstPersonWeaponTest::Ctx::State() const { return P->CurrentState(); }
 
-FirstPersonWeaponTest::FirstPersonWeaponTest(bool stockProbe) : m_Probe(stockProbe) {
+FirstPersonWeaponTest::FirstPersonWeaponTest(bool stockProbe, bool probeAk) : m_Probe(stockProbe), m_ProbeAk(probeAk) {
     // Shared between steps.
     struct Mem { int AkAmmo = 0, ShotgunAmmo = 0, Ammo = 0, Stage = 0; bool Held = false; float HipHand = 0.0f; };
     auto mem = std::make_shared<Mem>();
@@ -239,12 +239,12 @@ std::string ShotStem(const std::string& s) {
 void FirstPersonWeaponTest::BuildProbe() {
     using C = Ctx;
     auto hold = [](float s) { return [s](C& c) { return c.Time >= s; }; };
-    std::vector<Step> steps = {
-        {"AK in hand at Play", nullptr, [](C& c) { return c.State() == "Idle"; }, 30.0f, nullptr},
-        {"3: switch to the Remington", [](C& c) { c.P->SelectSlot(1); c.Cam->Pitch = 0.0f; },
-         [](C& c) { return c.P->Slot() == 1 && c.State() == "Idle"; }, 180.0f, nullptr},
-        {"settle", nullptr, hold(2.0f), 5.0f, nullptr},
-    };
+    const bool ak = m_ProbeAk;
+    std::vector<Step> steps = {{"AK in hand at Play", nullptr, [](C& c) { return c.State() == "Idle"; }, 30.0f, nullptr}};
+    if (!ak)
+        steps.push_back({"3: switch to the Remington", [](C& c) { c.P->SelectSlot(1); c.Cam->Pitch = 0.0f; },
+                         [](C& c) { return c.P->Slot() == 1 && c.State() == "Idle"; }, 180.0f, nullptr});
+    steps.push_back({"settle", nullptr, hold(2.0f), 5.0f, nullptr});
     // Held still at each pitch: the settled pose, and a capture.
     for (float pitch : {-89.0f, -85.0f, -80.0f, -75.0f, -60.0f, -45.0f, -30.0f, -15.0f, 0.0f, 15.0f, 30.0f, 45.0f, 60.0f}) {
         const std::string name = "idle pitch " + std::to_string((int)pitch);
@@ -275,16 +275,40 @@ void FirstPersonWeaponTest::BuildProbe() {
                              return c.Cam->Pitch == s.To;
                          }, 5.0f, [](C& c) { c.LogEvery = 0; }});
     }
-    // A round and its pump at three pitches, sampled through, captured along the way.
+    // A round (and the Remington's pump) at three pitches, sampled through, captured along the way.
     for (float pitch : {0.0f, -45.0f, 30.0f}) {
-        const std::string name = "fire+pump pitch " + std::to_string((int)pitch);
+        const std::string name = (ak ? "fire pitch " : "fire+pump pitch ") + std::to_string((int)pitch);
         steps.push_back({"to pitch " + std::to_string((int)pitch), [pitch](C& c) { c.Cam->Pitch = pitch; }, hold(1.0f), 5.0f, nullptr});
         steps.push_back({name, [name](C& c) { c.LogEvery = 6; c.Label = name; ++c.Pulls; },
-                         [pitch](C& c) {
+                         [pitch, ak](C& c) {
                              const int f = (int)std::lround(c.Time / std::max(c.Dt, 1e-4f));
                              if (f % 12 == 0) c.Shot = ShotStem("fire_p" + std::to_string((int)pitch) + "_" + std::to_string(1000 + f).substr(1));
+                             if (ak) return c.Time >= 0.8f && c.State() == "Idle";
                              return c.Saw("Pump") && c.State() == "Idle" && c.P->Chambered();
                          }, 6.0f, [](C& c) { c.LogEvery = 0; }});
+    }
+    // The AK's full auto: 0.6 s bursts (~7 rounds) at the hip and on the sights, level and pitched down - the
+    // recoil drives the gun back and the muzzle up, into the pocket and past the elbows. From a full magazine.
+    if (ak) {
+        steps.push_back({"full auto on, full mag", [](C& c) { c.Cam->Pitch = 0.0f; if (!c.P->IsFullAuto()) c.P->ToggleFireMode(); c.P->Reload(); },
+                         [](C& c) { return c.Time > 0.5f && c.State() == "Idle"; }, 8.0f, nullptr});
+        struct Burst { const char* Name; bool Aim; float Pitch; };
+        for (const Burst& b : {Burst{"burst hip pitch 0", false, 0.0f}, Burst{"burst hip pitch -30", false, -30.0f},
+                               Burst{"burst aim pitch 0", true, 0.0f}, Burst{"burst aim pitch -30", true, -30.0f}}) {
+            const std::string name = b.Name;
+            const std::string stem = ShotStem(name);
+            steps.push_back({"ready for " + name, [b](C& c) { c.Aim = b.Aim; c.Cam->Pitch = b.Pitch; },
+                             [b](C& c) { return c.State() == (b.Aim ? "Aim" : "Idle") && c.Time >= 0.8f; }, 5.0f, nullptr});
+            steps.push_back({name, [name](C& c) { c.Trigger = true; c.LogEvery = 3; c.Label = name; },
+                             [stem](C& c) {
+                                 if (c.Time >= 0.6f) c.Trigger = false;
+                                 const int f = (int)std::lround(c.Time / std::max(c.Dt, 1e-4f));
+                                 if (f % 12 == 6) c.Shot = stem + "_" + std::to_string(1000 + f).substr(1);
+                                 return c.Time >= 1.2f;
+                             }, 5.0f, [](C& c) { c.Trigger = false; c.LogEvery = 0; }});
+        }
+        steps.push_back({"bursts done", [](C& c) { c.Aim = false; c.Cam->Pitch = 0.0f; },
+                         [](C& c) { return c.State() == "Idle" && c.Time > 0.5f; }, 3.0f, nullptr});
     }
     // On the sights at three pitches.
     for (float pitch : {0.0f, -45.0f, 30.0f}) {
@@ -342,6 +366,31 @@ void FirstPersonWeaponTest::BuildProbe() {
         return [name, begin](C& c) { c.LogEvery = 3; c.Label = name; begin(c); };
     };
     auto stopLog = [](C& c) { c.LogEvery = 0; };
+    if (ak) {
+        // The AK: a tactical reload (rounds left), the magazine emptied and an empty reload, the inspect, the mag
+        // check and the melee at the hip, and a tactical reload on the sights.
+        steps.push_back({"a round, to reload", [](C& c) { c.Cam->Pitch = 0.0f; ++c.Pulls; }, [](C& c) { return c.Time >= 0.5f && c.State() == "Idle"; }, 3.0f, nullptr});
+        steps.push_back({"anim hip tac reload", sampled("anim hip tac reload", [](C& c) { c.P->Reload(); }),
+                         [](C& c) { return c.Saw("TacReload") && c.State() == "Idle"; }, 10.0f, stopLog});
+        steps.push_back({"empty the magazine", [](C& c) { c.Trigger = true; },
+                         [](C& c) { if (c.P->Ammo() == 0) c.Trigger = false; return c.P->Ammo() == 0 && c.Time > 0.3f && c.State() == "Idle"; }, 8.0f,
+                         [](C& c) { c.Trigger = false; }});
+        steps.push_back({"anim hip empty reload", sampled("anim hip empty reload", [](C& c) { c.P->Reload(); }),
+                         [](C& c) { return c.Saw("EmptyReload") && c.State() == "Idle"; }, 10.0f, stopLog});
+        steps.push_back({"anim inspect", sampled("anim inspect", [](C& c) { c.P->TriggerAction("Inspect"); }),
+                         [](C& c) { return c.Saw("Inspect") && c.State() == "Idle"; }, 12.0f, stopLog});
+        steps.push_back({"anim mag check", sampled("anim mag check", [](C& c) { c.P->TriggerAction("MagCheck"); }),
+                         [](C& c) { return c.Saw("MagCheck") && c.State() == "Idle"; }, 10.0f, stopLog});
+        steps.push_back({"anim melee", sampled("anim melee", [](C& c) { c.P->TriggerAction("Melee"); }),
+                         [](C& c) { return c.Saw("Melee") && c.State() == "Idle"; }, 8.0f, stopLog});
+        steps.push_back({"on the sights", [](C& c) { c.Aim = true; }, [](C& c) { return c.State() == "Aim" && c.Time > 0.6f; }, 5.0f, nullptr});
+        steps.push_back({"a round on the sights", [](C& c) { ++c.Pulls; }, [](C& c) { return c.Time >= 0.5f && c.State() == "Aim"; }, 3.0f, nullptr});
+        steps.push_back({"anim ADS tac reload", sampled("anim ADS tac reload", [](C& c) { c.P->Reload(); }),
+                         [](C& c) { return c.Saw("TacReload") && c.State() == "Aim"; }, 10.0f, stopLog});
+        steps.push_back({"sights down", [](C& c) { c.Aim = false; }, [](C& c) { return c.State() == "Idle" && c.Time > 0.4f; }, 3.0f, nullptr});
+        m_Steps = std::move(steps);
+        return;
+    }
     steps.push_back({"a round, to reload", [](C& c) { c.Cam->Pitch = 0.0f; ++c.Pulls; }, [=](C& c) { return c.Saw("Pump") && settledIdle(c); }, 6.0f, nullptr});
     steps.push_back({"anim hip reload", sampled("anim hip reload", [](C& c) { c.P->Reload(); }),
                      [](C& c) { return c.Saw("ReloadStart") && c.State() == "Idle"; }, 15.0f, stopLog});
@@ -375,7 +424,17 @@ void FirstPersonWeaponTest::AfterPose(const World& world, const FirstPersonBody&
     glm::vec3 butt, fwd, upper, clav, neck, head, muzzle, bore;
     // The gun's length: butt to muzzle along the bore (the first-person gun; the world one is the same).
     s.GunLength = 0.45f;
-    if (p.StockWorld(butt, fwd) && p.MuzzleRay(muzzle, bore)) s.GunLength = std::clamp(glm::dot(muzzle - butt, fwd), 0.3f, 1.5f);
+    if (p.StockWorld(butt, fwd) && p.MuzzleRay(muzzle, bore)) {
+        s.GunLength = std::clamp(glm::dot(muzzle - butt, fwd), 0.3f, 1.5f);
+        // Once per weapon, a check that StockWorld found its butt: the muzzle should be the gun's length
+        // ahead of it along the bore, with the stock's forward and the muzzle's bore the same way.
+        if (m_PrintedGunSlot != p.Slot() && s.State == "Idle") {
+            m_PrintedGunSlot = p.Slot();
+            std::printf("[StockProbe] gun: muzzle %.1f cm ahead of the butt along the bore, %.1f cm off it; stock forward . bore %.3f\n",
+                        glm::dot(muzzle - butt, fwd) * 100.0f, glm::length((muzzle - butt) - fwd * glm::dot(muzzle - butt, fwd)) * 100.0f,
+                        glm::dot(fwd, bore));
+        }
+    }
     // The world gun (split poses): the first-person one moved by the body's world gun shift.
     if (p.StockWorld(butt, fwd) && ((butt += body.WorldGunShift()), true) && body.BoneWorld(world, "upperarm_r", upper) && body.BoneWorld(world, "clavicle_r", clav) &&
         body.BoneWorld(world, "neck_01", neck) && body.BoneWorld(world, "head", head)) {
@@ -518,7 +577,7 @@ void FirstPersonWeaponTest::Drive(FirstPersonPresentation& p, float dt) {
         c.Hand.push_back(glm::vec4(v, p.HandAnchorWeight()));
     }
     if (glm::vec3 v; c.Shell.size() < c.Hand.size() && p.WeaponNodeInView("Shell", v)) c.Shell.push_back(v);
-    const bool held = m_Held && m_Held();
+    const bool held = (m_Held && m_Held()) || c.Trigger;
     p.UpdateTrigger(c.Pulls > 0 || held, c.Pulls > 0 || held);
     c.Pulls = 0;
     std::fflush(stdout);

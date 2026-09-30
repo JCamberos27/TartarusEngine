@@ -1739,8 +1739,8 @@ void FirstPersonBody::ArmsLateUpdate(World& world, entt::entity weaponArms, floa
                 const float room = std::max(0.0f, gun->MaxShift - glm::length(shift));
                 shift += away * FirstPersonBodyClearPush(m_HeadPointBuffer, a, b, away, gun->MeshClearance, room, 0.01f);
             }
-            // ... and the drawn torso, once the pocket has let go (looking steeply down, where a shouldered stock
-            // lies down the chest): straight out from the chest, by the release's weight.
+            // ... and the drawn torso whenever the butt isn't in the pocket (a reload tucks it under the arm; looking
+            // steeply down, a shouldered stock would lie down the chest): straight out from the chest, by that weight.
             glm::vec3 chest(0.0f);
             if (gun->MeshClearance > 0.0f && gun->TorsoKeepOut > 1e-3f && twinPoint(driverTwin, "spine_05", chest)) {
                 SkinnedPoints(world, BodyRegion::Torso, m_TorsoPointBuffer);

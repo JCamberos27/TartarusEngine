@@ -1267,6 +1267,8 @@ int Model::FindClipByRef(const std::string& ref) const {
 int Model::AttachClip(const Model& source, int sourceIndex, const std::string& ref, const std::string& displayName) {
     if (int existing = FindClipByRef(ref); existing >= 0) return existing;
     if (sourceIndex < 0 || sourceIndex >= (int)source.m_D->Animations.size()) return -1;
+    const std::pair<std::string, const SharedData*> key(ref, source.m_D.get());
+    if (std::find(m_UnmatchedClips.begin(), m_UnmatchedClips.end(), key) != m_UnmatchedClips.end()) return -1;
     const AnimationClip& clip = source.m_D->Animations[sourceIndex];
     ExternalClip x;
     x.Source = source.m_D;
@@ -1296,6 +1298,7 @@ int Model::AttachClip(const Model& source, int sourceIndex, const std::string& r
                   "' (clip samples: " + sample(clip.Channels.size(), [&](int i) { return clip.Channels[i].BoneName; }) +
                   "; target samples: " + sample(m_D->Nodes.size(), [&](int i) { return m_D->Nodes[i].Name; }) + ")",
                   LogContext::Asset(m_Path));
+        m_UnmatchedClips.push_back(key);
         return -1;
     }
     // Rest-orientation differences at the top of the animated hierarchy (a bone whose parent the
