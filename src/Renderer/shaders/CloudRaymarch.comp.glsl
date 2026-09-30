@@ -2,7 +2,8 @@
 // Volumetric clouds, one view: marches the cloud layer for every pixel of a reduced-resolution
 // target (VolumetricClouds::Quality picks the scale and step counts) with a per-frame jittered
 // start, then CloudTemporal.comp accumulates the frames, which turns the jitter noise into
-// smooth, band-free clouds.
+// smooth, band-free clouds. Checkerboarded: a frame with history marches one texel of every
+// 2x2 block (uChecker), the temporal pass reprojects the other three.
 #define ATMOSPHERE_LUTS
 #define SKY_VIEW_LUTS
 #include "AtmosphereCommon.glsl"
@@ -19,9 +20,19 @@ uniform float uFrame;
 uniform int uSteps;
 uniform int uLightSteps;
 uniform float uPixelAngle; // radians per pixel of this (reduced-resolution) target
+uniform ivec2 uChecker;    // this frame's texel of each 2x2 block; (-1, -1) = every texel
+uniform float uMarchIndex; // with uChecker: how many times each texel has been marched
+
+uint HashTexel(uvec2 p) { // PCG-style integer hash
+    uint v = p.x * 1664525u + p.y * 22695477u + 1013904223u;
+    v = v * 747796405u + 2891336453u;
+    v = ((v >> ((v >> 28u) + 4u)) ^ v) * 277803737u;
+    return (v >> 22u) ^ v;
+}
 
 void main() {
     ivec2 px = ivec2(gl_GlobalInvocationID.xy);
+    if (uChecker.x >= 0) px = px * 2 + uChecker;
     if (any(greaterThanEqual(px, uSize))) return;
     vec2 ndc = (vec2(px) + 0.5) / vec2(uSize) * 2.0 - 1.0;
     vec4 nearP = uInvViewProj * vec4(ndc, -1.0, 1.0);
@@ -29,7 +40,13 @@ void main() {
     vec3 rd = normalize(farP.xyz / farP.w - nearP.xyz / nearP.w);
     vec3 ro = ClampToAtmosphere(WorldToAtmosphere(uCameraWorld));
 
-    float jitter = InterleavedGradientNoise(vec2(px), uFrame);
+    // Checkerboarded, a texel is only marched every 4th frame, so gradient noise (a pattern built
+    // to average out over consecutive frames of neighbouring pixels) leaves a crawling 2x2 dither.
+    // Instead each texel walks its own golden-ratio sequence from a random start: its successive
+    // marches spread evenly over the step, and neighbours stay uncorrelated.
+    float jitter = uChecker.x >= 0
+        ? fract(float(HashTexel(uvec2(px))) * (1.0 / 4294967296.0) + uMarchIndex * 0.61803399)
+        : InterleavedGradientNoise(vec2(px), uFrame);
     vec3 ambTop, ambBottom;
     CloudAmbientColors(ambTop, ambBottom);
     CloudResult c = MarchClouds(ro, rd, uSteps, uLightSteps, jitter, true, uPixelAngle, ambTop, ambBottom);

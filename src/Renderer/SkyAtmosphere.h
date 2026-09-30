@@ -47,11 +47,11 @@ struct SkyLighting {
 //   2. ResolveLighting()  - sun/moon directions, the directional light's colour and aim.
 //   3. PrepareFrame()     - LUTs when the atmosphere changed, the cloud shadow map, and the
 //                           environment capture when the sky has changed enough to re-bake.
-//   4. per view: RenderView() (inside the scene pass, in place of the gradient sky) and
-//      ApplyToProgram() for each model program.
+//   4. per view: RenderView() (before the scene's opaque pass), ApplyToProgram() for each model
+//      program, then DrawSky() once the opaque geometry is down.
 //
-// GL contract: every pass is compute except RenderView's final full-screen draw, which renders
-// into whatever framebuffer + viewport the caller has bound and restores the depth state it
+// GL contract: every pass is compute except DrawSky's full-screen draw, which renders into
+// whatever framebuffer + viewport the caller has bound and restores the depth state it
 // touches. Texture units 0-9 and image units 0-1 are clobbered; GLStateCache is invalidated.
 class SkyAtmosphere {
 public:
@@ -87,14 +87,22 @@ public:
     // this sky mode, scene load).
     bool EnvironmentDirty() const { return m_EnvDirty; }
     unsigned int EnvironmentCube() const { return m_EnvCube; }
-    void MarkEnvironmentBaked() { m_EnvDirty = false; }
+    void MarkEnvironmentBaked() { m_EnvDirty = false; m_EnvUrgent = false; }
+    // The dirty capture was forced (scene load, switching into this sky mode): convolve it now.
+    // Any other re-capture (clouds drifting, the sun moving, a settings edit) is a small change
+    // the caller can spread over a few frames.
+    bool EnvironmentUrgent() const { return m_EnvUrgent; }
     void ForceEnvironmentCapture() { m_ForceCapture = true; }
 
-    // Renders one view's sky: its sky-view LUTs, aerial-perspective volume and clouds, then the
-    // full-screen sky into the bound framebuffer. `viewKey` identifies the view across frames
-    // (for the clouds' temporal history); any stable pointer, e.g. the view's HDR target.
+    // Prepares one view's sky: its sky-view LUTs, aerial-perspective volume and clouds (compute
+    // only). `viewKey` identifies the view across frames (for the clouds' temporal history); any
+    // stable pointer, e.g. the view's HDR target. The viewport bound now is the one DrawSky uses.
     void RenderView(const void* viewKey, const glm::mat4& view, const glm::mat4& proj,
                     const glm::vec3& cameraWorld);
+    // The full-screen sky for the view RenderView(viewKey) prepared, drawn at the far plane under
+    // a GL_LEQUAL depth test with depth writes off: call it after the opaque geometry, so only
+    // the pixels still showing sky run the atmosphere/cloud shader.
+    void DrawSky(const void* viewKey);
 
     // Model-shader state for the view rendered by the last RenderView(viewKey): the aerial
     // perspective volume and the cloud shadow map (kAerialUnit / kCloudShadowUnit), plus their
@@ -125,6 +133,11 @@ private:
         unsigned int CloudTexture = 0; // this frame's resolved clouds (owned by Clouds)
         bool CloudsValid = false;
         std::uint64_t LastUsedFrame = 0;
+        // What RenderView saw, for DrawSky.
+        glm::mat4 InvViewProj{1.0f};
+        glm::vec3 CameraWorld{0.0f};
+        int Viewport[4] = {0, 0, 1, 1};
+        bool Rendered = false;
         void Release();
         ~ViewResources() { Release(); }
     };
@@ -168,6 +181,7 @@ private:
 
     // Environment capture scheduling.
     bool m_EnvDirty = false;
+    bool m_EnvUrgent = false;
     bool m_ForceCapture = true;
     float m_LastCaptureSeconds = -1e9f;
     SkySettings m_CapturedSettings;
