@@ -9,10 +9,7 @@ ClusterGrid::~ClusterGrid() {
     if (m_Counts) glDeleteBuffers(1, &m_Counts);
     if (m_Indices) glDeleteBuffers(1, &m_Indices);
     if (m_Overflow) glDeleteBuffers(1, &m_Overflow);
-    for (int i = 0; i < kOverflowRing; ++i) {
-        if (m_OverflowFence[i]) glDeleteSync((GLsync)m_OverflowFence[i]);
-        if (m_OverflowCopy[i]) glDeleteBuffers(1, &m_OverflowCopy[i]);
-    }
+    if (m_OverflowCopy) glDeleteBuffers(1, &m_OverflowCopy); // deleting unmaps it
 }
 
 void ClusterGrid::EnsureCreated() {
@@ -32,12 +29,12 @@ void ClusterGrid::EnsureCreated() {
     // {globalCounter, overflowFlag} — see field comment in ClusterGrid.h.
     glNamedBufferStorage(m_Overflow, (GLsizeiptr)2 * (GLsizeiptr)sizeof(unsigned int), nullptr, GL_DYNAMIC_STORAGE_BIT);
 
-    // Ring of 1-uint staging buffers for the deferred overflow-flag readback (PERF-203). Mapped
-    // for read each time a fence signals; GL_STREAM_READ hints the GPU->CPU access pattern.
-    for (int i = 0; i < kOverflowRing; ++i) {
-        glCreateBuffers(1, &m_OverflowCopy[i]);
-        glNamedBufferStorage(m_OverflowCopy[i], (GLsizeiptr)sizeof(unsigned int), nullptr, GL_MAP_READ_BIT);
-    }
+    // The staging uint for the deferred overflow-flag readback (PERF-203), mapped once for good.
+    const GLbitfield mapFlags = GL_MAP_READ_BIT | GL_MAP_PERSISTENT_BIT | GL_MAP_COHERENT_BIT;
+    const unsigned int zero = 0;
+    glCreateBuffers(1, &m_OverflowCopy);
+    glNamedBufferStorage(m_OverflowCopy, (GLsizeiptr)sizeof(unsigned int), &zero, mapFlags);
+    m_OverflowMapped = (const volatile unsigned int*)glMapNamedBufferRange(m_OverflowCopy, 0, (GLsizeiptr)sizeof(unsigned int), mapFlags);
 }
 
 void ClusterGrid::Cull(Shader& buildShader, Shader& cullShader, const glm::mat4& view, const glm::mat4& proj,
@@ -105,35 +102,14 @@ void ClusterGrid::Cull(Shader& buildShader, Shader& cullShader, const glm::mat4&
 
     // Deferred, non-blocking readback of just the overflow flag (PERF-203). A synchronous
     // glGetNamedBufferSubData here read data the cull dispatch had just written *this* frame,
-    // forcing a CPU<-GPU sync twice per frame. Instead: copy the one flag uint (offset past the
-    // global counter) into the next ring slot, fence it, and consume the OLDEST slot only once
-    // its fence has signalled — the value is then a couple of frames stale, which is fine for the
-    // Stats-panel warning and invisible everywhere else.
-    // Only every 16th cull: the fence poll and the map each wait on a threaded driver's worker
-    // (NVIDIA's) like a glGet does, ~7% of a Sandbox frame when they ran every cull.
-    if ((m_CullCounter & 15u) != 0) return;
-    glCopyNamedBufferSubData(m_Overflow, m_OverflowCopy[m_OverflowHead],
-                             (GLintptr)sizeof(unsigned int), 0, (GLsizeiptr)sizeof(unsigned int));
-    if (m_OverflowFence[m_OverflowHead]) glDeleteSync((GLsync)m_OverflowFence[m_OverflowHead]);
-    m_OverflowFence[m_OverflowHead] = glFenceSync(GL_SYNC_GPU_COMMANDS_COMPLETE, 0);
-    m_OverflowSlotFilled[m_OverflowHead] = true;
-
-    const int oldest = (m_OverflowHead + 1) % kOverflowRing;
-    if (m_OverflowSlotFilled[oldest] && m_OverflowFence[oldest]) {
-        // Non-blocking poll (zero timeout); FLUSH_COMMANDS_BIT guarantees the fence reaches the
-        // GPU so it can eventually signal even on a frame that never otherwise flushes.
-        GLenum w = glClientWaitSync((GLsync)m_OverflowFence[oldest], GL_SYNC_FLUSH_COMMANDS_BIT, 0);
-        if (w == GL_ALREADY_SIGNALED || w == GL_CONDITION_SATISFIED) {
-            if (void* p = glMapNamedBuffer(m_OverflowCopy[oldest], GL_READ_ONLY)) {
-                m_LastSaturated = *(const unsigned int*)p != 0;
-                glUnmapNamedBuffer(m_OverflowCopy[oldest]);
-            }
-            glDeleteSync((GLsync)m_OverflowFence[oldest]);
-            m_OverflowFence[oldest] = nullptr;
-            m_OverflowSlotFilled[oldest] = false;
-        }
+    // forcing a CPU<-GPU sync twice per frame, and the fence-and-map ring that replaced it still
+    // waited on a threaded driver's worker (NVIDIA's) at every poll and map, like a glGet. Now the
+    // flag uint (past the global counter) is copied into the coherent mapped uint, which is read
+    // here first: whatever an earlier cull's copy left in it (or 0 before one lands).
+    if (m_OverflowMapped) {
+        m_LastSaturated = *m_OverflowMapped != 0;
+        glCopyNamedBufferSubData(m_Overflow, m_OverflowCopy, (GLintptr)sizeof(unsigned int), 0, (GLsizeiptr)sizeof(unsigned int));
     }
-    m_OverflowHead = oldest;
 }
 
 void ClusterGrid::BindForShading() const {
