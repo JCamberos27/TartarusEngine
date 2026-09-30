@@ -65,8 +65,8 @@ to the `.fpsanim` and **Gravity Gun** is off.
 4. Record each clip's frame range in the weapon's `export_manifest.json`.
 
 **Tooling:**
-- `work/export_clip.py` implements rules 2–3, but it hard-codes the AK's object names (`Armature`, `AK`), the `A_FP_` / `A_W_` prefixes and a mesh list. For a new rig, copy it and change those.
-- `work/export_remington.py` is the whole-weapon version (the Remington 870): every arms clip and weapon clip in one headless run, each baked against its pair, plus the weapon model and `export_manifest.json`. Copy it for the next weapon.
+- `tools/weapons/export_clip.py` implements rules 2–3, but it hard-codes the AK's object names (`Armature`, `AK`), the `A_FP_` / `A_W_` prefixes and a mesh list. For a new rig, copy it and change those.
+- `tools/weapons/export_remington.py` is the whole-weapon version (the Remington 870): every arms clip and weapon clip in one headless run, each baked against its pair, plus the weapon model and `export_manifest.json`. Copy it for the next weapon.
 - **Export a static pose over 2 frames (0–1), never 1.** A one-frame take comes out of the FBX with no animation, and a state that uses it as a clip fails to attach at Play.
 - **Ask before modifying any source `.blend`.** Drive Blender headless (`--background`).
 
@@ -133,8 +133,8 @@ Alternatively, if you have a flat list of 15 AK-style clips:
 2. Select it. In the Inspector, set:
    - **Controller**: your `<Weapon>.controller`.
    - **Weapon Socket / Weapon Root / Mount Rotation**. **Measure** the mount; don't guess:
-     1. Build the probe: `cmd /c "work\build_probe.bat socket_probe"`.
-     2. Run `work\socket_probe.exe <armsBase> <armsClip|-> <weaponBase> <weaponClip|->` over several clips.
+     1. Build the probe: `cmd /c "tools\probes\build_probe.bat socket_probe"`.
+     2. Run `build\probes\socket_probe.exe <armsBase> <armsClip|-> <weaponBase> <weaponClip|->` over several clips.
      3. Socket → weaponRoot should be the same rotation, with about zero translation, in every clip. If it isn't, fix the rig, not the engine.
    - **View Rotation**: 180 Y if the arms render behind the camera (a Blender `-Y` rig).
    - **Gameplay**: magazine, rounds per minute, full-auto allowed, reload-hold time, fidget timing.
@@ -261,7 +261,7 @@ retune only if the weapon's weight calls for it:
    - Use the weapon Inspector's **Aim-Down-Sights > Sight Alignment** to centre the sights (it writes to the weapon
      definition). View Model Offset / Rotation on the controller are scene-level extras on top of it, and a value
      tuned during Play reverts on Stop.
-   - To solve it exactly, use `work/sight_align_probe.cpp` (SYSTEM §5).
+   - To solve it exactly, use `tools/probes/sight_align_probe.cpp` (SYSTEM §5).
    - Write the final values into the scene file: Play-mode edits revert.
 4. View-model fields and the weapon definition are read when Play starts, so **Stop and Play again** after each change to the models, socket, root, mount, view rotation, materials or
    controller. Only the numbers in the Inspector's tuning sections apply live.
@@ -297,10 +297,10 @@ beyond the shotgun options, and it's regenerated from scripts:
 
 | Step | Script | Notes |
 |---|---|---|
-| Export | `work/export_remington.py` | The source `.blend` is read-only. The file has no ADS action, so the Aim pose is solved in memory: the gun's sight line is put on the AK's measured one (the two weapons share the scene's view-model offset). It is then corrected by what Play measured (`SIGHT_CORRECTION`) |
-| Textures, material, metas | `work/make_remington_assets.py` | Re-running keeps every GUID |
-| Controller | `work/make_remington_controller.py` | The AK's graph, with its two reloads replaced by the per-round loop and a `Pump` state |
-| Definition | `work/make_remington_fpsanim.py` | The AK's tuning, then the measured mount and muzzle and the 12-gauge numbers |
+| Export | `tools/weapons/export_remington.py` | The source `.blend` is read-only. The file has no ADS action, so the Aim pose is solved in memory: the gun's sight line is put on the AK's measured one (the two weapons share the scene's view-model offset). It is then corrected by what Play measured (`SIGHT_CORRECTION`) |
+| Textures, material, metas | `tools/weapons/make_remington_assets.py` | Re-running keeps every GUID |
+| Controller | `tools/weapons/make_remington_controller.py` | The AK's graph, with its two reloads replaced by the per-round loop and a `Pump` state |
+| Definition | `tools/weapons/make_remington_fpsanim.py` | The AK's tuning, then the measured mount and muzzle and the 12-gauge numbers |
 
 What's different from the AK:
 
@@ -323,7 +323,77 @@ What's different from the AK:
 - **ADS reloads roll the gun.** The Remington's shells go into the tube from underneath. Held level on the sights, the left hand worked out of sight behind the right hand. The reload states keep all of the clip's roll (`gunMotion` 1.0 / 1.0) about the sights, so the port and the hand show, as at the hip.
 - **ADS hand anchor** (`ads.handAnchor`). The clip keys the free hand and the `Shell` bone relative to the gun. With the gun on the sights, the spot where the hand fetches a shell from the belt rose with the gun, to behind the camera, and the left arm left the view. When the hand, or a listed bone, is more than `far` (0.15 m) from the gun's box, it goes where it is relative to the eye at the hip. Within `near` (0.05 m) it follows the gun, easing between the two.
 - **Tested by script.** `--weapon-test` plays both weapons through in Play (FPS_ANIMATION_SYSTEM.md §10).
-- **World pose** (`stockLock`). With a true first-person body, first person shows the animations' own pose, and every other view shows a world copy. In that copy the gun's butt sits in the body's right shoulder pocket and the gun is kept clear of the neck and hood. See `SPLIT_POSES_HANDOFF.md`.
+- **World pose** (`stockLock`). With a true first-person body, first person shows the animations' own pose, and every other view shows a world copy. In that copy the gun's butt sits in the body's right shoulder pocket and the gun is kept clear of the neck and hood. See "World pose: split first-person / world rendering" below.
+
+## World pose: split first-person / world rendering
+
+The arms rig holds a gun the way view-model rigs do (stock by the chin, carried high when sprinting).
+That looks right from the eye, but on the true first-person body, which the Scene view, shadows and
+other players see, the stock went through the neck and hood. So the player's own camera shows the
+animations' pose and every other view shows a corrected world copy.
+
+- **Render flags** (`Components.h`):
+  - `OwnerViewOnlyTag`: drawn only by the player's own camera. No other view, no shadow, and no SSAO in
+    other views.
+  - `HiddenFromOwnerTag`: drawn by every view except the player's own camera, and casts the shadows.
+  - They are applied in these places:
+    - `SceneRenderer`'s camera pass;
+    - the sun, spot and point shadow passes in `main.cpp`;
+    - the SSAO depth pre-pass;
+    - the Scene search tint.
+- **Body twins** (`FirstPersonBody::MakeTwins` / `SyncTwins`):
+  - At Play start, with Weapon Arms on, every body piece gets a `[Runtime] World <piece>` object. This
+    covers skin, clothing and anything in the outfit, so any character and any outfit works.
+  - Each twin is a `Model::CreateInstance()`, so it has its own pose. It copies the piece's materials,
+    shadow flags, `OutfitHideTag` (skin under clothing), layer and Hidden Bones.
+  - The twins are root objects, placed onto their pieces every frame, so the outfit's hierarchy never
+    sees them.
+  - An outfit change during Play re-runs Stop/Start, which rebuilds the twins.
+- **Two arm solves a frame** (`FirstPersonBody::ArmsLateUpdate`):
+  1. The twins take the pieces' pose as it stands: clips, spine and feet.
+  2. The existing Weapon Arms solve runs on the pieces, onto the rig's hands. This is first person,
+     unchanged.
+  3. The world gun shift is computed (below).
+  4. The same solve runs on the twins, onto the rig's hands moved by that shift. The twins have their own
+     Arm Steadiness and elbow state.
+  5. The twin's neck tilts the head toward the eye moved by the same shift (a cheek weld), at most Head
+     Tilt, weighted by how shouldered the gun is.
+- **World gun shift:**
+  - While shouldered, the butt goes into the right shoulder pocket: `pocket` is an offset from
+    `upperarm_r` in the chest frame.
+  - Always, the rear `gunLength` of the gun is pushed clear of two keep-out spheres:
+    - `neckRadius` around `neck_01`;
+    - `headRadius` around the head bone plus 7 cm up (for the hood).
+  - The shift is capped at `maxShift` and eased over 0.05 s.
+- **World gun** (`FirstPersonPresentation::PlaceWorldWeapon`):
+  - A second entity drawing the same weapon `Model`, so it has the same pump and shell pose. It is placed
+    at the first-person gun plus the shift.
+  - It is tagged `HiddenFromOwnerTag` and casts the shadow. The first-person gun becomes
+    `OwnerViewOnlyTag`.
+  - It hides with the first-person gun (holstered or unarmed).
+- **Settings** (`.fpsanim`, `stockLock`):
+
+  ```json
+  "stockLock": { "enabled": true, "tags": ["Idle", "Ready", "ADS", "Cycling"], "pocket": [-0.045, 0.03, 0.05],
+                 "maxShift": 0.3, "headTilt": 25.0, "blendTime": 0.2,
+                 "neckRadius": 0.09, "headRadius": 0.14, "gunLength": 0.45 }
+  ```
+
+  - `enabled` turns on the pocket lock only; the keep-outs apply to every weapon.
+  - "Shouldered" means a state with one of `tags`, or anything carried on the sights.
+  - The Remington's values come from `tools/weapons/make_remington_fpsanim.py`. Regenerate the weapon with it
+    rather than editing the JSON by hand.
+
+Open items:
+
+- **Weapon effects in other views:** there is no muzzle flash or tracer yet; the laser and bullet holes
+  draw only in the owner's Game view (`weaponOverlay`). When a flash or tracer is added, or other
+  players see the laser, start it at the world gun's muzzle (the first-person muzzle plus
+  `WorldGunShift`). Rounds keep firing from the camera.
+- **`--stock-probe` Scene capture is stale:** in the headless run the Scene tab doesn't render during
+  Play, so the capture's left half is from before Play (the numbers are fine). Check the Scene window's
+  dock ID in the loaded `imgui.ini` and `m_SceneViewportVisible` during Play.
+- Run `--stock-probe` after any change to the world gun or the twins.
 
 ## 6. When a weapon does need code
 

@@ -18,7 +18,7 @@
 #include <glm/gtx/matrix_decompose.hpp>
 // Engine's own rotation helpers, so the mount we measure is expressed in exactly the
 // representation FirstPersonPresentation will consume (Y-X-Z Euler degrees).
-#include "../src/Game/RotationMath.h"
+#include "../../src/Game/RotationMath.h"
 #include <algorithm>
 #include <cmath>
 #include <cstdio>

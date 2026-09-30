@@ -1,7 +1,7 @@
 import bpy
 
 # Read-only inspection of the .blend's saved animation state.
-# Never saves. Run as: blender -b "<blend>" --python work\inspect_blend.py
+# Never saves. Run as: blender -b "<blend>" --python tools\weapons\inspect_blend.py
 path = bpy.data.filepath
 print("BLEND_FILE:", path)
 

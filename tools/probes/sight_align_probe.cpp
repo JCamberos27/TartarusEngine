@@ -1,6 +1,6 @@
 ﻿// Where is the ADS iron-sight line relative to the camera?
 //
-// Replicates Model::EvaluatePose (same code as work/socket_probe.cpp), the weapon attachment
+// Replicates Model::EvaluatePose (same code as tools/probes/socket_probe.cpp), the weapon attachment
 // from FirstPersonPresentation::Update():
 //
 //     weaponEntity = armsEntity * (socket * mount * weaponRoot^-1),  mount = socket * R(YXZ) * wroot^-1
@@ -33,7 +33,7 @@
 #include <glm/gtc/matrix_transform.hpp>
 #define GLM_ENABLE_EXPERIMENTAL
 #include <glm/gtx/matrix_decompose.hpp>
-#include "../src/Game/RotationMath.h"
+#include "../../src/Game/RotationMath.h"
 #include <algorithm>
 #include <cmath>
 #include <cstdio>

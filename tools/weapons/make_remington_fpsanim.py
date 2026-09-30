@@ -1,10 +1,10 @@
 # Writes Remington870.fpsanim from the AKS-74U's weapon definition (its tuned ADS, bob and recoil
 # shape), with the Remington's rigs, measured mount and muzzle, and 12-gauge gameplay.
 #
-#   python work/make_remington_fpsanim.py
+#   python tools/weapons/make_remington_fpsanim.py
 #
 # Measured, not guessed:
-#  - weaponMountRotation / weaponMountOffset: work/socket_probe.exe (Quantum_Arms_FP + each clip,
+#  - weaponMountRotation / weaponMountOffset: build/probes/socket_probe.exe (Quantum_Arms_FP + each clip,
 #    weapon root Main): socket -> Main is t = (0, 0, -0.016) m and one fixed turn in every clip that
 #    has a weapon track (its Y-X-Z Euler reads (-90, Y, Z) with Y + Z = 180: gimbal lock, the same
 #    rotation - written as (-90, 90, 90)).
@@ -15,7 +15,7 @@ import copy
 import json
 import os
 
-REPO = os.path.dirname(os.path.dirname(os.path.abspath(__file__)))
+REPO = os.path.dirname(os.path.dirname(os.path.dirname(os.path.abspath(__file__))))
 AK = os.path.join(REPO, "project/assets/Weapons/AKS74U/AKS74U.fpsanim")
 OUT = os.path.join(REPO, "project/assets/Weapons/Remington870/Remington870.fpsanim")
 BASE = "assets/Weapons/Remington870"

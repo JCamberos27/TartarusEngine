@@ -8,7 +8,7 @@ import bpy
 # export that does NOT go through export_clip.py can no longer bake against
 # A_W_Tac_Reload and silently corrupt an arms clip (FPS_ANIMATION_INVESTIGATION.md
 # UPDATE 6). NLA tracks and pose_position are deliberately left untouched.
-# Run as: blender -b "<blend>" --python work\set_neutral_action.py
+# Run as: blender -b "<blend>" --python tools\weapons\set_neutral_action.py
 ARMS_OBJECT = "Armature"
 WEAPON_OBJECT = "AK"
 ARMS_ACTION = "A_FP_Idle"
