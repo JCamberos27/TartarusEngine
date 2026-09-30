@@ -13,7 +13,9 @@ Each piece is an ordinary model entity, so the scene saves it like any other. It
 materials on its Mesh Renderer. The component itself holds only gender, race, Randomize locks and Auto Hide
 Skin.
 
-New pieces get a follower Animator Controller copied from the body's driver. First Person Body picks up
+Pieces with an Animator Controller follow the body's driver (the root's controller, else the first piece's):
+one state machine per character, so parameters set on the driver reach every piece and they stay in step.
+New pieces get a follower copied from it; a loaded scene is linked again on its first frame. First Person Body picks up
 head-attached pieces (hair, hats, glasses, beards) as shadow-only, and it restarts its piece list when the
 outfit changes in Play. In the player's own view it also trims clothing around the camera, for any pack:
 what sits around the neck in the garment's bind pose (a hood, a collar, the shoulder tops), and whatever
@@ -38,10 +40,15 @@ only what the folders can't say:
 Rules that need no configuration:
 - **Gender** comes from a `Female` folder or an `SKM_F_` prefix.
 - **Hat-fitted haircuts:** with a hat on, the hair swaps to the cut named after it (`Bobcut` + `Cap` →
-  `Bobcut_Cap`). In the Quantum pack those cuts carry the hat in the mesh, so the separate hat comes off.
-  Fitted cuts and `_Inboots` pants count as *variants*: the rules pick them, so they aren't offered in the
-  lists.
-- **Colourways** are the `.mat` files next to an item's remapped material.
+  `Bobcut_Cap`), for a wardrobe with Hair and Hat slots. The Quantum wardrobe has no hair (balaclavas stand
+  in for it), so there this rule never fires. Fitted cuts and `_Inboots` pants count as *variants*: the
+  rules pick them, so they aren't offered in the lists.
+- **Colourways** are the `.mat` files in the same folder as an item's remapped material, when there are at
+  least two. Materials under `Materials/Characters` (skin, eyes, teeth) and `Materials/Clothing/Generated`
+  are nobody's colourway. A material in a sub-folder of the item's (`Hat_Classic/Beach`, `Coat/Leather`) is
+  a separate set, not offered next to the default one.
+- **Switching gender** swaps each item for the other gender's cut with the same name (`SKM_Hoodie` ↔
+  `SKM_F_Hoodie`), else the most alike name in the slot; Top, Pants and Shoes always get one.
 
 ## What goes together
 The pack's own 60 preset characters are the reference: they were rebuilt as outfit presets
@@ -60,11 +67,12 @@ In the Quantum pack:
 - **Jackets and tops.** Jackets with a top in the mesh (Leather Jacket, Jeans Jacket, Bombers, Coats with a
   shirt, Winter Open...) and closed ones (Puffer, Winter Closed, Jacket Classic) take the Top off. Open
   jackets (M65, female Bomber) keep a thin top but not a hoodie. Vests go over anything.
-- **Heads.** A hood that's up takes the hair off and allows only small hats (caps, bandanas, beanies).
-  Haircuts with a hat, headband or glasses built in take those slots off. Big hats leave no room for
-  headphones.
-- **Feet.** Socks (their own slot) go under every shoe but flip-flops and `Boots_Socks` (socks built in);
-  every style fills them. Plain boots take the `_Inboots` pants; `Boots_Inboots` go under plain pants.
+- **Heads.** Every style puts a balaclava on, and a balaclava takes hats and headphones off, so Randomize
+  gives neither (a hat or headphones can still be picked by hand, taking the balaclava off). A hood that's
+  up goes over the balaclava and allows only small hats. Big hats leave no room for headphones.
+- **Feet.** Socks (their own slot, filled by three item overrides - the Socks slot has no folder) go under
+  every shoe but flip-flops and `Boots_Socks` (socks built in). Plain boots take the `_Inboots` pants;
+  `Boots_Inboots` go under plain pants. Headphones are an override-only slot too (layer 11).
 - **Style clashes** (soft): suit jackets or trousers with shorts, sport pants, flip-flops or sport sneakers;
   winter jackets and hats with shorts or flip-flops.
 
@@ -97,7 +105,8 @@ With **Auto Hide Skin** on, each piece doesn't draw the vertices that poke throu
 so the body, the head, a shirt under a jacket or hair under a hood can't clip through as the character moves:
 - Every slot has a `layer` (body parts and the head are 0): balaclavas 1 (their neck skirt tucks under
   every top and jacket, so collars lie over it), shoes 2, pants 3, tops 4, outerwear 6, collars 7,
-  bags and wrists 8, hair/beards/glasses 9, hats 10. A piece hides what pokes through it from every lower layer.
+  bags and wrists 8, glasses (and hair/beards in a wardrobe with them) 9, hats 10, headphones 11. A piece
+  hides what pokes through it from every lower layer.
 - `"hides": false` on a slot (hair, beards, glasses, wrists) means its items never hide anything - they're see-through
   cards (or a watch strap / bead bracelet with gaps), and hiding the skin under them would open holes.
 - `"layers"` rules change that per item: `{"slot": "Top", "nameHasAny": ["Tucked"], "layer": 2}` puts tucked
@@ -122,8 +131,10 @@ so the body, the head, a shirt under a jacket or hair under a hood can't clip th
 ## Code
 - [`src/Game/Wardrobe.h`](src/Game/Wardrobe.h): parsing, classification and rule resolution (pure, unit tested).
 - [`src/Game/OutfitSystem.h`](src/Game/OutfitSystem.h): the catalog scan, plus `Apply`, `Equip`, `SetGender`,
-  `SetRace`, `Randomize`, colourways, `AdoptExisting`, presets and `UpdateHiding`. This is also the API for an
-  in-game character creator.
+  `SetRace`, `Randomize`, colourways, `AdoptExisting`, presets, `UpdateHiding` and `UpdateAttachments`, and the
+  background path the editor uses (`Submit`, `UpdatePending`, `IsPending`, `CancelPending`). This is also the
+  API for an in-game character creator. The Inspector saves presets to `assets/Characters/Outfits/<name>.outfit`;
+  the artist's are in `Outfits/Quantum/`.
 - [`src/Game/OutfitCoverage.h`](src/Game/OutfitCoverage.h): coverage geometry (pure, unit tested).
 - [`src/Editor/EditorLayer_Outfit.cpp`](src/Editor/EditorLayer_Outfit.cpp): the Inspector editor.
 - [`src/Game/OutfitAudit.h`](src/Game/OutfitAudit.h), [`src/Game/OutfitTestScene.h`](src/Game/OutfitTestScene.h):
