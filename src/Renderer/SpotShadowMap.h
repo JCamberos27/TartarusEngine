@@ -31,9 +31,10 @@ public:
     // Static-caster cache, one layer per spot in a second array of the same format. A spot whose
     // only changes are animated casters draws its static casters once into BeginStatic(i), then
     // each frame BeginFromStatic(i) copies that depth into the live layer (leaving it bound, not
-    // cleared) and only the animated casters are drawn over it.
+    // cleared) and only the animated casters are drawn over it. The copy covers texels [x0, x1) x
+    // [y0, y1) only - where the animated casters are and were - since a whole layer is 16 MB.
     void BeginStatic(int i) const;
-    void BeginFromStatic(int i) const;
+    void BeginFromStatic(int i, int x0, int y0, int x1, int y1) const;
 
     unsigned int DepthArray() const { return m_DepthArray; }
     int Resolution() const { return m_Resolution; }
