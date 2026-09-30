@@ -25,8 +25,13 @@ public:
     // moves, which — while dragging — is most frames, so there's no render-state cache here).
     // `slots`: per-mesh materials to draw with (a null / missing slot = the imported one), e.g. the
     // model's material remap, so the preview matches what placing it gives.
+    // `shading`: Lit (the PBR path), Unlit (flat albedo), or Wireframe (lit, with the triangle edges drawn
+    // over it). `studio`: the key light follows the camera, with a fill and a rim light, so whichever side
+    // is turned toward you is lit (the Character Outfit editor's spinnable item preview).
+    enum class Shading { Lit, Unlit, Wireframe };
     unsigned int Render(Model& model, float yaw, float pitch, float distance, int previewW, int previewH,
-                        const std::vector<std::shared_ptr<MaterialAsset>>& slots = {});
+                        const std::vector<std::shared_ptr<MaterialAsset>>& slots = {}, Shading shading = Shading::Lit,
+                        bool studio = false);
 
     // A starting distance that frames the model's whole bounding box in a ~45-degree-FOV camera,
     // for initializing a freshly-selected model's orbit state before the user has zoomed at all.
@@ -39,4 +44,5 @@ private:
     int m_TexW = 0, m_TexH = 0;
     std::unique_ptr<Shader> m_Shader;
     LightBuffer m_Lights; // a single fixed key light, so the shared model shader's SSBO read is valid
+    std::shared_ptr<MaterialAsset> m_WireMaterial; // flat light grey, for the Wireframe edges
 };

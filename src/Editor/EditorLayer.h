@@ -1522,6 +1522,7 @@ private:
     float m_ModelPreviewDistance = 3.0f;
     bool m_ModelPreviewDragging = false; // press started while hovering the preview image
     ModelPreviewRenderer m_ModelPreview;
+    ModelPreviewRenderer m_OutfitPreview; // the Character Outfit editor's spinnable item preview
 
     // Asset Browser model thumbnails (#18 P18): each Model rendered once into its own small GL
     // texture and cached, so a folder of FBXs shows real previews instead of a generic cube
