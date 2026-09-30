@@ -29,5 +29,8 @@
     "_TriplanarScale": 1.0
   },
   "renderQueue": 1,
-  "shader": "engine://Standard.shader"
+  "shader": "engine://Standard.shader",
+  "textureGuids": {
+    "_AlbedoMap": "7f7daa72f072efad"
+  }
 }
