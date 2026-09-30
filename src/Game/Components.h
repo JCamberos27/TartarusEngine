@@ -11,6 +11,7 @@
 #include <entt/entt.hpp>
 
 class SkinHideBuffer; // OutfitHideTag, PlayerBodyTag
+class VisibleIndexBuffer; // OutfitHideTag
 class Model;
 struct MaterialAsset; // full definition in MaterialAsset.h; shared_ptr<MaterialAsset> is valid here
 
@@ -665,6 +666,8 @@ struct CharacterOutfitComponent {
     int Version = 0;                 // runtime: bumped on every change (FirstPersonBody re-reads its pieces)
     std::uint64_t HideSignature = 0; // runtime: the pieces the hiding was last worked out for
     int LinkedVersion = -1;          // runtime: the Version whose pieces were last linked to the driving animator
+    std::uint64_t HideWaiting = 0;   // runtime: the pieces the hiding is waiting on coverage for ...
+    std::uint64_t HideRetryFrame = 0;// ... and when UpdateHiding looks again
 };
 
 // One piece of a Character Outfit (a child of the object with the Character Outfit component). Set by
@@ -682,6 +685,7 @@ enum OutfitPieceFlags { OutfitPieceBodyPart = 1, OutfitPieceHeadAttached = 2 };
 struct OutfitHideTag {
     std::shared_ptr<SkinHideBuffer> Buffer; // one bit per vertex (SkinHideBuffer.h)
     std::shared_ptr<const std::vector<std::uint32_t>> Bits; // the same bits on the CPU
+    std::shared_ptr<VisibleIndexBuffer> Visible;            // the triangles not covered entirely, drawn in its place
     int Hidden = 0, Total = 0;              // vertices hidden / in the model (the Inspector's readout)
 };
 
