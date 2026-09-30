@@ -78,16 +78,12 @@ private:
     unsigned int m_Overflow = 0;
     bool m_LastSaturated = false;
 
-    // Deferred readback of the overflow flag (PERF-203). Each Cull() copies the one flag uint into
-    // the next ring slot and fences it, then consumes the oldest slot only once its fence has
-    // signalled — so the CPU never blocks on data the same dispatch just produced. Cull() runs
-    // ~2x/frame (Scene + Game views), so 4 slots is ~2 frames of latency. Fences are opaque GLsync
-    // stored as void* to keep gl.h out of this header.
-    static constexpr int kOverflowRing = 4;
-    unsigned int m_OverflowCopy[kOverflowRing] = {}; // 1-uint staging buffers
-    void* m_OverflowFence[kOverflowRing] = {};       // GLsync per slot (null = none pending)
-    bool m_OverflowSlotFilled[kOverflowRing] = {};   // slot has a copy+fence not yet consumed
-    int m_OverflowHead = 0;                           // slot the next Cull() writes into
+    // Deferred readback of the overflow flag (PERF-203): each Cull() reads what an earlier one copied
+    // into a persistently mapped, coherent 1-uint buffer, then copies this dispatch's flag in. No
+    // fence, map or other call that returns a value, so the CPU never waits on the GPU or on a
+    // threaded driver's worker; the flag is a cull or more stale, fine for the Stats-panel warning.
+    unsigned int m_OverflowCopy = 0;
+    const volatile unsigned int* m_OverflowMapped = nullptr;
 
     // Cached projection state for build-pass optimization (#205), one per AABB slot (#160)
     struct BuildKey {
