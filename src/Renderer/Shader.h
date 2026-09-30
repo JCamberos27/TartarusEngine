@@ -4,6 +4,7 @@
 #include <string>
 #include <string_view>
 #include <unordered_map>
+#include <vector>
 #include <glm/glm.hpp>
 
 class Shader {
@@ -84,5 +85,14 @@ private:
     // The name is kept to confirm a hit, so a (vanishingly rare) hash collision is never wrong.
     struct CachedUniform { std::string Name; int Loc; };
     mutable std::unordered_map<std::uint64_t, CachedUniform> m_UniformCache;
+    // The last value each scalar / vector uniform was given, by location: a draw loop sets the same
+    // few dozen per draw, mostly unchanged since the last, and those skip the driver call. Only a
+    // write made while this program is bound is remembered; a write while another is bound (it lands
+    // on that one) makes every program forget, so no cache ever holds a value GL no longer has.
+    struct UniformValue { std::uint32_t Bits[4]; bool Set; };
+    mutable std::vector<UniformValue> m_Values;
+    mutable std::uint64_t m_ValuesEpoch = 0;
+    bool SameValue(int loc, const void* data, int words) const; // true: skip; else remembers it
+    void Forget(int loc, int count) const; // an uncached write (a matrix, an array) over these
     mutable std::shared_ptr<void> m_LocationBlock;
 };
