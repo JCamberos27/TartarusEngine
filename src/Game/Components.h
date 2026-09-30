@@ -664,6 +664,7 @@ struct CharacterOutfitComponent {
     bool RandomizeOnPlay = false;    // Play starts in a fresh random outfit (reverted on Stop, like any Play change)
     int Version = 0;                 // runtime: bumped on every change (FirstPersonBody re-reads its pieces)
     std::uint64_t HideSignature = 0; // runtime: the pieces the hiding was last worked out for
+    int LinkedVersion = -1;          // runtime: the Version whose pieces were last linked to the driving animator
 };
 
 // One piece of a Character Outfit (a child of the object with the Character Outfit component). Set by

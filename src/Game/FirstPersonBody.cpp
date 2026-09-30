@@ -624,6 +624,18 @@ void FirstPersonBody::SyncTwins(World& world) {
         }
         const IK::Pose& pose = m_Models[k]->AppliedLocalPose();
         if (!pose.empty()) m_TwinModels[k]->ApplyLocalPose(pose);
+        // The piece's look can change without its outfit's version: the hiding lands when its coverage has
+        // been worked out (often after Start), and a colourway step after the pieces.
+        const auto& src = reg.get<RenderableComponent>(m_Pieces[k]);
+        auto& dst = reg.get<RenderableComponent>(m_Twins[k]);
+        if (dst.Materials != src.Materials) dst.Materials = src.Materials;
+        const auto* hide = reg.try_get<OutfitHideTag>(m_Pieces[k]);
+        const auto* twinHide = reg.try_get<OutfitHideTag>(m_Twins[k]);
+        if (!hide && twinHide) reg.remove<OutfitHideTag>(m_Twins[k]);
+        else if (hide && (!twinHide || twinHide->Buffer != hide->Buffer)) {
+            const OutfitHideTag copy = *hide;
+            reg.emplace_or_replace<OutfitHideTag>(m_Twins[k], copy);
+        }
     }
 }
 
