@@ -3304,6 +3304,7 @@ int main(int argc, char** argv) {
                 glBindFramebuffer(GL_FRAMEBUFFER, 0);
                 GLStateCache::Invalidate();
 
+                PROFILE_GPU_SCOPE("SSAO Compute + Blur");
                 target.Compute(ssaoComputeShader, proj, world.SsaoRadius, world.SsaoBias);
                 target.Blur(ssaoBlurShader);
                 GLStateCache::Invalidate();
