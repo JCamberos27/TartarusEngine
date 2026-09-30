@@ -4,8 +4,8 @@ Plain-language snapshot of where things stand. No code reading required.
 
 ## What this is
 
-Tartarus Engine is a custom C++ / Vulkan 3D game engine, built partly on top of
-the open-source Acid engine and adapted to this project's own conventions.
+Tartarus Engine is a custom C++ / OpenGL 3D game engine (GLFW, EnTT, PhysX,
+Dear ImGui).
 It has its own editor, and a first-person shooter test scene ("Sandbox")
 used to develop and prove out the engine's systems.
 
@@ -19,8 +19,8 @@ progress bar, and build info.
 `ANIMATOR.md`, `FPS_WEAPON_INTEGRATION.md`). Weapons are data-driven
 (`.fpsanim` files): a state machine controls which animation clip plays
 when (idle, walk, fire, reload, aim down sights, etc.), and procedural
-effects (recoil, sway, breathing) layer on top. The AKS-74U is the one
-fully working weapon so far.
+effects (recoil, sway, breathing) layer on top. The Sandbox player carries
+the AKS-74U (key 1), the Remington 870 (key 2) and a gravity gun (key 3).
 
 **Player locomotion, phase 1 — done.** The player has their own body in
 the world (not just a floating camera) that walks, jogs, runs, jumps,
