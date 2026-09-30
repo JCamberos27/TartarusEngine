@@ -160,7 +160,9 @@ jobs:
           $name = "mesa3d-$ver-release-msvc.7z"
           $sha  = "4C6D32E653E0FF9AD07796E40C0BCFABF2764D849E3CE4F3B1590112C87E42F9"
           $url  = "https://github.com/pal1000/mesa-dist-win/releases/download/$ver/$name"
-          Invoke-WebRequest -Uri $url -OutFile $name
+          # GitHub's release downloads sometimes answer with a 5xx page; retry those rather than fail
+          # the whole run after the build and unit tests have passed (PR #497's first run).
+          Invoke-WebRequest -Uri $url -OutFile $name -MaximumRetryCount 4 -RetryIntervalSec 15
           $got = (Get-FileHash -Algorithm SHA256 -Path $name).Hash
           if ($got -ne $sha) { throw "Mesa archive SHA-256 mismatch: expected $sha, got $got" }
           Write-Host "Mesa $ver checksum verified"
