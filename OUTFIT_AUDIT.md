@@ -143,3 +143,38 @@ All 45 `--outfit-selftest` checks pass. `--unit-tests` (7222), `--outfit-rules`,
   - links every piece's Animator Controller to the driver's (follower mode). `UpdateAttachments` links a
     loaded scene again (`CharacterOutfitComponent::LinkedVersion`).
 - **`HideSignature`** includes each piece's slot, item and flags.
+
+## Phase 3: runtime performance
+- **Covered triangles aren't drawn.** For each piece and its hide bits, the triangles with at least one
+  visible vertex go into one element buffer (`VisibleIndexBuffer`, on `OutfitHideTag::Visible`). It's shared
+  by every piece with the same model and bits, and drawn in place of the mesh's own indices in every pass:
+  camera, sun cascades, spot/point shadows, and the SSAO pre-pass. Sub-meshes covered entirely are skipped.
+  Vertex numbering is unchanged, so the hide bits and the bone palette still line up. The 57 `--outfit-shots`
+  frames match the baseline: no pixel differs by more than 25 levels.
+- **Blended sub-meshes at Opacity 0 are skipped** (the Quantum eye overlay and saliva: two draws per head
+  that added nothing).
+- **CPU:**
+  - `UpdateHiding`'s per-frame check hashes the root's children directly, with no map built.
+  - While coverage is being worked out, it looks again every 8 frames, not every frame.
+  - `UpdateAttachments` builds no map.
+  - Coverage runs at most (cores − 1) jobs at once, instead of a thread per pair.
+  - Items play: "Outfits + Transform Cache" 0.57 → 0.35 ms, "Asset Pump + Outfit Hiding" 0.34 → 0.13 ms.
+
+1080p play-max, two runs after a warm-up run:
+
+| Scene | Baseline | Phase 3 | GPU Sun Shadow |
+|---|---|---|---|
+| Presets | 156 fps | 168–174 fps | 4.6 → 4.3 ms |
+| Randomized | 69 fps | 63–70 fps | 6.4 → 6.0 ms |
+| Items | 33 fps | 37–41 fps | 12.5 → 11.3 ms |
+
+GPU Scene Draw moves 1.5–2.5 ms between runs of the same build in the textured scenes (Randomized, Items),
+while the shadow pass, which samples no textures, is steady. That points at texture bandwidth, which is phase
+4's work. Sandbox is unchanged within run-to-run noise: at 1440p, alternating runs of main and this branch
+averaged 5.39 and 5.47 ms, each spread over about 0.3 ms.
+
+Two things to know when benchmarking:
+- **Builds share the coverage cache.** Builds with different coverage versions (main is 14, this is 15)
+  overwrite each other's `Library/OutfitCoverage` files. Alternating them makes each re-work its coverage
+  during the bench.
+- **Draw calls cost CPU.** Items has 3848 of them, and CPU Scene Draw is 5.5 ms.

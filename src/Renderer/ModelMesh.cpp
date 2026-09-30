@@ -107,6 +107,18 @@ ModelMesh::~ModelMesh() {
     glDeleteVertexArrays(1, &m_VAO);
 }
 
+void ModelMesh::DrawIndices(unsigned elementBuffer, std::uint32_t offset, std::uint32_t count, int instances) const {
+    if (!m_VAO || !count) return;
+    GLStateCache::BindVertexArray(m_VAO);
+    glBindBuffer(GL_ELEMENT_ARRAY_BUFFER, elementBuffer); // VAO state: put the mesh's own back below
+    const void* at = reinterpret_cast<const void*>((std::uintptr_t)offset);
+    if (instances > 1)
+        glDrawElementsInstanced(GL_TRIANGLES, (GLsizei)count, GL_UNSIGNED_INT, at, instances);
+    else
+        glDrawElements(GL_TRIANGLES, (GLsizei)count, GL_UNSIGNED_INT, at);
+    glBindBuffer(GL_ELEMENT_ARRAY_BUFFER, m_EBO);
+}
+
 void ModelMesh::Draw(int instances) const {
     if (!m_VAO) return; // still deferred
     GLStateCache::BindVertexArray(m_VAO);

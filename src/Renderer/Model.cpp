@@ -1,4 +1,5 @@
 #include "Model.h"
+#include "SkinHideBuffer.h"
 #include "MaterialAsset.h"
 #include "ShaderAsset.h"
 #include "Log.h"
@@ -2047,7 +2048,8 @@ const ShaderRenderState* EffectiveRenderState(const std::vector<std::shared_ptr<
 void Model::DrawSelected(Shader& fallback, const glm::mat4& xform,
                          const std::vector<std::shared_ptr<MaterialAsset>>& slots,
                          const ProgramSelector& selectProgram, float opacity,
-                         const std::function<void(Shader&)>& onProgramBound, MeshPass pass, bool forceDoubleSided) {
+                         const std::function<void(Shader&)>& onProgramBound, MeshPass pass, bool forceDoubleSided,
+                         const VisibleIndexBuffer* visible) {
     const glm::mat4 nrm = glm::mat4(glm::transpose(glm::inverse(glm::mat3(xform))));
 
     Shader*             lastProg = nullptr;
@@ -2061,6 +2063,14 @@ void Model::DrawSelected(Shader& fallback, const glm::mat4& xform,
         const bool hasSlot = i < (int)slots.size() && slots[i];
         const bool transparent = hasSlot && slots[i]->RenderQueue == MaterialAsset::Queue::Transparent;
         if ((pass == MeshPass::Opaque && transparent) || (pass == MeshPass::Transparent && !transparent)) continue;
+        const bool useVisible = visible && i < visible->MeshCount();
+        if (useVisible && !visible->MeshRange(i).Count) continue; // covered entirely
+        // A blended surface at Opacity 0 adds nothing (the Quantum heads' eye overlay and saliva) - unless
+        // its shader's own state blends or writes depth some other way.
+        if (transparent && slots[i]->Opacity <= 0.0f) {
+            const ShaderRenderState* st = SlotRenderState(slots, i);
+            if (!st || (st->ZWrite <= 0 && st->Blend < 0)) continue;
+        }
         stateScope.Apply(EffectiveRenderState(slots, i, hasSlot ? slots[i]->Mat : m_D->Meshes[i]->Mat, forceDoubleSided));
         Shader* prog = &fallback;
         if (Shader* p = selectProgram(hasSlot ? slots[i].get() : nullptr)) prog = p;
@@ -2091,11 +2101,15 @@ void Model::DrawSelected(Shader& fallback, const glm::mat4& xform,
         // After the bind (which a repeat of the same material skips): back faces lit with a flipped normal.
         prog->SetInt("uDoubleSided", forceDoubleSided || mat.DoubleSided ? 1 : 0);
         prog->SetInt("uClothInterior", forceDoubleSided && !mat.DoubleSided ? 1 : 0); // not hair cards: both sides are hair
-        m_D->Meshes[i]->Draw();
+        if (useVisible)
+            m_D->Meshes[i]->DrawIndices(visible->Id(), visible->MeshRange(i).Offset, visible->MeshRange(i).Count);
+        else
+            m_D->Meshes[i]->Draw();
     }
 }
 
-void Model::DrawDepthOnly(Shader& shader, const std::vector<std::shared_ptr<MaterialAsset>>& slots, int instances) {
+void Model::DrawDepthOnly(Shader& shader, const std::vector<std::shared_ptr<MaterialAsset>>& slots, int instances,
+                          const VisibleIndexBuffer* visible) {
     UploadBoneMatrices(shader);
     const MaterialLocs& locs = CachedMaterialLocs(shader);
     ShaderStateScope stateScope; // #104 — a Cull Off (double-sided) shader casts from both sides
@@ -2103,6 +2117,8 @@ void Model::DrawDepthOnly(Shader& shader, const std::vector<std::shared_ptr<Mate
         bool hasSlot = i < (int)slots.size() && slots[i];
         // Transparent materials don't cast shadows — skip them in the depth-only pass.
         if (hasSlot && slots[i]->RenderQueue == MaterialAsset::Queue::Transparent) continue;
+        const bool useVisible = visible && i < visible->MeshCount();
+        if (useVisible && !visible->MeshRange(i).Count) continue; // covered entirely
         stateScope.ApplyCullOnly(EffectiveRenderState(slots, i, hasSlot ? slots[i]->Mat : m_D->Meshes[i]->Mat));
         const Material& mat = hasSlot ? slots[i]->Mat : m_D->Meshes[i]->Mat;
         // Only cost paid over a pure depth draw: one texture bind + two uniforms, and only for
@@ -2129,7 +2145,10 @@ void Model::DrawDepthOnly(Shader& shader, const std::vector<std::shared_ptr<Mate
             }
             shader.SetInt(locs.depthAlbedo, 0);
         }
-        m_D->Meshes[i]->Draw(instances);
+        if (useVisible)
+            m_D->Meshes[i]->DrawIndices(visible->Id(), visible->MeshRange(i).Offset, visible->MeshRange(i).Count, instances);
+        else
+            m_D->Meshes[i]->Draw(instances);
     }
 }
 
