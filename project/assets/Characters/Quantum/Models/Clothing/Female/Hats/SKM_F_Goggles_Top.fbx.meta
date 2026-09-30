@@ -1,9 +1,0 @@
-{
-  "guid": "e1e219fc8fd43e3d",
-  "materialRemap": {
-    "Default_Material1": "assets/Characters/Quantum/Materials/Clothing/Generated/M_Goggles.mat",
-    "M_Googles3": "assets/Characters/Quantum/Materials/Clothing/Generated/M_Goggles.mat"
-  },
-  "metaVersion": 1,
-  "type": "model"
-}
