@@ -960,7 +960,7 @@ void EditorLayer::DrawWeaponDefinitionEditor(const std::string& path) {
             std::snprintf(buf, sizeof buf, "Controller: %d states", states);
             PropertyRows::Badge(Status::Ok, buf, s.Controller.c_str());
         } else {
-            PropertyRows::Badge(s.Clips.empty() ? Status::Error : Status::Info, s.Clips.empty() ? "No controller" : "v1 clip list");
+            PropertyRows::Badge(Status::Error, "No controller");
         }
         ImGui::SameLine();
         if (ctx.Arms) {
@@ -1017,22 +1017,6 @@ void EditorLayer::DrawWeaponDefinitionEditor(const std::string& path) {
             if (ActionButton(ICON_FA_DIAGRAM_PROJECT "  Open in Animator", "Edit the weapon's states, tags and transitions", false,
                              ImVec2(-FLT_MIN, 0.0f)))
                 OpenAnimatorWindow(s.Controller);
-        } else if (!s.Clips.empty()) {
-            char note[160];
-            std::snprintf(note, sizeof note, "A v1 file: its %d clips run on the standard first-person graph built in memory.", (int)s.Clips.size());
-            r.Note(note);
-            if (ActionButton(ICON_FA_WAND_MAGIC_SPARKLES "  Create Controller from Clips",
-                             "Write the standard first-person graph for these clips next to this file and point the weapon at it",
-                             false, ImVec2(-FLT_MIN, 0.0f))) {
-                const fs::path out = fs::u8path(path).replace_extension(".controller");
-                if (BuildFirstPersonController(s).SaveFile(out.u8string())) {
-                    s.Controller = ProjectPaths::Relativize(out.generic_u8string());
-                    s.Clips.clear();
-                    changed = true;
-                    InvalidateAnimationListing();
-                    OpenAnimatorWindow(s.Controller);
-                }
-            }
         }
     }
 

@@ -18,9 +18,8 @@ struct AnimatorController;
 // the Animator window like any other. The first-person driver (FirstPersonPresentation) only
 // sets its parameters and reacts to its tags and events - see FirstPersonAnimatorContract below.
 //
-// Format v1 files carried a flat `clips` list instead of a controller. They still load: the
-// driver builds the standard first-person graph from those clips in memory
-// (BuildFirstPersonController), and the same function turns them into a .controller file.
+// FirstPersonAnimationClip / Clips are the New Weapon wizard's per-state clip picks, which
+// BuildFirstPersonController turns into the weapon's .controller. They are never saved.
 struct FirstPersonAnimationClip {
     std::string Name;
     std::string ArmsClip;
@@ -203,9 +202,9 @@ struct FirstPersonAnimationSet {
     std::string ArmsModel;
     std::string WeaponModel;
     // The Animator Controller (.controller) driving both rigs: its "arms" track plays on the arms
-    // model, its "weapon" track on the weapon model. Empty = a v1 file; see Clips.
+    // model, its "weapon" track on the weapon model. Required.
     std::string Controller;
-    std::string DefaultState;             // v1 only
+    std::string DefaultState;             // wizard only: the generated graph's start state
     // Y-X-Z Euler degrees the models themselves need to line up with the play camera, applied
     // before any per-scene View Model Rotation. This belongs to the asset, not the scene: it
     // describes the axis convention of the FBXs named above. The Manny rig comes out of Blender
@@ -246,7 +245,7 @@ struct FirstPersonAnimationSet {
     // Recoil, sway, bob, breathing, aim, per-state offsets, lean and IK (FirstPersonProcedural.h).
     // Files from before it existed load their old gameplay.recoil / adsBob numbers into it.
     WeaponProceduralSettings Procedural = WeaponProceduralSettings::Defaults();
-    std::vector<FirstPersonAnimationClip> Clips; // v1 only
+    std::vector<FirstPersonAnimationClip> Clips; // wizard only, never saved
 
     const FirstPersonAnimationClip* Find(const std::string& state) const;
 
@@ -326,16 +325,16 @@ inline constexpr const char* kEventLoadRound = "LoadRound"; // one round goes in
 // whose input is missing is skipped. Reuses the body's result type.
 struct FirstPersonWeaponCheckInput {
     const FirstPersonAnimationSet* Set = nullptr;
-    const AnimatorController* Controller = nullptr;        // null = none loaded (a v1 file, or a bad path)
+    const AnimatorController* Controller = nullptr;        // null = none loaded (a bad path)
     std::function<bool(const std::string&)> HasArmsBone;   // on the arms rig (empty = skip)
     std::function<bool(const std::string&)> HasWeaponBone; // on the weapon model (empty = skip)
 };
 std::vector<FPBody::Check> FirstPersonWeaponValidate(const FirstPersonWeaponCheckInput& in);
 
-// The standard first-person graph for a v1 clip list (the AKS-74U's 15 states): locomotion with
+// The standard first-person graph for a clip list (the AKS-74U's 15 states): locomotion with
 // Idle<->Sprint transition clips, ADS, one-shots returning through Exit, reloads/melee that
 // firing can't interrupt, Draw/Holster that nothing interrupts, and a hidden Holstered state.
-// Used to run v1 files and to write their .controller once.
+// The New Weapon wizard writes a new weapon's .controller with it.
 AnimatorController BuildFirstPersonController(const FirstPersonAnimationSet& set);
 
 // Seconds of settled Idle before the next Fidget, from a uniform [0,1] sample.
