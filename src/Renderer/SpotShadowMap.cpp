@@ -69,12 +69,15 @@ void SpotShadowMap::BeginStatic(int i) const {
     glClear(GL_DEPTH_BUFFER_BIT);
 }
 
-void SpotShadowMap::BeginFromStatic(int i) const {
+void SpotShadowMap::BeginFromStatic(int i, int x0, int y0, int x1, int y1) const {
     i = std::clamp(i, 0, std::max(m_Layers, 1) - 1);
-    glNamedFramebufferTextureLayer(m_StaticFbo, GL_DEPTH_ATTACHMENT, m_StaticArray, 0, i);
     glNamedFramebufferTextureLayer(m_Fbo, GL_DEPTH_ATTACHMENT, m_DepthArray, 0, i);
-    glBlitNamedFramebuffer(m_StaticFbo, m_Fbo, 0, 0, m_Resolution, m_Resolution, 0, 0, m_Resolution, m_Resolution,
-                           GL_DEPTH_BUFFER_BIT, GL_NEAREST);
+    x0 = std::clamp(x0, 0, m_Resolution); x1 = std::clamp(x1, 0, m_Resolution);
+    y0 = std::clamp(y0, 0, m_Resolution); y1 = std::clamp(y1, 0, m_Resolution);
+    if (x0 < x1 && y0 < y1) {
+        glNamedFramebufferTextureLayer(m_StaticFbo, GL_DEPTH_ATTACHMENT, m_StaticArray, 0, i);
+        glBlitNamedFramebuffer(m_StaticFbo, m_Fbo, x0, y0, x1, y1, x0, y0, x1, y1, GL_DEPTH_BUFFER_BIT, GL_NEAREST);
+    }
     glBindFramebuffer(GL_FRAMEBUFFER, m_Fbo);
     glViewport(0, 0, m_Resolution, m_Resolution);
 }

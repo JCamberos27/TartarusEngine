@@ -2940,6 +2940,8 @@ int main(int argc, char** argv) {
             };
             static std::uint64_t s_SpotShadowSig[SpotShadowMap::kMaxSpots] = {}; // the static casters'
             static bool s_SpotHadAnimated[SpotShadowMap::kMaxSpots] = {};
+            // Per spot, the texels its animated casters covered when last drawn ({x0, y0, x1, y1}).
+            static glm::ivec4 s_SpotDynamicRect[SpotShadowMap::kMaxSpots] = {};
             static std::uint64_t s_PointShadowSig[PointShadowMap::kMaxPoints] = {};
             if (world.ShadowsEnabled && spotShadowCount > 0) {
                 PROFILE_SCOPE("Spot Shadow Pass");
@@ -2991,6 +2993,25 @@ int main(int argc, char** argv) {
                     localShadowShader.SetMat4(localLightViewProjLoc, spotShadowVP[s]);
                     localShadowShader.SetVec3(localLightPosLoc, spotShadowPos[s]);
                     localShadowShader.SetFloat(localFarLoc, spotShadowFar[s]);
+                    // Where this frame's animated casters land in the map: their bounds' corners through
+                    // the light, a texel of slack each side. A caster without bounds or reaching behind the
+                    // light covers it all.
+                    const int mapRes = spotShadowMap.Resolution();
+                    glm::ivec4 dynRect(mapRes, mapRes, 0, 0); // empty
+                    for (const LocalCaster* c : visible) {
+                        if (!c->animated && !c->moving) continue;
+                        bool whole = !c->bounded;
+                        for (int k = 0; k < 8 && !whole; ++k) {
+                            const glm::vec3 corner((k & 1) ? c->bounds.Max.x : c->bounds.Min.x, (k & 2) ? c->bounds.Max.y : c->bounds.Min.y,
+                                                   (k & 4) ? c->bounds.Max.z : c->bounds.Min.z);
+                            const glm::vec4 clip = spotShadowVP[s] * glm::vec4(corner, 1.0f);
+                            if (clip.w <= 1e-4f) { whole = true; break; }
+                            const glm::vec2 texel = (glm::vec2(clip) / clip.w * 0.5f + 0.5f) * (float)mapRes;
+                            dynRect = glm::ivec4(std::min(dynRect.x, (int)std::floor(texel.x) - 1), std::min(dynRect.y, (int)std::floor(texel.y) - 1),
+                                                 std::max(dynRect.z, (int)std::ceil(texel.x) + 1), std::max(dynRect.w, (int)std::ceil(texel.y) + 1));
+                        }
+                        if (whole) { dynRect = glm::ivec4(0, 0, mapRes, mapRes); break; }
+                    }
                     auto drawCasters = [&](bool animatedOnes) {
                         for (const LocalCaster* c : visible) {
                             if ((c->animated || c->moving) != animatedOnes) continue;
@@ -3008,8 +3029,15 @@ int main(int argc, char** argv) {
                         drawCasters(false);
                         s_SpotShadowSig[s] = sig;
                     }
-                    spotShadowMap.BeginFromStatic(s);
+                    // The live layer is the cache plus last frame's animated casters, which stayed within
+                    // their rect: restoring that rect and this frame's from the cache is the whole layer's
+                    // worth (a new cache is copied whole).
+                    const glm::ivec4 prev = s_SpotDynamicRect[s];
+                    const glm::ivec4 copy = staticChanged ? glm::ivec4(0, 0, mapRes, mapRes)
+                                                          : glm::ivec4(glm::min(glm::ivec2(dynRect), glm::ivec2(prev)), glm::max(glm::ivec2(dynRect.z, dynRect.w), glm::ivec2(prev.z, prev.w)));
+                    spotShadowMap.BeginFromStatic(s, copy.x, copy.y, copy.z, copy.w);
                     drawCasters(true);
+                    s_SpotDynamicRect[s] = dynRect;
                 }
 
                 glDisable(GL_POLYGON_OFFSET_FILL);
