@@ -24,10 +24,6 @@ float Factor(float lastTime, float nextTime, float timeTicks) {
 
 } // namespace
 
-glm::mat4 LocalTRS::ToMatrix() const {
-    return glm::translate(glm::mat4(1.0f), T) * glm::mat4_cast(R) * glm::scale(glm::mat4(1.0f), S);
-}
-
 LocalTRS LocalTRS::Blend(const LocalTRS& a, const LocalTRS& b, float t) {
     LocalTRS out;
     out.T = glm::mix(a.T, b.T, t);

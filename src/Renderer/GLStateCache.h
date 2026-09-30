@@ -22,6 +22,9 @@ namespace GLStateCache {
     void Invalidate();
 
     void UseProgram(unsigned int program);
+    // The program UseProgram last bound, or 0 when unknown (after Invalidate). Shader's uniform value
+    // cache only trusts a write it knows lands on its own program.
+    unsigned int CurrentProgram();
     void BindTexture2D(unsigned int unit, unsigned int texture);
     void BindVertexArray(unsigned int vao);
 

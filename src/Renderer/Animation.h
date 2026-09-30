@@ -17,9 +17,25 @@ struct LocalTRS {
     glm::vec3 T{0.0f};
     glm::quat R{1.0f, 0.0f, 0.0f, 0.0f};
     glm::vec3 S{1.0f};
-    glm::mat4 ToMatrix() const;
+    // translate(T) * mat4_cast(R) * scale(S), built directly: the terms the three-matrix product
+    // adds are exact zeros, so the values are the same, at a fraction of the work. Every node of
+    // every posed skeleton goes through this, several times a frame.
+    glm::mat4 ToMatrix() const {
+        const glm::mat3 r = glm::mat3_cast(R);
+        return glm::mat4(glm::vec4(r[0] * S.x, 0.0f), glm::vec4(r[1] * S.y, 0.0f), glm::vec4(r[2] * S.z, 0.0f), glm::vec4(T, 1.0f));
+    }
     static LocalTRS Blend(const LocalTRS& a, const LocalTRS& b, float t); // lerp / slerp
 };
+
+// a * b for two affine transforms (bottom row 0 0 0 1), such as a node's parent global and its
+// ToMatrix() local. glm's full product only adds the exact-zero terms this skips, so the result is
+// the same; the pose hot loops (each node, each skeleton, each IK pass) use it.
+inline glm::mat4 AffineMul(const glm::mat4& a, const glm::mat4& b) {
+    glm::mat4 r;
+    for (int c = 0; c < 3; ++c) r[c] = a[0] * b[c][0] + a[1] * b[c][1] + a[2] * b[c][2];
+    r[3] = a[0] * b[3][0] + a[1] * b[3][1] + a[2] * b[3][2] + a[3];
+    return r;
+}
 
 // Per-node keyframe track within one animation clip.
 struct BoneAnimChannel {
