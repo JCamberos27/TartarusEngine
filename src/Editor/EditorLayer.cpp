@@ -2203,8 +2203,10 @@ void EditorLayer::BeginFrame() {
 void EditorLayer::EndFrame() {
     ImGui::Render();
     ImDrawData* dd = ImGui::GetDrawData();
+    // No GLStateShadow_Invalidate() per frame: the backend restores every shadowed state it
+    // changes (blend, cull, depth test, scissor, viewport...) and never touches the rest, so the
+    // shadow still holds, and re-reading it would put the driver waits back (gl.h).
     ImGui_ImplOpenGL3_RenderDrawData(dd);
-    GLStateShadow_Invalidate(); // its own loader set GL state behind the engine's (gl.h)
 
     // Frosted backdrop: with the whole editor frame now on FBO 0, if a modal dialog is open,
     // blur the entire framebuffer and redraw just the dialog window crisp on top. Nothing
@@ -2243,7 +2245,6 @@ void EditorLayer::EndFrame() {
             else for (int i = first; i < dd->CmdLists.Size; ++i) sub.AddDrawList(dd->CmdLists[i]);
             sub.Valid = true;
             ImGui_ImplOpenGL3_RenderDrawData(&sub);
-            GLStateShadow_Invalidate();
             GLStateCache::Invalidate();
         }
     }

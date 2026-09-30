@@ -109,6 +109,9 @@ void ClusterGrid::Cull(Shader& buildShader, Shader& cullShader, const glm::mat4&
     // global counter) into the next ring slot, fence it, and consume the OLDEST slot only once
     // its fence has signalled — the value is then a couple of frames stale, which is fine for the
     // Stats-panel warning and invisible everywhere else.
+    // Only every 16th cull: the fence poll and the map each wait on a threaded driver's worker
+    // (NVIDIA's) like a glGet does, ~7% of a Sandbox frame when they ran every cull.
+    if ((m_CullCounter & 15u) != 0) return;
     glCopyNamedBufferSubData(m_Overflow, m_OverflowCopy[m_OverflowHead],
                              (GLintptr)sizeof(unsigned int), 0, (GLsizeiptr)sizeof(unsigned int));
     if (m_OverflowFence[m_OverflowHead]) glDeleteSync((GLsync)m_OverflowFence[m_OverflowHead]);
