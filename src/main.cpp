@@ -529,25 +529,6 @@ int main(int argc, char** argv) {
         CrashHandler::SetInteractive(false);
         return RunUnitTests() == 0 ? 0 : 1;
     }
-    // Animator v2 - `--upgrade-fpsanim <weapon.fpsanim> <out.controller> <controller ref>`: turns a
-    // v1 weapon definition (a flat clip list) into the standard first-person Animator Controller
-    // graph, writes it to <out.controller>, and rewrites the .fpsanim as v2 pointing at
-    // <controller ref> (the project-relative path the engine should load it by).
-    for (int i = 1; i + 3 < argc; ++i) {
-        if (std::string(argv[i]) != "--upgrade-fpsanim") continue;
-        CrashHandler::SetInteractive(false);
-        FirstPersonAnimationSet set;
-        std::string err;
-        if (!FirstPersonAnimationSet::LoadFile(argv[i + 1], set, &err)) { std::cerr << "load failed: " << err << "\n"; return 1; }
-        if (set.Clips.empty()) { std::cerr << "already v2 (no clip list)\n"; return 1; }
-        const AnimatorController ctrl = BuildFirstPersonController(set);
-        if (!ctrl.SaveFile(argv[i + 2])) { std::cerr << "couldn't write " << argv[i + 2] << "\n"; return 1; }
-        set.Controller = argv[i + 3];
-        if (!set.SaveFile(argv[i + 1])) { std::cerr << "couldn't rewrite " << argv[i + 1] << "\n"; return 1; }
-        std::cout << "wrote " << argv[i + 2] << " (" << ctrl.Layers[0].States.size() << " states, "
-                  << ctrl.Layers[0].Transitions.size() << " transitions)\n";
-        return 0;
-    }
     const bool resaveMode = !resaveIn.empty();
     // --smoke-test and --resave are non-interactive: no splash, and fatal errors go to stderr +
     // a nonzero exit instead of a modal MessageBox that a headless/CI desktop never dismisses
@@ -730,7 +711,7 @@ int main(int argc, char** argv) {
         // Declaration order is load-bearing for shutdown: the game and editor modules are
         // hot-reload DLLs, and EnTT lazily instantiates a component's registry storage in
         // whichever translation unit first calls registry.view<T>() / storage<T>(). During Play
-        // the game module's systems (SpinSystem, TransformControllerSystem) and the editor
+        // the game module's systems (TransformControllerSystem) and the editor
         // module's Stats panel do exactly that from inside their DLLs, so those storages' vtables
         // / destructor thunks live in DLL code. If ~World (the registry teardown) ran after the
         // modules' dtors FreeLibrary'd those DLLs, it would call into unmapped memory -> access
@@ -746,13 +727,12 @@ int main(int argc, char** argv) {
         // TartarusGame.dll / TartarusEditor.dll — whose code is FreeLibrary'd on shutdown while
         // the registry still holds that storage. The declaration order above is the primary
         // guard; this makes a future reorder non-fatal. Keep in sync with the component types
-        // named in SpinSystem / TransformControllerSystem / the editor Stats panel.
+        // named in TransformControllerSystem / the editor Stats panel.
         (void)world.Registry.storage<TransformComponent>();
         (void)world.Registry.storage<RenderableComponent>();
         (void)world.Registry.storage<ColliderComponent>();
         (void)world.Registry.storage<LightComponent>();
         (void)world.Registry.storage<InactiveTag>();
-        (void)world.Registry.storage<SpinComponent>();
         (void)world.Registry.storage<TransformControllerComponent>();
         (void)world.Registry.storage<AnimatorComponent>();
 
@@ -3704,10 +3684,6 @@ int main(int argc, char** argv) {
                 // editor / world / assets / camera state through EditorModuleHostAPI; hand it
                 // this frame's pointers first.
                 editorModule.SetFrameContext(&editor, &world, &assets, &editorCamera);
-                // Phase 3 item 2 — the toolbar's Zone B play controls read this cache instead of
-                // EditorLayer owning the simulation clock itself; must land before Draw() below,
-                // which is what actually renders Zone B this frame.
-                editor.SetPlayState(playing, paused, playMaximized);
                 if (devKeys) editorModule.Draw(editorUIVisible, dt);
 
                 // Staged-undo cleanup + selection-history recording (#38/#236 R2): must run after

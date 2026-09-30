@@ -351,10 +351,9 @@ void TestRotateEulerAboutLocalAxis() {
     CHECK(RotateEulerAboutLocalAxis(start, diag, 0.0f) == start);
 }
 
-// #123 - the three Euler-driven spin systems, run frame by frame, turn about the axis they were
+// #123 - the Euler-driven spin systems (Animator, Transform Controller), run frame by frame, turn about the axis they were
 // given rather than adding it to the Euler components.
 void TestSpinSystemsAboutDiagonalAxis() {
-    const glm::vec3 diag = glm::normalize(glm::vec3(1.0f, 1.0f, 0.0f));
     auto matrixOf = [](const glm::vec3& euler) { return glm::mat3(ComposeTransform(glm::vec3(0.0f), euler, glm::vec3(1.0f))); };
     auto turnAbout = [](const glm::vec3& axis, float deg) { return glm::mat3(glm::rotate(glm::mat4(1.0f), glm::radians(deg), axis)); };
     auto near = [](const glm::mat3& a, const glm::mat3& b, float eps) {
@@ -363,60 +362,13 @@ void TestSpinSystemsAboutDiagonalAxis() {
                 if (std::abs(a[c][r] - b[c][r]) > eps) return false;
         return true;
     };
-    const float dt = 1.0f / 60.0f;
 
-    // SpinSystem and TransformControllerSystem are compiled only into TartarusGame.dll, so run
-    // them the way the editor does: load the built module next to the exe and tick it.
+    // TransformControllerSystem is compiled only into TartarusGame.dll, so run
+    // it the way the editor does: load the built module next to the exe and tick it.
     HotReloadGameModule gameModule;
     wchar_t exePath[MAX_PATH] = {};
     GetModuleFileNameW(nullptr, exePath, MAX_PATH);
     gameModule.Initialize(std::filesystem::path(exePath).parent_path() / TARTARUS_GAME_MODULE_FILENAME);
-
-    // Spin: 60 frames at 90 deg/s is a quarter turn about the diagonal, and the axis itself never moves.
-    {
-        World world;
-        entt::entity e = world.CreateEmptyEntity(glm::vec3(0.0f), glm::vec3(0.0f), glm::vec3(1.0f), "s");
-        SpinComponent spin; spin.Axis = glm::vec3(1.0f, 1.0f, 0.0f); spin.Speed = 90.0f;
-        world.Registry.emplace<SpinComponent>(e, spin);
-        for (int i = 0; i < 60; ++i) gameModule.Tick(world, dt, true);
-        const glm::mat3 m = glm::mat3_cast(world.Registry.get<TransformComponent>(e).Rotation);
-        CHECK(near(m, turnAbout(diag, 90.0f), 1e-3f));
-        CHECK(glm::length(m * diag - diag) < 1e-3f);
-
-        // Ten minutes more (36000 frames = 900 turns): still the exact normalized rotation.
-        for (int i = 0; i < 36000; ++i) gameModule.Tick(world, dt, true);
-        const glm::quat rot = world.Registry.get<TransformComponent>(e).Rotation;
-        CHECK(near(glm::mat3_cast(rot), turnAbout(diag, 90.0f), 2e-2f));
-        CHECK(std::abs(glm::length(rot) - 1.0f) < 1e-4f);
-
-        // Something else moves the object (Inspector edit, physics): the spin carries on from
-        // where it now is instead of snapping back to where it started.
-        const glm::vec3 moved(0.0f, 45.0f, 0.0f);
-        world.Registry.get<TransformComponent>(e).SetRotationEuler(moved);
-        gameModule.Tick(world, dt, true);
-        CHECK(near(glm::mat3_cast(world.Registry.get<TransformComponent>(e).Rotation),
-                   matrixOf(moved) * turnAbout(diag, 90.0f * dt), 1e-3f));
-
-        // Editing the axis restarts from the current orientation too, with no jump.
-        const glm::quat before = world.Registry.get<TransformComponent>(e).Rotation;
-        world.Registry.get<SpinComponent>(e).Axis = glm::vec3(0.0f, 0.0f, 1.0f);
-        gameModule.Tick(world, dt, true);
-        CHECK(near(glm::mat3_cast(world.Registry.get<TransformComponent>(e).Rotation),
-                   glm::mat3_cast(before) * turnAbout(glm::vec3(0.0f, 0.0f, 1.0f), 90.0f * dt), 1e-3f));
-    }
-
-    // The default spin (+Y) on an untilted object is still plain yaw, and a zero axis does nothing.
-    {
-        World world;
-        entt::entity e = world.CreateEmptyEntity(glm::vec3(0.0f), glm::vec3(0.0f), glm::vec3(1.0f), "y");
-        world.Registry.emplace<SpinComponent>(e);
-        for (int i = 0; i < 30; ++i) gameModule.Tick(world, dt, true);
-        CHECK(near(glm::mat3_cast(world.Registry.get<TransformComponent>(e).Rotation), matrixOf(glm::vec3(0.0f, 45.0f, 0.0f)), 1e-3f));
-        world.Registry.get<SpinComponent>(e).Axis = glm::vec3(0.0f);
-        const glm::quat held = world.Registry.get<TransformComponent>(e).Rotation;
-        gameModule.Tick(world, dt, true);
-        CHECK(SameRotation(world.Registry.get<TransformComponent>(e).Rotation, held));
-    }
 
     // Animator: the base orientation turned by |w| * t about w's own direction.
     {
@@ -661,37 +613,37 @@ void TestComponentPreset() {
     const entt::entity src = world.CreateEmptyEntity(zero, zero, one, "Source");
     const entt::entity dst = world.CreateEmptyEntity(zero, zero, one, "Target");
 
-    SpinComponent spin;
-    spin.Axis = glm::vec3(1.0f, 0.0f, 0.0f);
-    spin.Speed = 123.5f;
-    world.Registry.emplace<SpinComponent>(src, spin);
+    TransformControllerComponent ctl;
+    ctl.RotationDegPerSec = glm::vec3(1.0f, 0.0f, 0.0f);
+    ctl.ScalePulseFrequencyHz = 123.5f;
+    world.Registry.emplace<TransformControllerComponent>(src, ctl);
 
-    const std::string preset = SceneSerializer::ComponentToPresetJson(world, src, "Spin");
+    const std::string preset = SceneSerializer::ComponentToPresetJson(world, src, "Transform Controller");
     CHECK(!preset.empty());
-    CHECK(SceneSerializer::PresetComponentName(preset) == "Spin");
+    CHECK(SceneSerializer::PresetComponentName(preset) == "Transform Controller");
 
     // Applies to an entity that does not have the component yet: it is added, not skipped.
-    CHECK(!world.Registry.all_of<SpinComponent>(dst));
+    CHECK(!world.Registry.all_of<TransformControllerComponent>(dst));
     CHECK(SceneSerializer::ApplyComponentPresetJson(world, assets, dst, preset));
-    CHECK(world.Registry.all_of<SpinComponent>(dst));
-    const SpinComponent& got = world.Registry.get<SpinComponent>(dst);
-    CHECK(got.Speed == 123.5f);
-    CHECK(got.Axis.x == 1.0f && got.Axis.y == 0.0f && got.Axis.z == 0.0f);
+    CHECK(world.Registry.all_of<TransformControllerComponent>(dst));
+    const TransformControllerComponent& got = world.Registry.get<TransformControllerComponent>(dst);
+    CHECK(got.ScalePulseFrequencyHz == 123.5f);
+    CHECK(got.RotationDegPerSec.x == 1.0f && got.RotationDegPerSec.y == 0.0f && got.RotationDegPerSec.z == 0.0f);
 
     // A field the preset does not mention keeps its current value rather than snapping to the
     // default, so a preset saved before a field existed stays usable.
-    world.Registry.get<SpinComponent>(dst).Speed = 7.0f;
+    world.Registry.get<TransformControllerComponent>(dst).ScalePulseFrequencyHz = 7.0f;
     CHECK(SceneSerializer::ApplyComponentPresetJson(world, assets, dst,
-              R"({"preset":1,"component":"Spin","fields":{"Axis":[0.0,0.0,1.0]}})"));
-    CHECK(world.Registry.get<SpinComponent>(dst).Axis.z == 1.0f);
-    CHECK(world.Registry.get<SpinComponent>(dst).Speed == 7.0f); // untouched
+              R"({"preset":1,"component":"Transform Controller","fields":{"Rotation Deg/Sec":[0.0,0.0,1.0]}})"));
+    CHECK(world.Registry.get<TransformControllerComponent>(dst).RotationDegPerSec.z == 1.0f);
+    CHECK(world.Registry.get<TransformControllerComponent>(dst).ScalePulseFrequencyHz == 7.0f); // untouched
 
     // Rejections: malformed, unknown component, missing fields block, and a component that has
     // no generic serialisation. None of these may half-write anything.
     CHECK(!SceneSerializer::ApplyComponentPresetJson(world, assets, dst, "not json"));
     CHECK(!SceneSerializer::ApplyComponentPresetJson(world, assets, dst,
               R"({"preset":1,"component":"NoSuchComponent","fields":{}})"));
-    CHECK(!SceneSerializer::ApplyComponentPresetJson(world, assets, dst, R"({"preset":1,"component":"Spin"})"));
+    CHECK(!SceneSerializer::ApplyComponentPresetJson(world, assets, dst, R"({"preset":1,"component":"Transform Controller"})"));
     CHECK(SceneSerializer::PresetComponentName("not json").empty());
     CHECK(SceneSerializer::PresetComponentName(R"({"component":"NoSuchComponent"})").empty());
 
@@ -1239,8 +1191,8 @@ void TestSceneRoundTrip() {
                                                  glm::vec3(0.0f, 30.0f, 0.0f),
                                                  glm::vec3(2.0f, 0.5f, 2.0f), "Box");
 
-    SpinComponent spin; spin.Axis = glm::vec3(0.0f, 0.0f, 1.0f); spin.Speed = 42.5f;
-    a.Registry.emplace<SpinComponent>(parent, spin);
+    TransformControllerComponent ctl; ctl.RotationDegPerSec = glm::vec3(0.0f, 0.0f, 1.0f); ctl.ScalePulseFrequencyHz = 42.5f;
+    a.Registry.emplace<TransformControllerComponent>(parent, ctl);
 
     CameraComponent cam; cam.FovDegrees = 72.5f; cam.NearPlane = 0.25f; cam.FarPlane = 750.0f;
     a.Registry.emplace<CameraComponent>(child, cam);
@@ -1279,9 +1231,9 @@ void TestSceneRoundTrip() {
         const std::string& n = b.Registry.get<NameComponent>(e).Name;
         if (n == "Parent") {
             ++found;
-            CHECK(b.Registry.all_of<SpinComponent>(e));
-            const auto& sp = b.Registry.get<SpinComponent>(e);
-            CHECK(sp.Speed == 42.5f && sp.Axis.z == 1.0f);
+            CHECK(b.Registry.all_of<TransformControllerComponent>(e));
+            const auto& tc = b.Registry.get<TransformControllerComponent>(e);
+            CHECK(tc.ScalePulseFrequencyHz == 42.5f && tc.RotationDegPerSec.z == 1.0f);
             CHECK(b.Registry.all_of<HierarchyComponent>(e));
             CHECK(b.Registry.get<HierarchyComponent>(e).Children.size() == 1);
         } else if (n == "Child") {
@@ -2828,14 +2780,10 @@ void TestFirstPersonAnimationSet() {
     const std::string valid = R"({
         "armsModel":"models/fps/arms_base.fbx",
         "weaponModel":"models/fps/aks74u_base.fbx",
-        "defaultState":"Idle",
+        "controller":"weapons/aks74u.controller",
         "weaponSocket":"ik_hand_gun",
         "weaponRoot":"root",
-        "weaponMountRotation":[0,90,90],
-        "clips":[
-            {"name":"Idle","arms":"animations/A_FP_Idle.fbx","loop":true,"fade":0.15},
-            {"name":"Fire","arms":"animations/A_FP_Fire.fbx","weapon":"animations/A_W_Fire.fbx"}
-        ]
+        "weaponMountRotation":[0,90,90]
     })";
     FirstPersonAnimationSet set;
     std::string error;
@@ -2843,11 +2791,7 @@ void TestFirstPersonAnimationSet() {
     CHECK(error.empty());
     CHECK(set.ArmsModel == "models/fps/arms_base.fbx");
     CHECK(set.WeaponModel == "models/fps/aks74u_base.fbx");
-    CHECK(set.DefaultState == "Idle");
-    CHECK(set.Clips.size() == 2);
-    CHECK(set.Find("Idle") && set.Find("Idle")->Loop);
-    CHECK(set.Find("Idle")->WeaponClip.empty()); // missing pair is explicit, never inferred
-    CHECK(set.Find("Fire") && set.Find("Fire")->WeaponClip == "animations/A_W_Fire.fbx");
+    CHECK(set.Controller == "weapons/aks74u.controller");
 
     // The weapon rides the arms rig's gun socket instead of being handed the arms' pose.
     CHECK(set.WeaponSocket == "ik_hand_gun");
@@ -2857,48 +2801,32 @@ void TestFirstPersonAnimationSet() {
     // Omitted mount fields stay neutral: no socket means "share the arms' pose", the old
     // behaviour, rather than snapping the weapon to a socket it was never told about.
     CHECK(FirstPersonAnimationSet::FromJsonString(
-        R"({"armsModel":"a.fbx","weaponModel":"w.fbx","clips":[{"name":"Idle","arms":"i.fbx"}]})",
+        R"({"armsModel":"a.fbx","weaponModel":"w.fbx","controller":"c.controller"})",
         set, &error));
     CHECK(set.WeaponSocket.empty() && set.WeaponRoot.empty());
     CHECK(set.WeaponMountRotation.x == 0.0f && set.WeaponMountRotation.y == 0.0f &&
           set.WeaponMountRotation.z == 0.0f);
     CHECK(FirstPersonAnimationSet::FromJsonString(valid, set, &error)); // back to the full set
 
+    // No controller: the load fails and leaves the live set untouched. (Format v1's flat
+    // "clips" list is no longer read.)
     const FirstPersonAnimationSet original = set;
     CHECK(!FirstPersonAnimationSet::FromJsonString(
-        R"({"armsModel":"a.fbx","weaponModel":"w.fbx","clips":[{"name":"Idle","arms":"i.fbx"},{"name":"Idle","arms":"again.fbx"}]})",
+        R"({"armsModel":"a.fbx","weaponModel":"w.fbx","clips":[{"name":"Idle","arms":"i.fbx"}]})",
         set, &error));
-    CHECK(error.find("duplicate") != std::string::npos);
-    CHECK(set.Clips.size() == original.Clips.size()); // bad reload must not corrupt a live set
-
-    CHECK(!FirstPersonAnimationSet::FromJsonString(
-        R"({"armsModel":"a.fbx","weaponModel":"w.fbx","defaultState":"Missing","clips":[{"name":"Idle","arms":"i.fbx"}]})",
-        set, &error));
-    CHECK(error.find("defaultState") != std::string::npos);
+    CHECK(error.find("controller") != std::string::npos);
+    CHECK(set.Controller == original.Controller && set.WeaponSocket == original.WeaponSocket);
 
     // A mount needs both ends. Naming only one is a typo that would otherwise fall back to the
     // shared pose while looking configured, so it fails the load instead.
     CHECK(!FirstPersonAnimationSet::FromJsonString(
-        R"({"armsModel":"a.fbx","weaponModel":"w.fbx","weaponSocket":"ik_hand_gun","clips":[{"name":"Idle","arms":"i.fbx"}]})",
+        R"({"armsModel":"a.fbx","weaponModel":"w.fbx","weaponSocket":"ik_hand_gun","controller":"c.controller"})",
         set, &error));
     CHECK(error.find("weaponRoot") != std::string::npos);
     CHECK(!FirstPersonAnimationSet::FromJsonString(
-        R"({"armsModel":"a.fbx","weaponModel":"w.fbx","weaponRoot":"root","clips":[{"name":"Idle","arms":"i.fbx"}]})",
+        R"({"armsModel":"a.fbx","weaponModel":"w.fbx","weaponRoot":"root","controller":"c.controller"})",
         set, &error));
     CHECK(error.find("weaponSocket") != std::string::npos);
-
-    // A v1 file (a clip list, no controller) survives an edit-and-save: the writer keeps its clips and
-    // default state, or the saved file would no longer load and Play would refuse to start.
-    {
-        FirstPersonAnimationSet v1;
-        CHECK(FirstPersonAnimationSet::FromJsonString(
-            R"({"armsModel":"a.fbx","weaponModel":"w.fbx","defaultState":"Idle","clips":[{"name":"Idle","arms":"i.fbx","loop":true},{"name":"Fire","arms":"f.fbx","weapon":"wf.fbx","fade":0.05}]})",
-            v1, &error));
-        FirstPersonAnimationSet back;
-        CHECK(FirstPersonAnimationSet::FromJsonString(v1.ToJsonString(), back, &error));
-        CHECK(back.Clips.size() == 2 && back.DefaultState == "Idle" && back.Clips[0].Loop && back.Clips[1].WeaponClip == "wf.fbx" &&
-              std::abs(back.Clips[1].Fade - 0.05f) < 1e-4f && back.Controller.empty());
-    }
 
     // Material overrides, keyed by the FBX's material name, round-trip through the v2 writer.
     CHECK(FirstPersonAnimationSet::FromJsonString(
@@ -3281,7 +3209,7 @@ void TestFirstPersonAnimationFSM() {
     CHECK(FirstPersonAnimationSet::FromJsonString(R"({"armsModel":"a.fbx","weaponModel":"w.fbx",
         "controller":"weapons/w.controller","gameplay":{"magazine":20,"rpm":600,"allowFullAuto":false,
         "recoil":{"pitch":2.0}}})", v2, &error));
-    CHECK(v2.Controller == "weapons/w.controller" && v2.Clips.empty());
+    CHECK(v2.Controller == "weapons/w.controller");
     CHECK(v2.Gameplay.Magazine == 20 && v2.Gameplay.RoundsPerMinute == 600.0f && !v2.Gameplay.AllowFullAuto);
     // A pre-procedural recoil block becomes curves of the same shape: the 2 degree kick peaks at
     // the old rise time (defaults for what's unspecified), ADS only.
@@ -4055,8 +3983,7 @@ void TestWeaponZero() {
     FirstPersonAnimationSet set;
     std::string error;
     CHECK(FirstPersonAnimationSet::FromJsonString(
-        R"({"armsModel":"a.fbx","weaponModel":"w.fbx","clips":[{"name":"Idle","arms":"idle.fbx","loop":true}]})", set, &error));
-    set.Controller = "w.controller"; // saved sets reference their controller, not v1 clips
+        R"({"armsModel":"a.fbx","weaponModel":"w.fbx","controller":"w.controller"})", set, &error));
     set.Gameplay.ZeroDistance = 50.0f;
     set.Gameplay.HasSightLine = true;
     set.Gameplay.SightOrigin = glm::vec3(0.28f, 0.058f, 0.0f);

@@ -160,3 +160,40 @@ The Scene view and the Game view each render their own sky while both are visibl
   Scene-view screenshots per scene (toward the west horizon, the east, and up), so rendering
   changes can be compared without opening the editor. `tools/sky-review/` wraps this with seven
   time-of-day scenes and a side-by-side compare script.
+
+## 5. Known issues
+
+1. **Fountain water and other transmission materials look pink or orange at night.**
+   - Materials: `project/assets/Environments/Sandbox/Materials/water.mat`, `StandardAdvanced` with transmission 0.75.
+   - Findings so far:
+     - The colour comes from the transmission branch in `ModelFragment.glsl`: setting
+       `_TransmissionStrength` to 0 makes the water look right (blue).
+     - It isn't the refraction offset landing on nearby objects. Rejecting refraction samples in
+       front of the surface, using the SSAO pre-pass depth, changed nothing.
+     - It isn't the red car-paint sphere next to it: removing that sphere left the tint.
+   - Suspects:
+     - the opaque-colour capture (`OpaqueColorCopy`, unit 14): stale mip levels, or a mismatch
+       between `screenUV = gl_FragCoord.xy / uScreenSize` and the capture's size or viewport
+       offset;
+     - the capture being shared between the Scene and Game views.
+   - To reproduce:
+     - copy `Sandbox.json`;
+     - set the `sky` block to `timeOfDayHours` 0.5 and `moonPhaseOffset` 0.73;
+     - move the `Fountain` root empty to (-3, 0, -5.5) so it's in front of the review camera;
+     - render with `tools/sky-review/render.sh` and look at shot `_0`.
+2. **Glossy and clear-coat spheres look very bright at night.** Probably just the orange lamp
+   lights dominating a dim, moonlit scene, but check it alongside issue 1.
+3. **Distant clouds at the horizon still stack into flat-based strips.** Partly realistic; could
+   be improved with more base variation.
+
+Ideas not started:
+
+- Crepuscular rays: shadow the aerial-perspective volume with the cloud shadow map.
+- Blending between environment re-captures: while clouds drift, the ambient light is re-captured
+  every 4 s.
+
+## 6. Texture units
+
+Units 30 and 31 are reserved for the sky (`SkyAtmosphere::kAerialUnit` / `kCloudShadowUnit`), and 10
+is the sky-ambient texture during sky passes. Material maps stop at unit 29 (`ShaderAsset.cpp`); an
+earlier collision on units 16/17 broke every draw.

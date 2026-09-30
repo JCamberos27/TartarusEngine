@@ -522,20 +522,8 @@ std::vector<float> AnimatorMaskWeights(const AnimatorController::Layer& layer,
 
 // --- cache / discovery -----------------------------------------------------------------------
 
-namespace {
-std::unordered_map<std::string, std::shared_ptr<const AnimatorController>>& MemoryControllers() {
-    static std::unordered_map<std::string, std::shared_ptr<const AnimatorController>> m;
-    return m;
-}
-} // namespace
-
-void RegisterAnimatorController(const std::string& key, std::shared_ptr<const AnimatorController> ctrl) {
-    MemoryControllers()[key] = std::move(ctrl);
-}
-
 std::shared_ptr<const AnimatorController> GetAnimatorController(const std::string& path) {
     if (path.empty()) return nullptr;
-    if (const auto m = MemoryControllers().find(path); m != MemoryControllers().end()) return m->second;
     struct Entry {
         std::shared_ptr<const AnimatorController> Ctrl;
         fs::file_time_type Stamp{};

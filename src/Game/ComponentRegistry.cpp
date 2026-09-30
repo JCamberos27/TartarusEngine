@@ -143,16 +143,6 @@ void RegisterEngineComponents() {
         Register<ImpactSoundComponent>(std::move(m));
     }
 
-    Register<SpinComponent>({
-        "Spin", ICON_FA_ARROWS_SPIN,
-        "Spins the object around a local axis while playing (SpinSystem, in TartarusGame.dll).",
-        "Scripts",
-        {
-            { "Axis",  T::Vec3,  TARTARUS_REFLECT_FIELD(SpinComponent, Axis),  0.01f, "Local axis to rotate around." },
-            { "Speed", T::Float, TARTARUS_REFLECT_FIELD(SpinComponent, Speed), 1.0f,  "Degrees per second." },
-        },
-    });
-
     // Migrated from hand-coded serialization/Inspector code onto reflection (#184). Previously
     // this component had runtime behaviour (TransformControllerSystem, in TartarusGame.dll) but
     // no Inspector section or Add Component entry at all — a violation of rule 2 at the top of

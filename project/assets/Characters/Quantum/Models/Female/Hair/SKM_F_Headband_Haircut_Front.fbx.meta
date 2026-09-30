@@ -1,9 +1,0 @@
-{
-  "guid": "698c6d36dc69bce1",
-  "materialRemap": {
-    "MI_F_Headband2": "assets/Characters/Quantum/Materials/Clothing/Generated/M_Headband.mat",
-    "Vivian_HAirCards_1": "assets/Characters/Quantum/Materials/Characters/M_Hair_Dark.mat"
-  },
-  "metaVersion": 1,
-  "type": "model"
-}

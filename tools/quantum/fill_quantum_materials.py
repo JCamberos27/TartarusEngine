@@ -75,10 +75,7 @@ RULES = [
     (None, r"M_Teeth|MI_F_Teeth", gen("M_Teeth")),
     (None, r"M_Cartilage|MI_F_Cartilage", gen("M_Cartilage")),
     (None, r"M_Quantum_Body_Facial_Details|Face_Detals|MI_Hair_Eyebrows_Eyelids", gen("M_Brows_Lashes")),
-    # Hats and glasses sharing a hair model: their own textured materials.
-    (None, r"M_Cap", existing("Clothing/Hats/Cap/M_Cap_Black.mat")),
-    (None, r"M_Warm_Hat", existing("Clothing/Hats/Hat_Warm/M_Warm_Hat_Black.mat")),
-    (None, r"M_Panama", existing("Clothing/Hats/Panama/M_Panama_Gray.mat")),
+    # Glasses sharing a hair model: their own textured materials.
     (None, r"M_Aviator(_Glass)?", existing("Clothing/Glasses/Glasses Aviator/M_Sunglasses_Brown.mat")),
     (None, r"M_Bracelet", existing("Clothing/Accessories/F_Bracelet/M_Bracelet.mat")),
     (None, r"M_Watch", existing("Clothing/Accessories/Watches_Military/M_Watches_Military_Black.mat")),

@@ -2977,7 +2977,7 @@ void EditorLayer::Draw(World& world, AssetLibrary& assets, Camera& editorCamera,
     }
     ImGui::End();
 
-    if (EditorSettings::Get().EngineMarkEnabled && !m_HideEngineMarkForStats && !m_HideOverlaysThisFrame)
+    if (EditorSettings::Get().EngineMarkEnabled && !m_HideOverlaysThisFrame)
         DrawEngineMark(dt);
 
     // (Every editor panel's window is drawn by the reloadable editor module now — Console, the
