@@ -55,6 +55,12 @@ float DistributionGGX(float NdotH, float roughness) {
 
 void main() {
     vec3 N = FaceDirection(vUV);
+    // Roughness 0 is a mirror: every GGX sample below is H == N, L == N, at mip 0, so the
+    // weighted average of kSampleCount identical fetches is just the one.
+    if (uRoughness == 0.0) {
+        FragColor = vec4(ClampRadiance(textureLod(uEnvMap, RotateEnv(N), 0.0).rgb), 1.0);
+        return;
+    }
     vec3 R = N;
     vec3 V = N; // the split-sum approximation's standard N == V == R assumption
 

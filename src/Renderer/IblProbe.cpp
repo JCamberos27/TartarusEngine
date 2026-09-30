@@ -6,6 +6,9 @@
 #include "Log.h"
 #include "gl.h"
 
+#include <algorithm>
+#include <utility>
+
 namespace {
 
 // Face-local bases for GL_TEXTURE_CUBE_MAP layers 0..5 (+X, -X, +Y, -Y, +Z, -Z). The V axis is
@@ -31,6 +34,10 @@ void IblProbe::Release() {
     if (m_EnvCube)        { glDeleteTextures(1, &m_EnvCube);          m_EnvCube = 0; }
     if (m_IrradianceCube) { glDeleteTextures(1, &m_IrradianceCube);   m_IrradianceCube = 0; }
     if (m_SpecularCube)   { glDeleteTextures(1, &m_SpecularCube);     m_SpecularCube = 0; }
+    if (m_StageIrradiance) { glDeleteTextures(1, &m_StageIrradiance); m_StageIrradiance = 0; }
+    if (m_StageSpecular)   { glDeleteTextures(1, &m_StageSpecular);   m_StageSpecular = 0; }
+    m_Step = -1;
+    m_StepQueued = false;
     if (m_BrdfLut)        { glDeleteTextures(1, &m_BrdfLut);          m_BrdfLut = 0; }
     m_EnvShader.reset();
     m_IrradianceShader.reset();
@@ -54,21 +61,8 @@ void IblProbe::EnsureCreated() {
     glTextureParameteri(m_EnvCube, GL_TEXTURE_WRAP_T, GL_CLAMP_TO_EDGE);
     glTextureParameteri(m_EnvCube, GL_TEXTURE_WRAP_R, GL_CLAMP_TO_EDGE);
 
-    glCreateTextures(GL_TEXTURE_CUBE_MAP, 1, &m_IrradianceCube);
-    glTextureStorage2D(m_IrradianceCube, 1, GL_RGB16F, kIrradianceSize, kIrradianceSize);
-    glTextureParameteri(m_IrradianceCube, GL_TEXTURE_MIN_FILTER, GL_LINEAR);
-    glTextureParameteri(m_IrradianceCube, GL_TEXTURE_MAG_FILTER, GL_LINEAR);
-    glTextureParameteri(m_IrradianceCube, GL_TEXTURE_WRAP_S, GL_CLAMP_TO_EDGE);
-    glTextureParameteri(m_IrradianceCube, GL_TEXTURE_WRAP_T, GL_CLAMP_TO_EDGE);
-    glTextureParameteri(m_IrradianceCube, GL_TEXTURE_WRAP_R, GL_CLAMP_TO_EDGE);
-
-    glCreateTextures(GL_TEXTURE_CUBE_MAP, 1, &m_SpecularCube);
-    glTextureStorage2D(m_SpecularCube, kSpecularMips, GL_RGB16F, kSpecularSize, kSpecularSize);
-    glTextureParameteri(m_SpecularCube, GL_TEXTURE_MIN_FILTER, GL_LINEAR_MIPMAP_LINEAR);
-    glTextureParameteri(m_SpecularCube, GL_TEXTURE_MAG_FILTER, GL_LINEAR);
-    glTextureParameteri(m_SpecularCube, GL_TEXTURE_WRAP_S, GL_CLAMP_TO_EDGE);
-    glTextureParameteri(m_SpecularCube, GL_TEXTURE_WRAP_T, GL_CLAMP_TO_EDGE);
-    glTextureParameteri(m_SpecularCube, GL_TEXTURE_WRAP_R, GL_CLAMP_TO_EDGE);
+    m_IrradianceCube = CreateIrradianceCube();
+    m_SpecularCube = CreateSpecularCube();
 
     glCreateTextures(GL_TEXTURE_2D, 1, &m_BrdfLut);
     glTextureStorage2D(m_BrdfLut, 1, GL_RG16F, kBrdfLutSize, kBrdfLutSize);
@@ -88,6 +82,30 @@ void IblProbe::EnsureCreated() {
 
     if (!m_EnvCube || !m_IrradianceCube || !m_SpecularCube || !m_BrdfLut)
         Log::Error("IblProbe: failed to create one or more probe textures");
+}
+
+unsigned int IblProbe::CreateIrradianceCube() {
+    unsigned int tex = 0;
+    glCreateTextures(GL_TEXTURE_CUBE_MAP, 1, &tex);
+    glTextureStorage2D(tex, 1, GL_RGB16F, kIrradianceSize, kIrradianceSize);
+    glTextureParameteri(tex, GL_TEXTURE_MIN_FILTER, GL_LINEAR);
+    glTextureParameteri(tex, GL_TEXTURE_MAG_FILTER, GL_LINEAR);
+    glTextureParameteri(tex, GL_TEXTURE_WRAP_S, GL_CLAMP_TO_EDGE);
+    glTextureParameteri(tex, GL_TEXTURE_WRAP_T, GL_CLAMP_TO_EDGE);
+    glTextureParameteri(tex, GL_TEXTURE_WRAP_R, GL_CLAMP_TO_EDGE);
+    return tex;
+}
+
+unsigned int IblProbe::CreateSpecularCube() {
+    unsigned int tex = 0;
+    glCreateTextures(GL_TEXTURE_CUBE_MAP, 1, &tex);
+    glTextureStorage2D(tex, kSpecularMips, GL_RGB16F, kSpecularSize, kSpecularSize);
+    glTextureParameteri(tex, GL_TEXTURE_MIN_FILTER, GL_LINEAR_MIPMAP_LINEAR);
+    glTextureParameteri(tex, GL_TEXTURE_MAG_FILTER, GL_LINEAR);
+    glTextureParameteri(tex, GL_TEXTURE_WRAP_S, GL_CLAMP_TO_EDGE);
+    glTextureParameteri(tex, GL_TEXTURE_WRAP_T, GL_CLAMP_TO_EDGE);
+    glTextureParameteri(tex, GL_TEXTURE_WRAP_R, GL_CLAMP_TO_EDGE);
+    return tex;
 }
 
 void IblProbe::BeginCubeFace(unsigned int tex, int face, int mip, int size) const {
@@ -117,6 +135,8 @@ bool IblProbe::BakeIfDirty(const glm::vec3& horizonColor, const glm::vec3& zenit
 
 void IblProbe::Bake(const glm::vec3& horizonColor, const glm::vec3& zenithColor) {
     m_BakedRotation = 0.0f;
+    m_Step = -1; // an amortized sky bake in flight would otherwise swap over this one
+    m_StepQueued = false;
     EnsureCreated();
     if (!m_Fbo) return;
 
@@ -222,91 +242,133 @@ void IblProbe::Bake(const glm::vec3& horizonColor, const glm::vec3& zenithColor)
     m_BakedZenith = zenithColor;
 }
 
-void IblProbe::BakeFromCubemap(unsigned int envCube, int faceSize, float rotationRadians, float radianceClamp) {
-    m_BakedRotation = rotationRadians;
-    m_BakedRadianceClamp = radianceClamp;
-    EnsureCreated();
-    if (!m_Fbo) return;
+namespace {
+// GL state the convolution passes change, restored on scope exit.
+struct BakeStateScope {
+    GLboolean WasDepthTest, WasCull, WasBlend;
+    GLint PrevDepthMask = GL_TRUE;
+    BakeStateScope() {
+        glEnable(GL_TEXTURE_CUBE_MAP_SEAMLESS);
+        WasDepthTest = glIsEnabled(GL_DEPTH_TEST);
+        WasCull      = glIsEnabled(GL_CULL_FACE);
+        WasBlend     = glIsEnabled(GL_BLEND);
+        glGetIntegerv(GL_DEPTH_WRITEMASK, &PrevDepthMask);
+        glDisable(GL_DEPTH_TEST);
+        glDisable(GL_CULL_FACE);
+        glDisable(GL_BLEND);
+        glDepthMask(GL_FALSE);
+    }
+    ~BakeStateScope() {
+        glBindTexture(GL_TEXTURE_CUBE_MAP, 0);
+        glBindVertexArray(0);
+        glBindFramebuffer(GL_FRAMEBUFFER, 0);
+        if (WasDepthTest) glEnable(GL_DEPTH_TEST);
+        if (WasCull)      glEnable(GL_CULL_FACE);
+        if (WasBlend)     glEnable(GL_BLEND);
+        glDepthMask((GLboolean)PrevDepthMask);
+        // Raw program / VAO / unit-0 texture binds - resync GLStateCache (audit GL-206).
+        GLStateCache::Invalidate();
+    }
+};
+} // namespace
 
-    glEnable(GL_TEXTURE_CUBE_MAP_SEAMLESS);
-    const GLboolean wasDepthTest = glIsEnabled(GL_DEPTH_TEST);
-    const GLboolean wasCull      = glIsEnabled(GL_CULL_FACE);
-    const GLboolean wasBlend     = glIsEnabled(GL_BLEND);
-    GLint prevDepthMask = GL_TRUE;
-    glGetIntegerv(GL_DEPTH_WRITEMASK, &prevDepthMask);
-    glDisable(GL_DEPTH_TEST);
-    glDisable(GL_CULL_FACE);
-    glDisable(GL_BLEND);
-    glDepthMask(GL_FALSE);
-
+bool IblProbe::Convolve(unsigned int irradiance, unsigned int specular, unsigned int envCube, int faceSize,
+                        float rotationRadians, float radianceClamp, int first, int last) {
+    BakeStateScope state;
     glBindVertexArray(m_Vao);
     if (!m_BrdfLutBaked) BakeBrdfLut();
 
     glActiveTexture(GL_TEXTURE0);
     glBindTexture(GL_TEXTURE_CUBE_MAP, envCube);
+    const float envResolution = (float)(faceSize > 0 ? faceSize : kEnvSize);
 
-    // Pass 2: cosine convolution -> irradiance cube
-    m_IrradianceShader->Bind();
-    m_IrradianceShader->SetInt("uEnvMap", 0);
-    m_IrradianceShader->SetFloat("uEnvRotation", rotationRadians);
-    m_IrradianceShader->SetFloat("uRadianceClamp", radianceClamp);
-    m_IrradianceShader->SetFloat("uEnvResolution", (float)(faceSize > 0 ? faceSize : kEnvSize));
-    for (int face = 0; face < 6; ++face) {
-        BeginCubeFace(m_IrradianceCube, face, 0, kIrradianceSize);
-        if (face == 0 && !GLFramebufferCheck::Complete("IblProbe irradiance cube", m_Fbo,
-                                                       kIrradianceSize, kIrradianceSize)) {
-            m_FboComplete = false; // audit #358 — bail; IsValid() stays false -> flat sky ambient
-            m_Baked = true;        // stop NeedsBake() re-attempting the doomed bake every frame
-            m_BakedHorizon = glm::vec3(-1.0f);
-            m_BakedZenith  = glm::vec3(-1.0f);
-            if (wasDepthTest) glEnable(GL_DEPTH_TEST);
-            if (wasCull)      glEnable(GL_CULL_FACE);
-            if (wasBlend)     glEnable(GL_BLEND);
-            glDepthMask((GLboolean)prevDepthMask);
-            glBindTexture(GL_TEXTURE_CUBE_MAP, 0);
-            glBindVertexArray(0);
-            glBindFramebuffer(GL_FRAMEBUFFER, 0);
-            GLStateCache::Invalidate(); // raw program / VAO / texture binds above (audit GL-206)
-            return;
-        }
-        SetFaceBasis(*m_IrradianceShader, face);
-        glDrawArrays(GL_TRIANGLES, 0, 6);
-    }
-    m_FboComplete = true;
-
-    // Pass 3: GGX prefilter -> specular cube
-    m_PrefilterShader->Bind();
-    m_PrefilterShader->SetInt("uEnvMap", 0);
-    m_PrefilterShader->SetFloat("uEnvResolution", (float)(faceSize > 0 ? faceSize : kEnvSize));
-    m_PrefilterShader->SetFloat("uEnvRotation", rotationRadians);
-    m_PrefilterShader->SetFloat("uRadianceClamp", radianceClamp);
-    for (int mip = 0; mip < kSpecularMips; ++mip) {
-        int size = kSpecularSize >> mip;
-        float roughness = (float)mip / (float)(kSpecularMips - 1);
-        m_PrefilterShader->SetFloat("uRoughness", roughness);
-        for (int face = 0; face < 6; ++face) {
-            BeginCubeFace(m_SpecularCube, face, mip, size);
-            SetFaceBasis(*m_PrefilterShader, face);
+    // Pass 2: cosine convolution -> irradiance cube, one face per step
+    if (first < 6) {
+        m_IrradianceShader->Bind();
+        m_IrradianceShader->SetInt("uEnvMap", 0);
+        m_IrradianceShader->SetFloat("uEnvRotation", rotationRadians);
+        m_IrradianceShader->SetFloat("uRadianceClamp", radianceClamp);
+        m_IrradianceShader->SetFloat("uEnvResolution", envResolution);
+        for (int face = first; face <= std::min(last, 5); ++face) {
+            BeginCubeFace(irradiance, face, 0, kIrradianceSize);
+            if (face == 0 && !GLFramebufferCheck::Complete("IblProbe irradiance cube", m_Fbo,
+                                                           kIrradianceSize, kIrradianceSize))
+                return false;
+            SetFaceBasis(*m_IrradianceShader, face);
             glDrawArrays(GL_TRIANGLES, 0, 6);
         }
     }
 
-    glBindTexture(GL_TEXTURE_CUBE_MAP, 0);
-    glBindVertexArray(0);
-    glBindFramebuffer(GL_FRAMEBUFFER, 0);
+    // Pass 3: GGX prefilter -> specular cube
+    if (last >= 6) {
+        m_PrefilterShader->Bind();
+        m_PrefilterShader->SetInt("uEnvMap", 0);
+        m_PrefilterShader->SetFloat("uEnvResolution", envResolution);
+        m_PrefilterShader->SetFloat("uEnvRotation", rotationRadians);
+        m_PrefilterShader->SetFloat("uRadianceClamp", radianceClamp);
+        for (int mip = 0; mip < kSpecularMips; ++mip) {
+            int size = kSpecularSize >> mip;
+            float roughness = (float)mip / (float)(kSpecularMips - 1);
+            m_PrefilterShader->SetFloat("uRoughness", roughness);
+            for (int face = 0; face < 6; ++face) {
+                BeginCubeFace(specular, face, mip, size);
+                SetFaceBasis(*m_PrefilterShader, face);
+                glDrawArrays(GL_TRIANGLES, 0, 6);
+            }
+        }
+    }
+    return true;
+}
 
-    if (wasDepthTest) glEnable(GL_DEPTH_TEST);
-    if (wasCull)      glEnable(GL_CULL_FACE);
-    if (wasBlend)     glEnable(GL_BLEND);
-    glDepthMask((GLboolean)prevDepthMask);
+void IblProbe::BakeFromCubemap(unsigned int envCube, int faceSize, float rotationRadians, float radianceClamp) {
+    m_BakedRotation = rotationRadians;
+    m_BakedRadianceClamp = radianceClamp;
+    m_Step = -1; // supersedes any amortized bake in flight
+    m_StepQueued = false;
+    EnsureCreated();
+    if (!m_Fbo) return;
 
-    // Raw program / VAO / unit-0 texture binds above — resync GLStateCache (audit GL-206).
-    GLStateCache::Invalidate();
+    if (!Convolve(m_IrradianceCube, m_SpecularCube, envCube, faceSize, rotationRadians, radianceClamp, 0, kBakeSteps - 1)) {
+        m_FboComplete = false; // audit #358 — bail; IsValid() stays false -> flat sky ambient
+        m_Baked = true;        // stop NeedsBake() re-attempting the doomed bake every frame
+        m_BakedHorizon = glm::vec3(-1.0f);
+        m_BakedZenith  = glm::vec3(-1.0f);
+        return;
+    }
+    m_FboComplete = true;
 
     m_Baked = true;
     // Sentinel so NeedsBake() returns true again when switching back to the procedural sky.
     m_BakedHorizon = glm::vec3(-1.0f);
     m_BakedZenith  = glm::vec3(-1.0f);
+}
+
+void IblProbe::RequestAmortizedBake() {
+    if (m_Step >= 0) m_StepQueued = true; // finish this one first, then start over
+    else m_Step = 0;
+}
+
+bool IblProbe::StepAmortizedBake(unsigned int envCube, int faceSize, float rotationRadians, float radianceClamp) {
+    if (m_Step < 0) return false;
+    EnsureCreated();
+    if (!m_Fbo) return false;
+    if (!m_StageIrradiance) m_StageIrradiance = CreateIrradianceCube();
+    if (!m_StageSpecular) m_StageSpecular = CreateSpecularCube();
+    if (!Convolve(m_StageIrradiance, m_StageSpecular, envCube, faceSize, rotationRadians, radianceClamp, m_Step, m_Step)) {
+        m_FboComplete = false;
+        m_Step = -1;
+        m_StepQueued = false;
+        return false;
+    }
+    if (++m_Step < kBakeSteps) return false;
+    std::swap(m_IrradianceCube, m_StageIrradiance);
+    std::swap(m_SpecularCube, m_StageSpecular);
+    m_FboComplete = true;
+    m_BakedRotation = rotationRadians;
+    m_BakedRadianceClamp = radianceClamp;
+    m_Step = m_StepQueued ? 0 : -1;
+    m_StepQueued = false;
+    return true;
 }
 
 void IblProbe::BakeBrdfLut() {
