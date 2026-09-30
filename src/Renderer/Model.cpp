@@ -357,7 +357,7 @@ std::unique_ptr<ModelMesh> Model::ProcessMesh(aiMesh* mesh, const aiScene* scene
     // nodeTransform == I, C == the group's frame - the jacket lay on the floor). So: when C is the
     // global frame of the mesh node or any node above it, and not the identity, it is folded back
     // out; every other file (C == I at bind, or a posed import's per-bone delta, which is no node's
-    // frame) bakes as before. work/female_bake_probe.cpp --scan checks a pack against this.
+    // frame) bakes as before. tools/probes/female_bake_probe.cpp --scan checks a pack against this.
     //
     // The correction goes on the offsets, not the bake: those offsets are stored once per bone
     // NAME for the whole model (first mesh wins, ExtractBoneWeights), and one file can mix both

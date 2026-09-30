@@ -1,9 +1,0 @@
-{
-  "guid": "e5d74a214c0b8f9f",
-  "materialRemap": {
-    "Vivian_HAirCards_3": "assets/Characters/Quantum/Materials/Characters/M_Hair_Dark.mat",
-    "lambert32": "assets/Characters/Quantum/Materials/Characters/M_Hair_Dark.mat"
-  },
-  "metaVersion": 1,
-  "type": "model"
-}

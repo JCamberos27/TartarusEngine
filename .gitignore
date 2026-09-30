@@ -22,16 +22,9 @@ project/shortcuts.json
 # copy in the working directory is only read once, to migrate an existing layout.
 imgui.ini
 
-# Local scratch tooling and derived assets under work/: probes are built from tracked
-# .cpp/.py sources, but the binaries, logs and re-exported FBX copies are per-machine output.
-# Nothing here is authoritative - the shipped clips live under project/assets/.
-work/*.exe
-work/*.obj
-work/*.fbx
-work/rebake/
-work/rebake0/
-work/pairtest/
-work/*.txt
+# Local scratch folder: probe output, logs, re-exported FBX copies. Nothing here is tracked;
+# probe and export sources live in tools/probes/ and tools/weapons/ (probe exes build into build/).
+work/
 
 # HDRI skies (Poly Haven, CC0) used by the Sandbox scene - too big for git; download into
 # project/assets/sky/ (see project/scenes/Sandbox.json skyHdriPath).
@@ -49,3 +42,7 @@ project/screenshots/*
 # tracked so GUIDs are stable; the PNGs come from the "Quantum Characters" pack (see
 # project/assets/Characters/Quantum/_import/IMPORT_NOTES.md for how to restore them).
 project/assets/Characters/Quantum/Textures/Clothing/**/*.png
+
+# Hat textures from the Quantum zip: the hats were removed from the project, so the editor
+# must not re-create .meta files for local copies of them.
+project/assets/Characters/Quantum/Textures/Clothing/Hats/

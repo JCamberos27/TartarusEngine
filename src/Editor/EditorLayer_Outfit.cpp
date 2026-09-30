@@ -294,10 +294,25 @@ void EditorLayer::DrawCharacterOutfitEditor(World& world, entt::entity root) {
     ImGui::TextUnformatted(slot->Label.c_str());
     ImGui::SameLine();
     ImGui::TextDisabled("%s", wornItem ? wornItem->Name.c_str() : "none");
+    const float lockX = ImGui::GetWindowContentRegionMax().x - ImGui::GetFrameHeight();
+    if (pieces.count(ui.Slot)) {
+        const float removeW = ImGui::CalcTextSize("Remove").x + style.FramePadding.x * 2.0f;
+        ImGui::SameLine(lockX - style.ItemSpacing.x - removeW);
+        const ImVec4 danger = DangerColor();
+        ImGui::PushStyleColor(ImGuiCol_Button, danger);
+        ImGui::PushStyleColor(ImGuiCol_ButtonHovered, ImVec4(std::min(danger.x + 0.12f, 1.0f), danger.y + 0.08f, danger.z + 0.08f, 1.0f));
+        ImGui::PushStyleColor(ImGuiCol_ButtonActive, ImVec4(danger.x * 0.8f, danger.y * 0.8f, danger.z * 0.8f, 1.0f));
+        ImGui::PushStyleColor(ImGuiCol_Text, ImVec4(1.0f, 1.0f, 1.0f, 1.0f));
+        if (ImGui::Button("Remove##outfitRemove")) {
+            PushUndo(world, "Remove " + slot->Label);
+            report(OutfitSystem::Equip(world, assets, root, ui.Slot, std::string()));
+        }
+        ImGui::PopStyleColor(4);
+    }
     {
         std::vector<std::string> locks = OutfitSystem::ParseLocks(outfit->Locks);
         const bool locked = std::find(locks.begin(), locks.end(), ui.Slot) != locks.end();
-        ImGui::SameLine(ImGui::GetWindowContentRegionMax().x - ImGui::GetFrameHeight());
+        ImGui::SameLine(lockX);
         if (EditorInternal::ActionButton(locked ? ICON_FA_LOCK : ICON_FA_LOCK_OPEN, locked ? "Locked: Randomize keeps it" : "Randomize may change it")) {
             PushUndo(world, "Lock Outfit Slot");
             if (locked) locks.erase(std::remove(locks.begin(), locks.end(), ui.Slot), locks.end());
@@ -310,28 +325,27 @@ void EditorLayer::DrawCharacterOutfitEditor(World& world, entt::entity root) {
     ImGui::SetNextItemWidth(-1.0f);
     ImGui::InputTextWithHint("##outfitSearch", ICON_FA_MAGNIFYING_GLASS "  Search", ui.Search, sizeof(ui.Search));
 
-    // The slot's items, as a list. Pointing at one previews it below; clicking puts it on.
+    // The slot's items, as a list. Pointing at one previews it below; clicking puts it on (Remove above takes it off).
     std::vector<const Wardrobe::Item*> items;
     for (const auto* it : cat->ForSlot(ui.Slot, sex))
         if ((ui.ShowVariants || !it->Variant || it == wornItem) && ContainsI(it->Name, ui.Search)) items.push_back(it);
     const Wardrobe::Item* hoveredItem = nullptr;
     const float row = ImGui::GetTextLineHeightWithSpacing() + 4.0f;
-    ImGui::BeginChild("##outfitList", ImVec2(0.0f, std::min(260.0f, row * (float)(items.size() + 1) + 6.0f)), true);
-    for (size_t i = 0; i <= items.size(); ++i) {
-        const Wardrobe::Item* it = i == 0 ? nullptr : items[i - 1];
+    ImGui::BeginChild("##outfitList", ImVec2(0.0f, std::min(260.0f, row * (float)items.size() + 6.0f)), true);
+    for (size_t i = 0; i < items.size(); ++i) {
+        const Wardrobe::Item* it = items[i];
         ImGui::PushID((int)i);
         const bool selected = it == wornItem;
-        const std::string label = it ? it->Name : "None";
-        if (ImGui::Selectable(label.c_str(), selected, 0, ImVec2(0.0f, row - ImGui::GetStyle().ItemSpacing.y)) && !selected) {
-            PushUndo(world, it ? "Equip " + it->Name : "Remove " + slot->Label);
-            report(OutfitSystem::Equip(world, assets, root, ui.Slot, it ? it->Path : std::string()));
+        if (ImGui::Selectable(it->Name.c_str(), selected, 0, ImVec2(0.0f, row - ImGui::GetStyle().ItemSpacing.y)) && !selected) {
+            PushUndo(world, "Equip " + it->Name);
+            report(OutfitSystem::Equip(world, assets, root, ui.Slot, it->Path));
         }
         const bool hovered = ImGui::IsItemHovered();
-        if (hovered && it) hoveredItem = it;
+        if (hovered) hoveredItem = it;
         // On the right: a clash with what's worn (amber: one comes off; grey: an odd pairing), a fitted cut.
         bool hardClash = false;
-        const Wardrobe::Item* clash = it && !selected ? clashWith(*it, hardClash) : nullptr;
-        std::string tag = it && it->Variant ? "fitted cut" : "";
+        const Wardrobe::Item* clash = !selected ? clashWith(*it, hardClash) : nullptr;
+        std::string tag = it->Variant ? "fitted cut" : "";
         if (clash) tag = hardClash ? "takes off " + clash->Name : "odd with " + clash->Name;
         if (!tag.empty()) {
             const ImVec2 ts = ImGui::CalcTextSize(tag.c_str());
@@ -339,7 +353,7 @@ void EditorLayer::DrawCharacterOutfitEditor(World& world, entt::entity root) {
             ImGui::GetWindowDrawList()->AddText(ImVec2(mx.x - ts.x - 6.0f, (mn.y + mx.y - ts.y) * 0.5f),
                                                 Col(clash && hardClash ? WarningColor() : style.Colors[ImGuiCol_TextDisabled]), tag.c_str());
         }
-        if (hovered && it) EditorUI::SetTooltip("%s", it->Path.c_str());
+        if (hovered) EditorUI::SetTooltip("%s", it->Path.c_str());
         ImGui::PopID();
     }
     ImGui::EndChild();

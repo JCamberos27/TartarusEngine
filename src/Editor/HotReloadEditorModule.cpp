@@ -171,23 +171,6 @@ EditorConsoleState* ConsoleStateFn() { return &EditorModuleHost::ConsoleState();
 // the executable only — the module reads them exclusively through these, exactly like the Log
 // bridge above. g_Editor / g_World are refreshed each frame by SetFrameContext().
 
-void StatsGetViewportRectFn(float* outX, float* outY, float* outW, float* outH,
-                            float* outUIScale, bool* outEnabled) {
-    const bool haveEditor = g_Editor != nullptr;
-    const glm::vec2 pos  = haveEditor ? g_Editor->ViewportPos()  : glm::vec2(0.0f);
-    const glm::vec2 size = haveEditor ? g_Editor->ViewportSize() : glm::vec2(0.0f);
-    if (outX) *outX = pos.x;
-    if (outY) *outY = pos.y;
-    if (outW) *outW = size.x;
-    if (outH) *outH = size.y;
-    if (outUIScale) *outUIScale = haveEditor ? g_Editor->UIScale() : 1.0f;
-    // Mirrors the old DrawStatsPanel guards: the toolbar/menu toggle, plus a live non-degenerate
-    // Scene viewport to pin to.
-    if (outEnabled) {
-        *outEnabled = haveEditor && EditorSettings::Get().SceneShowStats &&
-                      g_Editor->IsSceneViewportVisible() && size.x >= 1.0f && size.y >= 1.0f;
-    }
-}
 
 void StatsGetRenderStatsFn(EditorModuleRenderStats* out) {
     if (!out) return;
@@ -253,9 +236,6 @@ int StatsGetFrameTimeHistoryFn(float* out, int maxCount) {
 
 ImFont* GetMonoFontFn() { return g_Editor ? g_Editor->GetMonoFont() : nullptr; }
 
-void StatsSetHideEngineMarkFn(bool hide) {
-    if (g_Editor) g_Editor->SetHideEngineMarkForStats(hide);
-}
 
 // --- Toolbar / menus (API v4) --------------------------------------------------------------
 // Bodies for the reloadable toolbar strip (EditorModuleToolbar.cpp). The strip's window,
@@ -284,37 +264,11 @@ void TbWindowToggleMaximize() {
 void TbWindowClose() { if (g_ParentWindow) glfwSetWindowShouldClose(g_ParentWindow, GLFW_TRUE); }
 bool TbWindowIsMaximized() { return g_ParentWindow && glfwGetWindowAttrib(g_ParentWindow, GLFW_MAXIMIZED) != 0; }
 
-int  TbGetGizmoOp() { return g_Editor ? g_Editor->GizmoOpIndex() : 0; }
-void TbSetGizmoOp(int op) { if (g_Editor) g_Editor->SetGizmoOpIndex(op); }
-int  TbGetShadingMode() { return g_Editor ? g_Editor->ShadingModeIndex() : 0; }
-void TbSetShadingMode(int mode) { if (g_Editor) g_Editor->SetShadingModeIndex(mode); }
-bool TbGetGizmoLocalSpace() { return g_Editor && g_Editor->GizmoLocalSpace(); }
-void TbSetGizmoLocalSpace(bool on) { if (g_Editor) g_Editor->SetGizmoLocalSpace(on); }
-bool TbGetGizmoPivotCenter() { return g_Editor && g_Editor->GizmoPivotCenter(); }
-void TbSetGizmoPivotCenter(bool on) { if (g_Editor) g_Editor->SetGizmoPivotCenter(on); }
-bool TbGetShowGrid() { return g_Editor && g_Editor->ShowGrid(); }
-void TbSetShowGrid(bool on) { if (g_Editor) g_Editor->SetShowGrid(on); }
-bool TbGetGridSnapEnabled() { return g_Editor && g_Editor->GridSnapEnabled(); }
-void TbSetGridSnapEnabled(bool on) { if (g_Editor) g_Editor->SetGridSnapEnabled(on); }
 bool TbGetShowHistory() { return g_Editor && g_Editor->ShowHistory(); }
 void TbSetShowHistory(bool on) { if (g_Editor) g_Editor->SetShowHistory(on); }
 bool TbGetShowStats() { return EditorSettings::Get().SceneShowStats; }
 void TbSetShowStats(bool on) { EditorSettings::Get().SceneShowStats = on; EditorSettings::Save(); }
-bool TbGetShowLightGizmos() { return EditorSettings::Get().ShowLightGizmos; }
-void TbSetShowLightGizmos(bool on) { EditorSettings::Get().ShowLightGizmos = on; EditorSettings::Save(); }
-bool TbIsOrthographic() { return g_Camera && g_Camera->Orthographic; }
-void TbToggleOrthographic() {
-    if (g_Editor && g_World && g_Camera) g_Editor->ToolbarToggleOrthographic(*g_World, *g_Camera);
-}
-void TbUndo() { if (g_Editor && g_World && g_Assets) g_Editor->ToolbarUndo(*g_World, *g_Assets); }
-void TbRedo() { if (g_Editor && g_World && g_Assets) g_Editor->ToolbarRedo(*g_World, *g_Assets); }
-bool TbCanSnapSelectionToGround() {
-    return g_Editor && g_World && g_Editor->ToolbarCanSnapToGround(*g_World);
-}
-void TbSnapSelectionToGround() { if (g_Editor && g_World) g_Editor->ToolbarSnapToGround(*g_World); }
-void TbRequestResetLayout() { if (g_Editor) g_Editor->RequestResetLayout(); }
 void TbOpenPreferences() { if (g_Editor) g_Editor->OpenPreferences(); }
-void TbOpenProjectSettings() { if (g_Editor) g_Editor->OpenProjectSettings(); }
 void TbOpenShortcutsReference() { if (g_Editor) g_Editor->OpenShortcutsReference(); }
 
 // --- Help menu (API v33, #184) -------------------------------------------------------------
@@ -360,17 +314,6 @@ void TbDrawViewMenuBody() {
     if (g_Editor && g_World && g_Camera) g_Editor->DrawViewMenuBody(*g_World, *g_Camera);
 }
 void TbDrawWindowMenuBody() { if (g_Editor) g_Editor->DrawWindowMenuBody(); }
-void TbDrawCaptureOptionsPopupBody() { if (g_Editor) g_Editor->DrawCaptureOptionsPopupBody(); }
-void TbRequestCapture() { if (g_Editor) g_Editor->RequestCapture(); }
-void TbGetCaptureButtonTooltip(char* out, int outSize) {
-    if (!out || outSize <= 0) return;
-    const EditorSettings& s = EditorSettings::Get();
-    static const char* kModes[] = { "Full editor window", "Scene viewport",
-                                    "Scene viewport (clean)", "Game view" };
-    int cm = s.CaptureMode; cm = cm < 0 ? 0 : (cm > 3 ? 3 : cm);
-    std::snprintf(out, (size_t)outSize, "Capture screenshot \xe2\x80\x94 %s%s (Print Screen)",
-                  kModes[cm], (cm == 1 || cm == 2) && s.CaptureScale > 1 ? " x2+" : "");
-}
 
 // --- Asset Browser, thin slice (API v5) --------------------------------------------------
 // The Asset Browser's chrome lives in EditorModuleAssetBrowser.cpp; the grid stays host-side.
@@ -449,7 +392,6 @@ void  AbGetSelectionSummary(char* o, int n) {
     if (g_Editor && g_Assets) g_Editor->GetAssetSelectionSummary(*g_Assets, o, n);
     else if (o && n > 0) o[0] = '\0';
 }
-float AbGetIconSize() { return g_Editor ? g_Editor->GetAssetIconSize() : 64.0f; }
 void  AbSetIconSize(float px, bool commit) { if (g_Editor) g_Editor->SetAssetIconSize(px, commit); }
 void  AbGridFrameEnd() { if (g_Editor && g_World && g_Assets) g_Editor->AssetGridFrameEnd(*g_World, *g_Assets); }
 
@@ -477,14 +419,6 @@ void  InspSetShow(bool on) { if (g_Editor) g_Editor->SetShowInspector(on); }
 void  InspDrawBody() {
     if (g_Editor && g_World && g_Assets) g_Editor->DrawInspectorBody(*g_World, *g_Assets);
 }
-void  TbDrawGridSnapPopupBody() { if (g_Editor) g_Editor->DrawGridSnapPopupBody(); }
-void  TbDrawGizmosPopupBody()   { if (g_Editor) g_Editor->DrawGizmosPopupBody(); }
-bool  TbGetGizmosMasterVisible() { return g_Editor && g_Editor->GizmosMasterVisible(); }
-void  TbSetGizmosMasterVisible(bool on) { if (g_Editor) g_Editor->SetGizmosMasterVisible(on); }
-bool  TbGetHandTool() { return g_Editor && g_Editor->HandToolActive(); }
-void  TbSetHandTool(bool on) { if (g_Editor) g_Editor->SetHandToolActive(on); }
-bool  TbGetLockViewToSelection() { return g_Editor && g_Editor->LockViewToSelection(); }
-void  TbSetLockViewToSelection(bool on) { if (g_Editor) g_Editor->SetLockViewToSelection(on); }
 int   TbGetAssetSort() {
     return EditorSettings::Get().AssetSortMode * 2 + (EditorSettings::Get().AssetSortDesc ? 1 : 0);
 }
@@ -496,11 +430,6 @@ void  TbSetAssetSort(int packed) {
 }
 void  TbRefreshAssetBrowser() { if (g_Editor) g_Editor->RefreshAssetBrowser(); }
 float TbGetAssetRefreshFlash() { return g_Editor ? g_Editor->AssetRefreshFlash() : 0.0f; }
-bool  TbGetMeasureTool() { return g_Editor && g_Editor->MeasureToolActive(); }
-void  TbSetMeasureTool(bool on) { if (g_Editor) g_Editor->SetMeasureToolActive(on); }
-void  TbRequestDuplicateArray() { if (g_Editor) g_Editor->RequestArrayDuplicateModal(); }
-bool  TbGetInspectorLocked() { return g_Editor && g_Editor->IsInspectorLocked(); }
-void  TbToggleInspectorLock() { if (g_Editor) g_Editor->ToggleInspectorLock(); }
 bool  TbGetAssetSearchGlobal() { return EditorSettings::Get().AssetSearchGlobal; }
 void  TbSetAssetSearchGlobal(bool on) { EditorSettings::Get().AssetSearchGlobal = on; EditorSettings::Save(); }
 bool  TbGetAssetFavoritesOnly() { return g_Editor && g_Editor->AssetFavoritesOnly(); }
@@ -509,32 +438,15 @@ void  TbSetAssetFavoritesOnly(bool on) { if (g_Editor) g_Editor->SetAssetFavorit
 // --- History HUD, frame only (API v15) ---------------------------------------------------
 // The Undo History HUD's window + pin/height math + eased tint live in EditorModuleHistory.cpp;
 // the rows (undo/redo stacks + World&) stay host-side, exactly like the Hierarchy tree body.
-bool  HistGetHudFrame(float* vx, float* vy, float* vw, float* vh, float* uiScale, int* rowCount) {
-    if (!g_Editor) {
-        if (vx) *vx = 0.0f; if (vy) *vy = 0.0f; if (vw) *vw = 0.0f; if (vh) *vh = 0.0f;
-        if (uiScale) *uiScale = 1.0f; if (rowCount) *rowCount = 0;
-        return false;
-    }
-    return g_Editor->HistoryHudFrame(vx, vy, vw, vh, uiScale, rowCount);
-}
 void  HistDrawListBody() {
     if (g_Editor && g_World && g_Assets) g_Editor->DrawHistoryListBody(*g_World, *g_Assets);
 }
 
 // --- Document strip (API v20, Phase 3 item 1) --------------------------------------------
-void TbGetSceneDisplayName(char* out, int n) {
-    std::string name = g_Editor ? fs::path(g_Editor->CurrentScenePath()).filename().string() : std::string();
-    if (name.empty()) name = "Untitled";
-    AbPutStr(out, n, name);
-}
-bool TbGetSceneDirty() { return g_Editor && g_Editor->IsDirty(); }
-void TbDoSaveScene() { if (g_Editor && g_World && g_Assets) g_Editor->SaveScene(*g_World, *g_Assets); }
 
 // --- Play controls, Zone B (API v21, Phase 3 item 2) -------------------------------------
-void TbDrawPlayControlsBody() { if (g_Editor) g_Editor->DrawPlayControlsBody(); }
 
 // --- Play-mode panel tint (API v22, Q12 / Phase 4 #6) -------------------------------------
-bool TbGetInPlayMode() { return g_Editor && g_Editor->InPlayMode(); }
 
 // --- Asset Browser folder history (API v23, Phase 5 item 3) ------------------------------
 void AbFolderHistoryBack()          { if (g_Editor) g_Editor->AssetFolderHistoryBack(); }
@@ -585,7 +497,6 @@ EditorModuleHostAPI MakeHostAPI() {
     api.SetTooltip = &SetTooltipFn;
     api.SaveFileDialog = &SaveFileDialogFn;
     api.ConsoleState = &ConsoleStateFn;
-    api.GetViewportRect = &StatsGetViewportRectFn;
     api.GetRenderStats = &StatsGetRenderStatsFn;
     api.GetProfilerSamples = &StatsGetProfilerSamplesFn;
     api.GetGLFrameStats = &StatsGetGLFrameStatsFn;
@@ -593,40 +504,17 @@ EditorModuleHostAPI MakeHostAPI() {
     api.GetSmoothedFrameMs = &StatsGetSmoothedFrameMsFn;
     api.GetFrameTimeHistory = &StatsGetFrameTimeHistoryFn;
     api.GetMonoFont = &GetMonoFontFn;
-    api.SetHideEngineMark = &StatsSetHideEngineMarkFn;
     api.GetToolbarMetrics = &TbGetToolbarMetrics;
     api.SetTitleBarDragHovered = &TbSetTitleBarDragHovered;
     api.WindowMinimize = &TbWindowMinimize;
     api.WindowToggleMaximize = &TbWindowToggleMaximize;
     api.WindowClose = &TbWindowClose;
     api.WindowIsMaximized = &TbWindowIsMaximized;
-    api.GetGizmoOp = &TbGetGizmoOp;
-    api.SetGizmoOp = &TbSetGizmoOp;
-    api.GetShadingMode = &TbGetShadingMode;
-    api.SetShadingMode = &TbSetShadingMode;
-    api.GetGizmoLocalSpace = &TbGetGizmoLocalSpace;
-    api.SetGizmoLocalSpace = &TbSetGizmoLocalSpace;
-    api.GetGizmoPivotCenter = &TbGetGizmoPivotCenter;
-    api.SetGizmoPivotCenter = &TbSetGizmoPivotCenter;
-    api.GetShowGrid = &TbGetShowGrid;
-    api.SetShowGrid = &TbSetShowGrid;
-    api.GetGridSnapEnabled = &TbGetGridSnapEnabled;
-    api.SetGridSnapEnabled = &TbSetGridSnapEnabled;
     api.GetShowHistory = &TbGetShowHistory;
     api.SetShowHistory = &TbSetShowHistory;
     api.GetShowStats = &TbGetShowStats;
     api.SetShowStats = &TbSetShowStats;
-    api.GetShowLightGizmos = &TbGetShowLightGizmos;
-    api.SetShowLightGizmos = &TbSetShowLightGizmos;
-    api.IsOrthographic = &TbIsOrthographic;
-    api.ToggleOrthographic = &TbToggleOrthographic;
-    api.ToolbarUndo = &TbUndo;
-    api.ToolbarRedo = &TbRedo;
-    api.CanSnapSelectionToGround = &TbCanSnapSelectionToGround;
-    api.SnapSelectionToGround = &TbSnapSelectionToGround;
-    api.RequestResetLayout = &TbRequestResetLayout;
     api.OpenPreferences = &TbOpenPreferences;
-    api.OpenProjectSettings = &TbOpenProjectSettings;
     api.OpenShortcutsReference = &TbOpenShortcutsReference;
     api.LogGetEntryContext = &LogGetEntryContextFn;
     api.LogGetEntryStack = &LogGetEntryStackFn; // #178
@@ -638,9 +526,6 @@ EditorModuleHostAPI MakeHostAPI() {
     api.DrawAddEntityMenuItems = &TbDrawAddEntityMenuItems;
     api.DrawViewMenuBody = &TbDrawViewMenuBody;
     api.DrawWindowMenuBody = &TbDrawWindowMenuBody;
-    api.DrawCaptureOptionsPopupBody = &TbDrawCaptureOptionsPopupBody;
-    api.RequestCapture = &TbRequestCapture;
-    api.GetCaptureButtonTooltip = &TbGetCaptureButtonTooltip;
     api.GetShowAssetBrowser = &AbGetShow;
     api.SetShowAssetBrowser = &AbSetShow;
     api.GetAssetSearch = &AbGetSearch;
@@ -671,7 +556,6 @@ EditorModuleHostAPI MakeHostAPI() {
     api.DrawAssetCell = &AbDrawCell;
     api.HandleAssetGridBackground = &AbHandleGridBackground;
     api.GetAssetSelectionSummary = &AbGetSelectionSummary;
-    api.GetAssetIconSize = &AbGetIconSize;
     api.SetAssetIconSize = &AbSetIconSize;
     api.AssetGridFrameEnd = &AbGridFrameEnd;
     api.GetShowHierarchy = &HierGetShow;
@@ -683,35 +567,15 @@ EditorModuleHostAPI MakeHostAPI() {
     api.GetShowInspector = &InspGetShow;
     api.SetShowInspector = &InspSetShow;
     api.DrawInspectorBody = &InspDrawBody;
-    api.DrawGridSnapPopupBody = &TbDrawGridSnapPopupBody;
-    api.DrawGizmosPopupBody = &TbDrawGizmosPopupBody;
-    api.GetGizmosMasterVisible = &TbGetGizmosMasterVisible;
-    api.SetGizmosMasterVisible = &TbSetGizmosMasterVisible;
-    api.GetHandTool = &TbGetHandTool;
-    api.SetHandTool = &TbSetHandTool;
-    api.GetLockViewToSelection = &TbGetLockViewToSelection;
-    api.SetLockViewToSelection = &TbSetLockViewToSelection;
     api.GetAssetSort = &TbGetAssetSort;
     api.SetAssetSort = &TbSetAssetSort;
     api.RefreshAssetBrowser = &TbRefreshAssetBrowser;
     api.GetAssetRefreshFlash = &TbGetAssetRefreshFlash;
-    api.GetMeasureTool = &TbGetMeasureTool;
-    api.SetMeasureTool = &TbSetMeasureTool;
-    api.RequestDuplicateArray = &TbRequestDuplicateArray;
-    api.GetInspectorLocked = &TbGetInspectorLocked;
-    api.ToggleInspectorLock = &TbToggleInspectorLock;
     api.GetAssetSearchGlobal = &TbGetAssetSearchGlobal;
     api.SetAssetSearchGlobal = &TbSetAssetSearchGlobal;
     api.GetAssetFavoritesOnly = &TbGetAssetFavoritesOnly;
     api.SetAssetFavoritesOnly = &TbSetAssetFavoritesOnly;
-    api.GetHistoryHudFrame = &HistGetHudFrame;
     api.DrawHistoryListBody = &HistDrawListBody;
-    api.RequestBakeReflectionProbes = +[]() { /* probe bake: main.cpp's probeArray.Update() already runs every frame */ };
-    api.GetSceneDisplayName = &TbGetSceneDisplayName;
-    api.GetSceneDirty = &TbGetSceneDirty;
-    api.DoSaveScene = &TbDoSaveScene;
-    api.DrawPlayControlsBody = &TbDrawPlayControlsBody;
-    api.GetInPlayMode = &TbGetInPlayMode;
     api.AssetFolderHistoryBack = &AbFolderHistoryBack;
     api.AssetFolderHistoryForward = &AbFolderHistoryForward;
     api.CanAssetFolderHistoryBack = &AbCanFolderHistoryBack;
@@ -803,14 +667,7 @@ void HotReloadEditorModule::Draw(bool editorUIVisible, float deltaTime) {
             Reload(false);
     }
 
-    if (editorUIVisible && m_API && m_API->Draw) {
-        m_API->Draw(kHostAPI);
-    } else if (!editorUIVisible && g_Editor) {
-        // The module's Stats panel is what clears this each frame; with the module not drawing
-        // (editor UI hidden), clear it here so the corner engine-mark isn't left suppressed by a
-        // stale overflow decision when the panels come back.
-        g_Editor->SetHideEngineMarkForStats(false);
-    }
+    if (editorUIVisible && m_API && m_API->Draw) m_API->Draw(kHostAPI);
 }
 
 bool HotReloadEditorModule::Reload(bool initialLoad) {
