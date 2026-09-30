@@ -1029,16 +1029,27 @@ void UpdateAnimatorControllers(World& world, AssetLibrary& assets, float dt) {
         samplers.reserve(group.size());
         for (const Rig& r : group)
             if (r.M) samplers.push_back({*r.M, assets, ctrl->TrackIndex(r.AC->Track), {}, {}});
+        // Once the animator has advanced, the parameters are fixed for the frame, and so is each state's
+        // length: every rig's pose asks for the same few (per crossfade entry, per layer), each a pass
+        // over every rig's clips, so they are worked out once.
+        bool memo = false;
+        std::vector<std::vector<float>> lengths;
         const auto stateLength = [&](int li, int si) {
             if (li < 0 || li >= (int)ctrl->Layers.size() || si < 0 || si >= (int)ctrl->Layers[li].States.size())
                 return 1.0f;
+            if (memo && lengths[li][si] >= 0.0f) return lengths[li][si];
             const auto& s = ctrl->Layers[li].States[si];
             float len = 0.0f;
             for (Sampler& smp : samplers) len = std::max(len, smp.MotionLength(s.MotionFor(smp.Track), dac.Params));
-            return len > 1e-4f ? len : 1.0f;
+            len = len > 1e-4f ? len : 1.0f;
+            if (memo) lengths[li][si] = len;
+            return len;
         };
 
         AdvanceAnimator(*ctrl, dac, dt, stateLength);
+        lengths.resize(ctrl->Layers.size());
+        for (size_t li = 0; li < ctrl->Layers.size(); ++li) lengths[li].assign(ctrl->Layers[li].States.size(), -1.0f);
+        memo = true;
         for (const Rig& r : group) {
             if (r.AC != &dac) {
                 // Followers mirror the driver's playback exactly; their own params are unused.

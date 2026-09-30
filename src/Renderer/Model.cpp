@@ -1397,6 +1397,7 @@ bool Model::NodeTransform(const std::string& name, glm::mat4& out) const {
     // reimport) it is simply absent and the bind walk below is the truthful answer.
     const bool posed = (m_ExternalPose || m_Anim.Clip >= 0 || m_FadeDuration > 0.0f) && m_NodeGlobals.size() == nodes.size();
     if (posed) {
+        if (idx < m_GlobalValid.size() && !m_GlobalValid[idx]) ResolveNodeGlobal(found);
         out = m_NodeGlobals[idx];
         return true;
     }
@@ -1408,8 +1409,36 @@ bool Model::NodeTransform(const std::string& name, glm::mat4& out) const {
     return true;
 }
 
+const std::vector<unsigned char>& Model::SkinPath() const {
+    auto& path = m_D->SkinPath;
+    const auto& nodes = m_D->Nodes;
+    if (path.size() == nodes.size()) return path;
+    path.assign(nodes.size(), 0);
+    for (int i = (int)nodes.size() - 1; i >= 0; --i) // children after parents: walk back up
+        if (nodes[i].BoneId >= 0 || path[i]) {
+            path[i] = 1;
+            if (nodes[i].Parent >= 0) path[nodes[i].Parent] = 1;
+        }
+    return path;
+}
+
+void Model::ResolveNodeGlobal(int node) const {
+    const auto& nodes = m_D->Nodes;
+    thread_local std::vector<int> chain;
+    chain.clear();
+    for (int n = node; n >= 0 && !m_GlobalValid[n]; n = nodes[n].Parent) chain.push_back(n);
+    for (auto it = chain.rbegin(); it != chain.rend(); ++it) {
+        const int i = *it, p = nodes[i].Parent;
+        const glm::mat4 local = m_AppliedPose[i].ToMatrix();
+        m_NodeGlobals[i] = p >= 0 ? AffineMul(m_NodeGlobals[p], local) : local;
+        if ((size_t)i < m_HiddenNodes.size() && m_HiddenNodes[i]) m_NodeGlobals[i] = m_NodeGlobals[i] * kCollapse;
+        m_GlobalValid[i] = 1;
+    }
+}
+
 void Model::EvaluatePose() {
     const auto& nodes = m_D->Nodes;
+    m_GlobalValid.clear(); // every global below
     m_NodeGlobals.resize(nodes.size());
     if (m_FinalBoneMatrices.size() < (size_t)MAX_BONES) m_FinalBoneMatrices.assign(MAX_BONES, glm::mat4(1.0f));
     ++m_PoseVersion;
@@ -1506,10 +1535,13 @@ void Model::ApplyLocalPose(const std::vector<LocalTRS>& pose) {
     m_NodeGlobals.resize(nodes.size());
     if (m_FinalBoneMatrices.size() < (size_t)MAX_BONES) m_FinalBoneMatrices.assign(MAX_BONES, glm::mat4(1.0f));
     ++m_PoseVersion;
+    const std::vector<unsigned char>& path = SkinPath();
+    m_GlobalValid = path; // the rest on demand (ResolveNodeGlobal)
     for (size_t i = 0; i < nodes.size(); ++i) {
+        if (!path[i]) continue;
         const AnimNode& n = nodes[i];
         const glm::mat4 local = pose[i].ToMatrix();
-        m_NodeGlobals[i] = n.Parent >= 0 ? m_NodeGlobals[n.Parent] * local : local;
+        m_NodeGlobals[i] = n.Parent >= 0 ? AffineMul(m_NodeGlobals[n.Parent], local) : local;
         if (i < m_HiddenNodes.size() && m_HiddenNodes[i]) m_NodeGlobals[i] = m_NodeGlobals[i] * kCollapse;
         if (n.BoneId >= 0) m_FinalBoneMatrices[n.BoneId] = m_D->GlobalInverseTransform * m_NodeGlobals[i] * n.BoneOffset;
     }

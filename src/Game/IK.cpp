@@ -55,7 +55,7 @@ void ComputeGlobals(const Pose& pose, const std::vector<int>& parents, std::vect
     globals.resize(pose.size());
     for (size_t i = 0; i < pose.size(); ++i) {
         const glm::mat4 local = pose[i].ToMatrix();
-        globals[i] = parents[i] >= 0 ? globals[parents[i]] * local : local;
+        globals[i] = parents[i] >= 0 ? AffineMul(globals[parents[i]], local) : local;
     }
 }
 
@@ -70,7 +70,7 @@ void RefreshGlobals(const Pose& pose, const std::vector<int>& parents, std::vect
         if (!dirty[i] && !(p >= 0 && dirty[p])) continue;
         dirty[i] = 1;
         const glm::mat4 local = pose[i].ToMatrix();
-        globals[i] = p >= 0 ? globals[p] * local : local;
+        globals[i] = p >= 0 ? AffineMul(globals[p], local) : local;
     }
 }
 
@@ -123,7 +123,7 @@ void OffsetBoneOnly(Pose& pose, const std::vector<int>& parents, std::vector<glm
     SetLocalFromGlobal(pose, parents, globals, i, pivot + deltaRot * (pos - pivot) + deltaPos, glm::normalize(deltaRot * rot));
     const int p = parents[i];
     const glm::mat4 local = pose[i].ToMatrix();
-    globals[i] = p >= 0 ? globals[p] * local : local;
+    globals[i] = p >= 0 ? AffineMul(globals[p], local) : local;
 }
 
 void RefreshPath(const Pose& pose, const std::vector<int>& parents, std::vector<glm::mat4>& globals, int from, int node) {
@@ -134,7 +134,7 @@ void RefreshPath(const Pose& pose, const std::vector<int>& parents, std::vector<
     for (auto it = path.rbegin(); it != path.rend(); ++it) {
         const int p = parents[*it];
         const glm::mat4 local = pose[*it].ToMatrix();
-        globals[*it] = p >= 0 ? globals[p] * local : local;
+        globals[*it] = p >= 0 ? AffineMul(globals[p], local) : local;
     }
 }
 
