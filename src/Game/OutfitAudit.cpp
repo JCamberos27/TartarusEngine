@@ -65,14 +65,14 @@ struct PoseClip {
     const char* Ref;
 };
 constexpr PoseClip kPoseClips[] = {
-    {"idle", "assets/Animations/Mocap/Idle/AM_Stand_Idle_01.fbx"},
-    {"walk", "assets/Animations/Mocap/Locomotion_V2/AM_Walk/AM_Loco_Walk_Fwd.fbx"},
-    {"run", "assets/Animations/Mocap/Locomotion_V2/AM_Run/AM_Loco_Run_Fwd.fbx"},
-    {"crouch walk", "assets/Animations/Mocap/Locomotion_V2/AM_Crouch_Walk/AM_Crouch_Loco_Walk_Fwd.fbx"},
-    {"crouch", "assets/Animations/Mocap/Crouch/AM_Crouch_Idle_01.fbx"},
-    {"jump", "assets/Animations/Mocap/Jump/AM_Jump.fbx"},
-    {"pickup", "assets/Animations/Mocap/Pickup/AM_Stand_Pickup_02_Floor_To_Floor.fbx"},
-    {"arm flare", "assets/Animations/Mocap/Dance/AM_Dance_Basic_03_Arm_Flare.fbx"},
+    {"idle", "assets/Animations/Mocap/RootMotion/Idle/AM_Stand_Idle_01.fbx"},
+    {"walk", "assets/Animations/Mocap/RootMotion/Locomotion_V2/AM_Walk/AM_Loco_Walk_Fwd.fbx"},
+    {"run", "assets/Animations/Mocap/RootMotion/Locomotion_V2/AM_Run/AM_Loco_Run_Fwd.fbx"},
+    {"crouch walk", "assets/Animations/Mocap/RootMotion/Locomotion_V2/AM_Crouch_Walk/AM_Crouch_Loco_Walk_Fwd.fbx"},
+    {"crouch", "assets/Animations/Mocap/RootMotion/Crouch/AM_Crouch_Idle_01.fbx"},
+    {"jump", "assets/Animations/Mocap/RootMotion/Jump/AM_Jump.fbx"},
+    {"pickup", "assets/Animations/Mocap/RootMotion/Pickup/AM_Stand_Pickup_02_Floor_To_Floor.fbx"},
+    {"arm flare", "assets/Animations/Mocap/RootMotion/Dance/AM_Dance_Basic_03_Arm_Flare.fbx"},
 };
 constexpr float kPoseTimes[] = {0.1f, 0.35f, 0.6f, 0.85f}; // of each clip's length
 

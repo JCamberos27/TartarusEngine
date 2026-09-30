@@ -141,126 +141,126 @@
               "blendParamY": "MoveY",
               "children": [
                 {
-                  "clip": "assets/Animations/Mocap/Idle/AM_Stand_Idle_01.fbx",
+                  "clip": "assets/Animations/Mocap/RootMotion/Idle/AM_Stand_Idle_01.fbx",
                   "clipGuid": "cbec7c424d8c6f82",
                   "threshold": 0.0,
                   "thresholdY": 0.0,
                   "speed": 1.0
                 },
                 {
-                  "clip": "assets/Animations/Mocap/Locomotion_V2/AM_Walk/AM_Loco_Walk_Fwd.fbx",
+                  "clip": "assets/Animations/Mocap/RootMotion/Locomotion_V2/AM_Walk/AM_Loco_Walk_Fwd.fbx",
                   "clipGuid": "2f725c6d0ecc731b",
                   "threshold": 0.0,
                   "thresholdY": 1.53,
                   "speed": 1.0
                 },
                 {
-                  "clip": "assets/Animations/Mocap/Locomotion_V2/AM_Walk/AM_Loco_Walk_Fwd_Left.fbx",
+                  "clip": "assets/Animations/Mocap/RootMotion/Locomotion_V2/AM_Walk/AM_Loco_Walk_Fwd_Left.fbx",
                   "clipGuid": "52c90411529c91c3",
                   "threshold": -1.082,
                   "thresholdY": 1.082,
                   "speed": 1.0
                 },
                 {
-                  "clip": "assets/Animations/Mocap/Locomotion_V2/AM_Walk/AM_Loco_Walk_Fwd_Right.fbx",
+                  "clip": "assets/Animations/Mocap/RootMotion/Locomotion_V2/AM_Walk/AM_Loco_Walk_Fwd_Right.fbx",
                   "clipGuid": "93bc5b9065345d9e",
                   "threshold": 1.082,
                   "thresholdY": 1.082,
                   "speed": 1.0
                 },
                 {
-                  "clip": "assets/Animations/Mocap/Locomotion_V2/AM_Walk/AM_Loco_Walk_Left.fbx",
+                  "clip": "assets/Animations/Mocap/RootMotion/Locomotion_V2/AM_Walk/AM_Loco_Walk_Left.fbx",
                   "clipGuid": "f39adef33b72b5e1",
                   "threshold": -1.346,
                   "thresholdY": 0.0,
                   "speed": 1.0
                 },
                 {
-                  "clip": "assets/Animations/Mocap/Locomotion_V2/AM_Walk/AM_Loco_Walk_Right.fbx",
+                  "clip": "assets/Animations/Mocap/RootMotion/Locomotion_V2/AM_Walk/AM_Loco_Walk_Right.fbx",
                   "clipGuid": "fa653474f4c4cc71",
                   "threshold": 1.586,
                   "thresholdY": 0.0,
                   "speed": 1.0
                 },
                 {
-                  "clip": "assets/Animations/Mocap/Locomotion_V2/AM_Walk/AM_Loco_Walk_Bwd.fbx",
+                  "clip": "assets/Animations/Mocap/RootMotion/Locomotion_V2/AM_Walk/AM_Loco_Walk_Bwd.fbx",
                   "clipGuid": "c0adf8ca675de297",
                   "threshold": 0.0,
                   "thresholdY": -1.195,
                   "speed": 1.0
                 },
                 {
-                  "clip": "assets/Animations/Mocap/Locomotion_V2/AM_Walk/AM_Loco_Walk_Bwd_Left.fbx",
+                  "clip": "assets/Animations/Mocap/RootMotion/Locomotion_V2/AM_Walk/AM_Loco_Walk_Bwd_Left.fbx",
                   "clipGuid": "d9bba94a847fc1fe",
                   "threshold": -0.845,
                   "thresholdY": -0.845,
                   "speed": 1.0
                 },
                 {
-                  "clip": "assets/Animations/Mocap/Locomotion_V2/AM_Walk/AM_Loco_Walk_Bwd_Right.fbx",
+                  "clip": "assets/Animations/Mocap/RootMotion/Locomotion_V2/AM_Walk/AM_Loco_Walk_Bwd_Right.fbx",
                   "clipGuid": "f9f0f26c140addb8",
                   "threshold": 0.845,
                   "thresholdY": -0.845,
                   "speed": 1.0
                 },
                 {
-                  "clip": "assets/Animations/Mocap/Locomotion_V2/AM_Jog/AM_Loco_Jog_Fwd.fbx",
+                  "clip": "assets/Animations/Mocap/RootMotion/Locomotion_V2/AM_Jog/AM_Loco_Jog_Fwd.fbx",
                   "clipGuid": "b34ad32375c7191b",
                   "threshold": 0.0,
                   "thresholdY": 3.264,
                   "speed": 1.0
                 },
                 {
-                  "clip": "assets/Animations/Mocap/Locomotion_V2/AM_Jog/AM_Loco_Jog_Fwd_Left.fbx",
+                  "clip": "assets/Animations/Mocap/RootMotion/Locomotion_V2/AM_Jog/AM_Loco_Jog_Fwd_Left.fbx",
                   "clipGuid": "e0ed2f1bc132f6a8",
                   "threshold": -2.308,
                   "thresholdY": 2.308,
                   "speed": 1.0
                 },
                 {
-                  "clip": "assets/Animations/Mocap/Locomotion_V2/AM_Jog/AM_Loco_Jog_Fwd_Right.fbx",
+                  "clip": "assets/Animations/Mocap/RootMotion/Locomotion_V2/AM_Jog/AM_Loco_Jog_Fwd_Right.fbx",
                   "clipGuid": "a2c0da63f8d8dbd7",
                   "threshold": 2.308,
                   "thresholdY": 2.308,
                   "speed": 1.0
                 },
                 {
-                  "clip": "assets/Animations/Mocap/Locomotion_V2/AM_Jog/AM_Loco_Jog_Left.fbx",
+                  "clip": "assets/Animations/Mocap/RootMotion/Locomotion_V2/AM_Jog/AM_Loco_Jog_Left.fbx",
                   "clipGuid": "a1c36c5b252282a4",
                   "threshold": -2.3,
                   "thresholdY": 0.0,
                   "speed": 1.0
                 },
                 {
-                  "clip": "assets/Animations/Mocap/Locomotion_V2/AM_Jog/AM_Loco_Jog_Right.fbx",
+                  "clip": "assets/Animations/Mocap/RootMotion/Locomotion_V2/AM_Jog/AM_Loco_Jog_Right.fbx",
                   "clipGuid": "40a6acc6bc0284b1",
                   "threshold": 2.945,
                   "thresholdY": 0.0,
                   "speed": 1.0
                 },
                 {
-                  "clip": "assets/Animations/Mocap/Locomotion_V2/AM_Jog/AM_Loco_Jog_Bwd.fbx",
+                  "clip": "assets/Animations/Mocap/RootMotion/Locomotion_V2/AM_Jog/AM_Loco_Jog_Bwd.fbx",
                   "clipGuid": "5ed68e19d0aa1f55",
                   "threshold": 0.0,
                   "thresholdY": -2.261,
                   "speed": 1.0
                 },
                 {
-                  "clip": "assets/Animations/Mocap/Locomotion_V2/AM_Jog/AM_Loco_Jog_Bwd_Left.fbx",
+                  "clip": "assets/Animations/Mocap/RootMotion/Locomotion_V2/AM_Jog/AM_Loco_Jog_Bwd_Left.fbx",
                   "clipGuid": "8bebb836de70e21a",
                   "threshold": -1.599,
                   "thresholdY": -1.599,
                   "speed": 1.0
                 },
                 {
-                  "clip": "assets/Animations/Mocap/Locomotion_V2/AM_Jog/AM_Loco_Jog_Bwd_Right.fbx",
+                  "clip": "assets/Animations/Mocap/RootMotion/Locomotion_V2/AM_Jog/AM_Loco_Jog_Bwd_Right.fbx",
                   "clipGuid": "7e9963070bcd70f7",
                   "threshold": 1.599,
                   "thresholdY": -1.599,
                   "speed": 1.0
                 },
                 {
-                  "clip": "assets/Animations/Mocap/Locomotion_V2/AM_Run/AM_Loco_Run_Fwd.fbx",
+                  "clip": "assets/Animations/Mocap/RootMotion/Locomotion_V2/AM_Run/AM_Loco_Run_Fwd.fbx",
                   "clipGuid": "6ffa5affd5def353",
                   "threshold": 0.0,
                   "thresholdY": 4.736,
@@ -280,7 +280,7 @@
           ],
           "motions": {
             "main": {
-              "clip": "assets/Animations/Mocap/Jump/AM_Jump.fbx",
+              "clip": "assets/Animations/Mocap/RootMotion/Jump/AM_Jump.fbx",
               "clipGuid": "d50e5115458fb134"
             }
           },
@@ -298,7 +298,7 @@
           ],
           "motions": {
             "main": {
-              "clip": "assets/Animations/Mocap/Jump/AM_Jump_Fall_Loop.fbx",
+              "clip": "assets/Animations/Mocap/RootMotion/Jump/AM_Jump_Fall_Loop.fbx",
               "clipGuid": "0cb61f754798296f"
             }
           },
@@ -316,7 +316,7 @@
           ],
           "motions": {
             "main": {
-              "clip": "assets/Animations/Mocap/Jump/AM_Jump_Land_Recovery.fbx",
+              "clip": "assets/Animations/Mocap/RootMotion/Jump/AM_Jump_Land_Recovery.fbx",
               "clipGuid": "149625c5c5d35512"
             }
           }
@@ -334,49 +334,49 @@
               "blendParam": "TurnAngle",
               "children": [
                 {
-                  "clip": "assets/Animations/Mocap/Turn/AM_Stand_Idle_Turn_R180.fbx",
+                  "clip": "assets/Animations/Mocap/RootMotion/Turn/AM_Stand_Idle_Turn_R180.fbx",
                   "clipGuid": "4685634606e07d4e",
                   "threshold": -180.0,
                   "speed": 1.0
                 },
                 {
-                  "clip": "assets/Animations/Mocap/Turn/AM_Stand_Idle_Turn_R135.fbx",
+                  "clip": "assets/Animations/Mocap/RootMotion/Turn/AM_Stand_Idle_Turn_R135.fbx",
                   "clipGuid": "aa3fbc64fad3f8b5",
                   "threshold": -135.0,
                   "speed": 1.0
                 },
                 {
-                  "clip": "assets/Animations/Mocap/Turn/AM_Stand_Idle_Turn_R090.fbx",
+                  "clip": "assets/Animations/Mocap/RootMotion/Turn/AM_Stand_Idle_Turn_R090.fbx",
                   "clipGuid": "9cb7124f15924003",
                   "threshold": -90.0,
                   "speed": 1.0
                 },
                 {
-                  "clip": "assets/Animations/Mocap/Turn/AM_Stand_Idle_Turn_R045.fbx",
+                  "clip": "assets/Animations/Mocap/RootMotion/Turn/AM_Stand_Idle_Turn_R045.fbx",
                   "clipGuid": "931eadf7c2b109a6",
                   "threshold": -45.0,
                   "speed": 1.0
                 },
                 {
-                  "clip": "assets/Animations/Mocap/Turn/AM_Stand_Idle_Turn_L045.fbx",
+                  "clip": "assets/Animations/Mocap/RootMotion/Turn/AM_Stand_Idle_Turn_L045.fbx",
                   "clipGuid": "17e8a43d4fd11432",
                   "threshold": 45.0,
                   "speed": 1.0
                 },
                 {
-                  "clip": "assets/Animations/Mocap/Turn/AM_Stand_Idle_Turn_L090.fbx",
+                  "clip": "assets/Animations/Mocap/RootMotion/Turn/AM_Stand_Idle_Turn_L090.fbx",
                   "clipGuid": "df03b6fd87d5fc7e",
                   "threshold": 90.0,
                   "speed": 1.0
                 },
                 {
-                  "clip": "assets/Animations/Mocap/Turn/AM_Stand_Idle_Turn_L135.fbx",
+                  "clip": "assets/Animations/Mocap/RootMotion/Turn/AM_Stand_Idle_Turn_L135.fbx",
                   "clipGuid": "8a41eb401d24b425",
                   "threshold": 135.0,
                   "speed": 1.0
                 },
                 {
-                  "clip": "assets/Animations/Mocap/Turn/AM_Stand_Idle_Turn_L180.fbx",
+                  "clip": "assets/Animations/Mocap/RootMotion/Turn/AM_Stand_Idle_Turn_L180.fbx",
                   "clipGuid": "c24904de04270a8f",
                   "threshold": 180.0,
                   "speed": 1.0
@@ -402,28 +402,28 @@
               "blendParamY": "StartY",
               "children": [
                 {
-                  "clip": "assets/Animations/Mocap/Locomotion_V2/AM_Jog/AM_Loco_Jog_Fwd_Start.fbx",
+                  "clip": "assets/Animations/Mocap/RootMotion/Locomotion_V2/AM_Jog/AM_Loco_Jog_Fwd_Start.fbx",
                   "clipGuid": "cc9447341944c738",
                   "threshold": 0.0,
                   "thresholdY": 1.0,
                   "speed": 1.0
                 },
                 {
-                  "clip": "assets/Animations/Mocap/Locomotion_V2/AM_Jog/AM_Loco_Jog_Bwd_Start.fbx",
+                  "clip": "assets/Animations/Mocap/RootMotion/Locomotion_V2/AM_Jog/AM_Loco_Jog_Bwd_Start.fbx",
                   "clipGuid": "7aa3d42885420a73",
                   "threshold": 0.0,
                   "thresholdY": -1.0,
                   "speed": 1.0
                 },
                 {
-                  "clip": "assets/Animations/Mocap/Locomotion_V2/AM_Jog/AM_Loco_Jog_Left_Start.fbx",
+                  "clip": "assets/Animations/Mocap/RootMotion/Locomotion_V2/AM_Jog/AM_Loco_Jog_Left_Start.fbx",
                   "clipGuid": "6f1d263d8c01c266",
                   "threshold": -1.0,
                   "thresholdY": 0.0,
                   "speed": 1.0
                 },
                 {
-                  "clip": "assets/Animations/Mocap/Locomotion_V2/AM_Jog/AM_Loco_Jog_Right_Start.fbx",
+                  "clip": "assets/Animations/Mocap/RootMotion/Locomotion_V2/AM_Jog/AM_Loco_Jog_Right_Start.fbx",
                   "clipGuid": "fa7e16d0593addfe",
                   "threshold": 1.0,
                   "thresholdY": 0.0,
@@ -450,28 +450,28 @@
               "blendParamY": "StopY",
               "children": [
                 {
-                  "clip": "assets/Animations/Mocap/Locomotion_V2/AM_Jog/AM_Loco_Jog_Fwd_Stop.fbx",
+                  "clip": "assets/Animations/Mocap/RootMotion/Locomotion_V2/AM_Jog/AM_Loco_Jog_Fwd_Stop.fbx",
                   "clipGuid": "2d98c50513c02b98",
                   "threshold": 0.0,
                   "thresholdY": 1.0,
                   "speed": 1.0
                 },
                 {
-                  "clip": "assets/Animations/Mocap/Locomotion_V2/AM_Jog/AM_Loco_Jog_Bwd_Stop.fbx",
+                  "clip": "assets/Animations/Mocap/RootMotion/Locomotion_V2/AM_Jog/AM_Loco_Jog_Bwd_Stop.fbx",
                   "clipGuid": "e185198b4cb3cd6d",
                   "threshold": 0.0,
                   "thresholdY": -1.0,
                   "speed": 1.0
                 },
                 {
-                  "clip": "assets/Animations/Mocap/Locomotion_V2/AM_Jog/AM_Loco_Jog_Left_Stop.fbx",
+                  "clip": "assets/Animations/Mocap/RootMotion/Locomotion_V2/AM_Jog/AM_Loco_Jog_Left_Stop.fbx",
                   "clipGuid": "c55e7fde8c4420cc",
                   "threshold": -1.0,
                   "thresholdY": 0.0,
                   "speed": 1.0
                 },
                 {
-                  "clip": "assets/Animations/Mocap/Locomotion_V2/AM_Jog/AM_Loco_Jog_Right_Stop.fbx",
+                  "clip": "assets/Animations/Mocap/RootMotion/Locomotion_V2/AM_Jog/AM_Loco_Jog_Right_Stop.fbx",
                   "clipGuid": "73d93f603830af9d",
                   "threshold": 1.0,
                   "thresholdY": 0.0,
@@ -494,7 +494,7 @@
           ],
           "motions": {
             "main": {
-              "clip": "assets/Animations/Mocap/Locomotion_V2/AM_Run/AM_Loco_Run_Fwd_Stop.fbx",
+              "clip": "assets/Animations/Mocap/RootMotion/Locomotion_V2/AM_Run/AM_Loco_Run_Fwd_Stop.fbx",
               "clipGuid": "5d75ec66936312c5"
             }
           },
@@ -516,63 +516,63 @@
               "blendParamY": "MoveY",
               "children": [
                 {
-                  "clip": "assets/Animations/Mocap/Crouch/AM_Crouch_Idle_01.fbx",
+                  "clip": "assets/Animations/Mocap/RootMotion/Crouch/AM_Crouch_Idle_01.fbx",
                   "clipGuid": "5bbbc16c5a7e53cb",
                   "threshold": 0.0,
                   "thresholdY": 0.0,
                   "speed": 1.0
                 },
                 {
-                  "clip": "assets/Animations/Mocap/Locomotion_V2/AM_Crouch_Walk/AM_Crouch_Loco_Walk_Fwd.fbx",
+                  "clip": "assets/Animations/Mocap/RootMotion/Locomotion_V2/AM_Crouch_Walk/AM_Crouch_Loco_Walk_Fwd.fbx",
                   "clipGuid": "15acb8dbcc868cd2",
                   "threshold": 0.0,
                   "thresholdY": 1.355,
                   "speed": 1.0
                 },
                 {
-                  "clip": "assets/Animations/Mocap/Locomotion_V2/AM_Crouch_Walk/AM_Crouch_Loco_Walk_Fwd_Left.fbx",
+                  "clip": "assets/Animations/Mocap/RootMotion/Locomotion_V2/AM_Crouch_Walk/AM_Crouch_Loco_Walk_Fwd_Left.fbx",
                   "clipGuid": "263c5ce0379edfa8",
                   "threshold": -0.957,
                   "thresholdY": 0.957,
                   "speed": 1.0
                 },
                 {
-                  "clip": "assets/Animations/Mocap/Locomotion_V2/AM_Crouch_Walk/AM_Crouch_Loco_Walk_Fwd_Right.fbx",
+                  "clip": "assets/Animations/Mocap/RootMotion/Locomotion_V2/AM_Crouch_Walk/AM_Crouch_Loco_Walk_Fwd_Right.fbx",
                   "clipGuid": "b667084faf565701",
                   "threshold": 0.957,
                   "thresholdY": 0.957,
                   "speed": 1.0
                 },
                 {
-                  "clip": "assets/Animations/Mocap/Locomotion_V2/AM_Crouch_Walk/AM_Crouch_Loco_Walk_Left.fbx",
+                  "clip": "assets/Animations/Mocap/RootMotion/Locomotion_V2/AM_Crouch_Walk/AM_Crouch_Loco_Walk_Left.fbx",
                   "clipGuid": "1a9d5c1c02701f5e",
                   "threshold": -1.155,
                   "thresholdY": 0.0,
                   "speed": 1.0
                 },
                 {
-                  "clip": "assets/Animations/Mocap/Locomotion_V2/AM_Crouch_Walk/AM_Crouch_Loco_Walk_Right.fbx",
+                  "clip": "assets/Animations/Mocap/RootMotion/Locomotion_V2/AM_Crouch_Walk/AM_Crouch_Loco_Walk_Right.fbx",
                   "clipGuid": "7e7b97b9e1892026",
                   "threshold": 1.133,
                   "thresholdY": 0.0,
                   "speed": 1.0
                 },
                 {
-                  "clip": "assets/Animations/Mocap/Locomotion_V2/AM_Crouch_Walk/AM_Crouch_Loco_Walk_Bwd.fbx",
+                  "clip": "assets/Animations/Mocap/RootMotion/Locomotion_V2/AM_Crouch_Walk/AM_Crouch_Loco_Walk_Bwd.fbx",
                   "clipGuid": "1b5d05a364c08afd",
                   "threshold": 0.0,
                   "thresholdY": -1.123,
                   "speed": 1.0
                 },
                 {
-                  "clip": "assets/Animations/Mocap/Locomotion_V2/AM_Crouch_Walk/AM_Crouch_Loco_Walk_Bwd_Left.fbx",
+                  "clip": "assets/Animations/Mocap/RootMotion/Locomotion_V2/AM_Crouch_Walk/AM_Crouch_Loco_Walk_Bwd_Left.fbx",
                   "clipGuid": "64ef3a056ff93ce0",
                   "threshold": -0.794,
                   "thresholdY": -0.794,
                   "speed": 1.0
                 },
                 {
-                  "clip": "assets/Animations/Mocap/Locomotion_V2/AM_Crouch_Walk/AM_Crouch_Loco_Walk_Bwd_Right.fbx",
+                  "clip": "assets/Animations/Mocap/RootMotion/Locomotion_V2/AM_Crouch_Walk/AM_Crouch_Loco_Walk_Bwd_Right.fbx",
                   "clipGuid": "4b6dc3b6f1e41038",
                   "threshold": 0.794,
                   "thresholdY": -0.794,
@@ -598,49 +598,49 @@
               "blendParam": "TurnAngle",
               "children": [
                 {
-                  "clip": "assets/Animations/Mocap/Crouch/AM_Crouch_Idle_Turn_R180.fbx",
+                  "clip": "assets/Animations/Mocap/RootMotion/Crouch/AM_Crouch_Idle_Turn_R180.fbx",
                   "clipGuid": "52b24811ec0f0372",
                   "threshold": -180.0,
                   "speed": 1.0
                 },
                 {
-                  "clip": "assets/Animations/Mocap/Crouch/AM_Crouch_Idle_Turn_R135.fbx",
+                  "clip": "assets/Animations/Mocap/RootMotion/Crouch/AM_Crouch_Idle_Turn_R135.fbx",
                   "clipGuid": "219732f3629879ea",
                   "threshold": -135.0,
                   "speed": 1.0
                 },
                 {
-                  "clip": "assets/Animations/Mocap/Crouch/AM_Crouch_Idle_Turn_R090.fbx",
+                  "clip": "assets/Animations/Mocap/RootMotion/Crouch/AM_Crouch_Idle_Turn_R090.fbx",
                   "clipGuid": "f3f461f6ff4e9dfb",
                   "threshold": -90.0,
                   "speed": 1.0
                 },
                 {
-                  "clip": "assets/Animations/Mocap/Crouch/AM_Crouch_Idle_Turn_R045.fbx",
+                  "clip": "assets/Animations/Mocap/RootMotion/Crouch/AM_Crouch_Idle_Turn_R045.fbx",
                   "clipGuid": "ef42cbd093a44da7",
                   "threshold": -45.0,
                   "speed": 1.0
                 },
                 {
-                  "clip": "assets/Animations/Mocap/Crouch/AM_Crouch_Idle_Turn_L045.fbx",
+                  "clip": "assets/Animations/Mocap/RootMotion/Crouch/AM_Crouch_Idle_Turn_L045.fbx",
                   "clipGuid": "59c12678a0458cf5",
                   "threshold": 45.0,
                   "speed": 1.0
                 },
                 {
-                  "clip": "assets/Animations/Mocap/Crouch/AM_Crouch_Idle_Turn_L090.fbx",
+                  "clip": "assets/Animations/Mocap/RootMotion/Crouch/AM_Crouch_Idle_Turn_L090.fbx",
                   "clipGuid": "1ba9e255270bd6ad",
                   "threshold": 90.0,
                   "speed": 1.0
                 },
                 {
-                  "clip": "assets/Animations/Mocap/Crouch/AM_Crouch_Idle_Turn_L135.fbx",
+                  "clip": "assets/Animations/Mocap/RootMotion/Crouch/AM_Crouch_Idle_Turn_L135.fbx",
                   "clipGuid": "99bd3ca75283494a",
                   "threshold": 135.0,
                   "speed": 1.0
                 },
                 {
-                  "clip": "assets/Animations/Mocap/Crouch/AM_Crouch_Idle_Turn_L180.fbx",
+                  "clip": "assets/Animations/Mocap/RootMotion/Crouch/AM_Crouch_Idle_Turn_L180.fbx",
                   "clipGuid": "85205c3b409224e3",
                   "threshold": 180.0,
                   "speed": 1.0
@@ -663,7 +663,7 @@
           ],
           "motions": {
             "main": {
-              "clip": "assets/Animations/Mocap/Crouch/AM_Stand_Idle_Trans_Crouch_02.fbx",
+              "clip": "assets/Animations/Mocap/RootMotion/Crouch/AM_Stand_Idle_Trans_Crouch_02.fbx",
               "clipGuid": "8c9fdfb2ae24e5ba"
             }
           },
@@ -681,7 +681,7 @@
           ],
           "motions": {
             "main": {
-              "clip": "assets/Animations/Mocap/Crouch/AM_Crouch_Idle_Trans_Stand_01.fbx",
+              "clip": "assets/Animations/Mocap/RootMotion/Crouch/AM_Crouch_Idle_Trans_Stand_01.fbx",
               "clipGuid": "6c94a5f0977ea438"
             }
           },
@@ -703,28 +703,28 @@
               "blendParamY": "StartY",
               "children": [
                 {
-                  "clip": "assets/Animations/Mocap/Locomotion_V2/AM_Crouch_Walk/AM_Crouch_Loco_Walk_Fwd_Start.fbx",
+                  "clip": "assets/Animations/Mocap/RootMotion/Locomotion_V2/AM_Crouch_Walk/AM_Crouch_Loco_Walk_Fwd_Start.fbx",
                   "clipGuid": "3c06fc15fecbb0a6",
                   "threshold": 0.0,
                   "thresholdY": 1.0,
                   "speed": 1.0
                 },
                 {
-                  "clip": "assets/Animations/Mocap/Locomotion_V2/AM_Crouch_Walk/AM_Crouch_Loco_Walk_Bwd_Start.fbx",
+                  "clip": "assets/Animations/Mocap/RootMotion/Locomotion_V2/AM_Crouch_Walk/AM_Crouch_Loco_Walk_Bwd_Start.fbx",
                   "clipGuid": "783db248a2970435",
                   "threshold": 0.0,
                   "thresholdY": -1.0,
                   "speed": 1.0
                 },
                 {
-                  "clip": "assets/Animations/Mocap/Locomotion_V2/AM_Crouch_Walk/AM_Crouch_Loco_Walk_Left_Start.fbx",
+                  "clip": "assets/Animations/Mocap/RootMotion/Locomotion_V2/AM_Crouch_Walk/AM_Crouch_Loco_Walk_Left_Start.fbx",
                   "clipGuid": "7b1209d617221eb0",
                   "threshold": -1.0,
                   "thresholdY": 0.0,
                   "speed": 1.0
                 },
                 {
-                  "clip": "assets/Animations/Mocap/Locomotion_V2/AM_Crouch_Walk/AM_Crouch_Loco_Walk_Right_Start.fbx",
+                  "clip": "assets/Animations/Mocap/RootMotion/Locomotion_V2/AM_Crouch_Walk/AM_Crouch_Loco_Walk_Right_Start.fbx",
                   "clipGuid": "405245ef1bf03807",
                   "threshold": 1.0,
                   "thresholdY": 0.0,
@@ -752,28 +752,28 @@
               "blendParamY": "StopY",
               "children": [
                 {
-                  "clip": "assets/Animations/Mocap/Locomotion_V2/AM_Crouch_Walk/AM_Crouch_Loco_Walk_Fwd_Stop.fbx",
+                  "clip": "assets/Animations/Mocap/RootMotion/Locomotion_V2/AM_Crouch_Walk/AM_Crouch_Loco_Walk_Fwd_Stop.fbx",
                   "clipGuid": "a01f53ceb2de0fd6",
                   "threshold": 0.0,
                   "thresholdY": 1.0,
                   "speed": 1.0
                 },
                 {
-                  "clip": "assets/Animations/Mocap/Locomotion_V2/AM_Crouch_Walk/AM_Crouch_Loco_Walk_Bwd_Stop.fbx",
+                  "clip": "assets/Animations/Mocap/RootMotion/Locomotion_V2/AM_Crouch_Walk/AM_Crouch_Loco_Walk_Bwd_Stop.fbx",
                   "clipGuid": "ff6a62f304227a31",
                   "threshold": 0.0,
                   "thresholdY": -1.0,
                   "speed": 1.0
                 },
                 {
-                  "clip": "assets/Animations/Mocap/Locomotion_V2/AM_Crouch_Walk/AM_Crouch_Loco_Walk_Left_Stop.fbx",
+                  "clip": "assets/Animations/Mocap/RootMotion/Locomotion_V2/AM_Crouch_Walk/AM_Crouch_Loco_Walk_Left_Stop.fbx",
                   "clipGuid": "9f701734f074f557",
                   "threshold": -1.0,
                   "thresholdY": 0.0,
                   "speed": 1.0
                 },
                 {
-                  "clip": "assets/Animations/Mocap/Locomotion_V2/AM_Crouch_Walk/AM_Crouch_Loco_Walk_Right_Stop.fbx",
+                  "clip": "assets/Animations/Mocap/RootMotion/Locomotion_V2/AM_Crouch_Walk/AM_Crouch_Loco_Walk_Right_Stop.fbx",
                   "clipGuid": "932102775d75aa9e",
                   "threshold": 1.0,
                   "thresholdY": 0.0,
