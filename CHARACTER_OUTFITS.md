@@ -7,7 +7,7 @@ Person Body.
 ## Pieces
 The outfit is made of the root's children that carry an **Outfit Piece** component:
 - body parts: Torso, Arms, Legs, Feet, UnderPants, Head;
-- items: Hair, Hat, Top, Pants, and so on.
+- items: Balaclava, Glasses, Top, Pants, and so on.
 
 Each piece is an ordinary model entity, so the scene saves it like any other. Its colourway is simply the
 materials on its Mesh Renderer. The component itself holds only gender, race, Randomize locks and Auto Hide
@@ -16,7 +16,7 @@ Skin.
 Pieces with an Animator Controller follow the body's driver (the root's controller, else the first piece's):
 one state machine per character, so parameters set on the driver reach every piece and they stay in step.
 New pieces get a follower copied from it; a loaded scene is linked again on its first frame. First Person Body picks up
-head-attached pieces (hair, hats, glasses, beards) as shadow-only, and it restarts its piece list when the
+head-attached pieces (balaclavas, glasses, and hair, hats or beards in a pack with them) as shadow-only, and it restarts its piece list when the
 outfit changes in Play. In the player's own view it also trims clothing around the camera, for any pack:
 what sits around the neck in the garment's bind pose (a hood, a collar, the shoulder tops), and whatever
 comes within **Clothing Near Hide** of the eye (wider to the sides). See [BODY_SETUP.md](BODY_SETUP.md).
@@ -35,7 +35,7 @@ only what the folders can't say:
 | `covers` | Body parts an item hides or swaps (pants hide Legs; shoes swap Feet to ShoeFeet unless the shoe carries skin) |
 | `clears` | Slots an item empties (a `WithHair` hat clears Hair; a jacket with its own shirt clears Top) |
 | `pairs` | Name-based swaps (boots → the pants' `_Inboots` cut, and back) |
-| `items` | Per-item overrides: `hidden`, `slot`, `name`, `gender` |
+| `items` | Per-item overrides: `hidden`, `slot`, `name`, `gender`, and `fit` (rigid head wear drawn that much bigger about its own centre, 0.5–2) |
 
 Rules that need no configuration:
 - **Gender** comes from a `Female` folder or an `SKM_F_` prefix.
@@ -67,14 +67,16 @@ In the Quantum pack:
 - **Jackets and tops.** Jackets with a top in the mesh (Leather Jacket, Jeans Jacket, Bombers, Coats with a
   shirt, Winter Open...) and closed ones (Puffer, Winter Closed, Jacket Classic) take the Top off. Open
   jackets (M65, female Bomber) keep a thin top but not a hoodie. Vests go over anything.
-- **Heads.** Every style puts a balaclava on, and a balaclava takes hats and headphones off, so Randomize
-  gives neither (a hat or headphones can still be picked by hand, taking the balaclava off). A hood that's
-  up goes over the balaclava and allows only small hats. Big hats leave no room for headphones.
+- **Heads.** Every style puts a balaclava on (on purpose). Hats and headphones are out of the pack: the Hat
+  and Headphones slots are gone, `Hats` is in `excludeFolders`, and the aviators are hidden, so the only
+  head accessories are the balaclavas, hoods, and the black classic glasses. A hood that's up goes over
+  the balaclava. The female balaclava is modelled a little small for the female heads (the back of the head
+  poked out), so its item override has `"fit": 1.06`.
 - **Feet.** Socks (their own slot, filled by three item overrides - the Socks slot has no folder) go under
   every shoe but flip-flops and `Boots_Socks` (socks built in). Plain boots take the `_Inboots` pants;
-  `Boots_Inboots` go under plain pants. Headphones are an override-only slot too (layer 11).
+  `Boots_Inboots` go under plain pants.
 - **Style clashes** (soft): suit jackets or trousers with shorts, sport pants, flip-flops or sport sneakers;
-  winter jackets and hats with shorts or flip-flops.
+  winter jackets with shorts or flip-flops.
 
 `Wardrobe::Randomize` picks a style, then fills slots in `randomOrder`, each by the style's chance, from items
 of that style that aren't variants and don't conflict with anything already chosen. The Inspector marks
@@ -95,7 +97,14 @@ item cards that clash with what's worn (amber: one comes off; grey: an odd pairi
   pieces, draws, triangles and how much of that skin hiding throws away.
 - `TartarusEngine --outfit-shots <dir> [scene.json|dir]` renders the smoke test with the Scene view framed on
   the characters: the first row, then picked characters full length front and back and their heads close up.
-  `TARTARUS_SHOT_NAMES="Quantum_Male_01,Quantum_Female_11"` picks them by name.
+  `TARTARUS_SHOT_NAMES="Quantum_Male_01,Quantum_Female_11"` picks them by name. Each picked character also
+  gets a `_headback` shot (behind and above the head, for balaclavas and hoods).
+  `TARTARUS_SHOT_POSE="<clip>@<fraction>"` (for example
+  `assets/Animations/Mocap/Locomotion_V2/AM_Crouch_Walk/AM_Crouch_Loco_Walk_Fwd.fbx@0.35`) holds every skinned piece in that pose, to see clipping in
+  motion.
+- `--outfit-audit ... --outfit-posed` also skins every pair into 32 poses (idle, walk, run, crouch walk,
+  crouch, jump, pickup and arm flare, each at 10/35/60/85%) and reports what pokes through in any of them,
+  with the deepest pose (`posed`, `posed_depth_cm`, `posed_where` in the CSV). It takes about a minute more.
 - `python tools/quantum/audit_quantum_assets.py [--csv out.csv] [--clothing-max N] [--body-max N]` checks the
   files: every FBX material has a remap to a `.mat` that exists, every texture a material names exists, colour
   maps are sRGB and data maps linear, and nothing is orphaned; and totals VRAM by folder and model.
@@ -105,8 +114,8 @@ With **Auto Hide Skin** on, each piece doesn't draw the vertices that poke throu
 so the body, the head, a shirt under a jacket or hair under a hood can't clip through as the character moves:
 - Every slot has a `layer` (body parts and the head are 0): balaclavas 1 (their neck skirt tucks under
   every top and jacket, so collars lie over it), shoes 2, pants 3, tops 4, outerwear 6, collars 7,
-  bags and wrists 8, glasses (and hair/beards in a wardrobe with them) 9, hats 10, headphones 11. A piece
-  hides what pokes through it from every lower layer.
+  bags and wrists 8, glasses (and hair/beards in a wardrobe with them) 9. A piece hides what pokes through
+  it from every lower layer.
 - `"hides": false` on a slot (hair, beards, glasses, wrists) means its items never hide anything - they're see-through
   cards (or a watch strap / bead bracelet with gaps), and hiding the skin under them would open holes.
 - `"layers"` rules change that per item: `{"slot": "Top", "nameHasAny": ["Tucked"], "layer": 2}` puts tucked
@@ -118,11 +127,21 @@ so the body, the head, a shirt under a jacket or hair under a hood can't clip th
   sitting outside the cloth (up to 10 cm, with the cloth right behind it and facing the same way) is hidden
   too - unless, 5 cm or more in, the look back reaches the body's own far side within 2 cm
   (`kFarWallDepth` / `kFarWallSlack`): that's cloth sunk into the far side of a limb, not skin outside it.
-- The head keeps skin that would leave a hole if hidden (`Backed`). Headwear on the head bone (a balaclava,
+- The head keeps skin that would leave a hole if hidden (`Backed`). How far it looks back for the cloth
+  follows how deep the vertex pokes out (a bun 9 cm out through a balaclava has the cloth 9 cm behind it). Headwear on the head bone (a balaclava,
   a hat under a hood) only hides what pokes out through the cloth over it: it can't deform out from under
   it, and its covered rest can be in view (a balaclava's sides through a hood's face opening).
 - `OutfitEdgeBandPosed` and `OutfitRigidUnderHood` check these on the real Quantum meshes; `--outfit-audit`
   reports every pair's poke-through, to compare before and after a change.
+- **Layer pull.** What hiding keeps can still graze the layer over it by a few millimetres once the
+  character moves. Each piece is ranked by how many layers are worn over it (the longest chain of
+  `Wardrobe::Hides`, at most `kMaxLayerRank` = 3), and `ModelVertex.glsl` draws it `kLayerPull` (4 mm) per
+  rank nearer the camera (`OutfitLayerTag`, uniform `uLayerPull`). Vertices slide along the view ray, so
+  nothing moves on screen and early-z still works; only depth changes. Deeper pokes (a sneaker through a
+  pant leg in a crouch) are too far for it: see [OUTFIT_TODO.md](OUTFIT_TODO.md).
+- A fitted piece's fit is part of its coverage key, and the coverage version (`kCoverageVersion`, 17) is
+  bumped whenever coverage changes. The first run after a bump draws unhidden pieces until the background
+  jobs finish.
 - Coverage is stored as a per-vertex bit buffer (`OutfitHideTag` / `SkinHideBuffer`, SSBO binding 20), which
   `ModelVertex.glsl` reads.
 - `OutfitSystem::UpdateHiding` runs every frame but only does work when an outfit's pieces change (an edit,

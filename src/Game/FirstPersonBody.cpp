@@ -10,6 +10,7 @@
 #include "Log.h"
 #include "Model.h"
 #include "OutfitCoverage.h"
+#include "OutfitSystem.h"
 #include "PhysicsWorld.h"
 #include "Player.h"
 #include "SkinHideBuffer.h"
@@ -591,6 +592,10 @@ void FirstPersonBody::MakeTwins(World& world) {
             const OutfitHideTag copy = *hide;
             reg.emplace_or_replace<OutfitHideTag>(t, copy);
         }
+        if (const auto* pull = reg.try_get<OutfitLayerTag>(e)) {
+            const OutfitLayerTag copy = *pull;
+            reg.emplace_or_replace<OutfitLayerTag>(t, copy);
+        }
         if (const auto* layer = reg.try_get<LayerComponent>(e)) {
             const LayerComponent copy = *layer;
             reg.emplace_or_replace<LayerComponent>(t, copy);
@@ -636,6 +641,10 @@ void FirstPersonBody::SyncTwins(World& world) {
             const OutfitHideTag copy = *hide;
             reg.emplace_or_replace<OutfitHideTag>(m_Twins[k], copy);
         }
+        const auto* pull = reg.try_get<OutfitLayerTag>(m_Pieces[k]);
+        const auto* twinPull = reg.try_get<OutfitLayerTag>(m_Twins[k]);
+        if (!pull && twinPull) reg.remove<OutfitLayerTag>(m_Twins[k]);
+        else if (pull && (!twinPull || twinPull->Pull != pull->Pull)) reg.emplace_or_replace<OutfitLayerTag>(m_Twins[k]).Pull = pull->Pull;
     }
 }
 
@@ -659,8 +668,10 @@ void FirstPersonBody::PlaceHeadAttachedTwins(World& world) {
         const int flags = reg.get<OutfitPieceComponent>(m_Pieces[k]).Flags;
         if (!(flags & OutfitPieceHeadAttached) || (flags & OutfitPieceBodyPart)) continue;
         if (!m_TwinModels[k] || m_TwinModels[k]->BoneCount() > 0) continue; // skinned: it follows by its bones
-        world.SetWorldPose(m_Twins[k], glm::vec3(follow[3]), rot);
-        reg.get<TransformComponent>(m_Twins[k]).Scale = scale;
+        const float fit = reg.get<OutfitPieceComponent>(m_Pieces[k]).Fit;
+        const glm::mat4 fitted = follow * OutfitSystem::FitMatrix(*m_TwinModels[k], fit);
+        world.SetWorldPose(m_Twins[k], glm::vec3(fitted[3]), rot);
+        reg.get<TransformComponent>(m_Twins[k]).Scale = scale * (fit > 0.0f ? fit : 1.0f);
     }
 }
 

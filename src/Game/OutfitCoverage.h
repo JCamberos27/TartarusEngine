@@ -49,12 +49,14 @@ void ErodeWithin(const Mesh& body, std::vector<std::uint8_t>& covered, float rad
 // out over its hemisphere - kBackedRays of them, up to `reach` metres - that meets neither the cloth nor the
 // body), the view carries on to the cloth or the body's outside within kBackedBehind behind it. Skin past a
 // collar's rim fails (the view goes on down into the gap: a hole); skin poking through a shirt front passes.
-// Worked out only where `only` is 1 (empty = everywhere); 0 elsewhere.
+// Worked out only where `only` is 1 (empty = everywhere); 0 elsewhere. `poke` (PokeDepth's, when given): a
+// vertex that far out through the cloth has it that far behind - the look back goes as far as that (a
+// head's bun 9 cm out through a balaclava read as a hole at kBackedBehind, and stayed drawn over it).
 constexpr int kBackedRays = 32;
 constexpr float kBackedReach = 0.25f;
 constexpr float kBackedBehind = 0.04f;
 std::vector<std::uint8_t> Backed(const Mesh& body, const Mesh& cloth, const std::vector<std::uint8_t>& only = {},
-                                 float reach = kBackedReach);
+                                 float reach = kBackedReach, const std::vector<float>* poke = nullptr);
 
 // What the game hides of `under` while `over` is worn over it (OutfitSystem::UpdateHiding; the audit
 // checks the same): Covered then Erode and a kEdgeBand-wide ErodeWithin, plus everything poking out through it up to kPokeReach. `exposed`
