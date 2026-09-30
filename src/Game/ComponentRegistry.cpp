@@ -548,6 +548,10 @@ void RegisterEngineComponents() {
         m.Fields.push_back({ "Arm Steady Max", T::Float, TARTARUS_REFLECT_FIELD(FirstPersonBodyComponent, ArmSteadyMax), 0.005f,
               "The most (metres) a shoulder is held off where the body's pose puts it; past this it is carried along.", 0.0f, 0.3f });
         m.Fields.back().Group = "Camera & Arms (advanced)";
+        m.Fields.push_back({ "Elbow Clearance", T::Float, TARTARUS_REFLECT_FIELD(FirstPersonBodyComponent, ElbowClearance), 0.005f,
+              "Split poses: how far (metres) each elbow, in every view but the player's own, keeps from the drawn torso. It swings out\n"
+              "about the shoulder-to-hand line, so the hand stays on the gun. The rig tucks its elbows to a narrower body. 0 = off.", 0.0f, 0.2f });
+        m.Fields.back().Group = "Camera & Arms (advanced)";
         m.Fields.push_back({ "Look Down Push", T::Float, TARTARUS_REFLECT_FIELD(FirstPersonBodyComponent, LookDownPush), 0.005f,
               "Looking down, the eye comes this far (metres) forward over the chest. It moves the gun with it, away from the shoulders,\n"
               "so it costs the arms their reach - prefer Spine Aim Down. Straight down gets all of it. 0 = off.", 0.0f, 0.4f });

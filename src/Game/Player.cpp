@@ -41,6 +41,10 @@ void Player::Update(float dt, World& world, GLFWwindow* window, bool readInput) 
         wish = right * InputMap::GetAxis("Horizontal") + forward * InputMap::GetAxis("Vertical");
         if (glm::length(wish) > 1.0f) wish = glm::normalize(wish);
     }
+    if (ScriptedMove) {
+        wish = right * ScriptMove.x + forward * ScriptMove.y;
+        if (glm::length(wish) > 1.0f) wish = glm::normalize(wish);
+    }
     // Crouch: held; standing up needs headroom. Only from the ground, so the capsule never changes
     // shape mid-jump.
     const float standCylHalf = std::max(0.05f, Size.y * 0.5f - std::max(0.05f, Size.x * 0.5f));
@@ -61,7 +65,7 @@ void Player::Update(float dt, World& world, GLFWwindow* window, bool readInput) 
     // The eye follows the capsule down (a body's head bone overrides it; without one this is it).
     const float eye = EyeHeight * (1.0f - CrouchBlend * (1.0f - std::clamp(CrouchHeight / std::max(0.1f, Size.y), 0.0f, 1.0f)) * (CrouchHeight > 0.0f ? 1.0f : 0.0f));
 
-    const bool sprint = readInput && !Crouched && InputMap::GetButton("Sprint");
+    const bool sprint = !Crouched && (ScriptedMove ? ScriptSprint : readInput && InputMap::GetButton("Sprint"));
     float speed = MoveSpeed * (sprint ? SprintMultiplier : 1.0f) * (Crouched ? CrouchSpeedMultiplier : 1.0f);
     wish *= speed;
     WishVelocity = wish;
