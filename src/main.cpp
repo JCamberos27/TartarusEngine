@@ -2875,7 +2875,12 @@ int main(int argc, char** argv) {
                 AABB bounds;
                 std::uint32_t id;
                 bool bounded, twoSided, animated;
+                bool moving; // moved within the last kMovingFrames (a rolling ball, a door)
             };
+            // Per caster, its transform and when it last changed; drives LocalCaster::moving.
+            struct CasterMotion { glm::mat4 xform; std::uint64_t moved; };
+            static std::unordered_map<std::uint32_t, CasterMotion> s_CasterMotion;
+            constexpr std::uint64_t kMovingFrames = 30;
             static std::vector<LocalCaster> localCasters;
             localCasters.clear();
             if (world.ShadowsEnabled && (spotShadowCount > 0 || pointShadowCount > 0)) {
@@ -2891,6 +2896,11 @@ int main(int argc, char** argv) {
                     lc.id = static_cast<std::uint32_t>(entity);
                     lc.twoSided = r.CastShadows == RenderableComponent::ShadowCasting::TwoSided;
                     lc.animated = lc.model->HasAnimations();
+                    // First seen counts as settled (unsigned wrap keeps that true on early frames).
+                    const std::uint64_t now = (std::uint64_t)frameIndex;
+                    auto [motion, first] = s_CasterMotion.try_emplace(lc.id, CasterMotion{lc.xform, now - kMovingFrames});
+                    if (motion->second.xform != lc.xform) motion->second = {lc.xform, now};
+                    lc.moving = now - motion->second.moved < kMovingFrames;
                     glm::vec3 bmin = lc.model->BoundsMin(), bmax = lc.model->BoundsMax();
                     lc.bounded = bmin.x <= bmax.x && bmin.y <= bmax.y && bmin.z <= bmax.z;
                     if (!lc.bounded) continue;
@@ -2919,7 +2929,8 @@ int main(int argc, char** argv) {
                 h = hashBytes(h, &c.xform, sizeof c.xform);
                 return hashBytes(h, &c.twoSided, sizeof c.twoSided);
             };
-            static std::uint64_t s_SpotShadowSig[SpotShadowMap::kMaxSpots] = {};
+            static std::uint64_t s_SpotShadowSig[SpotShadowMap::kMaxSpots] = {}; // the static casters'
+            static bool s_SpotHadAnimated[SpotShadowMap::kMaxSpots] = {};
             static std::uint64_t s_PointShadowSig[PointShadowMap::kMaxPoints] = {};
             if (world.ShadowsEnabled && spotShadowCount > 0) {
                 PROFILE_SCOPE("Spot Shadow Pass");
@@ -2946,6 +2957,7 @@ int main(int argc, char** argv) {
                     Frustum lf = Frustum::FromViewProj(spotShadowVP[s]);
                     visible.clear();
                     bool animated = false;
+                    // The static casters' signature: animated ones redraw every frame anyway.
                     std::uint64_t sig = 1469598103934665603ull;
                     const unsigned int map = spotShadowMap.DepthArray();
                     const int res = spotShadowMap.Resolution() * 64 + spotShadowMap.Layers(); // a reallocation
@@ -2957,21 +2969,38 @@ int main(int argc, char** argv) {
                     for (const LocalCaster& c : localCasters) {
                         if (c.bounded && !lf.Intersects(c.bounds)) continue;
                         visible.push_back(&c);
-                        animated = animated || c.animated;
-                        sig = hashCaster(sig, c);
+                        // Animated or recently moved casters are drawn over the cached static depth
+                        // every frame; the rest are the static signature.
+                        const bool dynamic = c.animated || c.moving;
+                        animated = animated || dynamic;
+                        if (!dynamic) sig = hashCaster(sig, c);
                     }
-                    if (!animated && sig == s_SpotShadowSig[s]) continue; // unchanged: keep the layer
-                    s_SpotShadowSig[s] = animated ? 0 : sig;
-                    spotShadowMap.Begin(s);
+                    const bool staticChanged = sig != s_SpotShadowSig[s];
+                    // Unchanged, and no animated caster in it now or last frame: keep the layer.
+                    if (!staticChanged && !animated && !s_SpotHadAnimated[s]) continue;
+                    s_SpotHadAnimated[s] = animated;
                     localShadowShader.SetMat4(localLightViewProjLoc, spotShadowVP[s]);
                     localShadowShader.SetVec3(localLightPosLoc, spotShadowPos[s]);
                     localShadowShader.SetFloat(localFarLoc, spotShadowFar[s]);
-                    for (const LocalCaster* c : visible) {
-                        localShadowShader.SetMat4(localModelLoc, c->xform);
-                        if (c->twoSided) glDisable(GL_CULL_FACE);
-                        c->model->DrawDepthOnly(localShadowShader, *c->materials);
-                        if (c->twoSided) glEnable(GL_CULL_FACE);
+                    auto drawCasters = [&](bool animatedOnes) {
+                        for (const LocalCaster* c : visible) {
+                            if ((c->animated || c->moving) != animatedOnes) continue;
+                            localShadowShader.SetMat4(localModelLoc, c->xform);
+                            if (c->twoSided) glDisable(GL_CULL_FACE);
+                            c->model->DrawDepthOnly(localShadowShader, *c->materials);
+                            if (c->twoSided) glEnable(GL_CULL_FACE);
+                        }
+                    };
+                    // Static casters into the cache only when they changed; then the live layer is
+                    // that depth plus this frame's animated casters (an NPC standing in the spot
+                    // used to redraw the whole arena into it every frame).
+                    if (staticChanged) {
+                        spotShadowMap.BeginStatic(s);
+                        drawCasters(false);
+                        s_SpotShadowSig[s] = sig;
                     }
+                    spotShadowMap.BeginFromStatic(s);
+                    drawCasters(true);
                 }
 
                 glDisable(GL_POLYGON_OFFSET_FILL);

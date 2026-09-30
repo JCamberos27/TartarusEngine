@@ -11,6 +11,8 @@ SpotShadowMap::~SpotShadowMap() { Release(); }
 void SpotShadowMap::Release() {
     if (m_Fbo)        { glDeleteFramebuffers(1, &m_Fbo);    m_Fbo = 0; }
     if (m_DepthArray) { glDeleteTextures(1, &m_DepthArray); m_DepthArray = 0; }
+    if (m_StaticFbo)   { glDeleteFramebuffers(1, &m_StaticFbo);   m_StaticFbo = 0; }
+    if (m_StaticArray) { glDeleteTextures(1, &m_StaticArray); m_StaticArray = 0; }
 }
 
 void SpotShadowMap::Configure(int resolution, int layers) {
@@ -37,6 +39,12 @@ void SpotShadowMap::Configure(int resolution, int layers) {
     glCreateFramebuffers(1, &m_Fbo);
     glNamedFramebufferDrawBuffers(m_Fbo, 0, nullptr); // depth only
 
+    // Only ever rendered to and copied from, never sampled.
+    glCreateTextures(GL_TEXTURE_2D_ARRAY, 1, &m_StaticArray);
+    glTextureStorage3D(m_StaticArray, 1, GL_DEPTH_COMPONENT32F, resolution, resolution, layers);
+    glCreateFramebuffers(1, &m_StaticFbo);
+    glNamedFramebufferDrawBuffers(m_StaticFbo, 0, nullptr);
+
     if (!m_Fbo || !m_DepthArray)
         Log::Error("SpotShadowMap: failed to create depth array (" + std::to_string(resolution) + ")");
 }
@@ -51,4 +59,22 @@ void SpotShadowMap::Begin(int i) const {
     }
     glViewport(0, 0, m_Resolution, m_Resolution);
     glClear(GL_DEPTH_BUFFER_BIT);
+}
+
+void SpotShadowMap::BeginStatic(int i) const {
+    i = std::clamp(i, 0, std::max(m_Layers, 1) - 1);
+    glBindFramebuffer(GL_FRAMEBUFFER, m_StaticFbo);
+    glNamedFramebufferTextureLayer(m_StaticFbo, GL_DEPTH_ATTACHMENT, m_StaticArray, 0, i);
+    glViewport(0, 0, m_Resolution, m_Resolution);
+    glClear(GL_DEPTH_BUFFER_BIT);
+}
+
+void SpotShadowMap::BeginFromStatic(int i) const {
+    i = std::clamp(i, 0, std::max(m_Layers, 1) - 1);
+    glNamedFramebufferTextureLayer(m_StaticFbo, GL_DEPTH_ATTACHMENT, m_StaticArray, 0, i);
+    glNamedFramebufferTextureLayer(m_Fbo, GL_DEPTH_ATTACHMENT, m_DepthArray, 0, i);
+    glBlitNamedFramebuffer(m_StaticFbo, m_Fbo, 0, 0, m_Resolution, m_Resolution, 0, 0, m_Resolution, m_Resolution,
+                           GL_DEPTH_BUFFER_BIT, GL_NEAREST);
+    glBindFramebuffer(GL_FRAMEBUFFER, m_Fbo);
+    glViewport(0, 0, m_Resolution, m_Resolution);
 }
