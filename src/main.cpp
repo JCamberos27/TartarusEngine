@@ -42,7 +42,8 @@
 #include "GameModuleAPI.h" // #170 smoke: QueryFilter / RaycastHit
 #include "Tests/UnitTests.h" // #173
 #include "OutfitAudit.h"
-#include "OutfitTestScene.h"             // --outfit-audit
+#include "OutfitTestScene.h"
+#include "SkinHideBuffer.h"             // --outfit-audit
 #include "LightBuffer.h"
 #include "ClusterGrid.h"
 #include "CascadedShadowMap.h"
@@ -2777,6 +2778,7 @@ int main(int argc, char** argv) {
                 struct SunCaster {
                     Model* model;
                     const std::vector<std::shared_ptr<MaterialAsset>>* materials;
+                    const VisibleIndexBuffer* visible; // an outfit piece's uncovered triangles (OutfitHideTag)
                     glm::mat4 xform;
                     AABB bounds;
                     bool bounded, twoSided;
@@ -2794,6 +2796,8 @@ int main(int argc, char** argv) {
                     SunCaster& sc = sunCasters.emplace_back();
                     sc.model = r.ModelRef.get();
                     sc.materials = &r.Materials;
+                    const auto* hide = world.Registry.try_get<OutfitHideTag>(entity);
+                    sc.visible = hide ? hide->Visible.get() : nullptr;
                     sc.xform = world.GetCachedWorldTransform(entity);
                     sc.twoSided = r.CastShadows == RenderableComponent::ShadowCasting::TwoSided;
                     glm::vec3 bmin = sc.model->BoundsMin(), bmax = sc.model->BoundsMax();
@@ -2871,7 +2875,7 @@ int main(int argc, char** argv) {
                             int end = c;
                             while (end + 1 < cascadeCount && (mask & (1u << (end + 1)))) ++end;
                             if (c != boundFirst) { shadowShader.SetInt(firstLoc, c); boundFirst = c; }
-                            sc.model->DrawDepthOnly(shadowShader, *sc.materials, end - c + 1);
+                            sc.model->DrawDepthOnly(shadowShader, *sc.materials, end - c + 1, sc.visible);
                             c = end + 1;
                         }
                         if (sc.twoSided) glEnable(GL_CULL_FACE);
@@ -2893,7 +2897,7 @@ int main(int argc, char** argv) {
                         // Cull is on for the whole pass (DrawDepthOnly's per-mesh overrides put
                         // it back), so Two Sided just turns it off around its own draw.
                         if (sc.twoSided) glDisable(GL_CULL_FACE);
-                        sc.model->DrawDepthOnly(shadowShader, *sc.materials);
+                        sc.model->DrawDepthOnly(shadowShader, *sc.materials, 1, sc.visible);
                         if (sc.twoSided) glEnable(GL_CULL_FACE);
                     }
                 }
@@ -2926,6 +2930,7 @@ int main(int argc, char** argv) {
             struct LocalCaster {
                 Model* model;
                 const std::vector<std::shared_ptr<MaterialAsset>>* materials;
+                const VisibleIndexBuffer* visible; // an outfit piece's uncovered triangles (OutfitHideTag)
                 glm::mat4 xform;
                 AABB bounds;
                 std::uint32_t id;
@@ -2947,6 +2952,8 @@ int main(int argc, char** argv) {
                     LocalCaster& lc = localCasters.emplace_back();
                     lc.model = r.ModelRef.get();
                     lc.materials = &r.Materials;
+                    const auto* hide = world.Registry.try_get<OutfitHideTag>(entity);
+                    lc.visible = hide ? hide->Visible.get() : nullptr;
                     lc.xform = world.GetCachedWorldTransform(entity);
                     lc.id = static_cast<std::uint32_t>(entity);
                     lc.twoSided = r.CastShadows == RenderableComponent::ShadowCasting::TwoSided;
@@ -3063,7 +3070,7 @@ int main(int argc, char** argv) {
                             if ((c->animated || c->moving) != animatedOnes) continue;
                             localShadowShader.SetMat4(localModelLoc, c->xform);
                             if (c->twoSided) glDisable(GL_CULL_FACE);
-                            c->model->DrawDepthOnly(localShadowShader, *c->materials);
+                            c->model->DrawDepthOnly(localShadowShader, *c->materials, 1, c->visible);
                             if (c->twoSided) glEnable(GL_CULL_FACE);
                         }
                     };
@@ -3158,7 +3165,7 @@ int main(int argc, char** argv) {
                             if (c->bounded && !lf.Intersects(c->bounds)) continue;
                             localShadowShader.SetMat4(cubeModelLoc, c->xform);
                             if (c->twoSided) glDisable(GL_CULL_FACE);
-                            c->model->DrawDepthOnly(localShadowShader, *c->materials);
+                            c->model->DrawDepthOnly(localShadowShader, *c->materials, 1, c->visible);
                             if (c->twoSided) glEnable(GL_CULL_FACE);
                         }
                     }
@@ -3382,7 +3389,8 @@ int main(int argc, char** argv) {
                         if (!frustum.Intersects(AABB{bmin, bmax}.Transformed(model))) continue;
                     }
                     shadowShader.SetMat4(modelLoc, model);
-                    rc.ModelRef->DrawDepthOnly(shadowShader, rc.Materials);
+                    const auto* hide = world.Registry.try_get<OutfitHideTag>(entity);
+                    rc.ModelRef->DrawDepthOnly(shadowShader, rc.Materials, 1, hide ? hide->Visible.get() : nullptr);
                 }
                 glBindFramebuffer(GL_FRAMEBUFFER, 0);
                 GLStateCache::Invalidate();

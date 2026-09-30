@@ -15,6 +15,7 @@
 
 class Texture;
 class Shader;
+class VisibleIndexBuffer;
 struct aiScene;
 struct aiNode;
 struct aiMesh;
@@ -278,7 +279,9 @@ public:
     // imported material. Empty or short slots fall back to the imported mesh material.
     void Draw(Shader& shader, const std::vector<std::shared_ptr<MaterialAsset>>& slots);
     // `instances` > 1 draws every mesh instanced (the sun's single-pass layered cascades).
-    void DrawDepthOnly(Shader& shader, const std::vector<std::shared_ptr<MaterialAsset>>& slots, int instances = 1);
+    // `visible` (an outfit piece's uncovered triangles) draws in place of each sub-mesh's own indices.
+    void DrawDepthOnly(Shader& shader, const std::vector<std::shared_ptr<MaterialAsset>>& slots, int instances = 1,
+                       const VisibleIndexBuffer* visible = nullptr);
 
     // Scene-path draw (audit #354): per submesh, `selectProgram(slot)` picks the program (a
     // ShaderAsset variant, or `fallback` when it returns null / there's no linked shader). This
@@ -294,8 +297,11 @@ public:
                       const std::vector<std::shared_ptr<MaterialAsset>>& slots,
                       const ProgramSelector& selectProgram, float opacity = 1.0f,
                       const std::function<void(Shader&)>& onProgramBound = {},
-                      MeshPass pass = MeshPass::All, bool forceDoubleSided = false);
+                      MeshPass pass = MeshPass::All, bool forceDoubleSided = false,
+                      const VisibleIndexBuffer* visible = nullptr);
     int MeshCount() const { return (int)m_D->Meshes.size(); }
+    // Sub-mesh `index`'s triangle indices, local to it (ModelMesh::LocalIndices).
+    const std::vector<unsigned int>& MeshLocalIndices(int index) const { return m_D->Meshes[index]->LocalIndices(); }
     // Sub-mesh `index`'s skinned vertices (ModelMesh::SkinVertices): empty when it isn't skinned.
     const std::vector<ModelMesh::SkinVertex>& MeshSkinVertices(int index) const { return m_D->Meshes[index]->SkinVertices(); }
     Material& MeshMaterial(int index) { return m_D->Meshes[index]->Mat; }
