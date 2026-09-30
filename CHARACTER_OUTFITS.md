@@ -79,6 +79,18 @@ item cards that clash with what's worn (amber: one comes off; grey: an odd pairi
 - `TartarusEngine --gen-outfit-scenes` rebuilds `scenes/OutfitTest/`: **Presets** (the artist's 60),
   **Items** (one character per item on a plain outfit, a row per slot) and **Randomized** (eight per style
   and gender). Select any character and use the Inspector to change or re-roll it.
+- `TartarusEngine --outfit-selftest` drives the `OutfitSystem` API end to end on the real wardrobe (Apply,
+  Submit, Equip, SetGender/SetRace, Randomize with locks, colourways, presets, AdoptExisting, hiding,
+  CancelPending) and checks each result. Exit code 0 when every check passes.
+- `TartarusEngine --outfit-cost [scene.json ...]` prints what the wardrobe's models cost to draw (triangles,
+  vertices, sub-meshes and bones per model, by slot) and, per scene (default: the three OutfitTest scenes),
+  pieces, draws, triangles and how much of that skin hiding throws away.
+- `TartarusEngine --outfit-shots <dir> [scene.json|dir]` renders the smoke test with the Scene view framed on
+  the characters: the first row, then picked characters full length front and back and their heads close up.
+  `TARTARUS_SHOT_NAMES="Quantum_Male_01,Quantum_Female_11"` picks them by name.
+- `python tools/quantum/audit_quantum_assets.py [--csv out.csv] [--clothing-max N] [--body-max N]` checks the
+  files: every FBX material has a remap to a `.mat` that exists, every texture a material names exists, colour
+  maps are sRGB and data maps linear, and nothing is orphaned; and totals VRAM by folder and model.
 
 ## Skin hiding
 With **Auto Hide Skin** on, each piece doesn't draw the vertices that poke through the layers worn over it,
@@ -115,6 +127,6 @@ so the body, the head, a shirt under a jacket or hair under a hood can't clip th
 - [`src/Game/OutfitCoverage.h`](src/Game/OutfitCoverage.h): coverage geometry (pure, unit tested).
 - [`src/Editor/EditorLayer_Outfit.cpp`](src/Editor/EditorLayer_Outfit.cpp): the Inspector editor.
 - [`src/Game/OutfitAudit.h`](src/Game/OutfitAudit.h), [`src/Game/OutfitTestScene.h`](src/Game/OutfitTestScene.h):
-  `--outfit-audit` / `--outfit-rules` and `--gen-outfit-scenes`.
+  `--outfit-audit` / `--outfit-rules` / `--outfit-selftest` / `--outfit-cost` and `--gen-outfit-scenes`.
 
 Female bodies play the male mocap clips as-is, without proportion retargeting.
