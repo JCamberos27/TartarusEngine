@@ -58,6 +58,7 @@
 #include "Bloom.h"                 // PR16: threshold + blur bloom post-process
 #include "GLStateCache.h"
 #include "Profiler.h"
+#include "SamplingProfiler.h" // --perf-sample
 #include "Frustum.h"
 #include "PhysicsWorld.h" // #185 — PhysX world stepped during Play
 #include "GravityGun.h" // the player's always-on grab/throw ability
@@ -416,8 +417,9 @@ int main(int argc, char** argv) {
     // --perf-bench [dir|scene.json]: the smoke-test harness with VSync, the FPS cap and GL debug output
     // off, a longer per-scene run, and an averaged CPU/GPU profiler breakdown printed per scene: edit
     // mode, then Play in the docked Game view, then Play maximized. --perf-res WxH sizes the window
-    // (default: maximized) so runs at a given resolution are repeatable.
-    bool perfBenchMode = false;
+    // (default: maximized) so runs at a given resolution are repeatable. --perf-sample adds a
+    // statistical main-thread CPU profile of each phase (SamplingProfiler): the hottest functions.
+    bool perfBenchMode = false, perfSample = false;
     int perfResW = 0, perfResH = 0;
     // --resave <in.json> <out.json>: load a scene and immediately re-serialize it, then exit.
     // The one headless path that exercises the SAVE side of the serializer — round-trip tests
@@ -460,6 +462,7 @@ int main(int argc, char** argv) {
             perfBenchMode = a == "--perf-bench";
             if (i + 1 < argc && argv[i + 1][0] != '-') smokeScenesDirArg = argv[++i];
         }
+        else if (a == "--perf-sample") { perfSample = true; }
         else if (a == "--perf-res" && i + 1 < argc) {
             if (std::sscanf(argv[++i], "%dx%d", &perfResW, &perfResH) != 2 || perfResW <= 0 || perfResH <= 0)
                 perfResW = perfResH = 0;
@@ -4135,6 +4138,7 @@ int main(int argc, char** argv) {
                     const double frameMs = std::chrono::duration<double, std::milli>(now - perfLastFrameEnd).count();
                     perfLastFrameEnd = now;
                     const int phaseFrame = (smokeFramesRendered - 1) % kPerfPhaseFrames + 1;
+                    if (perfSample && phaseFrame == kPerfBenchWarmup) SamplingProfiler::Start();
                     if (phaseFrame > kPerfBenchWarmup) {
                         perfFrame.Sum += frameMs; perfFrame.Max = std::max(perfFrame.Max, frameMs); ++perfFrame.N;
                         for (const Profiler::Entry& e : Profiler::GetLastFrame()) perfAdd(perfCpu, e.Name, e.Milliseconds);
@@ -4153,6 +4157,7 @@ int main(int argc, char** argv) {
                                             name.c_str(), acc.Sum / std::max(perfFrame.N, 1), acc.Max);
                         }
                         std::fflush(stdout);
+                        if (perfSample) SamplingProfiler::Report(!playing ? "edit" : playMaximized ? "play-max" : "play", 60);
                         perfCpu.clear(); perfGpu.clear(); perfFrame = {};
                         if (smokeFramesRendered < kSmokeTestFrames) {
                             if (!playing) togglePlay();
