@@ -119,17 +119,6 @@ void EditorLayer::DrawPlayTransportButtons(bool playing, bool maximized, bool pa
     ImGui::PopStyleColor(3);
 }
 
-// Phase 3 item 2's toolbar Zone B — Play/Stop/Pause/Step drawn inline into the module-owned
-// toolbar strip — is dead now that the whole icon row moved out of the toolbar (see
-// EditorModuleToolbar.cpp's file comment); DrawViewportActionBar below is the only place these
-// controls render, always, not just during maximized play. DrawPlayControlsBody / the
-// m_Cached* play-state mirror it read from are kept as unused rather than torn out, since
-// EditorModuleHostAPI is an additive, versioned contract (each entry is annotated with the API
-// version that added it) that other code hasn't been audited to confirm nothing else expects.
-void EditorLayer::DrawPlayControlsBody() {
-    DrawPlayTransportButtons(m_CachedPlaying, m_CachedPlayMaximized, m_CachedPaused);
-}
-
 // The floating action bar centered over whichever of the Scene/Game viewports is on screen —
 // Undo/Redo/Save, the Play/Stop/Pause/Step/Fullscreen transport, and the panel-toggle /
 // screenshot / notification cluster that all used to live in the toolbar's one-click icon row.
@@ -423,22 +412,6 @@ void EditorLayer::DrawViewportStatusBar(World& world, Camera& editorCamera) {
 // The HUD window itself — the bottom-right pin, the height ceiling, the contrast-adaptive tint —
 // moved into TartarusEditor.dll (EditorModuleHistory.cpp, issue #229 API v15). These three are
 // the host half the module reaches back through EditorModuleHostAPI.
-
-// "Draw the History HUD this frame?" — plus the viewport rect, UI scale and row count the module
-// sizes its window against. Mirrors the old DrawHistoryPanel early-outs: History toggled on, a
-// live non-degenerate Scene viewport, and overlays not suppressed for a clean capture.
-bool EditorLayer::HistoryHudFrame(float* outVpX, float* outVpY, float* outVpW, float* outVpH,
-                                  float* outUIScale, int* outRowCount) {
-    if (outVpX)     *outVpX = m_ViewportPos.x;
-    if (outVpY)     *outVpY = m_ViewportPos.y;
-    if (outVpW)     *outVpW = m_ViewportSize.x;
-    if (outVpH)     *outVpH = m_ViewportSize.y;
-    if (outUIScale) *outUIScale = m_UIScale;
-    if (outRowCount)
-        *outRowCount = (int)m_UndoStack.size() + 1 /*Current*/ + (int)m_RedoStack.size();
-    return m_ShowHistory && !m_HideOverlaysThisFrame && m_SceneViewportVisible &&
-           m_ViewportSize.x >= 1.0f && m_ViewportSize.y >= 1.0f;
-}
 
 // The click-to-jump rows, drawn host-side into the module's window between its heading Separator
 // and its End. The undo/redo stacks, World& and AssetLibrary& never cross the DLL boundary.

@@ -78,7 +78,6 @@ bool FirstPersonAnimationSet::FromJsonString(const std::string& text, FirstPerso
     parsed.ArmsModel = String(root, "armsModel");
     parsed.WeaponModel = String(root, "weaponModel");
     parsed.Controller = String(root, "controller");
-    parsed.DefaultState = String(root, "defaultState");
     parsed.ViewRotation = Vec3(root, "viewRotation", glm::vec3(0.0f));
     parsed.WeaponSocket = String(root, "weaponSocket");
     parsed.WeaponRoot = String(root, "weaponRoot");
@@ -285,35 +284,8 @@ bool FirstPersonAnimationSet::FromJsonString(const std::string& text, FirstPerso
         if (!WeaponProceduralSettings::FromJson(*p, parsed.Procedural, &why)) return Fail(error, why);
     }
 
-    // v1: a flat clip list (no controller).
-    const auto clipsIt = root.find("clips");
-    const bool hasClips = clipsIt != root.end() && clipsIt->is_array() && !clipsIt->empty();
-    if (parsed.Controller.empty() && !hasClips)
-        return Fail(error, "needs a 'controller' (.controller path), or a v1 non-empty 'clips' array");
-    if (hasClips) {
-        std::unordered_set<std::string> names;
-        for (const json& item : *clipsIt) {
-            if (!item.is_object()) return Fail(error, "every item in 'clips' must be an object");
-            FirstPersonAnimationClip clip;
-            clip.Name = String(item, "name");
-            clip.ArmsClip = String(item, "arms");
-            clip.ArmsBindPose = Bool(item, "armsBindPose", false);
-            clip.WeaponClip = String(item, "weapon");
-            clip.Loop = Bool(item, "loop", false);
-            clip.Fade = Number(item, "fade", 0.08f);
-            if (clip.Name.empty()) return Fail(error, "every clip needs a non-empty 'name'");
-            if (clip.ArmsClip.empty() && !clip.ArmsBindPose)
-                return Fail(error, "clip '" + clip.Name + "' needs 'arms' or armsBindPose=true");
-            if (!std::isfinite(clip.Fade) || clip.Fade < 0.0f || clip.Fade > 5.0f)
-                return Fail(error, "clip '" + clip.Name + "' has an invalid 'fade' (expected 0..5)");
-            if (!names.insert(clip.Name).second)
-                return Fail(error, "duplicate clip name '" + clip.Name + "'");
-            parsed.Clips.push_back(std::move(clip));
-        }
-        if (parsed.DefaultState.empty()) parsed.DefaultState = parsed.Clips.front().Name;
-        if (!parsed.Find(parsed.DefaultState))
-            return Fail(error, "defaultState '" + parsed.DefaultState + "' does not name a clip");
-    }
+    if (parsed.Controller.empty())
+        return Fail(error, "needs a 'controller' (.controller path)");
 
     out = std::move(parsed);
     return true;
@@ -333,21 +305,6 @@ std::string FirstPersonAnimationSet::ToJsonString() const {
     j["armsModel"] = ArmsModel;
     j["weaponModel"] = WeaponModel;
     j["controller"] = Controller;
-    // A v1 file's clip list and default state: without them an edit saved here would leave a file
-    // that no longer loads (no controller, no clips).
-    if (!Clips.empty()) {
-        json clips = json::array();
-        for (const FirstPersonAnimationClip& c : Clips) {
-            json item = {{"name", c.Name}, {"arms", c.ArmsClip}};
-            if (c.ArmsBindPose) item["armsBindPose"] = true;
-            if (!c.WeaponClip.empty()) item["weapon"] = c.WeaponClip;
-            if (c.Loop) item["loop"] = true;
-            item["fade"] = c.Fade;
-            clips.push_back(std::move(item));
-        }
-        j["clips"] = std::move(clips);
-        if (!DefaultState.empty()) j["defaultState"] = DefaultState;
-    }
     j["viewRotation"] = vec3(ViewRotation);
     if (!WeaponSocket.empty()) {
         j["weaponSocket"] = WeaponSocket;
@@ -665,7 +622,7 @@ std::vector<FPBody::Check> FirstPersonWeaponValidate(const FirstPersonWeaponChec
     const FirstPersonAnimationSet& set = *in.Set;
     auto add = [&](Sev level, std::string msg, std::string hint = {}) { out.push_back({level, std::move(msg), std::move(hint)}); };
 
-    if (set.Controller.empty() && set.Clips.empty())
+    if (set.Controller.empty())
         add(Sev::Error, "No controller.", "Set the Controller (the Animation section): it animates both rigs.");
     if (in.Controller) {
         const AnimatorController& c = *in.Controller;

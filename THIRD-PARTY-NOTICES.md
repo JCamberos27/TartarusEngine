@@ -69,7 +69,6 @@ Engine means complying with these licenses even though no source is redistribute
 | ImGuizmo | `master` | MIT | https://github.com/CedricGuillemet/ImGuizmo |
 | meshoptimizer | 1.3 (vertex cache optimizer only) | MIT | https://github.com/zeux/meshoptimizer |
 | NVIDIA PhysX | `107.3-physx-5.6.1` (built from source) | BSD 3-Clause | https://github.com/NVIDIA-Omniverse/PhysX |
-| libtiff | 4.6.0 | libtiff license (BSD-style) — used only by the `TifSplitter` tool | https://gitlab.com/libtiff/libtiff |
 
 ---
 

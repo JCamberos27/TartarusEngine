@@ -4,8 +4,8 @@ Plain-language snapshot of where things stand. No code reading required.
 
 ## What this is
 
-Tartarus Engine is a custom C++ / Vulkan 3D game engine, built partly on top of
-the open-source Acid engine and adapted to this project's own conventions.
+Tartarus Engine is a custom C++ / OpenGL 3D game engine (GLFW, EnTT, PhysX,
+Dear ImGui).
 It has its own editor, and a first-person shooter test scene ("Sandbox")
 used to develop and prove out the engine's systems.
 
@@ -19,8 +19,8 @@ progress bar, and build info.
 `ANIMATOR.md`, `FPS_WEAPON_INTEGRATION.md`). Weapons are data-driven
 (`.fpsanim` files): a state machine controls which animation clip plays
 when (idle, walk, fire, reload, aim down sights, etc.), and procedural
-effects (recoil, sway, breathing) layer on top. The AKS-74U is the one
-fully working weapon so far.
+effects (recoil, sway, breathing) layer on top. The Sandbox player carries
+the AKS-74U (key 1), the Remington 870 (key 2) and a gravity gun (key 3).
 
 **Player locomotion, phase 1 — done.** The player has their own body in
 the world (not just a floating camera) that walks, jogs, runs, jumps,
@@ -79,3 +79,17 @@ gun sitting still while the hands did the equip animation at Play.
 - **Known limits.** A stop clip covers one foot phase, so entering it can
   make the feet pop slightly. There is no weapon-spread bonus for standing
   still yet (the engine only has recoil kick).
+
+## Working on the engine
+
+- **Build:** `cmake --build build --config Release --target TartarusEngine`. `run-editor.cmd`
+  (the desktop shortcut) rebuilds the checkout it lives in and launches the editor.
+- **Tests:** `build\Release\TartarusEngine.exe --unit-tests` and
+  `--smoke-test tests\smoke-scenes` (both gate CI). `--perf-bench <scene-dir>` prints per-pass
+  CPU and GPU times; `tools/sky-review/` does before/after screenshot reviews.
+- **Editor side effects:** the editor re-saves asset `.meta` files while running, and autosaves open
+  scenes lossily (drops `_comment` fields, reorders keys). Check `git status project` after an
+  editor session.
+- **Rebuilding while the editor is open:** rename the running `TartarusEngine.exe` first (Windows
+  allows it), then delete it afterwards.
+- **Line endings:** shaders use LF; most C++ files use CRLF.

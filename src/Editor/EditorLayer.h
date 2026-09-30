@@ -129,19 +129,6 @@ public:
     // Clicks only raise request flags — main.cpp owns the play/maximize/cursor state itself.
     void DrawViewportActionBar(World& world, AssetLibrary& assets, bool playing, bool maximized, bool paused);
 
-    // Dead code: DrawPlayControlsBody rendered the toolbar's old Zone B cluster inline in the
-    // strip via EditorModuleHostAPI::DrawPlayControlsBody. Nothing calls it any more now that
-    // DrawViewportActionBar above covers Play/Stop/Pause/Step unconditionally, but it (and the
-    // EditorModuleHostAPI callback slot, and SetPlayState below) are left in place rather than
-    // torn out, since EditorModuleHostAPI is an additive, versioned contract — removing a slot
-    // is a bigger, separately-considered change, not a side effect of this move.
-    void DrawPlayControlsBody();
-    // Pushed once per frame (main.cpp owns playing/paused/maximized — this class doesn't run the
-    // simulation clock) so DrawPlayControlsBody can read them without EditorLayer owning them.
-    void SetPlayState(bool playing, bool paused, bool maximized) {
-        m_CachedPlaying = playing; m_CachedPaused = paused; m_CachedPlayMaximized = maximized;
-    }
-
     // True when the cursor is over the toolbar's empty (draggable) area this frame; main.cpp
     // forwards it to Window so its WM_NCHITTEST can treat that region as the window's caption.
     // Written by the reloadable toolbar module through EditorModuleHostAPI::SetTitleBarDragHovered.
@@ -159,7 +146,6 @@ public:
     int  GizmoOpIndex() const { return (int)m_GizmoOp; }
     void SetGizmoOpIndex(int op) { m_GizmoOp = (GizmoOp)op; m_HandTool = false; } // picking a gizmo tool exits the Hand tool
     // Viewport tools (#236 E) — Hand tool (Q) and Lock View to Selected (Shift+F).
-    bool HandToolActive() const { return m_HandTool; }
     void SetHandToolActive(bool on) { m_HandTool = on; }
     bool MeasureToolActive() const { return m_MeasureTool; }
     void SetMeasureToolActive(bool on) { m_MeasureTool = on; m_MeasurePoints.clear(); if (on) m_HandTool = false; }
@@ -169,7 +155,6 @@ public:
     void RequestArrayDuplicateModal() { m_ShowArrayDuplicate = true; } // toolbar button (#236 R2)
     // Inspector padlock, driven from the panel's title bar (#236 R2). Toggle captures the live
     // selection snapshot; call it before DrawInspectorBody() runs this frame.
-    bool IsInspectorLocked() const { return m_InspectorLocked; }
     void ToggleInspectorLock();
 
     // Eyedropper colour pick (#236 R2 Inspector tail). A colour field arms it with a pointer
@@ -186,7 +171,6 @@ public:
     // main.cpp: true once on the frame a click landed; fills viewport-local pixel coords.
     bool ConsumeEyedropperSample(float& outX, float& outY);
     void ApplyEyedropperSample(const glm::vec3& rgb); // rgb in 0..1 display space
-    bool LockViewToSelection() const { return m_LockViewToSelection; }
     void SetLockViewToSelection(bool on) { m_LockViewToSelection = on; m_LockViewHasCentroid = false; }
     int  ShadingModeIndex() const { return (int)m_ShadingMode; }
     void SetShadingModeIndex(int m) { m_ShadingMode = (ShadingMode)m; }
@@ -195,13 +179,10 @@ public:
     bool GizmoPivotCenter() const { return m_GizmoPivotCenter; }
     void SetGizmoPivotCenter(bool on) { m_GizmoPivotCenter = on; }
     void SetShowGrid(bool on) { m_ShowGrid = on; }          // ShowGrid() getter already exists
-    bool GizmosMasterVisible() const { return m_GizmosMasterVisible; }
-    void SetGizmosMasterVisible(bool on) { m_GizmosMasterVisible = on; }
     bool GridSnapEnabled() const { return m_GridSnapEnabled; }
     void SetGridSnapEnabled(bool on) { m_GridSnapEnabled = on; }
     bool ShowHistory() const { return m_ShowHistory; }
     void SetShowHistory(bool on) { m_ShowHistory = on; }
-    void RequestResetLayout() { m_ResetLayoutRequested = true; }
     // Scene and Game side by side (Scene left) when they share a tab strip - for --stock-probe,
     // which captures both. Done on the next frame's dock pass.
     void RequestSceneGameSplit() { m_SplitSceneGameRequested = true; }
@@ -227,8 +208,6 @@ public:
     void ToolbarUndo(World& w, AssetLibrary& a) { Undo(w, a); }
     void ToolbarRedo(World& w, AssetLibrary& a) { Redo(w, a); }
     void ToolbarToggleOrthographic(World& w, Camera& c) { ToggleOrthographic(w, c); }
-    bool ToolbarCanSnapToGround(World& w) { return CanSnapSelectionToGround(w); }
-    void ToolbarSnapToGround(World& w) { SnapSelectionToGround(w); }
 
     // Menu / popup bodies for the module's dropdowns, rendered host-side into the module-begun
     // menu/popup (shared ImGuiContext). Defined in EditorLayer_Toolbar.cpp.
@@ -334,7 +313,6 @@ public:
     void  DrawAssetCell(World& world, AssetLibrary& assets, int index, float cellW, float cellH, bool gridMode);
     void  HandleAssetGridBackground(World& world, AssetLibrary& assets);
     void  GetAssetSelectionSummary(AssetLibrary& assets, char* out, int n) const;
-    float GetAssetIconSize() const { return m_AssetIconSize; }
     void  SetAssetIconSize(float px, bool commit);                              // clamps; persists on commit
     void  ToggleAssetViewMode();                                                // cycles Grid -> List -> Details (Phase 5 item 3/4)
     int   GetAssetViewMode() const;                                             // 0 Grid, 1 List, 2 Details (Phase 5 item 4)
@@ -374,12 +352,9 @@ public:
                                   const char* component, const char* field,
                                   const char* label, const char* tooltip);
 
-    // --- Reloadable History HUD module bridge (issue #229, frame only, API v15) -------------
-    // The module owns the bottom-right pinned HUD window + its pin/height math. HistoryHudFrame
-    // gates the draw and hands over the viewport rect / UI scale / row count; DrawHistoryListBody
-    // renders the click-to-jump rows. ShowHistory()/SetShowHistory() (above) carry the toggle.
-    bool HistoryHudFrame(float* outVpX, float* outVpY, float* outVpW, float* outVpH,
-                         float* outUIScale, int* outRowCount);                   // EditorLayer_Toolbar.cpp
+    // --- Reloadable History panel bridge (issue #229) ----------------------------------------
+    // DrawHistoryListBody renders the click-to-jump rows into the module's History panel.
+    // ShowHistory()/SetShowHistory() (above) carry the toggle.
     void DrawHistoryListBody(World& world, AssetLibrary& assets);                // EditorLayer_Toolbar.cpp
     // Screen-space rect of the live Game view image + its framebuffer's colour texture/size, so
     // the Play-Mode Stop/Fullscreen overlay can anchor to the game viewport. Pass a zero size to
@@ -553,7 +528,6 @@ public:
     // Phase 1 item 5 — the JetBrains Mono face for the Console body / numeric readouts, exposed
     // to modules the same way as the other host-owned resources on this line.
     ImFont* GetMonoFont() const { return m_MonoFont; }
-    void SetHideEngineMarkForStats(bool v) { m_HideEngineMarkForStats = v; }
 
     // The GL color texture main.cpp should hand over each frame (its editor-camera render,
     // already containing the grid/outline/drag-preview overlays) — Draw() displays it inside
@@ -630,9 +604,6 @@ public:
     // Public entry point for the toolbar's document-strip Save button (API v20) — DoSave() itself
     // is private since File > Save already reaches it through DrawFileMenuBody.
     bool SaveScene(World& world, AssetLibrary& assets) { return DoSave(world, assets); }
-    // API v22, Q12 (Phase 4 / #6) — lets a module (Inspector, Hierarchy) tint its own panel while
-    // Playing, the same live flag the host's own amber viewport banner already reads.
-    bool InPlayMode() const { return m_InPlayMode; }
 
     // "Save changes?" on-exit prompt (audit #56). main.cpp intercepts the window-close request
     // when the scene is dirty, calls OpenExitPrompt(), and each frame polls TakeExitDecision():
@@ -770,13 +741,8 @@ private:
     bool m_MaximizeToggleRequested = false;
     bool m_PauseToggleRequested = false;
     bool m_StepRequested = false;
-    // See SetPlayState() — this frame's play/pause/maximize state, mirrored in from main.cpp so
-    // DrawPlayControlsBody (Phase 3 item 2) can read it without owning the simulation clock.
-    bool m_CachedPlaying = false;
-    bool m_CachedPaused = false;
     std::set<entt::entity> m_ShadowOverBudget; // #110, see SetShadowOverBudget
     int m_SpotShadowBudget = 4, m_PointShadowBudget = 2; // #110 - this frame's caps, for the warning tooltip
-    bool m_CachedPlayMaximized = false;
     bool m_GameInputActive = false; // see SetGameInputActive
     // Set by Settings > Reset Layout; consumed at the top of Draw()'s dockspace setup to
     // rebuild the default panel arrangement from scratch.
@@ -1324,13 +1290,10 @@ private:
     // user has actually clicked a row, then never again this session (audit #70).
     bool m_HierarchyRowHintDone = false;
 
-    // Engine wordmark ("TARTARUS ENGINE" text, no icon), drawn small and translucent above the
-    // Inspector panel — loaded once in Init() from assets/branding/ (a build-time copy of
+    // Engine mark (the "TE" monogram, no text), spinning slowly in the viewport's bottom-left
+    // corner — loaded once in Init() from assets/branding/ (a build-time copy of
     // extern/branding/, same treatment as the icon font). Null and silently skipped if the
     // file's missing.
-    std::unique_ptr<Texture> m_LogoTexture;
-    // Engine mark (the "TE" monogram, no text), spinning slowly in the viewport's bottom-left
-    // corner — same load treatment as m_LogoTexture, just the other half of the full lockup.
     std::unique_ptr<Texture> m_MarkTexture;
     // Phase 1 item 5 — the JetBrains Mono face, baked once in Init(). Owned by ImGui's font
     // atlas (freed with the ImGuiContext), so this is a non-owning pointer; null only if the
@@ -1340,10 +1303,6 @@ private:
     float m_MarkHue = 0.0f;        // 0..1, advanced each frame; drives the tint when EngineMarkRgb is on
     bool m_ShutdownDone = false;       // guards the clean-exit-only tail of Shutdown()
     bool m_GpuResourcesFreed = false;  // guards FreeGpuResources() (also reachable from ~EditorLayer)
-    // Set each frame by the reloadable Stats module (via SetHideEngineMarkForStats): true when
-    // the (capped) Statistics HUD reaches far enough down the left edge to collide with the
-    // corner monogram — the mark is skipped while so.
-    bool m_HideEngineMarkForStats = false;
     // Live Game-view rect + texture, pushed in each frame by main.cpp (zero size = none). Used by
     // DrawViewportActionBar to place the action bar over the game viewport.
     ImVec2 m_GameViewImgPos{0.0f, 0.0f};
@@ -1848,9 +1807,7 @@ private:
     // indicator toggles itself off, all in place instead of requiring the Stats panel/menu/
     // shortcut. World&/Camera& are for Frame Selected.
     void DrawViewportStatusBar(World& world, Camera& editorCamera);
-    // The actual Play/Stop/Pause/Step/Restore buttons. DrawViewportActionBar is the only live
-    // caller now; the dead DrawPlayControlsBody (see its own comment) still calls this too, kept
-    // compiling for the same additive-API-contract reason.
+    // The actual Play/Stop/Pause/Step/Restore buttons, drawn by DrawViewportActionBar.
     void DrawPlayTransportButtons(bool playing, bool maximized, bool paused);
     // Panel visibility lives in EditorSettings::SceneShowStats (persisted), not a plain member.
     RenderStats m_RenderStats;

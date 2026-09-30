@@ -924,9 +924,9 @@ struct AnimatorComponent {
 // a Script asset attaches this component, and this runtime system applies its motion only while
 // playing. That gives the Inspector a familiar script workflow without requiring a compiler or
 // exposing native engine code to scene authors.
-// Registered via ComponentRegistry (#184) rather than hand-coded serializer/Inspector code — the
-// second such migration, after SpinComponent below. Reflected fields are addressed by
-// pointer-to-member (ComponentReflection.h), so the std::string member is no problem. The
+// Registered via ComponentRegistry (#184) rather than hand-coded serializer/Inspector code.
+// Reflected fields are addressed by pointer-to-member (ComponentReflection.h), so the
+// std::string member is no problem. The
 // runtime-scratch tail is deliberately excluded from the reflected field list, same as it was
 // excluded from the old hand-written serializer.
 struct TransformControllerComponent {
@@ -943,27 +943,6 @@ struct TransformControllerComponent {
     glm::quat BaseRotation{1.0f, 0.0f, 0.0f, 0.0f};
     glm::vec3 BaseScale{1.0f};
     float Elapsed = 0.0f;
-};
-
-// First component wired up purely through the native reflection system (#184): it is declared
-// here, listed once in ComponentRegistry::RegisterEngineComponents(), and from that its JSON
-// serialization, Inspector section and Add Component entry are all generated. The per-frame
-// behaviour is SpinSystem in TartarusGame.dll. Reflected fields are addressed by pointer-to-
-// member (ComponentReflection.h), so there's no standard-layout requirement on the component.
-struct SpinComponent {
-    glm::vec3 Axis{0.0f, 1.0f, 0.0f}; // local axis to spin around (normalised at use)
-    float Speed = 90.0f;             // degrees per second, applied only while playing
-
-    // Runtime scratch, never serialized and not in the reflected field list (#123). SpinSystem
-    // holds the orientation it started from plus the angle turned since, rather than feeding the
-    // previous frame's result back into the next one, so error can't accumulate.
-    // It restarts from the transform's current rotation whenever anything else moved it or Axis
-    // changed (LastRotation / LastAxis are what it last wrote and saw).
-    bool      Initialized = false;
-    glm::quat BaseRotation{1.0f, 0.0f, 0.0f, 0.0f};
-    float     Angle = 0.0f; // degrees turned about Axis since BaseRotation, wrapped to one turn
-    glm::vec3 LastAxis{0.0f};
-    glm::quat LastRotation{1.0f, 0.0f, 0.0f, 0.0f};
 };
 
 // --- Scoring and impact sounds (Sandbox basketball court). Plain data, run by ScoringSystem /

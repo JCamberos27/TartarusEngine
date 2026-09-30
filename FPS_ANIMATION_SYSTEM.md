@@ -10,7 +10,7 @@ from breaking again. Companion documents:
 |---|---|
 | **`ANIMATOR.md`** | You're editing a weapon's animation graph: states, transitions, layers, the Animator window |
 | **`FPS_WEAPON_INTEGRATION.md`** | You're adding a new weapon (or re-exporting this one). Step-by-step workflow and checklist |
-| **`FPS_ANIMATION_INVESTIGATION.md`** | You're about to form a new hypothesis about skinning or import. It lists everything already measured and ruled out, with numbers |
+| **`FPS_ANIMATION_INVESTIGATION.md`** (archived: `git show 763b8187:FPS_ANIMATION_INVESTIGATION.md`) | You're about to form a new hypothesis about skinning or import. It lists everything already measured and ruled out, with numbers. The bug it chased is fixed, so it's no longer in the tree |
 | `tools/assimp_patches/README.md` | You're bumping assimp, or a weapon's spare magazine vanished on import |
 
 ---
@@ -281,7 +281,7 @@ change a default key, edit both places, or delete that action from `settings.jso
 - **Shotguns** (`gameplay.pellets`, `spread`, `reload: "perRound"`, `cycle`; the Remington 870):
   - Each round is `pellets` rays, spread evenly over a cone of `spread.hip` / `spread.ads` degrees (half angle) about the zeroed bore. Each ray leaves its own hole, and the round's `impactImpulse` is shared between them.
   - `cycle.enabled`: after every round (hip or ADS) the `Cycle` trigger goes on after `cycle.delay`. `Fire()` refuses until a `Cycling` state has played through.
-  - `reload: "perRound"`: `LoadRound` adds one round. Pulling the trigger mid-reload sets `StopReload` (the next pull fires). The graph's loop is described in `work/make_remington_controller.py`.
+  - `reload: "perRound"`: `LoadRound` adds one round. Pulling the trigger mid-reload sets `StopReload` (the next pull fires). The graph's loop is described in `tools/weapons/make_remington_controller.py`.
 - **Magazine.** Refilled on the controller's `Refill` event. Anything that cuts a reload short, such as Holster, leaves the count unchanged. There is no reserve ammo, and running dry never auto-reloads.
 - **Triggers last one controller update.** `Update()` resets them each frame, so fire pressed during a reload is dropped rather than firing when the reload ends. The same happened in the old code.
 - **Fidget.** After `regripMin`–`regripMax` s (uniformly random, re-rolled each time) in a state tagged `Idle`, with no crossfade running.
@@ -346,7 +346,7 @@ the `head` camera. That is corrected on the scene's controller:
 
 "Aligned" means the front post's tip sits centred in the rear U-notch, flush with its
 top edge, exactly on screen centre. Both sights were located from the mesh
-(`work/sight_align_probe.cpp`, 0.5 mm heightmaps), not from bones:
+(`tools/probes/sight_align_probe.cpp`, 0.5 mm heightmaps), not from bones:
 
 | sight point (raw weapon frame) | x | y | z |
 |---|---|---|---|
@@ -361,8 +361,8 @@ normal. All view-model fields are read in `Start()` — **Stop and Play again** 
 changing them.
 
 To re-measure (e.g. after re-exporting the rig):
-`work\build_probe.bat sight_align_probe`, then
-`work\sight_align_probe.exe <A_FP_ADS> <A_FP_Aim> <A_W_ADS> - 0 90 90 <offset xyz> <rotation xyz>`;
+`tools\probes\build_probe.bat sight_align_probe`, then
+`build\probes\sight_align_probe.exe <A_FP_ADS> <A_FP_Aim> <A_W_ADS> - 0 90 90 <offset xyz> <rotation xyz>`;
 re-read the two sight points off the heightmaps first.
 Trap: `ads_sight_probe.cpp` (in af4ad15) picks the highest mid-plane vertex as the front
 sight — that's the top of the right-hand protective ear, ~5 mm off. Use `sight_align_probe`.
@@ -408,7 +408,7 @@ Axis reference used throughout: Blender (Z-up, cm) → engine (Y-up, m) is
 
 ```
 C:\Users\jacob\OneDrive\Desktop\AKS-74U 60fps (Revised).blend      (read-only ground truth)
-        │  work/export_clip.py (headless Blender), ranges in export_manifest.json
+        │  tools/weapons/export_clip.py (headless Blender), ranges in export_manifest.json
         ▼
 project/assets/Weapons/AKS74U/
 ├── AKS74U.fpsanim                       the state contract (15 states)
@@ -439,11 +439,11 @@ project/assets/Weapons/AKS74U/
    | `A_FP_<x>` | `A_W_<x>`, when that action exists |
    | Idle / Walk / Aim / Draw / Regrip (no weapon clip) | `A_W_ADS` — the weapon's bind pose *is* the ADS export |
 
-   `work/export_clip.py` applies this automatically and prints `weapon action paired = …`.
+   `tools/weapons/export_clip.py` applies this automatically and prints `weapon action paired = …`.
    Getting it wrong is not subtle: the old Idle had the left hand chase a magazine
    being pulled out (223.6 mm of hand travel → **2.1 mm** after re-export), and
    `Mag_Check` shipped 22.8 mm off (`FPS_ANIMATION_INVESTIGATION.md` UPDATE 6). Check a
-   clip with `work/hand_probe.cpp` or `work/bl_pair_check.py`.
+   clip with `tools/probes/hand_probe.cpp` or `tools/weapons/bl_pair_check.py`.
 4. **`export_manifest.json` is the frame-range record.** Its `frameStart`/`frameEnd` per
    action are what `export_clip.py` should be given. Nothing regenerates it or
    `verification_report.json`. Both date from the original export, so their `meshes` /
@@ -458,12 +458,12 @@ dirty scene:
 
 ```powershell
 & "C:\Program Files\Blender Foundation\Blender 5.1\blender.exe" --background `
-    "C:\Users\jacob\OneDrive\Desktop\AKS-74U 60fps (Revised).blend" --python work\bl_inspect.py
+    "C:\Users\jacob\OneDrive\Desktop\AKS-74U 60fps (Revised).blend" --python tools\weapons\bl_inspect.py
 ```
 
 The file is saved on the neutral pairing `Armature` → `A_FP_Idle`, `AK` → `A_W_ADS`
 (it used to be saved on `A_FP_Tac_Reload`/`A_W_Tac_Reload`, which baked the broken
-batch). `export_clip.py` never saves it; `work/set_neutral_action.py` is the only
+batch). `export_clip.py` never saves it; `tools/weapons/set_neutral_action.py` is the only
 script that writes it, and `AKS-74U 60fps (Revised).blend.pre-neutral.bak` is the
 rollback.
 
@@ -602,7 +602,7 @@ at and set aside - see issue #424 for why.
    a long hitch right after re-exporting its FBXs.
 2. **`Idle`, `Walk`, `Aim`, `Draw`, `Regrip` have no weapon clips** — the `A_W_Idle` /
    `A_W_Walk` actions don't exist in the `.blend` (verified with
-   `work/bl_idle_probe2.py`), so closing the gap means authoring animation. Ask first.
+   `tools/weapons/bl_idle_probe2.py`), so closing the gap means authoring animation. Ask first.
 3. **No ADS fire / aim-walk clips.** Both are procedural (§4) and tied to the `ADS` tag.
    If they're authored, add them to the graph and drop the tag from that state.
 4. **View-model fields are captured at `Start()`**, not live-tunable — Stop/Play.
@@ -669,14 +669,14 @@ out of ADS, tap/hold R at 30 / 15 / 0 rounds, F, Q, 1/2/scroll mid-action, idle 
 
 ---
 
-## 11. Standalone probes (`work/`)
+## 11. Standalone probes (`tools/probes/`, `tools/weapons/`)
 
-C++ probes link directly against the **prebuilt, patched** Assimp + glm in
+C++ probes (`tools/probes/`) link directly against the **prebuilt, patched** Assimp + glm in
 `build\_deps\` — no engine rebuild, no editor. Preferred for any import/skinning
-hypothesis. Build one with `cmd /c "work\build_probe.bat <name>"` (vcvars, `/MD`,
-include/lib paths). **Must be `/MD`**: the prebuilt lib is `MD_DynamicRelease` despite
-the `-mt` in its name. Binaries, logs and re-exported FBXs under `work/` are gitignored;
-only sources are tracked.
+hypothesis. Build one from the repo root with `cmd /c "tools\probes\build_probe.bat <name>"`
+(vcvars, `/MD`, include/lib paths); the exe lands in `build\probes\`. **Must be `/MD`**: the
+prebuilt lib is `MD_DynamicRelease` despite the `-mt` in its name. The Blender and export
+scripts are in `tools/weapons/`. Use the gitignored `work/` folder for scratch output.
 
 | Probe | What it answers |
 |-------|-----------------|
@@ -692,14 +692,14 @@ only sources are tracked.
 | `sight_align_probe.cpp` | Sight heightmaps + solved ADS offset/rotation (§5) |
 | `fbx_info.cpp` | Nodes, meshes, takes, per-bone weights inside an FBX |
 | `mag_probe.cpp` | Out-of-range weight audit, post-process flag bisect. Proved the assimp vertex-join bug |
-| `align_probe.cpp`, `diag_probe.cpp`, `assimp_probe.cpp`, `bone_match_probe.cpp`, `dup_name_probe.cpp` | Earlier investigations — see `FPS_ANIMATION_INVESTIGATION.md` |
-| `bl_inspect*.py`, `bl_idle_probe*.py`, `bl_pair_check.py`, `bl_mag_probe.py` | Read-only Blender ground truth |
-| `export_clip.py` | Clip export with the pairing rule: `blender -b "<blend>" --python work\export_clip.py -- <action> <out.fbx> <start> <end> <meshes 0\|1> [weapon\|auto]` |
+| `female_bake_probe.cpp` | `--scan` checks a character pack against `Model.cpp`'s bind-frame fold-out |
+| `bl_inspect.py`, `bl_idle_probe2.py`, `bl_pair_check.py`, `bl_mag_probe.py` | Read-only Blender ground truth |
+| `export_clip.py` | Clip export with the pairing rule: `blender -b "<blend>" --python tools\weapons\export_clip.py -- <action> <out.fbx> <start> <end> <meshes 0\|1> [weapon\|auto]` |
 | `inspect_blend.py`, `preflight_neutral.py`, `set_neutral_action.py` | Read the `.blend`'s saved state / (only with approval) park it on the neutral pairing |
 | `extract_frames.py` | Frames from a Play recording via Blender's VSE (no ffmpeg here) |
 
 **Gotcha:** `AiToGlm` must be a *direct element copy*; `glm::make_mat4(&m.a1)` silently
-transposes Assimp's row-major matrix. Copy the one in `work/pose_probe.cpp`. And the
+transposes Assimp's row-major matrix. Copy the one in `tools/probes/pose_probe.cpp`. And the
 probes replicate `Model.cpp`, they are not it — they omitted `ProcessMesh`'s vertex
 placement, which is exactly where the original bug was.
 
@@ -717,5 +717,6 @@ placement, which is exactly where the original bug was.
   into the Animator's live Parameters panel.
 - **Input defaults vs `settings.json`.** The saved list wins per action.
 - **View-model fields don't hot-reload** — Stop/Play.
-- **Don't re-check what `FPS_ANIMATION_INVESTIGATION.md` ruled out** without new evidence.
+- **Don't re-check what `FPS_ANIMATION_INVESTIGATION.md` ruled out** without new evidence
+  (archived; see the companion table at the top).
 - **Never touch the `.blend` without asking.**

@@ -100,7 +100,7 @@ item cards that clash with what's worn (amber: one comes off; grey: an odd pairi
   `TARTARUS_SHOT_NAMES="Quantum_Male_01,Quantum_Female_11"` picks them by name. Each picked character also
   gets a `_headback` shot (behind and above the head, for balaclavas and hoods).
   `TARTARUS_SHOT_POSE="<clip>@<fraction>"` (for example
-  `assets/Animations/Mocap/Locomotion_V2/AM_Crouch_Walk/AM_Crouch_Loco_Walk_Fwd.fbx@0.35`) holds every skinned piece in that pose, to see clipping in
+  `assets/Animations/Mocap/RootMotion/Locomotion_V2/AM_Crouch_Walk/AM_Crouch_Loco_Walk_Fwd.fbx@0.35`) holds every skinned piece in that pose, to see clipping in
   motion.
 - `--outfit-audit ... --outfit-posed` also skins every pair into 32 poses (idle, walk, run, crouch walk,
   crouch, jump, pickup and arm flare, each at 10/35/60/85%) and reports what pokes through in any of them,

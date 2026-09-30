@@ -1,9 +1,0 @@
-{
-  "guid": "fa6a17421d5aae89",
-  "materialRemap": {
-    "MI_F_Vivian_Head_Scalp": "assets/Characters/Quantum/Materials/Characters/M_Hair_Dark.mat",
-    "M_Haircut_Pixie_Cut": "assets/Characters/Quantum/Materials/Characters/M_Hair_Dark.mat"
-  },
-  "metaVersion": 1,
-  "type": "model"
-}
