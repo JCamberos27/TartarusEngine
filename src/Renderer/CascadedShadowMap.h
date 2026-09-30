@@ -62,6 +62,18 @@ public:
     // for cascade 0 and cascade 3 at the same time (#117). Packed into a vec4 like the splits.
     glm::vec4 TexelWorldSizesVec4() const;
 
+    // Whether a caster with these world bounds can shadow anything that samples cascade `c`. A
+    // cascade's light box is a square around a sphere around its view slice, far wider than the
+    // slice; only fragments whose view depth selects the cascade (or blends into it from the one
+    // before, over the shader's 12% band) read it, and those fragments lie in that depth range of
+    // the view frustum. Seen along the light, a caster can only darken what its own footprint
+    // covers, so it is needed iff its light-space footprint - grown by the PCF kernel
+    // (`kernelTexels`, before the per-cascade widening SunShadow applies) and the normal offset -
+    // overlaps the slice's. Cascade 0 always answers true: the view model draws at its own FOV, so
+    // its fragments can sit outside the world view's frustum near the eye.
+    bool CasterReachesSlice(int c, const glm::vec3& boundsMin, const glm::vec3& boundsMax,
+                            float kernelTexels, float normalBias) const;
+
 private:
     unsigned int m_DepthArray = 0;
     // One FBO per cascade, each attached to its own layer once in Configure(). Re-pointing a
@@ -74,6 +86,9 @@ private:
     std::array<glm::mat4, kMaxCascades> m_LightViewProj{};
     std::array<float, kMaxCascades> m_SplitFar{};
     std::array<float, kMaxCascades> m_TexelWorld{}; // 2*radius/resolution per cascade, from Update()
+    // The receiver slice of each cascade (see CasterReachesSlice): its 8 corners in that cascade's
+    // light clip space (x, y only - the projection is orthographic).
+    std::array<std::array<glm::vec2, 8>, kMaxCascades> m_SliceCorners{};
     mutable bool m_CompleteChecked = false; // audit GL-204 — one-shot FBO completeness check in Begin()
 
     void Release();
