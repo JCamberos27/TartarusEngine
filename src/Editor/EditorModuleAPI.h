@@ -127,7 +127,11 @@
 //   35 - #178: LogGetEntryStack, a Warning/Error entry resolved call stack (Console stack traces).
 //   36 - Notifications removed: GetNotificationUnreadCount, MarkNotificationsRead and
 //        DrawNotificationsPopupBody are gone (the bell and the capture/log cards were removed).
-constexpr std::uint32_t kEditorModuleAPIVersion = 36;
+//   37 - Dead host callbacks removed: the toolbar icon-row getters/setters, the Grid & Snap /
+//        Gizmos / capture popup bodies, the document strip, play controls, play-mode tint,
+//        history HUD frame, reflection-probe bake, Stats viewport rect and engine-mark hide.
+//        Nothing in the module read them since the icon row moved out of the toolbar.
+constexpr std::uint32_t kEditorModuleAPIVersion = 37;
 
 // Asset Browser Details-view column widths (API v26), in unscaled px (the caller applies UI
 // scale). Name gets whatever's left of the row after these three.
@@ -265,13 +269,6 @@ struct EditorModuleHostAPI {
     // host-owned state read through the callbacks below; the module keeps only derived data and
     // the eased contrast tint, both of which simply rebuild after a reload.
 
-    // Scene-viewport rect (screen space) and the editor UI scale the HUD lays itself out against.
-    // *outEnabled is false when the Stats overlay is toggled off (View > Statistics) or the Scene
-    // viewport isn't showing / is degenerate — the module then draws nothing and clears the
-    // engine-mark hide flag.
-    void (*GetViewportRect)(float* outX, float* outY, float* outW, float* outH,
-                            float* outUIScale, bool* outEnabled) = nullptr;
-
     // One-frame-behind render stats for the frame that just finished.
     void (*GetRenderStats)(EditorModuleRenderStats* out) = nullptr;
 
@@ -303,11 +300,6 @@ struct EditorModuleHostAPI {
     // if the bundled TTF somehow failed to load.
     ImFont* (*GetMonoFont)() = nullptr;
 
-    // The module's one write-back: true while the (height-capped) Stats HUD reaches far enough
-    // down the viewport to collide with the corner engine-mark monogram, so the host hides it.
-    // Called once per module Draw (false on the early-out paths).
-    void (*SetHideEngineMark)(bool hide) = nullptr;
-
     // --- Toolbar / menus (API v4) ------------------------------------------------------------
     // The top toolbar strip, its dropdown menus and the window min/max/close controls live in
     // the module now (EditorModuleToolbar.cpp). The module owns the pinned "##Toolbar" window,
@@ -330,26 +322,10 @@ struct EditorModuleHostAPI {
     void (*WindowClose)() = nullptr;
     bool (*WindowIsMaximized)() = nullptr;
 
-    // Icon-row state. Enums cross as int — GizmoOp: 0..3 Translate/Rotate/Scale/Rect;
-    // ShadingMode: 0..2 Shaded/Wireframe/Unlit.
-    int  (*GetGizmoOp)() = nullptr;          void (*SetGizmoOp)(int op) = nullptr;
-    int  (*GetShadingMode)() = nullptr;      void (*SetShadingMode)(int mode) = nullptr;
-    bool (*GetGizmoLocalSpace)() = nullptr;  void (*SetGizmoLocalSpace)(bool on) = nullptr;
-    bool (*GetGizmoPivotCenter)() = nullptr; void (*SetGizmoPivotCenter)(bool on) = nullptr;
-    bool (*GetShowGrid)() = nullptr;         void (*SetShowGrid)(bool on) = nullptr;
-    bool (*GetGridSnapEnabled)() = nullptr;  void (*SetGridSnapEnabled)(bool on) = nullptr;
     bool (*GetShowHistory)() = nullptr;      void (*SetShowHistory)(bool on) = nullptr;
     // These two persist into EditorSettings; the setter calls EditorSettings::Save() host-side.
     bool (*GetShowStats)() = nullptr;        void (*SetShowStats)(bool on) = nullptr;
-    bool (*GetShowLightGizmos)() = nullptr;  void (*SetShowLightGizmos)(bool on) = nullptr;
-    bool (*IsOrthographic)() = nullptr;      void (*ToggleOrthographic)() = nullptr;
-    void (*ToolbarUndo)() = nullptr;
-    void (*ToolbarRedo)() = nullptr;
-    bool (*CanSnapSelectionToGround)() = nullptr;
-    void (*SnapSelectionToGround)() = nullptr;
-    void (*RequestResetLayout)() = nullptr;
     void (*OpenPreferences)() = nullptr;
-    void (*OpenProjectSettings)() = nullptr; // v16 — menu-bar item beside Preferences
     void (*OpenShortcutsReference)() = nullptr; // v29 — Help menu's Shortcuts item
 
     // Menu / popup bodies rendered host-side into the module-begun menu or popup — the module
@@ -361,13 +337,6 @@ struct EditorModuleHostAPI {
     void (*DrawAddEntityMenuItems)() = nullptr;
     void (*DrawViewMenuBody)() = nullptr;
     void (*DrawWindowMenuBody)() = nullptr;
-    void (*DrawCaptureOptionsPopupBody)() = nullptr;
-    // Fire a screenshot with the current EditorSettings capture options (the Print Screen path
-    // shares this); kCaptureRes and EditorLayer::RequestCapture stay host-side.
-    void (*RequestCapture)() = nullptr;
-    // Fills `out` with the capture button's tooltip ("Capture screenshot — <mode><x2+?> (Print
-    // Screen)"), built host-side from EditorSettings so the module needn't read those fields.
-    void (*GetCaptureButtonTooltip)(char* out, int outSize) = nullptr;
 
     // --- Asset Browser, thin slice (API v5) -------------------------------------------------
     // The dock window, the +Create/Import toolbar row, the breadcrumb, the search box + Filters
@@ -437,7 +406,6 @@ struct EditorModuleHostAPI {
     void  (*DrawAssetCell)(int index, float cellW, float cellH, bool gridMode) = nullptr;
     void  (*HandleAssetGridBackground)() = nullptr;
     void  (*GetAssetSelectionSummary)(char* out, int n) = nullptr;
-    float (*GetAssetIconSize)() = nullptr;
     void  (*SetAssetIconSize)(float px, bool commit) = nullptr;
     void  (*AssetGridFrameEnd)() = nullptr;
 
@@ -459,35 +427,10 @@ struct EditorModuleHostAPI {
     bool (*GetShowInspector)() = nullptr;      void (*SetShowInspector)(bool on) = nullptr;
     void (*DrawInspectorBody)() = nullptr;
 
-    // --- Grid & Snap popover (API v9) ---------------------------------------------------
-    // The toolbar's magnet button gets a caret that opens this popup; the body (grid spacing,
-    // per-op snap increments — plain floats/ints in EditorSettings + EditorLayer) is host-side.
-    void (*DrawGridSnapPopupBody)() = nullptr;
-
-    // --- Gizmos dropdown (API v10) ----------------------------------------------------
-    // Master viewport-gizmo switch + per-type visibility; body is host-side (EditorLayer flags
-    // + EditorSettings::ShowLightGizmos).
-    void (*DrawGizmosPopupBody)() = nullptr;
-
-    // --- Gizmos master toggle button (API v11) --------------------------------------
-    bool (*GetGizmosMasterVisible)() = nullptr;  void (*SetGizmosMasterVisible)(bool on) = nullptr;
-
-    // --- Viewport tools (API v12) --------------------------------------------------
-    bool (*GetHandTool)() = nullptr;             void (*SetHandTool)(bool on) = nullptr;
-    bool (*GetLockViewToSelection)() = nullptr;  void (*SetLockViewToSelection)(bool on) = nullptr;
-
     // --- Asset Browser sort + refresh (API v13) ---------------------------------
     int  (*GetAssetSort)() = nullptr;   void (*SetAssetSort)(int packed) = nullptr;
     void (*RefreshAssetBrowser)() = nullptr;
     float (*GetAssetRefreshFlash)() = nullptr;
-
-    // --- Measure / ruler tool + Duplicate Array (API v14, #236 R2) ------------------
-    bool (*GetMeasureTool)() = nullptr;  void (*SetMeasureTool)(bool on) = nullptr;
-    void (*RequestDuplicateArray)() = nullptr; // opens the array-duplicate modal (host self-gates on a selection)
-
-    // --- Inspector lock in the title bar (API v14, #236 R2 Inspector tail) ----------
-    bool (*GetInspectorLocked)() = nullptr;
-    void (*ToggleInspectorLock)() = nullptr; // host does the selection-snapshot capture
 
     // --- Asset Browser search scope + favourites view (API v14, #236 G) -----------
     // Search scope: false = current folder + subfolders; true = whole project.
@@ -495,48 +438,11 @@ struct EditorModuleHostAPI {
     // Favourites-only grid filter (the toolbar star toggle).
     bool (*GetAssetFavoritesOnly)() = nullptr; void (*SetAssetFavoritesOnly)(bool on) = nullptr;
 
-    // --- History HUD, frame only (API v15) ---------------------------------------------
-    // GetHistoryHudFrame is superseded as of Phase 3 item 8: History is a real dockable panel
-    // now (EditorModuleHistory.cpp just reads GetShowHistory/SetShowHistory, API v4, like every
-    // other panel), so nothing calls this pin/height-ceiling query anymore. No struct layout
-    // change, so no version bump — left in place rather than renumbering every positional field
-    // after it (here and in HotReloadEditorModule.cpp's kHostAPI initializer) for one dead
-    // callback; fair game to actually remove in a future cleanup pass.
-    bool (*GetHistoryHudFrame)(float* outVpX, float* outVpY, float* outVpW, float* outVpH,
-                               float* outUIScale, int* outRowCount) = nullptr;
     // Renders the click-to-jump list into the module's window, between its heading Separator and
     // its End: every undo-stack row, the highlighted "Current" marker, every redo-stack row, and
     // their per-row tooltips + JumpToUndo/RedoEntry calls. The undo/redo stacks, World& and
     // AssetLibrary& never cross the boundary.
     void (*DrawHistoryListBody)() = nullptr;
-
-    // --- Reflection probes (API v16 / PR14) --------------------------------------------
-    // Called by the editor to trigger a probe bake on the next frame. The host rebuilds
-    // ReflectionProbeArray from the current world and marks all probes dirty; shader
-    // variants with _REFLECTION_PROBES receive corrected probe data on subsequent draws.
-    void (*RequestBakeReflectionProbes)() = nullptr;
-
-    // --- Document strip (API v20, Phase 3 item 1) --------------------------------------
-    // The toolbar's new left-hand cluster: the open scene's filename ("Untitled" for a new,
-    // unsaved scene), an unsaved-changes dot, and a Save button — the audit's callout that there
-    // was no visible Save control anywhere in the editor.
-    void (*GetSceneDisplayName)(char* out, int n) = nullptr;
-    bool (*GetSceneDirty)() = nullptr;
-    void (*DoSaveScene)() = nullptr;
-
-    // --- Play controls, Zone B (API v21, Phase 3 item 2) -------------------------------
-    // Renders Play (or Stop + Pause/Resume + Step + Fullscreen/Restore) inline into the toolbar —
-    // the host reads its own cached play/pause/maximize state (pushed in once a frame from
-    // main.cpp, which owns the actual simulation clock) and raises the same request flags the old
-    // floating overlay did.
-    void (*DrawPlayControlsBody)() = nullptr;
-
-    // --- Play-mode panel tint (API v22, Q12 / Phase 4 #6) ------------------------------
-    // True while Playing - the same flag the host's own amber viewport-border banner reads. A
-    // module panel (Inspector, Hierarchy) uses this to tint itself too, per Q12's settled answer:
-    // editing stays fully live in Play mode (it's genuinely useful for tuning values), so this is
-    // a reminder that edits here revert on Stop, not a lock.
-    bool (*GetInPlayMode)() = nullptr;
 
     // --- Asset Browser folder history, Phase 5 item 3 (API v23) ------------------------
     // Back/Forward over the trail NavigateAssetFolder (host-side) records every time

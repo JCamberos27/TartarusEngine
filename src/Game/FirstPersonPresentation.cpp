@@ -117,9 +117,8 @@ bool FirstPersonPresentation::StartSet(World& world, AssetLibrary& assets, int s
             return false;
         }
     } else {
-        m_ControllerPath = "memory:" + animationSet;
-        ctrl = std::make_shared<const AnimatorController>(BuildFirstPersonController(m_Set));
-        RegisterAnimatorController(m_ControllerPath, ctrl);
+        SetError("'" + animationSet + "' names no Animator Controller");
+        return false;
     }
     if (ctrl->Layers.empty() || ctrl->Layers[0].States.empty()) {
         SetError("the Animator Controller for '" + animationSet + "' has no states");

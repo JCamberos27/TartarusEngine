@@ -25,7 +25,7 @@ SOFTWARE.
 This license covers the source code of Tartarus Engine itself.
 
 Third-party components bundled in extern/ or fetched at build time (miniaudio, stb,
-nlohmann/json, Font Awesome, GLFW, GLM, Assimp, EnTT, Dear ImGui, ImGuizmo, libtiff)
+nlohmann/json, Font Awesome, GLFW, GLM, Assimp, EnTT, Dear ImGui, ImGuizmo)
 remain under their own licenses — see THIRD-PARTY-NOTICES.md.
 
 Branding assets under extern/branding/ (the Tartarus Engine wordmark, monogram, and

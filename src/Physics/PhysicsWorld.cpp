@@ -175,11 +175,6 @@ struct PhysicsState {
     std::set<std::uint32_t>     playerTriggers;
     std::vector<TriggerEvent>   triggerEvents;
     std::set<TriggerPair>       enteredThisFrame;
-    // #185 PR 6 — meshes cooked from RenderableComponent geometry for ConvexHull / Mesh
-    // colliders. Refcounted by PhysX; released after the scene (which owns the shapes that
-    // reference them) and before PxPhysics.
-    std::vector<PxConvexMesh*>   convexMeshes;
-    std::vector<PxTriangleMesh*> triangleMeshes;
     // #185 PR 7 — one PxMaterial per distinct (friction, bounciness) rounded to 1/100; the
     // per-entity dynamic-body lookup for the force API; this frame's solid-contact events.
     std::map<long long, PxMaterial*>&                materialCache; // PhysicsCore's (#167)
@@ -1045,8 +1040,6 @@ void Destroy() {
     if (s->controller)      s->controller->release();
     if (s->controllerMgr)   s->controllerMgr->release();
     if (s->scene)           s->scene->release();
-    for (PxConvexMesh* m : s->convexMeshes)   if (m) m->release(); // legacy non-cached path (now unused)
-    for (PxTriangleMesh* m : s->triangleMeshes) if (m) m->release();
 
     delete s;
     Log::Info("PhysX world destroyed.");

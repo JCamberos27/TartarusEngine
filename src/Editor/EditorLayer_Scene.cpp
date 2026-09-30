@@ -1165,7 +1165,7 @@ std::string EditorLayer::ImportDroppedFile(World& world, AssetLibrary& assets, C
             Log::Error("Failed to load prefab '" + path + "'.");
         }
     } else if (ext == ".tif" || ext == ".tiff") {
-        Log::Warn("Skipped '" + path + "' - TIFF isn't supported directly. Convert it to PNG first (see the TifSplitter tool) and drop that instead.");
+        Log::Warn("Skipped '" + path + "' - TIFF isn't supported directly. Convert it to PNG first and drop that instead.");
     } else {
         Log::Warn("Don't know how to import '" + path + "' (unrecognized extension \"" + ext + "\").");
     }

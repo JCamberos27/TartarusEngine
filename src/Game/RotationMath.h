@@ -85,7 +85,7 @@ inline glm::quat RotateAboutLocalAxis(const glm::quat& base, const glm::vec3& ax
 // principal axis; a diagonal like (1,1,0) instead adds equal pitch and yaw, which is a different
 // rotation. A zero axis or zero angle returns `eulerDeg` untouched.
 //
-// Header-only on purpose: TartarusGame.dll (SpinSystem, TransformControllerSystem, ...) doesn't
+// Header-only on purpose: TartarusGame.dll (TransformControllerSystem, ...) doesn't
 // link World.cpp, so it can't call anything defined there.
 inline glm::vec3 RotateEulerAboutLocalAxis(const glm::vec3& eulerDeg, const glm::vec3& axis, float angleDeg) {
     const float len = glm::length(axis);

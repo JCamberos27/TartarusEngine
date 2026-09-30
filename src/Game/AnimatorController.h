@@ -201,11 +201,6 @@ std::vector<float> AnimatorMaskWeights(const AnimatorController::Layer& layer,
 // may be project-relative. Null when it can't be read.
 std::shared_ptr<const AnimatorController> GetAnimatorController(const std::string& path);
 
-// Makes an in-memory controller reachable through GetAnimatorController under `key` (use a
-// "memory:" prefix so it can never collide with a file) - e.g. one generated from a v1 weapon
-// definition. Registering the same key again replaces it.
-void RegisterAnimatorController(const std::string& key, std::shared_ptr<const AnimatorController> ctrl);
-
 // Project-relative paths of every .controller file under the project, sorted.
 std::vector<std::string> FindAnimatorControllers();
 
