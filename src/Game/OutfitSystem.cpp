@@ -27,6 +27,7 @@
 #include <random>
 #include <set>
 #include <sstream>
+#include <stdexcept>
 
 using json = nlohmann::json;
 namespace fs = std::filesystem;
@@ -73,8 +74,13 @@ bool Exists(const std::string& rel) {
 }
 
 // The .mat files beside `matPath` (cached per folder).
-const std::vector<std::string>& Siblings(const std::string& matPath) {
+std::map<std::string, std::vector<std::string>>& SiblingCache() {
     static std::map<std::string, std::vector<std::string>> cache;
+    return cache;
+}
+
+const std::vector<std::string>& Siblings(const std::string& matPath) {
+    auto& cache = SiblingCache();
     const std::string dir = Folder(matPath);
     auto it = cache.find(dir);
     if (it != cache.end()) return it->second;
@@ -103,10 +109,30 @@ std::shared_ptr<MaterialAsset> Material(AssetLibrary& assets, const std::string&
 
 // The name an item has in either gender ("SKM_F_Hoodie" and "SKM_Hoodie" -> "hoodie").
 std::string CutName(const std::string& stem) {
-    std::string s = stem;
-    for (const char* p : {"SKM_F_", "SKM_", "SM_"})
-        if (Lower(s).rfind(Lower(p), 0) == 0) { s = s.substr(std::string(p).size()); break; }
-    return Lower(s);
+    std::string s = Lower(stem);
+    for (const char* p : {"skm_f_", "sm_f_", "skm_", "sm_"})
+        if (s.rfind(p, 0) == 0) { s = s.substr(std::string(p).size()); break; }
+    // A cut made for another item is the same item for the other gender ("jeans_inboots" -> "jeans").
+    for (const char* suffix : {"_inboots"})
+        if (s.size() > std::strlen(suffix) && s.compare(s.size() - std::strlen(suffix), std::string::npos, suffix) == 0)
+            s.resize(s.size() - std::strlen(suffix));
+    return s;
+}
+
+// How alike two cut names are: shared underscore-separated words over all words (0..1).
+float CutLikeness(const std::string& a, const std::string& b) {
+    auto words = [](const std::string& s) {
+        std::set<std::string> out;
+        std::stringstream ss(s);
+        for (std::string w; std::getline(ss, w, '_');)
+            if (!w.empty()) out.insert(w);
+        return out;
+    };
+    const auto wa = words(a), wb = words(b);
+    size_t shared = 0;
+    for (const auto& w : wa) shared += wb.count(w);
+    const size_t all = wa.size() + wb.size() - shared;
+    return all ? (float)shared / (float)all : 0.0f;
 }
 
 std::shared_ptr<const Catalog> CatalogFor(World& world, AssetLibrary& assets, entt::entity root, Result& r) {
@@ -117,14 +143,34 @@ std::shared_ptr<const Catalog> CatalogFor(World& world, AssetLibrary& assets, en
 }
 
 // The body's driving Animator (the first piece with one), for new pieces to follow.
-const AnimatorControllerComponent* Driver(const World& world, entt::entity root) {
+// The entity whose Animator Controller drives the outfit: the root's own, else the first child's that
+// isn't following another (First Person Body picks the same one).
+entt::entity DriverEntity(const World& world, entt::entity root) {
     const auto& reg = world.Registry;
-    if (const auto* ac = reg.try_get<AnimatorControllerComponent>(root)) return ac;
+    if (reg.all_of<AnimatorControllerComponent>(root)) return root;
     if (const auto* h = reg.try_get<HierarchyComponent>(root))
         for (entt::entity c : h->Children)
             if (reg.valid(c))
-                if (const auto* ac = reg.try_get<AnimatorControllerComponent>(c)) return ac;
-    return nullptr;
+                if (const auto* ac = reg.try_get<AnimatorControllerComponent>(c); ac && ac->Driver == entt::null) return c;
+    return entt::null;
+}
+
+const AnimatorControllerComponent* Driver(const World& world, entt::entity root) {
+    const entt::entity e = DriverEntity(world, root);
+    return e == entt::null ? nullptr : world.Registry.try_get<AnimatorControllerComponent>(e);
+}
+
+// Every other piece with an Animator Controller mirrors the driver's (AnimatorController's follower mode):
+// one state machine per character, the pieces always in step, and parameters set on the driver reach
+// them all. Runtime only - a loaded scene is linked again by UpdateAttachments.
+void LinkFollowers(World& world, entt::entity root, entt::entity driver) {
+    auto& reg = world.Registry;
+    if (driver == entt::null || !reg.valid(driver)) return;
+    const auto* h = reg.try_get<HierarchyComponent>(root);
+    if (!h) return;
+    for (entt::entity c : h->Children)
+        if (c != driver && reg.valid(c) && reg.all_of<OutfitPieceComponent>(c))
+            if (auto* ac = reg.try_get<AnimatorControllerComponent>(c)) ac->Driver = driver;
 }
 
 // A colourway picked on a piece: its remapped material and what was put in its place.
@@ -208,13 +254,27 @@ std::shared_ptr<const Wardrobe::Wardrobe> LayerWardrobe(const std::string& path)
 
 std::shared_ptr<const Catalog> LoadCatalog(AssetLibrary& assets, const std::string& path, bool rescan, std::string* error) {
     static std::map<std::string, std::shared_ptr<const Catalog>> cache;
+    // Failures too: the Inspector asks every frame, and a missing or broken file would be read each time.
+    static std::map<std::string, std::string> failed;
     const std::string key = Lower(Rel(path));
-    if (!rescan)
+    if (!rescan) {
         if (auto it = cache.find(key); it != cache.end()) return it->second;
+        if (auto it = failed.find(key); it != failed.end()) {
+            if (error) *error = it->second;
+            return nullptr;
+        }
+    }
+    failed.erase(key);
+    if (rescan) {
+        // New colourway .mat files and wardrobe edits are picked up too.
+        SiblingCache().clear();
+        LayerWardrobes().erase(key);
+    }
 
     std::ifstream in(ProjectPaths::Resolve(Rel(path)), std::ios::binary);
     if (!in) {
-        if (error) *error = "can't open wardrobe " + path;
+        failed[key] = "can't open wardrobe " + path;
+        if (error) *error = failed[key];
         return nullptr;
     }
     std::stringstream text;
@@ -223,7 +283,8 @@ std::shared_ptr<const Catalog> LoadCatalog(AssetLibrary& assets, const std::stri
     cat->Path = Rel(path);
     std::string parseError;
     if (!Wardrobe::Parse(text.str(), cat->W, &parseError)) {
-        if (error) *error = path + ": " + parseError;
+        failed[key] = path + ": " + parseError;
+        if (error) *error = failed[key];
         return nullptr;
     }
     for (const auto& folder : cat->W.ItemFolders) {
@@ -278,11 +339,24 @@ Result Apply(World& world, AssetLibrary& assets, entt::entity root, const Wardro
     auto& reg = world.Registry;
     auto cat = CatalogFor(world, assets, root, r);
     if (!cat) return r;
-    auto& outfit = reg.get<CharacterOutfitComponent>(root);
     const Wardrobe::RaceDef* race = Wardrobe::FindRace(cat->W, request.Sex, request.Race);
     const Wardrobe::Resolved resolved = Wardrobe::Resolve(cat->W, cat->Items, request);
     r.Notes = resolved.Notes;
     for (const auto& c : resolved.Clashes) r.Notes.push_back("Odd pairing: " + c);
+
+    // A second piece in a slot (a duplicated child): Pieces() sees only the first, so nothing would ever
+    // replace, hide or remove it.
+    if (const auto* h = reg.try_get<HierarchyComponent>(root)) {
+        std::set<std::string> seen;
+        std::vector<entt::entity> extra;
+        for (entt::entity c : h->Children)
+            if (reg.valid(c))
+                if (const auto* p = reg.try_get<OutfitPieceComponent>(c); p && !seen.insert(p->Slot).second) extra.push_back(c);
+        for (entt::entity c : extra) {
+            r.Notes.push_back("Removed a second " + reg.get<OutfitPieceComponent>(c).Slot + " piece.");
+            world.DestroyEntityAndChildren(c);
+        }
+    }
 
     // What's there now: a piece whose model was swapped by hand counts as its model, so it's rebuilt.
     auto pieces = Pieces(world, root);
@@ -306,6 +380,8 @@ Result Apply(World& world, AssetLibrary& assets, entt::entity root, const Wardro
         follower.Track = driver->Track;
         follower.RootMotion = driver->RootMotion;
     }
+    // Remember which entity drives (the component moves when the registry grows).
+    const entt::entity driverEntity = DriverEntity(world, root);
     const auto* rootLayer = reg.try_get<LayerComponent>(root);
     const int layer = rootLayer ? rootLayer->Layer : 0;
 
@@ -323,10 +399,11 @@ Result Apply(World& world, AssetLibrary& assets, entt::entity root, const Wardro
         pieces[p.Slot] = e;
         ++r.Created;
     }
+    std::set<std::string> failed; // slots whose new model didn't load: they keep the old piece and its record
     for (const auto& p : diff.Remodel) {
         const entt::entity e = pieces[p.Slot];
         auto model = assets.InstantiateModel(ProjectPaths::Resolve(p.Path));
-        if (!model) { r.Notes.push_back("can't load " + p.Path); continue; }
+        if (!model) { r.Notes.push_back("can't load " + p.Path); failed.insert(p.Slot); continue; }
         auto& rc = reg.get<RenderableComponent>(e);
         const Picks previous = PickedColourways(assets, cat->W, rc);
         rc.ModelRef = model;
@@ -338,7 +415,7 @@ Result Apply(World& world, AssetLibrary& assets, entt::entity root, const Wardro
     // Every piece: its record, and the race's skin (new pieces get their materials here).
     for (const auto& p : resolved.Pieces) {
         auto it = pieces.find(p.Slot);
-        if (it == pieces.end()) continue;
+        if (it == pieces.end() || failed.count(p.Slot)) continue;
         auto& piece = reg.get<OutfitPieceComponent>(it->second);
         piece.Item = p.Path;
         piece.Flags = flagsOf(p);
@@ -353,9 +430,13 @@ Result Apply(World& world, AssetLibrary& assets, entt::entity root, const Wardro
             }
     }
 
-    outfit.Gender = (int)request.Sex;
-    if (race) outfit.Race = race->Name;
-    ++outfit.Version;
+    LinkFollowers(world, root, driverEntity);
+
+    // `outfit` again: creating pieces can move the component's storage.
+    auto& done = reg.get<CharacterOutfitComponent>(root);
+    done.Gender = (int)request.Sex;
+    if (race) done.Race = race->Name;
+    ++done.Version;
     r.Ok = true;
     return r;
 }
@@ -441,8 +522,10 @@ Result Submit(World& world, AssetLibrary& assets, entt::entity root, const Wardr
     if (!cat) return r;
     // A newer change replaces whatever this outfit was still waiting for (clicking through items fast).
     auto& list = Waiting();
+    // Colourway-only steps (SubmitColourway, a preset's colours) stay: they apply to the pieces, whatever
+    // the outfit becomes.
     list.erase(std::remove_if(list.begin(), list.end(),
-                              [&](const PendingChange& pc) { return pc.W == &world && pc.Root == root; }),
+                              [&](const PendingChange& pc) { return pc.W == &world && pc.Root == root && pc.HasRequest; }),
                list.end());
 
     PendingChange pc;
@@ -539,11 +622,22 @@ Result SetGender(World& world, AssetLibrary& assets, entt::entity root, Wardrobe
     Wardrobe::Request next;
     next.Sex = gender;
     next.Race = req.Race; // FindRace falls back to the first when the other body has no such race
+    // Each item's cut for the other gender: the same name, else the most alike name in the slot. The pieces
+    // an outfit can't do without (Randomize's whole-outfit slots) take the most alike even when nothing is
+    // close, so a switch never leaves the character without pants.
     for (const auto& [slot, path] : req.Items) {
         const Wardrobe::Item* from = cat->Find(path);
         if (!from) continue;
-        for (const auto* it : cat->ForSlot(slot, gender))
-            if (CutName(it->Stem) == CutName(from->Stem)) { next.Items[slot] = it->Path; break; }
+        const std::string cut = CutName(from->Stem);
+        const Wardrobe::Item* best = nullptr;
+        float bestScore = -1.0f;
+        for (const auto* it : cat->ForSlot(slot, gender)) {
+            if (it->Variant) continue; // the rules pick those
+            const float score = CutName(it->Stem) == cut ? 2.0f : CutLikeness(CutName(it->Stem), cut);
+            if (score > bestScore) { bestScore = score; best = it; }
+        }
+        const bool essential = slot == "Top" || slot == "Pants" || slot == "Shoes";
+        if (best && (bestScore >= 0.34f || essential)) next.Items[slot] = best->Path;
     }
     return Submit(world, assets, root, next);
 }
@@ -637,6 +731,10 @@ bool SetColourway(World& world, AssetLibrary& assets, entt::entity piece, const 
     bool any = false;
     for (size_t i = 0; i < sources.size(); ++i)
         if (!sources[i].empty() && Same(sources[i], source)) { rc->Materials[i] = mat; any = true; }
+    // What caches the outfit's look (the first-person body's twins, the editor) notices by the version.
+    if (any)
+        if (const auto* h = world.Registry.try_get<HierarchyComponent>(piece); h && world.Registry.valid(h->Parent))
+            if (auto* outfit = world.Registry.try_get<CharacterOutfitComponent>(h->Parent)) ++outfit->Version;
     return any;
 }
 
@@ -667,8 +765,14 @@ int AdoptExisting(World& world, AssetLibrary& assets, entt::entity root) {
                 for (const auto& [part, model] : race.Parts)
                     if (isPart(model)) { piece.Slot = part; outfit.Gender = g; }
             }
+            // An alternate stands in for the part a cover rule replaces with it ("ShoeFeet" for "Feet").
             for (const auto& [name, model] : body.Alternates)
-                if (isPart(model)) piece.Slot = "Feet";
+                if (isPart(model)) {
+                    piece.Slot = "Feet";
+                    for (const auto& rule : cat->W.Covers)
+                        if (rule.With == name && !rule.Replace.empty()) { piece.Slot = rule.Replace; break; }
+                    outfit.Gender = g;
+                }
             if (!piece.Slot.empty()) piece.Flags = OutfitPieceBodyPart | (piece.Slot == "Head" ? OutfitPieceHeadAttached : 0);
         }
         if (piece.Slot.empty())
@@ -717,18 +821,34 @@ Result LoadPreset(World& world, AssetLibrary& assets, entt::entity root, const s
     Result r;
     std::ifstream in(ProjectPaths::Resolve(Rel(path)), std::ios::binary);
     if (!in) { r.Error = "can't open " + path; return r; }
-    json j;
-    try { in >> j; } catch (const std::exception& e) { r.Error = path + ": " + e.what(); return r; }
     Wardrobe::Request req;
-    req.Sex = Lower(j.value("gender", std::string("Male"))) == "female" ? Wardrobe::Gender::Female : Wardrobe::Gender::Male;
-    req.Race = j.value("race", std::string());
     std::map<std::string, json> colours;
-    if (j.contains("items") && j["items"].is_object())
-        for (const auto& [slot, v] : j["items"].items()) {
-            if (!v.is_object() || !v.contains("item")) continue;
-            req.Items[slot] = v["item"].get<std::string>();
-            if (v.contains("colours")) colours[slot] = v["colours"];
-        }
+    try {
+        json j;
+        in >> j;
+        if (!j.is_object()) throw std::runtime_error("not a preset");
+        auto text = [&](const json& o, const char* key) {
+            return o.contains(key) && o[key].is_string() ? o[key].get<std::string>() : std::string();
+        };
+        if (j.contains("gender") && !j["gender"].is_string()) throw std::runtime_error("\"gender\" isn't a name");
+        req.Sex = Lower(text(j, "gender")) == "female" ? Wardrobe::Gender::Female : Wardrobe::Gender::Male;
+        req.Race = text(j, "race");
+        const std::string wardrobe = text(j, "wardrobe");
+        if (const auto* outfit = world.Registry.try_get<CharacterOutfitComponent>(root);
+            outfit && !wardrobe.empty() && !Same(wardrobe, outfit->Wardrobe))
+            r.Notes.push_back("Made for " + wardrobe + ": its items may not be in this wardrobe.");
+        if (j.contains("items") && j["items"].is_object())
+            for (const auto& [slot, v] : j["items"].items()) {
+                if (!v.is_object() || !v.contains("item")) continue;
+                if (!v["item"].is_string()) throw std::runtime_error("the " + slot + " item isn't a path");
+                req.Items[slot] = v["item"].get<std::string>();
+                if (v.contains("colours")) colours[slot] = v["colours"];
+            }
+    } catch (const std::exception& e) {
+        r.Error = path + ": " + e.what();
+        return r;
+    }
+    const auto notes = r.Notes;
     std::vector<AssetLibrary::AsyncHandle> colourTickets;
     for (const auto& [slot, c] : colours)
         if (c.is_object())
@@ -745,7 +865,7 @@ Result LoadPreset(World& world, AssetLibrary& assets, entt::entity root, const s
             }
         });
     });
-    if (!r.Ok) return r;
+    r.Notes.insert(r.Notes.begin(), notes.begin(), notes.end());
     return r;
 }
 
@@ -756,10 +876,16 @@ namespace {
 // A piece's bind-pose geometry in the world (metres), as Model::CollisionGeometry lists it.
 OutfitCoverage::Mesh Geometry(const World& world, entt::entity e) {
     OutfitCoverage::Mesh m;
-    const auto* rc = world.Registry.try_get<RenderableComponent>(e);
+    const auto& reg = world.Registry;
+    const auto* rc = reg.try_get<RenderableComponent>(e);
     if (!rc || !rc->ModelRef) return m;
     rc->ModelRef->CollisionGeometry(m.Positions, m.Indices);
-    const glm::mat4 xf = world.ComposeWorldTransform(e);
+    // Rigid head wear is moved onto the head bone every frame (UpdateAttachments); modelled in the head's
+    // bind pose, that pose is where it belongs - its place under the root, like every other piece.
+    glm::mat4 xf = world.ComposeWorldTransform(e);
+    if (const auto* p = reg.try_get<OutfitPieceComponent>(e);
+        p && (p->Flags & OutfitPieceHeadAttached) && !(p->Flags & OutfitPieceBodyPart) && rc->ModelRef->BoneCount() == 0)
+        if (const auto* h = reg.try_get<HierarchyComponent>(e); h && reg.valid(h->Parent)) xf = world.ComposeWorldTransform(h->Parent);
     for (auto& p : m.Positions) p = glm::vec3(xf * glm::vec4(p, 1.0f));
     return m;
 }
@@ -777,8 +903,17 @@ std::uint64_t HideSignature(const World& world, const CharacterOutfitComponent& 
     std::uint64_t sig = outfit.AutoHide ? 1469598103934665603ull : 7ull;
     auto mix = [&](std::uint64_t v) { sig = (sig ^ v) * 1099511628211ull; };
     mix((std::uint64_t)(std::uintptr_t)w);
+    auto mixText = [&](const std::string& t) {
+        for (char c : t) mix((unsigned char)c);
+        mix(0xffull);
+    };
     for (const auto& [slot, e] : pieces) {
         mix((std::uint64_t)entt::to_integral(e));
+        // What its layer comes from (PieceLayer): an edit in the Inspector changes these without a new model.
+        const auto& piece = world.Registry.get<OutfitPieceComponent>(e);
+        mixText(piece.Slot);
+        mixText(piece.Item);
+        mix((std::uint64_t)piece.Flags);
         const auto* rc = world.Registry.try_get<RenderableComponent>(e);
         mix(rc ? (std::uint64_t)(std::uintptr_t)rc->ModelRef.get() : 0ull);
         mix(world.Registry.all_of<OutfitHideTag>(e) ? 2ull : 3ull);
@@ -803,7 +938,7 @@ CoverageStore& Coverage() {
     return s;
 }
 
-constexpr std::uint32_t kCoverageVersion = 14; // bump when Covered/Erode or their settings change
+constexpr std::uint32_t kCoverageVersion = 15; // bump when Covered/Erode or their settings change
 
 struct FileStamp {
     std::uint64_t Size = 0;
@@ -881,7 +1016,18 @@ const std::vector<std::uint8_t>* PairCoverage(const World& world, entt::entity u
                                               const std::string& underModel, const std::string& overModel, bool exposed,
                                               bool rigid) {
     CoverageStore& store = Coverage();
-    const CoverageKey key{Lower(Rel(underModel)) + (exposed ? "|exposed" : "") + (rigid ? "|rigid" : ""), Lower(Rel(overModel))};
+    // The thresholds are in metres, so a character scaled up or down has coverage of its own.
+    std::string scale;
+    if (const auto* h = world.Registry.try_get<HierarchyComponent>(under); h && world.Registry.valid(h->Parent)) {
+        const glm::mat4 root = world.ComposeWorldTransform(h->Parent);
+        const float s = glm::length(glm::vec3(root[1]));
+        if (std::abs(s - 1.0f) > 0.005f) {
+            char buf[24];
+            std::snprintf(buf, sizeof(buf), "|x%.2f", s);
+            scale = buf;
+        }
+    }
+    const CoverageKey key{Lower(Rel(underModel)) + (exposed ? "|exposed" : "") + (rigid ? "|rigid" : "") + scale, Lower(Rel(overModel))};
     if (auto it = store.Done.find(key); it != store.Done.end()) return &it->second;
     if (auto it = store.Running.find(key); it != store.Running.end()) {
         if (it->second.wait_for(std::chrono::seconds(0)) != std::future_status::ready) return nullptr;
@@ -957,6 +1103,11 @@ void UpdateHiding(World& world) {
 void UpdateAttachments(World& world) {
     auto& reg = world.Registry;
     for (entt::entity root : reg.view<CharacterOutfitComponent>()) {
+        // A loaded scene (or an undo) brings pieces back as independent animators: link them again.
+        if (auto& outfit = reg.get<CharacterOutfitComponent>(root); outfit.LinkedVersion != outfit.Version) {
+            LinkFollowers(world, root, DriverEntity(world, root));
+            outfit.LinkedVersion = outfit.Version;
+        }
         const auto pieces = Pieces(world, root);
         const auto head = pieces.find("Head");
         if (head == pieces.end()) continue;

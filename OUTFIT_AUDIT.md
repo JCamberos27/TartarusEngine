@@ -89,7 +89,7 @@ peaks at about 5.5 GB of VRAM.
   - The head keeps skin that would leave a hole (`Backed`), so these may be expected. Check them visually
     with `--outfit-shots`.
 
-### Bugs `--outfit-selftest` confirms (7 of 45 checks fail)
+### Bugs `--outfit-selftest` confirms (7 of 45 checks fail at baseline, all fixed in phase 2)
 1. **`SetGender` drops items.**
    - `CutName` doesn't strip `SM_F_`, so the balaclava is lost.
    - Names differ between the genders (`SKM_Jeans` vs `SKM_F_Pants_Jeans`, and `_Inboots` variants), so the
@@ -106,10 +106,18 @@ peaks at about 5.5 GB of VRAM.
    entities and models.
 
 ### Bugs found by reading the code (not yet covered by a check)
-- **A failed re-model still records the new item**, and `Result.Ok` stays true.
+- **A failed re-model still records the new item**, and `Result.Ok` stays true. (Fixed in phase 2: the old
+  piece and its record stay.)
 - **Coverage for rigid headwear is worked out in the animated pose** when it's first computed during Play.
-  The coverage cache key also has no world scale.
-- **`AdoptExisting` puts every body alternate in "Feet".**
+  The coverage cache key also has no world scale. (Fixed in phase 2; coverage version 15, so every pair is
+  worked out once again.)
+- **`AdoptExisting` puts every body alternate in "Feet".** (Fixed in phase 2: the slot comes from the
+  cover rule that uses the alternate.)
+- **The first-person twins never refresh their materials or hiding.** (Fixed in phase 2: `SyncTwins`
+  copies them when they change.)
+- **"Rescan wardrobe" keeps the colourway folder cache and the layer wardrobe.** (Fixed in phase 2.)
+- **A missing or broken wardrobe is read again on every call.** (Fixed in phase 2: failures are cached
+  until a rescan.)
 - **The editor's item thumbnails keep GL texture ids** that the thumbnail cache can delete, so they can dangle.
 - **Every clothing piece draws double-sided** (`SceneRenderer.cpp`), whatever its material says.
 - **Per-frame CPU work in `UpdateHiding` and `UpdateAttachments`:**
@@ -121,3 +129,17 @@ peaks at about 5.5 GB of VRAM.
   - `Catalog::Find` searches linearly, allocating strings;
   - clash checks run for every card;
   - with the "..." menu open, it scans the whole asset tree.
+
+## Phase 2: correctness
+All 45 `--outfit-selftest` checks pass. `--unit-tests` (7222), `--outfit-rules`, the Sandbox `--smoke-test` and
+`--weapon-test` (45 checks) pass too.
+- **`SetGender`:** `CutName` strips `SM_F_` and variant suffixes. When no cut has the same name, the most alike
+  name in the slot (shared words) is taken; Top, Pants and Shoes always get one.
+- **`SetColourway`** bumps the outfit's version.
+- **`LoadPreset`:** every read is inside the `try`. A preset made for another wardrobe adds a note.
+- **`Submit`** keeps colourway-only steps that are waiting.
+- **`Apply`:**
+  - removes a second piece in a slot;
+  - links every piece's Animator Controller to the driver's (follower mode). `UpdateAttachments` links a
+    loaded scene again (`CharacterOutfitComponent::LinkedVersion`).
+- **`HideSignature`** includes each piece's slot, item and flags.
