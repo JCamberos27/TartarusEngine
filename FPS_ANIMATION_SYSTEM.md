@@ -78,7 +78,7 @@ authority, and the view model has no collider.
    - `Fire1` → `UpdateTrigger`
    - `Reload` → `UpdateReloadKey`
    - `Inspect` and `Melee` → `TriggerAction`
-   - `Weapon1`, `Weapon2`, scroll and `Holster` → `SetEquipped`
+   - `Weapon1`, `Weapon2`, `Weapon3`, scroll and `Holster` → `SetEquipped`
 7. `firstPersonPresentation.Tick(dt, planarSpeed, sprinting, aiming)`: sets the locomotion parameters. `aiming` means `Fire2` is held.
 8. `UpdateAnimatorControllers(...)`: the arms controller runs, the weapon mirrors it, and both
    models are posed. The body's controller runs here too, its root motion In Place.
@@ -268,8 +268,8 @@ This lives in `FirstPersonPresentation`, and its numbers come from the definitio
 | `Reload` tap | R | Sets the `Reload` trigger when the magazine isn't full and no `Reload`-tagged state is playing |
 | `Reload` hold ≥ `reloadHoldSeconds` | R | Sets the `MagCheck` trigger |
 | `Inspect` / `Melee` | I / Q | Set those triggers |
-| `Weapon1` / `Weapon3` | 1 / 3 | Draw the controller's Animation Set / Secondary Animation Set. Switching weapons holsters the one in hand, swaps the rigs once it's `Hidden`, and draws the other from its `Holstered` state. Each keeps its ammo |
-| `Weapon2` | 2 | Unarmed (`Equipped` false) |
+| `Weapon1` / `Weapon2` | 1 / 2 | Draw the controller's Animation Set / Secondary Animation Set. Switching weapons holsters the one in hand, swaps the rigs once it's `Hidden`, and draws the other from its `Holstered` state. Each keeps its ammo |
+| `Weapon3` | 3 | Unarmed (`Equipped` false; the gravity gun, where the controller has one) |
 | scroll wheel | wheel | Steps through the weapons, then unarmed (only without the gravity gun) |
 | `Holster` | H | Toggle `Equipped` |
 | `Sprint` | L-Shift | The `Sprint` parameter. Sprinting drops ADS |
@@ -595,7 +595,7 @@ at and set aside - see issue #424 for why.
 
 ## 9. Known gaps / next steps
 
-1. **Two weapons per player.** Slots are "1 = Animation Set, 3 = Secondary Animation Set, 2 = unarmed",
+1. **Two weapons per player.** Slots are "1 = Animation Set, 2 = Secondary Animation Set, 3 = unarmed",
    swapped on Holster → Draw (`FirstPersonPresentation::SelectSlot`). A longer inventory needs a list
    field on the controller (the reflection system has no list type yet). The swap loads the other
    weapon's models on first use: fast once they're in the asset cache (the Sandbox preloads them),
