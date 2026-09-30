@@ -893,7 +893,8 @@ OutfitCoverage::Mesh Geometry(const World& world, entt::entity e) {
     glm::mat4 xf = world.ComposeWorldTransform(e);
     if (const auto* p = reg.try_get<OutfitPieceComponent>(e);
         p && (p->Flags & OutfitPieceHeadAttached) && !(p->Flags & OutfitPieceBodyPart) && rc->ModelRef->BoneCount() == 0)
-        if (const auto* h = reg.try_get<HierarchyComponent>(e); h && reg.valid(h->Parent)) xf = world.ComposeWorldTransform(h->Parent);
+        if (const auto* h = reg.try_get<HierarchyComponent>(e); h && reg.valid(h->Parent))
+            xf = world.ComposeWorldTransform(h->Parent) * FitMatrix(*rc->ModelRef, p->Fit);
     for (auto& p : m.Positions) p = glm::vec3(xf * glm::vec4(p, 1.0f));
     return m;
 }
@@ -952,7 +953,7 @@ CoverageStore& Coverage() {
     return s;
 }
 
-constexpr std::uint32_t kCoverageVersion = 15; // bump when Covered/Erode or their settings change
+constexpr std::uint32_t kCoverageVersion = 17; // bump when Covered/Erode or their settings change
 
 struct FileStamp {
     std::uint64_t Size = 0;
@@ -1041,7 +1042,16 @@ const std::vector<std::uint8_t>* PairCoverage(const World& world, entt::entity u
             scale = buf;
         }
     }
-    const CoverageKey key{Lower(Rel(underModel)) + (exposed ? "|exposed" : "") + (rigid ? "|rigid" : "") + scale, Lower(Rel(overModel))};
+    // A fitted piece (ItemOverride::Fit) covers differently: its fit is part of the key.
+    auto fitTag = [&](entt::entity e) {
+        const auto* p = world.Registry.try_get<OutfitPieceComponent>(e);
+        if (!p || p->Fit <= 0.0f || std::abs(p->Fit - 1.0f) < 1e-4f) return std::string();
+        char buf[24];
+        std::snprintf(buf, sizeof(buf), "|fit%.3f", p->Fit);
+        return std::string(buf);
+    };
+    const CoverageKey key{Lower(Rel(underModel)) + (exposed ? "|exposed" : "") + (rigid ? "|rigid" : "") + scale + fitTag(under),
+                          Lower(Rel(overModel)) + fitTag(over)};
     if (auto it = store.Done.find(key); it != store.Done.end()) return &it->second;
     if (auto it = store.Running.find(key); it != store.Running.end()) {
         if (it->second.wait_for(std::chrono::seconds(0)) != std::future_status::ready) return nullptr;
@@ -1133,8 +1143,31 @@ void UpdateHiding(World& world) {
         // Still waiting for coverage worked out in the background: look again every few frames, not every one.
         if (signature == outfit.HideWaiting && frame < outfit.HideRetryFrame) continue;
         const auto pieces = Pieces(world, root);
+        for (const auto& [slot, e] : pieces) {
+            auto& piece = reg.get<OutfitPieceComponent>(e);
+            piece.Fit = wardrobe ? Wardrobe::FitOf(*wardrobe, piece.Item) : 1.0f;
+        }
         std::map<entt::entity, Wardrobe::Layering> layers;
         for (const auto& [slot, e] : pieces) layers[e] = PieceLayer(wardrobe.get(), reg.get<OutfitPieceComponent>(e));
+
+        // Each piece's rank: the longest run of pieces worn one over the next beneath it (a hat over a
+        // balaclava over the head: 2). Drawn that many kLayerPull nearer the camera, it wins the depth test
+        // against what it lies on.
+        std::map<entt::entity, int> rank;
+        std::function<int(entt::entity, const std::string&, int)> rankOf = [&](entt::entity over, const std::string& overSlot, int depth) {
+            if (auto it = rank.find(over); it != rank.end()) return it->second;
+            int r = 0;
+            if (depth < (int)pieces.size())
+                for (const auto& [slot, under] : pieces)
+                    if (under != over && Wardrobe::Hides(layers[over], slot, layers[under], overSlot))
+                        r = std::max(r, 1 + rankOf(under, slot, depth + 1));
+            return rank[over] = r;
+        };
+        for (const auto& [slot, e] : pieces) {
+            const float pull = kLayerPull * (float)std::min(rankOf(e, slot, 0), kMaxLayerRank);
+            if (pull > 0.0f) reg.emplace_or_replace<OutfitLayerTag>(e).Pull = pull;
+            else reg.remove<OutfitLayerTag>(e);
+        }
 
         // Old tags go at once (a re-modelled piece must not keep bits for another mesh); new ones go
         // on when every pair they need is known. Until then the skin just isn't hidden.
@@ -1220,11 +1253,23 @@ void UpdateAttachments(World& world) {
             const auto* rc = reg.try_get<RenderableComponent>(e);
             if (!rc || !rc->ModelRef || rc->ModelRef->BoneCount() > 0) continue; // skinned: it follows by its bones
             auto& t = reg.get<TransformComponent>(e);
-            t.Position = pos;
             t.Rotation = glm::normalize(glm::quat_cast(rot));
-            t.Scale = scale;
+            if (p->Fit > 0.0f && std::abs(p->Fit - 1.0f) > 1e-4f) { // bigger about its own centre
+                const glm::mat4 fitted = follow * FitMatrix(*rc->ModelRef, p->Fit);
+                t.Position = glm::vec3(fitted[3]);
+                t.Scale = scale * p->Fit;
+            } else {
+                t.Position = pos;
+                t.Scale = scale;
+            }
         }
     }
+}
+
+glm::mat4 FitMatrix(const Model& model, float fit) {
+    if (fit <= 0.0f || std::abs(fit - 1.0f) < 1e-4f) return glm::mat4(1.0f);
+    const glm::vec3 c = (model.BoundsMin() + model.BoundsMax()) * 0.5f;
+    return glm::translate(glm::mat4(1.0f), c) * glm::scale(glm::mat4(1.0f), glm::vec3(fit)) * glm::translate(glm::mat4(1.0f), -c);
 }
 
 } // namespace OutfitSystem

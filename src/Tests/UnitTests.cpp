@@ -2233,16 +2233,18 @@ void TestWardrobeQuantum() {
     CHECK(pieceFor(r, "Pants") == "SKM_Jeans_Inboots" && pieceFor(r, "Feet") == "Quantum_Feet_Shoes");
     CHECK(pieceFor(r, "Legs").empty() && pieceFor(r, "Head") == "Quantum_Head_Afro" && pieceFor(r, "Torso") == "Quantum_Torso_Afro");
     CHECK(pieceFor(r, "Balaclava") == "SM_Balaclava_Crime");
-    // No hair in this wardrobe (nor the caps with hair in them), and the balaclava takes hats and headphones off.
+    // No hair in this wardrobe, and on the head only the balaclava, hoods and the black (classic) glasses:
+    // no hats, headphones or aviators.
     req = {};
     req.Sex = Wardrobe::Gender::Female;
-    req.Items = {{"Balaclava", item("Clothing/Female/Balaclava/SM_F_Balaclava_Crime.fbx")}, {"Hat", item("Clothing/Female/Hats/SKM_F_Cap.fbx")},
-                 {"Headphones", item("Clothing/Female/Hats/SKM_F_Headphones.fbx")}};
+    req.Items = {{"Balaclava", item("Clothing/Female/Balaclava/SM_F_Balaclava_Crime.fbx")},
+                 {"Glasses", item("Clothing/Female/Glasses/SKM_F_Glasses_Classic.fbx")}};
     r = Wardrobe::Resolve(cat->W, cat->Items, req);
-    CHECK(pieceFor(r, "Balaclava") == "SM_F_Balaclava_Crime" && pieceFor(r, "Hat").empty() && pieceFor(r, "Headphones").empty());
+    CHECK(pieceFor(r, "Balaclava") == "SM_F_Balaclava_Crime" && pieceFor(r, "Glasses") == "SKM_F_Glasses_Classic");
     CHECK(pieceFor(r, "Torso") == "SKM_F_Vivian_Body");
     CHECK(cat->Find("assets/Characters/Quantum/Models/Hair/SKM_Hair_Short.fbx") == nullptr);
-    CHECK(cat->Find("assets/Characters/Quantum/Models/Clothing/Male/Hats/WithHair/SKM_Cap_Hair.fbx") == nullptr);
+    CHECK(!cat->W.Slot("Hat") && !cat->W.Slot("Headphones"));
+    for (const auto& it : cat->Items) CHECK(it.Path.find("/Hats/") == std::string::npos && it.Path.find("Aviator") == std::string::npos);
     // A hood that's up goes over the balaclava, and only that way round (else each cuts holes in the other).
     for (const char* hood : {"Tops/SKM_Hoodie_Hood_Up", "Tops/SKM_Hoodie_Zipper_Hood", "Outerwear/SKM_Coat_Hoodie_Hood"}) {
         const std::string slot = std::string(hood).rfind("Tops", 0) == 0 ? "Top" : "Outerwear";
@@ -2271,12 +2273,9 @@ void TestWardrobeQuantum() {
     r = male({{"Shoes", item("Clothing/Male/Shoes/SKM_Boots_Inboots.fbx")}, {"Pants", item("Clothing/Male/Pants/SKM_Jeans.fbx")},
               {"Socks", item("Clothing/Male/Shoes/SKM_Socks.fbx")}});
     CHECK(pieceFor(r, "Pants") == "SKM_Jeans" && pieceFor(r, "Socks") == "SKM_Socks" && pieceFor(r, "Shoes") == "SKM_Boots_Inboots");
-    // A hood that's up: no big hat or headphones, but the balaclava stays under it (the hood's layered over it).
-    r = male({{"Top", item("Clothing/Male/Tops/SKM_Hoodie_Hood_Up.fbx")}, {"Balaclava", item("Clothing/Male/Balaclava/SM_Balaclava_Crime.fbx")},
-              {"Hat", item("Clothing/Male/Hats/SKM_Hat_Cowboy.fbx")}, {"Headphones", item("Clothing/Male/Hats/SKM_Headphones.fbx")}});
-    CHECK(pieceFor(r, "Balaclava") == "SM_Balaclava_Crime" && pieceFor(r, "Hat").empty() && pieceFor(r, "Headphones").empty());
-    r = male({{"Hat", item("Clothing/Male/Hats/SKM_Cap.fbx")}, {"Headphones", item("Clothing/Male/Hats/SKM_Headphones.fbx")}});
-    CHECK(pieceFor(r, "Hat") == "SKM_Cap" && pieceFor(r, "Headphones") == "SKM_Headphones");
+    // A hood that's up: the balaclava stays under it (the hood's layered over it).
+    r = male({{"Top", item("Clothing/Male/Tops/SKM_Hoodie_Hood_Up.fbx")}, {"Balaclava", item("Clothing/Male/Balaclava/SM_Balaclava_Crime.fbx")}});
+    CHECK(pieceFor(r, "Balaclava") == "SM_Balaclava_Crime" && pieceFor(r, "Top") == "SKM_Hoodie_Hood_Up");
     r = male({{"Outerwear", item("Clothing/Male/Outerwear/SKM_Jacket_Classic_Tie.fbx")},
               {"Shoes", item("Clothing/Male/Shoes/SKM_Flip_Flops.fbx")}});
     CHECK(!pieceFor(r, "Shoes").empty() && r.Clashes.size() == 1); // a style clash warns, it doesn't undress
