@@ -420,6 +420,7 @@ void SkyAtmosphere::PrepareFrame(const SkySettings& s, const SkyLighting& lit, c
     const bool cloudsDrift = s.CloudsEnabled && s.CloudWindSpeed > 0.0f && since > 4.0f;
     if (m_ForceCapture || ((lookChanged || bodiesMoved) && since > 0.1f) || cloudsDrift) {
         CaptureEnvironment(s, fv);
+        m_EnvUrgent = m_EnvUrgent || m_ForceCapture;
         m_ForceCapture = false;
         m_LastCaptureSeconds = m_RealSeconds;
         m_CapturedSettings = s;

@@ -87,7 +87,11 @@ public:
     // this sky mode, scene load).
     bool EnvironmentDirty() const { return m_EnvDirty; }
     unsigned int EnvironmentCube() const { return m_EnvCube; }
-    void MarkEnvironmentBaked() { m_EnvDirty = false; }
+    void MarkEnvironmentBaked() { m_EnvDirty = false; m_EnvUrgent = false; }
+    // The dirty capture was forced (scene load, switching into this sky mode): convolve it now.
+    // Any other re-capture (clouds drifting, the sun moving, a settings edit) is a small change
+    // the caller can spread over a few frames.
+    bool EnvironmentUrgent() const { return m_EnvUrgent; }
     void ForceEnvironmentCapture() { m_ForceCapture = true; }
 
     // Prepares one view's sky: its sky-view LUTs, aerial-perspective volume and clouds (compute
@@ -177,6 +181,7 @@ private:
 
     // Environment capture scheduling.
     bool m_EnvDirty = false;
+    bool m_EnvUrgent = false;
     bool m_ForceCapture = true;
     float m_LastCaptureSeconds = -1e9f;
     SkySettings m_CapturedSettings;
