@@ -105,8 +105,12 @@ three reruns).
 | 2560x1440 | Play (maximized) | 131 (31.4 ms) | **200** (8.8 ms) |
 | 3840x2160 | Play (maximized) | 127 (28.5 ms) | 193 (8.8 ms) |
 
-The 1440p target (144+) is met. 1080p reaches ~203 of the 240 target. The engine is CPU/driver-bound
-at every resolution: GPU time barely changes from 1080p to 4K.
+The 1440p target (144+) is met. 1080p reaches ~203 of the 240 target.
+
+**Correction (found in phase 3):** the play rows above did not render at the listed resolution. The
+Game view renders at the saved Game view preset, which was "1920x1080 FHD", so every play run drew
+the game at 1080p and letterboxed it into the window. "GPU time barely changes from 1080p to 4K" was
+this artifact. `--perf-bench` now forces the Game view to `--perf-res` (see Phase 3).
 
 ### Biggest finding: GL state reads stall the frame
 
@@ -154,37 +158,90 @@ Result: play-max 1080p 6.5 → 4.95 ms.
 `--smoke-test` passes with no GL errors; smoke screenshots match the previous build apart from
 run-to-run noise in the animated shot.
 
-## To do
+## Phase 3 results
 
-Ranked by the `--perf-sample` breakdown of play-max at 1080p (main thread).
+`--perf-bench` Sandbox at `--perf-res`, the Game view rendering at that size. Paired runs: phase 2
+(`main` at the #491 merge, run with the Game view preset set to the same size) and phase 3
+back to back, two runs each, averaged. Average ms (fps):
 
-**Driver / GL**
-1. Dear ImGui's GL backend backs up ~20 GL states with `glGet*` every render (~9%). Options: build the
-   backend against the engine loader and shadow its remaining states (program, texture, VAO, buffer,
-   scissor, blend equation), or patch its backup out and restore known state. Standalone game builds
-   without the editor don't pay this.
-2. GL call volume: share one mesh per primitive kind and draw identical mesh+material runs instanced
-   (~560 primitives are each their own Model; needs a per-instance material SSBO).
-3. Per-draw uniforms: cache per-program uniform locations for `perDraw` (`Shader::Loc` ~4%), array
-   uploads for `uBoneMask`/`uHideBones`, no string building in `BindMaterialDataDriven`.
+| Resolution | Phase | Phase 2 | Phase 3 |
+|---|---|---|---|
+| 1920x1080 | Edit | 5.68 (176) | 4.67 (214) |
+| 1920x1080 | Play (docked) | 7.27 (137) | 5.52 (181) |
+| 1920x1080 | Play (maximized) | 4.95 (202) | **4.06 (246)** |
+| 2560x1440 | Edit | 5.70 (176) | 4.55 (220) |
+| 2560x1440 | Play (docked) | 6.89 (145) | 5.89 (170) |
+| 2560x1440 | Play (maximized) | 6.14 (163) | **5.88 (170)** |
+
+Both targets are met: 240+ fps at 1080p and 144+ fps at 1440p, maximized. Worst frames in play-max
+are 7–8 ms. At 1080p the CPU and GPU are now about even (~3.9 ms each); 1440p is GPU-bound
+(Game view GPU 5.2 ms: scene draw 2.2, SSAO 1.0, view model 0.7, clouds 0.7, sun shadows 0.7).
+
+### Done (Phase 3)
+
+**Driver syncs**
+- **Dear ImGui's GL backend** (build-tree patch of `imgui_impl_opengl3.cpp`): its ~20 `glGet*` /
+  `glIsEnabled` state backups go through the engine's state shadow (`src/Editor/ImGuiGLHooks.cpp`),
+  which answers the ones it doesn't track with the values the engine always leaves (texture unit 0,
+  nothing bound, fill mode, add blending). It keeps one VAO instead of creating one per render.
+  Play-max 4.95 → 4.52 ms.
+- **Cluster overflow flag** is read from a persistently mapped, coherent buffer that a copy fills: no
+  fence poll or map, so no wait on the driver's worker.
+
+**GPU**
+- **Spot shadow static cache**: each spot keeps its static casters in a second layer that is only
+  redrawn when they change. Every frame the live layer is restored from it and only the animated or
+  recently moved casters are drawn. The restore covers only where those casters are and were (their
+  bounds through the light); a whole 2048² layer is 16 MB. A readback check against a full restore was
+  bit-identical over 685 play frames. Spot Shadow Pass 0.63 → 0.10 ms GPU.
+- **SSAO** taps read view z in closed form instead of reconstructing a position through the inverse
+  projection. 0.60 → 0.54 ms.
 
 **CPU**
-4. PhysX `fetchResults` waits ~6%: overlap simulate with animation / render prep instead of waiting
-   right after it.
-5. FP body: `SkinnedPoints` ~6%, `ApplyLocalPose` / IK globals ~7%, elbow swivel ~3%. Multithread
-   the per-piece work, or sample the driver once and copy to followers through a node remap.
-6. `glfwWindowVisible` / `WindowFromPoint` in the ImGui GLFW backend ~2.4%.
+- **Uniform locations**: `Shader::Loc` checks a small table keyed by the name's pointer before the
+  string map.
+- **Keep-out skinning**: head and torso points are packed at first use (bind position, normalized
+  weights, bones remapped to the few the region uses); each frame builds a palette of just those bones
+  with the world transform folded in. Head 0.22 → 0.085 ms, torso 0.17 → 0.10 ms.
+- **Elbow swivel search** only measures torso points inside the slab and ring the arm's swing can
+  reach (plus the clearance). The picked angle is unchanged; a unit test checks it against a search
+  over every point. 0.28 → 0.09 ms.
+- **`AABB::Transformed`** in center-extent form instead of eight corner transforms.
 
-**GPU (only matters once the CPU is under ~4 ms)**
-7. Depth prepass into the MSAA HDR target reused by SSAO; move the `discard`s into shader variants so
-   ordinary opaque draws keep early-Z. SSAO at half resolution.
-8. Spot shadows where an NPC stands: static layer plus dynamic casters; drop the `gl_FragDepth` write.
+**Measurement**
+- `--perf-bench` renders the Game view at `--perf-res` (or Free Aspect without it) for the run only,
+  without touching the saved preset.
+
+**Tried, not kept**
+- SSAO view-z mip pyramid (far taps read smaller levels, as in Scalable Ambient Obscurance): no gain.
+  The pass is limited by texture fetch rate, not cache misses.
+
+**Verification**: `--unit-tests` (7222 checks pass), `--weapon-test` (45 checks pass), Sandbox
+`--smoke-test` passes with no GL errors. Smoke screenshots match phase 2 except the Scene-view shot
+facing the sun, which differs between runs of the same build too (clouds drift in real time).
+
+## To do
+
+At 1080p the CPU (main thread) and GPU are about even; 1440p and up are GPU-bound.
+
+**GPU**
+1. Model fragment shader cost: the view model (arms + gun, a small part of the screen) takes
+   0.5 ms at 1080p and scene draw 1.4 ms. Profile the shader (clustered lights, shadow taps, IBL).
+2. Depth prepass into the MSAA HDR target reused by SSAO (the SSAO prepass excludes different
+   entities than the main pass, so it needs its own exclusions); move the `discard`s into shader
+   variants so ordinary opaque draws keep early-Z.
+3. SSAO: 32 taps at full resolution, fetch-bound. Half resolution or fewer taps would trade quality.
+4. Sun shadows 0.7 ms (vertex/submission-bound): skip sub-texel casters in far cascades.
+
+**CPU**
+5. FP body ~1.4 ms: `ApplyLocalPose` / IK globals / clip sampling. Multithread the per-piece work,
+   or sample the driver once and copy to followers through a node remap.
+6. PhysX `fetchResults` wait: overlap simulate with animation / render prep.
+7. GL call volume: share one mesh per primitive kind and draw identical mesh+material runs instanced.
+8. `Material::Hash` ~2.5%, `glfwWindowVisible` / `WindowFromPoint` ~1.7%.
 
 **Hitches**
-9. Edit-mode SSAO prepass ~117 ms first use (shader compile); sun shadow pass spike on the first edit
-   frames.
-
-**Scene**
-10. Review whether all 4 arena spots need shadows; small props need not cast into spot lights.
+9. Edit-mode SSAO prepass ~117 ms on first use (shader compile); sun shadow pass spike on the first
+   edit frames.
 
 Character LODs are out of scope for this pass.
