@@ -1,7 +1,19 @@
 #include "ModelMesh.h"
 #include "gl.h"
 #include "GLStateCache.h"
+#include "meshoptimizer.h"
 #include <cstddef>
+#include <vector>
+
+// Triangle order for the GPU's post-transform vertex cache: a vertex shared by neighbouring triangles
+// is shaded once instead of once per triangle. Imported meshes arrive in authoring order (the Quantum
+// heads shaded ~2.1 vertices per triangle, ~0.65 in this order), and skinning makes every vertex
+// invocation expensive, in every pass that draws the mesh. Only the triangles move: vertex IDs (the
+// hide/collar bit buffers) and what's drawn are unchanged.
+static void OptimizeTriangleOrder(std::vector<unsigned int>& indices, size_t vertexCount) {
+    if (indices.size() < 3 || indices.size() % 3 != 0 || vertexCount == 0) return;
+    meshopt_optimizeVertexCache(indices.data(), indices.data(), indices.size(), vertexCount);
+}
 
 // Imported geometry is static, so the buffers use immutable storage (flags 0) and the VAO is
 // configured entirely through Direct State Access — no glBind* to edit. Building a ModelMesh
@@ -13,6 +25,7 @@ ModelMesh::ModelMesh(const std::vector<ModelVertex>& vertices, const std::vector
     m_LocalPositions.reserve(vertices.size());
     for (const auto& v : vertices) m_LocalPositions.push_back(v.Position);
     m_LocalIndices = indices; // kept for #185 PR 6 mesh-collider cooking
+    OptimizeTriangleOrder(m_LocalIndices, vertices.size());
     KeepSkin(vertices);
     CreateGpu(vertices);
 }
@@ -22,6 +35,7 @@ ModelMesh::ModelMesh(std::vector<ModelVertex>&& vertices, const std::vector<unsi
     m_LocalPositions.reserve(vertices.size());
     for (const auto& v : vertices) m_LocalPositions.push_back(v.Position);
     m_LocalIndices = indices;
+    OptimizeTriangleOrder(m_LocalIndices, vertices.size());
     KeepSkin(vertices);
     if (deferUpload) m_PendingVertices = std::move(vertices);
     else CreateGpu(vertices);

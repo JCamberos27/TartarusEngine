@@ -148,6 +148,19 @@ if(NOT imguizmo_POPULATED)
   FetchContent_Populate(imguizmo)
 endif()
 
+# --- meshoptimizer (triangle order for the GPU's post-transform vertex cache) ---
+# Source only: the engine compiles the two files it uses (vertex cache optimizer + allocator)
+# rather than building the library target, whose install rules would land in the package.
+FetchContent_Declare(
+  meshoptimizer
+  GIT_REPOSITORY https://github.com/zeux/meshoptimizer.git
+  GIT_TAG v1.3
+)
+FetchContent_GetProperties(meshoptimizer)
+if(NOT meshoptimizer_POPULATED)
+  FetchContent_Populate(meshoptimizer)
+endif()
+
 # --- NVIDIA PhysX 5 (collision / rigid bodies / character controller — #185) --------------
 # Built from source, pinned by git tag, nothing vendored — issue #185's "Path B", but via
 # ExternalProject rather than FetchContent_MakeAvailable. PhysX's public CMake cannot share
@@ -333,6 +346,10 @@ set(IMGUI_SOURCES
   ${IMGUI_GL3_BACKEND}
   ${imguizmo_SOURCE_DIR}/src/ImGuizmo.cpp
 )
+set(MESHOPT_SOURCES
+  ${meshoptimizer_SOURCE_DIR}/src/allocator.cpp
+  ${meshoptimizer_SOURCE_DIR}/src/vcacheoptimizer.cpp
+)
 
 # App icon (Windows only — .rc is an MSVC resource script). Baked into the exe itself so any
 # shortcut targeting it keeps showing the icon across rebuilds; nothing to re-link externally.
@@ -343,7 +360,7 @@ if(WIN32)
   list(APPEND ENGINE_SOURCES ${CMAKE_SOURCE_DIR}/src/TartarusEngine.manifest)
 endif()
 
-add_executable(TartarusEngine ${ENGINE_SOURCES} ${IMGUI_SOURCES})
+add_executable(TartarusEngine ${ENGINE_SOURCES} ${IMGUI_SOURCES} ${MESHOPT_SOURCES})
 
 add_library(TartarusGame SHARED
   ${CMAKE_SOURCE_DIR}/src/Game/GameModule.cpp
@@ -468,6 +485,7 @@ target_include_directories(TartarusEngine PRIVATE
   ${imgui_SOURCE_DIR}
   ${imgui_SOURCE_DIR}/backends
   ${imguizmo_SOURCE_DIR}/src
+  ${meshoptimizer_SOURCE_DIR}/src
 )
 
 target_link_libraries(TartarusEngine PRIVATE glfw glm::glm assimp EnTT::EnTT physx)
@@ -503,6 +521,7 @@ tartarus_enable_release_debug_info(TartarusEngine)
 # can't reasonably change.
 set(TARTARUS_VENDORED_SOURCES
   ${IMGUI_SOURCES}
+  ${MESHOPT_SOURCES}
   ${CMAKE_SOURCE_DIR}/extern/stb_image_impl.cpp
   ${CMAKE_SOURCE_DIR}/extern/stb_dxt_impl.cpp
   ${CMAKE_SOURCE_DIR}/extern/miniaudio_impl.cpp
