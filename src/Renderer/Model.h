@@ -404,6 +404,9 @@ private:
         std::string Ref, DisplayName;
     };
     std::vector<ExternalClip> m_ExternalClips;
+    // Clips (ref, source) that animate none of this model's nodes - a rigid outfit piece under a body's
+    // controller - so AttachClip answers -1 again without rescanning or re-logging it every frame.
+    std::vector<std::pair<std::string, const SharedData*>> m_UnmatchedClips;
     // The clip at combined index `i` and its node->channel map for this model (nullptr if none).
     const AnimationClip* ClipAt(int i, const std::vector<int>** nodeChannel) const;
     // Clip `clipIndex`'s channel `channel` sampled for node `node` at `ticks`, with the attached

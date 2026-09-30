@@ -33,7 +33,7 @@ struct FirstPersonWorldGunInput {
     float HeadRadius = 0.14f;
     float GunLength = 0.45f;       // how much of the gun, from the butt forward, is kept clear, m
     float MeshClearance = 0.05f;   // ... and how far from the drawn head / neck / hood vertices, m (0 = off)
-    float TorsoKeepOut = 0.0f;     // 0..1: how much the gun also keeps MeshClearance from the drawn torso (the pocket let go)
+    float TorsoKeepOut = 0.0f;     // 0..1: how much the gun also keeps MeshClearance from the drawn torso (1 - Shouldered)
     float CheekWeld = 0.0f;        // 0..1 (eased): the head's tilt over the stock - on the sights only
 };
 

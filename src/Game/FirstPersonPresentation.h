@@ -298,6 +298,7 @@ private:
     entt::entity m_WorldWeapon = entt::null; // split poses: the gun every other view sees
     mutable std::vector<std::pair<int, int>> m_StockVerts; // StockWorld's butt vertices (mesh, vertex), found once per model
     mutable const Model* m_StockModel = nullptr;
+    mutable glm::vec3 m_StockBore{0.0f};                     // ... along this bore (root space)
     static constexpr int kWeaponAnchorOffset = 1;
     float m_AdsHold = 0.0f;       // 0..1, eased toward "aim held" over Ads.AimHoldTime
     float m_SinceUnhidden = 0.0f; // seconds the weapon has been out of its Hidden state (the laser waits for the gun to be up)

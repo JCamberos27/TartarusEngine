@@ -350,6 +350,7 @@ struct PlayerBodyTag {
     int CameraHideBones[8] = {-1, -1, -1, -1, -1, -1, -1, -1};
     bool HasSleeves = false;            // SleeveBones is set (a clothing piece with arm bones)
     bool SleevesInViewModel = false;    // FirstPersonBody: the arms are in the view-model pass right now
+    bool SleevesHidden = false;         // ... or hidden from the camera (easing off a holstered gun): the sleeves too
     std::uint32_t SleeveBones[16] = {}; // bit per palette bone (MAX_BONES = 512)
     // Clothing around the camera, never drawn in its world pass (shadows and other views keep it): what the
     // neck and everything above it move (a hood, a collar, a scarf), the collarbones' cloth (the shoulder
