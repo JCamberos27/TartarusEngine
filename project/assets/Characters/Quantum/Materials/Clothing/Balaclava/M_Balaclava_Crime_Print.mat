@@ -28,5 +28,11 @@
     "_Triplanar": false,
     "_TriplanarScale": 1.0
   },
-  "shader": "engine://Standard.shader"
+  "shader": "engine://Standard.shader",
+  "textureGuids": {
+    "_AOMap": "b273318edffb81cb",
+    "_AlbedoMap": "7edf0f8ddb9b52e7",
+    "_MetallicRoughnessMap": "b273318edffb81cb",
+    "_NormalMap": "5cd3393cf8ba4289"
+  }
 }
