@@ -269,11 +269,15 @@ file(GLOB_RECURSE ENGINE_SOURCES CONFIGURE_DEPENDS
 list(REMOVE_ITEM ENGINE_SOURCES
   ${CMAKE_SOURCE_DIR}/src/Game/GameModule.cpp
   ${CMAKE_SOURCE_DIR}/src/Game/TransformControllerSystem.cpp
-  ${CMAKE_SOURCE_DIR}/src/Game/SpinSystem.cpp
   ${CMAKE_SOURCE_DIR}/src/Game/ScoringSystem.cpp
   ${CMAKE_SOURCE_DIR}/src/Editor/EditorModule.cpp
+  ${CMAKE_SOURCE_DIR}/src/Editor/EditorModuleToolbar.cpp
+  ${CMAKE_SOURCE_DIR}/src/Editor/EditorModuleAssetBrowser.cpp
+  ${CMAKE_SOURCE_DIR}/src/Editor/EditorModuleHierarchy.cpp
+  ${CMAKE_SOURCE_DIR}/src/Editor/EditorModuleInspector.cpp
   ${CMAKE_SOURCE_DIR}/src/Editor/EditorModuleConsole.cpp
   ${CMAKE_SOURCE_DIR}/src/Editor/EditorModuleStats.cpp
+  ${CMAKE_SOURCE_DIR}/src/Editor/EditorModuleHistory.cpp
 )
 
 # The GLFW backend sets every viewport's GLFW_MOUSE_PASSTHROUGH each frame, and GLFW applies it
@@ -376,7 +380,6 @@ add_executable(TartarusEngine ${ENGINE_SOURCES} ${IMGUI_SOURCES} ${MESHOPT_SOURC
 add_library(TartarusGame SHARED
   ${CMAKE_SOURCE_DIR}/src/Game/GameModule.cpp
   ${CMAKE_SOURCE_DIR}/src/Game/TransformControllerSystem.cpp
-  ${CMAKE_SOURCE_DIR}/src/Game/SpinSystem.cpp
   ${CMAKE_SOURCE_DIR}/src/Game/ScoringSystem.cpp
 )
 
@@ -559,14 +562,9 @@ add_custom_command(TARGET TartarusEngine POST_BUILD
     "$<TARGET_FILE_DIR:TartarusEngine>/assets/fonts/JetBrainsMono-Regular.ttf"
 )
 
-# Editor wordmark ("TARTARUS ENGINE" text, no icon) and mark (the "TE" monogram, no text) —
-# the two halves of the full logo lockup, cropped separately — same copy-next-to-exe treatment
-# as the icon font.
+# Editor mark (the "TE" monogram, no text) — same copy-next-to-exe treatment as the icon font.
 add_custom_command(TARGET TartarusEngine POST_BUILD
   COMMAND ${CMAKE_COMMAND} -E make_directory "$<TARGET_FILE_DIR:TartarusEngine>/assets/branding"
-  COMMAND ${CMAKE_COMMAND} -E copy_if_different
-    "${CMAKE_SOURCE_DIR}/extern/branding/tartarus_wordmark.png"
-    "$<TARGET_FILE_DIR:TartarusEngine>/assets/branding/tartarus_wordmark.png"
   COMMAND ${CMAKE_COMMAND} -E copy_if_different
     "${CMAKE_SOURCE_DIR}/extern/branding/tartarus_engine_mark.png"
     "$<TARGET_FILE_DIR:TartarusEngine>/assets/branding/tartarus_engine_mark.png"
@@ -603,60 +601,6 @@ foreach(_pxdll ${_physx_runtime_dlls})
     VERBATIM
   )
 endforeach()
-
-# --- TifSplitter (optional standalone tool) ---------------------------------------------
-# Converts high-bit-depth / multi-channel TIFF texture sheets and heightmaps into 8-bit PNGs
-# the engine's own stb_image-based Texture loader can actually read. A separate executable,
-# not part of TartarusEngine, and off by default: pulling in libtiff (its own dependency,
-# with a real build-time cost) shouldn't happen just to build/run the game. Enable with
-# -DBUILD_TIF_SPLITTER=ON.
-option(BUILD_TIF_SPLITTER "Build the TifSplitter TIFF-to-PNG conversion tool" OFF)
-if(BUILD_TIF_SPLITTER)
-  # Baseline TIFF support only (uncompressed / PackBits / LZW — all built into libtiff itself,
-  # no external library needed). Every optional codec that WOULD need one is force-disabled so
-  # this dependency stays self-contained instead of silently picking up whatever happens to be
-  # on the build machine. Practical effect: a TIFF saved with ZIP/Deflate compression (a common
-  # Photoshop default) will fail to decode under this configuration — re-save it as LZW or
-  # uncompressed if that's ever hit.
-  set(zlib OFF CACHE BOOL "" FORCE)
-  set(libdeflate OFF CACHE BOOL "" FORCE)
-  set(pixarlog OFF CACHE BOOL "" FORCE)
-  set(jpeg OFF CACHE BOOL "" FORCE)
-  set(old-jpeg OFF CACHE BOOL "" FORCE)
-  set(jbig OFF CACHE BOOL "" FORCE)
-  set(lzma OFF CACHE BOOL "" FORCE)
-  set(zstd OFF CACHE BOOL "" FORCE)
-  set(webp OFF CACHE BOOL "" FORCE)
-  set(tiff-tools OFF CACHE BOOL "" FORCE)
-  set(tiff-tests OFF CACHE BOOL "" FORCE)
-  set(tiff-contrib OFF CACHE BOOL "" FORCE)
-  set(tiff-docs OFF CACHE BOOL "" FORCE)
-  FetchContent_Declare(
-    tiff
-    GIT_REPOSITORY https://gitlab.com/libtiff/libtiff.git
-    GIT_TAG v4.6.0
-  )
-  FetchContent_MakeAvailable(tiff)
-
-  set(TIF_SPLITTER_SOURCES
-    ${CMAKE_SOURCE_DIR}/tools/TifSplitter/main.cpp
-    ${CMAKE_SOURCE_DIR}/tools/TifSplitter/TifSplitter.cpp
-    ${CMAKE_SOURCE_DIR}/extern/stb_image_write_impl.cpp
-  )
-  if(WIN32)
-    list(APPEND TIF_SPLITTER_SOURCES ${CMAKE_SOURCE_DIR}/extern/branding/tifsplitter_icon.rc)
-    # Same UTF-8 active code page / long-path manifest as the engine (#185 / #149): non-ASCII
-    # input and output paths work through argv, libtiff and stb's fopen alike.
-    list(APPEND TIF_SPLITTER_SOURCES ${CMAKE_SOURCE_DIR}/src/TartarusEngine.manifest)
-  endif()
-  add_executable(TifSplitter ${TIF_SPLITTER_SOURCES})
-  target_include_directories(TifSplitter PRIVATE
-    ${CMAKE_SOURCE_DIR}/tools/TifSplitter
-    ${CMAKE_SOURCE_DIR}/extern
-  )
-  target_link_libraries(TifSplitter PRIVATE TIFF::tiff)
-  target_compile_features(TifSplitter PRIVATE cxx_std_20)
-endif()
 
 # --- Install + package (#173 suggestion 4) -----------------------------------------------
 # Produces a self-contained ZIP: unzip anywhere, run TartarusEngine.exe. The layout matches
@@ -698,7 +642,6 @@ install(FILES
   DESTINATION "assets/fonts"
 )
 install(FILES
-  "${CMAKE_SOURCE_DIR}/extern/branding/tartarus_wordmark.png"
   "${CMAKE_SOURCE_DIR}/extern/branding/tartarus_engine_mark.png"
   DESTINATION "assets/branding"
 )
