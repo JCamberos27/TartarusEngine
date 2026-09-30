@@ -3,6 +3,7 @@
 #include "AssetLibrary.h"
 #include "Components.h"
 #include "Model.h"
+#include "Texture.h"
 #include "OutfitCoverage.h"
 #include "OutfitSystem.h"
 #include "ProjectPaths.h"
@@ -560,6 +561,31 @@ int RunCost(AssetLibrary& assets, const std::string& wardrobe, const std::vector
         for (const auto& [name, model] : body.Alternates) add(name, model);
     }
     for (const auto& item : cat->Items) add(item.Slot, item.Path);
+
+    // The model files' own materials' textures: loaded with the model (uncompressed, the default import size)
+    // even where a material remap replaces them on every piece.
+    {
+        std::set<const Texture*> embedded;
+        unsigned long long bytes = 0;
+        int models = 0;
+        for (const auto& r : rows) {
+            auto model = assets.LoadModel(ProjectPaths::Resolve(r.Path));
+            if (!model) continue;
+            bool any = false;
+            for (int i = 0; i < model->MeshCount(); ++i) {
+                const Material& m = model->MeshMaterial(i);
+                for (const Texture* t : {m.AlbedoMap.get(), m.NormalMap.get(), m.MetallicRoughnessMap.get(), m.MetallicMap.get(),
+                                         m.RoughnessMap.get(), m.AOMap.get(), m.EmissiveMap.get()})
+                    if (t && embedded.insert(t).second) {
+                        bytes += 4ull * t->Width() * t->Height() * 4 / 3;
+                        any = true;
+                    }
+            }
+            models += any;
+        }
+        std::printf("[OutfitCost] the model files' own textures: %zu loaded by %d models, ~%.0f MB of VRAM\n", embedded.size(),
+                    models, bytes / 1048576.0);
+    }
 
     std::map<std::string, std::pair<unsigned long long, int>> bySlot; // slot -> (tris, models)
     for (const auto& r : rows) { bySlot[r.Slot].first += r.Tris; ++bySlot[r.Slot].second; }
