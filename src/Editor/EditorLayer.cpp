@@ -2194,6 +2194,9 @@ void EditorLayer::DrawProjectSettingsBody(World& /*world*/) {
 
 void EditorLayer::BeginFrame() {
     ImGui_ImplOpenGL3_NewFrame();
+    // Creating its device objects (first frame) leaves bindings at zero rather than restoring the
+    // engine's (ImGuiGLHooks.cpp); the binding cache must not trust what it last bound.
+    GLStateCache::Invalidate();
     ImGui_ImplGlfw_NewFrame();
     ImGui::NewFrame();
     ImGuizmo::BeginFrame();
@@ -2205,8 +2208,10 @@ void EditorLayer::EndFrame() {
     ImDrawData* dd = ImGui::GetDrawData();
     // No GLStateShadow_Invalidate() per frame: the backend restores every shadowed state it
     // changes (blend, cull, depth test, scissor, viewport...) and never touches the rest, so the
-    // shadow still holds, and re-reading it would put the driver waits back (gl.h).
+    // shadow still holds, and re-reading it would put the driver waits back (gl.h). Bindings it
+    // leaves at zero instead of restoring (ImGuiGLHooks.cpp), hence the binding-cache reset.
     ImGui_ImplOpenGL3_RenderDrawData(dd);
+    GLStateCache::Invalidate();
 
     // Frosted backdrop: with the whole editor frame now on FBO 0, if a modal dialog is open,
     // blur the entire framebuffer and redraw just the dialog window crisp on top. Nothing

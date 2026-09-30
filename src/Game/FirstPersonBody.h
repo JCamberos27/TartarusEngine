@@ -208,7 +208,11 @@ private:
     enum class BodyRegion { Head, Torso };
     float MeshGap(const World& world, BodyRegion region, const glm::vec3& a, const glm::vec3& b, std::string* piece, float* along) const;
     float m_WorldHeadTiltDeg = 0.0f, m_WorldHeadTiltWeight = 0.0f; // the cheek weld as last applied (diagnostics)
-    mutable std::map<const Model*, std::vector<std::pair<int, int>>> m_HeadVerts, m_TorsoVerts;
+    // Each chosen vertex as SkinnedPoints needs it every frame: bind position and its influences with
+    // weights already normalized, bones as indices into the few this region uses (Bones).
+    struct RegionSkinPoint { glm::vec3 Pos; int Count; std::uint16_t Bone[4]; float Weight[4]; };
+    struct RegionSkin { std::vector<int> Bones; std::vector<RegionSkinPoint> Points; };
+    mutable std::map<const Model*, RegionSkin> m_HeadVerts, m_TorsoVerts;
     // Per model: does it skin anything the arms' solve moves (under its top spine bone or the clavicles)?
     // Legs, feet and rigid pieces don't, so the solve leaves them be (nothing of theirs it moves is drawn).
     std::map<const Model*, bool> m_SkinsUpperBody;
