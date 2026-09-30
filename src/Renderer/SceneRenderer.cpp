@@ -244,16 +244,10 @@ void SceneRenderer::RenderScene(World& world, const RenderFrameContext& ctx,
     LightBuffer& lightBuffer = *in.lightBuffer;
     ClusterGrid& clusterGrid = *in.clusterGrid;
 
-    // PR13: sky draw — HDRI cubemap or procedural gradient; or the physical sky, which also
-    // renders this view's aerial perspective and clouds first (compute passes, no FBO change).
-    if (in.skyAtmosphere) {
-        in.skyAtmosphere->RenderView(ctx.TxHdr, ctx.View, ctx.Proj, ctx.ViewPos);
-    } else if (world.SkySourceMode == World::SkySource::Hdri && in.hdriCube) {
-        float rotRad = glm::radians(world.SkyRotationDegrees);
-        sky.DrawHdri(in.hdriCube->Texture(), rotRad, ctx.View, ctx.Proj);
-    } else {
-        sky.Draw(ctx.View, ctx.Proj, world.SkyHorizonColor, world.SkyZenithColor);
-    }
+    // The physical sky renders this view's aerial perspective and clouds up front (compute
+    // passes, no FBO change): the model shader samples the aerial volume. The sky itself draws
+    // after the opaque pass (below), only where no geometry landed.
+    if (in.skyAtmosphere) in.skyAtmosphere->RenderView(ctx.TxHdr, ctx.View, ctx.Proj, ctx.ViewPos);
 
     const FrameState fs = GatherFrameState(world, ctx, in);
     // Which frame state the program selector pushes. The view-model sub-pass swaps this for its
@@ -602,6 +596,18 @@ void SceneRenderer::RenderScene(World& world, const RenderFrameContext& ctx,
         localStats.DrawCalls += it.Meshes;
         localStats.Triangles += it.Tris;
         localStats.Vertices += it.Verts;
+    }
+
+    // PR13: sky - the physical sky, HDRI cubemap or procedural gradient - at the far plane under a
+    // GL_LEQUAL test, so the opaque pass above has already rejected every covered pixel. Before
+    // the transparent pass (it blends over the sky, and transmission captures it).
+    if (in.skyAtmosphere) {
+        in.skyAtmosphere->DrawSky(ctx.TxHdr);
+    } else if (world.SkySourceMode == World::SkySource::Hdri && in.hdriCube) {
+        float rotRad = glm::radians(world.SkyRotationDegrees);
+        sky.DrawHdri(in.hdriCube->Texture(), rotRad, ctx.View, ctx.Proj);
+    } else {
+        sky.Draw(ctx.View, ctx.Proj, world.SkyHorizonColor, world.SkyZenithColor);
     }
 
     // --- Transparent pass: back-to-front sorted, blended, no depth write -----------

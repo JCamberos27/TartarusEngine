@@ -492,24 +492,46 @@ void SkyAtmosphere::RenderView(const void* viewKey, const glm::mat4& view, const
     }
     glMemoryBarrier(GL_TEXTURE_FETCH_BARRIER_BIT | GL_SHADER_IMAGE_ACCESS_BARRIER_BIT);
 
-    // --- Full-screen sky ---
-    const GLboolean wasDepthTest = glIsEnabled(GL_DEPTH_TEST);
-    GLint prevDepthMask = GL_TRUE;
-    glGetIntegerv(GL_DEPTH_WRITEMASK, &prevDepthMask);
-    glDepthMask(GL_FALSE);
-    glDisable(GL_DEPTH_TEST);
+    vr.InvViewProj = invViewProj;
+    vr.CameraWorld = cameraWorld;
+    for (int i = 0; i < 4; ++i) vr.Viewport[i] = vp[i];
+    vr.Rendered = true;
+    GLStateCache::Invalidate();
+}
 
+void SkyAtmosphere::DrawSky(const void* viewKey) {
+    if (!m_Prepared) return;
+    const auto it = m_Views.find(viewKey);
+    if (it == m_Views.end() || !it->second->Rendered) return;
+    ViewResources& vr = *it->second;
+    PROFILE_SCOPE("Sky Draw");
+    PROFILE_GPU_SCOPE("Sky Draw");
+
+    // Another view may have filled the shared atmosphere UBO with its own camera altitude since.
+    UpdateAtmosphereUniforms(m_Settings, m_Lighting, vr.CameraWorld);
+
+    // Only where nothing opaque wrote depth: the quad sits exactly on the far plane (Sky.vert).
+    const GLboolean wasDepthTest = glIsEnabled(GL_DEPTH_TEST);
+    GLint prevDepthMask = GL_TRUE, prevDepthFunc = GL_LESS;
+    glGetIntegerv(GL_DEPTH_WRITEMASK, &prevDepthMask);
+    glGetIntegerv(GL_DEPTH_FUNC, &prevDepthFunc);
+    glDepthMask(GL_FALSE);
+    glEnable(GL_DEPTH_TEST);
+    glDepthFunc(GL_LEQUAL);
+
+    const int* vp = vr.Viewport;
     m_CompositeShader->Bind();
     BindLuts(vr);
     glBindTextureUnit(4, vr.CloudsValid ? vr.CloudTexture : DefaultTextures::Black());
-    m_CompositeShader->SetMat4("uInvViewProj", invViewProj);
+    m_CompositeShader->SetMat4("uInvViewProj", vr.InvViewProj);
     m_CompositeShader->SetInt("uCloudsOn", vr.CloudsValid ? 1 : 0);
     m_CompositeShader->SetVec4("uViewportRect", glm::vec4((float)vp[0], (float)vp[1], (float)vp[2], (float)vp[3]));
     m_CompositeShader->SetFloat("uFrame", (float)(m_Frame % 64));
     glBindVertexArray(m_Vao);
     glDrawArrays(GL_TRIANGLES, 0, 6);
 
-    if (wasDepthTest) glEnable(GL_DEPTH_TEST);
+    glDepthFunc((GLenum)prevDepthFunc);
+    if (!wasDepthTest) glDisable(GL_DEPTH_TEST);
     glDepthMask((GLboolean)prevDepthMask);
     glActiveTexture(GL_TEXTURE0);
     GLStateCache::Invalidate();
