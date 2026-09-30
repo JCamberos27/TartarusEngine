@@ -409,14 +409,15 @@ void SceneRenderer::RenderScene(World& world, const RenderFrameContext& ctx,
         // Clothing on the player's arms while they're in the view-model pass: the sleeves are drawn there
         // too (a second copy, only them), the rest here without them - see PlayerBodyTag.
         const bool splitSleeves = viewModelPass && cameraBody && bodyTag->SleevesInViewModel;
-        // What the camera's world pass leaves out of this piece: around the head, and the sleeves when split.
+        // What the camera's world pass leaves out of this piece: around the head, and the sleeves when split (or
+        // hidden with the arms).
         std::array<std::uint32_t, 16> cameraMask{};
         bool anyCameraMask = false;
         if (cameraBody && bodyTag->HasHeadBones) {
             for (int w = 0; w < 16; ++w) cameraMask[w] |= bodyTag->HeadBones[w];
             anyCameraMask = true;
         }
-        if (splitSleeves) {
+        if (splitSleeves || (cameraBody && bodyTag->SleevesHidden)) {
             for (int w = 0; w < 16; ++w) cameraMask[w] |= bodyTag->SleeveBones[w];
             anyCameraMask = true;
         }

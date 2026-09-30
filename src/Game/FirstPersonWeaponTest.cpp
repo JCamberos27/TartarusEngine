@@ -96,7 +96,7 @@ FirstPersonWeaponTest::FirstPersonWeaponTest(bool stockProbe, bool probeAk) : m_
         {"AK ADS round fires", fire, [](C& c) { return c.Time > 0.4f; }, 2.0f,
          [=](C& c) { ammoIs(c, mem->Ammo - 1); check(c, c.State() == "Aim", "stays on the sights (" + c.State() + ")"); c.Aim = false; mem->AkAmmo = c.P->Ammo(); }},
 
-        {"3: switch to the Remington", [](C& c) { c.P->SelectSlot(1); },
+        {"2: switch to the Remington", [](C& c) { c.P->SelectSlot(1); },
          [](C& c) { return c.P->Slot() == 1 && c.State() == "Idle"; }, 180.0f,
          [=](C& c) {
              check(c, c.Saw("Holster"), "AK holstered first");
@@ -201,10 +201,10 @@ FirstPersonWeaponTest::FirstPersonWeaponTest(bool stockProbe, bool probeAk) : m_
              return mem->Stage == 1 && c.P->Slot() == 0 && c.State() == "Idle";
          }, 30.0f,
          [=](C& c) { ammoIs(c, mem->AkAmmo); }},
-        {"3: the Remington kept its shells", [](C& c) { c.P->SelectSlot(1); },
+        {"2: the Remington kept its shells", [](C& c) { c.P->SelectSlot(1); },
          [](C& c) { return c.P->Slot() == 1 && c.State() == "Idle"; }, 30.0f,
          [=](C& c) { ammoIs(c, mem->ShotgunAmmo); }},
-        {"2: unarmed", [](C& c) { c.P->SetEquipped(false); }, [](C& c) { return c.State() == "Holstered"; }, 5.0f,
+        {"3: unarmed", [](C& c) { c.P->SetEquipped(false); }, [](C& c) { return c.State() == "Holstered"; }, 5.0f,
          [=](C& c) { check(c, !c.P->IsEquipped(), "not equipped"); }},
         {"3 from unarmed", [](C& c) { c.P->SelectSlot(1); }, [](C& c) { return c.P->Slot() == 1 && c.State() == "Idle"; }, 5.0f,
          [=](C& c) { check(c, c.Saw("Draw"), "drawn"); }},
@@ -242,7 +242,7 @@ void FirstPersonWeaponTest::BuildProbe() {
     const bool ak = m_ProbeAk;
     std::vector<Step> steps = {{"AK in hand at Play", nullptr, [](C& c) { return c.State() == "Idle"; }, 30.0f, nullptr}};
     if (!ak)
-        steps.push_back({"3: switch to the Remington", [](C& c) { c.P->SelectSlot(1); c.Cam->Pitch = 0.0f; },
+        steps.push_back({"2: switch to the Remington", [](C& c) { c.P->SelectSlot(1); c.Cam->Pitch = 0.0f; },
                          [](C& c) { return c.P->Slot() == 1 && c.State() == "Idle"; }, 180.0f, nullptr});
     steps.push_back({"settle", nullptr, hold(2.0f), 5.0f, nullptr});
     // Held still at each pitch: the settled pose, and a capture.
