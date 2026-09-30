@@ -4,6 +4,7 @@
 #include "ProjectPaths.h"
 #include <filesystem>
 #include <algorithm>
+#include <chrono>
 #include <cctype>
 #include "World.h"
 #include "RotationMath.h"
@@ -170,9 +171,8 @@ std::string AnimationClipLabel(const Model& source, int sourceClip) {
     return label;
 }
 
-int ResolveAnimationClip(Model& model, const std::string& clipRef, AssetLibrary& assets) {
-    if (clipRef.empty()) return model.AnimationCount() > 0 ? 0 : -1;
-    if (int i = model.FindAnimation(clipRef); i >= 0) return i; // own clip name, or already attached
+namespace {
+int ResolveExternalClip(Model& model, const std::string& clipRef, AssetLibrary& assets) {
     // "path[#clip]" naming a model file.
     const size_t hash = clipRef.find('#');
     const std::string path = clipRef.substr(0, hash);
@@ -193,6 +193,19 @@ int ResolveAnimationClip(Model& model, const std::string& clipRef, AssetLibrary&
         if (srcClip < 0) return -1;
     }
     return model.AttachClip(*src, srcClip, clipRef, AnimationClipLabel(*src, srcClip));
+}
+} // namespace
+
+int ResolveAnimationClip(Model& model, const std::string& clipRef, AssetLibrary& assets) {
+    if (clipRef.empty()) return model.AnimationCount() > 0 ? 0 : -1;
+    if (int i = model.FindAnimation(clipRef); i >= 0) return i; // own clip name, or already attached
+    // A ref that didn't resolve is retried once a second (the file may be imported meanwhile),
+    // not every frame: each try stats the file and walks the asset cache.
+    const double now = std::chrono::duration<double>(std::chrono::steady_clock::now().time_since_epoch()).count();
+    if (model.ClipLookupBackedOff(clipRef, now)) return -1;
+    const int i = ResolveExternalClip(model, clipRef, assets);
+    if (i < 0) model.BackOffClipLookup(clipRef, now + 1.0);
+    return i;
 }
 
 void UpdateSkeletalAnimations(World& world, AssetLibrary& assets, float dt) {
