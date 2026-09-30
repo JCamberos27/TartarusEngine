@@ -1,6 +1,7 @@
 // The Character Outfit component's editor (CHARACTER_OUTFITS.md): gender and race up top, a tab per slot,
-// a card grid of the slot's items with thumbnails, the equipped item's colourways, Randomize (with locks)
-// and presets. Everything goes through OutfitSystem, after PushUndo.
+// the slot's items as a list, a 3D preview of the item you point at (or the one worn) that you can spin, the
+// equipped item's colourways by name, Randomize (with locks) and presets. Everything goes through
+// OutfitSystem, after PushUndo.
 #include "EditorLayer.h"
 #include "EditorLayerInternal.h"
 #include "EditorUIHelpers.h"
@@ -37,38 +38,44 @@ struct OutfitUiState {
     bool ShowVariants = false;      // list the cuts the rules pick (Bobcut_Cap, Jeans_Inboots) too
     std::vector<std::string> Notes; // what the last change's rules did
     char PresetName[64] = "My Outfit";
+    // The item preview's orbit camera and shading; reframed when the previewed model changes.
+    std::string PreviewFor;
+    float Yaw = 0.6f, Pitch = 0.25f, Distance = 1.0f;
+    bool Dragging = false;
+    int Shading = 0; // ModelPreviewRenderer::Shading
 };
 std::unordered_map<entt::id_type, OutfitUiState> g_OutfitUi;
 
-// Thumbnails of items nothing has loaded: the cached render if there is one, else the model is loaded
-// in the background (cards on screen only) and rendered once it's in - after that the cache has it.
-struct ItemThumbs {
-    std::map<std::string, int> AskedFrame;       // path -> the frame it was first asked for
-    std::map<std::string, unsigned> Rendered;    // path -> ModelThumbnail texture
-    std::map<std::string, AssetLibrary::AsyncHandle> Loading; // path -> its background load
-    int Frame = 0, LoadsThisFrame = 0;
-};
-ItemThumbs g_Thumbs;
+// Models the preview has asked for, loading in the background.
+std::map<std::string, AssetLibrary::AsyncHandle> g_PreviewLoads;
 
-// Colourway swatches' materials, loaded in the background the first time they're shown.
-std::map<std::string, AssetLibrary::AsyncHandle> g_SwatchLoads;
-
-const char* SlotIcon(const std::string& icon) {
-    if (icon == "mask") return ICON_FA_USER_NINJA;
-    if (icon == "hair") return ICON_FA_SCISSORS;
-    if (icon == "beard") return ICON_FA_USER_TIE;
-    if (icon == "hat") return ICON_FA_HAT_COWBOY;
-    if (icon == "glasses") return ICON_FA_GLASSES;
-    if (icon == "shirt") return ICON_FA_SHIRT;
-    if (icon == "jacket") return ICON_FA_VEST;
-    if (icon == "collar") return ICON_FA_VEST_PATCHES;
-    if (icon == "pants") return ICON_FA_PERSON;
-    if (icon == "shoe") return ICON_FA_SHOE_PRINTS;
-    if (icon == "bag") return ICON_FA_BAG_SHOPPING;
-    if (icon == "watch") return ICON_FA_CLOCK;
-    if (icon == "headphones") return ICON_FA_HEADPHONES;
-    if (icon == "socks") return ICON_FA_SOCKS;
-    return ICON_FA_CIRCLE;
+// What the options of a colourway set have in common ("M_Pants_Cargo_Camo", "M_Pants_Cargo_Black" ->
+// "Pants Cargo"), so each is labelled by what sets it apart ("Camo", "Black").
+std::vector<std::string> ColourwayLabels(const std::vector<std::string>& options) {
+    std::vector<std::vector<std::string>> words;
+    for (const auto& o : options) {
+        std::vector<std::string> w;
+        std::string cur;
+        for (char c : Wardrobe::PrettyName(Wardrobe::Stem(o)) + " ") {
+            if (c == ' ') { if (!cur.empty()) w.push_back(cur); cur.clear(); }
+            else cur += c;
+        }
+        words.push_back(std::move(w));
+    }
+    size_t common = words.empty() ? 0 : words[0].size();
+    for (const auto& w : words) {
+        size_t k = 0;
+        while (k < common && k < w.size() && w[k] == words[0][k]) ++k;
+        common = k;
+    }
+    std::vector<std::string> out;
+    for (size_t i = 0; i < words.size(); ++i) {
+        std::string label;
+        for (size_t k = std::min(common, words[i].size() ? words[i].size() - 1 : 0); k < words[i].size(); ++k)
+            label += (label.empty() ? "" : " ") + words[i][k];
+        out.push_back(label.empty() ? Wardrobe::PrettyName(Wardrobe::Stem(options[i])) : label);
+    }
+    return out;
 }
 
 bool ContainsI(const std::string& hay, const char* needle) {
@@ -77,6 +84,17 @@ bool ContainsI(const std::string& hay, const char* needle) {
     for (char& c : h) c = (char)std::tolower((unsigned char)c);
     for (char& c : n) c = (char)std::tolower((unsigned char)c);
     return h.find(n) != std::string::npos;
+}
+
+bool SamePath(const std::string& a, const std::string& b) {
+    if (a.size() != b.size()) return false;
+    for (size_t i = 0; i < a.size(); ++i) {
+        char x = (char)std::tolower((unsigned char)a[i]), y = (char)std::tolower((unsigned char)b[i]);
+        if (x == '\\') x = '/';
+        if (y == '\\') y = '/';
+        if (x != y) return false;
+    }
+    return true;
 }
 
 ImU32 Col(const ImVec4& c, float alpha = 1.0f) { return ImGui::GetColorU32(ImVec4(c.x, c.y, c.z, c.w * alpha)); }
@@ -89,9 +107,6 @@ void EditorLayer::DrawCharacterOutfitEditor(World& world, entt::entity root) {
     if (!outfit || !m_AssetsPtr) return;
     AssetLibrary& assets = *m_AssetsPtr;
     OutfitUiState& ui = g_OutfitUi[entt::to_integral(root)];
-
-    const int frame = ImGui::GetFrameCount();
-    if (g_Thumbs.Frame != frame) { g_Thumbs.Frame = frame; g_Thumbs.LoadsThisFrame = 0; }
 
     std::string error;
     auto cat = OutfitSystem::LoadCatalog(assets, outfit->Wardrobe, false, &error);
@@ -234,21 +249,22 @@ void EditorLayer::DrawCharacterOutfitEditor(World& world, entt::entity root) {
         ui.Slot = slots.front()->Id;
     ImGui::Spacing();
     {
-        const float size = ImGui::GetFrameHeight() + 6.0f;
+        // A text tab per slot, flowing onto more lines as needed; a dot marks the slots with something on.
         const float avail = ImGui::GetContentRegionAvail().x;
         float x = 0.0f;
         for (const auto* s : slots) {
-            if (x > 0.0f && x + size > avail) x = 0.0f;
+            const float w = ImGui::CalcTextSize(s->Label.c_str()).x + style.FramePadding.x * 2.0f + 8.0f;
+            if (x > 0.0f && x + w > avail) x = 0.0f;
             else if (x > 0.0f) ImGui::SameLine(0.0f, 3.0f);
-            x += size + 3.0f;
+            x += w + 3.0f;
             const bool on = s->Id == ui.Slot, worn = pieces.count(s->Id) > 0;
             ImGui::PushID(s->Id.c_str());
             ImGui::PushStyleColor(ImGuiCol_Button, on ? accent : style.Colors[ImGuiCol_FrameBg]);
-            if (ImGui::Button(SlotIcon(s->Icon), ImVec2(size, size))) ui.Slot = s->Id;
+            if (ImGui::Button(s->Label.c_str(), ImVec2(w, 0.0f))) ui.Slot = s->Id;
             ImGui::PopStyleColor();
             if (worn) {
                 const ImVec2 mx = ImGui::GetItemRectMax();
-                dl->AddCircleFilled(ImVec2(mx.x - 5.0f, ImGui::GetItemRectMin().y + 5.0f), 3.0f, Col(SuccessColor()));
+                dl->AddCircleFilled(ImVec2(mx.x - 4.0f, ImGui::GetItemRectMin().y + 4.0f), 2.5f, Col(SuccessColor()));
             }
             if (ImGui::IsItemHovered()) EditorUI::SetTooltip("%s%s", s->Label.c_str(), worn ? " (worn)" : "");
             ImGui::PopID();
@@ -275,7 +291,7 @@ void EditorLayer::DrawCharacterOutfitEditor(World& world, entt::entity root) {
     };
     ImGui::Spacing();
     ImGui::AlignTextToFramePadding();
-    ImGui::Text("%s  %s", SlotIcon(slot->Icon), slot->Label.c_str());
+    ImGui::TextUnformatted(slot->Label.c_str());
     ImGui::SameLine();
     ImGui::TextDisabled("%s", wornItem ? wornItem->Name.c_str() : "none");
     {
@@ -294,128 +310,128 @@ void EditorLayer::DrawCharacterOutfitEditor(World& world, entt::entity root) {
     ImGui::SetNextItemWidth(-1.0f);
     ImGui::InputTextWithHint("##outfitSearch", ICON_FA_MAGNIFYING_GLASS "  Search", ui.Search, sizeof(ui.Search));
 
-    // Card grid.
-    const float card = 84.0f, thumb = 64.0f, gap = 6.0f;
-    const float width = ImGui::GetContentRegionAvail().x;
-    const int columns = std::max(1, (int)((width + gap) / (card + gap)));
+    // The slot's items, as a list. Pointing at one previews it below; clicking puts it on.
     std::vector<const Wardrobe::Item*> items;
     for (const auto* it : cat->ForSlot(ui.Slot, sex))
         if ((ui.ShowVariants || !it->Variant || it == wornItem) && ContainsI(it->Name, ui.Search)) items.push_back(it);
-
-    auto thumbFor = [&](const Wardrobe::Item& it, bool visible, bool& flip) -> unsigned {
-        flip = true;
-        if (auto r = g_Thumbs.Rendered.find(it.Path); r != g_Thumbs.Rendered.end()) return r->second;
-        const AssetThumbnailLoader::Thumb t = m_AssetThumbs.Get(ProjectPaths::Resolve(it.Path), AssetThumbnailLoader::Source::Cached);
-        if (t.Tex) { flip = t.FlipV; return t.Tex; }
-        auto asked = g_Thumbs.AskedFrame.emplace(it.Path, frame).first;
-        // No cached render after a moment: load the model in the background (on screen only), then
-        // render it once it's in (one a frame - that's a draw, no loading).
-        if (!visible || frame - asked->second <= 20) return 0;
-        const std::string abs = ProjectPaths::Resolve(it.Path);
-        auto loading = g_Thumbs.Loading.find(it.Path);
-        if (loading == g_Thumbs.Loading.end()) loading = g_Thumbs.Loading.emplace(it.Path, assets.RequestModelAsync(abs)).first;
-        if (AssetLibrary::IsReady(loading->second) && g_Thumbs.LoadsThisFrame < 1) {
-            ++g_Thumbs.LoadsThisFrame;
-            g_Thumbs.Loading.erase(loading);
-            if (auto model = assets.LoadModel(abs))
-                if (const unsigned tex = ModelThumbnail(*model)) { g_Thumbs.Rendered[it.Path] = tex; return tex; }
-        }
-        return 0;
-    };
-
-    ImGui::BeginChild("##outfitGrid", ImVec2(0.0f, std::min(360.0f, (card + 18.0f + gap) * (float)((items.size() + 1 + (size_t)columns - 1) / (size_t)columns) + 4.0f)),
-                      false);
-    ImDrawList* gdl = ImGui::GetWindowDrawList();
+    const Wardrobe::Item* hoveredItem = nullptr;
+    const float row = ImGui::GetTextLineHeightWithSpacing() + 4.0f;
+    ImGui::BeginChild("##outfitList", ImVec2(0.0f, std::min(260.0f, row * (float)(items.size() + 1) + 6.0f)), true);
     for (size_t i = 0; i <= items.size(); ++i) {
         const Wardrobe::Item* it = i == 0 ? nullptr : items[i - 1];
-        if (i % (size_t)columns) ImGui::SameLine(0.0f, gap);
         ImGui::PushID((int)i);
-        const ImVec2 p = ImGui::GetCursorScreenPos();
         const bool selected = it == wornItem;
-        if (ImGui::InvisibleButton("##card", ImVec2(card, card + 18.0f)) && !selected) {
+        const std::string label = it ? it->Name : "None";
+        if (ImGui::Selectable(label.c_str(), selected, 0, ImVec2(0.0f, row - ImGui::GetStyle().ItemSpacing.y)) && !selected) {
             PushUndo(world, it ? "Equip " + it->Name : "Remove " + slot->Label);
             report(OutfitSystem::Equip(world, assets, root, ui.Slot, it ? it->Path : std::string()));
         }
         const bool hovered = ImGui::IsItemHovered();
-        const bool visible = ImGui::IsItemVisible();
-        const ImVec2 q(p.x + card, p.y + card + 18.0f);
-        gdl->AddRectFilled(p, q, Col(style.Colors[hovered ? ImGuiCol_FrameBgHovered : ImGuiCol_FrameBg]), 6.0f);
-        if (selected) gdl->AddRect(p, q, Col(accent), 6.0f, 0, 2.5f);
-        const ImVec2 t0(p.x + (card - thumb) * 0.5f, p.y + 6.0f), t1(t0.x + thumb, t0.y + thumb);
-        if (it) {
-            bool flip = true;
-            if (const unsigned tex = thumbFor(*it, visible, flip))
-                gdl->AddImage((ImTextureID)(intptr_t)tex, t0, t1, ImVec2(0.0f, flip ? 1.0f : 0.0f), ImVec2(1.0f, flip ? 0.0f : 1.0f));
-            else {
-                const ImVec2 sz = ImGui::CalcTextSize(SlotIcon(slot->Icon));
-                gdl->AddText(ImVec2((t0.x + t1.x - sz.x) * 0.5f, (t0.y + t1.y - sz.y) * 0.5f), Col(style.Colors[ImGuiCol_TextDisabled]), SlotIcon(slot->Icon));
-            }
-        } else {
-            const char* none = ICON_FA_BAN;
-            const ImVec2 sz = ImGui::CalcTextSize(none);
-            gdl->AddText(ImVec2((t0.x + t1.x - sz.x) * 0.5f, (t0.y + t1.y - sz.y) * 0.5f), Col(style.Colors[ImGuiCol_TextDisabled]), none);
-        }
+        if (hovered && it) hoveredItem = it;
+        // On the right: a clash with what's worn (amber: one comes off; grey: an odd pairing), a fitted cut.
         bool hardClash = false;
         const Wardrobe::Item* clash = it && !selected ? clashWith(*it, hardClash) : nullptr;
-        if (clash) {
-            const ImVec2 cs = ImGui::CalcTextSize(ICON_FA_TRIANGLE_EXCLAMATION);
-            gdl->AddText(ImVec2(q.x - cs.x - 5.0f, p.y + 4.0f),
-                         Col(hardClash ? WarningColor() : style.Colors[ImGuiCol_TextDisabled]), ICON_FA_TRIANGLE_EXCLAMATION);
+        std::string tag = it && it->Variant ? "fitted cut" : "";
+        if (clash) tag = hardClash ? "takes off " + clash->Name : "odd with " + clash->Name;
+        if (!tag.empty()) {
+            const ImVec2 ts = ImGui::CalcTextSize(tag.c_str());
+            const ImVec2 mn = ImGui::GetItemRectMin(), mx = ImGui::GetItemRectMax();
+            ImGui::GetWindowDrawList()->AddText(ImVec2(mx.x - ts.x - 6.0f, (mn.y + mx.y - ts.y) * 0.5f),
+                                                Col(clash && hardClash ? WarningColor() : style.Colors[ImGuiCol_TextDisabled]), tag.c_str());
         }
-        const std::string label = it ? it->Name : "None";
-        const ImVec2 ls = ImGui::CalcTextSize(label.c_str());
-        const ImVec4 clip(p.x + 3.0f, p.y, q.x - 3.0f, q.y);
-        gdl->AddText(nullptr, 0.0f, ImVec2(std::max(p.x + 4.0f, p.x + (card - ls.x) * 0.5f), p.y + thumb + 10.0f),
-                     Col(style.Colors[selected ? ImGuiCol_Text : ImGuiCol_TextDisabled]), label.c_str(), nullptr, 0.0f, &clip);
-        if (hovered && it) {
-            ImGui::BeginTooltip();
-            bool flip = true;
-            if (const unsigned tex = thumbFor(*it, true, flip))
-                ImGui::Image((ImTextureID)(intptr_t)tex, ImVec2(160.0f, 160.0f), ImVec2(0.0f, flip ? 1.0f : 0.0f), ImVec2(1.0f, flip ? 0.0f : 1.0f));
-            ImGui::TextUnformatted(it->Name.c_str());
-            ImGui::TextDisabled("%s", it->Path.c_str());
-            if (it->Variant) ImGui::TextDisabled("A fitted cut - usually picked by the wardrobe's rules");
-            if (clash && hardClash) ImGui::TextColored(WarningColor(), ICON_FA_TRIANGLE_EXCLAMATION "  Doesn't go with %s - one of them comes off", clash->Name.c_str());
-            else if (clash) ImGui::TextDisabled(ICON_FA_TRIANGLE_EXCLAMATION "  An odd pairing with %s", clash->Name.c_str());
-            ImGui::EndTooltip();
-        }
+        if (hovered && it) EditorUI::SetTooltip("%s", it->Path.c_str());
         ImGui::PopID();
     }
     ImGui::EndChild();
 
-    // Colourways of the worn item.
+    // --- Preview: the item pointed at in the list, else the one worn --------------------------------
+    const Wardrobe::Item* shown = hoveredItem ? hoveredItem : wornItem;
+    if (shown) {
+        const std::string abs = ProjectPaths::Resolve(shown->Path);
+        std::shared_ptr<Model> model;
+        auto load = g_PreviewLoads.find(abs);
+        if (load == g_PreviewLoads.end()) load = g_PreviewLoads.emplace(abs, assets.RequestModelAsync(abs)).first;
+        if (AssetLibrary::IsReady(load->second)) model = assets.LoadModel(abs);
+        const float width = ImGui::GetContentRegionAvail().x;
+        const float height = std::clamp(width * 0.8f, 160.0f, 300.0f);
+        if (model) {
+            const float fit = ModelPreviewRenderer::ComputeFramingDistance(*model) * 0.72f;
+            if (ui.PreviewFor != abs) { ui.PreviewFor = abs; ui.Distance = fit; }
+            // The worn one with the piece's own materials (its colourway), anything else as it comes.
+            std::vector<std::shared_ptr<MaterialAsset>> slotsMats;
+            if (shown == wornItem && worn != pieces.end()) {
+                if (const auto* rc = reg.try_get<RenderableComponent>(worn->second)) slotsMats = rc->Materials;
+            } else {
+                assets.ApplyMaterialRemap(*model, slotsMats);
+            }
+            const float scale = ImGui::GetIO().DisplayFramebufferScale.x > 0.0f ? ImGui::GetIO().DisplayFramebufferScale.x : 1.0f;
+            const unsigned handle = m_OutfitPreview.Render(*model, ui.Yaw, ui.Pitch, ui.Distance, (int)(width * scale),
+                                                           (int)(height * scale), slotsMats,
+                                                           (ModelPreviewRenderer::Shading)ui.Shading, true);
+            ImGui::Image((ImTextureID)(intptr_t)handle, ImVec2(width, height), ImVec2(0, 1), ImVec2(1, 0));
+            // Drag to spin, scroll to zoom (tracked by hand: an Image is never "active").
+            const bool over = ImGui::IsItemHovered();
+            if (over && ImGui::IsMouseClicked(ImGuiMouseButton_Left)) ui.Dragging = true;
+            if (!ImGui::IsMouseDown(ImGuiMouseButton_Left)) ui.Dragging = false;
+            if (over && ImGui::GetIO().MouseWheel != 0.0f) ui.Distance *= 1.0f - ImGui::GetIO().MouseWheel * 0.1f;
+            if (ui.Dragging) {
+                ui.Yaw += ImGui::GetIO().MouseDelta.x * 0.01f;
+                ui.Pitch = std::clamp(ui.Pitch - ImGui::GetIO().MouseDelta.y * 0.01f, -1.4f, 1.4f);
+            }
+            ui.Distance = std::clamp(ui.Distance, fit * 0.2f, fit * 6.0f);
+            // The name over the image's top-left corner.
+            const ImVec2 mn = ImGui::GetItemRectMin();
+            ImGui::GetWindowDrawList()->AddText(ImVec2(mn.x + 8.0f, mn.y + 6.0f), Col(style.Colors[ImGuiCol_Text]),
+                                                (shown->Name + (shown == wornItem ? "  (worn)" : "")).c_str());
+            // Shading and reset, under it.
+            const char* modes[3] = {"Lit", "Unlit", "Wireframe"};
+            for (int m = 0; m < 3; ++m) {
+                if (m) ImGui::SameLine(0.0f, 2.0f);
+                const bool on = ui.Shading == m;
+                ImGui::PushStyleColor(ImGuiCol_Button, on ? accent : style.Colors[ImGuiCol_FrameBg]);
+                if (ImGui::Button(modes[m])) ui.Shading = m;
+                ImGui::PopStyleColor();
+            }
+            ImGui::SameLine();
+            ImGui::TextDisabled("Drag to spin, scroll to zoom");
+            ImGui::SameLine(ImGui::GetWindowContentRegionMax().x - ImGui::CalcTextSize("Reset view").x - style.FramePadding.x * 2.0f);
+            if (ImGui::Button("Reset view")) { ui.Yaw = 0.6f; ui.Pitch = 0.25f; ui.Distance = fit; }
+        } else {
+            ImGui::Dummy(ImVec2(width, height));
+            const ImVec2 mn = ImGui::GetItemRectMin(), mx = ImGui::GetItemRectMax();
+            ImGui::GetWindowDrawList()->AddRectFilled(mn, mx, Col(style.Colors[ImGuiCol_FrameBg]), 4.0f);
+            const char* msg = "Loading...";
+            const ImVec2 ts = ImGui::CalcTextSize(msg);
+            ImGui::GetWindowDrawList()->AddText(ImVec2((mn.x + mx.x - ts.x) * 0.5f, (mn.y + mx.y - ts.y) * 0.5f),
+                                                Col(style.Colors[ImGuiCol_TextDisabled]), msg);
+        }
+    }
+
+    // --- Colourways of the worn item, by name ------------------------------------------------------
     if (worn != pieces.end()) {
         const auto groups = OutfitSystem::ColourGroups(world, assets, worn->second);
-        for (const auto& g : groups) {
+        for (size_t gi = 0; gi < groups.size(); ++gi) {
+            const auto& g = groups[gi];
             ImGui::PushID(g.Source.c_str());
-            ImGui::AlignTextToFramePadding();
-            ImGui::TextDisabled(ICON_FA_PALETTE);
-            ImGui::SameLine();
-            const float sw = 26.0f;
-            const float rightEdge = ImGui::GetWindowPos().x + ImGui::GetWindowContentRegionMax().x;
+            ImGui::Spacing();
+            ImGui::TextDisabled("%s", groups.size() > 1 ? ("Colour " + std::to_string(gi + 1)).c_str() : "Colour");
+            const std::vector<std::string> labels = ColourwayLabels(g.Options);
+            const float avail = ImGui::GetContentRegionAvail().x;
+            float x = 0.0f;
             for (size_t k = 0; k < g.Options.size(); ++k) {
-                // Flow the swatches: on this line while they fit, else the next.
-                if (k && ImGui::GetItemRectMax().x + 4.0f + sw <= rightEdge) ImGui::SameLine(0.0f, 4.0f);
+                const float w = ImGui::CalcTextSize(labels[k].c_str()).x + style.FramePadding.x * 2.0f + 6.0f;
+                if (x > 0.0f && x + w > avail) x = 0.0f;
+                else if (x > 0.0f) ImGui::SameLine(0.0f, 3.0f);
+                x += w + 3.0f;
                 ImGui::PushID((int)k);
-                const ImVec2 p = ImGui::GetCursorScreenPos();
-                const bool on = g.Options[k] == g.Current;
-                if (ImGui::InvisibleButton("##sw", ImVec2(sw, sw)) && !on) {
+                const bool on = SamePath(g.Options[k], g.Current);
+                ImGui::PushStyleColor(ImGuiCol_Button, on ? accent : style.Colors[ImGuiCol_FrameBg]);
+                if (ImGui::Button(labels[k].c_str(), ImVec2(w, 0.0f)) && !on) {
                     PushUndo(world, "Change Colourway");
                     OutfitSystem::SubmitColourway(world, assets, root, worn->second, g.Source, g.Options[k]);
                 }
-                const ImVec2 c(p.x + sw * 0.5f, p.y + sw * 0.5f);
-                // The swatch's material loads in the background; a plain ring until it's in.
-                const std::string matPath = ProjectPaths::Resolve(g.Options[k]);
-                auto load = g_SwatchLoads.find(matPath);
-                if (load == g_SwatchLoads.end()) load = g_SwatchLoads.emplace(matPath, assets.RequestMaterialAsync(matPath)).first;
-                auto mat = AssetLibrary::IsReady(load->second) ? assets.LoadMaterial(matPath) : nullptr;
-                const unsigned tex = mat ? MaterialThumbnail(mat) : 0u;
-                if (tex) dl->AddImageRounded((ImTextureID)(intptr_t)tex, ImVec2(c.x - sw * 0.5f + 2.0f, c.y - sw * 0.5f + 2.0f),
-                                             ImVec2(c.x + sw * 0.5f - 2.0f, c.y + sw * 0.5f - 2.0f), ImVec2(0, 1), ImVec2(1, 0),
-                                             IM_COL32_WHITE, sw * 0.5f);
-                else if (mat) dl->AddCircleFilled(c, sw * 0.5f - 2.0f, ImGui::GetColorU32(ImVec4(mat->Mat.BaseColor.x, mat->Mat.BaseColor.y, mat->Mat.BaseColor.z, 1.0f)), 20);
-                dl->AddCircle(c, sw * 0.5f - 1.0f, on ? Col(accent) : Col(style.Colors[ImGuiCol_Border]), 20, on ? 2.5f : 1.0f);
-                if (ImGui::IsItemHovered()) EditorUI::SetTooltip("%s", Wardrobe::PrettyName(Wardrobe::Stem(g.Options[k])).c_str());
+                ImGui::PopStyleColor();
+                if (ImGui::IsItemHovered()) EditorUI::SetTooltip("%s", Wardrobe::Stem(g.Options[k]).c_str());
                 ImGui::PopID();
             }
             ImGui::PopID();
