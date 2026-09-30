@@ -1,9 +1,0 @@
-{
-  "guid": "f99d34c9e41ad368",
-  "materialRemap": {
-    "Fbx Default Material 1": "assets/Characters/Quantum/Materials/Characters/M_Hair_Dark.mat",
-    "MI_Hair_Long": "assets/Characters/Quantum/Materials/Characters/M_Hair_Dark.mat"
-  },
-  "metaVersion": 1,
-  "type": "model"
-}

@@ -1,9 +1,0 @@
-{
-  "guid": "759316866536c780",
-  "materialRemap": {
-    "M_Cap5": "assets/Characters/Quantum/Materials/Clothing/Hats/Cap/M_Cap_Black.mat",
-    "lambert4": "assets/Characters/Quantum/Materials/Characters/M_Hair_Dark.mat"
-  },
-  "metaVersion": 1,
-  "type": "model"
-}
