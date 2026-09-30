@@ -486,7 +486,11 @@ int RunSelfTest(AssetLibrary& assets, const std::string& wardrobe) {
         const auto sig = w.Registry.get<CharacterOutfitComponent>(guy).HideSignature;
         check(sig != 0 && w.Registry.all_of<OutfitHideTag>(OutfitSystem::Pieces(w, guy)["Torso"]), "the torso under the shirt is hidden");
         w.Registry.get<OutfitPieceComponent>(OutfitSystem::Pieces(w, guy)["Top"]).Item = item("Male/Tops/SKM_Tshirt_Tucked.fbx");
-        OutfitSystem::UpdateHiding(w);
+        // New coverage may take a few frames to work out; until then the old signature stays.
+        for (int i = 0; i < 3000 && w.Registry.get<CharacterOutfitComponent>(guy).HideSignature == sig; ++i) {
+            OutfitSystem::UpdateHiding(w);
+            std::this_thread::sleep_for(std::chrono::milliseconds(2));
+        }
         check(w.Registry.get<CharacterOutfitComponent>(guy).HideSignature != sig, "editing a piece's item re-runs the hiding");
     }
 
