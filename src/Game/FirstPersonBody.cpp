@@ -266,13 +266,29 @@ float FirstPersonBodyElbowClearSwivel(const std::vector<glm::vec3>& points, cons
     const glm::vec3 line = hand - shoulder;
     if (glm::dot(line, line) < 1e-8f) return 0.0f;
     const glm::vec3 axis = glm::normalize(line);
-    // Only what can come near the arm: a box around it, grown by the clearance and the elbow's swing.
-    const float reach = glm::length(elbow - shoulder) + clearance;
-    const glm::vec3 lo = glm::min(shoulder, hand) - glm::vec3(reach), hi = glm::max(shoulder, hand) + glm::vec3(reach);
+    // Only what can come near the arm. The gap is measured to the arm's middle (halfway up the upper
+    // arm, the elbow, halfway down the forearm), and the swivel turns it about the shoulder-to-hand
+    // line, so at any angle each of its points sits between the midpoints' distances along that line
+    // and between half and all of the elbow's distance from it. A point farther than the clearance
+    // outside that slab or that ring can't bring any angle's gap under the clearance - and only gaps
+    // under it are compared. The margin covers rounding.
+    const glm::vec3 toElbow = elbow - shoulder;
+    const float elbowAlong = glm::dot(toElbow, axis), handAlong = glm::dot(line, axis);
+    const float radial = glm::length(toElbow - axis * elbowAlong);
+    const float margin = clearance + 1e-3f;
+    const float alongLo = std::min({elbowAlong * 0.5f, elbowAlong, (elbowAlong + handAlong) * 0.5f}) - margin;
+    const float alongHi = std::max({elbowAlong * 0.5f, elbowAlong, (elbowAlong + handAlong) * 0.5f}) + margin;
+    const float ringIn = std::max(radial * 0.5f - margin, 0.0f), ringOut = radial + margin;
+    const float ringIn2 = ringIn > 0.0f ? ringIn * ringIn : -1.0f, ringOut2 = ringOut * ringOut;
     thread_local std::vector<glm::vec3> nearby;
     nearby.clear();
-    for (const glm::vec3& p : points)
-        if (glm::all(glm::greaterThanEqual(p, lo)) && glm::all(glm::lessThanEqual(p, hi))) nearby.push_back(p);
+    for (const glm::vec3& p : points) {
+        const glm::vec3 d = p - shoulder;
+        const float along = glm::dot(d, axis);
+        if (along < alongLo || along > alongHi) continue;
+        const float off2 = glm::dot(d, d) - along * along;
+        if (off2 >= ringIn2 && off2 <= ringOut2) nearby.push_back(p);
+    }
     thread_local PointsSoA soa;
     soa.Assign(nearby.data(), nearby.size());
     auto gapAt = [&](float angle, float floor) {
