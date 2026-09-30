@@ -17,7 +17,7 @@ class World;
 // checks what the weapon did: states, ammo, the pump, pellets, reloads, the sights, slot swaps.
 // Prints one [WeaponTest] line per check; Failures() counts the failed ones.
 //
-// `--stock-probe` runs a different script on the same harness: the Remington held while the view
+// `--stock-probe [remington|ak]` runs a different script on the same harness: the weapon held while the view
 // is pitched, turned, fired and aimed, logging where the gun's butt sits against the body's right
 // shoulder, neck and head ([StockProbe] lines), with Scene + Game view captures under --smoke-shots.
 class FirstPersonWeaponTest {
@@ -42,6 +42,7 @@ public:
         std::string Shot;                  // a capture name for this frame (--smoke-shots)
         glm::vec2 Move{0.0f};              // the move keys (x right, y forward, -1..1), held until changed
         bool Sprint = false;               // ... and Sprint
+        bool Trigger = false;              // the trigger held down (full auto), until changed
         bool Saw(const std::string& state) const;
         const std::string& State() const;
     };
@@ -53,7 +54,7 @@ public:
         std::function<void(Ctx&)> End;     // once, when Until holds: the step's checks
     };
 
-    explicit FirstPersonWeaponTest(bool stockProbe = false);
+    explicit FirstPersonWeaponTest(bool stockProbe = false, bool probeAk = false);
     void SetCamera(Camera* cam) { m_Ctx.Cam = cam; }
     // Stock probe, once the body's arms are on the rig (after FirstPersonBody::ArmsLateUpdate):
     // measures this frame's pose and places the Scene camera on the gun and shoulder.
@@ -83,6 +84,8 @@ private:
     int m_Failures = 0, m_Checks = 0;
     std::string m_Shot;
     bool m_Probe = false;
+    bool m_ProbeAk = false;     // the probe holds the AKS-74U, not the Remington
+    int m_PrintedGunSlot = -1;  // the slot the probe last printed its gun line (butt to muzzle) for
     struct Sample {
         bool Valid = false;
         float Pitch = 0.0f, Yaw = 0.0f, YawRate = 0.0f, TwistDeg = 0.0f;
