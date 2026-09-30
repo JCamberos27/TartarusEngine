@@ -1346,9 +1346,16 @@ void FirstPersonBody::ArmsLateUpdate(World& world, entt::entity weaponArms, floa
     if (follow) m_ArmsWeight = 1.0f;
     else m_ArmsWeight -= m_ArmsWeight * Follow(dt, cfg.ArmsEaseOut);
     const bool viewModelArms = follow;
-    // Clothing's sleeves go with the arms (PlayerBodyTag::SleeveBones).
+    // Easing off a holstered gun (a weapon swap's holster to draw, or going unarmed) the arms piece is hidden
+    // from the camera, below.
+    const bool armsHidden = haveRig && !follow && m_ArmsWeight > 1e-3f;
+    // Clothing's sleeves go with the arms (PlayerBodyTag::SleeveBones): into the view-model pass, or hidden with
+    // them - left in view, an empty sleeve hung where the arm had been.
     for (entt::entity e : m_Pieces)
-        if (auto* tag = reg.valid(e) ? reg.try_get<PlayerBodyTag>(e) : nullptr) tag->SleevesInViewModel = viewModelArms && tag->HasSleeves;
+        if (auto* tag = reg.valid(e) ? reg.try_get<PlayerBodyTag>(e) : nullptr) {
+            tag->SleevesInViewModel = viewModelArms && tag->HasSleeves;
+            tag->SleevesHidden = armsHidden && tag->HasSleeves;
+        }
     // The body's arms piece goes into the view-model pass with the gun (its hands then sit where the
     // rig's do); off, it is an ordinary piece of the body again.
     for (size_t k = 0; k < m_Pieces.size(); ++k) {
@@ -1366,7 +1373,7 @@ void FirstPersonBody::ArmsLateUpdate(World& world, entt::entity weaponArms, floa
         // Easing off a holstered gun the pose is still the rig's (its hands, no gun to hold): shown, it
         // would be a pair of hands hanging in the view for a few frames. Hidden until it has settled.
         auto& rc = reg.get<RenderableComponent>(e);
-        const bool easeOut = haveRig && !follow && m_ArmsWeight > 1e-3f;
+        const bool easeOut = armsHidden;
         if (easeOut && !m_ArmsEasedOut) { m_ArmsShadow = (int)rc.CastShadows; m_ArmsEasedOut = true; }
         if (easeOut) rc.CastShadows = RenderableComponent::ShadowCasting::ShadowsOnly;
         else if (m_ArmsEasedOut) { rc.CastShadows = (RenderableComponent::ShadowCasting)m_ArmsShadow; m_ArmsEasedOut = false; }
@@ -1739,8 +1746,8 @@ void FirstPersonBody::ArmsLateUpdate(World& world, entt::entity weaponArms, floa
                 const float room = std::max(0.0f, gun->MaxShift - glm::length(shift));
                 shift += away * FirstPersonBodyClearPush(m_HeadPointBuffer, a, b, away, gun->MeshClearance, room, 0.01f);
             }
-            // ... and the drawn torso, once the pocket has let go (looking steeply down, where a shouldered stock
-            // lies down the chest): straight out from the chest, by the release's weight.
+            // ... and the drawn torso whenever the butt isn't in the pocket (a reload tucks it under the arm; looking
+            // steeply down, a shouldered stock would lie down the chest): straight out from the chest, by that weight.
             glm::vec3 chest(0.0f);
             if (gun->MeshClearance > 0.0f && gun->TorsoKeepOut > 1e-3f && twinPoint(driverTwin, "spine_05", chest)) {
                 SkinnedPoints(world, BodyRegion::Torso, m_TorsoPointBuffer);
@@ -1923,6 +1930,7 @@ void FirstPersonBody::CameraProbe(World& world, const Camera& camera, float view
                 if (!viewModel) {
                     if (inCollar || hideBones > 0.5f) continue;
                     if (tag->HasHeadBones && head > 0.5f) continue;
+                    if (tag->SleevesHidden && sleeve > 0.5f) continue;
                 }
                 const glm::vec3 p = glm::vec3(pieceWorld * skin * glm::vec4(v.Position, 1.0f));
                 const glm::vec3 d = p - eye;

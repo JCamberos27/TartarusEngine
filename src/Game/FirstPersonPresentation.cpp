@@ -673,17 +673,37 @@ bool FirstPersonPresentation::StockWorld(glm::vec3& butt, glm::vec3& forward) co
             }
         return total > 0.0f ? glm::vec3(p) / total : sv.Position;
     };
-    // The bore is the root's -Z; the butt is what lies furthest along +Z (within 1.5 cm of the end).
-    const glm::vec3 back = glm::normalize(glm::vec3(root[2]));
-    if (m_StockModel != &m) {
+    // The butt is what lies furthest back along the bore (within 1.5 cm of the end). The bore is the muzzle's
+    // (root space), else the root's -Z: the Remington's Main bone points down its barrel, the AK's root doesn't.
+    const glm::vec3 boreLocal = m_HaveMuzzle ? m_BoreLocal : glm::vec3(0.0f, 0.0f, -1.0f);
+    const glm::vec3 back = -glm::normalize(glm::mat3(root) * boreLocal);
+    if (m_StockModel != &m || m_StockBore != boreLocal) {
         m_StockModel = &m;
+        m_StockBore = boreLocal;
         m_StockVerts.clear();
+        // Not the spare magazine (the AK's rides behind the stock, on the belt): no vertex skinned mostly to
+        // one of its bones, or a bone under them.
+        std::vector<char> spare(m.BoneCount() > 0 ? m.BoneCount() : 0, 0);
+        for (int n = 0; n < m.NodeCount(); ++n)
+            for (int a = n; a >= 0; a = m.NodeParent(a))
+                if (std::find(m_Set.SpareMagazineBones.begin(), m_Set.SpareMagazineBones.end(), m.NodeName(a)) != m_Set.SpareMagazineBones.end()) {
+                    if (const int id = m.BoneId(m.NodeName(n)); id >= 0 && id < (int)spare.size()) spare[id] = 1;
+                    break;
+                }
+        auto onGun = [&](int mesh, int v) {
+            const ModelMesh::SkinVertex& sv = m.MeshSkinVertices(mesh)[v];
+            int best = -1;
+            for (int k = 0; k < MAX_BONE_INFLUENCE; ++k)
+                if (sv.BoneIDs[k] >= 0 && sv.Weights[k] > 0.0f && (best < 0 || sv.Weights[k] > sv.Weights[best])) best = k;
+            return best < 0 || sv.BoneIDs[best] >= (int)spare.size() || !spare[sv.BoneIDs[best]];
+        };
         float far = -1e9f;
         for (int i = 0; i < m.MeshCount(); ++i)
-            for (int v = 0; v < (int)m.MeshSkinVertices(i).size(); ++v) far = std::max(far, glm::dot(skinned(i, v), back));
+            for (int v = 0; v < (int)m.MeshSkinVertices(i).size(); ++v)
+                if (onGun(i, v)) far = std::max(far, glm::dot(skinned(i, v), back));
         for (int i = 0; i < m.MeshCount(); ++i)
             for (int v = 0; v < (int)m.MeshSkinVertices(i).size(); ++v)
-                if (glm::dot(skinned(i, v), back) > far - 0.015f / std::max(m_Scale, 1e-6f)) m_StockVerts.push_back({i, v});
+                if (onGun(i, v) && glm::dot(skinned(i, v), back) > far - 0.015f / std::max(m_Scale, 1e-6f)) m_StockVerts.push_back({i, v});
     }
     if (m_StockVerts.empty()) return false;
     glm::vec3 sum(0.0f);
@@ -701,14 +721,15 @@ bool FirstPersonPresentation::WorldGunInput(FirstPersonWorldGunInput& out) const
     const float x = sl.Enabled ? m_StockLockWeight : 0.0f;
     out.ButtWorld = butt;
     out.ForwardWorld = forward;
-    // Looking steeply down the pocket lets go (all of it by Release End), and the gun keeps off the torso instead.
+    // Looking steeply down the pocket lets go (all of it by Release End). Whenever the butt isn't in the pocket - let go,
+    // in a reload / inspect / melee, or a weapon with no pocket lock - the gun keeps off the torso instead.
     float held = 1.0f;
     if (sl.ReleaseStart > sl.ReleaseEnd) {
         const float r = std::clamp((m_LookPitch - sl.ReleaseEnd) / (sl.ReleaseStart - sl.ReleaseEnd), 0.0f, 1.0f);
         held = r * r * (3.0f - 2.0f * r);
     }
     out.Shouldered = x * x * (3.0f - 2.0f * x) * held; // eased in and out
-    out.TorsoKeepOut = 1.0f - held;
+    out.TorsoKeepOut = 1.0f - out.Shouldered;
     // The cheek weld is for the sights: at the hip the head stays as the clips have it, so a reload or an inspect
     // starting and ending (states the pocket lock lets go in) no longer nods it 25 degrees each way.
     const float z = std::clamp(m_Zoom, 0.0f, 1.0f);
