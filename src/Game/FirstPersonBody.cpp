@@ -1,4 +1,5 @@
 #include "FirstPersonBody.h"
+#include "Profiler.h"
 #include "BodyDebugDraw.h"
 #include "FirstPersonBodyContract.h"
 
@@ -20,6 +21,7 @@
 #include <array>
 #include <cctype>
 #include <cmath>
+#include <unordered_set>
 #include <cstdio>
 #include <sstream>
 
@@ -200,6 +202,14 @@ float FirstPersonBodyClearPush(const std::vector<glm::vec3>& points, const glm::
 }
 
 float FirstPersonBodyElbowGap(const std::vector<glm::vec3>& points, const glm::vec3& shoulder, const glm::vec3& elbow, const glm::vec3& hand) {
+    return FirstPersonBodyElbowGapAbove(points, shoulder, elbow, hand, -1.0f);
+}
+
+float FirstPersonBodyElbowGapAbove(const std::vector<glm::vec3>& points, const glm::vec3& shoulder, const glm::vec3& elbow,
+                                   const glm::vec3& hand, float floor) {
+    // Stops as soon as the gap is known to be at most `floor` (a point that close): the search only
+    // asks whether an angle beats the best so far.
+    const float floor2 = floor >= 0.0f ? floor * floor : -1.0f;
     const glm::vec3 a = shoulder + (elbow - shoulder) * 0.5f, c = elbow + (hand - elbow) * 0.5f;
     auto seg2 = [](const glm::vec3& p, const glm::vec3& s0, const glm::vec3& s1) {
         const glm::vec3 d = s1 - s0;
@@ -208,7 +218,10 @@ float FirstPersonBodyElbowGap(const std::vector<glm::vec3>& points, const glm::v
         return glm::dot(e, e);
     };
     float best = 1e18f;
-    for (const glm::vec3& p : points) best = std::min(best, std::min(seg2(p, a, elbow), seg2(p, elbow, c)));
+    for (const glm::vec3& p : points) {
+        best = std::min(best, std::min(seg2(p, a, elbow), seg2(p, elbow, c)));
+        if (best <= floor2) break;
+    }
     return std::sqrt(best);
 }
 
@@ -225,17 +238,18 @@ float FirstPersonBodyElbowClearSwivel(const std::vector<glm::vec3>& points, cons
     nearby.clear();
     for (const glm::vec3& p : points)
         if (glm::all(glm::greaterThanEqual(p, lo)) && glm::all(glm::lessThanEqual(p, hi))) nearby.push_back(p);
-    auto gapAt = [&](float angle) {
+    auto gapAt = [&](float angle, float floor) {
         const glm::vec3 e = shoulder + glm::angleAxis(angle, axis) * (elbow - shoulder);
-        return FirstPersonBodyElbowGap(nearby, shoulder, e, hand);
+        return FirstPersonBodyElbowGapAbove(nearby, shoulder, e, hand, floor);
     };
-    const float here = gapAt(0.0f);
+    const float here = gapAt(0.0f, -1.0f);
     if (here >= clearance) return 0.0f;
     step = std::max(step, glm::radians(1.0f));
     float best = 0.0f, bestGap = here;
     for (float a = step; a <= maxAngle + 1e-5f; a += step)
         for (const float s : {prefer < 0.0f ? -a : a, prefer < 0.0f ? a : -a}) {
-            const float g = gapAt(s);
+            // A gap at most bestGap (< clearance) changes nothing below, so its scan may stop there.
+            const float g = gapAt(s, bestGap);
             if (g >= clearance) return s;
             if (g > bestGap) { bestGap = g; best = s; }
         }
@@ -825,7 +839,11 @@ void FirstPersonBody::LateUpdate(World& world, Camera& camera, float dt, entt::e
     const glm::vec3 d = ac.RootMotion.DeltaPosition;
     m_RootVelocity = dt > 0.0f && !m_Turning ? glm::vec3(d.x, 0.0f, d.z) / dt : glm::vec3(0.0f);
 
+    {
+    PROFILE_SCOPE("FPB foot IK");
     ApplyFootIK(world, cfg, dt); // the pelvis and legs first: everything after reads the final pose
+    }
+    PROFILE_SCOPE("FPB spine + shoulders");
 
     // The chest follows the view's pitch first, so the head (and the camera on it) and the
     // shoulders are where they will be drawn.
@@ -1097,17 +1115,39 @@ void FirstPersonBody::SkinnedPoints(const World& world, BodyRegion region, std::
                 for (size_t i = 0; i < verts.size(); i += stride) verts[n++] = verts[i];
                 verts.resize(n);
             }
+            // The head is dense (a detailed face, its mouth and eyes: ~50k vertices) for what only keeps a gun a
+            // few centimetres off it: one vertex per 5 mm cell is the same surface to within 4.3 mm - well under
+            // the 1 cm steps the gun is pushed out in - at a tenth of the skinning each frame.
+            if (region == BodyRegion::Head) {
+                constexpr float kCell = 0.005f;
+                std::unordered_set<std::uint64_t> taken;
+                taken.reserve(verts.size());
+                size_t n = 0;
+                for (const auto& iv : verts) {
+                    const glm::vec3& p = m.MeshSkinVertices(iv.first)[iv.second].Position;
+                    const auto cell = [&](float x) { return (std::uint64_t)(std::int64_t)std::floor(x / kCell) & 0x1FFFFFu; };
+                    if (taken.insert(cell(p.x) | cell(p.y) << 21 | cell(p.z) << 42).second) verts[n++] = iv;
+                }
+                verts.resize(n);
+            }
             found = cache.emplace(&m, std::move(verts)).first;
         }
         if (found->second.empty()) continue;
         const glm::mat4 toWorld = world.ComposeWorldTransform(ents[k]);
+        // The palette once per piece, not a lookup per influence per vertex; the sums are the same.
+        thread_local std::vector<glm::mat4> palette;
+        palette.resize((size_t)std::max(m.BoneCount(), 0));
+        for (int b = 0; b < (int)palette.size(); ++b) palette[b] = m.FinalBoneMatrix(b);
+        points.reserve(points.size() + found->second.size());
         for (const auto& [i, v] : found->second) {
             const ModelMesh::SkinVertex& sv = m.MeshSkinVertices(i)[v];
             glm::vec4 p(0.0f);
             float total = 0.0f;
+            const glm::vec4 pos(sv.Position, 1.0f);
             for (int j = 0; j < MAX_BONE_INFLUENCE; ++j)
                 if (sv.BoneIDs[j] >= 0 && sv.Weights[j] > 0.0f) {
-                    p += sv.Weights[j] * (m.FinalBoneMatrix(sv.BoneIDs[j]) * glm::vec4(sv.Position, 1.0f));
+                    const glm::mat4& bone = sv.BoneIDs[j] < (int)palette.size() ? palette[sv.BoneIDs[j]] : glm::mat4(1.0f);
+                    p += sv.Weights[j] * (bone * pos);
                     total += sv.Weights[j];
                 }
             if (total <= 0.0f) continue;
@@ -1293,7 +1333,9 @@ void FirstPersonBody::RotateChain(const std::vector<std::string>& chain, const s
                                   const std::vector<std::shared_ptr<Model>>* models) {
     std::vector<int> parents;
     std::vector<glm::mat4> globals;
-    for (const auto& mp : models ? *models : m_Models) {
+    const auto& list = models ? *models : m_Models;
+    for (size_t k = 0; k < list.size(); ++k) {
+        const auto& mp = list[k];
         if (!mp) continue;
         Model& m = *mp;
         IK::Pose pose = m.AppliedLocalPose();
@@ -1302,9 +1344,14 @@ void FirstPersonBody::RotateChain(const std::vector<std::string>& chain, const s
         for (const std::string& name : chain)
             if (const int i = m.NodeIndex(Bone(name)); i >= 0) bones.push_back(i);
         if (bones.empty()) continue;
+        // A piece skinning nothing the chain moves (legs, feet) draws the same either way. The driver always
+        // turns: its head and shoulders are read for the camera and the arms.
+        if ((k >= m_Pieces.size() || m_Pieces[k] != m_Driver) && !SkinsUnder(m, bones, chain.front())) continue;
         parents.resize(pose.size());
         for (int i = 0; i < (int)pose.size(); ++i) parents[i] = m.NodeParent(i);
-        IK::ComputeGlobals(pose, parents, globals);
+        // Only the chain and what's above it are read before ApplyLocalPose re-derives the rest.
+        globals.resize(pose.size());
+        IK::RefreshPath(pose, parents, globals, -1, bones.back());
         const glm::quat step = stepFor((int)bones.size());
         // Only the next spine bone's global is read before ApplyLocalPose re-derives the lot, so
         // refresh just the path to it rather than the whole upper body after every bone.
@@ -1317,6 +1364,37 @@ void FirstPersonBody::RotateChain(const std::vector<std::string>& chain, const s
     }
 }
 
+bool FirstPersonBody::SkinsUnder(const Model& m, const std::vector<int>& roots, const std::string& key) {
+    const auto id = std::make_pair(&m, key);
+    if (const auto it = m_SkinsUnder.find(id); it != m_SkinsUnder.end()) return it->second;
+    std::vector<char> under((size_t)m.NodeCount(), 0);
+    for (int r : roots) if (r >= 0 && r < m.NodeCount()) under[r] = 1;
+    bool skins = false;
+    for (int i = 0; i < m.NodeCount() && !skins; ++i) { // parents first
+        if (!under[i] && m.NodeParent(i) >= 0 && under[m.NodeParent(i)]) under[i] = 1;
+        skins = under[i] && m.BoneId(m.NodeName(i)) >= 0;
+    }
+    m_SkinsUnder[id] = skins;
+    return skins;
+}
+
+bool FirstPersonBody::SkinsUpperBody(const Model& m) {
+    if (const auto it = m_SkinsUpperBody.find(&m); it != m_SkinsUpperBody.end()) return it->second;
+    std::vector<char> under((size_t)m.NodeCount(), 0);
+    int chest = -1;
+    for (int b = 4; b >= 0 && chest < 0; --b) chest = m.NodeIndex(Bone(FPBody::kBoneSpine[b]));
+    if (chest >= 0) under[chest] = 1;
+    for (int s = 0; s < 2; ++s)
+        if (const int c = m.NodeIndex(Bone(FPBody::kBoneClavicle[s])); c >= 0) under[c] = 1;
+    bool skins = false;
+    for (int i = 0; i < m.NodeCount(); ++i) { // parents first
+        if (!under[i] && m.NodeParent(i) >= 0 && under[m.NodeParent(i)]) under[i] = 1;
+        if (under[i] && m.BoneId(m.NodeName(i)) >= 0) { skins = true; break; }
+    }
+    m_SkinsUpperBody[&m] = skins;
+    return skins;
+}
+
 void FirstPersonBody::ArmsLateUpdate(World& world, entt::entity weaponArms, float viewModelFov, float dt, const Camera* camera,
                                      const FirstPersonWorldGunInput* gun) {
     if (!IsActive()) return;
@@ -1325,7 +1403,10 @@ void FirstPersonBody::ArmsLateUpdate(World& world, entt::entity weaponArms, floa
     const FirstPersonBodyComponent& cfg = reg.get<FirstPersonBodyComponent>(m_Body);
     // The world twins start from the pieces' pose as it stands now (the clips, the spine, the feet): from
     // here the pieces' arms go to the rig's hands, the twins' to the world gun's.
+    {
+    PROFILE_SCOPE("FPB sync twins");
     SyncTwins(world);
+    }
     const bool enabled = cfg.WeaponArms;
     const bool haveRig = enabled && weaponArms != entt::null && reg.valid(weaponArms) &&
                          reg.all_of<RenderableComponent>(weaponArms) && viewModelFov > 0.0f;
@@ -1477,6 +1558,8 @@ void FirstPersonBody::ArmsLateUpdate(World& world, entt::entity weaponArms, floa
         for (size_t k : order) {
             if (k >= models.size() || !models[k]) continue;
             Model& m = *models[k];
+            // The source (the arms) and the driver are always solved: they are what the rest is read off.
+            if (sourceDone && m_Pieces[k] != m_Driver && !SkinsUpperBody(m)) continue;
             IK::Pose pose = m.AppliedLocalPose();
             if (pose.empty() || (int)pose.size() != m.NodeCount() || !reg.valid(ents[k])) continue;
             parents.resize(pose.size());
@@ -1662,6 +1745,7 @@ void FirstPersonBody::ArmsLateUpdate(World& world, entt::entity weaponArms, floa
                 // hand stays on the gun. Worked out on the source piece, eased (in fast, out slower), given to all.
                 if (!debug && cfg.ElbowClearance > 0.0f && !m_TorsoPointBuffer.empty()) {
                     if (isSource) {
+                        PROFILE_SCOPE("FPB elbow swivel search");
                         auto at = [&](int node) { return glm::vec3(pieceWorld * glm::vec4(IK::Position(globals[node]), 1.0f)); };
                         const float want = FirstPersonBodyElbowClearSwivel(m_TorsoPointBuffer, at(upper), at(lower), at(hand), cfg.ElbowClearance,
                                                                            glm::radians(90.0f), glm::radians(5.0f), m_WorldElbowClear[s]);
@@ -1682,14 +1766,19 @@ void FirstPersonBody::ArmsLateUpdate(World& world, entt::entity weaponArms, floa
             m.ApplyLocalPose(pose);
         }
     };
+    {
+    PROFILE_SCOPE("FPB arms: pieces");
     solveArms(m_Models, m_Pieces, m_ShoulderAnchor, m_HaveShoulderAnchor, m_ElbowAim, m_HaveElbowAim, true);
+    }
 
     // The world gun: the first-person gun moved so its butt sits in the body's right shoulder pocket while
     // shouldered, and pushed clear of the neck and head always - the rig holds the stock in by the chin and
     // carries the gun high across the chest sprinting, which in any other view went through the hood.
     // Measured on the twins as the clips and spine have them (before their arms move).
     glm::vec3 shiftTarget(0.0f);
+    bool torsoSkinned = false; // m_TorsoPointBuffer holds the twins' torso as posed now
     if (gun && !m_Twins.empty()) {
+        PROFILE_SCOPE("FPB world gun clearance");
         int armsTwin = -1, driverTwin = -1;
         for (size_t k = 0; k < m_Pieces.size(); ++k) {
             if (m_Pieces[k] == m_Driver) driverTwin = (int)k;
@@ -1736,7 +1825,8 @@ void FirstPersonBody::ArmsLateUpdate(World& world, entt::entity weaponArms, floa
             // sprinting rig carries the stock under the chin, through a hood the spheres miss). Out of them
             // straight away from the hood sphere's centre, as far as it takes.
             if (gun->MeshClearance > 0.0f) {
-                SkinnedPoints(world, BodyRegion::Head, m_HeadPointBuffer);
+                { PROFILE_SCOPE("FPB skin head"); SkinnedPoints(world, BodyRegion::Head, m_HeadPointBuffer); }
+                PROFILE_SCOPE("FPB push head");
                 const glm::vec3 a = gun->ButtWorld + shift, b = a + fwd * gun->GunLength;
                 const glm::vec3 centre = keepOut[1].Centre;
                 const glm::vec3 ab = b - a;
@@ -1750,7 +1840,9 @@ void FirstPersonBody::ArmsLateUpdate(World& world, entt::entity weaponArms, floa
             // steeply down, a shouldered stock would lie down the chest): straight out from the chest, by that weight.
             glm::vec3 chest(0.0f);
             if (gun->MeshClearance > 0.0f && gun->TorsoKeepOut > 1e-3f && twinPoint(driverTwin, "spine_05", chest)) {
-                SkinnedPoints(world, BodyRegion::Torso, m_TorsoPointBuffer);
+                { PROFILE_SCOPE("FPB skin torso (gun)"); SkinnedPoints(world, BodyRegion::Torso, m_TorsoPointBuffer); }
+                torsoSkinned = true;
+                PROFILE_SCOPE("FPB push torso");
                 const glm::vec3 a = gun->ButtWorld + shift, b = a + fwd * gun->GunLength;
                 const glm::vec3 ab = b - a;
                 const float t = std::clamp(glm::dot(chest - a, ab) / std::max(glm::dot(ab, ab), 1e-9f), 0.0f, 1.0f);
@@ -1774,9 +1866,16 @@ void FirstPersonBody::ArmsLateUpdate(World& world, entt::entity weaponArms, floa
             rigElbow[s] += m_WorldGunShift;
         }
         // The drawn torso the world elbows keep out of (Elbow Clearance), as the clips and spine pose it.
-        if (cfg.ElbowClearance > 0.0f) SkinnedPoints(world, BodyRegion::Torso, m_TorsoPointBuffer);
+        {
+        PROFILE_SCOPE("FPB twins torso skin");
+        // (Nothing has moved the twins since the gun's torso keep-out skinned them.)
+        if (cfg.ElbowClearance > 0.0f) { if (!torsoSkinned) SkinnedPoints(world, BodyRegion::Torso, m_TorsoPointBuffer); }
         else m_TorsoPointBuffer.clear();
+        }
+        {
+        PROFILE_SCOPE("FPB arms: twins");
         solveArms(m_TwinModels, m_Twins, m_WorldShoulderAnchor, m_WorldHaveShoulderAnchor, m_WorldElbowAim, m_WorldHaveElbowAim, false);
+        }
         // The world head over the stock: the neck tilts it toward where the eye is for the world gun (the
         // camera, moved with it), by the pocket lock's weight and at most Head Tilt.
         const float lock = gun ? std::clamp(gun->CheekWeld, 0.0f, 1.0f) * std::clamp(m_ArmsWeight, 0.0f, 1.0f) : 0.0f;
@@ -1813,6 +1912,7 @@ void FirstPersonBody::ArmsLateUpdate(World& world, entt::entity weaponArms, floa
 
     // Debug (the Inspector's readout, and the Scene overlay's Gizmos > Player body): the play camera's view
     // and each arm as the arms rig has it (yellow) against the body's (magenta).
+    PROFILE_SCOPE("FPB arms debug");
     if (camera) {
         const glm::vec3 eye = camera->Position, f = camera->Front(), r = camera->Right(), u = camera->Up();
         BodyDebug::Info().NearPlane = camera->NearPlane;

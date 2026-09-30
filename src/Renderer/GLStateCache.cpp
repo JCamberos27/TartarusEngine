@@ -69,6 +69,8 @@ void Invalidate() {
 #endif
 }
 
+unsigned int CurrentProgram() { return g_ProgramValid ? g_CurrentProgram : 0u; }
+
 void UseProgram(unsigned int program) {
     if (g_ProgramValid && g_CurrentProgram == program) {
         g_Stats.ProgramBindsSkipped++;
