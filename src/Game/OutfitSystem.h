@@ -12,6 +12,7 @@
 #include <vector>
 
 class AssetLibrary;
+class Model;
 class World;
 
 // Character outfits in the scene (CHARACTER_OUTFITS.md): builds, swaps and removes the Outfit Piece
@@ -107,8 +108,17 @@ Result LoadPreset(World& world, AssetLibrary& assets, entt::entity root, const s
 // Keeps every outfit's hidden vertices in step with its pieces (OutfitHideTag): what pokes through a
 // layer worn over it (Wardrobe::LayerOf - body, head, shirts, hair ...). Call once per frame, after the
 // world transform cache is rebuilt; it only works when an outfit's pieces changed (an edit, an undo, a
-// scene load), and remembers each pair.
+// scene load), and remembers each pair. Also ranks the pieces for drawing (OutfitLayerTag).
 void UpdateHiding(World& world);
+// OutfitLayerTag: how much nearer the camera each layer a piece is worn over draws it, and the most layers
+// counted. Cloth sways a few millimetres out through what's over it; much more and a hand resting on a
+// jacket would sink into it.
+constexpr float kLayerPull = 0.004f;
+constexpr int kMaxLayerRank = 3;
+
+// Rigid head wear's fit (Wardrobe::ItemOverride::Fit): `model` scaled by `fit` about its bounds' centre, in
+// its own space. Identity for a fit of 1 (or 0, not looked up yet).
+glm::mat4 FitMatrix(const Model& model, float fit);
 
 // Rigid head wear (a static mesh in a head-attached slot, like a balaclava): no skeleton of its own, so each
 // frame it's placed by the head bone's skinning matrix - modelled in the head's bind pose, that's where it sits.

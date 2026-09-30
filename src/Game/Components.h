@@ -677,6 +677,7 @@ struct OutfitPieceComponent {
     std::string Slot;                // "Torso", "Hair", "Top", "Wrist L" ...
     std::string Item;                // project-relative model path
     int Flags = 0;                   // OutfitPieceFlags
+    float Fit = 0.0f;                // runtime: Wardrobe::FitOf (0 = not looked up yet; UpdateHiding does)
 };
 enum OutfitPieceFlags { OutfitPieceBodyPart = 1, OutfitPieceHeadAttached = 2 };
 
@@ -687,6 +688,14 @@ struct OutfitHideTag {
     std::shared_ptr<const std::vector<std::uint32_t>> Bits; // the same bits on the CPU
     std::shared_ptr<VisibleIndexBuffer> Visible;            // the triangles not covered entirely, drawn in its place
     int Hidden = 0, Total = 0;              // vertices hidden / in the model (the Inspector's readout)
+};
+
+// How far an outfit piece is drawn toward the camera (OutfitSystem::UpdateHiding): the layers it's worn over
+// times OutfitSystem::kLayerPull. Depth only - each vertex slides along its own view ray, so nothing moves on
+// screen - so cloth lying on the layer under it wins the depth test instead of flickering with it, and a few
+// millimetres of the layer under swaying out through it stay behind. Runtime only.
+struct OutfitLayerTag {
+    float Pull = 0.0f; // metres
 };
 
 // Procedural runtime animation: spin, orbit, bob, and (for a LightComponent entity) hue

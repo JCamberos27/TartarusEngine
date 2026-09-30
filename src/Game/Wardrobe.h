@@ -122,6 +122,9 @@ struct ItemOverride {
     bool Hidden = false;    // not offered
     std::string Slot, Name; // "" = inferred
     int Gender = -1;        // -1 = inferred
+    // Rigid head wear drawn this much bigger about its own centre (OutfitSystem::FitMatrix): a balaclava
+    // modelled a little small for the head it's worn on (the female one pokes the back of the head out).
+    float Fit = 1.0f;
 };
 
 struct Wardrobe {
@@ -163,6 +166,9 @@ struct Item {
     std::vector<std::string> Tags;    // from the wardrobe's tag rules (TagRule)
     std::vector<std::string> Materials; // its remapped .mat paths (the colourway sources)
 };
+
+// An item's ItemOverride::Fit (1 when it has none). `path` project-relative.
+float FitOf(const Wardrobe& w, const std::string& path);
 
 // The display name for a model file stem: "SKM_F_Hoodie_Zipper_Hood" -> "Hoodie Zipper Hood".
 std::string PrettyName(const std::string& stem);

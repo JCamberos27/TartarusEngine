@@ -453,12 +453,13 @@ int main(int argc, char** argv) {
     // --outfit-shots <dir> [scene.json|dir]: the smoke test, with the Scene view framed on the scene's
     // characters instead (CharacterOutfitComponent): the first row, then each picked character full length
     // from the front and back and its head close up - for reviewing outfit and skin-hiding changes.
-    // Characters are picked spread along each row, or by name with TARTARUS_SHOT_NAMES="Name1,Name2".
+    // Characters are picked spread along each row, or by name with TARTARUS_SHOT_NAMES="Name1,Name2"; each also
+    // gets a "_headback" shot. TARTARUS_SHOT_POSE="<clip>@<fraction>" holds every skinned piece in that pose.
     std::string outfitShotsDir;
     // --outfit-audit [wardrobe] [report.csv]: the wardrobe's rules (presets, Randomize) and every pair of
     // outfit pieces worn one over the other, checked for clipping (OutfitAudit); --outfit-rules: the rules
-    // only. Exit code: 0 clean, 1 problems.
-    bool outfitAuditMode = false, outfitAuditGeometry = true;
+    // only; --outfit-posed: the pairs in 32 animation poses too. Exit code: 0 clean, 1 problems.
+    bool outfitAuditMode = false, outfitAuditGeometry = true, outfitAuditPosed = false;
     // --gen-outfit-scenes: builds project/scenes/OutfitTest/*.json with the outfit system (OutfitTestScene).
     bool outfitScenesMode = false;
     // --outfit-cost [scene.json ...]: draw cost of the wardrobe's models and of each scene (OutfitAudit::RunCost).
@@ -493,9 +494,11 @@ int main(int argc, char** argv) {
         else if (a == "--resave" && i + 2 < argc) { resaveIn = argv[i + 1]; resaveOut = argv[i + 2]; i += 2; }
         else if (a == "--undo-bench") { undoBenchMode = true; }
         else if (a == "--gen-outfit-scenes") { outfitScenesMode = true; }
-        else if (a == "--outfit-audit" || a == "--outfit-rules") {
+        else if (a == "--outfit-audit" || a == "--outfit-rules" || a == "--outfit-posed") {
+            // --outfit-posed: --outfit-audit plus each pair skinned through walk/run/crouch/... poses.
             outfitAuditMode = true;
-            outfitAuditGeometry = a == "--outfit-audit";
+            outfitAuditGeometry = a != "--outfit-rules";
+            outfitAuditPosed = a == "--outfit-posed";
             if (i + 1 < argc && argv[i + 1][0] != '-') outfitAuditWardrobe = argv[++i];
             if (i + 1 < argc && argv[i + 1][0] != '-') outfitAuditCsv = argv[++i];
         }
@@ -910,7 +913,7 @@ int main(int argc, char** argv) {
         }
 
         if (outfitAuditMode) {
-            const int clipping = OutfitAudit::Run(assets, outfitAuditWardrobe, outfitAuditCsv, outfitAuditGeometry);
+            const int clipping = OutfitAudit::Run(assets, outfitAuditWardrobe, outfitAuditCsv, outfitAuditGeometry, outfitAuditPosed);
             return clipping < 0 ? 2 : (clipping > 0 ? 1 : 0);
         }
 
@@ -4252,7 +4255,25 @@ int main(int argc, char** argv) {
                             outfitShots.push_back({n + "_front", g->P + glm::vec3(0.0f, 0.95f, 1.9f), -90.0f, 0.0f});
                             outfitShots.push_back({n + "_back", g->P + glm::vec3(0.0f, 0.95f, -1.9f), 90.0f, 0.0f});
                             outfitShots.push_back({n + "_head", g->P + glm::vec3(0.0f, 1.62f, 0.55f), -90.0f, 0.0f});
-                            if ((int)outfitShots.size() + 3 > kOutfitShotMax) break;
+                            outfitShots.push_back({n + "_headback", g->P + glm::vec3(0.0f, 1.75f, -0.55f), 90.0f, -12.0f});
+                            if ((int)outfitShots.size() + 4 > kOutfitShotMax) break;
+                        }
+                    }
+                    // TARTARUS_SHOT_POSE="<clip ref>@<0..1>": every outfit piece skinned into that moment of the clip
+                    // (the scenes stand still in the bind pose) - for what clips only in motion. Every frame: pieces
+                    // still loading land later.
+                    if (const char* poseEnv = std::getenv("TARTARUS_SHOT_POSE")) {
+                        const std::string spec = poseEnv;
+                        const size_t at = spec.rfind('@');
+                        const std::string clipRef = spec.substr(0, at);
+                        const float fraction = at == std::string::npos ? 0.5f : std::strtof(spec.c_str() + at + 1, nullptr);
+                        std::vector<LocalTRS> pose;
+                        for (auto [e, piece, rc] : world.Registry.view<OutfitPieceComponent, RenderableComponent>().each()) {
+                            if (!rc.ModelRef || rc.ModelRef->BoneCount() == 0) continue;
+                            const int clip = ResolveAnimationClip(*rc.ModelRef, clipRef, assets);
+                            if (clip < 0) continue;
+                            rc.ModelRef->SampleLocalPose(clip, fraction * rc.ModelRef->AnimationLength(clip), AnimationWrapMode::ClampForever, pose);
+                            rc.ModelRef->ApplyLocalPose(pose);
                         }
                     }
                     const int rel = smokeFramesRendered - kOutfitShotStart;

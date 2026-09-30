@@ -14,7 +14,8 @@ class AssetLibrary;
 //   the lower piece's vertices still poke through (OutfitCoverage::PokeDepth). Needs GL.
 // Returns the outfits with problems plus the pairs that clip.
 namespace OutfitAudit {
-int Run(AssetLibrary& assets, const std::string& wardrobe, const std::string& csvPath, bool geometry = true);
+int Run(AssetLibrary& assets, const std::string& wardrobe, const std::string& csvPath, bool geometry = true,
+        bool posed = false);
 
 // `--outfit-cost [scene.json ...]`: what the wardrobe's models cost to draw (triangles, vertices, meshes,
 // bones per model, by slot) and, for each scene (default: scenes/OutfitTest/*.json), the characters'

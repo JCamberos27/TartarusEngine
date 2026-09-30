@@ -295,7 +295,8 @@ bool AnyHit(const Mesh& mesh, const Grid& grid, const glm::vec3& p, const glm::v
 
 } // namespace
 
-std::vector<std::uint8_t> Backed(const Mesh& body, const Mesh& cloth, const std::vector<std::uint8_t>& only, float reach) {
+std::vector<std::uint8_t> Backed(const Mesh& body, const Mesh& cloth, const std::vector<std::uint8_t>& only, float reach,
+                                 const std::vector<float>* poke) {
     std::vector<std::uint8_t> out(body.Positions.size(), 0);
     if (body.Positions.empty() || cloth.Positions.empty() || cloth.Indices.size() < 3) return out;
     const Grid clothGrid = Build(cloth, reach), bodyGrid = Build(body, reach);
@@ -322,10 +323,13 @@ std::vector<std::uint8_t> Backed(const Mesh& body, const Mesh& cloth, const std:
             if (AnyHit(cloth, clothGrid, p, d, 0.0f, ~0u) || AnyHit(body, bodyGrid, p, d, minT, (unsigned)v)) continue;
             // ... and then, without it, the view goes on through: cloth (drawn both sides) or the body's
             // outside must be right there to see instead - found far down inside a shirt, it's a dark hole.
-            const glm::vec3 behind = -dir * kBackedBehind;
+            // Out through the cloth by `depth` along the normal: the cloth is that far back, further on a slant.
+            const float depth = poke && v < poke->size() && (*poke)[v] > 0.0f ? (*poke)[v] + 0.01f : 0.0f;
+            const float back = std::max(kBackedBehind, depth / std::max(l.z, 0.2f));
+            const glm::vec3 behind = -dir * back;
             // Only a surface facing the view counts: past a collar's rim the view meets the collar's inside
             // (drawn, but dark) - a hole all the same.
-            if (AnyHit(cloth, clothGrid, p, behind, 0.0f, ~0u, &dir) || AnyHit(body, bodyGrid, p, behind, 0.001f / kBackedBehind, (unsigned)v, &dir))
+            if (AnyHit(cloth, clothGrid, p, behind, 0.0f, ~0u, &dir) || AnyHit(body, bodyGrid, p, behind, 0.001f / back, (unsigned)v, &dir))
                 continue;
             backed = false;
             break;
@@ -360,7 +364,7 @@ std::vector<std::uint8_t> Hidden(const Mesh& under, const Mesh& over, bool expos
     for (size_t v = 0; v < covered.size(); ++v)
         if (poke[v] > 0.0f) covered[v] = 1;
     if (exposed) {
-        const std::vector<std::uint8_t> backed = Backed(under, over, covered);
+        const std::vector<std::uint8_t> backed = Backed(under, over, covered, kBackedReach, &poke);
         for (size_t v = 0; v < covered.size(); ++v) covered[v] &= backed[v];
     }
     return covered;
