@@ -32,6 +32,9 @@ struct FirstPersonWorldGunInput {
     float NeckRadius = 0.09f;      // keep-outs around the neck and head bones, m
     float HeadRadius = 0.14f;
     float GunLength = 0.45f;       // how much of the gun, from the butt forward, is kept clear, m
+    float MeshClearance = 0.05f;   // ... and how far from the drawn head / neck / hood vertices, m (0 = off)
+    float TorsoKeepOut = 0.0f;     // 0..1: how much the gun also keeps MeshClearance from the drawn torso (the pocket let go)
+    float CheekWeld = 0.0f;        // 0..1 (eased): the head's tilt over the stock - on the sights only
 };
 
 // True first person (#405, phase 1): the player's own body, drawn in the world under the play
@@ -92,6 +95,22 @@ public:
     // Diagnostics (--stock-probe): a standard bone's world position as last posed - from the arms
     // piece when it has the bone (the arms after ArmsLateUpdate), else the driver.
     bool BoneWorld(const World& world, const std::string& standard, glm::vec3& out) const;
+    // Diagnostics (--stock-probe): how close segment a-b (world) comes to the drawn head and neck - every
+    // vertex of the world twins (else the pieces) skinned mostly to neck_01, neck_02 or the head bone, so a
+    // hood or collar counts. Negative when there are none; `piece` / `along` (0..1 on a-b) say where.
+    float HeadMeshGap(const World& world, const glm::vec3& a, const glm::vec3& b, std::string* piece = nullptr,
+                      float* along = nullptr) const { return MeshGap(world, BodyRegion::Head, a, b, piece, along); }
+    // ... the same against the drawn torso (vertices skinned mostly to the pelvis or spine; thinned).
+    float TorsoMeshGap(const World& world, const glm::vec3& a, const glm::vec3& b, std::string* piece = nullptr,
+                       float* along = nullptr) const { return MeshGap(world, BodyRegion::Torso, a, b, piece, along); }
+    // The world head's cheek-weld tilt this frame (degrees) and the weight it was applied at (0..1).
+    float WorldHeadTilt() const { return m_WorldHeadTiltDeg; }
+    float WorldHeadTiltWeight() const { return m_WorldHeadTiltWeight; }
+    // Diagnostics (--stock-probe): how close each world elbow (the arm from half-way down the upper arm, through
+    // the elbow, to half-way down the forearm) comes to the drawn torso - vertices skinned mostly to the pelvis or
+    // spine. -1 when there's no body or no such vertices. [0] left, [1] right.
+    void ElbowTorsoGaps(const World& world, float (&gaps)[2]) const;
+    float WorldElbowSwing(int side) const { return m_WorldElbowClear[side & 1]; } // Elbow Clearance's swing this frame, radians
     float Yaw() const { return m_Yaw; }     // body heading, radians about +Y (model +Z faces the view)
     float Twist() const { return m_Twist; } // view heading minus body heading, radians
 
@@ -112,6 +131,8 @@ private:
                      const std::vector<std::shared_ptr<Model>>* models = nullptr);
     void MakeTwins(World& world);
     void SyncTwins(World& world); // each twin onto its piece: transform, and the pose as posed so far
+    // Rigid head wear's twins (a balaclava, glasses) onto the head twin's head bone, once the twins are posed.
+    void PlaceHeadAttachedTwins(World& world);
     void ApplyFootIK(World& world, const FirstPersonBodyComponent& cfg, float dt);
 
     entt::entity m_Body = entt::null;   // the root: placed at the feet, its pieces ride along
@@ -180,12 +201,23 @@ private:
     // Split poses: each piece's world twin (m_Twins[k] for m_Pieces[k]) and its model instance.
     std::vector<entt::entity> m_Twins;
     std::vector<std::shared_ptr<Model>> m_TwinModels;
+    // The drawn body's surface by region, whatever the outfit: every vertex of the world twins (else the pieces)
+    // skinned mostly to the neck / head (a hood, a collar, the face - the world gun's mesh keep-out) or to the
+    // pelvis / spine (a hoodie's body - the elbows' keep-out; thinned to a few thousand). Per model, (mesh,
+    // vertex) pairs found once; SkinnedPoints skins them to world space as posed now, with each one's piece.
+    enum class BodyRegion { Head, Torso };
+    float MeshGap(const World& world, BodyRegion region, const glm::vec3& a, const glm::vec3& b, std::string* piece, float* along) const;
+    float m_WorldHeadTiltDeg = 0.0f, m_WorldHeadTiltWeight = 0.0f; // the cheek weld as last applied (diagnostics)
+    mutable std::map<const Model*, std::vector<std::pair<int, int>>> m_HeadVerts, m_TorsoVerts;
+    void SkinnedPoints(const World& world, BodyRegion region, std::vector<glm::vec3>& points, std::vector<int>* pieceOf = nullptr) const;
+    std::vector<glm::vec3> m_HeadPointBuffer, m_TorsoPointBuffer; // ArmsLateUpdate's, kept so the frame doesn't allocate
     glm::vec3 m_WorldGunShift{0.0f};   // the world gun off the first-person one (world, eased)
     // The twins' own Arm Steadiness / elbow state (the pieces' is m_ShoulderAnchor ... m_ElbowAim).
     glm::vec3 m_WorldShoulderAnchor[2] = {glm::vec3(0.0f), glm::vec3(0.0f)};
     bool m_WorldHaveShoulderAnchor[2] = {false, false};
     glm::vec3 m_WorldElbowAim[2] = {glm::vec3(0.0f), glm::vec3(0.0f)};
     bool m_WorldHaveElbowAim[2] = {false, false};
+    float m_WorldElbowClear[2] = {0.0f, 0.0f}; // Elbow Clearance: each world elbow's swing out of the torso (radians, eased)
     glm::vec3 m_CameraApplied{0.0f}; // what LateUpdate added to the camera (BeforePlayerMove takes it off)
     glm::vec3 m_Feet{0.0f};
     float m_Yaw = 0.0f;           // body heading, radians about +Y (model +Z faces the view)
@@ -227,6 +259,19 @@ glm::vec3 FirstPersonBodyShoulderLineTilt(const glm::vec3& bodyAcross, const glm
 float FirstPersonBodyArmedEyeLift(float pitchRadians);
 // The share of the view's pitch the spine takes: Spine Aim looking up, Spine Aim Down looking down.
 float FirstPersonBodySpineAim(float pitchRadians, float spineAim, float spineAimDown);
+// How far segment `a`-`b` must move along unit `dir` for every one of `points` to be at least `clearance` from it:
+// the first of 0, `step`, 2 `step` ... that clears, and `maxPush` when none up to it does. 0 when already clear.
+float FirstPersonBodyClearPush(const std::vector<glm::vec3>& points, const glm::vec3& a, const glm::vec3& b, const glm::vec3& dir,
+                               float clearance, float maxPush, float step);
+// How close `points` come to an elbow: the arm from half-way down the upper arm (`shoulder` to `elbow`), through
+// the elbow, to half-way down the forearm (to `hand`). A large number when there are no points.
+float FirstPersonBodyElbowGap(const std::vector<glm::vec3>& points, const glm::vec3& shoulder, const glm::vec3& elbow, const glm::vec3& hand);
+// The swivel (radians, about the shoulder-to-hand line, right-handed) that takes the elbow at least `clearance`
+// from every one of `points`, the hand staying put: the smallest of +-step, +-2 step ... up to `maxAngle`, and
+// where none clears, the one that comes clearest. 0 when the elbow is already clear. At each size the side of
+// prefer (the last frame's swivel) is tried first, so an elbow that clears either way doesn't flip.
+float FirstPersonBodyElbowClearSwivel(const std::vector<glm::vec3>& points, const glm::vec3& shoulder, const glm::vec3& elbow,
+                                      const glm::vec3& hand, float clearance, float maxAngle, float step, float prefer = 0.0f);
 float FirstPersonBodyFootPelvis(float offL, float offR, float maxDrop, float maxRaise);
 glm::vec3 FirstPersonBodyEye(const glm::vec3& restHead, const glm::vec3& head, float bob, const glm::vec3& offset);
 // A piece's Near Hide: the body's, and for clothing at least Clothing Near Hide.

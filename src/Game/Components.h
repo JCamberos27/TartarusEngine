@@ -591,6 +591,10 @@ struct FirstPersonBodyComponent {
     float ArmSteadiness = 1.0f; // Arm Steadiness
     float ArmSteadyTime = 0.5f; // Arm Steady Time
     float ArmSteadyMax = 0.04f; // Arm Steady Max
+    // Split poses: each world elbow swings out about its shoulder-to-hand line (the hand stays on the gun) until
+    // the arm around it is this far (metres, the sleeve's thickness) from the drawn torso. A view-model rig tucks
+    // its elbows to a narrower body than this one; in its bend plane they went into the chest. 0 = off.
+    float ElbowClearance = 0.06f; // Elbow Clearance
     // Looking down, the eye moves this far (metres) forward over the chest, eased in from Look Down Start
     // degrees below level to straight down - the head pitching at the neck. Keeps the camera out of the torso.
     float LookDownPush = 0.0f; // Look Down Push
