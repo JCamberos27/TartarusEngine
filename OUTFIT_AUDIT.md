@@ -5,8 +5,10 @@ the Quantum assets. It started on 2026-09-30 and runs as phased PRs:
 1. tools and baseline (this document);
 2. correctness;
 3. runtime performance;
-4. Quantum assets;
+4. Quantum assets, then clipping (4b);
 5. editor UI.
+
+What's left is in [OUTFIT_TODO.md](OUTFIT_TODO.md).
 
 ## Tools
 All of these run headless. Release builds have no console, so redirect stdout to a file.
@@ -178,3 +180,57 @@ Two things to know when benchmarking:
   overwrite each other's `Library/OutfitCoverage` files. Alternating them makes each re-work its coverage
   during the bench.
 - **Draw calls cost CPU.** Items has 3848 of them, and CPU Scene Draw is 5.5 ms.
+
+## Phase 4: Quantum assets
+- **Clothing textures are capped at 2K** (656 `.png.meta` files, `maxTextureSize` 2048). Body, head and eyes
+  stay 4K. Worst-case resident VRAM: 9.1 GB → 3.4 GB.
+- **15 materials got the `textureGuids` they were missing** (eyes, brows and lashes, balaclavas, fur).
+- **No texture loads twice:** `--outfit-cost` counts the models' own embedded textures, and none load (0 MB).
+- **Double-sided clothing stays on.** Drawing it single-sided measured no GPU gain, and would open holes in
+  collars, hoods and hems.
+
+## Phase 4b: clipping
+- **Head accessories trimmed.** Only balaclavas, hoods and the black classic glasses stay:
+  - the Hat and Headphones slots, their tag rules, excludes, clashes and style fills are gone;
+  - `Hats` is in `excludeFolders`, and the aviators are hidden;
+  - the 14 presets that wore aviators wear the classic glasses, and the ones with hats or headphones lost
+    them;
+  - the OutfitTest scenes were regenerated.
+- **Female balaclava fit.** It's modelled a little small for the female heads, and the back of the head
+  poked out. Its item override has `"fit": 1.06`, applied about the model's centre everywhere it's placed:
+  `UpdateAttachments`, the first-person twins, coverage geometry, and the audit. Head poke-through dropped
+  from about 300 vertices to about 21, all at the face openings.
+- **`Backed` looks back as far as the vertex pokes out.** A bun 9 cm out through a balaclava used to read as
+  a hole at the 4 cm look-back and stayed drawn over it.
+- **Layer pull** (`OutfitLayerTag`, `uLayerPull` in `ModelVertex.glsl`): each piece draws 4 mm nearer the
+  camera per layer worn over it (up to 3), along the view ray. It covers the grazing cases (under 4 mm, the
+  largest group in the posed depth histogram). Pushing vertices out along their normals was tried first and
+  made clipping worse (it moves the silhouette), so it was dropped.
+- **The audit covers every race's head** (the heads differ), and `--outfit-posed` checks 32 poses.
+- **Coverage version 17.**
+
+`--outfit-audit --outfit-posed` now (2380 pairs):
+- **Bind pose:** 211 pairs clip. Most are the head under tops and jackets, through the neck opening at the
+  10 cm look-out cap. They're behind the collar in the shots.
+- **Animated:** 1265 pairs clip in some pose. Poke depth over all vertex-poses: ≤4 mm 268k, 4–5 mm 38k,
+  5–10 mm 135k, 10–15 mm 125k, 15–20 mm 89k, 20–25 mm 75k, 25–30 mm 71k (the check stops at 3 cm).
+
+| Under / over | Pairs | Clip in bind | Clip posed | Posed vertices |
+|---|---|---|---|---|
+| Head / Outerwear | 148 | 121 | 129 | 13,512 |
+| Shoes / Pants | 34 | 0 | 30 | 6,811 |
+| Outerwear / Bag | 146 | 0 | 146 | 6,662 |
+| Top / Outerwear | 65 | 0 | 65 | 4,575 |
+| Pants / Outerwear | 152 | 0 | 151 | 3,636 |
+| Top / Bag | 104 | 0 | 100 | 3,066 |
+| Head / Top | 93 | 81 | 74 | 3,006 |
+| Balaclava / Outerwear | 36 | 0 | 35 | 2,222 |
+| Head / Balaclava | 8 | 8 | 8 | 1,803 |
+| Arms / Outerwear | 36 | 0 | 34 | 1,629 |
+
+The worst single pairs are sport sneakers under cargo, jeans and sport pants in a crouch walk (780–970
+vertices, 3 cm), and the female heads under the puffer and open winter jackets in the pickup pose (650–800).
+
+Verification: `--unit-tests` 7349 checks, `--outfit-selftest` 45, `--outfit-rules` clean, `--smoke-test` on
+OutfitTest and Sandbox with no GL errors. 1080p play-max: Presets 177 fps, Randomized 61 fps, Items 54 fps
+(fewer pieces now that hats are gone), Sandbox 255 fps (unchanged).

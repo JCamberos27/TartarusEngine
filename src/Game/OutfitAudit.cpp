@@ -1,5 +1,6 @@
 #include "OutfitAudit.h"
 
+#include "AnimationSystem.h"
 #include "AssetLibrary.h"
 #include "Components.h"
 #include "Model.h"
@@ -14,6 +15,7 @@
 #include <json.hpp>
 
 #include <algorithm>
+#include <atomic>
 #include <cctype>
 #include <chrono>
 #include <filesystem>
@@ -31,6 +33,7 @@ namespace {
 struct Candidate {
     std::string Slot, Path;
     bool BodyPart = false;
+    std::string Race; // a race's own head or part (under it, what's worn is checked on that race)
 };
 
 struct Pair {
@@ -39,10 +42,72 @@ struct Pair {
     const Candidate* Over;
     int Verts = 0, Hidden = 0, Clipping = 0;
     float Depth = 0.0f; // deepest vertex still poking through, metres
+    std::vector<std::uint8_t> HiddenBits; // what the game hides (bind pose)
+    // Animated: the most under vertices the game draws that end up outside the over piece, in any pose.
+    int Posed = 0;
+    float PosedDepth = 0.0f;
+    std::string PosedWhere;
 };
 
-constexpr float kMaxDepth = 0.15f;    // how far out a poke is looked for
+// How far out a poke is looked for: what the game hides (kPokeReach). Past it the look back reaches a surface
+// that was never under the cloth (a jaw down through the neck opening to a collar), not a poke - at 15 cm every
+// head under a top read as ~1000 vertices poking through.
+constexpr float kMaxDepth = OutfitCoverage::kPokeReach;
 constexpr float kMinDepth = 0.002f;  // closer than this is the same surface, not a poke
+// Animated: how far out a drawn under vertex is looked for past the over piece. Clipping in motion is
+// shallow; further than this is, again, a surface that was never under the cloth.
+constexpr float kPosedReach = 0.03f;
+constexpr float kPosedMinDepth = 0.004f; // a few mm of sway is the cloth's thickness, not a visible poke
+
+// The poses the posed check skins every piece into: what the characters play, and the extremes.
+struct PoseClip {
+    const char* Name;
+    const char* Ref;
+};
+constexpr PoseClip kPoseClips[] = {
+    {"idle", "assets/Animations/Mocap/Idle/AM_Stand_Idle_01.fbx"},
+    {"walk", "assets/Animations/Mocap/Locomotion_V2/AM_Walk/AM_Loco_Walk_Fwd.fbx"},
+    {"run", "assets/Animations/Mocap/Locomotion_V2/AM_Run/AM_Loco_Run_Fwd.fbx"},
+    {"crouch walk", "assets/Animations/Mocap/Locomotion_V2/AM_Crouch_Walk/AM_Crouch_Loco_Walk_Fwd.fbx"},
+    {"crouch", "assets/Animations/Mocap/Crouch/AM_Crouch_Idle_01.fbx"},
+    {"jump", "assets/Animations/Mocap/Jump/AM_Jump.fbx"},
+    {"pickup", "assets/Animations/Mocap/Pickup/AM_Stand_Pickup_02_Floor_To_Floor.fbx"},
+    {"arm flare", "assets/Animations/Mocap/Dance/AM_Dance_Basic_03_Arm_Flare.fbx"},
+};
+constexpr float kPoseTimes[] = {0.1f, 0.35f, 0.6f, 0.85f}; // of each clip's length
+
+// `model`'s geometry (CollisionGeometry order) in `clipRef` at `fraction` of its length. Unskinned (rigid
+// headwear): carried by `headFollow`, as OutfitSystem::UpdateAttachments does. False if the clip doesn't resolve.
+bool Posed(Model& model, AssetLibrary& assets, const char* clipRef, float fraction, const glm::mat4* headFollow,
+           OutfitCoverage::Mesh& out) {
+    model.CollisionGeometry(out.Positions, out.Indices);
+    if (model.BoneCount() == 0) {
+        if (headFollow)
+            for (auto& p : out.Positions) p = glm::vec3(*headFollow * glm::vec4(p, 1.0f));
+        return true;
+    }
+    const int clip = ResolveAnimationClip(model, clipRef, assets);
+    if (clip < 0) return false;
+    std::vector<LocalTRS> pose;
+    model.SampleLocalPose(clip, fraction * model.AnimationLength(clip), AnimationWrapMode::ClampForever, pose);
+    model.ApplyLocalPose(pose);
+    std::vector<glm::mat4> palette((size_t)model.BoneCount());
+    for (int i = 0; i < model.BoneCount(); ++i) palette[(size_t)i] = model.FinalBoneMatrix(i);
+    size_t k = 0;
+    for (int mi = 0; mi < model.MeshCount(); ++mi)
+        for (const auto& v : model.MeshSkinVertices(mi)) {
+            glm::mat4 m(0.0f);
+            float tw = 0.0f;
+            for (int i = 0; i < MAX_BONE_INFLUENCE; ++i)
+                if (v.BoneIDs[i] >= 0 && v.BoneIDs[i] < (int)palette.size()) {
+                    m += palette[(size_t)v.BoneIDs[i]] * v.Weights[i];
+                    tw += v.Weights[i];
+                }
+            if (k < out.Positions.size() && tw > 1e-4f) out.Positions[k] = glm::vec3(m * glm::vec4(out.Positions[k], 1.0f));
+            ++k;
+        }
+    return k == out.Positions.size();
+}
 
 // What's wrong with a resolved outfit: pieces the rules had to take off (the request asked for things
 // that don't go together), style clashes left on, a variant asked for directly, and no top, pants or shoes.
@@ -150,7 +215,7 @@ int CheckRules(const OutfitSystem::Catalog& cat, int seeds) {
 
 } // namespace
 
-int Run(AssetLibrary& assets, const std::string& wardrobe, const std::string& csvPath, bool geometry) {
+int Run(AssetLibrary& assets, const std::string& wardrobe, const std::string& csvPath, bool geometry, bool posed) {
     std::string err;
     auto cat = OutfitSystem::LoadCatalog(assets, wardrobe, true, &err);
     if (!cat) {
@@ -166,7 +231,13 @@ int Run(AssetLibrary& assets, const std::string& wardrobe, const std::string& cs
         auto it = meshes.find(path);
         if (it != meshes.end()) return it->second;
         OutfitCoverage::Mesh m;
-        if (auto model = assets.LoadModel(ProjectPaths::Resolve(path))) model->CollisionGeometry(m.Positions, m.Indices);
+        if (auto model = assets.LoadModel(ProjectPaths::Resolve(path))) {
+            model->CollisionGeometry(m.Positions, m.Indices);
+            if (model->BoneCount() == 0) { // rigid head wear, at its fit (as OutfitSystem places it)
+                const glm::mat4 fit = OutfitSystem::FitMatrix(*model, Wardrobe::FitOf(w, path));
+                for (auto& q : m.Positions) q = glm::vec3(fit * glm::vec4(q, 1.0f));
+            }
+        }
         return meshes[path] = std::move(m);
     };
 
@@ -179,7 +250,12 @@ int Run(AssetLibrary& assets, const std::string& wardrobe, const std::string& cs
         auto& list = all[g];
         const Wardrobe::RaceDef* race = Wardrobe::FindRace(w, sex, "");
         for (const auto& [part, model] : body.Parts) list.push_back({part, model, true});
-        if (race && !race->Head.empty()) list.push_back({"Head", race->Head, true});
+        // Every race's head and its own parts: the heads differ in shape (a bun, a fuller skull), and a
+        // balaclava fitted to one pokes through on another.
+        for (const auto& r : body.Races) {
+            if (!r.Head.empty()) list.push_back({"Head", r.Head, true, r.Name});
+            for (const auto& [part, model] : r.Parts) list.push_back({part, model, true, r.Name});
+        }
         for (const auto& [name, model] : body.Alternates) list.push_back({"Feet", model, true});
         for (const auto& item : cat->Items)
             if (item.Sex == sex) list.push_back({item.Slot, item.Path, false});
@@ -194,7 +270,7 @@ int Run(AssetLibrary& assets, const std::string& wardrobe, const std::string& cs
                 // Only pairs the rules let one character wear together, as they are.
                 Wardrobe::Request req;
                 req.Sex = sex;
-                req.Race = race ? race->Name : std::string();
+                req.Race = !under.Race.empty() ? under.Race : race ? race->Name : std::string();
                 req.Items[over.Slot] = over.Path;
                 if (!under.BodyPart) req.Items[under.Slot] = under.Path;
                 const auto resolved = Wardrobe::Resolve(w, cat->Items, req);
@@ -224,6 +300,7 @@ int Run(AssetLibrary& assets, const std::string& wardrobe, const std::string& cs
                 const auto hidden = OutfitCoverage::Hidden(u, o, p.Under->BodyPart && p.Under->Slot == "Head", rigid);
                 const auto poke = OutfitCoverage::PokeDepth(u, o, kMaxDepth);
                 p.Verts = (int)u.Positions.size();
+                p.HiddenBits = hidden;
                 for (size_t v = 0; v < hidden.size(); ++v) {
                     p.Hidden += hidden[v];
                     if (!hidden[v] && poke[v] > kMinDepth) {
@@ -235,26 +312,110 @@ int Run(AssetLibrary& assets, const std::string& wardrobe, const std::string& cs
         }));
     for (auto& j : jobs) j.get();
 
-    std::sort(pairs.begin(), pairs.end(), [](const Pair& a, const Pair& b) { return a.Clipping > b.Clipping; });
+    // Animated: every piece skinned into each pose (here: models are GL-loaded and hold pose state), then per
+    // pair the under vertices the game draws that end up outside the over piece (on every core).
+    if (posed) {
+        std::map<std::string, int> sexOf;
+        for (const auto& p : pairs) { sexOf[p.Under->Path] = (int)p.Sex; sexOf[p.Over->Path] = (int)p.Sex; }
+        std::string heads[2];
+        for (int g = 0; g < 2; ++g)
+            if (const Wardrobe::RaceDef* race = Wardrobe::FindRace(w, (Wardrobe::Gender)g, "")) heads[g] = race->Head;
+        const auto t0 = std::chrono::steady_clock::now();
+        int poses = 0;
+        // Poke depths over every pair and pose: <=4 mm (kPosedMinDepth - what the draw's layer pull, OutfitLayerTag,
+        // keeps behind), 4-5, 5-10, 10-15, 15-20, 20-25, 25-30 mm.
+        std::atomic<long long> depthHist[7] = {};
+        for (const PoseClip& clip : kPoseClips)
+            for (float at : kPoseTimes) {
+                char where[64];
+                std::snprintf(where, sizeof where, "%s @%d%%", clip.Name, (int)(at * 100.0f + 0.5f));
+                glm::mat4 follow[2];
+                bool haveFollow[2] = {false, false};
+                for (int g = 0; g < 2; ++g) {
+                    auto head = heads[g].empty() ? nullptr : assets.LoadModel(ProjectPaths::Resolve(heads[g]));
+                    const int bone = head ? head->BoneId("head") : -1;
+                    OutfitCoverage::Mesh scratch;
+                    if (bone >= 0 && Posed(*head, assets, clip.Ref, at, nullptr, scratch)) {
+                        follow[g] = head->FinalBoneMatrix(bone);
+                        haveFollow[g] = true;
+                    }
+                }
+                std::map<std::string, OutfitCoverage::Mesh> posedMeshes;
+                bool ok = true;
+                for (const auto& [path, sex] : sexOf) {
+                    auto model = assets.LoadModel(ProjectPaths::Resolve(path));
+                    if (!model) continue;
+                    OutfitCoverage::Mesh m;
+                    const glm::mat4 fitted = haveFollow[sex] ? follow[sex] * OutfitSystem::FitMatrix(*model, Wardrobe::FitOf(w, path)) : glm::mat4(1.0f);
+                    if (!Posed(*model, assets, clip.Ref, at, haveFollow[sex] ? &fitted : nullptr, m)) {
+                        ok = false;
+                        break;
+                    }
+                    posedMeshes[path] = std::move(m);
+                }
+                if (!ok) {
+                    std::cerr << "[OutfitAudit] clip " << clip.Ref << " doesn't resolve - skipped\n";
+                    break;
+                }
+                ++poses;
+                std::vector<std::future<void>> posedJobs;
+                for (unsigned t = 0; t < threads; ++t)
+                    posedJobs.push_back(std::async(std::launch::async, [&, t] {
+                        for (size_t i = t; i < pairs.size(); i += threads) {
+                            Pair& p = pairs[i];
+                            const auto u = posedMeshes.find(p.Under->Path), o = posedMeshes.find(p.Over->Path);
+                            if (u == posedMeshes.end() || o == posedMeshes.end()) continue;
+                            const auto poke = OutfitCoverage::PokeDepth(u->second, o->second, kPosedReach);
+                            int n = 0;
+                            float deepest = 0.0f;
+                            for (size_t v = 0; v < poke.size() && v < p.HiddenBits.size(); ++v)
+                                if (!p.HiddenBits[v] && poke[v] > 0.0f && poke[v] <= kPosedMinDepth) ++depthHist[0];
+                                else if (!p.HiddenBits[v] && poke[v] > kPosedMinDepth) {
+                                    ++depthHist[std::min(6, 1 + (int)(poke[v] / 0.005f))];
+                                    ++n;
+                                    deepest = std::max(deepest, poke[v]);
+                                }
+                            if (n > p.Posed) { p.Posed = n; p.PosedDepth = deepest; p.PosedWhere = where; }
+                        }
+                    }));
+                for (auto& j : posedJobs) j.get();
+            }
+        std::printf("[OutfitAudit] posed poke depths (vertex-poses): <=4mm %lld | 4-5 %lld | 5-10 %lld | 10-15 %lld | 15-20 %lld | 20-25 %lld | 25-30 %lld\n",
+                    depthHist[0].load(), depthHist[1].load(), depthHist[2].load(), depthHist[3].load(), depthHist[4].load(),
+                    depthHist[5].load(), depthHist[6].load());
+        std::printf("[OutfitAudit] posed check: %d poses in %.1f s\n", poses,
+                    std::chrono::duration<double>(std::chrono::steady_clock::now() - t0).count());
+    }
+
+    std::sort(pairs.begin(), pairs.end(), [](const Pair& a, const Pair& b) {
+        return a.Posed != b.Posed ? a.Posed > b.Posed : a.Clipping > b.Clipping;
+    });
     int clipping = 0;
     std::ofstream csv;
     if (!csvPath.empty()) {
         csv.open(csvPath);
-        csv << "gender,under_slot,under,over_slot,over,verts,hidden,clipping,depth_cm\n";
+        csv << "gender,under_slot,under,over_slot,over,verts,hidden,clipping,depth_cm,posed,posed_depth_cm,posed_where\n";
     }
+    int posedClipping = 0;
     for (const auto& p : pairs) {
         if (p.Clipping) ++clipping;
+        if (p.Posed) ++posedClipping;
         if (csv)
             csv << Wardrobe::GenderName(p.Sex) << ',' << p.Under->Slot << ',' << Wardrobe::Stem(p.Under->Path) << ','
                 << p.Over->Slot << ',' << Wardrobe::Stem(p.Over->Path) << ',' << p.Verts << ',' << p.Hidden << ','
-                << p.Clipping << ',' << p.Depth * 100.0f << '\n';
+                << p.Clipping << ',' << p.Depth * 100.0f << ',' << p.Posed << ',' << p.PosedDepth * 100.0f << ','
+                << p.PosedWhere << '\n';
     }
-    std::cout << "[OutfitAudit] " << clipping << " of " << pairs.size() << " pairs clip\n";
-    for (size_t i = 0; i < pairs.size() && i < 40 && pairs[i].Clipping; ++i) {
+    std::cout << "[OutfitAudit] bind pose: " << clipping << " of " << pairs.size() << " pairs clip\n";
+    if (posed) std::cout << "[OutfitAudit] animated: " << posedClipping << " of " << pairs.size() << " pairs clip in some pose\n";
+    for (size_t i = 0; i < pairs.size() && i < 40 && (pairs[i].Clipping || pairs[i].Posed); ++i) {
         const Pair& p = pairs[i];
-        std::printf("  %-6s %-28s under %-30s %5d verts poke through (deepest %.1f cm)\n", Wardrobe::GenderName(p.Sex),
-                    Wardrobe::Stem(p.Under->Path).c_str(), Wardrobe::Stem(p.Over->Path).c_str(), p.Clipping, p.Depth * 100.0f);
+        std::printf("  %-6s %-28s under %-30s bind %4d  posed %5d verts (deepest %.1f cm, %s)\n", Wardrobe::GenderName(p.Sex),
+                    Wardrobe::Stem(p.Under->Path).c_str(), Wardrobe::Stem(p.Over->Path).c_str(), p.Clipping, p.Posed,
+                    p.PosedDepth * 100.0f, p.PosedWhere.c_str());
     }
+    // Animated clipping is reported, not failed on: cloth sways off the skin it was hidden against by design
+    // (the edge band); the count is for comparing before and after a change.
     return clipping + ruleProblems;
 }
 
