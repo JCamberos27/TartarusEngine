@@ -270,10 +270,18 @@ bool Parse(const std::string& jsonText, Wardrobe& out, std::string* error) {
             o.Name = String(c, "name");
             const std::string g = String(c, "gender");
             o.Gender = IEquals(g, "Female") ? 1 : IEquals(g, "Male") ? 0 : -1;
+            o.Fit = std::clamp(c.value("fit", 1.0f), 0.5f, 2.0f);
             if (!o.Path.empty()) w.Items.push_back(std::move(o));
         }
     out = std::move(w);
     return true;
+}
+
+float FitOf(const Wardrobe& w, const std::string& path) {
+    const std::string p = Normalize(path);
+    for (const auto& o : w.Items)
+        if (IEquals(o.Path, p)) return o.Fit;
+    return 1.0f;
 }
 
 bool Classify(const Wardrobe& w, const std::string& path, const std::vector<std::string>& materials, Item& out) {

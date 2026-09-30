@@ -40,6 +40,9 @@ uniform int uHideVertBase;
 // The player's collar (PlayerBodyTag::CollarVerts): the same layout, dropped in the camera's own view only.
 layout(std430, binding = 21) readonly buffer CollarVertBlock { uint uCollarVertBits[]; };
 uniform int uCollarVerts;
+// An outfit piece's layer (OutfitLayerTag): metres nearer the camera it's drawn, along each vertex's own view
+// ray - the depth changes, the picture doesn't - so cloth wins the depth test against the layer it lies on.
+uniform float uLayerPull;
 
 void main() {
     vec4 localPos = vec4(aPos, 1.0);
@@ -100,5 +103,13 @@ void main() {
 
     vUV = aUV;
     vColor = aColor;
-    gl_Position = uProj * uView * world;
+    vec4 viewPos = uView * world;
+    if (uLayerPull > 0.0) {
+        if (uProj[3][3] == 1.0) viewPos.z += uLayerPull; // orthographic: the view ray is -Z
+        else {
+            float d = length(viewPos.xyz);
+            viewPos.xyz *= max(d - uLayerPull, 0.5 * d) / max(d, 1e-6);
+        }
+    }
+    gl_Position = uProj * viewPos;
 }

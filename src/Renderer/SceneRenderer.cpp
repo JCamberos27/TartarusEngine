@@ -360,6 +360,7 @@ void SceneRenderer::RenderScene(World& world, const RenderFrameContext& ctx,
         bool DoubleSided = false;
         // OutfitHideTag::Visible: the piece's triangles not covered entirely, drawn instead of its own.
         const VisibleIndexBuffer* Visible = nullptr;
+        float LayerPull = 0.0f; // OutfitLayerTag: drawn this many metres nearer the camera (depth only)
     };
     static std::vector<DrawItem> drawList;
     static std::vector<DrawItem> transparentList;
@@ -421,6 +422,8 @@ void SceneRenderer::RenderScene(World& world, const RenderFrameContext& ctx,
         const unsigned collarVerts = cameraBody && bodyTag->CollarVerts ? bodyTag->CollarVerts->Id() : 0u;
         const auto* outfitHide = world.Registry.try_get<OutfitHideTag>(entity);
         const unsigned hideVerts = outfitHide && outfitHide->Buffer ? outfitHide->Buffer->Id() : 0u;
+        const auto* outfitLayer = world.Registry.try_get<OutfitLayerTag>(entity);
+        const float layerPull = outfitLayer ? outfitLayer->Pull : 0.0f;
         const auto* outfitPiece = world.Registry.try_get<OutfitPieceComponent>(entity);
         const bool clothing = outfitPiece && !(outfitPiece->Flags & OutfitPieceBodyPart);
         glm::mat4 model = world.GetCachedWorldTransform(entity);
@@ -495,6 +498,7 @@ void SceneRenderer::RenderScene(World& world, const RenderFrameContext& ctx,
                 MaterialAsset::Queue::Transparent, qi, viewDepth, centre, Model::MeshPass::Transparent,
                 renderable.ReceiveShadows, layerBit, nearHide, hideBones, noSsao, hideVerts, nearHideWidth, collarVerts };
             item.DoubleSided = clothing;
+            item.LayerPull = layerPull;
             if (outfitHide && outfitHide->Visible) {
                 item.Visible = outfitHide->Visible.get();
                 item.Tris = (int)item.Visible->Triangles();
@@ -523,6 +527,7 @@ void SceneRenderer::RenderScene(World& world, const RenderFrameContext& ctx,
                 MaterialAsset::Queue::Opaque, 2000, viewDepth, centre, opaquePass,
                 renderable.ReceiveShadows, layerBit, nearHide, hideBones, noSsao, hideVerts, nearHideWidth, collarVerts };
             item.DoubleSided = clothing;
+            item.LayerPull = layerPull;
             if (outfitHide && outfitHide->Visible) {
                 item.Visible = outfitHide->Visible.get();
                 item.Tris = (int)item.Visible->Triangles();
@@ -595,6 +600,7 @@ void SceneRenderer::RenderScene(World& world, const RenderFrameContext& ctx,
         prog.SetInt("uHideVerts", probeItem->HideVerts ? 1 : 0);
         SkinHideBuffer::Bind(probeItem->CollarVerts, SkinHideBuffer::kCollarBinding);
         prog.SetInt("uCollarVerts", probeItem->CollarVerts ? 1 : 0);
+        prog.SetFloat("uLayerPull", probeItem->LayerPull);
     };
 
     passAlphaBlend = 0;
