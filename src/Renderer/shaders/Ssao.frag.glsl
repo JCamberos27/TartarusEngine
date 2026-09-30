@@ -18,6 +18,15 @@ vec3 ReconstructViewPos(vec2 uv, float depth) {
     return view.xyz / view.w;
 }
 
+// View-space z of hardware depth [0,1]: the samples only need z, and this is the value
+// ReconstructViewPos gives without its matrix product per sample (perspective, or an
+// orthographic editor view, whose proj[3][3] is 1).
+float ViewZ(float depth) {
+    float ndc = depth * 2.0 - 1.0;
+    return uProjection[3][3] > 0.5 ? (ndc - uProjection[3][2]) / uProjection[2][2]
+                                   : -uProjection[3][2] / (ndc + uProjection[2][2]);
+}
+
 void main() {
     float depth = texture(uDepth, vUV).r;
     // Sky / far-plane pixels have depth ~1.0 — no geometry, no occlusion.
@@ -49,15 +58,14 @@ void main() {
         vec4 offset = uProjection * vec4(samplePos, 1.0);
         vec2 sampleUV = offset.xy / offset.w * 0.5 + 0.5;
 
-        float sampleDepth = texture(uDepth, sampleUV).r;
-        vec3  sampleView  = ReconstructViewPos(sampleUV, sampleDepth);
+        float sampleZ = ViewZ(textureLod(uDepth, sampleUV, 0.0).r);
 
         // Range check: suppress contributions from geometry far behind the surface.
-        float rangeCheck = smoothstep(0.0, 1.0, uRadius / abs(fragPos.z - sampleView.z));
+        float rangeCheck = smoothstep(0.0, 1.0, uRadius / abs(fragPos.z - sampleZ));
 
         // In OpenGL view space z increases toward the camera.
         // If the scene surface at sampleUV is at or closer than samplePos → occlusion.
-        occlusion += (sampleView.z >= samplePos.z + uBias ? 1.0 : 0.0) * rangeCheck;
+        occlusion += (sampleZ >= samplePos.z + uBias ? 1.0 : 0.0) * rangeCheck;
     }
 
     FragColor = 1.0 - (occlusion / 32.0);
