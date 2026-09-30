@@ -161,7 +161,7 @@ void Shader::Bind() const {
 }
 
 int Shader::Loc(std::string_view name) const {
-    FastUniform& fast = m_FastUniforms[((std::uintptr_t)name.data() >> 3 ^ (std::uintptr_t)name.data() >> 9) & 63];
+    FastUniform& fast = m_FastUniforms[((std::uint64_t)(std::uintptr_t)name.data() * 0x9E3779B97F4A7C15ull) >> 56];
     const bool fastable = name.size() < sizeof fast.Name;
     if (fastable && fast.Ptr == name.data() && fast.Len == name.size() &&
         std::memcmp(fast.Name, name.data(), name.size()) == 0)

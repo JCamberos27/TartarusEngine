@@ -7,6 +7,7 @@
 #include <algorithm>
 #include <cmath>
 #include <cstring>
+#include <limits>
 #include <string>
 
 CascadedShadowMap::~CascadedShadowMap() { Release(); }
@@ -137,6 +138,66 @@ void CascadedShadowMap::Update(const glm::mat4& camView, const glm::mat4& camPro
         m_LightViewProj[c] = lightProj * lightView;
         prevFar = m_SplitFar[c];
     }
+
+    // Receiver slices (CasterReachesSlice). Unlike the fit above, these place each view depth on
+    // the frustum edges exactly: a point's view depth runs linearly from the near to the far plane
+    // along each corner edge. Cascade c is read from 0.88 x the previous split (the cross-fade
+    // band) to its own split; the last one also by everything past the final split, to the far plane.
+    const float realFar = std::max(-(camView * glm::vec4(farC[0], 1.0f)).z, camNear + 1e-3f);
+    for (int c = 0; c < m_Count; ++c) {
+        const float lo = c == 0 ? camNear : std::max(camNear, m_SplitFar[c - 1] * 0.88f);
+        const float hi = c == m_Count - 1 ? realFar : std::min(m_SplitFar[c], realFar);
+        const float t0 = (lo - camNear) / (realFar - camNear), t1 = (hi - camNear) / (realFar - camNear);
+        for (int i = 0; i < 4; ++i) {
+            const glm::vec3 edge = farC[i] - nearC[i];
+            for (int k = 0; k < 2; ++k) {
+                const glm::vec4 p = m_LightViewProj[c] * glm::vec4(nearC[i] + edge * (k ? t1 : t0), 1.0f);
+                m_SliceCorners[c][i + 4 * k] = glm::vec2(p) / p.w;
+            }
+        }
+    }
+}
+
+bool CascadedShadowMap::CasterReachesSlice(int c, const glm::vec3& boundsMin, const glm::vec3& boundsMax,
+                                           float kernelTexels, float normalBias) const {
+    if (c <= 0 || c >= m_Count) return true;
+    // The caster's footprint: its bounds' light clip-space x/y extent, grown by what the shader can
+    // reach from a receiver - the Poisson kernel (longest offset ~1.23 radii, radius widened 35% per
+    // cascade), the 2x2 compare, the normal offset (at most one texel x normalBias) and a texel of slack.
+    const glm::mat4& vp = m_LightViewProj[c];
+    glm::vec2 lo(std::numeric_limits<float>::max()), hi(-std::numeric_limits<float>::max());
+    for (int k = 0; k < 8; ++k) {
+        const glm::vec3 p((k & 1) ? boundsMax.x : boundsMin.x, (k & 2) ? boundsMax.y : boundsMin.y,
+                          (k & 4) ? boundsMax.z : boundsMin.z);
+        const glm::vec4 q = vp * glm::vec4(p, 1.0f);
+        const glm::vec2 xy = glm::vec2(q) / q.w;
+        lo = glm::min(lo, xy);
+        hi = glm::max(hi, xy);
+    }
+    const float texels = std::max(kernelTexels, 0.5f) * (1.0f + 0.35f * (float)c) * 1.25f + std::max(normalBias, 0.0f) + 3.0f;
+    const float margin = texels * 2.0f / (float)std::max(m_Resolution, 1);
+    lo -= glm::vec2(margin);
+    hi += glm::vec2(margin);
+
+    // Separating axes between that rectangle and the slice's convex footprint: the rectangle's two
+    // axes, then the direction between every pair of slice corners (a superset of the hull's edges,
+    // so a separation found is real and every hull edge is tried).
+    const std::array<glm::vec2, 8>& s = m_SliceCorners[c];
+    glm::vec2 sMin = s[0], sMax = s[0];
+    for (const glm::vec2& p : s) { sMin = glm::min(sMin, p); sMax = glm::max(sMax, p); }
+    if (sMax.x < lo.x || sMin.x > hi.x || sMax.y < lo.y || sMin.y > hi.y) return false;
+    const glm::vec2 rect[4] = {{lo.x, lo.y}, {hi.x, lo.y}, {hi.x, hi.y}, {lo.x, hi.y}};
+    for (int a = 0; a < 8; ++a)
+        for (int b = a + 1; b < 8; ++b) {
+            const glm::vec2 d = s[b] - s[a];
+            const glm::vec2 n(-d.y, d.x);
+            if (glm::dot(n, n) < 1e-12f) continue;
+            float s0 = std::numeric_limits<float>::max(), s1 = -s0, r0 = s0, r1 = -s0;
+            for (const glm::vec2& p : s) { const float v = glm::dot(n, p); s0 = std::min(s0, v); s1 = std::max(s1, v); }
+            for (const glm::vec2& p : rect) { const float v = glm::dot(n, p); r0 = std::min(r0, v); r1 = std::max(r1, v); }
+            if (s1 < r0 || r1 < s0) return false;
+        }
+    return true;
 }
 
 void CascadedShadowMap::Begin(int i) const {

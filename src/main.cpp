@@ -2796,6 +2796,14 @@ int main(int argc, char** argv) {
                 int shadowLightViewProjLoc = shadowShader.Loc("uLightViewProj");
                 int shadowModelLoc = shadowShader.Loc("uModel");
                 const int cascadeCount = shadowMap.Count();
+                // A caster goes into a cascade only if its shadow can land where that cascade is read
+                // (CascadedShadowMap::CasterReachesSlice), with the PCF kernel SunShadow uses.
+                const float sunKernelTexels = std::clamp(frameSunAngularDeg * 3.0f, 1.0f, 14.0f) * frameSunShadowSoftness;
+                auto castsInto = [&](const SunCaster& sc, int c, const Frustum& cascadeFrustum) {
+                    if (!sc.bounded) return true;
+                    return cascadeFrustum.Intersects(sc.bounds) &&
+                           shadowMap.CasterReachesSlice(c, sc.bounds.Min, sc.bounds.Max, sunKernelTexels, frameSunShadowNormalBias);
+                };
                 if (CascadedShadowMap::LayeredSupported()) {
                     // One pass for every cascade: each caster is drawn once, instanced over the
                     // consecutive cascades its bounds touch, and the vertex shader routes each
@@ -2815,7 +2823,7 @@ int main(int argc, char** argv) {
                     for (const SunCaster& sc : sunCasters) {
                         unsigned mask = 0;
                         for (int c = 0; c < cascadeCount; ++c)
-                            if (!sc.bounded || cascadeFrustums[c].Intersects(sc.bounds)) mask |= 1u << c;
+                            if (castsInto(sc, c, cascadeFrustums[c])) mask |= 1u << c;
                         if (!mask) continue;
                         shadowShader.SetMat4(shadowModelLoc, sc.xform);
                         if (sc.twoSided) glDisable(GL_CULL_FACE);
@@ -2842,7 +2850,7 @@ int main(int argc, char** argv) {
                     // into every cascade regardless.
                     const Frustum cascadeFrustum = Frustum::FromViewProj(shadowMap.LightViewProj(c));
                     for (const SunCaster& sc : sunCasters) {
-                        if (sc.bounded && !cascadeFrustum.Intersects(sc.bounds)) continue;
+                        if (!castsInto(sc, c, cascadeFrustum)) continue;
                         shadowShader.SetMat4(shadowModelLoc, sc.xform);
                         // Cull is on for the whole pass (DrawDepthOnly's per-mesh overrides put
                         // it back), so Two Sided just turns it off around its own draw.
