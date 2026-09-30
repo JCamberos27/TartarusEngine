@@ -1,15 +1,20 @@
 #include "OutfitAudit.h"
 
 #include "AssetLibrary.h"
+#include "Components.h"
 #include "Model.h"
 #include "OutfitCoverage.h"
 #include "OutfitSystem.h"
 #include "ProjectPaths.h"
+#include "SceneSerializer.h"
 #include "Wardrobe.h"
+#include "World.h"
 
 #include <json.hpp>
 
 #include <algorithm>
+#include <cctype>
+#include <chrono>
 #include <filesystem>
 #include <set>
 #include <cstdio>
@@ -250,6 +255,405 @@ int Run(AssetLibrary& assets, const std::string& wardrobe, const std::string& cs
                     Wardrobe::Stem(p.Under->Path).c_str(), Wardrobe::Stem(p.Over->Path).c_str(), p.Clipping, p.Depth * 100.0f);
     }
     return clipping + ruleProblems;
+}
+
+namespace {
+std::string Lower(std::string s) {
+    for (char& c : s) c = (char)std::tolower((unsigned char)c);
+    return s;
+}
+} // namespace
+
+int RunSelfTest(AssetLibrary& assets, const std::string& wardrobe) {
+    std::string err;
+    const auto cat = OutfitSystem::LoadCatalog(assets, wardrobe, false, &err);
+    if (!cat) {
+        std::cerr << "[OutfitSelfTest] " << err << "\n";
+        return -1;
+    }
+    int checks = 0, failures = 0;
+    auto check = [&](bool ok, const std::string& what) {
+        ++checks;
+        if (!ok) { ++failures; std::cout << "[OutfitSelfTest] FAIL " << what << "\n"; }
+    };
+    auto item = [&](const std::string& rel) {
+        const auto* it = cat->Find("assets/Characters/Quantum/Models/Clothing/" + rel);
+        check(it != nullptr, "wardrobe has " + rel);
+        return it ? it->Path : std::string();
+    };
+    auto stemIn = [](const World& w, entt::entity root, const std::string& slot) {
+        const auto pieces = OutfitSystem::Pieces(w, root);
+        auto it = pieces.find(slot);
+        return it == pieces.end() ? std::string() : Wardrobe::Stem(w.Registry.get<OutfitPieceComponent>(it->second).Item);
+    };
+    auto character = [&](World& w) {
+        const entt::entity e = w.CreateEmptyEntity(glm::vec3(0.0f), glm::vec3(0.0f), glm::vec3(1.0f), "Guy");
+        w.Registry.emplace<CharacterOutfitComponent>(e).Wardrobe = wardrobe;
+        return e;
+    };
+    // Lets every background load and pending change land (what the frame loop does).
+    auto settle = [&](World& w) {
+        for (int i = 0; i < 2000; ++i) {
+            assets.PumpAsync(50.0);
+            OutfitSystem::UpdatePending(w, assets);
+            bool any = false;
+            for (auto e : w.Registry.view<CharacterOutfitComponent>()) any |= OutfitSystem::IsPending(w, e);
+            if (!any) return true;
+            std::this_thread::sleep_for(std::chrono::milliseconds(2));
+        }
+        return false;
+    };
+    Wardrobe::Request base;
+    base.Race = "European";
+    base.Items = {{"Top", item("Male/Tops/SKM_Tshirt.fbx")}, {"Pants", item("Male/Pants/SKM_Jeans.fbx")},
+                  {"Shoes", item("Male/Shoes/SKM_Sneakers.fbx")}, {"Balaclava", item("Male/Balaclava/SM_Balaclava_Crime.fbx")}};
+
+    // Apply: the body, the items, the component's gender and race, a new version.
+    {
+        World w;
+        const entt::entity guy = character(w);
+        const auto r = OutfitSystem::Apply(w, assets, guy, base);
+        check(r.Ok && r.Created >= 8, "Apply builds the body and items");
+        check(stemIn(w, guy, "Top") == "SKM_Tshirt" && stemIn(w, guy, "Head") == "Quantum_Head", "Apply: top and head");
+        const auto& outfit = w.Registry.get<CharacterOutfitComponent>(guy);
+        check(outfit.Gender == 0 && outfit.Race == "European" && outfit.Version > 0, "Apply sets gender, race and version");
+        const auto cur = OutfitSystem::CurrentRequest(w, guy);
+        check(cur.Items == base.Items && cur.Race == "European", "CurrentRequest round-trips what Apply built");
+
+        // Equip / take off, through Submit.
+        OutfitSystem::Equip(w, assets, guy, "Top", item("Male/Tops/SKM_Hoodie.fbx"));
+        settle(w);
+        check(stemIn(w, guy, "Top") == "SKM_Hoodie", "Equip swaps the top");
+        OutfitSystem::Equip(w, assets, guy, "Top", "");
+        settle(w);
+        check(stemIn(w, guy, "Top").empty(), "Equip \"\" takes the top off");
+        // A pair rule: boots put the pants' _Inboots cut on.
+        OutfitSystem::Equip(w, assets, guy, "Shoes", item("Male/Shoes/SKM_Boots.fbx"));
+        settle(w);
+        check(stemIn(w, guy, "Pants") == "SKM_Jeans_Inboots", "boots take the pants' _Inboots cut");
+
+        // Race and gender.
+        OutfitSystem::SetRace(w, assets, guy, "Afro");
+        settle(w);
+        check(stemIn(w, guy, "Head") == "Quantum_Head_Afro" && w.Registry.get<CharacterOutfitComponent>(guy).Race == "Afro",
+              "SetRace swaps the head");
+        OutfitSystem::SetGender(w, assets, guy, Wardrobe::Gender::Female);
+        settle(w);
+        check(w.Registry.get<CharacterOutfitComponent>(guy).Gender == 1 && stemIn(w, guy, "Head").rfind("SKM_F_", 0) == 0 &&
+                  stemIn(w, guy, "Balaclava") == "SM_F_Balaclava_Crime",
+              "SetGender swaps body and items for the female cuts (gender " +
+                  std::to_string(w.Registry.get<CharacterOutfitComponent>(guy).Gender) + ", head " + stemIn(w, guy, "Head") +
+                  ", balaclava " + stemIn(w, guy, "Balaclava") + ", pants " + stemIn(w, guy, "Pants") + ")");
+    }
+
+    // Randomize: locked slots stay, the same seed gives the same outfit.
+    {
+        World w1, w2;
+        const entt::entity a = character(w1), b = character(w2);
+        OutfitSystem::Apply(w1, assets, a, base);
+        OutfitSystem::Apply(w2, assets, b, base);
+        w1.Registry.get<CharacterOutfitComponent>(a).Locks = "Pants";
+        w2.Registry.get<CharacterOutfitComponent>(b).Locks = "Pants";
+        for (unsigned seed : {7u, 11u, 12345u}) {
+            OutfitSystem::Randomize(w1, assets, a, seed);
+            OutfitSystem::Randomize(w2, assets, b, seed);
+            settle(w1);
+            settle(w2);
+            check(stemIn(w1, a, "Pants").rfind("SKM_Jeans", 0) == 0, "Randomize keeps a locked slot");
+            check(OutfitSystem::CurrentRequest(w1, a).Items == OutfitSystem::CurrentRequest(w2, b).Items,
+                  "Randomize: same seed, same outfit");
+        }
+    }
+
+    // Colourways, presets.
+    {
+        World w;
+        const entt::entity guy = character(w);
+        Wardrobe::Request req = base;
+        OutfitSystem::Apply(w, assets, guy, req);
+        entt::entity top = OutfitSystem::Pieces(w, guy)["Pants"];
+        auto groups = OutfitSystem::ColourGroups(w, assets, top);
+        check(!groups.empty() && groups[0].Options.size() >= 2, "the jeans have colourways");
+        std::string picked;
+        if (!groups.empty() && groups[0].Options.size() >= 2) {
+            const auto& g = groups[0];
+            picked = g.Options[0] == g.Current ? g.Options[1] : g.Options[0];
+            const auto before = w.Registry.get<CharacterOutfitComponent>(guy).Version;
+            check(OutfitSystem::SetColourway(w, assets, top, g.Source, picked), "SetColourway");
+            check(OutfitSystem::ColourGroups(w, assets, top)[0].Current == picked, "ColourGroups reports the new colourway");
+            // Other views of the character (the first-person body's twins) only notice a change by the version.
+            check(w.Registry.get<CharacterOutfitComponent>(guy).Version != before, "SetColourway bumps the outfit's version");
+        }
+        const std::string presetRel = "Library/OutfitSelfTest.outfit";
+        std::string saveErr;
+        check(OutfitSystem::SavePreset(w, assets, guy, presetRel, &saveErr), "SavePreset: " + saveErr);
+        World w2;
+        const entt::entity other = character(w2);
+        const auto lr = OutfitSystem::LoadPreset(w2, assets, other, presetRel);
+        settle(w2);
+        check(lr.Ok && OutfitSystem::CurrentRequest(w2, other).Items == OutfitSystem::CurrentRequest(w, guy).Items,
+              "LoadPreset puts the same items on");
+        if (!picked.empty()) {
+            const auto g2 = OutfitSystem::ColourGroups(w2, assets, OutfitSystem::Pieces(w2, other)["Pants"]);
+            check(!g2.empty() && g2[0].Current == picked, "LoadPreset puts the colourway back");
+        }
+        // The same colourway survives boots switching the jeans to their _Inboots cut.
+        if (!picked.empty()) {
+            OutfitSystem::Equip(w, assets, guy, "Shoes", item("Male/Shoes/SKM_Boots.fbx"));
+            settle(w);
+            const auto g3 = OutfitSystem::ColourGroups(w, assets, OutfitSystem::Pieces(w, guy)["Pants"]);
+            const std::string now = g3.empty() ? std::string() : Lower(Wardrobe::Stem(g3[0].Current));
+            check(now == Lower(Wardrobe::Stem(picked)) || now == Lower(Wardrobe::Stem(picked)) + "_inboots",
+                  "a colourway follows the pants to their _Inboots cut (" + (g3.empty() ? std::string("none") : g3[0].Current) + ")");
+        }
+        // A malformed preset is an error, not a crash.
+        {
+            std::ofstream(ProjectPaths::Resolve(presetRel)) << R"({"gender": 3, "items": {"Top": {"item": 5}}})";
+            bool threw = false;
+            OutfitSystem::Result bad;
+            try { bad = OutfitSystem::LoadPreset(w2, assets, other, presetRel); } catch (...) { threw = true; }
+            check(!threw && !bad.Ok, "LoadPreset on a malformed file returns an error");
+        }
+        std::error_code ec;
+        std::filesystem::remove(ProjectPaths::Resolve(presetRel), ec);
+    }
+
+    // Submit: a colourway picked, then an item equipped before it landed - both happen.
+    {
+        World w;
+        const entt::entity guy = character(w);
+        OutfitSystem::Apply(w, assets, guy, base);
+        const entt::entity pants = OutfitSystem::Pieces(w, guy)["Pants"];
+        const auto groups = OutfitSystem::ColourGroups(w, assets, pants);
+        if (!groups.empty() && groups[0].Options.size() >= 2) {
+            const auto& g = groups[0];
+            // Something not loaded yet, so it has to wait.
+            std::string picked;
+            for (const auto& o : g.Options)
+                if (o != g.Current) picked = o;
+            assets.ForgetRemoved(ProjectPaths::Resolve(picked));
+            OutfitSystem::SubmitColourway(w, assets, guy, pants, g.Source, picked);
+            OutfitSystem::Equip(w, assets, guy, "Top", item("Male/Tops/SKM_Hoodie.fbx"));
+            settle(w);
+            const auto after = OutfitSystem::ColourGroups(w, assets, OutfitSystem::Pieces(w, guy)["Pants"]);
+            check(stemIn(w, guy, "Top") == "SKM_Hoodie" && !after.empty() && after[0].Current == picked,
+                  "a waiting colourway survives an Equip right after it");
+        }
+    }
+
+    // Duplicate slots: a second piece in a slot (a duplicated child) is removed by the next Apply.
+    {
+        World w;
+        const entt::entity guy = character(w);
+        OutfitSystem::Apply(w, assets, guy, base);
+        const auto model = assets.InstantiateModel(ProjectPaths::Resolve(base.Items["Top"]));
+        const entt::entity dup = w.CreateModelEntity(model, glm::vec3(0.0f), glm::vec3(0.0f), glm::vec3(1.0f), "Top");
+        w.AttachChildRaw(dup, guy);
+        w.Registry.emplace<OutfitPieceComponent>(dup, OutfitPieceComponent{"Top", base.Items["Top"], 0});
+        OutfitSystem::Equip(w, assets, guy, "Top", item("Male/Tops/SKM_Hoodie.fbx"));
+        settle(w);
+        int tops = 0;
+        for (auto [e, p] : w.Registry.view<OutfitPieceComponent>().each()) tops += p.Slot == "Top";
+        check(tops == 1, "a duplicated piece in a slot doesn't stay behind (" + std::to_string(tops) + " tops)");
+    }
+
+    // Follower animators: pieces follow the body's Animator Controller.
+    {
+        World w;
+        const entt::entity guy = character(w);
+        auto& ac = w.Registry.emplace<AnimatorControllerComponent>(guy);
+        ac.Controller = "assets/Characters/Quantum/Quantum.controller"; // any path: only the copy is checked
+        OutfitSystem::Apply(w, assets, guy, base);
+        int followers = 0, pieces = 0;
+        for (auto [e, p] : w.Registry.view<OutfitPieceComponent>().each()) {
+            ++pieces;
+            if (const auto* f = w.Registry.try_get<AnimatorControllerComponent>(e); f && f->Driver == guy) ++followers;
+        }
+        check(pieces > 0 && followers == pieces, "every piece follows the body's controller (" + std::to_string(followers) + "/" +
+                                                     std::to_string(pieces) + ")");
+    }
+
+    // Hiding: the tags go on, and a piece's slot or item edited in place is noticed.
+    {
+        World w;
+        const entt::entity guy = character(w);
+        OutfitSystem::Apply(w, assets, guy, base);
+        for (int i = 0; i < 3000 && !w.Registry.get<CharacterOutfitComponent>(guy).HideSignature; ++i) {
+            w.RebuildWorldTransformCache();
+            OutfitSystem::UpdateHiding(w);
+            std::this_thread::sleep_for(std::chrono::milliseconds(2));
+        }
+        const auto sig = w.Registry.get<CharacterOutfitComponent>(guy).HideSignature;
+        check(sig != 0 && w.Registry.all_of<OutfitHideTag>(OutfitSystem::Pieces(w, guy)["Torso"]), "the torso under the shirt is hidden");
+        w.Registry.get<OutfitPieceComponent>(OutfitSystem::Pieces(w, guy)["Top"]).Item = item("Male/Tops/SKM_Tshirt_Tucked.fbx");
+        OutfitSystem::UpdateHiding(w);
+        check(w.Registry.get<CharacterOutfitComponent>(guy).HideSignature != sig, "editing a piece's item re-runs the hiding");
+    }
+
+    // AdoptExisting: untagged children are recognised as the outfit's pieces.
+    {
+        World w;
+        const entt::entity guy = character(w);
+        OutfitSystem::Apply(w, assets, guy, base);
+        const auto before = OutfitSystem::Pieces(w, guy).size();
+        for (auto e : std::vector<entt::entity>(w.Registry.view<OutfitPieceComponent>().begin(), w.Registry.view<OutfitPieceComponent>().end()))
+            w.Registry.remove<OutfitPieceComponent>(e);
+        const int adopted = OutfitSystem::AdoptExisting(w, assets, guy);
+        check(adopted == (int)before && OutfitSystem::Pieces(w, guy).size() == before,
+              "AdoptExisting finds every piece (" + std::to_string(adopted) + "/" + std::to_string(before) + ")");
+        check(stemIn(w, guy, "Feet") == "Quantum_Feet_Shoes" || stemIn(w, guy, "Feet") == "Quantum_Feet", "AdoptExisting: feet");
+    }
+
+    // CancelPending drops a waiting change.
+    {
+        World w;
+        const entt::entity guy = character(w);
+        OutfitSystem::Apply(w, assets, guy, base);
+        assets.ForgetRemoved(ProjectPaths::Resolve(item("Male/Tops/SKM_Jersey.fbx")));
+        const auto r = OutfitSystem::Equip(w, assets, guy, "Top", item("Male/Tops/SKM_Jersey.fbx"));
+        OutfitSystem::CancelPending(w);
+        check(!OutfitSystem::IsPending(w, guy), "CancelPending drops the waiting change");
+        settle(w);
+        check(!r.Pending || stemIn(w, guy, "Top") == "SKM_Tshirt", "a cancelled change isn't applied");
+    }
+
+    std::cout << "[OutfitSelfTest] " << checks << " checks, " << failures << " failure(s)\n";
+    return failures;
+}
+
+int RunCost(AssetLibrary& assets, const std::string& wardrobe, const std::vector<std::string>& scenes) {
+    std::string err;
+    const auto cat = OutfitSystem::LoadCatalog(assets, wardrobe, false, &err);
+    if (!cat) {
+        std::cerr << "[OutfitCost] " << err << "\n";
+        return -1;
+    }
+    const Wardrobe::Wardrobe& w = cat->W;
+
+    // 1. Every model the wardrobe can put on a character: what one copy of it costs to draw.
+    struct Row { std::string Slot, Path; unsigned Tris = 0, Verts = 0; int Meshes = 0, Bones = 0; };
+    std::vector<Row> rows;
+    std::set<std::string> seen;
+    auto add = [&](const std::string& slot, const std::string& path) {
+        if (!seen.insert(path).second) return;
+        Row r{slot, path};
+        if (auto model = assets.LoadModel(ProjectPaths::Resolve(path))) {
+            r.Meshes = model->MeshCount();
+            for (int i = 0; i < r.Meshes; ++i) { r.Tris += model->MeshTriangleCount(i); r.Verts += model->MeshVertexCount(i); }
+            r.Bones = model->BoneCount();
+        } else {
+            std::cout << "[OutfitCost] can't load " << path << "\n";
+        }
+        rows.push_back(r);
+    };
+    for (int g = 0; g < 2; ++g) {
+        const auto& body = w.Body((Wardrobe::Gender)g);
+        for (const auto& [part, model] : body.Parts) add(part, model);
+        for (const auto& race : body.Races) {
+            if (!race.Head.empty()) add("Head", race.Head);
+            for (const auto& [part, model] : race.Parts) add(part, model);
+        }
+        for (const auto& [name, model] : body.Alternates) add(name, model);
+    }
+    for (const auto& item : cat->Items) add(item.Slot, item.Path);
+
+    std::map<std::string, std::pair<unsigned long long, int>> bySlot; // slot -> (tris, models)
+    for (const auto& r : rows) { bySlot[r.Slot].first += r.Tris; ++bySlot[r.Slot].second; }
+    std::cout << "[OutfitCost] " << rows.size() << " models; average triangles per model by slot:\n";
+    for (const auto& [slot, v] : bySlot)
+        std::printf("    %-12s %3d models  %7llu tris avg\n", slot.c_str(), v.second, v.first / std::max(1, v.second));
+    std::sort(rows.begin(), rows.end(), [](const Row& a, const Row& b) { return a.Tris > b.Tris; });
+    std::cout << "[OutfitCost] heaviest models:\n";
+    for (size_t i = 0; i < rows.size() && i < 25; ++i)
+        std::printf("    %7u tris %7u verts %2d meshes %3d bones  %-11s %s\n", rows[i].Tris, rows[i].Verts, rows[i].Meshes,
+                    rows[i].Bones, rows[i].Slot.c_str(), Wardrobe::Stem(rows[i].Path).c_str());
+
+    // 2. Each scene as it's drawn: pieces, triangles, and how much of it hiding throws away (vertices
+    // hidden under clothes still go through the vertex shader and, per piece, the shadow passes).
+    for (const auto& scene : scenes) {
+        World world;
+        if (!SceneSerializer::Load(world, assets, ProjectPaths::Resolve(scene), false)) {
+            std::cout << "[OutfitCost] can't load " << scene << "\n";
+            continue;
+        }
+        // Coverage comes from Library/OutfitCoverage or is worked out in the background; wait for it.
+        for (int frame = 0; frame < 6000; ++frame) {
+            world.RebuildWorldTransformCache();
+            assets.PumpAsync(50.0);
+            OutfitSystem::UpdatePending(world, assets);
+            OutfitSystem::UpdateHiding(world);
+            bool waiting = false;
+            for (auto [e, outfit] : world.Registry.view<CharacterOutfitComponent>().each())
+                if (outfit.AutoHide && outfit.HideSignature == 0) waiting = true;
+            if (!waiting && frame > 2) break;
+            std::this_thread::sleep_for(std::chrono::milliseconds(5));
+        }
+        int characters = 0, pieces = 0, fullyHidden = 0, drawCalls = 0, hiddenMeshes = 0;
+        unsigned long long tris = 0, verts = 0, hidden = 0, hiddenPieceTris = 0, hiddenTris = 0;
+        std::map<std::string, unsigned long long> slotTris, slotHiddenTris;
+        // Each model's triangles (model-wide vertex numbers, as the hide bits count them) and where each
+        // sub-mesh's triangles start.
+        struct Tris { std::vector<unsigned> Indices; std::vector<size_t> MeshStart; };
+        std::map<const Model*, Tris> modelTris;
+        characters = (int)world.Registry.view<CharacterOutfitComponent>().size();
+        for (auto [e, piece, rc] : world.Registry.view<OutfitPieceComponent, RenderableComponent>().each()) {
+            if (!rc.ModelRef) continue;
+            ++pieces;
+            unsigned t = 0;
+            for (int i = 0; i < rc.ModelRef->MeshCount(); ++i) t += rc.ModelRef->MeshTriangleCount(i);
+            drawCalls += rc.ModelRef->MeshCount();
+            tris += t;
+            slotTris[piece.Slot] += t;
+            const auto* tag = world.Registry.try_get<OutfitHideTag>(e);
+            verts += tag ? tag->Total : rc.ModelRef->VertexCount();
+            if (tag) {
+                hidden += tag->Hidden;
+                if (tag->Total && tag->Hidden >= tag->Total) { ++fullyHidden; hiddenPieceTris += t; }
+            }
+            if (tag && tag->Bits) {
+                auto& mt = modelTris[rc.ModelRef.get()];
+                if (mt.Indices.empty()) {
+                    std::vector<glm::vec3> positions;
+                    rc.ModelRef->CollisionGeometry(positions, mt.Indices);
+                    size_t start = 0;
+                    for (int i = 0; i < rc.ModelRef->MeshCount(); ++i) {
+                        mt.MeshStart.push_back(start);
+                        start += 3ull * rc.ModelRef->MeshTriangleCount(i);
+                    }
+                    mt.MeshStart.push_back(start);
+                }
+                const auto& bits = *tag->Bits;
+                auto isHidden = [&](unsigned v) { return (v >> 5) < bits.size() && ((bits[v >> 5] >> (v & 31)) & 1u); };
+                for (size_t m = 0; m + 1 < mt.MeshStart.size(); ++m) {
+                    unsigned meshHidden = 0, meshTris = 0;
+                    for (size_t i = mt.MeshStart[m]; i + 2 < mt.MeshStart[m + 1] && i + 2 < mt.Indices.size(); i += 3) {
+                        ++meshTris;
+                        if (isHidden(mt.Indices[i]) && isHidden(mt.Indices[i + 1]) && isHidden(mt.Indices[i + 2])) ++meshHidden;
+                    }
+                    hiddenTris += meshHidden;
+                    slotHiddenTris[piece.Slot] += meshHidden;
+                    // One character's sub-meshes of each body model, to see where a heavy piece's triangles are.
+                    static std::set<std::string> shown;
+                    if ((piece.Flags & OutfitPieceBodyPart) && shown.insert(scene + rc.ModelRef->Path() + std::to_string(m)).second)
+                        std::printf("      sub-mesh %-40s %6u tris %3.0f%% hidden  (%s)\n", rc.ModelRef->MeshMaterial((int)m).Name.c_str(),
+                                    meshTris, meshTris ? 100.0 * meshHidden / meshTris : 0.0, Wardrobe::Stem(rc.ModelRef->Path()).c_str());
+                    if (meshTris && meshHidden == meshTris) ++hiddenMeshes;
+                }
+            }
+        }
+        std::printf("[OutfitCost] %s: %d characters, %d pieces, %d draws, %.2fM tris (%.0fk per character), "
+                    "%.0f%% of vertices hidden, %d pieces fully hidden (%.2fM tris); %.2fM tris (%.0f%%) have every "
+                    "vertex hidden, %d sub-mesh draws entirely\n",
+                    scene.c_str(), characters, pieces, drawCalls, tris / 1e6, characters ? tris / 1e3 / characters : 0.0,
+                    verts ? 100.0 * hidden / verts : 0.0, fullyHidden, hiddenPieceTris / 1e6, hiddenTris / 1e6,
+                    tris ? 100.0 * hiddenTris / tris : 0.0, hiddenMeshes);
+        std::vector<std::pair<unsigned long long, std::string>> order;
+        for (const auto& [slot, t] : slotTris) order.push_back({t, slot});
+        std::sort(order.rbegin(), order.rend());
+        for (const auto& [t, slot] : order)
+            std::printf("    %-12s %6.2fM tris, %3.0f%% hidden\n", slot.c_str(), t / 1e6, t ? 100.0 * slotHiddenTris[slot] / t : 0.0);
+    }
+    return 0;
 }
 
 } // namespace OutfitAudit
