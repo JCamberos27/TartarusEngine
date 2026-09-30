@@ -116,18 +116,16 @@ struct Material {
     // materials on separate objects (every placed primitive gets its own Material instance)
     // dedupe, not just shared pointers. An FNV-style mix over the raw words; a 64-bit collision that
     // would swap two genuinely different materials for a frame is not a practical concern.
-    // Mixed 4 bytes at a time (every input below is a multiple of 4 bytes): this runs per mesh
-    // per pass, and the byte-wise FNV loop over ~230 bytes showed up in the shadow passes.
+    // Mixed a 32-bit word at a time over four independent lanes, folded at the end: this runs per
+    // mesh per pass, and one serial multiply chain over ~60 words was latency-bound (the byte-wise
+    // FNV loop before it showed up in the shadow passes). Runtime-only: never saved or compared
+    // across builds.
     std::uint64_t Hash() const {
-        std::uint64_t h = 1469598103934665603ull;
-        auto mix = [&h](const void* p, std::size_t n) {
-            const unsigned char* b = static_cast<const unsigned char*>(p);
-            for (std::size_t i = 0; i + 4 <= n; i += 4) {
-                std::uint32_t w;
-                std::memcpy(&w, b + i, 4);
-                h = (h ^ w) * 1099511628211ull;
-                h ^= h >> 32;
-            }
+        std::uint32_t words[64];
+        std::size_t n = 0;
+        auto put = [&words, &n](const void* p, std::size_t bytes) {
+            std::memcpy(words + n, p, bytes);
+            n += bytes / 4;
         };
         const float scalars[] = {
             BaseColor.x, BaseColor.y, BaseColor.z, Metallic, Roughness,
@@ -140,7 +138,7 @@ struct Material {
             UVTiling.x, UVTiling.y, UVOffset.x, UVOffset.y, NormalStrength, ParallaxScale,
             DetailTiling.x, DetailTiling.y,
         };
-        mix(scalars, sizeof(scalars));
+        put(scalars, sizeof(scalars));
         const std::uint32_t flags = (Triplanar ? 1u : 0u)
                                   | (SubsurfaceEnabled ? 2u : 0u)
                                   | (ReflectionProbes ? 4u : 0u)
@@ -150,14 +148,25 @@ struct Material {
                                   | (UseVertexColor ? 64u : 0u)
                                   | (SpecularHighlights ? 0u : 128u)
                                   | (GlossyReflections ? 0u : 256u);
-        mix(&flags, sizeof(flags));
+        put(&flags, sizeof(flags));
         const Texture* const texs[] = {
             AlbedoMap.get(), NormalMap.get(), MetallicRoughnessMap.get(), MetallicMap.get(),
             RoughnessMap.get(), AOMap.get(), EmissiveMap.get(),
             ClearCoatMap.get(), ThicknessMap.get(),
             HeightMap.get(), DetailAlbedoMap.get(), DetailNormalMap.get(),
         };
-        mix(texs, sizeof(texs));
+        static_assert(sizeof(scalars) + sizeof(flags) + sizeof(texs) <= sizeof(words), "Material::Hash words");
+        put(texs, sizeof(texs));
+        std::uint64_t lane[4] = {1469598103934665603ull, 0x9e3779b97f4a7c15ull, 0xc2b2ae3d27d4eb4full, 0x165667b19e3779f9ull};
+        std::size_t i = 0;
+        for (; i + 4 <= n; i += 4)
+            for (int k = 0; k < 4; ++k) {
+                lane[k] = (lane[k] ^ words[i + k]) * 1099511628211ull;
+                lane[k] ^= lane[k] >> 32;
+            }
+        for (; i < n; ++i) { lane[0] = (lane[0] ^ words[i]) * 1099511628211ull; lane[0] ^= lane[0] >> 32; }
+        std::uint64_t h = lane[0];
+        for (int k = 1; k < 4; ++k) { h = (h ^ lane[k]) * 1099511628211ull; h ^= h >> 29; }
         return h;
     }
 };

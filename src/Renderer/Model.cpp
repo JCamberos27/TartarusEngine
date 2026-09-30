@@ -1886,9 +1886,8 @@ void BindMaterialDataDriven(Shader& shader, const MaterialAsset& ma, const Shade
     for (const PropertyBinding& b : bindings) {
         const ShaderProperty& prop = props[b.PropIndex];
         const std::string& pname   = prop.Name;
-        // Derive uniform name: "_AlbedoMap" → "uAlbedoMap"
-        std::string uname = "u" + pname.substr(1);
-        const bool builtin = MaterialAsset::IsBuiltinProp(pname);
+        const std::string& uname = b.Uniform; // "_AlbedoMap" → "uAlbedoMap"
+        const bool builtin = b.Builtin;
         const MaterialProp* extra = nullptr;
         if (!builtin) {
             auto it = mat.ExtraProps.find(pname);
@@ -1897,7 +1896,7 @@ void BindMaterialDataDriven(Shader& shader, const MaterialAsset& ma, const Shade
 
         switch (prop.Type) {
         case ShaderPropType::Texture2D: {
-            std::string hasName = "uHas" + pname.substr(1);
+            const std::string& hasName = b.HasUniform;
             const std::shared_ptr<Texture>& tex =
                 builtin ? MaterialAsset::GetTexture(mat, pname)
                         : (extra ? extra->Tex : MaterialAsset::GetTexture(mat, pname) /*null*/);

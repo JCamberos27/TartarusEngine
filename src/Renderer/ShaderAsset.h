@@ -70,6 +70,11 @@ struct PropertyBinding {
     ShaderPropType Type;
     int PropIndex   = 0;
     int TextureUnit = -1; // material-side unit (1-based upward); -1 for scalars/colors
+    // Derived once here, not per material bind: the uniform names ("_AlbedoMap" -> "uAlbedoMap",
+    // "uHasAlbedoMap"), which as stable strings also hit Shader::Loc's by-address table, and whether
+    // the property is one of Material's built-in fields (MaterialAsset::IsBuiltinProp).
+    std::string Uniform, HasUniform;
+    bool Builtin = false;
 };
 
 class ShaderAsset {
