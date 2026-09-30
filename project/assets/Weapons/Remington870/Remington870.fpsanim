@@ -586,6 +586,9 @@
     "blendTime": 0.2,
     "neckRadius": 0.09,
     "headRadius": 0.14,
-    "gunLength": 0.45
+    "gunLength": 0.45,
+    "meshClearance": 0.05,
+    "releaseStart": -40.0,
+    "releaseEnd": -70.0
   }
 }

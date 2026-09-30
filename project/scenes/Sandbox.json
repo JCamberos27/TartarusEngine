@@ -23513,11 +23513,11 @@
         "Stop Min Speed (Crouched)": 0.6000000238418579,
         "Stop Run Forward": 0.699999988079071,
         "Turn End Angle": 8.0,
-        "Turn Lag Floor": 90.0,
+        "Turn Lag Floor": 45.0,
         "Turn Lag Margin": 5.0,
         "Turn Min Time": 0.30000001192092896,
         "Turn Move Ease": 0.07999999821186066,
-        "Turn Threshold": 55.0,
+        "Turn Threshold": 30.0,
         "Turn Timeout": 4.0,
         "Weapon Arms": true
       },

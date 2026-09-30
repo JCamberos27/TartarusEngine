@@ -163,6 +163,7 @@ public:
     // The barrel and sight line found this Play (the muzzle, and the sights' measurement while aiming).
     const FirstPersonBarrelReport& BarrelReport() const { return m_Barrel; }
     // Where rounds leave from this frame, world space: the muzzle and the (zeroed) bore.
+    float PlanarSpeed() const { return m_PlanarSpeed; } // the player's, from the last Tick (m/s)
     bool MuzzleRay(glm::vec3& origin, glm::vec3& direction) const {
         origin = m_Muzzle;
         direction = m_BoreDir;

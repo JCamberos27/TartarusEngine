@@ -40,6 +40,8 @@ public:
         int LogEvery = 0;                  // stock probe: print a sample every this many frames (0 = off)
         std::string Label;                 // ... tagged with this
         std::string Shot;                  // a capture name for this frame (--smoke-shots)
+        glm::vec2 Move{0.0f};              // the move keys (x right, y forward, -1..1), held until changed
+        bool Sprint = false;               // ... and Sprint
         bool Saw(const std::string& state) const;
         const std::string& State() const;
     };
@@ -61,6 +63,8 @@ public:
     // Once per Play frame, in place of the weapon input block (after the presentation's Update).
     void Drive(FirstPersonPresentation& p, float dt);
     bool Aim() const { return m_Ctx.Aim; }
+    glm::vec2 Move() const { return m_Ctx.Move; }
+    bool Sprint() const { return m_Ctx.Sprint; }
     void OnHit(const glm::vec3& point);
     bool Done() const { return m_Step >= m_Steps.size(); }
     int Failures() const { return m_Failures; }
@@ -87,6 +91,16 @@ private:
         float NeckGap = 0.0f, HeadGap = 0.0f; // nearest the gun's rear 30 cm comes to the neck / head bone, m
         float GunShift = 0.0f;                // the world gun off the first-person one, m
         float HandGap[2] = {0.0f, 0.0f};      // the world hands off the world gun's grips (L, R), m
+        // The whole gun, butt to muzzle (GunLength m): nearest the neck bone, the hood keep-out's centre
+        // (head + 7 cm up), and the drawn head / neck / hood mesh (MeshGap, on MeshPiece, MeshAlong m from the butt).
+        float GunLength = 0.0f, WholeNeckGap = 0.0f, WholeHoodGap = 0.0f, MeshGap = -1.0f, MeshAlong = 0.0f;
+        std::string MeshPiece;
+        float Speed = 0.0f;                   // the player's planar speed, m/s
+        float ElbowGap[2] = {-1.0f, -1.0f};   // each world elbow to the drawn torso (L, R), m (FirstPersonBody::ElbowTorsoGaps)
+        float ElbowSwing[2] = {0.0f, 0.0f};   // ... and how far Elbow Clearance swung it out, degrees
+        float TorsoGap = -1.0f, TorsoAlong = 0.0f; // the gun's rear GunLength to the drawn torso, m (and where, m from the butt)
+        float HeadTilt = 0.0f, HeadTiltWeight = 0.0f; // the cheek weld: degrees, and its weight
+        float HeadBend = 0.0f;                // the world head's bend off the chest line (spine_05 -> neck vs neck -> head), degrees
         std::string State;
     } m_Sample;
     int m_Frame = 0;
