@@ -85,6 +85,12 @@ private:
     // The name is kept to confirm a hit, so a (vanishingly rare) hash collision is never wrong.
     struct CachedUniform { std::string Name; int Loc; };
     mutable std::unordered_map<std::uint64_t, CachedUniform> m_UniformCache;
+    // In front of that map: a small table indexed by the name's address. Nearly every call passes
+    // the same literal each draw, so a hit costs a pointer hash and a short compare of the stored
+    // name (which also makes a reused buffer holding a different name a plain miss).
+    struct FastUniform { const char* Ptr = nullptr; std::uint32_t Len = 0; int Loc = -1; char Name[40]; };
+    mutable FastUniform m_FastUniforms[64];
+    int LocSlow(std::string_view name) const;
     // The last value each scalar / vector uniform was given, by location: a draw loop sets the same
     // few dozen per draw, mostly unchanged since the last, and those skip the driver call. Only a
     // write made while this program is bound is remembered; a write while another is bound (it lands

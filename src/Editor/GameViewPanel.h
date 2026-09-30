@@ -68,6 +68,8 @@ public:
     bool ConsumeFullscreenRequest(bool& outWantFullscreen);
 
     void SetPreset(const ResolutionPreset& preset);
+    // This run only, not written to the prefs (--perf-bench).
+    void UsePresetThisSession(const ResolutionPreset& preset) { m_CurrentPreset = preset; }
     const ResolutionPreset& GetCurrentPreset() const { return m_CurrentPreset; }
 
     ResolutionManager::LetterboxRect CalculateLetterboxSize(ImVec2 containerSize, float targetAspect) const {

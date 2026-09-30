@@ -564,6 +564,8 @@ extern PFNGLQUERYCOUNTERPROC glQueryCounter;
 typedef void* (__stdcall* PFNGLMAPNAMEDBUFFERPROC)(GLuint, GLenum);
 typedef GLboolean (__stdcall* PFNGLUNMAPNAMEDBUFFERPROC)(GLuint);
 extern PFNGLMAPNAMEDBUFFERPROC glMapNamedBuffer;
+typedef void* (__stdcall* PFNGLMAPNAMEDBUFFERRANGEPROC)(GLuint, GLintptr, GLsizeiptr, GLbitfield);
+extern PFNGLMAPNAMEDBUFFERRANGEPROC glMapNamedBufferRange;
 extern PFNGLUNMAPNAMEDBUFFERPROC glUnmapNamedBuffer;
 
 // Fence sync + buffer-to-buffer copy — deferred cluster-overflow readback (PERF-203).
