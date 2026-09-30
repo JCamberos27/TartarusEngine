@@ -21,6 +21,7 @@
 #include <array>
 #include <cctype>
 #include <cmath>
+#include <unordered_map>
 #include <unordered_set>
 #include <cstdio>
 #include <emmintrin.h> // SSE2: the elbow-gap point loop
@@ -265,13 +266,29 @@ float FirstPersonBodyElbowClearSwivel(const std::vector<glm::vec3>& points, cons
     const glm::vec3 line = hand - shoulder;
     if (glm::dot(line, line) < 1e-8f) return 0.0f;
     const glm::vec3 axis = glm::normalize(line);
-    // Only what can come near the arm: a box around it, grown by the clearance and the elbow's swing.
-    const float reach = glm::length(elbow - shoulder) + clearance;
-    const glm::vec3 lo = glm::min(shoulder, hand) - glm::vec3(reach), hi = glm::max(shoulder, hand) + glm::vec3(reach);
+    // Only what can come near the arm. The gap is measured to the arm's middle (halfway up the upper
+    // arm, the elbow, halfway down the forearm), and the swivel turns it about the shoulder-to-hand
+    // line, so at any angle each of its points sits between the midpoints' distances along that line
+    // and between half and all of the elbow's distance from it. A point farther than the clearance
+    // outside that slab or that ring can't bring any angle's gap under the clearance - and only gaps
+    // under it are compared. The margin covers rounding.
+    const glm::vec3 toElbow = elbow - shoulder;
+    const float elbowAlong = glm::dot(toElbow, axis), handAlong = glm::dot(line, axis);
+    const float radial = glm::length(toElbow - axis * elbowAlong);
+    const float margin = clearance + 1e-3f;
+    const float alongLo = std::min({elbowAlong * 0.5f, elbowAlong, (elbowAlong + handAlong) * 0.5f}) - margin;
+    const float alongHi = std::max({elbowAlong * 0.5f, elbowAlong, (elbowAlong + handAlong) * 0.5f}) + margin;
+    const float ringIn = std::max(radial * 0.5f - margin, 0.0f), ringOut = radial + margin;
+    const float ringIn2 = ringIn > 0.0f ? ringIn * ringIn : -1.0f, ringOut2 = ringOut * ringOut;
     thread_local std::vector<glm::vec3> nearby;
     nearby.clear();
-    for (const glm::vec3& p : points)
-        if (glm::all(glm::greaterThanEqual(p, lo)) && glm::all(glm::lessThanEqual(p, hi))) nearby.push_back(p);
+    for (const glm::vec3& p : points) {
+        const glm::vec3 d = p - shoulder;
+        const float along = glm::dot(d, axis);
+        if (along < alongLo || along > alongHi) continue;
+        const float off2 = glm::dot(d, d) - along * along;
+        if (off2 >= ringIn2 && off2 <= ringOut2) nearby.push_back(p);
+    }
     thread_local PointsSoA soa;
     soa.Assign(nearby.data(), nearby.size());
     auto gapAt = [&](float angle, float floor) {
@@ -1166,30 +1183,48 @@ void FirstPersonBody::SkinnedPoints(const World& world, BodyRegion region, std::
                 }
                 verts.resize(n);
             }
-            found = cache.emplace(&m, std::move(verts)).first;
+            // Packed for the per-frame skin below: weights normalized, bones remapped to the ones used.
+            static_assert(MAX_BONE_INFLUENCE == 4, "RegionSkinPoint holds four influences");
+            RegionSkin skin;
+            std::unordered_map<int, int> slot;
+            skin.Points.reserve(verts.size());
+            for (const auto& [i, v] : verts) {
+                const ModelMesh::SkinVertex& sv = m.MeshSkinVertices(i)[v];
+                RegionSkinPoint sp{sv.Position, 0, {}, {}};
+                float total = 0.0f;
+                for (int j = 0; j < MAX_BONE_INFLUENCE; ++j)
+                    if (sv.BoneIDs[j] >= 0 && sv.Weights[j] > 0.0f) {
+                        auto [it, added] = slot.emplace(sv.BoneIDs[j], (int)skin.Bones.size());
+                        if (added) skin.Bones.push_back(sv.BoneIDs[j]);
+                        sp.Bone[sp.Count] = (std::uint16_t)it->second;
+                        sp.Weight[sp.Count++] = sv.Weights[j];
+                        total += sv.Weights[j];
+                    }
+                if (total <= 0.0f) continue;
+                for (int j = 0; j < sp.Count; ++j) sp.Weight[j] /= total;
+                skin.Points.push_back(sp);
+            }
+            found = cache.emplace(&m, std::move(skin)).first;
         }
-        if (found->second.empty()) continue;
+        const RegionSkin& skin = found->second;
+        if (skin.Points.empty()) continue;
+        // Only the bones these points use, each with the piece's world transform folded in.
         const glm::mat4 toWorld = world.ComposeWorldTransform(ents[k]);
-        // The palette once per piece, not a lookup per influence per vertex; the sums are the same.
         thread_local std::vector<glm::mat4> palette;
-        palette.resize((size_t)std::max(m.BoneCount(), 0));
-        for (int b = 0; b < (int)palette.size(); ++b) palette[b] = m.FinalBoneMatrix(b);
-        points.reserve(points.size() + found->second.size());
-        for (const auto& [i, v] : found->second) {
-            const ModelMesh::SkinVertex& sv = m.MeshSkinVertices(i)[v];
-            glm::vec4 p(0.0f);
-            float total = 0.0f;
-            const glm::vec4 pos(sv.Position, 1.0f);
-            for (int j = 0; j < MAX_BONE_INFLUENCE; ++j)
-                if (sv.BoneIDs[j] >= 0 && sv.Weights[j] > 0.0f) {
-                    const glm::mat4& bone = sv.BoneIDs[j] < (int)palette.size() ? palette[sv.BoneIDs[j]] : glm::mat4(1.0f);
-                    p += sv.Weights[j] * (bone * pos);
-                    total += sv.Weights[j];
-                }
-            if (total <= 0.0f) continue;
-            points.push_back(glm::vec3(toWorld * glm::vec4(glm::vec3(p) / total, 1.0f)));
-            if (pieceOf) pieceOf->push_back((int)k);
+        palette.resize(skin.Bones.size());
+        for (size_t b = 0; b < skin.Bones.size(); ++b) palette[b] = toWorld * m.FinalBoneMatrix(skin.Bones[b]);
+        const size_t first = points.size();
+        points.resize(first + skin.Points.size());
+        glm::vec3* out = points.data() + first;
+        for (const RegionSkinPoint& sp : skin.Points) {
+            glm::vec3 p(0.0f);
+            for (int j = 0; j < sp.Count; ++j) {
+                const glm::mat4& M = palette[sp.Bone[j]];
+                p += sp.Weight[j] * (glm::vec3(M[0]) * sp.Pos.x + glm::vec3(M[1]) * sp.Pos.y + glm::vec3(M[2]) * sp.Pos.z + glm::vec3(M[3]));
+            }
+            *out++ = p;
         }
+        if (pieceOf) pieceOf->insert(pieceOf->end(), skin.Points.size(), (int)k);
     }
 }
 

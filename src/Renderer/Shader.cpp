@@ -130,6 +130,7 @@ void Shader::Reload(const std::string& vertFile, const std::string& fragFile) {
     glDeleteProgram(m_Program);
     m_Program = newProg;
     m_UniformCache.clear();
+    for (FastUniform& f : m_FastUniforms) f.Ptr = nullptr;
     m_Values.clear(); // a relinked program starts from its defaults
     m_LocationBlock.reset();
 }
@@ -160,6 +161,22 @@ void Shader::Bind() const {
 }
 
 int Shader::Loc(std::string_view name) const {
+    FastUniform& fast = m_FastUniforms[((std::uintptr_t)name.data() >> 3 ^ (std::uintptr_t)name.data() >> 9) & 63];
+    const bool fastable = name.size() < sizeof fast.Name;
+    if (fastable && fast.Ptr == name.data() && fast.Len == name.size() &&
+        std::memcmp(fast.Name, name.data(), name.size()) == 0)
+        return fast.Loc;
+    const int loc = LocSlow(name);
+    if (fastable) {
+        fast.Ptr = name.data();
+        fast.Len = (std::uint32_t)name.size();
+        fast.Loc = loc;
+        std::memcpy(fast.Name, name.data(), name.size());
+    }
+    return loc;
+}
+
+int Shader::LocSlow(std::string_view name) const {
     std::uint64_t h = 1469598103934665603ull; // FNV-1a
     for (const char c : name) { h ^= (unsigned char)c; h *= 1099511628211ull; }
     auto it = m_UniformCache.find(h);

@@ -115,6 +115,7 @@ PFNGLQUERYCOUNTERPROC glQueryCounter = nullptr;
 
 // Async pixel readback (PBO) — adaptive HUD contrast sampling without a GPU stall (#178).
 PFNGLMAPNAMEDBUFFERPROC glMapNamedBuffer = nullptr;
+PFNGLMAPNAMEDBUFFERRANGEPROC glMapNamedBufferRange = nullptr;
 PFNGLUNMAPNAMEDBUFFERPROC glUnmapNamedBuffer = nullptr;
 
 // Fence sync + buffer-to-buffer copy — deferred cluster-overflow readback (PERF-203).
@@ -252,6 +253,7 @@ bool GLLoader_Init() {
 
     // Async pixel readback (PBO) — adaptive HUD contrast sampling without a GPU stall (#178).
     LOAD(PFNGLMAPNAMEDBUFFERPROC, glMapNamedBuffer)
+    LOAD(PFNGLMAPNAMEDBUFFERRANGEPROC, glMapNamedBufferRange)
     LOAD(PFNGLUNMAPNAMEDBUFFERPROC, glUnmapNamedBuffer)
 
     // Fence sync + buffer-to-buffer copy — deferred cluster-overflow readback (PERF-203).

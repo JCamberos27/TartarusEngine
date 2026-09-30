@@ -1833,6 +1833,41 @@ void TestBlendTree2D() {
         CHECK(FirstPersonBodyElbowClearSwivel({glm::vec3(1.0f, 0.0f, 0.0f)}, shoulder, elbow, hand, 0.06f, 1.5f, 0.1f) == 0.0f); // already clear
         CHECK(FirstPersonBodyElbowClearSwivel(torso, shoulder, elbow, hand, 0.0f, 1.5f, 0.1f) == 0.0f);                          // off
     }
+    // The swivel search only measures the points its swing can come near: the angle it picks is the one a
+    // search measuring every point picks, over random arms in a random cloud.
+    {
+        std::uint32_t seed = 12345u;
+        auto rnd = [&](float lo, float hi) { seed = seed * 1664525u + 1013904223u; return lo + (hi - lo) * float(seed >> 8) / 16777216.0f; };
+        auto rndVec = [&](float r) { return glm::vec3(rnd(-r, r), rnd(-r, r), rnd(-r, r)); };
+        int same = 0, cases = 0;
+        for (int trial = 0; trial < 200; ++trial) {
+            const glm::vec3 shoulder = rndVec(0.1f), hand = shoulder + glm::vec3(rnd(-0.2f, 0.2f), rnd(-0.2f, 0.1f), rnd(-0.6f, -0.3f));
+            const glm::vec3 elbow = (shoulder + hand) * 0.5f + rndVec(0.15f);
+            std::vector<glm::vec3> cloud(400);
+            for (glm::vec3& p : cloud) p = (shoulder + hand) * 0.5f + rndVec(0.35f);
+            const float clearance = rnd(0.02f, 0.08f), prefer = rnd(-1.0f, 1.0f);
+            const float maxAngle = glm::radians(90.0f), step = glm::radians(5.0f);
+            // Every point, every angle, in the search's order.
+            const glm::vec3 axis = glm::normalize(hand - shoulder);
+            auto gapAt = [&](float angle) {
+                return FirstPersonBodyElbowGap(cloud, shoulder, shoulder + glm::angleAxis(angle, axis) * (elbow - shoulder), hand);
+            };
+            float expect = 0.0f;
+            if (const float here = gapAt(0.0f); here < clearance) {
+                float bestGap = here;
+                bool done = false;
+                for (float a = step; a <= maxAngle + 1e-5f && !done; a += step)
+                    for (const float s : {prefer < 0.0f ? -a : a, prefer < 0.0f ? a : -a}) {
+                        const float g = gapAt(s);
+                        if (g >= clearance) { expect = s; done = true; break; }
+                        if (g > bestGap) { bestGap = g; expect = s; }
+                    }
+            }
+            ++cases;
+            same += FirstPersonBodyElbowClearSwivel(cloud, shoulder, elbow, hand, clearance, maxAngle, step, prefer) == expect;
+        }
+        CHECK(same == cases);
+    }
     // The look-down push: none at or above its start, all of it straight down, rising as a sine between.
     CHECK(near(FirstPersonBodyLookDown(0.0f, 25.0f), 0.0f) && near(FirstPersonBodyLookDown(glm::radians(30.0f), 25.0f), 0.0f));
     CHECK(near(FirstPersonBodyLookDown(glm::radians(-25.0f), 25.0f), 0.0f) && near(FirstPersonBodyLookDown(glm::radians(-90.0f), 25.0f), 1.0f));
