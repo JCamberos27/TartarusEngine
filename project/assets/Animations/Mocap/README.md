@@ -9,8 +9,8 @@ character by bone name. They don't fit Y Bot (Mixamo bone names).
 
 - `RootMotion/` (379 clips): the root really travels (up to ~10 m). The player body is root-motion
   driven, so these are the clips controllers use.
-- `InPlace/` (280 clips, the `_No_Rm` files): the same moves with the root held in place. Only
-  Locomotion, Locomotion_V2, Crouch and Turn have in-place versions.
+- The pack's in-place (`_No_Rm`) copies of Locomotion, Locomotion_V2, Crouch and Turn were removed;
+  every one had a root-motion twin here. The originals are in the asset library below.
 - `Objects/Phone/SM_Prop_Phone.fbx`: the prop the Phone clips hold.
 
 Inside each, the pack's own categories: Conversation, Crouch, Dance, Idle, Jump, Kneel, Locomotion
@@ -20,7 +20,7 @@ Inside each, the pack's own categories: Conversation, Crouch, Dance, Idle, Jump,
 ## Names
 
 - `AM_` male, `AF_` female. 30 fps, except a few female run clips (check their speed in Play).
-- `_No_Rm` = in place; `_Mirror` = the same move mirrored left/right.
+- `_Mirror` = the same move mirrored left/right.
 
 ## Notes
 
