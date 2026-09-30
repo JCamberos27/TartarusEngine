@@ -148,6 +148,19 @@ if(NOT imguizmo_POPULATED)
   FetchContent_Populate(imguizmo)
 endif()
 
+# --- meshoptimizer (triangle order for the GPU's post-transform vertex cache) ---
+# Source only: the engine compiles the two files it uses (vertex cache optimizer + allocator)
+# rather than building the library target, whose install rules would land in the package.
+FetchContent_Declare(
+  meshoptimizer
+  GIT_REPOSITORY https://github.com/zeux/meshoptimizer.git
+  GIT_TAG v1.3
+)
+FetchContent_GetProperties(meshoptimizer)
+if(NOT meshoptimizer_POPULATED)
+  FetchContent_Populate(meshoptimizer)
+endif()
+
 # --- NVIDIA PhysX 5 (collision / rigid bodies / character controller — #185) --------------
 # Built from source, pinned by git tag, nothing vendored — issue #185's "Path B", but via
 # ExternalProject rather than FetchContent_MakeAvailable. PhysX's public CMake cannot share
@@ -276,6 +289,17 @@ if(_imgui_passthrough_at GREATER -1)
   string(REPLACE "${_imgui_passthrough_line}"
     "if (glfwGetWindowAttrib(window, GLFW_MOUSE_PASSTHROUGH) != (window_no_input ? 1 : 0)) ${_imgui_passthrough_line}"
     _imgui_glfw_src "${_imgui_glfw_src}")
+  # Two more per-frame Win32 round trips, each only where the line is found:
+  # - GLFW_HOVERED is a WindowFromPoint per viewport per frame (~3% of the play frame). While the
+  #   game has captured the cursor (GLFW_CURSOR_DISABLED) no viewport is hovered in any useful sense.
+  # - The monitor list (EnumDisplaySettings per monitor) is rebuilt every frame: every 0.5 s is
+  #   plenty to follow a display change.
+  string(REPLACE "if (glfwGetWindowAttrib(window, GLFW_HOVERED))"
+    "if (glfwGetInputMode(window, GLFW_CURSOR) != GLFW_CURSOR_DISABLED && glfwGetWindowAttrib(window, GLFW_HOVERED))"
+    _imgui_glfw_src "${_imgui_glfw_src}")
+  string(REPLACE "&io.DisplayFramebufferScale);\n    ImGui_ImplGlfw_UpdateMonitors();"
+    "&io.DisplayFramebufferScale);\n    { static double s_NextMonitors = 0.0; const double now = glfwGetTime(); if (now >= s_NextMonitors) { s_NextMonitors = now + 0.5; ImGui_ImplGlfw_UpdateMonitors(); } }"
+    _imgui_glfw_src "${_imgui_glfw_src}")
   set(IMGUI_GLFW_BACKEND ${CMAKE_BINARY_DIR}/imgui_patched/imgui_impl_glfw.cpp)
   set(_imgui_glfw_old "")
   if(EXISTS ${IMGUI_GLFW_BACKEND})
@@ -333,6 +357,10 @@ set(IMGUI_SOURCES
   ${IMGUI_GL3_BACKEND}
   ${imguizmo_SOURCE_DIR}/src/ImGuizmo.cpp
 )
+set(MESHOPT_SOURCES
+  ${meshoptimizer_SOURCE_DIR}/src/allocator.cpp
+  ${meshoptimizer_SOURCE_DIR}/src/vcacheoptimizer.cpp
+)
 
 # App icon (Windows only — .rc is an MSVC resource script). Baked into the exe itself so any
 # shortcut targeting it keeps showing the icon across rebuilds; nothing to re-link externally.
@@ -343,7 +371,7 @@ if(WIN32)
   list(APPEND ENGINE_SOURCES ${CMAKE_SOURCE_DIR}/src/TartarusEngine.manifest)
 endif()
 
-add_executable(TartarusEngine ${ENGINE_SOURCES} ${IMGUI_SOURCES})
+add_executable(TartarusEngine ${ENGINE_SOURCES} ${IMGUI_SOURCES} ${MESHOPT_SOURCES})
 
 add_library(TartarusGame SHARED
   ${CMAKE_SOURCE_DIR}/src/Game/GameModule.cpp
@@ -468,6 +496,7 @@ target_include_directories(TartarusEngine PRIVATE
   ${imgui_SOURCE_DIR}
   ${imgui_SOURCE_DIR}/backends
   ${imguizmo_SOURCE_DIR}/src
+  ${meshoptimizer_SOURCE_DIR}/src
 )
 
 target_link_libraries(TartarusEngine PRIVATE glfw glm::glm assimp EnTT::EnTT physx)
@@ -503,6 +532,7 @@ tartarus_enable_release_debug_info(TartarusEngine)
 # can't reasonably change.
 set(TARTARUS_VENDORED_SOURCES
   ${IMGUI_SOURCES}
+  ${MESHOPT_SOURCES}
   ${CMAKE_SOURCE_DIR}/extern/stb_image_impl.cpp
   ${CMAKE_SOURCE_DIR}/extern/stb_dxt_impl.cpp
   ${CMAKE_SOURCE_DIR}/extern/miniaudio_impl.cpp
