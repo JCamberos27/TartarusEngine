@@ -180,7 +180,7 @@ How it works:
 - **Only the base layer drives root motion.** Higher layers never move the object.
 - **Per-state opt-out:** a state with **Root Motion** off in the Animator window keeps its travel in the pose.
 - **Live readout:** while playing, the Inspector's Root Motion section shows the live speed (m/s) and turn rate (°/s).
-- **Clip packs:** packs often ship each clip twice, with root motion and in place (`_No_Rm` in the MC Core Motion pack). With Root Motion on, use the version with root motion.
+- **Clip packs:** packs often ship each clip twice, with root motion and in place (`_No_Rm` in the MC Core Motion pack). With Root Motion on, use the version with root motion. This project keeps only the root-motion MC Core Motion clips.
 - **Try it:** the Sandbox's *Root Motion Demo* (x −42, z −30) has two Quantum characters running the same controller. One has Root Motion on and walks, stops, turns and walks back. The other has it off: its mesh walks away from its object and snaps back each loop.
 
 ---
