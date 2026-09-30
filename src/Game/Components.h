@@ -680,6 +680,7 @@ enum OutfitPieceFlags { OutfitPieceBodyPart = 1, OutfitPieceHeadAttached = 2 };
 // can't poke through the cloth. Runtime only - rebuilt from the outfit whenever its pieces change.
 struct OutfitHideTag {
     std::shared_ptr<SkinHideBuffer> Buffer; // one bit per vertex (SkinHideBuffer.h)
+    std::shared_ptr<const std::vector<std::uint32_t>> Bits; // the same bits on the CPU
     int Hidden = 0, Total = 0;              // vertices hidden / in the model (the Inspector's readout)
 };
 
