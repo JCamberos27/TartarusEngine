@@ -1,5 +1,6 @@
 #include "ModelPreviewRenderer.h"
 #include "Camera.h" // #202 - MakePerspective
+#include "MaterialAsset.h"
 #include "Model.h"
 #include "Shader.h"
 #include "ShaderLibrary.h"
@@ -33,7 +34,8 @@ float ModelPreviewRenderer::ComputeFramingDistance(const Model& model) {
 }
 
 unsigned int ModelPreviewRenderer::Render(Model& model, float yaw, float pitch, float distance, int previewW, int previewH,
-                                          const std::vector<std::shared_ptr<MaterialAsset>>& slots) {
+                                          const std::vector<std::shared_ptr<MaterialAsset>>& slots, Shading shading,
+                                          bool studio) {
     if (!m_Shader) {
         m_Shader = std::make_unique<Shader>(ShaderLibrary::ReadFile("ModelVertex.glsl"),
                                             ShaderLibrary::ReadFile("ModelFragment.glsl"));
@@ -112,10 +114,21 @@ unsigned int ModelPreviewRenderer::Render(Model& model, float yaw, float pitch, 
     // always reads consistently regardless of where/how the asset will actually be placed.
     // Fixed preview key light, into the SSBO the shared model shader reads at binding 0.
     m_Lights.Clear();
-    m_Lights.AddDirectional(glm::normalize(glm::vec3(-0.4f, -1.0f, -0.3f)), glm::vec3(1.0f), 3.0f);
+    if (studio) {
+        // Camera-relative: a key from above the viewer's left shoulder, a softer fill from the right,
+        // and a rim from behind - no side ever goes black as the model turns.
+        const glm::vec3 fwd = glm::normalize(center - eye);
+        const glm::vec3 right = glm::normalize(glm::cross(fwd, glm::vec3(0.0f, 1.0f, 0.0f)));
+        const glm::vec3 up = glm::cross(right, fwd);
+        m_Lights.AddDirectional(glm::normalize(fwd + 0.6f * right - 0.8f * up), glm::vec3(1.0f), 3.0f);
+        m_Lights.AddDirectional(glm::normalize(fwd - 0.9f * right - 0.2f * up), glm::vec3(0.85f, 0.9f, 1.0f), 1.2f);
+        m_Lights.AddDirectional(glm::normalize(-fwd - 0.5f * up), glm::vec3(1.0f), 1.5f);
+    } else {
+        m_Lights.AddDirectional(glm::normalize(glm::vec3(-0.4f, -1.0f, -0.3f)), glm::vec3(1.0f), 3.0f);
+    }
     m_Lights.Upload();
     m_Lights.Bind(0);
-    m_Shader->SetInt("uUnlit", 0);
+    m_Shader->SetInt("uUnlit", shading == Shading::Unlit ? 1 : 0);
     // This offscreen preview has no shared Tonemapper pass, so keep the baked Reinhard + gamma
     // in the model shader for it (the real scene sets this to 0 and tonemaps separately).
     m_Shader->SetInt("uApplyTonemap", 1);
@@ -125,6 +138,25 @@ unsigned int ModelPreviewRenderer::Render(Model& model, float yaw, float pitch, 
     m_Shader->SetInt("uPointShadowCount", 0);
 
     model.Draw(*m_Shader, slots);
+
+    if (shading == Shading::Wireframe) {
+        // The edges over the lit model: flat light grey, pulled toward the camera so they win the
+        // depth test against the faces they lie on.
+        if (!m_WireMaterial) {
+            m_WireMaterial = std::make_shared<MaterialAsset>();
+            m_WireMaterial->Mat.BaseColor = glm::vec3(0.85f);
+        }
+        const std::vector<std::shared_ptr<MaterialAsset>> wire((size_t)std::max(1, model.MeshCount()), m_WireMaterial);
+        constexpr GLenum kPolygonOffsetLine = 0x2A02; // GL_POLYGON_OFFSET_LINE (not in the loader's header)
+        glPolygonMode(GL_FRONT_AND_BACK, GL_LINE);
+        glEnable(kPolygonOffsetLine);
+        glPolygonOffset(-1.0f, -1.0f);
+        m_Shader->SetInt("uUnlit", 1);
+        model.Draw(*m_Shader, wire);
+        glDisable(kPolygonOffsetLine);
+        glPolygonMode(GL_FRONT_AND_BACK, GL_FILL); // the editor draws filled everywhere else
+        m_Shader->SetInt("uUnlit", 0);
+    }
 
     if (!prevDepthTest) glDisable(GL_DEPTH_TEST);
     glBindFramebuffer(GL_FRAMEBUFFER, (unsigned int)prevFBO);
