@@ -246,7 +246,7 @@ void FirstPersonWeaponTest::BuildProbe() {
         {"settle", nullptr, hold(2.0f), 5.0f, nullptr},
     };
     // Held still at each pitch: the settled pose, and a capture.
-    for (float pitch : {-75.0f, -60.0f, -45.0f, -30.0f, -15.0f, 0.0f, 15.0f, 30.0f, 45.0f, 60.0f}) {
+    for (float pitch : {-89.0f, -85.0f, -80.0f, -75.0f, -60.0f, -45.0f, -30.0f, -15.0f, 0.0f, 15.0f, 30.0f, 45.0f, 60.0f}) {
         const std::string name = "idle pitch " + std::to_string((int)pitch);
         steps.push_back({name, [pitch](C& c) { c.Cam->Pitch = pitch; }, hold(1.2f), 5.0f,
                          [this, name, pitch](C& c) { PrintSample(name); c.Shot = ShotStem("idle_pitch_" + std::to_string((int)pitch)); }});
@@ -295,6 +295,67 @@ void FirstPersonWeaponTest::BuildProbe() {
     }
     steps.push_back({"sights down", [](C& c) { c.Aim = false; c.Cam->Pitch = 0.0f; },
                      [](C& c) { return c.State() == "Idle" && c.Time > 0.5f; }, 3.0f, nullptr});
+    // Moving: a walk, then sprints - straight at three pitches, and turning - each followed by a stop and
+    // a turn back round so the body stays near where it started. Sampled through, captured along the way.
+    struct Run { const char* Name; bool Sprint; float Pitch, YawRate; };
+    for (const Run& r : {Run{"walk", false, 0.0f, 0.0f}, Run{"sprint pitch 0", true, 0.0f, 0.0f}, Run{"sprint pitch -30", true, -30.0f, 0.0f},
+                         Run{"sprint pitch 20", true, 20.0f, 0.0f}, Run{"sprint turning 90", true, 0.0f, 90.0f}}) {
+        const std::string name = r.Name;
+        const std::string stem = ShotStem(name);
+        steps.push_back({name, [r, name](C& c) { c.Cam->Pitch = r.Pitch; c.Move = glm::vec2(0.0f, 1.0f); c.Sprint = r.Sprint; c.LogEvery = 6; c.Label = name; },
+                         [r, stem](C& c) {
+                             c.Cam->Yaw += r.YawRate * c.Dt;
+                             const int f = (int)std::lround(c.Time / std::max(c.Dt, 1e-4f));
+                             if (f % 20 == 10) c.Shot = stem + "_" + std::to_string(1000 + f).substr(1);
+                             return c.Time >= 2.5f;
+                         }, 5.0f, [](C& c) { c.Move = glm::vec2(0.0f); c.Sprint = false; }});
+        steps.push_back({"stop after " + name, [name](C& c) { c.Label = "stop after " + name; }, [](C& c) { return c.Time >= 1.5f && c.State() == "Idle"; }, 6.0f,
+                         [](C& c) { c.LogEvery = 0; }});
+        // Back round, so the next run heads back over the same ground.
+        steps.push_back({"about turn", [](C& c) { c.Cam->Pitch = 0.0f; }, [](C& c) { c.Cam->Yaw += 180.0f * c.Dt; return c.Time >= 1.0f; }, 5.0f, nullptr});
+        steps.push_back({"settle", nullptr, hold(1.0f), 5.0f, nullptr});
+    }
+    // On the sights while moving and turning (where the elbows come nearest the body): forward, sideways, back,
+    // turning on the spot, and forward while turning - each followed by a stop.
+    struct AimMove { const char* Name; glm::vec2 Move; float YawRate; };
+    for (const AimMove& r : {AimMove{"aim walk forward", {0.0f, 1.0f}, 0.0f}, AimMove{"aim strafe right", {1.0f, 0.0f}, 0.0f},
+                             AimMove{"aim strafe left", {-1.0f, 0.0f}, 0.0f}, AimMove{"aim walk back", {0.0f, -1.0f}, 0.0f},
+                             AimMove{"aim turning 90", {0.0f, 0.0f}, 90.0f}, AimMove{"aim walk turning -90", {0.0f, 1.0f}, -90.0f}}) {
+        const std::string name = r.Name;
+        const std::string stem = ShotStem(name);
+        steps.push_back({"aim for " + name, [](C& c) { c.Aim = true; c.Cam->Pitch = 0.0f; }, [](C& c) { return c.State() == "Aim" && c.Time >= 0.6f; }, 5.0f, nullptr});
+        steps.push_back({name, [r, name](C& c) { c.Move = r.Move; c.LogEvery = 6; c.Label = name; },
+                         [r, stem](C& c) {
+                             c.Cam->Yaw += r.YawRate * c.Dt;
+                             const int f = (int)std::lround(c.Time / std::max(c.Dt, 1e-4f));
+                             if (f % 20 == 10) c.Shot = stem + "_" + std::to_string(1000 + f).substr(1);
+                             return c.Time >= 2.0f;
+                         }, 5.0f, [](C& c) { c.Move = glm::vec2(0.0f); }});
+        steps.push_back({"stop after " + name, [name](C& c) { c.Label = "stop after " + name; }, hold(1.0f), 5.0f,
+                         [](C& c) { c.LogEvery = 0; c.Aim = false; }});
+        steps.push_back({"sights down", nullptr, [](C& c) { return c.State() == "Idle" && c.Time > 0.4f; }, 3.0f, nullptr});
+    }
+    // The weapon's own animations (where the head moved oddly): a reload at the hip and on the sights, the
+    // inspect, the shell check and the melee - sampled every third frame through each.
+    auto settledIdle = [](C& c) { return c.State() == "Idle" && c.P->Chambered(); };
+    auto sampled = [](const char* name, std::function<void(C&)> begin) {
+        return [name, begin](C& c) { c.LogEvery = 3; c.Label = name; begin(c); };
+    };
+    auto stopLog = [](C& c) { c.LogEvery = 0; };
+    steps.push_back({"a round, to reload", [](C& c) { c.Cam->Pitch = 0.0f; ++c.Pulls; }, [=](C& c) { return c.Saw("Pump") && settledIdle(c); }, 6.0f, nullptr});
+    steps.push_back({"anim hip reload", sampled("anim hip reload", [](C& c) { c.P->Reload(); }),
+                     [](C& c) { return c.Saw("ReloadStart") && c.State() == "Idle"; }, 15.0f, stopLog});
+    steps.push_back({"anim inspect", sampled("anim inspect", [](C& c) { c.P->TriggerAction("Inspect"); }),
+                     [](C& c) { return c.Saw("Inspect") && c.State() == "Idle"; }, 12.0f, stopLog});
+    steps.push_back({"anim shell check", sampled("anim shell check", [](C& c) { c.P->TriggerAction("MagCheck"); }),
+                     [](C& c) { return c.Saw("MagCheck") && c.State() == "Idle"; }, 10.0f, stopLog});
+    steps.push_back({"anim melee", sampled("anim melee", [](C& c) { c.P->TriggerAction("Melee"); }),
+                     [](C& c) { return c.Saw("Melee") && c.State() == "Idle"; }, 8.0f, stopLog});
+    steps.push_back({"on the sights", [](C& c) { c.Aim = true; }, [](C& c) { return c.State() == "Aim" && c.Time > 0.6f; }, 5.0f, nullptr});
+    steps.push_back({"a round on the sights", [](C& c) { ++c.Pulls; }, [](C& c) { return c.Saw("Pump") && c.State() == "Aim" && c.P->Chambered(); }, 6.0f, nullptr});
+    steps.push_back({"anim ADS reload", sampled("anim ADS reload", [](C& c) { c.P->Reload(); }),
+                     [](C& c) { return c.Saw("ReloadStart") && c.State() == "Aim"; }, 15.0f, stopLog});
+    steps.push_back({"sights down", [](C& c) { c.Aim = false; }, [](C& c) { return c.State() == "Idle" && c.Time > 0.4f; }, 3.0f, nullptr});
     m_Steps = std::move(steps);
 }
 
@@ -310,7 +371,11 @@ void FirstPersonWeaponTest::AfterPose(const World& world, const FirstPersonBody&
     m_HaveYaw = true;
     s.TwistDeg = glm::degrees(body.Twist());
     s.State = p.CurrentState();
-    glm::vec3 butt, fwd, upper, clav, neck, head;
+    s.Speed = p.PlanarSpeed();
+    glm::vec3 butt, fwd, upper, clav, neck, head, muzzle, bore;
+    // The gun's length: butt to muzzle along the bore (the first-person gun; the world one is the same).
+    s.GunLength = 0.45f;
+    if (p.StockWorld(butt, fwd) && p.MuzzleRay(muzzle, bore)) s.GunLength = std::clamp(glm::dot(muzzle - butt, fwd), 0.3f, 1.5f);
     // The world gun (split poses): the first-person one moved by the body's world gun shift.
     if (p.StockWorld(butt, fwd) && ((butt += body.WorldGunShift()), true) && body.BoneWorld(world, "upperarm_r", upper) && body.BoneWorld(world, "clavicle_r", clav) &&
         body.BoneWorld(world, "neck_01", neck) && body.BoneWorld(world, "head", head)) {
@@ -328,6 +393,22 @@ void FirstPersonWeaponTest::AfterPose(const World& world, const FirstPersonBody&
         const glm::vec3 rear = butt + fwd * 0.30f;
         s.NeckGap = SegmentDistance(neck, butt, rear);
         s.HeadGap = SegmentDistance(head, butt, rear);
+        // The whole gun: against the neck, the hood keep-out's centre, and the drawn head / neck / hood.
+        const glm::vec3 gunFront = butt + fwd * s.GunLength;
+        s.WholeNeckGap = SegmentDistance(neck, butt, gunFront);
+        s.WholeHoodGap = SegmentDistance(head + up * 0.07f, butt, gunFront);
+        float along = 0.0f;
+        s.MeshGap = body.HeadMeshGap(world, butt, gunFront, &s.MeshPiece, &along);
+        s.MeshAlong = along * s.GunLength;
+        body.ElbowTorsoGaps(world, s.ElbowGap);
+        for (int h = 0; h < 2; ++h) s.ElbowSwing[h] = glm::degrees(body.WorldElbowSwing(h));
+        float torsoAlong = 0.0f;
+        s.TorsoGap = body.TorsoMeshGap(world, butt, butt + fwd * 0.45f, nullptr, &torsoAlong);
+        s.TorsoAlong = torsoAlong * 0.45f;
+        s.HeadTilt = body.WorldHeadTilt();
+        s.HeadTiltWeight = body.WorldHeadTiltWeight();
+        if (glm::vec3 chest; body.BoneWorld(world, "spine_05", chest) && glm::length(neck - chest) > 1e-4f && glm::length(head - neck) > 1e-4f)
+            s.HeadBend = glm::degrees(std::acos(std::clamp(glm::dot(glm::normalize(neck - chest), glm::normalize(head - neck)), -1.0f, 1.0f)));
         // The world hands against the world gun's grips (the rig's hands, moved with it).
         for (int h = 0; h < 2; ++h) {
             glm::vec3 v, bodyHand;
@@ -365,11 +446,15 @@ void FirstPersonWeaponTest::PrintSample(const std::string& label) const {
         return;
     }
     std::printf("[StockProbe] %-24s pitch %6.1f yawRate %5.0f twist %6.1f %-9s | butt-shoulder R %+5.1f U %+5.1f F %+5.1f (%4.1f) | "
-                "clav %4.1f neck %4.1f head %4.1f | rear 30cm to neck %4.1f head %4.1f | shift %4.1f hands off L %4.1f R %4.1f cm\n",
+                "clav %4.1f neck %4.1f head %4.1f | rear 30cm to neck %4.1f head %4.1f | shift %4.1f hands off L %4.1f R %4.1f cm | "
+                "speed %4.1f | gun %3.0fcm to neck %4.1f hood %4.1f mesh %5.1f at %3.0fcm (%s) | elbow to torso L %5.1f R %5.1f cm, swung L %+4.0f R %+4.0f deg | rear 45cm to torso %5.1f at %3.0fcm | head tilt %4.1f (w %.2f) bend %4.1f deg\n",
                 label.c_str(), s.Pitch, s.YawRate, s.TwistDeg, s.State.c_str(), s.StockFromShoulder.x * 100.0f,
                 s.StockFromShoulder.y * 100.0f, s.StockFromShoulder.z * 100.0f, s.Shoulder * 100.0f, s.Clavicle * 100.0f,
                 s.Neck * 100.0f, s.Head * 100.0f, s.NeckGap * 100.0f, s.HeadGap * 100.0f, s.GunShift * 100.0f,
-                s.HandGap[0] * 100.0f, s.HandGap[1] * 100.0f);
+                s.HandGap[0] * 100.0f, s.HandGap[1] * 100.0f, s.Speed, s.GunLength * 100.0f, s.WholeNeckGap * 100.0f,
+                s.WholeHoodGap * 100.0f, s.MeshGap * 100.0f, s.MeshAlong * 100.0f, s.MeshPiece.c_str(), s.ElbowGap[0] * 100.0f,
+                s.ElbowGap[1] * 100.0f, s.ElbowSwing[0], s.ElbowSwing[1], s.TorsoGap * 100.0f, s.TorsoAlong * 100.0f, s.HeadTilt, s.HeadTiltWeight,
+                s.HeadBend);
     std::fflush(stdout);
 }
 

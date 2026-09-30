@@ -1807,6 +1807,32 @@ void TestBlendTree2D() {
     // Foot IK: the pelvis drops to the lower foot (capped), rises a little when both are up.
     CHECK(near(FirstPersonBodyFootPelvis(-0.1f, 0.0f, 0.35f, 0.15f), -0.1f) && near(FirstPersonBodyFootPelvis(0.05f, -0.5f, 0.35f, 0.15f), -0.35f));
     CHECK(near(FirstPersonBodyFootPelvis(0.2f, 0.3f, 0.35f, 0.15f), 0.15f) && near(FirstPersonBodyFootPelvis(0.0f, 0.0f, 0.35f, 0.15f), 0.0f));
+    // The world gun's mesh keep-out: a gun through two head points is pushed down until both are 5 cm clear.
+    {
+        const std::vector<glm::vec3> headPoints = {glm::vec3(0.0f), glm::vec3(0.0f, 0.05f, 0.0f)};
+        const glm::vec3 a(-0.5f, 0.0f, 0.0f), b(0.5f, 0.0f, 0.0f), down(0.0f, -1.0f, 0.0f);
+        CHECK(std::fabs(FirstPersonBodyClearPush(headPoints, a, b, down, 0.05f, 0.3f, 0.01f) - 0.05f) < 0.011f);
+        CHECK(FirstPersonBodyClearPush(headPoints, a + glm::vec3(0.0f, -0.2f, 0.0f), b + glm::vec3(0.0f, -0.2f, 0.0f), down, 0.05f, 0.3f, 0.01f) == 0.0f); // clear
+        CHECK(FirstPersonBodyClearPush(headPoints, a, b, down, 0.05f, 0.02f, 0.01f) == 0.02f);   // can't clear within the limit
+        CHECK(FirstPersonBodyClearPush({}, a, b, down, 0.05f, 0.3f, 0.01f) == 0.0f);        // nothing to clear
+        CHECK(FirstPersonBodyClearPush(headPoints, a, b, down, 0.0f, 0.3f, 0.01f) == 0.0f);       // off
+    }
+    // Elbow Clearance: an arm reaching straight ahead with its elbow 20 cm under the line, on a torso point. It swings
+    // about the shoulder-hand line until 6 cm clear - 20 degrees at 5-degree steps (a 6.9 cm chord) - the side asked for first.
+    {
+        const glm::vec3 shoulder(0.0f), elbow(0.0f, -0.2f, -0.25f), hand(0.0f, 0.0f, -0.5f);
+        const std::vector<glm::vec3> torso = {elbow};
+        CHECK(FirstPersonBodyElbowGap(torso, shoulder, elbow, hand) < 1e-5f);
+        CHECK(FirstPersonBodyElbowGap({}, shoulder, elbow, hand) > 1e3f);
+        const float swing = FirstPersonBodyElbowClearSwivel(torso, shoulder, elbow, hand, 0.06f, glm::radians(90.0f), glm::radians(5.0f));
+        CHECK(std::fabs(std::fabs(swing) - glm::radians(20.0f)) < 1e-3f);
+        CHECK(FirstPersonBodyElbowClearSwivel(torso, shoulder, elbow, hand, 0.06f, glm::radians(90.0f), glm::radians(5.0f), -1.0f) < 0.0f);
+        CHECK(FirstPersonBodyElbowClearSwivel(torso, shoulder, elbow, hand, 0.06f, glm::radians(90.0f), glm::radians(5.0f), 1.0f) > 0.0f);
+        const glm::vec3 swung = shoulder + glm::angleAxis(swing, glm::vec3(0.0f, 0.0f, -1.0f)) * (elbow - shoulder);
+        CHECK(FirstPersonBodyElbowGap(torso, shoulder, swung, hand) >= 0.06f);             // really clear, the hand where it was
+        CHECK(FirstPersonBodyElbowClearSwivel({glm::vec3(1.0f, 0.0f, 0.0f)}, shoulder, elbow, hand, 0.06f, 1.5f, 0.1f) == 0.0f); // already clear
+        CHECK(FirstPersonBodyElbowClearSwivel(torso, shoulder, elbow, hand, 0.0f, 1.5f, 0.1f) == 0.0f);                          // off
+    }
     // The look-down push: none at or above its start, all of it straight down, rising as a sine between.
     CHECK(near(FirstPersonBodyLookDown(0.0f, 25.0f), 0.0f) && near(FirstPersonBodyLookDown(glm::radians(30.0f), 25.0f), 0.0f));
     CHECK(near(FirstPersonBodyLookDown(glm::radians(-25.0f), 25.0f), 0.0f) && near(FirstPersonBodyLookDown(glm::radians(-90.0f), 25.0f), 1.0f));
