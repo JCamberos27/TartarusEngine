@@ -44,6 +44,7 @@
 #include "MaterialAsset.h"
 #include "PhysicMaterialAsset.h"
 #include "PlayerConfig.h" // #174 - player.json round-trip
+#include "Player.h"
 #include "PostProcessVolume.h"
 #include "Tonemapper.h"
 #include "ProjectPaths.h"
@@ -888,6 +889,28 @@ void TestCameraFrustumValidation() {
     CHECK(cams == 1);
 }
 
+// The player's acceleration: 0 = the move is the input (as before); otherwise an exponential approach
+// that lands in the same place whatever the frame rate, and arrives rather than creeping.
+void TestPlayerAcceleration() {
+    const glm::vec3 run(0.0f, 0.0f, 4.5f);
+    CHECK(PlayerApproachVelocity(glm::vec3(0.0f), run, 1.0f / 60.0f, 0.0f, 0.0f) == run);
+    CHECK(PlayerApproachVelocity(run, glm::vec3(0.0f), 1.0f / 60.0f, 0.07f, 0.0f) == glm::vec3(0.0f)); // no decel time: stops dead
+    auto after = [&](float hz, float seconds, glm::vec3 from, glm::vec3 to) {
+        glm::vec3 v = from;
+        for (int i = 0, n = (int)std::lround(seconds * hz); i < n; ++i) v = PlayerApproachVelocity(v, to, 1.0f / hz, 0.07f, 0.05f);
+        return v;
+    };
+    // 0.07 s: 63% of the way; the same at 30, 144 and 300 fps.
+    const float at30 = after(30.0f, 0.07f * 3.0f, glm::vec3(0.0f), run).z, at144 = after(144.0f, 0.07f * 3.0f, glm::vec3(0.0f), run).z,
+                at300 = after(300.0f, 0.07f * 3.0f, glm::vec3(0.0f), run).z;
+    CHECK(std::abs(at30 - at300) < 0.05f && std::abs(at144 - at300) < 0.05f && std::abs(at300 - 4.5f * (1.0f - std::exp(-3.0f))) < 0.05f);
+    CHECK(after(144.0f, 0.5f, glm::vec3(0.0f), run) == run);             // arrives
+    CHECK(after(144.0f, 0.4f, run, glm::vec3(0.0f)) == glm::vec3(0.0f)); // and stops
+    // Slowing down uses the deceleration time: quicker here than speeding up.
+    const float up = after(144.0f, 0.05f, glm::vec3(0.0f), run).z, down = 4.5f - after(144.0f, 0.05f, run, glm::vec3(0.0f)).z;
+    CHECK(down > up);
+}
+
 // --- #174: player.json keeps every field it was given -------------------------------------
 // player.json is the ONLY thing a built game is configured by, and nothing in the editor reads
 // it back, so a field dropped in Save() or missed in Load() is invisible until someone ships a
@@ -1489,13 +1512,16 @@ void TestFirstPersonWeaponWizard() {
     CHECK(BuildFirstPersonController(set).Layers[0].FindState("Fire") >= 0);
 }
 
-// The standard body locomotion graph: the builder gives the tuned reference (14 states, 20 parameters,
+// The standard body locomotion graph: the builder gives the tuned reference (14 states, 21 parameters,
 // 63 transitions), passes the lint and the body contract, and its clips are filled by role.
 void TestFirstPersonBodyController() {
     const std::vector<std::string> roles = FPBody::LocomotionRoles();
     CHECK(roles.size() > 40 && std::find(roles.begin(), roles.end(), std::string("Loco_Walk_Fwd")) != roles.end());
     AnimatorController c = FPBody::BuildLocomotionController([](const std::string& r) { return "clips/AM_" + r + ".fbx"; });
-    CHECK(c.Layers[0].States.size() == 14 && c.Parameters.size() == 20 && c.Layers[0].Transitions.size() == 63);
+    CHECK(c.Layers[0].States.size() == 14 && c.Parameters.size() == 21 && c.Layers[0].Transitions.size() == 63);
+    // The gait plays at PlayRate (the body's, so the feet keep up with a player faster than the clips).
+    CHECK(c.Layers[0].States[c.Layers[0].FindState("Locomotion")].SpeedParam == "PlayRate" &&
+          c.Layers[0].States[c.Layers[0].FindState("CrouchLoco")].SpeedParam.empty());
     CHECK(c.Layers[0].DefaultState == "Locomotion" && c.Layers[0].FindState("CrouchStop") >= 0);
     // The tuned numbers survived: Stop leaves Locomotion at 0.36, the jog forward child sits at 3.264 m/s.
     bool stop = false;
@@ -1740,6 +1766,17 @@ void TestBlendTree2D() {
     // Facing +Z (yaw 0): right is -X, as the mannequin's own frame.
     lm = FirstPersonBodyLocalMove(glm::vec3(-1.0f, 0.0f, 1.0f), 0.0f);
     CHECK(near(lm.x, 1.0f) && near(lm.y, 1.0f));
+    // A player faster than the clips: its run is the jog's speed, its sprint the run clip's, linear between;
+    // unset (the clips' own speeds) it is the speed itself.
+    CHECK(near(FirstPersonBodyClipSpeed(4.5f, 4.5f, 6.8f, 3.264f, 4.736f), 3.264f));
+    CHECK(near(FirstPersonBodyClipSpeed(6.8f, 4.5f, 6.8f, 3.264f, 4.736f), 4.736f));
+    CHECK(near(FirstPersonBodyClipSpeed(2.25f, 4.5f, 6.8f, 3.264f, 4.736f), 1.632f));
+    CHECK(near(FirstPersonBodyClipSpeed(4.0f, 3.26f, 4.72f, 3.26f, 4.72f), 4.0f) && near(FirstPersonBodyClipSpeed(1.0f, 3.26f, 4.72f, 3.26f, 4.72f), 1.0f));
+    // ... and its gait plays that much faster, within Max Play Rate, none of it under root motion or standing.
+    CHECK(near(FirstPersonBodyPlayRate(4.5f, 3.264f, 1.0f, 1.5f), 4.5f / 3.264f));
+    CHECK(near(FirstPersonBodyPlayRate(9.0f, 3.0f, 1.0f, 1.5f), 1.5f));
+    CHECK(near(FirstPersonBodyPlayRate(4.5f, 3.264f, 0.0f, 1.5f), 1.0f) && near(FirstPersonBodyPlayRate(0.0f, 0.0f, 1.0f, 1.5f), 1.0f));
+    CHECK(near(FirstPersonBodyPlayRate(3.0f, 3.0f, 1.0f, 1.5f), 1.0f)); // the clips' own speed: as authored
     // The eye: steady at the standing head with no bob, following it fully at 1, offset in the
     // body's frame (x right = model -X).
     const glm::vec3 rest(0.0f, 1.6f, 0.0f), head(0.02f, 1.55f, 0.1f);
@@ -4510,6 +4547,7 @@ int RunUnitTests() {
         {"CameraFrustumValidation", TestCameraFrustumValidation},
         {"SceneRoundTrip", TestSceneRoundTrip},
         {"PlayerConfigRoundTrip", TestPlayerConfigRoundTrip},
+        {"PlayerAcceleration", TestPlayerAcceleration},
         {"PhysicsWorldSync", TestPhysicsWorldSync},
         {"PhysicalSky", TestPhysicalSky},
     };

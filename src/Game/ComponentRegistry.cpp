@@ -368,6 +368,14 @@ void RegisterEngineComponents() {
               "A jump pressed this many seconds before landing still happens the moment you land.", 0.0f, 0.5f },
             { "Coyote Time", T::Float, TARTARUS_REFLECT_FIELD(FirstPersonControllerComponent, CoyoteTime), 0.005f,
               "A jump pressed this many seconds after stepping off an edge still counts.", 0.0f, 0.5f },
+            { "Ground Accel Time", T::Float, TARTARUS_REFLECT_FIELD(FirstPersonControllerComponent, GroundAccelTime), 0.005f,
+              "How quickly the player gets up to speed on the ground: the time constant, in seconds (about 2.3x\n"
+              "this reaches 90% of full speed). 0 = instantly.", 0.0f, 1.0f },
+            { "Ground Decel Time", T::Float, TARTARUS_REFLECT_FIELD(FirstPersonControllerComponent, GroundDecelTime), 0.005f,
+              "... and slows down on letting go. 0 = stops dead.", 0.0f, 1.0f },
+            { "Air Accel Time", T::Float, TARTARUS_REFLECT_FIELD(FirstPersonControllerComponent, AirAccelTime), 0.005f,
+              "How quickly the input steers the player in the air. Higher keeps more of the jump's momentum.\n"
+              "0 = full air control.", 0.0f, 5.0f },
             { "Eye Height", T::Float, TARTARUS_REFLECT_FIELD(FirstPersonControllerComponent, EyeHeight), 0.01f,
               "Camera height above the feet.", 0.1f, 10.0f },
             { "Capsule Radius", T::Float, TARTARUS_REFLECT_FIELD(FirstPersonControllerComponent, CapsuleRadius), 0.01f,
@@ -441,6 +449,14 @@ void RegisterEngineComponents() {
               "Metres per second asked of the blend tree when moving. Match a clip's speed (the jog, 3.26).", 0.0f, 20.0f },
             { "Sprint Speed", T::Float, TARTARUS_REFLECT_FIELD(FirstPersonBodyComponent, SprintSpeed), 0.01f,
               "... and while sprinting (the run clip, 4.72).", 0.0f, 20.0f },
+            { "Player Run Speed", T::Float, TARTARUS_REFLECT_FIELD(FirstPersonBodyComponent, PlayerRunSpeed), 0.01f,
+              "The player's own run speed (m/s) when it should be faster than the clips travel. 0 = Run Speed.\n"
+              "With Responsiveness up the gait clips play faster to keep pace (up to Max Play Rate).", 0.0f, 20.0f },
+            { "Player Sprint Speed", T::Float, TARTARUS_REFLECT_FIELD(FirstPersonBodyComponent, PlayerSprintSpeed), 0.01f,
+              "... and sprint speed. 0 = Sprint Speed.", 0.0f, 20.0f },
+            { "Max Play Rate", T::Float, TARTARUS_REFLECT_FIELD(FirstPersonBodyComponent, MaxPlayRate), 0.01f,
+              "The fastest the gait clips play (x authored) to keep the feet with a faster player. Needs the\n"
+              "controller's Locomotion state to take its speed from a PlayRate parameter.", 1.0f, 3.0f },
             { "Head Bone", T::String, TARTARUS_REFLECT_FIELD(FirstPersonBodyComponent, HeadBone), 0.0f,
               "The bone the camera sits on." },
             { "Camera Offset", T::Vec3, TARTARUS_REFLECT_FIELD(FirstPersonBodyComponent, CameraOffset), 0.005f,
