@@ -67,7 +67,9 @@ Everything in **(advanced)** groups has a tooltip; defaults are the values the b
 
 | Symptom | Change |
 |---|---|
-| Body feels floaty / sluggish to start and stop | **Responsiveness** up (0 = the clips move you, 1 = the input does). |
+| Body feels floaty / sluggish to start and stop | **Responsiveness** up (0 = the clips move you, 1 = the input does). At 1 the First Person Controller's **Ground Accel / Decel Time** and **Air Accel Time** shape the start, stop and air steering (0 = instant). |
+| Player too slow (the clips' speeds) | **Player Run Speed** / **Player Sprint Speed** (Sandbox: 4.5 / 6.8 m/s) with Responsiveness up. The blend tree still gets the clips' speeds and the gait plays faster to keep pace (the Locomotion state's speed is the `PlayRate` parameter), up to **Max Play Rate**. |
+| Mouse turn feels capped / laggy standing still | **Turn Threshold** 0 (the body always faces the view, no turn clips) or **Max Turn Rate** 0 (no cap; the turn clips still play). |
 | Feet slide when the view turns fast on the spot | Lower **Max Turn Rate**; check the turn clips with the Animator's clip analysis. |
 | Body turns too early / too late while standing | **Turn Threshold** (degrees off before it steps round), **Turn Lag Floor**, **Turn End Angle**. |
 | Turn clip keeps replaying | **Turn Min Time**, **Turn Timeout**. |

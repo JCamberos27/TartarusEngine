@@ -37,6 +37,9 @@ inline constexpr const char* kStopX = "StopX";           // Float: the braking d
 inline constexpr const char* kStopY = "StopY";
 inline constexpr const char* kCrouchDown = "CrouchDown"; // Trigger: stand -> crouch while still
 inline constexpr const char* kCrouchUp = "CrouchUp";     // Trigger: crouch -> stand while still
+// Optional: how much faster than authored the gait plays (the Locomotion state's speed parameter), so the
+// feet keep up with a player moving faster than the clips travel (Player Run / Sprint Speed). 1 = authored.
+inline constexpr const char* kPlayRate = "PlayRate";
 
 // States the body watches by name.
 inline constexpr const char* kStateLocomotion = "Locomotion";

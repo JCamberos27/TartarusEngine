@@ -97,14 +97,15 @@ r["position"]["y"] = scale_curve(r["position"]["y"], 2.0)
 r["cameraPitch"] = scale_curve(r["cameraPitch"], 3.0)
 r["cameraYaw"] = scale_curve(r["cameraYaw"], 1.5)
 r.update({
-    "hipScale": 1.2, "adsScale": 0.8,
+    "hipScale": 1.2, "adsScale": 0.95,
+    "cameraScale": 1.5,  # the AK's view punch is 1.8; the 12-gauge's curves are already 3x its
     "kickSpread": 10.0, "kickBias": 3.0, "timeJitter": 0.1, "firstShotScale": 1.0,
     "wander": 0.0, "burstGrowth": 0.0, "burstGrowthMax": 1.0,
     "aimPitch": [0.9, 1.3], "aimYaw": [-0.2, 0.25], "aimRecovery": 0.7,
     "aimRecoveryDelay": 0.18, "aimRecoverySpeed": 6.0,
-    "shakeAmount": 0.55, "shakeMax": [0.6, 0.45, 1.4], "shakeDecay": 3.2,
+    "shakeAmount": 0.7, "shakeMax": [0.6, 0.45, 1.4], "shakeDecay": 3.2,
     "hipProcedural": True, "boltCycle": 0.0, "boltBone": "",
-    "fovPunch": 0.8,
+    "fovPunch": 1.2,
 })
 
 with open(OUT, "w", encoding="utf-8", newline="\n") as f:

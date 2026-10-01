@@ -693,7 +693,7 @@ const WeaponProceduralPose& WeaponProceduralState::Update(const WeaponProcedural
     // Bob: phase-locked to distance travelled, so it never slides against the footsteps.
     const auto& b = s.Bob;
     const float speed = glm::length(glm::vec2(in.Velocity.x, in.Velocity.z));
-    const float ease = std::min(1.0f, dt * std::max(b.Ease, 0.0f));
+    const float ease = 1.0f - std::exp(-dt * std::max(b.Ease, 0.0f));
     m_BobWeight += ((b.Enabled ? std::min(speed / std::max(b.WalkFullSpeed, 0.01f), 1.0f) : 0.0f) - m_BobWeight) * ease;
     m_BobSprint += ((in.Sprinting ? 1.0f : 0.0f) - m_BobSprint) * ease;
     const float stride = std::max(b.WalkStride + (b.SprintStride - b.WalkStride) * m_BobSprint, 0.01f);

@@ -104,8 +104,15 @@ private:
         float TorsoGap = -1.0f, TorsoAlong = 0.0f; // the gun's rear GunLength to the drawn torso, m (and where, m from the butt)
         float HeadTilt = 0.0f, HeadTiltWeight = 0.0f; // the cheek weld: degrees, and its weight
         float HeadBend = 0.0f;                // the world head's bend off the chest line (spine_05 -> neck vs neck -> head), degrees
+        // The camera's smoothness: the most its position accelerated (m/s^2, frame to frame) since the last
+        // printed sample - a hitch in the eye shows as a spike.
+        float EyeAccel = 0.0f;
+        glm::vec3 Eye{0.0f};                  // where the camera is (world, m)
         std::string State;
     } m_Sample;
+    glm::vec3 m_EyePrev[2] = {glm::vec3(0.0f), glm::vec3(0.0f)};
+    int m_EyeFrames = 0;
+    mutable float m_EyeAccelMax = 0.0f;
     int m_Frame = 0;
     float m_LastYaw = 0.0f;
     bool m_HaveYaw = false;

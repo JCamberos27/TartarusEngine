@@ -51,6 +51,12 @@ public:
     // after stepping off an edge still counts (seconds).
     float JumpBufferTime = 0.12f;
     float CoyoteTime = 0.10f;
+    // How quickly the move reaches the input's speed on the ground (speeding up / slowing down) and in
+    // the air: the time constant (seconds) of an exponential approach, so about 2.3x this reaches 90%.
+    // 0 = instantly (the move is the input).
+    float GroundAccelTime = 0.0f;
+    float GroundDecelTime = 0.0f;
+    float AirAccelTime = 0.0f;
     float m_SinceGrounded = 0.0f, m_JumpBuffer = 0.0f;
     float CrouchBlend = 0.0f; // 0 standing .. 1 crouched: eases the eye height
     float YawFreeCenter = 0.0f;
@@ -70,3 +76,8 @@ public:
     // panel and the player hasn't clicked in to take control yet (Esc hands control back).
     void Update(float dt, World& world, struct GLFWwindow* window, bool readInput = true);
 };
+
+// The horizontal move one step closer to the target: an exponential approach with time constant
+// accelTime (speeding up) or decelTime (slowing down or turning away), so it is the same at any frame
+// rate. A time of 0 snaps to the target.
+glm::vec3 PlayerApproachVelocity(const glm::vec3& current, const glm::vec3& target, float dt, float accelTime, float decelTime);

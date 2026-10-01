@@ -451,6 +451,11 @@ struct FirstPersonControllerComponent {
     float JumpSpeed = 5.5f;
     float JumpBufferTime = 0.12f; // a jump pressed this long (seconds) before landing still happens on landing
     float CoyoteTime = 0.10f;     // a jump pressed this long after stepping off an edge still counts
+    // Seconds (time constants) the move takes to reach the input's speed on the ground, to slow down,
+    // and to steer in the air. 0 = instant.
+    float GroundAccelTime = 0.0f;
+    float GroundDecelTime = 0.0f;
+    float AirAccelTime = 0.0f;
     float EyeHeight = 1.6f;
     float CapsuleRadius = 0.3f;
     float CapsuleHeight = 1.8f;
@@ -507,6 +512,11 @@ struct FirstPersonBodyComponent {
     float ParamSmoothing = 0.12f;  // seconds the MoveX / MoveY parameters take to follow the input
     float RunSpeed = 3.26f;        // m/s asked of the blend tree when moving (the jog clips' speed)
     float SprintSpeed = 4.72f;     // ... and while sprinting (the run clip's)
+    // The capsule's own run / sprint speeds when they differ from the clips' (0 = the clips' Run /
+    // Sprint Speed). With Responsiveness up, the gait clips then play faster to keep pace.
+    float PlayerRunSpeed = 0.0f;
+    float PlayerSprintSpeed = 0.0f;
+    float MaxPlayRate = 1.5f;      // the fastest the gait clips play, x authored
     std::string HeadBone = "head";
     // The eyes, from the head bone, in the body's frame (x right, y up, z forward), metres.
     glm::vec3 CameraOffset{0.0f, 0.08f, 0.1f};

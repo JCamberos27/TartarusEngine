@@ -226,6 +226,20 @@ bool EditorLayer::GetSelectionCenter(World& world, glm::vec3& outCenter) const {
     return true;
 }
 
+bool EditorLayer::FrameFirstPersonBody(World& world, Camera& editorCamera) {
+    auto bodies = world.Registry.view<FirstPersonBodyComponent>(entt::exclude<InactiveTag>);
+    if (bodies.begin() == bodies.end()) return false;
+    const glm::mat4 xf = world.ComposeWorldTransform(*bodies.begin());
+    const glm::vec3 feet(xf[3]);
+    glm::vec3 ahead(xf[2].x, 0.0f, xf[2].z); // the body faces its +Z
+    ahead = glm::length(ahead) > 1e-4f ? glm::normalize(ahead) : glm::vec3(0.0f, 0.0f, 1.0f);
+    editorCamera.Position = feet + ahead * 2.6f + glm::vec3(0.0f, 1.45f, 0.0f);
+    const glm::vec3 look = glm::normalize(feet + glm::vec3(0.0f, 1.0f, 0.0f) - editorCamera.Position);
+    editorCamera.Yaw = glm::degrees(std::atan2(look.z, look.x));
+    editorCamera.Pitch = glm::degrees(std::asin(std::clamp(look.y, -1.0f, 1.0f)));
+    return true;
+}
+
 void EditorLayer::FrameSceneBounds(World& world, Camera& editorCamera) {
     glm::vec3 mn, mx;
     if (!ComputeSceneBounds(world, mn, mx)) return;
