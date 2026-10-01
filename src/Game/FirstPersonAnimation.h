@@ -71,6 +71,12 @@ struct FirstPersonWeaponGameplay {
     // between. A round loaded into an empty gun (LoadRound at 0 rounds) is chambered by its clip.
     bool CycleAfterShot = false;
     float CycleDelay = 0.1f;
+    // What a hit on a character costs it (gameplay.damage): Damage health per round (per pellet
+    // for a shotgun), times HeadMultiplier / LimbMultiplier by where it lands, scaled from 1 at
+    // FalloffStart metres down to FalloffMin at FalloffEnd and beyond. See Combat/Damage.h.
+    float Damage = 34.0f;
+    float HeadMultiplier = 3.0f, LimbMultiplier = 0.75f;
+    float FalloffStart = 25.0f, FalloffEnd = 60.0f, FalloffMin = 0.6f;
 };
 
 // Where rounds (and the laser) leave the gun. Auto finds the barrel from the procedural bolt's

@@ -59,7 +59,13 @@ void FirstPersonPresentation::SetError(const std::string& message) {
 
 bool FirstPersonPresentation::Start(World& world, AssetLibrary& assets,
                                     const FirstPersonControllerComponent& config) {
+    return Start(world, assets, config, Options{});
+}
+
+bool FirstPersonPresentation::Start(World& world, AssetLibrary& assets,
+                                    const FirstPersonControllerComponent& config, const Options& options) {
     Stop(world);
+    m_Options = options;
     m_LastError.clear();
     for (const std::string* set : {&config.AnimationSet, &config.SecondaryAnimationSet})
         if (!set->empty()) m_SlotSets.push_back(*set);
@@ -156,8 +162,10 @@ bool FirstPersonPresentation::StartSet(World& world, AssetLibrary& assets, int s
         renderable.ReceiveShadows = e == m_Weapon;
         // Routes them into the renderer's view-model sub-pass (own FOV, depth cleared) rather
         // than the world pass. Runtime-only tag: these entities are created here and destroyed
-        // by Stop(), so it never reaches a scene file.
-        world.Registry.emplace_or_replace<ViewModelTag>(e);
+        // by Stop(), so it never reaches a scene file. Without the owner's view (an NPC's gun) the
+        // weapon is plain world geometry and the arms rig only a pose source for the body's hands.
+        if (m_Options.OwnerView) world.Registry.emplace_or_replace<ViewModelTag>(e);
+        else if (e == m_Arms) world.Registry.emplace_or_replace<PoseSourceTag>(e);
     }
     // .fpsanim material overrides: every submesh whose imported material has the listed name.
     auto applyMaterials = [&](entt::entity e, const std::vector<std::pair<std::string, std::string>>& overrides) {
@@ -808,6 +816,12 @@ bool FirstPersonPresentation::LaserBeam(Laser& out) const {
     return true;
 }
 
+std::vector<FirstPersonPresentation::ShotTrace> FirstPersonPresentation::TakeShotTraces() {
+    std::vector<ShotTrace> t;
+    t.swap(m_ShotTraces);
+    return t;
+}
+
 std::vector<FirstPersonPresentation::ShotHit> FirstPersonPresentation::TakeShotHits() {
     std::vector<ShotHit> hits;
     hits.swap(m_ShotHits);
@@ -1080,9 +1094,11 @@ void FirstPersonPresentation::FireShot() {
     const float spread = HasTag(K::kTagAds) ? g.SpreadAds : g.SpreadHip;
     const int pellets = std::max(1, g.Pellets);
     std::uniform_real_distribution<float> unit(0.0f, 1.0f);
+    glm::vec3 line = m_BoreDir;
+    if (m_HasShotTarget && glm::length(m_ShotTarget - m_Muzzle) > 1e-3f) line = glm::normalize(m_ShotTarget - m_Muzzle);
     for (int p = 0; p < pellets; ++p) {
-        const glm::vec3 dir = pellets > 1 || spread > 0.0f ? FirstPersonPelletDirection(m_BoreDir, spread, unit(m_Rng), unit(m_Rng))
-                                                           : m_BoreDir;
+        const glm::vec3 dir = pellets > 1 || spread > 0.0f ? FirstPersonPelletDirection(line, spread, unit(m_Rng), unit(m_Rng))
+                                                           : line;
         const float o[3] = {m_Muzzle.x, m_Muzzle.y, m_Muzzle.z}, d[3] = {dir.x, dir.y, dir.z};
         RaycastHit hit;
         QueryFilter filter;
@@ -1091,11 +1107,15 @@ void FirstPersonPresentation::FireShot() {
         PhysicsWorld::SetQueryRecording(false);
         const bool struck = PhysicsWorld::RaycastFiltered(o, d, 300.0f, filter, hit) && hit.Hit;
         PhysicsWorld::SetQueryRecording(recording);
+        if (m_ShotTraces.size() < 256)
+            m_ShotTraces.push_back({m_Muzzle, struck ? glm::vec3(hit.Point[0], hit.Point[1], hit.Point[2]) : m_Muzzle + dir * 300.0f,
+                                    struck, p == 0, struck ? hit.Entity : 0xFFFFFFFFu});
         if (!struck) continue;
         // Bounded, in case nothing drains it (no renderer this session).
         if (m_ShotHits.size() < 256)
             m_ShotHits.push_back({glm::vec3(hit.Point[0], hit.Point[1], hit.Point[2]),
-                                  glm::vec3(hit.Normal[0], hit.Normal[1], hit.Normal[2]), hit.Entity, g.BulletHoleRadius});
+                                  glm::vec3(hit.Normal[0], hit.Normal[1], hit.Normal[2]), hit.Entity, g.BulletHoleRadius,
+                                  m_Muzzle, dir, pellets});
         if (g.ImpactImpulse <= 0.0f) continue;
         const auto e = static_cast<entt::entity>(hit.Entity);
         const auto* rb = m_World->Registry.valid(e) ? m_World->Registry.try_get<RigidbodyComponent>(e) : nullptr;
@@ -1107,6 +1127,15 @@ void FirstPersonPresentation::FireShot() {
         const float jv[3] = {j.x, j.y, j.z};
         PhysicsWorld::AddForceAtPosition(hit.Entity, jv, hit.Point, ForceMode::Impulse);
     }
+}
+
+void FirstPersonPresentation::RefillAmmo() {
+    for (int& a : m_SlotAmmo) a = -1; // -1 = a full magazine when the slot is drawn
+    if (!IsActive()) return;
+    m_Ammo = m_Set.Gameplay.Magazine;
+    m_Chambered = true;
+    m_CycleWait = 0.0f;
+    if (auto* ac = Animator()) ac->SetInt(K::kAmmo, m_Ammo);
 }
 
 void FirstPersonPresentation::OnRoundSpent() {
@@ -1217,7 +1246,7 @@ void FirstPersonPresentation::Tick(float dt, const glm::vec3& velocity, bool spr
         SwapToPendingSlot();
         return;
     }
-    ReloadIfChanged(dt);
+    if (m_Options.HotReload) ReloadIfChanged(dt);
     const FirstPersonWeaponGameplay& g = m_Set.Gameplay;
     const float planarSpeed = glm::length(glm::vec2(velocity.x, velocity.z));
     m_FireCooldown = std::max(0.0f, m_FireCooldown - dt);
@@ -1360,7 +1389,7 @@ void FirstPersonPresentation::Update(World& world, Camera& camera) {
         m_FlatForward = glm::length(f) > 1e-5f ? glm::normalize(f) : glm::vec3(0.0f, 0.0f, -1.0f);
         m_FlatRight = glm::normalize(glm::cross(m_FlatForward, glm::vec3(0.0f, 1.0f, 0.0f)));
     }
-    UpdateCornerPeek(camera);
+    if (m_Options.CornerPeek) UpdateCornerPeek(camera);
     // Aim climb: unlike the punch below it stays - the player has to pull it back down.
     {
         const glm::vec2 climb = m_Procedural.Pose().AimKick;
