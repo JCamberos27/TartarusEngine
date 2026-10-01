@@ -138,6 +138,18 @@ bool FirstPersonAnimationSet::FromJsonString(const std::string& text, FirstPerso
             }
         }
         gp.Pellets = std::clamp((int)Number(*g, "pellets", (float)gp.Pellets), 1, 64);
+        if (const auto dm = g->find("damage"); dm != g->end() && dm->is_object()) {
+            auto num = [&](const char* key, float fallback, float lo, float hi) {
+                const float v = Number(*dm, key, fallback);
+                return std::clamp(std::isfinite(v) ? v : fallback, lo, hi);
+            };
+            gp.Damage = num("base", gp.Damage, 0.0f, 10000.0f);
+            gp.HeadMultiplier = num("head", gp.HeadMultiplier, 0.0f, 100.0f);
+            gp.LimbMultiplier = num("limb", gp.LimbMultiplier, 0.0f, 100.0f);
+            gp.FalloffStart = num("falloffStart", gp.FalloffStart, 0.0f, 10000.0f);
+            gp.FalloffEnd = std::max(gp.FalloffStart, num("falloffEnd", gp.FalloffEnd, 0.0f, 10000.0f));
+            gp.FalloffMin = num("falloffMin", gp.FalloffMin, 0.0f, 1.0f);
+        }
         if (const auto sp = g->find("spread"); sp != g->end() && sp->is_object()) {
             gp.SpreadHip = Number(*sp, "hip", gp.SpreadHip);
             gp.SpreadAds = Number(*sp, "ads", gp.SpreadAds);
@@ -363,6 +375,9 @@ std::string FirstPersonAnimationSet::ToJsonString() const {
     }
     if (gp.Reload == FirstPersonWeaponGameplay::ReloadMode::PerRound) j["gameplay"]["reload"] = "perRound";
     if (gp.CycleAfterShot) j["gameplay"]["cycle"] = {{"enabled", true}, {"delay", gp.CycleDelay}};
+    j["gameplay"]["damage"] = {{"base", gp.Damage}, {"head", gp.HeadMultiplier}, {"limb", gp.LimbMultiplier},
+                               {"falloffStart", gp.FalloffStart}, {"falloffEnd", gp.FalloffEnd},
+                               {"falloffMin", gp.FalloffMin}};
     if (gp.HasSightLine)
         j["gameplay"]["sightLine"] = {{"origin", vec3(gp.SightOrigin)}, {"direction", vec3(gp.SightDirection)}};
     j["ads"] = {

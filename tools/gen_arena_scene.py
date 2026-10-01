@@ -211,11 +211,19 @@ crates('Tower South', 18, 7.5, [(0, 0, 0), (0, 0, 1)], trench)
 # Same facing as the Sandbox spawn (yaw 180 looks down -Z, toward the enemy side).
 copy_tree(spawn_id, -1, position=[0.0, 0.1, HALF - 4.0], rotation=quat_euler(yaw=180))
 enemies = group('Enemies')
-for k, x in enumerate([-20, -10, 0, 10, 20]):
+i = nid()
+ents['empties'].append({'id': i, 'name': 'AI Director', 'order': i, 'parentId': enemies, 'position': [0.0, 0.0, -HALF + 2.0],
+                        'rotation': [0, 0, 0, 1], 'scale': [1, 1, 1],
+                        'Squad Settings': {'Squad Size': 4, 'Respawn': True, 'Respawn Delay': 8.0, 'Difficulty': 1.0,
+                                           'NPC Damage Scale': 0.45}})
+# Facing +Z (yaw 0), toward the player's end. Two shotguns among the rifles.
+for k, (x, weapon, skill) in enumerate([(-20, 'AKS-74U', 0.6), (-10, 'Remington 870', 0.55), (0, 'AKS-74U', 0.7),
+                                        (10, 'AKS-74U', 0.6), (20, 'Remington 870', 0.55)]):
     i = nid()
     ents['empties'].append({'id': i, 'name': f'Enemy Spawn {k + 1}', 'order': i, 'parentId': enemies,
                             'position': [float(x), 0.1, -HALF + 5.0], 'rotation': quat_euler(yaw=0),
-                            'scale': [1, 1, 1]})
+                            'scale': [1, 1, 1],
+                            'NPC Spawn': {'Weapon': weapon, 'Squad': 0, 'Skill': skill, 'Outfit Seed': 0, 'Brain': 'Squad AI'}})
 
 for k in ('boxes', 'empties', 'models'):
     scene[k] = ents[k]
