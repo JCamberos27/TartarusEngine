@@ -28,6 +28,7 @@
 #include "FirstPersonAnimation.h"
 #include "FirstPersonAdsCarry.h"
 #include "AudioEngine.h"
+#include "AI/AiMath.h"
 #include "AI/SquadVoice.h"
 #include <set>
 #include "Log.h" // #178 stack traces
@@ -4756,6 +4757,94 @@ void TestAssetPackImport() {
 }
 
 // The squad radio: one speaker per squad, priority preemption, per-event cooldowns, "copy" responders.
+// The enemy AI's pure rules (AiMath): perception, memory, accuracy and the squad's tactics.
+void TestAiMath() {
+    // Perception: nearer, more central, more of the body, moving, and firing all notice faster; out of range or
+    // behind, not at all.
+    {
+        DetectionInput base;
+        const float r = DetectionRate(base);
+        CHECK(r > 0.0f);
+        DetectionInput far = base; far.Distance = 60.0f;
+        DetectionInput side = base; side.AngleDeg = 60.0f;
+        DetectionInput part = base; part.VisiblePoints = 1;
+        DetectionInput crouch = base; crouch.TargetCrouched = true;
+        DetectionInput fire = base; fire.TargetFiring = true; fire.TargetCrouched = true;
+        DetectionInput behind = base; behind.AngleDeg = 120.0f;
+        DetectionInput hidden = base; hidden.VisiblePoints = 0;
+        DetectionInput alert = base; alert.Alertness = 1.0f;
+        CHECK(DetectionRate(far) < r);
+        CHECK(DetectionRate(side) < r);
+        CHECK(DetectionRate(part) < r);
+        CHECK(DetectionRate(crouch) < r);
+        CHECK(DetectionRate(fire) > r);
+        CHECK(DetectionRate(behind) == 0.0f);
+        CHECK(DetectionRate(hidden) == 0.0f);
+        CHECK(DetectionRate(alert) > r);
+    }
+    // Memory: awareness builds to Known once (true on that update only); unseen, an unknown target fades and a known
+    // one's position grows uncertain.
+    {
+        TargetMemory m;
+        const glm::vec3 at(3.0f, 0.0f, 4.0f), vel(1.0f, 0.0f, 0.0f);
+        int became = 0;
+        for (int i = 0; i < 40; ++i) became += UpdateMemory(m, true, at, vel, 1.0f, 0.1f * i, 0.1f) ? 1 : 0;
+        CHECK(m.Known && became == 1);
+        CHECK(glm::length(m.LastKnown - at) < 1e-5f);
+        const float seen = m.LastSeen;
+        UpdateMemory(m, false, at, vel, 0.0f, seen + 1.0f, 1.0f);
+        CHECK(m.Known && !m.Visible && m.Uncertainty > 0.0f);
+        CHECK(glm::length(m.Predicted(seen + 1.0f) - (at + vel)) < 1e-4f);
+        CHECK(glm::length(m.Predicted(seen + 10.0f) - (at + vel * 1.5f)) < 1e-4f); // carried on 1.5 s at most
+        TargetMemory u;
+        UpdateMemory(u, true, at, vel, 2.0f, 0.0f, 0.2f);
+        CHECK(!u.Known && u.Awareness > 0.3f);
+        UpdateMemory(u, false, at, vel, 0.0f, 5.0f, 2.0f);
+        CHECK(u.Awareness < 0.3f);
+    }
+    // Accuracy: settles over time on target, worse at range and suppressed, never above 0.85; reaction time drops
+    // with skill and difficulty.
+    {
+        AccuracyInput a;
+        a.TimeOnTarget = 2.0f;
+        const float settled = HitProbability(a);
+        AccuracyInput fresh = a; fresh.TimeOnTarget = 0.0f;
+        AccuracyInput far = a; far.Distance = 60.0f;
+        AccuracyInput pinned = a; pinned.Suppression = 1.0f;
+        AccuracyInput best = a; best.Skill = 1.0f; best.Difficulty = 2.0f; best.Distance = 2.0f;
+        CHECK(HitProbability(fresh) < settled);
+        CHECK(HitProbability(far) < settled);
+        CHECK(HitProbability(pinned) < settled);
+        CHECK(HitProbability(best) <= 0.85f);
+        CHECK(ReactionTime(1.0f, 1.0f, false, 0.5f) < ReactionTime(0.0f, 1.0f, false, 0.5f));
+        CHECK(ReactionTime(0.5f, 2.0f, false, 0.5f) < ReactionTime(0.5f, 1.0f, false, 0.5f));
+        CHECK(ReactionTime(0.5f, 1.0f, true, 0.5f) > ReactionTime(0.5f, 1.0f, false, 0.5f));
+    }
+    // Tactics.
+    {
+        CHECK(MayBound(false, false, 0.0f));         // unseen: go
+        CHECK(!MayBound(true, false, 0.5f));         // seen, nobody covering: wait
+        CHECK(MayBound(true, true, 0.0f));           // covered: go
+        CHECK(MayBound(true, false, 1.6f));          // waited long enough: go anyway
+        CHECK(WantsBlindFire(0.8f, 2.5f, true, 3.0f));
+        CHECK(!WantsBlindFire(0.3f, 2.5f, true, 3.0f)); // not pinned
+        CHECK(!WantsBlindFire(0.8f, 1.0f, true, 3.0f)); // not for long
+        CHECK(!WantsBlindFire(0.8f, 2.5f, false, 3.0f));
+        CHECK(!WantsBlindFire(0.8f, 2.5f, true, 20.0f)); // no idea where any more
+        CHECK(WantsMelee(1.2f, 10.0f, 5.0f));
+        CHECK(!WantsMelee(3.0f, 10.0f, 5.0f));        // out of reach
+        CHECK(!WantsMelee(1.2f, 90.0f, 5.0f));        // off to the side
+        CHECK(!WantsMelee(1.2f, 10.0f, 0.5f));        // cooling down
+        const glm::vec3 deaths[2] = {glm::vec3(0.0f), glm::vec3(20.0f, 0.0f, 0.0f)};
+        const float times[2] = {10.0f, 10.0f};
+        CHECK(std::abs(DangerScale(glm::vec3(0.0f), deaths, times, 2, 10.0f) - 0.3f) < 1e-4f);
+        CHECK(DangerScale(glm::vec3(2.5f, 0.0f, 0.0f), deaths, times, 2, 10.0f) > 0.3f);
+        CHECK(DangerScale(glm::vec3(10.0f, 0.0f, 0.0f), deaths, times, 2, 10.0f) == 1.0f); // far from both
+        CHECK(DangerScale(glm::vec3(0.0f), deaths, times, 2, 45.0f) == 1.0f);              // long ago
+        CHECK(DangerScale(glm::vec3(0.0f), deaths, times, 0, 10.0f) == 1.0f);
+    }
+}
+
 void TestSquadVoice() {
     namespace fs = std::filesystem;
     const glm::vec3 pos(0.0f);
@@ -4944,6 +5033,7 @@ int RunUnitTests() {
         {"PhysicsWorldSync", TestPhysicsWorldSync},
         {"PhysicalSky", TestPhysicalSky},
         {"SquadVoice", TestSquadVoice},
+        {"AiMath", TestAiMath},
     };
     for (const auto& [name, fn] : tests) {
         g_CurrentTest = name;
