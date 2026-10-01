@@ -117,14 +117,14 @@ bool NpcDirector::Start(World& world, AssetLibrary& assets, const FirstPersonCon
     if (found.empty()) return false;
     std::sort(found.begin(), found.end(), [](const auto& a, const auto& b) { return a.first < b.first; });
     for (const auto& f : found) m_Spawns.push_back(f.second);
-    for (auto e : reg.view<SquadSettingsComponent>()) {
-        const auto& s = reg.get<SquadSettingsComponent>(e);
+    // The first Squad Settings (a loop that only ever takes its first pass is unreachable code to MSVC's C4702).
+    if (auto settings = reg.view<SquadSettingsComponent>(); settings.begin() != settings.end()) {
+        const auto& s = reg.get<SquadSettingsComponent>(*settings.begin());
         m_SquadSize = std::clamp(s.SquadSize, 0, 8);
         m_RespawnDelay = s.RespawnDelay;
         m_Difficulty = s.Difficulty;
         m_DamageScale = s.NpcDamageScale;
         m_Respawn = s.Respawn;
-        break;
     }
     // The soldier's body, read once.
     {
@@ -143,6 +143,21 @@ bool NpcDirector::Start(World& world, AssetLibrary& assets, const FirstPersonCon
     m_ViewConfig->SecondaryAnimationSet.clear();
     m_ViewConfig->GravityGun = false;
     if (m_ViewConfig->CameraBone.empty()) m_ViewConfig->CameraBone = "head";
+    // The soldiers are the player's body holding the player's rigs: they hold them by the player's numbers.
+    m_HoldSettings = NpcHoldSettings{};
+    if (auto bodies = world.Registry.view<FirstPersonBodyComponent>(); bodies.begin() != bodies.end()) {
+        const auto& fpb = bodies.get<FirstPersonBodyComponent>(*bodies.begin());
+        m_HoldSettings.ClavicleFollow = fpb.ClavicleFollow;
+        m_HoldSettings.ShoulderMaxAngle = fpb.ShoulderMaxAngle;
+        m_HoldSettings.ShrugStart = fpb.ShrugStart;
+        m_HoldSettings.ShrugMax = fpb.ShrugMax;
+        m_HoldSettings.ReachLeanMax = fpb.ReachLeanMax;
+        m_HoldSettings.ElbowClearance = fpb.ElbowClearance;
+        m_HoldSettings.ReachSlack = fpb.ReachSlack;
+        m_HoldSettings.ShoulderLineMatch = fpb.ShoulderLineMatch;
+        m_HoldSettings.SpineAim = fpb.SpineAim;
+        m_HoldSettings.SpineAimDown = fpb.SpineAimDown;
+    }
     m_Active = true;
     m_Started = false;
     m_Now = 0.0f;
@@ -253,6 +268,7 @@ int NpcDirector::Spawn(World& world, AssetLibrary& assets, int spawnIndex) {
     n->Feet = feet;
     n->PostPos = feet;
     world.SetWorldPose(root, feet, glm::angleAxis(sp.Yaw, glm::vec3(0, 1, 0)));
+    n->Body.SetHoldSettings(m_HoldSettings);
     if (!n->Body.Start(world, root)) {
         Log::Error("Enemy AI: the soldier's body has no animated skeleton.");
         world.DestroyEntityAndChildren(root);
@@ -696,7 +712,7 @@ void NpcDirector::AimAndFire(World& world, Npc& n, const PlayerSnapshot& p, floa
     if (!n.Intent.Aim) {
         const float chest = n.Body.Yaw();
         YawPitchOf(glm::vec3(std::sin(chest), 0.0f, std::cos(chest)), wantYaw, wantPitch);
-        wantPitch = -32.0f;
+        wantPitch = -26.0f;
     }
     const float omega = 9.0f + 7.0f * n.Skill;
     const float dy = WrapDeg(wantYaw - n.AimYaw), dp = wantPitch - n.AimPitch;
@@ -795,12 +811,16 @@ void NpcDirector::LateUpdate(World& world, float dt, const PlayerSnapshot& p) {
             continue;
         }
         Npc& n = *up;
-        n.Body.LateUpdate(world, dt);
+        const bool armed = n.Weapon && n.Weapon->IsActive();
+        n.WeaponCam.Yaw = n.AimYaw;
+        n.WeaponCam.Pitch = n.AimPitch;
+        n.WeaponCam.Roll = 0.0f;
+        n.Body.LateUpdate(world, dt, armed ? &n.WeaponCam : nullptr);
         n.Eye = n.Body.Eye();
-        if (n.Weapon && n.Weapon->IsActive()) {
-            n.WeaponCam.Position = n.Eye;
-            n.WeaponCam.Yaw = n.AimYaw;
-            n.WeaponCam.Pitch = n.AimPitch;
+        if (armed) {
+            // The weapon's camera hangs off the body's shoulders as the rig's does off its own (the player's
+            // shoulder lock), so the rig's hands come out where this body's arms reach.
+            n.WeaponCam.Position = n.Body.WeaponEye(world, n.Weapon->ArmsEntity(), n.Weapon->CameraBone(), n.WeaponCam, dt);
             // Where this frame's rounds go: on the player (the point it sees best, or the chest) when
             // the roll hits, else a near miss the player hears go by. Suppressing: about where they were.
             if (n.TriggerHeld) {
@@ -842,26 +862,18 @@ void NpcDirector::LateUpdate(World& world, float dt, const PlayerSnapshot& p) {
                 PhysicsWorld::ScopedQueryPolicy policy(Id(n.Root), /*hitPlayer=*/true);
                 n.Weapon->LateUpdate(world, n.WeaponCam);
             }
-            // Shouldered: the whole rig (arms and gun) slides so the stock sits in the body's right shoulder
-            // pocket - the first-person framing holds the gun well out in front of the eye.
+            // The gun seated in the shoulder and clear of the body, the arms onto it, the head onto the stock -
+            // the player's world body's solve. The drawn surfaces are checked near the player (where it shows).
             FirstPersonWorldGunInput gun;
-            glm::vec3 shoulder, muzzleShift(0.0f);
-            if (n.Weapon->WorldGunInput(gun) && gun.Shouldered > 0.01f && n.Body.BoneWorld(world, "upperarm_r", shoulder)) {
-                const glm::vec3 fwd = n.WeaponCam.Front(), right = n.WeaponCam.Right(), camUp = n.WeaponCam.Up();
-                const glm::vec3 pocket = shoulder + right * gun.Pocket.x + camUp * gun.Pocket.y + fwd * gun.Pocket.z;
-                glm::vec3 shift = (pocket - gun.ButtWorld) * gun.Shouldered;
-                const float len = glm::length(shift);
-                const float maxShift = std::max(gun.MaxShift, 0.55f);
-                if (len > maxShift) shift *= maxShift / len;
-                muzzleShift = shift;
-                for (entt::entity e : {n.Weapon->ArmsEntity(), n.Weapon->WeaponEntity()})
-                    if (e != entt::null && world.Registry.valid(e)) world.Registry.get<TransformComponent>(e).Position += shift;
-            }
-            n.Body.ReachHands(world, n.Weapon->ArmsEntity(), 1.0f);
+            const bool haveGun = n.Weapon->WorldGunInput(gun);
+            const bool closeToPlayer = !p.Valid || glm::length(n.Eye - p.Eye) < 40.0f || MeshChecksEverywhere;
+            const glm::vec3 muzzleShift = n.Body.HoldWeapon(world, n.Weapon->ArmsEntity(), n.Weapon->WeaponEntity(), haveGun ? &gun : nullptr,
+                                                            n.WeaponCam, dt, closeToPlayer);
+            n.Eye = n.Body.Eye();
             HandleShots(world, n, p, muzzleShift);
             for (const CasingSpawn& c : n.Weapon->TakeEjections()) if (m_Ejections.size() < 64) m_Ejections.push_back(c);
         } else {
-            n.Body.ReachHands(world, entt::null, 0.0f);
+            n.Body.HoldWeapon(world, entt::null, entt::null, nullptr, n.WeaponCam, dt, false);
         }
     }
     m_LateMs = std::chrono::duration<float, std::milli>(std::chrono::steady_clock::now() - t0).count();
