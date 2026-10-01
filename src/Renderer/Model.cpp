@@ -1388,9 +1388,14 @@ void Model::UpdateAnimation(float dt) {
 }
 
 bool Model::NodeTransform(const std::string& name, glm::mat4& out) const {
-    const auto& nodes = m_D->Nodes;
     const int found = NodeIndex(name);
-    if (found < 0) return false;
+    return found >= 0 && NodeTransformAt(found, out);
+}
+
+bool Model::NodeTransformAt(int found, glm::mat4& out) const {
+    if (found < 0 || found >= (int)m_D->Nodes.size()) return false;
+    if (m_PoseDirty) ResolveAppliedPose();
+    const auto& nodes = m_D->Nodes;
     const size_t idx = (size_t)found;
 
     // Same "is a pose live?" test UploadBoneMatrices uses, plus m_NodeGlobals being populated:
@@ -1438,6 +1443,7 @@ void Model::ResolveNodeGlobal(int node) const {
 }
 
 void Model::EvaluatePose() {
+    m_PoseDirty = m_PaletteDirty = false;
     const auto& nodes = m_D->Nodes;
     m_GlobalValid.clear(); // every global below
     m_NodeGlobals.resize(nodes.size());
@@ -1533,9 +1539,17 @@ void Model::ApplyLocalPose(const std::vector<LocalTRS>& pose) {
     const auto& nodes = m_D->Nodes;
     if (pose.size() != nodes.size()) return;
     m_AppliedPose = pose;
-    m_NodeGlobals.resize(nodes.size());
-    if (m_FinalBoneMatrices.size() < (size_t)MAX_BONES) m_FinalBoneMatrices.assign(MAX_BONES, glm::mat4(1.0f));
     ++m_PoseVersion;
+    m_ExternalPose = true;
+    m_PosePending = false;
+    m_PoseDirty = m_PaletteDirty = true; // the globals and palette follow when read (ResolveAppliedPose / ResolvePalette)
+}
+
+void Model::ResolveAppliedPose() const {
+    m_PoseDirty = false;
+    const auto& nodes = m_D->Nodes;
+    const std::vector<LocalTRS>& pose = m_AppliedPose;
+    m_NodeGlobals.resize(nodes.size());
     const std::vector<unsigned char>& path = SkinPath();
     m_GlobalValid = path; // the rest on demand (ResolveNodeGlobal)
     for (size_t i = 0; i < nodes.size(); ++i) {
@@ -1544,10 +1558,18 @@ void Model::ApplyLocalPose(const std::vector<LocalTRS>& pose) {
         const glm::mat4 local = pose[i].ToMatrix();
         m_NodeGlobals[i] = n.Parent >= 0 ? AffineMul(m_NodeGlobals[n.Parent], local) : local;
         if (i < m_HiddenNodes.size() && m_HiddenNodes[i]) m_NodeGlobals[i] = m_NodeGlobals[i] * kCollapse;
+    }
+}
+
+void Model::ResolvePalette() const {
+    if (m_PoseDirty) ResolveAppliedPose();
+    m_PaletteDirty = false;
+    if (m_FinalBoneMatrices.size() < (size_t)MAX_BONES) m_FinalBoneMatrices.assign(MAX_BONES, glm::mat4(1.0f));
+    const auto& nodes = m_D->Nodes;
+    for (size_t i = 0; i < nodes.size(); ++i) {
+        const AnimNode& n = nodes[i];
         if (n.BoneId >= 0) m_FinalBoneMatrices[n.BoneId] = m_D->GlobalInverseTransform * m_NodeGlobals[i] * n.BoneOffset;
     }
-    m_ExternalPose = true;
-    m_PosePending = false;
 }
 
 void Model::SetHiddenNodes(const std::vector<int>& nodes) {
@@ -1772,6 +1794,7 @@ void Model::UploadBoneMatrices(Shader& shader) const {
         if (g_BoundOffset < 0) BindBoneRange(0, matBytes);
         return;
     }
+    if (m_PaletteDirty) ResolvePalette();
     const bool posed = m_ExternalPose || (m_Anim.Clip >= 0 && m_Anim.Clip < AnimationCount()) || m_FadeDuration > 0.0f;
     const std::vector<glm::mat4>& palette =
         posed && m_FinalBoneMatrices.size() >= (size_t)MAX_BONES ? m_FinalBoneMatrices : m_D->BindPoseBones;

@@ -917,6 +917,44 @@ void ApplyAdditive(Pose& pose, const Pose& layer, const Pose& ref, const std::ve
     }
 }
 
+// Whether every state a layer is in has no motion for `track`: sampled, it gives back the pose it was handed.
+bool LayerIsIdle(const AnimatorController::Layer& L, const AnimatorLayerRuntime& rt, int track) {
+    for (const auto& it : rt.Stack) {
+        if (it.State < 0 || it.State >= (int)L.States.size()) continue;
+        if (!L.States[it.State].MotionFor(track).Empty()) return false;
+    }
+    return true;
+}
+
+// A layer's per-node mask weights for a model, worked out once (names and parents walked, the mask lists searched)
+// and kept: an additive layer asked for it every frame, for every rig.
+const std::vector<float>& CachedLayerMask(const AnimatorController::Layer& L, const Model& model) {
+    struct Key {
+        const AnimatorController::Layer* Layer; const Model* M; int Nodes; std::size_t Lists;
+        bool operator==(const Key& o) const { return Layer == o.Layer && M == o.M && Nodes == o.Nodes && Lists == o.Lists; }
+    };
+    struct KeyHash {
+        std::size_t operator()(const Key& k) const {
+            return std::hash<const void*>()(k.Layer) * 31u ^ std::hash<const void*>()(k.M) * 131u ^ (std::size_t)k.Nodes ^ k.Lists;
+        }
+    };
+    static std::unordered_map<Key, std::vector<float>, KeyHash> s_Masks;
+    // The key carries a hash of the mask lists, so an edited (reloaded) layer at a reused address still misses.
+    std::size_t lists = L.MaskInclude.size() * 7919u + L.MaskExclude.size();
+    for (const auto& s : L.MaskInclude) lists = lists * 1099511628211ull ^ std::hash<std::string>()(s);
+    for (const auto& s : L.MaskExclude) lists = lists * 1099511628211ull ^ (std::hash<std::string>()(s) + 1u);
+    const Key key{&L, &model, model.NodeCount(), lists};
+    auto it = s_Masks.find(key);
+    if (it == s_Masks.end()) {
+        if (s_Masks.size() > 512) s_Masks.clear();
+        std::vector<std::string> names((size_t)model.NodeCount());
+        std::vector<int> parents((size_t)model.NodeCount());
+        for (int i = 0; i < model.NodeCount(); ++i) { names[(size_t)i] = model.NodeName(i); parents[(size_t)i] = model.NodeParent(i); }
+        it = s_Masks.emplace(key, AnimatorMaskWeights(L, names, parents)).first;
+    }
+    return it->second;
+}
+
 // Poses `model` from the component's layers. With `rootNode` >= 0 the base layer's states are
 // sampled in place, and `motion` receives their mixed travel since the last update.
 void PoseModel(const AnimatorController& ctrl, const AnimatorControllerComponent& ac, Model& model,
@@ -930,8 +968,6 @@ void PoseModel(const AnimatorController& ctrl, const AnimatorControllerComponent
     Pose bind, pose, layerPose, refPose, gripPose;
     model.BindLocalPose(bind);
     pose = bind;
-    std::vector<std::string> names;
-    std::vector<int> parents;
     for (int li = 0; li < (int)ctrl.Layers.size() && li < (int)ac.Layers.size(); ++li) {
         const auto& L = ctrl.Layers[li];
         const auto& rt = ac.Layers[li];
@@ -960,12 +996,9 @@ void PoseModel(const AnimatorController& ctrl, const AnimatorControllerComponent
             continue;
         }
         if (L.Weight <= 0.0f) continue;
-        if (names.empty()) {
-            names.resize(model.NodeCount());
-            parents.resize(model.NodeCount());
-            for (int i = 0; i < model.NodeCount(); ++i) { names[i] = model.NodeName(i); parents[i] = model.NodeParent(i); }
-        }
-        const std::vector<float> mask = AnimatorMaskWeights(L, names, parents);
+        // A layer resting in an empty state (the hit reaction between hits) has nothing to add: no sampling at all.
+        if (LayerIsIdle(L, rt, track)) continue;
+        const std::vector<float>& mask = CachedLayerMask(L, model);
         if (L.Mode == AnimatorController::Blending::Override) {
             SampleLayer(L, rt, smp, ac.Params, stateLength, li, pose, false, layerPose);
             for (size_t i = 0; i < pose.size(); ++i) {
@@ -986,6 +1019,59 @@ void PoseModel(const AnimatorController& ctrl, const AnimatorControllerComponent
 
 } // namespace
 
+namespace {
+
+// A follower's pose from its driver's, by node name. The name map is built once per model pair.
+bool CopyDriverPose(const Model& driver, Model& follower) {
+    const auto& src = driver.AppliedLocalPose();
+    if (src.empty() || (int)src.size() != driver.NodeCount()) return false;
+    struct Key {
+        const Model* A; const Model* B; int NA, NB;
+        bool operator==(const Key& o) const { return A == o.A && B == o.B && NA == o.NA && NB == o.NB; }
+    };
+    struct KeyHash {
+        size_t operator()(const Key& k) const {
+            return std::hash<const void*>()(k.A) * 31u ^ std::hash<const void*>()(k.B) ^ (size_t)k.NA * 131u ^ (size_t)k.NB;
+        }
+    };
+    struct Map { std::vector<int> Node; bool Exact = true; };
+    static std::unordered_map<Key, Map, KeyHash> s_Maps;
+    const Key key{&driver, &follower, driver.NodeCount(), follower.NodeCount()};
+    auto it = s_Maps.find(key);
+    if (it == s_Maps.end()) {
+        std::unordered_map<std::string, int> byName;
+        byName.reserve((size_t)driver.NodeCount());
+        for (int i = 0; i < driver.NodeCount(); ++i) byName.emplace(driver.NodeName(i), i);
+        Map map;
+        map.Node.assign((size_t)follower.NodeCount(), -1);
+        for (int i = 0; i < follower.NodeCount(); ++i)
+            if (auto f = byName.find(follower.NodeName(i)); f != byName.end()) map.Node[(size_t)i] = f->second;
+        // A copy is only the same as sampling when the shared bones rest alike: a channel a clip doesn't key
+        // keeps each rig's own rest value. Otherwise this pair samples as before.
+        Pose db, fb;
+        driver.BindLocalPose(db);
+        follower.BindLocalPose(fb);
+        for (size_t i = 0; i < map.Node.size() && map.Exact; ++i) {
+            const int dn = map.Node[i];
+            if (dn < 0 || i >= fb.size() || (size_t)dn >= db.size()) continue;
+            if (glm::length(fb[i].T - db[(size_t)dn].T) > 1e-4f || glm::length(fb[i].S - db[(size_t)dn].S) > 1e-4f ||
+                std::abs(glm::dot(fb[i].R, db[(size_t)dn].R)) < 0.99999f)
+                map.Exact = false;
+        }
+        it = s_Maps.emplace(key, std::move(map)).first;
+    }
+    if (!it->second.Exact) return false;
+    static thread_local Pose s_Pose;
+    follower.BindLocalPose(s_Pose);
+    const std::vector<int>& map = it->second.Node;
+    for (size_t i = 0; i < map.size() && i < s_Pose.size(); ++i)
+        if (map[i] >= 0) s_Pose[i] = src[(size_t)map[i]];
+    follower.ApplyLocalPose(s_Pose);
+    return true;
+}
+
+} // namespace
+
 void UpdateAnimatorControllers(World& world, AssetLibrary& assets, float dt) {
     struct Rig {
         entt::entity E;
@@ -994,12 +1080,23 @@ void UpdateAnimatorControllers(World& world, AssetLibrary& assets, float dt) {
     };
     // Group followers under their drivers: a state's length is the longest of its motions over
     // every rig in the group, so no rig's clip is cut short by a shorter partner's.
-    std::unordered_map<entt::entity, std::vector<Rig>> groups;
-    std::vector<entt::entity> drivers;
+    // (Reused between frames: no allocations once the scene's rigs have been seen.)
+    static std::unordered_map<entt::entity, std::vector<Rig>> groups;
+    static std::vector<entt::entity> drivers;
+    if (groups.size() > 256) groups.clear();
+    for (auto& kv : groups) kv.second.clear();
+    drivers.clear();
     auto view = world.Registry.view<AnimatorControllerComponent, RenderableComponent>();
     for (auto e : view) {
         auto& ac = view.get<AnimatorControllerComponent>(e);
         if (world.Registry.all_of<InactiveTag>(e) && !ac.UpdateWhenInactive) continue;
+        if (ac.SkipUpdate) {
+            // Held this frame (animation LOD): the pose stays, the time is kept for the next update.
+            ac.SkippedTime += dt;
+            ac.RootMotion.DeltaPosition = glm::vec3(0.0f);
+            ac.RootMotion.DeltaYaw = 0.0f;
+            continue;
+        }
         Model* m = view.get<RenderableComponent>(e).ModelRef.get();
         const entt::entity driver =
             ac.Driver != entt::null && world.Registry.valid(ac.Driver) &&
@@ -1054,10 +1151,16 @@ void UpdateAnimatorControllers(World& world, AssetLibrary& assets, float dt) {
             return len;
         };
 
-        AdvanceAnimator(*ctrl, dac, dt, stateLength);
+        const float stepDt = dt + dac.SkippedTime; // plus whatever frames the LOD held
+        dac.SkippedTime = 0.0f;
+        AdvanceAnimator(*ctrl, dac, stepDt, stateLength);
         lengths.resize(ctrl->Layers.size());
         for (size_t li = 0; li < ctrl->Layers.size(); ++li) lengths[li].assign(ctrl->Layers[li].States.size(), -1.0f);
         memo = true;
+        // The driver poses first, so a follower that copies its pose (CopyDriverPose) reads this frame's.
+        std::stable_partition(group.begin(), group.end(), [&](const Rig& r) { return r.AC == &dac; });
+        Model* driverModel = nullptr;
+        const bool driverHasIk = world.Registry.all_of<IKRigComponent>(d);
         for (const Rig& r : group) {
             if (r.AC != &dac) {
                 // Followers mirror the driver's playback exactly; their own params are unused.
@@ -1073,6 +1176,13 @@ void UpdateAnimatorControllers(World& world, AssetLibrary& assets, float dt) {
                 r.AC->FiredEvents = dac.FiredEvents;
             }
             if (!r.M) continue;
+            if (r.AC == &dac) driverModel = r.M;
+            if (r.AC != &dac && r.AC->CopyDriverPose && driverModel && !driverHasIk &&
+                !world.Registry.all_of<IKRigComponent>(r.E) && CopyDriverPose(*driverModel, *r.M)) {
+                r.AC->RootMotion.DeltaPosition = glm::vec3(0.0f);
+                r.AC->RootMotion.DeltaYaw = 0.0f;
+                continue;
+            }
             RootMotionOptions& rmo = r.AC->RootMotion;
             const bool rootMotion = rmo.Mode != (int)RootMotionMode::Off;
             rmo.ResolvedBone = rootMotion ? r.M->FindRootMotionNode(rmo.Bone) : -1;
@@ -1082,7 +1192,8 @@ void UpdateAnimatorControllers(World& world, AssetLibrary& assets, float dt) {
             RootMotionDelta motion;
             PoseModel(*ctrl, *r.AC, *r.M, assets, ctrl->TrackIndex(r.AC->Track), stateLength,
                       world.Registry.try_get<IKRigComponent>(r.E), rmo.ResolvedBone, rms, &motion);
-            ApplyRootMotion(world, r.E, rmo, motion, dt);
+            r.AC->SkippedTime = 0.0f;
+            ApplyRootMotion(world, r.E, rmo, motion, stepDt);
         }
     }
 }
