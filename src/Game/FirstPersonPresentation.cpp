@@ -82,6 +82,8 @@ void FirstPersonPresentation::Stop(World& world) {
     m_PendingSlot = -1;
     m_SlotAssets = nullptr;
     m_Config.reset();
+    m_Ejections.clear();
+    m_EjectedTotal = 0;
 }
 
 bool FirstPersonPresentation::StartSet(World& world, AssetLibrary& assets, int slot, bool holstered) {
@@ -237,6 +239,8 @@ void FirstPersonPresentation::StopSet(World& world) {
     if (m_Weapon != entt::null && world.Registry.valid(m_Weapon)) world.DestroyEntityAndChildren(m_Weapon);
     m_World = nullptr;
     m_PendingShots = 0;
+    m_PendingEjects = 0;
+    m_RootSeenValid = false;
     m_Arms = entt::null;
     m_Weapon = entt::null;
     if (m_WeaponModel) m_WeaponModel->SetHiddenNodes({}); // the model outlives Play
@@ -810,6 +814,42 @@ std::vector<FirstPersonPresentation::ShotHit> FirstPersonPresentation::TakeShotH
     return hits;
 }
 
+std::vector<CasingSpawn> FirstPersonPresentation::TakeEjections() {
+    std::vector<CasingSpawn> out;
+    out.swap(m_Ejections);
+    return out;
+}
+
+void FirstPersonPresentation::Eject() {
+    const FirstPersonEjectSettings& ej = m_Set.Eject;
+    if (!ej.Enabled || ej.Model.empty() || !m_RootSeenValid) return;
+    // From the port as the player sees it, out along the eject direction inside a small cone, at the
+    // player's own speed plus the throw. The case leaves lying down the bore, base first, tumbling end
+    // over end about the axis across the bore and the throw.
+    const glm::mat4& R = m_RootSeen;
+    const glm::vec3 port = glm::vec3(R * glm::vec4(ej.Origin, 1.0f));
+    const glm::vec3 out = glm::normalize(glm::mat3(R) * ej.Direction);
+    const glm::vec3 bore = glm::normalize(glm::mat3(R) * (m_HaveMuzzle ? m_BoreLocal : glm::vec3(0.0f, 0.0f, -1.0f)));
+    std::uniform_real_distribution<float> u(0.0f, 1.0f), s(-1.0f, 1.0f);
+    const glm::vec3 dir = FirstPersonPelletDirection(out, ej.Spread, u(m_Rng), u(m_Rng));
+    CasingSpawn c;
+    c.Model = ej.Model;
+    c.Material = ej.Material;
+    c.Position = port;
+    c.Velocity = m_PlayerVelocity + dir * ej.Speed * (1.0f + ej.SpeedJitter * s(m_Rng));
+    // The mesh's long axis is its local +Y (tools/weapons/extract_casings.py).
+    glm::vec3 across = glm::cross(bore, dir);
+    if (glm::dot(across, across) < 1e-6f) across = glm::vec3(0.0f, 1.0f, 0.0f);
+    const glm::vec3 a = glm::normalize(across);
+    const glm::vec3 y = -bore, x = glm::normalize(glm::cross(y, a)), z = glm::cross(x, y);
+    c.Rotation = glm::quat_cast(glm::mat3(x, y, z));
+    c.AngularVelocity = a * ej.Spin * (0.75f + 0.5f * u(m_Rng)) + glm::vec3(s(m_Rng), s(m_Rng), s(m_Rng)) * ej.Spin * 0.2f;
+    m_Ejections.push_back(c);
+    m_LastEjectPoint = port;
+    m_LastEjectThrow = c.Velocity - m_PlayerVelocity;
+    ++m_EjectedTotal;
+}
+
 void FirstPersonPresentation::WriteIK() {
     if (m_World && m_World->Registry.valid(m_Weapon))
         if (auto* bolt = m_World->Registry.try_get<IKRigComponent>(m_Weapon); bolt && !bolt->Offsets.empty())
@@ -925,6 +965,7 @@ void FirstPersonPresentation::ReloadIfChanged(float dt) {
     m_Set.Ads = fresh.Ads;
     m_Set.Procedural = fresh.Procedural;
     m_Set.Muzzle = fresh.Muzzle;
+    m_Set.Eject = fresh.Eject;
     m_Set.Laser = fresh.Laser;
     if (remuzzle && m_WeaponModel)
         SetupMuzzle(glm::length(m_BoltStroke) >= 1e-5f ? m_WeaponModel->NodeIndex(m_Set.Procedural.Recoil.BoltBone) : -1);
@@ -1168,6 +1209,7 @@ void FirstPersonPresentation::SetEquipped(bool equipped) {
 }
 
 void FirstPersonPresentation::Tick(float dt, const glm::vec3& velocity, bool sprinting, bool aiming, float lean, bool grounded) {
+    m_PlayerVelocity = velocity;
     auto* ac = Animator();
     if (!ac) return;
     // Switching weapons: once the one in hand is put away, the other one's rigs come in.
@@ -1392,6 +1434,8 @@ void FirstPersonPresentation::Update(World& world, Camera& camera) {
             ShotImpact();
             OnRoundSpent();
         }
+        if (ac->EventFired(K::kEventEject) && m_Set.Eject.Enabled && m_Set.Eject.When == FirstPersonEjectSettings::Trigger::Event)
+            ++m_PendingEjects; // the action worked: the spent hull comes out
         if (ac->EventFired(K::kEventRefill)) m_Ammo = m_Set.Gameplay.Magazine;
         if (ac->EventFired(K::kEventLoadRound)) {
             // Into an empty gun the load clip chambers it itself (the empty start works the pump).
@@ -1479,6 +1523,7 @@ void FirstPersonPresentation::LateUpdate(World& world, const Camera& camera) {
     ApplyHidden(world);
     PlaceRigs(world, camera);
     for (; m_PendingShots > 0; --m_PendingShots) FireShot();
+    for (; m_PendingEjects > 0; --m_PendingEjects) Eject();
 }
 
 // Unarmed hides the rigs the way an unticked "active" box does. DeactivatedTag is what keeps
@@ -1644,7 +1689,8 @@ void FirstPersonPresentation::PlaceRigs(World& world, const Camera& camera) {
     m_AimPointValid = false;
     m_AimHit = false;
     glm::mat4 rootPose(1.0f);
-    if (m_HaveMuzzle && m_WeaponModel->NodeTransform(m_Set.WeaponRoot.empty() ? std::string("root") : m_Set.WeaponRoot, rootPose)) {
+    m_RootSeenValid = false;
+    if (m_WeaponModel->NodeTransform(m_Set.WeaponRoot.empty() ? std::string("root") : m_Set.WeaponRoot, rootPose)) {
         const glm::mat4 W = glm::translate(glm::mat4(1.0f), weaponPosition) * glm::mat4_cast(weaponRotation) *
                             glm::scale(glm::mat4(1.0f), glm::vec3(m_Scale)) * rootPose;
         // The gun is drawn at its own FOV (the view-model pass). On screen that is the world
@@ -1659,7 +1705,12 @@ void FirstPersonPresentation::PlaceRigs(World& world, const Camera& camera) {
             const glm::mat4 V = camera.ViewMatrix();
             seen = glm::inverse(V) * glm::scale(glm::mat4(1.0f), glm::vec3(k, k, 1.0f)) * V;
         }
-        const glm::mat4 SW = seen * W;
+        m_RootWorld = W;
+        m_RootSeen = seen * W;
+        m_RootSeenValid = true;
+    }
+    if (m_HaveMuzzle && m_RootSeenValid) {
+        const glm::mat4 W = m_RootWorld, SW = m_RootSeen;
         const glm::vec3 muzzle = glm::vec3(SW * glm::vec4(m_MuzzleLocal, 1.0f));
         const glm::vec3 bore = glm::normalize(glm::mat3(SW) * m_BoreLocal);
         const FirstPersonWeaponGameplay& gp = m_Set.Gameplay;

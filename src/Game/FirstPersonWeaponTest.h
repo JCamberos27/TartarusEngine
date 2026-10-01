@@ -9,6 +9,7 @@
 class Camera;
 class FirstPersonBody;
 class FirstPersonPresentation;
+class ShellCasings;
 class World;
 
 // `--weapon-test`: the Sandbox's weapons played through by script, in the real Play loop (the
@@ -35,6 +36,15 @@ public:
         // Through reload states this step: the left hand in view space (m) and the ADS hand anchor's weight.
         std::vector<glm::vec4> Hand;
         std::vector<glm::vec3> Shell; // ... and the weapon's Shell bone, same frames (view space, m)
+        // Spent cases out of the port this step: the state each left in, and how it was thrown.
+        struct Ejection {
+            std::string State;
+            float Right = 0.0f;     // the throw along the camera's right, as a share of the throw (-1..1)
+            float FromEye = 0.0f;   // the port from the camera, m
+            glm::vec3 Port{0.0f}, Muzzle{0.0f}; // the port and the muzzle, camera frame (right, up, forward), m
+        };
+        std::vector<Ejection> Ejections;
+        int Casings = 0, CasingsAsleep = 0; // on the ground now (ShellCasings)
         std::function<void(bool, const std::string&)> Check;
         Camera* Cam = nullptr;             // the play camera (the script may set its yaw / pitch)
         int LogEvery = 0;                  // stock probe: print a sample every this many frames (0 = off)
@@ -67,6 +77,8 @@ public:
     glm::vec2 Move() const { return m_Ctx.Move; }
     bool Sprint() const { return m_Ctx.Sprint; }
     void OnHit(const glm::vec3& point);
+    // Once per Play frame after the cases have moved: notes this frame's ejections and the pile.
+    void OnCasings(const ShellCasings& casings);
     bool Done() const { return m_Step >= m_Steps.size(); }
     int Failures() const { return m_Failures; }
     int Checks() const { return m_Checks; }
@@ -82,6 +94,7 @@ private:
     Ctx m_Ctx;
     std::function<bool()> m_Held; // full auto: the trigger held down
     int m_Failures = 0, m_Checks = 0;
+    int m_Ejected = 0; // the presentation's EjectedTotal last frame
     std::string m_Shot;
     bool m_Probe = false;
     bool m_ProbeAk = false;     // the probe holds the AKS-74U, not the Remington
