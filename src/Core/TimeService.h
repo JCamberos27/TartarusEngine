@@ -34,6 +34,19 @@ double TimeSinceStartup();
 double UnscaledTimeSinceStartup();
 double RealtimeSinceStartup();
 
+// The display's refresh period (seconds) while frames are synced to it (VSync on); 0 = not synced,
+// the default. Synced, every frame is shown for a whole number of refreshes, but the time measured
+// between BeginFrame calls jitters by milliseconds around that (the driver queues frames, so the
+// CPU waits at different points each frame). Stepping the game by the measured time then moves it
+// unevenly on screen: a stutter at a steady frame rate. So BeginFrame rounds the delta to whole
+// refreshes, carrying the remainder (bled back in slowly, so game time keeps pace with the clock).
+// Call before BeginFrame.
+void SetRefreshPeriod(double seconds);
+
+// One frame of that: `measured` seconds in, the paced delta out; `unpaced` carries the remainder
+// between frames (start it at 0).
+double PaceDelta(double measured, double period, double& unpaced);
+
 // Frames begun since startup.
 std::uint64_t FrameCount();
 
