@@ -131,6 +131,32 @@ void FirstPersonBodyCopyArmShape(const Model& m, const Model& rig, float weight,
     CopyArmShape(m, rig, weight, pose, parents, kNoMap, clavicleWeight);
 }
 
+void FirstPersonBodyArmShapeLinks(const Model& m, const Model& rig, const std::vector<int>& parents,
+                                  std::vector<FirstPersonArmShapeLink>& out) {
+    out.clear();
+    const int count = std::min(m.NodeCount(), (int)parents.size());
+    std::vector<char> under((size_t)count, 0), clavicle((size_t)count, 0);
+    for (const char* name : {FPBody::kBoneClavicle[0], FPBody::kBoneClavicle[1]})
+        if (const int c = m.NodeIndex(name); c >= 0 && c < count) under[(size_t)c] = clavicle[(size_t)c] = 1;
+    for (int i = 0; i < count; ++i) {
+        if (!under[(size_t)i] && parents[(size_t)i] >= 0 && under[(size_t)parents[(size_t)i]]) under[(size_t)i] = 1;
+        if (!under[(size_t)i]) continue;
+        if (const int r = rig.NodeIndex(m.NodeName(i)); r >= 0) out.push_back({i, r, clavicle[(size_t)i] != 0});
+    }
+}
+
+void FirstPersonBodyCopyArmShape(const std::vector<FirstPersonArmShapeLink>& links, const Model& rig, float weight,
+                                 std::vector<LocalTRS>& pose, float clavicleWeight) {
+    const IK::Pose& rigPose = rig.AppliedLocalPose();
+    if ((int)rigPose.size() != rig.NodeCount()) return;
+    const float clavWeight = weight * std::clamp(clavicleWeight, 0.0f, 1.0f);
+    for (const FirstPersonArmShapeLink& l : links) {
+        if (l.Body >= (int)pose.size() || l.Rig >= (int)rigPose.size()) continue;
+        LocalTRS& t = pose[(size_t)l.Body];
+        t.R = glm::normalize(glm::slerp(t.R, rigPose[(size_t)l.Rig].R, l.Clavicle ? clavWeight : weight));
+    }
+}
+
 float FirstPersonBodyYaw(const glm::vec3& front, float fallback) {
     const glm::vec2 flat(front.x, front.z);
     if (glm::dot(flat, flat) < 1e-8f) return fallback;

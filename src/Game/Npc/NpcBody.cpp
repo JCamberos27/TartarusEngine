@@ -102,6 +102,7 @@ bool NpcBody::Start(World& world, entt::entity root) {
         m_DriverParents.resize((size_t)d.NodeCount());
         for (int i = 0; i < d.NodeCount(); ++i) m_DriverParents[(size_t)i] = d.NodeParent(i);
         m_DriverNeck = d.NodeIndex("neck_01");
+        m_DriverNeck2 = d.NodeIndex("neck_02");
         m_DriverHead = d.NodeIndex("head");
         m_DriverSpineCount = 0;
         for (int k = 0; k < 5; ++k)

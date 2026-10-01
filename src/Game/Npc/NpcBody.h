@@ -9,7 +9,8 @@
 #include <string>
 #include <vector>
 
-#include "Animation.h" // LocalTRS
+#include "Animation.h"       // LocalTRS
+#include "FirstPersonBody.h" // FirstPersonArmShapeLink
 
 class Camera;
 class Model;
@@ -77,6 +78,9 @@ public:
 
     void Tick(World& world, const NpcBodyInput& in, float dt);
     void SetHoldSettings(const NpcHoldSettings& s) { m_Set = s; }
+    // The drawn surfaces' lookup tables (shared by every soldier wearing a piece) built now, with the rest of a spawn's
+    // work, rather than on the first close look in the middle of a fight.
+    void WarmHoldTables(const World& world);
     // `weaponCam` (optional): the weapon's camera with this frame's aim (its position is set later, by
     // WeaponEye). Armed, the chest takes the arms rig's stance against it (its shoulder line).
     void LateUpdate(World& world, float dt, const Camera* weaponCam = nullptr);
@@ -150,7 +154,7 @@ private:
     // The head's own look (radians, relative to the chest), sprung, and the cower (eased).
     float m_HeadYaw = 0.0f, m_HeadPitch = 0.0f, m_HeadYawRate = 0.0f, m_HeadPitchRate = 0.0f;
     float m_Cower = 0.0f;
-    int m_DriverNeck = -1, m_DriverHead = -1;
+    int m_DriverNeck = -1, m_DriverNeck2 = -1, m_DriverHead = -1;
     float m_Straighten = 0.0f;   // radians the aiming torso is brought up from the clips' lean (eased)
     NpcBodyInput m_In;
     glm::vec3 m_Eye{0.0f};
@@ -171,10 +175,16 @@ private:
     // Scratch.
     std::vector<glm::mat4> m_Globals;
     std::vector<LocalTRS> m_Pose, m_BindScratch;
-    struct FingerNode { int Node; int Hand; std::string Name; };
-    std::vector<FingerNode> m_FingerList; // the arms rig's finger nodes (HoldWeapon)
+    // What the hold reads every frame, looked up once per rig (by name, they cost a hash each): the rig's finger nodes and
+    // the driver's matching ones, the driver / rig node pairs for the arm shapes, and the driver's arm and chest bones.
+    struct FingerNode { int Node; int Hand; std::string Name; int Driver; };
+    std::vector<FingerNode> m_FingerList;
     const Model* m_FingerRig = nullptr;
     int m_FingerNodes = 0;
+    std::vector<FirstPersonArmShapeLink> m_ArmLinks;
+    struct ArmBones { int Upper[2] = {-1, -1}, Lower[2] = {-1, -1}, Hand[2] = {-1, -1}, Clav[2] = {-1, -1}, Chest = -1; };
+    ArmBones m_DriverArm;
+    std::vector<int> m_PieceParents; // scratch: a piece other than the driver's parents
     enum class Region { Head, Torso };
     struct RegionPoint { glm::vec3 Pos; int Count; std::uint16_t Bone[4]; float Weight[4]; };
     struct RegionSkin { std::vector<int> Bones; std::vector<RegionPoint> Points; };
