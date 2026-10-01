@@ -42,6 +42,16 @@ int NpcBrain::FindCover(NpcDirector& d, Npc& n, CoverGoal goal, const glm::vec3&
         if (o && !o->Dead && o.get() != &n && o->Squad == n.Squad) { centroid += o->Feet; ++count; }
     centroid /= (float)count;
     const glm::vec3 squadDir = FlatDir(threat, centroid);
+    // A pincer: another squadmate already flanking to cover - this one goes round the other side of the threat.
+    glm::vec3 otherFlank(0.0f);
+    bool pincer = false;
+    if (goal == CoverGoal::Flank)
+        for (const auto& o : d.m_Npcs)
+            if (o && !o->Dead && o.get() != &n && o->Squad == n.Squad && o->Doing == Behaviour::Flank && o->Cover >= 0) {
+                otherFlank = FlatDir(threat, cover.Points()[(size_t)o->Cover].Pos);
+                pincer = true;
+                break;
+            }
 
     static thread_local std::vector<int> near;
     cover.Query(n.Feet, goal == CoverGoal::Flank ? 34.0f : 28.0f, near);
@@ -84,6 +94,7 @@ int NpcBrain::FindCover(NpcDirector& d, Npc& n, CoverGoal goal, const glm::vec3&
             const float angle = glm::degrees(std::acos(std::clamp(glm::dot(FlatDir(threat, c.Pos), squadDir), -1.0f, 1.0f)));
             if (angle < 45.0f || dist > current + 4.0f) continue;
             score *= 0.4f + 0.6f * std::clamp((angle - 45.0f) / 45.0f, 0.0f, 1.0f);
+            if (pincer && glm::degrees(std::acos(std::clamp(glm::dot(FlatDir(threat, c.Pos), otherFlank), -1.0f, 1.0f))) < 80.0f) continue;
             break;
         }
         case CoverGoal::Push:
@@ -99,10 +110,12 @@ int NpcBrain::FindCover(NpcDirector& d, Npc& n, CoverGoal goal, const glm::vec3&
     }
     std::sort(cands.begin(), cands.end(), [](const Cand& a, const Cand& b) { return a.Score > b.Score; });
     // The expensive checks on the best few: it really hides from the threat, it can shoot from it, and
-    // it can be walked to without a long detour.
+    // it can be walked to without a long detour. A flank (one every 8 s at most) looks further down the list: the
+    // spots round the side that score best are often in the open from the threat's side.
+    const int maxTests = goal == CoverGoal::Flank ? 16 : 6;
     int tested = 0;
     for (const Cand& cd : cands) {
-        if (++tested > 6) break;
+        if (++tested > maxTests) break;
         const CoverPoint& c = cover.Points()[(size_t)cd.Index];
         const float hideHeight = c.High ? 1.55f : 0.95f;
         if (!CoverSystem::Shielded(c.Pos, hideHeight, threatEye)) continue;
@@ -185,7 +198,10 @@ void NpcBrain::Choose(NpcDirector& d, Npc& n, const PlayerSnapshot& p) {
         // Known but out of its own sight, with no cover to fight from: go and find a line on them.
         if (!m.Visible && ownSince > 3.0f && !inCover && now < n.NoCoverUntil)
             at(Behaviour::Search) = std::max(at(Behaviour::Search), 0.55f);
-        if (n.HasFlankToken && since < 20.0f) at(Behaviour::Flank) = 0.66f + (d.m_PlayerUnseen > 3.0f ? 0.12f : 0.0f);
+        // A flank: more pressing the longer the player holds one spot (a camper gets worked round), or hides from everyone.
+        if (n.HasFlankToken && since < 20.0f)
+            at(Behaviour::Flank) = 0.62f + 0.3f * std::clamp((d.m_PlayerStill - 4.0f) / 6.0f, 0.0f, 1.0f) +
+                                   (d.m_PlayerUnseen > 3.0f ? 0.12f : 0.0f);
         if (n.HasPushToken) at(Behaviour::Push) = 0.82f;
         else if (shotgun && dist > 13.0f && health > 0.5f && since < 12.0f) at(Behaviour::Push) = 0.6f;
         if (health < 0.35f && underFire && !n.Retreated) at(Behaviour::Retreat) = 0.88f;
@@ -223,8 +239,7 @@ void NpcBrain::Enter(NpcDirector& d, Npc& n, int behaviour, const PlayerSnapshot
     const glm::vec3 threat = n.Mem.Known ? n.Mem.Predicted(now) : n.Mem.LastKnown;
     // Leaving a flank or a push hands the token back.
     if (n.Doing == Behaviour::Flank && b != Behaviour::Flank && n.Squad < (int)d.m_Squads.size()) {
-        auto& sq = d.m_Squads[(size_t)n.Squad];
-        if (sq.FlankHolder == n.Index) { sq.FlankHolder = -1; sq.FlankDoneAt = now; }
+        d.m_Squads[(size_t)n.Squad].DropFlank(n.Index, now);
         n.HasFlankToken = false;
     }
     if (n.Doing == Behaviour::Push && b != Behaviour::Push && n.Squad < (int)d.m_Squads.size()) {
@@ -251,9 +266,12 @@ void NpcBrain::Enter(NpcDirector& d, Npc& n, int behaviour, const PlayerSnapshot
     case Behaviour::Flank:
         if (FindCover(d, n, CoverGoal::Flank, threat) < 0) {
             n.Phase = -1;
-            if (n.Squad < (int)d.m_Squads.size()) { d.m_Squads[(size_t)n.Squad].FlankHolder = -1; d.m_Squads[(size_t)n.Squad].FlankDoneAt = now; }
+            if (n.Squad < (int)d.m_Squads.size()) d.m_Squads[(size_t)n.Squad].DropFlank(n.Index, now);
             n.HasFlankToken = false;
+            ++d.m_Tactics.FlankFails;
         } else {
+            ++d.m_Tactics.Flanks;
+            if (n.Squad < (int)d.m_Squads.size() && d.m_Squads[(size_t)n.Squad].PincerHolder == n.Index) ++d.m_Tactics.Pincers;
             const CoverPoint& c = d.m_Cover.Points()[(size_t)n.Cover];
             const glm::vec3 right = glm::normalize(glm::cross(FlatDir(n.Feet, threat), glm::vec3(0, 1, 0)));
             d.Callout(n, glm::dot(c.Pos - n.Feet, right) > 0.0f ? Bark::FlankRight : Bark::FlankLeft);
@@ -494,8 +512,7 @@ void NpcBrain::Run(NpcDirector& d, World& world, Npc& n, const PlayerSnapshot& p
         if (left < arriveDist) {
             // In: fight from here.
             if (n.Doing == Behaviour::Flank && n.Squad < (int)d.m_Squads.size()) {
-                auto& sq = d.m_Squads[(size_t)n.Squad];
-                if (sq.FlankHolder == n.Index) { sq.FlankHolder = -1; sq.FlankDoneAt = now; }
+                d.m_Squads[(size_t)n.Squad].DropFlank(n.Index, now);
                 n.HasFlankToken = false;
             }
             n.Doing = Behaviour::CoverFight;
@@ -613,7 +630,8 @@ void NpcBrain::Run(NpcDirector& d, World& world, Npc& n, const PlayerSnapshot& p
             }
             if (!m.Visible) {
                 const bool suppress = (n.Role == NpcRole::Suppressor || d.m_Squads[(size_t)n.Squad].PushHolder >= 0 ||
-                                       d.m_Squads[(size_t)n.Squad].FlankHolder >= 0 || now < n.CoverFireOrder) &&
+                                       d.m_Squads[(size_t)n.Squad].FlankHolder >= 0 || d.m_Squads[(size_t)n.Squad].PincerHolder >= 0 ||
+                                       now < n.CoverFireOrder) &&
                                       sinceSeen < 6.0f && !shotgun;
                 it.Suppress = suppress;
                 it.Fire = suppress;

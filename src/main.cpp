@@ -2582,6 +2582,7 @@ int main(int argc, char** argv) {
                         playerSnap.Forward = player.Cam.Front();
                         playerSnap.Crouched = player.Crouched;
                         playerSnap.Dead = playerVitals.IsDead();
+                        playerSnap.Health = playerVitals.Health01();
                         playerSnap.Sprinting = glm::length(glm::vec2(player.Velocity.x, player.Velocity.z)) > player.MoveSpeed * 1.1f;
                         if (firstPersonPresentation.IsActive()) {
                             const int ammo = firstPersonPresentation.Ammo(), slot = firstPersonPresentation.Slot();
