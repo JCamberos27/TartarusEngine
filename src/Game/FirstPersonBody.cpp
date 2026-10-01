@@ -171,6 +171,21 @@ bool FirstPersonBodyShouldTurn(float offset, float thresholdDegrees) {
     return thresholdDegrees > 0.0f && std::abs(offset) > glm::radians(thresholdDegrees);
 }
 
+float FirstPersonBodyClipSpeed(float speed, float playerRun, float playerSprint, float clipRun, float clipSprint) {
+    speed = std::max(speed, 0.0f);
+    playerRun = std::max(playerRun, 0.01f);
+    if (speed <= playerRun || playerSprint <= playerRun + 1e-3f) return speed * clipRun / playerRun;
+    return clipRun + (speed - playerRun) * (clipSprint - clipRun) / (playerSprint - playerRun);
+}
+
+float FirstPersonBodyPlayRate(float speed, float clipSpeed, float responsiveness, float maxRate) {
+    if (!(clipSpeed > 0.05f)) return 1.0f; // standing: idle plays as authored
+    const float rate = std::clamp(speed / clipSpeed, 1.0f, std::max(maxRate, 1.0f));
+    // Eased in over the first half metre a second, so setting off doesn't hurry the idle's last moments.
+    const float moving = std::min(clipSpeed / 0.5f, 1.0f);
+    return 1.0f + (rate - 1.0f) * moving * std::clamp(responsiveness, 0.0f, 1.0f);
+}
+
 glm::vec2 FirstPersonBodyLocalMove(const glm::vec3& worldVelocity, float yaw) {
     const glm::quat r = YawRotation(yaw);
     const glm::vec3 v(worldVelocity.x, 0.0f, worldVelocity.z);
@@ -530,11 +545,15 @@ bool FirstPersonBody::Start(World& world, Player& player) {
     if (cfg.WeaponArms) MakeTwins(world);
 
     // The input asks the blend tree for speeds its clips have.
+    // Player Run / Sprint Speed (when set) move the capsule faster than the clips travel; the clips
+    // then play faster to keep pace (Tick's PlayRate).
     m_RunSpeed = std::max(cfg.RunSpeed, 0.01f);
+    m_PlayerRunSpeed = cfg.PlayerRunSpeed > 0.0f ? cfg.PlayerRunSpeed : m_RunSpeed;
+    m_PlayerSprintSpeed = std::max(cfg.PlayerSprintSpeed > 0.0f ? cfg.PlayerSprintSpeed : std::max(cfg.SprintSpeed, 0.01f), 0.01f);
     m_CrouchHeight = cfg.CrouchHeight;
     m_CrouchSpeed = cfg.CrouchSpeed;
-    player.MoveSpeed = m_RunSpeed;
-    player.SprintMultiplier = std::max(cfg.SprintSpeed, 0.01f) / m_RunSpeed;
+    player.MoveSpeed = m_PlayerRunSpeed;
+    player.SprintMultiplier = m_PlayerSprintSpeed / m_PlayerRunSpeed;
 
     Log::Info("First Person Body: '" + (reg.all_of<NameComponent>(body) ? reg.get<NameComponent>(body).Name : std::string("body")) +
               "' is the player's body - " + std::to_string(pieces.size()) + " pieces, " + std::to_string(shadowOnly) +
@@ -734,8 +753,26 @@ void FirstPersonBody::Tick(World& world, const Player& player, const Camera& cam
     world.SetWorldPose(m_Body, m_Feet, YawRotation(m_Yaw));
     auto fireTrigger = [&](AnimatorControllerComponent& a, const char* name) { a.SetTrigger(name); m_LastTrigger = name; m_SinceTrigger = 0.0f; };
 
-    // The movement, in the body's frame, eased so the gait changes smoothly.
-    const glm::vec2 target = FirstPersonBodyLocalMove(player.WishVelocity, m_Yaw);
+    // The movement, in the body's frame, eased so the gait changes smoothly - as the blend tree's
+    // speeds (a player faster than the clips asks for the clip that matches its gait). Toward
+    // Responsiveness 1 it is how the capsule really moves (its acceleration, a wall stopping it)
+    // rather than what the input asks.
+    const float responsiveness = std::clamp(cfg.Responsiveness, 0.0f, 1.0f);
+    const float clipSprint = std::max(cfg.SprintSpeed, 0.01f);
+    auto asClip = [&](const glm::vec3& v) {
+        const glm::vec2 local = FirstPersonBodyLocalMove(v, m_Yaw);
+        const float s = glm::length(local);
+        return s > 1e-4f ? local * (FirstPersonBodyClipSpeed(s, m_PlayerRunSpeed, m_PlayerSprintSpeed, m_RunSpeed, clipSprint) / s)
+                         : glm::vec2(0.0f);
+    };
+    const glm::vec3 moving(player.Velocity.x, 0.0f, player.Velocity.z);
+    const glm::vec2 target = responsiveness > 0.0f ? glm::mix(asClip(player.WishVelocity), asClip(moving), responsiveness)
+                                                   : asClip(player.WishVelocity);
+    // The gait clips play faster when the player outruns them, so the feet keep up.
+    const float movingSpeed = glm::length(moving);
+    const float playRate = FirstPersonBodyPlayRate(
+        movingSpeed, FirstPersonBodyClipSpeed(movingSpeed, m_PlayerRunSpeed, m_PlayerSprintSpeed, m_RunSpeed, clipSprint), responsiveness,
+        cfg.MaxPlayRate);
     // Letting go at speed, the gait holds for the moment a stop clip is being picked (the blend would
     // otherwise slow the body on its own first, and the stop clip's own travel come on top of it).
     const bool holdForStop = cfg.StartStopClips && glm::length(target) < 0.01f && m_IdleTime < cfg.StopDebounce &&
@@ -747,6 +784,7 @@ void FirstPersonBody::Tick(World& world, const Player& player, const Camera& cam
 
     if (!reg.valid(m_Driver)) { m_Body = entt::null; return; }
     auto& ac = reg.get<AnimatorControllerComponent>(m_Driver);
+    ac.SetFloat(FPBody::kPlayRate, playRate);
 
     // The heading. Moving, the body faces the view (a quick ease, no pop). Standing still with a
     // Turn Threshold, it keeps its heading until the view is that far off, then a turn clip carries
@@ -834,7 +872,7 @@ void FirstPersonBody::Tick(World& world, const Player& player, const Camera& cam
                 fireTrigger(ac, FPBody::kStart);
             }
             m_LastDir = dir;
-            m_LastSprint = glm::length(glm::vec2(player.WishVelocity.x, player.WishVelocity.z)) > m_RunSpeed * 1.05f;
+            m_LastSprint = glm::length(glm::vec2(player.WishVelocity.x, player.WishVelocity.z)) > m_PlayerRunSpeed * 1.05f;
             m_IdleTime = 0.0f;
             m_MoveTime += dt;
         } else {
@@ -855,7 +893,7 @@ void FirstPersonBody::Tick(World& world, const Player& player, const Camera& cam
     ac.SetFloat(FPBody::kMoveX, m_Move.x);
     ac.SetFloat(FPBody::kMoveY, m_Move.y);
     ac.SetFloat(FPBody::kSpeed, glm::length(m_Move));
-    ac.SetBool(FPBody::kSprint, glm::length(glm::vec2(player.WishVelocity.x, player.WishVelocity.z)) > m_RunSpeed * 1.05f);
+    ac.SetBool(FPBody::kSprint, glm::length(glm::vec2(player.WishVelocity.x, player.WishVelocity.z)) > m_PlayerRunSpeed * 1.05f);
     ac.SetBool(FPBody::kGrounded, player.Grounded);
     ac.SetBool(FPBody::kCrouched, player.Crouched);
     // Off the ground for a moment (not a step down a stair): falling.

@@ -61,7 +61,7 @@ void Player::Update(float dt, World& world, GLFWwindow* window, bool readInput) 
             Crouched = false;
         }
     }
-    CrouchBlend += ((Crouched ? 1.0f : 0.0f) - CrouchBlend) * std::min(1.0f, dt * 10.0f);
+    CrouchBlend += ((Crouched ? 1.0f : 0.0f) - CrouchBlend) * (1.0f - std::exp(-dt * 10.0f));
     // The eye follows the capsule down (a body's head bone overrides it; without one this is it).
     const float eye = EyeHeight * (1.0f - CrouchBlend * (1.0f - std::clamp(CrouchHeight / std::max(0.1f, Size.y), 0.0f, 1.0f)) * (CrouchHeight > 0.0f ? 1.0f : 0.0f));
 
@@ -71,7 +71,11 @@ void Player::Update(float dt, World& world, GLFWwindow* window, bool readInput) 
     WishVelocity = wish;
     // Root motion (a first-person body) takes over the horizontal move by its weight.
     const float rm = std::clamp(RootMotionWeight, 0.0f, 1.0f);
-    const glm::vec3 horizontal = wish + (glm::vec3(RootMotionVelocity.x, 0.0f, RootMotionVelocity.z) - wish) * rm;
+    const glm::vec3 target = wish + (glm::vec3(RootMotionVelocity.x, 0.0f, RootMotionVelocity.z) - wish) * rm;
+    const bool smoothed = GroundAccelTime > 0.0f || GroundDecelTime > 0.0f || AirAccelTime > 0.0f;
+    const glm::vec3 horizontal = PlayerApproachVelocity(glm::vec3(Velocity.x, 0.0f, Velocity.z), target, dt,
+                                                        Grounded ? GroundAccelTime : AirAccelTime,
+                                                        Grounded ? GroundDecelTime : AirAccelTime);
     Velocity.x = horizontal.x;
     Velocity.z = horizontal.z;
 
@@ -117,7 +121,22 @@ void Player::Update(float dt, World& world, GLFWwindow* window, bool readInput) 
 
     const glm::vec3 disp = Velocity * dt;
     const float d[3] = {disp.x, disp.y, disp.z};
+    float moveFrom[3] = {0.0f, 0.0f, 0.0f};
+    PhysicsWorld::GetCharacterFootPosition(moveFrom);
     unsigned flags = PhysicsWorld::MoveCharacter(d, dt);
+    // With acceleration on, the move carries over from frame to frame: running into a wall must not
+    // bank the speed the wall took away (letting go would then coast from full speed). Keep only what
+    // the capsule really travelled, sideways along the wall included.
+    if (smoothed && dt > 0.0f) {
+        float moveTo[3];
+        PhysicsWorld::GetCharacterFootPosition(moveTo);
+        const glm::vec2 travelled((moveTo[0] - moveFrom[0]) / dt, (moveTo[2] - moveFrom[2]) / dt);
+        const float asked = glm::length(glm::vec2(Velocity.x, Velocity.z)), got = glm::length(travelled);
+        if (got < asked) {
+            Velocity.x = travelled.x;
+            Velocity.z = travelled.y;
+        }
+    }
 
     Grounded = (flags & PhysicsWorld::CC_DOWN) != 0;
     // Walking down a small step or stair: the capsule would step off the edge and fall a few
@@ -152,4 +171,13 @@ void Player::Update(float dt, World& world, GLFWwindow* window, bool readInput) 
         Cam.Position = resetFeet + glm::vec3(0, eye, 0);
         Velocity = glm::vec3(0.0f);
     }
+}
+
+glm::vec3 PlayerApproachVelocity(const glm::vec3& current, const glm::vec3& target, float dt, float accelTime, float decelTime) {
+    // Speeding up toward the target uses the acceleration time; slowing down (letting go, or turning
+    // to a slower move) the deceleration time.
+    const float t = glm::length(target) >= glm::length(current) ? accelTime : decelTime;
+    if (!(t > 0.0f) || !(dt > 0.0f)) return target;
+    const glm::vec3 next = current + (target - current) * (1.0f - std::exp(-dt / t));
+    return glm::length(target - next) < 0.01f ? target : next; // arrive, rather than creep for ever
 }

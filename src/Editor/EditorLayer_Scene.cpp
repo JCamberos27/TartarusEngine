@@ -357,6 +357,13 @@ void EditorLayer::RequestOpenScene(World& world, AssetLibrary& assets, const std
         return;
     }
     OpenScene(world, assets, path);
+    FrameOpenedScene(world, path);
+}
+
+// A scene the user opened (not a revert of the one already open) starts looking at its player's body.
+void EditorLayer::FrameOpenedScene(World& world, const std::string& path) {
+    if (!m_EditorCameraPtr || m_CurrentScenePath != path) return; // the open failed or was refused
+    if (FrameFirstPersonBody(world, *m_EditorCameraPtr)) m_ViewTransition.Active = false;
 }
 
 void EditorLayer::RequestRevertScene(World& world, AssetLibrary& assets) {
@@ -415,7 +422,10 @@ void EditorLayer::DrawSceneSwitchPrompt(World& world, AssetLibrary& assets) {
 
         auto runPendingSwitch = [&]() {
             if (m_PendingSceneSwitch == PendingSceneSwitch::New) NewScene(world, assets);
-            else if (m_PendingSceneSwitch == PendingSceneSwitch::Open) OpenScene(world, assets, m_PendingScenePath);
+            else if (m_PendingSceneSwitch == PendingSceneSwitch::Open) {
+                OpenScene(world, assets, m_PendingScenePath);
+                FrameOpenedScene(world, m_PendingScenePath);
+            }
             m_PendingSceneSwitch = PendingSceneSwitch::None;
             m_PendingScenePath.clear();
         };

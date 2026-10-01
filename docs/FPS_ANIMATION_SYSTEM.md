@@ -549,8 +549,9 @@ Step-by-step setup, the controller contract and tuning: `BODY_SETUP.md`.
    motion (`Player::RootMotionVelocity`, weighted `1 - Responsiveness`; none while airborne).
 2. `Player::Update` looks and sweeps the capsule with the blend of root motion and input.
 3. `Tick` stands the body at the capsule's feet facing the camera's yaw and sets the controller's
-   `MoveX` / `MoveY` (the input in the body's frame, m/s, smoothed), `Speed`, `Sprint`,
-   `Grounded`, `Airborne` (off the ground > 0.15 s) and `Jump`.
+   `MoveX` / `MoveY` (the input in the body's frame, m/s, smoothed; toward Responsiveness 1 the
+   capsule's real move), `Speed`, `Sprint`, `Grounded`, `Airborne` (off the ground > 0.15 s), `Jump`
+   and `PlayRate`.
 4. The animators run: the driver's root motion is **In Place** (stripped from the pose, reported).
 5. `LateUpdate` takes the reported travel for the next move and puts the camera in the head: the
    head bone plus **Camera Offset**, **Head Bob** of its motion, smoothed in the body's frame.
@@ -558,7 +559,10 @@ Step-by-step setup, the controller contract and tuning: `BODY_SETUP.md`.
 **The controller.** A 2D blend tree of idle plus walk and jog in eight directions and run forward,
 each child at its clip's measured velocity (walk forward 1.53 m/s, jog forward 3.26, jog right
 2.95, jog backward 2.26, run 4.72), plus Jump / Fall / Land. The Player's move speeds become
-**Run Speed** / **Sprint Speed** so the input asks for what the clips have.
+**Run Speed** / **Sprint Speed** so the input asks for what the clips have - or **Player Run / Sprint
+Speed** when set (the Sandbox: 4.5 / 6.8 m/s, Responsiveness 1). Then the capsule's real velocity is
+remapped onto the clips' speeds for `MoveX` / `MoveY`, and the Locomotion state plays at `PlayRate`
+(capsule speed / clip speed, up to Max Play Rate) so the feet keep pace.
 
 **Weapon arms, turning, crouch and feet.** The body has arms (the `ArmsPiece`, an arms-only Quantum piece). It copies the
 arms rig's arm shapes and solves its hands to the rig's hands (`FirstPersonBody::ArmsLateUpdate`),
