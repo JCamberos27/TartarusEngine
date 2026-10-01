@@ -237,7 +237,9 @@ private:
     float m_AirTime = 0.0f;
     std::string m_LastTrigger;     // the last start / stop / crouch / jump trigger fired (for the debug readout)
     float m_SinceTrigger = 1000.0f;
-    float m_RunSpeed = 0.0f;
+    float m_RunSpeed = 0.0f;       // the blend tree's (the clips') run speed
+    float m_PlayerRunSpeed = 0.0f; // the capsule's run / sprint speeds (Player Run / Sprint Speed, else the clips')
+    float m_PlayerSprintSpeed = 0.0f;
     float m_Responsiveness = 0.0f; // the component's, from the last Tick
 };
 
@@ -252,6 +254,12 @@ float FirstPersonBodyWrapAngle(float radians);
 bool FirstPersonBodyShouldTurn(float offset, float thresholdDegrees);
 // A world velocity in the frame of a body at heading `yaw`: x = to its right, y = forward.
 glm::vec2 FirstPersonBodyLocalMove(const glm::vec3& worldVelocity, float yaw);
+// A player speed (m/s) as the blend tree's: 0..playerRun maps onto 0..clipRun (the jog clips' speed),
+// playerRun..playerSprint onto clipRun..clipSprint (the run clip's), beyond scaled on as sprint.
+float FirstPersonBodyClipSpeed(float speed, float playerRun, float playerSprint, float clipRun, float clipSprint);
+// How much faster than authored the gait clips play so their feet keep up with the capsule:
+// speed over its clip speed, within [1, maxRate], and none of it at responsiveness 0 (root motion).
+float FirstPersonBodyPlayRate(float speed, float clipSpeed, float responsiveness, float maxRate);
 // The eye in model space: the head's standing position, plus `bob` of the head's motion away
 // from it, plus `offset` given in the body's frame (x right, y up, z forward).
 // How far the pelvis moves (metres, + up) to put the feet on ground `offL` / `offR` above the

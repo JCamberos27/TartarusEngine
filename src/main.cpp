@@ -1280,17 +1280,7 @@ int main(int argc, char** argv) {
         // A scene with a First Person Body opens looking at it from the front, a couple of metres off,
         // so its outfit is in view from the start. The interactive editor only: the smoke test goes on to
         // load its own scenes through this camera, and aimed at the startup scene's player it saw nothing.
-        if (auto bodies = world.Registry.view<FirstPersonBodyComponent>(entt::exclude<InactiveTag>);
-            !headless && bodies.begin() != bodies.end()) {
-            const glm::mat4 xf = world.ComposeWorldTransform(*bodies.begin());
-            const glm::vec3 feet(xf[3]);
-            glm::vec3 ahead(xf[2].x, 0.0f, xf[2].z); // the body faces its +Z
-            ahead = glm::length(ahead) > 1e-4f ? glm::normalize(ahead) : glm::vec3(0.0f, 0.0f, 1.0f);
-            editorCamera.Position = feet + ahead * 2.6f + glm::vec3(0.0f, 1.45f, 0.0f);
-            const glm::vec3 look = glm::normalize(feet + glm::vec3(0.0f, 1.0f, 0.0f) - editorCamera.Position);
-            editorCamera.Yaw = glm::degrees(std::atan2(look.z, look.x));
-            editorCamera.Pitch = glm::degrees(std::asin(std::clamp(look.y, -1.0f, 1.0f)));
-        }
+        if (!headless) EditorLayer::FrameFirstPersonBody(world, editorCamera);
         editorCamera.Fov = EditorSettings::Get().SceneCameraFov; // #236 R2 — persisted editor camera
         editorCamera.NearPlane = EditorSettings::Get().SceneCameraNear;
         editorCamera.FarPlane = EditorSettings::Get().SceneCameraFar;
@@ -1371,6 +1361,9 @@ int main(int argc, char** argv) {
                 player.JumpSpeed = fp.JumpSpeed;
                 player.JumpBufferTime = fp.JumpBufferTime;
                 player.CoyoteTime = fp.CoyoteTime;
+                player.GroundAccelTime = fp.GroundAccelTime;
+                player.GroundDecelTime = fp.GroundDecelTime;
+                player.AirAccelTime = fp.AirAccelTime;
                 player.EyeHeight = fp.EyeHeight;
                 player.Size = glm::vec3(fp.CapsuleRadius * 2.0f, std::max(fp.CapsuleHeight, fp.CapsuleRadius * 2.0f + 0.1f),
                                         fp.CapsuleRadius * 2.0f);
@@ -1389,6 +1382,12 @@ int main(int argc, char** argv) {
                 player.RespawnFeet = glm::vec3(spawn[3]);
                 player.Cam.Position = player.RespawnFeet + glm::vec3(0.0f, player.EyeHeight, 0.0f);
                 YawPitchFromWorld(spawn, player.Cam.Yaw, player.Cam.Pitch);
+                // --stock-probe runs, strafes and turns for metres at a time: it starts on open ground (the
+                // Sandbox's shooting range lane), wherever the scene's spawn is, so runs stay comparable.
+                if (stockProbeMode) {
+                    player.RespawnFeet = glm::vec3(45.0f, 0.1f, -2.5f);
+                    player.Cam.Position = player.RespawnFeet + glm::vec3(0.0f, player.EyeHeight, 0.0f);
+                }
                 // FPS presentation is opt-in on the controller (its Animation Set). With the
                 // gravity gun also on, that becomes the unarmed slot - see gravityGunLive.
                 firstPersonPresentation.Start(world, assets, fp);

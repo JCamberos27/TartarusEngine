@@ -23,6 +23,7 @@ struct StateDef {
     const char* ParamX;               // blend tree parameters
     const char* ParamY;               // null = 1D
     std::vector<Child> Children;
+    const char* SpeedParam = nullptr; // a Float parameter multiplying Speed
 };
 struct TransitionDef {
     const char* From;
@@ -36,7 +37,7 @@ struct TransitionDef {
 
 const std::vector<StateDef>& StateDefs() {
     static const std::vector<StateDef> s = {
-        {"Locomotion", true, 1.0f, 0.0f, 0.0f, {"Locomotion"}, nullptr, "MoveX", "MoveY", {{"Stand_Idle_01", 0.0f, 0.0f}, {"Loco_Walk_Fwd", 0.0f, 1.53f}, {"Loco_Walk_Fwd_Left", -1.082f, 1.082f}, {"Loco_Walk_Fwd_Right", 1.082f, 1.082f}, {"Loco_Walk_Left", -1.346f, 0.0f}, {"Loco_Walk_Right", 1.586f, 0.0f}, {"Loco_Walk_Bwd", 0.0f, -1.195f}, {"Loco_Walk_Bwd_Left", -0.845f, -0.845f}, {"Loco_Walk_Bwd_Right", 0.845f, -0.845f}, {"Loco_Jog_Fwd", 0.0f, 3.264f}, {"Loco_Jog_Fwd_Left", -2.308f, 2.308f}, {"Loco_Jog_Fwd_Right", 2.308f, 2.308f}, {"Loco_Jog_Left", -2.3f, 0.0f}, {"Loco_Jog_Right", 2.945f, 0.0f}, {"Loco_Jog_Bwd", 0.0f, -2.261f}, {"Loco_Jog_Bwd_Left", -1.599f, -1.599f}, {"Loco_Jog_Bwd_Right", 1.599f, -1.599f}, {"Loco_Run_Fwd", 0.0f, 4.736f}}},
+        {"Locomotion", true, 1.0f, 0.0f, 0.0f, {"Locomotion"}, nullptr, "MoveX", "MoveY", {{"Stand_Idle_01", 0.0f, 0.0f}, {"Loco_Walk_Fwd", 0.0f, 1.53f}, {"Loco_Walk_Fwd_Left", -1.082f, 1.082f}, {"Loco_Walk_Fwd_Right", 1.082f, 1.082f}, {"Loco_Walk_Left", -1.346f, 0.0f}, {"Loco_Walk_Right", 1.586f, 0.0f}, {"Loco_Walk_Bwd", 0.0f, -1.195f}, {"Loco_Walk_Bwd_Left", -0.845f, -0.845f}, {"Loco_Walk_Bwd_Right", 0.845f, -0.845f}, {"Loco_Jog_Fwd", 0.0f, 3.264f}, {"Loco_Jog_Fwd_Left", -2.308f, 2.308f}, {"Loco_Jog_Fwd_Right", 2.308f, 2.308f}, {"Loco_Jog_Left", -2.3f, 0.0f}, {"Loco_Jog_Right", 2.945f, 0.0f}, {"Loco_Jog_Bwd", 0.0f, -2.261f}, {"Loco_Jog_Bwd_Left", -1.599f, -1.599f}, {"Loco_Jog_Bwd_Right", 1.599f, -1.599f}, {"Loco_Run_Fwd", 0.0f, 4.736f}}, "PlayRate"},
         {"Jump", false, 1.0f, 260.0f, -140.0f, {"Airborne"}, "Jump", nullptr, nullptr, {}},
         {"Fall", true, 1.0f, 520.0f, -140.0f, {"Airborne"}, "Jump_Fall_Loop", nullptr, nullptr, {}},
         {"Land", false, 1.4f, 260.0f, 140.0f, {}, "Jump_Land_Recovery", nullptr, nullptr, {}},
@@ -149,6 +150,7 @@ AnimatorController BuildLocomotionController(const std::function<std::string(con
         {"Crouched", AC::ParamType::Bool, 0.0f},
         {"CrouchDown", AC::ParamType::Trigger, 0.0f},
         {"CrouchUp", AC::ParamType::Trigger, 0.0f},
+        {"PlayRate", AC::ParamType::Float, 1.0f},
     };
     AC::Layer& L = c.Layers[0];
     L.Name = "Base Layer";
@@ -162,6 +164,7 @@ AnimatorController BuildLocomotionController(const std::function<std::string(con
         s.Name = d.Name;
         s.Loop = d.Loop;
         s.Speed = d.Speed;
+        if (d.SpeedParam) s.SpeedParam = d.SpeedParam;
         s.Position = {d.PosX, d.PosY};
         for (const char* t : d.Tags) s.Tags.push_back(t);
         s.Motions.resize(1);
