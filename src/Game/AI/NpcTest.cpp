@@ -2,6 +2,7 @@
 
 #include "Combat/CombatFx.h"
 #include "Combat/PlayerVitals.h"
+#include "FirstPersonBody.h"
 #include "FirstPersonPresentation.h"
 #include "GameModuleAPI.h"
 #include "NpcDirector.h"
@@ -22,6 +23,7 @@ static const char* EnvVar(const char* n) {
 NpcTest::NpcTest(const std::string& scenario) : m_Scenario(scenario.empty() ? "watch" : scenario) {
     if (m_Scenario == "fight") m_Duration = 75.0f;
     if (m_Scenario == "die") m_Duration = 60.0f;
+    if (m_Scenario == "pose") m_Duration = 2.5f + 13 * 2.4f + 1.0f;
     if (const char* t = EnvVar("NPC_TEST_SECONDS")) m_Duration = std::max(5.0f, (float)std::atof(t));
     if (const char* r = EnvVar("NPC_TEST_RECORD")) m_RecordDir = r;
     std::cout << "[NpcTest] scenario '" << m_Scenario << "', " << m_Duration << " s" << std::endl;
@@ -103,6 +105,21 @@ void NpcTest::After(World& world, NpcDirector& npcs, const PlayerVitals& vitals,
     const float now = npcs.Now();
     m_Time = now;
     m_Shot.clear();
+    if (m_Scenario == "pose") {
+        Pose(world, npcs, now);
+        if (now >= m_Duration && !m_Done) {
+            m_Done = true;
+            std::printf("[NpcTest] worst: gun-head %.1f cm (%s), gun-torso unshouldered %.1f cm (%s), elbow %.1f cm (%s), hand off %.1f cm (%s)\n",
+                        m_WorstHead * 100.0f, m_WorstHeadAt.c_str(), m_WorstTorso * 100.0f, m_WorstTorsoAt.c_str(), m_WorstElbow * 100.0f,
+                        m_WorstElbowAt.c_str(), m_WorstHand * 100.0f, m_WorstHandAt.c_str());
+            Check(!m_Probe[0].empty() && !m_Probe[1].empty(), "an AK and a Remington soldier to probe");
+            Check(m_PosePhase >= 13, "every pose ran");
+            Check(m_WorstHead >= 0.02f, "the gun stays 2 cm off the head, neck and hood");
+            Check(m_WorstElbow >= 0.0f, "the elbows stay out of the torso");
+            Check(m_WorstHand <= 0.03f, "the hands stay on the gun (within 3 cm)");
+        }
+        return;
+    }
     int alive = 0;
     bool nan = false;
     for (const auto& up : npcs.Npcs()) {
@@ -254,6 +271,155 @@ void NpcTest::After(World& world, NpcDirector& npcs, const PlayerVitals& vitals,
         if (m_Scenario == "die") {
             Check(m_PlayerDied, "the player was killed");
             Check(m_PlayerRespawned, "the player respawned");
+        }
+    }
+}
+
+// --- pose: the weapon hold, close up ------------------------------------------------------------------
+namespace {
+struct PosePhase {
+    const char* Name;
+    bool Aim;
+    float Ahead, Side, Up;   // the aim point off the soldier's chest, in its home frame (m)
+    bool Crouch = false;
+    float MoveSide = 0.0f;   // strafe this far (m, + = right) while aiming
+    float MoveAhead = 0.0f;  // run this far ahead
+    Gait Pace = Gait::Walk;
+    bool Reload = false;
+};
+const PosePhase kPhases[] = {
+    {"aim_level", true, 15.0f, 0.0f, 0.0f},
+    {"aim_up", true, 12.0f, 0.0f, 8.0f},
+    {"aim_down", true, 4.0f, 0.0f, -1.5f},
+    {"aim_right", true, 10.0f, 10.0f, 0.0f},
+    {"aim_left", true, 10.0f, -8.0f, 0.0f},
+    {"low_ready", false, 15.0f, 0.0f, 0.0f},
+    {"crouch_aim", true, 15.0f, 0.0f, 0.0f, true},
+    {"crouch_low", false, 15.0f, 0.0f, 0.0f, true},
+    {"strafe_right", true, 15.0f, 0.0f, 0.0f, false, 4.0f},
+    {"strafe_left", true, 15.0f, 0.0f, 0.0f, false, -4.0f},
+    {"reload", true, 15.0f, 0.0f, 0.0f, false, 0.0f, 0.0f, Gait::Walk, true},
+    {"jog", false, 15.0f, 0.0f, 0.0f, false, 0.0f, 7.0f, Gait::Jog},
+    {"sprint", false, 15.0f, 0.0f, 0.0f, false, 0.0f, -7.0f, Gait::Run},
+};
+constexpr float kPhaseTime = 2.4f;
+constexpr int kPhaseCount = (int)(sizeof(kPhases) / sizeof(kPhases[0]));
+} // namespace
+
+void NpcTest::Pose(World& world, NpcDirector& npcs, float now) {
+    (void)world;
+    npcs.Frozen = true;
+    npcs.HoldFire = true;
+    npcs.MeshChecksEverywhere = true;
+    // The two probes: the first AK and the first Remington.
+    Npc* probe[2] = {nullptr, nullptr};
+    for (const auto& up : npcs.Npcs()) {
+        if (!up || up->Dead) continue;
+        const int k = up->Class == WeaponClass::Shotgun ? 1 : 0;
+        if (m_Probe[k].empty() && now > 0.5f) {
+            m_Probe[k] = up->Name;
+            m_ProbeHome[k] = up->Feet;
+        }
+        if (up->Name == m_Probe[0]) probe[0] = up.get();
+        if (up->Name == m_Probe[1]) probe[1] = up.get();
+    }
+    // Everyone else stands easy.
+    for (const auto& up : npcs.Npcs())
+        if (up && !up->Dead && up.get() != probe[0] && up.get() != probe[1]) {
+            up->Intent = NpcIntent{};
+            up->Intent.LookPoint = up->Feet + glm::vec3(0.0f, 1.6f, 10.0f);
+        }
+    if (!probe[0] || !probe[1] || now < 2.0f) return;
+    if (m_PosePhase < 0) { m_PosePhase = 0; m_PhaseStart = now; }
+    float t = now - m_PhaseStart;
+    if (t >= kPhaseTime) {
+        ++m_PosePhase;
+        m_PhaseStart = now;
+        t = 0.0f;
+        m_PoseShots = 0;
+    }
+    if (m_PosePhase >= kPhaseCount) return;
+    const PosePhase& ph = kPhases[m_PosePhase];
+    // Home frame: facing south (toward the arena), as they spawn.
+    const glm::vec3 fwd(0.0f, 0.0f, 1.0f), right(-1.0f, 0.0f, 0.0f);
+    for (int k = 0; k < 2; ++k) {
+        Npc& n = *probe[k];
+        NpcIntent in;
+        const glm::vec3 base = m_ProbeHome[k];
+        const glm::vec3 chest = n.Feet + glm::vec3(0.0f, ph.Crouch ? 0.95f : 1.45f, 0.0f);
+        const glm::vec3 aimAt = glm::vec3(chest.x, base.y + (ph.Crouch ? 0.95f : 1.45f), base.z) + fwd * ph.Ahead + right * ph.Side +
+                                glm::vec3(0.0f, ph.Up, 0.0f);
+        in.Aim = ph.Aim;
+        in.AimPoint = aimAt;
+        in.LookPoint = aimAt;
+        in.Crouch = ph.Crouch;
+        in.Reload = ph.Reload && t < 0.2f;
+        if (ph.Reload && t < 0.05f && n.Weapon) n.Weapon->SetAmmo(n.Class == WeaponClass::Shotgun ? 4 : 12);
+        if (ph.MoveSide != 0.0f || ph.MoveAhead != 0.0f) {
+            // Out and back within the phase: the first half there, the second half home.
+            const glm::vec3 there = base + right * ph.MoveSide + fwd * ph.MoveAhead;
+            in.Move = true;
+            in.MoveTarget = t < kPhaseTime * 0.55f ? there : base;
+            in.Pace = ph.Pace;
+            in.FaceAim = ph.Aim;
+        } else if (glm::length(glm::vec2(n.Feet.x - base.x, n.Feet.z - base.z)) > 0.3f) {
+            in.Move = true; // drifted (a sprint's stop): walk home
+            in.MoveTarget = base;
+            in.Pace = Gait::Walk;
+            in.FaceAim = true;
+        }
+        n.Intent = in;
+    }
+
+    // Measured once a phase, settled (1.2 s in); four views of each probe near the end.
+    auto measure = [&](Npc& n) {
+        if (!n.Weapon || !n.Weapon->IsActive()) return;
+        FirstPersonWorldGunInput gun;
+        glm::vec3 muzzle, dir;
+        if (!n.Weapon->WorldGunInput(gun) || !n.Weapon->MuzzleRay(muzzle, dir)) return;
+        const glm::vec3 shift = n.Body.GunShift();
+        const NpcHoldReport r = n.Body.MeasureHold(world, n.Weapon->ArmsEntity(), gun.ButtWorld + shift, muzzle + shift);
+        std::printf("[NpcTest] pose %-12s %-4s gun-head %5.1f cm  gun-torso %5.1f cm  elbows %5.1f / %5.1f cm  hands off %4.1f / %4.1f cm  shift %4.1f cm  cheek %4.1f deg  eye(%5.1f,%5.1f,%5.1f)cm  %s\n",
+                    ph.Name, n.Class == WeaponClass::Shotgun ? "870" : "AK", r.GunHead * 100.0f, r.GunTorso * 100.0f, r.Elbow[0] * 100.0f,
+                    r.Elbow[1] * 100.0f, r.Hand[0] * 100.0f, r.Hand[1] * 100.0f, r.Shift * 100.0f, r.CheekTilt,
+                    r.EyeFromHead.x * 100.0f, r.EyeFromHead.y * 100.0f, r.EyeFromHead.z * 100.0f, n.Weapon->CurrentState().c_str());
+        const std::string at = std::string(ph.Name) + (n.Class == WeaponClass::Shotgun ? " 870" : " AK");
+        // The stock rests on the shoulder (the torso) by design when shouldered; elsewhere it should stand off.
+        if (r.GunHead >= 0.0f && r.GunHead < m_WorstHead) { m_WorstHead = r.GunHead; m_WorstHeadAt = at; }
+        if (r.GunTorso >= 0.0f && r.GunTorso < m_WorstTorso && gun.Shouldered < 0.5f) { m_WorstTorso = r.GunTorso; m_WorstTorsoAt = at; }
+        for (int s = 0; s < 2; ++s) {
+            if (r.Elbow[s] >= 0.0f && r.Elbow[s] < m_WorstElbow) { m_WorstElbow = r.Elbow[s]; m_WorstElbowAt = at + (s ? " right" : " left"); }
+            if (r.Hand[s] > m_WorstHand) { m_WorstHand = r.Hand[s]; m_WorstHandAt = at + (s ? " right" : " left"); }
+        }
+    };
+    if (t >= 1.2f && t - 1.0f / 60.0f < 1.2f) {
+        measure(*probe[0]);
+        measure(*probe[1]);
+        std::fflush(stdout);
+    }
+    // Views: right side, front-right, front-left, high front-right; AK probe then Remington probe.
+    static const struct { float Yaw, Pitch, Dist; const char* Name; } kViews[4] = {
+        {-90.0f, -5.0f, 2.3f, "right"}, {-35.0f, -8.0f, 2.2f, "front_r"}, {40.0f, -8.0f, 2.2f, "front_l"}, {-20.0f, -48.0f, 2.3f, "top"}};
+    const float shotStart = ph.Reload ? 0.7f : 1.3f;
+    const int view = (int)std::floor((t - shotStart) / 0.12f);
+    if (view >= 0 && view < 8) {
+        Npc& n = *probe[view / 4];
+        const auto& v = kViews[view % 4];
+        const float yaw = n.Body.Yaw() + glm::radians(v.Yaw);
+        const glm::vec3 chest = n.Feet + glm::vec3(0.0f, n.Crouched ? 0.95f : 1.35f, 0.0f);
+        const glm::vec3 dirFlat(std::sin(yaw), 0.0f, std::cos(yaw));
+        const float pitch = glm::radians(v.Pitch);
+        m_CamPos = chest + (dirFlat * std::cos(pitch) - glm::vec3(0.0f, std::sin(pitch), 0.0f)) * v.Dist;
+        const glm::vec3 d = glm::normalize(chest - m_CamPos);
+        m_CamYaw = glm::degrees(std::atan2(d.z, d.x));
+        m_CamPitch = glm::degrees(std::asin(std::clamp(d.y, -1.0f, 1.0f)));
+        m_HaveCam = true;
+        // A few frames into its window (the view has the camera by then), once.
+        if (view >= m_PoseShots && t - shotStart - (float)view * 0.12f > 0.05f) {
+            char name[96];
+            std::snprintf(name, sizeof name, "pose_%02d_%s_%s_%s", m_PosePhase, ph.Name, view < 4 ? "ak" : "870", v.Name);
+            m_Shot = name;
+            m_PoseShots = view + 1;
         }
     }
 }

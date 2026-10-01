@@ -1,5 +1,6 @@
 #include "NpcBody.h"
 
+#include "Camera.h"
 #include "Components.h"
 #include "FirstPersonBody.h"         // FirstPersonBodyLocalMove / WrapAngle
 #include "FirstPersonBodyContract.h" // FPBody:: parameter, state and bone names
@@ -10,6 +11,7 @@
 #include <glm/gtc/matrix_transform.hpp>
 
 #include <algorithm>
+#include <cctype>
 #include <cmath>
 
 namespace {
@@ -24,6 +26,9 @@ constexpr float kTurnThreshold = 1.15f;  // radians (66 deg): a still body furth
 constexpr float kMaxTwist = 1.2f;        // radians the spine twists toward the aim
 constexpr float kMoveEase = 0.1f;        // seconds: the blend tree's parameters
 constexpr float kFaceEase = 0.09f;       // seconds: the heading while moving
+constexpr float kAimLean = 0.1f;         // radians (6 deg): the torso's forward lean aiming, standing
+constexpr float kAimLeanCrouched = 0.22f; // ... and crouched (13 deg)
+constexpr float kReadyLeanCrouched = 0.4f; // ... crouched at the low ready (23 deg)
 
 } // namespace
 
@@ -63,12 +68,39 @@ bool NpcBody::Start(World& world, entt::entity root) {
         }
     }
     if (m_Driver == entt::null) { m_Pieces.clear(); m_Models.clear(); return false; }
+    // The arms piece: the weapon hold's source (its shoulders and elbows are worked out on it).
+    for (size_t k = 0; k < m_Pieces.size(); ++k)
+        if (const auto* nc = reg.try_get<NameComponent>(m_Pieces[k])) {
+            std::string name = nc->Name;
+            for (char& c : name) c = (char)std::tolower((unsigned char)c);
+            if (name == "arms") { m_ArmsIndex = (int)k; break; }
+        }
     for (entt::entity e : m_Pieces) {
         auto& ac = reg.get<AnimatorControllerComponent>(e);
         ac.Driver = e == m_Driver ? entt::null : m_Driver;
         ac.RootMotion.Mode = (int)RootMotionMode::InPlace;
     }
     m_Root = root;
+    m_HoldStagger = (int)(entt::to_integral(root) % 3u);
+    m_PieceSkins.assign(m_Models.size(), 0u);
+    for (size_t k = 0; k < m_Models.size(); ++k) {
+        const Model& m = *m_Models[k];
+        auto skinsUnder = [&](std::initializer_list<const char*> roots) {
+            std::vector<char> under((size_t)m.NodeCount(), 0);
+            for (const char* r : roots)
+                if (const int i = m.NodeIndex(r); i >= 0) under[(size_t)i] = 1;
+            for (int i = 0; i < m.NodeCount(); ++i) {
+                if (!under[(size_t)i] && m.NodeParent(i) >= 0 && under[(size_t)m.NodeParent(i)]) under[(size_t)i] = 1;
+                if (under[(size_t)i] && m.BoneId(m.NodeName(i)) >= 0) return true;
+            }
+            return false;
+        };
+        unsigned f = 0u;
+        if (skinsUnder({FPBody::kBoneSpine[0]})) f |= kSkinsSpine;
+        if (skinsUnder({FPBody::kBoneClavicle[0], FPBody::kBoneClavicle[1]})) f |= kSkinsArms;
+        if (skinsUnder({"neck_01"})) f |= kSkinsNeck;
+        m_PieceSkins[k] = f;
+    }
     return true;
 }
 
@@ -145,7 +177,7 @@ void NpcBody::Tick(World& world, const NpcBodyInput& in, float dt) {
     ac.SetBool(FPBody::kCrouched, in.Crouched);
 }
 
-void NpcBody::LateUpdate(World& world, float dt) {
+void NpcBody::LateUpdate(World& world, float dt, const Camera* weaponCam) {
     (void)world;
     if (!IsActive() || m_PoseExternal || !m_DriverModel) return;
     const glm::mat4 rootW = RootWorld();
@@ -161,6 +193,9 @@ void NpcBody::LateUpdate(World& world, float dt) {
         const glm::vec3 d = m_In.AimPoint - chestW;
         const float flat = std::sqrt(d.x * d.x + d.z * d.z);
         wantPitch = std::clamp(std::atan2(d.y, std::max(flat, 0.05f)), -1.1f, 1.1f);
+        // The chest takes the player's share of the aim's pitch (Spine Aim / Spine Aim Down); the gun, hung off
+        // the shoulders on the weapon's camera, takes the rest.
+        wantPitch *= std::clamp(wantPitch < 0.0f ? m_Set.SpineAimDown : m_Set.SpineAim, 0.0f, 1.0f);
         wantTwist = NpcSpineTwist(NpcYawOf(d, m_Yaw) - m_Yaw, kMaxTwist);
     } else if (!m_Turning) {
         // Looking about while not aiming: the twist only (a soldier scanning, not bending over).
@@ -171,13 +206,32 @@ void NpcBody::LateUpdate(World& world, float dt) {
     m_AimTwist += (wantTwist - m_AimTwist) * Follow(dt, 0.08f);
     m_Lean += (std::clamp(m_In.Lean, -1.0f, 1.0f) - m_Lean) * Follow(dt, 0.12f);
     m_AimWeight += ((m_In.Aiming ? 1.0f : 0.0f) - m_AimWeight) * Follow(dt, 0.12f);
+    // Aiming, the torso comes up into a shooter's stance whatever the legs are doing: the clips' own lean (a
+    // crouch walk hunches ~40 degrees, its head right over where the gun goes) is taken out, down to a slight
+    // forward lean, and the aim's pitch goes on top of that rather than on top of the hunch.
+    {
+        glm::mat4 pelvis(1.0f), neck(1.0f);
+        float straighten = 0.0f;
+        if (m_DriverModel->NodeTransform(FPBody::kBonePelvis, pelvis) && m_DriverModel->NodeTransform("neck_01", neck)) {
+            const glm::vec3 up = glm::vec3(neck[3]) - glm::vec3(pelvis[3]);
+            const float leanNow = std::atan2(up.z, std::max(up.y, 1e-3f)); // + = forward
+            // Crouched with a gun but not aiming (a low ready, moving between cover) the hunch is eased too, to a
+            // ready crouch: the crouch walk's own was so deep the gun's stock rode up past the hood.
+            const bool armedCrouch = m_In.Crouched && m_ArmsWeight > 0.5f;
+            const float leanWant = m_In.Crouched ? glm::mix(kReadyLeanCrouched, kAimLeanCrouched, m_AimWeight) : kAimLean;
+            const float weight = armedCrouch ? 1.0f : m_AimWeight;
+            straighten = std::clamp(leanWant - leanNow, -0.9f, 0.4f) * weight;
+        }
+        m_Straighten += (straighten - m_Straighten) * Follow(dt, 0.1f);
+    }
 
     // ... spread over the spine of every piece, so they stay one skeleton (each piece keeps its own
     // bones' rest frames; the rotation is the same in model space).
     std::vector<int> parents;
     std::vector<glm::mat4> globals;
-    for (const auto& mp : m_Models) {
-        Model& m = *mp;
+    for (size_t pk = 0; pk < m_Models.size(); ++pk) {
+        if (!PieceTakes(pk, kSkinsSpine)) continue;
+        Model& m = *m_Models[pk];
         IK::Pose pose = m.AppliedLocalPose();
         if (pose.empty() || (int)pose.size() != m.NodeCount()) continue;
         int spine[5], n = 0;
@@ -190,81 +244,34 @@ void NpcBody::LateUpdate(World& world, float dt) {
         // Rotating +Z about +X by theta gives (0, -sin, cos): looking up is a negative angle about X.
         // The lean rolls about the body's forward (+Z): + = the top toward -X, the body's right.
         const glm::quat step = glm::angleAxis(m_AimTwist / (float)n, glm::vec3(0, 1, 0)) *
-                               glm::angleAxis(-m_AimPitch / (float)n, glm::vec3(1, 0, 0)) *
+                               glm::angleAxis((m_Straighten - m_AimPitch) / (float)n, glm::vec3(1, 0, 0)) *
                                glm::angleAxis(m_Lean * 0.38f / (float)n, glm::vec3(0, 0, 1));
         for (int k = 0; k < n; ++k) IK::OffsetBone(pose, parents, globals, spine[k], glm::vec3(0.0f), step, IK::Position(globals[(size_t)spine[k]]));
-        // Aiming: the head drops and tilts onto the stock (a cheek weld).
-        if (m_AimWeight > 0.01f)
-            if (const int head = m.NodeIndex("head"); head >= 0) {
-                const glm::quat weld = glm::angleAxis(0.16f * m_AimWeight, glm::vec3(1, 0, 0)) * glm::angleAxis(0.22f * m_AimWeight, glm::vec3(0, 0, 1));
-                IK::OffsetBone(pose, parents, globals, head, glm::vec3(0.0f), weld, IK::Position(globals[(size_t)head]));
-            }
         m.ApplyLocalPose(pose);
+    }
+
+    // Armed, the chest takes the arms rig's stance: its shoulder line against the weapon's camera (the rig is
+    // authored bladed, the left shoulder ahead of the right). Squared to the aim, the left shoulder sat behind the
+    // rig's and the support hand came off the gun. The tilt is taken only by Clavicle Follow, the blade in full.
+    const float lineMatch = std::clamp(m_Set.ShoulderLineMatch, 0.0f, 1.0f) * std::clamp(m_ArmsWeight, 0.0f, 1.0f);
+    if (weaponCam && m_HaveRigLine && lineMatch > 1e-3f) {
+        const glm::vec3 lineWorld = weaponCam->Right() * m_RigShoulderLine.x + weaponCam->Up() * m_RigShoulderLine.y +
+                                    weaponCam->Front() * m_RigShoulderLine.z;
+        const glm::vec3 lineModel = glm::inverse(YawRotation(m_Yaw)) * lineWorld;
+        for (int pass = 0; pass < 2; ++pass) {
+            glm::mat4 l(1.0f), r(1.0f);
+            if (!m_DriverModel->NodeTransform(FPBody::kBoneUpperArm[0], l) || !m_DriverModel->NodeTransform(FPBody::kBoneUpperArm[1], r)) break;
+            const glm::vec3 across = glm::vec3(l[3]) - glm::vec3(r[3]);
+            const glm::vec3 target = FirstPersonBodyShoulderLineTilt(across, lineModel, m_Set.ClavicleFollow);
+            const glm::quat turn = FirstPersonBodyShoulderLineTurn(across, target, lineMatch);
+            if (2.0f * std::acos(std::clamp(std::abs(turn.w), 0.0f, 1.0f)) < 0.002f) break;
+            RotateSpine(turn);
+        }
     }
 
     // The head bone, where the weapon's camera goes (its arms rig is placed by the same bone).
     glm::mat4 head(1.0f);
     m_Eye = m_DriverModel->NodeTransform("head", head) ? glm::vec3(rootW * head[3]) : m_Feet + glm::vec3(0.0f, 1.62f, 0.0f);
-}
-
-void NpcBody::ReachHands(World& world, entt::entity armsRig, float weight) {
-    if (!IsActive() || m_PoseExternal || armsRig == entt::null || weight <= 0.0f) return;
-    auto& reg = world.Registry;
-    if (!reg.valid(armsRig)) return;
-    const auto* rrc = reg.try_get<RenderableComponent>(armsRig);
-    const auto* rt = reg.try_get<TransformComponent>(armsRig);
-    if (!rrc || !rrc->ModelRef || !rt) return;
-    const Model& rig = *rrc->ModelRef;
-    const glm::mat4 rigW = glm::translate(glm::mat4(1.0f), rt->Position) * glm::mat4_cast(rt->Rotation) * glm::scale(glm::mat4(1.0f), rt->Scale);
-    const glm::mat4 toModel = glm::inverse(RootWorld()) * rigW;
-    // The rig's hands and fingers in the body's model space (what every piece reaches for).
-    struct Target { std::string Name; glm::quat Rot; };
-    std::vector<Target> fingers;
-    glm::mat4 handTarget[2];
-    bool haveHand[2] = {false, false};
-    for (int s = 0; s < 2; ++s) {
-        glm::mat4 hand(1.0f);
-        if (!rig.NodeTransform(FPBody::kBoneHand[s], hand)) continue;
-        handTarget[s] = toModel * hand;
-        haveHand[s] = true;
-        const int rigHand = rig.NodeIndex(FPBody::kBoneHand[s]);
-        for (int i = rigHand + 1; i < rig.NodeCount(); ++i) {
-            int p = rig.NodeParent(i);
-            while (p > rigHand) p = rig.NodeParent(p);
-            if (p != rigHand) continue;
-            glm::mat4 g(1.0f);
-            if (rig.NodeTransform(rig.NodeName(i), g)) fingers.push_back({rig.NodeName(i), IK::Rotation(toModel * g)});
-        }
-    }
-    std::vector<int> parents;
-    std::vector<glm::mat4> globals;
-    for (const auto& mp : m_Models) {
-        Model& m = *mp;
-        IK::Pose pose = m.AppliedLocalPose();
-        if (pose.empty() || (int)pose.size() != m.NodeCount()) continue;
-        if (m.NodeIndex(FPBody::kBoneHand[0]) < 0 && m.NodeIndex(FPBody::kBoneHand[1]) < 0) continue; // no arms here
-        parents.resize(pose.size());
-        for (int i = 0; i < (int)pose.size(); ++i) parents[(size_t)i] = m.NodeParent(i);
-        IK::ComputeGlobals(pose, parents, globals);
-        for (int s = 0; s < 2; ++s) {
-            if (!haveHand[s]) continue;
-            const int up = m.NodeIndex(FPBody::kBoneUpperArm[s]), lo = m.NodeIndex(FPBody::kBoneLowerArm[s]), end = m.NodeIndex(FPBody::kBoneHand[s]);
-            if (up < 0 || lo < 0 || end < 0) continue;
-            const glm::quat rot = IK::Rotation(handTarget[s]);
-            IK::SolveTwoBone(pose, parents, globals, up, lo, end, glm::vec3(handTarget[s][3]), &rot, weight);
-        }
-        // Fingers: each takes the rig finger's model-space rotation (its position stays on its own bone).
-        for (const Target& f : fingers) {
-            const int i = m.NodeIndex(f.Name);
-            if (i < 0) continue;
-            const int par = parents[(size_t)i];
-            const glm::quat parentRot = par >= 0 ? IK::Rotation(globals[(size_t)par]) : glm::quat(1.0f, 0.0f, 0.0f, 0.0f);
-            const glm::quat local = glm::normalize(glm::inverse(parentRot) * f.Rot);
-            pose[(size_t)i].R = glm::slerp(pose[(size_t)i].R, local, weight);
-            IK::RefreshGlobals(pose, parents, globals, i);
-        }
-        m.ApplyLocalPose(pose);
-    }
 }
 
 void NpcBody::Flinch(World& world, const glm::vec3& dirWorld) {

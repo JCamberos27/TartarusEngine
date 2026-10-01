@@ -4,12 +4,27 @@
 #include <glm/glm.hpp>
 #include <glm/gtc/quaternion.hpp>
 
+#include <cstdint>
 #include <memory>
 #include <string>
 #include <vector>
 
+class Camera;
 class Model;
 class World;
+struct FirstPersonWorldGunInput;
+
+// How well a soldier holds its gun this frame (NpcBody::MeasureHold; --npc-test pose). Gaps are metres
+// (negative = not measured): the gun (butt to muzzle) to the drawn head / neck / hood and to the drawn
+// torso, each elbow to the torso, each hand to the arms rig's (off the gun when it can't reach).
+struct NpcHoldReport {
+    float GunHead = -1.0f, GunTorso = -1.0f;
+    float Elbow[2] = {-1.0f, -1.0f};
+    float Hand[2] = {-1.0f, -1.0f};
+    float Shift = 0.0f;          // how far the gun was moved off where the rig holds it
+    float CheekTilt = 0.0f;      // degrees the head tilted onto the stock
+    glm::vec3 EyeFromHead{0.0f}; // the weapon's eye off the head bone (body frame: x left, y up, z forward), m
+};
 
 // An enemy soldier's body: the Quantum outfit pieces under one root (assets/AI/Soldier.json), on the
 // npc_soldier controller (the player body's locomotion plus a flinch layer). Capsule-led: the AI moves
@@ -20,7 +35,23 @@ class World;
 // Frame order:
 //   Tick         before the animators: heading, parameters, triggers
 //   LateUpdate   after them: spine aim and lean, head look; the eye for the weapon's camera
-//   ReachHands   after the weapon has placed its rig: arms onto its hands, the pose onto every piece
+//   WeaponEye    before the weapon places its rig: where its camera goes (off the shoulders)
+//   HoldWeapon   after it: the gun clear of the body, arms onto its hands, the pose onto every piece
+
+// The weapon hold's tuning: the player's First Person Body numbers (the same body, the same rigs), copied
+// from the scene's player by NpcDirector; these defaults are the Arena player's.
+struct NpcHoldSettings {
+    float ClavicleFollow = 0.35f;    // how much of the rig's collarbone swing the body takes
+    float ShoulderMaxAngle = 25.0f;  // degrees a collarbone may turn (shrug)
+    float ShrugStart = 0.98f;        // a hand further than this share of the arm's length: the shoulder shrugs
+    float ShrugMax = 0.12f;          // ... by at most this (m)
+    float ReachLeanMax = 15.0f;      // degrees the chest leans for a hand still out of reach
+    float ElbowClearance = 0.06f;    // m: elbows swing out of the drawn torso by this
+    float ReachSlack = 0.04f;        // m: the shoulders a little nearer the gun than the rig's
+    float ShoulderLineMatch = 1.0f;  // the chest takes the rig's bladed stance
+    float SpineAim = 0.6f, SpineAimDown = 0.9f; // the share of the aim's pitch the chest takes (up / down)
+};
+
 struct NpcBodyInput {
     glm::vec3 Feet{0.0f};          // the capsule's foot position
     glm::vec3 Velocity{0.0f};      // how the capsule moved (m/s, world)
@@ -42,9 +73,28 @@ public:
     entt::entity Root() const { return m_Root; }
 
     void Tick(World& world, const NpcBodyInput& in, float dt);
-    void LateUpdate(World& world, float dt);
-    // `armsRig`: the weapon's arms entity (null = none, the arms stay as animated). `weight` 0..1.
-    void ReachHands(World& world, entt::entity armsRig, float weight);
+    void SetHoldSettings(const NpcHoldSettings& s) { m_Set = s; }
+    // `weaponCam` (optional): the weapon's camera with this frame's aim (its position is set later, by
+    // WeaponEye). Armed, the chest takes the arms rig's stance against it (its shoulder line).
+    void LateUpdate(World& world, float dt, const Camera* weaponCam = nullptr);
+
+    // Holding the weapon - the player's world body's solve (FirstPersonBody::ArmsLateUpdate), for a soldier:
+    //
+    // WeaponEye, before the weapon places its rig: where the weapon's camera goes. Hung off the body's
+    // shoulders as the rig's camera is off the rig's (the player's shoulder lock), so the rig's hands land
+    // within the body's reach - not at the head bone with the whole rig dragged into the shoulder after.
+    glm::vec3 WeaponEye(const World& world, entt::entity armsRig, const std::string& cameraBone, const Camera& cam, float dt);
+    // HoldWeapon, after it: the gun (rig and weapon together) into the right shoulder pocket while
+    // shouldered and pushed clear of the neck, head and (unshouldered) torso - spheres, and with
+    // `meshChecks` the drawn surfaces; then every piece's arms onto the rig's hands (the rig's arm shapes,
+    // collarbone shrug, chest lean for a far hand, elbows in the rig's bend plane and swung clear of the
+    // torso, fingers); then the head onto the stock on the sights. Returns the gun's shift (world).
+    // `gun` null (holstered, no weapon): the arms go back to the clips' pose.
+    glm::vec3 HoldWeapon(World& world, entt::entity armsRig, entt::entity weapon, const FirstPersonWorldGunInput* gun, const Camera& cam,
+                         float dt, bool meshChecks);
+    NpcHoldReport MeasureHold(const World& world, entt::entity armsRig, const glm::vec3& butt, const glm::vec3& muzzle) const;
+    const NpcHoldReport& LastHold() const { return m_Hold; }
+    glm::vec3 GunShift() const { return m_GunShift; } // the gun off where the rig holds it (world)
 
     // A hit: the upper body flinches away along `dirWorld` (the round's travel).
     void Flinch(World& world, const glm::vec3& dirWorld);
@@ -86,8 +136,47 @@ private:
     bool m_WasCrouched = false;
     // Aim, eased: the spine's pitch and twist (radians), and the lean.
     float m_AimPitch = 0.0f, m_AimTwist = 0.0f, m_Lean = 0.0f, m_AimWeight = 0.0f;
+    float m_Straighten = 0.0f;   // radians the aiming torso is brought up from the clips' lean (eased)
     NpcBodyInput m_In;
     glm::vec3 m_Eye{0.0f};
+
+    // The weapon hold (NpcWeaponHold.cpp).
+    NpcHoldSettings m_Set;
+    void RotateSpine(const glm::quat& modelDelta); // spread down the spine, on every piece
+    enum class Region { Head, Torso };
+    struct RegionPoint { glm::vec3 Pos; int Count; std::uint16_t Bone[4]; float Weight[4]; };
+    struct RegionSkin { std::vector<int> Bones; std::vector<RegionPoint> Points; };
+    struct PieceSkin { const Model* M = nullptr; RegionSkin Head, Torso; bool Built = false; };
+    mutable std::vector<PieceSkin> m_Skins;                 // per piece
+    // The drawn neck / head / hood, or pelvis / spine (a hoodie), skinned to world as posed now.
+    void SkinnedRegion(const World& world, Region region, std::vector<glm::vec3>& out) const;
+    std::vector<glm::vec3> m_HeadPoints, m_TorsoPoints, m_TorsoScratch;
+    int m_ArmsIndex = -1;
+    // Per piece: what of the skeleton it draws - anything the spine moves (kSkinsSpine), the arms (kSkinsArms), the
+    // neck and head (kSkinsNeck). A piece that draws none of what a pass moves is left out of it (legs, shoes):
+    // the driver always takes every pass (its bones are what is read back).
+    enum : unsigned { kSkinsSpine = 1u, kSkinsArms = 2u, kSkinsNeck = 4u };
+    std::vector<unsigned> m_PieceSkins;
+    bool PieceTakes(size_t k, unsigned what) const {
+        return k >= m_PieceSkins.size() || m_Pieces[k] == m_Driver || (m_PieceSkins[k] & what) != 0u;
+    }
+    int ArmsPiece() const;                                   // the "Arms" piece (index), else the driver's
+    glm::vec3 m_RigEyeToShoulders{0.0f};                     // the rig's shoulders off its camera (camera frame), slow
+    bool m_HaveRigOffset = false;
+    glm::vec3 m_RigShoulderLine{0.0f};                       // the rig's left-from-right upper arm (camera frame)
+    bool m_HaveRigLine = false;
+    glm::vec3 m_GunShift{0.0f};                              // eased
+    float m_ElbowClear[2] = {0.0f, 0.0f};                    // eased elbow swivels (radians)
+    glm::vec3 m_ElbowAim[2] = {glm::vec3(0.0f), glm::vec3(0.0f)}; // where each elbow heads (camera frame), eased
+    bool m_HaveElbowAim[2] = {false, false};
+    float m_ArmsWeight = 0.0f;
+    float m_CheekWeld = 0.0f;
+    unsigned m_HoldFrame = 0;
+    int m_HoldStagger = 0;                                   // which of every three frames this one checks the mesh
+    glm::vec3 m_MeshPush{0.0f};                              // the gun's push out of the drawn head / torso, last checked
+    float m_ElbowWant[2] = {0.0f, 0.0f};                     // the elbows' clearing swivels, last checked
+    float m_WeldShare = 1.0f;                                // how much of the cheek weld clears the gun, last checked
+    NpcHoldReport m_Hold;
 };
 
 // --- the maths, exposed for tests ---------------------------------------------------------------

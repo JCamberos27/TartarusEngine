@@ -18,6 +18,7 @@ class Model;
 class Player;
 class World;
 struct FirstPersonBodyComponent;
+struct LocalTRS;
 
 // The world gun this frame (FirstPersonPresentation::WorldGunInput): the first-person gun's butt and
 // bore (world), and how the world copy is placed off it - its butt into the body's right shoulder
@@ -294,6 +295,11 @@ float FirstPersonBodyElbowGapAbove(const std::vector<glm::vec3>& points, const g
 // prefer (the last frame's swivel) is tried first, so an elbow that clears either way doesn't flip.
 float FirstPersonBodyElbowClearSwivel(const std::vector<glm::vec3>& points, const glm::vec3& shoulder, const glm::vec3& elbow,
                                       const glm::vec3& hand, float clearance, float maxAngle, float step, float prefer = 0.0f);
+// The arms rig's arm shapes onto `pose` of model `m` (rotations of every node under the clavicles, the body
+// keeping its bone lengths), by `weight`; the clavicles themselves by `weight * clavicleWeight`. What the
+// player's arms take before reaching the rig's hands - also the enemy soldiers' (NpcBody::HoldWeapon).
+void FirstPersonBodyCopyArmShape(const Model& m, const Model& rig, float weight, std::vector<LocalTRS>& pose,
+                                 const std::vector<int>& parents, float clavicleWeight);
 float FirstPersonBodyFootPelvis(float offL, float offR, float maxDrop, float maxRaise);
 glm::vec3 FirstPersonBodyEye(const glm::vec3& restHead, const glm::vec3& head, float bob, const glm::vec3& offset);
 // A piece's Near Hide: the body's, and for clothing at least Clothing Near Hide.

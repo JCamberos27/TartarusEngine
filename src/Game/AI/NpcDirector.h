@@ -79,6 +79,7 @@ public:
     CombatFx* Fx = nullptr;    // gun reports, flashes, tracers, whizzes (optional; the host owns it)
     bool Frozen = false;       // the AI stops deciding (bodies and weapons still run)
     bool HoldFire = false;     // nobody shoots
+    bool MeshChecksEverywhere = false; // the weapon hold checks the drawn body at any distance (tests)
     int ShootersNow() const { return m_ShootersNow; }
     int MaxShootersSeen() const { return m_MaxShooters; }
     float Now() const { return m_Now; }
@@ -136,6 +137,7 @@ private:
     float m_RespawnDelay = 8.0f, m_Difficulty = 1.0f, m_DamageScale = 0.45f;
     bool m_Respawn = true;
     std::shared_ptr<FirstPersonControllerComponent> m_ViewConfig;
+    NpcHoldSettings m_HoldSettings;        // the scene player's First Person Body numbers
     std::string m_SoldierJson;
     std::vector<std::unique_ptr<Npc>> m_Npcs;
     std::vector<Squad> m_Squads;
