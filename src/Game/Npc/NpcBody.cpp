@@ -4,8 +4,10 @@
 #include "Components.h"
 #include "FirstPersonBody.h"         // FirstPersonBodyLocalMove / WrapAngle
 #include "FirstPersonBodyContract.h" // FPBody:: parameter, state and bone names
+#include "GameModuleAPI.h"           // RaycastHit, QueryFilter (the foot pass)
 #include "IK.h"
 #include "Model.h"
+#include "PhysicsWorld.h"
 #include "World.h"
 
 #include <glm/gtc/matrix_transform.hpp>
@@ -120,6 +122,25 @@ bool NpcBody::Start(World& world, entt::entity root) {
                 if (upper[(size_t)i])
                     if (const int pn = m.NodeIndex(d.NodeName(i)); pn >= 0) m_UpperMap[k].push_back({pn, i});
         }
+        // The lower body for the foot pass: the pelvis and everything under it that isn't the upper body (the legs).
+        m_DriverPelvis = d.NodeIndex(FPBody::kBonePelvis);
+        for (int s = 0; s < 2; ++s) {
+            m_DriverLeg[s][0] = d.NodeIndex(FPBody::kBoneThigh[s]);
+            m_DriverLeg[s][1] = d.NodeIndex(FPBody::kBoneCalf[s]);
+            m_DriverLeg[s][2] = d.NodeIndex(FPBody::kBoneFoot[s]);
+        }
+        std::vector<char> lower((size_t)d.NodeCount(), 0);
+        if (m_DriverPelvis >= 0) lower[(size_t)m_DriverPelvis] = 1;
+        for (int i = 0; i < d.NodeCount(); ++i)
+            if (!lower[(size_t)i] && !upper[(size_t)i] && d.NodeParent(i) >= 0 && lower[(size_t)d.NodeParent(i)]) lower[(size_t)i] = 1;
+        m_LowerMap.assign(m_Models.size(), {});
+        for (size_t k = 0; k < m_Models.size(); ++k) {
+            if ((int)k == m_DriverIndex) continue;
+            const Model& m = *m_Models[k];
+            for (int i = 0; i < d.NodeCount(); ++i)
+                if (lower[(size_t)i])
+                    if (const int pn = m.NodeIndex(d.NodeName(i)); pn >= 0) m_LowerMap[k].push_back({pn, i});
+        }
     }
     m_HoldStagger = (int)(entt::to_integral(root) % 3u);
     m_PieceSkins.assign(m_Models.size(), 0u);
@@ -217,9 +238,90 @@ void NpcBody::Tick(World& world, const NpcBodyInput& in, float dt) {
     ac.SetBool(FPBody::kCrouched, in.Crouched);
 }
 
+// Feet on uneven ground - a ramp, stairs, a slope - for a soldier near the player: a ray down under each animated foot,
+// the pelvis dropped to the lower foot's ground, both legs re-solved to theirs, a planted foot tilted to its slope (the
+// player body's foot IK, without its foot lock). Solved on the driver and handed to the other pieces; flat ground costs
+// only the two rays.
+void NpcBody::FootPass(float dt) {
+    constexpr float kMaxDrop = 0.35f, kMaxRaise = 0.35f, kPelvisRaise = 0.08f, kTiltMax = 0.5f; // m, m, m, rad
+    m_FootWeight += ((m_In.FootIK ? 1.0f : 0.0f) - m_FootWeight) * Follow(dt, 0.15f);
+    const bool rigged = m_DriverPelvis >= 0 && m_DriverLeg[0][0] >= 0 && m_DriverLeg[0][1] >= 0 && m_DriverLeg[0][2] >= 0 &&
+                        m_DriverLeg[1][0] >= 0 && m_DriverLeg[1][1] >= 0 && m_DriverLeg[1][2] >= 0;
+    if (m_FootWeight < 1e-3f || !rigged) {
+        m_HaveFootGround = false;
+        return;
+    }
+    Model& m = *m_DriverModel;
+    IK::Pose& pose = m_Pose;
+    pose = m.AppliedLocalPose();
+    if ((int)pose.size() != m.NodeCount()) return;
+    IK::ComputeGlobals(pose, m_DriverParents, m_Globals);
+    const glm::mat4 rootW = RootWorld();
+    const glm::mat3 toModel3 = glm::transpose(glm::mat3(rootW)); // a yaw: its inverse is its transpose
+    float animHeight[2];
+    for (int s = 0; s < 2; ++s) {
+        const glm::vec3 foot = glm::vec3(rootW * glm::vec4(IK::Position(m_Globals[(size_t)m_DriverLeg[s][2]]), 1.0f));
+        animHeight[s] = foot.y - m_Feet.y;
+        float offset = 0.0f;
+        glm::vec3 normal(0.0f, 1.0f, 0.0f);
+        const float origin[3] = {foot.x, foot.y + 0.45f, foot.z}, down[3] = {0.0f, -1.0f, 0.0f};
+        QueryFilter filter;
+        filter.HitTriggers = 0;
+        RaycastHit hit;
+        if (PhysicsWorld::RaycastSolid(origin, down, 0.45f + kMaxDrop + 0.2f, filter, hit) && hit.Hit) {
+            offset = std::clamp(hit.Point[1] - m_Feet.y, -kMaxDrop, kMaxRaise);
+            normal = glm::normalize(glm::vec3(hit.Normal[0], hit.Normal[1], hit.Normal[2]));
+            if (normal.y < 0.5f) normal = glm::vec3(0.0f, 1.0f, 0.0f); // a wall, not a floor
+        }
+        if (!m_HaveFootGround) { m_FootOffset[s] = offset; m_FootNormal[s] = normal; }
+        m_FootOffset[s] += (offset - m_FootOffset[s]) * Follow(dt, 0.05f);
+        m_FootNormal[s] = glm::normalize(m_FootNormal[s] + (normal - m_FootNormal[s]) * Follow(dt, 0.08f));
+    }
+    m_HaveFootGround = true;
+    const bool flat = std::abs(m_FootOffset[0]) < 0.004f && std::abs(m_FootOffset[1]) < 0.004f && m_FootNormal[0].y > 0.999f &&
+                      m_FootNormal[1].y > 0.999f;
+    if (flat) return; // the clips' own feet are right
+    const float w = m_FootWeight;
+    const float pelvisDelta = FirstPersonBodyFootPelvis(m_FootOffset[0], m_FootOffset[1], kMaxDrop, kPelvisRaise) * w;
+    IK::OffsetBone(pose, m_DriverParents, m_Globals, m_DriverPelvis, glm::vec3(0.0f, pelvisDelta, 0.0f), glm::quat(1.0f, 0.0f, 0.0f, 0.0f), glm::vec3(0.0f));
+    for (int s = 0; s < 2; ++s) {
+        const int thigh = m_DriverLeg[s][0], calf = m_DriverLeg[s][1], foot = m_DriverLeg[s][2];
+        const glm::vec3 target = IK::Position(m_Globals[(size_t)foot]) + glm::vec3(0.0f, m_FootOffset[s] * w - pelvisDelta, 0.0f);
+        // A planted foot lies on its slope; one swinging through the air keeps the clip's angle.
+        const float planted = 1.0f - std::clamp((animHeight[s] - 0.06f) / 0.09f, 0.0f, 1.0f);
+        const glm::vec3 normal = toModel3 * m_FootNormal[s];
+        const float angle = std::min(std::acos(std::clamp(normal.y, -1.0f, 1.0f)), kTiltMax) * planted * w;
+        glm::quat footRot = IK::Rotation(m_Globals[(size_t)foot]);
+        const glm::vec3 axis = glm::cross(glm::vec3(0.0f, 1.0f, 0.0f), normal);
+        if (angle > 1e-4f && glm::dot(axis, axis) > 1e-8f) footRot = glm::angleAxis(angle, glm::normalize(axis)) * footRot;
+        IK::SolveTwoBone(pose, m_DriverParents, m_Globals, thigh, calf, foot, target, &footRot, 1.0f);
+    }
+    m.ApplyLocalPose(pose);
+    SyncLower();
+}
+
+void NpcBody::SyncLower() {
+    const auto& src = m_DriverModel->AppliedLocalPose();
+    if ((int)src.size() != m_DriverModel->NodeCount()) return;
+    for (size_t k = 0; k < m_Models.size() && k < m_LowerMap.size(); ++k) {
+        if ((int)k == m_DriverIndex || m_LowerMap[k].empty() || !m_Models[k]) continue;
+        Model& m = *m_Models[k];
+        IK::Pose& pose = m_Pose;
+        pose = m.AppliedLocalPose();
+        if ((int)pose.size() != m.NodeCount()) continue;
+        // The pelvis moves (its translation too); the legs turn.
+        for (const auto& [pn, dn] : m_LowerMap[k]) {
+            pose[(size_t)pn].R = src[(size_t)dn].R;
+            if (dn == m_DriverPelvis) pose[(size_t)pn].T = src[(size_t)dn].T;
+        }
+        m.ApplyLocalPose(pose);
+    }
+}
+
 void NpcBody::LateUpdate(World& world, float dt, const Camera* weaponCam) {
     (void)world;
     if (!IsActive() || m_PoseExternal || !m_DriverModel) return;
+    FootPass(dt);
     const glm::mat4 rootW = RootWorld();
     // The aim, measured on the driver: from the chest, a pitch and a twist, eased.
     glm::vec3 chestW = m_Feet + glm::vec3(0.0f, 1.4f, 0.0f);
