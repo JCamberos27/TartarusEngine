@@ -29,6 +29,8 @@
 #include <map>
 #include <mutex>
 #include <chrono>
+#include <tuple>
+#include <unordered_map>
 
 namespace {
 // A hidden node's scale: its subtree folds into its pivot (tiny, not zero, so nothing divides by it).
@@ -1277,12 +1279,61 @@ int Model::AttachClip(const Model& source, int sourceIndex, const std::string& r
     x.SourceChannels = clip.Channels.size();
     x.Ref = ref;
     x.DisplayName = displayName;
+    // The node / channel match and the rest corrections depend only on the two models' shared import data: every
+    // instance of a model (a squad's rifles, each soldier's body) attaching the same clip reuses the first's.
+    struct MatchKey {
+        const SharedData* Target; const SharedData* Source; int Index; size_t Channels;
+        bool operator<(const MatchKey& o) const {
+            return std::tie(Target, Source, Index, Channels) < std::tie(o.Target, o.Source, o.Index, o.Channels);
+        }
+    };
+    struct Match {
+        std::weak_ptr<SharedData> Target, Source; // a freed model's address can be reused: these say it's still the same
+        std::vector<int> NodeChannel;
+        std::vector<glm::quat> Correction;
+        int Matched = 0;
+    };
+    static std::mutex s_MatchMutex;
+    static std::map<MatchKey, Match> s_Matches;
+    const MatchKey mkey{m_D.get(), source.m_D.get(), sourceIndex, clip.Channels.size()};
+    {
+        std::lock_guard<std::mutex> lock(s_MatchMutex);
+        const auto it = s_Matches.find(mkey);
+        if (it != s_Matches.end() && it->second.Target.lock() == m_D && it->second.Source.lock() == source.m_D) {
+            if (it->second.Matched == 0) {
+                m_UnmatchedClips.push_back(key);
+                return -1;
+            }
+            x.NodeChannel = it->second.NodeChannel;
+            x.Correction = it->second.Correction;
+            m_ExternalClips.push_back(std::move(x));
+            return (int)m_D->Animations.size() + (int)m_ExternalClips.size() - 1;
+        }
+    }
     x.NodeChannel.assign(m_D->Nodes.size(), -1);
     int matched = 0;
-    for (int c = 0; c < (int)clip.Channels.size(); ++c)
-        for (int n = 0; n < (int)m_D->Nodes.size(); ++n)
-            if (m_D->Nodes[n].Name == clip.Channels[c].BoneName) { x.NodeChannel[n] = c; ++matched; break; }
+    {
+        std::unordered_map<std::string, int> byName;
+        byName.reserve(m_D->Nodes.size());
+        for (int n = (int)m_D->Nodes.size() - 1; n >= 0; --n) byName[m_D->Nodes[n].Name] = n; // the first of a name wins
+        for (int c = 0; c < (int)clip.Channels.size(); ++c)
+            if (const auto it = byName.find(clip.Channels[c].BoneName); it != byName.end()) {
+                x.NodeChannel[it->second] = c;
+                ++matched;
+            }
+    }
+    auto remember = [&]() {
+        std::lock_guard<std::mutex> lock(s_MatchMutex);
+        if (s_Matches.size() > 4096) s_Matches.clear();
+        Match& mt = s_Matches[mkey];
+        mt.Target = m_D;
+        mt.Source = source.m_D;
+        mt.NodeChannel = x.NodeChannel;
+        mt.Correction = x.Correction;
+        mt.Matched = matched;
+    };
     if (matched == 0) {
+        remember();
         // A bare "-1" at the call site made mixed FBX exports nearly impossible to diagnose.
         // Give the author a small, actionable sample from each side without flooding the log
         // with an entire production skeleton.
@@ -1328,6 +1379,7 @@ int Model::AttachClip(const Model& source, int sourceIndex, const std::string& r
         Log::Warn("Animation: '" + ref + "' matches only " + std::to_string(matched) + " of its " +
                   std::to_string(clip.Channels.size()) + " animated bones on '" + m_Path +
                   "' - is it for a different skeleton?", LogContext::Asset(m_Path));
+    remember();
     m_ExternalClips.push_back(std::move(x));
     return (int)m_D->Animations.size() + (int)m_ExternalClips.size() - 1;
 }

@@ -103,8 +103,8 @@ public:
     float LastThinkMs() const { return m_ThinkMs; }
     float LastLateMs() const { return m_LateMs; }
     // Per-sub-system CPU time (ms per frame), for the profiler and --npc-test: Think's perceive / brain / squads /
-    // move / aim+fire, LateUpdate's body / weapon hold / ragdolls / hitboxes. Averages skip the first second.
-    enum Sub { SubPerceive, SubBrain, SubSquads, SubMove, SubAimFire, SubBody, SubHold, SubRagdoll, SubHitbox, SubCount };
+    // move / aim+fire, LateUpdate's body / weapon rig / weapon hold / ragdolls / hitboxes. Averages skip the first two seconds.
+    enum Sub { SubPerceive, SubBrain, SubSquads, SubMove, SubAimFire, SubBody, SubWeapon, SubHold, SubRagdoll, SubHitbox, SubCount };
     static const char* SubName(int s);
     struct CostStats { double Sum = 0.0; float Max = 0.0f; int Frames = 0; float Avg() const { return Frames ? (float)(Sum / Frames) : 0.0f; } };
     const CostStats& ThinkCost() const { return m_ThinkStat; }

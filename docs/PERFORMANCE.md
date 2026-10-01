@@ -37,6 +37,23 @@ was found; the phase 2 row here is the re-measured one.
 `--perf-bench` now forces it to `--perf-res` (or Free Aspect) for the run only. Results taken before
 phase 3 at "1440p" and "4K" were really 1080p, letterboxed.
 
+### Render resolution (4K screens)
+
+The 3D view renders at an internal height and is upscaled to the window: an FSR1-style RCAS sharpen, then a
+bicubic resample (`src/Renderer/Upscaler.*`, 0.25 ms GPU at 4K). The HUD and ImGui draw after it, at native
+resolution. Set it in Preferences â†’ Performance â†’ Render Resolution (Native / 2160 / 1440 / 1080 / 900 / 720, default
+**1080**) with a sharpness slider, or with `--render-height N` (the bench defaults to native).
+
+Sandbox with its enemy squad, 3840x2160 window, play-max:
+
+| Internal | fps |
+|---|---|
+| Native (2160) | 72 |
+| 1440 | 126 |
+| 1080 | **163** |
+
+The enemy squad (4 soldiers) costs ~0.3 ms CPU here; see `docs/ENEMY_AI.md` for its own numbers.
+
 **Where the GPU time goes** (knockout tests, 1440p play-max): lighting and shading ~0.3 ms of Scene Draw,
 skinning math ~0.03 ms (GPU pre-skinning isn't worth building), the player's body ~0, the NPCs ~0.3 ms,
 the rest of the scene ~0.8 ms. Sun shadows are vertex-bound.
@@ -123,5 +140,10 @@ What is left, roughly by expected value. At 1080p the GPU is the limit, at 1440p
 **Hitches**
 10. Edit-mode SSAO prepass ~117 ms on first use (shader compile); sun shadow pass spike on the first
     edit frames.
+11. An enemy soldier's spawn is ~4 ms (5 ms of it was the weapon's clip matching, now shared between model
+    instances). Pooling soldiers (reusing a dead one's entities and weapon rig) would take it to ~0.
+
+Fixed in the enemy AI work: the first round fired in a Play stalled up to a second importing the spent case's FBX;
+every weapon now warms its case's mesh when it starts (`FirstPersonPresentation::WarmEjectAssets`).
 
 Character LODs are out of scope for this pass.
