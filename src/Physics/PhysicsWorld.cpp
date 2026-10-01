@@ -193,8 +193,15 @@ struct PhysicsState {
     std::vector<PxJoint*> joints;
     // Ragdolls by id: their bodies and joints (released with the scene, or by DestroyRagdoll).
     // Prev: each part's pose before the latest substep, so GetRagdollPart can interpolate like #168.
-    struct Ragdoll { std::vector<PxRigidDynamic*> Bodies; std::vector<PxJoint*> Joints; std::vector<PxTransform> Prev; };
+    // Drive: per part, the D6 joint to its parent (null for the root), for the slerp drives.
+    struct Ragdoll { std::vector<PxRigidDynamic*> Bodies; std::vector<PxJoint*> Joints; std::vector<PxTransform> Prev; std::vector<PxD6Joint*> Drive; };
     std::vector<Ragdoll> ragdolls;
+    // Per-bone hitboxes of living NPCs (see CreateNpcHitboxes): their kinematic actors, the capsule each shadows while
+    // active. hitboxActors: every hitbox actor, for the query filters; hitboxedCapsules: the capsules currently shadowed.
+    struct Hitboxes { std::vector<PxRigidDynamic*> Bodies; const PxRigidActor* Capsule = nullptr; bool Active = false; };
+    std::vector<Hitboxes> hitboxes;
+    std::unordered_set<const PxRigidActor*> hitboxActors;
+    std::unordered_set<const PxRigidActor*> hitboxedCapsules;
     std::unordered_map<PxJoint*, std::uint32_t>       jointOwner;
     std::unordered_map<std::uint32_t, PxRigidStatic*> staticByEntity;
     // Dynamic bodies with at least one joint: solved with more iterations, and grabbed gently.
@@ -1321,6 +1328,11 @@ bool PolicyRejects(const PxRigidActor* actor, bool solidOnly = false) {
     if (actor == PlayerActor()) return !p.hitPlayer || solidOnly;
     if (p.ignoreEntity != 0xFFFFFFFFu && UserDataToEntity(actor->userData) == p.ignoreEntity) return true;
     if ((solidOnly || !p.hitCharacters) && g_State->npcActors.count(actor)) return true;
+    // Hitboxes answer the unscoped queries (the player's); a scoped one (an NPC's) and the solid ones use the capsule.
+    if (!g_State->hitboxActors.empty()) {
+        if (g_State->hitboxActors.count(actor)) return solidOnly || !t_QueryPolicy.empty();
+        if (t_QueryPolicy.empty() && !solidOnly && g_State->hitboxedCapsules.count(actor)) return true;
+    }
     return false;
 }
 
@@ -1927,6 +1939,7 @@ int CreateRagdoll(unsigned entity, const RagdollPart* parts, int count) {
         PxShape* sh = PxRigidActorExt::createExclusiveShape(*b, PxCapsuleGeometry(std::max(p.Radius, 0.01f), std::max(p.HalfLength, 0.005f)), *mat);
         sh->setSimulationFilterData(PxFilterData(1u, 0u, (PxU32)id + 1u, 0u));
         sh->setQueryFilterData(PxFilterData(1u, 0u, (PxU32)id + 1u, 0u));
+        sh->userData = reinterpret_cast<void*>(static_cast<std::uintptr_t>((2u << 16) | (unsigned)i)); // RaycastBodyParts: ragdoll part i
         PxRigidBodyExt::setMassAndUpdateInertia(*b, std::max(p.Mass, 0.1f));
         b->setLinearDamping(0.08f);
         b->setAngularDamping(0.25f);
@@ -1939,6 +1952,7 @@ int CreateRagdoll(unsigned entity, const RagdollPart* parts, int count) {
         rd.Bodies.push_back(b);
     }
     mat->release(); // the shapes hold their own reference
+    rd.Drive.assign((size_t)count, nullptr);
     for (int i = 1; i < count; ++i) {
         const RagdollPart& p = parts[i];
         if (p.Parent < 0 || p.Parent >= i) continue;
@@ -1956,6 +1970,8 @@ int CreateRagdoll(unsigned entity, const RagdollPart* parts, int count) {
         const float sw = PxPi * std::clamp(p.SwingDeg, 1.0f, 170.0f) / 180.0f;
         j->setTwistLimit(PxJointAngularLimitPair(-tw, tw));
         j->setSwingLimit(PxJointLimitCone(sw, sw));
+        j->setDrivePosition(PxTransform(PxIdentity));
+        rd.Drive[(size_t)i] = j;
         rd.Joints.push_back(j);
     }
     return id;
@@ -1969,6 +1985,7 @@ void DestroyRagdoll(int ragdoll) {
     rd.Joints.clear();
     rd.Bodies.clear();
     rd.Prev.clear();
+    rd.Drive.clear();
 }
 
 void RagdollImpulse(int ragdoll, int part, const float impulse[3], const float point[3]) {
@@ -1995,6 +2012,20 @@ bool GetRagdollPart(int ragdoll, int part, float outPos[3], float outRotXYZW[4])
     outPos[0] = t.p.x; outPos[1] = t.p.y; outPos[2] = t.p.z;
     outRotXYZW[0] = t.q.x; outRotXYZW[1] = t.q.y; outRotXYZW[2] = t.q.z; outRotXYZW[3] = t.q.w;
     return true;
+}
+
+void SetRagdollDrive(int ragdoll, float stiffness, float damping) {
+    if (!g_State || ragdoll < 0 || ragdoll >= (int)g_State->ragdolls.size()) return;
+    const PxD6JointDrive drive(std::max(stiffness, 0.0f), std::max(damping, 0.0f), PX_MAX_F32, /*isAcceleration=*/true);
+    for (PxD6Joint* j : g_State->ragdolls[(size_t)ragdoll].Drive)
+        if (j) j->setDrive(PxD6Drive::eSLERP, drive);
+}
+
+void SetRagdollDriveTarget(int ragdoll, int part, const float rotXYZW[4]) {
+    if (!g_State || ragdoll < 0 || ragdoll >= (int)g_State->ragdolls.size() || !rotXYZW) return;
+    auto& drive = g_State->ragdolls[(size_t)ragdoll].Drive;
+    if (part < 0 || part >= (int)drive.size() || !drive[(size_t)part]) return;
+    drive[(size_t)part]->setDrivePosition(PxTransform(PxVec3(0.0f), ToQuat(rotXYZW)));
 }
 
 bool RagdollAsleep(int ragdoll) {
@@ -2244,6 +2275,105 @@ CharacterId NpcCharacterOf(unsigned entity) {
     for (size_t i = 0; i < g_State->npcs.size(); ++i)
         if (g_State->npcs[i].ctrl && g_State->npcs[i].entity == entity) return (CharacterId)i;
     return kNoCharacter;
+}
+
+// --- NPC hitboxes ----------------------------------------------------------------------
+
+namespace {
+PxTransform HitboxPose(const HitCapsule& c) {
+    return PxTransform(PxVec3(c.Position[0], c.Position[1], c.Position[2]), ToQuat(c.Rotation));
+}
+void ShadowCapsule(PhysicsState::Hitboxes& h, bool on) {
+    if (!g_State || !h.Capsule) return;
+    if (on) g_State->hitboxedCapsules.insert(h.Capsule);
+    else g_State->hitboxedCapsules.erase(h.Capsule);
+}
+} // namespace
+
+int CreateNpcHitboxes(CharacterId owner, const HitCapsule* parts, int count) {
+    PxCapsuleController* c = NpcController(owner);
+    if (!g_State || !g_State->scene || !c || !parts || count <= 0) return -1;
+    PhysicsState& s = *g_State;
+    int id = -1;
+    for (size_t i = 0; i < s.hitboxes.size(); ++i)
+        if (s.hitboxes[i].Bodies.empty()) { id = (int)i; break; }
+    if (id < 0) { id = (int)s.hitboxes.size(); s.hitboxes.emplace_back(); }
+    PhysicsState::Hitboxes& h = s.hitboxes[(size_t)id];
+    h.Capsule = c->getActor();
+    const std::uint32_t entity = s.npcs[(size_t)owner].entity;
+    for (int i = 0; i < count; ++i) {
+        PxRigidDynamic* b = s.physics->createRigidDynamic(HitboxPose(parts[i]));
+        PxShape* sh = PxRigidActorExt::createExclusiveShape(
+            *b, PxCapsuleGeometry(std::max(parts[i].Radius, 0.01f), std::max(parts[i].HalfLength, 0.005f)), *s.defaultMaterial);
+        sh->setFlag(PxShapeFlag::eSIMULATION_SHAPE, false); // query only
+        sh->setFlag(PxShapeFlag::eSCENE_QUERY_SHAPE, true);
+        sh->setSimulationFilterData(PxFilterData(1u, 0u, 0u, 0u)); // the Default layer, as the capsule
+        sh->setQueryFilterData(PxFilterData(1u, 0u, 0u, 0u));
+        sh->userData = reinterpret_cast<void*>(static_cast<std::uintptr_t>((1u << 16) | (unsigned)i));
+        b->setRigidBodyFlag(PxRigidBodyFlag::eKINEMATIC, true);
+        b->userData = reinterpret_cast<void*>(static_cast<std::uintptr_t>(entity));
+        s.scene->addActor(*b);
+        h.Bodies.push_back(b);
+        s.hitboxActors.insert(b);
+    }
+    h.Active = true;
+    ShadowCapsule(h, true);
+    return id;
+}
+
+void SetNpcHitboxPoses(int id, const HitCapsule* parts, int count) {
+    if (!g_State || !parts || id < 0 || id >= (int)g_State->hitboxes.size()) return;
+    auto& h = g_State->hitboxes[(size_t)id];
+    for (int i = 0; i < count && i < (int)h.Bodies.size(); ++i) h.Bodies[(size_t)i]->setGlobalPose(HitboxPose(parts[i]), false);
+}
+
+void SetNpcHitboxesActive(int id, bool active) {
+    if (!g_State || id < 0 || id >= (int)g_State->hitboxes.size()) return;
+    auto& h = g_State->hitboxes[(size_t)id];
+    if (h.Bodies.empty() || h.Active == active) return;
+    h.Active = active;
+    for (PxRigidDynamic* b : h.Bodies) {
+        PxShape* sh = nullptr;
+        if (b->getShapes(&sh, 1) == 1 && sh) sh->setFlag(PxShapeFlag::eSCENE_QUERY_SHAPE, active);
+    }
+    ShadowCapsule(h, active);
+}
+
+void DestroyNpcHitboxes(int id) {
+    if (!g_State || id < 0 || id >= (int)g_State->hitboxes.size()) return;
+    auto& h = g_State->hitboxes[(size_t)id];
+    ShadowCapsule(h, false);
+    for (PxRigidDynamic* b : h.Bodies)
+        if (b) { g_State->hitboxActors.erase(b); b->release(); }
+    h.Bodies.clear();
+    h.Capsule = nullptr;
+    h.Active = false;
+}
+
+bool RaycastBodyParts(const float origin[3], const float dir[3], float maxDistance, BodyPartHit& out) {
+    out = BodyPartHit{};
+    PxVec3 d;
+    if (!g_State || !g_State->scene || maxDistance <= 0.0f || !NormalizedDir(dir, d)) return false;
+    struct PartsOnly : PxQueryFilterCallback {
+        PxQueryHitType::Enum preFilter(const PxFilterData&, const PxShape* shape, const PxRigidActor*, PxHitFlags&) override {
+            return shape && shape->userData ? PxQueryHitType::eBLOCK : PxQueryHitType::eNONE;
+        }
+        PxQueryHitType::Enum postFilter(const PxFilterData&, const PxQueryHit&, const PxShape*, const PxRigidActor*) override {
+            return PxQueryHitType::eBLOCK;
+        }
+    } filter;
+    PxQueryFilterData fd(PxQueryFlag::eDYNAMIC | PxQueryFlag::ePREFILTER);
+    PxRaycastBuffer buf;
+    if (!g_State->scene->raycast(PxVec3(origin[0], origin[1], origin[2]), d, maxDistance, buf, PxHitFlag::eDEFAULT, fd, &filter) ||
+        !buf.hasBlock || !buf.block.shape)
+        return false;
+    const unsigned tag = (unsigned)reinterpret_cast<std::uintptr_t>(buf.block.shape->userData);
+    out.Kind = (int)(tag >> 16);
+    out.Part = (int)(tag & 0xFFFFu);
+    out.Entity = buf.block.actor ? UserDataToEntity(buf.block.actor->userData) : 0xFFFFFFFFu;
+    out.Distance = buf.block.distance;
+    out.Point[0] = buf.block.position.x; out.Point[1] = buf.block.position.y; out.Point[2] = buf.block.position.z;
+    return true;
 }
 
 // ==================================================================================

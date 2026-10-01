@@ -18,6 +18,9 @@ class World;
 //   watch   (default) the player stands at the spawn, untouchable: the squad notices, takes cover, shoots
 //   fight   the player shoots back at whoever it can see; the squad takes losses and replaces them
 //   die     the player stands in the open and can be killed: death and respawn
+//   deaths  hitboxes, hit reactions and deaths: the soldiers stand still while rays are cast at every bone, then are shot
+//           dead through the head, chest, thigh and forearm (limp, stagger, ragdoll, no pose pop), a corpse is shot, and
+//           two are wounded (crawl, "Unit down", dies on the next hit / bleeds out)
 //   pose    the weapon hold, close up: an AK and a Remington soldier, the AI frozen, put through aim level /
 //           up / down / to the side, low ready, crouched, strafing, reloading and sprinting; four views of each
 //           and the gun's / elbows' / hands' clearances (NpcBody::MeasureHold) logged and checked
@@ -47,7 +50,20 @@ public:
 private:
     void Check(bool ok, const std::string& what);
     void CheckRadio(NpcDirector& npcs);
+    void PrintCosts(const NpcDirector& npcs) const;
     void Pose(World& world, NpcDirector& npcs, float now);
+    void Deaths(World& world, NpcDirector& npcs, float now);
+    // deaths
+    int m_DStep = 0;
+    float m_DAt = 0.0f;
+    std::vector<std::string> m_DUsed;
+    std::string m_DNpc[2];
+    int m_DCase = 0;
+    float m_DWorstPop = 0.0f, m_DWoundSpeed = 0.0f;
+    int m_DDeaths = 0, m_DRagdolls = 0;
+    glm::vec3 m_DCorpseBefore[11]{};
+    glm::vec3 m_DBoneBefore[4]{};
+    bool m_DCorpseAsleep = false, m_DKneelChecked = false;
     std::string m_Scenario;
     float m_Time = 0.0f;
     float m_Duration = 45.0f;
