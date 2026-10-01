@@ -13,6 +13,7 @@
 #include <cmath>
 #include <memory>
 #include <cstdio>
+#include <cstdlib>
 
 namespace {
 constexpr int kAkMagazine = 30;
@@ -247,7 +248,12 @@ FirstPersonWeaponTest::FirstPersonWeaponTest(bool stockProbe, bool probeAk) : m_
     };
     // Full-auto hold, read by Drive.
     m_Held = [mem] { return mem->Held; };
-    if (m_Probe) BuildProbe();
+    if (m_Probe) {
+#pragma warning(suppress : 4996)
+        const char* pose = std::getenv("STOCK_PROBE_POSE");
+        if (pose && *pose && *pose != '0') BuildPoseProbe();
+        else BuildProbe();
+    }
 }
 
 // --- Stock probe ------------------------------------------------------------------------------
@@ -265,6 +271,40 @@ std::string ShotStem(const std::string& s) {
     return n;
 }
 } // namespace
+
+void FirstPersonWeaponTest::BuildPoseProbe() {
+    using C = Ctx;
+    auto hold = [](float s) { return [s](C& c) { return c.Time >= s; }; };
+    const bool ak = m_ProbeAk;
+    std::vector<Step> steps = {{"AK in hand at Play", nullptr, [](C& c) { return c.State() == "Idle"; }, 30.0f, nullptr}};
+    if (!ak)
+        steps.push_back({"2: switch to the Remington", [](C& c) { c.P->SelectSlot(1); c.Cam->Pitch = 0.0f; },
+                         [](C& c) { return c.P->Slot() == 1 && c.State() == "Idle"; }, 180.0f, nullptr});
+    steps.push_back({"settle", nullptr, hold(2.0f), 5.0f, nullptr});
+    // Each pose held, sampled, then the whole body from three sides.
+    auto views = [&](const std::string& stem) {
+        static const char* kNames[4] = {"stock", "right", "front_r", "front_l"};
+        for (int v = 1; v <= 3; ++v)
+            steps.push_back({stem + " view " + kNames[v], [v](C& c) { c.View = v; }, hold(0.1f), 2.0f,
+                             [stem, v](C& c) { c.Shot = ShotStem("pose_" + stem + "_" + kNames[v]); }});
+    };
+    struct Pose { const char* Name; bool Crouch, Aim; float Pitch; glm::vec2 Move; };
+    for (const Pose& ps : {Pose{"stand_hip", false, false, 0.0f, {}}, Pose{"stand_aim", false, true, 0.0f, {}},
+                           Pose{"stand_aim_up", false, true, 30.0f, {}}, Pose{"stand_aim_down", false, true, -30.0f, {}},
+                           Pose{"crouch_hip", true, false, 0.0f, {}}, Pose{"crouch_aim", true, true, 0.0f, {}},
+                           Pose{"crouch_aim_up", true, true, 25.0f, {}}, Pose{"crouch_aim_down", true, true, -30.0f, {}},
+                           Pose{"crouch_aim_strafe", true, true, 0.0f, {1.0f, 0.0f}}, Pose{"stand_up", false, false, 0.0f, {}}}) {
+        const std::string name = ps.Name;
+        steps.push_back({name, [ps](C& c) { c.View = 0; c.Crouch = ps.Crouch; c.Aim = ps.Aim; c.Cam->Pitch = ps.Pitch; c.Move = ps.Move; },
+                         [ps](C& c) { return c.Time >= (ps.Move.x != 0.0f ? 0.9f : 1.5f) && (!ps.Aim || c.State() == "Aim"); }, 6.0f,
+                         [this, name](C&) { PrintSample(name); }});
+        views(name);
+        steps.push_back({name + " done", [](C& c) { c.View = 0; c.Move = glm::vec2(0.0f); }, hold(0.05f), 2.0f, nullptr});
+    }
+    steps.push_back({"sights down", [](C& c) { c.Aim = false; c.Crouch = false; c.Cam->Pitch = 0.0f; },
+                     [](C& c) { return c.State() == "Idle" && c.Time > 0.5f; }, 3.0f, nullptr});
+    m_Steps = std::move(steps);
+}
 
 void FirstPersonWeaponTest::BuildProbe() {
     using C = Ctx;
@@ -516,9 +556,17 @@ void FirstPersonWeaponTest::AfterPose(const World& world, const FirstPersonBody&
         }
         s.GunShift = glm::length(body.WorldGunShift());
         s.Valid = true;
-        // The Scene camera: in front of the body and to its right, on the gun's rear and the shoulder.
-        const glm::vec3 target = 0.5f * (butt + 0.5f * (neck + upper)) + fwd * 0.08f;
+        // The Scene camera: in front of the body and to its right, on the gun's rear and the shoulder - or (pose probe)
+        // the whole body from its right, its front right or its front left.
+        glm::vec3 target = 0.5f * (butt + 0.5f * (neck + upper)) + fwd * 0.08f;
         m_SceneCamPos = target + front * 1.05f + right * 0.75f + up * 0.12f;
+        if (m_Ctx.View > 0) {
+            glm::vec3 feet = cam.Position;
+            feet.y = neck.y - 1.45f;
+            target = glm::vec3(neck.x, feet.y + 0.85f * (neck.y - feet.y) * 0.85f, neck.z);
+            const glm::vec3 dir = m_Ctx.View == 1 ? right : m_Ctx.View == 2 ? glm::normalize(front + right * 0.75f) : glm::normalize(front - right * 0.85f);
+            m_SceneCamPos = target + dir * 2.4f + up * 0.15f;
+        }
         const glm::vec3 look = glm::normalize(target - m_SceneCamPos);
         m_SceneCamYaw = glm::degrees(std::atan2(look.z, look.x));
         m_SceneCamPitch = glm::degrees(std::asin(std::clamp(look.y, -1.0f, 1.0f)));

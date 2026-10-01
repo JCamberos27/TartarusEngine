@@ -71,6 +71,7 @@ public:
     bool ScriptedMove = false;
     glm::vec2 ScriptMove{0.0f};
     bool ScriptSprint = false;
+    bool ScriptCrouch = false; // ... and Crouch
 
     // readInput == false keeps the body simulating (gravity, collision, resting on geometry)
     // but ignores mouse-look / WASD / jump — used while the game runs inside the docked Game

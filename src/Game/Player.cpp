@@ -57,7 +57,7 @@ void Player::Update(float dt, World& world, GLFWwindow* window, bool readInput) 
         if (Crouched && PhysicsWorld::HasCharacter()) PhysicsWorld::ResizeCharacter(standCylHalf);
         Crouched = false;
     } else if (PhysicsWorld::HasCharacter()) {
-        const bool wantCrouch = readInput && InputMap::GetButton("Crouch");
+        const bool wantCrouch = ScriptedMove ? ScriptCrouch : readInput && InputMap::GetButton("Crouch");
         if (wantCrouch && !Crouched && Grounded) {
             if (PhysicsWorld::ResizeCharacter(crouchCylHalf)) Crouched = true;
         } else if (!wantCrouch && Crouched && PhysicsWorld::CharacterFitsAt(standCylHalf)) {
