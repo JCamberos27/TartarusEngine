@@ -67,6 +67,7 @@ struct NpcBodyInput {
     bool Sprint = false;
     float Lean = 0.0f;             // -1 (left) .. 1 (right), a peek round cover
     float Cower = 0.0f;            // 0..1: ducking from rounds cracking past (hunched, head down)
+    bool FootIK = false;           // feet onto uneven ground (near the player: two rays and a leg solve a frame)
 };
 
 class NpcBody {
@@ -167,6 +168,14 @@ private:
     // own solves came out the same, at several times the cost). Called whenever a piece is read or drawn next.
     void SyncPieces();
     void OffsetSpine(const glm::quat& step); // m_Pose / m_Globals already hold the driver's pose and its globals
+    // Feet onto uneven ground (LateUpdate, first): the pelvis drops to the lower foot's ground, the legs reach theirs.
+    void FootPass(float dt);
+    void SyncLower(); // the driver's pelvis and legs onto every other piece
+    std::vector<std::vector<std::pair<int, int>>> m_LowerMap; // per piece: (piece node, driver node), pelvis and legs
+    int m_DriverPelvis = -1, m_DriverLeg[2][3] = {{-1, -1, -1}, {-1, -1, -1}}; // thigh, calf, foot
+    float m_FootWeight = 0.0f, m_FootOffset[2] = {0.0f, 0.0f};
+    glm::vec3 m_FootNormal[2] = {glm::vec3(0.0f, 1.0f, 0.0f), glm::vec3(0.0f, 1.0f, 0.0f)};
+    bool m_HaveFootGround = false;
     bool m_PiecesStale = false;
     std::vector<std::vector<std::pair<int, int>>> m_UpperMap; // per piece: (piece node, driver node), spine_01 and below
     int m_DriverIndex = -1;

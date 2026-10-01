@@ -135,6 +135,7 @@ The goal was ≤ 1 ms for 5. What it relies on:
   - beyond 25 m: every 2nd frame
   - beyond 50 m or out of view: every 4th frame
   - always full rate while firing, just hurt, or just spawned
+- **Foot IK only where it shows.** For soldiers within 25 m and in view, feet go onto slopes, ramps and steps: a ground ray under each foot, the pelvis dropped to the lower foot, and both legs re-solved with the planted foot tilted to its slope. It's solved on the driver, and the pelvis and legs are copied to the other pieces. On flat ground it costs only the two rays.
 - **Mesh clearance only up close.** The gun / elbow / cheek checks against the drawn surfaces run within 12 m, in view, on every third frame. Their skin tables are shared per model and built at spawn. Further out, the sphere keep-outs do the job.
 - **No name lookups per frame in the hold.** Finger, arm and chest bones and the arm-shape node pairs are found once per weapon rig.
 - **One cover search per frame across all squads.** A second soldier wanting one waits a frame.
@@ -175,6 +176,7 @@ Hitbox. `--npc-test` prints them at the end.
 | fight | The player shoots back. Losses and respawns. |
 | die | The player is killed and respawns. |
 | deaths | Rays name every bone. Then:<br>• head, chest, thigh and forearm kills<br>• limp and stagger<br>• no pose pop into the ragdoll<br>• a shot corpse<br>• wounded crawl and bleed-out |
+| feet | Foot IK: each foot's height over the ground on the flat, then standing across and up the ramp. Both stay within 4 cm of the flat's. |
 | pose | The weapon hold close up: aim, low ready, crouch, strafe, reload, sprint, signal. Checks clearances. |
 | tactics | Pins a soldier: it blind-fires. Checks that bounds go under covering fire. Then steps up to a soldier and takes a rifle butt. |
 | sandbox | The Sandbox squad spawns, uses the radio and dies to Kill All. |
