@@ -161,6 +161,10 @@ float FirstPersonBodyArmedEyeLift(float pitchRadians) {
     return 1.0f - glm::smoothstep(glm::radians(25.0f), glm::radians(60.0f), std::abs(pitchRadians));
 }
 
+float FirstPersonBodyAimLeanMost(float pitchRadians, float spineShare) {
+    return std::clamp(0.2f - pitchRadians * std::clamp(spineShare, 0.0f, 1.0f), -0.3f, 1.2f);
+}
+
 float FirstPersonBodySpineAim(float pitchRadians, float spineAim, float spineAimDown) {
     return std::clamp(pitchRadians < 0.0f ? spineAimDown : spineAim, 0.0f, 1.0f);
 }
@@ -1545,6 +1549,31 @@ void FirstPersonBody::ArmsLateUpdate(World& world, entt::entity weaponArms, floa
     PROFILE_SCOPE("FPB sync twins");
     SyncTwins(world);
     }
+    // Armed, the world body stands up out of the clips' lean into a shooter's stance: the crouch walk hunches ~40
+    // degrees, which in every view but the player's carried the head over the gun and the stock behind the hood.
+    // The torso leans no further forward than a slight lean plus the chest's share of the view's pitch (Spine Aim
+    // Down looking down, less looking up). The twins only: the player's own eye (on the pieces) keeps its crouch.
+    if (!m_Twins.empty() && camera && m_ArmsWeight > 1e-3f) {
+        int driverTwin = -1;
+        for (size_t k = 0; k < m_Pieces.size() && k < m_TwinModels.size(); ++k)
+            if (m_Pieces[k] == m_Driver) driverTwin = (int)k;
+        glm::mat4 pelvis(1.0f), neck(1.0f);
+        if (driverTwin >= 0 && m_TwinModels[driverTwin] && m_TwinModels[driverTwin]->NodeTransform(Bone(FPBody::kBonePelvis), pelvis) &&
+            m_TwinModels[driverTwin]->NodeTransform(Bone("neck_01"), neck)) {
+            const glm::vec3 up = glm::vec3(neck[3]) - glm::vec3(pelvis[3]);
+            const float leanNow = std::atan2(glm::dot(up, kForward), std::max(up.y, 1e-3f)); // + = forward
+            const float viewPitch = std::asin(std::clamp(camera->Front().y, -1.0f, 1.0f));
+            const float leanMost = FirstPersonBodyAimLeanMost(viewPitch, FirstPersonBodySpineAim(viewPitch, cfg.SpineAim, cfg.SpineAimDown));
+            const float straighten = std::min(0.0f, leanMost - leanNow) * std::clamp(m_ArmsWeight, 0.0f, 1.0f);
+            if (straighten < -1e-3f) {
+                const glm::quat none(1.0f, 0.0f, 0.0f, 0.0f);
+                const glm::quat back = glm::angleAxis(straighten, kRight * -1.0f); // about the body's left (+X): + tips forward
+                const char* const* kSpine = FPBody::kBoneSpine;
+                RotateChain({kSpine[0], kSpine[1], kSpine[2], kSpine[3], kSpine[4]},
+                            [&](int n) { return glm::normalize(glm::slerp(none, back, 1.0f / (float)n)); }, &m_TwinModels);
+            }
+        }
+    }
     const bool enabled = cfg.WeaponArms;
     const bool haveRig = enabled && weaponArms != entt::null && reg.valid(weaponArms) &&
                          reg.all_of<RenderableComponent>(weaponArms) && viewModelFov > 0.0f;
@@ -2031,7 +2060,11 @@ void FirstPersonBody::ArmsLateUpdate(World& world, entt::entity weaponArms, floa
                 const glm::vec3 eye = glm::vec3(toModel * glm::vec4(camera->Position + m_WorldGunShift, 1.0f));
                 // The head sits the eye's offset behind and below the eye (the component's Camera Offset).
                 const glm::vec3 headWant = eye - (kRight * cfg.CameraOffset.x + glm::vec3(0.0f, cfg.CameraOffset.y, 0.0f) + kForward * cfg.CameraOffset.z);
-                const glm::vec3 from = headNow - neck, to = headWant - neck;
+                // Over and down onto the stock - canted toward it and nodding forward - never back: where the sights sit
+                // less far ahead of the head than Camera Offset, chased outright the neck tipped the head back.
+                const glm::vec3 from = headNow - neck;
+                glm::vec3 to = headWant - neck;
+                to += kForward * std::max(0.0f, glm::dot(from, kForward) + 0.03f - glm::dot(to, kForward));
                 if (glm::length(from) > 1e-4f && glm::length(to) > 1e-4f) {
                     const glm::quat none(1.0f, 0.0f, 0.0f, 0.0f);
                     glm::quat turn(glm::normalize(from), glm::normalize(to));
@@ -2039,6 +2072,36 @@ void FirstPersonBody::ArmsLateUpdate(World& world, entt::entity weaponArms, floa
                     const float most = glm::radians(gun->HeadTiltDegrees);
                     if (angle > most && angle > 1e-5f) turn = glm::slerp(none, turn, most / angle);
                     turn = glm::slerp(none, turn, lock);
+                    // ... onto it, not into it: the drawn head (skinned for the world gun's keep-out above), turned about the
+                    // neck, stays 2.5 cm off the gun; past that the weld gives way (the largest share that clears).
+                    if (!m_HeadPointBuffer.empty() && gun->MeshClearance > 0.0f) {
+                        const glm::mat4 twinWorld = world.ComposeWorldTransform(m_Twins[driverTwin]);
+                        const glm::quat worldRot = IK::Rotation(twinWorld);
+                        const glm::vec3 pivot = glm::vec3(twinWorld * glm::vec4(neck, 1.0f));
+                        const glm::vec3 fwd = glm::length(gun->ForwardWorld) > 1e-4f ? glm::normalize(gun->ForwardWorld) : camera->Front();
+                        const glm::vec3 a = gun->ButtWorld + m_WorldGunShift, b = a + fwd * 0.6f;
+                        std::vector<glm::vec3>& moved = m_HeadScratch;
+                        auto clears = [&](float share) {
+                            const glm::quat r = worldRot * glm::slerp(none, turn, share) * glm::inverse(worldRot);
+                            moved.resize(m_HeadPointBuffer.size());
+                            for (size_t i = 0; i < moved.size(); ++i) moved[i] = pivot + r * (m_HeadPointBuffer[i] - pivot);
+                            const glm::vec3 ab = b - a;
+                            const float len2 = std::max(glm::dot(ab, ab), 1e-9f);
+                            for (const glm::vec3& q : moved) {
+                                const float t = std::clamp(glm::dot(q - a, ab) / len2, 0.0f, 1.0f);
+                                if (glm::length(a + ab * t - q) < 0.025f) return false;
+                            }
+                            return true;
+                        };
+                        if (!clears(1.0f)) {
+                            float lo = 0.0f, hi = 1.0f;
+                            for (int it = 0; it < 6; ++it) {
+                                const float mid = 0.5f * (lo + hi);
+                                (clears(mid) ? lo : hi) = mid;
+                            }
+                            turn = glm::slerp(none, turn, lo);
+                        }
+                    }
                     m_WorldHeadTiltDeg = glm::degrees(2.0f * std::acos(std::clamp(std::abs(turn.w), 0.0f, 1.0f)));
                     RotateChain({"neck_01", "neck_02"}, [&](int n) { return glm::normalize(glm::slerp(none, turn, 1.0f / (float)n)); },
                                 &m_TwinModels);
