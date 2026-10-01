@@ -36,6 +36,7 @@ struct PlayerSnapshot {
     bool Fired = false;                    // a round left the player's gun this frame
     bool Reloading = false;
     bool Sprinting = false;
+    float Health = 1.0f;                   // 0..1
 };
 
 // Runs the enemy squad in Play: builds the navigation mesh and cover from the scene, spawns soldiers
@@ -95,6 +96,10 @@ public:
         int CoverOrders = 0;     // squadmates told to cover a bound
         int BlindFires = 0;
         int Melees = 0, MeleeHits = 0;
+        int Flanks = 0, FlankFails = 0; // flanks started / given up for want of cover round the side
+        int Pincers = 0;         // second flankers sent round the other side
+        int HurtPushes = 0;      // pushes called on a badly hurt player
+        int Startles = 0;
         int Backpedals = 0;      // a rifle too close: backing off while shooting
     };
     const TacticStats& Tactics() const { return m_Tactics; }
@@ -139,6 +144,14 @@ private:
         float NextRoles = 0.0f;
         float NextTokens = 0.0f;
         int FlankHolder = -1, PushHolder = -1;
+        int PincerHolder = -1;        // a second flanker, for the other side, while the first is on its way
+        float PincerDoneAt = -1e9f;
+        float PlayerHurtPushAt = -1e9f;
+        // A flank token handed back (left the flank, or arrived).
+        void DropFlank(int index, float now) {
+            if (FlankHolder == index) { FlankHolder = -1; FlankDoneAt = now; }
+            if (PincerHolder == index) { PincerHolder = -1; PincerDoneAt = now; }
+        }
         std::vector<int> Attackers;
         TargetMemory Shared;          // what the squad knows, merged from its members
         float SharedAt = -1e9f;
@@ -198,6 +211,8 @@ private:
     std::mt19937 m_Rng{0x5eedu};
     PlayerSnapshot m_Player;
     float m_PlayerUnseen = 0.0f;           // since any soldier last saw the player
+    glm::vec3 m_PlayerPost{0.0f};          // where the player has been holding ...
+    float m_PlayerStill = 0.0f;            // ... and for how long (within 2.5 m): a camper gets flanked
     glm::vec3 m_PrevPlayerFeet{0.0f};
     float m_FootstepTimer = 0.0f;
     int m_ShootersNow = 0, m_MaxShooters = 0;

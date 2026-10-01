@@ -395,6 +395,8 @@ void NpcTest::After(World& world, NpcDirector& npcs, const PlayerVitals& vitals,
         const NpcDirector::TacticStats& ts = npcs.Tactics();
         std::printf("[NpcTest] tactics: bounds %d (covered %d), cover orders %d, blind fire %d, melee %d (landed %d), backpedals %d\n",
                     ts.Bounds, ts.CoveredBounds, ts.CoverOrders, ts.BlindFires, ts.Melees, ts.MeleeHits, ts.Backpedals);
+        std::printf("[NpcTest] tactics: flanks %d (%d found no cover), ", ts.Flanks, ts.FlankFails);
+        std::printf("pincers %d, pushes on a hurt player %d, startles %d\n", ts.Pincers, ts.HurtPushes, ts.Startles);
         PrintCosts(npcs);
         std::fflush(stdout);
         Check(m_MaxAlive >= 3, "at least three soldiers spawned (" + std::to_string(m_MaxAlive) + ")");
