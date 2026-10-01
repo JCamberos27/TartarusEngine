@@ -3,6 +3,7 @@
 #include <GLFW/glfw3.h>
 #include <algorithm>
 #include <chrono>
+#include <cmath>
 #include <thread>
 
 #if defined(_WIN32)
@@ -27,6 +28,9 @@ std::uint64_t g_FrameCount = 0;
 float  g_TimeScale = 1.0f;
 float  g_DebugTimeScale = 1.0f;
 float  g_MaxDelta = 0.1f;
+double g_RefreshPeriod = 0.0; // SetRefreshPeriod; 0 = deltas as measured
+double g_Unpaced = 0.0;       // measured time not yet handed out as whole refreshes (+ ahead, - behind)
+double g_AvgDelta = 0.0;      // the measured delta, averaged over the last ~20 frames
 
 #if defined(_WIN32)
 // A high-resolution waitable timer (Windows 10 1803+) wakes within ~0.5 ms of its due time,
@@ -43,16 +47,48 @@ HANDLE FrameTimer() {
 
 namespace Time {
 
+double PaceDelta(double measured, double period, double& unpaced) {
+    unpaced += measured;
+    double paced = period * (double)std::max(1L, std::lround(unpaced / period));
+    unpaced -= paced;
+    // A little of what is left over goes back every frame: the refresh rate GLFW reports is
+    // rounded (59.94 Hz reads 60), and the game clock must not drift off the real one.
+    const double bleed = unpaced * 0.02;
+    paced += bleed;
+    unpaced -= bleed;
+    // Frames not following the refresh at all (a variable-refresh display, a stall): as measured.
+    if (std::abs(unpaced) > 2.0 * period) {
+        paced += unpaced;
+        unpaced = 0.0;
+    }
+    return paced;
+}
+
 void BeginFrame() {
     const double now = glfwGetTime();
     g_RealDelta = g_FrameStart < 0.0 ? 0.0f : (float)(now - g_FrameStart);
     if (g_RealDelta < 0.0f) g_RealDelta = 0.0f;
     g_FrameStart = now;
     g_UnscaledDelta = std::min(g_RealDelta, g_MaxDelta);
+    g_AvgDelta += ((double)g_UnscaledDelta - g_AvgDelta) * 0.05;
+    // Frames coming faster than the refresh: the sync isn't holding them (the driver overrides it), so as measured.
+    if (const double period = g_RefreshPeriod; period > 0.0 && g_UnscaledDelta > 0.0f && g_AvgDelta > period * 0.9) {
+        const double paced = PaceDelta(g_UnscaledDelta, period, g_Unpaced);
+        g_UnscaledDelta = (float)std::clamp(paced, 0.0, (double)g_MaxDelta);
+    }
     g_Delta = g_UnscaledDelta * EffectiveTimeScale();
     g_UnscaledTime += g_UnscaledDelta;
     g_Time += g_Delta;
     ++g_FrameCount;
+}
+
+void SetRefreshPeriod(double seconds) {
+    seconds = seconds > 0.0 ? seconds : 0.0;
+    if (seconds != g_RefreshPeriod) {
+        g_Unpaced = 0.0;
+        g_AvgDelta = seconds;
+    }
+    g_RefreshPeriod = seconds;
 }
 
 float DeltaTime() { return g_Delta; }
