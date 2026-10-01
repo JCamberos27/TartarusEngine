@@ -305,6 +305,13 @@ float FirstPersonBodyElbowClearSwivel(const std::vector<glm::vec3>& points, cons
 // player's arms take before reaching the rig's hands - also the enemy soldiers' (NpcBody::HoldWeapon).
 void FirstPersonBodyCopyArmShape(const Model& m, const Model& rig, float weight, std::vector<LocalTRS>& pose,
                                  const std::vector<int>& parents, float clavicleWeight);
+// The same with the body / rig node pairs worked out once (FirstPersonBodyArmShapeLinks), for a body that holds the
+// same rig frame after frame - no name lookups per frame.
+struct FirstPersonArmShapeLink { int Body, Rig; bool Clavicle; };
+void FirstPersonBodyArmShapeLinks(const Model& m, const Model& rig, const std::vector<int>& parents,
+                                  std::vector<FirstPersonArmShapeLink>& out);
+void FirstPersonBodyCopyArmShape(const std::vector<FirstPersonArmShapeLink>& links, const Model& rig, float weight,
+                                 std::vector<LocalTRS>& pose, float clavicleWeight);
 float FirstPersonBodyFootPelvis(float offL, float offR, float maxDrop, float maxRaise);
 glm::vec3 FirstPersonBodyEye(const glm::vec3& restHead, const glm::vec3& head, float bob, const glm::vec3& offset);
 // A piece's Near Hide: the body's, and for clothing at least Clothing Near Hide.

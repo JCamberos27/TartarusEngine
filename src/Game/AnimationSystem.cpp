@@ -6,6 +6,8 @@
 #include <algorithm>
 #include <chrono>
 #include <cctype>
+#include <mutex>
+#include <unordered_set>
 #include "World.h"
 #include "RotationMath.h"
 #include "Components.h"
@@ -181,8 +183,17 @@ int ResolveExternalClip(Model& model, const std::string& clipRef, AssetLibrary& 
     for (char& c : ext) c = (char)std::tolower((unsigned char)c);
     if (ext != ".fbx" && ext != ".gltf" && ext != ".glb" && ext != ".dae" && ext != ".obj") return -1;
     const std::string abs = std::filesystem::u8path(path).is_absolute() ? path : ProjectPaths::Resolve(path);
-    std::error_code ec;
-    if (!std::filesystem::exists(std::filesystem::u8path(abs), ec)) return -1;
+    // Files known to be there aren't stat'ed again (each weapon spawned resolves its whole clip list, a disk stat apiece).
+    static std::mutex s_KnownMutex;
+    static std::unordered_set<std::string> s_Known;
+    {
+        std::lock_guard<std::mutex> lock(s_KnownMutex);
+        if (!s_Known.count(abs)) {
+            std::error_code ec;
+            if (!std::filesystem::exists(std::filesystem::u8path(abs), ec)) return -1;
+            s_Known.insert(abs);
+        }
+    }
     std::shared_ptr<Model> src = assets.LoadModel(abs);
     if (!src || src.get() == &model || src->OwnAnimationCount() == 0) return -1;
     int srcClip = 0;
