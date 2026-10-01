@@ -23,6 +23,7 @@ class World;
 //           two are wounded (crawl, "Unit down", dies on the next hit / bleeds out)
 //   tactics the player pins a soldier behind low cover with bursts over its head (blind fire), the squad bounds under
 //           covering fire, then the player steps up to a soldier and is struck with its rifle butt
+//   feet    foot IK: a soldier's feet measured over the ground on the flat, then across and up the Arena's ramp
 //   pose    the weapon hold, close up: an AK and a Remington soldier, the AI frozen, put through aim level /
 //           up / down / to the side, low ready, crouched, strafing, reloading and sprinting; four views of each
 //           and the gun's / elbows' / hands' clearances (NpcBody::MeasureHold) logged and checked
@@ -55,6 +56,11 @@ private:
     void PrintCosts(const NpcDirector& npcs) const;
     void Pose(World& world, NpcDirector& npcs, float now);
     void Deaths(World& world, NpcDirector& npcs, float now);
+    void Feet(NpcDirector& npcs, float now);
+    // feet
+    std::string m_FProbe;
+    int m_FStage = 0, m_FMeasured = 0;
+    float m_FFlat = 0.0f;
     // tactics
     std::string m_TVictim;
     int m_TBlindShots = 0, m_TMeleeShots = 0;

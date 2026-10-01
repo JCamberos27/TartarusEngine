@@ -34,6 +34,7 @@ NpcTest::NpcTest(const std::string& scenario) : m_Scenario(scenario.empty() ? "w
     if (m_Scenario == "pose") m_Duration = 2.5f + (float)PosePhaseCount() * kPosePhaseTime + 1.0f;
     if (m_Scenario == "deaths") m_Duration = 60.0f;
     if (m_Scenario == "tactics") m_Duration = 70.0f;
+    if (m_Scenario == "feet") m_Duration = 10.0f;
     if (const char* t = EnvVar("NPC_TEST_SECONDS")) m_Duration = std::max(5.0f, (float)std::atof(t));
     if (const char* r = EnvVar("NPC_TEST_RECORD")) m_RecordDir = r;
     std::cout << "[NpcTest] scenario '" << m_Scenario << "', " << m_Duration << " s" << std::endl;
@@ -177,6 +178,10 @@ void NpcTest::After(World& world, NpcDirector& npcs, const PlayerVitals& vitals,
     m_Shot.clear();
     if (m_Scenario == "deaths") {
         Deaths(world, npcs, now);
+        return;
+    }
+    if (m_Scenario == "feet") {
+        Feet(npcs, now);
         return;
     }
     if (m_Scenario == "pose") {
@@ -856,5 +861,84 @@ void NpcTest::Pose(World& world, NpcDirector& npcs, float now) {
             m_Shot = name;
             m_PoseShots = view + 1;
         }
+    }
+}
+
+// --- feet: foot IK on the Arena's ramp ---------------------------------------------------------------------------------
+// One soldier, the AI frozen: each foot's height over the ground under it measured on the flat, then standing across the
+// ramp (one foot uphill of the other) and facing up it. With the feet on the ground both stay at the flat's height.
+namespace {
+const glm::vec3 kRampCentre(0.0f, 2.0f, -7.0f); // "Plinth Ramp": 14 degrees, rising toward -z
+bool FootGap(const Npc& n, const char* bone, float& gap) {
+    glm::vec3 foot;
+    if (!n.Body.BoneWorld(bone, foot)) return false;
+    const float o[3] = {foot.x, foot.y + 0.5f, foot.z}, d[3] = {0.0f, -1.0f, 0.0f};
+    QueryFilter f;
+    f.HitTriggers = 0;
+    RaycastHit hit;
+    if (!PhysicsWorld::RaycastSolid(o, d, 1.5f, f, hit) || !hit.Hit) return false;
+    gap = foot.y - hit.Point[1];
+    return true;
+}
+} // namespace
+
+void NpcTest::Feet(NpcDirector& npcs, float now) {
+    npcs.Frozen = true;
+    npcs.HoldFire = true;
+    npcs.FootIKEverywhere = true;
+    Npc* n = nullptr;
+    for (const auto& up : npcs.Npcs())
+        if (up && !up->Dead && (m_FProbe.empty() || up->Name == m_FProbe)) { n = up.get(); break; }
+    if (!n || n->Cct == PhysicsWorld::kNoCharacter) return;
+    m_FProbe = n->Name;
+    for (const auto& up : npcs.Npcs())
+        if (up && !up->Dead) { up->Intent = NpcIntent{}; up->Intent.LookPoint = up->Feet + glm::vec3(0.0f, 1.6f, 10.0f); }
+    // Stages: 0 flat (measure at 2.5 s), 1 across the ramp (placed at 3 s, measured at 5.5 s), 2 up it (6 s, 8.5 s).
+    struct Stage { float Place, Measure; glm::vec3 Look; const char* Name; };
+    static const Stage kStages[3] = {{-1.0f, 2.5f, glm::vec3(0.0f, 0.0f, 10.0f), "flat"},
+                                     {3.0f, 5.5f, glm::vec3(10.0f, 0.0f, 0.0f), "across"},
+                                     {6.0f, 8.5f, glm::vec3(0.0f, 0.0f, -10.0f), "uphill"}};
+    for (int s = 0; s < 3; ++s) {
+        const Stage& st = kStages[s];
+        if (st.Place >= 0.0f && now >= st.Place && m_FStage < s) {
+            m_FStage = s;
+            const float p[3] = {kRampCentre.x, kRampCentre.y, kRampCentre.z};
+            PhysicsWorld::SetNpcFootPosition(n->Cct, p);
+        }
+    }
+    const Stage& cur = kStages[std::max(m_FStage, 0)];
+    n->Intent.LookPoint = n->Feet + glm::vec3(0.0f, 1.6f, 0.0f) + cur.Look;
+    for (int s = 0; s < 3; ++s) {
+        const Stage& st = kStages[s];
+        if (now < st.Measure || m_FMeasured > s) continue;
+        m_FMeasured = s + 1;
+        float l = 0.0f, r = 0.0f;
+        const bool ok = FootGap(*n, "foot_l", l) && FootGap(*n, "foot_r", r);
+        std::printf("[NpcTest] feet %-6s at (%.2f, %.2f, %.2f): left %.1f cm, right %.1f cm over the ground\n", st.Name, n->Feet.x, n->Feet.y,
+                    n->Feet.z, l * 100.0f, r * 100.0f);
+        if (s == 0) {
+            m_FFlat = 0.5f * (l + r);
+            Check(ok, "the feet were measured on the flat");
+        } else {
+            Check(ok && n->Feet.y > 0.3f, std::string("the soldier stands on the ramp (") + st.Name + ")");
+            Check(ok && std::abs(l - m_FFlat) < 0.04f && std::abs(r - m_FFlat) < 0.04f,
+                  std::string("both feet on the ramp's surface, ") + st.Name + " (within 4 cm of the flat's " +
+                      std::to_string((int)std::lround(m_FFlat * 100.0f)) + " cm)");
+        }
+        m_Shot = std::string("feet_") + st.Name;
+    }
+    // The Scene view on its legs, side on (for the shots).
+    {
+        const float yaw = n->Body.Yaw() + glm::radians(-90.0f);
+        const glm::vec3 hip = n->Feet + glm::vec3(0.0f, 0.6f, 0.0f);
+        m_CamPos = hip + glm::vec3(std::sin(yaw), 0.15f, std::cos(yaw)) * 2.4f;
+        const glm::vec3 d = glm::normalize(hip - m_CamPos);
+        m_CamYaw = glm::degrees(std::atan2(d.z, d.x));
+        m_CamPitch = glm::degrees(std::asin(std::clamp(d.y, -1.0f, 1.0f)));
+        m_HaveCam = true;
+    }
+    if (now >= 9.0f && !m_Done) {
+        m_Done = true;
+        Check(m_FMeasured == 3, "every stage ran");
     }
 }
