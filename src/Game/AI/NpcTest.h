@@ -21,6 +21,8 @@ class World;
 //   deaths  hitboxes, hit reactions and deaths: the soldiers stand still while rays are cast at every bone, then are shot
 //           dead through the head, chest, thigh and forearm (limp, stagger, ragdoll, no pose pop), a corpse is shot, and
 //           two are wounded (crawl, "Unit down", dies on the next hit / bleeds out)
+//   tactics the player pins a soldier behind low cover with bursts over its head (blind fire), the squad bounds under
+//           covering fire, then the player steps up to a soldier and is struck with its rifle butt
 //   pose    the weapon hold, close up: an AK and a Remington soldier, the AI frozen, put through aim level /
 //           up / down / to the side, low ready, crouched, strafing, reloading and sprinting; four views of each
 //           and the gun's / elbows' / hands' clearances (NpcBody::MeasureHold) logged and checked
@@ -53,6 +55,10 @@ private:
     void PrintCosts(const NpcDirector& npcs) const;
     void Pose(World& world, NpcDirector& npcs, float now);
     void Deaths(World& world, NpcDirector& npcs, float now);
+    // tactics
+    std::string m_TVictim;
+    int m_TBlindShots = 0, m_TMeleeShots = 0;
+    float m_TShotAt = -1e9f, m_TNextCrack = 0.0f;
     // deaths
     int m_DStep = 0;
     float m_DAt = 0.0f;
@@ -95,7 +101,7 @@ private:
     float m_AimErr = -1.0f;
     bool m_Reload = false;
     std::string m_Target;
-    int m_PlayerShots = 0;
+    int m_PlayerShots = 0, m_LastAmmo = -1;
     // pose
     std::string m_Probe[2];
     int m_PosePhase = -1;

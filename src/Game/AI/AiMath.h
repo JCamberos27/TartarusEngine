@@ -72,6 +72,20 @@ float HitProbability(const AccuracyInput& in);
 // How long to hold fire after first seeing the target: a reaction time. Seconds.
 float ReactionTime(float skill, float difficulty, bool peripheral, float r01);
 
+// --- Squad tactics ------------------------------------------------------------------------------
+// Fire and maneuver: a soldier about to cross ground the player can see waits for a squadmate's covering
+// fire before it goes - but not for ever (`maxWait`), and not at all when it isn't exposed.
+bool MayBound(bool exposed, bool coverFireOn, float waited, float maxWait = 1.6f);
+// Blind fire from cover: pinned down (heavy suppression for a while) but still knowing about where the
+// player is, it holds the gun up over the cover and fires without looking.
+bool WantsBlindFire(float suppression, float pinnedFor, bool knowsThreat, float sinceSeen);
+// A rifle-butt strike: the player within arm's reach, in front, the last strike long enough ago.
+bool WantsMelee(float distance, float facingDeg, float sinceLastStrike, float reach = 1.9f, float cooldown = 1.5f);
+// A spot near where a squadmate fell: 0.3 at the place it died, back to 1 at `radius` or once `memory`
+// seconds have passed. `deaths` / `times` are `count` positions and times of death.
+float DangerScale(const glm::vec3& pos, const glm::vec3* deaths, const float* times, int count, float now, float radius = 5.0f,
+                  float memory = 30.0f);
+
 // --- Utility curves -----------------------------------------------------------------------------
 // A response curve on a 0..1 input. Linear: m*x + b. Quadratic: m*x^k + b. Logistic: k steepness
 // about midpoint c. Bell: peak at c, width k. Results clamp to 0..1.
