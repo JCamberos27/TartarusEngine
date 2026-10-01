@@ -23541,6 +23541,173 @@
         1.0,
         1.0
       ]
+    },
+    {
+      "id": 700,
+      "name": "Enemies",
+      "order": 700,
+      "parentId": -1,
+      "position": [
+        0.0,
+        0.0,
+        0.0
+      ],
+      "rotation": [
+        0.0,
+        0.0,
+        0.0,
+        1.0
+      ],
+      "scale": [
+        1.0,
+        1.0,
+        1.0
+      ]
+    },
+    {
+      "Squad Settings": {
+        "Difficulty": 1.0,
+        "NPC Damage Scale": 0.44999998807907104,
+        "Respawn": true,
+        "Respawn Delay": 8.0,
+        "Squad Size": 4
+      },
+      "id": 701,
+      "name": "AI Director",
+      "order": 701,
+      "parentId": 700,
+      "position": [
+        -44.0,
+        0.0,
+        9.0
+      ],
+      "rotation": [
+        0.0,
+        0.0,
+        0.0,
+        1.0
+      ],
+      "scale": [
+        1.0,
+        1.0,
+        1.0
+      ]
+    },
+    {
+      "NPC Spawn": {
+        "Brain": "Squad AI",
+        "Outfit Seed": 0,
+        "Skill": 0.6,
+        "Squad": 0,
+        "Weapon": "AKS-74U"
+      },
+      "id": 702,
+      "name": "Enemy Spawn 1",
+      "order": 702,
+      "parentId": 700,
+      "position": [
+        -44.0,
+        0.10000000149011612,
+        3.0
+      ],
+      "rotation": [
+        0.0,
+        0.7071067690849304,
+        0.0,
+        0.7071067690849304
+      ],
+      "scale": [
+        1.0,
+        1.0,
+        1.0
+      ]
+    },
+    {
+      "NPC Spawn": {
+        "Brain": "Squad AI",
+        "Outfit Seed": 0,
+        "Skill": 0.65,
+        "Squad": 0,
+        "Weapon": "AKS-74U"
+      },
+      "id": 703,
+      "name": "Enemy Spawn 2",
+      "order": 703,
+      "parentId": 700,
+      "position": [
+        -41.0,
+        0.10000000149011612,
+        7.0
+      ],
+      "rotation": [
+        0.0,
+        0.7071067690849304,
+        0.0,
+        0.7071067690849304
+      ],
+      "scale": [
+        1.0,
+        1.0,
+        1.0
+      ]
+    },
+    {
+      "NPC Spawn": {
+        "Brain": "Squad AI",
+        "Outfit Seed": 0,
+        "Skill": 0.55,
+        "Squad": 0,
+        "Weapon": "Remington 870"
+      },
+      "id": 704,
+      "name": "Enemy Spawn 3",
+      "order": 704,
+      "parentId": 700,
+      "position": [
+        -44.0,
+        0.10000000149011612,
+        11.0
+      ],
+      "rotation": [
+        0.0,
+        0.7071067690849304,
+        0.0,
+        0.7071067690849304
+      ],
+      "scale": [
+        1.0,
+        1.0,
+        1.0
+      ]
+    },
+    {
+      "NPC Spawn": {
+        "Brain": "Squad AI",
+        "Outfit Seed": 0,
+        "Skill": 0.6,
+        "Squad": 0,
+        "Weapon": "AKS-74U"
+      },
+      "id": 705,
+      "name": "Enemy Spawn 4",
+      "order": 705,
+      "parentId": 700,
+      "position": [
+        -41.0,
+        0.10000000149011612,
+        15.0
+      ],
+      "rotation": [
+        0.0,
+        0.7071067690849304,
+        0.0,
+        0.7071067690849304
+      ],
+      "scale": [
+        1.0,
+        1.0,
+        1.0
+      ]
     }
   ],
   "exposureEV": 0.0,
