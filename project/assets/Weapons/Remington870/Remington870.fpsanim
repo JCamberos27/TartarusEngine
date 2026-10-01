@@ -55,6 +55,25 @@
       ]
     }
   },
+  "eject": {
+    "model": "assets/Weapons/Remington870/Shell_12ga.fbx",
+    "material": "assets/Weapons/Remington870/Materials/Remington870.mat",
+    "origin": [
+      0.02,
+      0.034,
+      -0.062
+    ],
+    "direction": [
+      1.0,
+      0.4,
+      0.15
+    ],
+    "speed": 2.5,
+    "speedJitter": 0.15,
+    "spread": 8.0,
+    "spin": 15.0,
+    "trigger": "event"
+  },
   "gameplay": {
     "allowFullAuto": false,
     "impactImpulse": 14.0,
