@@ -69,6 +69,7 @@
 #include "BulletHoles.h"
 #include "ShellCasings.h"
 #include "AI/NpcDirector.h"     // the enemy squad
+#include "Combat/CombatFx.h"
 #include "AI/NpcTest.h"         // --npc-test
 #include "Combat/PlayerVitals.h" // the player's health, death and respawn
 #include "PlayerHudOverlay.h"
@@ -776,6 +777,8 @@ int main(int argc, char** argv) {
         WeaponFxRenderer weaponFx;  // the weapon's laser beam / spot and the bullet holes
         BulletHoleList bulletHoles; // where this Play's rounds struck
         NpcDirector npcDirector;    // the enemy squad, in scenes with NPC Spawns
+        CombatFx combatFx;          // its (and the player's) gunfire, flashes, tracers and hits
+        npcDirector.Fx = &combatFx;
         PlayerVitals playerVitals;  // the player's health in Play
         PlayerHudOverlay playerHud; // health, damage direction, hitmarker, death
         glm::vec3 deathCamOffset(0.0f); // the death camera's drop, on the camera only after the late pose
@@ -1426,7 +1429,8 @@ int main(int argc, char** argv) {
                 vitals.RespawnDelay = fp.RespawnDelay;
                 vitals.SpawnProtection = fp.SpawnProtection;
                 playerVitals.Reset(vitals);
-                npcDirector.Start(world, assets, &fp); // the enemy squad, when the scene has NPC Spawns
+                if (npcDirector.Start(world, assets, &fp)) // the enemy squad, when the scene has NPC Spawns
+                    combatFx.Start(world);
             } else if ((playCameraEntity = FindActiveSceneCamera(world)) != entt::null) {
                 playerVitals.Reset({});
                 playUsesPlayer = false;
@@ -1444,6 +1448,7 @@ int main(int argc, char** argv) {
             // them before restoring the authored world so they can never be serialized or leak
             // into another scene after a stop.
             firstPersonPresentation.RemoveViewKick(player.Cam);
+            combatFx.Stop(world);
             npcDirector.Stop(world);
             player.Cam.Position -= deathCamOffset;
             player.Cam.Roll -= deathCamRoll;
@@ -2590,15 +2595,23 @@ int main(int argc, char** argv) {
                     for (const FirstPersonPresentation::ShotHit& hit : firstPersonPresentation.TakeShotHits()) {
                         if (weaponTest) weaponTest->OnHit(hit.Point);
                         if (npcDirector.Active()) {
-                            npcDirector.OnPlayerShotLine(hit.Origin, hit.Point);
                             bool killed = false, head = false;
                             if (npcDirector.OnPlayerHit(world, hit.Entity, hit.Point, hit.Origin, hit.Direction,
                                                         firstPersonPresentation.Set().Gameplay, &killed, &head)) {
                                 playerVitals.MarkHit(killed, head);
+                                combatFx.Play(killed ? CombatFx::Cue::HitmarkerKill : CombatFx::Cue::Hitmarker, hit.Point);
                                 continue; // a soldier, not a wall: no hole
                             }
                         }
                         bulletHoles.Add(world, static_cast<entt::entity>(hit.Entity), hit.Point, hit.Normal, hit.HoleRadius);
+                    }
+                    // Every pellet's line: the report, and rounds cracking past soldiers' heads (suppression).
+                    for (const FirstPersonPresentation::ShotTrace& t : firstPersonPresentation.TakeShotTraces()) {
+                        if (!npcDirector.Active()) continue;
+                        npcDirector.OnPlayerShotLine(t.Origin, t.End);
+                        if (t.FirstPellet)
+                            combatFx.Shot(world, firstPersonPresentation.Set().Gameplay.Pellets > 1 ? CombatFx::Gun::Shotgun : CombatFx::Gun::Rifle,
+                                          t.Origin, t.End, true, false);
                     }
                     // The spent cases out of the port, then every case on the ground moved on.
                     for (const CasingSpawn& spawn : firstPersonPresentation.TakeEjections())
@@ -2617,7 +2630,13 @@ int main(int argc, char** argv) {
                     for (const NpcDirector::Impact& imp : npcDirector.TakeImpacts())
                         bulletHoles.Add(world, static_cast<entt::entity>(imp.Entity), imp.Point, imp.Normal, imp.Radius);
                     for (const CasingSpawn& spawn : npcDirector.TakeEjections()) shellCasings.Spawn(world, assets, spawn);
-                    for (const DamageEvent& e : npcDirector.TakePlayerDamage()) playerVitals.ApplyDamage(e.Amount, e.SourcePos);
+                    for (const DamageEvent& e : npcDirector.TakePlayerDamage()) {
+                        const float before = playerVitals.Health();
+                        playerVitals.ApplyDamage(e.Amount, e.SourcePos);
+                        if (playerVitals.Health() < before) combatFx.Play(CombatFx::Cue::FleshHit, e.Point, true, 0.8f);
+                    }
+                    combatFx.SetListener(player.Cam.Position);
+                    combatFx.Update(world, gameDt);
                     if (npcTest) npcTest->After(world, npcDirector, playerVitals, player);
                 }
                 if (playUsesPlayer) {

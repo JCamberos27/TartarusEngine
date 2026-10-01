@@ -816,6 +816,12 @@ bool FirstPersonPresentation::LaserBeam(Laser& out) const {
     return true;
 }
 
+std::vector<FirstPersonPresentation::ShotTrace> FirstPersonPresentation::TakeShotTraces() {
+    std::vector<ShotTrace> t;
+    t.swap(m_ShotTraces);
+    return t;
+}
+
 std::vector<FirstPersonPresentation::ShotHit> FirstPersonPresentation::TakeShotHits() {
     std::vector<ShotHit> hits;
     hits.swap(m_ShotHits);
@@ -1101,6 +1107,9 @@ void FirstPersonPresentation::FireShot() {
         PhysicsWorld::SetQueryRecording(false);
         const bool struck = PhysicsWorld::RaycastFiltered(o, d, 300.0f, filter, hit) && hit.Hit;
         PhysicsWorld::SetQueryRecording(recording);
+        if (m_ShotTraces.size() < 256)
+            m_ShotTraces.push_back({m_Muzzle, struck ? glm::vec3(hit.Point[0], hit.Point[1], hit.Point[2]) : m_Muzzle + dir * 300.0f,
+                                    struck, p == 0, struck ? hit.Entity : 0xFFFFFFFFu});
         if (!struck) continue;
         // Bounded, in case nothing drains it (no renderer this session).
         if (m_ShotHits.size() < 256)
