@@ -234,6 +234,34 @@ and the laser draws the same line. The **Barrel & Laser** section sets it all up
 Hip fire goes straight down the bore, where the gun really points; only the laser's near end
 bends onto the view model so it leaves the drawn muzzle.
 
+### Ejected cases
+
+**Ejected Cases** (in **Barrel & Laser**) throws a spent case out of the ejection port. **Port** and
+**Throw Direction** are in the weapon root bone's space, like a hand-set muzzle. With **On Eject Event** off, a
+case leaves with every round (a self-loader). With it on, it leaves on the controller's `Eject` event
+(a pump or bolt action: the Remington's `Pump` state has it at 0.2, when the forend is fully back).
+
+```json
+"eject": {"model": "assets/Weapons/AKS74U/Casing_545x39.fbx", "material": "assets/Weapons/AKS74U/Materials/Cartridge_545x39mm.mat",
+          "origin": [-0.04, 0.015, -0.02], "direction": [-0.2, 0.35, -1.0], "speed": 4.5, "speedJitter": 0.15,
+          "spread": 10.0, "spin": 30.0, "trigger": "shot"}
+```
+
+- **The meshes.** `tools/weapons/extract_casings.py` (Blender, `-b -P`) cuts the cases out of the weapon FBXs and
+  decimates them to at most 100 triangles. From the AK, it takes the magazine's top round without its bullet
+  (284 -> 100 tris). From the Remington, it takes the loading shell (316 -> 100 tris).
+- **Spawning.** The case leaves the port as the player sees it, through the view model's FOV stretch, at the
+  player's velocity plus the throw. It starts lying down the bore and tumbles end over end.
+- **On the ground** (`src/Game/ShellCasings.*`). A case is a model entity moved by a small integrator: a sphere
+  sweep against the solid world and a few bounces. Then it rolls onto its side and sleeps, after which it costs
+  only its draw. It casts no shadow.
+- **Lifetime.** A case stays where it lands. It is only removed while the camera can't see it (outside the view,
+  or behind something solid):
+  - once the player is 25 m away from it, or
+  - past 96 cases, oldest first.
+
+  1024 is a safety net for a pile that is entirely in view.
+
 ### Movement and camera
 
 The **Movement** section also holds the camera and body feel. Start from the AK's numbers and
@@ -386,6 +414,8 @@ animations' pose and every other view shows a corrected world copy.
 
 Open items:
 
+- **Case sounds:** weapons play no audio yet, and there is no case-drop sound. A tink on a case's first hard
+  bounce belongs in `ShellCasings::Step`.
 - **Weapon effects in other views:** there is no muzzle flash or tracer yet; the laser and bullet holes
   draw only in the owner's Game view (`weaponOverlay`). When a flash or tracer is added, or other
   players see the laser, start it at the world gun's muzzle (the first-person muzzle plus

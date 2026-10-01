@@ -1,0 +1,9 @@
+{
+  "folder": "assets/Weapons/Remington870",
+  "guid": "f037c3330b81b1e7",
+  "materialRemap": {
+    "02___Default": "assets/Weapons/Remington870/Materials/Remington870.mat"
+  },
+  "metaVersion": 1,
+  "type": "model"
+}

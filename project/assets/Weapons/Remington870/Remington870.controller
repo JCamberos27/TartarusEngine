@@ -336,6 +336,12 @@
           ]
         },
         {
+          "events": [
+            {
+              "name": "Eject",
+              "time": 0.2
+            }
+          ],
           "loop": false,
           "motions": {
             "arms": {
