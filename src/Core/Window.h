@@ -63,6 +63,8 @@ public:
     // when the mode actually changes.
     void SetVSync(int mode);
     int VSyncMode() const { return m_VSyncMode; }
+    // The refresh rate (Hz) of the monitor the window is on (fullscreen: its monitor); 0 = unknown.
+    int RefreshRate() const;
 
     // The window is created hidden and stays hidden until this is called — see the constructor.
     // Call it only after a frame has actually been presented, so it appears already painted
