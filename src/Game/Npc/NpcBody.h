@@ -99,7 +99,8 @@ public:
     glm::vec3 GunShift() const { return m_GunShift; } // the gun off where the rig holds it (world)
 
     // A hit: the upper body flinches away along `dirWorld` (the round's travel).
-    void Flinch(World& world, const glm::vec3& dirWorld);
+    // `point` / `part` (a hitbox part, see NpcRagdoll) steer it by where the round struck; both optional.
+    void Flinch(World& world, const glm::vec3& dirWorld, const glm::vec3* point = nullptr, int part = -1);
 
     float Yaw() const { return m_Yaw; }
     bool Turning() const { return m_Turning; }
@@ -109,6 +110,8 @@ public:
     bool BoneWorld(const World& world, const std::string& bone, glm::vec3& out) const;
     bool BoneWorld(const std::string& bone, glm::vec3& out) const;
     const std::vector<std::shared_ptr<Model>>& Models() const { return m_Models; }
+    // The driver's skeleton (the one whose pose is solved), for the hitboxes.
+    const Model* DriverModel() const { return m_DriverModel.get(); }
     glm::mat4 RootMatrix() const { return RootWorld(); }
     // The entity of every piece (for hit tests, the ragdoll).
     const std::vector<entt::entity>& Pieces() const { return m_Pieces; }
@@ -149,6 +152,7 @@ private:
     // gives every other piece that draws the upper body the driver's rotations for it (one skeleton: the pieces'
     // own solves came out the same, at several times the cost). Called whenever a piece is read or drawn next.
     void SyncPieces();
+    void OffsetSpine(const glm::quat& step); // m_Pose / m_Globals already hold the driver's pose and its globals
     bool m_PiecesStale = false;
     std::vector<std::vector<std::pair<int, int>>> m_UpperMap; // per piece: (piece node, driver node), spine_01 and below
     int m_DriverIndex = -1;
@@ -157,10 +161,16 @@ private:
     // Scratch.
     std::vector<glm::mat4> m_Globals;
     std::vector<LocalTRS> m_Pose;
+    struct FingerNode { int Node; int Hand; std::string Name; };
+    std::vector<FingerNode> m_FingerList; // the arms rig's finger nodes (HoldWeapon)
+    const Model* m_FingerRig = nullptr;
+    int m_FingerNodes = 0;
     enum class Region { Head, Torso };
     struct RegionPoint { glm::vec3 Pos; int Count; std::uint16_t Bone[4]; float Weight[4]; };
     struct RegionSkin { std::vector<int> Bones; std::vector<RegionPoint> Points; };
-    struct PieceSkin { const Model* M = nullptr; RegionSkin Head, Torso; bool Built = false; };
+    struct SkinTables { RegionSkin Head, Torso; };
+    // Per piece. The tables depend only on the mesh data, which every soldier wearing the piece shares: built once.
+    struct PieceSkin { const Model* M = nullptr; std::shared_ptr<const SkinTables> T; bool Built = false; };
     mutable std::vector<PieceSkin> m_Skins;                 // per piece
     // The drawn neck / head / hood, or pelvis / spine (a hoodie), skinned to world as posed now.
     void SkinnedRegion(const World& world, Region region, std::vector<glm::vec3>& out) const;

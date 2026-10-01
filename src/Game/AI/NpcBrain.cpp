@@ -8,7 +8,7 @@
 
 namespace {
 
-constexpr int kBehaviours = 10;
+constexpr int kBehaviours = kBehaviourCount;
 constexpr float kInertia = 0.12f;
 
 float Flat(const glm::vec3& a, const glm::vec3& b) { return glm::length(glm::vec2(a.x - b.x, a.z - b.z)); }
@@ -137,6 +137,11 @@ void NpcBrain::Think(NpcDirector& d, World& world, Npc& n, const PlayerSnapshot&
 void NpcBrain::Choose(NpcDirector& d, Npc& n, const PlayerSnapshot& p) {
     (void)p;
     const float now = d.m_Now;
+    // Down and bleeding: nothing to decide, it crawls for cover and shoots from it till it dies.
+    if (n.Wounded) {
+        if (n.Doing != Behaviour::Wounded || n.Phase < 0) Enter(d, n, (int)Behaviour::Wounded, p);
+        return;
+    }
     const TargetMemory& m = n.Mem;
     const float since = now - m.LastSeen;
     const float health = n.Health / std::max(n.MaxHealth, 1.0f);
@@ -185,6 +190,8 @@ void NpcBrain::Choose(NpcDirector& d, Npc& n, const PlayerSnapshot& p) {
         else if (shotgun && dist > 13.0f && health > 0.5f && since < 12.0f) at(Behaviour::Push) = 0.6f;
         if (health < 0.35f && underFire && !n.Retreated) at(Behaviour::Retreat) = 0.88f;
     }
+    // A bad leg: no running round the side, no pushing up.
+    if (now < n.LimpUntil) { at(Behaviour::Flank) = 0.0f; at(Behaviour::Push) = 0.0f; }
     // Commitment: what it's doing scores a little higher, unless that is finished (Phase -1).
     if (n.Phase >= 0 && n.Doing != Behaviour::Dead) {
         const float minCommit = n.Doing == Behaviour::TakeCover || n.Doing == Behaviour::Flank || n.Doing == Behaviour::Push ||
@@ -276,6 +283,30 @@ void NpcBrain::Enter(NpcDirector& d, Npc& n, int behaviour, const PlayerSnapshot
         n.Cover = -1;
         n.IdleUntil = now + 1.0f + 3.0f * Rand01(d);
         break;
+    case Behaviour::Wounded: {
+        // The nearest cover that stands between it and the threat, near enough to crawl to.
+        d.m_Cover.Release(n.Index, now);
+        n.Cover = -1;
+        static thread_local std::vector<int> near;
+        d.m_Cover.Query(n.Feet, 14.0f, near);
+        float best = 1e9f;
+        int pick = -1;
+        // Cover that faces the threat first; failing that, any, the nearest.
+        for (int pass = 0; pass < 2 && pick < 0; ++pass)
+            for (int i : near) {
+                const CoverPoint& c = d.m_Cover.Points()[(size_t)i];
+                if (c.ClaimedBy >= 0 && c.ClaimedBy != n.Index) continue;
+                if (pass == 0 && glm::dot(c.Normal, FlatDir(c.Pos, threat)) < 0.2f) continue;
+                const float dist = Flat(n.Feet, c.Pos);
+                if (dist > 1.0f && dist < best) { best = dist; pick = i; }
+            }
+        if (pick >= 0) {
+            d.m_Cover.Claim(pick, n.Index, now);
+            n.Cover = pick;
+            n.CoverGood = true;
+        }
+        break;
+    }
     default:
         break;
     }
@@ -562,6 +593,19 @@ void NpcBrain::Run(NpcDirector& d, World& world, Npc& n, const PlayerSnapshot& p
                     n.Phase = -1;
                 }
             }
+        }
+        break;
+    }
+    case Behaviour::Wounded: {
+        // On a knee, crawling for cover (the director holds its speed to a crawl), shooting when it has the player.
+        it.Crouch = true;
+        it.Aim = m.Known;
+        it.FaceAim = true;
+        it.Fire = m.Visible || now - n.LastOwnSight < 1.5f;
+        it.Reload = ammo01 <= 0.0f;
+        if (n.Cover >= 0) {
+            const CoverPoint& c = d.m_Cover.Points()[(size_t)n.Cover];
+            if (Flat(n.Feet, c.Pos) > 0.5f) moveTo(c.Pos, Gait::Walk);
         }
         break;
     }
