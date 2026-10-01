@@ -5,7 +5,7 @@ name -> .mat). What's left is parts the pack ships no textures for - eyes, teeth
 overlays, brows, hair, beards, fur, some clothing - plus a few slots whose .mat exists under a
 different name. This fills those remaps:
 
-  * a slot matching an existing .mat (Vivian Afro skin, caps, hats, glasses, watches...) uses it;
+  * a slot matching an existing .mat (Vivian Afro skin, caps, glasses, watches...) uses it;
   * everything else gets a plain PBR material (colour, roughness, transparency for the eye overlays,
     double-sided for hair cards): body parts in Materials/Characters/, clothing in
     Materials/Clothing/Generated/.
@@ -41,9 +41,7 @@ GENERATED = {
                          "roughnessMap": PROJECT_REL + "/Textures/Clothing/Outerwear/Jacket_Winter/Fur/T_FurCollar_Roughness.png"}),
     "M_Headband":       ((0.05, 0.05, 0.05), 0.80, 0.0, {}),
     "M_Bandana":        ((0.45, 0.06, 0.05), 0.85, 0.0, {}),
-    "M_Pith_Helmet":    ((0.62, 0.55, 0.40), 0.80, 0.0, {}),
     "M_Goggles":        ((0.08, 0.08, 0.08), 0.40, 0.0, {}),
-    "M_Hat_Cowboy":     ((0.30, 0.18, 0.10), 0.70, 0.0, {}),
     "M_Jacket_M65":     ((0.25, 0.27, 0.16), 0.85, 0.0, {}),
     "M_Flip_Flops":     ((0.10, 0.10, 0.10), 0.70, 0.0, {}),
     "M_Shirt_Adventure":((0.55, 0.50, 0.38), 0.85, 0.0, {}),
@@ -82,9 +80,7 @@ RULES = [
     # Untextured clothing.
     (None, r"MI_F_Headband|SKM_Headband|M_Elastic", gen("M_Headband")),
     (None, r"M_Bandana", gen("M_Bandana")),
-    (r"French_Pith", r".*", gen("M_Pith_Helmet")),
     (r"Goggles", r".*", gen("M_Goggles")),
-    (None, r"M_Hat_Cowboy", gen("M_Hat_Cowboy")),
     (None, r"M_Jacket_M65", gen("M_Jacket_M65")),
     (None, r"M_Flip_Flops", gen("M_Flip_Flops")),
     (None, r"M_Shirt_Adventure|M_Police_Shirt_Short", gen("M_Shirt_Adventure")),

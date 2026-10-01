@@ -13,10 +13,10 @@
 ## Housekeeping
 
 - [ ] No unrelated scene/asset re-saves (the editor rewrites `.json` scenes and `.meta` files when it opens them, so revert any you didn't mean to change)
-- [ ] Scratch output (`work/*.exe`, logs, commit-message files) not committed
+- [ ] Scratch output (logs, probe exes, commit-message files) not committed; `work/` is gitignored for it
 - [ ] Docs updated where behaviour changed
 
 <!--
 First-person weapons / animation: also complete the checklist at the bottom of
-FPS_WEAPON_INTEGRATION.md, and update FPS_ANIMATION_SYSTEM.md if a rule, key or constant changed.
+docs/FPS_WEAPON_INTEGRATION.md, and update docs/FPS_ANIMATION_SYSTEM.md if a rule, key or constant changed.
 -->

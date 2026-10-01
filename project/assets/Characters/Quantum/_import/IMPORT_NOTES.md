@@ -4,28 +4,28 @@ Modular parts only - the 60 preset characters are deliberately not imported. Log
 `IMPORT_LOG*.csv` (source -> engine path), `RENAME_LOG*.csv` (old -> new name after cleanup).
 
 ## Layout (`project/assets/Characters/Quantum/`)
-- `Models/<European|Afro|Asian|Old|Young>/` male bodies and heads; `Models/Female/{Body,Hair}`; `Models/Hair`; `Models/Beard`
-- `Models/Clothing/<Male|Female>/<Tops|Outerwear|Pants|Shoes|Hats|Bags|Glasses|Accessories>/`
+- `Models/<European|Afro|Asian|Old|Young>/` male bodies and heads; `Models/Female/Body`
+- `Models/Clothing/<Male|Female>/<Tops|Outerwear|Pants|Shoes|Bags|Glasses|Balaclava|Accessories>/`
 - `Textures/<European|Afro|Old|Young|Asian>/<Arms|Body|Head>`, `Textures/Female/<European|Afro|Old>/...`, `Textures/Clothing/<Category>/<Item>/`
-- `Materials/Characters/` (skin: body/head/arms, plus eyes/teeth/brows/hair/beard), `Materials/Clothing/<Category>/<Item>/` (one .mat per colourway)
+- `Materials/Characters/` (skin: body/head/arms, plus eyes/teeth/brows), `Materials/Clothing/<Category>/<Item>/` (one .mat per colourway)
 - Each texture set: BaseColor, Unity_Normal, Roughness, Occlusion (grey 2048 AO). `.meta` files carry the right import
   settings (BaseColor sRGB; Normal as normal map; Roughness/Occlusion linear).
 
 ## Materials are wired to meshes
 Every model with a recognised material has `materialRemap` in its `.meta` (FBX material name -> `.mat`), so placed
 instances start textured. Clothing defaults to a plain (unprinted) Black/Gray colourway - swap colourways per instance.
-The match is by name (heuristic); check by eye: Jacket_M65, Hat_Cowboy, Bandana, Headband, French_Pith, Goggles,
+The match is by name (heuristic); check by eye: Jacket_M65, Bandana, Headband, Goggles,
 male Bracelet/Watch, Shirt_Adventure (no matching textures in the pack: plain materials, see below).
 Do NOT run Extract Materials on these models - it rewrites `materialRemap`.
-Parts the pack has no textures for - eyes, cornea, eyelid/tear/saliva overlays, teeth, brows/lashes, hair, beards, fur,
-and untextured clothing (M65 jacket, cowboy hat, bandana, headbands, pith helmet, goggles, flip-flops, adventure shirt,
+Parts the pack has no textures for - eyes, cornea, eyelid/tear/saliva overlays, teeth, brows/lashes, fur,
+and untextured clothing (M65 jacket, bandana, headbands, goggles, flip-flops, adventure shirt,
 inboots pants, tank tops) - use plain PBR materials - body parts in `Materials/Characters/`, clothing in `Materials/Clothing/Generated/` - (colour + roughness; the eye overlays are
-transparent, hair cards double-sided). `tools/quantum/fill_quantum_materials.py` wires them, and the slots whose .mat
-exists under another name (Vivian Afro skin, caps, hats, glasses, watches); it only fills slots missing from a remap.
+transparent, brow/lash cards double-sided). `tools/quantum/fill_quantum_materials.py` wires them, and the slots whose .mat
+exists under another name (Vivian Afro skin, caps, glasses, watches); it only fills slots missing from a remap.
 
 ## Hair and beards: not used - balaclavas instead
-Hair, beards and the hats with built-in hair are out of the wardrobe (the models stay on disk; the pack ships the hair cards
-without usable textures). Every character wears a balaclava (`Models/Clothing/<Male|Female>/Balaclava/`, a static mesh
+Hair, beards and hats were imported, then deleted in #501 (the pack ships the hair cards without usable textures). Restore
+them from the pack if they are ever wanted. Every character wears a balaclava (`Models/Clothing/<Male|Female>/Balaclava/`, a static mesh
 modelled on the Quantum head; `OutfitSystem::UpdateAttachments` rides it on the head bone). Colourways:
 `Materials/Clothing/Balaclava/` (Black, Green, Print); textures in `Textures/Clothing/Balaclava/` (git-ignored like
 the other clothing PNGs; source: `textures.zip` beside `sm_balaclava_crime.fbx`).
