@@ -161,6 +161,9 @@ bool NpcDirector::Start(World& world, AssetLibrary& assets, const FirstPersonCon
     m_Active = true;
     m_Started = false;
     m_Now = 0.0f;
+    m_Voice.Reset();
+    m_PlayerWasDead = false;
+    if (!m_Voice.Loaded()) m_Voice.LoadManifest(ProjectPaths::Resolve("assets/Audio/Voice/combine"));
     Log::Info("Enemy AI: " + std::to_string(m_Spawns.size()) + " spawn(s), squad of " + std::to_string(m_SquadSize) + ".");
     return true;
 }
@@ -185,6 +188,7 @@ void NpcDirector::Stop(World& world) {
     m_Active = m_Started = false;
     m_ShootersNow = m_MaxShooters = 0;
     m_NextName = 1;
+    m_Voice.Reset();
 }
 
 void NpcDirector::BuildNav(World& world) {
@@ -338,13 +342,6 @@ Npc* NpcDirector::Find(int index) {
     return index >= 0 && index < (int)m_Npcs.size() ? m_Npcs[(size_t)index].get() : nullptr;
 }
 
-void NpcDirector::Callout(Npc& n, const char* line) {
-    if (m_Now - n.LastCallout < 2.5f) return;
-    n.LastCallout = m_Now;
-    n.Callout = line;
-    n.CalloutAt = m_Now;
-}
-
 // --- per frame ----------------------------------------------------------------------------------
 
 void NpcDirector::Think(World& world, AssetLibrary& assets, float dt, const PlayerSnapshot& p) {
@@ -427,6 +424,7 @@ void NpcDirector::Think(World& world, AssetLibrary& assets, float dt, const Play
     m_ShootersNow = shooters;
     m_MaxShooters = std::max(m_MaxShooters, shooters);
     Respawns(world, assets, p);
+    UpdateVoice(p);
     m_Noises.erase(std::remove_if(m_Noises.begin(), m_Noises.end(), [&](const Noise& z) { return m_Now - z.Time > 0.6f; }),
                    m_Noises.end());
     m_ThinkMs = std::chrono::duration<float, std::milli>(std::chrono::steady_clock::now() - t0).count();
@@ -447,7 +445,7 @@ void NpcDirector::Perceive(World& world, Npc& n, const PlayerSnapshot& p, float 
             const Npc* o = z.Source < (int)m_Npcs.size() ? m_Npcs[(size_t)z.Source].get() : nullptr;
             if (o && o->Squad == n.Squad && o->Mem.Known && glm::length(z.Pos - n.SightEye) < z.Radius) {
                 n.Mem.Awareness = 1.0f;
-                if (!n.Mem.Known) { n.Mem.Known = true; Callout(n, "Contact!"); }
+                if (!n.Mem.Known) { n.Mem.Known = true; Callout(n, Bark::ContactRelay); }
                 if (o->Mem.LastSeen > n.Mem.LastSeen) {
                     n.Mem.LastKnown = o->Mem.LastKnown;
                     n.Mem.LastSeen = o->Mem.LastSeen;
@@ -460,7 +458,7 @@ void NpcDirector::Perceive(World& world, Npc& n, const PlayerSnapshot& p, float 
         HearNoise(n.Mem, n.SightEye, z.Pos, z.Radius, z.Loudness, m_Now);
         if (!wasKnown && n.Mem.Known) {
             n.ReactionLeft = std::max(n.ReactionLeft, ReactionTime(n.Skill, m_Difficulty, true, 0.5f));
-            Callout(n, "Gunfire!");
+            Callout(n, Bark::Gunfire);
         }
     }
 
@@ -520,7 +518,7 @@ void NpcDirector::Perceive(World& world, Npc& n, const PlayerSnapshot& p, float 
     if (known) {
         n.ReactionLeft = ReactionTime(n.Skill, m_Difficulty, angleDeg > 30.0f, std::uniform_real_distribution<float>(0.0f, 1.0f)(m_Rng));
         n.FirstShot = true;
-        Callout(n, "Contact! Contact!");
+        Callout(n, Bark::Contact);
     } else if (n.Mem.Visible && !wasVisible && n.Mem.Known) {
         // Back in sight after a while: a shorter reaction, and the first round may go wide again.
         if (m_Now - lastSeen > 1.5f) {
@@ -929,6 +927,7 @@ void NpcDirector::HandleShots(World& world, Npc& n, const PlayerSnapshot& p, con
             e.Direction = hit.Direction;
             e.SourcePos = n.Eye;
             m_PlayerDamage.push_back(e);
+            Callout(n, Bark::PlayerHurt);
             continue;
         }
         bool onNpc = false;
@@ -1014,7 +1013,7 @@ void NpcDirector::ApplyDamage(World& world, Npc& n, float amount, HitZone zone, 
     }
     n.Body.Flinch(world, dir);
     n.NextThink = std::min(n.NextThink, m_Now); // rethink now
-    if (n.Health < 0.35f * n.MaxHealth) Callout(n, "I'm hit!");
+    if (n.Health < 0.35f * n.MaxHealth) Callout(n, Bark::Wounded);
 }
 
 void NpcDirector::Kill(World& world, Npc& n, const glm::vec3& dir, const glm::vec3& point, float shove) {
@@ -1052,7 +1051,7 @@ void NpcDirector::Kill(World& world, Npc& n, const glm::vec3& dir, const glm::ve
             Npc* o = i < (int)m_Npcs.size() ? m_Npcs[(size_t)i].get() : nullptr;
             if (!o || o->Dead) continue;
             o->Morale = std::max(0.0f, o->Morale - 0.25f);
-            if (glm::length(o->Feet - n.Feet) < 25.0f) Callout(*o, "Man down!");
+            if (glm::length(o->Feet - n.Feet) < 25.0f) Callout(*o, Bark::ManDown);
         }
     }
     if (m_Respawn) m_RespawnTimers.push_back(m_Now + m_RespawnDelay);
