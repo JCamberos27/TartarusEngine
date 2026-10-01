@@ -419,6 +419,14 @@ void FirstPersonWeaponTest::AfterPose(const World& world, const FirstPersonBody&
     m_LastYaw = cam.Yaw;
     m_HaveYaw = true;
     s.TwistDeg = glm::degrees(body.Twist());
+    // The camera's acceleration frame to frame (a hitch in the eye shows as a spike), the largest since the last print.
+    if (m_EyeFrames >= 2 && m_Ctx.Dt > 0.0f)
+        m_EyeAccelMax = std::max(m_EyeAccelMax, glm::length(cam.Position - 2.0f * m_EyePrev[0] + m_EyePrev[1]) / (m_Ctx.Dt * m_Ctx.Dt));
+    m_EyePrev[1] = m_EyePrev[0];
+    m_EyePrev[0] = cam.Position;
+    m_EyeFrames = std::min(m_EyeFrames + 1, 2);
+    s.EyeAccel = m_EyeAccelMax;
+    s.Eye = cam.Position;
     s.State = p.CurrentState();
     s.Speed = p.PlanarSpeed();
     glm::vec3 butt, fwd, upper, clav, neck, head, muzzle, bore;
@@ -506,14 +514,15 @@ void FirstPersonWeaponTest::PrintSample(const std::string& label) const {
     }
     std::printf("[StockProbe] %-24s pitch %6.1f yawRate %5.0f twist %6.1f %-9s | butt-shoulder R %+5.1f U %+5.1f F %+5.1f (%4.1f) | "
                 "clav %4.1f neck %4.1f head %4.1f | rear 30cm to neck %4.1f head %4.1f | shift %4.1f hands off L %4.1f R %4.1f cm | "
-                "speed %4.1f | gun %3.0fcm to neck %4.1f hood %4.1f mesh %5.1f at %3.0fcm (%s) | elbow to torso L %5.1f R %5.1f cm, swung L %+4.0f R %+4.0f deg | rear 45cm to torso %5.1f at %3.0fcm | head tilt %4.1f (w %.2f) bend %4.1f deg\n",
+                "speed %4.1f eyeAcc %5.1f at (%.1f, %.1f) | gun %3.0fcm to neck %4.1f hood %4.1f mesh %5.1f at %3.0fcm (%s) | elbow to torso L %5.1f R %5.1f cm, swung L %+4.0f R %+4.0f deg | rear 45cm to torso %5.1f at %3.0fcm | head tilt %4.1f (w %.2f) bend %4.1f deg\n",
                 label.c_str(), s.Pitch, s.YawRate, s.TwistDeg, s.State.c_str(), s.StockFromShoulder.x * 100.0f,
                 s.StockFromShoulder.y * 100.0f, s.StockFromShoulder.z * 100.0f, s.Shoulder * 100.0f, s.Clavicle * 100.0f,
                 s.Neck * 100.0f, s.Head * 100.0f, s.NeckGap * 100.0f, s.HeadGap * 100.0f, s.GunShift * 100.0f,
-                s.HandGap[0] * 100.0f, s.HandGap[1] * 100.0f, s.Speed, s.GunLength * 100.0f, s.WholeNeckGap * 100.0f,
+                s.HandGap[0] * 100.0f, s.HandGap[1] * 100.0f, s.Speed, s.EyeAccel, s.Eye.x, s.Eye.z, s.GunLength * 100.0f, s.WholeNeckGap * 100.0f,
                 s.WholeHoodGap * 100.0f, s.MeshGap * 100.0f, s.MeshAlong * 100.0f, s.MeshPiece.c_str(), s.ElbowGap[0] * 100.0f,
                 s.ElbowGap[1] * 100.0f, s.ElbowSwing[0], s.ElbowSwing[1], s.TorsoGap * 100.0f, s.TorsoAlong * 100.0f, s.HeadTilt, s.HeadTiltWeight,
                 s.HeadBend);
+    m_EyeAccelMax = 0.0f;
     std::fflush(stdout);
 }
 

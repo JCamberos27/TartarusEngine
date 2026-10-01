@@ -121,6 +121,10 @@ public:
     // aim. No-op on an empty scene. Called once on startup so the editor doesn't open staring
     // at empty space next to the geometry (audit #87).
     void FrameSceneBounds(World& world, Camera& editorCamera);
+    // A scene with a First Person Body: put the camera in front of it, a couple of metres off, looking
+    // at it, so its outfit is in view. False (camera untouched) when the scene has none.
+    static bool FrameFirstPersonBody(World& world, Camera& editorCamera);
+    void FrameOpenedScene(World& world, const std::string& path);
 
     // The floating action bar centered over the Scene/Game viewport — Undo/Redo/Save, the
     // Play/Stop/Pause/Step/Fullscreen transport, and the panel-toggle/Capture/notification

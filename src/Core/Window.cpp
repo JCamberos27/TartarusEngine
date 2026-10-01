@@ -483,6 +483,9 @@ void Window::SetFullscreen(bool fullscreen) {
 void Window::SetCursorLocked(bool locked) {
     m_CursorLocked = locked;
     glfwSetInputMode(m_Handle, GLFW_CURSOR, locked ? GLFW_CURSOR_DISABLED : GLFW_CURSOR_NORMAL);
+    // Locked, the mouse is a look device: raw motion skips the OS pointer acceleration (Windows'
+    // "Enhance pointer precision"), so the same hand movement always turns the view the same amount.
+    if (glfwRawMouseMotionSupported()) glfwSetInputMode(m_Handle, GLFW_RAW_MOUSE_MOTION, locked ? GLFW_TRUE : GLFW_FALSE);
 }
 
 void Window::FramebufferSizeCallback(GLFWwindow* window, int width, int height) {
