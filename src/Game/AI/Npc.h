@@ -10,6 +10,7 @@
 #include <entt/entt.hpp>
 #include <glm/glm.hpp>
 
+#include <cstdlib>
 #include <memory>
 #include <string>
 
@@ -147,4 +148,13 @@ struct Npc {
     std::string Callout;            // the last thing it shouted, for the overlay
     float CalloutAt = -1e9f;
     std::string Why;                // the last decision's reason, for the overlay
+    // Radio barks (NpcDirectorVoice.cpp): the edges already spoken for, and the next idle chatter.
+    bool VcReloading = false, VcCovering = false, VcSuspicious = false;
+    float NextChatter = 0.0f;
 };
+
+// Soldiers are named "Soldier <n>": n is the unit number on the radio and in the kill feed.
+inline int UnitNumber(const Npc& n) {
+    const size_t sp = n.Name.find(' ');
+    return sp == std::string::npos ? n.Index + 1 : std::atoi(n.Name.c_str() + sp + 1);
+}

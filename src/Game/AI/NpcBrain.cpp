@@ -225,6 +225,7 @@ void NpcBrain::Enter(NpcDirector& d, Npc& n, int behaviour, const PlayerSnapshot
         if (sq.PushHolder == n.Index) { sq.PushHolder = -1; sq.PushUntil = 0.0f; }
         n.HasPushToken = false;
     }
+    const Behaviour prev = n.Doing;
     n.Doing = b;
     n.DoingSince = now;
     n.Phase = 0;
@@ -247,7 +248,7 @@ void NpcBrain::Enter(NpcDirector& d, Npc& n, int behaviour, const PlayerSnapshot
         } else {
             const CoverPoint& c = d.m_Cover.Points()[(size_t)n.Cover];
             const glm::vec3 right = glm::normalize(glm::cross(FlatDir(n.Feet, threat), glm::vec3(0, 1, 0)));
-            d.Callout(n, glm::dot(c.Pos - n.Feet, right) > 0.0f ? "Flanking right!" : "Flanking left!");
+            d.Callout(n, glm::dot(c.Pos - n.Feet, right) > 0.0f ? Bark::FlankRight : Bark::FlankLeft);
         }
         break;
     case Behaviour::Push:
@@ -257,21 +258,25 @@ void NpcBrain::Enter(NpcDirector& d, Npc& n, int behaviour, const PlayerSnapshot
             d.m_Cover.Release(n.Index, now);
             n.Phase = n.Class == WeaponClass::Shotgun ? 2 : -1;
         }
-        if (n.Phase >= 0) d.Callout(n, "Moving up!");
+        if (n.Phase >= 0) d.Callout(n, Bark::MovingUp);
         break;
     case Behaviour::Retreat:
         n.Retreated = true;
         if (FindCover(d, n, CoverGoal::Retreat, threat) < 0) n.Phase = -1;
-        else d.Callout(n, "Falling back!");
+        else d.Callout(n, Bark::FallingBack);
+        break;
+    case Behaviour::Investigate:
+        d.Callout(n, Bark::Investigating);
         break;
     case Behaviour::CoverFight:
         n.PhaseUntil = now + 0.6f + 0.8f * Rand01(d);
         break;
     case Behaviour::Search:
-        d.Callout(n, "Where'd he go?");
+        d.Callout(n, Bark::LostTarget);
         n.Goal = threat;
         break;
     case Behaviour::Idle:
+        if (prev == Behaviour::Investigate || prev == Behaviour::Search) d.Callout(n, Bark::AllClear);
         d.m_Cover.Release(n.Index, now);
         n.Cover = -1;
         n.IdleUntil = now + 1.0f + 3.0f * Rand01(d);
