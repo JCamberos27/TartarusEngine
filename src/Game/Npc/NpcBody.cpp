@@ -20,6 +20,16 @@ float Follow(float dt, float timeConstant) {
     return timeConstant > 0.0f ? 1.0f - std::exp(-dt / timeConstant) : 1.0f;
 }
 
+// A damped spring toward `target` (semi-implicit, in steps no longer than 1/60 s): `zeta` under 1 lets the
+// body carry a touch past where it turns to and settle back, which reads as weight rather than a camera.
+void Spring(float& x, float& rate, float target, float omega, float zeta, float dt) {
+    for (float left = std::min(dt, 0.1f); left > 1e-6f; left -= 1.0f / 60.0f) {
+        const float h = std::min(left, 1.0f / 60.0f);
+        rate += (omega * omega * (target - x) - 2.0f * zeta * omega * rate) * h;
+        x += rate * h;
+    }
+}
+
 glm::quat YawRotation(float yaw) { return glm::angleAxis(yaw, glm::vec3(0.0f, 1.0f, 0.0f)); }
 
 constexpr float kTurnThreshold = 1.15f;  // radians (66 deg): a still body further off than this turns on the spot
@@ -29,6 +39,9 @@ constexpr float kFaceEase = 0.09f;       // seconds: the heading while moving
 constexpr float kAimLean = 0.1f;         // radians (6 deg): the torso's forward lean aiming, standing
 constexpr float kAimLeanCrouched = 0.22f; // ... and crouched (13 deg)
 constexpr float kReadyLeanCrouched = 0.4f; // ... crouched at the low ready (23 deg)
+constexpr float kHeadMaxYaw = 1.2f;      // radians (70 deg) the head turns past the chest
+constexpr float kHeadMaxPitch = 0.6f;    // radians (35 deg) it nods up or down
+constexpr float kCowerHunch = 0.35f;     // radians (20 deg) the spine curls forward ducking
 
 } // namespace
 
@@ -88,6 +101,8 @@ bool NpcBody::Start(World& world, entt::entity root) {
         const Model& d = *m_DriverModel;
         m_DriverParents.resize((size_t)d.NodeCount());
         for (int i = 0; i < d.NodeCount(); ++i) m_DriverParents[(size_t)i] = d.NodeParent(i);
+        m_DriverNeck = d.NodeIndex("neck_01");
+        m_DriverHead = d.NodeIndex("head");
         m_DriverSpineCount = 0;
         for (int k = 0; k < 5; ++k)
             if (const int b = d.NodeIndex(FPBody::kBoneSpine[k]); b >= 0) m_DriverSpine[m_DriverSpineCount++] = b;
@@ -226,9 +241,10 @@ void NpcBody::LateUpdate(World& world, float dt, const Camera* weaponCam) {
         const glm::vec3 d = m_In.LookPoint - chestW;
         wantTwist = NpcSpineTwist(NpcYawOf(d, m_Yaw) - m_Yaw, 0.6f);
     }
-    m_AimPitch += (wantPitch - m_AimPitch) * Follow(dt, 0.07f);
-    m_AimTwist += (wantTwist - m_AimTwist) * Follow(dt, 0.08f);
+    Spring(m_AimPitch, m_AimPitchRate, wantPitch, 15.0f, 0.8f, dt);
+    Spring(m_AimTwist, m_AimTwistRate, wantTwist, 13.0f, 0.75f, dt);
     m_Lean += (std::clamp(m_In.Lean, -1.0f, 1.0f) - m_Lean) * Follow(dt, 0.12f);
+    m_Cower += (std::clamp(m_In.Cower, 0.0f, 1.0f) - m_Cower) * Follow(dt, m_In.Cower > m_Cower ? 0.06f : 0.25f);
     m_AimWeight += ((m_In.Aiming ? 1.0f : 0.0f) - m_AimWeight) * Follow(dt, 0.12f);
     // Aiming, the torso comes up into a shooter's stance whatever the legs are doing: the clips' own lean (a
     // crouch walk hunches ~40 degrees, its head right over where the gun goes) is taken out, down to a slight
@@ -260,7 +276,7 @@ void NpcBody::LateUpdate(World& world, float dt, const Camera* weaponCam) {
             // Rotating +Z about +X by theta gives (0, -sin, cos): looking up is a negative angle about X.
             // The lean rolls about the body's forward (+Z): + = the top toward -X, the body's right.
             const glm::quat step = glm::angleAxis(m_AimTwist / (float)n, glm::vec3(0, 1, 0)) *
-                                   glm::angleAxis((m_Straighten - m_AimPitch) / (float)n, glm::vec3(1, 0, 0)) *
+                                   glm::angleAxis((m_Straighten - m_AimPitch + kCowerHunch * m_Cower) / (float)n, glm::vec3(1, 0, 0)) *
                                    glm::angleAxis(m_Lean * 0.38f / (float)n, glm::vec3(0, 0, 1));
             for (int k = 0; k < n; ++k)
                 IK::OffsetBone(pose, m_DriverParents, m_Globals, m_DriverSpine[k], glm::vec3(0.0f), step, IK::Position(m_Globals[(size_t)m_DriverSpine[k]]));
@@ -285,6 +301,44 @@ void NpcBody::LateUpdate(World& world, float dt, const Camera* weaponCam) {
             const glm::quat turn = FirstPersonBodyShoulderLineTurn(across, target, lineMatch);
             if (2.0f * std::acos(std::clamp(std::abs(turn.w), 0.0f, 1.0f)) < 0.002f) break;
             RotateSpine(turn);
+        }
+    }
+
+    // The head's own look: off the sights it turns to what the soldier looks at (a sound, a squadmate calling,
+    // the next corner) past where the chest faces; on them the gun owns it (HoldWeapon's cheek weld). Split
+    // between the neck and the head so the turn bends rather than pivots at the skull.
+    if (m_DriverNeck >= 0 && m_DriverHead >= 0) {
+        glm::mat4 hd(1.0f);
+        float lookYaw = 0.0f, lookPitch = 0.0f;
+        if (m_DriverModel->NodeTransform("head", hd)) {
+            const glm::vec3 d = glm::vec3(glm::inverse(rootW) * glm::vec4(m_In.LookPoint, 1.0f)) - glm::vec3(hd[3]);
+            const float flat = std::sqrt(d.x * d.x + d.z * d.z);
+            if (flat > 0.2f || std::abs(d.y) > 0.2f) {
+                lookYaw = std::clamp(FirstPersonBodyWrapAngle(NpcYawOf(d, 0.0f) - m_AimTwist), -kHeadMaxYaw, kHeadMaxYaw);
+                lookPitch = std::clamp(std::atan2(d.y, std::max(flat, 0.05f)), -kHeadMaxPitch, kHeadMaxPitch);
+            }
+        }
+        const float free = 1.0f - std::clamp(m_AimWeight, 0.0f, 1.0f);
+        lookYaw *= free;
+        lookPitch = lookPitch * free - 0.45f * m_Cower; // ducking: chin down
+        Spring(m_HeadYaw, m_HeadYawRate, lookYaw, 11.0f, 0.85f, dt);
+        Spring(m_HeadPitch, m_HeadPitchRate, lookPitch, 11.0f, 0.85f, dt);
+        if (std::abs(m_HeadYaw) > 1e-3f || std::abs(m_HeadPitch) > 1e-3f) {
+            IK::Pose& pose = m_Pose;
+            pose = m_DriverModel->AppliedLocalPose();
+            if ((int)pose.size() == m_DriverModel->NodeCount()) {
+                IK::ComputeGlobals(pose, m_DriverParents, m_Globals);
+                // Turn, then nod about the head's own side axis as turned (chest twist and the turn): looking up is
+                // a negative turn about it (see the spine above).
+                const glm::vec3 side = glm::angleAxis(m_AimTwist + m_HeadYaw, glm::vec3(0, 1, 0)) * glm::vec3(1, 0, 0);
+                const glm::quat look = glm::angleAxis(-m_HeadPitch, side) * glm::angleAxis(m_HeadYaw, glm::vec3(0, 1, 0));
+                const glm::quat neckShare = glm::slerp(glm::quat(1, 0, 0, 0), look, 0.4f);
+                const glm::quat headShare = glm::slerp(glm::quat(1, 0, 0, 0), look, 0.6f);
+                IK::OffsetBone(pose, m_DriverParents, m_Globals, m_DriverNeck, glm::vec3(0.0f), neckShare, IK::Position(m_Globals[(size_t)m_DriverNeck]));
+                IK::OffsetBone(pose, m_DriverParents, m_Globals, m_DriverHead, glm::vec3(0.0f), headShare, IK::Position(m_Globals[(size_t)m_DriverHead]));
+                m_DriverModel->ApplyLocalPose(pose);
+                m_PiecesStale = true;
+            }
         }
     }
 

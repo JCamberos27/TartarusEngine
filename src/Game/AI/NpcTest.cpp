@@ -15,6 +15,11 @@
 #include <cstdlib>
 #include <iostream>
 
+namespace {
+int PosePhaseCount(); // the pose scenario's phases (the table is with Pose below)
+constexpr float kPosePhaseTime = 2.4f;
+} // namespace
+
 static const char* EnvVar(const char* n) {
 #pragma warning(suppress : 4996)
     return std::getenv(n);
@@ -23,7 +28,7 @@ static const char* EnvVar(const char* n) {
 NpcTest::NpcTest(const std::string& scenario) : m_Scenario(scenario.empty() ? "watch" : scenario) {
     if (m_Scenario == "fight") m_Duration = 75.0f;
     if (m_Scenario == "die") m_Duration = 60.0f;
-    if (m_Scenario == "pose") m_Duration = 2.5f + 13 * 2.4f + 1.0f;
+    if (m_Scenario == "pose") m_Duration = 2.5f + (float)PosePhaseCount() * kPosePhaseTime + 1.0f;
     if (const char* t = EnvVar("NPC_TEST_SECONDS")) m_Duration = std::max(5.0f, (float)std::atof(t));
     if (const char* r = EnvVar("NPC_TEST_RECORD")) m_RecordDir = r;
     std::cout << "[NpcTest] scenario '" << m_Scenario << "', " << m_Duration << " s" << std::endl;
@@ -113,7 +118,7 @@ void NpcTest::After(World& world, NpcDirector& npcs, const PlayerVitals& vitals,
                         m_WorstHead * 100.0f, m_WorstHeadAt.c_str(), m_WorstTorso * 100.0f, m_WorstTorsoAt.c_str(), m_WorstElbow * 100.0f,
                         m_WorstElbowAt.c_str(), m_WorstHand * 100.0f, m_WorstHandAt.c_str());
             Check(!m_Probe[0].empty() && !m_Probe[1].empty(), "an AK and a Remington soldier to probe");
-            Check(m_PosePhase >= 13, "every pose ran");
+            Check(m_PosePhase >= PosePhaseCount(), "every pose ran");
             Check(m_WorstHead >= 0.02f, "the gun stays 2 cm off the head, neck and hood");
             Check(m_WorstElbow >= 0.0f, "the elbows stay out of the torso");
             Check(m_WorstHand <= 0.03f, "the hands stay on the gun (within 3 cm)");
@@ -294,6 +299,8 @@ const PosePhase kPhases[] = {
     {"aim_right", true, 10.0f, 10.0f, 0.0f},
     {"aim_left", true, 10.0f, -8.0f, 0.0f},
     {"low_ready", false, 15.0f, 0.0f, 0.0f},
+    {"look_right", false, 4.0f, 8.0f, 0.5f},  // off the sights the head turns past the chest
+    {"look_left", false, 4.0f, -8.0f, -1.0f},
     {"crouch_aim", true, 15.0f, 0.0f, 0.0f, true},
     {"crouch_low", false, 15.0f, 0.0f, 0.0f, true},
     {"strafe_right", true, 15.0f, 0.0f, 0.0f, false, 4.0f},
@@ -302,8 +309,9 @@ const PosePhase kPhases[] = {
     {"jog", false, 15.0f, 0.0f, 0.0f, false, 0.0f, 7.0f, Gait::Jog},
     {"sprint", false, 15.0f, 0.0f, 0.0f, false, 0.0f, -7.0f, Gait::Run},
 };
-constexpr float kPhaseTime = 2.4f;
+constexpr float kPhaseTime = kPosePhaseTime;
 constexpr int kPhaseCount = (int)(sizeof(kPhases) / sizeof(kPhases[0]));
+int PosePhaseCount() { return kPhaseCount; }
 } // namespace
 
 void NpcTest::Pose(World& world, NpcDirector& npcs, float now) {

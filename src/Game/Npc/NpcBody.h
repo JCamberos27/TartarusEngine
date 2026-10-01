@@ -65,6 +65,7 @@ struct NpcBodyInput {
     bool Crouched = false;
     bool Sprint = false;
     float Lean = 0.0f;             // -1 (left) .. 1 (right), a peek round cover
+    float Cower = 0.0f;            // 0..1: ducking from rounds cracking past (hunched, head down)
 };
 
 class NpcBody {
@@ -136,8 +137,13 @@ private:
     float m_TurnTime = 0.0f;
     float m_StillTime = 0.0f;
     bool m_WasCrouched = false;
-    // Aim, eased: the spine's pitch and twist (radians), and the lean.
+    // Aim, sprung: the spine's pitch and twist (radians) with their rates, and the lean (eased).
     float m_AimPitch = 0.0f, m_AimTwist = 0.0f, m_Lean = 0.0f, m_AimWeight = 0.0f;
+    float m_AimPitchRate = 0.0f, m_AimTwistRate = 0.0f;
+    // The head's own look (radians, relative to the chest), sprung, and the cower (eased).
+    float m_HeadYaw = 0.0f, m_HeadPitch = 0.0f, m_HeadYawRate = 0.0f, m_HeadPitchRate = 0.0f;
+    float m_Cower = 0.0f;
+    int m_DriverNeck = -1, m_DriverHead = -1;
     float m_Straighten = 0.0f;   // radians the aiming torso is brought up from the clips' lean (eased)
     NpcBodyInput m_In;
     glm::vec3 m_Eye{0.0f};
