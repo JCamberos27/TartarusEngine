@@ -291,6 +291,7 @@ struct PosePhase {
     float MoveAhead = 0.0f;  // run this far ahead
     Gait Pace = Gait::Walk;
     bool Reload = false;
+    bool Signal = false;     // a hand signal (forward and to the right) held through the phase
 };
 const PosePhase kPhases[] = {
     {"aim_level", true, 15.0f, 0.0f, 0.0f},
@@ -306,6 +307,7 @@ const PosePhase kPhases[] = {
     {"strafe_right", true, 15.0f, 0.0f, 0.0f, false, 4.0f},
     {"strafe_left", true, 15.0f, 0.0f, 0.0f, false, -4.0f},
     {"reload", true, 15.0f, 0.0f, 0.0f, false, 0.0f, 0.0f, Gait::Walk, true},
+    {"signal", false, 15.0f, 0.0f, 0.0f, false, 0.0f, 0.0f, Gait::Walk, false, true},
     {"jog", false, 15.0f, 0.0f, 0.0f, false, 0.0f, 7.0f, Gait::Jog},
     {"sprint", false, 15.0f, 0.0f, 0.0f, false, 0.0f, -7.0f, Gait::Run},
 };
@@ -363,6 +365,7 @@ void NpcTest::Pose(World& world, NpcDirector& npcs, float now) {
         in.Crouch = ph.Crouch;
         in.Reload = ph.Reload && t < 0.2f;
         if (ph.Reload && t < 0.05f && n.Weapon) n.Weapon->SetAmmo(n.Class == WeaponClass::Shotgun ? 4 : 12);
+        if (ph.Signal && t < 0.05f) n.Body.Signal(fwd + right * 0.6f, kPhaseTime);
         if (ph.MoveSide != 0.0f || ph.MoveAhead != 0.0f) {
             // Out and back within the phase: the first half there, the second half home.
             const glm::vec3 there = base + right * ph.MoveSide + fwd * ph.MoveAhead;
@@ -397,7 +400,8 @@ void NpcTest::Pose(World& world, NpcDirector& npcs, float now) {
         if (r.GunTorso >= 0.0f && r.GunTorso < m_WorstTorso && gun.Shouldered < 0.5f) { m_WorstTorso = r.GunTorso; m_WorstTorsoAt = at; }
         for (int s = 0; s < 2; ++s) {
             if (r.Elbow[s] >= 0.0f && r.Elbow[s] < m_WorstElbow) { m_WorstElbow = r.Elbow[s]; m_WorstElbowAt = at + (s ? " right" : " left"); }
-            if (r.Hand[s] > m_WorstHand) { m_WorstHand = r.Hand[s]; m_WorstHandAt = at + (s ? " right" : " left"); }
+            // Signalling, the support hand is off the gun by design.
+            if (!ph.Signal && r.Hand[s] > m_WorstHand) { m_WorstHand = r.Hand[s]; m_WorstHandAt = at + (s ? " right" : " left"); }
         }
     };
     if (t >= 1.2f && t - 1.0f / 60.0f < 1.2f) {

@@ -248,6 +248,7 @@ void NpcBrain::Enter(NpcDirector& d, Npc& n, int behaviour, const PlayerSnapshot
             const CoverPoint& c = d.m_Cover.Points()[(size_t)n.Cover];
             const glm::vec3 right = glm::normalize(glm::cross(FlatDir(n.Feet, threat), glm::vec3(0, 1, 0)));
             d.Callout(n, glm::dot(c.Pos - n.Feet, right) > 0.0f ? "Flanking right!" : "Flanking left!");
+            n.Body.Signal(c.Pos - n.Feet);
         }
         break;
     case Behaviour::Push:
@@ -257,7 +258,10 @@ void NpcBrain::Enter(NpcDirector& d, Npc& n, int behaviour, const PlayerSnapshot
             d.m_Cover.Release(n.Index, now);
             n.Phase = n.Class == WeaponClass::Shotgun ? 2 : -1;
         }
-        if (n.Phase >= 0) d.Callout(n, "Moving up!");
+        if (n.Phase >= 0) {
+            d.Callout(n, "Moving up!");
+            n.Body.Signal((n.Cover >= 0 ? d.m_Cover.Points()[(size_t)n.Cover].Pos : threat) - n.Feet);
+        }
         break;
     case Behaviour::Retreat:
         n.Retreated = true;
