@@ -125,6 +125,12 @@ std::string Trim(const std::string& s) {
 
 } // namespace
 
+void FirstPersonBodyCopyArmShape(const Model& m, const Model& rig, float weight, std::vector<LocalTRS>& pose, const std::vector<int>& parents,
+                                 float clavicleWeight) {
+    static const std::map<std::string, std::string> kNoMap;
+    CopyArmShape(m, rig, weight, pose, parents, kNoMap, clavicleWeight);
+}
+
 float FirstPersonBodyYaw(const glm::vec3& front, float fallback) {
     const glm::vec2 flat(front.x, front.z);
     if (glm::dot(flat, flat) < 1e-8f) return fallback;

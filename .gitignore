@@ -46,3 +46,4 @@ project/assets/Characters/Quantum/Textures/Clothing/**/*.png
 # Hat textures from the Quantum zip: the hats were removed from the project, so the editor
 # must not re-create .meta files for local copies of them.
 project/assets/Characters/Quantum/Textures/Clothing/Hats/
+videos/

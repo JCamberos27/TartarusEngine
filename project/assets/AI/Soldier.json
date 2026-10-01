@@ -1,0 +1,504 @@
+{
+  "boxes": [],
+  "empties": [
+    {
+      "Character Outfit": {
+        "Auto Hide Skin": true,
+        "Gender": "Male",
+        "Locks": "",
+        "Race": "Young",
+        "Randomize On Play": false,
+        "Wardrobe": {
+          "path": "assets/Characters/Quantum/Quantum.wardrobe",
+          "pathGuid": "ae5365d372fb447c"
+        }
+      },
+      "id": 0,
+      "name": "Soldier",
+      "order": 0,
+      "parentId": -1,
+      "position": [
+        0,
+        0,
+        0
+      ],
+      "rotation": [
+        0,
+        0,
+        0,
+        1
+      ],
+      "scale": [
+        1,
+        1,
+        1
+      ]
+    }
+  ],
+  "formatVersion": 4,
+  "models": [
+    {
+      "Animator Controller": {
+        "Controller": "assets/AI/npc_soldier.controller",
+        "Speed": 1.0,
+        "Track": "",
+        "rootMotion": "In Place",
+        "rootMotionBone": "",
+        "rootMotionRotation": false,
+        "rootMotionVertical": false
+      },
+      "Outfit Piece": {
+        "Flags": 1,
+        "Item": {
+          "path": "assets/Characters/Quantum/Models/European/Quantum_Torso.fbx",
+          "pathGuid": "34f0109f85dae259"
+        },
+        "Slot": "Torso"
+      },
+      "id": 1,
+      "materials": [
+        {
+          "guid": "00f2f285376c0e56",
+          "path": "assets/Characters/Quantum/Materials/Characters/M_Quantum_Head.mat"
+        },
+        {
+          "guid": "bdf55b314edda1f4",
+          "path": "assets/Characters/Quantum/Materials/Characters/M_Quantum_Arms.mat"
+        },
+        {
+          "guid": "ff2aca4c25ba4f89",
+          "path": "assets/Characters/Quantum/Materials/Characters/M_Quantum_Body.mat"
+        }
+      ],
+      "name": "Torso",
+      "order": 1,
+      "parentId": 0,
+      "path": "assets/Characters/Quantum/Models/European/Quantum_Torso.fbx",
+      "pathGuid": "34f0109f85dae259",
+      "position": [
+        0.0,
+        0.0,
+        0.0
+      ],
+      "rotation": [
+        0.0,
+        0.0,
+        0.0,
+        1.0
+      ],
+      "scale": [
+        1.0,
+        1.0,
+        1.0
+      ]
+    },
+    {
+      "Animator Controller": {
+        "Controller": "assets/AI/npc_soldier.controller",
+        "Speed": 1.0,
+        "Track": "",
+        "rootMotion": "In Place",
+        "rootMotionBone": "",
+        "rootMotionRotation": false,
+        "rootMotionVertical": false
+      },
+      "Outfit Piece": {
+        "Flags": 1,
+        "Item": {
+          "path": "assets/Characters/Quantum/Models/Clothing/Male/Shoes/Quantum_Feet_Shoes.fbx",
+          "pathGuid": "9223ed446c94346d"
+        },
+        "Slot": "Feet"
+      },
+      "id": 2,
+      "materials": [
+        {
+          "guid": "ff2aca4c25ba4f89",
+          "path": "assets/Characters/Quantum/Materials/Characters/M_Quantum_Body.mat"
+        }
+      ],
+      "name": "Feet",
+      "order": 2,
+      "parentId": 0,
+      "path": "assets/Characters/Quantum/Models/Clothing/Male/Shoes/Quantum_Feet_Shoes.fbx",
+      "pathGuid": "9223ed446c94346d",
+      "position": [
+        0.0,
+        0.0,
+        0.0
+      ],
+      "rotation": [
+        0.0,
+        0.0,
+        0.0,
+        1.0
+      ],
+      "scale": [
+        1.0,
+        1.0,
+        1.0
+      ]
+    },
+    {
+      "Animator Controller": {
+        "Controller": "assets/AI/npc_soldier.controller",
+        "Speed": 1.0,
+        "Track": "",
+        "rootMotion": "In Place",
+        "rootMotionBone": "",
+        "rootMotionRotation": false,
+        "rootMotionVertical": false
+      },
+      "Outfit Piece": {
+        "Flags": 3,
+        "Item": {
+          "path": "assets/Characters/Quantum/Models/Young/Quantum_Young_Head.fbx",
+          "pathGuid": "0ccde7cf189bfaba"
+        },
+        "Slot": "Head"
+      },
+      "id": 3,
+      "materials": [
+        {
+          "guid": "d71fa7c7cd81f033",
+          "path": "assets/Characters/Quantum/Materials/Characters/M_Cartilage.mat"
+        },
+        {
+          "guid": "9b4dcbacd337e8a1",
+          "path": "assets/Characters/Quantum/Materials/Characters/M_Eye_Overlay.mat"
+        },
+        {
+          "guid": "b0cdff125ce5bc62",
+          "path": "assets/Characters/Quantum/Materials/Characters/Eyes/M_Eye_Brown.mat"
+        },
+        {
+          "guid": "7a80f13a6d4b5daf",
+          "path": "assets/Characters/Quantum/Materials/Characters/M_Brows_Lashes.mat"
+        },
+        {
+          "guid": "b0cdff125ce5bc62",
+          "path": "assets/Characters/Quantum/Materials/Characters/Eyes/M_Eye_Brown.mat"
+        },
+        {
+          "guid": "185fa1f3e55e68a5",
+          "path": "assets/Characters/Quantum/Materials/Characters/M_Eye_Cornea.mat"
+        },
+        {
+          "guid": "35c182a2d61a4dca",
+          "path": "assets/Characters/Quantum/Materials/Characters/M_Saliva.mat"
+        },
+        {
+          "guid": "0681796530e520b8",
+          "path": "assets/Characters/Quantum/Materials/Characters/M_Teeth.mat"
+        },
+        {
+          "guid": "c1148bc46cc32021",
+          "path": "assets/Characters/Quantum/Materials/Characters/M_Quantum_Head_Young.mat"
+        }
+      ],
+      "name": "Head",
+      "order": 3,
+      "parentId": 0,
+      "path": "assets/Characters/Quantum/Models/Young/Quantum_Young_Head.fbx",
+      "pathGuid": "0ccde7cf189bfaba",
+      "position": [
+        0.0,
+        0.0,
+        0.0
+      ],
+      "rotation": [
+        0.0,
+        0.0,
+        0.0,
+        1.0
+      ],
+      "scale": [
+        1.0,
+        1.0,
+        1.0
+      ]
+    },
+    {
+      "Animator Controller": {
+        "Controller": "assets/AI/npc_soldier.controller",
+        "Speed": 1.0,
+        "Track": "",
+        "rootMotion": "In Place",
+        "rootMotionBone": "",
+        "rootMotionRotation": false,
+        "rootMotionVertical": false
+      },
+      "Outfit Piece": {
+        "Flags": 1,
+        "Item": {
+          "path": "assets/Characters/Quantum/FirstPerson/Quantum_Arms_FP.fbx",
+          "pathGuid": "19bbef7e387a5ef4"
+        },
+        "Slot": "Arms"
+      },
+      "id": 4,
+      "materials": [
+        {
+          "guid": "bdf55b314edda1f4",
+          "path": "assets/Characters/Quantum/Materials/Characters/M_Quantum_Arms.mat"
+        }
+      ],
+      "name": "Arms",
+      "order": 4,
+      "parentId": 0,
+      "path": "assets/Characters/Quantum/FirstPerson/Quantum_Arms_FP.fbx",
+      "pathGuid": "19bbef7e387a5ef4",
+      "position": [
+        0.0,
+        0.0,
+        0.0
+      ],
+      "rotation": [
+        0.0,
+        0.0,
+        0.0,
+        1.0
+      ],
+      "scale": [
+        1.0,
+        1.0,
+        1.0
+      ]
+    },
+    {
+      "Animator Controller": {
+        "Controller": "assets/AI/npc_soldier.controller",
+        "Speed": 1.0,
+        "Track": "",
+        "rootMotion": "In Place",
+        "rootMotionBone": "",
+        "rootMotionRotation": false,
+        "rootMotionVertical": false
+      },
+      "Outfit Piece": {
+        "Flags": 2,
+        "Item": {
+          "path": "assets/Characters/Quantum/Models/Clothing/Male/Balaclava/SM_Balaclava_Crime.fbx",
+          "pathGuid": "18fe3d21a3cde1a0"
+        },
+        "Slot": "Balaclava"
+      },
+      "id": 5,
+      "materials": [
+        {
+          "guid": "4a97d2684b5706be",
+          "path": "assets/Characters/Quantum/Materials/Clothing/Balaclava/M_Balaclava_Crime_Print.mat"
+        }
+      ],
+      "name": "Balaclava",
+      "order": 5,
+      "parentId": 0,
+      "path": "assets/Characters/Quantum/Models/Clothing/Male/Balaclava/SM_Balaclava_Crime.fbx",
+      "pathGuid": "18fe3d21a3cde1a0",
+      "position": [
+        1.2546353218567674e-06,
+        4.76837158203125e-07,
+        1.28941610455513e-06
+      ],
+      "rotation": [
+        -3.650785629361053e-07,
+        1.6864706964270226e-08,
+        3.987132686233963e-07,
+        1.0
+      ],
+      "scale": [
+        1.0,
+        0.9999997019767761,
+        0.9999997019767761
+      ]
+    },
+    {
+      "Animator Controller": {
+        "Controller": "assets/AI/npc_soldier.controller",
+        "Speed": 1.0,
+        "Track": "",
+        "rootMotion": "In Place",
+        "rootMotionBone": "",
+        "rootMotionRotation": false,
+        "rootMotionVertical": false
+      },
+      "Outfit Piece": {
+        "Flags": 0,
+        "Item": {
+          "path": "assets/Characters/Quantum/Models/Clothing/Male/Tops/SKM_Hoodie_Hood_Up.fbx",
+          "pathGuid": "a93a8b58180d0f44"
+        },
+        "Slot": "Top"
+      },
+      "id": 6,
+      "materials": [
+        {
+          "guid": "02619ee0a88e6cae",
+          "path": "assets/Characters/Quantum/Materials/Clothing/Tops/Hoodie_Hood_Up/M_Hoodie_Hood_Up_Black.mat"
+        }
+      ],
+      "name": "Top",
+      "order": 6,
+      "parentId": 0,
+      "path": "assets/Characters/Quantum/Models/Clothing/Male/Tops/SKM_Hoodie_Hood_Up.fbx",
+      "pathGuid": "a93a8b58180d0f44",
+      "position": [
+        0.0,
+        0.0,
+        0.0
+      ],
+      "rotation": [
+        0.0,
+        0.0,
+        0.0,
+        1.0
+      ],
+      "scale": [
+        1.0,
+        1.0,
+        1.0
+      ]
+    },
+    {
+      "Animator Controller": {
+        "Controller": "assets/AI/npc_soldier.controller",
+        "Speed": 1.0,
+        "Track": "",
+        "rootMotion": "In Place",
+        "rootMotionBone": "",
+        "rootMotionRotation": false,
+        "rootMotionVertical": false
+      },
+      "Outfit Piece": {
+        "Flags": 0,
+        "Item": {
+          "path": "assets/Characters/Quantum/Models/Clothing/Male/Pants/SKM_Sport_Pants.fbx",
+          "pathGuid": "c28a0a40272cd541"
+        },
+        "Slot": "Pants"
+      },
+      "id": 7,
+      "materials": [
+        {
+          "guid": "4a4ac6fabe21f2c8",
+          "path": "assets/Characters/Quantum/Materials/Clothing/Pants/Pants_Sport/M_Sport_Pants_Black.mat"
+        }
+      ],
+      "name": "Pants",
+      "order": 7,
+      "parentId": 0,
+      "path": "assets/Characters/Quantum/Models/Clothing/Male/Pants/SKM_Sport_Pants.fbx",
+      "pathGuid": "c28a0a40272cd541",
+      "position": [
+        0.0,
+        0.0,
+        0.0
+      ],
+      "rotation": [
+        0.0,
+        0.0,
+        0.0,
+        1.0
+      ],
+      "scale": [
+        1.0,
+        1.0,
+        1.0
+      ]
+    },
+    {
+      "Animator Controller": {
+        "Controller": "assets/AI/npc_soldier.controller",
+        "Speed": 1.0,
+        "Track": "",
+        "rootMotion": "In Place",
+        "rootMotionBone": "",
+        "rootMotionRotation": false,
+        "rootMotionVertical": false
+      },
+      "Outfit Piece": {
+        "Flags": 0,
+        "Item": {
+          "path": "assets/Characters/Quantum/Models/Clothing/Male/Shoes/SKM_Sneakers.fbx",
+          "pathGuid": "907719222c820ea8"
+        },
+        "Slot": "Shoes"
+      },
+      "id": 8,
+      "materials": [
+        {
+          "guid": "6ff7cafa7e9d186a",
+          "path": "assets/Characters/Quantum/Materials/Clothing/Shoes/Sneakers/Sneakers_Leather/M_F_Sneakers_Leather_Black.mat"
+        }
+      ],
+      "name": "Shoes",
+      "order": 8,
+      "parentId": 0,
+      "path": "assets/Characters/Quantum/Models/Clothing/Male/Shoes/SKM_Sneakers.fbx",
+      "pathGuid": "907719222c820ea8",
+      "position": [
+        0.0,
+        0.0,
+        0.0
+      ],
+      "rotation": [
+        0.0,
+        0.0,
+        0.0,
+        1.0
+      ],
+      "scale": [
+        1.0,
+        1.0,
+        1.0
+      ]
+    },
+    {
+      "Animator Controller": {
+        "Controller": "assets/AI/npc_soldier.controller",
+        "Speed": 1.0,
+        "Track": "",
+        "rootMotion": "In Place",
+        "rootMotionBone": "",
+        "rootMotionRotation": false,
+        "rootMotionVertical": false
+      },
+      "Outfit Piece": {
+        "Flags": 0,
+        "Item": {
+          "path": "assets/Characters/Quantum/Models/Clothing/Male/Shoes/SKM_Socks.fbx",
+          "pathGuid": "d2d9305f1b150870"
+        },
+        "Slot": "Socks"
+      },
+      "id": 9,
+      "materials": [
+        {
+          "guid": "475670f667a70b3b",
+          "path": "assets/Characters/Quantum/Materials/Clothing/Shoes/Socks/M_Socks.mat"
+        }
+      ],
+      "name": "Socks",
+      "order": 9,
+      "parentId": 0,
+      "path": "assets/Characters/Quantum/Models/Clothing/Male/Shoes/SKM_Socks.fbx",
+      "pathGuid": "d2d9305f1b150870",
+      "position": [
+        0.0,
+        0.0,
+        0.0
+      ],
+      "rotation": [
+        0.0,
+        0.0,
+        0.0,
+        1.0
+      ],
+      "scale": [
+        1.0,
+        1.0,
+        1.0
+      ]
+    }
+  ]
+}

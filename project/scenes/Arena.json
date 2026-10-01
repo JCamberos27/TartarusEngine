@@ -1,0 +1,6019 @@
+{
+  "autoExposure": false,
+  "autoExposureMaxEV": 4.0,
+  "autoExposureMinEV": -4.0,
+  "autoExposureSpeedDown": 1.0,
+  "autoExposureSpeedUp": 2.0,
+  "bloomEnabled": true,
+  "bloomIntensity": 0.11999999731779099,
+  "bloomKnee": 0.5,
+  "bloomThreshold": 1.2000000476837158,
+  "boxes": [
+    {
+      "collider": {
+        "friction": 0.800000011920929,
+        "isTrigger": false
+      },
+      "color": [
+        1.0,
+        1.0,
+        1.0
+      ],
+      "id": 0,
+      "materials": [
+        {
+          "embedded": {
+            "albedoMap": {
+              "path": "assets/Materials/Prototype/proto_grid_light.png",
+              "pathGuid": "c90849c8fc6c88b0"
+            },
+            "aoMap": "",
+            "baseColor": [
+              1.0,
+              1.0,
+              1.0
+            ],
+            "emissiveColor": [
+              0.0,
+              0.0,
+              0.0
+            ],
+            "emissiveMap": "",
+            "emissiveStrength": 1.0,
+            "factorsScaleMaps": true,
+            "metallic": 0.0,
+            "metallicMap": "",
+            "metallicRoughnessMap": "",
+            "normalMap": "",
+            "roughness": 0.8999999761581421,
+            "roughnessMap": "",
+            "triplanar": true,
+            "triplanarScale": 0.25
+          }
+        }
+      ],
+      "name": "Ground",
+      "order": 1,
+      "parentId": 78,
+      "position": [
+        0.0,
+        -0.10000000149011612,
+        0.0
+      ],
+      "rotation": [
+        0.0,
+        0.0,
+        0.0,
+        1.0
+      ],
+      "scale": [
+        70.0,
+        0.20000000298023224,
+        70.0
+      ]
+    },
+    {
+      "collider": {
+        "friction": 0.800000011920929,
+        "isTrigger": false
+      },
+      "color": [
+        1.0,
+        1.0,
+        1.0
+      ],
+      "id": 1,
+      "materials": [
+        {
+          "embedded": {
+            "albedoMap": {
+              "path": "assets/Materials/Prototype/proto_grid_dark.png",
+              "pathGuid": "2b60657ce9aa4555"
+            },
+            "aoMap": "",
+            "baseColor": [
+              1.0,
+              1.0,
+              1.0
+            ],
+            "emissiveColor": [
+              0.0,
+              0.0,
+              0.0
+            ],
+            "emissiveMap": "",
+            "emissiveStrength": 1.0,
+            "factorsScaleMaps": true,
+            "metallic": 0.0,
+            "metallicMap": "",
+            "metallicRoughnessMap": "",
+            "normalMap": "",
+            "roughness": 0.8500000238418579,
+            "roughnessMap": "",
+            "triplanar": true,
+            "triplanarScale": 0.25
+          }
+        }
+      ],
+      "name": "North Wall",
+      "order": 2,
+      "parentId": 78,
+      "position": [
+        0.0,
+        2.0,
+        -32.25
+      ],
+      "rotation": [
+        0.0,
+        0.0,
+        0.0,
+        1.0
+      ],
+      "scale": [
+        65.0,
+        4.0,
+        0.5
+      ]
+    },
+    {
+      "collider": {
+        "friction": 0.800000011920929,
+        "isTrigger": false
+      },
+      "color": [
+        1.0,
+        1.0,
+        1.0
+      ],
+      "id": 2,
+      "materials": [
+        {
+          "embedded": {
+            "albedoMap": {
+              "path": "assets/Materials/Prototype/proto_grid_dark.png",
+              "pathGuid": "2b60657ce9aa4555"
+            },
+            "aoMap": "",
+            "baseColor": [
+              1.0,
+              1.0,
+              1.0
+            ],
+            "emissiveColor": [
+              0.0,
+              0.0,
+              0.0
+            ],
+            "emissiveMap": "",
+            "emissiveStrength": 1.0,
+            "factorsScaleMaps": true,
+            "metallic": 0.0,
+            "metallicMap": "",
+            "metallicRoughnessMap": "",
+            "normalMap": "",
+            "roughness": 0.8500000238418579,
+            "roughnessMap": "",
+            "triplanar": true,
+            "triplanarScale": 0.25
+          }
+        }
+      ],
+      "name": "South Wall",
+      "order": 3,
+      "parentId": 78,
+      "position": [
+        0.0,
+        2.0,
+        32.25
+      ],
+      "rotation": [
+        0.0,
+        0.0,
+        0.0,
+        1.0
+      ],
+      "scale": [
+        65.0,
+        4.0,
+        0.5
+      ]
+    },
+    {
+      "collider": {
+        "friction": 0.800000011920929,
+        "isTrigger": false
+      },
+      "color": [
+        1.0,
+        1.0,
+        1.0
+      ],
+      "id": 3,
+      "materials": [
+        {
+          "embedded": {
+            "albedoMap": {
+              "path": "assets/Materials/Prototype/proto_grid_dark.png",
+              "pathGuid": "2b60657ce9aa4555"
+            },
+            "aoMap": "",
+            "baseColor": [
+              1.0,
+              1.0,
+              1.0
+            ],
+            "emissiveColor": [
+              0.0,
+              0.0,
+              0.0
+            ],
+            "emissiveMap": "",
+            "emissiveStrength": 1.0,
+            "factorsScaleMaps": true,
+            "metallic": 0.0,
+            "metallicMap": "",
+            "metallicRoughnessMap": "",
+            "normalMap": "",
+            "roughness": 0.8500000238418579,
+            "roughnessMap": "",
+            "triplanar": true,
+            "triplanarScale": 0.25
+          }
+        }
+      ],
+      "name": "West Wall",
+      "order": 4,
+      "parentId": 78,
+      "position": [
+        -32.25,
+        2.0,
+        0.0
+      ],
+      "rotation": [
+        0.0,
+        0.0,
+        0.0,
+        1.0
+      ],
+      "scale": [
+        0.5,
+        4.0,
+        64.0
+      ]
+    },
+    {
+      "collider": {
+        "friction": 0.800000011920929,
+        "isTrigger": false
+      },
+      "color": [
+        1.0,
+        1.0,
+        1.0
+      ],
+      "id": 4,
+      "materials": [
+        {
+          "embedded": {
+            "albedoMap": {
+              "path": "assets/Materials/Prototype/proto_grid_dark.png",
+              "pathGuid": "2b60657ce9aa4555"
+            },
+            "aoMap": "",
+            "baseColor": [
+              1.0,
+              1.0,
+              1.0
+            ],
+            "emissiveColor": [
+              0.0,
+              0.0,
+              0.0
+            ],
+            "emissiveMap": "",
+            "emissiveStrength": 1.0,
+            "factorsScaleMaps": true,
+            "metallic": 0.0,
+            "metallicMap": "",
+            "metallicRoughnessMap": "",
+            "normalMap": "",
+            "roughness": 0.8500000238418579,
+            "roughnessMap": "",
+            "triplanar": true,
+            "triplanarScale": 0.25
+          }
+        }
+      ],
+      "name": "East Wall",
+      "order": 5,
+      "parentId": 78,
+      "position": [
+        32.25,
+        2.0,
+        0.0
+      ],
+      "rotation": [
+        0.0,
+        0.0,
+        0.0,
+        1.0
+      ],
+      "scale": [
+        0.5,
+        4.0,
+        64.0
+      ]
+    },
+    {
+      "collider": {
+        "friction": 0.800000011920929,
+        "isTrigger": false
+      },
+      "color": [
+        1.0,
+        1.0,
+        1.0
+      ],
+      "id": 5,
+      "materials": [
+        {
+          "embedded": {
+            "albedoMap": {
+              "path": "assets/Materials/Prototype/proto_grid_dark.png",
+              "pathGuid": "2b60657ce9aa4555"
+            },
+            "aoMap": "",
+            "baseColor": [
+              1.0,
+              1.0,
+              1.0
+            ],
+            "emissiveColor": [
+              0.0,
+              0.0,
+              0.0
+            ],
+            "emissiveMap": "",
+            "emissiveStrength": 1.0,
+            "factorsScaleMaps": true,
+            "metallic": 0.0,
+            "metallicMap": "",
+            "metallicRoughnessMap": "",
+            "normalMap": "",
+            "roughness": 0.8500000238418579,
+            "roughnessMap": "",
+            "triplanar": true,
+            "triplanarScale": 0.25
+          }
+        }
+      ],
+      "name": "North Wall L",
+      "order": 11,
+      "parentId": 83,
+      "position": [
+        -20.149999618530273,
+        1.75,
+        -12.0
+      ],
+      "rotation": [
+        0.0,
+        0.0,
+        0.0,
+        1.0
+      ],
+      "scale": [
+        2.700000047683716,
+        3.5,
+        0.30000001192092896
+      ]
+    },
+    {
+      "collider": {
+        "friction": 0.800000011920929,
+        "isTrigger": false
+      },
+      "color": [
+        1.0,
+        1.0,
+        1.0
+      ],
+      "id": 6,
+      "materials": [
+        {
+          "embedded": {
+            "albedoMap": {
+              "path": "assets/Materials/Prototype/proto_grid_dark.png",
+              "pathGuid": "2b60657ce9aa4555"
+            },
+            "aoMap": "",
+            "baseColor": [
+              1.0,
+              1.0,
+              1.0
+            ],
+            "emissiveColor": [
+              0.0,
+              0.0,
+              0.0
+            ],
+            "emissiveMap": "",
+            "emissiveStrength": 1.0,
+            "factorsScaleMaps": true,
+            "metallic": 0.0,
+            "metallicMap": "",
+            "metallicRoughnessMap": "",
+            "normalMap": "",
+            "roughness": 0.8500000238418579,
+            "roughnessMap": "",
+            "triplanar": true,
+            "triplanarScale": 0.25
+          }
+        }
+      ],
+      "name": "North Wall R",
+      "order": 12,
+      "parentId": 83,
+      "position": [
+        -15.850000381469727,
+        1.75,
+        -12.0
+      ],
+      "rotation": [
+        0.0,
+        0.0,
+        0.0,
+        1.0
+      ],
+      "scale": [
+        2.700000047683716,
+        3.5,
+        0.30000001192092896
+      ]
+    },
+    {
+      "collider": {
+        "friction": 0.800000011920929,
+        "isTrigger": false
+      },
+      "color": [
+        1.0,
+        1.0,
+        1.0
+      ],
+      "id": 7,
+      "materials": [
+        {
+          "embedded": {
+            "albedoMap": {
+              "path": "assets/Materials/Prototype/proto_grid_dark.png",
+              "pathGuid": "2b60657ce9aa4555"
+            },
+            "aoMap": "",
+            "baseColor": [
+              1.0,
+              1.0,
+              1.0
+            ],
+            "emissiveColor": [
+              0.0,
+              0.0,
+              0.0
+            ],
+            "emissiveMap": "",
+            "emissiveStrength": 1.0,
+            "factorsScaleMaps": true,
+            "metallic": 0.0,
+            "metallicMap": "",
+            "metallicRoughnessMap": "",
+            "normalMap": "",
+            "roughness": 0.8500000238418579,
+            "roughnessMap": "",
+            "triplanar": true,
+            "triplanarScale": 0.25
+          }
+        }
+      ],
+      "name": "North Door Lintel",
+      "order": 13,
+      "parentId": 83,
+      "position": [
+        -18.0,
+        2.8499999046325684,
+        -12.0
+      ],
+      "rotation": [
+        0.0,
+        0.0,
+        0.0,
+        1.0
+      ],
+      "scale": [
+        1.600000023841858,
+        1.2999999523162842,
+        0.30000001192092896
+      ]
+    },
+    {
+      "collider": {
+        "friction": 0.800000011920929,
+        "isTrigger": false
+      },
+      "color": [
+        1.0,
+        1.0,
+        1.0
+      ],
+      "id": 8,
+      "materials": [
+        {
+          "embedded": {
+            "albedoMap": {
+              "path": "assets/Materials/Prototype/proto_grid_dark.png",
+              "pathGuid": "2b60657ce9aa4555"
+            },
+            "aoMap": "",
+            "baseColor": [
+              1.0,
+              1.0,
+              1.0
+            ],
+            "emissiveColor": [
+              0.0,
+              0.0,
+              0.0
+            ],
+            "emissiveMap": "",
+            "emissiveStrength": 1.0,
+            "factorsScaleMaps": true,
+            "metallic": 0.0,
+            "metallicMap": "",
+            "metallicRoughnessMap": "",
+            "normalMap": "",
+            "roughness": 0.8500000238418579,
+            "roughnessMap": "",
+            "triplanar": true,
+            "triplanarScale": 0.25
+          }
+        }
+      ],
+      "name": "South Wall L",
+      "order": 14,
+      "parentId": 83,
+      "position": [
+        -20.149999618530273,
+        1.75,
+        -4.0
+      ],
+      "rotation": [
+        0.0,
+        0.0,
+        0.0,
+        1.0
+      ],
+      "scale": [
+        2.700000047683716,
+        3.5,
+        0.30000001192092896
+      ]
+    },
+    {
+      "collider": {
+        "friction": 0.800000011920929,
+        "isTrigger": false
+      },
+      "color": [
+        1.0,
+        1.0,
+        1.0
+      ],
+      "id": 9,
+      "materials": [
+        {
+          "embedded": {
+            "albedoMap": {
+              "path": "assets/Materials/Prototype/proto_grid_dark.png",
+              "pathGuid": "2b60657ce9aa4555"
+            },
+            "aoMap": "",
+            "baseColor": [
+              1.0,
+              1.0,
+              1.0
+            ],
+            "emissiveColor": [
+              0.0,
+              0.0,
+              0.0
+            ],
+            "emissiveMap": "",
+            "emissiveStrength": 1.0,
+            "factorsScaleMaps": true,
+            "metallic": 0.0,
+            "metallicMap": "",
+            "metallicRoughnessMap": "",
+            "normalMap": "",
+            "roughness": 0.8500000238418579,
+            "roughnessMap": "",
+            "triplanar": true,
+            "triplanarScale": 0.25
+          }
+        }
+      ],
+      "name": "South Wall R",
+      "order": 15,
+      "parentId": 83,
+      "position": [
+        -15.850000381469727,
+        1.75,
+        -4.0
+      ],
+      "rotation": [
+        0.0,
+        0.0,
+        0.0,
+        1.0
+      ],
+      "scale": [
+        2.700000047683716,
+        3.5,
+        0.30000001192092896
+      ]
+    },
+    {
+      "collider": {
+        "friction": 0.800000011920929,
+        "isTrigger": false
+      },
+      "color": [
+        1.0,
+        1.0,
+        1.0
+      ],
+      "id": 10,
+      "materials": [
+        {
+          "embedded": {
+            "albedoMap": {
+              "path": "assets/Materials/Prototype/proto_grid_dark.png",
+              "pathGuid": "2b60657ce9aa4555"
+            },
+            "aoMap": "",
+            "baseColor": [
+              1.0,
+              1.0,
+              1.0
+            ],
+            "emissiveColor": [
+              0.0,
+              0.0,
+              0.0
+            ],
+            "emissiveMap": "",
+            "emissiveStrength": 1.0,
+            "factorsScaleMaps": true,
+            "metallic": 0.0,
+            "metallicMap": "",
+            "metallicRoughnessMap": "",
+            "normalMap": "",
+            "roughness": 0.8500000238418579,
+            "roughnessMap": "",
+            "triplanar": true,
+            "triplanarScale": 0.25
+          }
+        }
+      ],
+      "name": "South Door Lintel",
+      "order": 16,
+      "parentId": 83,
+      "position": [
+        -18.0,
+        2.8499999046325684,
+        -4.0
+      ],
+      "rotation": [
+        0.0,
+        0.0,
+        0.0,
+        1.0
+      ],
+      "scale": [
+        1.600000023841858,
+        1.2999999523162842,
+        0.30000001192092896
+      ]
+    },
+    {
+      "collider": {
+        "friction": 0.800000011920929,
+        "isTrigger": false
+      },
+      "color": [
+        1.0,
+        1.0,
+        1.0
+      ],
+      "id": 11,
+      "materials": [
+        {
+          "embedded": {
+            "albedoMap": {
+              "path": "assets/Materials/Prototype/proto_grid_dark.png",
+              "pathGuid": "2b60657ce9aa4555"
+            },
+            "aoMap": "",
+            "baseColor": [
+              1.0,
+              1.0,
+              1.0
+            ],
+            "emissiveColor": [
+              0.0,
+              0.0,
+              0.0
+            ],
+            "emissiveMap": "",
+            "emissiveStrength": 1.0,
+            "factorsScaleMaps": true,
+            "metallic": 0.0,
+            "metallicMap": "",
+            "metallicRoughnessMap": "",
+            "normalMap": "",
+            "roughness": 0.8500000238418579,
+            "roughnessMap": "",
+            "triplanar": true,
+            "triplanarScale": 0.25
+          }
+        }
+      ],
+      "name": "West Wall",
+      "order": 17,
+      "parentId": 83,
+      "position": [
+        -21.5,
+        1.75,
+        -8.0
+      ],
+      "rotation": [
+        0.0,
+        0.0,
+        0.0,
+        1.0
+      ],
+      "scale": [
+        0.30000001192092896,
+        3.5,
+        7.699999809265137
+      ]
+    },
+    {
+      "collider": {
+        "friction": 0.800000011920929,
+        "isTrigger": false
+      },
+      "color": [
+        1.0,
+        1.0,
+        1.0
+      ],
+      "id": 12,
+      "materials": [
+        {
+          "embedded": {
+            "albedoMap": {
+              "path": "assets/Materials/Prototype/proto_grid_dark.png",
+              "pathGuid": "2b60657ce9aa4555"
+            },
+            "aoMap": "",
+            "baseColor": [
+              1.0,
+              1.0,
+              1.0
+            ],
+            "emissiveColor": [
+              0.0,
+              0.0,
+              0.0
+            ],
+            "emissiveMap": "",
+            "emissiveStrength": 1.0,
+            "factorsScaleMaps": true,
+            "metallic": 0.0,
+            "metallicMap": "",
+            "metallicRoughnessMap": "",
+            "normalMap": "",
+            "roughness": 0.8500000238418579,
+            "roughnessMap": "",
+            "triplanar": true,
+            "triplanarScale": 0.25
+          }
+        }
+      ],
+      "name": "East Wall N",
+      "order": 18,
+      "parentId": 83,
+      "position": [
+        -14.5,
+        1.75,
+        -10.225000381469727
+      ],
+      "rotation": [
+        0.0,
+        0.0,
+        0.0,
+        1.0
+      ],
+      "scale": [
+        0.30000001192092896,
+        3.5,
+        3.25
+      ]
+    },
+    {
+      "collider": {
+        "friction": 0.800000011920929,
+        "isTrigger": false
+      },
+      "color": [
+        1.0,
+        1.0,
+        1.0
+      ],
+      "id": 13,
+      "materials": [
+        {
+          "embedded": {
+            "albedoMap": {
+              "path": "assets/Materials/Prototype/proto_grid_dark.png",
+              "pathGuid": "2b60657ce9aa4555"
+            },
+            "aoMap": "",
+            "baseColor": [
+              1.0,
+              1.0,
+              1.0
+            ],
+            "emissiveColor": [
+              0.0,
+              0.0,
+              0.0
+            ],
+            "emissiveMap": "",
+            "emissiveStrength": 1.0,
+            "factorsScaleMaps": true,
+            "metallic": 0.0,
+            "metallicMap": "",
+            "metallicRoughnessMap": "",
+            "normalMap": "",
+            "roughness": 0.8500000238418579,
+            "roughnessMap": "",
+            "triplanar": true,
+            "triplanarScale": 0.25
+          }
+        }
+      ],
+      "name": "East Wall S",
+      "order": 19,
+      "parentId": 83,
+      "position": [
+        -14.5,
+        1.75,
+        -5.775000095367432
+      ],
+      "rotation": [
+        0.0,
+        0.0,
+        0.0,
+        1.0
+      ],
+      "scale": [
+        0.30000001192092896,
+        3.5,
+        3.25
+      ]
+    },
+    {
+      "collider": {
+        "friction": 0.800000011920929,
+        "isTrigger": false
+      },
+      "color": [
+        1.0,
+        1.0,
+        1.0
+      ],
+      "id": 14,
+      "materials": [
+        {
+          "embedded": {
+            "albedoMap": {
+              "path": "assets/Materials/Prototype/proto_grid_dark.png",
+              "pathGuid": "2b60657ce9aa4555"
+            },
+            "aoMap": "",
+            "baseColor": [
+              1.0,
+              1.0,
+              1.0
+            ],
+            "emissiveColor": [
+              0.0,
+              0.0,
+              0.0
+            ],
+            "emissiveMap": "",
+            "emissiveStrength": 1.0,
+            "factorsScaleMaps": true,
+            "metallic": 0.0,
+            "metallicMap": "",
+            "metallicRoughnessMap": "",
+            "normalMap": "",
+            "roughness": 0.8500000238418579,
+            "roughnessMap": "",
+            "triplanar": true,
+            "triplanarScale": 0.25
+          }
+        }
+      ],
+      "name": "East Window Sill",
+      "order": 20,
+      "parentId": 83,
+      "position": [
+        -14.5,
+        0.5,
+        -8.0
+      ],
+      "rotation": [
+        0.0,
+        0.0,
+        0.0,
+        1.0
+      ],
+      "scale": [
+        0.30000001192092896,
+        1.0,
+        1.2000000476837158
+      ]
+    },
+    {
+      "collider": {
+        "friction": 0.800000011920929,
+        "isTrigger": false
+      },
+      "color": [
+        1.0,
+        1.0,
+        1.0
+      ],
+      "id": 15,
+      "materials": [
+        {
+          "embedded": {
+            "albedoMap": {
+              "path": "assets/Materials/Prototype/proto_grid_dark.png",
+              "pathGuid": "2b60657ce9aa4555"
+            },
+            "aoMap": "",
+            "baseColor": [
+              1.0,
+              1.0,
+              1.0
+            ],
+            "emissiveColor": [
+              0.0,
+              0.0,
+              0.0
+            ],
+            "emissiveMap": "",
+            "emissiveStrength": 1.0,
+            "factorsScaleMaps": true,
+            "metallic": 0.0,
+            "metallicMap": "",
+            "metallicRoughnessMap": "",
+            "normalMap": "",
+            "roughness": 0.8500000238418579,
+            "roughnessMap": "",
+            "triplanar": true,
+            "triplanarScale": 0.25
+          }
+        }
+      ],
+      "name": "East Window Lintel",
+      "order": 21,
+      "parentId": 83,
+      "position": [
+        -14.5,
+        2.8499999046325684,
+        -8.0
+      ],
+      "rotation": [
+        0.0,
+        0.0,
+        0.0,
+        1.0
+      ],
+      "scale": [
+        0.30000001192092896,
+        1.2999999523162842,
+        1.2000000476837158
+      ]
+    },
+    {
+      "collider": {
+        "friction": 0.800000011920929,
+        "isTrigger": false
+      },
+      "color": [
+        1.0,
+        1.0,
+        1.0
+      ],
+      "id": 16,
+      "materials": [
+        {
+          "embedded": {
+            "albedoMap": {
+              "path": "assets/Materials/Prototype/proto_grid_dark.png",
+              "pathGuid": "2b60657ce9aa4555"
+            },
+            "aoMap": "",
+            "baseColor": [
+              1.0,
+              1.0,
+              1.0
+            ],
+            "emissiveColor": [
+              0.0,
+              0.0,
+              0.0
+            ],
+            "emissiveMap": "",
+            "emissiveStrength": 1.0,
+            "factorsScaleMaps": true,
+            "metallic": 0.0,
+            "metallicMap": "",
+            "metallicRoughnessMap": "",
+            "normalMap": "",
+            "roughness": 0.8500000238418579,
+            "roughnessMap": "",
+            "triplanar": true,
+            "triplanarScale": 0.25
+          }
+        }
+      ],
+      "name": "North Wall L",
+      "order": 23,
+      "parentId": 84,
+      "position": [
+        -20.149999618530273,
+        1.75,
+        4.0
+      ],
+      "rotation": [
+        0.0,
+        0.0,
+        0.0,
+        1.0
+      ],
+      "scale": [
+        2.700000047683716,
+        3.5,
+        0.30000001192092896
+      ]
+    },
+    {
+      "collider": {
+        "friction": 0.800000011920929,
+        "isTrigger": false
+      },
+      "color": [
+        1.0,
+        1.0,
+        1.0
+      ],
+      "id": 17,
+      "materials": [
+        {
+          "embedded": {
+            "albedoMap": {
+              "path": "assets/Materials/Prototype/proto_grid_dark.png",
+              "pathGuid": "2b60657ce9aa4555"
+            },
+            "aoMap": "",
+            "baseColor": [
+              1.0,
+              1.0,
+              1.0
+            ],
+            "emissiveColor": [
+              0.0,
+              0.0,
+              0.0
+            ],
+            "emissiveMap": "",
+            "emissiveStrength": 1.0,
+            "factorsScaleMaps": true,
+            "metallic": 0.0,
+            "metallicMap": "",
+            "metallicRoughnessMap": "",
+            "normalMap": "",
+            "roughness": 0.8500000238418579,
+            "roughnessMap": "",
+            "triplanar": true,
+            "triplanarScale": 0.25
+          }
+        }
+      ],
+      "name": "North Wall R",
+      "order": 24,
+      "parentId": 84,
+      "position": [
+        -15.850000381469727,
+        1.75,
+        4.0
+      ],
+      "rotation": [
+        0.0,
+        0.0,
+        0.0,
+        1.0
+      ],
+      "scale": [
+        2.700000047683716,
+        3.5,
+        0.30000001192092896
+      ]
+    },
+    {
+      "collider": {
+        "friction": 0.800000011920929,
+        "isTrigger": false
+      },
+      "color": [
+        1.0,
+        1.0,
+        1.0
+      ],
+      "id": 18,
+      "materials": [
+        {
+          "embedded": {
+            "albedoMap": {
+              "path": "assets/Materials/Prototype/proto_grid_dark.png",
+              "pathGuid": "2b60657ce9aa4555"
+            },
+            "aoMap": "",
+            "baseColor": [
+              1.0,
+              1.0,
+              1.0
+            ],
+            "emissiveColor": [
+              0.0,
+              0.0,
+              0.0
+            ],
+            "emissiveMap": "",
+            "emissiveStrength": 1.0,
+            "factorsScaleMaps": true,
+            "metallic": 0.0,
+            "metallicMap": "",
+            "metallicRoughnessMap": "",
+            "normalMap": "",
+            "roughness": 0.8500000238418579,
+            "roughnessMap": "",
+            "triplanar": true,
+            "triplanarScale": 0.25
+          }
+        }
+      ],
+      "name": "North Door Lintel",
+      "order": 25,
+      "parentId": 84,
+      "position": [
+        -18.0,
+        2.8499999046325684,
+        4.0
+      ],
+      "rotation": [
+        0.0,
+        0.0,
+        0.0,
+        1.0
+      ],
+      "scale": [
+        1.600000023841858,
+        1.2999999523162842,
+        0.30000001192092896
+      ]
+    },
+    {
+      "collider": {
+        "friction": 0.800000011920929,
+        "isTrigger": false
+      },
+      "color": [
+        1.0,
+        1.0,
+        1.0
+      ],
+      "id": 19,
+      "materials": [
+        {
+          "embedded": {
+            "albedoMap": {
+              "path": "assets/Materials/Prototype/proto_grid_dark.png",
+              "pathGuid": "2b60657ce9aa4555"
+            },
+            "aoMap": "",
+            "baseColor": [
+              1.0,
+              1.0,
+              1.0
+            ],
+            "emissiveColor": [
+              0.0,
+              0.0,
+              0.0
+            ],
+            "emissiveMap": "",
+            "emissiveStrength": 1.0,
+            "factorsScaleMaps": true,
+            "metallic": 0.0,
+            "metallicMap": "",
+            "metallicRoughnessMap": "",
+            "normalMap": "",
+            "roughness": 0.8500000238418579,
+            "roughnessMap": "",
+            "triplanar": true,
+            "triplanarScale": 0.25
+          }
+        }
+      ],
+      "name": "South Wall L",
+      "order": 26,
+      "parentId": 84,
+      "position": [
+        -20.149999618530273,
+        1.75,
+        12.0
+      ],
+      "rotation": [
+        0.0,
+        0.0,
+        0.0,
+        1.0
+      ],
+      "scale": [
+        2.700000047683716,
+        3.5,
+        0.30000001192092896
+      ]
+    },
+    {
+      "collider": {
+        "friction": 0.800000011920929,
+        "isTrigger": false
+      },
+      "color": [
+        1.0,
+        1.0,
+        1.0
+      ],
+      "id": 20,
+      "materials": [
+        {
+          "embedded": {
+            "albedoMap": {
+              "path": "assets/Materials/Prototype/proto_grid_dark.png",
+              "pathGuid": "2b60657ce9aa4555"
+            },
+            "aoMap": "",
+            "baseColor": [
+              1.0,
+              1.0,
+              1.0
+            ],
+            "emissiveColor": [
+              0.0,
+              0.0,
+              0.0
+            ],
+            "emissiveMap": "",
+            "emissiveStrength": 1.0,
+            "factorsScaleMaps": true,
+            "metallic": 0.0,
+            "metallicMap": "",
+            "metallicRoughnessMap": "",
+            "normalMap": "",
+            "roughness": 0.8500000238418579,
+            "roughnessMap": "",
+            "triplanar": true,
+            "triplanarScale": 0.25
+          }
+        }
+      ],
+      "name": "South Wall R",
+      "order": 27,
+      "parentId": 84,
+      "position": [
+        -15.850000381469727,
+        1.75,
+        12.0
+      ],
+      "rotation": [
+        0.0,
+        0.0,
+        0.0,
+        1.0
+      ],
+      "scale": [
+        2.700000047683716,
+        3.5,
+        0.30000001192092896
+      ]
+    },
+    {
+      "collider": {
+        "friction": 0.800000011920929,
+        "isTrigger": false
+      },
+      "color": [
+        1.0,
+        1.0,
+        1.0
+      ],
+      "id": 21,
+      "materials": [
+        {
+          "embedded": {
+            "albedoMap": {
+              "path": "assets/Materials/Prototype/proto_grid_dark.png",
+              "pathGuid": "2b60657ce9aa4555"
+            },
+            "aoMap": "",
+            "baseColor": [
+              1.0,
+              1.0,
+              1.0
+            ],
+            "emissiveColor": [
+              0.0,
+              0.0,
+              0.0
+            ],
+            "emissiveMap": "",
+            "emissiveStrength": 1.0,
+            "factorsScaleMaps": true,
+            "metallic": 0.0,
+            "metallicMap": "",
+            "metallicRoughnessMap": "",
+            "normalMap": "",
+            "roughness": 0.8500000238418579,
+            "roughnessMap": "",
+            "triplanar": true,
+            "triplanarScale": 0.25
+          }
+        }
+      ],
+      "name": "South Door Lintel",
+      "order": 28,
+      "parentId": 84,
+      "position": [
+        -18.0,
+        2.8499999046325684,
+        12.0
+      ],
+      "rotation": [
+        0.0,
+        0.0,
+        0.0,
+        1.0
+      ],
+      "scale": [
+        1.600000023841858,
+        1.2999999523162842,
+        0.30000001192092896
+      ]
+    },
+    {
+      "collider": {
+        "friction": 0.800000011920929,
+        "isTrigger": false
+      },
+      "color": [
+        1.0,
+        1.0,
+        1.0
+      ],
+      "id": 22,
+      "materials": [
+        {
+          "embedded": {
+            "albedoMap": {
+              "path": "assets/Materials/Prototype/proto_grid_dark.png",
+              "pathGuid": "2b60657ce9aa4555"
+            },
+            "aoMap": "",
+            "baseColor": [
+              1.0,
+              1.0,
+              1.0
+            ],
+            "emissiveColor": [
+              0.0,
+              0.0,
+              0.0
+            ],
+            "emissiveMap": "",
+            "emissiveStrength": 1.0,
+            "factorsScaleMaps": true,
+            "metallic": 0.0,
+            "metallicMap": "",
+            "metallicRoughnessMap": "",
+            "normalMap": "",
+            "roughness": 0.8500000238418579,
+            "roughnessMap": "",
+            "triplanar": true,
+            "triplanarScale": 0.25
+          }
+        }
+      ],
+      "name": "West Wall",
+      "order": 29,
+      "parentId": 84,
+      "position": [
+        -21.5,
+        1.75,
+        8.0
+      ],
+      "rotation": [
+        0.0,
+        0.0,
+        0.0,
+        1.0
+      ],
+      "scale": [
+        0.30000001192092896,
+        3.5,
+        7.699999809265137
+      ]
+    },
+    {
+      "collider": {
+        "friction": 0.800000011920929,
+        "isTrigger": false
+      },
+      "color": [
+        1.0,
+        1.0,
+        1.0
+      ],
+      "id": 23,
+      "materials": [
+        {
+          "embedded": {
+            "albedoMap": {
+              "path": "assets/Materials/Prototype/proto_grid_dark.png",
+              "pathGuid": "2b60657ce9aa4555"
+            },
+            "aoMap": "",
+            "baseColor": [
+              1.0,
+              1.0,
+              1.0
+            ],
+            "emissiveColor": [
+              0.0,
+              0.0,
+              0.0
+            ],
+            "emissiveMap": "",
+            "emissiveStrength": 1.0,
+            "factorsScaleMaps": true,
+            "metallic": 0.0,
+            "metallicMap": "",
+            "metallicRoughnessMap": "",
+            "normalMap": "",
+            "roughness": 0.8500000238418579,
+            "roughnessMap": "",
+            "triplanar": true,
+            "triplanarScale": 0.25
+          }
+        }
+      ],
+      "name": "East Wall N",
+      "order": 30,
+      "parentId": 84,
+      "position": [
+        -14.5,
+        1.75,
+        5.775000095367432
+      ],
+      "rotation": [
+        0.0,
+        0.0,
+        0.0,
+        1.0
+      ],
+      "scale": [
+        0.30000001192092896,
+        3.5,
+        3.25
+      ]
+    },
+    {
+      "collider": {
+        "friction": 0.800000011920929,
+        "isTrigger": false
+      },
+      "color": [
+        1.0,
+        1.0,
+        1.0
+      ],
+      "id": 24,
+      "materials": [
+        {
+          "embedded": {
+            "albedoMap": {
+              "path": "assets/Materials/Prototype/proto_grid_dark.png",
+              "pathGuid": "2b60657ce9aa4555"
+            },
+            "aoMap": "",
+            "baseColor": [
+              1.0,
+              1.0,
+              1.0
+            ],
+            "emissiveColor": [
+              0.0,
+              0.0,
+              0.0
+            ],
+            "emissiveMap": "",
+            "emissiveStrength": 1.0,
+            "factorsScaleMaps": true,
+            "metallic": 0.0,
+            "metallicMap": "",
+            "metallicRoughnessMap": "",
+            "normalMap": "",
+            "roughness": 0.8500000238418579,
+            "roughnessMap": "",
+            "triplanar": true,
+            "triplanarScale": 0.25
+          }
+        }
+      ],
+      "name": "East Wall S",
+      "order": 31,
+      "parentId": 84,
+      "position": [
+        -14.5,
+        1.75,
+        10.225000381469727
+      ],
+      "rotation": [
+        0.0,
+        0.0,
+        0.0,
+        1.0
+      ],
+      "scale": [
+        0.30000001192092896,
+        3.5,
+        3.25
+      ]
+    },
+    {
+      "collider": {
+        "friction": 0.800000011920929,
+        "isTrigger": false
+      },
+      "color": [
+        1.0,
+        1.0,
+        1.0
+      ],
+      "id": 25,
+      "materials": [
+        {
+          "embedded": {
+            "albedoMap": {
+              "path": "assets/Materials/Prototype/proto_grid_dark.png",
+              "pathGuid": "2b60657ce9aa4555"
+            },
+            "aoMap": "",
+            "baseColor": [
+              1.0,
+              1.0,
+              1.0
+            ],
+            "emissiveColor": [
+              0.0,
+              0.0,
+              0.0
+            ],
+            "emissiveMap": "",
+            "emissiveStrength": 1.0,
+            "factorsScaleMaps": true,
+            "metallic": 0.0,
+            "metallicMap": "",
+            "metallicRoughnessMap": "",
+            "normalMap": "",
+            "roughness": 0.8500000238418579,
+            "roughnessMap": "",
+            "triplanar": true,
+            "triplanarScale": 0.25
+          }
+        }
+      ],
+      "name": "East Window Sill",
+      "order": 32,
+      "parentId": 84,
+      "position": [
+        -14.5,
+        0.5,
+        8.0
+      ],
+      "rotation": [
+        0.0,
+        0.0,
+        0.0,
+        1.0
+      ],
+      "scale": [
+        0.30000001192092896,
+        1.0,
+        1.2000000476837158
+      ]
+    },
+    {
+      "collider": {
+        "friction": 0.800000011920929,
+        "isTrigger": false
+      },
+      "color": [
+        1.0,
+        1.0,
+        1.0
+      ],
+      "id": 26,
+      "materials": [
+        {
+          "embedded": {
+            "albedoMap": {
+              "path": "assets/Materials/Prototype/proto_grid_dark.png",
+              "pathGuid": "2b60657ce9aa4555"
+            },
+            "aoMap": "",
+            "baseColor": [
+              1.0,
+              1.0,
+              1.0
+            ],
+            "emissiveColor": [
+              0.0,
+              0.0,
+              0.0
+            ],
+            "emissiveMap": "",
+            "emissiveStrength": 1.0,
+            "factorsScaleMaps": true,
+            "metallic": 0.0,
+            "metallicMap": "",
+            "metallicRoughnessMap": "",
+            "normalMap": "",
+            "roughness": 0.8500000238418579,
+            "roughnessMap": "",
+            "triplanar": true,
+            "triplanarScale": 0.25
+          }
+        }
+      ],
+      "name": "East Window Lintel",
+      "order": 33,
+      "parentId": 84,
+      "position": [
+        -14.5,
+        2.8499999046325684,
+        8.0
+      ],
+      "rotation": [
+        0.0,
+        0.0,
+        0.0,
+        1.0
+      ],
+      "scale": [
+        0.30000001192092896,
+        1.2999999523162842,
+        1.2000000476837158
+      ]
+    },
+    {
+      "collider": {
+        "friction": 0.800000011920929,
+        "isTrigger": false
+      },
+      "color": [
+        1.0,
+        1.0,
+        1.0
+      ],
+      "id": 27,
+      "materials": [
+        {
+          "embedded": {
+            "albedoMap": {
+              "path": "assets/Materials/Prototype/proto_grid_dark.png",
+              "pathGuid": "2b60657ce9aa4555"
+            },
+            "aoMap": "",
+            "baseColor": [
+              1.0,
+              1.0,
+              1.0
+            ],
+            "emissiveColor": [
+              0.0,
+              0.0,
+              0.0
+            ],
+            "emissiveMap": "",
+            "emissiveStrength": 1.0,
+            "factorsScaleMaps": true,
+            "metallic": 0.0,
+            "metallicMap": "",
+            "metallicRoughnessMap": "",
+            "normalMap": "",
+            "roughness": 0.8500000238418579,
+            "roughnessMap": "",
+            "triplanar": true,
+            "triplanarScale": 0.25
+          }
+        }
+      ],
+      "name": "Corridor West",
+      "order": 35,
+      "parentId": 85,
+      "position": [
+        -21.5,
+        1.0,
+        0.0
+      ],
+      "rotation": [
+        0.0,
+        0.0,
+        0.0,
+        1.0
+      ],
+      "scale": [
+        0.30000001192092896,
+        2.0,
+        8.0
+      ]
+    },
+    {
+      "collider": {
+        "friction": 0.800000011920929,
+        "isTrigger": false
+      },
+      "color": [
+        1.0,
+        1.0,
+        1.0
+      ],
+      "id": 28,
+      "materials": [
+        {
+          "embedded": {
+            "albedoMap": {
+              "path": "assets/Materials/Prototype/proto_grid_dark.png",
+              "pathGuid": "2b60657ce9aa4555"
+            },
+            "aoMap": "",
+            "baseColor": [
+              1.0,
+              1.0,
+              1.0
+            ],
+            "emissiveColor": [
+              0.0,
+              0.0,
+              0.0
+            ],
+            "emissiveMap": "",
+            "emissiveStrength": 1.0,
+            "factorsScaleMaps": true,
+            "metallic": 0.0,
+            "metallicMap": "",
+            "metallicRoughnessMap": "",
+            "normalMap": "",
+            "roughness": 0.8500000238418579,
+            "roughnessMap": "",
+            "triplanar": true,
+            "triplanarScale": 0.25
+          }
+        }
+      ],
+      "name": "Corridor East N",
+      "order": 36,
+      "parentId": 85,
+      "position": [
+        -14.5,
+        1.0,
+        -2.5
+      ],
+      "rotation": [
+        0.0,
+        0.0,
+        0.0,
+        1.0
+      ],
+      "scale": [
+        0.30000001192092896,
+        2.0,
+        3.0
+      ]
+    },
+    {
+      "collider": {
+        "friction": 0.800000011920929,
+        "isTrigger": false
+      },
+      "color": [
+        1.0,
+        1.0,
+        1.0
+      ],
+      "id": 29,
+      "materials": [
+        {
+          "embedded": {
+            "albedoMap": {
+              "path": "assets/Materials/Prototype/proto_grid_dark.png",
+              "pathGuid": "2b60657ce9aa4555"
+            },
+            "aoMap": "",
+            "baseColor": [
+              1.0,
+              1.0,
+              1.0
+            ],
+            "emissiveColor": [
+              0.0,
+              0.0,
+              0.0
+            ],
+            "emissiveMap": "",
+            "emissiveStrength": 1.0,
+            "factorsScaleMaps": true,
+            "metallic": 0.0,
+            "metallicMap": "",
+            "metallicRoughnessMap": "",
+            "normalMap": "",
+            "roughness": 0.8500000238418579,
+            "roughnessMap": "",
+            "triplanar": true,
+            "triplanarScale": 0.25
+          }
+        }
+      ],
+      "name": "Corridor East S",
+      "order": 37,
+      "parentId": 85,
+      "position": [
+        -14.5,
+        1.0,
+        2.5
+      ],
+      "rotation": [
+        0.0,
+        0.0,
+        0.0,
+        1.0
+      ],
+      "scale": [
+        0.30000001192092896,
+        2.0,
+        3.0
+      ]
+    },
+    {
+      "collider": {
+        "friction": 0.800000011920929,
+        "isTrigger": false
+      },
+      "color": [
+        1.0,
+        1.0,
+        1.0
+      ],
+      "id": 30,
+      "materials": [
+        {
+          "embedded": {
+            "albedoMap": {
+              "path": "assets/Materials/Prototype/proto_grid_dark.png",
+              "pathGuid": "2b60657ce9aa4555"
+            },
+            "aoMap": "",
+            "baseColor": [
+              1.0,
+              1.0,
+              1.0
+            ],
+            "emissiveColor": [
+              0.0,
+              0.0,
+              0.0
+            ],
+            "emissiveMap": "",
+            "emissiveStrength": 1.0,
+            "factorsScaleMaps": true,
+            "metallic": 0.0,
+            "metallicMap": "",
+            "metallicRoughnessMap": "",
+            "normalMap": "",
+            "roughness": 0.8500000238418579,
+            "roughnessMap": "",
+            "triplanar": true,
+            "triplanarScale": 0.25
+          }
+        }
+      ],
+      "name": "West Lane Low Wall N",
+      "order": 38,
+      "parentId": 82,
+      "position": [
+        -18.0,
+        0.5,
+        -20.0
+      ],
+      "rotation": [
+        0.0,
+        0.0,
+        0.0,
+        1.0
+      ],
+      "scale": [
+        4.0,
+        1.0,
+        0.4000000059604645
+      ]
+    },
+    {
+      "collider": {
+        "friction": 0.800000011920929,
+        "isTrigger": false
+      },
+      "color": [
+        1.0,
+        1.0,
+        1.0
+      ],
+      "id": 31,
+      "materials": [
+        {
+          "embedded": {
+            "albedoMap": {
+              "path": "assets/Materials/Prototype/proto_grid_dark.png",
+              "pathGuid": "2b60657ce9aa4555"
+            },
+            "aoMap": "",
+            "baseColor": [
+              1.0,
+              1.0,
+              1.0
+            ],
+            "emissiveColor": [
+              0.0,
+              0.0,
+              0.0
+            ],
+            "emissiveMap": "",
+            "emissiveStrength": 1.0,
+            "factorsScaleMaps": true,
+            "metallic": 0.0,
+            "metallicMap": "",
+            "metallicRoughnessMap": "",
+            "normalMap": "",
+            "roughness": 0.8500000238418579,
+            "roughnessMap": "",
+            "triplanar": true,
+            "triplanarScale": 0.25
+          }
+        }
+      ],
+      "name": "West Lane Low Wall S",
+      "order": 39,
+      "parentId": 82,
+      "position": [
+        -18.0,
+        0.5,
+        20.0
+      ],
+      "rotation": [
+        0.0,
+        0.0,
+        0.0,
+        1.0
+      ],
+      "scale": [
+        4.0,
+        1.0,
+        0.4000000059604645
+      ]
+    },
+    {
+      "collider": {
+        "friction": 0.800000011920929,
+        "isTrigger": false
+      },
+      "color": [
+        1.0,
+        1.0,
+        1.0
+      ],
+      "id": 32,
+      "materials": [
+        {
+          "embedded": {
+            "albedoMap": {
+              "path": "assets/Materials/Prototype/proto_grid_dark.png",
+              "pathGuid": "2b60657ce9aa4555"
+            },
+            "aoMap": "",
+            "baseColor": [
+              1.0,
+              1.0,
+              1.0
+            ],
+            "emissiveColor": [
+              0.0,
+              0.0,
+              0.0
+            ],
+            "emissiveMap": "",
+            "emissiveStrength": 1.0,
+            "factorsScaleMaps": true,
+            "metallic": 0.0,
+            "metallicMap": "",
+            "metallicRoughnessMap": "",
+            "normalMap": "",
+            "roughness": 0.8500000238418579,
+            "roughnessMap": "",
+            "triplanar": true,
+            "triplanarScale": 0.25
+          }
+        }
+      ],
+      "name": "Centre Wall",
+      "order": 41,
+      "parentId": 86,
+      "position": [
+        0.0,
+        1.25,
+        0.0
+      ],
+      "rotation": [
+        0.0,
+        0.0,
+        0.0,
+        1.0
+      ],
+      "scale": [
+        12.0,
+        2.5,
+        0.4000000059604645
+      ]
+    },
+    {
+      "collider": {
+        "friction": 0.800000011920929,
+        "isTrigger": false
+      },
+      "color": [
+        1.0,
+        1.0,
+        1.0
+      ],
+      "id": 33,
+      "materials": [
+        {
+          "embedded": {
+            "albedoMap": {
+              "path": "assets/Materials/Prototype/proto_grid_orange.png",
+              "pathGuid": "c389fb6bc574bb89"
+            },
+            "aoMap": "",
+            "baseColor": [
+              1.0,
+              1.0,
+              1.0
+            ],
+            "emissiveColor": [
+              0.0,
+              0.0,
+              0.0
+            ],
+            "emissiveMap": "",
+            "emissiveStrength": 1.0,
+            "factorsScaleMaps": true,
+            "metallic": 0.0,
+            "metallicMap": "",
+            "metallicRoughnessMap": "",
+            "normalMap": "",
+            "roughness": 0.75,
+            "roughnessMap": "",
+            "triplanar": true,
+            "triplanarScale": 0.25
+          }
+        }
+      ],
+      "name": "Plinth",
+      "order": 42,
+      "parentId": 86,
+      "position": [
+        0.0,
+        0.5,
+        -12.0
+      ],
+      "rotation": [
+        0.0,
+        0.0,
+        0.0,
+        1.0
+      ],
+      "scale": [
+        6.0,
+        1.0,
+        6.0
+      ]
+    },
+    {
+      "collider": {
+        "friction": 0.800000011920929,
+        "isTrigger": false
+      },
+      "color": [
+        1.0,
+        1.0,
+        1.0
+      ],
+      "id": 34,
+      "materials": [
+        {
+          "embedded": {
+            "albedoMap": {
+              "path": "assets/Materials/Prototype/proto_grid_orange.png",
+              "pathGuid": "c389fb6bc574bb89"
+            },
+            "aoMap": "",
+            "baseColor": [
+              1.0,
+              1.0,
+              1.0
+            ],
+            "emissiveColor": [
+              0.0,
+              0.0,
+              0.0
+            ],
+            "emissiveMap": "",
+            "emissiveStrength": 1.0,
+            "factorsScaleMaps": true,
+            "metallic": 0.0,
+            "metallicMap": "",
+            "metallicRoughnessMap": "",
+            "normalMap": "",
+            "roughness": 0.75,
+            "roughnessMap": "",
+            "triplanar": true,
+            "triplanarScale": 0.25
+          }
+        }
+      ],
+      "name": "Plinth Ramp",
+      "order": 43,
+      "parentId": 86,
+      "position": [
+        0.0,
+        0.4000000059604645,
+        -7.0
+      ],
+      "rotation": [
+        0.12218300253152847,
+        0.0,
+        0.0,
+        0.9925079941749573
+      ],
+      "scale": [
+        3.0,
+        0.20000000298023224,
+        4.1230998039245605
+      ]
+    },
+    {
+      "collider": {
+        "friction": 0.800000011920929,
+        "isTrigger": false
+      },
+      "color": [
+        1.0,
+        1.0,
+        1.0
+      ],
+      "id": 35,
+      "materials": [
+        {
+          "embedded": {
+            "albedoMap": {
+              "path": "assets/Materials/Prototype/proto_grid_orange.png",
+              "pathGuid": "c389fb6bc574bb89"
+            },
+            "aoMap": "",
+            "baseColor": [
+              0.8500000238418579,
+              0.699999988079071,
+              0.550000011920929
+            ],
+            "emissiveColor": [
+              0.0,
+              0.0,
+              0.0
+            ],
+            "emissiveMap": "",
+            "emissiveStrength": 1.0,
+            "factorsScaleMaps": true,
+            "metallic": 0.0,
+            "metallicMap": "",
+            "metallicRoughnessMap": "",
+            "normalMap": "",
+            "roughness": 0.800000011920929,
+            "roughnessMap": "",
+            "triplanar": true,
+            "triplanarScale": 0.25
+          }
+        }
+      ],
+      "name": "Crate 1",
+      "order": 45,
+      "parentId": 87,
+      "position": [
+        -6.0,
+        0.6000000238418579,
+        8.0
+      ],
+      "rotation": [
+        0.0,
+        0.0,
+        0.0,
+        1.0
+      ],
+      "scale": [
+        1.2000000476837158,
+        1.2000000476837158,
+        1.2000000476837158
+      ]
+    },
+    {
+      "collider": {
+        "friction": 0.800000011920929,
+        "isTrigger": false
+      },
+      "color": [
+        1.0,
+        1.0,
+        1.0
+      ],
+      "id": 36,
+      "materials": [
+        {
+          "embedded": {
+            "albedoMap": {
+              "path": "assets/Materials/Prototype/proto_grid_orange.png",
+              "pathGuid": "c389fb6bc574bb89"
+            },
+            "aoMap": "",
+            "baseColor": [
+              0.8500000238418579,
+              0.699999988079071,
+              0.550000011920929
+            ],
+            "emissiveColor": [
+              0.0,
+              0.0,
+              0.0
+            ],
+            "emissiveMap": "",
+            "emissiveStrength": 1.0,
+            "factorsScaleMaps": true,
+            "metallic": 0.0,
+            "metallicMap": "",
+            "metallicRoughnessMap": "",
+            "normalMap": "",
+            "roughness": 0.800000011920929,
+            "roughnessMap": "",
+            "triplanar": true,
+            "triplanarScale": 0.25
+          }
+        }
+      ],
+      "name": "Crate 2",
+      "order": 46,
+      "parentId": 87,
+      "position": [
+        -4.800000190734863,
+        0.6000000238418579,
+        8.0
+      ],
+      "rotation": [
+        0.0,
+        0.0,
+        0.0,
+        1.0
+      ],
+      "scale": [
+        1.2000000476837158,
+        1.2000000476837158,
+        1.2000000476837158
+      ]
+    },
+    {
+      "collider": {
+        "friction": 0.800000011920929,
+        "isTrigger": false
+      },
+      "color": [
+        1.0,
+        1.0,
+        1.0
+      ],
+      "id": 37,
+      "materials": [
+        {
+          "embedded": {
+            "albedoMap": {
+              "path": "assets/Materials/Prototype/proto_grid_orange.png",
+              "pathGuid": "c389fb6bc574bb89"
+            },
+            "aoMap": "",
+            "baseColor": [
+              0.8500000238418579,
+              0.699999988079071,
+              0.550000011920929
+            ],
+            "emissiveColor": [
+              0.0,
+              0.0,
+              0.0
+            ],
+            "emissiveMap": "",
+            "emissiveStrength": 1.0,
+            "factorsScaleMaps": true,
+            "metallic": 0.0,
+            "metallicMap": "",
+            "metallicRoughnessMap": "",
+            "normalMap": "",
+            "roughness": 0.800000011920929,
+            "roughnessMap": "",
+            "triplanar": true,
+            "triplanarScale": 0.25
+          }
+        }
+      ],
+      "name": "Crate 3",
+      "order": 47,
+      "parentId": 87,
+      "position": [
+        -6.0,
+        1.7999999523162842,
+        8.0
+      ],
+      "rotation": [
+        0.0,
+        0.0,
+        0.0,
+        1.0
+      ],
+      "scale": [
+        1.2000000476837158,
+        1.2000000476837158,
+        1.2000000476837158
+      ]
+    },
+    {
+      "collider": {
+        "friction": 0.800000011920929,
+        "isTrigger": false
+      },
+      "color": [
+        1.0,
+        1.0,
+        1.0
+      ],
+      "id": 38,
+      "materials": [
+        {
+          "embedded": {
+            "albedoMap": {
+              "path": "assets/Materials/Prototype/proto_grid_orange.png",
+              "pathGuid": "c389fb6bc574bb89"
+            },
+            "aoMap": "",
+            "baseColor": [
+              0.8500000238418579,
+              0.699999988079071,
+              0.550000011920929
+            ],
+            "emissiveColor": [
+              0.0,
+              0.0,
+              0.0
+            ],
+            "emissiveMap": "",
+            "emissiveStrength": 1.0,
+            "factorsScaleMaps": true,
+            "metallic": 0.0,
+            "metallicMap": "",
+            "metallicRoughnessMap": "",
+            "normalMap": "",
+            "roughness": 0.800000011920929,
+            "roughnessMap": "",
+            "triplanar": true,
+            "triplanarScale": 0.25
+          }
+        }
+      ],
+      "name": "Crate 1",
+      "order": 49,
+      "parentId": 88,
+      "position": [
+        5.0,
+        0.6000000238418579,
+        -4.0
+      ],
+      "rotation": [
+        0.0,
+        0.13052600622177124,
+        0.0,
+        0.991445004940033
+      ],
+      "scale": [
+        1.2000000476837158,
+        1.2000000476837158,
+        1.2000000476837158
+      ]
+    },
+    {
+      "collider": {
+        "friction": 0.800000011920929,
+        "isTrigger": false
+      },
+      "color": [
+        1.0,
+        1.0,
+        1.0
+      ],
+      "id": 39,
+      "materials": [
+        {
+          "embedded": {
+            "albedoMap": {
+              "path": "assets/Materials/Prototype/proto_grid_orange.png",
+              "pathGuid": "c389fb6bc574bb89"
+            },
+            "aoMap": "",
+            "baseColor": [
+              0.8500000238418579,
+              0.699999988079071,
+              0.550000011920929
+            ],
+            "emissiveColor": [
+              0.0,
+              0.0,
+              0.0
+            ],
+            "emissiveMap": "",
+            "emissiveStrength": 1.0,
+            "factorsScaleMaps": true,
+            "metallic": 0.0,
+            "metallicMap": "",
+            "metallicRoughnessMap": "",
+            "normalMap": "",
+            "roughness": 0.800000011920929,
+            "roughnessMap": "",
+            "triplanar": true,
+            "triplanarScale": 0.25
+          }
+        }
+      ],
+      "name": "Crate 2",
+      "order": 50,
+      "parentId": 88,
+      "position": [
+        5.3105998039245605,
+        0.6000000238418579,
+        -2.84089994430542
+      ],
+      "rotation": [
+        0.0,
+        0.13052600622177124,
+        0.0,
+        0.991445004940033
+      ],
+      "scale": [
+        1.2000000476837158,
+        1.2000000476837158,
+        1.2000000476837158
+      ]
+    },
+    {
+      "collider": {
+        "friction": 0.800000011920929,
+        "isTrigger": false
+      },
+      "color": [
+        1.0,
+        1.0,
+        1.0
+      ],
+      "id": 40,
+      "materials": [
+        {
+          "embedded": {
+            "albedoMap": {
+              "path": "assets/Materials/Prototype/proto_grid_orange.png",
+              "pathGuid": "c389fb6bc574bb89"
+            },
+            "aoMap": "",
+            "baseColor": [
+              0.8500000238418579,
+              0.699999988079071,
+              0.550000011920929
+            ],
+            "emissiveColor": [
+              0.0,
+              0.0,
+              0.0
+            ],
+            "emissiveMap": "",
+            "emissiveStrength": 1.0,
+            "factorsScaleMaps": true,
+            "metallic": 0.0,
+            "metallicMap": "",
+            "metallicRoughnessMap": "",
+            "normalMap": "",
+            "roughness": 0.800000011920929,
+            "roughnessMap": "",
+            "triplanar": true,
+            "triplanarScale": 0.25
+          }
+        }
+      ],
+      "name": "Crate 3",
+      "order": 51,
+      "parentId": 88,
+      "position": [
+        5.3105998039245605,
+        1.7999999523162842,
+        -2.84089994430542
+      ],
+      "rotation": [
+        0.0,
+        0.13052600622177124,
+        0.0,
+        0.991445004940033
+      ],
+      "scale": [
+        1.2000000476837158,
+        1.2000000476837158,
+        1.2000000476837158
+      ]
+    },
+    {
+      "collider": {
+        "friction": 0.800000011920929,
+        "isTrigger": false
+      },
+      "color": [
+        1.0,
+        1.0,
+        1.0
+      ],
+      "id": 41,
+      "materials": [
+        {
+          "embedded": {
+            "albedoMap": {
+              "path": "assets/Materials/Prototype/proto_grid_orange.png",
+              "pathGuid": "c389fb6bc574bb89"
+            },
+            "aoMap": "",
+            "baseColor": [
+              0.8500000238418579,
+              0.699999988079071,
+              0.550000011920929
+            ],
+            "emissiveColor": [
+              0.0,
+              0.0,
+              0.0
+            ],
+            "emissiveMap": "",
+            "emissiveStrength": 1.0,
+            "factorsScaleMaps": true,
+            "metallic": 0.0,
+            "metallicMap": "",
+            "metallicRoughnessMap": "",
+            "normalMap": "",
+            "roughness": 0.800000011920929,
+            "roughnessMap": "",
+            "triplanar": true,
+            "triplanarScale": 0.25
+          }
+        }
+      ],
+      "name": "Crate 1",
+      "order": 53,
+      "parentId": 89,
+      "position": [
+        7.0,
+        0.6000000238418579,
+        13.0
+      ],
+      "rotation": [
+        0.0,
+        0.0,
+        0.0,
+        1.0
+      ],
+      "scale": [
+        1.2000000476837158,
+        1.2000000476837158,
+        1.2000000476837158
+      ]
+    },
+    {
+      "collider": {
+        "friction": 0.800000011920929,
+        "isTrigger": false
+      },
+      "color": [
+        1.0,
+        1.0,
+        1.0
+      ],
+      "id": 42,
+      "materials": [
+        {
+          "embedded": {
+            "albedoMap": {
+              "path": "assets/Materials/Prototype/proto_grid_orange.png",
+              "pathGuid": "c389fb6bc574bb89"
+            },
+            "aoMap": "",
+            "baseColor": [
+              0.8500000238418579,
+              0.699999988079071,
+              0.550000011920929
+            ],
+            "emissiveColor": [
+              0.0,
+              0.0,
+              0.0
+            ],
+            "emissiveMap": "",
+            "emissiveStrength": 1.0,
+            "factorsScaleMaps": true,
+            "metallic": 0.0,
+            "metallicMap": "",
+            "metallicRoughnessMap": "",
+            "normalMap": "",
+            "roughness": 0.800000011920929,
+            "roughnessMap": "",
+            "triplanar": true,
+            "triplanarScale": 0.25
+          }
+        }
+      ],
+      "name": "Crate 2",
+      "order": 54,
+      "parentId": 89,
+      "position": [
+        8.199999809265137,
+        0.6000000238418579,
+        13.0
+      ],
+      "rotation": [
+        0.0,
+        0.0,
+        0.0,
+        1.0
+      ],
+      "scale": [
+        1.2000000476837158,
+        1.2000000476837158,
+        1.2000000476837158
+      ]
+    },
+    {
+      "collider": {
+        "friction": 0.800000011920929,
+        "isTrigger": false
+      },
+      "color": [
+        1.0,
+        1.0,
+        1.0
+      ],
+      "id": 43,
+      "materials": [
+        {
+          "embedded": {
+            "albedoMap": {
+              "path": "assets/Materials/Prototype/proto_grid_orange.png",
+              "pathGuid": "c389fb6bc574bb89"
+            },
+            "aoMap": "",
+            "baseColor": [
+              0.8500000238418579,
+              0.699999988079071,
+              0.550000011920929
+            ],
+            "emissiveColor": [
+              0.0,
+              0.0,
+              0.0
+            ],
+            "emissiveMap": "",
+            "emissiveStrength": 1.0,
+            "factorsScaleMaps": true,
+            "metallic": 0.0,
+            "metallicMap": "",
+            "metallicRoughnessMap": "",
+            "normalMap": "",
+            "roughness": 0.800000011920929,
+            "roughnessMap": "",
+            "triplanar": true,
+            "triplanarScale": 0.25
+          }
+        }
+      ],
+      "name": "Crate 1",
+      "order": 56,
+      "parentId": 90,
+      "position": [
+        -5.0,
+        0.6000000238418579,
+        -19.0
+      ],
+      "rotation": [
+        0.0,
+        -0.08715599775314331,
+        0.0,
+        0.9961950182914734
+      ],
+      "scale": [
+        1.2000000476837158,
+        1.2000000476837158,
+        1.2000000476837158
+      ]
+    },
+    {
+      "collider": {
+        "friction": 0.800000011920929,
+        "isTrigger": false
+      },
+      "color": [
+        1.0,
+        1.0,
+        1.0
+      ],
+      "id": 44,
+      "materials": [
+        {
+          "embedded": {
+            "albedoMap": {
+              "path": "assets/Materials/Prototype/proto_grid_orange.png",
+              "pathGuid": "c389fb6bc574bb89"
+            },
+            "aoMap": "",
+            "baseColor": [
+              0.8500000238418579,
+              0.699999988079071,
+              0.550000011920929
+            ],
+            "emissiveColor": [
+              0.0,
+              0.0,
+              0.0
+            ],
+            "emissiveMap": "",
+            "emissiveStrength": 1.0,
+            "factorsScaleMaps": true,
+            "metallic": 0.0,
+            "metallicMap": "",
+            "metallicRoughnessMap": "",
+            "normalMap": "",
+            "roughness": 0.800000011920929,
+            "roughnessMap": "",
+            "triplanar": true,
+            "triplanarScale": 0.25
+          }
+        }
+      ],
+      "name": "Crate 2",
+      "order": 57,
+      "parentId": 90,
+      "position": [
+        -3.81820011138916,
+        0.6000000238418579,
+        -18.79159927368164
+      ],
+      "rotation": [
+        0.0,
+        -0.08715599775314331,
+        0.0,
+        0.9961950182914734
+      ],
+      "scale": [
+        1.2000000476837158,
+        1.2000000476837158,
+        1.2000000476837158
+      ]
+    },
+    {
+      "collider": {
+        "friction": 0.800000011920929,
+        "isTrigger": false
+      },
+      "color": [
+        1.0,
+        1.0,
+        1.0
+      ],
+      "id": 45,
+      "materials": [
+        {
+          "embedded": {
+            "albedoMap": {
+              "path": "assets/Materials/Prototype/proto_grid_orange.png",
+              "pathGuid": "c389fb6bc574bb89"
+            },
+            "aoMap": "",
+            "baseColor": [
+              0.8500000238418579,
+              0.699999988079071,
+              0.550000011920929
+            ],
+            "emissiveColor": [
+              0.0,
+              0.0,
+              0.0
+            ],
+            "emissiveMap": "",
+            "emissiveStrength": 1.0,
+            "factorsScaleMaps": true,
+            "metallic": 0.0,
+            "metallicMap": "",
+            "metallicRoughnessMap": "",
+            "normalMap": "",
+            "roughness": 0.800000011920929,
+            "roughnessMap": "",
+            "triplanar": true,
+            "triplanarScale": 0.25
+          }
+        }
+      ],
+      "name": "Crate 3",
+      "order": 58,
+      "parentId": 90,
+      "position": [
+        -3.81820011138916,
+        1.7999999523162842,
+        -18.79159927368164
+      ],
+      "rotation": [
+        0.0,
+        -0.08715599775314331,
+        0.0,
+        0.9961950182914734
+      ],
+      "scale": [
+        1.2000000476837158,
+        1.2000000476837158,
+        1.2000000476837158
+      ]
+    },
+    {
+      "collider": {
+        "friction": 0.800000011920929,
+        "isTrigger": false
+      },
+      "color": [
+        1.0,
+        1.0,
+        1.0
+      ],
+      "id": 46,
+      "materials": [
+        {
+          "embedded": {
+            "albedoMap": {
+              "path": "assets/Materials/Prototype/proto_grid_dark.png",
+              "pathGuid": "2b60657ce9aa4555"
+            },
+            "aoMap": "",
+            "baseColor": [
+              1.0,
+              1.0,
+              1.0
+            ],
+            "emissiveColor": [
+              0.0,
+              0.0,
+              0.0
+            ],
+            "emissiveMap": "",
+            "emissiveStrength": 1.0,
+            "factorsScaleMaps": true,
+            "metallic": 0.0,
+            "metallicMap": "",
+            "metallicRoughnessMap": "",
+            "normalMap": "",
+            "roughness": 0.8500000238418579,
+            "roughnessMap": "",
+            "triplanar": true,
+            "triplanarScale": 0.25
+          }
+        }
+      ],
+      "name": "Low Wall 1",
+      "order": 59,
+      "parentId": 86,
+      "position": [
+        3.0,
+        0.5,
+        6.0
+      ],
+      "rotation": [
+        0.0,
+        0.0,
+        0.0,
+        1.0
+      ],
+      "scale": [
+        3.0,
+        1.0,
+        0.4000000059604645
+      ]
+    },
+    {
+      "collider": {
+        "friction": 0.800000011920929,
+        "isTrigger": false
+      },
+      "color": [
+        1.0,
+        1.0,
+        1.0
+      ],
+      "id": 47,
+      "materials": [
+        {
+          "embedded": {
+            "albedoMap": {
+              "path": "assets/Materials/Prototype/proto_grid_dark.png",
+              "pathGuid": "2b60657ce9aa4555"
+            },
+            "aoMap": "",
+            "baseColor": [
+              1.0,
+              1.0,
+              1.0
+            ],
+            "emissiveColor": [
+              0.0,
+              0.0,
+              0.0
+            ],
+            "emissiveMap": "",
+            "emissiveStrength": 1.0,
+            "factorsScaleMaps": true,
+            "metallic": 0.0,
+            "metallicMap": "",
+            "metallicRoughnessMap": "",
+            "normalMap": "",
+            "roughness": 0.8500000238418579,
+            "roughnessMap": "",
+            "triplanar": true,
+            "triplanarScale": 0.25
+          }
+        }
+      ],
+      "name": "Low Wall 2",
+      "order": 60,
+      "parentId": 86,
+      "position": [
+        -3.0,
+        0.5,
+        15.0
+      ],
+      "rotation": [
+        0.0,
+        0.25881901383399963,
+        0.0,
+        0.9659259915351868
+      ],
+      "scale": [
+        3.0,
+        1.0,
+        0.4000000059604645
+      ]
+    },
+    {
+      "collider": {
+        "friction": 0.800000011920929,
+        "isTrigger": false
+      },
+      "color": [
+        1.0,
+        1.0,
+        1.0
+      ],
+      "id": 48,
+      "materials": [
+        {
+          "embedded": {
+            "albedoMap": {
+              "path": "assets/Materials/Prototype/proto_grid_dark.png",
+              "pathGuid": "2b60657ce9aa4555"
+            },
+            "aoMap": "",
+            "baseColor": [
+              1.0,
+              1.0,
+              1.0
+            ],
+            "emissiveColor": [
+              0.0,
+              0.0,
+              0.0
+            ],
+            "emissiveMap": "",
+            "emissiveStrength": 1.0,
+            "factorsScaleMaps": true,
+            "metallic": 0.0,
+            "metallicMap": "",
+            "metallicRoughnessMap": "",
+            "normalMap": "",
+            "roughness": 0.8500000238418579,
+            "roughnessMap": "",
+            "triplanar": true,
+            "triplanarScale": 0.25
+          }
+        }
+      ],
+      "name": "Low Wall 3",
+      "order": 61,
+      "parentId": 86,
+      "position": [
+        8.0,
+        0.5,
+        -11.0
+      ],
+      "rotation": [
+        0.0,
+        0.38268300890922546,
+        0.0,
+        0.9238799810409546
+      ],
+      "scale": [
+        3.0,
+        1.0,
+        0.4000000059604645
+      ]
+    },
+    {
+      "collider": {
+        "friction": 0.800000011920929,
+        "isTrigger": false
+      },
+      "color": [
+        1.0,
+        1.0,
+        1.0
+      ],
+      "id": 49,
+      "materials": [
+        {
+          "embedded": {
+            "albedoMap": {
+              "path": "assets/Materials/Prototype/proto_grid_dark.png",
+              "pathGuid": "2b60657ce9aa4555"
+            },
+            "aoMap": "",
+            "baseColor": [
+              1.0,
+              1.0,
+              1.0
+            ],
+            "emissiveColor": [
+              0.0,
+              0.0,
+              0.0
+            ],
+            "emissiveMap": "",
+            "emissiveStrength": 1.0,
+            "factorsScaleMaps": true,
+            "metallic": 0.0,
+            "metallicMap": "",
+            "metallicRoughnessMap": "",
+            "normalMap": "",
+            "roughness": 0.8500000238418579,
+            "roughnessMap": "",
+            "triplanar": true,
+            "triplanarScale": 0.25
+          }
+        }
+      ],
+      "name": "Low Wall 4",
+      "order": 62,
+      "parentId": 86,
+      "position": [
+        -8.0,
+        0.5,
+        -6.0
+      ],
+      "rotation": [
+        0.0,
+        -0.25881901383399963,
+        0.0,
+        0.9659259915351868
+      ],
+      "scale": [
+        3.0,
+        1.0,
+        0.4000000059604645
+      ]
+    },
+    {
+      "collider": {
+        "friction": 0.800000011920929,
+        "isTrigger": false
+      },
+      "color": [
+        1.0,
+        1.0,
+        1.0
+      ],
+      "id": 50,
+      "materials": [
+        {
+          "embedded": {
+            "albedoMap": {
+              "path": "assets/Materials/Prototype/proto_grid_dark.png",
+              "pathGuid": "2b60657ce9aa4555"
+            },
+            "aoMap": "",
+            "baseColor": [
+              1.0,
+              1.0,
+              1.0
+            ],
+            "emissiveColor": [
+              0.0,
+              0.0,
+              0.0
+            ],
+            "emissiveMap": "",
+            "emissiveStrength": 1.0,
+            "factorsScaleMaps": true,
+            "metallic": 0.0,
+            "metallicMap": "",
+            "metallicRoughnessMap": "",
+            "normalMap": "",
+            "roughness": 0.8500000238418579,
+            "roughnessMap": "",
+            "triplanar": true,
+            "triplanarScale": 0.25
+          }
+        }
+      ],
+      "name": "Low Wall 5",
+      "order": 63,
+      "parentId": 86,
+      "position": [
+        0.0,
+        0.5,
+        21.0
+      ],
+      "rotation": [
+        0.0,
+        0.0,
+        0.0,
+        1.0
+      ],
+      "scale": [
+        3.0,
+        1.0,
+        0.4000000059604645
+      ]
+    },
+    {
+      "collider": {
+        "friction": 0.800000011920929,
+        "isTrigger": false
+      },
+      "color": [
+        1.0,
+        1.0,
+        1.0
+      ],
+      "id": 51,
+      "materials": [
+        {
+          "embedded": {
+            "albedoMap": {
+              "path": "assets/Materials/Prototype/proto_grid_dark.png",
+              "pathGuid": "2b60657ce9aa4555"
+            },
+            "aoMap": "",
+            "baseColor": [
+              1.0,
+              1.0,
+              1.0
+            ],
+            "emissiveColor": [
+              0.0,
+              0.0,
+              0.0
+            ],
+            "emissiveMap": "",
+            "emissiveStrength": 1.0,
+            "factorsScaleMaps": true,
+            "metallic": 0.0,
+            "metallicMap": "",
+            "metallicRoughnessMap": "",
+            "normalMap": "",
+            "roughness": 0.8500000238418579,
+            "roughnessMap": "",
+            "triplanar": true,
+            "triplanarScale": 0.25
+          }
+        }
+      ],
+      "name": "Low Wall 6",
+      "order": 64,
+      "parentId": 86,
+      "position": [
+        0.0,
+        0.5,
+        -23.0
+      ],
+      "rotation": [
+        0.0,
+        0.0,
+        0.0,
+        1.0
+      ],
+      "scale": [
+        3.0,
+        1.0,
+        0.4000000059604645
+      ]
+    },
+    {
+      "collider": {
+        "friction": 0.800000011920929,
+        "isTrigger": false
+      },
+      "color": [
+        1.0,
+        1.0,
+        1.0
+      ],
+      "id": 52,
+      "materials": [
+        {
+          "embedded": {
+            "albedoMap": {
+              "path": "assets/Materials/Prototype/proto_grid_dark.png",
+              "pathGuid": "2b60657ce9aa4555"
+            },
+            "aoMap": "",
+            "baseColor": [
+              1.0,
+              1.0,
+              1.0
+            ],
+            "emissiveColor": [
+              0.0,
+              0.0,
+              0.0
+            ],
+            "emissiveMap": "",
+            "emissiveStrength": 1.0,
+            "factorsScaleMaps": true,
+            "metallic": 0.0,
+            "metallicMap": "",
+            "metallicRoughnessMap": "",
+            "normalMap": "",
+            "roughness": 0.8500000238418579,
+            "roughnessMap": "",
+            "triplanar": true,
+            "triplanarScale": 0.25
+          }
+        }
+      ],
+      "name": "Pillar 1",
+      "order": 65,
+      "parentId": 86,
+      "position": [
+        -9.0,
+        2.0,
+        4.0
+      ],
+      "rotation": [
+        0.0,
+        0.0,
+        0.0,
+        1.0
+      ],
+      "scale": [
+        0.800000011920929,
+        4.0,
+        0.800000011920929
+      ]
+    },
+    {
+      "collider": {
+        "friction": 0.800000011920929,
+        "isTrigger": false
+      },
+      "color": [
+        1.0,
+        1.0,
+        1.0
+      ],
+      "id": 53,
+      "materials": [
+        {
+          "embedded": {
+            "albedoMap": {
+              "path": "assets/Materials/Prototype/proto_grid_dark.png",
+              "pathGuid": "2b60657ce9aa4555"
+            },
+            "aoMap": "",
+            "baseColor": [
+              1.0,
+              1.0,
+              1.0
+            ],
+            "emissiveColor": [
+              0.0,
+              0.0,
+              0.0
+            ],
+            "emissiveMap": "",
+            "emissiveStrength": 1.0,
+            "factorsScaleMaps": true,
+            "metallic": 0.0,
+            "metallicMap": "",
+            "metallicRoughnessMap": "",
+            "normalMap": "",
+            "roughness": 0.8500000238418579,
+            "roughnessMap": "",
+            "triplanar": true,
+            "triplanarScale": 0.25
+          }
+        }
+      ],
+      "name": "Pillar 2",
+      "order": 66,
+      "parentId": 86,
+      "position": [
+        9.0,
+        2.0,
+        -4.0
+      ],
+      "rotation": [
+        0.0,
+        0.0,
+        0.0,
+        1.0
+      ],
+      "scale": [
+        0.800000011920929,
+        4.0,
+        0.800000011920929
+      ]
+    },
+    {
+      "collider": {
+        "friction": 0.800000011920929,
+        "isTrigger": false
+      },
+      "color": [
+        1.0,
+        1.0,
+        1.0
+      ],
+      "id": 54,
+      "materials": [
+        {
+          "embedded": {
+            "albedoMap": {
+              "path": "assets/Materials/Prototype/proto_grid_dark.png",
+              "pathGuid": "2b60657ce9aa4555"
+            },
+            "aoMap": "",
+            "baseColor": [
+              1.0,
+              1.0,
+              1.0
+            ],
+            "emissiveColor": [
+              0.0,
+              0.0,
+              0.0
+            ],
+            "emissiveMap": "",
+            "emissiveStrength": 1.0,
+            "factorsScaleMaps": true,
+            "metallic": 0.0,
+            "metallicMap": "",
+            "metallicRoughnessMap": "",
+            "normalMap": "",
+            "roughness": 0.8500000238418579,
+            "roughnessMap": "",
+            "triplanar": true,
+            "triplanarScale": 0.25
+          }
+        }
+      ],
+      "name": "Pillar 3",
+      "order": 67,
+      "parentId": 86,
+      "position": [
+        -8.0,
+        2.0,
+        -14.0
+      ],
+      "rotation": [
+        0.0,
+        0.0,
+        0.0,
+        1.0
+      ],
+      "scale": [
+        0.800000011920929,
+        4.0,
+        0.800000011920929
+      ]
+    },
+    {
+      "collider": {
+        "friction": 0.800000011920929,
+        "isTrigger": false
+      },
+      "color": [
+        1.0,
+        1.0,
+        1.0
+      ],
+      "id": 55,
+      "materials": [
+        {
+          "embedded": {
+            "albedoMap": {
+              "path": "assets/Materials/Prototype/proto_grid_dark.png",
+              "pathGuid": "2b60657ce9aa4555"
+            },
+            "aoMap": "",
+            "baseColor": [
+              1.0,
+              1.0,
+              1.0
+            ],
+            "emissiveColor": [
+              0.0,
+              0.0,
+              0.0
+            ],
+            "emissiveMap": "",
+            "emissiveStrength": 1.0,
+            "factorsScaleMaps": true,
+            "metallic": 0.0,
+            "metallicMap": "",
+            "metallicRoughnessMap": "",
+            "normalMap": "",
+            "roughness": 0.8500000238418579,
+            "roughnessMap": "",
+            "triplanar": true,
+            "triplanarScale": 0.25
+          }
+        }
+      ],
+      "name": "Pillar 4",
+      "order": 68,
+      "parentId": 86,
+      "position": [
+        9.0,
+        2.0,
+        17.0
+      ],
+      "rotation": [
+        0.0,
+        0.0,
+        0.0,
+        1.0
+      ],
+      "scale": [
+        0.800000011920929,
+        4.0,
+        0.800000011920929
+      ]
+    },
+    {
+      "collider": {
+        "friction": 0.800000011920929,
+        "isTrigger": false
+      },
+      "color": [
+        1.0,
+        1.0,
+        1.0
+      ],
+      "id": 56,
+      "materials": [
+        {
+          "embedded": {
+            "albedoMap": {
+              "path": "assets/Materials/Prototype/proto_grid_dark.png",
+              "pathGuid": "2b60657ce9aa4555"
+            },
+            "aoMap": "",
+            "baseColor": [
+              1.0,
+              1.0,
+              1.0
+            ],
+            "emissiveColor": [
+              0.0,
+              0.0,
+              0.0
+            ],
+            "emissiveMap": "",
+            "emissiveStrength": 1.0,
+            "factorsScaleMaps": true,
+            "metallic": 0.0,
+            "metallicMap": "",
+            "metallicRoughnessMap": "",
+            "normalMap": "",
+            "roughness": 0.8500000238418579,
+            "roughnessMap": "",
+            "triplanar": true,
+            "triplanarScale": 0.25
+          }
+        }
+      ],
+      "name": "Trench Wall 1",
+      "order": 70,
+      "parentId": 91,
+      "position": [
+        15.0,
+        0.5,
+        -20.0
+      ],
+      "rotation": [
+        0.0,
+        0.0,
+        0.0,
+        1.0
+      ],
+      "scale": [
+        4.0,
+        1.0,
+        0.4000000059604645
+      ]
+    },
+    {
+      "collider": {
+        "friction": 0.800000011920929,
+        "isTrigger": false
+      },
+      "color": [
+        1.0,
+        1.0,
+        1.0
+      ],
+      "id": 57,
+      "materials": [
+        {
+          "embedded": {
+            "albedoMap": {
+              "path": "assets/Materials/Prototype/proto_grid_dark.png",
+              "pathGuid": "2b60657ce9aa4555"
+            },
+            "aoMap": "",
+            "baseColor": [
+              1.0,
+              1.0,
+              1.0
+            ],
+            "emissiveColor": [
+              0.0,
+              0.0,
+              0.0
+            ],
+            "emissiveMap": "",
+            "emissiveStrength": 1.0,
+            "factorsScaleMaps": true,
+            "metallic": 0.0,
+            "metallicMap": "",
+            "metallicRoughnessMap": "",
+            "normalMap": "",
+            "roughness": 0.8500000238418579,
+            "roughnessMap": "",
+            "triplanar": true,
+            "triplanarScale": 0.25
+          }
+        }
+      ],
+      "name": "Trench Wall 2",
+      "order": 71,
+      "parentId": 91,
+      "position": [
+        21.0,
+        0.5,
+        -15.0
+      ],
+      "rotation": [
+        0.0,
+        0.0,
+        0.0,
+        1.0
+      ],
+      "scale": [
+        4.0,
+        1.0,
+        0.4000000059604645
+      ]
+    },
+    {
+      "collider": {
+        "friction": 0.800000011920929,
+        "isTrigger": false
+      },
+      "color": [
+        1.0,
+        1.0,
+        1.0
+      ],
+      "id": 58,
+      "materials": [
+        {
+          "embedded": {
+            "albedoMap": {
+              "path": "assets/Materials/Prototype/proto_grid_dark.png",
+              "pathGuid": "2b60657ce9aa4555"
+            },
+            "aoMap": "",
+            "baseColor": [
+              1.0,
+              1.0,
+              1.0
+            ],
+            "emissiveColor": [
+              0.0,
+              0.0,
+              0.0
+            ],
+            "emissiveMap": "",
+            "emissiveStrength": 1.0,
+            "factorsScaleMaps": true,
+            "metallic": 0.0,
+            "metallicMap": "",
+            "metallicRoughnessMap": "",
+            "normalMap": "",
+            "roughness": 0.8500000238418579,
+            "roughnessMap": "",
+            "triplanar": true,
+            "triplanarScale": 0.25
+          }
+        }
+      ],
+      "name": "Trench Wall 3",
+      "order": 72,
+      "parentId": 91,
+      "position": [
+        15.0,
+        0.5,
+        -10.0
+      ],
+      "rotation": [
+        0.0,
+        0.0,
+        0.0,
+        1.0
+      ],
+      "scale": [
+        4.0,
+        1.0,
+        0.4000000059604645
+      ]
+    },
+    {
+      "collider": {
+        "friction": 0.800000011920929,
+        "isTrigger": false
+      },
+      "color": [
+        1.0,
+        1.0,
+        1.0
+      ],
+      "id": 59,
+      "materials": [
+        {
+          "embedded": {
+            "albedoMap": {
+              "path": "assets/Materials/Prototype/proto_grid_dark.png",
+              "pathGuid": "2b60657ce9aa4555"
+            },
+            "aoMap": "",
+            "baseColor": [
+              1.0,
+              1.0,
+              1.0
+            ],
+            "emissiveColor": [
+              0.0,
+              0.0,
+              0.0
+            ],
+            "emissiveMap": "",
+            "emissiveStrength": 1.0,
+            "factorsScaleMaps": true,
+            "metallic": 0.0,
+            "metallicMap": "",
+            "metallicRoughnessMap": "",
+            "normalMap": "",
+            "roughness": 0.8500000238418579,
+            "roughnessMap": "",
+            "triplanar": true,
+            "triplanarScale": 0.25
+          }
+        }
+      ],
+      "name": "Trench Wall 4",
+      "order": 73,
+      "parentId": 91,
+      "position": [
+        21.0,
+        0.5,
+        -5.0
+      ],
+      "rotation": [
+        0.0,
+        0.0,
+        0.0,
+        1.0
+      ],
+      "scale": [
+        4.0,
+        1.0,
+        0.4000000059604645
+      ]
+    },
+    {
+      "collider": {
+        "friction": 0.800000011920929,
+        "isTrigger": false
+      },
+      "color": [
+        1.0,
+        1.0,
+        1.0
+      ],
+      "id": 60,
+      "materials": [
+        {
+          "embedded": {
+            "albedoMap": {
+              "path": "assets/Materials/Prototype/proto_grid_dark.png",
+              "pathGuid": "2b60657ce9aa4555"
+            },
+            "aoMap": "",
+            "baseColor": [
+              1.0,
+              1.0,
+              1.0
+            ],
+            "emissiveColor": [
+              0.0,
+              0.0,
+              0.0
+            ],
+            "emissiveMap": "",
+            "emissiveStrength": 1.0,
+            "factorsScaleMaps": true,
+            "metallic": 0.0,
+            "metallicMap": "",
+            "metallicRoughnessMap": "",
+            "normalMap": "",
+            "roughness": 0.8500000238418579,
+            "roughnessMap": "",
+            "triplanar": true,
+            "triplanarScale": 0.25
+          }
+        }
+      ],
+      "name": "Trench Wall 5",
+      "order": 74,
+      "parentId": 91,
+      "position": [
+        15.0,
+        0.5,
+        0.0
+      ],
+      "rotation": [
+        0.0,
+        0.0,
+        0.0,
+        1.0
+      ],
+      "scale": [
+        4.0,
+        1.0,
+        0.4000000059604645
+      ]
+    },
+    {
+      "collider": {
+        "friction": 0.800000011920929,
+        "isTrigger": false
+      },
+      "color": [
+        1.0,
+        1.0,
+        1.0
+      ],
+      "id": 61,
+      "materials": [
+        {
+          "embedded": {
+            "albedoMap": {
+              "path": "assets/Materials/Prototype/proto_grid_dark.png",
+              "pathGuid": "2b60657ce9aa4555"
+            },
+            "aoMap": "",
+            "baseColor": [
+              1.0,
+              1.0,
+              1.0
+            ],
+            "emissiveColor": [
+              0.0,
+              0.0,
+              0.0
+            ],
+            "emissiveMap": "",
+            "emissiveStrength": 1.0,
+            "factorsScaleMaps": true,
+            "metallic": 0.0,
+            "metallicMap": "",
+            "metallicRoughnessMap": "",
+            "normalMap": "",
+            "roughness": 0.8500000238418579,
+            "roughnessMap": "",
+            "triplanar": true,
+            "triplanarScale": 0.25
+          }
+        }
+      ],
+      "name": "Trench Wall 6",
+      "order": 75,
+      "parentId": 91,
+      "position": [
+        21.0,
+        0.5,
+        5.0
+      ],
+      "rotation": [
+        0.0,
+        0.0,
+        0.0,
+        1.0
+      ],
+      "scale": [
+        4.0,
+        1.0,
+        0.4000000059604645
+      ]
+    },
+    {
+      "collider": {
+        "friction": 0.800000011920929,
+        "isTrigger": false
+      },
+      "color": [
+        1.0,
+        1.0,
+        1.0
+      ],
+      "id": 62,
+      "materials": [
+        {
+          "embedded": {
+            "albedoMap": {
+              "path": "assets/Materials/Prototype/proto_grid_dark.png",
+              "pathGuid": "2b60657ce9aa4555"
+            },
+            "aoMap": "",
+            "baseColor": [
+              1.0,
+              1.0,
+              1.0
+            ],
+            "emissiveColor": [
+              0.0,
+              0.0,
+              0.0
+            ],
+            "emissiveMap": "",
+            "emissiveStrength": 1.0,
+            "factorsScaleMaps": true,
+            "metallic": 0.0,
+            "metallicMap": "",
+            "metallicRoughnessMap": "",
+            "normalMap": "",
+            "roughness": 0.8500000238418579,
+            "roughnessMap": "",
+            "triplanar": true,
+            "triplanarScale": 0.25
+          }
+        }
+      ],
+      "name": "Trench Wall 7",
+      "order": 76,
+      "parentId": 91,
+      "position": [
+        15.0,
+        0.5,
+        10.0
+      ],
+      "rotation": [
+        0.0,
+        0.0,
+        0.0,
+        1.0
+      ],
+      "scale": [
+        4.0,
+        1.0,
+        0.4000000059604645
+      ]
+    },
+    {
+      "collider": {
+        "friction": 0.800000011920929,
+        "isTrigger": false
+      },
+      "color": [
+        1.0,
+        1.0,
+        1.0
+      ],
+      "id": 63,
+      "materials": [
+        {
+          "embedded": {
+            "albedoMap": {
+              "path": "assets/Materials/Prototype/proto_grid_dark.png",
+              "pathGuid": "2b60657ce9aa4555"
+            },
+            "aoMap": "",
+            "baseColor": [
+              1.0,
+              1.0,
+              1.0
+            ],
+            "emissiveColor": [
+              0.0,
+              0.0,
+              0.0
+            ],
+            "emissiveMap": "",
+            "emissiveStrength": 1.0,
+            "factorsScaleMaps": true,
+            "metallic": 0.0,
+            "metallicMap": "",
+            "metallicRoughnessMap": "",
+            "normalMap": "",
+            "roughness": 0.8500000238418579,
+            "roughnessMap": "",
+            "triplanar": true,
+            "triplanarScale": 0.25
+          }
+        }
+      ],
+      "name": "Trench Wall 8",
+      "order": 77,
+      "parentId": 91,
+      "position": [
+        21.0,
+        0.5,
+        15.0
+      ],
+      "rotation": [
+        0.0,
+        0.0,
+        0.0,
+        1.0
+      ],
+      "scale": [
+        4.0,
+        1.0,
+        0.4000000059604645
+      ]
+    },
+    {
+      "collider": {
+        "friction": 0.800000011920929,
+        "isTrigger": false
+      },
+      "color": [
+        1.0,
+        1.0,
+        1.0
+      ],
+      "id": 64,
+      "materials": [
+        {
+          "embedded": {
+            "albedoMap": {
+              "path": "assets/Materials/Prototype/proto_grid_dark.png",
+              "pathGuid": "2b60657ce9aa4555"
+            },
+            "aoMap": "",
+            "baseColor": [
+              1.0,
+              1.0,
+              1.0
+            ],
+            "emissiveColor": [
+              0.0,
+              0.0,
+              0.0
+            ],
+            "emissiveMap": "",
+            "emissiveStrength": 1.0,
+            "factorsScaleMaps": true,
+            "metallic": 0.0,
+            "metallicMap": "",
+            "metallicRoughnessMap": "",
+            "normalMap": "",
+            "roughness": 0.8500000238418579,
+            "roughnessMap": "",
+            "triplanar": true,
+            "triplanarScale": 0.25
+          }
+        }
+      ],
+      "name": "Trench Wall 9",
+      "order": 78,
+      "parentId": 91,
+      "position": [
+        15.0,
+        0.5,
+        20.0
+      ],
+      "rotation": [
+        0.0,
+        0.0,
+        0.0,
+        1.0
+      ],
+      "scale": [
+        4.0,
+        1.0,
+        0.4000000059604645
+      ]
+    },
+    {
+      "collider": {
+        "friction": 0.800000011920929,
+        "isTrigger": false
+      },
+      "color": [
+        1.0,
+        1.0,
+        1.0
+      ],
+      "id": 65,
+      "materials": [
+        {
+          "embedded": {
+            "albedoMap": {
+              "path": "assets/Materials/Prototype/proto_grid_orange.png",
+              "pathGuid": "c389fb6bc574bb89"
+            },
+            "aoMap": "",
+            "baseColor": [
+              0.8500000238418579,
+              0.699999988079071,
+              0.550000011920929
+            ],
+            "emissiveColor": [
+              0.0,
+              0.0,
+              0.0
+            ],
+            "emissiveMap": "",
+            "emissiveStrength": 1.0,
+            "factorsScaleMaps": true,
+            "metallic": 0.0,
+            "metallicMap": "",
+            "metallicRoughnessMap": "",
+            "normalMap": "",
+            "roughness": 0.800000011920929,
+            "roughnessMap": "",
+            "triplanar": true,
+            "triplanarScale": 0.25
+          }
+        }
+      ],
+      "name": "Crate 1",
+      "order": 80,
+      "parentId": 92,
+      "position": [
+        18.0,
+        0.6000000238418579,
+        -2.5
+      ],
+      "rotation": [
+        0.0,
+        0.0,
+        0.0,
+        1.0
+      ],
+      "scale": [
+        1.2000000476837158,
+        1.2000000476837158,
+        1.2000000476837158
+      ]
+    },
+    {
+      "collider": {
+        "friction": 0.800000011920929,
+        "isTrigger": false
+      },
+      "color": [
+        1.0,
+        1.0,
+        1.0
+      ],
+      "id": 66,
+      "materials": [
+        {
+          "embedded": {
+            "albedoMap": {
+              "path": "assets/Materials/Prototype/proto_grid_orange.png",
+              "pathGuid": "c389fb6bc574bb89"
+            },
+            "aoMap": "",
+            "baseColor": [
+              0.8500000238418579,
+              0.699999988079071,
+              0.550000011920929
+            ],
+            "emissiveColor": [
+              0.0,
+              0.0,
+              0.0
+            ],
+            "emissiveMap": "",
+            "emissiveStrength": 1.0,
+            "factorsScaleMaps": true,
+            "metallic": 0.0,
+            "metallicMap": "",
+            "metallicRoughnessMap": "",
+            "normalMap": "",
+            "roughness": 0.800000011920929,
+            "roughnessMap": "",
+            "triplanar": true,
+            "triplanarScale": 0.25
+          }
+        }
+      ],
+      "name": "Crate 2",
+      "order": 81,
+      "parentId": 92,
+      "position": [
+        18.0,
+        1.7999999523162842,
+        -2.5
+      ],
+      "rotation": [
+        0.0,
+        0.0,
+        0.0,
+        1.0
+      ],
+      "scale": [
+        1.2000000476837158,
+        1.2000000476837158,
+        1.2000000476837158
+      ]
+    },
+    {
+      "collider": {
+        "friction": 0.800000011920929,
+        "isTrigger": false
+      },
+      "color": [
+        1.0,
+        1.0,
+        1.0
+      ],
+      "id": 67,
+      "materials": [
+        {
+          "embedded": {
+            "albedoMap": {
+              "path": "assets/Materials/Prototype/proto_grid_orange.png",
+              "pathGuid": "c389fb6bc574bb89"
+            },
+            "aoMap": "",
+            "baseColor": [
+              0.8500000238418579,
+              0.699999988079071,
+              0.550000011920929
+            ],
+            "emissiveColor": [
+              0.0,
+              0.0,
+              0.0
+            ],
+            "emissiveMap": "",
+            "emissiveStrength": 1.0,
+            "factorsScaleMaps": true,
+            "metallic": 0.0,
+            "metallicMap": "",
+            "metallicRoughnessMap": "",
+            "normalMap": "",
+            "roughness": 0.800000011920929,
+            "roughnessMap": "",
+            "triplanar": true,
+            "triplanarScale": 0.25
+          }
+        }
+      ],
+      "name": "Crate 1",
+      "order": 83,
+      "parentId": 93,
+      "position": [
+        18.0,
+        0.6000000238418579,
+        7.5
+      ],
+      "rotation": [
+        0.0,
+        0.0,
+        0.0,
+        1.0
+      ],
+      "scale": [
+        1.2000000476837158,
+        1.2000000476837158,
+        1.2000000476837158
+      ]
+    },
+    {
+      "collider": {
+        "friction": 0.800000011920929,
+        "isTrigger": false
+      },
+      "color": [
+        1.0,
+        1.0,
+        1.0
+      ],
+      "id": 68,
+      "materials": [
+        {
+          "embedded": {
+            "albedoMap": {
+              "path": "assets/Materials/Prototype/proto_grid_orange.png",
+              "pathGuid": "c389fb6bc574bb89"
+            },
+            "aoMap": "",
+            "baseColor": [
+              0.8500000238418579,
+              0.699999988079071,
+              0.550000011920929
+            ],
+            "emissiveColor": [
+              0.0,
+              0.0,
+              0.0
+            ],
+            "emissiveMap": "",
+            "emissiveStrength": 1.0,
+            "factorsScaleMaps": true,
+            "metallic": 0.0,
+            "metallicMap": "",
+            "metallicRoughnessMap": "",
+            "normalMap": "",
+            "roughness": 0.800000011920929,
+            "roughnessMap": "",
+            "triplanar": true,
+            "triplanarScale": 0.25
+          }
+        }
+      ],
+      "name": "Crate 2",
+      "order": 84,
+      "parentId": 93,
+      "position": [
+        18.0,
+        1.7999999523162842,
+        7.5
+      ],
+      "rotation": [
+        0.0,
+        0.0,
+        0.0,
+        1.0
+      ],
+      "scale": [
+        1.2000000476837158,
+        1.2000000476837158,
+        1.2000000476837158
+      ]
+    }
+  ],
+  "chromaticAberration": 0.0,
+  "depthOfField": false,
+  "dofMaxBlur": 8.0,
+  "empties": [
+    {
+      "id": 78,
+      "name": "Environment",
+      "order": 0,
+      "parentId": -1,
+      "position": [
+        0.0,
+        0.0,
+        0.0
+      ],
+      "rotation": [
+        0.0,
+        0.0,
+        0.0,
+        1.0
+      ],
+      "scale": [
+        1.0,
+        1.0,
+        1.0
+      ]
+    },
+    {
+      "id": 79,
+      "name": "Lighting",
+      "order": 6,
+      "parentId": -1,
+      "position": [
+        0.0,
+        0.0,
+        0.0
+      ],
+      "rotation": [
+        0.0,
+        0.0,
+        0.0,
+        1.0
+      ],
+      "scale": [
+        1.0,
+        1.0,
+        1.0
+      ]
+    },
+    {
+      "Light": {
+        "Angular Size": 1.2000000476837158,
+        "Cast Shadows": true,
+        "Color": [
+          1.0,
+          1.0,
+          1.0
+        ],
+        "ColorTempK": 0.0,
+        "Culling Mask": -1,
+        "Intensity": 3.0,
+        "Range": 200.0,
+        "Shadow Bias": 1.0,
+        "Shadow Near Plane": 0.05000000074505806,
+        "Shadow Normal Bias": 1.0,
+        "Shadow Resolution": "Follow global",
+        "Shadow Softness": 0.3499999940395355,
+        "Shadow Update Mode": "Dynamic",
+        "Spot Angle": 35.0,
+        "Type": "Directional"
+      },
+      "id": 80,
+      "name": "Sun",
+      "order": 7,
+      "parentId": 79,
+      "position": [
+        0.0,
+        30.0,
+        0.0
+      ],
+      "rotation": [
+        -0.38715118169784546,
+        -0.27481505274772644,
+        -0.12206829339265823,
+        0.8716019988059998
+      ],
+      "scale": [
+        1.0,
+        1.0,
+        1.0
+      ]
+    },
+    {
+      "Reflection Probe": {
+        "Importance": 0.5,
+        "Size": [
+          64.0,
+          8.0,
+          64.0
+        ]
+      },
+      "id": 81,
+      "name": "Arena Reflection Probe",
+      "order": 8,
+      "parentId": 79,
+      "position": [
+        0.0,
+        4.0,
+        0.0
+      ],
+      "rotation": [
+        0.0,
+        0.0,
+        0.0,
+        1.0
+      ],
+      "scale": [
+        1.0,
+        1.0,
+        1.0
+      ]
+    },
+    {
+      "id": 82,
+      "name": "Cover",
+      "order": 9,
+      "parentId": -1,
+      "position": [
+        0.0,
+        0.0,
+        0.0
+      ],
+      "rotation": [
+        0.0,
+        0.0,
+        0.0,
+        1.0
+      ],
+      "scale": [
+        1.0,
+        1.0,
+        1.0
+      ]
+    },
+    {
+      "id": 83,
+      "name": "Building North",
+      "order": 10,
+      "parentId": 82,
+      "position": [
+        0.0,
+        0.0,
+        0.0
+      ],
+      "rotation": [
+        0.0,
+        0.0,
+        0.0,
+        1.0
+      ],
+      "scale": [
+        1.0,
+        1.0,
+        1.0
+      ]
+    },
+    {
+      "id": 84,
+      "name": "Building South",
+      "order": 22,
+      "parentId": 82,
+      "position": [
+        0.0,
+        0.0,
+        0.0
+      ],
+      "rotation": [
+        0.0,
+        0.0,
+        0.0,
+        1.0
+      ],
+      "scale": [
+        1.0,
+        1.0,
+        1.0
+      ]
+    },
+    {
+      "id": 85,
+      "name": "Corridor",
+      "order": 34,
+      "parentId": 82,
+      "position": [
+        0.0,
+        0.0,
+        0.0
+      ],
+      "rotation": [
+        0.0,
+        0.0,
+        0.0,
+        1.0
+      ],
+      "scale": [
+        1.0,
+        1.0,
+        1.0
+      ]
+    },
+    {
+      "id": 86,
+      "name": "Centre",
+      "order": 40,
+      "parentId": 82,
+      "position": [
+        0.0,
+        0.0,
+        0.0
+      ],
+      "rotation": [
+        0.0,
+        0.0,
+        0.0,
+        1.0
+      ],
+      "scale": [
+        1.0,
+        1.0,
+        1.0
+      ]
+    },
+    {
+      "id": 87,
+      "name": "Crates West",
+      "order": 44,
+      "parentId": 86,
+      "position": [
+        0.0,
+        0.0,
+        0.0
+      ],
+      "rotation": [
+        0.0,
+        0.0,
+        0.0,
+        1.0
+      ],
+      "scale": [
+        1.0,
+        1.0,
+        1.0
+      ]
+    },
+    {
+      "id": 88,
+      "name": "Crates East",
+      "order": 48,
+      "parentId": 86,
+      "position": [
+        0.0,
+        0.0,
+        0.0
+      ],
+      "rotation": [
+        0.0,
+        0.0,
+        0.0,
+        1.0
+      ],
+      "scale": [
+        1.0,
+        1.0,
+        1.0
+      ]
+    },
+    {
+      "id": 89,
+      "name": "Crates South",
+      "order": 52,
+      "parentId": 86,
+      "position": [
+        0.0,
+        0.0,
+        0.0
+      ],
+      "rotation": [
+        0.0,
+        0.0,
+        0.0,
+        1.0
+      ],
+      "scale": [
+        1.0,
+        1.0,
+        1.0
+      ]
+    },
+    {
+      "id": 90,
+      "name": "Crates North",
+      "order": 55,
+      "parentId": 86,
+      "position": [
+        0.0,
+        0.0,
+        0.0
+      ],
+      "rotation": [
+        0.0,
+        0.0,
+        0.0,
+        1.0
+      ],
+      "scale": [
+        1.0,
+        1.0,
+        1.0
+      ]
+    },
+    {
+      "id": 91,
+      "name": "Trench",
+      "order": 69,
+      "parentId": 82,
+      "position": [
+        0.0,
+        0.0,
+        0.0
+      ],
+      "rotation": [
+        0.0,
+        0.0,
+        0.0,
+        1.0
+      ],
+      "scale": [
+        1.0,
+        1.0,
+        1.0
+      ]
+    },
+    {
+      "id": 92,
+      "name": "Tower North",
+      "order": 79,
+      "parentId": 91,
+      "position": [
+        0.0,
+        0.0,
+        0.0
+      ],
+      "rotation": [
+        0.0,
+        0.0,
+        0.0,
+        1.0
+      ],
+      "scale": [
+        1.0,
+        1.0,
+        1.0
+      ]
+    },
+    {
+      "id": 93,
+      "name": "Tower South",
+      "order": 82,
+      "parentId": 91,
+      "position": [
+        0.0,
+        0.0,
+        0.0
+      ],
+      "rotation": [
+        0.0,
+        0.0,
+        0.0,
+        1.0
+      ],
+      "scale": [
+        1.0,
+        1.0,
+        1.0
+      ]
+    },
+    {
+      "First Person Controller": {
+        "Air Accel Time": 0.0,
+        "Animation Set": {
+          "path": "assets/Weapons/AKS74U/AKS74U.fpsanim",
+          "pathGuid": "c0ff631aac421f76"
+        },
+        "Camera Bone": "head",
+        "Capsule Height": 1.850000023841858,
+        "Capsule Radius": 0.30000001192092896,
+        "Coyote Time": 0.10000000149011612,
+        "Eye Height": 1.7000000476837158,
+        "Field of View": 90.0,
+        "Gravity": 18.0,
+        "Gravity Gun": true,
+        "Ground Accel Time": 0.0,
+        "Ground Decel Time": 0.0,
+        "Invert Y": false,
+        "Jump Buffer Time": 0.11999999731779099,
+        "Jump Speed": 5.5,
+        "Kill Height": -20.0,
+        "Max Health": 100.0,
+        "Max Throw Speed": 16.0,
+        "Min Throw Speed": 3.5,
+        "Mouse Sensitivity": 0.05000000074505806,
+        "Move Speed": 4.0,
+        "Regen Delay": 5.0,
+        "Regen Rate": 30.0,
+        "Respawn Delay": 3.0,
+        "Secondary Animation Set": {
+          "path": "assets/Weapons/Remington870/Remington870.fpsanim",
+          "pathGuid": "4e3925bded078f9a"
+        },
+        "Spawn Protection": 2.0,
+        "Sprint Multiplier": 1.600000023841858,
+        "Throw Backspin": 2.0,
+        "Throw Charge Time": 1.100000023841858,
+        "View Model FOV": 50.0,
+        "View Model Offset": [
+          0.05620000138878822,
+          -0.03200000151991844,
+          0.0
+        ],
+        "View Model Rotation": [
+          -0.23999999463558197,
+          0.38999998569488525,
+          0.0
+        ],
+        "View Model Scale": 1.0
+      },
+      "id": 94,
+      "name": "Player Spawn",
+      "order": 85,
+      "parentId": -1,
+      "position": [
+        0.0,
+        0.10000000149011612,
+        28.0
+      ],
+      "rotation": [
+        0.0,
+        1.0,
+        0.0,
+        0.0
+      ],
+      "scale": [
+        1.0,
+        1.0,
+        1.0
+      ]
+    },
+    {
+      "Character Outfit": {
+        "Auto Hide Skin": true,
+        "Gender": "Male",
+        "Locks": "",
+        "Race": "Young",
+        "Randomize On Play": false,
+        "Wardrobe": {
+          "path": "assets/Characters/Quantum/Quantum.wardrobe",
+          "pathGuid": "ae5365d372fb447c"
+        }
+      },
+      "First Person Body": {
+        "Airborne Delay": 0.15000000596046448,
+        "Arm Steadiness": 1.0,
+        "Arm Steady Max": 0.03999999910593033,
+        "Arm Steady Time": 0.5,
+        "Armed Eye Offset": [
+          0.0,
+          0.10000000149011612,
+          0.03999999910593033
+        ],
+        "Arms Ease Out": 0.10000000149011612,
+        "Arms Piece": "Arms",
+        "Bone Map": "",
+        "Camera Hidden Bones": "clavicle_l, clavicle_r, upperarm_l, upperarm_r",
+        "Camera Offset": [
+          0.0,
+          0.07999999821186066,
+          0.10000000149011612
+        ],
+        "Camera Smoothing": 0.05999999865889549,
+        "Clavicle Follow": 0.3499999940395355,
+        "Clothing Near Hide": 0.20000000298023224,
+        "Clothing Near Hide Width": 0.2800000011920929,
+        "Collar Hide Drop": 0.019999999552965164,
+        "Crouch Height": 1.2000000476837158,
+        "Crouch Speed": 0.41999998688697815,
+        "Elbow Clearance": 0.05999999865889549,
+        "Eye Slack": 0.03500000014901161,
+        "Foot IK": true,
+        "Foot IK Fade": 0.10000000149011612,
+        "Foot IK Max Drop": 0.3499999940395355,
+        "Foot Lock Drift": 0.11999999731779099,
+        "Foot Lock Ease In": 0.03999999910593033,
+        "Foot Lock Ease Out": 0.07999999821186066,
+        "Foot Max Raise": 0.25,
+        "Foot Normal Ease": 0.07999999821186066,
+        "Foot Offset Ease": 0.05999999865889549,
+        "Foot Planted Height": 0.05000000074505806,
+        "Foot Ray Length": 1.0,
+        "Foot Ray Up": 0.5,
+        "Foot Tilt Max": 25.0,
+        "Head Bob": 0.5,
+        "Head Bone": "head",
+        "Hidden Bones": "",
+        "Hidden Parts": "Head",
+        "Look Down Push": 0.05999999865889549,
+        "Look Down Start": 0.0,
+        "Max Play Rate": 1.5,
+        "Max Turn Rate": 0.0,
+        "Near Hide": 0.10000000149011612,
+        "Parameter Smoothing": 0.11999999731779099,
+        "Pelvis Max Raise": 0.0,
+        "Player Run Speed": 0.0,
+        "Player Sprint Speed": 0.0,
+        "Reach Lean Max": 15.0,
+        "Reach Slack": 0.03999999910593033,
+        "Responsiveness": 0.0,
+        "Run Speed": 3.259999990463257,
+        "Shoulder Line Match": 1.0,
+        "Shoulder Max Angle": 25.0,
+        "Shrug Max": 0.11999999731779099,
+        "Shrug Start": 0.9800000190734863,
+        "Spine Aim": 0.6000000238418579,
+        "Spine Aim Down": 0.8999999761581421,
+        "Spine Twist": 1.0,
+        "Sprint Speed": 4.71999979019165,
+        "Stair Ease": 0.09000000357627869,
+        "Stair Pop Rate": 2.5,
+        "Stair Pop Rise": 0.029999999329447746,
+        "Start Idle Time": 0.25,
+        "Start Max Move": 0.6000000238418579,
+        "Start Stop Clips": false,
+        "Stop Debounce": 0.05000000074505806,
+        "Stop Min Run Time": 0.6000000238418579,
+        "Stop Min Run Time (Crouched)": 0.699999988079071,
+        "Stop Min Speed": 1.2000000476837158,
+        "Stop Min Speed (Crouched)": 0.6000000238418579,
+        "Stop Run Forward": 0.699999988079071,
+        "Turn End Angle": 8.0,
+        "Turn Lag Floor": 45.0,
+        "Turn Lag Margin": 5.0,
+        "Turn Min Time": 0.30000001192092896,
+        "Turn Move Ease": 0.07999999821186066,
+        "Turn Threshold": 30.0,
+        "Turn Timeout": 4.0,
+        "Weapon Arms": true
+      },
+      "id": 95,
+      "name": "Player Body",
+      "order": 86,
+      "parentId": 94,
+      "position": [
+        0.0,
+        0.0,
+        0.0
+      ],
+      "rotation": [
+        0.0,
+        0.0,
+        0.0,
+        1.0
+      ],
+      "scale": [
+        1.0,
+        1.0,
+        1.0
+      ]
+    },
+    {
+      "id": 96,
+      "name": "Enemies",
+      "order": 96,
+      "parentId": -1,
+      "position": [
+        0.0,
+        0.0,
+        0.0
+      ],
+      "rotation": [
+        0.0,
+        0.0,
+        0.0,
+        1.0
+      ],
+      "scale": [
+        1.0,
+        1.0,
+        1.0
+      ]
+    },
+    {
+      "Squad Settings": {
+        "Difficulty": 1.0,
+        "NPC Damage Scale": 0.44999998807907104,
+        "Respawn": true,
+        "Respawn Delay": 8.0,
+        "Squad Size": 4
+      },
+      "id": 97,
+      "name": "AI Director",
+      "order": 97,
+      "parentId": 96,
+      "position": [
+        0.0,
+        0.0,
+        -30.0
+      ],
+      "rotation": [
+        0.0,
+        0.0,
+        0.0,
+        1.0
+      ],
+      "scale": [
+        1.0,
+        1.0,
+        1.0
+      ]
+    },
+    {
+      "NPC Spawn": {
+        "Brain": "Squad AI",
+        "Outfit Seed": 0,
+        "Skill": 0.6000000238418579,
+        "Squad": 0,
+        "Weapon": "AKS-74U"
+      },
+      "id": 98,
+      "name": "Enemy Spawn 1",
+      "order": 98,
+      "parentId": 96,
+      "position": [
+        -20.0,
+        0.10000000149011612,
+        -27.0
+      ],
+      "rotation": [
+        0.0,
+        0.0,
+        0.0,
+        1.0
+      ],
+      "scale": [
+        1.0,
+        1.0,
+        1.0
+      ]
+    },
+    {
+      "NPC Spawn": {
+        "Brain": "Squad AI",
+        "Outfit Seed": 0,
+        "Skill": 0.550000011920929,
+        "Squad": 0,
+        "Weapon": "Remington 870"
+      },
+      "id": 99,
+      "name": "Enemy Spawn 2",
+      "order": 99,
+      "parentId": 96,
+      "position": [
+        -10.0,
+        0.10000000149011612,
+        -27.0
+      ],
+      "rotation": [
+        0.0,
+        0.0,
+        0.0,
+        1.0
+      ],
+      "scale": [
+        1.0,
+        1.0,
+        1.0
+      ]
+    },
+    {
+      "NPC Spawn": {
+        "Brain": "Squad AI",
+        "Outfit Seed": 0,
+        "Skill": 0.699999988079071,
+        "Squad": 0,
+        "Weapon": "AKS-74U"
+      },
+      "id": 100,
+      "name": "Enemy Spawn 3",
+      "order": 100,
+      "parentId": 96,
+      "position": [
+        0.0,
+        0.10000000149011612,
+        -27.0
+      ],
+      "rotation": [
+        0.0,
+        0.0,
+        0.0,
+        1.0
+      ],
+      "scale": [
+        1.0,
+        1.0,
+        1.0
+      ]
+    },
+    {
+      "NPC Spawn": {
+        "Brain": "Squad AI",
+        "Outfit Seed": 0,
+        "Skill": 0.6000000238418579,
+        "Squad": 0,
+        "Weapon": "AKS-74U"
+      },
+      "id": 101,
+      "name": "Enemy Spawn 4",
+      "order": 101,
+      "parentId": 96,
+      "position": [
+        10.0,
+        0.10000000149011612,
+        -27.0
+      ],
+      "rotation": [
+        0.0,
+        0.0,
+        0.0,
+        1.0
+      ],
+      "scale": [
+        1.0,
+        1.0,
+        1.0
+      ]
+    },
+    {
+      "NPC Spawn": {
+        "Brain": "Squad AI",
+        "Outfit Seed": 0,
+        "Skill": 0.550000011920929,
+        "Squad": 0,
+        "Weapon": "Remington 870"
+      },
+      "id": 102,
+      "name": "Enemy Spawn 5",
+      "order": 102,
+      "parentId": 96,
+      "position": [
+        20.0,
+        0.10000000149011612,
+        -27.0
+      ],
+      "rotation": [
+        0.0,
+        0.0,
+        0.0,
+        1.0
+      ],
+      "scale": [
+        1.0,
+        1.0,
+        1.0
+      ]
+    }
+  ],
+  "exposureEV": 0.0,
+  "filmGrain": 0.0,
+  "filmGrainResponse": 0.800000011920929,
+  "focusDistance": 10.0,
+  "focusRange": 3.0,
+  "fogBaseHeight": 0.0,
+  "fogColor": [
+    0.6600000262260437,
+    0.7300000190734863,
+    0.8199999928474426
+  ],
+  "fogDensity": 0.0044999998062849045,
+  "fogEnabled": false,
+  "fogEnd": 300.0,
+  "fogHeightFalloff": 0.05999999865889549,
+  "fogMode": 2,
+  "fogStart": 10.0,
+  "formatVersion": 4,
+  "fxaa": false,
+  "gradeColorFilter": [
+    1.0,
+    1.0,
+    1.0
+  ],
+  "gradeContrast": 8.0,
+  "gradeSaturation": 6.0,
+  "gradeTemperature": -6.0,
+  "gradeTint": 0.0,
+  "libraryMaterials": [
+    {
+      "path": "assets/characters/Quantum/Materials/Characters/M_Quantum_Head.mat",
+      "pathGuid": "00f2f285376c0e56"
+    },
+    {
+      "path": "assets/characters/Quantum/Materials/Characters/M_Quantum_Arms.mat",
+      "pathGuid": "bdf55b314edda1f4"
+    },
+    {
+      "path": "assets/characters/Quantum/Materials/Characters/M_Quantum_Body.mat",
+      "pathGuid": "ff2aca4c25ba4f89"
+    },
+    {
+      "path": "assets/characters/Quantum/Materials/Characters/M_Cartilage.mat",
+      "pathGuid": "d71fa7c7cd81f033"
+    },
+    {
+      "path": "assets/characters/Quantum/Materials/Characters/M_Eye_Overlay.mat",
+      "pathGuid": "9b4dcbacd337e8a1"
+    },
+    {
+      "path": "assets/characters/Quantum/Materials/Characters/Eyes/M_Eye_Brown.mat",
+      "pathGuid": "b0cdff125ce5bc62"
+    },
+    {
+      "path": "assets/characters/Quantum/Materials/Characters/M_Brows_Lashes.mat",
+      "pathGuid": "7a80f13a6d4b5daf"
+    },
+    {
+      "path": "assets/characters/Quantum/Materials/Characters/M_Eye_Cornea.mat",
+      "pathGuid": "185fa1f3e55e68a5"
+    },
+    {
+      "path": "assets/characters/Quantum/Materials/Characters/M_Saliva.mat",
+      "pathGuid": "35c182a2d61a4dca"
+    },
+    {
+      "path": "assets/characters/Quantum/Materials/Characters/M_Teeth.mat",
+      "pathGuid": "0681796530e520b8"
+    },
+    {
+      "path": "assets/characters/Quantum/Materials/Characters/M_Quantum_Head_Young.mat",
+      "pathGuid": "c1148bc46cc32021"
+    },
+    {
+      "path": "assets/characters/Quantum/Materials/Clothing/Balaclava/M_Balaclava_Crime_Print.mat",
+      "pathGuid": "4a97d2684b5706be"
+    },
+    {
+      "path": "assets/characters/Quantum/Materials/Clothing/Tops/Hoodie_Hood_Up/M_Hoodie_Hood_Up_Black.mat",
+      "pathGuid": "02619ee0a88e6cae"
+    },
+    {
+      "path": "assets/characters/Quantum/Materials/Clothing/Pants/Pants_Sport/M_Sport_Pants_Black.mat",
+      "pathGuid": "4a4ac6fabe21f2c8"
+    },
+    {
+      "path": "assets/characters/Quantum/Materials/Clothing/Shoes/Sneakers/Sneakers_Leather/M_F_Sneakers_Leather_Black.mat",
+      "pathGuid": "6ff7cafa7e9d186a"
+    },
+    {
+      "path": "assets/characters/Quantum/Materials/Clothing/Shoes/Socks/M_Socks.mat",
+      "pathGuid": "475670f667a70b3b"
+    }
+  ],
+  "libraryModels": [
+    {
+      "path": "assets/characters/Quantum/Models/European/Quantum_Torso.fbx",
+      "pathGuid": "34f0109f85dae259"
+    },
+    {
+      "path": "assets/characters/Quantum/Models/Clothing/Male/Shoes/Quantum_Feet_Shoes.fbx",
+      "pathGuid": "9223ed446c94346d"
+    },
+    {
+      "path": "assets/characters/Quantum/Models/Young/Quantum_Young_Head.fbx",
+      "pathGuid": "0ccde7cf189bfaba"
+    },
+    {
+      "path": "assets/characters/Quantum/FirstPerson/Quantum_Arms_FP.fbx",
+      "pathGuid": "19bbef7e387a5ef4"
+    },
+    {
+      "path": "assets/characters/Quantum/Models/Clothing/Male/Balaclava/SM_Balaclava_Crime.fbx",
+      "pathGuid": "18fe3d21a3cde1a0"
+    },
+    {
+      "path": "assets/characters/Quantum/Models/Clothing/Male/Tops/SKM_Hoodie_Hood_Up.fbx",
+      "pathGuid": "a93a8b58180d0f44"
+    },
+    {
+      "path": "assets/characters/Quantum/Models/Clothing/Male/Pants/SKM_Sport_Pants.fbx",
+      "pathGuid": "c28a0a40272cd541"
+    },
+    {
+      "path": "assets/characters/Quantum/Models/Clothing/Male/Shoes/SKM_Sneakers.fbx",
+      "pathGuid": "907719222c820ea8"
+    },
+    {
+      "path": "assets/characters/Quantum/Models/Clothing/Male/Shoes/SKM_Socks.fbx",
+      "pathGuid": "d2d9305f1b150870"
+    }
+  ],
+  "libraryPrefabs": [],
+  "librarySounds": [],
+  "libraryTextures": [
+    {
+      "path": "assets/Materials/Prototype/proto_grid_light.png",
+      "pathGuid": "c90849c8fc6c88b0"
+    },
+    {
+      "path": "assets/Materials/Prototype/proto_grid_dark.png",
+      "pathGuid": "2b60657ce9aa4555"
+    },
+    {
+      "path": "assets/Materials/Prototype/proto_grid_orange.png",
+      "pathGuid": "c389fb6bc574bb89"
+    },
+    {
+      "path": "assets/characters/Quantum/Textures/European/Head/T_Quantum_Basemesh_Head_BaseColor.1001.png",
+      "pathGuid": "53c56365fccaaaf6"
+    },
+    {
+      "path": "assets/characters/Quantum/Textures/European/Head/T_Quantum_Basemesh_Head_Unity_Normal.1001.png",
+      "pathGuid": "1ce8ae861ca44d77"
+    },
+    {
+      "path": "assets/characters/Quantum/Textures/European/Head/T_Quantum_Basemesh_Head_Roughness.1001.png",
+      "pathGuid": "2c09c787a05ae64b"
+    },
+    {
+      "path": "assets/characters/Quantum/Textures/European/Head/T_Quantum_Basemesh_Head_Occlusion.1001.png",
+      "pathGuid": "4158845f83d91935"
+    },
+    {
+      "path": "assets/characters/Quantum/Textures/European/Arms/T_Quantum_Basemesh_Arms_BaseColor.1003.png",
+      "pathGuid": "41cb6d59333dff57"
+    },
+    {
+      "path": "assets/characters/Quantum/Textures/European/Arms/T_Quantum_Basemesh_Arms_Unity_Normal.1003.png",
+      "pathGuid": "29da77c277b4c368"
+    },
+    {
+      "path": "assets/characters/Quantum/Textures/European/Arms/T_Quantum_Basemesh_Arms_Roughness.1003.png",
+      "pathGuid": "0f4f3be6435fb551"
+    },
+    {
+      "path": "assets/characters/Quantum/Textures/European/Arms/T_Quantum_Basemesh_Arms_Occlusion.1003.png",
+      "pathGuid": "a90075e269ca5791"
+    },
+    {
+      "path": "assets/characters/Quantum/Textures/European/Body/T_Quantum_Basemesh_Body_BaseColor.1002.png",
+      "pathGuid": "eaeb3aa5bb6fea12"
+    },
+    {
+      "path": "assets/characters/Quantum/Textures/European/Body/T_Quantum_Basemesh_Body_Unity_Normal.1002.png",
+      "pathGuid": "04da729f18d0764b"
+    },
+    {
+      "path": "assets/characters/Quantum/Textures/European/Body/T_Quantum_Basemesh_Body_Roughness.1002.png",
+      "pathGuid": "31e1f9b82ac0d4d5"
+    },
+    {
+      "path": "assets/characters/Quantum/Textures/European/Body/T_Quantum_Basemesh_Body_Occlusion.1002.png",
+      "pathGuid": "d5ec3de7cc7c9073"
+    },
+    {
+      "path": "assets/characters/Quantum/Textures/Eyes/T_Eye_Brown.png",
+      "pathGuid": "291658f014c4553a"
+    },
+    {
+      "path": "assets/characters/Quantum/Textures/Eyes/T_Brows_Lashes.png",
+      "pathGuid": "7f7daa72f072efad"
+    },
+    {
+      "path": "assets/characters/Quantum/Textures/Young/Head/T_Quantum_Basemesh_Head_Young_BaseColor.1001.png",
+      "pathGuid": "7abfadd9b82d77d1"
+    },
+    {
+      "path": "assets/characters/Quantum/Textures/Young/Head/T_Quantum_Basemesh_Head_Young_Unity_Normal.1001.png",
+      "pathGuid": "435828b6af022794"
+    },
+    {
+      "path": "assets/characters/Quantum/Textures/Young/Head/T_Quantum_Basemesh_Head_Young_Roughness.1001.png",
+      "pathGuid": "c450debfcebdf287"
+    },
+    {
+      "path": "assets/characters/Quantum/Textures/Young/Head/T_Quantum_Basemesh_Head_Young_Occlusion.1001.png",
+      "pathGuid": "55d925b21b2b6d41"
+    },
+    {
+      "path": "assets/characters/Quantum/Textures/Clothing/Balaclava/T_Balaclava_Crime_Print_BaseColor.png",
+      "pathGuid": "7edf0f8ddb9b52e7"
+    },
+    {
+      "path": "assets/characters/Quantum/Textures/Clothing/Balaclava/T_Balaclava_Crime_Print_Normal.png",
+      "pathGuid": "5cd3393cf8ba4289"
+    },
+    {
+      "path": "assets/characters/Quantum/Textures/Clothing/Balaclava/T_Balaclava_Crime_Print_OcclusionRoughnessMetallic.png",
+      "pathGuid": "b273318edffb81cb"
+    },
+    {
+      "path": "assets/characters/Quantum/Textures/Clothing/Tops/Hoodie_Hood_Up/T_Hoodie_Hood_Up_Black_BaseColor.png",
+      "pathGuid": "102e34904a03fd80"
+    },
+    {
+      "path": "assets/characters/Quantum/Textures/Clothing/Tops/Hoodie_Hood_Up/T_Hoodie_Hood_Up_Unity_Normal.png",
+      "pathGuid": "75f7d3734bdcbffe"
+    },
+    {
+      "path": "assets/characters/Quantum/Textures/Clothing/Tops/Hoodie_Hood_Up/T_Hoodie_Hood_Up_Roughness.png",
+      "pathGuid": "6e90149c347bedc2"
+    },
+    {
+      "path": "assets/characters/Quantum/Textures/Clothing/Tops/Hoodie_Hood_Up/T_Hoodie_Hood_Up_Occlusion.png",
+      "pathGuid": "3d3479334266d781"
+    },
+    {
+      "path": "assets/characters/Quantum/Textures/Clothing/Pants/Pants_Sport/T_Sport_Pants_Black_BaseColor.png",
+      "pathGuid": "dcc7e35f9e93a284"
+    },
+    {
+      "path": "assets/characters/Quantum/Textures/Clothing/Pants/Pants_Sport/T_Sport_Pants_Unity_Normal.png",
+      "pathGuid": "490076b88517c219"
+    },
+    {
+      "path": "assets/characters/Quantum/Textures/Clothing/Pants/Pants_Sport/T_Sport_Pants_Roughness.png",
+      "pathGuid": "a344f2e9a18e398b"
+    },
+    {
+      "path": "assets/characters/Quantum/Textures/Clothing/Pants/Pants_Sport/T_Sport_Pants_Occlusion.png",
+      "pathGuid": "5ed366a42af67c36"
+    },
+    {
+      "path": "assets/characters/Quantum/Textures/Clothing/Shoes/Sneakers/Sneakers_Leather/T_F_Sneakers_Leather_Black_BaseColor.png",
+      "pathGuid": "8e3df431656c6989"
+    },
+    {
+      "path": "assets/characters/Quantum/Textures/Clothing/Shoes/Sneakers/Sneakers_Leather/T_F_Sneakers_Leather_Unity_Normal.png",
+      "pathGuid": "5346dc389402d8ba"
+    },
+    {
+      "path": "assets/characters/Quantum/Textures/Clothing/Shoes/Sneakers/Sneakers_Leather/T_F_Sneakers_Leather_Roughness.png",
+      "pathGuid": "9b18ad03ad5ec47b"
+    },
+    {
+      "path": "assets/characters/Quantum/Textures/Clothing/Shoes/Sneakers/Sneakers_Leather/T_F_Sneakers_Leather_Occlusion.png",
+      "pathGuid": "9c0d74e53b152f2c"
+    },
+    {
+      "path": "assets/characters/Quantum/Textures/Clothing/Shoes/Socks/T_Socks_BaseColor.png",
+      "pathGuid": "427d699fbc412c22"
+    },
+    {
+      "path": "assets/characters/Quantum/Textures/Clothing/Shoes/Socks/T_Socks_Unity_Normal.png",
+      "pathGuid": "91e0a7e4f759f6d4"
+    },
+    {
+      "path": "assets/characters/Quantum/Textures/Clothing/Shoes/Socks/T_Socks_Roughness.png",
+      "pathGuid": "b3b2b46e73b05bbc"
+    },
+    {
+      "path": "assets/characters/Quantum/Textures/Clothing/Shoes/Socks/T_Socks_Occlusion.png",
+      "pathGuid": "407594381188360c"
+    }
+  ],
+  "maxPointShadows": 2,
+  "maxSpotShadows": 4,
+  "models": [
+    {
+      "Animator Controller": {
+        "Controller": {
+          "path": "assets/Animations/Controllers/fps_body_locomotion.controller",
+          "pathGuid": "f00ced2b8e9ec387"
+        },
+        "Speed": 1.0,
+        "Track": "",
+        "rootMotion": "In Place",
+        "rootMotionBone": "",
+        "rootMotionRotation": false,
+        "rootMotionVertical": false
+      },
+      "Outfit Piece": {
+        "Flags": 1,
+        "Item": {
+          "path": "assets/Characters/Quantum/Models/European/Quantum_Torso.fbx",
+          "pathGuid": "34f0109f85dae259"
+        },
+        "Slot": "Torso"
+      },
+      "id": 69,
+      "materials": [
+        {
+          "guid": "00f2f285376c0e56",
+          "path": "assets/characters/Quantum/Materials/Characters/M_Quantum_Head.mat"
+        },
+        {
+          "guid": "bdf55b314edda1f4",
+          "path": "assets/characters/Quantum/Materials/Characters/M_Quantum_Arms.mat"
+        },
+        {
+          "guid": "ff2aca4c25ba4f89",
+          "path": "assets/characters/Quantum/Materials/Characters/M_Quantum_Body.mat"
+        }
+      ],
+      "name": "Torso",
+      "order": 87,
+      "parentId": 95,
+      "path": "assets/characters/Quantum/Models/European/Quantum_Torso.fbx",
+      "pathGuid": "34f0109f85dae259",
+      "position": [
+        0.0,
+        0.0,
+        0.0
+      ],
+      "rotation": [
+        0.0,
+        0.0,
+        0.0,
+        1.0
+      ],
+      "scale": [
+        1.0,
+        1.0,
+        1.0
+      ]
+    },
+    {
+      "Animator Controller": {
+        "Controller": {
+          "path": "assets/Animations/Controllers/fps_body_locomotion.controller",
+          "pathGuid": "f00ced2b8e9ec387"
+        },
+        "Speed": 1.0,
+        "Track": "",
+        "rootMotion": "In Place",
+        "rootMotionBone": "",
+        "rootMotionRotation": false,
+        "rootMotionVertical": false
+      },
+      "Outfit Piece": {
+        "Flags": 1,
+        "Item": {
+          "path": "assets/Characters/Quantum/Models/Clothing/Male/Shoes/Quantum_Feet_Shoes.fbx",
+          "pathGuid": "9223ed446c94346d"
+        },
+        "Slot": "Feet"
+      },
+      "id": 70,
+      "materials": [
+        {
+          "guid": "ff2aca4c25ba4f89",
+          "path": "assets/characters/Quantum/Materials/Characters/M_Quantum_Body.mat"
+        }
+      ],
+      "name": "Feet",
+      "order": 88,
+      "parentId": 95,
+      "path": "assets/characters/Quantum/Models/Clothing/Male/Shoes/Quantum_Feet_Shoes.fbx",
+      "pathGuid": "9223ed446c94346d",
+      "position": [
+        0.0,
+        0.0,
+        0.0
+      ],
+      "rotation": [
+        0.0,
+        0.0,
+        0.0,
+        1.0
+      ],
+      "scale": [
+        1.0,
+        1.0,
+        1.0
+      ]
+    },
+    {
+      "Animator Controller": {
+        "Controller": {
+          "path": "assets/Animations/Controllers/fps_body_locomotion.controller",
+          "pathGuid": "f00ced2b8e9ec387"
+        },
+        "Speed": 1.0,
+        "Track": "",
+        "rootMotion": "In Place",
+        "rootMotionBone": "",
+        "rootMotionRotation": false,
+        "rootMotionVertical": false
+      },
+      "Outfit Piece": {
+        "Flags": 3,
+        "Item": {
+          "path": "assets/Characters/Quantum/Models/Young/Quantum_Young_Head.fbx",
+          "pathGuid": "0ccde7cf189bfaba"
+        },
+        "Slot": "Head"
+      },
+      "id": 71,
+      "materials": [
+        {
+          "guid": "d71fa7c7cd81f033",
+          "path": "assets/characters/Quantum/Materials/Characters/M_Cartilage.mat"
+        },
+        {
+          "guid": "9b4dcbacd337e8a1",
+          "path": "assets/characters/Quantum/Materials/Characters/M_Eye_Overlay.mat"
+        },
+        {
+          "guid": "b0cdff125ce5bc62",
+          "path": "assets/characters/Quantum/Materials/Characters/Eyes/M_Eye_Brown.mat"
+        },
+        {
+          "guid": "7a80f13a6d4b5daf",
+          "path": "assets/characters/Quantum/Materials/Characters/M_Brows_Lashes.mat"
+        },
+        {
+          "guid": "b0cdff125ce5bc62",
+          "path": "assets/characters/Quantum/Materials/Characters/Eyes/M_Eye_Brown.mat"
+        },
+        {
+          "guid": "185fa1f3e55e68a5",
+          "path": "assets/characters/Quantum/Materials/Characters/M_Eye_Cornea.mat"
+        },
+        {
+          "guid": "35c182a2d61a4dca",
+          "path": "assets/characters/Quantum/Materials/Characters/M_Saliva.mat"
+        },
+        {
+          "guid": "0681796530e520b8",
+          "path": "assets/characters/Quantum/Materials/Characters/M_Teeth.mat"
+        },
+        {
+          "guid": "c1148bc46cc32021",
+          "path": "assets/characters/Quantum/Materials/Characters/M_Quantum_Head_Young.mat"
+        }
+      ],
+      "name": "Head",
+      "order": 89,
+      "parentId": 95,
+      "path": "assets/characters/Quantum/Models/Young/Quantum_Young_Head.fbx",
+      "pathGuid": "0ccde7cf189bfaba",
+      "position": [
+        0.0,
+        0.0,
+        0.0
+      ],
+      "rotation": [
+        0.0,
+        0.0,
+        0.0,
+        1.0
+      ],
+      "scale": [
+        1.0,
+        1.0,
+        1.0
+      ]
+    },
+    {
+      "Animator Controller": {
+        "Controller": {
+          "path": "assets/Animations/Controllers/fps_body_locomotion.controller",
+          "pathGuid": "f00ced2b8e9ec387"
+        },
+        "Speed": 1.0,
+        "Track": "",
+        "rootMotion": "In Place",
+        "rootMotionBone": "",
+        "rootMotionRotation": false,
+        "rootMotionVertical": false
+      },
+      "Outfit Piece": {
+        "Flags": 1,
+        "Item": {
+          "path": "assets/Characters/Quantum/FirstPerson/Quantum_Arms_FP.fbx",
+          "pathGuid": "19bbef7e387a5ef4"
+        },
+        "Slot": "Arms"
+      },
+      "id": 72,
+      "materials": [
+        {
+          "guid": "bdf55b314edda1f4",
+          "path": "assets/characters/Quantum/Materials/Characters/M_Quantum_Arms.mat"
+        }
+      ],
+      "name": "Arms",
+      "order": 90,
+      "parentId": 95,
+      "path": "assets/characters/Quantum/FirstPerson/Quantum_Arms_FP.fbx",
+      "pathGuid": "19bbef7e387a5ef4",
+      "position": [
+        0.0,
+        0.0,
+        0.0
+      ],
+      "rotation": [
+        0.0,
+        0.0,
+        0.0,
+        1.0
+      ],
+      "scale": [
+        1.0,
+        1.0,
+        1.0
+      ]
+    },
+    {
+      "Animator Controller": {
+        "Controller": {
+          "path": "assets/Animations/Controllers/fps_body_locomotion.controller",
+          "pathGuid": "f00ced2b8e9ec387"
+        },
+        "Speed": 1.0,
+        "Track": "",
+        "rootMotion": "In Place",
+        "rootMotionBone": "",
+        "rootMotionRotation": false,
+        "rootMotionVertical": false
+      },
+      "Outfit Piece": {
+        "Flags": 2,
+        "Item": {
+          "path": "assets/Characters/Quantum/Models/Clothing/Male/Balaclava/SM_Balaclava_Crime.fbx",
+          "pathGuid": "18fe3d21a3cde1a0"
+        },
+        "Slot": "Balaclava"
+      },
+      "id": 73,
+      "materials": [
+        {
+          "guid": "4a97d2684b5706be",
+          "path": "assets/characters/Quantum/Materials/Clothing/Balaclava/M_Balaclava_Crime_Print.mat"
+        }
+      ],
+      "name": "Balaclava",
+      "order": 91,
+      "parentId": 95,
+      "path": "assets/characters/Quantum/Models/Clothing/Male/Balaclava/SM_Balaclava_Crime.fbx",
+      "pathGuid": "18fe3d21a3cde1a0",
+      "position": [
+        1.2546353218567674e-06,
+        4.76837158203125e-07,
+        1.28941610455513e-06
+      ],
+      "rotation": [
+        -3.650785629361053e-07,
+        1.6864706964270226e-08,
+        3.987132686233963e-07,
+        1.0
+      ],
+      "scale": [
+        1.0,
+        0.9999997019767761,
+        0.9999997019767761
+      ]
+    },
+    {
+      "Animator Controller": {
+        "Controller": {
+          "path": "assets/Animations/Controllers/fps_body_locomotion.controller",
+          "pathGuid": "f00ced2b8e9ec387"
+        },
+        "Speed": 1.0,
+        "Track": "",
+        "rootMotion": "In Place",
+        "rootMotionBone": "",
+        "rootMotionRotation": false,
+        "rootMotionVertical": false
+      },
+      "Outfit Piece": {
+        "Flags": 0,
+        "Item": {
+          "path": "assets/Characters/Quantum/Models/Clothing/Male/Tops/SKM_Hoodie_Hood_Up.fbx",
+          "pathGuid": "a93a8b58180d0f44"
+        },
+        "Slot": "Top"
+      },
+      "id": 74,
+      "materials": [
+        {
+          "guid": "02619ee0a88e6cae",
+          "path": "assets/characters/Quantum/Materials/Clothing/Tops/Hoodie_Hood_Up/M_Hoodie_Hood_Up_Black.mat"
+        }
+      ],
+      "name": "Top",
+      "order": 92,
+      "parentId": 95,
+      "path": "assets/characters/Quantum/Models/Clothing/Male/Tops/SKM_Hoodie_Hood_Up.fbx",
+      "pathGuid": "a93a8b58180d0f44",
+      "position": [
+        0.0,
+        0.0,
+        0.0
+      ],
+      "rotation": [
+        0.0,
+        0.0,
+        0.0,
+        1.0
+      ],
+      "scale": [
+        1.0,
+        1.0,
+        1.0
+      ]
+    },
+    {
+      "Animator Controller": {
+        "Controller": {
+          "path": "assets/Animations/Controllers/fps_body_locomotion.controller",
+          "pathGuid": "f00ced2b8e9ec387"
+        },
+        "Speed": 1.0,
+        "Track": "",
+        "rootMotion": "In Place",
+        "rootMotionBone": "",
+        "rootMotionRotation": false,
+        "rootMotionVertical": false
+      },
+      "Outfit Piece": {
+        "Flags": 0,
+        "Item": {
+          "path": "assets/Characters/Quantum/Models/Clothing/Male/Pants/SKM_Sport_Pants.fbx",
+          "pathGuid": "c28a0a40272cd541"
+        },
+        "Slot": "Pants"
+      },
+      "id": 75,
+      "materials": [
+        {
+          "guid": "4a4ac6fabe21f2c8",
+          "path": "assets/characters/Quantum/Materials/Clothing/Pants/Pants_Sport/M_Sport_Pants_Black.mat"
+        }
+      ],
+      "name": "Pants",
+      "order": 93,
+      "parentId": 95,
+      "path": "assets/characters/Quantum/Models/Clothing/Male/Pants/SKM_Sport_Pants.fbx",
+      "pathGuid": "c28a0a40272cd541",
+      "position": [
+        0.0,
+        0.0,
+        0.0
+      ],
+      "rotation": [
+        0.0,
+        0.0,
+        0.0,
+        1.0
+      ],
+      "scale": [
+        1.0,
+        1.0,
+        1.0
+      ]
+    },
+    {
+      "Animator Controller": {
+        "Controller": {
+          "path": "assets/Animations/Controllers/fps_body_locomotion.controller",
+          "pathGuid": "f00ced2b8e9ec387"
+        },
+        "Speed": 1.0,
+        "Track": "",
+        "rootMotion": "In Place",
+        "rootMotionBone": "",
+        "rootMotionRotation": false,
+        "rootMotionVertical": false
+      },
+      "Outfit Piece": {
+        "Flags": 0,
+        "Item": {
+          "path": "assets/Characters/Quantum/Models/Clothing/Male/Shoes/SKM_Sneakers.fbx",
+          "pathGuid": "907719222c820ea8"
+        },
+        "Slot": "Shoes"
+      },
+      "id": 76,
+      "materials": [
+        {
+          "guid": "6ff7cafa7e9d186a",
+          "path": "assets/characters/Quantum/Materials/Clothing/Shoes/Sneakers/Sneakers_Leather/M_F_Sneakers_Leather_Black.mat"
+        }
+      ],
+      "name": "Shoes",
+      "order": 94,
+      "parentId": 95,
+      "path": "assets/characters/Quantum/Models/Clothing/Male/Shoes/SKM_Sneakers.fbx",
+      "pathGuid": "907719222c820ea8",
+      "position": [
+        0.0,
+        0.0,
+        0.0
+      ],
+      "rotation": [
+        0.0,
+        0.0,
+        0.0,
+        1.0
+      ],
+      "scale": [
+        1.0,
+        1.0,
+        1.0
+      ]
+    },
+    {
+      "Animator Controller": {
+        "Controller": {
+          "path": "assets/Animations/Controllers/fps_body_locomotion.controller",
+          "pathGuid": "f00ced2b8e9ec387"
+        },
+        "Speed": 1.0,
+        "Track": "",
+        "rootMotion": "In Place",
+        "rootMotionBone": "",
+        "rootMotionRotation": false,
+        "rootMotionVertical": false
+      },
+      "Outfit Piece": {
+        "Flags": 0,
+        "Item": {
+          "path": "assets/Characters/Quantum/Models/Clothing/Male/Shoes/SKM_Socks.fbx",
+          "pathGuid": "d2d9305f1b150870"
+        },
+        "Slot": "Socks"
+      },
+      "id": 77,
+      "materials": [
+        {
+          "guid": "475670f667a70b3b",
+          "path": "assets/characters/Quantum/Materials/Clothing/Shoes/Socks/M_Socks.mat"
+        }
+      ],
+      "name": "Socks",
+      "order": 95,
+      "parentId": 95,
+      "path": "assets/characters/Quantum/Models/Clothing/Male/Shoes/SKM_Socks.fbx",
+      "pathGuid": "d2d9305f1b150870",
+      "position": [
+        0.0,
+        0.0,
+        0.0
+      ],
+      "rotation": [
+        0.0,
+        0.0,
+        0.0,
+        1.0
+      ],
+      "scale": [
+        1.0,
+        1.0,
+        1.0
+      ]
+    }
+  ],
+  "motionBlur": false,
+  "motionBlurIntensity": 0.5,
+  "motionBlurSamples": 12,
+  "msaaSamples": 4,
+  "shadowCascades": 4,
+  "shadowDistance": 150.0,
+  "shadowResolution": 4096,
+  "shadowsEnabled": true,
+  "sky": {
+    "aerialPerspectiveScale": 6.0,
+    "altitudeOffsetMeters": 0.0,
+    "animateInEditor": false,
+    "atmosphereHeightKm": 100.0,
+    "atmosphereTintsSun": true,
+    "cirrusAltitudeMeters": 9000.0,
+    "cirrusCoverage": 0.3499999940395355,
+    "cirrusScale": 1.0,
+    "cloudAmbient": 1.0,
+    "cloudBaseMeters": 1500.0,
+    "cloudCoverage": 0.3799999952316284,
+    "cloudDensity": 1.0,
+    "cloudDetail": 0.44999998807907104,
+    "cloudForwardScattering": 0.800000011920929,
+    "cloudHorizonHaze": 0.019999999552965164,
+    "cloudMultiScattering": 1.0,
+    "cloudPowder": 0.3499999940395355,
+    "cloudQuality": 1,
+    "cloudScale": 1.0,
+    "cloudSeed": 0.0,
+    "cloudShadowStrength": 0.6000000238418579,
+    "cloudShadows": true,
+    "cloudThicknessMeters": 3000.0,
+    "cloudType": 0.44999998807907104,
+    "cloudWindDirection": 45.0,
+    "cloudWindShear": 0.6000000238418579,
+    "cloudWindSpeed": 8.0,
+    "clouds": true,
+    "dayLengthMinutes": 0.0,
+    "dayOfYear": 200.0,
+    "groundAlbedo": [
+      0.30000001192092896,
+      0.30000001192092896,
+      0.30000001192092896
+    ],
+    "latitude": 38.0,
+    "mieAbsorption": 1.0,
+    "mieAnisotropy": 0.800000011920929,
+    "mieHeightKm": 1.2000000476837158,
+    "mieScale": 1.0,
+    "moon": true,
+    "moonBrightness": 0.004000000189989805,
+    "moonDiscScale": 1.7999999523162842,
+    "moonPhaseOffset": 0.0,
+    "multipleScattering": 1.0,
+    "nightBrightness": 5.0,
+    "nightGlow": 0.019999999552965164,
+    "northOffset": 0.0,
+    "ozoneScale": 1.0,
+    "planetRadiusKm": 6360.0,
+    "rayleighHeightKm": 8.0,
+    "rayleighScale": 1.0,
+    "rayleighTint": [
+      1.0,
+      1.0,
+      1.0
+    ],
+    "seaLevel": 0.0,
+    "skyIntensity": 1.0,
+    "starsBrightness": 1.0,
+    "sunDiscBrightness": 1.0,
+    "sunDiscScale": 0.44999998807907104,
+    "timeOfDay": true,
+    "timeOfDayHours": 16.0
+  },
+  "skyAmbientIntensity": 1.0,
+  "skyHdriGuid": "28043ea394433649",
+  "skyHdriPath": "assets/sky/kloofendal_48d_partly_cloudy_puresky_4k.hdr",
+  "skyHorizonColor": [
+    0.699999988079071,
+    0.7599999904632568,
+    0.8399999737739563
+  ],
+  "skyRotationDegrees": 90.69999694824219,
+  "skySource": 2,
+  "skyZenithColor": [
+    0.2199999988079071,
+    0.41999998688697815,
+    0.7400000095367432
+  ],
+  "ssaoBias": 0.02500000037252903,
+  "ssaoEnabled": true,
+  "ssaoIntensity": 1.0,
+  "ssaoRadius": 0.5,
+  "tonemapOperator": 1,
+  "vignetteIntensity": 0.18000000715255737,
+  "vignetteSmoothness": 0.44999998807907104
+}
