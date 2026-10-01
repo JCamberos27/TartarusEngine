@@ -31,6 +31,8 @@ public:
     int Failures() const { return m_Failures; }
     // Non-empty on frames to capture: the file stem.
     const std::string& ShotName() const { return m_Shot; }
+    // NPC_TEST_RECORD=<dir>: every other frame of both views goes there as JPEGs (for a video).
+    const std::string& RecordDir() const { return m_RecordDir; }
     // Where to put the Scene view (false = leave it).
     bool SceneCamera(glm::vec3& pos, float& yaw, float& pitch) const;
     // The player's trigger this frame (the host feeds it to the weapon).
@@ -61,6 +63,7 @@ private:
     std::vector<std::string> m_BehavioursSeen;
     std::vector<std::string> m_Dead;
     std::string m_LastKill;
+    std::string m_RecordDir;
     float m_LastKillAt = -1e9f;
     int m_KillShots = 0;
     bool m_Firing = false;
