@@ -6,10 +6,12 @@
 #include "NavMesh.h"
 #include "Npc.h"
 #include "ShellCasings.h" // CasingSpawn
+#include "SquadVoice.h"
 
 #include <entt/entt.hpp>
 #include <glm/glm.hpp>
 
+#include <algorithm>
 #include <memory>
 #include <random>
 #include <string>
@@ -77,6 +79,11 @@ public:
     const NavMesh& Nav() const { return m_Nav; }
     const CoverSystem& Cover() const { return m_Cover; }
     CombatFx* Fx = nullptr;    // gun reports, flashes, tracers, whizzes (optional; the host owns it)
+    SquadVoice& Voice() { return m_Voice; }
+    const SquadVoice& Voice() const { return m_Voice; }
+    void SetDifficulty(float d) { m_Difficulty = std::clamp(d, 0.25f, 3.0f); }
+    float Difficulty() const { return m_Difficulty; }
+    int SquadSize() const { return m_SquadSize; }
     bool Frozen = false;       // the AI stops deciding (bodies and weapons still run)
     bool HoldFire = false;     // nobody shoots
     bool MeshChecksEverywhere = false; // the weapon hold checks the drawn body at any distance (tests)
@@ -125,7 +132,9 @@ private:
     void HandleShots(World& world, Npc& n, const PlayerSnapshot& p, const glm::vec3& muzzleShift);
     void ApplyDamage(World& world, Npc& n, float amount, HitZone zone, const glm::vec3& point, const glm::vec3& dir, int attacker);
     void Despawn(World& world, Npc& n);
-    void Callout(Npc& n, const char* line);
+    // A radio bark (SquadVoice picks the line, the channel and the cooldown). NpcDirectorVoice.cpp.
+    void Callout(Npc& n, Bark ev);
+    void UpdateVoice(const PlayerSnapshot& p);
     void Respawns(World& world, AssetLibrary& assets, const PlayerSnapshot& p);
     bool CanSee(const Npc& n, const glm::vec3& point) const; // a solid-world sight line
     void BuildNav(World& world);
@@ -162,4 +171,6 @@ private:
     // One cover search (raycasts + paths, the AI's priciest call) per frame across the squad: a second
     // soldier wanting one waits a frame, so a volley that sends everyone to cover is no spike.
     int m_Frame = 0, m_CoverSearchFrame = -1;
+    SquadVoice m_Voice;
+    bool m_PlayerWasDead = false;
 };
