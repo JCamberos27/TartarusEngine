@@ -51,6 +51,7 @@ struct NpcIntent {
     bool Suppress = false;         // shooting at where the player was, not at them
     bool Reload = false;
     float Lean = 0.0f;
+    float Cower = 0.0f;            // 0..1: duck from rounds cracking past (the body hunches, the head goes down)
 };
 
 struct Npc {
@@ -92,6 +93,9 @@ struct Npc {
     int VisiblePoints = 0;
     glm::vec3 SeenPoint{0.0f};      // the player's body point it can see best (chest, else head ...)
     float Suppression = 0.0f;       // 0..1
+    float CowerUntil = -1e9f;       // ducking from a near miss until then
+    glm::vec3 GlanceAt{0.0f};       // a squadmate who just called out: a look their way ...
+    float GlanceUntil = -1e9f;      // ... until then
     float ReactionLeft = 0.0f;      // hold fire this long after (re)acquiring
     bool HadSight = false;
     float LastOwnSight = -1e9f;     // when it last saw the player itself (not told by the squad)

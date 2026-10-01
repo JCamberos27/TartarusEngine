@@ -343,6 +343,14 @@ void NpcDirector::Callout(Npc& n, const char* line) {
     n.LastCallout = m_Now;
     n.Callout = line;
     n.CalloutAt = m_Now;
+    // Squadmates in earshot who aren't busy shooting glance toward whoever called.
+    std::uniform_real_distribution<float> unit(0.0f, 1.0f);
+    for (auto& o : m_Npcs) {
+        if (!o || o->Dead || o.get() == &n || o->Squad != n.Squad || o->Intent.Fire) continue;
+        if (glm::length(o->Feet - n.Feet) > 18.0f) continue;
+        o->GlanceAt = n.Eye;
+        o->GlanceUntil = m_Now + 0.7f + 0.6f * unit(m_Rng);
+    }
 }
 
 // --- per frame ----------------------------------------------------------------------------------
@@ -692,6 +700,7 @@ void NpcDirector::Move(World& world, Npc& n, float dt) {
     in.Crouched = n.Crouched;
     in.Sprint = n.Intent.Pace == Gait::Run && n.Intent.Move;
     in.Lean = n.Intent.Lean;
+    in.Cower = n.Intent.Cower;
     n.Body.Tick(world, in, dt);
 }
 
@@ -975,6 +984,10 @@ void NpcDirector::OnPlayerShotLine(const glm::vec3& origin, const glm::vec3& end
         const float d = glm::length(origin + seg * t - up->SightEye);
         if (d < 1.5f && t > 0.02f) {
             up->Suppression = std::min(1.0f, up->Suppression + 0.18f * (1.5f - d));
+            // A round within a metre makes most duck for a beat (the steadier, less often); not again straight away.
+            std::uniform_real_distribution<float> unit(0.0f, 1.0f);
+            if (d < 1.0f && m_Now > up->CowerUntil + 0.8f && unit(m_Rng) < 0.65f - 0.35f * up->Skill)
+                up->CowerUntil = m_Now + 0.35f + 0.3f * unit(m_Rng);
             if (!up->Mem.Known) {
                 up->Mem.Known = true;
                 up->Mem.Awareness = 1.0f;

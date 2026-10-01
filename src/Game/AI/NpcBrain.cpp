@@ -568,5 +568,12 @@ void NpcBrain::Run(NpcDirector& d, World& world, Npc& n, const PlayerSnapshot& p
     case Behaviour::Dead:
         break;
     }
+    // Reactions over whatever the behaviour wants: a duck from a near miss holds the trigger for its beat; a
+    // squadmate calling out draws a look while the gun is down.
+    if (now < n.CowerUntil) {
+        it.Cower = 1.0f;
+        it.Fire = false;
+    }
+    if (now < n.GlanceUntil && !it.Aim) it.LookPoint = n.GlanceAt;
     if (it.Move && !d.m_Nav.Valid()) it.Move = false;
 }
