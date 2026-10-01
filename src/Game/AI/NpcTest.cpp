@@ -1,6 +1,7 @@
 #include "NpcTest.h"
 
 #include "Combat/CombatFx.h"
+#include "DevPanel.h"
 #include "Combat/PlayerVitals.h"
 #include "FirstPersonBody.h"
 #include "FirstPersonPresentation.h"
@@ -28,6 +29,7 @@ static const char* EnvVar(const char* n) {
 NpcTest::NpcTest(const std::string& scenario) : m_Scenario(scenario.empty() ? "watch" : scenario) {
     if (m_Scenario == "fight") m_Duration = 75.0f;
     if (m_Scenario == "die") m_Duration = 60.0f;
+    if (m_Scenario == "sandbox") m_Duration = 40.0f;
     if (m_Scenario == "pose") m_Duration = 2.5f + (float)PosePhaseCount() * kPosePhaseTime + 1.0f;
     if (const char* t = EnvVar("NPC_TEST_SECONDS")) m_Duration = std::max(5.0f, (float)std::atof(t));
     if (const char* r = EnvVar("NPC_TEST_RECORD")) m_RecordDir = r;
@@ -49,7 +51,7 @@ void NpcTest::Drive(Player& player, FirstPersonPresentation& weapon, NpcDirector
     m_Firing = false;
     if (vitals.IsDead()) return;
     // Default: look north over the arena, toward the squad's end.
-    float wantYaw = -90.0f, wantPitch = -3.0f;
+    float wantYaw = m_Scenario == "sandbox" ? 180.0f : -90.0f, wantPitch = -3.0f; // sandbox: west, toward the squad
     if (m_Scenario == "fight") {
         // Shoot whoever is in sight: the nearest soldier with a clear line to its chest.
         const Npc* target = nullptr;
@@ -252,8 +254,30 @@ void NpcTest::After(World& world, NpcDirector& npcs, const PlayerVitals& vitals,
         }
     }
 
+    // Sandbox: the dev panel's Kill All, once the squad has been up a while.
+    if (m_Scenario == "sandbox") {
+        if (!m_DevKilled && now >= 20.0f) {
+            m_DevKilled = true;
+            m_DevKilledCount = DevPanel::KillAll(world, npcs);
+        }
+        if (m_DevKilled && now >= 20.5f && m_AliveAfterKill < 0) {
+            m_AliveAfterKill = alive;
+        }
+    }
+
     if (now >= m_Duration && !m_Done) {
         m_Done = true;
+        if (m_Scenario == "sandbox") {
+            std::printf("[NpcTest] sandbox: %d soldier(s) spawned, %zu spawn point(s), %zu cover points, %d radio line(s)\n", m_MaxAlive,
+                        npcs.SpawnPoints().size(), npcs.Cover().Points().size(), npcs.Voice().Spoken());
+            Check(m_MaxAlive >= 3, "the Sandbox squad spawned (" + std::to_string(m_MaxAlive) + " soldiers)");
+            Check(npcs.Nav().Valid() && npcs.Nav().PolyCount() > 0, "a navigation mesh was built for the Sandbox");
+            Check(!npcs.Cover().Points().empty(), "the Sandbox has cover (" + std::to_string(npcs.Cover().Points().size()) + " points)");
+            Check(m_DevKilledCount >= 3 && m_AliveAfterKill == 0, "Kill All killed the squad (" + std::to_string(m_DevKilledCount) + ", " + std::to_string(m_AliveAfterKill) + " left)");
+            CheckRadio(npcs);
+            std::fflush(stdout);
+            return;
+        }
         std::string seen;
         for (const auto& b : m_BehavioursSeen) seen += b + ", ";
         std::cout << "[NpcTest] behaviours seen: " << seen << std::endl;
@@ -273,11 +297,29 @@ void NpcTest::After(World& world, NpcDirector& npcs, const PlayerVitals& vitals,
             Check(npcs.Fx->WhizzesHeard() > 0, "rounds cracked past the player (" + std::to_string(npcs.Fx->WhizzesHeard()) + ")");
         }
         if (m_Scenario == "fight") Check(m_Kills > 0, "the player killed " + std::to_string(m_Kills) + " soldier(s)");
+        CheckRadio(npcs);
+        Check(npcs.Voice().Spoken() > 0, "the squad used the radio (" + std::to_string(npcs.Voice().Spoken()) + " lines)");
         if (m_Scenario == "die") {
             Check(m_PlayerDied, "the player was killed");
             Check(m_PlayerRespawned, "the player respawned");
         }
     }
+}
+
+// Radio: no squad ever had two lines on air at once (a cut line counts up to where it was cut), and the
+// lines spoken came from more than one kind of event.
+void NpcTest::CheckRadio(NpcDirector& npcs) {
+    int overlaps = 0;
+    for (int s = 0; s < 4; ++s) overlaps += npcs.Voice().FirstOverlap(s) >= 0 ? 1 : 0;
+    bool seen[(int)Bark::Count] = {};
+    int kinds = 0;
+    for (const BarkPlayed& b : npcs.Voice().History()) {
+        if (!seen[(int)b.Event]) { seen[(int)b.Event] = true; ++kinds; }
+        std::printf("[NpcTest] radio t=%6.2f squad %d UNIT-%d %-13s p%d%s%s \"%s\"\n", b.Start, b.Squad, b.Unit, BarkKey(b.Event), b.Priority,
+                    b.Responder ? " (copy)" : "", b.Cut >= 0.0f ? " (cut)" : "", b.Text.c_str());
+    }
+    Check(overlaps == 0, "no squad had two radio lines on air at once");
+    Check(kinds >= 2, "the radio carried " + std::to_string(kinds) + " kinds of call");
 }
 
 // --- pose: the weapon hold, close up ------------------------------------------------------------------
