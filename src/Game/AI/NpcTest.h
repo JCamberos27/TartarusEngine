@@ -42,9 +42,11 @@ public:
     bool Firing() const { return m_Firing; }
     bool Aiming() const { return !m_Target.empty(); }   // sights up (rounds go where the view looks)
     bool WantsReload() const { return m_Reload; }
+    bool WantsAiOverlay() const { return m_Scenario == "sandbox"; } // the AI overlay in the sandbox shots
 
 private:
     void Check(bool ok, const std::string& what);
+    void CheckRadio(NpcDirector& npcs);
     void Pose(World& world, NpcDirector& npcs, float now);
     std::string m_Scenario;
     float m_Time = 0.0f;
@@ -63,6 +65,8 @@ private:
     float m_FirstKnown = -1.0f, m_FirstDamage = -1.0f, m_FirstCover = -1.0f, m_FirstShot = -1.0f;
     int m_MaxAlive = 0, m_Kills = 0, m_Spawned = 0;
     bool m_PlayerDied = false, m_PlayerRespawned = false;
+    bool m_DevKilled = false;
+    int m_DevKilledCount = 0, m_AliveAfterKill = -1;
     float m_HealthSeen = 0.0f;
     std::vector<std::string> m_BehavioursSeen;
     std::vector<std::string> m_Dead;
