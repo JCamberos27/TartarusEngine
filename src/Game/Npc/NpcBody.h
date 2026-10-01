@@ -9,6 +9,8 @@
 #include <string>
 #include <vector>
 
+#include "Animation.h" // LocalTRS
+
 class Camera;
 class Model;
 class World;
@@ -142,7 +144,19 @@ private:
 
     // The weapon hold (NpcWeaponHold.cpp).
     NpcHoldSettings m_Set;
-    void RotateSpine(const glm::quat& modelDelta); // spread down the spine, on every piece
+    void RotateSpine(const glm::quat& modelDelta); // spread down the driver's spine (SyncPieces passes it on)
+    // The pose passes (spine aim, shoulder line, arms onto the gun, cheek weld) solve on the driver alone; this
+    // gives every other piece that draws the upper body the driver's rotations for it (one skeleton: the pieces'
+    // own solves came out the same, at several times the cost). Called whenever a piece is read or drawn next.
+    void SyncPieces();
+    bool m_PiecesStale = false;
+    std::vector<std::vector<std::pair<int, int>>> m_UpperMap; // per piece: (piece node, driver node), spine_01 and below
+    int m_DriverIndex = -1;
+    std::vector<int> m_DriverParents;                          // the driver's node parents
+    int m_DriverSpine[5] = {-1, -1, -1, -1, -1}, m_DriverSpineCount = 0;
+    // Scratch.
+    std::vector<glm::mat4> m_Globals;
+    std::vector<LocalTRS> m_Pose;
     enum class Region { Head, Torso };
     struct RegionPoint { glm::vec3 Pos; int Count; std::uint16_t Bone[4]; float Weight[4]; };
     struct RegionSkin { std::vector<int> Bones; std::vector<RegionPoint> Points; };

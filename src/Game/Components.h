@@ -849,6 +849,10 @@ struct AnimatorControllerComponent {
     // Follower mode: when set, this entity mirrors the driver's layers/states/times exactly and
     // evaluates no transitions of its own - the way a weapon rig stays locked to the arms.
     entt::entity Driver = entt::null;
+    // Follower only (runtime, not saved): take the driver's finished local pose, matched by node
+    // name, instead of sampling every clip again - for modular pieces cut from one skeleton (an
+    // NPC's outfit). Ignored when either rig has an IK Rig.
+    bool CopyDriverPose = false;
     // Keep updating while the entity is inactive (hidden rigs that must still leave a state).
     bool UpdateWhenInactive = false;
 

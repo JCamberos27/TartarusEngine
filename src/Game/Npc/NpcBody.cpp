@@ -78,9 +78,33 @@ bool NpcBody::Start(World& world, entt::entity root) {
     for (entt::entity e : m_Pieces) {
         auto& ac = reg.get<AnimatorControllerComponent>(e);
         ac.Driver = e == m_Driver ? entt::null : m_Driver;
+        ac.CopyDriverPose = e != m_Driver; // one skeleton: sample the clips once, on the torso
         ac.RootMotion.Mode = (int)RootMotionMode::InPlace;
     }
     m_Root = root;
+    for (size_t k = 0; k < m_Pieces.size(); ++k)
+        if (m_Pieces[k] == m_Driver) m_DriverIndex = (int)k;
+    {
+        const Model& d = *m_DriverModel;
+        m_DriverParents.resize((size_t)d.NodeCount());
+        for (int i = 0; i < d.NodeCount(); ++i) m_DriverParents[(size_t)i] = d.NodeParent(i);
+        m_DriverSpineCount = 0;
+        for (int k = 0; k < 5; ++k)
+            if (const int b = d.NodeIndex(FPBody::kBoneSpine[k]); b >= 0) m_DriverSpine[m_DriverSpineCount++] = b;
+        // The upper body: spine_01 and everything under it, mapped onto each piece by name.
+        std::vector<char> upper((size_t)d.NodeCount(), 0);
+        if (const int s = d.NodeIndex(FPBody::kBoneSpine[0]); s >= 0) upper[(size_t)s] = 1;
+        for (int i = 0; i < d.NodeCount(); ++i)
+            if (!upper[(size_t)i] && d.NodeParent(i) >= 0 && upper[(size_t)d.NodeParent(i)]) upper[(size_t)i] = 1;
+        m_UpperMap.assign(m_Models.size(), {});
+        for (size_t k = 0; k < m_Models.size(); ++k) {
+            if ((int)k == m_DriverIndex) continue;
+            const Model& m = *m_Models[k];
+            for (int i = 0; i < d.NodeCount(); ++i)
+                if (upper[(size_t)i])
+                    if (const int pn = m.NodeIndex(d.NodeName(i)); pn >= 0) m_UpperMap[k].push_back({pn, i});
+        }
+    }
     m_HoldStagger = (int)(entt::to_integral(root) % 3u);
     m_PieceSkins.assign(m_Models.size(), 0u);
     for (size_t k = 0; k < m_Models.size(); ++k) {
@@ -225,29 +249,24 @@ void NpcBody::LateUpdate(World& world, float dt, const Camera* weaponCam) {
         m_Straighten += (straighten - m_Straighten) * Follow(dt, 0.1f);
     }
 
-    // ... spread over the spine of every piece, so they stay one skeleton (each piece keeps its own
-    // bones' rest frames; the rotation is the same in model space).
-    std::vector<int> parents;
-    std::vector<glm::mat4> globals;
-    for (size_t pk = 0; pk < m_Models.size(); ++pk) {
-        if (!PieceTakes(pk, kSkinsSpine)) continue;
-        Model& m = *m_Models[pk];
-        IK::Pose pose = m.AppliedLocalPose();
-        if (pose.empty() || (int)pose.size() != m.NodeCount()) continue;
-        int spine[5], n = 0;
-        for (int k = 0; k < 5; ++k)
-            if (const int b = m.NodeIndex(FPBody::kBoneSpine[k]); b >= 0) spine[n++] = b;
-        if (n == 0) continue;
-        parents.resize(pose.size());
-        for (int i = 0; i < (int)pose.size(); ++i) parents[(size_t)i] = m.NodeParent(i);
-        IK::ComputeGlobals(pose, parents, globals);
-        // Rotating +Z about +X by theta gives (0, -sin, cos): looking up is a negative angle about X.
-        // The lean rolls about the body's forward (+Z): + = the top toward -X, the body's right.
-        const glm::quat step = glm::angleAxis(m_AimTwist / (float)n, glm::vec3(0, 1, 0)) *
-                               glm::angleAxis((m_Straighten - m_AimPitch) / (float)n, glm::vec3(1, 0, 0)) *
-                               glm::angleAxis(m_Lean * 0.38f / (float)n, glm::vec3(0, 0, 1));
-        for (int k = 0; k < n; ++k) IK::OffsetBone(pose, parents, globals, spine[k], glm::vec3(0.0f), step, IK::Position(globals[(size_t)spine[k]]));
-        m.ApplyLocalPose(pose);
+    // ... spread over the driver's spine; SyncPieces hands it to the other pieces (one skeleton).
+    {
+        Model& m = *m_DriverModel;
+        IK::Pose& pose = m_Pose;
+        pose = m.AppliedLocalPose();
+        const int n = m_DriverSpineCount;
+        if (n > 0 && (int)pose.size() == m.NodeCount()) {
+            IK::ComputeGlobals(pose, m_DriverParents, m_Globals);
+            // Rotating +Z about +X by theta gives (0, -sin, cos): looking up is a negative angle about X.
+            // The lean rolls about the body's forward (+Z): + = the top toward -X, the body's right.
+            const glm::quat step = glm::angleAxis(m_AimTwist / (float)n, glm::vec3(0, 1, 0)) *
+                                   glm::angleAxis((m_Straighten - m_AimPitch) / (float)n, glm::vec3(1, 0, 0)) *
+                                   glm::angleAxis(m_Lean * 0.38f / (float)n, glm::vec3(0, 0, 1));
+            for (int k = 0; k < n; ++k)
+                IK::OffsetBone(pose, m_DriverParents, m_Globals, m_DriverSpine[k], glm::vec3(0.0f), step, IK::Position(m_Globals[(size_t)m_DriverSpine[k]]));
+            m.ApplyLocalPose(pose);
+            m_PiecesStale = true;
+        }
     }
 
     // Armed, the chest takes the arms rig's stance: its shoulder line against the weapon's camera (the rig is

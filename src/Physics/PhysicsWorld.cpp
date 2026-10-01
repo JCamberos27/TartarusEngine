@@ -192,7 +192,8 @@ struct PhysicsState {
     // joint's other end be a static collider (#185 hardening).
     std::vector<PxJoint*> joints;
     // Ragdolls by id: their bodies and joints (released with the scene, or by DestroyRagdoll).
-    struct Ragdoll { std::vector<PxRigidDynamic*> Bodies; std::vector<PxJoint*> Joints; };
+    // Prev: each part's pose before the latest substep, so GetRagdollPart can interpolate like #168.
+    struct Ragdoll { std::vector<PxRigidDynamic*> Bodies; std::vector<PxJoint*> Joints; std::vector<PxTransform> Prev; };
     std::vector<Ragdoll> ragdolls;
     std::unordered_map<PxJoint*, std::uint32_t>       jointOwner;
     std::unordered_map<std::uint32_t, PxRigidStatic*> staticByEntity;
@@ -1165,6 +1166,10 @@ void RunOneSubstep(PhysicsState& s, float fixedStep) {
         s.preStepVel[body] = body->getLinearVelocity();
         s.prevPose[body] = body->getGlobalPose(); // #168
     }
+    for (auto& rd : s.ragdolls) {
+        rd.Prev.resize(rd.Bodies.size());
+        for (size_t i = 0; i < rd.Bodies.size(); ++i) rd.Prev[i] = rd.Bodies[i]->getGlobalPose();
+    }
     s.scene->simulate(fixedStep);
     s.scene->fetchResults(/*block=*/true);
     ++s.frameIndex;
@@ -1963,6 +1968,7 @@ void DestroyRagdoll(int ragdoll) {
     for (PxRigidDynamic* b : rd.Bodies) if (b) b->release();
     rd.Joints.clear();
     rd.Bodies.clear();
+    rd.Prev.clear();
 }
 
 void RagdollImpulse(int ragdoll, int part, const float impulse[3], const float point[3]) {
@@ -1977,7 +1983,15 @@ bool GetRagdollPart(int ragdoll, int part, float outPos[3], float outRotXYZW[4])
     if (!g_State || ragdoll < 0 || ragdoll >= (int)g_State->ragdolls.size()) return false;
     auto& rd = g_State->ragdolls[(size_t)ragdoll];
     if (part < 0 || part >= (int)rd.Bodies.size()) return false;
-    const PxTransform t = rd.Bodies[(size_t)part]->getGlobalPose();
+    PxTransform t = rd.Bodies[(size_t)part]->getGlobalPose();
+    // Drawn between the last two substeps (#168), so a body falling at 240 fps doesn't step at 60.
+    if ((size_t)part < rd.Prev.size() && PoseIsFinite(rd.Prev[(size_t)part]) && PoseIsFinite(t)) {
+        const float alpha = std::clamp(g_State->stepAccumulator / FixedStep(), 0.0f, 1.0f);
+        const PxTransform& a = rd.Prev[(size_t)part];
+        t.p = a.p + (t.p - a.p) * alpha;
+        const glm::quat q = glm::slerp(glm::quat(a.q.w, a.q.x, a.q.y, a.q.z), glm::quat(t.q.w, t.q.x, t.q.y, t.q.z), alpha);
+        t.q = PxQuat(q.x, q.y, q.z, q.w);
+    }
     outPos[0] = t.p.x; outPos[1] = t.p.y; outPos[2] = t.p.z;
     outRotXYZW[0] = t.q.x; outRotXYZW[1] = t.q.y; outRotXYZW[2] = t.q.z; outRotXYZW[3] = t.q.w;
     return true;

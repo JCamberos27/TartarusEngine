@@ -87,6 +87,8 @@ void EditorSettings::Load() {
     s.VSyncMode = SafeValue(root, "vsyncMode", s.VSyncMode);
     s.FpsLimit = SafeValue(root, "fpsLimit", s.FpsLimit);
     s.UnfocusedFpsLimit = SafeValue(root, "unfocusedFpsLimit", s.UnfocusedFpsLimit);
+    s.RenderHeight = std::clamp(SafeValue(root, "renderHeight", s.RenderHeight), 0, 4320);
+    s.RenderSharpness = std::clamp(SafeValue(root, "renderSharpness", s.RenderSharpness), 0.0f, 1.0f);
     s.FullscreenMode = std::clamp(SafeValue(root, "fullscreenMode", s.FullscreenMode), 0, 1);
     s.FullscreenMonitor = std::clamp(SafeValue(root, "fullscreenMonitor", s.FullscreenMonitor), -1, 15);
     if (auto wp = root.find("windowPlacement"); wp != root.end() && wp->is_object()) {
@@ -244,6 +246,8 @@ void EditorSettings::Flush() {
     root["vsyncMode"] = Get().VSyncMode;
     root["fpsLimit"] = Get().FpsLimit;
     root["unfocusedFpsLimit"] = Get().UnfocusedFpsLimit;
+    root["renderHeight"] = Get().RenderHeight;
+    root["renderSharpness"] = Get().RenderSharpness;
     root["fullscreenMode"] = Get().FullscreenMode;
     root["fullscreenMonitor"] = Get().FullscreenMonitor;
     if (Get().WindowPlacementValid) {

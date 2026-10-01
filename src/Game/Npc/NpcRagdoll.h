@@ -6,6 +6,8 @@
 #include <memory>
 #include <vector>
 
+#include "Animation.h" // LocalTRS
+
 class Model;
 class NpcBody;
 
@@ -35,8 +37,14 @@ private:
         std::shared_ptr<Model> M;
         std::vector<int> Node;       // per part: the piece's node (-1 = none)
         std::vector<glm::mat4> Off;  // per part: node world = part world * Off
+        std::vector<int> Parents;    // the model's node parents (filled on first use)
     };
     int m_Id = -1;
     glm::mat4 m_RootInv{1.0f};       // the body's root (frozen at death), inverted
     std::vector<PieceBones> m_Pieces;
+    bool m_Settled = false;          // asleep, and the pieces already show the resting pose
+    // Scratch, reused every frame.
+    std::vector<glm::mat4> m_Globals;
+    std::vector<std::pair<int, int>> m_Order;
+    std::vector<LocalTRS> m_Pose;
 };
