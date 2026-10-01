@@ -52,6 +52,8 @@ public:
         std::string Shot;                  // a capture name for this frame (--smoke-shots)
         glm::vec2 Move{0.0f};              // the move keys (x right, y forward, -1..1), held until changed
         bool Sprint = false;               // ... and Sprint
+        bool Crouch = false;               // ... and Crouch
+        int View = 0;                      // stock probe's Scene camera: 0 on the stock, 1 right side, 2 front right, 3 front left (whole body)
         bool Trigger = false;              // the trigger held down (full auto), until changed
         bool Saw(const std::string& state) const;
         const std::string& State() const;
@@ -76,6 +78,7 @@ public:
     bool Aim() const { return m_Ctx.Aim; }
     glm::vec2 Move() const { return m_Ctx.Move; }
     bool Sprint() const { return m_Ctx.Sprint; }
+    bool Crouch() const { return m_Ctx.Crouch; }
     void OnHit(const glm::vec3& point);
     // Once per Play frame after the cases have moved: notes this frame's ejections and the pile.
     void OnCasings(const ShellCasings& casings);
@@ -134,4 +137,5 @@ private:
     float m_SceneCamYaw = 0.0f, m_SceneCamPitch = 0.0f;
     void PrintSample(const std::string& label) const;
     void BuildProbe();
+    void BuildPoseProbe(); // STOCK_PROBE_POSE=1: the third-person body standing / crouched, at the hip and on the sights
 };
