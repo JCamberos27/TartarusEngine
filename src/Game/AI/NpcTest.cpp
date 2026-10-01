@@ -23,6 +23,7 @@ NpcTest::NpcTest(const std::string& scenario) : m_Scenario(scenario.empty() ? "w
     if (m_Scenario == "fight") m_Duration = 75.0f;
     if (m_Scenario == "die") m_Duration = 60.0f;
     if (const char* t = EnvVar("NPC_TEST_SECONDS")) m_Duration = std::max(5.0f, (float)std::atof(t));
+    if (const char* r = EnvVar("NPC_TEST_RECORD")) m_RecordDir = r;
     std::cout << "[NpcTest] scenario '" << m_Scenario << "', " << m_Duration << " s" << std::endl;
 }
 

@@ -78,7 +78,15 @@ void CombatFx::Start(World& world) {
                               glm::vec3(1.0f, 0.55f, 0.2f), 1.0f, 0.6f, 14.0f, 1);
 }
 
+void CombatFx::SetAudioLog(const std::string& path) {
+    if (m_Log) std::fclose(m_Log);
+    m_Log = nullptr;
+#pragma warning(suppress : 4996)
+    if (!path.empty()) m_Log = std::fopen(path.c_str(), "w");
+}
+
 void CombatFx::Stop(World& world) {
+    if (m_Log) std::fflush(m_Log);
     for (Flash& f : m_Flashes)
         if (world.Registry.valid(f.Light)) world.DestroyEntityAndChildren(f.Light);
     m_Flashes.clear();
@@ -91,6 +99,9 @@ void CombatFx::Stop(World& world) {
 
 void CombatFx::PlaySound(const std::string& file, const glm::vec3& pos, bool at2D, float volume, float pitch, float minDist,
                          float maxDist) {
+    if (m_Log)
+        std::fprintf(m_Log, "S %.4f %s %.3f %.3f %d %.3f %.3f %.3f %.2f %.2f\n", m_Now, file.c_str(), volume, pitch, at2D ? 1 : 0, pos.x,
+                     pos.y, pos.z, minDist, maxDist);
     if (!AudioEngine::IsInitialized()) return;
     const AudioEngine::SoundHandle h = AudioEngine::Play(Path(file), std::clamp(volume, 0.0f, 1.0f), false, AudioEngine::Bus::SFX);
     if (h == AudioEngine::InvalidHandle) return;
@@ -196,6 +207,9 @@ void CombatFx::Play(Cue cue, const glm::vec3& pos, bool at2D, float volume) {
 
 void CombatFx::Update(World& world, float dt) {
     if (!m_Active) return;
+    if (m_Log)
+        std::fprintf(m_Log, "L %.4f %.3f %.3f %.3f %.3f %.3f %.3f\n", m_Now, m_Listener.x, m_Listener.y, m_Listener.z, m_ListenerFwd.x,
+                     m_ListenerFwd.y, m_ListenerFwd.z);
     m_Now += dt;
     for (Flash& f : m_Flashes) {
         if (!world.Registry.valid(f.Light)) continue;
