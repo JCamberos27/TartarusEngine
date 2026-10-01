@@ -494,6 +494,14 @@ struct FirstPersonControllerComponent {
     glm::vec3 ViewModelRotation{0.0f};
     float ViewModelScale = 1.0f;
     float ViewModelFov = 60.0f;
+    // The player's health (Combat/PlayerVitals.h): enemies' rounds take it, it comes back
+    // RegenRate per second after RegenDelay seconds unhurt, and at 0 the player dies and respawns
+    // here RespawnDelay seconds later, untouchable for SpawnProtection seconds.
+    float MaxHealth = 100.0f;
+    float RegenDelay = 5.0f;
+    float RegenRate = 30.0f;
+    float RespawnDelay = 3.0f;
+    float SpawnProtection = 2.0f;
 };
 
 // True first person (FirstPersonBody.h): the player's own full body, drawn in the world under the
@@ -984,6 +992,33 @@ struct ScoreboardComponent {
 // A seven-segment digit showing one place of a team's score. Its children named "Seg A" .. "Seg G"
 // (the standard segment letters: A top, B top right, C bottom right, D bottom, E bottom left,
 // F top left, G middle) light up by raising their material's emission.
+// Hit points. Rounds that hit an entity with one take Current down (Combat/Damage.h); at 0 it
+// is dead. Current is runtime-only: it starts at Max each Play.
+struct HealthComponent {
+    float Max = 100.0f;
+    bool Invulnerable = false;
+    // --- runtime (not serialized)
+    float Current = -1.0f; // < 0 = not started yet (reads as Max)
+};
+
+// Where an enemy soldier appears in Play (Npc/NpcSpawner.h). The enemy squad is built from these.
+struct NpcSpawnComponent {
+    int Weapon = 0;        // 0 = AKS-74U, 1 = Remington 870, 2 = either, picked at random
+    int Squad = 0;         // NPCs with the same Squad fight together
+    float Skill = 0.5f;    // 0 (green) .. 1 (veteran): reaction, accuracy, aggression
+    int OutfitSeed = 0;    // 0 = a random outfit each Play
+    int Brain = 0;         // 0 = the squad AI, 1 = a training dummy (stands still, takes hits)
+};
+
+// The fight's rules, on any object in the scene (the first one counts).
+struct SquadSettingsComponent {
+    int SquadSize = 4;            // NPCs alive at once, refilled from the spawns
+    float RespawnDelay = 8.0f;    // seconds before a dead NPC's replacement appears
+    float Difficulty = 1.0f;      // scales the NPCs' accuracy and reaction
+    float NpcDamageScale = 0.45f; // NPC rounds do this much of the weapon's damage to the player
+    bool Respawn = true;          // false: dead NPCs stay dead
+};
+
 struct ScoreDigitComponent {
     int Team = 0;             // 0 = Home, 1 = Away
     int Place = 0;            // 0 = ones, 1 = tens (blank while the score is under 10)

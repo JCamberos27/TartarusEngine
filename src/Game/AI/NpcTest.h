@@ -1,0 +1,72 @@
+#pragma once
+
+#include <glm/glm.hpp>
+
+#include <string>
+#include <vector>
+
+class FirstPersonPresentation;
+class NpcDirector;
+class Player;
+class PlayerVitals;
+class World;
+
+// --npc-test [scenario] [--smoke-shots dir]: the enemy squad, headless, in scenes/Arena.json. The host
+// enters Play, hands the player to this script each frame (Drive), and reports (After). It logs what
+// every soldier is doing, checks the fight works end to end, and frames the Scene view on the soldiers
+// for screenshots.
+//   watch   (default) the player stands at the spawn, untouchable: the squad notices, takes cover, shoots
+//   fight   the player shoots back at whoever it can see; the squad takes losses and replaces them
+//   die     the player stands in the open and can be killed: death and respawn
+class NpcTest {
+public:
+    explicit NpcTest(const std::string& scenario);
+
+    // Before Player::Update: the move keys (ScriptedMove), the view, the trigger.
+    void Drive(Player& player, FirstPersonPresentation& weapon, NpcDirector& npcs, PlayerVitals& vitals, float dt);
+    // After everyone's late pose: checks and the log.
+    void After(World& world, NpcDirector& npcs, const PlayerVitals& vitals, const Player& player);
+    bool Done() const { return m_Done; }
+    int Checks() const { return m_Checks; }
+    int Failures() const { return m_Failures; }
+    // Non-empty on frames to capture: the file stem.
+    const std::string& ShotName() const { return m_Shot; }
+    // Where to put the Scene view (false = leave it).
+    bool SceneCamera(glm::vec3& pos, float& yaw, float& pitch) const;
+    // The player's trigger this frame (the host feeds it to the weapon).
+    bool Firing() const { return m_Firing; }
+    bool Aiming() const { return !m_Target.empty(); }   // sights up (rounds go where the view looks)
+    bool WantsReload() const { return m_Reload; }
+
+private:
+    void Check(bool ok, const std::string& what);
+    std::string m_Scenario;
+    float m_Time = 0.0f;
+    float m_Duration = 45.0f;
+    bool m_Done = false;
+    int m_Checks = 0, m_Failures = 0;
+    std::string m_Shot;
+    float m_NextLog = 0.0f;
+    float m_NextShot = 0.0f;
+    int m_ShotIndex = 0;
+    int m_Focus = 0;          // which soldier the Scene view follows
+    glm::vec3 m_CamPos{0.0f};
+    float m_CamYaw = 0.0f, m_CamPitch = 0.0f;
+    bool m_HaveCam = false;
+    // What happened.
+    float m_FirstKnown = -1.0f, m_FirstDamage = -1.0f, m_FirstCover = -1.0f, m_FirstShot = -1.0f;
+    int m_MaxAlive = 0, m_Kills = 0, m_Spawned = 0;
+    bool m_PlayerDied = false, m_PlayerRespawned = false;
+    float m_HealthSeen = 0.0f;
+    std::vector<std::string> m_BehavioursSeen;
+    std::vector<std::string> m_Dead;
+    std::string m_LastKill;
+    float m_LastKillAt = -1e9f;
+    int m_KillShots = 0;
+    bool m_Firing = false;
+    float m_FireHold = 0.0f;
+    float m_AimErr = -1.0f;
+    bool m_Reload = false;
+    std::string m_Target;
+    int m_PlayerShots = 0;
+};

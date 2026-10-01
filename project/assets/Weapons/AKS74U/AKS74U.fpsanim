@@ -30,6 +30,14 @@
     "trigger": "shot"
   },
   "gameplay": {
+    "damage": {
+      "base": 34.0,
+      "head": 3.0,
+      "limb": 0.75,
+      "falloffStart": 25.0,
+      "falloffEnd": 60.0,
+      "falloffMin": 0.6
+    },
     "allowFullAuto": true,
     "impactImpulse": 5.0,
     "impactMaxSpeed": 7.0,

@@ -1,5 +1,6 @@
 #pragma once
 #include <functional>
+#include <vector>
 
 // PhysX 5 simulation world — created when Play mode starts, destroyed when it ends (#185).
 //
@@ -88,6 +89,62 @@ bool ResizeCharacter(float cylinderHalfHeight);
 // Whether the capsule, at that cylinder half-height and the current foot position, is clear of
 // solid geometry (triggers and the character itself ignored): standing up from a crouch.
 bool CharacterFitsAt(float cylinderHalfHeight);
+
+// --- NPC characters ------------------------------------------------------------------
+// More kinematic capsules, one per AI character, beside the Player's. Each is tagged with its
+// owner entity (so shots that hit it report that entity) and sits on the Default layer. They
+// don't ride platforms or fire the Player's trigger overlap. Ids are small ints, -1 = none;
+// all released with the world.
+using CharacterId = int;
+constexpr CharacterId kNoCharacter = -1;
+CharacterId CreateNpcCharacter(unsigned entity, float radius, float cylinderHalfHeight, const float footPos[3]);
+void     DestroyNpcCharacter(CharacterId id);
+unsigned MoveNpcCharacter(CharacterId id, const float disp[3], float dt);
+void     SetNpcFootPosition(CharacterId id, const float footPos[3]);
+bool     GetNpcCapsule(CharacterId id, float outFootPos[3], float* outRadius, float* outCylHalfHeight);
+bool     ResizeNpcCharacter(CharacterId id, float cylinderHalfHeight);
+bool     NpcFitsAt(CharacterId id, float cylinderHalfHeight);
+// The NPC character owned by `entity`, or kNoCharacter.
+CharacterId NpcCharacterOf(unsigned entity);
+
+// --- Ragdolls ------------------------------------------------------------------------
+// A dead character's body as jointed capsules (Npc/NpcRagdoll.h). Each part is a capsule along its
+// local +X, posed in world space; part 0 is the root, every other names its parent, and a D6 joint at
+// `Anchor` (world) lets it swing `SwingDeg` and twist `TwistDeg` about the parent. The parts don't
+// collide with each other (only the world), and report `entity` when queries or contacts hit them.
+struct RagdollPart {
+    int Parent = -1;
+    float Position[3] = {0, 0, 0};
+    float Rotation[4] = {0, 0, 0, 1}; // xyzw
+    float HalfLength = 0.1f, Radius = 0.05f, Mass = 1.0f;
+    float Anchor[3] = {0, 0, 0};
+    float SwingDeg = 45.0f, TwistDeg = 20.0f;
+    float Velocity[3] = {0, 0, 0};
+};
+int  CreateRagdoll(unsigned entity, const RagdollPart* parts, int count); // -1 on failure
+void DestroyRagdoll(int ragdoll);
+void RagdollImpulse(int ragdoll, int part, const float impulse[3], const float point[3]);
+bool GetRagdollPart(int ragdoll, int part, float outPos[3], float outRotXYZW[4]);
+bool RagdollAsleep(int ragdoll);
+
+// Who scene queries may hit, for the calls made while one of these is alive (innermost wins,
+// per thread). By default a query never hits the Player capsule; an NPC's own queries set
+// `ignoreEntity` to itself (its capsule and hitboxes) and `hitPlayer` so its shots and sight
+// rays can reach the Player. `hitCharacters` false skips every NPC capsule. The *Solid queries
+// always skip NPC capsules - a character isn't cover or ground.
+class ScopedQueryPolicy {
+public:
+    ScopedQueryPolicy(unsigned ignoreEntity, bool hitPlayer, bool hitCharacters = true);
+    ~ScopedQueryPolicy();
+    ScopedQueryPolicy(const ScopedQueryPolicy&) = delete;
+    ScopedQueryPolicy& operator=(const ScopedQueryPolicy&) = delete;
+};
+
+// Every solid, unmoving shape in the scene (static actors, plus kinematic ones when asked) as
+// world-space triangles, for building a navigation mesh: boxes, convex and triangle meshes and
+// heightfields exactly, spheres and capsules as their bounding boxes. Triggers, characters and
+// simulated bodies are left out. Appends to `verts` (xyz) / `tris` (indices); returns the triangles added.
+int CollectStaticGeometry(std::vector<float>& verts, std::vector<int>& tris, bool includeKinematic);
 
 // --- Triggers (#185 PR 5) --------------------------------------------------------------
 // Step() rebuilds this frame's enter/stay/exit list from PhysX's onTrigger callback (dynamic
