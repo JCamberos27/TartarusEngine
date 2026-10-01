@@ -39,6 +39,7 @@ constexpr float kLimpTime = 6.0f;
 constexpr float kStaggerTime = 0.4f;        // aim paused
 constexpr float kHeavyHit = 40.0f;          // damage that staggers
 constexpr float kHitboxRange = 60.0f;       // m from the player: soldiers further off keep only their capsule
+constexpr float kFootIKRange = 25.0f;       // m: soldiers this close (and in view) put their feet on uneven ground
 constexpr float kMeshCheckRange = 12.0f;    // m: the weapon hold checks the gun and elbows against the drawn body this close
                                             // (further off, 2 cm is a pixel or two; the hold's sphere keep-outs still apply)
 constexpr float kMeleeTime = 0.55f;         // a rifle-butt strike, wind-up to recovery
@@ -902,6 +903,7 @@ void NpcDirector::Move(World& world, Npc& n, float dt) {
     in.Sprint = n.Intent.Pace == Gait::Run && n.Intent.Move;
     in.Lean = n.Intent.Lean;
     in.Cower = n.Intent.Cower;
+    in.FootIK = FootIKEverywhere || (n.PlayerDist < kFootIKRange && n.OnScreen); // feet on slopes and steps where they can be seen
     n.Body.Tick(world, in, dt);
 }
 
