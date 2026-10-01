@@ -4763,14 +4763,19 @@
         "Jump Buffer Time": 0.11999999731779099,
         "Jump Speed": 5.5,
         "Kill Height": -20.0,
+        "Max Health": 100.0,
         "Max Throw Speed": 16.0,
         "Min Throw Speed": 3.5,
         "Mouse Sensitivity": 0.05000000074505806,
         "Move Speed": 4.0,
+        "Regen Delay": 5.0,
+        "Regen Rate": 30.0,
+        "Respawn Delay": 3.0,
         "Secondary Animation Set": {
           "path": "assets/Weapons/Remington870/Remington870.fpsanim",
           "pathGuid": "4e3925bded078f9a"
         },
+        "Spawn Protection": 2.0,
         "Sprint Multiplier": 1.600000023841858,
         "Throw Backspin": 2.0,
         "Throw Charge Time": 1.100000023841858,
@@ -4951,9 +4956,45 @@
       ]
     },
     {
+      "Squad Settings": {
+        "Difficulty": 1.0,
+        "NPC Damage Scale": 0.44999998807907104,
+        "Respawn": true,
+        "Respawn Delay": 8.0,
+        "Squad Size": 4
+      },
       "id": 97,
-      "name": "Enemy Spawn 1",
+      "name": "AI Director",
       "order": 97,
+      "parentId": 96,
+      "position": [
+        0.0,
+        0.0,
+        -30.0
+      ],
+      "rotation": [
+        0.0,
+        0.0,
+        0.0,
+        1.0
+      ],
+      "scale": [
+        1.0,
+        1.0,
+        1.0
+      ]
+    },
+    {
+      "NPC Spawn": {
+        "Brain": "Squad AI",
+        "Outfit Seed": 0,
+        "Skill": 0.6000000238418579,
+        "Squad": 0,
+        "Weapon": "AKS-74U"
+      },
+      "id": 98,
+      "name": "Enemy Spawn 1",
+      "order": 98,
       "parentId": 96,
       "position": [
         -20.0,
@@ -4973,9 +5014,16 @@
       ]
     },
     {
-      "id": 98,
+      "NPC Spawn": {
+        "Brain": "Squad AI",
+        "Outfit Seed": 0,
+        "Skill": 0.550000011920929,
+        "Squad": 0,
+        "Weapon": "Remington 870"
+      },
+      "id": 99,
       "name": "Enemy Spawn 2",
-      "order": 98,
+      "order": 99,
       "parentId": 96,
       "position": [
         -10.0,
@@ -4995,9 +5043,16 @@
       ]
     },
     {
-      "id": 99,
+      "NPC Spawn": {
+        "Brain": "Squad AI",
+        "Outfit Seed": 0,
+        "Skill": 0.699999988079071,
+        "Squad": 0,
+        "Weapon": "AKS-74U"
+      },
+      "id": 100,
       "name": "Enemy Spawn 3",
-      "order": 99,
+      "order": 100,
       "parentId": 96,
       "position": [
         0.0,
@@ -5017,9 +5072,16 @@
       ]
     },
     {
-      "id": 100,
+      "NPC Spawn": {
+        "Brain": "Squad AI",
+        "Outfit Seed": 0,
+        "Skill": 0.6000000238418579,
+        "Squad": 0,
+        "Weapon": "AKS-74U"
+      },
+      "id": 101,
       "name": "Enemy Spawn 4",
-      "order": 100,
+      "order": 101,
       "parentId": 96,
       "position": [
         10.0,
@@ -5039,9 +5101,16 @@
       ]
     },
     {
-      "id": 101,
+      "NPC Spawn": {
+        "Brain": "Squad AI",
+        "Outfit Seed": 0,
+        "Skill": 0.550000011920929,
+        "Squad": 0,
+        "Weapon": "Remington 870"
+      },
+      "id": 102,
       "name": "Enemy Spawn 5",
-      "order": 101,
+      "order": 102,
       "parentId": 96,
       "position": [
         20.0,

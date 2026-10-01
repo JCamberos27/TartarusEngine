@@ -93,6 +93,8 @@ PxFilterFlags EngineFilterShader(
         const PxU32 la = filterData0.word1 & 31u, lb = filterData1.word1 & 31u;
         if (((mask[la] >> lb) & 1u) == 0u) return PxFilterFlag::eKILL;
     }
+    // The parts of one ragdoll (word2 = its id + 1) never collide with each other.
+    if (filterData0.word2 != 0u && filterData0.word2 == filterData1.word2) return PxFilterFlag::eKILL;
     if (PxFilterObjectIsTrigger(attributes0) || PxFilterObjectIsTrigger(attributes1)) {
         pairFlags = PxPairFlag::eTRIGGER_DEFAULT;
         return PxFilterFlag::eDEFAULT;
@@ -158,6 +160,11 @@ struct PhysicsState {
     PxMaterial*           defaultMaterial = nullptr;
     PxControllerManager*  controllerMgr = nullptr; // #185 PR 3
     PxController*         controller    = nullptr; // the Play-mode Player's capsule (lazy)
+    // NPC capsules, indexed by CharacterId (a released slot stays null). npcActors: their actors,
+    // for the query filters that skip characters.
+    struct NpcCharacter { PxController* ctrl = nullptr; std::uint32_t entity = 0xFFFFFFFFu; };
+    std::vector<NpcCharacter>               npcs;
+    std::unordered_set<const PxRigidActor*> npcActors;
     // #185 PR 4 — RigidbodyComponent entities. Force-driven bodies get their pose written back
     // to TransformComponent after each Step; kinematic bodies are driven the other way, from
     // TransformComponent, before it. Actors themselves are owned by the scene.
@@ -184,6 +191,9 @@ struct PhysicsState {
     // back to the entity that authored it, for a useful break message. staticByEntity lets a
     // joint's other end be a static collider (#185 hardening).
     std::vector<PxJoint*> joints;
+    // Ragdolls by id: their bodies and joints (released with the scene, or by DestroyRagdoll).
+    struct Ragdoll { std::vector<PxRigidDynamic*> Bodies; std::vector<PxJoint*> Joints; };
+    std::vector<Ragdoll> ragdolls;
     std::unordered_map<PxJoint*, std::uint32_t>       jointOwner;
     std::unordered_map<std::uint32_t, PxRigidStatic*> staticByEntity;
     // Dynamic bodies with at least one joint: solved with more iterations, and grabbed gently.
@@ -1037,7 +1047,9 @@ void Destroy() {
     // Reverse construction order. scene->release() drops every actor/shape it owns. The core
     // (physics, dispatcher, materials, cooked meshes) stays up for the next Play (#167).
     for (PxJoint* j : s->joints)               if (j) j->release(); // #185 PR 11 — before the scene
+    for (auto& r : s->ragdolls) for (PxJoint* j : r.Joints) if (j) j->release();
     if (s->controller)      s->controller->release();
+    for (auto& n : s->npcs) if (n.ctrl) n.ctrl->release();
     if (s->controllerMgr)   s->controllerMgr->release();
     if (s->scene)           s->scene->release();
 
@@ -1290,13 +1302,31 @@ void Step(float dt, World& world, const std::function<void(float fixedDt)>& onFi
             PushTriggerEvent(*g_State, TriggerEvent::Stay, t, kPlayerEntity);
 }
 
+// ScopedQueryPolicy's stack (see the header). Empty = the default: skip the Player, hit NPCs.
+struct QueryPolicy { std::uint32_t ignoreEntity = 0xFFFFFFFFu; bool hitPlayer = false; bool hitCharacters = true; };
+thread_local std::vector<QueryPolicy> t_QueryPolicy;
+
+const PxRigidActor* PlayerActor();
+
+// Whether the active policy drops `actor` from a query. `solidOnly`: the query is after the solid
+// world, so characters never count.
+bool PolicyRejects(const PxRigidActor* actor, bool solidOnly = false) {
+    if (!actor || !g_State) return false;
+    const QueryPolicy p = t_QueryPolicy.empty() ? QueryPolicy{} : t_QueryPolicy.back();
+    if (actor == PlayerActor()) return !p.hitPlayer || solidOnly;
+    if (p.ignoreEntity != 0xFFFFFFFFu && UserDataToEntity(actor->userData) == p.ignoreEntity) return true;
+    if ((solidOnly || !p.hitCharacters) && g_State->npcActors.count(actor)) return true;
+    return false;
+}
+
 // Drop the Player capsule from scene queries — a "from the player" ray/sweep almost never
 // wants to hit itself, and its shape sits right on the query origin (#185 hardening).
 struct ExcludeActorFilter : PxQueryFilterCallback {
     const PxRigidActor* skip = nullptr;
     PxQueryHitType::Enum preFilter(const PxFilterData&, const PxShape*, const PxRigidActor* actor,
                                    PxHitFlags&) override {
-        return (actor && actor == skip) ? PxQueryHitType::eNONE : PxQueryHitType::eBLOCK;
+        if (actor && actor == skip) return PxQueryHitType::eNONE;
+        return PolicyRejects(actor) ? PxQueryHitType::eNONE : PxQueryHitType::eBLOCK;
     }
     PxQueryHitType::Enum postFilter(const PxFilterData&, const PxQueryHit&, const PxShape*,
                                     const PxRigidActor*) override {
@@ -1316,7 +1346,7 @@ bool Raycast(const float origin[3], const float dir[3], float maxDistance, Rayca
     if (len < 1e-8f || maxDistance <= 0.0f) return false;
     d *= (1.0f / len);
 
-    ExcludeActorFilter filter; filter.skip = PlayerActor();
+    ExcludeActorFilter filter; // the Player is skipped through PolicyRejects (unless a policy says otherwise)
     PxQueryFilterData fd(PxQueryFlag::eSTATIC | PxQueryFlag::eDYNAMIC | PxQueryFlag::ePREFILTER);
     PxRaycastBuffer buf;
 
@@ -1574,7 +1604,7 @@ bool SphereCast(const float origin[3], const float dir[3], float radius, float m
     if (len < 1e-8f) return false;
     d *= (1.0f / len);
 
-    ExcludeActorFilter filter; filter.skip = PlayerActor();
+    ExcludeActorFilter filter; // the Player is skipped through PolicyRejects (unless a policy says otherwise)
     PxQueryFilterData fd(PxQueryFlag::eSTATIC | PxQueryFlag::eDYNAMIC | PxQueryFlag::ePREFILTER);
     PxSweepBuffer buf;
     const PxTransform pose(PxVec3(origin[0], origin[1], origin[2]));
@@ -1647,6 +1677,7 @@ struct LayerQueryFilter : PxQueryFilterCallback {
     PxQueryHitType::Enum preFilter(const PxFilterData&, const PxShape* shape, const PxRigidActor* actor,
                                    PxHitFlags&) override {
         if (actor && actor == skip) return PxQueryHitType::eNONE;
+        if (PolicyRejects(actor, skipSimulated)) return PxQueryHitType::eNONE;
         if (skipSimulated && actor) {
             if (const PxRigidDynamic* dyn = actor->is<PxRigidDynamic>();
                 dyn && !(dyn->getRigidBodyFlags() & PxRigidBodyFlag::eKINEMATIC))
@@ -1666,8 +1697,7 @@ struct LayerQueryFilter : PxQueryFilterCallback {
 };
 
 LayerQueryFilter MakeFilter(const QueryFilter& f, bool touchMode = false) {
-    LayerQueryFilter lf;
-    lf.skip = PlayerActor();
+    LayerQueryFilter lf; // the Player / self / characters are dropped by PolicyRejects
     lf.mask = f.LayerMask;
     lf.triggers = f.HitTriggers != 0;
     lf.touchMode = touchMode;
@@ -1871,6 +1901,335 @@ bool CharacterFitsAt(float cylinderHalfHeight) {
     QueryFilter f;
     f.HitTriggers = 0;
     return OverlapFiltered(PxCapsuleGeometry(radius, cylinderHalfHeight), PxTransform(centre, lieAlongY), f, nullptr, 0) == 0;
+}
+
+// --- Ragdolls --------------------------------------------------------------------------------
+
+int CreateRagdoll(unsigned entity, const RagdollPart* parts, int count) {
+    if (!g_State || !g_State->scene || !parts || count <= 0) return -1;
+    PhysicsState& s = *g_State;
+    int id = -1;
+    for (size_t i = 0; i < s.ragdolls.size(); ++i)
+        if (s.ragdolls[i].Bodies.empty()) { id = (int)i; break; }
+    if (id < 0) { id = (int)s.ragdolls.size(); s.ragdolls.emplace_back(); }
+    PhysicsState::Ragdoll& rd = s.ragdolls[(size_t)id];
+    PxMaterial* mat = s.physics->createMaterial(0.8f, 0.7f, 0.05f);
+    for (int i = 0; i < count; ++i) {
+        const RagdollPart& p = parts[i];
+        const PxTransform pose(PxVec3(p.Position[0], p.Position[1], p.Position[2]),
+                               PxQuat(p.Rotation[0], p.Rotation[1], p.Rotation[2], p.Rotation[3]).getNormalized());
+        PxRigidDynamic* b = s.physics->createRigidDynamic(pose);
+        PxShape* sh = PxRigidActorExt::createExclusiveShape(*b, PxCapsuleGeometry(std::max(p.Radius, 0.01f), std::max(p.HalfLength, 0.005f)), *mat);
+        sh->setSimulationFilterData(PxFilterData(1u, 0u, (PxU32)id + 1u, 0u));
+        sh->setQueryFilterData(PxFilterData(1u, 0u, (PxU32)id + 1u, 0u));
+        PxRigidBodyExt::setMassAndUpdateInertia(*b, std::max(p.Mass, 0.1f));
+        b->setLinearDamping(0.08f);
+        b->setAngularDamping(0.25f);
+        b->setSolverIterationCounts(16, 4);
+        b->setMaxDepenetrationVelocity(3.0f);
+        b->setSleepThreshold(0.08f);
+        b->setLinearVelocity(PxVec3(p.Velocity[0], p.Velocity[1], p.Velocity[2]));
+        b->userData = reinterpret_cast<void*>(static_cast<std::uintptr_t>(entity));
+        s.scene->addActor(*b);
+        rd.Bodies.push_back(b);
+    }
+    mat->release(); // the shapes hold their own reference
+    for (int i = 1; i < count; ++i) {
+        const RagdollPart& p = parts[i];
+        if (p.Parent < 0 || p.Parent >= i) continue;
+        PxRigidDynamic* parent = rd.Bodies[(size_t)p.Parent];
+        PxRigidDynamic* child = rd.Bodies[(size_t)i];
+        // The joint frame: at the anchor, its X along the child (the twist axis).
+        const PxTransform childPose = child->getGlobalPose();
+        const PxTransform frame(PxVec3(p.Anchor[0], p.Anchor[1], p.Anchor[2]), childPose.q);
+        PxD6Joint* j = PxD6JointCreate(*s.physics, parent, parent->getGlobalPose().transformInv(frame), child, childPose.transformInv(frame));
+        if (!j) continue;
+        j->setMotion(PxD6Axis::eTWIST, PxD6Motion::eLIMITED);
+        j->setMotion(PxD6Axis::eSWING1, PxD6Motion::eLIMITED);
+        j->setMotion(PxD6Axis::eSWING2, PxD6Motion::eLIMITED);
+        const float tw = PxPi * std::clamp(p.TwistDeg, 1.0f, 170.0f) / 180.0f;
+        const float sw = PxPi * std::clamp(p.SwingDeg, 1.0f, 170.0f) / 180.0f;
+        j->setTwistLimit(PxJointAngularLimitPair(-tw, tw));
+        j->setSwingLimit(PxJointLimitCone(sw, sw));
+        rd.Joints.push_back(j);
+    }
+    return id;
+}
+
+void DestroyRagdoll(int ragdoll) {
+    if (!g_State || ragdoll < 0 || ragdoll >= (int)g_State->ragdolls.size()) return;
+    auto& rd = g_State->ragdolls[(size_t)ragdoll];
+    for (PxJoint* j : rd.Joints) if (j) j->release();
+    for (PxRigidDynamic* b : rd.Bodies) if (b) b->release();
+    rd.Joints.clear();
+    rd.Bodies.clear();
+}
+
+void RagdollImpulse(int ragdoll, int part, const float impulse[3], const float point[3]) {
+    if (!g_State || ragdoll < 0 || ragdoll >= (int)g_State->ragdolls.size()) return;
+    auto& rd = g_State->ragdolls[(size_t)ragdoll];
+    if (part < 0 || part >= (int)rd.Bodies.size()) return;
+    PxRigidBodyExt::addForceAtPos(*rd.Bodies[(size_t)part], PxVec3(impulse[0], impulse[1], impulse[2]),
+                                  PxVec3(point[0], point[1], point[2]), PxForceMode::eIMPULSE, true);
+}
+
+bool GetRagdollPart(int ragdoll, int part, float outPos[3], float outRotXYZW[4]) {
+    if (!g_State || ragdoll < 0 || ragdoll >= (int)g_State->ragdolls.size()) return false;
+    auto& rd = g_State->ragdolls[(size_t)ragdoll];
+    if (part < 0 || part >= (int)rd.Bodies.size()) return false;
+    const PxTransform t = rd.Bodies[(size_t)part]->getGlobalPose();
+    outPos[0] = t.p.x; outPos[1] = t.p.y; outPos[2] = t.p.z;
+    outRotXYZW[0] = t.q.x; outRotXYZW[1] = t.q.y; outRotXYZW[2] = t.q.z; outRotXYZW[3] = t.q.w;
+    return true;
+}
+
+bool RagdollAsleep(int ragdoll) {
+    if (!g_State || ragdoll < 0 || ragdoll >= (int)g_State->ragdolls.size()) return true;
+    for (PxRigidDynamic* b : g_State->ragdolls[(size_t)ragdoll].Bodies)
+        if (b && !b->isSleeping()) return false;
+    return true;
+}
+
+// --- Navigation geometry -----------------------------------------------------------------
+
+int CollectStaticGeometry(std::vector<float>& verts, std::vector<int>& tris, bool includeKinematic) {
+    if (!g_State || !g_State->scene) return 0;
+    const int before = (int)tris.size() / 3;
+    PxActorTypeFlags types = PxActorTypeFlag::eRIGID_STATIC;
+    if (includeKinematic) types |= PxActorTypeFlag::eRIGID_DYNAMIC;
+    const PxU32 n = g_State->scene->getNbActors(types);
+    std::vector<PxActor*> actors(n);
+    g_State->scene->getActors(types, actors.data(), n);
+    auto addVert = [&](const PxVec3& v) {
+        verts.push_back(v.x); verts.push_back(v.y); verts.push_back(v.z);
+        return (int)verts.size() / 3 - 1;
+    };
+    auto addBox = [&](const PxTransform& pose, const PxVec3& h) {
+        int base = -1;
+        for (int i = 0; i < 8; ++i) {
+            const PxVec3 c((i & 1) ? h.x : -h.x, (i & 2) ? h.y : -h.y, (i & 4) ? h.z : -h.z);
+            const int v = addVert(pose.transform(c));
+            if (i == 0) base = v;
+        }
+        // Faces wound counter-clockwise seen from outside (Recast wants up-facing floors CCW from above).
+        static const int f[12][3] = {{0, 2, 1}, {1, 2, 3}, {4, 5, 6}, {5, 7, 6}, {0, 1, 4}, {1, 5, 4},
+                                     {2, 6, 3}, {3, 6, 7}, {0, 4, 2}, {2, 4, 6}, {1, 3, 5}, {3, 7, 5}};
+        for (const auto& t : f) { tris.push_back(base + t[0]); tris.push_back(base + t[1]); tris.push_back(base + t[2]); }
+    };
+    std::vector<PxShape*> shapes;
+    for (PxActor* a : actors) {
+        auto* ra = a->is<PxRigidActor>();
+        if (!ra) continue;
+        if (auto* dyn = a->is<PxRigidDynamic>()) {
+            if (!(dyn->getRigidBodyFlags() & PxRigidBodyFlag::eKINEMATIC)) continue;
+            if (g_State->npcActors.count(ra) || ra == PlayerActor()) continue;
+        }
+        shapes.resize(ra->getNbShapes());
+        ra->getShapes(shapes.data(), (PxU32)shapes.size());
+        const PxTransform actorPose = ra->getGlobalPose();
+        for (PxShape* sh : shapes) {
+            if (sh->getFlags() & PxShapeFlag::eTRIGGER_SHAPE) continue;
+            if (!(sh->getFlags() & PxShapeFlag::eSIMULATION_SHAPE)) continue;
+            const PxTransform pose = actorPose * sh->getLocalPose();
+            const PxGeometry& g = sh->getGeometry();
+            switch (g.getType()) {
+            case PxGeometryType::eBOX:
+                addBox(pose, static_cast<const PxBoxGeometry&>(g).halfExtents);
+                break;
+            case PxGeometryType::eSPHERE: {
+                const float r = static_cast<const PxSphereGeometry&>(g).radius;
+                addBox(pose, PxVec3(r));
+                break;
+            }
+            case PxGeometryType::eCAPSULE: {
+                const auto& c = static_cast<const PxCapsuleGeometry&>(g);
+                addBox(pose, PxVec3(c.halfHeight + c.radius, c.radius, c.radius));
+                break;
+            }
+            case PxGeometryType::eCONVEXMESH: {
+                const auto& c = static_cast<const PxConvexMeshGeometry&>(g);
+                const PxConvexMesh* m = c.convexMesh;
+                const PxVec3* mv = m->getVertices();
+                const PxU8* ib = m->getIndexBuffer();
+                const int base = (int)verts.size() / 3;
+                const PxMat33 sc = c.scale.toMat33();
+                for (PxU32 i = 0; i < m->getNbVertices(); ++i) addVert(pose.transform(sc * mv[i]));
+                for (PxU32 p = 0; p < m->getNbPolygons(); ++p) {
+                    PxHullPolygon poly;
+                    if (!m->getPolygonData(p, poly) || poly.mNbVerts < 3) continue;
+                    const PxU8* idx = ib + poly.mIndexBase;
+                    // The polygon's outward plane normal says which way it faces: wind it to match.
+                    const PxVec3 out = pose.rotate(sc.getInverse().getTranspose() * PxVec3(poly.mPlane[0], poly.mPlane[1], poly.mPlane[2]));
+                    for (PxU32 k = 1; k + 1 < poly.mNbVerts; ++k) {
+                        const int i0 = base + idx[0], i1 = base + idx[k], i2 = base + idx[k + 1];
+                        const PxVec3 a0(verts[3 * i0], verts[3 * i0 + 1], verts[3 * i0 + 2]);
+                        const PxVec3 a1(verts[3 * i1], verts[3 * i1 + 1], verts[3 * i1 + 2]);
+                        const PxVec3 a2(verts[3 * i2], verts[3 * i2 + 1], verts[3 * i2 + 2]);
+                        const bool flip = (a1 - a0).cross(a2 - a0).dot(out) < 0.0f;
+                        tris.push_back(i0); tris.push_back(flip ? i2 : i1); tris.push_back(flip ? i1 : i2);
+                    }
+                }
+                break;
+            }
+            case PxGeometryType::eTRIANGLEMESH: {
+                const auto& t = static_cast<const PxTriangleMeshGeometry&>(g);
+                const PxTriangleMesh* m = t.triangleMesh;
+                const PxVec3* mv = m->getVertices();
+                const int base = (int)verts.size() / 3;
+                const PxMat33 sc = t.scale.toMat33();
+                for (PxU32 i = 0; i < m->getNbVertices(); ++i) addVert(pose.transform(sc * mv[i]));
+                const bool b16 = m->getTriangleMeshFlags() & PxTriangleMeshFlag::e16_BIT_INDICES;
+                const void* ib = m->getTriangles();
+                for (PxU32 i = 0; i < m->getNbTriangles(); ++i) {
+                    int i0, i1, i2;
+                    if (b16) { const PxU16* x = static_cast<const PxU16*>(ib) + 3 * i; i0 = x[0]; i1 = x[1]; i2 = x[2]; }
+                    else     { const PxU32* x = static_cast<const PxU32*>(ib) + 3 * i; i0 = (int)x[0]; i1 = (int)x[1]; i2 = (int)x[2]; }
+                    // Recast walks on triangles whose (v1-v0) x (v2-v0) points up; whichever way a mesh was
+                    // wound, its floors are made to face up (an underside under solid geometry is never reached).
+                    const PxVec3 a0(verts[3 * (base + i0)], verts[3 * (base + i0) + 1], verts[3 * (base + i0) + 2]);
+                    const PxVec3 a1(verts[3 * (base + i1)], verts[3 * (base + i1) + 1], verts[3 * (base + i1) + 2]);
+                    const PxVec3 a2(verts[3 * (base + i2)], verts[3 * (base + i2) + 1], verts[3 * (base + i2) + 2]);
+                    const bool flip = (a1 - a0).cross(a2 - a0).y < 0.0f;
+                    tris.push_back(base + i0);
+                    tris.push_back(base + (flip ? i2 : i1));
+                    tris.push_back(base + (flip ? i1 : i2));
+                }
+                break;
+            }
+            default: break; // planes, heightfields: none in the engine's scenes yet
+            }
+        }
+    }
+    return (int)tris.size() / 3 - before;
+}
+
+// --- NPC characters --------------------------------------------------------------------
+
+ScopedQueryPolicy::ScopedQueryPolicy(unsigned ignoreEntity, bool hitPlayer, bool hitCharacters) {
+    t_QueryPolicy.push_back(QueryPolicy{ignoreEntity, hitPlayer, hitCharacters});
+}
+ScopedQueryPolicy::~ScopedQueryPolicy() {
+    if (!t_QueryPolicy.empty()) t_QueryPolicy.pop_back();
+}
+
+namespace {
+PxCapsuleController* NpcController(CharacterId id) {
+    if (!g_State || id < 0 || id >= (int)g_State->npcs.size()) return nullptr;
+    return static_cast<PxCapsuleController*>(g_State->npcs[(size_t)id].ctrl);
+}
+} // namespace
+
+CharacterId CreateNpcCharacter(unsigned entity, float radius, float cylinderHalfHeight, const float footPos[3]) {
+    if (!g_State || !g_State->controllerMgr || radius <= 0.0f || cylinderHalfHeight <= 0.0f) return kNoCharacter;
+    PxCapsuleControllerDesc desc;
+    desc.radius        = radius;
+    desc.height        = 2.0f * cylinderHalfHeight;
+    desc.position      = PxExtendedVec3(footPos[0], footPos[1] + radius + cylinderHalfHeight, footPos[2]);
+    desc.upDirection   = PxVec3(0.0f, 1.0f, 0.0f);
+    desc.stepOffset    = 0.3f;
+    desc.slopeLimit    = std::cos(0.8726646f);
+    desc.contactOffset = 0.05f;
+    desc.material      = g_State->defaultMaterial;
+    desc.climbingMode  = PxCapsuleClimbingMode::eCONSTRAINED;
+    if (!desc.isValid()) return kNoCharacter;
+    PxController* c = g_State->controllerMgr->createController(desc);
+    if (!c) {
+        Log::Error("PhysX: createController failed for an NPC.");
+        return kNoCharacter;
+    }
+    if (PxRigidActor* a = c->getActor()) {
+        a->userData = reinterpret_cast<void*>(static_cast<std::uintptr_t>(entity));
+        const PxU32 nbShapes = a->getNbShapes();
+        std::vector<PxShape*> shapes(nbShapes);
+        a->getShapes(shapes.data(), nbShapes);
+        for (PxShape* sh : shapes) sh->setSimulationFilterData(PxFilterData(1u, 0u, 0u, 0u)); // Default layer
+        g_State->npcActors.insert(a);
+    }
+    for (size_t i = 0; i < g_State->npcs.size(); ++i)
+        if (!g_State->npcs[i].ctrl) { g_State->npcs[i] = {c, entity}; return (CharacterId)i; }
+    g_State->npcs.push_back({c, entity});
+    return (CharacterId)g_State->npcs.size() - 1;
+}
+
+void DestroyNpcCharacter(CharacterId id) {
+    PxCapsuleController* c = NpcController(id);
+    if (!c) return;
+    g_State->npcActors.erase(c->getActor());
+    c->release();
+    g_State->npcs[(size_t)id] = {};
+}
+
+unsigned MoveNpcCharacter(CharacterId id, const float disp[3], float dt) {
+    PxCapsuleController* c = NpcController(id);
+    if (!c || dt <= 0.0f) return 0;
+    // Same collision-matrix row as a Default-layer body; ignore the NPC's own hitboxes.
+    struct LayerFilter : PxQueryFilterCallback {
+        PxU32 Mask = 0xFFFFFFFFu; std::uint32_t Self = 0xFFFFFFFFu;
+        PxQueryHitType::Enum preFilter(const PxFilterData&, const PxShape* shape, const PxRigidActor* actor,
+                                       PxHitFlags&) override {
+            if (actor && UserDataToEntity(actor->userData) == Self) return PxQueryHitType::eNONE;
+            if (shape->getFlags() & PxShapeFlag::eTRIGGER_SHAPE) return PxQueryHitType::eNONE;
+            const PxU32 layer = shape->getSimulationFilterData().word1 & 31u;
+            return ((Mask >> layer) & 1u) ? PxQueryHitType::eBLOCK : PxQueryHitType::eNONE;
+        }
+        PxQueryHitType::Enum postFilter(const PxFilterData&, const PxQueryHit&, const PxShape*,
+                                        const PxRigidActor*) override {
+            return PxQueryHitType::eBLOCK;
+        }
+    } layerFilter;
+    layerFilter.Mask = ProjectSettings::Physics().LayerCollisionMask[0];
+    layerFilter.Self = g_State->npcs[(size_t)id].entity;
+    PxControllerFilters filters(nullptr, &layerFilter, nullptr);
+    const PxControllerCollisionFlags f = c->move(PxVec3(disp[0], disp[1], disp[2]), 0.001f, dt, filters);
+    unsigned out = 0;
+    if (f & PxControllerCollisionFlag::eCOLLISION_SIDES) out |= CC_SIDES;
+    if (f & PxControllerCollisionFlag::eCOLLISION_UP)    out |= CC_UP;
+    if (f & PxControllerCollisionFlag::eCOLLISION_DOWN)  out |= CC_DOWN;
+    return out;
+}
+
+void SetNpcFootPosition(CharacterId id, const float footPos[3]) {
+    if (PxCapsuleController* c = NpcController(id))
+        c->setFootPosition(PxExtendedVec3(footPos[0], footPos[1], footPos[2]));
+}
+
+bool GetNpcCapsule(CharacterId id, float outFootPos[3], float* outRadius, float* outCylHalfHeight) {
+    PxCapsuleController* c = NpcController(id);
+    if (!c) return false;
+    const PxExtendedVec3 f = c->getFootPosition();
+    outFootPos[0] = (float)f.x; outFootPos[1] = (float)f.y; outFootPos[2] = (float)f.z;
+    if (outRadius)        *outRadius = c->getRadius();
+    if (outCylHalfHeight) *outCylHalfHeight = 0.5f * c->getHeight();
+    return true;
+}
+
+bool ResizeNpcCharacter(CharacterId id, float cylinderHalfHeight) {
+    PxCapsuleController* c = NpcController(id);
+    if (!c || cylinderHalfHeight <= 0.0f) return false;
+    const PxExtendedVec3 foot = c->getFootPosition();
+    c->resize(2.0f * cylinderHalfHeight);
+    c->setFootPosition(foot);
+    return true;
+}
+
+bool NpcFitsAt(CharacterId id, float cylinderHalfHeight) {
+    PxCapsuleController* c = NpcController(id);
+    if (!c || cylinderHalfHeight <= 0.0f) return false;
+    const PxExtendedVec3 foot = c->getFootPosition();
+    const float radius = std::max(0.02f, c->getRadius() - 0.03f);
+    const PxVec3 centre((float)foot.x, (float)foot.y + 0.04f + cylinderHalfHeight + radius, (float)foot.z);
+    const PxQuat lieAlongY(PxPi * 0.5f, PxVec3(0.0f, 0.0f, 1.0f));
+    ScopedQueryPolicy self(g_State->npcs[(size_t)id].entity, /*hitPlayer=*/true);
+    QueryFilter f;
+    f.HitTriggers = 0;
+    return OverlapFiltered(PxCapsuleGeometry(radius, cylinderHalfHeight), PxTransform(centre, lieAlongY), f, nullptr, 0) == 0;
+}
+
+CharacterId NpcCharacterOf(unsigned entity) {
+    if (!g_State) return kNoCharacter;
+    for (size_t i = 0; i < g_State->npcs.size(); ++i)
+        if (g_State->npcs[i].ctrl && g_State->npcs[i].entity == entity) return (CharacterId)i;
+    return kNoCharacter;
 }
 
 // ==================================================================================

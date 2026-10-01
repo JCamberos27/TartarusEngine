@@ -122,6 +122,56 @@ void RegisterEngineComponents() {
         m.Fields[1].EnumLabels = "Ones\0Tens\0"; m.Fields[1].EnumCount = 2;
         Register<ScoreDigitComponent>(std::move(m));
     }
+    Register<HealthComponent>({
+        "Health", ICON_FA_HEART,
+        "Hit points: rounds that hit this object take them away, and at 0 it is dead.\n"
+        "Starts full every Play.",
+        "Gameplay",
+        {
+            { "Max", T::Float, TARTARUS_REFLECT_FIELD(HealthComponent, Max), 1.0f, "Full health.", 1.0f, 100000.0f },
+            { "Invulnerable", T::Bool, TARTARUS_REFLECT_FIELD(HealthComponent, Invulnerable), 0.0f,
+              "Hits register but take nothing." },
+        },
+    });
+    {
+        ReflectComponent m;
+        m.Name = "NPC Spawn"; m.Icon = ICON_FA_PERSON_RIFLE; m.Category = "AI";
+        m.Tooltip = "An enemy soldier appears here in Play, facing this object's forward. The squad is built\n"
+                    "from these spawns (see Squad Settings); replacements come back at the one farthest\n"
+                    "out of the player's sight.";
+        m.Fields = {
+            { "Weapon", T::Enum, TARTARUS_REFLECT_FIELD(NpcSpawnComponent, Weapon), 0.0f, "What the soldier carries." },
+            { "Squad", T::Int, TARTARUS_REFLECT_FIELD(NpcSpawnComponent, Squad), 1.0f,
+              "Soldiers with the same Squad share what they know and fight together.", 0.0f, 16.0f },
+            { "Skill", T::Float, TARTARUS_REFLECT_FIELD(NpcSpawnComponent, Skill), 0.01f,
+              "0 = green (slow, inaccurate, timid) .. 1 = veteran.", 0.0f, 1.0f },
+            { "Outfit Seed", T::Int, TARTARUS_REFLECT_FIELD(NpcSpawnComponent, OutfitSeed), 1.0f,
+              "Which random outfit. 0 = a different one every Play.", 0.0f, 100000.0f },
+            { "Brain", T::Enum, TARTARUS_REFLECT_FIELD(NpcSpawnComponent, Brain), 0.0f,
+              "Squad AI, or a Training Dummy that just stands there and takes hits." },
+        };
+        m.Fields[0].EnumLabels = "AKS-74U\0Remington 870\0Random\0"; m.Fields[0].EnumCount = 3;
+        m.Fields[2].Slider = true; m.Fields[2].Format = "%.2f";
+        m.Fields[4].EnumLabels = "Squad AI\0Training Dummy\0"; m.Fields[4].EnumCount = 2;
+        Register<NpcSpawnComponent>(std::move(m));
+    }
+    Register<SquadSettingsComponent>({
+        "Squad Settings", ICON_FA_USERS,
+        "The enemy squad's rules for this scene (the first Squad Settings counts).",
+        "AI",
+        {
+            { "Squad Size", T::Int, TARTARUS_REFLECT_FIELD(SquadSettingsComponent, SquadSize), 1.0f,
+              "Enemies alive at once.", 0.0f, 8.0f },
+            { "Respawn", T::Bool, TARTARUS_REFLECT_FIELD(SquadSettingsComponent, Respawn), 0.0f,
+              "Replace enemies that die." },
+            { "Respawn Delay", T::Float, TARTARUS_REFLECT_FIELD(SquadSettingsComponent, RespawnDelay), 0.1f,
+              "Seconds before a dead enemy's replacement appears.", 0.0f, 120.0f },
+            { "Difficulty", T::Float, TARTARUS_REFLECT_FIELD(SquadSettingsComponent, Difficulty), 0.01f,
+              "Scales the enemies' accuracy and reaction speed.", 0.25f, 2.0f },
+            { "NPC Damage Scale", T::Float, TARTARUS_REFLECT_FIELD(SquadSettingsComponent, NpcDamageScale), 0.01f,
+              "Enemy rounds do this much of their weapon's damage to the player.", 0.0f, 4.0f },
+        },
+    });
     {
         ReflectComponent m;
         m.Name = "Impact Sound"; m.Icon = ICON_FA_VOLUME_HIGH; m.Category = "Audio";
@@ -427,6 +477,16 @@ void RegisterEngineComponents() {
               "Independent of the world camera's FOV: this changes how the held weapon is framed,\n"
               "never the scene behind it. Narrower than the world FOV by default, which is what\n"
               "keeps the weapon reading as held instead of stretched.", 20.0f, 150.0f },
+            { "Max Health", T::Float, TARTARUS_REFLECT_FIELD(FirstPersonControllerComponent, MaxHealth), 1.0f,
+              "The player's health. Enemy rounds take it; at 0 the player dies and respawns here.", 1.0f, 100000.0f },
+            { "Regen Delay", T::Float, TARTARUS_REFLECT_FIELD(FirstPersonControllerComponent, RegenDelay), 0.05f,
+              "Seconds without being hit before health starts coming back.", 0.0f, 120.0f },
+            { "Regen Rate", T::Float, TARTARUS_REFLECT_FIELD(FirstPersonControllerComponent, RegenRate), 0.5f,
+              "Health per second coming back after Regen Delay. 0 = no regeneration.", 0.0f, 10000.0f },
+            { "Respawn Delay", T::Float, TARTARUS_REFLECT_FIELD(FirstPersonControllerComponent, RespawnDelay), 0.05f,
+              "Seconds from death to respawning here.", 0.0f, 60.0f },
+            { "Spawn Protection", T::Float, TARTARUS_REFLECT_FIELD(FirstPersonControllerComponent, SpawnProtection), 0.05f,
+              "Seconds after a respawn when nothing can hurt the player.", 0.0f, 60.0f },
         },
     });
 

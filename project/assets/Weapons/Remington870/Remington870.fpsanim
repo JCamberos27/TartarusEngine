@@ -75,6 +75,14 @@
     "trigger": "event"
   },
   "gameplay": {
+    "damage": {
+      "base": 14.0,
+      "head": 2.0,
+      "limb": 0.75,
+      "falloffStart": 8.0,
+      "falloffEnd": 25.0,
+      "falloffMin": 0.2
+    },
     "allowFullAuto": false,
     "impactImpulse": 14.0,
     "impactMaxSpeed": 9.0,
