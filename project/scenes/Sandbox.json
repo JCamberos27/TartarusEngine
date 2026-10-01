@@ -23484,7 +23484,7 @@
         "Hidden Parts": "Head",
         "Look Down Push": 0.05999999865889549,
         "Look Down Start": 0.0,
-        "Max Turn Rate": 120.0,
+        "Max Turn Rate": 0.0,
         "Near Hide": 0.10000000149011612,
         "Parameter Smoothing": 0.11999999731779099,
         "Pelvis Max Raise": 0.0,

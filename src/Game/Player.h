@@ -41,6 +41,7 @@ public:
     // Inside the range, and back toward it, the view is free. 0 = unlimited. Set before each Update;
     // the turn beyond the limit is dropped.
     float MaxYawRate = 0.0f;
+    float YawDropped = 0.0f; // out, per Update: the view turn (degrees) MaxYawRate dropped
     // Crouching (the Input Manager's "Crouch", held): the capsule shrinks to CrouchHeight metres and
     // the move slows to CrouchSpeedMultiplier of MoveSpeed (no sprint, no jump). 0 = no crouching -
     // set by whatever wants it (a first-person body). Standing up waits for headroom.

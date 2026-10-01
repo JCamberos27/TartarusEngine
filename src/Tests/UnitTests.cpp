@@ -13,6 +13,7 @@
 //
 // Deliberately no test framework dependency: a CHECK macro and a list of functions is all this
 // needs, and it keeps the engine's third-party surface unchanged.
+#include "TimeService.h"
 #include "UnitTests.h"
 
 #include "AnimatorController.h"
@@ -892,6 +893,33 @@ void TestCameraFrustumValidation() {
 
 // The player's acceleration: 0 = the move is the input (as before); otherwise an exponential approach
 // that lands in the same place whatever the frame rate, and arrives rather than creeping.
+void TestFramePacing() {
+    const double p = 1.0 / 60.0;
+    // Jittered CPU-side frame times around one refresh come out as whole refreshes.
+    double unpaced = 0.0, worst = 0.0, total = 0.0, measuredTotal = 0.0;
+    const double jitter[] = {0.011, 0.022, 0.0167, 0.014, 0.0194, 0.0155, 0.0179, 0.0167};
+    for (int i = 0; i < 800; ++i) {
+        const double m = jitter[i % 8] + (i % 8 == 7 ? 8 * p - 0.1336 : 0.0); // the eight sum to eight refreshes
+        const double d = Time::PaceDelta(m, p, unpaced);
+        if (i > 20) worst = std::max(worst, std::abs(d - p));
+        total += d;
+        measuredTotal += m;
+    }
+    CHECK(worst < 0.0005);                               // within half a millisecond of a refresh
+    CHECK(std::abs(total - measuredTotal) < p);          // the game clock keeps up with the real one
+    // A dropped frame is two refreshes.
+    unpaced = 0.0;
+    CHECK(std::abs(Time::PaceDelta(2.0 * p + 0.003, p, unpaced) - 2.0 * p) < 0.0005);
+    // A refresh rate that is off (59.94 Hz read as 60): no drift.
+    unpaced = 0.0, total = 0.0;
+    for (int i = 0; i < 6000; ++i) total += Time::PaceDelta(1.0 / 59.94, p, unpaced);
+    CHECK(std::abs(total - 6000.0 / 59.94) < 2.0 * p);
+    // A stall far off the refresh: handed out as measured, nothing left over.
+    unpaced = 0.0;
+    const double stall = Time::PaceDelta(0.0, p, unpaced) + Time::PaceDelta(0.1 + 0.4 * p, p, unpaced);
+    CHECK(std::abs(stall + unpaced - (0.1 + 0.4 * p)) < 1e-9);
+}
+
 void TestPlayerAcceleration() {
     const glm::vec3 run(0.0f, 0.0f, 4.5f);
     CHECK(PlayerApproachVelocity(glm::vec3(0.0f), run, 1.0f / 60.0f, 0.0f, 0.0f) == run);
@@ -4621,6 +4649,7 @@ int RunUnitTests() {
         {"SceneRoundTrip", TestSceneRoundTrip},
         {"PlayerConfigRoundTrip", TestPlayerConfigRoundTrip},
         {"PlayerAcceleration", TestPlayerAcceleration},
+        {"FramePacing", TestFramePacing},
         {"PhysicsWorldSync", TestPhysicsWorldSync},
         {"PhysicalSky", TestPhysicalSky},
     };
