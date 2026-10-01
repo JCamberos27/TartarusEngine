@@ -85,6 +85,23 @@ struct FirstPersonMuzzleSettings {
     glm::vec3 Direction{0.0f, 0.0f, -1.0f};
 };
 
+// Spent casings thrown out of the ejection port (ShellCasings owns them once they leave the gun).
+// Origin and Direction are in the weapon root's space (metres), like the hand-set muzzle. Trigger
+// "shot" ejects as each round is fired (a self-loading gun); "event" waits for the controller's
+// Eject event (a pump or bolt action: the hull comes out when the action is worked).
+struct FirstPersonEjectSettings {
+    bool Enabled = false;
+    std::string Model;       // the casing mesh (.fbx)
+    std::string Material;    // .mat applied to every submesh; empty keeps the import / .meta remap
+    glm::vec3 Origin{0.0f};
+    glm::vec3 Direction{1.0f, 0.0f, 0.0f};
+    float Speed = 3.0f;      // m/s along Direction, on top of the player's own velocity
+    float SpeedJitter = 0.2f;// +- fraction of Speed
+    float Spread = 12.0f;    // degrees of random cone around Direction
+    float Spin = 20.0f;      // rad/s of tumble
+    enum class Trigger { Shot, Event } When = Trigger::Shot;
+};
+
 // The weapon's laser: a beam from the muzzle down the (zeroed) bore and the dot where it lands.
 // Color is the hue (linear); the beam draws at BeamBrightness times it and the dot, which a
 // camera sees washing out towards white, at SpotBrightness.
@@ -240,6 +257,7 @@ struct FirstPersonAnimationSet {
     FirstPersonWeaponGameplay Gameplay;
     FirstPersonAdsSettings Ads;
     FirstPersonMuzzleSettings Muzzle;
+    FirstPersonEjectSettings Eject;
     FirstPersonLaserSettings Laser;
     FirstPersonStockLockSettings StockLock;
     // Recoil, sway, bob, breathing, aim, per-state offsets, lean and IK (FirstPersonProcedural.h).
@@ -317,6 +335,7 @@ const char* KnownTagDescription(const std::string& tag); // nullptr for a custom
 inline constexpr const char* kEventShot = "Shot";    // a round leaves the gun (hip fire)
 inline constexpr const char* kEventRefill = "Refill";// the magazine is full again
 inline constexpr const char* kEventLoadRound = "LoadRound"; // one round goes in (a per-round reload)
+inline constexpr const char* kEventEject = "Eject";  // the spent case leaves the port (eject.trigger "event")
 } // namespace FirstPersonAnimatorContract
 
 // A weapon setup checked against the contract above and its own definition, worst first (the Weapon

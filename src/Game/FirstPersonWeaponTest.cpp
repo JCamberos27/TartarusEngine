@@ -3,6 +3,7 @@
 #include "Camera.h"
 #include "FirstPersonBody.h"
 #include "FirstPersonPresentation.h"
+#include "ShellCasings.h"
 #include "World.h"
 
 #include <glm/glm.hpp>
@@ -64,6 +65,18 @@ FirstPersonWeaponTest::FirstPersonWeaponTest(bool stockProbe, bool probeAk) : m_
                     label, share * 100.0f, (int)c.Hand.size(), nearest, anchored);
         return share;
     };
+    // `n` spent cases out of the port this step, thrown out to the right from beside the camera, and
+    // (shell) each while the pump was being worked - none on the shot itself.
+    auto ejected = [check](C& c, int n, const char* during = nullptr) {
+        check(c, (int)c.Ejections.size() == n, std::to_string(c.Ejections.size()) + " case(s) ejected (want " + std::to_string(n) + ")");
+        for (const C::Ejection& e : c.Ejections) {
+            char msg[240];
+            std::snprintf(msg, sizeof msg, "case thrown right (%.2f of the throw) from the port at (%.3f %.3f %.3f), muzzle (%.3f %.3f %.3f), in %s",
+                          e.Right, e.Port.x, e.Port.y, e.Port.z, e.Muzzle.x, e.Muzzle.y, e.Muzzle.z, e.State.c_str());
+            // Thrown out to the right, from a port near the eye and well behind the muzzle.
+            check(c, e.Right > 0.3f && e.FromEye < 1.0f && e.Port.z < e.Muzzle.z - 0.15f && (!during || e.State == during), msg);
+        }
+    };
     auto pelletsInCone = [check](C& c, float cone) {
         // Every pellet struck something, each inside the spread cone about the bore, and they
         // spread (not all down one line).
@@ -79,7 +92,11 @@ FirstPersonWeaponTest::FirstPersonWeaponTest(bool stockProbe, bool probeAk) : m_
         {"AK in hand at Play", nullptr, [](C& c) { return c.State() == "Idle"; }, 30.0f,
          [=](C& c) { check(c, c.P->Slot() == 0, "slot 0"); ammoIs(c, kAkMagazine); }},
         {"AK hip round", fire, [](C& c) { return c.Time > 0.5f; }, 2.0f,
-         [=](C& c) { ammoIs(c, kAkMagazine - 1); check(c, c.Hits.size() == 1, std::to_string(c.Hits.size()) + " hit(s) (want 1)"); }},
+         [=](C& c) {
+             ammoIs(c, kAkMagazine - 1);
+             check(c, c.Hits.size() == 1, std::to_string(c.Hits.size()) + " hit(s) (want 1)");
+             ejected(c, 1);
+         }},
         {"AK reload", [](C& c) { c.P->Reload(); }, [](C& c) { return c.Saw("TacReload") && c.State() == "Idle"; }, 8.0f,
          [=](C& c) { ammoIs(c, kAkMagazine); }},
         {"AK full auto (0.5 s held)",
@@ -89,12 +106,24 @@ FirstPersonWeaponTest::FirstPersonWeaponTest(bool stockProbe, bool probeAk) : m_
              check(c, c.P->IsFullAuto(), "full auto on");
              const int spent = kAkMagazine - c.P->Ammo();
              check(c, spent >= 4 && spent <= 8, std::to_string(spent) + " rounds in 0.5 s (700 rpm: ~6)");
+             ejected(c, spent);
              c.P->ToggleFireMode();
          }},
         {"AK ADS round", [](C& c) { c.Aim = true; }, [](C& c) { return c.State() == "Aim" && c.Time > 0.6f; }, 3.0f,
          [=](C& c) { mem->Ammo = c.P->Ammo(); }},
         {"AK ADS round fires", fire, [](C& c) { return c.Time > 0.4f; }, 2.0f,
-         [=](C& c) { ammoIs(c, mem->Ammo - 1); check(c, c.State() == "Aim", "stays on the sights (" + c.State() + ")"); c.Aim = false; mem->AkAmmo = c.P->Ammo(); }},
+         [=](C& c) {
+             ammoIs(c, mem->Ammo - 1);
+             check(c, c.State() == "Aim", "stays on the sights (" + c.State() + ")");
+             ejected(c, 1);
+             c.Aim = false;
+             mem->AkAmmo = c.P->Ammo();
+         }},
+        {"AK cases come to rest", nullptr, [](C& c) { return c.Casings > 0 && c.CasingsAsleep == c.Casings; }, 4.0f,
+         [=](C& c) {
+             check(c, c.Casings >= 6, std::to_string(c.Casings) + " cases on the ground");
+             check(c, c.CasingsAsleep == c.Casings, std::to_string(c.CasingsAsleep) + " of them at rest");
+         }},
 
         {"2: switch to the Remington", [](C& c) { c.P->SelectSlot(1); },
          [](C& c) { return c.P->Slot() == 1 && c.State() == "Idle"; }, 180.0f,
@@ -108,6 +137,7 @@ FirstPersonWeaponTest::FirstPersonWeaponTest(bool stockProbe, bool probeAk) : m_
          [=](C& c) {
              ammoIs(c, kShotgunShells - 1);
              pelletsInCone(c, c.P->Set().Gameplay.SpreadHip);
+             ejected(c, 1, "Pump");
          }},
         {"no round mid-pump",
          [=](C& c) { mem->Stage = 0; mem->Ammo = c.P->Ammo(); fire(c); },
@@ -525,6 +555,27 @@ void FirstPersonWeaponTest::OnHit(const glm::vec3& point) {
         m_Ctx.HitAngles.push_back(glm::degrees(std::acos(std::clamp(glm::dot(glm::normalize(point - o), d), -1.0f, 1.0f))));
 }
 
+void FirstPersonWeaponTest::OnCasings(const ShellCasings& casings) {
+    Ctx& c = m_Ctx;
+    c.Casings = casings.Count();
+    c.CasingsAsleep = casings.SleepingCount();
+    if (!c.P || !c.Cam) return;
+    const int total = c.P->EjectedTotal();
+    for (; m_Ejected < total; ++m_Ejected) {
+        Ctx::Ejection e;
+        e.State = c.P->CurrentState();
+        const glm::vec3 t = c.P->LastEjectThrow();
+        e.Right = glm::length(t) > 1e-6f ? glm::dot(glm::normalize(t), c.Cam->Right()) : 0.0f;
+        e.FromEye = glm::length(c.P->LastEjectPoint() - c.Cam->Position);
+        const glm::vec3 r = c.Cam->Right(), u = c.Cam->Up(), f = c.Cam->Front();
+        auto view = [&](const glm::vec3& w) { const glm::vec3 d = w - c.Cam->Position; return glm::vec3(glm::dot(d, r), glm::dot(d, u), glm::dot(d, f)); };
+        e.Port = view(c.P->LastEjectPoint());
+        glm::vec3 o, dir;
+        if (c.P->MuzzleRay(o, dir)) e.Muzzle = view(o);
+        c.Ejections.push_back(e);
+    }
+}
+
 void FirstPersonWeaponTest::Drive(FirstPersonPresentation& p, float dt) {
     Ctx& c = m_Ctx;
     c.P = &p;
@@ -543,6 +594,7 @@ void FirstPersonWeaponTest::Drive(FirstPersonPresentation& p, float dt) {
             c.HitAngles.clear();
             c.Hand.clear();
             c.Shell.clear();
+            c.Ejections.clear();
             std::printf("[WeaponTest] %s\n", s.Name.c_str());
             if (s.Begin) s.Begin(c);
         } else {

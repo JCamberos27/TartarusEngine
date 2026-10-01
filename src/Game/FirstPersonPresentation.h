@@ -3,6 +3,7 @@
 #include "FirstPersonAdsCarry.h"
 #include "FirstPersonAnimation.h"
 #include "FirstPersonBody.h" // FirstPersonStockLockInput
+#include "ShellCasings.h"      // CasingSpawn
 
 #include <entt/entt.hpp>
 #include <glm/glm.hpp>
@@ -135,6 +136,13 @@ public:
         float HoleRadius = 0.0045f; // the weapon's bullet hole, metres
     };
     std::vector<ShotHit> TakeShotHits();
+    // The spent cases thrown out of the port since the last call (FirstPersonEjectSettings), for
+    // ShellCasings. The list empties.
+    std::vector<CasingSpawn> TakeEjections();
+    // Cases ejected this Play, and where the last one left (world space) - for --weapon-test.
+    int EjectedTotal() const { return m_EjectedTotal; }
+    glm::vec3 LastEjectPoint() const { return m_LastEjectPoint; }
+    glm::vec3 LastEjectThrow() const { return m_LastEjectThrow; } // its velocity off the player's, m/s
     const std::string& CurrentState() const;
     const std::string& LastError() const { return m_LastError; }
     const WeaponProceduralPose& ProceduralPose() const { return m_Procedural.Pose(); }
@@ -195,9 +203,25 @@ private:
     AdsCarrySample SampleAdsCarry(float dt) const;
     // A round leaves the bore. Queued, and fired in LateUpdate from the gun as the frame renders it
     // (after the body has put the camera in its head), so it goes where the laser points.
-    void ShotImpact() { ++m_PendingShots; }
+    void ShotImpact() {
+        ++m_PendingShots;
+        if (m_Set.Eject.Enabled && m_Set.Eject.When == FirstPersonEjectSettings::Trigger::Shot) ++m_PendingEjects;
+    }
     void FireShot(); // one queued round: note where it hits and shove that
     int m_PendingShots = 0;
+    // A spent case leaves the port: on the shot, or on the controller's Eject event (a pump).
+    // Queued like a shot and thrown in LateUpdate from the port as the gun is drawn.
+    void Eject();
+    int m_PendingEjects = 0;
+    int m_EjectedTotal = 0;
+    glm::vec3 m_LastEjectPoint{0.0f}, m_LastEjectThrow{0.0f};
+    std::vector<CasingSpawn> m_Ejections;
+    // The weapon root as SEEN this frame (world space, through the view-model FOV stretch): where
+    // the port is on screen. Valid once PlaceRigs found the root.
+    glm::mat4 m_RootSeen{1.0f};
+    glm::mat4 m_RootWorld{1.0f}; // the same without the stretch
+    bool m_RootSeenValid = false;
+    glm::vec3 m_PlayerVelocity{0.0f}; // from the last Tick
     void ReloadIfChanged(float dt);
     // Hides the spare magazine bones unless the left hand holds them (FirstPersonAnimationSet).
     void UpdateSpareMagazine(const glm::vec3& armsPos, const glm::quat& armsRot, const glm::vec3& weaponPos,
