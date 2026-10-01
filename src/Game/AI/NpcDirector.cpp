@@ -275,6 +275,9 @@ void NpcDirector::BuildNav(World& world) {
 bool NpcDirector::LateStart(World& world, AssetLibrary& assets) {
     m_Started = true;
     BuildNav(world);
+    // Both guns' spent cases now, with the navigation mesh: a soldier carrying the other gun spawning mid-fight would
+    // otherwise import its case's mesh then.
+    for (const char* set : {kAkPath, kRemingtonPath}) FirstPersonPresentation::WarmEjectAssets(assets, set);
     if (m_Player.Valid) m_PlayerAgent = m_Crowd.Add(m_Player.Feet, m_Player.Radius, m_Player.Height, 6.0f, /*steer=*/false);
     const int want = std::min<int>(m_SquadSize, (int)m_Spawns.size() * 2);
     for (int i = 0; i < want; ++i) Spawn(world, assets, i % (int)m_Spawns.size());
@@ -1109,16 +1112,22 @@ void NpcDirector::LatePose(World& world, Npc& n, float dt, const PlayerSnapshot&
         PhysicsWorld::ScopedQueryPolicy policy(Id(n.Root), /*hitPlayer=*/true);
         n.Weapon->LateUpdate(world, n.WeaponCam);
     }
-    SubTimer holdTimer(*this, SubHold);
     // The gun seated in the shoulder and clear of the body, the arms onto it, the head onto the stock -
     // the player's world body's solve. The drawn surfaces are checked near the player, and in view (where it shows).
-    FirstPersonWorldGunInput gun;
-    const bool haveGun = n.Weapon->WorldGunInput(gun);
-    const bool closeToPlayer = !p.Valid || (glm::length(n.Eye - p.Eye) < kMeshCheckRange && n.OnScreen) || MeshChecksEverywhere;
-    const glm::vec3 muzzleShift = n.Body.HoldWeapon(world, n.Weapon->ArmsEntity(), n.Weapon->WeaponEntity(), haveGun ? &gun : nullptr,
-                                                    n.WeaponCam, dt, closeToPlayer);
+    glm::vec3 muzzleShift(0.0f);
+    {
+        SubTimer holdTimer(*this, SubHold);
+        FirstPersonWorldGunInput gun;
+        const bool haveGun = n.Weapon->WorldGunInput(gun);
+        const bool closeToPlayer = !p.Valid || (glm::length(n.Eye - p.Eye) < kMeshCheckRange && n.OnScreen) || MeshChecksEverywhere;
+        muzzleShift = n.Body.HoldWeapon(world, n.Weapon->ArmsEntity(), n.Weapon->WeaponEntity(), haveGun ? &gun : nullptr, n.WeaponCam,
+                                        dt, closeToPlayer);
+    }
     n.Eye = n.Body.Eye();
-    if (alive) HandleShots(world, n, p, muzzleShift);
+    if (alive) {
+        SubTimer shotsTimer(*this, SubWeapon); // the rounds' reports, flashes, tracers and hits count to the weapon
+        HandleShots(world, n, p, muzzleShift);
+    }
     for (const CasingSpawn& c : n.Weapon->TakeEjections()) if (m_Ejections.size() < 64) m_Ejections.push_back(c);
 }
 

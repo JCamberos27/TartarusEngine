@@ -47,6 +47,10 @@ public:
     };
     bool Start(World& world, AssetLibrary& assets, const FirstPersonControllerComponent& config);
     bool Start(World& world, AssetLibrary& assets, const FirstPersonControllerComponent& config, const Options& options);
+    // The spent cases' mesh and material of `animationSet` (a .fpsanim) into the asset cache. Every slot's are warmed
+    // when it starts; left to the first round fired (ShellCasings::Spawn), the FBX import stalls that frame for up to a second.
+    static void WarmEjectAssets(AssetLibrary& assets, const std::string& animationSet);
+    static void WarmEjectAssets(AssetLibrary& assets, const FirstPersonAnimationSet& set);
     // Where rounds go instead of down the zeroed bore: from the muzzle toward `point` (pellets
     // spread about that line). Null = the bore, as the player's do. Copied.
     void SetShotTarget(const glm::vec3* point) {
