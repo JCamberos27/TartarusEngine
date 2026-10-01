@@ -986,6 +986,59 @@ void PoseModel(const AnimatorController& ctrl, const AnimatorControllerComponent
 
 } // namespace
 
+namespace {
+
+// A follower's pose from its driver's, by node name. The name map is built once per model pair.
+bool CopyDriverPose(const Model& driver, Model& follower) {
+    const auto& src = driver.AppliedLocalPose();
+    if (src.empty() || (int)src.size() != driver.NodeCount()) return false;
+    struct Key {
+        const Model* A; const Model* B; int NA, NB;
+        bool operator==(const Key& o) const { return A == o.A && B == o.B && NA == o.NA && NB == o.NB; }
+    };
+    struct KeyHash {
+        size_t operator()(const Key& k) const {
+            return std::hash<const void*>()(k.A) * 31u ^ std::hash<const void*>()(k.B) ^ (size_t)k.NA * 131u ^ (size_t)k.NB;
+        }
+    };
+    struct Map { std::vector<int> Node; bool Exact = true; };
+    static std::unordered_map<Key, Map, KeyHash> s_Maps;
+    const Key key{&driver, &follower, driver.NodeCount(), follower.NodeCount()};
+    auto it = s_Maps.find(key);
+    if (it == s_Maps.end()) {
+        std::unordered_map<std::string, int> byName;
+        byName.reserve((size_t)driver.NodeCount());
+        for (int i = 0; i < driver.NodeCount(); ++i) byName.emplace(driver.NodeName(i), i);
+        Map map;
+        map.Node.assign((size_t)follower.NodeCount(), -1);
+        for (int i = 0; i < follower.NodeCount(); ++i)
+            if (auto f = byName.find(follower.NodeName(i)); f != byName.end()) map.Node[(size_t)i] = f->second;
+        // A copy is only the same as sampling when the shared bones rest alike: a channel a clip doesn't key
+        // keeps each rig's own rest value. Otherwise this pair samples as before.
+        Pose db, fb;
+        driver.BindLocalPose(db);
+        follower.BindLocalPose(fb);
+        for (size_t i = 0; i < map.Node.size() && map.Exact; ++i) {
+            const int dn = map.Node[i];
+            if (dn < 0 || i >= fb.size() || (size_t)dn >= db.size()) continue;
+            if (glm::length(fb[i].T - db[(size_t)dn].T) > 1e-4f || glm::length(fb[i].S - db[(size_t)dn].S) > 1e-4f ||
+                std::abs(glm::dot(fb[i].R, db[(size_t)dn].R)) < 0.99999f)
+                map.Exact = false;
+        }
+        it = s_Maps.emplace(key, std::move(map)).first;
+    }
+    if (!it->second.Exact) return false;
+    static thread_local Pose s_Pose;
+    follower.BindLocalPose(s_Pose);
+    const std::vector<int>& map = it->second.Node;
+    for (size_t i = 0; i < map.size() && i < s_Pose.size(); ++i)
+        if (map[i] >= 0) s_Pose[i] = src[(size_t)map[i]];
+    follower.ApplyLocalPose(s_Pose);
+    return true;
+}
+
+} // namespace
+
 void UpdateAnimatorControllers(World& world, AssetLibrary& assets, float dt) {
     struct Rig {
         entt::entity E;
@@ -1058,6 +1111,10 @@ void UpdateAnimatorControllers(World& world, AssetLibrary& assets, float dt) {
         lengths.resize(ctrl->Layers.size());
         for (size_t li = 0; li < ctrl->Layers.size(); ++li) lengths[li].assign(ctrl->Layers[li].States.size(), -1.0f);
         memo = true;
+        // The driver poses first, so a follower that copies its pose (CopyDriverPose) reads this frame's.
+        std::stable_partition(group.begin(), group.end(), [&](const Rig& r) { return r.AC == &dac; });
+        Model* driverModel = nullptr;
+        const bool driverHasIk = world.Registry.all_of<IKRigComponent>(d);
         for (const Rig& r : group) {
             if (r.AC != &dac) {
                 // Followers mirror the driver's playback exactly; their own params are unused.
@@ -1073,6 +1130,13 @@ void UpdateAnimatorControllers(World& world, AssetLibrary& assets, float dt) {
                 r.AC->FiredEvents = dac.FiredEvents;
             }
             if (!r.M) continue;
+            if (r.AC == &dac) driverModel = r.M;
+            if (r.AC != &dac && r.AC->CopyDriverPose && driverModel && !driverHasIk &&
+                !world.Registry.all_of<IKRigComponent>(r.E) && CopyDriverPose(*driverModel, *r.M)) {
+                r.AC->RootMotion.DeltaPosition = glm::vec3(0.0f);
+                r.AC->RootMotion.DeltaYaw = 0.0f;
+                continue;
+            }
             RootMotionOptions& rmo = r.AC->RootMotion;
             const bool rootMotion = rmo.Mode != (int)RootMotionMode::Off;
             rmo.ResolvedBone = rootMotion ? r.M->FindRootMotionNode(rmo.Bone) : -1;

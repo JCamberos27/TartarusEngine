@@ -125,29 +125,35 @@ bool NpcRagdoll::Start(NpcBody& body, const glm::vec3& velocity, const glm::vec3
 
 void NpcRagdoll::Update() {
     if (m_Id < 0) return;
+    // A body at rest stays as it lies: one last write once it sleeps, then nothing per frame.
+    const bool asleep = Asleep();
+    if (asleep && m_Settled) return;
+    m_Settled = asleep;
     glm::mat4 partWorld[kParts];
     for (int i = 0; i < kParts; ++i) {
         float p[3], q[4];
         if (!PhysicsWorld::GetRagdollPart(m_Id, i, p, q)) return;
         partWorld[i] = PoseOf(glm::vec3(p[0], p[1], p[2]), glm::quat(q[3], q[0], q[1], q[2]));
     }
-    std::vector<int> parents;
-    std::vector<glm::mat4> globals;
-    std::vector<std::pair<int, int>> order; // (node, part), parents first
+    auto& pose = m_Pose;
+    auto& globals = m_Globals;
+    auto& order = m_Order; // (node, part), parents first
     for (PieceBones& pb : m_Pieces) {
         Model& m = *pb.M;
-        IK::Pose pose = m.AppliedLocalPose();
+        pose = m.AppliedLocalPose();
         if ((int)pose.size() != m.NodeCount()) m.BindLocalPose(pose);
-        parents.resize(pose.size());
-        for (int i = 0; i < (int)pose.size(); ++i) parents[(size_t)i] = m.NodeParent(i);
-        IK::ComputeGlobals(pose, parents, globals);
+        if (pb.Parents.size() != pose.size()) {
+            pb.Parents.resize(pose.size());
+            for (int i = 0; i < (int)pose.size(); ++i) pb.Parents[(size_t)i] = m.NodeParent(i);
+        }
+        IK::ComputeGlobals(pose, pb.Parents, globals);
         order.clear();
         for (int i = 0; i < kParts; ++i)
             if (pb.Node[(size_t)i] >= 0) order.push_back({pb.Node[(size_t)i], i});
         std::sort(order.begin(), order.end());
         for (const auto& [node, part] : order) {
             const glm::mat4 want = m_RootInv * partWorld[part] * pb.Off[(size_t)part];
-            IK::SetGlobal(pose, parents, globals, node, glm::vec3(want[3]), IK::Rotation(want));
+            IK::SetGlobal(pose, pb.Parents, globals, node, glm::vec3(want[3]), IK::Rotation(want));
         }
         m.ApplyLocalPose(pose);
     }

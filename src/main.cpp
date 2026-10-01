@@ -39,6 +39,7 @@
 #include "OpaqueColorCopy.h"
 #include "Screenshot.h"
 #include "Tonemapper.h"
+#include "Upscaler.h"
 #include "GameModuleAPI.h" // #170 smoke: QueryFilter / RaycastHit
 #include "Tests/UnitTests.h" // #173
 #include "OutfitAudit.h"
@@ -434,6 +435,7 @@ int main(int argc, char** argv) {
     // statistical main-thread CPU profile of each phase (SamplingProfiler): the hottest functions.
     bool perfBenchMode = false, perfSample = false;
     int perfResW = 0, perfResH = 0;
+    int renderHeightArg = -1; // --render-height N: this run's render resolution (0 = native)
     // --resave <in.json> <out.json>: load a scene and immediately re-serialize it, then exit.
     // The one headless path that exercises the SAVE side of the serializer — round-trip tests
     // (prefab overrides #302 Part B, the reflected-component migrations, ...) all need it. Still
@@ -491,6 +493,7 @@ int main(int argc, char** argv) {
             if (std::sscanf(argv[++i], "%dx%d", &perfResW, &perfResH) != 2 || perfResW <= 0 || perfResH <= 0)
                 perfResW = perfResH = 0;
         }
+        else if (a == "--render-height" && i + 1 < argc) { renderHeightArg = std::max(0, std::atoi(argv[++i])); }
         else if (a == "--weapon-test") { smokeTestMode = true; weaponTestMode = true; }
         else if (a == "--npc-test") {
             smokeTestMode = true; npcTestMode = true;
@@ -620,6 +623,10 @@ int main(int argc, char** argv) {
     try {
         // Per-user preferences, loaded before anything reads them. No GL or project state needed.
         EditorSettings::Load();
+        // A benchmark measures native resolution unless it asks for a render height, so its
+        // numbers stay comparable with the ones in docs/PERFORMANCE.md.
+        if (renderHeightArg >= 0) EditorSettings::Get().RenderHeight = renderHeightArg;
+        else if (perfBenchMode) EditorSettings::Get().RenderHeight = 0;
         // The editor starts with no splash: the console shows the load log until the main window
         // presents its first frame (see Window::Show). Only a built game can opt into one.
         SplashScreen splash;
@@ -1279,6 +1286,10 @@ int main(int argc, char** argv) {
         OpaqueColorCopy sceneOpaqueColor;  // PR12: opaque color capture for scene-view refraction
         OpaqueColorCopy gameOpaqueColor;   // PR12: opaque color capture for game-view refraction
         Tonemapper tonemapper;
+        // Render resolution (EditorSettings::RenderHeight): the game paths tonemap into gameLdr at
+        // the internal size and the upscaler scales it to the display.
+        Upscaler upscaler;
+        Framebuffer gameLdr;
         LightBuffer lightBuffer; // scene lights -> std430 SSBO the model shader reads at binding 0
         ClusterGrid clusterGrid; // #120: froxel light lists, rebuilt per rendered view each frame
         CascadedShadowMap shadowMap; // directional-sun CSM; depth array sampled by the model shader
@@ -3942,7 +3953,10 @@ int main(int argc, char** argv) {
                 int gvWidth, gvHeight;
                 gameView.ComputeTargetSize(available, gvWidth, gvHeight);
                 gameView.GetFramebuffer().Resize(gvWidth, gvHeight);
-                gameHdr.Resize(gvWidth, gvHeight, world.MsaaSamples);
+                int gvRw, gvRh; // internal 3D resolution
+                Upscaler::InternalSize(gvWidth, gvHeight, EditorSettings::Get().RenderHeight, gvRw, gvRh);
+                const bool gvScaled = gvRw != gvWidth || gvRh != gvHeight;
+                gameHdr.Resize(gvRw, gvRh, world.MsaaSamples);
                 gameHdr.BindForRender();
                 glClearColor(0.0f, 0.0f, 0.0f, 1.0f);
                 glClear(GL_COLOR_BUFFER_BIT | GL_DEPTH_BUFFER_BIT);
@@ -3969,11 +3983,11 @@ int main(int argc, char** argv) {
                 }
                 // SSAO depth pre-pass for the Game view — own Ssao instance/resolution from the
                 // Scene view's (see gameSsao declaration). Game view has no unlit mode.
-                if (world.SsaoEnabled) gameSsao.Resize(gvWidth, gvHeight);
+                if (world.SsaoEnabled) gameSsao.Resize(gvRw, gvRh);
                 if (world.SsaoEnabled && gameSsao.IsValid()) { // audit #358 — skip if any FBO incomplete
                     PROFILE_SCOPE("SSAO Depth Pre-pass (Game)");
                     PROFILE_GPU_SCOPE("SSAO Depth Pre-pass (Game)");
-                    ssaoDepthPrepass(gameSsao, gvWidth, gvHeight, gvView, gvProj, /*editorView=*/false);
+                    ssaoDepthPrepass(gameSsao, gvRw, gvRh, gvView, gvProj, /*editorView=*/false);
 
                     gameHdr.BindForRender(); // restore for the main scene draw below
                 }
@@ -3983,7 +3997,7 @@ int main(int argc, char** argv) {
                               /*EditorView=*/false, /*DebugView=*/0,
                               &gameHdr, &gameOpaqueColor, &gameSsao,
                               firstPersonPresentation.ViewModelFov(),
-                              weaponOverlay(playing && playUsesPlayer, gvView, gvProj, gvEye, gvHeight),
+                              weaponOverlay(playing && playUsesPlayer, gvView, gvProj, gvEye, gvRh),
                               /*OwnerView=*/playing && playUsesPlayer },
                           &gvRenderStats);
 
@@ -4003,7 +4017,7 @@ int main(int argc, char** argv) {
                 float        gvBloomIntensity = 0.0f;
                 if (world.BloomEnabled) {
                     PROFILE_GPU_SCOPE("Bloom (Game)");
-                    gameBloom.Resize(gvWidth, gvHeight);
+                    gameBloom.Resize(gvRw, gvRh);
                     if (gameBloom.IsValid()) { // audit #358 — no glow if any mip FBO is incomplete
                         gameBloom.Compute(bloomThreshShader, bloomDownsampleShader, bloomUpsampleShader,
                                           gameHdr.ResolvedColorTexture(),
@@ -4016,9 +4030,18 @@ int main(int argc, char** argv) {
                 }
                 {
                 PROFILE_GPU_SCOPE("Tonemap");
-                tonemapper.Apply(gameHdr.ResolvedColorTexture(), gameView.GetFramebuffer().Handle(),
-                                 gvWidth, gvHeight,
-                                 WithDepthEffects(MakePostSettings(world, gvBloomGlowTex, gvBloomIntensity, dt, 1, gvEye), world, gameHdr, gvView, gvProj, 0));
+                const PostSettings gvPost = WithDepthEffects(MakePostSettings(world, gvBloomGlowTex, gvBloomIntensity, dt, 1, gvEye), world, gameHdr, gvView, gvProj, 0);
+                if (gvScaled) {
+                    gameLdr.Resize(gvRw, gvRh);
+                    tonemapper.Apply(gameHdr.ResolvedColorTexture(), gameLdr.Handle(), gvRw, gvRh, gvPost);
+                } else {
+                    tonemapper.Apply(gameHdr.ResolvedColorTexture(), gameView.GetFramebuffer().Handle(), gvWidth, gvHeight, gvPost);
+                }
+                }
+                if (gvScaled) {
+                    PROFILE_GPU_SCOPE("Upscale");
+                    upscaler.Apply(gameLdr.ColorTexture(), gvRw, gvRh, gameView.GetFramebuffer().Handle(),
+                                   0, 0, gvWidth, gvHeight, EditorSettings::Get().RenderSharpness);
                 }
                 if (playing && playUsesPlayer)
                     crosshair.Draw(gameView.GetFramebuffer().Handle(), gvWidth, gvHeight,
@@ -4190,7 +4213,10 @@ int main(int argc, char** argv) {
                 // Free-Aspect maximized play: render the scene into the HDR target at the
                 // window's native aspect, then tonemap straight onto the backbuffer.
                 int mw = window.GetWidth(), mh = window.GetHeight();
-                gameHdr.Resize(mw, mh, world.MsaaSamples);
+                int mRw, mRh; // internal 3D resolution
+                Upscaler::InternalSize(mw, mh, EditorSettings::Get().RenderHeight, mRw, mRh);
+                const bool mScaled = mRw != mw || mRh != mh;
+                gameHdr.Resize(mRw, mRh, world.MsaaSamples);
                 gameHdr.BindForRender();
                 glClearColor(0.0f, 0.0f, 0.0f, 1.0f);
                 glClear(GL_COLOR_BUFFER_BIT | GL_DEPTH_BUFFER_BIT);
@@ -4200,11 +4226,11 @@ int main(int argc, char** argv) {
 
                 // SSAO depth pre-pass — same gameSsao instance the docked Game view uses; the two
                 // paths are mutually exclusive per frame (if/else-if above), so no resize thrash.
-                if (world.SsaoEnabled) gameSsao.Resize(mw, mh);
+                if (world.SsaoEnabled) gameSsao.Resize(mRw, mRh);
                 if (world.SsaoEnabled && gameSsao.IsValid()) { // audit #358
                     PROFILE_SCOPE("SSAO Depth Pre-pass (Game)");
                     PROFILE_GPU_SCOPE("SSAO Depth Pre-pass (Game)");
-                    ssaoDepthPrepass(gameSsao, mw, mh, view, proj, /*editorView=*/false);
+                    ssaoDepthPrepass(gameSsao, mRw, mRh, view, proj, /*editorView=*/false);
 
                     gameHdr.BindForRender(); // restore for the main scene draw below
                 }
@@ -4214,7 +4240,7 @@ int main(int argc, char** argv) {
                               /*EditorView=*/false, /*DebugView=*/0,
                               &gameHdr, &gameOpaqueColor, &gameSsao,
                               firstPersonPresentation.ViewModelFov(),
-                              weaponOverlay(playing && playUsesPlayer, view, proj, gameCam->Position, mh),
+                              weaponOverlay(playing && playUsesPlayer, view, proj, gameCam->Position, mRh),
                               /*OwnerView=*/playing && playUsesPlayer },
                           &stats);
                 editor.SetRenderStats(stats);
@@ -4233,7 +4259,7 @@ int main(int argc, char** argv) {
                 float        mwBloomIntensity = 0.0f;
                 if (world.BloomEnabled) {
                     PROFILE_GPU_SCOPE("Bloom (Game)");
-                    gameBloom.Resize(mw, mh);
+                    gameBloom.Resize(mRw, mRh);
                     if (gameBloom.IsValid()) { // audit #358
                         gameBloom.Compute(bloomThreshShader, bloomDownsampleShader, bloomUpsampleShader,
                                           gameHdr.ResolvedColorTexture(),
@@ -4246,8 +4272,17 @@ int main(int argc, char** argv) {
                 }
                 {
                 PROFILE_GPU_SCOPE("Tonemap");
-                tonemapper.Apply(gameHdr.ResolvedColorTexture(), 0, mw, mh,
-                                 WithDepthEffects(MakePostSettings(world, mwBloomGlowTex, mwBloomIntensity, dt, 1, gameCam->Position), world, gameHdr, view, proj, 1));
+                const PostSettings mPost = WithDepthEffects(MakePostSettings(world, mwBloomGlowTex, mwBloomIntensity, dt, 1, gameCam->Position), world, gameHdr, view, proj, 1);
+                if (mScaled) {
+                    gameLdr.Resize(mRw, mRh);
+                    tonemapper.Apply(gameHdr.ResolvedColorTexture(), gameLdr.Handle(), mRw, mRh, mPost);
+                } else {
+                    tonemapper.Apply(gameHdr.ResolvedColorTexture(), 0, mw, mh, mPost);
+                }
+                }
+                if (mScaled) {
+                    PROFILE_GPU_SCOPE("Upscale");
+                    upscaler.Apply(gameLdr.ColorTexture(), mRw, mRh, 0, 0, 0, mw, mh, EditorSettings::Get().RenderSharpness);
                 }
                 if (playing && playUsesPlayer)
                     crosshair.Draw(0, mw, mh, gravityGunLive() && gravityGun.IsHolding(),
@@ -4535,6 +4570,16 @@ int main(int argc, char** argv) {
                         editorCamera.Position = p;
                         editorCamera.Yaw = yaw;
                         editorCamera.Pitch = pitch;
+                    }
+                }
+                // --npc-test --perf-sample: a CPU profile of the fight itself (the squad up and shooting).
+                if (npcTest && perfSample) {
+                    static bool sampling = false;
+                    if (smokeFramesRendered == 900) { SamplingProfiler::Start(); sampling = true; }
+                    if (sampling && (smokeFramesRendered >= kSmokeTestFrames - 1 || npcTest->Done())) {
+                        SamplingProfiler::Stop();
+                        SamplingProfiler::Report("npc-test", 80);
+                        sampling = false;
                     }
                 }
                 if (perfBenchMode) {

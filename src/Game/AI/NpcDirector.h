@@ -159,4 +159,7 @@ private:
     float m_ThinkMs = 0.0f, m_LateMs = 0.0f;
     int m_NextName = 1;
     int m_LookCursor = 0;
+    // One cover search (raycasts + paths, the AI's priciest call) per frame across the squad: a second
+    // soldier wanting one waits a frame, so a volley that sends everyone to cover is no spike.
+    int m_Frame = 0, m_CoverSearchFrame = -1;
 };
