@@ -90,6 +90,10 @@ Tokens limit how many soldiers shoot at once (2-4 with difficulty), and allow on
 
 ### Tactics
 
+- **Flanking a camper.** The flank's score rises once the player has held one spot (within 2.5 m) for 4 s, maxing at 10 s, so a camper gets worked round. A flank looks 16 candidates deep for cover round the side. Flanks are 8 s apart.
+- **Pincer.** With four or more soldiers up and the first flanker on its way, a second flanker goes round the other side, to cover at least 80Â° round the player from the first's. Pincers are 12 s apart.
+- **Pressing the hurt.** A player under 40% health seen by the squad gets a push called on them, at most every 10 s, as a player seen reloading does.
+- **Startle.** Caught out (the player within 12 m, or more than 35Â° off to the side), a soldier may duck for a beat before reacting; steadier soldiers less often.
 - **Fire and maneuver.** A flanker or pusher the player can see waits, down with the gun up, until a squadmate is shooting. If nobody is, a soldier in Cover Fight is ordered up to give covering fire ("Covering!"). The wait is capped at 1.6 s (0.8 s for a push).
 - **Blind fire.** A soldier pinned for 1.5 s (suppression > 0.5) holds the gun out and sprays toward where the player was:
   - up over low cover

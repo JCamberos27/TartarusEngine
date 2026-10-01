@@ -434,6 +434,8 @@ void NpcDirector::Think(World& world, AssetLibrary& assets, float dt, const Play
             m_FootstepTimer = sprint ? 0.32f : 0.45f;
         }
         if (p.Reloading) m_Noises.push_back({p.Eye, 9.0f, 0.15f, m_Now, -2});
+        if (glm::length(p.Feet - m_PlayerPost) > 2.5f) { m_PlayerPost = p.Feet; m_PlayerStill = 0.0f; }
+        else m_PlayerStill += dt;
         if (m_PlayerAgent < 0 && m_Crowd.Valid()) m_PlayerAgent = m_Crowd.Add(p.Feet, p.Radius, p.Height, 6.0f, false);
         if (m_PlayerAgent >= 0) m_Crowd.Sync(m_PlayerAgent, p.Feet, p.Velocity);
     }
@@ -612,6 +614,13 @@ void NpcDirector::Perceive(World& world, Npc& n, const PlayerSnapshot& p, float 
     if (known) {
         n.ReactionLeft = ReactionTime(n.Skill, m_Difficulty, angleDeg > 30.0f, std::uniform_real_distribution<float>(0.0f, 1.0f)(m_Rng));
         n.FirstShot = true;
+        // Caught out - the player close, or off to the side - most flinch down for a beat before they react.
+        if ((dist < 12.0f || angleDeg > 35.0f) &&
+            std::uniform_real_distribution<float>(0.0f, 1.0f)(m_Rng) < 0.75f - 0.45f * n.Skill) {
+            n.CowerUntil = m_Now + 0.3f;
+            n.ReactionLeft = std::max(n.ReactionLeft, 0.35f);
+            ++m_Tactics.Startles;
+        }
         Callout(n, Bark::Contact);
     } else if (n.Mem.Visible && !wasVisible && n.Mem.Known) {
         // Back in sight after a while: a shorter reaction, and the first round may go wide again.
@@ -683,27 +692,65 @@ void NpcDirector::UpdateSquads(const PlayerSnapshot& p, float dt) {
                 if (score > bestScore && n->Health > 0.45f * n->MaxHealth && !n->Wounded) { bestScore = score; flanker = n; }
             }
             if (alive.size() < 2) flanker = nullptr;
+            // The pincer's second flanker keeps its token while it's fit and still working round.
+            if (s.PincerHolder >= 0) {
+                const Npc* h = s.PincerHolder < (int)m_Npcs.size() ? m_Npcs[(size_t)s.PincerHolder].get() : nullptr;
+                if (!h || h->Dead || h->Wounded || h == flanker) s.PincerHolder = -1;
+            }
             for (size_t k = 0; k < alive.size(); ++k) {
                 Npc* n = alive[k];
-                n->Role = n == flanker ? NpcRole::Flanker
-                                       : (k == 0 || n->Class == WeaponClass::Shotgun ? NpcRole::Anchor : NpcRole::Suppressor);
+                n->Role = n == flanker || n->Index == s.PincerHolder
+                              ? NpcRole::Flanker
+                              : (k == 0 || n->Class == WeaponClass::Shotgun ? NpcRole::Anchor : NpcRole::Suppressor);
             }
             // The flank token goes to the flanker; one at a time, and not straight after a death.
             if (s.FlankHolder >= 0) {
                 const Npc* h = s.FlankHolder < (int)m_Npcs.size() ? m_Npcs[(size_t)s.FlankHolder].get() : nullptr;
                 if (!h || h->Dead || h->Role != NpcRole::Flanker) s.FlankHolder = -1;
             }
-            if (s.FlankHolder < 0 && flanker && flanker->Mem.Known && m_Now - s.LastDeath > 4.0f) s.FlankHolder = flanker->Index;
+            if (s.FlankHolder < 0 && flanker && flanker->Mem.Known && m_Now - s.LastDeath > 4.0f && m_Now - s.FlankDoneAt > 8.0f)
+                s.FlankHolder = flanker->Index;
+            // A pincer: with four or more up and the first flanker on its way, a second goes round the other side (its cover
+            // is picked 80 degrees or more round from the first's - NpcBrain::FindCover).
+            const Npc* first = s.FlankHolder >= 0 && s.FlankHolder < (int)m_Npcs.size() ? m_Npcs[(size_t)s.FlankHolder].get() : nullptr;
+            if (s.PincerHolder < 0 && alive.size() >= 4 && m_Difficulty >= 0.75f && first && first->Doing == Behaviour::Flank &&
+                first->Cover >= 0 && m_Now - s.LastDeath > 4.0f && m_Now - s.PincerDoneAt > 12.0f) {
+                Npc* second = nullptr;
+                float best = -1.0f;
+                for (size_t k = 1; k < alive.size(); ++k) { // not the nearest: it holds
+                    Npc* n = alive[k];
+                    if (n == first || n->Wounded || !n->Mem.Known || n->Health < 0.5f * n->MaxHealth || n->Doing != Behaviour::CoverFight)
+                        continue;
+                    const float score = n->Health / n->MaxHealth + 0.3f * n->Skill;
+                    if (score > best) { best = score; second = n; }
+                }
+                if (second) {
+                    s.PincerHolder = second->Index;
+                    second->Role = NpcRole::Flanker;
+                }
+            }
+            // A badly hurt player in view: press them before they recover.
+            if (p.Valid && !p.Dead && p.Health < 0.4f && m_Now - s.PlayerHurtPushAt > 10.0f && m_Now >= s.PushUntil)
+                for (Npc* n : alive)
+                    if (n->Mem.Visible) {
+                        s.PlayerHurtPushAt = m_Now;
+                        s.PushUntil = m_Now + 4.5f;
+                        ++m_Tactics.HurtPushes;
+                        break;
+                    }
             // The push token: during a push, the healthiest of the nearer half.
             if (m_Now < s.PushUntil) {
                 if (s.PushHolder < 0)
                     for (Npc* n : alive)
-                        if (n->Health > 0.5f * n->MaxHealth && n->Index != s.FlankHolder && !n->Wounded) { s.PushHolder = n->Index; break; }
+                        if (n->Health > 0.5f * n->MaxHealth && n->Index != s.FlankHolder && n->Index != s.PincerHolder && !n->Wounded) {
+                            s.PushHolder = n->Index;
+                            break;
+                        }
             } else {
                 s.PushHolder = -1;
             }
             for (Npc* n : alive) {
-                n->HasFlankToken = n->Index == s.FlankHolder;
+                n->HasFlankToken = n->Index == s.FlankHolder || n->Index == s.PincerHolder;
                 n->HasPushToken = n->Index == s.PushHolder;
             }
         }
@@ -1484,7 +1531,8 @@ void NpcDirector::OnPlayerRespawned() {
     for (auto& s : m_Squads) {
         s.Shared = TargetMemory{};
         s.PushUntil = 0.0f;
-        s.FlankHolder = s.PushHolder = -1;
+        s.FlankHolder = s.PushHolder = s.PincerHolder = -1;
+        s.CoverRequest = s.CoverFirer = -1;
         s.Attackers.clear();
     }
     m_PlayerDamage.clear();
