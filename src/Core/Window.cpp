@@ -435,6 +435,14 @@ GLFWmonitor* PickMonitor(GLFWwindow* window, int index) {
 }
 } // namespace
 
+int Window::RefreshRate() const {
+    if (!m_Handle) return 0;
+    GLFWmonitor* monitor = glfwGetWindowMonitor(m_Handle);
+    if (!monitor) monitor = PickMonitor(m_Handle, -1);
+    const GLFWvidmode* mode = monitor ? glfwGetVideoMode(monitor) : nullptr;
+    return mode && mode->refreshRate > 0 ? mode->refreshRate : 0;
+}
+
 void Window::SetFullscreen(bool fullscreen) {
     if (fullscreen == m_IsFullscreen) return;
     GLFWmonitor* monitor = PickMonitor(m_Handle, m_FsMonitor);
