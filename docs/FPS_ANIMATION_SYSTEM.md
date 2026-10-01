@@ -1,7 +1,5 @@
 # FPS First-Person Animation — System Reference
 
-Branch: `feature/fps-first-person-animation`
-
 This is the **how it works** document. It covers what the system is made of, how a frame
 flows through it, the asset formats, the gameplay rules, and the invariants that keep it
 from breaking again. Companion documents:
@@ -23,8 +21,8 @@ During Play, a player whose `FirstPersonController` has a **Weapon Definition**
 - **arms**: a skinned FBX.
 - **weapon**: a second skinned FBX.
 
-If the field is empty, the controller behaves exactly as it did before this branch; the
-Sandbox gravity gun is untouched.
+If the field is empty, the player is unarmed: no rigs, which is how the Sandbox's gravity gun
+(slot 3) works.
 
 The work is split three ways:
 
@@ -469,7 +467,7 @@ rollback.
 
 ---
 
-## 8. Invariants — the fixes this branch landed, and how to not undo them
+## 8. Invariants — past fixes, and how not to undo them
 
 | # | Symptom | Root cause | Fix (keep it) |
 |---|---------|-----------|-----|
@@ -482,7 +480,7 @@ rollback.
 | 7 | Gun lagged the hands by up to 68 cm | Weapon clips never move the gun's root | Weapon socket (§5) |
 | 8 | New default keys did nothing | Saved `settings.json` input list replaced `Defaults()` wholesale | `InputMap::MergeDefaults` |
 
-### 1. The bake rule (the invariant most likely to be broken by accident)
+### Row 1: the bake rule (the invariant most likely to be broken by accident)
 
 ```cpp
 const glm::mat4& bake = nodeTransform;   // ALWAYS — skinned or not
@@ -502,7 +500,7 @@ clip FBXs (frame-0 pose), and `≈ translate(-0.069, 1.503, 0.446)` for the weap
 (the ADS pose — the gun-socket delta). Applying `C⁻¹` was tried and dropped the weapon
 to the floor. `mag2`'s `C` is an outlier on purpose.
 
-### 3. Hold the last frame, never drop to bind
+### Row 4: hold the last frame, never drop to bind
 
 `Once` clears the clip at the end, so the model falls back to the base FBX's bind pose, the
 Manny T-pose (`ik_hand_gun` 678 mm off). That lasts a frame, and the next crossfade travels
@@ -511,13 +509,13 @@ holds until a transition takes over. For the same reason `Holstered` plays Holst
 held at their end: Draw then fades out of the holstered pose, not out of the T-pose. The
 model's own `PlayAnimation` / `Once` contract is untouched for other callers.
 
-### 5. Fade to bind, don't cut
+### Row 5: fade to bind, don't cut
 
 A state with no weapon clip is an empty motion on the weapon track. On the base layer that
 means "bind pose", and it goes through the same crossfade stack as any clip, so the spare
 magazine fades rather than pops. The clip files were not touched.
 
-### 6. The assimp patch — a fresh clone depends on it
+### Row 6: the assimp patch — a fresh clone depends on it
 
 assimp comes from GitHub at a pinned `GIT_TAG`. Stock v5.4.3's dedup key ignored bone
 weights, so the two coincident magazine islands merged and the losing bone kept 17,594
@@ -562,7 +560,7 @@ each child at its clip's measured velocity (walk forward 1.53 m/s, jog forward 3
 2.95, jog backward 2.26, run 4.72), plus Jump / Fall / Land. The Player's move speeds become
 **Run Speed** / **Sprint Speed** so the input asks for what the clips have.
 
-**Phases 2 and 3.** The body has arms (the `ArmsPiece`, an arms-only Quantum piece). It copies the
+**Weapon arms, turning, crouch and feet.** The body has arms (the `ArmsPiece`, an arms-only Quantum piece). It copies the
 arms rig's arm shapes and solves its hands to the rig's hands (`FirstPersonBody::ArmsLateUpdate`),
 the camera is anchored to the shoulders while armed (`kEyeSlack`, `kReachSlack`, the shrug), and it
 keeps that height unarmed. The eye hangs off the shoulders in the *view's* frame, as the rig's does (its
@@ -610,13 +608,9 @@ at and set aside - see issue #424 for why.
    eyes; the ADS offset absorbs it. There is no eye bone on this rig.
 6. **No HUD** — ammo and fire mode are Console-only (`Ammo()`, `IsFullAuto()` are there
    for one).
-7. **The FPS scene is not in CI.** CI's smoke test runs `tests/smoke-scenes/`; the FPS
-   scene lives in `project/scenes/` and is only smoke-tested locally. Adding an FPS smoke
-   scene would gate `.fpsanim` loading and clip attachment on every push.
-8. **Materials/textures are out of scope.** Untextured rendering is expected;
-   `Texture: failed to load ...` errors are known noise.
-9. **The true-FPS body has its phases 1-3 merged** (#405): body, weapon arms, turn in place, start/stop,
-   crouch, foot IK. See §8b, `BODY_SETUP.md` (setup and tuning) and issue #426 (authoring tools).
+7. **The FPS scene is not in CI.** CI's smoke test runs `tests/smoke-scenes/`; the Sandbox
+   lives in `project/scenes/` and is smoke- and `--weapon-test`-ed only locally. Adding an FPS
+   smoke scene would gate `.fpsanim` loading and clip attachment on every push.
 
 ---
 
@@ -646,8 +640,8 @@ $p = Start-Process build\Release\TartarusEngine.exe -ArgumentList "--weapon-test
 ```
 
 Expected: unit tests exit 0. The AK is tested in `Sandbox.json` (its Player Spawn carries
-it); Sandbox and `Apartment` need the gitignored Mixamo characters and HDRI sky locally, or
-their smoke runs fail on the missing assets.
+it); the Sandbox needs the gitignored Quantum clothing textures and HDRI sky locally, or
+its smoke run fails on the missing assets.
 
 CI (`.github/workflows/build.yml`) additionally runs
 `tools/check_component_registration.py`: any new `*Tag`/`*Component` struct in

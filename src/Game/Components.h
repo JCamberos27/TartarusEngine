@@ -651,7 +651,7 @@ struct FirstPersonBodyComponent {
     float StairEase = 0.09f; // Stair Ease
 };
 
-// A character dressed from a wardrobe (CHARACTER_OUTFITS.md): put it on the body's root. Its children
+// A character dressed from a wardrobe (docs/CHARACTER_OUTFITS.md): put it on the body's root. Its children
 // tagged with an Outfit Piece are the outfit - body parts (torso, arms, legs, feet, head) and items
 // (hair, tops, pants, shoes, hats ...) - and the Inspector's outfit editor builds and swaps them from
 // the wardrobe's catalog. The children are the record of what is worn (each piece's model and its
