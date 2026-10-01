@@ -9,6 +9,8 @@
 #include <string>
 #include <vector>
 
+#include "Animation.h" // LocalTRS
+
 class Camera;
 class Model;
 class World;
@@ -63,6 +65,7 @@ struct NpcBodyInput {
     bool Crouched = false;
     bool Sprint = false;
     float Lean = 0.0f;             // -1 (left) .. 1 (right), a peek round cover
+    float Cower = 0.0f;            // 0..1: ducking from rounds cracking past (hunched, head down)
 };
 
 class NpcBody {
@@ -97,7 +100,12 @@ public:
     glm::vec3 GunShift() const { return m_GunShift; } // the gun off where the rig holds it (world)
 
     // A hit: the upper body flinches away along `dirWorld` (the round's travel).
-    void Flinch(World& world, const glm::vec3& dirWorld);
+    // `point` / `part` (a hitbox part, see NpcRagdoll) steer it by where the round struck; both optional.
+    void Flinch(World& world, const glm::vec3& dirWorld, const glm::vec3* point = nullptr, int part = -1);
+    // A hand signal with an order: the support hand leaves the gun and points along `dirWorld` for `seconds`.
+    void Signal(const glm::vec3& dirWorld, float seconds = 0.9f) { m_SignalDir = dirWorld; m_SignalLeft = seconds; }
+    void CancelSignal() { m_SignalLeft = 0.0f; }
+    bool Signalling() const { return m_SignalWeight > 0.05f; }
 
     float Yaw() const { return m_Yaw; }
     bool Turning() const { return m_Turning; }
@@ -107,6 +115,8 @@ public:
     bool BoneWorld(const World& world, const std::string& bone, glm::vec3& out) const;
     bool BoneWorld(const std::string& bone, glm::vec3& out) const;
     const std::vector<std::shared_ptr<Model>>& Models() const { return m_Models; }
+    // The driver's skeleton (the one whose pose is solved), for the hitboxes.
+    const Model* DriverModel() const { return m_DriverModel.get(); }
     glm::mat4 RootMatrix() const { return RootWorld(); }
     // The entity of every piece (for hit tests, the ragdoll).
     const std::vector<entt::entity>& Pieces() const { return m_Pieces; }
@@ -134,19 +144,43 @@ private:
     float m_TurnTime = 0.0f;
     float m_StillTime = 0.0f;
     bool m_WasCrouched = false;
-    // Aim, eased: the spine's pitch and twist (radians), and the lean.
+    // Aim, sprung: the spine's pitch and twist (radians) with their rates, and the lean (eased).
     float m_AimPitch = 0.0f, m_AimTwist = 0.0f, m_Lean = 0.0f, m_AimWeight = 0.0f;
+    float m_AimPitchRate = 0.0f, m_AimTwistRate = 0.0f;
+    // The head's own look (radians, relative to the chest), sprung, and the cower (eased).
+    float m_HeadYaw = 0.0f, m_HeadPitch = 0.0f, m_HeadYawRate = 0.0f, m_HeadPitchRate = 0.0f;
+    float m_Cower = 0.0f;
+    int m_DriverNeck = -1, m_DriverHead = -1;
     float m_Straighten = 0.0f;   // radians the aiming torso is brought up from the clips' lean (eased)
     NpcBodyInput m_In;
     glm::vec3 m_Eye{0.0f};
 
     // The weapon hold (NpcWeaponHold.cpp).
     NpcHoldSettings m_Set;
-    void RotateSpine(const glm::quat& modelDelta); // spread down the spine, on every piece
+    void RotateSpine(const glm::quat& modelDelta); // spread down the driver's spine (SyncPieces passes it on)
+    // The pose passes (spine aim, shoulder line, arms onto the gun, cheek weld) solve on the driver alone; this
+    // gives every other piece that draws the upper body the driver's rotations for it (one skeleton: the pieces'
+    // own solves came out the same, at several times the cost). Called whenever a piece is read or drawn next.
+    void SyncPieces();
+    void OffsetSpine(const glm::quat& step); // m_Pose / m_Globals already hold the driver's pose and its globals
+    bool m_PiecesStale = false;
+    std::vector<std::vector<std::pair<int, int>>> m_UpperMap; // per piece: (piece node, driver node), spine_01 and below
+    int m_DriverIndex = -1;
+    std::vector<int> m_DriverParents;                          // the driver's node parents
+    int m_DriverSpine[5] = {-1, -1, -1, -1, -1}, m_DriverSpineCount = 0;
+    // Scratch.
+    std::vector<glm::mat4> m_Globals;
+    std::vector<LocalTRS> m_Pose, m_BindScratch;
+    struct FingerNode { int Node; int Hand; std::string Name; };
+    std::vector<FingerNode> m_FingerList; // the arms rig's finger nodes (HoldWeapon)
+    const Model* m_FingerRig = nullptr;
+    int m_FingerNodes = 0;
     enum class Region { Head, Torso };
     struct RegionPoint { glm::vec3 Pos; int Count; std::uint16_t Bone[4]; float Weight[4]; };
     struct RegionSkin { std::vector<int> Bones; std::vector<RegionPoint> Points; };
-    struct PieceSkin { const Model* M = nullptr; RegionSkin Head, Torso; bool Built = false; };
+    struct SkinTables { RegionSkin Head, Torso; };
+    // Per piece. The tables depend only on the mesh data, which every soldier wearing the piece shares: built once.
+    struct PieceSkin { const Model* M = nullptr; std::shared_ptr<const SkinTables> T; bool Built = false; };
     mutable std::vector<PieceSkin> m_Skins;                 // per piece
     // The drawn neck / head / hood, or pelvis / spine (a hoodie), skinned to world as posed now.
     void SkinnedRegion(const World& world, Region region, std::vector<glm::vec3>& out) const;
@@ -171,6 +205,8 @@ private:
     bool m_HaveElbowAim[2] = {false, false};
     float m_ArmsWeight = 0.0f;
     float m_CheekWeld = 0.0f;
+    glm::vec3 m_SignalDir{0.0f};                              // world
+    float m_SignalLeft = 0.0f, m_SignalWeight = 0.0f;
     unsigned m_HoldFrame = 0;
     int m_HoldStagger = 0;                                   // which of every three frames this one checks the mesh
     glm::vec3 m_MeshPush{0.0f};                              // the gun's push out of the drawn head / torso, last checked

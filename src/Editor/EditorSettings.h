@@ -49,6 +49,12 @@ struct EditorSettings {
     // extra cap. A minimized window doesn't render at all, whatever this is.
     int UnfocusedFpsLimit = 30;
 
+    // Render resolution: the Game view / play window renders its 3D frame this many pixels tall
+    // (same aspect) and Upscaler scales it to the display, so a 4K monitor costs what a 1080p
+    // one does. The HUD and editor UI stay native. 0 = native (no upscale).
+    int   RenderHeight    = 1080;
+    float RenderSharpness = 0.5f; // RCAS strength for the upscale, 0..1
+
     // HDR/tone mapping, SSAO, bloom, and shadow settings moved to World (#9, Phase M item 1) —
     // they're scene-authored content, not per-user editor prefs. See World.h's ExposureEV et al.
     // A pre-v3 scene's values are migrated forward from this file's on-disk legacy keys by
