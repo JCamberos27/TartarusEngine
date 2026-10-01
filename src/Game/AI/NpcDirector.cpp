@@ -39,6 +39,8 @@ constexpr float kLimpTime = 6.0f;
 constexpr float kStaggerTime = 0.4f;        // aim paused
 constexpr float kHeavyHit = 40.0f;          // damage that staggers
 constexpr float kHitboxRange = 60.0f;       // m from the player: soldiers further off keep only their capsule
+constexpr float kMeshCheckRange = 12.0f;    // m: the weapon hold checks the gun and elbows against the drawn body this close
+                                            // (further off, 2 cm is a pixel or two; the hold's sphere keep-outs still apply)
 constexpr float kMeleeTime = 0.55f;         // a rifle-butt strike, wind-up to recovery
 constexpr float kMeleeHitTime = 0.22f;      // ... the blow lands this far in
 constexpr float kMeleeDamage = 25.0f;
@@ -105,7 +107,7 @@ const char* RoleName(NpcRole r) {
 
 const char* NpcDirector::SubName(int s) {
     static const char* kNames[SubCount] = {"AI Perceive", "AI Brain", "AI Squads", "AI Move", "AI Aim+Fire",
-                                           "AI Body", "AI Hold", "AI Ragdoll", "AI Hitbox"};
+                                           "AI Body", "AI Weapon", "AI Hold", "AI Ragdoll", "AI Hitbox"};
     return s >= 0 && s < SubCount ? kNames[s] : "AI ?";
 }
 
@@ -289,6 +291,7 @@ int NpcDirector::Spawn(World& world, AssetLibrary& assets, int spawnIndex) {
         Log::Error("Enemy AI: couldn't build a soldier from Soldier.json.");
         return -1;
     }
+    const float entitiesMs = since();
     auto& reg = world.Registry;
     entt::entity root = entt::null;
     for (entt::entity e : created) {
@@ -328,6 +331,7 @@ int NpcDirector::Spawn(World& world, AssetLibrary& assets, int spawnIndex) {
         world.DestroyEntityAndChildren(root);
         return -1;
     }
+    n->Body.WarmHoldTables(world);
     const float bodyMs = since();
     n->Cct = PhysicsWorld::CreateNpcCharacter(Id(root), kRadius, kStandCyl, &feet.x);
     n->Agent = m_Crowd.Add(feet, 0.34f, 1.8f, 3.2f);
@@ -347,12 +351,14 @@ int NpcDirector::Spawn(World& world, AssetLibrary& assets, int spawnIndex) {
     opt.OwnerView = false;
     opt.HotReload = false;
     opt.CornerPeek = false;
+    const float weaponT0 = since();
     if (!n->Weapon->Start(world, assets, cfg, opt) || !n->Weapon->IsActive()) {
         Log::Warn("Enemy AI: " + n->Name + " has no weapon (" + n->Weapon->LastError() + ").");
     } else {
         n->Gun = n->Weapon->Set().Gameplay;
         n->Weapon->SetLocomotionSpeeds(3.2f, 4.7f);
     }
+    const float weaponMs = since() - weaponT0;
     n->WeaponCam.Fov = cfg.ViewModelFov;
     const glm::vec3 fwd(std::sin(sp.Yaw), 0.0f, std::cos(sp.Yaw));
     YawPitchOf(fwd, n->AimYaw, n->AimPitch);
@@ -368,7 +374,8 @@ int NpcDirector::Spawn(World& world, AssetLibrary& assets, int spawnIndex) {
     n->SpawnedAt = m_Now;
     {
         char msg[160];
-        std::snprintf(msg, sizeof msg, "Enemy AI: %s spawned in %.1f ms (body %.1f ms).", n->Name.c_str(), since(), bodyMs);
+        std::snprintf(msg, sizeof msg, "Enemy AI: %s spawned in %.1f ms (entities %.1f, body %.1f, weapon %.1f ms).", n->Name.c_str(),
+                      since(), entitiesMs, bodyMs - entitiesMs, weaponMs);
         Log::Info(msg);
     }
 
@@ -1098,7 +1105,7 @@ void NpcDirector::LatePose(World& world, Npc& n, float dt, const PlayerSnapshot&
         n.Weapon->SetShotTarget(nullptr);
     }
     {
-        SubTimer timer(*this, SubHold);
+        SubTimer timer(*this, SubWeapon);
         PhysicsWorld::ScopedQueryPolicy policy(Id(n.Root), /*hitPlayer=*/true);
         n.Weapon->LateUpdate(world, n.WeaponCam);
     }
@@ -1107,7 +1114,7 @@ void NpcDirector::LatePose(World& world, Npc& n, float dt, const PlayerSnapshot&
     // the player's world body's solve. The drawn surfaces are checked near the player, and in view (where it shows).
     FirstPersonWorldGunInput gun;
     const bool haveGun = n.Weapon->WorldGunInput(gun);
-    const bool closeToPlayer = !p.Valid || (glm::length(n.Eye - p.Eye) < 40.0f && n.OnScreen) || MeshChecksEverywhere;
+    const bool closeToPlayer = !p.Valid || (glm::length(n.Eye - p.Eye) < kMeshCheckRange && n.OnScreen) || MeshChecksEverywhere;
     const glm::vec3 muzzleShift = n.Body.HoldWeapon(world, n.Weapon->ArmsEntity(), n.Weapon->WeaponEntity(), haveGun ? &gun : nullptr,
                                                     n.WeaponCam, dt, closeToPlayer);
     n.Eye = n.Body.Eye();

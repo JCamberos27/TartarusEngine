@@ -1467,7 +1467,9 @@ int main(int argc, char** argv) {
                 vitals.RespawnDelay = fp.RespawnDelay;
                 vitals.SpawnProtection = fp.SpawnProtection;
                 playerVitals.Reset(vitals);
-                if (npcDirector.Start(world, assets, &fp)) { // the enemy squad, when the scene has NPC Spawns
+                // The enemy squad, when the scene has NPC Spawns - not under --weapon-test / --stock-probe, which put the
+                // player's gun through its paces alone (a squad would shoot the player or step into the muzzle's line).
+                if (!weaponTest && npcDirector.Start(world, assets, &fp)) {
                     devPanel.Reset(playerVitals, npcDirector);
                     combatHud.Reset();
                     combatFx.Start(world);
