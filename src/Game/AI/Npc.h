@@ -56,6 +56,7 @@ struct NpcIntent {
     bool Reload = false;
     float Lean = 0.0f;
     float Cower = 0.0f;            // 0..1: duck from rounds cracking past (the body hunches, the head goes down)
+    bool BlindFire = false;        // pinned behind cover: the gun held up over it, fired without looking (Suppress, head down)
 };
 
 struct Npc {
@@ -183,6 +184,15 @@ struct Npc {
     // Radio barks (NpcDirectorVoice.cpp): the edges already spoken for, and the next idle chatter.
     bool VcReloading = false, VcCovering = false, VcSuspicious = false;
     float NextChatter = 0.0f;
+    // Tactics.
+    float BoundWaitFrom = -1.0f;    // about to bound across open ground: waiting since then for covering fire (< 0: not waiting)
+    float CoverFireOrder = -1e9f;   // told to give a bounding squadmate covering fire until then
+    float PinnedSince = -1.0f;      // heavy suppression since then (< 0: not pinned)
+    float LastBlindFire = -1e9f;
+    float BlindLift = 0.0f;         // 0..1: how far the gun is out for blind fire (eased) ...
+    glm::vec3 BlindOffset{0.0f};    // ... and where to: up over low cover, out past the edge of high cover
+    float MeleeAt = -1e9f;          // a rifle-butt strike started then (the gun thrusts, the blow lands kMeleeHitTime in)
+    bool MeleeLanded = true;        // ... and whether its blow has been resolved
 };
 
 // Soldiers are named "Soldier <n>": n is the unit number on the radio and in the kill feed.

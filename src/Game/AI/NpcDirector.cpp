@@ -39,6 +39,9 @@ constexpr float kLimpTime = 6.0f;
 constexpr float kStaggerTime = 0.4f;        // aim paused
 constexpr float kHeavyHit = 40.0f;          // damage that staggers
 constexpr float kHitboxRange = 60.0f;       // m from the player: soldiers further off keep only their capsule
+constexpr float kMeleeTime = 0.55f;         // a rifle-butt strike, wind-up to recovery
+constexpr float kMeleeHitTime = 0.22f;      // ... the blow lands this far in
+constexpr float kMeleeDamage = 25.0f;
 
 unsigned Id(entt::entity e) { return (unsigned)entt::to_integral(e); }
 
@@ -511,8 +514,10 @@ void NpcDirector::Think(World& world, AssetLibrary& assets, float dt, const Play
 
 void NpcDirector::Perceive(World& world, Npc& n, const PlayerSnapshot& p, float dt) {
     (void)world;
-    n.Suppression = std::max(0.0f, n.Suppression - dt * 0.3f);
+    n.Suppression = std::max(0.0f, n.Suppression - dt * 0.25f);
     n.ReactionLeft = std::max(0.0f, n.ReactionLeft - dt);
+    if (n.Suppression > 0.5f) { if (n.PinnedSince < 0.0f) n.PinnedSince = m_Now; }
+    else if (n.Suppression < 0.3f) n.PinnedSince = -1.0f;
     const glm::vec3 look = n.Intent.Aim ? FrontOf(n.AimYaw, n.AimPitch) : FrontOf(n.LookYaw, n.LookPitch);
     n.SightEye = n.Eye + glm::vec3(0.0f, 0.08f, 0.0f) + glm::normalize(glm::vec3(look.x, 0.0f, look.z) + glm::vec3(1e-5f)) * 0.08f;
 
@@ -692,6 +697,7 @@ void NpcDirector::UpdateSquads(const PlayerSnapshot& p, float dt) {
                 n->HasPushToken = n->Index == s.PushHolder;
             }
         }
+        UpdateCoverFire(s);
         // Attack tokens: how many shoot at once. Holders keep theirs a few seconds while they can
         // still see; the rest wait their turn, so the player always has a moment to act.
         if (m_Now >= s.NextTokens) {
@@ -723,6 +729,71 @@ void NpcDirector::UpdateSquads(const PlayerSnapshot& p, float dt) {
                     n->HasAttackToken = std::find(s.Attackers.begin(), s.Attackers.end(), i) != s.Attackers.end();
         }
     }
+}
+
+// Fire and maneuver (see NpcBrain's bound): anyone but the waiting soldier shooting covers its bound. When nobody is, a
+// squadmate fighting from cover is told to come up and give covering fire.
+void NpcDirector::UpdateCoverFire(Squad& s) {
+    auto get = [&](int i) { return i >= 0 && i < (int)m_Npcs.size() ? m_Npcs[(size_t)i].get() : nullptr; };
+    for (int i : s.Members)
+        if (const Npc* n = get(i); n && !n->Dead && n->Index != s.CoverRequest && n->TriggerHeld) {
+            s.CoverFireUntil = m_Now + 0.5f;
+            break;
+        }
+    if (s.CoverRequest >= 0 && m_Now - s.CoverRequestAt > 0.3f) s.CoverRequest = -1; // it stopped waiting
+    if (s.CoverFirer >= 0) {
+        const Npc* f = get(s.CoverFirer);
+        if (!f || f->Dead || m_Now >= f->CoverFireOrder) s.CoverFirer = -1;
+    }
+    if (s.CoverRequest < 0 || s.CoverFirer >= 0 || m_Now < s.CoverFireUntil) return;
+    Npc* best = nullptr;
+    float bestScore = 0.0f;
+    for (int i : s.Members) {
+        Npc* n = get(i);
+        if (!n || n->Dead || n->Wounded || n->Index == s.CoverRequest || !n->Mem.Known || n->Reloading) continue;
+        if (n->Class == WeaponClass::Shotgun || n->Doing != Behaviour::CoverFight || n->Cover < 0) continue;
+        if (n->Weapon && n->Weapon->IsActive() && n->Weapon->Ammo() == 0) continue;
+        const float score = 1.0f + (n->Role == NpcRole::Suppressor ? 0.5f : 0.0f) + n->Skill * 0.2f;
+        if (score > bestScore) { bestScore = score; best = n; }
+    }
+    if (!best) return;
+    best->CoverFireOrder = m_Now + 2.5f;
+    s.CoverFirer = best->Index;
+    ++m_Tactics.CoverOrders;
+    Callout(*best, Bark::Covering);
+}
+
+// A rifle-butt strike at a player in arm's reach: started here, the blow resolved kMeleeHitTime later (still in reach and
+// in front, it lands). The gun's thrust is drawn in LatePose.
+void NpcDirector::UpdateMelee(Npc& n, const PlayerSnapshot& p) {
+    const glm::vec3 to(p.Feet.x - n.Feet.x, 0.0f, p.Feet.z - n.Feet.z);
+    const float dist = glm::length(to);
+    const float yaw = n.Body.Yaw();
+    const glm::vec3 fwd(std::sin(yaw), 0.0f, std::cos(yaw));
+    const float facing = dist > 1e-3f ? glm::degrees(std::acos(std::clamp(glm::dot(fwd, to / dist), -1.0f, 1.0f))) : 0.0f;
+    const bool level = std::abs(p.Feet.y - n.Feet.y) < 1.0f;
+    if (!n.MeleeLanded && m_Now - n.MeleeAt >= kMeleeHitTime) {
+        n.MeleeLanded = true;
+        if (p.Valid && !p.Dead && level && dist < 2.3f && facing < 70.0f) {
+            DamageEvent e;
+            e.Source = Id(n.Root);
+            e.Target = kPlayerEntity;
+            e.Amount = kMeleeDamage * std::clamp(m_Difficulty, 0.5f, 1.5f);
+            e.Zone = HitZone::Torso;
+            e.Point = p.Feet + glm::vec3(0.0f, p.Height * 0.75f, 0.0f);
+            e.Direction = dist > 1e-3f ? to / dist : fwd;
+            e.SourcePos = n.Eye;
+            m_PlayerDamage.push_back(e);
+            ++m_Tactics.MeleeHits;
+        }
+    }
+    if (HoldFire || n.Wounded || n.Reloading || !n.Mem.Known || !p.Valid || p.Dead || !level || m_Now - n.MeleeAt < kMeleeTime) return;
+    if (!WantsMelee(dist, facing, m_Now - n.MeleeAt)) return;
+    n.MeleeAt = m_Now;
+    n.MeleeLanded = false;
+    n.BurstLeft = 0;
+    ++m_Tactics.Melees;
+    Callout(n, Bark::Melee);
 }
 
 void NpcDirector::Move(World& world, Npc& n, float dt) {
@@ -767,7 +838,8 @@ void NpcDirector::Move(World& world, Npc& n, float dt) {
     in.FacingYaw = NpcYawOf(face - n.Feet, n.Body.Yaw());
     in.HoldFacing = n.Intent.FaceAim;
     in.AimPoint = n.Intent.AimPoint;
-    in.Aiming = n.Intent.Aim && !n.Reloading; // reloads are worked at the hip, not on the sights
+    // Reloads are worked at the hip, not on the sights; blind fire and a rifle-butt strike aren't aimed either.
+    in.Aiming = n.Intent.Aim && !n.Reloading && !n.Intent.BlindFire && m_Now - n.MeleeAt >= kMeleeTime;
     in.LookPoint = n.Intent.LookPoint;
     in.Crouched = n.Crouched;
     in.Sprint = n.Intent.Pace == Gait::Run && n.Intent.Move;
@@ -790,7 +862,9 @@ void NpcDirector::AimAndFire(World& world, Npc& n, const PlayerSnapshot& p, floa
         n.Reloading = st.find("Reload") != std::string::npos;
         n.Pumping = st == "Pump";
     }
-    const bool aimGun = n.Intent.Aim && !n.Reloading;
+    UpdateMelee(n, p);
+    const bool meleeing = m_Now - n.MeleeAt < kMeleeTime;
+    const bool aimGun = n.Intent.Aim && !n.Reloading && !n.Intent.BlindFire && !meleeing;
     const glm::vec3 target = n.Intent.Aim ? n.Intent.AimPoint : n.Intent.LookPoint;
     {
         float ly = n.LookYaw, lp = n.LookPitch;
@@ -853,7 +927,7 @@ void NpcDirector::AimAndFire(World& world, Npc& n, const PlayerSnapshot& p, floa
     const float tolerance = n.Intent.Suppress ? 9.0f : 4.5f + 3.0f * std::clamp(8.0f / std::max(glm::length(target - n.Eye), 1.0f), 0.0f, 1.0f);
     // A hand off the gun signalling: the order first, then the shooting.
     bool canFire = n.Intent.Fire && !HoldFire && n.HasAttackToken && n.ReactionLeft <= 0.0f && errorDeg < tolerance && !reloading &&
-                   !n.Body.Signalling() &&
+                   !n.Body.Signalling() && !meleeing &&
                    !sprinting && w.IsEquipped() && p.Valid && !p.Dead && (n.Mem.Visible || n.Intent.Suppress) && w.Ammo() > 0;
     // Never through a friend: the first thing along the line must not be a squadmate (checked every
     // frame the trigger could be down, so a friend stepping into the line stops the burst).
@@ -962,13 +1036,36 @@ void NpcDirector::LatePose(World& world, Npc& n, float dt, const PlayerSnapshot&
     // The weapon's camera hangs off the body's shoulders as the rig's does off its own (the player's
     // shoulder lock), so the rig's hands come out where this body's arms reach.
     n.WeaponCam.Position = n.Body.WeaponEye(world, n.Weapon->ArmsEntity(), n.Weapon->CameraBone(), n.WeaponCam, dt);
+    // Blind fire: the gun eased up over low cover, or out past the edge of high cover, while the head stays down behind it.
+    if (n.Intent.BlindFire && alive) {
+        n.BlindOffset = glm::vec3(0.0f, 0.34f, 0.0f) + FrontOf(n.AimYaw, 0.0f) * 0.12f;
+        if (n.Cover >= 0 && n.PeekSide >= 0) {
+            const CoverPoint& c = m_Cover.Points()[(size_t)n.Cover];
+            const glm::vec3 out(c.PeekPos[n.PeekSide].x - c.Pos.x, 0.0f, c.PeekPos[n.PeekSide].z - c.Pos.z);
+            if (c.High && glm::dot(out, out) > 1e-4f)
+                n.BlindOffset = glm::normalize(out) * 0.45f + FrontOf(n.AimYaw, 0.0f) * 0.1f + glm::vec3(0.0f, 0.12f, 0.0f);
+        }
+    }
+    n.BlindLift += ((n.Intent.BlindFire && alive ? 1.0f : 0.0f) - n.BlindLift) * AiFollow(dt, 0.09f);
+    if (n.BlindLift > 1e-3f) n.WeaponCam.Position += n.BlindOffset * n.BlindLift;
+    // A rifle-butt strike: drawn back, driven forward at the player's chest with a twist, then recovered.
+    if (const float mt = (m_Now - n.MeleeAt) / kMeleeTime; alive && mt >= 0.0f && mt < 1.0f) {
+        float reach;
+        if (mt < 0.3f) reach = -0.12f * Smoothstep01(mt / 0.3f);
+        else if (mt < 0.42f) reach = -0.12f + 0.52f * Smoothstep01((mt - 0.3f) / 0.12f);
+        else reach = 0.4f * (1.0f - Smoothstep01((mt - 0.42f) / 0.58f));
+        n.WeaponCam.Position += FrontOf(n.AimYaw, n.AimPitch) * reach;
+        n.WeaponCam.Roll = 28.0f * std::sin(3.14159265f * mt);
+    }
     // Where this frame's rounds go: on the player (the point it sees best, or the chest) when
     // the roll hits, else a near miss the player hears go by. Suppressing: about where they were.
     if (alive && n.TriggerHeld) {
         glm::vec3 shot;
-        if (n.Intent.Suppress && !n.Mem.Visible) {
+        if ((n.Intent.Suppress && !n.Mem.Visible) || n.Intent.BlindFire) {
+            // Blind fire sprays: it can't see where its rounds go.
             const glm::vec3 j(unit(m_Rng) - 0.5f, unit(m_Rng) * 0.8f, unit(m_Rng) - 0.5f);
-            shot = n.Mem.Predicted(m_Now) + glm::vec3(0.0f, 1.1f, 0.0f) + j * (0.8f + n.Mem.Uncertainty * 0.3f);
+            shot = n.Mem.Predicted(m_Now) + glm::vec3(0.0f, 1.1f, 0.0f) +
+                   j * (0.8f + n.Mem.Uncertainty * 0.3f) * (n.Intent.BlindFire ? 2.4f : 1.0f);
         } else {
             AccuracyInput ai;
             ai.Distance = glm::length(p.Eye - n.Eye);
@@ -1173,7 +1270,7 @@ bool NpcDirector::OnPlayerHit(World& world, unsigned entity, const glm::vec3& po
 }
 
 void NpcDirector::OnPlayerShotLine(const glm::vec3& origin, const glm::vec3& end) {
-    // Rounds cracking past within a metre and a half of a head keep it down.
+    // Rounds cracking past (or smacking into the cover) within 1.6 m of a head keep it down.
     const glm::vec3 seg = end - origin;
     const float len2 = glm::dot(seg, seg);
     if (len2 < 1e-4f) return;
@@ -1181,8 +1278,8 @@ void NpcDirector::OnPlayerShotLine(const glm::vec3& origin, const glm::vec3& end
         if (!up || up->Dead) continue;
         const float t = std::clamp(glm::dot(up->SightEye - origin, seg) / len2, 0.0f, 1.0f);
         const float d = glm::length(origin + seg * t - up->SightEye);
-        if (d < 1.5f && t > 0.02f) {
-            up->Suppression = std::min(1.0f, up->Suppression + 0.18f * (1.5f - d));
+        if (d < 1.6f && t > 0.02f) {
+            up->Suppression = std::min(1.0f, up->Suppression + 0.22f * (1.6f - d));
             // A round within a metre makes most duck for a beat (the steadier, less often); not again straight away.
             std::uniform_real_distribution<float> unit(0.0f, 1.0f);
             if (d < 1.0f && m_Now > up->CowerUntil + 0.8f && unit(m_Rng) < 0.65f - 0.35f * up->Skill)
@@ -1283,6 +1380,11 @@ void NpcDirector::Kill(World& world, Npc& n, const glm::vec3& dir, const glm::ve
     n.Agent = -1;
     // The body goes down in this frame's late pose (LateUpdate -> FinishDeath): the animators and the gun run one more
     // frame, so the ragdoll starts from the pose it was seen in.
+    // Where it fell: cover near here is a worse bet for a while.
+    m_DeathPos[m_DeathNext] = n.Feet;
+    m_DeathTime[m_DeathNext] = m_Now;
+    m_DeathNext = (m_DeathNext + 1) % kDeathMemory;
+    m_DeathCount = std::min(m_DeathCount + 1, kDeathMemory);
     n.DeathPending = true;
     n.DeathDir = glm::length(dir) > 1e-4f ? glm::normalize(dir) : glm::vec3(0.0f, 0.0f, 1.0f);
     n.DeathPoint = point;

@@ -19,6 +19,7 @@
 namespace {
 int PosePhaseCount(); // the pose scenario's phases (the table is with Pose below)
 constexpr float kPosePhaseTime = 2.4f;
+constexpr float kTacticsCloseAt = 45.0f; // tactics: the player steps up to a soldier for its rifle butt
 } // namespace
 
 static const char* EnvVar(const char* n) {
@@ -32,6 +33,7 @@ NpcTest::NpcTest(const std::string& scenario) : m_Scenario(scenario.empty() ? "w
     if (m_Scenario == "sandbox") m_Duration = 40.0f;
     if (m_Scenario == "pose") m_Duration = 2.5f + (float)PosePhaseCount() * kPosePhaseTime + 1.0f;
     if (m_Scenario == "deaths") m_Duration = 60.0f;
+    if (m_Scenario == "tactics") m_Duration = 70.0f;
     if (const char* t = EnvVar("NPC_TEST_SECONDS")) m_Duration = std::max(5.0f, (float)std::atof(t));
     if (const char* r = EnvVar("NPC_TEST_RECORD")) m_RecordDir = r;
     std::cout << "[NpcTest] scenario '" << m_Scenario << "', " << m_Duration << " s" << std::endl;
@@ -97,11 +99,62 @@ void NpcTest::Drive(Player& player, FirstPersonPresentation& weapon, NpcDirector
         } else {
             m_Target.clear();
         }
-        static int lastAmmo = -1;
-        if (lastAmmo >= 0 && weapon.Ammo() < lastAmmo) m_PlayerShots += lastAmmo - weapon.Ammo();
-        lastAmmo = weapon.Ammo();
         m_Reload = weapon.Ammo() == 0;
     }
+    if (m_Scenario == "tactics") {
+        auto aimAt = [&](const glm::vec3& at) {
+            const glm::vec3 d = glm::normalize(at - player.Cam.Position);
+            wantYaw = glm::degrees(std::atan2(d.z, d.x));
+            wantPitch = glm::degrees(std::asin(std::clamp(d.y, -1.0f, 1.0f)));
+            return std::abs(std::remainder(wantYaw - player.Cam.Yaw, 360.0f)) + std::abs(wantPitch - player.Cam.Pitch);
+        };
+        if (npcs.Now() < kTacticsCloseAt) {
+            // Pin a soldier down in cover: bursts just past its head (over low cover, along the face of high cover).
+            const Npc* pin = nullptr;
+            float best = 1e9f;
+            for (const auto& up : npcs.Npcs()) {
+                if (!up || up->Dead || up->Doing != Behaviour::CoverFight || up->Cover < 0) continue;
+                const float d = glm::length(up->Feet - player.Cam.Position);
+                if (d < best) { best = d; pin = up.get(); }
+            }
+            if (pin) {
+                const float err = aimAt(pin->Feet + glm::vec3(0.0f, pin->Crouched ? 1.4f : 1.9f, 0.0f));
+                m_AimErr = err;
+                m_FireHold += dt;
+                m_Firing = err < 4.0f && std::fmod(m_FireHold, 1.0f) < 0.6f;
+                m_Target = pin->Name;
+            } else {
+                m_Target.clear();
+            }
+            m_Reload = weapon.Ammo() == 0;
+        } else {
+            // Up close: the player put an arm's length in front of a soldier, to be struck.
+            m_Target.clear();
+            if (m_TVictim.empty()) {
+                const Npc* v = nullptr;
+                float best = 1e9f;
+                for (const auto& up : npcs.Npcs()) {
+                    if (!up || up->Dead || up->Wounded || up->Cct == PhysicsWorld::kNoCharacter) continue;
+                    const float d = glm::length(up->Feet - player.Cam.Position);
+                    if (d < best) { best = d; v = up.get(); }
+                }
+                if (v) {
+                    const float yaw = v->Body.Yaw();
+                    const glm::vec3 feet = v->Feet + glm::vec3(std::sin(yaw), 0.0f, std::cos(yaw)) * 1.5f + glm::vec3(0.0f, 0.05f, 0.0f);
+                    const float f[3] = {feet.x, feet.y, feet.z};
+                    PhysicsWorld::SetCharacterFootPosition(f);
+                    player.Velocity = glm::vec3(0.0f);
+                    player.Cam.Position = feet + glm::vec3(0.0f, player.EyeHeight, 0.0f);
+                    m_TVictim = v->Name;
+                    std::printf("[NpcTest] tactics: the player steps up to %s\n", v->Name.c_str());
+                }
+            }
+            for (const auto& up : npcs.Npcs())
+                if (up && !up->Dead && up->Name == m_TVictim) aimAt(up->Feet + glm::vec3(0.0f, 1.4f, 0.0f));
+        }
+    }
+    if (m_LastAmmo >= 0 && weapon.Ammo() < m_LastAmmo) m_PlayerShots += m_LastAmmo - weapon.Ammo();
+    m_LastAmmo = weapon.Ammo();
     // Turn the view toward it like a player would (a fast but finite turn).
     const float dy = std::remainder(wantYaw - player.Cam.Yaw, 360.0f), dp = wantPitch - player.Cam.Pitch;
     const float step = 240.0f * dt;
@@ -178,7 +231,7 @@ void NpcTest::After(World& world, NpcDirector& npcs, const PlayerVitals& vitals,
         std::snprintf(line, sizeof line, "[NpcTest] t=%5.1f player hp=%3.0f%s  shooters=%d  think=%.2fms late=%.2fms", now, vitals.Health(),
                       vitals.IsDead() ? " DEAD" : "", npcs.ShootersNow(), npcs.LastThinkMs(), npcs.LastLateMs());
         std::cout << line << std::endl;
-        if (m_Scenario == "fight")
+        if (m_Scenario == "fight" || m_Scenario == "tactics")
             std::cout << "[NpcTest]   player target='" << m_Target << "' err=" << m_AimErr << " shots=" << m_PlayerShots
                       << " yaw=" << player.Cam.Yaw << std::endl;
         for (const auto& up : npcs.Npcs()) {
@@ -186,8 +239,8 @@ void NpcTest::After(World& world, NpcDirector& npcs, const PlayerVitals& vitals,
             const Npc& n = *up;
             const int ammo = n.Weapon && n.Weapon->IsActive() ? n.Weapon->Ammo() : -1;
             std::snprintf(line, sizeof line,
-                          "[NpcTest]   %-10s %-11s ph%-2d %-10s hp%3.0f %s ammo%2d %s%s%s pos(%5.1f,%4.1f,%5.1f) v%3.1f anim=%s gun=%s %s%s",
-                          n.Name.c_str(), BehaviourName(n.Doing), n.Phase, RoleName(n.Role), n.Health,
+                          "[NpcTest]   %-10s %-11s ph%-2d %-10s hp%3.0f sup%.2f %s ammo%2d %s%s%s pos(%5.1f,%4.1f,%5.1f) v%3.1f anim=%s gun=%s %s%s",
+                          n.Name.c_str(), BehaviourName(n.Doing), n.Phase, RoleName(n.Role), n.Health, n.Suppression,
                           n.Class == WeaponClass::Shotgun ? "870" : "AK ", ammo, n.Mem.Known ? "K" : "-", n.Mem.Visible ? "V" : "-",
                           n.HasAttackToken ? "A" : "-", n.Feet.x, n.Feet.y, n.Feet.z, glm::length(n.Velocity),
                           n.Body.StateName(world).c_str(), n.Weapon && n.Weapon->IsActive() ? n.Weapon->CurrentState().c_str() : "-",
@@ -196,6 +249,48 @@ void NpcTest::After(World& world, NpcDirector& npcs, const PlayerVitals& vitals,
         }
     }
 
+    // Tactics: while pinning, a steady stream of near misses past the target's head as well as the player's bursts (rounds
+    // that would otherwise go wherever this run's fight sends them) - so the suppression it's under is the same every run.
+    if (m_Scenario == "tactics" && now < kTacticsCloseAt && now >= m_TNextCrack)
+        for (const auto& up : npcs.Npcs())
+            if (up && !up->Dead && up->Name == m_Target && up->Doing == Behaviour::CoverFight) {
+                m_TNextCrack = now + 0.1f;
+                npcs.OnPlayerShotLine(player.Cam.Position, up->SightEye + glm::vec3(0.0f, 0.5f, 0.0f));
+            }
+    // Tactics: the Scene view on a blind fire and on the rifle-butt strike, side on.
+    if (m_Scenario == "tactics") {
+        const Npc* show = nullptr;
+        const char* what = nullptr;
+        for (const auto& up : npcs.Npcs()) {
+            if (!up || up->Dead) continue;
+            if (up->Intent.BlindFire && now - up->LastBlindFire > 0.6f && m_TBlindShots < 3 && now - m_TShotAt > 1.5f) {
+                show = up.get();
+                what = "blindfire";
+            }
+            // The strike at its wind-up, its full reach and its recovery (one frame each).
+            const float mt = now - up->MeleeAt;
+            const float at[3] = {0.08f, 0.24f, 0.42f};
+            if (m_TMeleeShots < 3 && mt >= at[m_TMeleeShots] && mt < at[m_TMeleeShots] + 0.05f) { show = up.get(); what = "melee"; }
+        }
+        if (show) {
+            const float yaw = show->Body.Yaw();
+            const glm::vec3 left(std::cos(yaw), 0.0f, -std::sin(yaw)), fwd(std::sin(yaw), 0.0f, std::cos(yaw));
+            const glm::vec3 chest = show->Feet + glm::vec3(0.0f, show->Crouched ? 0.9f : 1.3f, 0.0f);
+            m_CamPos = chest + left * 3.2f + fwd * 0.6f + glm::vec3(0.0f, 0.3f, 0.0f);
+            const glm::vec3 d = glm::normalize(chest - m_CamPos);
+            m_CamYaw = glm::degrees(std::atan2(d.z, d.x));
+            m_CamPitch = glm::degrees(std::asin(d.y));
+            m_HaveCam = true;
+            const int index = what[0] == 'b' ? m_TBlindShots++ : m_TMeleeShots++;
+            char name[64];
+            std::snprintf(name, sizeof name, "npc_tactics_%s_%d", what, index);
+            m_Shot = name;
+            m_TShotAt = now;
+            std::printf("[NpcTest] %s: %s %s, crouched %d, gun out %.2f, cover %s\n", name, show->Name.c_str(), BehaviourName(show->Doing),
+                        (int)show->Crouched, show->BlindLift,
+                        show->Cover < 0 ? "none" : npcs.Cover().Points()[(size_t)show->Cover].High ? "high" : "low");
+        }
+    }
     // A fresh kill: the Scene view on the body as it goes down (0.6 s and 3 s after).
     const Npc* corpse = nullptr;
     if (now - m_LastKillAt < 3.5f)
@@ -297,6 +392,9 @@ void NpcTest::After(World& world, NpcDirector& npcs, const PlayerVitals& vitals,
         std::cout << "[NpcTest] behaviours seen: " << seen << std::endl;
         std::printf("[NpcTest] first known %.1f s, first shot %.1f s, first hit on player %.1f s, first in cover %.1f s, max shooters %d\n",
                     m_FirstKnown, m_FirstShot, m_FirstDamage, m_FirstCover, npcs.MaxShootersSeen());
+        const NpcDirector::TacticStats& ts = npcs.Tactics();
+        std::printf("[NpcTest] tactics: bounds %d (covered %d), cover orders %d, blind fire %d, melee %d (landed %d), backpedals %d\n",
+                    ts.Bounds, ts.CoveredBounds, ts.CoverOrders, ts.BlindFires, ts.Melees, ts.MeleeHits, ts.Backpedals);
         PrintCosts(npcs);
         std::fflush(stdout);
         Check(m_MaxAlive >= 3, "at least three soldiers spawned (" + std::to_string(m_MaxAlive) + ")");
@@ -312,6 +410,12 @@ void NpcTest::After(World& world, NpcDirector& npcs, const PlayerVitals& vitals,
             Check(npcs.Fx->WhizzesHeard() > 0, "rounds cracked past the player (" + std::to_string(npcs.Fx->WhizzesHeard()) + ")");
         }
         if (m_Scenario == "fight") Check(m_Kills > 0, "the player killed " + std::to_string(m_Kills) + " soldier(s)");
+        if (m_Scenario == "tactics") {
+            Check(ts.BlindFires > 0, "a pinned soldier blind-fired over its cover (" + std::to_string(ts.BlindFires) + ")");
+            Check(ts.Melees > 0 && ts.MeleeHits > 0, "a soldier struck the player at arm's length (" + std::to_string(ts.MeleeHits) + " landed)");
+            Check(ts.CoveredBounds * 2 >= ts.Bounds, "most bounds in the player's view went under covering fire (" +
+                                                          std::to_string(ts.CoveredBounds) + " of " + std::to_string(ts.Bounds) + ")");
+        }
         CheckRadio(npcs);
         Check(npcs.Voice().Spoken() > 0, "the squad used the radio (" + std::to_string(npcs.Voice().Spoken()) + " lines)");
         if (m_Scenario == "die") {
