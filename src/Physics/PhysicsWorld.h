@@ -126,6 +126,37 @@ void DestroyRagdoll(int ragdoll);
 void RagdollImpulse(int ragdoll, int part, const float impulse[3], const float point[3]);
 bool GetRagdollPart(int ragdoll, int part, float outPos[3], float outRotXYZW[4]);
 bool RagdollAsleep(int ragdoll);
+// The joints' slerp drives: each part held toward its target orientation (identity: the pose the ragdoll was built in,
+// see SetRagdollDriveTarget) as a spring of `stiffness` / `damping` (acceleration: mass independent). 0 = limp.
+void SetRagdollDrive(int ragdoll, float stiffness, float damping);
+// Where part `part`'s drive wants it, as its rotation (xyzw) relative to its parent from the built pose.
+void SetRagdollDriveTarget(int ragdoll, int part, const float rotXYZW[4]);
+
+// --- Hitboxes ---------------------------------------------------------------------------
+// Per-bone hitboxes for a living character: kinematic, query-only capsules (along local +X, posed in world space)
+// that report the owner entity. While they are active, an unscoped query (the player's shots, grabs, picks) hits them
+// and skips the character's capsule; a ScopedQueryPolicy query (an NPC's own, its sight) is the other way round, and
+// the *Solid queries see neither. Ids are small ints, -1 = none; released with the world.
+struct HitCapsule {
+    float Position[3] = {0, 0, 0};
+    float Rotation[4] = {0, 0, 0, 1}; // xyzw
+    float HalfLength = 0.1f, Radius = 0.05f;
+};
+int  CreateNpcHitboxes(CharacterId owner, const HitCapsule* parts, int count);
+void SetNpcHitboxPoses(int id, const HitCapsule* parts, int count); // poses only (Position / Rotation)
+void SetNpcHitboxesActive(int id, bool active);                      // false: the capsule answers queries again
+void DestroyNpcHitboxes(int id);
+
+// A ray against body parts only - the hitboxes of living characters and the parts of ragdolls - for which part of
+// a body a round struck. `kind` 1 = hitbox, 2 = ragdoll part; `part` is the index in the soldier's part order.
+struct BodyPartHit {
+    int Kind = 0;
+    unsigned Entity = 0xFFFFFFFFu;
+    int Part = -1;
+    float Distance = 0.0f;
+    float Point[3] = {0, 0, 0};
+};
+bool RaycastBodyParts(const float origin[3], const float dir[3], float maxDistance, BodyPartHit& out);
 
 // Who scene queries may hit, for the calls made while one of these is alive (innermost wins,
 // per thread). By default a query never hits the Player capsule; an NPC's own queries set

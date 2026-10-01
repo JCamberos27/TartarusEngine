@@ -4,6 +4,7 @@
 #include "Camera.h"
 #include "FirstPersonAnimation.h" // FirstPersonWeaponGameplay
 #include "Npc/NpcBody.h"
+#include "Npc/NpcHitboxes.h"
 #include "Npc/NpcRagdoll.h"
 #include "PhysicsWorld.h"
 
@@ -34,7 +35,9 @@ enum class Behaviour : unsigned char {
     Search,      // lost the player: hunting for them
     Retreat,     // hurt: falling back to cover further off
     Dead,
+    Wounded,     // down on a knee, crawling for cover and shooting poorly until it bleeds out (after Dead so the indices hold)
 };
+constexpr int kBehaviourCount = 11;
 const char* BehaviourName(Behaviour b);
 const char* RoleName(NpcRole r);
 
@@ -67,6 +70,8 @@ struct Npc {
 
     NpcBody Body;
     std::unique_ptr<NpcRagdoll> Ragdoll; // once dead
+    std::unique_ptr<NpcHitboxes> Hitboxes; // while alive and near the player: the bones the player's rounds hit
+    int HitboxTries = 0;
     std::unique_ptr<FirstPersonPresentation> Weapon;
     FirstPersonWeaponGameplay Gun;  // a copy of the weapon's numbers (damage, rpm)
     WeaponClass Class = WeaponClass::Rifle;
@@ -87,6 +92,28 @@ struct Npc {
     float LastHurt = -1e9f;
     glm::vec3 LastHurtFrom{0.0f};
     int Hits = 0;
+    // Hit reactions.
+    float StaggerUntil = 0.0f;      // a heavy hit: aim paused, movement slowed until then
+    float LimpUntil = -1e9f;        // a leg hit: slower, no pushing or flanking until then
+    glm::vec3 PushVel{0.0f};        // a stagger's shove (m/s, decays)
+    bool Wounded = false;           // down, crawling (Behaviour::Wounded)
+    float WoundedAt = 0.0f;
+    bool WoundRolled = false;       // the 35% chance has been taken this life
+    // Animation level of detail (NpcDirector::Think): the pose passes run one frame in every Lod.
+    int Lod = 1;
+    bool Animate = true;            // this frame runs the animators and the late pose
+    float LateDt = 0.0f;            // time since the late pose last ran (frames skipped by the LOD)
+    float SpawnedAt = 0.0f;
+    float PlayerDist = 0.0f;
+    bool OnScreen = true;
+    // Dying: the ragdoll starts after this frame's late pose (so it takes the pose the body died in).
+    bool DeathPending = false;
+    glm::vec3 DeathDir{0.0f, 0.0f, 1.0f}, DeathPoint{0.0f};
+    float DeathShove = 40.0f;
+    int DeathPart = -1;
+    float DeathPop = -1.0f;         // metres the tracked bones jumped between the last animated frame and the first ragdoll one
+    glm::vec3 LastBones[3]{};       // head, left hand, left foot as last posed (only tracked when asked)
+    bool HaveLastBones = false;
 
     // What it knows.
     TargetMemory Mem;
@@ -115,7 +142,8 @@ struct Npc {
     int ShotsFired = 0;
     int Tracer = 0;                 // every third round is a tracer
     bool FxReloading = false, FxPumping = false; // for the reload / pump sounds' rising edges
-    bool Reloading = false;         // the weapon is in a reload state (read once a frame in AimAndFire)
+    bool Reloading = false;         // the weapon is in a reload state (read once a frame in AimAndFire) ...
+    bool Pumping = false;           // ... or racking the pump
     float FallSoundAt = -1.0f;      // the body hits the ground (seconds, director time)
     float LastShot = -1e9f;
     bool FullAutoSet = false;
@@ -147,7 +175,7 @@ struct Npc {
     bool CoverGood = false;         // ... and whether it still hides from the threat
     float PhaseStart = 0.0f;
     int ShotsAtPhase = 0;           // ShotsFired when the phase began
-    float Scores[10] = {};          // the last decision's behaviour scores, for the overlay
+    float Scores[kBehaviourCount] = {};          // the last decision's behaviour scores, for the overlay
     NpcIntent Intent;
     std::string Callout;            // the last thing it shouted, for the overlay
     float CalloutAt = -1e9f;

@@ -278,8 +278,7 @@ void NpcBody::LateUpdate(World& world, float dt, const Camera* weaponCam) {
             const glm::quat step = glm::angleAxis(m_AimTwist / (float)n, glm::vec3(0, 1, 0)) *
                                    glm::angleAxis((m_Straighten - m_AimPitch + kCowerHunch * m_Cower) / (float)n, glm::vec3(1, 0, 0)) *
                                    glm::angleAxis(m_Lean * 0.38f / (float)n, glm::vec3(0, 0, 1));
-            for (int k = 0; k < n; ++k)
-                IK::OffsetBone(pose, m_DriverParents, m_Globals, m_DriverSpine[k], glm::vec3(0.0f), step, IK::Position(m_Globals[(size_t)m_DriverSpine[k]]));
+            OffsetSpine(step);
             m.ApplyLocalPose(pose);
             m_PiecesStale = true;
         }
@@ -347,12 +346,31 @@ void NpcBody::LateUpdate(World& world, float dt, const Camera* weaponCam) {
     m_Eye = m_DriverModel->NodeTransform("head", head) ? glm::vec3(rootW * head[3]) : m_Feet + glm::vec3(0.0f, 1.62f, 0.0f);
 }
 
-void NpcBody::Flinch(World& world, const glm::vec3& dirWorld) {
+void NpcBody::OffsetSpine(const glm::quat& step) {
+    // Down the chain, each bone's own global is made current before the next is read; everything below (arms, fingers) is
+    // refreshed once at the end instead of after every bone.
+    for (int k = 0; k < m_DriverSpineCount; ++k) {
+        const int b = m_DriverSpine[k];
+        IK::OffsetBoneOnly(m_Pose, m_DriverParents, m_Globals, b, glm::vec3(0.0f), step, IK::Position(m_Globals[(size_t)b]));
+        if (k + 1 < m_DriverSpineCount) IK::RefreshPath(m_Pose, m_DriverParents, m_Globals, b, m_DriverSpine[k + 1]);
+    }
+    if (m_DriverSpineCount > 0) IK::RefreshGlobals(m_Pose, m_DriverParents, m_Globals, m_DriverSpine[0]);
+}
+
+void NpcBody::Flinch(World& world, const glm::vec3& dirWorld, const glm::vec3* point, int part) {
     if (!IsActive() || m_PoseExternal || !world.Registry.valid(m_Driver)) return;
     auto& ac = world.Registry.get<AnimatorControllerComponent>(m_Driver);
     glm::vec2 push = FirstPersonBodyLocalMove(glm::vec3(dirWorld.x, 0.0f, dirWorld.z), m_Yaw);
     if (glm::length(push) < 1e-4f) push = glm::vec2(0.0f, -1.0f);
     push = glm::normalize(push);
+    // Where it struck steers it too: an arm hit swings that shoulder back (the side the hit was on), a leg hit buckles
+    // the stance (more along the body's length); a head or chest hit goes with the round's own line.
+    if (point && part >= 0) {
+        const glm::vec2 off = FirstPersonBodyLocalMove(glm::vec3(point->x - m_Feet.x, 0.0f, point->z - m_Feet.z), m_Yaw);
+        if (part >= 3 && part <= 6 && std::abs(off.x) > 1e-3f) push.x += std::copysign(0.7f, off.x);
+        else if (part >= 7) push.y += push.y >= 0.0f ? 0.5f : -0.5f;
+        push = glm::normalize(push);
+    }
     ac.SetFloat("HitX", push.x);
     ac.SetFloat("HitY", push.y);
     ac.SetTrigger("Hit");
