@@ -1611,6 +1611,30 @@ void EditorLayer::DrawSettingsWindow(World& world) {
                                  "A minimized editor doesn't render at all.");
 
         ImGui::Spacing();
+        ImGui::SeparatorText("Render Resolution");
+        {
+            static const char* kResLabels[] = { "Native", "2160p", "1440p", "1080p", "900p", "720p" };
+            static const int   kResValues[] = { 0, 2160, 1440, 1080, 900, 720 };
+            int resIdx = 0;
+            for (int i = 0; i < IM_ARRAYSIZE(kResValues); ++i)
+                if (kResValues[i] == prefs.RenderHeight) { resIdx = i; break; }
+            ImGui::SetNextItemWidth(kw);
+            if (ImGui::Combo("Game render resolution", &resIdx, kResLabels, IM_ARRAYSIZE(kResLabels))) {
+                prefs.RenderHeight = kResValues[resIdx];
+                EditorSettings::Save();
+            }
+            if (ImGui::IsItemHovered())
+                EditorUI::SetTooltip("The Game view and Play render the 3D frame at this height and upscale it to\n"
+                                     "the screen (sharpened bicubic). On a 4K monitor, 1080p costs what a real\n"
+                                     "1080p monitor would. The HUD and editor UI stay at native resolution.");
+            if (prefs.RenderHeight == 0) ImGui::BeginDisabled();
+            ImGui::SetNextItemWidth(kw);
+            ImGui::SliderFloat("Upscale sharpness", &prefs.RenderSharpness, 0.0f, 1.0f, "%.2f");
+            if (ImGui::IsItemDeactivatedAfterEdit()) EditorSettings::Save();
+            if (prefs.RenderHeight == 0) ImGui::EndDisabled();
+        }
+
+        ImGui::Spacing();
         ImGui::SeparatorText("Rendering (HDR)");
 
         DrawPostProcessSettings(world, kw); // exposure + tone mapping — shared with Window ▸ Lighting

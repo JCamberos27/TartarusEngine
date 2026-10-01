@@ -28,6 +28,8 @@
 #include "FirstPersonAnimation.h"
 #include "FirstPersonAdsCarry.h"
 #include "AudioEngine.h"
+#include "AI/SquadVoice.h"
+#include <set>
 #include "Log.h" // #178 stack traces
 #include "InputMap.h"
 #include "AssetDatabase.h"
@@ -36,6 +38,8 @@
 #include "AtomicFile.h"
 #include "Camera.h"
 #include "PhysicsWorld.h"  // #201 - the physics sync regression test
+#include "Combat/Damage.h" // hit regions, damage zones
+#include "Npc/NpcRagdoll.h" // the soldier's part table
 #include "GameModuleAPI.h"  // QueryFilter / RaycastHit
 #include <cmath>   // #202 isfinite
 #include <limits>
@@ -1003,6 +1007,165 @@ void TestPlayerConfigRoundTrip() {
 // This lived only in --smoke-test, which CI runs with continue-on-error because the runners have
 // no GPU - so the check never actually gated anything. PhysX needs no GL, so it belongs here
 // where the exit code is enforced. It is the one test that stands a real PhysX world up.
+// Bones and ragdoll parts map to the regions of a hit, which map to the zones the damage multipliers are keyed on.
+void TestNpcHitRegions() {
+    CHECK(RegionFromBone("head") == HitRegion::Head);
+    CHECK(RegionFromBone("neck_01") == HitRegion::Torso);
+    CHECK(RegionFromBone("spine_03") == HitRegion::Torso);
+    CHECK(RegionFromBone("pelvis") == HitRegion::Torso);
+    CHECK(RegionFromBone("clavicle_l") == HitRegion::Torso);
+    CHECK(RegionFromBone("upperarm_l") == HitRegion::Arm);
+    CHECK(RegionFromBone("lowerarm_r") == HitRegion::Arm);
+    CHECK(RegionFromBone("hand_r") == HitRegion::Arm);
+    CHECK(RegionFromBone("index_01_l") == HitRegion::Arm);
+    CHECK(RegionFromBone("thigh_l") == HitRegion::Leg);
+    CHECK(RegionFromBone("calf_r") == HitRegion::Leg);
+    CHECK(RegionFromBone("foot_l") == HitRegion::Leg);
+    CHECK(RegionFromBone("ball_r") == HitRegion::Leg);
+    CHECK(RegionFromBone("nonsense") == HitRegion::Torso);
+    CHECK(RegionFromBone(nullptr) == HitRegion::Torso);
+    // Every part of the soldier's table lands where its bone does.
+    for (int i = 0; i < NpcRagdoll::kParts; ++i) CHECK(RegionFromPart(i) == RegionFromBone(NpcPartDefOf(i).Bone));
+    CHECK(RegionFromPart(-1) == HitRegion::Torso && RegionFromPart(99) == HitRegion::Torso);
+    // Regions to zones: arms and legs are both "limb", with the weapon's limb multiplier.
+    CHECK(ZoneOfRegion(HitRegion::Head) == HitZone::Head);
+    CHECK(ZoneOfRegion(HitRegion::Torso) == HitZone::Torso);
+    CHECK(ZoneOfRegion(HitRegion::Arm) == HitZone::Limb && ZoneOfRegion(HitRegion::Leg) == HitZone::Limb);
+    FirstPersonWeaponGameplay w;
+    w.Damage = 30.0f;
+    w.HeadMultiplier = 2.0f;
+    w.LimbMultiplier = 0.5f;
+    w.FalloffStart = 1000.0f;
+    w.FalloffEnd = 2000.0f;
+    CHECK(std::fabs(DamageForHit(w, ZoneOfRegion(RegionFromPart(2)), 5.0f) - 60.0f) < 1e-3f);  // head
+    CHECK(std::fabs(DamageForHit(w, ZoneOfRegion(RegionFromPart(1)), 5.0f) - 30.0f) < 1e-3f);  // chest
+    CHECK(std::fabs(DamageForHit(w, ZoneOfRegion(RegionFromPart(4)), 5.0f) - 15.0f) < 1e-3f);  // forearm
+    CHECK(std::fabs(DamageForHit(w, ZoneOfRegion(RegionFromPart(9)), 5.0f) - 15.0f) < 1e-3f);  // thigh
+}
+
+// IK::SetGlobals sets several bones in one pass and lands exactly where setting them one by one does.
+void TestIKSetGlobalsBatch() {
+    IK::Pose pose(6);
+    const std::vector<int> parents = {-1, 0, 1, 1, 3, 4};
+    pose[0].S = glm::vec3(0.8f);
+    for (int i = 1; i < 6; ++i) {
+        pose[(size_t)i].T = glm::vec3(0.1f * (float)i, 0.5f, 0.05f);
+        pose[(size_t)i].R = glm::angleAxis(0.2f * (float)i, glm::normalize(glm::vec3(1, (float)i, 2)));
+    }
+    std::vector<glm::mat4> g0;
+    IK::ComputeGlobals(pose, parents, g0);
+    const glm::quat turn = glm::angleAxis(0.7f, glm::vec3(0, 1, 0));
+    const std::vector<IK::GlobalTarget> targets = {
+        {1, IK::Position(g0[1]) + glm::vec3(0.1f, 0.0f, 0.0f), turn * IK::Rotation(g0[1])},
+        {3, IK::Position(g0[3]) + glm::vec3(0.0f, 0.2f, 0.0f), turn * IK::Rotation(g0[3])},
+        {5, IK::Position(g0[5]) + glm::vec3(-0.1f, 0.1f, 0.0f), IK::Rotation(g0[5])}};
+    IK::Pose a = pose, b = pose;
+    std::vector<glm::mat4> ga = g0, gb = g0;
+    IK::SetGlobals(a, parents, ga, targets);
+    for (const auto& t : targets) IK::SetGlobal(b, parents, gb, t.Node, t.Pos, t.Rot);
+    for (size_t i = 0; i < pose.size(); ++i) {
+        CHECK(glm::length(a[i].T - b[i].T) < 1e-5f);
+        CHECK(std::fabs(glm::dot(a[i].R, b[i].R)) > 1.0f - 1e-5f);
+        CHECK(glm::length(IK::Position(ga[i]) - IK::Position(gb[i])) < 1e-5f);
+    }
+}
+
+// The per-bone hitboxes: while active the unscoped queries (the player's shots) hit them and skip the capsule; a scoped one
+// (an NPC's) is the other way round; a ray over body parts says which part; a ragdoll's parts answer the same ray.
+void TestNpcBodyParts() {
+    World world;
+    PhysicsWorld::Create(world);
+    CHECK(PhysicsWorld::IsActive());
+    if (!PhysicsWorld::IsActive()) return;
+    constexpr unsigned kEntity = 4242u;
+    const float foot[3] = {0.0f, 0.0f, 0.0f};
+    const PhysicsWorld::CharacterId cct = PhysicsWorld::CreateNpcCharacter(kEntity, 0.3f, 0.6f, foot);
+    CHECK(cct != PhysicsWorld::kNoCharacter);
+    // Eleven short capsules stacked up the capsule's axis, part i at height 0.15 i + 0.1, lying along X.
+    PhysicsWorld::HitCapsule caps[NpcRagdoll::kParts];
+    for (int i = 0; i < NpcRagdoll::kParts; ++i) {
+        caps[i].Position[1] = 0.15f * (float)i + 0.1f;
+        caps[i].HalfLength = 0.1f;
+        caps[i].Radius = 0.05f;
+    }
+    const int boxes = PhysicsWorld::CreateNpcHitboxes(cct, caps, NpcRagdoll::kParts);
+    CHECK(boxes >= 0);
+    auto settle = [&] { PhysicsWorld::Step(1.0f / 60.0f, world, {}); };
+    settle();
+    QueryFilter all;
+    RaycastHit hit;
+    const float along[3] = {1.0f, 0.0f, 0.0f};
+    // Down the middle of each part: the player's ray hits that part's hitbox.
+    for (int i = 0; i < NpcRagdoll::kParts; ++i) {
+        const float o[3] = {-3.0f, caps[i].Position[1], 0.0f};
+        CHECK(PhysicsWorld::RaycastFiltered(o, along, 20.0f, all, hit) && hit.Entity == kEntity);
+        PhysicsWorld::BodyPartHit part;
+        CHECK(PhysicsWorld::RaycastBodyParts(o, along, 20.0f, part));
+        CHECK(part.Kind == 1 && part.Part == i && part.Entity == kEntity);
+        CHECK(std::fabs(part.Distance - (3.0f - 0.1f - 0.05f)) < 0.02f); // the capsule's near cap
+    }
+    // Inside the movement capsule but outside every hitbox: the player's ray passes through; an NPC's (scoped) hits the capsule.
+    const float graze[3] = {-3.0f, 0.9f, 0.22f};
+    CHECK(!PhysicsWorld::RaycastFiltered(graze, along, 20.0f, all, hit));
+    {
+        PhysicsWorld::ScopedQueryPolicy npc(0xFFFFFFFEu, /*hitPlayer=*/true);
+        CHECK(PhysicsWorld::RaycastFiltered(graze, along, 20.0f, all, hit) && hit.Entity == kEntity);
+        // ... and it does not see the hitboxes: down the middle of part 4 it meets the capsule's surface instead (z = -0.3).
+        const float mid[3] = {-3.0f, caps[4].Position[1], 0.0f};
+        CHECK(PhysicsWorld::RaycastFiltered(mid, along, 20.0f, all, hit) && hit.Distance > 2.5f && hit.Distance < 2.8f);
+    }
+    // Inactive (a soldier far from the player): the capsule answers every query again.
+    PhysicsWorld::SetNpcHitboxesActive(boxes, false);
+    settle();
+    CHECK(PhysicsWorld::RaycastFiltered(graze, along, 20.0f, all, hit) && hit.Entity == kEntity);
+    PhysicsWorld::SetNpcHitboxesActive(boxes, true);
+    settle();
+    CHECK(!PhysicsWorld::RaycastFiltered(graze, along, 20.0f, all, hit));
+    // Moved: the hitboxes go where they are put.
+    for (auto& c : caps) c.Position[2] = 1.0f;
+    PhysicsWorld::SetNpcHitboxPoses(boxes, caps, NpcRagdoll::kParts);
+    settle();
+    const float shifted[3] = {-3.0f, caps[2].Position[1], 1.0f};
+    PhysicsWorld::BodyPartHit moved;
+    CHECK(PhysicsWorld::RaycastBodyParts(shifted, along, 20.0f, moved) && moved.Part == 2);
+    PhysicsWorld::DestroyNpcHitboxes(boxes);
+    settle();
+    PhysicsWorld::BodyPartHit none;
+    CHECK(!PhysicsWorld::RaycastBodyParts(shifted, along, 20.0f, none));
+    CHECK(PhysicsWorld::RaycastFiltered(graze, along, 20.0f, all, hit) && hit.Entity == kEntity);
+    PhysicsWorld::DestroyNpcCharacter(cct);
+
+    // A ragdoll's parts are tagged the same way; its slerp drives can be set and cleared; a shove wakes it.
+    PhysicsWorld::RagdollPart parts[NpcRagdoll::kParts];
+    for (int i = 0; i < NpcRagdoll::kParts; ++i) {
+        parts[i].Parent = i == 0 ? -1 : i - 1;
+        parts[i].Position[0] = 20.0f;
+        parts[i].Position[1] = 10.0f + 0.3f * (float)i;
+        parts[i].Anchor[0] = 20.0f;
+        parts[i].Anchor[1] = parts[i].Position[1] - 0.15f;
+        parts[i].HalfLength = 0.1f;
+        parts[i].Radius = 0.05f;
+    }
+    const int ragdoll = PhysicsWorld::CreateRagdoll(kEntity, parts, NpcRagdoll::kParts);
+    CHECK(ragdoll >= 0);
+    PhysicsWorld::SetRagdollDrive(ragdoll, 700.0f, 60.0f);
+    const float ident[4] = {0.0f, 0.0f, 0.0f, 1.0f};
+    PhysicsWorld::SetRagdollDriveTarget(ragdoll, 3, ident);
+    settle();
+    const float o5[3] = {17.0f, parts[5].Position[1], 0.0f};
+    PhysicsWorld::BodyPartHit rp;
+    CHECK(PhysicsWorld::RaycastBodyParts(o5, along, 20.0f, rp) && rp.Kind == 2 && rp.Part == 5 && rp.Entity == kEntity);
+    PhysicsWorld::SetRagdollDrive(ragdoll, 0.0f, 0.0f);
+    const float j[3] = {0.0f, 0.0f, 5.0f}, at[3] = {20.0f, parts[5].Position[1], 0.0f};
+    PhysicsWorld::RagdollImpulse(ragdoll, 5, j, at);
+    CHECK(!PhysicsWorld::RagdollAsleep(ragdoll));
+    for (int i = 0; i < 30; ++i) settle();
+    float p[3], q[4];
+    CHECK(PhysicsWorld::GetRagdollPart(ragdoll, 5, p, q) && std::isfinite(p[0]) && std::isfinite(p[1]) && p[1] < parts[5].Position[1]);
+    PhysicsWorld::DestroyRagdoll(ragdoll);
+    PhysicsWorld::Destroy(); // (the core stays up for the next test)
+}
+
 void TestPhysicsWorldSync() {
     World world;
     const glm::vec3 zero(0.0f), one(1.0f);
@@ -4592,6 +4755,127 @@ void TestAssetPackImport() {
     fs::remove_all(base, ec);
 }
 
+// The squad radio: one speaker per squad, priority preemption, per-event cooldowns, "copy" responders.
+void TestSquadVoice() {
+    namespace fs = std::filesystem;
+    const glm::vec3 pos(0.0f);
+    // The built-in tables: unique keys, wounded outranks everything but nothing outranks the others' copy.
+    {
+        std::set<std::string> keys;
+        for (int i = 0; i < (int)Bark::Count; ++i) keys.insert(BarkKey((Bark)i));
+        CHECK(keys.size() == (size_t)Bark::Count);
+        CHECK(BarkDefaults(Bark::Wounded).Priority > BarkDefaults(Bark::ManDown).Priority);
+        CHECK(BarkDefaults(Bark::Copy).Priority == 0);
+    }
+    // Priority and cooldown.
+    {
+        SquadVoice v;
+        v.SetAudio(false);
+        CHECK(v.Say(0.0f, 0, 1, 11, Bark::Contact, pos));
+        CHECK(v.Busy(0, 0.5f));
+        CHECK(!v.Say(0.5f, 0, 2, 12, Bark::Reloading, pos));            // busy, lower priority
+        CHECK(!v.Say(0.5f, 0, 2, 12, Bark::Contact, pos));              // equal priority and cooling down
+        CHECK(v.Say(0.5f, 0, 2, 12, Bark::Wounded, pos));               // higher: cuts in
+        CHECK(v.History().size() == 2);
+        CHECK(std::abs(v.History()[0].Cut - 0.5f) < 1e-5f);
+        CHECK(v.Cuts() == 1);
+        CHECK(v.FirstOverlap(0) < 0);
+        const float free = v.History()[1].End + 0.5f;
+        CHECK(!v.Busy(0, free));
+        CHECK(!v.Say(free, 0, 2, 12, Bark::Wounded, pos));              // wounded cools down (4 s)
+        CHECK(v.Say(free + v.Cooldown(Bark::Wounded), 0, 2, 12, Bark::Wounded, pos));
+        // A second squad has its own channel.
+        CHECK(v.Say(0.6f, 1, 5, 15, Bark::Reloading, pos));
+        CHECK(v.FirstOverlap(1) < 0);
+        // A copy never cuts anything.
+        SquadVoice w;
+        w.SetAudio(false);
+        CHECK(w.Say(0.0f, 0, 1, 1, Bark::Idle, pos));
+        CHECK(!w.Say(0.1f, 0, 2, 2, Bark::Copy, pos));
+        const auto sub = w.TakeSubtitles();
+        CHECK(sub.size() == 1 && !sub[0].Text.empty() && sub[0].Unit == 1);
+        CHECK(w.TakeSubtitles().empty());
+    }
+    // Responders answer "copy" after the line, never over it.
+    {
+        SquadVoice v;
+        v.SetAudio(false);
+        int copies = 0;
+        float t = 0.0f;
+        for (int k = 0; k < 40; ++k) {
+            t += 40.0f;
+            CHECK(v.Say(t, 0, 1, 1, Bark::ManDown, pos, 2, 2, pos));
+            const float end = v.History().back().End;
+            for (float u = t; u < end + 3.0f; u += 0.05f) v.Update(u);
+        }
+        for (const BarkPlayed& b : v.History()) copies += b.Responder ? 1 : 0;
+        CHECK(copies > 5 && copies < 40);
+        CHECK(v.FirstOverlap(0) < 0);
+        for (size_t i = 1; i < v.History().size(); ++i)
+            if (v.History()[i].Responder) CHECK(v.History()[i].Start >= v.History()[i - 1].End && v.History()[i].Speaker == 2);
+    }
+    // A manifest sets priorities, cooldowns, texts and the clip lengths that hold the channel.
+    {
+        const fs::path dir = fs::temp_directory_path() / "tartarus_squadvoice_test";
+        std::error_code ec;
+        fs::create_directories(dir, ec);
+        {
+            std::ofstream m(dir / "manifest.json");
+            m << R"({"sampleRate":22050,"voices":2,"events":{
+                "contact":{"priority":2,"cooldown":1.0,"lines":[{"text":"Test contact.","files":["a.wav","b.wav"],"duration":[3.0,4.0]}]},
+                "reloading":{"priority":6,"cooldown":0.0,"lines":[{"text":"Test reload.","files":["c.wav","d.wav"],"duration":[1.0,1.0]}]}}})";
+        }
+        SquadVoice v;
+        v.SetAudio(false);
+        CHECK(v.LoadManifest(dir.string()));
+        CHECK(v.Priority(Bark::Contact) == 2 && v.Priority(Bark::Reloading) == 6);
+        CHECK(v.Say(0.0f, 0, 1, 7, Bark::Contact, pos));                // voice 1: 4 s
+        CHECK(std::abs(v.History()[0].End - 4.0f) < 1e-4f && v.History()[0].Text == "Test contact.");
+        CHECK(v.Say(1.0f, 0, 2, 8, Bark::Reloading, pos));              // the manifest made reloading outrank contact
+        CHECK(v.History()[0].Cut >= 0.0f);
+        CHECK(v.FirstOverlap(0) < 0);
+        fs::remove_all(dir, ec);
+    }
+    // A long random session over three squads: nothing overlaps, no event repeats inside its cooldown.
+    {
+        SquadVoice v;
+        v.SetAudio(false);
+        std::uint32_t rng = 12345u;
+        auto rnd = [&]() { rng = rng * 1664525u + 1013904223u; return (rng >> 8) & 0xFFFF; };
+        for (float t = 0.0f; t < 900.0f; t += 0.1f) {
+            const int tries = (int)(rnd() % 3u);
+            for (int k = 0; k < tries; ++k) {
+                const int squad = (int)(rnd() % 3u);
+                const Bark b = (Bark)(rnd() % (unsigned)Bark::Count);
+                v.Say(t, squad, squad * 4 + (int)(rnd() % 4u), 1, b, pos, (int)(rnd() % 4u) - 1 + squad * 4);
+            }
+            v.Update(t);
+        }
+        CHECK(v.Spoken() > 100);
+        for (int s = 0; s < 3; ++s) CHECK(v.FirstOverlap(s) < 0);
+        float last[3][(int)Bark::Count];
+        for (auto& row : last) for (float& f : row) f = -1e9f;
+        bool cooldownsHold = true;
+        for (const BarkPlayed& b : v.History()) {
+            if (b.Responder) continue;
+            if (b.Start - last[b.Squad][(int)b.Event] < v.Cooldown(b.Event) - 1e-3f) cooldownsHold = false;
+            last[b.Squad][(int)b.Event] = b.Start;
+        }
+        CHECK(cooldownsHold);
+    }
+    // The real manifest, when the project is around (the generator's output): every event has lines.
+    {
+        SquadVoice v;
+        v.SetAudio(false);
+        const std::string root = ProjectPaths::Resolve("assets/Audio/Voice/combine");
+        if (fs::exists(fs::path(root) / "manifest.json")) {
+            CHECK(v.LoadManifest(root));
+            for (int i = 0; i < (int)Bark::Count; ++i) CHECK(v.Say(1000.0f * (float)(i + 1), 0, i, 1, (Bark)i, pos));
+            for (const BarkPlayed& b : v.History()) CHECK(!b.File.empty() && b.End > b.Start + 0.3f && fs::exists(fs::path(root) / b.File));
+        }
+    }
+}
+
 int RunUnitTests() {
     const std::vector<std::pair<const char*, std::function<void()>>> tests = {
         {"AssetGuid", TestAssetGuid},
@@ -4654,8 +4938,12 @@ int RunUnitTests() {
         {"PlayerConfigRoundTrip", TestPlayerConfigRoundTrip},
         {"PlayerAcceleration", TestPlayerAcceleration},
         {"FramePacing", TestFramePacing},
+        {"NpcHitRegions", TestNpcHitRegions},
+        {"IKSetGlobalsBatch", TestIKSetGlobalsBatch},
+        {"NpcBodyParts", TestNpcBodyParts},
         {"PhysicsWorldSync", TestPhysicsWorldSync},
         {"PhysicalSky", TestPhysicalSky},
+        {"SquadVoice", TestSquadVoice},
     };
     for (const auto& [name, fn] : tests) {
         g_CurrentTest = name;

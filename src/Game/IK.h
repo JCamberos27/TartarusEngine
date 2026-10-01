@@ -35,6 +35,11 @@ glm::quat Rotation(const glm::mat4& global); // scale removed
 void SetGlobal(Pose& pose, const std::vector<int>& parents, std::vector<glm::mat4>& globals, int i,
                const glm::vec3& pos, const glm::quat& rot);
 
+// SetGlobal for several nodes in one pass. `nodes` ascending (parents first); wanted[k] = {position, rotation} for
+// nodes[k]. The pose and globals come out the same as SetGlobal on each in turn, at one refresh instead of one each.
+struct GlobalTarget { int Node; glm::vec3 Pos; glm::quat Rot; };
+void SetGlobals(Pose& pose, const std::vector<int>& parents, std::vector<glm::mat4>& globals, const std::vector<GlobalTarget>& targets);
+
 // Rigidly moves node `i` (and so everything under it) in model space: rotation `deltaRot` about
 // `pivot`, then translation `deltaPos`.
 void OffsetBone(Pose& pose, const std::vector<int>& parents, std::vector<glm::mat4>& globals, int i,

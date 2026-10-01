@@ -83,6 +83,20 @@ void NpcBody::SkinnedRegion(const World& world, Region region, std::vector<glm::
             ps = PieceSkin{};
             ps.M = &m;
             ps.Built = true;
+            struct Key {
+                const void* Verts; int Meshes; size_t Count;
+                bool operator==(const Key& o) const { return Verts == o.Verts && Meshes == o.Meshes && Count == o.Count; }
+            };
+            struct KeyHash {
+                size_t operator()(const Key& k) const { return std::hash<const void*>()(k.Verts) * 31u ^ (size_t)k.Meshes ^ k.Count * 131u; }
+            };
+            static std::unordered_map<Key, std::shared_ptr<const SkinTables>, KeyHash> s_Tables;
+            const Key key{m.MeshCount() > 0 ? (const void*)m.MeshSkinVertices(0).data() : nullptr, m.MeshCount(),
+                          m.MeshCount() > 0 ? m.MeshSkinVertices(0).size() : 0u};
+            if (auto found = s_Tables.find(key); found != s_Tables.end()) {
+                ps.T = found->second;
+            } else {
+            auto tables = std::make_shared<SkinTables>();
             for (int r = 0; r < 2; ++r) {
                 // Vertices whose heaviest bone is the region's: the neck and head, or the pelvis and spine.
                 std::vector<int> ids;
@@ -112,7 +126,7 @@ void NpcBody::SkinnedRegion(const World& world, Region region, std::vector<glm::
                     if (taken.insert(cell(p.x) | cell(p.y) << 21 | cell(p.z) << 42).second) verts[n++] = iv;
                 }
                 verts.resize(n);
-                RegionSkin& skin = r == 0 ? ps.Head : ps.Torso;
+                RegionSkin& skin = r == 0 ? tables->Head : tables->Torso;
                 std::unordered_map<int, int> slot;
                 for (const auto& [i, v] : verts) {
                     const ModelMesh::SkinVertex& sv = m.MeshSkinVertices(i)[(size_t)v];
@@ -131,8 +145,13 @@ void NpcBody::SkinnedRegion(const World& world, Region region, std::vector<glm::
                     skin.Points.push_back(rp);
                 }
             }
+            if (s_Tables.size() > 64) s_Tables.clear();
+            s_Tables[key] = tables;
+            ps.T = tables;
+            }
         }
-        const RegionSkin& skin = region == Region::Head ? ps.Head : ps.Torso;
+        if (!ps.T) continue;
+        const RegionSkin& skin = region == Region::Head ? ps.T->Head : ps.T->Torso;
         if (skin.Points.empty()) continue;
         const glm::mat4 toWorld = world.ComposeWorldTransform(m_Pieces[k]);
         thread_local std::vector<glm::mat4> palette;
@@ -153,23 +172,33 @@ void NpcBody::SkinnedRegion(const World& world, Region region, std::vector<glm::
 }
 
 void NpcBody::RotateSpine(const glm::quat& modelDelta) {
-    if (AngleOf(modelDelta) < 1e-6f) return;
-    std::vector<int> parents;
-    std::vector<glm::mat4> globals;
-    for (size_t pk = 0; pk < m_Models.size(); ++pk) {
-        if (!PieceTakes(pk, kSkinsSpine)) continue;
-        Model& m = *m_Models[pk];
-        IK::Pose pose = m.AppliedLocalPose();
-        if (pose.empty() || (int)pose.size() != m.NodeCount()) continue;
-        int spine[5], n = 0;
-        for (int k = 0; k < 5; ++k)
-            if (const int b = m.NodeIndex(FPBody::kBoneSpine[k]); b >= 0) spine[n++] = b;
-        if (n == 0) continue;
-        parents.resize(pose.size());
-        for (int i = 0; i < (int)pose.size(); ++i) parents[(size_t)i] = m.NodeParent(i);
-        IK::ComputeGlobals(pose, parents, globals);
-        const glm::quat step = glm::normalize(glm::slerp(kNone, modelDelta, 1.0f / (float)n));
-        for (int k = 0; k < n; ++k) IK::OffsetBone(pose, parents, globals, spine[k], glm::vec3(0.0f), step, IK::Position(globals[(size_t)spine[k]]));
+    if (AngleOf(modelDelta) < 1e-6f || !m_DriverModel) return;
+    Model& m = *m_DriverModel;
+    IK::Pose& pose = m_Pose;
+    pose = m.AppliedLocalPose();
+    const int n = m_DriverSpineCount;
+    if (n == 0 || (int)pose.size() != m.NodeCount()) return;
+    IK::ComputeGlobals(pose, m_DriverParents, m_Globals);
+    const glm::quat step = glm::normalize(glm::slerp(kNone, modelDelta, 1.0f / (float)n));
+    OffsetSpine(step);
+    m.ApplyLocalPose(pose);
+    m_PiecesStale = true;
+}
+
+void NpcBody::SyncPieces() {
+    m_PiecesStale = false;
+    if (!m_DriverModel) return;
+    const auto& src = m_DriverModel->AppliedLocalPose();
+    if ((int)src.size() != m_DriverModel->NodeCount()) return;
+    for (size_t k = 0; k < m_Models.size() && k < m_UpperMap.size(); ++k) {
+        if ((int)k == m_DriverIndex || m_UpperMap[k].empty() || !m_Models[k]) continue;
+        if (!PieceTakes(k, kSkinsSpine | kSkinsArms | kSkinsNeck)) continue;
+        Model& m = *m_Models[k];
+        IK::Pose& pose = m_Pose;
+        pose = m.AppliedLocalPose();
+        if ((int)pose.size() != m.NodeCount()) continue;
+        // Rotations only: every pass here turns bones, and a piece keeps its own bones' offsets.
+        for (const auto& [pn, dn] : m_UpperMap[k]) pose[(size_t)pn].R = src[(size_t)dn].R;
         m.ApplyLocalPose(pose);
     }
 }
@@ -213,6 +242,7 @@ glm::vec3 NpcBody::HoldWeapon(World& world, entt::entity armsRig, entt::entity w
     else m_ArmsWeight -= m_ArmsWeight * Follow(dt, 0.1f);
     m_Hold = NpcHoldReport{};
     if (!haveRig || m_ArmsWeight < 1e-3f) {
+        if (m_PiecesStale) SyncPieces();
         m_GunShift = glm::vec3(0.0f);
         m_HaveElbowAim[0] = m_HaveElbowAim[1] = false;
         m_ElbowClear[0] = m_ElbowClear[1] = 0.0f;
@@ -221,13 +251,17 @@ glm::vec3 NpcBody::HoldWeapon(World& world, entt::entity armsRig, entt::entity w
         return glm::vec3(0.0f);
     }
     const Model& rig = *reg.get<RenderableComponent>(armsRig).ModelRef;
-    if ((int)rig.AppliedLocalPose().size() != rig.NodeCount()) return glm::vec3(0.0f);
+    if ((int)rig.AppliedLocalPose().size() != rig.NodeCount()) {
+        if (m_PiecesStale) SyncPieces();
+        return glm::vec3(0.0f);
+    }
     const glm::mat4 rootW = RootWorld();
     const glm::mat4 toModel = glm::inverse(rootW);
     const glm::mat3 toModel3(toModel);
     const glm::quat toModelRot = IK::Rotation(toModel);
     const glm::vec3 up(0.0f, 1.0f, 0.0f);
-    const int armsK = ArmsPiece();
+    // The solve runs on the driver (the whole skeleton; SyncPieces hands the result to the drawn pieces).
+    const int armsK = m_DriverIndex >= 0 ? m_DriverIndex : ArmsPiece();
 
     // The rig's stance for the chest (LateUpdate's shoulder line next frame): its left-from-right upper arm,
     // in the camera's frame.
@@ -247,6 +281,7 @@ glm::vec3 NpcBody::HoldWeapon(World& world, entt::entity armsRig, entt::entity w
     // The drawn surfaces are skinned and searched every third frame (staggered between soldiers); what they gave -
     // the gun's push out of them, the elbows' swing, the cheek weld's share - holds and eases in between.
     const bool meshNow = meshChecks && (m_HoldFrame++ % 3) == (unsigned)m_HoldStagger;
+    if (meshNow && m_PiecesStale) SyncPieces(); // the drawn surfaces are skinned from the pieces' own poses
     const bool torsoPoints = meshNow && m_Set.ElbowClearance > 0.0f;
     if (torsoPoints) SkinnedRegion(world, Region::Torso, m_TorsoPoints);
     else if (!meshChecks) m_TorsoPoints.clear();
@@ -321,8 +356,24 @@ glm::vec3 NpcBody::HoldWeapon(World& world, entt::entity armsRig, entt::entity w
     bool haveHand[2] = {false, false};
     glm::vec3 rigShoulder[2]{}, rigElbow[2]{};
     bool haveRigElbow[2] = {false, false};
-    struct Finger { std::string Name; glm::quat Rot; };
-    std::vector<Finger> fingers;
+    // The rig's fingers: the nodes under each hand, found once per rig, then read by index every frame.
+    if (m_FingerRig != &rig || m_FingerNodes != rig.NodeCount()) {
+        m_FingerRig = &rig;
+        m_FingerNodes = rig.NodeCount();
+        m_FingerList.clear();
+        for (int s = 0; s < 2; ++s) {
+            const int rigHand = rig.NodeIndex(FPBody::kBoneHand[s]);
+            if (rigHand < 0) continue;
+            for (int i = rigHand + 1; i < rig.NodeCount(); ++i) {
+                int p = rig.NodeParent(i);
+                while (p > rigHand) p = rig.NodeParent(p);
+                if (p == rigHand) m_FingerList.push_back({i, s, rig.NodeName(i)});
+            }
+        }
+    }
+    struct Finger { const std::string* Name; glm::quat Rot; };
+    thread_local std::vector<Finger> fingers;
+    fingers.clear();
     for (int s = 0; s < 2; ++s) {
         glm::mat4 h(1.0f), u(1.0f), l(1.0f);
         if (!rig.NodeTransform(FPBody::kBoneHand[s], h)) continue;
@@ -335,13 +386,10 @@ glm::vec3 NpcBody::HoldWeapon(World& world, entt::entity armsRig, entt::entity w
             rigElbow[s] = glm::vec3(rigWorld * l[3]);
             haveRigElbow[s] = true;
         }
-        const int rigHand = rig.NodeIndex(FPBody::kBoneHand[s]);
-        for (int i = rigHand + 1; i < rig.NodeCount(); ++i) {
-            int p = rig.NodeParent(i);
-            while (p > rigHand) p = rig.NodeParent(p);
-            if (p != rigHand) continue;
+        for (const FingerNode& f : m_FingerList) {
+            if (f.Hand != s) continue;
             glm::mat4 g(1.0f);
-            if (rig.NodeTransform(rig.NodeName(i), g)) fingers.push_back({rig.NodeName(i), glm::normalize(toModelRot * IK::Rotation(rigWorld * g))});
+            if (rig.NodeTransformAt(f.Node, g)) fingers.push_back({&f.Name, glm::normalize(toModelRot * IK::Rotation(rigWorld * g))});
         }
     }
 
@@ -349,8 +397,9 @@ glm::vec3 NpcBody::HoldWeapon(World& world, entt::entity armsRig, entt::entity w
     // and the elbows'; the rest take the same (one skeleton, one model space: the pieces sit on the root).
     std::vector<size_t> order;
     if (armsK >= 0) order.push_back((size_t)armsK);
-    for (size_t k = 0; k < m_Models.size(); ++k)
-        if ((int)k != armsK) order.push_back(k);
+    if (m_DriverIndex < 0)
+        for (size_t k = 0; k < m_Models.size(); ++k)
+            if ((int)k != armsK) order.push_back(k);
     const float shoulderMax = glm::radians(std::clamp(m_Set.ShoulderMaxAngle, 0.0f, 90.0f));
     const float leanMax = glm::radians(std::clamp(m_Set.ReachLeanMax, 0.0f, 60.0f));
     const glm::mat3 camToModel = toModel3 * glm::mat3(cam.Right(), cam.Up(), cam.Front()); // the camera's frame, model space
@@ -512,7 +561,7 @@ glm::vec3 NpcBody::HoldWeapon(World& world, entt::entity armsRig, entt::entity w
         }
         // Fingers: each takes the rig finger's model-space rotation (its position stays on its own bone).
         for (const Finger& f : fingers) {
-            const int i = m.NodeIndex(f.Name);
+            const int i = m.NodeIndex(*f.Name);
             if (i < 0) continue;
             const int par = parents[(size_t)i];
             const glm::quat parentRot = par >= 0 ? IK::Rotation(globals[(size_t)par]) : kNone;
@@ -520,6 +569,55 @@ glm::vec3 NpcBody::HoldWeapon(World& world, entt::entity armsRig, entt::entity w
             IK::RefreshGlobals(pose, parents, globals, i);
         }
         m.ApplyLocalPose(pose);
+    }
+
+    // 3b. A hand signal: the support hand comes off the gun and chops the way an order sends the squad (forward and a
+    // little up, at arm's length), then goes back. The gun stays in the right hand meanwhile.
+    m_SignalLeft = std::max(0.0f, m_SignalLeft - dt);
+    const float signalWant = m_SignalLeft > 0.0f ? 1.0f : 0.0f;
+    m_SignalWeight += (signalWant - m_SignalWeight) * Follow(dt, signalWant > m_SignalWeight ? 0.1f : 0.16f);
+    if (m_SignalWeight > 1e-3f && m_DriverModel && m_DriverIndex >= 0) {
+        Model& m = *m_DriverModel;
+        IK::Pose& pose = m_Pose;
+        pose = m.AppliedLocalPose();
+        const int upper = m.NodeIndex(FPBody::kBoneUpperArm[0]), lower = m.NodeIndex(FPBody::kBoneLowerArm[0]),
+                  hand = m.NodeIndex(FPBody::kBoneHand[0]);
+        glm::vec3 dir = toModel3 * m_SignalDir;
+        dir.y = 0.0f;
+        if ((int)pose.size() == m.NodeCount() && upper >= 0 && lower >= 0 && hand >= 0 && glm::dot(dir, dir) > 1e-6f) {
+            IK::ComputeGlobals(pose, m_DriverParents, m_Globals);
+            const glm::vec3 a = IK::Position(m_Globals[(size_t)upper]);
+            const float armLen = glm::length(IK::Position(m_Globals[(size_t)lower]) - a) +
+                                 glm::length(IK::Position(m_Globals[(size_t)hand]) - IK::Position(m_Globals[(size_t)lower]));
+            const float sw = m_SignalWeight;
+            const glm::vec3 reach = glm::normalize(glm::normalize(dir) * 0.9f + up * 0.2f);
+            IK::SolveTwoBone(pose, m_DriverParents, m_Globals, upper, lower, hand, a + reach * armLen * 0.97f, nullptr, sw);
+            // A flat blade of a hand, not the grip: the fingers straighten (to the bind pose, which is open) ...
+            m.BindLocalPose(m_BindScratch);
+            for (int i = hand + 1; i < m.NodeCount(); ++i) {
+                int p = m_DriverParents[(size_t)i];
+                while (p > hand) p = m_DriverParents[(size_t)p];
+                if (p == hand) pose[(size_t)i].R = glm::slerp(pose[(size_t)i].R, m_BindScratch[(size_t)i].R, sw);
+            }
+            IK::ComputeGlobals(pose, m_DriverParents, m_Globals);
+            // ... laid along the reach with the thumb up (measured on the hand's own fingers, whatever its bone axes).
+            const int middle = m.NodeIndex("middle_01_l"), thumb = m.NodeIndex("thumb_01_l");
+            if (middle >= 0 && thumb >= 0) {
+                const glm::vec3 h = IK::Position(m_Globals[(size_t)hand]);
+                const glm::vec3 along = IK::Position(m_Globals[(size_t)middle]) - h;
+                if (glm::dot(along, along) > 1e-8f) {
+                    const glm::quat lay(glm::normalize(along), reach);
+                    glm::vec3 t = lay * (IK::Position(m_Globals[(size_t)thumb]) - h);
+                    t -= reach * glm::dot(t, reach);
+                    glm::vec3 u = up - reach * glm::dot(up, reach);
+                    glm::quat roll(1.0f, 0.0f, 0.0f, 0.0f);
+                    if (glm::dot(t, t) > 1e-8f && glm::dot(u, u) > 1e-8f) roll = glm::quat(glm::normalize(t), glm::normalize(u));
+                    const glm::quat turn = glm::slerp(kNone, glm::normalize(roll * lay), sw);
+                    IK::OffsetBone(pose, m_DriverParents, m_Globals, hand, glm::vec3(0.0f), turn, h);
+                }
+            }
+            m.ApplyLocalPose(pose);
+        }
     }
 
     // 4. On the sights the head comes down onto the stock: the neck tilts it toward the eye (the camera,
@@ -575,6 +673,7 @@ glm::vec3 NpcBody::HoldWeapon(World& world, entt::entity armsRig, entt::entity w
                 const glm::quat half = glm::normalize(glm::slerp(kNone, turn, 0.5f));
                 for (size_t pk = 0; pk < m_Models.size(); ++pk) {
                     if (!PieceTakes(pk, kSkinsNeck)) continue;
+                    if (m_DriverIndex >= 0 && (int)pk != m_DriverIndex) continue; // SyncPieces passes it on
                     Model& m = *m_Models[pk];
                     IK::Pose pose = m.AppliedLocalPose();
                     if (pose.empty() || (int)pose.size() != m.NodeCount()) continue;
@@ -590,6 +689,8 @@ glm::vec3 NpcBody::HoldWeapon(World& world, entt::entity armsRig, entt::entity w
             }
         }
     }
+    m_PiecesStale = true;
+    SyncPieces();
     // The eye (perception, the weapon's next camera) follows the head as it now is.
     if (m_DriverModel) {
         glm::mat4 hd(1.0f);

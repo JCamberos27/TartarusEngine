@@ -8,7 +8,7 @@
 
 namespace {
 
-constexpr int kBehaviours = 10;
+constexpr int kBehaviours = kBehaviourCount;
 constexpr float kInertia = 0.12f;
 
 float Flat(const glm::vec3& a, const glm::vec3& b) { return glm::length(glm::vec2(a.x - b.x, a.z - b.z)); }
@@ -32,6 +32,7 @@ float Rand01(NpcDirector&) { return std::uniform_real_distribution<float>(0.0f, 
 int NpcBrain::FindCover(NpcDirector& d, Npc& n, CoverGoal goal, const glm::vec3& threat) {
     CoverSystem& cover = d.m_Cover;
     if (cover.Points().empty()) return -1;
+    d.m_CoverSearchFrame = d.m_Frame;
     const glm::vec3 threatEye = threat + glm::vec3(0.0f, 1.6f, 0.0f);
     const float current = Flat(n.Feet, threat);
     // Where the rest of the squad is (the flank goes wide of it).
@@ -42,10 +43,11 @@ int NpcBrain::FindCover(NpcDirector& d, Npc& n, CoverGoal goal, const glm::vec3&
     centroid /= (float)count;
     const glm::vec3 squadDir = FlatDir(threat, centroid);
 
-    std::vector<int> near;
+    static thread_local std::vector<int> near;
     cover.Query(n.Feet, goal == CoverGoal::Flank ? 34.0f : 28.0f, near);
     struct Cand { int Index; float Score; };
-    std::vector<Cand> cands;
+    static thread_local std::vector<Cand> cands;
+    cands.clear();
     const bool shotgun = n.Class == WeaponClass::Shotgun;
     for (int i : near) {
         const CoverPoint& c = cover.Points()[(size_t)i];
@@ -135,6 +137,11 @@ void NpcBrain::Think(NpcDirector& d, World& world, Npc& n, const PlayerSnapshot&
 void NpcBrain::Choose(NpcDirector& d, Npc& n, const PlayerSnapshot& p) {
     (void)p;
     const float now = d.m_Now;
+    // Down and bleeding: nothing to decide, it crawls for cover and shoots from it till it dies.
+    if (n.Wounded) {
+        if (n.Doing != Behaviour::Wounded || n.Phase < 0) Enter(d, n, (int)Behaviour::Wounded, p);
+        return;
+    }
     const TargetMemory& m = n.Mem;
     const float since = now - m.LastSeen;
     const float health = n.Health / std::max(n.MaxHealth, 1.0f);
@@ -183,6 +190,8 @@ void NpcBrain::Choose(NpcDirector& d, Npc& n, const PlayerSnapshot& p) {
         else if (shotgun && dist > 13.0f && health > 0.5f && since < 12.0f) at(Behaviour::Push) = 0.6f;
         if (health < 0.35f && underFire && !n.Retreated) at(Behaviour::Retreat) = 0.88f;
     }
+    // A bad leg: no running round the side, no pushing up.
+    if (now < n.LimpUntil) { at(Behaviour::Flank) = 0.0f; at(Behaviour::Push) = 0.0f; }
     // Commitment: what it's doing scores a little higher, unless that is finished (Phase -1).
     if (n.Phase >= 0 && n.Doing != Behaviour::Dead) {
         const float minCommit = n.Doing == Behaviour::TakeCover || n.Doing == Behaviour::Flank || n.Doing == Behaviour::Push ||
@@ -196,7 +205,15 @@ void NpcBrain::Choose(NpcDirector& d, Npc& n, const PlayerSnapshot& p) {
     int best = 0;
     for (int i = 1; i < kBehaviours; ++i) if (s[i] > s[best]) best = i;
     for (int i = 0; i < kBehaviours; ++i) n.Scores[i] = s[i];
-    if ((Behaviour)best != n.Doing || n.Phase < 0) Enter(d, n, best, p);
+    if ((Behaviour)best != n.Doing || n.Phase < 0) {
+        const Behaviour b = (Behaviour)best;
+        const bool needsCover = b == Behaviour::TakeCover || b == Behaviour::Flank || b == Behaviour::Push || b == Behaviour::Retreat;
+        if (needsCover && d.m_CoverSearchFrame == d.m_Frame) {
+            n.NextThink = now; // someone searched this frame already: decide again next frame
+            return;
+        }
+        Enter(d, n, best, p);
+    }
 }
 
 void NpcBrain::Enter(NpcDirector& d, Npc& n, int behaviour, const PlayerSnapshot& p) {
@@ -215,6 +232,7 @@ void NpcBrain::Enter(NpcDirector& d, Npc& n, int behaviour, const PlayerSnapshot
         if (sq.PushHolder == n.Index) { sq.PushHolder = -1; sq.PushUntil = 0.0f; }
         n.HasPushToken = false;
     }
+    const Behaviour prev = n.Doing;
     n.Doing = b;
     n.DoingSince = now;
     n.Phase = 0;
@@ -237,7 +255,8 @@ void NpcBrain::Enter(NpcDirector& d, Npc& n, int behaviour, const PlayerSnapshot
         } else {
             const CoverPoint& c = d.m_Cover.Points()[(size_t)n.Cover];
             const glm::vec3 right = glm::normalize(glm::cross(FlatDir(n.Feet, threat), glm::vec3(0, 1, 0)));
-            d.Callout(n, glm::dot(c.Pos - n.Feet, right) > 0.0f ? "Flanking right!" : "Flanking left!");
+            d.Callout(n, glm::dot(c.Pos - n.Feet, right) > 0.0f ? Bark::FlankRight : Bark::FlankLeft);
+            n.Body.Signal(c.Pos - n.Feet);
         }
         break;
     case Behaviour::Push:
@@ -247,25 +266,56 @@ void NpcBrain::Enter(NpcDirector& d, Npc& n, int behaviour, const PlayerSnapshot
             d.m_Cover.Release(n.Index, now);
             n.Phase = n.Class == WeaponClass::Shotgun ? 2 : -1;
         }
-        if (n.Phase >= 0) d.Callout(n, "Moving up!");
+        if (n.Phase >= 0) {
+            d.Callout(n, Bark::MovingUp);
+            n.Body.Signal((n.Cover >= 0 ? d.m_Cover.Points()[(size_t)n.Cover].Pos : threat) - n.Feet);
+        }
         break;
     case Behaviour::Retreat:
         n.Retreated = true;
         if (FindCover(d, n, CoverGoal::Retreat, threat) < 0) n.Phase = -1;
-        else d.Callout(n, "Falling back!");
+        else d.Callout(n, Bark::FallingBack);
+        break;
+    case Behaviour::Investigate:
+        d.Callout(n, Bark::Investigating);
         break;
     case Behaviour::CoverFight:
         n.PhaseUntil = now + 0.6f + 0.8f * Rand01(d);
         break;
     case Behaviour::Search:
-        d.Callout(n, "Where'd he go?");
+        d.Callout(n, Bark::LostTarget);
         n.Goal = threat;
         break;
     case Behaviour::Idle:
+        if (prev == Behaviour::Investigate || prev == Behaviour::Search) d.Callout(n, Bark::AllClear);
         d.m_Cover.Release(n.Index, now);
         n.Cover = -1;
         n.IdleUntil = now + 1.0f + 3.0f * Rand01(d);
         break;
+    case Behaviour::Wounded: {
+        // The nearest cover that stands between it and the threat, near enough to crawl to.
+        d.m_Cover.Release(n.Index, now);
+        n.Cover = -1;
+        static thread_local std::vector<int> near;
+        d.m_Cover.Query(n.Feet, 14.0f, near);
+        float best = 1e9f;
+        int pick = -1;
+        // Cover that faces the threat first; failing that, any, the nearest.
+        for (int pass = 0; pass < 2 && pick < 0; ++pass)
+            for (int i : near) {
+                const CoverPoint& c = d.m_Cover.Points()[(size_t)i];
+                if (c.ClaimedBy >= 0 && c.ClaimedBy != n.Index) continue;
+                if (pass == 0 && glm::dot(c.Normal, FlatDir(c.Pos, threat)) < 0.2f) continue;
+                const float dist = Flat(n.Feet, c.Pos);
+                if (dist > 1.0f && dist < best) { best = dist; pick = i; }
+            }
+        if (pick >= 0) {
+            d.m_Cover.Claim(pick, n.Index, now);
+            n.Cover = pick;
+            n.CoverGood = true;
+        }
+        break;
+    }
     default:
         break;
     }
@@ -283,7 +333,7 @@ void NpcBrain::Run(NpcDirector& d, World& world, Npc& n, const PlayerSnapshot& p
     const glm::vec3 aimAt = m.Visible ? (n.VisiblePoints > 0 ? n.SeenPoint : p.Feet + glm::vec3(0.0f, p.Height * 0.7f, 0.0f)) : threatChest;
     const bool shotgun = n.Class == WeaponClass::Shotgun;
     const float ammo01 = n.Weapon && n.Weapon->IsActive() ? (float)n.Weapon->Ammo() / (float)std::max(1, n.Weapon->MagazineSize()) : 1.0f;
-    const bool reloading = n.Weapon && n.Weapon->IsActive() && n.Weapon->CurrentState().find("Reload") != std::string::npos;
+    const bool reloading = n.Reloading;
     const float arriveDist = 0.55f;
 
     const NpcIntent prev = it;
@@ -555,8 +605,28 @@ void NpcBrain::Run(NpcDirector& d, World& world, Npc& n, const PlayerSnapshot& p
         }
         break;
     }
+    case Behaviour::Wounded: {
+        // On a knee, crawling for cover (the director holds its speed to a crawl), shooting when it has the player.
+        it.Crouch = true;
+        it.Aim = m.Known;
+        it.FaceAim = true;
+        it.Fire = m.Visible || now - n.LastOwnSight < 1.5f;
+        it.Reload = ammo01 <= 0.0f;
+        if (n.Cover >= 0) {
+            const CoverPoint& c = d.m_Cover.Points()[(size_t)n.Cover];
+            if (Flat(n.Feet, c.Pos) > 0.5f) moveTo(c.Pos, Gait::Walk);
+        }
+        break;
+    }
     case Behaviour::Dead:
         break;
     }
+    // Reactions over whatever the behaviour wants: a duck from a near miss holds the trigger for its beat; a
+    // squadmate calling out draws a look while the gun is down.
+    if (now < n.CowerUntil) {
+        it.Cower = 1.0f;
+        it.Fire = false;
+    }
+    if (now < n.GlanceUntil && !it.Aim) it.LookPoint = n.GlanceAt;
     if (it.Move && !d.m_Nav.Valid()) it.Move = false;
 }
