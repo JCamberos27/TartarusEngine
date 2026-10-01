@@ -23,7 +23,7 @@ comes within **Clothing Near Hide** of the eye (wider to the sides). See [BODY_S
 
 ## Wardrobes (`*.wardrobe`)
 A JSON file describing one character pack
-([`Characters/Quantum/Quantum.wardrobe`](project/assets/Characters/Quantum/Quantum.wardrobe)). It holds
+([`Characters/Quantum/Quantum.wardrobe`](../project/assets/Characters/Quantum/Quantum.wardrobe)). It holds
 only what the folders can't say:
 
 | Key | Meaning |
@@ -148,15 +148,15 @@ so the body, the head, a shirt under a jacket or hair under a hood can't clip th
   an undo, or loading a scene).
 
 ## Code
-- [`src/Game/Wardrobe.h`](src/Game/Wardrobe.h): parsing, classification and rule resolution (pure, unit tested).
-- [`src/Game/OutfitSystem.h`](src/Game/OutfitSystem.h): the catalog scan, plus `Apply`, `Equip`, `SetGender`,
+- [`src/Game/Wardrobe.h`](../src/Game/Wardrobe.h): parsing, classification and rule resolution (pure, unit tested).
+- [`src/Game/OutfitSystem.h`](../src/Game/OutfitSystem.h): the catalog scan, plus `Apply`, `Equip`, `SetGender`,
   `SetRace`, `Randomize`, colourways, `AdoptExisting`, presets, `UpdateHiding` and `UpdateAttachments`, and the
   background path the editor uses (`Submit`, `UpdatePending`, `IsPending`, `CancelPending`). This is also the
   API for an in-game character creator. The Inspector saves presets to `assets/Characters/Outfits/<name>.outfit`;
   the artist's are in `Outfits/Quantum/`.
-- [`src/Game/OutfitCoverage.h`](src/Game/OutfitCoverage.h): coverage geometry (pure, unit tested).
-- [`src/Editor/EditorLayer_Outfit.cpp`](src/Editor/EditorLayer_Outfit.cpp): the Inspector editor.
-- [`src/Game/OutfitAudit.h`](src/Game/OutfitAudit.h), [`src/Game/OutfitTestScene.h`](src/Game/OutfitTestScene.h):
+- [`src/Game/OutfitCoverage.h`](../src/Game/OutfitCoverage.h): coverage geometry (pure, unit tested).
+- [`src/Editor/EditorLayer_Outfit.cpp`](../src/Editor/EditorLayer_Outfit.cpp): the Inspector editor.
+- [`src/Game/OutfitAudit.h`](../src/Game/OutfitAudit.h), [`src/Game/OutfitTestScene.h`](../src/Game/OutfitTestScene.h):
   `--outfit-audit` / `--outfit-rules` / `--outfit-selftest` / `--outfit-cost` and `--gen-outfit-scenes`.
 
 Female bodies play the male mocap clips as-is, without proportion retargeting.

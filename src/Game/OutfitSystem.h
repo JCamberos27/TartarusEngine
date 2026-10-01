@@ -15,7 +15,7 @@ class AssetLibrary;
 class Model;
 class World;
 
-// Character outfits in the scene (CHARACTER_OUTFITS.md): builds, swaps and removes the Outfit Piece
+// Character outfits in the scene (docs/CHARACTER_OUTFITS.md): builds, swaps and removes the Outfit Piece
 // children of an object with a Character Outfit component, from its wardrobe's catalog. The Inspector's
 // outfit editor calls these (after PushUndo); a future in-game character creator can call them too.
 namespace OutfitSystem {

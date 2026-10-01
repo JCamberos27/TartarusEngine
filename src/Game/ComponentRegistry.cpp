@@ -680,7 +680,7 @@ void RegisterEngineComponents() {
         Register<FirstPersonBodyComponent>(std::move(m));
     }
 
-    // Character outfits (CHARACTER_OUTFITS.md): the Inspector's outfit editor draws the choices.
+    // Character outfits (docs/CHARACTER_OUTFITS.md): the Inspector's outfit editor draws the choices.
     {
         ReflectComponent m;
         m.Name = "Character Outfit"; m.Icon = ICON_FA_PERSON_DRESS; m.Category = "Gameplay";

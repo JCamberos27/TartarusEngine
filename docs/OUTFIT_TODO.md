@@ -17,7 +17,7 @@ long worktree paths), e.g. `cmake --build C:/tb/perf --config Release`.
 
 | Command | Use |
 |---|---|
-| `--unit-tests` | 7349 checks, 0 failures today |
+| `--unit-tests` | must report 0 failures |
 | `--outfit-selftest` | OutfitSystem API end to end, 45 checks |
 | `--outfit-rules` | presets and 10,000 random outfits |
 | `--outfit-audit assets/Characters/Quantum/Quantum.wardrobe out.csv --outfit-posed` | clipping per pair, in bind pose and 32 animation poses (about 2.5 min) |
@@ -143,10 +143,8 @@ Worst single pairs: sport sneakers under cargo, jeans and sport pants in a crouc
   Don't regenerate Sandbox.
 
 ## 3. Phase 5: editor UI (`src/Editor/EditorLayer_Outfit.cpp`)
-Not started. From the audit plan:
-- **Dangling thumbnails:** `g_Thumbs.Rendered` keeps GL texture ids that `ModelThumbnail`'s cache can delete.
-  Ask `ModelThumbnail` each time. Make thumbnail requests use a light load that doesn't keep whole models
-  resident.
+Partly done: #500 replaced the thumbnail cards with a text list and a 3D preview (which also removed the
+dangling-thumbnail problem), and #501 replaced the "None" row with a Remove button. Left from the audit plan:
 - **Per-frame cost in the Inspector:**
   - `Catalog::Find` is a linear search that allocates strings: build a lowercase-path hash map once in
     `LoadCatalog`;
@@ -154,7 +152,7 @@ Not started. From the audit plan:
   - `ColourGroups` is recomputed every frame: cache per `outfit.Version`;
   - with the "..." menu open it scans the whole asset tree for presets: throttle like `ProjectModelFiles` in
     `EditorLayer_Animator.cpp`, and give each preset a unique ImGui id;
-  - the card grid draws every card: use `ImGuiListClipper` or cull rows;
+  - the item list draws every row: use `ImGuiListClipper`;
   - `ContainsI` → the shared `MatchesFilter`.
 - **Consistency and style:**
   - "Auto Hide Skin" shows twice (the generic field from `ComponentRegistry.cpp` and the outfit panel's
@@ -163,7 +161,7 @@ Not started. From the audit plan:
   - gender pills, slot tabs and the lock via `ActionButton(active=…)`, and remove the button-styling
     allowlist entry;
   - `AlignToColumn` in place of `SameLine(60)`; no hard-coded pixel sizes;
-  - card tooltips through `EditorUI::SetTooltip`, and tooltips where missing;
+  - tooltips where missing;
   - label the colourway rows;
   - errors in the danger colour, notes dismissable; remove the early return that hides notes, the checkbox
     and the warning;
