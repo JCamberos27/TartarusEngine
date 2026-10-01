@@ -2445,6 +2445,7 @@ int main(int argc, char** argv) {
                     if (weaponTest) {
                         player.ScriptMove = weaponTest->Move();
                         player.ScriptSprint = weaponTest->Sprint();
+                        player.ScriptCrouch = weaponTest->Crouch();
                     }
                     if (npcTest) npcTest->Drive(player, firstPersonPresentation, npcDirector, playerVitals, gameDt);
                     player.Update(gameDt, world, window.Handle(), gameHasInput && !playerVitals.IsDead());
@@ -3580,7 +3581,7 @@ int main(int argc, char** argv) {
             // Scene and Game are tabs in the same dock node - at most one is visible at a time, so
             // skip this render entirely when the Scene tab isn't the one showing (#172). Halves
             // per-frame render cost in the common case (editing in one tab or the other).
-            if ((editorUIVisible && editor.IsSceneViewportVisible()) || (npcTest && playing)) {
+            if ((editorUIVisible && editor.IsSceneViewportVisible()) || ((npcTest || stockProbeMode) && playing)) {
                 PROFILE_SCOPE("Scene View Render");
                 PROFILE_GPU_SCOPE("Scene View Render");
                 glm::vec2 available = editor.GetLastSceneContentRegion();

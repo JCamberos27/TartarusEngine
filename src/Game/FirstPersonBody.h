@@ -222,7 +222,8 @@ private:
     std::map<std::pair<const Model*, std::string>, bool> m_SkinsUnder;
     bool SkinsUnder(const Model& m, const std::vector<int>& roots, const std::string& key);
     void SkinnedPoints(const World& world, BodyRegion region, std::vector<glm::vec3>& points, std::vector<int>* pieceOf = nullptr) const;
-    std::vector<glm::vec3> m_HeadPointBuffer, m_TorsoPointBuffer; // ArmsLateUpdate's, kept so the frame doesn't allocate
+    std::vector<glm::vec3> m_HeadPointBuffer, m_TorsoPointBuffer;
+    std::vector<glm::vec3> m_HeadScratch; // the head turned by the cheek weld, checked against the gun // ArmsLateUpdate's, kept so the frame doesn't allocate
     glm::vec3 m_WorldGunShift{0.0f};   // the world gun off the first-person one (world, eased)
     // The twins' own Arm Steadiness / elbow state (the pieces' is m_ShoulderAnchor ... m_ElbowAim).
     glm::vec3 m_WorldShoulderAnchor[2] = {glm::vec3(0.0f), glm::vec3(0.0f)};
@@ -279,6 +280,10 @@ glm::vec3 FirstPersonBodyShoulderLineTilt(const glm::vec3& bodyAcross, const glm
 float FirstPersonBodyArmedEyeLift(float pitchRadians);
 // The share of the view's pitch the spine takes: Spine Aim looking up, Spine Aim Down looking down.
 float FirstPersonBodySpineAim(float pitchRadians, float spineAim, float spineAimDown);
+// Armed, the furthest forward the world body's torso leans (radians, pelvis to neck, + = forward): a slight lean
+// (0.2) plus `spineShare` of the view's pitch down (less looking up). The clips' deeper leans (the crouch walk's
+// hunch) are brought up to it.
+float FirstPersonBodyAimLeanMost(float pitchRadians, float spineShare);
 // How far segment `a`-`b` must move along unit `dir` for every one of `points` to be at least `clearance` from it:
 // the first of 0, `step`, 2 `step` ... that clears, and `maxPush` when none up to it does. 0 when already clear.
 float FirstPersonBodyClearPush(const std::vector<glm::vec3>& points, const glm::vec3& a, const glm::vec3& b, const glm::vec3& dir,
