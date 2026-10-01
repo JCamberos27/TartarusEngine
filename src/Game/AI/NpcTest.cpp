@@ -31,9 +31,19 @@ NpcTest::NpcTest(const std::string& scenario) : m_Scenario(scenario.empty() ? "w
     if (m_Scenario == "die") m_Duration = 60.0f;
     if (m_Scenario == "sandbox") m_Duration = 40.0f;
     if (m_Scenario == "pose") m_Duration = 2.5f + (float)PosePhaseCount() * kPosePhaseTime + 1.0f;
+    if (m_Scenario == "deaths") m_Duration = 60.0f;
     if (const char* t = EnvVar("NPC_TEST_SECONDS")) m_Duration = std::max(5.0f, (float)std::atof(t));
     if (const char* r = EnvVar("NPC_TEST_RECORD")) m_RecordDir = r;
     std::cout << "[NpcTest] scenario '" << m_Scenario << "', " << m_Duration << " s" << std::endl;
+}
+
+void NpcTest::PrintCosts(const NpcDirector& npcs) const {
+    const auto& t = npcs.ThinkCost();
+    const auto& l = npcs.LateCost();
+    std::printf("[NpcTest] cost avg/max ms over %d frames: think %.3f/%.3f  late %.3f/%.3f  (AI+late avg %.3f)\n", t.Frames, t.Avg(),
+                t.Max, l.Avg(), l.Max, t.Avg() + l.Avg());
+    for (int i = 0; i < NpcDirector::SubCount; ++i)
+        std::printf("[NpcTest]   %-12s avg %.3f  max %.3f\n", NpcDirector::SubName(i), npcs.SubCost(i).Avg(), npcs.SubCost(i).Max);
 }
 
 void NpcTest::Check(bool ok, const std::string& what) {
@@ -112,6 +122,10 @@ void NpcTest::After(World& world, NpcDirector& npcs, const PlayerVitals& vitals,
     const float now = npcs.Now();
     m_Time = now;
     m_Shot.clear();
+    if (m_Scenario == "deaths") {
+        Deaths(world, npcs, now);
+        return;
+    }
     if (m_Scenario == "pose") {
         Pose(world, npcs, now);
         if (now >= m_Duration && !m_Done) {
@@ -283,6 +297,7 @@ void NpcTest::After(World& world, NpcDirector& npcs, const PlayerVitals& vitals,
         std::cout << "[NpcTest] behaviours seen: " << seen << std::endl;
         std::printf("[NpcTest] first known %.1f s, first shot %.1f s, first hit on player %.1f s, first in cover %.1f s, max shooters %d\n",
                     m_FirstKnown, m_FirstShot, m_FirstDamage, m_FirstCover, npcs.MaxShootersSeen());
+        PrintCosts(npcs);
         std::fflush(stdout);
         Check(m_MaxAlive >= 3, "at least three soldiers spawned (" + std::to_string(m_MaxAlive) + ")");
         Check(npcs.Nav().Valid() && npcs.Nav().PolyCount() > 0, "a navigation mesh was built");
@@ -320,6 +335,266 @@ void NpcTest::CheckRadio(NpcDirector& npcs) {
     }
     Check(overlaps == 0, "no squad had two radio lines on air at once");
     Check(kinds >= 2, "the radio carried " + std::to_string(kinds) + " kinds of call");
+}
+
+// --- deaths: hitboxes, hit reactions, deaths -------------------------------------------------------------------------
+namespace {
+unsigned RootId(const Npc& n) { return (unsigned)entt::to_integral(n.Root); }
+
+struct DeathCase {
+    const char* Name;
+    int Part;          // the hitbox part shot (NpcRagdoll's order)
+    float Damage;      // the weapon's damage per round
+    bool LimpAfterFirst, StaggerAfterFirst, DiesFirst;
+};
+const DeathCase kDeathCases[] = {
+    {"head", 2, 34.0f, false, false, true},       // 34 x the head multiplier: dead at once
+    {"chest", 1, 34.0f, false, false, false},     // a few rounds
+    {"thigh", 7, 40.0f, true, false, false},      // a leg: it limps
+    {"forearm", 4, 70.0f, false, true, false},    // a heavy hit on an arm: it staggers, a second kills
+};
+constexpr int kDeathCaseCount = (int)(sizeof(kDeathCases) / sizeof(kDeathCases[0]));
+const char* const kCorpseBones[4] = {"pelvis", "head", "hand_l", "foot_r"};
+} // namespace
+
+void NpcTest::Deaths(World& world, NpcDirector& npcs, float now) {
+    (void)world;
+    npcs.HoldFire = true;
+    npcs.NoLod = true;
+    npcs.TrackDeathPop = true;
+    npcs.SetWoundChance(1.0f);
+    npcs.Frozen = m_DStep < 4; // still for the rays and the kills; the brain runs for the wounded
+    m_Shot.clear();
+    FirstPersonWeaponGameplay w;
+    w.HeadMultiplier = 2.0f;
+    w.LimbMultiplier = 0.75f;
+    w.FalloffStart = 1000.0f;
+    w.FalloffEnd = 2000.0f;
+    w.FalloffMin = 1.0f;
+    auto used = [&](const Npc& n) { return std::find(m_DUsed.begin(), m_DUsed.end(), n.Name) != m_DUsed.end(); };
+    auto fresh = [&]() -> Npc* {
+        for (const auto& up : npcs.Npcs())
+            if (up && !up->Dead && !up->Wounded && !used(*up) && up->Hitboxes && up->Hitboxes->Active() && up->Cct != PhysicsWorld::kNoCharacter)
+                return up.get();
+        return nullptr;
+    };
+    auto find = [&](const std::string& name) -> Npc* {
+        for (const auto& up : npcs.Npcs())
+            if (up && up->Name == name) return up.get();
+        return nullptr;
+    };
+    // A round down a part's middle: from behind it, or from the outside for an arm.
+    auto from = [&](const Npc& n, int part, glm::vec3& origin, glm::vec3& dir) {
+        const float yaw = n.Body.Yaw();
+        const glm::vec3 fwd(std::sin(yaw), 0.0f, std::cos(yaw)), left(std::cos(yaw), 0.0f, -std::sin(yaw));
+        const glm::vec3 c = n.Hitboxes->Centre(n.Body, part);
+        dir = fwd;
+        if (part == 3 || part == 4) dir = -left;
+        else if (part == 5 || part == 6) dir = left;
+        origin = c - dir * 3.0f;
+    };
+    auto shoot = [&](Npc& n, int part, float damage) {
+        w.Damage = damage;
+        glm::vec3 origin, dir;
+        from(n, part, origin, dir);
+        const glm::vec3 c = n.Hitboxes->Centre(n.Body, part);
+        bool killed = false, head = false;
+        npcs.OnPlayerHit(world, RootId(n), c, origin, dir, w, &killed, &head);
+        return killed;
+    };
+    auto step = [&](int to) { m_DStep = to; m_DAt = now; };
+
+    switch (m_DStep) {
+    case 0: { // wait for a squad with hitboxes
+        int ready = 0;
+        for (const auto& up : npcs.Npcs())
+            if (up && !up->Dead && up->Hitboxes && up->Hitboxes->Active()) ++ready;
+        if (now > 3.0f && ready >= 3) step(1);
+        break;
+    }
+    case 1: { // a ray at every bone's middle names that bone; a grazing ray hits the capsule only for an NPC's own queries
+        if (now - m_DAt < 0.3f) break;
+        Npc* a = fresh();
+        if (!a) break;
+        int right = 0;
+        std::string wrong;
+        for (int part = 0; part < NpcRagdoll::kParts; ++part) {
+            glm::vec3 origin, dir;
+            from(*a, part, origin, dir);
+            const float o[3] = {origin.x, origin.y, origin.z}, d[3] = {dir.x, dir.y, dir.z};
+            PhysicsWorld::BodyPartHit bp;
+            if (PhysicsWorld::RaycastBodyParts(o, d, 6.0f, bp) && bp.Kind == 1 && bp.Part == part && bp.Entity == RootId(*a)) ++right;
+            else wrong += std::string(" ") + NpcPartDefOf(part).Bone + "->" + std::to_string(bp.Part);
+        }
+        std::printf("[NpcTest] hitbox rays: %d / %d parts named correctly%s\n", right, NpcRagdoll::kParts, wrong.c_str());
+        Check(right == NpcRagdoll::kParts, "a ray down each bone's hitbox names that bone" + wrong);
+        // The movement capsule is skipped by the player's rays but not by the soldiers': a ray just inside the capsule's
+        // edge at thigh height misses every hitbox. (PhysX gives a controller's query actor 0.8 of its radius.)
+        float capFeet[3], capRadius = 0.3f;
+        PhysicsWorld::GetNpcCapsule(a->Cct, capFeet, &capRadius, nullptr);
+        const float side = 0.8f * capRadius * 0.9f;
+        const float yaw = a->Body.Yaw();
+        const glm::vec3 fwd(std::sin(yaw), 0.0f, std::cos(yaw)), left(std::cos(yaw), 0.0f, -std::sin(yaw));
+        // (From in front, down the line it faces: open ground, not a wall at its back.)
+        const glm::vec3 g = a->Feet + glm::vec3(0.0f, 0.55f, 0.0f) + left * side + fwd * 1.2f;
+        const float o[3] = {g.x, g.y, g.z}, d[3] = {-fwd.x, -fwd.y, -fwd.z};
+        QueryFilter f;
+        f.HitTriggers = 0;
+        RaycastHit hit;
+        const bool playerHit = PhysicsWorld::RaycastFiltered(o, d, 2.4f, f, hit) && hit.Hit && hit.Entity == RootId(*a);
+        bool soldierHit = false;
+        {
+            PhysicsWorld::ScopedQueryPolicy policy(0xFFFFFFFEu, /*hitPlayer=*/true);
+            soldierHit = PhysicsWorld::RaycastFiltered(o, d, 2.4f, f, hit) && hit.Hit && hit.Entity == RootId(*a);
+        }
+        Check(!playerHit, "the player's shots pass through the movement capsule's empty corners");
+        Check(soldierHit, "a soldier's own queries still meet the movement capsule");
+        step(2);
+        break;
+    }
+    case 2: { // the kills
+        if (m_DCase >= kDeathCaseCount) { step(3); break; }
+        if (m_DNpc[0].empty()) {
+            Npc* n = fresh();
+            if (!n) break;
+            const DeathCase& dc = kDeathCases[m_DCase];
+            m_DNpc[0] = n->Name;
+            m_DUsed.push_back(n->Name);
+            const bool first = shoot(*n, dc.Part, dc.Damage);
+            if (dc.DiesFirst) Check(first && n->Dead, std::string(dc.Name) + ": one round kills");
+            else Check(!n->Dead, std::string(dc.Name) + ": the first round doesn't kill");
+            if (dc.LimpAfterFirst) Check(n->LimpUntil > npcs.Now(), std::string(dc.Name) + ": a leg hit leaves it limping");
+            else Check(n->LimpUntil < npcs.Now(), std::string(dc.Name) + ": no limp");
+            if (dc.StaggerAfterFirst)
+                Check(n->StaggerUntil > npcs.Now() && n->ReactionLeft >= 0.39f, std::string(dc.Name) + ": a heavy hit staggers it (aim paused 0.4 s)");
+            int rounds = 1;
+            while (!n->Dead && rounds < 12) { shoot(*n, dc.Part, dc.Damage); ++rounds; }
+            std::printf("[NpcTest] %s: dead after %d round(s)\n", dc.Name, rounds);
+            Check(n->Dead, std::string(dc.Name) + ": dead after " + std::to_string(rounds) + " round(s)");
+            m_DAt = now;
+            break;
+        }
+        Npc* n = find(m_DNpc[0]);
+        if (!n) { m_DNpc[0].clear(); ++m_DCase; break; }
+        if (n->Ragdoll || now - m_DAt > 1.0f) {
+            ++m_DDeaths;
+            const bool ragdoll = n->Ragdoll != nullptr;
+            if (ragdoll) ++m_DRagdolls;
+            Check(ragdoll, std::string(kDeathCases[m_DCase].Name) + ": a ragdoll took the body");
+            if (ragdoll) {
+                std::printf("[NpcTest] %s: pose pop %.1f cm between the last animated frame and the first ragdoll one\n",
+                            kDeathCases[m_DCase].Name, n->DeathPop * 100.0f);
+                Check(n->DeathPop >= 0.0f && n->DeathPop <= 0.15f,
+                      std::string(kDeathCases[m_DCase].Name) + ": no pose pop over 15 cm (" + std::to_string(n->DeathPop * 100.0f) + " cm)");
+                m_DWorstPop = std::max(m_DWorstPop, n->DeathPop);
+                Check(n->Ragdoll->DriveLeft() > 0.0f || npcs.Now() - n->DiedAt > NpcRagdoll::kDriveFade,
+                      std::string(kDeathCases[m_DCase].Name) + ": the joints start powered");
+            }
+            m_DNpc[0].clear();
+            ++m_DCase;
+        }
+        break;
+    }
+    case 3: { // a corpse is shot
+        Npc* corpse = nullptr;
+        for (const auto& up : npcs.Npcs())
+            if (up && up->Dead && up->Ragdoll) { corpse = up.get(); break; }
+        if (!corpse) { if (now - m_DAt > 10.0f) { Check(false, "a corpse to shoot"); step(4); } break; }
+        const bool asleep = corpse->Ragdoll->Asleep();
+        if (!asleep && now - corpse->DiedAt < 7.0f) break; // let it settle
+        if (m_DNpc[1].empty()) {
+            m_DNpc[1] = corpse->Name;
+            m_DCorpseAsleep = asleep;
+            for (int k = 0; k < NpcRagdoll::kParts; ++k) m_DCorpseBefore[k] = corpse->Ragdoll->PartPosition(k);
+            for (int k = 0; k < 4; ++k) corpse->Body.BoneWorld(kCorpseBones[k], m_DBoneBefore[k]);
+            // From the side at the chest part's middle.
+            const glm::vec3 c = corpse->Ragdoll->PartPosition(1);
+            const float o[3] = {c.x - 3.0f, c.y, c.z}, d[3] = {1.0f, 0.0f, 0.0f};
+            PhysicsWorld::BodyPartHit bp;
+            const bool part = PhysicsWorld::RaycastBodyParts(o, d, 6.0f, bp) && bp.Kind == 2 && bp.Entity == RootId(*corpse);
+            Check(part, "a ray at a corpse names a ragdoll part");
+            w.Damage = 34.0f;
+            npcs.OnPlayerHit(world, RootId(*corpse), c, glm::vec3(o[0], o[1], o[2]), glm::vec3(1.0f, 0.0f, 0.0f), w, nullptr, nullptr);
+            Check(!corpse->Ragdoll->Asleep(), std::string("a round wakes the corpse") + (m_DCorpseAsleep ? "" : " (it was still moving)"));
+            m_DAt = now;
+            break;
+        }
+        Npc* c = find(m_DNpc[1]);
+        if (!c || !c->Ragdoll) { step(4); break; }
+        if (now - m_DAt > 0.6f) {
+            float moved = 0.0f;
+            for (int k = 0; k < NpcRagdoll::kParts; ++k) moved += glm::length(c->Ragdoll->PartPosition(k) - m_DCorpseBefore[k]);
+            float drawn = 0.0f;
+            for (int k = 0; k < 4; ++k) {
+                glm::vec3 bone(0.0f);
+                c->Body.BoneWorld(kCorpseBones[k], bone);
+                drawn += glm::length(bone - m_DBoneBefore[k]);
+            }
+            std::printf("[NpcTest] corpse shot: parts moved %.1f cm in all, the drawn bones %.1f cm\n", moved * 100.0f, drawn * 100.0f);
+            Check(moved > 0.10f, "the corpse reacts to a shot (parts moved " + std::to_string(moved * 100.0f) + " cm in all)");
+            Check(drawn > 0.05f, "the drawn body follows the shoved corpse (" + std::to_string(drawn * 100.0f) + " cm)");
+            step(4);
+        }
+        break;
+    }
+    case 4: { // two soldiers go down wounded
+        Npc* a = fresh();
+        Npc* b = nullptr;
+        for (const auto& up : npcs.Npcs())
+            if (up && up.get() != a && !up->Dead && !up->Wounded && !used(*up) && up->Hitboxes && up->Hitboxes->Active() &&
+                up->Cct != PhysicsWorld::kNoCharacter)
+                b = up.get();
+        if (!a || !b) { if (now - m_DAt > 25.0f) { Check(false, "two soldiers to wound"); step(7); } break; }
+        for (Npc* n : {a, b}) {
+            m_DUsed.push_back(n->Name);
+            n->Health = 30.0f;
+            w.Damage = 12.0f;
+            shoot(*n, 1, 12.0f); // the chest: 18 left, under 20%
+        }
+        m_DNpc[0] = a->Name;
+        m_DNpc[1] = b->Name;
+        Check(a->Wounded && b->Wounded, "a body hit under 20% health can leave a soldier wounded (the chance forced to 1)");
+        Check(a->Callout == "Unit down, need assist", "a wounded soldier calls 'Unit down, need assist'");
+        Check(a->Doing == Behaviour::Wounded, "it is in the Wounded behaviour");
+        m_DWoundSpeed = 0.0f;
+        step(5);
+        break;
+    }
+    case 5: { // crawling; then the next hit kills one, the other bleeds out
+        Npc* a = find(m_DNpc[0]);
+        Npc* b = find(m_DNpc[1]);
+        if (!a || !b) { step(7); break; }
+        const float t = now - m_DAt;
+        if (!a->Dead && t > 0.5f) m_DWoundSpeed = std::max(m_DWoundSpeed, glm::length(a->Velocity));
+        if (!m_DKneelChecked && t > 0.5f) {
+            m_DKneelChecked = true;
+            Check(a->Intent.Crouch && a->Crouched, "a wounded soldier is down on a knee (crouched)");
+        }
+        if (t > 4.0f && !a->Dead && a->Wounded) {
+            std::printf("[NpcTest] wounded: top speed %.2f m/s\n", m_DWoundSpeed);
+            Check(m_DWoundSpeed <= 0.75f, "a wounded soldier crawls (top speed " + std::to_string(m_DWoundSpeed) + " m/s)");
+            Check(!b->Dead && b->Wounded, "an unhit wounded soldier is still alive after 4 s");
+            shoot(*a, 8, 20.0f); // any hit
+            Check(a->Dead, "a wounded soldier dies on the next hit");
+        }
+        if (t > 22.5f) {
+            Check(b->Dead, "a wounded soldier bleeds out after 20 s");
+            step(7);
+        }
+        break;
+    }
+    default:
+        break;
+    }
+    if (now >= m_Duration && !m_Done) {
+        m_Done = true;
+        PrintCosts(npcs);
+        Check(m_DStep >= 7, "every stage of the scenario ran (reached " + std::to_string(m_DStep) + ")");
+        Check(m_DDeaths == kDeathCaseCount && m_DRagdolls == kDeathCaseCount, "every kill ended in a ragdoll (" + std::to_string(m_DRagdolls) + ")");
+        std::printf("[NpcTest] worst pose pop %.1f cm\n", m_DWorstPop * 100.0f);
+    }
+    // Early finish once the last stage is through.
+    if (m_DStep >= 7 && !m_Done && now - m_DAt > 1.0f) m_Duration = now;
 }
 
 // --- pose: the weapon hold, close up ------------------------------------------------------------------

@@ -92,12 +92,26 @@ public:
     float Now() const { return m_Now; }
     float LastThinkMs() const { return m_ThinkMs; }
     float LastLateMs() const { return m_LateMs; }
+    // Per-sub-system CPU time (ms per frame), for the profiler and --npc-test: Think's perceive / brain / squads /
+    // move / aim+fire, LateUpdate's body / weapon hold / ragdolls / hitboxes. Averages skip the first second.
+    enum Sub { SubPerceive, SubBrain, SubSquads, SubMove, SubAimFire, SubBody, SubHold, SubRagdoll, SubHitbox, SubCount };
+    static const char* SubName(int s);
+    struct CostStats { double Sum = 0.0; float Max = 0.0f; int Frames = 0; float Avg() const { return Frames ? (float)(Sum / Frames) : 0.0f; } };
+    const CostStats& ThinkCost() const { return m_ThinkStat; }
+    const CostStats& LateCost() const { return m_LateStat; }
+    const CostStats& SubCost(int s) const { return m_SubStat[s]; }
     // Lines for the AI overlay (7 floats per vertex: xyz rgba, two per line).
     void DebugLines(std::vector<float>& out) const;
     // A scripted test can put a soldier somewhere and give it a goal.
     Npc* Find(int index);
     int Spawn(World& world, AssetLibrary& assets, int spawnIndex); // -1 on failure
-    void Kill(World& world, Npc& npc, const glm::vec3& dir, const glm::vec3& point, float shove = 40.0f);
+    // The soldier dies this frame; its ragdoll starts after this frame's late pose (so it takes the pose it died in),
+    // the shove on part `part` (-1: the part nearest `point`).
+    void Kill(World& world, Npc& npc, const glm::vec3& dir, const glm::vec3& point, float shove = 40.0f, int part = -1);
+    // Tests: the chance a soldier left under 20% health by a leg or torso hit goes down wounded (default 0.35).
+    void SetWoundChance(float chance) { m_WoundChance = chance; }
+    bool TrackDeathPop = false;        // record the bones' last animated pose so the ragdoll's first frame can be compared
+    bool NoLod = false;                // every soldier animates every frame (tests)
 
     struct SpawnPoint {
         glm::vec3 Pos{0.0f};
@@ -130,7 +144,14 @@ private:
     void Move(World& world, Npc& n, float dt);
     void AimAndFire(World& world, Npc& n, const PlayerSnapshot& p, float dt);
     void HandleShots(World& world, Npc& n, const PlayerSnapshot& p, const glm::vec3& muzzleShift);
-    void ApplyDamage(World& world, Npc& n, float amount, HitZone zone, const glm::vec3& point, const glm::vec3& dir, int attacker);
+    // `part`: the hitbox part struck (NpcRagdoll's order), -1 when unknown (the capsule: only the zone is known).
+    void ApplyDamage(World& world, Npc& n, float amount, HitZone zone, const glm::vec3& point, const glm::vec3& dir, int attacker,
+                     int part = -1);
+    void BecomeWounded(Npc& n);
+    void FinishDeath(World& world, Npc& n);
+    void LatePose(World& world, Npc& n, float dt, const PlayerSnapshot& p, bool alive);
+    void UpdateHitboxes(Npc& n, const PlayerSnapshot& p, bool posed);
+    void UpdateLod(World& world, Npc& n, const PlayerSnapshot& p);
     void Despawn(World& world, Npc& n);
     // A radio bark (SquadVoice picks the line, the channel and the cooldown). NpcDirectorVoice.cpp.
     void Callout(Npc& n, Bark ev);
@@ -167,10 +188,16 @@ private:
     int m_ShootersNow = 0, m_MaxShooters = 0;
     float m_ThinkMs = 0.0f, m_LateMs = 0.0f;
     int m_NextName = 1;
+    float m_WoundChance = 0.35f;
     int m_LookCursor = 0;
     // One cover search (raycasts + paths, the AI's priciest call) per frame across the squad: a second
     // soldier wanting one waits a frame, so a volley that sends everyone to cover is no spike.
     int m_Frame = 0, m_CoverSearchFrame = -1;
     SquadVoice m_Voice;
     bool m_PlayerWasDead = false;
+    // Cost accounting (see Sub).
+    struct SubTimer;
+    float m_SubFrame[SubCount] = {};
+    CostStats m_SubStat[SubCount], m_ThinkStat, m_LateStat;
+    void FlushCosts(bool think);
 };

@@ -107,6 +107,25 @@ void SetGlobal(Pose& pose, const std::vector<int>& parents, std::vector<glm::mat
     RefreshGlobals(pose, parents, globals, i);
 }
 
+void SetGlobals(Pose& pose, const std::vector<int>& parents, std::vector<glm::mat4>& globals, const std::vector<GlobalTarget>& targets) {
+    if (targets.empty() || !ValidNode(pose, targets.front().Node)) return;
+    thread_local std::vector<unsigned char> dirty;
+    dirty.assign(pose.size(), 0);
+    size_t next = 0;
+    for (size_t i = (size_t)targets.front().Node; i < pose.size(); ++i) {
+        const int p = parents[i];
+        const bool target = next < targets.size() && targets[next].Node == (int)i;
+        if (!target && !(p >= 0 && dirty[p])) continue;
+        if (target) {
+            SetLocalFromGlobal(pose, parents, globals, (int)i, targets[next].Pos, targets[next].Rot);
+            ++next;
+        }
+        dirty[i] = 1;
+        const glm::mat4 local = pose[i].ToMatrix();
+        globals[i] = p >= 0 ? AffineMul(globals[p], local) : local;
+    }
+}
+
 void OffsetBone(Pose& pose, const std::vector<int>& parents, std::vector<glm::mat4>& globals, int i,
                 const glm::vec3& deltaPos, const glm::quat& deltaRot, const glm::vec3& pivot) {
     if (!ValidNode(pose, i)) return;

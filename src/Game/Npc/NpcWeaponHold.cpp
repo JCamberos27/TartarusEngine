@@ -83,6 +83,20 @@ void NpcBody::SkinnedRegion(const World& world, Region region, std::vector<glm::
             ps = PieceSkin{};
             ps.M = &m;
             ps.Built = true;
+            struct Key {
+                const void* Verts; int Meshes; size_t Count;
+                bool operator==(const Key& o) const { return Verts == o.Verts && Meshes == o.Meshes && Count == o.Count; }
+            };
+            struct KeyHash {
+                size_t operator()(const Key& k) const { return std::hash<const void*>()(k.Verts) * 31u ^ (size_t)k.Meshes ^ k.Count * 131u; }
+            };
+            static std::unordered_map<Key, std::shared_ptr<const SkinTables>, KeyHash> s_Tables;
+            const Key key{m.MeshCount() > 0 ? (const void*)m.MeshSkinVertices(0).data() : nullptr, m.MeshCount(),
+                          m.MeshCount() > 0 ? m.MeshSkinVertices(0).size() : 0u};
+            if (auto found = s_Tables.find(key); found != s_Tables.end()) {
+                ps.T = found->second;
+            } else {
+            auto tables = std::make_shared<SkinTables>();
             for (int r = 0; r < 2; ++r) {
                 // Vertices whose heaviest bone is the region's: the neck and head, or the pelvis and spine.
                 std::vector<int> ids;
@@ -112,7 +126,7 @@ void NpcBody::SkinnedRegion(const World& world, Region region, std::vector<glm::
                     if (taken.insert(cell(p.x) | cell(p.y) << 21 | cell(p.z) << 42).second) verts[n++] = iv;
                 }
                 verts.resize(n);
-                RegionSkin& skin = r == 0 ? ps.Head : ps.Torso;
+                RegionSkin& skin = r == 0 ? tables->Head : tables->Torso;
                 std::unordered_map<int, int> slot;
                 for (const auto& [i, v] : verts) {
                     const ModelMesh::SkinVertex& sv = m.MeshSkinVertices(i)[(size_t)v];
@@ -131,8 +145,13 @@ void NpcBody::SkinnedRegion(const World& world, Region region, std::vector<glm::
                     skin.Points.push_back(rp);
                 }
             }
+            if (s_Tables.size() > 64) s_Tables.clear();
+            s_Tables[key] = tables;
+            ps.T = tables;
+            }
         }
-        const RegionSkin& skin = region == Region::Head ? ps.Head : ps.Torso;
+        if (!ps.T) continue;
+        const RegionSkin& skin = region == Region::Head ? ps.T->Head : ps.T->Torso;
         if (skin.Points.empty()) continue;
         const glm::mat4 toWorld = world.ComposeWorldTransform(m_Pieces[k]);
         thread_local std::vector<glm::mat4> palette;
@@ -161,8 +180,7 @@ void NpcBody::RotateSpine(const glm::quat& modelDelta) {
     if (n == 0 || (int)pose.size() != m.NodeCount()) return;
     IK::ComputeGlobals(pose, m_DriverParents, m_Globals);
     const glm::quat step = glm::normalize(glm::slerp(kNone, modelDelta, 1.0f / (float)n));
-    for (int k = 0; k < n; ++k)
-        IK::OffsetBone(pose, m_DriverParents, m_Globals, m_DriverSpine[k], glm::vec3(0.0f), step, IK::Position(m_Globals[(size_t)m_DriverSpine[k]]));
+    OffsetSpine(step);
     m.ApplyLocalPose(pose);
     m_PiecesStale = true;
 }
@@ -338,8 +356,24 @@ glm::vec3 NpcBody::HoldWeapon(World& world, entt::entity armsRig, entt::entity w
     bool haveHand[2] = {false, false};
     glm::vec3 rigShoulder[2]{}, rigElbow[2]{};
     bool haveRigElbow[2] = {false, false};
-    struct Finger { std::string Name; glm::quat Rot; };
-    std::vector<Finger> fingers;
+    // The rig's fingers: the nodes under each hand, found once per rig, then read by index every frame.
+    if (m_FingerRig != &rig || m_FingerNodes != rig.NodeCount()) {
+        m_FingerRig = &rig;
+        m_FingerNodes = rig.NodeCount();
+        m_FingerList.clear();
+        for (int s = 0; s < 2; ++s) {
+            const int rigHand = rig.NodeIndex(FPBody::kBoneHand[s]);
+            if (rigHand < 0) continue;
+            for (int i = rigHand + 1; i < rig.NodeCount(); ++i) {
+                int p = rig.NodeParent(i);
+                while (p > rigHand) p = rig.NodeParent(p);
+                if (p == rigHand) m_FingerList.push_back({i, s, rig.NodeName(i)});
+            }
+        }
+    }
+    struct Finger { const std::string* Name; glm::quat Rot; };
+    thread_local std::vector<Finger> fingers;
+    fingers.clear();
     for (int s = 0; s < 2; ++s) {
         glm::mat4 h(1.0f), u(1.0f), l(1.0f);
         if (!rig.NodeTransform(FPBody::kBoneHand[s], h)) continue;
@@ -352,13 +386,10 @@ glm::vec3 NpcBody::HoldWeapon(World& world, entt::entity armsRig, entt::entity w
             rigElbow[s] = glm::vec3(rigWorld * l[3]);
             haveRigElbow[s] = true;
         }
-        const int rigHand = rig.NodeIndex(FPBody::kBoneHand[s]);
-        for (int i = rigHand + 1; i < rig.NodeCount(); ++i) {
-            int p = rig.NodeParent(i);
-            while (p > rigHand) p = rig.NodeParent(p);
-            if (p != rigHand) continue;
+        for (const FingerNode& f : m_FingerList) {
+            if (f.Hand != s) continue;
             glm::mat4 g(1.0f);
-            if (rig.NodeTransform(rig.NodeName(i), g)) fingers.push_back({rig.NodeName(i), glm::normalize(toModelRot * IK::Rotation(rigWorld * g))});
+            if (rig.NodeTransformAt(f.Node, g)) fingers.push_back({&f.Name, glm::normalize(toModelRot * IK::Rotation(rigWorld * g))});
         }
     }
 
@@ -530,7 +561,7 @@ glm::vec3 NpcBody::HoldWeapon(World& world, entt::entity armsRig, entt::entity w
         }
         // Fingers: each takes the rig finger's model-space rotation (its position stays on its own bone).
         for (const Finger& f : fingers) {
-            const int i = m.NodeIndex(f.Name);
+            const int i = m.NodeIndex(*f.Name);
             if (i < 0) continue;
             const int par = parents[(size_t)i];
             const glm::quat parentRot = par >= 0 ? IK::Rotation(globals[(size_t)par]) : kNone;
