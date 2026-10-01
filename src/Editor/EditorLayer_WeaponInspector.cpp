@@ -782,6 +782,28 @@ void DrawBarrel(PropertyRows& r, FirstPersonAnimationSet& s, const FirstPersonBa
                 "In Play, aim and hold still for about two seconds without firing: the sight line is measured, and Save appears here.");
     }
 
+    r.Heading("Ejected Cases");
+    FirstPersonEjectSettings& ej = s.Eject;
+    r.Check("Eject Cases", ej.Enabled, "Throw a spent case out of the ejection port. They lie where they land until the player is\n"
+                                   "well away and can't see them.");
+    if (ej.Enabled) {
+        r.Text("Case Model", ej.Model, "The case mesh (.fbx). tools/weapons/extract_casings.py makes them from the weapon FBXs.");
+        r.Text("Case Material", ej.Material, "A .mat for every submesh of the case; empty keeps the import.");
+        bool onEvent = ej.When == FirstPersonEjectSettings::Trigger::Event;
+        if (r.Check("On Eject Event", onEvent,
+                    "Off: a case per shot (a self-loader). On: when the controller's 'Eject' event fires - a pump or bolt\n"
+                    "action throws the hull out as the action is worked."))
+            ej.When = onEvent ? FirstPersonEjectSettings::Trigger::Event : FirstPersonEjectSettings::Trigger::Shot;
+        r.Vec3("Port", ej.Origin, 0.001f, "%.4f", "Where the case leaves, in the weapon root bone's space (metres).");
+        if (r.Vec3("Throw Direction", ej.Direction, 0.01f, "%.3f", "Which way it is thrown, in the weapon root bone's space.") &&
+            glm::length(ej.Direction) > 1e-6f)
+            ej.Direction = glm::normalize(ej.Direction);
+        r.Float("Throw Speed", ej.Speed, 0.05f, 0.0f, 50.0f, "%.2f m/s", "How hard it is thrown, on top of the player's own velocity.");
+        r.Float("Speed Jitter", ej.SpeedJitter, 0.01f, 0.0f, 1.0f, "%.2f", "+- this share of Speed, case to case.");
+        r.Float("Spread", ej.Spread, 0.1f, 0.0f, 90.0f, "%.1f deg", "A random cone around Direction.");
+        r.Float("Spin", ej.Spin, 0.5f, 0.0f, 200.0f, "%.1f rad/s", "How fast it tumbles end over end.");
+    }
+
     r.Heading("Laser");
     FirstPersonLaserSettings& l = s.Laser;
     r.Check("Enabled", l.Enabled, "A beam from the muzzle down the zeroed bore, and the dot where it lands.");

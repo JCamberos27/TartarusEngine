@@ -68,6 +68,7 @@
 #include "UndoDeltaChain.h"
 #include "World.h"
 #include "BulletHoles.h"
+#include "ShellCasings.h"
 #include "RotationMath.h"
 #include "SkyAtmosphere.h"
 #include "SkySettings.h"
@@ -3967,6 +3968,77 @@ void TestWeaponProcedural() {
 // --- Procedural animation: curves and IK -----------------------------------------------------
 // Bullet holes stay on what was hit: a world-space hole stays put, one in an entity follows it
 // (moved and turned), a destroyed entity takes its holes, and past capacity the oldest go.
+// Spent cases are only ever removed out of the camera's sight: once left behind, or oldest first when
+// too many have piled up. The .fpsanim eject block round-trips.
+void TestShellCasings() {
+    using L = ShellCasings::LifeInput;
+    ShellCasings::Settings s;
+    s.DespawnDistance = 10.0f;
+    s.SoftCap = 3;
+    s.HardCap = 5;
+    const glm::vec3 player(0.0f);
+    auto has = [](const std::vector<int>& v, int i) { return std::find(v.begin(), v.end(), i) != v.end(); };
+    // Near: kept, seen or not. Far: kept while seen, removed once not.
+    {
+        const std::vector<L> cases = {{{1, 0, 0}, false, 0}, {{20, 0, 0}, true, 1}, {{20, 0, 0}, false, 2}, {{2, 0, 0}, true, 3}};
+        const auto r = ShellCasings::PickRemovals(cases, player, s);
+        CHECK(r.size() == 1);
+        CHECK(has(r, 2));
+    }
+    // Over the soft cap: the oldest unseen go first; seen ones stay even when older.
+    {
+        const std::vector<L> cases = {{{1, 0, 0}, true, 0}, {{1, 0, 0}, false, 1}, {{1, 0, 0}, false, 2},
+                                      {{1, 0, 0}, false, 3}, {{1, 0, 0}, true, 4}};
+        const auto r = ShellCasings::PickRemovals(cases, player, s);
+        CHECK(r.size() == 2);
+        CHECK(has(r, 1) && has(r, 2));
+        CHECK(!has(r, 0) && !has(r, 4));
+    }
+    // All in view: nothing goes below the hard cap ...
+    {
+        std::vector<L> cases;
+        for (int i = 0; i < 5; ++i) cases.push_back({{30.0f, 0, 0}, true, (std::uint64_t)i});
+        CHECK(ShellCasings::PickRemovals(cases, player, s).empty());
+        // ... and past it, only the oldest.
+        cases.push_back({{30.0f, 0, 0}, true, 5});
+        const auto r = ShellCasings::PickRemovals(cases, player, s);
+        CHECK(r.size() == 1 && has(r, 0));
+    }
+    // The view test: ahead in, behind out, off to the side out, a sphere straddling the edge in.
+    {
+        const glm::vec3 eye(0.0f), front(0, 0, -1), right(1, 0, 0), up(0, 1, 0);
+        CHECK(ShellCasings::InView(eye, front, right, up, 60.0f, 1.0f, {0, 0, -5}, 0.02f));
+        CHECK(!ShellCasings::InView(eye, front, right, up, 60.0f, 1.0f, {0, 0, 5}, 0.02f));
+        CHECK(!ShellCasings::InView(eye, front, right, up, 60.0f, 1.0f, {10, 0, -5}, 0.02f));
+        const float edge = 5.0f * std::tan(glm::radians(30.0f));
+        CHECK(ShellCasings::InView(eye, front, right, up, 60.0f, 1.0f, {edge + 0.01f, 0, -5}, 0.05f));
+        CHECK(ShellCasings::InView(eye, front, right, up, 60.0f, 1.0f, {0, 0, 0.01f}, 0.05f)); // at the eye
+    }
+    // eject: parsed, clamped, and written back.
+    {
+        const std::string text = R"({"armsModel": "a.fbx", "weaponModel": "w.fbx", "controller": "c.controller", "eject": {"model": "assets/c.fbx", "material": "assets/c.mat",
+            "origin": [0.1, 0.2, 0.3], "direction": [2, 0, 0], "speed": 99, "trigger": "event"}})";
+        FirstPersonAnimationSet set;
+        std::string why;
+        CHECK(FirstPersonAnimationSet::FromJsonString(text, set, &why));
+        CHECK(set.Eject.Enabled && set.Eject.Model == "assets/c.fbx" && set.Eject.Material == "assets/c.mat");
+        CHECK(set.Eject.Direction == glm::vec3(1, 0, 0));
+        CHECK(set.Eject.Speed == 50.0f);
+        CHECK(set.Eject.When == FirstPersonEjectSettings::Trigger::Event);
+        FirstPersonAnimationSet back;
+        CHECK(FirstPersonAnimationSet::FromJsonString(set.ToJsonString(), back, &why));
+        CHECK(back.Eject.Model == set.Eject.Model && back.Eject.Origin == set.Eject.Origin &&
+              back.Eject.When == FirstPersonEjectSettings::Trigger::Event);
+        FirstPersonAnimationSet none;
+        CHECK(FirstPersonAnimationSet::FromJsonString(R"({"armsModel": "a.fbx", "weaponModel": "w.fbx", "controller": "c.controller"})", none, &why));
+        CHECK(!none.Eject.Enabled);
+        CHECK(json::parse(none.ToJsonString()).count("eject") == 0);
+        FirstPersonAnimationSet bad;
+        CHECK(!FirstPersonAnimationSet::FromJsonString(R"({"armsModel": "a.fbx", "weaponModel": "w.fbx", "controller": "c", "eject": {"trigger": "shot"}})", bad, &why));
+        CHECK(!FirstPersonAnimationSet::FromJsonString(R"({"armsModel": "a.fbx", "weaponModel": "w.fbx", "controller": "c", "eject": {"model": "m.fbx", "trigger": "pump"}})", bad, &why));
+    }
+}
+
 void TestBulletHoles() {
     auto near = [](const glm::vec3& a, const glm::vec3& b) { return glm::length(a - b) < 1e-4f; };
     World world;
@@ -4522,6 +4594,7 @@ int RunUnitTests() {
         {"RemingtonController", TestRemingtonController},
         {"FirstPersonAds", TestFirstPersonAds},
         {"BulletHoles", TestBulletHoles},
+        {"ShellCasings", TestShellCasings},
         {"WeaponZero", TestWeaponZero},
         {"Curve", TestCurve},
         {"IKSolver", TestIKSolver},

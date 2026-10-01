@@ -17,6 +17,18 @@
     "gunMotion": {"EmptyReload": {"rotation": 0.18, "position": 0.25}, "MagCheck": {"rotation": 0.6, "position": 0.2}, "TacReload": {"rotation": 0.18, "position": 0.25}},
     "sightPivot": 0.25
   },
+  "eject": {
+    "_comment": "5.45x39 case (tools/weapons/extract_casings.py) out of the right of the receiver, a little forward and up, every round. Root space: -X down the bore, +Y up, -Z right.",
+    "model": "assets/Weapons/AKS74U/Casing_545x39.fbx",
+    "material": "assets/Weapons/AKS74U/Materials/Cartridge_545x39mm.mat",
+    "origin": [-0.04, 0.015, -0.02],
+    "direction": [-0.2, 0.35, -1.0],
+    "speed": 4.5,
+    "speedJitter": 0.15,
+    "spread": 10.0,
+    "spin": 30.0,
+    "trigger": "shot"
+  },
   "gameplay": {
     "allowFullAuto": true,
     "impactImpulse": 5.0,

@@ -32,6 +32,12 @@ d["weaponMountOffset"] = [0.0, 0.0, -0.016]
 d["viewRotation"] = [0.0, 180.0, 0.0]
 d["spareMagazine"] = {"bones": [], "grabDistance": 0.21}
 d["muzzle"] = {"auto": False, "origin": [0.0, 0.0363, -0.6309], "direction": [0.0, 0.0, -1.0]}
+# The spent hull (tools/weapons/extract_casings.py) out of the ejection port on the right of the receiver
+# (the .blend's port window: 4.5 cm behind Main, at bore height) when the pump is worked - the
+# controller's Eject event - thrown right, up and a little back. Main's +X is the gun's right.
+d["eject"] = {"model": BASE + "/Shell_12ga.fbx", "material": BASE + "/Materials/Remington870.mat",
+              "origin": [0.02, 0.034, -0.062], "direction": [1.0, 0.4, 0.15], "speed": 2.5,
+              "speedJitter": 0.15, "spread": 8.0, "spin": 15.0, "trigger": "event"}
 d["laser"] = {"enabled": False, "color": [1.0, 0.0227, 0.0136], "beamBrightness": 1.1, "spotBrightness": 9.0}
 
 g = d["gameplay"]

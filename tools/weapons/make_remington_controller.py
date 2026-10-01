@@ -12,6 +12,7 @@
 #     LastRound  -> ReloadLoopEnd  (load the last shell and finish)
 #     otherwise  -> ReloadLoop     (load a shell: LoadRound, and reach for the next)
 # Pump (gameplay.cycle; the driver sets Cycle after each round): Any State -> Pump, tagged Cycling.
+# Its Eject event (0.2: the Pump bone is fully back at f10/45) throws the spent hull out of the port.
 # LoadRound times are where each clip's shell disappears into the gun (sampled from the .blend's
 # Shell bone): ReloadLoop f42/70, ReloadLoopEnd f42/98, ReloadStartEmpty f120/160 (pump closed).
 import copy
@@ -87,7 +88,7 @@ def state(name, clip, weapon, pos, events=(), tags=("Reload", "ADSCarry"), prior
 
 
 states += [
-    state("Pump", "Pump", "Pump", (990, -330), tags=("Cycling", "ADSCarry")),
+    state("Pump", "Pump", "Pump", (990, -330), [("Eject", 0.2)], tags=("Cycling", "ADSCarry")),
     state("ReloadStart", "Reload_Start", "Reload_Start", (660, -30)),
     state("ReloadStartEmpty", "Reload_Start_Empty", "Reload_Start_Empty", (660, 45), [("LoadRound", 0.74)]),
     state("ReloadLoop", "Reload_Loop", "Reload_Loop", (990, 5), [("LoadRound", 0.6)]),
