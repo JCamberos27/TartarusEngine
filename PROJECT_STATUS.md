@@ -11,60 +11,14 @@ used to develop and prove out the engine's systems.
 
 ## Where things stand today
 
-**Launch screen** — done. A retro CRT-style splash screen (a separate WPF
-window on Windows) plays while the engine boots, with a tube-warm-up shader,
-progress bar, and build info.
-
-**FPS weapon animation** — done and documented (`FPS_ANIMATION_SYSTEM.md`,
-`ANIMATOR.md`, `FPS_WEAPON_INTEGRATION.md`). Weapons are data-driven
-(`.fpsanim` files): a state machine controls which animation clip plays
-when (idle, walk, fire, reload, aim down sights, etc.), and procedural
-effects (recoil, sway, breathing) layer on top. The Sandbox player carries
-the AKS-74U (key 1), the Remington 870 (key 2) and a gravity gun (key 3).
-
-**Player locomotion, phase 1 — done.** The player has their own body in
-the world (not just a floating camera) that walks, jogs, runs, jumps,
-falls, and lands using real animation clips instead of just sliding the
-camera around. This is what "root motion" means: the animation itself
-supplies the movement, not a separate physics script guessing at how far
-a walk cycle should move you.
-
-**Player locomotion, phase 2 — done.** The player's own body now has the
-arms that hold the gun. The old separate floating arms are still there
-behind the scenes (they animate the reload, inspect, aim and so on), but
-what you see is the body's own arms following their hands, so it is one
-connected character. Where the camera sits comes from the body's
-shoulders, so the gun stays within the arms' reach: no stretched arms and
-no hand pulling off the gun. Near level the camera is lifted back up to
-where eyes really are (the weapon's animation rig puts it much lower), so
-the player's own chest and collar never show at the edge of the view,
-including mid-reload, while looking down, or turning. Holstering hides the arms, draw and Play both
-bring them straight onto the gun, and the camera keeps the same height
-armed or unarmed.
-
-**Player locomotion, phase 3 — done.** The polish pass:
-- **Turning in place.** Turn the view far enough while standing still and
-  the feet step around to face it, with the chest twisting to keep up. The
-  turn speed is capped so the feet never slide, and the mouse feels
-  normal while aiming.
-- **Starts and stops.** Real start and stop clips play as you begin or end
-  a run. Tapping a move key does not trigger a stop clip or a full
-  push-off.
-- **Crouch.** Hold Left Ctrl. The body drops with a shorter collision
-  capsule and a lower camera, moves slower, and has its own stand-to-crouch,
-  turn, start and stop clips. It only stands up when there is headroom.
-- **Foot placement.** Feet are placed on the ground under them, so they no
-  longer clip into slopes and stairs, and a planted foot stays put instead
-  of skating. Going up or down small stairs no longer bounces the camera.
-- **Jump and land.** You keep your speed through a landing. A jump pressed
-  just before landing, or just after stepping off an edge, still counts.
-  You can jump out of a crouch when there is room.
-
-**Weapon states with the new arms — checked.** Aim down sights, reload,
-inspect, melee, holster and draw, and firing while walking were played and
-captured frame by frame. It turned up three bugs, all fixed: a pair of hands
-flashing after the holster, the camera rising when you holstered, and the
-gun sitting still while the hands did the equip animation at Play.
+| Area | State | Docs |
+|---|---|---|
+| Launch screen | Retro CRT splash (WPF) plays while `run-editor.cmd` builds and boots the editor | `tools/launcher/README.md` |
+| Weapons | Data-driven (`.fpsanim` + Animator controller), procedural recoil / sway / IK on top. The Sandbox player carries the AKS-74U (key 1), the Remington 870 (key 2) and a gravity gun (key 3) | `docs/FPS_ANIMATION_SYSTEM.md`, `docs/FPS_WEAPON_INTEGRATION.md`, `docs/ANIMATOR.md`, `docs/PROCEDURAL_ANIMATION.md` |
+| Player body (true first person, #405) | Root-motion body under the camera: walk / jog / run, jump and land, crouch, turn in place, starts and stops, foot placement. Its own arms hold the gun | `docs/BODY_SETUP.md` |
+| Character outfits | Modular Quantum characters dressed from a wardrobe, with skin hiding and clash rules | `docs/CHARACTER_OUTFITS.md`, `docs/OUTFIT_TODO.md` |
+| Sky | Physical sky: time of day, atmosphere, volumetric clouds | `docs/SKY.md` |
+| Performance | Sandbox at 258 fps (1080p) / 192 fps (1440p), play mode maximized | `docs/PERFORMANCE.md` |
 
 ## What is next
 
@@ -79,6 +33,8 @@ gun sitting still while the hands did the equip animation at Play.
 - **Known limits.** A stop clip covers one foot phase, so entering it can
   make the feet pop slightly. There is no weapon-spread bonus for standing
   still yet (the engine only has recoil kick).
+- **Outfits:** clipping in motion, asset fixes and editor polish (`docs/OUTFIT_TODO.md`).
+- **Performance:** the GPU and CPU items under "To do" in `docs/PERFORMANCE.md`.
 
 ## Working on the engine
 
