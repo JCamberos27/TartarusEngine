@@ -774,7 +774,9 @@ void NpcDirector::AimAndFire(World& world, Npc& n, const PlayerSnapshot& p, floa
     const bool sprinting = n.Intent.Pace == Gait::Run && n.Intent.Move && glm::length(n.Velocity) > 3.5f;
     const bool reloading = n.Reloading;
     const float tolerance = n.Intent.Suppress ? 9.0f : 4.5f + 3.0f * std::clamp(8.0f / std::max(glm::length(target - n.Eye), 1.0f), 0.0f, 1.0f);
+    // A hand off the gun signalling: the order first, then the shooting.
     bool canFire = n.Intent.Fire && !HoldFire && n.HasAttackToken && n.ReactionLeft <= 0.0f && errorDeg < tolerance && !reloading &&
+                   !n.Body.Signalling() &&
                    !sprinting && w.IsEquipped() && p.Valid && !p.Dead && (n.Mem.Visible || n.Intent.Suppress) && w.Ammo() > 0;
     // Never through a friend: the first thing along the line must not be a squadmate (checked every
     // frame the trigger could be down, so a friend stepping into the line stops the burst).

@@ -101,6 +101,10 @@ public:
 
     // A hit: the upper body flinches away along `dirWorld` (the round's travel).
     void Flinch(World& world, const glm::vec3& dirWorld);
+    // A hand signal with an order: the support hand leaves the gun and points along `dirWorld` for `seconds`.
+    void Signal(const glm::vec3& dirWorld, float seconds = 0.9f) { m_SignalDir = dirWorld; m_SignalLeft = seconds; }
+    void CancelSignal() { m_SignalLeft = 0.0f; }
+    bool Signalling() const { return m_SignalWeight > 0.05f; }
 
     float Yaw() const { return m_Yaw; }
     bool Turning() const { return m_Turning; }
@@ -162,7 +166,7 @@ private:
     int m_DriverSpine[5] = {-1, -1, -1, -1, -1}, m_DriverSpineCount = 0;
     // Scratch.
     std::vector<glm::mat4> m_Globals;
-    std::vector<LocalTRS> m_Pose;
+    std::vector<LocalTRS> m_Pose, m_BindScratch;
     enum class Region { Head, Torso };
     struct RegionPoint { glm::vec3 Pos; int Count; std::uint16_t Bone[4]; float Weight[4]; };
     struct RegionSkin { std::vector<int> Bones; std::vector<RegionPoint> Points; };
@@ -191,6 +195,8 @@ private:
     bool m_HaveElbowAim[2] = {false, false};
     float m_ArmsWeight = 0.0f;
     float m_CheekWeld = 0.0f;
+    glm::vec3 m_SignalDir{0.0f};                              // world
+    float m_SignalLeft = 0.0f, m_SignalWeight = 0.0f;
     unsigned m_HoldFrame = 0;
     int m_HoldStagger = 0;                                   // which of every three frames this one checks the mesh
     glm::vec3 m_MeshPush{0.0f};                              // the gun's push out of the drawn head / torso, last checked

@@ -540,6 +540,55 @@ glm::vec3 NpcBody::HoldWeapon(World& world, entt::entity armsRig, entt::entity w
         m.ApplyLocalPose(pose);
     }
 
+    // 3b. A hand signal: the support hand comes off the gun and chops the way an order sends the squad (forward and a
+    // little up, at arm's length), then goes back. The gun stays in the right hand meanwhile.
+    m_SignalLeft = std::max(0.0f, m_SignalLeft - dt);
+    const float signalWant = m_SignalLeft > 0.0f ? 1.0f : 0.0f;
+    m_SignalWeight += (signalWant - m_SignalWeight) * Follow(dt, signalWant > m_SignalWeight ? 0.1f : 0.16f);
+    if (m_SignalWeight > 1e-3f && m_DriverModel && m_DriverIndex >= 0) {
+        Model& m = *m_DriverModel;
+        IK::Pose& pose = m_Pose;
+        pose = m.AppliedLocalPose();
+        const int upper = m.NodeIndex(FPBody::kBoneUpperArm[0]), lower = m.NodeIndex(FPBody::kBoneLowerArm[0]),
+                  hand = m.NodeIndex(FPBody::kBoneHand[0]);
+        glm::vec3 dir = toModel3 * m_SignalDir;
+        dir.y = 0.0f;
+        if ((int)pose.size() == m.NodeCount() && upper >= 0 && lower >= 0 && hand >= 0 && glm::dot(dir, dir) > 1e-6f) {
+            IK::ComputeGlobals(pose, m_DriverParents, m_Globals);
+            const glm::vec3 a = IK::Position(m_Globals[(size_t)upper]);
+            const float armLen = glm::length(IK::Position(m_Globals[(size_t)lower]) - a) +
+                                 glm::length(IK::Position(m_Globals[(size_t)hand]) - IK::Position(m_Globals[(size_t)lower]));
+            const float sw = m_SignalWeight;
+            const glm::vec3 reach = glm::normalize(glm::normalize(dir) * 0.9f + up * 0.2f);
+            IK::SolveTwoBone(pose, m_DriverParents, m_Globals, upper, lower, hand, a + reach * armLen * 0.97f, nullptr, sw);
+            // A flat blade of a hand, not the grip: the fingers straighten (to the bind pose, which is open) ...
+            m.BindLocalPose(m_BindScratch);
+            for (int i = hand + 1; i < m.NodeCount(); ++i) {
+                int p = m_DriverParents[(size_t)i];
+                while (p > hand) p = m_DriverParents[(size_t)p];
+                if (p == hand) pose[(size_t)i].R = glm::slerp(pose[(size_t)i].R, m_BindScratch[(size_t)i].R, sw);
+            }
+            IK::ComputeGlobals(pose, m_DriverParents, m_Globals);
+            // ... laid along the reach with the thumb up (measured on the hand's own fingers, whatever its bone axes).
+            const int middle = m.NodeIndex("middle_01_l"), thumb = m.NodeIndex("thumb_01_l");
+            if (middle >= 0 && thumb >= 0) {
+                const glm::vec3 h = IK::Position(m_Globals[(size_t)hand]);
+                const glm::vec3 along = IK::Position(m_Globals[(size_t)middle]) - h;
+                if (glm::dot(along, along) > 1e-8f) {
+                    const glm::quat lay(glm::normalize(along), reach);
+                    glm::vec3 t = lay * (IK::Position(m_Globals[(size_t)thumb]) - h);
+                    t -= reach * glm::dot(t, reach);
+                    glm::vec3 u = up - reach * glm::dot(up, reach);
+                    glm::quat roll(1.0f, 0.0f, 0.0f, 0.0f);
+                    if (glm::dot(t, t) > 1e-8f && glm::dot(u, u) > 1e-8f) roll = glm::quat(glm::normalize(t), glm::normalize(u));
+                    const glm::quat turn = glm::slerp(kNone, glm::normalize(roll * lay), sw);
+                    IK::OffsetBone(pose, m_DriverParents, m_Globals, hand, glm::vec3(0.0f), turn, h);
+                }
+            }
+            m.ApplyLocalPose(pose);
+        }
+    }
+
     // 4. On the sights the head comes down onto the stock: the neck tilts it toward the eye (the camera,
     // moved with the gun), by the cheek weld and at most Head Tilt.
     const float lockWant = std::clamp(gun->CheekWeld, 0.0f, 1.0f) * w;
