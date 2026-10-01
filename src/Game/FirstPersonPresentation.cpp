@@ -77,7 +77,20 @@ bool FirstPersonPresentation::Start(World& world, AssetLibrary& assets,
     m_PendingSlot = -1;
     m_WalkSpeed = config.MoveSpeed;
     m_SprintSpeed = config.MoveSpeed * config.SprintMultiplier;
+    // The other slots' spent cases too (StartSet warms its own): a swap to the other gun mustn't stall on its first round.
+    for (size_t i = 1; i < m_SlotSets.size(); ++i) WarmEjectAssets(assets, m_SlotSets[i]);
     return StartSet(world, assets, 0, false);
+}
+
+void FirstPersonPresentation::WarmEjectAssets(AssetLibrary& assets, const std::string& animationSet) {
+    FirstPersonAnimationSet set;
+    if (FirstPersonAnimationSet::LoadFile(ProjectPaths::Resolve(animationSet), set, nullptr)) WarmEjectAssets(assets, set);
+}
+
+void FirstPersonPresentation::WarmEjectAssets(AssetLibrary& assets, const FirstPersonAnimationSet& set) {
+    if (!set.Eject.Enabled || set.Eject.Model.empty()) return;
+    assets.LoadModel(ProjectPaths::Resolve(set.Eject.Model));
+    if (!set.Eject.Material.empty()) assets.LoadMaterial(ProjectPaths::Resolve(set.Eject.Material));
 }
 
 void FirstPersonPresentation::Stop(World& world) {
@@ -191,6 +204,7 @@ bool FirstPersonPresentation::StartSet(World& world, AssetLibrary& assets, int s
     };
     applyMaterials(m_Arms, m_Set.ArmsMaterials);
     applyMaterials(m_Weapon, m_Set.WeaponMaterials);
+    WarmEjectAssets(assets, m_Set);
     // The arms run the controller; the weapon mirrors it on its own track. Both keep running
     // while hidden (unarmed), or the controller could never leave its Hidden state.
     auto& armsAnim = world.Registry.emplace_or_replace<AnimatorControllerComponent>(m_Arms);
