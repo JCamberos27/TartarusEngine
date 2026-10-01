@@ -4,6 +4,7 @@
 #include <glm/glm.hpp>
 
 #include <cstdint>
+#include <cstdio>
 #include <string>
 #include <vector>
 
@@ -24,7 +25,10 @@ public:
     bool Active() const { return m_Active; }
 
     // The listener (the player's eye) for choosing near / distant reports.
-    void SetListener(const glm::vec3& eye) { m_Listener = eye; }
+    void SetListener(const glm::vec3& eye, const glm::vec3& forward) { m_Listener = eye; m_ListenerFwd = forward; }
+    // Tests: every sound started, and the listener each frame, as text lines in `path` (a video's
+    // soundtrack is mixed from it offline: tools/mix_npc_video.py). Empty closes it.
+    void SetAudioLog(const std::string& path);
 
     // A round left a muzzle at `origin` heading for `end`. `fromPlayer`: the report is 2D and there's
     // no flash light (the view model has its own), `tracer`: a streak along the line.
@@ -47,7 +51,8 @@ private:
         float Peak = 0.0f;
     };
     bool m_Active = false;
-    glm::vec3 m_Listener{0.0f};
+    glm::vec3 m_Listener{0.0f}, m_ListenerFwd{0.0f, 0.0f, -1.0f};
+    std::FILE* m_Log = nullptr;
     std::vector<Flash> m_Flashes;
     size_t m_NextFlash = 0;
     entt::entity m_Sparks = entt::null, m_Smoke = entt::null, m_Tracers = entt::null;

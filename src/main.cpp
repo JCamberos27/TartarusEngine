@@ -1429,8 +1429,14 @@ int main(int argc, char** argv) {
                 vitals.RespawnDelay = fp.RespawnDelay;
                 vitals.SpawnProtection = fp.SpawnProtection;
                 playerVitals.Reset(vitals);
-                if (npcDirector.Start(world, assets, &fp)) // the enemy squad, when the scene has NPC Spawns
+                if (npcDirector.Start(world, assets, &fp)) { // the enemy squad, when the scene has NPC Spawns
                     combatFx.Start(world);
+                    if (npcTest && !npcTest->RecordDir().empty()) {
+                        std::error_code ec;
+                        std::filesystem::create_directories(npcTest->RecordDir(), ec);
+                        combatFx.SetAudioLog((std::filesystem::path(npcTest->RecordDir()) / "audio.txt").string());
+                    }
+                }
             } else if ((playCameraEntity = FindActiveSceneCamera(world)) != entt::null) {
                 playerVitals.Reset({});
                 playUsesPlayer = false;
@@ -2635,7 +2641,7 @@ int main(int argc, char** argv) {
                         playerVitals.ApplyDamage(e.Amount, e.SourcePos);
                         if (playerVitals.Health() < before) combatFx.Play(CombatFx::Cue::FleshHit, e.Point, true, 0.8f);
                     }
-                    combatFx.SetListener(player.Cam.Position);
+                    combatFx.SetListener(player.Cam.Position, player.Cam.Front());
                     combatFx.Update(world, gameDt);
                     if (npcTest) npcTest->After(world, npcDirector, playerVitals, player);
                 }
@@ -4054,6 +4060,26 @@ int main(int argc, char** argv) {
                     std::filesystem::create_directories(smokeShotsDir, ec);
                     const std::string out = (std::filesystem::path(smokeShotsDir) / (harnessShot + ".png")).string();
                     stbi_write_png(out.c_str(), outW, outH, 4, image.data(), outW * 4);
+                }
+                // NPC_TEST_RECORD=<dir>: both views every other frame (30 fps of the fixed 60 Hz), for a video.
+                if (npcTest && playing && !npcTest->RecordDir().empty()) {
+                    static int recordFrame = 0;
+                    if ((recordFrame++ % 2) == 0) {
+                        std::error_code ec;
+                        std::filesystem::create_directories(npcTest->RecordDir(), ec);
+                        auto save = [&](unsigned fbo, int w, int h, const char* stem) {
+                            glBindFramebuffer(GL_READ_FRAMEBUFFER, fbo);
+                            std::vector<unsigned char> px = Screenshot::GrabRegion(0, 0, w, h);
+                            stbi_flip_vertically_on_write(1);
+                            char name[64];
+                            std::snprintf(name, sizeof name, "%s_%05d.jpg", stem, recordFrame / 2);
+                            stbi_write_jpg((std::filesystem::path(npcTest->RecordDir()) / name).string().c_str(), w, h, 4, px.data(), 92);
+                            stbi_flip_vertically_on_write(0);
+                        };
+                        save(gameView.GetFramebuffer().Handle(), gvWidth, gvHeight, "game");
+                        if (sceneFramebuffer.IsValid()) save(sceneFramebuffer.Handle(), sceneFramebuffer.Width(), sceneFramebuffer.Height(), "scene");
+                        glBindFramebuffer(GL_READ_FRAMEBUFFER, 0);
+                    }
                 }
                 Framebuffer::BindDefault(window.GetWidth(), window.GetHeight());
 
