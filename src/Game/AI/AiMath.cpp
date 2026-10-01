@@ -142,3 +142,31 @@ float CombineScores(const float* scores, int count) {
     }
     return std::clamp(out, 0.0f, 1.0f);
 }
+
+// --- Squad tactics --------------------------------------------------------------------------------
+
+bool MayBound(bool exposed, bool coverFireOn, float waited, float maxWait) {
+    return !exposed || coverFireOn || waited >= maxWait;
+}
+
+bool WantsBlindFire(float suppression, float pinnedFor, bool knowsThreat, float sinceSeen) {
+    return knowsThreat && suppression > 0.5f && pinnedFor > 1.5f && sinceSeen < 8.0f;
+}
+
+bool WantsMelee(float distance, float facingDeg, float sinceLastStrike, float reach, float cooldown) {
+    return distance <= reach && facingDeg < 50.0f && sinceLastStrike >= cooldown;
+}
+
+float DangerScale(const glm::vec3& pos, const glm::vec3* deaths, const float* times, int count, float now, float radius, float memory) {
+    float scale = 1.0f;
+    for (int i = 0; i < count; ++i) {
+        const float age = now - times[i];
+        if (age < 0.0f || age > memory) continue;
+        const float d = glm::length(glm::vec2(pos.x - deaths[i].x, pos.z - deaths[i].z));
+        if (d >= radius) continue;
+        // Nearer and fresher: more to be avoided.
+        const float near = 1.0f - d / radius, fresh = 1.0f - age / memory;
+        scale = std::min(scale, 1.0f - 0.7f * near * fresh);
+    }
+    return scale;
+}

@@ -88,6 +88,16 @@ public:
     bool HoldFire = false;     // nobody shoots
     bool MeshChecksEverywhere = false; // the weapon hold checks the drawn body at any distance (tests)
     int ShootersNow() const { return m_ShootersNow; }
+    // What the squad's tactics did (--npc-test).
+    struct TacticStats {
+        int Bounds = 0;          // bounds that had to wait for the player's attention ...
+        int CoveredBounds = 0;   // ... and went with covering fire on
+        int CoverOrders = 0;     // squadmates told to cover a bound
+        int BlindFires = 0;
+        int Melees = 0, MeleeHits = 0;
+        int Backpedals = 0;      // a rifle too close: backing off while shooting
+    };
+    const TacticStats& Tactics() const { return m_Tactics; }
     int MaxShootersSeen() const { return m_MaxShooters; }
     float Now() const { return m_Now; }
     float LastThinkMs() const { return m_ThinkMs; }
@@ -136,6 +146,11 @@ private:
         float PlayerReloadingSeen = -1e9f;
         float LastDeath = -1e9f;
         float FlankDoneAt = -1e9f;    // the last flank reached its cover (the next waits a while)
+        // Fire and maneuver: a soldier waiting to bound asks for covering fire; a squadmate shooting is it.
+        int CoverRequest = -1;        // who is waiting (-1: nobody)
+        float CoverRequestAt = -1e9f; // refreshed every frame it waits
+        int CoverFirer = -1;          // the squadmate told to give it
+        float CoverFireUntil = -1e9f; // someone other than the requester is shooting: covered until then
     };
 
     bool LateStart(World& world, AssetLibrary& assets);
@@ -195,6 +210,14 @@ private:
     int m_Frame = 0, m_CoverSearchFrame = -1;
     SquadVoice m_Voice;
     bool m_PlayerWasDead = false;
+    TacticStats m_Tactics;
+    // Where soldiers fell lately (a ring): cover near them is avoided for a while (DangerScale).
+    static constexpr int kDeathMemory = 8;
+    glm::vec3 m_DeathPos[kDeathMemory]{};
+    float m_DeathTime[kDeathMemory]{};
+    int m_DeathCount = 0, m_DeathNext = 0;
+    void UpdateCoverFire(Squad& s);
+    void UpdateMelee(Npc& n, const PlayerSnapshot& p);
     // Cost accounting (see Sub).
     struct SubTimer;
     float m_SubFrame[SubCount] = {};
