@@ -1,6 +1,7 @@
 #include "NpcDirector.h"
 
 #include "AssetLibrary.h"
+#include "Combat/CombatFx.h"
 #include "Components.h"
 #include "FirstPersonPresentation.h"
 #include "GameModuleAPI.h" // RaycastHit, QueryFilter, kPlayerEntity
@@ -787,6 +788,10 @@ void NpcDirector::LateUpdate(World& world, float dt, const PlayerSnapshot& p) {
         if (!up) continue;
         if (up->Dead) {
             if (up->Ragdoll) up->Ragdoll->Update();
+            if (up->FallSoundAt > 0.0f && m_Now >= up->FallSoundAt) {
+                up->FallSoundAt = -1.0f;
+                if (Fx) Fx->Play(CombatFx::Cue::BodyFall, up->Ragdoll ? up->Ragdoll->Root() : up->Feet);
+            }
             continue;
         }
         Npc& n = *up;
@@ -840,7 +845,7 @@ void NpcDirector::LateUpdate(World& world, float dt, const PlayerSnapshot& p) {
             // Shouldered: the whole rig (arms and gun) slides so the stock sits in the body's right shoulder
             // pocket - the first-person framing holds the gun well out in front of the eye.
             FirstPersonWorldGunInput gun;
-            glm::vec3 shoulder;
+            glm::vec3 shoulder, muzzleShift(0.0f);
             if (n.Weapon->WorldGunInput(gun) && gun.Shouldered > 0.01f && n.Body.BoneWorld(world, "upperarm_r", shoulder)) {
                 const glm::vec3 fwd = n.WeaponCam.Front(), right = n.WeaponCam.Right(), camUp = n.WeaponCam.Up();
                 const glm::vec3 pocket = shoulder + right * gun.Pocket.x + camUp * gun.Pocket.y + fwd * gun.Pocket.z;
@@ -848,11 +853,12 @@ void NpcDirector::LateUpdate(World& world, float dt, const PlayerSnapshot& p) {
                 const float len = glm::length(shift);
                 const float maxShift = std::max(gun.MaxShift, 0.55f);
                 if (len > maxShift) shift *= maxShift / len;
+                muzzleShift = shift;
                 for (entt::entity e : {n.Weapon->ArmsEntity(), n.Weapon->WeaponEntity()})
                     if (e != entt::null && world.Registry.valid(e)) world.Registry.get<TransformComponent>(e).Position += shift;
             }
             n.Body.ReachHands(world, n.Weapon->ArmsEntity(), 1.0f);
-            HandleShots(world, n, p);
+            HandleShots(world, n, p, muzzleShift);
             for (const CasingSpawn& c : n.Weapon->TakeEjections()) if (m_Ejections.size() < 64) m_Ejections.push_back(c);
         } else {
             n.Body.ReachHands(world, entt::null, 0.0f);
@@ -861,7 +867,32 @@ void NpcDirector::LateUpdate(World& world, float dt, const PlayerSnapshot& p) {
     m_LateMs = std::chrono::duration<float, std::milli>(std::chrono::steady_clock::now() - t0).count();
 }
 
-void NpcDirector::HandleShots(World& world, Npc& n, const PlayerSnapshot& p) {
+void NpcDirector::HandleShots(World& world, Npc& n, const PlayerSnapshot& p, const glm::vec3& muzzleShift) {
+    // What the round looked and sounded like: the report and flash at the (shouldered) muzzle, a
+    // tracer every third round, and the crack of anything passing close to the player's head.
+    for (const FirstPersonPresentation::ShotTrace& t : n.Weapon->TakeShotTraces()) {
+        if (!Fx) continue;
+        const bool shotgun = n.Class == WeaponClass::Shotgun;
+        if (t.FirstPellet)
+            Fx->Shot(world, shotgun ? CombatFx::Gun::Shotgun : CombatFx::Gun::Rifle, t.Origin + muzzleShift, t.End, false,
+                     !shotgun && (n.Tracer++ % 3) == 0);
+        if (!p.Valid || p.Dead || (t.Hit && t.Entity == kPlayerEntity)) continue;
+        const glm::vec3 seg = t.End - t.Origin;
+        const float len2 = glm::dot(seg, seg);
+        if (len2 < 1e-4f) continue;
+        const float u = std::clamp(glm::dot(p.Eye - t.Origin, seg) / len2, 0.0f, 1.0f);
+        const glm::vec3 closest = t.Origin + seg * u;
+        if (glm::length(closest - p.Eye) < 1.6f && u * std::sqrt(len2) > 3.0f && u < 0.999f) Fx->Whizz(closest);
+    }
+    // The gun's own noises: a reload starting, the pump racked.
+    if (Fx && n.Weapon) {
+        const bool reloading = n.Weapon->IsReloading();
+        if (reloading && !n.FxReloading) Fx->Play(CombatFx::Cue::Reload, n.Eye - glm::vec3(0.0f, 0.4f, 0.0f));
+        n.FxReloading = reloading;
+        const bool pumping = n.Weapon->CurrentState() == "Pump";
+        if (pumping && !n.FxPumping) Fx->Play(CombatFx::Cue::Pump, n.Eye - glm::vec3(0.0f, 0.3f, 0.0f));
+        n.FxPumping = pumping;
+    }
     for (const FirstPersonPresentation::ShotHit& hit : n.Weapon->TakeShotHits()) {
         const float dist = glm::length(hit.Point - hit.Origin);
         if (hit.Entity == kPlayerEntity) {
@@ -902,6 +933,7 @@ bool NpcDirector::OnPlayerHit(World& world, unsigned entity, const glm::vec3& po
         if (n.Dead) return true;
         const HitZone zone = ZoneFromCapsuleHeight(point.y, n.Feet.y, n.Crouched ? 1.26f : 1.8f);
         const float dmg = DamageForHit(weapon, zone, glm::length(point - origin));
+        if (Fx) Fx->Play(CombatFx::Cue::FleshHit, point, false, 0.7f);
         ApplyDamage(world, n, dmg, zone, point, dir, -1);
         if (killed) *killed = n.Dead;
         if (head) *head = zone == HitZone::Head;
@@ -981,6 +1013,7 @@ void NpcDirector::Kill(World& world, Npc& n, const glm::vec3& dir, const glm::ve
     for (entt::entity e : n.Body.Pieces())
         if (world.Registry.valid(e)) world.Registry.remove<AnimatorControllerComponent>(e);
     n.Body.SetPoseOwnedElsewhere(true);
+    n.FallSoundAt = m_Now + 0.45f;
     n.Ragdoll = std::make_unique<NpcRagdoll>();
     const glm::vec3 d = glm::length(dir) > 1e-4f ? glm::normalize(dir) : glm::vec3(0.0f, 0.0f, 1.0f);
     if (!n.Ragdoll->Start(n.Body, n.Velocity, d * shove, point)) {

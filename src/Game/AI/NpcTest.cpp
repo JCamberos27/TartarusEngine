@@ -1,5 +1,6 @@
 #include "NpcTest.h"
 
+#include "Combat/CombatFx.h"
 #include "Combat/PlayerVitals.h"
 #include "FirstPersonPresentation.h"
 #include "GameModuleAPI.h"
@@ -215,10 +216,13 @@ void NpcTest::After(World& world, NpcDirector& npcs, const PlayerVitals& vitals,
             m_CamPitch = -32.0f;
         }
         m_HaveCam = true;
-        if (now >= m_NextShot && now > 3.0f) {
+        // A close shot waits up to a second and a half for its soldier to fire (the flash in frame).
+        const bool firing = close && focus->LastShot >= npcs.Now() - 1e-4f;
+        if (now >= m_NextShot && now > 3.0f && (!close || firing || now >= m_NextShot + 1.5f)) {
             m_NextShot = now + 3.0f;
             char name[64];
-            std::snprintf(name, sizeof name, "npc_%s_%02d_%s", m_Scenario.c_str(), m_ShotIndex, close ? "close" : "wide");
+            std::snprintf(name, sizeof name, "npc_%s_%02d_%s%s", m_Scenario.c_str(), m_ShotIndex, close ? "close" : "wide",
+                          firing ? "_firing" : "");
             m_Shot = name;
             ++m_ShotIndex;
             if (close) ++m_Focus;
@@ -241,6 +245,10 @@ void NpcTest::After(World& world, NpcDirector& npcs, const PlayerVitals& vitals,
         Check(m_FirstDamage >= 0.0f, "the squad's rounds reached the player");
         Check(m_FirstCover >= 0.0f, "someone fought from cover");
         Check(npcs.MaxShootersSeen() <= 4, "never more than the attack tokens shooting at once");
+        if (npcs.Fx) {
+            Check(npcs.Fx->ShotsHeard() > 0, "gunfire was heard (" + std::to_string(npcs.Fx->ShotsHeard()) + " reports)");
+            Check(npcs.Fx->WhizzesHeard() > 0, "rounds cracked past the player (" + std::to_string(npcs.Fx->WhizzesHeard()) + ")");
+        }
         if (m_Scenario == "fight") Check(m_Kills > 0, "the player killed " + std::to_string(m_Kills) + " soldier(s)");
         if (m_Scenario == "die") {
             Check(m_PlayerDied, "the player was killed");

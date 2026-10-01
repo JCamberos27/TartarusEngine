@@ -16,6 +16,7 @@
 #include <vector>
 
 class AssetLibrary;
+class CombatFx;
 class World;
 struct FirstPersonControllerComponent;
 
@@ -75,6 +76,7 @@ public:
     const std::vector<std::unique_ptr<Npc>>& Npcs() const { return m_Npcs; }
     const NavMesh& Nav() const { return m_Nav; }
     const CoverSystem& Cover() const { return m_Cover; }
+    CombatFx* Fx = nullptr;    // gun reports, flashes, tracers, whizzes (optional; the host owns it)
     bool Frozen = false;       // the AI stops deciding (bodies and weapons still run)
     bool HoldFire = false;     // nobody shoots
     int ShootersNow() const { return m_ShootersNow; }
@@ -119,7 +121,7 @@ private:
     void UpdateSquads(const PlayerSnapshot& p, float dt);
     void Move(World& world, Npc& n, float dt);
     void AimAndFire(World& world, Npc& n, const PlayerSnapshot& p, float dt);
-    void HandleShots(World& world, Npc& n, const PlayerSnapshot& p);
+    void HandleShots(World& world, Npc& n, const PlayerSnapshot& p, const glm::vec3& muzzleShift);
     void ApplyDamage(World& world, Npc& n, float amount, HitZone zone, const glm::vec3& point, const glm::vec3& dir, int attacker);
     void Despawn(World& world, Npc& n);
     void Callout(Npc& n, const char* line);
