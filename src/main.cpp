@@ -2082,6 +2082,13 @@ int main(int argc, char** argv) {
             // by the game's time scale); `gameDt` is the scaled step every Play system uses.
             Time::SetMaximumDeltaTime(ProjectSettings::Time().MaximumDeltaTime);
             Time::SetDebugTimeScale(EditorSettings::Get().PhysicsSimTimeScale);
+            // VSync on: the frames are shown on the monitor's refresh, so the game steps in whole refreshes
+            // (see Time::SetRefreshPeriod). Adaptive VSync tears late frames, so it is left as measured.
+            {
+                static int refreshHz = 0, refreshCheck = 0;
+                if (refreshCheck-- <= 0) { refreshHz = window.RefreshRate(); refreshCheck = 60; } // the window can move monitors
+                Time::SetRefreshPeriod(!headless && appliedVSyncMode == 1 && refreshHz >= 30 ? 1.0 / refreshHz : 0.0);
+            }
             Time::BeginFrame();
             const float dt = Time::UnscaledDeltaTime();
             // --weapon-test runs on a fixed step, so its timings don't depend on the machine.
@@ -4169,9 +4176,32 @@ int main(int argc, char** argv) {
                 editor.SetHideOverlaysThisFrame(false);
             }
 
+            const double traceBeforeSwap = glfwGetTime();
             {
                 PROFILE_SCOPE("Swap Buffers");
                 window.SwapBuffers();
+            }
+            // TARTARUS_FRAME_TRACE=<csv path>: one row per Play frame - timing, look input and the camera -
+            // to find where a stutter comes from.
+            if (static FILE* trace = [] {
+                    const char* path = std::getenv("TARTARUS_FRAME_TRACE");
+                    FILE* f = path && *path ? std::fopen(path, "w") : nullptr;
+                    if (f) std::fprintf(f, "t,realDt,gameDt,beforeSwap,swapMs,mouseDx,mouseDy,hasInput,camYaw,camPitch,camX,camY,camZ,velX,velZ,"
+                                           "grounded,yawDropped,bodyYaw,substeps,topCpu,topCpuMs\n");
+                    return f;
+                }(); trace && playing && playUsesPlayer) {
+                const double now = glfwGetTime();
+                std::string top;
+                float topMs = 0.0f;
+                for (const Profiler::Entry& e : Profiler::GetLastFrame())
+                    if (e.Name != "Swap Buffers" && e.Milliseconds > topMs) { topMs = e.Milliseconds; top = e.Name; }
+                std::fprintf(trace, "%.6f,%.6f,%.6f,%.6f,%.3f,%.2f,%.2f,%d,%.4f,%.4f,%.5f,%.5f,%.5f,%.4f,%.4f,%d,%.3f,%.4f,%d,%s,%.3f\n",
+                             now, Time::RealDeltaTime(), gameDt, traceBeforeSwap,
+                             (now - traceBeforeSwap) * 1000.0, Input::GetMouseDeltaX(), Input::GetMouseDeltaY(), gameHasInput ? 1 : 0,
+                             player.Cam.Yaw, player.Cam.Pitch, player.Cam.Position.x, player.Cam.Position.y, player.Cam.Position.z,
+                             player.Velocity.x, player.Velocity.z, player.Grounded ? 1 : 0, player.YawDropped,
+                             glm::degrees(firstPersonBody.Yaw()), PhysicsWorld::GetDebugStats().Substeps, top.c_str(), topMs);
+                std::fflush(trace);
             }
 
             // Software frame cap. Runs whatever the VSync mode is, but it's really for VSync Off

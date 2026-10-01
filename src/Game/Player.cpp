@@ -10,6 +10,7 @@ void Player::Update(float dt, World& world, GLFWwindow* window, bool readInput) 
     (void)world;  // collision now runs against PhysicsWorld's PhysX scene, not World's AABBs
     (void)window; // kept in the signature for a future direct-input path; unused today
 
+    YawDropped = 0.0f;
     if (readInput) {
         const float yawBefore = Cam.Yaw;
         Cam.ProcessMouseLook((float)Input::GetMouseDeltaX(),
@@ -26,7 +27,10 @@ void Player::Update(float dt, World& world, GLFWwindow* window, bool readInput) 
             const float before = wrap(yawBefore - YawFreeCenter), after = wrap(Cam.Yaw - YawFreeCenter);
             // Further out than it was (and than the free range): only as fast as the limit.
             const float reach = std::max(std::abs(before), YawFreeRange) + MaxYawRate * dt;
-            if (std::abs(after) > reach) Cam.Yaw = YawFreeCenter + std::copysign(reach, after);
+            if (std::abs(after) > reach) {
+                YawDropped = std::abs(after) - reach;
+                Cam.Yaw = YawFreeCenter + std::copysign(reach, after);
+            }
         }
     }
 
