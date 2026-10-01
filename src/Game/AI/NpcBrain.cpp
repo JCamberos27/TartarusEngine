@@ -75,7 +75,7 @@ int NpcBrain::FindCover(NpcDirector& d, Npc& n, CoverGoal goal, const glm::vec3&
         s[2] = 0.5f + 0.5f * facing;
         s[3] = d.m_Now - c.LastUsed < 6.0f ? 0.6f : 1.0f;
         s[4] = c.High && !c.Peek[0] && !c.Peek[1] ? 0.55f : 1.0f;
-        float score = CombineScores(s, 5);
+        float score = CombineScores(s, 5) * DangerScale(c.Pos, d.m_DeathPos, d.m_DeathTime, d.m_DeathCount, d.m_Now);
         switch (goal) {
         case CoverGoal::Fight:
             break;
@@ -235,6 +235,7 @@ void NpcBrain::Enter(NpcDirector& d, Npc& n, int behaviour, const PlayerSnapshot
     const Behaviour prev = n.Doing;
     n.Doing = b;
     n.DoingSince = now;
+    n.BoundWaitFrom = -1.0f;
     n.Phase = 0;
     n.PhaseStart = now;
     n.PhaseUntil = now;
@@ -257,6 +258,7 @@ void NpcBrain::Enter(NpcDirector& d, Npc& n, int behaviour, const PlayerSnapshot
             const glm::vec3 right = glm::normalize(glm::cross(FlatDir(n.Feet, threat), glm::vec3(0, 1, 0)));
             d.Callout(n, glm::dot(c.Pos - n.Feet, right) > 0.0f ? Bark::FlankRight : Bark::FlankLeft);
             n.Body.Signal(c.Pos - n.Feet);
+            n.BoundWaitFrom = now; // the order given, it goes once someone covers it
         }
         break;
     case Behaviour::Push:
@@ -269,6 +271,7 @@ void NpcBrain::Enter(NpcDirector& d, Npc& n, int behaviour, const PlayerSnapshot
         if (n.Phase >= 0) {
             d.Callout(n, Bark::MovingUp);
             n.Body.Signal((n.Cover >= 0 ? d.m_Cover.Points()[(size_t)n.Cover].Pos : threat) - n.Feet);
+            if (n.Cover >= 0) n.BoundWaitFrom = now;
         }
         break;
     case Behaviour::Retreat:
@@ -347,6 +350,31 @@ void NpcBrain::Run(NpcDirector& d, World& world, Npc& n, const PlayerSnapshot& p
         it.Pace = pace;
     };
     auto arrived = [&](const glm::vec3& goal) { return Flat(n.Feet, goal) < arriveDist; };
+    // Fire and maneuver: a bound across ground the player can see waits - down, gun up, shooting if there's a shot - for a
+    // squadmate's covering fire, though not for long if none comes (a push, called while the player reloads, hardly at all).
+    // False while it waits.
+    auto bound = [&](float maxWait) {
+        if (n.BoundWaitFrom < 0.0f || n.Squad >= (int)d.m_Squads.size()) return true;
+        auto& sq = d.m_Squads[(size_t)n.Squad];
+        const bool exposed = m.Visible || now - n.LastOwnSight < 0.5f;
+        const bool covered = now < sq.CoverFireUntil;
+        if (MayBound(exposed, covered, now - n.BoundWaitFrom, maxWait)) {
+            if (exposed) {
+                ++d.m_Tactics.Bounds;
+                if (covered) ++d.m_Tactics.CoveredBounds;
+            }
+            n.BoundWaitFrom = -1.0f;
+            if (sq.CoverRequest == n.Index) sq.CoverRequest = -1;
+            return true;
+        }
+        sq.CoverRequest = n.Index;
+        sq.CoverRequestAt = now;
+        it.Crouch = true;
+        it.Aim = true;
+        it.FaceAim = true;
+        it.Fire = m.Visible;
+        return false;
+    };
     // Stuck: give the behaviour up and let the next decision pick again.
     if (n.BlockedTime > 1.6f) {
         n.BlockedTime = 0.0f;
@@ -420,19 +448,26 @@ void NpcBrain::Run(NpcDirector& d, World& world, Npc& n, const PlayerSnapshot& p
         it.Fire = true;
         it.Reload = ammo01 <= 0.0f;
         const float dist = Flat(n.Feet, threat);
+        glm::vec3 snapped;
         if (shotgun && dist > 6.5f) {
             moveTo(threat + FlatDir(threat, n.Feet) * 5.0f, dist > 14.0f ? Gait::Jog : Gait::Walk);
+        } else if (!shotgun && dist < 5.0f && (n.Phase != 2 || now > n.PhaseUntil) &&
+                   d.m_Nav.Closest(n.Feet + FlatDir(threat, n.Feet) * 3.0f, snapped) && d.m_Nav.Walkable(n.Feet, snapped)) {
+            // Too close for a rifle: back off while shooting.
+            if (n.Phase != 2) ++d.m_Tactics.Backpedals;
+            n.Goal = snapped;
+            n.Phase = 2;
+            n.PhaseUntil = now + 0.8f;
         } else if (n.Phase == 0 || now > n.PhaseUntil) {
             // A strafe step: 2-4 m across, alternating sides, or a crouch on the spot at range.
             const glm::vec3 across = glm::normalize(glm::cross(FlatDir(n.Feet, threat), glm::vec3(0, 1, 0)));
             const float side = (n.SearchStep++ % 2 == 0) ? 1.0f : -1.0f;
             glm::vec3 pt = n.Feet + across * side * (2.0f + 2.0f * Rand01(d));
-            glm::vec3 snapped;
             n.Goal = d.m_Nav.Closest(pt, snapped) && d.m_Nav.Walkable(n.Feet, snapped) ? snapped : n.Feet;
             n.Phase = 1;
             n.PhaseUntil = now + 1.4f + 1.2f * Rand01(d);
         }
-        if (n.Phase == 1 && !(shotgun && dist > 6.5f)) {
+        if ((n.Phase == 1 || n.Phase == 2) && !(shotgun && dist > 6.5f)) {
             if (!arrived(n.Goal)) moveTo(n.Goal, Gait::Walk);
             else it.Crouch = !shotgun && dist > 14.0f && n.SearchStep % 3 == 0;
         }
@@ -442,6 +477,7 @@ void NpcBrain::Run(NpcDirector& d, World& world, Npc& n, const PlayerSnapshot& p
     case Behaviour::Flank:
     case Behaviour::Retreat: {
         if (n.Cover < 0) { n.Phase = -1; break; }
+        if (!bound(1.6f)) break;
         const CoverPoint& c = d.m_Cover.Points()[(size_t)n.Cover];
         const bool exposed = m.Visible || now - n.LastHurt < 2.0f;
         const float left = Flat(n.Feet, c.Pos);
@@ -480,6 +516,7 @@ void NpcBrain::Run(NpcDirector& d, World& world, Npc& n, const PlayerSnapshot& p
             if (Flat(n.Feet, threat) < 6.0f) n.Phase = -1;
             break;
         }
+        if (!bound(0.8f)) break;
         const CoverPoint& c = d.m_Cover.Points()[(size_t)n.Cover];
         moveTo(c.Pos, Gait::Run);
         if (Flat(n.Feet, c.Pos) < arriveDist) {
@@ -510,8 +547,28 @@ void NpcBrain::Run(NpcDirector& d, World& world, Npc& n, const PlayerSnapshot& p
             it.LookPoint = threatChest;
             it.Reload = ammo01 < 0.5f;
             if (n.Suppression > 0.6f) n.PhaseUntil = std::max(n.PhaseUntil, now + 0.2f);
+            // Told to cover a squadmate's bound: up now.
+            const bool ordered = now < n.CoverFireOrder;
+            if (ordered) n.PhaseUntil = std::min(n.PhaseUntil, now);
             // Seen while hiding: the cover's no good any more (flanked) - move.
             if (m.Visible && !n.CoverGood) { n.Phase = -1; d.m_Cover.Release(n.Index, now); n.Cover = -1; break; }
+            // Pinned: the gun up over low cover, or out past the edge of high cover, and a burst without looking.
+            if ((!c.High || c.Peek[0] || c.Peek[1]) && !reloading && ammo01 > 0.2f && now - n.LastBlindFire > 5.0f && n.PinnedSince >= 0.0f &&
+                WantsBlindFire(n.Suppression, now - n.PinnedSince, m.Known, sinceSeen)) {
+                n.Phase = 3;
+                n.PhaseStart = now;
+                n.PhaseUntil = now + 1.1f + 0.8f * Rand01(d);
+                n.LastBlindFire = now;
+                n.ShotsAtPhase = n.ShotsFired;
+                n.PeekSide = -1;
+                if (c.High) {
+                    float bestD = 1e9f;
+                    for (int s = 0; s < 2; ++s)
+                        if (c.Peek[s] && Flat(c.PeekPos[s], threat) < bestD) { bestD = Flat(c.PeekPos[s], threat); n.PeekSide = s; }
+                }
+                ++d.m_Tactics.BlindFires;
+                break;
+            }
             if (now > n.PhaseUntil && !reloading && ammo01 >= 0.3f) {
                 // Out to shoot: over low cover, else past whichever end sees the threat.
                 n.PeekSide = -1;
@@ -531,7 +588,7 @@ void NpcBrain::Run(NpcDirector& d, World& world, Npc& n, const PlayerSnapshot& p
                     }
                 }
                 // Peek after peek with nothing to shoot at: this spot is no use - find another.
-                if (n.EmptyPeeks >= 2) {
+                if (n.EmptyPeeks >= 2 && !ordered) {
                     n.EmptyPeeks = 0;
                     n.Phase = -1;
                     d.m_Cover.Release(n.Index, now);
@@ -556,12 +613,13 @@ void NpcBrain::Run(NpcDirector& d, World& world, Npc& n, const PlayerSnapshot& p
             }
             if (!m.Visible) {
                 const bool suppress = (n.Role == NpcRole::Suppressor || d.m_Squads[(size_t)n.Squad].PushHolder >= 0 ||
-                                       d.m_Squads[(size_t)n.Squad].FlankHolder >= 0) &&
+                                       d.m_Squads[(size_t)n.Squad].FlankHolder >= 0 || now < n.CoverFireOrder) &&
                                       sinceSeen < 6.0f && !shotgun;
                 it.Suppress = suppress;
                 it.Fire = suppress;
                 if (!suppress && now - n.PhaseStart > 1.2f) n.PhaseUntil = std::min(n.PhaseUntil, now);
             }
+            if (now < n.CoverFireOrder) n.PhaseUntil = std::max(n.PhaseUntil, n.CoverFireOrder);
             const int bursts = n.ShotsFired - n.ShotsAtPhase;
             const bool hurtNow = n.LastHurt > n.PhaseStart;
             if (now > n.PhaseUntil || hurtNow || bursts >= (shotgun ? 2 : 12) || ammo01 <= 0.0f) {
@@ -571,6 +629,25 @@ void NpcBrain::Run(NpcDirector& d, World& world, Npc& n, const PlayerSnapshot& p
                 const float base = c.High ? 1.0f : 1.3f;
                 n.PhaseUntil = now + base * (0.8f + 1.4f * Rand01(d)) * (1.0f + n.Suppression) * (1.2f - 0.4f * n.Skill) *
                                          (n.Retreated ? 1.6f : 1.0f);
+            }
+        } else if (n.Phase == 3) {
+            // Blind fire: down behind the cover, head tucked, the gun held out over or round it toward where the player was.
+            moveTo(c.Pos, Gait::Walk);
+            if (Flat(n.Feet, c.Pos) < 0.3f) it.Move = false;
+            it.Crouch = !c.High; // behind high cover it stands, the gun out round the edge
+            it.Aim = true;
+            it.AimPoint = threatChest;
+            it.FaceAim = true;
+            it.Fire = true;
+            it.Suppress = true;
+            it.BlindFire = true;
+            it.Cower = 0.8f;
+            // Done, empty, hit, or someone at arm's length to strike instead.
+            if (now > n.PhaseUntil || ammo01 <= 0.0f || n.LastHurt > n.PhaseStart || n.MeleeAt > n.PhaseStart) {
+                it.BlindFire = false;
+                n.Phase = 0;
+                n.PhaseStart = now;
+                n.PhaseUntil = now + 0.8f + 0.8f * Rand01(d);
             }
         }
         break;
