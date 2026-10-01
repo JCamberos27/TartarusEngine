@@ -5,7 +5,7 @@
 #include <cstdint>
 #include <vector>
 
-// Which of a body part's vertices a piece of clothing covers (CHARACTER_OUTFITS.md, "skin hiding").
+// Which of a body part's vertices a piece of clothing covers (docs/CHARACTER_OUTFITS.md, "skin hiding").
 // Pure geometry, in one space (world metres), in the bind pose both models share: each body vertex
 // looks along its normal, a little inward and further out, for the cloth. Covered skin isn't drawn,
 // so it can't poke through the cloth as the body animates.
