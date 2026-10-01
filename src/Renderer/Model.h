@@ -197,6 +197,7 @@ public:
     // The current skinning matrix of bone `i` (bind pose when nothing plays). For tests / tools.
     glm::mat4 FinalBoneMatrix(int i) const {
         if (i < 0 || i >= m_D->BoneCounter) return glm::mat4(1.0f);
+        if (m_PaletteDirty) ResolvePalette();
         const bool posed = m_ExternalPose || m_Anim.Clip >= 0 || m_FadeDuration > 0.0f;
         return posed && i < (int)m_FinalBoneMatrices.size() ? m_FinalBoneMatrices[i] : m_D->BindPoseBones[i];
     }
@@ -207,6 +208,8 @@ public:
     // bone's world position, e.g. to hang a camera off a head bone. Returns false when the model
     // has no node of that name, in which case `out` is left untouched.
     bool NodeTransform(const std::string& name, glm::mat4& out) const;
+    // The same by node index (no name lookup), for a loop that has already resolved its nodes.
+    bool NodeTransformAt(int node, glm::mat4& out) const;
 
     // --- Animator pose API ------------------------------------------------------------------
     // The Animator Controller (AnimatorController.cpp) blends poses itself - crossfade stacks,
@@ -392,7 +395,14 @@ private:
     bool m_PosePending = false;    // a fade to "stopped" still needs final matrices this frame
     bool m_ExternalPose = false;   // ApplyLocalPose owns the pose until the next PlayAnimation
     std::vector<LocalTRS> m_AppliedPose; // ... and what it was given (AppliedLocalPose)
-    std::vector<glm::mat4> m_FinalBoneMatrices;
+    mutable std::vector<glm::mat4> m_FinalBoneMatrices;
+    // ApplyLocalPose only stores the pose; the node globals and the skinning palette are worked out when something
+    // first reads them (NodeTransform, FinalBoneMatrix, the draw's palette upload). A rig posed several times a frame
+    // (an NPC's solves) pays for the last pose only.
+    mutable bool m_PoseDirty = false;    // the node globals are behind the applied pose
+    mutable bool m_PaletteDirty = false; // ... and the skinning palette
+    void ResolveAppliedPose() const;     // the node globals
+    void ResolvePalette() const;         // the palette (resolves the globals first)
     std::uint64_t m_PoseVersion = 1; // bumped whenever m_FinalBoneMatrices is rewritten
     // Where this frame's palette already sits in the bone ring (UploadBoneMatrices), and for what.
     struct BoneUpload {
