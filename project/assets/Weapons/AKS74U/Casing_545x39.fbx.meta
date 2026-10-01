@@ -1,0 +1,9 @@
+{
+  "folder": "assets/Weapons/AKS74U",
+  "guid": "3400d0834ae58519",
+  "materialRemap": {
+    "cartridge_545x39mm": "assets/Weapons/AKS74U/Materials/Cartridge_545x39mm.mat"
+  },
+  "metaVersion": 1,
+  "type": "model"
+}

@@ -245,6 +245,31 @@ bool FirstPersonAnimationSet::FromJsonString(const std::string& text, FirstPerso
         if (glm::length(d) > 1e-6f) mz.Direction = glm::normalize(d);
         else if (!mz.Auto) return Fail(error, "'muzzle.direction' can't be zero when 'muzzle.auto' is false");
     }
+    if (const auto e = root.find("eject"); e != root.end() && e->is_object()) {
+        FirstPersonEjectSettings& ej = parsed.Eject;
+        ej.Enabled = Bool(*e, "enabled", true);
+        ej.Model = String(*e, "model");
+        ej.Material = String(*e, "material");
+        const glm::vec3 o = Vec3(*e, "origin", ej.Origin), d = Vec3(*e, "direction", ej.Direction);
+        if (!Finite(o) || !Finite(d)) return Fail(error, "'eject.origin' and 'eject.direction' must be three finite numbers");
+        if (glm::length(d) < 1e-6f) return Fail(error, "'eject.direction' can't be zero");
+        ej.Origin = o;
+        ej.Direction = glm::normalize(d);
+        auto clampNum = [&](const char* key, float& v, float lo, float hi) {
+            const float x = Number(*e, key, v);
+            if (std::isfinite(x)) v = std::clamp(x, lo, hi);
+        };
+        clampNum("speed", ej.Speed, 0.0f, 50.0f);
+        clampNum("speedJitter", ej.SpeedJitter, 0.0f, 1.0f);
+        clampNum("spread", ej.Spread, 0.0f, 90.0f);
+        clampNum("spin", ej.Spin, 0.0f, 200.0f);
+        if (const std::string t = String(*e, "trigger"); !t.empty()) {
+            if (t == "shot") ej.When = FirstPersonEjectSettings::Trigger::Shot;
+            else if (t == "event") ej.When = FirstPersonEjectSettings::Trigger::Event;
+            else return Fail(error, "'eject.trigger' must be \"shot\" or \"event\"");
+        }
+        if (ej.Enabled && ej.Model.empty()) return Fail(error, "'eject' needs a 'model' (.fbx path)");
+    }
     if (const auto s = root.find("stockLock"); s != root.end() && s->is_object()) {
         FirstPersonStockLockSettings& sl = parsed.StockLock;
         sl.Enabled = Bool(*s, "enabled", sl.Enabled);
@@ -357,6 +382,11 @@ std::string FirstPersonAnimationSet::ToJsonString() const {
     if (Ads.Anchor.Enabled)
         j["ads"]["handAnchor"] = {{"near", Ads.Anchor.Near}, {"far", Ads.Anchor.Far}, {"bones", Ads.Anchor.Bones}};
     j["muzzle"] = {{"auto", Muzzle.Auto}, {"origin", vec3(Muzzle.Origin)}, {"direction", vec3(Muzzle.Direction)}};
+    if (!Eject.Model.empty() || Eject.Enabled)
+        j["eject"] = {{"enabled", Eject.Enabled}, {"model", Eject.Model}, {"material", Eject.Material},
+                      {"origin", vec3(Eject.Origin)}, {"direction", vec3(Eject.Direction)}, {"speed", Eject.Speed},
+                      {"speedJitter", Eject.SpeedJitter}, {"spread", Eject.Spread}, {"spin", Eject.Spin},
+                      {"trigger", Eject.When == FirstPersonEjectSettings::Trigger::Event ? "event" : "shot"}};
     j["stockLock"] = {{"enabled", StockLock.Enabled}, {"tags", StockLock.Tags}, {"pocket", vec3(StockLock.Pocket)},
                       {"maxShift", StockLock.MaxShift}, {"headTilt", StockLock.HeadTilt}, {"blendTime", StockLock.BlendTime},
                       {"neckRadius", StockLock.NeckRadius}, {"headRadius", StockLock.HeadRadius}, {"gunLength", StockLock.GunLength},
@@ -665,6 +695,9 @@ std::vector<FPBody::Check> FirstPersonWeaponValidate(const FirstPersonWeaponChec
             });
         };
         auto hasTag = [&](const char* tag) { return anyState([&](const AnimatorController::State& s) { return s.HasTag(tag); }); };
+        if (set.Eject.Enabled && set.Eject.When == FirstPersonEjectSettings::Trigger::Event && !hasEvent(kEventEject))
+            add(Sev::Warning, std::string("Casings eject on an event, but no state has an '") + kEventEject + "' event.",
+                "Add an 'Eject' event to the state that works the action (the pump), or set eject.trigger to \"shot\".");
         if (!hasEvent(kEventShot))
             add(Sev::Warning, std::string("No state has a '") + kEventShot + "' event.",
                 "Add a 'Shot' event on the fire clip at the moment a round leaves the gun; without it hip fire spends no ammo.");
