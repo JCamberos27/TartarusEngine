@@ -38,5 +38,5 @@ Two separate defects, both needed:
 island modelled exactly on top of the installed one and driven by its own `mag2` bone - they
 occupy the same space at rest and only the bone animation separates them. Joining merged the
 pair, kept `magazine`, and left `mag2` pointing at vertices that no longer existed, so the
-engine dropped all 17594 of its weights and the spare magazine never moved. See
-`FPS_ANIMATION_INVESTIGATION.md` (archived: `git show 763b8187:FPS_ANIMATION_INVESTIGATION.md`).
+engine dropped all 17594 of its weights and the spare magazine never moved. The full investigation
+is archived: `git show 763b8187:FPS_ANIMATION_INVESTIGATION.md`.
