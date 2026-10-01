@@ -88,6 +88,7 @@ public:
     bool Frozen = false;       // the AI stops deciding (bodies and weapons still run)
     bool HoldFire = false;     // nobody shoots
     bool MeshChecksEverywhere = false; // the weapon hold checks the drawn body at any distance (tests)
+    bool FootIKEverywhere = false;     // feet onto the ground at any distance and out of view (tests)
     int ShootersNow() const { return m_ShootersNow; }
     // What the squad's tactics did (--npc-test).
     struct TacticStats {
