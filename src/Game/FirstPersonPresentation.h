@@ -36,7 +36,23 @@ struct FirstPersonControllerComponent;
 // and lean go on the play camera (ApplyViewKick / RemoveViewKick).
 class FirstPersonPresentation {
 public:
+    // How the rigs are used. The defaults are the player's. An NPC (Npc/NpcWeapon.h) carries the
+    // same weapon on a virtual camera at its eyes: OwnerView off draws the gun as ordinary world
+    // geometry and the arms rig not at all (the NPC's body takes its hands), HotReload off skips
+    // polling the .fpsanim, CornerPeek off leaves leaning to the AI.
+    struct Options {
+        bool OwnerView = true;
+        bool HotReload = true;
+        bool CornerPeek = true;
+    };
     bool Start(World& world, AssetLibrary& assets, const FirstPersonControllerComponent& config);
+    bool Start(World& world, AssetLibrary& assets, const FirstPersonControllerComponent& config, const Options& options);
+    // Where rounds go instead of down the zeroed bore: from the muzzle toward `point` (pellets
+    // spread about that line). Null = the bore, as the player's do. Copied.
+    void SetShotTarget(const glm::vec3* point) {
+        m_HasShotTarget = point != nullptr;
+        if (point) m_ShotTarget = *point;
+    }
     void Stop(World& world);
 
     // Keeps the presentation in camera space, and takes in what the animator reported last
@@ -101,12 +117,18 @@ public:
     void CycleSlot(int step);
 
     int Ammo() const { return m_Ammo; }
+    void SetAmmo(int rounds) { m_Ammo = rounds < 0 ? 0 : rounds; } // tests: a part-empty magazine to reload
+    // Every slot's magazine full again, the one in hand chambered (a respawn).
+    void RefillAmmo();
+    // In a reload state (the controller's Reload tag).
+    bool IsReloading() const { return HasTag("Reload"); }
     // False while the action still has to be worked after a round (gameplay.cycle).
     bool Chambered() const { return m_Chambered; }
     int MagazineSize() const { return m_Set.Gameplay.Magazine; }
     bool IsActive() const { return m_Arms != entt::null; }
     // The runtime arms rig's entity (null when inactive) - the body's arms take their hands from it.
     entt::entity ArmsEntity() const { return m_Arms; }
+    entt::entity WeaponEntity() const { return m_Weapon; }
     // The arms rig node the play camera is pinned to (empty = the rig's root sits on the camera).
     const std::string& CameraBone() const { return m_CameraBone; }
     // Mid-swap counts as equipped: the weapon is only being traded for another, so e.g. the gravity
@@ -134,8 +156,18 @@ public:
         glm::vec3 Point{0.0f}, Normal{0.0f, 1.0f, 0.0f};
         unsigned Entity = 0xFFFFFFFFu;
         float HoleRadius = 0.0045f; // the weapon's bullet hole, metres
+        glm::vec3 Origin{0.0f}, Direction{0.0f, 0.0f, -1.0f}; // the ray it came down (muzzle, unit)
+        int Pellets = 1;            // rays in the round it belongs to (a shotgun's pellets)
     };
     std::vector<ShotHit> TakeShotHits();
+    // Every pellet's line since the last call, hit or not (muzzle flash, tracers, near misses).
+    struct ShotTrace {
+        glm::vec3 Origin{0.0f}, End{0.0f};
+        bool Hit = false;
+        bool FirstPellet = true; // the first ray of its round (one flash and one report per round)
+        unsigned Entity = 0xFFFFFFFFu;
+    };
+    std::vector<ShotTrace> TakeShotTraces();
     // The spent cases thrown out of the port since the last call (FirstPersonEjectSettings), for
     // ShellCasings. The list empties.
     std::vector<CasingSpawn> TakeEjections();
@@ -301,6 +333,10 @@ private:
     glm::vec3 m_AimNormal{0.0f, 1.0f, 0.0f};
     bool m_AimHit = false;        // the bore ray met a surface within range
     std::vector<ShotHit> m_ShotHits;
+    std::vector<ShotTrace> m_ShotTraces;
+    Options m_Options;
+    bool m_HasShotTarget = false;
+    glm::vec3 m_ShotTarget{0.0f};
     // The sight line measured in Play (weapon root space), for a weapon without a saved one.
     bool m_SightMeasured = false;
     float m_SightSettled = 0.0f;  // seconds the sights have been steady for measuring

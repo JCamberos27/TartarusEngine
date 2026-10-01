@@ -161,6 +161,20 @@ if(NOT meshoptimizer_POPULATED)
   FetchContent_Populate(meshoptimizer)
 endif()
 
+# --- Recast & Detour (navigation meshes, pathfinding and crowd steering for the enemy AI) ---
+# Source only, like meshoptimizer: the engine compiles Recast (navmesh building), Detour (queries)
+# and DetourCrowd (local avoidance) itself rather than building the library targets, whose install
+# rules would land in the package.
+FetchContent_Declare(
+  recastnavigation
+  GIT_REPOSITORY https://github.com/recastnavigation/recastnavigation.git
+  GIT_TAG v1.6.0
+)
+FetchContent_GetProperties(recastnavigation)
+if(NOT recastnavigation_POPULATED)
+  FetchContent_Populate(recastnavigation)
+endif()
+
 # --- NVIDIA PhysX 5 (collision / rigid bodies / character controller — #185) --------------
 # Built from source, pinned by git tag, nothing vendored — issue #185's "Path B", but via
 # ExternalProject rather than FetchContent_MakeAvailable. PhysX's public CMake cannot share
@@ -365,6 +379,11 @@ set(MESHOPT_SOURCES
   ${meshoptimizer_SOURCE_DIR}/src/allocator.cpp
   ${meshoptimizer_SOURCE_DIR}/src/vcacheoptimizer.cpp
 )
+file(GLOB RECAST_SOURCES
+  ${recastnavigation_SOURCE_DIR}/Recast/Source/*.cpp
+  ${recastnavigation_SOURCE_DIR}/Detour/Source/*.cpp
+  ${recastnavigation_SOURCE_DIR}/DetourCrowd/Source/*.cpp
+)
 
 # App icon (Windows only — .rc is an MSVC resource script). Baked into the exe itself so any
 # shortcut targeting it keeps showing the icon across rebuilds; nothing to re-link externally.
@@ -375,7 +394,7 @@ if(WIN32)
   list(APPEND ENGINE_SOURCES ${CMAKE_SOURCE_DIR}/src/TartarusEngine.manifest)
 endif()
 
-add_executable(TartarusEngine ${ENGINE_SOURCES} ${IMGUI_SOURCES} ${MESHOPT_SOURCES})
+add_executable(TartarusEngine ${ENGINE_SOURCES} ${IMGUI_SOURCES} ${MESHOPT_SOURCES} ${RECAST_SOURCES})
 
 add_library(TartarusGame SHARED
   ${CMAKE_SOURCE_DIR}/src/Game/GameModule.cpp
@@ -500,6 +519,9 @@ target_include_directories(TartarusEngine PRIVATE
   ${imgui_SOURCE_DIR}/backends
   ${imguizmo_SOURCE_DIR}/src
   ${meshoptimizer_SOURCE_DIR}/src
+  ${recastnavigation_SOURCE_DIR}/Recast/Include
+  ${recastnavigation_SOURCE_DIR}/Detour/Include
+  ${recastnavigation_SOURCE_DIR}/DetourCrowd/Include
 )
 
 target_link_libraries(TartarusEngine PRIVATE glfw glm::glm assimp EnTT::EnTT physx)
@@ -536,6 +558,7 @@ tartarus_enable_release_debug_info(TartarusEngine)
 set(TARTARUS_VENDORED_SOURCES
   ${IMGUI_SOURCES}
   ${MESHOPT_SOURCES}
+  ${RECAST_SOURCES}
   ${CMAKE_SOURCE_DIR}/extern/stb_image_impl.cpp
   ${CMAKE_SOURCE_DIR}/extern/stb_dxt_impl.cpp
   ${CMAKE_SOURCE_DIR}/extern/miniaudio_impl.cpp
