@@ -1927,6 +1927,10 @@ void TestBlendTree2D() {
     }
     // The spine's share of the pitch: Spine Aim up, Spine Aim Down down.
     CHECK(near(FirstPersonBodySpineAim(glm::radians(30.0f), 0.6f, 0.9f), 0.6f) && near(FirstPersonBodySpineAim(glm::radians(-30.0f), 0.6f, 0.9f), 0.9f));
+    // Armed, the world torso leans no further than 0.2 rad plus its share of the view's pitch down (less looking up).
+    CHECK(near(FirstPersonBodyAimLeanMost(0.0f, 0.9f), 0.2f));
+    CHECK(near(FirstPersonBodyAimLeanMost(glm::radians(-30.0f), 0.9f), 0.2f + glm::radians(30.0f) * 0.9f));
+    CHECK(FirstPersonBodyAimLeanMost(glm::radians(30.0f), 0.6f) < 0.2f && FirstPersonBodyAimLeanMost(glm::radians(-89.0f), 1.0f) <= 1.2f);
 }
 
 // Character outfits: a small wardrobe's items are classified from their folders, and the rules
