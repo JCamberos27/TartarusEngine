@@ -252,7 +252,7 @@ bool NavMesh::FindPath(const glm::vec3& a, const glm::vec3& b, std::vector<glm::
 }
 
 float NavMesh::PathLength(const glm::vec3& a, const glm::vec3& b) const {
-    std::vector<glm::vec3> pts;
+    static thread_local std::vector<glm::vec3> pts; // reused: cover searches call this in a loop
     bool partial = false;
     if (!FindPath(a, b, pts, &partial) || partial) return -1.0f;
     float len = 0.0f;

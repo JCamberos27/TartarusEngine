@@ -110,6 +110,7 @@ struct Npc {
     int ShotsFired = 0;
     int Tracer = 0;                 // every third round is a tracer
     bool FxReloading = false, FxPumping = false; // for the reload / pump sounds' rising edges
+    bool Reloading = false;         // the weapon is in a reload state (read once a frame in AimAndFire)
     float FallSoundAt = -1.0f;      // the body hits the ground (seconds, director time)
     float LastShot = -1e9f;
     bool FullAutoSet = false;

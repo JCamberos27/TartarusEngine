@@ -352,6 +352,7 @@ void NpcDirector::Think(World& world, AssetLibrary& assets, float dt, const Play
     const auto t0 = std::chrono::steady_clock::now();
     m_Player = p;
     m_Now += dt;
+    ++m_Frame;
     if (!m_Started) {
         if (!PhysicsWorld::IsActive()) return;
         LateStart(world, assets);
@@ -686,7 +687,7 @@ void NpcDirector::Move(World& world, Npc& n, float dt) {
     in.FacingYaw = NpcYawOf(face - n.Feet, n.Body.Yaw());
     in.HoldFacing = n.Intent.FaceAim;
     in.AimPoint = n.Intent.AimPoint;
-    in.Aiming = n.Intent.Aim;
+    in.Aiming = n.Intent.Aim && !n.Reloading; // reloads are worked at the hip, not on the sights
     in.LookPoint = n.Intent.LookPoint;
     in.Crouched = n.Crouched;
     in.Sprint = n.Intent.Pace == Gait::Run && n.Intent.Move;
@@ -699,6 +700,11 @@ void NpcDirector::AimAndFire(World& world, Npc& n, const PlayerSnapshot& p, floa
     // gun's own recoil kick shows on the rig; the spring brings the muzzle back down.
     // The eyes go where the brain looks (quickly); the gun follows the aim, or - lowered - the chest,
     // muzzle down: a low ready, not a gun swinging round after every glance.
+    // A reload is worked at the hip: the sights come down while the hands are busy (an ADS-carried
+    // reload swings the reaching hand across the face as the gun bobs on the aim), the muzzle low
+    // toward the threat, then back up onto it when the new magazine is in.
+    n.Reloading = n.Weapon && n.Weapon->IsActive() && n.Weapon->CurrentState().find("Reload") != std::string::npos;
+    const bool aimGun = n.Intent.Aim && !n.Reloading;
     const glm::vec3 target = n.Intent.Aim ? n.Intent.AimPoint : n.Intent.LookPoint;
     {
         float ly = n.LookYaw, lp = n.LookPitch;
@@ -709,7 +715,11 @@ void NpcDirector::AimAndFire(World& world, Npc& n, const PlayerSnapshot& p, floa
     }
     float wantYaw = n.AimYaw, wantPitch = n.AimPitch;
     YawPitchOf(target - n.Eye, wantYaw, wantPitch);
-    if (!n.Intent.Aim) {
+    if (n.Intent.Aim && n.Reloading) {
+        // Facing the threat, the view near level: the reload clips are authored against a level camera (the
+        // player's hip reload), and pitched well down the rig swung the gun into the chest.
+        wantPitch = std::clamp(wantPitch, -20.0f, 20.0f) * 0.5f - 4.0f;
+    } else if (!n.Intent.Aim) {
         const float chest = n.Body.Yaw();
         YawPitchOf(glm::vec3(std::sin(chest), 0.0f, std::cos(chest)), wantYaw, wantPitch);
         wantPitch = -26.0f;
@@ -723,7 +733,7 @@ void NpcDirector::AimAndFire(World& world, Npc& n, const PlayerSnapshot& p, floa
     const glm::vec3 aimDir = FrontOf(n.AimYaw, n.AimPitch);
     const glm::vec3 wantDir = glm::normalize(target - n.Eye + glm::vec3(1e-5f));
     const float errorDeg = glm::degrees(std::acos(std::clamp(glm::dot(aimDir, wantDir), -1.0f, 1.0f)));
-    if (n.Mem.Visible && n.Intent.Aim && errorDeg < 6.0f) n.TimeOnTarget += dt;
+    if (n.Mem.Visible && aimGun && errorDeg < 6.0f) n.TimeOnTarget += dt;
     else n.TimeOnTarget = std::max(0.0f, n.TimeOnTarget - dt * 2.0f);
 
     if (!n.Weapon || !n.Weapon->IsActive()) return;
@@ -753,8 +763,7 @@ void NpcDirector::AimAndFire(World& world, Npc& n, const PlayerSnapshot& p, floa
     n.BurstPause = std::max(0.0f, n.BurstPause - dt);
 
     const bool sprinting = n.Intent.Pace == Gait::Run && n.Intent.Move && glm::length(n.Velocity) > 3.5f;
-    const std::string& state = w.CurrentState();
-    const bool reloading = state.find("Reload") != std::string::npos;
+    const bool reloading = n.Reloading;
     const float tolerance = n.Intent.Suppress ? 9.0f : 4.5f + 3.0f * std::clamp(8.0f / std::max(glm::length(target - n.Eye), 1.0f), 0.0f, 1.0f);
     bool canFire = n.Intent.Fire && !HoldFire && n.HasAttackToken && n.ReactionLeft <= 0.0f && errorDeg < tolerance && !reloading &&
                    !sprinting && w.IsEquipped() && p.Valid && !p.Dead && (n.Mem.Visible || n.Intent.Suppress) && w.Ammo() > 0;
@@ -793,7 +802,8 @@ void NpcDirector::AimAndFire(World& world, Npc& n, const PlayerSnapshot& p, floa
     n.TriggerHeld = held;
     w.UpdateTrigger(pressed, held);
     if ((n.Intent.Reload || w.Ammo() == 0) && !reloading && !held) w.Reload();
-    w.Tick(dt, n.Velocity, sprinting, n.Intent.Aim && !sprinting, 0.0f, true);
+    // Reloading, the walk's bob is damped too: the hands are on the magazine, not swinging the gun.
+    w.Tick(dt, reloading ? n.Velocity * 0.35f : n.Velocity, sprinting, aimGun && !sprinting, 0.0f, true);
 }
 
 void NpcDirector::LateUpdate(World& world, float dt, const PlayerSnapshot& p) {

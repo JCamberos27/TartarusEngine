@@ -32,6 +32,7 @@ float Rand01(NpcDirector&) { return std::uniform_real_distribution<float>(0.0f, 
 int NpcBrain::FindCover(NpcDirector& d, Npc& n, CoverGoal goal, const glm::vec3& threat) {
     CoverSystem& cover = d.m_Cover;
     if (cover.Points().empty()) return -1;
+    d.m_CoverSearchFrame = d.m_Frame;
     const glm::vec3 threatEye = threat + glm::vec3(0.0f, 1.6f, 0.0f);
     const float current = Flat(n.Feet, threat);
     // Where the rest of the squad is (the flank goes wide of it).
@@ -42,10 +43,11 @@ int NpcBrain::FindCover(NpcDirector& d, Npc& n, CoverGoal goal, const glm::vec3&
     centroid /= (float)count;
     const glm::vec3 squadDir = FlatDir(threat, centroid);
 
-    std::vector<int> near;
+    static thread_local std::vector<int> near;
     cover.Query(n.Feet, goal == CoverGoal::Flank ? 34.0f : 28.0f, near);
     struct Cand { int Index; float Score; };
-    std::vector<Cand> cands;
+    static thread_local std::vector<Cand> cands;
+    cands.clear();
     const bool shotgun = n.Class == WeaponClass::Shotgun;
     for (int i : near) {
         const CoverPoint& c = cover.Points()[(size_t)i];
@@ -196,7 +198,15 @@ void NpcBrain::Choose(NpcDirector& d, Npc& n, const PlayerSnapshot& p) {
     int best = 0;
     for (int i = 1; i < kBehaviours; ++i) if (s[i] > s[best]) best = i;
     for (int i = 0; i < kBehaviours; ++i) n.Scores[i] = s[i];
-    if ((Behaviour)best != n.Doing || n.Phase < 0) Enter(d, n, best, p);
+    if ((Behaviour)best != n.Doing || n.Phase < 0) {
+        const Behaviour b = (Behaviour)best;
+        const bool needsCover = b == Behaviour::TakeCover || b == Behaviour::Flank || b == Behaviour::Push || b == Behaviour::Retreat;
+        if (needsCover && d.m_CoverSearchFrame == d.m_Frame) {
+            n.NextThink = now; // someone searched this frame already: decide again next frame
+            return;
+        }
+        Enter(d, n, best, p);
+    }
 }
 
 void NpcBrain::Enter(NpcDirector& d, Npc& n, int behaviour, const PlayerSnapshot& p) {
@@ -283,7 +293,7 @@ void NpcBrain::Run(NpcDirector& d, World& world, Npc& n, const PlayerSnapshot& p
     const glm::vec3 aimAt = m.Visible ? (n.VisiblePoints > 0 ? n.SeenPoint : p.Feet + glm::vec3(0.0f, p.Height * 0.7f, 0.0f)) : threatChest;
     const bool shotgun = n.Class == WeaponClass::Shotgun;
     const float ammo01 = n.Weapon && n.Weapon->IsActive() ? (float)n.Weapon->Ammo() / (float)std::max(1, n.Weapon->MagazineSize()) : 1.0f;
-    const bool reloading = n.Weapon && n.Weapon->IsActive() && n.Weapon->CurrentState().find("Reload") != std::string::npos;
+    const bool reloading = n.Reloading;
     const float arriveDist = 0.55f;
 
     const NpcIntent prev = it;
