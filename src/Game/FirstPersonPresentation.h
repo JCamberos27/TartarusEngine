@@ -159,6 +159,14 @@ public:
         int Pellets = 1;            // rays in the round it belongs to (a shotgun's pellets)
     };
     std::vector<ShotHit> TakeShotHits();
+    // Every pellet's line since the last call, hit or not (muzzle flash, tracers, near misses).
+    struct ShotTrace {
+        glm::vec3 Origin{0.0f}, End{0.0f};
+        bool Hit = false;
+        bool FirstPellet = true; // the first ray of its round (one flash and one report per round)
+        unsigned Entity = 0xFFFFFFFFu;
+    };
+    std::vector<ShotTrace> TakeShotTraces();
     // The spent cases thrown out of the port since the last call (FirstPersonEjectSettings), for
     // ShellCasings. The list empties.
     std::vector<CasingSpawn> TakeEjections();
@@ -324,6 +332,7 @@ private:
     glm::vec3 m_AimNormal{0.0f, 1.0f, 0.0f};
     bool m_AimHit = false;        // the bore ray met a surface within range
     std::vector<ShotHit> m_ShotHits;
+    std::vector<ShotTrace> m_ShotTraces;
     Options m_Options;
     bool m_HasShotTarget = false;
     glm::vec3 m_ShotTarget{0.0f};
