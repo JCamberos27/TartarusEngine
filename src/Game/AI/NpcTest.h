@@ -18,6 +18,9 @@ class World;
 //   watch   (default) the player stands at the spawn, untouchable: the squad notices, takes cover, shoots
 //   fight   the player shoots back at whoever it can see; the squad takes losses and replaces them
 //   die     the player stands in the open and can be killed: death and respawn
+//   pose    the weapon hold, close up: an AK and a Remington soldier, the AI frozen, put through aim level /
+//           up / down / to the side, low ready, crouched, strafing, reloading and sprinting; four views of each
+//           and the gun's / elbows' / hands' clearances (NpcBody::MeasureHold) logged and checked
 class NpcTest {
 public:
     explicit NpcTest(const std::string& scenario);
@@ -42,6 +45,7 @@ public:
 
 private:
     void Check(bool ok, const std::string& what);
+    void Pose(World& world, NpcDirector& npcs, float now);
     std::string m_Scenario;
     float m_Time = 0.0f;
     float m_Duration = 45.0f;
@@ -72,4 +76,12 @@ private:
     bool m_Reload = false;
     std::string m_Target;
     int m_PlayerShots = 0;
+    // pose
+    std::string m_Probe[2];
+    int m_PosePhase = -1;
+    float m_PhaseStart = 0.0f;
+    int m_PoseShots = 0;
+    glm::vec3 m_ProbeHome[2]{};
+    float m_WorstHead = 1e9f, m_WorstTorso = 1e9f, m_WorstElbow = 1e9f, m_WorstHand = 0.0f;
+    std::string m_WorstHeadAt, m_WorstTorsoAt, m_WorstElbowAt, m_WorstHandAt;
 };

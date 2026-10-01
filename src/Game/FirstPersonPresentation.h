@@ -117,6 +117,7 @@ public:
     void CycleSlot(int step);
 
     int Ammo() const { return m_Ammo; }
+    void SetAmmo(int rounds) { m_Ammo = rounds < 0 ? 0 : rounds; } // tests: a part-empty magazine to reload
     // Every slot's magazine full again, the one in hand chambered (a respawn).
     void RefillAmmo();
     // In a reload state (the controller's Reload tag).
