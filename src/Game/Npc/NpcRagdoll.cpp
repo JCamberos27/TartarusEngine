@@ -284,7 +284,8 @@ bool NpcRagdoll::BuildParts(const std::function<bool(const char*, glm::vec3&)>& 
         p.SwingDeg = d.Swing;
         p.TwistDeg = d.Twist;
         p.Velocity[0] = velocity.x; p.Velocity[1] = velocity.y; p.Velocity[2] = velocity.z;
-        p.InertiaScale = cfg.InertiaScale;
+        if (rd.R == Region::Hand || rd.R == Region::Foot) p.JointDamping = cfg.DistalJointDamping;
+        p.InertiaScale = cfg.InertiaScale * (rd.R == Region::Hand || rd.R == Region::Foot ? std::max(cfg.DistalInertiaScale, 0.05f) : 1.0f);
         if (cfg.ShapedTorsoInertia && (rd.R == Region::Pelvis || rd.R == Region::Spine)) {
             // A trunk is wider than it is deep: a box (the hips a little narrower than the shoulders), not a round capsule.
             p.InertiaHalfWidth = cfg.TorsoHalfWidth * (rd.R == Region::Pelvis ? 0.9f : 1.0f);
@@ -336,7 +337,7 @@ bool NpcRagdoll::Start(NpcBody& body, const glm::vec3& velocity, const glm::vec3
     m_Id = PhysicsWorld::CreateRagdoll((unsigned)entt::to_integral(body.Root()), parts, kRagParts, &bodyParams);
     if (m_Id < 0) return false;
     // Powered at first: the joints hold the death pose (their drive targets are the pose they were built in).
-    m_Stiffness = cfg.DriveStiffness; m_Damping = cfg.DriveDamping;
+    m_Stiffness = cfg.DriveStiffness; m_Damping = cfg.DriveDamping; m_DistalDamping = cfg.DistalJointDamping;
     for (int i = 0; i < kRagParts; ++i) m_PartFade[i] = PartFade(&cfg, i);
     PhysicsWorld::SetRagdollDrive(m_Id, m_Stiffness, m_Damping);
     m_Drive = 1.0f;
@@ -416,7 +417,8 @@ void NpcRagdoll::Update(float dt) {
         for (int i = 1; i < kRagParts; ++i) {
             const float f = DriveAt(m_Time, m_PartFade[i]);
             m_Drive = std::max(m_Drive, f);
-            PhysicsWorld::SetRagdollPartDrive(m_Id, i, m_Stiffness * f * f, m_Damping * f * f);
+            const bool distal = kRagDefs[i].R == Region::Hand || kRagDefs[i].R == Region::Foot;
+            PhysicsWorld::SetRagdollPartDrive(m_Id, i, m_Stiffness * f * f, std::max(m_Damping * f * f, distal ? m_DistalDamping : 0.0f));
         }
     }
     // A body at rest stays as it lies: one last write once it sleeps, then nothing per frame.

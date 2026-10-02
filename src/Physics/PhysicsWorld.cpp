@@ -2015,6 +2015,7 @@ int CreateRagdoll(unsigned entity, const RagdollPart* parts, int count, const Ra
             j->setSwingLimit(PxJointLimitCone(sw, sw));
         }
         j->setDrivePosition(PxTransform(PxIdentity));
+        if (p.JointDamping > 0.0f) j->setDrive(PxD6Drive::eSLERP, PxD6JointDrive(0.0f, p.JointDamping, PX_MAX_F32, true));
         rd.Drive[(size_t)i] = j;
         rd.Joints.push_back(j);
     }

@@ -110,6 +110,7 @@ private:
     float m_Drive = 0.0f;
     float m_Time = 0.0f;             // seconds since death
     float m_PartFade[kRagParts];        // per part: seconds to limp
+    float m_DistalDamping = 0.0f;    // the hands' and feet's joint damping floor
     float m_Stiffness = 700.0f, m_Damping = 60.0f; // the drives' strength, from the settings
     // Scratch, reused every frame.
     std::vector<glm::mat4> m_Globals;
