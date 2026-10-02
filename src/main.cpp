@@ -1479,6 +1479,13 @@ int main(int argc, char** argv) {
             gravityGun.Settings = GravityGunSettings{};
             playCameraEntity = entt::null;
             playControllerEntity = FindFirstPersonController(world);
+            {   // the scene's effect and HUD tuning: the first FX / HUD Settings component, defaults when none
+                FxHudSettingsComponent fx;
+                for (auto e : world.Registry.view<FxHudSettingsComponent>()) { fx = world.Registry.get<FxHudSettingsComponent>(e); break; }
+                combatFx.Settings = fx;
+                combatHud.Settings = fx;
+                weaponFx.Settings = fx;
+            }
             if (entt::entity ctrl = playControllerEntity; ctrl != entt::null) {
                 const auto& fp = world.Registry.get<FirstPersonControllerComponent>(ctrl);
                 player.MoveSpeed = fp.MoveSpeed;
@@ -3097,8 +3104,7 @@ int main(int argc, char** argv) {
                     if (!sc.bounded) continue;
                     // Bounds are bind-pose only (#113): pad rigged models around the centre so
                     // a swinging limb stays inside, the same inflation the main pass culls with.
-                    // Use HasBones() instead of HasAnimations() to handle characters whose animation clips
-                    // live in other files (#P1-1).
+                    // HasBones(): a character's clips may live in other files, so HasAnimations() misses it.
                     if (sc.model->HasBones()) {
                         const glm::vec3 c = (bmin + bmax) * 0.5f, h = (bmax - bmin) * 0.5f * 1.75f;
                         bmin = c - h; bmax = c + h;
@@ -3676,8 +3682,7 @@ int main(int argc, char** argv) {
                     const glm::mat4 model = world.GetCachedWorldTransform(entity);
                     glm::vec3 bmin = rc.ModelRef->BoundsMin(), bmax = rc.ModelRef->BoundsMax();
                     if (bmin.x <= bmax.x && bmin.y <= bmax.y && bmin.z <= bmax.z) {
-                        // Same inflation as the main pass (#113), using HasBones() to handle
-                        // characters whose animation clips live in other files (#P1-1).
+                        // same inflation as the main pass
                         if (rc.ModelRef->HasBones()) {
                             const glm::vec3 c = (bmin + bmax) * 0.5f, hext = (bmax - bmin) * 0.5f * 1.75f;
                             bmin = c - hext; bmax = c + hext;

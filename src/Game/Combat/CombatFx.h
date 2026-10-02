@@ -8,6 +8,8 @@
 #include <string>
 #include <vector>
 
+#include "../Components.h"
+
 class World;
 
 // The noise and light of a firefight, Play only: gun reports (near and distant layers, 3D for the
@@ -20,6 +22,12 @@ public:
     enum class Gun { Rifle, Shotgun };
     enum class Cue { Pump, Reload, DryFire, BodyFall, FleshHit, Hitmarker, HitmarkerKill };
 
+    // Scene tuning (muzzle flash and flame); the defaults are the look before it was tunable. Set before Start.
+    FxHudSettingsComponent Settings;
+    // The peak intensity of a muzzle flash light: a soldier's, scaled down for the player's own gun.
+    static float FlashPeak(const FxHudSettingsComponent& s, bool shotgun, bool fromPlayer) {
+        return (shotgun ? 26.0f : 18.0f) * (fromPlayer ? s.PlayerFlashScale : 1.0f);
+    }
     void Start(World& world);
     void Stop(World& world);
     bool Active() const { return m_Active; }

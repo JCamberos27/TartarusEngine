@@ -12,11 +12,7 @@
 namespace {
 
 constexpr int kFlashLights = 6;
-constexpr float kFlashTime = 0.055f;
-constexpr float kPlayerFlashScale = 0.35f; // the player's flash light, of a soldier's
 constexpr float kFlameAhead = 0.01f;   // the flame's seat ahead of the muzzle face
-constexpr float kFlameGlow = 150.0f;   // the flame's peak emission (red)
-constexpr float kFlameScale = 1.75f;  // the tongue's length and width, of the pack's: bigger reads better in play
 const char* kDir = "assets/Audio/Combat/";
 
 std::string Path(const std::string& file) { return ProjectPaths::Resolve(std::string(kDir) + file); }
@@ -87,7 +83,7 @@ void CombatFx::Start(World& world) {
     struct FlameSystem { entt::entity* E; const char* Name; };
     for (const FlameSystem& f : {FlameSystem{&m_Flame, "[Runtime] Muzzle Flame"}, FlameSystem{&m_PlayerFlame, "[Runtime] Player Muzzle Flame"},
                                  FlameSystem{&m_PlayerWorldFlame, "[Runtime] Player Muzzle Flame (world)"}}) {
-        *f.E = MakeParticles(world, f.Name, 0.15f, 0.0f, 0.0f, glm::vec3(1.0f, 0.147f, 0.0177f), glm::vec3(0.0f), 1.0f, 0.0f, kFlameGlow, 1);
+        *f.E = MakeParticles(world, f.Name, 0.15f, 0.0f, 0.0f, glm::vec3(1.0f, 0.147f, 0.0177f), glm::vec3(0.0f), 1.0f, 0.0f, Settings.FlameGlow, 1);
         world.Registry.get<ParticleSystemComponent>(*f.E).Texture = "assets/Effects/Muzzle/T_MuzzleFlame.png";
     }
     world.Registry.emplace<ViewModelTag>(m_PlayerFlame);
@@ -162,8 +158,8 @@ void CombatFx::Shot(World& world, Gun gun, const glm::vec3& origin, const glm::v
         Flash& f = m_Flashes[m_NextFlash++ % m_Flashes.size()];
         if (world.Registry.valid(f.Light)) {
             world.Registry.get<TransformComponent>(f.Light).Position = origin + dir * 0.12f;
-            f.Peak = (shotgun ? 26.0f : 18.0f) * (fromPlayer ? kPlayerFlashScale : 1.0f);
-            f.Left = kFlashTime;
+            f.Peak = FlashPeak(Settings, shotgun, fromPlayer);
+            f.Left = Settings.FlashTime;
         }
     }
     // The flash: a hot core plus a fan of sparks along the bore, then a puff of smoke drifting up.
@@ -188,8 +184,8 @@ void CombatFx::Shot(World& world, Gun gun, const glm::vec3& origin, const glm::v
         ParticleSystemComponent::Particle p;
         p.Pos = origin + dir * kFlameAhead;
         p.Axis = dir;
-        p.Width = (0.04f + 0.02f * Rand01()) * kFlameScale;
-        p.Length = (shotgun ? 0.2f + 0.08f * Rand01() : 0.16f + 0.16f * Rand01()) * kFlameScale;
+        p.Width = (0.04f + 0.02f * Rand01()) * Settings.FlameScale;
+        p.Length = (shotgun ? 0.2f + 0.08f * Rand01() : 0.16f + 0.16f * Rand01()) * Settings.FlameScale;
         p.Seed = Rand01();
         // The emission is two randoms multiplied (the gradient's and M_Muzzle's); HDRP blows nearly
         // all of them out to white, so here the dimmest are kept to a third.
@@ -276,7 +272,7 @@ void CombatFx::Update(World& world, float dt) {
             continue;
         }
         // Full on the frame it fires, gone two or three frames later.
-        const float k = std::clamp(f.Left / kFlashTime, 0.0f, 1.0f);
+        const float k = std::clamp(f.Left / std::max(Settings.FlashTime, 1e-4f), 0.0f, 1.0f);
         l.Intensity = f.Peak * k * k;
         l.Range = 7.0f;
         f.Left -= dt;

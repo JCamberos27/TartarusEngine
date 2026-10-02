@@ -1114,7 +1114,7 @@ struct ReflectionProbeComponent {
 // ---- lane P ----
 // Scene-level visual effects and HUD settings (Lane P quality pass).
 // Add one to the scene to tune muzzle flash, laser beam and HUD display parameters.
-// Defaults match the hardcoded values; editing them live reloads the settings per frame.
+// Defaults match the values these effects had before they were tunable; read once when Play starts.
 struct FxHudSettingsComponent {
     // Muzzle flash parameters (Combat/CombatFx.cpp)
     float FlashTime = 0.055f;               // seconds the muzzle flash light stays on; Muzzle Flash group
