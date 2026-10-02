@@ -21,6 +21,36 @@
 #include <algorithm>
 #include <cmath>
 #include <cstdio>
+#include <unordered_map>
+
+namespace {
+
+// What a weapon's setup measures from its assets alone - the bolt's stroke, the barrel found along it, the ADS carry -
+// kept per weapon definition (and its file's time) for the presentations without an owner view (enemy soldiers'
+// guns): each spawn reuses the first's instead of sampling clips and scanning the mesh again (~2 ms a spawn). The
+// player's own weapon always measures, so its Inspector reports and hot reload stay live.
+struct SharedSetup {
+    std::filesystem::file_time_type Time{};
+    FirstPersonAnimationSet Set;
+    bool HaveBolt = false;
+    glm::vec3 BoltStroke{0.0f};
+    bool HaveBarrel = false, BarrelDetected = false;
+    glm::vec3 BarrelOrigin{0.0f}, BarrelDirection{0.0f};
+    bool HaveAds = false;
+    AdsCarryResult Ads;
+};
+std::unordered_map<std::string, SharedSetup>& SharedSetups() {
+    static std::unordered_map<std::string, SharedSetup> s;
+    return s;
+}
+// The entry for `setFile` as of `time` (a changed file starts it afresh).
+SharedSetup& SharedSetupFor(const std::string& setFile, std::filesystem::file_time_type time) {
+    SharedSetup& s = SharedSetups()[setFile];
+    if (s.Time != time) s = SharedSetup{time};
+    return s;
+}
+
+} // namespace
 
 namespace K = FirstPersonAnimatorContract;
 
@@ -118,9 +148,16 @@ bool FirstPersonPresentation::StartSet(World& world, AssetLibrary& assets, int s
         std::error_code ec;
         m_SetFileTime = std::filesystem::last_write_time(m_SetFile, ec);
     }
-    if (!FirstPersonAnimationSet::LoadFile(setPath, m_Set, &m_LastError)) {
-        SetError("could not load '" + animationSet + "': " + m_LastError);
-        return false;
+    // An enemy's gun takes the definition parsed for the last one (the same file, unchanged since).
+    SharedSetup* shared = m_Options.OwnerView ? nullptr : &SharedSetupFor(m_SetFile.u8string(), m_SetFileTime);
+    if (shared && !shared->Set.Controller.empty()) {
+        m_Set = shared->Set;
+    } else {
+        if (!FirstPersonAnimationSet::LoadFile(setPath, m_Set, &m_LastError)) {
+            SetError("could not load '" + animationSet + "': " + m_LastError);
+            return false;
+        }
+        if (shared) shared->Set = m_Set;
     }
     if (!FinitePositive(config.ViewModelScale)) {
         SetError("View Model Scale must be finite and greater than zero");
@@ -400,18 +437,24 @@ void FirstPersonPresentation::SetupBolt(AssetLibrary& assets, const AnimatorCont
         SetupMuzzle(-1);
         return;
     }
-    std::vector<int> parents(m_WeaponModel->NodeCount());
-    for (int i = 0; i < (int)parents.size(); ++i) parents[i] = m_WeaponModel->NodeParent(i);
-    std::vector<LocalTRS> pose;
-    std::vector<glm::mat4> globals;
-    glm::vec3 start(0.0f);
-    const float length = m_WeaponModel->AnimationLength(clip);
-    for (int k = 0; k <= 60; ++k) {
-        m_WeaponModel->SampleLocalPose(clip, length * (float)k / 60.0f, AnimationWrapMode::ClampForever, pose);
-        IK::ComputeGlobals(pose, parents, globals);
-        const glm::vec3 at = IK::Position(globals[bolt]);
-        if (k == 0) start = at;
-        else if (glm::length(at - start) > glm::length(m_BoltStroke)) m_BoltStroke = at - start;
+    SharedSetup* shared = m_Options.OwnerView ? nullptr : &SharedSetupFor(m_SetFile.u8string(), m_SetFileTime);
+    if (shared && shared->HaveBolt) {
+        m_BoltStroke = shared->BoltStroke;
+    } else {
+        std::vector<int> parents(m_WeaponModel->NodeCount());
+        for (int i = 0; i < (int)parents.size(); ++i) parents[i] = m_WeaponModel->NodeParent(i);
+        std::vector<LocalTRS> pose;
+        std::vector<glm::mat4> globals;
+        glm::vec3 start(0.0f);
+        const float length = m_WeaponModel->AnimationLength(clip);
+        for (int k = 0; k <= 60; ++k) {
+            m_WeaponModel->SampleLocalPose(clip, length * (float)k / 60.0f, AnimationWrapMode::ClampForever, pose);
+            IK::ComputeGlobals(pose, parents, globals);
+            const glm::vec3 at = IK::Position(globals[bolt]);
+            if (k == 0) start = at;
+            else if (glm::length(at - start) > glm::length(m_BoltStroke)) m_BoltStroke = at - start;
+        }
+        if (shared) { shared->HaveBolt = true; shared->BoltStroke = m_BoltStroke; }
     }
     SetupMuzzle(bolt);
     if (r.BoltCycle <= 0.0f) return;
@@ -460,7 +503,15 @@ void FirstPersonPresentation::SetupAdsCarry() {
     in.Rig = m_UsesIK && m_World ? m_World->Registry.try_get<IKRigComponent>(m_Arms) : nullptr;
     in.AdsOffset = kAdsOffset;
     in.ProceduralOffset = kProceduralOffset;
+    // An enemy's gun reuses the carry measured for the first (the same clips, attached in the same order).
+    SharedSetup* shared = m_Options.OwnerView ? nullptr : &SharedSetupFor(m_SetFile.u8string(), m_SetFileTime);
+    if (shared && shared->HaveAds) {
+        m_AdsCarry = shared->Ads;
+        SetupHandAnchor();
+        return;
+    }
     m_AdsCarry = BuildAdsCarry(in);
+    if (shared) { shared->HaveAds = true; shared->Ads = m_AdsCarry; }
     PublishAdsCarryReport(m_SetFile.u8string(), m_AdsCarry.Report);
     for (const std::string& w : m_AdsCarry.Report.Warnings) Log::Warn("First-person ADS: " + w);
     for (const auto& e : m_AdsCarry.Report.Entries)
@@ -610,7 +661,14 @@ void FirstPersonPresentation::SetupMuzzle(int bolt) {
     m_HaveMuzzle = false;
     m_Barrel.Detected = m_Barrel.HasMuzzle = false;
     m_Barrel.Problem.clear();
-    if (m_WeaponModel && bolt >= 0 && glm::length(m_BoltStroke) >= 1e-5f) {
+    SharedSetup* shared = m_Options.OwnerView ? nullptr : &SharedSetupFor(m_SetFile.u8string(), m_SetFileTime);
+    const bool measured = shared && shared->HaveBarrel && bolt >= 0;
+    if (measured) {
+        m_Barrel.Detected = shared->BarrelDetected;
+        m_Barrel.DetectedOrigin = shared->BarrelOrigin;
+        m_Barrel.DetectedDirection = shared->BarrelDirection;
+    }
+    if (!measured && m_WeaponModel && bolt >= 0 && glm::length(m_BoltStroke) >= 1e-5f) {
         std::vector<int> parents(m_WeaponModel->NodeCount());
         for (int i = 0; i < (int)parents.size(); ++i) parents[i] = m_WeaponModel->NodeParent(i);
         const int root = m_WeaponModel->NodeIndex(m_Set.WeaponRoot.empty() ? std::string("root") : m_Set.WeaponRoot);
@@ -646,6 +704,12 @@ void FirstPersonPresentation::SetupMuzzle(int bolt) {
             std::snprintf(msg, sizeof msg, "First-person: bolt stroke %.1f, muzzle %.1f ahead of the bolt (model units x100).",
                           stroke * 100.0f, tip * 100.0f);
             Log::Info(msg);
+        }
+        if (shared) {
+            shared->HaveBarrel = true;
+            shared->BarrelDetected = m_Barrel.Detected;
+            shared->BarrelOrigin = m_Barrel.DetectedOrigin;
+            shared->BarrelDirection = m_Barrel.DetectedDirection;
         }
     }
     const FirstPersonMuzzleSettings& mz = m_Set.Muzzle;

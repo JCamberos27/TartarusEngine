@@ -140,8 +140,9 @@ What is left, roughly by expected value. At 1080p the GPU is the limit, at 1440p
 **Hitches**
 10. Edit-mode SSAO prepass ~117 ms on first use (shader compile); sun shadow pass spike on the first
     edit frames.
-11. An enemy soldier's spawn is ~4 ms (5 ms of it was the weapon's clip matching, now shared between model
-    instances). Pooling soldiers (reusing a dead one's entities and weapon rig) would take it to ~0.
+11. An enemy soldier's respawn is ~1.8 ms (it was 6-7: the gun's clip matching and setup measurements are now shared
+    between soldiers): ~1 ms of it is building the soldier's entities from Soldier.json. Pooling soldiers (reusing a
+    dead one's entities and weapon rig) would take it to ~0.
 
 Fixed in the enemy AI work: the first round fired in a Play stalled up to a second importing the spent case's FBX;
 every weapon now warms its case's mesh when it starts (`FirstPersonPresentation::WarmEjectAssets`).

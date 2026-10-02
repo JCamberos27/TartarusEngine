@@ -412,6 +412,16 @@ void NpcTest::After(World& world, NpcDirector& npcs, const PlayerVitals& vitals,
         Check(m_FirstDamage >= 0.0f, "the squad's rounds reached the player");
         Check(m_FirstCover >= 0.0f, "someone fought from cover");
         Check(npcs.MaxShootersSeen() <= 4, "never more than the attack tokens shooting at once");
+        {
+            // Every gun found its muzzle (no muzzle: its rounds come from nowhere and there's no laser).
+            int armed = 0, muzzled = 0;
+            for (const auto& up : npcs.Npcs()) {
+                if (!up || up->Dead || !up->Weapon || !up->Weapon->IsActive()) continue;
+                ++armed;
+                if (up->Weapon->BarrelReport().HasMuzzle) ++muzzled;
+            }
+            Check(armed > 0 && muzzled == armed, "every soldier's gun has its muzzle (" + std::to_string(muzzled) + " of " + std::to_string(armed) + ")");
+        }
         if (npcs.Fx) {
             Check(npcs.Fx->ShotsHeard() > 0, "gunfire was heard (" + std::to_string(npcs.Fx->ShotsHeard()) + " reports)");
             Check(npcs.Fx->WhizzesHeard() > 0, "rounds cracked past the player (" + std::to_string(npcs.Fx->WhizzesHeard()) + ")");
