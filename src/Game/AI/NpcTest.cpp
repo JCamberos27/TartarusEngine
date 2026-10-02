@@ -655,7 +655,7 @@ void NpcTest::Deaths(World& world, NpcDirector& npcs, float now) {
                 Check(n->DeathPop >= 0.0f && n->DeathPop <= 0.15f,
                       std::string(kDeathCases[m_DCase].Name) + ": no pose pop over 15 cm (" + std::to_string(n->DeathPop * 100.0f) + " cm)");
                 m_DWorstPop = std::max(m_DWorstPop, n->DeathPop);
-                Check(n->Ragdoll->DriveLeft() > 0.0f || npcs.Now() - n->DiedAt > NpcRagdoll::kDriveFade,
+                Check(n->Ragdoll->DriveLeft() > 0.0f || npcs.Now() - n->DiedAt > n->Ragdoll->DriveFadeTime(),
                       std::string(kDeathCases[m_DCase].Name) + ": the joints start powered");
             }
             m_DNpc[0].clear();
