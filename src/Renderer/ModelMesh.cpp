@@ -41,6 +41,11 @@ ModelMesh::ModelMesh(std::vector<ModelVertex>&& vertices, const std::vector<unsi
     else CreateGpu(vertices);
 }
 
+ModelMesh::ModelMesh(const ModelMesh& source, ShareGeometry)
+    : Mat(source.Mat), m_VAO(source.m_VAO), m_VBO(source.m_VBO), m_EBO(source.m_EBO), m_GpuOwner(source.m_GpuOwner),
+      m_IndexCount(source.m_IndexCount), m_LocalPositions(source.m_LocalPositions), m_LocalIndices(source.m_LocalIndices),
+      m_Skin(source.m_Skin) {}
+
 void ModelMesh::KeepSkin(const std::vector<ModelVertex>& vertices) {
     bool skinned = false;
     for (const auto& v : vertices)
@@ -98,14 +103,18 @@ void ModelMesh::CreateGpu(const std::vector<ModelVertex>& vertices) {
     floatAttrib(5, 4, offsetof(ModelVertex, Weights));
     floatAttrib(6, 1, offsetof(ModelVertex, TangentSign));
     floatAttrib(7, 4, offsetof(ModelVertex, Color)); // #113
+
+    struct Ids { unsigned vao, vbo, ebo; };
+    m_GpuOwner = std::shared_ptr<void>(new Ids{m_VAO, m_VBO, m_EBO}, [](void* p) {
+        Ids* ids = static_cast<Ids*>(p);
+        glDeleteBuffers(1, &ids->vbo);
+        glDeleteBuffers(1, &ids->ebo);
+        glDeleteVertexArrays(1, &ids->vao);
+        delete ids;
+    });
 }
 
-ModelMesh::~ModelMesh() {
-    if (!m_VAO) return; // deferred and never uploaded: no GL objects (and maybe no GL thread)
-    glDeleteBuffers(1, &m_VBO);
-    glDeleteBuffers(1, &m_EBO);
-    glDeleteVertexArrays(1, &m_VAO);
-}
+ModelMesh::~ModelMesh() = default; // m_GpuOwner frees the buffers with the last mesh using them (none while deferred)
 
 void ModelMesh::DrawIndices(unsigned elementBuffer, std::uint32_t offset, std::uint32_t count, int instances) const {
     if (!m_VAO || !count) return;
