@@ -1336,7 +1336,7 @@ void EditorLayer::DrawHierarchyRowBody(World& world, AssetLibrary& assets, entt:
         ImU32 col = EditorTheme::U32((inactive || sceneHiddenRow) ? EditorTheme::Dim : EditorTheme::Text);
         if (prefabInst && !inactive && !sceneHiddenRow)
             col = EditorTheme::U32(prefabInst->Missing ? EditorTheme::KindPrefabBroken : EditorTheme::KindPrefab);
-        // The selected row: a gold bar at its left edge over the theme's gold selection wash.
+        // The selected row: an accent bar at its left edge over the theme's accent selection wash.
         if (selected)
             dl->AddRectFilled(ImVec2(ImGui::GetWindowPos().x, rowMin.y), ImVec2(ImGui::GetWindowPos().x + EditorTheme::Px(2.0f), rowMax.y),
                               EditorTheme::U32(EditorTheme::Accent));

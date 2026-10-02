@@ -236,9 +236,9 @@ inline std::string SanitizeAssetName(const std::string& in) {
 // The button treatments (#160), drawn by EditorUIPrimitives.h and shared with the modules:
 //
 //   ActionButton    flat icon (or icon + short label): toolbar tools, panel toggles, low-
-//                   frequency icon actions. `active` = a toggle that is on (gold).
+//                   frequency icon actions. `active` = a toggle that is on (the accent).
 //   SecondaryButton a raised text button: Cancel, Import..., Add Component, row actions.
-//   PrimaryButton   gold: a dialog's one confirming action.
+//   PrimaryButton   inverse video: a dialog's one confirming action.
 //   DangerIconButton flat, red on hover: destructive icons.
 //
 // Nothing else: no raw ImGui::Button / ImGui::SmallButton for chrome, no per-site colour pushes.
@@ -395,7 +395,7 @@ inline bool SceneVisToggle(const char* id, const char* glyphOn, const char* glyp
     ImDrawList* dl = ImGui::GetWindowDrawList();
     const char* g = on ? glyphOn : glyphOff;
     const ImVec2 ts = ImGui::CalcTextSize(g);
-    // A set toggle (hidden / locked) is the state worth seeing: gold. At rest the default state
+    // A set toggle (hidden / locked) is the state worth seeing: the accent. At rest the default state
     // stays quiet until its row is hovered.
     ImVec4 col = on ? EditorTheme::Accent : EditorTheme::Secondary;
     col.w = on ? (selfHover ? 1.0f : 0.90f) : (selfHover ? 1.0f : (rowHovered ? 0.85f : 0.40f));
