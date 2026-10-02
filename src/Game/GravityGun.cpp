@@ -14,10 +14,7 @@
 namespace {
 
 constexpr unsigned kNoEntity = 0xFFFFFFFFu;
-constexpr float kGrabRange = 100.0f;
-constexpr float kAssistRange = 30.0f;               // the forgiving search reaches this far
 const float kAssistCos = std::cos(glm::radians(7.0f)); // within 7 degrees of the crosshair
-constexpr float kScrollTurnDeg = 15.0f;             // Alt / Ctrl + one scroll notch
 
 bool Grabbable(unsigned e) {
     BodyState bs;
@@ -46,8 +43,8 @@ unsigned GravityGun::FindGrabTarget(const glm::vec3& eye, const glm::vec3& fwd) 
     solid.HitTriggers = 0;
     const float o[3] = {eye.x, eye.y, eye.z}, d[3] = {fwd.x, fwd.y, fwd.z};
     RaycastHit hit;
-    float reach = kAssistRange;
-    if (PhysicsWorld::RaycastFiltered(o, d, kGrabRange, solid, hit)) {
+    float reach = Settings.AssistRange;
+    if (PhysicsWorld::RaycastFiltered(o, d, Settings.GrabRange, solid, hit)) {
         if (Grabbable(hit.Entity)) return hit.Entity;
         reach = std::min(reach, hit.Distance + 0.5f);
     }
@@ -177,7 +174,7 @@ void GravityGun::Update(float dt, const Player& player) {
         if (scroll != 0.0) {
             const bool alt = Input::IsKeyDown(GLFW_KEY_LEFT_ALT) || Input::IsKeyDown(GLFW_KEY_RIGHT_ALT);
             const bool ctrl = Input::IsKeyDown(GLFW_KEY_LEFT_CONTROL) || Input::IsKeyDown(GLFW_KEY_RIGHT_CONTROL);
-            const float turn = glm::radians(kScrollTurnDeg) * (float)scroll;
+            const float turn = glm::radians(Settings.ScrollTurnDeg) * (float)scroll;
             if (alt)
                 m_HoldRotation = glm::angleAxis(turn, up) * m_HoldRotation;
             else if (ctrl)
