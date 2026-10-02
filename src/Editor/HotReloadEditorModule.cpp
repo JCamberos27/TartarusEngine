@@ -698,9 +698,9 @@ bool HotReloadEditorModule::Reload(bool initialLoad) {
         return false;
     }
 
-    // On startup, clear numbered copies left behind by an earlier crash or force-kill (a clean
-    // Shutdown deletes its own). Anything still locked by another running instance just fails the
-    // remove and is left alone.
+    // On startup, clear numbered copies orphaned by an earlier crash or force-kill (a clean
+    // Shutdown deletes its own). Anything still locked by another running instance just fails
+    // the remove and is left alone.
     if (initialLoad) {
         std::error_code sweepEc;
         for (const auto& entry : fs::directory_iterator(cacheDir, sweepEc)) {
@@ -712,7 +712,9 @@ bool HotReloadEditorModule::Reload(bool initialLoad) {
         }
     }
 
-    const fs::path copyPath = cacheDir / ("TartarusEditor_" + std::to_string(++m_Generation) + ".dll");
+    // Named per process: a second instance (another editor, the unit tests) shares this folder, and a bare
+    // generation number would collide with the copy the first one has loaded and locked.
+    const fs::path copyPath = cacheDir / ("TartarusEditor_" + std::to_string(::GetCurrentProcessId()) + "_" + std::to_string(++m_Generation) + ".dll");
     fs::copy_file(m_SourceModule, copyPath, fs::copy_options::overwrite_existing, ec);
     if (ec) {
         Log::Warn("Editor hot reload: TartarusEditor.dll is still being written; will retry.");
