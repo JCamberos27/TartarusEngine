@@ -1462,28 +1462,28 @@ void EditorLayer::DrawScreenshotPreview(World& world, AssetLibrary& assets) {
         if (rightX > ImGui::GetCursorPosX()) ImGui::SameLine(rightX);
         else ImGui::SameLine();
         ImGui::PushStyleVar(ImGuiStyleVar_ItemSpacing, ImVec2(EditorTheme::Px(2.0f), ImGui::GetStyle().ItemSpacing.y));
-        if (EditorUIPrimitives::ActionButton(ICON_FA_ARROW_UP_RIGHT_FROM_SQUARE, "Open externally", EditorUI::SetTooltip, false, ImVec2(btnW, 0.0f)))
+        if (ActionButton(ICON_FA_ARROW_UP_RIGHT_FROM_SQUARE, "Open externally", false, ImVec2(btnW, 0.0f)))
             Screenshot::OpenFile(m_ShotPreviewPath);
         ImGui::SameLine();
-        if (EditorUIPrimitives::ActionButton(ICON_FA_COPY, "Copy path", EditorUI::SetTooltip, false, ImVec2(btnW, 0.0f))) {
+        if (ActionButton(ICON_FA_COPY, "Copy path", false, ImVec2(btnW, 0.0f))) {
             ImGui::SetClipboardText(m_ShotPreviewPath.c_str());
             Log::Info("Copied path: " + m_ShotPreviewPath);
         }
         ImGui::SameLine();
-        if (EditorUIPrimitives::ActionButton(ICON_FA_IMAGE, "Copy image", EditorUI::SetTooltip, false, ImVec2(btnW, 0.0f))) {
+        if (ActionButton(ICON_FA_IMAGE, "Copy image", false, ImVec2(btnW, 0.0f))) {
             if (Screenshot::CopyImageToClipboard(m_ShotPreviewPath)) Log::Info("Copied image to clipboard.");
         }
         ImGui::SameLine();
-        if (EditorUIPrimitives::ActionButton(ICON_FA_FOLDER_OPEN, "Show in folder", EditorUI::SetTooltip, false, ImVec2(btnW, 0.0f)))
+        if (ActionButton(ICON_FA_FOLDER_OPEN, "Show in folder", false, ImVec2(btnW, 0.0f)))
             Screenshot::ShowInFolder(m_ShotPreviewPath);
         ImGui::SameLine();
-        if (EditorUIPrimitives::DangerIconButton(ICON_FA_TRASH, "Delete", EditorUI::SetTooltip, ImVec2(btnW, 0.0f))) {
+        if (DangerIconButton(ICON_FA_TRASH, "Delete", ImVec2(btnW, 0.0f))) {
             RequestDeleteAssets(world, assets, { AssetKeyRef{ m_ShotPreviewPath, false } }, /*skipDialog=*/false);
             open = false;
             ImGui::CloseCurrentPopup();
         }
         ImGui::SameLine();
-        if (EditorUIPrimitives::ActionButton(ICON_FA_XMARK, "Close (Esc)", EditorUI::SetTooltip, false, ImVec2(btnW, 0.0f)))
+        if (ActionButton(ICON_FA_XMARK, "Close (Esc)", false, ImVec2(btnW, 0.0f)))
             { open = false; ImGui::CloseCurrentPopup(); }
         ImGui::PopStyleVar();
 
