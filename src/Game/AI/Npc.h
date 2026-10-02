@@ -66,6 +66,7 @@ struct Npc {
     int Agent = -1;                // crowd agent
     int SpawnIndex = -1;
     int Squad = 0;
+    const char* WeaponAction = nullptr; // a weapon trigger to pull with this frame's weapon tick (tests: "Fidget", "Inspect")
     bool Dummy = false;             // a training dummy (NPC Spawn Brain 1): stands where it spawned, never shoots or calls out, takes hits
     float Skill = 0.5f;
     std::string Name;

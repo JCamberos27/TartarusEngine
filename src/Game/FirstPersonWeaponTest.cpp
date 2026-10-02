@@ -432,21 +432,31 @@ void FirstPersonWeaponTest::BuildProbe() {
     // The weapon's own animations (where the head moved oddly): a reload at the hip and on the sights, the
     // inspect, the shell check and the melee - sampled every third frame through each.
     auto settledIdle = [](C& c) { return c.State() == "Idle" && c.P->Chambered(); };
+    // ... seen from the front right (the body whole, as --npc-test reload shows a soldier's), every 0.15 s.
     auto sampled = [](const char* name, std::function<void(C&)> begin) {
-        return [name, begin](C& c) { c.LogEvery = 3; c.Label = name; begin(c); };
+        return [name, begin](C& c) { c.LogEvery = 3; c.Label = name; c.View = 2; begin(c); };
     };
-    auto stopLog = [](C& c) { c.LogEvery = 0; };
+    auto filmed = [](const char* stem, std::function<bool(C&)> done) {
+        return [stem, done](C& c) {
+            const int f = (int)std::lround(c.Time / std::max(c.Dt, 1e-4f));
+            if (f % 9 == 0) c.Shot = std::string(stem) + "_" + std::to_string(1000 + f).substr(1);
+            return done(c);
+        };
+    };
+    auto stopLog = [](C& c) { c.LogEvery = 0; c.View = 0; };
     if (ak) {
         // The AK: a tactical reload (rounds left), the magazine emptied and an empty reload, the inspect, the mag
         // check and the melee at the hip, and a tactical reload on the sights.
         steps.push_back({"a round, to reload", [](C& c) { c.Cam->Pitch = 0.0f; ++c.Pulls; }, [](C& c) { return c.Time >= 0.5f && c.State() == "Idle"; }, 3.0f, nullptr});
         steps.push_back({"anim hip tac reload", sampled("anim hip tac reload", [](C& c) { c.P->Reload(); }),
-                         [](C& c) { return c.Saw("TacReload") && c.State() == "Idle"; }, 10.0f, stopLog});
+                         filmed("anim_hip_tac_reload", [](C& c) { return c.Saw("TacReload") && c.State() == "Idle"; }), 10.0f, stopLog});
         steps.push_back({"empty the magazine", [](C& c) { c.Trigger = true; },
                          [](C& c) { if (c.P->Ammo() == 0) c.Trigger = false; return c.P->Ammo() == 0 && c.Time > 0.3f && c.State() == "Idle"; }, 8.0f,
                          [](C& c) { c.Trigger = false; }});
         steps.push_back({"anim hip empty reload", sampled("anim hip empty reload", [](C& c) { c.P->Reload(); }),
-                         [](C& c) { return c.Saw("EmptyReload") && c.State() == "Idle"; }, 10.0f, stopLog});
+                         filmed("anim_hip_empty_reload", [](C& c) { return c.Saw("EmptyReload") && c.State() == "Idle"; }), 10.0f, stopLog});
+        steps.push_back({"anim regrip", sampled("anim regrip", [](C& c) { c.P->TriggerAction("Fidget"); }),
+                         filmed("anim_regrip", [](C& c) { return c.Saw("Regrip") && c.State() == "Idle"; }), 10.0f, stopLog});
         steps.push_back({"anim inspect", sampled("anim inspect", [](C& c) { c.P->TriggerAction("Inspect"); }),
                          [](C& c) { return c.Saw("Inspect") && c.State() == "Idle"; }, 12.0f, stopLog});
         steps.push_back({"anim mag check", sampled("anim mag check", [](C& c) { c.P->TriggerAction("MagCheck"); }),
@@ -456,14 +466,14 @@ void FirstPersonWeaponTest::BuildProbe() {
         steps.push_back({"on the sights", [](C& c) { c.Aim = true; }, [](C& c) { return c.State() == "Aim" && c.Time > 0.6f; }, 5.0f, nullptr});
         steps.push_back({"a round on the sights", [](C& c) { ++c.Pulls; }, [](C& c) { return c.Time >= 0.5f && c.State() == "Aim"; }, 3.0f, nullptr});
         steps.push_back({"anim ADS tac reload", sampled("anim ADS tac reload", [](C& c) { c.P->Reload(); }),
-                         [](C& c) { return c.Saw("TacReload") && c.State() == "Aim"; }, 10.0f, stopLog});
+                         filmed("anim_ads_tac_reload", [](C& c) { return c.Saw("TacReload") && c.State() == "Aim"; }), 10.0f, stopLog});
         steps.push_back({"sights down", [](C& c) { c.Aim = false; }, [](C& c) { return c.State() == "Idle" && c.Time > 0.4f; }, 3.0f, nullptr});
         m_Steps = std::move(steps);
         return;
     }
     steps.push_back({"a round, to reload", [](C& c) { c.Cam->Pitch = 0.0f; ++c.Pulls; }, [=](C& c) { return c.Saw("Pump") && settledIdle(c); }, 6.0f, nullptr});
     steps.push_back({"anim hip reload", sampled("anim hip reload", [](C& c) { c.P->Reload(); }),
-                     [](C& c) { return c.Saw("ReloadStart") && c.State() == "Idle"; }, 15.0f, stopLog});
+                     filmed("anim_hip_reload", [](C& c) { return c.Saw("ReloadStart") && c.State() == "Idle"; }), 15.0f, stopLog});
     steps.push_back({"anim inspect", sampled("anim inspect", [](C& c) { c.P->TriggerAction("Inspect"); }),
                      [](C& c) { return c.Saw("Inspect") && c.State() == "Idle"; }, 12.0f, stopLog});
     steps.push_back({"anim shell check", sampled("anim shell check", [](C& c) { c.P->TriggerAction("MagCheck"); }),
@@ -484,6 +494,7 @@ void FirstPersonWeaponTest::AfterPose(const World& world, const FirstPersonBody&
     const Camera& cam = *m_Ctx.Cam;
     Sample s;
     s.Pitch = cam.Pitch;
+    s.Roll = cam.Roll;
     s.Yaw = cam.Yaw;
     if (m_HaveYaw && m_Ctx.Dt > 0.0f) s.YawRate = std::remainder(cam.Yaw - m_LastYaw, 360.0f) / m_Ctx.Dt;
     m_LastYaw = cam.Yaw;
@@ -523,6 +534,8 @@ void FirstPersonWeaponTest::AfterPose(const World& world, const FirstPersonBody&
         const glm::vec3 right = glm::normalize(glm::cross(front, up));
         const glm::vec3 d = butt - upper;
         s.StockFromShoulder = glm::vec3(glm::dot(d, right), d.y, glm::dot(d, front));
+        const glm::vec3 e = cam.Position - upper;
+        s.EyeFromShoulder = glm::vec3(glm::dot(e, right), e.y, glm::dot(e, front));
         s.Shoulder = glm::length(d);
         s.Clavicle = glm::length(butt - clav);
         s.Neck = glm::length(butt - neck);
@@ -592,14 +605,14 @@ void FirstPersonWeaponTest::PrintSample(const std::string& label) const {
     }
     std::printf("[StockProbe] %-24s pitch %6.1f yawRate %5.0f twist %6.1f %-9s | butt-shoulder R %+5.1f U %+5.1f F %+5.1f (%4.1f) | "
                 "clav %4.1f neck %4.1f head %4.1f | rear 30cm to neck %4.1f head %4.1f | shift %4.1f hands off L %4.1f R %4.1f cm | "
-                "speed %4.1f eyeAcc %5.1f at (%.1f, %.1f) | gun %3.0fcm to neck %4.1f hood %4.1f mesh %5.1f at %3.0fcm (%s) | elbow to torso L %5.1f R %5.1f cm, swung L %+4.0f R %+4.0f deg | rear 45cm to torso %5.1f at %3.0fcm | head tilt %4.1f (w %.2f) bend %4.1f deg\n",
+                "speed %4.1f eyeAcc %5.1f at (%.1f, %.1f) | gun %3.0fcm to neck %4.1f hood %4.1f mesh %5.1f at %3.0fcm (%s) | elbow to torso L %5.1f R %5.1f cm, swung L %+4.0f R %+4.0f deg | rear 45cm to torso %5.1f at %3.0fcm | head tilt %4.1f (w %.2f) bend %4.1f deg | eye-shoulder R %+5.1f U %+5.1f F %+5.1f roll %5.1f\n",
                 label.c_str(), s.Pitch, s.YawRate, s.TwistDeg, s.State.c_str(), s.StockFromShoulder.x * 100.0f,
                 s.StockFromShoulder.y * 100.0f, s.StockFromShoulder.z * 100.0f, s.Shoulder * 100.0f, s.Clavicle * 100.0f,
                 s.Neck * 100.0f, s.Head * 100.0f, s.NeckGap * 100.0f, s.HeadGap * 100.0f, s.GunShift * 100.0f,
                 s.HandGap[0] * 100.0f, s.HandGap[1] * 100.0f, s.Speed, s.EyeAccel, s.Eye.x, s.Eye.z, s.GunLength * 100.0f, s.WholeNeckGap * 100.0f,
                 s.WholeHoodGap * 100.0f, s.MeshGap * 100.0f, s.MeshAlong * 100.0f, s.MeshPiece.c_str(), s.ElbowGap[0] * 100.0f,
                 s.ElbowGap[1] * 100.0f, s.ElbowSwing[0], s.ElbowSwing[1], s.TorsoGap * 100.0f, s.TorsoAlong * 100.0f, s.HeadTilt, s.HeadTiltWeight,
-                s.HeadBend);
+                s.HeadBend, s.EyeFromShoulder.x * 100.0f, s.EyeFromShoulder.y * 100.0f, s.EyeFromShoulder.z * 100.0f, s.Roll);
     m_EyeAccelMax = 0.0f;
     std::fflush(stdout);
 }
