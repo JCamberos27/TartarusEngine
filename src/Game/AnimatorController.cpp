@@ -283,6 +283,19 @@ bool AnimatorController::FromJsonString(const std::string& text, AnimatorControl
             // v1, or the one-track shorthand: the state itself carries the first track's motion.
             st.Motions[0] = MotionFromJson(s);
         }
+        if (const auto cs = s.find("curves"); cs != s.end() && cs->is_array())
+            for (const auto& cj : *cs) {
+                if (!cj.is_object() || Str(cj, "name").empty()) continue;
+                Curve cv;
+                cv.Name = Str(cj, "name");
+                if (const auto ks = cj.find("keys"); ks != cj.end() && ks->is_array())
+                    for (const auto& k : *ks)
+                        if (k.is_array() && k.size() >= 2 && k[0].is_number() && k[1].is_number())
+                            cv.Keys.push_back({std::clamp((float)k[0].get<double>(), 0.0f, 1.0f), (float)k[1].get<double>()});
+                std::stable_sort(cv.Keys.begin(), cv.Keys.end(),
+                                 [](const CurveKey& a, const CurveKey& b) { return a.Time < b.Time; });
+                st.Curves.push_back(std::move(cv));
+            }
         if (const auto es = s.find("events"); es != s.end() && es->is_array())
             for (const auto& e : *es) {
                 if (!e.is_object() || Str(e, "name").empty()) continue;
@@ -379,6 +392,15 @@ std::string AnimatorController::ToJsonString() const {
             for (int t = 0; t < (int)Tracks.size(); ++t)
                 if (!s.MotionFor(t).Empty()) ms[Tracks[t]] = MotionToJson(s.MotionFor(t));
             st["motions"] = std::move(ms);
+            if (!s.Curves.empty()) {
+                json cs = json::array();
+                for (const auto& c : s.Curves) {
+                    json ks = json::array();
+                    for (const auto& k : c.Keys) ks.push_back({k.Time, k.Value});
+                    cs.push_back({{"name", c.Name}, {"keys", std::move(ks)}});
+                }
+                st["curves"] = std::move(cs);
+            }
             if (!s.Events.empty()) {
                 json es = json::array();
                 for (const auto& e : s.Events) es.push_back({{"name", e.Name}, {"time", e.Time}});
@@ -743,6 +765,46 @@ bool AnimatorStartInState(const AnimatorController& ctrl, AnimatorControllerComp
     ac.Layers[0].Stack.push_back(item);
     SyncBaseLayerFields(ctrl, ac);
     return true;
+}
+
+// --- weight curves ---------------------------------------------------------------------------
+
+float AnimatorController::EvaluateCurve(const std::vector<CurveKey>& keys, float t, float fallback) {
+    if (keys.empty()) return fallback;
+    if (t <= keys.front().Time) return keys.front().Value;
+    for (size_t i = 1; i < keys.size(); ++i) {
+        if (t > keys[i].Time) continue;
+        const float span = keys[i].Time - keys[i - 1].Time;
+        const float u = span > 1e-6f ? (t - keys[i - 1].Time) / span : 1.0f;
+        return keys[i - 1].Value + (keys[i].Value - keys[i - 1].Value) * u;
+    }
+    return keys.back().Value;
+}
+
+const AnimatorController::Curve* AnimatorController::State::FindCurve(const std::string& name) const {
+    for (const Curve& c : Curves)
+        if (c.Name == name) return &c;
+    return nullptr;
+}
+
+float AnimatorSampleCurve(const AnimatorController& ctrl, const AnimatorControllerComponent& ac, int layer,
+                          const std::string& name, float fallback) {
+    if (name.empty() || layer < 0 || layer >= (int)ctrl.Layers.size() || layer >= (int)ac.Layers.size()) return fallback;
+    const AnimatorController::Layer& L = ctrl.Layers[layer];
+    float out = fallback;
+    bool first = true;
+    for (const auto& it : ac.Layers[layer].Stack) {
+        if (it.State < 0 || it.State >= (int)L.States.size()) continue;
+        const AnimatorController::State& s = L.States[it.State];
+        float phase = it.Phase;
+        if (s.Loop) phase -= std::floor(phase);                // loops count past 1
+        else phase = std::clamp(phase, 0.0f, 1.0f);
+        const AnimatorController::Curve* c = s.FindCurve(name);
+        const float v = c ? AnimatorController::EvaluateCurve(c->Keys, phase, fallback) : fallback;
+        if (first) { out = v; first = false; }
+        else out += (v - out) * AnimatorCrossfadeWeight(it.Fade);
+    }
+    return out;
 }
 
 // --- sampling --------------------------------------------------------------------------------

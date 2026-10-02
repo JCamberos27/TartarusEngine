@@ -328,7 +328,7 @@ void ApplyRig(const IKRigComponent& rig, const Model& model, Pose& pose, const P
     Limb limbs[2];
     int limbCount = 0;
     for (const IKLimb* l : {&rig.LimbA, &rig.LimbB}) {
-        if (!l->Enabled || l->Weight <= 0.0f) continue;
+        if (!l->Enabled || l->Weight <= 0.0f || l->CurveWeight <= 0.0f) continue;
         Limb limb{l, model.NodeIndex(l->Upper), model.NodeIndex(l->Lower), model.NodeIndex(l->End),
                   model.NodeIndex(l->Target)};
         if (limb.Upper < 0 || limb.Lower < 0 || limb.End < 0 || limb.Target < 0) continue;
@@ -362,7 +362,7 @@ void ApplyRig(const IKRigComponent& rig, const Model& model, Pose& pose, const P
         const int target = model.NodeIndex(rig.LookAtTarget);
         if (bone >= 0 && target >= 0)
             AimBone(pose, parents, globals, bone, rig.LookAtAxis, Position(globals[target]),
-                    rig.LookAtMaxAngle, rig.LookAtWeight * w);
+                    rig.LookAtMaxAngle, rig.LookAtWeight * std::clamp(rig.LookCurveWeight, 0.0f, 1.0f) * w);
     }
 
     for (int n = 0; n < limbCount; ++n) {
@@ -383,7 +383,7 @@ void ApplyRig(const IKRigComponent& rig, const Model& model, Pose& pose, const P
             }
         }
         SolveTwoBone(pose, parents, globals, limb.Upper, limb.Lower, limb.End, Position(goal),
-                     ls.MatchRotation ? &goalRot : nullptr, ls.Weight * w, ls.Swivel * w, hinted ? &hint : nullptr);
+                     ls.MatchRotation ? &goalRot : nullptr, ls.Weight * std::clamp(ls.CurveWeight, 0.0f, 1.0f) * w, ls.Swivel * w, hinted ? &hint : nullptr);
     }
 }
 
