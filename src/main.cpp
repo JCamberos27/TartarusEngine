@@ -1497,6 +1497,7 @@ int main(int argc, char** argv) {
                 playBaseSensitivity = fp.MouseSensitivity;
                 playBaseFov = fp.VerticalFov();
                 player.InvertY = fp.InvertY;
+                player.StickLookDegPerSec = fp.StickLookDegPerSec;
                 player.KillY = fp.KillY;
                 player.Cam.Fov = fp.VerticalFov();
                 playGravityGun = fp.GravityGun;

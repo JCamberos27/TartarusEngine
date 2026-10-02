@@ -480,6 +480,10 @@ struct FirstPersonControllerComponent {
         const float h = glm::radians(std::clamp(FieldOfView, 1.0f, 179.0f));
         return glm::degrees(2.0f * std::atan(std::tan(0.5f * h) * (9.0f / 16.0f)));
     }
+    // Gamepad right stick look speed (turn rate, not a delta)
+    float StickLookDegPerSec = 180.0f;  // degrees per second; Gamepad Input group
+    // Camera lean collision: the sphere radius used for wall-detection during camera lean
+    float EyeRadius = 0.12f;            // metres; keeps the near plane off the wall; Camera group
     float KillY = -20.0f;           // falling below this respawns at the spawn point
     bool  GravityGun = true;        // the built-in pick-up/throw tool (right/left mouse)
     float Gravity = 18.0f;          // m/s^2 pulling the player down - game feel, separate from the physics world's
