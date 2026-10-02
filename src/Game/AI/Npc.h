@@ -66,6 +66,7 @@ struct Npc {
     int Agent = -1;                // crowd agent
     int SpawnIndex = -1;
     int Squad = 0;
+    bool Dummy = false;             // a training dummy (NPC Spawn Brain 1): stands where it spawned, never shoots or calls out, takes hits
     float Skill = 0.5f;
     std::string Name;
 
