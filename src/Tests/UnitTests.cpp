@@ -14,6 +14,7 @@
 // Deliberately no test framework dependency: a CHECK macro and a list of functions is all this
 // needs, and it keeps the engine's third-party surface unchanged.
 #include "TimeService.h"
+#include "UnitTestSupport.h"
 #include "UnitTests.h"
 
 #include "AnimatorController.h"
@@ -104,21 +105,19 @@
 
 using json = nlohmann::json;
 
-namespace {
+namespace UnitTestSupport {
 
 int g_Failures = 0;
 int g_Checks = 0;
 const char* g_CurrentTest = "";
 
-#define CHECK(cond)                                                                              \
-    do {                                                                                         \
-        ++g_Checks;                                                                              \
-        if (!(cond)) {                                                                           \
-            ++g_Failures;                                                                        \
-            std::cout << "[UnitTest] FAIL " << g_CurrentTest << ": " #cond " (" << __FILE__     \
-                      << ":" << __LINE__ << ")\n";                                               \
-        }                                                                                        \
-    } while (0)
+} // namespace UnitTestSupport
+
+using UnitTestSupport::g_Checks;
+using UnitTestSupport::g_CurrentTest;
+using UnitTestSupport::g_Failures;
+
+namespace {
 
 std::filesystem::path TempDir() {
     std::error_code ec;
@@ -4966,7 +4965,7 @@ void TestSquadVoice() {
 }
 
 int RunUnitTests() {
-    const std::vector<std::pair<const char*, std::function<void()>>> tests = {
+    UnitTestSupport::TestList tests = {
         {"AssetGuid", TestAssetGuid},
         {"UndoDeltaChain", TestUndoDeltaChain},
         {"AtomicFile", TestAtomicFile},
@@ -5035,6 +5034,10 @@ int RunUnitTests() {
         {"SquadVoice", TestSquadVoice},
         {"AiMath", TestAiMath},
     };
+    RegisterRagdollTests(tests);
+    RegisterAnimationTests(tests);
+    RegisterEditorTests(tests);
+    RegisterEngineTests(tests);
     for (const auto& [name, fn] : tests) {
         g_CurrentTest = name;
         const int before = g_Failures;
