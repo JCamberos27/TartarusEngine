@@ -940,6 +940,7 @@ struct IKLimb {
     float HintWeight = 0.0f;       // 0..1
     glm::vec3 HintOffset{0.0f};    // model-space move of the pole point
     float MaxLimbScale = 1.0f;     // longest the limb may stretch toward an out-of-reach target (1 = never)
+    float CurveWeight = 1.0f;      // runtime: clip weight curve scale on Weight (game code writes it; 1 = none)
     // The end's grip on the Target, moved in the Target bone's own frame (model units, degrees pitch/yaw/roll);
     // zero = the grip as animated. First-person weapon IK writes the hand-vs-gun offsets here.
     glm::vec3 GripPosition{0.0f};
@@ -978,6 +979,7 @@ struct IKRigComponent {
     glm::vec3 LookAtAxis{0.0f, 0.0f, 1.0f}; // the bone's local axis that should face the target
     float LookAtMaxAngle = 60.0f;
     float LookAtWeight = 1.0f;
+    float LookCurveWeight = 1.0f;   // runtime: clip weight curve scale on LookAtWeight (lane A; 1 = none)
 
     // --- runtime (not serialized) ---
     std::vector<IKBoneOffset> Offsets;
