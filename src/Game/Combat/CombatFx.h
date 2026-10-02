@@ -30,9 +30,12 @@ public:
     // soundtrack is mixed from it offline: tools/mix_npc_video.py). Empty closes it.
     void SetAudioLog(const std::string& path);
 
-    // A round left a muzzle at `origin` heading for `end`. `fromPlayer`: the report is 2D and there's
-    // no flash light (the view model has its own), `tracer`: a streak along the line.
+    // A round left a muzzle at `origin` heading for `end`. `fromPlayer`: the report is 2D, the flash
+    // light softer and the flame rides the gun (FollowMuzzle), `tracer`: a streak along the line.
     void Shot(World& world, Gun gun, const glm::vec3& origin, const glm::vec3& end, bool fromPlayer, bool tracer);
+    // The player's gun this frame (FirstPersonPresentation::MuzzleFrames: the first-person gun's muzzle,
+    // the world copy's, and the bore): the player's flames move with it.
+    void FollowMuzzle(World& world, const glm::vec3& firstPerson, const glm::vec3& worldCopy, const glm::vec3& bore);
     // A round passing the player's head at `point`.
     void Whizz(const glm::vec3& point);
     // A one-shot at `pos` (3D), or on the listener when `at2D`.
@@ -55,7 +58,7 @@ private:
     std::FILE* m_Log = nullptr;
     std::vector<Flash> m_Flashes;
     size_t m_NextFlash = 0;
-    entt::entity m_Sparks = entt::null, m_Smoke = entt::null, m_Tracers = entt::null;
+    entt::entity m_Sparks = entt::null, m_Flame = entt::null, m_PlayerFlame = entt::null, m_PlayerWorldFlame = entt::null, m_Smoke = entt::null, m_Tracers = entt::null;
     float m_LastWhizz = -1e9f, m_Now = 0.0f;
     std::uint32_t m_Rng = 0xC0FFEEu;
     int m_ShotsHeard = 0, m_Whizzes = 0;
