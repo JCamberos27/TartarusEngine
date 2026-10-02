@@ -86,6 +86,8 @@ Everything in **(advanced)** groups has a tooltip; defaults are the values the b
 | The body's shoulder hunches up toward the head during a reload (Scene view, shadow), or drifts back into place after | **Clavicle Follow** down: how much of the arms rig's collarbone swing the body (and its chest's stance) takes. The hands stay on the gun; the shrug turns a collarbone only as far as a hand needs. Arm Steadiness filters only the walk's sway, so a clip's own shoulder moves aren't held back. |
 | Camera rises or drops on holster | **Arms Ease Out**; the body keeps the armed eye height unarmed. |
 | Feet float over steps / sink into slopes | **Foot IK**, **Foot Ray Up/Length**, **Foot Max Raise**, **Pelvis Max Raise**, **Foot IK Max Drop**. |
+| Elbows lag or snap to their target | **Elbow Ease** (seconds) and **Elbow Max Rate** (degrees/s), group Arms. |
+| NPC soldiers turn, twist, lean, look or plant their feet differently from what you want | The **NPC Body**, **NPC Head** and **NPC Foot IK** groups on the same First Person Body component (NPC Turn Threshold, Max Twist, Aim/Ready Lean, Cower Hunch, Head Max Yaw/Pitch, Foot IK Max Drop/Raise/Pelvis Raise/Tilt Max and the Move/Face/Foot Offset/Foot Normal/Foot IK Fade eases). NPCs have no component of their own: at Play start the NPC director copies these fields from the scene's player First Person Body (angles are degrees here, radians inside the NPC body). Defaults equal the old built-in values, so old scenes behave as before. |
 | Foot slides while planted | **Foot Lock Drift**, **Foot Planted Height**, **Foot Lock Ease In/Out**. |
 | Run/Sprint speed doesn't match the feet | Set **Run Speed** / **Sprint Speed** to the ground speed of the jog/run clip - the Animator's clip analysis measures it. |
 

@@ -237,6 +237,24 @@ bool NpcDirector::Start(World& world, AssetLibrary& assets, const FirstPersonCon
         m_HoldSettings.EyeSlack = fpb.EyeSlack;
         m_HoldSettings.LookDownPush = fpb.LookDownPush;
         m_HoldSettings.LookDownStart = fpb.LookDownStart;
+        // NPC body tuning
+        m_HoldSettings.TurnThreshold = glm::radians(fpb.NpcTurnThreshold); // degrees in the component
+        m_HoldSettings.MoveEase = fpb.NpcMoveEase;
+        m_HoldSettings.FaceEase = fpb.NpcFaceEase;
+        m_HoldSettings.MaxTwist = glm::radians(fpb.NpcMaxTwist); // degrees in the component
+        m_HoldSettings.AimLean = glm::radians(fpb.NpcAimLean); // degrees in the component
+        m_HoldSettings.AimLeanCrouched = glm::radians(fpb.NpcAimLeanCrouched); // degrees in the component
+        m_HoldSettings.ReadyLeanCrouched = glm::radians(fpb.NpcReadyLeanCrouched); // degrees in the component
+        m_HoldSettings.CowerHunch = glm::radians(fpb.NpcCowerHunch); // degrees in the component
+        m_HoldSettings.HeadMaxYaw = glm::radians(fpb.NpcHeadMaxYaw); // degrees in the component
+        m_HoldSettings.HeadMaxPitch = glm::radians(fpb.NpcHeadMaxPitch); // degrees in the component
+        m_HoldSettings.FootIKMaxDrop = fpb.NpcFootIKMaxDrop;
+        m_HoldSettings.FootIKMaxRaise = fpb.NpcFootIKMaxRaise;
+        m_HoldSettings.FootIKPelvisRaise = fpb.NpcFootIKPelvisRaise;
+        m_HoldSettings.FootIKTiltMax = glm::radians(fpb.NpcFootIKTiltMax); // degrees in the component
+        m_HoldSettings.FootOffsetEase = fpb.NpcFootOffsetEase;
+        m_HoldSettings.FootNormalEase = fpb.NpcFootNormalEase;
+        m_HoldSettings.FootIKFade = fpb.NpcFootIKFade;
     }
     m_Active = true;
     m_Started = false;

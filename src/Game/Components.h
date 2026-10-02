@@ -691,6 +691,31 @@ struct FirstPersonBodyComponent {
     float StairPopRise = 0.03f; // Stair Pop Rise
     float StairPopRate = 2.5f; // Stair Pop Rate
     float StairEase = 0.09f; // Stair Ease
+    // --- Arm IK (Player body: elbow tracking and clearance) ---
+    float ElbowEase = 0.06f; // Elbow Ease
+    float ElbowMaxRate = 540.0f; // Elbow Max Rate (degrees/s)
+    // --- NPC body tuning (copied to NPC soldiers from the scene's player body) ---
+    // NPC body heading and turns
+    float NpcTurnThreshold = glm::degrees(1.15f); // NPC Turn Threshold (degrees; ~66 deg body can lag before turning on the spot)
+    float NpcMoveEase = 0.1f; // NPC Move Ease (seconds; blend tree parameter easing)
+    float NpcFaceEase = 0.09f; // NPC Face Ease (seconds; heading easing while moving)
+    // NPC spine and body aim
+    float NpcMaxTwist = glm::degrees(1.2f); // NPC Max Twist (degrees; spine twists toward aim)
+    float NpcAimLean = glm::degrees(0.1f); // NPC Aim Lean (degrees; torso forward lean aiming, standing)
+    float NpcAimLeanCrouched = glm::degrees(0.22f); // NPC Aim Lean Crouched (degrees; ~13 deg)
+    float NpcReadyLeanCrouched = glm::degrees(0.4f); // NPC Ready Lean Crouched (degrees; ~23 deg, low ready stance)
+    float NpcCowerHunch = glm::degrees(0.35f); // NPC Cower Hunch (degrees; spine curls forward ducking)
+    // NPC head look
+    float NpcHeadMaxYaw = glm::degrees(1.2f); // NPC Head Max Yaw (degrees; ~70 deg head turns past chest)
+    float NpcHeadMaxPitch = glm::degrees(0.6f); // NPC Head Max Pitch (degrees; ~35 deg nod up/down)
+    // NPC foot IK
+    float NpcFootIKMaxDrop = 0.35f; // NPC Foot IK Max Drop (metres)
+    float NpcFootIKMaxRaise = 0.35f; // NPC Foot IK Max Raise (metres)
+    float NpcFootIKPelvisRaise = 0.08f; // NPC Foot IK Pelvis Raise (metres; pelvis height adjustment)
+    float NpcFootIKTiltMax = glm::degrees(0.5f); // NPC Foot IK Tilt Max (degrees; max foot angle to ground normal)
+    float NpcFootOffsetEase = 0.05f; // NPC Foot Offset Ease (seconds; vertical foot adjustment easing)
+    float NpcFootNormalEase = 0.08f; // NPC Foot Normal Ease (seconds; ground normal easing)
+    float NpcFootIKFade = 0.15f; // NPC Foot IK Fade (seconds; foot IK enable/disable easing)
 };
 
 // A character dressed from a wardrobe (docs/CHARACTER_OUTFITS.md): put it on the body's root. Its children
