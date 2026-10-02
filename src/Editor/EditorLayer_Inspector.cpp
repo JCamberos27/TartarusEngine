@@ -3135,7 +3135,7 @@ bool EditorLayer::BeginComponentSection(const char* icon,
     if (prefabApplyOut)  *prefabApplyOut = false;
 
     std::string header = std::string(icon) + "  " + label;
-    // The component's title bar: a raised strip with a chevron, the component's icon (gold while
+    // The component's title bar: a raised strip with a chevron, the component's icon (the accent while
     // open) and its name, drawn by hand so it can sit flush with the card below it. Its open state
     // lives in the same ImGui storage slot CollapsingHeader used (keyed by the label), so every
     // component starts collapsed and keeps its state for the session, as before. AllowOverlap lets

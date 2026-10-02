@@ -399,9 +399,9 @@ void EditorLayer::ApplyThemeStyle() {
     style.ScaleAllSizes(m_UIScale);
 }
 
-// The Tartarus palette (EditorTheme.h), after the launch screen: layered near-black surfaces with a
-// cool cast, hairline borders, off-white text, and one warm gold accent for selection, focus and
-// "on". Status colours (danger / warning / success / info) are fixed and never double as the accent.
+// The Tartarus palette (EditorTheme.h), an old white-phosphor terminal: layered pitch-black
+// surfaces, hairline borders, phosphor-white text, and the phosphor at full drive as the one accent
+// for selection, focus and "on". Status colours (danger / warning / success / info) are fixed and never double as the accent.
 static void ApplyTartarusPalette(ImGuiStyle& style) {
     using namespace EditorTheme;
     ImVec4* c = style.Colors;

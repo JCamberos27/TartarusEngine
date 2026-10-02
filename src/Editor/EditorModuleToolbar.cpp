@@ -193,7 +193,7 @@ void Draw(const EditorModuleHostAPI& host) {
         }
         ImGui::PopStyleColor();
 
-        // The open scene, centred in the title bar like a document title: its name, a gold dot
+        // The open scene, centred in the title bar like a document title: its name, an accent dot
         // while it has unsaved changes, and a PLAYING tag in Play.
         if (host.GetSceneTitle) {
             char title[128] = {};

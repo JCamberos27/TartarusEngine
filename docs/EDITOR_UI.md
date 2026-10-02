@@ -1,10 +1,16 @@
 # Editor UI
 
-The editor's look follows the launch screen (`tools/launcher`). It uses:
-- near-black surfaces with a cool cast;
-- off-white text and cool greys;
-- one warm gold accent;
+The editor looks like an old white-phosphor terminal. It uses:
+- pitch-black surfaces;
+- phosphor-white text and neutral greys;
+- the phosphor at full drive as the one accent, so a selection or the primary button reads as inverse video;
+- muted status, kind and axis colours;
 - letter-spaced monospace capitals for headings.
+
+Preferences > General > CRT screen draws the whole editor through the launch screen's tube shader
+(`src/Renderer/CrtScreen.*`, `CrtScreen.frag.glsl`): scanlines, phosphor glow, a vignette, and
+optional curved glass. With the glass on, the mouse is bent through the same curve before ImGui
+reads it, so clicks land on what's drawn.
 
 Everything a panel draws with comes from three headers. Don't type colour literals or one-off button styles into panel code.
 
@@ -12,7 +18,7 @@ Everything a panel draws with comes from three headers. Don't type colour litera
 
 | File | What it holds |
 |------|---------------|
-| `src/Editor/EditorTheme.h` | The tokens: surfaces, lines, text, gold accent, status colours, axis colours, per-kind tints, and the HUD plate. Font roles (`PushBody`, `PushSmall`, `PushMono`, `PushHeading`, `PushTitle`), `Px()` for UI-scaled lengths, tracked text, and the Inspector's shared label column (`PropertyLabelWidth`). |
+| `src/Editor/EditorTheme.h` | The tokens: surfaces, lines, text, accent, status colours, axis colours, per-kind tints, and the HUD plate. Font roles (`PushBody`, `PushSmall`, `PushMono`, `PushHeading`, `PushTitle`), `Px()` for UI-scaled lengths, tracked text, and the Inspector's shared label column (`PropertyLabelWidth`). |
 | `src/Editor/EditorUIPrimitives.h` | The widgets (see below). |
 | `src/Editor/EditorPanels.h` | Every dockable panel's window name (`"<icon>  <title>###<id>"`). Also `MigrateIni`, which renames layouts saved under the old titles. |
 
@@ -33,21 +39,21 @@ Everything a panel draws with comes from three headers. Don't type colour litera
 
 | Widget | Use |
 |--------|-----|
-| `ActionButton` | Flat icon button: toolbar tools, panel toggles. `active` = on (gold). |
+| `ActionButton` | Flat icon button: toolbar tools, panel toggles. `active` = on (the accent). |
 | `SecondaryButton` | Raised text button: Cancel, Import..., Add Component. |
-| `PrimaryButton` | Gold: the one confirming action of a dialog. |
+| `PrimaryButton` | Inverse video: the one confirming action of a dialog. |
 | `DangerIconButton` | Flat, red on hover: delete / remove. |
 | `Segmented` | Mutually exclusive options as one strip. |
-| `SectionHeader` | Tracked capitals with a hairline. Replaces `SeparatorText`; a leading icon glyph becomes a gold icon. |
+| `SectionHeader` | Tracked capitals with a hairline. Replaces `SeparatorText`; a leading icon glyph becomes an accent icon. |
 | `Foldout` | A collapsible section (replaces `CollapsingHeader`). |
 | `SearchField` | Magnifier, hint and clear button, the same everywhere. |
-| `Chip`, `EmptyState`, `DrawRowState` | Tags; what an empty panel shows; list selection (gold wash + gold bar). |
+| `Chip`, `EmptyState`, `DrawRowState` | Tags; what an empty panel shows; list selection (accent wash + accent bar). |
 
 Host code reaches these through the forwarders in `EditorLayerInternal.h`, which route tooltips through the ShowTooltips preference.
 
 ## Layout
 
-- **Menu bar:** the monogram, then File / Edit / Create / View / Window / Help. The open scene's name is centred, with a gold dot while unsaved and a PLAYING tag in Play.
+- **Menu bar:** the monogram, then File / Edit / Create / View / Window / Help. The open scene's name is centred, with an accent dot while unsaved and a PLAYING tag in Play.
 - **Status bar:** across the bottom of the window (`EditorLayer::DrawStatusBar`).
   - Left: the latest log line. Click it to open the Console.
   - Right: tool, selection, scene, frame readout and build.
