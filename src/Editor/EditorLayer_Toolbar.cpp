@@ -90,8 +90,7 @@ void EditorLayer::DrawPlayTransportButtons(bool playing, bool maximized, bool pa
         ImGui::PopStyleColor(3);
         if (ImGui::IsItemHovered()) EditorUI::SetTooltip("Play the scene in the Game panel (F1)");
     } else {
-        if (ImGui::Button(ICON_FA_STOP "  Stop")) m_PlayStopRequested = true;
-        if (ImGui::IsItemHovered()) EditorUI::SetTooltip("Stop and revert the scene (F1)");
+        if (ActionButton(ICON_FA_STOP "  Stop", "Stop and revert the scene (F1)")) m_PlayStopRequested = true;
 
         // Pause toggle + single-frame Step (#236). Pause reads as pressed-in while active; Step
         // is only meaningful (and only enabled) once paused.
@@ -103,17 +102,14 @@ void EditorLayer::DrawPlayTransportButtons(bool playing, bool maximized, bool pa
 
         ImGui::SameLine();
         ImGui::BeginDisabled(!paused);
-        if (ImGui::Button(ICON_FA_FORWARD_STEP "  Step")) m_StepRequested = true;
+        if (ActionButton(ICON_FA_FORWARD_STEP "  Step", "Advance exactly one frame (F3)")) m_StepRequested = true;
         ImGui::EndDisabled();
-        if (ImGui::IsItemHovered()) EditorUI::SetTooltip("Advance exactly one frame (F3)");
 
         ImGui::SameLine();
         const char* fsLabel = maximized ? ICON_FA_COMPRESS "  Restore" : ICON_FA_EXPAND "  Fullscreen";
-        if (ImGui::Button(fsLabel)) m_MaximizeToggleRequested = true;
-        if (ImGui::IsItemHovered()) {
-            EditorUI::SetTooltip(maximized
-                ? "Back to windowed play (editor panels return) (F4)"
-                : "Maximize the Game view over the editor panels (F4)");
+        if (ActionButton(fsLabel, maximized ? "Back to windowed play (editor panels return) (F4)"
+                                            : "Maximize the Game view over the editor panels (F4)")) {
+            m_MaximizeToggleRequested = true;
         }
     }
 
