@@ -1,4 +1,6 @@
 #pragma once
+#include <algorithm>
+#include <cmath>
 #include <vector>
 #include <glm/glm.hpp>
 #include <glm/gtc/quaternion.hpp>
@@ -65,6 +67,12 @@ public:
     // empty. The held body's own shape is swept along the arc, and each bounce uses the combined
     // bounciness / friction of the two colliders, as PhysX will.
     const ThrowPrediction& Prediction() const { return m_Prediction; }
+
+    // How far the assist search reaches: AssistRange, cut short just past a solid the crosshair ray hit
+    // at `rayHitDist` (negative: the ray hit nothing).
+    static float AssistReach(const GravityGunSettings& s, float rayHitDist) {
+        return rayHitDist < 0.0f ? s.AssistRange : std::min(s.AssistRange, rayHitDist + 0.5f);
+    }
 
 private:
     unsigned FindGrabTarget(const glm::vec3& eye, const glm::vec3& fwd) const;

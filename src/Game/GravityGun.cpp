@@ -42,17 +42,16 @@ unsigned GravityGun::FindGrabTarget(const glm::vec3& eye, const glm::vec3& fwd) 
     solid.HitTriggers = 0;
     const float o[3] = {eye.x, eye.y, eye.z}, d[3] = {fwd.x, fwd.y, fwd.z};
     RaycastHit hit;
-    float reach = Settings.AssistRange;
+    float reach = AssistReach(Settings, -1.0f);
     if (PhysicsWorld::RaycastFiltered(o, d, Settings.GrabRange, solid, hit)) {
         if (Grabbable(hit.Entity)) return hit.Entity;
-        reach = std::min(reach, hit.Distance + 0.5f);
+        reach = AssistReach(Settings, hit.Distance);
     }
 
     // Sweep overlap spheres down the aim line, each wide enough to cover the cone at its
     // distance, and keep the candidate closest in angle to the crosshair.
     unsigned best = kNoEntity;
-    const float assistCos = std::cos(glm::radians(Settings.AssistConeDeg));
-    float bestCos = assistCos;
+    float bestCos = std::cos(glm::radians(Settings.AssistConeDeg));
     unsigned ids[32];
     for (float t = 0.5f; t < reach;) {
         const float r = std::clamp(t * std::tan(glm::radians(Settings.AssistConeDeg)), 0.3f, 2.5f);
