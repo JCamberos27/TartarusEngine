@@ -111,10 +111,12 @@
 #include <thread>
 #include <vector>
 #include <chrono>
+#include <future>
 #pragma warning(disable: 4996) // stb_image_write.h's own sprintf() use, not this file's
 #include <stb_image_write.h> // --asset-load-bench: synthesize PNGs to load (ARCH-201 / #375)
 #include <glm/gtc/type_ptr.hpp> // #162 - motion blur matrices
 #include <cstring>
+#include <imgui_internal.h> // --editor-shot finds dock tabs by title
 #include <cstdlib>
 #include <intrin.h>   // __cpuid — CPU brand string for the boot log
 #ifndef NOMINMAX
@@ -461,6 +463,7 @@ int main(int argc, char** argv) {
     // Uses Project Settings > Build; outDir overrides its Output Folder. Exit 0 on success.
     bool buildMode = false;
     std::string buildOutArg;
+    int buildCancelAt = -1;
     // --smoke-shots <dir> (with --smoke-test): saves three Scene-view PNGs per scene - toward the
     // horizon, a higher angle behind, and up at the sky - for reviewing rendering changes (the
     // physical sky's, first) without driving the editor.
@@ -481,6 +484,16 @@ int main(int argc, char** argv) {
     bool outfitCostMode = false;
     // --outfit-selftest: the OutfitSystem API end to end on the real wardrobe (OutfitAudit::RunSelfTest).
     bool outfitSelfTestMode = false;
+    // --editor-shot <dir>: the interactive editor at 1920x1080 (or --perf-res), stepped through a few
+    // fixed views (an entity selected, the Console, the Game view, Settings), each saved as a PNG of the
+    // whole window, then closed - for reviewing editor UI changes without driving the desktop. It runs
+    // on a copy of the user's editor prefs and layout (%LOCALAPPDATA%\TartarusEngine-Shot), never the
+    // real ones. --editor-shot-select <name> picks the selected entity (default: Player Spawn);
+    // --editor-shot-default-layout starts from the default dock layout instead of the user's;
+    // --editor-shot-scale <s> sets the UI scale (as Preferences > General > UI scale would).
+    std::string editorShotDir, editorShotSelect = "Player Spawn";
+    bool editorShotDefaultLayout = false;
+    float editorShotScale = 0.0f;
     std::vector<std::string> outfitCostScenes;
     std::string outfitAuditWardrobe = "assets/Characters/Quantum/Quantum.wardrobe", outfitAuditCsv;
     for (int i = 1; i < argc; ++i) {
@@ -506,6 +519,10 @@ int main(int argc, char** argv) {
             if (i + 1 < argc && (std::string(argv[i + 1]) == "ak" || std::string(argv[i + 1]) == "remington")) stockProbeAk = std::string(argv[++i]) == "ak";
         }
         else if (a == "--smoke-shots" && i + 1 < argc) { smokeShotsDir = argv[++i]; }
+        else if (a == "--editor-shot" && i + 1 < argc) { editorShotDir = argv[++i]; }
+        else if (a == "--editor-shot-select" && i + 1 < argc) { editorShotSelect = argv[++i]; }
+        else if (a == "--editor-shot-default-layout") { editorShotDefaultLayout = true; }
+        else if (a == "--editor-shot-scale" && i + 1 < argc) { editorShotScale = (float)std::atof(argv[++i]); }
         else if (a == "--outfit-shots" && i + 1 < argc) {
             smokeTestMode = true;
             outfitShotsDir = argv[++i];
@@ -532,6 +549,8 @@ int main(int argc, char** argv) {
             buildMode = true;
             if (i + 1 < argc && argv[i + 1][0] != '-') buildOutArg = argv[++i];
         }
+        // Test hook: cancel the --build once this many files are copied (checks Cancel cleans up).
+        else if (a == "--build-cancel-at" && i + 1 < argc) { buildCancelAt = std::atoi(argv[++i]); }
         // #151 - open a specific project folder instead of the one found next to the exe.
         else if (a == "--project" && i + 1 < argc) {
             std::error_code ec;
@@ -554,7 +573,32 @@ int main(int argc, char** argv) {
     // a nonzero exit instead of a modal MessageBox that a headless/CI desktop never dismisses
     // (audit BUG-102).
     const bool headless = smokeTestMode || resaveMode || undoBenchMode || assetLoadBenchMode || outfitAuditMode || outfitScenesMode || outfitCostMode || outfitSelfTestMode;
-    CrashHandler::SetInteractive(!headless); // #148: no crash dialog on an unattended run
+    CrashHandler::SetInteractive(!headless && editorShotDir.empty()); // #148: no crash dialog on an unattended run
+    if (!editorShotDir.empty()) {
+        // The prefs and layout the user sees, copied into a scratch user folder that this run may
+        // freely rewrite (window placement, layout, last scene).
+        // UserPaths resolves its root once, on first use, so the real folder is found from
+        // LOCALAPPDATA here rather than through UserPaths::Root() (which would pin the real one).
+        namespace fs = std::filesystem;
+        char* appData = nullptr;
+        size_t appDataLen = 0;
+        fs::path real;
+        if (_dupenv_s(&appData, &appDataLen, "LOCALAPPDATA") == 0 && appData) {
+            real = fs::path(appData) / "TartarusEngine";
+            std::free(appData);
+        }
+        UserPaths::SetAppName("TartarusEngine-Shot");
+        const fs::path scratch = UserPaths::Root();
+        std::error_code eqEc;
+        if (real.empty() || fs::equivalent(real, scratch, eqEc) || scratch.filename() != "TartarusEngine-Shot") {
+            std::cerr << "--editor-shot: could not set up a scratch user folder; refusing to run." << std::endl;
+            return 1;
+        }
+        std::error_code ec;
+        for (const char* f : {"imgui.ini", "editor_prefs.json", "shortcuts.json"})
+            fs::copy_file(real / f, scratch / f, fs::copy_options::overwrite_existing, ec);
+        if (editorShotDefaultLayout) fs::remove(scratch / "imgui.ini", ec);
+    }
 
     // #148: `--crash-test <kind>` deliberately crashes through one path so the handler (dump,
     // stderr line, dialog) can be checked: av | overflow | abort | purecall | invalidparam | terminate.
@@ -589,7 +633,20 @@ int main(int argc, char** argv) {
         ProjectSettings::BuildSettings bs = ProjectSettings::Build();
         if (!buildOutArg.empty()) bs.OutputDir = std::filesystem::absolute(buildOutArg).string();
         if (bs.Scenes.empty()) bs.Scenes.push_back("scenes/Sandbox.json");
-        const BuildPipeline::Report r = BuildPipeline::Build(bs);
+        // On a worker thread with progress, the same way the editor's Build button runs it.
+        BuildPipeline::Progress progress;
+        auto future = std::async(std::launch::async, [&] { return BuildPipeline::Build(bs, &progress); });
+        int lastShown = -1;
+        while (future.wait_for(std::chrono::milliseconds(20)) != std::future_status::ready) {
+            const int done = progress.Done.load(), total = progress.Total.load();
+            if (buildCancelAt >= 0 && done >= buildCancelAt) progress.Cancel.store(true);
+            if (total > 0 && done * 10 / total != lastShown) {
+                lastShown = done * 10 / total;
+                std::cout << "[Build] " << BuildPipeline::StageLabel((BuildPipeline::Stage)progress.StageNow.load())
+                          << " " << done << "/" << total << "\n";
+            }
+        }
+        const BuildPipeline::Report r = future.get();
         std::cout << "[Build] " << r.Message << "\n";
         if (r.Ok) {
             std::cout << "[Build] " << r.ExePath << "\n";
@@ -625,6 +682,7 @@ int main(int argc, char** argv) {
     try {
         // Per-user preferences, loaded before anything reads them. No GL or project state needed.
         EditorSettings::Load();
+        if (!editorShotDir.empty() && editorShotScale > 0.0f) EditorSettings::Get().UiScaleOverride = editorShotScale;
         // A benchmark measures native resolution unless it asks for a render height, so its
         // numbers stay comparable with the ones in docs/PERFORMANCE.md.
         if (renderHeightArg >= 0) EditorSettings::Get().RenderHeight = renderHeightArg;
@@ -907,6 +965,9 @@ int main(int argc, char** argv) {
             if (perfBenchMode && perfResW > 0) {
                 glfwRestoreWindow(window.Handle());
                 glfwSetWindowSize(window.Handle(), perfResW, perfResH);
+            } else if (!editorShotDir.empty()) {
+                glfwRestoreWindow(window.Handle());
+                glfwSetWindowSize(window.Handle(), perfResW > 0 ? perfResW : 1920, perfResW > 0 ? perfResH : 1080);
             }
         }
         LayerRegistry::Load(); // LayerComponent slot names (#236 A1)
@@ -1536,6 +1597,13 @@ int main(int argc, char** argv) {
         // the user has chosen Don't Save, or Save and the save succeeded, so the next close
         // request goes through.
         bool exitApproved = false;
+
+        // --editor-shot: each view gets kEditorShotFrames frames - set up halfway, captured at the end.
+        constexpr int kEditorShotFrames = 150;
+        static const char* const kEditorShots[] = {"overview", "inspector", "console", "game", "settings", "settings-viewport",
+                                                   "settings-performance", "project-settings", "project-tags", "project-build",
+                                                   "lighting", "animator"};
+        int editorShotFrame = 0;
 
         // Monotonically increasing per-frame counter, used by Model::TickAnimationOnce() to
         // dedupe animation updates for models shared by more than one entity (#106) without a
@@ -3907,6 +3975,41 @@ int main(int argc, char** argv) {
                 // While the game owns input, the editor viewport's own picking / gizmo keys
                 // stand down (a shoot-click or strafe key shouldn't also poke the editor).
                 editor.SetGameInputActive(gameHasInput);
+                // --editor-shot: set up the next view a second ahead of its capture (below).
+                if (!editorShotDir.empty()) {
+                    const int step = editorShotFrame++ / kEditorShotFrames;
+                    if (editorShotFrame % kEditorShotFrames == kEditorShotFrames / 2 && step < (int)std::size(kEditorShots)) {
+                        const std::string view = kEditorShots[step];
+                        auto focus = [](const char* title) {
+                            for (ImGuiWindow* w : ImGui::GetCurrentContext()->Windows)
+                                if (std::strstr(w->Name, title) && std::strncmp(w->Name, "##", 2) != 0 && !(w->Flags & ImGuiWindowFlags_ChildWindow)) ImGui::SetWindowFocus(w->Name);
+                        };
+                        if (view == "overview") {
+                            EditorModuleHost::ConsoleState().Visible = true; // a tab now, in front for "console"
+                            for (auto [e, n] : world.Registry.view<NameComponent>().each())
+                                if (n.Name == editorShotSelect) {
+                                    if (const auto* o = world.Registry.try_get<OrderComponent>(e)) editor.SelectEntityByOrder(world, o->Value);
+                                    break;
+                                }
+                            focus("###Scene");
+                            focus("###Assets");
+                        }
+                        else if (view == "inspector") editor.SetExpandAllComponents(true);
+                        else if (view == "console") { editor.SetExpandAllComponents(false); focus("###Console"); }
+                        else if (view == "game") focus("###Game");
+                        else if (view == "settings") editor.OpenPreferences();
+                        else if (view == "settings-viewport") editor.OpenSettingsCategory(false, 1);
+                        else if (view == "settings-performance") editor.OpenSettingsCategory(false, 4);
+                        else if (view == "project-settings") editor.OpenProjectSettings();
+                        else if (view == "project-tags") editor.OpenSettingsCategory(true, 1);
+                        else if (view == "project-build") editor.OpenSettingsCategory(true, 2);
+                        else if (view == "lighting") { editor.CloseSettingsWindow(); editor.SetShowLighting(true); }
+                        else if (view == "animator") {
+                            editor.SetShowLighting(false);
+                            editor.OpenAnimatorWindow("assets/Animations/Controllers/fps_body_locomotion.controller");
+                        }
+                    }
+                }
                 if (editorUIVisible) editor.Draw(world, assets, editorCamera, dt);
                 else if (playing && devKeys) editor.DrawPlayModeOverlays(world); // #185 — physics panel + HUD over maximized play
                 if (playing && devKeys && playUsesPlayer && npcDirector.Active() && devPanel.Open) {
@@ -4451,6 +4554,26 @@ int main(int argc, char** argv) {
                 }
                 for (const Screenshot::Finished& f : Screenshot::PollFinished())
                     editor.OnCaptureDone(f.Ok ? f.Path : std::string(), f.Width, f.Height);
+                // --editor-shot: the whole window, once each view has settled.
+                if (!editorShotDir.empty() && editorShotFrame > 0 && editorShotFrame % kEditorShotFrames == 0) {
+                    const int step = editorShotFrame / kEditorShotFrames - 1;
+                    if (step < (int)std::size(kEditorShots)) {
+                        int w = 0, h = 0;
+                        glfwGetFramebufferSize(window.Handle(), &w, &h);
+                        glBindFramebuffer(GL_READ_FRAMEBUFFER, 0);
+                        std::vector<unsigned char> px = Screenshot::GrabRegion(0, 0, w, h);
+                        std::vector<unsigned char> flipped(px.size());
+                        for (int y = 0; y < h; ++y)
+                            std::memcpy(&flipped[(size_t)y * w * 4], &px[(size_t)(h - 1 - y) * w * 4], (size_t)w * 4);
+                        for (size_t i = 3; i < flipped.size(); i += 4) flipped[i] = 255;
+                        std::error_code ec;
+                        std::filesystem::create_directories(editorShotDir, ec);
+                        const std::string out = (std::filesystem::path(editorShotDir) / (std::string(kEditorShots[step]) + ".png")).string();
+                        stbi_write_png(out.c_str(), w, h, 4, flipped.data(), w * 4);
+                        std::cout << "[EditorShot] " << out << std::endl;
+                    }
+                    if (step + 1 >= (int)std::size(kEditorShots)) { exitApproved = true; window.SetShouldClose(true); }
+                }
                 editor.SetHideOverlaysThisFrame(false);
             }
 

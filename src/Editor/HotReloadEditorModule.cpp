@@ -1,4 +1,5 @@
 #include "HotReloadEditorModule.h"
+#include "EditorTheme.h"
 
 #include "EditorModuleAPI.h"
 #include "EditorUIHelpers.h"
@@ -69,7 +70,7 @@ void DrawStatusPanel(const char* title, const char* message, const char* accent)
     }
     ImGui::TextWrapped("%s", message);
     ImGui::Separator();
-    ImGui::TextColored(ImVec4(0.32f, 0.86f, 0.62f, 1.0f), "%s", accent);
+    ImGui::TextColored(EditorTheme::Success, "%s", accent);
     ImGui::End();
 }
 
@@ -303,6 +304,16 @@ void HelpReportBug() {
     Log::Info("Report a Bug: system report copied to the clipboard; attach Logs/Editor.log to the issue.");
 }
 
+void TbDrawEditMenuBody() {
+    if (g_Editor && g_World && g_Assets) g_Editor->DrawEditMenuBody(*g_World, *g_Assets);
+}
+unsigned int TbGetEngineMarkTexture() { return g_Editor ? g_Editor->EngineMarkTexture() : 0u; }
+void TbGetSceneTitle(char* out, int n, bool* outDirty, bool* outPlaying) {
+    if (!g_Editor) { if (out && n > 0) out[0] = '\0'; return; }
+    if (out && n > 0) std::snprintf(out, (size_t)n, "%s", g_Editor->SceneTitle().c_str());
+    if (outDirty) *outDirty = g_Editor->SceneDirty();
+    if (outPlaying) *outPlaying = g_Editor->IsInPlayMode();
+}
 void TbDrawFileMenuBody() {
     if (g_Editor && g_World && g_Assets) g_Editor->DrawFileMenuBody(*g_World, *g_Assets);
 }
@@ -523,6 +534,9 @@ EditorModuleHostAPI MakeHostAPI() {
     api.OpenLogFolder = &HelpOpenLogFolder;
     api.ReportBug = &HelpReportBug;
     api.DrawFileMenuBody = &TbDrawFileMenuBody;
+    api.DrawEditMenuBody = &TbDrawEditMenuBody;
+    api.GetEngineMarkTexture = &TbGetEngineMarkTexture;
+    api.GetSceneTitle = &TbGetSceneTitle;
     api.DrawAddEntityMenuItems = &TbDrawAddEntityMenuItems;
     api.DrawViewMenuBody = &TbDrawViewMenuBody;
     api.DrawWindowMenuBody = &TbDrawWindowMenuBody;

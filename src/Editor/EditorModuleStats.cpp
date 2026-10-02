@@ -7,8 +7,8 @@
 // so it could never be dragged, resized, or interacted with. It's a real dockable panel now, same
 // as Hierarchy/Inspector/Console — draggable into any dock node, its position persisted in
 // imgui.ini like theirs, with a title bar and a working close box. The glanceable, always-visible
-// role the old corner HUD served is now the viewport status bar's FPS/ms cluster (Phase 3 item
-// 5, EditorLayer_Toolbar.cpp's DrawViewportStatusBar) — already a collapsed FPS/frame-ms reading
+// role the old corner HUD served is now the status bar's fps / ms segment (Phase 3 item
+// 5, EditorLayer_Toolbar.cpp's DrawStatusBar) — already a collapsed FPS/frame-ms reading
 // that opens this exact panel on click, so this pass didn't need to invent a second one.
 //
 // What changed in the move: every number it shows is host-owned and now arrives through the
@@ -26,8 +26,12 @@
 // its ms figure (relative to that list's own slowest sample) instead of being bare text.
 
 #include "EditorModuleAPI.h"
+#include "EditorPanels.h"
+#include "EditorTheme.h"
+#include "EditorUIPrimitives.h"
 
 #include <imgui.h>
+#include <imgui_internal.h> // RenderTextEllipsis
 #include <IconsFontAwesome6.h>
 
 #include <algorithm>
@@ -59,57 +63,102 @@ const char* FormatThousands(int value, char* buf, size_t bufSize) {
     return buf;
 }
 
-// One row of the stats table: label left, right-aligned comma-formatted value. `dim` greys both
-// columns for a secondary reading (e.g. "Culled", "Inactive") without a whole separate style pass.
+// One row of a stats table: label left in the secondary colour, the value right-aligned in the
+// monospace face. `dim` greys both for a secondary reading (e.g. "Culled", "Inactive").
 void StatRow(const char* label, int value, bool dim = false) {
     char buf[16];
     ImGui::TableNextRow();
     ImGui::TableNextColumn();
-    if (dim) ImGui::PushStyleColor(ImGuiCol_Text, ImGui::GetStyle().Colors[ImGuiCol_TextDisabled]);
-    ImGui::TextUnformatted(label);
+    ImGui::TextColored(dim ? EditorTheme::Dim : EditorTheme::Secondary, "%s", label);
     ImGui::TableNextColumn();
-    const std::string formatted = FormatThousands(value, buf, sizeof(buf));
+    FormatThousands(value, buf, sizeof(buf));
+    EditorTheme::PushMono();
     const float w = ImGui::GetContentRegionAvail().x;
-    ImGui::SetCursorPosX(ImGui::GetCursorPosX() + w - ImGui::CalcTextSize(formatted.c_str()).x);
-    ImGui::TextUnformatted(formatted.c_str());
-    if (dim) ImGui::PopStyleColor();
+    ImGui::SetCursorPosX(ImGui::GetCursorPosX() + w - ImGui::CalcTextSize(buf).x);
+    ImGui::TextColored(dim ? EditorTheme::Dim : EditorTheme::Text, "%s", buf);
+    EditorTheme::PopFont();
 }
 
-// A profiler sample row: name, a bar sized to its share of `maxMs` in the same list (so the
-// slowest scope in CPU or GPU reads full-width, everything else scales against it), then the ms
-// figure right-aligned. Deliberately its own thin bar via the draw list rather than
-// ImGui::ProgressBar — a full-height progress bar per row reads heavier than this list needs.
+// A profiler sample row: the scope's name (cut with an ellipsis to its column), a thin bar sized
+// to its share of the slowest sample in the same list, and the milliseconds right-aligned.
 void ProfilerRow(const EditorModuleProfilerSample& s, float maxMs) {
     ImGui::PushID(s.Name);
-    ImGui::TextUnformatted(s.Name);
-    // #184 — sized off the font (which is baked at the editor's UI scale) rather than fixed
-    // pixels, so the name column and bar keep their proportions at 150%/200% scaling.
-    const float em = ImGui::GetFontSize();
-    ImGui::SameLine(em * 9.0f);
+    ImGui::TableNextRow();
+    ImGui::TableNextColumn();
+    const ImVec2 p0 = ImGui::GetCursorScreenPos();
+    const float nameW = ImGui::GetContentRegionAvail().x;
+    const ImVec2 ts = ImGui::CalcTextSize(s.Name);
+    ImGui::Dummy(ImVec2(nameW, ts.y));
+    ImGui::PushStyleColor(ImGuiCol_Text, EditorTheme::Secondary);
+    ImGui::RenderTextEllipsis(ImGui::GetWindowDrawList(), p0, ImVec2(p0.x + nameW, p0.y + ts.y), p0.x + nameW, s.Name, nullptr, &ts);
+    ImGui::PopStyleColor();
+    if (ts.x > nameW && ImGui::IsItemHovered()) ImGui::SetTooltip("%s", s.Name);
 
-    const float barW = em * 8.5f, barH = ImGui::GetTextLineHeight() * 0.6f;
+    ImGui::TableNextColumn();
+    const float barW = ImGui::GetContentRegionAvail().x, barH = EditorTheme::Px(4.0f);
     const ImVec2 p = ImGui::GetCursorScreenPos();
     const float frac = maxMs > 0.0001f ? std::clamp(s.Milliseconds / maxMs, 0.0f, 1.0f) : 0.0f;
     ImDrawList* dl = ImGui::GetWindowDrawList();
-    const float yOff = (ImGui::GetTextLineHeight() - barH) * 0.5f;
-    dl->AddRectFilled(ImVec2(p.x, p.y + yOff), ImVec2(p.x + barW, p.y + yOff + barH),
-                       ImGui::GetColorU32(ImGuiCol_FrameBg));
-    if (frac > 0.0f) {
-        dl->AddRectFilled(ImVec2(p.x, p.y + yOff), ImVec2(p.x + barW * frac, p.y + yOff + barH),
-                           ImGui::GetColorU32(ImGuiCol_PlotHistogram));
-    }
+    const float yOff = std::floor((ImGui::GetTextLineHeight() - barH) * 0.5f);
+    dl->AddRectFilled(ImVec2(p.x, p.y + yOff), ImVec2(p.x + barW, p.y + yOff + barH), EditorTheme::U32(EditorTheme::Field), barH * 0.5f);
+    if (frac > 0.0f)
+        dl->AddRectFilled(ImVec2(p.x, p.y + yOff), ImVec2(p.x + std::max(barH, barW * frac), p.y + yOff + barH),
+                          EditorTheme::U32(EditorTheme::Accent), barH * 0.5f);
     ImGui::Dummy(ImVec2(barW, ImGui::GetTextLineHeight()));
-    ImGui::SameLine();
-    ImGui::Text("%6.3f ms", s.Milliseconds);
+
+    ImGui::TableNextColumn();
+    char ms[32];
+    std::snprintf(ms, sizeof(ms), "%.2f", s.Milliseconds);
+    EditorTheme::PushMono();
+    ImGui::SetCursorPosX(ImGui::GetCursorPosX() + ImGui::GetContentRegionAvail().x - ImGui::CalcTextSize(ms).x);
+    ImGui::TextColored(EditorTheme::Text, "%s", ms);
+    EditorTheme::PopFont();
     ImGui::PopID();
 }
 
 void DrawProfilerSection(const char* title, const EditorModuleProfilerSample* samples, int n) {
     if (n <= 0) return;
-    if (!ImGui::CollapsingHeader(title, ImGuiTreeNodeFlags_DefaultOpen)) return;
+    EditorUIPrimitives::SectionHeader(title);
     float maxMs = 0.0001f;
     for (int i = 0; i < n; ++i) maxMs = std::max(maxMs, samples[i].Milliseconds);
-    for (int i = 0; i < n; ++i) ProfilerRow(samples[i], maxMs);
+    if (ImGui::BeginTable(title, 3, ImGuiTableFlags_SizingStretchProp)) {
+        ImGui::TableSetupColumn("name", ImGuiTableColumnFlags_WidthStretch, 1.0f);
+        ImGui::TableSetupColumn("bar", ImGuiTableColumnFlags_WidthStretch, 0.7f);
+        ImGui::TableSetupColumn("ms", ImGuiTableColumnFlags_WidthFixed, ImGui::GetFontSize() * 3.2f);
+        for (int i = 0; i < n; ++i) ProfilerRow(samples[i], maxMs);
+        ImGui::EndTable();
+    }
+}
+
+// The frame-time history as a line over a field-coloured plot, with the 60 and 30 fps budgets as
+// faint guides, scaled to the worst frame shown (at least 20 ms so a smooth run doesn't look spiky).
+void FrameTimeGraph(const float* ms, int n) {
+    const float h = EditorTheme::Px(44.0f);
+    const float w = ImGui::GetContentRegionAvail().x;
+    const ImVec2 p = ImGui::GetCursorScreenPos();
+    ImGui::Dummy(ImVec2(w, h));
+    ImDrawList* dl = ImGui::GetWindowDrawList();
+    dl->AddRectFilled(p, ImVec2(p.x + w, p.y + h), EditorTheme::U32(EditorTheme::Field), EditorTheme::Px(3.0f));
+    dl->AddRect(p, ImVec2(p.x + w, p.y + h), EditorTheme::U32(EditorTheme::Hairline), EditorTheme::Px(3.0f));
+    if (n < 2) return;
+    float worst = 20.0f;
+    for (int i = 0; i < n; ++i) worst = std::max(worst, ms[i]);
+    const float top = worst * 1.1f;
+    auto yOf = [&](float v) { return p.y + h - 2.0f - (h - 4.0f) * std::clamp(v / top, 0.0f, 1.0f); };
+    for (float guide : {16.667f, 33.333f}) {
+        if (guide >= top) continue;
+        const float y = std::floor(yOf(guide)) + 0.5f;
+        dl->AddLine(ImVec2(p.x + 1.0f, y), ImVec2(p.x + w - 1.0f, y), EditorTheme::U32(EditorTheme::Hairline));
+    }
+    ImVec2 pts[kFrameTimeHistoryCap];
+    for (int i = 0; i < n; ++i) pts[i] = ImVec2(p.x + 2.0f + (w - 4.0f) * (float)i / (float)(n - 1), yOf(ms[i]));
+    dl->AddPolyline(pts, n, EditorTheme::U32(EditorTheme::Accent), ImDrawFlags_None, std::max(1.0f, EditorTheme::Px(1.25f)));
+    char peak[32];
+    std::snprintf(peak, sizeof(peak), "peak %.0f ms", worst);
+    EditorTheme::PushMonoSmall();
+    const ImVec2 ps = ImGui::CalcTextSize(peak);
+    dl->AddText(ImVec2(p.x + w - ps.x - EditorTheme::Px(6.0f), p.y + EditorTheme::Px(3.0f)), EditorTheme::U32(EditorTheme::Dim), peak);
+    EditorTheme::PopFont();
 }
 
 } // namespace
@@ -135,29 +184,32 @@ void Draw(const EditorModuleHostAPI& host) {
     float frameHistory[kFrameTimeHistoryCap];
     const int frameHistoryN = host.GetFrameTimeHistory ? host.GetFrameTimeHistory(frameHistory, kFrameTimeHistoryCap) : 0;
 
-    // Phase 1 item 5 — pushed before ImGui::Begin so every row below (and ImGui's own layout
-    // pass) measures the same font it renders with: every label was hand-padded with spaces
-    // ("Draw calls   %d") to fake column alignment against the proportional UI font, which only
-    // lines up under a true monospace face.
-    ImGui::PushFont(host.GetMonoFont ? host.GetMonoFont() : nullptr, 0.0f);
-
     bool open = shown;
-    if (ImGui::Begin(ICON_FA_CHART_SIMPLE "  Statistics", &open)) {
-        ImGui::Text("%.1f FPS  (%.2f ms)", smoothedMs > 0.0001f ? 1000.0f / smoothedMs : 0.0f, smoothedMs);
-
-        if (frameHistoryN > 1) {
-            // Scale to the worst frame in the window (floor 8ms so an all-smooth stretch doesn't
-            // make the line look artificially spiky) rather than a fixed range — a project running
-            // at 8ms and one hitching to 80ms both want the sparkline to actually use its height.
-            float worst = 8.0f;
-            for (int i = 0; i < frameHistoryN; ++i) worst = std::max(worst, frameHistory[i]);
-            char overlay[32];
-            std::snprintf(overlay, sizeof(overlay), "%.0f ms peak", worst);
-            ImGui::PlotLines("##frametime", frameHistory, frameHistoryN, 0, overlay, 0.0f, worst,
-                              ImVec2(0.0f, 40.0f));
+    if (ImGui::Begin(EditorPanels::Statistics, &open)) {
+        // The headline: frames per second large, the frame time beside it.
+        {
+            char fps[32], ms[32];
+            std::snprintf(fps, sizeof(fps), "%.0f", smoothedMs > 0.0001f ? 1000.0f / smoothedMs : 0.0f);
+            std::snprintf(ms, sizeof(ms), "%.2f ms", smoothedMs);
+            ImGui::PushFont(EditorTheme::MonoFont(), EditorTheme::Px(26.0f));
+            ImGui::TextColored(EditorTheme::Text, "%s", fps);
+            ImGui::PopFont();
+            ImGui::SameLine(0.0f, EditorTheme::Px(6.0f));
+            EditorTheme::PushHeading();
+            const float base = ImGui::GetCursorPosY();
+            ImGui::SetCursorPosY(base + EditorTheme::Px(12.0f));
+            EditorTheme::TrackedText("FPS", EditorTheme::Dim, EditorTheme::HeadingTracking());
+            EditorTheme::PopFont();
+            ImGui::SameLine();
+            EditorTheme::PushMono();
+            ImGui::SetCursorPosX(ImGui::GetCursorPosX() + ImGui::GetContentRegionAvail().x - ImGui::CalcTextSize(ms).x);
+            ImGui::SetCursorPosY(base + EditorTheme::Px(9.0f));
+            ImGui::TextColored(EditorTheme::Secondary, "%s", ms);
+            EditorTheme::PopFont();
         }
-        ImGui::Separator();
+        FrameTimeGraph(frameHistory, frameHistoryN);
 
+        EditorUIPrimitives::SectionHeader("RENDERING");
         if (ImGui::BeginTable("##rendertbl", 2, ImGuiTableFlags_SizingStretchProp)) {
             StatRow("Draw calls", rs.DrawCalls);
             StatRow("Triangles", rs.Triangles);
@@ -165,7 +217,7 @@ void Draw(const EditorModuleHostAPI& host) {
             if (rs.Culled > 0) StatRow("Culled (outside view)", rs.Culled, true);
             ImGui::EndTable();
         }
-        ImGui::Separator();
+        EditorUIPrimitives::SectionHeader("SCENE");
         if (ImGui::BeginTable("##entitytbl", 2, ImGuiTableFlags_SizingStretchProp)) {
             StatRow("Entities", entityCount);
             StatRow("Renderers", renderableCount);
@@ -176,16 +228,12 @@ void Draw(const EditorModuleHostAPI& host) {
         }
 
         // Numbers from the frame that just finished (this frame's own "Scene Draw"/"ImGui
-        // Render" scopes haven't run yet at this point) - same one-frame-behind convention the
-        // smoothed FPS figure above already uses, so it's not called out as its own oddity.
-        ImGui::Spacing();
-        DrawProfilerSection("Profiler (CPU)", cpuSamples, profN);
-        // GPU timings land several frames later than their CPU counterparts (pipelining), so
-        // these are "most recently completed", not "this frame" - the CPU section above already
-        // reads one frame behind; this one just trails a little further (#197).
-        DrawProfilerSection("Profiler (GPU)", gpuSamples, profGpuN);
+        // Render" scopes haven't run yet at this point). GPU timings land several frames later
+        // than their CPU counterparts (pipelining), so they are "most recently completed" (#197).
+        DrawProfilerSection("CPU  (MS)", cpuSamples, profN);
+        DrawProfilerSection("GPU  (MS)", gpuSamples, profGpuN);
 
-        ImGui::Separator();
+        EditorUIPrimitives::SectionHeader("STATE CACHE");
         EditorModuleGLFrameStats gl;
         if (host.GetGLFrameStats) host.GetGLFrameStats(&gl);
         if (ImGui::BeginTable("##gltbl", 2, ImGuiTableFlags_SizingStretchProp)) {
@@ -200,7 +248,6 @@ void Draw(const EditorModuleHostAPI& host) {
         }
     }
     ImGui::End();
-    ImGui::PopFont();
 
     if (!open && host.SetShowStats) host.SetShowStats(false); // the title-bar X
 }

@@ -12,6 +12,8 @@
 //         ...
 //     }
 
+#include "AssetPathPicker.h"
+
 #include <glm/glm.hpp>
 #include <imgui.h>
 
@@ -41,6 +43,8 @@ public:
     // Spring: frequency (Hz) and damping ratio.
     bool Spring(const char* label, float& frequency, float& damping, const char* tip = nullptr);
     bool Text(const char* label, std::string& v, const char* tip = nullptr);
+    // A project file or folder path, picked from the project's files (never typed).
+    bool Path(const char* label, std::string& v, const AssetPathPickerOptions& options, const char* tip = nullptr);
     // A name typed in or picked from `items`. With `validate`, a name not in `items` shows in the
     // warning colour and `unknownTip` (printf, %s = the name) explains why.
     bool Name(const char* label, std::string& v, const std::vector<std::string>& items, bool validate,

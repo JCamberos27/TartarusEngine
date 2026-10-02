@@ -4,6 +4,8 @@
 // the whole asset folder in through the same path as dropping it on the window (copied into
 // project/assets/ with its layout, textures matched, materials extracted).
 #include "EditorLayer.h"
+#include "EditorUIPrimitives.h"
+#include "EditorPanels.h"
 #include "EditorLayerInternal.h"
 #include "AssetImport.h"
 #include "AssetLibrary.h"
@@ -180,7 +182,7 @@ void EditorLayer::DrawAssetLibraryPanel(World& world, AssetLibrary& assets) {
     ImGui::SetNextWindowSize(ImVec2(620.0f * m_UIScale, 420.0f * m_UIScale), ImGuiCond_FirstUseEver);
     PushTabChromeText();
     bool open = true;
-    const bool visible = ImGui::Begin(ICON_FA_BOX_ARCHIVE "  Asset Library", &open);
+    const bool visible = ImGui::Begin(EditorPanels::AssetLibrary, &open);
     PopTabChromeText();
     if (!open) { prefs.ShowAssetLibrary = false; EditorSettings::Save(); }
     if (!visible) { ImGui::End(); return; }
@@ -202,7 +204,7 @@ void EditorLayer::DrawAssetLibraryPanel(World& world, AssetLibrary& assets) {
             : "The library folder can't be found:");
         if (!prefs.AssetLibraryPath.empty()) ImGui::TextDisabled("%s", prefs.AssetLibraryPath.c_str());
         ImGui::Spacing();
-        if (ImGui::Button(ICON_FA_FOLDER_OPEN "  Choose Library Folder...")) chooseFolder();
+        if (EditorUIPrimitives::SecondaryButton(ICON_FA_FOLDER_OPEN "  Choose Library Folder...")) chooseFolder();
         ImGui::End();
         return;
     }
@@ -332,7 +334,7 @@ void EditorLayer::DrawAssetLibraryPanel(World& world, AssetLibrary& assets) {
 
             if (!s.ModelFiles.empty()) {
                 ImGui::Spacing();
-                ImGui::SeparatorText("Models");
+                EditorUIPrimitives::SectionHeader("Models");
                 ImGui::TextDisabled("Double-click to import just that file.");
                 for (const std::string& rel : s.ModelFiles) {
                     const std::string full = (fs::path(s.Path) / rel).string();
