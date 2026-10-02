@@ -1877,7 +1877,7 @@ void EditorLayer::DrawAssetCell(World& world, AssetLibrary& assets, int index, f
             ImU32 textColor = ImGui::GetColorU32(ImGuiCol_Text);
             {
                 // 2px asset-type stripe along the tile's bottom edge; a selected tile also gets a
-                // 1.5px gold outline.
+                // 1.5px accent outline.
                 const float stripeH = EditorTheme::Px(2.0f);
                 const ImVec2 tileMax(tileMin.x + tileSize.x, tileMin.y + tileSize.y);
                 dl->AddRectFilled(ImVec2(tileMin.x, tileMax.y - stripeH), tileMax,

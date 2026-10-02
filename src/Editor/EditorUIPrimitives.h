@@ -40,7 +40,7 @@ namespace EditorUIPrimitives {
 
 using TooltipFn = void (*)(const char*);
 
-// The accent every "on" state, selection and focus reads in: the launch screen's gold
+// The accent every "on" state, selection and focus reads in: the phosphor at full drive
 // (EditorTheme.h). Kept as named accessors so a call site never picks its own shade.
 inline ImVec4 AccentColor() { return EditorTheme::Accent; }
 inline ImVec4 ActiveAccentColor() { return EditorTheme::AccentBright; }
@@ -58,11 +58,11 @@ inline ImVec4 FlatPressed() { return ImVec4(1.0f, 1.0f, 1.0f, 0.12f); }
 
 // Three button treatments across the whole editor (#160), plus a destructive variant:
 //   ActionButton    flat; no body at rest, a faint wash on hover. Toolbar tools, panel toggles,
-//                   low-frequency icon actions. `active` = a toggle that is on: gold glyph on a
-//                   gold wash with a gold keyline.
+//                   low-frequency icon actions. `active` = a toggle that is on: accent glyph on an
+//                   accent wash with an accent keyline.
 //   SecondaryButton a raised body with a hairline: ordinary text buttons (Cancel, Import...,
 //                   Add Component).
-//   PrimaryButton   a gold body with dark text: the one confirming action of a dialog.
+//   PrimaryButton   a white body with black text (inverse video): the one confirming action of a dialog.
 //   DangerIconButton flat, red on hover: Delete, the component-remove x.
 inline bool ActionButton(const char* icon, const char* tooltip, TooltipFn tooltipFn,
                           bool active = false, ImVec2 size = ImVec2(0, 0)) {
@@ -147,7 +147,7 @@ inline bool SecondaryButton(const char* label, ImVec2 size = ImVec2(0, 0)) {
     return clicked;
 }
 
-// The one filled treatment: a gold body with dark text, for a dialog's confirming action (Save,
+// The one filled treatment: a white body with black text, for a dialog's confirming action (Save,
 // Create, Apply, Restore...). Rare by design, so it always reads as "the" action.
 inline bool PrimaryButton(const char* label, ImVec2 size = ImVec2(0, 0)) {
     ImGui::PushStyleColor(ImGuiCol_Button,        EditorTheme::Accent);
@@ -161,7 +161,7 @@ inline bool PrimaryButton(const char* label, ImVec2 size = ImVec2(0, 0)) {
 }
 
 // A segmented control: `count` mutually exclusive options drawn as one joined strip, the chosen one
-// gold. Labels may be icons or short words. Returns true when `*current` changed.
+// accent. Labels may be icons or short words. Returns true when `*current` changed.
 inline bool Segmented(const char* id, int* current, const char* const* labels, int count, TooltipFn tooltipFn = nullptr,
                       const char* const* tooltips = nullptr, float itemWidth = 0.0f) {
     bool changed = false;
@@ -193,7 +193,7 @@ inline bool Segmented(const char* id, int* current, const char* const* labels, i
 }
 
 // A section heading in the launch screen's voice: tracked monospace capitals in the secondary text
-// colour, an optional icon in gold, and a hairline running out to the right edge. Replaces
+// colour, an optional icon in the accent colour, and a hairline running out to the right edge. Replaces
 // SeparatorText. `text` is set in capitals here; a Font Awesome glyph at its front (the old
 // SeparatorText(ICON_FA_X "  Title") form) becomes the icon.
 inline void SectionHeader(const char* rawText, const char* icon = nullptr) {
@@ -365,7 +365,7 @@ inline void EndPanelToolbar() {
 }
 
 // A collapsible section inside a panel (ImGui::CollapsingHeader): the raised surface with a hairline
-// instead of the gold selection fill CollapsingHeader would otherwise borrow from ImGuiCol_Header.
+// instead of the accent selection fill CollapsingHeader would otherwise borrow from ImGuiCol_Header.
 inline bool Foldout(const char* label, ImGuiTreeNodeFlags flags = 0) {
     ImGui::PushStyleColor(ImGuiCol_Header,        EditorTheme::Raised);
     ImGui::PushStyleColor(ImGuiCol_HeaderHovered, EditorTheme::Hover);
@@ -376,8 +376,8 @@ inline bool Foldout(const char* label, ImGuiTreeNodeFlags flags = 0) {
     return open;
 }
 
-// A row highlight for custom lists (Hierarchy, Console, Asset list): the selection is a gold wash
-// with a 2px gold bar at the left edge; hover is a faint white wash. Call before drawing the row's
+// A row highlight for custom lists (Hierarchy, Console, Asset list): the selection is an accent wash
+// with a 2px accent bar at the left edge; hover is a faint white wash. Call before drawing the row's
 // content, with the row's full-width rect.
 inline void DrawRowState(ImDrawList* dl, ImVec2 mn, ImVec2 mx, bool selected, bool hovered) {
     if (selected) {

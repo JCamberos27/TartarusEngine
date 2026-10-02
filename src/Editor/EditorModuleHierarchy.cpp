@@ -49,7 +49,7 @@ void Draw(const EditorModuleHostAPI& host) {
     }
     ImGui::PushStyleVar(ImGuiStyleVar_ItemSpacing, ImVec2(st.ItemSpacing.x * 0.5f, st.ItemSpacing.y));
 
-    // Type filter (Phase 5 item 6): additive kinds in a popup; the icon is gold while any is on.
+    // Type filter (Phase 5 item 6): additive kinds in a popup; the icon takes the accent while any is on.
     int typeMask = host.GetHierarchyTypeFilter ? host.GetHierarchyTypeFilter() : 0;
     ImGui::SameLine();
     if (EditorUIPrimitives::ActionButton(ICON_FA_FILTER, typeMask ? "Filtered by type (click to change)" : "Show only some kinds of object",

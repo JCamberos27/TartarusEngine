@@ -153,7 +153,7 @@ void EditorLayer::DrawViewportActionBar(World& world, AssetLibrary& assets,
         const ImVec2 imgPos  = overGame ? m_GameViewImgPos  : ImVec2(m_ViewportPos.x, m_ViewportPos.y);
         const ImVec2 imgSize = overGame ? m_GameViewImgSize : ImVec2(m_ViewportSize.x, m_ViewportSize.y);
 
-        // Play-mode tint: a thin gold frame just inside the viewport image (AccentDeep while paused),
+        // Play-mode tint: a thin accent frame just inside the viewport image (AccentDeep while paused),
         // drawn on the Scene / Game window's own draw list so it sits with the image. Skipped for a
         // clean capture like every other viewport overlay.
         if (playing && !m_HideOverlaysThisFrame) {
@@ -452,7 +452,7 @@ void EditorLayer::DrawStatusBar(World& world, Camera& editorCamera) {
             const float f = std::clamp((float)done / (float)total, 0.0f, 1.0f);
             dl->AddRectFilled(ImVec2(bx, by), ImVec2(bx + barW * f, by + barH2), EditorTheme::U32(EditorTheme::Accent));
         } else {
-            // Indeterminate: a gold segment sweeping across the track.
+            // Indeterminate: an accent segment sweeping across the track.
             const float segW = barW * 0.3f;
             const float t = std::fmod((float)ImGui::GetTime() * 0.9f, 1.0f);
             const float sx = bx - segW + (barW + segW) * t;
