@@ -8,6 +8,7 @@
 #include <glm/glm.hpp>
 #include "RotationMath.h"
 #include "Animation.h" // LocalTRS
+#include "IK.h"        // IK::SpineDistribution
 #include <entt/entt.hpp>
 
 class SkinHideBuffer; // OutfitHideTag, PlayerBodyTag
@@ -582,6 +583,11 @@ struct FirstPersonBodyComponent {
     // How much of the camera's pitch the spine takes (0 = the body stays upright, 1 = the chest
     // tilts as far as the view), so the shoulders follow the view and the hands stay in reach.
     float SpineAim = 0.0f;
+    // ---- lane A ----
+    // How the spine's turns (view pitch, twist, shoulder line) are shared over spine_01..05, pelvis alpha:
+    // the default is the even spread. Used by the player body and, copied at Play, by NPCs.
+    IK::SpineDistribution Spine;
+    // ---- end lane A ----
     // The same looking down. Armed, the eye hangs off the shoulders as the arms rig's does, so looking
     // down it comes over the chest only as far as the chest pitches with it.
     float SpineAimDown = 0.9f;
@@ -928,6 +934,17 @@ struct IKLimb {
     bool KeepAnimatedOffset = true;
     bool MatchRotation = true;     // also turn the end to the goal's rotation
     float Weight = 1.0f;
+    // ---- lane A ----
+    // Elbow/knee hint (IK.h TwoBoneHint). HintWeight 0 keeps the animated bend plane, as before.
+    std::string PoleBone;          // node whose position the elbow points toward (empty = the animated elbow)
+    float HintWeight = 0.0f;       // 0..1
+    glm::vec3 HintOffset{0.0f};    // model-space move of the pole point
+    float MaxLimbScale = 1.0f;     // longest the limb may stretch toward an out-of-reach target (1 = never)
+    // The end's grip on the Target, moved in the Target bone's own frame (model units, degrees pitch/yaw/roll);
+    // zero = the grip as animated. First-person weapon IK writes the hand-vs-gun offsets here.
+    glm::vec3 GripPosition{0.0f};
+    glm::vec3 GripRotation{0.0f};
+    // ---- end lane A ----
     // Runtime: radians to swing the solved limb about its root->end line (the elbow's "door"),
     // after the solve - the end stays put. Game code writes it (first-person ADS actions do).
     float Swivel = 0.0f;

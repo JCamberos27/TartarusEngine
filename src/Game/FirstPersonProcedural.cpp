@@ -283,7 +283,9 @@ json WeaponProceduralSettings::ToJson() const {
     j["ik"] = {{"enabled", k.Enabled}, {"gunBone", k.GunBone},
                {"rightUpper", k.RightUpper}, {"rightLower", k.RightLower}, {"rightHand", k.RightHand},
                {"leftUpper", k.LeftUpper}, {"leftLower", k.LeftLower}, {"leftHand", k.LeftHand},
-               {"offTag", k.OffTag}, {"blendTime", k.BlendTime}};
+               {"offTag", k.OffTag}, {"blendTime", k.BlendTime},
+               {"rightHandPosition", Vec(k.RightHandPosition)}, {"rightHandRotation", Vec(k.RightHandRotation)},
+               {"leftHandPosition", Vec(k.LeftHandPosition)}, {"leftHandRotation", Vec(k.LeftHandRotation)}};
     return j;
 }
 
@@ -483,6 +485,10 @@ bool WeaponProceduralSettings::FromJson(const json& j, WeaponProceduralSettings&
         r.String("leftHand", o.LeftHand);
         r.String("offTag", o.OffTag);
         r.Number("blendTime", o.BlendTime);
+        r.Vector("rightHandPosition", o.RightHandPosition);
+        r.Vector("rightHandRotation", o.RightHandRotation);
+        r.Vector("leftHandPosition", o.LeftHandPosition);
+        r.Vector("leftHandRotation", o.LeftHandRotation);
     });
     if (!root.Ok) return false;
 

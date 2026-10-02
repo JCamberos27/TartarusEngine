@@ -364,6 +364,18 @@ void RegisterEngineComponents() {
             { "Limb A Match Rotation", T::Bool, TARTARUS_REFLECT_FIELD(IKRigComponent, LimbA.MatchRotation), 0.0f,
               "Also turn the end bone to the goal's rotation." },
             { "Limb A Weight", T::Float, TARTARUS_REFLECT_FIELD(IKRigComponent, LimbA.Weight), 0.01f, "Limb blend.", 0.0f, 1.0f },
+            { "Limb A Pole Bone", T::String, TARTARUS_REFLECT_FIELD(IKRigComponent, LimbA.PoleBone), 0.0f,
+              "Bone the elbow/knee points toward (e.g. a hint bone). Empty = the animated elbow's own position." },
+            { "Limb A Hint Weight", T::Float, TARTARUS_REFLECT_FIELD(IKRigComponent, LimbA.HintWeight), 0.01f,
+              "0 = keep the animated bend plane (default); 1 = the elbow/knee sits in the plane of the pole and the root-target line, so it cannot flip when the target crosses the bend plane.", 0.0f, 1.0f },
+            { "Limb A Hint Offset", T::Vec3, TARTARUS_REFLECT_FIELD(IKRigComponent, LimbA.HintOffset), 0.01f,
+              "Model-space offset added to the pole point: pushes the elbow/knee out, in or up." },
+            { "Limb A Max Limb Scale", T::Float, TARTARUS_REFLECT_FIELD(IKRigComponent, LimbA.MaxLimbScale), 0.01f,
+              "How far the limb may stretch toward an out-of-reach target, x its length. 1 = never (reaches along the straightened chain).", 1.0f, 2.0f },
+            { "Limb A Grip Position", T::Vec3, TARTARUS_REFLECT_FIELD(IKRigComponent, LimbA.GripPosition), 0.001f,
+              "Moves the end's grip in the Target bone's own frame (model units). Zero = the grip as animated." },
+            { "Limb A Grip Rotation", T::Vec3, TARTARUS_REFLECT_FIELD(IKRigComponent, LimbA.GripRotation), 0.5f,
+              "Turns the end's grip in the Target bone's frame: pitch, yaw, roll in degrees. Zero = as animated." },
 
             { "Limb B Enabled", T::Bool, TARTARUS_REFLECT_FIELD(IKRigComponent, LimbB.Enabled), 0.0f, "Solve this limb." },
             { "Limb B Upper", T::String, TARTARUS_REFLECT_FIELD(IKRigComponent, LimbB.Upper), 0.0f, "Upper bone, e.g. upperarm_l." },
@@ -375,6 +387,18 @@ void RegisterEngineComponents() {
             { "Limb B Match Rotation", T::Bool, TARTARUS_REFLECT_FIELD(IKRigComponent, LimbB.MatchRotation), 0.0f,
               "Also turn the end bone to the goal's rotation." },
             { "Limb B Weight", T::Float, TARTARUS_REFLECT_FIELD(IKRigComponent, LimbB.Weight), 0.01f, "Limb blend.", 0.0f, 1.0f },
+            { "Limb B Pole Bone", T::String, TARTARUS_REFLECT_FIELD(IKRigComponent, LimbB.PoleBone), 0.0f,
+              "Bone the elbow/knee points toward (e.g. a hint bone). Empty = the animated elbow's own position." },
+            { "Limb B Hint Weight", T::Float, TARTARUS_REFLECT_FIELD(IKRigComponent, LimbB.HintWeight), 0.01f,
+              "0 = keep the animated bend plane (default); 1 = the elbow/knee sits in the plane of the pole and the root-target line, so it cannot flip when the target crosses the bend plane.", 0.0f, 1.0f },
+            { "Limb B Hint Offset", T::Vec3, TARTARUS_REFLECT_FIELD(IKRigComponent, LimbB.HintOffset), 0.01f,
+              "Model-space offset added to the pole point: pushes the elbow/knee out, in or up." },
+            { "Limb B Max Limb Scale", T::Float, TARTARUS_REFLECT_FIELD(IKRigComponent, LimbB.MaxLimbScale), 0.01f,
+              "How far the limb may stretch toward an out-of-reach target, x its length. 1 = never (reaches along the straightened chain).", 1.0f, 2.0f },
+            { "Limb B Grip Position", T::Vec3, TARTARUS_REFLECT_FIELD(IKRigComponent, LimbB.GripPosition), 0.001f,
+              "Moves the end's grip in the Target bone's own frame (model units). Zero = the grip as animated." },
+            { "Limb B Grip Rotation", T::Vec3, TARTARUS_REFLECT_FIELD(IKRigComponent, LimbB.GripRotation), 0.5f,
+              "Turns the end's grip in the Target bone's frame: pitch, yaw, roll in degrees. Zero = as animated." },
 
             { "Look At Enabled", T::Bool, TARTARUS_REFLECT_FIELD(IKRigComponent, LookAtEnabled), 0.0f, "Aim a bone at another." },
             { "Look At Bone", T::String, TARTARUS_REFLECT_FIELD(IKRigComponent, LookAtBone), 0.0f, "The bone that turns, e.g. head." },
@@ -387,7 +411,7 @@ void RegisterEngineComponents() {
         };
         // Collapsible groups in the Inspector.
         for (size_t i = 0; i < m.Fields.size(); ++i) {
-            m.Fields[i].Group = i < 2 ? nullptr : i < 10 ? "Limb A" : i < 18 ? "Limb B" : "Look At";
+            m.Fields[i].Group = i < 2 ? nullptr : i < 16 ? "Limb A" : i < 30 ? "Limb B" : "Look At";
         }
         Register<IKRigComponent>(std::move(m));
     }
@@ -598,6 +622,39 @@ void RegisterEngineComponents() {
         m.Fields.push_back({ "Spine Aim Down", T::Float, TARTARUS_REFLECT_FIELD(FirstPersonBodyComponent, SpineAimDown), 0.01f,
               "Spine Aim for looking down. Armed, the camera hangs off the shoulders as the arms rig's does, so it clears the\n"
               "chest looking down only as far as the chest pitches with the view: lower it and the torso may be seen from inside.", 0.0f, 1.0f });
+        m.Fields.push_back({ "Spine Weight 1", T::Float, TARTARUS_REFLECT_FIELD(FirstPersonBodyComponent, Spine.Weight[0]), 0.05f,
+              "Relative share of the spine's look, twist and shoulder turns that spine_01 takes. All equal = the even spread; 0 = it takes none.", 0.0f, 4.0f });
+        m.Fields.back().Group = "Spine Distribution";
+        m.Fields.push_back({ "Spine Max Angle 1", T::Float, TARTARUS_REFLECT_FIELD(FirstPersonBodyComponent, Spine.MaxAngle[0]), 0.5f,
+              "Most (degrees) spine_01 turns from one spread. 0 = no limit.", 0.0f, 90.0f });
+        m.Fields.back().Group = "Spine Distribution";
+        m.Fields.push_back({ "Spine Weight 2", T::Float, TARTARUS_REFLECT_FIELD(FirstPersonBodyComponent, Spine.Weight[1]), 0.05f,
+              "Relative share of the spine's look, twist and shoulder turns that spine_02 takes. All equal = the even spread; 0 = it takes none.", 0.0f, 4.0f });
+        m.Fields.back().Group = "Spine Distribution";
+        m.Fields.push_back({ "Spine Max Angle 2", T::Float, TARTARUS_REFLECT_FIELD(FirstPersonBodyComponent, Spine.MaxAngle[1]), 0.5f,
+              "Most (degrees) spine_02 turns from one spread. 0 = no limit.", 0.0f, 90.0f });
+        m.Fields.back().Group = "Spine Distribution";
+        m.Fields.push_back({ "Spine Weight 3", T::Float, TARTARUS_REFLECT_FIELD(FirstPersonBodyComponent, Spine.Weight[2]), 0.05f,
+              "Relative share of the spine's look, twist and shoulder turns that spine_03 takes. All equal = the even spread; 0 = it takes none.", 0.0f, 4.0f });
+        m.Fields.back().Group = "Spine Distribution";
+        m.Fields.push_back({ "Spine Max Angle 3", T::Float, TARTARUS_REFLECT_FIELD(FirstPersonBodyComponent, Spine.MaxAngle[2]), 0.5f,
+              "Most (degrees) spine_03 turns from one spread. 0 = no limit.", 0.0f, 90.0f });
+        m.Fields.back().Group = "Spine Distribution";
+        m.Fields.push_back({ "Spine Weight 4", T::Float, TARTARUS_REFLECT_FIELD(FirstPersonBodyComponent, Spine.Weight[3]), 0.05f,
+              "Relative share of the spine's look, twist and shoulder turns that spine_04 takes. All equal = the even spread; 0 = it takes none.", 0.0f, 4.0f });
+        m.Fields.back().Group = "Spine Distribution";
+        m.Fields.push_back({ "Spine Max Angle 4", T::Float, TARTARUS_REFLECT_FIELD(FirstPersonBodyComponent, Spine.MaxAngle[3]), 0.5f,
+              "Most (degrees) spine_04 turns from one spread. 0 = no limit.", 0.0f, 90.0f });
+        m.Fields.back().Group = "Spine Distribution";
+        m.Fields.push_back({ "Spine Weight 5", T::Float, TARTARUS_REFLECT_FIELD(FirstPersonBodyComponent, Spine.Weight[4]), 0.05f,
+              "Relative share of the spine's look, twist and shoulder turns that spine_05 takes. All equal = the even spread; 0 = it takes none.", 0.0f, 4.0f });
+        m.Fields.back().Group = "Spine Distribution";
+        m.Fields.push_back({ "Spine Max Angle 5", T::Float, TARTARUS_REFLECT_FIELD(FirstPersonBodyComponent, Spine.MaxAngle[4]), 0.5f,
+              "Most (degrees) spine_05 turns from one spread. 0 = no limit.", 0.0f, 90.0f });
+        m.Fields.back().Group = "Spine Distribution";
+        m.Fields.push_back({ "Pelvis Alpha", T::Float, TARTARUS_REFLECT_FIELD(FirstPersonBodyComponent, Spine.PelvisAlpha), 0.01f,
+              "Share (0..1) of the spine's turn the pelvis takes; the spine takes the rest, so the chest still turns as far.", 0.0f, 1.0f });
+        m.Fields.back().Group = "Spine Distribution";
         m.Fields.push_back({ "Shoulder Line Match", T::Float, TARTARUS_REFLECT_FIELD(FirstPersonBodyComponent, ShoulderLineMatch), 0.01f,
               "Armed, how far the chest takes the arms rig's stance - its shoulder line (bladed, the support shoulder forward) -\n"
               "instead of squaring to the view. 1 = the rig's: both hands then reach the gun without the shoulders moving.", 0.0f, 1.0f });

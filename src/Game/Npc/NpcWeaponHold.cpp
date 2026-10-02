@@ -184,8 +184,7 @@ void NpcBody::RotateSpine(const glm::quat& modelDelta) {
     const int n = m_DriverSpineCount;
     if (n == 0 || (int)pose.size() != m.NodeCount()) return;
     IK::ComputeGlobals(pose, m_DriverParents, m_Globals);
-    const glm::quat step = glm::normalize(glm::slerp(kNone, modelDelta, 1.0f / (float)n));
-    OffsetSpine(step);
+    OffsetSpine([&](float d) { return glm::normalize(glm::slerp(kNone, modelDelta, 1.0f / d)); });
     m.ApplyLocalPose(pose);
     m_PiecesStale = true;
 }
