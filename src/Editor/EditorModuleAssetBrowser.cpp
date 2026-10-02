@@ -15,6 +15,8 @@
 // survives a reload) via Is/SetAssetFolderExpanded. Drag payloads are bare path strings.
 
 #include "EditorModuleAPI.h"
+#include "EditorPanels.h"
+#include "EditorTheme.h"
 #include "EditorUIPrimitives.h"
 
 #include <imgui.h>
@@ -39,8 +41,9 @@ void Tooltip(const EditorModuleHostAPI& host, const char* text) {
 }
 
 // Forwards to the shared implementation (EditorUIPrimitives.h, Defect #53).
-bool ActionButton(const EditorModuleHostAPI& host, const char* icon, const char* tooltip) {
-    return EditorUIPrimitives::ActionButton(icon, tooltip, host.SetTooltip);
+bool ActionButton(const EditorModuleHostAPI& host, const char* icon, const char* tooltip, bool active = false) {
+    const float s = ImGui::GetFrameHeight();
+    return EditorUIPrimitives::ActionButton(icon, tooltip, host.SetTooltip, active, ImVec2(s, s));
 }
 
 // EditorUI::VSeparator — a 1px rule spanning the frame height with ItemSpacing.x either side.
@@ -241,6 +244,70 @@ void DrawFolderNode(const EditorModuleHostAPI& host, const std::vector<std::stri
     }
 }
 
+// Details view: a real ImGui table (resizable, sortable, header frozen). The host's DrawAssetCell
+// fills column 0 (icon + the row's Selectable, spanning all columns) and the Type / Size /
+// Modified cells itself. Header clicks drive the same sort state as the toolbar's Sort menu
+// (packed mode*2+desc; modes 0 Name, 1 Type, 2 Date modified, 3 Size) - each column's user id is
+// its sort mode.
+void DrawDetailsTable(const EditorModuleHostAPI& host, float uiScale, int cellCount,
+                      float cellWidth, float cellHeight) {
+    namespace T = EditorTheme;
+    ImGui::PushStyleColor(ImGuiCol_TableHeaderBg,     T::Raised);
+    ImGui::PushStyleColor(ImGuiCol_TableRowBg,        T::WithAlpha(T::Panel, 0.0f));
+    ImGui::PushStyleColor(ImGuiCol_TableRowBgAlt,     T::Stripe);
+    ImGui::PushStyleColor(ImGuiCol_TableBorderLight,  T::Hairline);
+    ImGui::PushStyleColor(ImGuiCol_TableBorderStrong, T::Hairline);
+
+    const ImGuiTableFlags flags = ImGuiTableFlags_Resizable | ImGuiTableFlags_Sortable |
+        ImGuiTableFlags_ScrollY | ImGuiTableFlags_RowBg | ImGuiTableFlags_BordersInnerV |
+        ImGuiTableFlags_SizingFixedFit | ImGuiTableFlags_NoSavedSettings;
+    if (ImGui::BeginTable("##AssetDetails", 4, flags, ImVec2(0.0f, 0.0f))) {
+        ImGui::TableSetupScrollFreeze(0, 1);
+        ImGui::TableSetupColumn("NAME",     ImGuiTableColumnFlags_WidthStretch | ImGuiTableColumnFlags_NoHide, 0.0f, 0);
+        ImGui::TableSetupColumn("TYPE",     ImGuiTableColumnFlags_WidthFixed, kAssetDetailsTypeColW * uiScale, 1);
+        ImGui::TableSetupColumn("SIZE",     ImGuiTableColumnFlags_WidthFixed, kAssetDetailsSizeColW * uiScale, 3);
+        ImGui::TableSetupColumn("MODIFIED", ImGuiTableColumnFlags_WidthFixed, kAssetDetailsModifiedColW * uiScale, 2);
+
+        // Keep the table's sort indicator and the host's sort state in step both ways.
+        const int hostPacked = host.GetAssetSort ? host.GetAssetSort() : 0;
+        const int hostMode = (hostPacked >> 1) & 3;
+        const bool hostDesc = (hostPacked & 1) != 0;
+        ImGuiTableSortSpecs* specs = ImGui::TableGetSortSpecs();
+        const bool haveSpec = specs && specs->SpecsCount > 0;
+        const int specMode = haveSpec ? (int)specs->Specs[0].ColumnUserID : -1;
+        const bool specDesc = haveSpec && specs->Specs[0].SortDirection == ImGuiSortDirection_Descending;
+        if (specs && specs->SpecsDirty) {
+            if (haveSpec && (specMode != hostMode || specDesc != hostDesc) && host.SetAssetSort)
+                host.SetAssetSort(specMode * 2 + (specDesc ? 1 : 0));
+            specs->SpecsDirty = false;
+        } else if (!haveSpec || specMode != hostMode || specDesc != hostDesc) {
+            const int col = hostMode == 0 ? 0 : hostMode == 1 ? 1 : hostMode == 3 ? 2 : 3;
+            ImGui::TableSetColumnSortDirection(col, hostDesc ? ImGuiSortDirection_Descending
+                                                              : ImGuiSortDirection_Ascending, false);
+        }
+
+        // Column titles in the heading voice (mono capitals), muted until hovered.
+        ImGui::PushStyleColor(ImGuiCol_Text, T::Secondary);
+        T::PushHeading();
+        ImGui::TableHeadersRow();
+        T::PopFont();
+        ImGui::PopStyleColor();
+
+        ImGuiListClipper clipper;
+        clipper.Begin(cellCount);
+        while (clipper.Step()) {
+            for (int idx = clipper.DisplayStart; idx < clipper.DisplayEnd; ++idx) {
+                ImGui::TableNextRow();
+                ImGui::TableSetColumnIndex(0);
+                if (host.DrawAssetCell) host.DrawAssetCell(idx, cellWidth, cellHeight, false);
+            }
+        }
+        clipper.End();
+        ImGui::EndTable();
+    }
+    ImGui::PopStyleColor(5);
+}
+
 // The asset grid (API v6): the module owns the ##AssetList child, the ImGuiListClipper row loop
 // with per-row SameLine wrapping, and the footer; every cell + the background + the delete-confirm
 // popup are host code (DrawAssetCell / HandleAssetGridBackground / AssetGridFrameEnd). Cell size
@@ -258,24 +325,9 @@ void DrawAssetGrid(const EditorModuleHostAPI& host, float contentHeight) {
     const bool detailsMode = viewMode == 2;
     const bool gridMode = !detailsMode && iconSize > listMinIcon * uiScale;
 
-    // A fixed, known height rather than measuring one via GetCursorPosY() deltas - Separator()
-    // interacting with several SameLine(absoluteX)-positioned items on the same line was pushing
-    // ImGui's line-height tracking (CursorMaxPos) up by a large, inconsistent amount, which then
-    // fed into the BeginChild size below and squeezed the row list down to nothing.
-    float headerH = 0.0f;
-    if (detailsMode) {
-        const float rightEdge = ImGui::GetWindowContentRegionMax().x;
-        const float typeX = rightEdge - (kAssetDetailsTypeColW + kAssetDetailsSizeColW + kAssetDetailsModifiedColW) * uiScale;
-        const float sizeX = rightEdge - (kAssetDetailsSizeColW + kAssetDetailsModifiedColW) * uiScale;
-        const float modX  = rightEdge - kAssetDetailsModifiedColW * uiScale;
-        ImGui::TextDisabled("Name");
-        ImGui::SameLine(typeX); ImGui::TextDisabled("Type");
-        ImGui::SameLine(sizeX); ImGui::TextDisabled("Size");
-        ImGui::SameLine(modX);  ImGui::TextDisabled("Modified");
-        ImGui::NewLine(); // end the SameLine chain on a clean, single-line cursor advance first
-        ImGui::Separator();
-        headerH = ImGui::GetFrameHeightWithSpacing() + ImGui::GetStyle().ItemSpacing.y;
-    }
+    // Details view's column header lives inside the table (DrawDetailsTable), so the list child
+    // simply fills the space.
+    const float headerH = 0.0f;
 
     // ImGui::BeginChild treats a <=0 size specially ("fill available" for 0, "fill available minus
     // |size|" for negative) rather than as a literal small height - on a short docked panel where
@@ -287,7 +339,7 @@ void DrawAssetGrid(const EditorModuleHostAPI& host, float contentHeight) {
 
     if (host.AssetGridFrameBegin) host.AssetGridFrameBegin();
 
-    const float cellPadding = 8.0f;
+    const float cellPadding = 8.0f * uiScale;
     const float cellWidth = iconSize + cellPadding * 2.0f;
     // Phase 5 item 4 — grid labels wrap to 2 lines now (was 1); reserve a second line height.
     // List/Details rows are unaffected (clipRowHeight below uses GetFrameHeightWithSpacing() for
@@ -306,21 +358,25 @@ void DrawAssetGrid(const EditorModuleHostAPI& host, float contentHeight) {
     const int totalRows = cellCount == 0 ? 0 : (cellCount + cellsPerRow - 1) / cellsPerRow;
     const float clipRowHeight = gridMode ? cellHeight : ImGui::GetFrameHeightWithSpacing();
 
-    ImGuiListClipper clipper;
-    clipper.Begin(totalRows, clipRowHeight);
-    while (clipper.Step()) {
-        for (int row = clipper.DisplayStart; row < clipper.DisplayEnd; ++row) {
-            for (int col = 0; col < cellsPerRow; ++col) {
-                const int idx = row * cellsPerRow + col;
-                if (idx >= cellCount) break;
-                if (host.DrawAssetCell) host.DrawAssetCell(idx, cellWidth, cellHeight, gridMode);
-                // Wrap within the row: SameLine for every column but the last, and only when
-                // there's another cell to draw (the final row may be partial).
-                if (gridMode && col + 1 < cellsPerRow && idx + 1 < cellCount) ImGui::SameLine();
+    if (detailsMode) {
+        DrawDetailsTable(host, uiScale, cellCount, cellWidth, cellHeight);
+    } else {
+        ImGuiListClipper clipper;
+        clipper.Begin(totalRows, clipRowHeight);
+        while (clipper.Step()) {
+            for (int row = clipper.DisplayStart; row < clipper.DisplayEnd; ++row) {
+                for (int col = 0; col < cellsPerRow; ++col) {
+                    const int idx = row * cellsPerRow + col;
+                    if (idx >= cellCount) break;
+                    if (host.DrawAssetCell) host.DrawAssetCell(idx, cellWidth, cellHeight, gridMode);
+                    // Wrap within the row: SameLine for every column but the last, and only when
+                    // there's another cell to draw (the final row may be partial).
+                    if (gridMode && col + 1 < cellsPerRow && idx + 1 < cellCount) ImGui::SameLine();
+                }
             }
         }
+        clipper.End();
     }
-    clipper.End();
 
     if (host.HandleAssetGridBackground) host.HandleAssetGridBackground();
 
@@ -332,7 +388,7 @@ void DrawAssetGrid(const EditorModuleHostAPI& host, float contentHeight) {
     char summary[256] = {};
     if (host.GetAssetSelectionSummary) host.GetAssetSelectionSummary(summary, (int)sizeof(summary));
     ImGui::AlignTextToFramePadding();
-    ImGui::TextDisabled("%s", summary);
+    ImGui::TextColored(EditorTheme::Dim, "%s", summary);
 
     // Phase 5 item 3/4: an explicit Grid/List/Details toggle beside the slider — the slider alone
     // (drag-to-minimum) was the only way to reach list view, which isn't discoverable, and Details
@@ -355,9 +411,9 @@ void DrawAssetGrid(const EditorModuleHostAPI& host, float contentHeight) {
     ImGui::SameLine(sliderX);
     ImGui::SetNextItemWidth(sliderWidth);
     float sliderVal = iconSize;
-    ImGui::PushStyleColor(ImGuiCol_FrameBg,        ImGui::GetColorU32(ImGuiCol_Border));
-    ImGui::PushStyleColor(ImGuiCol_FrameBgHovered, ImGui::GetColorU32(ImGuiCol_Border));
-    ImGui::PushStyleColor(ImGuiCol_FrameBgActive,  ImGui::GetColorU32(ImGuiCol_Border));
+    ImGui::PushStyleColor(ImGuiCol_FrameBg,        EditorTheme::Field);
+    ImGui::PushStyleColor(ImGuiCol_FrameBgHovered, EditorTheme::Rgb(0x1A, 0x1A, 0x20));
+    ImGui::PushStyleColor(ImGuiCol_FrameBgActive,  EditorTheme::Rgb(0x20, 0x20, 0x27));
     ImGui::PushStyleVar(ImGuiStyleVar_FrameRounding, ImGui::GetFrameHeight() * 0.5f);
     // Details rows don't use the icon-size slider at all (a fixed small icon, like List) — disable
     // rather than hide it, so the toggle button next to it doesn't jump position when cycling.
@@ -391,7 +447,7 @@ void Draw(const EditorModuleHostAPI& host) {
     bool visible = true;
     ImGui::PushStyleVar(ImGuiStyleVar_WindowPadding, ImVec2(8.0f * uiScale, 4.0f * uiScale)); // #37
     PushTabChromeText();
-    const bool open = ImGui::Begin("Asset Browser", &visible, ImGuiWindowFlags_None);
+    const bool open = ImGui::Begin(EditorPanels::Assets, &visible, ImGuiWindowFlags_None);
     PopTabChromeText();
     ImGui::PopStyleVar();
     if (host.SetShowAssetBrowser) host.SetShowAssetBrowser(visible); // capture the title-bar X
@@ -477,15 +533,18 @@ void Draw(const EditorModuleHostAPI& host) {
     {
         ImGui::AlignTextToFramePadding();
         ImGui::PushStyleColor(ImGuiCol_Button, ImVec4(0, 0, 0, 0));
-        ImGui::PushStyleColor(ImGuiCol_ButtonHovered, ImVec4(1, 1, 1, 0.08f));
-        ImGui::PushStyleColor(ImGuiCol_ButtonActive, ImVec4(1, 1, 1, 0.14f));
-        ImGui::PushStyleVar(ImGuiStyleVar_FramePadding, ImVec2(4.0f, ImGui::GetStyle().FramePadding.y));
+        ImGui::PushStyleColor(ImGuiCol_ButtonHovered, EditorUIPrimitives::FlatHover());
+        ImGui::PushStyleColor(ImGuiCol_ButtonActive, EditorUIPrimitives::FlatPressed());
+        ImGui::PushStyleVar(ImGuiStyleVar_FramePadding, ImVec2(4.0f * uiScale, ImGui::GetStyle().FramePadding.y));
         ImGui::PushStyleVar(ImGuiStyleVar_FrameBorderSize, 0.0f); // flat breadcrumb, no hairline box
 
         // The root segment is only a link when we're not already there; otherwise it's just the
         // "you are here" label like every other trailing segment below.
+        ImGui::PushStyleColor(ImGuiCol_Text, EditorTheme::Secondary);
         if (curFolder.empty()) {
+            ImGui::PushStyleColor(ImGuiCol_Text, EditorTheme::Text);
             ImGui::TextUnformatted("Assets");
+            ImGui::PopStyleColor();
         } else if (ImGui::Button("Assets") && host.SetCurrentAssetFolder) {
             host.SetCurrentAssetFolder("");
         }
@@ -499,13 +558,16 @@ void Draw(const EditorModuleHostAPI& host) {
             prefix = prefix.empty() ? segment : (prefix + "/" + segment);
             const bool isLast = slash == std::string::npos;
 
-            ImGui::SameLine(0.0f, 0.0f);
-            ImGui::TextDisabled(" / ");
-            ImGui::SameLine(0.0f, 0.0f);
+            ImGui::SameLine(0.0f, EditorTheme::Px(2.0f));
+            EditorTheme::PushSmall();
+            ImGui::AlignTextToFramePadding();
+            ImGui::TextColored(EditorTheme::Dim, ICON_FA_CHEVRON_RIGHT);
+            EditorTheme::PopFont();
+            ImGui::SameLine(0.0f, EditorTheme::Px(2.0f));
             ImGui::PushID((int)segStart);
             if (isLast) {
                 ImGui::AlignTextToFramePadding();
-                ImGui::TextUnformatted(segment.c_str());
+                ImGui::TextColored(EditorTheme::Text, "%s", segment.c_str());
             } else {
                 if (ImGui::Button(segment.c_str()) && host.SetCurrentAssetFolder)
                     host.SetCurrentAssetFolder(prefix.c_str());
@@ -516,14 +578,15 @@ void Draw(const EditorModuleHostAPI& host) {
             if (isLast) break;
             segStart = slash + 1;
         }
+        ImGui::PopStyleColor(); // the segments' secondary text
         ImGui::PopStyleVar(2);
         ImGui::PopStyleColor(3);
 
         if (refreshFlash > 0.0f) {
             const float a = refreshFlash > 1.0f ? 1.0f : refreshFlash;
-            ImGui::SameLine(0.0f, 12.0f);
+            ImGui::SameLine(0.0f, 12.0f * uiScale);
             ImGui::AlignTextToFramePadding();
-            ImGui::PushStyleColor(ImGuiCol_Text, ImVec4(0.42f, 0.85f, 0.52f, a));
+            ImGui::PushStyleColor(ImGuiCol_Text, EditorTheme::WithAlpha(EditorTheme::Success, a));
             ImGui::TextUnformatted(ICON_FA_CIRCLE_CHECK "  Assets refreshed");
             ImGui::PopStyleColor();
         }
@@ -531,7 +594,7 @@ void Draw(const EditorModuleHostAPI& host) {
 
     // Search box + the trailing icon buttons (Filters, Sort, Refresh — #236 G), pinned to the
     // right edge (or a new line if the breadcrumb has crowded them out).
-    const float iconBtnW = ImGui::GetFrameHeight() + ImGui::GetStyle().ItemSpacing.x;
+    const float iconBtnW = ImGui::GetFrameHeight() + EditorTheme::Px(2.0f);
     const float trailingButtonsWidth = iconBtnW * 5.0f; // favourites | scope | filter | sort | refresh
     const float targetX = ImGui::GetWindowContentRegionMax().x - (searchWidth + trailingButtonsWidth);
     if (targetX > ImGui::GetCursorPosX()) ImGui::SameLine(targetX);
@@ -539,12 +602,9 @@ void Draw(const EditorModuleHostAPI& host) {
 
     char searchBuf[128];
     std::snprintf(searchBuf, sizeof(searchBuf), "%s", search.c_str());
-    ImGui::SetNextItemWidth(searchWidth);
     if (host.ConsumeAssetSearchFocus && host.ConsumeAssetSearchFocus()) ImGui::SetKeyboardFocusHere();
-    if (ImGui::InputTextWithHint("##AssetFilter", ICON_FA_MAGNIFYING_GLASS "  Search...",
-            searchBuf, sizeof(searchBuf))) {
+    if (EditorUIPrimitives::SearchField("##AssetFilter", searchBuf, sizeof(searchBuf), "Search assets", searchWidth))
         search = searchBuf;
-    }
     if (ImGui::IsItemHovered() && !ImGui::IsItemActive()) {
         Tooltip(host,
             "Search every asset by name, across all folders.\n"
@@ -573,39 +633,31 @@ void Draw(const EditorModuleHostAPI& host) {
         anyFilterActive |= SearchHasToken(search, "l:" + lbl);
 
     // Favourites-only toggle (#236 G).
-    ImGui::SameLine();
+    ImGui::SameLine(0.0f, EditorTheme::Px(6.0f));
+    ImGui::PushStyleVar(ImGuiStyleVar_ItemSpacing, ImVec2(EditorTheme::Px(2.0f), ImGui::GetStyle().ItemSpacing.y));
     {
         bool favOnly = host.GetAssetFavoritesOnly && host.GetAssetFavoritesOnly();
-        if (favOnly) ImGui::PushStyleColor(ImGuiCol_Text, ImGui::GetStyleColorVec4(ImGuiCol_SliderGrab));
-        if (ImGui::Button(ICON_FA_STAR "##favonly") && host.SetAssetFavoritesOnly)
+        if (ActionButton(host, ICON_FA_STAR, favOnly ? "Showing favorites only (click to show all)" // #19 — en-US
+                                                     : "Show favorites only", favOnly) && host.SetAssetFavoritesOnly)
             host.SetAssetFavoritesOnly(!favOnly);
-        if (favOnly) ImGui::PopStyleColor();
-        if (ImGui::IsItemHovered())
-            Tooltip(host, favOnly ? "Showing favorites only (click to show all)" // #19 — en-US
-                                  : "Show favorites only");
     }
 
     // Search scope toggle (#236 G): folder (+subfolders) vs whole project.
     ImGui::SameLine();
     {
         bool global = host.GetAssetSearchGlobal && host.GetAssetSearchGlobal();
-        if (global) ImGui::PushStyleColor(ImGuiCol_Text, ImGui::GetStyleColorVec4(ImGuiCol_SliderGrab));
-        if (ImGui::Button(global ? ICON_FA_GLOBE : ICON_FA_FOLDER_TREE) && host.SetAssetSearchGlobal)
+        if (ActionButton(host, global ? ICON_FA_GLOBE : ICON_FA_FOLDER_TREE,
+                         global ? "Search scope: whole project (click for this folder)"
+                                : "Search scope: this folder + subfolders (click for whole project)", global) &&
+            host.SetAssetSearchGlobal)
             host.SetAssetSearchGlobal(!global);
-        if (global) ImGui::PopStyleColor();
-        if (ImGui::IsItemHovered())
-            Tooltip(host, global ? "Search scope: whole project (click for this folder)"
-                                 : "Search scope: this folder + subfolders (click for whole project)");
     }
 
     ImGui::SameLine();
-    if (anyFilterActive) ImGui::PushStyleColor(ImGuiCol_Text, ImGui::GetStyleColorVec4(ImGuiCol_CheckMark));
-    const bool openFilters = ImGui::Button(ICON_FA_FILTER);
-    if (anyFilterActive) ImGui::PopStyleColor();
-    if (openFilters) ImGui::OpenPopup("##AssetFilters");
-    if (ImGui::IsItemHovered()) Tooltip(host, "Filter by asset type or label");
+    if (ActionButton(host, ICON_FA_FILTER, "Filter by asset type or label", anyFilterActive))
+        ImGui::OpenPopup("##AssetFilters");
     if (ImGui::BeginPopup("##AssetFilters")) {
-        ImGui::SeparatorText("Type");
+        EditorUIPrimitives::SectionHeader("TYPE");
         static const std::pair<const char*, const char*> kTypes[] = {
             {"Model", "model"}, {"Texture", "texture"}, {"Material", "material"}, // #184
             {"Shader", "shader"}, {"Sound", "sound"}, {"Scene", "scene"},
@@ -617,16 +669,15 @@ void Draw(const EditorModuleHostAPI& host) {
                 ToggleSearchToken(search, full);
         }
 
-        ImGui::SeparatorText("Label");
+        EditorUIPrimitives::SectionHeader("LABEL");
         if (knownLabels.empty()) {
             ImGui::TextDisabled("No labels yet - add one from an\nasset's right-click menu.");
         } else {
             std::string labelMenuFilter = HostString(host.GetAssetLabelMenuFilter);
             char lbuf[64];
             std::snprintf(lbuf, sizeof(lbuf), "%s", labelMenuFilter.c_str());
-            ImGui::SetNextItemWidth(180.0f * uiScale); // #37
-            if (ImGui::InputTextWithHint("##LabelMenuFilter", ICON_FA_MAGNIFYING_GLASS "  Search labels...",
-                    lbuf, sizeof(lbuf)) && host.SetAssetLabelMenuFilter) {
+            if (EditorUIPrimitives::SearchField("##LabelMenuFilter", lbuf, sizeof(lbuf), "Search labels", 180.0f * uiScale) &&
+                host.SetAssetLabelMenuFilter) {
                 host.SetAssetLabelMenuFilter(lbuf);
                 labelMenuFilter = lbuf;
             }
@@ -660,9 +711,9 @@ void Draw(const EditorModuleHostAPI& host) {
     const int sortPacked = host.GetAssetSort ? host.GetAssetSort() : 0;
     int sortMode = (sortPacked >> 1) & 3;
     bool sortDesc = (sortPacked & 1) != 0;
-    if (ImGui::Button(ICON_FA_ARROW_DOWN_SHORT_WIDE)) ImGui::OpenPopup("##AssetSort");
-    if (ImGui::IsItemHovered()) Tooltip(host, "Sort the grid");
+    if (ActionButton(host, ICON_FA_ARROW_DOWN_SHORT_WIDE, "Sort the grid", sortPacked != 0)) ImGui::OpenPopup("##AssetSort");
     if (ImGui::BeginPopup("##AssetSort")) {
+        EditorUIPrimitives::SectionHeader("SORT BY");
         static const char* kModes[] = { "Name", "Type", "Date modified", "Size" };
         for (int i = 0; i < 4; ++i)
             if (ImGui::MenuItem(kModes[i], nullptr, sortMode == i)) sortMode = i;
@@ -675,11 +726,9 @@ void Draw(const EditorModuleHostAPI& host) {
     if (newPacked != sortPacked && host.SetAssetSort) host.SetAssetSort(newPacked);
 
     ImGui::SameLine();
-    if (refreshFlash > 0.0f)
-        ImGui::PushStyleColor(ImGuiCol_Text, ImVec4(0.42f, 0.85f, 0.52f, 1.0f)); // green while confirming
-    if (ImGui::Button(ICON_FA_ROTATE) && host.RefreshAssetBrowser) host.RefreshAssetBrowser();
-    if (refreshFlash > 0.0f) ImGui::PopStyleColor();
-    if (ImGui::IsItemHovered()) Tooltip(host, "Refresh - re-scan folders and thumbnails (Ctrl+R)");
+    if (ActionButton(host, ICON_FA_ROTATE, "Refresh - re-scan folders and thumbnails (Ctrl+R)") && host.RefreshAssetBrowser)
+        host.RefreshAssetBrowser();
+    ImGui::PopStyleVar(); // the icon cluster's tight spacing
 
     ImGui::EndChild(); // ##AssetToolbar
 
@@ -697,13 +746,7 @@ void Draw(const EditorModuleHostAPI& host) {
     ImGui::EndChild();
 
     ImGui::SameLine();
-    ImGui::PushStyleColor(ImGuiCol_Button, ImVec4(0, 0, 0, 0));
-    ImGui::PushStyleColor(ImGuiCol_ButtonHovered, ImVec4(0, 0, 0, 0));
-    ImGui::PushStyleColor(ImGuiCol_ButtonActive, ImVec4(0, 0, 0, 0));
-    ImGui::PushStyleVar(ImGuiStyleVar_FrameBorderSize, 0.0f); // invisible drag handle, no hairline box
-    ImGui::Button("##AssetTreeSplitter", ImVec2(6.0f * uiScale, contentHeight)); // #37
-    ImGui::PopStyleVar();
-    ImGui::PopStyleColor(3);
+    ImGui::InvisibleButton("##AssetTreeSplitter", ImVec2(6.0f * uiScale, contentHeight)); // #37 — the drag handle
     {
         const bool active = ImGui::IsItemActive();
         const bool hot = active || ImGui::IsItemHovered();

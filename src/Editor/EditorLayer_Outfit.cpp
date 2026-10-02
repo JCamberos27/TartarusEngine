@@ -112,7 +112,7 @@ void EditorLayer::DrawCharacterOutfitEditor(World& world, entt::entity root) {
     auto cat = OutfitSystem::LoadCatalog(assets, outfit->Wardrobe, false, &error);
     if (!cat) {
         ImGui::TextColored(WarningColor(), ICON_FA_TRIANGLE_EXCLAMATION "  %s", error.c_str());
-        if (ImGui::Button(ICON_FA_ROTATE "  Try again")) OutfitSystem::LoadCatalog(assets, outfit->Wardrobe, true);
+        if (EditorUIPrimitives::SecondaryButton(ICON_FA_ROTATE "  Try again")) OutfitSystem::LoadCatalog(assets, outfit->Wardrobe, true);
         return;
     }
     auto report = [&](const OutfitSystem::Result& r) {
@@ -135,7 +135,7 @@ void EditorLayer::DrawCharacterOutfitEditor(World& world, entt::entity root) {
             if (adopted) ui.Notes.insert(ui.Notes.begin(), "Adopted " + std::to_string(adopted) + " existing pieces");
         }
         ImGui::SameLine();
-        if (ImGui::Button(ICON_FA_WAND_MAGIC_SPARKLES "  Adopt existing")) {
+        if (EditorUIPrimitives::SecondaryButton(ICON_FA_WAND_MAGIC_SPARKLES "  Adopt existing")) {
             PushUndo(world, "Adopt Outfit Pieces");
             const int n = OutfitSystem::AdoptExisting(world, assets, root);
             ui.Notes = {"Adopted " + std::to_string(n) + " pieces"};
@@ -179,7 +179,7 @@ void EditorLayer::DrawCharacterOutfitEditor(World& world, entt::entity root) {
             ImGui::SetNextItemWidth(160.0f);
             ImGui::InputText("##presetName", ui.PresetName, sizeof(ui.PresetName));
             ImGui::SameLine();
-            if (ImGui::Button("Save")) {
+            if (EditorUIPrimitives::PrimaryButton("Save")) {
                 const std::string path = "assets/Characters/Outfits/" + std::string(ui.PresetName) + ".outfit";
                 std::error_code ec;
                 std::filesystem::create_directories(ProjectPaths::Resolve("assets/Characters/Outfits"), ec);
@@ -409,7 +409,7 @@ void EditorLayer::DrawCharacterOutfitEditor(World& world, entt::entity root) {
             ImGui::SameLine();
             ImGui::TextDisabled("Drag to spin, scroll to zoom");
             ImGui::SameLine(ImGui::GetWindowContentRegionMax().x - ImGui::CalcTextSize("Reset view").x - style.FramePadding.x * 2.0f);
-            if (ImGui::Button("Reset view")) { ui.Yaw = 0.6f; ui.Pitch = 0.25f; ui.Distance = fit; }
+            if (EditorUIPrimitives::SecondaryButton("Reset view")) { ui.Yaw = 0.6f; ui.Pitch = 0.25f; ui.Distance = fit; }
         } else {
             ImGui::Dummy(ImVec2(width, height));
             const ImVec2 mn = ImGui::GetItemRectMin(), mx = ImGui::GetItemRectMax();

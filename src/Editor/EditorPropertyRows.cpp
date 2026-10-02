@@ -3,6 +3,7 @@
 #include "EditorLayerInternal.h"
 #include "EditorUIHelpers.h"
 #include "EditorUIPrimitives.h"
+#include "EditorTheme.h"
 
 #include <IconsFontAwesome6.h>
 
@@ -25,10 +26,9 @@ void Tip(const char* tip) {
     if (tip && *tip && ImGui::IsItemHovered()) EditorUI::SetTooltip("%s", tip);
 }
 
-// The Transform rows' axis tints.
+// The axis tints (EditorTheme.h), shared with the gizmos and the Transform rows.
 ImVec4 AxisTint(int i) {
-    static const ImVec4 kTints[3] = {ImVec4(0.86f, 0.36f, 0.36f, 1.0f), ImVec4(0.45f, 0.78f, 0.42f, 1.0f),
-                                     ImVec4(0.42f, 0.62f, 0.95f, 1.0f)};
+    static const ImVec4 kTints[3] = {EditorTheme::AxisX, EditorTheme::AxisY, EditorTheme::AxisZ};
     return kTints[std::clamp(i, 0, 2)];
 }
 
@@ -40,11 +40,14 @@ bool PropertyRows::Commit(bool committed) {
 }
 
 void PropertyRows::Label(const char* label, const char* tip) {
+    // The Inspector's one label column (EditorTheme::PropertyLabelWidth), so the weapon / outfit
+    // editors line up with every other component.
     const float x = ImGui::GetCursorPosX();
-    ImGui::AlignTextToFramePadding();
-    ImGui::TextUnformatted(label);
-    Tip(tip);
-    ImGui::SameLine(x + m_LabelWidth);
+    const float w = EditorTheme::PropertyLabelWidth();
+    const bool cut = EditorTheme::PropertyLabelText(label, w);
+    if (cut && ImGui::IsItemHovered()) EditorUI::SetTooltip("%s%s%s", label, tip && *tip ? "\n\n" : "", tip ? tip : "");
+    else Tip(tip);
+    ImGui::SameLine(x + w);
     ImGui::SetNextItemWidth(-FLT_MIN);
 }
 
@@ -173,6 +176,14 @@ bool PropertyRows::Text(const char* label, std::string& v, const char* tip) {
     return Commit(c);
 }
 
+bool PropertyRows::Path(const char* label, std::string& v, const AssetPathPickerOptions& options, const char* tip) {
+    ImGui::PushID(label);
+    Label(label, tip);
+    const bool c = AssetPathPicker("##v", v, options);
+    ImGui::PopID();
+    return Commit(c);
+}
+
 bool PropertyRows::Name(const char* label, std::string& v, const std::vector<std::string>& items, bool validate,
                         const char* tip, const char* unknownTip) {
     ImGui::PushID(label);
@@ -230,7 +241,7 @@ bool PropertyRows::Section(const char* icon, const char* title, const char* summ
     char header[160];
     std::snprintf(header, sizeof header, "%s  %s###sec_%s", icon ? icon : "", title, title);
     const float right = ImGui::GetCursorScreenPos().x + ImGui::GetContentRegionAvail().x;
-    const bool open = ImGui::CollapsingHeader(header, defaultOpen ? ImGuiTreeNodeFlags_DefaultOpen : 0);
+    const bool open = EditorUIPrimitives::Foldout(header, defaultOpen ? ImGuiTreeNodeFlags_DefaultOpen : 0);
     if (summary && *summary) {
         const ImVec2 min = ImGui::GetItemRectMin(), max = ImGui::GetItemRectMax();
         const ImVec2 ts = ImGui::CalcTextSize(summary);
@@ -247,7 +258,7 @@ bool PropertyRows::Section(const char* icon, const char* title, const char* summ
 
 void PropertyRows::Heading(const char* text) {
     ImGui::Spacing();
-    ImGui::SeparatorText(text);
+    EditorUIPrimitives::SectionHeader(text);
 }
 
 void PropertyRows::Note(const char* text) {

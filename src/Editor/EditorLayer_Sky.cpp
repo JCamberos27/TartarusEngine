@@ -56,7 +56,7 @@ void EditorLayer::DrawPhysicalSkySettings(World& world, float w) {
     // Every section open by default the first time, remembered by ImGui after that.
     auto section = [](const char* label) {
         ImGui::Spacing();
-        return ImGui::CollapsingHeader(label, ImGuiTreeNodeFlags_DefaultOpen);
+        return EditorUIPrimitives::Foldout(label, ImGuiTreeNodeFlags_DefaultOpen);
     };
 
     // --- Presets ---
@@ -216,14 +216,14 @@ void EditorLayer::DrawPhysicalSkySettings(World& world, float w) {
                        "How quickly distant clouds fade into the sky's colour.");
                 ImGui::TreePop();
             }
-            ImGui::SeparatorText("Cirrus");
+            EditorUIPrimitives::SectionHeader("Cirrus");
             slider("Cirrus coverage", &s.CirrusCoverage, 0.0f, 1.0f, "%.2f", "High, thin ice cloud streaked by the wind.");
             if (s.CirrusCoverage > 0.0f) {
                 slider("Cirrus altitude", &s.CirrusAltitudeMeters, 4000.0f, 15000.0f, "%.0f m", "Height of the cirrus sheet.");
                 slider("Cirrus size", &s.CirrusScale, 0.25f, 4.0f, "%.2f x", "Size of the cirrus streaks.",
                        ImGuiSliderFlags_Logarithmic);
             }
-            ImGui::SeparatorText("Shadows and quality");
+            EditorUIPrimitives::SectionHeader("Shadows and quality");
             checkbox("Cloud shadows", &s.CloudShadows, "Clouds shade the sun (or moon) on the scene below them.");
             if (s.CloudShadows)
                 slider("Shadow strength", &s.CloudShadowStrength, 0.0f, 1.0f, "%.2f", "0 = no shadows, 1 = fully dark under thick cloud.");

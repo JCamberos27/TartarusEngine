@@ -1,4 +1,6 @@
 #include "GameViewPanel.h"
+#include "EditorTheme.h"
+#include "EditorPanels.h"
 #include "EditorUIHelpers.h"
 #include "EditorUIPrimitives.h"
 #include "EditorSettings.h"
@@ -56,7 +58,7 @@ void GameViewPanel::ComputeTargetSize(ImVec2 available, int& outWidth, int& outH
 }
 
 void GameViewPanel::DrawAspectControl() {
-    const float itemW = 200.0f;
+    const float itemW = 200.0f * EditorTheme::Scale();
     const float h = ImGui::GetFrameHeight();
     const ImVec2 p0 = ImGui::GetCursorScreenPos();
     // #54 — used to take a `contrast` param (sampled scene luminance) and invert text/plate
@@ -67,8 +69,8 @@ void GameViewPanel::DrawAspectControl() {
     // Custom button + manual popup rather than BeginCombo/ImGui's own auto-placement, so the
     // caret can match the popup's actual open direction below.
     ImGui::PushStyleColor(ImGuiCol_Button,        EditorUIPrimitives::kHudPlateColor);
-    ImGui::PushStyleColor(ImGuiCol_ButtonHovered, IM_COL32(40, 40, 40, 220));
-    ImGui::PushStyleColor(ImGuiCol_ButtonActive,  IM_COL32(50, 50, 50, 230));
+    ImGui::PushStyleColor(ImGuiCol_ButtonHovered, EditorTheme::Hover);
+    ImGui::PushStyleColor(ImGuiCol_ButtonActive,  EditorTheme::Pressed);
     ImGui::PushStyleColor(ImGuiCol_Text,          textCol);
     ImGui::PushStyleVar(ImGuiStyleVar_ButtonTextAlign, ImVec2(0.0f, 0.5f)); // left-align like a combo
     if (ImGui::Button((m_CurrentPreset.Label + "###aspectbtn").c_str(), ImVec2(itemW, h)))
@@ -110,12 +112,12 @@ void GameViewPanel::DrawAspectControl() {
     }
     // #140 — the Game view's own stats overlay had no toggle anywhere (the toolbar Stats button
     // drives the Scene-side Statistics panel), so it could never be turned off.
-    ImGui::SameLine(0.0f, 6.0f);
+    ImGui::SameLine(0.0f, 6.0f * EditorTheme::Scale());
     {
         bool showStats = EditorSettings::Get().GameViewShowStats;
         ImGui::PushStyleColor(ImGuiCol_Button, EditorUIPrimitives::kHudPlateColor);
-        ImGui::PushStyleColor(ImGuiCol_Text, showStats ? EditorUIPrimitives::kHudTextColor
-                                                        : ImGui::GetColorU32(ImGuiCol_TextDisabled));
+        ImGui::PushStyleColor(ImGuiCol_Text, showStats ? EditorTheme::U32(EditorTheme::Accent)
+                                                        : EditorTheme::U32(EditorTheme::Secondary));
         if (ImGui::Button(ICON_FA_CHART_SIMPLE "##gvstats", ImVec2(h, h))) {
             EditorSettings::Get().GameViewShowStats = !showStats;
             EditorSettings::Save();
@@ -140,7 +142,7 @@ void GameViewPanel::DrawCustomResolutionModal() {
         m_CustomHeight = std::max(m_CustomHeight, 1);
 
         ImGui::Spacing();
-        if (ImGui::Button("Add", ImVec2(120.0f, 0.0f))) {
+        if (EditorUIPrimitives::PrimaryButton("Add", ImVec2(120.0f * EditorTheme::Scale(), 0.0f))) {
             ResolutionPreset preset;
             preset.Label = std::to_string(m_CustomWidth) + "x" + std::to_string(m_CustomHeight) + " Custom";
             preset.Mode = AspectRatioMode::FixedResolution;
@@ -152,7 +154,7 @@ void GameViewPanel::DrawCustomResolutionModal() {
             ImGui::CloseCurrentPopup();
         }
         ImGui::SameLine();
-        if (ImGui::Button("Cancel", ImVec2(120.0f, 0.0f))) ImGui::CloseCurrentPopup();
+        if (EditorUIPrimitives::SecondaryButton("Cancel", ImVec2(120.0f * EditorTheme::Scale(), 0.0f))) ImGui::CloseCurrentPopup();
         ImGui::EndPopup();
     }
 }
@@ -176,7 +178,7 @@ void GameViewPanel::RenderUI(const GameViewStats* stats, bool isOsFullscreen, bo
     // permanently disabled instead.
     const bool gvLightChrome = false;
     if (gvLightChrome) ImGui::PushStyleColor(ImGuiCol_Text, ImVec4(0.97f, 0.98f, 1.00f, 1.0f));
-    m_Visible = ImGui::Begin("Game", &m_WindowOpen, ImGuiWindowFlags_NoFocusOnAppearing);
+    m_Visible = ImGui::Begin(EditorPanels::Game, &m_WindowOpen, ImGuiWindowFlags_NoFocusOnAppearing);
     if (gvLightChrome) ImGui::PopStyleColor();
     if (!m_Visible) {
         m_LastAvailableRegion = ImVec2(0.0f, 0.0f);

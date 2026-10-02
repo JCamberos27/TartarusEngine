@@ -2,6 +2,8 @@
 // thumbnails, and asset delete/rename/duplicate. Split out of EditorLayer.cpp (#179).
 
 #include "EditorLayer.h"
+#include "EditorTheme.h"
+#include "EditorUIPrimitives.h"
 #include "EditorLayerInternal.h"
 #include "FileDialog.h"
 #include "AssetLibrary.h"
@@ -746,7 +748,7 @@ void EditorLayer::DrawDeleteConfirmPopup(World& world, AssetLibrary& assets) {
             if (item.IsFolder && !assets.CanDeleteFolder(item.Key)) { anyNonEmptyFolder = true; break; }
         }
         if (anyNonEmptyFolder) {
-            ImGui::TextColored(ImVec4(1.0f, 0.75f, 0.35f, 1.0f),
+            ImGui::TextColored(EditorTheme::Warning,
                 "One or more of these folders isn't empty - everything inside, including subfolders, will be removed too.");
         }
         // Scenes and screenshots are real files on disk, not AssetLibrary entries — deleting them
@@ -1055,7 +1057,7 @@ void EditorLayer::DrawRenameRejectedTooltip(ImVec2 fieldMin, ImVec2 fieldMax) {
     // Enter key submitted the rejected name).
     ImGui::SetNextWindowPos(ImVec2(fieldMin.x, fieldMax.y + 4.0f));
     ImGui::BeginTooltip();
-    ImGui::TextColored(ImVec4(0.95f, 0.35f, 0.35f, 1.0f),
+    ImGui::TextColored(EditorTheme::Danger,
         "Name can't be blank, only illegal characters (< > : \" / \\ | ? *), or a reserved name like CON/NUL.");
     ImGui::EndTooltip();
 }
@@ -1832,6 +1834,26 @@ void EditorLayer::DrawAssetCell(World& world, AssetLibrary& assets, int index, f
             : cell.kind == Cell::Kind::Script ? ICON_FA_SCROLL
             : (playing ? ICON_FA_STOP : ICON_FA_MUSIC);
 
+        // The asset-type colour: the tile's bottom stripe in Grid view.
+        auto kindColor = [&]() -> ImVec4 {
+            switch (cell.kind) {
+                case Cell::Kind::Folder:     return EditorTheme::Secondary;
+                case Cell::Kind::Model:      return EditorTheme::KindMesh;
+                case Cell::Kind::Texture:    return EditorTheme::KindTexture;
+                case Cell::Kind::Hdri:       return EditorTheme::KindLight;
+                case Cell::Kind::Material:   return EditorTheme::KindMaterial;
+                case Cell::Kind::Sound:      return EditorTheme::KindAudio;
+                case Cell::Kind::Scene:      return EditorTheme::KindScene;
+                case Cell::Kind::Prefab:     return EditorTheme::KindPrefab;
+                case Cell::Kind::Script:
+                case Cell::Kind::Shader:     return EditorTheme::KindScript;
+                case Cell::Kind::Animator:   return EditorTheme::KindAnim;
+                case Cell::Kind::Weapon:     return EditorTheme::Warning;
+                case Cell::Kind::Screenshot: return EditorTheme::Info;
+            }
+            return EditorTheme::Secondary;
+        };
+
         bool clicked = false;
         if (gridMode) {
             // The tile itself (Selectable for its background/hit-test, or a same-size Dummy
@@ -1853,6 +1875,17 @@ void EditorLayer::DrawAssetCell(World& world, AssetLibrary& assets, int index, f
 
             ImDrawList* dl = ImGui::GetWindowDrawList();
             ImU32 textColor = ImGui::GetColorU32(ImGuiCol_Text);
+            {
+                // 2px asset-type stripe along the tile's bottom edge; a selected tile also gets a
+                // 1.5px gold outline.
+                const float stripeH = EditorTheme::Px(2.0f);
+                const ImVec2 tileMax(tileMin.x + tileSize.x, tileMin.y + tileSize.y);
+                dl->AddRectFilled(ImVec2(tileMin.x, tileMax.y - stripeH), tileMax,
+                                  EditorTheme::U32(kindColor()));
+                if (isSelected)
+                    dl->AddRect(tileMin, tileMax, EditorTheme::U32(EditorTheme::Accent),
+                                ImGui::GetStyle().FrameRounding, ImDrawFlags_None, EditorTheme::Px(1.5f));
+            }
             unsigned int modelThumb = (cell.kind == Cell::Kind::Model && cell.model) ? ModelThumbnail(*cell.model)
                                     : (cell.kind == Cell::Kind::Material) ? MaterialThumbnail(cell.material) : 0u; // #107
             if (unloadedThumb.Tex) {
@@ -1932,6 +1965,32 @@ void EditorLayer::DrawAssetCell(World& world, AssetLibrary& assets, int index, f
                 ImGui::SetCursorScreenPos(ImVec2(tileMin.x, tileMin.y + tileSize.y));
             }
         } else {
+            // Details mode runs inside the module's ImGui table (EditorModuleAssetBrowser.cpp,
+            // DrawDetailsTable): the module has already started this row, so the Type / Size /
+            // Modified cells are filled first (columns 1-3), then the cursor returns to column 0 for
+            // the icon + the row's Selectable - which stays the last submitted item, so hover,
+            // drag source, double-click and the context menu below all attach to it.
+            const bool detailsMode = !isRenaming && EditorSettings::Get().AssetDetailsMode;
+            if (detailsMode) {
+                std::error_code ec;
+                std::string sizeStr = "-", modStr = "-";
+                if (!isFolder) {
+                    const std::filesystem::path p(cell.key);
+                    if (std::filesystem::exists(p, ec)) {
+                        const auto sz = std::filesystem::file_size(p, ec);
+                        if (!ec) sizeStr = FormatFileSize(sz);
+                        const auto mt = std::filesystem::last_write_time(p, ec);
+                        if (!ec) modStr = FormatModifiedTime(mt);
+                    }
+                }
+                ImGui::TableSetColumnIndex(1); ImGui::PushStyleColor(ImGuiCol_Text, EditorTheme::Dim);
+                ImGui::TextUnformatted(AssetKindLabel(cell.kind));
+                ImGui::TableSetColumnIndex(2); ImGui::TextUnformatted(sizeStr.c_str());
+                ImGui::TableSetColumnIndex(3); ImGui::TextUnformatted(modStr.c_str());
+                ImGui::PopStyleColor();
+                ImGui::TableSetColumnIndex(0);
+            }
+
             // List mode: little icon (real thumbnail for textures, a Font Awesome glyph
             // otherwise) followed by the name, mirroring how the Scene Hierarchy lists rows.
             float rowIconSize = ImGui::GetTextLineHeight();
@@ -1947,14 +2006,6 @@ void EditorLayer::DrawAssetCell(World& world, AssetLibrary& assets, int index, f
                 ImGui::TextUnformatted(icon);
             }
             ImGui::SameLine();
-
-            // Phase 5 item 4 — Details view appends Type/Size/Modified after the name, all within
-            // this same row/Selectable so click/drag/rename/context-menu below stay untouched.
-            const bool detailsMode = !isRenaming && EditorSettings::Get().AssetDetailsMode;
-            const float rightEdge = ImGui::GetWindowContentRegionMax().x;
-            const float reservedW = (kAssetDetailsTypeColW + kAssetDetailsSizeColW + kAssetDetailsModifiedColW) * m_UIScale;
-            const float nameW = detailsMode
-                ? std::max(40.0f * m_UIScale, (rightEdge - ImGui::GetCursorPosX()) - reservedW) : 0.0f;
 
             if (isRenaming) {
                 ImGui::SetNextItemWidth(-1);
@@ -1974,31 +2025,11 @@ void EditorLayer::DrawAssetCell(World& world, AssetLibrary& assets, int index, f
             } else {
                 // NoNav (Defect #43): same reasoning as the grid tile above.
                 ImGui::PushItemFlag(ImGuiItemFlags_NoNav, true);
-                clicked = ImGui::Selectable(cell.display.c_str(), isSelected, ImGuiSelectableFlags_None,
-                    detailsMode ? ImVec2(nameW, 0.0f) : ImVec2(0.0f, 0.0f));
+                clicked = ImGui::Selectable(cell.display.c_str(), isSelected,
+                    detailsMode ? (ImGuiSelectableFlags_SpanAllColumns | ImGuiSelectableFlags_AllowOverlap)
+                                : ImGuiSelectableFlags_None,
+                    ImVec2(0.0f, 0.0f));
                 ImGui::PopItemFlag();
-
-                if (detailsMode) {
-                    const float typeX = rightEdge - (kAssetDetailsTypeColW + kAssetDetailsSizeColW + kAssetDetailsModifiedColW) * m_UIScale;
-                    const float sizeX = rightEdge - (kAssetDetailsSizeColW + kAssetDetailsModifiedColW) * m_UIScale;
-                    const float modX  = rightEdge - kAssetDetailsModifiedColW * m_UIScale;
-
-                    std::error_code ec;
-                    std::string sizeStr = "-", modStr = "-";
-                    if (!isFolder) {
-                        const std::filesystem::path p(cell.key);
-                        if (std::filesystem::exists(p, ec)) {
-                            const auto sz = std::filesystem::file_size(p, ec);
-                            if (!ec) sizeStr = FormatFileSize(sz);
-                            const auto mt = std::filesystem::last_write_time(p, ec);
-                            if (!ec) modStr = FormatModifiedTime(mt);
-                        }
-                    }
-
-                    ImGui::SameLine(typeX); ImGui::TextDisabled("%s", AssetKindLabel(cell.kind));
-                    ImGui::SameLine(sizeX); ImGui::TextDisabled("%s", sizeStr.c_str());
-                    ImGui::SameLine(modX);  ImGui::TextDisabled("%s", modStr.c_str());
-                }
             }
         }
 
@@ -2272,7 +2303,7 @@ void EditorLayer::DrawAssetCell(World& world, AssetLibrary& assets, int index, f
                 m_SelectedAssetKey = cell.key;
                 m_SelectedAssetIsFolder = isFolder;
             }
-            ImGui::SeparatorText(ICON_FA_PEN "  Edit");
+            EditorUIPrimitives::SectionHeader(ICON_FA_PEN "  Edit");
             if (ImGui::MenuItem(ICON_FA_PEN "  Rename (F2)", nullptr, false, m_ExtraAssetSelection.empty())) {
                 BeginRenameAsset(cell.key, isFolder, cell.display);
             }
@@ -2290,7 +2321,7 @@ void EditorLayer::DrawAssetCell(World& world, AssetLibrary& assets, int index, f
                 ImGui::SetNextItemWidth(240.0f * m_UIScale); // #37
                 bool enter = ImGui::InputText("##LabelsBuf", m_LabelsEditBuffer, sizeof(m_LabelsEditBuffer),
                     ImGuiInputTextFlags_EnterReturnsTrue);
-                bool apply = enter || ImGui::Button("Apply");
+                bool apply = enter || EditorUIPrimitives::PrimaryButton("Apply");
                 if (apply) {
                     std::set<std::string> labels;
                     std::stringstream ss(m_LabelsEditBuffer);
@@ -2382,7 +2413,7 @@ void EditorLayer::DrawAssetCell(World& world, AssetLibrary& assets, int index, f
             // Apply (#28 P17). Single selection, real imported assets only.
             if (!isFolder && m_ExtraAssetSelection.empty() &&
                 (cell.kind == Cell::Kind::Model || cell.kind == Cell::Kind::Texture)) {
-                ImGui::SeparatorText(ICON_FA_ROTATE "  Actions");
+                EditorUIPrimitives::SectionHeader(ICON_FA_ROTATE "  Actions");
                 if (ImGui::MenuItem(ICON_FA_ROTATE "  Reimport")) {
                     if (cell.kind == Cell::Kind::Model) {
                         PushUndo(world, "Reimport Model");
@@ -2483,7 +2514,8 @@ void EditorLayer::HandleAssetGridBackground(World& world, AssetLibrary& assets) 
         BeginRenameAsset(candidate, true, LeafNameOf(candidate));
     };
 
-    if (ImGui::IsWindowHovered() && !ImGui::IsAnyItemHovered()) {
+    // ChildWindows: Details view's table scrolls in its own inner window inside ##AssetList.
+    if (ImGui::IsWindowHovered(ImGuiHoveredFlags_ChildWindows) && !ImGui::IsAnyItemHovered()) {
         if (ImGui::IsMouseClicked(ImGuiMouseButton_Left)) ClearAssetSelection();
         if (ImGui::IsMouseClicked(ImGuiMouseButton_Right)) ImGui::OpenPopup("##BrowserBgContext");
     }
@@ -2664,7 +2696,7 @@ void EditorLayer::HandleAssetGridBackground(World& world, AssetLibrary& assets) 
             if (dirCombo("##wad", w.ArmsDir)) autoAssign();
             ImGui::TextUnformatted("Weapon animations folder");
             if (dirCombo("##wwd", w.WeaponDir)) autoAssign();
-            if (ImGui::SmallButton("Re-match by name")) autoAssign();
+            if (EditorUIPrimitives::SecondaryButton("Re-match by name")) autoAssign();
             ImGui::Separator();
             if (ImGui::BeginChild("##wclips", ImVec2(0.0f, -ImGui::GetFrameHeightWithSpacing() * 2.5f), ImGuiChildFlags_Borders)) {
                 if (ImGui::BeginTable("##wt", 3, ImGuiTableFlags_RowBg | ImGuiTableFlags_SizingStretchProp)) {
@@ -2693,7 +2725,7 @@ void EditorLayer::HandleAssetGridBackground(World& world, AssetLibrary& assets) 
             ImGui::TextDisabled("%d of %d states have a clip. Missing ones play the bind pose / nothing (Idle and Fire matter most).", filled, (int)w.Picks.size());
             if (!w.Error.empty()) ImGui::TextColored(EditorUIPrimitives::DangerColor(), "%s", w.Error.c_str());
             ImGui::BeginDisabled(!ready);
-            if (ImGui::Button("Create")) {
+            if (EditorUIPrimitives::PrimaryButton("Create")) {
                 std::string safe = w.Name;
                 for (char& c : safe) if (!std::isalnum((unsigned char)c) && c != '_' && c != '-' && c != ' ') c = '_';
                 const std::string dirRel = "assets/Weapons/" + safe;
@@ -2719,7 +2751,7 @@ void EditorLayer::HandleAssetGridBackground(World& world, AssetLibrary& assets) 
             }
             ImGui::EndDisabled();
             ImGui::SameLine();
-            if (ImGui::Button("Cancel")) ImGui::CloseCurrentPopup();
+            if (EditorUIPrimitives::SecondaryButton("Cancel")) ImGui::CloseCurrentPopup();
             ImGui::EndPopup();
         }
     }
