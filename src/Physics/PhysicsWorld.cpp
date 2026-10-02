@@ -1975,7 +1975,7 @@ int CreateRagdoll(unsigned entity, const RagdollPart* parts, int count, const Ra
     rd.Drive.assign((size_t)count, nullptr);
     for (int i = 1; i < count; ++i) {
         const RagdollPart& p = parts[i];
-        if (p.Parent < 0 || p.Parent >= i) continue;
+        if (p.Parent < 0 || p.Parent >= count || p.Parent == i) continue; // any other part (the head hangs off the neck, which comes after it)
         PxRigidDynamic* parent = rd.Bodies[(size_t)p.Parent];
         PxRigidDynamic* child = rd.Bodies[(size_t)i];
         // The joint frame: at the anchor, its X along the child (the twist axis); an anatomical joint's is its neutral frame.
