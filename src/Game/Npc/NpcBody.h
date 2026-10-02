@@ -5,6 +5,7 @@
 #include <glm/gtc/quaternion.hpp>
 
 #include <cstdint>
+#include <functional>
 #include <memory>
 #include <string>
 #include <vector>
@@ -63,6 +64,7 @@ struct NpcHoldSettings {
     float TurnThreshold = 1.15f;     // radians: a still body further off than this turns on the spot
     float MoveEase = 0.1f;           // seconds: blend tree parameter easing
     float FaceEase = 0.09f;          // seconds: heading easing while moving
+    IK::SpineDistribution Spine;     // how the spine's turns are shared over spine_01..05 (default: even)
     float MaxTwist = 1.2f;           // radians: spine twists toward aim
     float AimLean = 0.1f;            // radians: torso forward lean aiming, standing
     float AimLeanCrouched = 0.22f;   // radians: torso lean aiming, crouched (~13 deg)
@@ -192,7 +194,8 @@ private:
     // gives every other piece that draws the upper body the driver's rotations for it (one skeleton: the pieces'
     // own solves came out the same, at several times the cost). Called whenever a piece is read or drawn next.
     void SyncPieces();
-    void OffsetSpine(const glm::quat& step); // m_Pose / m_Globals already hold the driver's pose and its globals
+    // `stepFor(divisor)` = the turn one spine bone takes (the whole turn / divisor); see IK::ChainDivisors.
+    void OffsetSpine(const std::function<glm::quat(float)>& stepFor); // m_Pose / m_Globals already hold the driver's pose and its globals
     // Feet onto uneven ground (LateUpdate, first): the pelvis drops to the lower foot's ground, the legs reach theirs.
     void FootPass(float dt);
     void SyncLower(); // the driver's pelvis and legs onto every other piece
@@ -206,6 +209,7 @@ private:
     int m_DriverIndex = -1;
     std::vector<int> m_DriverParents;                          // the driver's node parents
     int m_DriverSpine[5] = {-1, -1, -1, -1, -1}, m_DriverSpineCount = 0;
+    int m_DriverSpineSlot[5] = {0, 1, 2, 3, 4}; // the chain slot (spine_0N - 1) of each found bone, for the Spine distribution
     // Scratch.
     std::vector<glm::mat4> m_Globals;
     std::vector<LocalTRS> m_Pose, m_BindScratch;

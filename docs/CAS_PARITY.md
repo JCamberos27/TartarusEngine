@@ -56,7 +56,7 @@ Parity: full / partial / missing. "Hardcoded" = a constant in code a designer ca
 | Foot IK (CAS Foot IK, FPSAF Leg IK) | Ray per foot (layer mask, foot height/radius, ray offset), pelvis corrected, interp speed. FPSAF: trace length, height offset, interp speed. | Player `FootIK` + ray, raise, drop, tilt, ease fields (`Components.h` ~L650-665). NPC `FootPass` (`NpcBody.cpp` ~L245). Ground-normal tilt: yes. | full (player), partial (NPC) | NPC: kMaxDrop .35, kMaxRaise .35, kPelvisRaise .08, kTiltMax .5 rad; no foot radius/height or sphere cast. |
 | Step modifier (CAS) | Procedural step (lead/follow foot + pelvis curves) on stance change, stop and turn; docs suggest max stride 0.3-0.4, 45 deg, cooldown 0.3-0.4 s. | Clip-based start/stop/turn clips only. | missing | n/a |
 | Pivot modifier (CAS) | Spine rotation + pelvis translation on start/stop, lean toward velocity (max angle, intensity). | none | missing | n/a |
-| Two-bone IK with hint/pole (CAS Two Bone IK) | Tip, target (bone or world), hint weight, pole target, hint offset, max limb length scale. | `IK::SolveTwoBone` (IK.cpp ~L160) keeps the animated bend plane and straightens when out of reach; `IKLimb`: Weight, KeepAnimatedOffset, MatchRotation, runtime Swivel and GoalMove. | partial | No authored pole/hint target, hint weight/offset, or max limb length scale. |
+| Two-bone IK with hint/pole (CAS Two Bone IK) | Tip, target (bone or world), hint weight, pole target, hint offset, max limb length scale. | `IK::SolveTwoBone` (IK.cpp ~L160) keeps the animated bend plane and straightens when out of reach; `IKLimb`: Weight, KeepAnimatedOffset, MatchRotation, runtime Swivel and GoalMove. | done (round 2) | `TwoBoneHint` (pole bone, HintWeight, HintOffset, MaxLimbScale) on `SolveTwoBone` and `IKLimb`; defaults identical to before. |
 | Per-limb IK weights, curve-driven (CAS Enable_HandR/L_IK, Enable_FootR/L_IK) | Each limb's IK weight authored per clip. | `IKLimb::Weight` static; `IKOff` tag. | partial | n/a |
 | Attach hand + grip pose (CAS Attach Hand) | Left hand to a weapon attach transform, finger-chain pose clip, fallback default hand. | Hands follow the gun via KeepAnimatedOffset; the grip is whatever the clip authored. No separate grip/finger pose. | partial | n/a |
 | FPS Offset (CAS) | Component-space offsets for weapon bone and each hand relative to weapon; several allowed, weight-overridable (e.g. first-person only). | `WeaponStateOffset`, `WeaponAimSettings` offsets. Separate hand-vs-gun offsets: missing. | partial | n/a |
@@ -80,11 +80,11 @@ Impact on visible realism, then effort (S under a day, M a few days, L a week or
 
 ### Little wins
 
-1. **Pole/hint on two-bone IK (S-M).** Optional `Pole` bone, `HintWeight`, `HintOffset`, `MaxLimbScale` on `IKLimb` and `SolveTwoBone`; defaults reproduce today's keep-animated-bend. Fixes elbow/knee flips.
-2. **Per-bone look weights (S).** Replace the even spread (`FirstPersonBody.cpp` ~L1478, `NpcBody`) with a per-bone weight list plus max angle; default = even.
+1. **DONE (round 2) - Pole/hint on two-bone IK (S-M).** Optional `Pole` bone, `HintWeight`, `HintOffset`, `MaxLimbScale` on `IKLimb` and `SolveTwoBone`; defaults reproduce today's keep-animated-bend. Fixes elbow/knee flips.
+2. **DONE (round 2) - Per-bone look weights (S).** Replace the even spread (`FirstPersonBody.cpp` ~L1478, `NpcBody`) with a per-bone weight list plus max angle; default = even.
 3. **Expose NPC hardcodes (S).** kMaxTwist, kHeadMax*, kAimLean*, kTurnThreshold and FootPass kMax* into a reflected NPC body component. Best tunability for the effort.
 4. **ADS pieces (S).** Separate position/rotation absolute-vs-additive blend, crouch pose, camera blend.
-5. **Hand-vs-gun offsets (S).** Right/left hand offset fields on `WeaponIKSettings`.
+5. **DONE (round 2) - Hand-vs-gun offsets (S).** Right/left hand offset fields on `WeaponIKSettings`.
 6. **Free-aim dead zone (S).** Sway option: the view turns inside a zone before the gun follows.
 7. **Per-clip weight curves (M, high value).** Read named float curves (look mask, left-hand mask, foot IK enable) from the playing clip and scale the matching layer; subsumes `IKOff`.
 

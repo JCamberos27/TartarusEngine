@@ -66,8 +66,13 @@ All layers are summed:
 - **Limb A / Limb B:** two-bone chains (Upper, Lower, End) that reach for a **Target** bone. It keeps the bend the animation already has, and straightens toward targets out of reach.
   - **Keep Animated Offset:** the end reaches for where it sat relative to the target in the animated pose. This is how hands stay gripped while the gun moves.
   - **Match Rotation:** also turns the end bone to the goal.
+  - **Pole Bone / Hint Weight / Hint Offset:** the elbow or knee points toward the pole bone's position (the animated elbow when empty) plus the offset. Hint Weight 0 (the default) keeps the animated bend plane; 1 puts the elbow in the plane of the pole and the root-target line, so it no longer flips when the target crosses the bend plane.
+  - **Max Limb Scale:** how far the limb may stretch toward an out-of-reach target (1 = never, the default).
+  - **Grip Position / Grip Rotation:** moves the end's grip in the target bone's own frame (degrees for rotation). The first-person weapon settings' `ik.rightHandPosition/Rotation` and `leftHandPosition/Rotation` (metres, degrees; default zero) write these.
 - **Look At:** turns a bone's axis toward another bone, clamped to a maximum angle.
 - **Weight:** blends the solved pose with the animated pose.
+
+**Spine distribution** (First Person Body, group Spine Distribution; NPCs read the same fields once the director copies them): Spine Weight 1-5, Spine Max Angle 1-5 (degrees, 0 = no limit) and Pelvis Alpha share the view pitch, twist and shoulder turn over the spine bones. The default (all weights 1, no limits, alpha 0) is the old even spread, exactly.
 
 The look-at runs before the limbs, so aiming a spine bone still leaves the hands on their targets.
 

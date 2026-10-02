@@ -982,6 +982,7 @@ void FirstPersonBody::LateUpdate(World& world, Camera& camera, float dt, entt::e
     auto& reg = world.Registry;
     if (!reg.valid(m_Body)) { m_Body = entt::null; return; }
     const auto& cfg = reg.get<FirstPersonBodyComponent>(m_Body);
+    m_Spine = cfg.Spine;
 
     // This step's root motion, for the capsule's next move.
     if (!reg.valid(m_Driver)) { m_Body = entt::null; return; }
@@ -1481,24 +1482,24 @@ void FirstPersonBody::ApplySpineAim(const Camera& camera, float amount, float tw
     const float pitch = std::asin(std::clamp(camera.Front().y, -1.0f, 1.0f)); // up is positive
     // Rotating +Z about +X by theta gives (0, -sin, cos): looking up needs a negative angle.
     // The twist about the model's up turns the chest toward the view (positive = to the left).
-    RotateSpine([&](int n) {
-        return glm::angleAxis(twist / (float)n, glm::vec3(0.0f, 1.0f, 0.0f)) *
-               glm::angleAxis(-pitch * amount / (float)n, glm::vec3(1.0f, 0.0f, 0.0f));
+    RotateSpine([&](float n) {
+        return glm::angleAxis(twist / n, glm::vec3(0.0f, 1.0f, 0.0f)) *
+               glm::angleAxis(-pitch * amount / n, glm::vec3(1.0f, 0.0f, 0.0f));
     });
 }
 
 void FirstPersonBody::ApplySpineRotation(const glm::quat& modelDelta) {
     const glm::quat none(1.0f, 0.0f, 0.0f, 0.0f);
-    RotateSpine([&](int n) { return glm::normalize(glm::slerp(none, modelDelta, 1.0f / (float)n)); });
+    RotateSpine([&](float n) { return glm::normalize(glm::slerp(none, modelDelta, 1.0f / n)); });
 }
 
-void FirstPersonBody::RotateSpine(const std::function<glm::quat(int)>& stepFor) {
+void FirstPersonBody::RotateSpine(const std::function<glm::quat(float)>& stepFor) {
     const char* const* kSpine = FPBody::kBoneSpine;
-    RotateChain({kSpine[0], kSpine[1], kSpine[2], kSpine[3], kSpine[4]}, stepFor);
+    RotateChain({kSpine[0], kSpine[1], kSpine[2], kSpine[3], kSpine[4]}, stepFor, nullptr, &m_Spine);
 }
 
-void FirstPersonBody::RotateChain(const std::vector<std::string>& chain, const std::function<glm::quat(int)>& stepFor,
-                                  const std::vector<std::shared_ptr<Model>>* models) {
+void FirstPersonBody::RotateChain(const std::vector<std::string>& chain, const std::function<glm::quat(float)>& stepFor,
+                                  const std::vector<std::shared_ptr<Model>>* models, const IK::SpineDistribution* dist) {
     std::vector<int> parents;
     std::vector<glm::mat4> globals;
     const auto& list = models ? *models : m_Models;
@@ -1508,9 +1509,9 @@ void FirstPersonBody::RotateChain(const std::vector<std::string>& chain, const s
         Model& m = *mp;
         IK::Pose pose = m.AppliedLocalPose();
         if (pose.empty() || (int)pose.size() != m.NodeCount()) continue;
-        std::vector<int> bones;
-        for (const std::string& name : chain)
-            if (const int i = m.NodeIndex(Bone(name)); i >= 0) bones.push_back(i);
+        std::vector<int> bones, slot; // slot: the bone's place in the chain (its weight and limit)
+        for (size_t c = 0; c < chain.size(); ++c)
+            if (const int i = m.NodeIndex(Bone(chain[c])); i >= 0) { bones.push_back(i); slot.push_back((int)c); }
         if (bones.empty()) continue;
         // A piece skinning nothing the chain moves (legs, feet) draws the same either way. The driver always
         // turns: its head and shoulders are read for the camera and the arms.
@@ -1520,12 +1521,28 @@ void FirstPersonBody::RotateChain(const std::vector<std::string>& chain, const s
         // Only the chain and what's above it are read before ApplyLocalPose re-derives the rest.
         globals.resize(pose.size());
         IK::RefreshPath(pose, parents, globals, -1, bones.back());
-        const glm::quat step = stepFor((int)bones.size());
+        // Each bone's share of the turn: even (the bone count) unless the distribution says otherwise.
+        float divisor[8], weight[8];
+        const size_t count = std::min<size_t>(bones.size(), 5);
+        for (size_t b = 0; b < count; ++b) weight[b] = dist ? dist->Weight[std::min(slot[b], 4)] : 1.0f;
+        IK::ChainDivisors(weight, (int)count, divisor);
+        const float pelvisAlpha = dist ? std::clamp(dist->PelvisAlpha, 0.0f, 1.0f) : 0.0f;
+        if (pelvisAlpha > 0.0f) // the pelvis takes its share first; the spine the rest
+            if (const int pelvis = m.NodeIndex(Bone(FPBody::kBonePelvis)); pelvis >= 0) {
+                IK::RefreshPath(pose, parents, globals, -1, pelvis);
+                IK::OffsetBoneOnly(pose, parents, globals, pelvis, glm::vec3(0.0f), stepFor(1.0f / pelvisAlpha),
+                                   IK::Position(globals[pelvis]));
+                IK::RefreshPath(pose, parents, globals, pelvis, bones.back());
+            }
         // Only the next spine bone's global is read before ApplyLocalPose re-derives the lot, so
         // refresh just the path to it rather than the whole upper body after every bone.
         for (size_t b = 0; b < bones.size(); ++b) {
             const int i = bones[b];
             if (b > 0) IK::RefreshPath(pose, parents, globals, bones[b - 1], i);
+            float d = b < count ? divisor[b] : (float)bones.size();
+            if (pelvisAlpha > 0.0f) d /= 1.0f - pelvisAlpha;
+            glm::quat step = stepFor(d);
+            if (dist && b < count) step = IK::ClampStepAngle(step, dist->MaxAngle[std::min(slot[b], 4)]);
             IK::OffsetBoneOnly(pose, parents, globals, i, glm::vec3(0.0f), step, IK::Position(globals[i]));
         }
         m.ApplyLocalPose(pose);
@@ -1569,6 +1586,7 @@ void FirstPersonBody::ArmsLateUpdate(World& world, entt::entity weaponArms, floa
     auto& reg = world.Registry;
     if (!reg.valid(m_Body)) return;
     const FirstPersonBodyComponent& cfg = reg.get<FirstPersonBodyComponent>(m_Body);
+    m_Spine = cfg.Spine;
     // The world twins start from the pieces' pose as it stands now (the clips, the spine, the feet): from
     // here the pieces' arms go to the rig's hands, the twins' to the world gun's.
     {
@@ -1596,7 +1614,7 @@ void FirstPersonBody::ArmsLateUpdate(World& world, entt::entity weaponArms, floa
                 const glm::quat back = glm::angleAxis(straighten, kRight * -1.0f); // about the body's left (+X): + tips forward
                 const char* const* kSpine = FPBody::kBoneSpine;
                 RotateChain({kSpine[0], kSpine[1], kSpine[2], kSpine[3], kSpine[4]},
-                            [&](int n) { return glm::normalize(glm::slerp(none, back, 1.0f / (float)n)); }, &m_TwinModels);
+                            [&](float n) { return glm::normalize(glm::slerp(none, back, 1.0f / n)); }, &m_TwinModels, &m_Spine);
             }
         }
     }
@@ -2129,7 +2147,7 @@ void FirstPersonBody::ArmsLateUpdate(World& world, entt::entity weaponArms, floa
                         }
                     }
                     m_WorldHeadTiltDeg = glm::degrees(2.0f * std::acos(std::clamp(std::abs(turn.w), 0.0f, 1.0f)));
-                    RotateChain({"neck_01", "neck_02"}, [&](int n) { return glm::normalize(glm::slerp(none, turn, 1.0f / (float)n)); },
+                    RotateChain({"neck_01", "neck_02"}, [&](float n) { return glm::normalize(glm::slerp(none, turn, 1.0f / n)); },
                                 &m_TwinModels);
                 }
             }

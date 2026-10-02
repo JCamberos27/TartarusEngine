@@ -5,6 +5,7 @@
 #include <glm/gtc/quaternion.hpp>
 
 #include "FirstPersonBodyContract.h"
+#include "IK.h" // IK::SpineDistribution
 
 #include <cstdint>
 #include <functional>
@@ -125,11 +126,14 @@ private:
     void ApplySpineAim(const Camera& camera, float amount, float twist);
     // Turns the chest by `modelDelta` (model space), spread evenly down the spine bones, on every piece.
     void ApplySpineRotation(const glm::quat& modelDelta);
-    // The spine's per-bone turn for a spine of `n` bones, applied bone by bone on every piece.
-    void RotateSpine(const std::function<glm::quat(int)>& stepFor);
-    // The same over any chain of (standard-named) bones, root first - on `models` (default: the pieces).
-    void RotateChain(const std::vector<std::string>& bones, const std::function<glm::quat(int)>& stepFor,
-                     const std::vector<std::shared_ptr<Model>>* models = nullptr);
+    // The spine's per-bone turn, applied bone by bone on every piece. `stepFor(divisor)` gives the turn a bone takes:
+    // the whole turn divided by `divisor` (the bone count for the even spread; see IK::ChainDivisors).
+    void RotateSpine(const std::function<glm::quat(float)>& stepFor);
+    // The same over any chain of (standard-named) bones, root first - on `models` (default: the pieces). With
+    // `dist` (spine chains) the bones take weighted shares, per-bone limits and a pelvis share; null = even.
+    void RotateChain(const std::vector<std::string>& bones, const std::function<glm::quat(float)>& stepFor,
+                     const std::vector<std::shared_ptr<Model>>* models = nullptr, const IK::SpineDistribution* dist = nullptr);
+    IK::SpineDistribution m_Spine; // the body component's Spine fields, as of the last update
     void MakeTwins(World& world);
     void SyncTwins(World& world); // each twin onto its piece: transform, and the pose as posed so far
     // Rigid head wear's twins (a balaclava, glasses) onto the head twin's head bone, once the twins are posed.
