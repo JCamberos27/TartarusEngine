@@ -33,6 +33,7 @@ ALLOWLIST = ROOT / "tools" / "button_styling_allowlist.txt"
 SANCTIONED_FILE = "EditorUIPrimitives.h"
 
 PUSH_RE = re.compile(r"PushStyleColor\(\s*ImGuiCol_Button(Hovered|Active)?\s*,")
+BUTTON_RE = re.compile(r"ImGui::(SmallButton|Button)\s*\(")
 
 
 def parse_allowlist(text: str) -> dict[str, str]:
@@ -63,7 +64,8 @@ def main() -> int:
         if path.name == SANCTIONED_FILE:
             continue
         lines = path.read_text(encoding="utf-8", errors="replace").splitlines()
-        hits = [i + 1 for i, line in enumerate(lines) if PUSH_RE.search(line)]
+        # Check for both style color pushes and raw ImGui::Button/SmallButton calls
+        hits = [i + 1 for i, line in enumerate(lines) if PUSH_RE.search(line) or BUTTON_RE.search(line)]
         if hits:
             violations[path.name] = hits
 
@@ -72,18 +74,18 @@ def main() -> int:
         if name not in allowed:
             where = ", ".join(f"L{n}" for n in hits)
             errors.append(
-                f"{name}: {len(hits)} manual ImGuiCol_Button* push(es) ({where}), not on the "
-                f"allow-list.\n    Either call EditorUIPrimitives::ActionButton/PrimaryButton/"
-                f"DangerIconButton instead, or add '{name} = <reason>' to "
+                f"{name}: {len(hits)} raw ImGui::Button()/SmallButton() or ImGuiCol_Button* push(es) ({where}), "
+                f"not on the allow-list.\n    Either call EditorUIPrimitives::ActionButton/PrimaryButton/"
+                f"DangerIconButton/SecondaryButton/Segmented instead, or add '{name} = <reason>' to "
                 f"{ALLOWLIST.relative_to(ROOT)} if this one genuinely isn't ActionButton-shaped."
             )
 
     for name in allowed:
         if name not in violations:
             errors.append(
-                f"{name}: allow-listed but has no manual ImGuiCol_Button* push anymore. Remove "
-                f"the stale entry from {ALLOWLIST.relative_to(ROOT)} (or, better, it means this "
-                f"one finished migrating — nothing left to do)."
+                f"{name}: allow-listed but has no raw ImGui::Button()/SmallButton() or ImGuiCol_Button* "
+                f"anymore. Remove the stale entry from {ALLOWLIST.relative_to(ROOT)} (or, better, it means "
+                f"this one finished migrating — nothing left to do)."
             )
 
     if errors:
