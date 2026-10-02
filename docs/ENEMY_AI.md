@@ -47,7 +47,7 @@ The combat HUD (`src/Game/CombatHud.*`, text by `src/Renderer/HudText.*`) shows:
 | `AI/CoverSystem.*`, `AI/NavMesh.*` | Cover points probed from the scene (low or high, with peek positions), and the Recast navmesh with a DetourCrowd. |
 | `AI/SquadVoice.*`, `AI/NpcDirectorVoice.cpp` | The radio. Each squad gets one channel with priorities, cooldowns and "copy" responders. Callouts come from decisions, and reload, covering, kill and idle chatter come from state edges. |
 | `Npc/NpcBody.*` | The soldier's body: outfit pieces on one Quantum skeleton. The torso piece drives; the rest copy its pose. Sprung aim, head look-at, cower, hand signals. |
-| `Npc/NpcWeaponHold.cpp` | The weapon hold. The gun goes into the shoulder and clear of the head. The arms go onto the weapon rig's hands, with elbow and cheek-weld clearance against the drawn body. |
+| `Npc/NpcWeaponHold.cpp` | The weapon hold: the player's world body's solve, step for step and by the player's First Person Body numbers. The weapon's eye hangs off the shoulders as the player's camera does (Head Bob, Camera Smoothing, Eye Slack, Armed Eye Offset, Look Down Push). The gun goes into the shoulder and clear of the head, and the arms go onto the rig's hands, with elbow and cheek-weld clearance against the drawn body. Off the sights the gun is at the hip, the view level along the chest; reloads are worked there, the view level on the threat, the stance kept. `--npc-test reload` against `--stock-probe ak` compares the two. |
 | `Npc/NpcHitboxes.*` | Per-bone hitboxes for live soldiers within 60 m: 11 query-only capsules posed from the skeleton. |
 | `Npc/NpcRagdoll.*` | Ragdoll deaths, starting from the pose the soldier died in. |
 | `AI/NpcTest.*` | `--npc-test` scenarios (below). |
@@ -142,7 +142,7 @@ The goal was ≤ 1 ms for 5. What it relies on:
 - **Ragdolls:**
   - skipped once asleep
   - read from interpolated poses
-- **Spawns.** Clip-to-skeleton matches are shared between model instances (`Model::AttachClip`), and clip files are stat'ed once. A soldier's gun reuses the first one's parsed definition, bolt stroke, barrel and ADS carry (the player's own gun still measures). A respawn costs about 1.8 ms; the first soldier with each gun pays the full ~5 ms.
+- **Spawns.** Clip-to-skeleton matches are shared between model instances (`Model::AttachClip`), and clip files are stat'ed once. A soldier's gun reuses the first one's parsed definition, bolt stroke, barrel and ADS carry (the player's own gun still measures). A gone corpse's entity tree is kept, hidden, for the next spawn (with its animators as built), and two spares are built at the start; a respawn costs about 0.8 ms (body 0.4, gun 0.4). The first soldier with each gun pays the full ~5 ms.
 
 The profiler shows the costs as AI Perceive / Brain / Squads / Move / Aim+Fire / Body / Weapon / Hold / Ragdoll /
 Hitbox. `--npc-test` prints them at the end.
@@ -177,7 +177,8 @@ Hitbox. `--npc-test` prints them at the end.
 | die | The player is killed and respawns. |
 | deaths | Rays name every bone. Then:<br>• head, chest, thigh and forearm kills<br>• limp and stagger<br>• no pose pop into the ragdoll<br>• a shot corpse<br>• wounded crawl and bleed-out |
 | feet | Foot IK: each foot's height over the ground on the flat, then standing across and up the ramp. Both stay within 4 cm of the flat's. |
-| pose | The weapon hold close up: aim, low ready, crouch, strafe, reload, sprint, signal. Checks clearances. |
+| pose | The weapon hold close up: aim, hip, crouch, strafe, reload, sprint, signal. Checks clearances. |
+| reload | An AK and a Remington soldier aimed, at the hip, reloading at each, an empty reload and the idle regrip. Logs the butt against the right shoulder and the eye off it as `--stock-probe ak` logs the player's body (the two should agree), checks the hands stay on the gun. |
 | tactics | Pins a soldier: it blind-fires. Checks that bounds go under covering fire. Then steps up to a soldier and takes a rifle butt. |
 | sandbox | The Sandbox squad spawns, uses the radio and dies to Kill All. |
 

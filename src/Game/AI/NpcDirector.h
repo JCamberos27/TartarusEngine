@@ -15,6 +15,7 @@
 #include <memory>
 #include <random>
 #include <string>
+#include <unordered_map>
 #include <vector>
 
 class AssetLibrary;
@@ -121,6 +122,7 @@ public:
     // A scripted test can put a soldier somewhere and give it a goal.
     Npc* Find(int index);
     int Spawn(World& world, AssetLibrary& assets, int spawnIndex); // -1 on failure
+    int ReusedBodies() const { return m_Reused; }                  // spawns that took a pooled body
     // The soldier dies this frame; its ragdoll starts after this frame's late pose (so it takes the pose it died in),
     // the shove on part `part` (-1: the part nearest `point`).
     void Kill(World& world, Npc& npc, const glm::vec3& dir, const glm::vec3& point, float shove = 40.0f, int part = -1);
@@ -181,7 +183,9 @@ private:
     void LatePose(World& world, Npc& n, float dt, const PlayerSnapshot& p, bool alive);
     void UpdateHitboxes(Npc& n, const PlayerSnapshot& p, bool posed);
     void UpdateLod(World& world, Npc& n, const PlayerSnapshot& p);
-    void Despawn(World& world, Npc& n);
+    // Gone: its capsule, agent, weapon and physics. `keepBody`: its entity tree goes into the pool for the next spawn
+    // (hidden), else it is destroyed.
+    void Despawn(World& world, Npc& n, bool keepBody = false);
     // A radio bark (SquadVoice picks the line, the channel and the cooldown). NpcDirectorVoice.cpp.
     void Callout(Npc& n, Bark ev);
     void UpdateVoice(const PlayerSnapshot& p);
@@ -198,6 +202,13 @@ private:
     NpcHoldSettings m_HoldSettings;        // the scene player's First Person Body numbers
     std::string m_SoldierJson;
     std::vector<std::unique_ptr<Npc>> m_Npcs;
+    // A soldier's built body - its entity tree, and its animators as they came from Soldier.json - kept from its corpse
+    // going to the next spawn instead of destroyed and built again (about a millisecond of entity building a spawn).
+    struct SoldierBody;
+    std::unordered_map<entt::entity, std::shared_ptr<SoldierBody>> m_Bodies; // per soldier, living or lying, by root
+    std::vector<std::shared_ptr<SoldierBody>> m_Pool;                        // hidden, ready for the next spawn
+    int m_Reused = 0;                                                         // spawns that took a pooled body
+    std::shared_ptr<SoldierBody> BuildBody(World& world, AssetLibrary& assets); // from Soldier.json; null on failure
     std::vector<Squad> m_Squads;
     std::vector<float> m_RespawnTimers;     // per pending replacement
     NavMesh m_Nav;
