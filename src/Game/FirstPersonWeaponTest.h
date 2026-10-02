@@ -35,6 +35,7 @@ public:
         bool Aim = false;                  // held until a step changes it
         // Through reload states this step: the left hand in view space (m) and the ADS hand anchor's weight.
         std::vector<glm::vec4> Hand;
+        float Anchored = 0.0f;          // the last reload's highest hand-anchor weight (handInTheWay)
         std::vector<glm::vec3> Shell; // ... and the weapon's Shell bone, same frames (view space, m)
         // Spent cases out of the port this step: the state each left in, and how it was thrown.
         struct Ejection {

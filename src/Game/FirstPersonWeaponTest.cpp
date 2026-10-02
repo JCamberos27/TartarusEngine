@@ -35,7 +35,7 @@ const std::string& FirstPersonWeaponTest::Ctx::State() const { return P->Current
 
 FirstPersonWeaponTest::FirstPersonWeaponTest(bool stockProbe, bool probeAk) : m_Probe(stockProbe), m_ProbeAk(probeAk) {
     // Shared between steps.
-    struct Mem { int AkAmmo = 0, ShotgunAmmo = 0, Ammo = 0, Stage = 0; bool Held = false; float HipHand = 0.0f; };
+    struct Mem { int AkAmmo = 0, ShotgunAmmo = 0, Ammo = 0, Stage = 0; bool Held = false; float HipHand = 0.0f; std::vector<glm::vec4> AkHipHand; };
     auto mem = std::make_shared<Mem>();
     using C = Ctx;
     auto fire = [](C& c) { ++c.Pulls; };
@@ -55,6 +55,7 @@ FirstPersonWeaponTest::FirstPersonWeaponTest(bool stockProbe, bool probeAk) : m_
             nearest = std::min(nearest, d);
             anchored = std::max(anchored, h.w);
         }
+        c.Anchored = anchored;
         for (size_t i = 0; i < c.Hand.size(); i += 12) {
             const glm::vec3 v(c.Hand[i]);
             std::printf("[WeaponTest]       %s f%3d view (%.2f %.2f %.2f) right %.0f up %.0f deg, anchor %.2f, shell %.2f m off the hand\n", label, (int)i, v.x, v.y, v.z,
@@ -99,7 +100,7 @@ FirstPersonWeaponTest::FirstPersonWeaponTest(bool stockProbe, bool probeAk) : m_
              ejected(c, 1);
          }},
         {"AK reload", [](C& c) { c.P->Reload(); }, [](C& c) { return c.Saw("TacReload") && c.State() == "Idle"; }, 8.0f,
-         [=](C& c) { ammoIs(c, kAkMagazine); }},
+         [=](C& c) { ammoIs(c, kAkMagazine); handInTheWay(c, "AK hip"); mem->AkHipHand = c.Hand; }},
         {"AK full auto (0.5 s held)",
          [=](C& c) { c.P->ToggleFireMode(); mem->Held = true; },
          [=](C& c) { if (c.Time > 0.5f) mem->Held = false; return c.Time > 1.0f; }, 3.0f,
@@ -117,6 +118,25 @@ FirstPersonWeaponTest::FirstPersonWeaponTest(bool stockProbe, bool probeAk) : m_
              ammoIs(c, mem->Ammo - 1);
              check(c, c.State() == "Aim", "stays on the sights (" + c.State() + ")");
              ejected(c, 1);
+         }},
+        // On the sights the free hand's trip to the pouch is anchored to the body (ads.handAnchor),
+        // so it stays out of the view about as it does at the hip instead of swinging with the gun.
+        {"AK ADS reload", [](C& c) { c.P->Reload(); }, [](C& c) { return c.Saw("TacReload") && c.State() == "Aim"; }, 8.0f,
+         [=](C& c) {
+             ammoIs(c, kAkMagazine);
+             handInTheWay(c, "AK ADS");
+             check(c, c.Anchored > 0.5f, "the hand anchor carried the pouch trip (" + std::to_string(c.Anchored) + ")");
+             // Off the gun (anchored) the hand is where it was at the hip, frame for frame (the clip is the same).
+             float worst = 0.0f;
+             int frames = 0;
+             for (size_t i = 0; i < c.Hand.size() && i < mem->AkHipHand.size(); ++i)
+                 if (c.Hand[i].w > 0.9f) {
+                     worst = std::max(worst, glm::length(glm::vec3(c.Hand[i]) - glm::vec3(mem->AkHipHand[i])));
+                     ++frames;
+                 }
+             char msg[160];
+             std::snprintf(msg, sizeof msg, "off the gun the hand follows its hip path (%d frames, worst %.1f cm)", frames, worst * 100.0f);
+             check(c, frames > 10 && worst < 0.06f, msg);
              c.Aim = false;
              mem->AkAmmo = c.P->Ammo();
          }},
@@ -690,10 +710,10 @@ void FirstPersonWeaponTest::Drive(FirstPersonPresentation& p, float dt) {
         m_Shot = c.Shot;
         c.Shot.clear();
     }
-    if (glm::vec3 v; !m_Probe && p.CurrentState().rfind("Reload", 0) == 0 && p.ArmsNodeInView("hand_l", v)) {
+    if (glm::vec3 v; !m_Probe && p.CurrentState().find("Reload") != std::string::npos && p.ArmsNodeInView("hand_l", v)) {
         if (c.Hand.size() % 10 == 0 && !Done()) {
             char name[64];
-            std::snprintf(name, sizeof name, "%s_%03d", c.Aim ? "ads" : "hip", (int)c.Hand.size());
+            std::snprintf(name, sizeof name, "%s%s_%03d", p.CurrentState().rfind("Reload", 0) == 0 ? "" : "ak_", c.Aim ? "ads" : "hip", (int)c.Hand.size());
             m_Shot = name;
         }
         c.Hand.push_back(glm::vec4(v, p.HandAnchorWeight()));
