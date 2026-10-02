@@ -294,6 +294,7 @@ bool FirstPersonPresentation::StartSet(World& world, AssetLibrary& assets, int s
 void FirstPersonPresentation::StopSet(World& world) {
     if (m_WorldWeapon != entt::null && world.Registry.valid(m_WorldWeapon)) world.DestroyEntityAndChildren(m_WorldWeapon);
     m_WorldWeapon = entt::null;
+    m_WorldWeaponShift = glm::vec3(0.0f);
     if (m_Arms != entt::null && world.Registry.valid(m_Arms)) world.DestroyEntityAndChildren(m_Arms);
     if (m_Weapon != entt::null && world.Registry.valid(m_Weapon)) world.DestroyEntityAndChildren(m_Weapon);
     m_World = nullptr;
@@ -840,6 +841,7 @@ void FirstPersonPresentation::PlaceWorldWeapon(World& world, bool split, const g
         if (m_WorldWeapon != entt::null && reg.valid(m_WorldWeapon)) world.DestroyEntityAndChildren(m_WorldWeapon);
         m_WorldWeapon = entt::null;
         if (haveWeapon) reg.remove<OwnerViewOnlyTag>(m_Weapon);
+        m_WorldWeaponShift = glm::vec3(0.0f);
         return;
     }
     if (m_WorldWeapon == entt::null || !reg.valid(m_WorldWeapon)) {
@@ -859,6 +861,7 @@ void FirstPersonPresentation::PlaceWorldWeapon(World& world, bool split, const g
     const glm::mat3 r(glm::vec3(m_WeaponWorld[0]) / std::max(scale.x, 1e-6f), glm::vec3(m_WeaponWorld[1]) / std::max(scale.y, 1e-6f),
                       glm::vec3(m_WeaponWorld[2]) / std::max(scale.z, 1e-6f));
     world.SetWorldPose(m_WorldWeapon, glm::vec3(m_WeaponWorld[3]) + shift, glm::normalize(glm::quat_cast(r)));
+    m_WorldWeaponShift = shift;
     reg.get<TransformComponent>(m_WorldWeapon).Scale = scale;
     // Hidden (holstered, unarmed) with the first-person gun.
     const bool hidden = reg.any_of<InactiveTag, DeactivatedTag>(m_Weapon);
@@ -870,6 +873,16 @@ void FirstPersonPresentation::PlaceWorldWeapon(World& world, bool split, const g
             reg.remove<DeactivatedTag, InactiveTag>(m_WorldWeapon);
         }
     }
+}
+
+bool FirstPersonPresentation::MuzzleFrames(glm::vec3& firstPerson, glm::vec3& worldCopy, glm::vec3& bore) const {
+    if (!m_HaveMuzzle || !m_RootSeenValid) return false;
+    firstPerson = glm::vec3(m_RootWorld * glm::vec4(m_MuzzleLocal, 1.0f));
+    worldCopy = firstPerson + m_WorldWeaponShift;
+    const glm::vec3 b = glm::mat3(m_RootWorld) * m_BoreLocal;
+    if (glm::dot(b, b) < 1e-12f) return false;
+    bore = glm::normalize(b);
+    return true;
 }
 
 bool FirstPersonPresentation::BarrelAimPoint(glm::vec3& out) const {

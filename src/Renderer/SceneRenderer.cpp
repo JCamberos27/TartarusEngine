@@ -42,6 +42,13 @@
 // by --smoke-test to log which lobes actually rendered; harmless in normal runs.
 namespace {
 std::unordered_map<std::uint32_t, std::uint64_t> g_variantDrawCounts;
+
+// #177 - deliberately leaked: a function-local static would run its GL deletes at exit, after the
+// context is gone. The OS reclaims the handful of GL objects with the process.
+ParticleRenderer* Particles() {
+    static ParticleRenderer* particles = new ParticleRenderer();
+    return particles;
+}
 }
 namespace SceneRendererDebug {
 const std::unordered_map<std::uint32_t, std::uint64_t>& VariantDrawCounts() { return g_variantDrawCounts; }
@@ -679,12 +686,8 @@ void SceneRenderer::RenderScene(World& world, const RenderFrameContext& ctx,
     }
 
     // #177 - particles last: depth-tested against everything above, blended, no depth write.
-    {
-        // Deliberately leaked: a function-local static would run its GL deletes at exit, after
-        // the context is gone. The OS reclaims the handful of GL objects with the process.
-        static ParticleRenderer* particles = new ParticleRenderer();
-        if (particles->Draw(world, ctx) > 0) ++localStats.DrawCalls;
-    }
+    // The player's own muzzle flame waits for the view-model sub-pass.
+    if (Particles()->Draw(world, ctx, viewModelPass) > 0) ++localStats.DrawCalls;
     if (ctx.WorldOverlay) {
         ctx.WorldOverlay();
         GLStateCache::Invalidate();
@@ -788,6 +791,10 @@ void SceneRenderer::RenderScene(World& world, const RenderFrameContext& ctx,
             glDisable(GL_BLEND);
             for (Shader* p : appliedPrograms) { p->Bind(); p->SetInt("uAlphaBlend", 0); }
         }
+
+        // The player's own muzzle flame, at the gun's projection, behind or in front of the arms and gun
+        // as it really is.
+        if (Particles()->Draw(world, vmCtx, true, true) > 0) ++localStats.DrawCalls;
 
         glDisable(0x864F /*GL_DEPTH_CLAMP*/);
         activeFs = &fs; // nothing below reads it; leave the selector on the caller's state
