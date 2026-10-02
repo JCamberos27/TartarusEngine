@@ -36,6 +36,7 @@ class World;
 class Camera;
 class AssetLibrary;
 class ScreenBlur;
+class CrtScreen;
 class Framebuffer;
 
 // Rect = Unity's "Rect Tool" adapted to 3D: translate handles plus bounding-box corner/edge
@@ -67,7 +68,7 @@ struct AssetGridCell {
 // In-game editor overlay (Dear ImGui + ImGuizmo): import assets, place/inspect
 // entities, manipulate them with viewport gizmos. Toggle with F1; gameplay pauses
 // while the editor is open.
-namespace BuildPipeline { struct Report; } // #174
+#include "BuildPipeline.h" // #174 (complete types: a build runs in a std::future)
 
 struct AnimatorWindowState; // the Animator window's state (EditorLayer_Animator*.cpp)
 
@@ -145,6 +146,7 @@ public:
     // XP chrome and the icon-row layout; it reaches everything below through EditorModuleHostAPI
     // (bodies in HotReloadEditorModule.cpp). These are public purely for that host-side glue.
     float ToolbarHeightPx() const; // kToolbarHeight * m_UIScale; defined in EditorLayer_Toolbar.cpp
+    float StatusBarHeightPx() const; // kStatusBarHeight * m_UIScale (the window-wide status bar)
     void SetTitleBarDragHovered(bool hovered) { m_TitleBarDragHovered = hovered; }
 
     int  GizmoOpIndex() const { return (int)m_GizmoOp; }
@@ -216,6 +218,22 @@ public:
     // Menu / popup bodies for the module's dropdowns, rendered host-side into the module-begun
     // menu/popup (shared ImGuiContext). Defined in EditorLayer_Toolbar.cpp.
     void DrawFileMenuBody(World& world, AssetLibrary& assets);
+    void DrawEditMenuBody(World& world, AssetLibrary& assets);
+    // The engine monogram texture (0 = none) and the open scene's title, for the menu bar.
+    unsigned int EngineMarkTexture() const;
+    std::string SceneTitle() const;
+    bool SceneDirty() const { return m_Dirty; }
+    bool IsInPlayMode() const { return m_InPlayMode; }
+    // --editor-shot: draw every Inspector component open, so a capture shows their contents.
+    void SetExpandAllComponents(bool on) { m_ExpandAllComponents = on; }
+    void SetShowLighting(bool on) { m_ShowLighting = on; }
+    void SetShowAnimator(bool on) { m_ShowAnimator = on; }
+    void CloseSettingsWindow() { m_ShowPreferences = false; }
+    // Settings at a given category: `project` picks the THIS PROJECT group.
+    void OpenSettingsCategory(bool project, int index) {
+        m_ShowPreferences = true; m_SettingsGroupIsProject = project;
+        if (project) m_ProjSettingsCategory = index; else m_PrefsCategory = index;
+    }
     void DrawViewMenuBody(World& world, Camera& editorCamera);
     void DrawWindowMenuBody();
     void DrawCaptureOptionsPopupBody();
@@ -729,6 +747,9 @@ private:
     // EndFrame): the whole framebuffer is blurred and the dialog window redrawn crisp on top.
     std::unique_ptr<ScreenBlur> m_ModalBlur;
     std::unique_ptr<Framebuffer> m_FrostCapture;
+    // Preferences > CRT screen: the frame is drawn into m_CrtFrame, then through the tube shader.
+    std::unique_ptr<CrtScreen> m_Crt;
+    std::unique_ptr<Framebuffer> m_CrtFrame;
 
     // Monitor content-scale factor (1.0 = 96 DPI, 2.0 = 200% Windows scaling, etc.), read once
     // at Init and baked into font sizes and the handful of raw-pixel layout constants below —
@@ -1055,6 +1076,16 @@ private:
     void DrawBuildSettingsBody();
     void RunBuild(bool runAfter);
     std::shared_ptr<BuildPipeline::Report> m_LastBuildReport;
+    // A build in flight: BuildPipeline::Build on a worker thread, polled by PollBuild() each
+    // frame. The progress is shared so the worker can't outlive what it writes to.
+    std::future<BuildPipeline::Report> m_BuildFuture;
+    std::shared_ptr<BuildPipeline::Progress> m_BuildProgress;
+    bool m_BuildRunAfter = false;
+    bool IsBuilding() const { return m_BuildFuture.valid(); }
+    void PollBuild();
+    void CancelBuild();
+    // The build's progress bar (fraction < 0 = not counted yet) and its label.
+    bool BuildProgressInfo(float& fraction, std::string& label) const;
     char m_NewTagBuf[48] = {};
 
     // Physics debug panel + Play HUD overlay (#185). Host-side (EditorLayer is in the exe), so
@@ -1333,11 +1364,6 @@ private:
     // above).
     bool m_OpenQuickAdd = false; // set by the Shift+A shortcut, consumed next frame in Draw()
     std::string m_LastSelectedName; // last valid scene selection, shown in the Inspector empty state
-
-    // Inspector Transform > Copy / Paste Values (#77) — stored as raw vectors to keep
-    // Components.h out of this header.
-    glm::vec3 m_TransformClipPos{0.0f}, m_TransformClipRot{0.0f}, m_TransformClipScale{1.0f};
-    bool m_HasTransformClipboard = false;
 
     // Inspector Tag field: dropdown of known tags with an inline "New tag..." entry mode.
     bool m_TagAdding = false;
@@ -1739,6 +1765,7 @@ private:
     // --- Play mode (see OnEnterPlayMode/OnExitPlayMode) -------------------------------------
     // The scene as it was the instant Play was pressed, as a SceneSerializer JSON string — the
     // same snapshot format undo/redo already uses. Empty when not in (or never entered) play.
+    bool m_ExpandAllComponents = false; // SetExpandAllComponents
     bool m_InPlayMode = false; // set by OnEnter/OnExitPlayMode — lets edit-mode-only shortcuts (F2 rename) yield to Play-mode ones
     std::string m_PlayModeSnapshot;
     // #91 — the whole undo/redo history as it stood when Play started. Edits made while playing
@@ -1810,7 +1837,7 @@ private:
     // opens Statistics, the scene name reveals the file, selection count frames it, and the lock
     // indicator toggles itself off, all in place instead of requiring the Stats panel/menu/
     // shortcut. World&/Camera& are for Frame Selected.
-    void DrawViewportStatusBar(World& world, Camera& editorCamera);
+    void DrawStatusBar(World& world, Camera& editorCamera);
     // The actual Play/Stop/Pause/Step/Restore buttons, drawn by DrawViewportActionBar.
     void DrawPlayTransportButtons(bool playing, bool maximized, bool paused);
     // Panel visibility lives in EditorSettings::SceneShowStats (persisted), not a plain member.

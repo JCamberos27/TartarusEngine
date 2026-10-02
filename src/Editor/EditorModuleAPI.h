@@ -131,7 +131,10 @@
 //        Gizmos / capture popup bodies, the document strip, play controls, play-mode tint,
 //        history HUD frame, reflection-probe bake, Stats viewport rect and engine-mark hide.
 //        Nothing in the module read them since the icon row moved out of the toolbar.
-constexpr std::uint32_t kEditorModuleAPIVersion = 37;
+//   38 - Editor UI pass: DrawEditMenuBody (an Edit menu), GetEngineMarkTexture (the monogram beside
+//        the menus) and GetSceneTitle (the open scene's name, dirty and play state, centred in the
+//        title bar).
+constexpr std::uint32_t kEditorModuleAPIVersion = 38;
 
 // Asset Browser Details-view column widths (API v26), in unscaled px (the caller applies UI
 // scale). Name gets whatever's left of the row after these three.
@@ -495,6 +498,13 @@ struct EditorModuleHostAPI {
     // Copies the system report to the clipboard, reveals Editor.log, and opens the issue
     // tracker's new-issue page, so a report can include both without the host sending anything.
     void (*ReportBug)() = nullptr;
+
+    // --- Editor UI pass (API v38) ---
+    void (*DrawEditMenuBody)() = nullptr;
+    unsigned int (*GetEngineMarkTexture)() = nullptr; // a GL texture name, 0 = none
+    // The open scene's name (no extension) into `out`, and whether it has unsaved changes / the
+    // editor is in Play.
+    void (*GetSceneTitle)(char* out, int n, bool* outDirty, bool* outPlaying) = nullptr;
 };
 
 struct EditorModuleAPI {

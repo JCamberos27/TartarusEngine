@@ -3,6 +3,7 @@
 
 #include "EditorLayer.h"
 #include "EditorLayerInternal.h"
+#include "EditorTheme.h"
 #include "EditorModuleAPI.h" // kHierarchyFilter* bitmask constants, shared with EditorModuleHierarchy.cpp
 #include "FileDialog.h"
 #include "AssetLibrary.h"
@@ -634,7 +635,7 @@ void EditorLayer::DrawArrayDuplicateModal(World& world, AssetLibrary& assets) {
         const long long total = (long long)m_ArrayDupCount[0] * m_ArrayDupCount[1] * m_ArrayDupCount[2];
         ImGui::TextDisabled("%lld new copies", std::max(0LL, total - 1));
         const bool ok = total > 1 && total <= 512;
-        if (!ok) ImGui::TextColored(ImVec4(1.0f, 0.6f, 0.3f, 1.0f),
+        if (!ok) ImGui::TextColored(EditorTheme::Warning,
                                     total <= 1 ? "Increase a count above 1." : "Too many (max 512).");
         ImGui::Separator();
 
@@ -699,7 +700,7 @@ void EditorLayer::DrawAddEntityItems(World& world, AssetLibrary& assets, Camera&
     if (ImGui::MenuItem(ICON_FA_LIFE_RING "  Donut")) spawnPrimitive("donut", "Donut");
     if (ImGui::MenuItem(ICON_FA_SQUARE "  Plane")) spawnPrimitive("plane", "Plane");
 
-    ImGui::SeparatorText("Objects");
+    EditorUIPrimitives::SectionHeader("Objects");
     if (ImGui::MenuItem(ICON_FA_DIAGRAM_PROJECT "  Empty")) {
         CreateEmptyAt(world, &editorCamera, "Empty", false);
     }
@@ -868,6 +869,13 @@ void EditorLayer::DrawHierarchyTreeBody(World& world, AssetLibrary& assets) {
             for (auto it = chain.rbegin(); it != chain.rend(); ++it)
                 ImGui::PushID((int)entt::to_integral(*it));
 
+            // Alternate rows carry a faint stripe, full width, so a long list is easy to follow.
+            if (i % 2 == 1) {
+                const ImVec2 rp = ImGui::GetCursorScreenPos();
+                const ImVec2 wp = ImGui::GetWindowPos();
+                ImGui::GetWindowDrawList()->AddRectFilled(ImVec2(wp.x, rp.y), ImVec2(wp.x + ImGui::GetWindowWidth(), rp.y + ImGui::GetFrameHeight()),
+                                                          EditorTheme::U32(EditorTheme::Stripe));
+            }
             if (row.Depth > 0) ImGui::Indent(row.Depth * ImGui::GetStyle().IndentSpacing);
             DrawHierarchyRowBody(world, assets, row.Entity, /*isFirstRow=*/i == 0);
             if (row.Depth > 0) ImGui::Unindent(row.Depth * ImGui::GetStyle().IndentSpacing);
@@ -1095,7 +1103,7 @@ void EditorLayer::DrawHierarchyRowBody(World& world, AssetLibrary& assets, entt:
             // way — it's gated on ImGui::IsItemHovered(), which this isn't.
             ImGui::SetNextWindowPos(ImVec2(renameFieldMin.x, renameFieldMax.y + 4.0f));
             ImGui::BeginTooltip();
-            ImGui::TextColored(ImVec4(0.95f, 0.35f, 0.35f, 1.0f), "Name can't be blank.");
+            ImGui::TextColored(EditorTheme::Danger, "Name can't be blank.");
             ImGui::EndTooltip();
         }
         return; // children stay collapsed for the one frame a rename is open — deliberate, keeps the field stable
@@ -1124,10 +1132,10 @@ void EditorLayer::DrawHierarchyRowBody(World& world, AssetLibrary& assets, entt:
     // Muted per-kind tint so kinds separate at a glance without the panel turning to confetti —
     // amber light, blue camera (the #234 accent roles); mesh/empty stay near the text colour
     // since they're the bulk of every scene. Overridden to the disabled grey on inactive rows.
-    const ImU32 kindCol =
-        hasLight  ? IM_COL32(232, 196, 104, 255) :
-        hasCamera ? IM_COL32( 91, 157, 249, 255) :
-        hasMesh   ? IM_COL32(214, 214, 218, 255) : IM_COL32(148, 148, 156, 255);
+    const ImU32 kindCol = EditorTheme::U32(
+        hasLight  ? EditorTheme::KindLight :
+        hasCamera ? EditorTheme::KindCamera :
+        hasMesh   ? EditorTheme::KindMesh : EditorTheme::Secondary);
 
     // Never-named entities get a positional fallback instead of a wall of identical
     // "(unnamed)" rows (#21 P10).
@@ -1257,8 +1265,8 @@ void EditorLayer::DrawHierarchyRowBody(World& world, AssetLibrary& assets, entt:
             }
 
             ImDrawList* dl = ImGui::GetWindowDrawList();
-            const ImU32 accent = ImGui::GetColorU32(ImGuiCol_DragDropTarget);
-            const ImU32 fill   = (accent & 0x00FFFFFFu) | 0x44000000u; // same hue, ~27% alpha block
+            const ImU32 accent = EditorTheme::U32(EditorTheme::Accent);
+            const ImU32 fill   = EditorTheme::U32(EditorTheme::WithAlpha(EditorTheme::Accent, 0.16f));
             float y0, y1, edge;
             if (zone == 0)      { y0 = midY - pInset; y1 = midY + pInset; edge = -1.0f; }
             else if (zone > 0)  { y0 = midY + pInset; y1 = midY + half;   edge = y0 + 1.0f; }
@@ -1325,10 +1333,15 @@ void EditorLayer::DrawHierarchyRowBody(World& world, AssetLibrary& assets, entt:
         // Pull the kind glyph + name in toward the eye (#152 follow-up). Parent rows keep enough
         // lead for the disclosure chevron; leaf rows (no chevron) only need a hair of separation.
         const float labelX   = rowMin.x + (hasChildren ? fontSize * 1.15f : fontSize * 0.35f);
-        ImU32 col = ImGui::GetColorU32((inactive || sceneHiddenRow) ? ImGuiCol_TextDisabled : ImGuiCol_Text);
+        ImU32 col = EditorTheme::U32((inactive || sceneHiddenRow) ? EditorTheme::Dim : EditorTheme::Text);
         if (prefabInst && !inactive && !sceneHiddenRow)
-            col = prefabInst->Missing ? IM_COL32(240, 130, 120, 255)   // broken link
-                                      : IM_COL32(120, 170, 255, 255);  // prefab blue
+            col = EditorTheme::U32(prefabInst->Missing ? EditorTheme::KindPrefabBroken : EditorTheme::KindPrefab);
+        // The selected row: an accent bar at its left edge over the theme's accent selection wash.
+        if (selected)
+            dl->AddRectFilled(ImVec2(ImGui::GetWindowPos().x, rowMin.y), ImVec2(ImGui::GetWindowPos().x + EditorTheme::Px(2.0f), rowMax.y),
+                              EditorTheme::U32(EditorTheme::Accent));
+        // The name never runs under the eye / lock / active column on the right.
+        dl->PushClipRect(ImVec2(rowMin.x, rowMin.y), ImVec2(rowMax.x - rowIconsBandW - EditorTheme::Px(4.0f), rowMax.y), true);
 
         // Disclosure chevron — a light Font Awesome ">" / "v" (0.66em) centred in the leading
         // slot, in the dim text colour, brightening on arrow-hover. Replaces ImGui's chunky
@@ -1337,7 +1350,7 @@ void EditorLayer::DrawHierarchyRowBody(World& world, AssetLibrary& assets, entt:
             const float chSize = fontSize * 0.66f;
             const char* chev = open ? ICON_FA_CHEVRON_DOWN : ICON_FA_CHEVRON_RIGHT;
             const ImVec2 cm = ImGui::GetFont()->CalcTextSizeA(chSize, FLT_MAX, 0.0f, chev);
-            const ImU32 chCol = ImGui::GetColorU32(clickOnArrow ? ImGuiCol_Text : ImGuiCol_TextDisabled);
+            const ImU32 chCol = EditorTheme::U32(clickOnArrow ? EditorTheme::Text : EditorTheme::Dim);
             dl->AddText(ImGui::GetFont(), chSize,
                         ImVec2(rowMin.x + (fontSize * 1.1f - cm.x) * 0.5f,
                                rowMin.y + (ImGui::GetFrameHeight() - cm.y) * 0.5f),
@@ -1347,8 +1360,7 @@ void EditorLayer::DrawHierarchyRowBody(World& world, AssetLibrary& assets, entt:
         if (secondaryGlyph) {
             const float sub = fontSize * 0.68f;
             const ImU32 secBase = inactive ? col
-                                : (hasMesh && hasLight) ? IM_COL32(232, 196, 104, 255)
-                                                        : IM_COL32(91, 157, 249, 255);
+                                : EditorTheme::U32((hasMesh && hasLight) ? EditorTheme::KindLight : EditorTheme::KindCamera);
             dl->AddText(ImGui::GetFont(), sub,
                         ImVec2(labelX + slotW - sub, rowMin.y + fontSize - sub),
                         (secBase & 0x00FFFFFFu) | 0xB4000000u, secondaryGlyph);
@@ -1370,6 +1382,7 @@ void EditorLayer::DrawHierarchyRowBody(World& world, AssetLibrary& assets, entt:
                 EditorUI::SetTooltip(prefabInst->Missing ? "Prefab instance - link to its source is broken"
                                                           : "Prefab instance");
         }
+        dl->PopClipRect();
     }
 
     // Active-state eye, pinned to a fixed right-hand column so every row's eye lines up no matter
@@ -1407,12 +1420,17 @@ void EditorLayer::DrawHierarchyRowBody(World& world, AssetLibrary& assets, entt:
             }
         };
 
+        // Unity-style: the toggles only show while the row is hovered or selected, or when one is
+        // away from its default (hidden / locked / inactive). Their columns stay reserved.
+        const bool rowActive = selected ||
+            (ImGui::IsWindowHovered(ImGuiHoveredFlags_ChildWindows) && ImGui::IsMouseHoveringRect(rowMin, rowMax));
         ImGui::SameLine();
         ImGui::SetCursorScreenPos(ImVec2(rowMax.x - eyeW - gap - lockW - hideW - 2.0f * gap, rowMin.y));
         if (SceneVisToggle("##svhide", ICON_FA_EYE_SLASH, ICON_FA_EYE, sceneHidden, rowHovered,
                            sceneHidden ? "Hidden in the Scene view - click to show (Alt+click: this object only)"
                                        : "Hide in the Scene view with its children (still in the game, still collides,\n"
-                                         "still saved). Alt+click: this object only.")) {
+                                         "still saved). Alt+click: this object only.",
+                           rowActive || sceneHidden)) {
             PushUndo(world, "Toggle Scene Visibility");
             setOnSubtree((HiddenInSceneTag*)nullptr, !sceneHidden);
         }
@@ -1420,7 +1438,8 @@ void EditorLayer::DrawHierarchyRowBody(World& world, AssetLibrary& assets, entt:
         if (SceneVisToggle("##svlock", ICON_FA_LOCK, ICON_FA_LOCK_OPEN, sceneLocked, rowHovered,
                            sceneLocked ? "Locked out of Scene-view clicks - click to unlock (Alt+click: this object only)"
                                        : "Lock with its children: can't be clicked in the Scene view (Hierarchy select\n"
-                                         "still works). Alt+click: this object only.")) {
+                                         "still works). Alt+click: this object only.",
+                           rowActive || sceneLocked)) {
             PushUndo(world, "Toggle Scene Lock");
             setOnSubtree((SceneLockedTag*)nullptr, !sceneLocked);
         }
@@ -1430,7 +1449,7 @@ void EditorLayer::DrawHierarchyRowBody(World& world, AssetLibrary& assets, entt:
                          selfDeactivated ? "Inactive - click to enable"
                          : inactive      ? "Hidden because a parent is inactive - click to disable this one too"
                                          : "Active - click to disable",
-                         /*alignTop=*/true)) {
+                         /*alignTop=*/true, rowActive || selfDeactivated)) {
             PushUndo(world, "Toggle Active");
             if (selfDeactivated) world.Registry.remove<DeactivatedTag>(entity);
             else world.Registry.emplace<DeactivatedTag>(entity);
@@ -1462,7 +1481,7 @@ void EditorLayer::DrawHierarchyContextMenu(World& world, AssetLibrary& assets, e
     // doesn't mean reading every line; "Frame Selected" (previously missing here even though the
     // Scene viewport already has it) and a clearer name for the object-moving "Move To View" item
     // (see below) land in this pass too.
-    ImGui::SeparatorText(ICON_FA_CUBES "  Create");
+    EditorUIPrimitives::SectionHeader(ICON_FA_CUBES "  Create");
     if (ImGui::BeginMenu(ICON_FA_PLUS "  Create")) {
         // Same body as the toolbar Create menu and the Shift+A quick-add, so every "add an
         // object" entry point offers the same list. New objects spawn in front of the editor
@@ -1474,7 +1493,7 @@ void EditorLayer::DrawHierarchyContextMenu(World& world, AssetLibrary& assets, e
         CreateEmptyChild(world, entity);
     }
 
-    ImGui::SeparatorText(ICON_FA_OBJECT_UNGROUP "  Select");
+    EditorUIPrimitives::SectionHeader(ICON_FA_OBJECT_UNGROUP "  Select");
     const bool anyEntities = world.Registry.view<const NameComponent>().begin() != world.Registry.view<const NameComponent>().end();
     if (ImGui::MenuItem(ICON_FA_OBJECT_UNGROUP "  Select All", "Ctrl+A", false, anyEntities)) SelectAllEntities(world);
     if (ImGui::MenuItem(ICON_FA_BAN "  Deselect All", "Ctrl+Shift+A", false, HasAnySelection())) ClearSelection();
@@ -1517,7 +1536,7 @@ void EditorLayer::DrawHierarchyContextMenu(World& world, AssetLibrary& assets, e
         FocusOnSelection(world, *m_EditorCameraPtr);
     }
 
-    ImGui::SeparatorText(ICON_FA_SITEMAP "  Arrange");
+    EditorUIPrimitives::SectionHeader(ICON_FA_SITEMAP "  Arrange");
     if (ImGui::MenuItem(ICON_FA_OBJECT_GROUP "  Group into Empty Parent", nullptr, false, HasAnySelection())) {
         CreateEmptyParentForSelection(world);
     }
@@ -1545,7 +1564,7 @@ void EditorLayer::DrawHierarchyContextMenu(World& world, AssetLibrary& assets, e
     if (ImGui::MenuItem(ICON_FA_ANGLES_DOWN "  Set as Last Sibling", nullptr, false, hasEntity))
         SetHierarchySiblingExtreme(world, entity, /*first=*/false);
 
-    ImGui::SeparatorText(ICON_FA_ARROWS_UP_DOWN_LEFT_RIGHT "  Transform");
+    EditorUIPrimitives::SectionHeader(ICON_FA_ARROWS_UP_DOWN_LEFT_RIGHT "  Transform");
     if (ImGui::MenuItem(ICON_FA_EYE "  Toggle Active State", "Alt+Shift+A", false, HasAnySelection()))
         ToggleSelectionActive(world);
     // Renamed from "Move To View" (Phase 5 item 7) — that name read like a camera action (framing
@@ -1577,7 +1596,7 @@ void EditorLayer::DrawHierarchyContextMenu(World& world, AssetLibrary& assets, e
         }
     }
 
-    ImGui::SeparatorText(ICON_FA_COPY "  Edit");
+    EditorUIPrimitives::SectionHeader(ICON_FA_COPY "  Edit");
     if (ImGui::MenuItem(ICON_FA_COPY "  Copy", "Ctrl+C", false, hasEntity)) CopySelection(world);
     if (ImGui::MenuItem(ICON_FA_SCISSORS "  Cut", "Ctrl+X", false, hasEntity)) {
         CopySelection(world);
@@ -1594,7 +1613,7 @@ void EditorLayer::DrawHierarchyContextMenu(World& world, AssetLibrary& assets, e
     }
     if (ImGui::MenuItem(ICON_FA_PEN "  Rename", "F2", false, hasEntity)) BeginRenameEntity(entity);
 
-    ImGui::SeparatorText(ICON_FA_BOX_ARCHIVE "  Prefab");
+    EditorUIPrimitives::SectionHeader(ICON_FA_BOX_ARCHIVE "  Prefab");
     if (ImGui::MenuItem(ICON_FA_BOX_ARCHIVE "  Save as Prefab...", nullptr, false, hasEntity)) {
         std::string path = FileDialog::SaveFile("Prefab Files\0*.prefab\0All Files\0*.*\0", "prefab", m_Window);
         if (!path.empty() && SceneSerializer::SavePrefab(world, entity, path)) {

@@ -3,6 +3,8 @@
 // EditorLayer.cpp for build time (#179).
 
 #include <iterator>
+#include "EditorTheme.h"
+#include "EditorPanels.h"
 #include "MaterialAsset.h"
 #include "AtomicFile.h"
 #include "AssetImport.h"
@@ -1304,7 +1306,7 @@ void EditorLayer::DrawCaptureFeedback(float dt) {
     if (m_CaptureFlashT <= 0.0f) return;
     if (m_ViewportSize.x < 1.0f || m_ViewportSize.y < 1.0f) return;
 
-    ImGuiWindow* sceneWin = ImGui::FindWindowByName("Scene");
+    ImGuiWindow* sceneWin = ImGui::FindWindowByName(EditorPanels::Scene);
     ImDrawList* dl = sceneWin ? sceneWin->DrawList : ImGui::GetForegroundDrawList();
     const ImVec2 mn(m_ViewportPos.x, m_ViewportPos.y);
     const ImVec2 mx(m_ViewportPos.x + m_ViewportSize.x, m_ViewportPos.y + m_ViewportSize.y);
@@ -1460,7 +1462,7 @@ void EditorLayer::DrawScreenshotPreview(World& world, AssetLibrary& assets) {
         if (rightX > ImGui::GetCursorPosX()) ImGui::SameLine(rightX);
         else ImGui::SameLine();
         ImGui::PushStyleColor(ImGuiCol_Button, ImVec4(0, 0, 0, 0));
-        ImGui::PushStyleColor(ImGuiCol_ButtonHovered, ImVec4(1, 1, 1, 0.08f));
+        ImGui::PushStyleColor(ImGuiCol_ButtonHovered, EditorUIPrimitives::FlatHover());
         ImGui::PushStyleVar(ImGuiStyleVar_FrameBorderSize, 0.0f); // flat icon row, no hairline box
         if (ImGui::Button(ICON_FA_ARROW_UP_RIGHT_FROM_SQUARE, ImVec2(btnW, 0.0f)))
             Screenshot::OpenFile(m_ShotPreviewPath);

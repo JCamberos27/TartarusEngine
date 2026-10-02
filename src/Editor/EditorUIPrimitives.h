@@ -29,145 +29,363 @@
 #include <imgui_internal.h> // ImMax (kept for callers of this header that need glyph metrics)
 #include <IconsFontAwesome6.h>
 
+#include "EditorTheme.h"
+
+#include <algorithm>
 #include <cmath>
 #include <cstdio>
+#include <cstring>
 
 namespace EditorUIPrimitives {
 
 using TooltipFn = void (*)(const char*);
 
-// The accent colour every "on" toggle state reads in — the same ImGui role (ImGuiCol_SliderGrab)
-// the styled sliders use — kept as one named accessor rather than a raw ImGuiCol_* index
-// sprinkled at every call site. Cyan = selection / "you are here" (accent roles are listed above
-// ApplyBentoPalette in EditorLayer.cpp).
-inline ImVec4 AccentColor() { return ImGui::GetStyleColorVec4(ImGuiCol_SliderGrab); }
+// The accent every "on" state, selection and focus reads in: the phosphor at full drive
+// (EditorTheme.h). Kept as named accessors so a call site never picks its own shade.
+inline ImVec4 AccentColor() { return EditorTheme::Accent; }
+inline ImVec4 ActiveAccentColor() { return EditorTheme::AccentBright; }
 
-// The brighter of the theme's two accents (Unity's "Link Text" / focus blue, vs. AccentColor's
-// dimmer selection cyan) — ~4.8:1 against the toolbar's MenuBarBg vs. AccentColor's ~2.5:1, under
-// this codebase's own 3:1 non-text floor. Used where an "on" state has to read as on by itself:
-// ActionButton's toggle keyline used to lean on FrameBorderSize's hairline to help delineate it,
-// but that border is suppressed on flat buttons now (see ActionButton's own comment) so the
-// keyline/active-text color needs to clear the floor unassisted.
-inline ImVec4 ActiveAccentColor() { return ImGui::GetStyleColorVec4(ImGuiCol_SliderGrabActive); }
+// Status-role colours (Phase 1 item 2): fixed meanings, never the accent. All clear WCAG 1.4.3's
+// 4.5:1 text floor against the Panel surface (checked in ApplyThemeStyle).
+inline ImVec4 DangerColor()  { return EditorTheme::Danger; }
+inline ImVec4 WarningColor() { return EditorTheme::Warning; }
+inline ImVec4 SuccessColor() { return EditorTheme::Success; }
+inline ImVec4 InfoColor()    { return EditorTheme::Info; }
 
-// Status-role colours (Phase 1 item 2, Appendix B — "add danger/warning/success/info roles").
-// Fixed, not theme-derived: a status colour has to mean the same thing regardless of which of
-// the three themes is active, unlike AccentColor(). All four already clear WCAG 1.4.3's 4.5:1
-// text floor against the darkest surface a status message sits on (#121212) by a wide margin —
-// computed via the same relative-luminance method as the #34/border/text-secondary fixes above,
-// not eyeballed. Existing call sites (DangerIconButton's hover red, Console's per-entry tint)
-// already used colours in this range; these give that a single named source instead of each
-// call site picking its own shade.
-inline ImVec4 DangerColor()  { return ImVec4(0xD3 / 255.0f, 0x22 / 255.0f, 0x22 / 255.0f, 1.0f); } // Unity "Error Text" #D32222
-inline ImVec4 WarningColor() { return ImVec4(0xF4 / 255.0f, 0xBC / 255.0f, 0x02 / 255.0f, 1.0f); } // Unity "Warning Text" #F4BC02
-inline ImVec4 SuccessColor() { return ImVec4(0.45f, 0.85f, 0.55f, 1.0f); } // ~10.9:1
-inline ImVec4 InfoColor()    { return ImVec4(0.55f, 0.75f, 1.00f, 1.0f); } // ~9.9:1
+// The hover / press wash every flat control shares.
+inline ImVec4 FlatHover()   { return ImVec4(1.0f, 1.0f, 1.0f, 0.07f); }
+inline ImVec4 FlatPressed() { return ImVec4(1.0f, 1.0f, 1.0f, 0.12f); }
 
-// Two — and only two — button treatments across the whole editor (#160). ActionButton: flat, no body at rest, faint wash on hover; `active` gives
-// an accent-tinted body + a 2px bottom keyline for toggles that are "on". This is every toolbar
-// tool, every panel toggle, every low-frequency icon action.
+// Three button treatments across the whole editor (#160), plus a destructive variant:
+//   ActionButton    flat; no body at rest, a faint wash on hover. Toolbar tools, panel toggles,
+//                   low-frequency icon actions. `active` = a toggle that is on: accent glyph on an
+//                   accent wash with an accent keyline.
+//   SecondaryButton a raised body with a hairline: ordinary text buttons (Cancel, Import...,
+//                   Add Component).
+//   PrimaryButton   a white body with black text (inverse video): the one confirming action of a dialog.
+//   DangerIconButton flat, red on hover: Delete, the component-remove x.
 inline bool ActionButton(const char* icon, const char* tooltip, TooltipFn tooltipFn,
                           bool active = false, ImVec2 size = ImVec2(0, 0)) {
-    const ImVec4 acc = ActiveAccentColor();
-    // At rest an ActionButton had no visual cue at all — same full-bright ImGuiCol_Text as any
-    // plain label, distinguished only by the wash that only appears once you're already hovering
-    // it. Dimming the glyph at rest (same 0.78-alpha treatment the Hierarchy eye/lock toggles use
-    // — still clears the 3:1 floor against WindowBg) and popping it back to full brightness on
-    // hover/press gives the icon row a legible "these are buttons" cue before the cursor arrives.
-    // Approximates Button()'s own hit-test (cursor pos + FramePadding) since the hover state has
-    // to be known before the glyph color is pushed, one frame ahead of ImGui::Button() itself.
+    const ImVec4 acc = AccentColor();
     if (!active) {
+        // A resting icon is drawn in the secondary text colour and brightens under the cursor, so a
+        // row of icons reads as buttons before the pointer arrives. Approximates Button()'s own
+        // hit-test since the colour has to be pushed before the button is submitted.
         const ImVec2 cursor = ImGui::GetCursorScreenPos();
-        const ImVec2 iconSize = ImGui::CalcTextSize(icon);
+        const ImVec2 iconSize = ImGui::CalcTextSize(icon, nullptr, true);
         const ImVec2 pad = ImGui::GetStyle().FramePadding;
         const ImVec2 btnSize(size.x > 0.0f ? size.x : iconSize.x + pad.x * 2.0f,
                               size.y > 0.0f ? size.y : iconSize.y + pad.y * 2.0f);
         const bool willHover = ImGui::IsWindowHovered(ImGuiHoveredFlags_ChildWindows) &&
             ImGui::IsMouseHoveringRect(cursor, ImVec2(cursor.x + btnSize.x, cursor.y + btnSize.y));
-        ImVec4 text = ImGui::GetStyleColorVec4(ImGuiCol_Text);
-        if (!willHover) text.w *= 0.78f;
-        ImGui::PushStyleColor(ImGuiCol_Text, text);
-    }
-    if (active) {
-        ImGui::PushStyleColor(ImGuiCol_Button,        ImVec4(acc.x, acc.y, acc.z, 0.22f));
-        ImGui::PushStyleColor(ImGuiCol_ButtonHovered, ImVec4(acc.x, acc.y, acc.z, 0.34f));
-        ImGui::PushStyleColor(ImGuiCol_ButtonActive,  ImVec4(acc.x, acc.y, acc.z, 0.46f));
-        ImGui::PushStyleColor(ImGuiCol_Text,          ImVec4(acc.x, acc.y, acc.z, 1.0f));
-    } else {
+        ImGui::PushStyleColor(ImGuiCol_Text, willHover ? EditorTheme::Text : EditorTheme::Secondary);
         ImGui::PushStyleColor(ImGuiCol_Button,        ImVec4(0.0f, 0.0f, 0.0f, 0.0f));
-        ImGui::PushStyleColor(ImGuiCol_ButtonHovered, ImVec4(1.0f, 1.0f, 1.0f, 0.08f));
-        ImGui::PushStyleColor(ImGuiCol_ButtonActive,  ImVec4(1.0f, 1.0f, 1.0f, 0.14f));
+        ImGui::PushStyleColor(ImGuiCol_ButtonHovered, FlatHover());
+        ImGui::PushStyleColor(ImGuiCol_ButtonActive,  FlatPressed());
+    } else {
+        ImGui::PushStyleColor(ImGuiCol_Text,          EditorTheme::AccentBright);
+        ImGui::PushStyleColor(ImGuiCol_Button,        ImVec4(acc.x, acc.y, acc.z, 0.16f));
+        ImGui::PushStyleColor(ImGuiCol_ButtonHovered, ImVec4(acc.x, acc.y, acc.z, 0.24f));
+        ImGui::PushStyleColor(ImGuiCol_ButtonActive,  ImVec4(acc.x, acc.y, acc.z, 0.32f));
     }
-    // The Unity-dark reskin turned FrameBorderSize back on editor-wide (a real hairline around
-    // input fields, matching Unity's own field borders) — but ImGui::Button() draws that same
-    // frame border regardless of the transparent Button fill above, so every flat toolbar icon
-    // picked up an unwanted dark outline (#160's "no body at rest" treatment). Suppress it just
-    // for this flat treatment; real frame widgets (inputs, combos) keep their border untouched.
+    // FrameBorderSize is on editor-wide (a hairline around fields); a flat button has no frame.
     ImGui::PushStyleVar(ImGuiStyleVar_FrameBorderSize, 0.0f);
-    // Button() folds its label into its ID, so two buttons that ever show the same glyph would
-    // collide — scope the ID to the (unique) tooltip string instead.
+    // Button() folds its label into its ID, so two buttons showing the same glyph would collide;
+    // scope the ID to the (unique) tooltip string instead.
     ImGui::PushID(tooltip);
-    bool clicked = ImGui::Button(icon, size);
+    const bool clicked = ImGui::Button(icon, size);
     ImGui::PopID();
     ImGui::PopStyleVar();
     if (active) {
         const ImVec2 mn = ImGui::GetItemRectMin(), mx = ImGui::GetItemRectMax();
-        const float y = mx.y - 2.0f;
-        ImGui::GetWindowDrawList()->AddRectFilled(ImVec2(mn.x + 3.0f, y), ImVec2(mx.x - 3.0f, mx.y - 1.0f),
-                                                  ImGui::ColorConvertFloat4ToU32(acc), 1.0f);
+        const float k = EditorTheme::Px(2.0f);
+        ImGui::GetWindowDrawList()->AddRectFilled(ImVec2(mn.x + k * 1.5f, mx.y - k), ImVec2(mx.x - k * 1.5f, mx.y),
+                                                  EditorTheme::U32(acc), k * 0.5f);
     }
-    // Button/Hovered/Active + Text, either the accent-text push (active) or the dim-at-rest push above.
     ImGui::PopStyleColor(4);
     if (tooltipFn && ImGui::IsItemHovered()) tooltipFn(tooltip);
     return clicked;
 }
 
-// Same skeleton as ActionButton, the red-on-hover palette for destructive icon actions (Delete,
-// the component-remove x).
 inline bool DangerIconButton(const char* icon, const char* tooltip, TooltipFn tooltipFn,
                               ImVec2 size = ImVec2(0, 0)) {
     const ImVec4 danger = DangerColor();
+    ImGui::PushStyleColor(ImGuiCol_Text,          EditorTheme::Secondary);
     ImGui::PushStyleColor(ImGuiCol_Button,        ImVec4(0.0f, 0.0f, 0.0f, 0.0f));
-    ImGui::PushStyleColor(ImGuiCol_ButtonHovered, ImVec4(danger.x, danger.y, danger.z, 0.92f));
+    ImGui::PushStyleColor(ImGuiCol_ButtonHovered, ImVec4(danger.x, danger.y, danger.z, 0.85f));
     ImGui::PushStyleColor(ImGuiCol_ButtonActive,  ImVec4(danger.x, danger.y, danger.z, 1.00f));
-    ImGui::PushStyleVar(ImGuiStyleVar_FrameBorderSize, 0.0f); // see ActionButton's comment
+    ImGui::PushStyleVar(ImGuiStyleVar_FrameBorderSize, 0.0f);
     ImGui::PushID(tooltip);
-    bool clicked = ImGui::Button(icon, size);
+    const bool clicked = ImGui::Button(icon, size);
     ImGui::PopID();
     ImGui::PopStyleVar();
-    ImGui::PopStyleColor(3);
+    ImGui::PopStyleColor(4);
     if (tooltipFn && ImGui::IsItemHovered()) tooltipFn(tooltip);
     return clicked;
 }
 
-// Defect #20 / #73 — an unchecked checkbox's frame meets this theme's 3:1 WCAG floor (FrameBg vs
-// WindowBg — see EditorLayer.cpp's #34 comment) but this theme runs FrameBorderSize 0 everywhere,
-// so it has no outline at all: a small, low-contrast fill with no edge to define it, easy to miss
-// entirely at a glance (confirmed live via raw-pixel sampling against a running build — it does
-// render, just imperceptibly). Checked boxes don't have this problem: ImGuiCol_CheckboxSelectedBg
-// and the CheckMark tick are both far more saturated than a plain unchecked fill. First fixed
-// locally in the Console module (Defect #20) with a full manual reimplementation; promoted here,
-// simplified to a thin wrapper, once the same pattern turned up editor-wide (#73) — real
-// ImGui::Checkbox handles every bit of actual behaviour (click/hover/id/tri-state/keyboard nav/
-// disabled), this only adds the one outline it's missing, drawn over its own item rect afterward.
+// Defect #20 / #73: an unchecked box needs a visible edge. The frame's own hairline is faint on
+// the near-black panels, so this draws a stronger one over the item afterwards (real
+// ImGui::Checkbox handles all behaviour).
 inline bool Checkbox(const char* label, bool* v) {
     const bool changed = ImGui::Checkbox(label, v);
     const ImVec2 mn = ImGui::GetItemRectMin();
-    const float sz = ImGui::GetFrameHeight(); // Checkbox()'s own box is always this tall/wide, at the item's top-left
+    const float sz = ImGui::GetFrameHeight();
     ImGui::GetWindowDrawList()->AddRect(mn, ImVec2(mn.x + sz, mn.y + sz),
-        ImGui::GetColorU32(ImGuiCol_TextDisabled), ImGui::GetStyle().FrameRounding, 0, 1.0f);
+        EditorTheme::U32(*v ? EditorTheme::AccentDeep : EditorTheme::Strong), ImGui::GetStyle().FrameRounding, 0, 1.0f);
     return changed;
 }
 
-// The one filled treatment — theme accent body, for prominent/rare actions only (modal-dialog
-// buttons: Save / Don't Save / Restore / Cancel …).
-inline bool PrimaryButton(const char* label, ImVec2 size = ImVec2(0, 0)) {
-    ImGui::PushStyleColor(ImGuiCol_Button,        ImGui::GetStyleColorVec4(ImGuiCol_Header));
-    ImGui::PushStyleColor(ImGuiCol_ButtonHovered, ImGui::GetStyleColorVec4(ImGuiCol_HeaderHovered));
-    ImGui::PushStyleColor(ImGuiCol_ButtonActive,  ImGui::GetStyleColorVec4(ImGuiCol_HeaderActive));
-    bool clicked = ImGui::Button(label, size);
-    ImGui::PopStyleColor(3);
+// The raised text button: everything that isn't a toolbar icon or a dialog's confirm.
+inline bool SecondaryButton(const char* label, ImVec2 size = ImVec2(0, 0)) {
+    ImGui::PushStyleColor(ImGuiCol_Button,        EditorTheme::Raised);
+    ImGui::PushStyleColor(ImGuiCol_ButtonHovered, EditorTheme::Hover);
+    ImGui::PushStyleColor(ImGuiCol_ButtonActive,  EditorTheme::Pressed);
+    ImGui::PushStyleColor(ImGuiCol_Border,        EditorTheme::Strong);
+    const bool clicked = ImGui::Button(label, size);
+    ImGui::PopStyleColor(4);
     return clicked;
+}
+
+// The one filled treatment: a white body with black text, for a dialog's confirming action (Save,
+// Create, Apply, Restore...). Rare by design, so it always reads as "the" action.
+inline bool PrimaryButton(const char* label, ImVec2 size = ImVec2(0, 0)) {
+    ImGui::PushStyleColor(ImGuiCol_Button,        EditorTheme::Accent);
+    ImGui::PushStyleColor(ImGuiCol_ButtonHovered, EditorTheme::AccentBright);
+    ImGui::PushStyleColor(ImGuiCol_ButtonActive,  EditorTheme::AccentDeep);
+    ImGui::PushStyleColor(ImGuiCol_Border,        EditorTheme::AccentDeep);
+    ImGui::PushStyleColor(ImGuiCol_Text,          EditorTheme::OnAccent);
+    const bool clicked = ImGui::Button(label, size);
+    ImGui::PopStyleColor(5);
+    return clicked;
+}
+
+// A segmented control: `count` mutually exclusive options drawn as one joined strip, the chosen one
+// accent. Labels may be icons or short words. Returns true when `*current` changed.
+inline bool Segmented(const char* id, int* current, const char* const* labels, int count, TooltipFn tooltipFn = nullptr,
+                      const char* const* tooltips = nullptr, float itemWidth = 0.0f) {
+    bool changed = false;
+    ImGui::PushID(id);
+    ImGui::PushStyleVar(ImGuiStyleVar_ItemSpacing, ImVec2(0.0f, ImGui::GetStyle().ItemSpacing.y));
+    ImGui::PushStyleVar(ImGuiStyleVar_FrameRounding, 0.0f);
+    const ImVec2 start = ImGui::GetCursorScreenPos();
+    for (int i = 0; i < count; ++i) {
+        if (i > 0) ImGui::SameLine();
+        const bool on = *current == i;
+        ImGui::PushStyleColor(ImGuiCol_Button,        on ? EditorTheme::AccentWash : EditorTheme::Field);
+        ImGui::PushStyleColor(ImGuiCol_ButtonHovered, on ? ImVec4(0.894f, 0.722f, 0.408f, 0.24f) : EditorTheme::Hover);
+        ImGui::PushStyleColor(ImGuiCol_ButtonActive,  on ? ImVec4(0.894f, 0.722f, 0.408f, 0.32f) : EditorTheme::Pressed);
+        ImGui::PushStyleColor(ImGuiCol_Text,          on ? EditorTheme::AccentBright : EditorTheme::Secondary);
+        ImGui::PushStyleVar(ImGuiStyleVar_FrameBorderSize, 0.0f);
+        ImGui::PushID(i);
+        if (ImGui::Button(labels[i], ImVec2(itemWidth, 0.0f)) && !on) { *current = i; changed = true; }
+        ImGui::PopID();
+        ImGui::PopStyleVar();
+        ImGui::PopStyleColor(4);
+        if (tooltipFn && tooltips && tooltips[i] && ImGui::IsItemHovered()) tooltipFn(tooltips[i]);
+    }
+    const ImVec2 end = ImGui::GetItemRectMax();
+    ImGui::GetWindowDrawList()->AddRect(start, end, EditorTheme::U32(EditorTheme::Strong),
+                                        EditorTheme::Px(3.0f), 0, 1.0f);
+    ImGui::PopStyleVar(2);
+    ImGui::PopID();
+    return changed;
+}
+
+// A section heading in the launch screen's voice: tracked monospace capitals in the secondary text
+// colour, an optional icon in the accent colour, and a hairline running out to the right edge. Replaces
+// SeparatorText. `text` is set in capitals here; a Font Awesome glyph at its front (the old
+// SeparatorText(ICON_FA_X "  Title") form) becomes the icon.
+inline void SectionHeader(const char* rawText, const char* icon = nullptr) {
+    char iconBuf[8] = {};
+    if (!icon && rawText && (unsigned char)rawText[0] >= 0xE0) {
+        unsigned int c = 0;
+        const int len = ImTextCharFromUtf8(&c, rawText, nullptr);
+        if (len > 0 && len < (int)sizeof(iconBuf) && c >= 0xE000 && c <= 0xF8FF) { // the icon font's private-use range
+            std::memcpy(iconBuf, rawText, (size_t)len);
+            icon = iconBuf;
+            rawText += len;
+            while (*rawText == ' ') ++rawText;
+        }
+    }
+    char upper[160];
+    {
+        size_t n = 0;
+        for (const char* s = rawText ? rawText : ""; *s && n + 1 < sizeof(upper); ++s)
+            upper[n++] = (*s >= 'a' && *s <= 'z') ? (char)(*s - 'a' + 'A') : *s;
+        upper[n] = 0;
+    }
+    const char* text = upper;
+    ImGui::Dummy(ImVec2(0.0f, EditorTheme::Px(4.0f)));
+    EditorTheme::PushHeading();
+    const float lineH = ImGui::GetFontSize();
+    const ImVec2 pos = ImGui::GetCursorScreenPos();
+    ImDrawList* dl = ImGui::GetWindowDrawList();
+    float x = pos.x;
+    if (icon) {
+        EditorTheme::PopFont();
+        EditorTheme::PushSmall();
+        const ImVec2 isz = ImGui::CalcTextSize(icon);
+        dl->AddText(ImVec2(x, pos.y + (lineH - isz.y) * 0.5f), EditorTheme::U32(EditorTheme::Accent), icon);
+        x += isz.x + EditorTheme::Px(7.0f);
+        EditorTheme::PopFont();
+        EditorTheme::PushHeading();
+    }
+    const float tracking = EditorTheme::HeadingTracking();
+    const ImVec2 tsz = EditorTheme::CalcTrackedSize(text, tracking);
+    EditorTheme::DrawTracked(dl, ImVec2(x, pos.y), EditorTheme::U32(EditorTheme::Secondary), text, tracking);
+    x += tsz.x + EditorTheme::Px(10.0f);
+    const float right = ImGui::GetContentRegionMax().x + ImGui::GetWindowPos().x;
+    if (right > x) {
+        const float y = std::floor(pos.y + lineH * 0.5f) + 0.5f;
+        dl->AddLine(ImVec2(x, y), ImVec2(right, y), EditorTheme::U32(EditorTheme::Hairline), 1.0f);
+    }
+    ImGui::Dummy(ImVec2(std::max(1.0f, right - pos.x), lineH));
+    EditorTheme::PopFont();
+    ImGui::Dummy(ImVec2(0.0f, EditorTheme::Px(1.0f)));
+}
+
+// The one search box: a magnifier inside the field, the hint in the dim colour, and a clear (x)
+// button once there is text. Same height as every other frame widget. `width` <= 0 fills the
+// remaining row (minus -width). Returns true when the text changed (typing or clearing).
+inline bool SearchField(const char* id, char* buf, size_t bufSize, const char* hint, float width = 0.0f) {
+    ImGui::PushID(id);
+    const float iconW = EditorTheme::Px(22.0f);
+    const ImVec2 pad = ImGui::GetStyle().FramePadding;
+    ImGui::SetNextItemWidth(width > 0.0f ? width : ImGui::GetContentRegionAvail().x + width);
+    ImGui::PushStyleVar(ImGuiStyleVar_FramePadding, ImVec2(pad.x + iconW, pad.y));
+    ImGui::PushStyleColor(ImGuiCol_TextDisabled, EditorTheme::Dim);
+    bool changed = ImGui::InputTextWithHint("##search", hint, buf, bufSize);
+    ImGui::PopStyleColor();
+    ImGui::PopStyleVar();
+    const ImVec2 mn = ImGui::GetItemRectMin(), mx = ImGui::GetItemRectMax();
+    const bool focused = ImGui::IsItemActive();
+    ImDrawList* dl = ImGui::GetWindowDrawList();
+    EditorTheme::PushSmall();
+    const ImVec2 gsz = ImGui::CalcTextSize(ICON_FA_MAGNIFYING_GLASS);
+    dl->AddText(ImVec2(mn.x + pad.x + (iconW - gsz.x) * 0.35f, (mn.y + mx.y - gsz.y) * 0.5f),
+                EditorTheme::U32(focused || buf[0] ? EditorTheme::Accent : EditorTheme::Dim), ICON_FA_MAGNIFYING_GLASS);
+    EditorTheme::PopFont();
+    if (focused) dl->AddRect(mn, mx, EditorTheme::U32(EditorTheme::WithAlpha(EditorTheme::Accent, 0.55f)),
+                             ImGui::GetStyle().FrameRounding, 0, 1.0f);
+    if (buf[0]) {
+        // The clear button, inside the field's right end.
+        const float h = mx.y - mn.y;
+        const ImVec2 bmin(mx.x - h, mn.y), bmax(mx.x, mx.y);
+        const bool hov = ImGui::IsMouseHoveringRect(bmin, bmax) && ImGui::IsWindowHovered(ImGuiHoveredFlags_ChildWindows);
+        EditorTheme::PushSmall();
+        const ImVec2 xsz = ImGui::CalcTextSize(ICON_FA_XMARK);
+        dl->AddText(ImVec2((bmin.x + bmax.x - xsz.x) * 0.5f, (bmin.y + bmax.y - xsz.y) * 0.5f),
+                    EditorTheme::U32(hov ? EditorTheme::Text : EditorTheme::Dim), ICON_FA_XMARK);
+        EditorTheme::PopFont();
+        if (hov) ImGui::SetMouseCursor(ImGuiMouseCursor_Hand);
+        if (hov && ImGui::IsMouseClicked(ImGuiMouseButton_Left)) {
+            buf[0] = '\0';
+            changed = true;
+            ImGui::ClearActiveID();
+        }
+    }
+    ImGui::PopID();
+    return changed;
+}
+
+// A small rounded tag: a count, a state, a type. `tint` colours the text and a faint body.
+inline void Chip(const char* text, ImVec4 tint) {
+    EditorTheme::PushSmall();
+    const ImVec2 tsz = ImGui::CalcTextSize(text);
+    const ImVec2 pad(EditorTheme::Px(6.0f), EditorTheme::Px(1.0f));
+    const float h = ImGui::GetFrameHeight();
+    const ImVec2 pos = ImGui::GetCursorScreenPos();
+    const ImVec2 mn(pos.x, pos.y + (h - tsz.y - pad.y * 2.0f) * 0.5f);
+    const ImVec2 mx(mn.x + tsz.x + pad.x * 2.0f, mn.y + tsz.y + pad.y * 2.0f);
+    ImDrawList* dl = ImGui::GetWindowDrawList();
+    dl->AddRectFilled(mn, mx, EditorTheme::U32(EditorTheme::WithAlpha(tint, 0.14f)), EditorTheme::Px(3.0f));
+    dl->AddText(ImVec2(mn.x + pad.x, mn.y + pad.y), EditorTheme::U32(tint), text);
+    ImGui::Dummy(ImVec2(mx.x - mn.x, h));
+    EditorTheme::PopFont();
+}
+
+// What a panel shows when it has nothing to show: a large dim icon, a line of text and a hint,
+// centred in the remaining space.
+inline void EmptyState(const char* icon, const char* text, const char* hint = nullptr) {
+    const ImVec2 avail = ImGui::GetContentRegionAvail();
+    const ImVec2 origin = ImGui::GetCursorScreenPos();
+    ImDrawList* dl = ImGui::GetWindowDrawList();
+    ImGui::PushFont(EditorTheme::UiFont(), EditorTheme::Px(28.0f));
+    const ImVec2 isz = ImGui::CalcTextSize(icon);
+    ImGui::PopFont();
+    EditorTheme::PushBody();
+    const ImVec2 tsz = ImGui::CalcTextSize(text);
+    EditorTheme::PopFont();
+    EditorTheme::PushSmall();
+    const ImVec2 hsz = hint ? ImGui::CalcTextSize(hint, nullptr, false, avail.x - EditorTheme::Px(24.0f)) : ImVec2(0, 0);
+    EditorTheme::PopFont();
+    const float gap = EditorTheme::Px(10.0f);
+    const float total = isz.y + gap + tsz.y + (hint ? EditorTheme::Px(4.0f) + hsz.y : 0.0f);
+    float y = origin.y + std::max(EditorTheme::Px(12.0f), (avail.y - total) * 0.42f);
+    const float cx = origin.x + avail.x * 0.5f;
+    dl->AddText(EditorTheme::UiFont(), EditorTheme::Px(28.0f), ImVec2(cx - isz.x * 0.5f, y),
+                EditorTheme::U32(EditorTheme::Strong), icon);
+    y += isz.y + gap;
+    dl->AddText(EditorTheme::UiFont(), EditorTheme::BodySize(), ImVec2(cx - tsz.x * 0.5f, y),
+                EditorTheme::U32(EditorTheme::Secondary), text);
+    y += tsz.y;
+    if (hint) {
+        y += EditorTheme::Px(4.0f);
+        dl->AddText(EditorTheme::UiFont(), EditorTheme::SmallSize(), ImVec2(cx - hsz.x * 0.5f, y),
+                    EditorTheme::U32(EditorTheme::Dim), hint, nullptr, avail.x - EditorTheme::Px(24.0f));
+        y += hsz.y;
+    }
+    ImGui::Dummy(ImVec2(avail.x, std::max(0.0f, y - origin.y)));
+}
+
+// A panel's top toolbar strip: a Raised band, full width, with a hairline under it. Everything
+// between Begin and End lays out on one row as usual (SameLine); End closes the band.
+inline void BeginPanelToolbar(const char* id) {
+    const ImGuiStyle& st = ImGui::GetStyle();
+    const float h = ImGui::GetFrameHeight() + EditorTheme::Px(8.0f);
+    const ImVec2 wpos = ImGui::GetWindowPos();
+    const ImVec2 cur = ImGui::GetCursorScreenPos();
+    const float left = wpos.x, right = wpos.x + ImGui::GetWindowWidth();
+    ImDrawList* dl = ImGui::GetWindowDrawList();
+    const float top = cur.y - st.WindowPadding.y;
+    dl->AddRectFilled(ImVec2(left, top), ImVec2(right, cur.y + h - st.WindowPadding.y + EditorTheme::Px(4.0f)),
+                      EditorTheme::U32(EditorTheme::Raised));
+    dl->AddLine(ImVec2(left, cur.y + h - st.WindowPadding.y + EditorTheme::Px(4.0f) - 0.5f),
+                ImVec2(right, cur.y + h - st.WindowPadding.y + EditorTheme::Px(4.0f) - 0.5f),
+                EditorTheme::U32(EditorTheme::Hairline));
+    ImGui::PushID(id);
+    ImGui::SetCursorScreenPos(ImVec2(cur.x, cur.y - st.WindowPadding.y + EditorTheme::Px(4.0f)));
+    ImGui::BeginGroup();
+}
+inline void EndPanelToolbar() {
+    ImGui::EndGroup();
+    ImGui::PopID();
+    ImGui::Dummy(ImVec2(0.0f, EditorTheme::Px(6.0f)));
+}
+
+// A collapsible section inside a panel (ImGui::CollapsingHeader): the raised surface with a hairline
+// instead of the accent selection fill CollapsingHeader would otherwise borrow from ImGuiCol_Header.
+inline bool Foldout(const char* label, ImGuiTreeNodeFlags flags = 0) {
+    ImGui::PushStyleColor(ImGuiCol_Header,        EditorTheme::Raised);
+    ImGui::PushStyleColor(ImGuiCol_HeaderHovered, EditorTheme::Hover);
+    ImGui::PushStyleColor(ImGuiCol_HeaderActive,  EditorTheme::Pressed);
+    ImGui::PushStyleColor(ImGuiCol_Border,        EditorTheme::Hairline);
+    const bool open = ImGui::CollapsingHeader(label, flags);
+    ImGui::PopStyleColor(4);
+    return open;
+}
+
+// A row highlight for custom lists (Hierarchy, Console, Asset list): the selection is an accent wash
+// with a 2px accent bar at the left edge; hover is a faint white wash. Call before drawing the row's
+// content, with the row's full-width rect.
+inline void DrawRowState(ImDrawList* dl, ImVec2 mn, ImVec2 mx, bool selected, bool hovered) {
+    if (selected) {
+        dl->AddRectFilled(mn, mx, EditorTheme::U32(EditorTheme::AccentWash));
+        dl->AddRectFilled(mn, ImVec2(mn.x + EditorTheme::Px(2.0f), mx.y), EditorTheme::U32(EditorTheme::Accent));
+    } else if (hovered) {
+        dl->AddRectFilled(mn, mx, EditorTheme::U32(FlatHover()));
+    }
 }
 
 // #4 item 2 — a small inline marker for a control that writes into the *scene* file (pushes an
@@ -181,10 +399,7 @@ inline bool PrimaryButton(const char* label, ImVec2 size = ImVec2(0, 0)) {
 // line (SeparatorText, for one, already ends its row, so a badge marking a section it titles
 // reads better on the next line than fighting the separator rule for the same row).
 inline void SceneDataBadge(TooltipFn tooltipFn) {
-    const ImVec4 info = InfoColor();
-    ImGui::PushStyleColor(ImGuiCol_Text, ImVec4(info.x, info.y, info.z, 0.85f));
-    ImGui::TextUnformatted(ICON_FA_FILM "  SCENE");
-    ImGui::PopStyleColor();
+    Chip(ICON_FA_FILM " SCENE", InfoColor());
     if (tooltipFn && ImGui::IsItemHovered())
         tooltipFn("Saved in the scene file, not your editor preferences \xe2\x80\x94 editing this dirties the scene and can be undone (Ctrl+Z).");
 }
@@ -200,9 +415,9 @@ inline void SceneDataBadge(TooltipFn tooltipFn) {
 // fixed opaque-ish dark plate is legible by construction, with zero runtime GPU cost and zero
 // "wrong colour this frame" flicker while a readback catches up. Use these two together: draw
 // the plate first, then the text in kHudTextColor on top.
-inline constexpr ImU32 kHudTextColor         = IM_COL32(235, 235, 235, 255);
-inline constexpr ImU32 kHudTextDisabledColor = IM_COL32(235, 235, 235, 150);
-inline constexpr ImU32 kHudPlateColor        = IM_COL32(10, 10, 10, 190);
+inline constexpr ImU32 kHudTextColor         = IM_COL32(0xEC, 0xEC, 0xF0, 255); // EditorTheme::Text
+inline constexpr ImU32 kHudTextDisabledColor = IM_COL32(0xEC, 0xEC, 0xF0, 150);
+inline constexpr ImU32 kHudPlateColor        = IM_COL32(0x0E, 0x0E, 0x11, 219); // EditorTheme::HudPlate
 
 // Fills `mn`..`mx` with the standard HUD plate colour. Pass the tight bounding box of the
 // content that sits on top (e.g. from ImGui::CalcTextSize / ImFont::CalcTextSizeA), already
@@ -210,6 +425,7 @@ inline constexpr ImU32 kHudPlateColor        = IM_COL32(10, 10, 10, 190);
 // multi-line stats block).
 inline void DrawHudPlate(ImDrawList* dl, ImVec2 mn, ImVec2 mx, float rounding = 4.0f) {
     dl->AddRectFilled(mn, mx, kHudPlateColor, rounding);
+    dl->AddRect(mn, mx, EditorTheme::U32(EditorTheme::Hairline), rounding, 0, 1.0f);
 }
 
 // --- Startup contrast assert (Phase 1 item 1) -----------------------------------------------

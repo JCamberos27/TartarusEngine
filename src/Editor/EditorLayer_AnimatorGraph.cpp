@@ -1,5 +1,6 @@
 // The Animator window's middle panel: the state graph - nodes, edges, linking, selection, the context menu.
 #include "EditorLayer.h"
+#include "EditorTheme.h"
 #include "EditorLayerInternal.h"
 #include "EditorUIHelpers.h"
 #include "EditorUIPrimitives.h"
@@ -147,14 +148,14 @@ void DrawGraphCanvas(AnimCtx& cx) {
 
     // Grid
     dl->PushClipRect(c0, c1, true);
-    dl->AddRectFilled(c0, c1, IM_COL32(32, 32, 34, 255));
+    dl->AddRectFilled(c0, c1, EditorTheme::U32(EditorTheme::Field));
     {
         const float step = 40.0f * W.Zoom;
         if (step > 6.0f) {
             for (float x = std::fmod(W.Pan.x, step); x < csz.x; x += step)
-                dl->AddLine(ImVec2(c0.x + x, c0.y), ImVec2(c0.x + x, c1.y), IM_COL32(255, 255, 255, 12));
+                dl->AddLine(ImVec2(c0.x + x, c0.y), ImVec2(c0.x + x, c1.y), EditorTheme::U32(EditorTheme::WithAlpha(EditorTheme::Text, 0.05f)));
             for (float y = std::fmod(W.Pan.y, step); y < csz.y; y += step)
-                dl->AddLine(ImVec2(c0.x, c0.y + y), ImVec2(c1.x, c0.y + y), IM_COL32(255, 255, 255, 12));
+                dl->AddLine(ImVec2(c0.x, c0.y + y), ImVec2(c1.x, c0.y + y), EditorTheme::U32(EditorTheme::WithAlpha(EditorTheme::Text, 0.05f)));
         }
     }
 
@@ -229,9 +230,9 @@ void DrawGraphCanvas(AnimCtx& cx) {
         const bool sel = edgeIsSelected(E);
         const bool active = liveTransition >= 0 &&
                             std::find(E.Transitions.begin(), E.Transitions.end(), liveTransition) != E.Transitions.end();
-        const ImU32 col = active ? IM_COL32(90, 170, 255, 255)
+        const ImU32 col = active ? EditorTheme::U32(EditorTheme::Info)
                         : sel ? ImGui::GetColorU32(EditorUIPrimitives::ActiveAccentColor())
-                        : e == hoveredEdge ? IM_COL32(235, 235, 235, 255) : IM_COL32(190, 190, 190, 200);
+                        : e == hoveredEdge ? EditorTheme::U32(EditorTheme::Text) : EditorTheme::U32(EditorTheme::WithAlpha(EditorTheme::Secondary, 0.8f));
         const float thick = (sel || active ? 3.0f : 2.0f) * std::max(W.Zoom, 0.6f);
         if (E.From == E.To) {
             ImVec2 a, b;
@@ -264,7 +265,7 @@ void DrawGraphCanvas(AnimCtx& cx) {
             nodeRect(def, ra, rb);
             const ImVec2 b0 = (ra + rb) * 0.5f, hB = (rb - ra) * 0.5f;
             const ImVec2 a = RectExit(a0, hA, b0), b = RectExit(b0, hB, a0);
-            const ImU32 col = IM_COL32(230, 140, 40, 220);
+            const ImU32 col = EditorTheme::U32(EditorTheme::Accent);
             dl->AddLine(a, b, col, 2.0f * std::max(W.Zoom, 0.6f));
             Arrowhead(dl, (a + b) * 0.5f, b - a, 7.0f * std::max(W.Zoom, 0.6f), col);
         }
@@ -299,17 +300,17 @@ void DrawGraphCanvas(AnimCtx& cx) {
         ImVec2 a, b;
         nodeRect(n, a, b);
         const float round = 6.0f * W.Zoom;
-        ImU32 fill = IM_COL32(70, 72, 78, 255);
+        ImU32 fill = EditorTheme::U32(EditorTheme::Pressed);
         std::string label;
         bool selected = false;
         switch (n.Kind) {
-            case NodeKind::Entry: fill = IM_COL32(40, 120, 60, 255); label = "Entry"; selected = W.SelSpecial && W.SelKind == NodeKind::Entry; break;
-            case NodeKind::Any:   fill = IM_COL32(40, 130, 130, 255); label = "Any State"; selected = W.SelSpecial && W.SelKind == NodeKind::Any; break;
-            case NodeKind::Exit:  fill = IM_COL32(150, 50, 50, 255); label = "Exit"; selected = W.SelSpecial && W.SelKind == NodeKind::Exit; break;
+            case NodeKind::Entry: fill = EditorTheme::U32(EditorTheme::Rgb(0x2E, 0x6E, 0x44)); label = "Entry"; selected = W.SelSpecial && W.SelKind == NodeKind::Entry; break;
+            case NodeKind::Any:   fill = EditorTheme::U32(EditorTheme::Rgb(0x2C, 0x5E, 0x6C)); label = "Any State"; selected = W.SelSpecial && W.SelKind == NodeKind::Any; break;
+            case NodeKind::Exit:  fill = EditorTheme::U32(EditorTheme::Rgb(0x7E, 0x34, 0x30)); label = "Exit"; selected = W.SelSpecial && W.SelKind == NodeKind::Exit; break;
             default: {
                 const auto& s = Ly.States[n.Index];
                 label = s.Name;
-                if (n.Index == defaultState) fill = IM_COL32(180, 100, 30, 255);
+                if (n.Index == defaultState) fill = EditorTheme::U32(EditorTheme::AccentDeep);
                 bool blend = false;
                 for (const auto& m : s.Motions) blend |= m.IsBlendTree();
                 if (blend) label += "  " ICON_FA_SLIDERS;
@@ -330,15 +331,15 @@ void DrawGraphCanvas(AnimCtx& cx) {
         dl->AddRectFilled(a + ImVec2(3, 4) * W.Zoom, b + ImVec2(3, 4) * W.Zoom, IM_COL32(0, 0, 0, 90), round);
         dl->AddRectFilled(a, b, fill, round);
         const ImU32 border = selected ? ImGui::GetColorU32(EditorUIPrimitives::ActiveAccentColor())
-                           : (n == hoveredNode ? IM_COL32(220, 220, 220, 200) : IM_COL32(20, 20, 20, 200));
+                           : (n == hoveredNode ? EditorTheme::U32(EditorTheme::WithAlpha(EditorTheme::Secondary, 0.9f)) : EditorTheme::U32(EditorTheme::Hairline));
         dl->AddRect(a, b, border, round, 0, selected ? 2.5f : 1.0f);
         if (n.Kind == NodeKind::State && g_stateSearch[0] && ClipFilterMatch(g_stateSearch, label))
-            dl->AddRect(a - ImVec2(3, 3), b + ImVec2(3, 3), IM_COL32(255, 210, 60, 255), round + 2.0f, 0, 2.0f);
+            dl->AddRect(a - ImVec2(3, 3), b + ImVec2(3, 3), EditorTheme::U32(EditorTheme::AccentBright), round + 2.0f, 0, 2.0f);
         if (n.Kind == NodeKind::State && n.Index == liveCurrent) {
             const float h = 4.0f * W.Zoom;
             dl->AddRectFilled(ImVec2(a.x + round, b.y - h - 3.0f * W.Zoom),
                               ImVec2(a.x + round + (b.x - a.x - 2 * round) * liveProgress, b.y - 3.0f * W.Zoom),
-                              IM_COL32(120, 200, 255, 255));
+                              EditorTheme::U32(EditorTheme::Info));
         }
         ImFont* font = ImGui::GetFont();
         const float fs = ImGui::GetFontSize() * fontScale;
@@ -351,10 +352,10 @@ void DrawGraphCanvas(AnimCtx& cx) {
         const float lift = tagLine.empty() ? 0.0f : tfs * 0.55f;
         const ImVec2 tp((a.x + b.x - ts.x) * 0.5f, (a.y + b.y - ts.y) * 0.5f - lift);
         dl->PushClipRect(a, b, true);
-        dl->AddText(font, fs, tp, IM_COL32(240, 240, 240, 255), label.c_str());
+        dl->AddText(font, fs, tp, EditorTheme::U32(EditorTheme::Text), label.c_str());
         if (!tagLine.empty()) {
             const ImVec2 tts = font->CalcTextSizeA(tfs, FLT_MAX, 0.0f, tagLine.c_str());
-            dl->AddText(font, tfs, ImVec2((a.x + b.x - tts.x) * 0.5f, tp.y + ts.y), IM_COL32(190, 205, 225, 210), tagLine.c_str());
+            dl->AddText(font, tfs, ImVec2((a.x + b.x - tts.x) * 0.5f, tp.y + ts.y), EditorTheme::U32(EditorTheme::Secondary), tagLine.c_str());
         }
         dl->PopClipRect();
     }
@@ -362,19 +363,19 @@ void DrawGraphCanvas(AnimCtx& cx) {
     // Link preview
     if (W.Linking) {
         const ImVec2 a = nodeCenter(W.LinkFrom);
-        dl->AddLine(a, mouse, IM_COL32(255, 255, 255, 200), 2.0f);
-        Arrowhead(dl, mouse, mouse - a, 8.0f, IM_COL32(255, 255, 255, 200));
+        dl->AddLine(a, mouse, EditorTheme::U32(EditorTheme::WithAlpha(EditorTheme::AccentBright, 0.85f)), 2.0f);
+        Arrowhead(dl, mouse, mouse - a, 8.0f, EditorTheme::U32(EditorTheme::WithAlpha(EditorTheme::AccentBright, 0.85f)));
     }
     // Box select
     if (W.BoxSelecting) {
-        dl->AddRectFilled(W.BoxStart, mouse, IM_COL32(90, 150, 255, 40));
-        dl->AddRect(W.BoxStart, mouse, IM_COL32(90, 150, 255, 160));
+        dl->AddRectFilled(W.BoxStart, mouse, EditorTheme::U32(EditorTheme::WithAlpha(EditorTheme::Accent, 0.12f)));
+        dl->AddRect(W.BoxStart, mouse, EditorTheme::U32(EditorTheme::WithAlpha(EditorTheme::Accent, 0.7f)));
     }
     // Hint
     if (Ly.States.empty())
-        dl->AddText(c0 + ImVec2(12, 10), IM_COL32(200, 200, 200, 160), "Right-click to create a state.");
+        dl->AddText(c0 + ImVec2(12, 10), EditorTheme::U32(EditorTheme::Dim), "Right-click to create a state.");
     else if (W.Linking)
-        dl->AddText(c0 + ImVec2(12, 10), IM_COL32(200, 200, 200, 200), "Click a state (or Exit) to finish the transition. Esc cancels.");
+        dl->AddText(c0 + ImVec2(12, 10), EditorTheme::U32(EditorTheme::Secondary), "Click a state (or Exit) to finish the transition. Esc cancels.");
     dl->PopClipRect();
 
     // --- interaction -------------------------------------------------------------------------
