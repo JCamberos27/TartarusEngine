@@ -97,6 +97,8 @@ public:
     bool CrashRecoverySave(const World& world, const AssetLibrary& assets) noexcept;
     // --crash-test-in-editor: pretend there are unsaved edits, so the recovery path runs.
     void MarkDirtyForCrashTest() { m_Dirty = true; }
+    // Headless runs (--unit-tests, --smoke-test, etc.) should not persist editor_prefs.json.
+    void SetHeadless(bool headless) { m_Headless = headless; }
     void Shutdown();
 
     // Applies the editor's style — colours and metrics (rounding / padding / borders), DPI-scaled
@@ -766,6 +768,7 @@ private:
     bool m_MaximizeToggleRequested = false;
     bool m_PauseToggleRequested = false;
     bool m_StepRequested = false;
+    bool m_Headless = false;
     std::set<entt::entity> m_ShadowOverBudget; // #110, see SetShadowOverBudget
     int m_SpotShadowBudget = 4, m_PointShadowBudget = 2; // #110 - this frame's caps, for the warning tooltip
     bool m_GameInputActive = false; // see SetGameInputActive

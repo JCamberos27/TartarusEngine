@@ -96,10 +96,11 @@ void EditorLayer::DrawPlayTransportButtons(bool playing, bool maximized, bool pa
         // Pause toggle + single-frame Step (#236). Pause reads as pressed-in while active; Step
         // is only meaningful (and only enabled) once paused.
         ImGui::SameLine();
-        if (paused) ImGui::PushStyleColor(ImGuiCol_Button, EditorTheme::AccentWash);
-        if (ImGui::Button(paused ? ICON_FA_PLAY "  Resume" : ICON_FA_PAUSE "  Pause")) m_PauseToggleRequested = true;
-        if (paused) ImGui::PopStyleColor();
-        if (ImGui::IsItemHovered()) EditorUI::SetTooltip(paused ? "Resume simulation (F2)" : "Freeze simulation, keep rendering (F2)");
+        if (EditorUIPrimitives::ActionButton(paused ? ICON_FA_PLAY "  Resume" : ICON_FA_PAUSE "  Pause",
+                                             paused ? "Resume simulation (F2)" : "Freeze simulation, keep rendering (F2)",
+                                             EditorUI::SetTooltip, paused)) {
+            m_PauseToggleRequested = true;
+        }
 
         ImGui::SameLine();
         ImGui::BeginDisabled(!paused);

@@ -152,17 +152,12 @@ void EditorLayer::DrawCharacterOutfitEditor(World& world, entt::entity root) {
     ImGui::Spacing();
     {
         const char* labels[2] = {ICON_FA_MARS "  Male", ICON_FA_VENUS "  Female"};
-        for (int g = 0; g < 2; ++g) {
-            if (g) ImGui::SameLine(0.0f, 2.0f);
-            const bool on = outfit->Gender == g;
-            ImGui::PushStyleColor(ImGuiCol_Button, on ? accent : style.Colors[ImGuiCol_FrameBg]);
-            ImGui::PushStyleVar(ImGuiStyleVar_FrameRounding, 12.0f);
-            if (ImGui::Button(labels[g], ImVec2(96.0f, 0.0f)) && !on) {
+        {
+            int gender = outfit->Gender;
+            if (EditorUIPrimitives::Segmented("##genderPills", &gender, labels, 2, nullptr, nullptr, EditorTheme::Px(96.0f))) {
                 PushUndo(world, "Change Gender");
-                report(OutfitSystem::SetGender(world, assets, root, (Wardrobe::Gender)g));
+                report(OutfitSystem::SetGender(world, assets, root, (Wardrobe::Gender)gender));
             }
-            ImGui::PopStyleVar();
-            ImGui::PopStyleColor();
         }
         // Randomize and the menu on the right.
         const float right = ImGui::GetWindowContentRegionMax().x;
@@ -398,14 +393,8 @@ void EditorLayer::DrawCharacterOutfitEditor(World& world, entt::entity root) {
             ImGui::GetWindowDrawList()->AddText(ImVec2(mn.x + 8.0f, mn.y + 6.0f), Col(style.Colors[ImGuiCol_Text]),
                                                 (shown->Name + (shown == wornItem ? "  (worn)" : "")).c_str());
             // Shading and reset, under it.
-            const char* modes[3] = {"Lit", "Unlit", "Wireframe"};
-            for (int m = 0; m < 3; ++m) {
-                if (m) ImGui::SameLine(0.0f, 2.0f);
-                const bool on = ui.Shading == m;
-                ImGui::PushStyleColor(ImGuiCol_Button, on ? accent : style.Colors[ImGuiCol_FrameBg]);
-                if (ImGui::Button(modes[m])) ui.Shading = m;
-                ImGui::PopStyleColor();
-            }
+            static const char* kShadingModes[] = {"Lit", "Unlit", "Wireframe"};
+            EditorUIPrimitives::Segmented("##shadingMode", &ui.Shading, kShadingModes, 3);
             ImGui::SameLine();
             ImGui::TextDisabled("Drag to spin, scroll to zoom");
             ImGui::SameLine(ImGui::GetWindowContentRegionMax().x - ImGui::CalcTextSize("Reset view").x - style.FramePadding.x * 2.0f);
