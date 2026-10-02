@@ -2594,6 +2594,7 @@ int main(int argc, char** argv) {
                     firstPersonBody.Tick(world, player, player.Cam, gameDt);
                     if (firstPersonPresentation.IsActive()) {
                         firstPersonPresentation.Update(world, player.Cam);
+                        firstPersonPresentation.SetCrouch(player.CrouchBlend); // the crouched ADS pose eases in with the eye height
                         if (weaponTest) {
                             // The script is the player: its trigger, aim and weapon keys, nothing else.
                             weaponTest->SetCamera(&player.Cam);
