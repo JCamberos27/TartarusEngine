@@ -1501,6 +1501,34 @@ void RegisterEngineComponents() {
               "Degrees of inward rotation along the bone (toes or thumb toward the midline).", 0.0f, 175.0f },
             { "Calf Twist Out", T::Float, TARTARUS_REFLECT_FIELD(RagdollSettingsComponent, CalfTwistOut), 0.5f,
               "Degrees of outward rotation along the bone.", 0.0f, 175.0f },
+            { "Limb Velocity Scale", T::Float, TARTARUS_REFLECT_FIELD(RagdollSettingsComponent, LimbVelocityScale), 0.05f,
+              "How much of each bone's own motion (from the last two animated poses) the parts keep at death: a soldier shot mid-stride keeps his swinging limbs. 0 = only the body's velocity.", 0.0f, 2.0f },
+            { "Max Limb Speed", T::Float, TARTARUS_REFLECT_FIELD(RagdollSettingsComponent, MaxLimbSpeed), 0.1f,
+              "Cap on a part's speed relative to the body from that (m/s); stops a teleport or a bad first frame throwing a limb.", 0.0f, 30.0f },
+            { "Max Limb Spin", T::Float, TARTARUS_REFLECT_FIELD(RagdollSettingsComponent, MaxLimbSpin), 0.5f,
+              "Cap on a part's spin from that (rad/s).", 0.0f, 100.0f },
+            { "Shaped Torso Inertia", T::Bool, TARTARUS_REFLECT_FIELD(RagdollSettingsComponent, ShapedTorsoInertia), 0.0f,
+              "Pelvis and chest turn like a box wider than deep (a human trunk) instead of a round capsule. Off: the capsule's own inertia." },
+            { "Torso Half Width", T::Float, TARTARUS_REFLECT_FIELD(RagdollSettingsComponent, TorsoHalfWidth), 0.005f,
+              "Half the trunk's width (shoulder to shoulder), for its inertia only; hitboxes are unchanged.", 0.05f, 0.4f },
+            { "Torso Half Depth", T::Float, TARTARUS_REFLECT_FIELD(RagdollSettingsComponent, TorsoHalfDepth), 0.005f,
+              "Half the trunk's depth (chest to back), for its inertia only.", 0.05f, 0.3f },
+            { "Inertia Scale", T::Float, TARTARUS_REFLECT_FIELD(RagdollSettingsComponent, InertiaScale), 0.05f,
+              "Multiplies every part's rotational inertia. Above 1 the parts turn more slowly (stabler), below 1 they whip about.", 0.2f, 5.0f },
+            { "Pelvis Fade Scale", T::Float, TARTARUS_REFLECT_FIELD(RagdollSettingsComponent, PelvisFadeScale), 0.05f,
+              "Multiplies Drive Fade for this region's joint drive: below 1 it goes limp sooner (legs give out first), above 1 it holds longer (spine and neck). 1 = with the rest.", 0.1f, 4.0f },
+            { "Spine Fade Scale", T::Float, TARTARUS_REFLECT_FIELD(RagdollSettingsComponent, SpineFadeScale), 0.05f,
+              "Multiplies Drive Fade for this region's joint drive: below 1 it goes limp sooner (legs give out first), above 1 it holds longer (spine and neck). 1 = with the rest.", 0.1f, 4.0f },
+            { "Head Fade Scale", T::Float, TARTARUS_REFLECT_FIELD(RagdollSettingsComponent, HeadFadeScale), 0.05f,
+              "Multiplies Drive Fade for this region's joint drive: below 1 it goes limp sooner (legs give out first), above 1 it holds longer (spine and neck). 1 = with the rest.", 0.1f, 4.0f },
+            { "Upper Arm Fade Scale", T::Float, TARTARUS_REFLECT_FIELD(RagdollSettingsComponent, UpperArmFadeScale), 0.05f,
+              "Multiplies Drive Fade for this region's joint drive: below 1 it goes limp sooner (legs give out first), above 1 it holds longer (spine and neck). 1 = with the rest.", 0.1f, 4.0f },
+            { "Forearm Fade Scale", T::Float, TARTARUS_REFLECT_FIELD(RagdollSettingsComponent, ForearmFadeScale), 0.05f,
+              "Multiplies Drive Fade for this region's joint drive: below 1 it goes limp sooner (legs give out first), above 1 it holds longer (spine and neck). 1 = with the rest.", 0.1f, 4.0f },
+            { "Thigh Fade Scale", T::Float, TARTARUS_REFLECT_FIELD(RagdollSettingsComponent, ThighFadeScale), 0.05f,
+              "Multiplies Drive Fade for this region's joint drive: below 1 it goes limp sooner (legs give out first), above 1 it holds longer (spine and neck). 1 = with the rest.", 0.1f, 4.0f },
+            { "Calf Fade Scale", T::Float, TARTARUS_REFLECT_FIELD(RagdollSettingsComponent, CalfFadeScale), 0.05f,
+              "Multiplies Drive Fade for this region's joint drive: below 1 it goes limp sooner (legs give out first), above 1 it holds longer (spine and neck). 1 = with the rest.", 0.1f, 4.0f },
         };
         m.Fields[0].Group = "Joints";
         m.Fields[1].Group = "Death Drive";
@@ -1562,6 +1590,20 @@ void RegisterEngineComponents() {
         m.Fields[57].Group = "Calf";
         m.Fields[58].Group = "Calf";
         m.Fields[59].Group = "Calf";
+        m.Fields[60].Group = "Death Momentum";
+        m.Fields[61].Group = "Death Momentum";
+        m.Fields[62].Group = "Death Momentum";
+        m.Fields[63].Group = "Inertia";
+        m.Fields[64].Group = "Inertia";
+        m.Fields[65].Group = "Inertia";
+        m.Fields[66].Group = "Inertia";
+        m.Fields[67].Group = "Death Drive";
+        m.Fields[68].Group = "Death Drive";
+        m.Fields[69].Group = "Death Drive";
+        m.Fields[70].Group = "Death Drive";
+        m.Fields[71].Group = "Death Drive";
+        m.Fields[72].Group = "Death Drive";
+        m.Fields[73].Group = "Death Drive";
         Register<RagdollSettingsComponent>(std::move(m));
     }
     for (RegisteredComponent& rc : Storage())

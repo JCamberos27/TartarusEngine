@@ -13,6 +13,8 @@
 #include <glm/gtx/quaternion.hpp>
 
 #include <algorithm>
+#include <cmath>
+#include <cstring>
 #include <string>
 
 namespace {
@@ -144,6 +146,63 @@ float NpcRagdoll::PartMass(const RagdollSettingsComponent* cfg, int part) {
     }
 }
 
+float NpcRagdoll::PartFade(const RagdollSettingsComponent* cfg, int part) {
+    part = std::clamp(part, 0, kParts - 1);
+    if (!cfg) return kDriveFade;
+    float scale = 1.0f;
+    switch (kRegionOf[part]) {
+    case Region::Pelvis: scale = cfg->PelvisFadeScale; break;
+    case Region::Spine: scale = cfg->SpineFadeScale; break;
+    case Region::Head: scale = cfg->HeadFadeScale; break;
+    case Region::UpperArm: scale = cfg->UpperArmFadeScale; break;
+    case Region::Forearm: scale = cfg->ForearmFadeScale; break;
+    case Region::Thigh: scale = cfg->ThighFadeScale; break;
+    default: scale = cfg->CalfFadeScale; break;
+    }
+    return std::max(cfg->DriveFade * std::max(scale, 0.0f), 1e-3f);
+}
+
+float NpcRagdoll::DriveFadeTime() const {
+    float t = 0.0f;
+    for (int i = 0; i < kParts; ++i) t = std::max(t, m_PartFade[i]);
+    return t;
+}
+
+namespace {
+// The bones a snapshot holds: every part's start and end bone, and the neck.
+const char* const kSnapNames[NpcRagdoll::kSnapBones] = {"pelvis", "spine_02", "spine_03", "neck_01", "head", "upperarm_l", "lowerarm_l", "hand_l",
+                                                        "upperarm_r", "lowerarm_r", "hand_r", "thigh_l", "calf_l", "foot_l", "thigh_r", "calf_r", "foot_r"};
+} // namespace
+
+void NpcRagdoll::Capture(const NpcBody& body, BoneSnapshot& out) {
+    const glm::mat4 inv = glm::inverse(body.RootMatrix());
+    out.Valid = true;
+    for (int i = 0; i < kSnapBones; ++i) {
+        glm::vec3 w;
+        if (!body.BoneWorld(kSnapNames[i], w)) { out.Valid = false; return; }
+        out.P[i] = glm::vec3(inv * glm::vec4(w, 1.0f));
+    }
+}
+
+void NpcRagdoll::InheritVelocity(const glm::mat4* prevWorld, const glm::mat4* nowWorld, float dt, const RagdollSettingsComponent& cfg,
+                                 PhysicsWorld::RagdollPart* parts) {
+    if (dt < 0.002f || dt > 0.12f || cfg.LimbVelocityScale <= 0.0f) return;
+    for (int i = 0; i < kParts; ++i) {
+        glm::vec3 v = (glm::vec3(nowWorld[i][3]) - glm::vec3(prevWorld[i][3])) / dt * cfg.LimbVelocityScale;
+        const float sp = glm::length(v);
+        if (sp > cfg.MaxLimbSpeed) v *= cfg.MaxLimbSpeed / sp;
+        glm::quat dq = glm::quat_cast(glm::mat3(nowWorld[i])) * glm::inverse(glm::quat_cast(glm::mat3(prevWorld[i])));
+        if (dq.w < 0.0f) dq = -dq;
+        const float angle = 2.0f * std::atan2(glm::length(glm::vec3(dq.x, dq.y, dq.z)), dq.w);
+        glm::vec3 w(0.0f);
+        const float s = glm::length(glm::vec3(dq.x, dq.y, dq.z));
+        if (s > 1e-6f) w = glm::vec3(dq.x, dq.y, dq.z) / s * (angle / dt * cfg.LimbVelocityScale);
+        const float spin = glm::length(w);
+        if (spin > cfg.MaxLimbSpin) w *= cfg.MaxLimbSpin / spin;
+        for (int k = 0; k < 3; ++k) { parts[i].Velocity[k] += v[k]; parts[i].AngularVelocity[k] += w[k]; }
+    }
+}
+
 PhysicsWorld::RagdollParams NpcRagdoll::BodyParams(const RagdollSettingsComponent& c) {
     PhysicsWorld::RagdollParams p;
     p.LinearDamping = c.LinearDamping; p.AngularDamping = c.AngularDamping;
@@ -178,6 +237,14 @@ bool NpcRagdoll::BuildParts(const std::function<bool(const char*, glm::vec3&)>& 
         p.SwingDeg = d.Swing;
         p.TwistDeg = d.Twist;
         p.Velocity[0] = velocity.x; p.Velocity[1] = velocity.y; p.Velocity[2] = velocity.z;
+        p.InertiaScale = cfg.InertiaScale;
+        if (cfg.ShapedTorsoInertia && (kRegionOf[i] == Region::Pelvis || kRegionOf[i] == Region::Spine)) {
+            // A trunk is wider than it is deep: a box (the hips a little narrower than the shoulders), not a round capsule.
+            p.InertiaHalfWidth = cfg.TorsoHalfWidth * (kRegionOf[i] == Region::Pelvis ? 0.9f : 1.0f);
+            p.InertiaHalfDepth = cfg.TorsoHalfDepth;
+            const glm::vec3 left = glm::normalize(glm::vec3(root[0]));
+            p.InertiaLateral[0] = left.x; p.InertiaLateral[1] = left.y; p.InertiaLateral[2] = left.z;
+        }
         partWorld[i] = PoseOf(s.Centre, s.Rotation);
         dir[i] = s.Rotation * glm::vec3(1, 0, 0);
     }
@@ -199,7 +266,7 @@ void NpcRagdoll::Stop() {
 }
 
 bool NpcRagdoll::Start(NpcBody& body, const glm::vec3& velocity, const glm::vec3& impulse, const glm::vec3& point, int hitPart,
-                       const RagdollSettingsComponent* cfgIn) {
+                       const RagdollSettingsComponent* cfgIn, const BoneSnapshot* prev, float prevDt) {
     Stop();
     const RagdollSettingsComponent defaults;
     const RagdollSettingsComponent& cfg = cfgIn ? *cfgIn : defaults;
@@ -211,13 +278,25 @@ bool NpcRagdoll::Start(NpcBody& body, const glm::vec3& velocity, const glm::vec3
     glm::mat4 partWorld[kParts];
     if (!BuildParts([&](const char* name, glm::vec3& out) { return name && body.BoneWorld(name, out); }, root, velocity, cfg, parts, partWorld))
         return false;
+    if (prev && prev->Valid) { // each part's own motion: its pose against the one before, both in the body's (fixed) root frame
+        auto before = [&](const char* name, glm::vec3& out) {
+            for (int k = 0; k < kSnapBones; ++k)
+                if (std::strcmp(kSnapNames[k], name) == 0) { out = glm::vec3(root * glm::vec4(prev->P[k], 1.0f)); return true; }
+            return false;
+        };
+        PhysicsWorld::RagdollPart prevParts[kParts];
+        glm::mat4 prevWorld[kParts];
+        if (BuildParts(before, root, velocity, cfg, prevParts, prevWorld)) InheritVelocity(prevWorld, partWorld, prevDt, cfg, parts);
+    }
     const PhysicsWorld::RagdollParams bodyParams = BodyParams(cfg);
     m_Id = PhysicsWorld::CreateRagdoll((unsigned)entt::to_integral(body.Root()), parts, kParts, &bodyParams);
     if (m_Id < 0) return false;
     // Powered at first: the joints hold the death pose (their drive targets are the pose they were built in).
-    m_Stiffness = cfg.DriveStiffness; m_Damping = cfg.DriveDamping; m_Fade = std::max(cfg.DriveFade, 1e-3f);
+    m_Stiffness = cfg.DriveStiffness; m_Damping = cfg.DriveDamping;
+    for (int i = 0; i < kParts; ++i) m_PartFade[i] = PartFade(&cfg, i);
     PhysicsWorld::SetRagdollDrive(m_Id, m_Stiffness, m_Damping);
     m_Drive = 1.0f;
+    m_Time = 0.0f;
     m_Settled = false;
     m_RootInv = glm::inverse(root);
     // Each piece's bones, relative to the part they ride on.
@@ -267,11 +346,15 @@ bool NpcRagdoll::Start(NpcBody& body, const glm::vec3& velocity, const glm::vec3
 
 void NpcRagdoll::Update(float dt) {
     if (m_Id < 0) return;
-    // The drives fade out: stiff at the moment of death, limp a quarter second on.
+    // The drives fade out, each region on its own clock: stiff at the moment of death, limp a quarter second on (by default).
     if (m_Drive > 0.0f && dt > 0.0f) {
-        m_Drive = std::max(0.0f, m_Drive - dt / m_Fade);
-        const float k = m_Drive * m_Drive;
-        PhysicsWorld::SetRagdollDrive(m_Id, m_Stiffness * k, m_Damping * k);
+        m_Time += dt;
+        m_Drive = 0.0f;
+        for (int i = 1; i < kParts; ++i) {
+            const float f = DriveAt(m_Time, m_PartFade[i]);
+            m_Drive = std::max(m_Drive, f);
+            PhysicsWorld::SetRagdollPartDrive(m_Id, i, m_Stiffness * f * f, m_Damping * f * f);
+        }
     }
     // A body at rest stays as it lies: one last write once it sleeps, then nothing per frame.
     const bool asleep = Asleep();
