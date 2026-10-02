@@ -368,9 +368,6 @@ void SceneRenderer::RenderScene(World& world, const RenderFrameContext& ctx,
         // OutfitHideTag::Visible: the piece's triangles not covered entirely, drawn instead of its own.
         const VisibleIndexBuffer* Visible = nullptr;
         float LayerPull = 0.0f; // OutfitLayerTag: drawn this many metres nearer the camera (depth only)
-        // Model::InstanceGeometry for an opaque item: placed primitives of one kind share a buffer, and a run
-        // of them with the same material goes out as one instanced draw (0 = never batched).
-        unsigned Geo = 0;
     };
     static std::vector<DrawItem> drawList;
     static std::vector<DrawItem> transparentList;
@@ -539,8 +536,6 @@ void SceneRenderer::RenderScene(World& world, const RenderFrameContext& ctx,
                 MaterialAsset::Queue::Opaque, 2000, viewDepth, centre, opaquePass,
                 renderable.ReceiveShadows, layerBit, nearHide, hideBones, noSsao, hideVerts, nearHideWidth, collarVerts };
             item.DoubleSided = clothing;
-            if (!clothing && !outfitHide && !cameraBody && !anyCameraMask && !isViewModel && opaquePass == Model::MeshPass::All)
-                item.Geo = m->InstanceGeometry();
             item.LayerPull = layerPull;
             if (outfitHide && outfitHide->Visible) {
                 item.Visible = outfitHide->Visible.get();
@@ -573,7 +568,6 @@ void SceneRenderer::RenderScene(World& world, const RenderFrameContext& ctx,
     const auto opaqueOrder = [](const DrawItem& a, const DrawItem& b) {
         if (a.Prog != b.Prog) return std::less<const Shader*>()(a.Prog, b.Prog);
         if (a.MatKey != b.MatKey) return a.MatKey < b.MatKey;
-        if (a.Geo != b.Geo) return a.Geo < b.Geo; // identical primitives side by side: one instanced draw
         return a.ViewDepth < b.ViewDepth;
     };
     std::sort(drawList.begin(), drawList.end(), opaqueOrder);
@@ -620,34 +614,13 @@ void SceneRenderer::RenderScene(World& world, const RenderFrameContext& ctx,
 
     passAlphaBlend = 0;
     modelShader.SetInt("uAlphaBlend", 0); // explicit: ensure opaque pass outputs alpha=1
-    static std::vector<glm::mat4> batchXforms;
-    // Items [k, k + n) are one batch when they draw the same buffers with the same material, program and per-draw
-    // state (the main pass's perDraw sets nothing else for a static, un-hidden, un-layered primitive).
-    const auto batchable = [&](const DrawItem& a, const DrawItem& b) {
-        return a.Geo == b.Geo && a.Prog == b.Prog && a.MatKey == b.MatKey && a.ReceiveShadows == b.ReceiveShadows &&
-               a.LayerBit == b.LayerBit && a.NoSsao == b.NoSsao && a.Pass == b.Pass &&
-               (a.Slots->empty() ? nullptr : a.Slots->front().get()) == (b.Slots->empty() ? nullptr : b.Slots->front().get());
-    };
-    for (size_t k = 0; k < drawList.size();) {
-        const DrawItem& it = drawList[k];
+    for (const DrawItem& it : drawList) {
         probeItem = &it;
-        size_t run = 1;
-        // Reflection probes are picked per object, so a scene with probes draws one by one.
-        if (it.Geo && !anyProbes && it.Prog->Loc("uInstanced") >= 0) {
-            while (k + run < drawList.size() && batchable(it, drawList[k + run])) ++run;
-            if (run >= 2) {
-                batchXforms.clear();
-                for (size_t j = 0; j < run; ++j) batchXforms.push_back(drawList[k + j].Xform);
-                if (!Model::UploadInstances(batchXforms.data(), (int)run)) run = 1;
-            }
-        }
-        it.Ref->DrawSelected(modelShader, it.Xform, *it.Slots, selectProgram, 1.0f, perDraw, it.Pass, it.DoubleSided, it.Visible,
-                             (int)run);
+        it.Ref->DrawSelected(modelShader, it.Xform, *it.Slots, selectProgram, 1.0f, perDraw, it.Pass, it.DoubleSided, it.Visible);
 
         localStats.DrawCalls += it.Meshes;
-        localStats.Triangles += it.Tris * (int)run;
-        localStats.Vertices += it.Verts * (int)run;
-        k += run;
+        localStats.Triangles += it.Tris;
+        localStats.Vertices += it.Verts;
     }
 
     // PR13: sky - the physical sky, HDRI cubemap or procedural gradient - at the far plane under a
