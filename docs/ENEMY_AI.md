@@ -18,6 +18,16 @@ can be tuned, and how it is tested.
   - Difficulty.
   - NPC damage scale.
   - Whether the dead respawn.
+  - Groups for the combat numbers (defaults are the old hard-coded values): Damage / Stagger (heavy hit, stagger time),
+    Wounded (bleed-out, crawl speed, limp speed and time), Corpses (corpse time, fall gravity), Melee (damage, strike
+    and hit time), Distances / LOD (hitbox, foot IK and mesh-check ranges) and Cover (sample spacing, reach, probe
+    heights, peek step).
+- **Ragdoll Settings** (`RagdollSettingsComponent`, category AI): on any object; the first one counts. Without one the
+  defaults below apply. Groups: Joints (anatomical limits on/off), Death Drive (stiffness, damping, fade), Body Physics
+  (damping, solver iterations, depenetration, sleep threshold), Contact (friction, restitution), Impulse Caps (part and
+  chest shove speed, corpse-shot shove), then per region (Pelvis, Spine, Head, Upper Arm, Forearm, Thigh, Calf; left and
+  right share a value) a mass and a range of motion. Hitbox geometry (radius, length) is not exposed: it changes
+  gameplay.
 
 Both scenes have a squad. `scenes/Arena.json` is the test arena. `scenes/Sandbox.json` keeps its squad in the
 "Enemies" group, west of the fountain.
@@ -116,6 +126,14 @@ Tokens limit how many soldiers shoot at once (2-4 with difficulty), and allow on
   - A leg hit makes it limp for 6 s: 60% speed, no flanking or pushing.
 - **Wounded.** Under 20% health from a leg or torso hit, there is a 35% chance the soldier goes down wounded. It crawls to cover, calls for help, and dies on the next hit or after 20 s.
 - **Death.** The body hands over to the ragdoll on the frame it dies, from that frame's pose. Corpses can be shot, and stay for 14 s.
+- **Joint limits.** The ragdoll's 11 capsules are joined by D6 joints with anatomical ranges (table in `NpcRagdoll.cpp`:
+  AAOS / Kapandji active ROM, trimmed for one part standing for several joints). Elbows and knees are one-way hinges:
+  flexion 145 / 140 degrees, no hyperextension, a few degrees of sideways slack and twist. Shoulders, hips, spine and
+  head are asymmetric pyramids (flexion, extension, adduction, abduction) with separate inward and outward twist. The
+  ranges are measured from a neutral pose (limb hanging, spine upright), so the death pose (a stride, an A pose) is
+  just somewhere inside them, and a pose outside widens the range to hold it. Which way a hinge folds comes from the
+  pose it died in when it was bent, else forward (elbow) / back (knee). `AnatomicalLimits` off restores the old
+  symmetric cones.
 
 ## Performance
 
@@ -156,7 +174,7 @@ Hitbox. `--npc-test` prints them at the end.
   - attack tokens
   - melee damage
 - **Numbers in code:**
-  - `NpcDirector.cpp` constants: corpse time, bleed-out, crawl and limp speed, stagger, heavy hit, hitbox and mesh-check ranges, melee.
+  - Squad Settings / Ragdoll Settings: the combat, cover and ragdoll numbers above are inspector fields now, not constants.
   - `AiMath.cpp`: perception, accuracy and the tactics thresholds.
   - `NpcBrain.cpp`: behaviour scores.
 - **Voice lines:** `tools/gen_combine_voice.py` renders them with Windows TTS and a radio chain into `project/assets/Audio/Voice/combine/`. Each event's lines, subtitle, priority and cooldown are in `manifest.json` there.

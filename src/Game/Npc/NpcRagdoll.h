@@ -3,6 +3,7 @@
 #include <glm/glm.hpp>
 #include <glm/gtc/quaternion.hpp>
 
+#include <functional>
 #include <memory>
 #include <vector>
 
@@ -10,6 +11,8 @@
 
 class Model;
 class NpcBody;
+struct RagdollSettingsComponent;
+namespace PhysicsWorld { struct RagdollPart; struct RagdollParams; }
 
 // A soldier going down: the body's pose at the moment of death becomes eleven jointed capsules
 // (pelvis, chest, head, upper and lower arms, thighs and calves) in the physics world, carrying the
@@ -24,7 +27,9 @@ public:
     ~NpcRagdoll();
     // `velocity`: the body's (m/s); `impulse` (N s) at `point` (world) on part `hitPart` (-1: the part nearest
     // `point`).
-    bool Start(NpcBody& body, const glm::vec3& velocity, const glm::vec3& impulse, const glm::vec3& point, int hitPart = -1);
+    // `cfg`: the scene's Ragdoll Settings (null: the defaults).
+    bool Start(NpcBody& body, const glm::vec3& velocity, const glm::vec3& impulse, const glm::vec3& point, int hitPart = -1,
+               const RagdollSettingsComponent* cfg = nullptr);
     void Stop();
     bool Active() const { return m_Id >= 0; }
     // After the physics step (and after the animators, which are off by then): the pieces' poses. `dt` runs the
@@ -40,8 +45,18 @@ public:
     glm::vec3 PartPosition(int part) const;
     // The drive's strength now, 1 at the moment of death to 0 once faded.
     float DriveLeft() const { return m_Drive; }
-    // How the drives fade: seconds from death to limp.
+    // How the drives fade: seconds from death to limp (the default; a Ragdoll Settings overrides it, see DriveFadeTime).
     static constexpr float kDriveFade = 0.25f;
+    float DriveFadeTime() const { return m_Fade; }
+
+    // The physics parts for a body in the pose `bone` gives (a bone's world position by name, false if missing), its root
+    // matrix (x left, y up, z forward): capsules, masses and the joints' limits (anatomical ranges of motion from `cfg`, or the
+    // old symmetric cones with AnatomicalLimits off). Exposed for tests. `partWorld` (optional) gets each part's pose.
+    static bool BuildParts(const std::function<bool(const char*, glm::vec3&)>& bone, const glm::mat4& root, const glm::vec3& velocity,
+                           const RagdollSettingsComponent& cfg, PhysicsWorld::RagdollPart* parts, glm::mat4* partWorld = nullptr);
+    static PhysicsWorld::RagdollParams BodyParams(const RagdollSettingsComponent& cfg);
+    // Part `part`'s mass under `cfg` (null: the default).
+    static float PartMass(const RagdollSettingsComponent* cfg, int part);
 
     // The parts (pure: from bone positions), exposed for tests. Bones by part, in order:
     // pelvis, spine_03, head, upperarm_l, lowerarm_l, upperarm_r, lowerarm_r, thigh_l, calf_l, thigh_r, calf_r.
@@ -59,6 +74,7 @@ private:
     std::vector<PieceBones> m_Pieces;
     bool m_Settled = false;          // asleep, and the pieces already show the resting pose
     float m_Drive = 0.0f;
+    float m_Fade = kDriveFade, m_Stiffness = 700.0f, m_Damping = 60.0f; // the drives' fade, from the settings
     // Scratch, reused every frame.
     std::vector<glm::mat4> m_Globals;
     std::vector<LocalTRS> m_Pose;

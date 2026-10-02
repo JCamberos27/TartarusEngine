@@ -10,10 +10,6 @@
 namespace {
 
 constexpr float kCell = 4.0f;
-constexpr float kSpacing = 0.9f;   // metres between samples along an edge
-constexpr float kReach = 0.85f;    // how far beyond the edge something must stand to count
-constexpr float kKnee = 0.85f, kHead = 1.55f;
-constexpr float kStep = 0.8f;      // a high-cover peek: this far along the wall
 
 bool SolidRay(const glm::vec3& from, const glm::vec3& dir, float dist, RaycastHit* out = nullptr) {
     const float o[3] = {from.x, from.y, from.z}, d[3] = {dir.x, dir.y, dir.z};
@@ -46,7 +42,7 @@ void CoverSystem::Clear() {
     m_Grid.clear();
 }
 
-int CoverSystem::Build(const NavMesh& nav) {
+int CoverSystem::Build(const NavMesh& nav, const CoverTuning& tune) {
     Clear();
     std::vector<NavMesh::Edge> edges;
     nav.BoundaryEdges(edges);
@@ -56,26 +52,26 @@ int CoverSystem::Build(const NavMesh& nav) {
         const float len = glm::length(along);
         if (len < 0.5f) continue;
         along /= len;
-        const int n = std::max(1, (int)std::floor(len / kSpacing));
+        const int n = std::max(1, (int)std::floor(len / tune.Spacing));
         for (int i = 0; i < n; ++i) {
             const float t = (i + 0.5f) / (float)n;
             const glm::vec3 p = e.A + (e.B - e.A) * t;
             CoverProbe probe;
-            probe.BlockedKnee = SolidRay(p + glm::vec3(0, kKnee, 0), e.Out, kReach);
-            probe.BlockedHead = SolidRay(p + glm::vec3(0, kHead, 0), e.Out, kReach);
+            probe.BlockedKnee = SolidRay(p + glm::vec3(0, tune.Knee, 0), e.Out, tune.Reach);
+            probe.BlockedHead = SolidRay(p + glm::vec3(0, tune.Head, 0), e.Out, tune.Reach);
             // Facing the cover (Out), its left is Out rotated +90 about up: (Out.z, 0, -Out.x) is the right.
             const glm::vec3 right(-e.Out.z, 0.0f, e.Out.x);
             const glm::vec3 side[2] = {-right, right};
             glm::vec3 peekPos[2];
             if (probe.BlockedHead) {
                 for (int s = 0; s < 2; ++s) {
-                    const glm::vec3 q = p + side[s] * kStep;
+                    const glm::vec3 q = p + side[s] * tune.Step;
                     glm::vec3 snapped;
                     const bool onMesh = nav.Closest(q, snapped, glm::vec3(0.3f, 0.6f, 0.3f)) &&
                                         glm::length(glm::vec2(snapped.x - q.x, snapped.z - q.z)) < 0.25f;
                     // Clear past the end, and nothing in the way of the step itself.
-                    probe.ClearPast[s] = onMesh && !SolidRay(q + glm::vec3(0, kHead, 0), e.Out, kReach + 0.6f) &&
-                                         !SolidRay(p + glm::vec3(0, kHead, 0), side[s], kStep);
+                    probe.ClearPast[s] = onMesh && !SolidRay(q + glm::vec3(0, tune.Head, 0), e.Out, tune.Reach + 0.6f) &&
+                                         !SolidRay(p + glm::vec3(0, tune.Head, 0), side[s], tune.Step);
                     peekPos[s] = onMesh ? snapped : q;
                 }
             }

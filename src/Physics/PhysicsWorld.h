@@ -120,8 +120,23 @@ struct RagdollPart {
     float Anchor[3] = {0, 0, 0};
     float SwingDeg = 45.0f, TwistDeg = 20.0f;
     float Velocity[3] = {0, 0, 0};
+    // Anatomical limits (Anatomical true): the joint frame is `LimitFrame` (world, xyzw) with +X the bone's neutral
+    // direction and +Y the direction of positive flexion; the swing ranges are degrees from that neutral (flexion toward +Y =
+    // SwingZ, sideways = SwingY), the twist about +X. The part's pose at build may sit anywhere inside (or outside: the range
+    // then widens to include it). Not Anatomical: the symmetric cone (SwingDeg) and twist (TwistDeg) above.
+    bool Anatomical = false;
+    float LimitFrame[4] = {0, 0, 0, 1};
+    float SwingYMin = -45.0f, SwingYMax = 45.0f, SwingZMin = -45.0f, SwingZMax = 45.0f;
+    float TwistMin = -20.0f, TwistMax = 20.0f;
 };
-int  CreateRagdoll(unsigned entity, const RagdollPart* parts, int count); // -1 on failure
+// Body-wide ragdoll tuning (the defaults are what was hard-coded before it was exposed).
+struct RagdollParams {
+    float LinearDamping = 0.08f, AngularDamping = 0.25f;
+    int SolverPosIters = 16, SolverVelIters = 4;
+    float Depenetration = 3.0f, SleepThreshold = 0.08f;
+    float StaticFriction = 0.8f, DynamicFriction = 0.7f, Restitution = 0.05f;
+};
+int  CreateRagdoll(unsigned entity, const RagdollPart* parts, int count, const RagdollParams* params = nullptr); // -1 on failure
 void DestroyRagdoll(int ragdoll);
 void RagdollImpulse(int ragdoll, int part, const float impulse[3], const float point[3]);
 bool GetRagdollPart(int ragdoll, int part, float outPos[3], float outRotXYZW[4]);
