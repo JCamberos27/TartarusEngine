@@ -11,12 +11,15 @@
 #include "Texture.h"
 #include "EditorUIHelpers.h"
 #include "EditorUIPrimitives.h"
+#include "EditorTheme.h"
 
 #include <imgui.h>
 #include <imgui_internal.h> // ImMax, used by ActiveToggle's glyph metrics
 #include <IconsFontAwesome6.h>
 
 #include <algorithm>
+#include <cstring>
+#include <initializer_list>
 #include <cctype>
 #include <memory>
 #include <set>
@@ -32,6 +35,8 @@ namespace EditorInternal {
 // was the point of the move. Tuned empirically against the actual menu-bar row height; adjust if
 // a future font/metric change leaves a visible gap or clips the row.
 inline constexpr float kToolbarHeight = 30.0f;
+// Height of the window-wide status bar under the dock space (EditorLayer::DrawStatusBar).
+inline constexpr float kStatusBarHeight = 24.0f;
 
 
 // --- Dialog primitive (Phase 1 item 4) ------------------------------------------------------
@@ -228,34 +233,89 @@ inline std::string SanitizeAssetName(const std::string& in) {
 
 
 // ============================================================================================
-// Two — and only two — button treatments across the whole editor (#160):
+// The button treatments (#160), drawn by EditorUIPrimitives.h and shared with the modules:
 //
-//   ActionButton   flat: no body at rest, just the glyph (or glyph + short label), faint wash
-//                  on hover. `active` gives it an accent-tinted body + a 2px bottom keyline for
-//                  toggles that are "on". This is every toolbar tool, every panel toggle, every
-//                  low-frequency icon action (eye, expand/collapse, breadcrumb, kelvin mode, +).
-//                  DangerIconButton is the same treatment with a red-on-hover wash, for
-//                  destructive icons (Delete, the component-remove ✕).
+//   ActionButton    flat icon (or icon + short label): toolbar tools, panel toggles, low-
+//                   frequency icon actions. `active` = a toggle that is on (the accent).
+//   SecondaryButton a raised text button: Cancel, Import..., Add Component, row actions.
+//   PrimaryButton   inverse video: a dialog's one confirming action.
+//   DangerIconButton flat, red on hover: destructive icons.
 //
-//   PrimaryButton  the one filled/emphasis style: modal-dialog buttons only (Save / Don't Save
-//                  / Restore / Cancel …), where a raised body helps them read as the choice.
-//
-// Nothing else. No raw ImGui::Button / ImGui::SmallButton for chrome; no per-site colour pushes.
+// Nothing else: no raw ImGui::Button / ImGui::SmallButton for chrome, no per-site colour pushes.
+// Colours come from EditorTheme.h. These forwarders route tooltips through EditorUI::SetTooltip so
+// the ShowTooltips preference gates them.
 // ============================================================================================
-// The actual drawing lives in EditorUIPrimitives.h, shared verbatim with the reloadable editor
-// modules (Defect #53) — these are thin forwarders so every existing host call site (which
-// passes no TooltipFn) keeps compiling unchanged, routed through EditorUI::SetTooltip so the
-// ShowTooltips preference still gates them exactly as before.
 inline void ForwardHostTooltip(const char* text) { EditorUI::SetTooltip("%s", text); }
 
 inline bool ActionButton(const char* icon, const char* tooltip, bool active = false, ImVec2 size = ImVec2(0, 0)) {
     return EditorUIPrimitives::ActionButton(icon, tooltip, &ForwardHostTooltip, active, size);
 }
-
-
-// The one filled treatment — theme accent body, for prominent/rare actions only.
+inline bool DangerIconButton(const char* icon, const char* tooltip, ImVec2 size = ImVec2(0, 0)) {
+    return EditorUIPrimitives::DangerIconButton(icon, tooltip, &ForwardHostTooltip, size);
+}
 inline bool PrimaryButton(const char* label, ImVec2 size = ImVec2(0, 0)) {
     return EditorUIPrimitives::PrimaryButton(label, size);
+}
+inline bool SecondaryButton(const char* label, ImVec2 size = ImVec2(0, 0)) {
+    return EditorUIPrimitives::SecondaryButton(label, size);
+}
+inline bool Segmented(const char* id, int* current, const char* const* labels, int count,
+                      const char* const* tooltips = nullptr, float itemWidth = 0.0f) {
+    return EditorUIPrimitives::Segmented(id, current, labels, count, &ForwardHostTooltip, tooltips, itemWidth);
+}
+using EditorUIPrimitives::SectionHeader;
+using EditorUIPrimitives::SearchField;
+using EditorUIPrimitives::Chip;
+using EditorUIPrimitives::EmptyState;
+using EditorUIPrimitives::DrawRowState;
+
+// A line of help text: the dim colour, wrapped to the panel's width rather than running off its
+// right edge in a narrow panel. For literal text (no format arguments).
+inline void HintText(const char* text) {
+    ImGui::PushStyleColor(ImGuiCol_Text, EditorTheme::Dim);
+    ImGui::PushTextWrapPos(0.0f);
+    ImGui::TextUnformatted(text);
+    ImGui::PopTextWrapPos();
+    ImGui::PopStyleColor();
+}
+
+// --- Settings rows ------------------------------------------------------------------------------
+// The Settings window (Preferences, Project Settings, Build) lays its rows out like the Inspector:
+// the name in a left column in the secondary text colour, the control to its right at a
+// comfortable width. Call SettingsLabel just before a control whose own label is hidden ("##...");
+// anything after "##" in `label` is not shown.
+inline float SettingsLabelWidth() {
+    const float f = ImGui::GetFontSize();
+    return ImClamp(ImGui::GetContentRegionAvail().x * 0.42f, f * 7.0f, f * 13.0f);
+}
+inline void SettingsLabel(const char* label) {
+    const char* end = std::strstr(label, "##");
+    const std::string shown(label, end ? (size_t)(end - label) : std::strlen(label));
+    const float x = ImGui::GetCursorPosX();
+    const float w = SettingsLabelWidth();
+    if (EditorTheme::PropertyLabelText(shown.c_str(), w) && ImGui::IsItemHovered()) EditorUI::SetTooltip("%s", shown.c_str());
+    ImGui::SameLine(x + w);
+    ImGui::SetNextItemWidth(ImMin(ImGui::GetContentRegionAvail().x, ImGui::GetFontSize() * 16.0f));
+}
+inline bool SettingsCheckbox(const char* label, bool* v) {
+    SettingsLabel(label);
+    ImGui::PushID(label);
+    const bool changed = EditorUIPrimitives::Checkbox("##cb", v);
+    ImGui::PopID();
+    return changed;
+}
+
+// A dialog's button row, right-aligned: call with the total width of the buttons that follow
+// (e.g. ButtonRowWidth({"Cancel", "Save"})) and lay them out with SameLine.
+inline float ButtonWidth(const char* label) {
+    return ImGui::CalcTextSize(label, nullptr, true).x + ImGui::GetStyle().FramePadding.x * 2.0f;
+}
+inline void AlignButtonRow(std::initializer_list<const char*> labels, float minWidth = 0.0f) {
+    float w = 0.0f;
+    for (const char* l : labels) w += ImMax(ButtonWidth(l), minWidth);
+    w += ImGui::GetStyle().ItemSpacing.x * (float)(labels.size() > 0 ? labels.size() - 1 : 0);
+    const float avail = ImGui::GetContentRegionAvail().x;
+    if (avail > w) ImGui::SetCursorPosX(ImGui::GetCursorPosX() + avail - w);
 }
 
 
@@ -268,7 +328,7 @@ inline bool PrimaryButton(const char* label, ImVec2 size = ImVec2(0, 0)) {
 // the rest of the row, so it can't rely on its own hover alone). Returns true on click.
 // `alignTop`: place the glyph with its line-box at the row top (matches the Hierarchy's kind
 // glyph). False = frame-centred, matching a framed widget on the same line (Inspector header).
-inline bool ActiveToggle(const char* id, bool active, bool rowHovered, const char* tip, bool alignTop) {
+inline bool ActiveToggle(const char* id, bool active, bool rowHovered, const char* tip, bool alignTop, bool show = true) {
     const float sz = ImGui::GetFrameHeight();
     // Width hugs the glyph (+2px) instead of a full sz-square, so the slot doesn't push the
     // rest of the row across the way the old sz-wide Button did (#152 follow-up). Floored at
@@ -285,6 +345,7 @@ inline bool ActiveToggle(const char* id, bool active, bool rowHovered, const cha
     ImGui::PopID();
     if (selfHover) EditorUI::SetTooltip("%s", tip);
 
+    if (!show) return clicked; // slot stays reserved; the glyph is revealed on row hover / selection / non-default state
     ImDrawList* dl = ImGui::GetWindowDrawList();
     // Align to the Hierarchy's kind glyph, which is painted with its line-box top at the row
     // top (rowMin.y) rather than at FramePadding.y — so draw the eye the same way, not
@@ -298,9 +359,11 @@ inline bool ActiveToggle(const char* id, bool active, bool rowHovered, const cha
     // "Active" reads as a checkbox now, not an eye — Unity's own convention and it frees the eye
     // metaphor for the SceneVis visibility toggle next to it (#236 B feedback).
     if (!active) {
-        glyph(ICON_FA_SQUARE, ImGui::GetColorU32(ImGuiCol_TextDisabled, selfHover ? 1.0f : 0.80f));
+        glyph(ICON_FA_SQUARE, EditorTheme::U32(selfHover ? EditorTheme::Text : EditorTheme::Dim));
     } else {
-        glyph(ICON_FA_SQUARE_CHECK, ImGui::GetColorU32(ImGuiCol_Text, selfHover ? 1.0f : (rowHovered ? 0.85f : 0.65f)));
+        glyph(ICON_FA_SQUARE_CHECK, EditorTheme::U32(selfHover ? EditorTheme::Text
+                                                      : rowHovered ? EditorTheme::Secondary
+                                                                   : EditorTheme::WithAlpha(EditorTheme::Secondary, 0.70f)));
     }
     return clicked;
 }
@@ -315,7 +378,7 @@ inline bool ActiveToggle(const char* id, bool active, bool rowHovered, const cha
 // ActiveToggle's own unchecked glyph already clears — the "quiet until hovered" declutter effect
 // is smaller than it was, but an interactive glyph invisible at rest isn't discoverable at all.
 inline bool SceneVisToggle(const char* id, const char* glyphOn, const char* glyphOff,
-                           bool on, bool rowHovered, const char* tip) {
+                           bool on, bool rowHovered, const char* tip, bool show = true) {
     const float sz = ImGui::GetFrameHeight();
     // Floored at `sz`, same reasoning as ActiveToggle above (Phase 1 item 6).
     const float w  = ImMax(ImMax(ImGui::CalcTextSize(glyphOn).x, ImGui::CalcTextSize(glyphOff).x) + 2.0f, sz);
@@ -326,15 +389,17 @@ inline bool SceneVisToggle(const char* id, const char* glyphOn, const char* glyp
     ImGui::PopID();
     if (selfHover) EditorUI::SetTooltip("%s", tip);
 
+    if (!show) return clicked; // slot stays reserved; see ActiveToggle
     // Always drawn: a dim-but-legible glyph at rest (>=3:1, see above), brighter on row-hover,
     // brightest when set or directly hovered.
     ImDrawList* dl = ImGui::GetWindowDrawList();
     const char* g = on ? glyphOn : glyphOff;
     const ImVec2 ts = ImGui::CalcTextSize(g);
-    const float a = on ? (selfHover ? 1.0f : 0.90f)
-                       : (selfHover ? 1.0f : (rowHovered ? 0.85f : 0.78f));
-    dl->AddText(ImVec2(p0.x + (w - ts.x) * 0.5f, p0.y),
-                ImGui::GetColorU32(on ? ImGuiCol_Text : ImGuiCol_TextDisabled, a), g);
+    // A set toggle (hidden / locked) is the state worth seeing: the accent. At rest the default state
+    // stays quiet until its row is hovered.
+    ImVec4 col = on ? EditorTheme::Accent : EditorTheme::Secondary;
+    col.w = on ? (selfHover ? 1.0f : 0.90f) : (selfHover ? 1.0f : (rowHovered ? 0.85f : 0.40f));
+    dl->AddText(ImVec2(p0.x + (w - ts.x) * 0.5f, p0.y), EditorTheme::U32(col), g);
     return clicked;
 }
 

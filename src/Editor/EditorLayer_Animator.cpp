@@ -8,8 +8,10 @@
 //    is saved straight to the file (a running Play picks it up within a second) and goes on the
 //    editor's undo stack (Ctrl+Z / Ctrl+Y, the History panel), as an asset-only entry.
 #include "EditorLayer.h"
+#include "EditorPanels.h"
 #include "EditorLayer_AnimatorInternal.h"
 #include "EditorLayerInternal.h"
+#include "EditorTheme.h"
 #include "EditorUIHelpers.h"
 #include "EditorUIPrimitives.h"
 #include "AnimationSystem.h"
@@ -57,7 +59,7 @@ void EditorLayer::OpenAnimatorWindow(const std::string& controllerRel, entt::ent
     }
     if (entity != entt::null) w.Entity = entity;
     m_ShowAnimator = true;
-    ImGui::SetWindowFocus(ICON_FA_DIAGRAM_PROJECT "  Animator");
+    ImGui::SetWindowFocus(EditorPanels::Animator);
 }
 
 // --- Inspector section ------------------------------------------------------------------------
@@ -149,7 +151,7 @@ void EditorLayer::DrawAnimatorControllerExtra(World& world, entt::entity entity)
 
     // --- Live view while playing: current state + parameters you can poke ---------------------
     if (m_InPlayMode && ac->Started) {
-        ImGui::SeparatorText("Live");
+        EditorUIPrimitives::SectionHeader("Live");
         ImGui::Text("State: %s", ac->StateName.c_str());
         ImGui::SameLine();
         ImGui::TextDisabled("(%.0f%%%s)", 100.0f * std::fmod(ac->StateTime, 1.0f), ac->InTransition ? ", blending" : "");
@@ -159,7 +161,7 @@ void EditorLayer::DrawAnimatorControllerExtra(World& world, entt::entity entity)
 
 void EditorLayer::DrawRootMotionExtra(World& world, entt::entity entity, RootMotionOptions& opts, Model* model) {
     if (opts.Mode == (int)RootMotionMode::Off) return;
-    ImGui::SeparatorText(ICON_FA_PERSON_WALKING "  Root Motion");
+    EditorUIPrimitives::SectionHeader(ICON_FA_PERSON_WALKING "  Root Motion");
     // Label column like the controller picker above.
     const float valueX = ImGui::GetContentRegionAvail().x * 0.35f;
     auto PropertyLabel = [&](const char* label, const char* tip) {
@@ -235,7 +237,7 @@ void EditorLayer::DrawAnimatorWindow(World& world) {
 
     ImGui::SetNextWindowSize(ImVec2(1100.0f * m_UIScale, 620.0f * m_UIScale), ImGuiCond_FirstUseEver);
     PushTabChromeText();
-    const bool open = ImGui::Begin(ICON_FA_DIAGRAM_PROJECT "  Animator", &m_ShowAnimator);
+    const bool open = ImGui::Begin(EditorPanels::Animator, &m_ShowAnimator);
     PopTabChromeText();
     if (!open) { ImGui::End(); return; }
     const float S = m_UIScale;
@@ -262,10 +264,12 @@ void EditorLayer::DrawAnimatorWindow(World& world) {
             ImGui::SameLine();
             if (ActionButton(ICON_FA_EXPAND, "Frame all nodes (F)")) W.FramePending = true;
             ImGui::SameLine();
-            ImGui::TextDisabled("%.0f%%", W.Zoom * 100.0f);
+            EditorTheme::PushMono();
+            ImGui::AlignTextToFramePadding();
+            ImGui::TextColored(EditorTheme::Dim, "%.0f%%", W.Zoom * 100.0f);
+            EditorTheme::PopFont();
             ImGui::SameLine();
-            ImGui::SetNextItemWidth(130.0f * S);
-            ImGui::InputTextWithHint("##statesearch", ICON_FA_MAGNIFYING_GLASS " find state", g_stateSearch, sizeof g_stateSearch);
+            SearchField("##statesearch", g_stateSearch, sizeof g_stateSearch, "Find state", 170.0f * S);
             if (ImGui::IsItemHovered()) EditorUI::SetTooltip("Highlights states whose name contains this text. Enter selects the first and pans to it.");
             if (ImGui::IsItemDeactivated() && ImGui::IsKeyPressed(ImGuiKey_Enter) && g_stateSearch[0]) {
                 const AC::Layer& sl = W.L();
@@ -300,8 +304,9 @@ void EditorLayer::DrawAnimatorWindow(World& world) {
             ImGui::TextColored(EditorUIPrimitives::WarningColor(), ICON_FA_TRIANGLE_EXCLAMATION "  Can't read %s: %s",
                                W.Rel.c_str(), W.Error.c_str());
         else
-            ImGui::TextDisabled("Pick a controller above, double-click one in the Asset Browser's Animation folder,\n"
-                                "or use Open Animator on an Animator Controller component.");
+            EmptyState(ICON_FA_DIAGRAM_PROJECT, "No controller open",
+                       "Pick one above, double-click one in Assets, or use Open Animator\n"
+                       "on an Animator Controller component.");
         ImGui::End();
         return;
     }
@@ -361,7 +366,7 @@ void EditorLayer::DrawAnimatorWindow(World& world) {
 
 void EditorLayer::DrawControllerAssetInspector(const std::string& path) {
     const std::string rel = ProjectPaths::Relativize(path);
-    ImGui::SeparatorText(ICON_FA_DIAGRAM_PROJECT "  Animator Controller");
+    EditorUIPrimitives::SectionHeader(ICON_FA_DIAGRAM_PROJECT "  Animator Controller");
     ImGui::TextWrapped("%s", rel.c_str());
     if (ActionButton(ICON_FA_DIAGRAM_PROJECT "  Open in Animator", "Edit it in the Animator window", false, ImVec2(-FLT_MIN, 0.0f)))
         OpenAnimatorWindow(rel);
@@ -437,7 +442,7 @@ bool ProjectClipFileList(const char* filter, std::string& ref, int maxShown) {
         ++matched;
         if (shown >= maxShown) continue;
         if (!header) {
-            ImGui::SeparatorText("Project files");
+            EditorUIPrimitives::SectionHeader("Project files");
             header = true;
         }
         const std::string label = fs::u8path(path).stem().u8string() + "##pf" + path;

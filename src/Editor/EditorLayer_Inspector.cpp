@@ -3,8 +3,11 @@
 // EditorLayer.cpp for build time (#179).
 
 #include "PhysicMaterialAsset.h" // #170
+#include "EditorUIPrimitives.h"
 #include "EditorLayer.h"
 #include "EditorLayerInternal.h"
+#include "EditorTheme.h"
+#include "AssetPathPicker.h"
 #include "FileDialog.h"
 #include "AssetLibrary.h"
 #include "World.h"
@@ -101,7 +104,7 @@ inline KelvinBarResult KelvinBar(const char* id, float& k, bool mixed = false) {
     k = std::clamp(k, kKMin, kKMax);
     const float innerSp = ImGui::GetStyle().ItemInnerSpacing.x;
     const float btnW = ImGui::CalcTextSize("RGB").x + ImGui::GetStyle().FramePadding.x * 2.0f;
-    const float barW = std::max(40.0f, ImGui::GetContentRegionAvail().x - btnW - innerSp);
+    const float barW = std::max(40.0f * EditorTheme::Scale(), ImGui::GetContentRegionAvail().x - btnW - innerSp);
     const float barH = ImGui::GetFrameHeight();
     const ImVec2 p = ImGui::GetCursorScreenPos();
 
@@ -158,6 +161,33 @@ bool InputTextString(const char* label, const char* hint, std::string& str) {
                                     ImGuiInputTextFlags_CallbackResize, cb, &str);
 }
 
+// Which files a ReflectField::AssetPath string may point at (extensions as the loaders read them:
+// AnimatorController .controller, FirstPersonAnimationSet .fpsanim, OutfitSystem .wardrobe,
+// Transform Controller scripts .tescript).
+AssetPathPickerOptions AssetPathFieldOptions(const char* component, const char* field) {
+    static const char* const kController[] = {".controller", nullptr};
+    static const char* const kScript[]     = {".tescript", nullptr};
+    static const char* const kWeapon[]     = {".fpsanim", nullptr};
+    static const char* const kWardrobe[]   = {".wardrobe", nullptr};
+    AssetPathPickerOptions o;
+    auto is = [&](const char* c, const char* f) { return !std::strcmp(component, c) && !std::strcmp(field, f); };
+    if (is("Animator Controller", "Controller")) {
+        o.Extensions = kController; o.DragPayload = "ASSET_FILE_PATH"; o.DialogFilter = "Animator Controller\0*.controller\0All Files\0*.*\0";
+    } else if (is("Transform Controller", "Script Path")) {
+        o.Extensions = kScript; o.DragPayload = "ASSET_FILE_PATH"; o.DialogFilter = "Scripts\0*.tescript\0All Files\0*.*\0";
+    } else if (!std::strcmp(component, "First Person Controller")) {
+        o.Extensions = kWeapon; o.DragPayload = "ASSET_FILE_PATH"; o.DialogFilter = "Weapon Animation Set\0*.fpsanim\0All Files\0*.*\0";
+    } else if (is("Character Outfit", "Wardrobe")) {
+        o.Extensions = kWardrobe; o.DragPayload = "ASSET_FILE_PATH"; o.DialogFilter = "Wardrobe\0*.wardrobe\0All Files\0*.*\0";
+    } else if (is("Outfit Piece", "Item")) {
+        o.Extensions = AssetExts::Models; o.DragPayload = "ASSET_MODEL_PATH";
+        o.DialogFilter = "Models\0*.fbx;*.gltf;*.glb;*.obj;*.dae\0All Files\0*.*\0";
+    } else { // Animation Clip (hidden here, its own dropdown) and any future animation-source field
+        o.Extensions = AssetExts::Animations; o.DragPayload = "ASSET_MODEL_PATH";
+    }
+    return o;
+}
+
 // Editable name field bound to a std::string, without depending on imgui_stdlib.h — copies
 // into a fixed local buffer, writes back only on edit. Returns true the moment editing starts
 // (for undo-snapshot timing), via activatedOut, same convention as DrawVec3Row below.
@@ -174,10 +204,6 @@ bool DrawNameField(const char* label, std::string& name, const char* placeholder
     return changed;
 }
 
-// Shared verbatim with the reloadable editor modules — EditorUIPrimitives.h (Defect #53).
-bool DangerIconButton(const char* icon, const char* tooltip, ImVec2 size = ImVec2(0, 0)) {
-    return EditorUIPrimitives::DangerIconButton(icon, tooltip, &EditorInternal::ForwardHostTooltip, size);
-}
 
 // The Unity/Blender/Unreal property-grid convention: a fixed-width label column so a field's
 // name always sits at the same X position regardless of what that row's own value widget is —
@@ -198,29 +224,28 @@ bool DangerIconButton(const char* icon, const char* tooltip, ImVec2 size = ImVec
 // `highlighted` for a plain label; this alone is the fallback for anything else.
 void DrawOverrideGutterBar() {
     const ImVec2 mn = ImGui::GetItemRectMin(), mx = ImGui::GetItemRectMax();
-    ImGui::GetWindowDrawList()->AddRectFilled(ImVec2(mn.x - 6.0f, mn.y), ImVec2(mn.x - 4.0f, mx.y),
-        ImGui::ColorConvertFloat4ToU32(EditorUIPrimitives::InfoColor()), 1.0f);
+    const float k = EditorTheme::Px(1.0f);
+    ImGui::GetWindowDrawList()->AddRectFilled(ImVec2(mn.x - 6.0f * k, mn.y), ImVec2(mn.x - 4.0f * k, mx.y),
+        EditorTheme::U32(EditorTheme::KindPrefab), k);
 }
 
 void AlignToColumn(const char* label, float columnWidth, const char* tooltip = nullptr, bool highlighted = false) {
-    float lineStartX = ImGui::GetCursorPosX();
-    ImGui::AlignTextToFramePadding();
-    if (highlighted) ImGui::PushStyleColor(ImGuiCol_Text, EditorUIPrimitives::InfoColor());
-    ImGui::TextUnformatted(label);
+    const float lineStartX = ImGui::GetCursorPosX();
+    // Labels read in the secondary colour so the values beside them stand out; a prefab override
+    // (#6 item 7) reads in the prefab blue with a gutter bar in the row's left margin.
+    const bool cut = EditorTheme::PropertyLabelText(label, columnWidth,
+                                                    highlighted ? EditorTheme::KindPrefab : EditorTheme::Secondary);
     if (highlighted) {
-        ImGui::PopStyleColor();
-        // A gutter bar (DrawOverrideGutterBar's own technique, inlined here since it already has
-        // the item rect) plus a 1px-offset second pass of the label — faux bold, since no bold
-        // font variant is loaded in this editor (see EditorLayer.h's m_MonoFont comment) — instead
-        // of a plain colour tint, which read identically to "this value happens to be blue" as
-        // cyan/selection once was, not "this differs from its prefab source" (#6 item 7).
         const ImVec2 mn = ImGui::GetItemRectMin(), mx = ImGui::GetItemRectMax();
-        ImDrawList* dl = ImGui::GetWindowDrawList();
-        const ImU32 col = ImGui::ColorConvertFloat4ToU32(EditorUIPrimitives::InfoColor());
-        dl->AddRectFilled(ImVec2(mn.x - 6.0f, mn.y), ImVec2(mn.x - 4.0f, mx.y), col, 1.0f);
-        dl->AddText(ImVec2(mn.x + 1.0f, mn.y), col, label);
+        const float k = EditorTheme::Px(1.0f);
+        ImGui::GetWindowDrawList()->AddRectFilled(ImVec2(mn.x - 6.0f * k, mn.y + 3.0f * k), ImVec2(mn.x - 4.0f * k, mx.y - 3.0f * k),
+                                                  EditorTheme::U32(EditorTheme::KindPrefab), k);
     }
-    if (tooltip && ImGui::IsItemHovered()) EditorUI::SetTooltip("%s", tooltip);
+    if (ImGui::IsItemHovered()) {
+        if (tooltip && cut) EditorUI::SetTooltip("%s\n\n%s", label, tooltip);
+        else if (tooltip) EditorUI::SetTooltip("%s", tooltip);
+        else if (cut) EditorUI::SetTooltip("%s", label);
+    }
     ImGui::SameLine(lineStartX + columnWidth);
 }
 
@@ -310,7 +335,7 @@ SurfaceEdit DrawSurfaceOptionRows(const std::vector<Material*>& mats) {
             ev.Defer([mats, field, v]() { for (Material* m : mats) m->*field = v; });
         ImGui::PopID();
     };
-    ImGui::SeparatorText("Surface Options");
+    EditorUIPrimitives::SectionHeader("Surface Options");
     vec2Row("Tiling", &Material::UVTiling, 0.01f, "Repeats every map this many times across the mesh UVs.");
     vec2Row("Offset", &Material::UVOffset, 0.005f, "Shifts every map across the mesh UVs.");
     floatRow("Normal Strength", &Material::NormalStrength, 0.0f, 2.0f, "Scales the normal map's bumpiness. 0 = flat.");
@@ -333,7 +358,7 @@ SurfaceEdit DrawRenderModeRows(const std::vector<MaterialAsset*>& assets) {
     bool mixed = false;
     for (const MaterialAsset* a : assets) mixed |= a->RenderQueue != first.RenderQueue;
 
-    ImGui::SeparatorText("Rendering");
+    EditorUIPrimitives::SectionHeader("Rendering");
     PropertyLabel("Rendering Mode",
         "Opaque: solid.\nCutout: fully solid or fully invisible by the albedo alpha (foliage, fences).\n"
         "Transparent: blended by Opacity x albedo alpha (glass, water); doesn't cast shadows.");
@@ -383,8 +408,7 @@ void PropertyLabel(const char* label, const char* tooltip, bool highlighted) {
     // Sized to fit "Emissive Strength", the longest label actually used — every row sharing
     // this one constant is what makes their value widgets land in the same column regardless
     // of how long that particular row's own label is. Computed once (the UI font is fixed).
-    static const float labelColumnWidth = ImGui::CalcTextSize("Emissive Strength").x + ImGui::GetStyle().ItemSpacing.x * 2.0f;
-    AlignToColumn(label, labelColumnWidth, tooltip, highlighted);
+    AlignToColumn(label, EditorTheme::PropertyLabelWidth(), tooltip, highlighted);
     ImGui::SetNextItemWidth(-FLT_MIN); // fill exactly to the window's right edge
 }
 
@@ -414,15 +438,33 @@ struct PrefabMultiRef {
 // deliberate deuteranopia guard, was reverted back to a filled block by explicit request). Shared
 // by DrawVec3Row (Transform) and MultiEditVec3Row (every other reflected Vec3 field).
 bool AxisButton(const char* name, ImVec4 tint, ImVec2 size) {
-    ImVec4 hovered = ImVec4(std::min(tint.x * 1.15f, 1.0f), std::min(tint.y * 1.15f, 1.0f), std::min(tint.z * 1.15f, 1.0f), 1.0f);
-    ImVec4 active  = ImVec4(tint.x * 0.85f, tint.y * 0.85f, tint.z * 0.85f, 1.0f);
-    ImGui::PushStyleColor(ImGuiCol_Button,        tint);
-    ImGui::PushStyleColor(ImGuiCol_ButtonHovered, hovered);
-    ImGui::PushStyleColor(ImGuiCol_ButtonActive,  active);
-    ImGui::PushStyleColor(ImGuiCol_Text,          ImVec4(1.0f, 1.0f, 1.0f, 1.0f));
+    // A slim tab in the axis colour (EditorTheme::AxisX/Y/Z), glued to its field like Unreal's.
+    const ImVec4 rest(tint.x * 0.78f, tint.y * 0.78f, tint.z * 0.78f, 1.0f);
+    ImGui::PushStyleColor(ImGuiCol_Button,        rest);
+    ImGui::PushStyleColor(ImGuiCol_ButtonHovered, tint);
+    ImGui::PushStyleColor(ImGuiCol_ButtonActive,  ImVec4(tint.x * 0.62f, tint.y * 0.62f, tint.z * 0.62f, 1.0f));
+    ImGui::PushStyleColor(ImGuiCol_Text,          EditorTheme::Rgb(0xF6, 0xF6, 0xF8));
+    ImGui::PushStyleVar(ImGuiStyleVar_FrameBorderSize, 0.0f);
+    ImGui::PushStyleVar(ImGuiStyleVar_FramePadding, ImVec2(0.0f, ImGui::GetStyle().FramePadding.y));
     const bool clicked = ImGui::Button(name, size);
+    ImGui::PopStyleVar(2);
     ImGui::PopStyleColor(4);
     return clicked;
+}
+
+// The display format for one axis of a vector row: three decimals when they fit the field, fewer
+// when the panel is narrow (the exact value is always in the tooltip and shown while editing).
+// `room` is the field's width inside its padding.
+const char* FitAxisFormat(float v, float room) {
+    if (std::fabs(v) < 5.0e-4f) return "0.000"; // never "-0.000" from float dust (#24 P13)
+    if (std::fabs(v) >= 1.0e6f) return "%.4g";  // never a ~30-digit decimal (#44 P27)
+    static const char* kFormats[] = {"%.3f", "%.2f", "%.1f", "%.0f"};
+    for (const char* f : kFormats) {
+        char buf[32];
+        std::snprintf(buf, sizeof(buf), f, v);
+        if (ImGui::CalcTextSize(buf).x <= room) return f;
+    }
+    return "%.0f";
 }
 
 // Unity/Hazel-style vector row: a colored X/Y/Z button (click to zero that axis) glued to
@@ -440,7 +482,7 @@ bool DrawVec3Row(const char* label, glm::vec3& v, float speed, float minV, float
     // that follows needs the width back more than it needs to share that wider column. Putting
     // the label on the SAME line as its row (instead of on its own line above it, as before) is
     // what actually removes the wasted vertical gap between each Position/Rotation/Scale block.
-    static const float vec3LabelColumnWidth = ImGui::CalcTextSize("Rotation").x + ImGui::GetStyle().ItemSpacing.x * 2.0f;
+    const float vec3LabelColumnWidth = EditorTheme::PropertyLabelWidth(); // the one shared label column
     const bool pfOverridden = pf.self && pf.field &&
         SceneSerializer::IsPrefabFieldOverridden(*pf.world, pf.e, pf.comp, pf.field);
     AlignToColumn(label, vec3LabelColumnWidth, tooltip, pfOverridden);
@@ -454,16 +496,16 @@ bool DrawVec3Row(const char* label, glm::vec3& v, float speed, float minV, float
     }
 
     float lineHeight = ImGui::GetFrameHeight();
-    float buttonW = lineHeight + 4.0f;
-    float innerSpacing = ImGui::GetStyle().ItemInnerSpacing.x;
+    float buttonW = std::floor(lineHeight * 0.8f);
+    float innerSpacing = ImGui::GetStyle().ItemInnerSpacing.x * 0.5f;
     float fullWidth = ImGui::GetContentRegionAvail().x;
     float dragW = (fullWidth - 3.0f * buttonW - 3.0f * innerSpacing) / 3.0f;
 
     struct Axis { const char* name; float* value; ImVec4 tint; };
     Axis axes[3] = {
-        {"X", &v.x, ImVec4(0.66f, 0.20f, 0.20f, 1.0f)},
-        {"Y", &v.y, ImVec4(0.22f, 0.52f, 0.22f, 1.0f)},
-        {"Z", &v.z, ImVec4(0.18f, 0.38f, 0.72f, 1.0f)},
+        {"X", &v.x, EditorTheme::AxisX},
+        {"Y", &v.y, EditorTheme::AxisY},
+        {"Z", &v.z, EditorTheme::AxisZ},
     };
 
     for (int i = 0; i < 3; ++i) {
@@ -480,16 +522,12 @@ bool DrawVec3Row(const char* label, glm::vec3& v, float speed, float minV, float
         ImGui::SameLine(0.0f, innerSpacing);
         ImGui::SetNextItemWidth(dragW);
         const float before = *axes[i].value;
-        // Big magnitudes get %g so they don't overflow the field as a ~30-digit decimal (#44
-        // P27). Small values are left to "%.3f" — anything under 0.001 just reads as "0.000",
-        // which is fine and far less alarming than "6.5e-09" of floating-point dust; the exact
-        // value is still in the hover tooltip.
-        const float mag = std::fabs(before);
-        // Anything that rounds to zero shows "0.000": %.3f printed floating-point dust like
-        // -1e-8 (left by a matrix decompose, e.g. on Duplicate) as "-0.000". A literal format is
-        // display-only; the exact value is still in the tooltip.
-        const char* fmt = (mag >= 1.0e6f) ? "%.4g" : (mag < 5.0e-4f ? "0.000" : "%.3f");
+        // Display-only (FitAxisFormat): the exact value is in the hover tooltip and while typing.
+        const char* fmt = FitAxisFormat(before, dragW - EditorTheme::Px(4.0f) * 2.0f);
+        // Tight horizontal padding: three numbers share the row beside their axis tabs.
+        ImGui::PushStyleVar(ImGuiStyleVar_FramePadding, ImVec2(EditorTheme::Px(4.0f), ImGui::GetStyle().FramePadding.y));
         bool itemChanged = ImGui::DragFloat("##v", axes[i].value, speed, minV, maxV, fmt);
+        ImGui::PopStyleVar();
         if (ImGui::IsItemHovered() && !ImGui::IsItemActive())
             EditorUI::SetTooltip("%.9g\nClick and drag to change; double-click to type a value", *axes[i].value);
         if (ImGui::IsItemActivated()) activatedOut = true;
@@ -540,7 +578,7 @@ MultiEditResult MultiEditVec3Row(const char* label, glm::vec3& value, const bool
     axisTouched[0] = axisTouched[1] = axisTouched[2] = false;
 
     ImGui::PushID(label);
-    static const float col = ImGui::CalcTextSize("Rotation").x + ImGui::GetStyle().ItemSpacing.x * 2.0f;
+    const float col = EditorTheme::PropertyLabelWidth();
     const bool pfOv = pf.self && pf.field && pf.sel &&
         pf.self->AnyPrefabFieldOverridden(*pf.world, *pf.sel, pf.comp, pf.field);
     AlignToColumn(label, col, tooltip, pfOv);
@@ -554,16 +592,16 @@ MultiEditResult MultiEditVec3Row(const char* label, glm::vec3& value, const bool
     }
 
     float lineHeight = ImGui::GetFrameHeight();
-    float buttonW = lineHeight + 4.0f;
-    float innerSpacing = ImGui::GetStyle().ItemInnerSpacing.x;
+    float buttonW = std::floor(lineHeight * 0.8f);
+    float innerSpacing = ImGui::GetStyle().ItemInnerSpacing.x * 0.5f;
     float fullWidth = ImGui::GetContentRegionAvail().x;
     float dragW = (fullWidth - 3.0f * buttonW - 3.0f * innerSpacing) / 3.0f;
 
     struct Axis { const char* name; float* v; ImVec4 tint; };
     Axis axes[3] = {
-        {"X", &value.x, ImVec4(0.66f, 0.20f, 0.20f, 1.0f)},
-        {"Y", &value.y, ImVec4(0.22f, 0.52f, 0.22f, 1.0f)},
-        {"Z", &value.z, ImVec4(0.18f, 0.38f, 0.72f, 1.0f)},
+        {"X", &value.x, EditorTheme::AxisX},
+        {"Y", &value.y, EditorTheme::AxisY},
+        {"Z", &value.z, EditorTheme::AxisZ},
     };
 
     for (int i = 0; i < 3; ++i) {
@@ -579,9 +617,11 @@ MultiEditResult MultiEditVec3Row(const char* label, glm::vec3& value, const bool
         ImGuiID fieldId = ImGui::GetID("##v");
         bool editing = ImGui::GetActiveID() == fieldId;
         const char* fmt = (mixedAxis[i] && !editing) ? "\xE2\x80\x94" // em dash while untouched
-                        : (std::fabs(*axes[i].v) < 5.0e-4f ? "0.000" : "%.3f"); // never "-0.000"
+                        : FitAxisFormat(*axes[i].v, dragW - EditorTheme::Px(4.0f) * 2.0f);
         float before = *axes[i].v;
+        ImGui::PushStyleVar(ImGuiStyleVar_FramePadding, ImVec2(EditorTheme::Px(4.0f), ImGui::GetStyle().FramePadding.y));
         bool fieldChanged = ImGui::DragFloat("##v", axes[i].v, speed, minV, maxV, fmt);
+        ImGui::PopStyleVar();
         if (ImGui::IsItemActivated()) r.activated = true;
         if (ImGui::IsItemDeactivatedAfterEdit()) r.committed = true;
         if (fieldChanged) {
@@ -663,7 +703,7 @@ bool IsStaticButSimulated(const entt::registry& reg, entt::entity e) {
 }
 
 void DrawStaticRigidbodyWarning(int count) {
-    ImGui::TextColored(ImVec4(1.0f, 0.75f, 0.3f, 1.0f), ICON_FA_TRIANGLE_EXCLAMATION "  %s",
+    ImGui::TextColored(EditorTheme::Warning, ICON_FA_TRIANGLE_EXCLAMATION "  %s",
         count == 1 ? "Static, but has a non-kinematic Rigidbody - physics will still move it."
                    : "Some Static objects have a non-kinematic Rigidbody - physics will still move them.");
 }
@@ -764,7 +804,7 @@ void EyedropperButton(EditorLayer* self, World& world, glm::vec3* target) {
     const bool armed = self->EyedropperArmed();
     ImGui::PushStyleColor(ImGuiCol_Text, armed ? ImGui::GetStyleColorVec4(ImGuiCol_SliderGrab)
                                                : ImGui::GetStyleColorVec4(ImGuiCol_TextDisabled));
-    if (ImGui::SmallButton(ICON_FA_EYE_DROPPER)) self->ArmEyedropper(&world, target);
+    if (EditorUIPrimitives::ActionButton(ICON_FA_EYE_DROPPER, "Pick a colour from the Scene view", &EditorInternal::ForwardHostTooltip)) self->ArmEyedropper(&world, target);
     ImGui::PopStyleColor();
     if (ImGui::IsItemHovered())
         EditorUI::SetTooltip("Pick a color from the Scene viewport (Esc / right-click to cancel)"); // #19
@@ -816,19 +856,19 @@ void EditorLayer::DrawShaderPreviewInspector(AssetLibrary& assets, const std::st
     }
 
     if (m_ShaderPreviewOk) {
-        ImGui::TextColored(ImVec4(0.4f, 0.8f, 0.5f, 1.0f), ICON_FA_CIRCLE_CHECK "  Compiles OK");
+        ImGui::TextColored(EditorTheme::Success, ICON_FA_CIRCLE_CHECK "  Compiles OK");
     } else {
-        ImGui::TextColored(ImVec4(0.95f, 0.35f, 0.35f, 1.0f), ICON_FA_CIRCLE_XMARK "  Compile Error");
+        ImGui::TextColored(EditorTheme::Danger, ICON_FA_CIRCLE_XMARK "  Compile Error");
         ImGui::PushTextWrapPos(ImGui::GetContentRegionAvail().x);
         ImGui::TextWrapped("%s", m_ShaderPreviewError.c_str());
         ImGui::PopTextWrapPos();
     }
     ImGui::Spacing();
 
-    if (ImGui::Button(ICON_FA_UP_RIGHT_FROM_SQUARE "  Open Externally")) Screenshot::OpenFile(key);
+    if (EditorUIPrimitives::SecondaryButton(ICON_FA_UP_RIGHT_FROM_SQUARE "  Open Externally")) Screenshot::OpenFile(key);
     ImGui::Spacing();
 
-    ImGui::SeparatorText("Source");
+    EditorUIPrimitives::SectionHeader("Source");
     ImGui::PushFont(GetMonoFont(), 0.0f);
     ImGui::InputTextMultiline("##shaderSrc", m_ShaderPreviewSource.data(), m_ShaderPreviewSource.size() + 1,
         ImVec2(-FLT_MIN, 320.0f * m_UIScale), ImGuiInputTextFlags_ReadOnly);
@@ -849,7 +889,7 @@ void EditorLayer::DrawAssetImportInspector(World& world, AssetLibrary& assets, c
     bool isTexture = (ext == ".png" || ext == ".jpg" || ext == ".jpeg" || ext == ".tga" || ext == ".bmp");
     bool isModel = (ext == ".fbx" || ext == ".obj" || ext == ".gltf" || ext == ".glb");
 
-    ImGui::SeparatorText(assets.DisplayName(key).c_str());
+    EditorUIPrimitives::SectionHeader(assets.DisplayName(key).c_str());
     ImGui::TextDisabled("%s", key.c_str());
     ImGui::Spacing();
 
@@ -925,11 +965,11 @@ void EditorLayer::DrawAssetImportInspector(World& world, AssetLibrary& assets, c
             }
             ImGui::Image((ImTextureID)(intptr_t)m_ChannelPreview.Handle(), previewDims);
         } else {
-            ImGui::TextColored(ImVec4(1.0f, 0.4f, 0.4f, 1.0f), "Failed to load - see Console.");
+            ImGui::TextColored(EditorTheme::Danger, "Failed to load - see Console.");
         }
 
         ImGui::Spacing();
-        ImGui::SeparatorText("Texture Import Settings");
+        EditorUIPrimitives::SectionHeader("Texture Import Settings");
         AssetImporterInspector::DrawTextureSettings(m_PendingTextureSettings, m_ImportSettingsDirty);
         AssetImporterInspector::DrawApplyRevertFooter(m_ImportSettingsDirty,
             [&]() {
@@ -1003,7 +1043,7 @@ void EditorLayer::DrawAssetImportInspector(World& world, AssetLibrary& assets, c
         }
 
         ImGui::Spacing();
-        ImGui::SeparatorText("Model Import Settings");
+        EditorUIPrimitives::SectionHeader("Model Import Settings");
         std::vector<std::pair<std::string, float>> clipList;
         if (model)
             for (int ci = 0; ci < model->OwnAnimationCount(); ++ci) clipList.push_back({model->AnimationName(ci), model->AnimationLength(ci)});
@@ -1026,7 +1066,7 @@ void EditorLayer::DrawAssetImportInspector(World& world, AssetLibrary& assets, c
         // editable .mat it's extracted to (if any), with the Extract Materials action.
         if (model && model->MeshCount() > 0) {
             ImGui::Spacing();
-            ImGui::SeparatorText("Materials");
+            EditorUIPrimitives::SectionHeader("Materials");
             const auto remap = assets.MaterialRemap(key);
             std::set<std::string> shown;
             if (ImGui::BeginTable("##modelmats", 2, ImGuiTableFlags_RowBg | ImGuiTableFlags_SizingStretchProp)) {
@@ -1092,9 +1132,9 @@ void EditorLayer::DrawAssetImportInspector(World& world, AssetLibrary& assets, c
             ImGui::Spacing();
             char clipsHeader[48];
             std::snprintf(clipsHeader, sizeof(clipsHeader), "Animation Clips (%d)###animclips", model->AnimationCount());
-            if (ImGui::CollapsingHeader(clipsHeader, ImGuiTreeNodeFlags_DefaultOpen)) {
+            if (EditorUIPrimitives::Foldout(clipsHeader, ImGuiTreeNodeFlags_DefaultOpen)) {
                 const bool canPreview = model->MeshCount() > 0;
-                if (!canPreview) ImGui::TextDisabled("Animation only - place it on a matching character to see it.");
+                if (!canPreview) HintText("Animation only - place it on a matching character to see it.");
                 if (ImGui::BeginTable("##animclipstbl", canPreview ? 3 : 2, ImGuiTableFlags_RowBg | ImGuiTableFlags_SizingStretchProp)) {
                     ImGui::TableSetupColumn("Clip", ImGuiTableColumnFlags_WidthStretch, 0.7f);
                     ImGui::TableSetupColumn("Length", ImGuiTableColumnFlags_WidthStretch, 0.3f);
@@ -1135,7 +1175,7 @@ void EditorLayer::DrawAssetImportInspector(World& world, AssetLibrary& assets, c
             ImGui::Spacing();
             char header[48];
             std::snprintf(header, sizeof(header), "Meshes (%d)###submeshes", model->MeshCount());
-            if (ImGui::CollapsingHeader(header)) {
+            if (EditorUIPrimitives::Foldout(header)) {
                 if (ImGui::BeginTable("##submeshtbl", 3,
                         ImGuiTableFlags_RowBg | ImGuiTableFlags_SizingStretchProp)) {
                     ImGui::TableSetupColumn("Mesh", ImGuiTableColumnFlags_WidthStretch, 0.34f);
@@ -1286,7 +1326,7 @@ void EditorLayer::DrawMaterialAssetEditor(World& world, AssetLibrary& assets, co
         return;
     }
 
-    ImGui::SeparatorText(assets.DisplayName(matPath).c_str());
+    EditorUIPrimitives::SectionHeader(assets.DisplayName(matPath).c_str());
     ImGui::TextDisabled("%s", matPath.c_str());
     ImGui::Spacing();
 
@@ -1301,7 +1341,7 @@ void EditorLayer::DrawMaterialPreview(const std::shared_ptr<MaterialAsset>& ma, 
     if (!ma) return;
     ImGui::Spacing();
     ImGui::SetNextItemOpen(m_MaterialPreviewOpen, ImGuiCond_Always);
-    m_MaterialPreviewOpen = ImGui::CollapsingHeader("Preview##materialPreview");
+    m_MaterialPreviewOpen = EditorUIPrimitives::Foldout("Preview##materialPreview");
     if (!m_MaterialPreviewOpen) { m_MaterialPreviewDragging = false; return; }
 
     using Shape = MaterialPreviewRenderer::Shape;
@@ -1514,9 +1554,9 @@ void EditorLayer::DrawMaterialAssetFields(World& world, AssetLibrary& assets, co
             ImGui::PushID(prop.Name.c_str());
             const char* label = prop.DisplayName.c_str();
             const char* tip = prop.Tooltip.empty() ? nullptr : prop.Tooltip.c_str(); // [Tooltip(...)]
-            if (!prop.Header.empty()) { ImGui::SeparatorText(prop.Header.c_str()); inTexSection = true; } // [Header(...)]
+            if (!prop.Header.empty()) { EditorUIPrimitives::SectionHeader(prop.Header.c_str()); inTexSection = true; } // [Header(...)]
             if (prop.Type == ShaderPropType::Texture2D && !inTexSection) {
-                ImGui::SeparatorText("Texture Maps");
+                EditorUIPrimitives::SectionHeader("Texture Maps");
                 inTexSection = true;
             }
             switch (prop.Type) {
@@ -1634,7 +1674,7 @@ void EditorLayer::DrawMaterialAssetFields(World& world, AssetLibrary& assets, co
         bool anyCustom = false;
         for (const std::string& k : ma->Shader->Keywords()) {
             if (ShaderAsset::IsBuiltinKeyword(k)) continue;
-            if (!anyCustom) { ImGui::SeparatorText("Keywords"); anyCustom = true; }
+            if (!anyCustom) { EditorUIPrimitives::SectionHeader("Keywords"); anyCustom = true; }
             auto& kws = mat.ShaderKeywords;
             bool on = std::find(kws.begin(), kws.end(), k) != kws.end();
             PropertyLabel(k.c_str(), "A custom shader keyword: when on, this material draws with a variant compiled\nwith #define <keyword>.");
@@ -1660,7 +1700,7 @@ void EditorLayer::DrawMaterialAssetFields(World& world, AssetLibrary& assets, co
     scalarRow("Emissive Strength", &Material::EmissiveStrength, 0.0f, 10.0f,
               "Brightness multiplier for the Emissive Color / map.");
 
-    ImGui::SeparatorText("Texture Maps");
+    EditorUIPrimitives::SectionHeader("Texture Maps");
     mapRow("Albedo",    &Material::AlbedoMap,    "The base color texture (diffuse / base color map).");
     mapRow("Normal",    &Material::NormalMap,    "Fine surface detail (bumps, grooves) without extra geometry.");
     mapRow("Metallic",  &Material::MetallicMap,  "Grayscale: white = metal. Multiplied by the Metallic value above.");
@@ -1823,6 +1863,21 @@ void EditorLayer::DrawReflectedField(World& world, AssetLibrary& assets, const R
                 if (first) { shared = v; first = false; } else if (v != shared) mixed = true;
             });
             PrefabOverrideLabelMulti(world, sel, rc.Meta.Name, ReflectFieldKey(f), f.Name, f.Tooltip);
+            // A file path is picked, never typed. One-shot edit like the AssetRef case below.
+            if (f.AssetPath) {
+                AssetPathPickerOptions opt = AssetPathFieldOptions(rc.Meta.Name, f.Name);
+                opt.AllowNone = !mixed;
+                if (mixed) opt.NoneLabel = "(multiple values)"; // the preview text; no clear entry while mixed
+                opt.Owner = m_Window;
+                std::string picked = mixed ? std::string() : shared;
+                ImGui::SetNextItemWidth(-FLT_MIN);
+                if (AssetPathPicker("##v", picked, opt)) {
+                    StageUndo(world);
+                    forEach([&](entt::entity e) { *reinterpret_cast<std::string*>(fieldPtr(e)) = picked; });
+                    CommitStagedUndo(world, std::string("Edit ") + rc.Meta.Name);
+                }
+                break;
+            }
             // #128 — grows with the text (was a 256-byte buffer that cut long values, possibly
             // mid UTF-8 sequence).
             std::string text = mixed ? std::string() : shared;
@@ -1951,11 +2006,12 @@ void EditorLayer::DrawInspectorBody(World& world, AssetLibrary& assets) {
     // on hover. Every ImGui::Button below inherits it; ActionButton / DangerIconButton push their
     // own on top. Popped before each early return (and the natural end) via InspectorEnd() — the
     // module owns ImGui::End() now, so this no longer closes the window.
+    // Fields keep the theme's hairline edge (FrameBorderSize), which is what separates an input
+    // from the card it sits on.
     ImGui::PushStyleColor(ImGuiCol_Button,        ImVec4(0.0f, 0.0f, 0.0f, 0.0f));
-    ImGui::PushStyleColor(ImGuiCol_ButtonHovered, ImVec4(1.0f, 1.0f, 1.0f, 0.08f));
-    ImGui::PushStyleColor(ImGuiCol_ButtonActive,  ImVec4(1.0f, 1.0f, 1.0f, 0.14f));
-    ImGui::PushStyleVar(ImGuiStyleVar_FrameBorderSize, 0.0f); // flat buttons, no hairline box
-    auto InspectorEnd = []() { ImGui::PopStyleVar(); ImGui::PopStyleColor(3); };
+    ImGui::PushStyleColor(ImGuiCol_ButtonHovered, EditorUIPrimitives::FlatHover());
+    ImGui::PushStyleColor(ImGuiCol_ButtonActive,  EditorUIPrimitives::FlatPressed());
+    auto InspectorEnd = []() { ImGui::PopStyleColor(3); };
 
     // Prune handles for objects deleted since the selection was made, so the multi/single
     // Inspector split below (and everything downstream) sees an accurate count.
@@ -2027,7 +2083,7 @@ void EditorLayer::DrawInspectorBody(World& world, AssetLibrary& assets) {
         const int count = (int)sel.size();
         auto forEach = [&](const std::function<void(entt::entity)>& fn) { for (entt::entity e : sel) fn(e); };
 
-        ImGui::SeparatorText((std::to_string(count) + " objects selected").c_str());
+        EditorUIPrimitives::SectionHeader((std::to_string(count) + " objects selected").c_str());
         // Explanation moved onto the heading's own tooltip (#156) — no persistent "(?)" glyph.
         if (ImGui::IsItemHovered()) EditorUI::SetTooltip(
             "Editing a field here writes it to EVERY selected object.\n"
@@ -2332,17 +2388,10 @@ void EditorLayer::DrawInspectorBody(World& world, AssetLibrary& assets) {
         // wrong content for THIS empty state (#6 item 9 / Appendix A #24) — a scene overview
         // belongs in the real Statistics panel (Window > Statistics; rebuilt properly in Phase 6
         // item 5), not duplicated, unaligned, into whatever panel happens to have no selection.
-        ImGui::Spacing();
-        ImGui::TextDisabled("Nothing selected");
-        ImGui::Spacing();
-        ImGui::TextUnformatted("Select an object in the Scene Hierarchy, or an\nasset in the Asset Browser, to edit it here.");
-        ImGui::Spacing();
-        ImGui::TextDisabled("Tip: press " ICON_FA_KEYBOARD " Shift+A in the viewport to add an object.");
-
-        if (!m_LastSelectedName.empty()) {
-            ImGui::Spacing();
-            ImGui::TextDisabled("Last selected: %s", m_LastSelectedName.c_str());
-        }
+        const std::string hint = "Select an object in the Hierarchy or an asset in Assets.\n"
+                                 "Shift+A in the viewport adds an object." +
+                                 (m_LastSelectedName.empty() ? std::string() : "\n\nLast selected: " + m_LastSelectedName);
+        EmptyState(ICON_FA_SLIDERS, "Nothing selected", hint.c_str());
         InspectorEnd();
         return;
     }
@@ -2377,6 +2426,15 @@ void EditorLayer::DrawInspectorBody(World& world, AssetLibrary& assets) {
     // --- Header: active checkbox + icon + name, then tag/static, matching Unity's Inspector
     // top block but with the same per-kind icon the Hierarchy already uses, so the two panels
     // read as one consistent visual language instead of the Inspector being icon-less.
+    // The whole block (header row, prefab banner, Tag / Static / Layer) sits in one Card so it reads
+    // as a unit, apart from the component sections below.
+    ImGui::PushStyleColor(ImGuiCol_ChildBg, EditorTheme::Card);
+    ImGui::PushStyleColor(ImGuiCol_Border,  EditorTheme::Hairline);
+    ImGui::PushStyleVar(ImGuiStyleVar_WindowPadding, ImVec2(EditorTheme::Px(8.0f), EditorTheme::Px(6.0f)));
+    ImGui::PushStyleVar(ImGuiStyleVar_ChildRounding, EditorTheme::Px(4.0f));
+    ImGui::BeginChild("##entityHeaderCard", ImVec2(0.0f, 0.0f),
+                      ImGuiChildFlags_Borders | ImGuiChildFlags_AutoResizeY | ImGuiChildFlags_AlwaysUseWindowPadding,
+                      ImGuiWindowFlags_NoScrollbar);
     bool active = !registry.all_of<DeactivatedTag>(entity);
     {
         // #152 — same eye control as the Hierarchy. The header line hover-reveals it for an
@@ -2399,7 +2457,9 @@ void EditorLayer::DrawInspectorBody(World& world, AssetLibrary& assets) {
     if (registry.all_of<LightComponent>(entity)) { kindIcon = ICON_FA_LIGHTBULB; kindTip = "Light - casts light into the scene"; }
     else if (!registry.all_of<RenderableComponent>(entity)) { kindIcon = ICON_FA_DIAGRAM_PROJECT; kindTip = "Empty - a transform with no mesh, useful as a grouping pivot"; }
     ImGui::AlignTextToFramePadding();
-    ImGui::TextUnformatted(kindIcon);
+    ImGui::TextColored(registry.all_of<LightComponent>(entity) ? EditorTheme::KindLight
+                       : registry.all_of<RenderableComponent>(entity) ? EditorTheme::KindMesh : EditorTheme::Secondary,
+                       "%s", kindIcon);
     if (ImGui::IsItemHovered()) EditorUI::SetTooltip("%s", kindTip);
     ImGui::SameLine();
 
@@ -2423,8 +2483,7 @@ void EditorLayer::DrawInspectorBody(World& world, AssetLibrary& assets) {
     }
     ImGui::SameLine();
     {
-        ImGui::PushStyleColor(ImGuiCol_Text, m_InspectorLocked ? ImGui::GetStyleColorVec4(ImGuiCol_SliderGrab)
-                                                               : ImGui::GetStyleColorVec4(ImGuiCol_TextDisabled));
+        ImGui::PushStyleColor(ImGuiCol_Text, m_InspectorLocked ? EditorTheme::Accent : EditorTheme::Secondary);
         if (ActionButton(m_InspectorLocked ? ICON_FA_LOCK : ICON_FA_LOCK_OPEN,
                          m_InspectorLocked ? "Inspector locked \xE2\x80\x94 click to unlock"
                                            : "Lock the Inspector to the current selection",
@@ -2472,8 +2531,7 @@ void EditorLayer::DrawInspectorBody(World& world, AssetLibrary& assets) {
             const auto& pi = registry.get<PrefabInstanceComponent>(prefabRoot);
             const bool isRoot = (prefabRoot == entity);
             ImGui::Spacing();
-            ImGui::PushStyleColor(ImGuiCol_Text, pi.Missing ? IM_COL32(240, 130, 120, 255)
-                                                            : IM_COL32(120, 170, 255, 255));
+            ImGui::PushStyleColor(ImGuiCol_Text, pi.Missing ? EditorTheme::KindPrefabBroken : EditorTheme::KindPrefab);
             ImGui::TextWrapped("%s  %s", ICON_FA_BOX_ARCHIVE,
                 pi.Missing ? "Prefab source missing"
                            : (isRoot ? "Prefab instance" : "Part of a prefab instance"));
@@ -2483,6 +2541,9 @@ void EditorLayer::DrawInspectorBody(World& world, AssetLibrary& assets) {
                 const std::string src = pi.SourcePath;
                 if (ActionButton(ICON_FA_PEN_TO_SQUARE " Open Prefab", "Edit the prefab itself in Prefab Mode; every instance picks up the changes")) {
                     EnterPrefabMode(world, *m_AssetsPtr, src);
+                    ImGui::EndChild(); // the header card
+                    ImGui::PopStyleVar(2);
+                    ImGui::PopStyleColor(2);
                     return; // the world was just replaced; this entity is gone
                 }
             }
@@ -2500,13 +2561,6 @@ void EditorLayer::DrawInspectorBody(World& world, AssetLibrary& assets) {
         std::string tagText = tag ? tag->Tag : std::string("Untagged");
 
         PropertyLabel("Tag", "Label for filtering/searching - e.g. search \"t:Enemy\" in the\nHierarchy to find every object tagged \"Enemy\".");
-        // Leaves room for the Static checkbox after it instead of claiming the row's full width
-        // the way a plain PropertyLabel field would — this row is the one place two fields
-        // deliberately share a line, to keep the header block compact.
-        const ImGuiStyle& st = ImGui::GetStyle();
-        float staticReserve = ImGui::GetFrameHeight() + st.ItemInnerSpacing.x + ImGui::CalcTextSize("Static").x
-            + st.ItemSpacing.x + 6.0f;
-        ImGui::SetNextItemWidth(ImGui::GetContentRegionAvail().x - staticReserve);
 
         auto setTag = [&](const std::string& t) {
             PushUndo(world, "Edit Tag");
@@ -2554,9 +2608,11 @@ void EditorLayer::DrawInspectorBody(World& world, AssetLibrary& assets) {
                 ImGui::EndCombo();
             }
         }
-        ImGui::SameLine();
+        // Static gets its own row: sharing the Tag row squeezed the tag name to a few letters in a
+        // narrow Inspector.
         bool isStatic = registry.all_of<StaticTag>(entity);
-        if (EditorUIPrimitives::Checkbox("Static", &isStatic)) {
+        PropertyLabel("Static", kStaticTooltip);
+        if (EditorUIPrimitives::Checkbox("##Static", &isStatic)) {
             PushUndo(world, "Toggle Static");
             if (isStatic) registry.emplace<StaticTag>(entity);
             else registry.remove<StaticTag>(entity);
@@ -2587,9 +2643,10 @@ void EditorLayer::DrawInspectorBody(World& world, AssetLibrary& assets) {
             ImGui::EndCombo();
         }
     }
+    ImGui::EndChild(); // ##entityHeaderCard
+    ImGui::PopStyleVar(2);
+    ImGui::PopStyleColor(2);
 
-    ImGui::Spacing();
-    ImGui::Separator();
     ImGui::Spacing();
 
     // --- Transform (every entity has one; not removable, same as Unity) --------------------
@@ -2628,37 +2685,7 @@ void EditorLayer::DrawInspectorBody(World& world, AssetLibrary& assets) {
         if (rowActive) StageUndo(world);
         if (rowCommitted) CommitStagedUndo(world, "Scale");
 
-        // Compact Reset / Copy / Paste for this Transform's values (audit #77). Small buttons so
-        // they don't dominate the section.
-        ImGui::Spacing();
-        ImGui::PushStyleVar(ImGuiStyleVar_FramePadding, ImVec2(6.0f * m_UIScale, 2.0f * m_UIScale)); // #37
-        float tw = (ImGui::GetContentRegionAvail().x - ImGui::GetStyle().ItemSpacing.x * 2.0f) / 3.0f;
-        if (ImGui::Button(ICON_FA_ROTATE_LEFT "  Reset##xf", ImVec2(tw, 0.0f))) {
-            PushUndo(world, "Reset Transform");
-            transform.Position = glm::vec3(0.0f);
-            transform.SetRotationEuler(glm::vec3(0.0f));
-            transform.Scale = glm::vec3(1.0f);
-        }
-        if (ImGui::IsItemHovered()) EditorUI::SetTooltip("Position 0, rotation 0, scale 1");
-        ImGui::SameLine();
-        if (ImGui::Button(ICON_FA_COPY "  Copy##xf", ImVec2(tw, 0.0f))) {
-            m_TransformClipPos = transform.Position;
-            m_TransformClipRot = transform.EulerDegrees();
-            m_TransformClipScale = transform.Scale;
-            m_HasTransformClipboard = true;
-        }
-        if (ImGui::IsItemHovered()) EditorUI::SetTooltip("Copy this Transform's position/rotation/scale");
-        ImGui::SameLine();
-        ImGui::BeginDisabled(!m_HasTransformClipboard);
-        if (ImGui::Button(ICON_FA_PASTE "  Paste##xf", ImVec2(tw, 0.0f))) {
-            PushUndo(world, "Paste Transform");
-            transform.Position = m_TransformClipPos;
-            transform.SetRotationEuler(m_TransformClipRot);
-            transform.Scale = m_TransformClipScale;
-        }
-        if (ImGui::IsItemHovered() && m_HasTransformClipboard) EditorUI::SetTooltip("Paste the copied Transform values");
-        ImGui::EndDisabled();
-        ImGui::PopStyleVar();
+        // Reset / Copy / Paste are in the title bar's ... menu, like every other component.
 
         // Re-parenting lives in the Hierarchy panel (drag one row onto another), and Snap to
         // Ground lives in the toolbar now — neither duplicated here.
@@ -2730,13 +2757,13 @@ void EditorLayer::DrawInspectorBody(World& world, AssetLibrary& assets) {
             if (renderable->ModelRef->HasAnimations()) {
                 for (int i = 0; i < renderable->ModelRef->AnimationCount(); ++i) {
                     ImGui::PushID(i);
-                    if (ImGui::Button(ICON_FA_PLAY)) renderable->ModelRef->PlayAnimation(i);
+                    if (EditorUIPrimitives::ActionButton(ICON_FA_PLAY, "Play this clip", &EditorInternal::ForwardHostTooltip)) renderable->ModelRef->PlayAnimation(i);
                     if (ImGui::IsItemHovered()) EditorUI::SetTooltip("Play this animation clip");
                     ImGui::SameLine();
                     ImGui::TextUnformatted(renderable->ModelRef->AnimationName(i).c_str());
                     ImGui::PopID();
                 }
-                if (renderable->ModelRef->IsPlayingAnimation() && ImGui::Button("Stop Animation")) {
+                if (renderable->ModelRef->IsPlayingAnimation() && EditorUIPrimitives::SecondaryButton(ICON_FA_STOP "  Stop Animation")) {
                     renderable->ModelRef->PlayAnimation(-1);
                 }
             }
@@ -2811,7 +2838,7 @@ void EditorLayer::DrawInspectorBody(World& world, AssetLibrary& assets) {
             }
 
             // #163 - Unity's Mesh Renderer > Lighting.
-            ImGui::SeparatorText("Lighting");
+            EditorUIPrimitives::SectionHeader("Lighting");
             PropertyLabel("Cast Shadows", "On: casts shadows from the side facing the light.\n"
                                           "Off: casts no shadows.\n"
                                           "Two Sided: casts from both sides - for planes, leaves and other\n"
@@ -3108,25 +3135,49 @@ bool EditorLayer::BeginComponentSection(const char* icon,
     if (prefabApplyOut)  *prefabApplyOut = false;
 
     std::string header = std::string(icon) + "  " + label;
-    // CollapsingHeader claims its ENTIRE row as one hit-test region by default, so without
-    // AllowOverlap the "x" button drawn on top of that same row below never actually receives
-    // the click — it lands on the header's own collapse-toggle instead, which is exactly why
-    // pressing it only expanded/collapsed the section instead of removing anything.
-    // Every component starts collapsed: selecting an object shows the list of what it has at a glance,
-    // and only what's opened takes room. ImGui remembers each header's state (keyed by label) for the session.
-    ImGuiTreeNodeFlags flags = ImGuiTreeNodeFlags_AllowOverlap;
-    // Component headers get a dark filled bar (matching Unity's own Inspector, where each
-    // component's title strip is visibly darker than the panel it sits on) so adjacent components
-    // are easy to tell apart at a glance, rather than the flat #155 no-fill treatment this used to
-    // have.
-    ImGui::PushStyleColor(ImGuiCol_Header,        ImVec4(0x19 / 255.0f, 0x19 / 255.0f, 0x19 / 255.0f, 1.0f));
-    ImGui::PushStyleColor(ImGuiCol_HeaderHovered, ImVec4(0x24 / 255.0f, 0x24 / 255.0f, 0x24 / 255.0f, 1.0f));
-    ImGui::PushStyleColor(ImGuiCol_HeaderActive,  ImVec4(0x28 / 255.0f, 0x28 / 255.0f, 0x28 / 255.0f, 1.0f));
-    bool open = ImGui::CollapsingHeader(header.c_str(), flags);
+    // The component's title bar: a raised strip with a chevron, the component's icon (the accent while
+    // open) and its name, drawn by hand so it can sit flush with the card below it. Its open state
+    // lives in the same ImGui storage slot CollapsingHeader used (keyed by the label), so every
+    // component starts collapsed and keeps its state for the session, as before. AllowOverlap lets
+    // the ... and x buttons drawn on the same row receive their clicks.
+    const ImGuiID headerId = ImGui::GetID(header.c_str());
+    ImGuiStorage* storage = ImGui::GetStateStorage();
+    bool open = storage->GetInt(headerId, 0) != 0 || m_ExpandAllComponents;
+    const ImVec2 hp = ImGui::GetCursorScreenPos();
+    const float hw = ImGui::GetContentRegionAvail().x;
+    const float hh = ImGui::GetFrameHeight() + EditorTheme::Px(4.0f);
+    ImGui::SetNextItemAllowOverlap();
+    if (ImGui::InvisibleButton(header.c_str(), ImVec2(hw, hh))) {
+        open = !open;
+        storage->SetInt(headerId, open ? 1 : 0);
+    }
     // Right-click anywhere on the header row -> the actions menu (#236). Registered here while
     // the header is the last item; the popup body is drawn a few lines down.
     ImGui::OpenPopupOnItemClick(header.c_str(), ImGuiPopupFlags_MouseButtonRight);
-    ImGui::PopStyleColor(3);
+    {
+        ImDrawList* dl = ImGui::GetWindowDrawList();
+        const bool hov = ImGui::IsItemHovered();
+        const float r = EditorTheme::Px(3.0f);
+        dl->AddRectFilled(hp, ImVec2(hp.x + hw, hp.y + hh), EditorTheme::U32(hov ? EditorTheme::Hover : EditorTheme::Raised), r,
+                          open ? ImDrawFlags_RoundCornersTop : ImDrawFlags_RoundCornersAll);
+        const float cy = hp.y + hh * 0.5f;
+        EditorTheme::PushSmall();
+        const char* chev = open ? ICON_FA_CHEVRON_DOWN : ICON_FA_CHEVRON_RIGHT;
+        const ImVec2 cs = ImGui::CalcTextSize(chev);
+        dl->AddText(ImVec2(hp.x + EditorTheme::Px(10.0f) - cs.x * 0.5f, cy - cs.y * 0.5f), EditorTheme::U32(EditorTheme::Dim), chev);
+        EditorTheme::PopFont();
+        const ImVec2 is = ImGui::CalcTextSize(icon);
+        const float ix = hp.x + EditorTheme::Px(22.0f);
+        dl->AddText(ImVec2(ix, cy - is.y * 0.5f), EditorTheme::U32(open ? EditorTheme::Accent : EditorTheme::Secondary), icon);
+        // The name, cut with an ellipsis before the ... / x buttons at the bar's right end.
+        const ImVec2 ls = ImGui::CalcTextSize(label);
+        const float lx = ix + std::max(is.x, ImGui::GetFontSize()) + EditorTheme::Px(8.0f);
+        const float btnReserve = ImGui::GetFrameHeight() * ((removable ? 1.0f : 0.0f) + 1.0f) + EditorTheme::Px(8.0f);
+        const float lmax = hp.x + hw - btnReserve;
+        ImGui::PushStyleColor(ImGuiCol_Text, EditorTheme::Text);
+        ImGui::RenderTextEllipsis(dl, ImVec2(lx, cy - ls.y * 0.5f), ImVec2(lmax, cy + ls.y * 0.5f), lmax, label, nullptr, &ls);
+        ImGui::PopStyleColor();
+    }
     const bool headerHovered = ImGui::IsItemHovered();
     // Defect #25/#35 — a plain near-cursor tooltip (EditorUI::SetTooltip's default position) can
     // land on the section's own body (BeginChild starts right below this header), which reads as
@@ -3154,10 +3205,12 @@ bool EditorLayer::BeginComponentSection(const char* icon,
     // reachable only by right-clicking the header, which the Phase 4 exit criterion rules out
     // ("nothing reachable only by right-click"). A visible "..." button opens the identical popup.
     const bool hasMenu = resetOut || copyOut || pasteOut || removable || prefabRevertOut || prefabApplyOut;
+    const float headerBtnY = hp.y + (hh - ImGui::GetFrameHeight()) * 0.5f; // centred on the taller bar
     if (hasMenu) {
         const float bw = ImGui::GetFrameHeight();
-        const float removeReserve = removable ? (bw + ImGui::GetStyle().ItemSpacing.x) : 0.0f;
-        ImGui::SameLine(ImGui::GetWindowContentRegionMax().x - removeReserve - bw);
+        const float removeReserve = removable ? bw : 0.0f;
+        ImGui::SameLine(ImGui::GetWindowContentRegionMax().x - removeReserve - bw - EditorTheme::Px(2.0f));
+        ImGui::SetCursorScreenPos(ImVec2(ImGui::GetCursorScreenPos().x, headerBtnY));
         ImGui::PushID(label);
         ImGui::PushID("##moreActions");
         const bool moreClicked = ActionButton(ICON_FA_ELLIPSIS_VERTICAL, "More actions", false, ImVec2(bw, 0.0f));
@@ -3170,14 +3223,20 @@ bool EditorLayer::BeginComponentSection(const char* icon,
     }
 
     if (removable) {
-        // Right-aligned remove control on the header's line, always visible so it's discoverable
-        // (#155): flat at rest, red on hover — the shared destructive-icon treatment (#156).
+        // Right-aligned remove control on the header's line, shown only while the title bar is
+        // hovered (its slot stays reserved; the ... button beside it is always visible, and the
+        // right-click menu also offers Remove). Flat, red on hover (#156).
         const float bw = ImGui::GetFrameHeight();
-        ImGui::SameLine(ImGui::GetWindowContentRegionMax().x - bw);
-        ImGui::PushID(label);
-        if (DangerIconButton(ICON_FA_XMARK, "Remove this component", ImVec2(bw, 0.0f)))
-            removedOut = true;
-        ImGui::PopID();
+        const bool barHovered = ImGui::IsWindowHovered(ImGuiHoveredFlags_ChildWindows) &&
+            ImGui::IsMouseHoveringRect(hp, ImVec2(hp.x + hw, hp.y + hh));
+        if (barHovered) {
+            ImGui::SameLine(ImGui::GetWindowContentRegionMax().x - bw - EditorTheme::Px(2.0f));
+            ImGui::SetCursorScreenPos(ImVec2(ImGui::GetCursorScreenPos().x, headerBtnY));
+            ImGui::PushID(label);
+            if (DangerIconButton(ICON_FA_XMARK, "Remove this component", ImVec2(bw, 0.0f)))
+                removedOut = true;
+            ImGui::PopID();
+        }
     }
 
     // Actions menu opened by the right-click registered just after the header above (#236).
@@ -3225,14 +3284,17 @@ bool EditorLayer::BeginComponentSection(const char* icon,
     bool showBody = open && !removedOut;
     m_ComponentSectionIsCard = false;
     if (showBody) {
-        // The section body sits in a rounded hairline-bordered card — delineation only, no fill,
-        // so the whole Inspector stays one tone (the header stays outside the card).
-        ImGui::PushStyleColor(ImGuiCol_ChildBg, ImVec4(0.0f, 0.0f, 0.0f, 0.0f)); // no fill
-        ImGui::PushStyleColor(ImGuiCol_Border,  ImVec4(1.0f, 1.0f, 1.0f, 0.12f));
-        ImGui::PushStyleVar(ImGuiStyleVar_WindowPadding, ImVec2(12.0f * m_UIScale, 10.0f * m_UIScale));
+        // The body hangs under its title bar as one card: the Card surface, a hairline edge, the
+        // title bar's width, no gap between them.
+        ImGui::SetCursorScreenPos(ImVec2(hp.x, hp.y + hh));
+        ImGui::PushStyleColor(ImGuiCol_ChildBg, EditorTheme::Card);
+        ImGui::PushStyleColor(ImGuiCol_Border,  EditorTheme::Hairline);
+        ImGui::PushStyleVar(ImGuiStyleVar_WindowPadding, ImVec2(10.0f * m_UIScale, 8.0f * m_UIScale));
         ImGui::BeginChild(label, ImVec2(0.0f, 0.0f),
-                          ImGuiChildFlags_Borders | ImGuiChildFlags_AutoResizeY);
+                          ImGuiChildFlags_Borders | ImGuiChildFlags_AutoResizeY | ImGuiChildFlags_AlwaysUseWindowPadding);
         m_ComponentSectionIsCard = true;
+    } else {
+        ImGui::Dummy(ImVec2(0.0f, EditorTheme::Px(1.0f)));
     }
     return showBody; // callers must call EndComponentSection() whenever this returns true
 }
@@ -3242,7 +3304,7 @@ void EditorLayer::EndComponentSection() {
     ImGui::PopStyleVar();
     ImGui::PopStyleColor(2);
     m_ComponentSectionIsCard = false;
-    ImGui::Spacing();
+    ImGui::Dummy(ImVec2(0.0f, EditorTheme::Px(4.0f)));
 }
 
 // #302 Part B — the body of the right-click override menu (caller has already Begun the popup).
@@ -3396,7 +3458,7 @@ void EditorLayer::DrawReflectedComponentExtra(const char* componentName, World& 
                     const std::string ref = AnimationClipRef(*src, j);
                     const int idx = ResolveAnimationClip(*model, ref, assets); // attaches if compatible
                     if (idx < 0) continue;
-                    if (!header) { ImGui::SeparatorText("From other files"); header = true; }
+                    if (!header) { EditorUIPrimitives::SectionHeader("From other files"); header = true; }
                     pick(ref, model->AnimationName(idx), model->AnimationLength(idx));
                 }
             }
@@ -3413,7 +3475,7 @@ void EditorLayer::DrawReflectedComponentExtra(const char* componentName, World& 
         if (!m_InPlayMode) {
             PropertyLabel("Preview", "Plays the clip in the Scene view while editing (not saved).");
             const bool previewing = model->IsPlayingAnimation();
-            if (ImGui::Button(previewing ? ICON_FA_STOP "  Stop" : ICON_FA_PLAY "  Play")) {
+            if (EditorUIPrimitives::SecondaryButton(previewing ? ICON_FA_STOP "  Stop" : ICON_FA_PLAY "  Play")) {
                 if (previewing) model->StopAnimation();
                 else {
                     // With root motion on, preview in place: the object doesn't move in edit mode.
@@ -3504,7 +3566,7 @@ void EditorLayer::DrawReflectedComponentExtra(const char* componentName, World& 
         if (d.Valid && ImGui::TreeNodeEx("##bodylive", ImGuiTreeNodeFlags_DefaultOpen | ImGuiTreeNodeFlags_SpanAvailWidth, "Live (Play)")) {
             auto row = [](const char* label, const char* fmt, auto... args) {
                 ImGui::TextDisabled("%s", label);
-                ImGui::SameLine(190.0f);
+                ImGui::SameLine(190.0f * EditorTheme::Scale());
                 ImGui::Text(fmt, args...);
             };
             row("Animator state", "%s  (%.0f%% of the pass)", d.AnimatorState.c_str(), (d.StateTime - std::floor(d.StateTime)) * 100.0f);
@@ -3588,7 +3650,7 @@ void EditorLayer::DrawReflectedComponentExtra(const char* componentName, World& 
         if (!rig->LimbA.Enabled && !rig->LimbB.Enabled && !rig->LookAtEnabled)
             ImGui::TextDisabled(ICON_FA_CIRCLE_INFO "  Enable a limb or the look-at below, or pick a preset.");
 
-        if (ImGui::Button(ICON_FA_WAND_MAGIC_SPARKLES "  Presets", ImVec2(-FLT_MIN, 0.0f))) ImGui::OpenPopup("##ikpresets");
+        if (EditorUIPrimitives::SecondaryButton(ICON_FA_WAND_MAGIC_SPARKLES "  Presets", ImVec2(-FLT_MIN, 0.0f))) ImGui::OpenPopup("##ikpresets");
         if (ImGui::IsItemHovered()) EditorUI::SetTooltip("Fill in the bone names of a common skeleton");
         if (ImGui::BeginPopup("##ikpresets")) {
             const auto limb = [](IKLimb& l, const char* upper, const char* lower, const char* end, const char* target) {
@@ -3621,7 +3683,7 @@ void EditorLayer::DrawReflectedComponentExtra(const char* componentName, World& 
                 limb(rig->LimbB, "mixamorig:LeftUpLeg", "mixamorig:LeftLeg", "mixamorig:LeftFoot", "");
             }
             ImGui::Separator();
-            ImGui::TextDisabled("Mixamo rigs have no IK target bones:\nset each limb's Target yourself.");
+            HintText("Mixamo rigs have no IK target bones:\nset each limb's Target yourself.");
             ImGui::EndPopup();
         }
         return;
@@ -3635,7 +3697,7 @@ void EditorLayer::DrawReflectedComponentExtra(const char* componentName, World& 
         if (cam->FarPlane <= cam->NearPlane) cam->FarPlane = cam->NearPlane + 1.0f;
 
         ImGui::Spacing();
-        if (ImGui::Button(ICON_FA_VIDEO "  Align to View", ImVec2(-FLT_MIN, 0.0f)) && m_EditorCameraPtr) {
+        if (EditorUIPrimitives::SecondaryButton(ICON_FA_VIDEO "  Align to View", ImVec2(-FLT_MIN, 0.0f)) && m_EditorCameraPtr) {
             PushUndo(world, "Align Camera to View");
             const Camera& ec = *m_EditorCameraPtr;
             auto& t = registry.get<TransformComponent>(entity);
@@ -3767,11 +3829,11 @@ void EditorLayer::DrawReflectedComponentExtra(const char* componentName, World& 
 
         // Bottom: viewport workflow buttons (#140 phase 4).
         ImGui::Spacing();
-        if (ImGui::Button(ICON_FA_EYE "  Look through", ImVec2(-FLT_MIN, 0.0f)))
+        if (EditorUIPrimitives::SecondaryButton(ICON_FA_EYE "  Look through", ImVec2(-FLT_MIN, 0.0f)))
             m_PendingLookThrough = entity;
         if (ImGui::IsItemHovered())
             EditorUI::SetTooltip("View from this light's POV. Fly the camera to move / re-aim the\nlight from there. Spot uses its cone angle for FOV; Esc restores the camera.");
-        if (ImGui::Button(ICON_FA_DOWN_LONG "  Drop to surface", ImVec2(-FLT_MIN, 0.0f))) {
+        if (EditorUIPrimitives::SecondaryButton(ICON_FA_DOWN_LONG "  Drop to surface", ImVec2(-FLT_MIN, 0.0f))) {
             if (!DropLightToSurface(world, entity))
                 Log::Info("Drop to surface: nothing directly below this light.");
         }
@@ -3919,7 +3981,7 @@ void EditorLayer::DrawReflectedComponentExtra(const char* componentName, World& 
                     "Half-length of the straight cylindrical section (axis = local Y); the hemisphere caps add Radius on each end.");
                 break;
             default: // Convex Hull / Mesh
-                ImGui::TextDisabled("Sized from the mesh and this object's scale.");
+                HintText("Sized from the mesh and this object's scale.");
                 break;
         }
         if ((collider->Kind == Shape::Box || collider->Kind == Shape::Sphere ||
@@ -4051,8 +4113,8 @@ void EditorLayer::DrawReflectedComponentExtraMulti(const char* componentName, Wo
 }
 
 void EditorLayer::DrawAddComponentMenu(World& world, AssetLibrary& assets, entt::entity entity) {
-    if (ActionButton(ICON_FA_PLUS "  Add Component", "Attach a new capability to this object",
-                     false, ImVec2(-1.0f, 0.0f))) {
+    ImGui::Dummy(ImVec2(0.0f, EditorTheme::Px(4.0f)));
+    if (SecondaryButton(ICON_FA_PLUS "  Add Component", ImVec2(-FLT_MIN, ImGui::GetFrameHeight() + EditorTheme::Px(4.0f)))) {
         m_AddComponentFilter[0] = '\0';
         m_AddComponentFilterFocus = true;
         ImGui::OpenPopup("##AddComponentPopup");
@@ -4060,10 +4122,9 @@ void EditorLayer::DrawAddComponentMenu(World& world, AssetLibrary& assets, entt:
     if (!ImGui::BeginPopup("##AddComponentPopup")) return;
 
     // Type-to-filter (#236). Focused on open; Esc clears it before it closes the popup.
-    ImGui::SetNextItemWidth(240.0f * m_UIScale);
     if (m_AddComponentFilterFocus) { ImGui::SetKeyboardFocusHere(); m_AddComponentFilterFocus = false; }
-    ImGui::InputTextWithHint("##AddComponentFilter", ICON_FA_MAGNIFYING_GLASS "  Search",
-                             m_AddComponentFilter, sizeof(m_AddComponentFilter));
+    SearchField("##AddComponentFilter", m_AddComponentFilter, sizeof(m_AddComponentFilter), "Search components",
+                260.0f * m_UIScale);
     if (ImGui::IsItemDeactivated() && ImGui::IsKeyPressed(ImGuiKey_Escape)) m_AddComponentFilter[0] = '\0';
     ImGui::Separator();
     const std::string filter = m_AddComponentFilter;
@@ -4080,7 +4141,7 @@ void EditorLayer::DrawAddComponentMenu(World& world, AssetLibrary& assets, entt:
         }
     };
     // Category headings are noise once a filter narrows the list to a handful of rows.
-    auto section = [&](const char* title) { if (filter.empty()) ImGui::SeparatorText(title); };
+    auto section = [&](const char* title) { if (filter.empty()) EditorUIPrimitives::SectionHeader(title); };
     // #302: reflection-registered components slot into these same headings via
     // ReflectComponent::Category — so e.g. Camera lists under "Rendering", not "Scripts".
     // GenericInspector == false components (Mesh Renderer) keep their own hand-coded entry below.
@@ -4199,7 +4260,7 @@ void EditorLayer::DrawMaterialEditor(World& world, AssetLibrary& assets,
             if (mixed) {
                 float w = ImGui::GetContentRegionAvail().x -
                           ImGui::CalcTextSize(" (mixed)").x - ImGui::GetStyle().ItemSpacing.x;
-                ImGui::SetNextItemWidth(w > 40.0f ? w : 40.0f);
+                ImGui::SetNextItemWidth(w > 40.0f * m_UIScale ? w : 40.0f * m_UIScale);
             }
             glm::vec3 edit = shared;
             ImGui::PushID(label);
@@ -4244,7 +4305,7 @@ void EditorLayer::DrawMaterialEditor(World& world, AssetLibrary& assets,
         scalarRow("Emissive Strength", &Material::EmissiveStrength, 0.0f, 10.0f,
                   "Brightness multiplier for the Emissive Color / map.");
 
-        ImGui::SeparatorText("Texture Maps");
+        EditorUIPrimitives::SectionHeader("Texture Maps");
 
         auto mapRow = [&](const char* label, std::shared_ptr<Texture> Material::* texSlot, const char* help) {
             ImGui::PushID(label);
@@ -4340,10 +4401,10 @@ void EditorLayer::DrawMaterialEditor(World& world, AssetLibrary& assets,
             ImGui::PushID(prop.Name.c_str());
             const char* label = prop.DisplayName.c_str();
             const char* tip = prop.Tooltip.empty() ? nullptr : prop.Tooltip.c_str(); // [Tooltip(...)]
-            if (!prop.Header.empty()) { ImGui::SeparatorText(prop.Header.c_str()); inTexSection = true; } // [Header(...)]
+            if (!prop.Header.empty()) { EditorUIPrimitives::SectionHeader(prop.Header.c_str()); inTexSection = true; } // [Header(...)]
 
             if (prop.Type == ShaderPropType::Texture2D && !inTexSection) {
-                ImGui::SeparatorText("Texture Maps");
+                EditorUIPrimitives::SectionHeader("Texture Maps");
                 inTexSection = true;
             }
 
@@ -4514,7 +4575,7 @@ void EditorLayer::DrawMaterialEditor(World& world, AssetLibrary& assets,
         DrawHiddenLobesNote(*mats[0], sa);
         // #354: two variant opt-ins that aren't shader Properties() — subsurface and reflection
         // probes have no natural "off" scalar, so a bool drives their keyword.
-        ImGui::SeparatorText("Variant Options");
+        EditorUIPrimitives::SectionHeader("Variant Options");
         const bool showsSubsurface = std::any_of(props.begin(), props.end(), [](const ShaderProperty& p) {
             return p.Name == "_SubsurfaceColor" && !p.Hidden; }); // StandardAdvanced, not Standard
         auto boolRow = [&](const char* label, bool Material::* field, const char* tip) {
@@ -4645,7 +4706,7 @@ void EditorLayer::DrawMaterialEditor(World& world, AssetLibrary& assets,
             // "Save" button — converts embedded → file-backed
             if (isEmbedded) {
                 ImGui::SameLine();
-                if (ImGui::Button("Save")) {
+                if (EditorUIPrimitives::PrimaryButton("Save")) {
                     std::string path = FileDialog::SaveFile(
                         "Material\0*.mat\0", "mat", m_Window);
                     if (!path.empty()) {
@@ -4682,7 +4743,7 @@ void EditorLayer::DrawMaterialEditor(World& world, AssetLibrary& assets,
             ImGui::Spacing();
             if (meshCount > 1) {
                 char header[32]; snprintf(header, sizeof(header), "Slot %d", i);
-                ImGui::SeparatorText(header);
+                EditorUIPrimitives::SectionHeader(header);
             }
             ImGui::PushID(1000 + i);
             mats.clear();

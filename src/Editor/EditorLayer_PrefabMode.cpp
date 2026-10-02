@@ -6,6 +6,7 @@
 // Auto Save), restores the scene snapshot and history - and because a scene stores prefab
 // instances as links, every instance of the edited prefab comes back with the changes.
 #include "EditorLayer.h"
+#include "EditorTheme.h"
 #include "EditorLayerInternal.h"
 #include "EditorUIHelpers.h"
 #include "EditorUIPrimitives.h"
@@ -144,7 +145,7 @@ void EditorLayer::DrawPrefabModeBar(World& world, AssetLibrary& assets) {
     if (!InPrefabMode()) return;
     const ImGuiViewport* vp = ImGui::GetMainViewport();
     // A blue frame around the whole editor, like Play mode's orange one.
-    const ImU32 col = IM_COL32(90, 150, 255, 230);
+    const ImU32 col = EditorTheme::U32(EditorTheme::KindPrefab);
     const float t = 3.0f;
     ImGui::GetForegroundDrawList()->AddRect(ImVec2(vp->Pos.x + t * 0.5f, vp->Pos.y + t * 0.5f),
                                             ImVec2(vp->Pos.x + vp->Size.x - t * 0.5f, vp->Pos.y + vp->Size.y - t * 0.5f),
@@ -167,7 +168,7 @@ void EditorLayer::DrawPrefabModeBar(World& world, AssetLibrary& assets) {
         }
         ImGui::SameLine();
         ImGui::AlignTextToFramePadding();
-        ImGui::TextColored(ImVec4(0.55f, 0.72f, 1.0f, 1.0f), ICON_FA_BOX_ARCHIVE "  %s%s", name.c_str(), m_Dirty ? "*" : "");
+        ImGui::TextColored(EditorTheme::KindPrefab, ICON_FA_BOX_ARCHIVE "  %s%s", name.c_str(), m_Dirty ? "*" : "");
         if (ImGui::IsItemHovered()) EditorUI::SetTooltip("%s", ProjectPaths::Relativize(m_PrefabModePath).c_str());
         ImGui::SameLine();
         ImGui::BeginDisabled(!m_Dirty);

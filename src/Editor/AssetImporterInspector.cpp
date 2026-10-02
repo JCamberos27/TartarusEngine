@@ -134,7 +134,7 @@ void AssetImporterInspector::DrawModelSettings(ModelImportSettings& settings, bo
     isDirty |= EditorUIPrimitives::Checkbox("##OptimizeGraph", &settings.OptimizeGraph);
 
     ImGui::Spacing();
-    ImGui::SeparatorText("Rig & Animation");
+    EditorUIPrimitives::SectionHeader("Rig & Animation");
 
     Row("Import Animation", "Reads animation clips embedded in the file. Off if this asset\nis only ever used as a static prop - skips clip data entirely.");
     isDirty |= EditorUIPrimitives::Checkbox("##ImportAnim", &settings.ImportAnimations);
@@ -160,7 +160,7 @@ void AssetImporterInspector::DrawModelSettings(ModelImportSettings& settings, bo
             ImGui::SetNextItemWidth(ImGui::GetContentRegionAvail().x - ImGui::GetFrameHeight() - ImGui::GetStyle().ItemSpacing.x);
             isDirty |= ImGui::DragFloat("##te", &t.EndSeconds, 0.01f, 0.0f, 10000.0f, "end %.2f s");
             ImGui::SameLine();
-            if (ImGui::Button(ICON_FA_XMARK)) remove = i;
+            if (EditorUIPrimitives::DangerIconButton(ICON_FA_XMARK, "Remove", nullptr)) remove = i;
             ImGui::PopID();
         }
         if (remove >= 0) { settings.ClipTrims.erase(settings.ClipTrims.begin() + remove); isDirty = true; }
@@ -180,7 +180,7 @@ void AssetImporterInspector::DrawModelSettings(ModelImportSettings& settings, bo
     }
 
     ImGui::Spacing();
-    ImGui::SeparatorText("Materials");
+    EditorUIPrimitives::SectionHeader("Materials");
 
     Row("Material Import Mode", "Import Embedded reads the file's own materials/textures\n(today's default). Create Synthetic ignores them and assigns one neutral\nPBR material to author from scratch. None leaves every mesh's material\nat bare defaults (flat white, non-metal, mid roughness).");
     const char* kMatModes[] = {"Import Embedded", "Create Synthetic Materials", "None"};
@@ -201,10 +201,10 @@ void AssetImporterInspector::DrawApplyRevertFooter(bool isDirty, const std::func
 
     if (!isDirty) ImGui::BeginDisabled();
     float halfWidth = (ImGui::GetContentRegionAvail().x - ImGui::GetStyle().ItemSpacing.x) * 0.5f;
-    if (ImGui::Button("Revert", ImVec2(halfWidth, 0.0f)) && onRevert) onRevert();
+    if (EditorUIPrimitives::SecondaryButton("Revert", ImVec2(halfWidth, 0.0f)) && onRevert) onRevert();
     if (ImGui::IsItemHovered()) EditorUI::SetTooltip("Discard these changes, reloading the settings\ncurrently saved for this asset.");
     ImGui::SameLine();
-    if (ImGui::Button("Apply", ImVec2(halfWidth, 0.0f)) && onApply) onApply();
+    if (EditorUIPrimitives::PrimaryButton("Apply", ImVec2(halfWidth, 0.0f)) && onApply) onApply();
     if (ImGui::IsItemHovered()) EditorUI::SetTooltip("Save these settings and re-import the asset\nwith them right now.");
     if (!isDirty) ImGui::EndDisabled();
 }
