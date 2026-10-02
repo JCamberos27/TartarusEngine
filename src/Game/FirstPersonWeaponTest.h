@@ -105,6 +105,8 @@ private:
     struct Sample {
         bool Valid = false;
         float Pitch = 0.0f, Yaw = 0.0f, YawRate = 0.0f, TwistDeg = 0.0f;
+        glm::vec3 EyeFromShoulder{0.0f};   // the camera - upperarm_r, the same frame
+        float Roll = 0.0f;
         glm::vec3 StockFromShoulder{0.0f}; // butt - upperarm_r, view's flat frame (right, up, forward), m
         float Shoulder = 0.0f, Clavicle = 0.0f, Neck = 0.0f, Head = 0.0f; // butt to each, m
         float NeckGap = 0.0f, HeadGap = 0.0f; // nearest the gun's rear 30 cm comes to the neck / head bone, m

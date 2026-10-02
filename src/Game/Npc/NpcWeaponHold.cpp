@@ -217,11 +217,10 @@ glm::vec3 NpcBody::WeaponEye(const World& world, entt::entity armsRig, const std
                            : nullptr;
     glm::mat4 rl(1.0f), rr(1.0f), cb(1.0f);
     if (!rig || rig->AppliedLocalPose().empty() || !BoneWorld(FPBody::kBoneUpperArm[0], sl) || !BoneWorld(FPBody::kBoneUpperArm[1], sr) ||
-        !rig->NodeTransform(FPBody::kBoneUpperArm[0], rl) || !rig->NodeTransform(FPBody::kBoneUpperArm[1], rr)) {
-        m_HaveRigOffset = false;
+        !rig->NodeTransform(FPBody::kBoneUpperArm[0], rl) || !rig->NodeTransform(FPBody::kBoneUpperArm[1], rr) || !m_HaveShouldersAnimated) {
+        m_HaveRigOffset = m_HaveShoulders = false;
         return m_Eye; // no rig posed yet: the head bone
     }
-    (void)rootW;
     if (!cameraBone.empty()) rig->NodeTransform(cameraBone, cb);
     // The rig's shoulders off its camera, in the camera's frame. The clips sway the shoulders about the
     // camera; only a slow drift of this is followed, so the sway shows on the arms and not on the gun.
@@ -230,10 +229,29 @@ glm::vec3 NpcBody::WeaponEye(const World& world, entt::entity armsRig, const std
     const glm::vec3 inCamera(glm::dot(fromEye, cam.Right()), glm::dot(fromEye, cam.Up()), glm::dot(fromEye, cam.Front()));
     if (!m_HaveRigOffset) { m_RigEyeToShoulders = inCamera; m_HaveRigOffset = true; }
     m_RigEyeToShoulders += (inCamera - m_RigEyeToShoulders) * Follow(dt, 0.4f);
-    // ... put on the body's own shoulders, a little slack toward the gun so the support arm never locks straight.
-    const glm::vec3 shoulders = 0.5f * (sl + sr);
-    return shoulders - (cam.Right() * m_RigEyeToShoulders.x + cam.Up() * m_RigEyeToShoulders.y +
-                        cam.Front() * (m_RigEyeToShoulders.z + m_Set.ReachSlack));
+    // ... put on the body's own shoulders, a little slack toward the gun so the support arm never locks straight - the
+    // player's camera's solve (FirstPersonBody::LateUpdate), step for step. The shoulders the eye hangs off are the clips'
+    // eased (only Head Bob of their motion about a slow average, never more than Eye Slack behind), with what the spine
+    // passes did to them (the aim's pitch and twist, the stance) on in full.
+    const glm::vec3 shouldersNow = glm::vec3(glm::inverse(rootW) * glm::vec4(0.5f * (sl + sr), 1.0f)); // model space
+    const glm::vec3 toRest = shouldersNow - m_ShouldersAnimated;
+    if (!m_HaveShoulders) { m_ShouldersSlow = m_Shoulders = m_ShouldersAnimated; m_HaveShoulders = true; }
+    m_ShouldersSlow += (m_ShouldersAnimated - m_ShouldersSlow) * Follow(dt, 0.5f);
+    const glm::vec3 shoulderTarget = m_ShouldersSlow + (m_ShouldersAnimated - m_ShouldersSlow) * std::clamp(m_Set.HeadBob, 0.0f, 1.0f);
+    m_Shoulders += (shoulderTarget - m_Shoulders) * Follow(dt, m_Set.CameraSmoothing);
+    const glm::vec3 gap = m_ShouldersAnimated - m_Shoulders;
+    if (const float gapLen = glm::length(gap); gapLen > m_Set.EyeSlack) m_Shoulders = m_ShouldersAnimated - gap / gapLen * m_Set.EyeSlack;
+    // Armed Eye Offset: the rig's camera sits lower against its shoulders than an eye does; lifted back up looking level
+    // (without it the gun rode ~10 cm low, into the chest, and a reload's keep-out shoved it down to the belt).
+    const float viewPitch = std::asin(std::clamp(cam.Front().y, -1.0f, 1.0f));
+    const glm::vec3 lift = (kRight * m_Set.ArmedEyeOffset.x + glm::vec3(0.0f, m_Set.ArmedEyeOffset.y, 0.0f) + kForward * m_Set.ArmedEyeOffset.z) *
+                           FirstPersonBodyArmedEyeLift(viewPitch);
+    glm::vec3 eye = glm::vec3(rootW * glm::vec4(m_Shoulders + toRest + lift, 1.0f)) -
+                    (cam.Right() * m_RigEyeToShoulders.x + cam.Up() * m_RigEyeToShoulders.y + cam.Front() * (m_RigEyeToShoulders.z + m_Set.ReachSlack));
+    glm::vec3 flat = cam.Front();
+    flat.y = 0.0f;
+    if (glm::dot(flat, flat) > 1e-8f) eye += glm::normalize(flat) * (m_Set.LookDownPush * FirstPersonBodyLookDown(viewPitch, m_Set.LookDownStart));
+    return eye;
 }
 
 glm::vec3 NpcBody::HoldWeapon(World& world, entt::entity armsRig, entt::entity weapon, const FirstPersonWorldGunInput* gun, const Camera& cam,
@@ -299,11 +317,7 @@ glm::vec3 NpcBody::HoldWeapon(World& world, entt::entity armsRig, entt::entity w
             across.y = 0.0f;
             const glm::vec3 right = glm::length(across) > 1e-4f ? glm::normalize(across) : glm::vec3(1.0f, 0.0f, 0.0f);
             const glm::vec3 front = glm::normalize(glm::cross(up, right));
-            // At the low ready (not aiming) the butt sits lower and further in - the front of the shoulder, on the chest -
-            // with the muzzle down; held in the aiming pocket the stock rode up beside the hood.
-            const float ready = 1.0f - std::clamp(m_AimWeight, 0.0f, 1.0f);
-            const glm::vec3 pocket = ur + right * (gun->Pocket.x - 0.03f * ready) + up * (gun->Pocket.y - 0.07f * ready) +
-                                     front * (gun->Pocket.z + 0.04f * ready);
+            const glm::vec3 pocket = ur + right * gun->Pocket.x + up * gun->Pocket.y + front * gun->Pocket.z;
             glm::vec3 shift = (pocket - gun->ButtWorld) * std::clamp(gun->Shouldered, 0.0f, 1.0f);
             const glm::vec3 fwd = glm::length(gun->ForwardWorld) > 1e-4f ? glm::normalize(gun->ForwardWorld) : front;
             const struct { glm::vec3 Centre; float Radius; } keepOut[2] = {{neck, gun->NeckRadius}, {head + up * 0.07f, gun->HeadRadius}};

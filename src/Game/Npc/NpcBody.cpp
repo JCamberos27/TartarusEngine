@@ -323,6 +323,11 @@ void NpcBody::LateUpdate(World& world, float dt, const Camera* weaponCam) {
     if (!IsActive() || m_PoseExternal || !m_DriverModel) return;
     FootPass(dt);
     const glm::mat4 rootW = RootWorld();
+    {
+        glm::mat4 l(1.0f), r(1.0f);
+        m_HaveShouldersAnimated = m_DriverModel->NodeTransform(FPBody::kBoneUpperArm[0], l) && m_DriverModel->NodeTransform(FPBody::kBoneUpperArm[1], r);
+        if (m_HaveShouldersAnimated) m_ShouldersAnimated = 0.5f * (glm::vec3(l[3]) + glm::vec3(r[3]));
+    }
     // The aim, measured on the driver: from the chest, a pitch and a twist, eased.
     glm::vec3 chestW = m_Feet + glm::vec3(0.0f, 1.4f, 0.0f);
     {

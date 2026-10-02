@@ -53,6 +53,12 @@ struct NpcHoldSettings {
     float ReachSlack = 0.04f;        // m: the shoulders a little nearer the gun than the rig's
     float ShoulderLineMatch = 1.0f;  // the chest takes the rig's bladed stance
     float SpineAim = 0.6f, SpineAimDown = 0.9f; // the share of the aim's pitch the chest takes (up / down)
+    // The weapon's eye off the shoulders, as the player's camera is (FirstPersonBody::LateUpdate).
+    glm::vec3 ArmedEyeOffset{0.0f, 0.10f, 0.04f}; // the eye lifted off the rig's (model: right, up, forward), looking level
+    float HeadBob = 0.5f;            // the share of the shoulders' motion about their slow average the eye follows
+    float CameraSmoothing = 0.06f;   // seconds
+    float EyeSlack = 0.035f;         // m the eye may trail the shoulders by
+    float LookDownPush = 0.0f, LookDownStart = 0.0f; // looking down, the eye comes forward over the chest
 };
 
 struct NpcBodyInput {
@@ -61,7 +67,7 @@ struct NpcBodyInput {
     float FacingYaw = 0.0f;        // the heading the body should have (radians, model +Z = sin/cos)
     bool HoldFacing = false;       // face FacingYaw even while moving (strafing); else face the travel
     glm::vec3 AimPoint{0.0f};      // what the spine and gun aim at (world)
-    bool Aiming = false;           // false: the spine doesn't aim (running, reloading behind cover)
+    bool Aiming = false;           // false: the spine doesn't aim (running, at the hip)
     glm::vec3 LookPoint{0.0f};     // what the head looks at
     bool Crouched = false;
     bool Sprint = false;
@@ -216,6 +222,10 @@ private:
     int ArmsPiece() const;                                   // the "Arms" piece (index), else the driver's
     glm::vec3 m_RigEyeToShoulders{0.0f};                     // the rig's shoulders off its camera (camera frame), slow
     bool m_HaveRigOffset = false;
+    // The shoulders' midpoint (model space) as the clips have them (before LateUpdate's spine passes), and the eased
+    // copy the eye hangs off - the player's camera's (Head Bob of the motion about a slow average, Eye Slack at most).
+    glm::vec3 m_ShouldersAnimated{0.0f}, m_ShouldersSlow{0.0f}, m_Shoulders{0.0f};
+    bool m_HaveShouldersAnimated = false, m_HaveShoulders = false;
     glm::vec3 m_RigShoulderLine{0.0f};                       // the rig's left-from-right upper arm (camera frame)
     bool m_HaveRigLine = false;
     glm::vec3 m_GunShift{0.0f};                              // eased
