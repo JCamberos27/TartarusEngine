@@ -279,25 +279,33 @@ std::shared_ptr<Model> Model::CreatePrimitive(const std::string& kind, const std
     model->m_Path = path;
     model->m_D->GlobalInverseTransform = glm::mat4(1.0f);
 
-    std::vector<ModelVertex> verts;
-    std::vector<unsigned int> indices;
-    if (kind == "sphere") PrimitiveMeshes::GenerateSphere(verts, indices);
-    else if (kind == "cylinder") PrimitiveMeshes::GenerateCylinder(verts, indices);
-    else if (kind == "cone") PrimitiveMeshes::GenerateCone(verts, indices);
-    else if (kind == "plane") PrimitiveMeshes::GeneratePlane(verts, indices);
-    else if (kind == "pyramid") PrimitiveMeshes::GeneratePyramid(verts, indices);
-    else if (kind == "donut") PrimitiveMeshes::GenerateDonut(verts, indices);
-    else if (kind == "capsule") PrimitiveMeshes::GenerateCapsule(verts, indices);
-    else PrimitiveMeshes::GenerateCube(verts, indices); // default/"cube"
-
-    for (const auto& v : verts) {
-        model->m_D->BoundsMin = glm::min(model->m_D->BoundsMin, v.Position);
-        model->m_D->BoundsMax = glm::max(model->m_D->BoundsMax, v.Position);
+    // One mesh per primitive kind: every placed sphere, cube... draws from the same GPU buffers (it used to
+    // generate and upload its own, 139 spheres of 1152 triangles in the Sandbox) and has its own material.
+    // Process-lifetime like the bone ring, so no GL delete runs after the context is gone.
+    static std::map<std::string, std::unique_ptr<ModelMesh>>* const s_Templates = new std::map<std::string, std::unique_ptr<ModelMesh>>();
+    const std::string key = kind == "sphere" || kind == "cylinder" || kind == "cone" || kind == "plane" ||
+                            kind == "pyramid" || kind == "donut" || kind == "capsule" ? kind : std::string("cube");
+    std::unique_ptr<ModelMesh>& tmpl = (*s_Templates)[key];
+    if (!tmpl) {
+        std::vector<ModelVertex> verts;
+        std::vector<unsigned int> indices;
+        if (key == "sphere") PrimitiveMeshes::GenerateSphere(verts, indices);
+        else if (key == "cylinder") PrimitiveMeshes::GenerateCylinder(verts, indices);
+        else if (key == "cone") PrimitiveMeshes::GenerateCone(verts, indices);
+        else if (key == "plane") PrimitiveMeshes::GeneratePlane(verts, indices);
+        else if (key == "pyramid") PrimitiveMeshes::GeneratePyramid(verts, indices);
+        else if (key == "donut") PrimitiveMeshes::GenerateDonut(verts, indices);
+        else if (key == "capsule") PrimitiveMeshes::GenerateCapsule(verts, indices);
+        else PrimitiveMeshes::GenerateCube(verts, indices);
+        tmpl = std::make_unique<ModelMesh>(verts, indices);
+        tmpl->Mat.BaseColor = glm::vec3(0.75f); // neutral default; override via the Inspector's PBR Material section
     }
 
-    auto mesh = std::make_unique<ModelMesh>(verts, indices);
-    mesh->Mat.BaseColor = glm::vec3(0.75f); // neutral default; override via the Inspector's PBR Material section
-    model->m_D->Meshes.push_back(std::move(mesh));
+    for (const glm::vec3& p : tmpl->LocalPositions()) {
+        model->m_D->BoundsMin = glm::min(model->m_D->BoundsMin, p);
+        model->m_D->BoundsMax = glm::max(model->m_D->BoundsMax, p);
+    }
+    model->m_D->Meshes.push_back(std::make_unique<ModelMesh>(*tmpl, ModelMesh::ShareGeometry{}));
 
     model->m_FinalBoneMatrices.assign(MAX_BONES, glm::mat4(1.0f));
     return model;
@@ -1827,7 +1835,43 @@ void BindBoneRange(GLintptr offset, GLsizeiptr size) {
 }
 } // namespace
 
+// Per-instance world + normal matrices of an instanced DrawSelected (SSBO binding 22), in per-frame
+// ring slices like the bone palettes. Process-lifetime.
+static constexpr GLsizeiptr kInstSliceBytes = 4 * 1024 * 1024; // 32768 instances per frame
+static unsigned int g_InstRing = 0;
+static GLsizeiptr g_InstAlign = 256;
+static GLsizeiptr g_InstCursor = 0;
+
+bool Model::UploadInstances(const glm::mat4* xforms, int count) {
+    if (count < 1) return false;
+    const GLsizeiptr bytes = (GLsizeiptr)count * 2 * (GLsizeiptr)sizeof(glm::mat4);
+    if (!g_InstRing) {
+        glCreateBuffers(1, &g_InstRing);
+        glNamedBufferStorage(g_InstRing, kBoneRingSlices * kInstSliceBytes, nullptr, GL_DYNAMIC_STORAGE_BIT);
+        GLint align = 0;
+        glGetIntegerv(GL_SHADER_STORAGE_BUFFER_OFFSET_ALIGNMENT, &align);
+        if (align > 0) g_InstAlign = align;
+    }
+    if (g_InstCursor + bytes > kInstSliceBytes) return false;
+    static std::vector<glm::mat4> staging;
+    staging.resize((size_t)count * 2);
+    for (int i = 0; i < count; ++i) {
+        staging[(size_t)i * 2] = xforms[i];
+        staging[(size_t)i * 2 + 1] = glm::mat4(glm::transpose(glm::inverse(glm::mat3(xforms[i]))));
+    }
+    const GLintptr offset = (GLintptr)(g_BoneSlice * kInstSliceBytes + g_InstCursor);
+    glNamedBufferSubData(g_InstRing, offset, bytes, staging.data());
+    g_InstCursor += (bytes + g_InstAlign - 1) / g_InstAlign * g_InstAlign;
+    glBindBufferRange(GL_SHADER_STORAGE_BUFFER, 22, g_InstRing, offset, bytes);
+    return true;
+}
+
+unsigned Model::InstanceGeometry() const {
+    return m_D->Meshes.size() == 1 && m_D->BoneCounter == 0 ? m_D->Meshes[0]->GeometryId() : 0u;
+}
+
 void Model::BeginRenderFrame() {
+    g_InstCursor = 0;
     g_BoneSlice = (g_BoneSlice + 1) % kBoneRingSlices;
     g_BoneCursor = 0;
     ++g_BoneEpoch;
@@ -2124,7 +2168,7 @@ void Model::DrawSelected(Shader& fallback, const glm::mat4& xform,
                          const std::vector<std::shared_ptr<MaterialAsset>>& slots,
                          const ProgramSelector& selectProgram, float opacity,
                          const std::function<void(Shader&)>& onProgramBound, MeshPass pass, bool forceDoubleSided,
-                         const VisibleIndexBuffer* visible) {
+                         const VisibleIndexBuffer* visible, int instances) {
     const glm::mat4 nrm = glm::mat4(glm::transpose(glm::inverse(glm::mat3(xform))));
 
     Shader*             lastProg = nullptr;
@@ -2160,6 +2204,7 @@ void Model::DrawSelected(Shader& fallback, const glm::mat4& xform,
             prog->SetMat4(prog->Loc("uModel"), xform);
             prog->SetMat4(prog->Loc("uNormalMatrix"), nrm);
             if (onProgramBound) onProgramBound(*prog); // per-draw uniforms, e.g. probes (#108)
+            if (instances > 1) prog->SetInt("uInstanced", 1); // the vertex shader reads UploadInstances' matrices
             lastProg = prog;
         }
         // Per-draw: the transparent pass varies opacity per entity. No-op on opaque programs
@@ -2179,8 +2224,9 @@ void Model::DrawSelected(Shader& fallback, const glm::mat4& xform,
         if (useVisible)
             m_D->Meshes[i]->DrawIndices(visible->Id(), visible->MeshRange(i).Offset, visible->MeshRange(i).Count);
         else
-            m_D->Meshes[i]->Draw();
+            m_D->Meshes[i]->Draw(instances);
     }
+    if (instances > 1 && lastProg) lastProg->SetInt("uInstanced", 0);
 }
 
 void Model::DrawDepthOnly(Shader& shader, const std::vector<std::shared_ptr<MaterialAsset>>& slots, int instances,

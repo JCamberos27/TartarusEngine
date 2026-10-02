@@ -302,7 +302,14 @@ public:
                       const ProgramSelector& selectProgram, float opacity = 1.0f,
                       const std::function<void(Shader&)>& onProgramBound = {},
                       MeshPass pass = MeshPass::All, bool forceDoubleSided = false,
-                      const VisibleIndexBuffer* visible = nullptr);
+                      const VisibleIndexBuffer* visible = nullptr, int instances = 1);
+    // Non-zero for a static one-mesh model; models returning the same id draw from the same GPU buffers
+    // (the placed primitives of one kind) and can go out as one instanced DrawSelected.
+    unsigned InstanceGeometry() const;
+    // Puts the world and normal matrices of `count` instances where the model vertex shader reads them
+    // (SSBO binding 22) for the next DrawSelected(..., instances = count). False when this frame's
+    // instance buffer is full: draw them one by one.
+    static bool UploadInstances(const glm::mat4* xforms, int count);
     int MeshCount() const { return (int)m_D->Meshes.size(); }
     // Sub-mesh `index`'s triangle indices, local to it (ModelMesh::LocalIndices).
     const std::vector<unsigned int>& MeshLocalIndices(int index) const { return m_D->Meshes[index]->LocalIndices(); }
