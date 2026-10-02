@@ -2,6 +2,7 @@
 
 #include "AiMath.h"
 #include "Combat/Damage.h"
+#include "Components.h" // SquadSettingsComponent, RagdollSettingsComponent
 #include "CoverSystem.h"
 #include "NavMesh.h"
 #include "Npc.h"
@@ -56,6 +57,10 @@ public:
     // Remembers the scene's spawns and settings; the navigation mesh and the first soldiers come on the
     // first Think, once the physics world is up. False when the scene has no NPC Spawn.
     bool Start(World& world, AssetLibrary& assets, const FirstPersonControllerComponent* playerConfig);
+    // Reads the scene's Squad Settings and Ragdoll Settings (Start does; the defaults without them).
+    void ApplySettings(const entt::registry& reg);
+    const SquadSettingsComponent& Settings() const { return m_Cfg; }
+    const RagdollSettingsComponent& RagdollSettings() const { return m_RagdollCfg; }
     void Stop(World& world);
     bool Active() const { return m_Active; }
 
@@ -197,6 +202,8 @@ private:
     std::vector<SpawnPoint> m_Spawns;
     int m_SquadSize = 4;
     float m_RespawnDelay = 8.0f, m_Difficulty = 1.0f, m_DamageScale = 0.45f;
+    SquadSettingsComponent m_Cfg;            // the scene's Squad Settings (defaults without one)
+    RagdollSettingsComponent m_RagdollCfg;   // ... and Ragdoll Settings
     bool m_Respawn = true;
     std::shared_ptr<FirstPersonControllerComponent> m_ViewConfig;
     NpcHoldSettings m_HoldSettings;        // the scene player's First Person Body numbers

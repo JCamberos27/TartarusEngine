@@ -30,21 +30,6 @@ constexpr const char* kRemingtonPath = "assets/Weapons/Remington870/Remington870
 constexpr float kRadius = 0.3f;
 constexpr float kStandCyl = 0.6f;    // capsule 1.8 m standing
 constexpr float kCrouchCyl = 0.33f;  // 1.26 m crouched
-constexpr float kGravity = 18.0f;
-constexpr float kCorpseTime = 14.0f;
-constexpr float kBleedOutTime = 20.0f;      // a wounded soldier dies this long after going down
-constexpr float kCrawlSpeed = 0.6f;         // m/s
-constexpr float kLimpSpeedScale = 0.6f;
-constexpr float kLimpTime = 6.0f;
-constexpr float kStaggerTime = 0.4f;        // aim paused
-constexpr float kHeavyHit = 40.0f;          // damage that staggers
-constexpr float kHitboxRange = 60.0f;       // m from the player: soldiers further off keep only their capsule
-constexpr float kFootIKRange = 25.0f;       // m: soldiers this close (and in view) put their feet on uneven ground
-constexpr float kMeshCheckRange = 12.0f;    // m: the weapon hold checks the gun and elbows against the drawn body this close
-                                            // (further off, 2 cm is a pixel or two; the hold's sphere keep-outs still apply)
-constexpr float kMeleeTime = 0.55f;         // a rifle-butt strike, wind-up to recovery
-constexpr float kMeleeHitTime = 0.22f;      // ... the blow lands this far in
-constexpr float kMeleeDamage = 25.0f;
 
 unsigned Id(entt::entity e) { return (unsigned)entt::to_integral(e); }
 
@@ -168,6 +153,23 @@ void NpcDirector::FlushCosts(bool think) {
 NpcDirector::NpcDirector() = default;
 NpcDirector::~NpcDirector() = default;
 
+// The scene's Squad Settings and Ragdoll Settings (the first of each; the defaults without one).
+void NpcDirector::ApplySettings(const entt::registry& reg) {
+    if (auto settings = reg.view<const SquadSettingsComponent>(); settings.begin() != settings.end()) {
+        const auto& s = reg.get<const SquadSettingsComponent>(*settings.begin());
+        m_SquadSize = std::clamp(s.SquadSize, 0, 8);
+        m_RespawnDelay = s.RespawnDelay;
+        m_Difficulty = s.Difficulty;
+        m_DamageScale = s.NpcDamageScale;
+        m_Respawn = s.Respawn;
+        m_Cfg = s;
+    } else {
+        m_Cfg = SquadSettingsComponent();
+    }
+    if (auto rag = reg.view<const RagdollSettingsComponent>(); rag.begin() != rag.end()) m_RagdollCfg = reg.get<const RagdollSettingsComponent>(*rag.begin());
+    else m_RagdollCfg = RagdollSettingsComponent();
+}
+
 bool NpcDirector::Start(World& world, AssetLibrary& assets, const FirstPersonControllerComponent* playerConfig) {
     (void)assets;
     Stop(world);
@@ -191,15 +193,7 @@ bool NpcDirector::Start(World& world, AssetLibrary& assets, const FirstPersonCon
     if (found.empty()) return false;
     std::sort(found.begin(), found.end(), [](const auto& a, const auto& b) { return a.first < b.first; });
     for (const auto& f : found) m_Spawns.push_back(f.second);
-    // The first Squad Settings (a loop that only ever takes its first pass is unreachable code to MSVC's C4702).
-    if (auto settings = reg.view<SquadSettingsComponent>(); settings.begin() != settings.end()) {
-        const auto& s = reg.get<SquadSettingsComponent>(*settings.begin());
-        m_SquadSize = std::clamp(s.SquadSize, 0, 8);
-        m_RespawnDelay = s.RespawnDelay;
-        m_Difficulty = s.Difficulty;
-        m_DamageScale = s.NpcDamageScale;
-        m_Respawn = s.Respawn;
-    }
+    ApplySettings(reg);
     // The soldier's body, read once.
     {
         std::ifstream in(std::filesystem::u8path(ProjectPaths::Resolve(kSoldierPath)));
@@ -297,7 +291,7 @@ void NpcDirector::BuildNav(World& world) {
         std::filesystem::create_directories(std::filesystem::u8path(cache).parent_path(), ec);
         m_Nav.Save(cache, hash);
     }
-    const int cover = m_Cover.Build(m_Nav);
+    const int cover = m_Cover.Build(m_Nav, CoverTuning{m_Cfg.CoverSpacing, m_Cfg.CoverReach, m_Cfg.CoverKneeHeight, m_Cfg.CoverHeadHeight, m_Cfg.CoverStep});
     m_Crowd.Init(m_Nav, 16, 0.6f);
     const float ms = std::chrono::duration<float, std::milli>(std::chrono::steady_clock::now() - t0).count();
     char msg[200];
@@ -541,7 +535,7 @@ void NpcDirector::Think(World& world, AssetLibrary& assets, float dt, const Play
         if (!up || up->Dead) continue;
         Npc& n = *up;
         // Down and not helped: it bleeds out.
-        if (n.Wounded && m_Now - n.WoundedAt > kBleedOutTime) {
+        if (n.Wounded && m_Now - n.WoundedAt > m_Cfg.BleedOutTime) {
             Kill(world, n, FrontOf(n.AimYaw, 0.0f) * -1.0f, n.Feet + glm::vec3(0.0f, 0.8f, 0.0f), 6.0f);
             continue;
         }
@@ -563,8 +557,8 @@ void NpcDirector::Think(World& world, AssetLibrary& assets, float dt, const Play
                     }
                 }
                 float speed = SpeedFor(n.Intent.Pace, crouchMove);
-                if (n.Wounded) speed = kCrawlSpeed;                    // a crawl
-                else if (m_Now < n.LimpUntil) speed *= kLimpSpeedScale; // a bad leg
+                if (n.Wounded) speed = m_Cfg.CrawlSpeed;                    // a crawl
+                else if (m_Now < n.LimpUntil) speed *= m_Cfg.LimpSpeedScale; // a bad leg
                 if (m_Now < n.StaggerUntil) speed *= 0.2f;              // reeling from a heavy hit
                 m_Crowd.SetMaxSpeed(n.Agent, speed);
             } else if (n.HasGoal) {
@@ -581,7 +575,7 @@ void NpcDirector::Think(World& world, AssetLibrary& assets, float dt, const Play
         Npc& n = *up;
         if (n.Dead) {
             // The body lies there a while, then goes (and its replacement is on the way).
-            if (m_Now - n.DiedAt > kCorpseTime) {
+            if (m_Now - n.DiedAt > m_Cfg.CorpseTime) {
                 Despawn(world, n, /*keepBody=*/true);
                 up.reset();
             }
@@ -904,7 +898,7 @@ void NpcDirector::UpdateCoverFire(Squad& s) {
     Callout(*best, Bark::Covering);
 }
 
-// A rifle-butt strike at a player in arm's reach: started here, the blow resolved kMeleeHitTime later (still in reach and
+// A rifle-butt strike at a player in arm's reach: started here, the blow resolved MeleeHitTime later (still in reach and
 // in front, it lands). The gun's thrust is drawn in LatePose.
 void NpcDirector::UpdateMelee(Npc& n, const PlayerSnapshot& p) {
     const glm::vec3 to(p.Feet.x - n.Feet.x, 0.0f, p.Feet.z - n.Feet.z);
@@ -913,13 +907,13 @@ void NpcDirector::UpdateMelee(Npc& n, const PlayerSnapshot& p) {
     const glm::vec3 fwd(std::sin(yaw), 0.0f, std::cos(yaw));
     const float facing = dist > 1e-3f ? glm::degrees(std::acos(std::clamp(glm::dot(fwd, to / dist), -1.0f, 1.0f))) : 0.0f;
     const bool level = std::abs(p.Feet.y - n.Feet.y) < 1.0f;
-    if (!n.MeleeLanded && m_Now - n.MeleeAt >= kMeleeHitTime) {
+    if (!n.MeleeLanded && m_Now - n.MeleeAt >= m_Cfg.MeleeHitTime) {
         n.MeleeLanded = true;
         if (p.Valid && !p.Dead && level && dist < 2.3f && facing < 70.0f) {
             DamageEvent e;
             e.Source = Id(n.Root);
             e.Target = kPlayerEntity;
-            e.Amount = kMeleeDamage * std::clamp(m_Difficulty, 0.5f, 1.5f);
+            e.Amount = m_Cfg.MeleeDamage * std::clamp(m_Difficulty, 0.5f, 1.5f);
             e.Zone = HitZone::Torso;
             e.Point = p.Feet + glm::vec3(0.0f, p.Height * 0.75f, 0.0f);
             e.Direction = dist > 1e-3f ? to / dist : fwd;
@@ -928,7 +922,7 @@ void NpcDirector::UpdateMelee(Npc& n, const PlayerSnapshot& p) {
             ++m_Tactics.MeleeHits;
         }
     }
-    if (HoldFire || n.Dummy || n.Wounded || n.Reloading || !n.Mem.Known || !p.Valid || p.Dead || !level || m_Now - n.MeleeAt < kMeleeTime) return;
+    if (HoldFire || n.Dummy || n.Wounded || n.Reloading || !n.Mem.Known || !p.Valid || p.Dead || !level || m_Now - n.MeleeAt < m_Cfg.MeleeTime) return;
     if (!WantsMelee(dist, facing, m_Now - n.MeleeAt)) return;
     n.MeleeAt = m_Now;
     n.MeleeLanded = false;
@@ -942,7 +936,7 @@ void NpcDirector::Move(World& world, Npc& n, float dt) {
     glm::vec3 want(0.0f);
     if (n.Intent.Move && n.Agent >= 0) want = m_Crowd.Velocity(n.Agent);
     want.y = 0.0f;
-    n.FallSpeed -= kGravity * dt;
+    n.FallSpeed -= m_Cfg.FallGravity * dt;
     const glm::vec3 disp = (want + n.PushVel) * dt + glm::vec3(0.0f, n.FallSpeed * dt, 0.0f);
     n.PushVel *= std::exp(-7.0f * dt); // a stagger's shove dies away
     const float d[3] = {disp.x, disp.y, disp.z};
@@ -981,13 +975,13 @@ void NpcDirector::Move(World& world, Npc& n, float dt) {
     in.AimPoint = n.Intent.AimPoint;
     // The stance stays aimed through a reload (worked at the hip, the player's body's chest keeps following its view
     // there too: dropping it at each reload's start and end rocked the torso); blind fire and a rifle-butt strike aren't.
-    in.Aiming = n.Intent.Aim && !n.Intent.BlindFire && m_Now - n.MeleeAt >= kMeleeTime;
+    in.Aiming = n.Intent.Aim && !n.Intent.BlindFire && m_Now - n.MeleeAt >= m_Cfg.MeleeTime;
     in.LookPoint = n.Intent.LookPoint;
     in.Crouched = n.Crouched;
     in.Sprint = n.Intent.Pace == Gait::Run && n.Intent.Move;
     in.Lean = n.Intent.Lean;
     in.Cower = n.Intent.Cower;
-    in.FootIK = FootIKEverywhere || (n.PlayerDist < kFootIKRange && n.OnScreen); // feet on slopes and steps where they can be seen
+    in.FootIK = FootIKEverywhere || (n.PlayerDist < m_Cfg.FootIKRange && n.OnScreen); // feet on slopes and steps where they can be seen
     n.Body.Tick(world, in, dt);
 }
 
@@ -1006,7 +1000,7 @@ void NpcDirector::AimAndFire(World& world, Npc& n, const PlayerSnapshot& p, floa
         n.Pumping = st == "Pump";
     }
     UpdateMelee(n, p);
-    const bool meleeing = m_Now - n.MeleeAt < kMeleeTime;
+    const bool meleeing = m_Now - n.MeleeAt < m_Cfg.MeleeTime;
     const bool aimGun = n.Intent.Aim && !n.Reloading && !n.Intent.BlindFire && !meleeing;
     const glm::vec3 target = n.Intent.Aim ? n.Intent.AimPoint : n.Intent.LookPoint;
     {
@@ -1207,7 +1201,7 @@ void NpcDirector::LatePose(World& world, Npc& n, float dt, const PlayerSnapshot&
     n.BlindLift += ((n.Intent.BlindFire && alive ? 1.0f : 0.0f) - n.BlindLift) * AiFollow(dt, 0.09f);
     if (n.BlindLift > 1e-3f) n.WeaponCam.Position += n.BlindOffset * n.BlindLift;
     // A rifle-butt strike: drawn back, driven forward at the player's chest with a twist, then recovered.
-    if (const float mt = (m_Now - n.MeleeAt) / kMeleeTime; alive && mt >= 0.0f && mt < 1.0f) {
+    if (const float mt = (m_Now - n.MeleeAt) / m_Cfg.MeleeTime; alive && mt >= 0.0f && mt < 1.0f) {
         float reach;
         if (mt < 0.3f) reach = -0.12f * Smoothstep01(mt / 0.3f);
         else if (mt < 0.42f) reach = -0.12f + 0.52f * Smoothstep01((mt - 0.3f) / 0.12f);
@@ -1267,7 +1261,7 @@ void NpcDirector::LatePose(World& world, Npc& n, float dt, const PlayerSnapshot&
         SubTimer holdTimer(*this, SubHold);
         FirstPersonWorldGunInput gun;
         const bool haveGun = n.Weapon->WorldGunInput(gun);
-        const bool closeToPlayer = !p.Valid || (glm::length(n.Eye - p.Eye) < kMeshCheckRange && n.OnScreen) || MeshChecksEverywhere;
+        const bool closeToPlayer = !p.Valid || (glm::length(n.Eye - p.Eye) < m_Cfg.MeshCheckRange && n.OnScreen) || MeshChecksEverywhere;
         muzzleShift = n.Body.HoldWeapon(world, n.Weapon->ArmsEntity(), n.Weapon->WeaponEntity(), haveGun ? &gun : nullptr, n.WeaponCam,
                                         dt, closeToPlayer);
     }
@@ -1310,11 +1304,11 @@ void NpcDirector::UpdateLod(World& world, Npc& n, const PlayerSnapshot& p) {
     }
 }
 
-// The per-bone hitboxes follow the skeleton for soldiers within kHitboxRange of the player (made on first need, off
+// The per-bone hitboxes follow the skeleton for soldiers within Hitbox Range of the player (made on first need, off
 // beyond it, where the capsule answers instead).
 void NpcDirector::UpdateHitboxes(Npc& n, const PlayerSnapshot& p, bool posed) {
     if (n.Cct == PhysicsWorld::kNoCharacter) return;
-    const bool near = !p.Valid || glm::length(n.Feet - p.Feet) < kHitboxRange;
+    const bool near = !p.Valid || glm::length(n.Feet - p.Feet) < m_Cfg.HitboxRange;
     if (!near) {
         if (n.Hitboxes) n.Hitboxes->SetActive(false);
         return;
@@ -1417,7 +1411,7 @@ bool NpcDirector::OnPlayerHit(World& world, unsigned entity, const glm::vec3& po
                 }
                 const float amount = DamageForHit(weapon, HitZone::Torso, dist);
                 const glm::vec3 d = glm::length(dir) > 1e-6f ? glm::normalize(dir) : glm::vec3(0.0f, 0.0f, 1.0f);
-                n.Ragdoll->Shove(part, d * NpcPartDefOf(part).Mass * (1.5f + 0.04f * amount), point);
+                n.Ragdoll->Shove(part, d * NpcRagdoll::PartMass(&m_RagdollCfg, part) * (m_RagdollCfg.CorpseShotBase + m_RagdollCfg.CorpseShotPerDamage * amount), point);
                 if (Fx) Fx->Play(CombatFx::Cue::FleshHit, point, false, 0.5f);
             }
             return true;
@@ -1495,11 +1489,11 @@ void NpcDirector::ApplyDamage(World& world, Npc& n, float amount, HitZone zone, 
     // It flinches the way it was hit (where it was hit), and a leg hit leaves it limping.
     n.Body.Flinch(world, dir, &point, part);
     n.NextThink = std::min(n.NextThink, m_Now); // rethink now
-    if (region == HitRegion::Leg) n.LimpUntil = m_Now + kLimpTime;
-    if (attacker < 0 && amount >= kHeavyHit) {
+    if (region == HitRegion::Leg) n.LimpUntil = m_Now + m_Cfg.LimpTime;
+    if (attacker < 0 && amount >= m_Cfg.HeavyHitDamage) {
         // A heavy hit: a beat of aim lost, and a small shove back along the round.
-        n.StaggerUntil = m_Now + kStaggerTime;
-        n.ReactionLeft = std::max(n.ReactionLeft, kStaggerTime);
+        n.StaggerUntil = m_Now + m_Cfg.StaggerTime;
+        n.ReactionLeft = std::max(n.ReactionLeft, m_Cfg.StaggerTime);
         const glm::vec3 flat(dir.x, 0.0f, dir.z);
         if (glm::dot(flat, flat) > 1e-6f) n.PushVel += glm::normalize(flat) * 1.8f;
         if (glm::length(n.PushVel) > 2.5f) n.PushVel = glm::normalize(n.PushVel) * 2.5f;
@@ -1579,7 +1573,7 @@ void NpcDirector::FinishDeath(World& world, Npc& n) {
     n.Body.SetPoseOwnedElsewhere(true);
     n.FallSoundAt = m_Now + 0.45f;
     n.Ragdoll = std::make_unique<NpcRagdoll>();
-    if (!n.Ragdoll->Start(n.Body, n.Velocity, n.DeathDir * n.DeathShove, n.DeathPoint, n.DeathPart)) {
+    if (!n.Ragdoll->Start(n.Body, n.Velocity, n.DeathDir * n.DeathShove, n.DeathPoint, n.DeathPart, &m_RagdollCfg)) {
         n.Ragdoll.reset();
         if (n.Root != entt::null && world.Registry.valid(n.Root)) {
             world.Registry.emplace_or_replace<DeactivatedTag>(n.Root);
