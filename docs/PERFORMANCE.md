@@ -123,17 +123,22 @@ What is left, roughly by expected value. At 1080p the GPU is the limit, at 1440p
    depth-aware upsample or fewer taps would trade some quality.
 4. **Clouds** (~0.5 ms): already a quarter of texels per frame. Skipping texels behind opaque geometry
    needs history handling so moving objects don't leave holes.
-5. **Static geometry** (~0.8 ms of Scene Draw at 1440p): primitives are one Model per entity (139
-   spheres at 1152 triangles each, 56 cubes, 36 cylinders). Share one mesh per primitive kind and draw
-   identical mesh+material runs instanced, in the main, SSAO and shadow passes. Also cuts CPU draw calls.
+5. **Static geometry** (~0.8 ms of Scene Draw at 1440p): primitives now share one GPU mesh per kind (done, #P2),
+   but each is still its own draw. Instancing identical mesh+material runs was built for the main pass and
+   the SSAO pre-pass (per-instance matrices in an SSBO, runs merged after sorting on material then mesh) and
+   measured: no gain. CPU Scene Draw stayed at ~0.6 ms and the GPU SSAO pre-pass got ~15% slower, so it was
+   dropped; the Sandbox is GPU-bound and its ~230 draws are not what costs. Note embedded materials are one
+   asset per entity (batch on `Mat.Hash()`, not the pointer) and reflection probes are chosen per object.
+   The sun and local shadow passes were not tried (the sun's instance index is the cascade layer).
 6. ~~**Characters' bounds**: characters whose clips live in other files report `HasAnimations() == false`,
    so they are culled on unpadded bind-pose bounds in the main, SSAO and shadow passes. Harmless in the
    Sandbox, but a limb reaching out of the bind box could be culled. Use "has bones" for the padding.~~ **Done (#P1)**: Added `Model::HasBones()` and replaced the three padding checks with it (SceneRenderer L451, main L3095 and L3672).
 
 **CPU** (worth it once the GPU is lighter, or on slower CPUs)
-7. First-person body ~1.4 ms: `ApplyLocalPose` (the final bone matrices do two generic 4x4 products per
-   bone; both are affine), IK global refreshes, clip sampling. Multithread the per-piece work, or sample
-   the driver once and copy to followers through a node remap.
+7. First-person body ~1.4 ms: the final bone matrices now use affine products (done, #P2: `AffineMul`, unit
+   test vs the generic product within 1e-5; the bench's First Person IK timer is ~1.25 ms before and after,
+   inside noise). Left: IK global refreshes (Game/IK.cpp), clip sampling. Multithread the per-piece work, or
+   sample the driver once and copy to followers through a node remap.
 8. PhysX `fetchResults` wait (~0.45 ms): overlap simulation with animation and render prep.
 9. Animator controllers ~0.46 ms.
 
