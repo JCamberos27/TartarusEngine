@@ -1641,13 +1641,12 @@ void EditorLayer::DrawSettingsWindow(World& world) {
             if (ImGui::InputTextWithHint("##scfilter", ICON_FA_MAGNIFYING_GLASS "  Filter", buf, sizeof(buf)))
                 m_PrefsShortcutFilter = buf;
             ImGui::SameLine(0.0f, 4.0f * m_UIScale);
-            if (ImGui::Button(ICON_FA_ARROW_ROTATE_LEFT "##resetall", ImVec2(-1.0f, 0.0f))) {
+            if (ActionButton(ICON_FA_ARROW_ROTATE_LEFT, "Restore every shortcut to its default", false, ImVec2(-1.0f, 0.0f))) {
                 Shortcuts::ResetAllToDefault();
                 Shortcuts::Save();
                 m_PrefsCapturingId.clear();
                 m_PrefsCaptureStage = 0;
             }
-            if (ImGui::IsItemHovered()) EditorUI::SetTooltip("Restore every shortcut to its default");
         }
 
         // Capture polling. One armed row at a time (m_PrefsCapturingId):
@@ -1802,13 +1801,15 @@ void EditorLayer::DrawSettingsWindow(World& world) {
                     ImGui::TableNextColumn();
                     if (s.Overridden) {
                         ImGui::AlignTextToFramePadding();
-                        if (ImGui::SmallButton(ICON_FA_ARROW_ROTATE_LEFT)) {
+                        const std::string resetTip = "Reset to " + Shortcuts::ToString(s.Default);
+                        ImGui::PushID(s.Id.c_str());
+                        const bool resetClicked = ActionButton(ICON_FA_ARROW_ROTATE_LEFT, resetTip.c_str());
+                        ImGui::PopID();
+                        if (resetClicked) {
                             Shortcuts::ResetToDefault(s.Id.c_str());
                             Shortcuts::Save();
                             if (capturing) { m_PrefsCapturingId.clear(); m_PrefsCaptureStage = 0; }
                         }
-                        if (ImGui::IsItemHovered())
-                            EditorUI::SetTooltip("Reset to %s", Shortcuts::ToString(s.Default).c_str());
                     }
 
                     ImGui::PopID();

@@ -938,21 +938,13 @@ void EditorLayer::DrawAssetImportInspector(World& world, AssetLibrary& assets, c
             // Channel isolation toggles - "Combined" shows the texture as normal; R/G/B/A each
             // broadcast that one channel to grayscale, e.g. to check what a MaskMap's alpha
             // (often Smoothness) actually contains without exporting it to a separate file first.
-            auto channelButton = [&](const char* label, int channel) {
-                bool active = m_ChannelPreviewChannel == channel;
-                if (active) ImGui::PushStyleColor(ImGuiCol_Button, ImGui::GetStyleColorVec4(ImGuiCol_ButtonActive));
-                if (ImGui::Button(label)) m_ChannelPreviewChannel = channel;
-                if (active) ImGui::PopStyleColor();
-            };
-            channelButton("Combined", -1);
-            ImGui::SameLine();
-            channelButton("R", 0);
-            ImGui::SameLine();
-            channelButton("G", 1);
-            ImGui::SameLine();
-            channelButton("B", 2);
-            ImGui::SameLine();
-            channelButton("A", 3);
+            {
+                static const char* const kChannelLabels[] = {"Combined", "R", "G", "B", "A"};
+                static const char* const kChannelTips[] = {"Show the texture as authored", "Red channel as grayscale",
+                    "Green channel as grayscale", "Blue channel as grayscale", "Alpha channel as grayscale"};
+                int seg = m_ChannelPreviewChannel + 1; // -1 (Combined) .. 3 (A) -> 0..4
+                if (Segmented("##channelPreview", &seg, kChannelLabels, 5, kChannelTips)) m_ChannelPreviewChannel = seg - 1;
+            }
 
             // Render (or reuse) the offscreen preview - only when the inspected asset or the
             // selected channel actually changed since the last frame, not unconditionally.

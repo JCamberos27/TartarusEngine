@@ -76,3 +76,7 @@ Host code reaches these through the forwarders in `EditorLayerInternal.h`, which
   | `--editor-shot-scale <s>` | Set the UI scale. |
   | `--editor-shot-select <name>` | Choose the selected entity. |
   | `--perf-res WxH` | Set the window size. |
+
+### Raw button audit (lane U round 2)
+
+Raw `ImGui::Button` calls left in `src/Editor` are each one of: a state/data-coloured control (Inspector axis tabs, Console level toggles, Preferences keybinding pill, Layers filter chip), a field-shaped asset/material/mesh slot picker, a wrapping selected-state pill flow (Outfit editor; `Segmented` can't wrap), the green Play button, HUD-plate buttons (Game view aspect/stats), breadcrumb text links, or the title-bar window controls. The allow-list reason for each file names these. Migrated to primitives this round: Stop / Step / Fullscreen (ActionButton), the texture channel-preview strip (Segmented), and the Preferences reset-shortcut buttons (ActionButton). Every icon-only button carries a tooltip. Host code calls the `EditorLayerInternal.h` forwarders (no tooltip-fn argument).
