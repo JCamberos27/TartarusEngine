@@ -1177,6 +1177,11 @@ void NpcDirector::LateUpdate(World& world, float dt, const PlayerSnapshot& p) {
         n.LateDt = 0.0f;
         LatePose(world, n, lateDt, p, /*alive=*/true);
         UpdateHitboxes(n, p, /*posed=*/true);
+        // The hit flinch goes on after the hitboxes took their pose (and the eye and the aim were read): visual only.
+        if (const auto it = m_Flinch.find(n.Index); it != m_Flinch.end()) {
+            if (it->second.Active(m_Now)) it->second.Apply(n.Body, m_Now);
+            else m_Flinch.erase(it);
+        }
         if (TrackDeathPop) {
             static const char* kBones[3] = {"head", "hand_l", "foot_l"};
             n.HaveLastBones = true;
@@ -1423,7 +1428,7 @@ bool NpcDirector::OnPlayerHit(World& world, unsigned entity, const glm::vec3& po
             if (n.Ragdoll) {
                 if (part < 0) {
                     float best = 1e9f;
-                    for (int i = 0; i < NpcRagdoll::kParts; ++i) {
+                    for (int i = 0; i < NpcRagdoll::kRagParts; ++i) {
                         const float d2 = glm::length(n.Ragdoll->PartPosition(i) - point);
                         if (d2 < best) { best = d2; part = i; }
                     }
@@ -1507,6 +1512,7 @@ void NpcDirector::ApplyDamage(World& world, Npc& n, float amount, HitZone zone, 
     }
     // It flinches the way it was hit (where it was hit), and a leg hit leaves it limping.
     n.Body.Flinch(world, dir, &point, part);
+    if (m_RagdollCfg.HitFlinch && part >= 0) m_Flinch[n.Index].Hit(n.Body, part, dir, amount, m_Now, m_RagdollCfg); // a kick on the struck region
     n.NextThink = std::min(n.NextThink, m_Now); // rethink now
     if (region == HitRegion::Leg) n.LimpUntil = m_Now + m_Cfg.LimpTime;
     if (attacker < 0 && amount >= m_Cfg.HeavyHitDamage) {
@@ -1551,6 +1557,7 @@ void NpcDirector::Kill(World& world, Npc& n, const glm::vec3& dir, const glm::ve
     n.TriggerHeld = false;
     m_Cover.Release(n.Index, m_Now);
     n.Hitboxes.reset(); // the ragdoll's parts take over the rounds
+    m_Flinch.erase(n.Index);
     if (n.Cct != PhysicsWorld::kNoCharacter) PhysicsWorld::DestroyNpcCharacter(n.Cct);
     n.Cct = PhysicsWorld::kNoCharacter;
     if (n.Agent >= 0) m_Crowd.Remove(n.Agent);
