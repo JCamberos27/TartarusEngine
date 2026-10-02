@@ -496,6 +496,8 @@ struct FirstPersonControllerComponent {
     float GrabRange = 100.0f;       // metres; Gravity Gun group
     // Gravity gun aim assist: search radius when no object is under the exact crosshair
     float AssistRange = 30.0f;      // metres; Gravity Gun group
+    // Gravity gun assist cone: within this many degrees of the crosshair
+    float AssistConeDeg = 7.0f;     // degrees; Gravity Gun group
     // Gravity gun scroll-wheel tuning: rotation applied per scroll notch while holding an object
     float ScrollTurnDeg = 15.0f;    // degrees per notch; Gravity Gun group
 

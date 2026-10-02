@@ -14,7 +14,6 @@
 namespace {
 
 constexpr unsigned kNoEntity = 0xFFFFFFFFu;
-const float kAssistCos = std::cos(glm::radians(7.0f)); // within 7 degrees of the crosshair
 
 bool Grabbable(unsigned e) {
     BodyState bs;
@@ -52,10 +51,11 @@ unsigned GravityGun::FindGrabTarget(const glm::vec3& eye, const glm::vec3& fwd) 
     // Sweep overlap spheres down the aim line, each wide enough to cover the cone at its
     // distance, and keep the candidate closest in angle to the crosshair.
     unsigned best = kNoEntity;
-    float bestCos = kAssistCos;
+    const float assistCos = std::cos(glm::radians(Settings.AssistConeDeg));
+    float bestCos = assistCos;
     unsigned ids[32];
     for (float t = 0.5f; t < reach;) {
-        const float r = std::clamp(t * std::tan(glm::radians(7.0f)), 0.3f, 2.5f);
+        const float r = std::clamp(t * std::tan(glm::radians(Settings.AssistConeDeg)), 0.3f, 2.5f);
         const glm::vec3 c = eye + fwd * t;
         const float cf[3] = {c.x, c.y, c.z};
         const int n = PhysicsWorld::OverlapSphereFiltered(cf, r, solid, ids, 32);
