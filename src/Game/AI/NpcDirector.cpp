@@ -237,6 +237,24 @@ bool NpcDirector::Start(World& world, AssetLibrary& assets, const FirstPersonCon
         m_HoldSettings.EyeSlack = fpb.EyeSlack;
         m_HoldSettings.LookDownPush = fpb.LookDownPush;
         m_HoldSettings.LookDownStart = fpb.LookDownStart;
+        // NPC body tuning
+        m_HoldSettings.TurnThreshold = fpb.NpcTurnThreshold;
+        m_HoldSettings.MoveEase = fpb.NpcMoveEase;
+        m_HoldSettings.FaceEase = fpb.NpcFaceEase;
+        m_HoldSettings.MaxTwist = fpb.NpcMaxTwist;
+        m_HoldSettings.AimLean = fpb.NpcAimLean;
+        m_HoldSettings.AimLeanCrouched = fpb.NpcAimLeanCrouched;
+        m_HoldSettings.ReadyLeanCrouched = fpb.NpcReadyLeanCrouched;
+        m_HoldSettings.CowerHunch = fpb.NpcCowerHunch;
+        m_HoldSettings.HeadMaxYaw = fpb.NpcHeadMaxYaw;
+        m_HoldSettings.HeadMaxPitch = fpb.NpcHeadMaxPitch;
+        m_HoldSettings.FootIKMaxDrop = fpb.NpcFootIKMaxDrop;
+        m_HoldSettings.FootIKMaxRaise = fpb.NpcFootIKMaxRaise;
+        m_HoldSettings.FootIKPelvisRaise = fpb.NpcFootIKPelvisRaise;
+        m_HoldSettings.FootIKTiltMax = fpb.NpcFootIKTiltMax;
+        m_HoldSettings.FootOffsetEase = fpb.NpcFootOffsetEase;
+        m_HoldSettings.FootNormalEase = fpb.NpcFootNormalEase;
+        m_HoldSettings.FootIKFade = fpb.NpcFootIKFade;
     }
     m_Active = true;
     m_Started = false;
