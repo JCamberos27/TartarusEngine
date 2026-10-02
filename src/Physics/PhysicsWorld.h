@@ -120,6 +120,13 @@ struct RagdollPart {
     float Anchor[3] = {0, 0, 0};
     float SwingDeg = 45.0f, TwistDeg = 20.0f;
     float Velocity[3] = {0, 0, 0};
+    float AngularVelocity[3] = {0, 0, 0}; // rad/s, world
+    // Shaped inertia: > 0 gives the part the inertia of a box `2 * InertiaHalfWidth` wide (along InertiaLateral, world) and
+    // `2 * InertiaHalfDepth` deep, as long as the capsule, instead of the capsule's own (a torso is wider than it is deep).
+    // `InertiaScale` multiplies either (> 1 spins slower: stability).
+    float InertiaHalfWidth = 0.0f, InertiaHalfDepth = 0.0f;
+    float InertiaLateral[3] = {0, 0, 1};
+    float InertiaScale = 1.0f;
     // Anatomical limits (Anatomical true): the joint frame is `LimitFrame` (world, xyzw) with +X the bone's neutral
     // direction and +Y the direction of positive flexion; the swing ranges are degrees from that neutral (flexion toward +Y =
     // SwingZ, sideways = SwingY), the twist about +X. The part's pose at build may sit anywhere inside (or outside: the range
@@ -144,6 +151,10 @@ bool RagdollAsleep(int ragdoll);
 // The joints' slerp drives: each part held toward its target orientation (identity: the pose the ragdoll was built in,
 // see SetRagdollDriveTarget) as a spring of `stiffness` / `damping` (acceleration: mass independent). 0 = limp.
 void SetRagdollDrive(int ragdoll, float stiffness, float damping);
+// The same for the one joint that holds `part` to its parent (a region's drive fading on its own clock).
+void SetRagdollPartDrive(int ragdoll, int part, float stiffness, float damping);
+// Part `part`'s principal moments of inertia (kg m^2, about its bone axis and the two across it), for tests.
+bool GetRagdollPartInertia(int ragdoll, int part, float outInertia[3]);
 // Where part `part`'s drive wants it, as its rotation (xyzw) relative to its parent from the built pose.
 void SetRagdollDriveTarget(int ragdoll, int part, const float rotXYZW[4]);
 

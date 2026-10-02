@@ -3,6 +3,7 @@
 #include <glm/glm.hpp>
 #include <glm/gtc/quaternion.hpp>
 
+#include <algorithm>
 #include <functional>
 #include <memory>
 #include <vector>
@@ -21,15 +22,19 @@ namespace PhysicsWorld { struct RagdollPart; struct RagdollParams; }
 //
 // The death is a powered blend, not a cut: the joints start with slerp drives holding the pose the body died in
 // (so a soldier hit running keeps its stride for a beat and falls as it was), and the drives fade to nothing over
-// kDriveFade seconds, after which it is a rag.
+// kDriveFade seconds (each region on its own clock: the Ragdoll Settings' fade scales), after which it is a rag. Every part
+// starts with its own bone's velocity from the last two animated poses, so limbs keep their swing.
 class NpcRagdoll {
 public:
     ~NpcRagdoll();
     // `velocity`: the body's (m/s); `impulse` (N s) at `point` (world) on part `hitPart` (-1: the part nearest
     // `point`).
     // `cfg`: the scene's Ragdoll Settings (null: the defaults).
+    // `prev` / `prevDt`: the bones as they were `prevDt` seconds before the pose the body is in now (Capture), for each part's own
+    // velocity (null: all parts move with `velocity`).
+    struct BoneSnapshot;
     bool Start(NpcBody& body, const glm::vec3& velocity, const glm::vec3& impulse, const glm::vec3& point, int hitPart = -1,
-               const RagdollSettingsComponent* cfg = nullptr);
+               const RagdollSettingsComponent* cfg = nullptr, const BoneSnapshot* prev = nullptr, float prevDt = 0.0f);
     void Stop();
     bool Active() const { return m_Id >= 0; }
     // After the physics step (and after the animators, which are off by then): the pieces' poses. `dt` runs the
@@ -43,11 +48,29 @@ public:
     void Shove(int part, const glm::vec3& impulse, const glm::vec3& point);
     // Part `part`'s centre (world), as last stepped.
     glm::vec3 PartPosition(int part) const;
-    // The drive's strength now, 1 at the moment of death to 0 once faded.
+    // The drive's strength now (the strongest region's), 1 at the moment of death to 0 once faded.
     float DriveLeft() const { return m_Drive; }
     // How the drives fade: seconds from death to limp (the default; a Ragdoll Settings overrides it, see DriveFadeTime).
     static constexpr float kDriveFade = 0.25f;
-    float DriveFadeTime() const { return m_Fade; }
+    // The longest any region's drive lasts (seconds).
+    float DriveFadeTime() const;
+    // Seconds region of `part` takes to go limp under `cfg` (null: the default), and the drive's strength (1..0) `t` seconds
+    // after death for a fade of `fade`.
+    static float PartFade(const RagdollSettingsComponent* cfg, int part);
+    static float DriveAt(float t, float fade) { return fade <= 1e-4f ? 0.0f : std::max(0.0f, 1.0f - t / fade); }
+
+    // The bones a ragdoll is built from, in the body's root space, for a velocity from two poses.
+    static constexpr int kSnapBones = 17;
+    struct BoneSnapshot {
+        glm::vec3 P[kSnapBones];
+        bool Valid = false;
+    };
+    static void Capture(const NpcBody& body, BoneSnapshot& out);
+    // Adds each part's own motion to parts[].Velocity / AngularVelocity: the finite difference of its pose over `dt`, from
+    // `prevWorld` to `nowWorld` (both in the same, non-moving frame), times cfg.LimbVelocityScale and clamped (a teleport, a bad
+    // frame). dt outside 2 ms .. 120 ms adds nothing.
+    static void InheritVelocity(const glm::mat4* prevWorld, const glm::mat4* nowWorld, float dt, const RagdollSettingsComponent& cfg,
+                                PhysicsWorld::RagdollPart* parts);
 
     // The physics parts for a body in the pose `bone` gives (a bone's world position by name, false if missing), its root
     // matrix (x left, y up, z forward): capsules, masses and the joints' limits (anatomical ranges of motion from `cfg`, or the
@@ -74,7 +97,9 @@ private:
     std::vector<PieceBones> m_Pieces;
     bool m_Settled = false;          // asleep, and the pieces already show the resting pose
     float m_Drive = 0.0f;
-    float m_Fade = kDriveFade, m_Stiffness = 700.0f, m_Damping = 60.0f; // the drives' fade, from the settings
+    float m_Time = 0.0f;             // seconds since death
+    float m_PartFade[kParts];        // per part: seconds to limp
+    float m_Stiffness = 700.0f, m_Damping = 60.0f; // the drives' strength, from the settings
     // Scratch, reused every frame.
     std::vector<glm::mat4> m_Globals;
     std::vector<LocalTRS> m_Pose;
