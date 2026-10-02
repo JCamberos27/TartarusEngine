@@ -8,6 +8,10 @@
 #include "AssetLibrary.h"
 #include "SceneSerializer.h"
 #include "World.h"
+#include "../Renderer/Animation.h"
+#include <random>
+#include <glm/gtc/quaternion.hpp>
+#include <glm/gtc/matrix_transform.hpp>
 
 // Unit tests for renderer, core and performance. Add a function per test and list it below.
 
@@ -93,9 +97,32 @@ static void Test_FxHud_SettingsDrivePureHelpers() {
     CHECK(!CombatHud::FeedExpired(s, 4.6f) && CombatHud::FeedExpired(s, 9.5f));
 }
 
+static glm::mat4 RandomAffine(std::mt19937& rng) {
+    std::uniform_real_distribution<float> d(-2.0f, 2.0f), a(-3.0f, 3.0f), sc(0.2f, 2.5f);
+    const glm::quat q = glm::normalize(glm::quat(a(rng), a(rng), a(rng), a(rng) + 4.0f));
+    return glm::translate(glm::mat4(1.0f), glm::vec3(d(rng), d(rng), d(rng))) * glm::mat4_cast(q) *
+           glm::scale(glm::mat4(1.0f), glm::vec3(sc(rng), sc(rng), sc(rng)));
+}
+
+// The skinning palette uses affine products; they must equal the generic 4x4 ones.
+static void Test_Model_AffinePaletteMatchesGeneric() {
+    std::mt19937 rng(1234);
+    float worst = 0.0f;
+    for (int n = 0; n < 500; ++n) {
+        const glm::mat4 gi = RandomAffine(rng), g = RandomAffine(rng), off = RandomAffine(rng);
+        const glm::mat4 ref = gi * g * off;
+        const glm::mat4 got = AffineMul(AffineMul(gi, g), off);
+        for (int c = 0; c < 4; ++c)
+            for (int r = 0; r < 4; ++r)
+                worst = std::max(worst, std::abs(ref[c][r] - got[c][r]) / std::max(1.0f, std::abs(ref[c][r])));
+    }
+    CHECK(worst < 1e-5f);
+}
+
 void RegisterEngineTests(UnitTestSupport::TestList& tests) {
     tests.push_back({"FirstPersonController::NewFieldsRoundTrip", Test_FirstPersonController_NewFieldsRoundTrip});
     tests.push_back({"FxHudSettings::RoundTrip", Test_FxHudSettings_RoundTrip});
     tests.push_back({"GravityGun::AssistReach", Test_GravityGun_AssistReach});
+    tests.push_back({"Model::AffinePaletteMatchesGeneric", Test_Model_AffinePaletteMatchesGeneric});
     tests.push_back({"FxHud::SettingsDrivePureHelpers", Test_FxHud_SettingsDrivePureHelpers});
 }

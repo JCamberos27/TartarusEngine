@@ -1489,7 +1489,7 @@ void Model::ResolveNodeGlobal(int node) const {
         const int i = *it, p = nodes[i].Parent;
         const glm::mat4 local = m_AppliedPose[i].ToMatrix();
         m_NodeGlobals[i] = p >= 0 ? AffineMul(m_NodeGlobals[p], local) : local;
-        if ((size_t)i < m_HiddenNodes.size() && m_HiddenNodes[i]) m_NodeGlobals[i] = m_NodeGlobals[i] * kCollapse;
+        if ((size_t)i < m_HiddenNodes.size() && m_HiddenNodes[i]) m_NodeGlobals[i] = AffineMul(m_NodeGlobals[i], kCollapse);
         m_GlobalValid[i] = 1;
     }
 }
@@ -1551,8 +1551,8 @@ void Model::EvaluatePose() {
             }
         }
         m_NodeGlobals[i] = n.Parent >= 0 ? m_NodeGlobals[n.Parent] * local : local;
-        if (i < m_HiddenNodes.size() && m_HiddenNodes[i]) m_NodeGlobals[i] = m_NodeGlobals[i] * kCollapse;
-        if (n.BoneId >= 0) m_FinalBoneMatrices[n.BoneId] = m_D->GlobalInverseTransform * m_NodeGlobals[i] * n.BoneOffset;
+        if (i < m_HiddenNodes.size() && m_HiddenNodes[i]) m_NodeGlobals[i] = AffineMul(m_NodeGlobals[i], kCollapse);
+        if (n.BoneId >= 0) m_FinalBoneMatrices[n.BoneId] = AffineMul(AffineMul(m_D->GlobalInverseTransform, m_NodeGlobals[i]), n.BoneOffset);
     }
 }
 
@@ -1609,7 +1609,7 @@ void Model::ResolveAppliedPose() const {
         const AnimNode& n = nodes[i];
         const glm::mat4 local = pose[i].ToMatrix();
         m_NodeGlobals[i] = n.Parent >= 0 ? AffineMul(m_NodeGlobals[n.Parent], local) : local;
-        if (i < m_HiddenNodes.size() && m_HiddenNodes[i]) m_NodeGlobals[i] = m_NodeGlobals[i] * kCollapse;
+        if (i < m_HiddenNodes.size() && m_HiddenNodes[i]) m_NodeGlobals[i] = AffineMul(m_NodeGlobals[i], kCollapse);
     }
 }
 
@@ -1620,7 +1620,7 @@ void Model::ResolvePalette() const {
     const auto& nodes = m_D->Nodes;
     for (size_t i = 0; i < nodes.size(); ++i) {
         const AnimNode& n = nodes[i];
-        if (n.BoneId >= 0) m_FinalBoneMatrices[n.BoneId] = m_D->GlobalInverseTransform * m_NodeGlobals[i] * n.BoneOffset;
+        if (n.BoneId >= 0) m_FinalBoneMatrices[n.BoneId] = AffineMul(AffineMul(m_D->GlobalInverseTransform, m_NodeGlobals[i]), n.BoneOffset);
     }
 }
 
