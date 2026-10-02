@@ -25,9 +25,9 @@ can be tuned, and how it is tested.
 - **Ragdoll Settings** (`RagdollSettingsComponent`, category AI): on any object; the first one counts. Without one the
   defaults below apply. Groups: Joints (anatomical limits on/off), Death Drive (stiffness, damping, fade), Body Physics
   (damping, solver iterations, depenetration, sleep threshold), Contact (friction, restitution), Impulse Caps (part and
-  chest shove speed, corpse-shot shove), then per region (Pelvis, Spine, Head, Upper Arm, Forearm, Thigh, Calf; left and
-  right share a value) a mass and a range of motion. Hitbox geometry (radius, length) is not exposed: it changes
-  gameplay.
+  chest shove speed, corpse-shot shove), Hit Flinch (see Hit flinch below), then per region (Pelvis, Spine, Neck, Head, Upper
+  Arm, Forearm, Hand, Thigh, Calf, Foot; left and right share a value) a mass and a range of motion. Hitbox geometry
+  (radius, length) is not exposed: it changes gameplay.
 
 Both scenes have a squad. `scenes/Arena.json` is the test arena. `scenes/Sandbox.json` keeps its squad in the
 "Enemies" group, west of the fountain.
@@ -128,15 +128,23 @@ Tokens limit how many soldiers shoot at once (2-4 with difficulty), and allow on
 - **Death.** The body hands over to the ragdoll on the frame it dies, from that frame's pose. Corpses can be shot, and stay for 14 s.
 - **Death momentum.** Each part starts with its own bone's linear and angular velocity, the finite difference of the pose at the hit (captured in `Kill`) against the dying frame's over the real frame time, in the body's root frame, added to the body's velocity. A soldier shot mid-stride keeps his limb swing. Clamped by Max Limb Speed (8 m/s) and Max Limb Spin (30 rad/s); a held (LOD) frame adds nothing; Limb Velocity Scale 0 turns it off. The capsules' roll about their own axis is not part of the pose, so spin about the bone is not inherited.
 - **Shaped inertia.** PhysX already derived each capsule's inertia from its shape; the pelvis and chest now turn like a box wider than deep (Torso Half Width / Depth, inertia only, hitboxes unchanged), so bending forward is easier than sideways. Inertia Scale multiplies every part's (stability knob). Off: Shaped Torso Inertia.
-- **Per-region drive fade.** Drive Fade times a scale per region (Pelvis ... Calf Fade Scale, default 1 = the single 0.25 s fade); e.g. legs 0.6, spine 1.5 makes the legs give out first. Hands, feet and neck are not separate parts yet (a part in `kParts` is also a hitbox; the two tables would have to be split first).
-- **Joint limits.** The ragdoll's 11 capsules are joined by D6 joints with anatomical ranges (table in `NpcRagdoll.cpp`:
+- **Per-region drive fade.** Drive Fade times a scale per region (Pelvis ... Calf Fade Scale, default 1 = the single 0.25 s fade); e.g. legs 0.6, spine 1.5 makes the legs give out first. Neck, Hand and Foot have scales too.
+- **Ragdoll vs hitbox tables.** The hitboxes are exactly the old eleven capsules (`NpcPartDefOf`, indices 0-10: the hitbox ray test still names the same bones); the ragdoll has its own 16-part table (`NpcRagdollDefOf`) with the same eleven at the same indices, so a hit part names the same body part in both, then neck_01 (11), hand_l / hand_r (12, 13), foot_l / foot_r (14, 15). Forearms and calves now stop at the wrist and ankle (the hand and foot capsules carry the rest), and the head hangs off the neck (`CreateRagdoll` accepts any parent index, not only an earlier one). A hand reaches to `middle_01`, a foot to `ball`; a rig without those bones gets a stub along the forearm / forward from the ankle. Masses add to ~75 kg (pelvis 15, spine 19, neck 1, head 4.5, upper arm 2.5, forearm 1.6, hand 0.5, thigh 8, calf 4, foot 1, each side for limbs). Written back to the skin: every part's bones follow their capsule; spine_01 / spine_02 are blended between pelvis and chest by where the death pose had them, and the clavicles ride the chest, so nothing between two parts stretches. Velocity inheritance covers all 16 (the snapshot also holds the optional finger and toe bones).
+- **Hit flinch.** A round that does not kill kicks the struck region's bones (`NpcFlinch`): a rotation about each bone's own joint, axis = bone direction x round direction (its far end goes where the round did), settling back through a critically damped spring within Flinch Duration (0.3 s; the peak is at a fifth of that). Peak = Flinch Angle (7 deg) x the region's scale (pelvis 0.7, chest 0.8, thigh 1.2, head 1.3, upper arm and calf 1.4, forearm 1.5) x the bone's share x damage / Flinch Damage Reference (40; clamped 0.3-2), rounds in a burst add up to Flinch Max Angle (28 deg). It is added after the late pose and after the hitboxes took theirs (aim, eye and hitboxes never see it), on top of the animator's own Hit reaction, only on frames where the pose was refreshed (a held LOD pose already carries the last one), and dropped when the soldier dies. Hit Flinch off disables it.
+- **Joint limits.** The ragdoll's 16 capsules are joined by D6 joints with anatomical ranges (table in `NpcRagdoll.cpp`:
   AAOS / Kapandji active ROM, trimmed for one part standing for several joints). Elbows and knees are one-way hinges:
   flexion 145 / 140 degrees, no hyperextension, a few degrees of sideways slack and twist. Shoulders, hips, spine and
   head are asymmetric pyramids (flexion, extension, adduction, abduction) with separate inward and outward twist. The
   ranges are measured from a neutral pose (limb hanging, spine upright), so the death pose (a stride, an A pose) is
   just somewhere inside them, and a pose outside widens the range to hold it. Which way a hinge folds comes from the
   pose it died in when it was bent, else forward (elbow) / back (knee). `AnatomicalLimits` off restores the old
-  symmetric cones.
+  symmetric cones. The cervical range is shared: neck 30 / 35 flexion / extension, head on neck 25 / 30 (they were 50 / 60
+  for the head alone). Wrist: 75 palm side, 70 back, 25 / 25 sideways, 15 twist, neutral = the forearm straight on. Ankle:
+  dorsiflexion 20, plantarflexion 50, toes in / out 15, inversion 35 / eversion 15, neutral = level, facing forward. The
+  hands and feet are light end links that whip the forearm / calf through its limit (elbow overshoot 19.6 degrees in the 3 m/s per kg
+  shove test): their inertia is multiplied by Distal Inertia Scale (6) and their joints carry Distal Joint Damping (40, always on,
+  also after the drives fade), which brings the elbow to 4.4 and the knee to 3.0 degrees while the wrist still folds 64 and the
+  ankle 75 degrees under the same shove. (Heavier hands were worse, more solver iterations did nothing.)
 
 ## Performance
 

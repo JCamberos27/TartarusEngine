@@ -83,6 +83,8 @@ public:
 
     // --- debug / tests ---
     const std::vector<std::unique_ptr<Npc>>& Npcs() const { return m_Npcs; }
+    // Soldier `index` has hit-flinch kicks still settling (for tests).
+    bool FlinchActive(int index) const { const auto it = m_Flinch.find(index); return it != m_Flinch.end() && it->second.Active(m_Now); }
     const NavMesh& Nav() const { return m_Nav; }
     const CoverSystem& Cover() const { return m_Cover; }
     CombatFx* Fx = nullptr;    // gun reports, flashes, tracers, whizzes (optional; the host owns it)
@@ -205,6 +207,7 @@ private:
     SquadSettingsComponent m_Cfg;            // the scene's Squad Settings (defaults without one)
     struct DeathCapture { NpcRagdoll::BoneSnapshot Bones; float Dt = 0.0f; };
     std::unordered_map<int, DeathCapture> m_DeathBones; // by soldier index, from the hit to the ragdoll's start
+    std::unordered_map<int, NpcFlinch> m_Flinch;       // by soldier index: the hit-flinch kicks still settling
     RagdollSettingsComponent m_RagdollCfg;   // ... and Ragdoll Settings
     bool m_Respawn = true;
     std::shared_ptr<FirstPersonControllerComponent> m_ViewConfig;

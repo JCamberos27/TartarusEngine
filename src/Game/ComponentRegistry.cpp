@@ -1661,6 +1661,60 @@ void RegisterEngineComponents() {
         m.Fields[71].Group = "Death Drive";
         m.Fields[72].Group = "Death Drive";
         m.Fields[73].Group = "Death Drive";
+        {
+            // The neck, hands and feet: ragdoll-only parts (the hitboxes are unchanged).
+            struct R { const char* Label; void* (*Ptr)(void*); float Step; const char* Tip; float Lo, Hi; const char* Group; };
+            const R rows[] = {
+                { "Neck Mass", TARTARUS_REFLECT_FIELD(RagdollSettingsComponent, NeckMass), 0.1f, "kg. A ragdoll-only part between the chest and the head.", 0.1f, 200.0f, "Neck" },
+                { "Neck Flexion Max", TARTARUS_REFLECT_FIELD(RagdollSettingsComponent, NeckFlexMax), 0.5f, "Degrees the part can swing in its flexion direction (forward), from its neutral pose.", 0.0f, 175.0f, "Neck" },
+                { "Neck Extension Max", TARTARUS_REFLECT_FIELD(RagdollSettingsComponent, NeckExtMax), 0.5f, "Degrees it can swing the other way (back).", 0.0f, 175.0f, "Neck" },
+                { "Neck Lateral In", TARTARUS_REFLECT_FIELD(RagdollSettingsComponent, NeckLatIn), 0.5f, "Degrees toward the body's midline (adduction). A neck leans this far either way.", 0.0f, 175.0f, "Neck" },
+                { "Neck Lateral Out", TARTARUS_REFLECT_FIELD(RagdollSettingsComponent, NeckLatOut), 0.5f, "Degrees away from the midline (abduction).", 0.0f, 175.0f, "Neck" },
+                { "Neck Twist In", TARTARUS_REFLECT_FIELD(RagdollSettingsComponent, NeckTwistIn), 0.5f, "Degrees of inward rotation along the bone.", 0.0f, 175.0f, "Neck" },
+                { "Neck Twist Out", TARTARUS_REFLECT_FIELD(RagdollSettingsComponent, NeckTwistOut), 0.5f, "Degrees of outward rotation along the bone.", 0.0f, 175.0f, "Neck" },
+                { "Hand Mass", TARTARUS_REFLECT_FIELD(RagdollSettingsComponent, HandMass), 0.1f, "kg, each side. A ragdoll-only part (the forearm's hitbox still covers the hand).", 0.1f, 200.0f, "Hand" },
+                { "Hand Flexion Max", TARTARUS_REFLECT_FIELD(RagdollSettingsComponent, HandFlexMax), 0.5f, "Degrees the part can swing in its flexion direction (the palm side (wrist flexion)), from its neutral pose.", 0.0f, 175.0f, "Hand" },
+                { "Hand Extension Max", TARTARUS_REFLECT_FIELD(RagdollSettingsComponent, HandExtMax), 0.5f, "Degrees it can swing the other way (the back of the hand (wrist extension)).", 0.0f, 175.0f, "Hand" },
+                { "Hand Lateral In", TARTARUS_REFLECT_FIELD(RagdollSettingsComponent, HandLatIn), 0.5f, "Degrees toward the body's midline (adduction).", 0.0f, 175.0f, "Hand" },
+                { "Hand Lateral Out", TARTARUS_REFLECT_FIELD(RagdollSettingsComponent, HandLatOut), 0.5f, "Degrees away from the midline (abduction).", 0.0f, 175.0f, "Hand" },
+                { "Hand Twist In", TARTARUS_REFLECT_FIELD(RagdollSettingsComponent, HandTwistIn), 0.5f, "Degrees of inward rotation along the bone.", 0.0f, 175.0f, "Hand" },
+                { "Hand Twist Out", TARTARUS_REFLECT_FIELD(RagdollSettingsComponent, HandTwistOut), 0.5f, "Degrees of outward rotation along the bone.", 0.0f, 175.0f, "Hand" },
+                { "Foot Mass", TARTARUS_REFLECT_FIELD(RagdollSettingsComponent, FootMass), 0.1f, "kg, each side. A ragdoll-only part (the calf's hitbox still covers the foot).", 0.1f, 200.0f, "Foot" },
+                { "Foot Flexion Max", TARTARUS_REFLECT_FIELD(RagdollSettingsComponent, FootFlexMax), 0.5f, "Degrees the part can swing in its flexion direction (toes up (dorsiflexion)), from its neutral pose.", 0.0f, 175.0f, "Foot" },
+                { "Foot Extension Max", TARTARUS_REFLECT_FIELD(RagdollSettingsComponent, FootExtMax), 0.5f, "Degrees it can swing the other way (toes down (plantarflexion)).", 0.0f, 175.0f, "Foot" },
+                { "Foot Lateral In", TARTARUS_REFLECT_FIELD(RagdollSettingsComponent, FootLatIn), 0.5f, "Degrees toward the body's midline (adduction).", 0.0f, 175.0f, "Foot" },
+                { "Foot Lateral Out", TARTARUS_REFLECT_FIELD(RagdollSettingsComponent, FootLatOut), 0.5f, "Degrees away from the midline (abduction).", 0.0f, 175.0f, "Foot" },
+                { "Foot Twist In", TARTARUS_REFLECT_FIELD(RagdollSettingsComponent, FootTwistIn), 0.5f, "Degrees of inward rotation along the bone (foot: inversion).", 0.0f, 175.0f, "Foot" },
+                { "Foot Twist Out", TARTARUS_REFLECT_FIELD(RagdollSettingsComponent, FootTwistOut), 0.5f, "Degrees of outward rotation along the bone (foot: eversion).", 0.0f, 175.0f, "Foot" },
+                { "Neck Fade Scale", TARTARUS_REFLECT_FIELD(RagdollSettingsComponent, NeckFadeScale), 0.05f, "Multiplies Drive Fade for this region's joint drive: below 1 it goes limp sooner (legs give out first), above 1 it holds longer (spine and neck). 1 = with the rest.", 0.1f, 4.0f, "Death Drive" },
+                { "Hand Fade Scale", TARTARUS_REFLECT_FIELD(RagdollSettingsComponent, HandFadeScale), 0.05f, "Multiplies Drive Fade for this region's joint drive: below 1 it goes limp sooner (legs give out first), above 1 it holds longer (spine and neck). 1 = with the rest.", 0.1f, 4.0f, "Death Drive" },
+                { "Foot Fade Scale", TARTARUS_REFLECT_FIELD(RagdollSettingsComponent, FootFadeScale), 0.05f, "Multiplies Drive Fade for this region's joint drive: below 1 it goes limp sooner (legs give out first), above 1 it holds longer (spine and neck). 1 = with the rest.", 0.1f, 4.0f, "Death Drive" },
+            };
+            for (const R& r : rows) {
+                m.Fields.push_back({ r.Label, T::Float, r.Ptr, r.Step, r.Tip, r.Lo, r.Hi });
+                m.Fields.back().Group = r.Group;
+            }
+        }
+        {
+            // Hit flinch (see NpcFlinch).
+            m.Fields.push_back({ "Hit Flinch", T::Bool, TARTARUS_REFLECT_FIELD(RagdollSettingsComponent, HitFlinch), 0.0f,
+              "A round that doesn't kill kicks the struck region (a damped spring on top of the hit animation) and it settles back. Visual only: aim and hitboxes don't move." });
+            m.Fields.push_back({ "Flinch Angle", T::Float, TARTARUS_REFLECT_FIELD(RagdollSettingsComponent, FlinchAngle), 0.25f,
+              "Degrees the struck bone kicks at the reference damage (each region scales it: a head or an arm kicks further than the chest).", 0.0f, 60.0f });
+            m.Fields.push_back({ "Flinch Duration", T::Float, TARTARUS_REFLECT_FIELD(RagdollSettingsComponent, FlinchDuration), 0.01f,
+              "Seconds until the kick has settled back to the animation.", 0.05f, 2.0f });
+            m.Fields.push_back({ "Flinch Damage Reference", T::Float, TARTARUS_REFLECT_FIELD(RagdollSettingsComponent, FlinchDamageRef), 1.0f,
+              "The damage that gives the full Flinch Angle; lighter rounds kick proportionally less (down to 30%), heavier up to twice as much.", 1.0f, 500.0f });
+            m.Fields.push_back({ "Flinch Max Angle", T::Float, TARTARUS_REFLECT_FIELD(RagdollSettingsComponent, FlinchMaxAngle), 0.5f,
+              "Cap on a bone's total kick (degrees) when rounds land in quick succession.", 1.0f, 90.0f });
+            for (size_t k = m.Fields.size() - 5; k < m.Fields.size(); ++k) m.Fields[k].Group = "Hit Flinch";
+            m.Fields.push_back({ "Distal Inertia Scale", T::Float, TARTARUS_REFLECT_FIELD(RagdollSettingsComponent, DistalInertiaScale), 0.1f,
+              "Multiplies the hands' and feet's rotational inertia (on top of Inertia Scale). Light end links whip the forearm or calf through its joint limit; 1 = off.", 0.2f, 40.0f });
+            m.Fields.push_back({ "Distal Joint Damping", T::Float, TARTARUS_REFLECT_FIELD(RagdollSettingsComponent, DistalJointDamping), 1.0f,
+              "Viscous damping of the wrist and ankle joints (acceleration units), kept on after the death drives fade. Keeps the hands and feet from whipping the limb above; 0 = off.", 0.0f, 500.0f });
+            m.Fields[m.Fields.size() - 2].Group = "Body Physics";
+            m.Fields[m.Fields.size() - 1].Group = "Body Physics";
+        }
         Register<RagdollSettingsComponent>(std::move(m));
     }
     for (RegisteredComponent& rc : Storage())
