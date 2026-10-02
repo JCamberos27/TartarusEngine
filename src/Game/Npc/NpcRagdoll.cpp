@@ -1,5 +1,6 @@
 #include "NpcRagdoll.h"
 
+#include "Components.h" // RagdollSettingsComponent
 #include "IK.h"
 #include "Model.h"
 #include "NpcBody.h"
@@ -16,7 +17,8 @@
 
 namespace {
 
-// Masses add up to ~75 kg; limits are generous rather than anatomical, so a body settles naturally.
+// Masses add up to ~75 kg (the Ragdoll Settings' defaults; these are the fallback and the shared shape table). Swing / Twist
+// here are the old generous symmetric cones, kept for AnatomicalLimits off; the anatomical ranges are below.
 const NpcPartDef kDefs[NpcRagdoll::kParts] = {
     {"pelvis", "spine_02", 0.0f, 0.13f, 14.0f, -1, 0.0f, 0.0f},
     {"spine_03", "neck_01", 0.0f, 0.15f, 18.0f, 0, 28.0f, 22.0f},
@@ -31,9 +33,79 @@ const NpcPartDef kDefs[NpcRagdoll::kParts] = {
     {"calf_r", "foot_r", 0.06f, 0.055f, 4.5f, 9, 60.0f, 8.0f},
 };
 
-// The joints' slerp drives at the moment of death (acceleration units: independent of the parts' masses).
-constexpr float kDriveStiffness = 700.0f;
-constexpr float kDriveDamping = 60.0f;
+// Anatomical ranges of motion (degrees, from the neutral pose: limb hanging, spine and head upright), the defaults of
+// RagdollSettingsComponent. Flexion is toward the front for the spine, neck, shoulder and hip; elbows and knees are hinges
+// that fold one way only. References (AAOS / Kapandji, healthy adult, active ROM; trimmed where one ragdoll part stands for
+// several joints, or where the full range would let the limb fold through the body):
+//   joint        flex  ext  adduct abduct  twist in / out
+//   spine (T+L)   45    20    25     25      30 / 30      (lumbar+thoracic combined: flexion 60-80, extension 20-30)
+//   head (neck)   50    60    40     40      70 / 70      (cervical: flexion 45-50, extension 55-70, lateral 40, rotation 70-80)
+//   shoulder     170    60    40    150      70 / 80      (flexion 180, extension 60, adduction 30-50, abduction 180, IR 70, ER 90)
+//   elbow        145     0     3      3      10 / 10      (flexion 140-150, hyperextension 0; the forearm's own rotation is the wrist's)
+//   hip          120    20    30     45      40 / 45      (flexion 120, extension 20, adduction 30, abduction 45, IR 40, ER 45)
+//   knee         140     0     3      3       5 /  5      (flexion 135-145, no hyperextension, ~5 deg of rotation when bent)
+// "Lateral" for a hinge is slack so the joint doesn't bind. Hitbox shape (radius, extend) is NOT tunable: it changes gameplay.
+enum class Region { Pelvis, Spine, Head, UpperArm, Forearm, Thigh, Calf };
+constexpr Region kRegionOf[NpcRagdoll::kParts] = {Region::Pelvis, Region::Spine, Region::Head, Region::UpperArm, Region::Forearm,
+                                                   Region::UpperArm, Region::Forearm, Region::Thigh, Region::Calf, Region::Thigh, Region::Calf};
+
+struct Ranges { float Flex, Ext, LatIn, LatOut, TwistIn, TwistOut; };
+Ranges RangesOf(const RagdollSettingsComponent& c, Region r) {
+    switch (r) {
+    case Region::Spine: return {c.SpineFlexMax, c.SpineExtMax, c.SpineLatIn, c.SpineLatOut, c.SpineTwistIn, c.SpineTwistOut};
+    case Region::Head: return {c.HeadFlexMax, c.HeadExtMax, c.HeadLatIn, c.HeadLatOut, c.HeadTwistIn, c.HeadTwistOut};
+    case Region::UpperArm: return {c.UpperArmFlexMax, c.UpperArmExtMax, c.UpperArmLatIn, c.UpperArmLatOut, c.UpperArmTwistIn, c.UpperArmTwistOut};
+    case Region::Forearm: return {c.ForearmFlexMax, c.ForearmExtMax, c.ForearmLatIn, c.ForearmLatOut, c.ForearmTwistIn, c.ForearmTwistOut};
+    case Region::Thigh: return {c.ThighFlexMax, c.ThighExtMax, c.ThighLatIn, c.ThighLatOut, c.ThighTwistIn, c.ThighTwistOut};
+    case Region::Calf: return {c.CalfFlexMax, c.CalfExtMax, c.CalfLatIn, c.CalfLatOut, c.CalfTwistIn, c.CalfTwistOut};
+    default: return {0, 0, 0, 0, 0, 0};
+    }
+}
+
+glm::vec3 PerpNormalized(const glm::vec3& v, const glm::vec3& axis) {
+    const glm::vec3 p = v - axis * glm::dot(v, axis);
+    const float l = glm::length(p);
+    return l > 1e-5f ? p / l : glm::vec3(0.0f);
+}
+
+// Part `i`'s joint frame (X = neutral bone direction, Y = positive flexion) and range of motion, from the build pose.
+// `pd` / `cd`: the parent's and the part's bone directions; `left`, `up`, `fwd`: the body's axes (world).
+void FillAnatomical(int i, const RagdollSettingsComponent& cfg, const glm::vec3& pd, const glm::vec3& cd, const glm::vec3& left,
+                    const glm::vec3& up, const glm::vec3& fwd, PhysicsWorld::RagdollPart& out) {
+    const Region r = kRegionOf[i];
+    const bool hinge = r == Region::Forearm || r == Region::Calf;
+    const bool leftSide = i == 3 || i == 4 || i == 7 || i == 8;
+    const bool centre = r == Region::Spine || r == Region::Head;
+    const Ranges lim = RangesOf(cfg, r);
+    // Neutral: a hinge's is the bone above it straight on, a limb otherwise hangs, a spine stands.
+    const glm::vec3 x = glm::normalize(hinge ? pd : centre ? up : -up);
+    // The flexion direction: forward (back for a knee); a hinge folds the way the animated pose already bends when it does.
+    glm::vec3 y = PerpNormalized(r == Region::Calf ? -fwd : fwd, x);
+    if (hinge) {
+        const glm::vec3 bent = PerpNormalized(cd, x);
+        if (glm::length(cd - pd) > 0.17f && glm::length(bent) > 0.0f) y = bent;
+    }
+    if (glm::length(y) < 0.5f) y = PerpNormalized(std::fabs(x.y) < 0.9f ? up : left, x);
+    const glm::vec3 z = glm::cross(x, y);
+    out.Anatomical = true;
+    const glm::quat q = glm::quat_cast(glm::mat3(x, y, z));
+    out.LimitFrame[0] = q.x; out.LimitFrame[1] = q.y; out.LimitFrame[2] = q.z; out.LimitFrame[3] = q.w;
+    out.SwingZMin = -lim.Ext;
+    out.SwingZMax = lim.Flex;
+    // Sideways: a positive swing about Y leans toward -Z; "in" is toward the midline, "out" away from it.
+    if (centre) {
+        const float lat = std::max(lim.LatIn, lim.LatOut);
+        out.SwingYMin = -lat; out.SwingYMax = lat;
+        out.TwistMin = -lim.TwistIn; out.TwistMax = lim.TwistOut;
+        return;
+    }
+    const glm::vec3 outward = leftSide ? left : -left;
+    if (glm::dot(-z, outward) > 0.0f) { out.SwingYMin = -lim.LatIn; out.SwingYMax = lim.LatOut; }
+    else { out.SwingYMin = -lim.LatOut; out.SwingYMax = lim.LatIn; }
+    // Twist about the bone (down a hanging limb): positive turns the left limb inward, the right outward.
+    if (leftSide) { out.TwistMin = -lim.TwistOut; out.TwistMax = lim.TwistIn; }
+    else { out.TwistMin = -lim.TwistIn; out.TwistMax = lim.TwistOut; }
+}
 
 glm::mat4 PoseOf(const glm::vec3& p, const glm::quat& q) { return glm::translate(glm::mat4(1.0f), p) * glm::mat4_cast(q); }
 
@@ -58,24 +130,33 @@ NpcPartShape NpcPartShapeOf(const NpcPartDef& d, const glm::vec3& a, const glm::
     return s;
 }
 
-NpcRagdoll::~NpcRagdoll() { Stop(); }
-
-void NpcRagdoll::Stop() {
-    if (m_Id >= 0) PhysicsWorld::DestroyRagdoll(m_Id);
-    m_Id = -1;
-    m_Pieces.clear();
-    m_Drive = 0.0f;
+float NpcRagdoll::PartMass(const RagdollSettingsComponent* cfg, int part) {
+    part = std::clamp(part, 0, kParts - 1);
+    if (!cfg) return kDefs[part].Mass;
+    switch (kRegionOf[part]) {
+    case Region::Pelvis: return cfg->PelvisMass;
+    case Region::Spine: return cfg->SpineMass;
+    case Region::Head: return cfg->HeadMass;
+    case Region::UpperArm: return cfg->UpperArmMass;
+    case Region::Forearm: return cfg->ForearmMass;
+    case Region::Thigh: return cfg->ThighMass;
+    default: return cfg->CalfMass;
+    }
 }
 
-bool NpcRagdoll::Start(NpcBody& body, const glm::vec3& velocity, const glm::vec3& impulse, const glm::vec3& point, int hitPart) {
-    Stop();
-    const auto& models = body.Models();
-    if (models.empty()) return false;
-    const glm::mat4 root = body.RootMatrix();
-    // Bone world positions from the driver's finished pose.
-    auto bone = [&](const char* name, glm::vec3& out) { return name && body.BoneWorld(name, out); };
-    PhysicsWorld::RagdollPart parts[kParts];
+PhysicsWorld::RagdollParams NpcRagdoll::BodyParams(const RagdollSettingsComponent& c) {
+    PhysicsWorld::RagdollParams p;
+    p.LinearDamping = c.LinearDamping; p.AngularDamping = c.AngularDamping;
+    p.SolverPosIters = c.SolverPosIters; p.SolverVelIters = c.SolverVelIters;
+    p.Depenetration = c.Depenetration; p.SleepThreshold = c.SleepThreshold;
+    p.StaticFriction = c.StaticFriction; p.DynamicFriction = c.DynamicFriction; p.Restitution = c.Restitution;
+    return p;
+}
+
+bool NpcRagdoll::BuildParts(const std::function<bool(const char*, glm::vec3&)>& bone, const glm::mat4& root, const glm::vec3& velocity,
+                            const RagdollSettingsComponent& cfg, PhysicsWorld::RagdollPart* parts, glm::mat4* partWorldOut) {
     glm::mat4 partWorld[kParts];
+    glm::vec3 dir[kParts];
     glm::vec3 neck;
     if (!bone("neck_01", neck)) neck = glm::vec3(0.0f);
     for (int i = 0; i < kParts; ++i) {
@@ -86,22 +167,56 @@ bool NpcRagdoll::Start(NpcBody& body, const glm::vec3& velocity, const glm::vec3
         if (!d.End && glm::length(neck) < 1e-6f) neck = a - glm::vec3(0, 0.1f, 0);
         const NpcPartShape s = NpcPartShapeOf(d, a, b, neck);
         auto& p = parts[i];
+        p = PhysicsWorld::RagdollPart();
         p.Parent = d.Parent;
         p.Position[0] = s.Centre.x; p.Position[1] = s.Centre.y; p.Position[2] = s.Centre.z;
         p.Rotation[0] = s.Rotation.x; p.Rotation[1] = s.Rotation.y; p.Rotation[2] = s.Rotation.z; p.Rotation[3] = s.Rotation.w;
         p.Radius = s.Radius;
         p.HalfLength = s.HalfLength;
-        p.Mass = d.Mass;
+        p.Mass = PartMass(&cfg, i);
         p.Anchor[0] = a.x; p.Anchor[1] = a.y; p.Anchor[2] = a.z;
         p.SwingDeg = d.Swing;
         p.TwistDeg = d.Twist;
         p.Velocity[0] = velocity.x; p.Velocity[1] = velocity.y; p.Velocity[2] = velocity.z;
         partWorld[i] = PoseOf(s.Centre, s.Rotation);
+        dir[i] = s.Rotation * glm::vec3(1, 0, 0);
     }
-    m_Id = PhysicsWorld::CreateRagdoll((unsigned)entt::to_integral(body.Root()), parts, kParts);
+    if (cfg.AnatomicalLimits) {
+        const glm::vec3 left = glm::normalize(glm::vec3(root[0])), up = glm::normalize(glm::vec3(root[1])), fwd = glm::normalize(glm::vec3(root[2]));
+        for (int i = 1; i < kParts; ++i) FillAnatomical(i, cfg, dir[kDefs[i].Parent], dir[i], left, up, fwd, parts[i]);
+    }
+    if (partWorldOut) for (int i = 0; i < kParts; ++i) partWorldOut[i] = partWorld[i];
+    return true;
+}
+
+NpcRagdoll::~NpcRagdoll() { Stop(); }
+
+void NpcRagdoll::Stop() {
+    if (m_Id >= 0) PhysicsWorld::DestroyRagdoll(m_Id);
+    m_Id = -1;
+    m_Pieces.clear();
+    m_Drive = 0.0f;
+}
+
+bool NpcRagdoll::Start(NpcBody& body, const glm::vec3& velocity, const glm::vec3& impulse, const glm::vec3& point, int hitPart,
+                       const RagdollSettingsComponent* cfgIn) {
+    Stop();
+    const RagdollSettingsComponent defaults;
+    const RagdollSettingsComponent& cfg = cfgIn ? *cfgIn : defaults;
+    const auto& models = body.Models();
+    if (models.empty()) return false;
+    const glm::mat4 root = body.RootMatrix();
+    // Bone world positions from the driver's finished pose.
+    PhysicsWorld::RagdollPart parts[kParts];
+    glm::mat4 partWorld[kParts];
+    if (!BuildParts([&](const char* name, glm::vec3& out) { return name && body.BoneWorld(name, out); }, root, velocity, cfg, parts, partWorld))
+        return false;
+    const PhysicsWorld::RagdollParams bodyParams = BodyParams(cfg);
+    m_Id = PhysicsWorld::CreateRagdoll((unsigned)entt::to_integral(body.Root()), parts, kParts, &bodyParams);
     if (m_Id < 0) return false;
     // Powered at first: the joints hold the death pose (their drive targets are the pose they were built in).
-    PhysicsWorld::SetRagdollDrive(m_Id, kDriveStiffness, kDriveDamping);
+    m_Stiffness = cfg.DriveStiffness; m_Damping = cfg.DriveDamping; m_Fade = std::max(cfg.DriveFade, 1e-3f);
+    PhysicsWorld::SetRagdollDrive(m_Id, m_Stiffness, m_Damping);
     m_Drive = 1.0f;
     m_Settled = false;
     m_RootInv = glm::inverse(root);
@@ -135,11 +250,11 @@ bool NpcRagdoll::Start(NpcBody& body, const glm::vec3& velocity, const glm::vec3
     // A light part (a forearm, a skull) shoved with the whole round's momentum would leave the body at 30 m/s and tear
     // its joints: the part takes what it can (6 m/s), the rest goes into the chest, so the body still moves as hard.
     const float total = glm::length(impulse);
-    const float cap = kDefs[target].Mass * 6.0f;
+    const float cap = PartMass(&cfg, target) * cfg.PartImpulseSpeed;
     const float onPart = std::min(total, cap);
     if (total > 1e-6f) {
         const glm::vec3 dir = impulse / total;
-        const glm::vec3 a = dir * onPart, rest = dir * std::min(total - onPart, kDefs[1].Mass * 5.0f);
+        const glm::vec3 a = dir * onPart, rest = dir * std::min(total - onPart, PartMass(&cfg, 1) * cfg.ChestImpulseSpeed);
         const float ja[3] = {a.x, a.y, a.z}, at[3] = {point.x, point.y, point.z};
         PhysicsWorld::RagdollImpulse(m_Id, target, ja, at);
         if (glm::dot(rest, rest) > 1e-8f && target != 1) {
@@ -154,9 +269,9 @@ void NpcRagdoll::Update(float dt) {
     if (m_Id < 0) return;
     // The drives fade out: stiff at the moment of death, limp a quarter second on.
     if (m_Drive > 0.0f && dt > 0.0f) {
-        m_Drive = std::max(0.0f, m_Drive - dt / kDriveFade);
+        m_Drive = std::max(0.0f, m_Drive - dt / m_Fade);
         const float k = m_Drive * m_Drive;
-        PhysicsWorld::SetRagdollDrive(m_Id, kDriveStiffness * k, kDriveDamping * k);
+        PhysicsWorld::SetRagdollDrive(m_Id, m_Stiffness * k, m_Damping * k);
     }
     // A body at rest stays as it lies: one last write once it sleeps, then nothing per frame.
     const bool asleep = Asleep();

@@ -7,6 +7,14 @@
 
 class NavMesh;
 
+// How cover is sampled (Squad Settings, Cover group; the defaults are the original values).
+struct CoverTuning {
+    float Spacing = 0.9f;  // metres between samples along an edge
+    float Reach = 0.85f;   // how far beyond the edge something must stand to count
+    float Knee = 0.85f, Head = 1.55f; // probe heights: low cover, high cover
+    float Step = 0.8f;     // a high-cover peek: this far along the wall
+};
+
 // Where a soldier can take cover: points along the navigation mesh's open edges where something
 // solid stands just beyond - low cover (a crate, a low wall: crouch behind, rise to shoot over it) or
 // high cover (a wall, a pillar: stand behind it and step out past its end to shoot). Found once
@@ -33,7 +41,7 @@ bool ClassifyCover(const CoverProbe& probe, CoverPoint& out);
 class CoverSystem {
 public:
     // Samples `nav`'s open edges (PhysicsWorld solid-world rays). Returns the points found.
-    int Build(const NavMesh& nav);
+    int Build(const NavMesh& nav, const CoverTuning& tuning = CoverTuning());
     void Clear();
     const std::vector<CoverPoint>& Points() const { return m_Points; }
     CoverPoint& Point(int i) { return m_Points[(size_t)i]; }

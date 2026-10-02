@@ -1037,6 +1037,26 @@ struct SquadSettingsComponent {
     float Difficulty = 1.0f;      // scales the NPCs' accuracy and reaction
     float NpcDamageScale = 0.45f; // NPC rounds do this much of the weapon's damage to the player
     bool Respawn = true;          // false: dead NPCs stay dead
+    // Combat / AI tunables (Npc/NpcDirector, CoverSystem). Defaults are the values these were hard-coded to.
+    float HeavyHitDamage = 40.0f;
+    float StaggerTime = 0.4f;
+    float BleedOutTime = 20.0f;
+    float CrawlSpeed = 0.6f;
+    float LimpSpeedScale = 0.6f;
+    float LimpTime = 6.0f;
+    float CorpseTime = 14.0f;
+    float FallGravity = 18.0f;
+    float MeleeDamage = 25.0f;
+    float MeleeTime = 0.55f;
+    float MeleeHitTime = 0.22f;
+    float HitboxRange = 60.0f;
+    float FootIKRange = 25.0f;
+    float MeshCheckRange = 12.0f;
+    float CoverSpacing = 0.9f;
+    float CoverReach = 0.85f;
+    float CoverKneeHeight = 0.85f;
+    float CoverHeadHeight = 1.55f;
+    float CoverStep = 0.8f;
 };
 
 struct ScoreDigitComponent {
@@ -1098,3 +1118,71 @@ struct ReflectionProbeComponent {
     glm::vec3 Size{5.0f, 5.0f, 5.0f}; // full extents of the capture volume, in world units
     float Importance{1.0f};            // higher wins 2-probe selection tie-breaks
 };
+
+// ---- lane R ----
+// A soldier's ragdoll (Npc/NpcRagdoll): masses, joint ranges of motion, drives, body physics, impulse caps. On any object in
+// the scene (the first one counts); without one the NPCs use these same defaults. Hitbox shapes are not exposed (they change gameplay).
+// Joint limits are degrees from each joint's neutral pose (arm and leg hanging, spine and head upright).
+struct RagdollSettingsComponent {
+    bool AnatomicalLimits = true;
+    float DriveStiffness = 700.0f;
+    float DriveDamping = 60.0f;
+    float DriveFade = 0.25f;
+    float LinearDamping = 0.08f;
+    float AngularDamping = 0.25f;
+    int SolverPosIters = 16;
+    int SolverVelIters = 4;
+    float Depenetration = 3.0f;
+    float SleepThreshold = 0.08f;
+    float StaticFriction = 0.8f;
+    float DynamicFriction = 0.7f;
+    float Restitution = 0.05f;
+    float PartImpulseSpeed = 6.0f;
+    float ChestImpulseSpeed = 5.0f;
+    float CorpseShotBase = 1.5f;
+    float CorpseShotPerDamage = 0.04f;
+    float PelvisMass = 14.0f;
+    float SpineMass = 18.0f;
+    float SpineFlexMax = 45.0f;
+    float SpineExtMax = 20.0f;
+    float SpineLatIn = 25.0f;
+    float SpineLatOut = 25.0f;
+    float SpineTwistIn = 30.0f;
+    float SpineTwistOut = 30.0f;
+    float HeadMass = 5.0f;
+    float HeadFlexMax = 50.0f;
+    float HeadExtMax = 60.0f;
+    float HeadLatIn = 40.0f;
+    float HeadLatOut = 40.0f;
+    float HeadTwistIn = 70.0f;
+    float HeadTwistOut = 70.0f;
+    float UpperArmMass = 2.5f;
+    float UpperArmFlexMax = 170.0f;
+    float UpperArmExtMax = 60.0f;
+    float UpperArmLatIn = 40.0f;
+    float UpperArmLatOut = 150.0f;
+    float UpperArmTwistIn = 70.0f;
+    float UpperArmTwistOut = 80.0f;
+    float ForearmMass = 1.8f;
+    float ForearmFlexMax = 145.0f;
+    float ForearmExtMax = 0.0f;
+    float ForearmLatIn = 3.0f;
+    float ForearmLatOut = 3.0f;
+    float ForearmTwistIn = 10.0f;
+    float ForearmTwistOut = 10.0f;
+    float ThighMass = 8.0f;
+    float ThighFlexMax = 120.0f;
+    float ThighExtMax = 20.0f;
+    float ThighLatIn = 30.0f;
+    float ThighLatOut = 45.0f;
+    float ThighTwistIn = 40.0f;
+    float ThighTwistOut = 45.0f;
+    float CalfMass = 4.5f;
+    float CalfFlexMax = 140.0f;
+    float CalfExtMax = 0.0f;
+    float CalfLatIn = 3.0f;
+    float CalfLatOut = 3.0f;
+    float CalfTwistIn = 5.0f;
+    float CalfTwistOut = 5.0f;
+};
+// ---- end lane R ----
