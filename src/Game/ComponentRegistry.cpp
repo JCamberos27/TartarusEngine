@@ -740,6 +740,63 @@ void RegisterEngineComponents() {
         m.Fields.push_back({ "Stair Ease", T::Float, TARTARUS_REFLECT_FIELD(FirstPersonBodyComponent, StairEase), 0.005f,
               "Seconds the body takes to ease up or down a stair (0.03 s when Foot IK is off).", 0.005f, 1.0f });
         m.Fields.back().Group = "Foot IK (advanced)";
+        m.Fields.push_back({ "Elbow Ease", T::Float, TARTARUS_REFLECT_FIELD(FirstPersonBodyComponent, ElbowEase), 0.005f,
+              "Seconds the player body's elbow takes to follow its target direction (smooths elbow jitter).", 0.005f, 1.0f });
+        m.Fields.back().Group = "Arms";
+        m.Fields.push_back({ "Elbow Max Rate", T::Float, TARTARUS_REFLECT_FIELD(FirstPersonBodyComponent, ElbowMaxRate), 10.0f,
+              "The fastest (degrees per second) a player-body elbow may swing toward its target.", 30.0f, 3600.0f });
+        m.Fields.back().Group = "Arms";
+        m.Fields.push_back({ "NPC Turn Threshold", T::Float, TARTARUS_REFLECT_FIELD(FirstPersonBodyComponent, NpcTurnThreshold), 1.0f,
+              "NPCs: a still body this many degrees off its aim turns on the spot. NPCs copy this from the scene's player body when Play starts.", 0.0f, 180.0f });
+        m.Fields.back().Group = "NPC Body";
+        m.Fields.push_back({ "NPC Move Ease", T::Float, TARTARUS_REFLECT_FIELD(FirstPersonBodyComponent, NpcMoveEase), 0.005f,
+              "NPCs: seconds the locomotion blend tree's speed and direction take to follow the movement.", 0.005f, 1.0f });
+        m.Fields.back().Group = "NPC Body";
+        m.Fields.push_back({ "NPC Face Ease", T::Float, TARTARUS_REFLECT_FIELD(FirstPersonBodyComponent, NpcFaceEase), 0.005f,
+              "NPCs: seconds the body heading takes to ease toward the movement direction while walking.", 0.005f, 1.0f });
+        m.Fields.back().Group = "NPC Body";
+        m.Fields.push_back({ "NPC Max Twist", T::Float, TARTARUS_REFLECT_FIELD(FirstPersonBodyComponent, NpcMaxTwist), 1.0f,
+              "NPCs: the most (degrees) the spine twists to aim past the legs' heading.", 0.0f, 120.0f });
+        m.Fields.back().Group = "NPC Body";
+        m.Fields.push_back({ "NPC Aim Lean", T::Float, TARTARUS_REFLECT_FIELD(FirstPersonBodyComponent, NpcAimLean), 0.5f,
+              "NPCs: degrees the torso leans forward when aiming standing.", 0.0f, 45.0f });
+        m.Fields.back().Group = "NPC Body";
+        m.Fields.push_back({ "NPC Aim Lean Crouched", T::Float, TARTARUS_REFLECT_FIELD(FirstPersonBodyComponent, NpcAimLeanCrouched), 0.5f,
+              "NPCs: degrees the torso leans forward when aiming crouched.", 0.0f, 60.0f });
+        m.Fields.back().Group = "NPC Body";
+        m.Fields.push_back({ "NPC Ready Lean Crouched", T::Float, TARTARUS_REFLECT_FIELD(FirstPersonBodyComponent, NpcReadyLeanCrouched), 0.5f,
+              "NPCs: degrees the torso leans forward at low ready, crouched.", 0.0f, 60.0f });
+        m.Fields.back().Group = "NPC Body";
+        m.Fields.push_back({ "NPC Cower Hunch", T::Float, TARTARUS_REFLECT_FIELD(FirstPersonBodyComponent, NpcCowerHunch), 0.5f,
+              "NPCs: degrees the spine curls forward when ducking for cover.", 0.0f, 60.0f });
+        m.Fields.back().Group = "NPC Body";
+        m.Fields.push_back({ "NPC Head Max Yaw", T::Float, TARTARUS_REFLECT_FIELD(FirstPersonBodyComponent, NpcHeadMaxYaw), 1.0f,
+              "NPCs: the most (degrees) the head turns left or right past the chest to look at a target.", 0.0f, 120.0f });
+        m.Fields.back().Group = "NPC Head";
+        m.Fields.push_back({ "NPC Head Max Pitch", T::Float, TARTARUS_REFLECT_FIELD(FirstPersonBodyComponent, NpcHeadMaxPitch), 1.0f,
+              "NPCs: the most (degrees) the head nods up or down to look at a target.", 0.0f, 90.0f });
+        m.Fields.back().Group = "NPC Head";
+        m.Fields.push_back({ "NPC Foot IK Max Drop", T::Float, TARTARUS_REFLECT_FIELD(FirstPersonBodyComponent, NpcFootIKMaxDrop), 0.01f,
+              "NPCs: the most (metres) the pelvis drops to let the lower foot reach the ground.", 0.0f, 1.0f });
+        m.Fields.back().Group = "NPC Foot IK";
+        m.Fields.push_back({ "NPC Foot IK Max Raise", T::Float, TARTARUS_REFLECT_FIELD(FirstPersonBodyComponent, NpcFootIKMaxRaise), 0.01f,
+              "NPCs: the most (metres) a foot is lifted to meet higher ground.", 0.0f, 1.0f });
+        m.Fields.back().Group = "NPC Foot IK";
+        m.Fields.push_back({ "NPC Foot IK Pelvis Raise", T::Float, TARTARUS_REFLECT_FIELD(FirstPersonBodyComponent, NpcFootIKPelvisRaise), 0.005f,
+              "NPCs: the most (metres) the pelvis may rise when both feet are on higher ground.", 0.0f, 0.5f });
+        m.Fields.back().Group = "NPC Foot IK";
+        m.Fields.push_back({ "NPC Foot IK Tilt Max", T::Float, TARTARUS_REFLECT_FIELD(FirstPersonBodyComponent, NpcFootIKTiltMax), 1.0f,
+              "NPCs: the most (degrees) a planted foot tilts to lie on a slope.", 0.0f, 60.0f });
+        m.Fields.back().Group = "NPC Foot IK";
+        m.Fields.push_back({ "NPC Foot Offset Ease", T::Float, TARTARUS_REFLECT_FIELD(FirstPersonBodyComponent, NpcFootOffsetEase), 0.005f,
+              "NPCs: seconds the ground height under each foot takes to follow the ray.", 0.005f, 1.0f });
+        m.Fields.back().Group = "NPC Foot IK";
+        m.Fields.push_back({ "NPC Foot Normal Ease", T::Float, TARTARUS_REFLECT_FIELD(FirstPersonBodyComponent, NpcFootNormalEase), 0.005f,
+              "NPCs: seconds the ground's slope under each foot takes to follow the ray.", 0.005f, 1.0f });
+        m.Fields.back().Group = "NPC Foot IK";
+        m.Fields.push_back({ "NPC Foot IK Fade", T::Float, TARTARUS_REFLECT_FIELD(FirstPersonBodyComponent, NpcFootIKFade), 0.005f,
+              "NPCs: seconds foot IK takes to fade in and out.", 0.005f, 1.0f });
+        m.Fields.back().Group = "NPC Foot IK";
         // Groups, by name (not by position: reordering fields must not move them).
         {
             static const std::pair<const char*, const char*> kGroups[] = {
