@@ -9,9 +9,6 @@
 
 namespace {
 
-constexpr float kFeedLife = 4.5f;
-constexpr float kStreakWindow = 4.0f;
-constexpr float kSubLinger = 1.1f;
 constexpr int kMaxSubs = 3;
 constexpr int kMaxFeed = 5;
 
@@ -41,7 +38,7 @@ void CombatHud::OnKill(const NpcDirector& npcs, unsigned entity, bool head) {
     m_Feed.push_back(row);
     if ((int)m_Feed.size() > kMaxFeed) m_Feed.erase(m_Feed.begin());
     ++m_Kills;
-    m_Streak = row.At - m_LastKillAt <= kStreakWindow ? m_Streak + 1 : 1;
+    m_Streak = NextStreak(Settings, m_Streak, row.At - m_LastKillAt);
     m_LastKillAt = row.At;
     if (m_Streak >= 2) m_StreakAt = row.At;
 }
@@ -92,13 +89,13 @@ void CombatHud::DrawAmmo(const CombatHudInput& in) {
 void CombatHud::DrawFeed(const CombatHudInput& in, float now) {
     const float s = m_Text.Scale();
     const float W = (float)in.Width;
-    m_Feed.erase(std::remove_if(m_Feed.begin(), m_Feed.end(), [&](const FeedRow& r) { return now - r.At > kFeedLife; }), m_Feed.end());
+    m_Feed.erase(std::remove_if(m_Feed.begin(), m_Feed.end(), [&](const FeedRow& r) { return FeedExpired(Settings, now - r.At); }), m_Feed.end());
     float y = 40.0f * s;
     const float rowH = 38.0f * s, right = W - 40.0f * s;
     for (int i = (int)m_Feed.size() - 1; i >= 0; --i) {
         const FeedRow& r = m_Feed[(size_t)i];
         const float age = now - r.At;
-        const float a = std::clamp((kFeedLife - age) / 1.0f, 0.0f, 1.0f) * std::clamp(age / 0.08f + 0.2f, 0.0f, 1.0f);
+        const float a = std::clamp((Settings.FeedLife - age) / 1.0f, 0.0f, 1.0f) * std::clamp(age / 0.08f + 0.2f, 0.0f, 1.0f);
         const float slide = (1.0f - std::clamp(age / 0.15f, 0.0f, 1.0f)) * 40.0f * s;
         const std::string head = r.Head ? "HEADSHOT  " : "";
         const float w = m_Text.Measure(r.Name, 26.0f) + m_Text.Measure(head, 26.0f) + m_Text.Measure("ELIMINATED  ", 26.0f);
@@ -228,7 +225,7 @@ void CombatHud::Draw(const CombatHudInput& in, NpcDirector& npcs) {
     m_Text.Begin(in.Width, in.Height);
     const float now = npcs.Now();
     for (const BarkPlayed& b : npcs.Voice().TakeSubtitles()) {
-        if (now > b.End + kSubLinger) continue;
+        if (now > b.End + Settings.SubLinger) continue;
         for (Subtitle& o : m_Subs) // the new line cut the old one off: its subtitle goes soon after
             if (o.Squad == b.Squad && o.AudioEnd > b.Start) o.End = std::min(o.End, b.Start + 0.4f);
         Subtitle sub;
@@ -238,7 +235,7 @@ void CombatHud::Draw(const CombatHudInput& in, NpcDirector& npcs) {
         sub.Squad = b.Squad;
         sub.Start = b.Start;
         sub.AudioEnd = b.End;
-        sub.End = b.End + kSubLinger;
+        sub.End = b.End + Settings.SubLinger;
         m_Subs.push_back(sub);
     }
     const float s = m_Text.Scale();

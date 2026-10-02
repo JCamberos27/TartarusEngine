@@ -447,8 +447,10 @@ void SceneRenderer::RenderScene(World& world, const RenderFrameContext& ctx,
         const bool playerBody = bodyTag && !ctx.EditorView && ctx.OwnerView;
         if (validBounds && !playerBody) {
             // Bounds are bind-pose only. A skinned model's limbs can swing well past them, so
-            // inflate around the centre before the frustum test for animated models (#113).
-            if (renderable.ModelRef->HasAnimations()) {
+            // inflate around the centre before the frustum test for rigged models (#113).
+            // Check HasBones() rather than HasAnimations() to handle characters whose animation
+            // clips live in other files - they have bones but report HasAnimations() false.
+            if (renderable.ModelRef->HasBones()) {
                 glm::vec3 c = (boundsMin + boundsMax) * 0.5f;
                 glm::vec3 h = (boundsMax - boundsMin) * 0.5f * 1.75f;
                 boundsMin = c - h;
