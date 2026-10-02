@@ -7,11 +7,16 @@
 
 #include <algorithm>
 #include <cmath>
+#include <utility>
 
 namespace {
 
 constexpr int kFlashLights = 6;
 constexpr float kFlashTime = 0.055f;
+constexpr float kPlayerFlashScale = 0.35f; // the player's flash light, of a soldier's
+constexpr float kFlameAhead = 0.01f;   // the flame's seat ahead of the muzzle face
+constexpr float kFlameGlow = 150.0f;   // the flame's peak emission (red)
+constexpr float kFlameScale = 1.75f;  // the tongue's length and width, of the pack's: bigger reads better in play
 const char* kDir = "assets/Audio/Combat/";
 
 std::string Path(const std::string& file) { return ProjectPaths::Resolve(std::string(kDir) + file); }
@@ -72,6 +77,22 @@ void CombatFx::Start(World& world) {
     // Sparks: the flash itself, a few hot additive specks thrown forward that die in a frame or three.
     m_Sparks = MakeParticles(world, "[Runtime] Muzzle Flash", 0.05f, 0.075f, 0.015f, glm::vec3(1.0f, 0.85f, 0.5f),
                              glm::vec3(1.0f, 0.4f, 0.1f), 1.0f, 0.0f, 9.0f, 1);
+    // The muzzle flame from the Tactical Shooter pack (P_AK105_MuzzleFlash / P_SRM12_MuzzleFlash,
+    // M_Muzzle): one tongue per shot (ParticleRenderer runs its curves). The colour is its emission's
+    // hue, the custom-data gradient times the graph's colour; the intensity, the AK's peak, is what
+    // the engine's exposure and bloom want of HDRP's ~150,000. The player's flame rides the gun (the
+    // prefabs simulate in local space), see FollowMuzzle, in two copies: one in the player's own
+    // camera, on the first-person gun and drawn with it in the view-model pass (its projection, its
+    // depth), and one on the world copy of the gun that every other view sees.
+    struct FlameSystem { entt::entity* E; const char* Name; };
+    for (const FlameSystem& f : {FlameSystem{&m_Flame, "[Runtime] Muzzle Flame"}, FlameSystem{&m_PlayerFlame, "[Runtime] Player Muzzle Flame"},
+                                 FlameSystem{&m_PlayerWorldFlame, "[Runtime] Player Muzzle Flame (world)"}}) {
+        *f.E = MakeParticles(world, f.Name, 0.15f, 0.0f, 0.0f, glm::vec3(1.0f, 0.147f, 0.0177f), glm::vec3(0.0f), 1.0f, 0.0f, kFlameGlow, 1);
+        world.Registry.get<ParticleSystemComponent>(*f.E).Texture = "assets/Effects/Muzzle/T_MuzzleFlame.png";
+    }
+    world.Registry.emplace<ViewModelTag>(m_PlayerFlame);
+    world.Registry.emplace<OwnerViewOnlyTag>(m_PlayerFlame);
+    world.Registry.emplace<HiddenFromOwnerTag>(m_PlayerWorldFlame);
     m_Smoke = MakeParticles(world, "[Runtime] Muzzle Smoke", 0.9f, 0.05f, 0.3f, glm::vec3(0.45f, 0.44f, 0.43f),
                             glm::vec3(0.55f, 0.54f, 0.53f), 0.09f, 0.0f, 0.6f, 0);
     m_Tracers = MakeParticles(world, "[Runtime] Tracers", 0.06f, 0.035f, 0.025f, glm::vec3(1.0f, 0.75f, 0.35f),
@@ -90,7 +111,7 @@ void CombatFx::Stop(World& world) {
     for (Flash& f : m_Flashes)
         if (world.Registry.valid(f.Light)) world.DestroyEntityAndChildren(f.Light);
     m_Flashes.clear();
-    for (entt::entity* e : {&m_Sparks, &m_Smoke, &m_Tracers}) {
+    for (entt::entity* e : {&m_Sparks, &m_Flame, &m_PlayerFlame, &m_PlayerWorldFlame, &m_Smoke, &m_Tracers}) {
         if (*e != entt::null && world.Registry.valid(*e)) world.DestroyEntityAndChildren(*e);
         *e = entt::null;
     }
@@ -134,12 +155,14 @@ void CombatFx::Shot(World& world, Gun gun, const glm::vec3& origin, const glm::v
     const float len = glm::length(dir);
     dir = len > 1e-4f ? dir / len : glm::vec3(0.0f, 0.0f, -1.0f);
 
-    // The light: off the muzzle a hand's width, so the gun and the shooter's hands catch it.
-    if (!fromPlayer && !m_Flashes.empty()) {
+    // The light: off the muzzle a hand's width, so the gun and the shooter's hands catch it. The
+    // player's is softer: its hands are right there, and it's the flash they see most of (looking
+    // down the bore, the flame mostly hides behind the gun).
+    if (!m_Flashes.empty()) {
         Flash& f = m_Flashes[m_NextFlash++ % m_Flashes.size()];
         if (world.Registry.valid(f.Light)) {
             world.Registry.get<TransformComponent>(f.Light).Position = origin + dir * 0.12f;
-            f.Peak = shotgun ? 26.0f : 18.0f;
+            f.Peak = (shotgun ? 26.0f : 18.0f) * (fromPlayer ? kPlayerFlashScale : 1.0f);
             f.Left = kFlashTime;
         }
     }
@@ -155,6 +178,28 @@ void CombatFx::Shot(World& world, Gun gun, const glm::vec3& origin, const glm::v
             p.Vel = v * (i == 0 ? 0.5f : 6.0f + 10.0f * Rand01());
             p.Life = (i == 0 ? 0.035f : 0.03f + 0.03f * Rand01()) * (shotgun ? 1.4f : 1.0f);
             ps->Live.push_back(p);
+        }
+    }
+    {
+        // The flame's one particle, on the muzzle's face (kFlameAhead), 0.04-0.06 m
+        // wide when grown (start size 0.5-0.75, times 0.08 over its life). The AK's (P_AK105) is
+        // 0.16-0.32 m long and lives 0.125-0.175 s; the shotgun's (P_SRM12's forward flame - not its
+        // brake's side jets, which an 870 hasn't got) 0.2-0.28 m and 0.175-0.275 s, at half the heat.
+        ParticleSystemComponent::Particle p;
+        p.Pos = origin + dir * kFlameAhead;
+        p.Axis = dir;
+        p.Width = (0.04f + 0.02f * Rand01()) * kFlameScale;
+        p.Length = (shotgun ? 0.2f + 0.08f * Rand01() : 0.16f + 0.16f * Rand01()) * kFlameScale;
+        p.Seed = Rand01();
+        // The emission is two randoms multiplied (the gradient's and M_Muzzle's); HDRP blows nearly
+        // all of them out to white, so here the dimmest are kept to a third.
+        p.Glow = (0.33f + 0.67f * Rand01() * Rand01()) * (shotgun ? 0.5f : 1.0f);
+        p.Alpha = 0.5f + 0.5f * Rand01();
+        p.Life = shotgun ? 0.175f + 0.1f * Rand01() : 0.125f + 0.05f * Rand01();
+        p.Age = 0.008f; // half a frame in (a burst comes out partly simulated): grown from nothing it'd be unseen the frame it fires
+        for (entt::entity e : {fromPlayer ? m_PlayerFlame : m_Flame, fromPlayer ? m_PlayerWorldFlame : entt::entity(entt::null)}) {
+            if (!world.Registry.valid(e)) continue;
+            if (auto* ps = world.Registry.try_get<ParticleSystemComponent>(e); ps && ps->Live.size() < 100) ps->Live.push_back(p);
         }
     }
     if (auto* ps = world.Registry.try_get<ParticleSystemComponent>(m_Smoke)) {
@@ -180,6 +225,17 @@ void CombatFx::Shot(World& world, Gun gun, const glm::vec3& origin, const glm::v
                 ps->Live.push_back(p);
             }
         }
+    }
+}
+
+void CombatFx::FollowMuzzle(World& world, const glm::vec3& firstPerson, const glm::vec3& worldCopy, const glm::vec3& bore) {
+    for (const auto& [e, muzzle] : {std::pair{m_PlayerFlame, firstPerson}, std::pair{m_PlayerWorldFlame, worldCopy}}) {
+        if (!world.Registry.valid(e)) continue;
+        if (auto* ps = world.Registry.try_get<ParticleSystemComponent>(e))
+            for (auto& p : ps->Live) {
+                p.Pos = muzzle + bore * kFlameAhead;
+                p.Axis = bore;
+            }
     }
 }
 

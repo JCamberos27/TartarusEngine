@@ -434,8 +434,20 @@ struct ParticleSystemComponent {
     float Intensity = 1.0f;       // HDR brightness multiplier (above 1 feeds Bloom)
     float GravityModifier = 0.0f; // x project gravity (1 = falls like a rigidbody)
     int   BlendMode = 1;          // 0 Alpha Blended, 1 Additive
+    // Runtime only (not serialized): a project-relative texture that turns particles with a Length
+    // into muzzle-flame tongues (see Particle.Length). Empty = the plain soft discs.
+    std::string Texture;
 
-    struct Particle { glm::vec3 Pos{0.0f}, Vel{0.0f}; float Age = 0.0f, Life = 1.0f; };
+    // The flame extras: a particle with Length > 0 (and a Texture set) is drawn as a tongue standing
+    // on Pos and pointing along Axis, growing from nothing to Length x Width metres over its life
+    // (the system's sizes and colours are ignored). Seed (0..1) picks its shape, Glow scales its
+    // emission and Alpha its smoky body.
+    struct Particle {
+        glm::vec3 Pos{0.0f}, Vel{0.0f};
+        float Age = 0.0f, Life = 1.0f;
+        glm::vec3 Axis{0.0f, 0.0f, -1.0f};
+        float Length = 0.0f, Width = 0.0f, Seed = 0.0f, Glow = 1.0f, Alpha = 1.0f;
+    };
     std::vector<Particle> Live;
     float EmitAccumulator = 0.0f;
     std::uint32_t Rng = 0x9E3779B9u;
