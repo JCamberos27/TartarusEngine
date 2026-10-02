@@ -141,8 +141,10 @@ Tokens limit how many soldiers shoot at once (2-4 with difficulty), and allow on
   symmetric cones. The cervical range is shared: neck 30 / 35 flexion / extension, head on neck 25 / 30 (they were 50 / 60
   for the head alone). Wrist: 75 palm side, 70 back, 25 / 25 sideways, 15 twist, neutral = the forearm straight on. Ankle:
   dorsiflexion 20, plantarflexion 50, toes in / out 15, inversion 35 / eversion 15, neutral = level, facing forward. The
-  hands and feet make the elbow whip a little more under a violent shove (about 20 degrees of overshoot at 3 m/s per kg,
-  against 3 with the wrist locked and 63 with the old cones).
+  hands and feet are light end links that whip the forearm / calf through its limit (elbow overshoot 19.6 degrees in the 3 m/s per kg
+  shove test): their inertia is multiplied by Distal Inertia Scale (6) and their joints carry Distal Joint Damping (40, always on,
+  also after the drives fade), which brings the elbow to 4.4 and the knee to 3.0 degrees while the wrist still folds 64 and the
+  ankle 75 degrees under the same shove. (Heavier hands were worse, more solver iterations did nothing.)
 
 ## Performance
 

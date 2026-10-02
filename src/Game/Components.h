@@ -1288,6 +1288,10 @@ struct RagdollSettingsComponent {
     float NeckFadeScale = 1.0f;
     float HandFadeScale = 1.0f;
     float FootFadeScale = 1.0f;
+    // Hands and feet are light end links that whip the limb above through their joint limit: their rotational inertia is multiplied by
+    // Distal Inertia Scale (on top of Inertia Scale) and their joint carries a viscous Distal Joint Damping that stays on after the drives fade.
+    float DistalInertiaScale = 6.0f;
+    float DistalJointDamping = 40.0f;
     // Hit flinch: a round that doesn't kill kicks the struck region's bones (a damped spring, on top of the hit animation), scaled by
     // the damage, and they settle back within FlinchDuration. Visual only: aim, eye and hitboxes don't move.
     bool HitFlinch = true;

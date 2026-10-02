@@ -1651,6 +1651,12 @@ void RegisterEngineComponents() {
             m.Fields.push_back({ "Flinch Max Angle", T::Float, TARTARUS_REFLECT_FIELD(RagdollSettingsComponent, FlinchMaxAngle), 0.5f,
               "Cap on a bone's total kick (degrees) when rounds land in quick succession.", 1.0f, 90.0f });
             for (size_t k = m.Fields.size() - 5; k < m.Fields.size(); ++k) m.Fields[k].Group = "Hit Flinch";
+            m.Fields.push_back({ "Distal Inertia Scale", T::Float, TARTARUS_REFLECT_FIELD(RagdollSettingsComponent, DistalInertiaScale), 0.1f,
+              "Multiplies the hands' and feet's rotational inertia (on top of Inertia Scale). Light end links whip the forearm or calf through its joint limit; 1 = off.", 0.2f, 40.0f });
+            m.Fields.push_back({ "Distal Joint Damping", T::Float, TARTARUS_REFLECT_FIELD(RagdollSettingsComponent, DistalJointDamping), 1.0f,
+              "Viscous damping of the wrist and ankle joints (acceleration units), kept on after the death drives fade. Keeps the hands and feet from whipping the limb above; 0 = off.", 0.0f, 500.0f });
+            m.Fields[m.Fields.size() - 2].Group = "Body Physics";
+            m.Fields[m.Fields.size() - 1].Group = "Body Physics";
         }
         Register<RagdollSettingsComponent>(std::move(m));
     }

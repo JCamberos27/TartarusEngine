@@ -97,10 +97,17 @@ void TestRagdollHingesDoNotHyperextend() {
     const float elbowNew = std::max(BendAlong(anatomical, kForearmL, -fwd, 3.0f), BendAlong(anatomical, kForearmR, -fwd, 3.0f));
     const float elbowOld = std::max(BendAlong(legacy, kForearmL, -fwd, 3.0f), BendAlong(legacy, kForearmR, -fwd, 3.0f));
     std::printf("[UnitTest] max hyperextension: knee %.1f deg (was %.1f), elbow %.1f deg (was %.1f)\n", kneeNew, kneeOld, elbowNew, elbowOld);
-    // (The elbow overshoots more than the knee since the hand became its own part: it whips through the wrist limit and pulls the forearm
-    // with it, ~20 deg in this violent 3 m/s shove; with the wrist locked it is ~3. Still a fraction of the legacy fold.)
-    CHECK(kneeNew < 6.0f && elbowNew < 25.0f);
+    CHECK(kneeNew < 6.0f && elbowNew < 6.0f);
     CHECK(kneeOld > 15.0f && elbowOld > 15.0f);
+    // The hands and feet are damped and heavy-inertia so they can't whip the limb above through its limit (without: elbow ~20 deg), but
+    // the wrist and ankle stay free: a shove still folds them well past the damping's reach.
+    const float wrist = std::max(BendAlong(anatomical, NpcRagdoll::kHandL, fwd, 3.0f), BendAlong(anatomical, NpcRagdoll::kHandL, -fwd, 3.0f));
+    const float ankle = std::max(BendAlong(anatomical, NpcRagdoll::kFootL, fwd, 3.0f), BendAlong(anatomical, NpcRagdoll::kFootL, -fwd, 3.0f));
+    std::printf("[UnitTest] free joints under the same shove: wrist folds %.1f deg, ankle %.1f deg\n", wrist, ankle);
+    CHECK(wrist > 25.0f && ankle > 15.0f);
+    RagdollSettingsComponent undamped = anatomical;
+    undamped.DistalJointDamping = 0.0f; undamped.DistalInertiaScale = 1.0f;
+    CHECK(BendAlong(undamped, 4, -fwd, 3.0f) > 15.0f); // the cause: without them the elbow overshoots
     // The proper way still folds: a knee bends back, an elbow forward.
     CHECK(BendAlong(anatomical, kCalfL, -fwd, 3.0f) > 30.0f);
     CHECK(BendAlong(anatomical, kForearmR, fwd, 3.0f) > 30.0f);
