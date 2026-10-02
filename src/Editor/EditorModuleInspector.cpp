@@ -7,6 +7,7 @@
 // the DLL boundary — and is drawn into this window through host.DrawInspectorBody().
 
 #include "EditorModuleAPI.h"
+#include "EditorPanels.h"
 
 #include <imgui.h>
 #include <IconsFontAwesome6.h>
@@ -36,7 +37,7 @@ void Draw(const EditorModuleHostAPI& host) {
 
     bool visible = true;
     PushTabChromeText();
-    const bool open = ImGui::Begin("Inspector", &visible, ImGuiWindowFlags_None);
+    const bool open = ImGui::Begin(EditorPanels::Inspector, &visible, ImGuiWindowFlags_None);
     PopTabChromeText();
     if (host.SetShowInspector) host.SetShowInspector(visible); // capture the title-bar X
     if (!open) { ImGui::End(); return; }

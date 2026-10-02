@@ -3,6 +3,7 @@
 // History panels. Split out of EditorLayer.cpp for build time (#179).
 
 #include "EditorLayer.h"
+#include "EditorPanels.h"
 #include "EditorLayerInternal.h"
 #include "EditorIcons.h"
 #include "FileDialog.h"
@@ -19,7 +20,8 @@
 #include "Log.h"
 #include "EditorSettings.h"
 #include "EditorUIHelpers.h"
-#include "EditorUIPrimitives.h" // SuccessColor() — the Play button's green
+#include "EditorUIPrimitives.h"
+#include "EditorTheme.h"
 #include "PhysicsWorld.h"             // #185 — PDD_* debug-draw channel flags
 #include "EditorModuleAPI.h"          // EditorConsoleState — the Console panel lives in the module now
 #include "HotReloadEditorModule.h"    // EditorModuleHost::ConsoleState()
@@ -68,8 +70,8 @@ void EditorLayer::DrawPlayTransportButtons(bool playing, bool maximized, bool pa
     // foreground on hover/press so they still read as pressable without fighting whatever plate
     // (or lack of one) the caller drew behind them.
     ImGui::PushStyleColor(ImGuiCol_Button,        ImVec4(0.0f, 0.0f, 0.0f, 0.0f));
-    ImGui::PushStyleColor(ImGuiCol_ButtonHovered, ImVec4(1.0f, 1.0f, 1.0f, 0.10f));
-    ImGui::PushStyleColor(ImGuiCol_ButtonActive,  ImVec4(1.0f, 1.0f, 1.0f, 0.18f));
+    ImGui::PushStyleColor(ImGuiCol_ButtonHovered, EditorUIPrimitives::FlatHover());
+    ImGui::PushStyleColor(ImGuiCol_ButtonActive,  EditorUIPrimitives::FlatPressed());
     // The Unity-dark reskin's FrameBorderSize=1 (EditorLayer.cpp ApplyThemeStyle) draws a hairline
     // around every frame widget including plain Button() — suppress it for these flat transport
     // buttons the same way EditorUIPrimitives::ActionButton does.
@@ -94,7 +96,7 @@ void EditorLayer::DrawPlayTransportButtons(bool playing, bool maximized, bool pa
         // Pause toggle + single-frame Step (#236). Pause reads as pressed-in while active; Step
         // is only meaningful (and only enabled) once paused.
         ImGui::SameLine();
-        if (paused) ImGui::PushStyleColor(ImGuiCol_Button, ImVec4(1.0f, 1.0f, 1.0f, 0.18f));
+        if (paused) ImGui::PushStyleColor(ImGuiCol_Button, EditorTheme::AccentWash);
         if (ImGui::Button(paused ? ICON_FA_PLAY "  Resume" : ICON_FA_PAUSE "  Pause")) m_PauseToggleRequested = true;
         if (paused) ImGui::PopStyleColor();
         if (ImGui::IsItemHovered()) EditorUI::SetTooltip(paused ? "Resume simulation (F2)" : "Freeze simulation, keep rendering (F2)");
@@ -150,13 +152,27 @@ void EditorLayer::DrawViewportActionBar(World& world, AssetLibrary& assets,
     if (overScene || overGame) {
         const ImVec2 imgPos  = overGame ? m_GameViewImgPos  : ImVec2(m_ViewportPos.x, m_ViewportPos.y);
         const ImVec2 imgSize = overGame ? m_GameViewImgSize : ImVec2(m_ViewportSize.x, m_ViewportSize.y);
+
+        // Play-mode tint: a thin gold frame just inside the viewport image (AccentDeep while paused),
+        // drawn on the Scene / Game window's own draw list so it sits with the image. Skipped for a
+        // clean capture like every other viewport overlay.
+        if (playing && !m_HideOverlaysThisFrame) {
+            ImGuiWindow* vp = ImGui::FindWindowByName(overGame ? EditorPanels::Game : EditorPanels::Scene);
+            if (vp && !vp->Hidden && !vp->SkipItems) {
+                const float t = EditorTheme::Px(2.0f);
+                vp->DrawList->AddRect(ImVec2(imgPos.x + t * 0.5f, imgPos.y + t * 0.5f),
+                                      ImVec2(imgPos.x + imgSize.x - t * 0.5f, imgPos.y + imgSize.y - t * 0.5f),
+                                      EditorTheme::U32(paused ? EditorTheme::AccentDeep : EditorTheme::Accent),
+                                      0.0f, ImDrawFlags_None, t);
+            }
+        }
         const float cx = imgPos.x + imgSize.x * 0.5f;
         const float cy = imgPos.y + 8.0f * m_UIScale;
         ImGui::SetNextWindowPos(ImVec2(cx, cy), ImGuiCond_Always, ImVec2(0.5f, 0.0f));
     } else {
         // No viewport rect to anchor to (before the first Scene/Game frame) — float near the
         // top of the window.
-        ImGui::SetNextWindowPos(ImVec2(w * 0.5f, 10.0f), ImGuiCond_Always, ImVec2(0.5f, 0.0f));
+        ImGui::SetNextWindowPos(ImVec2(w * 0.5f, 10.0f * m_UIScale), ImGuiCond_Always, ImVec2(0.5f, 0.0f));
     }
 
     // #5 item 2 — this used to be a 60%-alpha wash behind fixed near-white text, which (on a pale
@@ -167,12 +183,16 @@ void EditorLayer::DrawViewportActionBar(World& world, AssetLibrary& assets,
     ImGui::PushStyleColor(ImGuiCol_Text,     EditorUIPrimitives::kHudTextColor);
 
     ImGui::Begin("##ViewportActionBar", nullptr, flags);
-    // Forces this to the front of the display order every frame so a dock rebuild elsewhere
-    // (Reset Layout) can't bury it behind whatever the freshly recreated dock host window
-    // ends up as. Skipped while a popup is open (e.g. Capture options) so the bar doesn't punch
-    // through a menu that legitimately overlays the viewport top-centre.
-    if (!ImGui::IsPopupOpen(nullptr, ImGuiPopupFlags_AnyPopupId | ImGuiPopupFlags_AnyPopupLevel))
-        ImGui::BringWindowToDisplayFront(ImGui::GetCurrentWindow());
+    // A dock rebuild elsewhere (Reset Layout) can bury this behind the freshly recreated dock
+    // windows; bring it forward only then — when it sits behind the viewport it rides on — so a
+    // floating window (Settings, Lighting) or a popup the user opened over the viewport stays on
+    // top of it. (It used to be forced to the very front every frame, over those windows too.)
+    {
+        ImGuiWindow* self = ImGui::GetCurrentWindow();
+        ImGuiWindow* viewport = ImGui::FindWindowByName(overGame ? EditorPanels::Game : EditorPanels::Scene);
+        if (viewport && ImGui::FindWindowDisplayIndex(self) < ImGui::FindWindowDisplayIndex(viewport->RootWindow))
+            ImGui::BringWindowToDisplayFront(self);
+    }
 
     // A short inset tick between clusters — same treatment the old toolbar row's dividers used,
     // lighter than the icons themselves rather than another hard-edged shape the same weight.
@@ -217,7 +237,7 @@ void EditorLayer::DrawViewportActionBar(World& world, AssetLibrary& assets,
             if (!cs.Visible) {
                 cs.Visible = true;
             } else {
-                ImGuiWindow* consoleWin = ImGui::FindWindowByName(ICON_FA_TERMINAL "  Console");
+                ImGuiWindow* consoleWin = ImGui::FindWindowByName(EditorPanels::Console);
                 if (consoleWin && consoleWin->Hidden) ImGui::FocusWindow(consoleWin);
                 else cs.Visible = false;
             }
@@ -257,151 +277,225 @@ void EditorLayer::DrawViewportActionBar(World& world, AssetLibrary& assets,
 
 // The Statistics HUD itself lives in the reloadable editor module (src/Editor/EditorModuleStats.cpp).
 
-void EditorLayer::DrawViewportStatusBar(World& world, Camera& editorCamera) {
-    if (!m_SceneViewportVisible || m_ViewportSize.x < 1.0f || m_ViewportSize.y < 1.0f) return;
+// The window-wide status bar under the dock space (Unity / Unreal / VS Code): the latest log
+// message on the left (click: the Console), and on the right the active tool, the selection, the
+// scene, the frame readout and the build config. Each segment that does something is clickable.
+// Used to be a strip over the bottom of the Scene viewport, which vanished whenever the Game tab
+// was up and covered the bottom of the 3D view.
+void EditorLayer::DrawStatusBar(World& world, Camera& editorCamera) {
+    int ww = 0, wh = 0;
+    glfwGetWindowSize(m_Window, &ww, &wh);
+    const float barH = StatusBarHeightPx();
+    if (ww <= 0 || wh <= 0) return;
 
     const char* toolName =
         m_HandTool                       ? "Hand"      :
-        m_GizmoOp == GizmoOp::Translate  ? "Translate" :
+        m_GizmoOp == GizmoOp::Translate  ? "Move"      :
         m_GizmoOp == GizmoOp::Rotate     ? "Rotate"    :
         m_GizmoOp == GizmoOp::Scale      ? "Scale"     :
         m_GizmoOp == GizmoOp::Universal  ? "Transform" : "Rect";
-
-    int selCount = (int)GetSelectedItems().size();
-    float fps = m_SmoothedFrameMs > 0.0001f ? 1000.0f / m_SmoothedFrameMs : 0.0f;
-
+    const int selCount = (int)GetSelectedItems().size();
+    const float fps = m_SmoothedFrameMs > 0.0001f ? 1000.0f / m_SmoothedFrameMs : 0.0f;
     auto compact = [](int n) -> std::string {
-        if (n >= 1000000) { char b[32]; snprintf(b, sizeof(b), "%.1fM", n / 1e6); return b; }
-        if (n >= 1000)    { char b[32]; snprintf(b, sizeof(b), "%.1fk", n / 1e3); return b; }
+        char b[32];
+        if (n >= 1000000) { snprintf(b, sizeof(b), "%.1fM", n / 1e6); return b; }
+        if (n >= 1000)    { snprintf(b, sizeof(b), "%.1fk", n / 1e3); return b; }
         return std::to_string(n);
     };
 
-    const float barH = ImGui::GetTextLineHeight() + 8.0f * m_UIScale;
-
-    // #54 — used to be a bare line of text over the 3D view, kept legible by sampling the scene
-    // luminance behind it and steering white-on-dark / dark-on-light; now a fixed opaque strip
-    // behind fixed near-white text, legible over anything.
-    ImGui::SetNextWindowPos(ImVec2(m_ViewportPos.x, m_ViewportPos.y + m_ViewportSize.y - barH), ImGuiCond_Always);
-    ImGui::SetNextWindowSize(ImVec2(m_ViewportSize.x, barH), ImGuiCond_Always);
-    ImGui::PushStyleVar(ImGuiStyleVar_WindowPadding, ImVec2(10.0f * m_UIScale, 3.0f * m_UIScale));
+    ImGui::SetNextWindowPos(ImVec2(0.0f, (float)wh - barH), ImGuiCond_Always);
+    ImGui::SetNextWindowSize(ImVec2((float)ww, barH), ImGuiCond_Always);
+    ImGui::SetNextWindowViewport(ImGui::GetMainViewport()->ID);
+    ImGui::PushStyleVar(ImGuiStyleVar_WindowPadding, ImVec2(0.0f, 0.0f));
     ImGui::PushStyleVar(ImGuiStyleVar_WindowBorderSize, 0.0f);
-    ImGui::PushStyleColor(ImGuiCol_WindowBg,     EditorUIPrimitives::kHudPlateColor);
-    ImGui::PushStyleColor(ImGuiCol_Text,         EditorUIPrimitives::kHudTextColor);
-    ImGui::PushStyleColor(ImGuiCol_TextDisabled, EditorUIPrimitives::kHudTextDisabledColor);
-    // Phase 3 item 5 — NoInputs is gone: the bar used to be pure decoration ("today it is
-    // ImGuiWindowFlags_NoInputs — nothing clickable", audit #5). Individual segments below opt
-    // into a click action via IsItemClicked() on whatever they just drew (Text() items still
-    // register a hoverable/clickable rect — this doesn't require switching them to buttons).
-    if (ImGui::Begin("##ViewportStatusBar", nullptr,
-            ImGuiWindowFlags_NoDecoration | ImGuiWindowFlags_NoDocking |
-            ImGuiWindowFlags_NoSavedSettings | ImGuiWindowFlags_NoFocusOnAppearing | ImGuiWindowFlags_NoNav |
-            ImGuiWindowFlags_NoMove)) {
+    ImGui::PushStyleVar(ImGuiStyleVar_ItemSpacing, ImVec2(0.0f, 0.0f));
+    ImGui::PushStyleColor(ImGuiCol_WindowBg, EditorTheme::Base);
+    const bool open = ImGui::Begin("##StatusBar", nullptr,
+        ImGuiWindowFlags_NoDecoration | ImGuiWindowFlags_NoDocking | ImGuiWindowFlags_NoSavedSettings |
+        ImGuiWindowFlags_NoFocusOnAppearing | ImGuiWindowFlags_NoNav | ImGuiWindowFlags_NoMove |
+        ImGuiWindowFlags_NoBringToFrontOnFocus | ImGuiWindowFlags_NoScrollbar | ImGuiWindowFlags_NoScrollWithMouse);
+    ImGui::PopStyleColor();
+    ImGui::PopStyleVar(3);
+    if (!open) { ImGui::End(); return; }
 
-        auto sep = [&]() { ImGui::SameLine(0, 6); ImGui::TextDisabled("\xc2\xb7"); ImGui::SameLine(0, 6); };
-        // Every interactive segment below shares this: hand cursor + tooltip on hover, act on
-        // click. Kept as a helper rather than repeating the three lines per segment.
-        auto clickable = [](const char* tooltip) -> bool {
-            if (ImGui::IsItemHovered()) {
-                ImGui::SetMouseCursor(ImGuiMouseCursor_Hand);
-                EditorUI::SetTooltip("%s", tooltip);
-            }
-            return ImGui::IsItemClicked();
-        };
+    ImDrawList* dl = ImGui::GetWindowDrawList();
+    const ImVec2 wpos = ImGui::GetWindowPos();
+    dl->AddLine(ImVec2(wpos.x, wpos.y + 0.5f), ImVec2(wpos.x + (float)ww, wpos.y + 0.5f),
+                EditorTheme::U32(EditorTheme::Hairline));
 
-        ImGui::AlignTextToFramePadding();
-        // Build config, so it's obvious at a glance whether this is the slow (Debug) binary or an
-        // optimized one. TARTARUS_BUILD_CONFIG is "$<CONFIG>" from CMake; NDEBUG is the canonical
-        // "optimized" signal (Release / RelWithDebInfo define it), so only a true Debug build gets
-        // the amber warning colour — the rest render quiet.
+    EditorTheme::PushMonoSmall();
+    const float textH = ImGui::GetFontSize();
+    const float textY = wpos.y + std::floor((barH - textH) * 0.5f);
+    const float padX = EditorTheme::Px(10.0f);
+    const float gap = EditorTheme::Px(14.0f);
+
+    // One clickable run of text. Returns true when clicked.
+    auto segment = [&](float x, const char* text, ImVec4 col, const char* tip, const char* id) -> bool {
+        const ImVec2 sz = ImGui::CalcTextSize(text);
+        ImGui::SetCursorScreenPos(ImVec2(x - EditorTheme::Px(4.0f), wpos.y));
+        ImGui::PushID(id);
+        const bool clicked = ImGui::InvisibleButton("##seg", ImVec2(sz.x + EditorTheme::Px(8.0f), barH));
+        const bool hovered = ImGui::IsItemHovered();
+        ImGui::PopID();
+        if (hovered && tip) {
+            dl->AddRectFilled(ImGui::GetItemRectMin(), ImGui::GetItemRectMax(),
+                              EditorTheme::U32(EditorUIPrimitives::FlatHover()));
+            ImGui::SetMouseCursor(ImGuiMouseCursor_Hand);
+            EditorUI::SetTooltip("%s", tip);
+        }
+        dl->AddText(ImVec2(x, textY), EditorTheme::U32(hovered && tip ? EditorTheme::Text : col), text);
+        return clicked && tip;
+    };
+
+    // --- right cluster, laid out right to left --------------------------------------------------
+    struct Seg { std::string Text; ImVec4 Color; const char* Tip; int Action; };
+    std::vector<Seg> segs;
 #ifndef TARTARUS_BUILD_CONFIG
 #define TARTARUS_BUILD_CONFIG "Build?"
 #endif
 #if defined(NDEBUG)
-        ImGui::TextDisabled("%s", TARTARUS_BUILD_CONFIG);
+    segs.push_back({TARTARUS_BUILD_CONFIG, EditorTheme::Dim, nullptr, 0});
 #else
-        ImGui::TextColored(ImVec4(1.00f, 0.62f, 0.20f, 1.00f), "%s", TARTARUS_BUILD_CONFIG);
+    segs.push_back({TARTARUS_BUILD_CONFIG, EditorTheme::Warning, "A Debug build: expect low frame rates", 0});
 #endif
-        sep();
-        // The FPS/ms/draws/tris cluster is one click target — jumps to the deeper Statistics
-        // panel readout instead of duplicating it here.
-        ImGui::Text("%.0f FPS", fps);
-        if (clickable("Open the Statistics panel")) {
-            EditorSettings::Get().SceneShowStats = !EditorSettings::Get().SceneShowStats;
-            EditorSettings::Save();
-        }
-        sep(); ImGui::TextDisabled("%.1f ms", m_SmoothedFrameMs);
-        if (clickable("Open the Statistics panel")) {
-            EditorSettings::Get().SceneShowStats = !EditorSettings::Get().SceneShowStats;
-            EditorSettings::Save();
-        }
-        // A hitch - one frame over 33 ms in the recent history - stays visible for as long as it's in
-        // the history, which the smoothed figure hides (a 2 s freeze barely moves it).
+    {
+        char b[96];
+        snprintf(b, sizeof(b), "%s draws  %s tris", compact(m_RenderStats.DrawCalls).c_str(),
+                 compact(m_RenderStats.Triangles).c_str());
+        segs.push_back({b, EditorTheme::Dim, "Open the Statistics panel", 1});
         float worst = 0.0f;
         for (int i = 0; i < m_FrameTimeHistoryFilled; ++i) worst = std::max(worst, m_FrameTimeHistory[i]);
+        snprintf(b, sizeof(b), "%.0f fps  %.1f ms", fps, m_SmoothedFrameMs);
+        segs.push_back({b, EditorTheme::Secondary, "Open the Statistics panel", 1});
         if (worst > 33.0f) {
-            ImGui::SameLine();
-            ImGui::TextColored(EditorUIPrimitives::WarningColor(), "(hitch %.0f ms)", worst);
-            if (ImGui::IsItemHovered()) EditorUI::SetTooltip("Slowest frame in the last %d", m_FrameTimeHistoryFilled);
+            // A hitch (one frame over 33 ms) stays visible while it's in the recent history; the
+            // smoothed figure hides it.
+            snprintf(b, sizeof(b), "hitch %.0f ms", worst);
+            segs.push_back({b, EditorTheme::Warning, "The slowest recent frame. Open the Statistics panel", 1});
         }
-        sep(); ImGui::Text("%s draws", compact(m_RenderStats.DrawCalls).c_str());
-        if (clickable("Open the Statistics panel")) {
-            EditorSettings::Get().SceneShowStats = !EditorSettings::Get().SceneShowStats;
-            EditorSettings::Save();
-        }
-        sep(); ImGui::TextDisabled("%s tris", compact(m_RenderStats.Triangles).c_str());
-        if (clickable("Open the Statistics panel")) {
-            EditorSettings::Get().SceneShowStats = !EditorSettings::Get().SceneShowStats;
-            EditorSettings::Save();
-        }
+    }
+    {
+        std::string sceneName = std::filesystem::path(m_CurrentScenePath).filename().string();
+        if (sceneName.empty()) sceneName = "Untitled";
+        if (m_Dirty) sceneName += " \xe2\x80\xa2"; // a dot: unsaved changes
+        segs.push_back({sceneName, m_Dirty ? EditorTheme::Accent : EditorTheme::Secondary,
+                        m_CurrentScenePath.empty() ? "Untitled scene: save it to give it a file"
+                                                   : "Show the scene file in its folder", 2});
+    }
+    if (m_LockViewToSelection) segs.push_back({ICON_FA_LOCK " following", EditorTheme::Accent, "Stop following the selection (Shift+F)", 3});
+    {
+        char b[48];
+        if (selCount == 0) snprintf(b, sizeof(b), "nothing selected");
+        else snprintf(b, sizeof(b), "%d selected", selCount);
+        segs.push_back({b, selCount ? EditorTheme::Secondary : EditorTheme::Dim, selCount ? "Frame the selection (F)" : nullptr, 4});
+    }
+    {
+        char b[48];
+        snprintf(b, sizeof(b), "%s %s", m_HandTool ? ICON_FA_HAND : ICON_FA_UP_DOWN_LEFT_RIGHT, toolName);
+        segs.push_back({b, EditorTheme::Secondary,
+                        m_HandTool ? "Back to the last transform tool (Q)" : "Hand tool: drag to pan the view (Q)", 5});
+    }
 
-        // Scene name (audit #5 item 5's explicit ask) — click reveals the file, same "Show in
-        // folder" action Capture's toast/menu already use.
-        sep();
-        {
-            std::string sceneName = std::filesystem::path(m_CurrentScenePath).filename().string();
-            if (sceneName.empty()) sceneName = "Untitled";
-            if (m_Dirty) ImGui::TextColored(ImVec4(1.0f, 0.75f, 0.3f, 1.0f), "%s*", sceneName.c_str());
-            else         ImGui::TextUnformatted(sceneName.c_str());
-            if (clickable(m_CurrentScenePath.empty() ? "Untitled scene — Save to give it a file"
-                                                      : "Show the scene file in its folder")) {
-                if (!m_CurrentScenePath.empty()) Screenshot::ShowInFolder(m_CurrentScenePath);
+    float x = (float)ww - padX;
+    float leftLimit = x;
+    for (size_t i = 0; i < segs.size(); ++i) {
+        const float w = ImGui::CalcTextSize(segs[i].Text.c_str()).x;
+        x -= w;
+        char id[16]; snprintf(id, sizeof(id), "s%zu", i);
+        if (segment(x, segs[i].Text.c_str(), segs[i].Color, segs[i].Tip, id)) {
+            switch (segs[i].Action) {
+                case 1: EditorSettings::Get().SceneShowStats = true; EditorSettings::Save(); break;
+                case 2: if (!m_CurrentScenePath.empty()) Screenshot::ShowInFolder(m_CurrentScenePath); break;
+                case 3: SetLockViewToSelection(false); break;
+                case 4: FocusOnSelection(world, editorCamera); break;
+                case 5: SetHandToolActive(!m_HandTool); break;
+                default: break;
             }
         }
-
-        // Camera readout — where the Scene view is and what it's looking at, so a screenshot is
-        // enough to reproduce a view exactly.
-        sep();
-        ImGui::TextDisabled("cam %.2f, %.2f, %.2f  yaw %.1f  pitch %.1f", editorCamera.Position.x,
-                            editorCamera.Position.y, editorCamera.Position.z, editorCamera.Yaw, editorCamera.Pitch);
-        if (ImGui::IsItemHovered()) EditorUI::SetTooltip("Scene camera position and yaw / pitch (degrees)");
-
-        sep();
-        if (selCount == 0) {
-            ImGui::TextDisabled("no selection");
-        } else {
-            ImGui::Text("%d selected", selCount);
-            if (clickable("Frame the selection (F)")) FocusOnSelection(world, editorCamera);
+        leftLimit = x;
+        x -= gap;
+        if (i + 1 < segs.size()) {
+            // A short tick between segments.
+            const float tx = std::floor(x + gap * 0.5f) + 0.5f;
+            dl->AddLine(ImVec2(tx, wpos.y + barH * 0.3f), ImVec2(tx, wpos.y + barH * 0.7f),
+                        EditorTheme::U32(EditorTheme::Strong));
         }
-
-        if (m_LockViewToSelection) {
-            sep();
-            ImGui::Text("%s follow", ICON_FA_LOCK); // Shift+F (#236 E)
-            if (clickable("Stop following the selection (Shift+F)")) SetLockViewToSelection(false);
-        }
-
-        // Active tool pinned to the right — click toggles the Hand tool, the one binary state
-        // (as opposed to the 5-way gizmo-op choice, already one click away in the tool palette).
-        char toolBuf[32]; snprintf(toolBuf, sizeof(toolBuf), "%s  %s",
-            m_HandTool ? ICON_FA_HAND : ICON_FA_UP_DOWN_LEFT_RIGHT, toolName);
-        float tw = ImGui::CalcTextSize(toolBuf).x;
-        ImGui::SameLine(ImGui::GetWindowContentRegionMax().x - tw);
-        ImGui::TextUnformatted(toolBuf);
-        if (clickable(m_HandTool ? "Switch back to the last transform tool (Q)" : "Hand tool — drag to pan the view (Q)"))
-            SetHandToolActive(!m_HandTool);
     }
+
+    // --- progress: a build or an asset import in flight -------------------------------------------
+    // A mono label plus a thin bar (track Hairline, fill Accent, like the launcher's loading bar),
+    // just left of the right cluster; hidden when idle. A build wins over an import.
+    float buildFrac = 0.0f;
+    std::string buildLabel;
+    const bool building = BuildProgressInfo(buildFrac, buildLabel);
+    if (building || m_ImportQueue.IsActive()) {
+        int total = m_ImportQueue.BatchTotal();
+        int done = std::max(0, total - m_ImportQueue.PendingCount());
+        char label[64];
+        if (building) {
+            snprintf(label, sizeof(label), "%s", buildLabel.c_str());
+            total = buildFrac >= 0.0f ? 1000 : 0;
+            done = (int)(buildFrac * 1000.0f);
+        }
+        else if (total > 0) snprintf(label, sizeof(label), "Importing %d/%d", std::min(done + 1, total), total);
+        else snprintf(label, sizeof(label), "Importing...");
+        const float labelW = ImGui::CalcTextSize(label).x;
+        const float barW = EditorTheme::Px(90.0f);
+        const float barH2 = EditorTheme::Px(3.0f);
+        const float inner = EditorTheme::Px(8.0f);
+        const float x0 = leftLimit - gap * 1.5f - (labelW + inner + barW);
+        dl->AddText(ImVec2(x0, textY), EditorTheme::U32(EditorTheme::Secondary), label);
+        const float bx = x0 + labelW + inner;
+        const float by = wpos.y + std::floor((barH - barH2) * 0.5f);
+        dl->AddRectFilled(ImVec2(bx, by), ImVec2(bx + barW, by + barH2), EditorTheme::U32(EditorTheme::Hairline));
+        if (total > 0) {
+            const float f = std::clamp((float)done / (float)total, 0.0f, 1.0f);
+            dl->AddRectFilled(ImVec2(bx, by), ImVec2(bx + barW * f, by + barH2), EditorTheme::U32(EditorTheme::Accent));
+        } else {
+            // Indeterminate: a gold segment sweeping across the track.
+            const float segW = barW * 0.3f;
+            const float t = std::fmod((float)ImGui::GetTime() * 0.9f, 1.0f);
+            const float sx = bx - segW + (barW + segW) * t;
+            dl->PushClipRect(ImVec2(bx, by), ImVec2(bx + barW, by + barH2), true);
+            dl->AddRectFilled(ImVec2(sx, by), ImVec2(sx + segW, by + barH2), EditorTheme::U32(EditorTheme::Accent));
+            dl->PopClipRect();
+        }
+        leftLimit = x0;
+    }
+
+    // --- left: the latest log message -----------------------------------------------------------
+    const std::vector<LogEntry>& entries = Log::Entries();
+    if (!entries.empty()) {
+        const LogEntry& e = entries.back();
+        const ImVec4 col = e.Level == LogLevel::Error ? EditorTheme::Danger
+                         : e.Level == LogLevel::Warning ? EditorTheme::Warning : EditorTheme::Secondary;
+        const char* icon = e.Level == LogLevel::Error ? ICON_FA_CIRCLE_XMARK
+                         : e.Level == LogLevel::Warning ? ICON_FA_TRIANGLE_EXCLAMATION : ICON_FA_CIRCLE_INFO;
+        std::string line = e.Message;
+        if (const size_t nl = line.find('\n'); nl != std::string::npos) line.resize(nl);
+        const float maxW = leftLimit - gap * 2.0f - padX;
+        if (maxW > EditorTheme::Px(60.0f)) {
+            const ImVec2 mn(wpos.x, wpos.y), mx(wpos.x + padX + maxW, wpos.y + barH);
+            ImGui::SetCursorScreenPos(mn);
+            const bool clicked = ImGui::InvisibleButton("##lastlog", ImVec2(mx.x - mn.x, barH));
+            const bool hovered = ImGui::IsItemHovered();
+            if (hovered) {
+                ImGui::SetMouseCursor(ImGuiMouseCursor_Hand);
+                EditorUI::SetTooltip("%s\n\nClick to open the Console.", e.Message.c_str());
+            }
+            if (clicked) {
+                EditorModuleHost::ConsoleState().Visible = true;
+                if (ImGuiWindow* w = ImGui::FindWindowByName(ICON_FA_TERMINAL "  Console###Console")) ImGui::FocusWindow(w);
+            }
+            dl->PushClipRect(mn, mx, true);
+            dl->AddText(ImVec2(wpos.x + padX, textY), EditorTheme::U32(col), icon);
+            const float ix = wpos.x + padX + ImGui::CalcTextSize(icon).x + EditorTheme::Px(7.0f);
+            dl->AddText(ImVec2(ix, textY), EditorTheme::U32(hovered ? EditorTheme::Text : col), line.c_str());
+            dl->PopClipRect();
+        }
+    }
+    EditorTheme::PopFont();
     ImGui::End();
-    ImGui::PopStyleColor(3);
-    ImGui::PopStyleVar(2);
 }
 
 // Unity-style Undo History: every recorded change, oldest to newest, with the current position
@@ -435,7 +529,7 @@ void EditorLayer::DrawHistoryListBody(World& world, AssetLibrary& assets) {
         ImGui::PopID();
     }
 
-    ImGui::PushStyleColor(ImGuiCol_Text, ImVec4(1.0f, 0.75f, 0.3f, 1.0f));
+    ImGui::PushStyleColor(ImGuiCol_Text, EditorTheme::Warning);
     ImGui::Selectable(ICON_FA_LOCATION_DOT "  Current", true);
     ImGui::PopStyleColor();
     if (ImGui::IsItemHovered()) EditorUI::SetTooltip("Where you are right now");
@@ -463,6 +557,7 @@ static const struct { const char* label; int w, h; } kCaptureRes[] = {
 };
 
 float EditorLayer::ToolbarHeightPx() const { return kToolbarHeight * m_UIScale; }
+float EditorLayer::StatusBarHeightPx() const { return kStatusBarHeight * m_UIScale; }
 
 // The toolbar strip + its menu bar + the window min/max/close controls moved into
 // TartarusEditor.dll (EditorModuleToolbar.cpp, issue #229). What stays here is the deep host
@@ -471,6 +566,23 @@ float EditorLayer::ToolbarHeightPx() const { return kToolbarHeight * m_UIScale; 
 // DrawAddEntityItems (EditorLayer_Hierarchy.cpp) is the fifth; the Shift+A quick-add popup and
 // the Hierarchy's context menu call it too. The play/stop button, viewport status bar and
 // History HUD further down this file are still host-drawn (a later #229 pass).
+
+// The Edit menu: the commands every editor puts there, each one already a shortcut elsewhere.
+void EditorLayer::DrawEditMenuBody(World& world, AssetLibrary& assets) {
+    const bool sel = HasAnySelection();
+    if (ImGui::MenuItem(ICON_FA_ROTATE_LEFT "  Undo", "Ctrl+Z", false, !m_UndoStack.empty())) Undo(world, assets);
+    if (ImGui::MenuItem(ICON_FA_ROTATE_RIGHT "  Redo", "Ctrl+Y", false, !m_RedoStack.empty())) Redo(world, assets);
+    ImGui::Separator();
+    if (ImGui::MenuItem(ICON_FA_COPY "  Copy", "Ctrl+C", false, sel)) CopySelection(world);
+    if (ImGui::MenuItem(ICON_FA_PASTE "  Paste", "Ctrl+V")) PasteClipboard(world, assets);
+    if (ImGui::MenuItem(ICON_FA_CLONE "  Duplicate", "Ctrl+D", false, sel)) DuplicateSelection(world, assets);
+    if (ImGui::MenuItem(ICON_FA_TRASH "  Delete", "Del", false, sel)) DeleteSelection(world);
+    ImGui::Separator();
+    if (ImGui::MenuItem(ICON_FA_OBJECT_GROUP "  Select All", "Ctrl+A")) SelectAllEntities(world);
+    ImGui::Separator();
+    if (ImGui::MenuItem(ICON_FA_SLIDERS "  Preferences...", "Ctrl+,")) OpenPreferences();
+    if (ImGui::MenuItem(ICON_FA_GEAR "  Project Settings...", "Ctrl+Shift+P")) OpenProjectSettings();
+}
 
 void EditorLayer::DrawFileMenuBody(World& world, AssetLibrary& assets) {
             if (ImGui::MenuItem(ICON_FA_FILE "  New Scene", "Ctrl+N")) {
@@ -575,7 +687,7 @@ void EditorLayer::DrawViewMenuBody(World& world, Camera& editorCamera) {
                 FrameSceneBounds(world, editorCamera);
             }
 
-            ImGui::SeparatorText("Selection");
+            EditorUIPrimitives::SectionHeader("Selection");
             if (ImGui::MenuItem(ICON_FA_ARROW_LEFT "  Selection Back", "Ctrl+[", false, CanSelectionHistoryBack()))
                 SelectionHistoryBack(world);
             if (ImGui::MenuItem(ICON_FA_ARROW_RIGHT "  Selection Forward", "Ctrl+]", false, CanSelectionHistoryForward()))
@@ -585,7 +697,7 @@ void EditorLayer::DrawViewMenuBody(World& world, Camera& editorCamera) {
             // palette's draw-mode icon, DrawToolPalette in EditorLayer_ToolPalette.cpp), so this
             // menu copy was a live duplicate. Grid lives only there too (#148) — the menu keeps
             // just the toggles that have no viewport-control home.
-            ImGui::SeparatorText("Options");
+            EditorUIPrimitives::SectionHeader("Options");
             ImGui::MenuItem(EDITOR_ICON_TOGGLE_GIZMOS "  Transform Gizmo", nullptr, &m_ShowGizmos);
             if (ImGui::MenuItem(ICON_FA_RULER "  Measure Tool", "M", m_MeasureTool)) {
                 m_MeasureTool = !m_MeasureTool;
@@ -615,7 +727,7 @@ void EditorLayer::DrawViewMenuBody(World& world, Camera& editorCamera) {
             // > Camera, the only home they didn't already have; the persisted fields are unchanged
             // (EditorSettings::SceneCameraFov etc.), so existing editor_prefs.json values carry over.
 
-            ImGui::SeparatorText("Snap to view");
+            EditorUIPrimitives::SectionHeader("Snap to view");
             if (ImGui::MenuItem("  Iso", "0")) {
                 SnapToView(world, editorCamera, -45.0f, -35.264f, true);
             }
@@ -633,19 +745,19 @@ void EditorLayer::DrawWindowMenuBody() {
             // Scene can never be closed and Game's toggle round-trips through main.cpp (it owns
             // GameViewPanel, not this class) via SetGameViewOpenState/ConsumeGameViewOpenRequest.
             bool sceneAlwaysOpen = true;
-            ImGui::MenuItem(ICON_FA_CAMERA "  Scene", nullptr, &sceneAlwaysOpen, false);
+            ImGui::MenuItem(ICON_FA_CUBE "  Scene", nullptr, &sceneAlwaysOpen, false);
             // IsItemHovered() ignores disabled items by default (AllowWhenDisabled) — without this
             // flag the tooltip below never fires, since this MenuItem is always disabled (#69 QA).
             if (ImGui::IsItemHovered(ImGuiHoveredFlags_AllowWhenDisabled))
                 EditorUI::SetTooltip("Always open — the core viewport can't be closed.");
             {
                 bool gameOpen = m_GameViewOpenCached;
-                if (ImGui::MenuItem(ICON_FA_DESKTOP "  Game", nullptr, &gameOpen))
+                if (ImGui::MenuItem(ICON_FA_GAMEPAD "  Game", nullptr, &gameOpen))
                     m_GameViewOpenRequest = gameOpen ? 1 : 0;
             }
-            ImGui::MenuItem(ICON_FA_SITEMAP "  Scene Hierarchy", nullptr, &m_ShowHierarchy);
+            ImGui::MenuItem(ICON_FA_LIST "  Hierarchy", nullptr, &m_ShowHierarchy);
             ImGui::MenuItem(ICON_FA_SLIDERS "  Inspector", nullptr, &m_ShowInspector);
-            ImGui::MenuItem(ICON_FA_FOLDER_TREE "  Asset Browser", nullptr, &m_ShowAssetBrowser);
+            ImGui::MenuItem(ICON_FA_FOLDER_OPEN "  Assets", nullptr, &m_ShowAssetBrowser);
             if (ImGui::MenuItem(ICON_FA_BOX_ARCHIVE "  Asset Library", nullptr, &EditorSettings::Get().ShowAssetLibrary))
                 EditorSettings::Save();
             if (ImGui::IsItemHovered())
@@ -712,9 +824,9 @@ void EditorLayer::DrawWindowMenuBody() {
                             m_RenamingLayoutPreset.clear();
                         }
                         ImGui::SameLine();
-                        if (ImGui::SmallButton(ICON_FA_CHECK)) { RenameLayoutPreset(name, m_RenameLayoutBuf); m_RenamingLayoutPreset.clear(); }
+                        if (ActionButton(ICON_FA_CHECK, "Rename")) { RenameLayoutPreset(name, m_RenameLayoutBuf); m_RenamingLayoutPreset.clear(); }
                         ImGui::SameLine();
-                        if (ImGui::SmallButton(ICON_FA_XMARK)) m_RenamingLayoutPreset.clear();
+                        if (ActionButton(ICON_FA_XMARK, "Cancel")) m_RenamingLayoutPreset.clear();
                     } else {
                         const bool isDefault = EditorSettings::Get().DefaultLayoutPreset == name;
                         std::string label = isDefault ? (ICON_FA_STAR "  " + name) : name;
@@ -725,18 +837,17 @@ void EditorLayer::DrawWindowMenuBody() {
                         if (ImGui::MenuItem(label.c_str())) RequestLoadLayoutPreset(name);
                         if (ImGui::IsItemHovered() && isDefault) EditorUI::SetTooltip("Startup default — Reset Layout rebuilds to this preset.");
                         ImGui::SameLine();
-                        if (ImGui::SmallButton(ICON_FA_PEN)) {
+                        if (ActionButton(ICON_FA_PEN, "Rename this preset")) {
                             m_RenamingLayoutPreset = name;
                             std::snprintf(m_RenameLayoutBuf, sizeof(m_RenameLayoutBuf), "%s", name.c_str());
                         }
                         if (ImGui::IsItemHovered()) EditorUI::SetTooltip("Rename this preset");
                         ImGui::SameLine();
-                        if (ImGui::SmallButton(ICON_FA_COPY)) DuplicateLayoutPreset(name);
+                        if (ActionButton(ICON_FA_COPY, "Duplicate this preset")) DuplicateLayoutPreset(name);
                         if (ImGui::IsItemHovered()) EditorUI::SetTooltip("Duplicate this preset");
                         ImGui::SameLine();
-                        if (!isDefault) ImGui::PushStyleColor(ImGuiCol_Text, ImGui::GetStyle().Colors[ImGuiCol_TextDisabled]);
-                        const bool starClicked = ImGui::SmallButton(ICON_FA_STAR);
-                        if (!isDefault) ImGui::PopStyleColor();
+                        const bool starClicked = ActionButton(ICON_FA_STAR, isDefault ? "Unset as startup default"
+                                                                                      : "Set as startup default (Reset Layout rebuilds to this)", isDefault);
                         if (starClicked) {
                             EditorSettings::Get().DefaultLayoutPreset = isDefault ? std::string() : name;
                             EditorSettings::Save();
@@ -749,7 +860,7 @@ void EditorLayer::DrawWindowMenuBody() {
                         if (ImGui::IsWindowAppearing()) m_ConfirmDeleteLayoutPreset.clear();
                         if (m_ConfirmDeleteLayoutPreset == name) {
                             ImGui::PushStyleColor(ImGuiCol_Text, EditorUIPrimitives::DangerColor());
-                            const bool confirmed = ImGui::SmallButton(ICON_FA_TRASH "  Delete?");
+                            const bool confirmed = DangerIconButton(ICON_FA_TRASH "  Delete?", "Click again to delete this preset");
                             ImGui::PopStyleColor();
                             if (confirmed) {
                                 DeleteLayoutPreset(name);
@@ -757,7 +868,7 @@ void EditorLayer::DrawWindowMenuBody() {
                             }
                             if (ImGui::IsItemHovered()) EditorUI::SetTooltip("Click again to delete this preset permanently");
                         } else {
-                            if (ImGui::SmallButton(ICON_FA_TRASH)) m_ConfirmDeleteLayoutPreset = name;
+                            if (DangerIconButton(ICON_FA_TRASH, "Delete this preset")) m_ConfirmDeleteLayoutPreset = name;
                             if (ImGui::IsItemHovered()) EditorUI::SetTooltip("Delete this preset");
                         }
                     }
@@ -849,7 +960,7 @@ void EditorLayer::DrawGridSnapPopupBody() {
     EditorUI::SliderFloat("Scale snap",  &m_SnapScale,       0.001f, 10.0f,  "%.3f",   ImGuiSliderFlags_Logarithmic);
     ImGui::EndDisabled();
 
-    if (ImGui::SmallButton("Match Move snap to grid")) m_SnapTranslation = gs.GridMinorSpacing;
+    if (EditorUIPrimitives::SecondaryButton("Match Move snap to grid")) m_SnapTranslation = gs.GridMinorSpacing;
     if (ImGui::IsItemHovered())
         EditorUI::SetTooltip("Set the gizmo Move increment equal to the grid cell size.");
 
@@ -923,7 +1034,7 @@ void EditorLayer::DrawGizmosPopupBody() {
         if (ImGui::IsItemHovered())
             EditorUI::SetTooltip("Contact sparks, raycasts and velocity arrows in the Scene viewport.\nWindow \xE2\x96\xB8 Physics has the individual channels + a slow-mo slider.");
         ImGui::SameLine();
-        if (ImGui::SmallButton("Panel\xE2\x80\xA6")) {
+        if (EditorUIPrimitives::SecondaryButton("Panel\xE2\x80\xA6")) {
             EditorSettings::Get().ShowPhysicsPanel = true;
             EditorSettings::Save();
         }
@@ -937,7 +1048,7 @@ void EditorLayer::DrawGizmosPopupBody() {
     // seven authorable slots. Visibility/lock masks are per-user (EditorSettings); the slot
     // names are project content (LayerRegistry / project/layers.json).
     ImGui::Separator();
-    if (ImGui::CollapsingHeader("Layers")) {
+    if (EditorUIPrimitives::Foldout("Layers")) {
         EditorSettings& s = EditorSettings::Get();
         for (int i = 0; i < LayerRegistry::kCount; ++i) {
             if (!LayerRegistry::IsListed(i)) continue; // #150: 32 slots; show Default + named ones

@@ -17,6 +17,7 @@
 // theme's normal WindowBg/Text like every other panel — no more bespoke plate.
 
 #include "EditorModuleAPI.h"
+#include "EditorPanels.h"
 
 #include <imgui.h>
 #include <IconsFontAwesome6.h>
@@ -28,7 +29,7 @@ void Draw(const EditorModuleHostAPI& host) {
     if (!shown) return;
 
     bool open = shown;
-    if (ImGui::Begin(ICON_FA_CLOCK_ROTATE_LEFT "  History", &open)) {
+    if (ImGui::Begin(EditorPanels::History, &open)) {
         // #156 — a one-line explanation instead of a persistent "(?)" glyph or a title-bar
         // tooltip (the title bar is ImGui's own chrome now, not a Text() item this code draws,
         // so there's nothing of ours to hang a tooltip off there).

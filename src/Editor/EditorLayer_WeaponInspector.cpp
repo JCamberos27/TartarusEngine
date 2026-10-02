@@ -513,9 +513,9 @@ void DrawMovement(PropertyRows& r, WeaponProceduralSettings& p, const WeaponCont
         r.Float("Ease", b.Ease, 0.1f, 0.1f, 50.0f, "%.1f /s", "How fast the bob fades in when you start moving and out when you stop.");
         if (Tree("Cycle curves")) {
             const char* cycleTip = "One stride (two steps), keyed over 0..1. Should start and end on the same value so it loops.";
-            ImGui::SeparatorText("Walk");
+            EditorUIPrimitives::SectionHeader("Walk");
             Curve3Rows(r, "walk", b.Walk, kDefaults.Bob.Walk, "Side (m)", "Up (m)", "Roll (deg)", "%.4f", "%.2f", 0.003f, 0.5f, cycleTip);
-            ImGui::SeparatorText("Sprint");
+            EditorUIPrimitives::SectionHeader("Sprint");
             Curve3Rows(r, "sprint", b.Sprint, kDefaults.Bob.Sprint, "Side (m)", "Up (m)", "Roll (deg)", "%.4f", "%.2f", 0.008f, 1.0f, cycleTip);
             ImGui::TreePop();
         }
@@ -787,8 +787,8 @@ void DrawBarrel(PropertyRows& r, FirstPersonAnimationSet& s, const FirstPersonBa
     r.Check("Eject Cases", ej.Enabled, "Throw a spent case out of the ejection port. They lie where they land until the player is\n"
                                    "well away and can't see them.");
     if (ej.Enabled) {
-        r.Text("Case Model", ej.Model, "The case mesh (.fbx). tools/weapons/extract_casings.py makes them from the weapon FBXs.");
-        r.Text("Case Material", ej.Material, "A .mat for every submesh of the case; empty keeps the import.");
+        r.Path("Case Model", ej.Model, {AssetExts::Models, false, "ASSET_MODEL_PATH", true, "(none)", "Models\0*.fbx;*.gltf;*.glb;*.obj;*.dae\0All Files\0*.*\0", false, nullptr}, "The case mesh (.fbx). tools/weapons/extract_casings.py makes them from the weapon FBXs.");
+        r.Path("Case Material", ej.Material, {AssetExts::Materials, false, "ASSET_MATERIAL_PATH", true, "(keep import)", "Materials\0*.mat\0All Files\0*.*\0", false, nullptr}, "A .mat for every submesh of the case; empty keeps the import.");
         bool onEvent = ej.When == FirstPersonEjectSettings::Trigger::Event;
         if (r.Check("On Eject Event", onEvent,
                     "Off: a case per shot (a self-loader). On: when the controller's 'Eject' event fires - a pump or bolt\n"
@@ -869,7 +869,7 @@ void EditorLayer::DrawWeaponDefinitionEditor(const std::string& path) {
     const std::string name = fs::u8path(path).stem().u8string();
 
     // --- overview card -------------------------------------------------------------------------
-    ImGui::SeparatorText(ICON_FA_CROSSHAIRS "  Weapon Definition");
+    EditorUIPrimitives::SectionHeader(ICON_FA_CROSSHAIRS "  Weapon Definition");
     {
         const float buttonsW = 2.0f * (ImGui::GetFrameHeight() + ImGui::GetStyle().ItemSpacing.x);
         ImGui::TextUnformatted(name.c_str());
@@ -897,7 +897,7 @@ void EditorLayer::DrawWeaponDefinitionEditor(const std::string& path) {
         ImGui::Checkbox("Recoil", &s_copyRecoil);
         ImGui::Checkbox("Movement (sway, bob, breathing, camera, walls)", &s_copyMovement);
         ImGui::Checkbox("IK (bone names: only for the same arms rig)", &s_copyIK);
-        ImGui::SeparatorText("From");
+        EditorUIPrimitives::SectionHeader("From");
         RefreshAnimationListingIfNeeded();
         for (const std::string& other : m_AnimationListingCache.paths) {
             if (fs::u8path(other).extension() != ".fpsanim" || fs::u8path(other).lexically_normal() == fs::u8path(path).lexically_normal()) continue;

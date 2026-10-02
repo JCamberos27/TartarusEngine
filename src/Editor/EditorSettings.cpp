@@ -82,6 +82,9 @@ void EditorSettings::Load() {
     // editor now has one style. An old prefs file's stray "editorTheme" key is simply ignored.
     s.ShowTooltips = SafeValue(root, "showTooltips", s.ShowTooltips);
     s.UiScaleOverride = SafeValue(root, "uiScaleOverride", s.UiScaleOverride);
+    s.CrtScreen = SafeValue(root, "crtScreen", s.CrtScreen);
+    s.CrtCurvature = SafeValue(root, "crtCurvature", s.CrtCurvature);
+    s.CrtStrength = SafeValue(root, "crtStrength", s.CrtStrength);
     s.AutoSaveEnabled = SafeValue(root, "autoSaveEnabled", s.AutoSaveEnabled);
     s.AutoSaveIntervalMinutes = SafeValue(root, "autoSaveIntervalMinutes", s.AutoSaveIntervalMinutes);
     s.VSyncMode = SafeValue(root, "vsyncMode", s.VSyncMode);
@@ -196,6 +199,7 @@ void EditorSettings::Load() {
         v = std::clamp(v, lo, hi);
     };
     if (s.UiScaleOverride != 0.0f) clampF(s.UiScaleOverride, 0.75f, 2.5f, 0.0f);
+    clampF(s.CrtStrength, 0.0f, 1.0f, 0.7f);
     clampF(s.AutoSaveIntervalMinutes, 1.0f, 60.0f, 5.0f);
     s.VSyncMode = std::clamp(s.VSyncMode, 0, 2);
     if (s.FpsLimit < 0) s.FpsLimit = 0;
@@ -241,6 +245,9 @@ void EditorSettings::Flush() {
     json root;
     root["showTooltips"] = Get().ShowTooltips;
     root["uiScaleOverride"] = Get().UiScaleOverride;
+    root["crtScreen"] = Get().CrtScreen;
+    root["crtCurvature"] = Get().CrtCurvature;
+    root["crtStrength"] = Get().CrtStrength;
     root["autoSaveEnabled"] = Get().AutoSaveEnabled;
     root["autoSaveIntervalMinutes"] = Get().AutoSaveIntervalMinutes;
     root["vsyncMode"] = Get().VSyncMode;

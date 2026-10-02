@@ -1,5 +1,6 @@
 // The Animator window's right panel: the selected state's, transition's or layer's properties.
 #include "EditorLayer.h"
+#include "EditorTheme.h"
 #include "EditorLayerInternal.h"
 #include "EditorUIHelpers.h"
 #include "EditorUIPrimitives.h"
@@ -140,7 +141,7 @@ void DrawSelectionPanel(AnimCtx& cx) {
     if (stateSel) {
         const int si = W.SelStates[0];
         AC::State& s = L.States[si];
-        ImGui::SeparatorText(ICON_FA_SQUARE "  State");
+        EditorUIPrimitives::SectionHeader(ICON_FA_SQUARE "  State");
         row("Name");
         const std::string before = s.Name;
         if (InputName("##sname", s.Name, -FLT_MIN)) {
@@ -226,14 +227,14 @@ void DrawSelectionPanel(AnimCtx& cx) {
                         for (int f = 0; f < 2; ++f) {
                             const ClipAnalysis::Foot& ft = a.Feet[f];
                             const float y = origin.y + f * (h + 3.0f);
-                            dl->AddRectFilled({origin.x, y}, {origin.x + w, y + h}, IM_COL32(60, 60, 60, 160));
+                            dl->AddRectFilled({origin.x, y}, {origin.x + w, y + h}, EditorTheme::U32(EditorTheme::Field));
                             if (!ft.Found) continue;
                             // Draw each contact as a bar from its start for ContactFraction / plants of the clip.
                             const float each = ft.ContactStarts.empty() ? 0.0f : ft.ContactFraction / ft.ContactStarts.size();
                             for (float st : ft.ContactStarts) {
                                 const float x0 = origin.x + st * w, x1 = origin.x + std::min(1.0f, st + each) * w;
-                                dl->AddRectFilled({x0, y}, {x1, y + h}, f == 0 ? IM_COL32(90, 170, 255, 220) : IM_COL32(255, 170, 90, 220));
-                                if (st + each > 1.0f) dl->AddRectFilled({origin.x, y}, {origin.x + (st + each - 1.0f) * w, y + h}, f == 0 ? IM_COL32(90, 170, 255, 220) : IM_COL32(255, 170, 90, 220));
+                                dl->AddRectFilled({x0, y}, {x1, y + h}, f == 0 ? EditorTheme::U32(EditorTheme::WithAlpha(EditorTheme::Info, 0.85f)) : EditorTheme::U32(EditorTheme::WithAlpha(EditorTheme::Warning, 0.85f)));
+                                if (st + each > 1.0f) dl->AddRectFilled({origin.x, y}, {origin.x + (st + each - 1.0f) * w, y + h}, f == 0 ? EditorTheme::U32(EditorTheme::WithAlpha(EditorTheme::Info, 0.85f)) : EditorTheme::U32(EditorTheme::WithAlpha(EditorTheme::Warning, 0.85f)));
                             }
                         }
                         ImGui::Dummy({w, 2 * h + 3.0f});
@@ -244,7 +245,7 @@ void DrawSelectionPanel(AnimCtx& cx) {
                             for (float st : ft.ContactStarts) { char b[16]; std::snprintf(b, sizeof b, "%s%.2f", starts.empty() ? "" : ", ", st); starts += b; }
                             ImGui::Text("%s: plants at %s (of 1.0), down %.0f%%, stride %.2f m", ft.Bone.c_str(), starts.empty() ? "-" : starts.c_str(), ft.ContactFraction * 100.0f, ft.Stride);
                         }
-                        ImGui::TextDisabled("Blue = left foot planted, orange = right. Use the plant times for Stop transition offsets \nand Start exit times; the stride against the speed tells if the feet will slide.");
+                        HintText("Blue = left foot planted, orange = right. Use the plant times for Stop transition offsets \nand Start exit times; the stride against the speed tells if the feet will slide.");
                         ImGui::TreePop();
                     }
                     ImGui::PopID();
@@ -384,7 +385,7 @@ void DrawSelectionPanel(AnimCtx& cx) {
         for (int t = 0; t < (int)D.Tracks.size(); ++t) {
             AC::Motion& m = s.Motions[t];
             ImGui::PushID(t);
-            ImGui::SeparatorText((ICON_FA_FILM "  Motion: " + D.Tracks[t]).c_str());
+            EditorUIPrimitives::SectionHeader((ICON_FA_FILM "  Motion: " + D.Tracks[t]).c_str());
             row("Type");
             int kind = !m.IsBlendTree() ? 0 : m.Is2D() ? 2 : 1;
             ImGui::SetNextItemWidth(-FLT_MIN);
@@ -518,18 +519,18 @@ void DrawSelectionPanel(AnimCtx& cx) {
                     auto spaceToScreen = [&](float px, float py) {
                         return ImVec2(o.x + (px - x0) / (x1 - x0) * side, o.y + (1.0f - (py - y0) / (y1 - y0)) * side);
                     };
-                    pl->AddRectFilled(o, o + ImVec2(side, side), IM_COL32(24, 24, 26, 255));
-                    pl->AddRect(o, o + ImVec2(side, side), IM_COL32(90, 90, 96, 255));
-                    if (x0 < 0 && x1 > 0) pl->AddLine(spaceToScreen(0, y0), spaceToScreen(0, y1), IM_COL32(255, 255, 255, 30));
-                    if (y0 < 0 && y1 > 0) pl->AddLine(spaceToScreen(x0, 0), spaceToScreen(x1, 0), IM_COL32(255, 255, 255, 30));
+                    pl->AddRectFilled(o, o + ImVec2(side, side), EditorTheme::U32(EditorTheme::Field));
+                    pl->AddRect(o, o + ImVec2(side, side), EditorTheme::U32(EditorTheme::Strong));
+                    if (x0 < 0 && x1 > 0) pl->AddLine(spaceToScreen(0, y0), spaceToScreen(0, y1), EditorTheme::U32(EditorTheme::WithAlpha(EditorTheme::Text, 0.12f)));
+                    if (y0 < 0 && y1 > 0) pl->AddLine(spaceToScreen(x0, 0), spaceToScreen(x1, 0), EditorTheme::U32(EditorTheme::WithAlpha(EditorTheme::Text, 0.12f)));
                     for (size_t k = 0; k < m.Children.size(); ++k) {
                         const ImVec2 c = spaceToScreen(m.Children[k].Threshold, m.Children[k].ThresholdY);
-                        pl->AddCircleFilled(c, 3.0f + 9.0f * w[k], IM_COL32(70, 140, 230, 200));
-                        pl->AddText(c + ImVec2(6, -14), IM_COL32(210, 210, 215, 255), ClipLabel(m.Children[k].Clip).c_str());
+                        pl->AddCircleFilled(c, 3.0f + 9.0f * w[k], EditorTheme::U32(EditorTheme::WithAlpha(EditorTheme::Accent, 0.8f)));
+                        pl->AddText(c + ImVec2(6, -14), EditorTheme::U32(EditorTheme::Text), ClipLabel(m.Children[k].Clip).c_str());
                     }
                     const ImVec2 cur = spaceToScreen(v, vy);
-                    pl->AddLine(cur - ImVec2(6, 0), cur + ImVec2(6, 0), IM_COL32(255, 210, 60, 255), 2.0f);
-                    pl->AddLine(cur - ImVec2(0, 6), cur + ImVec2(0, 6), IM_COL32(255, 210, 60, 255), 2.0f);
+                    pl->AddLine(cur - ImVec2(6, 0), cur + ImVec2(6, 0), EditorTheme::U32(EditorTheme::AccentBright), 2.0f);
+                    pl->AddLine(cur - ImVec2(0, 6), cur + ImVec2(0, 6), EditorTheme::U32(EditorTheme::AccentBright), 2.0f);
                     if (live && ImGui::IsItemActive()) {
                         const ImVec2 mp = ImGui::GetIO().MousePos;
                         live->SetFloat(m.BlendParam, x0 + (mp.x - o.x) / side * (x1 - x0));
@@ -542,8 +543,8 @@ void DrawSelectionPanel(AnimCtx& cx) {
         }
 
         // Events
-        ImGui::SeparatorText(ICON_FA_FLAG "  Events");
-        ImGui::TextDisabled("Game code reads these with EventFired(name).");
+        EditorUIPrimitives::SectionHeader(ICON_FA_FLAG "  Events");
+        HintText("Game code reads these with EventFired(name).");
         int removeEvent = -1;
         for (int k = 0; k < (int)s.Events.size(); ++k) {
             auto& e = s.Events[k];
@@ -564,7 +565,7 @@ void DrawSelectionPanel(AnimCtx& cx) {
         }
 
         // Transitions out of this state, for quick access.
-        ImGui::SeparatorText(ICON_FA_ARROW_RIGHT "  Transitions");
+        EditorUIPrimitives::SectionHeader(ICON_FA_ARROW_RIGHT "  Transitions");
         for (int t = 0; t < (int)L.Transitions.size(); ++t) {
             const auto& tr = L.Transitions[t];
             if (tr.FromKind != AC::Source::State || tr.From != s.Name) continue;
@@ -589,7 +590,7 @@ void DrawSelectionPanel(AnimCtx& cx) {
         static float s_speed = 1.0f;
         static int s_priority = 0;
         static char s_tag[64] = "";
-        ImGui::SeparatorText("Playback");
+        EditorUIPrimitives::SectionHeader("Playback");
         row("Speed");
         ImGui::SetNextItemWidth(ImGui::GetContentRegionAvail().x - 70.0f * S);
         ImGui::DragFloat("##bspeed", &s_speed, 0.01f, 0.0f, 10.0f, "x%.2f");
@@ -608,7 +609,7 @@ void DrawSelectionPanel(AnimCtx& cx) {
         ImGui::InputInt("##bprio", &s_priority);
         ImGui::SameLine();
         if (ActionButton("Apply##bp", "Set every selected state's Priority")) each([&](AC::State& st) { st.Priority = s_priority; });
-        ImGui::SeparatorText("Tags");
+        EditorUIPrimitives::SectionHeader("Tags");
         ImGui::SetNextItemWidth(-FLT_MIN);
         ImGui::InputTextWithHint("##btag", "tag name", s_tag, sizeof s_tag);
         const bool haveTag = s_tag[0] != 0;
@@ -627,7 +628,7 @@ void DrawSelectionPanel(AnimCtx& cx) {
     } else if (W.SelTransition >= 0 && W.SelTransition < (int)L.Transitions.size()) {
         AC::Transition& t = L.Transitions[W.SelTransition];
         const std::string fromLabel = t.FromKind == AC::Source::Any ? "Any State" : t.FromKind == AC::Source::Entry ? "Entry" : t.From;
-        ImGui::SeparatorText(ICON_FA_ARROW_RIGHT "  Transition");
+        EditorUIPrimitives::SectionHeader(ICON_FA_ARROW_RIGHT "  Transition");
         ImGui::TextWrapped("%s  " ICON_FA_ARROW_RIGHT "  %s", fromLabel.c_str(), t.To.c_str());
         // Siblings between the same pair: evaluated top to bottom, the first that holds wins.
         {
@@ -752,7 +753,7 @@ void DrawSelectionPanel(AnimCtx& cx) {
                 }
             }
         } else {
-            ImGui::TextDisabled("Entry transitions pick the state a layer starts in (and\nreturns to through Exit): the first one whose\nconditions hold, else the default state.");
+            HintText("Entry transitions pick the state a layer starts in (and\nreturns to through Exit): the first one whose\nconditions hold, else the default state.");
         }
         if (tr.FromKind == AC::Source::Any) {
             row("Respect Priority");
@@ -764,7 +765,7 @@ void DrawSelectionPanel(AnimCtx& cx) {
             if (ImGui::IsItemHovered()) EditorUI::SetTooltip("May restart the destination when it is already playing.");
         }
 
-        ImGui::SeparatorText("Conditions");
+        EditorUIPrimitives::SectionHeader("Conditions");
         int removeCond = -1;
         for (int k = 0; k < (int)tr.Conditions.size(); ++k) {
             auto& cond = tr.Conditions[k];
@@ -819,7 +820,7 @@ void DrawSelectionPanel(AnimCtx& cx) {
     } else if (W.SelSpecial) {
         switch (W.SelKind) {
             case NodeKind::Entry:
-                ImGui::SeparatorText("Entry");
+                EditorUIPrimitives::SectionHeader("Entry");
                 ImGui::TextWrapped("Where the layer starts, and where a transition to Exit comes back in. "
                                    "Entry transitions (right-click Entry > Make Transition) are checked in order; "
                                    "the first whose conditions hold wins, else the default state (orange).");
@@ -832,13 +833,13 @@ void DrawSelectionPanel(AnimCtx& cx) {
                 }
                 break;
             case NodeKind::Any:
-                ImGui::SeparatorText("Any State");
+                EditorUIPrimitives::SectionHeader("Any State");
                 ImGui::TextWrapped("Transitions from Any State are checked every frame from whatever state is playing, "
                                    "before that state's own. Turn on Respect Priority to stop them cutting "
                                    "higher-priority states short.");
                 break;
             case NodeKind::Exit:
-                ImGui::SeparatorText("Exit");
+                EditorUIPrimitives::SectionHeader("Exit");
                 ImGui::TextWrapped("A transition to Exit leaves the current state and re-enters the layer through Entry, "
                                    "so the Entry transitions pick the next state from the current parameters.");
                 break;
@@ -847,7 +848,7 @@ void DrawSelectionPanel(AnimCtx& cx) {
     } else {
         ImGui::TextDisabled("Select a state or transition.");
         ImGui::Spacing();
-        ImGui::TextDisabled("Right-click the graph to create states.\nRight-click a state > Make Transition,\nthen click the destination.\n\n"
+        HintText("Right-click the graph to create states.\nRight-click a state > Make Transition,\nthen click the destination.\n\n"
                             "Middle-drag pans, the wheel zooms, F frames.\nDel deletes, Ctrl+D duplicates,\nCtrl+Z / Ctrl+Y undo and redo.");
     }
     ImGui::EndChild();

@@ -71,7 +71,7 @@ void DrawLayersAndParameters(AnimCtx& cx) {
                 changed = true;
             }
             AC::Layer& Ly = W.L();
-            ImGui::SeparatorText("Layer Settings");
+            EditorUIPrimitives::SectionHeader("Layer Settings");
             ImGui::PushID("layer");
             ImGui::TextUnformatted("Name");
             ImGui::SameLine(80.0f * S);
@@ -92,8 +92,8 @@ void DrawLayersAndParameters(AnimCtx& cx) {
                                          "Additive adds this layer's motion relative to each clip's first frame.");
 
                 // Bone mask
-                ImGui::SeparatorText("Bone Mask");
-                ImGui::TextDisabled("Empty Include = whole rig. Children follow their parent.");
+                EditorUIPrimitives::SectionHeader("Bone Mask");
+                HintText("Empty Include = whole rig. Children follow their parent.");
                 auto maskList = [&](const char* title, std::vector<std::string>& list) {
                     ImGui::TextUnformatted(title);
                     int remove = -1;
@@ -152,7 +152,7 @@ void DrawLayersAndParameters(AnimCtx& cx) {
                     changed = true;
                 }
             } else {
-                ImGui::TextDisabled("The base layer always plays at full weight.");
+                HintText("The base layer always plays at full weight.");
             }
             ImGui::PopID();
 
@@ -178,8 +178,8 @@ void DrawLayersAndParameters(AnimCtx& cx) {
             }
 
             // Tracks
-            ImGui::SeparatorText("Tracks");
-            ImGui::TextDisabled("Clip sets per state, for rigs animated together\n(e.g. arms + weapon). An object picks one with\nits component's Track field.");
+            EditorUIPrimitives::SectionHeader("Tracks");
+            HintText("Clip sets per state, for rigs animated together\n(e.g. arms + weapon). An object picks one with\nits component's Track field.");
             int removeTrack = -1;
             for (int t = 0; t < (int)D.Tracks.size(); ++t) {
                 ImGui::PushID(1000 + t);
@@ -214,9 +214,9 @@ void DrawLayersAndParameters(AnimCtx& cx) {
         }
         if (ImGui::BeginTabItem("Parameters")) {
             if (live) {
-                ImGui::SeparatorText("Live");
+                EditorUIPrimitives::SectionHeader("Live");
                 for (auto& p : live->Params) LiveParamWidget(p, ImGui::GetContentRegionAvail().x * 0.5f);
-                ImGui::SeparatorText("Defaults");
+                EditorUIPrimitives::SectionHeader("Defaults");
             }
             int remove = -1;
             for (int i = 0; i < (int)D.Parameters.size(); ++i) {
@@ -299,9 +299,9 @@ void DrawLayersAndParameters(AnimCtx& cx) {
                     if (sp) ImGui::BulletText("%d state speed parameter%s (cleared)", sp, sp == 1 ? "" : "s");
                     if (bl) ImGui::BulletText("%d blend-tree axis%s (cleared: the tree stops blending)", bl, bl == 1 ? "" : "es");
                     ImGui::Spacing();
-                    if (ImGui::Button("Remove it and those uses")) { dropParam(s_pendingRemove); s_pendingRemove = -1; ImGui::CloseCurrentPopup(); }
+                    if (EditorUIPrimitives::PrimaryButton("Remove it and those uses")) { dropParam(s_pendingRemove); s_pendingRemove = -1; ImGui::CloseCurrentPopup(); }
                     ImGui::SameLine();
-                    if (ImGui::Button("Cancel")) { s_pendingRemove = -1; ImGui::CloseCurrentPopup(); }
+                    if (EditorUIPrimitives::SecondaryButton("Cancel")) { s_pendingRemove = -1; ImGui::CloseCurrentPopup(); }
                 } else {
                     s_pendingRemove = -1;
                     ImGui::CloseCurrentPopup();
@@ -318,7 +318,7 @@ void DrawLayersAndParameters(AnimCtx& cx) {
         }
         // Lint: the mistakes a controller loads fine with and then quietly doesn't do what it was built to.
         if (live && ImGui::BeginTabItem("History")) {
-            ImGui::TextDisabled("Every transition this object's controller took, newest first (Play).");
+            HintText("Every transition this object's controller took, newest first (Play).");
             if (ActionButton(ICON_FA_TRASH " Clear", "Empty the list")) live->History.clear();
             if (live->History.empty()) ImGui::TextDisabled("Nothing yet.");
             for (int i = (int)live->History.size() - 1; i >= 0; --i) {
@@ -387,7 +387,7 @@ void DrawLayersAndParameters(AnimCtx& cx) {
                     ImGui::PopID();
                 }
                 if (!contract.empty()) {
-                    ImGui::SeparatorText(s_against == 1 ? "As a body controller" : "As a weapon controller");
+                    EditorUIPrimitives::SectionHeader(s_against == 1 ? "As a body controller" : "As a weapon controller");
                     for (const auto& c : contract) {
                         ImVec4 col = ImGui::GetStyleColorVec4(ImGuiCol_TextDisabled);
                         const char* icon = ICON_FA_CIRCLE_INFO;

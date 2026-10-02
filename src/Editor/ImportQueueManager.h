@@ -34,6 +34,9 @@ public:
     void Update(const ImportFn& importOne, int perFrame = 2);
 
     bool IsActive() const { return !m_Pending.empty(); }
+    // Progress of the batch in flight (for the status bar): files still queued / files in the batch.
+    int PendingCount() const { return (int)m_Pending.size(); }
+    int BatchTotal() const { return m_TotalInBatch; }
     // Drops every not-yet-processed file without importing it; files already drained this
     // Update() are unaffected (there's no partial rollback of an import that already ran).
     void CancelRemaining();

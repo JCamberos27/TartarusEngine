@@ -19,6 +19,7 @@
 #include "EditorSettings.h"
 #include "EditorUIHelpers.h"
 #include "EditorUIPrimitives.h"
+#include "EditorTheme.h"
 
 #include <imgui.h>
 #include <imgui_internal.h> // ImMax, used by EditorUIPrimitives
@@ -40,13 +41,16 @@ void EditorLayer::DrawToolPalette(World& world, Camera& editorCamera) {
 
     ImGui::SetCursorScreenPos(ImVec2(m_ViewportPos.x + margin, m_ViewportPos.y + margin));
 
+    // The HUD plate (EditorTheme::HudPlate) with a hairline edge, like every viewport overlay.
     ImGui::PushStyleColor(ImGuiCol_ChildBg, EditorUIPrimitives::kHudPlateColor);
-    ImGui::PushStyleVar(ImGuiStyleVar_ChildRounding, 6.0f * m_UIScale);
+    ImGui::PushStyleColor(ImGuiCol_Border, EditorTheme::Hairline);
+    ImGui::PushStyleVar(ImGuiStyleVar_ChildBorderSize, 1.0f);
+    ImGui::PushStyleVar(ImGuiStyleVar_ChildRounding, 4.0f * m_UIScale);
     ImGui::PushStyleVar(ImGuiStyleVar_WindowPadding, ImVec2(6.0f * m_UIScale, 6.0f * m_UIScale));
     ImGui::PushStyleVar(ImGuiStyleVar_ItemSpacing, ImVec2(0.0f, 4.0f * m_UIScale));
 
     ImGui::BeginChild("##ToolPalette", ImVec2(railW, 0.0f),
-        ImGuiChildFlags_AutoResizeY | ImGuiChildFlags_AlwaysUseWindowPadding,
+        ImGuiChildFlags_AutoResizeY | ImGuiChildFlags_AlwaysUseWindowPadding | ImGuiChildFlags_Borders,
         ImGuiWindowFlags_NoScrollbar | ImGuiWindowFlags_NoScrollWithMouse);
 
     const bool collapsed = settings.ToolPaletteCollapsed;
@@ -184,6 +188,6 @@ void EditorLayer::DrawToolPalette(World& world, Camera& editorCamera) {
     }
 
     ImGui::EndChild();
-    ImGui::PopStyleVar(3);
-    ImGui::PopStyleColor();
+    ImGui::PopStyleVar(4);
+    ImGui::PopStyleColor(2);
 }

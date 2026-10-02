@@ -27,10 +27,15 @@
 #include "EditorModuleAPI.h"
 #include "EditorUIPrimitives.h"
 #include "EditorIcons.h"
+#include "EditorTheme.h"
 
 #include <imgui.h>
 #include <imgui_internal.h> // ImFloor
 #include <IconsFontAwesome6.h>
+
+#include <algorithm>
+#include <cmath>
+#include <cstdint>
 
 namespace EditorModuleToolbar {
 
@@ -47,15 +52,16 @@ void DrawWindowControls(const EditorModuleHostAPI& host) {
     const float h = ImGui::GetFrameHeight();
     const float bw = ImFloor(h * 1.6f);
     const ImGuiStyle& st = ImGui::GetStyle();
-    const float startX = ImGui::GetWindowWidth() - bw * 3.0f - st.WindowPadding.x;
+    const float startX = ImGui::GetWindowWidth() - bw * 3.0f;
     ImGui::SameLine(startX > 0.0f ? startX : 0.0f);
 
     ImGui::PushStyleVar(ImGuiStyleVar_FrameRounding, 0.0f);
     ImGui::PushStyleVar(ImGuiStyleVar_ItemSpacing, ImVec2(0.0f, st.ItemSpacing.y));
     ImGui::PushStyleVar(ImGuiStyleVar_FrameBorderSize, 0.0f); // flat window controls, no hairline box
     ImGui::PushStyleColor(ImGuiCol_Button, ImVec4(0.0f, 0.0f, 0.0f, 0.0f));
-    ImGui::PushStyleColor(ImGuiCol_ButtonHovered, ImVec4(1.0f, 1.0f, 1.0f, 0.09f));
-    ImGui::PushStyleColor(ImGuiCol_ButtonActive, ImVec4(1.0f, 1.0f, 1.0f, 0.16f));
+    ImGui::PushStyleColor(ImGuiCol_ButtonHovered, EditorUIPrimitives::FlatHover());
+    ImGui::PushStyleColor(ImGuiCol_ButtonActive, EditorUIPrimitives::FlatPressed());
+    ImGui::PushStyleColor(ImGuiCol_Text, EditorTheme::Secondary);
 
     ImGui::PushID("win_min");
     if (ImGui::Button(EDITOR_ICON_WINDOW_MINIMIZE, ImVec2(bw, 0.0f)) && host.WindowMinimize) host.WindowMinimize();
@@ -72,9 +78,9 @@ void DrawWindowControls(const EditorModuleHostAPI& host) {
     ImGui::SameLine();
 
     {
-        ImVec4 danger = EditorUIPrimitives::DangerColor(); // Unity "Error Text" #D32222
-        ImGui::PushStyleColor(ImGuiCol_ButtonHovered, ImVec4(danger.x, danger.y, danger.z, 0.92f));
-        ImGui::PushStyleColor(ImGuiCol_ButtonActive, ImVec4(danger.x * 0.9f, danger.y * 0.9f, danger.z * 0.9f, 1.0f));
+        // Close turns the system red on hover, like every Windows title bar.
+        ImGui::PushStyleColor(ImGuiCol_ButtonHovered, EditorTheme::Rgb(0xC4, 0x2B, 0x1C));
+        ImGui::PushStyleColor(ImGuiCol_ButtonActive, EditorTheme::Rgb(0xA3, 0x24, 0x18));
     }
     ImGui::PushID("win_close");
     if (ImGui::Button(EDITOR_ICON_WINDOW_CLOSE, ImVec2(bw, 0.0f)) && host.WindowClose) host.WindowClose();
@@ -82,7 +88,7 @@ void DrawWindowControls(const EditorModuleHostAPI& host) {
     ImGui::PopID();
     ImGui::PopStyleColor(2);
 
-    ImGui::PopStyleColor(3);
+    ImGui::PopStyleColor(4);
     ImGui::PopStyleVar(3);
 }
 
@@ -93,7 +99,7 @@ void Draw(const EditorModuleHostAPI& host) {
     if (host.GetToolbarMetrics) host.GetToolbarMetrics(&winW, &toolbarH, &uiScale);
     if (winW < 1.0f || toolbarH < 1.0f) return;
 
-    // Always pinned regardless of Lock Layout — pos/size forced every frame. Fixed size +
+    // Always pinned regardless of Lock Layout â€” pos/size forced every frame. Fixed size +
     // NoResize + size constraints keep it from ever stretching down over the dock panels' tab
     // bars; NoMove/NoDocking keep it from being dragged off or docked; NoSavedSettings stops a
     // stale imgui.ini from repositioning it.
@@ -106,55 +112,69 @@ void Draw(const EditorModuleHostAPI& host) {
         ImGuiWindowFlags_MenuBar | ImGuiWindowFlags_NoMove | ImGuiWindowFlags_NoResize |
         ImGuiWindowFlags_NoCollapse | ImGuiWindowFlags_NoDocking | ImGuiWindowFlags_NoNavFocus |
         ImGuiWindowFlags_NoBringToFrontOnFocus | ImGuiWindowFlags_NoSavedSettings;
-    // Tight vertical window padding so the menu bar hugs the top and bottom edge — the strip is
-    // only as tall as that one row now (host-owned kToolbarHeight).
-    ImGui::PushStyleVar(ImGuiStyleVar_WindowPadding, ImVec2(9.0f * uiScale, 3.0f * uiScale)); // #37
+    // The menu bar fills the strip: no window padding above or below it, and the row's height
+    // comes from the frame padding so the menus centre vertically in the strip.
+    const float fontH = ImGui::GetFontSize();
+    const float padY = std::max(0.0f, (toolbarH - fontH) * 0.5f);
+    const ImVec2 normalFramePadding = ImGui::GetStyle().FramePadding;
+    ImGui::PushStyleVar(ImGuiStyleVar_WindowPadding, ImVec2(0.0f, 0.0f));
+    ImGui::PushStyleVar(ImGuiStyleVar_WindowBorderSize, 0.0f);
+    ImGui::PushStyleVar(ImGuiStyleVar_FramePadding, ImVec2(ImGui::GetStyle().FramePadding.x, padY));
+    ImGui::PushStyleColor(ImGuiCol_MenuBarBg, EditorTheme::Base);
 
-    // Phase 1 item 9 — the Windows XP theme (and its Luna-blue toolbar-strip override, the one
-    // consumer host.GetEditorTheme ever had) is gone; the strip now just follows the active
-    // theme's ordinary MenuBarBg/Text colours like every other panel.
     if (!ImGui::Begin("##Toolbar", nullptr, flags)) {
         ImGui::End();
-        ImGui::PopStyleVar();
+        ImGui::PopStyleColor();
+        ImGui::PopStyleVar(3);
         return;
     }
 
-    // Real dropdown menus for the stuff you reach for occasionally (import, add primitive, scene
-    // save/load). The menu bodies are host code (deep scene / entity / camera logic); rendered
-    // here through callbacks.
     if (ImGui::BeginMenuBar()) {
-        if (ImGui::BeginMenu(ICON_FA_FOLDER_OPEN " File")) {
+        // The engine's monogram, then the menus: plain words, like every desktop application.
+        ImGui::Dummy(ImVec2(EditorTheme::Px(6.0f), 0.0f));
+        if (const unsigned int mark = host.GetEngineMarkTexture ? host.GetEngineMarkTexture() : 0u) {
+            const float s = std::floor(toolbarH * 0.62f);
+            const ImVec2 p = ImGui::GetCursorScreenPos();
+            ImGui::GetWindowDrawList()->AddImage((ImTextureID)(intptr_t)mark, ImVec2(p.x, std::floor((toolbarH - s) * 0.5f)),
+                                                 ImVec2(p.x + s, std::floor((toolbarH - s) * 0.5f) + s), ImVec2(0, 0), ImVec2(1, 1),
+                                                 EditorTheme::U32(EditorTheme::Accent));
+            ImGui::Dummy(ImVec2(s + EditorTheme::Px(8.0f), 0.0f));
+        }
+        ImGui::PushStyleColor(ImGuiCol_Text, EditorTheme::Secondary);
+        // Inside an open menu: the ordinary text colour and frame padding again.
+        auto menu = [&](const char* label) {
+            const bool open = ImGui::BeginMenu(label);
+            if (open) {
+                ImGui::PushStyleColor(ImGuiCol_Text, EditorTheme::Text);
+                ImGui::PushStyleVar(ImGuiStyleVar_FramePadding, normalFramePadding);
+            }
+            return open;
+        };
+        auto endMenu = []() { ImGui::PopStyleVar(); ImGui::PopStyleColor(); ImGui::EndMenu(); };
+        if (menu("File")) {
             if (host.DrawFileMenuBody) host.DrawFileMenuBody();
-            ImGui::EndMenu();
+            endMenu();
         }
-        if (ImGui::BeginMenu(ICON_FA_CUBES " Create")) {
+        if (menu("Edit")) {
+            if (host.DrawEditMenuBody) host.DrawEditMenuBody();
+            endMenu();
+        }
+        if (menu("Create")) {
             if (host.DrawAddEntityMenuItems) host.DrawAddEntityMenuItems();
-            ImGui::EndMenu();
+            endMenu();
         }
-        if (ImGui::BeginMenu(ICON_FA_CAMERA " View")) {
+        if (menu("View")) {
             if (host.DrawViewMenuBody) host.DrawViewMenuBody();
-            ImGui::EndMenu();
+            endMenu();
         }
-        if (ImGui::BeginMenu(ICON_FA_TABLE_COLUMNS " Window")) {
+        if (menu("Window")) {
             if (host.DrawWindowMenuBody) host.DrawWindowMenuBody();
-            ImGui::EndMenu();
+            endMenu();
         }
-
-        // Preferences and Project Settings are one and the same searchable window (a "THIS
-        // MACHINE" / "THIS PROJECT" sidebar inside DrawSettingsWindow) — two separate menu items
-        // both opening it just made it look like two different destinations. One entry now;
-        // Ctrl+, still lands on the editor side, Ctrl+Shift+P still lands on the project side
-        // (editor.preferences / project.settings shortcuts, unchanged), and either way both
-        // groups are one click away in the sidebar once it's open.
-        if (ImGui::MenuItem(ICON_FA_GEAR " Settings") && host.OpenPreferences) host.OpenPreferences();
-        if (ImGui::IsItemHovered()) Tooltip(host, "Editor preferences and project settings (Ctrl+,)");
-
-        // Phase 6 item 11 — the shortcut coverage pass's own "add a Help ▸ Shortcuts reference"
-        // ask. Jumps straight to the existing press-to-bind editor rather than duplicating it.
-        if (ImGui::BeginMenu(ICON_FA_CIRCLE_QUESTION " Help")) {
+        // Phase 6 item 11 / #184: the shortcuts reference, docs, logs, a bug-report path, About.
+        if (menu("Help")) {
             if (ImGui::MenuItem(ICON_FA_KEYBOARD "  Shortcuts") && host.OpenShortcutsReference)
                 host.OpenShortcutsReference();
-            // #184 — the rest of a Help menu: docs, logs, a bug-report path, About.
             if (ImGui::MenuItem(ICON_FA_BOOK "  Documentation") && host.OpenDocumentation)
                 host.OpenDocumentation();
             if (ImGui::IsItemHovered()) Tooltip(host, "Open the project's documentation in your browser");
@@ -169,18 +189,60 @@ void Draw(const EditorModuleHostAPI& host) {
             ImGui::Separator();
             if (ImGui::MenuItem(ICON_FA_CIRCLE_INFO "  About Tartarus Engine") && host.OpenAbout)
                 host.OpenAbout();
-            ImGui::EndMenu();
+            endMenu();
+        }
+        ImGui::PopStyleColor();
+
+        // The open scene, centred in the title bar like a document title: its name, a gold dot
+        // while it has unsaved changes, and a PLAYING tag in Play.
+        if (host.GetSceneTitle) {
+            char title[128] = {};
+            bool dirty = false, playing = false;
+            host.GetSceneTitle(title, (int)sizeof(title), &dirty, &playing);
+            const float tw = ImGui::CalcTextSize(title).x;
+            const float dot = dirty ? EditorTheme::Px(14.0f) : 0.0f;
+            EditorTheme::PushHeading();
+            const char* tag = "P L A Y I N G";
+            const float tagW = playing ? ImGui::CalcTextSize(tag).x + EditorTheme::Px(22.0f) : 0.0f;
+            EditorTheme::PopFont();
+            const float total = tw + dot + tagW;
+            const float x = std::floor((winW - total) * 0.5f);
+            const float menusEnd = ImGui::GetCursorScreenPos().x + EditorTheme::Px(24.0f);
+            const float controlsStart = winW - std::floor(ImGui::GetFrameHeight() * 1.6f) * 3.0f - EditorTheme::Px(24.0f);
+            if (x > menusEnd && x + total < controlsStart) {
+                ImDrawList* dl = ImGui::GetWindowDrawList();
+                const float y = std::floor((toolbarH - fontH) * 0.5f);
+                dl->AddText(ImVec2(x, y), EditorTheme::U32(playing ? EditorTheme::Accent : EditorTheme::Secondary), title);
+                float cx = x + tw;
+                if (dirty) {
+                    dl->AddCircleFilled(ImVec2(cx + EditorTheme::Px(8.0f), y + fontH * 0.55f), EditorTheme::Px(3.0f),
+                                        EditorTheme::U32(EditorTheme::Accent));
+                    cx += dot;
+                }
+                if (playing) {
+                    EditorTheme::PushHeading();
+                    const float th = ImGui::GetFontSize();
+                    const ImVec2 mn(cx + EditorTheme::Px(10.0f), std::floor((toolbarH - th) * 0.5f) - EditorTheme::Px(3.0f));
+                    const ImVec2 mx(mn.x + ImGui::CalcTextSize(tag).x + EditorTheme::Px(12.0f), mn.y + th + EditorTheme::Px(6.0f));
+                    dl->AddRectFilled(mn, mx, EditorTheme::U32(EditorTheme::AccentWash), EditorTheme::Px(3.0f));
+                    dl->AddText(ImVec2(mn.x + EditorTheme::Px(6.0f), mn.y + EditorTheme::Px(3.0f)), EditorTheme::U32(EditorTheme::Accent), tag);
+                    EditorTheme::PopFont();
+                }
+            }
         }
 
-        // Custom window controls, right-aligned — the OS title bar is gone (Win32 custom frame,
+        // Custom window controls, right-aligned â€” the OS title bar is gone (Win32 custom frame,
         // Window.cpp), so minimize / maximize-restore / close live here instead.
         DrawWindowControls(host);
 
         ImGui::EndMenuBar();
     }
+    // A hairline under the title bar, separating it from the dock space.
+    ImGui::GetWindowDrawList()->AddLine(ImVec2(0.0f, toolbarH - 0.5f), ImVec2(winW, toolbarH - 0.5f),
+                                        EditorTheme::U32(EditorTheme::Hairline));
 
     // The toolbar's empty space is the window drag handle (the OS caption is gone). True only
-    // when the cursor is over this strip and not over any widget / open menu / active drag —
+    // when the cursor is over this strip and not over any widget / open menu / active drag â€”
     // Window.cpp's WM_NCHITTEST reads this (via the host) to return HTCAPTION.
     const bool dragHovered =
         ImGui::IsWindowHovered(ImGuiHoveredFlags_ChildWindows) &&
@@ -190,7 +252,9 @@ void Draw(const EditorModuleHostAPI& host) {
     if (host.SetTitleBarDragHovered) host.SetTitleBarDragHovered(dragHovered);
 
     ImGui::End();
-    ImGui::PopStyleVar(); // WindowPadding
+    ImGui::PopStyleColor();
+    ImGui::PopStyleVar(3);
 }
 
 } // namespace EditorModuleToolbar
+
