@@ -39,6 +39,7 @@ Everything a panel draws with comes from three headers. Don't type colour litera
 
 | Widget | Use |
 |--------|-----|
+| `BeginPanelToolbar` / `EndPanelToolbar` | Panel header strip: Raised background, hairline bottom border, full width. Wraps a toolbar row; items inside lay out horizontally via SameLine. Used for Hierarchy/Asset Browser/Console panel headers. |
 | `ActionButton` | Flat icon button: toolbar tools, panel toggles. `active` = on (the accent). |
 | `SecondaryButton` | Raised text button: Cancel, Import..., Add Component. |
 | `PrimaryButton` | Inverse video: the one confirming action of a dialog. |
@@ -50,6 +51,10 @@ Everything a panel draws with comes from three headers. Don't type colour litera
 | `Chip`, `EmptyState`, `DrawRowState` | Tags; what an empty panel shows; list selection (accent wash + accent bar). |
 
 Host code reaches these through the forwarders in `EditorLayerInternal.h`, which route tooltips through the ShowTooltips preference.
+
+## Button styling enforcement
+
+`tools/check_button_styling.py` enforces the two-button-treatment rule (#160): every .cpp/.h in `src/Editor` must use `EditorUIPrimitives` button primitives instead of hand-rolling `PushStyleColor(ImGuiCol_Button*)` or raw `ImGui::Button()`/`SmallButton()` calls. The script flags both manual colour pushes and raw button calls. Exceptions are allow-listed by file with a reason when the use genuinely doesn't fit a primitive (axis-coloured gizmo buttons, HUD-styled controls, breadcrumb text links, etc.). Run locally: `python tools/check_button_styling.py`.
 
 ## Layout
 
