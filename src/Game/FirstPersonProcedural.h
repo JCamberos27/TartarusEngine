@@ -299,6 +299,10 @@ struct WeaponIKSettings {
     // Off, or when the arms rig lacks any of the bones above: the procedural motion moves the
     // whole view model about the eye instead of the gun bone.
     float BlendTime = 0.12f;
+    // Hand-vs-gun offsets: each hand's grip moved in the gun bone's frame, on top of the clip's grip.
+    // Position in metres (x right, y up, z forward), rotation in degrees (pitch, yaw, roll). Zero = as authored.
+    glm::vec3 RightHandPosition{0.0f}, RightHandRotation{0.0f};
+    glm::vec3 LeftHandPosition{0.0f}, LeftHandRotation{0.0f};
 };
 
 struct WeaponProceduralSettings {

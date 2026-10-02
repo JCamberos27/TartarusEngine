@@ -103,7 +103,7 @@ bool NpcBody::Start(World& world, entt::entity root) {
         m_DriverHead = d.NodeIndex("head");
         m_DriverSpineCount = 0;
         for (int k = 0; k < 5; ++k)
-            if (const int b = d.NodeIndex(FPBody::kBoneSpine[k]); b >= 0) m_DriverSpine[m_DriverSpineCount++] = b;
+            if (const int b = d.NodeIndex(FPBody::kBoneSpine[k]); b >= 0) { m_DriverSpineSlot[m_DriverSpineCount] = k; m_DriverSpine[m_DriverSpineCount++] = b; }
         // The upper body: spine_01 and everything under it, mapped onto each piece by name.
         std::vector<char> upper((size_t)d.NodeCount(), 0);
         if (const int s = d.NodeIndex(FPBody::kBoneSpine[0]); s >= 0) upper[(size_t)s] = 1;
@@ -377,10 +377,11 @@ void NpcBody::LateUpdate(World& world, float dt, const Camera* weaponCam) {
             IK::ComputeGlobals(pose, m_DriverParents, m_Globals);
             // Rotating +Z about +X by theta gives (0, -sin, cos): looking up is a negative angle about X.
             // The lean rolls about the body's forward (+Z): + = the top toward -X, the body's right.
-            const glm::quat step = glm::angleAxis(m_AimTwist / (float)n, glm::vec3(0, 1, 0)) *
-                                   glm::angleAxis((m_Straighten - m_AimPitch + m_Set.CowerHunch * m_Cower) / (float)n, glm::vec3(1, 0, 0)) *
-                                   glm::angleAxis(m_Lean * 0.38f / (float)n, glm::vec3(0, 0, 1));
-            OffsetSpine(step);
+            OffsetSpine([&](float d) {
+                return glm::angleAxis(m_AimTwist / d, glm::vec3(0, 1, 0)) *
+                       glm::angleAxis((m_Straighten - m_AimPitch + m_Set.CowerHunch * m_Cower) / d, glm::vec3(1, 0, 0)) *
+                       glm::angleAxis(m_Lean * 0.38f / d, glm::vec3(0, 0, 1));
+            });
             m.ApplyLocalPose(pose);
             m_PiecesStale = true;
         }
@@ -448,11 +449,27 @@ void NpcBody::LateUpdate(World& world, float dt, const Camera* weaponCam) {
     m_Eye = m_DriverModel->NodeTransform("head", head) ? glm::vec3(rootW * head[3]) : m_Feet + glm::vec3(0.0f, 1.62f, 0.0f);
 }
 
-void NpcBody::OffsetSpine(const glm::quat& step) {
+void NpcBody::OffsetSpine(const std::function<glm::quat(float)>& stepFor) {
+    // Each bone's share of the turn: even (the bone count) with the default Spine distribution.
+    float divisor[8], weight[8];
+    const int n = std::min(m_DriverSpineCount, 5);
+    for (int k = 0; k < n; ++k) weight[k] = m_Set.Spine.Weight[std::min(m_DriverSpineSlot[k], 4)];
+    IK::ChainDivisors(weight, n, divisor);
+    const float pelvisAlpha = std::clamp(m_Set.Spine.PelvisAlpha, 0.0f, 1.0f);
+    if (pelvisAlpha > 0.0f && m_DriverPelvis >= 0 && m_DriverSpineCount > 0) { // the pelvis takes its share first
+        IK::RefreshPath(m_Pose, m_DriverParents, m_Globals, -1, m_DriverPelvis);
+        IK::OffsetBoneOnly(m_Pose, m_DriverParents, m_Globals, m_DriverPelvis, glm::vec3(0.0f), stepFor(1.0f / pelvisAlpha),
+                           IK::Position(m_Globals[(size_t)m_DriverPelvis]));
+        IK::RefreshPath(m_Pose, m_DriverParents, m_Globals, m_DriverPelvis, m_DriverSpine[m_DriverSpineCount - 1]);
+    }
     // Down the chain, each bone's own global is made current before the next is read; everything below (arms, fingers) is
     // refreshed once at the end instead of after every bone.
     for (int k = 0; k < m_DriverSpineCount; ++k) {
         const int b = m_DriverSpine[k];
+        float d = k < n ? divisor[k] : (float)m_DriverSpineCount;
+        if (pelvisAlpha > 0.0f) d /= 1.0f - pelvisAlpha;
+        glm::quat step = stepFor(d);
+        if (k < n) step = IK::ClampStepAngle(step, m_Set.Spine.MaxAngle[std::min(m_DriverSpineSlot[k], 4)]);
         IK::OffsetBoneOnly(m_Pose, m_DriverParents, m_Globals, b, glm::vec3(0.0f), step, IK::Position(m_Globals[(size_t)b]));
         if (k + 1 < m_DriverSpineCount) IK::RefreshPath(m_Pose, m_DriverParents, m_Globals, b, m_DriverSpine[k + 1]);
     }
