@@ -2678,6 +2678,10 @@ int main(int argc, char** argv) {
                             combatFx.Shot(world, firstPersonPresentation.Set().Gameplay.Pellets > 1 ? CombatFx::Gun::Shotgun : CombatFx::Gun::Rifle,
                                           t.Origin, t.End, true, false);
                     }
+                    // The player's muzzle flames (this frame's too) ride the gun as it kicks and turns.
+                    if (glm::vec3 fpMuzzle, worldMuzzle, bore; combatFx.Active() && firstPersonPresentation.IsActive() &&
+                                                               firstPersonPresentation.MuzzleFrames(fpMuzzle, worldMuzzle, bore))
+                        combatFx.FollowMuzzle(world, fpMuzzle, worldMuzzle, bore);
                     // The spent cases out of the port, then every case on the ground moved on.
                     for (const CasingSpawn& spawn : firstPersonPresentation.TakeEjections())
                         shellCasings.Spawn(world, assets, spawn);
@@ -4146,7 +4150,8 @@ int main(int argc, char** argv) {
                 // NPC_TEST_RECORD=<dir>: both views every other frame (30 fps of the fixed 60 Hz), for a video.
                 if (npcTest && playing && !npcTest->RecordDir().empty()) {
                     static int recordFrame = 0;
-                    if ((recordFrame++ % 2) == 0) {
+                    const int recordStep = npcTest->RecordStep();
+                    if ((recordFrame++ % recordStep) == 0) {
                         std::error_code ec;
                         std::filesystem::create_directories(npcTest->RecordDir(), ec);
                         auto save = [&](unsigned fbo, int w, int h, const char* stem) {
@@ -4154,7 +4159,7 @@ int main(int argc, char** argv) {
                             std::vector<unsigned char> px = Screenshot::GrabRegion(0, 0, w, h);
                             stbi_flip_vertically_on_write(1);
                             char name[64];
-                            std::snprintf(name, sizeof name, "%s_%05d.jpg", stem, recordFrame / 2);
+                            std::snprintf(name, sizeof name, "%s_%05d.jpg", stem, recordFrame / recordStep);
                             stbi_write_jpg((std::filesystem::path(npcTest->RecordDir()) / name).string().c_str(), w, h, 4, px.data(), 92);
                             stbi_flip_vertically_on_write(0);
                         };
