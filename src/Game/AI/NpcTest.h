@@ -25,6 +25,8 @@ class World;
 //           covering fire, then the player steps up to a soldier and is struck with its rifle butt
 //   reload  the reloads and the regrip: an AK and a Remington soldier aimed, at the hip, empty, and idle; the butt
 //           against the shoulder and the hands logged through each (as --stock-probe logs the player's body), the AK shot
+//   flame   the player's muzzle flames: the AK's and the Remington's (second slot), shots from the hip
+//           then on the sights (record it: NPC_TEST_RECORD, every frame)
 //   feet    foot IK: a soldier's feet measured over the ground on the flat, then across and up the Arena's ramp
 //   pose    the weapon hold, close up: an AK and a Remington soldier, the AI frozen, put through aim level /
 //           up / down / to the side, at the hip, crouched, strafing, reloading and sprinting; four views of each
@@ -44,6 +46,7 @@ public:
     const std::string& ShotName() const { return m_Shot; }
     // NPC_TEST_RECORD=<dir>: every other frame of both views goes there as JPEGs (for a video).
     const std::string& RecordDir() const { return m_RecordDir; }
+    int RecordStep() const { return m_Scenario == "flame" ? 1 : 2; } // every frame for the muzzle flame
     // Where to put the Scene view (false = leave it).
     bool SceneCamera(glm::vec3& pos, float& yaw, float& pitch) const;
     // The player's trigger this frame (the host feeds it to the weapon).
@@ -62,6 +65,8 @@ private:
     void Reload(World& world, NpcDirector& npcs, float now);
     // reload
     unsigned m_Frame = 0, m_Reloads = 0, m_Fidgets = 0;
+    // flame
+    bool m_FlameSwitched = false;
     // feet
     std::string m_FProbe;
     int m_FStage = 0, m_FMeasured = 0;

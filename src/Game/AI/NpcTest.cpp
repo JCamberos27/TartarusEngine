@@ -36,6 +36,7 @@ NpcTest::NpcTest(const std::string& scenario) : m_Scenario(scenario.empty() ? "w
     if (m_Scenario == "tactics") m_Duration = 70.0f;
     if (m_Scenario == "feet") m_Duration = 10.0f;
     if (m_Scenario == "reload") m_Duration = 28.0f;
+    if (m_Scenario == "flame") m_Duration = 14.0f;
     if (const char* t = EnvVar("NPC_TEST_SECONDS")) m_Duration = std::max(5.0f, (float)std::atof(t));
     if (const char* r = EnvVar("NPC_TEST_RECORD")) m_RecordDir = r;
     std::cout << "[NpcTest] scenario '" << m_Scenario << "', " << m_Duration << " s" << std::endl;
@@ -98,6 +99,26 @@ void NpcTest::Drive(Player& player, FirstPersonPresentation& weapon, NpcDirector
             m_Firing = err < 3.0f && std::fmod(m_FireHold, 1.0f) < 0.45f;
             m_AimErr = err;
             m_Target = target->Name;
+        } else {
+            m_Target.clear();
+        }
+        m_Reload = weapon.Ammo() == 0;
+    }
+    if (m_Scenario == "flame") {
+        // The muzzle flame: the AK's single shots from the hip (1-3.5 s), then bursts on the sights
+        // (4-7 s); then the second slot (the Remington): shots from the hip (8.5-10.5 s), then on the
+        // sights (11-13 s).
+        m_FireHold += dt;
+        const float t = m_FireHold;
+        if (t >= 7.5f && !m_FlameSwitched && weapon.SlotCount() > 1) {
+            weapon.SelectSlot(1);
+            m_FlameSwitched = true;
+        }
+        const float u = t >= 7.5f ? t - 7.5f : t; // each gun's own clock
+        if (u >= 1.0f && u < 3.5f) m_Firing = std::fmod(u, 0.5f) < 0.05f;
+        if (u >= 4.0f && u < (t >= 7.5f ? 5.5f : 7.0f)) {
+            m_Target = "flame"; // sights up
+            m_Firing = u >= 4.5f && std::fmod(u, 1.0f) < 0.3f;
         } else {
             m_Target.clear();
         }
@@ -187,6 +208,22 @@ void NpcTest::After(World& world, NpcDirector& npcs, const PlayerVitals& vitals,
     }
     if (m_Scenario == "reload") {
         Reload(world, npcs, now);
+        return;
+    }
+    if (m_Scenario == "flame") {
+        // The Scene view off the player's right shoulder, on the muzzle.
+        const glm::vec3 eye = player.Cam.Position, front = player.Cam.Front();
+        const glm::vec3 right = glm::normalize(glm::cross(front, glm::vec3(0.0f, 1.0f, 0.0f)));
+        m_CamPos = eye + right * 0.9f + front * 0.5f + glm::vec3(0.0f, 0.1f, 0.0f);
+        const glm::vec3 d = glm::normalize(eye + front * 0.7f - glm::vec3(0.0f, 0.15f, 0.0f) - m_CamPos);
+        m_CamYaw = glm::degrees(std::atan2(d.z, d.x));
+        m_CamPitch = glm::degrees(std::asin(std::clamp(d.y, -1.0f, 1.0f)));
+        m_HaveCam = true;
+        if (now >= m_Duration && !m_Done) {
+            m_Done = true;
+            Check(m_PlayerShots > 0, "the player fired (" + std::to_string(m_PlayerShots) + " rounds)");
+            Check(m_FlameSwitched, "the player switched to the second weapon");
+        }
         return;
     }
     if (m_Scenario == "pose") {
