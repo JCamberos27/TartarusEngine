@@ -1249,6 +1249,38 @@ void RegisterEngineComponents() {
         Register<RenderableComponent>(std::move(m));
     }
 
+    // Lane P: scene-level visual effects and HUD settings
+    Register<FxHudSettingsComponent>({
+        "FX & HUD Settings", ICON_FA_SLIDERS,
+        "Scene-level visual effects and HUD display parameters (add one per scene to tune muzzle flash,\n"
+        "laser beam and HUD display).",
+        "Gameplay",
+        {
+            { "Flash Time", T::Float, TARTARUS_REFLECT_FIELD(FxHudSettingsComponent, FlashTime), 0.001f,
+              "Seconds the muzzle flash light stays on.", 0.001f, 1.0f },
+            { "Player Flash Scale", T::Float, TARTARUS_REFLECT_FIELD(FxHudSettingsComponent, PlayerFlashScale), 0.01f,
+              "Player's flash light scale relative to soldier's.", 0.01f, 2.0f },
+            { "Flame Glow", T::Float, TARTARUS_REFLECT_FIELD(FxHudSettingsComponent, FlameGlow), 5.0f,
+              "Flame peak emission intensity (red channel).", 0.0f, 1000.0f },
+            { "Flame Scale", T::Float, TARTARUS_REFLECT_FIELD(FxHudSettingsComponent, FlameScale), 0.05f,
+              "Flame tongue length/width scale vs. tactical shooter pack.", 0.1f, 5.0f },
+            { "Beam Range", T::Float, TARTARUS_REFLECT_FIELD(FxHudSettingsComponent, BeamRange), 1.0f,
+              "Laser beam metres drawn before fading in the haze.", 1.0f, 500.0f },
+            { "Beam Half Width", T::Float, TARTARUS_REFLECT_FIELD(FxHudSettingsComponent, BeamHalfWidth), 0.0001f,
+              "Laser beam width in metres.", 0.0001f, 0.1f },
+            { "Beam Falloff", T::Float, TARTARUS_REFLECT_FIELD(FxHudSettingsComponent, BeamFalloff), 0.1f,
+              "Laser beam glow falloff distance in metres near the emitter.", 0.1f, 50.0f },
+            { "Beam Bend", T::Float, TARTARUS_REFLECT_FIELD(FxHudSettingsComponent, BeamBend), 0.1f,
+              "Laser beam easing distance over which view-model emitter eases onto the true path (metres).", 0.1f, 20.0f },
+            { "Feed Life", T::Float, TARTARUS_REFLECT_FIELD(FxHudSettingsComponent, FeedLife), 0.1f,
+              "Seconds a kill feed line stays on screen.", 0.1f, 60.0f },
+            { "Streak Window", T::Float, TARTARUS_REFLECT_FIELD(FxHudSettingsComponent, StreakWindow), 0.1f,
+              "Seconds to count consecutive kills for streak display.", 0.1f, 60.0f },
+            { "Sub Linger", T::Float, TARTARUS_REFLECT_FIELD(FxHudSettingsComponent, SubLinger), 0.01f,
+              "Seconds a subtitle lingers after its clip ends.", 0.01f, 10.0f },
+        },
+    });
+
     // #132 - String fields that hold asset paths: tracked by GUID so renaming or moving the file
     // outside the editor keeps the reference (see ReflectField::AssetPath).
     const std::pair<const char*, const char*> kAssetPathFields[] = {
