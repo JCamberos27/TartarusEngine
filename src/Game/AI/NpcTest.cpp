@@ -35,6 +35,7 @@ NpcTest::NpcTest(const std::string& scenario) : m_Scenario(scenario.empty() ? "w
     if (m_Scenario == "deaths") m_Duration = 60.0f;
     if (m_Scenario == "tactics") m_Duration = 70.0f;
     if (m_Scenario == "feet") m_Duration = 10.0f;
+    if (m_Scenario == "reload") m_Duration = 28.0f;
     if (const char* t = EnvVar("NPC_TEST_SECONDS")) m_Duration = std::max(5.0f, (float)std::atof(t));
     if (const char* r = EnvVar("NPC_TEST_RECORD")) m_RecordDir = r;
     std::cout << "[NpcTest] scenario '" << m_Scenario << "', " << m_Duration << " s" << std::endl;
@@ -182,6 +183,10 @@ void NpcTest::After(World& world, NpcDirector& npcs, const PlayerVitals& vitals,
     }
     if (m_Scenario == "feet") {
         Feet(npcs, now);
+        return;
+    }
+    if (m_Scenario == "reload") {
+        Reload(world, npcs, now);
         return;
     }
     if (m_Scenario == "pose") {
@@ -426,7 +431,12 @@ void NpcTest::After(World& world, NpcDirector& npcs, const PlayerVitals& vitals,
             Check(npcs.Fx->ShotsHeard() > 0, "gunfire was heard (" + std::to_string(npcs.Fx->ShotsHeard()) + " reports)");
             Check(npcs.Fx->WhizzesHeard() > 0, "rounds cracked past the player (" + std::to_string(npcs.Fx->WhizzesHeard()) + ")");
         }
-        if (m_Scenario == "fight") Check(m_Kills > 0, "the player killed " + std::to_string(m_Kills) + " soldier(s)");
+        if (m_Scenario == "fight") {
+            Check(m_Kills > 0, "the player killed " + std::to_string(m_Kills) + " soldier(s)");
+            // The replacements are built from the spare and the gone corpses' bodies, not from Soldier.json again.
+            Check(npcs.ReusedBodies() > 0, "a replacement took a pooled body (" + std::to_string(npcs.ReusedBodies()) + " of " +
+                                               std::to_string(m_Kills) + " replacements)");
+        }
         if (m_Scenario == "tactics") {
             Check(ts.BlindFires > 0, "a pinned soldier blind-fired over its cover (" + std::to_string(ts.BlindFires) + ")");
             Check(ts.Melees > 0 && ts.MeleeHits > 0, "a soldier struck the player at arm's length (" + std::to_string(ts.MeleeHits) + " landed)");
@@ -737,11 +747,11 @@ const PosePhase kPhases[] = {
     {"aim_down", true, 4.0f, 0.0f, -1.5f},
     {"aim_right", true, 10.0f, 10.0f, 0.0f},
     {"aim_left", true, 10.0f, -8.0f, 0.0f},
-    {"low_ready", false, 15.0f, 0.0f, 0.0f},
+    {"hip", false, 15.0f, 0.0f, 0.0f},
     {"look_right", false, 4.0f, 8.0f, 0.5f},  // off the sights the head turns past the chest
     {"look_left", false, 4.0f, -8.0f, -1.0f},
     {"crouch_aim", true, 15.0f, 0.0f, 0.0f, true},
-    {"crouch_low", false, 15.0f, 0.0f, 0.0f, true},
+    {"crouch_hip", false, 15.0f, 0.0f, 0.0f, true},
     {"strafe_right", true, 15.0f, 0.0f, 0.0f, false, 4.0f},
     {"strafe_left", true, 15.0f, 0.0f, 0.0f, false, -4.0f},
     {"reload", true, 15.0f, 0.0f, 0.0f, false, 0.0f, 0.0f, Gait::Walk, true},
@@ -871,6 +881,115 @@ void NpcTest::Pose(World& world, NpcDirector& npcs, float now) {
             m_Shot = name;
             m_PoseShots = view + 1;
         }
+    }
+}
+
+// --- reload: the reloads and the regrip, against the player's ----------------------------------------------------------
+// The two probes (an AK, a Remington), the AI frozen, each facing the arena: aimed, then reloading where they stand; at the
+// hip, then reloading; an empty reload; the idle regrip. Through every one the butt's place against the right
+// shoulder (in the aim's flat frame - what --stock-probe prints for the player's body as "butt-shoulder R U F") and the
+// hands off the rig's are logged every third frame, and the Scene view takes the AK probe from its front right.
+namespace {
+struct ReloadPhase { const char* Name; float Start; bool Aim; int Ammo; bool Fidget; };
+const ReloadPhase kReloadPhases[] = {
+    {"aim", 0.0f, true, -1, false},       {"aim_reload", 2.0f, true, 12, false}, {"hip", 7.0f, false, -1, false},
+    {"hip_reload", 9.0f, false, 12, false}, {"empty_reload", 14.0f, true, 0, false}, {"regrip", 19.5f, false, -1, true},
+};
+constexpr float kReloadEnd = 25.0f;
+} // namespace
+
+void NpcTest::Reload(World& world, NpcDirector& npcs, float now) {
+    npcs.Frozen = true;
+    npcs.HoldFire = true;
+    npcs.MeshChecksEverywhere = true;
+    Npc* probe[2] = {nullptr, nullptr};
+    for (const auto& up : npcs.Npcs()) {
+        if (!up || up->Dead) continue;
+        const int k = up->Class == WeaponClass::Shotgun ? 1 : 0;
+        if (m_Probe[k].empty() && now > 0.5f) { m_Probe[k] = up->Name; m_ProbeHome[k] = up->Feet; }
+        if (up->Name == m_Probe[0]) probe[0] = up.get();
+        if (up->Name == m_Probe[1]) probe[1] = up.get();
+    }
+    for (const auto& up : npcs.Npcs())
+        if (up && !up->Dead && up.get() != probe[0] && up.get() != probe[1]) {
+            up->Intent = NpcIntent{};
+            up->Intent.LookPoint = up->Feet + glm::vec3(0.0f, 1.6f, 10.0f);
+        }
+    if (!probe[0] || !probe[1] || now < 2.0f) return;
+    const float t = now - 2.0f;
+    int phase = 0;
+    for (int i = 0; i < (int)(sizeof kReloadPhases / sizeof kReloadPhases[0]); ++i)
+        if (t >= kReloadPhases[i].Start) phase = i;
+    const ReloadPhase& ph = kReloadPhases[phase];
+    const bool entered = phase != m_PosePhase;
+    m_PosePhase = phase;
+    const glm::vec3 fwd(0.0f, 0.0f, 1.0f);
+    for (int k = 0; k < 2; ++k) {
+        Npc& n = *probe[k];
+        NpcIntent in;
+        const glm::vec3 aimAt = m_ProbeHome[k] + glm::vec3(0.0f, 1.45f, 0.0f) + fwd * 15.0f;
+        in.Aim = ph.Aim;
+        in.AimPoint = in.LookPoint = aimAt;
+        if (entered && n.Weapon && ph.Ammo >= 0) {
+            n.Weapon->SetAmmo(k == 1 ? std::min(ph.Ammo, 4) : ph.Ammo);
+            in.Reload = true;
+        }
+        // The regrip once the hip carry has settled into Idle (a trigger set mid-transition is dropped).
+        if (ph.Fidget && n.Weapon && !(m_Fidgets >> k & 1) && t - ph.Start > 0.6f && n.Weapon->CurrentState() == "Idle") {
+            n.WeaponAction = "Fidget";
+            m_Fidgets |= 1u << k;
+        }
+        if (glm::length(glm::vec2(n.Feet.x - m_ProbeHome[k].x, n.Feet.z - m_ProbeHome[k].z)) > 0.3f) {
+            in.Move = true;
+            in.MoveTarget = m_ProbeHome[k];
+            in.Pace = Gait::Walk;
+            in.FaceAim = true;
+        }
+        n.Intent = in;
+        // The butt against the right shoulder and the hands off the rig's, every third frame.
+        if (!n.Weapon || !n.Weapon->IsActive() || (m_Frame++ % 3) != 0) continue;
+        FirstPersonWorldGunInput gun;
+        glm::vec3 shoulder;
+        if (!n.Weapon->WorldGunInput(gun) || !n.Body.BoneWorld("upperarm_r", shoulder)) continue;
+        glm::vec3 front = n.WeaponCam.Front();
+        front.y = 0.0f;
+        front = glm::normalize(front + glm::vec3(1e-5f));
+        const glm::vec3 right = glm::normalize(glm::cross(front, glm::vec3(0.0f, 1.0f, 0.0f)));
+        const glm::vec3 d = gun.ButtWorld + n.Body.GunShift() - shoulder;
+        const glm::vec3 e = n.WeaponCam.Position - shoulder;
+        const NpcHoldReport r = n.Body.MeasureHold(world, n.Weapon->ArmsEntity(), gun.ButtWorld, gun.ButtWorld);
+        std::printf("[NpcTest] reload %-12s %-3s t %5.2f %-12s | butt-shoulder R %+5.1f U %+5.1f F %+5.1f | hands off L %4.1f R %4.1f cm | eye-shoulder R %+5.1f U %+5.1f F %+5.1f | shift %4.1f | cam pitch %5.1f roll %5.1f\n",
+                    ph.Name, k ? "870" : "AK", t - ph.Start, n.Weapon->CurrentState().c_str(), glm::dot(d, right) * 100.0f, d.y * 100.0f,
+                    glm::dot(d, front) * 100.0f, r.Hand[0] * 100.0f, r.Hand[1] * 100.0f, glm::dot(e, right) * 100.0f, e.y * 100.0f,
+                    glm::dot(e, front) * 100.0f, glm::length(n.Body.GunShift()) * 100.0f, n.WeaponCam.Pitch, n.WeaponCam.Roll);
+        if (!ph.Fidget || phase == 0) {
+            for (int s = 0; s < 2; ++s)
+                if (r.Hand[s] > m_WorstHand) { m_WorstHand = r.Hand[s]; m_WorstHandAt = std::string(ph.Name) + (k ? " 870" : " AK") + (s ? " right" : " left"); }
+        }
+        if (n.Weapon->CurrentState().find("Reload") != std::string::npos) m_Reloads |= 1 << (phase * 2 + k);
+        if (n.Weapon->CurrentState() == "Regrip") m_Reloads |= 1 << (16 + k);
+    }
+    // The AK probe from its front right, every 0.15 s.
+    Npc& n = *probe[0];
+    const float yaw = n.Body.Yaw() + glm::radians(-40.0f);
+    const glm::vec3 chest = n.Feet + glm::vec3(0.0f, 1.3f, 0.0f);
+    m_CamPos = chest + glm::vec3(std::sin(yaw), 0.08f, std::cos(yaw)) * 2.0f;
+    const glm::vec3 d = glm::normalize(chest - m_CamPos);
+    m_CamYaw = glm::degrees(std::atan2(d.z, d.x));
+    m_CamPitch = glm::degrees(std::asin(std::clamp(d.y, -1.0f, 1.0f)));
+    m_HaveCam = true;
+    if (t >= m_NextShot) {
+        m_NextShot = t + 0.15f;
+        char name[64];
+        std::snprintf(name, sizeof name, "reload_%03d_%s", m_ShotIndex++, ph.Name);
+        m_Shot = name;
+    }
+    if (t >= kReloadEnd && !m_Done) {
+        m_Done = true;
+        std::printf("[NpcTest] reload: worst hand off %.1f cm (%s)\n", m_WorstHand * 100.0f, m_WorstHandAt.c_str());
+        Check((m_Reloads & 0x3CC) == 0x3CC, "both probes reloaded aimed, at the hip and empty");
+        Check((m_Reloads >> 16 & 1) != 0, "the AK regripped");
+        Check(m_WorstHand <= 0.03f, "the hands stay on the rig's through the reloads (within 3 cm)");
     }
 }
 
