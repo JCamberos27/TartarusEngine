@@ -1108,3 +1108,27 @@ struct ReflectionProbeComponent {
     glm::vec3 Size{5.0f, 5.0f, 5.0f}; // full extents of the capture volume, in world units
     float Importance{1.0f};            // higher wins 2-probe selection tie-breaks
 };
+
+// ---- lane P ----
+// Scene-level visual effects and HUD settings (Lane P quality pass).
+// Add one to the scene to tune muzzle flash, laser beam and HUD display parameters.
+// Defaults match the hardcoded values; editing them live reloads the settings per frame.
+struct FxHudSettingsComponent {
+    // Muzzle flash parameters (Combat/CombatFx.cpp)
+    float FlashTime = 0.055f;               // seconds the muzzle flash light stays on; Muzzle Flash group
+    float PlayerFlashScale = 0.35f;         // player's flash light scale relative to soldier's; Muzzle Flash group
+    float FlameGlow = 150.0f;               // flame peak emission intensity (red channel); Muzzle Flash group
+    float FlameScale = 1.75f;               // flame tongue length/width scale vs. tactical shooter pack; Muzzle Flash group
+
+    // Laser beam parameters (src/Renderer/WeaponFxRenderer.cpp)
+    float BeamRange = 150.0f;               // metres drawn; past that it's gone in the haze; Laser Beam group
+    float BeamHalfWidth = 0.0015f;          // beam width in metres (3 mm); Laser Beam group
+    float BeamFalloff = 2.5f;               // glow falloff distance in metres near the emitter; Laser Beam group
+    float BeamBend = 4.0f;                  // metres over which a view-model emitter eases onto the true path; Laser Beam group
+
+    // HUD display parameters (Combat/CombatHud.cpp)
+    float FeedLife = 4.5f;                  // seconds a kill feed line stays on screen; HUD group
+    float StreakWindow = 4.0f;               // seconds to count consecutive kills for streak display; HUD group
+    float SubLinger = 1.1f;                 // seconds a subtitle lingers after its clip ends; HUD group
+};
+// ---- end lane P ----
