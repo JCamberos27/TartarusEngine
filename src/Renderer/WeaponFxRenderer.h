@@ -2,6 +2,8 @@
 #include <memory>
 #include <vector>
 #include <glm/glm.hpp>
+#include <algorithm>
+#include "../Game/Components.h"
 
 class Shader;
 
@@ -17,6 +19,10 @@ public:
     WeaponFxRenderer(const WeaponFxRenderer&) = delete;
     WeaponFxRenderer& operator=(const WeaponFxRenderer&) = delete;
 
+    // Scene tuning (beam range, width, glow falloff, bend); the defaults are the old fixed values.
+    FxHudSettingsComponent Settings;
+    // How much of a `distance` long beam is drawn; past the range it is gone in the haze.
+    static float BeamLength(const FxHudSettingsComponent& s, float distance) { return std::min(distance, s.BeamRange); }
     // `color` is linear HDR; the beam's own brightness falls off with distance from `from`.
     // `emitterScale` != 1: the emitter is drawn through another FOV (the view model's) - the
     // beam's near end is scaled about the view axis by it, so it leaves the barrel the player

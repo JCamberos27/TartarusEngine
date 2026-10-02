@@ -11,10 +11,6 @@
 namespace {
 constexpr int kStride = 10;              // pos3 uv2 color4 kind1
 constexpr int kBeamSegments = 40;        // packed toward the emitter, where it's brightest
-constexpr float kBeamRange = 150.0f;     // metres drawn; past that it's gone in the haze
-constexpr float kBeamHalfWidth = 0.0015f; // a 3 mm beam
-constexpr float kBeamFalloff = 2.5f;     // metres: the glow near the emitter
-constexpr float kBeamBend = 4.0f;        // metres over which a view-model emitter eases onto the true path
 constexpr float kSpotCore = 0.004f;      // metres: the dot's radius
 constexpr float kSpotQuad = 6.0f;        // the quad's half-size, in core radii (the halo)
 constexpr float kHoleQuad = 2.5f;        // in hole radii (the darkened ring)
@@ -99,8 +95,8 @@ void WeaponFxRenderer::Draw(const glm::mat4& view, const glm::mat4& proj, const 
     const glm::mat4 viewInv = glm::inverse(view);
     for (const Beam& beam : m_Beams) {
         const glm::vec3 dir = glm::normalize(beam.To - beam.From);
-        const float length = std::min(glm::length(beam.To - beam.From), kBeamRange);
-        const float bend = std::min(kBeamBend, length);
+        const float length = BeamLength(Settings, glm::length(beam.To - beam.From));
+        const float bend = std::min(Settings.BeamBend, length);
         glm::vec3 prevL(0.0f), prevR(0.0f);
         float prevD = 0.0f, prevA = 0.0f;
         for (int i = 0; i <= kBeamSegments; ++i) {
@@ -120,9 +116,9 @@ void WeaponFxRenderer::Draw(const glm::mat4& view, const glm::mat4& proj, const 
             side = sl > 1e-7f ? side / sl : glm::vec3(0.0f);
             // Never thinner than about a pixel and a half; spread that wide it dims to match, so
             // far off it fades out instead of turning into a thick red line.
-            const float half = std::max(kBeamHalfWidth, 0.75f * pixelAt(p));
-            const float energy = kBeamHalfWidth / half;
-            const float glow = 0.35f + 0.65f * std::exp(-d / kBeamFalloff);
+            const float half = std::max(Settings.BeamHalfWidth, 0.75f * pixelAt(p));
+            const float energy = Settings.BeamHalfWidth / half;
+            const float glow = 0.35f + 0.65f * std::exp(-d / std::max(Settings.BeamFalloff, 1e-4f));
             const float a = energy * glow;
             const glm::vec3 L = p - side * half, R = p + side * half;
             if (i > 0) {

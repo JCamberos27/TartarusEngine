@@ -480,6 +480,10 @@ struct FirstPersonControllerComponent {
         const float h = glm::radians(std::clamp(FieldOfView, 1.0f, 179.0f));
         return glm::degrees(2.0f * std::atan(std::tan(0.5f * h) * (9.0f / 16.0f)));
     }
+    // Gamepad right stick look speed (turn rate, not a delta)
+    float StickLookDegPerSec = 180.0f;  // degrees per second; Gamepad Input group
+    // Camera lean collision: the sphere radius used for wall-detection during camera lean
+    float EyeRadius = 0.12f;            // metres; keeps the near plane off the wall; Camera group
     float KillY = -20.0f;           // falling below this respawns at the spawn point
     bool  GravityGun = true;        // the built-in pick-up/throw tool (right/left mouse)
     float Gravity = 18.0f;          // m/s^2 pulling the player down - game feel, separate from the physics world's
@@ -488,6 +492,14 @@ struct FirstPersonControllerComponent {
     float MaxThrowSpeed = 18.0f;    // m/s, fully charged
     float ThrowChargeTime = 1.0f;   // seconds to full power
     float ThrowBackspin = 2.0f;     // revolutions per second given to a thrown ball (round bodies only)
+    // Gravity gun grab: aiming distance for the primary pick-up ray
+    float GrabRange = 100.0f;       // metres; Gravity Gun group
+    // Gravity gun aim assist: search radius when no object is under the exact crosshair
+    float AssistRange = 30.0f;      // metres; Gravity Gun group
+    // Gravity gun assist cone: within this many degrees of the crosshair
+    float AssistConeDeg = 7.0f;     // degrees; Gravity Gun group
+    // Gravity gun scroll-wheel tuning: rotation applied per scroll notch while holding an object
+    float ScrollTurnDeg = 15.0f;    // degrees per notch; Gravity Gun group
 
     // Optional camera-bound arms + weapon presentation. The .fpsanim asset defines paired clips;
     // leaving this empty preserves the existing controller exactly (including Sandbox gravity gun
@@ -1098,3 +1110,27 @@ struct ReflectionProbeComponent {
     glm::vec3 Size{5.0f, 5.0f, 5.0f}; // full extents of the capture volume, in world units
     float Importance{1.0f};            // higher wins 2-probe selection tie-breaks
 };
+
+// ---- lane P ----
+// Scene-level visual effects and HUD settings (Lane P quality pass).
+// Add one to the scene to tune muzzle flash, laser beam and HUD display parameters.
+// Defaults match the values these effects had before they were tunable; read once when Play starts.
+struct FxHudSettingsComponent {
+    // Muzzle flash parameters (Combat/CombatFx.cpp)
+    float FlashTime = 0.055f;               // seconds the muzzle flash light stays on; Muzzle Flash group
+    float PlayerFlashScale = 0.35f;         // player's flash light scale relative to soldier's; Muzzle Flash group
+    float FlameGlow = 150.0f;               // flame peak emission intensity (red channel); Muzzle Flash group
+    float FlameScale = 1.75f;               // flame tongue length/width scale vs. tactical shooter pack; Muzzle Flash group
+
+    // Laser beam parameters (src/Renderer/WeaponFxRenderer.cpp)
+    float BeamRange = 150.0f;               // metres drawn; past that it's gone in the haze; Laser Beam group
+    float BeamHalfWidth = 0.0015f;          // beam width in metres (3 mm); Laser Beam group
+    float BeamFalloff = 2.5f;               // glow falloff distance in metres near the emitter; Laser Beam group
+    float BeamBend = 4.0f;                  // metres over which a view-model emitter eases onto the true path; Laser Beam group
+
+    // HUD display parameters (Combat/CombatHud.cpp)
+    float FeedLife = 4.5f;                  // seconds a kill feed line stays on screen; HUD group
+    float StreakWindow = 4.0f;               // seconds to count consecutive kills for streak display; HUD group
+    float SubLinger = 1.1f;                 // seconds a subtitle lingers after its clip ends; HUD group
+};
+// ---- end lane P ----
