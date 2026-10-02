@@ -714,7 +714,9 @@ bool HotReloadEditorModule::Reload(bool initialLoad) {
 
     // Named per process: a second instance (another editor, the unit tests) shares this folder, and a bare
     // generation number would collide with the copy the first one has loaded and locked.
-    const fs::path copyPath = cacheDir / ("TartarusEditor_" + std::to_string(::GetCurrentProcessId()) + "_" + std::to_string(++m_Generation) + ".dll");
+    const std::string copyName = "TartarusEditor_" + std::to_string(::GetCurrentProcessId()) + "_" +
+                                  std::to_string(++m_Generation) + ".dll";
+    const fs::path copyPath = cacheDir / copyName;
     fs::copy_file(m_SourceModule, copyPath, fs::copy_options::overwrite_existing, ec);
     if (ec) {
         Log::Warn("Editor hot reload: TartarusEditor.dll is still being written; will retry.");
