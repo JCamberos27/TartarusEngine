@@ -142,7 +142,7 @@ The goal was ≤ 1 ms for 5. What it relies on:
 - **Ragdolls:**
   - skipped once asleep
   - read from interpolated poses
-- **Spawns.** Clip-to-skeleton matches are shared between model instances (`Model::AttachClip`), and clip files are stat'ed once. A respawn costs about 4 ms.
+- **Spawns.** Clip-to-skeleton matches are shared between model instances (`Model::AttachClip`), and clip files are stat'ed once. A soldier's gun reuses the first one's parsed definition, bolt stroke, barrel and ADS carry (the player's own gun still measures). A respawn costs about 1.8 ms; the first soldier with each gun pays the full ~5 ms.
 
 The profiler shows the costs as AI Perceive / Brain / Squads / Move / Aim+Fire / Body / Weapon / Hold / Ragdoll /
 Hitbox. `--npc-test` prints them at the end.
