@@ -16,6 +16,7 @@ float Hash01(int a, float b) {
 } // namespace
 
 void NpcDirector::Callout(Npc& n, Bark ev) {
+    if (n.Dummy) return; // no radio
     if (m_Now - n.LastCallout < 2.5f && m_Voice.Priority(ev) < 7) return; // urgent calls skip the per-soldier gap
     // A squadmate to answer "copy": the nearest other one who's alive.
     int resp = -1, respUnit = 0;
