@@ -156,6 +156,7 @@ onto the sights for the length of the action and matches the elbows and wrists t
 so it looks like the hip clip done on the sights and ends there with no readjust. Needs:
 - an aim state tagged `ADS` (named in **Reference Pose**, default `Aim`);
 - the arm IK on (**IK** section, bones found) - otherwise the whole rig is carried.
+- the IK section's **Hand Offsets** (position m, rotation deg per hand, in the gun bone's frame; saved in the weapon JSON) are zero unless you nudge a grip; **Reset Hand Offsets** zeroes them.
 
 **Authored ADS clip.** Export the action as its own clip and add it to the controller:
 - *Standard graph:* name the clip `ADS_<action>`; the generator adds an `ADS <action>` state

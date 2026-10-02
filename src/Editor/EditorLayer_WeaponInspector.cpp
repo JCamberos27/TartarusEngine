@@ -709,6 +709,17 @@ void DrawIK(PropertyRows& r, WeaponIKSettings& k, WeaponContext& ctx) {
             PropertyRows::Badge(Status::Ok, "All IK bones found on the arms rig");
         }
     }
+    r.Heading("Hand Offsets");
+    r.Note("Each hand's grip moved in the gun bone's frame, on top of the clip's grip. Zero = as authored.");
+    r.Vec3("Right Position", k.RightHandPosition, 0.0005f, "%.4f", "Metres the right hand moves on the gun (x right, y up, z forward).");
+    r.Vec3("Right Rotation", k.RightHandRotation, 0.1f, "%.2f", "Degrees (pitch, yaw, roll) the right hand turns on the gun.", "PYR");
+    r.Vec3("Left Position", k.LeftHandPosition, 0.0005f, "%.4f", "Metres the left hand moves on the gun (x right, y up, z forward).");
+    r.Vec3("Left Rotation", k.LeftHandRotation, 0.1f, "%.2f", "Degrees (pitch, yaw, roll) the left hand turns on the gun.", "PYR");
+    if (ActionButton(ICON_FA_ROTATE_LEFT "  Reset Hand Offsets", "Set both hands' position and rotation offsets back to zero (as authored)", false,
+                     ImVec2(-FLT_MIN, 0.0f))) {
+        k.RightHandPosition = k.RightHandRotation = k.LeftHandPosition = k.LeftHandRotation = glm::vec3(0.0f);
+        r.MarkChanged();
+    }
     r.Heading("Blending");
     r.Name("Off Tag", k.OffTag, ctx.Tags, false, "States with this tag play purely as authored: IK and the procedural motion fade out.");
     r.Float("Blend Time", k.BlendTime, 0.005f, 0.0f, 2.0f, "%.3f s", "Seconds to fade out and back in around Off-tagged states.");
