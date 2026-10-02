@@ -385,6 +385,7 @@ private:
     bool m_KickApplied = false;
     glm::vec3 m_KickAngles{0.0f}; // pitch, yaw, roll degrees
     glm::vec3 m_KickOffset{0.0f}; // world
+    float m_EyeRadius = 0.12f;   // camera lean collision: sphere radius for wall detection
     // Live retuning: the .fpsanim is re-read when it changes on disk (the Inspector saves it).
     std::filesystem::path m_SetFile;
     std::filesystem::file_time_type m_SetFileTime{};

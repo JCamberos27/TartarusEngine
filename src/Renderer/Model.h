@@ -132,6 +132,7 @@ public:
     // Clips: this model's own (0..OwnAnimationCount-1), then any attached from other files
     // (AttachClip, #175 — e.g. Mixamo animation-only FBXs played on the character).
     bool HasAnimations() const { return AnimationCount() > 0; }
+    bool HasBones() const { return BoneCount() > 0; }
     int OwnAnimationCount() const { return (int)m_D->Animations.size(); }
     int AnimationCount() const { return (int)m_D->Animations.size() + (int)m_ExternalClips.size(); }
     const std::string& AnimationName(int index) const;

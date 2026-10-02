@@ -1,4 +1,6 @@
 #pragma once
+#include <algorithm>
+#include <cmath>
 #include <vector>
 #include <glm/glm.hpp>
 #include <glm/gtc/quaternion.hpp>
@@ -15,8 +17,14 @@ struct ThrowPrediction {
     void Clear() { Legs.clear(); ContactPoints.clear(); ContactNormals.clear(); BodyRadius = 0.0f; }
 };
 
-// How the gravity gun throws. Filled from the scene's First Person Controller when there is one.
+// How the gravity gun grabs and throws. Filled from the scene's First Person Controller when there is one.
 struct GravityGunSettings {
+    // Grab parameters
+    float GrabRange = 100.0f;     // metres; aiming distance for the primary pick-up ray
+    float AssistRange = 30.0f;    // metres; search radius when no object is under the exact crosshair
+    float AssistConeDeg = 7.0f;   // degrees; within this many degrees of the crosshair
+    float ScrollTurnDeg = 15.0f;  // degrees per scroll notch while holding an object
+    // Throw parameters
     float MinThrowSpeed = 4.0f;   // m/s for a quick click
     float MaxThrowSpeed = 18.0f;  // m/s fully charged
     float ChargeTime = 1.0f;      // seconds of holding left mouse to reach MaxThrowSpeed
@@ -59,6 +67,12 @@ public:
     // empty. The held body's own shape is swept along the arc, and each bounce uses the combined
     // bounciness / friction of the two colliders, as PhysX will.
     const ThrowPrediction& Prediction() const { return m_Prediction; }
+
+    // How far the assist search reaches: AssistRange, cut short just past a solid the crosshair ray hit
+    // at `rayHitDist` (negative: the ray hit nothing).
+    static float AssistReach(const GravityGunSettings& s, float rayHitDist) {
+        return rayHitDist < 0.0f ? s.AssistRange : std::min(s.AssistRange, rayHitDist + 0.5f);
+    }
 
 private:
     unsigned FindGrabTarget(const glm::vec3& eye, const glm::vec3& fwd) const;

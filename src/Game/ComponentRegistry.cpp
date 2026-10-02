@@ -436,6 +436,10 @@ void RegisterEngineComponents() {
               "Degrees of turn per pixel of mouse movement.", 0.01f, 1.0f },
             { "Invert Y", T::Bool, TARTARUS_REFLECT_FIELD(FirstPersonControllerComponent, InvertY), 0.0f,
               "Moving the mouse up looks down." },
+            { "Stick Look Deg/Sec", T::Float, TARTARUS_REFLECT_FIELD(FirstPersonControllerComponent, StickLookDegPerSec), 5.0f,
+              "Gamepad right stick: turn rate in degrees per second (not a delta).", 1.0f, 720.0f },
+            { "Eye Radius", T::Float, TARTARUS_REFLECT_FIELD(FirstPersonControllerComponent, EyeRadius), 0.001f,
+              "Camera lean collision: sphere radius used for wall detection, metres (keeps the near plane off the wall).", 0.01f, 1.0f },
             { "Field of View", T::Float, TARTARUS_REFLECT_FIELD(FirstPersonControllerComponent, FieldOfView), 0.25f,
               "Horizontal field of view in degrees, measured on a 16:9 screen (90 = the usual shooter FOV). "
               "Wider screens see more at the sides.", 30.0f, 150.0f },
@@ -456,6 +460,14 @@ void RegisterEngineComponents() {
             { "Throw Backspin", T::Float, TARTARUS_REFLECT_FIELD(FirstPersonControllerComponent, ThrowBackspin), 0.05f,
               "Gravity gun: backspin (revolutions per second) put on a thrown ball, like a real shot.\n"
               "Only round (sphere collider) bodies get it.", 0.0f, 20.0f },
+            { "Grab Range", T::Float, TARTARUS_REFLECT_FIELD(FirstPersonControllerComponent, GrabRange), 1.0f,
+              "Gravity gun: aiming distance for the primary pick-up ray, metres.", 10.0f, 1000.0f },
+            { "Assist Range", T::Float, TARTARUS_REFLECT_FIELD(FirstPersonControllerComponent, AssistRange), 1.0f,
+              "Gravity gun: search radius when no object is under the exact crosshair, metres.", 1.0f, 500.0f },
+            { "Assist Cone Deg", T::Float, TARTARUS_REFLECT_FIELD(FirstPersonControllerComponent, AssistConeDeg), 0.5f,
+              "Gravity gun: within this many degrees of the crosshair during aim assist, degrees.", 1.0f, 45.0f },
+            { "Scroll Turn Deg", T::Float, TARTARUS_REFLECT_FIELD(FirstPersonControllerComponent, ScrollTurnDeg), 0.5f,
+              "Gravity gun: rotation applied per scroll notch while holding an object, degrees.", 1.0f, 90.0f },
             { "Animation Set", T::String, TARTARUS_REFLECT_FIELD(FirstPersonControllerComponent, AnimationSet), 0.0f,
               "Optional .fpsanim asset for a camera-bound first-person arms and weapon presentation." },
             { "Secondary Animation Set", T::String, TARTARUS_REFLECT_FIELD(FirstPersonControllerComponent, SecondaryAnimationSet), 0.0f,
@@ -1236,6 +1248,38 @@ void RegisterEngineComponents() {
         m.GenericInspector = false;
         Register<RenderableComponent>(std::move(m));
     }
+
+    // Lane P: scene-level visual effects and HUD settings
+    Register<FxHudSettingsComponent>({
+        "FX & HUD Settings", ICON_FA_SLIDERS,
+        "Scene-level visual effects and HUD display parameters (add one per scene to tune muzzle flash,\n"
+        "laser beam and HUD display).",
+        "Gameplay",
+        {
+            { "Flash Time", T::Float, TARTARUS_REFLECT_FIELD(FxHudSettingsComponent, FlashTime), 0.001f,
+              "Seconds the muzzle flash light stays on.", 0.001f, 1.0f },
+            { "Player Flash Scale", T::Float, TARTARUS_REFLECT_FIELD(FxHudSettingsComponent, PlayerFlashScale), 0.01f,
+              "Player's flash light scale relative to soldier's.", 0.01f, 2.0f },
+            { "Flame Glow", T::Float, TARTARUS_REFLECT_FIELD(FxHudSettingsComponent, FlameGlow), 5.0f,
+              "Flame peak emission intensity (red channel).", 0.0f, 1000.0f },
+            { "Flame Scale", T::Float, TARTARUS_REFLECT_FIELD(FxHudSettingsComponent, FlameScale), 0.05f,
+              "Flame tongue length/width scale vs. tactical shooter pack.", 0.1f, 5.0f },
+            { "Beam Range", T::Float, TARTARUS_REFLECT_FIELD(FxHudSettingsComponent, BeamRange), 1.0f,
+              "Laser beam metres drawn before fading in the haze.", 1.0f, 500.0f },
+            { "Beam Half Width", T::Float, TARTARUS_REFLECT_FIELD(FxHudSettingsComponent, BeamHalfWidth), 0.0001f,
+              "Laser beam width in metres.", 0.0001f, 0.1f },
+            { "Beam Falloff", T::Float, TARTARUS_REFLECT_FIELD(FxHudSettingsComponent, BeamFalloff), 0.1f,
+              "Laser beam glow falloff distance in metres near the emitter.", 0.1f, 50.0f },
+            { "Beam Bend", T::Float, TARTARUS_REFLECT_FIELD(FxHudSettingsComponent, BeamBend), 0.1f,
+              "Laser beam easing distance over which view-model emitter eases onto the true path (metres).", 0.1f, 20.0f },
+            { "Feed Life", T::Float, TARTARUS_REFLECT_FIELD(FxHudSettingsComponent, FeedLife), 0.1f,
+              "Seconds a kill feed line stays on screen.", 0.1f, 60.0f },
+            { "Streak Window", T::Float, TARTARUS_REFLECT_FIELD(FxHudSettingsComponent, StreakWindow), 0.1f,
+              "Seconds to count consecutive kills for streak display.", 0.1f, 60.0f },
+            { "Sub Linger", T::Float, TARTARUS_REFLECT_FIELD(FxHudSettingsComponent, SubLinger), 0.01f,
+              "Seconds a subtitle lingers after its clip ends.", 0.01f, 10.0f },
+        },
+    });
 
     // #132 - String fields that hold asset paths: tracked by GUID so renaming or moving the file
     // outside the editor keeps the reference (see ReflectField::AssetPath).
