@@ -10,10 +10,6 @@ layout (location = 7) in vec4 aColor; // #113 vertex colour (white when the mesh
 
 uniform mat4 uModel;
 uniform mat4 uNormalMatrix; // mat3 inverse-transpose of uModel in a mat4 (loader has no mat3fv)
-// Instanced draws of one static mesh (SceneRenderer batches identical primitives): instance i's world matrix
-// then its normal matrix are uInst[2i], uInst[2i + 1] (Model::UploadInstances), instead of the two uniforms.
-uniform int uInstanced;
-layout(std430, binding = 22) readonly buffer InstBlock { mat4 uInst[]; };
 uniform mat4 uView;
 uniform mat4 uProj;
 uniform int uUseSkinning;
@@ -92,22 +88,15 @@ void main() {
         localTangent = mat3(skinMat) * aTangent;
     }
 
-    mat4 modelM = uModel;
-    mat4 normalM = uNormalMatrix;
-    if (uInstanced == 1) {
-        int inst = clamp(gl_InstanceID, 0, uInst.length() / 2 - 1);
-        modelM = uInst[2 * inst];
-        normalM = uInst[2 * inst + 1];
-    }
-    vec4 world = modelM * localPos;
+    vec4 world = uModel * localPos;
     vWorldPos = world.xyz;
 
-    mat3 normalMat = mat3(normalM); // inverse-transpose of the model matrix, computed once on the CPU (#104)
+    mat3 normalMat = mat3(uNormalMatrix); // inverse-transpose of uModel, computed once on the CPU (#104)
     vNormal = normalize(normalMat * localNormal);
     // Tangents transform with the model matrix's linear part directly (not the
     // inverse-transpose used for normals) — using normalMat here would skew tangents
     // under non-uniform scale.
-    vec3 T = normalize(mat3(modelM) * localTangent);
+    vec3 T = normalize(mat3(uModel) * localTangent);
     T = normalize(T - dot(T, vNormal) * vNormal);
     vec3 B = cross(vNormal, T) * aTangentSign;
     vTBN = mat3(T, B, vNormal);

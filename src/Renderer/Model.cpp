@@ -1835,43 +1835,7 @@ void BindBoneRange(GLintptr offset, GLsizeiptr size) {
 }
 } // namespace
 
-// Per-instance world + normal matrices of an instanced DrawSelected (SSBO binding 22), in per-frame
-// ring slices like the bone palettes. Process-lifetime.
-static constexpr GLsizeiptr kInstSliceBytes = 4 * 1024 * 1024; // 32768 instances per frame
-static unsigned int g_InstRing = 0;
-static GLsizeiptr g_InstAlign = 256;
-static GLsizeiptr g_InstCursor = 0;
-
-bool Model::UploadInstances(const glm::mat4* xforms, int count) {
-    if (count < 1) return false;
-    const GLsizeiptr bytes = (GLsizeiptr)count * 2 * (GLsizeiptr)sizeof(glm::mat4);
-    if (!g_InstRing) {
-        glCreateBuffers(1, &g_InstRing);
-        glNamedBufferStorage(g_InstRing, kBoneRingSlices * kInstSliceBytes, nullptr, GL_DYNAMIC_STORAGE_BIT);
-        GLint align = 0;
-        glGetIntegerv(GL_SHADER_STORAGE_BUFFER_OFFSET_ALIGNMENT, &align);
-        if (align > 0) g_InstAlign = align;
-    }
-    if (g_InstCursor + bytes > kInstSliceBytes) return false;
-    static std::vector<glm::mat4> staging;
-    staging.resize((size_t)count * 2);
-    for (int i = 0; i < count; ++i) {
-        staging[(size_t)i * 2] = xforms[i];
-        staging[(size_t)i * 2 + 1] = glm::mat4(glm::transpose(glm::inverse(glm::mat3(xforms[i]))));
-    }
-    const GLintptr offset = (GLintptr)(g_BoneSlice * kInstSliceBytes + g_InstCursor);
-    glNamedBufferSubData(g_InstRing, offset, bytes, staging.data());
-    g_InstCursor += (bytes + g_InstAlign - 1) / g_InstAlign * g_InstAlign;
-    glBindBufferRange(GL_SHADER_STORAGE_BUFFER, 22, g_InstRing, offset, bytes);
-    return true;
-}
-
-unsigned Model::InstanceGeometry() const {
-    return m_D->Meshes.size() == 1 && m_D->BoneCounter == 0 ? m_D->Meshes[0]->GeometryId() : 0u;
-}
-
 void Model::BeginRenderFrame() {
-    g_InstCursor = 0;
     g_BoneSlice = (g_BoneSlice + 1) % kBoneRingSlices;
     g_BoneCursor = 0;
     ++g_BoneEpoch;
@@ -2168,7 +2132,7 @@ void Model::DrawSelected(Shader& fallback, const glm::mat4& xform,
                          const std::vector<std::shared_ptr<MaterialAsset>>& slots,
                          const ProgramSelector& selectProgram, float opacity,
                          const std::function<void(Shader&)>& onProgramBound, MeshPass pass, bool forceDoubleSided,
-                         const VisibleIndexBuffer* visible, int instances) {
+                         const VisibleIndexBuffer* visible) {
     const glm::mat4 nrm = glm::mat4(glm::transpose(glm::inverse(glm::mat3(xform))));
 
     Shader*             lastProg = nullptr;
@@ -2204,7 +2168,6 @@ void Model::DrawSelected(Shader& fallback, const glm::mat4& xform,
             prog->SetMat4(prog->Loc("uModel"), xform);
             prog->SetMat4(prog->Loc("uNormalMatrix"), nrm);
             if (onProgramBound) onProgramBound(*prog); // per-draw uniforms, e.g. probes (#108)
-            if (instances > 1) prog->SetInt("uInstanced", 1); // the vertex shader reads UploadInstances' matrices
             lastProg = prog;
         }
         // Per-draw: the transparent pass varies opacity per entity. No-op on opaque programs
@@ -2224,9 +2187,8 @@ void Model::DrawSelected(Shader& fallback, const glm::mat4& xform,
         if (useVisible)
             m_D->Meshes[i]->DrawIndices(visible->Id(), visible->MeshRange(i).Offset, visible->MeshRange(i).Count);
         else
-            m_D->Meshes[i]->Draw(instances);
+            m_D->Meshes[i]->Draw();
     }
-    if (instances > 1 && lastProg) lastProg->SetInt("uInstanced", 0);
 }
 
 void Model::DrawDepthOnly(Shader& shader, const std::vector<std::shared_ptr<MaterialAsset>>& slots, int instances,

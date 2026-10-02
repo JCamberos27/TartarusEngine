@@ -19,8 +19,6 @@ public:
     ModelMesh(const ModelMesh& source, ShareGeometry);
     ~ModelMesh();
 
-    // Meshes that return the same non-zero id draw from the same buffers (SceneRenderer batches them).
-    unsigned GeometryId() const { return m_VAO; }
     bool NeedsUpload() const { return m_VAO == 0; }
     void FinishUpload();
 
