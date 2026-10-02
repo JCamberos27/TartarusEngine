@@ -186,7 +186,6 @@ private:
     void Callout(Npc& n, Bark ev);
     void UpdateVoice(const PlayerSnapshot& p);
     void Respawns(World& world, AssetLibrary& assets, const PlayerSnapshot& p);
-    bool CanSee(const Npc& n, const glm::vec3& point) const; // a solid-world sight line
     void BuildNav(World& world);
 
     bool m_Active = false, m_Started = false;
