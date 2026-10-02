@@ -106,6 +106,15 @@ A transition with no conditions and no exit time never fires, and the window war
 Each layer keeps a crossfade stack, so a transition that interrupts another crossfade
 starts from the blended pose that was showing. Nothing pops.
 
+### Weight curves
+
+A state can carry named float **curves** (state properties panel, **Curves** section; saved as `curves` in
+the controller JSON). Keys are (time, value) over the state's normalized time: 0 is entry, 1 the end of one
+pass (a looping state repeats it); linear between keys, held outside them. **Add Curve** offers the names
+the first-person driver reads - `IK`, `IK_RightHand`, `IK_LeftHand`, `Look` - or type your own for game code.
+A state without the curve reads as 1, so nothing changes until you author one. Edits mark the controller
+dirty and undo like other state edits; the keys are kept sorted by time.
+
 ### 1D blend trees
 
 A blend-tree state blends clips along one Float parameter:
