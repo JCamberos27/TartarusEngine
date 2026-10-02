@@ -109,8 +109,6 @@ void TestNpcSpineTwistClamping() {
 void TestFootTiltLimiting() {
     // Verify that foot tilt is properly limited by max angle
     // Simulate a steep slope (e.g., normal vector tilted 30 degrees)
-    float slope30deg = 0.5f; // sin(30 deg) ≈ 0.5, so acos(cos 30) ≈ 30 deg offset
-
     glm::vec3 normal(0.5f, 0.866f, 0.0f); // normal tilted ~30 deg from vertical
     float maxTilt = 0.5f; // radians, about 28 degrees
 
