@@ -127,6 +127,8 @@ struct RagdollPart {
     float InertiaHalfWidth = 0.0f, InertiaHalfDepth = 0.0f;
     float InertiaLateral[3] = {0, 0, 1};
     float InertiaScale = 1.0f;
+    // Viscous damping of the joint holding this part to its parent (acceleration units, as the drive's), always on, with the drives off too.
+    float JointDamping = 0.0f;
     // Anatomical limits (Anatomical true): the joint frame is `LimitFrame` (world, xyzw) with +X the bone's neutral
     // direction and +Y the direction of positive flexion; the swing ranges are degrees from that neutral (flexion toward +Y =
     // SwingZ, sideways = SwingY), the twist about +X. The part's pose at build may sit anywhere inside (or outside: the range

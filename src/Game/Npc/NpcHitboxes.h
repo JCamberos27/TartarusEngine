@@ -11,7 +11,7 @@
 
 class NpcBody;
 
-// A living soldier's hitboxes: the same eleven capsules the ragdoll is built from (NpcRagdoll's part table), as
+// A living soldier's hitboxes: eleven capsules (the table in NpcRagdoll.cpp, which the ragdoll's own table extends), as
 // kinematic, query-only bodies in the physics world, posed from the animated skeleton after its late pose. The player's
 // rounds hit these (PhysicsWorld::RaycastBodyParts says which) instead of the character's movement capsule.
 class NpcHitboxes {
