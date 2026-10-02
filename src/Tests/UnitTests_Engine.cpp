@@ -30,7 +30,20 @@ static void Test_GravityGunSettings_Defaults() {
     CHECK(settings.ScrollTurnDeg > 0.0f);
 }
 
+static void Test_FirstPersonControllerComponent_CameraTunables() {
+    FirstPersonControllerComponent fpc;
+
+    // Check that camera and control tunables are present with sensible defaults
+    CHECK(fpc.StickLookDegPerSec > 0.0f);      // gamepad turn rate
+    CHECK(fpc.EyeRadius > 0.0f && fpc.EyeRadius < 1.0f);  // eye collision sphere
+
+    // Verify they match the expected default values (from components removed from hardcoded)
+    CHECK(fpc.StickLookDegPerSec == 180.0f);   // from Player.cpp
+    CHECK(fpc.EyeRadius == 0.12f);             // from FirstPersonPresentation.cpp
+}
+
 void RegisterEngineTests(UnitTestSupport::TestList& tests) {
     tests.push_back({"Model::HasBones", Test_Model_HasBones});
     tests.push_back({"GravityGunSettings::Defaults", Test_GravityGunSettings_Defaults});
+    tests.push_back({"FirstPersonControllerComponent::CameraTunables", Test_FirstPersonControllerComponent_CameraTunables});
 }

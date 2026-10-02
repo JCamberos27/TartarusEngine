@@ -107,6 +107,7 @@ bool FirstPersonPresentation::Start(World& world, AssetLibrary& assets,
     m_PendingSlot = -1;
     m_WalkSpeed = config.MoveSpeed;
     m_SprintSpeed = config.MoveSpeed * config.SprintMultiplier;
+    m_EyeRadius = config.EyeRadius;
     // The other slots' spent cases too (StartSet warms its own): a swap to the other gun mustn't stall on its first round.
     for (size_t i = 1; i < m_SlotSets.size(); ++i) WarmEjectAssets(assets, m_SlotSets[i]);
     return StartSet(world, assets, 0, false);
@@ -1497,11 +1498,11 @@ void FirstPersonPresentation::Update(World& world, Camera& camera) {
             const glm::vec3 dir = camera.Right() * (side > 0.0f ? 1.0f : -1.0f);
             const float origin[3] = {camera.Position.x, camera.Position.y, camera.Position.z};
             const float d[3] = {dir.x, dir.y, dir.z};
-            constexpr float kEyeRadius = 0.12f; // keeps the near plane off the wall
+            // keeps the near plane off the wall; tunable from FirstPersonControllerComponent
             RaycastHit hit;
             QueryFilter filter;
             filter.HitTriggers = 0;
-            if (PhysicsWorld::SphereCastFiltered(origin, d, kEyeRadius, std::fabs(side), filter, hit) && hit.Hit) {
+            if (PhysicsWorld::SphereCastFiltered(origin, d, m_EyeRadius, std::fabs(side), filter, hit) && hit.Hit) {
                 const float room = std::max(0.0f, hit.Distance - 0.02f);
                 const float fraction = room / std::fabs(side);
                 side *= fraction;
