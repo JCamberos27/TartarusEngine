@@ -266,6 +266,7 @@ void Draw(const EditorModuleHostAPI& host) {
 
     // One toolbar row: clear / save, the three level toggles (each with its count), the search box
     // filling the middle, and an options popup for the less frequent switches.
+    EditorUIPrimitives::BeginPanelToolbar("ConsoleToolbar");
     const float iconW = ImGui::GetFrameHeight();
     const ImGuiStyle& st = ImGui::GetStyle();
     ImGui::PushStyleVar(ImGuiStyleVar_ItemSpacing, ImVec2(EditorTheme::Px(2.0f), st.ItemSpacing.y));
@@ -338,6 +339,7 @@ void Draw(const EditorModuleHostAPI& host) {
         if (ImGui::IsItemHovered()) Tooltip(host, "Freeze the running simulation the moment a new error is logged");
         ImGui::EndPopup();
     }
+    EditorUIPrimitives::EndPanelToolbar();
 
     // #219: rebuild the filtered index list only when something that affects it actually changed
     // (the text filter, a level toggle, or the log gaining/losing entries via Log::Revision())
@@ -361,15 +363,6 @@ void Draw(const EditorModuleHostAPI& host) {
         g_FilterCacheShowWarning = state.ShowWarning;
         g_FilterCacheShowError = state.ShowError;
         g_FilterCacheCollapse = state.Collapse;
-    }
-
-    {
-        // A hairline under the toolbar, full width.
-        const ImVec2 wp = ImGui::GetWindowPos();
-        const float y = std::floor(ImGui::GetCursorScreenPos().y) + 0.5f;
-        ImGui::GetWindowDrawList()->AddLine(ImVec2(wp.x, y), ImVec2(wp.x + ImGui::GetWindowWidth(), y),
-                                            EditorTheme::U32(EditorTheme::Hairline));
-        ImGui::Dummy(ImVec2(0.0f, EditorTheme::Px(2.0f)));
     }
     if (g_FilteredIndices.empty()) {
         g_SelectedEntry = -1;
