@@ -1220,21 +1220,21 @@ struct RagdollSettingsComponent {
     float ChestImpulseSpeed = 5.0f;
     float CorpseShotBase = 1.5f;
     float CorpseShotPerDamage = 0.04f;
-    float PelvisMass = 14.0f;
-    float SpineMass = 18.0f;
+    float PelvisMass = 15.0f;
+    float SpineMass = 19.0f;
     float SpineFlexMax = 45.0f;
     float SpineExtMax = 20.0f;
     float SpineLatIn = 25.0f;
     float SpineLatOut = 25.0f;
     float SpineTwistIn = 30.0f;
     float SpineTwistOut = 30.0f;
-    float HeadMass = 5.0f;
-    float HeadFlexMax = 50.0f;
-    float HeadExtMax = 60.0f;
-    float HeadLatIn = 40.0f;
-    float HeadLatOut = 40.0f;
-    float HeadTwistIn = 70.0f;
-    float HeadTwistOut = 70.0f;
+    float HeadMass = 4.5f;
+    float HeadFlexMax = 25.0f;
+    float HeadExtMax = 30.0f;
+    float HeadLatIn = 20.0f;
+    float HeadLatOut = 20.0f;
+    float HeadTwistIn = 35.0f;
+    float HeadTwistOut = 35.0f;
     float UpperArmMass = 2.5f;
     float UpperArmFlexMax = 170.0f;
     float UpperArmExtMax = 60.0f;
@@ -1242,7 +1242,7 @@ struct RagdollSettingsComponent {
     float UpperArmLatOut = 150.0f;
     float UpperArmTwistIn = 70.0f;
     float UpperArmTwistOut = 80.0f;
-    float ForearmMass = 1.8f;
+    float ForearmMass = 1.6f;
     float ForearmFlexMax = 145.0f;
     float ForearmExtMax = 0.0f;
     float ForearmLatIn = 3.0f;
@@ -1256,7 +1256,7 @@ struct RagdollSettingsComponent {
     float ThighLatOut = 45.0f;
     float ThighTwistIn = 40.0f;
     float ThighTwistOut = 45.0f;
-    float CalfMass = 4.5f;
+    float CalfMass = 4.0f;
     float CalfFlexMax = 140.0f;
     float CalfExtMax = 0.0f;
     float CalfLatIn = 3.0f;
@@ -1280,5 +1280,43 @@ struct RagdollSettingsComponent {
     float ForearmFadeScale = 1.0f;
     float ThighFadeScale = 1.0f;
     float CalfFadeScale = 1.0f;
+    // The neck, hands and feet are ragdoll-only parts (the hitboxes stay the eleven): the head's range above is the head on the neck,
+    // the neck's the neck on the chest (together the cervical range). Hand: flexion = palm side, lateral = radial / ulnar deviation.
+    // Foot: flexion = dorsiflexion (toes up), extension = plantarflexion, lateral = toes in / out, twist = inversion / eversion.
+    float NeckMass = 1.0f;
+    float NeckFlexMax = 30.0f;
+    float NeckExtMax = 35.0f;
+    float NeckLatIn = 25.0f;
+    float NeckLatOut = 25.0f;
+    float NeckTwistIn = 40.0f;
+    float NeckTwistOut = 40.0f;
+    float HandMass = 0.5f;
+    float HandFlexMax = 75.0f;
+    float HandExtMax = 70.0f;
+    float HandLatIn = 25.0f;
+    float HandLatOut = 25.0f;
+    float HandTwistIn = 15.0f;
+    float HandTwistOut = 15.0f;
+    float FootMass = 1.0f;
+    float FootFlexMax = 20.0f;
+    float FootExtMax = 50.0f;
+    float FootLatIn = 15.0f;
+    float FootLatOut = 15.0f;
+    float FootTwistIn = 35.0f;
+    float FootTwistOut = 15.0f;
+    float NeckFadeScale = 1.0f;
+    float HandFadeScale = 1.0f;
+    float FootFadeScale = 1.0f;
+    // Hands and feet are light end links that whip the limb above through their joint limit: their rotational inertia is multiplied by
+    // Distal Inertia Scale (on top of Inertia Scale) and their joint carries a viscous Distal Joint Damping that stays on after the drives fade.
+    float DistalInertiaScale = 6.0f;
+    float DistalJointDamping = 40.0f;
+    // Hit flinch: a round that doesn't kill kicks the struck region's bones (a damped spring, on top of the hit animation), scaled by
+    // the damage, and they settle back within FlinchDuration. Visual only: aim, eye and hitboxes don't move.
+    bool HitFlinch = true;
+    float FlinchAngle = 7.0f;
+    float FlinchDuration = 0.3f;
+    float FlinchDamageRef = 40.0f;
+    float FlinchMaxAngle = 28.0f;
 };
 // ---- end lane R ----
