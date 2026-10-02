@@ -59,6 +59,25 @@ struct NpcHoldSettings {
     float CameraSmoothing = 0.06f;   // seconds
     float EyeSlack = 0.035f;         // m the eye may trail the shoulders by
     float LookDownPush = 0.0f, LookDownStart = 0.0f; // looking down, the eye comes forward over the chest
+    // NPC body tuning (Tick, LateUpdate, FootPass)
+    float TurnThreshold = 1.15f;     // radians: a still body further off than this turns on the spot
+    float MoveEase = 0.1f;           // seconds: blend tree parameter easing
+    float FaceEase = 0.09f;          // seconds: heading easing while moving
+    float MaxTwist = 1.2f;           // radians: spine twists toward aim
+    float AimLean = 0.1f;            // radians: torso forward lean aiming, standing
+    float AimLeanCrouched = 0.22f;   // radians: torso lean aiming, crouched (~13 deg)
+    float ReadyLeanCrouched = 0.4f;  // radians: torso lean at low ready, crouched (~23 deg)
+    float CowerHunch = 0.35f;        // radians: spine curls forward ducking (~20 deg)
+    float HeadMaxYaw = 1.2f;         // radians: head turns past chest (~70 deg)
+    float HeadMaxPitch = 0.6f;       // radians: head nods up/down (~35 deg)
+    // NPC foot IK
+    float FootIKMaxDrop = 0.35f;     // m: pelvis drops to lower foot
+    float FootIKMaxRaise = 0.35f;    // m: pelvis rises to higher foot
+    float FootIKPelvisRaise = 0.08f; // m: pelvis height adjustment limit
+    float FootIKTiltMax = 0.5f;      // radians: max foot angle to ground normal
+    float FootOffsetEase = 0.05f;    // seconds: vertical foot adjustment easing
+    float FootNormalEase = 0.08f;    // seconds: ground normal easing
+    float FootIKFade = 0.15f;        // seconds: foot IK enable/disable easing
 };
 
 struct NpcBodyInput {
