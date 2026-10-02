@@ -3090,9 +3090,11 @@ int main(int argc, char** argv) {
                     glm::vec3 bmin = sc.model->BoundsMin(), bmax = sc.model->BoundsMax();
                     sc.bounded = bmin.x <= bmax.x && bmin.y <= bmax.y && bmin.z <= bmax.z;
                     if (!sc.bounded) continue;
-                    // Bounds are bind-pose only (#113): pad animated models around the centre so
+                    // Bounds are bind-pose only (#113): pad rigged models around the centre so
                     // a swinging limb stays inside, the same inflation the main pass culls with.
-                    if (sc.model->HasAnimations()) {
+                    // Use HasBones() instead of HasAnimations() to handle characters whose animation clips
+                    // live in other files (#P1-1).
+                    if (sc.model->HasBones()) {
                         const glm::vec3 c = (bmin + bmax) * 0.5f, h = (bmax - bmin) * 0.5f * 1.75f;
                         bmin = c - h; bmax = c + h;
                     }
@@ -3669,7 +3671,9 @@ int main(int argc, char** argv) {
                     const glm::mat4 model = world.GetCachedWorldTransform(entity);
                     glm::vec3 bmin = rc.ModelRef->BoundsMin(), bmax = rc.ModelRef->BoundsMax();
                     if (bmin.x <= bmax.x && bmin.y <= bmax.y && bmin.z <= bmax.z) {
-                        if (rc.ModelRef->HasAnimations()) { // same inflation as the main pass
+                        // Same inflation as the main pass (#113), using HasBones() to handle
+                        // characters whose animation clips live in other files (#P1-1).
+                        if (rc.ModelRef->HasBones()) {
                             const glm::vec3 c = (bmin + bmax) * 0.5f, hext = (bmax - bmin) * 0.5f * 1.75f;
                             bmin = c - hext; bmax = c + hext;
                         }

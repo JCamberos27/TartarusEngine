@@ -126,9 +126,9 @@ What is left, roughly by expected value. At 1080p the GPU is the limit, at 1440p
 5. **Static geometry** (~0.8 ms of Scene Draw at 1440p): primitives are one Model per entity (139
    spheres at 1152 triangles each, 56 cubes, 36 cylinders). Share one mesh per primitive kind and draw
    identical mesh+material runs instanced, in the main, SSAO and shadow passes. Also cuts CPU draw calls.
-6. **Characters' bounds**: characters whose clips live in other files report `HasAnimations() == false`,
+6. ~~**Characters' bounds**: characters whose clips live in other files report `HasAnimations() == false`,
    so they are culled on unpadded bind-pose bounds in the main, SSAO and shadow passes. Harmless in the
-   Sandbox, but a limb reaching out of the bind box could be culled. Use "has bones" for the padding.
+   Sandbox, but a limb reaching out of the bind box could be culled. Use "has bones" for the padding.~~ **Done (#P1)**: Added `Model::HasBones()` and replaced the three padding checks with it (SceneRenderer L451, main L3095 and L3672).
 
 **CPU** (worth it once the GPU is lighter, or on slower CPUs)
 7. First-person body ~1.4 ms: `ApplyLocalPose` (the final bone matrices do two generic 4x4 products per
