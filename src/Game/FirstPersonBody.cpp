@@ -1908,8 +1908,8 @@ void FirstPersonBody::ArmsLateUpdate(World& world, entt::entity weaponArms, floa
                             if (!haveElbowAim[s]) { elbowAim[s] = aimTo; haveElbowAim[s] = true; }
                             const float angle = std::acos(std::clamp(glm::dot(elbowAim[s], aimTo), -1.0f, 1.0f));
                             if (angle > 1e-5f) {
-                                constexpr float kElbowEase = 0.06f, kElbowMaxRate = glm::radians(540.0f); // seconds; per second
-                                const float step = std::min(angle * Follow(dt, kElbowEase), kElbowMaxRate * dt);
+                                const float kElbowMaxRateRad = glm::radians(cfg.ElbowMaxRate); // convert deg/s to rad/s
+                                const float step = std::min(angle * Follow(dt, cfg.ElbowEase), kElbowMaxRateRad * dt);
                                 glm::vec3 turnAxis = glm::cross(elbowAim[s], aimTo);
                                 if (glm::dot(turnAxis, turnAxis) < 1e-10f) turnAxis = glm::cross(elbowAim[s], glm::vec3(0.0f, 1.0f, 0.0f));
                                 if (glm::dot(turnAxis, turnAxis) < 1e-10f) turnAxis = glm::vec3(1.0f, 0.0f, 0.0f);
