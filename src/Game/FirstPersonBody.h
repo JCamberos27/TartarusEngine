@@ -21,6 +21,9 @@ class World;
 struct FirstPersonBodyComponent;
 struct LocalTRS;
 
+// One body node's arm-shape link to the arms rig (FirstPersonBodyArmShapeLinks).
+struct FirstPersonArmShapeLink { int Body, Rig; bool Clavicle; };
+
 // The world gun this frame (FirstPersonPresentation::WorldGunInput): the first-person gun's butt and
 // bore (world), and how the world copy is placed off it - its butt into the body's right shoulder
 // pocket while shouldered, and always clear of the neck and head (see ArmsLateUpdate).
@@ -221,6 +224,12 @@ private:
     // Per model: does it skin anything the arms' solve moves (under its top spine bone or the clavicles)?
     // Legs, feet and rigid pieces don't, so the solve leaves them be (nothing of theirs it moves is drawn).
     std::map<const Model*, bool> m_SkinsUpperBody;
+    // The body / arms-rig node pairs CopyArmShape works out by name, per (piece model, rig): the same pairs every
+    // frame, so found once. Keyed by model addresses and node counts; cleared at Stop like m_HeadVerts.
+    struct ArmShapeCache { const Model* Body; const Model* Rig; int BodyNodes, RigNodes; std::vector<FirstPersonArmShapeLink> Links; };
+    std::vector<ArmShapeCache> m_ArmShapeCache;
+    void CopyArmShapeCached(const Model& m, const Model& rig, float weight, std::vector<LocalTRS>& pose, const std::vector<int>& parents,
+                            float clavicleWeight);
     bool SkinsUpperBody(const Model& m);
     // The same question for any set of roots (a chain's bones), cached by the chain's first name.
     std::map<std::pair<const Model*, std::string>, bool> m_SkinsUnder;
@@ -311,11 +320,14 @@ void FirstPersonBodyCopyArmShape(const Model& m, const Model& rig, float weight,
                                  const std::vector<int>& parents, float clavicleWeight);
 // The same with the body / rig node pairs worked out once (FirstPersonBodyArmShapeLinks), for a body that holds the
 // same rig frame after frame - no name lookups per frame.
-struct FirstPersonArmShapeLink { int Body, Rig; bool Clavicle; };
 void FirstPersonBodyArmShapeLinks(const Model& m, const Model& rig, const std::vector<int>& parents,
                                   std::vector<FirstPersonArmShapeLink>& out);
 void FirstPersonBodyCopyArmShape(const std::vector<FirstPersonArmShapeLink>& links, const Model& rig, float weight,
                                  std::vector<LocalTRS>& pose, float clavicleWeight);
+// FirstPersonBodyArmShapeLinks' core, by node index: `rigOf(i)` is body node i's counterpart in the rig (-1 none),
+// `clavicles` the body's two collarbone nodes (-1 none). The nodes under a clavicle (parents come first), in order.
+void FirstPersonBodyArmShapeLinksFrom(int count, const std::vector<int>& parents, const int (&clavicles)[2],
+                                      const std::function<int(int)>& rigOf, std::vector<FirstPersonArmShapeLink>& out);
 float FirstPersonBodyFootPelvis(float offL, float offR, float maxDrop, float maxRaise);
 glm::vec3 FirstPersonBodyEye(const glm::vec3& restHead, const glm::vec3& head, float bob, const glm::vec3& offset);
 // A piece's Near Hide: the body's, and for clothing at least Clothing Near Hide.

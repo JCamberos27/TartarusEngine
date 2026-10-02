@@ -131,18 +131,24 @@ void FirstPersonBodyCopyArmShape(const Model& m, const Model& rig, float weight,
     CopyArmShape(m, rig, weight, pose, parents, kNoMap, clavicleWeight);
 }
 
-void FirstPersonBodyArmShapeLinks(const Model& m, const Model& rig, const std::vector<int>& parents,
-                                  std::vector<FirstPersonArmShapeLink>& out) {
+void FirstPersonBodyArmShapeLinksFrom(int count, const std::vector<int>& parents, const int (&clavicles)[2],
+                                      const std::function<int(int)>& rigOf, std::vector<FirstPersonArmShapeLink>& out) {
     out.clear();
-    const int count = std::min(m.NodeCount(), (int)parents.size());
-    std::vector<char> under((size_t)count, 0), clavicle((size_t)count, 0);
-    for (const char* name : {FPBody::kBoneClavicle[0], FPBody::kBoneClavicle[1]})
-        if (const int c = m.NodeIndex(name); c >= 0 && c < count) under[(size_t)c] = clavicle[(size_t)c] = 1;
+    count = std::min(count, (int)parents.size());
+    std::vector<char> under((size_t)std::max(count, 0), 0), clavicle((size_t)std::max(count, 0), 0);
+    for (const int c : clavicles)
+        if (c >= 0 && c < count) under[(size_t)c] = clavicle[(size_t)c] = 1;
     for (int i = 0; i < count; ++i) {
         if (!under[(size_t)i] && parents[(size_t)i] >= 0 && under[(size_t)parents[(size_t)i]]) under[(size_t)i] = 1;
         if (!under[(size_t)i]) continue;
-        if (const int r = rig.NodeIndex(m.NodeName(i)); r >= 0) out.push_back({i, r, clavicle[(size_t)i] != 0});
+        if (const int r = rigOf(i); r >= 0) out.push_back({i, r, clavicle[(size_t)i] != 0});
     }
+}
+
+void FirstPersonBodyArmShapeLinks(const Model& m, const Model& rig, const std::vector<int>& parents,
+                                  std::vector<FirstPersonArmShapeLink>& out) {
+    const int clavicles[2] = {m.NodeIndex(FPBody::kBoneClavicle[0]), m.NodeIndex(FPBody::kBoneClavicle[1])};
+    FirstPersonBodyArmShapeLinksFrom(m.NodeCount(), parents, clavicles, [&](int i) { return rig.NodeIndex(m.NodeName(i)); }, out);
 }
 
 void FirstPersonBodyCopyArmShape(const std::vector<FirstPersonArmShapeLink>& links, const Model& rig, float weight,
@@ -155,6 +161,26 @@ void FirstPersonBodyCopyArmShape(const std::vector<FirstPersonArmShapeLink>& lin
         LocalTRS& t = pose[(size_t)l.Body];
         t.R = glm::normalize(glm::slerp(t.R, rigPose[(size_t)l.Rig].R, l.Clavicle ? clavWeight : weight));
     }
+}
+
+void FirstPersonBody::CopyArmShapeCached(const Model& m, const Model& rig, float weight, std::vector<LocalTRS>& pose,
+                                         const std::vector<int>& parents, float clavicleWeight) {
+    if (pose.size() != parents.size() || (int)pose.size() != m.NodeCount()) {
+        CopyArmShape(m, rig, weight, pose, parents, m_BoneMap, clavicleWeight);
+        return;
+    }
+    ArmShapeCache* entry = nullptr;
+    for (ArmShapeCache& e : m_ArmShapeCache)
+        if (e.Body == &m && e.Rig == &rig && e.BodyNodes == m.NodeCount() && e.RigNodes == rig.NodeCount()) { entry = &e; break; }
+    if (!entry) {
+        // The same pairs CopyArmShape finds by name each call (the clavicles through the Bone Map).
+        const int clavicles[2] = {m.NodeIndex(FPBody::MappedBone(m_BoneMap, FPBody::kBoneClavicle[0])),
+                                  m.NodeIndex(FPBody::MappedBone(m_BoneMap, FPBody::kBoneClavicle[1]))};
+        m_ArmShapeCache.push_back({&m, &rig, m.NodeCount(), rig.NodeCount(), {}});
+        entry = &m_ArmShapeCache.back();
+        FirstPersonBodyArmShapeLinksFrom(m.NodeCount(), parents, clavicles, [&](int i) { return rig.NodeIndex(m.NodeName(i)); }, entry->Links);
+    }
+    FirstPersonBodyCopyArmShape(entry->Links, rig, weight, pose, clavicleWeight);
 }
 
 float FirstPersonBodyYaw(const glm::vec3& front, float fallback) {
@@ -606,6 +632,7 @@ bool FirstPersonBody::OutfitChanged(const World& world) const {
 void FirstPersonBody::Stop(World& world) {
     m_HeadVerts.clear(); // keyed by model address: the next Start's models may reuse this run's
     m_TorsoVerts.clear();
+    m_ArmShapeCache.clear();
     BodyDebug::Info() = BodyDebug::Snapshot{};
     BodyDebug::Clear();
     if (m_PoseSource != entt::null && world.Registry.valid(m_PoseSource)) world.Registry.remove<PoseSourceTag>(m_PoseSource);
@@ -1029,7 +1056,7 @@ void FirstPersonBody::LateUpdate(World& world, Camera& camera, float dt, entt::e
             if (pose.empty() || (int)pose.size() != m.NodeCount() || ul < 0 || ur < 0) break;
             std::vector<int> parents(pose.size());
             for (int i = 0; i < (int)pose.size(); ++i) parents[i] = m.NodeParent(i);
-            CopyArmShape(m, *armRig, m_ArmsWeight, pose, parents, m_BoneMap, cfg.ClavicleFollow);
+            CopyArmShapeCached(m, *armRig, m_ArmsWeight, pose, parents, cfg.ClavicleFollow);
             std::vector<glm::mat4> globals;
             IK::ComputeGlobals(pose, parents, globals);
             left = IK::Position(globals[ul]);
@@ -1789,7 +1816,7 @@ void FirstPersonBody::ArmsLateUpdate(World& world, entt::entity weaponArms, floa
 
             // The rig's arm shapes first, so the elbows bend the way the animation has them; the solve
             // then only fixes the hands.
-            CopyArmShape(m, *rig, m_ArmsWeight, pose, parents, m_BoneMap, cfg.ClavicleFollow);
+            CopyArmShapeCached(m, *rig, m_ArmsWeight, pose, parents, cfg.ClavicleFollow);
 
             const glm::mat4 toModel = glm::inverse(pieceWorld);
             // The first piece in `order` works the shoulder moves out; the rest copy them. (What of the torso's
