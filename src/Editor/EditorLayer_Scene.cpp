@@ -1457,44 +1457,35 @@ void EditorLayer::DrawScreenshotPreview(World& world, AssetLibrary& assets) {
         }
 
         const float btnW = 26.0f * m_UIScale;
-        const int   btnCount = 6; // open externally, copy path, copy image, show in folder, delete, close
-        float rightX = ImGui::GetContentRegionMax().x - btnW * (float)btnCount - 6.0f * (float)(btnCount - 1);
+        const int btnCount = 6; // open externally, copy path, copy image, show in folder, delete, close
+        float rightX = ImGui::GetContentRegionMax().x - btnW * (float)btnCount - EditorTheme::Px(2.0f) * (float)(btnCount - 1);
         if (rightX > ImGui::GetCursorPosX()) ImGui::SameLine(rightX);
         else ImGui::SameLine();
-        ImGui::PushStyleColor(ImGuiCol_Button, ImVec4(0, 0, 0, 0));
-        ImGui::PushStyleColor(ImGuiCol_ButtonHovered, EditorUIPrimitives::FlatHover());
-        ImGui::PushStyleVar(ImGuiStyleVar_FrameBorderSize, 0.0f); // flat icon row, no hairline box
-        if (ImGui::Button(ICON_FA_ARROW_UP_RIGHT_FROM_SQUARE, ImVec2(btnW, 0.0f)))
+        ImGui::PushStyleVar(ImGuiStyleVar_ItemSpacing, ImVec2(EditorTheme::Px(2.0f), ImGui::GetStyle().ItemSpacing.y));
+        if (EditorUIPrimitives::ActionButton(ICON_FA_ARROW_UP_RIGHT_FROM_SQUARE, "Open externally", EditorUI::SetTooltip, false, ImVec2(btnW, 0.0f)))
             Screenshot::OpenFile(m_ShotPreviewPath);
-        if (ImGui::IsItemHovered()) EditorUI::SetTooltip("Open externally");
-        ImGui::SameLine(0.0f, 6.0f);
-        if (ImGui::Button(ICON_FA_COPY, ImVec2(btnW, 0.0f))) {
+        ImGui::SameLine();
+        if (EditorUIPrimitives::ActionButton(ICON_FA_COPY, "Copy path", EditorUI::SetTooltip, false, ImVec2(btnW, 0.0f))) {
             ImGui::SetClipboardText(m_ShotPreviewPath.c_str());
             Log::Info("Copied path: " + m_ShotPreviewPath);
         }
-        if (ImGui::IsItemHovered()) EditorUI::SetTooltip("Copy path");
-        ImGui::SameLine(0.0f, 6.0f);
-        if (ImGui::Button(ICON_FA_IMAGE, ImVec2(btnW, 0.0f))) {
+        ImGui::SameLine();
+        if (EditorUIPrimitives::ActionButton(ICON_FA_IMAGE, "Copy image", EditorUI::SetTooltip, false, ImVec2(btnW, 0.0f))) {
             if (Screenshot::CopyImageToClipboard(m_ShotPreviewPath)) Log::Info("Copied image to clipboard.");
         }
-        if (ImGui::IsItemHovered()) EditorUI::SetTooltip("Copy image");
-        ImGui::SameLine(0.0f, 6.0f);
-        if (ImGui::Button(ICON_FA_FOLDER_OPEN, ImVec2(btnW, 0.0f))) Screenshot::ShowInFolder(m_ShotPreviewPath);
-        if (ImGui::IsItemHovered()) EditorUI::SetTooltip("Show in folder");
-        ImGui::SameLine(0.0f, 6.0f);
-        ImGui::PushStyleColor(ImGuiCol_Text, EditorUIPrimitives::DangerColor());
-        if (ImGui::Button(ICON_FA_TRASH, ImVec2(btnW, 0.0f))) {
+        ImGui::SameLine();
+        if (EditorUIPrimitives::ActionButton(ICON_FA_FOLDER_OPEN, "Show in folder", EditorUI::SetTooltip, false, ImVec2(btnW, 0.0f)))
+            Screenshot::ShowInFolder(m_ShotPreviewPath);
+        ImGui::SameLine();
+        if (EditorUIPrimitives::DangerIconButton(ICON_FA_TRASH, "Delete", EditorUI::SetTooltip, ImVec2(btnW, 0.0f))) {
             RequestDeleteAssets(world, assets, { AssetKeyRef{ m_ShotPreviewPath, false } }, /*skipDialog=*/false);
             open = false;
             ImGui::CloseCurrentPopup();
         }
-        ImGui::PopStyleColor();
-        if (ImGui::IsItemHovered()) EditorUI::SetTooltip("Delete");
-        ImGui::SameLine(0.0f, 6.0f);
-        if (ImGui::Button(ICON_FA_XMARK, ImVec2(btnW, 0.0f))) { open = false; ImGui::CloseCurrentPopup(); }
-        if (ImGui::IsItemHovered()) EditorUI::SetTooltip("Close (Esc)");
+        ImGui::SameLine();
+        if (EditorUIPrimitives::ActionButton(ICON_FA_XMARK, "Close (Esc)", EditorUI::SetTooltip, false, ImVec2(btnW, 0.0f)))
+            { open = false; ImGui::CloseCurrentPopup(); }
         ImGui::PopStyleVar();
-        ImGui::PopStyleColor(2);
 
         ImGui::Spacing();
 
