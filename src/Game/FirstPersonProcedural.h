@@ -11,6 +11,9 @@
 #include <string>
 #include <vector>
 
+struct AnimatorController;
+struct AnimatorControllerComponent;
+
 // Procedural first-person weapon animation, in the spirit of Kinemation's CAS: the animated
 // pose plays as authored, and on top of it the GUN BONE is moved by a stack of procedural
 // layers - recoil, sway, bob, breathing, an ADS aim offset, per-state pose offsets and lean -
@@ -136,7 +139,18 @@ struct WeaponSwaySettings {
     // to frame, and the raw rate made the gun buzz. 0 = raw. The Max limits are soft (the sway
     // eases into them rather than stopping dead).
     float LookSmoothing = 16.0f;
+    // Free-aim dead zone (CAS Sway): the view turns inside a zone before the gun follows - the gun holds its
+    // line while the view turns up to FreeAimZone degrees (yaw, pitch) off it, then is carried along at the
+    // edge; it comes back to centre at FreeAimReturn degrees/second once the view stops turning. 0 = off.
+    glm::vec2 FreeAimZone{0.0f};
+    float FreeAimReturn = 30.0f;   // degrees/second
+    float FreeAimAdsScale = 0.0f;  // the zone with the sights up, as a fraction (0: the sights stay on the view)
 };
+
+// One step of the free-aim offset (degrees, yaw/pitch of the view relative to the gun's line): the view's turn
+// `lookDelta` (degrees) adds to it, clamped to +-`zone` per axis; with `returning` it eases back to 0 at
+// `returnSpeed` degrees/second. A zero zone gives 0. Exposed for tests.
+glm::vec2 StepFreeAim(glm::vec2 offset, glm::vec2 lookDelta, glm::vec2 zone, float returnSpeed, bool returning, float dt);
 
 struct WeaponBobSettings {
     bool Enabled = true;
@@ -243,7 +257,25 @@ struct WeaponAimSettings {
     glm::vec3 HipRotation{0.0f};
     float BlendTime = 0.18f;       // seconds in and out
     Curve Blend;                   // 0..1 easing over the blend
+    // Absolute vs additive (per channel): 1 lays the offset on top of everything the stack has built (today's
+    // behaviour); 0 places the gun at the offset outright, the other layers' motion fading out as the sights
+    // come up. In between mixes the two.
+    float PositionAdditive = 1.0f;
+    float RotationAdditive = 1.0f;
+    // Added to the offset while crouched (blended by the crouch input over CrouchBlendTime), sights up only.
+    glm::vec3 CrouchPosition{0.0f};
+    glm::vec3 CrouchRotation{0.0f};
+    float CrouchBlendTime = 0.25f;
+    // Camera vs weapon: the share (0..1) of the position offset applied by moving the view instead of the gun.
+    // The sight picture on screen is the same; 0 = the gun moves alone (today).
+    float CameraShare = 0.0f;
 };
+
+// The ADS offset's effect on one channel of the pose. `pose` is what the stack has built so far, `offset` the
+// aim offset, `ads` 0..1, `additive` 0..1 (see WeaponAimSettings::PositionAdditive). Exposed for tests.
+inline glm::vec3 BlendAdsChannel(const glm::vec3& pose, const glm::vec3& offset, float ads, float additive) {
+    return pose * (1.0f - ads * (1.0f - additive)) + offset * ads;
+}
 
 // A pose tweak while a state (or any state with a tag) is playing - e.g. lower the gun and roll
 // it in Sprint, or pull it in closer while walking.
@@ -303,7 +335,22 @@ struct WeaponIKSettings {
     // Position in metres (x right, y up, z forward), rotation in degrees (pitch, yaw, roll). Zero = as authored.
     glm::vec3 RightHandPosition{0.0f}, RightHandRotation{0.0f};
     glm::vec3 LeftHandPosition{0.0f}, LeftHandRotation{0.0f};
+    // Clip weight curves: float curves authored on the Animator Controller's states (AnimatorController::Curve)
+    // scale the IK while that state plays, blended by the crossfade. A state with no such curve = 1, so
+    // nothing changes until a curve is authored. The OffTag still works: it multiplies in.
+    bool UseClipCurves = true;
+    std::string CurveAll = "IK";               // the whole arm IK and the procedural motion it carries
+    std::string CurveRightHand = "IK_RightHand";
+    std::string CurveLeftHand = "IK_LeftHand";
+    std::string CurveLook = "Look";            // the rig's look-at (when it has one)
 };
+
+// The clip weight curves' current values (each 0..1, 1 = no curve), read from `layer` of `ac`.
+struct IKCurveWeights {
+    float All = 1.0f, RightHand = 1.0f, LeftHand = 1.0f, Look = 1.0f;
+};
+IKCurveWeights SampleIKCurves(const WeaponIKSettings& ik, const AnimatorController& ctrl,
+                              const AnimatorControllerComponent& ac, int layer = 0);
 
 struct WeaponProceduralSettings {
     WeaponRecoilSettings Recoil;
@@ -360,7 +407,9 @@ struct WeaponProceduralInput {
     bool Sprinting = false;
     bool Ads = false;              // the current state is tagged ADS
     bool IKOff = false;            // the current state is tagged IKOff (or hidden)
+    float IKCurve = 1.0f;          // the clip's "IK" weight curve (IKCurveWeights::All); 1 = none
     float Lean = 0.0f;             // -1 left .. +1 right
+    float Crouch = 0.0f;           // 0..1 crouched (for WeaponAimSettings::Crouch*)
     // The player's full walk and sprint speeds (m/s), for references left at 0.
     float WalkSpeed = 0.0f;
     float SprintSpeed = 0.0f;
@@ -417,6 +466,8 @@ private:
     glm::vec2 m_Look{0.0f};            // low-passed look rate
     float m_DriftTime = 0.0f;
     float m_Exertion = 0.0f;           // 0..1
+    glm::vec2 m_FreeAim{0.0f};         // free-aim offset, degrees (yaw, pitch)
+    float m_CrouchAds = 0.0f;          // smoothed crouch input for the ADS pose
     bool m_WasGrounded = true;
     float m_AirVy = 0.0f;              // vertical speed last frame in the air
     float m_BobWeight = 0.0f, m_BobSprint = 0.0f, m_BobPhase = 0.0f;

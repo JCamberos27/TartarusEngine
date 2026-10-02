@@ -967,6 +967,9 @@ void FirstPersonPresentation::WriteIK() {
     const glm::quat C = NormalizeRotation(QuaternionFromEulerYXZ(m_Set.ViewRotation) * QuaternionFromEulerYXZ(m_Rotation));
     const glm::quat Ci = glm::inverse(C);
     rig->Weight = p.IKWeight;
+    rig->LimbA.CurveWeight = m_IKCurves.RightHand;
+    rig->LimbB.CurveWeight = m_IKCurves.LeftHand;
+    rig->LookCurveWeight = m_IKCurves.Look;
     // With the sights up through a reload or mag check, only the GUN is carried onto Aim's sight
     // line (about the camera bone, in model space); the arms follow it by IK, so the shoulders
     // stay where the body is and nothing has to settle back when the action ends.
@@ -1436,6 +1439,9 @@ void FirstPersonPresentation::Tick(float dt, const glm::vec3& velocity, bool spr
     in.WallSide = m_WallSide;
     in.Ads = ac->HasTag(K::kTagAds);
     in.IKOff = ac->HasTag(K::kTagHidden) || (!m_Set.Procedural.IK.OffTag.empty() && ac->HasTag(m_Set.Procedural.IK.OffTag.c_str()));
+    m_IKCurves = m_Controller ? SampleIKCurves(m_Set.Procedural.IK, *m_Controller, *ac) : IKCurveWeights{};
+    in.IKCurve = m_IKCurves.All;
+    in.Crouch = m_Crouch;
     in.Lean = m_Equipped ? std::clamp(lean + m_PeekLean, -1.0f, 1.0f) : 0.0f;
     in.WalkSpeed = m_WalkSpeed;
     in.SprintSpeed = m_SprintSpeed;
