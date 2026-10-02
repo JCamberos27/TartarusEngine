@@ -409,6 +409,37 @@ void TestAdsBlendPieces() {
 }
 // ---- end lane A round 3 ----
 
+// The cached arm-shape links (FirstPersonBodyArmShapeLinksFrom) pick exactly the nodes the per-frame name walk did:
+// every node under a clavicle (itself included), in order, flagged when it is the clavicle, with the rig's counterpart.
+static void TestArmShapeLinksMatchNameWalk() {
+    // A spine with two clavicle branches (each a chain of 5 with a finger fork) and a leg branch, parents first.
+    std::vector<int> parents = {-1, 0, 1, 2};      // root, pelvis, spine, chest
+    const int clavL = (int)parents.size(); parents.push_back(3);
+    for (int k = 0; k < 5; ++k) parents.push_back((int)parents.size() - 1);
+    parents.push_back(clavL + 2); // fork off the chain
+    const int clavR = (int)parents.size(); parents.push_back(3);
+    for (int k = 0; k < 5; ++k) parents.push_back((int)parents.size() - 1);
+    const int leg = (int)parents.size(); parents.push_back(1);
+    parents.push_back(leg);
+    const int count = (int)parents.size();
+    const auto rigOf = [&](int i) { return i % 7 == 3 ? -1 : i + 10; }; // some nodes the rig lacks
+    for (const bool haveR : {true, false}) {
+        const int clavicles[2] = {clavL, haveR ? clavR : -1};
+        std::vector<FirstPersonArmShapeLink> links;
+        FirstPersonBodyArmShapeLinksFrom(count, parents, clavicles, rigOf, links);
+        std::vector<FirstPersonArmShapeLink> want;
+        for (int i = 0; i < count; ++i) {
+            bool under = false;
+            for (int n = i; n >= 0 && !under; n = parents[(size_t)n]) under = n == clavicles[0] || n == clavicles[1];
+            if (!under || rigOf(i) < 0) continue;
+            want.push_back({i, rigOf(i), i == clavicles[0] || i == clavicles[1]});
+        }
+        CHECK(links.size() == want.size() && !links.empty());
+        for (size_t i = 0; i < std::min(links.size(), want.size()); ++i)
+            CHECK(links[i].Body == want[i].Body && links[i].Rig == want[i].Rig && links[i].Clavicle == want[i].Clavicle);
+    }
+}
+
 void RegisterAnimationTests(UnitTestSupport::TestList& tests) {
     tests.push_back({"FirstPersonBody NPC tunables save/load round-trip", TestFirstPersonBodyNpcTunablesRoundTrip});
     tests.push_back({"NPC turn threshold affects turning", TestNpcTurnThresholdAffectsTurning});
@@ -424,4 +455,5 @@ void RegisterAnimationTests(UnitTestSupport::TestList& tests) {
     tests.push_back({"Clip IK curve and the IKOff tag combine", TestClipCurveAndIKOffTagCombine});
     tests.push_back({"Free-aim dead zone", TestFreeAimDeadZoneMath});
     tests.push_back({"ADS blend pieces: additive, crouch, camera share", TestAdsBlendPieces});
+    tests.push_back({"Arm-shape links match the per-frame name walk", TestArmShapeLinksMatchNameWalk});
 }
