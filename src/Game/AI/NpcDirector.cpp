@@ -1150,6 +1150,7 @@ void NpcDirector::LateUpdate(World& world, float dt, const PlayerSnapshot& p) {
                 n.LateDt += dt;
                 if (n.Animate) { // (a held frame has no fresh pose to solve on: the ragdoll takes the one it has)
                     LatePose(world, n, n.LateDt, p, /*alive=*/false);
+                    m_DeathBones[n.Index].Dt = n.LateDt;
                     n.LateDt = 0.0f;
                 }
                 FinishDeath(world, n);
@@ -1564,6 +1565,8 @@ void NpcDirector::Kill(World& world, Npc& n, const glm::vec3& dir, const glm::ve
         m_DeathCount = std::min(m_DeathCount + 1, kDeathMemory);
     }
     n.DeathPending = true;
+    NpcRagdoll::Capture(n.Body, m_DeathBones[n.Index].Bones); // last frame's pose, for the limbs' velocity
+    m_DeathBones[n.Index].Dt = 0.0f;
     n.DeathDir = glm::length(dir) > 1e-4f ? glm::normalize(dir) : glm::vec3(0.0f, 0.0f, 1.0f);
     n.DeathPoint = point;
     n.DeathShove = shove;
@@ -1591,14 +1594,18 @@ void NpcDirector::FinishDeath(World& world, Npc& n) {
     n.Body.SetPoseOwnedElsewhere(true);
     n.FallSoundAt = m_Now + 0.45f;
     n.Ragdoll = std::make_unique<NpcRagdoll>();
-    if (!n.Ragdoll->Start(n.Body, n.Velocity, n.DeathDir * n.DeathShove, n.DeathPoint, n.DeathPart, &m_RagdollCfg)) {
+    // The bones' velocity: the pose they had when the soldier was hit (last frame's, before the animators moved on) against the
+    // dying frame's, over the real time between (a held frame has no new pose: no relative motion, just the body's).
+    if (!n.Ragdoll->Start(n.Body, n.Velocity, n.DeathDir * n.DeathShove, n.DeathPoint, n.DeathPart, &m_RagdollCfg, &m_DeathBones[n.Index].Bones, m_DeathBones[n.Index].Dt)) {
         n.Ragdoll.reset();
+        m_DeathBones.erase(n.Index);
         if (n.Root != entt::null && world.Registry.valid(n.Root)) {
             world.Registry.emplace_or_replace<DeactivatedTag>(n.Root);
             world.SyncActiveInHierarchy();
         }
         return;
     }
+    m_DeathBones.erase(n.Index);
     n.Ragdoll->Update(0.0f); // the pieces take the parts' first pose now
     if (TrackDeathPop && n.HaveLastBones) {
         static const char* kBones[3] = {"head", "hand_l", "foot_l"};

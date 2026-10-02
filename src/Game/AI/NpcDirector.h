@@ -203,6 +203,8 @@ private:
     int m_SquadSize = 4;
     float m_RespawnDelay = 8.0f, m_Difficulty = 1.0f, m_DamageScale = 0.45f;
     SquadSettingsComponent m_Cfg;            // the scene's Squad Settings (defaults without one)
+    struct DeathCapture { NpcRagdoll::BoneSnapshot Bones; float Dt = 0.0f; };
+    std::unordered_map<int, DeathCapture> m_DeathBones; // by soldier index, from the hit to the ragdoll's start
     RagdollSettingsComponent m_RagdollCfg;   // ... and Ragdoll Settings
     bool m_Respawn = true;
     std::shared_ptr<FirstPersonControllerComponent> m_ViewConfig;

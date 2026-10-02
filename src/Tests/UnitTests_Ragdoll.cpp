@@ -122,6 +122,115 @@ void TestRagdollSettingsReachTheParts() {
     CHECK(!parts[8].Anatomical && std::fabs(parts[8].SwingDeg - NpcPartDefOf(8).Swing) < 1e-5f);
 }
 
+// Each part starts with its own bone's velocity (the finite difference of two poses), not only the body's.
+void TestRagdollPartsInheritTheirBonesVelocity() {
+    const RagdollSettingsComponent cfg;
+    const float dt = 1.0f / 60.0f, angle = 0.25f; // the left hand swung 0.25 rad about the elbow (z) in one frame
+    auto swung = [&](float a, const glm::vec3& shift) {
+        return [=](const char* name, glm::vec3& out) {
+            if (!StandingBone(name, out)) return false;
+            if (std::string(name) == "hand_l") {
+                glm::vec3 elbow;
+                StandingBone("lowerarm_l", elbow);
+                const glm::vec3 r = out - elbow;
+                out = elbow + glm::vec3(r.x * std::cos(a) - r.y * std::sin(a), r.x * std::sin(a) + r.y * std::cos(a), r.z);
+            }
+            if (std::string(name) == "foot_r") out += shift;
+            return true;
+        };
+    };
+    auto speedOf = [](const float v[3]) { return glm::length(glm::vec3(v[0], v[1], v[2])); };
+    PhysicsWorld::RagdollPart before[NpcRagdoll::kParts], now[NpcRagdoll::kParts], jump[NpcRagdoll::kParts], idle[NpcRagdoll::kParts];
+    glm::mat4 wb[NpcRagdoll::kParts], wn[NpcRagdoll::kParts], wj[NpcRagdoll::kParts];
+    CHECK(NpcRagdoll::BuildParts(swung(0.0f, glm::vec3(0.0f)), glm::mat4(1.0f), glm::vec3(0.0f), cfg, before, wb));
+    CHECK(NpcRagdoll::BuildParts(swung(angle, glm::vec3(0.0f)), glm::mat4(1.0f), glm::vec3(0.0f), cfg, now, wn));
+    NpcRagdoll::InheritVelocity(wb, wn, dt, cfg, now);
+    const glm::vec3 w(now[4].AngularVelocity[0], now[4].AngularVelocity[1], now[4].AngularVelocity[2]);
+    std::printf("[UnitTest] forearm spin %.2f rad/s (bone turned %.2f rad in %.0f ms)\n", glm::length(w), angle, dt * 1000.0f);
+    CHECK(std::fabs(std::fabs(w.z) - angle / dt) < 0.05f * angle / dt && std::fabs(w.x) < 0.05f && std::fabs(w.y) < 0.05f);
+    CHECK(speedOf(now[4].Velocity) > 0.3f); // its centre moves too
+    for (int i : {0, 1, 2, 3}) CHECK(speedOf(now[i].AngularVelocity) < 1e-3f);
+    // A teleport (a bone 5 m off in one frame) is clamped, a bad dt adds nothing, and the scale switches it off.
+    CHECK(NpcRagdoll::BuildParts(swung(0.0f, glm::vec3(5.0f, 0.0f, 0.0f)), glm::mat4(1.0f), glm::vec3(0.0f), cfg, jump, wj));
+    NpcRagdoll::InheritVelocity(wb, wj, dt, cfg, jump);
+    float fastest = 0.0f;
+    for (int i = 0; i < NpcRagdoll::kParts; ++i) fastest = std::max(fastest, speedOf(jump[i].Velocity));
+    CHECK(fastest > 1.0f && fastest <= cfg.MaxLimbSpeed + 1e-3f);
+    CHECK(NpcRagdoll::BuildParts(StandingBone, glm::mat4(1.0f), glm::vec3(1.0f, 0.0f, 0.0f), cfg, idle));
+    NpcRagdoll::InheritVelocity(wb, wn, 0.0f, cfg, idle);
+    NpcRagdoll::InheritVelocity(wb, wn, 1.0f, cfg, idle);
+    CHECK(idle[4].AngularVelocity[2] == 0.0f && idle[4].Velocity[0] == 1.0f);
+    RagdollSettingsComponent off = cfg;
+    off.LimbVelocityScale = 0.0f;
+    NpcRagdoll::InheritVelocity(wb, wn, dt, off, idle);
+    CHECK(idle[4].AngularVelocity[2] == 0.0f);
+    // And PhysX takes it: the spun forearm turns in the first steps.
+    World world;
+    PhysicsWorld::Create(world);
+    if (!PhysicsWorld::IsActive()) return;
+    const PhysicsWorld::RagdollParams prm = NpcRagdoll::BodyParams(cfg);
+    const int id = PhysicsWorld::CreateRagdoll(4344u, now, NpcRagdoll::kParts, &prm);
+    CHECK(id >= 0);
+    if (id >= 0) {
+        PhysicsWorld::SetRagdollDrive(id, 0.0f, 0.0f);
+        const glm::vec3 d0 = DirOf(id, 4);
+        for (int i = 0; i < 3; ++i) PhysicsWorld::Step(1.0f / 60.0f, world, {});
+        const float turned = std::acos(std::clamp(glm::dot(d0, DirOf(id, 4)), -1.0f, 1.0f));
+        std::printf("[UnitTest] forearm turned %.3f rad in the first three steps (a bone swung %.2f rad/frame)\n", turned, angle);
+        CHECK(turned > 0.05f);
+        PhysicsWorld::DestroyRagdoll(id);
+    }
+    PhysicsWorld::Destroy();
+}
+
+// The torso parts' inertia comes from a box wider than deep, not the round capsule; the scale multiplies it.
+void TestRagdollShapedInertia() {
+    World world;
+    PhysicsWorld::Create(world);
+    if (!PhysicsWorld::IsActive()) return;
+    auto inertia = [&](const RagdollSettingsComponent& cfg, int part, float out[3]) {
+        PhysicsWorld::RagdollPart parts[NpcRagdoll::kParts];
+        CHECK(NpcRagdoll::BuildParts(StandingBone, glm::mat4(1.0f), glm::vec3(0.0f), cfg, parts));
+        const PhysicsWorld::RagdollParams prm = NpcRagdoll::BodyParams(cfg);
+        const int id = PhysicsWorld::CreateRagdoll(4345u, parts, NpcRagdoll::kParts, &prm);
+        CHECK(id >= 0);
+        const bool ok = id >= 0 && PhysicsWorld::GetRagdollPartInertia(id, part, out);
+        CHECK(ok);
+        if (id >= 0) PhysicsWorld::DestroyRagdoll(id);
+    };
+    RagdollSettingsComponent shaped, capsule, heavy;
+    capsule.ShapedTorsoInertia = false;
+    heavy.InertiaScale = 2.0f;
+    float s[3] = {}, c[3] = {}, h[3] = {}, armShaped[3] = {}, armCapsule[3] = {};
+    inertia(shaped, 1, s); inertia(capsule, 1, c); inertia(heavy, 1, h);
+    inertia(shaped, 4, armShaped); inertia(capsule, 4, armCapsule);
+    std::printf("[UnitTest] chest inertia (about the bone, across, front-back): shaped %.3f %.3f %.3f, capsule %.3f %.3f %.3f\n", s[0], s[1], s[2], c[0], c[1], c[2]);
+    CHECK(std::fabs(s[0] - c[0]) > 0.05f * c[0]);         // not the capsule's
+    CHECK(s[1] < s[2]);                                    // a box wider than deep: easier to bend forward than sideways
+    CHECK(std::fabs(c[1] - c[2]) < 0.02f * c[1]);          // a capsule is symmetric across its axis
+    CHECK(std::fabs(h[0] - 2.0f * s[0]) < 0.01f * s[0] && std::fabs(h[2] - 2.0f * s[2]) < 0.01f * s[2]);
+    for (int k = 0; k < 3; ++k) CHECK(std::fabs(armShaped[k] - armCapsule[k]) < 1e-5f); // limbs keep the capsule's own
+    PhysicsWorld::Destroy();
+}
+
+// Each region's drive fades on its own clock; the defaults are the old single fade.
+void TestRagdollPerRegionDriveFade() {
+    const RagdollSettingsComponent def;
+    for (int i = 0; i < NpcRagdoll::kParts; ++i) CHECK(std::fabs(NpcRagdoll::PartFade(&def, i) - NpcRagdoll::kDriveFade) < 1e-6f);
+    CHECK(std::fabs(NpcRagdoll::PartFade(nullptr, 3) - NpcRagdoll::kDriveFade) < 1e-6f);
+    RagdollSettingsComponent cfg;
+    cfg.DriveFade = 0.4f;
+    cfg.ThighFadeScale = 0.5f; cfg.CalfFadeScale = 0.5f; cfg.SpineFadeScale = 1.5f; cfg.HeadFadeScale = 2.0f;
+    CHECK(std::fabs(NpcRagdoll::PartFade(&cfg, 7) - 0.2f) < 1e-6f && std::fabs(NpcRagdoll::PartFade(&cfg, 10) - 0.2f) < 1e-6f);
+    CHECK(std::fabs(NpcRagdoll::PartFade(&cfg, 1) - 0.6f) < 1e-6f && std::fabs(NpcRagdoll::PartFade(&cfg, 2) - 0.8f) < 1e-6f);
+    CHECK(std::fabs(NpcRagdoll::PartFade(&cfg, 4) - 0.4f) < 1e-6f); // forearms untouched
+    // At 0.2 s the legs are limp while the spine still holds two thirds, the head three quarters.
+    CHECK(NpcRagdoll::DriveAt(0.2f, NpcRagdoll::PartFade(&cfg, 7)) == 0.0f);
+    CHECK(std::fabs(NpcRagdoll::DriveAt(0.2f, NpcRagdoll::PartFade(&cfg, 1)) - (1.0f - 0.2f / 0.6f)) < 1e-5f);
+    CHECK(std::fabs(NpcRagdoll::DriveAt(0.2f, NpcRagdoll::PartFade(&cfg, 2)) - 0.75f) < 1e-5f);
+    CHECK(NpcRagdoll::DriveAt(0.0f, 0.3f) == 1.0f);
+}
+
 // Both settings components save and load, and an old scene (no such fields) loads as the defaults.
 void TestRagdollAndSquadSettingsRoundTrip() {
     World world;
@@ -187,5 +296,8 @@ void RegisterRagdollTests(UnitTestSupport::TestList& tests) {
     tests.push_back({"RagdollHingesDoNotHyperextend", TestRagdollHingesDoNotHyperextend});
     tests.push_back({"RagdollSettingsReachTheParts", TestRagdollSettingsReachTheParts});
     tests.push_back({"RagdollAndSquadSettingsRoundTrip", TestRagdollAndSquadSettingsRoundTrip});
+    tests.push_back({"RagdollPartsInheritTheirBonesVelocity", TestRagdollPartsInheritTheirBonesVelocity});
+    tests.push_back({"RagdollShapedInertia", TestRagdollShapedInertia});
+    tests.push_back({"RagdollPerRegionDriveFade", TestRagdollPerRegionDriveFade});
     tests.push_back({"NpcDirectorReadsSettings", TestNpcDirectorReadsSettings});
 }
