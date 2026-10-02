@@ -1503,6 +1503,7 @@ int main(int argc, char** argv) {
                 playGravityGun = fp.GravityGun;
                 gravityGun.Settings.GrabRange = fp.GrabRange;
                 gravityGun.Settings.AssistRange = fp.AssistRange;
+                gravityGun.Settings.AssistConeDeg = fp.AssistConeDeg;
                 gravityGun.Settings.ScrollTurnDeg = fp.ScrollTurnDeg;
                 gravityGun.Settings.MinThrowSpeed = fp.MinThrowSpeed;
                 gravityGun.Settings.MaxThrowSpeed = std::max(fp.MaxThrowSpeed, fp.MinThrowSpeed);

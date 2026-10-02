@@ -20,6 +20,7 @@ struct GravityGunSettings {
     // Grab parameters
     float GrabRange = 100.0f;     // metres; aiming distance for the primary pick-up ray
     float AssistRange = 30.0f;    // metres; search radius when no object is under the exact crosshair
+    float AssistConeDeg = 7.0f;   // degrees; within this many degrees of the crosshair
     float ScrollTurnDeg = 15.0f;  // degrees per scroll notch while holding an object
     // Throw parameters
     float MinThrowSpeed = 4.0f;   // m/s for a quick click
