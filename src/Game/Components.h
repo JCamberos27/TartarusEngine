@@ -1244,5 +1244,22 @@ struct RagdollSettingsComponent {
     float CalfLatOut = 3.0f;
     float CalfTwistIn = 5.0f;
     float CalfTwistOut = 5.0f;
+    // Death momentum: each part starts with its own bone's velocity (from the last two animated poses), not just the body's.
+    float LimbVelocityScale = 1.0f;
+    float MaxLimbSpeed = 8.0f;
+    float MaxLimbSpin = 30.0f;
+    // Shaped inertia: the torso parts turn like a box wider than deep rather than a round capsule.
+    bool ShapedTorsoInertia = true;
+    float TorsoHalfWidth = 0.18f;
+    float TorsoHalfDepth = 0.11f;
+    float InertiaScale = 1.0f;
+    // The drive fade per region: DriveFade times this (1 = all together).
+    float PelvisFadeScale = 1.0f;
+    float SpineFadeScale = 1.0f;
+    float HeadFadeScale = 1.0f;
+    float UpperArmFadeScale = 1.0f;
+    float ForearmFadeScale = 1.0f;
+    float ThighFadeScale = 1.0f;
+    float CalfFadeScale = 1.0f;
 };
 // ---- end lane R ----
