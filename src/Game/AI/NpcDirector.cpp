@@ -249,6 +249,7 @@ bool NpcDirector::Start(World& world, AssetLibrary& assets, const FirstPersonCon
         m_HoldSettings.FootOffsetEase = fpb.NpcFootOffsetEase;
         m_HoldSettings.FootNormalEase = fpb.NpcFootNormalEase;
         m_HoldSettings.FootIKFade = fpb.NpcFootIKFade;
+        m_HoldSettings.Spine = fpb.Spine; // per-bone spine weights and limits
     }
     m_Active = true;
     m_Started = false;
