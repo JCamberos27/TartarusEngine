@@ -1142,6 +1142,7 @@ int main(int argc, char** argv) {
         // --stock-probe captures the Scene view (the body) beside the Game view (the first-person view).
         if (stockProbeMode || npcTestMode) editor.RequestSceneGameSplit();
         editor.Init(window.Handle());
+        editor.SetHeadless(headless);
         // #148: a hard crash (access violation, stack overflow, abort...) never reaches the
         // exception-path EmergencyRecoverySave, so the crash handler gets its own hook. Pointers
         // live in statics because the handler takes a plain function; the guard below clears the

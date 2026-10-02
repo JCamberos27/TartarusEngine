@@ -503,8 +503,11 @@ void EditorLayer::Shutdown() {
 
     // Safety net: force a preferences write on clean shutdown, in case a future control forgets
     // its own Save() call, and to flush anything raised dirty since the last per-frame Flush().
-    EditorSettings::Save();
-    EditorSettings::Flush();
+    // Skip for headless runs (--unit-tests, --smoke-test, etc.) to avoid persisting transient state.
+    if (!m_Headless) {
+        EditorSettings::Save();
+        EditorSettings::Flush();
+    }
 
     ImGui_ImplOpenGL3_Shutdown();
     ImGui_ImplGlfw_Shutdown();

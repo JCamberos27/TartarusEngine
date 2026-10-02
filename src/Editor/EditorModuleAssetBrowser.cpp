@@ -466,10 +466,7 @@ void Draw(const EditorModuleHostAPI& host) {
     const std::string searchBefore = search;
 
     // --- toolbar row ---------------------------------------------------------------------
-    ImGui::PushStyleVar(ImGuiStyleVar_WindowPadding, ImVec2(0.0f, 0.0f));
-    ImGui::BeginChild("##AssetToolbar", ImVec2(0, ImGui::GetFrameHeight()), ImGuiChildFlags_None,
-        ImGuiWindowFlags_NoScrollbar | ImGuiWindowFlags_NoScrollWithMouse);
-    ImGui::PopStyleVar();
+    EditorUIPrimitives::BeginPanelToolbar("AssetToolbar");
 
     // #14 — was a bare 200.0f, so at anything other than 1x UI scale the search box stayed a
     // fixed pixel width while every neighbouring control (buttons, breadcrumb text) scaled with it.
@@ -729,12 +726,9 @@ void Draw(const EditorModuleHostAPI& host) {
     if (ActionButton(host, ICON_FA_ROTATE, "Refresh - re-scan folders and thumbnails (Ctrl+R)") && host.RefreshAssetBrowser)
         host.RefreshAssetBrowser();
     ImGui::PopStyleVar(); // the icon cluster's tight spacing
-
-    ImGui::EndChild(); // ##AssetToolbar
+    EditorUIPrimitives::EndPanelToolbar();
 
     if (search != searchBefore && host.SetAssetSearch) host.SetAssetSearch(search.c_str());
-
-    ImGui::Separator();
 
     // --- tree | splitter | grid --------------------------------------------------------
     const float footerHeight = ImGui::GetFrameHeightWithSpacing() + 4.0f;

@@ -321,7 +321,7 @@ void EditorLayer::DrawAssetLibraryPanel(World& world, AssetLibrary& assets) {
             const bool importable = s.Models + s.Textures + s.Sounds > 0;
             ImGui::BeginDisabled(!importable || !m_EditorCameraPtr);
             const std::string label = std::string(ICON_FA_FILE_IMPORT "  ") + (alreadyIn ? "Import Again" : "Import") + " '" + name + "'";
-            if (ImGui::Button(label.c_str(), ImVec2(-1.0f, 0.0f)) && m_EditorCameraPtr)
+            if (EditorUIPrimitives::SecondaryButton(label.c_str(), ImVec2(-1.0f, 0.0f)) && m_EditorCameraPtr)
                 HandleDroppedFiles(world, assets, *m_EditorCameraPtr, true, {s.Path});
             ImGui::EndDisabled();
             if (ImGui::IsItemHovered(ImGuiHoveredFlags_AllowWhenDisabled))

@@ -10,7 +10,6 @@
 
 EditorLayer.cpp = The Layers panel's colour-coded filter chip button (fill colour varies per filter, not one of the two fixed treatments) - legitimately not ActionButton-shaped.
 EditorLayer_Inspector.cpp = Mostly the transform gizmo's per-axis X/Y/Z coloured mode buttons (colour IS the information, can't route through a fixed-palette primitive) plus one generic "highlight when active" push and one transparent icon-button treatment; the axis buttons are a real one-off, the rest is pre-existing ActionButton-shaped debt worth migrating opportunistically.
-EditorLayer_Scene.cpp = The screenshot lightbox's folder-open/close icon buttons - pre-existing ActionButton-shaped debt (transparent at rest, white wash on hover, the same treatment ActionButton already encodes), not yet migrated.
 EditorLayer_Toolbar.cpp = The Play/Stop transport button's HUD-intensity-tinted styling (tied to the fixed viewport-HUD text treatment, Defect #54 - not one of the two panel-chrome button treatments) plus its own "paused" active-highlight variant.
 EditorModuleAssetBrowser.cpp = The breadcrumb path segments: text links (secondary text, no body, a hover wash) laid out edge to edge between chevrons - not ActionButton-shaped, since ActionButton draws icons at a fixed square size.
 EditorModuleConsole.cpp = The Info / Warning / Error level toggles: each is tinted in its own severity colour when shown (the colour IS the information, like the Inspector axis buttons), dim when hidden - not the gold "on" state ActionButton draws.
