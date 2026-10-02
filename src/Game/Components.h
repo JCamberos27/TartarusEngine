@@ -488,6 +488,12 @@ struct FirstPersonControllerComponent {
     float MaxThrowSpeed = 18.0f;    // m/s, fully charged
     float ThrowChargeTime = 1.0f;   // seconds to full power
     float ThrowBackspin = 2.0f;     // revolutions per second given to a thrown ball (round bodies only)
+    // Gravity gun grab: aiming distance for the primary pick-up ray
+    float GrabRange = 100.0f;       // metres; Gravity Gun group
+    // Gravity gun aim assist: search radius when no object is under the exact crosshair
+    float AssistRange = 30.0f;      // metres; Gravity Gun group
+    // Gravity gun scroll-wheel tuning: rotation applied per scroll notch while holding an object
+    float ScrollTurnDeg = 15.0f;    // degrees per notch; Gravity Gun group
 
     // Optional camera-bound arms + weapon presentation. The .fpsanim asset defines paired clips;
     // leaving this empty preserves the existing controller exactly (including Sandbox gravity gun

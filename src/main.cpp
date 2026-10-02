@@ -1500,6 +1500,9 @@ int main(int argc, char** argv) {
                 player.KillY = fp.KillY;
                 player.Cam.Fov = fp.VerticalFov();
                 playGravityGun = fp.GravityGun;
+                gravityGun.Settings.GrabRange = fp.GrabRange;
+                gravityGun.Settings.AssistRange = fp.AssistRange;
+                gravityGun.Settings.ScrollTurnDeg = fp.ScrollTurnDeg;
                 gravityGun.Settings.MinThrowSpeed = fp.MinThrowSpeed;
                 gravityGun.Settings.MaxThrowSpeed = std::max(fp.MaxThrowSpeed, fp.MinThrowSpeed);
                 gravityGun.Settings.ChargeTime = fp.ThrowChargeTime;

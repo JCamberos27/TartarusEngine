@@ -15,8 +15,13 @@ struct ThrowPrediction {
     void Clear() { Legs.clear(); ContactPoints.clear(); ContactNormals.clear(); BodyRadius = 0.0f; }
 };
 
-// How the gravity gun throws. Filled from the scene's First Person Controller when there is one.
+// How the gravity gun grabs and throws. Filled from the scene's First Person Controller when there is one.
 struct GravityGunSettings {
+    // Grab parameters
+    float GrabRange = 100.0f;     // metres; aiming distance for the primary pick-up ray
+    float AssistRange = 30.0f;    // metres; search radius when no object is under the exact crosshair
+    float ScrollTurnDeg = 15.0f;  // degrees per scroll notch while holding an object
+    // Throw parameters
     float MinThrowSpeed = 4.0f;   // m/s for a quick click
     float MaxThrowSpeed = 18.0f;  // m/s fully charged
     float ChargeTime = 1.0f;      // seconds of holding left mouse to reach MaxThrowSpeed
