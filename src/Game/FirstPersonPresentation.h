@@ -141,6 +141,8 @@ public:
     // The speeds (m/s) the walk and sprint clips play at: the controller's Move Speed / Sprint Multiplier, or - with a
     // First Person Body - the body's Run / Sprint Speed (what the player really moves at). Call after Start.
     void SetLocomotionSpeeds(float walk, float sprint) { m_WalkSpeed = walk; m_SprintSpeed = sprint; }
+    // 0..1 how crouched the player is, for WeaponAimSettings::Crouch* (call before Tick; default 0).
+    void SetCrouch(float crouch) { m_Crouch = crouch; }
     // Where the barrel points (world space): down the bore from the muzzle to the first surface.
     // False while the gun isn't simply held at the hip (ADS, sprinting, reloading, holstered).
     bool BarrelAimPoint(glm::vec3& out) const;
@@ -274,6 +276,8 @@ private:
     std::string m_ControllerPath;
     AssetLibrary* m_Assets = nullptr;                       // for re-measuring on live edits
     std::shared_ptr<const AnimatorController> m_Controller;
+    float m_Crouch = 0.0f;
+    IKCurveWeights m_IKCurves;                // the clip weight curves this frame (1 = none)
     entt::entity m_Arms = entt::null;
     entt::entity m_Weapon = entt::null;
     std::shared_ptr<Model> m_ArmsModel;
