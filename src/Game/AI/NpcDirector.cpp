@@ -312,6 +312,7 @@ int NpcDirector::Spawn(World& world, AssetLibrary& assets, int spawnIndex) {
     if (auto* name = reg.try_get<NameComponent>(root)) name->Name = "[Runtime] " + n->Name;
     n->SpawnIndex = spawnIndex;
     n->Squad = sp.Squad;
+    n->Dummy = sp.Brain == 1;
     n->Skill = sp.Skill;
 
     // Feet on the walkable mesh, a little apart from anyone already standing there.
@@ -384,7 +385,7 @@ int NpcDirector::Spawn(World& world, AssetLibrary& assets, int spawnIndex) {
     }
 
     while ((int)m_Squads.size() <= n->Squad) m_Squads.emplace_back();
-    m_Squads[(size_t)n->Squad].Members.push_back(n->Index);
+    if (!n->Dummy) m_Squads[(size_t)n->Squad].Members.push_back(n->Index); // a dummy has no part in the squad's tactics
     const int idx = n->Index;
     if (idx < (int)m_Npcs.size()) m_Npcs[(size_t)idx] = std::move(n);
     else m_Npcs.push_back(std::move(n));
@@ -462,7 +463,7 @@ void NpcDirector::Think(World& world, AssetLibrary& assets, float dt, const Play
             Kill(world, n, FrontOf(n.AimYaw, 0.0f) * -1.0f, n.Feet + glm::vec3(0.0f, 0.8f, 0.0f), 6.0f);
             continue;
         }
-        if (!Frozen) {
+        if (!Frozen && !n.Dummy) { // a dummy keeps the intent it spawned with: stand, facing the way it was placed
             SubTimer timer(*this, SubBrain);
             NpcBrain::Think(*this, world, n, p, dt);
         }
@@ -845,7 +846,7 @@ void NpcDirector::UpdateMelee(Npc& n, const PlayerSnapshot& p) {
             ++m_Tactics.MeleeHits;
         }
     }
-    if (HoldFire || n.Wounded || n.Reloading || !n.Mem.Known || !p.Valid || p.Dead || !level || m_Now - n.MeleeAt < kMeleeTime) return;
+    if (HoldFire || n.Dummy || n.Wounded || n.Reloading || !n.Mem.Known || !p.Valid || p.Dead || !level || m_Now - n.MeleeAt < kMeleeTime) return;
     if (!WantsMelee(dist, facing, m_Now - n.MeleeAt)) return;
     n.MeleeAt = m_Now;
     n.MeleeLanded = false;
@@ -985,7 +986,7 @@ void NpcDirector::AimAndFire(World& world, Npc& n, const PlayerSnapshot& p, floa
     const bool reloading = n.Reloading;
     const float tolerance = n.Intent.Suppress ? 9.0f : 4.5f + 3.0f * std::clamp(8.0f / std::max(glm::length(target - n.Eye), 1.0f), 0.0f, 1.0f);
     // A hand off the gun signalling: the order first, then the shooting.
-    bool canFire = n.Intent.Fire && !HoldFire && n.HasAttackToken && n.ReactionLeft <= 0.0f && errorDeg < tolerance && !reloading &&
+    bool canFire = n.Intent.Fire && !HoldFire && !n.Dummy && n.HasAttackToken && n.ReactionLeft <= 0.0f && errorDeg < tolerance && !reloading &&
                    !n.Body.Signalling() && !meleeing &&
                    !sprinting && w.IsEquipped() && p.Valid && !p.Dead && (n.Mem.Visible || n.Intent.Suppress) && w.Ammo() > 0;
     // Never through a friend: the first thing along the line must not be a squadmate (checked every
@@ -1406,7 +1407,7 @@ void NpcDirector::ApplyDamage(World& world, Npc& n, float amount, HitZone zone, 
         if (glm::length(n.PushVel) > 2.5f) n.PushVel = glm::normalize(n.PushVel) * 2.5f;
     }
     // Close to death from a leg or the body: it may go down wounded instead of fighting on (once a life).
-    if (attacker < 0 && !n.WoundRolled && n.Health < 0.2f * n.MaxHealth && (region == HitRegion::Leg || region == HitRegion::Torso)) {
+    if (attacker < 0 && !n.Dummy && !n.WoundRolled && n.Health < 0.2f * n.MaxHealth && (region == HitRegion::Leg || region == HitRegion::Torso)) {
         n.WoundRolled = true;
         if (std::uniform_real_distribution<float>(0.0f, 1.0f)(m_Rng) < m_WoundChance) BecomeWounded(n);
     }
@@ -1446,16 +1447,18 @@ void NpcDirector::Kill(World& world, Npc& n, const glm::vec3& dir, const glm::ve
     // The body goes down in this frame's late pose (LateUpdate -> FinishDeath): the animators and the gun run one more
     // frame, so the ragdoll starts from the pose it was seen in.
     // Where it fell: cover near here is a worse bet for a while.
-    m_DeathPos[m_DeathNext] = n.Feet;
-    m_DeathTime[m_DeathNext] = m_Now;
-    m_DeathNext = (m_DeathNext + 1) % kDeathMemory;
-    m_DeathCount = std::min(m_DeathCount + 1, kDeathMemory);
+    if (!n.Dummy) {
+        m_DeathPos[m_DeathNext] = n.Feet;
+        m_DeathTime[m_DeathNext] = m_Now;
+        m_DeathNext = (m_DeathNext + 1) % kDeathMemory;
+        m_DeathCount = std::min(m_DeathCount + 1, kDeathMemory);
+    }
     n.DeathPending = true;
     n.DeathDir = glm::length(dir) > 1e-4f ? glm::normalize(dir) : glm::vec3(0.0f, 0.0f, 1.0f);
     n.DeathPoint = point;
     n.DeathShove = shove;
     n.DeathPart = part;
-    if (n.Squad < (int)m_Squads.size()) {
+    if (n.Squad < (int)m_Squads.size() && !n.Dummy) { // a dummy going down is no loss to the squad
         Squad& s = m_Squads[(size_t)n.Squad];
         s.LastDeath = m_Now;
         for (int i : s.Members) {
@@ -1538,10 +1541,6 @@ void NpcDirector::OnPlayerRespawned() {
         s.Attackers.clear();
     }
     m_PlayerDamage.clear();
-}
-
-bool NpcDirector::CanSee(const Npc& n, const glm::vec3& point) const {
-    return !CoverSystem::Shielded(point - glm::vec3(0.0f, 0.0f, 0.0f), 0.0f, n.SightEye);
 }
 
 std::vector<DamageEvent> NpcDirector::TakePlayerDamage() {
