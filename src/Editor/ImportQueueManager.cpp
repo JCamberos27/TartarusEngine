@@ -1,4 +1,5 @@
 #include "ImportQueueManager.h"
+#include "EditorUIPrimitives.h"
 #include "Log.h"
 #include <imgui.h>
 #include <filesystem>
@@ -114,10 +115,10 @@ void ImportQueueManager::DrawProgressUI(const std::function<void()>& openConsole
             ImGui::PopTextWrapPos();
             const float half = (ImGui::GetContentRegionAvail().x - ImGui::GetStyle().ItemSpacing.x) * 0.5f;
             if (problems && openConsole) {
-                if (ImGui::Button("Show Console", ImVec2(half, 0.0f))) { openConsole(); m_SummaryShownAt = -1.0; }
+                if (EditorUIPrimitives::SecondaryButton("Show Console", ImVec2(half, 0.0f))) { openConsole(); m_SummaryShownAt = -1.0; }
                 ImGui::SameLine();
             }
-            if (ImGui::Button("Dismiss", ImVec2(problems && openConsole ? half : -1.0f, 0.0f))) m_SummaryShownAt = -1.0;
+            if (EditorUIPrimitives::SecondaryButton("Dismiss", ImVec2(problems && openConsole ? half : -1.0f, 0.0f))) m_SummaryShownAt = -1.0;
         }
         ImGui::End();
         return;
@@ -130,7 +131,7 @@ void ImportQueueManager::DrawProgressUI(const std::function<void()>& openConsole
         float fraction = m_TotalInBatch > 0 ? (float)processed / (float)m_TotalInBatch : 0.0f;
         ImGui::ProgressBar(fraction, ImVec2(-1.0f, 0.0f));
 
-        if (ImGui::Button("Cancel Remaining", ImVec2(-1.0f, 0.0f))) {
+        if (EditorUIPrimitives::SecondaryButton("Cancel Remaining", ImVec2(-1.0f, 0.0f))) {
             CancelRemaining();
         }
     }

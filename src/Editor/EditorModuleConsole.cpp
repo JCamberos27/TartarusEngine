@@ -12,12 +12,15 @@
 // reload doesn't clear the user's filter.
 
 #include "EditorModuleAPI.h"
+#include "EditorPanels.h"
+#include "EditorTheme.h"
 #include "EditorUIPrimitives.h"
 
 #include <imgui.h>
 #include <IconsFontAwesome6.h>
 
 #include <algorithm>
+#include <cmath>
 #include <cctype>
 #include <cstdio>
 #include <cstdlib>
@@ -42,25 +45,6 @@ bool MatchesFilter(const std::string& filter, const std::string& text) {
     };
     return toLower(text).find(toLower(filter)) != std::string::npos;
 }
-
-// Forwards to the shared implementation (EditorUIPrimitives.h, Defect #53).
-bool ActionButton(const EditorModuleHostAPI& host, const char* icon, const char* tooltip) {
-    return EditorUIPrimitives::ActionButton(icon, tooltip, host.SetTooltip);
-}
-
-// Defect #20 — an unchecked Collapse/Clear on Play/Error Pause "reads as bare text label", per
-// the audit. Live pixel-sampled the running build to settle what that actually meant: raw OS-level
-// screenshots (System.Drawing.Bitmap.GetPixel, not a rescaled/compressed screenshot-tool crop)
-// prove ImGui::Checkbox's frame WAS painting the configured rgb(97,97,97) FrameBg exactly where
-// expected — it isn't invisible, it's just a 3:1-contrast mid-grey square with no border (this
-// theme runs FrameBorderSize 0 everywhere, see EditorLayer.cpp's #34 comment) on a near-black
-// #121212 toolbar, small enough and low-contrast enough to disappear at a glance and in any
-// compressed/rescaled screenshot — which is exactly the "no checkbox or button frame" the audit
-// (reasonably) reported. Auto-scroll/Timestamps read fine only because they default checked, and
-// a checked box's CheckboxSelectedBg fill + CheckMark tick are both far more saturated. The same
-// pattern turned up editor-wide (#73), so the fix now lives as EditorUIPrimitives::Checkbox — a
-// thin wrapper that keeps real ImGui::Checkbox for all of the actual behaviour and just adds the
-// outline this theme otherwise omits.
 
 // EditorUI::VSeparator: a 1px rule in ImGuiCol_Separator spanning the frame height, with
 // ItemSpacing.x of breathing room either side. Advances the cursor itself.
@@ -203,6 +187,7 @@ bool LevelVisible(const EditorConsoleState& state, int level) {
 std::vector<int> g_FilteredIndices;
 std::vector<int> g_RowCounts;
 unsigned int g_FilterCacheRevision = (unsigned int)-1; // forces a rebuild on first draw
+int g_SelectedEntry = -1; // log index of the row picked for the detail pane; -1 = none
 std::string g_FilterCacheFilter;
 bool g_FilterCacheShowInfo = true;
 bool g_FilterCacheShowWarning = true;
@@ -275,15 +260,21 @@ void Draw(const EditorModuleHostAPI& host) {
     const bool consoleLightChrome = false;
     if (consoleLightChrome) ImGui::PushStyleColor(ImGuiCol_Text, ImVec4(0.97f, 0.98f, 1.00f, 1.0f));
     ImGuiWindowFlags flags = ImGuiWindowFlags_None;
-    const bool consoleOpen = ImGui::Begin(ICON_FA_TERMINAL "  Console", &state.Visible, flags);
+    const bool consoleOpen = ImGui::Begin(EditorPanels::Console, &state.Visible, flags);
     if (consoleLightChrome) ImGui::PopStyleColor();
     if (!consoleOpen) { ImGui::End(); return; }
 
-    if (ActionButton(host, ICON_FA_TRASH "  Clear", "Remove every message from the console")) {
+    // One toolbar row: clear / save, the three level toggles (each with its count), the search box
+    // filling the middle, and an options popup for the less frequent switches.
+    const float iconW = ImGui::GetFrameHeight();
+    const ImGuiStyle& st = ImGui::GetStyle();
+    ImGui::PushStyleVar(ImGuiStyleVar_ItemSpacing, ImVec2(EditorTheme::Px(2.0f), st.ItemSpacing.y));
+    if (EditorUIPrimitives::ActionButton(ICON_FA_TRASH_CAN, "Clear the console", host.SetTooltip, false, ImVec2(iconW, iconW))) {
         if (host.LogClear) host.LogClear();
     }
     ImGui::SameLine();
-    if (ActionButton(host, ICON_FA_FLOPPY_DISK "  Save...", "Write the messages currently shown to a text file")) {
+    if (EditorUIPrimitives::ActionButton(ICON_FA_FLOPPY_DISK, "Save the messages shown to a text file", host.SetTooltip, false,
+                                         ImVec2(iconW, iconW))) {
         char pathBuf[1024] = {};
         if (host.SaveFileDialog &&
             host.SaveFileDialog("Log Files\0*.log;*.txt\0All Files\0*.*\0", "log", pathBuf, (int)sizeof(pathBuf))) {
@@ -297,48 +288,56 @@ void Draw(const EditorModuleHostAPI& host) {
             }
         }
     }
-    ImGui::SameLine();
-    EditorUIPrimitives::Checkbox("Auto-scroll", &state.AutoScroll);
-    if (ImGui::IsItemHovered()) Tooltip(host, "Automatically jump to the newest message as it arrives");
-    ImGui::SameLine();
-    EditorUIPrimitives::Checkbox("Timestamps", &state.ShowTimestamps);
-    if (ImGui::IsItemHovered()) Tooltip(host, "Show the HH:MM:SS each message first arrived");
-    ImGui::SameLine();
-    EditorUIPrimitives::Checkbox("Collapse", &state.Collapse);
-    if (ImGui::IsItemHovered()) Tooltip(host, "Show each identical message once, with a total count - not just consecutive repeats");
-    ImGui::SameLine();
-    EditorUIPrimitives::Checkbox("Clear on Play", &state.ClearOnPlay);
-    if (ImGui::IsItemHovered()) Tooltip(host, "Wipe the console every time you enter Play mode");
-    ImGui::SameLine();
-    EditorUIPrimitives::Checkbox("Error Pause", &state.ErrorPause);
-    if (ImGui::IsItemHovered()) Tooltip(host, "Freeze the running simulation the moment a new error is logged");
-
-    // Per-level toggles double as counters, the way Unity's console header does.
+    ImGui::PopStyleVar();
     VSeparator();
-    char infoLabel[32], warnLabel[32], errorLabel[32];
+
+    // Per-level toggles double as counters, the way Unity's console header does: the level's
+    // colour while shown, dim while hidden.
     const int infoCount  = host.LogCountOf ? host.LogCountOf(EditorModuleLogLevel_Info) : 0;
     const int warnCount  = host.LogCountOf ? host.LogCountOf(EditorModuleLogLevel_Warning) : 0;
     const int errorCount = host.LogCountOf ? host.LogCountOf(EditorModuleLogLevel_Error) : 0;
-    snprintf(infoLabel, sizeof(infoLabel), ICON_FA_CIRCLE_INFO " %d", infoCount);
-    snprintf(warnLabel, sizeof(warnLabel), ICON_FA_TRIANGLE_EXCLAMATION " %d", warnCount);
-    snprintf(errorLabel, sizeof(errorLabel), ICON_FA_CIRCLE_EXCLAMATION " %d", errorCount);
-    EditorUIPrimitives::Checkbox(infoLabel, &state.ShowInfo);
-    if (ImGui::IsItemHovered()) Tooltip(host, "Show/hide informational messages");
-    ImGui::SameLine();
-    ImGui::PushStyleColor(ImGuiCol_Text, EditorUIPrimitives::WarningColor());
-    EditorUIPrimitives::Checkbox(warnLabel, &state.ShowWarning);
-    ImGui::PopStyleColor();
-    if (ImGui::IsItemHovered()) Tooltip(host, "Show/hide warnings");
-    ImGui::SameLine();
-    ImGui::PushStyleColor(ImGuiCol_Text, EditorUIPrimitives::DangerColor());
-    EditorUIPrimitives::Checkbox(errorLabel, &state.ShowError);
-    ImGui::PopStyleColor();
-    if (ImGui::IsItemHovered()) Tooltip(host, "Show/hide errors");
+    auto levelToggle = [&](const char* icon, int count, bool& on, ImVec4 col, const char* tip) {
+        char label[48];
+        snprintf(label, sizeof(label), "%s %d##%s", icon, count, tip);
+        ImGui::PushStyleColor(ImGuiCol_Button, on ? EditorTheme::WithAlpha(col, 0.12f) : ImVec4(0, 0, 0, 0));
+        ImGui::PushStyleColor(ImGuiCol_ButtonHovered, on ? EditorTheme::WithAlpha(col, 0.20f) : EditorUIPrimitives::FlatHover());
+        ImGui::PushStyleColor(ImGuiCol_ButtonActive, EditorTheme::WithAlpha(col, 0.28f));
+        ImGui::PushStyleColor(ImGuiCol_Text, on ? col : EditorTheme::Dim);
+        ImGui::PushStyleVar(ImGuiStyleVar_FrameBorderSize, 0.0f);
+        if (ImGui::Button(label)) on = !on;
+        ImGui::PopStyleVar();
+        ImGui::PopStyleColor(4);
+        if (ImGui::IsItemHovered()) Tooltip(host, tip);
+    };
+    levelToggle(ICON_FA_CIRCLE_INFO, infoCount, state.ShowInfo, EditorTheme::Secondary, "Show / hide messages");
+    ImGui::SameLine(0.0f, EditorTheme::Px(2.0f));
+    levelToggle(ICON_FA_TRIANGLE_EXCLAMATION, warnCount, state.ShowWarning, EditorUIPrimitives::WarningColor(), "Show / hide warnings");
+    ImGui::SameLine(0.0f, EditorTheme::Px(2.0f));
+    levelToggle(ICON_FA_CIRCLE_EXCLAMATION, errorCount, state.ShowError, EditorUIPrimitives::DangerColor(), "Show / hide errors");
+    VSeparator();
 
-    ImGui::SetNextItemWidth(-1.0f);
-    ImGui::InputTextWithHint("##ConsoleFilter", ICON_FA_MAGNIFYING_GLASS "  Filter messages...",
-                             state.Filter, sizeof(state.Filter));
+    EditorUIPrimitives::SearchField("##ConsoleFilter", state.Filter, sizeof(state.Filter), "Filter messages",
+                                    -(iconW + st.ItemSpacing.x));
     if (ImGui::IsItemHovered() && !ImGui::IsItemActive()) Tooltip(host, "Only show messages containing this text");
+    ImGui::SameLine();
+    const bool anyOption = state.Collapse || state.ClearOnPlay || state.ErrorPause;
+    if (EditorUIPrimitives::ActionButton(ICON_FA_SLIDERS, "Console options", host.SetTooltip, anyOption, ImVec2(iconW, iconW)))
+        ImGui::OpenPopup("##ConsoleOptions");
+    if (ImGui::BeginPopup("##ConsoleOptions")) {
+        EditorUIPrimitives::SectionHeader("CONSOLE");
+        ImGui::MenuItem("Auto-scroll", nullptr, &state.AutoScroll);
+        if (ImGui::IsItemHovered()) Tooltip(host, "Automatically jump to the newest message as it arrives");
+        ImGui::MenuItem("Timestamps", nullptr, &state.ShowTimestamps);
+        if (ImGui::IsItemHovered()) Tooltip(host, "Show the HH:MM:SS each message first arrived");
+        ImGui::MenuItem("Collapse", nullptr, &state.Collapse);
+        if (ImGui::IsItemHovered()) Tooltip(host, "Show each identical message once, with a total count - not just consecutive repeats");
+        EditorUIPrimitives::SectionHeader("PLAY MODE");
+        ImGui::MenuItem("Clear on Play", nullptr, &state.ClearOnPlay);
+        if (ImGui::IsItemHovered()) Tooltip(host, "Wipe the console every time you enter Play mode");
+        ImGui::MenuItem("Error Pause", nullptr, &state.ErrorPause);
+        if (ImGui::IsItemHovered()) Tooltip(host, "Freeze the running simulation the moment a new error is logged");
+        ImGui::EndPopup();
+    }
 
     // #219: rebuild the filtered index list only when something that affects it actually changed
     // (the text filter, a level toggle, or the log gaining/losing entries via Log::Revision())
@@ -363,10 +362,38 @@ void Draw(const EditorModuleHostAPI& host) {
         g_FilterCacheShowError = state.ShowError;
         g_FilterCacheCollapse = state.Collapse;
     }
-    (void)entryCount;
 
-    ImGui::Separator();
-    if (ImGui::BeginChild("##ConsoleScroll", ImVec2(0, 0), false, ImGuiWindowFlags_HorizontalScrollbar)) {
+    {
+        // A hairline under the toolbar, full width.
+        const ImVec2 wp = ImGui::GetWindowPos();
+        const float y = std::floor(ImGui::GetCursorScreenPos().y) + 0.5f;
+        ImGui::GetWindowDrawList()->AddLine(ImVec2(wp.x, y), ImVec2(wp.x + ImGui::GetWindowWidth(), y),
+                                            EditorTheme::U32(EditorTheme::Hairline));
+        ImGui::Dummy(ImVec2(0.0f, EditorTheme::Px(2.0f)));
+    }
+    if (g_FilteredIndices.empty()) {
+        g_SelectedEntry = -1;
+        EditorUIPrimitives::EmptyState(ICON_FA_TERMINAL, entryCount == 0 ? "No messages" : "Nothing matches the filter",
+                                       entryCount == 0 ? "Logs, warnings and errors appear here." : "Clear the search or show more levels.");
+        ImGui::End();
+        return;
+    }
+    // The detail pane under the list: only while a row is selected (and still exists).
+    Entry detailEntry;
+    bool hasDetail = g_SelectedEntry >= 0 && g_SelectedEntry < entryCount && FetchEntry(host, g_SelectedEntry, detailEntry);
+    if (!hasDetail) g_SelectedEntry = -1;
+    if (hasDetail && ImGui::IsWindowFocused(ImGuiFocusedFlags_ChildWindows) && ImGui::IsKeyPressed(ImGuiKey_Escape, false)) {
+        g_SelectedEntry = -1;
+        hasDetail = false;
+    }
+    float detailH = 0.0f;
+    if (hasDetail) {
+        const float availY = ImGui::GetContentRegionAvail().y;
+        detailH = std::max(availY * 0.30f, ImGui::GetTextLineHeightWithSpacing() * 5.0f + EditorTheme::Px(8.0f));
+        detailH = std::min(detailH, availY * 0.70f);
+    }
+    const ImVec2 listSize(0.0f, hasDetail ? ImGui::GetContentRegionAvail().y - detailH - ImGui::GetStyle().ItemSpacing.y : 0.0f);
+    if (ImGui::BeginChild("##ConsoleScroll", listSize, false, ImGuiWindowFlags_HorizontalScrollbar)) {
         ImGuiListClipper clipper;
         clipper.Begin((int)g_FilteredIndices.size(), ImGui::GetTextLineHeightWithSpacing());
         while (clipper.Step()) {
@@ -375,49 +402,63 @@ void Draw(const EditorModuleHostAPI& host) {
                 Entry entry;
                 if (!FetchEntry(host, entryIndex, entry)) continue;
 
-                ImVec4 color(0.82f, 0.84f, 0.86f, 1.0f);
+                ImVec4 color = EditorTheme::Secondary;
                 const char* icon = ICON_FA_CIRCLE_INFO;
                 if (entry.Level == EditorModuleLogLevel_Warning) { color = EditorUIPrimitives::WarningColor(); icon = ICON_FA_TRIANGLE_EXCLAMATION; }
                 else if (entry.Level == EditorModuleLogLevel_Error) { color = EditorUIPrimitives::DangerColor(); icon = ICON_FA_CIRCLE_EXCLAMATION; }
 
                 const int rowCount = (row >= 0 && (size_t)row < g_RowCounts.size()) ? g_RowCounts[(size_t)row] : entry.Count;
-                std::string tsPrefix = (state.ShowTimestamps && !entry.Time.empty()) ? ("[" + entry.Time + "]  ") : "";
-                // Phase 6 item 4 — category column. Padded (monospace body font) rather than a
-                // separate ImGui column so it stays part of the one full-width Selectable the
-                // right-click menu and double-click both depend on.
-                char categoryField[16];
-                snprintf(categoryField, sizeof(categoryField), "%-10s", DeriveCategory(entry.Message).c_str());
-                std::string rowLabel = tsPrefix + categoryField + icon + "  " + entry.Message;
-                if (rowCount > 1) rowLabel += "  (x" + std::to_string(rowCount) + ")";
-
-                // Phase 6 item 4 — a 3px severity band down the row's left edge, in addition to
-                // the icon+colour: colour alone fails at a glance for anyone who can't rely on
-                // hue (the icon already covers that; this is a second, position-based cue matching
-                // Console's leftmost real estate rather than adding a fourth ImGui column).
-                const ImVec2 rowTop = ImGui::GetCursorScreenPos();
-                const float rowHeight = ImGui::GetTextLineHeightWithSpacing();
-                ImGui::Indent(6.0f);
 
                 // PushID on the entry's stable log index rather than baking a pointer into the
-                // label text: a message long enough to fill a fixed label buffer used to truncate
-                // away the "##r<ptr>" ID suffix entirely, silently colliding ImGui IDs between
-                // rows. PushID keeps identity independent of label content/length altogether.
+                // label text: a long message used to truncate the "##r<ptr>" suffix away and collide
+                // rows' IDs.
                 ImGui::PushID(entryIndex);
-                // A full-width Selectable (rather than a bare Text) so the whole row is a real
-                // item with a hover rect — needed for a reliable right-click context menu.
-                // Phase 1 item 5: the Console body is mono so a timestamp column and repeated-
-                // count suffix actually line up; GetMonoFont has the severity icon range merged
-                // onto it too (EditorLayer.cpp), so the inline FA glyph in rowLabel still renders.
+                // An empty Selectable owns the row's hover rect, click, double-click and right-click
+                // menu; the row's parts are painted over it: timestamp and category dim, the level
+                // icon and a 2px band in the level colour, the message, the repeat count. Phase 1
+                // item 5: the body is monospace so the columns line up.
                 ImGui::PushFont(host.GetMonoFont ? host.GetMonoFont() : nullptr, 0.0f);
-                ImGui::PushStyleColor(ImGuiCol_Text, color);
-                const bool rowClicked = ImGui::Selectable(rowLabel.c_str(), false, ImGuiSelectableFlags_AllowDoubleClick);
-                ImGui::PopStyleColor();
+                const ImVec2 rowTop = ImGui::GetCursorScreenPos();
+                const float rowHeight = ImGui::GetTextLineHeightWithSpacing();
+                char categoryField[16]; // Phase 6 item 4 — the category column: 11 cells, cut to fit
+                snprintf(categoryField, sizeof(categoryField), "%-11.10s", DeriveCategory(entry.Message).c_str());
+                char cnt[24] = {};
+                if (rowCount > 1) snprintf(cnt, sizeof(cnt), "%d", rowCount);
+                const bool showTime = state.ShowTimestamps && !entry.Time.empty();
+                const float gapS = EditorTheme::Px(8.0f), gapL = EditorTheme::Px(10.0f), pad = EditorTheme::Px(5.0f);
+                const float rowW = gapS + (showTime ? ImGui::CalcTextSize(entry.Time.c_str()).x + gapL : 0.0f) +
+                                   ImGui::CalcTextSize(categoryField).x + ImGui::CalcTextSize(icon).x + gapS +
+                                   ImGui::CalcTextSize(entry.Message.c_str()).x +
+                                   (cnt[0] ? gapL + ImGui::CalcTextSize(cnt).x + pad * 2.0f : 0.0f) + gapS;
+                if (row % 2 == 1)
+                    ImGui::GetWindowDrawList()->AddRectFilled(ImVec2(ImGui::GetWindowPos().x, rowTop.y),
+                        ImVec2(ImGui::GetWindowPos().x + ImGui::GetWindowWidth(), rowTop.y + rowHeight), EditorTheme::U32(EditorTheme::Stripe));
+                const bool rowClicked = ImGui::Selectable("##row", entryIndex == g_SelectedEntry, ImGuiSelectableFlags_AllowDoubleClick,
+                                                          ImVec2(std::max(ImGui::GetContentRegionAvail().x, rowW), 0.0f));
+                {
+                    ImDrawList* rowDl = ImGui::GetWindowDrawList();
+                    rowDl->AddRectFilled(rowTop, ImVec2(rowTop.x + EditorTheme::Px(2.0f), rowTop.y + rowHeight - 1.0f),
+                                         EditorTheme::U32(EditorTheme::WithAlpha(color, entry.Level == EditorModuleLogLevel_Info ? 0.35f : 1.0f)));
+                    float x = rowTop.x + gapS;
+                    const float y = rowTop.y;
+                    auto put = [&](const char* s, ImVec4 c) {
+                        rowDl->AddText(ImVec2(x, y), EditorTheme::U32(c), s);
+                        x += ImGui::CalcTextSize(s).x;
+                    };
+                    if (showTime) { put(entry.Time.c_str(), EditorTheme::Dim); x += gapL; }
+                    put(categoryField, EditorTheme::Dim);
+                    put(icon, color);
+                    x += gapS;
+                    put(entry.Message.c_str(), entry.Level == EditorModuleLogLevel_Info ? EditorTheme::Text : color);
+                    if (cnt[0]) {
+                        x += gapL;
+                        const ImVec2 cs = ImGui::CalcTextSize(cnt);
+                        rowDl->AddRectFilled(ImVec2(x, y + 1.0f), ImVec2(x + cs.x + pad * 2.0f, y + cs.y - 1.0f),
+                                             EditorTheme::U32(EditorTheme::Raised), cs.y * 0.5f);
+                        rowDl->AddText(ImVec2(x + pad, y), EditorTheme::U32(EditorTheme::Secondary), cnt);
+                    }
+                }
                 ImGui::PopFont();
-
-                ImDrawList* rowDl = ImGui::GetWindowDrawList();
-                rowDl->AddRectFilled(rowTop, ImVec2(rowTop.x + 3.0f, rowTop.y + rowHeight),
-                                     ImGui::ColorConvertFloat4ToU32(color));
-                ImGui::Unindent(6.0f);
 
                 // Phase 6 item 4 — click-to-navigate. An entity reference wins over an asset one
                 // when a message happens to parse as both (hasn't come up in practice, but PhysX
@@ -431,6 +472,7 @@ void Draw(const EditorModuleHostAPI& host) {
                 const bool hasAssetRef = !hasEntityRef && host.PingAssetPath &&
                     (!assetRef.empty() || ParsePathRef(entry.Message, assetRef));
 
+                if (rowClicked) g_SelectedEntry = entryIndex;
                 if (rowClicked && ImGui::IsMouseDoubleClicked(ImGuiMouseButton_Left)) {
                     if (hasEntityRef) host.SelectEntityByOrder(entityRef);
                     else if (hasAssetRef) host.PingAssetPath(assetRef.c_str());
@@ -492,6 +534,52 @@ void Draw(const EditorModuleHostAPI& host) {
         state.SeenRevision = revision;
     }
     ImGui::EndChild();
+
+    if (hasDetail) {
+        // A hairline splitter, then the full message of the selected row.
+        {
+            const ImVec2 wp = ImGui::GetWindowPos();
+            const float y = std::floor(ImGui::GetCursorScreenPos().y - ImGui::GetStyle().ItemSpacing.y * 0.5f) + 0.5f;
+            ImGui::GetWindowDrawList()->AddLine(ImVec2(wp.x, y), ImVec2(wp.x + ImGui::GetWindowWidth(), y),
+                                                EditorTheme::U32(EditorTheme::Hairline));
+        }
+        if (ImGui::BeginChild("##ConsoleDetail", ImVec2(0, 0), false)) {
+            ImVec4 lvlCol = EditorTheme::Secondary;
+            const char* lvlName = "INFO";
+            if (detailEntry.Level == EditorModuleLogLevel_Warning) { lvlCol = EditorUIPrimitives::WarningColor(); lvlName = "WARNING"; }
+            else if (detailEntry.Level == EditorModuleLogLevel_Error) { lvlCol = EditorUIPrimitives::DangerColor(); lvlName = "ERROR"; }
+            const float btn = ImGui::GetFrameHeight();
+
+            EditorTheme::PushSmall();
+            ImGui::AlignTextToFramePadding();
+            ImGui::TextColored(lvlCol, "%s", lvlName);
+            ImGui::SameLine();
+            ImGui::PushStyleColor(ImGuiCol_Text, EditorTheme::Dim);
+            ImGui::Text("%s%s%s", DeriveCategory(detailEntry.Message).c_str(),
+                        detailEntry.Time.empty() ? "" : "   ", detailEntry.Time.c_str());
+            ImGui::PopStyleColor();
+            EditorTheme::PopFont();
+
+            ImGui::SameLine(ImGui::GetWindowContentRegionMax().x - btn * 2.0f - ImGui::GetStyle().ItemSpacing.x);
+            if (EditorUIPrimitives::ActionButton(ICON_FA_COPY, "Copy this message", host.SetTooltip, false, ImVec2(btn, btn)))
+                ImGui::SetClipboardText(detailEntry.Message.c_str());
+            ImGui::SameLine();
+            const bool closeClicked = EditorUIPrimitives::ActionButton(ICON_FA_XMARK, "Close (Esc)", host.SetTooltip, false, ImVec2(btn, btn));
+
+            if (ImGui::BeginChild("##ConsoleDetailText", ImVec2(0, 0), false)) {
+                EditorTheme::PushMono();
+                ImGui::PushTextWrapPos(0.0f);
+                ImGui::PushStyleColor(ImGuiCol_Text, detailEntry.Level == EditorModuleLogLevel_Info ? EditorTheme::Text : lvlCol);
+                ImGui::TextUnformatted(detailEntry.Message.c_str());
+                ImGui::PopStyleColor();
+                ImGui::PopTextWrapPos();
+                EditorTheme::PopFont();
+            }
+            ImGui::EndChild();
+            if (closeClicked) g_SelectedEntry = -1;
+        }
+        ImGui::EndChild();
+    }
 
     ImGui::End();
 }

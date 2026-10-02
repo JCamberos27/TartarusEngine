@@ -3,7 +3,9 @@
 // framing / look-through navigation they share. Split out of EditorLayer.cpp (#179).
 
 #include "EditorLayer.h"
+#include "EditorPanels.h"
 #include "EditorLayerInternal.h"
+#include "EditorTheme.h"
 #include "FileDialog.h"
 #include "AssetLibrary.h"
 #include "World.h"
@@ -672,9 +674,9 @@ void EditorLayer::UpdateLookThrough(World& world, Camera& editorCamera) {
     ImVec2 c(m_ViewportPos.x + m_ViewportSize.x * 0.5f, m_ViewportPos.y + 14.0f * m_UIScale);
     ImVec2 bmin(c.x - ts.x * 0.5f - padX, c.y - padY);
     ImVec2 bmax(c.x + ts.x * 0.5f + padX, c.y + ts.y + padY);
-    dl->AddRectFilled(bmin, bmax, IM_COL32(20, 22, 28, 225), 5.0f);
-    dl->AddRect(bmin, bmax, IM_COL32(255, 210, 90, 220), 5.0f);
-    dl->AddText(ImVec2(c.x - ts.x * 0.5f, c.y), IM_COL32(240, 240, 245, 255), buf);
+    dl->AddRectFilled(bmin, bmax, EditorUIPrimitives::kHudPlateColor, 4.0f * m_UIScale);
+    dl->AddRect(bmin, bmax, EditorTheme::U32(EditorTheme::Accent), 4.0f * m_UIScale);
+    dl->AddText(ImVec2(c.x - ts.x * 0.5f, c.y), EditorUIPrimitives::kHudTextColor, buf);
 }
 
 // --- Drop light to surface (#140 phase 4) --------------------------------------------------
@@ -886,8 +888,8 @@ void EditorLayer::DrawViewportDropTarget(World& world, AssetLibrary& assets, Cam
             const ImVec2 pad(6.0f * m_UIScale, 3.0f * m_UIScale);
             ImDrawList* fg = ImGui::GetForegroundDrawList();
             fg->AddRectFilled(ImVec2(at.x - pad.x, at.y - pad.y), ImVec2(at.x + ts.x + pad.x, at.y + ts.y + pad.y),
-                              IM_COL32(20, 22, 28, 230), 4.0f);
-            fg->AddText(at, IM_COL32(240, 240, 245, 255), hint.c_str());
+                              EditorUIPrimitives::kHudPlateColor, 4.0f * m_UIScale);
+            fg->AddText(at, EditorUIPrimitives::kHudTextColor, hint.c_str());
         }
     } else {
         RestoreMaterialDropPreview(world);
@@ -1005,8 +1007,8 @@ void EditorLayer::HandleViewportPicking(World& world, Camera& editorCamera) {
     if (leftDown) {
         if (isDragging) {
             ImVec2 a(m_BoxSelectStart.x, m_BoxSelectStart.y), b(current.x, current.y);
-            ImGui::GetForegroundDrawList()->AddRectFilled(a, b, IM_COL32(255, 217, 77, 35));
-            ImGui::GetForegroundDrawList()->AddRect(a, b, IM_COL32(255, 217, 77, 220));
+            ImGui::GetForegroundDrawList()->AddRectFilled(a, b, EditorTheme::U32(EditorTheme::WithAlpha(EditorTheme::Accent, 0.12f)));
+            ImGui::GetForegroundDrawList()->AddRect(a, b, EditorTheme::U32(EditorTheme::Accent));
         }
         return; // still held: nothing selected yet, just drawing the marquee
     }
@@ -1287,7 +1289,7 @@ void EditorLayer::DrawEntityIcons(World& world, Camera& editorCamera) {
     // icons would punch through the Inspector, Preferences, any window overlapping the
     // viewport. Appended to the Scene window's list, they sit at its z-order and a panel on
     // top correctly covers them.
-    ImGuiWindow* sceneWin = ImGui::FindWindowByName("Scene");
+    ImGuiWindow* sceneWin = ImGui::FindWindowByName(EditorPanels::Scene);
     ImDrawList* draw = sceneWin ? sceneWin->DrawList : ImGui::GetForegroundDrawList();
     const ImVec2 clipMin(m_ViewportPos.x, m_ViewportPos.y);
     const ImVec2 clipMax(m_ViewportPos.x + m_ViewportSize.x, m_ViewportPos.y + m_ViewportSize.y);
@@ -1348,7 +1350,7 @@ void EditorLayer::DrawEntityIcons(World& world, Camera& editorCamera) {
 
         // Selected state = a subtle ring, not extra geometry inside the marker.
         if (selected)
-            draw->AddCircle(screen, iconPx * 0.72f, IM_COL32(255, 150, 30, 230), 0, 1.5f * m_UIScale);
+            draw->AddCircle(screen, iconPx * 0.72f, EditorTheme::U32(EditorTheme::Accent), 0, 1.5f * m_UIScale);
     }
 
     draw->PopClipRect();
@@ -1365,7 +1367,7 @@ void EditorLayer::DrawLightGizmos(World& world, Camera& editorCamera) {
 
     // Same draw target + clipping as DrawEntityIcons: the Scene window's own list, bounded to
     // the viewport rect, so panels over the viewport cover the shapes instead of them bleeding.
-    ImGuiWindow* sceneWin = ImGui::FindWindowByName("Scene");
+    ImGuiWindow* sceneWin = ImGui::FindWindowByName(EditorPanels::Scene);
     ImDrawList* draw = sceneWin ? sceneWin->DrawList : ImGui::GetForegroundDrawList();
     const ImVec2 clipMin(m_ViewportPos.x, m_ViewportPos.y);
     const ImVec2 clipMax(m_ViewportPos.x + m_ViewportSize.x, m_ViewportPos.y + m_ViewportSize.y);
@@ -1488,7 +1490,7 @@ void EditorLayer::DrawReflectionProbeGizmos(World& world, Camera& editorCamera) 
     const glm::mat4 proj      = editorCamera.ProjectionMatrix(m_ViewportSize.x / m_ViewportSize.y);
     const glm::mat4 viewProj  = proj * view;
 
-    ImGuiWindow* sceneWin = ImGui::FindWindowByName("Scene");
+    ImGuiWindow* sceneWin = ImGui::FindWindowByName(EditorPanels::Scene);
     ImDrawList* draw = sceneWin ? sceneWin->DrawList : ImGui::GetForegroundDrawList();
     const ImVec2 clipMin(m_ViewportPos.x, m_ViewportPos.y);
     const ImVec2 clipMax(m_ViewportPos.x + m_ViewportSize.x, m_ViewportPos.y + m_ViewportSize.y);
@@ -1509,7 +1511,7 @@ void EditorLayer::DrawReflectionProbeGizmos(World& world, Camera& editorCamera) 
     };
 
     const ImU32 kProbeColor    = IM_COL32(100, 200, 255, 200);
-    const ImU32 kProbeSelected = IM_COL32(255, 220,  50, 230);
+    const ImU32 kProbeSelected = EditorTheme::U32(EditorTheme::AccentBright);
     const float kThick = 1.5f;
 
     auto probeView = world.Registry.view<const TransformComponent, const ReflectionProbeComponent>();
@@ -1657,7 +1659,7 @@ void EditorLayer::UpdateLightHandles(World& world, Camera& editorCamera) {
         dots.push_back({LightHandle::Aim, pos + dir * (2.6f * std::max(prefs.LightGizmoScale, 0.05f)), dir});
     }
 
-    ImGuiWindow* sceneWin = ImGui::FindWindowByName("Scene");
+    ImGuiWindow* sceneWin = ImGui::FindWindowByName(EditorPanels::Scene);
     ImDrawList* draw = sceneWin ? sceneWin->DrawList : ImGui::GetForegroundDrawList();
     draw->PushClipRect(ImVec2(m_ViewportPos.x, m_ViewportPos.y),
                        ImVec2(m_ViewportPos.x + m_ViewportSize.x, m_ViewportPos.y + m_ViewportSize.y), true);
@@ -1743,7 +1745,7 @@ void EditorLayer::UpdateLightHandles(World& world, Camera& editorCamera) {
         float r = (hot ? 6.0f : 4.0f) * m_UIScale;
         int fillA = (int)((hot ? 255.0f : 225.0f) * alpha);
         int lineA = (int)(190.0f * alpha);
-        draw->AddCircleFilled(sp, r, hot ? IM_COL32(255, 200, 60, fillA) : IM_COL32(245, 245, 245, fillA));
+        draw->AddCircleFilled(sp, r, hot ? EditorTheme::U32(EditorTheme::WithAlpha(EditorTheme::Accent, fillA / 255.0f)) : IM_COL32(245, 245, 245, fillA));
         draw->AddCircle(sp, r, IM_COL32(0, 0, 0, lineA), 0, 1.5f);
     }
 
@@ -1782,7 +1784,7 @@ static void KeepFloatingWindowsAboveOverlay() {
         if (w->Flags & ImGuiWindowFlags_ChildWindow) continue;
         if (w->DockNode != nullptr) continue;                     // docked — not floating over the viewport
         if (w->Name[0] == '#' && w->Name[1] == '#') continue;     // ##GizmoOverlay / ##DockHost / ...
-        if (std::strcmp(w->Name, "Scene") == 0 || std::strcmp(w->Name, "Game") == 0) continue;
+        if (std::strcmp(w->Name, EditorPanels::Scene) == 0 || std::strcmp(w->Name, EditorPanels::Game) == 0) continue;
         floating.push_back(w);
     }
     for (ImGuiWindow* w : floating) ImGui::BringWindowToDisplayFront(w);
@@ -1838,7 +1840,7 @@ bool EditorLayer::BeginGizmoOverlay(Camera& editorCamera, const char* overlayNam
     // ImGui's g.HoveredWindow — so without this, hovering the actual "Scene" panel makes
     // IsHoveringWindow() return false and the handles draw but never grab. Registering "Scene" as
     // the alternative window is ImGuizmo's supported way to say "the user hovers there, not here".
-    ImGuizmo::SetAlternativeWindow(ImGui::FindWindowByName("Scene"));
+    ImGuizmo::SetAlternativeWindow(ImGui::FindWindowByName(EditorPanels::Scene));
 
     ImGuizmo::SetOrthographic(editorCamera.Orthographic); // #107 — ortho views used to offset the handles
     ImGuizmo::SetDrawlist();
@@ -2023,8 +2025,8 @@ void EditorLayer::DrawGizmoDragReadout(const glm::vec3& pos, const glm::vec3& ro
     const ImVec2 ts = ImGui::CalcTextSize(buf);
     dl->AddRectFilled(ImVec2(at.x - 5.0f, at.y - 3.0f),
                       ImVec2(at.x + ts.x + 5.0f, at.y + ts.y + 3.0f),
-                      IM_COL32(20, 20, 24, 220), 3.0f);
-    dl->AddText(at, IM_COL32(255, 255, 255, 255), buf);
+                      EditorUIPrimitives::kHudPlateColor, 3.0f * m_UIScale);
+    dl->AddText(at, EditorUIPrimitives::kHudTextColor, buf);
 }
 
 // Ray from a screen pixel into the scene; returns the nearest renderable-AABB hit, or a point
@@ -2103,8 +2105,8 @@ void EditorLayer::DrawMeasurement(Camera& cam) {
         ImVec2 ts = ImGui::CalcTextSize(segBuf);
         ImVec2 tp(mid.x - ts.x * 0.5f, mid.y - ts.y - 6.0f);
         dl->AddRectFilled(ImVec2(tp.x - 5.0f, tp.y - 3.0f), ImVec2(tp.x + ts.x + 5.0f, tp.y + ts.y + 3.0f),
-                          IM_COL32(15, 20, 28, 225), 3.0f);
-        dl->AddText(tp, IM_COL32(235, 245, 255, 255), segBuf);
+                          EditorUIPrimitives::kHudPlateColor, 3.0f * m_UIScale);
+        dl->AddText(tp, EditorUIPrimitives::kHudTextColor, segBuf);
     }
 
     // Persistent HUD (audit's "Clear/Copy/unit toggle") — a real ImGui window, not just draw-list
@@ -2112,7 +2114,7 @@ void EditorLayer::DrawMeasurement(Camera& cam) {
     // itself (m_MeasureTool || !m_MeasurePoints.empty() at the call site), so the reading stays
     // on screen after switching to another tool, until explicitly cleared.
     {
-        const float barBottomMargin = 46.0f * m_UIScale; // clears DrawViewportStatusBar below it
+        const float barBottomMargin = 14.0f * m_UIScale; // above the viewport's bottom edge
         ImGui::SetNextWindowPos(ImVec2(m_ViewportPos.x + m_ViewportSize.x * 0.5f,
                                        m_ViewportPos.y + m_ViewportSize.y - barBottomMargin),
                                 ImGuiCond_Always, ImVec2(0.5f, 1.0f));
@@ -2228,6 +2230,10 @@ void EditorLayer::DrawViewGizmo(World& world, Camera& editorCamera) {
     // corner overlay, not a takeover, while actually being readable.
     ImViewGuizmo::Style& style = ImViewGuizmo::GetStyle();
     style.scale = m_UIScale * 0.7f;
+    style.axisColors[0] = EditorTheme::U32(EditorTheme::AxisX);
+    style.axisColors[1] = EditorTheme::U32(EditorTheme::AxisY);
+    style.axisColors[2] = EditorTheme::U32(EditorTheme::AxisZ);
+    style.highlightColor = EditorTheme::U32(EditorTheme::Accent);
 
     float gizmoRadius = 128.0f * style.scale; // half of the library's fixed 256px rotate-ring box
     float margin = 14.0f * m_UIScale;

@@ -28,6 +28,13 @@ struct EditorSettings {
     // launch. Range clamped to [0.75, 2.5] by the Preferences slider.
     float UiScaleOverride = 0.0f;
 
+    // The CRT screen: the whole editor drawn through the launch screen's tube (scanlines, phosphor
+    // glow, vignette), and optionally its curved glass. The mouse is bent through the same curve,
+    // so clicks land on what's drawn under the cursor. Strength 0..1.
+    bool CrtScreen = true;
+    bool CrtCurvature = true;
+    float CrtStrength = 0.7f;
+
     // Periodically re-saves the current scene to its own file while editing (only when there
     // are actually unsaved changes) — a safety net against a crash/force-quit losing work,
     // independent of the existing always-on "save on clean exit" behavior. Interval is in

@@ -9,67 +9,36 @@
 // host.DrawHierarchyTreeBody(). EnTT and Components.h never cross the DLL boundary.
 
 #include "EditorModuleAPI.h"
+#include "EditorPanels.h"
+#include "EditorTheme.h"
+#include "EditorUIPrimitives.h"
 
 #include <imgui.h>
 #include <IconsFontAwesome6.h>
 
+#include <cmath>
 #include <cstdio>
 
 namespace EditorModuleHierarchy {
-
-namespace {
-
-// EditorInternal::PushTabChromeText — used to keep the dock tab bar's text white against
-// Windows XP's saturated-green tab chrome. Phase 1 item 9 removed that theme; Light's tabs are
-// neutral and already pair with its own normal text colour, so this is a permanent no-op now
-// (see EditorLayerInternal.h's PanelChromeIsLight for the full explanation).
-bool PanelChromeIsLight() {
-    return false;
-}
-void PushTabChromeText() {
-    if (PanelChromeIsLight()) ImGui::PushStyleColor(ImGuiCol_Text, ImVec4(0.97f, 0.98f, 1.00f, 1.0f));
-}
-void PopTabChromeText() {
-    if (PanelChromeIsLight()) ImGui::PopStyleColor();
-}
-
-// The Hierarchy's two flat glyph buttons (Expand-all / Collapse-all), copied from the host lambda.
-bool FlatGlyphButton(const EditorModuleHostAPI& host, const char* icon, const char* tip) {
-    ImGui::PushStyleColor(ImGuiCol_Button,        ImVec4(0.0f, 0.0f, 0.0f, 0.0f)); // flat at rest
-    ImGui::PushStyleColor(ImGuiCol_ButtonHovered, ImVec4(0.245f, 0.250f, 0.275f, 1.0f));
-    ImGui::PushStyleColor(ImGuiCol_ButtonActive,  ImVec4(0.300f, 0.310f, 0.345f, 1.0f));
-    ImGui::PushStyleVar(ImGuiStyleVar_FrameBorderSize, 0.0f); // no hairline box on this flat button
-    ImGui::PushID(tip);
-    bool clicked = ImGui::Button(icon);
-    ImGui::PopID();
-    ImGui::PopStyleVar();
-    ImGui::PopStyleColor(3);
-    if (ImGui::IsItemHovered() && host.SetTooltip) host.SetTooltip(tip);
-    return clicked;
-}
-
-} // namespace
 
 void Draw(const EditorModuleHostAPI& host) {
     if (host.GetShowHierarchy && !host.GetShowHierarchy()) return;
 
     bool visible = true;
-    PushTabChromeText();
-    const bool open = ImGui::Begin("Scene Hierarchy", &visible, ImGuiWindowFlags_None);
-    PopTabChromeText();
+    const bool open = ImGui::Begin(EditorPanels::Hierarchy, &visible, ImGuiWindowFlags_None);
     if (host.SetShowHierarchy) host.SetShowHierarchy(visible); // capture the title-bar X
     if (!open) { ImGui::End(); return; }
 
-    // Search box. A bare string matches names; "t:Tag" matches TagComponent instead. Width leaves
-    // room for the two glyph buttons + the spacing on either side.
+    // One toolbar row: the search box, then the type filter, sort and expand / collapse icons.
+    // A bare string matches names; "t:Tag" matches TagComponent instead.
     const ImGuiStyle& st = ImGui::GetStyle();
-    const float glyphBtnW = ImGui::CalcTextSize(ICON_FA_ANGLES_UP).x + st.FramePadding.x * 2.0f;
-    ImGui::SetNextItemWidth(-(glyphBtnW * 2.0f + st.ItemSpacing.x * 2.0f));
+    const float iconW = ImGui::GetFrameHeight();
+    const int kIcons = 4;
     char filterBuf[128] = {};
     if (host.GetHierarchyFilter) host.GetHierarchyFilter(filterBuf, (int)sizeof(filterBuf));
-    if (ImGui::InputTextWithHint("##HierarchyFilter",
-            ICON_FA_MAGNIFYING_GLASS "  Search (t:Tag to filter by tag)",
-            filterBuf, sizeof(filterBuf)) && host.SetHierarchyFilter) {
+    if (EditorUIPrimitives::SearchField("##HierarchyFilter", filterBuf, sizeof(filterBuf), "Search",
+                                        -(iconW * kIcons + st.ItemSpacing.x * 0.5f * kIcons)) &&
+        host.SetHierarchyFilter) {
         host.SetHierarchyFilter(filterBuf);
     }
     if (ImGui::IsItemHovered() && !ImGui::IsItemActive() && host.SetTooltip) {
@@ -78,42 +47,42 @@ void Draw(const EditorModuleHostAPI& host) {
                         "Tip: click a row in the tree, then type a name (without clicking here) "
                         "to jump to the next entity starting with those letters.");
     }
+    ImGui::PushStyleVar(ImGuiStyleVar_ItemSpacing, ImVec2(st.ItemSpacing.x * 0.5f, st.ItemSpacing.y));
 
-    ImGui::SameLine();
-    if (FlatGlyphButton(host, ICON_FA_ANGLES_DOWN, "Expand all") && host.HierarchyExpandAll)
-        host.HierarchyExpandAll(true);
-    ImGui::SameLine();
-    if (FlatGlyphButton(host, ICON_FA_ANGLES_UP, "Collapse all") && host.HierarchyExpandAll)
-        host.HierarchyExpandAll(false);
-
-    // Phase 5 item 6 (remainder) — type-filter chips + sort control, a second toolbar row. Chips
-    // are additive toggles (multiple kinds can be shown at once); an active chip is tinted like a
-    // pressed button so the filter state reads at a glance without a tooltip.
+    // Type filter (Phase 5 item 6): additive kinds in a popup; the icon is gold while any is on.
     int typeMask = host.GetHierarchyTypeFilter ? host.GetHierarchyTypeFilter() : 0;
-    auto chip = [&](const char* icon, const char* tip, int bit) {
-        const bool active = (typeMask & bit) != 0;
-        if (active) ImGui::PushStyleColor(ImGuiCol_Button, ImGui::GetStyleColorVec4(ImGuiCol_ButtonActive));
-        if (ImGui::Button(icon)) {
-            typeMask ^= bit;
-            if (host.SetHierarchyTypeFilter) host.SetHierarchyTypeFilter(typeMask);
-        }
-        if (active) ImGui::PopStyleColor();
-        if (ImGui::IsItemHovered() && host.SetTooltip) host.SetTooltip(tip);
-        ImGui::SameLine();
-    };
-    chip(ICON_FA_CUBE, "Meshes only", kHierarchyFilterMesh);
-    chip(ICON_FA_LIGHTBULB, "Lights only", kHierarchyFilterLight);
-    chip(ICON_FA_VIDEO, "Cameras only", kHierarchyFilterCamera);
-    chip(ICON_FA_VECTOR_SQUARE, "Empties / other only", kHierarchyFilterOther);
+    ImGui::SameLine();
+    if (EditorUIPrimitives::ActionButton(ICON_FA_FILTER, typeMask ? "Filtered by type (click to change)" : "Show only some kinds of object",
+                                         host.SetTooltip, typeMask != 0, ImVec2(iconW, iconW)))
+        ImGui::OpenPopup("##HierarchyTypeFilter");
+    if (ImGui::BeginPopup("##HierarchyTypeFilter")) {
+        EditorUIPrimitives::SectionHeader("SHOW ONLY");
+        auto kind = [&](const char* label, int bit) {
+            bool on = (typeMask & bit) != 0;
+            if (ImGui::MenuItem(label, nullptr, &on)) {
+                typeMask ^= bit;
+                if (host.SetHierarchyTypeFilter) host.SetHierarchyTypeFilter(typeMask);
+            }
+        };
+        kind(ICON_FA_CUBE "  Meshes", kHierarchyFilterMesh);
+        kind(ICON_FA_LIGHTBULB "  Lights", kHierarchyFilterLight);
+        kind(ICON_FA_VIDEO "  Cameras", kHierarchyFilterCamera);
+        kind(ICON_FA_VECTOR_SQUARE "  Empties and other", kHierarchyFilterOther);
+        ImGui::Separator();
+        if (ImGui::MenuItem("Show everything", nullptr, false, typeMask != 0) && host.SetHierarchyTypeFilter)
+            host.SetHierarchyTypeFilter(0);
+        ImGui::EndPopup();
+    }
 
     const int sortPacked = host.GetHierarchySort ? host.GetHierarchySort() : 0;
     int sortMode = (sortPacked >> 1) & 3;
     bool sortDesc = (sortPacked & 1) != 0;
-    const float sortBtnW = ImGui::CalcTextSize(ICON_FA_ARROW_DOWN_SHORT_WIDE).x + st.FramePadding.x * 2.0f;
-    ImGui::SameLine(ImGui::GetWindowContentRegionMax().x - sortBtnW);
-    if (ImGui::Button(ICON_FA_ARROW_DOWN_SHORT_WIDE)) ImGui::OpenPopup("##HierarchySort");
-    if (ImGui::IsItemHovered() && host.SetTooltip) host.SetTooltip("Sort the list");
+    ImGui::SameLine();
+    if (EditorUIPrimitives::ActionButton(ICON_FA_ARROW_DOWN_SHORT_WIDE, "Sort the list", host.SetTooltip,
+                                         sortPacked != 0, ImVec2(iconW, iconW)))
+        ImGui::OpenPopup("##HierarchySort");
     if (ImGui::BeginPopup("##HierarchySort")) {
+        EditorUIPrimitives::SectionHeader("SORT BY");
         static const char* kModes[] = { "Creation order", "Name", "Type" };
         for (int i = 0; i < 3; ++i)
             if (ImGui::MenuItem(kModes[i], nullptr, sortMode == i)) sortMode = i;
@@ -124,6 +93,25 @@ void Draw(const EditorModuleHostAPI& host) {
     }
     const int newSortPacked = sortMode * 2 + (sortDesc ? 1 : 0);
     if (newSortPacked != sortPacked && host.SetHierarchySort) host.SetHierarchySort(newSortPacked);
+
+    ImGui::SameLine();
+    if (EditorUIPrimitives::ActionButton(ICON_FA_ANGLES_DOWN, "Expand all", host.SetTooltip, false, ImVec2(iconW, iconW)) &&
+        host.HierarchyExpandAll)
+        host.HierarchyExpandAll(true);
+    ImGui::SameLine();
+    if (EditorUIPrimitives::ActionButton(ICON_FA_ANGLES_UP, "Collapse all", host.SetTooltip, false, ImVec2(iconW, iconW)) &&
+        host.HierarchyExpandAll)
+        host.HierarchyExpandAll(false);
+    ImGui::PopStyleVar();
+
+    // A hairline under the toolbar, full width.
+    {
+        const ImVec2 wp = ImGui::GetWindowPos();
+        const float y = std::floor(ImGui::GetCursorScreenPos().y + EditorTheme::Px(1.0f)) + 0.5f;
+        ImGui::GetWindowDrawList()->AddLine(ImVec2(wp.x, y), ImVec2(wp.x + ImGui::GetWindowWidth(), y),
+                                            EditorTheme::U32(EditorTheme::Hairline));
+        ImGui::Dummy(ImVec2(0.0f, EditorTheme::Px(3.0f)));
+    }
 
     if (host.DrawHierarchyTreeBody) host.DrawHierarchyTreeBody();
 

@@ -1,4 +1,5 @@
 #pragma once
+#include <atomic>
 #include <cstdint>
 #include <string>
 #include <utility>
@@ -32,13 +33,25 @@ struct Report {
     int ShadersChecked = 0; // #208 - project .shader descriptors whose stages/includes were validated
 };
 
+// A build's live progress. Build() runs on a worker thread (EditorLayer::RunBuild); the editor
+// reads this every frame for the progress bars and sets Cancel to stop it at the next file.
+enum class Stage : int { Checking, Counting, Copying, Finishing };
+struct Progress {
+    std::atomic<int> StageNow{(int)Stage::Checking};
+    std::atomic<int> Done{0};  // files copied
+    std::atomic<int> Total{0}; // files to copy (0 until counted)
+    std::atomic<bool> Cancel{false};
+};
+const char* StageLabel(Stage s);
+
 // Where a build with these settings lands (resolves the empty default).
 std::string ResolveOutputDir(const ProjectSettings::BuildSettings& settings);
 
 // Project-relative paths of every scene under project/scenes, sorted.
 std::vector<std::string> FindProjectScenes();
 
-Report Build(const ProjectSettings::BuildSettings& settings);
+// Thread-safe: touches only files and the (locked) log. `progress` may be null.
+Report Build(const ProjectSettings::BuildSettings& settings, Progress* progress = nullptr);
 
 // Starts the built exe with its own folder as the working directory. False if it couldn't.
 bool Run(const std::string& exePath);

@@ -57,8 +57,13 @@ struct Copier {
     Report& R;
     fs::path OutRoot;
     std::string Error;
+    Progress* P = nullptr;
+    bool CountOnly = false; // a dry run: count the files a real run would copy
+    int Counted = 0;
 
     bool File(const fs::path& from, const fs::path& to, const char* group) {
+        if (CountOnly) { ++Counted; return true; }
+        if (P && P->Cancel.load()) { Error = "cancelled"; return false; }
         std::error_code ec;
         fs::create_directories(to.parent_path(), ec);
         if (!fs::copy_file(from, to, fs::copy_options::overwrite_existing, ec) || ec) {
@@ -73,6 +78,7 @@ struct Copier {
         if (g == R.BytesByGroup.end()) R.BytesByGroup.push_back({group, size});
         else g->second += size;
         R.LargestFiles.push_back({fs::relative(to, OutRoot, ec).generic_string(), size});
+        if (P) P->Done.fetch_add(1);
         return true;
     }
 
@@ -96,6 +102,16 @@ struct Copier {
 
 } // namespace
 
+const char* StageLabel(Stage s) {
+    switch (s) {
+        case Stage::Checking:  return "Checking";
+        case Stage::Counting:  return "Preparing";
+        case Stage::Copying:   return "Copying";
+        case Stage::Finishing: return "Finishing";
+    }
+    return "Building";
+}
+
 std::string ResolveOutputDir(const ProjectSettings::BuildSettings& s) {
     if (!s.OutputDir.empty()) return fs::path(s.OutputDir).lexically_normal().string();
     const fs::path project(ProjectPaths::Root());
@@ -114,15 +130,17 @@ std::vector<std::string> FindProjectScenes() {
     return out;
 }
 
-Report Build(const ProjectSettings::BuildSettings& s) {
+Report Build(const ProjectSettings::BuildSettings& s, Progress* progress) {
     const auto t0 = std::chrono::steady_clock::now();
     Report r;
+    auto stage = [progress](Stage st) { if (progress) progress->StageNow.store((int)st); };
     auto fail = [&r](const std::string& why) {
         r.Ok = false;
         r.Message = "Build failed: " + why;
         Log::Error(r.Message);
         return r;
     };
+    stage(Stage::Checking);
 
     if (s.Scenes.empty()) return fail("no scenes in the build. Add at least one in Build Settings.");
     const fs::path projectRoot(ProjectPaths::Root());
@@ -191,30 +209,54 @@ Report Build(const ProjectSettings::BuildSettings& s) {
     fs::create_directories(out, ec);
     if (ec) return fail("couldn't create '" + out.string() + "': " + ec.message());
 
-    Copier copy{r, out, {}};
     const std::string product = SanitizeFileName(s.ProductName);
     r.ExePath = (out / (product + ".exe")).string();
-    if (!copy.File(exe, r.ExePath, "Runtime")) return fail(copy.Error);
-    for (const auto& e : fs::directory_iterator(exeDir, ec)) {
-        if (e.is_regular_file() && e.path().extension() == ".dll" && !copy.File(e.path(), out / e.path().filename(), "Runtime"))
-            return fail(copy.Error);
+    auto copyContent = [&](Copier& copy) -> bool {
+        if (!copy.File(exe, r.ExePath, "Runtime")) return false;
+        for (const auto& e : fs::directory_iterator(exeDir, ec)) {
+            if (e.is_regular_file() && e.path().extension() == ".dll" && !copy.File(e.path(), out / e.path().filename(), "Runtime"))
+                return false;
+        }
+        const fs::path engineAssets = exeDir / "assets";
+        if (fs::is_directory(engineAssets, ec) &&
+            !copy.Tree(engineAssets, out / "assets", "Engine",
+                       [](const fs::directory_entry& e) { return e.path().filename() == "test-scenes"; }))
+            return false;
+        if (!copy.Tree(projectRoot, out / "project", "Project assets", [](const fs::directory_entry& e) {
+                const std::string name = e.path().filename().string();
+                if (e.is_directory()) return IsEditorOnlyProjectDir(name);
+                return name.size() > 12 && name.compare(name.size() - 12, 12, ".backup.json") == 0;
+            }))
+            return false;
+        for (const std::string& sc : s.Scenes) {
+            if (!copy.File(projectRoot / sc, out / "project" / sc, "Scenes")) return false;
+            const fs::path meta = projectRoot / (sc + ".meta");
+            if (fs::exists(meta, ec) && !copy.File(meta, out / "project" / (sc + ".meta"), "Scenes")) return false;
+        }
+        return true;
+    };
+    if (progress) {
+        stage(Stage::Counting);
+        Report scratch;
+        Copier counter{scratch, out, {}, progress, /*CountOnly=*/true};
+        copyContent(counter);
+        progress->Total.store(counter.Counted);
     }
-    const fs::path engineAssets = exeDir / "assets";
-    if (fs::is_directory(engineAssets, ec) &&
-        !copy.Tree(engineAssets, out / "assets", "Engine",
-                   [](const fs::directory_entry& e) { return e.path().filename() == "test-scenes"; }))
+    stage(Stage::Copying);
+    Copier copy{r, out, {}, progress};
+    if (!copyContent(copy)) {
+        if (progress && progress->Cancel.load()) {
+            // Don't leave half a build behind: the next build would refuse the folder as "not a
+            // previous build" (it has no player.json yet).
+            fs::remove_all(out, ec);
+            r.Ok = false;
+            r.Message = "Build cancelled.";
+            Log::Warn(r.Message);
+            return r;
+        }
         return fail(copy.Error);
-    if (!copy.Tree(projectRoot, out / "project", "Project assets", [](const fs::directory_entry& e) {
-            const std::string name = e.path().filename().string();
-            if (e.is_directory()) return IsEditorOnlyProjectDir(name);
-            return name.size() > 12 && name.compare(name.size() - 12, 12, ".backup.json") == 0;
-        }))
-        return fail(copy.Error);
-    for (const std::string& sc : s.Scenes) {
-        if (!copy.File(projectRoot / sc, out / "project" / sc, "Scenes")) return fail(copy.Error);
-        const fs::path meta = projectRoot / (sc + ".meta");
-        if (fs::exists(meta, ec) && !copy.File(meta, out / "project" / (sc + ".meta"), "Scenes")) return fail(copy.Error);
     }
+    stage(Stage::Finishing);
 
     // #174 - product branding. The chosen images are copied to fixed names under the player's
     // own assets/branding/ rather than referenced where they sit in project/: the icon and
