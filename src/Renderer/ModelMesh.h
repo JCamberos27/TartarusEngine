@@ -1,4 +1,5 @@
 #pragma once
+#include <memory>
 #include <cstdint>
 #include <vector>
 #include "ModelVertex.h"
@@ -12,8 +13,14 @@ public:
     // Deferred: keeps the vertices on the CPU and creates no GL objects, so an import can run on
     // a worker thread (AsyncAssetLoader). FinishUpload() creates the buffers later, main thread.
     ModelMesh(std::vector<ModelVertex>&& vertices, const std::vector<unsigned int>& indices, bool deferUpload);
+    // A copy that shares `source`'s GPU buffers (own material and CPU data): the placed primitives of one
+    // kind draw from one vertex/index buffer instead of each uploading their own (Model::CreatePrimitive).
+    struct ShareGeometry {};
+    ModelMesh(const ModelMesh& source, ShareGeometry);
     ~ModelMesh();
 
+    // Meshes that return the same non-zero id draw from the same buffers (SceneRenderer batches them).
+    unsigned GeometryId() const { return m_VAO; }
     bool NeedsUpload() const { return m_VAO == 0; }
     void FinishUpload();
 
@@ -57,6 +64,8 @@ private:
 
     std::vector<ModelVertex> m_PendingVertices; // deferred meshes only, until FinishUpload
     unsigned int m_VAO = 0, m_VBO = 0, m_EBO = 0;
+    // Owns the three objects above; every mesh sharing them holds it, the last one deletes them.
+    std::shared_ptr<void> m_GpuOwner;
     unsigned int m_IndexCount = 0;
     std::vector<glm::vec3> m_LocalPositions;
     std::vector<unsigned int> m_LocalIndices;
