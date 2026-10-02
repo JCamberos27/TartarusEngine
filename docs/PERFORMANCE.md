@@ -137,8 +137,15 @@ What is left, roughly by expected value. At 1080p the GPU is the limit, at 1440p
 **CPU** (worth it once the GPU is lighter, or on slower CPUs)
 7. First-person body ~1.4 ms: the final bone matrices now use affine products (done, #P2: `AffineMul`, unit
    test vs the generic product within 1e-5; the bench's First Person IK timer is ~1.25 ms before and after,
-   inside noise). Left: IK global refreshes (Game/IK.cpp), clip sampling. Multithread the per-piece work, or
-   sample the driver once and copy to followers through a node remap.
+   inside noise). Then (#A4): the per-piece arm-shape copy (`CopyArmShape`) looked up every node's rig twin by
+   name each frame, per piece, twice; the pairs are now found once per (piece model, rig) and cached
+   (`FirstPersonBody::CopyArmShapeCached`, unit-tested against the name walk). Bench at 1080p, base/new
+   interleaved x3: First Person IK 1.17 -> 1.12 ms, 169.2 -> 171.2 fps (consistent in all three pairs; small).
+   `--perf-sample` shows the rest is spread thin: IK refresh/compute ~9% of the frame (SolveTwoBone's final
+   subtree refresh, foot IK, per-piece solves of the 5-6 upper-body pieces), `SkinnedPoints` ~3%, the rig's clip
+   sampling. Each refresh already recomputes only the dirty subtree with affine products, so a further gain needs
+   a structural change (share one solve across pieces, or cache local matrices) - not done: the pieces' bone
+   lengths differ, and a cached local would go stale when callers write `pose[i]` directly.
 8. PhysX `fetchResults` wait (~0.45 ms): overlap simulation with animation and render prep.
 9. Animator controllers ~0.46 ms.
 
