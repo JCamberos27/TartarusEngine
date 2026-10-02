@@ -1239,7 +1239,7 @@ bool EditorLayer::TexturePickerPopup(const char* popupId, AssetLibrary& assets, 
         ImGui::EndChild();
 
         ImGui::Separator();
-        if (ImGui::Button("Import from disk...", ImVec2(-FLT_MIN, 0.0f))) {
+        if (EditorUIPrimitives::SecondaryButton("Import from disk...", ImVec2(-FLT_MIN, 0.0f))) {
             std::string diskPath = FileDialog::OpenFile(
                 "Images\0*.png;*.jpg;*.jpeg;*.tga;*.bmp\0All Files\0*.*\0", m_Window);
             if (!diskPath.empty()) {
@@ -1299,7 +1299,7 @@ bool EditorLayer::MaterialPickerPopup(const char* popupId, AssetLibrary& assets,
         ImGui::EndChild();
 
         ImGui::Separator();
-        if (ImGui::Button("Import from disk...", ImVec2(-FLT_MIN, 0.0f))) {
+        if (EditorUIPrimitives::SecondaryButton("Import from disk...", ImVec2(-FLT_MIN, 0.0f))) {
             std::string diskPath = FileDialog::OpenFile("Material\0*.mat\0All Files\0*.*\0", m_Window);
             if (!diskPath.empty()) {
                 outPath = diskPath;
@@ -1359,12 +1359,16 @@ void EditorLayer::DrawMaterialPreview(const std::shared_ptr<MaterialAsset>& ma, 
         }
         ImGui::SameLine();
     }
-    for (int i = 0; i < (int)Shape::Count; ++i) {
-        if (i > 0) ImGui::SameLine(0.0f, 2.0f);
-        const bool active = (int)m_MaterialPreviewShape == i;
-        if (active) ImGui::PushStyleColor(ImGuiCol_Button, ImGui::GetStyleColorVec4(ImGuiCol_ButtonActive));
-        if (ImGui::SmallButton(MaterialPreviewRenderer::ShapeName((Shape)i))) m_MaterialPreviewShape = (Shape)i;
-        if (active) ImGui::PopStyleColor();
+    {
+        static const char* kShapeLabels[(int)Shape::Count] = {};
+        if (!kShapeLabels[0]) {
+            for (int i = 0; i < (int)Shape::Count; ++i) {
+                kShapeLabels[i] = MaterialPreviewRenderer::ShapeName((Shape)i);
+            }
+        }
+        int shape = (int)m_MaterialPreviewShape;
+        EditorUIPrimitives::Segmented("##materialPreviewShapes", &shape, kShapeLabels, (int)Shape::Count);
+        m_MaterialPreviewShape = (Shape)shape;
     }
 
     const float avail = ImGui::GetContentRegionAvail().x;

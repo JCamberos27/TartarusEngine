@@ -31,6 +31,7 @@ void Draw(const EditorModuleHostAPI& host) {
 
     // One toolbar row: the search box, then the type filter, sort and expand / collapse icons.
     // A bare string matches names; "t:Tag" matches TagComponent instead.
+    EditorUIPrimitives::BeginPanelToolbar("HierarchyToolbar");
     const ImGuiStyle& st = ImGui::GetStyle();
     const float iconW = ImGui::GetFrameHeight();
     const int kIcons = 4;
@@ -103,15 +104,7 @@ void Draw(const EditorModuleHostAPI& host) {
         host.HierarchyExpandAll)
         host.HierarchyExpandAll(false);
     ImGui::PopStyleVar();
-
-    // A hairline under the toolbar, full width.
-    {
-        const ImVec2 wp = ImGui::GetWindowPos();
-        const float y = std::floor(ImGui::GetCursorScreenPos().y + EditorTheme::Px(1.0f)) + 0.5f;
-        ImGui::GetWindowDrawList()->AddLine(ImVec2(wp.x, y), ImVec2(wp.x + ImGui::GetWindowWidth(), y),
-                                            EditorTheme::U32(EditorTheme::Hairline));
-        ImGui::Dummy(ImVec2(0.0f, EditorTheme::Px(3.0f)));
-    }
+    EditorUIPrimitives::EndPanelToolbar();
 
     if (host.DrawHierarchyTreeBody) host.DrawHierarchyTreeBody();
 
