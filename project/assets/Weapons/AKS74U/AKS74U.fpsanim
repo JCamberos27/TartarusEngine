@@ -15,7 +15,8 @@
     "aimHoldTime": 0.15,
     "actionBones": ["clavicle_l"],
     "gunMotion": {"EmptyReload": {"rotation": 0.18, "position": 0.25}, "MagCheck": {"rotation": 0.6, "position": 0.2}, "TacReload": {"rotation": 0.18, "position": 0.25}},
-    "sightPivot": 0.25
+    "sightPivot": 0.25,
+    "handAnchor": {"near": 0.05, "far": 0.15, "bones": ["magazine", "mag2"]}
   },
   "eject": {
     "_comment": "5.45x39 case (tools/weapons/extract_casings.py) out of the right of the receiver, a little forward and up, every round. Root space: -X down the bore, +Y up, -Z right.",
