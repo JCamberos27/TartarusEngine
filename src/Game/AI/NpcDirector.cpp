@@ -78,6 +78,24 @@ float SpeedFor(Gait g, bool crouch) {
     return 3.2f;
 }
 
+// A soldier's tree shown or hidden: its own checkbox on the root, the derived flag on everything under it (set here rather
+// than by World::SyncActiveInHierarchy, which walks the whole scene).
+void SetTreeActive(World& world, entt::entity root, bool active) {
+    auto& reg = world.Registry;
+    if (!reg.valid(root)) return;
+    if (active) reg.remove<DeactivatedTag>(root);
+    else reg.emplace_or_replace<DeactivatedTag>(root);
+    std::vector<entt::entity> stack{root};
+    while (!stack.empty()) {
+        const entt::entity e = stack.back();
+        stack.pop_back();
+        if (!reg.valid(e)) continue;
+        if (active) reg.remove<InactiveTag>(e);
+        else reg.emplace_or_replace<InactiveTag>(e);
+        if (const auto* h = reg.try_get<HierarchyComponent>(e)) stack.insert(stack.end(), h->Children.begin(), h->Children.end());
+    }
+}
+
 } // namespace
 
 const char* BehaviourName(Behaviour b) {
@@ -111,6 +129,11 @@ const char* NpcDirector::SubName(int s) {
                                            "AI Body", "AI Weapon", "AI Hold", "AI Ragdoll", "AI Hitbox"};
     return s >= 0 && s < SubCount ? kNames[s] : "AI ?";
 }
+
+struct NpcDirector::SoldierBody {
+    entt::entity Root = entt::null;
+    std::vector<std::pair<entt::entity, AnimatorControllerComponent>> Animators; // as built: each soldier starts from these
+};
 
 // Adds the time it lives to a sub-system's per-frame total (flushed by FlushCosts).
 struct NpcDirector::SubTimer {
@@ -208,6 +231,12 @@ bool NpcDirector::Start(World& world, AssetLibrary& assets, const FirstPersonCon
         m_HoldSettings.ShoulderLineMatch = fpb.ShoulderLineMatch;
         m_HoldSettings.SpineAim = fpb.SpineAim;
         m_HoldSettings.SpineAimDown = fpb.SpineAimDown;
+        m_HoldSettings.ArmedEyeOffset = fpb.ArmedEyeOffset;
+        m_HoldSettings.HeadBob = fpb.HeadBob;
+        m_HoldSettings.CameraSmoothing = fpb.CameraSmoothing;
+        m_HoldSettings.EyeSlack = fpb.EyeSlack;
+        m_HoldSettings.LookDownPush = fpb.LookDownPush;
+        m_HoldSettings.LookDownStart = fpb.LookDownStart;
     }
     m_Active = true;
     m_Started = false;
@@ -223,6 +252,10 @@ void NpcDirector::Stop(World& world) {
     for (auto& n : m_Npcs)
         if (n) Despawn(world, *n);
     m_Npcs.clear();
+    for (const auto& b : m_Pool)
+        if (b && world.Registry.valid(b->Root)) world.DestroyEntityAndChildren(b->Root);
+    m_Pool.clear();
+    m_Bodies.clear();
     m_Squads.clear();
     m_RespawnTimers.clear();
     m_Crowd.Clear();
@@ -282,27 +315,63 @@ bool NpcDirector::LateStart(World& world, AssetLibrary& assets) {
     if (m_Player.Valid) m_PlayerAgent = m_Crowd.Add(m_Player.Feet, m_Player.Radius, m_Player.Height, 6.0f, /*steer=*/false);
     const int want = std::min<int>(m_SquadSize, (int)m_Spawns.size() * 2);
     for (int i = 0; i < want; ++i) Spawn(world, assets, i % (int)m_Spawns.size());
+    // Two spare bodies, built now and laid out of the way: the first replacements come before any corpse has gone.
+    for (int i = 0; i < 2 && m_Respawn && !m_SoldierJson.empty(); ++i)
+        if (auto spare = BuildBody(world, assets)) {
+            for (const auto& [e, ac] : spare->Animators)
+                if (world.Registry.valid(e)) world.Registry.remove<AnimatorControllerComponent>(e);
+            SetTreeActive(world, spare->Root, false);
+            m_Pool.push_back(std::move(spare));
+        }
     return true;
+}
+
+std::shared_ptr<NpcDirector::SoldierBody> NpcDirector::BuildBody(World& world, AssetLibrary& assets) {
+    std::vector<entt::entity> created;
+    if (!SceneSerializer::AppendEntitiesFromString(world, assets, m_SoldierJson, created) || created.empty()) {
+        Log::Error("Enemy AI: couldn't build a soldier from Soldier.json.");
+        return nullptr;
+    }
+    auto& reg = world.Registry;
+    auto built = std::make_shared<SoldierBody>();
+    for (entt::entity e : created) {
+        const auto* h = reg.try_get<HierarchyComponent>(e);
+        if (built->Root == entt::null && (!h || h->Parent == entt::null)) built->Root = e;
+        if (const auto* ac = reg.try_get<AnimatorControllerComponent>(e)) built->Animators.push_back({e, *ac});
+    }
+    if (built->Root == entt::null) {
+        for (entt::entity e : created)
+            if (reg.valid(e)) world.DestroyEntityAndChildren(e);
+        return nullptr;
+    }
+    return built;
 }
 
 int NpcDirector::Spawn(World& world, AssetLibrary& assets, int spawnIndex) {
     if (spawnIndex < 0 || spawnIndex >= (int)m_Spawns.size() || m_SoldierJson.empty()) return -1;
     const SpawnPoint& sp = m_Spawns[(size_t)spawnIndex];
-    std::vector<entt::entity> created;
     const auto spawnT0 = std::chrono::steady_clock::now();
     auto since = [&]() { return std::chrono::duration<float, std::milli>(std::chrono::steady_clock::now() - spawnT0).count(); };
-    if (!SceneSerializer::AppendEntitiesFromString(world, assets, m_SoldierJson, created) || created.empty()) {
-        Log::Error("Enemy AI: couldn't build a soldier from Soldier.json.");
+    auto& reg = world.Registry;
+    // A body from the pool (a corpse that has gone) when there is one: shown again, its animators as they were built.
+    std::shared_ptr<SoldierBody> built;
+    while (!built && !m_Pool.empty()) {
+        built = std::move(m_Pool.back());
+        m_Pool.pop_back();
+        if (!built || !reg.valid(built->Root)) built.reset();
+    }
+    const bool reused = built != nullptr;
+    if (built) {
+        for (const auto& [e, ac] : built->Animators)
+            if (reg.valid(e)) reg.emplace_or_replace<AnimatorControllerComponent>(e, ac);
+        SetTreeActive(world, built->Root, true);
+        ++m_Reused;
+    } else if (!(built = BuildBody(world, assets))) {
         return -1;
     }
     const float entitiesMs = since();
-    auto& reg = world.Registry;
-    entt::entity root = entt::null;
-    for (entt::entity e : created) {
-        const auto* h = reg.try_get<HierarchyComponent>(e);
-        if (!h || h->Parent == entt::null) { root = e; break; }
-    }
-    if (root == entt::null) return -1;
+    const entt::entity root = built->Root;
+    m_Bodies[root] = built;
     auto n = std::make_unique<Npc>();
     n->Index = (int)m_Npcs.size();
     for (int i = 0; i < (int)m_Npcs.size(); ++i)
@@ -333,6 +402,7 @@ int NpcDirector::Spawn(World& world, AssetLibrary& assets, int spawnIndex) {
     n->Body.SetHoldSettings(m_HoldSettings);
     if (!n->Body.Start(world, root)) {
         Log::Error("Enemy AI: the soldier's body has no animated skeleton.");
+        m_Bodies.erase(root);
         world.DestroyEntityAndChildren(root);
         return -1;
     }
@@ -379,8 +449,8 @@ int NpcDirector::Spawn(World& world, AssetLibrary& assets, int spawnIndex) {
     n->SpawnedAt = m_Now;
     {
         char msg[160];
-        std::snprintf(msg, sizeof msg, "Enemy AI: %s spawned in %.1f ms (entities %.1f, body %.1f, weapon %.1f ms).", n->Name.c_str(),
-                      since(), entitiesMs, bodyMs - entitiesMs, weaponMs);
+        std::snprintf(msg, sizeof msg, "Enemy AI: %s spawned in %.1f ms (entities %.1f%s, body %.1f, weapon %.1f ms).", n->Name.c_str(),
+                      since(), entitiesMs, reused ? " reused" : "", bodyMs - entitiesMs, weaponMs);
         Log::Info(msg);
     }
 
@@ -392,7 +462,7 @@ int NpcDirector::Spawn(World& world, AssetLibrary& assets, int spawnIndex) {
     return idx;
 }
 
-void NpcDirector::Despawn(World& world, Npc& n) {
+void NpcDirector::Despawn(World& world, Npc& n, bool keepBody) {
     m_Cover.Release(n.Index, m_Now);
     n.Hitboxes.reset();
     n.Ragdoll.reset();
@@ -403,7 +473,19 @@ void NpcDirector::Despawn(World& world, Npc& n) {
     n.Cct = PhysicsWorld::kNoCharacter;
     if (n.Agent >= 0) m_Crowd.Remove(n.Agent);
     n.Agent = -1;
-    if (n.Root != entt::null && world.Registry.valid(n.Root)) world.DestroyEntityAndChildren(n.Root);
+    if (n.Root != entt::null && world.Registry.valid(n.Root)) {
+        auto found = m_Bodies.find(n.Root);
+        // Kept for the next spawn (as many as a squad's worth): hidden, its animators off (the ragdoll took them).
+        if (keepBody && found != m_Bodies.end() && found->second && (int)m_Pool.size() < std::max(m_SquadSize, 1)) {
+            for (const auto& [e, ac] : found->second->Animators)
+                if (world.Registry.valid(e)) world.Registry.remove<AnimatorControllerComponent>(e);
+            SetTreeActive(world, n.Root, false);
+            m_Pool.push_back(std::move(found->second));
+        } else {
+            world.DestroyEntityAndChildren(n.Root);
+        }
+        if (found != m_Bodies.end()) m_Bodies.erase(found);
+    }
     n.Root = entt::null;
     for (auto& s : m_Squads) s.Members.erase(std::remove(s.Members.begin(), s.Members.end(), n.Index), s.Members.end());
 }
@@ -500,7 +582,7 @@ void NpcDirector::Think(World& world, AssetLibrary& assets, float dt, const Play
         if (n.Dead) {
             // The body lies there a while, then goes (and its replacement is on the way).
             if (m_Now - n.DiedAt > kCorpseTime) {
-                Despawn(world, n);
+                Despawn(world, n, /*keepBody=*/true);
                 up.reset();
             }
             continue;
@@ -897,8 +979,9 @@ void NpcDirector::Move(World& world, Npc& n, float dt) {
     in.FacingYaw = NpcYawOf(face - n.Feet, n.Body.Yaw());
     in.HoldFacing = n.Intent.FaceAim;
     in.AimPoint = n.Intent.AimPoint;
-    // Reloads are worked at the hip, not on the sights; blind fire and a rifle-butt strike aren't aimed either.
-    in.Aiming = n.Intent.Aim && !n.Reloading && !n.Intent.BlindFire && m_Now - n.MeleeAt >= kMeleeTime;
+    // The stance stays aimed through a reload (worked at the hip, the player's body's chest keeps following its view
+    // there too: dropping it at each reload's start and end rocked the torso); blind fire and a rifle-butt strike aren't.
+    in.Aiming = n.Intent.Aim && !n.Intent.BlindFire && m_Now - n.MeleeAt >= kMeleeTime;
     in.LookPoint = n.Intent.LookPoint;
     in.Crouched = n.Crouched;
     in.Sprint = n.Intent.Pace == Gait::Run && n.Intent.Move;
@@ -911,11 +994,11 @@ void NpcDirector::Move(World& world, Npc& n, float dt) {
 void NpcDirector::AimAndFire(World& world, Npc& n, const PlayerSnapshot& p, float dt) {
     // Aim: a critically damped spring on the weapon camera's yaw and pitch toward the aim point. The
     // gun's own recoil kick shows on the rig; the spring brings the muzzle back down.
-    // The eyes go where the brain looks (quickly); the gun follows the aim, or - lowered - the chest,
-    // muzzle down: a low ready, not a gun swinging round after every glance.
-    // A reload is worked at the hip: the sights come down while the hands are busy (an ADS-carried
-    // reload swings the reaching hand across the face as the gun bobs on the aim), the muzzle low
-    // toward the threat, then back up onto it when the new magazine is in.
+    // The eyes go where the brain looks (quickly); the gun follows the aim, or - off the sights - the chest's heading,
+    // level: the player's hip carry, not a gun swinging round after every glance.
+    // A reload is worked at the hip, as the player's is when not aiming: the sights come down while the hands are busy
+    // (an ADS-carried reload swings the reaching hand across the face as the gun bobs on the aim), the view level on
+    // the threat, then back onto the sights when the new magazine is in.
     n.Reloading = n.Pumping = false;
     if (n.Weapon && n.Weapon->IsActive()) {
         const std::string& st = n.Weapon->CurrentState();
@@ -935,14 +1018,18 @@ void NpcDirector::AimAndFire(World& world, Npc& n, const PlayerSnapshot& p, floa
     }
     float wantYaw = n.AimYaw, wantPitch = n.AimPitch;
     YawPitchOf(target - n.Eye, wantYaw, wantPitch);
-    if (n.Intent.Aim && n.Reloading) {
-        // Facing the threat, the view near level: the reload clips are authored against a level camera (the
-        // player's hip reload), and pitched well down the rig swung the gun into the chest.
-        wantPitch = std::clamp(wantPitch, -20.0f, 20.0f) * 0.5f - 4.0f;
+    if (n.Reloading) {
+        // Facing what it was looking at, the view near level - as the player reloads: the reload clips are authored
+        // against a level camera, and pitched well down the hands worked the magazine tipped toward the floor.
+        wantPitch = std::clamp(wantPitch, -15.0f, 15.0f);
     } else if (!n.Intent.Aim) {
+        // At the hip, as the player stands with the gun down off the sights: the view along the chest, about level
+        // (what it looks at only nods it a little). A pitched-down "low ready" was the soldiers' own pose: the weapon
+        // clips are authored level, and an idle regrip played under it threw the gun 9 cm up and back.
+        const float lookPitch = std::clamp(wantPitch, -15.0f, 10.0f);
         const float chest = n.Body.Yaw();
         YawPitchOf(glm::vec3(std::sin(chest), 0.0f, std::cos(chest)), wantYaw, wantPitch);
-        wantPitch = -26.0f;
+        wantPitch = lookPitch;
     }
     const float omega = 9.0f + 7.0f * n.Skill;
     const float dy = WrapDeg(wantYaw - n.AimYaw), dp = wantPitch - n.AimPitch;
@@ -1022,10 +1109,21 @@ void NpcDirector::AimAndFire(World& world, Npc& n, const PlayerSnapshot& p, floa
         }
     }
     n.TriggerHeld = held;
+    // Loading the tube a shell at a time with the player at arm's length: the trigger ends the reload after the shell in
+    // hand, as the player's does, and the rifle butt is free to swing.
+    if (reloading && n.Class == WeaponClass::Shotgun && w.Ammo() > 0 && n.Mem.Known && p.Valid && !p.Dead &&
+        glm::length(glm::vec2(p.Feet.x - n.Feet.x, p.Feet.z - n.Feet.z)) < 2.5f)
+        pressed = true;
     w.UpdateTrigger(pressed, held);
     if ((n.Intent.Reload || w.Ammo() == 0) && !reloading && !held) w.Reload();
-    // Reloading, the walk's bob is damped too: the hands are on the magazine, not swinging the gun.
-    w.Tick(dt, reloading ? n.Velocity * 0.35f : n.Velocity, sprinting, aimGun && !sprinting, 0.0f, true);
+    // Standing, the gun is told it stands: the capsule creeps a few cm/s (the crowd's nudges), and the weapon's clips leave
+    // a regrip or an idle at any speed over 0.05 m/s - the regrip started and was cut off a frame later, over and over.
+    // (The body counts as moving from the same 0.25 m/s; the player's own gun reads 0 standing still.)
+    const glm::vec3 gunVelocity = glm::length(glm::vec2(n.Velocity.x, n.Velocity.z)) > 0.25f ? n.Velocity : glm::vec3(0.0f);
+    w.Tick(dt, gunVelocity, sprinting, aimGun && !sprinting, 0.0f, true);
+    // (After the tick, before the animators: the weapon clears its triggers at the start of each frame.)
+    if (n.WeaponAction) w.TriggerAction(n.WeaponAction);
+    n.WeaponAction = nullptr;
 }
 
 void NpcDirector::LateUpdate(World& world, float dt, const PlayerSnapshot& p) {
