@@ -989,6 +989,13 @@ void FirstPersonPresentation::WriteIK() {
     WriteHandAnchor(*rig, carry, adsR, adsT);
     rig->LimbA.Swivel = carry.Swivel[0];
     rig->LimbB.Swivel = carry.Swivel[1];
+    {   // hand-vs-gun offsets (metres to the arms rig's units)
+        const WeaponIKSettings& ik = m_Set.Procedural.IK;
+        rig->LimbA.GripPosition = ik.RightHandPosition / m_Scale;
+        rig->LimbA.GripRotation = ik.RightHandRotation;
+        rig->LimbB.GripPosition = ik.LeftHandPosition / m_Scale;
+        rig->LimbB.GripRotation = ik.LeftHandRotation;
+    }
     rig->LocalRotations.clear();
     if (carry.Action)
         for (const auto& [bone, d] : carry.Action->Locals)
