@@ -5,6 +5,7 @@
 #include "SceneSerializer.h"
 #include "AssetLibrary.h"
 #include "../Game/FirstPersonProcedural.h"
+#include "../Game/AnimatorController.h"
 #include <cmath>
 #include <cstdio>
 
@@ -268,6 +269,146 @@ void TestWeaponIkHandOffsetsRoundTrip() {
     CHECK(back.IK.LeftHandRotation == s.IK.LeftHandRotation);
 }
 
+// ---- lane A round 3 ----
+// A weight curve authored on a state is read back at the state's phase, blended by the crossfade; no curve = 1.
+void TestClipWeightCurveSamplingAndLayerScaling() {
+    AnimatorController c;
+    AnimatorController::State a, b;
+    a.Name = "A";
+    b.Name = "B";
+    a.Curves.push_back({"IK_LeftHand", {{0.0f, 1.0f}, {0.5f, 0.0f}, {1.0f, 0.0f}}});
+    a.Curves.push_back({"IK", {{0.0f, 0.5f}}});
+    c.Layers[0].States = {a, b};
+    // JSON round trip keeps the curves.
+    AnimatorController back;
+    CHECK(AnimatorController::FromJsonString(c.ToJsonString(), back));
+    CHECK(back.Layers[0].States[0].Curves.size() == 2 && back.Layers[0].States[0].Curves[0].Keys.size() == 3);
+    CHECK(back.Layers[0].States[1].Curves.empty());
+
+    AnimatorControllerComponent ac;
+    ac.Layers.resize(1);
+    ac.Layers[0].Stack.push_back({0, 0.25f, 1.0f, 0.0f, -1.0f});
+    CHECK(std::fabs(AnimatorSampleCurve(c, ac, 0, "IK_LeftHand") - 0.5f) < 1e-5f);
+    CHECK(AnimatorSampleCurve(c, ac, 0, "Look") == 1.0f);          // no curve = 1
+    ac.Layers[0].Stack[0].Phase = 1.75f;                           // loops count past 1: 0.75 -> 0
+    CHECK(std::fabs(AnimatorSampleCurve(c, ac, 0, "IK_LeftHand")) < 1e-5f);
+    // Crossfading into B (no curve): halfway the eased weight is 0.5 -> halfway between 0 and 1.
+    ac.Layers[0].Stack.push_back({1, 0.0f, 0.5f, 0.2f, -1.0f});
+    CHECK(std::fabs(AnimatorSampleCurve(c, ac, 0, "IK_LeftHand") - 0.5f) < 1e-5f);
+    CHECK(std::fabs(AnimatorSampleCurve(c, ac, 0, "Missing", 0.7f) - 0.7f) < 1e-5f);
+
+    // The weapon IK weights: left hand off while the curve says so, the others untouched; UseClipCurves off = all 1.
+    ac.Layers[0].Stack.assign(1, {0, 0.75f, 1.0f, 0.0f, -1.0f});
+    WeaponIKSettings ik;
+    IKCurveWeights w = SampleIKCurves(ik, c, ac);
+    CHECK(w.LeftHand == 0.0f && w.RightHand == 1.0f && w.Look == 1.0f && std::fabs(w.All - 0.5f) < 1e-5f);
+    ik.UseClipCurves = false;
+    w = SampleIKCurves(ik, c, ac);
+    CHECK(w.LeftHand == 1.0f && w.All == 1.0f);
+}
+
+// The IK curve scales the procedural IK weight; the IKOff tag still takes it to 0; no curve = old behaviour.
+void TestClipCurveAndIKOffTagCombine() {
+    const WeaponProceduralSettings s = WeaponProceduralSettings::Defaults();
+    auto settle = [&](bool off, float curve) {
+        WeaponProceduralState st;
+        WeaponProceduralInput in;
+        in.Dt = 1.0f / 60.0f;
+        in.IKOff = off;
+        in.IKCurve = curve;
+        WeaponProceduralPose p;
+        for (int i = 0; i < 60; ++i) p = st.Update(s, in);
+        return p.IKWeight;
+    };
+    CHECK(settle(false, 1.0f) == 1.0f);
+    CHECK(std::fabs(settle(false, 0.4f) - 0.4f) < 1e-5f);
+    CHECK(settle(true, 1.0f) == 0.0f);
+    CHECK(settle(true, 0.4f) == 0.0f);
+    // The new settings round-trip.
+    WeaponProceduralSettings k = s, back;
+    k.IK.CurveLeftHand = "Left";
+    k.IK.UseClipCurves = false;
+    CHECK(WeaponProceduralSettings::FromJson(k.ToJson(), back, nullptr));
+    CHECK(back.IK.CurveLeftHand == "Left" && !back.IK.UseClipCurves && back.IK.CurveAll == "IK");
+}
+
+void TestFreeAimDeadZoneMath() {
+    const glm::vec2 zone(4.0f, 2.0f);
+    glm::vec2 o(0.0f);
+    o = StepFreeAim(o, glm::vec2(3.0f, 0.0f), zone, 30.0f, false, 0.016f);
+    CHECK(o == glm::vec2(3.0f, 0.0f));                  // inside the zone: the view turned, the gun held
+    o = StepFreeAim(o, glm::vec2(5.0f, 5.0f), zone, 30.0f, false, 0.016f);
+    CHECK(o == zone);                                   // past it the offset stops at the edge: the gun follows
+    o = StepFreeAim(o, glm::vec2(-1.0f, 0.0f), zone, 30.0f, true, 0.016f);
+    CHECK(glm::length(o) < glm::length(zone) - 0.4f);   // stopped: returns at ~30 deg/s
+    for (int i = 0; i < 20; ++i) o = StepFreeAim(o, glm::vec2(0.0f), zone, 30.0f, true, 0.016f);
+    CHECK(o == glm::vec2(0.0f));
+    CHECK(StepFreeAim(glm::vec2(1.0f), glm::vec2(9.0f), glm::vec2(0.0f), 30.0f, false, 0.016f) == glm::vec2(0.0f)); // off
+
+    // In the stack: the zone fully taken up by a steady turn adds its degrees of lag to the gun's yaw.
+    auto pose = [&](glm::vec2 zoneSetting) {
+        WeaponProceduralSettings s = WeaponProceduralSettings::Defaults();
+        s.Sway.FreeAimZone = zoneSetting;
+        WeaponProceduralState st;
+        WeaponProceduralInput in;
+        in.Dt = 1.0f / 60.0f;
+        in.LookRate = glm::vec2(20.0f, 0.0f);
+        WeaponProceduralPose p;
+        for (int i = 0; i < 30; ++i) p = st.Update(s, in);
+        return p;
+    };
+    const WeaponProceduralPose off = pose(glm::vec2(0.0f)), on = pose(glm::vec2(3.0f, 3.0f));
+    CHECK(std::fabs((on.Rotation.y - off.Rotation.y) - 3.0f) < 0.05f);
+    WeaponProceduralSettings k = WeaponProceduralSettings::Defaults(), back;
+    k.Sway.FreeAimZone = glm::vec2(2.0f, 1.0f);
+    k.Sway.FreeAimReturn = 12.0f;
+    CHECK(WeaponProceduralSettings::FromJson(k.ToJson(), back, nullptr));
+    CHECK(back.Sway.FreeAimZone == k.Sway.FreeAimZone && back.Sway.FreeAimReturn == 12.0f);
+}
+
+void TestAdsBlendPieces() {
+    // Additive 1 = the old behaviour: pose + offset * ads.
+    const glm::vec3 pose(1.0f, 2.0f, 3.0f), off(0.1f, 0.0f, -0.2f);
+    CHECK(BlendAdsChannel(pose, off, 0.5f, 1.0f) == pose + off * 0.5f);
+    CHECK(BlendAdsChannel(pose, off, 0.0f, 0.0f) == pose);       // sights down: nothing, whatever the mode
+    CHECK(BlendAdsChannel(pose, off, 1.0f, 0.0f) == off);        // fully absolute, sights up: the offset alone
+
+    auto settle = [&](WeaponProceduralSettings s, float crouch) {
+        s.Aim.BlendTime = 0.01f;
+        WeaponProceduralState st;
+        WeaponProceduralInput in;
+        in.Dt = 1.0f / 60.0f;
+        in.Ads = true;
+        in.Crouch = crouch;
+        WeaponProceduralPose p;
+        for (int i = 0; i < 90; ++i) p = st.Update(s, in);
+        return p;
+    };
+    WeaponProceduralSettings s = WeaponProceduralSettings::Defaults();
+    s.Aim.Position = glm::vec3(0.0f, -0.02f, 0.0f);
+    const WeaponProceduralPose base = settle(s, 0.0f);
+    // Defaults add nothing: the crouch input and a camera share of 0 change no number.
+    CHECK(settle(s, 1.0f).Position == base.Position && settle(s, 1.0f).CameraOffset == base.CameraOffset);
+    WeaponProceduralSettings c = s;
+    c.Aim.CrouchPosition = glm::vec3(0.0f, -0.01f, 0.0f);
+    CHECK(std::fabs(settle(c, 1.0f).Position.y - (base.Position.y - 0.01f)) < 1e-4f);
+    CHECK(settle(c, 0.0f).Position == base.Position);            // standing: unchanged
+    // Camera share: the gun takes (1 - share) of the offset, the view the rest; their difference is unchanged.
+    WeaponProceduralSettings v = s;
+    v.Aim.CameraShare = 0.5f;
+    const WeaponProceduralPose p = settle(v, 0.0f);
+    CHECK(std::fabs((p.Position.y - p.CameraOffset.y) - (base.Position.y - base.CameraOffset.y)) < 1e-4f);
+    CHECK(std::fabs(p.CameraOffset.y - base.CameraOffset.y - 0.01f) < 1e-4f);
+    WeaponProceduralSettings k = s, back;
+    k.Aim.PositionAdditive = 0.25f;
+    k.Aim.CrouchRotation = glm::vec3(1.0f, 2.0f, 3.0f);
+    k.Aim.CameraShare = 0.3f;
+    CHECK(WeaponProceduralSettings::FromJson(k.ToJson(), back, nullptr));
+    CHECK(back.Aim.PositionAdditive == 0.25f && back.Aim.CrouchRotation == k.Aim.CrouchRotation && back.Aim.CameraShare == 0.3f);
+    CHECK(WeaponProceduralSettings::Defaults().Aim.PositionAdditive == 1.0f && WeaponProceduralSettings::Defaults().Aim.RotationAdditive == 1.0f);
+}
+// ---- end lane A round 3 ----
+
 void RegisterAnimationTests(UnitTestSupport::TestList& tests) {
     tests.push_back({"FirstPersonBody NPC tunables save/load round-trip", TestFirstPersonBodyNpcTunablesRoundTrip});
     tests.push_back({"NPC turn threshold affects turning", TestNpcTurnThresholdAffectsTurning});
@@ -279,4 +420,8 @@ void RegisterAnimationTests(UnitTestSupport::TestList& tests) {
     tests.push_back({"Spine distribution defaults to the even spread", TestSpineDistributionDefaultsEven});
     tests.push_back({"Limb grip offset moves the hand", TestLimbGripOffsetMovesHand});
     tests.push_back({"Weapon IK hand offsets round-trip", TestWeaponIkHandOffsetsRoundTrip});
+    tests.push_back({"Clip weight curves sample and scale the IK layers", TestClipWeightCurveSamplingAndLayerScaling});
+    tests.push_back({"Clip IK curve and the IKOff tag combine", TestClipCurveAndIKOffTagCombine});
+    tests.push_back({"Free-aim dead zone", TestFreeAimDeadZoneMath});
+    tests.push_back({"ADS blend pieces: additive, crouch, camera share", TestAdsBlendPieces});
 }
