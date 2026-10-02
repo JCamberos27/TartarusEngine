@@ -213,6 +213,11 @@ public:
         direction = m_BoreDir;
         return m_AimPointValid;
     }
+    // The muzzle where the gun really is, world space, from the last PlaceRigs (MuzzleRay's is where it's
+    // SEEN, stretched by the view-model FOV): the first-person gun's (drawn in the view-model pass), the
+    // world copy's every other view sees (PlaceWorldWeapon; the same as the first when poses aren't
+    // split), and the bore as modelled.
+    bool MuzzleFrames(glm::vec3& firstPerson, glm::vec3& worldCopy, glm::vec3& bore) const;
 
 private:
     // One weapon's rigs up or down; Start / Stop add the slot list around them.
@@ -360,6 +365,7 @@ private:
     float m_AnchorWeight = 0.0f; // this frame's (for the weapon test)
     glm::mat4 m_ArmsWorld{1.0f}, m_WeaponWorld{1.0f}, m_View{1.0f}; // PlaceRigs': the arms entity's pose and the camera's view
     entt::entity m_WorldWeapon = entt::null; // split poses: the gun every other view sees
+    glm::vec3 m_WorldWeaponShift{0.0f};      // ... placed this far off the first-person one
     mutable std::vector<std::pair<int, int>> m_StockVerts; // StockWorld's butt vertices (mesh, vertex), found once per model
     mutable const Model* m_StockModel = nullptr;
     mutable glm::vec3 m_StockBore{0.0f};                     // ... along this bore (root space)
