@@ -15,8 +15,8 @@ class World;
 // The noise and light of a firefight, Play only: gun reports (near and distant layers, 3D for the
 // squad, 2D for the player), muzzle flashes (a short point light plus additive sparks and a puff of
 // smoke), tracers, rounds whizzing past the player's head, flesh hits, hitmarker ticks, pumps,
-// reloads and bodies falling. Sounds live in assets/Audio/Combat/ (tools/gen_combat_sounds.py makes
-// placeholders). Everything it creates is runtime-only and destroyed by Stop.
+// reloads and bodies falling. Every sound is a recorded set played through Game/Audio (WeaponAudio, ImpactAudio; keys in
+// docs/AUDIO.md). Everything it creates is runtime-only and destroyed by Stop.
 class CombatFx {
 public:
     enum class Gun { Rifle, Shotgun };
@@ -46,10 +46,10 @@ public:
     // The player's gun this frame (FirstPersonPresentation::MuzzleFrames: the first-person gun's muzzle,
     // the world copy's, and the bore): the player's flames move with it.
     void FollowMuzzle(World& world, const glm::vec3& firstPerson, const glm::vec3& worldCopy, const glm::vec3& bore);
-    // A round passing the player's head at `point`, `miss` metres from the listener: the recorded flyby when there is one (within
-    // Impact Audio's Flyby Radius), else the placeholder whizz (within 1.6 m) - never both.
+    // A round passing the player's head at `point`, `miss` metres from the listener: the recorded flyby (snd.flyby) within Impact
+    // Audio's Flyby Radius.
     void Whizz(const glm::vec3& point, float miss = 0.0f);
-    // How far from the listener a passing round is worth a Whizz call (the flyby radius, at least the placeholder's 1.6 m).
+    // How far from the listener a passing round is worth a Whizz call (the flyby radius, at least 1.6 m).
     float FlybyReach() const;
     // A round struck `entity` at `point` (a wall, a prop - not a soldier: the flesh hit has its own cue): snd.impact.<surface>.
     void Impact(World& world, std::uint32_t entity, const glm::vec3& point);
@@ -79,5 +79,4 @@ private:
     int m_ShotsHeard = 0, m_Whizzes = 0;
 
     float Rand01();
-    void PlaySound(const std::string& file, const glm::vec3& pos, bool at2D, float volume, float pitch, float minDist, float maxDist);
 };
