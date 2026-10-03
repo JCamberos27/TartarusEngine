@@ -1,5 +1,7 @@
 # Audio mix / reverb pass: handoff (paused 2026-10-03)
 
+> **Superseded:** this pass is finished and merged to `main`; see `docs/AUDIO.md` (reference) and `docs/AUDIO_REVAMP_HANDOFF.md` (what came after).
+
 Read this first, then `docs/AUDIO.md`. The base branch is `claude/audio-int`, the integration branch, which is not on main yet. **Ask the user before merging anything to main.**
 
 ## Why

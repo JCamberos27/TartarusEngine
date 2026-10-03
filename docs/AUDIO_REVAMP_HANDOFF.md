@@ -1,5 +1,14 @@
 # Audio revamp — handoff (2026-10-03)
 
+> **Status (2026-10-03, merged to `main`):** parts A and B below are done and merged together with a third session
+> (branch `claude/audio-fixes`): footsteps on the animated feet, impacts that start on the hit, the 870 rebuilt from the
+> Tactical Shooter Pack with a cinematic low end (+3 dB over the AK), Kinemation shell inserts in one event per shell,
+> draw / holster on the movement only with a zip layer, no gear rattle on weapon switches, no hard cut-offs, short-key
+> variant levelling, the flyby whine removed, Sandbox reverb zones on their calibrated class defaults. `docs/AUDIO.md` is
+> the reference for all of it. Still open: more free Sonniss GDC takes for impacts / casings / shell bounces / flybys (ask
+> before each download), heavier sprint steps, the AK reload's two-contact events, room tails from more than one recording
+> per space; the Hell2025 sounds are on hold (no licence in that repo).
+
 Branch: `claude/audio-int-trial` (pushed to GitHub). It is `claude/audio-int` + the VX / SL / SM (WIP phase 2) / SE-2 lanes +
 everything below. **Not merged to main — ask the user before merging anything to main.** Older context: `docs/AUDIO_PASS_HANDOFF.md`
 (the original mix/reverb pass) and `docs/AUDIO.md` (the full reference, updated for everything in part A).
