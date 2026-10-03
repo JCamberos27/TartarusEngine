@@ -28,10 +28,10 @@ void ReverbZones::Set(std::vector<ReverbZoneVolume> zones) {
     });
 }
 
-void ReverbZones::Build(World& world) {
+void ReverbZones::Build(const World& world) {
     std::vector<ReverbZoneVolume> zones;
-    for (const entt::entity e : world.Registry.view<ReverbZoneComponent>()) {
-        const ReverbZoneComponent& c = world.Registry.get<ReverbZoneComponent>(e);
+    for (const entt::entity e : world.Registry.view<const ReverbZoneComponent>()) {
+        const ReverbZoneComponent& c = world.Registry.get<const ReverbZoneComponent>(e);
         if (!c.Enabled) continue;
         const glm::mat4 m = world.ComposeWorldTransform(e);
         glm::mat3 rot(m);
@@ -66,6 +66,12 @@ ReverbZoneMix ReverbZones::Mix(const glm::vec3& p) const {
         const float take = remaining * w;
         mix.Weights[(int)z.Class] += take;
         gain += take * z.TailGain;
+        mix.Reverb.RoomSize += take * z.Reverb.RoomSize;
+        mix.Reverb.DecayTime += take * z.Reverb.DecayTime;
+        mix.Reverb.HfDamping += take * z.Reverb.HfDamping;
+        mix.Reverb.PreDelayMs += take * z.Reverb.PreDelayMs;
+        mix.Reverb.WetLevel += take * z.Reverb.WetLevel;
+        mix.Reverb.EarlyLateMix += take * z.Reverb.EarlyLateMix;
         remaining -= take;
         ++mix.Zones;
     }

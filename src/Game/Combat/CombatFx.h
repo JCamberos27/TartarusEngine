@@ -46,8 +46,13 @@ public:
     // The player's gun this frame (FirstPersonPresentation::MuzzleFrames: the first-person gun's muzzle,
     // the world copy's, and the bore): the player's flames move with it.
     void FollowMuzzle(World& world, const glm::vec3& firstPerson, const glm::vec3& worldCopy, const glm::vec3& bore);
-    // A round passing the player's head at `point`.
-    void Whizz(const glm::vec3& point);
+    // A round passing the player's head at `point`, `miss` metres from the listener: the recorded flyby when there is one (within
+    // Impact Audio's Flyby Radius), else the placeholder whizz (within 1.6 m) - never both.
+    void Whizz(const glm::vec3& point, float miss = 0.0f);
+    // How far from the listener a passing round is worth a Whizz call (the flyby radius, at least the placeholder's 1.6 m).
+    float FlybyReach() const;
+    // A round struck `entity` at `point` (a wall, a prop - not a soldier: the flesh hit has its own cue): snd.impact.<surface>.
+    void Impact(World& world, std::uint32_t entity, const glm::vec3& point);
     // A one-shot at `pos` (3D), or on the listener when `at2D`.
     void Play(Cue cue, const glm::vec3& pos, bool at2D = false, float volume = 1.0f);
 

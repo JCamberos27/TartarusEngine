@@ -3,6 +3,7 @@
 #include <vector>
 #include <cstdint>
 #include <glm/glm.hpp>
+#include "ReverbFdn.h"
 
 // Thin wrapper over miniaudio's ma_engine: loads sounds by path (wav/mp3/flac/ogg) and plays
 // them as individually addressable voices.
@@ -52,8 +53,33 @@ public:
 
     // startOffsetSeconds > 0 starts the voice that far into the file (skips a lead-in: weapon sounds whose contact
     // transient has to land on an animation frame that is nearer than the file's lead).
+    // Per-voice processing built into the voice's node chain when it starts: a send into the reverb bus (0 = none: the voice
+    // is not routed through a splitter at all) and a low-pass for occlusion (SetOcclusion drives its cutoff).
+    struct VoiceFx {
+        float ReverbSend = 0.0f;   // linear level of the voice into the reverb (post fader, post spatialisation)
+        bool Occlusion = false;
+    };
     static SoundHandle Play(const std::string& path, float volume = 1.0f, bool loop = false, Bus bus = Bus::SFX,
-                            float startOffsetSeconds = 0.0f);
+                            float startOffsetSeconds = 0.0f, const VoiceFx* fx = nullptr);
+    // Occlusion low-pass of a voice that was started with VoiceFx::Occlusion: cutoff in Hz (>= 20000 or <= 0 = open).
+    static void SetOcclusion(SoundHandle handle, float cutoffHz);
+    // The send level of a voice that was started with a ReverbSend > 0.
+    static void SetReverbSend(SoundHandle handle, float level);
+
+    // The reverb bus: a send every voice with a ReverbSend feeds, one FDN reverb (ReverbFdn) summed into the output. The
+    // parameters are targets the DSP glides to (no zipper noise); safe to call from the game thread every frame.
+    static void SetReverbEnabled(bool enabled);
+    static bool ReverbEnabled();
+    static void SetReverb(const ReverbParams& target);
+    static void SetReverbReturn(float level); // linear gain of the wet signal into the output (times the SFX bus volume)
+    static void SetReverbGlide(float seconds); // how long the reverb takes to follow a change of its parameters
+    struct ReverbStats {
+        std::uint64_t Callbacks = 0;
+        double TotalMicros = 0.0, MaxMicros = 0.0;
+        int Frames = 0;            // frames of the last callback
+    };
+    static ReverbStats GetReverbStats();
+    static void ResetReverbStats();
 
     // All no-ops / false for a stale or invalid handle.
     static void Stop(SoundHandle handle);

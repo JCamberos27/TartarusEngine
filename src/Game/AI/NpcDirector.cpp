@@ -1365,14 +1365,14 @@ void NpcDirector::HandleShots(World& world, Npc& n, const PlayerSnapshot& p, con
         const bool shotgun = n.Class == WeaponClass::Shotgun;
         if (t.FirstPellet)
             Fx->Shot(world, shotgun ? CombatFx::Gun::Shotgun : CombatFx::Gun::Rifle, t.Origin + muzzleShift, t.End, false,
-                     !shotgun && (n.Tracer++ % 3) == 0);
+                     !shotgun && (n.Tracer++ % 3) == 0, (std::uint32_t)n.Index + 1u); // the soldier's id: his tail's probe is cached per shooter
         if (!p.Valid || p.Dead || (t.Hit && t.Entity == kPlayerEntity)) continue;
         const glm::vec3 seg = t.End - t.Origin;
         const float len2 = glm::dot(seg, seg);
         if (len2 < 1e-4f) continue;
         const float u = std::clamp(glm::dot(p.Eye - t.Origin, seg) / len2, 0.0f, 1.0f);
         const glm::vec3 closest = t.Origin + seg * u;
-        if (glm::length(closest - p.Eye) < 1.6f && u * std::sqrt(len2) > 3.0f && u < 0.999f) Fx->Whizz(closest);
+        if (const float miss = glm::length(closest - p.Eye); miss < Fx->FlybyReach() && u * std::sqrt(len2) > 3.0f && u < 0.999f) Fx->Whizz(closest, miss);
     }
     // The gun's own noises: a reload starting, the pump racked.
     if (Fx && n.Weapon) {

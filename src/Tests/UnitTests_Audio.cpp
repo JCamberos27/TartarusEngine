@@ -2,6 +2,8 @@
 
 #include "../Game/Audio/FoleyAudio.h"
 #include "../Game/Audio/EnvironmentProbe.h"
+#include "../Game/Audio/ImpactAudio.h"
+#include "../Audio/ReverbFdn.h"
 #include "../Game/Audio/ReverbZones.h"
 #include "../Game/Audio/WeaponAudio.h"
 #include "../Game/ComponentRegistry.h"
@@ -28,6 +30,11 @@ struct FakeBackend : SoundBackend {
         float Life = 1e9f;
     };
     std::vector<V> Voices;
+    std::vector<std::pair<AudioEngine::SoundHandle, float>> Occlusion; // every SetOcclusion
+    ReverbParams LastReverb;
+    int ReverbCalls = 0;
+    void SetOcclusion(AudioEngine::SoundHandle h, float hz) override { Occlusion.push_back({h, hz}); }
+    void SetReverb(const ReverbParams& p) override { LastReverb = p; ++ReverbCalls; }
     float DefaultLife = 1e9f;
     AudioEngine::SoundHandle Start(const SoundVoice& v) override {
         V x;
@@ -1085,7 +1092,7 @@ void TestReverbZoneContainmentPriorityAndBlend() {
     zc.ReverbMode = 1;
     zc.Reverb.DecayTime = 7.0f;
     CHECK(zc.Resolved().DecayTime == 7.0f);
-    CHECK(ReverbPresetFor(2).DecayTime < ReverbPresetFor(3).DecayTime && ReverbPresetFor(3).DecayTime < ReverbPresetFor(0).DecayTime);
+    CHECK(ReverbPresetFor(2).DecayTime < ReverbPresetFor(3).DecayTime && ReverbPresetFor(0).WetLevel < ReverbPresetFor(2).WetLevel);
     CHECK(ReverbPresetFor(2).RoomSize < ReverbPresetFor(3).RoomSize && ReverbPresetFor(2).PreDelayMs < ReverbPresetFor(3).PreDelayMs);
     if (ComponentRegistry::All().empty()) ComponentRegistry::RegisterEngineComponents();
     bool registered = false;
@@ -1134,6 +1141,490 @@ void TestEnvironmentZonesBeatTheProbe() {
     wa.Stop();
 }
 
+
+// --- reverb bus, sends, occlusion, impacts, casings, flyby -----------------------------------------------------------
+
+// A deterministic noise burst (no <random>: the same samples everywhere).
+struct Lcg {
+    std::uint32_t S = 12345u;
+    float Next() { S = S * 1664525u + 1013904223u; return (float)(S >> 8) / (float)(1u << 24) * 2.0f - 1.0f; }
+};
+
+// The wet signal of an impulse (a click in the middle of silence) for `seconds`.
+std::vector<float> ReverbImpulse(const ReverbParams& p, float seconds, int block = 480) {
+    ReverbFdn fdn(48000);
+    fdn.Reset(p);
+    const int total = (int)(seconds * 48000.0f);
+    std::vector<float> in((size_t)total * 2, 0.0f), out((size_t)total * 2, 0.0f);
+    in[0] = in[1] = 1.0f;
+    for (int pos = 0; pos < total; pos += block) fdn.Process(in.data() + 2 * (size_t)pos, out.data() + 2 * (size_t)pos, std::min(block, total - pos));
+    return out;
+}
+double WindowEnergy(const std::vector<float>& x, float t0, float t1) {
+    double e = 0.0;
+    for (size_t i = (size_t)(t0 * 48000.0f); i < (size_t)(t1 * 48000.0f) && 2 * i + 1 < x.size(); ++i) e += (double)x[2 * i] * x[2 * i] + (double)x[2 * i + 1] * x[2 * i + 1];
+    return e;
+}
+double Db(double ratio) { return 10.0 * std::log10(std::max(ratio, 1e-30)); }
+
+void TestReverbFdnImpulseAndDecay() {
+    ReverbParams p;
+    p.RoomSize = 0.5f; p.DecayTime = 1.0f; p.HfDamping = 0.3f; p.PreDelayMs = 10.0f; p.WetLevel = 1.0f; p.EarlyLateMix = 0.0f; // the late field alone
+    const std::vector<float> y = ReverbImpulse(p, 6.0f);
+    // Nothing before the pre-delay; then energy that decays: each half second quieter than the one before, ~60 dB down by RT60 x ~2.
+    CHECK(WindowEnergy(y, 0.0f, 0.008f) < 1e-6);
+    const double e0 = WindowEnergy(y, 0.05f, 0.25f), e1 = WindowEnergy(y, 0.5f, 0.7f), e2 = WindowEnergy(y, 1.0f, 1.2f), e3 = WindowEnergy(y, 2.0f, 2.2f);
+    CHECK(e0 > 1e-6);
+    CHECK(e1 < e0 && e2 < e1 && e3 < e2);
+    CHECK(Db(e2 / e0) < -20.0); // a second after the front: well down (RT60 = 1 s means -60 dB per second)
+    CHECK(Db(e3 / e0) < -45.0);
+    // A longer decay time rings longer; a shorter one dies faster.
+    ReverbParams longer = p, shorter = p;
+    longer.DecayTime = 3.0f;
+    shorter.DecayTime = 0.4f;
+    const std::vector<float> yl = ReverbImpulse(longer, 6.0f), ys = ReverbImpulse(shorter, 6.0f);
+    CHECK(WindowEnergy(yl, 1.0f, 1.2f) > 10.0 * e2);
+    CHECK(WindowEnergy(ys, 0.5f, 0.7f) < 0.2 * e1);
+    // No NaN, no infinities, no denormals: not in the tail of a long run into silence either.
+    const std::vector<float> z = ReverbImpulse(p, 25.0f);
+    bool bad = false;
+    for (float v : z) {
+        const int c = std::fpclassify(v);
+        bad |= c == FP_NAN || c == FP_INFINITE || c == FP_SUBNORMAL;
+    }
+    CHECK(!bad);
+    // Wet 0 is silent; the early stage alone (EarlyLateMix 1) ends within ~150 ms; the level follows Wet Level.
+    ReverbParams dry = p;
+    dry.WetLevel = 0.0f;
+    CHECK(WindowEnergy(ReverbImpulse(dry, 1.0f), 0.0f, 1.0f) < 1e-12);
+    ReverbParams early = p;
+    early.EarlyLateMix = 1.0f;
+    const std::vector<float> ye = ReverbImpulse(early, 2.0f);
+    CHECK(WindowEnergy(ye, 0.0f, 0.15f) > 1e-3 && WindowEnergy(ye, 0.3f, 2.0f) < 1e-9);
+    ReverbParams half = p;
+    half.WetLevel = 0.5f;
+    CHECK(std::fabs(Db(WindowEnergy(ReverbImpulse(half, 1.0f), 0.05f, 0.5f) / WindowEnergy(y, 0.05f, 0.5f)) + 6.0) < 0.5); // -6 dB
+    // Damping: a darker setting has less high-frequency energy in the tail (energy of the first difference over the energy).
+    auto brightness = [](const std::vector<float>& x) {
+        double d = 0.0, e = 0.0;
+        for (size_t i = (size_t)(0.4f * 48000.0f) + 1; i < (size_t)(1.5f * 48000.0f); ++i) { // after several passes through the damping
+            d += std::pow((double)x[2 * i] - x[2 * (i - 1)], 2.0);
+            e += (double)x[2 * i] * x[2 * i];
+        }
+        return d / std::max(e, 1e-30);
+    };
+    ReverbParams bright = p, dark = p;
+    bright.HfDamping = 0.0f;
+    dark.HfDamping = 1.0f;
+    CHECK(brightness(ReverbImpulse(dark, 2.0f)) < 0.5 * brightness(ReverbImpulse(bright, 2.0f)));
+    // Mono compatibility: left and right differ (a stereo field) yet fold to mono without a hole.
+    double l2 = 0.0, r2 = 0.0, m2 = 0.0, lr = 0.0;
+    ReverbParams both = p;
+    both.EarlyLateMix = 0.5f;
+    const std::vector<float> yb = ReverbImpulse(both, 3.0f);
+    for (size_t i = 0; i < yb.size() / 2; ++i) {
+        l2 += (double)yb[2 * i] * yb[2 * i];
+        r2 += (double)yb[2 * i + 1] * yb[2 * i + 1];
+        m2 += std::pow(0.5 * ((double)yb[2 * i] + yb[2 * i + 1]), 2.0);
+        lr += (double)yb[2 * i] * yb[2 * i + 1];
+    }
+    CHECK(Db(m2 / (0.5 * (l2 + r2))) > -4.5);               // a decorrelated pair folds at -3 dB; a hole would be far lower
+    CHECK(std::fabs(lr) / std::sqrt(l2 * r2) < 0.5);         // and the channels are not the same signal
+    // Block size does not change what it sounds like (the sub-block ramps are the same ones): 480 vs 64 frame callbacks.
+    const std::vector<float> a = ReverbImpulse(p, 1.0f, 480), b = ReverbImpulse(p, 1.0f, 64);
+    double diff = 0.0, ref = 0.0;
+    for (size_t i = 0; i < a.size(); ++i) {
+        diff += std::pow((double)a[i] - b[i], 2.0);
+        ref += (double)a[i] * a[i];
+    }
+    CHECK(diff < 1e-4 * ref);
+}
+
+void TestReverbFdnParameterGlide() {
+    // A steady tone through the reverb while Wet Level jumps 0.1 -> 0.9: with the glide the output level moves in small steps; a hard
+    // jump (Reset) is the step the glide exists to avoid.
+    auto run = [](bool glide) {
+        ReverbParams a, b;
+        a.WetLevel = 0.1f;
+        b = a;
+        b.WetLevel = 0.9f; // only the level moves, so the step measured is the level's
+        ReverbFdn fdn(48000);
+        fdn.Reset(a);
+        const int blocks = 300, n = 480;
+        std::vector<float> in((size_t)n * 2), out((size_t)n * 2);
+        std::vector<double> level;
+        float ph = 0.0f;
+        double prevSample = 0.0, worstJump = 0.0;
+        for (int k = 0; k < blocks; ++k) {
+            if (k == 100) {
+                if (!glide) fdn.SetSmoothingTime(0.001f); // (about a step)
+                fdn.SetTarget(b);
+            }
+            for (int i = 0; i < n; ++i) {
+                ph += 2.0f * 3.14159265f * 330.0f / 48000.0f;
+                in[2 * i] = in[2 * i + 1] = 0.3f * std::sin(ph);
+            }
+            fdn.Process(in.data(), out.data(), n);
+            double e = 0.0;
+            for (int i = 0; i < n; ++i) {
+                e += (double)out[2 * i] * out[2 * i];
+                worstJump = std::max(worstJump, std::fabs((double)out[2 * i] - prevSample));
+                prevSample = out[2 * i];
+            }
+            level.push_back(std::sqrt(e / n));
+        }
+        double worstStep = 0.0;
+        for (size_t k = 100; k < level.size(); ++k) worstStep = std::max(worstStep, std::fabs(level[k] - level[k - 1]));
+        return std::make_pair(worstStep, worstJump);
+    };
+    const auto glided = run(true), jumped = run(false);
+    CHECK(glided.first < 0.5 * jumped.first); // the level moves in far smaller steps than the jump's
+    // It arrives: after the glide the output is the new settings' (compared with a reverb that started there).
+    ReverbParams a, b;
+    a.WetLevel = 0.1f;
+    b.WetLevel = 0.9f;
+    ReverbFdn fdn(48000), ref(48000);
+    fdn.Reset(a);
+    ref.Reset(b);
+    fdn.SetTarget(b);
+    std::vector<float> in(480 * 2, 0.0f), o1(480 * 2), o2(480 * 2);
+    Lcg rng;
+    double e1 = 0.0, e2 = 0.0;
+    for (int k = 0; k < 400; ++k) { // 4 s: well past the 0.35 s glide
+        for (float& v : in) v = 0.2f * rng.Next();
+        fdn.Process(in.data(), o1.data(), 480);
+        ref.Process(in.data(), o2.data(), 480);
+        if (k >= 380)
+            for (size_t i = 0; i < o1.size(); ++i) { e1 += (double)o1[i] * o1[i]; e2 += (double)o2[i] * o2[i]; }
+    }
+    CHECK(std::fabs(Db(e1 / e2)) < 0.5);
+    CHECK(std::fabs(fdn.Current().WetLevel - 0.9f) < 0.01f);
+}
+
+void TestReverbSendRoutingByCategory() {
+    FakeBackend be;
+    WeaponAudio& wa = WeaponAudio::Get();
+    wa.StartForTest("", &be);
+    const ReverbBusComponent& b = wa.Bus();
+    CHECK(wa.SendFor("snd.ak.fire_tail") == 0.0f && wa.SendFor("snd.870.fire_tail_indoor_large") == 0.0f && wa.SendFor("snd.ak.fire_far") == 0.0f); // tails: recorded, no send
+    CHECK(wa.SendFor("snd.ak.fire_close") == b.SendShot && wa.SendFor("snd.870.fire_mech") == b.SendShot && wa.SendFor("snd.ak.fire_sub") == b.SendShot);
+    CHECK(wa.SendFor("snd.ak.mag_out") == b.SendActions && wa.SendFor("snd.870.pump_back") == b.SendActions);
+    CHECK(wa.SendFor("snd.foley.step_wood.walk") == b.SendFootsteps && wa.SendFor("snd.foley.step_concrete.land") == b.SendFootsteps);
+    CHECK(wa.SendFor("snd.foley.move.jump") == b.SendFoley && wa.SendFor("snd.foley.weapon.ads_in") == b.SendFoley && wa.SendFor("snd.foley.cloth.sprint_loop") == b.SendFoley);
+    CHECK(wa.SendFor("snd.casing.rifle.concrete") == b.SendCasings && wa.SendFor("snd.impact.metal") == b.SendImpacts && wa.SendFor("snd.flyby") == b.SendImpacts);
+    CHECK(wa.SendFor("snd.voice.callout") == b.SendVoice && wa.SendFor("not_a_key") == 0.0f);
+    CHECK(b.SendTail == 0.0f && b.SendFoley > 0.0f && b.SendImpacts > 0.0f && b.SendCasings > 0.0f && b.SendShot > 0.0f && b.SendShot < b.SendFoley);
+    // Voices start with their category's send, from the player: a keyed set, a gun layer, a tail.
+    SoundSet* imp = wa.KeySet("snd.impact.metal", [](SoundSet& s) { s.Files = {"imp.wav"}; });
+    wa.PlayKeyed(*imp, glm::vec3(5.0f, 0.0f, 0.0f), false, 1.0f);
+    CHECK(be.Voices.size() == 1 && be.Voices[0].Voice.ReverbSend == b.SendImpacts);
+    WeaponAudioProfile* p = wa.Profile("ak");
+    p->Close.Set.Files = {"close.wav"};
+    p->Tail.Set.Files = {"tail.wav"};
+    p->Tail.Every = 1;
+    wa.Shot("ak", glm::vec3(5.0f, 0.0f, 0.0f), true);
+    int closeSend = -1, tailSend = -1;
+    for (const auto& v : be.Voices) {
+        if (v.Voice.File == "close.wav") closeSend = (int)std::lround(v.Voice.ReverbSend * 1000.0f);
+        if (v.Voice.File == "tail.wav") tailSend = (int)std::lround(v.Voice.ReverbSend * 1000.0f);
+    }
+    CHECK(closeSend == (int)std::lround(b.SendShot * 1000.0f) && tailSend == 0);
+    // A set's own value beats the category's; -1 asks the category.
+    imp->ReverbSend = 0.9f;
+    be.Voices.clear();
+    wa.Update(1.0f);
+    wa.PlayKeyed(*imp, glm::vec3(5.0f, 0.0f, 0.0f), false, 1.0f);
+    CHECK(be.Voices.size() == 1 && be.Voices[0].Voice.ReverbSend == 0.9f);
+    // The set's json carries it.
+    SoundSet fromJson = SoundSet::FromJson("snd.x.y", R"({"files":["a.wav"],"reverbSend":0.25,"occlusion":false})");
+    CHECK(fromJson.ReverbSend == 0.25f && fromJson.Occlusion == 0);
+    CHECK(SoundSet::FromJson("snd.x.y", SoundSet{}.ToJson()).ReverbSend == -1.0f);
+    // The bus off: no sends at all.
+    wa.Bus().Enabled = false;
+    be.Voices.clear();
+    imp->ReverbSend = -1.0f;
+    wa.Update(1.0f);
+    wa.PlayKeyed(*imp, glm::vec3(5.0f, 0.0f, 0.0f), false, 1.0f);
+    CHECK(be.Voices.size() == 1 && be.Voices[0].Voice.ReverbSend == 0.0f);
+    wa.Stop();
+}
+
+void TestOcclusionLowPass() {
+    FakeBackend be;
+    WeaponAudio& wa = WeaponAudio::Get();
+    wa.StartForTest("", &be);
+    SoundPlayer& pl = wa.Player();
+    bool wall = true;
+    int casts = 0;
+    pl.SetBlockedFn([&](const glm::vec3&, const glm::vec3&) { ++casts; return wall; });
+    pl.SetListener(glm::vec3(0.0f));
+    SoundPlayer::OcclusionSettings occ = pl.GetOcclusion();
+    CHECK(occ.CutoffHz == 900.0f && occ.Enabled);
+    SoundSet* s = wa.KeySet("snd.impact.concrete", [](SoundSet& set) { set.Files = {"i.wav"}; set.MaxVoices = 64; });
+    // A voice behind the wall starts muffled (its low-pass already closed), one that is close is never occluded, one in 2D is not either.
+    wa.PlayKeyed(*s, glm::vec3(20.0f, 0.0f, 0.0f), false, 1.0f);
+    wa.PlayKeyed(*s, glm::vec3(1.0f, 0.0f, 0.0f), false, 1.0f);
+    wa.PlayKeyed(*s, glm::vec3(20.0f, 0.0f, 0.0f), true, 1.0f);
+    CHECK(be.Voices.size() == 3);
+    CHECK(be.Voices[0].Voice.Occlusion && std::fabs(be.Voices[0].Voice.OcclusionHz - 900.0f) < 1.0f);
+    CHECK(be.Voices[1].Voice.Occlusion && be.Voices[1].Voice.OcclusionHz == 20000.0f); // inside the minimum distance
+    CHECK(!be.Voices[2].Voice.Occlusion);                                                // 2D
+    CHECK(be.Occlusion.size() == 1 && be.Occlusion[0].second < 1000.0f);               // the muffled one was told its cutoff
+    // The wall goes away: the low-pass opens over a few frames (a smoothed amount), not in one click.
+    wall = false;
+    const size_t told = be.Occlusion.size();
+    float first = 0.0f;
+    for (int i = 0; i < 30 && be.Occlusion.size() == told; ++i) pl.Update(0.02f); // until the voice sees the wall is gone
+    if (be.Occlusion.size() > told) first = be.Occlusion[told].second;
+    CHECK(first > 900.0f && first < 20000.0f); // the first step is on its way, not the whole way
+    for (int i = 0; i < 40; ++i) pl.Update(0.02f);
+    float last = 0.0f;
+    for (const auto& o : be.Occlusion) last = o.second;
+    CHECK(last >= 19999.0f);
+    // Back behind it: it closes again.
+    wall = true;
+    for (int i = 0; i < 80; ++i) pl.Update(0.02f);
+    for (const auto& o : be.Occlusion) last = o.second;
+    CHECK(last < 1000.0f);
+    // Throttled: the checks a frame never exceed the budget, however many voices there are.
+    be.Voices.clear();
+    be.Occlusion.clear();
+    pl.StopAll();
+    SoundPlayer::OcclusionSettings few = pl.GetOcclusion();
+    few.RaysPerFrame = 4;
+    few.Interval = 0.05f;
+    pl.SetOcclusion(few);
+    for (int i = 0; i < 30; ++i) wa.PlayKeyed(*s, glm::vec3(20.0f + (float)i, 0.0f, 0.0f), false, 1.0f);
+    CHECK(pl.OccludedVoices() == 30);
+    pl.Update(0.06f); // all due now
+    casts = 0;
+    pl.Update(0.016f);
+    CHECK(casts <= few.RaysPerFrame);
+    casts = 0;
+    for (int i = 0; i < 20; ++i) pl.Update(0.02f); // 0.4 s: every voice (30 / 4 = 8 frames) was checked at least once
+    CHECK(casts >= 30);
+    // Off in the component: nothing is tracked.
+    few.Enabled = false;
+    pl.SetOcclusion(few);
+    pl.StopAll();
+    be.Voices.clear();
+    wa.PlayKeyed(*s, glm::vec3(20.0f, 0.0f, 0.0f), false, 1.0f);
+    CHECK(!be.Voices[0].Voice.Occlusion && pl.OccludedVoices() == 0);
+    // The cutoff law: open at 0, the setting at 1, log-spaced between.
+    CHECK(SoundPlayer::OcclusionCutoff(occ, 0.0f) == 20000.0f && std::fabs(SoundPlayer::OcclusionCutoff(occ, 1.0f) - 900.0f) < 0.5f);
+    CHECK(std::fabs(SoundPlayer::OcclusionCutoff(occ, 0.5f) - std::sqrt(20000.0f * 900.0f)) < 1.0f);
+    wa.Stop();
+}
+
+void TestReverbFollowsListenerSpace() {
+    FakeBackend be;
+    WeaponAudio& wa = WeaponAudio::Get();
+    wa.StartForTest("", &be);
+    BoxRoom field{{-500.0f, -50.0f, -500.0f}, {500.0f, 500.0f, 500.0f}};
+    BoxRoom small{{-2.0f, 0.0f, -2.5f}, {2.0f, 3.0f, 2.5f}};
+    wa.ListenerProbe().SetRayFn(field.Fn());
+    // No zone, open ground: the outdoor_open preset.
+    wa.SetListener(glm::vec3(0.0f, 1.5f, 0.0f));
+    wa.Update(0.016f);
+    const ReverbPreset open = ReverbPresetFor((int)SpaceClass::OutdoorOpen);
+    CHECK(be.ReverbCalls >= 1 && std::fabs(be.LastReverb.DecayTime - open.DecayTime) < 0.01f && std::fabs(be.LastReverb.WetLevel - open.WetLevel) < 0.01f);
+    // The probe says small room: its preset.
+    auto roomAround = [](const glm::vec3& o, const glm::vec3& d, float maxD, float& hit) { // a small room around wherever the listener is
+        return BoxRoom{o + glm::vec3(-2.0f, -1.5f, -2.5f), o + glm::vec3(2.0f, 1.5f, 2.5f)}.Fn()(o, d, maxD, hit);
+    };
+    (void)small;
+    wa.ListenerProbe().Clear();
+    wa.ListenerProbe().SetRayFn(roomAround);
+    wa.Update(0.5f);
+    const ReverbPreset room = ReverbPresetFor((int)SpaceClass::IndoorSmall);
+    CHECK(std::fabs(be.LastReverb.DecayTime - room.DecayTime) < 0.01f && std::fabs(be.LastReverb.RoomSize - room.RoomSize) < 0.01f);
+    // A Reverb Zone with its own (custom) preset beats the probe inside it, and fades into it at the edge.
+    ReverbZoneVolume z;
+    z.Center = glm::vec3(100.0f, 0.0f, 0.0f);
+    z.Shape = 1;
+    z.Radius = 10.0f;
+    z.FadeDistance = 4.0f;
+    z.Class = SpaceClass::IndoorLarge;
+    z.Reverb = {0.77f, 5.5f, 0.2f, 40.0f, 0.6f, 0.1f};
+    wa.Zones().Set({z});
+    wa.SetListener(glm::vec3(100.0f, 0.0f, 0.0f));
+    wa.Update(0.5f);
+    CHECK(std::fabs(be.LastReverb.DecayTime - 5.5f) < 0.01f && std::fabs(be.LastReverb.WetLevel - 0.6f) < 0.01f);
+    float prev = be.LastReverb.DecayTime, worst = 0.0f;
+    for (int i = 0; i <= 100; ++i) { // walk out through the 4 m fade: the decay time moves continuously from the zone's to the probe's
+        wa.SetListener(glm::vec3(100.0f + 6.0f + 0.05f * (float)i, 0.0f, 0.0f));
+        wa.Update(0.016f);
+        worst = std::max(worst, std::fabs(be.LastReverb.DecayTime - prev));
+        prev = be.LastReverb.DecayTime;
+    }
+    CHECK(worst < 0.12f);
+    CHECK(std::fabs(prev - room.DecayTime) < 0.01f);
+    // The bus off: the reverb is not driven; the wet scale scales the preset's wet level.
+    wa.Bus().WetScale = 0.5f;
+    wa.SetListener(glm::vec3(0.0f, 1.5f, 0.0f));
+    wa.Update(0.5f);
+    CHECK(std::fabs(be.LastReverb.WetLevel - 0.5f * room.WetLevel) < 0.01f);
+    wa.Stop();
+}
+
+void TestCasingContactGating() {
+    ImpactAudioComponent t;
+    CHECK(t.CasingMaxContacts == 2);
+    // The first contacts of a case sound, the third does not; a soft touch is silent; a case that never lands fast enough is silent.
+    CHECK(ImpactAudio::CasingContactAudible(t, 0, 3.0f) && ImpactAudio::CasingContactAudible(t, 1, 3.0f));
+    CHECK(!ImpactAudio::CasingContactAudible(t, 2, 3.0f) && !ImpactAudio::CasingContactAudible(t, 5, 9.0f));
+    CHECK(!ImpactAudio::CasingContactAudible(t, 0, t.CasingMinSpeed - 0.01f) && ImpactAudio::CasingContactAudible(t, 0, t.CasingMinSpeed));
+    CHECK(!ImpactAudio::CasingContactAudible(t, -1, 3.0f));
+    t.CasingMaxContacts = 3;
+    CHECK(ImpactAudio::CasingContactAudible(t, 2, 3.0f)); // tunable
+    t.CasingMaxContacts = 2;
+    t.CasingsEnabled = false;
+    CHECK(!ImpactAudio::CasingContactAudible(t, 0, 3.0f));
+    t.CasingsEnabled = true;
+    // Gain by impact speed: GainMin x volume at the minimum, volume at the full speed and above, rising between.
+    CHECK(std::fabs(ImpactAudio::CasingGain(t, t.CasingMinSpeed) - t.CasingGainMin * t.CasingVolume) < 1e-4f);
+    CHECK(std::fabs(ImpactAudio::CasingGain(t, t.CasingFullSpeed) - t.CasingVolume) < 1e-4f && std::fabs(ImpactAudio::CasingGain(t, 40.0f) - t.CasingVolume) < 1e-4f);
+    float prev = 0.0f;
+    for (float v = t.CasingMinSpeed; v <= t.CasingFullSpeed; v += 0.1f) {
+        const float g = ImpactAudio::CasingGain(t, v);
+        CHECK(g >= prev - 1e-6f);
+        prev = g;
+    }
+    CHECK(ImpactAudio::IsShell(t, 0.009f) && !ImpactAudio::IsShell(t, 0.005f));
+    // Through the weapon audio: the right set for the kind and the surface, 3D, only while it counts.
+    FakeBackend be;
+    WeaponAudio& wa = WeaponAudio::Get();
+    wa.StartForTest("", &be);
+    ImpactAudio& ia = ImpactAudio::Get();
+    ia.StartForTest(t);
+    for (const char* k : {"snd.casing.rifle.concrete", "snd.casing.rifle.wood", "snd.casing.shell.concrete", "snd.casing.shell.wood"})
+        wa.KeySet(k, [&](SoundSet& s) { s.Files = {std::string(k) + ".wav"}; s.MaxVoices = 6; });
+    World world;
+    auto mk = [&](const char* name, const char* material = "") {
+        const entt::entity e = world.Registry.create();
+        world.Registry.emplace<NameComponent>(e).Name = name;
+        if (*material) world.Registry.emplace<ColliderComponent>(e).Material = material;
+        return (std::uint32_t)e;
+    };
+    const std::uint32_t floorWood = mk("Oak floor planks"), tile = mk("Bathroom tile"), slab = mk("Slab", "concrete.physmat");
+    CHECK(ia.CasingContact(world, glm::vec3(3.0f, 0.0f, 0.0f), 3.0f, floorWood, false, 0));
+    CHECK(be.Voices.size() == 1 && be.Voices[0].Voice.File == "snd.casing.rifle.wood.wav" && be.Voices[0].Voice.Spatial);
+    CHECK(ia.CasingContact(world, glm::vec3(3.0f, 0.0f, 0.0f), 3.0f, slab, true, 1));
+    CHECK(be.Voices.back().Voice.File == "snd.casing.shell.concrete.wav");
+    CHECK(!ia.CasingContact(world, glm::vec3(3.0f, 0.0f, 0.0f), 3.0f, slab, false, 2)); // the third
+    CHECK(!ia.CasingContact(world, glm::vec3(3.0f, 0.0f, 0.0f), 0.3f, slab, false, 0)); // too soft
+    // A surface with no takes (tile) plays the default's.
+    CHECK(ia.CasingContact(world, glm::vec3(3.0f, 0.0f, 0.0f), 3.0f, tile, false, 0) && be.Voices.back().Voice.File == "snd.casing.rifle.concrete.wav");
+    CHECK(ia.Played().Casings == 3 && be.Voices.size() == 3);
+    // Louder when it lands harder.
+    be.Voices.clear();
+    wa.Update(1.0f);
+    SoundSet* wood = wa.KeySet("snd.casing.rifle.wood");
+    wood->VolumeJitterDb = 0.0f;
+    wood->FilePeakDb = {-30.0f};
+    ia.CasingContact(world, glm::vec3(3.0f, 0.0f, 0.0f), 1.0f, floorWood, false, 0);
+    ia.CasingContact(world, glm::vec3(3.0f, 0.0f, 0.0f), 5.0f, floorWood, false, 0);
+    CHECK(be.Voices.size() == 2 && be.Voices[0].Voice.Volume < be.Voices[1].Voice.Volume);
+    // Voice cap: past Max Voices the oldest is stolen.
+    be.Voices.clear();
+    wa.Player().StopAll();
+    wood->StealFadeTime = 0.0f;
+    for (int i = 0; i < 10; ++i) ia.CasingContact(world, glm::vec3(3.0f, 0.0f, 0.0f), 3.0f, floorWood, false, 0);
+    CHECK(be.Live() <= 6);
+    ia.Stop();
+    wa.Stop();
+}
+
+void TestImpactSurfaceMappingAndFlesh() {
+    ImpactAudioComponent t;
+    FakeBackend be;
+    WeaponAudio& wa = WeaponAudio::Get();
+    wa.StartForTest("", &be);
+    ImpactAudio& ia = ImpactAudio::Get();
+    ia.StartForTest(t);
+    World world;
+    auto mk = [&](const char* name, const char* material, const char* tag) {
+        const entt::entity e = world.Registry.create();
+        world.Registry.emplace<NameComponent>(e).Name = name;
+        if (*material) world.Registry.emplace<ColliderComponent>(e).Material = material;
+        if (*tag) world.Registry.emplace<TagComponent>(e).Tag = tag;
+        return (std::uint32_t)e;
+    };
+    // Surface from material, tag, then name; the default when nothing matches; a dead / null entity is the default.
+    CHECK(ia.SurfaceOf(world, mk("Wall", "metal_sheet.physmat", "")) == "metal");
+    CHECK(ia.SurfaceOf(world, mk("Wall", "", "Glass")) == "glass");
+    CHECK(ia.SurfaceOf(world, mk("Garden dirt mound", "", "")) == "dirt");
+    CHECK(ia.SurfaceOf(world, mk("Plank wall", "", "")) == "wood");
+    CHECK(ia.SurfaceOf(world, mk("Thing", "", "")) == "concrete");
+    CHECK(ia.SurfaceOf(world, 0xFFFFFFFFu) == "concrete" && ia.SurfaceOf(world, 12345u) == "concrete");
+    t.SurfaceTable = "wood=thing;metal=wall";
+    ia.SetTuning(t);
+    CHECK(ia.SurfaceOf(world, mk("Thing", "", "")) == "wood" && ia.SurfaceOf(world, mk("Wall", "", "")) == "metal"); // the table is the component's
+    t = ImpactAudioComponent{};
+    ia.SetTuning(t);
+    // Impact plays its surface's set at the hit point, 3D; surfaces with no takes use the default; two within the interval are one.
+    for (const char* s : {"concrete", "metal", "flesh"})
+        wa.KeySet(std::string("snd.impact.") + s, [&](SoundSet& set) { set.Files = {std::string(s) + ".wav"}; set.MaxVoices = 8; });
+    const std::uint32_t steel = mk("Door", "steel.physmat", ""), sand = mk("Sandbag", "", "sand"), crate = mk("Crate", "", "");
+    CHECK(ia.Impact(world, steel, glm::vec3(1.0f, 2.0f, 3.0f)));
+    CHECK(be.Voices.size() == 1 && be.Voices[0].Voice.File == "metal.wav" && be.Voices[0].Voice.Spatial && be.Voices[0].Voice.Position == glm::vec3(1.0f, 2.0f, 3.0f));
+    CHECK(!ia.Impact(world, steel, glm::vec3(1.0f, 2.0f, 3.0f))); // the same surface within 30 ms: one voice (a shotgun's pellets)
+    wa.Update(0.1f);
+    CHECK(ia.Impact(world, sand, glm::vec3(0.0f)) && be.Voices.back().Voice.File == "concrete.wav"); // dirt has no takes here: the default's
+    wa.Update(0.1f);
+    CHECK(ia.Impact(world, crate, glm::vec3(0.0f)) && be.Voices.back().Voice.File == "concrete.wav");
+    // Flesh: the recording replaces the placeholder (true = handled, the caller plays nothing else); false = the caller's placeholder.
+    CHECK(ia.Flesh(glm::vec3(0.0f), false, 0.7f) && be.Voices.back().Voice.File == "flesh.wav" && be.Voices.back().Voice.Spatial);
+    CHECK(ia.Flesh(glm::vec3(0.0f), true, 0.7f) && !be.Voices.back().Voice.Spatial);
+    t.FleshUsesRecordings = false;
+    ia.SetTuning(t);
+    CHECK(!ia.Flesh(glm::vec3(0.0f), false, 1.0f));
+    t.FleshUsesRecordings = true;
+    t.ImpactsEnabled = false;
+    ia.SetTuning(t);
+    CHECK(!ia.Impact(world, steel, glm::vec3(0.0f)) && ia.Flesh(glm::vec3(0.0f), false, 1.0f)); // the flesh hit has its own switch
+    ia.Stop();
+    CHECK(!ia.Impact(world, steel, glm::vec3(0.0f)) && !ia.Flesh(glm::vec3(0.0f), false, 1.0f)); // stopped: silent
+    wa.Stop();
+}
+
+void TestFlybyRadiusAndNoDoubling() {
+    ImpactAudioComponent t;
+    // Gain: full at a graze, FlybyFarGain at the radius, gone beyond.
+    CHECK(std::fabs(ImpactAudio::FlybyGain(t, 0.0f) - t.FlybyVolume) < 1e-5f);
+    CHECK(std::fabs(ImpactAudio::FlybyGain(t, t.FlybyRadius) - t.FlybyVolume * t.FlybyFarGain) < 1e-4f);
+    CHECK(ImpactAudio::FlybyGain(t, t.FlybyRadius + 0.01f) == 0.0f);
+    CHECK(ImpactAudio::FlybyGain(t, 1.0f) < ImpactAudio::FlybyGain(t, 0.2f) && ImpactAudio::FlybyGain(t, 4.0f) < ImpactAudio::FlybyGain(t, 1.0f));
+    FakeBackend be;
+    WeaponAudio& wa = WeaponAudio::Get();
+    wa.StartForTest("", &be);
+    ImpactAudio& ia = ImpactAudio::Get();
+    ia.StartForTest(t);
+    // No flyby recordings: false, so the caller's placeholder whizz plays (and there is no flyby voice).
+    CHECK(!ia.Flyby(glm::vec3(1.0f, 1.0f, 0.0f), 0.5f) && be.Voices.empty());
+    wa.KeySet("snd.flyby")->Files = {"flyby.wav"};
+    CHECK(ia.FlybyRadius() == t.FlybyRadius);
+    // Within the radius: one recorded flyby, handled (true: the caller plays no placeholder).
+    CHECK(ia.Flyby(glm::vec3(1.0f, 1.0f, 0.0f), 0.5f) && be.Voices.size() == 1 && be.Voices[0].Voice.Spatial && be.Voices[0].Voice.File == "flyby.wav");
+    // A second inside the minimum interval is swallowed - still "handled", so the placeholder does not pick it up.
+    CHECK(ia.Flyby(glm::vec3(1.0f, 1.0f, 0.0f), 0.5f) && be.Voices.size() == 1);
+    wa.Update(0.1f);
+    CHECK(ia.Flyby(glm::vec3(1.0f, 1.0f, 0.0f), 0.5f) && be.Voices.size() == 2);
+    // Beyond the radius: not heard (false), not even by the placeholder (CombatFx keeps that to 1.6 m).
+    wa.Update(0.1f);
+    CHECK(!ia.Flyby(glm::vec3(8.0f, 1.0f, 0.0f), t.FlybyRadius + 0.5f) && be.Voices.size() == 2);
+    // The radius is a setting.
+    t.FlybyRadius = 12.0f;
+    ia.SetTuning(t);
+    CHECK(ia.Flyby(glm::vec3(8.0f, 1.0f, 0.0f), 10.0f) && be.Voices.size() == 3 && ia.FlybyRadius() == 12.0f);
+    t.FlybyEnabled = false;
+    ia.SetTuning(t);
+    wa.Update(0.1f);
+    CHECK(!ia.Flyby(glm::vec3(1.0f, 1.0f, 0.0f), 0.5f) && ia.FlybyRadius() == 0.0f);
+    ia.Stop();
+    wa.Stop();
+}
+
 void RegisterAudioTests(UnitTestSupport::TestList& tests) {
     tests.push_back({"SoundSetRoundRobinNeverRepeats", TestSoundSetRoundRobinNeverRepeats});
     tests.push_back({"SoundSetStealOldest", TestSoundSetStealOldest});
@@ -1155,4 +1646,12 @@ void RegisterAudioTests(UnitTestSupport::TestList& tests) {
     tests.push_back({"EnvironmentTailSelectionAndFallback", TestEnvironmentTailSelectionAndFallback});
     tests.push_back({"ReverbZoneContainmentPriorityAndBlend", TestReverbZoneContainmentPriorityAndBlend});
     tests.push_back({"EnvironmentZonesBeatTheProbe", TestEnvironmentZonesBeatTheProbe});
+    tests.push_back({"ReverbFdnImpulseAndDecay", TestReverbFdnImpulseAndDecay});
+    tests.push_back({"ReverbFdnParameterGlide", TestReverbFdnParameterGlide});
+    tests.push_back({"ReverbSendRoutingByCategory", TestReverbSendRoutingByCategory});
+    tests.push_back({"OcclusionLowPass", TestOcclusionLowPass});
+    tests.push_back({"ReverbFollowsListenerSpace", TestReverbFollowsListenerSpace});
+    tests.push_back({"CasingContactGating", TestCasingContactGating});
+    tests.push_back({"ImpactSurfaceMappingAndFlesh", TestImpactSurfaceMappingAndFlesh});
+    tests.push_back({"FlybyRadiusAndNoDoubling", TestFlybyRadiusAndNoDoubling});
 }

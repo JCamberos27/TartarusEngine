@@ -1520,10 +1520,10 @@ struct ReverbPreset {
 // The preset of a tail class (0 outdoor open, 1 outdoor urban, 2 indoor small, 3 indoor large).
 inline ReverbPreset ReverbPresetFor(int tailClass) {
     switch (tailClass) {
-    case 0: return {1.0f, 2.8f, 0.55f, 20.0f, 0.25f, 0.2f};
-    case 1: return {0.7f, 1.4f, 0.4f, 12.0f, 0.3f, 0.5f};
-    case 3: return {0.8f, 1.8f, 0.6f, 25.0f, 0.35f, 0.35f};
-    default: return {0.15f, 0.5f, 0.25f, 2.0f, 0.3f, 0.7f};
+    case 0: return {0.9f, 1.6f, 0.7f, 25.0f, 0.12f, 0.15f};   // open ground: a faint, dark, far wash
+    case 1: return {0.7f, 1.2f, 0.5f, 15.0f, 0.2f, 0.5f};     // among buildings: slaps and a short tail
+    case 3: return {0.8f, 1.8f, 0.6f, 25.0f, 0.35f, 0.35f};   // hall / warehouse
+    default: return {0.15f, 0.45f, 0.25f, 2.0f, 0.3f, 0.7f};  // small room: tight and bright
     }
 }
 struct ReverbZoneComponent {
@@ -1538,5 +1538,65 @@ struct ReverbZoneComponent {
     int ReverbMode = 0;                // 0 = the Tail Class's preset, 1 = the values below
     ReverbPreset Reverb = ReverbPresetFor(2);
     ReverbPreset Resolved() const { return ReverbMode == 1 ? Reverb : ReverbPresetFor(TailClass); }
+};
+// The runtime reverb bus (Audio/ReverbFdn, wired in AudioEngine): what each category of sound sends into it, how the reverb
+// follows the listener's space (Reverb Zones, else the raycast probe), and the listener-side occlusion low-pass. One per scene
+// (the first counts). The gun tails are recorded in their spaces and send nothing (Send Tail stays 0).
+struct ReverbBusComponent {
+    bool Enabled = true;
+    float ReturnLevel = 1.0f;          // linear gain of the wet signal into the mix (times the SFX bus volume)
+    float WetScale = 1.0f;             // on every space's preset Wet Level
+    float GlideTime = 0.35f;           // seconds the reverb takes to follow a change of space (the DSP's smoothing)
+    // Sends by category (linear, into the reverb after the voice's own fader and spatialisation).
+    float SendFoley = 0.35f;           // cloth, jumps, landings, ADS / equip / fire-mode gear
+    float SendFootsteps = 0.30f;
+    float SendActions = 0.40f;         // each gun's own mags, bolts, pumps, shells
+    float SendImpacts = 0.50f;         // bullet impacts, flesh hits, flybys
+    float SendCasings = 0.50f;
+    float SendVoice = 0.30f;
+    float SendShot = 0.12f;            // the close / mech / sub layers: a little, so the crack sits in the room
+    float SendTail = 0.0f;             // the recorded tails already hold their room
+    // Occlusion: a 3D voice whose line of sight from the listener is blocked by solid geometry is low-passed.
+    bool OcclusionEnabled = true;
+    float OcclusionCutoff = 900.0f;    // Hz of a fully occluded voice
+    float OcclusionInterval = 0.15f;   // seconds between checks of one voice
+    int OcclusionRaysPerFrame = 8;
+    float OcclusionMinDistance = 3.0f; // closer sources are never occluded
+    float OcclusionGlide = 10.0f;      // per second
+};
+// Bullet impacts, shell casings and rounds passing the listener (Game/Audio/ImpactAudio). One per scene (the first counts).
+struct ImpactAudioComponent {
+    bool Enabled = true;
+    // Surface from the struck / landed-on collider: its physics material, tag and name against this table (like footsteps).
+    std::string SurfaceTable = "metal=metal,steel,iron,grate;wood=wood,plank,floor,parquet;tile=tile;carpet=carpet,rug;glass=glass;ice=ice,snow;dirt=dirt,soil,sand,grass,gravel,mud;concrete=concrete,asphalt,stone,brick";
+    std::string DefaultSurface = "concrete";
+    // Shell casings: the first contacts with the ground.
+    bool CasingsEnabled = true;
+    int CasingMaxContacts = 2;         // contacts of one case that sound
+    float CasingMinSpeed = 0.9f;       // m/s into the surface below which a contact is silent
+    float CasingFullSpeed = 4.0f;      // m/s at which it plays at full gain
+    float CasingGainMin = 0.25f;       // gain just above the minimum speed
+    float CasingVolume = 0.8f;
+    float CasingMinDistance = 1.5f;
+    float CasingMaxDistance = 25.0f;
+    int CasingMaxVoices = 6;           // the oldest is stolen
+    float ShellRadius = 0.0075f;       // metres: a case wider than this is a shotgun shell (snd.casing.shell), else a rifle case
+    // Bullet impacts at the hit point (3D).
+    bool ImpactsEnabled = true;
+    float ImpactVolume = 0.9f;
+    float ImpactMinDistance = 2.0f;
+    float ImpactMaxDistance = 60.0f;
+    int ImpactMaxVoices = 8;
+    float ImpactMinInterval = 0.03f;   // seconds between impacts of one surface (a shotgun's nine pellets are not nine voices)
+    bool FleshUsesRecordings = true;   // the flesh-hit cue plays snd.impact.flesh instead of the placeholder wav (no doubling)
+    float FleshVolume = 0.9f;
+    // Rounds passing the listener.
+    bool FlybyEnabled = true;
+    float FlybyRadius = 5.0f;          // metres: a soldier's round that passes closer than this to the listener whips by
+    float FlybyVolume = 0.9f;
+    float FlybyMinInterval = 0.07f;    // seconds: a burst reads as a few cracks, not a smear
+    float FlybyMinDistance = 0.5f;
+    float FlybyMaxDistance = 14.0f;
+    float FlybyFarGain = 0.35f;        // gain of a round at the edge of FlybyRadius (1 for a hit-close miss)
 };
 // ---- end lane S ----

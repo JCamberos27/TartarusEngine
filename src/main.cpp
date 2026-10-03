@@ -68,6 +68,7 @@
 #include "CrosshairOverlay.h"
 #include "WeaponFxRenderer.h" // the weapon's laser and bullet holes
 #include "BulletHoles.h"
+#include "ReverbRender.h"
 #include "ShellCasings.h"
 #include "AI/NpcDirector.h"     // the enemy squad
 #include "Combat/CombatFx.h"
@@ -569,6 +570,9 @@ int main(int argc, char** argv) {
         CrashHandler::SetInteractive(false);
         return RunUnitTests() == 0 ? 0 : 1;
     }
+    // `--reverb-render`: the audio reverb over a recorded send mix, for tools/mix_npc_video.py (no window, no audio device).
+    for (int i = 1; i < argc; ++i)
+        if (std::string(argv[i]) == "--reverb-render") return RunReverbRender(argc, argv);
     const bool resaveMode = !resaveIn.empty();
     // --smoke-test and --resave are non-interactive: no splash, and fatal errors go to stderr +
     // a nonzero exit instead of a modal MessageBox that a headless/CI desktop never dismisses
@@ -2794,6 +2798,7 @@ int main(int argc, char** argv) {
                                 continue; // a soldier, not a wall: no hole
                             }
                         }
+                        combatFx.Impact(world, hit.Entity, glm::vec3(hit.Point[0], hit.Point[1], hit.Point[2]));
                         bulletHoles.Add(world, static_cast<entt::entity>(hit.Entity), hit.Point, hit.Normal, hit.HoleRadius);
                     }
                     // Every pellet's line: the report, and rounds cracking past soldiers' heads (suppression).
@@ -2821,8 +2826,10 @@ int main(int argc, char** argv) {
                 if (npcDirector.Active()) {
                     PROFILE_SCOPE("Enemy AI Late");
                     npcDirector.LateUpdate(world, gameDt, playerSnap);
-                    for (const NpcDirector::Impact& imp : npcDirector.TakeImpacts())
+                    for (const NpcDirector::Impact& imp : npcDirector.TakeImpacts()) {
+                        combatFx.Impact(world, imp.Entity, glm::vec3(imp.Point[0], imp.Point[1], imp.Point[2]));
                         bulletHoles.Add(world, static_cast<entt::entity>(imp.Entity), imp.Point, imp.Normal, imp.Radius);
+                    }
                     for (const CasingSpawn& spawn : npcDirector.TakeEjections()) shellCasings.Spawn(world, assets, spawn);
                     for (const DamageEvent& e : npcDirector.TakePlayerDamage()) {
                         const float before = playerVitals.Health();

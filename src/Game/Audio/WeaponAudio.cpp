@@ -1,6 +1,8 @@
 #include "WeaponAudio.h"
 
 #include "Components.h"
+#include "GameModuleAPI.h"
+#include "PhysicsWorld.h"
 #include "ProjectPaths.h"
 #include "World.h"
 
@@ -71,6 +73,8 @@ SoundSet ApplySetJson(const json& j, SoundSet s) {
     s.MaxVoices = (int)Num(j, "maxVoices", (float)s.MaxVoices);
     s.StealFadeTime = Num(j, "stealFadeTime", s.StealFadeTime);
     s.Loop = Flag(j, "loop", s.Loop);
+    s.ReverbSend = Num(j, "reverbSend", s.ReverbSend);
+    if (const auto it = j.find("occlusion"); it != j.end() && it->is_boolean()) s.Occlusion = it->get<bool>() ? 1 : 0;
     return s;
 }
 
@@ -89,6 +93,8 @@ json SetToJson(const SoundSet& s) {
     j["maxVoices"] = s.MaxVoices;
     j["stealFadeTime"] = s.StealFadeTime;
     j["loop"] = s.Loop;
+    j["reverbSend"] = s.ReverbSend;
+    if (s.Occlusion >= 0) j["occlusion"] = s.Occlusion > 0;
     return j;
 }
 
@@ -233,7 +239,11 @@ namespace {
 struct EngineBackend : SoundBackend {
     AudioEngine::SoundHandle Start(const SoundVoice& v) override {
         if (!AudioEngine::IsInitialized()) return AudioEngine::InvalidHandle;
-        const AudioEngine::SoundHandle h = AudioEngine::Play(ProjectPaths::Resolve(v.File), std::clamp(v.Volume, 0.0f, 4.0f), v.Loop, v.Bus, v.StartOffset);
+        AudioEngine::VoiceFx fx;
+        fx.ReverbSend = v.ReverbSend;
+        fx.Occlusion = v.Occlusion && v.Spatial;
+        const AudioEngine::SoundHandle h = AudioEngine::Play(ProjectPaths::Resolve(v.File), std::clamp(v.Volume, 0.0f, 4.0f), v.Loop, v.Bus, v.StartOffset,
+                                                             (fx.ReverbSend > 0.0f || fx.Occlusion) ? &fx : nullptr);
         if (h == AudioEngine::InvalidHandle) return h;
         AudioEngine::SetPitch(h, v.Pitch);
         if (v.Spatial) {
@@ -245,6 +255,13 @@ struct EngineBackend : SoundBackend {
     void Stop(AudioEngine::SoundHandle h) override { AudioEngine::Stop(h); }
     void SetVolume(AudioEngine::SoundHandle h, float volume) override { AudioEngine::SetVolume(h, volume); }
     bool IsPlaying(AudioEngine::SoundHandle h) override { return AudioEngine::IsPlaying(h); }
+    void SetOcclusion(AudioEngine::SoundHandle h, float cutoffHz) override { AudioEngine::SetOcclusion(h, cutoffHz); }
+    void SetReverb(const ReverbParams& p) override { AudioEngine::SetReverb(p); }
+    void ConfigureReverb(bool enabled, float returnLevel, float glideSeconds) override {
+        AudioEngine::SetReverbEnabled(enabled);
+        AudioEngine::SetReverbReturn(returnLevel);
+        AudioEngine::SetReverbGlide(glideSeconds);
+    }
     void Preload(const std::string& file) override {
         if (AudioEngine::IsInitialized()) AudioEngine::Load(ProjectPaths::Resolve(file));
     }
@@ -365,6 +382,18 @@ SoundPlayer::Played SoundPlayer::Start(const SoundSet& set, int idx, const Reque
     v.MaxDistance = set.MaxDistance;
     v.Rolloff = set.Rolloff;
     v.StartOffset = seek;
+    // The reverb send and the occlusion low-pass (a set's own value, else its category's).
+    Routing rt;
+    if (m_Routing) rt = m_Routing(set.Key);
+    v.ReverbSend = set.ReverbSend >= 0.0f ? set.ReverbSend : rt.Send;
+    v.Occlusion = v.Spatial && m_Occ.Enabled && !set.Loop && (set.Occlusion < 0 ? rt.Occlusion : set.Occlusion > 0);
+    float occAmount = 0.0f;
+    const float occDistance = glm::length(req.Position - m_ListenerPos);
+    if (v.Occlusion && m_Blocked && occDistance >= m_Occ.MinDistance && m_Blocked(m_ListenerPos, req.Position)) {
+        occAmount = 1.0f; // behind something already: it starts muffled
+        ++m_OccChecks;
+    }
+    v.OcclusionHz = OcclusionCutoff(m_Occ, occAmount);
     // The bus limiter: duck this voice by what headroom the live transients leave.
     if (m_Limiter.Enabled && !set.Loop) {
         const float peak = set.PeakLin((size_t)idx) * v.Volume;
@@ -379,6 +408,17 @@ SoundPlayer::Played SoundPlayer::Start(const SoundSet& set, int idx, const Reque
     out.Pitch = v.Pitch;
     out.Handle = Backend().Start(v);
     out.Started = out.Handle != AudioEngine::InvalidHandle;
+    if (out.Started && v.Occlusion) {
+        if (occAmount > 0.0f) Backend().SetOcclusion(out.Handle, v.OcclusionHz);
+        Tracked t;
+        t.Handle = out.Handle;
+        t.Pos = req.Position;
+        t.Amount = t.Target = occAmount;
+        t.LastCutoff = v.OcclusionHz;
+        t.NextCheck = m_Now + (double)m_Occ.Interval;
+        t.MinDist = m_Occ.MinDistance;
+        m_Occluded.push_back(t);
+    }
     if (out.Started) {
         Voice vo;
         vo.Handle = out.Handle;
@@ -406,6 +446,7 @@ void SoundPlayer::Update(float dt) {
         }
     }
     m_Peaks.erase(std::remove_if(m_Peaks.begin(), m_Peaks.end(), [&](const Peak& p) { return m_Now - p.Time >= m_Limiter.Window; }), m_Peaks.end());
+    UpdateOcclusion(dt);
     for (auto& [key, pool] : m_Pools) {
         for (Voice& v : pool.Voices) {
             if (v.FadeLeft < 0.0f) continue;
@@ -421,6 +462,40 @@ void SoundPlayer::Update(float dt) {
     }
 }
 
+float SoundPlayer::OcclusionCutoff(const OcclusionSettings& s, float amount) {
+    const float a = std::clamp(amount, 0.0f, 1.0f);
+    if (a <= 0.0f) return 20000.0f;
+    return 20000.0f * std::pow(std::max(s.CutoffHz, 80.0f) / 20000.0f, a);
+}
+
+void SoundPlayer::UpdateOcclusion(float dt) {
+    if (m_Occluded.empty()) return;
+    SoundBackend& be = Backend();
+    m_Occluded.erase(std::remove_if(m_Occluded.begin(), m_Occluded.end(), [&](const Tracked& t) { return !be.IsPlaying(t.Handle); }), m_Occluded.end());
+    int budget = m_Occ.RaysPerFrame;
+    const size_t n = m_Occluded.size();
+    for (size_t k = 0; k < n; ++k) { // a rolling start, so a busy frame does not always spend the budget on the same voices
+        Tracked& t = m_Occluded[(m_OccCursor + k) % n];
+        if (budget > 0 && m_Blocked && m_Now >= t.NextCheck) {
+            --budget;
+            ++m_OccChecks;
+            t.NextCheck = m_Now + (double)m_Occ.Interval;
+            t.Target = glm::length(t.Pos - m_ListenerPos) >= t.MinDist && m_Blocked(m_ListenerPos, t.Pos) ? 1.0f : 0.0f;
+        }
+        const float before = t.Amount;
+        t.Amount += (t.Target - t.Amount) * std::min(1.0f, m_Occ.GlideRate * dt);
+        if (std::fabs(t.Target - t.Amount) < 0.005f) t.Amount = t.Target;
+        if (t.Amount != before) {
+            const float hz = OcclusionCutoff(m_Occ, t.Amount);
+            if (std::fabs(std::log(hz / t.LastCutoff)) > 0.02f || t.Amount == 0.0f) {
+                be.SetOcclusion(t.Handle, hz);
+                t.LastCutoff = hz;
+            }
+        }
+    }
+    m_OccCursor = (m_OccCursor + 1) % std::max<size_t>(m_Occluded.size(), 1);
+}
+
 void SoundPlayer::StopAll() {
     SoundBackend& be = Backend();
     for (auto& [key, pool] : m_Pools)
@@ -428,6 +503,7 @@ void SoundPlayer::StopAll() {
     m_Pools.clear();
     m_Pending.clear();
     m_Peaks.clear();
+    m_Occluded.clear();
 }
 
 // --- profile -----------------------------------------------------------------------------------
@@ -616,9 +692,9 @@ void WeaponAudio::InstallLog() {
         if (!m_LogFile) return;
         // W <t> <key> <file|-> <voices> <vol> <pitch> <2d> <x y z> <min dist> <max dist> <start offset s>   (CombatFx's audio.txt, beside
         // its S / L lines; tools/mix_npc_video.py mixes them)
-        std::fprintf(m_LogFile, "W %.4f %s %s %d %.3f %.3f %d %.3f %.3f %.3f %.2f %.2f %.4f\n", t, key.c_str(), file.empty() ? "-" : file.c_str(), voices,
+        std::fprintf(m_LogFile, "W %.4f %s %s %d %.3f %.3f %d %.3f %.3f %.3f %.2f %.2f %.4f %.3f %.0f\n", t, key.c_str(), file.empty() ? "-" : file.c_str(), voices,
                      vol, pitch, r.At2D ? 1 : 0, r.Position.x, r.Position.y, r.Position.z, v ? v->MinDistance : 1.0f, v ? v->MaxDistance : 40.0f,
-                     v ? v->StartOffset : 0.0f);
+                     v ? v->StartOffset : 0.0f, v ? v->ReverbSend : 0.0f, v ? v->OcclusionHz : 20000.0f);
     });
 }
 
@@ -641,6 +717,9 @@ void WeaponAudio::FillSet(SoundSet& set) {
 void WeaponAudio::StartForTest(const std::string& projectRoot, SoundBackend* backend) {
     m_Root = projectRoot;
     m_Player.SetBackend(backend);
+    m_Player.SetBlockedFn(nullptr);
+    m_Player.SetOcclusion(SoundPlayer::OcclusionSettings{});
+    m_Player.StopAll();
     m_Player.Seed(12345u);
     m_Player.SetLimiter(SoundPlayer::Limiter{});
     m_Bursts.clear();
@@ -651,12 +730,17 @@ void WeaponAudio::StartForTest(const std::string& projectRoot, SoundBackend* bac
     m_ShotVoices = 0;
     m_LastTail = -1e9;
     m_Probe = EnvironmentProbe{};
+    m_ListenerProbe = EnvironmentProbe{};
     m_Zones.Set({});
     m_LastSpace = SpaceMix{};
     m_LastDominant.clear();
     m_SpaceLines = 0;
+    m_Keyed.clear();
+    m_Bus = ReverbBusComponent{};
+    m_ReverbValid = false;
     for (const char* g : {"ak", "870"}) m_Profiles[g] = WeaponAudioProfile::Default(g);
     InstallLog();
+    InstallRouting();
     m_Active = true;
 }
 
@@ -737,10 +821,21 @@ void WeaponAudio::Start(World& world, const std::string& projectRoot) {
     m_ShotVoices = 0;
     m_LastTail = -1e9;
     m_Probe = EnvironmentProbe{};
+    m_ListenerProbe = EnvironmentProbe{};
     m_Zones.Build(world);
     m_LastSpace = SpaceMix{};
     m_LastDominant.clear();
     m_SpaceLines = 0;
+    m_Keyed.clear();
+    m_Bus = ReverbBusComponent{};
+    for (const entt::entity e : world.Registry.view<ReverbBusComponent>()) {
+        m_Bus = world.Registry.get<ReverbBusComponent>(e);
+        break;
+    }
+    m_ReverbValid = false;
+    InstallRouting();
+    m_Player.SetBlockedFn(EnvironmentBlockedFn());
+    m_Player.Backend().ConfigureReverb(m_Bus.Enabled, m_Bus.ReturnLevel, m_Bus.GlideTime);
     m_Active = true;
 }
 
@@ -750,16 +845,154 @@ void WeaponAudio::Stop() {
         std::printf("[WeaponAudio] environment probe: %d refreshes (%d rays), mean %.1f us, max %.1f us per refresh; %d zone(s)\n", st.Refreshes, st.Rays,
                     st.TotalMicros / st.Refreshes, st.MaxMicros, (int)m_Zones.Zones().size());
     }
+    if (m_Active) {
+        const AudioEngine::ReverbStats rs = AudioEngine::GetReverbStats();
+        if (rs.Callbacks > 0)
+            std::printf("[WeaponAudio] reverb bus: %llu audio callbacks (%d frames), mean %.1f us, max %.1f us per callback\n", (unsigned long long)rs.Callbacks, rs.Frames,
+                        rs.TotalMicros / (double)rs.Callbacks, rs.MaxMicros);
+        AudioEngine::ResetReverbStats();
+    }
     m_Player.StopAll();
+    m_Player.SetBlockedFn(nullptr); // (a test's line-of-sight function must not outlive its locals)
     m_Profiles.clear();
     m_Foley.clear();
+    m_Keyed.clear();
     m_Bursts.clear();
     m_Active = false;
 }
 
 void WeaponAudio::Update(float dt) {
     if (!m_Active) return;
+    m_Player.SetListener(m_Listener);
+    SoundPlayer::OcclusionSettings occ = m_Player.GetOcclusion();
+    occ.Enabled = m_Bus.OcclusionEnabled;
+    occ.CutoffHz = m_Bus.OcclusionCutoff;
+    occ.Interval = m_Bus.OcclusionInterval;
+    occ.RaysPerFrame = m_Bus.OcclusionRaysPerFrame;
+    occ.MinDistance = m_Bus.OcclusionMinDistance;
+    occ.GlideRate = m_Bus.OcclusionGlide;
+    m_Player.SetOcclusion(occ);
     m_Player.Update(dt);
+    // The reverb follows the listener's space: told when it moves enough to matter (the DSP glides to what it is told).
+    if (m_Bus.Enabled) {
+        const ReverbParams p = ReverbAt(m_Listener);
+        const ReverbParams& q = m_ReverbSent;
+        const float d = std::fabs(p.RoomSize - q.RoomSize) + std::fabs(p.DecayTime - q.DecayTime) + std::fabs(p.HfDamping - q.HfDamping) +
+                        std::fabs(p.PreDelayMs - q.PreDelayMs) * 0.02f + std::fabs(p.WetLevel - q.WetLevel) + std::fabs(p.EarlyLateMix - q.EarlyLateMix);
+        if (!m_ReverbValid || d > 1e-3f) {
+            m_Player.Backend().SetReverb(p);
+            m_ReverbSent = p;
+            m_ReverbValid = true;
+            if (m_LogFile && m_Player.Now() - m_LastReverbLog >= 0.1) {
+                m_LastReverbLog = m_Player.Now();
+                std::fprintf(m_LogFile, "R %.4f %.4f %.4f %.4f %.3f %.4f %.4f\n", m_Player.Now(), p.RoomSize, p.DecayTime, p.HfDamping, p.PreDelayMs, p.WetLevel, p.EarlyLateMix);
+            }
+        }
+    }
+}
+
+void WeaponAudio::InstallRouting() {
+    m_Player.SetRouting([this](const std::string& key) {
+        SoundPlayer::Routing r;
+        if (m_Bus.Enabled) r.Send = SendFor(key);
+        r.Occlusion = m_Bus.OcclusionEnabled;
+        return r;
+    });
+}
+
+SoundPlayer::BlockedFn WeaponAudio::EnvironmentBlockedFn() {
+    return [this](const glm::vec3& from, const glm::vec3& to) {
+        const glm::vec3 d = to - from;
+        const float dist = glm::length(d);
+        if (dist < 1e-3f) return false;
+        const glm::vec3 dir = d / dist;
+        const float o[3] = {from.x, from.y, from.z}, dd[3] = {dir.x, dir.y, dir.z};
+        QueryFilter f;
+        f.HitTriggers = 0;
+        RaycastHit hit;
+        const bool recording = PhysicsWorld::GetQueryRecording();
+        PhysicsWorld::SetQueryRecording(false); // plumbing: kept off the physics debug overlay
+        const bool blocked = PhysicsWorld::RaycastSolid(o, dd, dist, f, hit) && hit.Hit && hit.Distance < dist - m_Player.GetOcclusion().Clearance;
+        PhysicsWorld::SetQueryRecording(recording);
+        return blocked;
+    };
+}
+
+float WeaponAudio::SendFor(const std::string& key) const {
+    const ReverbBusComponent& b = m_Bus;
+    if (key.rfind("snd.foley.", 0) == 0) {
+        const std::string rest = key.substr(10);
+        const size_t dot = rest.find('.');
+        const std::string cat = rest.substr(0, dot), el = dot == std::string::npos ? std::string() : rest.substr(dot + 1);
+        const bool step = cat.rfind("step_", 0) == 0 || el == "walk" || el == "run" || el == "crouch";
+        return ClampSend(step ? b.SendFootsteps : b.SendFoley);
+    }
+    if (key.rfind("snd.casing.", 0) == 0) return ClampSend(b.SendCasings);
+    if (key.rfind("snd.impact.", 0) == 0 || key == "snd.flyby") return ClampSend(b.SendImpacts);
+    if (key.rfind("snd.voice", 0) == 0) return ClampSend(b.SendVoice);
+    if (key.rfind("snd.", 0) == 0) {
+        const size_t dot = key.find('.', 4);
+        const std::string el = dot == std::string::npos ? std::string() : key.substr(dot + 1);
+        if (el == "fire_close" || el == "fire_mech" || el == "fire_sub") return ClampSend(b.SendShot);
+        if (el.rfind("fire_tail", 0) == 0 || el == "fire_far") return ClampSend(b.SendTail);
+        return ClampSend(b.SendActions);
+    }
+    return 0.0f;
+}
+
+ReverbParams WeaponAudio::ReverbAt(const glm::vec3& pos) {
+    const ReverbZoneMix z = m_Zones.Mix(pos);
+    ReverbPreset acc = z.Reverb;
+    if (z.ProbeShare > 1e-3f) {
+        constexpr std::uint32_t kListenerProbe = 0xFFFFFFFDu;
+        EnvironmentSettings env;
+        if (const auto it = m_Profiles.find("ak"); it != m_Profiles.end()) env = it->second.Env;
+        else if (!m_Profiles.empty()) env = m_Profiles.begin()->second.Env;
+        const EnvironmentReading& r = m_ListenerProbe.Query(kListenerProbe, pos, m_Player.Now(), env);
+        for (int i = 0; i < kSpaceClassCount; ++i) {
+            const ReverbPreset pre = ReverbPresetFor(i);
+            const float w = z.ProbeShare * r.Weights[i];
+            acc.RoomSize += w * pre.RoomSize;
+            acc.DecayTime += w * pre.DecayTime;
+            acc.HfDamping += w * pre.HfDamping;
+            acc.PreDelayMs += w * pre.PreDelayMs;
+            acc.WetLevel += w * pre.WetLevel;
+            acc.EarlyLateMix += w * pre.EarlyLateMix;
+        }
+    }
+    ReverbParams p;
+    p.RoomSize = acc.RoomSize;
+    p.DecayTime = acc.DecayTime;
+    p.HfDamping = acc.HfDamping;
+    p.PreDelayMs = acc.PreDelayMs;
+    p.WetLevel = acc.WetLevel * m_Bus.WetScale;
+    p.EarlyLateMix = acc.EarlyLateMix;
+    return p;
+}
+
+SoundSet* WeaponAudio::KeySet(const std::string& key, const std::function<void(SoundSet&)>& init) {
+    auto it = m_Keyed.find(key);
+    if (it != m_Keyed.end()) {
+        if (it->second.Files.empty()) FillSet(it->second);
+        return &it->second;
+    }
+    SoundSet s;
+    s.Key = key;
+    if (init) init(s);
+    FillSet(s);
+    it = m_Keyed.emplace(key, std::move(s)).first;
+    for (const std::string& f : it->second.Files) m_Player.Backend().Preload(f);
+    return &it->second;
+}
+
+SoundPlayer::Played WeaponAudio::PlayKeyed(SoundSet& set, const glm::vec3& pos, bool at2D, float gain, float pitchScale) {
+    SoundPlayer::Request r;
+    r.Position = pos;
+    r.At2D = at2D;
+    r.Gain = gain;
+    r.PitchScale = pitchScale;
+    Note(set.Key, at2D);
+    return m_Player.Play(set, r);
 }
 
 WeaponAudioProfile* WeaponAudio::Profile(const std::string& gun) {
@@ -903,12 +1136,22 @@ int WeaponAudio::PlayTail(WeaponAudioProfile& p, const SoundPlayer::Request& bas
     return started;
 }
 
-void WeaponAudio::EnvironmentDebugLines(std::vector<float>& out) const {
+void AppendAudioDebugLines(const World& world, std::vector<float>& out, bool zones) {
+    if (zones) {
+        ReverbZones z;
+        z.Build(world);
+        z.DebugLines(out);
+    }
+    if (WeaponAudio::Get().Active()) WeaponAudio::Get().EnvironmentDebugLines(out, false);
+}
+
+void WeaponAudio::EnvironmentDebugLines(std::vector<float>& out, bool withZones) const {
     bool any = false;
     for (const auto& [gun, p] : m_Profiles) any |= p.Env.DebugDraw;
     if (!any) return;
-    m_Zones.DebugLines(out);
+    if (withZones) m_Zones.DebugLines(out);
     m_Probe.DebugLines(out);
+    m_ListenerProbe.DebugLines(out);
 }
 
 bool WeaponAudio::ParseKey(const std::string& name, std::string& gun, std::string& element, float* leadMs) {
