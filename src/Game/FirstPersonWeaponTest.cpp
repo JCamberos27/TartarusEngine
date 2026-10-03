@@ -840,12 +840,18 @@ void FirstPersonWeaponTest::CheckAudio() {
         c.Check(count[key] >= n, std::string(key) + " x" + std::to_string(count[key]) + " (want " + std::to_string(n) + "+)");
     };
     want("snd.ak.firemode", 2);          // full auto on, off
-    // ADS and equip are the shared foley's (snd.foley.weapon.*): the AK and the Remington each aim twice, draw and put away.
+    // ADS is the shared foley's (snd.foley.weapon.*): the AK and the Remington each aim twice. Drawing and putting away are the
+    // guns' own draw / holster takes from their clips; the shared equip / unequip rattle is only for a gun without them.
     want("snd.foley.weapon.ads_in", 2);
     want("snd.foley.weapon.ads_out", 2);
     want("snd.870.dry_fire", 1);         // one pull on the empty tube
-    want("snd.foley.weapon.equip", 4);   // back to the AK, 2 again, 3 from unarmed, and the Remington's first draw
-    want("snd.foley.weapon.unequip", 4);
+    want("snd.foley.weapon.equip", 0);
+    want("snd.foley.weapon.unequip", 0);
+    // One draw and one holster per switch, nothing doubled: 4 draws (back to the AK, 2 again, 3 from unarmed, the Remington's
+    // first) and 4 holsters, across the two guns.
+    const int draws = count["snd.ak.draw"] + count["snd.870.draw"], holsters = count["snd.ak.holster"] + count["snd.870.holster"];
+    c.Check(draws == 4, "draws x" + std::to_string(draws) + " (want 4)");
+    c.Check(holsters == 4, "holsters x" + std::to_string(holsters) + " (want 4)");
     atLeast("snd.ak.fire_close", 5);     // every round plays close / mech / sub (the AK fires 7)
     atLeast("snd.870.fire_close", 8);
     atLeast("snd.ak.fire_mech", 5);

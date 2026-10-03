@@ -36,6 +36,15 @@ void WeaponSound(const FirstPersonPresentation& p, const std::filesystem::path& 
     wa.PlayEvent(name, WeaponAudioGunId(setFile.string()), world, ownerView);
 }
 
+// The shared gear rattle of putting a weapon up / away (snd.foley.weapon.equip / unequip) - only for a gun without draw /
+// holster takes of its own: those play from its Draw / Holster clips, and with both a weapon switch stacked four sounds
+// (rattle, holster, rattle, draw).
+void GearSound(const FirstPersonPresentation& p, const std::filesystem::path& setFile, bool ownerView, bool equip) {
+    WeaponAudio& wa = WeaponAudio::Get();
+    if (!wa.Active() || wa.HasEventFiles(WeaponAudioGunId(setFile.string()), equip ? "draw" : "holster")) return;
+    WeaponSound(p, setFile, ownerView, equip ? "equip" : "unequip");
+}
+
 // What a weapon's setup measures from its assets alone - the bolt's stroke, the barrel found along it, the ADS carry -
 // kept per weapon definition (and its file's time) for the presentations without an owner view (enemy soldiers'
 // guns): each spawn reuses the first's instead of sampling clips and scanning the mesh again (~2 ms a spawn). The
@@ -1274,7 +1283,7 @@ void FirstPersonPresentation::SelectSlot(int slot) {
     }
     // Put this one away first; Tick swaps the rigs once it's holstered (at once if it already is).
     m_PendingSlot = slot;
-    if (m_Equipped) WeaponSound(*this, m_SetFile, m_Options.OwnerView, "unequip");
+    if (m_Equipped) GearSound(*this, m_SetFile, m_Options.OwnerView, false);
     m_Equipped = false;
     if (auto* ac = Animator()) ac->SetBool(K::kEquipped, false);
 }
@@ -1304,7 +1313,7 @@ void FirstPersonPresentation::SwapToPendingSlot() {
     }
     m_WalkSpeed = walk;
     m_SprintSpeed = sprint;
-    WeaponSound(*this, m_SetFile, m_Options.OwnerView, "equip"); // (StartSet has the gun in hand already: SetEquipped sees no change)
+    GearSound(*this, m_SetFile, m_Options.OwnerView, true); // (StartSet has the gun in hand already: SetEquipped sees no change)
     SetEquipped(true);
 }
 
@@ -1356,7 +1365,7 @@ bool FirstPersonPresentation::TriggerAction(const std::string& trigger) {
 void FirstPersonPresentation::SetEquipped(bool equipped) {
     if (!IsActive()) return;
     if (!equipped) m_PendingSlot = -1;
-    if (equipped != m_Equipped) WeaponSound(*this, m_SetFile, m_Options.OwnerView, equipped ? "equip" : "unequip");
+    if (equipped != m_Equipped) GearSound(*this, m_SetFile, m_Options.OwnerView, equipped);
     m_Equipped = equipped;
     if (auto* ac = Animator()) ac->SetBool(K::kEquipped, equipped);
 }
