@@ -80,6 +80,7 @@ private:
     float m_DAt = 0.0f;
     std::vector<std::string> m_DUsed;
     std::string m_DNpc[2];
+    std::string m_DCamFor; // the soldier the Scene view was placed for
     int m_DCase = 0;
     float m_DWorstPop = 0.0f, m_DWoundSpeed = 0.0f;
     int m_DDeaths = 0, m_DRagdolls = 0;

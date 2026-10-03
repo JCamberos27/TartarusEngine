@@ -1744,6 +1744,84 @@ void RegisterEngineComponents() {
             m.Fields[m.Fields.size() - 2].Group = "Body Physics";
             m.Fields[m.Fields.size() - 1].Group = "Body Physics";
         }
+        {
+            // The powered ragdoll (NpcRagdollMotor).
+            m.Fields.push_back({ "Powered Ragdoll", T::Bool, TARTARUS_REFLECT_FIELD(RagdollSettingsComponent, PoweredRagdoll), 0.0f,
+              "Dead soldiers keep muscle tone: every joint holds a spring toward the pose it died in, blending into a collapse, with the strength decaying per region (legs first, then spine, neck and arms) to a small residual. The round carries the body, and a settled body comes to rest and sleeps. Off: the old behaviour (Death Drive fade, then a rag)." });
+            m.Fields.back().Group = "Muscle Tone";
+            m.Fields.push_back({ "Grip Floor", T::Bool, TARTARUS_REFLECT_FIELD(RagdollSettingsComponent, GripFloor), 0.0f,
+              "The body's friction wins against a slicker floor material and it never bounces (max-combined friction, multiplied restitution). Only with Powered Ragdoll." });
+            m.Fields.back().Group = "Settle";
+            struct R2 { const char* Group; const char* Label; void* (*Ptr)(void*); float Step; const char* Tip; float Lo, Hi; };
+            const R2 rows2[] = {
+                { "Muscle Tone", "Tone Stiffness", TARTARUS_REFLECT_FIELD(RagdollSettingsComponent, ToneStiffness), 5.0f, "Spring strength of every joint at full muscle strength (acceleration units: mass independent). The pose is held this hard until the region's tone decays.", 0.0f, 5000.0f },
+                { "Muscle Tone", "Tone Damping", TARTARUS_REFLECT_FIELD(RagdollSettingsComponent, ToneDamping), 1.0f, "Damper of that spring at full strength.", 0.0f, 500.0f },
+                { "Muscle Tone", "Tone Residual", TARTARUS_REFLECT_FIELD(RagdollSettingsComponent, ToneResidual), 0.005f, "Fraction of the strength a dead body keeps for good (squared into stiffness), so a limp body is never a free noodle. 0 = fully limp.", 0.0f, 0.5f },
+                { "Muscle Tone", "Joint Friction", TARTARUS_REFLECT_FIELD(RagdollSettingsComponent, JointFriction), 0.5f, "Damper floor on every joint (acceleration units), always on: dead bodies have joint friction. 0 = frictionless joints.", 0.0f, 200.0f },
+                { "Muscle Tone", "Legs Tone Time", TARTARUS_REFLECT_FIELD(RagdollSettingsComponent, LegsToneTime), 0.05f, "Seconds for the legs' muscle strength to decay to the residual (after the Stagger Time).", 0.05f, 6.0f },
+                { "Muscle Tone", "Spine Tone Time", TARTARUS_REFLECT_FIELD(RagdollSettingsComponent, SpineToneTime), 0.05f, "Seconds for the spine's strength to decay to the residual.", 0.05f, 6.0f },
+                { "Muscle Tone", "Neck Tone Time", TARTARUS_REFLECT_FIELD(RagdollSettingsComponent, NeckToneTime), 0.05f, "Seconds for the neck's and head's strength to decay to the residual.", 0.05f, 6.0f },
+                { "Muscle Tone", "Arms Tone Time", TARTARUS_REFLECT_FIELD(RagdollSettingsComponent, ArmsToneTime), 0.05f, "Seconds for the arms' and hands' strength to decay to the residual.", 0.05f, 6.0f },
+                { "Muscle Tone", "Collapse Blend Time", TARTARUS_REFLECT_FIELD(RagdollSettingsComponent, CollapseBlendTime), 0.05f, "Seconds the joints' target takes to go from the pose the soldier died in to the collapse pose.", 0.05f, 4.0f },
+                { "Muscle Tone", "Collapse Amount", TARTARUS_REFLECT_FIELD(RagdollSettingsComponent, CollapseAmount), 0.05f, "0 = the joints keep aiming for the death pose, 1 = the full collapse pose below (knees and hips fold, spine curls, arms drop or brace).", 0.0f, 1.5f },
+                { "Muscle Tone", "Hip Flexion", TARTARUS_REFLECT_FIELD(RagdollSettingsComponent, HipFlexCollapse), 0.5f, "Degrees the hips fold in the collapse pose.", 0.0f, 120.0f },
+                { "Muscle Tone", "Knee Flexion", TARTARUS_REFLECT_FIELD(RagdollSettingsComponent, KneeFlexCollapse), 0.5f, "Degrees the knees fold in the collapse pose.", 0.0f, 140.0f },
+                { "Muscle Tone", "Spine Curl", TARTARUS_REFLECT_FIELD(RagdollSettingsComponent, SpineCurlCollapse), 0.5f, "Degrees the spine curls (forward when the body falls forward, a little back when it falls back).", 0.0f, 45.0f },
+                { "Muscle Tone", "Neck Tuck", TARTARUS_REFLECT_FIELD(RagdollSettingsComponent, NeckCollapse), 0.5f, "Degrees the neck tucks (chin in when falling back, head back when falling forward).", 0.0f, 50.0f },
+                { "Muscle Tone", "Shoulder Brace", TARTARUS_REFLECT_FIELD(RagdollSettingsComponent, ShoulderCollapse), 0.5f, "Degrees the arms come forward to brace a fall forward (a fall back throws them back, a sideways one swings them out: see Reactions, where Brace Weight scales all of it).", 0.0f, 120.0f },
+                { "Muscle Tone", "Elbow Flexion", TARTARUS_REFLECT_FIELD(RagdollSettingsComponent, ElbowCollapse), 0.5f, "Degrees the elbows fold in the collapse pose.", 0.0f, 140.0f },
+                { "Stagger", "Stagger Leg Strength", TARTARUS_REFLECT_FIELD(RagdollSettingsComponent, StaggerLegStrength), 0.02f, "The legs start at this fraction of the muscle strength: they give out instead of holding the pose, so the body topples and doesn't stand rigid.", 0.0f, 1.0f },
+                { "Stagger", "Stagger Time", TARTARUS_REFLECT_FIELD(RagdollSettingsComponent, StaggerTime), 0.01f, "Seconds the legs hold that strength before their tone starts to decay: the body stays on its feet long enough for the round to carry it.", 0.0f, 2.0f },
+                { "Stagger", "Hit Weakness", TARTARUS_REFLECT_FIELD(RagdollSettingsComponent, HitWeakness), 0.01f, "Strength fraction of the joint the round struck (a struck chest or head gives way; a struck leg buckles). 1 = no different from the rest.", 0.0f, 1.0f },
+                { "Stagger", "Hit Impulse Scale", TARTARUS_REFLECT_FIELD(RagdollSettingsComponent, HitImpulseScale), 0.05f, "Multiplies the round's shove on the body: the body falls along the shot. 1 = the plain impulse.", 0.0f, 10.0f },
+                { "Stagger", "Hit Body Share", TARTARUS_REFLECT_FIELD(RagdollSettingsComponent, HitBodyShare), 0.02f, "Share of the shove that pushes the whole body (every part by mass: it is carried along the shot and topples on its feet) rather than only the struck part (which folds around the round). 0 = all on the struck part.", 0.0f, 1.0f },
+                { "Settle", "Down Height", TARTARUS_REFLECT_FIELD(RagdollSettingsComponent, DownHeight), 0.02f, "The body is down once its pelvis is below this fraction of its standing height; it then settles (damping and friction ramp up) whatever its speed, so it does not skate along the floor.", 0.05f, 1.0f },
+                { "Settle", "Settle Speed", TARTARUS_REFLECT_FIELD(RagdollSettingsComponent, SettleSpeed), 0.02f, "Fastest part speed (m/s) under which the body starts to settle (damping and friction ramp up).", 0.01f, 5.0f },
+                { "Settle", "Settle Delay", TARTARUS_REFLECT_FIELD(RagdollSettingsComponent, SettleDelay), 0.05f, "Seconds after death before the body may start to settle.", 0.0f, 5.0f },
+                { "Settle", "Settle Ramp", TARTARUS_REFLECT_FIELD(RagdollSettingsComponent, SettleRamp), 0.05f, "Seconds the damping, friction and joint friction take to reach their settled values.", 0.05f, 5.0f },
+                { "Settle", "Settle Linear Damping", TARTARUS_REFLECT_FIELD(RagdollSettingsComponent, SettleLinearDamping), 0.05f, "Linear damping of every part once settled.", 0.0f, 20.0f },
+                { "Settle", "Settle Angular Damping", TARTARUS_REFLECT_FIELD(RagdollSettingsComponent, SettleAngularDamping), 0.05f, "Angular damping of every part once settled.", 0.0f, 40.0f },
+                { "Settle", "Settle Friction", TARTARUS_REFLECT_FIELD(RagdollSettingsComponent, SettleFriction), 0.05f, "Static and dynamic friction against the world once settled (no sliding on the floor).", 0.0f, 6.0f },
+                { "Settle", "Settle Joint Friction", TARTARUS_REFLECT_FIELD(RagdollSettingsComponent, SettleJointFriction), 0.5f, "The joint damper floor once settled (acceleration units): no limb jitter at rest.", 0.0f, 200.0f },
+                { "Settle", "Rest Speed", TARTARUS_REFLECT_FIELD(RagdollSettingsComponent, RestSpeed), 0.001f, "Every part slower than this (m/s; rad/s at ten times) for Rest Time and the body is put to sleep, and stays so until hit.", 0.0f, 1.0f },
+                { "Settle", "Rest Time", TARTARUS_REFLECT_FIELD(RagdollSettingsComponent, RestTime), 0.05f, "Seconds of stillness before the body is put to sleep.", 0.05f, 5.0f },
+                { "Settle", "Stabilization Threshold", TARTARUS_REFLECT_FIELD(RagdollSettingsComponent, StabilizationThreshold), 0.005f, "PhysX stabilization: a part with less kinetic energy per mass than this is held still against contact jitter.", 0.0f, 2.0f },
+                { "Lying", "Relax Delay", TARTARUS_REFLECT_FIELD(RagdollSettingsComponent, RelaxDelay), 0.02f, "Seconds after death before the joints' target starts going from the collapse pose to the lying pose.", 0.0f, 4.0f },
+                { "Lying", "Relax Loose", TARTARUS_REFLECT_FIELD(RagdollSettingsComponent, RelaxLoose), 0.02f, "The most the settle (joint friction, floor friction and damping ramping up) may reach until the lying pose has formed, so the limbs can still move on the floor. 1 = no limit.", 0.0f, 1.0f },
+                { "Lying", "Relax Time", TARTARUS_REFLECT_FIELD(RagdollSettingsComponent, RelaxTime), 0.05f, "Seconds the joints' target takes to go from the collapse pose to a relaxed lying pose (legs extend, hips and arms relax), (after the Relax Delay). A body no longer ends frozen kneeling or curled up.", 0.05f, 5.0f },
+                { "Lying", "Relax Tone", TARTARUS_REFLECT_FIELD(RagdollSettingsComponent, RelaxTone), 0.02f, "Strength fraction that holds the lying pose while it forms. 0 = no lying phase: the target stays at the collapse pose and the body is as limp as the Tone Residual lets it be.", 0.0f, 1.0f },
+                { "Lying", "Relax Hold", TARTARUS_REFLECT_FIELD(RagdollSettingsComponent, RelaxHold), 0.05f, "Seconds the lying tone holds after the target has arrived, then fades out (the body may not sleep before that).", 0.0f, 5.0f },
+                { "Lying", "Rest Pelvis Max", TARTARUS_REFLECT_FIELD(RagdollSettingsComponent, RestPelvisMax), 0.01f, "A body about to rest whose pelvis is higher than this (m) is kneeling or propped up, not lying: it is not put to sleep yet and the settle lets go of it while its legs push toward the lying pose (see Rest Fix Time).", 0.05f, 1.0f },
+                { "Lying", "Rest Chest Max", TARTARUS_REFLECT_FIELD(RagdollSettingsComponent, RestChestMax), 0.01f, "A body about to rest whose chest is higher than this (m) is propped up on its arms or legs, not lying: same as Rest Pelvis Max.", 0.1f, 1.0f },
+                { "Lying", "Rest Knee Max", TARTARUS_REFLECT_FIELD(RagdollSettingsComponent, RestKneeMax), 1.0f, "A body about to rest with a knee bent more than this (degrees) is curled up: same as Rest Pelvis Max.", 10.0f, 140.0f },
+                { "Lying", "Rest Hip Max", TARTARUS_REFLECT_FIELD(RagdollSettingsComponent, RestHipMax), 1.0f, "A body about to rest with a hip folded more than this (degrees) is curled up: same as Rest Pelvis Max.", 10.0f, 150.0f },
+                { "Lying", "Rest Fix Time", TARTARUS_REFLECT_FIELD(RagdollSettingsComponent, RestFixTime), 0.05f, "The longest (seconds after the lying pose has formed) the legs push a kneeling or curled-up body toward the lying pose before it is left as it lies (propped against something, it stays so). 0 = never push.", 0.0f, 5.0f },
+                { "Lying", "Rest Fix Tone", TARTARUS_REFLECT_FIELD(RagdollSettingsComponent, RestFixTone), 0.02f, "The legs' strength fraction while they push (and the settle is held to Relax Loose).", 0.0f, 1.0f },
+                { "Lying", "Lying Hip Flexion", TARTARUS_REFLECT_FIELD(RagdollSettingsComponent, LyingHip), 0.5f, "Degrees the hips are flexed in the lying pose.", 0.0f, 90.0f },
+                { "Lying", "Lying Knee Flexion", TARTARUS_REFLECT_FIELD(RagdollSettingsComponent, LyingKnee), 0.5f, "Degrees the knees are bent in the lying pose.", 0.0f, 90.0f },
+                { "Lying", "Lying Elbow Flexion", TARTARUS_REFLECT_FIELD(RagdollSettingsComponent, LyingElbow), 0.5f, "Degrees the elbows are bent in the lying pose.", 0.0f, 120.0f },
+                { "Lying", "Lying Arms", TARTARUS_REFLECT_FIELD(RagdollSettingsComponent, LyingArms), 0.02f, "How far the arms go back to hanging in the lying pose (0 = they keep the pose they died in, 1 = straight down).", 0.0f, 1.0f },
+                { "Lying", "Lying Spine", TARTARUS_REFLECT_FIELD(RagdollSettingsComponent, LyingSpine), 0.02f, "How far the spine, neck and head go back to upright in the lying pose.", 0.0f, 1.0f },
+                { "Directional Fall", "Buckle Asymmetry", TARTARUS_REFLECT_FIELD(RagdollSettingsComponent, BuckleAsymmetry), 0.02f, "The leg on the side the body falls toward (the far side from the shot) folds its knee further and the other less. 0 = both knees fold alike.", 0.0f, 1.0f },
+                { "Directional Fall", "Buckle Lead", TARTARUS_REFLECT_FIELD(RagdollSettingsComponent, BuckleLead), 0.02f, "That lead leg gives out earlier: its Stagger Time hold is shortened by this fraction (the other leg's lengthened).", 0.0f, 0.9f },
+                { "Directional Fall", "Back Fall Knee Scale", TARTARUS_REFLECT_FIELD(RagdollSettingsComponent, BackKneeScale), 0.02f, "Knee fold of a body falling straight back, as a fraction of Knee Flexion (a back fall sits down more than it kneels).", 0.0f, 1.5f },
+                { "Directional Fall", "Back Fall Hip Scale", TARTARUS_REFLECT_FIELD(RagdollSettingsComponent, BackHipScale), 0.02f, "Hip fold of a body falling straight back, as a multiple of Hip Flexion (the legs go forward as it sits).", 0.5f, 3.0f },
+                { "Reactions", "Brace Weight", TARTARUS_REFLECT_FIELD(RagdollSettingsComponent, BraceWeight), 0.02f, "The arms reach toward the fall (forward, back, or out to the side), scaled by this. 0 = they keep the pose they died in. A head kill never braces.", 0.0f, 1.0f },
+                { "Reactions", "Brace Sideways", TARTARUS_REFLECT_FIELD(RagdollSettingsComponent, BraceLateral), 0.5f, "Degrees the arms swing toward a sideways fall (before Brace Weight).", 0.0f, 90.0f },
+                { "Reactions", "Wound Grab Weight", TARTARUS_REFLECT_FIELD(RagdollSettingsComponent, WoundGrabWeight), 0.02f, "On a torso hit the hand on the struck side goes to the wound for a moment, scaled by this. 0 = off.", 0.0f, 1.0f },
+                { "Reactions", "Wound Grab Time", TARTARUS_REFLECT_FIELD(RagdollSettingsComponent, WoundGrabTime), 0.02f, "Seconds the hand stays at the wound before the arm lets go.", 0.05f, 3.0f },
+                { "Reactions", "Wound Shoulder", TARTARUS_REFLECT_FIELD(RagdollSettingsComponent, WoundShoulder), 0.5f, "Degrees the shoulder lifts the hand toward the wound.", 0.0f, 120.0f },
+                { "Reactions", "Wound Elbow", TARTARUS_REFLECT_FIELD(RagdollSettingsComponent, WoundElbow), 0.5f, "Degrees the elbow bends taking the hand to the wound.", 0.0f, 140.0f },
+                { "Reactions", "Head Tuck Weight", TARTARUS_REFLECT_FIELD(RagdollSettingsComponent, HeadTuckWeight), 0.02f, "The head tucks forward as the body falls back (Neck Tuck degrees, scaled by this). A head kill does not tuck.", 0.0f, 1.0f },
+                { "Reactions", "Head Kill Limp", TARTARUS_REFLECT_FIELD(RagdollSettingsComponent, HeadKillLimp), 0.02f, "A head kill: the arms' and neck's muscle times (Tone Time) are scaled by this, so the body goes limp at once. 1 = no different from a body kill.", 0.05f, 1.0f },
+                { "Corpse Hits", "Corpse Wake Time", TARTARUS_REFLECT_FIELD(RagdollSettingsComponent, CorpseWakeTime), 0.02f, "Seconds a body at rest stays loose (no settling, joint friction low) after a round hits it, so the limb the round struck visibly reacts before the body settles and sleeps again.", 0.0f, 3.0f },
+                { "Corpse Hits", "Corpse Shot Max Speed", TARTARUS_REFLECT_FIELD(RagdollSettingsComponent, CorpseShotMaxSpeed), 0.1f, "The most speed (m/s) a round adds to the part it struck on a body at rest, however heavy the round.", 0.5f, 20.0f },
+            };
+            for (const R2& r : rows2) {
+                m.Fields.push_back({ r.Label, T::Float, r.Ptr, r.Step, r.Tip, r.Lo, r.Hi });
+                m.Fields.back().Group = r.Group;
+            }
+        }
         Register<RagdollSettingsComponent>(std::move(m));
     }
     for (RegisteredComponent& rc : Storage())
@@ -1770,6 +1848,46 @@ void RegisterEngineComponents() {
                 if (std::strcmp(f.Name, "Cover Peek Step") == 0) f.Group = "Cover";
             }
     // ---- end lane R ----
+    // ---- lane R-gear ----
+    {
+        ReflectComponent m;
+        m.Name = "Dropped Weapon Settings"; m.Icon = ICON_FA_GUN; m.Category = "AI";
+        m.Tooltip = "The gun a soldier drops when he dies: its own physics body, thrown from the hands and tumbling to rest (the first Dropped Weapon Settings in the scene counts).";
+        m.Fields = {
+            { "Enabled", T::Bool, TARTARUS_REFLECT_FIELD(DroppedWeaponSettingsComponent, Enabled), 0.0f,
+              "The gun leaves the dead soldier's hands and lies where it falls. Off: it vanishes with him." },
+            { "Mass", T::Float, TARTARUS_REFLECT_FIELD(DroppedWeaponSettingsComponent, Mass), 0.1f,
+              "Kilograms.", 0.5f, 20.0f },
+            { "Impulse Share", T::Float, TARTARUS_REFLECT_FIELD(DroppedWeaponSettingsComponent, ImpulseShare), 0.01f,
+              "The share of the killing round's impulse the gun takes (its speed gain = share x impulse / mass).", 0.0f, 1.0f },
+            { "Max Shot Speed", T::Float, TARTARUS_REFLECT_FIELD(DroppedWeaponSettingsComponent, MaxShotSpeed), 0.1f,
+              "Metres per second: the most speed the round adds to the gun.", 0.0f, 30.0f },
+            { "Spin", T::Float, TARTARUS_REFLECT_FIELD(DroppedWeaponSettingsComponent, Spin), 0.05f,
+              "Tumble: radians per second of spin for each metre per second the gun leaves the hands at (0 = no spin).", 0.0f, 10.0f },
+            { "Max Spin", T::Float, TARTARUS_REFLECT_FIELD(DroppedWeaponSettingsComponent, MaxSpin), 0.1f,
+              "Radians per second.", 0.0f, 40.0f },
+            { "Collision Delay", T::Float, TARTARUS_REFLECT_FIELD(DroppedWeaponSettingsComponent, CollisionDelay), 0.01f,
+              "Seconds the gun flies without colliding, so it clears the falling body's arms and torso instead of being thrown off them.", 0.0f, 1.0f },
+            { "Friction", T::Float, TARTARUS_REFLECT_FIELD(DroppedWeaponSettingsComponent, Friction), 0.01f,
+              "Static and dynamic friction against the world.", 0.0f, 3.0f },
+            { "Bounciness", T::Float, TARTARUS_REFLECT_FIELD(DroppedWeaponSettingsComponent, Bounciness), 0.01f,
+              "Restitution (0 = dead stop, 1 = no energy lost).", 0.0f, 1.0f },
+            { "Linear Damping", T::Float, TARTARUS_REFLECT_FIELD(DroppedWeaponSettingsComponent, LinearDamping), 0.01f,
+              "Per-second velocity bleed.", 0.0f, 10.0f },
+            { "Angular Damping", T::Float, TARTARUS_REFLECT_FIELD(DroppedWeaponSettingsComponent, AngularDamping), 0.01f,
+              "Per-second spin bleed (higher settles sooner).", 0.0f, 10.0f },
+            { "Lifetime", T::Float, TARTARUS_REFLECT_FIELD(DroppedWeaponSettingsComponent, Lifetime), 1.0f,
+              "Seconds before the gun is removed. 0 = it lies as long as the corpse does.", 0.0f, 600.0f },
+        };
+        for (ReflectField& f : m.Fields) {
+            if (std::strcmp(f.Name, "Enabled") == 0 || std::strcmp(f.Name, "Lifetime") == 0) f.Group = "Drop";
+            else if (std::strcmp(f.Name, "Mass") == 0 || std::strcmp(f.Name, "Impulse Share") == 0 || std::strcmp(f.Name, "Max Shot Speed") == 0 ||
+                     std::strcmp(f.Name, "Spin") == 0 || std::strcmp(f.Name, "Max Spin") == 0 || std::strcmp(f.Name, "Collision Delay") == 0) f.Group = "Throw";
+            else f.Group = "Body Physics";
+        }
+        Register<DroppedWeaponSettingsComponent>(std::move(m));
+    }
+    // ---- end lane R-gear ----
 
     // #132 - String fields that hold asset paths: tracked by GUID so renaming or moving the file
     // outside the editor keeps the reference (see ReflectField::AssetPath).
