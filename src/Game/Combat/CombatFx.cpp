@@ -1,6 +1,8 @@
 #include "CombatFx.h"
 
 #include "AudioEngine.h"
+#include "Audio/FoleyAudio.h"
+#include "Audio/WeaponAudio.h"
 #include "Components.h"
 #include "ProjectPaths.h"
 #include "World.h"
@@ -60,6 +62,9 @@ void CombatFx::Start(World& world) {
     m_ShotsHeard = m_Whizzes = 0;
     if (AudioEngine::IsInitialized())
         for (const char* s : kAllSounds) AudioEngine::Load(Path(s)); // decoded up front: no hitch on the first shot
+    WeaponAudio::Get().Start(world); // the guns' report layers, gear sounds and the foley (Play-mode audio, whatever else is in the scene)
+    WeaponAudio::Get().SetLogFile(m_Log);
+    FoleyAudio::Get().Start(world);
     for (int i = 0; i < kFlashLights; ++i) {
         Flash f;
         f.Light = world.CreateEmptyEntity(glm::vec3(0.0f, -100.0f, 0.0f), glm::vec3(0.0f), glm::vec3(1.0f), "[Runtime] Muzzle Light");
@@ -100,10 +105,13 @@ void CombatFx::SetAudioLog(const std::string& path) {
     m_Log = nullptr;
 #pragma warning(suppress : 4996)
     if (!path.empty()) m_Log = std::fopen(path.c_str(), "w");
+    WeaponAudio::Get().SetLogFile(m_Log);
 }
 
 void CombatFx::Stop(World& world) {
     if (m_Log) std::fflush(m_Log);
+    FoleyAudio::Get().Stop();
+    WeaponAudio::Get().Stop();
     for (Flash& f : m_Flashes)
         if (world.Registry.valid(f.Light)) world.DestroyEntityAndChildren(f.Light);
     m_Flashes.clear();
@@ -133,19 +141,9 @@ void CombatFx::Shot(World& world, Gun gun, const glm::vec3& origin, const glm::v
     if (!m_Active) return;
     ++m_ShotsHeard;
     const bool shotgun = gun == Gun::Shotgun;
-    const float pitch = 0.96f + 0.08f * Rand01();
-    if (fromPlayer) {
-        PlaySound(shotgun ? "shotgun_shot.wav" : (Rand01() < 0.5f ? "ak_shot.wav" : "ak_shot_b.wav"), origin, true, 0.75f, pitch, 1, 1);
-    } else {
-        // Up close it cracks; across the arena the crack is gone and the field's echo carries it.
-        const float d = glm::length(origin - m_Listener);
-        const float nearW = std::clamp(1.0f - (d - 18.0f) / 25.0f, 0.0f, 1.0f);
-        if (nearW > 0.01f)
-            PlaySound(shotgun ? "shotgun_shot.wav" : (Rand01() < 0.5f ? "ak_shot.wav" : "ak_shot_b.wav"), origin, false, nearW,
-                      pitch, 3.0f, 90.0f);
-        if (nearW < 0.99f)
-            PlaySound(shotgun ? "shotgun_shot_far.wav" : "ak_shot_far.wav", origin, false, 0.9f * (1.0f - nearW) + 0.1f, pitch, 6.0f, 160.0f);
-    }
+    // The report: every layer of this gun's audio (close, mech, sub, tail, far), weighted by distance for the squad's guns.
+    WeaponAudio::Get().SetListener(m_Listener);
+    WeaponAudio::Get().Shot(shotgun ? "870" : "ak", origin, fromPlayer);
 
     glm::vec3 dir = end - origin;
     const float len = glm::length(dir);
@@ -263,6 +261,8 @@ void CombatFx::Update(World& world, float dt) {
         std::fprintf(m_Log, "L %.4f %.3f %.3f %.3f %.3f %.3f %.3f\n", m_Now, m_Listener.x, m_Listener.y, m_Listener.z, m_ListenerFwd.x,
                      m_ListenerFwd.y, m_ListenerFwd.z);
     m_Now += dt;
+    WeaponAudio::Get().SetListener(m_Listener);
+    WeaponAudio::Get().Update(dt);
     for (Flash& f : m_Flashes) {
         if (!world.Registry.valid(f.Light)) continue;
         auto& l = world.Registry.get<LightComponent>(f.Light);

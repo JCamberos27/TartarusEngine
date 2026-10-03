@@ -1425,3 +1425,57 @@ struct DroppedWeaponSettingsComponent {
     float Lifetime = 0.0f;             // seconds before the gun goes (0 = it lies as long as the corpse does)
 };
 // ---- end lane R-gear ----
+// ---- lane S ----
+// One gun's audio tuning (Game/Audio/WeaponAudio): add one per gun, Gun naming it ("ak", "870"); a gun with none uses these
+// defaults. The per-event sets (reloads, ADS, equip ...) live in the Data File, a json of SoundSets by element; sets with no
+// entry there are filled from the audio manifest by key (snd.<Gun>.<element>).
+struct WeaponAudioComponent {
+    std::string Gun = "ak";
+    bool Enabled = true;
+    float Volume = 1.0f;
+    float PlayerGain = 0.75f;
+    float ShotPitchMin = 0.96f;
+    float ShotPitchMax = 1.04f;
+    float VolumeJitterDb = 1.0f;       // +- dB per layer per shot
+    // Shot layers by distance from the listener (3D shots: soldiers' guns).
+    float CloseFullDistance = 18.0f;   // the crack is full within this ...
+    float CloseZeroDistance = 43.0f;   // ... and gone by this
+    float FarMinWeight = 0.1f;         // the distant report's gain up close ...
+    float FarMaxWeight = 1.0f;         // ... and past CloseZeroDistance
+    float MaxDistance = 90.0f;         // close / mech / sub layers' audible range
+    float FarMaxDistance = 160.0f;
+    int ShotMaxVoices = 6;             // per layer; the oldest is stolen
+    int TailMaxVoices = 3;             // full auto: tails ringing at once
+    float TailFadeTime = 0.25f;        // seconds a stolen tail fades out over
+    float TailMinInterval = 0.0f;      // seconds between tails (0 = one per shot, the cap still applies)
+    float TailDuckPerVoice = 0.3f;     // each tail still ringing ducks a new one by this share
+    std::string DataFile;              // json of SoundSet overrides by element (empty = none)
+};
+// Footsteps, jumps, landings and the sprint cloth loop (Game/Audio/FoleyAudio). One per scene (the first counts).
+struct FoleyAudioComponent {
+    bool Enabled = true;
+    float Volume = 1.0f;
+    float WalkVolume = 0.55f;
+    float RunVolume = 0.8f;
+    float CrouchVolume = 0.3f;
+    float VolumeJitterDb = 1.5f;
+    float PitchMin = 0.94f;
+    float PitchMax = 1.06f;
+    float StepStrideScale = 1.0f;      // footfall spacing against the view bob's stride (2 per stride): above 1 = slower
+    float CrouchStrideScale = 0.8f;
+    float MinStepSpeed = 0.6f;         // m/s below which there are no footsteps
+    float RunSpeed = 4.5f;             // m/s from which the run set plays
+    float JumpVolume = 0.6f;
+    float LandVolume = 0.9f;
+    float LandMinSpeed = 2.5f;         // m/s of fall below which landing is silent
+    float LandFullSpeed = 9.0f;        // m/s at which it is at LandVolume (a hard landing)
+    float ClothLoopVolume = 0.35f;     // sprint cloth / gear loop
+    float ClothLoopMinSpeed = 3.0f;    // m/s: silent below, full at RunSpeed
+    float NpcStepVolume = 0.7f;
+    float NpcStepMaxDistance = 28.0f;
+    float NpcStepMinDistance = 2.5f;
+    std::string DefaultSurface = "concrete";
+    // surface=word,word;surface=word  - the first surface with a word in the ground's physics material, tag or name.
+    std::string SurfaceTable = "wood=wood,plank,floor,parquet;metal=metal,steel,iron,grate;grass=grass,turf,lawn;dirt=dirt,soil,sand,mud;gravel=gravel,stone,rock;concrete=concrete,asphalt,tile";
+};
+// ---- end lane S ----

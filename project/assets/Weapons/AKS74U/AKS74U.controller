@@ -133,6 +133,12 @@
           "speed": 1.0
         },
         {
+          "events": [
+            {
+              "name": "snd.ak.regrip",
+              "time": 0.3
+            }
+          ],
           "loop": false,
           "motions": {
             "arms": {
@@ -181,6 +187,16 @@
           ]
         },
         {
+          "events": [
+            {
+              "name": "snd.ak.inspect_move",
+              "time": 0.2
+            },
+            {
+              "name": "snd.ak.inspect_rattle",
+              "time": 0.6
+            }
+          ],
           "loop": false,
           "motions": {
             "arms": {
@@ -204,6 +220,16 @@
           ]
         },
         {
+          "events": [
+            {
+              "name": "snd.ak.mag_check_out",
+              "time": 0.25
+            },
+            {
+              "name": "snd.ak.mag_check_in",
+              "time": 0.7
+            }
+          ],
           "loop": false,
           "motions": {
             "arms": {
@@ -228,6 +254,12 @@
           ]
         },
         {
+          "events": [
+            {
+              "name": "snd.ak.melee_swing",
+              "time": 0.25
+            }
+          ],
           "loop": false,
           "motions": {
             "arms": {
@@ -252,6 +284,22 @@
         },
         {
           "events": [
+            {
+              "name": "snd.ak.mag_release",
+              "time": 0.2
+            },
+            {
+              "name": "snd.ak.mag_out",
+              "time": 0.3
+            },
+            {
+              "name": "snd.ak.mag_in",
+              "time": 0.62
+            },
+            {
+              "name": "snd.ak.mag_seat",
+              "time": 0.72
+            },
             {
               "name": "Refill",
               "time": 1.0
@@ -283,6 +331,26 @@
         {
           "events": [
             {
+              "name": "snd.ak.mag_release",
+              "time": 0.15
+            },
+            {
+              "name": "snd.ak.mag_out",
+              "time": 0.25
+            },
+            {
+              "name": "snd.ak.mag_in",
+              "time": 0.5
+            },
+            {
+              "name": "snd.ak.mag_seat",
+              "time": 0.58
+            },
+            {
+              "name": "snd.ak.bolt_release",
+              "time": 0.8
+            },
+            {
               "name": "Refill",
               "time": 1.0
             }
@@ -311,6 +379,12 @@
           ]
         },
         {
+          "events": [
+            {
+              "name": "snd.ak.draw",
+              "time": 0.05
+            }
+          ],
           "loop": false,
           "motions": {
             "arms": {
@@ -330,6 +404,12 @@
           ]
         },
         {
+          "events": [
+            {
+              "name": "snd.ak.holster",
+              "time": 0.1
+            }
+          ],
           "loop": false,
           "motions": {
             "arms": {

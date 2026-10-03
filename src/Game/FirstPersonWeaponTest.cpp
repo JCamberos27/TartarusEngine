@@ -1,8 +1,12 @@
 #include "FirstPersonWeaponTest.h"
 
+#include "AnimatorController.h"
+#include "Audio/WeaponAudio.h"
 #include "Camera.h"
+#include "Components.h"
 #include "FirstPersonBody.h"
 #include "FirstPersonPresentation.h"
+#include "ProjectPaths.h"
 #include "ShellCasings.h"
 #include "World.h"
 
@@ -14,6 +18,8 @@
 #include <memory>
 #include <cstdio>
 #include <cstdlib>
+#include <map>
+#include <set>
 
 namespace {
 constexpr int kAkMagazine = 30;
@@ -261,6 +267,7 @@ FirstPersonWeaponTest::FirstPersonWeaponTest(bool stockProbe, bool probeAk) : m_
          [=](C& c) { check(c, c.Saw("Draw"), "drawn"); }},
         {"idle fidget", nullptr, [](C& c) { return c.Saw("Regrip"); }, 25.0f, nullptr},
     };
+    if (!m_Probe) WeaponAudio::Get().SetRecording(true); // the audio checks at the end read every emission
     m_Ctx.Check = [this](bool ok, const std::string& what) {
         ++m_Checks;
         if (!ok) ++m_Failures;
@@ -509,6 +516,7 @@ void FirstPersonWeaponTest::BuildProbe() {
 }
 
 void FirstPersonWeaponTest::AfterPose(const World& world, const FirstPersonBody& body, const FirstPersonPresentation& p) {
+    if (!m_Probe) RecordAudioFrame(world, p);
     if (!m_Probe || !m_Ctx.Cam) return;
     ++m_Frame;
     const Camera& cam = *m_Ctx.Cam;
@@ -705,6 +713,10 @@ void FirstPersonWeaponTest::Drive(FirstPersonPresentation& p, float dt) {
             m_Step = m_Steps.size(); // later steps assume this one happened
         }
     }
+    if (Done() && !m_Probe && !m_AudioChecked) {
+        m_AudioChecked = true;
+        CheckAudio();
+    }
     m_Shot.clear();
     if (!c.Shot.empty()) {
         m_Shot = c.Shot;
@@ -723,4 +735,117 @@ void FirstPersonWeaponTest::Drive(FirstPersonPresentation& p, float dt) {
     p.UpdateTrigger(c.Pulls > 0 || held, c.Pulls > 0 || held);
     c.Pulls = 0;
     std::fflush(stdout);
+}
+
+// --- Audio ------------------------------------------------------------------------------------------------------
+
+void FirstPersonWeaponTest::RecordAudioFrame(const World& world, const FirstPersonPresentation& p) {
+    AudioFrame f;
+    f.Slot = p.Slot();
+    f.Controller = p.Set().Controller;
+    if (const auto* ac = world.Registry.try_get<AnimatorControllerComponent>(p.ArmsEntity())) {
+        f.State = ac->StateName;
+        f.Phase = ac->StateTime;
+    }
+    const std::vector<WeaponAudio::Emitted>& t = WeaponAudio::Get().Transcript();
+    for (; m_AudioSeen < t.size(); ++m_AudioSeen) f.Keys.push_back(t[m_AudioSeen].Key);
+    m_AudioFrames.push_back(std::move(f));
+}
+
+// The audio is data on the controllers (snd.* events); this replays the whole run's frames against them: every event the
+// animator crossed must have been played, in order, by the frame after it crossed (+-1 frame), and nothing else of the
+// animator's keys may have been. Then the gear sounds the script's actions should have made (ADS, fire mode, dry
+// trigger, equip / unequip, the shot layers), counted.
+void FirstPersonWeaponTest::CheckAudio() {
+    Ctx& c = m_Ctx;
+    std::printf("[WeaponTest] audio (snd.* events against the animator, %d frames)\n", (int)m_AudioFrames.size());
+    // The controllers by slot.
+    AnimatorController ctrl[2];
+    bool have[2] = {false, false};
+    for (const AudioFrame& f : m_AudioFrames)
+        if (f.Slot >= 0 && f.Slot < 2 && !have[f.Slot] && !f.Controller.empty())
+            have[f.Slot] = AnimatorController::LoadFile(ProjectPaths::Resolve(f.Controller), ctrl[f.Slot]);
+    c.Check(have[0] && have[1], "both weapons' controllers loaded");
+    if (!(have[0] && have[1])) return;
+
+    struct Expect { int Frame; std::string Key; };
+    std::vector<Expect> expected;
+    std::vector<Expect> observed;
+    std::set<std::string> animatorKeys;
+    for (const AnimatorController& a : ctrl)
+        for (const AnimatorController::State& s : a.Layers[0].States)
+            for (const AnimatorController::Event& e : s.Events)
+                if (e.Name.rfind("snd.", 0) == 0) animatorKeys.insert(e.Name);
+    c.Check(!animatorKeys.empty(), std::to_string(animatorKeys.size()) + " snd.* keys on the controllers' states");
+
+    std::string prevState;
+    float prevPhase = 0.0f;
+    int prevSlot = -1;
+    for (int i = 0; i < (int)m_AudioFrames.size(); ++i) {
+        const AudioFrame& f = m_AudioFrames[i];
+        for (const std::string& k : f.Keys)
+            if (animatorKeys.count(k)) observed.push_back({i, k});
+        if (f.Slot < 0 || f.Slot > 1 || f.State.empty()) continue;
+        const AnimatorController::Layer& L = ctrl[f.Slot].Layers[0];
+        const int si = L.FindState(f.State);
+        if (si < 0) continue;
+        const AnimatorController::State& st = L.States[si];
+        const bool entered = f.State != prevState || f.Slot != prevSlot || f.Phase < prevPhase - 1e-6f;
+        const float from = entered ? -1e-6f : prevPhase;
+        // The controller's own rule (AnimatorController.cpp CrossEvents): events in (from, to], per pass for a loop.
+        if (f.Phase > from) {
+            const int first = st.Loop ? (int)std::floor(std::max(from, 0.0f)) : 0;
+            const int last = st.Loop ? (int)std::floor(f.Phase) : 0;
+            for (int k = first; k <= last; ++k)
+                for (const AnimatorController::Event& e : st.Events) {
+                    const float t = e.Time + (st.Loop ? (float)k : 0.0f);
+                    if (t > from && t <= f.Phase && e.Name.rfind("snd.", 0) == 0) expected.push_back({i, e.Name});
+                }
+        }
+        prevState = f.State;
+        prevPhase = f.Phase;
+        prevSlot = f.Slot;
+    }
+    std::printf("[WeaponTest]     %d snd.* events crossed, %d played\n", (int)expected.size(), (int)observed.size());
+    c.Check(!expected.empty(), "the script crossed snd.* events");
+    c.Check(expected.size() == observed.size(), "every crossed event was played, nothing else of the animator's (" + std::to_string(expected.size()) + " vs " + std::to_string(observed.size()) + ")");
+    int worst = 0, wrongKey = 0;
+    for (size_t i = 0; i < expected.size() && i < observed.size(); ++i) {
+        if (expected[i].Key != observed[i].Key) {
+            if (++wrongKey <= 5)
+                std::printf("[WeaponTest]       #%d expected %s (frame %d), played %s (frame %d)\n", (int)i, expected[i].Key.c_str(), expected[i].Frame, observed[i].Key.c_str(), observed[i].Frame);
+            continue;
+        }
+        worst = std::max(worst, std::abs(observed[i].Frame - 1 - expected[i].Frame)); // played the frame after the crossing
+    }
+    c.Check(wrongKey == 0, "played in the animator's order");
+    c.Check(worst <= 1, "each within +-1 frame of the event time (worst " + std::to_string(worst) + ")");
+
+    // Gear sounds the script's actions make, and the shot layers.
+    std::map<std::string, int> count;
+    bool all2D = true;
+    for (const WeaponAudio::Emitted& e : WeaponAudio::Get().Transcript()) {
+        ++count[e.Key];
+        all2D &= e.At2D;
+    }
+    auto want = [&](const char* key, int n) {
+        c.Check(count[key] == n, std::string(key) + " x" + std::to_string(count[key]) + " (want " + std::to_string(n) + ")");
+    };
+    auto atLeast = [&](const char* key, int n) {
+        c.Check(count[key] >= n, std::string(key) + " x" + std::to_string(count[key]) + " (want " + std::to_string(n) + "+)");
+    };
+    want("snd.ak.fire_mode", 2);         // full auto on, off
+    atLeast("snd.ak.ads_in", 1);
+    atLeast("snd.ak.ads_out", 1);
+    atLeast("snd.870.ads_in", 1);
+    atLeast("snd.870.ads_out", 1);
+    want("snd.870.dry_fire", 1);         // one pull on the empty tube
+    want("snd.ak.equip", 1);             // back from the Remington
+    want("snd.870.equip", 3);            // 2, 2 again, 3 from unarmed
+    want("snd.ak.unequip", 2);
+    want("snd.870.unequip", 2);          // 1, then unarmed
+    atLeast("snd.ak.shot_close", 5);     // every round plays its layers (the AK fires 7)
+    atLeast("snd.870.shot_close", 8);
+    atLeast("snd.ak.shot_tail", 5);
+    c.Check(all2D, "the player's gun is all 2D");
 }
