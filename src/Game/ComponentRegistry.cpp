@@ -1818,6 +1818,46 @@ void RegisterEngineComponents() {
                 if (std::strcmp(f.Name, "Cover Peek Step") == 0) f.Group = "Cover";
             }
     // ---- end lane R ----
+    // ---- lane R-gear ----
+    {
+        ReflectComponent m;
+        m.Name = "Dropped Weapon Settings"; m.Icon = ICON_FA_GUN; m.Category = "AI";
+        m.Tooltip = "The gun a soldier drops when he dies: its own physics body, thrown from the hands and tumbling to rest (the first Dropped Weapon Settings in the scene counts).";
+        m.Fields = {
+            { "Enabled", T::Bool, TARTARUS_REFLECT_FIELD(DroppedWeaponSettingsComponent, Enabled), 0.0f,
+              "The gun leaves the dead soldier's hands and lies where it falls. Off: it vanishes with him." },
+            { "Mass", T::Float, TARTARUS_REFLECT_FIELD(DroppedWeaponSettingsComponent, Mass), 0.1f,
+              "Kilograms.", 0.5f, 20.0f },
+            { "Impulse Share", T::Float, TARTARUS_REFLECT_FIELD(DroppedWeaponSettingsComponent, ImpulseShare), 0.01f,
+              "The share of the killing round's impulse the gun takes (its speed gain = share x impulse / mass).", 0.0f, 1.0f },
+            { "Max Shot Speed", T::Float, TARTARUS_REFLECT_FIELD(DroppedWeaponSettingsComponent, MaxShotSpeed), 0.1f,
+              "Metres per second: the most speed the round adds to the gun.", 0.0f, 30.0f },
+            { "Spin", T::Float, TARTARUS_REFLECT_FIELD(DroppedWeaponSettingsComponent, Spin), 0.05f,
+              "Tumble: radians per second of spin for each metre per second the gun leaves the hands at (0 = no spin).", 0.0f, 10.0f },
+            { "Max Spin", T::Float, TARTARUS_REFLECT_FIELD(DroppedWeaponSettingsComponent, MaxSpin), 0.1f,
+              "Radians per second.", 0.0f, 40.0f },
+            { "Collision Delay", T::Float, TARTARUS_REFLECT_FIELD(DroppedWeaponSettingsComponent, CollisionDelay), 0.01f,
+              "Seconds the gun flies without colliding, so it clears the falling body's arms and torso instead of being thrown off them.", 0.0f, 1.0f },
+            { "Friction", T::Float, TARTARUS_REFLECT_FIELD(DroppedWeaponSettingsComponent, Friction), 0.01f,
+              "Static and dynamic friction against the world.", 0.0f, 3.0f },
+            { "Bounciness", T::Float, TARTARUS_REFLECT_FIELD(DroppedWeaponSettingsComponent, Bounciness), 0.01f,
+              "Restitution (0 = dead stop, 1 = no energy lost).", 0.0f, 1.0f },
+            { "Linear Damping", T::Float, TARTARUS_REFLECT_FIELD(DroppedWeaponSettingsComponent, LinearDamping), 0.01f,
+              "Per-second velocity bleed.", 0.0f, 10.0f },
+            { "Angular Damping", T::Float, TARTARUS_REFLECT_FIELD(DroppedWeaponSettingsComponent, AngularDamping), 0.01f,
+              "Per-second spin bleed (higher settles sooner).", 0.0f, 10.0f },
+            { "Lifetime", T::Float, TARTARUS_REFLECT_FIELD(DroppedWeaponSettingsComponent, Lifetime), 1.0f,
+              "Seconds before the gun is removed. 0 = it lies as long as the corpse does.", 0.0f, 600.0f },
+        };
+        for (ReflectField& f : m.Fields) {
+            if (std::strcmp(f.Name, "Enabled") == 0 || std::strcmp(f.Name, "Lifetime") == 0) f.Group = "Drop";
+            else if (std::strcmp(f.Name, "Mass") == 0 || std::strcmp(f.Name, "Impulse Share") == 0 || std::strcmp(f.Name, "Max Shot Speed") == 0 ||
+                     std::strcmp(f.Name, "Spin") == 0 || std::strcmp(f.Name, "Max Spin") == 0 || std::strcmp(f.Name, "Collision Delay") == 0) f.Group = "Throw";
+            else f.Group = "Body Physics";
+        }
+        Register<DroppedWeaponSettingsComponent>(std::move(m));
+    }
+    // ---- end lane R-gear ----
 
     // #132 - String fields that hold asset paths: tracked by GUID so renaming or moving the file
     // outside the editor keeps the reference (see ReflectField::AssetPath).
