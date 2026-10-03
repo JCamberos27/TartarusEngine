@@ -77,5 +77,19 @@ unsigned int Volume() {
     }();
     return t;
 }
+unsigned int BlackCube() {
+    static const unsigned int t = [] {
+        GLuint tex = 0;
+        glCreateTextures(GL_TEXTURE_CUBE_MAP, 1, &tex);
+        glTextureStorage2D(tex, 1, GL_RGBA8, 1, 1);
+        unsigned char px[6 * 4] = {};
+        for (int f = 0; f < 6; ++f) px[f * 4 + 3] = 255;
+        glTextureSubImage3D(tex, 0, 0, 0, 0, 1, 1, 6, kRGBA, kUnsignedByte, px);
+        glTextureParameteri(tex, GL_TEXTURE_MIN_FILTER, GL_NEAREST);
+        glTextureParameteri(tex, kTexMagFilter, GL_NEAREST);
+        return tex;
+    }();
+    return t;
+}
 
 } // namespace DefaultTextures

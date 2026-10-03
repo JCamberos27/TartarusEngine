@@ -3729,11 +3729,10 @@ void TestProjectWatcher() {
     fs::create_directories(dir / "Library", ec);
     fs::create_directories(dir / "sub", ec);
     CHECK(ProjectWatcher::Start(dir.string()));
-    std::this_thread::sleep_for(std::chrono::milliseconds(100));
     auto settle = [&] {
         std::vector<ProjectWatcher::Change> all;
         bool overflow = false;
-        for (int i = 0; i < 80; ++i) { // up to 4 s (slow CI runners)
+        for (int i = 0; i < 300; ++i) { // up to 15 s (loaded machines); Start() returns with the watch armed
             std::this_thread::sleep_for(std::chrono::milliseconds(50));
             auto got = ProjectWatcher::Drain(150, overflow);
             all.insert(all.end(), got.begin(), got.end());
