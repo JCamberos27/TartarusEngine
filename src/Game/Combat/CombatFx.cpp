@@ -137,13 +137,13 @@ void CombatFx::PlaySound(const std::string& file, const glm::vec3& pos, bool at2
     }
 }
 
-void CombatFx::Shot(World& world, Gun gun, const glm::vec3& origin, const glm::vec3& end, bool fromPlayer, bool tracer) {
+void CombatFx::Shot(World& world, Gun gun, const glm::vec3& origin, const glm::vec3& end, bool fromPlayer, bool tracer, std::uint32_t shooter) {
     if (!m_Active) return;
     ++m_ShotsHeard;
     const bool shotgun = gun == Gun::Shotgun;
     // The report: every layer of this gun's audio (close, mech, sub, tail, far), weighted by distance for the squad's guns.
     WeaponAudio::Get().SetListener(m_Listener);
-    WeaponAudio::Get().Shot(shotgun ? "870" : "ak", origin, fromPlayer);
+    WeaponAudio::Get().Shot(shotgun ? "870" : "ak", origin, fromPlayer, shooter);
 
     glm::vec3 dir = end - origin;
     const float len = glm::length(dir);
