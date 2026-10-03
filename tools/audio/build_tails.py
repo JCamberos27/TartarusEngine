@@ -20,7 +20,7 @@ import adsp
 import build_fire
 
 SR = adsp.SR
-MIX_DB = -4.0          # same bus balance as the generic tail
+# (mix_db comes from recipes/mix.json via mixspec.py, applied by abuild.update_manifest)
 PEAK_IN_DB = -12.0     # each slice is peak-normalised here before its gain_db, so layers of different recordings are comparable
 
 
@@ -84,7 +84,7 @@ def build(gun, cfg, sources):
             note = " + ".join(f"{os.path.basename(s['file'])[:40]} {s['start_s']:.2f}-{s['end_s']:.2f}s" for s in srcs)
             e = abuild.emit(rel, y, f"snd.{gun}.fire_tail_{cname}", "tail",
                             {"gun": gun, "element": f"fire_tail_{cname}", "space": cname, "variant": n, "source": note,
-                             "sources": srcs, "mix_db": MIX_DB, "mono_fold_loss_db": round(mono_fold_loss_db(y), 2)})
+                             "sources": srcs, "mono_fold_loss_db": round(mono_fold_loss_db(y), 2)})
             entries.append(e)
             print(f"{rel:56s} LUFS-M {e['lufs_m_max']:6.1f}  TP {e['true_peak_dbtp']:5.1f}  {e['length_s']:.2f}s  "
                   f"mono-fold {e['mono_fold_loss_db']:4.1f} dB  {note}")

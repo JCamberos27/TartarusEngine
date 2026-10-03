@@ -20,7 +20,7 @@ SR = adsp.SR
 _cache = {}
 # default bus balance of the five layers (every file is delivered at its own loudness target; the engine plays each
 # layer at mix_db relative to that, then a limiter on the weapon bus). Starting point for S2, not a mastering decision.
-MIX_DB = {"close": 0.0, "sub": -2.0, "mech": -3.0, "tail": -4.0, "far": -7.0}
+# (superseded: mix_db now comes from recipes/mix.json via mixspec.py, applied by abuild.update_manifest)
 
 
 def src(path):
@@ -189,7 +189,7 @@ def build(recipe_path, layers=None):
         rel = f"{d}/fire_{layer}_{n}.wav"
         e = abuild.emit(rel, y, f"snd.{gun}.fire_{layer}", layer,
                         {"gun": gun, "element": f"fire_{layer}", "variant": n, "source": note,
-                         "mix_db": MIX_DB[layer]}, mono=mono, sources=uses)
+                         }, mono=mono, sources=uses)
         out.append(e)
         print(f"{rel:46s} LUFS-M {e['lufs_m_max']:6.1f}  TP {e['true_peak_dbtp']:5.1f}  {e['length_s']:.2f}s  {note}")
     return out, [f"{d}/fire_{l}_" for l in (layers or LAYER_NAMES)]
