@@ -124,7 +124,7 @@ public:
         AudioEngine::SoundHandle Handle = AudioEngine::InvalidHandle;
     };
     // Every play (and every play that found no file): sim time, key, file ("" none), the set's voices, request.
-    using LogFn = std::function<void(double, const std::string&, const std::string&, int, const Request&, float, float)>;
+    using LogFn = std::function<void(double, const std::string&, const std::string&, int, const Request&, float, float, const SoundVoice*)>;
 
     explicit SoundPlayer(SoundBackend* backend = nullptr) : m_Backend(backend) {}
     void SetBackend(SoundBackend* backend) { m_Backend = backend; }
