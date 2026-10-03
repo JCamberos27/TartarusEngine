@@ -58,8 +58,16 @@ AudioEngine::Bus BusFrom(const std::string& s, AudioEngine::Bus fallback) {
 SoundSet ApplySetJson(const json& j, SoundSet s) {
     if (const auto it = j.find("files"); it != j.end() && it->is_array()) {
         s.Files.clear();
+        s.FileAnchorMs.clear(); // (the per-file values belonged to the files this replaces)
+        s.FileGainDb.clear();
+        s.FilePeakDb.clear();
         for (const auto& f : *it)
             if (f.is_string()) s.Files.push_back(f.get<std::string>());
+        s.FilesExplicit = !s.Files.empty();
+    }
+    if (const auto it = j.find("mixDb"); it != j.end() && it->is_number()) {
+        s.HasMixDb = true;
+        s.MixDb = it->get<float>();
     }
     s.Volume = Num(j, "volume", s.Volume);
     s.VolumeJitterDb = Num(j, "volumeJitterDb", s.VolumeJitterDb);
@@ -95,6 +103,7 @@ json SetToJson(const SoundSet& s) {
     j["stealFadeTime"] = s.StealFadeTime;
     j["loop"] = s.Loop;
     j["reverbSend"] = s.ReverbSend;
+    if (s.HasMixDb) j["mixDb"] = s.MixDb;
     if (s.Occlusion >= 0) j["occlusion"] = s.Occlusion > 0;
     return j;
 }
@@ -125,7 +134,10 @@ SoundSet SoundSet::FromJson(const std::string& key, const std::string& text, con
 
 std::string SoundSet::ToJson() const { return SetToJson(*this).dump(2); }
 
-float SoundSet::GainLin(size_t i) const { return i < FileGainDb.size() ? std::pow(10.0f, FileGainDb[i] / 20.0f) : 1.0f; }
+float SoundSet::GainLin(size_t i) const {
+    if (HasMixDb) return std::pow(10.0f, MixDb / 20.0f);
+    return i < FileGainDb.size() ? std::pow(10.0f, FileGainDb[i] / 20.0f) : 1.0f;
+}
 float SoundSet::PeakLin(size_t i) const { return i < FilePeakDb.size() ? std::pow(10.0f, FilePeakDb[i] / 20.0f) : 0.7f; }
 
 float BlendCurve::Weight(float distance) const {
@@ -143,6 +155,12 @@ bool SoundManifest::FromJson(const std::string& text, SoundManifest& out, std::s
         return false;
     }
     out.Entries.clear();
+    out.DistanceRefs.clear();
+    if (j.is_object())
+        if (const auto mix = j.find("mix"); mix != j.end() && mix->is_object())
+            if (const auto refs = mix->find("distance_refs_m"); refs != mix->end() && refs->is_object())
+                for (auto r = refs->begin(); r != refs->end(); ++r)
+                    if (r.value().is_number()) out.DistanceRefs[r.key()] = r.value().get<float>();
     auto add = [&](const std::string& file, const json& e) {
         if (!e.is_object() || file.empty()) return;
         SoundManifestEntry m;
@@ -153,6 +171,8 @@ bool SoundManifest::FromJson(const std::string& text, SoundManifest& out, std::s
         m.AnchorMs = Num(e, "anchor_ms", 0.0f);
         m.MixDb = Num(e, "mix_db", 0.0f);
         m.PeakDb = Num(e, "true_peak_dbtp", -3.0f);
+        m.Rt60S = Num(e, "rt60_s", 0.0f);
+        m.PreDelayMs = Num(e, "predelay_ms", 0.0f);
         m.Loop = Flag(e, "loop", false);
         if (!m.Key.empty()) out.Entries.push_back(std::move(m));
     };
@@ -168,6 +188,12 @@ bool SoundManifest::FromJson(const std::string& text, SoundManifest& out, std::s
     }
     std::sort(out.Entries.begin(), out.Entries.end(), [](const SoundManifestEntry& a, const SoundManifestEntry& b) { return a.File < b.File; });
     return true;
+}
+
+const SoundManifestEntry* SoundManifest::FirstFor(const std::string& key) const {
+    for (const SoundManifestEntry& e : Entries)
+        if (e.Key == key) return &e;
+    return nullptr;
 }
 
 std::vector<std::string> SoundManifest::FilesFor(const std::string& key) const {
@@ -262,7 +288,15 @@ struct EngineBackend : SoundBackend {
     void SetOcclusion(AudioEngine::SoundHandle h, float cutoffHz, float gain) override { AudioEngine::SetOcclusion(h, cutoffHz, gain); }
     void SetVoicePosition(AudioEngine::SoundHandle h, const glm::vec3& p) override { AudioEngine::SetPosition(h, p); }
     void SetReverbSendBus(AudioEngine::SoundHandle h, int bus) override { AudioEngine::SetReverbSendBus(h, bus); }
-    void SetReverb(const ReverbParams& p, int bus) override { AudioEngine::SetReverb(p, bus); }
+    void SetReverb(const AudioEngine::ReverbSpec& spec, int bus) override {
+        AudioEngine::ReverbSpec s = spec;
+        for (int i = 0; i < s.Count && i < 2; ++i) s.Layers[i].Ir = ProjectPaths::Resolve(s.Layers[i].Ir);
+        AudioEngine::SetReverb(s, bus);
+    }
+    void PreloadIr(const std::string& file) override {
+        if (AudioEngine::IsInitialized()) AudioEngine::PreloadIr(ProjectPaths::Resolve(file));
+    }
+    void ConfigureLimiter(const LimiterSettings& l) override { AudioEngine::SetMasterLimiter(l); }
     void SetReverbBusActive(int bus, bool active) override { AudioEngine::SetReverbEnabled(active, bus); }
     void ConfigureReverb(bool enabled, float returnLevel, float glideSeconds) override {
         AudioEngine::SetReverbEnabled(enabled);
@@ -380,6 +414,9 @@ SoundPlayer::Played SoundPlayer::Start(const SoundSet& set, int idx, const Reque
     SoundVoice v;
     v.File = set.Files[idx];
     v.Volume = set.Volume * req.Gain * jitter * set.GainLin((size_t)idx);
+    // 3D: the log rolloff puts Min / d on the level at distance d; calibrated sets are brought to the spec (mix_db) at their reference distance.
+    if (!req.At2D && set.RefDistance > set.MinDistance && set.MinDistance > 0.01f && set.Rolloff == AudioEngine::Rolloff::Logarithmic)
+        v.Volume *= set.RefDistance / set.MinDistance;
     v.Pitch = (set.PitchMin + (set.PitchMax - set.PitchMin) * Rand01()) * req.PitchScale;
     v.Loop = set.Loop;
     v.Bus = set.Bus;
@@ -602,7 +639,7 @@ WeaponAudioProfile WeaponAudioProfile::Default(const std::string& gun) {
         l.Curve = {full, zero, nearW, farW};
     };
     layer(p.Close, "close", 18.0f, 43.0f, 1.0f, 0.0f, 3.0f, 90.0f, 6, 0.03f);
-    layer(p.Mech, "mech", 10.0f, 30.0f, 1.0f, 0.0f, 2.0f, 45.0f, 6, 0.03f);
+    layer(p.Mech, "mech", 10.0f, 30.0f, 1.0f, 0.0f, 3.0f, 45.0f, 6, 0.03f);
     layer(p.Sub, "sub", 25.0f, 70.0f, 1.0f, 0.0f, 6.0f, 120.0f, 6, 0.05f);
     layer(p.Tail, "tail", 30.0f, 120.0f, 1.0f, 0.7f, 6.0f, 140.0f, 3, 0.25f);
     layer(p.Far, "far", 18.0f, 43.0f, 0.1f, 1.0f, 6.0f, 160.0f, 6, 0.1f);
@@ -614,25 +651,6 @@ WeaponAudioProfile WeaponAudioProfile::Default(const std::string& gun) {
         p.TailClass[c].Set.Key = k + "tail_" + SpaceClassName((SpaceClass)c);
     }
     for (const char* e : {"ads_in", "ads_out", "equip", "unequip"}) p.Aliases[e] = std::string("snd.foley.weapon.") + e;
-    // Until the recorded takes land, the placeholders the squad has always used.
-    const char* dir = "assets/Audio/Combat/";
-    if (gun == "ak") {
-        p.Close.Set.Files = {std::string(dir) + "ak_shot.wav", std::string(dir) + "ak_shot_b.wav"};
-        p.Far.Set.Files = {std::string(dir) + "ak_shot_far.wav"};
-    } else if (gun == "870") {
-        p.Close.Set.Files = {std::string(dir) + "shotgun_shot.wav"};
-        p.Far.Set.Files = {std::string(dir) + "shotgun_shot_far.wav"};
-    }
-    SoundSet dry;
-    dry.Key = "snd." + gun + ".dry_fire";
-    dry.Files = {std::string(dir) + "dry_fire.wav"};
-    dry.Volume = 0.6f;
-    dry.PitchMin = 0.95f;
-    dry.PitchMax = 1.05f;
-    dry.MinDistance = 1.0f;
-    dry.MaxDistance = 10.0f;
-    dry.MaxVoices = 2;
-    p.Events["dry_fire"] = dry;
     return p;
 }
 
@@ -652,6 +670,10 @@ void WeaponAudioProfile::ApplyComponent(const WeaponAudioComponent& c) {
     Far.Curve.FarDistance = Close.Curve.FarDistance;
     Far.Curve.NearWeight = c.FarMinWeight;
     Far.Curve.FarWeight = c.FarMaxWeight;
+    Close.Set.MinDistance = Mech.Set.MinDistance = std::max(c.ShotMinDistance, 0.1f);
+    Sub.Set.MinDistance = Tail.Set.MinDistance = Far.Set.MinDistance = std::max(c.BassMinDistance, 0.1f);
+    EventMinDistance = std::max(c.EventMinDistance, 0.1f);
+    EventMaxDistance = std::max(c.EventMaxDistance, EventMinDistance + 0.1f);
     Close.Set.MaxDistance = Mech.Set.MaxDistance = Sub.Set.MaxDistance = c.MaxDistance;
     Far.Set.MaxDistance = Tail.Set.MaxDistance = c.FarMaxDistance;
     Tail.Set.MaxVoices = std::max(1, c.TailMaxVoices);
@@ -664,6 +686,7 @@ void WeaponAudioProfile::ApplyComponent(const WeaponAudioComponent& c) {
     for (Layer& l : TailClass) { // the class tails follow the tail layer's voice policy
         l.Set.VolumeJitterDb = c.VolumeJitterDb;
         l.Set.MaxDistance = c.FarMaxDistance;
+        l.Set.MinDistance = Tail.Set.MinDistance;
         l.Set.MaxVoices = std::max(1, c.TailMaxVoices);
         l.Set.StealFadeTime = c.TailFadeTime;
     }
@@ -721,8 +744,8 @@ void WeaponAudioProfile::ApplyJson(const std::string& text) {
             if (!e.value().is_object()) continue;
             SoundSet base;
             if (const auto have = Events.find(e.key()); have != Events.end()) base = have->second;
-            base.MinDistance = 1.5f;
-            base.MaxDistance = 25.0f;
+            base.MinDistance = EventMinDistance;
+            base.MaxDistance = EventMaxDistance;
             SoundSet s = ApplySetJson(e.value(), base);
             s.Key = "snd." + Gun + "." + e.key();
             Events[e.key()] = s;
@@ -766,7 +789,19 @@ void WeaponAudio::InstallLog() {
     });
 }
 
+namespace {
+// Which manifest mix.distance_refs_m entry calibrates a set's 3D rolloff, by key.
+const char* RefNameForKey(const std::string& key) {
+    if (key.rfind("snd.impact.", 0) == 0) return "impact";
+    if (key == "snd.body_fall") return "body_fall";
+    const size_t dot = key.rfind('.');
+    if (key.rfind("snd.", 0) == 0 && dot != std::string::npos && key.compare(dot + 1, 5, "fire_") == 0) return "npc_shot";
+    return nullptr;
+}
+} // namespace
+
 void WeaponAudio::FillSet(SoundSet& set) {
+    if (const char* ref = RefNameForKey(set.Key)) set.RefDistance = m_Manifest.DistanceRef(ref);
     if (!set.Files.empty()) return;
     set.FileAnchorMs.clear();
     set.FileGainDb.clear();
@@ -806,6 +841,11 @@ void WeaponAudio::StartForTest(const std::string& projectRoot, SoundBackend* bac
     m_Keyed.clear();
     m_Bus = ReverbBusComponent{};
     m_ReverbValid = false;
+    m_ReverbSent = m_RemoteSent = AudioEngine::ReverbSpec{};
+    m_ListenerMix = ReverbZoneMix{};
+    m_Beds.clear();
+    m_AmbienceDebug.clear();
+    m_IrWarned = 0;
     m_World = nullptr;
     m_RemoteHoldUntil = -1e9;
     m_RemoteActive = false;
@@ -864,18 +904,20 @@ void WeaponAudio::Start(World& world, const std::string& projectRoot) {
             SoundSet fresh;
             fresh.Key = l->Set.Key;
             FillSet(fresh);
-            if (!fresh.Files.empty()) {
+            l->Set.RefDistance = fresh.RefDistance;
+            if (!fresh.Files.empty() && !l->Set.FilesExplicit) { // (a Data File's own files win over the manifest's)
                 l->Set.Files = fresh.Files;
                 l->Set.FileAnchorMs = fresh.FileAnchorMs;
                 l->Set.FileGainDb = fresh.FileGainDb;
                 l->Set.FilePeakDb = fresh.FilePeakDb;
+                if (fresh.Loop) l->Set.Loop = true;
             }
         }
         for (auto& [element, es] : p.Events) {
             SoundSet fresh;
             fresh.Key = es.Key;
             FillSet(fresh);
-            if (!fresh.Files.empty()) {
+            if (!fresh.Files.empty() && !es.FilesExplicit) {
                 es.Files = fresh.Files;
                 es.FileAnchorMs = fresh.FileAnchorMs;
                 es.FileGainDb = fresh.FileGainDb;
@@ -906,6 +948,11 @@ void WeaponAudio::Start(World& world, const std::string& projectRoot) {
         break;
     }
     m_ReverbValid = false;
+    m_ReverbSent = m_RemoteSent = AudioEngine::ReverbSpec{};
+    m_ListenerMix = ReverbZoneMix{};
+    m_Beds.clear();
+    m_AmbienceDebug.clear();
+    m_IrWarned = 0;
     m_World = &world;
     m_RemoteHoldUntil = -1e9;
     m_RemoteActive = false;
@@ -914,6 +961,19 @@ void WeaponAudio::Start(World& world, const std::string& projectRoot) {
     InstallRouting();
     m_Player.SetBlockedFn(EnvironmentBlockedFn());
     m_Player.Backend().ConfigureReverb(m_Bus.Enabled, m_Bus.ReturnLevel, m_Bus.GlideTime);
+    {   // the master limiter
+        LimiterSettings lim;
+        lim.Enabled = m_Bus.MasterLimiterEnabled;
+        lim.CeilingDb = m_Bus.MasterCeilingDb;
+        lim.LookaheadMs = m_Bus.MasterLookaheadMs;
+        lim.ReleaseMs = m_Bus.MasterReleaseMs;
+        m_Player.Backend().ConfigureLimiter(lim);
+    }
+    // The impulse responses: the classes' (manifest ir.<class>) and the zones' own, decoded and prepared now, not on the first frame in a room.
+    for (int c = 0; c < kSpaceClassCount; ++c)
+        if (const std::string ir = ClassIr(c); !ir.empty()) m_Player.Backend().PreloadIr(ir);
+    for (const ReverbZoneVolume& z : m_Zones.Zones())
+        if (!z.Reverb.Ir.empty()) m_Player.Backend().PreloadIr(z.Reverb.Ir);
     m_Active = true;
 }
 
@@ -926,14 +986,16 @@ void WeaponAudio::Stop() {
     if (m_Active) {
         const AudioEngine::ReverbStats rs = AudioEngine::GetReverbStats();
         if (rs.Callbacks > 0)
-            std::printf("[WeaponAudio] reverb bus: %llu audio callbacks (%d frames), mean %.1f us, max %.1f us per callback\n", (unsigned long long)rs.Callbacks, rs.Frames,
-                        rs.TotalMicros / (double)rs.Callbacks, rs.MaxMicros);
+            std::printf("[WeaponAudio] reverb bus: %llu audio callbacks (%d frames), mean %.1f us, max %.1f us per callback; tail worker %llu blocks, mean %.1f us, %llu late\n",
+                        (unsigned long long)rs.Callbacks, rs.Frames, rs.TotalMicros / (double)rs.Callbacks, rs.MaxMicros, (unsigned long long)rs.WorkerJobs,
+                        rs.WorkerJobs ? rs.WorkerMicros / (double)rs.WorkerJobs : 0.0, (unsigned long long)rs.LateBlocks);
         AudioEngine::ResetReverbStats();
     }
     if (m_Active && (m_PathCalls > 0 || m_Refreshes > 0))
         std::printf("[WeaponAudio] portals: %d path searches, mean %.2f us; %d zone/portal refreshes, mean %.2f us; %d portal(s), %d zone(s)\n", m_PathCalls,
                     m_PathCalls ? m_PathMicros / m_PathCalls : 0.0, m_Refreshes, m_Refreshes ? m_RefreshMicros / m_Refreshes : 0.0, (int)m_Zones.Portals().size(),
                     (int)m_Zones.Zones().size());
+    StopAmbience();
     m_Player.StopAll();
     m_Player.SetBlockedFn(nullptr); // (a test's line-of-sight function must not outlive its locals)
     m_Player.SetPathFn(nullptr);
@@ -968,37 +1030,39 @@ void WeaponAudio::Update(float dt) {
         if (m_Player.PortalVoices() > 0) m_RemoteHoldUntil = m_Player.Now() + (double)m_Bus.RemoteReverbHold;
         const bool active = m_Player.Now() < m_RemoteHoldUntil;
         if (active) {
-            const ReverbPreset& r = m_Player.RemoteRoom();
-            ReverbParams rp;
-            rp.RoomSize = r.RoomSize;
-            rp.DecayTime = r.DecayTime;
-            rp.HfDamping = r.HfDamping;
-            rp.PreDelayMs = r.PreDelayMs;
-            rp.WetLevel = r.WetLevel * m_Bus.WetScale;
-            rp.EarlyLateMix = r.EarlyLateMix;
-            m_Player.Backend().SetReverb(rp, 1);
+            AudioEngine::ReverbSpec rs;
+            AudioEngine::ReverbLayerSpec layer;
+            if (BuildLayer(m_Player.RemoteRoom(), 1.0f, layer)) {
+                rs.Count = 1;
+                rs.Layers[0] = layer;
+            }
+            if (SpecDiffers(rs, m_RemoteSent)) {
+                m_Player.Backend().SetReverb(rs, 1);
+                m_RemoteSent = rs;
+            }
         }
         if (active != m_RemoteActive) {
             m_Player.Backend().SetReverbBusActive(1, active);
             m_RemoteActive = active;
         }
     }
-    // The reverb follows the listener's space: told when it moves enough to matter (the DSP glides to what it is told).
+    // The reverb follows the listener's space: told when it changes enough to matter (the DSP glides to what it is told).
     if (m_Bus.Enabled) {
-        const ReverbParams p = ReverbAt(m_Listener);
-        const ReverbParams& q = m_ReverbSent;
-        const float d = std::fabs(p.RoomSize - q.RoomSize) + std::fabs(p.DecayTime - q.DecayTime) + std::fabs(p.HfDamping - q.HfDamping) +
-                        std::fabs(p.PreDelayMs - q.PreDelayMs) * 0.02f + std::fabs(p.WetLevel - q.WetLevel) + std::fabs(p.EarlyLateMix - q.EarlyLateMix);
-        if (!m_ReverbValid || d > 1e-3f) {
-            m_Player.Backend().SetReverb(p);
-            m_ReverbSent = p;
+        const AudioEngine::ReverbSpec spec = ReverbAt(m_Listener);
+        if (!m_ReverbValid || SpecDiffers(spec, m_ReverbSent)) {
+            m_Player.Backend().SetReverb(spec, 0);
+            m_ReverbSent = spec;
             m_ReverbValid = true;
             if (m_LogFile && m_Player.Now() - m_LastReverbLog >= 0.1) {
                 m_LastReverbLog = m_Player.Now();
-                std::fprintf(m_LogFile, "R %.4f %.4f %.4f %.4f %.3f %.4f %.4f\n", m_Player.Now(), p.RoomSize, p.DecayTime, p.HfDamping, p.PreDelayMs, p.WetLevel, p.EarlyLateMix);
+                std::fprintf(m_LogFile, "R %.4f %d", m_Player.Now(), spec.Count);
+                for (int i = 0; i < spec.Count; ++i) std::fprintf(m_LogFile, " %s %.3f %.2f %.1f", spec.Layers[i].Ir.c_str(), spec.Layers[i].Weight, spec.Layers[i].WetDb, spec.Layers[i].PreDelayMs);
+                std::fprintf(m_LogFile, "\n");
             }
         }
     }
+    m_ListenerMix = m_Zones.Mix(m_Listener);
+    UpdateAmbience(dt);
 }
 
 SoundPlayer::VoicePath WeaponAudio::PathFor(const glm::vec3& listener, const glm::vec3& source) {
@@ -1058,7 +1122,6 @@ float WeaponAudio::SendFor(const std::string& key) const {
     }
     if (key.rfind("snd.casing.", 0) == 0) return ClampSend(b.SendCasings);
     if (key.rfind("snd.impact.", 0) == 0 || key == "snd.flyby") return ClampSend(b.SendImpacts);
-    if (key.rfind("snd.voice", 0) == 0) return ClampSend(b.SendVoice);
     if (key.rfind("snd.", 0) == 0) {
         const size_t dot = key.find('.', 4);
         const std::string el = dot == std::string::npos ? std::string() : key.substr(dot + 1);
@@ -1069,34 +1132,188 @@ float WeaponAudio::SendFor(const std::string& key) const {
     return 0.0f;
 }
 
-ReverbParams WeaponAudio::ReverbAt(const glm::vec3& pos) {
+std::string WeaponAudio::ClassIr(int tailClass) const {
+    const SoundManifestEntry* e = m_Manifest.FirstFor(std::string("ir.") + SpaceClassName((SpaceClass)std::clamp(tailClass, 0, kSpaceClassCount - 1)));
+    return e ? e->File : std::string();
+}
+
+float WeaponAudio::ClassPreDelayMs(int tailClass) const {
+    const SoundManifestEntry* e = m_Manifest.FirstFor(std::string("ir.") + SpaceClassName((SpaceClass)std::clamp(tailClass, 0, kSpaceClassCount - 1)));
+    return e ? e->PreDelayMs : 0.0f;
+}
+
+float WeaponAudio::ClassWetDb(int tailClass) const {
+    float db = m_Bus.WetIndoorSmallDb;
+    switch (tailClass) {
+    case 0: db = m_Bus.WetOutdoorOpenDb; break;
+    case 1: db = m_Bus.WetOutdoorUrbanDb; break;
+    case 3: db = m_Bus.WetIndoorLargeDb; break;
+    default: break;
+    }
+    return db + 20.0f * std::log10(std::max(m_Bus.WetScale, 1e-4f));
+}
+
+bool WeaponAudio::BuildLayer(const ReverbPreset& p, float weight, AudioEngine::ReverbLayerSpec& out) {
+    const int cls = std::clamp(p.Class, 0, kSpaceClassCount - 1);
+    std::string ir = p.Ir.empty() ? ClassIr(cls) : p.Ir;
+    if (ir.empty()) { // no recorded impulse response for this space: the reverb is silently off for it (said once per class)
+        if (!(m_IrWarned & (1u << cls))) {
+            m_IrWarned |= 1u << cls;
+            std::printf("[WeaponAudio] no impulse response for %s (manifest key ir.%s): the reverb is off there\n", SpaceClassName((SpaceClass)cls), SpaceClassName((SpaceClass)cls));
+        }
+        return false;
+    }
+    out.Ir = std::move(ir);
+    out.Weight = weight;
+    out.WetDb = ClassWetDb(cls) + p.WetDb;
+    out.PreDelayMs = p.PreDelayMs >= 0.0f ? p.PreDelayMs : ClassPreDelayMs(cls);
+    out.HfDampDb = p.HfDampDb;
+    out.LowCutHz = p.LowCutHz >= 0.0f ? p.LowCutHz : m_Bus.LowCutHz;
+    return true;
+}
+
+bool WeaponAudio::SpecDiffers(const AudioEngine::ReverbSpec& a, const AudioEngine::ReverbSpec& b) {
+    if (a.Count != b.Count) return true;
+    for (int i = 0; i < a.Count; ++i) {
+        const AudioEngine::ReverbLayerSpec &x = a.Layers[i], &y = b.Layers[i];
+        if (x.Ir != y.Ir || std::fabs(x.Weight - y.Weight) > 0.002f || std::fabs(x.WetDb - y.WetDb) > 0.05f || std::fabs(x.PreDelayMs - y.PreDelayMs) > 0.2f ||
+            std::fabs(x.HfDampDb - y.HfDampDb) > 0.05f || std::fabs(x.LowCutHz - y.LowCutHz) > 0.5f)
+            return true;
+    }
+    return false;
+}
+
+AudioEngine::ReverbSpec WeaponAudio::ReverbAt(const glm::vec3& pos) {
     const ReverbZoneMix z = m_Zones.Mix(pos);
-    ReverbPreset acc = z.Reverb;
+    AudioEngine::ReverbLayerSpec cands[ReverbZoneMix::kMaxClaims + kSpaceClassCount];
+    int n = 0;
+    auto add = [&](const ReverbPreset& p, float w) {
+        if (w <= 1e-4f) return;
+        AudioEngine::ReverbLayerSpec L;
+        if (!BuildLayer(p, w, L)) return;
+        for (int i = 0; i < n; ++i) // the same impulse response twice (two zones of a class, a zone and the probe): one layer
+            if (cands[i].Ir == L.Ir) {
+                const float t = cands[i].Weight + L.Weight;
+                const float a = cands[i].Weight / t, b = L.Weight / t;
+                cands[i].WetDb = cands[i].WetDb * a + L.WetDb * b;
+                cands[i].PreDelayMs = cands[i].PreDelayMs * a + L.PreDelayMs * b;
+                cands[i].HfDampDb = cands[i].HfDampDb * a + L.HfDampDb * b;
+                cands[i].LowCutHz = cands[i].LowCutHz * a + L.LowCutHz * b;
+                cands[i].Weight = t;
+                return;
+            }
+        cands[n++] = std::move(L);
+    };
+    for (int i = 0; i < z.ClaimCount; ++i) add(m_Zones.Zones()[(size_t)z.Claims[i].Zone].Reverb, z.Claims[i].Weight);
     if (z.ProbeShare > 1e-3f) {
         constexpr std::uint32_t kListenerProbe = 0xFFFFFFFDu;
         EnvironmentSettings env;
         if (const auto it = m_Profiles.find("ak"); it != m_Profiles.end()) env = it->second.Env;
         else if (!m_Profiles.empty()) env = m_Profiles.begin()->second.Env;
         const EnvironmentReading& r = m_ListenerProbe.Query(kListenerProbe, pos, m_Player.Now(), env);
-        for (int i = 0; i < kSpaceClassCount; ++i) {
-            const ReverbPreset pre = ReverbPresetFor(i);
-            const float w = z.ProbeShare * r.Weights[i];
-            acc.RoomSize += w * pre.RoomSize;
-            acc.DecayTime += w * pre.DecayTime;
-            acc.HfDamping += w * pre.HfDamping;
-            acc.PreDelayMs += w * pre.PreDelayMs;
-            acc.WetLevel += w * pre.WetLevel;
-            acc.EarlyLateMix += w * pre.EarlyLateMix;
-        }
+        for (int i = 0; i < kSpaceClassCount; ++i) add(ReverbPresetFor(i), z.ProbeShare * r.Weights[i]);
     }
-    ReverbParams p;
-    p.RoomSize = acc.RoomSize;
-    p.DecayTime = acc.DecayTime;
-    p.HfDamping = acc.HfDamping;
-    p.PreDelayMs = acc.PreDelayMs;
-    p.WetLevel = acc.WetLevel * m_Bus.WetScale;
-    p.EarlyLateMix = acc.EarlyLateMix;
-    return p;
+    // the two heaviest, weights renormalised; a second layer under 3 % is not worth a convolver
+    AudioEngine::ReverbSpec spec;
+    int first = -1, second = -1;
+    for (int i = 0; i < n; ++i) {
+        if (first < 0 || cands[i].Weight > cands[first].Weight) { second = first; first = i; }
+        else if (second < 0 || cands[i].Weight > cands[second].Weight) second = i;
+    }
+    if (first < 0) return spec;
+    float total = cands[first].Weight;
+    if (second >= 0 && cands[second].Weight >= WeaponAudioProfile::kMinClassWeight * (total + cands[second].Weight)) total += cands[second].Weight;
+    else second = -1;
+    spec.Layers[spec.Count] = std::move(cands[first]);
+    spec.Layers[spec.Count++].Weight /= total;
+    if (second >= 0) {
+        spec.Layers[spec.Count] = std::move(cands[second]);
+        spec.Layers[spec.Count++].Weight /= total;
+    }
+    return spec;
+}
+
+// --- zone ambience beds -------------------------------------------------------------------------------------------------
+// Each Reverb Zone with an Ambience key adds a looping 2D bed. A bed's level is sqrt(the weight the listener's zones with that key
+// claim) x the zones' Ambience Volume (equal-power, so two zones crossfading do not dip), and it moves by at most 1 per second:
+// a hard zone edge or a teleport is a 1 s fade, never a step. A bed starts when it becomes audible and stops once faded out.
+
+void WeaponAudio::StopAmbience() {
+    for (Bed& b : m_Beds)
+        if (b.Handle != AudioEngine::InvalidHandle) m_Player.Backend().Stop(b.Handle);
+    m_Beds.clear();
+    m_AmbienceDebug.clear();
+}
+
+void WeaponAudio::UpdateAmbience(float dt) {
+    const std::string* keys[ReverbZoneMix::kMaxClaims];
+    float take[ReverbZoneMix::kMaxClaims], vol[ReverbZoneMix::kMaxClaims];
+    int n = 0;
+    for (int i = 0; i < m_ListenerMix.ClaimCount; ++i) {
+        const ReverbZoneVolume& z = m_Zones.Zones()[(size_t)m_ListenerMix.Claims[i].Zone];
+        if (z.Ambience.empty()) continue;
+        int k = 0;
+        while (k < n && *keys[k] != z.Ambience) ++k;
+        if (k == n) {
+            keys[n] = &z.Ambience;
+            take[n] = vol[n] = 0.0f;
+            ++n;
+        }
+        take[k] += m_ListenerMix.Claims[i].Weight;
+        vol[k] += m_ListenerMix.Claims[i].Weight * z.AmbienceVolume;
+    }
+    for (Bed& b : m_Beds) b.Target = 0.0f;
+    for (int k = 0; k < n; ++k) {
+        Bed* bed = nullptr;
+        for (Bed& b : m_Beds)
+            if (b.Key == *keys[k]) bed = &b;
+        if (!bed) {
+            m_Beds.emplace_back();
+            m_Beds.back().Key = *keys[k];
+            bed = &m_Beds.back();
+        }
+        bed->Target = take[k] > 1e-5f ? std::sqrt(take[k]) * (vol[k] / take[k]) : 0.0f;
+    }
+    m_AmbienceDebug.clear();
+    for (Bed& b : m_Beds) {
+        const float step = std::max(dt, 0.0f) / 1.0f;
+        b.Level += std::clamp(b.Target - b.Level, -step, step);
+        if (b.Level < 1e-4f && b.Target <= 0.0f) {
+            b.Level = 0.0f;
+            if (b.Handle != AudioEngine::InvalidHandle) {
+                m_Player.Backend().Stop(b.Handle);
+                b.Handle = AudioEngine::InvalidHandle;
+            }
+        } else if (b.Handle == AudioEngine::InvalidHandle || !m_Player.Backend().IsPlaying(b.Handle)) {
+            b.Handle = AudioEngine::InvalidHandle;
+            SoundSet* set = KeySet(b.Key, [](SoundSet& s) {
+                s.Loop = true;
+                s.Bus = AudioEngine::Bus::Ambient;
+                s.MaxVoices = 2;
+                s.StealFadeTime = 0.0f;
+                s.ReverbSend = 0.0f;  // the bed already holds its room
+                s.Occlusion = 0;
+            });
+            if (!set->Files.empty() && b.Level > 1e-4f) {
+                SoundPlayer::Request r;
+                r.At2D = true;
+                r.Gain = b.Level;
+                const SoundPlayer::Played pl = m_Player.Play(*set, r);
+                if (pl.Started) {
+                    b.Handle = pl.Handle;
+                    b.BaseVolume = pl.Volume / b.Level;
+                }
+            }
+        } else {
+            m_Player.Backend().SetVolume(b.Handle, b.BaseVolume * b.Level);
+        }
+        AmbienceDebug d;
+        d.Key = b.Key;
+        d.Target = b.Target;
+        d.Level = b.Level;
+        d.Playing = b.Handle != AudioEngine::InvalidHandle;
+        m_AmbienceDebug.push_back(d);
+    }
 }
 
 SoundSet* WeaponAudio::KeySet(const std::string& key, const std::function<void(SoundSet&)>& init) {
@@ -1309,8 +1526,8 @@ SoundSet* WeaponAudio::EventSet(WeaponAudioProfile& p, const std::string& elemen
     if (it == p.Events.end()) {
         SoundSet s;
         s.Key = "snd." + p.Gun + "." + element;
-        s.MinDistance = 1.5f;
-        s.MaxDistance = 25.0f;
+        s.MinDistance = p.EventMinDistance;
+        s.MaxDistance = p.EventMaxDistance;
         s.MaxVoices = 4;
         s.PitchMin = 0.98f;
         s.PitchMax = 1.02f;
@@ -1330,8 +1547,9 @@ SoundSet* WeaponAudio::FoleySet(const std::string& category, const std::string& 
     if (it == m_Foley.end()) {
         SoundSet s;
         s.Key = key;
-        s.MinDistance = 2.0f;
-        s.MaxDistance = 30.0f;
+        const auto gun = m_Profiles.find("ak") != m_Profiles.end() ? m_Profiles.find("ak") : m_Profiles.begin();
+        s.MinDistance = gun != m_Profiles.end() ? gun->second.EventMinDistance : 1.5f; // gear sounds: the gun events' reach
+        s.MaxDistance = gun != m_Profiles.end() ? gun->second.EventMaxDistance : 25.0f;
         s.MaxVoices = 4;
         s.StealFadeTime = 0.05f;
         FillSet(s);
