@@ -118,8 +118,9 @@ void ConvolutionReverb::ProcessChunk(const float* mono, float* outL, float* outR
     for (int k = 0; k < count; ++k) {
         Inst* s = m_Inst[k].load(std::memory_order_acquire);
         if (!s) continue;
-        // what the target wants of this IR
-        float tw = 0.0f, tWet = 0.0f, tPd = 0.0f, tHf = 0.0f, tLc = 0.0f;
+        // what the target wants of this IR; one the target no longer names keeps its level and filters while its weight fades out
+        // (only the weight carries the crossfade: gliding the level to 0 as well would dip the sum)
+        float tw = 0.0f, tWet = s->Wet, tPd = s->Delay * 1000.0f / sr, tHf = s->Hf, tLc = s->Lc;
         for (int l = 0; l < m_Cur.Count && l < 2; ++l) {
             const ReverbRtLayer& L = m_Cur.Layers[l];
             if (L.Instance != k) continue;

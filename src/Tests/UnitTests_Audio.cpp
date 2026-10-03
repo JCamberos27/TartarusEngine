@@ -1964,7 +1964,7 @@ void TestConvolutionReverbCrossfadeContinuity() {
     float steadyStep = 0.0f, steadyStepB = 0.0f, crossStep = 0.0f;
     for (size_t i = steadyEnd - 4800 + 1; i < steadyEnd; ++i) steadyStep = std::max(steadyStep, std::fabs(wet[i] - wet[i - 1]));
     for (size_t i = wet.size() - 4800 + 1; i < wet.size(); ++i) steadyStepB = std::max(steadyStepB, std::fabs(wet[i] - wet[i - 1]));
-    for (size_t i = steadyEnd + 1; i < steadyEnd + 33600; ++i) crossStep = std::max(crossStep, std::fabs(wet[i] - wet[i - 1]));
+    for (size_t i = steadyEnd + 1; i < wet.size(); ++i) crossStep = std::max(crossStep, std::fabs(wet[i] - wet[i - 1]));
     CHECK(steadyStep > 1e-4f && steadyStepB > 1e-4f && crossStep < 1.6f * std::max(steadyStep, steadyStepB)); // a click would be many times the tone's own step
     // Equal power: noise through two uncorrelated responses of the same energy keeps its level across the crossfade.
     ConvolutionReverb v2(rate, false);
@@ -2436,12 +2436,11 @@ void TestOfflineEngineLimiterAndReverbCalibration() {
     const AudioEngine::SoundHandle h = AudioEngine::Play(tonePath, 4.0f);
     CHECK(h != AudioEngine::InvalidHandle);
     render(0.7f);
-    const float ceil = std::pow(10.0f, -1.0f / 20.0f);
     CHECK(LoudnessMeter::PeakDb(pre, 0, pre.size() / 2) > 9.0f);                       // +12 dBFS going in
     CHECK(LoudnessMeter::PeakDb(master, 0, master.size() / 2) <= -1.0f + 1e-3f);      // never over the ceiling
     CHECK(AudioEngine::TakeLimiterGainReductionDb() > 10.0f && AudioEngine::GetMeter(AudioEngine::MeterMaster).PeakDb <= -0.99f);
     CHECK(AudioEngine::VoiceCount() >= 0);
-    // The limiter is a setting: raised to 0 dB the same tone reaches it.
+    // The limiter is a setting: lowered to -6 dB the same tone comes out at -6 dB.
     LimiterSettings ls = AudioEngine::GetMasterLimiter();
     CHECK(ls.Enabled && ls.CeilingDb == -1.0f && ls.LookaheadMs == 1.5f && ls.ReleaseMs == 80.0f);
     ls.CeilingDb = -6.0f;
