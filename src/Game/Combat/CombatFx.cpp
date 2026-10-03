@@ -16,13 +16,30 @@ namespace {
 
 constexpr int kFlashLights = 6;
 constexpr float kFlameAhead = 0.01f;   // the flame's seat ahead of the muzzle face
-const char* kDir = "assets/Audio/Combat/";
 
-std::string Path(const std::string& file) { return ProjectPaths::Resolve(std::string(kDir) + file); }
-
-const char* kAllSounds[] = {"ak_shot.wav", "ak_shot_b.wav", "ak_shot_far.wav", "shotgun_shot.wav", "shotgun_shot_far.wav",
-                            "shotgun_pump.wav", "reload.wav", "dry_fire.wav", "whizz_1.wav", "whizz_2.wav", "whizz_3.wav",
-                            "flesh_hit.wav", "hitmarker.wav", "hitmarker_kill.wav", "body_fall.wav"};
+// The recorded one-shots CombatFx plays itself (manifest keys, tools/audio build_ui.py): the hitmarker ticks and a body falling.
+// Each is a keyed set of WeaponAudio, so the manifest's mix_db is its level; nothing here scales it.
+SoundSet* UiSet(const char* key) {
+    return WeaponAudio::Get().KeySet(key, [](SoundSet& s) {
+        s.MaxVoices = 4;
+        s.StealFadeTime = 0.01f;
+        s.ReverbSend = 0.0f; // a HUD tick is not in the room
+        s.Occlusion = 0;
+    });
+}
+SoundSet* BodyFallSet() {
+    return WeaponAudio::Get().KeySet("snd.body_fall", [](SoundSet& s) {
+        s.MinDistance = 2.0f;
+        s.MaxDistance = 30.0f;
+        s.MaxVoices = 4;
+        s.PitchMin = 0.95f;
+        s.PitchMax = 1.05f;
+        s.VolumeJitterDb = 1.0f;
+    });
+}
+void PlaySet(SoundSet* set, const glm::vec3& pos, bool at2D, float volume) {
+    if (set && !set->Files.empty()) WeaponAudio::Get().PlayKeyed(*set, pos, at2D, volume);
+}
 
 entt::entity MakeParticles(World& world, const char* name, float life, float startSize, float endSize, const glm::vec3& c0,
                            const glm::vec3& c1, float a0, float a1, float intensity, int blend) {
@@ -61,8 +78,6 @@ void CombatFx::Start(World& world) {
     m_Active = true;
     m_Now = 0.0f;
     m_ShotsHeard = m_Whizzes = 0;
-    if (AudioEngine::IsInitialized())
-        for (const char* s : kAllSounds) AudioEngine::Load(Path(s)); // decoded up front: no hitch on the first shot
     WeaponAudio::Get().Start(world); // the guns' report layers, gear sounds and the foley (Play-mode audio, whatever else is in the scene)
     WeaponAudio::Get().SetLogFile(m_Log);
     ImpactAudio::Get().Start(world);
@@ -123,21 +138,6 @@ void CombatFx::Stop(World& world) {
         *e = entt::null;
     }
     m_Active = false;
-}
-
-void CombatFx::PlaySound(const std::string& file, const glm::vec3& pos, bool at2D, float volume, float pitch, float minDist,
-                         float maxDist) {
-    if (m_Log)
-        std::fprintf(m_Log, "S %.4f %s %.3f %.3f %d %.3f %.3f %.3f %.2f %.2f\n", m_Now, file.c_str(), volume, pitch, at2D ? 1 : 0, pos.x,
-                     pos.y, pos.z, minDist, maxDist);
-    if (!AudioEngine::IsInitialized()) return;
-    const AudioEngine::SoundHandle h = AudioEngine::Play(Path(file), std::clamp(volume, 0.0f, 1.0f), false, AudioEngine::Bus::SFX);
-    if (h == AudioEngine::InvalidHandle) return;
-    AudioEngine::SetPitch(h, pitch);
-    if (!at2D) {
-        AudioEngine::SetPosition(h, pos);
-        AudioEngine::SetAttenuation(h, minDist, maxDist, 1.0f);
-    }
 }
 
 void CombatFx::Shot(World& world, Gun gun, const glm::vec3& origin, const glm::vec3& end, bool fromPlayer, bool tracer, std::uint32_t shooter) {
@@ -246,38 +246,21 @@ void CombatFx::Impact(World& world, std::uint32_t entity, const glm::vec3& point
 void CombatFx::Whizz(const glm::vec3& point, float miss) {
     if (!m_Active) return;
     const int before = ImpactAudio::Get().Played().Flybys;
-    if (ImpactAudio::Get().Flyby(point, miss)) { // the recorded flyby: no placeholder on top of it
-        if (ImpactAudio::Get().Played().Flybys > before) ++m_Whizzes;
-        return;
-    }
-    if (miss > 1.6f) return; // the placeholder keeps its old reach
-    if (m_Now - m_LastWhizz < 0.07f) return; // a burst reads as a few cracks, not a smear
-    m_LastWhizz = m_Now;
-    ++m_Whizzes;
-    static const char* kWhizz[] = {"whizz_1.wav", "whizz_2.wav", "whizz_3.wav"};
-    PlaySound(kWhizz[(int)(Rand01() * 2.999f)], point, false, 0.9f, 0.92f + 0.16f * Rand01(), 0.4f, 6.0f);
+    if (ImpactAudio::Get().Flyby(point, miss) && ImpactAudio::Get().Played().Flybys > before) ++m_Whizzes; // the recorded flyby (snd.flyby)
 }
 
 void CombatFx::Play(Cue cue, const glm::vec3& pos, bool at2D, float volume) {
     if (!m_Active) return;
-    const float pitch = 0.95f + 0.1f * Rand01();
     switch (cue) {
-    // The soldiers' own weapons now sound the pump and the reload from their animators' snd.* events; these cues are the
-    // fallback for a gun whose sets have no files (and a pump / reload from before the recorded takes).
+    // The pump, the reload and the dry fire are the weapons' own: an animator's snd.* event plays the recorded take
+    // (snd.<gun>.pump_back, mag_out, dry_fire ...), so these cues make no sound of their own.
     case Cue::Pump:
-        if (WeaponAudio::Get().HasEventFiles("870", "pump_back")) break;
-        PlaySound("shotgun_pump.wav", pos, at2D, 0.7f * volume, pitch, 1.5f, 25.0f); break;
     case Cue::Reload:
-        if (WeaponAudio::Get().HasEventFiles("ak", "mag_out") && WeaponAudio::Get().HasEventFiles("870", "shell_insert")) break;
-        PlaySound("reload.wav", pos, at2D, 0.7f * volume, pitch, 1.5f, 18.0f);
-        break;
-    case Cue::DryFire: PlaySound("dry_fire.wav", pos, at2D, 0.6f * volume, pitch, 1.0f, 10.0f); break;
-    case Cue::BodyFall: PlaySound("body_fall.wav", pos, at2D, 0.9f * volume, pitch, 2.0f, 30.0f); break;
-    case Cue::FleshHit:
-        if (ImpactAudio::Get().Flesh(pos, at2D, volume)) break; // the recorded flesh impact, not the placeholder on top of it
-        PlaySound("flesh_hit.wav", pos, at2D, 0.8f * volume, pitch, 1.0f, 25.0f); break;
-    case Cue::Hitmarker: PlaySound("hitmarker.wav", pos, true, 0.45f * volume, 1.0f, 1, 1); break;
-    case Cue::HitmarkerKill: PlaySound("hitmarker_kill.wav", pos, true, 0.6f * volume, 1.0f, 1, 1); break;
+    case Cue::DryFire: break;
+    case Cue::BodyFall: PlaySet(BodyFallSet(), pos, at2D, volume); break;
+    case Cue::FleshHit: ImpactAudio::Get().Flesh(pos, at2D, volume); break; // the recorded flesh impact (snd.impact.flesh)
+    case Cue::Hitmarker: PlaySet(UiSet("snd.ui.hitmarker"), pos, true, volume); break;
+    case Cue::HitmarkerKill: PlaySet(UiSet("snd.ui.hitmarker_kill"), pos, true, volume); break;
     }
 }
 
