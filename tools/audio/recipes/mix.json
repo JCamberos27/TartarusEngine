@@ -12,7 +12,12 @@
       -2.0,
       1.5
     ],
-    "variant_spread_db": 3.0
+    "variant_spread_db": 3.0,
+    "gun_db": {
+      "_doc": "dB on a gun's whole report (close / sub / mech) over the 0 dB reference, which is measured without it: the 12-gauge hits harder than the 5.45 carbine (user, 2026-10-03: 'it should be loud'). Its close layer is built denser (remington870_fire.json close.target / max_gr_db) to leave the peak headroom for it.",
+      "ak": 0.0,
+      "870": 2.0
+    }
   },
   "levels": {
     "_doc": "dB relative to the player's shot (= 0). Tiers: 0 anchor (your gun) / 1 threat (soldiers' shots, flybys) / 2 feedback (hit markers, melee, flesh) / 3 your hands (reloads, gear) / 4 world (impacts, bodies) / 5 movement (steps; soldiers' louder than yours, see distance.npc_step) / 6 debris (casings) / 7 beds (ambience). A 3D category's level holds at its distance model's ref_m (see \"distance\").",

@@ -97,18 +97,27 @@ def _layer_of(e):
     return classify(e)[0][5:]
 
 
-def shot_comp_db(e, lufs_m):
+def gun_db(e):
+    """The gun's own offset on its report (reference.gun_db, e.g. the shotgun above the carbine); 0 for anything else."""
+    m = re.match(r"snd\.(ak|870)\.fire_", e["key"])
+    return float(SPEC["reference"].get("gun_db", {}).get(m.group(1), 0.0)) if m else 0.0
+
+
+def shot_comp_db(e, lufs_m, extra_db=0.0):
     """Per-file compensation of a close / sub / mech variant to its layer's loudness target (clamped), so every variant plays
-    equally loud; never so much that the file's true peak, played at this mix_db, passes PEAK_CAP_DB."""
+    equally loud; never so much that the file's true peak, played at this mix_db (+ extra_db), passes PEAK_CAP_DB."""
     lo, hi = SPEC["reference"]["shot_layer_comp_db"]
     off = SPEC["reference"]["shot_layer_db"][_layer_of(e)]
     tgt = abuild.TARGETS["layers"][e["layer"]]["target"]
-    hi = min(hi, PEAK_CAP_DB - e["true_peak_dbtp"] - off)
+    hi = min(hi, PEAK_CAP_DB - e["true_peak_dbtp"] - off - extra_db)
     return min(hi, max(lo, tgt - lufs_m))
 
 
-def shot_layer_mix_db(e, lufs_m):
-    return SPEC["reference"]["shot_layer_db"][_layer_of(e)] + shot_comp_db(e, lufs_m)
+def shot_layer_mix_db(e, lufs_m, with_gun=True):
+    """The nominal layer offset + the compensation (+ the gun's offset; the reference is measured without it, so a louder
+    shotgun doesn't move the rest of the mix)."""
+    g = gun_db(e) if with_gun else 0.0
+    return SPEC["reference"]["shot_layer_db"][_layer_of(e)] + shot_comp_db(e, lufs_m, g) + g
 
 
 def compute_reference(files, lufs_of):
@@ -126,7 +135,7 @@ def compute_reference(files, lufs_of):
                 e = v[i % len(v)]
                 x = read_wav(e)
                 n = min(len(mix), len(x))
-                mix[:n] += (x[:n] * 10 ** (shot_layer_mix_db(e, lufs_of(e)) / 20)).astype(np.float32)
+                mix[:n] += (x[:n] * 10 ** (shot_layer_mix_db(e, lufs_of(e), with_gun=False) / 20)).astype(np.float32)
             res.append(adsp.lufs(mix)[1])
         per_gun[gun] = float(np.mean(res))
     if not per_gun:

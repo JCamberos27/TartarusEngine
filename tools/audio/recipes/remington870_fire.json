@@ -1,5 +1,5 @@
 {
- "_doc": "Remington 870 gunfire: same layer set as the AK. 12 ga: huge low-mid blast, little crack. close = Herrington 11-87 report (wide stereo) + SRM-12 / Mk14 body weight; sub is deeper and longer; mech is the recoil thump of the receiver / forend (the pump itself is its own element, fired from the Pump clip). Round 4: fire_sub is built from real recordings only (low-passed shot + the same shot pitched down); no synthesis. Round 4: no algorithmic reverb anywhere; the far layer is the real recorded tail, low-passed and compressed. Round 5 (2026-10-03 revamp): 8 close variants over the three Herrington recordings, each layered with a different shot of the real Remington 870 (Audiobeast, medium warehouse, 10 m: 80 Hz - 2.5 kHz, 7 dB down) for the gun's own boom, SRM-12 / Mk14 weight or the TS Sound 12-gauge crack on some; chain eased for crest.",
+ "_doc": "Remington 870 gunfire: same layer set as the AK. 12 ga: huge low-mid blast, little crack. close = Herrington 11-87 report (wide stereo) + SRM-12 / Mk14 body weight; sub is deeper and longer; mech is the recoil thump of the receiver / forend (the pump itself is its own element, fired from the Pump clip). Round 4: fire_sub is built from real recordings only (low-passed shot + the same shot pitched down); no synthesis. Round 4: no algorithmic reverb anywhere; the far layer is the real recorded tail, low-passed and compressed. Round 5 (2026-10-03 revamp): 8 close variants over the three Herrington recordings, each layered with a different shot of the real Remington 870 (Audiobeast, medium warehouse, 10 m: 80 Hz - 2.5 kHz, 7 dB down) for the gun's own boom, SRM-12 / Mk14 weight or the TS Sound 12-gauge crack on some; chain eased for crest. Round 6 (2026-10-03): the close layer rebuilt from the Tactical Shooter Pack only, on the AK's recipe - the pack's SRM-12 shotgun shot (the Herrington takes start soft and clip flat 40-60 ms in) under a TR15 crack (high-passed), an R08 / WK-11 mid layer (150 Hz - 5 kHz) and Mk14 weight, variety from the layers and +-0.9 st, through the AK's chain with a shotgun's low end - so both guns share one recording style. (The Audiobeast warehouse and TS Sound layers are gone from it.)",
  "gun": "870",
  "dir": "Weapons/Remington870",
  "rpm": 70,
@@ -20,81 +20,122 @@
     ],
     [
      2600,
-     1.5,
+     2.5,
      0.8
     ],
     [
      6500,
-     1.0,
+     2.0,
      0.7
     ]
    ],
-   "attack": 0.3,
-   "sustain": 0.05,
+   "attack": 0.6,
+   "sustain": 0.0,
    "comp": {
     "threshold_db": -20,
     "ratio": 3.0,
-    "attack_ms": 4,
-    "release_ms": 160
+    "attack_ms": 3,
+    "release_ms": 140
    },
-   "drive": 1.35
+   "drive": 1.4
   },
   "variants": [
    {
     "base": {
-     "src": "Herrington_11-87/Fire/S_Herrington_11-87_Unsuppressed_1_With_Tail.wav"
-    },
-    "layer": {
-     "src": "sonniss/Audiobeast/Audiobeast_Medium_Warehouse_Remington_870",
-     "t": 22.39,
-     "dur": 0.35,
-     "hp": 80,
-     "lp": 2500,
-     "gain_db": -7
-    },
-    "body": {
-     "src": "SRM-12/Actions/S_SRM-12_ShotOnly.wav",
-     "dur": 0.4,
-     "lp": 700,
-     "gain_db": -9
-    }
-   },
-   {
-    "base": {
-     "src": "Herrington_11-87/Fire/S_Herrington_11-87_Unsuppressed_2_With_Tail.wav"
-    },
-    "layer": {
-     "src": "sonniss/Audiobeast/Audiobeast_Medium_Warehouse_Remington_870",
-     "t": 29.16,
-     "dur": 0.35,
-     "hp": 80,
-     "lp": 2500,
-     "gain_db": -7
+     "src": "SRM-12/Actions/S_SRM-12_ShotOnly.wav"
     },
     "crack": {
-     "src": "sonniss/TS Sound/Shotgun_Fire_Round Eject_01",
-     "dur": 0.12,
+     "src": "TR15/Fire/S_TR15_V1_Unsupressed_With_Tail_0.wav",
+     "dur": 0.14,
      "hp": 2000,
-     "gain_db": -8
-    }
-   },
-   {
-    "base": {
-     "src": "Herrington_11-87/Fire/S_Herrington_11-87_Unsuppressed_3_With_Tail.wav"
+     "gain_db": -3
     },
     "layer": {
-     "src": "sonniss/Audiobeast/Audiobeast_Medium_Warehouse_Remington_870",
-     "t": 34.48,
-     "dur": 0.35,
-     "hp": 80,
-     "lp": 2500,
+     "src": "R08/S_R08_Fire_01.WAV",
+     "dur": 0.3,
+     "hp": 150,
+     "lp": 5000,
      "gain_db": -7
     },
     "body": {
      "src": "Mk14EBR/S_Mk14EBR_Fire_02.WAV",
-     "dur": 0.4,
+     "dur": 0.45,
      "lp": 650,
-     "gain_db": -9
+     "gain_db": -7
+    }
+   },
+   {
+    "base": {
+     "src": "SRM-12/Actions/S_SRM-12_ShotOnly.wav"
+    },
+    "crack": {
+     "src": "TR15/Fire/S_TR15_V2_Unsupressed_With_Tail_0.wav",
+     "dur": 0.14,
+     "hp": 2100,
+     "gain_db": -3
+    },
+    "layer": {
+     "src": "WK-11_Viper/Fire/S_WK-11_Viper_Shot_1_With_Tail.wav",
+     "dur": 0.3,
+     "hp": 150,
+     "lp": 5000,
+     "gain_db": -7
+    },
+    "body": {
+     "src": "Mk14EBR/S_Mk14EBR_Fire_03.WAV",
+     "dur": 0.45,
+     "lp": 650,
+     "gain_db": -7
+    },
+    "pitch": -0.6
+   },
+   {
+    "base": {
+     "src": "SRM-12/Actions/S_SRM-12_ShotOnly.wav"
+    },
+    "crack": {
+     "src": "TR15/Fire/S_TR15_V3_Unsuppressed_With_Tail_0.wav",
+     "dur": 0.14,
+     "hp": 2200,
+     "gain_db": -3
+    },
+    "layer": {
+     "src": "R08/S_R08_Fire_02.WAV",
+     "dur": 0.3,
+     "hp": 150,
+     "lp": 5000,
+     "gain_db": -7
+    },
+    "body": {
+     "src": "Mk14EBR/S_Mk14EBR_Fire_01.WAV",
+     "dur": 0.45,
+     "lp": 650,
+     "gain_db": -7
+    },
+    "pitch": 0.6
+   },
+   {
+    "base": {
+     "src": "SRM-12/Actions/S_SRM-12_ShotOnly.wav"
+    },
+    "crack": {
+     "src": "TR15/Fire/S_TR15_V4_Unsuppressed_With_Tail_0.wav",
+     "dur": 0.14,
+     "hp": 2300,
+     "gain_db": -3
+    },
+    "layer": {
+     "src": "WK-11_Viper/Fire/S_WK-11_Viper_2_With_Tail.wav",
+     "dur": 0.3,
+     "hp": 150,
+     "lp": 5000,
+     "gain_db": -7
+    },
+    "body": {
+     "src": "Mk14EBR/S_Mk14EBR_Fire_02.WAV",
+     "dur": 0.45,
+     "lp": 650,
+     "gain_db": -7
     },
     "pitch": -0.3
    },
@@ -102,107 +143,105 @@
     "base": {
      "src": "SRM-12/Actions/S_SRM-12_ShotOnly.wav"
     },
-    "layer": {
-     "src": "sonniss/Audiobeast/Audiobeast_Medium_Warehouse_Remington_870",
-     "t": 38.64,
-     "dur": 0.35,
-     "hp": 80,
-     "lp": 2500,
-     "gain_db": -5
-    },
-    "body": {
-     "src": "Herrington_11-87/Fire/S_Herrington_11-87_Unsuppressed_1_With_Tail.wav",
-     "dur": 0.4,
-     "lp": 600,
-     "gain_db": -6
-    }
-   },
-   {
-    "base": {
-     "src": "sonniss/TS Sound/Shotgun_Fire_Round Eject_01"
-    },
-    "layer": {
-     "src": "sonniss/Audiobeast/Audiobeast_Medium_Warehouse_Remington_870",
-     "t": 43.2,
-     "dur": 0.35,
-     "hp": 80,
-     "lp": 2500,
-     "gain_db": -6
-    },
-    "body": {
-     "src": "Herrington_11-87/Fire/S_Herrington_11-87_Unsuppressed_2_With_Tail.wav",
-     "dur": 0.4,
-     "lp": 600,
-     "gain_db": -1
-    },
     "crack": {
-     "src": "Herrington_11-87/Fire/S_Herrington_11-87_Unsuppressed_2_With_Tail.wav",
-     "dur": 0.12,
-     "hp": 2400,
-     "gain_db": -9
-    }
-   },
-   {
-    "base": {
-     "src": "Herrington_11-87/Fire/S_Herrington_11-87_Unsuppressed_3_With_Tail.wav"
+     "src": "TR15/Fire/S_TR15_V1_Unsupressed_With_Tail_1.wav",
+     "dur": 0.14,
+     "hp": 2000,
+     "gain_db": -3
     },
     "layer": {
-     "src": "sonniss/Audiobeast/Audiobeast_Medium_Warehouse_Remington_870",
-     "t": 46.78,
-     "dur": 0.35,
-     "hp": 80,
-     "lp": 2500,
-     "gain_db": -6
-    },
-    "crack": {
-     "src": "sonniss/TS Sound/Shotgun_Fire_Round Eject_01",
-     "dur": 0.12,
-     "hp": 2200,
-     "gain_db": -9
-    },
-    "pitch": 0.8
-   },
-   {
-    "base": {
-     "src": "Herrington_11-87/Fire/S_Herrington_11-87_Unsuppressed_1_With_Tail.wav"
-    },
-    "layer": {
-     "src": "sonniss/Audiobeast/Audiobeast_Medium_Warehouse_Remington_870",
-     "t": 49.51,
-     "dur": 0.35,
-     "hp": 80,
-     "lp": 2500,
+     "src": "R08/S_R08_Fire_03.WAV",
+     "dur": 0.3,
+     "hp": 150,
+     "lp": 5000,
      "gain_db": -7
     },
     "body": {
-     "src": "SRM-12/Actions/S_SRM-12_ShotOnly.wav",
-     "dur": 0.4,
+     "src": "Mk14EBR/S_Mk14EBR_Fire_03.WAV",
+     "dur": 0.45,
      "lp": 650,
-     "gain_db": -9
+     "gain_db": -7
     },
-    "pitch": -0.8
+    "pitch": 0.3
    },
    {
     "base": {
      "src": "SRM-12/Actions/S_SRM-12_ShotOnly.wav"
     },
+    "crack": {
+     "src": "TR15/Fire/S_TR15_V2_Unsupressed_With_Tail_1.wav",
+     "dur": 0.14,
+     "hp": 2100,
+     "gain_db": -3
+    },
     "layer": {
-     "src": "sonniss/Audiobeast/Audiobeast_Medium_Warehouse_Remington_870",
-     "t": 52.92,
-     "dur": 0.35,
-     "hp": 80,
-     "lp": 2500,
-     "gain_db": -5
+     "src": "R08/S_R08_Fire_01.WAV",
+     "dur": 0.3,
+     "hp": 150,
+     "lp": 5000,
+     "gain_db": -6
+    },
+    "body": {
+     "src": "Mk14EBR/S_Mk14EBR_Fire_01.WAV",
+     "dur": 0.45,
+     "lp": 650,
+     "gain_db": -6
+    },
+    "pitch": -0.4
+   },
+   {
+    "base": {
+     "src": "SRM-12/Actions/S_SRM-12_ShotOnly.wav"
     },
     "crack": {
-     "src": "sonniss/TS Sound/Shotgun_Fire_Round Eject_01",
-     "dur": 0.12,
-     "hp": 2400,
-     "gain_db": -10
+     "src": "TR15/Fire/S_TR15_V3_Unsuppressed_With_Tail_1.wav",
+     "dur": 0.14,
+     "hp": 2200,
+     "gain_db": -3
     },
-    "pitch": 0.6
+    "layer": {
+     "src": "Mk14EBR/S_Mk14EBR_Fire_03.WAV",
+     "dur": 0.3,
+     "hp": 150,
+     "lp": 5000,
+     "gain_db": -7
+    },
+    "body": {
+     "src": "Mk14EBR/S_Mk14EBR_Fire_02.WAV",
+     "dur": 0.45,
+     "lp": 650,
+     "gain_db": -7
+    },
+    "pitch": 0.9
+   },
+   {
+    "base": {
+     "src": "SRM-12/Actions/S_SRM-12_ShotOnly.wav"
+    },
+    "crack": {
+     "src": "TR15/Fire/S_TR15_V4_Unsuppressed_With_Tail_1.wav",
+     "dur": 0.14,
+     "hp": 2300,
+     "gain_db": -3
+    },
+    "layer": {
+     "src": "Mk14EBR/S_Mk14EBR_Fire_01.WAV",
+     "dur": 0.3,
+     "hp": 150,
+     "lp": 5000,
+     "gain_db": -7
+    },
+    "body": {
+     "src": "Mk14EBR/S_Mk14EBR_Fire_03.WAV",
+     "dur": 0.45,
+     "lp": 650,
+     "gain_db": -7
+    },
+    "pitch": 0.15
    }
-  ]
+  ],
+  "target": -12.0,
+  "max_gr_db": 8.0
  },
  "mech": {
   "length_s": 0.35,
