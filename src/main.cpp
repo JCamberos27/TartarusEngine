@@ -68,9 +68,11 @@
 #include "CrosshairOverlay.h"
 #include "WeaponFxRenderer.h" // the weapon's laser and bullet holes
 #include "BulletHoles.h"
+#include "Audio/AudioTest.h" // --audio-test
 #include "ShellCasings.h"
 #include "AI/NpcDirector.h"     // the enemy squad
 #include "Combat/CombatFx.h"
+#include "Audio/FoleyAudio.h"
 #include "AI/NpcTest.h"         // --npc-test
 #include "Combat/PlayerVitals.h" // the player's health, death and respawn
 #include "PlayerHudOverlay.h"
@@ -568,6 +570,9 @@ int main(int argc, char** argv) {
         CrashHandler::SetInteractive(false);
         return RunUnitTests() == 0 ? 0 : 1;
     }
+    // `--audio-test [scene]`: the audio engine's own test, offline (no window, no audio device): a scripted tour of a scene's reverb zones.
+    for (int i = 1; i < argc; ++i)
+        if (std::string(argv[i]) == "--audio-test") return RunAudioTest(argc, argv);
     const bool resaveMode = !resaveIn.empty();
     // --smoke-test and --resave are non-interactive: no splash, and fatal errors go to stderr +
     // a nonzero exit instead of a modal MessageBox that a headless/CI desktop never dismisses
@@ -1498,7 +1503,10 @@ int main(int argc, char** argv) {
             playControllerEntity = FindFirstPersonController(world);
             {   // the scene's effect and HUD tuning: the first FX / HUD Settings component, defaults when none
                 FxHudSettingsComponent fx;
-                for (auto e : world.Registry.view<FxHudSettingsComponent>()) { fx = world.Registry.get<FxHudSettingsComponent>(e); break; }
+                if (const auto first = world.Registry.view<FxHudSettingsComponent>(); first.begin() != first.end()) { // the first one counts
+                    const entt::entity e = *first.begin();
+                    fx = world.Registry.get<FxHudSettingsComponent>(e);
+                }
                 combatFx.Settings = fx;
                 combatHud.Settings = fx;
                 weaponFx.Settings = fx;
@@ -1567,6 +1575,24 @@ int main(int argc, char** argv) {
                         std::error_code ec;
                         std::filesystem::create_directories(npcTest->RecordDir(), ec);
                         combatFx.SetAudioLog((std::filesystem::path(npcTest->RecordDir()) / "audio.txt").string());
+                    }
+                }
+                // Play-mode audio (the guns' report layers, gear sounds, foley) and the muzzle effects don't wait for a squad:
+                // a scene with no NPC Spawns, --weapon-test and --stock-probe have the player's gun too.
+                if (!combatFx.Active()) {
+                    combatFx.Start(world);
+                    if (weaponTest) {
+                        // WEAPON_TEST_AUDIO_LOG=<file>, or NPC_TEST_RECORD=<dir> (-> <dir>/audio.txt): every weapon / foley voice, timed.
+#pragma warning(suppress : 4996)
+                        const char* logFile = std::getenv("WEAPON_TEST_AUDIO_LOG");
+#pragma warning(suppress : 4996)
+                        const char* recordDir = std::getenv("NPC_TEST_RECORD");
+                        if (logFile && *logFile) combatFx.SetAudioLog(logFile);
+                        else if (recordDir && *recordDir) {
+                            std::error_code ec;
+                            std::filesystem::create_directories(recordDir, ec);
+                            combatFx.SetAudioLog((std::filesystem::path(recordDir) / "audio.txt").string());
+                        }
                     }
                 }
             } else if ((playCameraEntity = FindActiveSceneCamera(world)) != entt::null) {
@@ -2775,12 +2801,12 @@ int main(int argc, char** argv) {
                                 continue; // a soldier, not a wall: no hole
                             }
                         }
+                        combatFx.Impact(world, hit.Entity, glm::vec3(hit.Point[0], hit.Point[1], hit.Point[2]));
                         bulletHoles.Add(world, static_cast<entt::entity>(hit.Entity), hit.Point, hit.Normal, hit.HoleRadius);
                     }
                     // Every pellet's line: the report, and rounds cracking past soldiers' heads (suppression).
                     for (const FirstPersonPresentation::ShotTrace& t : firstPersonPresentation.TakeShotTraces()) {
-                        if (!npcDirector.Active()) continue;
-                        npcDirector.OnPlayerShotLine(t.Origin, t.End);
+                        if (npcDirector.Active()) npcDirector.OnPlayerShotLine(t.Origin, t.End);
                         if (t.FirstPellet)
                             combatFx.Shot(world, firstPersonPresentation.Set().Gameplay.Pellets > 1 ? CombatFx::Gun::Shotgun : CombatFx::Gun::Rifle,
                                           t.Origin, t.End, true, false);
@@ -2803,17 +2829,38 @@ int main(int argc, char** argv) {
                 if (npcDirector.Active()) {
                     PROFILE_SCOPE("Enemy AI Late");
                     npcDirector.LateUpdate(world, gameDt, playerSnap);
-                    for (const NpcDirector::Impact& imp : npcDirector.TakeImpacts())
+                    for (const NpcDirector::Impact& imp : npcDirector.TakeImpacts()) {
+                        combatFx.Impact(world, imp.Entity, glm::vec3(imp.Point[0], imp.Point[1], imp.Point[2]));
                         bulletHoles.Add(world, static_cast<entt::entity>(imp.Entity), imp.Point, imp.Normal, imp.Radius);
+                    }
                     for (const CasingSpawn& spawn : npcDirector.TakeEjections()) shellCasings.Spawn(world, assets, spawn);
                     for (const DamageEvent& e : npcDirector.TakePlayerDamage()) {
                         const float before = playerVitals.Health();
                         playerVitals.ApplyDamage(e.Amount, e.SourcePos);
                         if (playerVitals.Health() < before) combatFx.Play(CombatFx::Cue::FleshHit, e.Point, true, 0.8f);
                     }
-                    combatFx.SetListener(player.Cam.Position, player.Cam.Front());
-                    combatFx.Update(world, gameDt);
                     if (npcTest) npcTest->After(world, npcDirector, playerVitals, player);
+                }
+                combatFx.SetListener(player.Cam.Position, player.Cam.Front());
+                combatFx.Update(world, gameDt); // (a no-op until Start: runs with or without a squad)
+                if (playUsesPlayer && combatFx.Active()) {
+                    FoleyPlayerInput fi;
+                    fi.Velocity = player.Velocity;
+                    fi.Feet = player.Cam.Position - glm::vec3(0.0f, player.EyeHeight, 0.0f);
+                    if (float foot[3], r = 0.3f, cyl = 0.6f; PhysicsWorld::HasCharacter()) {
+                        PhysicsWorld::GetCharacterCapsule(foot, &r, &cyl);
+                        fi.Feet = glm::vec3(foot[0], foot[1], foot[2]);
+                    }
+                    fi.Grounded = player.Grounded;
+                    fi.Sprinting = weaponTest ? weaponTest->Sprint() : (gameHasInput && InputMap::GetButton("Sprint"));
+                    fi.Crouched = player.Crouched;
+                    fi.Jumped = player.Jumped;
+                    fi.HaveFootHeights = firstPersonBody.FootHeights(world, fi.FootHeight); // steps on the body's touch-downs
+                    if (firstPersonPresentation.IsActive()) {
+                        fi.WalkStride = firstPersonPresentation.Set().Procedural.Bob.WalkStride;
+                        fi.SprintStride = firstPersonPresentation.Set().Procedural.Bob.SprintStride;
+                    }
+                    FoleyAudio::Get().UpdatePlayer(world, gameDt, fi);
                 }
                 if (playUsesPlayer) {
                     playerVitals.Tick(gameDt);
@@ -4299,19 +4346,26 @@ int main(int argc, char** argv) {
                     stbi_write_png(out.c_str(), outW, outH, 4, image.data(), outW * 4);
                 }
                 // NPC_TEST_RECORD=<dir>: both views every other frame (30 fps of the fixed 60 Hz), for a video.
-                if (npcTest && playing && !npcTest->RecordDir().empty()) {
+                // (--weapon-test records the same way: its frames are the fixed step too, 30 fps, into the same dir.)
+                static std::string weaponRecordDir = [] {
+#pragma warning(suppress : 4996)
+                    const char* r = std::getenv("NPC_TEST_RECORD");
+                    return r ? std::string(r) : std::string();
+                }();
+                const std::string recordDir = npcTest ? npcTest->RecordDir() : (weaponTest ? weaponRecordDir : std::string());
+                if ((npcTest || weaponTest) && playing && !recordDir.empty()) {
                     static int recordFrame = 0;
-                    const int recordStep = npcTest->RecordStep();
+                    const int recordStep = npcTest ? npcTest->RecordStep() : 2;
                     if ((recordFrame++ % recordStep) == 0) {
                         std::error_code ec;
-                        std::filesystem::create_directories(npcTest->RecordDir(), ec);
+                        std::filesystem::create_directories(recordDir, ec);
                         auto save = [&](unsigned fbo, int w, int h, const char* stem) {
                             glBindFramebuffer(GL_READ_FRAMEBUFFER, fbo);
                             std::vector<unsigned char> px = Screenshot::GrabRegion(0, 0, w, h);
                             stbi_flip_vertically_on_write(1);
                             char name[64];
                             std::snprintf(name, sizeof name, "%s_%05d.jpg", stem, recordFrame / recordStep);
-                            stbi_write_jpg((std::filesystem::path(npcTest->RecordDir()) / name).string().c_str(), w, h, 4, px.data(), 92);
+                            stbi_write_jpg((std::filesystem::path(recordDir) / name).string().c_str(), w, h, 4, px.data(), 92);
                             stbi_flip_vertically_on_write(0);
                         };
                         save(gameView.GetFramebuffer().Handle(), gvWidth, gvHeight, "game");

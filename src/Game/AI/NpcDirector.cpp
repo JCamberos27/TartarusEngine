@@ -1,6 +1,7 @@
 #include "NpcDirector.h"
 
 #include "AssetLibrary.h"
+#include "Audio/FoleyAudio.h"
 #include "Combat/CombatFx.h"
 #include "Components.h"
 #include "FirstPersonPresentation.h"
@@ -82,6 +83,121 @@ void SetTreeActive(World& world, entt::entity root, bool active) {
 }
 
 } // namespace
+
+// ---- squad callouts (plain scheduling, no audio) ----
+namespace {
+
+struct CallDef { float Priority, Cooldown, Duration; bool Responds; };
+// Order = CallKind. Priority decides who may cut the channel; Duration is how long the call holds the channel;
+// Responds: a squadmate may answer with a "copy".
+const CallDef kCalls[(int)CallKind::Count] = {
+    {7, 8.0f, 2.63f, true},   {5, 6.0f, 2.15f, false},  {6, 6.0f, 2.26f, false},  {5, 8.0f, 1.80f, true},
+    {5, 8.0f, 1.79f, true},   {4, 8.0f, 1.67f, true},   {6, 10.0f, 1.99f, true},  {5, 10.0f, 2.18f, false},
+    {8, 5.0f, 2.36f, true},   {9, 4.0f, 2.17f, false},  {3, 10.0f, 1.38f, false}, {4, 12.0f, 1.90f, false},
+    {6, 20.0f, 1.91f, false}, {3, 12.0f, 1.69f, false}, {4, 10.0f, 1.77f, true},  {3, 10.0f, 1.90f, false},
+    {2, 15.0f, 1.64f, false}, {1, 25.0f, 1.96f, false}, {8, 3.0f, 2.16f, false},  {0, 0.0f, 1.12f, false},
+};
+constexpr float kCallGap = 0.18f;       // silence on the channel after a call
+constexpr float kCopyDelay = 0.3f;
+
+// A repeatable pseudo-random 0..1 (the AI's own generator is left alone, so its stream is unchanged).
+float Hash01(int a, float b) {
+    const float v = std::sin((float)a * 12.9898f + b * 78.233f) * 43758.5453f;
+    return v - std::floor(v);
+}
+
+} // namespace
+
+NpcDirector::CallChannel& NpcDirector::CallChan(int squad) {
+    squad = std::max(0, squad);
+    while ((int)m_CallChannels.size() <= squad) m_CallChannels.emplace_back();
+    return m_CallChannels[(size_t)squad];
+}
+
+void NpcDirector::Callout(Npc& n, CallKind ev) {
+    if (n.Dummy) return; // no radio
+    const CallDef& def = kCalls[(int)ev];
+    if (m_Now - n.LastCallout < 2.5f && def.Priority < 7) return; // urgent calls skip the per-soldier gap
+    CallChannel& c = CallChan(n.Squad);
+    if (def.Cooldown > 0.0f && m_Now - c.LastEvent[(int)ev] < def.Cooldown) return;
+    if (m_Now < c.BusyUntil) {
+        if (def.Priority <= (float)c.OnAirPriority) return;
+        c.BusyUntil = m_Now; // cut in
+    }
+    c.RespPending = false;
+    c.OnAirPriority = (int)def.Priority;
+    c.BusyUntil = m_Now + def.Duration + kCallGap;
+    c.LastEvent[(int)ev] = m_Now;
+    if (def.Responds) {
+        // A squadmate to answer "copy": another one who's alive within earshot.
+        bool anyone = false;
+        for (const auto& up : m_Npcs) {
+            if (!up || up->Dead || up->Index == n.Index || up->Squad != n.Squad) continue;
+            if (glm::length(up->Feet - n.Feet) < 40.0f) { anyone = true; break; }
+        }
+        m_CallRng = m_CallRng * 1664525u + 1013904223u;
+        if (anyone && (float)(m_CallRng >> 8) / 16777216.0f < 0.6f) {
+            c.RespPending = true;
+            c.RespAt = c.BusyUntil + kCopyDelay;
+        }
+    }
+    n.LastCallout = m_Now;
+    // Squadmates in earshot who aren't busy shooting glance toward whoever called.
+    for (auto& o : m_Npcs) {
+        if (!o || o->Dead || o.get() == &n || o->Squad != n.Squad || o->Intent.Fire) continue;
+        if (glm::length(o->Feet - n.Feet) > 18.0f) continue;
+        o->GlanceAt = n.Eye;
+        o->GlanceUntil = m_Now + 0.7f + 0.6f * Hash01(o->Index, m_Now);
+    }
+}
+
+void NpcDirector::UpdateCallouts(const PlayerSnapshot& p) {
+    // A pending "copy" takes the channel once the call has ended.
+    for (CallChannel& c : m_CallChannels) {
+        if (!c.RespPending || m_Now < c.RespAt) continue;
+        c.RespPending = false;
+        if (m_Now >= c.BusyUntil) {
+            const CallDef& def = kCalls[(int)CallKind::Copy];
+            c.OnAirPriority = (int)def.Priority;
+            c.BusyUntil = m_Now + def.Duration + kCallGap;
+            c.LastEvent[(int)CallKind::Copy] = m_Now;
+        }
+    }
+    // The player went down: the nearest soldier who was in the fight confirms it.
+    if (p.Dead && !m_PlayerWasDead) {
+        Npc* who = nullptr;
+        float best = 1e9f;
+        for (auto& up : m_Npcs) {
+            if (!up || up->Dead || !up->Mem.Known) continue;
+            const float d = glm::length(up->Feet - p.Feet);
+            if (d < best) { best = d; who = up.get(); }
+        }
+        if (who) Callout(*who, CallKind::TargetDown);
+    }
+    m_PlayerWasDead = p.Dead;
+
+    for (auto& up : m_Npcs) {
+        if (!up || up->Dead) continue;
+        Npc& n = *up;
+        const bool reloading = n.Reloading && n.Mem.Known;
+        if (reloading && !n.VcReloading) Callout(n, CallKind::Reloading);
+        n.VcReloading = reloading;
+        const bool covering = n.Intent.Suppress && n.TriggerHeld;
+        if (covering && !n.VcCovering) Callout(n, CallKind::Covering);
+        n.VcCovering = covering;
+        const bool suspicious = !n.Mem.Known && n.Mem.Awareness > 0.3f;
+        if (suspicious && !n.VcSuspicious) Callout(n, CallKind::Suspicious);
+        n.VcSuspicious = suspicious;
+        // Idle chatter, now and then, while nothing is going on.
+        if (n.Doing == Behaviour::Idle && !n.Mem.Known) {
+            if (n.NextChatter <= 0.0f) n.NextChatter = m_Now + 10.0f + 25.0f * Hash01(n.Index, m_Now);
+            else if (m_Now >= n.NextChatter) {
+                Callout(n, CallKind::Idle);
+                n.NextChatter = m_Now + 25.0f + 35.0f * Hash01(n.Index + 7, m_Now);
+            }
+        }
+    }
+}
 
 const char* BehaviourName(Behaviour b) {
     switch (b) {
@@ -255,9 +371,9 @@ bool NpcDirector::Start(World& world, AssetLibrary& assets, const FirstPersonCon
     m_Active = true;
     m_Started = false;
     m_Now = 0.0f;
-    m_Voice.Reset();
+    m_CallChannels.clear();
+    m_CallRng = 0xBA4Cu;
     m_PlayerWasDead = false;
-    if (!m_Voice.Loaded()) m_Voice.LoadManifest(ProjectPaths::Resolve("assets/Audio/Voice/combine"));
     Log::Info("Enemy AI: " + std::to_string(m_Spawns.size()) + " spawn(s), squad of " + std::to_string(m_SquadSize) + ".");
     return true;
 }
@@ -286,7 +402,8 @@ void NpcDirector::Stop(World& world) {
     m_Active = m_Started = false;
     m_ShootersNow = m_MaxShooters = 0;
     m_NextName = 1;
-    m_Voice.Reset();
+    m_CallChannels.clear();
+    m_CallRng = 0xBA4Cu;
 }
 
 void NpcDirector::BuildNav(World& world) {
@@ -617,7 +734,7 @@ void NpcDirector::Think(World& world, AssetLibrary& assets, float dt, const Play
     m_ShootersNow = shooters;
     m_MaxShooters = std::max(m_MaxShooters, shooters);
     Respawns(world, assets, p);
-    UpdateVoice(p);
+    UpdateCallouts(p);
     m_Noises.erase(std::remove_if(m_Noises.begin(), m_Noises.end(), [&](const Noise& z) { return m_Now - z.Time > 0.6f; }),
                    m_Noises.end());
     m_ThinkMs = std::chrono::duration<float, std::milli>(std::chrono::steady_clock::now() - t0).count();
@@ -641,7 +758,7 @@ void NpcDirector::Perceive(World& world, Npc& n, const PlayerSnapshot& p, float 
             const Npc* o = z.Source < (int)m_Npcs.size() ? m_Npcs[(size_t)z.Source].get() : nullptr;
             if (o && o->Squad == n.Squad && o->Mem.Known && glm::length(z.Pos - n.SightEye) < z.Radius) {
                 n.Mem.Awareness = 1.0f;
-                if (!n.Mem.Known) { n.Mem.Known = true; Callout(n, Bark::ContactRelay); }
+                if (!n.Mem.Known) { n.Mem.Known = true; Callout(n, CallKind::ContactRelay); }
                 if (o->Mem.LastSeen > n.Mem.LastSeen) {
                     n.Mem.LastKnown = o->Mem.LastKnown;
                     n.Mem.LastSeen = o->Mem.LastSeen;
@@ -654,7 +771,7 @@ void NpcDirector::Perceive(World& world, Npc& n, const PlayerSnapshot& p, float 
         HearNoise(n.Mem, n.SightEye, z.Pos, z.Radius, z.Loudness, m_Now);
         if (!wasKnown && n.Mem.Known) {
             n.ReactionLeft = std::max(n.ReactionLeft, ReactionTime(n.Skill, m_Difficulty, true, 0.5f));
-            Callout(n, Bark::Gunfire);
+            Callout(n, CallKind::Gunfire);
         }
     }
 
@@ -721,7 +838,7 @@ void NpcDirector::Perceive(World& world, Npc& n, const PlayerSnapshot& p, float 
             n.ReactionLeft = std::max(n.ReactionLeft, 0.35f);
             ++m_Tactics.Startles;
         }
-        Callout(n, Bark::Contact);
+        Callout(n, CallKind::Contact);
     } else if (n.Mem.Visible && !wasVisible && n.Mem.Known) {
         // Back in sight after a while: a shorter reaction, and the first round may go wide again.
         if (m_Now - lastSeen > 1.5f) {
@@ -917,7 +1034,7 @@ void NpcDirector::UpdateCoverFire(Squad& s) {
     best->CoverFireOrder = m_Now + 2.5f;
     s.CoverFirer = best->Index;
     ++m_Tactics.CoverOrders;
-    Callout(*best, Bark::Covering);
+    Callout(*best, CallKind::Covering);
 }
 
 // A rifle-butt strike at a player in arm's reach: started here, the blow resolved MeleeHitTime later (still in reach and
@@ -950,7 +1067,7 @@ void NpcDirector::UpdateMelee(Npc& n, const PlayerSnapshot& p) {
     n.MeleeLanded = false;
     n.BurstLeft = 0;
     ++m_Tactics.Melees;
-    Callout(n, Bark::Melee);
+    Callout(n, CallKind::Melee);
 }
 
 void NpcDirector::Move(World& world, Npc& n, float dt) {
@@ -1137,6 +1254,8 @@ void NpcDirector::AimAndFire(World& world, Npc& n, const PlayerSnapshot& p, floa
     // (The body counts as moving from the same 0.25 m/s; the player's own gun reads 0 standing still.)
     const glm::vec3 gunVelocity = glm::length(glm::vec2(n.Velocity.x, n.Velocity.z)) > 0.25f ? n.Velocity : glm::vec3(0.0f);
     w.Tick(dt, gunVelocity, sprinting, aimGun && !sprinting, 0.0f, true);
+    if (float feet[2]; !FoleyAudio::Get().Tuning().StepsFromFeet || !n.Body.FootHeights(feet)) // else LateUpdate steps on the feet
+        FoleyAudio::Get().NpcWalk(world, n.Index, n.Feet, n.Velocity, sprinting, dt);
     // (After the tick, before the animators: the weapon clears its triggers at the start of each frame.)
     if (n.WeaponAction) w.TriggerAction(n.WeaponAction);
     n.WeaponAction = nullptr;
@@ -1181,6 +1300,9 @@ void NpcDirector::LateUpdate(World& world, float dt, const PlayerSnapshot& p) {
         const float lateDt = n.LateDt;
         n.LateDt = 0.0f;
         LatePose(world, n, lateDt, p, /*alive=*/true);
+        // Footsteps on the posed feet's touch-downs (a body without foot bones walks by the stride rule, in the weapon update).
+        if (float feet[2]; n.Body.FootHeights(feet))
+            FoleyAudio::Get().NpcFeet(world, n.Index, n.Feet, feet, n.Body.Sprinting(), glm::length(glm::vec2(n.Velocity.x, n.Velocity.z)), lateDt);
         UpdateHitboxes(n, p, /*posed=*/true);
         // The hit flinch goes on after the hitboxes took their pose (and the eye and the aim were read): visual only.
         if (const auto it = m_Flinch.find(n.Index); it != m_Flinch.end()) {
@@ -1363,14 +1485,14 @@ void NpcDirector::HandleShots(World& world, Npc& n, const PlayerSnapshot& p, con
         const bool shotgun = n.Class == WeaponClass::Shotgun;
         if (t.FirstPellet)
             Fx->Shot(world, shotgun ? CombatFx::Gun::Shotgun : CombatFx::Gun::Rifle, t.Origin + muzzleShift, t.End, false,
-                     !shotgun && (n.Tracer++ % 3) == 0);
+                     !shotgun && (n.Tracer++ % 3) == 0, (std::uint32_t)n.Index + 1u); // the soldier's id: his tail's probe is cached per shooter
         if (!p.Valid || p.Dead || (t.Hit && t.Entity == kPlayerEntity)) continue;
         const glm::vec3 seg = t.End - t.Origin;
         const float len2 = glm::dot(seg, seg);
         if (len2 < 1e-4f) continue;
         const float u = std::clamp(glm::dot(p.Eye - t.Origin, seg) / len2, 0.0f, 1.0f);
         const glm::vec3 closest = t.Origin + seg * u;
-        if (glm::length(closest - p.Eye) < 1.6f && u * std::sqrt(len2) > 3.0f && u < 0.999f) Fx->Whizz(closest);
+        if (const float miss = glm::length(closest - p.Eye); miss < Fx->FlybyReach() && u * std::sqrt(len2) > 3.0f && u < 0.999f) Fx->Whizz(closest, miss);
     }
     // The gun's own noises: a reload starting, the pump racked.
     if (Fx && n.Weapon) {
@@ -1395,7 +1517,7 @@ void NpcDirector::HandleShots(World& world, Npc& n, const PlayerSnapshot& p, con
             e.Direction = hit.Direction;
             e.SourcePos = n.Eye;
             m_PlayerDamage.push_back(e);
-            Callout(n, Bark::PlayerHurt);
+            Callout(n, CallKind::PlayerHurt);
             continue;
         }
         bool onNpc = false;
@@ -1533,7 +1655,7 @@ void NpcDirector::ApplyDamage(World& world, Npc& n, float amount, HitZone zone, 
         n.WoundRolled = true;
         if (std::uniform_real_distribution<float>(0.0f, 1.0f)(m_Rng) < m_WoundChance) BecomeWounded(n);
     }
-    if (n.Health < 0.35f * n.MaxHealth && !n.Wounded) Callout(n, Bark::Wounded);
+    if (n.Health < 0.35f * n.MaxHealth && !n.Wounded) Callout(n, CallKind::Wounded);
 }
 
 void NpcDirector::BecomeWounded(Npc& n) {
@@ -1546,8 +1668,6 @@ void NpcDirector::BecomeWounded(Npc& n) {
     n.Role = NpcRole::Anchor;
     n.HasFlankToken = n.HasPushToken = false;
     // Said at once, whatever it shouted last.
-    n.Callout = "Unit down, need assist";
-    n.CalloutAt = m_Now;
     n.LastCallout = m_Now;
 }
 
@@ -1590,7 +1710,7 @@ void NpcDirector::Kill(World& world, Npc& n, const glm::vec3& dir, const glm::ve
             Npc* o = i < (int)m_Npcs.size() ? m_Npcs[(size_t)i].get() : nullptr;
             if (!o || o->Dead) continue;
             o->Morale = std::max(0.0f, o->Morale - 0.25f);
-            if (glm::length(o->Feet - n.Feet) < 25.0f) Callout(*o, Bark::ManDown);
+            if (glm::length(o->Feet - n.Feet) < 25.0f) Callout(*o, CallKind::ManDown);
         }
     }
     if (m_Respawn) m_RespawnTimers.push_back(m_Now + m_RespawnDelay);

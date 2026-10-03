@@ -9,6 +9,7 @@
 #include "Model.h"
 #include "GLStateCache.h"
 #include "PhysicsWorld.h"
+#include "Audio/WeaponAudio.h"
 
 #include <glm/gtc/quaternion.hpp>
 #include <glm/gtx/euler_angles.hpp> // eulerAngleYXZ — must match World::ComposeTransform's order
@@ -234,6 +235,8 @@ void ColliderGizmo::Draw(const glm::mat4& view, const glm::mat4& proj, const Wor
             arc(bot, Z, -UR, kCircleSegs / 2);
         }
     }
+
+    AppendAudioDebugLines(world, V, drawShapes); // Reverb Zone volumes (with the colliders) and, in Play, the audio probe rays (Env Debug Draw)
 
     // The opaque wireframe part ends here; everything after is additive-blended glow.
     const GLsizei wireVerts = (GLsizei)(V.size() / 7);

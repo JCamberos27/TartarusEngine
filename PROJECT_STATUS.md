@@ -17,6 +17,7 @@ used to develop and prove out the engine's systems.
 | Weapons | Data-driven (`.fpsanim` + Animator controller), procedural recoil / sway / IK on top. The Sandbox player carries the AKS-74U (key 1), the Remington 870 (key 2) and a gravity gun (key 3) | `docs/FPS_ANIMATION_SYSTEM.md`, `docs/FPS_WEAPON_INTEGRATION.md`, `docs/ANIMATOR.md`, `docs/PROCEDURAL_ANIMATION.md` |
 | Player body (true first person, #405) | Root-motion body under the camera: walk / jog / run, jump and land, crouch, turn in place, starts and stops, foot placement. Its own arms hold the gun | `docs/BODY_SETUP.md` |
 | Character outfits | Modular Quantum characters dressed from a wardrobe, with skin hiding and clash rules | `docs/CHARACTER_OUTFITS.md`, `docs/OUTFIT_TODO.md` |
+| Audio | Recorded-only sound design (Tactical Shooter Pack + free Sonniss): layered AK / 870 gunfire, reloads synced to the clips, footsteps on the animated feet, impacts, casings, flybys, reverb zones with convolution reverb, ambience beds, a tiered dynamic mix with a master limiter; `--audio-test` checks it | `docs/AUDIO.md` |
 | Sky | Physical sky: time of day, atmosphere, volumetric clouds | `docs/SKY.md` |
 | Performance | Sandbox at 258 fps (1080p) / 192 fps (1440p), play mode maximized | `docs/PERFORMANCE.md` |
 

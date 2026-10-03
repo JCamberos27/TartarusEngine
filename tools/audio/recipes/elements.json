@@ -1,0 +1,1142 @@
+{
+ "_doc": "Weapon action one-shots. src is relative to the extracted Tactical Shooter Pack (C:/tb/audio-src/tsp/Tactical Shooter Pack). t = approximate time of the CONTACT transient in the source (snapped to the real transient, +-12 ms); dur = seconds kept after it -- chosen from the source's onset map so a slice never swallows the next, louder event of the pack's own (longer) animation. lead_ms = extra source kept BEFORE the contact (slide / approach scrape of pump and bolt strokes); the manifest records the resulting anchor_ms and the engine starts the file at (contact time - anchor_ms). Other optional fields: pitch (semitones), gain_db, eq [[kind,hz,gain_db,q]], hp/lp (Hz), fade_in_ms, snap (false for noise-like cloth), preroll_ms (default 3). Draw/holster variants: t0..main = cloth lead varispeed-fitted to main_at_ms so the thud lands on the animation's arrival; thud = extra layer {src,t,dur,pitch,delay_ms,gain_db} dropped in at delay_ms. synth = procedural one-shot (build_elements.py). Round 4: no synthesised element anywhere -- melee, dry fire and the 870 handling are slices / layer composites of real recordings (sonniss/<pack>/<file> paths resolve under C:/tb/audio-src/sonniss). A variant with 'layers' is a composite; 'peak_at_ms' cuts a whoosh so its loudest part lands there. shell_insert (2026-10-03): ONE event per shell, at the port contact (frame 11 of Reload_Loop / Reload_Loop_End); every take holds both contacts - the push into the port and the click home past the latch 117 ms (7 frames) later - either as recorded (the Herrington loop, 120 ms apart) or as a composite of a push and a click placed 117 ms apart. anchor_ms on a variant overrides the computed anchor. min_dur_s (2026-10-03): no action slice is cut shorter than this - the 40-120 ms slices stopped dead; a slice that would run into the source's next event is ended before it by the trim (adsp.trim_secondary, 30 ms fade). shell_insert (2026-10-03, user): only the Kinemation Herrington 11-87 shell loads - the loop's (as recorded) and the reload start's / end's (push + click home re-spaced to 117 ms, their low-mid handling noise shelved down) - each with two mild EQ colours. (2026-10-03, user) shell_insert: only the metallic Herrington reload-loop take, in four mild EQ / +-0.3 st colours. draw / holster: motion_only - the Kinemation draw / holster recordings (AK105 / TR15 / WK-11; Herrington / SRM-12 / Mk14 for the 870) up to the arrival, faded out as the hands settle, no arrival thud. draw / holster (2026-10-03, AAA pass): motion_variant - the handling recording eased 15 dB down through the arrival (no thud, no cut), a Kinemation zip / webbing layer (General: Equip / UnEquip / pistol holster / Pickup) over the movement, a long end fade.",
+ "guns": {
+  "ak": {
+   "dir": "Weapons/AKS74U",
+   "elements": {
+    "mag_release": [
+     {
+      "src": "AK105/Actions/S_AK105_Reload_Tactical.WAV",
+      "t": 0.44,
+      "dur": 0.04,
+      "hp": 300
+     },
+     {
+      "src": "AK105/Actions/S_AK105_Reload_Empty.WAV",
+      "t": 0.46,
+      "dur": 0.046
+     },
+     {
+      "src": "AK105/Actions/S_AK105_MagCheck.WAV",
+      "t": 0.338,
+      "dur": 0.07
+     },
+     {
+      "src": "Mk14EBR/S_Mk14EBR_Reload_Tactical.WAV",
+      "t": 0.462,
+      "dur": 0.04,
+      "pitch": 1.5
+     },
+     {
+      "src": "SRM-12/Actions/S_SRM-12_EmptyReload.wav",
+      "t": 0.524,
+      "dur": 0.05
+     }
+    ],
+    "mag_out": [
+     {
+      "src": "AK105/Actions/S_AK105_Reload_Tactical.WAV",
+      "t": 0.482,
+      "dur": 0.125
+     },
+     {
+      "src": "AK105/Actions/S_AK105_Reload_Empty.WAV",
+      "t": 0.508,
+      "dur": 0.12
+     },
+     {
+      "src": "AK105/Actions/S_AK105_MagCheck.WAV",
+      "t": 0.414,
+      "dur": 0.13
+     },
+     {
+      "src": "TR15/Actions/S_TR15_Reload_Tactical.wav",
+      "t": 0.872,
+      "dur": 0.12,
+      "pitch": -1.0
+     },
+     {
+      "src": "SRM-12/Actions/S_SRM-12_TacticalReload.wav",
+      "t": 0.731,
+      "dur": 0.12,
+      "hp": 300
+     },
+     {
+      "src": "SRM-12/Actions/S_SRM-12_MagCheck.wav",
+      "t": 0.941,
+      "dur": 0.09
+     }
+    ],
+    "mag_in": [
+     {
+      "src": "AK105/Actions/S_AK105_Reload_Tactical.WAV",
+      "t": 1.698,
+      "dur": 0.17
+     },
+     {
+      "src": "AK105/Actions/S_AK105_Reload_Empty.WAV",
+      "t": 1.754,
+      "dur": 0.165
+     },
+     {
+      "src": "AK105/Actions/S_AK105_MagCheck.WAV",
+      "t": 2.582,
+      "lead_ms": 38,
+      "dur": 0.15
+     },
+     {
+      "src": "TR15/Actions/S_TR15_Reload_Tactical.wav",
+      "t": 1.93,
+      "lead_ms": 36,
+      "dur": 0.115,
+      "pitch": -1.5,
+      "hp": 150
+     },
+     {
+      "src": "SRM-12/Actions/S_SRM-12_EmptyReload.wav",
+      "t": 1.907,
+      "dur": 0.16
+     },
+     {
+      "src": "Mk14EBR/S_Mk14EBR_MagCheck.WAV",
+      "t": 3.027,
+      "dur": 0.16
+     },
+     {
+      "src": "SRM-12/Actions/S_SRM-12_MagCheck.wav",
+      "t": 2.58,
+      "dur": 0.16
+     }
+    ],
+    "mag_tap": [
+     {
+      "src": "AK105/Actions/S_AK105_Reload_Tactical.WAV",
+      "t": 1.878,
+      "dur": 0.12
+     },
+     {
+      "src": "AK105/Actions/S_AK105_Reload_Tactical.WAV",
+      "t": 2.014,
+      "dur": 0.12
+     },
+     {
+      "src": "AK105/Actions/S_AK105_Reload_Empty.WAV",
+      "t": 1.968,
+      "dur": 0.12
+     },
+     {
+      "src": "AK105/Actions/S_AK105_MagCheck.WAV",
+      "t": 2.748,
+      "dur": 0.105,
+      "hp": 250
+     }
+    ],
+    "bolt_back": [
+     {
+      "src": "AK105/Actions/S_AK105_Reload_Empty.WAV",
+      "t": 2.642,
+      "lead_ms": 36,
+      "dur": 0.2
+     },
+     {
+      "src": "TR15/Actions/S_TR15_Reload_Empty.wav",
+      "t": 2.604,
+      "lead_ms": 36,
+      "dur": 0.2,
+      "pitch": -0.8,
+      "hp": 150
+     },
+     {
+      "src": "Mk14EBR/S_Mk14EBR_Reload_Empty.WAV",
+      "t": 2.48,
+      "lead_ms": 82,
+      "dur": 0.2,
+      "pitch": 0.8
+     },
+     {
+      "src": "SRM-12/Actions/S_SRM-12_EmptyReload.wav",
+      "t": 3.12,
+      "dur": 0.2
+     }
+    ],
+    "bolt_release": [
+     {
+      "src": "AK105/Actions/S_AK105_Reload_Empty.WAV",
+      "t": 3.08,
+      "lead_ms": 28,
+      "dur": 0.14
+     },
+     {
+      "src": "TR15/Actions/S_TR15_Reload_Empty.wav",
+      "t": 3.078,
+      "lead_ms": 34,
+      "dur": 0.3,
+      "pitch": -0.5,
+      "hp": 150
+     },
+     {
+      "src": "Mk14EBR/S_Mk14EBR_Reload_Empty.WAV",
+      "t": 3.822,
+      "lead_ms": 42,
+      "dur": 0.2,
+      "pitch": 0.5
+     },
+     {
+      "src": "SRM-12/Actions/S_SRM-12_EmptyReload.wav",
+      "t": 4.222,
+      "dur": 0.14
+     }
+    ],
+    "handle": [
+     {
+      "src": "AK105/Actions/S_AK105_Reload_Empty.WAV",
+      "t": 3.994,
+      "dur": 0.22
+     },
+     {
+      "src": "AK105/Actions/S_AK105_Inspect.WAV",
+      "t": 4.322,
+      "dur": 0.3
+     },
+     {
+      "src": "AK105/Actions/S_AK105_MagCheck.WAV",
+      "t": 3.72,
+      "dur": 0.25
+     },
+     {
+      "src": "AK105/Actions/S_AK105_Inspect.WAV",
+      "t": 4.634,
+      "dur": 0.3
+     }
+    ],
+    "cloth": [
+     {
+      "src": "AK105/Actions/S_AK105_Draw.WAV",
+      "t": 0.3,
+      "dur": 0.45,
+      "snap": false,
+      "fade_in_ms": 30
+     },
+     {
+      "src": "AK105/Actions/S_AK105_Holster.WAV",
+      "t": 0.43,
+      "dur": 0.45,
+      "snap": false,
+      "fade_in_ms": 30
+     },
+     {
+      "src": "AK105/Actions/S_AK105_Inspect.WAV",
+      "t": 0.24,
+      "dur": 0.45,
+      "snap": false,
+      "fade_in_ms": 30
+     }
+    ],
+    "draw": [
+     {
+      "src": "AK105/Actions/S_AK105_Draw.WAV",
+      "t0": 0.28,
+      "main": 0.554,
+      "dur": 0.85,
+      "main_at_ms": 360,
+      "motion_only": true,
+      "zip": {
+       "src": "General/S_Equip.WAV",
+       "gain_db": -4,
+       "hp": 150
+      }
+     },
+     {
+      "src": "TR15/Actions/S_TR15_Draw.wav",
+      "t0": 0.6,
+      "main": 0.902,
+      "dur": 0.85,
+      "main_at_ms": 360,
+      "pitch": 0.5,
+      "motion_only": true,
+      "zip": {
+       "src": "General/S_DrawPistolWithHolster.WAV",
+       "gain_db": -5,
+       "hp": 150
+      }
+     },
+     {
+      "src": "WK-11_Viper/Actions/S_WK-11_Viper_Draw.wav",
+      "t0": 0.6,
+      "main": 0.886,
+      "dur": 0.85,
+      "main_at_ms": 360,
+      "pitch": -0.5,
+      "motion_only": true,
+      "zip": {
+       "src": "General/S_Pickup.WAV",
+       "gain_db": -6,
+       "hp": 180
+      }
+     }
+    ],
+    "holster": [
+     {
+      "src": "AK105/Actions/S_AK105_Holster.WAV",
+      "t0": 0.43,
+      "main": 0.662,
+      "dur": 0.8,
+      "main_at_ms": 300,
+      "motion_only": true,
+      "zip": {
+       "src": "General/S_UnEquip.WAV",
+       "gain_db": -4,
+       "hp": 150
+      }
+     },
+     {
+      "src": "TR15/Actions/S_TR15_Holster.wav",
+      "t0": 0.24,
+      "main": 0.454,
+      "dur": 0.8,
+      "main_at_ms": 300,
+      "pitch": 0.5,
+      "motion_only": true,
+      "zip": {
+       "src": "General/S_HolsterPistolWithHolster.WAV",
+       "gain_db": -5,
+       "hp": 150
+      }
+     },
+     {
+      "src": "WK-11_Viper/Actions/S_WK-11_Viper_Holster.wav",
+      "t0": 0.3,
+      "main": 0.516,
+      "dur": 0.8,
+      "main_at_ms": 300,
+      "pitch": -0.5,
+      "motion_only": true,
+      "zip": {
+       "src": "General/S_UnEquip_Pistol.WAV",
+       "gain_db": -5,
+       "hp": 150
+      }
+     }
+    ],
+    "firemode": [
+     {
+      "src": "General/S_FireMode.WAV",
+      "t": 0.028,
+      "dur": 0.3
+     },
+     {
+      "src": "General/S_FireMode.WAV",
+      "t": 0.028,
+      "dur": 0.3,
+      "pitch": -2.0,
+      "gain_db": -1.0
+     },
+     {
+      "src": "General/S_FireMode.WAV",
+      "t": 0.028,
+      "dur": 0.3,
+      "pitch": 1.5,
+      "eq": [
+       [
+        "peak",
+        2500,
+        -2.0,
+        1.0
+       ]
+      ]
+     }
+    ],
+    "dry_fire": [
+     {
+      "src": "sonniss/Pole Position Production/Steyr_TMP",
+      "t": 1.962,
+      "dur": 0.14,
+      "hp": 180
+     },
+     {
+      "src": "sonniss/Pole Position Production/Steyr_TMP",
+      "t": 6.93,
+      "dur": 0.14,
+      "hp": 180,
+      "pitch": -1.0
+     },
+     {
+      "src": "sonniss/Pole Position Production/Steyr_TMP",
+      "t": 15.622,
+      "dur": 0.14,
+      "hp": 180,
+      "pitch": 0.8
+     },
+     {
+      "src": "sonniss/Pole Position Production/Steyr_TMP",
+      "t": 21.27,
+      "dur": 0.14,
+      "hp": 180,
+      "pitch": -2.0
+     }
+    ],
+    "melee_swing": [
+     {
+      "src": "sonniss/David Dumais/MeleeSwingsPack_96khz_Stereo_Normal",
+      "peak_at_ms": 95,
+      "dur": 0.45
+     },
+     {
+      "src": "sonniss/David Dumais/MeleeSwingsPack_96khz_Stereo_High",
+      "peak_at_ms": 70,
+      "dur": 0.3,
+      "pitch": -2.0
+     },
+     {
+      "src": "sonniss/Gamemaster Audio - Punch/whoosh_weapon_knife_swing_04",
+      "peak_at_ms": 70,
+      "dur": 0.28,
+      "pitch": -2.0
+     },
+     {
+      "src": "sonniss/David Dumais/MeleeSwingsPack_96khz_Mono_Designed",
+      "peak_at_ms": 90,
+      "dur": 0.45,
+      "pitch": -1.0
+     }
+    ],
+    "melee_hit": [
+     {
+      "layers": [
+       {
+        "src": "sonniss/The Chris Alan/Hand-to-Hand Combat - Body Hits - Deep Punch 02",
+        "t": 0.0,
+        "dur": 0.21
+       },
+       {
+        "src": "AK105/Actions/S_AK105_Reload_Tactical.WAV",
+        "t": 2.014,
+        "dur": 0.12,
+        "delay_ms": 14,
+        "gain_db": -6
+       },
+       {
+        "src": "sonniss/Shapeforms/CLOTHING_MATERIAL_MOVEMENT_08",
+        "t": 0.0,
+        "dur": 0.2,
+        "delay_ms": 0,
+        "gain_db": -12,
+        "snap": false
+       }
+      ]
+     },
+     {
+      "layers": [
+       {
+        "src": "sonniss/Shapeforms/PUNCH_PERCUSSIVE_HEAVY_06",
+        "t": 0.0,
+        "dur": 0.18
+       },
+       {
+        "src": "sonniss/Shapeforms/IMPACT_LOW_THUD_10",
+        "t": 0.0,
+        "dur": 0.2,
+        "gain_db": -4
+       },
+       {
+        "src": "AK105/Actions/S_AK105_Reload_Empty.WAV",
+        "t": 3.994,
+        "dur": 0.2,
+        "delay_ms": 16,
+        "gain_db": -8
+       }
+      ]
+     },
+     {
+      "layers": [
+       {
+        "src": "sonniss/Gamemaster Audio -  Bullet/bullet_impact_body_thump_02",
+        "t": 0.0,
+        "dur": 0.4
+       },
+       {
+        "src": "sonniss/The Chris Alan/Hand-to-Hand Combat - Body Hits - Deep Punch 02",
+        "t": 0.0,
+        "dur": 0.2,
+        "gain_db": -3
+       },
+       {
+        "src": "AK105/Actions/S_AK105_Reload_Empty.WAV",
+        "t": 1.968,
+        "dur": 0.12,
+        "delay_ms": 12,
+        "gain_db": -6
+       }
+      ]
+     },
+     {
+      "layers": [
+       {
+        "src": "sonniss/The Chris Alan/Hand-to-Hand Combat - Body Hits - Body Slam Floor 08",
+        "t": 0.0,
+        "dur": 0.4
+       },
+       {
+        "src": "AK105/Actions/S_AK105_Reload_Empty.WAV",
+        "t": 1.754,
+        "dur": 0.12,
+        "delay_ms": 18,
+        "gain_db": -7
+       },
+       {
+        "src": "sonniss/Shapeforms/CLOTHING_MATERIAL_MOVEMENT_08",
+        "t": 0.0,
+        "dur": 0.2,
+        "gain_db": -12,
+        "snap": false
+       }
+      ]
+     }
+    ]
+   }
+  },
+  "870": {
+   "dir": "Weapons/Remington870",
+   "elements": {
+    "pump_back": [
+     {
+      "src": "sonniss/TS Sound/Shotgun_Quick Pump_01",
+      "t": 0.154,
+      "lead_ms": 100,
+      "dur": 0.08,
+      "eq": [
+       [
+        "peak",
+        130,
+        4.0,
+        0.8
+       ],
+       [
+        "peak",
+        70,
+        2.0,
+        0.8
+       ]
+      ]
+     },
+     {
+      "src": "sonniss/TS Sound/Shotgun_Quick Pump_01",
+      "t": 1.148,
+      "lead_ms": 100,
+      "dur": 0.09,
+      "eq": [
+       [
+        "peak",
+        130,
+        4.0,
+        0.8
+       ],
+       [
+        "peak",
+        70,
+        2.0,
+        0.8
+       ]
+      ],
+      "pitch": -0.8
+     },
+     {
+      "src": "sonniss/Wav Junction/0019_Shotgun_Pump",
+      "t": 0.448,
+      "lead_ms": 90,
+      "dur": 0.3,
+      "eq": [
+       [
+        "peak",
+        130,
+        4.0,
+        0.8
+       ],
+       [
+        "peak",
+        70,
+        2.0,
+        0.8
+       ]
+      ]
+     },
+     {
+      "src": "sonniss/Pole Position Production/SAIGA-12",
+      "t": 0.172,
+      "lead_ms": 100,
+      "dur": 0.17,
+      "eq": [
+       [
+        "peak",
+        130,
+        4.0,
+        0.8
+       ],
+       [
+        "peak",
+        70,
+        2.0,
+        0.8
+       ]
+      ]
+     },
+     {
+      "src": "sonniss/Pole Position Production/SAIGA-12",
+      "t": 2.498,
+      "lead_ms": 150,
+      "dur": 0.2,
+      "eq": [
+       [
+        "peak",
+        130,
+        4.0,
+        0.8
+       ],
+       [
+        "peak",
+        70,
+        2.0,
+        0.8
+       ]
+      ],
+      "pitch": -1.0
+     }
+    ],
+    "pump_fwd": [
+     {
+      "src": "sonniss/TS Sound/Shotgun_Quick Pump_01",
+      "t": 0.34,
+      "lead_ms": 100,
+      "dur": 0.25,
+      "eq": [
+       [
+        "peak",
+        130,
+        4.0,
+        0.8
+       ],
+       [
+        "peak",
+        70,
+        2.0,
+        0.8
+       ]
+      ]
+     },
+     {
+      "src": "sonniss/TS Sound/Shotgun_Quick Pump_01",
+      "t": 1.344,
+      "lead_ms": 100,
+      "dur": 0.13,
+      "eq": [
+       [
+        "peak",
+        130,
+        4.0,
+        0.8
+       ],
+       [
+        "peak",
+        70,
+        2.0,
+        0.8
+       ]
+      ],
+      "pitch": -0.8
+     },
+     {
+      "src": "sonniss/Wav Junction/0019_Shotgun_Pump",
+      "t": 0.908,
+      "lead_ms": 140,
+      "dur": 0.3,
+      "eq": [
+       [
+        "peak",
+        130,
+        4.0,
+        0.8
+       ],
+       [
+        "peak",
+        70,
+        2.0,
+        0.8
+       ]
+      ]
+     },
+     {
+      "src": "sonniss/Pole Position Production/SAIGA-12",
+      "t": 0.45,
+      "lead_ms": 110,
+      "dur": 0.3,
+      "eq": [
+       [
+        "peak",
+        130,
+        4.0,
+        0.8
+       ],
+       [
+        "peak",
+        70,
+        2.0,
+        0.8
+       ]
+      ]
+     },
+     {
+      "src": "sonniss/Pole Position Production/SAIGA-12",
+      "t": 2.78,
+      "lead_ms": 60,
+      "dur": 0.3,
+      "eq": [
+       [
+        "peak",
+        130,
+        4.0,
+        0.8
+       ],
+       [
+        "peak",
+        70,
+        2.0,
+        0.8
+       ]
+      ],
+      "pitch": -1.0
+     }
+    ],
+    "shell_insert": [
+     {
+      "src": "Herrington_11-87/Actions/S_Herrington_11-87_Reload_Loop.wav",
+      "t": 0.468,
+      "dur": 0.32,
+      "anchor_ms": 3.0
+     },
+     {
+      "src": "Herrington_11-87/Actions/S_Herrington_11-87_Reload_Loop.wav",
+      "t": 0.468,
+      "dur": 0.32,
+      "anchor_ms": 3.0,
+      "eq": [
+       [
+        "peak",
+        3500,
+        2.0,
+        0.9
+       ]
+      ]
+     },
+     {
+      "src": "Herrington_11-87/Actions/S_Herrington_11-87_Reload_Loop.wav",
+      "t": 0.468,
+      "dur": 0.32,
+      "anchor_ms": 3.0,
+      "eq": [
+       [
+        "peak",
+        2200,
+        -2.0,
+        0.9
+       ],
+       [
+        "peak",
+        6000,
+        1.5,
+        0.8
+       ]
+      ],
+      "pitch": -0.3
+     },
+     {
+      "src": "Herrington_11-87/Actions/S_Herrington_11-87_Reload_Loop.wav",
+      "t": 0.468,
+      "dur": 0.32,
+      "anchor_ms": 3.0,
+      "eq": [
+       [
+        "peak",
+        1500,
+        2.0,
+        0.8
+       ]
+      ],
+      "pitch": 0.3
+     }
+    ],
+    "shell_load_chamber": [
+     {
+      "src": "sonniss/TS Sound/Shell Load_Round Eject",
+      "t": 4.394,
+      "lead_ms": 40,
+      "dur": 0.35,
+      "pitch": -1.5,
+      "eq": [
+       [
+        "peak",
+        130,
+        4.0,
+        0.8
+       ],
+       [
+        "peak",
+        70,
+        2.0,
+        0.8
+       ]
+      ]
+     },
+     {
+      "src": "sonniss/TS Sound/Shell Load_Round Eject",
+      "t": 2.904,
+      "lead_ms": 30,
+      "dur": 0.35,
+      "pitch": -1.0,
+      "eq": [
+       [
+        "peak",
+        130,
+        4.0,
+        0.8
+       ],
+       [
+        "peak",
+        70,
+        2.0,
+        0.8
+       ]
+      ]
+     },
+     {
+      "src": "Herrington_11-87/Actions/S_Herrington_11-87_Reload_Start_Empty.wav",
+      "t": 1.27,
+      "dur": 0.22,
+      "eq": [
+       [
+        "peak",
+        130,
+        4.0,
+        0.8
+       ],
+       [
+        "peak",
+        70,
+        2.0,
+        0.8
+       ]
+      ]
+     },
+     {
+      "src": "Herrington_11-87/Actions/S_Herrington_11-87_Reload_Start_Empty.wav",
+      "t": 1.796,
+      "dur": 0.3,
+      "eq": [
+       [
+        "peak",
+        130,
+        4.0,
+        0.8
+       ],
+       [
+        "peak",
+        70,
+        2.0,
+        0.8
+       ]
+      ]
+     }
+    ],
+    "handle": [
+     {
+      "src": "Herrington_11-87/Actions/S_Herrington_11-87_Inspect.WAV",
+      "t": 2.955,
+      "dur": 0.095
+     },
+     {
+      "src": "Herrington_11-87/Actions/S_Herrington_11-87_Inspect.WAV",
+      "t": 3.21,
+      "dur": 0.3
+     },
+     {
+      "src": "Herrington_11-87/Actions/S_Herrington_11-87_Inspect.WAV",
+      "t": 5.058,
+      "dur": 0.3
+     },
+     {
+      "src": "AK105/Actions/S_AK105_Reload_Empty.WAV",
+      "t": 3.994,
+      "dur": 0.24,
+      "pitch": -2.0,
+      "hp": 150
+     }
+    ],
+    "cloth": [
+     {
+      "src": "Herrington_11-87/Actions/S_Herrington_11-87_Draw.WAV",
+      "t": 0.1,
+      "dur": 0.5,
+      "snap": false,
+      "fade_in_ms": 30
+     },
+     {
+      "src": "Herrington_11-87/Actions/S_Herrington_11-87_Holster.WAV",
+      "t": 0.1,
+      "dur": 0.5,
+      "snap": false,
+      "fade_in_ms": 30
+     },
+     {
+      "src": "Herrington_11-87/Actions/S_Herrington_11-87_Reload_End.WAV",
+      "t": 0.1,
+      "dur": 0.5,
+      "snap": false,
+      "fade_in_ms": 30
+     }
+    ],
+    "draw": [
+     {
+      "src": "Herrington_11-87/Actions/S_Herrington_11-87_Draw.WAV",
+      "t0": 0.0,
+      "main": 0.383,
+      "dur": 0.783,
+      "main_at_ms": 360,
+      "motion_only": true,
+      "zip": {
+       "src": "General/S_DrawPistolWithHolster.WAV",
+       "gain_db": -5,
+       "hp": 150
+      }
+     },
+     {
+      "src": "SRM-12/Actions/S_SRM-12_Draw.wav",
+      "t0": 0.2,
+      "main": 0.627,
+      "dur": 0.827,
+      "main_at_ms": 360,
+      "motion_only": true,
+      "pitch": -0.5,
+      "zip": {
+       "src": "General/S_Pickup.WAV",
+       "gain_db": -6,
+       "hp": 180
+      }
+     },
+     {
+      "src": "Mk14EBR/S_Mk14EBR_Draw.WAV",
+      "t0": 0.15,
+      "main": 0.559,
+      "dur": 0.809,
+      "main_at_ms": 360,
+      "motion_only": true,
+      "pitch": -0.5,
+      "zip": {
+       "src": "General/S_Equip.WAV",
+       "gain_db": -4,
+       "hp": 150
+      }
+     }
+    ],
+    "holster": [
+     {
+      "src": "Herrington_11-87/Actions/S_Herrington_11-87_Holster.WAV",
+      "t0": 0.0,
+      "main": 0.304,
+      "dur": 0.704,
+      "main_at_ms": 300,
+      "motion_only": true,
+      "zip": {
+       "src": "General/S_HolsterPistolWithHolster.WAV",
+       "gain_db": -5,
+       "hp": 150
+      }
+     },
+     {
+      "src": "SRM-12/Actions/S_SRM-12_Holster.wav",
+      "t0": 0.05,
+      "main": 0.449,
+      "dur": 0.799,
+      "main_at_ms": 300,
+      "motion_only": true,
+      "pitch": -0.5,
+      "zip": {
+       "src": "General/S_UnEquip_Pistol.WAV",
+       "gain_db": -5,
+       "hp": 150
+      }
+     },
+     {
+      "src": "Mk14EBR/S_Mk14EBR_Holster.WAV",
+      "t0": 0.0,
+      "main": 0.483,
+      "dur": 0.883,
+      "main_at_ms": 300,
+      "motion_only": true,
+      "pitch": -0.5,
+      "zip": {
+       "src": "General/S_UnEquip.WAV",
+       "gain_db": -4,
+       "hp": 150
+      }
+     }
+    ],
+    "dry_fire": [
+     {
+      "src": "sonniss/Wav Junction/0023_Shotgun_Safety",
+      "t": 0.29,
+      "dur": 0.16,
+      "pitch": -2.0,
+      "hp": 150
+     },
+     {
+      "src": "sonniss/Wav Junction/0023_Shotgun_Safety",
+      "t": 0.656,
+      "dur": 0.16,
+      "pitch": -1.0,
+      "hp": 150
+     },
+     {
+      "src": "sonniss/Pole Position Production/Steyr_TMP",
+      "t": 25.244,
+      "dur": 0.16,
+      "pitch": -2.0,
+      "hp": 150
+     },
+     {
+      "src": "sonniss/Pole Position Production/Steyr_TMP",
+      "t": 30.662,
+      "dur": 0.16,
+      "pitch": -2.0,
+      "hp": 150,
+      "lp": 9000
+     }
+    ],
+    "melee_swing": [
+     {
+      "src": "sonniss/David Dumais/MeleeSwingsPack_96khz_Stereo_Low",
+      "peak_at_ms": 100,
+      "dur": 0.6
+     },
+     {
+      "src": "sonniss/David Dumais/MeleeSwingsPack_96khz_Stereo_Normal",
+      "peak_at_ms": 100,
+      "dur": 0.5,
+      "pitch": -2.0
+     },
+     {
+      "src": "sonniss/David Dumais/MeleeSwingsPack_96khz_Mono_Designed",
+      "peak_at_ms": 100,
+      "dur": 0.55,
+      "pitch": -2.0
+     },
+     {
+      "src": "sonniss/David Dumais/MeleeSwingsPack_96khz_Stereo_Low",
+      "peak_at_ms": 90,
+      "dur": 0.55,
+      "pitch": -1.5
+     }
+    ],
+    "melee_hit": [
+     {
+      "layers": [
+       {
+        "src": "sonniss/Shapeforms/IMPACT_LOW_THUD_10",
+        "t": 0.0,
+        "dur": 0.2
+       },
+       {
+        "src": "sonniss/The Chris Alan/Hand-to-Hand Combat - Body Hits - Deep Punch 02",
+        "t": 0.0,
+        "dur": 0.2,
+        "gain_db": -2
+       },
+       {
+        "src": "Herrington_11-87/Actions/S_Herrington_11-87_Inspect.WAV",
+        "t": 3.21,
+        "dur": 0.3,
+        "delay_ms": 15,
+        "gain_db": -3
+       }
+      ]
+     },
+     {
+      "layers": [
+       {
+        "src": "sonniss/The Chris Alan/Hand-to-Hand Combat - Body Hits - Body Slam Floor 08",
+        "t": 0.0,
+        "dur": 0.45
+       },
+       {
+        "src": "sonniss/Shapeforms/PUNCH_PERCUSSIVE_HEAVY_06",
+        "t": 0.0,
+        "dur": 0.18,
+        "gain_db": -3
+       },
+       {
+        "src": "sonniss/TS Sound/Shotgun_Quick Pump_01",
+        "t": 0.34,
+        "dur": 0.13,
+        "delay_ms": 20,
+        "gain_db": -8
+       }
+      ]
+     },
+     {
+      "layers": [
+       {
+        "src": "sonniss/Gamemaster Audio -  Bullet/bullet_impact_body_thump_02",
+        "t": 0.0,
+        "dur": 0.45
+       },
+       {
+        "src": "sonniss/Shapeforms/IMPACT_LOW_THUD_10",
+        "t": 0.0,
+        "dur": 0.2,
+        "gain_db": -2
+       },
+       {
+        "src": "sonniss/Pole Position Production/SAIGA-12",
+        "t": 6.094,
+        "dur": 0.25,
+        "delay_ms": 14,
+        "gain_db": -6
+       }
+      ]
+     },
+     {
+      "layers": [
+       {
+        "src": "sonniss/Gamemaster Audio - Punch/punch_grit_wet_impact_05",
+        "t": 0.0,
+        "dur": 0.45
+       },
+       {
+        "src": "sonniss/Shapeforms/IMPACT_LOW_THUD_10",
+        "t": 0.0,
+        "dur": 0.2
+       },
+       {
+        "src": "sonniss/Wav Junction/0019_Shotgun_Pump",
+        "t": 0.908,
+        "dur": 0.2,
+        "delay_ms": 18,
+        "gain_db": -8
+       }
+      ]
+     }
+    ]
+   }
+  }
+ },
+ "snap": {
+  "_doc": "Every mechanical action one-shot (not cloth, draw / holster or swings) goes through a transient designer before finishing: more attack, less ring, so mags, bolts, pumps and shells hit hard and short (user, 2026-10-03: 'louder, hit harder, snappier'). adsp.transient_shape, [-1, 1].",
+  "attack": 0.85,
+  "sustain": -0.4,
+  "skip": [
+   "cloth",
+   "draw",
+   "holster",
+   "melee_swing"
+  ]
+ },
+ "min_dur_s": 0.16
+}

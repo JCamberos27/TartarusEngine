@@ -1226,6 +1226,21 @@ void FirstPersonBody::LateUpdate(World& world, Camera& camera, float dt, entt::e
 // Puts each foot on the ground under it: a ray down from the animated foot gives how far the ground
 // is above / below the capsule's, the pelvis drops to the lower foot, and the legs are re-solved to
 // the offset feet (tilted toward the ground while planted). On every piece so they stay one skeleton.
+bool FirstPersonBody::FootHeights(const World& world, float (&out)[2]) const {
+    const auto& reg = world.Registry;
+    if (!IsActive() || !reg.valid(m_Body) || !reg.valid(m_Driver)) return false;
+    const auto* rc = reg.try_get<RenderableComponent>(m_Driver);
+    if (!rc || !rc->ModelRef) return false;
+    // As ApplyFootIK places the animated feet: the driver's model space sits on the feet, scaled by the root.
+    const float scale = std::max(reg.get<TransformComponent>(m_Body).Scale.y, 1e-3f);
+    for (int s = 0; s < 2; ++s) {
+        glm::mat4 n(1.0f);
+        if (!rc->ModelRef->NodeTransform(Bone(FPBody::kBoneFoot[s]), n)) return false;
+        out[s] = scale * n[3].y;
+    }
+    return true;
+}
+
 bool FirstPersonBody::BoneWorld(const World& world, const std::string& standard, glm::vec3& out) const {
     if (!IsActive() || !world.Registry.valid(m_Body)) return false;
     const auto& reg = world.Registry;
