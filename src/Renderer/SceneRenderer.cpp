@@ -26,6 +26,7 @@
 #include "Frustum.h"
 #include "Camera.h"    // MakePerspective — the view-model sub-pass's one projection switch
 #include "ParticleRenderer.h"
+#include "BloodRenderer.h"
 #include "GLStateCache.h"
 #include "gl.h"
 #include "Core/Profiler.h"
@@ -639,6 +640,12 @@ void SceneRenderer::RenderScene(World& world, const RenderFrameContext& ctx,
         localStats.Triangles += it.Tris;
         localStats.Vertices += it.Verts;
     }
+
+    // Volumetric blood in the air (docs/BLOOD_FX.md): opaque fluid, so before the sky and with the
+    // opaque geometry it lands on already in depth.
+    localStats.DrawCalls += BloodRenderer::Get().DrawSprays(ctx.View, ctx.Proj,
+                                                            [&](Shader& p) { ApplyFrameState(p, fs); });
+    modelShader.Bind();
 
     // PR13: sky - the physical sky, HDRI cubemap or procedural gradient - at the far plane under a
     // GL_LEQUAL test, so the opaque pass above has already rejected every covered pixel. Before
