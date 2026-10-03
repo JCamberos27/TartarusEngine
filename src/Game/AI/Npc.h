@@ -182,10 +182,8 @@ struct Npc {
     int ShotsAtPhase = 0;           // ShotsFired when the phase began
     float Scores[kBehaviourCount] = {};          // the last decision's behaviour scores, for the overlay
     NpcIntent Intent;
-    std::string Callout;            // the last thing it shouted, for the overlay
-    float CalloutAt = -1e9f;
     std::string Why;                // the last decision's reason, for the overlay
-    // Radio barks (NpcDirectorVoice.cpp): the edges already spoken for, and the next idle chatter.
+    // Squad callouts: the edges already called, and the next idle chatter.
     bool VcReloading = false, VcCovering = false, VcSuspicious = false;
     float NextChatter = 0.0f;
     // Tactics.
