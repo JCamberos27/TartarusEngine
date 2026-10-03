@@ -7,12 +7,12 @@
 #include "NavMesh.h"
 #include "Npc.h"
 #include "ShellCasings.h" // CasingSpawn
-#include "SquadVoice.h"
 
 #include <entt/entt.hpp>
 #include <glm/glm.hpp>
 
 #include <algorithm>
+#include <cstdint>
 #include <memory>
 #include <random>
 #include <string>
@@ -23,6 +23,14 @@ class AssetLibrary;
 class CombatFx;
 class World;
 struct FirstPersonControllerComponent;
+
+// The squad's chatter, kept as plain scheduling: what a soldier "calls out" gates the squadmates' glance toward
+// the caller (one channel per squad, priorities, per-event cooldowns, a copy from a squadmate). No sound, no text.
+enum class CallKind : std::uint8_t {
+    Contact, ContactRelay, Gunfire, FlankLeft, FlankRight, MovingUp, FallingBack, LostTarget, ManDown, Wounded,
+    Reloading, Covering, TargetDown, PlayerHurt, Suspicious, Investigating, AllClear, Idle, Melee, Copy,
+    Count
+};
 
 // The player as the enemy squad sees them this frame (filled by the host from Player, the camera and
 // the player's weapon).
@@ -88,8 +96,6 @@ public:
     const NavMesh& Nav() const { return m_Nav; }
     const CoverSystem& Cover() const { return m_Cover; }
     CombatFx* Fx = nullptr;    // gun reports, flashes, tracers, whizzes (optional; the host owns it)
-    SquadVoice& Voice() { return m_Voice; }
-    const SquadVoice& Voice() const { return m_Voice; }
     void SetDifficulty(float d) { m_Difficulty = std::clamp(d, 0.25f, 3.0f); }
     float Difficulty() const { return m_Difficulty; }
     int SquadSize() const { return m_SquadSize; }
@@ -193,9 +199,9 @@ private:
     // Gone: its capsule, agent, weapon and physics. `keepBody`: its entity tree goes into the pool for the next spawn
     // (hidden), else it is destroyed.
     void Despawn(World& world, Npc& n, bool keepBody = false);
-    // A radio bark (SquadVoice picks the line, the channel and the cooldown). NpcDirectorVoice.cpp.
-    void Callout(Npc& n, Bark ev);
-    void UpdateVoice(const PlayerSnapshot& p);
+    // A squad callout: gated by the squad channel; squadmates in earshot who are not shooting glance toward the caller.
+    void Callout(Npc& n, CallKind ev);
+    void UpdateCallouts(const PlayerSnapshot& p);
     void Respawns(World& world, AssetLibrary& assets, const PlayerSnapshot& p);
     void BuildNav(World& world);
 
@@ -246,7 +252,17 @@ private:
     // One cover search (raycasts + paths, the AI's priciest call) per frame across the squad: a second
     // soldier wanting one waits a frame, so a volley that sends everyone to cover is no spike.
     int m_Frame = 0, m_CoverSearchFrame = -1;
-    SquadVoice m_Voice;
+    struct CallChannel {
+        float BusyUntil = 0.0f;
+        int OnAirPriority = 0;
+        float LastEvent[(int)CallKind::Count];
+        bool RespPending = false;
+        float RespAt = 0.0f;
+        CallChannel() { for (float& t : LastEvent) t = -1e9f; }
+    };
+    CallChannel& CallChan(int squad);
+    std::vector<CallChannel> m_CallChannels;
+    std::uint32_t m_CallRng = 0xBA4Cu;
     bool m_PlayerWasDead = false;
     TacticStats m_Tactics;
     // Where soldiers fell lately (a ring): cover near them is avoided for a while (DangerScale).
