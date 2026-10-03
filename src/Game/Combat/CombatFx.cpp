@@ -245,8 +245,15 @@ void CombatFx::Play(Cue cue, const glm::vec3& pos, bool at2D, float volume) {
     if (!m_Active) return;
     const float pitch = 0.95f + 0.1f * Rand01();
     switch (cue) {
-    case Cue::Pump: PlaySound("shotgun_pump.wav", pos, at2D, 0.7f * volume, pitch, 1.5f, 25.0f); break;
-    case Cue::Reload: PlaySound("reload.wav", pos, at2D, 0.7f * volume, pitch, 1.5f, 18.0f); break;
+    // The soldiers' own weapons now sound the pump and the reload from their animators' snd.* events; these cues are the
+    // fallback for a gun whose sets have no files (and a pump / reload from before the recorded takes).
+    case Cue::Pump:
+        if (WeaponAudio::Get().HasEventFiles("870", "pump_back")) break;
+        PlaySound("shotgun_pump.wav", pos, at2D, 0.7f * volume, pitch, 1.5f, 25.0f); break;
+    case Cue::Reload:
+        if (WeaponAudio::Get().HasEventFiles("ak", "mag_out") && WeaponAudio::Get().HasEventFiles("870", "shell_insert")) break;
+        PlaySound("reload.wav", pos, at2D, 0.7f * volume, pitch, 1.5f, 18.0f);
+        break;
     case Cue::DryFire: PlaySound("dry_fire.wav", pos, at2D, 0.6f * volume, pitch, 1.0f, 10.0f); break;
     case Cue::BodyFall: PlaySound("body_fall.wav", pos, at2D, 0.9f * volume, pitch, 2.0f, 30.0f); break;
     case Cue::FleshHit: PlaySound("flesh_hit.wav", pos, at2D, 0.8f * volume, pitch, 1.0f, 25.0f); break;

@@ -1914,13 +1914,21 @@ void RegisterEngineComponents() {
             { "Tail Fade Time", T::Float, TARTARUS_REFLECT_FIELD(W, TailFadeTime), 0.01f, "Seconds a stolen tail fades out over.", 0.0f, 2.0f },
             { "Tail Min Interval", T::Float, TARTARUS_REFLECT_FIELD(W, TailMinInterval), 0.005f, "Seconds between tails (0 = one per shot, capped by Tail Max Voices).", 0.0f, 1.0f },
             { "Tail Duck Per Voice", T::Float, TARTARUS_REFLECT_FIELD(W, TailDuckPerVoice), 0.01f, "Each tail still ringing quietens a new one by this share, so a long burst doesn't clip.", 0.0f, 1.0f },
+            { "Tail Every", T::Int, TARTARUS_REFLECT_FIELD(W, TailEvery), 1.0f, "Full auto: the tail layer plays on every Nth shot of a burst (1 = every shot; S1's mix policy is 2).", 1.0f, 16.0f },
+            { "Far Every", T::Int, TARTARUS_REFLECT_FIELD(W, FarEvery), 1.0f, "Full auto: the distant report plays on every Nth shot of a burst (S1's mix policy is 3).", 1.0f, 16.0f },
+            { "Burst Gap", T::Float, TARTARUS_REFLECT_FIELD(W, BurstGap), 0.01f, "Seconds without a shot that end a burst; the next shot plays every layer.", 0.05f, 5.0f },
+            { "Limiter Enabled", T::Bool, TARTARUS_REFLECT_FIELD(W, LimiterEnabled), 0.0f, "Weapon bus peak limiter (gain ducking so a burst's summed peaks stay under the ceiling). Shared by all guns: the last Weapon Audio component read wins." },
+            { "Limiter Ceiling dB", T::Float, TARTARUS_REFLECT_FIELD(W, LimiterCeilingDb), 0.1f, "dBFS the summed peaks of the live transients are kept under.", -12.0f, 0.0f },
+            { "Limiter Window", T::Float, TARTARUS_REFLECT_FIELD(W, LimiterWindow), 0.005f, "Seconds a transient counts toward the sum.", 0.02f, 1.0f },
+            { "Limiter Min Gain", T::Float, TARTARUS_REFLECT_FIELD(W, LimiterMinGain), 0.01f, "The most a voice is ducked by the limiter (linear gain).", 0.0f, 1.0f },
             { "Data File", T::String, TARTARUS_REFLECT_FIELD(W, DataFile), 0.0f, "Optional json of SoundSet overrides by element (files, volume, jitter, pitch, bus, range, voices). Relative to the project." },
         };
         const std::pair<const char*, const char*> groups[] = {
             {"Shot Pitch Min", "Shot"}, {"Shot Pitch Max", "Shot"}, {"Volume Jitter dB", "Shot"},
             {"Close Full Distance", "Distance Blend"}, {"Close Zero Distance", "Distance Blend"}, {"Far Min Weight", "Distance Blend"},
             {"Far Max Weight", "Distance Blend"}, {"Max Distance", "Distance Blend"}, {"Far Max Distance", "Distance Blend"},
-            {"Tail Max Voices", "Full Auto"}, {"Tail Fade Time", "Full Auto"}, {"Tail Min Interval", "Full Auto"}, {"Tail Duck Per Voice", "Full Auto"}};
+            {"Tail Max Voices", "Full Auto"}, {"Tail Every", "Full Auto"}, {"Far Every", "Full Auto"}, {"Burst Gap", "Full Auto"},
+            {"Limiter Enabled", "Bus Limiter"}, {"Limiter Ceiling dB", "Bus Limiter"}, {"Limiter Window", "Bus Limiter"}, {"Limiter Min Gain", "Bus Limiter"}, {"Tail Fade Time", "Full Auto"}, {"Tail Min Interval", "Full Auto"}, {"Tail Duck Per Voice", "Full Auto"}};
         for (ReflectField& f : m.Fields)
             for (const auto& [n, g] : groups)
                 if (std::strcmp(f.Name, n) == 0) f.Group = g;
@@ -1948,6 +1956,7 @@ void RegisterEngineComponents() {
             { "Land Volume", T::Float, TARTARUS_REFLECT_FIELD(Fo, LandVolume), 0.01f, "Gain of a landing at Land Full Speed.", 0.0f, 2.0f },
             { "Land Min Speed", T::Float, TARTARUS_REFLECT_FIELD(Fo, LandMinSpeed), 0.05f, "m/s of fall below which a landing is silent.", 0.0f, 30.0f },
             { "Land Full Speed", T::Float, TARTARUS_REFLECT_FIELD(Fo, LandFullSpeed), 0.05f, "m/s of fall at which a landing is at Land Volume.", 0.1f, 40.0f },
+            { "Land Heavy Speed", T::Float, TARTARUS_REFLECT_FIELD(Fo, LandHeavySpeed), 0.05f, "m/s of fall from which the heavy landing plays (the light one below).", 0.0f, 40.0f },
             { "Cloth Loop Volume", T::Float, TARTARUS_REFLECT_FIELD(Fo, ClothLoopVolume), 0.01f, "Gain of the sprint cloth / gear loop at Run Speed.", 0.0f, 2.0f },
             { "Cloth Loop Min Speed", T::Float, TARTARUS_REFLECT_FIELD(Fo, ClothLoopMinSpeed), 0.05f, "m/s below which the loop is silent.", 0.0f, 20.0f },
             { "NPC Step Volume", T::Float, TARTARUS_REFLECT_FIELD(Fo, NpcStepVolume), 0.01f, "Gain of soldiers' footsteps.", 0.0f, 2.0f },
@@ -1960,7 +1969,7 @@ void RegisterEngineComponents() {
             {"Walk Volume", "Footsteps"}, {"Run Volume", "Footsteps"}, {"Crouch Volume", "Footsteps"}, {"Volume Jitter dB", "Footsteps"},
             {"Pitch Min", "Footsteps"}, {"Pitch Max", "Footsteps"}, {"Step Stride Scale", "Footsteps"}, {"Crouch Stride Scale", "Footsteps"},
             {"Min Step Speed", "Footsteps"}, {"Run Speed", "Footsteps"},
-            {"Jump Volume", "Jump / Land"}, {"Land Volume", "Jump / Land"}, {"Land Min Speed", "Jump / Land"}, {"Land Full Speed", "Jump / Land"},
+            {"Jump Volume", "Jump / Land"}, {"Land Volume", "Jump / Land"}, {"Land Min Speed", "Jump / Land"}, {"Land Heavy Speed", "Jump / Land"}, {"Land Full Speed", "Jump / Land"},
             {"Cloth Loop Volume", "Cloth Loop"}, {"Cloth Loop Min Speed", "Cloth Loop"},
             {"NPC Step Volume", "NPC Footsteps"}, {"NPC Step Min Distance", "NPC Footsteps"}, {"NPC Step Max Distance", "NPC Footsteps"}};
         for (ReflectField& f : m.Fields)

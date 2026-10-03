@@ -156,6 +156,9 @@ void TestSoundSetJitterPitchAndRequest() {
     FakeBackend be;
     SoundPlayer player(&be);
     player.Seed(99u);
+    SoundPlayer::Limiter off;
+    off.Enabled = false;
+    player.SetLimiter(off); // (the jitter is what is measured here)
     SoundSet s = MakeSet("t.jit", {"a.wav"}, 0);
     s.Volume = 0.5f;
     s.VolumeJitterDb = 3.0f;
@@ -240,6 +243,9 @@ void TestDistanceBlendWeights() {
     WeaponAudio& wa = WeaponAudio::Get();
     wa.StartForTest("", &be);
     wa.SetListener(glm::vec3(0.0f));
+    SoundPlayer::Limiter off;
+    off.Enabled = false;
+    wa.Player().SetLimiter(off);
     auto volumeOf = [&](const char* file) {
         float v = -1.0f;
         for (const auto& x : be.Voices)
@@ -250,6 +256,7 @@ void TestDistanceBlendWeights() {
     CHECK(volumeOf("assets/Audio/Combat/ak_shot.wav") > 0.7f || volumeOf("assets/Audio/Combat/ak_shot_b.wav") > 0.7f); // the crack, full (+-1 dB)
     CHECK(volumeOf("assets/Audio/Combat/ak_shot_far.wav") > 0.05f && volumeOf("assets/Audio/Combat/ak_shot_far.wav") < 0.15f);
     be.Voices.clear();
+    wa.Update(1.0f); // a new burst
     wa.Shot("ak", glm::vec3(70.0f, 0.0f, 0.0f), false);
     CHECK(volumeOf("assets/Audio/Combat/ak_shot.wav") < 0.0f && volumeOf("assets/Audio/Combat/ak_shot_b.wav") < 0.0f); // no crack at 70 m
     CHECK(volumeOf("assets/Audio/Combat/ak_shot_far.wav") > 0.7f);
@@ -268,6 +275,7 @@ void TestAutofireVoiceCap() {
     wa.StartForTest("", &be);
     WeaponAudioProfile* p = wa.Profile("ak");
     CHECK(p != nullptr);
+    p->Tail.Every = 1; // (the decimation has its own test)
     p->Tail.Set.Files = {"tail_1.wav", "tail_2.wav"};
     p->Mech.Set.Files = {"mech_1.wav"};
     p->Sub.Set.Files = {"sub_1.wav"};
@@ -299,6 +307,7 @@ void TestAutofireVoiceCap() {
     // A minimum tail interval spaces them: 10 shots in 0.5 s with 0.25 s between tails = 2-3 tails.
     be.Voices.clear();
     p->TailMinInterval = 0.25f;
+    wa.Update(1.0f);
     for (int i = 0; i < 10; ++i) {
         wa.Shot("ak", glm::vec3(0.0f), true);
         wa.Update(0.05f);
@@ -361,7 +370,7 @@ void TestProfileComponentAndJson() {
     CHECK(p.Tail.Set.MaxVoices == 2 && p.Tail.Set.StealFadeTime == 0.4f);
     p.ApplyJson(R"({"layers":{"close":{"volume":0.4,"curve":{"farDistance":60}}},"events":{"mag_out":{"files":["a.wav","b.wav"],"maxVoices":2,"volume":0.8}}})");
     CHECK(p.Close.Set.Volume == 0.4f && p.Close.Curve.FarDistance == 60.0f && p.Close.Curve.NearDistance == 30.0f);
-    CHECK(p.Close.Set.Key == "snd.ak.shot_close"); // keys stay put
+    CHECK(p.Close.Set.Key == "snd.ak.fire_close"); // keys stay put
     CHECK(p.Events.count("mag_out") == 1 && p.Events["mag_out"].Files.size() == 2 && p.Events["mag_out"].MaxVoices == 2);
     CHECK(p.Events["mag_out"].Key == "snd.ak.mag_out");
     // The profile writes itself out and reads back the same.
@@ -462,11 +471,11 @@ void TestFoleyFootstepCadence() {
     CHECK(stepsAt(0.3f, false, false, 10.0f) == 0); // below the minimum speed: standing still makes no steps
     // The set follows the gait, on the default surface (no physics world here).
     stepsAt(2.0f, false, false, 1.0f);
-    CHECK(!WeaponAudio::Get().History().empty() && WeaponAudio::Get().History().front().Key == "snd.foley.concrete.walk" && WeaponAudio::Get().History().front().At2D);
+    CHECK(!WeaponAudio::Get().History().empty() && WeaponAudio::Get().History().front().Key == "snd.foley.step_concrete.walk" && WeaponAudio::Get().History().front().At2D);
     stepsAt(6.0f, true, false, 1.0f);
-    CHECK(WeaponAudio::Get().History().front().Key == "snd.foley.concrete.run");
+    CHECK(WeaponAudio::Get().History().front().Key == "snd.foley.step_concrete.run");
     stepsAt(1.5f, false, true, 1.0f);
-    CHECK(WeaponAudio::Get().History().front().Key == "snd.foley.concrete.crouch");
+    CHECK(WeaponAudio::Get().History().front().Key == "snd.foley.step_concrete.crouch");
     // Slower strides (the scale tunes it) mean fewer steps.
     t.StepStrideScale = 2.0f;
     CHECK(std::abs(stepsAt(2.0f, false, false, 10.0f) - 12) <= 1);
@@ -508,7 +517,7 @@ void TestFoleyRules() {
     // Surfaces by the ground's material / tag / name, in table order, case-insensitive; the default otherwise.
     CHECK(FoleyAudio::SurfaceFromName(t.SurfaceTable, "Assets/Materials/WoodPlank.physicmaterial", "concrete") == "wood");
     CHECK(FoleyAudio::SurfaceFromName(t.SurfaceTable, "Metal Grate 02", "concrete") == "metal");
-    CHECK(FoleyAudio::SurfaceFromName(t.SurfaceTable, "TERRAIN GRASS", "concrete") == "grass");
+    CHECK(FoleyAudio::SurfaceFromName(t.SurfaceTable, "Red CARPET", "concrete") == "carpet");
     CHECK(FoleyAudio::SurfaceFromName(t.SurfaceTable, "Cube (12)", "concrete") == "concrete");
     CHECK(FoleyAudio::SurfaceFromName(t.SurfaceTable, "Cube (12)", "dirt") == "dirt");
     CHECK(FoleyAudio::SurfaceFromName("a=x;b=y,z", "ZZ", "q") == "b" && FoleyAudio::SurfaceFromName("", "x", "q") == "q");
@@ -551,7 +560,7 @@ void TestFoleyLandingAndJump() {
         in.Grounded = true;
         in.Velocity = glm::vec3(0.0f);
         fo.UpdatePlayer(world, 1.0f / 60.0f, in);
-        return (int)std::count_if(wa.History().begin(), wa.History().end(), [](const WeaponAudio::Emitted& e) { return e.Key == "snd.foley.concrete.land"; });
+        return (int)std::count_if(wa.History().begin(), wa.History().end(), [](const WeaponAudio::Emitted& e) { return e.Key == "snd.foley.move.land_heavy"; });
     };
     CHECK(land(1.0f) == 0); // a hop: silent
     CHECK(land(9.0f) == 1); // a hard landing: once
@@ -560,7 +569,171 @@ void TestFoleyLandingAndJump() {
     FoleyPlayerInput j;
     j.Jumped = true;
     fo.UpdatePlayer(world, 1.0f / 60.0f, j);
-    CHECK(wa.History().size() == 1 && wa.History()[0].Key == "snd.foley.concrete.jump");
+    CHECK(wa.History().size() == 1 && wa.History()[0].Key == "snd.foley.move.jump");
+    wa.Stop();
+}
+
+void TestFullAutoDecimationAndHeadroom() {
+    FakeBackend be;
+    WeaponAudio& wa = WeaponAudio::Get();
+    wa.StartForTest("", &be);
+    WeaponAudioProfile* p = wa.Profile("ak");
+    for (WeaponAudioProfile::Layer* l : {&p->Close, &p->Mech, &p->Sub, &p->Tail, &p->Far}) {
+        l->Set.Files = {std::string("f_") + l->Set.Key + ".wav"};
+        l->Set.FilePeakDb = {-9.0f}; // each layer peaks at -9 dBTP
+        l->Set.StealFadeTime = 0.0f;
+        l->Set.MaxVoices = 64;
+    }
+    auto count = [&](const WeaponAudioProfile::Layer& l) { return be.Started(l.Set.Files[0]); };
+    // Policy: close / mech / sub every shot, tail every 2nd, far every 3rd of a burst; the first shot of a burst plays all.
+    CHECK(p->Tail.Every == 2 && p->Far.Every == 3 && p->Close.Every == 1);
+    const float dt = 60.0f / 650.0f; // 650 rpm
+    for (int i = 0; i < 30; ++i) {
+        wa.Shot("ak", glm::vec3(60.0f, 0.0f, 0.0f), false); // far away: tail and far audible, the crack is out of range
+        wa.Update(dt);
+    }
+    CHECK(count(p->Tail) == 15);
+    CHECK(count(p->Far) == 10);
+    be.Voices.clear();
+    wa.Update(2.0f);
+    for (int i = 0; i < 30; ++i) {
+        wa.Shot("ak", glm::vec3(0.0f), true);
+        wa.Update(dt);
+    }
+    CHECK(count(p->Close) == 30 && count(p->Mech) == 30 && count(p->Sub) == 30);
+    CHECK(count(p->Tail) == 15 && count(p->Far) == 0); // the shooter doesn't hear the distant layer
+    // A new burst starts on a full report again.
+    be.Voices.clear();
+    wa.Update(1.0f);
+    wa.Shot("ak", glm::vec3(0.0f), true);
+    CHECK(count(p->Tail) == 1 && count(p->Close) == 1);
+    // The rate is the profile's: every 1 plays every shot.
+    p->Tail.Every = 1;
+    be.Voices.clear();
+    wa.Update(1.0f);
+    for (int i = 0; i < 6; ++i) {
+        wa.Shot("ak", glm::vec3(0.0f), true);
+        wa.Update(dt);
+    }
+    CHECK(count(p->Tail) == 6);
+
+    // Headroom: ten shots of three layers peaking at -4 dBTP each, overlapping inside the limiter window.
+    auto peakOfBurst = [&](bool limiter) {
+        FakeBackend fb;
+        wa.StartForTest("", &fb);
+        SoundPlayer::Limiter lim;
+        lim.Enabled = limiter;
+        lim.MinGain = 0.02f; // (the ceiling, not the audibility floor, is measured)
+        wa.Player().SetLimiter(lim);
+        WeaponAudioProfile* q = wa.Profile("ak");
+        q->PlayerGain = 1.0f;
+        for (WeaponAudioProfile::Layer* l : {&q->Close, &q->Mech, &q->Sub}) {
+            l->Set.Files = {"x.wav"};
+            l->Set.FilePeakDb = {-4.0f};
+            l->Set.VolumeJitterDb = 0.0f;
+        }
+        q->Tail.Set.Files.clear();
+        q->Far.Set.Files.clear();
+        std::vector<std::pair<double, float>> starts; // time, peak amplitude
+        const float dt2 = 60.0f / 800.0f;
+        double now = 0.0;
+        float worst = 0.0f;
+        for (int i = 0; i < 10; ++i) {
+            const size_t before = fb.Voices.size();
+            wa.Shot("ak", glm::vec3(0.0f), true);
+            for (size_t v = before; v < fb.Voices.size(); ++v) starts.push_back({now, fb.Voices[v].Volume * std::pow(10.0f, -4.0f / 20.0f)});
+            // The summed peaks of every transient still inside the window.
+            float sum = 0.0f;
+            for (const auto& [t, a] : starts)
+                if (now - t < lim.Window) sum += a * (1.0f - (float)(now - t) / lim.Window);
+            worst = std::max(worst, sum);
+            wa.Update(dt2);
+            now += dt2;
+        }
+        wa.Stop(); // (before `fb` goes: the player still holds its backend)
+        return worst;
+    };
+    const float unlimited = peakOfBurst(false), limited = peakOfBurst(true);
+    CHECK(unlimited > 1.5f); // without it the burst sums well past 0 dBFS
+    CHECK(limited < 1.0f);   // with it, under full scale ...
+    CHECK(limited > 0.3f);   // ... and not silenced
+    // The ceiling is a setting: lower it and the burst stays lower.
+    {
+        FakeBackend fb;
+        SoundPlayer pl(&fb);
+        SoundPlayer::Limiter lim;
+        lim.CeilingDb = -12.0f;
+        lim.MinGain = 0.0f;
+        pl.SetLimiter(lim);
+        SoundSet s = MakeSet("t.lim", {"a.wav"}, 0);
+        s.FilePeakDb = {0.0f};
+        pl.Play(s, {});
+        pl.Play(s, {});
+        pl.Play(s, {});
+        CHECK(pl.LimiterLoad() < std::pow(10.0f, -12.0f / 20.0f) * 1.3f);
+    }
+    wa.Stop();
+}
+
+void TestAnchoredEventsLandOnTheContact() {
+    FakeBackend be;
+    WeaponAudio& wa = WeaponAudio::Get();
+    wa.StartForTest("", &be);
+    WeaponAudioProfile* ak = wa.Profile("ak");
+    // Two takes of one sound: the contact transient is 20 ms into the first file and 100 ms into the second.
+    SoundSet s = MakeSet("snd.ak.bolt_back", {"a_20.wav", "b_100.wav"}, 8);
+    s.NoImmediateRepeat = false;
+    s.FileAnchorMs = {20.0f, 100.0f};
+    ak->Events["bolt_back"] = s;
+    float lead = 0.0f;
+    std::string gun, el;
+    CHECK(WeaponAudio::ParseKey("snd.ak.bolt_back@100", gun, el, &lead) && gun == "ak" && el == "bolt_back" && lead == 100.0f);
+    CHECK(WeaponAudio::ParseKey("snd.ak.bolt_back", gun, el, &lead) && lead < 0.0f);
+    // The event fires 100 ms ahead of the contact: whichever take plays, its transient lands on the contact.
+    std::set<std::string> seen;
+    for (int i = 0; i < 40 && seen.size() < 2; ++i) {
+        be.Voices.clear();
+        const double t0 = wa.Player().Now();
+        wa.PlayEvent("snd.ak.bolt_back@100", "", glm::vec3(0.0f), true);
+        double started = -1.0;
+        float seek = 0.0f;
+        std::string file;
+        for (int f = 0; f < 200 && started < 0.0; ++f) {
+            if (!be.Voices.empty()) {
+                started = wa.Player().Now();
+                seek = be.Voices[0].Voice.StartOffset;
+                file = be.Voices[0].Voice.File;
+            } else {
+                wa.Update(0.001f);
+            }
+        }
+        CHECK(started >= 0.0);
+        const float anchor = file == "a_20.wav" ? 0.020f : 0.100f;
+        // The transient's place on the timeline (start - seek + anchor) must be the contact, t0 + 100 ms.
+        CHECK(std::fabs((started - seek + anchor) - (t0 + 0.100)) < 0.0025);
+        seen.insert(file);
+        wa.Update(0.3f);
+    }
+    CHECK(seen.size() == 2);
+    // A clamped event (the contact is only 30 ms away, nearer than the second take's lead-in): it starts at once, 70 ms in.
+    be.Voices.clear();
+    wa.Update(0.5f);
+    ak->Events["bolt_back"].Files = {"b_100.wav"};
+    ak->Events["bolt_back"].FileAnchorMs = {100.0f};
+    wa.PlayEvent("snd.ak.bolt_back@30", "", glm::vec3(0.0f), true);
+    CHECK(be.Voices.size() == 1 && std::fabs(be.Voices[0].Voice.StartOffset - 0.070f) < 1e-4f);
+    // A start that lands a frame late skips the overshoot, so the contact is still on time.
+    be.Voices.clear();
+    ak->Events["bolt_back"].FileAnchorMs = {0.0f};
+    wa.PlayEvent("snd.ak.bolt_back@100", "", glm::vec3(0.0f), true);
+    CHECK(be.Voices.empty());
+    wa.Update(1.0f / 60.0f * 7.0f); // 117 ms: 17 ms past due
+    CHECK(be.Voices.size() == 1 && std::fabs(be.Voices[0].Voice.StartOffset - 0.0167f) < 0.002f);
+    // Gear sounds the shared foley owns are its keys; the gun's own stay the gun's.
+    be.Voices.clear();
+    CHECK(wa.PlayEvent("ads_in", "ak", glm::vec3(0.0f), true));
+    CHECK(wa.History().back().Key == "snd.foley.weapon.ads_in");
+    CHECK(wa.PlayEvent("firemode", "ak", glm::vec3(0.0f), true) && wa.History().back().Key == "snd.ak.firemode");
     wa.Stop();
 }
 
@@ -573,6 +746,8 @@ void RegisterAudioTests(UnitTestSupport::TestList& tests) {
     tests.push_back({"SoundSetJsonRoundTrip", TestSoundSetJsonRoundTrip});
     tests.push_back({"DistanceBlendWeights", TestDistanceBlendWeights});
     tests.push_back({"AutofireVoiceCap", TestAutofireVoiceCap});
+    tests.push_back({"FullAutoDecimationAndHeadroom", TestFullAutoDecimationAndHeadroom});
+    tests.push_back({"AnchoredEventsLandOnTheContact", TestAnchoredEventsLandOnTheContact});
     tests.push_back({"AnimEventPlaysItsSet", TestAnimEventPlaysItsSet});
     tests.push_back({"WeaponAudioProfileComponentAndJson", TestProfileComponentAndJson});
     tests.push_back({"AudioManifestGroupsVariants", TestAudioManifestGroupsVariants});

@@ -756,6 +756,11 @@ void FirstPersonWeaponTest::RecordAudioFrame(const World& world, const FirstPers
 // animator crossed must have been played, in order, by the frame after it crossed (+-1 frame), and nothing else of the
 // animator's keys may have been. Then the gear sounds the script's actions should have made (ADS, fire mode, dry
 // trigger, equip / unequip, the shot layers), counted.
+namespace {
+// "snd.ak.mag_out@95" -> "snd.ak.mag_out": the event's lead before its contact is not part of the key.
+std::string BaseKey(const std::string& name) { return name.substr(0, name.find('@')); }
+} // namespace
+
 void FirstPersonWeaponTest::CheckAudio() {
     Ctx& c = m_Ctx;
     std::printf("[WeaponTest] audio (snd.* events against the animator, %d frames)\n", (int)m_AudioFrames.size());
@@ -775,7 +780,7 @@ void FirstPersonWeaponTest::CheckAudio() {
     for (const AnimatorController& a : ctrl)
         for (const AnimatorController::State& s : a.Layers[0].States)
             for (const AnimatorController::Event& e : s.Events)
-                if (e.Name.rfind("snd.", 0) == 0) animatorKeys.insert(e.Name);
+                if (e.Name.rfind("snd.", 0) == 0) animatorKeys.insert(BaseKey(e.Name));
     c.Check(!animatorKeys.empty(), std::to_string(animatorKeys.size()) + " snd.* keys on the controllers' states");
 
     std::string prevState;
@@ -799,7 +804,7 @@ void FirstPersonWeaponTest::CheckAudio() {
             for (int k = first; k <= last; ++k)
                 for (const AnimatorController::Event& e : st.Events) {
                     const float t = e.Time + (st.Loop ? (float)k : 0.0f);
-                    if (t > from && t <= f.Phase && e.Name.rfind("snd.", 0) == 0) expected.push_back({i, e.Name});
+                    if (t > from && t <= f.Phase && e.Name.rfind("snd.", 0) == 0) expected.push_back({i, BaseKey(e.Name)});
                 }
         }
         prevState = f.State;
@@ -834,18 +839,16 @@ void FirstPersonWeaponTest::CheckAudio() {
     auto atLeast = [&](const char* key, int n) {
         c.Check(count[key] >= n, std::string(key) + " x" + std::to_string(count[key]) + " (want " + std::to_string(n) + "+)");
     };
-    want("snd.ak.fire_mode", 2);         // full auto on, off
-    atLeast("snd.ak.ads_in", 1);
-    atLeast("snd.ak.ads_out", 1);
-    atLeast("snd.870.ads_in", 1);
-    atLeast("snd.870.ads_out", 1);
+    want("snd.ak.firemode", 2);          // full auto on, off
+    // ADS and equip are the shared foley's (snd.foley.weapon.*): the AK and the Remington each aim twice, draw and put away.
+    want("snd.foley.weapon.ads_in", 2);
+    want("snd.foley.weapon.ads_out", 2);
     want("snd.870.dry_fire", 1);         // one pull on the empty tube
-    want("snd.ak.equip", 1);             // back from the Remington
-    want("snd.870.equip", 3);            // 2, 2 again, 3 from unarmed
-    want("snd.ak.unequip", 2);
-    want("snd.870.unequip", 2);          // 1, then unarmed
-    atLeast("snd.ak.shot_close", 5);     // every round plays its layers (the AK fires 7)
-    atLeast("snd.870.shot_close", 8);
-    atLeast("snd.ak.shot_tail", 5);
+    want("snd.foley.weapon.equip", 4);   // back to the AK, 2 again, 3 from unarmed, and the Remington's first draw
+    want("snd.foley.weapon.unequip", 4);
+    atLeast("snd.ak.fire_close", 5);     // every round plays close / mech / sub (the AK fires 7)
+    atLeast("snd.870.fire_close", 8);
+    atLeast("snd.ak.fire_mech", 5);
+    atLeast("snd.ak.fire_tail", 3);      // ... the tail on every 2nd of a burst, the first shot of one always
     c.Check(all2D, "the player's gun is all 2D");
 }

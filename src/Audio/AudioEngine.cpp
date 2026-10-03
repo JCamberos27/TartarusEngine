@@ -190,7 +190,7 @@ void AudioEngine::UnloadAll() {
     s_Preloaded.clear();
 }
 
-AudioEngine::SoundHandle AudioEngine::Play(const std::string& path, float volume, bool loop, Bus bus) {
+AudioEngine::SoundHandle AudioEngine::Play(const std::string& path, float volume, bool loop, Bus bus, float startOffsetSeconds) {
     if (!s_Initialized) return InvalidHandle;
     const int busIndex = std::clamp((int)bus, 0, kBusCount - 1);
     ma_sound_group* group = s_BusesReady ? &s_Buses[busIndex] : nullptr;
@@ -231,6 +231,11 @@ AudioEngine::SoundHandle AudioEngine::Play(const std::string& path, float volume
     // Off until someone calls SetPosition: an unpositioned voice would otherwise sit at the
     // origin and get attenuated against the listener, which is wrong for UI and preview sounds.
     ma_sound_set_spatialization_enabled(sound.get(), MA_FALSE);
+    if (startOffsetSeconds > 0.0f) {
+        ma_uint32 sampleRate = 0;
+        if (ma_sound_get_data_format(sound.get(), nullptr, nullptr, &sampleRate, nullptr, 0) == MA_SUCCESS && sampleRate > 0)
+            ma_sound_seek_to_pcm_frame(sound.get(), (ma_uint64)(startOffsetSeconds * (float)sampleRate));
+    }
     if (ma_sound_start(sound.get()) != MA_SUCCESS) {
         Log::Error("Audio: failed to start sound '" + path + "'.", LogContext::Asset(path));
         ma_sound_uninit(sound.get());
