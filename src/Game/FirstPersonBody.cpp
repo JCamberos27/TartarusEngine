@@ -131,18 +131,24 @@ void FirstPersonBodyCopyArmShape(const Model& m, const Model& rig, float weight,
     CopyArmShape(m, rig, weight, pose, parents, kNoMap, clavicleWeight);
 }
 
-void FirstPersonBodyArmShapeLinks(const Model& m, const Model& rig, const std::vector<int>& parents,
-                                  std::vector<FirstPersonArmShapeLink>& out) {
+void FirstPersonBodyArmShapeLinksFrom(int count, const std::vector<int>& parents, const int (&clavicles)[2],
+                                      const std::function<int(int)>& rigOf, std::vector<FirstPersonArmShapeLink>& out) {
     out.clear();
-    const int count = std::min(m.NodeCount(), (int)parents.size());
-    std::vector<char> under((size_t)count, 0), clavicle((size_t)count, 0);
-    for (const char* name : {FPBody::kBoneClavicle[0], FPBody::kBoneClavicle[1]})
-        if (const int c = m.NodeIndex(name); c >= 0 && c < count) under[(size_t)c] = clavicle[(size_t)c] = 1;
+    count = std::min(count, (int)parents.size());
+    std::vector<char> under((size_t)std::max(count, 0), 0), clavicle((size_t)std::max(count, 0), 0);
+    for (const int c : clavicles)
+        if (c >= 0 && c < count) under[(size_t)c] = clavicle[(size_t)c] = 1;
     for (int i = 0; i < count; ++i) {
         if (!under[(size_t)i] && parents[(size_t)i] >= 0 && under[(size_t)parents[(size_t)i]]) under[(size_t)i] = 1;
         if (!under[(size_t)i]) continue;
-        if (const int r = rig.NodeIndex(m.NodeName(i)); r >= 0) out.push_back({i, r, clavicle[(size_t)i] != 0});
+        if (const int r = rigOf(i); r >= 0) out.push_back({i, r, clavicle[(size_t)i] != 0});
     }
+}
+
+void FirstPersonBodyArmShapeLinks(const Model& m, const Model& rig, const std::vector<int>& parents,
+                                  std::vector<FirstPersonArmShapeLink>& out) {
+    const int clavicles[2] = {m.NodeIndex(FPBody::kBoneClavicle[0]), m.NodeIndex(FPBody::kBoneClavicle[1])};
+    FirstPersonBodyArmShapeLinksFrom(m.NodeCount(), parents, clavicles, [&](int i) { return rig.NodeIndex(m.NodeName(i)); }, out);
 }
 
 void FirstPersonBodyCopyArmShape(const std::vector<FirstPersonArmShapeLink>& links, const Model& rig, float weight,
@@ -155,6 +161,26 @@ void FirstPersonBodyCopyArmShape(const std::vector<FirstPersonArmShapeLink>& lin
         LocalTRS& t = pose[(size_t)l.Body];
         t.R = glm::normalize(glm::slerp(t.R, rigPose[(size_t)l.Rig].R, l.Clavicle ? clavWeight : weight));
     }
+}
+
+void FirstPersonBody::CopyArmShapeCached(const Model& m, const Model& rig, float weight, std::vector<LocalTRS>& pose,
+                                         const std::vector<int>& parents, float clavicleWeight) {
+    if (pose.size() != parents.size() || (int)pose.size() != m.NodeCount()) {
+        CopyArmShape(m, rig, weight, pose, parents, m_BoneMap, clavicleWeight);
+        return;
+    }
+    ArmShapeCache* entry = nullptr;
+    for (ArmShapeCache& e : m_ArmShapeCache)
+        if (e.Body == &m && e.Rig == &rig && e.BodyNodes == m.NodeCount() && e.RigNodes == rig.NodeCount()) { entry = &e; break; }
+    if (!entry) {
+        // The same pairs CopyArmShape finds by name each call (the clavicles through the Bone Map).
+        const int clavicles[2] = {m.NodeIndex(FPBody::MappedBone(m_BoneMap, FPBody::kBoneClavicle[0])),
+                                  m.NodeIndex(FPBody::MappedBone(m_BoneMap, FPBody::kBoneClavicle[1]))};
+        m_ArmShapeCache.push_back({&m, &rig, m.NodeCount(), rig.NodeCount(), {}});
+        entry = &m_ArmShapeCache.back();
+        FirstPersonBodyArmShapeLinksFrom(m.NodeCount(), parents, clavicles, [&](int i) { return rig.NodeIndex(m.NodeName(i)); }, entry->Links);
+    }
+    FirstPersonBodyCopyArmShape(entry->Links, rig, weight, pose, clavicleWeight);
 }
 
 float FirstPersonBodyYaw(const glm::vec3& front, float fallback) {
@@ -606,6 +632,7 @@ bool FirstPersonBody::OutfitChanged(const World& world) const {
 void FirstPersonBody::Stop(World& world) {
     m_HeadVerts.clear(); // keyed by model address: the next Start's models may reuse this run's
     m_TorsoVerts.clear();
+    m_ArmShapeCache.clear();
     BodyDebug::Info() = BodyDebug::Snapshot{};
     BodyDebug::Clear();
     if (m_PoseSource != entt::null && world.Registry.valid(m_PoseSource)) world.Registry.remove<PoseSourceTag>(m_PoseSource);
@@ -778,6 +805,7 @@ void FirstPersonBody::Tick(World& world, const Player& player, const Camera& cam
             m_StepOffset = std::clamp(m_StepOffset - rise, -0.3f, 0.3f);
         m_StepOffset -= m_StepOffset * Follow(dt, player.Grounded && cfg.FootIK ? cfg.StairEase : 0.03f);
         m_LastCapsuleY = f[1];
+        m_GroundVelocity = glm::vec3(player.Velocity.x, 0.0f, player.Velocity.z);
         m_LastGrounded = player.Grounded;
         m_HaveCapsule = true;
         m_Feet = glm::vec3(f[0], f[1] + m_StepOffset, f[2]);
@@ -982,6 +1010,7 @@ void FirstPersonBody::LateUpdate(World& world, Camera& camera, float dt, entt::e
     auto& reg = world.Registry;
     if (!reg.valid(m_Body)) { m_Body = entt::null; return; }
     const auto& cfg = reg.get<FirstPersonBodyComponent>(m_Body);
+    m_Spine = cfg.Spine;
 
     // This step's root motion, for the capsule's next move.
     if (!reg.valid(m_Driver)) { m_Body = entt::null; return; }
@@ -1028,7 +1057,7 @@ void FirstPersonBody::LateUpdate(World& world, Camera& camera, float dt, entt::e
             if (pose.empty() || (int)pose.size() != m.NodeCount() || ul < 0 || ur < 0) break;
             std::vector<int> parents(pose.size());
             for (int i = 0; i < (int)pose.size(); ++i) parents[i] = m.NodeParent(i);
-            CopyArmShape(m, *armRig, m_ArmsWeight, pose, parents, m_BoneMap, cfg.ClavicleFollow);
+            CopyArmShapeCached(m, *armRig, m_ArmsWeight, pose, parents, cfg.ClavicleFollow);
             std::vector<glm::mat4> globals;
             IK::ComputeGlobals(pose, parents, globals);
             left = IK::Position(globals[ul]);
@@ -1369,6 +1398,7 @@ void FirstPersonBody::ApplyFootIK(World& world, const FirstPersonBodyComponent& 
         m_HaveFoot = false;
         m_FootPlanted[0] = m_FootPlanted[1] = false;
         m_FootLockWeight[0] = m_FootLockWeight[1] = 0.0f;
+        m_Slide.Reset();
         return;
     }
     const auto* rc = reg.try_get<RenderableComponent>(m_Driver);
@@ -1389,16 +1419,40 @@ void FirstPersonBody::ApplyFootIK(World& world, const FirstPersonBodyComponent& 
 
     const float maxDrop = std::max(cfg.FootIKMaxDrop, 0.0f);
     float animHeight[2];
+    // Foot slide correction (stride warp, then pin) on the animated feet; off = the clips' own feet and the plain foot lock below.
+    IK::FootSlideSettings slideSet = IK::FootSlideFrom(cfg);
+    const int probe = IK::FootSlideProbeMode();
+    if (probe == 1) { slideSet = IK::FootSlideSettings{}; slideSet.PinEnabled = slideSet.StrideEnabled = true; }
+    const bool slideOn = slideSet.Active();
+    IK::FootSlideOutput slide;
+    glm::vec3 footAnim[2];
+    for (int s = 0; s < 2; ++s) footAnim[s] = m_Feet + yaw * (scale * IK::Position(globals[footNode[s]]));
+    if (slideOn || probe >= 0) {
+        IK::FootSlideInput in;
+        in.Feet = m_Feet;
+        in.Velocity = m_GroundVelocity;
+        in.PlantHeight = cfg.FootPlantedHeight;
+        in.Dt = dt;
+        for (int s = 0; s < 2; ++s) { in.Foot[s] = footAnim[s]; in.Height[s] = footAnim[s].y - m_Feet.y; }
+        const int pelvisNode = drv.NodeIndex(Bone(FPBody::kBonePelvis));
+        const int thighNode = drv.NodeIndex(Bone(FPBody::kBoneThigh[0])), calfNode = drv.NodeIndex(Bone(FPBody::kBoneCalf[0]));
+        in.Pelvis = pelvisNode >= 0 ? m_Feet + yaw * (scale * IK::Position(globals[pelvisNode])) : m_Feet + glm::vec3(0.0f, 1.0f, 0.0f);
+        if (thighNode >= 0 && calfNode >= 0)
+            in.LegLength = scale * (glm::length(IK::Position(globals[thighNode]) - IK::Position(globals[calfNode])) +
+                                    glm::length(IK::Position(globals[calfNode]) - IK::Position(globals[footNode[0]])));
+        slide = m_Slide.Step(slideSet, in, !slideOn);
+        if (probe >= 0) IK::FootSlideProbeLog("player", m_Slide.Stats, glm::length(m_GroundVelocity), m_Slide.ClipSpeed(), m_Slide.Scale());
+    }
     glm::vec3 lockShift[2] = {glm::vec3(0.0f), glm::vec3(0.0f)}; // world, horizontal: animated foot -> pinned foot
     // No pinning while the body turns on the spot (the feet must step) or the heading swings.
     const bool yawSteady = !m_Turning && std::abs(FirstPersonBodyWrapAngle(m_Yaw - m_FootYaw)) < glm::radians(2.0f);
     m_FootYaw = m_Yaw;
     for (int s = 0; s < 2; ++s) {
-        const glm::vec3 footWorld = m_Feet + yaw * (scale * IK::Position(globals[footNode[s]]));
+        const glm::vec3 footWorld = footAnim[s] + slide.Shift[s]; // the stride-warped foot (pinned, below, when the pin is on)
         animHeight[s] = footWorld.y - m_Feet.y;
         // Foot lock: a planted foot stays where it landed instead of sliding when the animation and the
         // capsule's travel disagree a little; it lets go when the foot lifts or the mismatch gets big.
-        const bool planted = animHeight[s] < cfg.FootPlantedHeight && yawSteady;
+        const bool planted = animHeight[s] < cfg.FootPlantedHeight && yawSteady && !slideSet.PinEnabled; // the pin replaces the plain lock
         if (planted) {
             if (!m_FootPlanted[s]) { m_FootPlanted[s] = true; m_FootLock[s] = footWorld; }
             const glm::vec3 drift(footWorld.x - m_FootLock[s].x, 0.0f, footWorld.z - m_FootLock[s].z);
@@ -1407,7 +1461,8 @@ void FirstPersonBody::ApplyFootIK(World& world, const FirstPersonBodyComponent& 
             m_FootPlanted[s] = false;
         }
         m_FootLockWeight[s] += ((m_FootPlanted[s] ? 1.0f : 0.0f) - m_FootLockWeight[s]) * Follow(dt, m_FootPlanted[s] ? cfg.FootLockEaseIn : cfg.FootLockEaseOut);
-        lockShift[s] = glm::vec3(m_FootLock[s].x - footWorld.x, 0.0f, m_FootLock[s].z - footWorld.z) * (m_FootLockWeight[s] * m_FootWeight);
+        lockShift[s] = glm::vec3(m_FootLock[s].x - footWorld.x, 0.0f, m_FootLock[s].z - footWorld.z) * (m_FootLockWeight[s] * m_FootWeight) +
+                       slide.Shift[s] * m_FootWeight;
         float offset = 0.0f;
         glm::vec3 normal(0.0f, 1.0f, 0.0f);
         const float origin[3] = {footWorld.x, footWorld.y + cfg.FootRayUp, footWorld.z};
@@ -1440,7 +1495,7 @@ void FirstPersonBody::ApplyFootIK(World& world, const FirstPersonBodyComponent& 
         for (int s = 0; s < 2; ++s) { d.FootOffset[s] = m_FootOffset[s]; d.FootPlanted[s] = m_FootPlanted[s]; d.FootLock[s] = m_FootLockWeight[s]; }
     }
 
-    const float pelvisDelta = FirstPersonBodyFootPelvis(m_FootOffset[0], m_FootOffset[1], maxDrop, cfg.PelvisMaxRaise) * m_FootWeight;
+    const float pelvisDelta = (FirstPersonBodyFootPelvis(m_FootOffset[0], m_FootOffset[1], maxDrop, cfg.PelvisMaxRaise) - slide.PelvisDrop) * m_FootWeight;
     static const char* const kLegs[2][3] = {{FPBody::kBoneThigh[0], FPBody::kBoneCalf[0], FPBody::kBoneFoot[0]}, {FPBody::kBoneThigh[1], FPBody::kBoneCalf[1], FPBody::kBoneFoot[1]}};
     const glm::quat yawInverse = glm::inverse(yaw);
     for (const auto& mp : m_Models) {
@@ -1481,24 +1536,24 @@ void FirstPersonBody::ApplySpineAim(const Camera& camera, float amount, float tw
     const float pitch = std::asin(std::clamp(camera.Front().y, -1.0f, 1.0f)); // up is positive
     // Rotating +Z about +X by theta gives (0, -sin, cos): looking up needs a negative angle.
     // The twist about the model's up turns the chest toward the view (positive = to the left).
-    RotateSpine([&](int n) {
-        return glm::angleAxis(twist / (float)n, glm::vec3(0.0f, 1.0f, 0.0f)) *
-               glm::angleAxis(-pitch * amount / (float)n, glm::vec3(1.0f, 0.0f, 0.0f));
+    RotateSpine([&](float n) {
+        return glm::angleAxis(twist / n, glm::vec3(0.0f, 1.0f, 0.0f)) *
+               glm::angleAxis(-pitch * amount / n, glm::vec3(1.0f, 0.0f, 0.0f));
     });
 }
 
 void FirstPersonBody::ApplySpineRotation(const glm::quat& modelDelta) {
     const glm::quat none(1.0f, 0.0f, 0.0f, 0.0f);
-    RotateSpine([&](int n) { return glm::normalize(glm::slerp(none, modelDelta, 1.0f / (float)n)); });
+    RotateSpine([&](float n) { return glm::normalize(glm::slerp(none, modelDelta, 1.0f / n)); });
 }
 
-void FirstPersonBody::RotateSpine(const std::function<glm::quat(int)>& stepFor) {
+void FirstPersonBody::RotateSpine(const std::function<glm::quat(float)>& stepFor) {
     const char* const* kSpine = FPBody::kBoneSpine;
-    RotateChain({kSpine[0], kSpine[1], kSpine[2], kSpine[3], kSpine[4]}, stepFor);
+    RotateChain({kSpine[0], kSpine[1], kSpine[2], kSpine[3], kSpine[4]}, stepFor, nullptr, &m_Spine);
 }
 
-void FirstPersonBody::RotateChain(const std::vector<std::string>& chain, const std::function<glm::quat(int)>& stepFor,
-                                  const std::vector<std::shared_ptr<Model>>* models) {
+void FirstPersonBody::RotateChain(const std::vector<std::string>& chain, const std::function<glm::quat(float)>& stepFor,
+                                  const std::vector<std::shared_ptr<Model>>* models, const IK::SpineDistribution* dist) {
     std::vector<int> parents;
     std::vector<glm::mat4> globals;
     const auto& list = models ? *models : m_Models;
@@ -1508,9 +1563,9 @@ void FirstPersonBody::RotateChain(const std::vector<std::string>& chain, const s
         Model& m = *mp;
         IK::Pose pose = m.AppliedLocalPose();
         if (pose.empty() || (int)pose.size() != m.NodeCount()) continue;
-        std::vector<int> bones;
-        for (const std::string& name : chain)
-            if (const int i = m.NodeIndex(Bone(name)); i >= 0) bones.push_back(i);
+        std::vector<int> bones, slot; // slot: the bone's place in the chain (its weight and limit)
+        for (size_t c = 0; c < chain.size(); ++c)
+            if (const int i = m.NodeIndex(Bone(chain[c])); i >= 0) { bones.push_back(i); slot.push_back((int)c); }
         if (bones.empty()) continue;
         // A piece skinning nothing the chain moves (legs, feet) draws the same either way. The driver always
         // turns: its head and shoulders are read for the camera and the arms.
@@ -1520,12 +1575,28 @@ void FirstPersonBody::RotateChain(const std::vector<std::string>& chain, const s
         // Only the chain and what's above it are read before ApplyLocalPose re-derives the rest.
         globals.resize(pose.size());
         IK::RefreshPath(pose, parents, globals, -1, bones.back());
-        const glm::quat step = stepFor((int)bones.size());
+        // Each bone's share of the turn: even (the bone count) unless the distribution says otherwise.
+        float divisor[8], weight[8];
+        const size_t count = std::min<size_t>(bones.size(), 5);
+        for (size_t b = 0; b < count; ++b) weight[b] = dist ? dist->Weight[std::min(slot[b], 4)] : 1.0f;
+        IK::ChainDivisors(weight, (int)count, divisor);
+        const float pelvisAlpha = dist ? std::clamp(dist->PelvisAlpha, 0.0f, 1.0f) : 0.0f;
+        if (pelvisAlpha > 0.0f) // the pelvis takes its share first; the spine the rest
+            if (const int pelvis = m.NodeIndex(Bone(FPBody::kBonePelvis)); pelvis >= 0) {
+                IK::RefreshPath(pose, parents, globals, -1, pelvis);
+                IK::OffsetBoneOnly(pose, parents, globals, pelvis, glm::vec3(0.0f), stepFor(1.0f / pelvisAlpha),
+                                   IK::Position(globals[pelvis]));
+                IK::RefreshPath(pose, parents, globals, pelvis, bones.back());
+            }
         // Only the next spine bone's global is read before ApplyLocalPose re-derives the lot, so
         // refresh just the path to it rather than the whole upper body after every bone.
         for (size_t b = 0; b < bones.size(); ++b) {
             const int i = bones[b];
             if (b > 0) IK::RefreshPath(pose, parents, globals, bones[b - 1], i);
+            float d = b < count ? divisor[b] : (float)bones.size();
+            if (pelvisAlpha > 0.0f) d /= 1.0f - pelvisAlpha;
+            glm::quat step = stepFor(d);
+            if (dist && b < count) step = IK::ClampStepAngle(step, dist->MaxAngle[std::min(slot[b], 4)]);
             IK::OffsetBoneOnly(pose, parents, globals, i, glm::vec3(0.0f), step, IK::Position(globals[i]));
         }
         m.ApplyLocalPose(pose);
@@ -1569,6 +1640,7 @@ void FirstPersonBody::ArmsLateUpdate(World& world, entt::entity weaponArms, floa
     auto& reg = world.Registry;
     if (!reg.valid(m_Body)) return;
     const FirstPersonBodyComponent& cfg = reg.get<FirstPersonBodyComponent>(m_Body);
+    m_Spine = cfg.Spine;
     // The world twins start from the pieces' pose as it stands now (the clips, the spine, the feet): from
     // here the pieces' arms go to the rig's hands, the twins' to the world gun's.
     {
@@ -1596,7 +1668,7 @@ void FirstPersonBody::ArmsLateUpdate(World& world, entt::entity weaponArms, floa
                 const glm::quat back = glm::angleAxis(straighten, kRight * -1.0f); // about the body's left (+X): + tips forward
                 const char* const* kSpine = FPBody::kBoneSpine;
                 RotateChain({kSpine[0], kSpine[1], kSpine[2], kSpine[3], kSpine[4]},
-                            [&](int n) { return glm::normalize(glm::slerp(none, back, 1.0f / (float)n)); }, &m_TwinModels);
+                            [&](float n) { return glm::normalize(glm::slerp(none, back, 1.0f / n)); }, &m_TwinModels, &m_Spine);
             }
         }
     }
@@ -1771,7 +1843,7 @@ void FirstPersonBody::ArmsLateUpdate(World& world, entt::entity weaponArms, floa
 
             // The rig's arm shapes first, so the elbows bend the way the animation has them; the solve
             // then only fixes the hands.
-            CopyArmShape(m, *rig, m_ArmsWeight, pose, parents, m_BoneMap, cfg.ClavicleFollow);
+            CopyArmShapeCached(m, *rig, m_ArmsWeight, pose, parents, cfg.ClavicleFollow);
 
             const glm::mat4 toModel = glm::inverse(pieceWorld);
             // The first piece in `order` works the shoulder moves out; the rest copy them. (What of the torso's
@@ -1908,8 +1980,8 @@ void FirstPersonBody::ArmsLateUpdate(World& world, entt::entity weaponArms, floa
                             if (!haveElbowAim[s]) { elbowAim[s] = aimTo; haveElbowAim[s] = true; }
                             const float angle = std::acos(std::clamp(glm::dot(elbowAim[s], aimTo), -1.0f, 1.0f));
                             if (angle > 1e-5f) {
-                                constexpr float kElbowEase = 0.06f, kElbowMaxRate = glm::radians(540.0f); // seconds; per second
-                                const float step = std::min(angle * Follow(dt, kElbowEase), kElbowMaxRate * dt);
+                                const float kElbowMaxRateRad = glm::radians(cfg.ElbowMaxRate); // convert deg/s to rad/s
+                                const float step = std::min(angle * Follow(dt, cfg.ElbowEase), kElbowMaxRateRad * dt);
                                 glm::vec3 turnAxis = glm::cross(elbowAim[s], aimTo);
                                 if (glm::dot(turnAxis, turnAxis) < 1e-10f) turnAxis = glm::cross(elbowAim[s], glm::vec3(0.0f, 1.0f, 0.0f));
                                 if (glm::dot(turnAxis, turnAxis) < 1e-10f) turnAxis = glm::vec3(1.0f, 0.0f, 0.0f);
@@ -2129,7 +2201,7 @@ void FirstPersonBody::ArmsLateUpdate(World& world, entt::entity weaponArms, floa
                         }
                     }
                     m_WorldHeadTiltDeg = glm::degrees(2.0f * std::acos(std::clamp(std::abs(turn.w), 0.0f, 1.0f)));
-                    RotateChain({"neck_01", "neck_02"}, [&](int n) { return glm::normalize(glm::slerp(none, turn, 1.0f / (float)n)); },
+                    RotateChain({"neck_01", "neck_02"}, [&](float n) { return glm::normalize(glm::slerp(none, turn, 1.0f / n)); },
                                 &m_TwinModels);
                 }
             }

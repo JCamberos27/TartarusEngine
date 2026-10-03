@@ -168,6 +168,17 @@ void DrawAds(PropertyRows& r, FirstPersonAnimationSet& s, const WeaponContext& c
                                                       "Zero keeps the clip's sight picture exactly.");
     r.Vec3("Rotation", aim.Rotation, 0.05f, "%.2f", "Degrees (pitch, yaw, roll) added with the sights up.", "PYR");
     r.Float("Blend Time", aim.BlendTime, 0.005f, 0.0f, 2.0f, "%.3f s", "Seconds to blend that offset (and the ADS sway / bob / breathing scales) in and out.");
+    r.Float("Position Additive", aim.PositionAdditive, 0.01f, 0.0f, 1.0f, "%.2f",
+            "1 lays the position offset on top of everything the stack has built (additive); 0 places the gun at the offset outright, "
+            "the other layers' motion fading out as the sights come up.");
+    r.Float("Rotation Additive", aim.RotationAdditive, 0.01f, 0.0f, 1.0f, "%.2f",
+            "Same for the rotation offset: 1 = additive, 0 = absolute.");
+    r.Float("Camera Share", aim.CameraShare, 0.01f, 0.0f, 1.0f, "%.2f",
+            "Share of the position offset applied by moving the view instead of the gun. The sight picture on screen is the same; 0 = the gun moves alone.");
+    r.Heading("Crouched Pose");
+    r.Vec3("Crouch Position", aim.CrouchPosition, 0.0005f, "%.4f", "Metres added to the sight offset while crouched (camera frame: +X right, +Y up, +Z back). Sights up only.");
+    r.Vec3("Crouch Rotation", aim.CrouchRotation, 0.05f, "%.2f", "Degrees (pitch, yaw, roll) added to the sight offset while crouched.", "PYR");
+    r.Float("Crouch Blend Time", aim.CrouchBlendTime, 0.005f, 0.0f, 2.0f, "%.3f s", "Seconds to blend the crouched pose in and out as the player crouches.");
     if (Tree("Blend Easing")) {
         CurveRow(r, "Weight over the blend", "##aiblend", aim.Blend, kDefaults.Aim.Blend, "%.2f", 1.0f,
                  "Maps the 0..1 blend to the weight actually applied. Should run from 0 to 1.");
@@ -496,6 +507,9 @@ void DrawMovement(PropertyRows& r, WeaponProceduralSettings& p, const WeaponCont
         r.Float("Move Position", w.MovePosition, 0.0001f, 0.0f, 0.05f, "%.4f m", "Trail per m/s of movement.");
         r.Float("Move Roll", w.MoveRoll, 0.01f, 0.0f, 10.0f, "%.2f deg", "Tilt into a strafe, per m/s.");
         r.Float("ADS Scale", w.AdsScale, 0.01f, 0.0f, 2.0f, "x%.2f", "Multiplier with the sights up (lower = steadier aim).");
+        r.Vec2("Free-Aim Zone", w.FreeAimZone, 0.05f, "%.2f deg", "Yaw, pitch: the view turns this far (degrees) inside a zone before the gun follows. 0 = off (the gun follows at once).");
+        r.Float("Free-Aim Return", w.FreeAimReturn, 0.5f, 0.0f, 360.0f, "%.1f deg/s", "How fast the gun comes back to centre once the view stops turning.");
+        r.Float("Free-Aim ADS Scale", w.FreeAimAdsScale, 0.01f, 0.0f, 1.0f, "x%.2f", "The zone with the sights up, as a fraction (0: the sights stay on the view).");
         r.Spring("Spring", w.Spring.Frequency, w.Spring.Damping, "Damping under 1 overshoots, which reads as weight.");
         r.Float("Look Smoothing", w.LookSmoothing, 0.1f, 0.0f, 60.0f, w.LookSmoothing > 0.0f ? "%.1f Hz" : "raw",
                 "Smooths the mouse's turn rate before it drives the sway, so the gun glides instead of buzzing. Lower = smoother, laggier.");
@@ -709,6 +723,23 @@ void DrawIK(PropertyRows& r, WeaponIKSettings& k, WeaponContext& ctx) {
             PropertyRows::Badge(Status::Ok, "All IK bones found on the arms rig");
         }
     }
+    r.Heading("Hand Offsets");
+    r.Note("Each hand's grip moved in the gun bone's frame, on top of the clip's grip. Zero = as authored.");
+    r.Vec3("Right Position", k.RightHandPosition, 0.0005f, "%.4f", "Metres the right hand moves on the gun (x right, y up, z forward).");
+    r.Vec3("Right Rotation", k.RightHandRotation, 0.1f, "%.2f", "Degrees (pitch, yaw, roll) the right hand turns on the gun.", "PYR");
+    r.Vec3("Left Position", k.LeftHandPosition, 0.0005f, "%.4f", "Metres the left hand moves on the gun (x right, y up, z forward).");
+    r.Vec3("Left Rotation", k.LeftHandRotation, 0.1f, "%.2f", "Degrees (pitch, yaw, roll) the left hand turns on the gun.", "PYR");
+    if (ActionButton(ICON_FA_ROTATE_LEFT "  Reset Hand Offsets", "Set both hands' position and rotation offsets back to zero (as authored)", false,
+                     ImVec2(-FLT_MIN, 0.0f))) {
+        k.RightHandPosition = k.RightHandRotation = k.LeftHandPosition = k.LeftHandRotation = glm::vec3(0.0f);
+        r.MarkChanged();
+    }
+    r.Heading("Clip Curves");
+    r.Check("Use Clip Curves", k.UseClipCurves, "Weight curves authored on the Animator Controller's states scale the IK while that state plays (blended by the crossfade). A state with no curve = 1, so nothing changes until one is authored.");
+    r.Text("All Curve", k.CurveAll, "Curve name scaling the whole arm IK and the procedural motion it carries (0..1).");
+    r.Text("Right Hand Curve", k.CurveRightHand, "Curve name scaling the right hand's IK (0..1).");
+    r.Text("Left Hand Curve", k.CurveLeftHand, "Curve name scaling the left hand's IK (0..1).");
+    r.Text("Look Curve", k.CurveLook, "Curve name scaling the rig's look-at (0..1), when it has one.");
     r.Heading("Blending");
     r.Name("Off Tag", k.OffTag, ctx.Tags, false, "States with this tag play purely as authored: IK and the procedural motion fade out.");
     r.Float("Blend Time", k.BlendTime, 0.005f, 0.0f, 2.0f, "%.3f s", "Seconds to fade out and back in around Off-tagged states.");

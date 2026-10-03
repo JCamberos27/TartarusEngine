@@ -16,12 +16,11 @@ void Player::Update(float dt, World& world, GLFWwindow* window, bool readInput) 
         Cam.ProcessMouseLook((float)Input::GetMouseDeltaX(),
                              (float)Input::GetMouseDeltaY() * (InvertY ? -1.0f : 1.0f), MouseSensitivity);
         // #145 - gamepad right stick: a turn rate, not a delta. Stick Y is +down, look is +up.
-        constexpr float kStickLookDegPerSec = 180.0f;
         const float lx = Input::GetGamepadAxis(GLFW_GAMEPAD_AXIS_RIGHT_X);
         const float ly = -Input::GetGamepadAxis(GLFW_GAMEPAD_AXIS_RIGHT_Y);
         if (lx != 0.0f || ly != 0.0f)
-            Cam.ProcessMouseLook(lx * kStickLookDegPerSec * dt,
-                                 ly * kStickLookDegPerSec * dt * (InvertY ? -1.0f : 1.0f), 1.0f);
+            Cam.ProcessMouseLook(lx * StickLookDegPerSec * dt,
+                                 ly * StickLookDegPerSec * dt * (InvertY ? -1.0f : 1.0f), 1.0f);
         if (MaxYawRate > 0.0f && dt > 0.0f) {
             auto wrap = [](float d) { d = std::fmod(d, 360.0f); return d > 180.0f ? d - 360.0f : (d <= -180.0f ? d + 360.0f : d); };
             const float before = wrap(yawBefore - YawFreeCenter), after = wrap(Cam.Yaw - YawFreeCenter);

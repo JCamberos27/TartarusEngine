@@ -5,6 +5,7 @@
 #include <glm/gtc/quaternion.hpp>
 
 #include <cstdint>
+#include <functional>
 #include <memory>
 #include <string>
 #include <vector>
@@ -59,6 +60,27 @@ struct NpcHoldSettings {
     float CameraSmoothing = 0.06f;   // seconds
     float EyeSlack = 0.035f;         // m the eye may trail the shoulders by
     float LookDownPush = 0.0f, LookDownStart = 0.0f; // looking down, the eye comes forward over the chest
+    // NPC body tuning (Tick, LateUpdate, FootPass)
+    float TurnThreshold = 1.15f;     // radians: a still body further off than this turns on the spot
+    float MoveEase = 0.1f;           // seconds: blend tree parameter easing
+    float FaceEase = 0.09f;          // seconds: heading easing while moving
+    IK::SpineDistribution Spine;     // how the spine's turns are shared over spine_01..05 (default: even)
+    float MaxTwist = 1.2f;           // radians: spine twists toward aim
+    float AimLean = 0.1f;            // radians: torso forward lean aiming, standing
+    float AimLeanCrouched = 0.22f;   // radians: torso lean aiming, crouched (~13 deg)
+    float ReadyLeanCrouched = 0.4f;  // radians: torso lean at low ready, crouched (~23 deg)
+    float CowerHunch = 0.35f;        // radians: spine curls forward ducking (~20 deg)
+    float HeadMaxYaw = 1.2f;         // radians: head turns past chest (~70 deg)
+    float HeadMaxPitch = 0.6f;       // radians: head nods up/down (~35 deg)
+    // NPC foot IK
+    float FootIKMaxDrop = 0.35f;     // m: pelvis drops to lower foot
+    float FootIKMaxRaise = 0.35f;    // m: pelvis rises to higher foot
+    float FootIKPelvisRaise = 0.08f; // m: pelvis height adjustment limit
+    float FootIKTiltMax = 0.5f;      // radians: max foot angle to ground normal
+    float FootOffsetEase = 0.05f;    // seconds: vertical foot adjustment easing
+    float FootNormalEase = 0.08f;    // seconds: ground normal easing
+    float FootIKFade = 0.15f;        // seconds: foot IK enable/disable easing
+    IK::FootSlideSettings FootSlide; // foot pinning + stride warping (off by default; the player body's settings)
 };
 
 struct NpcBodyInput {
@@ -173,12 +195,14 @@ private:
     // gives every other piece that draws the upper body the driver's rotations for it (one skeleton: the pieces'
     // own solves came out the same, at several times the cost). Called whenever a piece is read or drawn next.
     void SyncPieces();
-    void OffsetSpine(const glm::quat& step); // m_Pose / m_Globals already hold the driver's pose and its globals
+    // `stepFor(divisor)` = the turn one spine bone takes (the whole turn / divisor); see IK::ChainDivisors.
+    void OffsetSpine(const std::function<glm::quat(float)>& stepFor); // m_Pose / m_Globals already hold the driver's pose and its globals
     // Feet onto uneven ground (LateUpdate, first): the pelvis drops to the lower foot's ground, the legs reach theirs.
     void FootPass(float dt);
     void SyncLower(); // the driver's pelvis and legs onto every other piece
     std::vector<std::vector<std::pair<int, int>>> m_LowerMap; // per piece: (piece node, driver node), pelvis and legs
     int m_DriverPelvis = -1, m_DriverLeg[2][3] = {{-1, -1, -1}, {-1, -1, -1}}; // thigh, calf, foot
+    IK::FootSlide m_Slide;
     float m_FootWeight = 0.0f, m_FootOffset[2] = {0.0f, 0.0f};
     glm::vec3 m_FootNormal[2] = {glm::vec3(0.0f, 1.0f, 0.0f), glm::vec3(0.0f, 1.0f, 0.0f)};
     bool m_HaveFootGround = false;
@@ -187,6 +211,7 @@ private:
     int m_DriverIndex = -1;
     std::vector<int> m_DriverParents;                          // the driver's node parents
     int m_DriverSpine[5] = {-1, -1, -1, -1, -1}, m_DriverSpineCount = 0;
+    int m_DriverSpineSlot[5] = {0, 1, 2, 3, 4}; // the chain slot (spine_0N - 1) of each found bone, for the Spine distribution
     // Scratch.
     std::vector<glm::mat4> m_Globals;
     std::vector<LocalTRS> m_Pose, m_BindScratch;

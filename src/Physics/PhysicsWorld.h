@@ -120,8 +120,32 @@ struct RagdollPart {
     float Anchor[3] = {0, 0, 0};
     float SwingDeg = 45.0f, TwistDeg = 20.0f;
     float Velocity[3] = {0, 0, 0};
+    float AngularVelocity[3] = {0, 0, 0}; // rad/s, world
+    // Shaped inertia: > 0 gives the part the inertia of a box `2 * InertiaHalfWidth` wide (along InertiaLateral, world) and
+    // `2 * InertiaHalfDepth` deep, as long as the capsule, instead of the capsule's own (a torso is wider than it is deep).
+    // `InertiaScale` multiplies either (> 1 spins slower: stability).
+    float InertiaHalfWidth = 0.0f, InertiaHalfDepth = 0.0f;
+    float InertiaLateral[3] = {0, 0, 1};
+    float InertiaScale = 1.0f;
+    // Viscous damping of the joint holding this part to its parent (acceleration units, as the drive's), always on, with the drives off too.
+    float JointDamping = 0.0f;
+    // Anatomical limits (Anatomical true): the joint frame is `LimitFrame` (world, xyzw) with +X the bone's neutral
+    // direction and +Y the direction of positive flexion; the swing ranges are degrees from that neutral (flexion toward +Y =
+    // SwingZ, sideways = SwingY), the twist about +X. The part's pose at build may sit anywhere inside (or outside: the range
+    // then widens to include it). Not Anatomical: the symmetric cone (SwingDeg) and twist (TwistDeg) above.
+    bool Anatomical = false;
+    float LimitFrame[4] = {0, 0, 0, 1};
+    float SwingYMin = -45.0f, SwingYMax = 45.0f, SwingZMin = -45.0f, SwingZMax = 45.0f;
+    float TwistMin = -20.0f, TwistMax = 20.0f;
 };
-int  CreateRagdoll(unsigned entity, const RagdollPart* parts, int count); // -1 on failure
+// Body-wide ragdoll tuning (the defaults are what was hard-coded before it was exposed).
+struct RagdollParams {
+    float LinearDamping = 0.08f, AngularDamping = 0.25f;
+    int SolverPosIters = 16, SolverVelIters = 4;
+    float Depenetration = 3.0f, SleepThreshold = 0.08f;
+    float StaticFriction = 0.8f, DynamicFriction = 0.7f, Restitution = 0.05f;
+};
+int  CreateRagdoll(unsigned entity, const RagdollPart* parts, int count, const RagdollParams* params = nullptr); // -1 on failure
 void DestroyRagdoll(int ragdoll);
 void RagdollImpulse(int ragdoll, int part, const float impulse[3], const float point[3]);
 bool GetRagdollPart(int ragdoll, int part, float outPos[3], float outRotXYZW[4]);
@@ -129,6 +153,10 @@ bool RagdollAsleep(int ragdoll);
 // The joints' slerp drives: each part held toward its target orientation (identity: the pose the ragdoll was built in,
 // see SetRagdollDriveTarget) as a spring of `stiffness` / `damping` (acceleration: mass independent). 0 = limp.
 void SetRagdollDrive(int ragdoll, float stiffness, float damping);
+// The same for the one joint that holds `part` to its parent (a region's drive fading on its own clock).
+void SetRagdollPartDrive(int ragdoll, int part, float stiffness, float damping);
+// Part `part`'s principal moments of inertia (kg m^2, about its bone axis and the two across it), for tests.
+bool GetRagdollPartInertia(int ragdoll, int part, float outInertia[3]);
 // Where part `part`'s drive wants it, as its rotation (xyzw) relative to its parent from the built pose.
 void SetRagdollDriveTarget(int ragdoll, int part, const float rotXYZW[4]);
 

@@ -123,23 +123,54 @@ What is left, roughly by expected value. At 1080p the GPU is the limit, at 1440p
    depth-aware upsample or fewer taps would trade some quality.
 4. **Clouds** (~0.5 ms): already a quarter of texels per frame. Skipping texels behind opaque geometry
    needs history handling so moving objects don't leave holes.
-5. **Static geometry** (~0.8 ms of Scene Draw at 1440p): primitives are one Model per entity (139
-   spheres at 1152 triangles each, 56 cubes, 36 cylinders). Share one mesh per primitive kind and draw
-   identical mesh+material runs instanced, in the main, SSAO and shadow passes. Also cuts CPU draw calls.
-6. **Characters' bounds**: characters whose clips live in other files report `HasAnimations() == false`,
+5. **Static geometry** (~0.8 ms of Scene Draw at 1440p): primitives now share one GPU mesh per kind (done, #P2),
+   but each is still its own draw. Instancing identical mesh+material runs was built for the main pass and
+   the SSAO pre-pass (per-instance matrices in an SSBO, runs merged after sorting on material then mesh) and
+   measured: no gain. CPU Scene Draw stayed at ~0.6 ms and the GPU SSAO pre-pass got ~15% slower, so it was
+   dropped; the Sandbox is GPU-bound and its ~230 draws are not what costs. Note embedded materials are one
+   asset per entity (batch on `Mat.Hash()`, not the pointer) and reflection probes are chosen per object.
+   The sun and local shadow passes were not tried (the sun's instance index is the cascade layer).
+6. ~~**Characters' bounds**: characters whose clips live in other files report `HasAnimations() == false`,
    so they are culled on unpadded bind-pose bounds in the main, SSAO and shadow passes. Harmless in the
-   Sandbox, but a limb reaching out of the bind box could be culled. Use "has bones" for the padding.
+   Sandbox, but a limb reaching out of the bind box could be culled. Use "has bones" for the padding.~~ **Done (#P1)**: Added `Model::HasBones()` and replaced the three padding checks with it (SceneRenderer L451, main L3095 and L3672).
 
 **CPU** (worth it once the GPU is lighter, or on slower CPUs)
-7. First-person body ~1.4 ms: `ApplyLocalPose` (the final bone matrices do two generic 4x4 products per
-   bone; both are affine), IK global refreshes, clip sampling. Multithread the per-piece work, or sample
-   the driver once and copy to followers through a node remap.
+7. First-person body ~1.4 ms: the final bone matrices now use affine products (done, #P2: `AffineMul`, unit
+   test vs the generic product within 1e-5; the bench's First Person IK timer is ~1.25 ms before and after,
+   inside noise). Then (#A4): the per-piece arm-shape copy (`CopyArmShape`) looked up every node's rig twin by
+   name each frame, per piece, twice; the pairs are now found once per (piece model, rig) and cached
+   (`FirstPersonBody::CopyArmShapeCached`, unit-tested against the name walk). Bench at 1080p, base/new
+   interleaved x3: First Person IK 1.17 -> 1.12 ms, 169.2 -> 171.2 fps (consistent in all three pairs; small).
+   `--perf-sample` shows the rest is spread thin: IK refresh/compute ~9% of the frame (SolveTwoBone's final
+   subtree refresh, foot IK, per-piece solves of the 5-6 upper-body pieces), `SkinnedPoints` ~3%, the rig's clip
+   sampling. Each refresh already recomputes only the dirty subtree with affine products, so a further gain needs
+   a structural change (share one solve across pieces, or cache local matrices) - not done: the pieces' bone
+   lengths differ, and a cached local would go stale when callers write `pose[i]` directly.
 8. PhysX `fetchResults` wait (~0.45 ms): overlap simulation with animation and render prep.
 9. Animator controllers ~0.46 ms.
 
 **Hitches**
-10. Edit-mode SSAO prepass ~117 ms on first use (shader compile); sun shadow pass spike on the first
-    edit frames.
+10. First-use stalls, measured on Sandbox with the first 60 frames of each `--perf-bench` phase logged. Fixed by
+    `warmRenderResources` (main.cpp, run behind the load): the physical sky's programs, LUT resources and cloud noise
+    bake (`SkyAtmosphere::WarmUp`, GPU 268 ms on frame 3 down to ~6 ms), `Ssao::WarmUp` (compute+blur on a 16x16
+    target) and the sun shadow array allocation. Edit-phase worst frame 12.2 ms down to 7.7 ms (A/B x2, noise
+    ~0.1 ms). Still stalling on first use: frame 3 of the Scene view (~175 ms: SSAO depth pre-pass 20 ms, cluster
+    cull 40 ms, model program variants), Play press (`Animator Clip Warm-up` ~1.1 s on the first Play frame, Enemy AI
+    ~110 ms, asset pump ~87 ms on frame 3 of Play; not in the renderer).
+    Round 4 moved more of it behind the load: `IblProbe::WarmUp` (programs + BRDF LUT), `Tonemapper::WarmUp`,
+    `LightBuffer`/`ClusterGrid::WarmUp` (buffers + cull programs) and `SceneRenderer::WarmShaderVariants` (every
+    material's ShaderAsset variant). First-frame CPU Scene Draw 64 -> 22 ms, IBL bake CPU 20.6 -> ~0, GPU Cluster
+    Cull 47 -> under the 3 ms report line, SSAO pre-pass 21.7 -> 4.8 ms. The worst early frame (frame 3, ~175 ms wall)
+    did NOT move (A/B x2: 174/175 base, 52/175 new): it is GPU-side first use - the urgent IBL convolve (~45 ms of real
+    work, needs the first sky capture, so it cannot run at load), first-touch of textures/buffers by the driver, and
+    NVIDIA's one-time "vertex shader recompiled based on GL state" for each shadow program (2 warnings; only a real
+    mesh draw triggers it).
+12. GL warnings, fixed: the periodic "texture object (0) bound to texture image unit 0 does not have a defined base
+    level" burst (14 every ~4 s; 228 per weapon-test) was the IBL convolve (and the SSAO warm-up) leaving their
+    program current with its cube/2D texture unbound, so the next draw/clear validated a program sampling texture 0.
+    `BakeStateScope`, `IblProbe::Bake` and `Ssao::WarmUp` now `glUseProgram(0)` on exit; the spot/point shadow passes bind
+    the white default to unit 0 before their first clear. Headless.log texture-state warnings: 228 -> 0. The
+    MaterialPreview smoke pass still logs 7 (units 0/11-13), not in the game path.
 11. An enemy soldier's respawn is ~1.8 ms (it was 6-7: the gun's clip matching and setup measurements are now shared
     between soldiers): ~1 ms of it is building the soldier's entities from Soldier.json. Pooling soldiers (reusing a
     dead one's entities and weapon rig) would take it to ~0.

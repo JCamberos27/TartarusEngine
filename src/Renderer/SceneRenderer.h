@@ -107,6 +107,10 @@ struct FrameState {
 // shadow/IBL/cluster prerequisite passes, framebuffer binding, and the viewport.
 class SceneRenderer {
 public:
+    // Compiles, at load, every shader-variant program the world's materials will draw through
+    // (otherwise each compiles on the first frame that draws it). Returns how many programs it touched.
+    static int WarmShaderVariants(World& world);
+
     // Draws sky + the opaque and transparent scene geometry for one viewport. `ctx` carries the
     // per-view params (see RenderFrameContext.h and its GL state contract); `in` carries the
     // engine resources + this frame's light/shadow state. `outStats` (optional) receives the

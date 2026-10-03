@@ -156,6 +156,9 @@ onto the sights for the length of the action and matches the elbows and wrists t
 so it looks like the hip clip done on the sights and ends there with no readjust. Needs:
 - an aim state tagged `ADS` (named in **Reference Pose**, default `Aim`);
 - the arm IK on (**IK** section, bones found) - otherwise the whole rig is carried.
+- the IK section's **Clip Curves**: **Use Clip Curves** and the four curve names (`IK`, `IK_RightHand`, `IK_LeftHand`, `Look`) pick which Animator Controller state curves (see [ANIMATOR.md](ANIMATOR.md), Weight curves) scale the IK; a state with no such curve = 1.
+- Aim-Down-Sights: **Position / Rotation Additive** (1 = on top of the stack, 0 = absolute), **Camera Share**, and the **Crouched Pose** (position, rotation, blend time) for the sights-up offset; Sway: **Free-Aim Zone** (yaw, pitch deg; 0 = off), **Return** (deg/s) and **ADS Scale**.
+- the IK section's **Hand Offsets** (position m, rotation deg per hand, in the gun bone's frame; saved in the weapon JSON) are zero unless you nudge a grip; **Reset Hand Offsets** zeroes them.
 
 **Authored ADS clip.** Export the action as its own clip and add it to the controller:
 - *Standard graph:* name the clip `ADS_<action>`; the generator adds an `ADS <action>` state

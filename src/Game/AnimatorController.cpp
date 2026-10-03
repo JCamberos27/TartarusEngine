@@ -16,9 +16,11 @@
 
 #include <algorithm>
 #include <cstdio>
+#include <cstdlib>
 #include <chrono>
 #include <cmath>
 #include <filesystem>
+#include <functional>
 #include <fstream>
 #include <cstdint>
 #include <sstream>
@@ -283,6 +285,19 @@ bool AnimatorController::FromJsonString(const std::string& text, AnimatorControl
             // v1, or the one-track shorthand: the state itself carries the first track's motion.
             st.Motions[0] = MotionFromJson(s);
         }
+        if (const auto cs = s.find("curves"); cs != s.end() && cs->is_array())
+            for (const auto& cj : *cs) {
+                if (!cj.is_object() || Str(cj, "name").empty()) continue;
+                Curve cv;
+                cv.Name = Str(cj, "name");
+                if (const auto ks = cj.find("keys"); ks != cj.end() && ks->is_array())
+                    for (const auto& k : *ks)
+                        if (k.is_array() && k.size() >= 2 && k[0].is_number() && k[1].is_number())
+                            cv.Keys.push_back({std::clamp((float)k[0].get<double>(), 0.0f, 1.0f), (float)k[1].get<double>()});
+                std::stable_sort(cv.Keys.begin(), cv.Keys.end(),
+                                 [](const CurveKey& a, const CurveKey& b) { return a.Time < b.Time; });
+                st.Curves.push_back(std::move(cv));
+            }
         if (const auto es = s.find("events"); es != s.end() && es->is_array())
             for (const auto& e : *es) {
                 if (!e.is_object() || Str(e, "name").empty()) continue;
@@ -379,6 +394,15 @@ std::string AnimatorController::ToJsonString() const {
             for (int t = 0; t < (int)Tracks.size(); ++t)
                 if (!s.MotionFor(t).Empty()) ms[Tracks[t]] = MotionToJson(s.MotionFor(t));
             st["motions"] = std::move(ms);
+            if (!s.Curves.empty()) {
+                json cs = json::array();
+                for (const auto& c : s.Curves) {
+                    json ks = json::array();
+                    for (const auto& k : c.Keys) ks.push_back({k.Time, k.Value});
+                    cs.push_back({{"name", c.Name}, {"keys", std::move(ks)}});
+                }
+                st["curves"] = std::move(cs);
+            }
             if (!s.Events.empty()) {
                 json es = json::array();
                 for (const auto& e : s.Events) es.push_back({{"name", e.Name}, {"time", e.Time}});
@@ -745,6 +769,46 @@ bool AnimatorStartInState(const AnimatorController& ctrl, AnimatorControllerComp
     return true;
 }
 
+// --- weight curves ---------------------------------------------------------------------------
+
+float AnimatorController::EvaluateCurve(const std::vector<CurveKey>& keys, float t, float fallback) {
+    if (keys.empty()) return fallback;
+    if (t <= keys.front().Time) return keys.front().Value;
+    for (size_t i = 1; i < keys.size(); ++i) {
+        if (t > keys[i].Time) continue;
+        const float span = keys[i].Time - keys[i - 1].Time;
+        const float u = span > 1e-6f ? (t - keys[i - 1].Time) / span : 1.0f;
+        return keys[i - 1].Value + (keys[i].Value - keys[i - 1].Value) * u;
+    }
+    return keys.back().Value;
+}
+
+const AnimatorController::Curve* AnimatorController::State::FindCurve(const std::string& name) const {
+    for (const Curve& c : Curves)
+        if (c.Name == name) return &c;
+    return nullptr;
+}
+
+float AnimatorSampleCurve(const AnimatorController& ctrl, const AnimatorControllerComponent& ac, int layer,
+                          const std::string& name, float fallback) {
+    if (name.empty() || layer < 0 || layer >= (int)ctrl.Layers.size() || layer >= (int)ac.Layers.size()) return fallback;
+    const AnimatorController::Layer& L = ctrl.Layers[layer];
+    float out = fallback;
+    bool first = true;
+    for (const auto& it : ac.Layers[layer].Stack) {
+        if (it.State < 0 || it.State >= (int)L.States.size()) continue;
+        const AnimatorController::State& s = L.States[it.State];
+        float phase = it.Phase;
+        if (s.Loop) phase -= std::floor(phase);                // loops count past 1
+        else phase = std::clamp(phase, 0.0f, 1.0f);
+        const AnimatorController::Curve* c = s.FindCurve(name);
+        const float v = c ? AnimatorController::EvaluateCurve(c->Keys, phase, fallback) : fallback;
+        if (first) { out = v; first = false; }
+        else out += (v - out) * AnimatorCrossfadeWeight(it.Fade);
+    }
+    return out;
+}
+
 // --- sampling --------------------------------------------------------------------------------
 
 bool AnimatorSampleMotion(Model& M, AssetLibrary& assets, const AnimatorController::Motion& m,
@@ -883,6 +947,23 @@ struct Sampler {
         return mix.Result();
     }
 };
+
+// Resolves every clip `smp`'s track can reach (attaching the ones in other files), once per
+// model + controller + track. A pointer reused by a later model only skips the warm-up; clips
+// still resolve lazily.
+void WarmControllerClips(const AnimatorController& ctrl, Sampler& smp) {
+    static std::unordered_set<std::uint64_t> s_Warmed;
+    const std::uint64_t key = (std::uint64_t)(std::uintptr_t)&smp.M * 1099511628211ull ^
+                              (std::uint64_t)(std::uintptr_t)&ctrl * 31ull ^ (std::uint64_t)smp.Track;
+    if (!s_Warmed.insert(key).second) return;
+    PROFILE_SCOPE("Animator Clip Warm-up");
+    for (const auto& L : ctrl.Layers)
+        for (const auto& s : L.States) {
+            const auto& m = s.MotionFor(smp.Track);
+            if (!m.IsBlendTree()) smp.Clip(m.Clip);
+            for (const auto& child : m.Children) smp.Clip(child.Clip);
+        }
+}
 
 // The pose one layer's crossfade stack produces. `base` fills in for empty motions.
 // `top`, when given, also receives the current (topmost) state's own unblended pose.
@@ -1119,21 +1200,10 @@ void UpdateAnimatorControllers(World& world, AssetLibrary& assets, float dt) {
             if (r.M) samplers.push_back({*r.M, assets, ctrl->TrackIndex(r.AC->Track), {}, {}});
         // Resolve every clip a rig's track can reach the first time the rig meets this controller:
         // a clip in another file loads (and attaches) on first use, and entering a new state
-        // mid-Play used to hitch a frame by ~20 ms. A pointer reused by a later model only skips
-        // the warm-up; clips still resolve lazily.
-        static std::unordered_set<std::uint64_t> s_Warmed;
-        for (Sampler& smp : samplers) {
-            const std::uint64_t key = (std::uint64_t)(std::uintptr_t)&smp.M * 1099511628211ull ^
-                                      (std::uint64_t)(std::uintptr_t)ctrl.get() * 31ull ^ (std::uint64_t)smp.Track;
-            if (!s_Warmed.insert(key).second) continue;
-            PROFILE_SCOPE("Animator Clip Warm-up");
-            for (const auto& L : ctrl->Layers)
-                for (const auto& s : L.States) {
-                    const auto& m = s.MotionFor(smp.Track);
-                    if (!m.IsBlendTree()) smp.Clip(m.Clip);
-                    for (const auto& child : m.Children) smp.Clip(child.Clip);
-                }
-        }
+        // mid-Play used to hitch a frame by ~20 ms. PrefetchAnimatorClips normally did this behind
+        // the editor already (the files on worker threads, the attach on the main thread), so this
+        // is the fallback for a rig that appeared since.
+        for (Sampler& smp : samplers) WarmControllerClips(*ctrl, smp);
         // Once the animator has advanced, the parameters are fixed for the frame, and so is each state's
         // length: every rig's pose asks for the same few (per crossfade entry, per layer), each a pass
         // over every rig's clips, so they are worked out once.
@@ -1195,5 +1265,111 @@ void UpdateAnimatorControllers(World& world, AssetLibrary& assets, float dt) {
             r.AC->SkippedTime = 0.0f;
             ApplyRootMotion(world, r.E, rmo, motion, stepDt);
         }
+    }
+}
+
+std::vector<std::string> AnimatorControllerClipFiles(const AnimatorController& ctrl, int track) {
+    std::vector<std::string> files;
+    std::unordered_set<std::string> seen;
+    const auto add = [&](const std::string& ref) {
+        if (ref.empty()) return;
+        std::string path = ref.substr(0, ref.find('#'));
+        std::string ext = fs::u8path(path).extension().u8string();
+        for (char& c : ext) c = (char)std::tolower((unsigned char)c);
+        if (ext != ".fbx" && ext != ".gltf" && ext != ".glb" && ext != ".dae" && ext != ".obj") return; // an own clip
+        if (seen.insert(path).second) files.push_back(std::move(path));
+    };
+    for (const auto& L : ctrl.Layers)
+        for (const auto& s : L.States) {
+            const auto& m = s.MotionFor(track);
+            if (!m.IsBlendTree()) add(m.Clip);
+            for (const auto& child : m.Children) add(child.Clip);
+        }
+    return files;
+}
+
+void PrefetchAnimatorClips(World& world, AssetLibrary& assets) {
+    // Twice a second is plenty: a controller or rig that appears is picked up well before Play is pressed.
+    static const bool s_Off = [] { // A/B switch for timing runs
+        char* e = nullptr;
+        size_t n = 0;
+        _dupenv_s(&e, &n, "TARTARUS_NO_ANIM_PREFETCH");
+        const bool off = e && *e;
+        std::free(e);
+        return off;
+    }();
+    if (s_Off) return;
+    static std::chrono::steady_clock::time_point s_Next;
+    const auto now = std::chrono::steady_clock::now();
+    if (now < s_Next) return;
+    s_Next = now + std::chrono::milliseconds(500);
+    static std::unordered_map<std::string, AssetLibrary::AsyncHandle> s_Requested;
+    // Prefetches one controller's clip files (the rigs' own track, or every track for `track` < 0); true once all are loaded.
+    const auto request = [&](const AnimatorController& ctrl, int track) {
+        bool ready = true;
+        std::vector<std::string> files;
+        if (track >= 0) files = AnimatorControllerClipFiles(ctrl, track);
+        else {
+            size_t tracks = 1;
+            for (const auto& L : ctrl.Layers)
+                for (const auto& s : L.States) tracks = std::max(tracks, s.Motions.size());
+            for (size_t t = 0; t < tracks; ++t)
+                for (std::string& f : AnimatorControllerClipFiles(ctrl, (int)t))
+                    if (std::find(files.begin(), files.end(), f) == files.end()) files.push_back(std::move(f));
+        }
+        for (const std::string& rel : files) {
+            const std::string abs = fs::u8path(rel).is_absolute() ? rel : ProjectPaths::Resolve(rel);
+            auto it = s_Requested.find(abs);
+            if (it == s_Requested.end()) {
+                std::error_code ec;
+                if (!fs::exists(fs::u8path(abs), ec)) continue; // a ref that doesn't resolve stays lazy
+                it = s_Requested.emplace(abs, assets.RequestModelAsync(abs)).first;
+            }
+            if (!AssetLibrary::IsReady(it->second)) ready = false;
+        }
+        return ready;
+    };
+    // The enemy squad's soldiers are built at Play from Soldier.json: their controller's clips are loaded too, or the
+    // first soldier spawned stalls its frame on them.
+    if (!world.Registry.view<NpcSpawnComponent>().empty()) {
+        static std::vector<std::string> s_SoldierControllers;
+        static bool s_Read = false;
+        if (!s_Read) {
+            s_Read = true;
+            std::ifstream in(fs::u8path(ProjectPaths::Resolve("assets/AI/Soldier.json")), std::ios::binary);
+            const json doc = json::parse(in, nullptr, /*allow_exceptions=*/false);
+            // Every "Controller" string anywhere in the prefab: the soldier's pieces each carry one.
+            const std::function<void(const json&)> collect = [&](const json& j) {
+                if (j.is_object()) {
+                    for (auto it = j.begin(); it != j.end(); ++it) {
+                        if (it.key() == "Controller" && it->is_string()) {
+                            const std::string ref = it->get<std::string>();
+                            if (!ref.empty() && std::find(s_SoldierControllers.begin(), s_SoldierControllers.end(), ref) ==
+                                                    s_SoldierControllers.end())
+                                s_SoldierControllers.push_back(ref);
+                        } else {
+                            collect(*it);
+                        }
+                    }
+                } else if (j.is_array()) {
+                    for (const json& e : j) collect(e);
+                }
+            };
+            if (!doc.is_discarded()) collect(doc);
+        }
+        for (const std::string& ref : s_SoldierControllers)
+            if (const auto ctrl = GetAnimatorController(ref)) request(*ctrl, -1);
+    }
+    auto view = world.Registry.view<AnimatorControllerComponent, RenderableComponent>();
+    for (auto e : view) {
+        Model* m = view.get<RenderableComponent>(e).ModelRef.get();
+        if (!m) continue;
+        auto& ac = view.get<AnimatorControllerComponent>(e);
+        const auto ctrl = GetAnimatorController(ac.Controller);
+        if (!ctrl) continue;
+        const int track = ctrl->TrackIndex(ac.Track);
+        if (!request(*ctrl, track)) continue;
+        Sampler smp{*m, assets, track, {}, {}};
+        WarmControllerClips(*ctrl, smp);
     }
 }
