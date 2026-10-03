@@ -1539,6 +1539,23 @@ struct ReverbZoneComponent {
     ReverbPreset Reverb = ReverbPresetFor(2);
     ReverbPreset Resolved() const { return ReverbMode == 1 ? Reverb : ReverbPresetFor(TailClass); }
 };
+// An opening between two Reverb Zones (Wwise "rooms and portals"): a door, a window, a breach. A 3D voice whose source and listener are in
+// different rooms joined by portals is heard from the portal (its direction and the path's length), softened by the portal's open amount
+// and by how sharply the sound has to bend round it, and carries its own room's reverb with it. The portal is a rectangle in the
+// entity's local X (width) / Y (height) plane, facing local +Z; the rooms are the zones on its two sides (sampled one Probe Distance out
+// from the opening), or the zones named in Room A / Room B. Gameplay opens and closes it by writing Open Amount.
+struct ReverbPortalComponent {
+    bool Enabled = true;
+    glm::vec3 Extents{0.5f, 1.0f, 0.1f}; // half width, half height, half thickness (metres)
+    float OpenAmount = 1.0f;           // 0 closed .. 1 fully open (a door's angle)
+    std::string RoomA, RoomB;          // names of Reverb Zone entities on the -Z / +Z side (empty = the zone found on that side)
+    float ProbeDistance = 0.5f;        // metres out from the opening where the rooms are looked up
+    float ClosedGainDb = -30.0f;       // what a shut portal lets through
+    float ClosedCutoff = 500.0f;       // Hz of its low-pass
+    float DiffractionCutoff = 2500.0f; // Hz of the low-pass at Diffraction Max Angle
+    float DiffractionMaxAngle = 120.0f; // degrees of bend at which the diffraction loss is full
+    float DiffractionGainDb = -6.0f;   // gain at that bend
+};
 // The runtime reverb bus (Audio/ReverbFdn, wired in AudioEngine): what each category of sound sends into it, how the reverb
 // follows the listener's space (Reverb Zones, else the raycast probe), and the listener-side occlusion low-pass. One per scene
 // (the first counts). The gun tails are recorded in their spaces and send nothing (Send Tail stays 0).
@@ -1562,7 +1579,10 @@ struct ReverbBusComponent {
     float OcclusionInterval = 0.15f;   // seconds between checks of one voice
     int OcclusionRaysPerFrame = 8;
     float OcclusionMinDistance = 3.0f; // closer sources are never occluded
-    float OcclusionGlide = 10.0f;      // per second
+    float OcclusionGlide = 10.0f;      // per second (also how fast a sound heard through a portal follows a door swinging)
+    // Portals (Reverb Portal components): a voice in another room is heard from the portal that joins the rooms.
+    bool PortalsEnabled = true;
+    float RemoteReverbHold = 5.0f;     // seconds the remote room's reverb keeps running after the last voice heard through a portal
 };
 // Bullet impacts, shell casings and rounds passing the listener (Game/Audio/ImpactAudio). One per scene (the first counts).
 struct ImpactAudioComponent {
