@@ -29,6 +29,7 @@ AUDIO_FOLDERS = ("Weapons", "Foley", "Impacts", "Casings", "Combat", "UI", "Body
 NO_LOUDNESS_WINDOW = ("ir",)      # an impulse response has no meaningful programme loudness (its rt60 / trim are checked in phase 2)
 MAX_PITCH_ST = 2.0       # no pitch / varispeed shift of a source cut beyond this (it sounds bad); variety comes from takes, cuts, EQ
 MONO_FOLD_MAX_DB = 4.0   # a fully decorrelated stereo pair loses 3 dB on a mono fold; a little more is tolerated
+IMPACT_LEAD_MAX_MS = 5.0  # bullet impacts start at once (first sound within this of the file start)
 LAYER_GROUPS = ("close", "mech", "sub", "tail", "far")
 
 
@@ -136,6 +137,11 @@ def main():
             allowed = e.get("lead_ms", 0.0) * 1.35 + 20.0
             if e["anchor_ms"] > allowed:
                 warns.append(f"{tag}: contact transient at {e['anchor_ms']} ms, expected <= {allowed:.0f} ms")
+        # an impact plays the frame the round lands: no lead-in silence (it read as a late hit at close range)
+        if layer == "impact":
+            lead = adsp.first_onset(x, frac=0.01) * 1000.0 / adsp.SR
+            if lead > IMPACT_LEAD_MAX_MS:
+                errs.append(f"{tag}: first sound at {lead:.1f} ms (> {IMPACT_LEAD_MAX_MS} ms of lead-in silence)")
         # provenance: every output must name the recorded files it is made of (hard rule: nothing is synthesised)
         srcs = e.get("sources")
         if not srcs:

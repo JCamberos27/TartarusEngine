@@ -169,6 +169,15 @@ def find_onset(x, t, back_ms=12.0, fwd_ms=30.0, frac=0.22, hp=250.0):
     return a + idx
 
 
+def first_onset(x, frac=0.05, hp=150.0):
+    """Sample index of the first sound in a whole recording: the first high-passed sample reaching `frac` of its peak.
+    One-shots cut from the head of a file start here (minus a short pre-roll), not at the file's own lead-in silence."""
+    h = np.abs(signal.sosfilt(signal.butter(2, hp, "hp", fs=SR, output="sos"), to_mono(x)))
+    if h.max() <= 0:
+        return 0
+    return int(np.argmax(h >= frac * h.max()))
+
+
 def anchor_ms(x, frac=0.5, hp=250.0):
     """Time (ms) of the contact transient in a rendered one-shot: first sample whose high-passed magnitude reaches
     `frac` of the file's high-passed peak. The engine starts the file at (event time - anchor_ms)."""

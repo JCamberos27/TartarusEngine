@@ -137,10 +137,13 @@ def main():
         n = 0
         for spec in m["sources"]:
             x = be.src(spec["src"])
+            # The hit plays the frame the round lands: start at the source's first sound (2 ms pre-roll), not at its lead-in
+            # silence (up to 250 ms on some takes - a close shot's impact came audibly late).
+            a = max(0, adsp.first_onset(np.asarray(x)) - int(0.002 * SR))
             for v in spec["variants"]:
                 n += 1
                 adsp.take_uses()
-                y = adsp.cut(x, 0, len(x) if "dur" not in v else int(v["dur"] * SR))
+                y = adsp.cut(x, a, len(x) if "dur" not in v else a + int(v["dur"] * SR))
                 y = adsp.fade(y, int(0.0008 * SR), int(0.12 * SR))
                 uses = adsp.take_uses()
                 emit(f"Impacts/{mat}_{n}.wav", post(y, v), f"snd.impact.{mat}", "impact",

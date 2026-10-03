@@ -2852,6 +2852,7 @@ int main(int argc, char** argv) {
                     fi.Sprinting = weaponTest ? weaponTest->Sprint() : (gameHasInput && InputMap::GetButton("Sprint"));
                     fi.Crouched = player.Crouched;
                     fi.Jumped = player.Jumped;
+                    fi.HaveFootHeights = firstPersonBody.FootHeights(world, fi.FootHeight); // steps on the body's touch-downs
                     if (firstPersonPresentation.IsActive()) {
                         fi.WalkStride = firstPersonPresentation.Set().Procedural.Bob.WalkStride;
                         fi.SprintStride = firstPersonPresentation.Set().Procedural.Bob.SprintStride;
