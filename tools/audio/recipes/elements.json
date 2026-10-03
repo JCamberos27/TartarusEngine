@@ -810,7 +810,6 @@
      {
       "src": "Herrington_11-87/Actions/S_Herrington_11-87_Reload_Start_Empty.wav",
       "t": 1.796,
-      "lead_ms": 34,
       "dur": 0.3,
       "eq": [
        [
@@ -831,9 +830,8 @@
     "handle": [
      {
       "src": "Herrington_11-87/Actions/S_Herrington_11-87_Inspect.WAV",
-      "t": 2.966,
-      "lead_ms": 58,
-      "dur": 0.2
+      "t": 2.955,
+      "dur": 0.095
      },
      {
       "src": "Herrington_11-87/Actions/S_Herrington_11-87_Inspect.WAV",
@@ -849,7 +847,8 @@
       "src": "AK105/Actions/S_AK105_Reload_Empty.WAV",
       "t": 3.994,
       "dur": 0.24,
-      "pitch": -2.0
+      "pitch": -2.0,
+      "hp": 150
      }
     ],
     "cloth": [
@@ -960,31 +959,17 @@
     "dry_fire": [
      {
       "src": "sonniss/Wav Junction/0023_Shotgun_Safety",
-      "t": 1.096,
+      "t": 0.29,
       "dur": 0.16,
       "pitch": -2.0,
-      "eq": [
-       [
-        "peak",
-        150,
-        3.0,
-        0.8
-       ]
-      ]
+      "hp": 150
      },
      {
       "src": "sonniss/Wav Junction/0023_Shotgun_Safety",
-      "t": 2.302,
+      "t": 0.656,
       "dur": 0.16,
       "pitch": -1.0,
-      "eq": [
-       [
-        "peak",
-        150,
-        3.0,
-        0.8
-       ]
-      ]
+      "hp": 150
      },
      {
       "src": "sonniss/Pole Position Production/Steyr_TMP",

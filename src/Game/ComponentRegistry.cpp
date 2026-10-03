@@ -1982,7 +1982,10 @@ void RegisterEngineComponents() {
             { "Step Stride Scale", T::Float, TARTARUS_REFLECT_FIELD(Fo, StepStrideScale), 0.01f, "Footfall spacing against the view bob's stride (two footfalls per stride): above 1 = slower steps.", 0.25f, 4.0f },
             { "Crouch Stride Scale", T::Float, TARTARUS_REFLECT_FIELD(Fo, CrouchStrideScale), 0.01f, "Footfall spacing when crouched, on top of Step Stride Scale.", 0.25f, 4.0f },
             { "Min Step Speed", T::Float, TARTARUS_REFLECT_FIELD(Fo, MinStepSpeed), 0.05f, "m/s of planar speed below which there are no footsteps.", 0.0f, 10.0f },
-            { "Run Speed", T::Float, TARTARUS_REFLECT_FIELD(Fo, RunSpeed), 0.05f, "m/s from which the run set plays; the cloth loop is full here.", 0.5f, 20.0f },
+            { "Run Speed", T::Float, TARTARUS_REFLECT_FIELD(Fo, RunSpeed), 0.05f, "m/s from which the run set plays.", 0.5f, 20.0f },
+            { "Steps From Feet", T::Bool, TARTARUS_REFLECT_FIELD(Fo, StepsFromFeet), 0.0f, "A footstep when an animated foot (the player's body, a soldier's) touches down. Off, or with no body: one every half stride of travel." },
+            { "Foot Lift Height", T::Float, TARTARUS_REFLECT_FIELD(Fo, FootLiftHeight), 0.005f, "m a foot must rise above its planted height before its next touch-down counts (shuffles below this are silent).", 0.01f, 0.3f },
+            { "Foot Contact Height", T::Float, TARTARUS_REFLECT_FIELD(Fo, FootContactHeight), 0.005f, "m above its planted height at which a lowering foot counts as down: higher = the step a little earlier.", 0.0f, 0.2f },
             { "Jump Volume", T::Float, TARTARUS_REFLECT_FIELD(Fo, JumpVolume), 0.01f, "Gain of the jump.", 0.0f, 2.0f },
             { "Land Volume", T::Float, TARTARUS_REFLECT_FIELD(Fo, LandVolume), 0.01f, "Gain of a landing at Land Full Speed.", 0.0f, 2.0f },
             { "Land Min Speed", T::Float, TARTARUS_REFLECT_FIELD(Fo, LandMinSpeed), 0.05f, "m/s of fall below which a landing is silent.", 0.0f, 30.0f },
@@ -1997,7 +2000,8 @@ void RegisterEngineComponents() {
         const std::pair<const char*, const char*> groups[] = {
             {"Walk Volume", "Footsteps"}, {"Run Volume", "Footsteps"}, {"Crouch Volume", "Footsteps"}, {"Volume Jitter dB", "Footsteps"},
             {"Pitch Min", "Footsteps"}, {"Pitch Max", "Footsteps"}, {"Step Stride Scale", "Footsteps"}, {"Crouch Stride Scale", "Footsteps"},
-            {"Min Step Speed", "Footsteps"}, {"Run Speed", "Footsteps"},
+            {"Min Step Speed", "Footsteps"}, {"Run Speed", "Footsteps"}, {"Steps From Feet", "Footsteps"}, {"Foot Lift Height", "Footsteps"},
+            {"Foot Contact Height", "Footsteps"},
             {"Jump Volume", "Jump / Land"}, {"Land Volume", "Jump / Land"}, {"Land Min Speed", "Jump / Land"}, {"Land Heavy Speed", "Jump / Land"}, {"Land Full Speed", "Jump / Land"},
             
             {"NPC Step Volume", "NPC Footsteps"}, {"NPC Step Min Distance", "NPC Footsteps"}, {"NPC Step Max Distance", "NPC Footsteps"}};

@@ -1254,7 +1254,8 @@ void NpcDirector::AimAndFire(World& world, Npc& n, const PlayerSnapshot& p, floa
     // (The body counts as moving from the same 0.25 m/s; the player's own gun reads 0 standing still.)
     const glm::vec3 gunVelocity = glm::length(glm::vec2(n.Velocity.x, n.Velocity.z)) > 0.25f ? n.Velocity : glm::vec3(0.0f);
     w.Tick(dt, gunVelocity, sprinting, aimGun && !sprinting, 0.0f, true);
-    FoleyAudio::Get().NpcWalk(world, n.Index, n.Feet, n.Velocity, sprinting, dt);
+    if (float feet[2]; !FoleyAudio::Get().Tuning().StepsFromFeet || !n.Body.FootHeights(feet)) // else LateUpdate steps on the feet
+        FoleyAudio::Get().NpcWalk(world, n.Index, n.Feet, n.Velocity, sprinting, dt);
     // (After the tick, before the animators: the weapon clears its triggers at the start of each frame.)
     if (n.WeaponAction) w.TriggerAction(n.WeaponAction);
     n.WeaponAction = nullptr;
@@ -1299,6 +1300,9 @@ void NpcDirector::LateUpdate(World& world, float dt, const PlayerSnapshot& p) {
         const float lateDt = n.LateDt;
         n.LateDt = 0.0f;
         LatePose(world, n, lateDt, p, /*alive=*/true);
+        // Footsteps on the posed feet's touch-downs (a body without foot bones walks by the stride rule, in the weapon update).
+        if (float feet[2]; n.Body.FootHeights(feet))
+            FoleyAudio::Get().NpcFeet(world, n.Index, n.Feet, feet, n.Body.Sprinting(), lateDt);
         UpdateHitboxes(n, p, /*posed=*/true);
         // The hit flinch goes on after the hitboxes took their pose (and the eye and the aim were read): visual only.
         if (const auto it = m_Flinch.find(n.Index); it != m_Flinch.end()) {

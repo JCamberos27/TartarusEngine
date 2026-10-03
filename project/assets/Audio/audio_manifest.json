@@ -7924,13 +7924,13 @@
    "sample_rate": 48000,
    "lufs_i": -17.04,
    "lufs_m_max": -17.0,
-   "true_peak_dbtp": -3.72,
-   "length_s": 0.346,
-   "peak_ms": 92.7,
+   "true_peak_dbtp": -3.7,
+   "length_s": 0.315,
+   "peak_ms": 62.0,
    "sources": [
     {
      "file": "sonniss/Gamemaster Audio -  Bullet Impact Sounds/bullet_impact_concrete_brick_01.wav",
-     "start": 0.0,
+     "start": 0.031,
      "end": 0.346,
      "pitch_st": 0.0
     }
@@ -7950,13 +7950,13 @@
    "sample_rate": 48000,
    "lufs_i": -17.04,
    "lufs_m_max": -17.0,
-   "true_peak_dbtp": -3.58,
-   "length_s": 0.377,
-   "peak_ms": 101.1,
+   "true_peak_dbtp": -3.55,
+   "length_s": 0.344,
+   "peak_ms": 67.6,
    "sources": [
     {
      "file": "sonniss/Gamemaster Audio -  Bullet Impact Sounds/bullet_impact_concrete_brick_01.wav",
-     "start": 0.0,
+     "start": 0.031,
      "end": 0.346,
      "pitch_st": 0.0
     }
@@ -7976,13 +7976,13 @@
    "sample_rate": 48000,
    "lufs_i": -17.04,
    "lufs_m_max": -17.0,
-   "true_peak_dbtp": -2.81,
-   "length_s": 0.317,
-   "peak_ms": 85.0,
+   "true_peak_dbtp": -2.78,
+   "length_s": 0.289,
+   "peak_ms": 56.9,
    "sources": [
     {
      "file": "sonniss/Gamemaster Audio -  Bullet Impact Sounds/bullet_impact_concrete_brick_01.wav",
-     "start": 0.0,
+     "start": 0.031,
      "end": 0.346,
      "pitch_st": 0.0
     }
@@ -8002,13 +8002,13 @@
    "sample_rate": 48000,
    "lufs_i": -17.04,
    "lufs_m_max": -17.0,
-   "true_peak_dbtp": -2.16,
-   "length_s": 0.388,
-   "peak_ms": 88.7,
+   "true_peak_dbtp": -2.14,
+   "length_s": 0.354,
+   "peak_ms": 54.3,
    "sources": [
     {
      "file": "sonniss/Gamemaster Audio -  Bullet Impact Sounds/bullet_impact_concrete_brick_01.wav",
-     "start": 0.0,
+     "start": 0.031,
      "end": 0.346,
      "pitch_st": 0.0
     }
@@ -8028,14 +8028,14 @@
    "sample_rate": 48000,
    "lufs_i": -17.04,
    "lufs_m_max": -17.0,
-   "true_peak_dbtp": -1.49,
+   "true_peak_dbtp": -1.37,
    "length_s": 0.223,
-   "peak_ms": 42.7,
+   "peak_ms": 43.0,
    "sources": [
     {
      "file": "sonniss/Gamemaster Audio -  Bullet Impact Sounds/bullet_impact_concrete_brick_01.wav",
-     "start": 0.0,
-     "end": 0.25,
+     "start": 0.031,
+     "end": 0.281,
      "pitch_st": 0.0
     }
    ],
@@ -8052,15 +8052,15 @@
    "layer": "impact",
    "channels": 2,
    "sample_rate": 48000,
-   "lufs_i": -20.34,
+   "lufs_i": -20.18,
    "lufs_m_max": -17.0,
-   "true_peak_dbtp": -4.76,
-   "length_s": 1.705,
-   "peak_ms": 166.6,
+   "true_peak_dbtp": -4.73,
+   "length_s": 1.64,
+   "peak_ms": 102.2,
    "sources": [
     {
      "file": "sonniss/PMSFX - Bullet Bys &Impacts/PM_BBI_Bullet_Impact_Dirt_3.wav",
-     "start": 0.0,
+     "start": 0.064,
      "end": 1.705,
      "pitch_st": 0.0
     }
@@ -8078,15 +8078,15 @@
    "layer": "impact",
    "channels": 2,
    "sample_rate": 48000,
-   "lufs_i": -19.92,
+   "lufs_i": -20.72,
    "lufs_m_max": -17.0,
-   "true_peak_dbtp": -4.91,
-   "length_s": 1.859,
-   "peak_ms": 181.7,
+   "true_peak_dbtp": -5.38,
+   "length_s": 1.789,
+   "peak_ms": 111.5,
    "sources": [
     {
      "file": "sonniss/PMSFX - Bullet Bys &Impacts/PM_BBI_Bullet_Impact_Dirt_3.wav",
-     "start": 0.0,
+     "start": 0.064,
      "end": 1.705,
      "pitch_st": 0.0
     }
@@ -8104,15 +8104,15 @@
    "layer": "impact",
    "channels": 2,
    "sample_rate": 48000,
-   "lufs_i": -19.76,
+   "lufs_i": -20.56,
    "lufs_m_max": -17.0,
-   "true_peak_dbtp": -4.98,
-   "length_s": 1.563,
-   "peak_ms": 152.8,
+   "true_peak_dbtp": -4.87,
+   "length_s": 1.504,
+   "peak_ms": 95.7,
    "sources": [
     {
      "file": "sonniss/PMSFX - Bullet Bys &Impacts/PM_BBI_Bullet_Impact_Dirt_3.wav",
-     "start": 0.0,
+     "start": 0.064,
      "end": 1.705,
      "pitch_st": 0.0
     }
@@ -8130,15 +8130,15 @@
    "layer": "impact",
    "channels": 2,
    "sample_rate": 48000,
-   "lufs_i": -19.81,
+   "lufs_i": -19.94,
    "lufs_m_max": -17.0,
-   "true_peak_dbtp": -5.22,
-   "length_s": 1.913,
-   "peak_ms": 189.5,
+   "true_peak_dbtp": -5.23,
+   "length_s": 1.841,
+   "peak_ms": 117.2,
    "sources": [
     {
      "file": "sonniss/PMSFX - Bullet Bys &Impacts/PM_BBI_Bullet_Impact_Dirt_3.wav",
-     "start": 0.0,
+     "start": 0.064,
      "end": 1.705,
      "pitch_st": 0.0
     }
@@ -8156,16 +8156,16 @@
    "layer": "impact",
    "channels": 2,
    "sample_rate": 48000,
-   "lufs_i": -18.87,
+   "lufs_i": -19.72,
    "lufs_m_max": -17.0,
-   "true_peak_dbtp": -3.33,
+   "true_peak_dbtp": -3.29,
    "length_s": 0.713,
-   "peak_ms": 163.2,
+   "peak_ms": 105.9,
    "sources": [
     {
      "file": "sonniss/PMSFX - Bullet Bys &Impacts/PM_BBI_Bullet_Impact_Dirt_3.wav",
-     "start": 0.0,
-     "end": 0.8,
+     "start": 0.064,
+     "end": 0.864,
      "pitch_st": 0.0
     }
    ],
@@ -8182,15 +8182,15 @@
    "layer": "impact",
    "channels": 2,
    "sample_rate": 48000,
-   "lufs_i": -17.04,
+   "lufs_i": -18.57,
    "lufs_m_max": -17.0,
    "true_peak_dbtp": -4.27,
-   "length_s": 0.93,
-   "peak_ms": 242.4,
+   "length_s": 0.772,
+   "peak_ms": 84.2,
    "sources": [
     {
      "file": "sonniss/PMSFX - Bullet Bys &Impacts/PM_BBI_Bullet_Impact_Hit_Body_Flesh_25.wav",
-     "start": 0.0,
+     "start": 0.158,
      "end": 0.93,
      "pitch_st": 0.0
     }
@@ -8208,15 +8208,15 @@
    "layer": "impact",
    "channels": 2,
    "sample_rate": 48000,
-   "lufs_i": -18.02,
+   "lufs_i": -18.08,
    "lufs_m_max": -17.0,
-   "true_peak_dbtp": -5.07,
-   "length_s": 1.015,
-   "peak_ms": 264.3,
+   "true_peak_dbtp": -5.04,
+   "length_s": 0.842,
+   "peak_ms": 91.8,
    "sources": [
     {
      "file": "sonniss/PMSFX - Bullet Bys &Impacts/PM_BBI_Bullet_Impact_Hit_Body_Flesh_25.wav",
-     "start": 0.0,
+     "start": 0.158,
      "end": 0.93,
      "pitch_st": 0.0
     }
@@ -8234,15 +8234,15 @@
    "layer": "impact",
    "channels": 2,
    "sample_rate": 48000,
-   "lufs_i": -17.04,
+   "lufs_i": -18.95,
    "lufs_m_max": -17.0,
-   "true_peak_dbtp": -4.68,
-   "length_s": 0.853,
-   "peak_ms": 223.3,
+   "true_peak_dbtp": -4.67,
+   "length_s": 0.708,
+   "peak_ms": 78.2,
    "sources": [
     {
      "file": "sonniss/PMSFX - Bullet Bys &Impacts/PM_BBI_Bullet_Impact_Hit_Body_Flesh_25.wav",
-     "start": 0.0,
+     "start": 0.158,
      "end": 0.93,
      "pitch_st": 0.0
     }
@@ -8260,15 +8260,15 @@
    "layer": "impact",
    "channels": 2,
    "sample_rate": 48000,
-   "lufs_i": -19.65,
+   "lufs_i": -17.04,
    "lufs_m_max": -17.0,
-   "true_peak_dbtp": -2.5,
-   "length_s": 0.471,
-   "peak_ms": 93.9,
+   "true_peak_dbtp": -2.48,
+   "length_s": 0.432,
+   "peak_ms": 54.8,
    "sources": [
     {
      "file": "sonniss/Gamemaster Audio -  Bullet Impact Sounds/bullet_impact_body_thump_02.wav",
-     "start": 0.0,
+     "start": 0.039,
      "end": 0.471,
      "pitch_st": 0.0
     }
@@ -8286,15 +8286,15 @@
    "layer": "impact",
    "channels": 2,
    "sample_rate": 48000,
-   "lufs_i": -18.95,
+   "lufs_i": -17.04,
    "lufs_m_max": -17.0,
-   "true_peak_dbtp": -3.07,
-   "length_s": 0.529,
-   "peak_ms": 94.9,
+   "true_peak_dbtp": -2.42,
+   "length_s": 0.485,
+   "peak_ms": 61.1,
    "sources": [
     {
      "file": "sonniss/Gamemaster Audio -  Bullet Impact Sounds/bullet_impact_body_thump_02.wav",
-     "start": 0.0,
+     "start": 0.039,
      "end": 0.471,
      "pitch_st": 0.0
     }
@@ -8314,13 +8314,13 @@
    "sample_rate": 48000,
    "lufs_i": -17.04,
    "lufs_m_max": -17.0,
-   "true_peak_dbtp": -2.67,
-   "length_s": 0.511,
-   "peak_ms": 47.8,
+   "true_peak_dbtp": -2.59,
+   "length_s": 0.503,
+   "peak_ms": 40.3,
    "sources": [
     {
      "file": "sonniss/Gamemaster Audio - Punch and Combat Sounds/punch_grit_wet_impact_05.wav",
-     "start": 0.0,
+     "start": 0.008,
      "end": 0.511,
      "pitch_st": 0.0
     }
@@ -8340,13 +8340,13 @@
    "sample_rate": 48000,
    "lufs_i": -17.04,
    "lufs_m_max": -17.0,
-   "true_peak_dbtp": -2.51,
-   "length_s": 0.468,
-   "peak_ms": 44.0,
+   "true_peak_dbtp": -2.4,
+   "length_s": 0.461,
+   "peak_ms": 37.1,
    "sources": [
     {
      "file": "sonniss/Gamemaster Audio - Punch and Combat Sounds/punch_grit_wet_impact_05.wav",
-     "start": 0.0,
+     "start": 0.008,
      "end": 0.511,
      "pitch_st": 0.0
     }
@@ -8508,15 +8508,15 @@
    "layer": "impact",
    "channels": 2,
    "sample_rate": 48000,
-   "lufs_i": -20.01,
+   "lufs_i": -21.92,
    "lufs_m_max": -17.0,
-   "true_peak_dbtp": -7.1,
-   "length_s": 1.307,
-   "peak_ms": 164.8,
+   "true_peak_dbtp": -7.14,
+   "length_s": 1.16,
+   "peak_ms": 17.6,
    "sources": [
     {
      "file": "sonniss/PMSFX - Bullet Bys &Impacts/PM_BBI_Bullet_Impact_Glass_1.wav",
-     "start": 0.0,
+     "start": 0.147,
      "end": 1.307,
      "pitch_st": 0.0
     }
@@ -8534,15 +8534,15 @@
    "layer": "impact",
    "channels": 2,
    "sample_rate": 48000,
-   "lufs_i": -20.35,
+   "lufs_i": -22.44,
    "lufs_m_max": -17.0,
-   "true_peak_dbtp": -7.03,
-   "length_s": 1.426,
-   "peak_ms": 179.8,
+   "true_peak_dbtp": -7.61,
+   "length_s": 1.265,
+   "peak_ms": 19.2,
    "sources": [
     {
      "file": "sonniss/PMSFX - Bullet Bys &Impacts/PM_BBI_Bullet_Impact_Glass_1.wav",
-     "start": 0.0,
+     "start": 0.147,
      "end": 1.307,
      "pitch_st": 0.0
     }
@@ -8560,15 +8560,15 @@
    "layer": "impact",
    "channels": 2,
    "sample_rate": 48000,
-   "lufs_i": -19.64,
+   "lufs_i": -22.13,
    "lufs_m_max": -17.0,
-   "true_peak_dbtp": -6.86,
-   "length_s": 1.199,
-   "peak_ms": 153.8,
+   "true_peak_dbtp": -6.55,
+   "length_s": 1.064,
+   "peak_ms": 16.1,
    "sources": [
     {
      "file": "sonniss/PMSFX - Bullet Bys &Impacts/PM_BBI_Bullet_Impact_Glass_1.wav",
-     "start": 0.0,
+     "start": 0.147,
      "end": 1.307,
      "pitch_st": 0.0
     }
@@ -8586,15 +8586,15 @@
    "layer": "impact",
    "channels": 2,
    "sample_rate": 48000,
-   "lufs_i": -20.3,
+   "lufs_i": -23.03,
    "lufs_m_max": -17.0,
-   "true_peak_dbtp": -6.85,
-   "length_s": 1.467,
-   "peak_ms": 185.1,
+   "true_peak_dbtp": -7.18,
+   "length_s": 1.302,
+   "peak_ms": 19.8,
    "sources": [
     {
      "file": "sonniss/PMSFX - Bullet Bys &Impacts/PM_BBI_Bullet_Impact_Glass_1.wav",
-     "start": 0.0,
+     "start": 0.147,
      "end": 1.307,
      "pitch_st": 0.0
     }
@@ -8612,16 +8612,16 @@
    "layer": "impact",
    "channels": 2,
    "sample_rate": 48000,
-   "lufs_i": -18.85,
+   "lufs_i": -20.13,
    "lufs_m_max": -17.0,
-   "true_peak_dbtp": -5.9,
+   "true_peak_dbtp": -6.05,
    "length_s": 0.713,
-   "peak_ms": 146.9,
+   "peak_ms": 15.7,
    "sources": [
     {
      "file": "sonniss/PMSFX - Bullet Bys &Impacts/PM_BBI_Bullet_Impact_Glass_1.wav",
-     "start": 0.0,
-     "end": 0.8,
+     "start": 0.147,
+     "end": 0.947,
      "pitch_st": 0.0
     }
    ],
@@ -8638,15 +8638,15 @@
    "layer": "impact",
    "channels": 2,
    "sample_rate": 48000,
-   "lufs_i": -21.53,
+   "lufs_i": -21.14,
    "lufs_m_max": -17.0,
    "true_peak_dbtp": -2.38,
-   "length_s": 0.798,
-   "peak_ms": 88.0,
+   "length_s": 0.772,
+   "peak_ms": 61.3,
    "sources": [
     {
      "file": "sonniss/Gamemaster Audio - Guns, Bullets and Explosions/bullet_impact_ice_06.wav",
-     "start": 0.0,
+     "start": 0.027,
      "end": 0.798,
      "pitch_st": 0.0
     }
@@ -8664,15 +8664,15 @@
    "layer": "impact",
    "channels": 2,
    "sample_rate": 48000,
-   "lufs_i": -21.14,
+   "lufs_i": -22.04,
    "lufs_m_max": -17.0,
-   "true_peak_dbtp": -2.59,
-   "length_s": 0.871,
-   "peak_ms": 96.0,
+   "true_peak_dbtp": -2.54,
+   "length_s": 0.841,
+   "peak_ms": 66.8,
    "sources": [
     {
      "file": "sonniss/Gamemaster Audio - Guns, Bullets and Explosions/bullet_impact_ice_06.wav",
-     "start": 0.0,
+     "start": 0.027,
      "end": 0.798,
      "pitch_st": 0.0
     }
@@ -8690,15 +8690,15 @@
    "layer": "impact",
    "channels": 2,
    "sample_rate": 48000,
-   "lufs_i": -20.6,
+   "lufs_i": -21.21,
    "lufs_m_max": -17.0,
-   "true_peak_dbtp": -2.18,
-   "length_s": 0.732,
-   "peak_ms": 71.3,
+   "true_peak_dbtp": -2.13,
+   "length_s": 0.708,
+   "peak_ms": 56.2,
    "sources": [
     {
      "file": "sonniss/Gamemaster Audio - Guns, Bullets and Explosions/bullet_impact_ice_06.wav",
-     "start": 0.0,
+     "start": 0.027,
      "end": 0.798,
      "pitch_st": 0.0
     }
@@ -8716,15 +8716,15 @@
    "layer": "impact",
    "channels": 2,
    "sample_rate": 48000,
-   "lufs_i": -20.93,
+   "lufs_i": -21.92,
    "lufs_m_max": -17.0,
    "true_peak_dbtp": -2.36,
-   "length_s": 0.896,
-   "peak_ms": 103.9,
+   "length_s": 0.866,
+   "peak_ms": 73.9,
    "sources": [
     {
      "file": "sonniss/Gamemaster Audio - Guns, Bullets and Explosions/bullet_impact_ice_06.wav",
-     "start": 0.0,
+     "start": 0.027,
      "end": 0.798,
      "pitch_st": 0.0
     }
@@ -8742,15 +8742,15 @@
    "layer": "impact",
    "channels": 2,
    "sample_rate": 48000,
-   "lufs_i": -18.35,
+   "lufs_i": -18.8,
    "lufs_m_max": -17.0,
    "true_peak_dbtp": -6.47,
-   "length_s": 0.82,
-   "peak_ms": 126.1,
+   "length_s": 0.808,
+   "peak_ms": 113.8,
    "sources": [
     {
      "file": "sonniss/Gamemaster Audio -  Bullet Impact Sounds/bullet_impact_metal_heavy_08.wav",
-     "start": 0.0,
+     "start": 0.012,
      "end": 0.82,
      "pitch_st": 0.0
     }
@@ -8768,15 +8768,15 @@
    "layer": "impact",
    "channels": 2,
    "sample_rate": 48000,
-   "lufs_i": -19.71,
+   "lufs_i": -18.5,
    "lufs_m_max": -17.0,
-   "true_peak_dbtp": -6.19,
-   "length_s": 0.894,
-   "peak_ms": 137.5,
+   "true_peak_dbtp": -6.53,
+   "length_s": 0.881,
+   "peak_ms": 124.1,
    "sources": [
     {
      "file": "sonniss/Gamemaster Audio -  Bullet Impact Sounds/bullet_impact_metal_heavy_08.wav",
-     "start": 0.0,
+     "start": 0.012,
      "end": 0.82,
      "pitch_st": 0.0
     }
@@ -8794,15 +8794,15 @@
    "layer": "impact",
    "channels": 2,
    "sample_rate": 48000,
-   "lufs_i": -18.62,
+   "lufs_i": -18.98,
    "lufs_m_max": -17.0,
-   "true_peak_dbtp": -5.84,
-   "length_s": 0.752,
-   "peak_ms": 115.6,
+   "true_peak_dbtp": -5.62,
+   "length_s": 0.741,
+   "peak_ms": 105.2,
    "sources": [
     {
      "file": "sonniss/Gamemaster Audio -  Bullet Impact Sounds/bullet_impact_metal_heavy_08.wav",
-     "start": 0.0,
+     "start": 0.012,
      "end": 0.82,
      "pitch_st": 0.0
     }
@@ -8820,15 +8820,15 @@
    "layer": "impact",
    "channels": 2,
    "sample_rate": 48000,
-   "lufs_i": -19.59,
+   "lufs_i": -20.09,
    "lufs_m_max": -17.0,
-   "true_peak_dbtp": -5.76,
-   "length_s": 0.92,
-   "peak_ms": 141.6,
+   "true_peak_dbtp": -5.61,
+   "length_s": 0.907,
+   "peak_ms": 127.8,
    "sources": [
     {
      "file": "sonniss/Gamemaster Audio -  Bullet Impact Sounds/bullet_impact_metal_heavy_08.wav",
-     "start": 0.0,
+     "start": 0.012,
      "end": 0.82,
      "pitch_st": 0.0
     }
@@ -8848,14 +8848,14 @@
    "sample_rate": 48000,
    "lufs_i": -17.04,
    "lufs_m_max": -17.0,
-   "true_peak_dbtp": -5.21,
+   "true_peak_dbtp": -4.82,
    "length_s": 0.445,
-   "peak_ms": 72.5,
+   "peak_ms": 74.8,
    "sources": [
     {
      "file": "sonniss/Gamemaster Audio -  Bullet Impact Sounds/bullet_impact_metal_heavy_08.wav",
-     "start": 0.0,
-     "end": 0.5,
+     "start": 0.012,
+     "end": 0.512,
      "pitch_st": 0.0
     }
    ],
@@ -8872,16 +8872,16 @@
    "layer": "impact",
    "channels": 2,
    "sample_rate": 48000,
-   "lufs_i": -18.43,
-   "lufs_m_max": -17.85,
+   "lufs_i": -17.83,
+   "lufs_m_max": -16.83,
    "true_peak_dbtp": -1.0,
    "length_s": 0.5,
-   "peak_ms": 22.2,
+   "peak_ms": 2.8,
    "sources": [
     {
      "file": "sonniss/Stuart Duffield - Bullet SFX/Bullet_Drop_Wood_04.wav",
-     "start": 0.0,
-     "end": 0.5,
+     "start": 0.02,
+     "end": 0.52,
      "pitch_st": 0.0
     }
    ],
@@ -8890,7 +8890,7 @@
    "variant": 1,
    "proxy": true,
    "source": "Bullet_Drop_Wood_04.wav {\"dur\": 0.5}",
-   "mix_db": -11.38
+   "mix_db": -12.4
   },
   {
    "file": "Impacts/wood_2.wav",
@@ -8898,16 +8898,16 @@
    "layer": "impact",
    "channels": 2,
    "sample_rate": 48000,
-   "lufs_i": -18.38,
-   "lufs_m_max": -17.83,
+   "lufs_i": -17.79,
+   "lufs_m_max": -16.97,
    "true_peak_dbtp": -1.0,
    "length_s": 0.545,
-   "peak_ms": 24.2,
+   "peak_ms": 3.0,
    "sources": [
     {
      "file": "sonniss/Stuart Duffield - Bullet SFX/Bullet_Drop_Wood_04.wav",
-     "start": 0.0,
-     "end": 0.5,
+     "start": 0.02,
+     "end": 0.52,
      "pitch_st": 0.0
     }
    ],
@@ -8916,7 +8916,7 @@
    "variant": 2,
    "proxy": true,
    "source": "Bullet_Drop_Wood_04.wav {\"pitch\": -1.5, \"dur\": 0.5}",
-   "mix_db": -11.4
+   "mix_db": -12.26
   },
   {
    "file": "Impacts/wood_3.wav",
@@ -8924,16 +8924,16 @@
    "layer": "impact",
    "channels": 2,
    "sample_rate": 48000,
-   "lufs_i": -17.87,
-   "lufs_m_max": -17.83,
+   "lufs_i": -17.23,
+   "lufs_m_max": -17.19,
    "true_peak_dbtp": -1.0,
    "length_s": 0.413,
-   "peak_ms": 20.4,
+   "peak_ms": 2.6,
    "sources": [
     {
      "file": "sonniss/Stuart Duffield - Bullet SFX/Bullet_Drop_Wood_04.wav",
-     "start": 0.0,
-     "end": 0.45,
+     "start": 0.02,
+     "end": 0.47,
      "pitch_st": 0.0
     }
    ],
@@ -8942,7 +8942,7 @@
    "variant": 3,
    "proxy": true,
    "source": "Bullet_Drop_Wood_04.wav {\"pitch\": 1.5, \"dur\": 0.45, \"eq\": [[\"peak\", 3000, 2.0, 0.9]]}",
-   "mix_db": -11.4
+   "mix_db": -12.04
   },
   {
    "file": "Impacts/wood_4.wav",
@@ -8950,16 +8950,16 @@
    "layer": "impact",
    "channels": 2,
    "sample_rate": 48000,
-   "lufs_i": -18.46,
-   "lufs_m_max": -17.5,
+   "lufs_i": -18.19,
+   "lufs_m_max": -16.82,
    "true_peak_dbtp": -1.0,
    "length_s": 0.561,
-   "peak_ms": 25.0,
+   "peak_ms": 3.4,
    "sources": [
     {
      "file": "sonniss/Stuart Duffield - Bullet SFX/Bullet_Drop_Wood_04.wav",
-     "start": 0.0,
-     "end": 0.5,
+     "start": 0.02,
+     "end": 0.52,
      "pitch_st": 0.0
     }
    ],
@@ -8968,7 +8968,7 @@
    "variant": 4,
    "proxy": true,
    "source": "Bullet_Drop_Wood_04.wav {\"pitch\": -2.0, \"dur\": 0.5, \"lp\": 6000}",
-   "mix_db": -11.73
+   "mix_db": -12.41
   },
   {
    "file": "Impacts/wood_5.wav",
@@ -12625,16 +12625,16 @@
    "layer": "action",
    "channels": 2,
    "sample_rate": 48000,
-   "lufs_i": -28.61,
-   "lufs_m_max": -28.57,
+   "lufs_i": -26.83,
+   "lufs_m_max": -26.78,
    "true_peak_dbtp": -1.0,
    "length_s": 0.183,
    "peak_ms": 3.4,
    "sources": [
     {
      "file": "sonniss/Wav Junction Sound Effects - Shotguns/0023_Shotgun_Safety_Switch_On_Off_2.wav",
-     "start": 1.095,
-     "end": 1.258,
+     "start": 0.287,
+     "end": 0.45,
      "pitch_st": -2.0
     }
    ],
@@ -12642,8 +12642,8 @@
    "gun": "870",
    "element": "dry_fire",
    "variant": 1,
-   "source": "0023_Shotgun_Safety@1.096",
-   "mix_db": -4.38
+   "source": "0023_Shotgun_Safety@0.29",
+   "mix_db": -7.98
   },
   {
    "file": "Weapons/Remington870/dry_fire_2.wav",
@@ -12651,16 +12651,16 @@
    "layer": "action",
    "channels": 2,
    "sample_rate": 48000,
-   "lufs_i": -28.56,
-   "lufs_m_max": -28.52,
+   "lufs_i": -21.37,
+   "lufs_m_max": -21.33,
    "true_peak_dbtp": -1.0,
    "length_s": 0.173,
-   "peak_ms": 3.1,
+   "peak_ms": 4.0,
    "sources": [
     {
      "file": "sonniss/Wav Junction Sound Effects - Shotguns/0023_Shotgun_Safety_Switch_On_Off_2.wav",
-     "start": 2.306,
-     "end": 2.469,
+     "start": 0.653,
+     "end": 0.816,
      "pitch_st": -1.0
     }
    ],
@@ -12668,8 +12668,8 @@
    "gun": "870",
    "element": "dry_fire",
    "variant": 2,
-   "source": "0023_Shotgun_Safety@2.302",
-   "mix_db": -4.38
+   "source": "0023_Shotgun_Safety@0.656",
+   "mix_db": -10.9
   },
   {
    "file": "Weapons/Remington870/dry_fire_3.wav",
@@ -12695,7 +12695,7 @@
    "element": "dry_fire",
    "variant": 3,
    "source": "Steyr_TMP@25.244",
-   "mix_db": -10.38
+   "mix_db": -11.06
   },
   {
    "file": "Weapons/Remington870/dry_fire_4.wav",
@@ -12721,7 +12721,7 @@
    "element": "dry_fire",
    "variant": 4,
    "source": "Steyr_TMP@30.662",
-   "mix_db": -10.38
+   "mix_db": -11.37
   },
   {
    "file": "Weapons/Remington870/fire_close_1.wav",
@@ -12881,16 +12881,22 @@
    "layer": "close",
    "channels": 2,
    "sample_rate": 48000,
-   "lufs_i": -16.8,
+   "lufs_i": -16.82,
    "lufs_m_max": -14.0,
-   "true_peak_dbtp": -4.83,
+   "true_peak_dbtp": -4.39,
    "length_s": 0.85,
-   "peak_ms": 15.3,
+   "peak_ms": 78.0,
    "sources": [
     {
      "file": "sonniss/TS Sound - 12 Gauge Shotgun/Shotgun_Fire_Round Eject_01.wav",
      "start": 0.0,
      "end": 0.85,
+     "pitch_st": 0.0
+    },
+    {
+     "file": "tsp/Tactical Shooter Pack/Herrington_11-87/Fire/S_Herrington_11-87_Unsuppressed_2_With_Tail.wav",
+     "start": 0.035,
+     "end": 0.155,
      "pitch_st": 0.0
     },
     {
@@ -12910,7 +12916,7 @@
    "gun": "870",
    "element": "fire_close",
    "variant": 5,
-   "source": "base:Shotgun_Fire_Round Eject_01 body:S_Herrington_11-87_Unsuppressed_2_With_Tail.wav lag=29smp pol=-1 layer:Audiobeast_Medium_Warehouse_Remington_870 lag=55smp pol=-1",
+   "source": "base:Shotgun_Fire_Round Eject_01 crack:S_Herrington_11-87_Unsuppressed_2_With_Tail.wav lag=-56smp pol=-1 body:S_Herrington_11-87_Unsuppressed_2_With_Tail.wav lag=29smp pol=-1 layer:Audiobeast_Medium_Warehouse_Remington_870 lag=55smp pol=-1",
    "mix_db": 0.0
   },
   {
@@ -14163,26 +14169,25 @@
    "layer": "action",
    "channels": 2,
    "sample_rate": 48000,
-   "lufs_i": -20.99,
-   "lufs_m_max": -20.95,
+   "lufs_i": -21.17,
+   "lufs_m_max": -21.13,
    "true_peak_dbtp": -1.0,
-   "length_s": 0.101,
-   "peak_ms": 66.9,
+   "length_s": 0.098,
+   "peak_ms": 11.9,
    "sources": [
     {
      "file": "tsp/Tactical Shooter Pack/Herrington_11-87/Actions/S_Herrington_11-87_Inspect.WAV",
-     "start": 2.897,
-     "end": 3.155,
+     "start": 2.952,
+     "end": 3.05,
      "pitch_st": 0.0
     }
    ],
-   "anchor_ms": 58.0,
+   "anchor_ms": 3.0,
    "gun": "870",
    "element": "handle",
    "variant": 1,
-   "source": "S_Herrington_11-87_Inspect.WAV@2.966",
-   "lead_ms": 58,
-   "mix_db": -17.28
+   "source": "S_Herrington_11-87_Inspect.WAV@2.955",
+   "mix_db": -17.1
   },
   {
    "file": "Weapons/Remington870/handle_2.wav",
@@ -14242,8 +14247,8 @@
    "layer": "action",
    "channels": 2,
    "sample_rate": 48000,
-   "lufs_i": -21.24,
-   "lufs_m_max": -21.2,
+   "lufs_i": -21.19,
+   "lufs_m_max": -21.14,
    "true_peak_dbtp": -1.0,
    "length_s": 0.141,
    "peak_ms": 13.2,
@@ -14260,7 +14265,7 @@
    "element": "handle",
    "variant": 4,
    "source": "S_AK105_Reload_Empty.WAV@3.994",
-   "mix_db": -17.03
+   "mix_db": -17.09
   },
   {
    "file": "Weapons/Remington870/holster_1.wav",
@@ -15107,23 +15112,22 @@
    "sample_rate": 48000,
    "lufs_i": -21.04,
    "lufs_m_max": -21.0,
-   "true_peak_dbtp": -6.71,
-   "length_s": 0.334,
-   "peak_ms": 160.6,
+   "true_peak_dbtp": -6.66,
+   "length_s": 0.303,
+   "peak_ms": 129.6,
    "sources": [
     {
      "file": "tsp/Tactical Shooter Pack/Herrington_11-87/Actions/S_Herrington_11-87_Reload_Start_Empty.wav",
-     "start": 1.764,
+     "start": 1.795,
      "end": 2.098,
      "pitch_st": 0.0
     }
    ],
-   "anchor_ms": 34.0,
+   "anchor_ms": 3.0,
    "gun": "870",
    "element": "shell_load_chamber",
    "variant": 4,
    "source": "S_Herrington_11-87_Reload_Start_Empty.wav@1.796",
-   "lead_ms": 34,
    "mix_db": -9.23
   }
  ]

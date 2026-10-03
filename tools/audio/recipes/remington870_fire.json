@@ -133,7 +133,13 @@
      "src": "Herrington_11-87/Fire/S_Herrington_11-87_Unsuppressed_2_With_Tail.wav",
      "dur": 0.4,
      "lp": 600,
-     "gain_db": -4
+     "gain_db": -1
+    },
+    "crack": {
+     "src": "Herrington_11-87/Fire/S_Herrington_11-87_Unsuppressed_2_With_Tail.wav",
+     "dur": 0.12,
+     "hp": 2400,
+     "gain_db": -9
     }
    },
    {

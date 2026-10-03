@@ -1492,6 +1492,9 @@ struct FoleyAudioComponent {
     float CrouchStrideScale = 0.8f;
     float MinStepSpeed = 0.6f;         // m/s below which there are no footsteps
     float RunSpeed = 4.5f;             // m/s from which the run set plays
+    bool StepsFromFeet = true;         // a footfall when an animated foot touches down (no body: by distance, the stride rule above)
+    float FootLiftHeight = 0.05f;      // m a foot must rise above its planted height before its next touch-down counts
+    float FootContactHeight = 0.02f;   // m above its planted height at which a lowering foot has touched down
     float JumpVolume = 1.0f;
     float LandVolume = 1.0f;
     float LandMinSpeed = 2.5f;         // m/s of fall below which landing is silent
