@@ -1370,5 +1370,40 @@ struct RagdollSettingsComponent {
     float RestTime = 0.3f;
     float StabilizationThreshold = 0.05f; // PhysX stabilization: contact jitter below this energy per mass is held still
     bool GripFloor = true;             // the body's friction wins against a slick floor and it never bounces
+    // Lying: after the collapse the drive target keeps going, to a relaxed lying pose (legs extend, hips and arms relax), held by a modest
+    // tone (RelaxTone) for a while, so a body does not end frozen kneeling or curled up. RelaxTone 0 = no lying phase (the target stays at the collapse pose).
+    float RelaxDelay = 0.3f;           // seconds after death before the target starts toward the lying pose (about when the collapse has formed)
+    float RelaxLoose = 0.3f;           // the most the settle (damping, friction, joint friction) may reach until the lying pose has formed: lower lets the limbs move on the floor
+    float RelaxTime = 0.6f;            // seconds the target takes to go from the collapse pose to the lying pose (after the delay)
+    float RelaxTone = 0.45f;           // the strength fraction that holds the lying pose while it forms
+    float RelaxHold = 0.5f;            // seconds the lying tone holds once the target has arrived, then it fades out
+    float RestPelvisMax = 0.22f;       // a body at rest whose pelvis is higher than this (m) is not lying (kneeling, sat up), whose knees are bent more than RestKneeMax or hips more than RestHipMax (degrees) is curled up:
+    float RestChestMax = 0.3f;         // (or whose chest is higher than this: propped up on its arms or legs)
+    float RestKneeMax = 55.0f;         // it is not put to sleep: its legs push toward the lying pose and the floor lets go of it, for up to RestFixTime seconds (propped against something, it is left as it is after that)
+    float RestHipMax = 80.0f;
+    float RestFixTime = 1.5f;
+    float RestFixTone = 0.9f;          // the legs' strength fraction while they push
+    float LyingHip = 8.0f;             // degrees, the lying pose's hip, knee and elbow flexion
+    float LyingKnee = 10.0f;
+    float LyingElbow = 25.0f;
+    float LyingArms = 0.8f;            // how far the arms go back to hanging (0 = they keep the death pose, 1 = straight down)
+    float LyingSpine = 0.6f;           // how far the spine, neck and head go back to upright
+    // Directional falls: the leg on the side the body falls toward buckles first and folds further; a back fall folds the knees less and sits back.
+    float BuckleAsymmetry = 0.5f;      // 0 = both knees fold alike, 1 = the lead leg folds 2x and the other not at all (at a pure sideways fall)
+    float BuckleLead = 0.5f;           // the lead leg's stagger hold is shortened by this fraction (the other's lengthened)
+    float BackKneeScale = 0.45f;       // knee fold when falling straight back, as a fraction of Knee Flexion
+    float BackHipScale = 1.5f;         // hip fold when falling straight back (the legs go forward, the body sits down), as a multiple of Hip Flexion
+    // Reactions: layers on the drive target while the body is still conscious (a head kill has none and goes limp at once).
+    float BraceWeight = 1.0f;          // 0..1: arms reach toward the fall (the Shoulder Brace and Brace Sideways below, scaled by this)
+    float BraceLateral = 30.0f;        // degrees the arms swing toward a sideways fall
+    float WoundGrabWeight = 0.8f;      // 0..1: on a torso hit the struck side's hand goes to the wound for a moment
+    float WoundGrabTime = 0.5f;        // seconds it stays there before the arm lets go
+    float WoundShoulder = 50.0f;       // degrees the shoulder lifts the hand to the wound
+    float WoundElbow = 85.0f;          // degrees the elbow bends doing so
+    float HeadTuckWeight = 1.0f;       // 0..1: the head tucks forward as the body falls back (Neck Tuck degrees, scaled)
+    float HeadKillLimp = 0.4f;         // a head kill: the arms' and neck's tone times are scaled by this (0.4 = they let go in under half the time)
+    // Corpse hits: a round into a body at rest.
+    float CorpseWakeTime = 0.45f;      // seconds the body stays loose (no settling) after a round, so the limb the round struck visibly reacts
+    float CorpseShotMaxSpeed = 4.0f;   // m/s: the most a round adds to the struck part, whatever the damage
 };
 // ---- end lane R ----

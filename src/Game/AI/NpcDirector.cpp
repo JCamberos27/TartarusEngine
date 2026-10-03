@@ -1437,7 +1437,7 @@ bool NpcDirector::OnPlayerHit(World& world, unsigned entity, const glm::vec3& po
                 }
                 const float amount = DamageForHit(weapon, HitZone::Torso, dist);
                 const glm::vec3 d = glm::length(dir) > 1e-6f ? glm::normalize(dir) : glm::vec3(0.0f, 0.0f, 1.0f);
-                n.Ragdoll->Shove(part, d * NpcRagdoll::PartMass(&m_RagdollCfg, part) * (m_RagdollCfg.CorpseShotBase + m_RagdollCfg.CorpseShotPerDamage * amount), point);
+                n.Ragdoll->HitCorpse(part, d, amount, point, m_RagdollCfg);
                 if (Fx) Fx->Play(CombatFx::Cue::FleshHit, point, false, 0.5f);
             }
             return true;
