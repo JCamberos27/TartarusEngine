@@ -1,0 +1,88 @@
+{
+  "_doc": "Loudness acceptance windows per layer, in LUFS-M max (loudest 400 ms momentary window, BS.1770 K-weighted). A one-shot is too short for an integrated or 3 s short-term reading to mean anything, so the loudest momentary window is the metric; lufs_i (integrated, zero padded to 400 ms) is stored for reference only. peak_dbtp is the 4x-oversampled true peak ceiling. edge_max / dc_max are linear full-scale limits for the first/last sample and the mean. The minimums are loose on purpose: finish() limits at most a dB or two (abuild.GR_BUDGET_DB) so transients keep their punch, and a file that stops short of its target is levelled by the mix (mix_db).",
+  "peak_dbtp_max": -1.0,
+  "dc_max": 0.002,
+  "edge_max": 0.004,
+  "layers": {
+    "close": {
+      "target": -14.0,
+      "min": -19.0,
+      "max": -10.0
+    },
+    "mech": {
+      "target": -20.0,
+      "min": -28.0,
+      "max": -17.0
+    },
+    "sub": {
+      "target": -19.0,
+      "min": -27.0,
+      "max": -15.0
+    },
+    "tail": {
+      "target": -22.0,
+      "min": -26.0,
+      "max": -18.0
+    },
+    "far": {
+      "target": -25.0,
+      "min": -29.0,
+      "max": -21.0
+    },
+    "action": {
+      "target": -21.0,
+      "min": -32.0,
+      "max": -18.0
+    },
+    "foley": {
+      "target": -21.0,
+      "min": -30.0,
+      "max": -18.0
+    },
+    "step": {
+      "target": -23.0,
+      "min": -32.0,
+      "max": -20.0
+    },
+    "loop": {
+      "target": -24.0,
+      "min": -27.0,
+      "max": -21.0
+    },
+    "casing": {
+      "target": -26.0,
+      "min": -34.0,
+      "max": -20.0
+    },
+    "impact": {
+      "target": -17.0,
+      "min": -28.0,
+      "max": -12.0
+    },
+    "flyby": {
+      "target": -21.0,
+      "min": -30.0,
+      "max": -16.0
+    },
+    "ui": {
+      "target": -25.0,
+      "min": -33.0,
+      "max": -19.0
+    },
+    "bodyfall": {
+      "target": -17.0,
+      "min": -28.0,
+      "max": -12.0
+    },
+    "ambience": {
+      "target": -30.0,
+      "min": -34.0,
+      "max": -26.0
+    },
+    "ir": {
+      "target": -20.0,
+      "min": -60.0,
+      "max": 0.0
+    }
+  }
+}

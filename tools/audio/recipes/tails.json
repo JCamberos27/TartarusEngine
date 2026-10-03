@@ -1,0 +1,631 @@
+{
+ "_doc": "Environment-aware gunshot tails (build_tails.py). REAL RECORDINGS ONLY: every file is a time-sliced, EQ'd, faded (and for some open-air variants layered) cut of a real recording of gunfire in that kind of space - nothing is synthesised, no impulse response is generated or convolved. Sources are paths relative to C:\\tb\\audio-src (never committed): sonniss/ = the Pole Position indoor / outdoor gun acoustics libraries and Audiobeast's London Warehouse library, tsp/ = the Tactical Shooter Pack. A layer is [shot onset + start_s, shot onset + end_s] of its source (t = the shot's approximate time in the source, refined to the blast's first sample; packs' own shots are found automatically). The file is timelined from the shot instant (leading silence = start_s) like the generic fire_tail, so it starts together with the close layer; start_s skips the direct sound (the close layer carries it). Every output records its source slices in the manifest `sources` list; check_audio.py fails a tail without one. Classes: indoor_small = Audiobeast small room (H&K 416) + Pole Position catacombs; indoor_large = Audiobeast medium warehouse (870 x8) + Pole Position long corridor; outdoor_urban = Pole Position valley behind buildings; outdoor_open = Pole Position big open area + forest road, layered with the pack's long With_Tail recordings for the long rolling decay.",
+ "sources": {
+  "wh870": "sonniss/Audiobeast - The London Warehouse Firearms Library/Audiobeast_Medium_Warehouse_Remington_870_12g_Pump_Action_Shotgun_10m_U87_001_Single_Shot_x8.wav",
+  "room416": "sonniss/Audiobeast - The London Warehouse Firearms Library/Audiobeast_Small_Room_H&K_416_5.56_Assault_Rifle_05m_LS5_001_Single_Shot_x1.wav",
+  "catacombs": "sonniss/Pole Position - The Indoor Gun Acoustics Library/AK47_catacombs_burst_blanks_in_front_of_gun_MKH8020_wide_stereo.wav",
+  "corridor": "sonniss/Pole Position - The Indoor Gun Acoustics Library/AK4_long_corridor_single_shots_blanks_behind_gun_in_corner_M10.wav",
+  "bigopen": "sonniss/Pole Position - The Outdoor Gun Acoustics Library/AK47_big_open_area_2m_above_behind_gun_RSM191_M.wav",
+  "valley": "sonniss/Pole Position - The Outdoor Gun Acoustics Library/AK5_valley_field_forest_50m_behind_gun_off_axis_behind_buildings_M10.wav",
+  "forest": "sonniss/Pole Position - The Outdoor Gun Acoustics Library/MP5_forest_road_10m_behind_gun_pointing_at_forest_off_axis_MKH8060.wav",
+  "ak105_0": "tsp/Tactical Shooter Pack/AK105/Fire/S_AK105_Fire_Unsuppressed_0.wav",
+  "ak105_1": "tsp/Tactical Shooter Pack/AK105/Fire/S_AK105_Fire_Unsuppressed_1.wav",
+  "viper_2": "tsp/Tactical Shooter Pack/WK-11_Viper/Fire/S_WK-11_Viper_2_With_Tail.wav",
+  "herr_1": "tsp/Tactical Shooter Pack/Herrington_11-87/Fire/S_Herrington_11-87_Unsuppressed_1_With_Tail.wav",
+  "herr_2": "tsp/Tactical Shooter Pack/Herrington_11-87/Fire/S_Herrington_11-87_Unsuppressed_2_With_Tail.wav",
+  "herr_3": "tsp/Tactical Shooter Pack/Herrington_11-87/Fire/S_Herrington_11-87_Unsuppressed_3_With_Tail.wav"
+ },
+ "guns": {
+  "ak": {
+   "dir": "Weapons/AKS74U",
+   "classes": {
+    "indoor_small": {
+     "target_lufs_m": -21.0,
+     "fade_in_s": 0.03,
+     "fade_out": 0.5,
+     "chain": {
+      "hp": 100,
+      "lp": 13000,
+      "comp": {
+       "threshold_db": -30,
+       "ratio": 2.0,
+       "attack_ms": 5,
+       "release_ms": 120
+      }
+     },
+     "variants": [
+      {
+       "layers": [
+        {
+         "src": "room416",
+         "t": 3.82,
+         "start_s": 0.06,
+         "end_s": 0.95
+        }
+       ]
+      },
+      {
+       "layers": [
+        {
+         "src": "catacombs",
+         "t": 1.12,
+         "start_s": 0.08,
+         "end_s": 1.0
+        }
+       ]
+      },
+      {
+       "layers": [
+        {
+         "src": "room416",
+         "t": 3.82,
+         "start_s": 0.1,
+         "end_s": 0.85,
+         "pitch": -0.5
+        }
+       ]
+      },
+      {
+       "layers": [
+        {
+         "src": "catacombs",
+         "t": 1.12,
+         "start_s": 0.06,
+         "end_s": 0.9,
+         "pitch": 0.5,
+         "lp": 9000
+        }
+       ]
+      },
+      {
+       "layers": [
+        {
+         "src": "room416",
+         "t": 3.82,
+         "start_s": 0.07,
+         "end_s": 0.9,
+         "gain_db": 0.0
+        },
+        {
+         "src": "catacombs",
+         "t": 1.12,
+         "start_s": 0.09,
+         "end_s": 0.9,
+         "gain_db": -7.0
+        }
+       ]
+      }
+     ]
+    },
+    "indoor_large": {
+     "target_lufs_m": -21.5,
+     "fade_in_s": 0.05,
+     "fade_out": 0.5,
+     "chain": {
+      "hp": 90,
+      "lp": 10000,
+      "comp": {
+       "threshold_db": -30,
+       "ratio": 2.0,
+       "attack_ms": 8,
+       "release_ms": 220
+      }
+     },
+     "variants": [
+      {
+       "layers": [
+        {
+         "src": "corridor",
+         "t": 0.45,
+         "start_s": 0.1,
+         "end_s": 1.3
+        }
+       ]
+      },
+      {
+       "layers": [
+        {
+         "src": "corridor",
+         "t": 15.52,
+         "start_s": 0.1,
+         "end_s": 1.4
+        }
+       ]
+      },
+      {
+       "layers": [
+        {
+         "src": "corridor",
+         "t": 39.65,
+         "start_s": 0.12,
+         "end_s": 1.3,
+         "pitch": -0.4
+        }
+       ]
+      },
+      {
+       "layers": [
+        {
+         "src": "wh870",
+         "t": 28.98,
+         "start_s": 0.12,
+         "end_s": 2.0,
+         "pitch": 1.5,
+         "lp": 7000
+        }
+       ]
+      },
+      {
+       "layers": [
+        {
+         "src": "wh870",
+         "t": 46.71,
+         "start_s": 0.12,
+         "end_s": 2.1,
+         "pitch": 2.0,
+         "lp": 6500
+        }
+       ]
+      }
+     ]
+    },
+    "outdoor_urban": {
+     "target_lufs_m": -22.0,
+     "fade_in_s": 0.06,
+     "fade_out": 0.55,
+     "chain": {
+      "hp": 130,
+      "lp": 11000,
+      "comp": {
+       "threshold_db": -32,
+       "ratio": 2.5,
+       "attack_ms": 10,
+       "release_ms": 250
+      }
+     },
+     "variants": [
+      {
+       "layers": [
+        {
+         "src": "valley",
+         "t": 0.24,
+         "start_s": 0.1,
+         "end_s": 2.4
+        }
+       ]
+      },
+      {
+       "layers": [
+        {
+         "src": "valley",
+         "t": 7.4,
+         "start_s": 0.1,
+         "end_s": 2.4
+        }
+       ]
+      },
+      {
+       "layers": [
+        {
+         "src": "valley",
+         "t": 21.5,
+         "start_s": 0.1,
+         "end_s": 2.3,
+         "pitch": 0.4
+        }
+       ]
+      },
+      {
+       "layers": [
+        {
+         "src": "valley",
+         "t": 45.66,
+         "start_s": 0.1,
+         "end_s": 2.4
+        }
+       ]
+      },
+      {
+       "layers": [
+        {
+         "src": "valley",
+         "t": 52.54,
+         "start_s": 0.1,
+         "end_s": 2.4,
+         "pitch": -0.4
+        }
+       ]
+      }
+     ]
+    },
+    "outdoor_open": {
+     "target_lufs_m": -23.0,
+     "fade_in_s": 0.1,
+     "fade_out": 0.55,
+     "chain": {
+      "hp": 80,
+      "lp": 10000,
+      "comp": {
+       "threshold_db": -34,
+       "ratio": 2.5,
+       "attack_ms": 20,
+       "release_ms": 500
+      }
+     },
+     "variants": [
+      {
+       "layers": [
+        {
+         "src": "bigopen",
+         "t": 0.83,
+         "start_s": 0.12,
+         "end_s": 1.5
+        }
+       ]
+      },
+      {
+       "layers": [
+        {
+         "src": "forest",
+         "t": 0.37,
+         "start_s": 0.12,
+         "end_s": 1.6
+        }
+       ]
+      },
+      {
+       "layers": [
+        {
+         "src": "ak105_0",
+         "start_s": 0.14,
+         "end_s": 3.5
+        }
+       ]
+      },
+      {
+       "layers": [
+        {
+         "src": "bigopen",
+         "t": 9.55,
+         "start_s": 0.12,
+         "end_s": 1.5
+        },
+        {
+         "src": "ak105_1",
+         "start_s": 0.3,
+         "end_s": 3.6,
+         "gain_db": -6.0
+        }
+       ]
+      },
+      {
+       "layers": [
+        {
+         "src": "forest",
+         "t": 9.76,
+         "start_s": 0.12,
+         "end_s": 1.6
+        },
+        {
+         "src": "viper_2",
+         "start_s": 0.3,
+         "end_s": 3.6,
+         "gain_db": -6.0,
+         "pitch": -1.0
+        }
+       ]
+      }
+     ]
+    }
+   }
+  },
+  "870": {
+   "dir": "Weapons/Remington870",
+   "classes": {
+    "indoor_small": {
+     "target_lufs_m": -21.0,
+     "fade_in_s": 0.03,
+     "fade_out": 0.5,
+     "chain": {
+      "hp": 80,
+      "lp": 11000,
+      "comp": {
+       "threshold_db": -30,
+       "ratio": 2.0,
+       "attack_ms": 5,
+       "release_ms": 120
+      }
+     },
+     "variants": [
+      {
+       "layers": [
+        {
+         "src": "room416",
+         "t": 3.82,
+         "start_s": 0.08,
+         "end_s": 1.0,
+         "pitch": -2.0
+        }
+       ]
+      },
+      {
+       "layers": [
+        {
+         "src": "catacombs",
+         "t": 1.12,
+         "start_s": 0.1,
+         "end_s": 1.05,
+         "pitch": -2.0
+        }
+       ]
+      },
+      {
+       "layers": [
+        {
+         "src": "room416",
+         "t": 3.82,
+         "start_s": 0.1,
+         "end_s": 0.95,
+         "pitch": -2.0
+        }
+       ]
+      },
+      {
+       "layers": [
+        {
+         "src": "catacombs",
+         "t": 1.12,
+         "start_s": 0.08,
+         "end_s": 1.0,
+         "pitch": -2.0,
+         "lp": 9000
+        }
+       ]
+      },
+      {
+       "layers": [
+        {
+         "src": "room416",
+         "t": 3.82,
+         "start_s": 0.09,
+         "end_s": 1.0,
+         "pitch": -2.0
+        },
+        {
+         "src": "catacombs",
+         "t": 1.12,
+         "start_s": 0.11,
+         "end_s": 1.0,
+         "pitch": -2.0,
+         "gain_db": -7.0
+        }
+       ]
+      }
+     ]
+    },
+    "indoor_large": {
+     "target_lufs_m": -21.5,
+     "fade_in_s": 0.05,
+     "fade_out": 0.5,
+     "chain": {
+      "hp": 70,
+      "lp": 10000,
+      "comp": {
+       "threshold_db": -30,
+       "ratio": 2.0,
+       "attack_ms": 8,
+       "release_ms": 220
+      }
+     },
+     "variants": [
+      {
+       "layers": [
+        {
+         "src": "wh870",
+         "t": 22.25,
+         "start_s": 0.12,
+         "end_s": 2.2
+        }
+       ]
+      },
+      {
+       "layers": [
+        {
+         "src": "wh870",
+         "t": 34.4,
+         "start_s": 0.12,
+         "end_s": 2.2
+        }
+       ]
+      },
+      {
+       "layers": [
+        {
+         "src": "wh870",
+         "t": 38.57,
+         "start_s": 0.12,
+         "end_s": 2.2
+        }
+       ]
+      },
+      {
+       "layers": [
+        {
+         "src": "wh870",
+         "t": 43.13,
+         "start_s": 0.12,
+         "end_s": 2.2
+        }
+       ]
+      },
+      {
+       "layers": [
+        {
+         "src": "wh870",
+         "t": 49.43,
+         "start_s": 0.12,
+         "end_s": 2.2
+        }
+       ]
+      }
+     ]
+    },
+    "outdoor_urban": {
+     "target_lufs_m": -22.0,
+     "fade_in_s": 0.08,
+     "fade_out": 0.55,
+     "chain": {
+      "hp": 90,
+      "lp": 10000,
+      "comp": {
+       "threshold_db": -32,
+       "ratio": 2.5,
+       "attack_ms": 10,
+       "release_ms": 250
+      }
+     },
+     "variants": [
+      {
+       "layers": [
+        {
+         "src": "valley",
+         "t": 0.24,
+         "start_s": 0.12,
+         "end_s": 2.5,
+         "pitch": -2.0
+        }
+       ]
+      },
+      {
+       "layers": [
+        {
+         "src": "valley",
+         "t": 7.4,
+         "start_s": 0.12,
+         "end_s": 2.5,
+         "pitch": -2.0
+        }
+       ]
+      },
+      {
+       "layers": [
+        {
+         "src": "valley",
+         "t": 21.5,
+         "start_s": 0.12,
+         "end_s": 2.5,
+         "pitch": -2.0
+        }
+       ]
+      },
+      {
+       "layers": [
+        {
+         "src": "valley",
+         "t": 45.66,
+         "start_s": 0.12,
+         "end_s": 2.5,
+         "pitch": -2.0
+        }
+       ]
+      },
+      {
+       "layers": [
+        {
+         "src": "valley",
+         "t": 52.54,
+         "start_s": 0.12,
+         "end_s": 2.5,
+         "pitch": -2.0
+        }
+       ]
+      }
+     ]
+    },
+    "outdoor_open": {
+     "target_lufs_m": -23.0,
+     "fade_in_s": 0.1,
+     "fade_out": 0.55,
+     "chain": {
+      "hp": 55,
+      "lp": 9000,
+      "comp": {
+       "threshold_db": -34,
+       "ratio": 2.5,
+       "attack_ms": 20,
+       "release_ms": 600
+      }
+     },
+     "variants": [
+      {
+       "layers": [
+        {
+         "src": "bigopen",
+         "t": 5.56,
+         "start_s": 0.14,
+         "end_s": 1.6,
+         "pitch": -2.0
+        }
+       ]
+      },
+      {
+       "layers": [
+        {
+         "src": "forest",
+         "t": 3.38,
+         "start_s": 0.14,
+         "end_s": 1.7,
+         "pitch": -2.0
+        }
+       ]
+      },
+      {
+       "layers": [
+        {
+         "src": "herr_1",
+         "start_s": 0.16,
+         "end_s": 4.0
+        }
+       ]
+      },
+      {
+       "layers": [
+        {
+         "src": "bigopen",
+         "t": 13.86,
+         "start_s": 0.14,
+         "end_s": 1.6,
+         "pitch": -2.0
+        },
+        {
+         "src": "herr_2",
+         "start_s": 0.3,
+         "end_s": 4.0,
+         "gain_db": -6.0
+        }
+       ]
+      },
+      {
+       "layers": [
+        {
+         "src": "forest",
+         "t": 13.03,
+         "start_s": 0.14,
+         "end_s": 1.7,
+         "pitch": -2.0
+        },
+        {
+         "src": "herr_3",
+         "start_s": 0.3,
+         "end_s": 4.0,
+         "gain_db": -6.0,
+         "pitch": -0.5
+        }
+       ]
+      }
+     ]
+    }
+   }
+  }
+ }
+}
