@@ -340,3 +340,25 @@ by time and by distance), class selection and the fallback to the generic tail, 
 fallback to the probe. `--weapon-test` ends by replaying every frame's animator state against the
 controllers' `snd.*` events: each crossed event must have been played, in order, within +-1 frame, plus counts for the
 gear sounds (ADS, fire mode, dry fire, equip / unequip) and the shot layers.
+
+## Audio Lab scene
+
+`project/scenes/AudioLab.json` is a dedicated scene for hearing and testing every audio feature (no Sandbox clutter). Metres, Y up;
+all structures are solid static box colliders, so the probe rays and occlusion see them. The player spawns at (0, 0.1, 8.5) facing -Z
+with the AK (key 1), the Remington (key 2) and the gravity gun (key 3), exactly like the Sandbox.
+
+| Area | Where | What to test |
+| --- | --- | --- |
+| Warehouse hall | x -15..15, z -10..10, y 0..10, roofed. Zone "Audio / Zone Hall" (Indoor Large, fade 2) | big-room tails, ambience `snd.amb.indoor_large` |
+| Footstep strips | six 3 x 6 m strips, x centres -7.5 .. 7.5 step 3, z 0..6: concrete, wood, metal, glass, carpet, water | footsteps, jump / land per surface (name AND tag hold the surface word) |
+| Impact wall | z -1.5 (10 m from spawn): 2 x 2 m panels at x -10 (concrete), -6 (metal), -2 (wood), 2 (glass), 6 (ice); dirt berm at x 10 | bullet impacts per surface; casings land on the strips |
+| Small room | x -20.3..-15.3, z -2..2, y 0..3. Zone "Audio / Zone Small Room" (Indoor Small, priority 1, fade 1.5) | small-room tail, zone priority over the hall |
+| Doorways | 1.2 x 2.2 m at (-15.15, z -1) and (-15.15, z +1); "Audio / Portal Small Room A" Open Amount 1.0, "... B" 0.3 | sound heard through an opening, open amount, diffraction |
+| Alley | x 15.3..45, z -3..3, 12 m walls, no roof. Zone "Audio / Zone Alley" (Outdoor Urban, fade 3). Hall doorway 4 x 4 m at x 15.15 with "Audio / Portal Alley" | slap echo, hall-to-outside transition |
+| Field | 120 x 120 ground centred (105, 0, 0), a few cover boxes. Zone "Audio / Zone Field" (Outdoor Open, fade 3) | open-air tails, distance |
+| Settings | "Audio / Settings" holds one Reverb Bus, Foley Audio and Impact Audio at their defaults | tweak in the inspector |
+| NPC squads | "Lab / NPC Squads (disabled)": two spawns in the small room, two 40 m out in the field facing the alley. Spawns are inactive (tick them active in the Hierarchy to enable) | flybys, soldier footsteps, shots heard through portals |
+
+Surfaces are matched on the collider's physics material, tag and name against each component's Surface Table (see Foley / Impact above);
+avoid naming other colliders with a table word (for example "Floor" reads as wood). The zones also set `Ambience` / `Ambience Volume`
+(ignored by builds without those fields).
