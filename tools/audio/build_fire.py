@@ -209,7 +209,8 @@ def main():
         e, p = build(os.path.join(abuild.HERE, "recipes", path), layers)
         allent += e
         prefixes += p
-    print("manifest files:", abuild.update_manifest(allent, prefixes))
+    # the environment tails (fire_tail_<space>_<n>, build_tails.py) share the fire_tail_ prefix but are not ours
+    print("manifest files:", abuild.update_manifest(allent, prefixes, keep=lambda e: e.get("space") is not None))
 
 
 if __name__ == "__main__":

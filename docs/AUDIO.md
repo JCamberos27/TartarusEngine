@@ -81,9 +81,10 @@ blender.exe -b --python tools/audio/clip_contacts.py -- dump C:\tb\audio-work\mo
 uv run --with numpy python tools/audio/clip_contacts.py analyze C:\tb\audio-work\motion tools/audio/sync_map.json
 build_elements.py   # weapon action one-shots   (recipes/elements.json)
 build_fire.py       # five gunfire layers       (recipes/ak_fire.json, recipes/remington870_fire.json)
+build_tails.py      # environment tails         (recipes/tails.json; real recordings only, writes `sources` to the manifest)
 build_foley.py      # foley + footsteps + loops (recipes/foley.json)
 check_audio.py      # acceptance checks, exit code 0 = pass
-render_reel.py      # audition reels to C:\tb\audio-reel (not committed)
+render_reel.py      # audition reels to C:\tb\audio-reel (not committed); `render_reel.py tails` for the environment tails
 ```
 
 Builds are deterministic (seeded by recipe content, fixed dither seeds). After changing a recipe rebuild the affected
@@ -254,6 +255,55 @@ Full auto: close / mech / sub are capped by their set's Max Voices (steal oldest
 (Tail Max Voices, 3), the stolen tail fades over Tail Fade Time, a tail never starts within Tail Min Interval of the
 last, and each tail still ringing ducks a new one by Tail Duck Per Voice, so 600+ rpm neither piles up nor clips.
 
+### Environment tails
+
+The gunshot tail follows the space the shooter is in. Four classes, each its own tail set per gun (5 variants,
+`snd.<gun>.fire_tail_<class>`, files `fire_tail_<class>_<n>.wav`): `outdoor_open`, `outdoor_urban`, `indoor_small`,
+`indoor_large`. The generic `snd.<gun>.fire_tail` stays: it is the fallback for a class with no files, and what plays when
+**Env Enabled** is off. The close / sub / mech layers do not change with the space.
+
+Choosing the space (`WeaponAudio::ResolveSpace`), per tail that plays:
+
+1. **Reverb Zone** components (Audio category; box or sphere placed by the entity's position and rotation, extents / radius in
+   metres, Scale ignored). A zone has a Tail Class, a Tail Gain, a Priority and a Fade Distance. Its weight is 0 at the
+   surface and rises (smoothstep) to 1 Fade Distance inside. Zones layer from the highest priority down, each taking its weight
+   of what is still unclaimed, so an edge is a crossfade and a small room inside a hall sits on top of it. The zones also
+   store the reverb preset for the runtime reverb bus to come (Room Size, Decay Time, HF Damping, Pre-Delay, Wet Level,
+   Early/Late Mix): Reverb Mode "Class Default" uses the preset of the Tail Class (`ReverbPresetFor`), "Custom" the fields.
+   Zones are read when Play starts (they do not move).
+2. Whatever share of the mix no zone claims (all of it, outside every zone) is the **probe's**
+   (`EnvironmentProbe`): rays from the muzzle through `PhysicsWorld::RaycastSolid` (statics and kinematic bodies; props, ragdolls
+   and triggers do not count): one up, a diagonal ring at 45 degrees, a horizontal ring (Env Ray Count, default 12 = 1 + 4 + 7).
+   Features: **cover** = half the up ray, half the share of diagonals that hit; **wall** = share of horizontal rays that hit
+   within Env Urban Distance; **wall distance** = mean horizontal ray length (a miss counts as Env Max Distance). Class weights:
+   `indoor = band(cover, IndoorCover +- BlendFraction)`, `large = band(wallDistance, LargeRoomDistance +- BlendDistance)`,
+   `urban = band(wall, UrbanWall +- BlendFraction)` with `band` a smoothstep, then small = indoor(1-large), large = indoor x
+   large, urban = (1-indoor) x urban, open = (1-indoor)(1-urban). The four sum to 1 and move continuously, so crossing a doorway is
+   a crossfade, not a switch. A zone that fully covers the shooter skips the probe.
+3. The probe is cached per shooter and refreshed every Env Refresh Interval (0.25 s) or when the shooter has moved
+   Env Refresh Move Distance (1 m): never per shot (a 650 rpm burst probes about 4 times a second). Shooters are named by
+   `CombatFx::Shot(..., shooter)` / `WeaponAudio::Shot(..., shooter)` (any stable id); unnamed shooters are the player (2D shots) or
+   told apart by position (Env Match Radius).
+
+Playback: the two heaviest classes (a class under 3 % is dropped) play together, equal-power (gain sqrt(weight), the tails are
+different recordings), each at its Env Gain (per class) x the zones' Tail Gain; a class with no files plays the generic tail in its
+place. Full-auto decimation (Tail Every), the tail voice cap, ducking and the min interval apply to the tail layer as before, counting
+the voices of all the tail sets. The logical emission stays `snd.<gun>.fire_tail` (its `Space` field and the `[WeaponAudio] ...
+space -> <class>` console lines say which; the audio log gets an `E` line per probe: `E <t> <shooter> <class> <4 weights>
+cover wall wallDist enclosure`). Debug: `WeaponAudio::EnvironmentDebugLines` gives the zones' wire shapes and the probe rays
+(7 floats per vertex, xyz rgba) when a gun has Env Debug Draw on; the editor overlay does not draw them yet.
+
+Cost: 1.5 us per ray (17-18 us per 12-ray refresh in the Sandbox, max 37 us).
+
+Sound: every tail is cut from **real recordings** (no synthesis, no generated or convolved impulse responses; `tools/audio/
+recipes/tails.json`, `build_tails.py`): indoor_small = Audiobeast small room (H&K 416) + Pole Position catacombs; indoor_large =
+Audiobeast medium warehouse (870 x8) + Pole Position long corridor; outdoor_urban = Pole Position valley behind buildings;
+outdoor_open = Pole Position big open area + forest road, layered with the pack's long With_Tail recordings for the long decay.
+Each is [shot onset + start_s, + end_s] of its source (the close layer carries the direct sound), faded, EQ'd, loudness-set into
+the tail window, true peak <= -1 dBTP, mono-fold loss <= 4 dB. The manifest entry lists `sources` (file, start_s, end_s, gain_db,
+pitch_st) and `check_audio.py` fails any tail without them. Sources live in C:\tb\audio-src (never committed).
+`render_reel.py tails` renders the audition reels (a shot with each tail, a burst per space) to C:\tb\audio-reel\tails.
+
 ### Tuning
 
 - **Weapon Audio** component (one per gun; `Gun` = `ak` / `870`; a gun without one uses the built-in defaults): volume,
@@ -284,6 +334,9 @@ mix the new layers.
 
 Unit: round robin never repeats, steal-oldest (and the fade), jitter / pitch ranges, JSON round trips, distance blend
 weights, the autofire voice cap, `snd.` event to set and 2D / 3D, manifest and layout loaders, footstep cadence vs speed,
-surfaces, landing and cloth-loop rules. `--weapon-test` ends by replaying every frame's animator state against the
+surfaces, landing and cloth-loop rules; environment tails: the ray set, the classifier on analytic rooms (small room, hall,
+courtyard, open ground), crossfade weights (sum to 1, continuous through every threshold), probe refresh throttling (per shooter,
+by time and by distance), class selection and the fallback to the generic tail, Reverb Zone containment / priority / edge blend /
+fallback to the probe. `--weapon-test` ends by replaying every frame's animator state against the
 controllers' `snd.*` events: each crossed event must have been played, in order, within +-1 frame, plus counts for the
 gear sounds (ADS, fire mode, dry fire, equip / unequip) and the shot layers.
