@@ -16,6 +16,10 @@ public:
     Ssao(const Ssao&) = delete;
     Ssao& operator=(const Ssao&) = delete;
 
+    // Runs the compute and blur programs once on a tiny throwaway target, so the driver finishes
+    // building them at load instead of on the first frame that uses SSAO (~100 ms stall).
+    static void WarmUp(Shader& ssaoShader, Shader& blurShader);
+
     // Lazily (re)creates all GL objects. No-op when width/height already match.
     void Resize(int width, int height);
 
