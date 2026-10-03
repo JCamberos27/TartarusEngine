@@ -19,6 +19,7 @@ import abuild
 import adsp
 
 MIN_VARIANTS = {"close": 4, "sub": 4, "mech": 4, "tail": 4, "far": 4, "action": 3, "foley": 3, "step": 5, "loop": 3}
+MONO_FOLD_MAX_DB = 4.0   # a fully decorrelated stereo pair loses 3 dB on a mono fold; a little more is tolerated
 LAYER_GROUPS = ("close", "mech", "sub", "tail", "far")
 
 
@@ -60,6 +61,11 @@ def main():
             errs.append(f"{tag}: true peak {tp:.2f} dBTP > {T['peak_dbtp_max']}")
         if not (win["min"] <= lm <= win["max"]):
             errs.append(f"{tag}: {lm:.1f} LUFS-M outside {layer} window [{win['min']}, {win['max']}]")
+        if e.get("space") and x.shape[1] == 2:        # environment tails (build_tails.py): must fold to mono without a hole
+            l, r = x[:, 0].astype(np.float64), x[:, 1].astype(np.float64)
+            fold = 10 * np.log10(max(np.mean(((l + r) * 0.5) ** 2), 1e-12) / max(0.5 * (np.mean(l ** 2) + np.mean(r ** 2)), 1e-12))
+            if fold < -MONO_FOLD_MAX_DB:
+                errs.append(f"{tag}: mono fold loses {-fold:.1f} dB (> {MONO_FOLD_MAX_DB}); not mono compatible")
         if np.abs(x).max() >= 0.9995 or (np.abs(x) >= 32767 / 32768).sum() > 0:
             errs.append(f"{tag}: clipped samples")
         if not e.get("loop"):
