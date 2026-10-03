@@ -1503,7 +1503,10 @@ int main(int argc, char** argv) {
             playControllerEntity = FindFirstPersonController(world);
             {   // the scene's effect and HUD tuning: the first FX / HUD Settings component, defaults when none
                 FxHudSettingsComponent fx;
-                for (auto e : world.Registry.view<FxHudSettingsComponent>()) { fx = world.Registry.get<FxHudSettingsComponent>(e); break; }
+                if (const auto first = world.Registry.view<FxHudSettingsComponent>(); first.begin() != first.end()) { // the first one counts
+                    const entt::entity e = *first.begin();
+                    fx = world.Registry.get<FxHudSettingsComponent>(e);
+                }
                 combatFx.Settings = fx;
                 combatHud.Settings = fx;
                 weaponFx.Settings = fx;
