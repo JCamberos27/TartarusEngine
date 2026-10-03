@@ -74,68 +74,35 @@ def thud_variant(v):
     return apply_eq(y, v)
 
 
-# ---------------------------------------------------------------------------------------------------- synth one-shots
-def synth_dry_fire(v):
-    """Hammer fall on an empty chamber: tight metallic click + short body knock, no powder."""
-    r = adsp.deterministic_rng("dry", v["seed"])
-    n = int(0.16 * SR)
-    t = np.arange(n) / SR
-    click = r.standard_normal(n) * np.exp(-t / 0.0018)
-    click = signal.sosfilt(signal.butter(2, [v["click_hz"] * 0.6, min(v["click_hz"] * 2.2, 20000)], "bp", fs=SR, output="sos"), click)
-    ring = np.sin(2 * np.pi * v["click_hz"] * 0.9 * t) * np.exp(-t / 0.006) * 0.35     # small metallic ring
-    body = np.sin(2 * np.pi * v["body_hz"] * t * (1 + 0.15 * np.exp(-t / 0.01))) * np.exp(-t / 0.028) * 0.9
-    knock = r.standard_normal(n) * np.exp(-t / 0.004)
-    knock = signal.sosfilt(signal.butter(2, 900, "lp", fs=SR, output="sos"), knock) * 0.5
-    m = click * 0.9 + ring + body + knock
-    y = np.stack([m, m * (1 + 0.04 * (r.random() - 0.5))], 1).astype(np.float32)
-    return adsp.fade(y, int(0.0005 * SR), int(0.05 * SR))
+# ---------------------------------------------------------------------------------------------------- composites
+def peak_aligned(v):
+    """A swing / whoosh: cut so the loudest part of the whoosh sits at peak_at_ms (the strike lands ~100 ms in)."""
+    x = src(v["src"])
+    m = adsp.to_mono(x)
+    sm = np.convolve(np.abs(m), np.ones(int(0.012 * SR)) / int(0.012 * SR), mode="same")
+    pk = int(np.argmax(sm))
+    a = max(0, pk - int(v["peak_at_ms"] / 1000 * SR))
+    y = x[a:a + int(v["dur"] * SR)].copy()
+    y = adsp.fade(y, int(v.get("fade_in_ms", 6) / 1000 * SR), int(max(0.06, v["dur"] * 0.4) * SR))
+    y = adsp.pitch(y, v.get("pitch", 0.0))
+    return apply_eq(y, v)
 
 
-def synth_melee_swing(v):
-    """Air + cloth whoosh: band-passed noise whose centre sweeps f0 -> f1 with a rise/fall envelope."""
-    r = adsp.deterministic_rng("swing", v["seed"])
-    n = int(v["dur"] * SR)
-    t = np.linspace(0, 1, n)
-    noise = r.standard_normal(n)
-    f = v["f0"] * (v["f1"] / v["f0"]) ** (t ** 1.4)               # exponential sweep
-    # time-varying band-pass via a bank crossfade (cheap and artifact free for noise)
-    out = np.zeros(n)
-    bands = np.geomspace(v["f0"] * 0.6, v["f1"] * 1.4, 10)
-    for i, fc in enumerate(bands):
-        sos = signal.butter(2, [fc / 1.35, min(fc * 1.35, 20000)], "bp", fs=SR, output="sos")
-        w = np.exp(-0.5 * ((np.log(f) - np.log(fc)) / 0.28) ** 2)
-        out += signal.sosfilt(sos, noise) * w
-    env = np.sin(np.pi * np.clip(t, 0, 1) ** 0.7) ** 2
-    m = out * env
-    lo = signal.sosfilt(signal.butter(2, [90, 260], "bp", fs=SR, output="sos"), r.standard_normal(n)) * env * 0.5
-    m = m + lo
-    y = np.stack([m, np.roll(m, int(0.0004 * SR))], 1).astype(np.float32)
-    return adsp.fade(y, int(0.02 * SR), int(0.06 * SR))
-
-
-def synth_melee_hit(v):
-    """Blunt strike: pitched-down body thump + noise burst + a metal/handling slap lifted from the pack."""
-    r = adsp.deterministic_rng("hit", v["seed"])
-    n = int(0.45 * SR)
-    t = np.arange(n) / SR
-    body = np.sin(2 * np.pi * (v["body_hz"] * (1 + 1.2 * np.exp(-t / 0.03)) * t)) * np.exp(-t / 0.07)
-    burst = signal.sosfilt(signal.butter(2, [200, 3000], "bp", fs=SR, output="sos"), r.standard_normal(n)) * np.exp(-t / 0.018)
-    thump = (body * 1.0 + burst * 0.55)
-    slap = adsp.slice_at(src(v["slap_src"]), v["slap_t"], 0.2)
-    slap = adsp.to_mono(slap)
-    slap = np.pad(slap, (0, max(0, n - len(slap))))[:n] * 0.5
-    m = thump + slap
-    y = np.stack([m, m], 1).astype(np.float32)
-    y = adsp.soft_sat(y, 1.6)
-    return adsp.fade(y, int(0.0005 * SR), int(0.12 * SR))
-
-
-SYNTH = {"dry_fire": synth_dry_fire, "melee_swing": synth_melee_swing, "melee_hit": synth_melee_hit}
+def composite(v):
+    """Strike / click built only from real recordings: every layer is a slice of a real source, dropped in at delay_ms
+    (its own contact transient lands there), with its own pitch / filter / gain."""
+    layers = []
+    for l in v["layers"]:
+        y = slice_variant(l)
+        layers.append((adsp.gain_db(y, l.get("gain_db", 0.0)), int(l.get("delay_ms", 0.0) / 1000 * SR), 0.0))
+    return apply_eq(adsp.mix(layers), v)
 
 
 def render_variant(v):
-    if "synth" in v:
-        y = SYNTH[v["synth"]](v)
+    if "layers" in v:
+        y = composite(v)
+    elif "peak_at_ms" in v:
+        y = peak_aligned(v)
     elif "thud" in v:
         y = thud_variant(v)
     elif "main" in v:
@@ -146,8 +113,8 @@ def render_variant(v):
 
 
 def describe(v):
-    if "synth" in v:
-        return f"synth:{v['synth']}#{v['seed']}"
+    if "layers" in v:
+        return "+".join(describe(l) for l in v["layers"])
     s = v["src"].replace("\\", "/").split("/")[-1]
     return f"{s}@{v.get('t', v.get('t0'))}"
 
@@ -165,8 +132,10 @@ def main():
                     extra["anchor_ms"] = float(v["thud"]["delay_ms"])
                 elif "main_at_ms" in v:
                     extra["anchor_ms"] = float(v["main_at_ms"])
-                elif v.get("synth") in ("melee_hit", "dry_fire", "melee_swing") or elem == "cloth":
-                    extra["anchor_ms"] = 0.0          # no contact transient: the file starts when the motion starts
+                elif elem in ("melee_hit", "dry_fire", "melee_swing", "cloth"):
+                    extra["anchor_ms"] = 0.0
+                elif "src" in v and "t" in v:        # sliced at the contact: anchor = the lead kept before it (pitch scales time)
+                    extra["anchor_ms"] = round(v.get("lead_ms", v.get("preroll_ms", 3.0)) / 2 ** (v.get("pitch", 0.0) / 12), 1)
                 if "lead_ms" in v:
                     extra["lead_ms"] = v["lead_ms"]
                 entries.append(abuild.emit(rel, y, f"snd.{gun}.{elem}", "action", extra))
