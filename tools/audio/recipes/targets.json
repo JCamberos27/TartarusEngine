@@ -1,0 +1,17 @@
+{
+  "_doc": "Loudness acceptance windows per layer, in LUFS-M max (loudest 400 ms momentary window, BS.1770 K-weighted). A one-shot is too short for an integrated or 3 s short-term reading to mean anything, so the loudest momentary window is the metric; lufs_i (integrated, zero padded to 400 ms) is stored for reference only. peak_dbtp is the 4x-oversampled true peak ceiling. edge_max / dc_max are linear full-scale limits for the first/last sample and the mean.",
+  "peak_dbtp_max": -1.0,
+  "dc_max": 0.002,
+  "edge_max": 0.004,
+  "layers": {
+    "close":  {"target": -14.0, "min": -16.5, "max": -12.0},
+    "mech":   {"target": -20.0, "min": -23.0, "max": -17.0},
+    "sub":    {"target": -19.0, "min": -23.0, "max": -15.0},
+    "tail":   {"target": -22.0, "min": -26.0, "max": -18.0},
+    "far":    {"target": -25.0, "min": -29.0, "max": -21.0},
+    "action": {"target": -21.0, "min": -26.0, "max": -18.0},
+    "foley":  {"target": -21.0, "min": -24.0, "max": -18.0},
+    "step":   {"target": -23.0, "min": -28.0, "max": -20.0},
+    "loop":   {"target": -24.0, "min": -27.0, "max": -21.0}
+  }
+}

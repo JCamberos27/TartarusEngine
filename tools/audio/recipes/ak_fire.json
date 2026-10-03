@@ -1,0 +1,71 @@
+{
+  "_doc": "AKS-74U gunfire: five separately delivered layers, all timelined from the shot instant (t = 0) so the engine starts them together. See build_fire.py. src paths relative to the extracted Tactical Shooter Pack. 5.45 carbine: short barrel = bright crack + flash, so the close chain leans on 3-4 kHz and the body is kept tight.",
+  "gun": "ak",
+  "dir": "Weapons/AKS74U",
+  "rpm": 650,
+  "close": {
+    "length_s": 0.46,
+    "chain": {"hp": 55, "eq": [[110, 2.0, 0.8], [320, -3.0, 1.0], [3300, 2.5, 0.8], [7500, 1.5, 0.7]],
+              "attack": 0.35, "sustain": -0.1,
+              "comp": {"threshold_db": -20, "ratio": 4.0, "attack_ms": 3, "release_ms": 110}, "drive": 1.7},
+    "variants": [
+      {"base": {"src": "AK105/Fire/S_AK105_Fire_Unsuppressed_0.wav"},
+       "crack": {"src": "TR15/Fire/S_TR15_V1_Unsupressed_With_Tail_0.wav", "dur": 0.14, "hp": 2200, "gain_db": -5},
+       "body": {"src": "Mk14EBR/S_Mk14EBR_Fire_02.WAV", "dur": 0.40, "lp": 700, "gain_db": -9}},
+      {"base": {"src": "AK105/Fire/S_AK105_Fire_Unsuppressed_1.wav"},
+       "crack": {"src": "TR15/Fire/S_TR15_V2_Unsupressed_With_Tail_0.wav", "dur": 0.14, "hp": 2400, "gain_db": -5}},
+      {"base": {"src": "AK105/Fire/S_AK105_Fire_Unsuppressed_2.wav"},
+       "crack": {"src": "TR15/Fire/S_TR15_V3_Unsuppressed_With_Tail_0.wav", "dur": 0.14, "hp": 2000, "gain_db": -4},
+       "body": {"src": "Mk14EBR/S_Mk14EBR_Fire_03.WAV", "dur": 0.40, "lp": 650, "gain_db": -9}},
+      {"base": {"src": "AK105/Fire/S_AK105_Fire_Unsuppressed_0.wav"},
+       "crack": {"src": "TR15/Fire/S_TR15_V4_Unsuppressed_With_Tail_0.wav", "dur": 0.14, "hp": 2300, "gain_db": -5}, "pitch": -0.4},
+      {"base": {"src": "AK105/Fire/S_AK105_Fire_Unsuppressed_1.wav"},
+       "crack": {"src": "TR15/Fire/S_TR15_V1_Unsupressed_With_Tail_1.wav", "dur": 0.14, "hp": 2200, "gain_db": -5},
+       "body": {"src": "Mk14EBR/S_Mk14EBR_Fire_01.WAV", "dur": 0.40, "lp": 750, "gain_db": -9}, "pitch": 0.3},
+      {"base": {"src": "AK105/Fire/S_AK105_Fire_Unsuppressed_2.wav"},
+       "crack": {"src": "TR15/Fire/S_TR15_V4_Unsuppressed_With_Tail_1.wav", "dur": 0.14, "hp": 2500, "gain_db": -6}, "pitch": -0.2}
+    ]
+  },
+  "mech": {
+    "length_s": 0.30,
+    "chain": {"hp": 450, "eq": [[1800, 2.0, 1.0]], "comp": {"threshold_db": -16, "ratio": 3.0, "attack_ms": 2, "release_ms": 60}, "drive": 1.3},
+    "variants": [
+      {"src": "AK105/Actions/S_AK105_Reload_Empty.WAV", "t": 3.052, "dur": 0.12, "delay_ms": 17},
+      {"src": "TR15/Actions/S_TR15_Reload_Empty.wav", "t": 3.044, "dur": 0.10, "delay_ms": 21, "pitch": -0.5},
+      {"src": "Mk14EBR/S_Mk14EBR_Reload_Empty.WAV", "t": 3.780, "dur": 0.12, "delay_ms": 15, "pitch": 0.5},
+      {"src": "AK105/Actions/S_AK105_Reload_Empty.WAV", "t": 2.606, "dur": 0.08, "delay_ms": 19}
+    ]
+  },
+  "sub": {
+    "length_s": 0.45,
+    "variants": [
+      {"f0": 105, "f1": 46, "tau_ms": 80, "sweep_ms": 55, "drive": 2.0, "click_ms": 7},
+      {"f0": 98, "f1": 50, "tau_ms": 92, "sweep_ms": 60, "drive": 2.2, "click_ms": 8},
+      {"f0": 112, "f1": 44, "tau_ms": 74, "sweep_ms": 48, "drive": 1.9, "click_ms": 6},
+      {"f0": 92, "f1": 52, "tau_ms": 100, "sweep_ms": 65, "drive": 2.4, "click_ms": 8},
+      {"f0": 108, "f1": 42, "tau_ms": 86, "sweep_ms": 52, "drive": 2.1, "click_ms": 7}
+    ]
+  },
+  "tail": {
+    "length_s": 3.2, "start_s": 0.12,
+    "chain": {"hp": 70, "lp": 11000, "comp": {"threshold_db": -38, "ratio": 3.5, "attack_ms": 20, "release_ms": 450}},
+    "variants": [
+      {"src": "AK105/Fire/S_AK105_Fire_Unsuppressed_0.wav"},
+      {"src": "AK105/Fire/S_AK105_Fire_Unsuppressed_1.wav"},
+      {"src": "AK105/Fire/S_AK105_Fire_Unsuppressed_2.wav", "pitch": -0.5},
+      {"src": "TR15/Fire/S_TR15_V4_Unsuppressed_With_Tail_0.wav", "pitch": -2.0},
+      {"src": "Mk14EBR/S_Mk14EBR_Fire_02.WAV", "lp": 6000}
+    ]
+  },
+  "far": {
+    "length_s": 3.4, "delay_ms": 85,
+    "chain": {"hp": 60, "lp": 2400, "lp_order": 4, "reverb": {"room_size": 0.85, "damping": 0.55, "wet_level": 0.28, "dry_level": 0.72},
+              "comp": {"threshold_db": -34, "ratio": 3.0, "attack_ms": 25, "release_ms": 500}},
+    "variants": [
+      {"src": "AK105/Fire/S_AK105_Fire_Unsuppressed_0.wav"},
+      {"src": "AK105/Fire/S_AK105_Fire_Unsuppressed_1.wav", "delay_ms": 110},
+      {"src": "AK105/Fire/S_AK105_Fire_Unsuppressed_2.wav", "delay_ms": 70},
+      {"src": "Mk14EBR/S_Mk14EBR_Fire_03.WAV", "delay_ms": 95, "pitch": 1.0}
+    ]
+  }
+}

@@ -1,0 +1,752 @@
+{
+ "_meta": {
+  "fps": 60,
+  "frame_base": 0,
+  "time": "frame / clip length in frames (the export_manifest frameEnd)",
+  "note": "frame = the CONTACT frame of the event (impact / press / grab). Play the one-shot at (frame / 60 s - anchor_ms / 1000) where anchor_ms comes from audio_manifest.json: pump and bolt one-shots carry their slide lead-in before the contact transient, so the file starts slightly BEFORE the frame (clamp at clip start). conf: high = driven by part motion (mag/bolt/pump/shell), medium = derived from hand motion."
+ },
+ "ak/Draw": [
+  {
+   "key": "snd.ak.draw",
+   "frame": 24,
+   "time": 0.5217,
+   "src": "gun settles in the hands / holster seats (left hand arrives)",
+   "conf": "medium"
+  }
+ ],
+ "ak/Holster": [
+  {
+   "key": "snd.ak.holster",
+   "frame": 27,
+   "time": 0.9643,
+   "src": "gun settles in the hands / holster seats (left hand arrives)",
+   "conf": "medium"
+  }
+ ],
+ "ak/Fire": [
+  {
+   "key": "snd.ak.fire",
+   "frame": 0,
+   "time": 0.0,
+   "src": "bolt cycles; shot at the first frame",
+   "conf": "high"
+  }
+ ],
+ "ak/Tac_Reload": [
+  {
+   "key": "snd.ak.cloth",
+   "frame": 5,
+   "time": 0.0294,
+   "src": "hand_l starts moving (peak 0.80)",
+   "conf": "medium"
+  },
+  {
+   "key": "snd.ak.handle",
+   "frame": 19,
+   "time": 0.1118,
+   "src": "hand_l arrives / settles",
+   "conf": "medium"
+  },
+  {
+   "key": "snd.ak.handle",
+   "frame": 28,
+   "time": 0.1647,
+   "src": "hand_r arrives / settles",
+   "conf": "medium"
+  },
+  {
+   "key": "snd.ak.mag_release",
+   "frame": 48,
+   "time": 0.2824,
+   "src": "mag_release bone starts moving (button press)",
+   "conf": "high"
+  },
+  {
+   "key": "snd.ak.mag_out",
+   "frame": 61,
+   "time": 0.3588,
+   "src": "magazine is 4.0 units clear of the well",
+   "conf": "high"
+  },
+  {
+   "key": "snd.ak.mag_in",
+   "frame": 92,
+   "time": 0.5412,
+   "src": "magazine reaches the seat (stop)",
+   "conf": "high"
+  },
+  {
+   "key": "snd.ak.mag_tap",
+   "frame": 103,
+   "time": 0.6059,
+   "src": "left hand taps / tugs the seated magazine",
+   "conf": "medium"
+  },
+  {
+   "key": "snd.ak.cloth",
+   "frame": 115,
+   "time": 0.6765,
+   "src": "hand_l starts moving (peak 1.00)",
+   "conf": "medium"
+  },
+  {
+   "key": "snd.ak.handle",
+   "frame": 131,
+   "time": 0.7706,
+   "src": "hand_l arrives / settles",
+   "conf": "medium"
+  },
+  {
+   "key": "snd.ak.handle",
+   "frame": 149,
+   "time": 0.8765,
+   "src": "hand_r arrives / settles",
+   "conf": "medium"
+  }
+ ],
+ "ak/Empty_Reload": [
+  {
+   "key": "snd.ak.cloth",
+   "frame": 5,
+   "time": 0.0227,
+   "src": "hand_l starts moving (peak 0.43)",
+   "conf": "medium"
+  },
+  {
+   "key": "snd.ak.mag_release",
+   "frame": 24,
+   "time": 0.1091,
+   "src": "mag_release bone starts moving (button press)",
+   "conf": "high"
+  },
+  {
+   "key": "snd.ak.mag_out",
+   "frame": 37,
+   "time": 0.1682,
+   "src": "magazine is 4.0 units clear of the well",
+   "conf": "high"
+  },
+  {
+   "key": "snd.ak.handle",
+   "frame": 44,
+   "time": 0.2,
+   "src": "hand_r arrives / settles",
+   "conf": "medium"
+  },
+  {
+   "key": "snd.ak.handle",
+   "frame": 74,
+   "time": 0.3364,
+   "src": "hand_l arrives / settles",
+   "conf": "medium"
+  },
+  {
+   "key": "snd.ak.mag_in",
+   "frame": 102,
+   "time": 0.4636,
+   "src": "magazine reaches the seat (stop)",
+   "conf": "high"
+  },
+  {
+   "key": "snd.ak.handle",
+   "frame": 107,
+   "time": 0.4864,
+   "src": "hand_r arrives / settles",
+   "conf": "medium"
+  },
+  {
+   "key": "snd.ak.cloth",
+   "frame": 114,
+   "time": 0.5182,
+   "src": "hand_l starts moving (peak 0.66)",
+   "conf": "medium"
+  },
+  {
+   "key": "snd.ak.handle",
+   "frame": 127,
+   "time": 0.5773,
+   "src": "hand_l arrives / settles",
+   "conf": "medium"
+  },
+  {
+   "key": "snd.ak.bolt_back",
+   "frame": 146,
+   "time": 0.6636,
+   "src": "bolt reaches its rear stop",
+   "conf": "high"
+  },
+  {
+   "key": "snd.ak.bolt_release",
+   "frame": 156,
+   "time": 0.7091,
+   "src": "bolt slams forward onto the chamber",
+   "conf": "high"
+  },
+  {
+   "key": "snd.ak.handle",
+   "frame": 188,
+   "time": 0.8545,
+   "src": "hand_l arrives / settles",
+   "conf": "medium"
+  }
+ ],
+ "ak/Mag_Check": [
+  {
+   "key": "snd.ak.cloth",
+   "frame": 5,
+   "time": 0.0192,
+   "src": "hand_l starts moving (peak 0.74)",
+   "conf": "medium"
+  },
+  {
+   "key": "snd.ak.handle",
+   "frame": 17,
+   "time": 0.0654,
+   "src": "hand_l arrives / settles",
+   "conf": "medium"
+  },
+  {
+   "key": "snd.ak.mag_release",
+   "frame": 24,
+   "time": 0.0923,
+   "src": "mag_release bone starts moving (button press)",
+   "conf": "high"
+  },
+  {
+   "key": "snd.ak.cloth",
+   "frame": 29,
+   "time": 0.1115,
+   "src": "hand_l starts moving (peak 0.44)",
+   "conf": "medium"
+  },
+  {
+   "key": "snd.ak.mag_out",
+   "frame": 39,
+   "time": 0.15,
+   "src": "magazine is 4.0 units clear of the well",
+   "conf": "high"
+  },
+  {
+   "key": "snd.ak.handle",
+   "frame": 46,
+   "time": 0.1769,
+   "src": "hand_r arrives / settles",
+   "conf": "medium"
+  },
+  {
+   "key": "snd.ak.mag_in",
+   "frame": 196,
+   "time": 0.7538,
+   "src": "magazine reaches the seat (stop)",
+   "conf": "high"
+  },
+  {
+   "key": "snd.ak.cloth",
+   "frame": 210,
+   "time": 0.8077,
+   "src": "hand_l starts moving (peak 0.35)",
+   "conf": "medium"
+  }
+ ],
+ "ak/Inspect": [
+  {
+   "key": "snd.ak.cloth",
+   "frame": 5,
+   "time": 0.0177,
+   "src": "hand_l starts moving (peak 0.50)",
+   "conf": "medium"
+  },
+  {
+   "key": "snd.ak.handle",
+   "frame": 31,
+   "time": 0.1099,
+   "src": "hand_l arrives / settles",
+   "conf": "medium"
+  },
+  {
+   "key": "snd.ak.cloth",
+   "frame": 114,
+   "time": 0.4043,
+   "src": "hand_l starts moving (peak 1.00)",
+   "conf": "medium"
+  },
+  {
+   "key": "snd.ak.handle",
+   "frame": 148,
+   "time": 0.5248,
+   "src": "hand_l arrives / settles",
+   "conf": "medium"
+  },
+  {
+   "key": "snd.ak.handle",
+   "frame": 163,
+   "time": 0.578,
+   "src": "hand_r arrives / settles",
+   "conf": "medium"
+  },
+  {
+   "key": "snd.ak.bolt_back",
+   "frame": 173,
+   "time": 0.6135,
+   "src": "bolt eases back (chamber check)",
+   "conf": "high"
+  },
+  {
+   "key": "snd.ak.bolt_release",
+   "frame": 212,
+   "time": 0.7518,
+   "src": "bolt returns fast onto the chamber",
+   "conf": "high"
+  },
+  {
+   "key": "snd.ak.cloth",
+   "frame": 223,
+   "time": 0.7908,
+   "src": "hand_l starts moving (peak 0.79)",
+   "conf": "medium"
+  },
+  {
+   "key": "snd.ak.handle",
+   "frame": 249,
+   "time": 0.883,
+   "src": "hand_l arrives / settles",
+   "conf": "medium"
+  }
+ ],
+ "ak/Melee": [
+  {
+   "key": "snd.ak.melee_swing",
+   "frame": 0,
+   "time": 0.0,
+   "src": "strike starts",
+   "conf": "medium"
+  },
+  {
+   "key": "snd.ak.melee_hit",
+   "frame": 6,
+   "time": 0.0923,
+   "src": "left hand arrives = contact",
+   "conf": "medium"
+  },
+  {
+   "key": "snd.ak.cloth",
+   "frame": 23,
+   "time": 0.3538,
+   "src": "recovery movement",
+   "conf": "medium"
+  }
+ ],
+ "ak/Regrip": [
+  {
+   "key": "snd.ak.cloth",
+   "frame": 11,
+   "time": 0.275,
+   "src": "hand_l starts moving (peak 0.43)",
+   "conf": "medium"
+  },
+  {
+   "key": "snd.ak.handle",
+   "frame": 24,
+   "time": 0.6,
+   "src": "hand_l arrives / settles",
+   "conf": "medium"
+  },
+  {
+   "key": "snd.ak.handle",
+   "frame": 40,
+   "time": 1.0,
+   "src": "hand_r arrives / settles",
+   "conf": "medium"
+  }
+ ],
+ "870/Draw": [
+  {
+   "key": "snd.870.draw",
+   "frame": 26,
+   "time": 0.5652,
+   "src": "gun settles in the hands / holster seats (left hand arrives)",
+   "conf": "medium"
+  }
+ ],
+ "870/Holster": [
+  {
+   "key": "snd.870.holster",
+   "frame": 27,
+   "time": 0.9643,
+   "src": "gun settles in the hands / holster seats (left hand arrives)",
+   "conf": "medium"
+  }
+ ],
+ "870/Fire": [
+  {
+   "key": "snd.870.fire",
+   "frame": 0,
+   "time": 0.0,
+   "src": "shot at the first frame",
+   "conf": "high"
+  }
+ ],
+ "870/Pump": [
+  {
+   "key": "snd.870.pump_back",
+   "frame": 8,
+   "time": 0.1818,
+   "src": "forend reaches its rear stop",
+   "conf": "high"
+  },
+  {
+   "key": "snd.870.pump_fwd",
+   "frame": 18,
+   "time": 0.4091,
+   "src": "forend slams forward",
+   "conf": "high"
+  }
+ ],
+ "870/Reload_Start": [
+  {
+   "key": "snd.870.cloth",
+   "frame": 5,
+   "time": 0.1667,
+   "src": "hand_l starts moving (peak 1.00)",
+   "conf": "medium"
+  },
+  {
+   "key": "snd.870.handle",
+   "frame": 29,
+   "time": 0.9667,
+   "src": "hand_l arrives / settles",
+   "conf": "medium"
+  }
+ ],
+ "870/Reload_Start_Empty": [
+  {
+   "key": "snd.870.pump_back",
+   "frame": 10,
+   "time": 0.0625,
+   "src": "forend reaches its rear stop",
+   "conf": "high"
+  },
+  {
+   "key": "snd.870.cloth",
+   "frame": 21,
+   "time": 0.1313,
+   "src": "hand_l starts moving (peak 1.00)",
+   "conf": "medium"
+  },
+  {
+   "key": "snd.870.handle",
+   "frame": 31,
+   "time": 0.1938,
+   "src": "hand_r arrives / settles",
+   "conf": "medium"
+  },
+  {
+   "key": "snd.870.handle",
+   "frame": 45,
+   "time": 0.2812,
+   "src": "hand_r arrives / settles",
+   "conf": "medium"
+  },
+  {
+   "key": "snd.870.shell_load_chamber",
+   "frame": 54,
+   "time": 0.3375,
+   "src": "first shell meets the open action port",
+   "conf": "high"
+  },
+  {
+   "key": "snd.870.handle",
+   "frame": 97,
+   "time": 0.6062,
+   "src": "hand_r arrives / settles",
+   "conf": "medium"
+  },
+  {
+   "key": "snd.870.pump_fwd",
+   "frame": 118,
+   "time": 0.7375,
+   "src": "forend slams forward",
+   "conf": "high"
+  },
+  {
+   "key": "snd.870.cloth",
+   "frame": 130,
+   "time": 0.8125,
+   "src": "hand_l starts moving (peak 0.68)",
+   "conf": "medium"
+  },
+  {
+   "key": "snd.870.handle",
+   "frame": 152,
+   "time": 0.95,
+   "src": "hand_l arrives / settles",
+   "conf": "medium"
+  }
+ ],
+ "870/Reload_Loop": [
+  {
+   "key": "snd.870.cloth",
+   "frame": 1,
+   "time": 0.0143,
+   "src": "hand_l starts moving (peak 1.00)",
+   "conf": "medium"
+  },
+  {
+   "key": "snd.870.shell_insert",
+   "frame": 11,
+   "time": 0.1571,
+   "src": "shell meets the loading port",
+   "conf": "high"
+  },
+  {
+   "key": "snd.870.shell_insert",
+   "frame": 18,
+   "time": 0.2571,
+   "src": "shell slides home past the latch (soft second click)",
+   "conf": "medium"
+  },
+  {
+   "key": "snd.870.handle",
+   "frame": 46,
+   "time": 0.6571,
+   "src": "hand_r arrives / settles",
+   "conf": "medium"
+  },
+  {
+   "key": "snd.870.cloth",
+   "frame": 54,
+   "time": 0.7714,
+   "src": "hand_l starts moving (peak 0.97)",
+   "conf": "medium"
+  },
+  {
+   "key": "snd.870.handle",
+   "frame": 67,
+   "time": 0.9571,
+   "src": "hand_l arrives / settles",
+   "conf": "medium"
+  }
+ ],
+ "870/Reload_Loop_End": [
+  {
+   "key": "snd.870.cloth",
+   "frame": 1,
+   "time": 0.0102,
+   "src": "hand_l starts moving (peak 1.00)",
+   "conf": "medium"
+  },
+  {
+   "key": "snd.870.shell_insert",
+   "frame": 11,
+   "time": 0.1122,
+   "src": "shell meets the loading port",
+   "conf": "high"
+  },
+  {
+   "key": "snd.870.shell_insert",
+   "frame": 18,
+   "time": 0.1837,
+   "src": "shell slides home past the latch (soft second click)",
+   "conf": "medium"
+  },
+  {
+   "key": "snd.870.handle",
+   "frame": 44,
+   "time": 0.449,
+   "src": "hand_r arrives / settles",
+   "conf": "medium"
+  },
+  {
+   "key": "snd.870.cloth",
+   "frame": 55,
+   "time": 0.5612,
+   "src": "hand_l starts moving (peak 0.37)",
+   "conf": "medium"
+  },
+  {
+   "key": "snd.870.handle",
+   "frame": 79,
+   "time": 0.8061,
+   "src": "hand_r arrives / settles",
+   "conf": "medium"
+  }
+ ],
+ "870/Reload_End": [
+  {
+   "key": "snd.870.cloth",
+   "frame": 3,
+   "time": 0.06,
+   "src": "hand_l starts moving (peak 1.00)",
+   "conf": "medium"
+  },
+  {
+   "key": "snd.870.handle",
+   "frame": 27,
+   "time": 0.54,
+   "src": "hand_l arrives / settles",
+   "conf": "medium"
+  }
+ ],
+ "870/Mag_Check": [
+  {
+   "key": "snd.870.cloth",
+   "frame": 6,
+   "time": 0.0417,
+   "src": "hand_l starts moving (peak 0.44)",
+   "conf": "medium"
+  },
+  {
+   "key": "snd.870.cloth",
+   "frame": 32,
+   "time": 0.2222,
+   "src": "hand_l starts moving (peak 1.00)",
+   "conf": "medium"
+  },
+  {
+   "key": "snd.870.pump_back",
+   "frame": 37,
+   "time": 0.2569,
+   "src": "forend reaches its rear stop",
+   "conf": "high"
+  },
+  {
+   "key": "snd.870.cloth",
+   "frame": 73,
+   "time": 0.5069,
+   "src": "hand_l starts moving (peak 0.74)",
+   "conf": "medium"
+  },
+  {
+   "key": "snd.870.pump_fwd",
+   "frame": 78,
+   "time": 0.5417,
+   "src": "forend slams forward",
+   "conf": "high"
+  },
+  {
+   "key": "snd.870.cloth",
+   "frame": 88,
+   "time": 0.6111,
+   "src": "hand_r starts moving (peak 0.73)",
+   "conf": "medium"
+  },
+  {
+   "key": "snd.870.handle",
+   "frame": 125,
+   "time": 0.8681,
+   "src": "hand_r arrives / settles",
+   "conf": "medium"
+  }
+ ],
+ "870/Inspect": [
+  {
+   "key": "snd.870.handle",
+   "frame": 31,
+   "time": 0.1033,
+   "src": "hand_r arrives / settles",
+   "conf": "medium"
+  },
+  {
+   "key": "snd.870.cloth",
+   "frame": 171,
+   "time": 0.57,
+   "src": "hand_l starts moving (peak 1.00)",
+   "conf": "medium"
+  },
+  {
+   "key": "snd.870.handle",
+   "frame": 188,
+   "time": 0.6267,
+   "src": "hand_r arrives / settles",
+   "conf": "medium"
+  },
+  {
+   "key": "snd.870.pump_back",
+   "frame": 193,
+   "time": 0.6433,
+   "src": "forend reaches its rear stop",
+   "conf": "high"
+  },
+  {
+   "key": "snd.870.cloth",
+   "frame": 228,
+   "time": 0.76,
+   "src": "hand_l starts moving (peak 0.79)",
+   "conf": "medium"
+  },
+  {
+   "key": "snd.870.pump_fwd",
+   "frame": 234,
+   "time": 0.78,
+   "src": "forend slams forward",
+   "conf": "high"
+  },
+  {
+   "key": "snd.870.cloth",
+   "frame": 244,
+   "time": 0.8133,
+   "src": "hand_r starts moving (peak 0.52)",
+   "conf": "medium"
+  },
+  {
+   "key": "snd.870.handle",
+   "frame": 254,
+   "time": 0.8467,
+   "src": "hand_r arrives / settles",
+   "conf": "medium"
+  },
+  {
+   "key": "snd.870.handle",
+   "frame": 281,
+   "time": 0.9367,
+   "src": "hand_r arrives / settles",
+   "conf": "medium"
+  }
+ ],
+ "870/Melee": [
+  {
+   "key": "snd.870.melee_swing",
+   "frame": 0,
+   "time": 0.0,
+   "src": "strike starts",
+   "conf": "medium"
+  },
+  {
+   "key": "snd.870.melee_hit",
+   "frame": 8,
+   "time": 0.1194,
+   "src": "left hand arrives = contact",
+   "conf": "medium"
+  },
+  {
+   "key": "snd.870.cloth",
+   "frame": 17,
+   "time": 0.2537,
+   "src": "recovery movement",
+   "conf": "medium"
+  }
+ ],
+ "870/Regrip": [
+  {
+   "key": "snd.870.cloth",
+   "frame": 1,
+   "time": 0.0263,
+   "src": "hand_l starts moving (peak 1.00)",
+   "conf": "medium"
+  },
+  {
+   "key": "snd.870.handle",
+   "frame": 24,
+   "time": 0.6316,
+   "src": "hand_l arrives / settles",
+   "conf": "medium"
+  },
+  {
+   "key": "snd.870.handle",
+   "frame": 37,
+   "time": 0.9737,
+   "src": "hand_r arrives / settles",
+   "conf": "medium"
+  }
+ ]
+}
