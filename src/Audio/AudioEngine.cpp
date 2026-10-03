@@ -56,10 +56,10 @@ struct ReverbNode {
     std::atomic<double> TotalMicros{0.0}, MaxMicros{0.0};
     std::atomic<int> LastFrames{0};
 };
-ReverbNode* s_Reverb = nullptr;
+ReverbNode* s_Reverbs[2] = {nullptr, nullptr}; // 0: the listener's room, 1: the remote room (a portal voice's own)
 bool s_ReverbInit = false;
 float s_ReverbReturn = 1.0f;
-ReverbParams s_ReverbTarget;
+ReverbParams s_ReverbTargets[2];
 
 void ReverbProcess(ma_node* pNode, const float** ppIn, ma_uint32* pFrameCountIn, float** ppOut, ma_uint32* pFrameCountOut) {
     ReverbNode* n = reinterpret_cast<ReverbNode*>(pNode);
@@ -177,7 +177,7 @@ void AudioEngine::Init() {
     }
     ApplyMasterVolume(s_Engine);
     // The reverb bus. If it can't be built, voices simply start without a send.
-    {
+    for (int bus = 0; bus < 2; ++bus) {
         const ma_uint32 sr = ma_engine_get_sample_rate(&s_Engine);
         ma_node_config nc = ma_node_config_init();
         ma_uint32 ch = 2;
@@ -186,15 +186,16 @@ void AudioEngine::Init() {
         nc.pOutputChannels = &ch;
         auto* node = new ReverbNode();
         node->Fdn = new ReverbFdn((int)sr);
-        node->Fdn->Reset(s_ReverbTarget);
-        const float t[6] = {s_ReverbTarget.RoomSize, s_ReverbTarget.DecayTime, s_ReverbTarget.HfDamping, s_ReverbTarget.PreDelayMs,
-                            s_ReverbTarget.WetLevel, s_ReverbTarget.EarlyLateMix};
+        node->Fdn->Reset(s_ReverbTargets[bus]);
+        const ReverbParams& rp = s_ReverbTargets[bus];
+        const float t[6] = {rp.RoomSize, rp.DecayTime, rp.HfDamping, rp.PreDelayMs, rp.WetLevel, rp.EarlyLateMix};
         for (int i = 0; i < 6; ++i) node->Target[i].store(t[i]);
         node->Target[6].store(0.35f);
+        node->Enabled.store(bus == 0); // the remote room's reverb runs only while a portal voice feeds it
         if (ma_engine_get_channels(&s_Engine) == 2 && ma_node_init(ma_engine_get_node_graph(&s_Engine), &nc, nullptr, &node->Base) == MA_SUCCESS) {
             ma_node_attach_output_bus(&node->Base, 0, ma_engine_get_endpoint(&s_Engine), 0);
             ma_node_set_output_bus_volume(&node->Base, 0, s_ReverbReturn * s_BusVolume[0]);
-            s_Reverb = node;
+            s_Reverbs[bus] = node;
             s_ReverbInit = true;
         } else {
             Log::Warn("Audio: could not create the reverb bus; voices play without a send.");
@@ -214,12 +215,13 @@ void AudioEngine::Shutdown() {
     s_Paused = false;
     if (s_BusesReady) for (int b = 0; b < kBusCount; ++b) ma_sound_group_uninit(&s_Buses[b]);
     s_BusesReady = false;
-    if (s_Reverb) {
-        ma_node_uninit(&s_Reverb->Base, nullptr);
-        delete s_Reverb->Fdn;
-        delete s_Reverb;
-        s_Reverb = nullptr;
-    }
+    for (ReverbNode*& r : s_Reverbs)
+        if (r) {
+            ma_node_uninit(&r->Base, nullptr);
+            delete r->Fdn;
+            delete r;
+            r = nullptr;
+        }
     s_ReverbInit = false;
     ma_engine_uninit(&s_Engine);
     s_Initialized = false;
@@ -342,20 +344,21 @@ AudioEngine::SoundHandle AudioEngine::Play(const std::string& path, float volume
         const ma_uint32 sr = ma_engine_get_sample_rate(&s_Engine);
         if (fx->Occlusion) {
             auto n = std::make_unique<ma_lpf_node>();
-            ma_lpf_node_config lc = ma_lpf_node_config_init(2, sr, 20000.0, 2);
+            ma_lpf_node_config lc = ma_lpf_node_config_init(2, sr, std::clamp((double)fx->Cutoff, 80.0, 20000.0), 2);
             if (ma_lpf_node_init(ma_engine_get_node_graph(&s_Engine), &lc, nullptr, n.get()) == MA_SUCCESS) {
+                ma_node_set_output_bus_volume(n.get(), 0, std::max(fx->Gain, 0.0f));
                 ma_node_attach_output_bus(tail, 0, n.get(), 0);
                 tail = n.get();
                 lpf = std::move(n);
             }
         }
-        if (fx->ReverbSend > 0.0f && s_Reverb) {
+        if (fx->ReverbSend > 0.0f && s_Reverbs[0]) {
             auto n = std::make_unique<ma_splitter_node>();
             ma_splitter_node_config sc = ma_splitter_node_config_init(2);
             if (ma_splitter_node_init(ma_engine_get_node_graph(&s_Engine), &sc, nullptr, n.get()) == MA_SUCCESS) {
                 ma_node_attach_output_bus(tail, 0, n.get(), 0);
                 ma_node_attach_output_bus(n.get(), 0, group, 0);
-                ma_node_attach_output_bus(n.get(), 1, &s_Reverb->Base, 0);
+                ma_node_attach_output_bus(n.get(), 1, &s_Reverbs[fx->ReverbBus == 1 && s_Reverbs[1] ? 1 : 0]->Base, 0);
                 ma_node_set_output_bus_volume(n.get(), 1, fx->ReverbSend);
                 tail = n.get();
                 split = std::move(n);
@@ -402,10 +405,18 @@ AudioEngine::SoundHandle AudioEngine::Play(const std::string& path, float volume
     return MakeHandle(index, voice.Generation);
 }
 
-void AudioEngine::SetOcclusion(SoundHandle handle, float cutoffHz) {
+void AudioEngine::SetReverbSendBus(SoundHandle handle, int bus) {
+    if (!Resolve(handle)) return;
+    Voice& v = s_Voices[handle & kIndexMask];
+    ReverbNode* r = s_Reverbs[bus == 1 ? 1 : 0];
+    if (v.Split && r) ma_node_attach_output_bus(v.Split.get(), 1, &r->Base, 0);
+}
+
+void AudioEngine::SetOcclusion(SoundHandle handle, float cutoffHz, float gain) {
     if (!Resolve(handle)) return;
     Voice& v = s_Voices[handle & kIndexMask];
     if (!v.Lpf) return;
+    ma_node_set_output_bus_volume(v.Lpf.get(), 0, std::max(gain, 0.0f));
     const double hz = (cutoffHz <= 0.0f || cutoffHz >= 20000.0f) ? 20000.0 : std::max(80.0, (double)cutoffHz);
     ma_lpf_node_config lc = ma_lpf_node_config_init(2, ma_engine_get_sample_rate(&s_Engine), hz, 2);
     ma_lpf_node_reinit(&lc.lpf, v.Lpf.get());
@@ -417,42 +428,48 @@ void AudioEngine::SetReverbSend(SoundHandle handle, float level) {
     if (v.Split) ma_node_set_output_bus_volume(v.Split.get(), 1, std::max(level, 0.0f));
 }
 
-void AudioEngine::SetReverbEnabled(bool enabled) {
-    if (s_Reverb) s_Reverb->Enabled.store(enabled);
+void AudioEngine::SetReverbEnabled(bool enabled, int bus) {
+    if (ReverbNode* r = s_Reverbs[bus == 1 ? 1 : 0]) r->Enabled.store(enabled);
 }
-bool AudioEngine::ReverbEnabled() { return s_Reverb && s_Reverb->Enabled.load(); }
+bool AudioEngine::ReverbEnabled(int bus) { return s_Reverbs[bus == 1 ? 1 : 0] && s_Reverbs[bus == 1 ? 1 : 0]->Enabled.load(); }
 
-void AudioEngine::SetReverb(const ReverbParams& p) {
-    s_ReverbTarget = p;
-    if (!s_Reverb) return;
+void AudioEngine::SetReverb(const ReverbParams& p, int bus) {
+    const int b = bus == 1 ? 1 : 0;
+    s_ReverbTargets[b] = p;
+    if (!s_Reverbs[b]) return;
     const float t[6] = {p.RoomSize, p.DecayTime, p.HfDamping, p.PreDelayMs, p.WetLevel, p.EarlyLateMix};
-    for (int i = 0; i < 6; ++i) s_Reverb->Target[i].store(t[i], std::memory_order_relaxed);
+    for (int i = 0; i < 6; ++i) s_Reverbs[b]->Target[i].store(t[i], std::memory_order_relaxed);
 }
 
 void AudioEngine::SetReverbGlide(float seconds) {
-    if (s_Reverb) s_Reverb->Target[6].store(std::max(seconds, 0.001f), std::memory_order_relaxed);
+    for (ReverbNode* r : s_Reverbs)
+        if (r) r->Target[6].store(std::max(seconds, 0.001f), std::memory_order_relaxed);
 }
 
 void AudioEngine::SetReverbReturn(float level) {
     s_ReverbReturn = std::max(level, 0.0f);
-    if (s_Reverb) ma_node_set_output_bus_volume(&s_Reverb->Base, 0, s_ReverbReturn * s_BusVolume[0]);
+    for (ReverbNode* r : s_Reverbs)
+        if (r) ma_node_set_output_bus_volume(&r->Base, 0, s_ReverbReturn * s_BusVolume[0]);
 }
 
-AudioEngine::ReverbStats AudioEngine::GetReverbStats() {
+AudioEngine::ReverbStats AudioEngine::GetReverbStats(int bus) {
     ReverbStats st;
-    if (!s_Reverb) return st;
-    st.Callbacks = s_Reverb->Callbacks.load();
-    st.TotalMicros = s_Reverb->TotalMicros.load();
-    st.MaxMicros = s_Reverb->MaxMicros.load();
-    st.Frames = s_Reverb->LastFrames.load();
+    ReverbNode* r = s_Reverbs[bus == 1 ? 1 : 0];
+    if (!r) return st;
+    st.Callbacks = r->Callbacks.load();
+    st.TotalMicros = r->TotalMicros.load();
+    st.MaxMicros = r->MaxMicros.load();
+    st.Frames = r->LastFrames.load();
     return st;
 }
 
 void AudioEngine::ResetReverbStats() {
-    if (!s_Reverb) return;
-    s_Reverb->Callbacks.store(0);
-    s_Reverb->TotalMicros.store(0.0);
-    s_Reverb->MaxMicros.store(0.0);
+    for (ReverbNode* r : s_Reverbs)
+        if (r) {
+            r->Callbacks.store(0);
+            r->TotalMicros.store(0.0);
+            r->MaxMicros.store(0.0);
+        }
 }
 
 void AudioEngine::Stop(SoundHandle handle) {
@@ -568,7 +585,9 @@ void AudioEngine::SetBusVolume(Bus bus, float volume) {
     const int b = std::clamp((int)bus, 0, kBusCount - 1);
     s_BusVolume[b] = std::clamp(volume, 0.0f, 1.0f);
     if (s_BusesReady) ma_sound_group_set_volume(&s_Buses[b], s_BusVolume[b]);
-    if (s_Reverb && b == 0) ma_node_set_output_bus_volume(&s_Reverb->Base, 0, s_ReverbReturn * s_BusVolume[0]); // the return follows the SFX bus
+    if (b == 0)
+        for (ReverbNode* r : s_Reverbs)
+            if (r) ma_node_set_output_bus_volume(&r->Base, 0, s_ReverbReturn * s_BusVolume[0]); // the returns follow the SFX bus
 }
 float AudioEngine::BusVolume(Bus bus) { return s_BusVolume[std::clamp((int)bus, 0, kBusCount - 1)]; }
 

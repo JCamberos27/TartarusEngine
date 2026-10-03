@@ -58,19 +58,26 @@ public:
     struct VoiceFx {
         float ReverbSend = 0.0f;   // linear level of the voice into the reverb (post fader, post spatialisation)
         bool Occlusion = false;
+        float Cutoff = 20000.0f;   // the occlusion low-pass it starts with (Hz), and the gain after it (so the first block is already right)
+        float Gain = 1.0f;
+        int ReverbBus = 0;         // which reverb the send feeds (see SetReverbSendBus)
     };
     static SoundHandle Play(const std::string& path, float volume = 1.0f, bool loop = false, Bus bus = Bus::SFX,
                             float startOffsetSeconds = 0.0f, const VoiceFx* fx = nullptr);
     // Occlusion low-pass of a voice that was started with VoiceFx::Occlusion: cutoff in Hz (>= 20000 or <= 0 = open).
-    static void SetOcclusion(SoundHandle handle, float cutoffHz);
+    // `gain` (linear) scales the voice after the filter - its dry and its reverb send alike (a portal's loss).
+    static void SetOcclusion(SoundHandle handle, float cutoffHz, float gain = 1.0f);
+    // Which reverb a voice's send feeds: 0 = the listener's room (the default), 1 = the "remote room" bus (a sound heard through a
+    // portal carries its own room's reverb: its params are set separately, SetReverb(p, 1)).
+    static void SetReverbSendBus(SoundHandle handle, int bus);
     // The send level of a voice that was started with a ReverbSend > 0.
     static void SetReverbSend(SoundHandle handle, float level);
 
     // The reverb bus: a send every voice with a ReverbSend feeds, one FDN reverb (ReverbFdn) summed into the output. The
     // parameters are targets the DSP glides to (no zipper noise); safe to call from the game thread every frame.
-    static void SetReverbEnabled(bool enabled);
-    static bool ReverbEnabled();
-    static void SetReverb(const ReverbParams& target);
+    static void SetReverbEnabled(bool enabled, int bus = 0); // bus 1 (the remote room) is off until a portal voice needs it
+    static bool ReverbEnabled(int bus = 0);
+    static void SetReverb(const ReverbParams& target, int bus = 0);
     static void SetReverbReturn(float level); // linear gain of the wet signal into the output (times the SFX bus volume)
     static void SetReverbGlide(float seconds); // how long the reverb takes to follow a change of its parameters
     struct ReverbStats {
@@ -78,7 +85,7 @@ public:
         double TotalMicros = 0.0, MaxMicros = 0.0;
         int Frames = 0;            // frames of the last callback
     };
-    static ReverbStats GetReverbStats();
+    static ReverbStats GetReverbStats(int bus = 0);
     static void ResetReverbStats();
 
     // All no-ops / false for a stale or invalid handle.

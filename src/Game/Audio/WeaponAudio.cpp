@@ -9,6 +9,7 @@
 #include <json.hpp>
 
 #include <algorithm>
+#include <chrono>
 #include <cmath>
 #include <cstdlib>
 #include <cctype>
@@ -242,6 +243,9 @@ struct EngineBackend : SoundBackend {
         AudioEngine::VoiceFx fx;
         fx.ReverbSend = v.ReverbSend;
         fx.Occlusion = v.Occlusion && v.Spatial;
+        fx.Cutoff = v.OcclusionHz;
+        fx.Gain = v.PortalGain;
+        fx.ReverbBus = v.ReverbBus;
         const AudioEngine::SoundHandle h = AudioEngine::Play(ProjectPaths::Resolve(v.File), std::clamp(v.Volume, 0.0f, 4.0f), v.Loop, v.Bus, v.StartOffset,
                                                              (fx.ReverbSend > 0.0f || fx.Occlusion) ? &fx : nullptr);
         if (h == AudioEngine::InvalidHandle) return h;
@@ -255,8 +259,11 @@ struct EngineBackend : SoundBackend {
     void Stop(AudioEngine::SoundHandle h) override { AudioEngine::Stop(h); }
     void SetVolume(AudioEngine::SoundHandle h, float volume) override { AudioEngine::SetVolume(h, volume); }
     bool IsPlaying(AudioEngine::SoundHandle h) override { return AudioEngine::IsPlaying(h); }
-    void SetOcclusion(AudioEngine::SoundHandle h, float cutoffHz) override { AudioEngine::SetOcclusion(h, cutoffHz); }
-    void SetReverb(const ReverbParams& p) override { AudioEngine::SetReverb(p); }
+    void SetOcclusion(AudioEngine::SoundHandle h, float cutoffHz, float gain) override { AudioEngine::SetOcclusion(h, cutoffHz, gain); }
+    void SetVoicePosition(AudioEngine::SoundHandle h, const glm::vec3& p) override { AudioEngine::SetPosition(h, p); }
+    void SetReverbSendBus(AudioEngine::SoundHandle h, int bus) override { AudioEngine::SetReverbSendBus(h, bus); }
+    void SetReverb(const ReverbParams& p, int bus) override { AudioEngine::SetReverb(p, bus); }
+    void SetReverbBusActive(int bus, bool active) override { AudioEngine::SetReverbEnabled(active, bus); }
     void ConfigureReverb(bool enabled, float returnLevel, float glideSeconds) override {
         AudioEngine::SetReverbEnabled(enabled);
         AudioEngine::SetReverbReturn(returnLevel);
@@ -388,12 +395,21 @@ SoundPlayer::Played SoundPlayer::Start(const SoundSet& set, int idx, const Reque
     v.ReverbSend = set.ReverbSend >= 0.0f ? set.ReverbSend : rt.Send;
     v.Occlusion = v.Spatial && m_Occ.Enabled && !set.Loop && (set.Occlusion < 0 ? rt.Occlusion : set.Occlusion > 0);
     float occAmount = 0.0f;
+    VoicePath vp;
+    if (v.Occlusion && m_Path) {
+        vp = m_Path(m_ListenerPos, req.Position);
+        ++m_PathChecks;
+    }
     const float occDistance = glm::length(req.Position - m_ListenerPos);
-    if (v.Occlusion && m_Blocked && occDistance >= m_Occ.MinDistance && m_Blocked(m_ListenerPos, req.Position)) {
+    if (vp.ViaPortal) { // another room: heard from the portal, through its loss, with the source room's reverb
+        v.Position = vp.Virtual;
+        v.PortalGain = vp.Gain;
+        v.ReverbBus = 1;
+    } else if (v.Occlusion && m_Blocked && occDistance >= m_Occ.MinDistance && m_Blocked(m_ListenerPos, req.Position)) {
         occAmount = 1.0f; // behind something already: it starts muffled
         ++m_OccChecks;
     }
-    v.OcclusionHz = OcclusionCutoff(m_Occ, occAmount);
+    v.OcclusionHz = vp.ViaPortal ? std::min(vp.CutoffHz, 20000.0f) : OcclusionCutoff(m_Occ, occAmount);
     // The bus limiter: duck this voice by what headroom the live transients leave.
     if (m_Limiter.Enabled && !set.Loop) {
         const float peak = set.PeakLin((size_t)idx) * v.Volume;
@@ -409,12 +425,19 @@ SoundPlayer::Played SoundPlayer::Start(const SoundSet& set, int idx, const Reque
     out.Handle = Backend().Start(v);
     out.Started = out.Handle != AudioEngine::InvalidHandle;
     if (out.Started && v.Occlusion) {
-        if (occAmount > 0.0f) Backend().SetOcclusion(out.Handle, v.OcclusionHz);
         Tracked t;
         t.Handle = out.Handle;
         t.Pos = req.Position;
         t.Amount = t.Target = occAmount;
         t.LastCutoff = v.OcclusionHz;
+        t.CurPos = t.SentPos = vp.ViaPortal ? vp.Virtual : req.Position;
+        t.TargetPos = t.CurPos;
+        if (vp.ViaPortal) {
+            t.Portal = true;
+            t.Gain = t.TargetGain = t.SentGain = vp.Gain;
+            t.PortalCut = t.TargetPortalCut = vp.CutoffHz;
+            m_RemoteRoom = vp.Remote;
+        }
         t.NextCheck = m_Now + (double)m_Occ.Interval;
         t.MinDist = m_Occ.MinDistance;
         m_Occluded.push_back(t);
@@ -474,22 +497,67 @@ void SoundPlayer::UpdateOcclusion(float dt) {
     m_Occluded.erase(std::remove_if(m_Occluded.begin(), m_Occluded.end(), [&](const Tracked& t) { return !be.IsPlaying(t.Handle); }), m_Occluded.end());
     int budget = m_Occ.RaysPerFrame;
     const size_t n = m_Occluded.size();
+    m_PortalVoices = 0;
     for (size_t k = 0; k < n; ++k) { // a rolling start, so a busy frame does not always spend the budget on the same voices
         Tracked& t = m_Occluded[(m_OccCursor + k) % n];
-        if (budget > 0 && m_Blocked && m_Now >= t.NextCheck) {
-            --budget;
-            ++m_OccChecks;
-            t.NextCheck = m_Now + (double)m_Occ.Interval;
-            t.Target = glm::length(t.Pos - m_ListenerPos) >= t.MinDist && m_Blocked(m_ListenerPos, t.Pos) ? 1.0f : 0.0f;
+        if (m_Now >= t.NextCheck && (m_Path || (budget > 0 && m_Blocked))) {
+            VoicePath vp;
+            if (m_Path) {
+                vp = m_Path(m_ListenerPos, t.Pos);
+                ++m_PathChecks;
+            }
+            if (vp.ViaPortal) {
+                if (!t.Portal) {
+                    t.Portal = true;
+                    be.SetReverbSendBus(t.Handle, 1);
+                }
+                t.NextCheck = m_Now + (double)m_Occ.Interval;
+                t.TargetPos = vp.Virtual;
+                t.TargetGain = vp.Gain;
+                t.TargetPortalCut = vp.CutoffHz;
+                t.Target = 0.0f; // the direct line is not the way it comes: no occlusion on top of the portal's own
+                m_RemoteRoom = vp.Remote;
+            } else {
+                if (t.Portal) {
+                    t.Portal = false;
+                    be.SetReverbSendBus(t.Handle, 0);
+                    t.TargetPos = t.Pos;
+                    t.TargetGain = 1.0f;
+                    t.TargetPortalCut = 20000.0f;
+                }
+                if (budget > 0 && m_Blocked) {
+                    --budget;
+                    ++m_OccChecks;
+                    t.NextCheck = m_Now + (double)m_Occ.Interval;
+                    t.Target = glm::length(t.Pos - m_ListenerPos) >= t.MinDist && m_Blocked(m_ListenerPos, t.Pos) ? 1.0f : 0.0f;
+                } else if (!m_Blocked) {
+                    t.NextCheck = m_Now + (double)m_Occ.Interval;
+                }
+            }
         }
         const float before = t.Amount;
-        t.Amount += (t.Target - t.Amount) * std::min(1.0f, m_Occ.GlideRate * dt);
+        const float a = std::min(1.0f, m_Occ.GlideRate * dt);
+        t.Amount += (t.Target - t.Amount) * a;
         if (std::fabs(t.Target - t.Amount) < 0.005f) t.Amount = t.Target;
-        if (t.Amount != before) {
-            const float hz = OcclusionCutoff(m_Occ, t.Amount);
-            if (std::fabs(std::log(hz / t.LastCutoff)) > 0.02f || t.Amount == 0.0f) {
-                be.SetOcclusion(t.Handle, hz);
+        // The portal's state glides too (position, gain, cutoff in the log domain): a door swinging or a step through a doorway is not a click.
+        t.CurPos += (t.TargetPos - t.CurPos) * a;
+        t.Gain += (t.TargetGain - t.Gain) * a;
+        t.PortalCut = std::exp(std::log(t.PortalCut) + (std::log(t.TargetPortalCut) - std::log(t.PortalCut)) * a);
+        if (std::fabs(t.TargetGain - t.Gain) < 0.002f) t.Gain = t.TargetGain;
+        if (std::fabs(std::log(t.TargetPortalCut / t.PortalCut)) < 0.01f) t.PortalCut = t.TargetPortalCut;
+        if (t.Portal || glm::dot(t.CurPos - t.SentPos, t.CurPos - t.SentPos) > 1e-6f) {
+            if (glm::dot(t.CurPos - t.SentPos, t.CurPos - t.SentPos) > 1e-6f) {
+                be.SetVoicePosition(t.Handle, t.CurPos);
+                t.SentPos = t.CurPos;
+            }
+        }
+        if (t.Portal) ++m_PortalVoices;
+        const float hz = std::min(OcclusionCutoff(m_Occ, t.Amount), std::min(t.PortalCut, 20000.0f));
+        if (t.Amount != before || std::fabs(std::log(hz / t.LastCutoff)) > 0.02f || std::fabs(t.Gain - t.SentGain) > 0.01f) {
+            if (std::fabs(std::log(hz / t.LastCutoff)) > 0.02f || std::fabs(t.Gain - t.SentGain) > 0.01f || hz >= 20000.0f != (t.LastCutoff >= 20000.0f)) {
+                be.SetOcclusion(t.Handle, hz, t.Gain);
                 t.LastCutoff = hz;
+                t.SentGain = t.Gain;
             }
         }
     }
@@ -738,6 +806,11 @@ void WeaponAudio::StartForTest(const std::string& projectRoot, SoundBackend* bac
     m_Keyed.clear();
     m_Bus = ReverbBusComponent{};
     m_ReverbValid = false;
+    m_World = nullptr;
+    m_RemoteHoldUntil = -1e9;
+    m_RemoteActive = false;
+    m_PathCalls = m_Refreshes = 0;
+    m_PathMicros = m_RefreshMicros = 0.0;
     for (const char* g : {"ak", "870"}) m_Profiles[g] = WeaponAudioProfile::Default(g);
     InstallLog();
     InstallRouting();
@@ -833,6 +906,11 @@ void WeaponAudio::Start(World& world, const std::string& projectRoot) {
         break;
     }
     m_ReverbValid = false;
+    m_World = &world;
+    m_RemoteHoldUntil = -1e9;
+    m_RemoteActive = false;
+    m_PathCalls = m_Refreshes = 0;
+    m_PathMicros = m_RefreshMicros = 0.0;
     InstallRouting();
     m_Player.SetBlockedFn(EnvironmentBlockedFn());
     m_Player.Backend().ConfigureReverb(m_Bus.Enabled, m_Bus.ReturnLevel, m_Bus.GlideTime);
@@ -852,8 +930,14 @@ void WeaponAudio::Stop() {
                         rs.TotalMicros / (double)rs.Callbacks, rs.MaxMicros);
         AudioEngine::ResetReverbStats();
     }
+    if (m_Active && (m_PathCalls > 0 || m_Refreshes > 0))
+        std::printf("[WeaponAudio] portals: %d path searches, mean %.2f us; %d zone/portal refreshes, mean %.2f us; %d portal(s), %d zone(s)\n", m_PathCalls,
+                    m_PathCalls ? m_PathMicros / m_PathCalls : 0.0, m_Refreshes, m_Refreshes ? m_RefreshMicros / m_Refreshes : 0.0, (int)m_Zones.Portals().size(),
+                    (int)m_Zones.Zones().size());
     m_Player.StopAll();
     m_Player.SetBlockedFn(nullptr); // (a test's line-of-sight function must not outlive its locals)
+    m_Player.SetPathFn(nullptr);
+    m_World = nullptr;
     m_Profiles.clear();
     m_Foley.clear();
     m_Keyed.clear();
@@ -864,6 +948,12 @@ void WeaponAudio::Stop() {
 void WeaponAudio::Update(float dt) {
     if (!m_Active) return;
     m_Player.SetListener(m_Listener);
+    if (m_World) { // zones and portals that moved, opened, closed, appeared or went
+        const auto t0 = std::chrono::steady_clock::now();
+        m_Zones.Refresh(*m_World);
+        m_RefreshMicros += std::chrono::duration<double, std::micro>(std::chrono::steady_clock::now() - t0).count();
+        ++m_Refreshes;
+    }
     SoundPlayer::OcclusionSettings occ = m_Player.GetOcclusion();
     occ.Enabled = m_Bus.OcclusionEnabled;
     occ.CutoffHz = m_Bus.OcclusionCutoff;
@@ -873,6 +963,26 @@ void WeaponAudio::Update(float dt) {
     occ.GlideRate = m_Bus.OcclusionGlide;
     m_Player.SetOcclusion(occ);
     m_Player.Update(dt);
+    // The remote room's reverb (a voice heard through a portal brings its own room's): runs while such voices play, then rings out.
+    if (m_Bus.Enabled) {
+        if (m_Player.PortalVoices() > 0) m_RemoteHoldUntil = m_Player.Now() + (double)m_Bus.RemoteReverbHold;
+        const bool active = m_Player.Now() < m_RemoteHoldUntil;
+        if (active) {
+            const ReverbPreset& r = m_Player.RemoteRoom();
+            ReverbParams rp;
+            rp.RoomSize = r.RoomSize;
+            rp.DecayTime = r.DecayTime;
+            rp.HfDamping = r.HfDamping;
+            rp.PreDelayMs = r.PreDelayMs;
+            rp.WetLevel = r.WetLevel * m_Bus.WetScale;
+            rp.EarlyLateMix = r.EarlyLateMix;
+            m_Player.Backend().SetReverb(rp, 1);
+        }
+        if (active != m_RemoteActive) {
+            m_Player.Backend().SetReverbBusActive(1, active);
+            m_RemoteActive = active;
+        }
+    }
     // The reverb follows the listener's space: told when it moves enough to matter (the DSP glides to what it is told).
     if (m_Bus.Enabled) {
         const ReverbParams p = ReverbAt(m_Listener);
@@ -891,7 +1001,26 @@ void WeaponAudio::Update(float dt) {
     }
 }
 
+SoundPlayer::VoicePath WeaponAudio::PathFor(const glm::vec3& listener, const glm::vec3& source) {
+    SoundPlayer::VoicePath vp;
+    if (!m_Bus.PortalsEnabled || m_Zones.Portals().empty()) return vp;
+    const auto t0 = std::chrono::steady_clock::now();
+    PortalPath pp;
+    if (m_Zones.FindPath(source, listener, pp)) {
+        vp.ViaPortal = true;
+        vp.Virtual = pp.Virtual;
+        vp.Gain = pp.Gain;
+        vp.CutoffHz = pp.CutoffHz;
+        const ReverbZoneVolume* room = m_Zones.ZoneOfRoom(pp.SourceRoom);
+        vp.Remote = room ? room->Reverb : ReverbPresetFor((int)SpaceClass::OutdoorOpen);
+    }
+    m_PathMicros += std::chrono::duration<double, std::micro>(std::chrono::steady_clock::now() - t0).count();
+    ++m_PathCalls;
+    return vp;
+}
+
 void WeaponAudio::InstallRouting() {
+    m_Player.SetPathFn([this](const glm::vec3& l, const glm::vec3& s) { return PathFor(l, s); });
     m_Player.SetRouting([this](const std::string& key) {
         SoundPlayer::Routing r;
         if (m_Bus.Enabled) r.Send = SendFor(key);
@@ -991,7 +1120,7 @@ SoundPlayer::Played WeaponAudio::PlayKeyed(SoundSet& set, const glm::vec3& pos, 
     r.At2D = at2D;
     r.Gain = gain;
     r.PitchScale = pitchScale;
-    Note(set.Key, at2D);
+    // (not Note()d: the transcript is the player's own gun and gear - impacts and casings are the world's, and are in the W log)
     return m_Player.Play(set, r);
 }
 
