@@ -194,7 +194,7 @@ struct PhysicsState {
     // Ragdolls by id: their bodies and joints (released with the scene, or by DestroyRagdoll).
     // Prev: each part's pose before the latest substep, so GetRagdollPart can interpolate like #168.
     // Drive: per part, the D6 joint to its parent (null for the root), for the slerp drives.
-    struct Ragdoll { std::vector<PxRigidDynamic*> Bodies; std::vector<PxJoint*> Joints; std::vector<PxTransform> Prev; std::vector<PxD6Joint*> Drive; };
+    struct Ragdoll { std::vector<PxRigidDynamic*> Bodies; std::vector<PxJoint*> Joints; std::vector<PxTransform> Prev; std::vector<PxD6Joint*> Drive; PxMaterial* Mat = nullptr; };
     std::vector<Ragdoll> ragdolls;
     // Per-bone hitboxes of living NPCs (see CreateNpcHitboxes): their kinematic actors, the capsule each shadows while
     // active. hitboxActors: every hitbox actor, for the query filters; hitboxedCapsules: the capsules currently shadowed.
@@ -1031,6 +1031,9 @@ void Create(const World& world) {
     // Same result every run regardless of how the solver threads carve up the work — cheap
     // insurance for a future that wants replays / deterministic netcode (#185 hardening).
     desc.flags                  |= PxSceneFlag::eENABLE_ENHANCED_DETERMINISM;
+    // Resting contacts (a corpse's sixteen parts on the floor) hold still instead of creeping (bodies opt in by their stabilization
+    // threshold; PhysX's own default is tiny).
+    desc.flags                  |= PxSceneFlag::eENABLE_STABILIZATION;
     s->scene = s->physics->createScene(desc);
     if (!s->scene) {
         Log::Error("PhysX: createScene failed — physics disabled for this Play session.");
@@ -1055,7 +1058,7 @@ void Destroy() {
     // Reverse construction order. scene->release() drops every actor/shape it owns. The core
     // (physics, dispatcher, materials, cooked meshes) stays up for the next Play (#167).
     for (PxJoint* j : s->joints)               if (j) j->release(); // #185 PR 11 — before the scene
-    for (auto& r : s->ragdolls) for (PxJoint* j : r.Joints) if (j) j->release();
+    for (auto& r : s->ragdolls) { for (PxJoint* j : r.Joints) if (j) j->release(); if (r.Mat) { r.Mat->release(); r.Mat = nullptr; } }
     if (s->controller)      s->controller->release();
     for (auto& n : s->npcs) if (n.ctrl) n.ctrl->release();
     if (s->controllerMgr)   s->controllerMgr->release();
@@ -1932,6 +1935,10 @@ int CreateRagdoll(unsigned entity, const RagdollPart* parts, int count, const Ra
     PhysicsState::Ragdoll& rd = s.ragdolls[(size_t)id];
     const RagdollParams prm = params ? *params : RagdollParams();
     PxMaterial* mat = s.physics->createMaterial(prm.StaticFriction, prm.DynamicFriction, prm.Restitution);
+    if (prm.Grip) {
+        mat->setFrictionCombineMode(PxCombineMode::eMAX);
+        mat->setRestitutionCombineMode(PxCombineMode::eMULTIPLY);
+    }
     for (int i = 0; i < count; ++i) {
         const RagdollPart& p = parts[i];
         const PxTransform pose(PxVec3(p.Position[0], p.Position[1], p.Position[2]),
@@ -1965,13 +1972,14 @@ int CreateRagdoll(unsigned entity, const RagdollPart* parts, int count, const Ra
         b->setSolverIterationCounts((PxU32)std::max(prm.SolverPosIters, 1), (PxU32)std::max(prm.SolverVelIters, 1));
         b->setMaxDepenetrationVelocity(prm.Depenetration);
         b->setSleepThreshold(prm.SleepThreshold);
+        if (prm.StabilizationThreshold >= 0.0f) b->setStabilizationThreshold(prm.StabilizationThreshold);
         b->setLinearVelocity(PxVec3(p.Velocity[0], p.Velocity[1], p.Velocity[2]));
         b->setAngularVelocity(PxVec3(p.AngularVelocity[0], p.AngularVelocity[1], p.AngularVelocity[2]));
         b->userData = reinterpret_cast<void*>(static_cast<std::uintptr_t>(entity));
         s.scene->addActor(*b);
         rd.Bodies.push_back(b);
     }
-    mat->release(); // the shapes hold their own reference
+    rd.Mat = mat; // kept for SetRagdollFriction (the shapes hold their own reference too); released with the ragdoll
     rd.Drive.assign((size_t)count, nullptr);
     for (int i = 1; i < count; ++i) {
         const RagdollPart& p = parts[i];
@@ -2027,10 +2035,51 @@ void DestroyRagdoll(int ragdoll) {
     auto& rd = g_State->ragdolls[(size_t)ragdoll];
     for (PxJoint* j : rd.Joints) if (j) j->release();
     for (PxRigidDynamic* b : rd.Bodies) if (b) b->release();
+    if (rd.Mat) rd.Mat->release();
+    rd.Mat = nullptr;
     rd.Joints.clear();
     rd.Bodies.clear();
     rd.Prev.clear();
     rd.Drive.clear();
+}
+
+void SetRagdollDamping(int ragdoll, float linear, float angular) {
+    if (!g_State || ragdoll < 0 || ragdoll >= (int)g_State->ragdolls.size()) return;
+    for (PxRigidDynamic* b : g_State->ragdolls[(size_t)ragdoll].Bodies)
+        if (b) { b->setLinearDamping(std::max(linear, 0.0f)); b->setAngularDamping(std::max(angular, 0.0f)); }
+}
+
+void SetRagdollFriction(int ragdoll, float staticFriction, float dynamicFriction) {
+    if (!g_State || ragdoll < 0 || ragdoll >= (int)g_State->ragdolls.size()) return;
+    PxMaterial* m = g_State->ragdolls[(size_t)ragdoll].Mat;
+    if (!m) return;
+    m->setStaticFriction(std::max(staticFriction, 0.0f));
+    m->setDynamicFriction(std::max(dynamicFriction, 0.0f));
+}
+
+bool RagdollMotion(int ragdoll, float* outMaxLinear, float* outMaxAngular) {
+    if (!g_State || ragdoll < 0 || ragdoll >= (int)g_State->ragdolls.size()) return false;
+    const auto& rd = g_State->ragdolls[(size_t)ragdoll];
+    if (rd.Bodies.empty()) return false;
+    float lin = 0.0f, ang = 0.0f;
+    for (PxRigidDynamic* b : rd.Bodies) {
+        if (!b) continue;
+        lin = std::max(lin, b->getLinearVelocity().magnitude());
+        ang = std::max(ang, b->getAngularVelocity().magnitude());
+    }
+    if (outMaxLinear) *outMaxLinear = lin;
+    if (outMaxAngular) *outMaxAngular = ang;
+    return true;
+}
+
+void RagdollSleep(int ragdoll) {
+    if (!g_State || ragdoll < 0 || ragdoll >= (int)g_State->ragdolls.size()) return;
+    for (PxRigidDynamic* b : g_State->ragdolls[(size_t)ragdoll].Bodies)
+        if (b && !b->isSleeping()) {
+            b->setLinearVelocity(PxVec3(0.0f));
+            b->setAngularVelocity(PxVec3(0.0f));
+            b->putToSleep();
+        }
 }
 
 void RagdollImpulse(int ragdoll, int part, const float impulse[3], const float point[3]) {
@@ -2086,7 +2135,7 @@ void SetRagdollDriveTarget(int ragdoll, int part, const float rotXYZW[4]) {
     if (!g_State || ragdoll < 0 || ragdoll >= (int)g_State->ragdolls.size() || !rotXYZW) return;
     auto& drive = g_State->ragdolls[(size_t)ragdoll].Drive;
     if (part < 0 || part >= (int)drive.size() || !drive[(size_t)part]) return;
-    drive[(size_t)part]->setDrivePosition(PxTransform(PxVec3(0.0f), ToQuat(rotXYZW)));
+    drive[(size_t)part]->setDrivePosition(PxTransform(PxVec3(0.0f), ToQuat(rotXYZW)), /*autowake=*/false); // (a sleeping body stays so)
 }
 
 bool RagdollAsleep(int ragdoll) {

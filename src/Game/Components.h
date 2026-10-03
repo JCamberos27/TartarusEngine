@@ -1330,5 +1330,45 @@ struct RagdollSettingsComponent {
     float FlinchDuration = 0.3f;
     float FlinchDamageRef = 40.0f;
     float FlinchMaxAngle = 28.0f;
+    // Powered ragdoll (Euphoria-style "physical animation"): after death every joint keeps a spring toward a target pose (the pose it
+    // died in, blending into a procedural collapse), its strength decaying per region to a small residual tone; the struck region gives way
+    // first. Off: the old behaviour (the drives fade on the Death Drive clocks and the body is a rag).
+    bool PoweredRagdoll = true;
+    // Muscle Tone
+    float ToneStiffness = 450.0f;      // joint spring at full strength (acceleration units)
+    float ToneDamping = 50.0f;         // its damper at full strength
+    float ToneResidual = 0.06f;        // the fraction of strength a dead body keeps (never zero)
+    float JointFriction = 4.0f;        // damper floor on every joint: dead bodies have joint friction
+    float LegsToneTime = 0.6f;         // seconds for each region's strength to decay (after the stagger, for the legs)
+    float SpineToneTime = 1.1f;
+    float NeckToneTime = 1.4f;
+    float ArmsToneTime = 1.4f;
+    float CollapseBlendTime = 0.55f;   // seconds the target pose takes to go from the death pose to the collapse pose
+    float CollapseAmount = 1.0f;       // 0 = hold the death pose, 1 = the full collapse pose below
+    float HipFlexCollapse = 35.0f;     // degrees, in the collapse pose
+    float KneeFlexCollapse = 70.0f;
+    float SpineCurlCollapse = 18.0f;
+    float NeckCollapse = 20.0f;
+    float ShoulderCollapse = 35.0f;
+    float ElbowCollapse = 50.0f;
+    // Stagger
+    float StaggerLegStrength = 0.7f;   // the legs start at this fraction of the strength (they give out, they don't hold a pose)
+    float StaggerTime = 0.35f;         // seconds the legs hold it before they decay
+    float HitWeakness = 0.25f;         // the struck joint's strength (fraction): it takes the round instead of holding against it
+    float HitImpulseScale = 2.2f;      // multiplies the round's shove (the body goes along the shot)
+    float HitBodyShare = 0.8f;         // the share of the shove that pushes the whole body (by mass) instead of only the struck part
+    // Settle
+    float DownHeight = 0.5f;           // the body counts as down once its pelvis is below this fraction of its standing height: it settles whatever its speed
+    float SettleSpeed = 0.5f;          // m/s: below this (after the delay) the body starts to settle
+    float SettleDelay = 0.5f;          // seconds after death before it can
+    float SettleRamp = 0.2f;           // seconds to reach the full settled values
+    float SettleLinearDamping = 6.0f;
+    float SettleAngularDamping = 8.0f;
+    float SettleFriction = 2.5f;       // static and dynamic, against the world
+    float SettleJointFriction = 30.0f; // the joint damper floor, settled
+    float RestSpeed = 0.01f;           // m/s and rad/s x 10: below this for Rest Time the body is put to sleep
+    float RestTime = 0.3f;
+    float StabilizationThreshold = 0.05f; // PhysX stabilization: contact jitter below this energy per mass is held still
+    bool GripFloor = true;             // the body's friction wins against a slick floor and it never bounces
 };
 // ---- end lane R ----
