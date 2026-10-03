@@ -14937,26 +14937,25 @@
    "layer": "action",
    "channels": 2,
    "sample_rate": 48000,
-   "lufs_i": -21.04,
-   "lufs_m_max": -21.0,
-   "true_peak_dbtp": -3.67,
-   "length_s": 0.3,
-   "peak_ms": 101.8,
+   "lufs_i": -22.6,
+   "lufs_m_max": -22.56,
+   "true_peak_dbtp": -1.0,
+   "length_s": 0.323,
+   "peak_ms": 121.7,
    "sources": [
     {
-     "file": "sonniss/TS Sound - 12 Gauge Shotgun/Shell Load_Round Eject.wav",
-     "start": 2.829,
-     "end": 3.129,
+     "file": "tsp/Tactical Shooter Pack/Herrington_11-87/Actions/S_Herrington_11-87_Reload_Loop.wav",
+     "start": 0.465,
+     "end": 0.787,
      "pitch_st": 0.0
     }
    ],
-   "anchor_ms": 80.0,
+   "anchor_ms": 3.0,
    "gun": "870",
    "element": "shell_insert",
    "variant": 1,
-   "source": "Shell Load_Round Eject@2.904",
-   "lead_ms": 80,
-   "mix_db": -10.15
+   "source": "S_Herrington_11-87_Reload_Loop.wav@0.468",
+   "mix_db": -8.59
   },
   {
    "file": "Weapons/Remington870/shell_insert_2.wav",
@@ -14964,26 +14963,31 @@
    "layer": "action",
    "channels": 2,
    "sample_rate": 48000,
-   "lufs_i": -21.26,
-   "lufs_m_max": -21.22,
-   "true_peak_dbtp": -1.0,
-   "length_s": 0.41,
-   "peak_ms": 134.2,
+   "lufs_i": -21.04,
+   "lufs_m_max": -21.0,
+   "true_peak_dbtp": -2.97,
+   "length_s": 0.38,
+   "peak_ms": 121.8,
    "sources": [
     {
      "file": "sonniss/TS Sound - 12 Gauge Shotgun/Shell Load_Round Eject.wav",
-     "start": 4.29,
-     "end": 4.7,
+     "start": 2.856,
+     "end": 2.919,
+     "pitch_st": 0.0
+    },
+    {
+     "file": "sonniss/TS Sound - 12 Gauge Shotgun/Shell Load_Round Eject.wav",
+     "start": 2.924,
+     "end": 3.187,
      "pitch_st": 0.0
     }
    ],
-   "anchor_ms": 110.0,
+   "anchor_ms": 3.0,
    "gun": "870",
    "element": "shell_insert",
    "variant": 2,
-   "source": "Shell Load_Round Eject@4.394",
-   "lead_ms": 110,
-   "mix_db": -9.93
+   "source": "Shell Load_Round Eject@2.859+Shell Load_Round Eject@2.927",
+   "mix_db": -10.15
   },
   {
    "file": "Weapons/Remington870/shell_insert_3.wav",
@@ -14991,26 +14995,31 @@
    "layer": "action",
    "channels": 2,
    "sample_rate": 48000,
-   "lufs_i": -23.51,
-   "lufs_m_max": -23.47,
+   "lufs_i": -21.48,
+   "lufs_m_max": -21.44,
    "true_peak_dbtp": -1.0,
-   "length_s": 0.292,
-   "peak_ms": 42.0,
+   "length_s": 0.38,
+   "peak_ms": 142.8,
    "sources": [
     {
      "file": "sonniss/TS Sound - 12 Gauge Shotgun/Shell Load_Round Eject.wav",
-     "start": 0.564,
-     "end": 0.856,
+     "start": 4.342,
+     "end": 4.405,
+     "pitch_st": 0.0
+    },
+    {
+     "file": "sonniss/TS Sound - 12 Gauge Shotgun/Shell Load_Round Eject.wav",
+     "start": 4.398,
+     "end": 4.661,
      "pitch_st": 0.0
     }
    ],
-   "anchor_ms": 42.0,
+   "anchor_ms": 3.0,
    "gun": "870",
    "element": "shell_insert",
    "variant": 3,
-   "source": "Shell Load_Round Eject@0.6",
-   "lead_ms": 42,
-   "mix_db": -7.68
+   "source": "Shell Load_Round Eject@4.345+Shell Load_Round Eject@4.413",
+   "mix_db": -9.71
   },
   {
    "file": "Weapons/Remington870/shell_insert_4.wav",
@@ -15018,26 +15027,31 @@
    "layer": "action",
    "channels": 2,
    "sample_rate": 48000,
-   "lufs_i": -23.67,
-   "lufs_m_max": -23.63,
-   "true_peak_dbtp": -1.0,
-   "length_s": 0.29,
-   "peak_ms": 90.4,
+   "lufs_i": -21.04,
+   "lufs_m_max": -21.0,
+   "true_peak_dbtp": -1.28,
+   "length_s": 0.38,
+   "peak_ms": 121.8,
    "sources": [
     {
-     "file": "tsp/Tactical Shooter Pack/Herrington_11-87/Actions/S_Herrington_11-87_Reload_Loop.wav",
-     "start": 0.496,
-     "end": 0.786,
+     "file": "tsp/Tactical Shooter Pack/Herrington_11-87/Actions/S_Herrington_11-87_Reload_Start_Normal.WAV",
+     "start": 0.223,
+     "end": 0.281,
+     "pitch_st": 0.0
+    },
+    {
+     "file": "tsp/Tactical Shooter Pack/Herrington_11-87/Actions/S_Herrington_11-87_Reload_Start_Normal.WAV",
+     "start": 0.284,
+     "end": 0.547,
      "pitch_st": 0.0
     }
    ],
-   "anchor_ms": 90.0,
+   "anchor_ms": 3.0,
    "gun": "870",
    "element": "shell_insert",
    "variant": 4,
-   "source": "S_Herrington_11-87_Reload_Loop.wav@0.584",
-   "lead_ms": 90,
-   "mix_db": -7.52
+   "source": "S_Herrington_11-87_Reload_Start_Normal.WAV@0.226+S_Herrington_11-87_Reload_Start_Normal.WAV@0.287",
+   "mix_db": -10.15
   },
   {
    "file": "Weapons/Remington870/shell_insert_5.wav",
@@ -15045,26 +15059,31 @@
    "layer": "action",
    "channels": 2,
    "sample_rate": 48000,
-   "lufs_i": -21.04,
-   "lufs_m_max": -21.0,
-   "true_peak_dbtp": -3.0,
-   "length_s": 0.275,
-   "peak_ms": 93.2,
+   "lufs_i": -20.94,
+   "lufs_m_max": -20.9,
+   "true_peak_dbtp": -1.0,
+   "length_s": 0.38,
+   "peak_ms": 120.4,
    "sources": [
     {
-     "file": "sonniss/TS Sound - 12 Gauge Shotgun/Shell Load_Round Eject.wav",
-     "start": 2.829,
-     "end": 3.129,
-     "pitch_st": 1.5
+     "file": "tsp/Tactical Shooter Pack/Herrington_11-87/Actions/S_Herrington_11-87_Reload_End.WAV",
+     "start": 0.265,
+     "end": 0.343,
+     "pitch_st": 0.0
+    },
+    {
+     "file": "tsp/Tactical Shooter Pack/Herrington_11-87/Actions/S_Herrington_11-87_Reload_End.WAV",
+     "start": 0.348,
+     "end": 0.611,
+     "pitch_st": 0.0
     }
    ],
-   "anchor_ms": 73.4,
+   "anchor_ms": 3.0,
    "gun": "870",
    "element": "shell_insert",
    "variant": 5,
-   "source": "Shell Load_Round Eject@2.904",
-   "lead_ms": 80,
-   "mix_db": -10.15
+   "source": "S_Herrington_11-87_Reload_End.WAV@0.268+S_Herrington_11-87_Reload_End.WAV@0.351",
+   "mix_db": -10.25
   },
   {
    "file": "Weapons/Remington870/shell_load_chamber_1.wav",
