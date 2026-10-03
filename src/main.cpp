@@ -1428,6 +1428,15 @@ int main(int argc, char** argv) {
             editor.HandleDroppedFiles(world, assets, editorCamera, editorUIVisible, paths);
         });
 
+        // First-use stalls moved behind the load: the programs/volumes a scene is about to need are
+        // built now instead of on its first frames (sky ~270 ms, SSAO ~100 ms, shadow array alloc).
+        auto warmRenderResources = [&]() {
+            if (world.SkySourceMode == World::SkySource::Atmosphere) skyAtmosphere.WarmUp(world.Sky.CloudsEnabled);
+            if (world.SsaoEnabled) Ssao::WarmUp(ssaoComputeShader, ssaoBlurShader);
+            if (world.ShadowsEnabled) shadowMap.Configure(world.ShadowResolution, world.ShadowCascades);
+        };
+        warmRenderResources();
+
         bool firstFramePresented = false; // gates the splash -> editor handoff at the loop's end
 
         int appliedVSyncMode = -1; // != any real mode, so the first iteration applies the saved pref
@@ -1757,6 +1766,7 @@ int main(int argc, char** argv) {
                     // from loading it (audit #77; tests/smoke-scenes-invalid/ in particular is
                     // documented as static, hand-authored fixtures).
                     smokeSceneLoadOk = SceneSerializer::Load(world, assets, path, /*persistMigration=*/false);
+                    warmRenderResources(); // the editor does the same at startup, before its first frame
                     std::cout << "[SmokeTest] Loading " << path
                               << (smokeSceneLoadOk ? "" : "  (Load() reported failure)") << std::endl;
                     // #116 regression: the exact triangle raycast behind editor picking / surface
