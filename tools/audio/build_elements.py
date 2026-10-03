@@ -131,6 +131,9 @@ def main():
                 adsp.take_uses()
                 y = render_variant(v)
                 uses = adsp.take_uses()
+                snap = recipe.get("snap")
+                if snap and elem not in snap.get("skip", []):   # mechanical contacts: harder attack, shorter ring
+                    y = adsp.transient_shape(y, snap.get("attack", 0.0), snap.get("sustain", 0.0))
                 y = abuild.finish(y, "action", trim_bleed="layers" not in v)   # (a composite's later layers are meant)
                 rel = f"{g['dir']}/{elem}_{n}.wav"
                 extra = {"gun": gun, "element": elem, "variant": n, "source": describe(v)}
