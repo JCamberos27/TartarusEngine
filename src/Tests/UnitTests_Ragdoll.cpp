@@ -19,6 +19,7 @@
 #include <cmath>
 #include <cstring>
 #include <map>
+#include <vector>
 #include <string>
 
 // Unit tests for ragdolls, NPC death and NPC physics. Add a function per test and list it below.
@@ -542,6 +543,376 @@ void TestNavBoundaryEdgesMergeQuickly() {
     CHECK(joinable == 0);
 }
 
+// ---- Powered ragdoll: kills on a floor, measured ------------------------------------------------------------------------------
+// A bare ragdoll (the standing pose above) is killed on a floor the way NpcRagdoll::Start does it (Launch) and stepped for six seconds;
+// the same kill runs with the old passive death (Powered Ragdoll off, the drives fade to nothing in 0.25 s) and the new powered one.
+
+struct KillCase { const char* Name; int Hit; glm::vec3 Shot; glm::vec3 Run; };
+struct KillStats {
+    float MeanJointSpin = 0.0f;   // rad/s, mean over joints and the first second
+    float PeakJointDeg100 = 0.0f; // degrees, the most any joint turned in 100 ms (first two seconds)
+    float FallAngle = 0.0f;       // degrees between the pelvis's horizontal travel and the body's momentum
+    float Travel = 0.0f;          // m, pelvis horizontal travel to rest
+    float FallTime = 6.0f;        // s until the pelvis is below 0.3 m
+    float SettleTime = 6.0f;      // s of the last part speed above 1 cm/s
+    float JitterMm = 0.0f;        // RMS part motion (what a straight line through it leaves) in the second after the fastest part first drops under 5 cm/s
+    float Slide = 0.0f;           // m the pelvis moves after the chest, head or pelvis first touches the floor
+    bool Finite = true;
+};
+
+glm::quat PartQuat(int id, int part, glm::vec3* pos = nullptr) {
+    float p[3], q[4];
+    PhysicsWorld::GetRagdollPart(id, part, p, q);
+    if (pos) *pos = glm::vec3(p[0], p[1], p[2]);
+    return glm::quat(q[3], q[0], q[1], q[2]);
+}
+
+float AngleBetween(const glm::quat& a, const glm::quat& b) {
+    const float d = std::fabs(glm::dot(a, b));
+    return 2.0f * std::acos(std::clamp(d, 0.0f, 1.0f));
+}
+
+// Main's death: the drives fade to nothing in a quarter second, the old body physics.
+RagdollSettingsComponent PassiveCfg() {
+    RagdollSettingsComponent c;
+    c.PoweredRagdoll = false;
+    return c;
+}
+
+KillStats KillOnAFloor(const RagdollSettingsComponent& cfg, const KillCase& kc) {
+    KillStats st;
+    World world;
+    const entt::entity floorE = world.CreateEmptyEntity(glm::vec3(0.0f, -0.53f, 0.0f), glm::vec3(0.0f), glm::vec3(1.0f), "Floor");
+    ColliderComponent col;
+    col.Kind = ColliderComponent::Shape::Box;
+    col.HalfExtents = glm::vec3(40.0f, 0.5f, 40.0f);
+    world.Registry.emplace<ColliderComponent>(floorE, col);
+    world.SyncActiveInHierarchy();
+    world.RebuildWorldTransformCache();
+    PhysicsWorld::Create(world);
+    if (!PhysicsWorld::IsActive()) return st;
+    PhysicsWorld::RagdollPart parts[NpcRagdoll::kRagParts];
+    glm::mat4 partWorld[NpcRagdoll::kRagParts];
+    CHECK(NpcRagdoll::BuildParts(StandingBone, glm::mat4(1.0f), kc.Run, cfg, parts, partWorld));
+    const PhysicsWorld::RagdollParams prm = NpcRagdoll::BodyParams(cfg);
+    const int id = PhysicsWorld::CreateRagdoll(4350u, parts, NpcRagdoll::kRagParts, &prm);
+    CHECK(id >= 0);
+    if (id < 0) { PhysicsWorld::Destroy(); return st; }
+    NpcRagdollMotor motor;
+    const bool powered = cfg.PoweredRagdoll;
+    const float impulseMag = 50.0f; // what the director gives a 50 damage round: 30 + 0.4 * damage
+    const glm::vec3 impulse = glm::normalize(kc.Shot) * impulseMag;
+    const glm::vec3 point(partWorld[kc.Hit][3]);
+    if (!powered) PhysicsWorld::SetRagdollDrive(id, cfg.DriveStiffness, cfg.DriveDamping);
+    NpcRagdoll::Launch(id, parts, partWorld, glm::mat4(1.0f), kc.Run, impulse, point, kc.Hit, cfg, powered ? &motor : nullptr);
+    float mass = 0.0f;
+    for (int i = 0; i < NpcRagdoll::kRagParts; ++i) mass += NpcRagdoll::PartMass(&cfg, i);
+    const glm::vec3 momentum = kc.Run * mass + impulse * (powered ? cfg.HitImpulseScale : 1.0f);
+    const glm::vec3 refDir = glm::normalize(glm::vec3(momentum.x, 0.0f, momentum.z));
+    const float dt = 1.0f / 60.0f;
+    const int steps = 360;
+    std::vector<std::vector<glm::quat>> rel((size_t)steps + 1, std::vector<glm::quat>(NpcRagdoll::kRagParts));
+    std::vector<std::vector<glm::vec3>> pos((size_t)steps + 1, std::vector<glm::vec3>(NpcRagdoll::kRagParts));
+    auto sample = [&](int k) {
+        for (int i = 0; i < NpcRagdoll::kRagParts; ++i) {
+            const glm::quat q = PartQuat(id, i, &pos[(size_t)k][(size_t)i]);
+            rel[(size_t)k][(size_t)i] = i == 0 ? q : glm::inverse(PartQuat(id, NpcRagdollDefOf(i).Parent)) * q;
+        }
+    };
+    sample(0);
+    const glm::vec3 start = pos[0][0];
+    float firstContact = -1.0f, lastFast = 0.0f;
+    glm::vec3 contactPos(0.0f);
+    float spinSum = 0.0f;
+    int spinN = 0, quietAt = -1;
+    for (int k = 1; k <= steps; ++k) {
+        const float t = (float)k * dt;
+        if (powered) motor.Update(dt);
+        else {
+            for (int i = 1; i < NpcRagdoll::kRagParts; ++i) {
+                const float f = NpcRagdoll::DriveAt(t, NpcRagdoll::PartFade(&cfg, i));
+                const bool distal = i == NpcRagdoll::kHandL || i == NpcRagdoll::kHandR || i == NpcRagdoll::kFootL || i == NpcRagdoll::kFootR;
+                PhysicsWorld::SetRagdollPartDrive(id, i, cfg.DriveStiffness * f * f, std::max(cfg.DriveDamping * f * f, distal ? cfg.DistalJointDamping : 0.0f));
+            }
+        }
+        PhysicsWorld::Step(dt, world, {});
+        sample(k);
+        float lin = 0.0f, ang = 0.0f;
+        PhysicsWorld::RagdollMotion(id, &lin, &ang);
+        if (lin > 0.01f) lastFast = t;
+        if (quietAt < 0 && t > 0.3f && lin < 0.05f) quietAt = k;
+        if (!std::isfinite(lin) || !std::isfinite(pos[(size_t)k][0].x)) st.Finite = false;
+        if (t <= 1.0f)
+            for (int i = 1; i < NpcRagdoll::kRagParts; ++i) { spinSum += AngleBetween(rel[(size_t)k][(size_t)i], rel[(size_t)k - 1][(size_t)i]) / dt; ++spinN; }
+        if (k >= 6 && t <= 2.0f)
+            for (int i = 1; i < NpcRagdoll::kRagParts; ++i)
+                st.PeakJointDeg100 = std::max(st.PeakJointDeg100, glm::degrees(AngleBetween(rel[(size_t)k][(size_t)i], rel[(size_t)k - 6][(size_t)i])));
+        if (st.FallTime >= 6.0f && pos[(size_t)k][0].y < 0.3f) st.FallTime = t;
+        if (firstContact < 0.0f)
+            for (int i : {0, 1, 2}) {
+                const glm::quat q = PartQuat(id, i);
+                const float low = pos[(size_t)k][(size_t)i].y - std::fabs((q * glm::vec3(1, 0, 0)).y) * parts[i].HalfLength - parts[i].Radius;
+                if (low < 0.0f) { firstContact = t; contactPos = pos[(size_t)k][0]; break; }
+            }
+    }
+    st.MeanJointSpin = spinN ? spinSum / (float)spinN : 0.0f;
+    st.SettleTime = lastFast;
+    const glm::vec3 end = pos[(size_t)steps][0];
+    const glm::vec3 travel(end.x - start.x, 0.0f, end.z - start.z);
+    st.Travel = glm::length(travel);
+    st.FallAngle = st.Travel > 1e-3f ? glm::degrees(std::acos(std::clamp(glm::dot(travel / st.Travel, refDir), -1.0f, 1.0f))) : 180.0f;
+    st.Slide = firstContact >= 0.0f ? glm::length(glm::vec3(end.x - contactPos.x, 0.0f, end.z - contactPos.z)) : 0.0f;
+    double sq = 0.0;
+    const int w0 = quietAt < 0 ? steps - 60 : std::min(quietAt, steps - 60), w1 = std::min(w0 + 60, steps), n = w1 - w0 + 1;
+    for (int i = 0; i < NpcRagdoll::kRagParts; ++i)
+        for (int axis = 0; axis < 3; ++axis) { // least-squares line through the window, per axis
+            double sx = 0, sy = 0, sxx = 0, sxy = 0;
+            for (int k = w0; k <= w1; ++k) { const double x = k - w0, y = pos[(size_t)k][(size_t)i][axis]; sx += x; sy += y; sxx += x * x; sxy += x * y; }
+            const double den = n * sxx - sx * sx, b = den > 0 ? (n * sxy - sx * sy) / den : 0.0, a = (sy - b * sx) / n;
+            for (int k = w0; k <= w1; ++k) { const double r = pos[(size_t)k][(size_t)i][axis] - (a + b * (k - w0)); sq += r * r; }
+        }
+    st.JitterMm = 1000.0f * (float)std::sqrt(sq / (double)(n * NpcRagdoll::kRagParts));
+    PhysicsWorld::DestroyRagdoll(id);
+    PhysicsWorld::Destroy();
+    return st;
+}
+
+const std::vector<KillCase>& KillCases() {
+    static const std::vector<KillCase> cases = {
+        {"stand head front", 2, {0, 0, -1}, {0, 0, 0}}, {"stand head side", 2, {1, 0, 0}, {0, 0, 0}}, {"stand head back", 2, {0, 0, 1}, {0, 0, 0}},
+        {"stand chest front", 1, {0, 0, -1}, {0, 0, 0}}, {"stand chest side", 1, {-1, 0, 0}, {0, 0, 0}}, {"stand chest back", 1, {0, 0, 1}, {0, 0, 0}},
+        {"stand thigh front", 7, {0, 0, -1}, {0, 0, 0}}, {"stand thigh side", 7, {1, 0, 0}, {0, 0, 0}}, {"stand thigh back", 9, {0, 0, 1}, {0, 0, 0}},
+        {"run chest front", 1, {0, 0, -1}, {0, 0, 4}}, {"run chest side", 1, {1, 0, 0}, {0, 0, 4}}, {"run chest back", 1, {0, 0, 1}, {0, 0, 4}},
+    };
+    return cases;
+}
+
+struct KillSummary { KillStats Mean, Worst; int N = 0; };
+KillSummary SummariseKills(const RagdollSettingsComponent& cfg, bool running, bool print, const char* label) {
+    KillSummary s;
+    s.Mean.FallTime = s.Mean.SettleTime = s.Worst.FallTime = s.Worst.SettleTime = 0.0f;
+    for (const KillCase& kc : KillCases()) {
+        const bool isRun = glm::length(kc.Run) > 0.1f;
+        if (isRun != running) continue;
+        const KillStats k = KillOnAFloor(cfg, kc);
+        if (print)
+            std::printf("[UnitTest]   %-4s %-18s spin %5.2f rad/s  peak %5.1f deg/100ms  fall %5.1f deg  travel %4.2f m  down %4.2f s  settle %4.2f s  jitter %5.2f mm  slide %4.2f m\n",
+                        label, kc.Name, k.MeanJointSpin, k.PeakJointDeg100, k.FallAngle, k.Travel, k.FallTime, k.SettleTime, k.JitterMm, k.Slide);
+        s.Mean.MeanJointSpin += k.MeanJointSpin; s.Mean.PeakJointDeg100 += k.PeakJointDeg100; s.Mean.FallAngle += k.FallAngle; s.Mean.Travel += k.Travel;
+        s.Mean.FallTime += k.FallTime; s.Mean.SettleTime += k.SettleTime; s.Mean.JitterMm += k.JitterMm; s.Mean.Slide += k.Slide;
+        s.Worst.SettleTime = std::max(s.Worst.SettleTime, k.SettleTime); s.Worst.JitterMm = std::max(s.Worst.JitterMm, k.JitterMm);
+        s.Worst.Slide = std::max(s.Worst.Slide, k.Slide); s.Worst.FallAngle = std::max(s.Worst.FallAngle, k.FallAngle);
+        s.Worst.Finite = s.Worst.Finite && k.Finite;
+        ++s.N;
+    }
+    const float n = (float)std::max(s.N, 1);
+    s.Mean.MeanJointSpin /= n; s.Mean.PeakJointDeg100 /= n; s.Mean.FallAngle /= n; s.Mean.Travel /= n; s.Mean.FallTime /= n;
+    s.Mean.SettleTime /= n; s.Mean.JitterMm /= n; s.Mean.Slide /= n;
+    return s;
+}
+
+// The old passive death against the powered one, over twelve kills (standing and running; head, chest and leg hits; front, side, back).
+void TestPoweredRagdollDeathsAgainstPassive() {
+    const RagdollSettingsComponent powered, passive = PassiveCfg();
+    const KillSummary bs = SummariseKills(passive, false, true, "old"), ns = SummariseKills(powered, false, true, "new");
+    const KillSummary br = SummariseKills(passive, true, true, "old"), nr = SummariseKills(powered, true, true, "new");
+    if (bs.N == 0) return; // no physics
+    auto row = [](const char* what, const KillStats& o, const KillStats& n) {
+        std::printf("[UnitTest] %-8s spin %5.2f -> %5.2f rad/s | peak %5.1f -> %5.1f deg/100ms | fall angle %5.1f -> %5.1f deg | travel %4.2f -> %4.2f m | down %4.2f -> %4.2f s | settle %4.2f -> %4.2f s | jitter %5.2f -> %5.2f mm | slide %4.2f -> %4.2f m\n",
+                    what, o.MeanJointSpin, n.MeanJointSpin, o.PeakJointDeg100, n.PeakJointDeg100, o.FallAngle, n.FallAngle, o.Travel, n.Travel, o.FallTime, n.FallTime,
+                    o.SettleTime, n.SettleTime, o.JitterMm, n.JitterMm, o.Slide, n.Slide);
+    };
+    row("standing", bs.Mean, ns.Mean);
+    row("running", br.Mean, nr.Mean);
+    CHECK(ns.Worst.Finite && nr.Worst.Finite);
+    // Less noodle, not frozen: the joints turn slower than the passive rag's and the peak 100 ms swing is smaller, but they do move.
+    CHECK(ns.Mean.MeanJointSpin < 0.7f * bs.Mean.MeanJointSpin && ns.Mean.MeanJointSpin > 0.3f && nr.Mean.MeanJointSpin < 0.9f * br.Mean.MeanJointSpin);
+    CHECK(ns.Mean.PeakJointDeg100 < 0.8f * bs.Mean.PeakJointDeg100 && nr.Mean.PeakJointDeg100 < 0.8f * br.Mean.PeakJointDeg100 && ns.Mean.PeakJointDeg100 > 10.0f);
+    // It goes down along the shot, not straight down, and it takes its time doing it.
+    CHECK(ns.Mean.FallAngle < 35.0f && nr.Mean.FallAngle < 35.0f && ns.Mean.FallAngle < 0.5f * bs.Mean.FallAngle);
+    CHECK(ns.Mean.Travel > 1.15f * bs.Mean.Travel);
+    CHECK(ns.Mean.FallTime > 0.6f && ns.Mean.FallTime < 1.2f);
+    // And it comes to rest: still within 2.5 s, no jitter, no skating.
+    CHECK(ns.Worst.SettleTime < 2.5f && nr.Worst.SettleTime < 3.5f);
+    CHECK(ns.Worst.JitterMm < 1.0f && nr.Worst.JitterMm < 1.0f);
+    CHECK(ns.Mean.Slide < 0.10f && bs.Mean.Slide > 0.30f && nr.Mean.Slide < 0.7f * br.Mean.Slide);
+    CHECK(bs.Worst.SettleTime > ns.Worst.SettleTime); // the old one was slower to rest
+}
+
+// The muscles' strength: legs start partial and hold a beat, then each region decays in its own time (legs first, then spine, neck and arms)
+// to a residual that is never zero; the struck joint is weaker.
+void TestRagdollMuscleToneCurves() {
+    const RagdollSettingsComponent c;
+    using M = NpcRagdollMotor;
+    const int kThighL = 7, kCalfL = 8, kSpine = 1, kNeck = NpcRagdoll::kNeck, kUpperArmL = 3;
+    // At the moment of death: the legs partial (they give out), the rest at full strength.
+    CHECK(std::fabs(M::PartStrength(c, kThighL, 0.0f, -1) - (c.ToneResidual + (1.0f - c.ToneResidual) * c.StaggerLegStrength)) < 1e-5f);
+    CHECK(std::fabs(M::PartStrength(c, kSpine, 0.0f, -1) - 1.0f) < 1e-5f && std::fabs(M::PartStrength(c, kUpperArmL, 0.0f, -1) - 1.0f) < 1e-5f);
+    // The legs hold through the stagger, then fade.
+    CHECK(M::PartStrength(c, kThighL, c.StaggerTime * 0.99f, -1) == M::PartStrength(c, kThighL, 0.0f, -1));
+    CHECK(M::PartStrength(c, kThighL, c.StaggerTime + 0.2f, -1) < M::PartStrength(c, kThighL, 0.0f, -1));
+    // Legs give out before the spine, the spine before the neck and arms.
+    const float t = c.StaggerTime + 0.5f;
+    CHECK(M::PartStrength(c, kCalfL, t, -1) < M::PartStrength(c, kSpine, t, -1));
+    CHECK(M::PartStrength(c, kSpine, t, -1) < M::PartStrength(c, kNeck, t, -1) + 1e-6f);
+    CHECK(M::PartStrength(c, kSpine, 1.0f, -1) < M::PartStrength(c, kUpperArmL, 1.0f, -1));
+    // Monotone decay to the residual, which is never zero.
+    for (int part = 1; part < NpcRagdoll::kRagParts; ++part) {
+        float last = 2.0f;
+        for (float tt = 0.0f; tt < 4.0f; tt += 0.05f) {
+            const float s = M::PartStrength(c, part, tt, -1);
+            CHECK(s <= last + 1e-6f && s >= c.ToneResidual - 1e-6f);
+            last = s;
+        }
+        CHECK(std::fabs(M::PartStrength(c, part, 30.0f, -1) - c.ToneResidual) < 1e-5f && c.ToneResidual > 0.0f);
+    }
+    // The struck joint gives way: weaker than the same joint unstruck; a hit pelvis weakens both hips, a hit head the neck too.
+    CHECK(M::PartStrength(c, kSpine, 0.0f, kSpine) < 0.5f * M::PartStrength(c, kSpine, 0.0f, -1));
+    CHECK(M::PartStrength(c, 7, 0.0f, 0) < M::PartStrength(c, 7, 0.0f, -1) && M::PartStrength(c, 9, 0.0f, 0) < M::PartStrength(c, 9, 0.0f, -1));
+    CHECK(M::PartStrength(c, kNeck, 0.0f, 2) < M::PartStrength(c, kNeck, 0.0f, -1) && M::PartStrength(c, 3, 0.0f, 2) == M::PartStrength(c, 3, 0.0f, -1));
+    // The collapse pose: knees and hips fold, the target eases in over the blend time, and zero amount keeps the death pose.
+    const glm::quat k0 = M::TargetAt(c, kCalfL, 0.0f, true), kEnd = M::TargetAt(c, kCalfL, 5.0f, true);
+    CHECK(glm::degrees(AngleBetween(k0, glm::quat(1, 0, 0, 0))) < 1e-3f);
+    CHECK(std::fabs(glm::degrees(AngleBetween(kEnd, glm::quat(1, 0, 0, 0))) - c.KneeFlexCollapse) < 0.1f);
+    const glm::quat mid = M::TargetAt(c, kCalfL, c.CollapseBlendTime * 0.5f, true);
+    CHECK(mid.w > kEnd.w && mid.w < 1.0f);
+    RagdollSettingsComponent hold = c;
+    hold.CollapseAmount = 0.0f;
+    CHECK(AngleBetween(M::TargetAt(hold, kCalfL, 5.0f, true), glm::quat(1, 0, 0, 0)) < 1e-4f);
+    // Falling forward the spine curls forward and the arms brace; falling back the spine arches a little and the neck tucks.
+    CHECK(M::CollapseFlexion(c, kSpine, true) > 0.0f && M::CollapseFlexion(c, kSpine, false) < 0.0f);
+    CHECK(M::CollapseFlexion(c, kUpperArmL, true) > M::CollapseFlexion(c, kUpperArmL, false));
+    CHECK(M::CollapseFlexion(c, kNeck, false) > 0.0f && M::CollapseFlexion(c, kNeck, true) < 0.0f);
+}
+
+// The joints really chase the target: with the muscles at full strength, a body that dies standing folds its knees toward the collapse pose
+// (aiming for the death pose instead, they stay straight).
+void TestRagdollMusclesFoldTheKnees() {
+    auto kneeAfter = [&](const RagdollSettingsComponent& cfg, float seconds, float* pelvisY) {
+        World world;
+        const entt::entity floorE = world.CreateEmptyEntity(glm::vec3(0.0f, -0.53f, 0.0f), glm::vec3(0.0f), glm::vec3(1.0f), "Floor");
+        ColliderComponent col;
+        col.Kind = ColliderComponent::Shape::Box;
+        col.HalfExtents = glm::vec3(40.0f, 0.5f, 40.0f);
+        world.Registry.emplace<ColliderComponent>(floorE, col);
+        world.SyncActiveInHierarchy();
+        world.RebuildWorldTransformCache();
+        PhysicsWorld::Create(world);
+        float knee = -1.0f;
+        if (!PhysicsWorld::IsActive()) return knee;
+        PhysicsWorld::RagdollPart parts[NpcRagdoll::kRagParts];
+        glm::mat4 pw[NpcRagdoll::kRagParts];
+        CHECK(NpcRagdoll::BuildParts(StandingBone, glm::mat4(1.0f), glm::vec3(0.0f), cfg, parts, pw));
+        const PhysicsWorld::RagdollParams prm = NpcRagdoll::BodyParams(cfg);
+        const int id = PhysicsWorld::CreateRagdoll(4351u, parts, NpcRagdoll::kRagParts, &prm);
+        CHECK(id >= 0);
+        NpcRagdollMotor motor;
+        NpcRagdoll::Launch(id, parts, pw, glm::mat4(1.0f), glm::vec3(0.0f), glm::vec3(0.0f), glm::vec3(0, 1, 0), 1, cfg, cfg.PoweredRagdoll ? &motor : nullptr);
+        if (!cfg.PoweredRagdoll) PhysicsWorld::SetRagdollDrive(id, 0.0f, 0.0f);
+        for (int k = 0; k < (int)(seconds * 60.0f); ++k) {
+            if (cfg.PoweredRagdoll) motor.Update(1.0f / 60.0f);
+            PhysicsWorld::Step(1.0f / 60.0f, world, {});
+        }
+        glm::vec3 p;
+        PartQuat(id, 0, &p);
+        if (pelvisY) *pelvisY = p.y;
+        knee = glm::degrees(std::acos(std::clamp(glm::dot(DirOf(id, 7), DirOf(id, 8)), -1.0f, 1.0f)));
+        PhysicsWorld::DestroyRagdoll(id);
+        PhysicsWorld::Destroy();
+        return knee;
+    };
+    RagdollSettingsComponent strong; // full strength, held: only the target differs from standing
+    strong.StaggerLegStrength = 1.0f; strong.StaggerTime = 5.0f; strong.HitWeakness = 1.0f; strong.SettleDelay = 50.0f;
+    strong.CollapseBlendTime = 0.4f;
+    float yStrong = 0.0f;
+    const float kneeStrong = kneeAfter(strong, 0.8f, &yStrong);
+    if (kneeStrong < 0.0f) return;
+    std::printf("[UnitTest] knee fold at 0.8 s: %.1f deg (target %.0f), pelvis %.2f m\n", kneeStrong, strong.KneeFlexCollapse, yStrong);
+    CHECK(kneeStrong > 0.5f * strong.KneeFlexCollapse); // (gravity may fold them further than the target)
+    RagdollSettingsComponent still = strong;
+    still.CollapseAmount = 0.0f; // aim for the death pose: the knees stay straight
+    CHECK(kneeAfter(still, 0.8f, nullptr) < 0.3f * strong.KneeFlexCollapse);
+}
+
+// A body that has come to rest is put to sleep and stays so (no drive write wakes it) until something hits it.
+void TestRagdollSettlesAndSleeps() {
+    World world;
+    const entt::entity floorE = world.CreateEmptyEntity(glm::vec3(0.0f, -0.53f, 0.0f), glm::vec3(0.0f), glm::vec3(1.0f), "Floor");
+    ColliderComponent col;
+    col.Kind = ColliderComponent::Shape::Box;
+    col.HalfExtents = glm::vec3(40.0f, 0.5f, 40.0f);
+    world.Registry.emplace<ColliderComponent>(floorE, col);
+    world.SyncActiveInHierarchy();
+    world.RebuildWorldTransformCache();
+    PhysicsWorld::Create(world);
+    if (!PhysicsWorld::IsActive()) return;
+    const RagdollSettingsComponent cfg;
+    PhysicsWorld::RagdollPart parts[NpcRagdoll::kRagParts];
+    glm::mat4 pw[NpcRagdoll::kRagParts];
+    CHECK(NpcRagdoll::BuildParts(StandingBone, glm::mat4(1.0f), glm::vec3(0.0f), cfg, parts, pw));
+    const PhysicsWorld::RagdollParams prm = NpcRagdoll::BodyParams(cfg);
+    const int id = PhysicsWorld::CreateRagdoll(4352u, parts, NpcRagdoll::kRagParts, &prm);
+    CHECK(id >= 0);
+    NpcRagdollMotor motor;
+    NpcRagdoll::Launch(id, parts, pw, glm::mat4(1.0f), glm::vec3(0.0f), glm::vec3(0, 0, -50), glm::vec3(0, 1.3f, 0), 1, cfg, &motor);
+    CHECK(motor.Settle() == 0.0f && !motor.ForcedToRest());
+    float settledAt = -1.0f;
+    for (int k = 0; k < 480; ++k) {
+        motor.Update(1.0f / 60.0f);
+        PhysicsWorld::Step(1.0f / 60.0f, world, {});
+        if (settledAt < 0.0f && PhysicsWorld::RagdollAsleep(id)) settledAt = (float)k / 60.0f;
+    }
+    std::printf("[UnitTest] body asleep after %.2f s, settle %.2f, strength left %.3f\n", settledAt, motor.Settle(), motor.Strength());
+    CHECK(settledAt > 0.0f && settledAt < 2.5f);
+    CHECK(motor.Strength() >= cfg.ToneResidual * 0.99f && motor.Strength() < 0.2f); // limp, but never fully
+    for (int k = 0; k < 60; ++k) { motor.Update(1.0f / 60.0f); PhysicsWorld::Step(1.0f / 60.0f, world, {}); }
+    CHECK(PhysicsWorld::RagdollAsleep(id)); // and it stays so
+    // A shot into the corpse wakes it, and it comes to rest again.
+    const float j[3] = {0, 0, 30.0f}, at[3] = {0, 0.2f, 0};
+    PhysicsWorld::RagdollImpulse(id, 0, j, at);
+    motor.Wake();
+    CHECK(!PhysicsWorld::RagdollAsleep(id) && motor.Settle() == 0.0f);
+    for (int k = 0; k < 420; ++k) { motor.Update(1.0f / 60.0f); PhysicsWorld::Step(1.0f / 60.0f, world, {}); }
+    CHECK(PhysicsWorld::RagdollAsleep(id));
+    PhysicsWorld::DestroyRagdoll(id);
+    PhysicsWorld::Destroy();
+}
+
+// Powered Ragdoll off keeps the old body (no grip, no stabilization); on, the new body physics reach PhysX's parameters. The new fields save and load.
+void TestRagdollPoweredSettings() {
+    RagdollSettingsComponent off;
+    off.PoweredRagdoll = false;
+    CHECK(!NpcRagdoll::BodyParams(off).Grip && NpcRagdoll::BodyParams(off).StabilizationThreshold < 0.0f);
+    const RagdollSettingsComponent on;
+    CHECK(on.PoweredRagdoll && NpcRagdoll::BodyParams(on).Grip && std::fabs(NpcRagdoll::BodyParams(on).StabilizationThreshold - on.StabilizationThreshold) < 1e-6f);
+    World world;
+    AssetLibrary assets;
+    const entt::entity e = world.CreateEmptyEntity(glm::vec3(0.0f), glm::vec3(0.0f), glm::vec3(1.0f), "Rules");
+    auto& rag = world.Registry.emplace<RagdollSettingsComponent>(e);
+    rag.PoweredRagdoll = false; rag.ToneStiffness = 321.0f; rag.LegsToneTime = 0.33f; rag.StaggerLegStrength = 0.5f; rag.HitBodyShare = 0.25f; rag.SettleFriction = 3.0f; rag.DownHeight = 0.4f; rag.GripFloor = false;
+    const std::string json = SceneSerializer::SaveToString(world, assets);
+    World back;
+    AssetLibrary assets2;
+    CHECK(SceneSerializer::LoadFromString(back, assets2, json));
+    int seen = 0;
+    for (entt::entity b : back.Registry.view<RagdollSettingsComponent>()) {
+        const auto& r = back.Registry.get<RagdollSettingsComponent>(b);
+        ++seen;
+        CHECK(!r.PoweredRagdoll && r.ToneStiffness == 321.0f && r.LegsToneTime == 0.33f && r.StaggerLegStrength == 0.5f && r.HitBodyShare == 0.25f && r.SettleFriction == 3.0f && r.DownHeight == 0.4f && !r.GripFloor);
+        CHECK(r.SpineToneTime == RagdollSettingsComponent().SpineToneTime && r.HitImpulseScale == RagdollSettingsComponent().HitImpulseScale);
+    }
+    CHECK(seen == 1);
+    // A scene saved before the powered ragdoll existed loads with it on (the new default).
+    World old;
+    AssetLibrary assets3;
+    const std::string oldJson = std::string(R"({"formatVersion":3,"empties":[{"name":"S","id":1,"position":[0,0,0],"rotation":[0,0,0],"scale":[1,1,1],)") +
+                                R"("Ragdoll Settings":{"Drive Fade":0.5}}]})";
+    CHECK(SceneSerializer::LoadFromString(old, assets3, oldJson));
+    int found = 0;
+    for (entt::entity b : old.Registry.view<RagdollSettingsComponent>()) { ++found; CHECK(old.Registry.get<RagdollSettingsComponent>(b).PoweredRagdoll); }
+    CHECK(found == 1);
+}
+
 } // namespace
 
 void RegisterRagdollTests(UnitTestSupport::TestList& tests) {
@@ -558,4 +929,9 @@ void RegisterRagdollTests(UnitTestSupport::TestList& tests) {
     tests.push_back({"NpcFlinchKicksAndSettles", TestNpcFlinchKicksAndSettles});
     tests.push_back({"RagdollNewFieldsRoundTrip", TestRagdollNewFieldsRoundTrip});
     tests.push_back({"NavBoundaryEdgesMergeQuickly", TestNavBoundaryEdgesMergeQuickly});
+    tests.push_back({"PoweredRagdollDeathsAgainstPassive", TestPoweredRagdollDeathsAgainstPassive});
+    tests.push_back({"RagdollMuscleToneCurves", TestRagdollMuscleToneCurves});
+    tests.push_back({"RagdollMusclesFoldTheKnees", TestRagdollMusclesFoldTheKnees});
+    tests.push_back({"RagdollSettlesAndSleeps", TestRagdollSettlesAndSleeps});
+    tests.push_back({"RagdollPoweredSettings", TestRagdollPoweredSettings});
 }
