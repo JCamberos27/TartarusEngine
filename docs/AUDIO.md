@@ -22,13 +22,13 @@ can be fired from an animator event on the contact frame of our own clip.
   `anchor_ms = 0` with no transient (cloth, melee swing, foley handling, loops) means "starts with the motion".
 * `snd.<gun>.fire` in `sync_map.json` is not a file: it expands to the five layers `snd.<gun>.fire_close|sub|mech|tail|far`
   (all start at the shot instant; tails and far carry their own leading silence / delay). Play each layer at its
-  manifest `mix_db` (see "Mix": close ~0, sub -2, mech -3, tail -9 + space, far -15 relative to the shot sum) into a weapon bus with a limiter.
+  manifest `mix_db` (see "Mix": close ~0, sub -2, mech -3, tail -9 + space, far -15 relative to the shot sum); peaks are the master limiter's, no voice is ever ducked.
 * **Full auto**: close/sub/mech on every shot, **tail every 2nd shot, far every 3rd** (the audition reel does exactly
   this). Stacking a 3 s tail per shot at 650 rpm sums to +10 dB and buries the transients. Even so ten AK shots sum to
-  about +4 dBFS before the bus limiter, so the bus limiter (-1 dBTP) is required.
+  about +4 dBFS before the master limiter (-1 dBFS), which catches it; voices keep their levels.
 * Far layers are mono (play them as a 3D / distance source); everything else is stereo 1P material.
-* Foley keys: `snd.foley.weapon.{ads_in,ads_out,equip,unequip,firemode}`, `snd.foley.move.{jump,land_light,land_heavy,sprint_loop}`
-  (`sprint_loop` is seamless, `loop: true`), `snd.foley.step_<carpet|concrete|glass|metal|water|wood>.{walk,run,land}`.
+* Foley keys: `snd.foley.weapon.{ads_in,ads_out,equip,unequip,firemode}`, `snd.foley.move.{jump,land_light,land_heavy}`,
+  `snd.foley.step_<carpet|concrete|glass|metal|water|wood>.{walk,run,land}`.
 * Weapon elements: AK `mag_release mag_out mag_in mag_tap bolt_back bolt_release handle cloth draw holster firemode
   dry_fire melee_swing melee_hit`; 870 `pump_back pump_fwd shell_insert shell_load_chamber handle cloth draw holster
   dry_fire melee_swing melee_hit`. Fire layers `fire_close fire_sub fire_mech fire_tail fire_far`. `dry_fire` has no
@@ -133,29 +133,47 @@ within +-3 dB of the key's median `mix_db`; a file's true peak plus its `mix_db`
 their layer offset (0 / -2 / -3) plus a compensation to the layer's loudness target limited to -2..+1.5 dB (and by that peak rule),
 so every shot variant plays equally loud.
 
-Hierarchy (dB re the player's shot; surface and space offsets added where noted; `mix.json` is the source of truth):
+Hierarchy (dB re the player's shot; surface and space offsets added where noted; `mix.json` is the source of truth). Tiers sit at
+least ~4 dB apart so each layer reads; a 3D category's level holds at its distance model's reference distance (below):
 
-| Group | Level | Group | Level |
-|---|---|---|---|
-| player shot (close + sub + mech) | 0 | gun tail (player) | -9, + space |
-| NPC shot at 10 m | -6 | far layer | -15 |
-| flyby | -9 | bolt_release / mag_in / pump_fwd / shell_load_chamber | -14 |
-| flesh impact | -10 | mag_out / pump_back / shell_insert / bolt_back / mag_tap / mag_release | -17 |
-| impacts at 5 m | -12, + surface | handle | -21 |
-| body fall at 5 m | -12 | cloth | -25 |
-| melee_hit | -6 | dry_fire | -18 |
-| melee_swing | -16 | ADS in / out, equip, unequip, firemode | -22 |
-| draw / holster | -18 | footsteps walk / run | -24 / -20, + surface |
-| land (step land, `move.land_light`) | -16, + surface for step land | `move.land_heavy` | -12 |
-| jump | -20 | sprint loop | -24 |
-| casings | -24, + surface | UI hitmarker / kill | -16 / -13 |
-| ambience loops (phase 2) | -26 | impulse responses | no level (mix_db 0) |
+| Tier | Sounds | Level |
+|---|---|---|
+| 0 anchor | player shot (close + sub + mech) / gun tail / far layer | 0 / -10 + space / -15 |
+| 1 threat | soldier's shot at 10 m (close-up cap -3) / flyby at 1 m | -8 / -6 |
+| 2 feedback | hitmarker / kill / melee_hit / flesh at 5 m | -14 / -11 / -8 / -12 |
+| 3 your hands | bolt_release, mag_in, pump_fwd, shell_load_chamber | -15 |
+| | mag_out, pump_back, shell_insert, bolt_back, mag_tap, mag_release | -19 |
+| | dry_fire / draw, holster / handle / cloth / melee_swing | -17 / -18 / -23 / -27 / -18 |
+| | equip, unequip, firemode / ADS in, out | -22 / -24 |
+| 4 world | impacts at 5 m (+ surface; cap -9) / body fall at 5 m (cap -9) | -14 / -14 |
+| 5 movement | your walk / run / land (+ surface) | -22 / -18 / -16 |
+| | jump / move.land_light / move.land_heavy | -24 / -18 / -14 |
+| | a soldier's step at 5 m: your step's level + 3 (walk -19, cap -15) | |
+| 6 debris | casings (+ surface) | -26 |
+| 7 beds | ambience: indoor small, indoor large / outdoor urban, open | -34 / -32 |
+| | impulse responses | no level (mix_db 0) |
 
 Surface offsets (footsteps, casings, impacts): metal +2, glass +1, wood 0, concrete 0, tile 0, dirt -2, carpet -5, water -1 (ice 0).
 Tail space offsets: indoor_small -2, indoor_large +1, outdoor_urban 0 (also the generic `fire_tail`), outdoor_open -3.
 
-Distance-based levels (NPC shot 10 m, impacts 5 m, body fall 5 m, `distance_refs` in `mix.json`) are stored as the level *at that
-distance*: the file's `mix_db` is the spec-at-distance, so the engine's rolloff for that set must be 0 dB at the reference distance.
+**Distance models** (`mix.json` "distance", copied to the manifest's `mix.distance` by `apply_mix.py`). Every 3D category says how its
+level holds in the world: the level holds at `ref_m`; closer it rises `slope_db` per halving up to `near_db` above it (the close-up
+cap, so nothing but your own gun reaches 0 dB), farther it falls `slope_db` per doubling, held past `max_m`. `offset_db` is added to
+the files' own level when they play in the world: a soldier's shot is the shot layer files 10.5 dB down (computed by `mixspec.py`:
+npc_shot - the shot layers' level), a soldier's step is the step files 3 dB up (you have to hear them), a soldier's gear 2 dB down.
+
+| Model | ref m | near dB (cap at) | slope dB / doubling | max m | offset dB |
+|---|---|---|---|---|---|
+| npc_shot (fire_* in the world) | 10 | 5 (5 m) | 5 | 250 | -10.5 |
+| flyby | 1 | 0 | 4 | 15 | 0 |
+| impact (incl. flesh) / body_fall | 5 | 5 (2.8 m) | 6 | 60 / 40 | 0 |
+| npc_step (foley step_* in the world) | 5 | 4 (2.7 m) | 4.5 | 35 | +3 |
+| npc_gear (gun and foley gear in the world) | 4 | 3 (2.8 m) | 6 | 25 | -2 |
+| casing | 1.5 | 0 | 8 | 20 | 0 |
+
+The engine derives each set's Min Distance (where the cap is reached: ref x 2^(-near / slope)) and an exponential rolloff (miniaudio's
+`exponential` model, factor slope / 6.02), and starts the voice offset + near dB over its `mix_db`. The components' own 3D Min / Max
+distances for these sounds are no longer in the inspector (the engine still reads them when no manifest is loaded).
 
 Change a number in `mix.json`, run `apply_mix.py` (no audio is touched), run `check_audio.py`: it recomputes every `mix_db` from the
 wavs themselves and fails on a mismatch (+-0.1 dB), a missing `mix_db`, a key `mix.json` does not cover, or a stale manifest.
@@ -300,7 +318,7 @@ Gun shot layers are manifest entries with key `snd.<gun>.shot` and layer `close 
   `tools/audio/apply_sync_map.py` (`mag_out`, `mag_in`, `pump_back`, `shell_insert`, ...). Gear sounds the presentation
   makes itself: `ads_in`, `ads_out`, `fire_mode`, `dry_fire`, `equip`, `unequip`.
 - `snd.foley.<category>.<element>`: footsteps are `snd.foley.<surface>.walk | run | crouch | jump | land`;
-  `snd.foley.cloth.sprint_loop` is the sprint gear loop. A foley key on a weapon animation event plays the same way.
+  (There is no sprint gear loop: moving is footsteps only; metal handling sounds come only from gun actions.) A foley key on a weapon animation event plays the same way.
 
 ### Animator events
 
@@ -468,7 +486,7 @@ Ambience Volume (linear). Scenes saved with the old feedback-network reverb stil
 to the class's old default, +-12 dB) and HF Damping 0..1 becomes 0..10 dB; Room Size, Decay Time and Early/Late Mix are ignored
 (the IR is the room).
 
-**Ambience beds.** Each zone with an Ambience key adds a looping 2D bed on the Ambient bus at sqrt(the share the listener's zones
+**Ambience beds.** A box zone fades in across its walls and ceiling, never its floor (the listener stands on it). Each zone with an Ambience key adds a looping 2D bed on the Ambient bus at sqrt(the share the listener's zones
 with that key claim) x their Ambience Volume (equal power across a zone edge), moving at most 1 per second (a teleport is a 1 s
 fade). A bed starts when it becomes audible and stops once faded out.
 
@@ -478,43 +496,64 @@ signal passes bit for bit (delayed by the lookahead).
 
 ## Mix and 3D distance
 
-A voice plays at `set volume x 10^(mix_db / 20)`: `mix_db` is the manifest's per file (written by `tools/audio/apply_mix.py` from
-`recipes/mix.json`, the level hierarchy relative to the player's shot), applied once, nothing loudness-related on top. Component
-volumes (Foley, Impact, Weapon Audio) default to 1 and only scale (per gait, per fall speed, ...). Player Gain (0.75) applies to
-the player's own shot layers only.
+A voice plays at `set volume x 10^(mix_db / 20)`, and in the world by its category's distance model (see "Mix": the level at the
+reference distance, the close-up cap, the slope): `mix_db` is the manifest's per file (written by `tools/audio/apply_mix.py` from
+`recipes/mix.json`), applied once. Component volumes (Foley, Impact, Weapon Audio) default to 1 and only scale (per gait, per fall
+speed, ...). Player Gain (0.75) applies to the player's own shot layers only. Everything a voice needs (position, rolloff, pitch, its
+duck gain) is set before it starts, so its first block is already placed (setting them after the start let the audio thread render a
+block unspatialised at the voice's full calibrated gain: a click up to 10 dB loud on a soldier's shot).
 
 Panning is constant-power (a patch in `extern/miniaudio.h`, marked TARTARUS PATCH): a 3D sound has the power it has played 2D, whichever way the listener faces; stock miniaudio played a source straight ahead 6 dB down and one at the side about 3 dB louder than that.
 
-Every 3D sound is logarithmic: full level inside Min, then Min / d (-6 dB per doubling), held at Max. Sets the spec levels at a
-distance (`mix.distance_refs_m`) are calibrated so the level at that distance is the spec's: gain x Ref / Min.
+Sounds with no distance model (none at present among the recorded sets) keep their set's own Min / Max and logarithmic rolloff.
 
-| Sound | Min (m) | Max (m) | Spec level holds at |
-| --- | --- | --- | --- |
-| Shot close / mech (Weapon Audio Shot Min Distance) | 3 | 90 (Max Distance) | npc_shot 10 m |
-| Shot sub / tail / far (Bass Min Distance) | 6 | 90 / 160 (Far Max Distance) | npc_shot 10 m |
-| Gun gear / foley in the world (Event Min / Max Distance) | 1.5 | 25 | |
-| Soldier footsteps (Foley NPC Step Min / Max Distance) | 2.5 | 28 | |
-| Bullet impacts (Impact Min / Max Distance) | 2 | 60 | 5 m |
-| Casings (Casing Min / Max Distance) | 1.5 | 25 | |
-| Flybys (Flyby Min / Max Distance) | 0.5 | 14 | |
+## Dynamic mix
+
+The scene's **Audio Mix** component (one per scene; the defaults play without one; Window > Audio edits it live):
+
+* **Mix groups.** Every voice has one, from its key and whether it is yours (2D) or in the world (3D): weapon (your gun), threat
+  (soldiers' shots, flybys), feedback (hit markers, flesh hits), own foley (your steps, cloth, gear, reloads), npc foley (soldiers'
+  steps, gear, reloads), world (impacts, bodies), debris (casings), bed (ambience).
+* **Ducking.** A weapon or threat voice keys the duck with its level at the listener (the file's LUFS-M + its gain + the distance's,
+  against the reference): from -20 dB (Duck Threshold) up to -6 dB (Duck Full) the groups under it go down by their depth - beds 6 dB,
+  your foley 3, casings 3, impacts 0 - in 15 ms, hold 0.15 s after the last loud event and come back over 0.8 s. Threat, feedback and
+  npc foley are never ducked: they are what you have to hear. The duck is each voice's fader (`AudioEngine::SetDuck`), separate from
+  its volume.
+* **Focus.** Aiming down sights (the player's own view) takes the beds 4 dB, your foley 3 and casings 2 down over 0.25 s.
+* **Air.** Every 3D voice is low-passed with distance: open to 15 m, then 20 kHz x (15 / d)^0.6, never below 4 kHz (60 m: about
+  8.7 kHz; 150 m: 5 kHz), folded into the same low-pass as occlusion (min of the two).
+* **Master.** Trim -3 dB, then the glue compressor (linked peak, threshold -15 dBFS, 2:1, 6 dB knee, 15 ms attack so a shot's
+  transient passes, 200 ms release), then the limiter. A sustained firefight integrates near -19 LUFS with a couple of dB of glue at
+  most and the limiter idle (`--audio-test` part 5).
+* **Wet levels.** The Reverb Bus's Wet <class> dB are what is heard: the impulse responses are calibrated on white noise and real
+  material (impacts, shots, K-weighted) came back about 4 dB hotter, which Wet Trim dB (-4) takes back.
 
 ## Audio panel
 
 Window > Audio (editor): peak and loudness meters for the master, each bus and the reverb return, the limiter's gain reduction,
 the voice count, each reverb bus's running IRs and weights, and in Play the zones at the listener, the reverb's target and the
-ambience beds.
+ambience beds. In Play also the **Mix**: the duck and focus envelopes, the glue's gain reduction, the live voices and duck gain per
+mix group, and faders for the ducking, focus, air, master (trim, glue) and the rooms' wet levels, applied as you move them. **Keep
+after Play** writes them to the scene's Audio Mix / Reverb Bus components when Play stops (as an undoable edit; save the scene);
+**Defaults** puts the mix back to the shipped values.
 
 ## --audio-test
 
 `TartarusEngine.exe --audio-test [scene] [--report <file>]` (default scene `AudioLab`): the real engine rendered offline (no device,
 no window) under the real `WeaponAudio`, over the scene's Reverb Zones.
 
-1. Levels: every manifest key played alone, dry and without jitter, LUFS-M max against `recipes/mix.json` (reference + level +
-   surface offset), 3D at its reference distance where the spec gives one; the player's and a soldier's shot (close + sub + mech).
+0. Tier ladder: the spec's levels and distance models against the hierarchy's rules (nothing but your gun reaches -3 dB close up; a
+   soldier's walk at 10 m and your own walk 4 dB over the loudest bed; a soldier's walk at 5 m over yours). No audio.
+1. Levels: every manifest key played alone, dry, without jitter or ducking, LUFS-M max against `recipes/mix.json` (reference + level +
+   surface offset), 3D at its distance model's reference distance; the player's and a soldier's shot (close + sub + mech) at 10 m and
+   close up (the cap); a soldier's step and reload (the offsets).
 2. Wet / dry: an impact 2 m in front of the centre of each zone; reverb return energy against the dry signal's, against the zone's
    calibrated level x the impacts' send.
 3. Ambience: each zone's bed at its centre against the spec's ambience level.
 4. Peak: a 30-round burst with impacts and a soldier's shots in the first Indoor Large zone; the master never exceeds the ceiling.
+5. Firefight: 20 s in the first outdoor zone with a bed - your bursts with impacts and casings, two soldiers answering from 20 and
+   35 m, flybys, a third walking the flank at 8 m - with the scene's whole dynamic mix: integrated loudness (in [-22, -16] LUFS),
+   short-term range, the glue's and the limiter's work (the limiter over 1 dB at most 5 % of the time), the beds' duck depth.
 
-Exit 1 when a level is off by more than 2 dB, a wet / dry by more than 3 dB, the master peak is over the ceiling, or a part could
-not run (no manifest reference, no spec, a zone with no IR).
+Exit 1 when a level is off by more than 2 dB, a wet / dry by more than 3 dB, the master peak is over the ceiling, a rule of the
+ladder or a firefight bound fails, or a part could not run (no manifest reference, no spec, a zone with no IR).

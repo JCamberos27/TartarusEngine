@@ -12,13 +12,27 @@ MANIFEST = os.path.join(AUDIO_DIR, "audio_manifest.json")
 TARGETS = json.load(open(os.path.join(HERE, "recipes", "targets.json")))
 
 
-def finish(x, layer, ceiling_db=None, max_gr_db=7.0, trim_edges=True, target=None, loop=False):
-    """Bring a rendered one-shot to its layer's loudness target without breaking the peak ceiling.
+# How much limiting finish() may use to reach a layer's loudness target. The mix (mix_db) sets every file's playback level, so a
+# file only needs to be loud where it plays near full scale: the shot's close layer. Everywhere else limiting would only trade the
+# transient (the punch, the click) for a number the mix then turns down again; a file that stops short of its target is fine.
+GR_BUDGET_DB = {"close": 4.0, "sub": 1.0, "tail": 3.0, "far": 3.0, "ambience": 2.0, "loop": 2.0}
+SUSTAINED = ("tail", "far", "ambience", "loop", "ir")
 
-    Gain to target; if that pushes the true peak over the ceiling, a limiter takes up to max_gr_db of it (the sound
-    gets denser, not just quieter) and the rest is plain gain reduction."""
+
+def finish(x, layer, ceiling_db=None, max_gr_db=None, trim_edges=True, target=None, loop=False, trim_bleed=False):
+    """Bring a rendered one-shot toward its layer's loudness target without breaking the peak ceiling or its transient.
+
+    Gain to target; if that pushes the true peak over the ceiling, a limiter takes at most max_gr_db of it (default: the layer's
+    GR_BUDGET_DB, 1.5 dB for transient layers) and the rest is plain gain reduction. One-shots also get their noise floor expanded
+    down (anything 50 dB under the peak), and with trim_bleed a second event of the source that bled into the slice is cut off."""
     ceiling = TARGETS["peak_dbtp_max"] if ceiling_db is None else ceiling_db
     tgt = TARGETS["layers"][layer]["target"] if target is None else target
+    if max_gr_db is None:
+        max_gr_db = GR_BUDGET_DB.get(layer, 1.5)
+    if trim_bleed and not loop and layer not in SUSTAINED:
+        x = adsp.trim_secondary(x)
+    if not loop and layer not in SUSTAINED:
+        x = adsp.expand_floor(x)
     if not loop:                                       # a loop keeps its (circularly continuous) edges untouched
         x = adsp.remove_dc(x)
     if trim_edges and not loop:                        # guarantee a click-free start and end

@@ -1,5 +1,5 @@
 {
- "_doc": "Player foley. one_shots: category -> element -> variants (same variant syntax as elements.json; src relative to the Tactical Shooter Pack). steps: Boots library -> per-surface walk/run (individual steps cut out of the 30 s sequences by envelope peak picking), single steps and stomps. loops: procedurally built, circularly filtered so the loop point is seamless. Round 4: no synthesis -- land_heavy adds a real low thud, sprint_loop is built from real cloth slices + gear rattle.",
+ "_doc": "Player foley. one_shots: category -> element -> variants (same variant syntax as elements.json; src relative to the Tactical Shooter Pack). steps: Boots library -> per-surface walk/run (individual steps cut out of the 30 s sequences by envelope peak picking), single steps and stomps. Round 4: no synthesis -- land_heavy adds a real low thud. (The sprint gear loop was removed 2026-10-03: gun-handling rattle on every stride; metal handling sounds come only from gun actions.)",
  "one_shots": {
   "weapon": {
    "ads_in": [
@@ -279,13 +279,13 @@
    "Wood"
   ],
   "walk": {
-   "seq_variants": 3,
+   "seq_variants": 8,
    "single_variants": 3,
    "dur": 0.34,
    "target_lufs": -24.0
   },
   "run": {
-   "seq_variants": 6,
+   "seq_variants": 10,
    "single_variants": 0,
    "dur": 0.28,
    "target_lufs": -22.0
@@ -305,27 +305,5 @@
     "General/Run/S_Run_Concrete_4.WAV"
    ]
   }
- },
- "loops": {
-  "sprint_loop": [
-   {
-    "seed": 1,
-    "dur": 1.2,
-    "steps": 2,
-    "rattle": 5
-   },
-   {
-    "seed": 2,
-    "dur": 1.1,
-    "steps": 2,
-    "rattle": 4
-   },
-   {
-    "seed": 3,
-    "dur": 1.3,
-    "steps": 2,
-    "rattle": 6
-   }
-  ]
  }
 }

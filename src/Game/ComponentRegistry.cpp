@@ -32,6 +32,13 @@
 namespace ComponentRegistry {
 
 namespace {
+// 3D distance fields of the audio components that recipes/mix.json "distance" (the manifest's mix.distance) now decides: the engine
+// still reads them when no manifest is loaded, the inspector does not offer them.
+bool MixOwnsDistanceField(const char* name) {
+    for (const char* n : {"Shot Min Distance", "Bass Min Distance", "Event Min Distance", "Event Max Distance", "Max Distance", "Far Max Distance", "NPC Step Min Distance", "NPC Step Max Distance", "Casing Min Distance", "Casing Max Distance", "Impact Min Distance", "Impact Max Distance", "Flyby Min Distance", "Flyby Max Distance"})
+        if (std::strcmp(name, n) == 0) return true;
+    return false;
+}
 std::vector<RegisteredComponent>& Storage() {
     static std::vector<RegisteredComponent> registry;
     return registry;
@@ -1919,10 +1926,6 @@ void RegisterEngineComponents() {
             { "Tail Every", T::Int, TARTARUS_REFLECT_FIELD(W, TailEvery), 1.0f, "Full auto: the tail layer plays on every Nth shot of a burst (1 = every shot; S1's mix policy is 2).", 1.0f, 16.0f },
             { "Far Every", T::Int, TARTARUS_REFLECT_FIELD(W, FarEvery), 1.0f, "Full auto: the distant report plays on every Nth shot of a burst (S1's mix policy is 3).", 1.0f, 16.0f },
             { "Burst Gap", T::Float, TARTARUS_REFLECT_FIELD(W, BurstGap), 0.01f, "Seconds without a shot that end a burst; the next shot plays every layer.", 0.05f, 5.0f },
-            { "Limiter Enabled", T::Bool, TARTARUS_REFLECT_FIELD(W, LimiterEnabled), 0.0f, "Weapon bus peak limiter (gain ducking so a burst's summed peaks stay under the ceiling). Shared by all guns: the last Weapon Audio component read wins." },
-            { "Limiter Ceiling dB", T::Float, TARTARUS_REFLECT_FIELD(W, LimiterCeilingDb), 0.1f, "dBFS the summed peaks of the live transients are kept under.", -12.0f, 0.0f },
-            { "Limiter Window", T::Float, TARTARUS_REFLECT_FIELD(W, LimiterWindow), 0.005f, "Seconds a transient counts toward the sum.", 0.02f, 1.0f },
-            { "Limiter Min Gain", T::Float, TARTARUS_REFLECT_FIELD(W, LimiterMinGain), 0.01f, "The most a voice is ducked by the limiter (linear gain).", 0.0f, 1.0f },
             { "Data File", T::String, TARTARUS_REFLECT_FIELD(W, DataFile), 0.0f, "Optional json of SoundSet overrides by element (files, volume, jitter, pitch, bus, range, voices). Relative to the project." },
             { "Env Enabled", T::Bool, TARTARUS_REFLECT_FIELD(W, EnvEnabled), 0.0f, "The shot's tail follows the space the shooter is in: a Reverb Zone volume first, else a raycast probe around the shooter. Off: always the generic tail (fire_tail). A space with no recorded tail files also plays the generic one." },
             { "Env Ray Count", T::Int, TARTARUS_REFLECT_FIELD(W, EnvRayCount), 1.0f, "Rays per probe (1 up, a diagonal ring and a horizontal ring). More = a finer read of the space, a little more cost per refresh.", 6.0f, 64.0f },
@@ -1948,16 +1951,18 @@ void RegisterEngineComponents() {
             {"Far Max Weight", "Distance Blend"}, {"Max Distance", "Distance Blend"}, {"Far Max Distance", "Distance Blend"},
             {"Shot Min Distance", "Distance Blend"}, {"Bass Min Distance", "Distance Blend"}, {"Event Min Distance", "Distance Blend"}, {"Event Max Distance", "Distance Blend"},
             {"Tail Max Voices", "Full Auto"}, {"Tail Every", "Full Auto"}, {"Far Every", "Full Auto"}, {"Burst Gap", "Full Auto"},
-            {"Limiter Enabled", "Bus Limiter"}, {"Limiter Ceiling dB", "Bus Limiter"}, {"Limiter Window", "Bus Limiter"}, {"Limiter Min Gain", "Bus Limiter"}, {"Tail Fade Time", "Full Auto"}, {"Tail Min Interval", "Full Auto"}, {"Tail Duck Per Voice", "Full Auto"},
+            {"Tail Fade Time", "Full Auto"}, {"Tail Min Interval", "Full Auto"}, {"Tail Duck Per Voice", "Full Auto"},
             {"Env Enabled", "Environment"}, {"Env Ray Count", "Environment"}, {"Env Max Distance", "Environment"}, {"Env Indoor Cover", "Environment"},
             {"Env Urban Wall", "Environment"}, {"Env Urban Distance", "Environment"}, {"Env Large Room Distance", "Environment"},
             {"Env Blend Fraction", "Environment"}, {"Env Blend Distance", "Environment"}, {"Env Refresh Interval", "Environment"},
             {"Env Refresh Move Distance", "Environment"}, {"Env Match Radius", "Environment"}, {"Env Gain Outdoor Open", "Environment"},
             {"Env Gain Outdoor Urban", "Environment"}, {"Env Gain Indoor Small", "Environment"}, {"Env Gain Indoor Large", "Environment"},
             {"Env Debug Draw", "Environment"}};
-        for (ReflectField& f : m.Fields)
+        for (ReflectField& f : m.Fields) {
             for (const auto& [n, g] : groups)
                 if (std::strcmp(f.Name, n) == 0) f.Group = g;
+            if (MixOwnsDistanceField(f.Name)) f.EditorHidden = true; // the mix spec's distance models own it (manifest mix.distance)
+        }
         Register<WeaponAudioComponent>(std::move(m));
     }
     {
@@ -1983,8 +1988,6 @@ void RegisterEngineComponents() {
             { "Land Min Speed", T::Float, TARTARUS_REFLECT_FIELD(Fo, LandMinSpeed), 0.05f, "m/s of fall below which a landing is silent.", 0.0f, 30.0f },
             { "Land Full Speed", T::Float, TARTARUS_REFLECT_FIELD(Fo, LandFullSpeed), 0.05f, "m/s of fall at which a landing is at Land Volume.", 0.1f, 40.0f },
             { "Land Heavy Speed", T::Float, TARTARUS_REFLECT_FIELD(Fo, LandHeavySpeed), 0.05f, "m/s of fall from which the heavy landing plays (the light one below).", 0.0f, 40.0f },
-            { "Cloth Loop Volume", T::Float, TARTARUS_REFLECT_FIELD(Fo, ClothLoopVolume), 0.01f, "Gain of the sprint cloth / gear loop at Run Speed.", 0.0f, 2.0f },
-            { "Cloth Loop Min Speed", T::Float, TARTARUS_REFLECT_FIELD(Fo, ClothLoopMinSpeed), 0.05f, "m/s below which the loop is silent.", 0.0f, 20.0f },
             { "NPC Step Volume", T::Float, TARTARUS_REFLECT_FIELD(Fo, NpcStepVolume), 0.01f, "Gain of soldiers' footsteps.", 0.0f, 2.0f },
             { "NPC Step Min Distance", T::Float, TARTARUS_REFLECT_FIELD(Fo, NpcStepMinDistance), 0.1f, "Metres inside which a soldier's step is full volume.", 0.1f, 50.0f },
             { "NPC Step Max Distance", T::Float, TARTARUS_REFLECT_FIELD(Fo, NpcStepMaxDistance), 0.5f, "Metres a soldier's step carries.", 1.0f, 200.0f },
@@ -1996,11 +1999,13 @@ void RegisterEngineComponents() {
             {"Pitch Min", "Footsteps"}, {"Pitch Max", "Footsteps"}, {"Step Stride Scale", "Footsteps"}, {"Crouch Stride Scale", "Footsteps"},
             {"Min Step Speed", "Footsteps"}, {"Run Speed", "Footsteps"},
             {"Jump Volume", "Jump / Land"}, {"Land Volume", "Jump / Land"}, {"Land Min Speed", "Jump / Land"}, {"Land Heavy Speed", "Jump / Land"}, {"Land Full Speed", "Jump / Land"},
-            {"Cloth Loop Volume", "Cloth Loop"}, {"Cloth Loop Min Speed", "Cloth Loop"},
+            
             {"NPC Step Volume", "NPC Footsteps"}, {"NPC Step Min Distance", "NPC Footsteps"}, {"NPC Step Max Distance", "NPC Footsteps"}};
-        for (ReflectField& f : m.Fields)
+        for (ReflectField& f : m.Fields) {
             for (const auto& [n, g] : groups)
                 if (std::strcmp(f.Name, n) == 0) f.Group = g;
+            if (MixOwnsDistanceField(f.Name)) f.EditorHidden = true; // the mix spec's distance models own it (manifest mix.distance)
+        }
         Register<FoleyAudioComponent>(std::move(m));
     }
     {
@@ -2097,6 +2102,7 @@ void RegisterEngineComponents() {
             { "Wet Outdoor Urban dB", T::Float, TARTARUS_REFLECT_FIELD(B, WetOutdoorUrbanDb), 0.1f, "The same among buildings.", -60.0f, 12.0f },
             { "Wet Indoor Small dB", T::Float, TARTARUS_REFLECT_FIELD(B, WetIndoorSmallDb), 0.1f, "The same in a small room.", -60.0f, 12.0f },
             { "Wet Indoor Large dB", T::Float, TARTARUS_REFLECT_FIELD(B, WetIndoorLargeDb), 0.1f, "The same in a hall / warehouse.", -60.0f, 12.0f },
+            { "Wet Trim dB", T::Float, TARTARUS_REFLECT_FIELD(B, WetTrimDb), 0.1f, "On every Wet level: they are calibrated on white noise, and real material (impacts, shots) comes back about 4 dB hotter from the recorded rooms. -4 makes the Wet levels what is heard.", -12.0f, 6.0f },
             { "Low Cut Hz", T::Float, TARTARUS_REFLECT_FIELD(B, LowCutHz), 1.0f, "High-pass on the reverb's input for a space with no Low Cut of its own (0 = off).", 0.0f, 1000.0f },
             { "Send Foley", T::Float, TARTARUS_REFLECT_FIELD(B, SendFoley), 0.01f, "Cloth, jumps, landings, ADS / equip / fire-mode gear. 1 = the space's calibrated wet level.", 0.0f, 2.0f },
             { "Send Footsteps", T::Float, TARTARUS_REFLECT_FIELD(B, SendFootsteps), 0.01f, "Player and soldier footfalls.", 0.0f, 2.0f },
@@ -2121,7 +2127,7 @@ void RegisterEngineComponents() {
         };
         const std::pair<const char*, const char*> groups[] = {
             {"Wet Outdoor Open dB", "Wet Level"}, {"Wet Outdoor Urban dB", "Wet Level"}, {"Wet Indoor Small dB", "Wet Level"}, {"Wet Indoor Large dB", "Wet Level"},
-            {"Low Cut Hz", "Wet Level"},
+            {"Wet Trim dB", "Wet Level"}, {"Low Cut Hz", "Wet Level"},
             {"Send Foley", "Sends"}, {"Send Footsteps", "Sends"}, {"Send Actions", "Sends"}, {"Send Impacts", "Sends"}, {"Send Casings", "Sends"},
             {"Send Voice", "Sends"}, {"Send Shot", "Sends"}, {"Send Tail", "Sends"},
             {"Occlusion Enabled", "Occlusion"}, {"Occlusion Cutoff", "Occlusion"}, {"Occlusion Interval", "Occlusion"}, {"Occlusion Rays Per Frame", "Occlusion"},
@@ -2133,6 +2139,47 @@ void RegisterEngineComponents() {
             if (std::strcmp(f.Name, "Send Voice") == 0) f.EditorHidden = true;
         }
         Register<ReverbBusComponent>(std::move(m));
+    }
+    {
+        ReflectComponent m;
+        m.Name = "Audio Mix"; m.Icon = ICON_FA_VOLUME_HIGH; m.Category = "Audio";
+        m.Tooltip = "The dynamic mix: what ducks under gunfire and rounds cracking past (the beds, your own foley, casings; soldiers' shots and steps,\n"
+                    "flybys and hit markers never duck), the aim-down-sights focus, air absorption with distance, and the master bus's trim and glue\n"
+                    "compressor (before the limiter). One per scene (the first counts); without one the defaults play. Window > Audio edits it live.";
+        using M = AudioMixComponent;
+        m.Fields = {
+            { "Duck Enabled", T::Bool, TARTARUS_REFLECT_FIELD(M, DuckEnabled), 0.0f, "A loud event at the listener ducks the groups under it." },
+            { "Duck Threshold dB", T::Float, TARTARUS_REFLECT_FIELD(M, DuckThresholdDb), 0.5f, "An event this loud at the listener (dB re your own shot) starts to duck.", -40.0f, 0.0f },
+            { "Duck Full dB", T::Float, TARTARUS_REFLECT_FIELD(M, DuckFullDb), 0.5f, "An event this loud ducks by the full depths.", -30.0f, 6.0f },
+            { "Duck Attack ms", T::Float, TARTARUS_REFLECT_FIELD(M, DuckAttackMs), 1.0f, "How fast the groups go down.", 1.0f, 200.0f },
+            { "Duck Hold", T::Float, TARTARUS_REFLECT_FIELD(M, DuckHold), 0.01f, "Seconds at depth after the last loud event.", 0.0f, 2.0f },
+            { "Duck Release", T::Float, TARTARUS_REFLECT_FIELD(M, DuckRelease), 0.01f, "Seconds back up from full depth.", 0.05f, 5.0f },
+            { "Duck Bed dB", T::Float, TARTARUS_REFLECT_FIELD(M, DuckBedDb), 0.5f, "Ambience beds.", 0.0f, 24.0f },
+            { "Duck Own Foley dB", T::Float, TARTARUS_REFLECT_FIELD(M, DuckOwnFoleyDb), 0.5f, "Your own steps, cloth, gear, reloads.", 0.0f, 24.0f },
+            { "Duck Debris dB", T::Float, TARTARUS_REFLECT_FIELD(M, DuckDebrisDb), 0.5f, "Shell casings.", 0.0f, 24.0f },
+            { "Duck World dB", T::Float, TARTARUS_REFLECT_FIELD(M, DuckWorldDb), 0.5f, "Bullet impacts, bodies falling.", 0.0f, 24.0f },
+            { "Focus Enabled", T::Bool, TARTARUS_REFLECT_FIELD(M, FocusEnabled), 0.0f, "Aiming down sights quietens the beds and your own foley so the world comes forward." },
+            { "Focus Bed dB", T::Float, TARTARUS_REFLECT_FIELD(M, FocusBedDb), 0.5f, "", 0.0f, 24.0f },
+            { "Focus Own Foley dB", T::Float, TARTARUS_REFLECT_FIELD(M, FocusOwnFoleyDb), 0.5f, "", 0.0f, 24.0f },
+            { "Focus Debris dB", T::Float, TARTARUS_REFLECT_FIELD(M, FocusDebrisDb), 0.5f, "", 0.0f, 24.0f },
+            { "Focus Time", T::Float, TARTARUS_REFLECT_FIELD(M, FocusTime), 0.01f, "Seconds in / out.", 0.01f, 2.0f },
+            { "Air Enabled", T::Bool, TARTARUS_REFLECT_FIELD(M, AirEnabled), 0.0f, "3D sounds lose their top end with distance (on top of occlusion)." },
+            { "Air Start Distance", T::Float, TARTARUS_REFLECT_FIELD(M, AirStartDistance), 0.5f, "Metres: open up to here.", 1.0f, 200.0f },
+            { "Air Exponent", T::Float, TARTARUS_REFLECT_FIELD(M, AirExponent), 0.01f, "Past the start the cutoff is 20 kHz x (start / distance)^exponent.", 0.1f, 2.0f },
+            { "Air Min Hz", T::Float, TARTARUS_REFLECT_FIELD(M, AirMinHz), 50.0f, "The cutoff never goes below this.", 500.0f, 20000.0f },
+            { "Glue Enabled", T::Bool, TARTARUS_REFLECT_FIELD(M, GlueEnabled), 0.0f, "A gentle bus compressor before the master limiter: a firefight holds together and the limiter barely works." },
+            { "Glue Threshold dB", T::Float, TARTARUS_REFLECT_FIELD(M, GlueThresholdDb), 0.5f, "dBFS (linked peak).", -40.0f, 0.0f },
+            { "Glue Ratio", T::Float, TARTARUS_REFLECT_FIELD(M, GlueRatio), 0.1f, "", 1.0f, 10.0f },
+            { "Glue Knee dB", T::Float, TARTARUS_REFLECT_FIELD(M, GlueKneeDb), 0.5f, "", 0.0f, 24.0f },
+            { "Glue Attack ms", T::Float, TARTARUS_REFLECT_FIELD(M, GlueAttackMs), 0.5f, "Slow enough to let a shot's transient through.", 0.1f, 200.0f },
+            { "Glue Release ms", T::Float, TARTARUS_REFLECT_FIELD(M, GlueReleaseMs), 5.0f, "", 10.0f, 2000.0f },
+            { "Master Trim dB", T::Float, TARTARUS_REFLECT_FIELD(M, MasterTrimDb), 0.1f, "The whole mix, before the glue and the limiter.", -24.0f, 12.0f },
+        };
+        for (ReflectField& f : m.Fields) {
+            const std::string n = f.Name;
+            f.Group = n.rfind("Duck", 0) == 0 ? "Ducking" : n.rfind("Focus", 0) == 0 ? "Focus" : n.rfind("Air", 0) == 0 ? "Air" : "Master";
+        }
+        Register<AudioMixComponent>(std::move(m));
     }
     {
         ReflectComponent m;
@@ -2178,9 +2225,11 @@ void RegisterEngineComponents() {
             {"Impact Max Voices", "Impacts"}, {"Impact Min Interval", "Impacts"}, {"Flesh Uses Recordings", "Impacts"}, {"Flesh Volume", "Impacts"},
             {"Flyby Enabled", "Flyby"}, {"Flyby Radius", "Flyby"}, {"Flyby Volume", "Flyby"}, {"Flyby Min Interval", "Flyby"},
             {"Flyby Min Distance", "Flyby"}, {"Flyby Max Distance", "Flyby"}, {"Flyby Far Gain", "Flyby"}};
-        for (ReflectField& f : m.Fields)
+        for (ReflectField& f : m.Fields) {
             for (const auto& [n, g] : groups)
                 if (std::strcmp(f.Name, n) == 0) f.Group = g;
+            if (MixOwnsDistanceField(f.Name)) f.EditorHidden = true; // the mix spec's distance models own it (manifest mix.distance)
+        }
         Register<ImpactAudioComponent>(std::move(m));
     }
     // ---- end lane S ----

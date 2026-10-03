@@ -25,13 +25,18 @@
 
 // The audio engine's own test (docs/AUDIO.md, "--audio-test"). Offline: the real engine (voices, buses, the convolution reverb, the
 // master limiter) rendered on demand at 48 kHz with no device, driven by the real WeaponAudio over a scene's Reverb Zones. Four parts:
-//  1. Levels: every manifest key played alone, dry (no reverb, no jitter), LUFS-M max against tools/audio/recipes/mix.json
-//     (reference + the key's level + its surface / space offset). 3D at its reference distance where the spec gives one.
+//  0. The tier ladder: the spec's levels and distance models, checked against the hierarchy's rules (nothing outranks the player's
+//     gun up close, soldiers' steps carry over the beds, ...). No audio.
+//  1. Levels: every manifest key played alone, dry (no reverb, no jitter, no ducking), LUFS-M max against tools/audio/recipes/mix.json
+//     (reference + the key's level + its surface / space offset). 3D at its distance model's reference distance, and close up (the cap).
 //  2. Wet / dry: in each zone, an impact 2 m in front; the reverb return's energy against the dry signal's, against the zone's
 //     calibrated level (Reverb Bus: Wet <class> dB + the zone's trim, x the impacts' send).
 //  3. Ambience: in each zone with a bed, the bed's LUFS-M max against the spec's ambience level for its class.
 //  4. Peak: a full-auto burst with impacts and a soldier's shots in the loudest zone; the master stays under the limiter's ceiling.
-// Exit 1 when a level is off by more than 2 dB, a wet / dry by more than 3 dB, the peak is over the ceiling, or a part could not run.
+//  5. Firefight: 20 s of a scripted fight with the whole dynamic mix on (ducking, air, glue): integrated loudness, how hard the glue
+//     and the limiter work, how deep the beds duck.
+// Exit 1 when a level is off by more than 2 dB, a wet / dry by more than 3 dB, the peak is over the ceiling, a rule of the ladder or
+// the firefight's bounds fails, or a part could not run.
 
 namespace {
 
@@ -126,7 +131,10 @@ bool SpecLevel(const json& spec, const std::string& key, float& level, std::stri
         refName = "impact";
         return true;
     }
-    if (p[0] == "flyby" && p.size() == 1) return Num(L, "flyby", level);
+    if (p[0] == "flyby" && p.size() == 1) {
+        refName = "flyby";
+        return Num(L, "flyby", level);
+    }
     if (p[0] == "body_fall" && p.size() == 1) {
         refName = "body_fall";
         return Num(L, "body_fall", level);
@@ -139,6 +147,20 @@ bool SpecLevel(const json& spec, const std::string& key, float& level, std::stri
         return L.contains("elements") && Num(L["elements"], p[1].c_str(), level);
     }
     return false;
+}
+
+// A distance model of the manifest's mix.distance (empty: none).
+DistanceModel ModelOf(const json& manifest, const std::string& name) {
+    DistanceModel m;
+    if (name.empty() || !manifest.contains("mix") || !manifest["mix"].contains("distance")) return m;
+    const json& d = manifest["mix"]["distance"];
+    if (!d.contains(name) || !d[name].is_object()) return m;
+    Num(d[name], "ref_m", m.RefM);
+    Num(d[name], "slope_db", m.SlopeDb);
+    Num(d[name], "near_db", m.NearDb);
+    Num(d[name], "max_m", m.MaxM);
+    Num(d[name], "offset_db", m.OffsetDb);
+    return m;
 }
 
 // The offline engine, stepped like the game: WeaponAudio's update, then one 10 ms block rendered, the taps drained.
@@ -273,7 +295,46 @@ int RunAudioTest(int argc, char** argv) {
     AudioEngine::SetReverbEnabled(false, 0);
     AudioEngine::SetReverbEnabled(false, 1);
     AudioEngine::SetBusVolume(AudioEngine::Bus::Ambient, 0.0f);
+    const AudioMixComponent sceneMix = wa.Mix();
+    wa.Mix().DuckEnabled = wa.Mix().FocusEnabled = false; // static levels: nothing ducks (part 5 runs the dynamic mix)
+    wa.ApplyMix();
     rig.Run(1.2f); // (any bed of the zone fades in silently)
+
+    // --- 0. the tier ladder ----------------------------------------------------------------------------------------------
+    if (haveSpec && haveManifest) {
+        const json& L = spec["levels"];
+        float shotNpc = 0.0f, walk = 0.0f, bedMax = -99.0f;
+        Num(L, "npc_shot", shotNpc);
+        if (L.contains("step")) Num(L["step"], "walk", walk);
+        if (L.contains("ambience"))
+            for (auto it = L["ambience"].begin(); it != L["ambience"].end(); ++it)
+                if (it.value().is_number()) bedMax = std::max(bedMax, it.value().get<float>());
+        Out("\n== tier ladder (spec levels and distance models, dB re the player's shot)\n");
+        Out("%-12s %8s %8s %8s %8s %8s\n", "category", "level", "@ref m", "cap", "cap <m", "@20 m");
+        bool capsOk = true;
+        for (const char* name : {"npc_shot", "flyby", "impact", "body_fall", "npc_step", "npc_gear", "casing"}) {
+            const DistanceModel m = ModelOf(manifest, name);
+            if (!m.Valid()) {
+                Out("%-12s no distance model %s\n", name, Verdict(Check(false)));
+                continue;
+            }
+            // the category's level at its reference distance: the spec's (steps / gear: the player's level + the offset)
+            float level = 0.0f;
+            if (std::string(name) == "npc_step") level = walk + m.OffsetDb;
+            else if (std::string(name) == "npc_gear") { Num(L["elements"], "mag_in", level); level += m.OffsetDb; }
+            else if (std::string(name) == "npc_shot") level = shotNpc;
+            else Num(L, name, level);
+            const float cap = level + m.NearDb, far = level + m.GainDbAt(20.0f) - m.OffsetDb;
+            capsOk = capsOk && cap <= -3.0f + 1e-3f;
+            Out("%-12s %8.1f %8.0f %8.1f %8.1f %8.1f\n", name, level, m.RefM, cap, m.MinDistance(), far);
+        }
+        Out("nothing but the player's gun reaches -3 dB, close up %s\n", Verdict(Check(capsOk)));
+        const DistanceModel st = ModelOf(manifest, "npc_step");
+        const float npcWalk10 = walk + st.GainDbAt(10.0f);
+        Out("a soldier's walk at 10 m (%.1f) is 4 dB over the loudest bed (%.1f) %s\n", npcWalk10, bedMax, Verdict(Check(npcWalk10 >= bedMax + 4.0f)));
+        Out("the player's walk (%.1f) is 4 dB over the loudest bed %s\n", walk, Verdict(Check(walk >= bedMax + 4.0f)));
+        Out("a soldier's walk at 5 m (%.1f) is over the player's own %s\n", walk + st.GainDbAt(5.0f), Verdict(Check(walk + st.GainDbAt(5.0f) > walk)));
+    }
     if (haveRef && haveSpec) {
         Out("\n== levels (LUFS-M max, dB re the player's shot; tolerance %.1f dB)\n", kLevelTolDb);
         Out("%-36s %8s %8s %7s\n", "key", "played", "spec", "diff");
@@ -283,27 +344,31 @@ int RunAudioTest(int argc, char** argv) {
             worst = std::max(worst, std::fabs(diff));
             Out("%-36s %8.1f %8.1f %+7.1f %s\n", what.c_str(), rel, specDb, diff, Verdict(Check(std::fabs(diff) <= kLevelTolDb)));
         };
-        // The shots: the player's (2D, x player gain) is the 0 dB reference; a soldier's at the npc_shot distance.
+        // The shots: the player's (2D, x player gain) is the 0 dB reference; a soldier's at the npc_shot model's reference distance,
+        // and close up (its cap: the reference level + near_db).
+        const DistanceModel npcShot = ModelOf(manifest, "npc_shot");
+        float npcDb = 0.0f;
+        const bool haveNpc = Num(spec["levels"], "npc_shot", npcDb) && npcShot.Valid();
         for (const char* gun : {"ak", "870"}) {
             WeaponAudioProfile* p = wa.Profile(gun);
             if (!p) continue;
             QuietShotExtras(*p, true);
-            for (int pass = 0; pass < 2; ++pass) {
-                const bool npc = pass == 1;
-                float npcDb = 0.0f, dist = 0.0f;
-                if (npc && !(Num(spec["levels"], "npc_shot", npcDb) && manifest["mix"].contains("distance_refs_m") &&
-                             Num(manifest["mix"]["distance_refs_m"], "npc_shot", dist)))
-                    continue;
+            for (int pass = 0; pass < 3; ++pass) {
+                if (pass > 0 && !haveNpc) break;
+                const float dist = pass == 1 ? npcShot.RefM : pass == 2 ? std::max(1.0f, 0.5f * npcShot.MinDistance()) : 0.0f;
                 float sum = 0.0f;
                 const int shots = 3;
                 for (int s = 0; s < shots; ++s) {
                     rig.Clear();
-                    if (npc) wa.Shot(gun, rig.Pos + rig.Fwd * dist, false, 7u);
+                    if (pass > 0) wa.Shot(gun, rig.Pos + rig.Fwd * dist, false, 7u);
                     else wa.Shot(gun, rig.Pos, true);
                     rig.Run(1.6f);
                     sum += LufsMax(rig.Pre);
                 }
-                report(std::string("shot ") + gun + (npc ? " (soldier, " + std::to_string((int)dist) + " m)" : " (player)"), sum / (float)shots, npc ? npcDb : 0.0f);
+                char what[64];
+                if (pass == 0) std::snprintf(what, sizeof(what), "shot %s (player)", gun);
+                else std::snprintf(what, sizeof(what), "shot %s (soldier, %.0f m%s)", gun, dist, pass == 2 ? ", cap" : "");
+                report(what, sum / (float)shots, pass == 0 ? 0.0f : pass == 1 ? npcDb : npcDb + npcShot.NearDb);
             }
             QuietShotExtras(*p, false);
         }
@@ -329,8 +394,8 @@ int RunAudioTest(int argc, char** argv) {
             }
             set->VolumeJitterDb = 0.0f;
             set->PitchMin = set->PitchMax = 1.0f;
-            float dist = 0.0f;
-            if (!refName.empty() && manifest["mix"].contains("distance_refs_m")) Num(manifest["mix"]["distance_refs_m"], refName.c_str(), dist);
+            const DistanceModel model = ModelOf(manifest, refName);
+            const float dist = model.Valid() ? model.RefM : 0.0f;
             const int plays = std::min<int>(3, (int)set->Files.size());
             float sum = 0.0f;
             int n = 0;
@@ -353,6 +418,27 @@ int RunAudioTest(int argc, char** argv) {
                 continue;
             }
             report(dist > 0.0f ? key + " @" + std::to_string((int)dist) + "m" : key, sum / (float)n, level);
+        }
+        // A soldier's step and reload: the player's files, in the world at the model's reference distance (level + offset).
+        for (const auto& [key, model] : {std::pair<const char*, const char*>{"snd.foley.step_concrete.walk", "npc_step"}, {"snd.ak.mag_in", "npc_gear"}}) {
+            float level = 0.0f;
+            std::string ignored;
+            const DistanceModel m = ModelOf(manifest, model);
+            SoundSet* set = wa.KeySet(key);
+            if (!m.Valid() || !SpecLevel(spec, key, level, ignored) || !set || set->Files.empty()) continue;
+            set->VolumeJitterDb = 0.0f;
+            set->PitchMin = set->PitchMax = 1.0f;
+            float sum = 0.0f;
+            int n = 0;
+            for (int k = 0; k < std::min<int>(3, (int)set->Files.size()); ++k) {
+                rig.Clear();
+                const SoundPlayer::Played pl = wa.PlayKeyed(*set, rig.Pos + rig.Fwd * m.RefM, false, 1.0f);
+                if (!pl.Started) continue;
+                rig.RunUntilDone(pl.Handle, 6.0f);
+                sum += LufsMax(rig.Pre);
+                ++n;
+            }
+            if (n > 0) report(std::string(key) + " (soldier) @" + std::to_string((int)m.RefM) + "m", sum / (float)n, level + m.OffsetDb);
         }
         Out("levels: worst %.1f dB off; %d key(s) not levelled here (shot layers, impulse responses, ambience below)\n", worst, skipped);
     }
@@ -385,7 +471,7 @@ int RunAudioTest(int argc, char** argv) {
             }
             double calib = 0.0;
             for (int l = 0; l < spec0.Count; ++l) calib += spec0.Layers[l].Weight * std::pow(10.0, spec0.Layers[l].WetDb / 10.0);
-            const float calibDb = (float)(10.0 * std::log10(std::max(calib, 1e-12))) + sendDb;
+            const float calibDb = (float)(10.0 * std::log10(std::max(calib, 1e-12))) + sendDb - wa.Bus().WetTrimDb; // (the trim is the white-noise -> real material correction)
             double wet = 0.0, dry = 0.0, wetRaw = 0.0, dryRaw = 0.0; // K-weighted (as heard) and plain energies
             for (int k = 0; k < 2; ++k) {
                 rig.Clear();
@@ -464,6 +550,78 @@ int RunAudioTest(int argc, char** argv) {
         if (rs.Callbacks > 0)
             Out("reverb: %llu blocks, mean %.1f us, max %.1f us per 10 ms block (offline, tail inline)\n", (unsigned long long)rs.Callbacks,
                 rs.TotalMicros / (double)rs.Callbacks, rs.MaxMicros);
+    }
+
+    // --- 5. firefight -------------------------------------------------------------------------------------------------
+    {
+        wa.Mix() = sceneMix; // the whole dynamic mix, as the scene has it
+        wa.ApplyMix();
+        wa.Bus().OcclusionEnabled = true;
+        int arena = -1; // an outdoor zone with a bed if there is one (where fights are), else the hall
+        for (size_t i = 0; i < zones.size(); ++i)
+            if (arena < 0 && !zones[i].Ambience.empty() && (zones[i].Class == SpaceClass::OutdoorUrban || zones[i].Class == SpaceClass::OutdoorOpen)) arena = (int)i;
+        if (arena < 0) arena = hall;
+        glm::vec3 p(0.0f, 1.6f, 0.0f), f(0.0f, 0.0f, -1.0f);
+        float room = 20.0f;
+        if (arena >= 0) spotIn(zones[(size_t)arena], p, f, room);
+        rig.Place(p, f);
+        const glm::vec3 side = glm::normalize(glm::cross(rig.Fwd, glm::vec3(0.0f, 1.0f, 0.0f)));
+        rig.Run(2.0f); // the bed fades in
+        rig.Clear();
+        AudioEngine::TakeLimiterGainReductionDb();
+        AudioEngine::TakeGlueGainReductionDb();
+        SoundSet* impact = wa.KeySet("snd.impact.concrete");
+        SoundSet* npcStep = wa.KeySet("snd.foley.step_concrete.walk");
+        SoundSet* ownStep = wa.KeySet("snd.foley.step_concrete.run");
+        SoundSet* casing = wa.KeySet("snd.casing.rifle.concrete");
+        SoundSet* flyby = wa.KeySet("snd.flyby");
+        auto has = [](SoundSet* s) { return s && !s->Files.empty(); };
+        const float dt = (float)kBlock / (float)kRate;
+        const int blocks = (int)(20.0f / dt);
+        int limBlocks = 0, glueBlocks = 0;
+        float limMax = 0.0f, glueMax = 0.0f, glueSum = 0.0f, duckMax = 0.0f;
+        for (int b = 0; b < blocks; ++b) {
+            const float t = (float)b * dt;
+            const int tick = b; // 10 ms
+            // the player: a 5-round burst (600 rpm) every 2.5 s, impacts on the far wall, casings at the feet; running steps every 0.33 s
+            const float inCycle = std::fmod(t, 2.5f);
+            if (inCycle < 0.5f && tick % 10 == 0) {
+                wa.Shot("ak", rig.Pos, true);
+                if (has(impact)) wa.PlayKeyed(*impact, rig.Pos + rig.Fwd * std::min(15.0f, 0.8f * room), false, 1.0f);
+                if (has(casing)) wa.PlayKeyed(*casing, rig.Pos + side * 0.8f - glm::vec3(0.0f, 1.5f, 0.0f), false, 1.0f);
+            }
+            if (has(ownStep) && tick % 33 == 0 && inCycle > 0.6f) wa.PlayKeyed(*ownStep, rig.Pos, true, 1.0f);
+            // two soldiers answering: 3-round bursts from 20 m and 35 m, rounds cracking past
+            if (std::fmod(t + 1.2f, 2.5f) < 0.3f && tick % 10 == 0) {
+                wa.Shot("ak", rig.Pos + rig.Fwd * 20.0f + side * 6.0f, false, 11u);
+                if (has(flyby) && tick % 20 == 0) wa.PlayKeyed(*flyby, rig.Pos + side * 1.5f, false, 1.0f);
+            }
+            if (std::fmod(t + 0.3f, 5.0f) < 0.3f && tick % 10 == 0) wa.Shot("ak", rig.Pos + rig.Fwd * 35.0f - side * 10.0f, false, 12u);
+            // a third walking up the flank at 8 m
+            if (has(npcStep) && tick % 50 == 0) wa.PlayKeyed(*npcStep, rig.Pos + side * 8.0f, false, 1.0f);
+            rig.Step();
+            const float lim = AudioEngine::TakeLimiterGainReductionDb(), glue = AudioEngine::TakeGlueGainReductionDb();
+            limMax = std::max(limMax, lim);
+            glueMax = std::max(glueMax, glue);
+            glueSum += glue;
+            if (lim > 1.0f) ++limBlocks;
+            if (glue > 0.5f) ++glueBlocks;
+            duckMax = std::max(duckMax, wa.Ducker().Amount());
+        }
+        rig.Run(1.0f);
+        const float integrated = LoudnessMeter::Integrated(rig.Master, kRate);
+        const float lra = LoudnessMeter::ShortTermRange(rig.Master, kRate);
+        const LimiterSettings lim = AudioEngine::GetMasterLimiter();
+        const float master = LoudnessMeter::PeakDb(rig.Master, 0, rig.Master.size() / 2);
+        Out("\n== firefight (20 s in the %s: your bursts, two soldiers answering, flybys, a third walking the flank; ducking / air / glue on)\n",
+            arena >= 0 ? SpaceClassName(zones[(size_t)arena].Class) : "scene");
+        Out("integrated %.1f LUFS, short-term range %.1f LU, peak %.2f dBFS\n", integrated, lra, master);
+        Out("glue: deepest %.1f dB, mean %.1f dB, working (> 0.5 dB) %.0f%% of the time\n", glueMax, glueSum / (float)blocks, 100.0f * (float)glueBlocks / (float)blocks);
+        Out("limiter: deepest %.1f dB, working (> 1 dB) %.1f%% of the time %s\n", limMax, 100.0f * (float)limBlocks / (float)blocks,
+            Verdict(Check((float)limBlocks <= 0.05f * (float)blocks)));
+        Out("the beds ducked to %.1f dB under the fire %s\n", -wa.Mix().DuckBedDb * duckMax, Verdict(Check(!wa.Mix().DuckEnabled || duckMax > 0.9f)));
+        Out("peak under the ceiling %s; integrated loudness in [-22, -16] LUFS (a sustained fight) %s\n", Verdict(Check(!lim.Enabled || master <= lim.CeilingDb + 0.05f)),
+            Verdict(Check(integrated >= -22.0f && integrated <= -16.0f)));
     }
 
     wa.Stop();

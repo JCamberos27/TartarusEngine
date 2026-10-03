@@ -1435,7 +1435,7 @@ struct WeaponAudioComponent {
     float PlayerGain = 0.75f;
     float ShotPitchMin = 0.96f;
     float ShotPitchMax = 1.04f;
-    float VolumeJitterDb = 1.0f;       // +- dB per layer per shot
+    float VolumeJitterDb = 0.5f;       // +- dB per layer per shot (small: the layers are balanced, a big swing changes the tone)
     // Shot layers by distance from the listener (3D shots: soldiers' guns).
     float CloseFullDistance = 18.0f;   // the crack is full within this ...
     float CloseZeroDistance = 43.0f;   // ... and gone by this
@@ -1457,10 +1457,6 @@ struct WeaponAudioComponent {
     int TailEvery = 2;                 // full auto: the tail layer plays on every Nth shot of a burst (1 = every shot)
     int FarEvery = 3;                  // ... and the distant report on every Nth
     float BurstGap = 0.4f;             // seconds without a shot that end a burst (the next shot plays every layer)
-    bool LimiterEnabled = true;        // weapon bus peak limiter (gain ducking, shared by all guns: the last component read wins)
-    float LimiterCeilingDb = -1.0f;    // dBFS the summed peaks of live transients are kept under
-    float LimiterWindow = 0.15f;       // seconds a transient counts toward the sum
-    float LimiterMinGain = 0.1f;       // the most a voice is ducked (linear)
     std::string DataFile;              // json of SoundSet overrides by element (empty = none)
     // Environment tails: the shot's tail follows the space the shooter is in (a Reverb Zone volume first, else a few raycasts
     // around the shooter; see Game/Audio/EnvironmentProbe.h). A class with no recorded files plays the generic fire_tail.
@@ -1489,7 +1485,7 @@ struct FoleyAudioComponent {
     float WalkVolume = 1.0f;           // (the static level of every sound is its manifest mix_db; these only scale)
     float RunVolume = 1.0f;
     float CrouchVolume = 0.55f;        // crouch plays the walk takes, quieter
-    float VolumeJitterDb = 1.5f;
+    float VolumeJitterDb = 1.0f;
     float PitchMin = 0.94f;
     float PitchMax = 1.06f;
     float StepStrideScale = 1.0f;      // footfall spacing against the view bob's stride (2 per stride): above 1 = slower
@@ -1501,8 +1497,6 @@ struct FoleyAudioComponent {
     float LandMinSpeed = 2.5f;         // m/s of fall below which landing is silent
     float LandFullSpeed = 9.0f;        // m/s at which it is at LandVolume (a hard landing)
     float LandHeavySpeed = 6.0f;       // m/s of fall from which the heavy landing plays (light below)
-    float ClothLoopVolume = 1.0f;      // sprint cloth / gear loop
-    float ClothLoopMinSpeed = 3.0f;    // m/s: silent below, full at RunSpeed
     float NpcStepVolume = 1.0f;
     float NpcStepMaxDistance = 28.0f;
     float NpcStepMinDistance = 2.5f;
@@ -1610,6 +1604,10 @@ struct ReverbBusComponent {
     float WetOutdoorUrbanDb = -12.0f;
     float WetIndoorSmallDb = -6.0f;
     float WetIndoorLargeDb = -4.0f;
+    // The Wet levels are calibrated on white noise (the impulse responses are energy-normalised); real material (K-weighted, the
+    // impacts and shots a room is heard with) comes back about 4 dB hotter, since the recorded rooms ring longest where that
+    // material has its energy. This trim makes the Wet levels what is heard.
+    float WetTrimDb = -4.0f;
     float LowCutHz = 80.0f;            // the reverb input's high-pass for a space with no Low Cut of its own
     // Sends by category (linear, into the reverb after the voice's own fader and spatialisation; 1 = the space's calibrated level).
     float SendFoley = 1.0f;            // cloth, jumps, landings, ADS / equip / fire-mode gear
@@ -1635,6 +1633,38 @@ struct ReverbBusComponent {
     float MasterCeilingDb = -1.0f;     // dBFS
     float MasterLookaheadMs = 1.5f;
     float MasterReleaseMs = 80.0f;
+};
+// The dynamic mix (Game/Audio/AudioMix): ducking under loud events, the aim-down-sights focus, air absorption with distance, the
+// master bus's glue compressor and trim. One per scene (the first counts); a scene without one plays these defaults. The Audio
+// panel (Window > Audio) edits the live values and can write them back here.
+struct AudioMixComponent {
+    bool DuckEnabled = true;
+    float DuckThresholdDb = -20.0f;    // an event this loud at the listener (dB re the player's shot) starts to duck ...
+    float DuckFullDb = -6.0f;          // ... and this loud ducks by the full depths
+    float DuckAttackMs = 15.0f;
+    float DuckHold = 0.15f;            // seconds at depth after the last loud event
+    float DuckRelease = 0.8f;          // seconds back up from full depth
+    float DuckBedDb = 6.0f;            // depths by group (dB): the ambience beds ...
+    float DuckOwnFoleyDb = 3.0f;       // ... the player's own steps, cloth, gear ...
+    float DuckDebrisDb = 3.0f;         // ... shell casings ...
+    float DuckWorldDb = 0.0f;          // ... impacts, bodies (soldiers' shots / steps, flybys and hit markers are never ducked)
+    bool FocusEnabled = true;          // aiming down sights brings the world forward
+    float FocusBedDb = 4.0f;
+    float FocusOwnFoleyDb = 3.0f;
+    float FocusDebrisDb = 2.0f;
+    float FocusTime = 0.25f;           // seconds in / out
+    bool AirEnabled = true;            // 3D voices lose their top end with distance
+    float AirStartDistance = 15.0f;    // metres: open up to here ...
+    float AirExponent = 0.6f;          // ... then cutoff = 20 kHz x (start / d)^exponent
+    float AirMinHz = 4000.0f;
+    bool GlueEnabled = true;           // a gentle bus compressor before the limiter: holds a firefight together, the limiter barely works
+    float GlueThresholdDb = -15.0f;    // dBFS (peak detector; after the trim)
+    float GlueRatio = 2.0f;
+    float GlueKneeDb = 6.0f;
+    float GlueAttackMs = 15.0f;        // lets a shot's transient through, then holds the body
+    float GlueReleaseMs = 200.0f;
+    float MasterTrimDb = -3.0f;        // the whole mix, before the glue and the limiter: a sustained firefight integrates near -19 LUFS
+                                       // (AAA practice: fights -18..-20, a whole session about -24), the limiter all but idle
 };
 // Bullet impacts, shell casings and rounds passing the listener (Game/Audio/ImpactAudio). One per scene (the first counts).
 struct ImpactAudioComponent {

@@ -32,7 +32,7 @@ struct FoleyPlayerInput {
 };
 
 // Player and soldier foley (docs/AUDIO.md). Surfaces are foley categories (Audio/Foley/<surface>/<element>_<n>.wav,
-// keys snd.foley.<surface>.<element>): walk, run, crouch, jump, land for each, and snd.foley.cloth.sprint_loop.
+// keys snd.foley.<surface>.<element>): walk, run, crouch, jump, land for each.
 class FoleyAudio {
 public:
     static FoleyAudio& Get();
@@ -56,7 +56,6 @@ public:
     // Metres between footfalls: half the (walk .. sprint) stride, scaled.
     static float StepDistance(const FoleyAudioComponent& t, const FoleyPlayerInput& in);
     static float LandGain(const FoleyAudioComponent& t, float fallSpeed); // 0 below LandMinSpeed
-    static float ClothLoopGain(const FoleyAudioComponent& t, float planarSpeed, bool grounded);
     // The ground under `feet`: a downward ray's entity -> its physics material, tag and name -> the surface table.
     std::string SurfaceAt(World& world, const glm::vec3& feet) const;
     // What the player's last frame emitted, for tests.
@@ -70,6 +69,5 @@ private:
     bool m_PrevGrounded = true;
     float m_PrevVy = 0.0f;
     int m_Steps = 0;
-    AudioEngine::SoundHandle m_Loop = AudioEngine::InvalidHandle;
     void Play(const std::string& surface, const std::string& element, float gain, bool at2D, const glm::vec3& pos);
 };

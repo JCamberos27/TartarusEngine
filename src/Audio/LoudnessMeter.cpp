@@ -136,3 +136,66 @@ float LoudnessMeter::PeakDb(const std::vector<float>& stereo, size_t from, size_
     for (size_t i = from; i < to; ++i) p = std::max({p, std::fabs(stereo[2 * i]), std::fabs(stereo[2 * i + 1])});
     return ToDb(p);
 }
+
+std::vector<double> LoudnessMeter::BlockPowers(const std::vector<float>& stereo, int sampleRate) {
+    Biquad shelf[2], hp[2];
+    for (int c = 0; c < 2; ++c) Design(sampleRate, shelf[c], hp[c]);
+    const size_t block = (size_t)(sampleRate / 10), frames = stereo.size() / 2;
+    std::vector<double> out;
+    for (size_t pos = 0; pos + block <= frames; pos += block) {
+        double sum = 0.0;
+        for (size_t i = pos; i < pos + block; ++i)
+            for (int c = 0; c < 2; ++c) {
+                const double y = hp[c].Run(shelf[c].Run((double)stereo[2 * i + (size_t)c]));
+                sum += y * y;
+            }
+        out.push_back(sum / (double)block);
+    }
+    return out;
+}
+
+namespace {
+// Windows of `n` consecutive 100 ms blocks every `hop` blocks: their mean powers.
+std::vector<double> Windows(const std::vector<double>& b, size_t n, size_t hop) {
+    std::vector<double> w;
+    for (size_t i = 0; i + n <= b.size(); i += hop) {
+        double s = 0.0;
+        for (size_t k = i; k < i + n; ++k) s += b[k];
+        w.push_back(s / (double)n);
+    }
+    return w;
+}
+double PowerOfLufs(double lufs) { return std::pow(10.0, (lufs + 0.691) / 10.0); }
+} // namespace
+
+float LoudnessMeter::Integrated(const std::vector<float>& stereo, int sampleRate) {
+    const std::vector<double> w = Windows(BlockPowers(stereo, sampleRate), 4, 1);
+    auto gatedMean = [&](double gate) {
+        double s = 0.0;
+        size_t n = 0;
+        for (double p : w)
+            if (p > gate) { s += p; ++n; }
+        return n ? s / (double)n : 0.0;
+    };
+    const double abs = gatedMean(PowerOfLufs(-70.0));
+    if (abs <= 0.0) return -120.0f;
+    const double rel = gatedMean(abs * std::pow(10.0, -1.0)); // -10 LU
+    return rel > 0.0 ? ToLufs(rel) : -120.0f;
+}
+
+float LoudnessMeter::ShortTermRange(const std::vector<float>& stereo, int sampleRate) {
+    const std::vector<double> w = Windows(BlockPowers(stereo, sampleRate), 30, 10);
+    std::vector<double> kept;
+    double s = 0.0;
+    for (double p : w)
+        if (p > PowerOfLufs(-70.0)) { kept.push_back(p); s += p; }
+    if (kept.empty()) return 0.0f;
+    const double gate = s / (double)kept.size() * std::pow(10.0, -2.0); // -20 LU
+    std::vector<float> l;
+    for (double p : kept)
+        if (p > gate) l.push_back(ToLufs(p));
+    if (l.size() < 2) return 0.0f;
+    std::sort(l.begin(), l.end());
+    auto pct = [&](float q) { return l[(size_t)std::lround(q * (float)(l.size() - 1))]; };
+    return pct(0.95f) - pct(0.10f);
+}

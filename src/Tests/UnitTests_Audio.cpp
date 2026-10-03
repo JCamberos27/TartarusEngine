@@ -11,6 +11,7 @@
 #include "../Game/Audio/ReverbZones.h"
 #include "../Game/Audio/WeaponAudio.h"
 #include "../Game/ComponentRegistry.h"
+#include "../Game/Components.h"
 #include "World.h"
 #include "AssetLibrary.h"
 #include "SceneSerializer.h"
@@ -71,6 +72,8 @@ struct FakeBackend : SoundBackend {
     void SetVolume(AudioEngine::SoundHandle h, float v) override {
         if (h >= 1 && h <= Voices.size()) Voices[h - 1].Volume = v;
     }
+    std::vector<std::pair<AudioEngine::SoundHandle, float>> Ducks; // every SetDuck
+    void SetDuck(AudioEngine::SoundHandle h, float gain, float) override { Ducks.push_back({h, gain}); }
     bool IsPlaying(AudioEngine::SoundHandle h) override { return h >= 1 && h <= Voices.size() && Voices[h - 1].Playing; }
     void Age(float dt) {
         for (V& v : Voices)
@@ -188,9 +191,6 @@ void TestSoundSetJitterPitchAndRequest() {
     FakeBackend be;
     SoundPlayer player(&be);
     player.Seed(99u);
-    SoundPlayer::Limiter off;
-    off.Enabled = false;
-    player.SetLimiter(off); // (the jitter is what is measured here)
     SoundSet s = MakeSet("t.jit", {"a.wav"}, 0);
     s.Volume = 0.5f;
     s.VolumeJitterDb = 3.0f;
@@ -277,9 +277,6 @@ void TestDistanceBlendWeights() {
     wa.Profile("ak")->Close.Set.Files = {"test/fire_close.wav"};
     wa.Profile("ak")->Far.Set.Files = {"test/fire_far.wav"};
     wa.SetListener(glm::vec3(0.0f));
-    SoundPlayer::Limiter off;
-    off.Enabled = false;
-    wa.Player().SetLimiter(off);
     auto volumeOf = [&](const char* file) {
         float v = -1.0f;
         for (const auto& x : be.Voices)
@@ -334,8 +331,9 @@ void TestAutofireVoiceCap() {
     CHECK(peakTail == p->Tail.Set.MaxVoices); // ... and is reached: the test really overlapped them
     CHECK(peakAudible <= p->Tail.Set.MaxVoices + 4); // stolen ones are fading out, a few at most
     CHECK(peakClose <= p->Close.Set.MaxVoices);
-    // Ducking: three tails at full gain would be 3 x the player gain; they sum to well under that.
-    CHECK(peakTailGain < 0.75f * 3.0f * 0.85f);
+    // Ducking: three tails at full gain would be 3 x the player gain; the tail ducking keeps them under that (with the stolen ones
+    // still fading out).
+    CHECK(peakTailGain < 0.75f * 3.0f * 0.9f);
     // Every shot played its short layers: close, mech and sub, none dropped by the cap (steal, not refuse).
     CHECK(be.Started("mech_1.wav") == 90 && be.Started("sub_1.wav") == 90);
     // A minimum tail interval spaces them: 10 shots in 0.5 s with 0.25 s between tails = 2-3 tails.
@@ -559,10 +557,6 @@ void TestFoleyRules() {
     CHECK(FoleyAudio::LandGain(t, 1.0f) == 0.0f && FoleyAudio::LandGain(t, t.LandMinSpeed - 0.01f) == 0.0f);
     const float soft = FoleyAudio::LandGain(t, 4.0f), hard = FoleyAudio::LandGain(t, 8.0f), huge = FoleyAudio::LandGain(t, 30.0f);
     CHECK(soft > 0.0f && soft < hard && hard < huge + 1e-6f && std::fabs(huge - t.LandVolume) < 1e-5f);
-    // The cloth loop rides the speed: silent below its minimum, full at the run speed, none in the air.
-    CHECK(FoleyAudio::ClothLoopGain(t, 1.0f, true) == 0.0f && FoleyAudio::ClothLoopGain(t, 6.0f, false) == 0.0f);
-    const float mid = FoleyAudio::ClothLoopGain(t, 0.5f * (t.ClothLoopMinSpeed + t.RunSpeed), true);
-    CHECK(std::fabs(mid - 0.5f * t.ClothLoopVolume) < 1e-5f && std::fabs(FoleyAudio::ClothLoopGain(t, 10.0f, true) - t.ClothLoopVolume) < 1e-5f);
     // Stride: half the (walk .. sprint) stride, scaled; crouching shortens it.
     FoleyPlayerInput in;
     in.WalkStride = 2.0f;
@@ -651,60 +645,28 @@ void TestFullAutoDecimationAndHeadroom() {
     }
     CHECK(count(p->Tail) == 6);
 
-    // Headroom: ten shots of three layers peaking at -4 dBTP each, overlapping inside the limiter window.
-    auto peakOfBurst = [&](bool limiter) {
+    // No ducking: every layer of every shot in a burst plays at its contract level, whatever is still ringing (peaks are the
+    // master limiter's, TestMasterLimiterNeverExceedsCeiling).
+    {
         FakeBackend fb;
         wa.StartForTest("", &fb);
-        SoundPlayer::Limiter lim;
-        lim.Enabled = limiter;
-        lim.MinGain = 0.02f; // (the ceiling, not the audibility floor, is measured)
-        wa.Player().SetLimiter(lim);
         WeaponAudioProfile* q = wa.Profile("ak");
         q->PlayerGain = 1.0f;
+        q->ShotPitchMin = q->ShotPitchMax = 1.0f;
         for (WeaponAudioProfile::Layer* l : {&q->Close, &q->Mech, &q->Sub}) {
             l->Set.Files = {"x.wav"};
-            l->Set.FilePeakDb = {-4.0f};
+            l->Set.FilePeakDb = {-1.0f};
             l->Set.VolumeJitterDb = 0.0f;
         }
         q->Tail.Set.Files.clear();
         q->Far.Set.Files.clear();
-        std::vector<std::pair<double, float>> starts; // time, peak amplitude
-        const float dt2 = 60.0f / 800.0f;
-        double now = 0.0;
-        float worst = 0.0f;
         for (int i = 0; i < 10; ++i) {
-            const size_t before = fb.Voices.size();
             wa.Shot("ak", glm::vec3(0.0f), true);
-            for (size_t v = before; v < fb.Voices.size(); ++v) starts.push_back({now, fb.Voices[v].Volume * std::pow(10.0f, -4.0f / 20.0f)});
-            // The summed peaks of every transient still inside the window.
-            float sum = 0.0f;
-            for (const auto& [t, a] : starts)
-                if (now - t < lim.Window) sum += a * (1.0f - (float)(now - t) / lim.Window);
-            worst = std::max(worst, sum);
-            wa.Update(dt2);
-            now += dt2;
+            wa.Update(60.0f / 800.0f);
         }
+        CHECK(fb.Voices.size() == 30);
+        for (const auto& v : fb.Voices) CHECK(std::fabs(v.Voice.Volume - fb.Voices[0].Voice.Volume) < 1e-5f);
         wa.Stop(); // (before `fb` goes: the player still holds its backend)
-        return worst;
-    };
-    const float unlimited = peakOfBurst(false), limited = peakOfBurst(true);
-    CHECK(unlimited > 1.5f); // without it the burst sums well past 0 dBFS
-    CHECK(limited < 1.0f);   // with it, under full scale ...
-    CHECK(limited > 0.3f);   // ... and not silenced
-    // The ceiling is a setting: lower it and the burst stays lower.
-    {
-        FakeBackend fb;
-        SoundPlayer pl(&fb);
-        SoundPlayer::Limiter lim;
-        lim.CeilingDb = -12.0f;
-        lim.MinGain = 0.0f;
-        pl.SetLimiter(lim);
-        SoundSet s = MakeSet("t.lim", {"a.wav"}, 0);
-        s.FilePeakDb = {0.0f};
-        pl.Play(s, {});
-        pl.Play(s, {});
-        pl.Play(s, {});
-        CHECK(pl.LimiterLoad() < std::pow(10.0f, -12.0f / 20.0f) * 1.3f);
     }
     wa.Stop();
 }
@@ -1202,7 +1164,7 @@ void TestReverbSendRoutingByCategory() {
     CHECK(wa.SendFor("snd.ak.fire_close") == b.SendShot && wa.SendFor("snd.870.fire_mech") == b.SendShot && wa.SendFor("snd.ak.fire_sub") == b.SendShot);
     CHECK(wa.SendFor("snd.ak.mag_out") == b.SendActions && wa.SendFor("snd.870.pump_back") == b.SendActions);
     CHECK(wa.SendFor("snd.foley.step_wood.walk") == b.SendFootsteps && wa.SendFor("snd.foley.step_concrete.land") == b.SendFootsteps);
-    CHECK(wa.SendFor("snd.foley.move.jump") == b.SendFoley && wa.SendFor("snd.foley.weapon.ads_in") == b.SendFoley && wa.SendFor("snd.foley.cloth.sprint_loop") == b.SendFoley);
+    CHECK(wa.SendFor("snd.foley.move.jump") == b.SendFoley && wa.SendFor("snd.foley.weapon.ads_in") == b.SendFoley && wa.SendFor("snd.foley.move.land_light") == b.SendFoley);
     CHECK(wa.SendFor("snd.casing.rifle.concrete") == b.SendCasings && wa.SendFor("snd.impact.metal") == b.SendImpacts && wa.SendFor("snd.flyby") == b.SendImpacts);
     CHECK(wa.SendFor("not_a_key") == 0.0f);
     // Calibrated: a send of 1 is the space's calibrated wet level (the categories are trims around it); the recorded tails send nothing.
@@ -1336,7 +1298,7 @@ void TestReverbFollowsListenerSpace() {
     wa.Update(0.016f);
     CHECK(be.ReverbCalls >= 1 && be.LastReverb.Count == 1);
     CHECK(be.LastReverb.Layers[0].Ir == "assets/Audio/IR/outdoor_open_1.wav" && std::fabs(be.LastReverb.Layers[0].Weight - 1.0f) < 1e-4f);
-    CHECK(std::fabs(be.LastReverb.Layers[0].WetDb - bus.WetOutdoorOpenDb) < 1e-3f && std::fabs(be.LastReverb.Layers[0].PreDelayMs - 30.0f) < 1e-3f);
+    CHECK(std::fabs(be.LastReverb.Layers[0].WetDb - (bus.WetOutdoorOpenDb + bus.WetTrimDb)) < 1e-3f && std::fabs(be.LastReverb.Layers[0].PreDelayMs - 30.0f) < 1e-3f);
     CHECK(be.LastReverb.Layers[0].LowCutHz == bus.LowCutHz);
     // The probe says small room: its impulse response.
     auto roomAround = [](const glm::vec3& o, const glm::vec3& d, float maxD, float& hit) { // a small room around wherever the listener is
@@ -1345,7 +1307,7 @@ void TestReverbFollowsListenerSpace() {
     wa.ListenerProbe().Clear();
     wa.ListenerProbe().SetRayFn(roomAround);
     wa.Update(0.5f);
-    CHECK(be.LastReverb.Count == 1 && be.LastReverb.Layers[0].Ir == "assets/Audio/IR/indoor_small_1.wav" && std::fabs(be.LastReverb.Layers[0].WetDb - bus.WetIndoorSmallDb) < 1e-3f);
+    CHECK(be.LastReverb.Count == 1 && be.LastReverb.Layers[0].Ir == "assets/Audio/IR/indoor_small_1.wav" && std::fabs(be.LastReverb.Layers[0].WetDb - (bus.WetIndoorSmallDb + bus.WetTrimDb)) < 1e-3f);
     // A Reverb Zone with its own reverb beats the probe inside it, and crossfades into it at the edge.
     ReverbZoneVolume z;
     z.Center = glm::vec3(100.0f, 0.0f, 0.0f);
@@ -1363,7 +1325,7 @@ void TestReverbFollowsListenerSpace() {
     wa.SetListener(glm::vec3(100.0f, 0.0f, 0.0f));
     wa.Update(0.5f);
     const AudioEngine::ReverbLayerSpec& L = be.LastReverb.Layers[0];
-    CHECK(be.LastReverb.Count == 1 && L.Ir == "assets/Audio/IR/custom_hall.wav" && std::fabs(L.WetDb - (bus.WetIndoorLargeDb + 2.5f)) < 1e-3f);
+    CHECK(be.LastReverb.Count == 1 && L.Ir == "assets/Audio/IR/custom_hall.wav" && std::fabs(L.WetDb - (bus.WetIndoorLargeDb + bus.WetTrimDb + 2.5f)) < 1e-3f);
     CHECK(L.PreDelayMs == 40.0f && L.HfDampDb == 6.0f && L.LowCutHz == 150.0f);
     // Walk out through the 4 m fade: two layers (the zone's IR, the probe's), weights summing to 1 and moving continuously; then one.
     float prevZoneWeight = 1.0f, worst = 0.0f;
@@ -1387,7 +1349,7 @@ void TestReverbFollowsListenerSpace() {
     wa.Bus().WetScale = 0.5f;
     wa.SetListener(glm::vec3(0.0f, 1.5f, 0.0f));
     wa.Update(0.5f);
-    CHECK(std::fabs(be.LastReverb.Layers[0].WetDb - (bus.WetIndoorSmallDb - 6.0206f)) < 1e-2f);
+    CHECK(std::fabs(be.LastReverb.Layers[0].WetDb - (bus.WetIndoorSmallDb + bus.WetTrimDb - 6.0206f)) < 1e-2f);
     const int calls = be.ReverbCalls;
     wa.Bus().Enabled = false;
     wa.SetListener(glm::vec3(300.0f, 1.5f, 0.0f));
@@ -2093,6 +2055,156 @@ void TestConvolverCost() {
     CHECK(tInline / (double)seconds < 0.05); // (a loose bound: other jobs share the machine; the printed numbers are the report)
 }
 
+
+SoundManifest MixManifest(); // (below: the mix_db / distance fixture)
+
+void TestDistanceModelAndMixGroups() {
+    DistanceModel m;
+    m.RefM = 10.0f;
+    m.SlopeDb = 5.0f;
+    m.NearDb = 5.0f;
+    m.MaxM = 250.0f;
+    m.OffsetDb = -10.5f;
+    CHECK(m.Valid() && std::fabs(m.MinDistance() - 5.0f) < 1e-4f); // 5 dB up at 5 dB per halving: one halving
+    CHECK(std::fabs(m.GainDbAt(10.0f) + 10.5f) < 1e-4f);             // the offset at the reference
+    CHECK(std::fabs(m.GainDbAt(1.0f) - (-10.5f + 5.0f)) < 1e-4f);    // capped close up
+    CHECK(std::fabs(m.GainDbAt(20.0f) - (-10.5f - 5.0f)) < 1e-4f);   // one doubling past: the slope
+    CHECK(std::fabs(m.GainDbAt(1000.0f) - m.GainDbAt(250.0f)) < 1e-4f); // held past Max
+    CHECK(!DistanceModel{}.Valid());
+    CHECK(MixGroupForKey("snd.ak.fire_close", true) == MixGroup::Weapon && MixGroupForKey("snd.ak.fire_close", false) == MixGroup::Threat);
+    CHECK(MixGroupForKey("snd.ak.mag_in", true) == MixGroup::OwnFoley && MixGroupForKey("snd.ak.mag_in", false) == MixGroup::NpcFoley);
+    CHECK(MixGroupForKey("snd.foley.step_wood.walk", true) == MixGroup::OwnFoley && MixGroupForKey("snd.foley.step_wood.walk", false) == MixGroup::NpcFoley);
+    CHECK(MixGroupForKey("snd.flyby", false) == MixGroup::Threat && MixGroupForKey("snd.ui.hitmarker", true) == MixGroup::Feedback);
+    CHECK(MixGroupForKey("snd.impact.flesh", false) == MixGroup::Feedback && MixGroupForKey("snd.impact.wood", false) == MixGroup::World);
+    CHECK(MixGroupForKey("snd.casing.rifle.wood", false) == MixGroup::Debris && MixGroupForKey("snd.amb.outdoor_open", true) == MixGroup::Bed);
+    CHECK(MixGroupForKey("snd.body_fall", false) == MixGroup::World);
+    // The air: open up to the start, then darker with distance, never below the floor.
+    AudioMixComponent mix;
+    CHECK(AirCutoffHz(mix, 10.0f) == 20000.0f && AirCutoffHz(mix, 60.0f) < 12000.0f && AirCutoffHz(mix, 60.0f) > 6000.0f && AirCutoffHz(mix, 1e5f) == mix.AirMinHz);
+    mix.AirEnabled = false;
+    CHECK(AirCutoffHz(mix, 1e5f) == 20000.0f);
+}
+
+void TestMixDuckerEnvelope() {
+    AudioMixComponent s;
+    MixDucker d;
+    d.Configure(s);
+    CHECK(d.Gain(MixGroup::Bed) == 1.0f && d.Amount() == 0.0f);
+    d.Key(-30.0f); // under the threshold: nothing
+    CHECK(d.Amount() == 0.0f);
+    d.Key(-13.0f); // half way between the threshold (-20) and full (-6)
+    CHECK(std::fabs(d.Amount() - 0.5f) < 1e-4f && std::fabs(d.GainDb(MixGroup::Bed) + 0.5f * s.DuckBedDb) < 1e-4f);
+    d.Key(0.0f); // a shot: full depth on the groups under it, nothing on the protected ones
+    CHECK(d.Amount() == 1.0f && std::fabs(d.GainDb(MixGroup::Bed) + s.DuckBedDb) < 1e-4f && std::fabs(d.GainDb(MixGroup::OwnFoley) + s.DuckOwnFoleyDb) < 1e-4f);
+    for (MixGroup g : {MixGroup::Threat, MixGroup::Feedback, MixGroup::NpcFoley, MixGroup::Weapon}) CHECK(d.GainDb(g) == 0.0f);
+    // Hold, then release over DuckRelease.
+    d.Update(s.DuckHold * 0.5f);
+    CHECK(d.Amount() == 1.0f);
+    d.Update(s.DuckHold);
+    d.Update(s.DuckRelease * 0.5f);
+    CHECK(d.Amount() > 0.3f && d.Amount() < 0.7f);
+    d.Update(s.DuckRelease);
+    CHECK(d.Amount() == 0.0f);
+    // Focus glides in and out.
+    d.SetFocus(true);
+    d.Update(s.FocusTime * 0.5f);
+    CHECK(d.Focus() > 0.4f && d.Focus() < 0.6f);
+    d.Update(s.FocusTime);
+    CHECK(d.Focus() == 1.0f && std::fabs(d.GainDb(MixGroup::Bed) + s.FocusBedDb) < 1e-4f && d.GainDb(MixGroup::Threat) == 0.0f);
+    d.SetFocus(false);
+    d.Update(s.FocusTime * 2.0f);
+    CHECK(d.Focus() == 0.0f);
+    // Off: nothing ducks.
+    s.DuckEnabled = false;
+    d.Configure(s);
+    d.Key(0.0f);
+    d.Update(0.0f);
+    CHECK(d.Amount() == 0.0f);
+
+    // In the player: a gunshot (its file's loudness at the reference) keys the duck; a live bed voice follows it down, a voice
+    // started while ducked starts there, a soldier's step (protected) is never touched.
+    FakeBackend be;
+    WeaponAudio& wa = WeaponAudio::Get();
+    wa.StartForTest("", &be);
+    SoundManifest man = MixManifest();
+    wa.SetManifestForTest(man);
+    wa.Mix().DuckEnabled = true;
+    wa.ApplyMix();
+    SoundSet* bed = wa.KeySet("snd.amb.a", [](SoundSet& x) { x.Loop = true; x.Bus = AudioEngine::Bus::Ambient; });
+    const SoundPlayer::Played bp = wa.PlayKeyed(*bed, glm::vec3(0.0f), true, 1.0f);
+    CHECK(bp.Started && be.Voices.back().Voice.Duck == 1.0f);
+    WeaponAudioProfile* p = wa.Profile("ak");
+    p->Close.Set.VolumeJitterDb = 0.0f;
+    wa.FillSet(p->Close.Set);
+    p->PlayerGain = 1.0f;
+    wa.Shot("ak", glm::vec3(0.0f), true); // -14 LUFS file at mix_db -3 against a -15 reference: -2 dB, past "full"
+    CHECK(wa.Ducker().Amount() == 1.0f);
+    be.Ducks.clear();
+    wa.Update(1.0f / 60.0f);
+    bool bedDucked = false;
+    for (const auto& [h, g] : be.Ducks)
+        if (h == bp.Handle) bedDucked = std::fabs(20.0f * std::log10(g) + wa.Mix().DuckBedDb) < 0.1f;
+    CHECK(bedDucked);
+    SoundSet* step = wa.FoleySet("step_wood", "walk");
+    wa.PlayKeyed(*step, glm::vec3(3.0f, 0.0f, 0.0f), false, 1.0f);
+    CHECK(be.Voices.back().Voice.Group == MixGroup::NpcFoley && be.Voices.back().Voice.Duck == 1.0f);
+    wa.PlayKeyed(*step, glm::vec3(0.0f), true, 1.0f);
+    CHECK(be.Voices.back().Voice.Group == MixGroup::OwnFoley && std::fabs(20.0f * std::log10(be.Voices.back().Voice.Duck) + wa.Mix().DuckOwnFoleyDb) < 0.1f);
+    wa.Stop();
+}
+
+void TestGlueCompressorAndIntegratedLoudness() {
+    const int rate = 48000;
+    std::vector<float> x(2 * (size_t)rate * 2);
+    for (size_t i = 0; i < x.size() / 2; ++i) x[2 * i] = x[2 * i + 1] = 0.5f * (float)std::sin(2.0 * 3.14159265358979 * 1000.0 * (double)i / rate); // -6 dBFS peak
+    // The glue: threshold -12, ratio 2, hard knee: a steady -6 dBFS tone is 6 dB over and comes out 3 dB down (the limiter, at -1, is idle).
+    MasterLimiter lim(rate);
+    LimiterSettings st;
+    st.GlueEnabled = true;
+    st.GlueThresholdDb = -12.0f;
+    st.GlueRatio = 2.0f;
+    st.GlueKneeDb = 0.0f;
+    lim.Configure(st);
+    std::vector<float> y(x.size());
+    lim.Process(x.data(), y.data(), (int)(x.size() / 2));
+    const float outPk = LoudnessMeter::PeakDb(y, (size_t)rate, y.size() / 2);
+    CHECK(std::fabs(outPk - (-6.02f - 3.0f)) < 0.5f);
+    CHECK(lim.TakeGlueReductionDb() > 2.5f && lim.TakeGainReductionDb() == 0.0f);
+    // The trim scales everything before it.
+    MasterLimiter lim2(rate);
+    LimiterSettings t;
+    t.TrimDb = -6.0f;
+    lim2.Configure(t);
+    lim2.Process(x.data(), y.data(), (int)(x.size() / 2));
+    CHECK(std::fabs(LoudnessMeter::PeakDb(y, (size_t)rate, y.size() / 2) - (-12.04f)) < 0.1f);
+    // Integrated loudness of a steady tone is its loudness; a steady tone has no range; silence is -120.
+    std::vector<float> s(2 * (size_t)rate * 4);
+    for (size_t i = 0; i < s.size() / 2; ++i) s[2 * i] = s[2 * i + 1] = 0.1f * (float)std::sin(2.0 * 3.14159265358979 * 1000.0 * (double)i / rate);
+    CHECK(std::fabs(LoudnessMeter::Integrated(s, rate) + 20.0f) < 0.2f);
+    CHECK(LoudnessMeter::ShortTermRange(s, rate) < 0.2f);
+    std::vector<float> z(2 * (size_t)rate, 0.0f);
+    CHECK(LoudnessMeter::Integrated(z, rate) == -120.0f);
+    // The relative gate: 4 s of the tone and 4 s of it 30 dB down read the tone (the quiet half is gated out).
+    std::vector<float> two = s;
+    for (size_t i = 0; i < s.size(); ++i) two.push_back(s[i] * 0.0316f);
+    CHECK(std::fabs(LoudnessMeter::Integrated(two, rate) + 20.0f) < 0.3f);
+}
+
+void TestZoneFadeIgnoresTheFloor() {
+    // A box zone 6 m tall with a 3 m fade: at head height over its floor, in the middle, the listener is fully inside (the fade is
+    // across the walls and the ceiling, not the floor stood on).
+    ReverbZoneVolume z;
+    z.Shape = 0;
+    z.Center = glm::vec3(0.0f, 3.0f, 0.0f);
+    z.Extents = glm::vec3(20.0f, 3.0f, 20.0f);
+    z.FadeDistance = 3.0f;
+    CHECK(z.Weight(glm::vec3(0.0f, 1.6f, 0.0f)) == 1.0f);
+    CHECK(z.Weight(glm::vec3(0.0f, 0.1f, 0.0f)) == 1.0f);
+    CHECK(z.Weight(glm::vec3(0.0f, 5.5f, 0.0f)) < 0.5f);  // near the ceiling: fading
+    CHECK(z.Weight(glm::vec3(19.0f, 1.6f, 0.0f)) < 0.5f); // near a wall: fading
+    CHECK(z.Weight(glm::vec3(0.0f, -0.5f, 0.0f)) == 0.0f); // under the floor: outside
+}
+
 void TestMasterLimiterNeverExceedsCeiling() {
     const int rate = 48000;
     MasterLimiter lim(rate);
@@ -2179,9 +2291,12 @@ void TestLoudnessMeterReadsALevel() {
 
 SoundManifest MixManifest() {
     SoundManifest m;
-    const char* text = R"({"mix":{"distance_refs_m":{"impact":5,"npc_shot":10,"body_fall":5}},"files":[
-        {"file":"Impacts/concrete_1.wav","key":"snd.impact.concrete","layer":"","mix_db":-6},
-        {"file":"Weapons/AKS74U/fire_close_1.wav","key":"snd.ak.fire_close","layer":"close","mix_db":-3},
+    const char* text = R"({"mix":{"reference_lufs_m":-15,"shot_lufs_m":-12.5,"distance":{
+        "impact":{"ref_m":4,"near_db":6,"slope_db":6,"max_m":60},
+        "npc_shot":{"ref_m":10,"near_db":6,"slope_db":6,"max_m":200,"offset_db":-10},
+        "body_fall":{"ref_m":5,"near_db":5,"slope_db":6,"max_m":40}}},"files":[
+        {"file":"Impacts/concrete_1.wav","key":"snd.impact.concrete","layer":"","mix_db":-6,"lufs_m_max":-20},
+        {"file":"Weapons/AKS74U/fire_close_1.wav","key":"snd.ak.fire_close","layer":"close","mix_db":-3,"lufs_m_max":-14},
         {"file":"Foley/step_wood/walk_1.wav","key":"snd.foley.step_wood.walk","layer":"","mix_db":-9.5},
         {"file":"Ambience/amb_a_1.wav","key":"snd.amb.a","layer":"ambience","mix_db":-4,"loop":true},
         {"file":"Ambience/amb_b_1.wav","key":"snd.amb.b","layer":"ambience","mix_db":-8,"loop":true}]})";
@@ -2194,25 +2309,28 @@ void TestMixDbAppliedOnceAndRefDistance() {
     WeaponAudio& wa = WeaponAudio::Get();
     wa.StartForTest("", &be);
     wa.SetManifestForTest(MixManifest());
-    SoundPlayer::Limiter off;
-    off.Enabled = false;
-    wa.Player().SetLimiter(off);
-    CHECK(wa.Manifest().DistanceRef("impact") == 5.0f && wa.Manifest().DistanceRef("npc_shot") == 10.0f && wa.Manifest().DistanceRef("nope") == 0.0f);
+    CHECK(wa.Manifest().DistanceRef("impact") == 4.0f && wa.Manifest().DistanceRef("npc_shot") == 10.0f && wa.Manifest().DistanceRef("nope") == 0.0f);
+    CHECK(wa.Manifest().HasReference && wa.Manifest().ReferenceLufs == -15.0f && std::fabs(wa.Manifest().ShotOverReferenceDb - 2.5f) < 1e-4f);
     // A keyed set: every voice plays at the set's volume x 10^(mix_db / 20), once. 2D: nothing else on it.
     SoundSet* imp = wa.KeySet("snd.impact.concrete", [](SoundSet& s) { s.MinDistance = 2.0f; s.MaxDistance = 60.0f; s.VolumeJitterDb = 0.0f; });
-    CHECK(imp->Files.size() == 1 && imp->FileGainDb.size() == 1 && imp->FileGainDb[0] == -6.0f && imp->RefDistance == 5.0f);
+    CHECK(imp->Files.size() == 1 && imp->FileGainDb.size() == 1 && imp->FileGainDb[0] == -6.0f && imp->Distance.RefM == 4.0f);
     const float lin = std::pow(10.0f, -6.0f / 20.0f);
     wa.PlayKeyed(*imp, glm::vec3(0.0f), true, 1.0f);
     CHECK(std::fabs(be.Voices.back().Volume - lin) < 1e-4f);
-    // 3D: calibrated so it is the spec (0 dB re mix_db) at the reference distance: the log rolloff gives Min / d there, the set carries d / Min.
+    // 3D: the distance model. The cap (near_db = 6) is reached at Min = 4 x 2^(-6/6) = 2 m; the voice starts 6 dB up and an exponential
+    // rolloff of 6 dB per doubling takes it back to mix_db at the 4 m reference. The set's own Min / Max are not used.
     wa.PlayKeyed(*imp, glm::vec3(8.0f, 0.0f, 0.0f), false, 1.0f);
-    CHECK(std::fabs(be.Voices.back().Volume - lin * 5.0f / 2.0f) < 1e-3f);
-    CHECK(std::fabs(be.Voices.back().Volume * (2.0f / 5.0f) - lin) < 1e-3f); // x the rolloff at 5 m (Min / d) = the spec
+    const SoundVoice& iv = be.Voices.back().Voice;
+    CHECK(std::fabs(iv.Volume - lin * std::pow(10.0f, 6.0f / 20.0f)) < 1e-3f);
+    CHECK(iv.Rolloff == AudioEngine::Rolloff::Exponential && std::fabs(iv.MinDistance - 2.0f) < 1e-3f && std::fabs(iv.RolloffFactor - 6.0f / 6.0206f) < 1e-3f &&
+          iv.MaxDistance == 60.0f);
+    CHECK(std::fabs(iv.Volume * std::pow(4.0f / iv.MinDistance, -iv.RolloffFactor) - lin) < 2e-3f); // x the rolloff at 4 m = mix_db
+    CHECK(iv.Group == MixGroup::World);
     // The gun's layers: close at -3 dB, the player's shot also at the player gain (and that only), a soldier's at the 10 m reference.
     WeaponAudioProfile* p = wa.Profile("ak");
     p->Close.Set.VolumeJitterDb = 0.0f;
     wa.FillSet(p->Close.Set);
-    CHECK(p->Close.Set.Files.size() == 1 && p->Close.Set.FileGainDb[0] == -3.0f && p->Close.Set.RefDistance == 10.0f);
+    CHECK(p->Close.Set.Files.size() == 1 && p->Close.Set.FileGainDb[0] == -3.0f && p->Close.Set.Distance.RefM == 10.0f);
     be.Voices.clear();
     wa.Shot("ak", glm::vec3(0.0f), true);
     CHECK(be.Voices.size() == 1 && std::fabs(be.Voices[0].Volume - p->PlayerGain * p->Volume * std::pow(10.0f, -3.0f / 20.0f)) < 1e-3f);
@@ -2220,7 +2338,9 @@ void TestMixDbAppliedOnceAndRefDistance() {
     wa.Update(1.0f);
     wa.SetListener(glm::vec3(0.0f));
     wa.Shot("ak", glm::vec3(10.0f, 0.0f, 0.0f), false);
-    CHECK(be.Voices.size() == 1 && std::fabs(be.Voices[0].Volume - std::pow(10.0f, -3.0f / 20.0f) * 10.0f / p->Close.Set.MinDistance) < 2e-3f);
+    // A soldier's: its offset (-10) and the cap (+6) on the file's mix_db; Min 5 m.
+    CHECK(be.Voices.size() == 1 && std::fabs(be.Voices[0].Volume - std::pow(10.0f, (-3.0f - 10.0f + 6.0f) / 20.0f)) < 2e-3f &&
+          std::fabs(be.Voices[0].Voice.MinDistance - 5.0f) < 1e-3f && be.Voices[0].Voice.Group == MixGroup::Threat);
     // Foley steps (no ref distance): the same single mix_db.
     SoundSet* step = wa.FoleySet("step_wood", "walk");
     step->VolumeJitterDb = 0.0f;
@@ -2549,6 +2669,10 @@ void RegisterAudioTests(UnitTestSupport::TestList& tests) {
     tests.push_back({"MasterLimiterNeverExceedsCeiling", TestMasterLimiterNeverExceedsCeiling});
     tests.push_back({"LoudnessMeterReadsALevel", TestLoudnessMeterReadsALevel});
     tests.push_back({"MixDbAppliedOnceAndRefDistance", TestMixDbAppliedOnceAndRefDistance});
+    tests.push_back({"DistanceModelAndMixGroups", TestDistanceModelAndMixGroups});
+    tests.push_back({"MixDuckerEnvelope", TestMixDuckerEnvelope});
+    tests.push_back({"GlueCompressorAndIntegratedLoudness", TestGlueCompressorAndIntegratedLoudness});
+    tests.push_back({"ZoneFadeIgnoresTheFloor", TestZoneFadeIgnoresTheFloor});
     tests.push_back({"ZoneAmbienceBeds", TestZoneAmbienceBeds});
     tests.push_back({"ReverbZoneOldKeysAndNewFields", TestReverbZoneOldKeysAndNewFields});
     tests.push_back({"OfflineEngineLimiterAndReverbCalibration", TestOfflineEngineLimiterAndReverbCalibration});
