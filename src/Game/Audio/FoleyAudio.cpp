@@ -141,7 +141,7 @@ void FoleyAudio::UpdatePlayer(World& world, float dt, const FoleyPlayerInput& in
         const float fall = std::max(0.0f, -m_PrevVy), g = LandGain(m_T, fall);
         if (g > 0.0f) {
             Play("move", fall >= m_T.LandHeavySpeed ? "land_heavy" : "land_light", g, true, in.Feet);
-            Play("step_" + SurfaceAt(world, in.Feet), "land", g * 0.7f, true, in.Feet);
+            Play("step_" + SurfaceAt(world, in.Feet), "land", g, true, in.Feet);
         }
         m_Stepper.Reset();
     }

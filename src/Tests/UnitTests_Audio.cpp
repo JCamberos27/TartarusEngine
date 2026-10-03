@@ -3,11 +3,17 @@
 #include "../Game/Audio/FoleyAudio.h"
 #include "../Game/Audio/EnvironmentProbe.h"
 #include "../Game/Audio/ImpactAudio.h"
-#include "../Audio/ReverbFdn.h"
+#include "../Audio/AudioEngine.h"
+#include "../Audio/Convolution.h"
+#include "../Audio/ConvolutionReverb.h"
+#include "../Audio/LoudnessMeter.h"
+#include "../Audio/MasterLimiter.h"
 #include "../Game/Audio/ReverbZones.h"
 #include "../Game/Audio/WeaponAudio.h"
 #include "../Game/ComponentRegistry.h"
 #include "World.h"
+#include "AssetLibrary.h"
+#include "SceneSerializer.h"
 
 #include <glm/gtc/matrix_transform.hpp>
 
@@ -15,7 +21,10 @@
 #include <cmath>
 #include <filesystem>
 #include <fstream>
+#include <chrono>
+#include <cstdio>
 #include <set>
+#include <thread>
 
 // Unit tests for the engine audio wiring (Game/Audio: SoundSet playback rules, weapon audio profiles, foley, the manifest).
 
@@ -31,10 +40,10 @@ struct FakeBackend : SoundBackend {
     };
     std::vector<V> Voices;
     std::vector<std::pair<AudioEngine::SoundHandle, float>> Occlusion; // every SetOcclusion
-    ReverbParams LastReverb;
+    AudioEngine::ReverbSpec LastReverb;
     int ReverbCalls = 0;
     float LastGain = 1.0f;
-    ReverbParams LastRemote;
+    AudioEngine::ReverbSpec LastRemote;
     int RemoteCalls = 0;
     bool RemoteActive = false;
     std::vector<std::pair<AudioEngine::SoundHandle, int>> SendBus;
@@ -42,7 +51,7 @@ struct FakeBackend : SoundBackend {
     void SetOcclusion(AudioEngine::SoundHandle h, float hz, float gain) override { Occlusion.push_back({h, hz}); LastGain = gain; }
     void SetVoicePosition(AudioEngine::SoundHandle h, const glm::vec3& p) override { Positions.push_back({h, p}); }
     void SetReverbSendBus(AudioEngine::SoundHandle h, int bus) override { SendBus.push_back({h, bus}); }
-    void SetReverb(const ReverbParams& p, int bus) override {
+    void SetReverb(const AudioEngine::ReverbSpec& p, int bus) override {
         if (bus == 1) { LastRemote = p; ++RemoteCalls; }
         else { LastReverb = p; ++ReverbCalls; }
     }
@@ -265,6 +274,8 @@ void TestDistanceBlendWeights() {
     FakeBackend be;
     WeaponAudio& wa = WeaponAudio::Get();
     wa.StartForTest("", &be);
+    wa.Profile("ak")->Close.Set.Files = {"assets/Audio/Combat/ak_shot.wav"};
+    wa.Profile("ak")->Far.Set.Files = {"assets/Audio/Combat/ak_shot_far.wav"};
     wa.SetListener(glm::vec3(0.0f));
     SoundPlayer::Limiter off;
     off.Enabled = false;
@@ -276,12 +287,12 @@ void TestDistanceBlendWeights() {
         return v;
     };
     wa.Shot("ak", glm::vec3(10.0f, 0.0f, 0.0f), false);
-    CHECK(volumeOf("assets/Audio/Combat/ak_shot.wav") > 0.7f || volumeOf("assets/Audio/Combat/ak_shot_b.wav") > 0.7f); // the crack, full (+-1 dB)
+    CHECK(volumeOf("assets/Audio/Combat/ak_shot.wav") > 0.7f); // the crack, full (+-1 dB)
     CHECK(volumeOf("assets/Audio/Combat/ak_shot_far.wav") > 0.05f && volumeOf("assets/Audio/Combat/ak_shot_far.wav") < 0.15f);
     be.Voices.clear();
     wa.Update(1.0f); // a new burst
     wa.Shot("ak", glm::vec3(70.0f, 0.0f, 0.0f), false);
-    CHECK(volumeOf("assets/Audio/Combat/ak_shot.wav") < 0.0f && volumeOf("assets/Audio/Combat/ak_shot_b.wav") < 0.0f); // no crack at 70 m
+    CHECK(volumeOf("assets/Audio/Combat/ak_shot.wav") < 0.0f); // no crack at 70 m
     CHECK(volumeOf("assets/Audio/Combat/ak_shot_far.wav") > 0.7f);
     CHECK(be.Voices.back().Voice.Spatial);
     be.Voices.clear();
@@ -1097,15 +1108,33 @@ void TestReverbZoneContainmentPriorityAndBlend() {
     CHECK(built.Zones().size() == 1 && built.Zones()[0].Class == SpaceClass::IndoorLarge);
     CHECK(built.Mix(glm::vec3(101.0f, 0.5f, -1.0f)).Weights[(int)SpaceClass::IndoorLarge] == 1.0f);
     CHECK(built.Mix(glm::vec3(0.0f, 0.0f, 100.0f)).ProbeShare == 1.0f);
-    // The reverb values are stored: the class presets by default, the component's own with Custom.
+    // The reverb a zone asks for: the class's defaults, or the component's own values with Custom.
     ReverbZoneComponent zc;
     zc.TailClass = 3;
-    CHECK(zc.Resolved().DecayTime == ReverbPresetFor(3).DecayTime);
+    const ReverbPreset def = zc.Resolved();
+    CHECK(def.Class == 3 && def.Ir.empty() && def.WetDb == 0.0f && def.PreDelayMs < 0.0f && def.LowCutHz < 0.0f && def.HfDampDb == 0.0f);
     zc.ReverbMode = 1;
-    zc.Reverb.DecayTime = 7.0f;
-    CHECK(zc.Resolved().DecayTime == 7.0f);
-    CHECK(ReverbPresetFor(2).DecayTime < ReverbPresetFor(3).DecayTime && ReverbPresetFor(0).WetLevel < ReverbPresetFor(2).WetLevel);
-    CHECK(ReverbPresetFor(2).RoomSize < ReverbPresetFor(3).RoomSize && ReverbPresetFor(2).PreDelayMs < ReverbPresetFor(3).PreDelayMs);
+    zc.Ir = "assets/Audio/IR/x.wav";
+    zc.WetDb = -3.0f;
+    zc.PreDelayMs = 33.0f;
+    zc.HfDampDb = 4.0f;
+    zc.LowCutHz = 120.0f;
+    const ReverbPreset own = zc.Resolved();
+    CHECK(own.Ir == "assets/Audio/IR/x.wav" && own.WetDb == -3.0f && own.PreDelayMs == 33.0f && own.HfDampDb == 4.0f && own.LowCutHz == 120.0f && own.Class == 3);
+    // Scenes saved before the convolution reverb: their Wet Level is a trim against that class's old default, their HF Damping 0..1 is 0..10 dB.
+    zc.WetDb = 0.0f;
+    zc.HfDampDb = 0.0f;
+    zc.Old.WetLevel = ReverbZoneComponent::LegacyDefaultWet(3);
+    CHECK(std::fabs(zc.Resolved().WetDb) < 1e-4f);                                   // the old default = no trim
+    zc.Old.WetLevel = 0.5f * ReverbZoneComponent::LegacyDefaultWet(3);
+    CHECK(std::fabs(zc.Resolved().WetDb + 6.0206f) < 1e-3f);                          // half = -6 dB
+    zc.Old.WetLevel = 0.0f;
+    CHECK(zc.Resolved().WetDb == -12.0f);                                            // clamped
+    zc.Old.WetLevel = -1.0f;
+    zc.Old.HfDamping = 0.5f;
+    CHECK(std::fabs(zc.Resolved().HfDampDb - 5.0f) < 1e-4f);
+    zc.ReverbMode = 0; // Class Default ignores all of it
+    CHECK(zc.Resolved().WetDb == 0.0f && zc.Resolved().HfDampDb == 0.0f);
     if (ComponentRegistry::All().empty()) ComponentRegistry::RegisterEngineComponents();
     bool registered = false;
     for (const auto& rc : ComponentRegistry::All()) registered |= std::string(rc.Meta.Name) == "Reverb Zone";
@@ -1162,156 +1191,7 @@ struct Lcg {
     float Next() { S = S * 1664525u + 1013904223u; return (float)(S >> 8) / (float)(1u << 24) * 2.0f - 1.0f; }
 };
 
-// The wet signal of an impulse (a click in the middle of silence) for `seconds`.
-std::vector<float> ReverbImpulse(const ReverbParams& p, float seconds, int block = 480) {
-    ReverbFdn fdn(48000);
-    fdn.Reset(p);
-    const int total = (int)(seconds * 48000.0f);
-    std::vector<float> in((size_t)total * 2, 0.0f), out((size_t)total * 2, 0.0f);
-    in[0] = in[1] = 1.0f;
-    for (int pos = 0; pos < total; pos += block) fdn.Process(in.data() + 2 * (size_t)pos, out.data() + 2 * (size_t)pos, std::min(block, total - pos));
-    return out;
-}
-double WindowEnergy(const std::vector<float>& x, float t0, float t1) {
-    double e = 0.0;
-    for (size_t i = (size_t)(t0 * 48000.0f); i < (size_t)(t1 * 48000.0f) && 2 * i + 1 < x.size(); ++i) e += (double)x[2 * i] * x[2 * i] + (double)x[2 * i + 1] * x[2 * i + 1];
-    return e;
-}
 double Db(double ratio) { return 10.0 * std::log10(std::max(ratio, 1e-30)); }
-
-void TestReverbFdnImpulseAndDecay() {
-    ReverbParams p;
-    p.RoomSize = 0.5f; p.DecayTime = 1.0f; p.HfDamping = 0.3f; p.PreDelayMs = 10.0f; p.WetLevel = 1.0f; p.EarlyLateMix = 0.0f; // the late field alone
-    const std::vector<float> y = ReverbImpulse(p, 6.0f);
-    // Nothing before the pre-delay; then energy that decays: each half second quieter than the one before, ~60 dB down by RT60 x ~2.
-    CHECK(WindowEnergy(y, 0.0f, 0.008f) < 1e-6);
-    const double e0 = WindowEnergy(y, 0.05f, 0.25f), e1 = WindowEnergy(y, 0.5f, 0.7f), e2 = WindowEnergy(y, 1.0f, 1.2f), e3 = WindowEnergy(y, 2.0f, 2.2f);
-    CHECK(e0 > 1e-6);
-    CHECK(e1 < e0 && e2 < e1 && e3 < e2);
-    CHECK(Db(e2 / e0) < -20.0); // a second after the front: well down (RT60 = 1 s means -60 dB per second)
-    CHECK(Db(e3 / e0) < -45.0);
-    // A longer decay time rings longer; a shorter one dies faster.
-    ReverbParams longer = p, shorter = p;
-    longer.DecayTime = 3.0f;
-    shorter.DecayTime = 0.4f;
-    const std::vector<float> yl = ReverbImpulse(longer, 6.0f), ys = ReverbImpulse(shorter, 6.0f);
-    CHECK(WindowEnergy(yl, 1.0f, 1.2f) > 10.0 * e2);
-    CHECK(WindowEnergy(ys, 0.5f, 0.7f) < 0.2 * e1);
-    // No NaN, no infinities, no denormals: not in the tail of a long run into silence either.
-    const std::vector<float> z = ReverbImpulse(p, 25.0f);
-    bool bad = false;
-    for (float v : z) {
-        const int c = std::fpclassify(v);
-        bad |= c == FP_NAN || c == FP_INFINITE || c == FP_SUBNORMAL;
-    }
-    CHECK(!bad);
-    // Wet 0 is silent; the early stage alone (EarlyLateMix 1) ends within ~150 ms; the level follows Wet Level.
-    ReverbParams dry = p;
-    dry.WetLevel = 0.0f;
-    CHECK(WindowEnergy(ReverbImpulse(dry, 1.0f), 0.0f, 1.0f) < 1e-12);
-    ReverbParams early = p;
-    early.EarlyLateMix = 1.0f;
-    const std::vector<float> ye = ReverbImpulse(early, 2.0f);
-    CHECK(WindowEnergy(ye, 0.0f, 0.15f) > 1e-3 && WindowEnergy(ye, 0.3f, 2.0f) < 1e-9);
-    ReverbParams half = p;
-    half.WetLevel = 0.5f;
-    CHECK(std::fabs(Db(WindowEnergy(ReverbImpulse(half, 1.0f), 0.05f, 0.5f) / WindowEnergy(y, 0.05f, 0.5f)) + 6.0) < 0.5); // -6 dB
-    // Damping: a darker setting has less high-frequency energy in the tail (energy of the first difference over the energy).
-    auto brightness = [](const std::vector<float>& x) {
-        double d = 0.0, e = 0.0;
-        for (size_t i = (size_t)(0.4f * 48000.0f) + 1; i < (size_t)(1.5f * 48000.0f); ++i) { // after several passes through the damping
-            d += std::pow((double)x[2 * i] - x[2 * (i - 1)], 2.0);
-            e += (double)x[2 * i] * x[2 * i];
-        }
-        return d / std::max(e, 1e-30);
-    };
-    ReverbParams bright = p, dark = p;
-    bright.HfDamping = 0.0f;
-    dark.HfDamping = 1.0f;
-    CHECK(brightness(ReverbImpulse(dark, 2.0f)) < 0.5 * brightness(ReverbImpulse(bright, 2.0f)));
-    // Mono compatibility: left and right differ (a stereo field) yet fold to mono without a hole.
-    double l2 = 0.0, r2 = 0.0, m2 = 0.0, lr = 0.0;
-    ReverbParams both = p;
-    both.EarlyLateMix = 0.5f;
-    const std::vector<float> yb = ReverbImpulse(both, 3.0f);
-    for (size_t i = 0; i < yb.size() / 2; ++i) {
-        l2 += (double)yb[2 * i] * yb[2 * i];
-        r2 += (double)yb[2 * i + 1] * yb[2 * i + 1];
-        m2 += std::pow(0.5 * ((double)yb[2 * i] + yb[2 * i + 1]), 2.0);
-        lr += (double)yb[2 * i] * yb[2 * i + 1];
-    }
-    CHECK(Db(m2 / (0.5 * (l2 + r2))) > -4.5);               // a decorrelated pair folds at -3 dB; a hole would be far lower
-    CHECK(std::fabs(lr) / std::sqrt(l2 * r2) < 0.5);         // and the channels are not the same signal
-    // Block size does not change what it sounds like (the sub-block ramps are the same ones): 480 vs 64 frame callbacks.
-    const std::vector<float> a = ReverbImpulse(p, 1.0f, 480), b = ReverbImpulse(p, 1.0f, 64);
-    double diff = 0.0, ref = 0.0;
-    for (size_t i = 0; i < a.size(); ++i) {
-        diff += std::pow((double)a[i] - b[i], 2.0);
-        ref += (double)a[i] * a[i];
-    }
-    CHECK(diff < 1e-4 * ref);
-}
-
-void TestReverbFdnParameterGlide() {
-    // A steady tone through the reverb while Wet Level jumps 0.1 -> 0.9: with the glide the output level moves in small steps; a hard
-    // jump (Reset) is the step the glide exists to avoid.
-    auto run = [](bool glide) {
-        ReverbParams a, b;
-        a.WetLevel = 0.1f;
-        b = a;
-        b.WetLevel = 0.9f; // only the level moves, so the step measured is the level's
-        ReverbFdn fdn(48000);
-        fdn.Reset(a);
-        const int blocks = 300, n = 480;
-        std::vector<float> in((size_t)n * 2), out((size_t)n * 2);
-        std::vector<double> level;
-        float ph = 0.0f;
-        double prevSample = 0.0, worstJump = 0.0;
-        for (int k = 0; k < blocks; ++k) {
-            if (k == 100) {
-                if (!glide) fdn.SetSmoothingTime(0.001f); // (about a step)
-                fdn.SetTarget(b);
-            }
-            for (int i = 0; i < n; ++i) {
-                ph += 2.0f * 3.14159265f * 330.0f / 48000.0f;
-                in[2 * i] = in[2 * i + 1] = 0.3f * std::sin(ph);
-            }
-            fdn.Process(in.data(), out.data(), n);
-            double e = 0.0;
-            for (int i = 0; i < n; ++i) {
-                e += (double)out[2 * i] * out[2 * i];
-                worstJump = std::max(worstJump, std::fabs((double)out[2 * i] - prevSample));
-                prevSample = out[2 * i];
-            }
-            level.push_back(std::sqrt(e / n));
-        }
-        double worstStep = 0.0;
-        for (size_t k = 100; k < level.size(); ++k) worstStep = std::max(worstStep, std::fabs(level[k] - level[k - 1]));
-        return std::make_pair(worstStep, worstJump);
-    };
-    const auto glided = run(true), jumped = run(false);
-    CHECK(glided.first < 0.5 * jumped.first); // the level moves in far smaller steps than the jump's
-    // It arrives: after the glide the output is the new settings' (compared with a reverb that started there).
-    ReverbParams a, b;
-    a.WetLevel = 0.1f;
-    b.WetLevel = 0.9f;
-    ReverbFdn fdn(48000), ref(48000);
-    fdn.Reset(a);
-    ref.Reset(b);
-    fdn.SetTarget(b);
-    std::vector<float> in(480 * 2, 0.0f), o1(480 * 2), o2(480 * 2);
-    Lcg rng;
-    double e1 = 0.0, e2 = 0.0;
-    for (int k = 0; k < 400; ++k) { // 4 s: well past the 0.35 s glide
-        for (float& v : in) v = 0.2f * rng.Next();
-        fdn.Process(in.data(), o1.data(), 480);
-        ref.Process(in.data(), o2.data(), 480);
-        if (k >= 380)
-            for (size_t i = 0; i < o1.size(); ++i) { e1 += (double)o1[i] * o1[i]; e2 += (double)o2[i] * o2[i]; }
-    }
-    CHECK(std::fabs(Db(e1 / e2)) < 0.5);
-    CHECK(std::fabs(fdn.Current().WetLevel - 0.9f) < 0.01f);
-}
 
 void TestReverbSendRoutingByCategory() {
     FakeBackend be;
@@ -1324,8 +1204,10 @@ void TestReverbSendRoutingByCategory() {
     CHECK(wa.SendFor("snd.foley.step_wood.walk") == b.SendFootsteps && wa.SendFor("snd.foley.step_concrete.land") == b.SendFootsteps);
     CHECK(wa.SendFor("snd.foley.move.jump") == b.SendFoley && wa.SendFor("snd.foley.weapon.ads_in") == b.SendFoley && wa.SendFor("snd.foley.cloth.sprint_loop") == b.SendFoley);
     CHECK(wa.SendFor("snd.casing.rifle.concrete") == b.SendCasings && wa.SendFor("snd.impact.metal") == b.SendImpacts && wa.SendFor("snd.flyby") == b.SendImpacts);
-    CHECK(wa.SendFor("snd.voice.callout") == b.SendVoice && wa.SendFor("not_a_key") == 0.0f);
-    CHECK(b.SendTail == 0.0f && b.SendFoley > 0.0f && b.SendImpacts > 0.0f && b.SendCasings > 0.0f && b.SendShot > 0.0f && b.SendShot < b.SendFoley);
+    CHECK(wa.SendFor("not_a_key") == 0.0f);
+    // Calibrated: a send of 1 is the space's calibrated wet level (the categories are trims around it); the recorded tails send nothing.
+    CHECK(b.SendTail == 0.0f && b.SendFoley == 1.0f && b.SendFootsteps == 1.0f && b.SendActions == 1.0f && b.SendImpacts == 1.0f && b.SendCasings == 1.0f && b.SendShot == 1.0f);
+    CHECK(b.WetIndoorSmallDb == -6.0f && b.WetIndoorLargeDb == -4.0f && b.WetOutdoorUrbanDb == -12.0f && b.WetOutdoorOpenDb == -20.0f);
     // Voices start with their category's send, from the player: a keyed set, a gun layer, a tail.
     SoundSet* imp = wa.KeySet("snd.impact.metal", [](SoundSet& s) { s.Files = {"imp.wav"}; });
     wa.PlayKeyed(*imp, glm::vec3(5.0f, 0.0f, 0.0f), false, 1.0f);
@@ -1428,54 +1310,94 @@ void TestOcclusionLowPass() {
     wa.Stop();
 }
 
+// A manifest with the four class impulse responses (ir.<class>), as lane SM writes them.
+SoundManifest IrManifest() {
+    SoundManifest m;
+    const char* text = R"({"files":[
+        {"file":"IR/outdoor_open_1.wav","key":"ir.outdoor_open","layer":"ir","rt60_s":2.5,"predelay_ms":30},
+        {"file":"IR/outdoor_urban_1.wav","key":"ir.outdoor_urban","layer":"ir","rt60_s":1.2,"predelay_ms":15},
+        {"file":"IR/indoor_small_1.wav","key":"ir.indoor_small","layer":"ir","rt60_s":0.4,"predelay_ms":2},
+        {"file":"IR/indoor_large_1.wav","key":"ir.indoor_large","layer":"ir","rt60_s":1.8,"predelay_ms":22}]})";
+    CHECK(SoundManifest::FromJson(text, m));
+    return m;
+}
+
 void TestReverbFollowsListenerSpace() {
     FakeBackend be;
     WeaponAudio& wa = WeaponAudio::Get();
     wa.StartForTest("", &be);
+    wa.SetManifestForTest(IrManifest());
+    const ReverbBusComponent& bus = wa.Bus();
+    CHECK(wa.ClassIr((int)SpaceClass::IndoorLarge) == "assets/Audio/IR/indoor_large_1.wav" && wa.ClassPreDelayMs((int)SpaceClass::OutdoorUrban) == 15.0f);
     BoxRoom field{{-500.0f, -50.0f, -500.0f}, {500.0f, 500.0f, 500.0f}};
-    BoxRoom small{{-2.0f, 0.0f, -2.5f}, {2.0f, 3.0f, 2.5f}};
     wa.ListenerProbe().SetRayFn(field.Fn());
-    // No zone, open ground: the outdoor_open preset.
+    // No zone, open ground: the outdoor_open impulse response at its calibrated level.
     wa.SetListener(glm::vec3(0.0f, 1.5f, 0.0f));
     wa.Update(0.016f);
-    const ReverbPreset open = ReverbPresetFor((int)SpaceClass::OutdoorOpen);
-    CHECK(be.ReverbCalls >= 1 && std::fabs(be.LastReverb.DecayTime - open.DecayTime) < 0.01f && std::fabs(be.LastReverb.WetLevel - open.WetLevel) < 0.01f);
-    // The probe says small room: its preset.
+    CHECK(be.ReverbCalls >= 1 && be.LastReverb.Count == 1);
+    CHECK(be.LastReverb.Layers[0].Ir == "assets/Audio/IR/outdoor_open_1.wav" && std::fabs(be.LastReverb.Layers[0].Weight - 1.0f) < 1e-4f);
+    CHECK(std::fabs(be.LastReverb.Layers[0].WetDb - bus.WetOutdoorOpenDb) < 1e-3f && std::fabs(be.LastReverb.Layers[0].PreDelayMs - 30.0f) < 1e-3f);
+    CHECK(be.LastReverb.Layers[0].LowCutHz == bus.LowCutHz);
+    // The probe says small room: its impulse response.
     auto roomAround = [](const glm::vec3& o, const glm::vec3& d, float maxD, float& hit) { // a small room around wherever the listener is
         return BoxRoom{o + glm::vec3(-2.0f, -1.5f, -2.5f), o + glm::vec3(2.0f, 1.5f, 2.5f)}.Fn()(o, d, maxD, hit);
     };
-    (void)small;
     wa.ListenerProbe().Clear();
     wa.ListenerProbe().SetRayFn(roomAround);
     wa.Update(0.5f);
-    const ReverbPreset room = ReverbPresetFor((int)SpaceClass::IndoorSmall);
-    CHECK(std::fabs(be.LastReverb.DecayTime - room.DecayTime) < 0.01f && std::fabs(be.LastReverb.RoomSize - room.RoomSize) < 0.01f);
-    // A Reverb Zone with its own (custom) preset beats the probe inside it, and fades into it at the edge.
+    CHECK(be.LastReverb.Count == 1 && be.LastReverb.Layers[0].Ir == "assets/Audio/IR/indoor_small_1.wav" && std::fabs(be.LastReverb.Layers[0].WetDb - bus.WetIndoorSmallDb) < 1e-3f);
+    // A Reverb Zone with its own reverb beats the probe inside it, and crossfades into it at the edge.
     ReverbZoneVolume z;
     z.Center = glm::vec3(100.0f, 0.0f, 0.0f);
     z.Shape = 1;
     z.Radius = 10.0f;
     z.FadeDistance = 4.0f;
     z.Class = SpaceClass::IndoorLarge;
-    z.Reverb = {0.77f, 5.5f, 0.2f, 40.0f, 0.6f, 0.1f};
+    z.Reverb.Class = (int)SpaceClass::IndoorLarge;
+    z.Reverb.Ir = "assets/Audio/IR/custom_hall.wav";
+    z.Reverb.WetDb = 2.5f;
+    z.Reverb.PreDelayMs = 40.0f;
+    z.Reverb.HfDampDb = 6.0f;
+    z.Reverb.LowCutHz = 150.0f;
     wa.Zones().Set({z});
     wa.SetListener(glm::vec3(100.0f, 0.0f, 0.0f));
     wa.Update(0.5f);
-    CHECK(std::fabs(be.LastReverb.DecayTime - 5.5f) < 0.01f && std::fabs(be.LastReverb.WetLevel - 0.6f) < 0.01f);
-    float prev = be.LastReverb.DecayTime, worst = 0.0f;
-    for (int i = 0; i <= 100; ++i) { // walk out through the 4 m fade: the decay time moves continuously from the zone's to the probe's
+    const AudioEngine::ReverbLayerSpec& L = be.LastReverb.Layers[0];
+    CHECK(be.LastReverb.Count == 1 && L.Ir == "assets/Audio/IR/custom_hall.wav" && std::fabs(L.WetDb - (bus.WetIndoorLargeDb + 2.5f)) < 1e-3f);
+    CHECK(L.PreDelayMs == 40.0f && L.HfDampDb == 6.0f && L.LowCutHz == 150.0f);
+    // Walk out through the 4 m fade: two layers (the zone's IR, the probe's), weights summing to 1 and moving continuously; then one.
+    float prevZoneWeight = 1.0f, worst = 0.0f;
+    bool sawTwo = false;
+    for (int i = 0; i <= 100; ++i) {
         wa.SetListener(glm::vec3(100.0f + 6.0f + 0.05f * (float)i, 0.0f, 0.0f));
         wa.Update(0.016f);
-        worst = std::max(worst, std::fabs(be.LastReverb.DecayTime - prev));
-        prev = be.LastReverb.DecayTime;
+        const AudioEngine::ReverbSpec& r = be.LastReverb;
+        float sum = 0.0f, zoneW = 0.0f;
+        for (int k = 0; k < r.Count; ++k) {
+            sum += r.Layers[k].Weight;
+            if (r.Layers[k].Ir == "assets/Audio/IR/custom_hall.wav") zoneW = r.Layers[k].Weight;
+        }
+        CHECK(std::fabs(sum - 1.0f) < 1e-3f);
+        sawTwo |= r.Count == 2;
+        worst = std::max(worst, std::fabs(zoneW - prevZoneWeight));
+        prevZoneWeight = zoneW;
     }
-    CHECK(worst < 0.12f);
-    CHECK(std::fabs(prev - room.DecayTime) < 0.01f);
-    // The bus off: the reverb is not driven; the wet scale scales the preset's wet level.
+    CHECK(sawTwo && worst < 0.12f && be.LastReverb.Count == 1 && be.LastReverb.Layers[0].Ir == "assets/Audio/IR/indoor_small_1.wav");
+    // The wet scale is a linear gain on every space's level; the bus off: the reverb is not driven.
     wa.Bus().WetScale = 0.5f;
     wa.SetListener(glm::vec3(0.0f, 1.5f, 0.0f));
     wa.Update(0.5f);
-    CHECK(std::fabs(be.LastReverb.WetLevel - 0.5f * room.WetLevel) < 0.01f);
+    CHECK(std::fabs(be.LastReverb.Layers[0].WetDb - (bus.WetIndoorSmallDb - 6.0206f)) < 1e-2f);
+    const int calls = be.ReverbCalls;
+    wa.Bus().Enabled = false;
+    wa.SetListener(glm::vec3(300.0f, 1.5f, 0.0f));
+    wa.Update(0.5f);
+    CHECK(be.ReverbCalls == calls);
+    // No impulse response for a space (no manifest entry, no zone IR): the reverb is silently off there.
+    wa.Bus().Enabled = true;
+    wa.SetManifestForTest(SoundManifest{});
+    wa.Update(0.5f);
+    CHECK(be.LastReverb.Count == 0);
     wa.Stop();
 }
 
@@ -1702,17 +1624,17 @@ void TestZonesMoveAtRuntime() {
     FakeBackend be;
     WeaponAudio& wa = WeaponAudio::Get();
     wa.StartForTest("", &be);
+    wa.SetManifestForTest(IrManifest());
     wa.SetWorld(&world);
     wa.Zones().Build(world);
     BoxRoom field{{-5000.0f, -50.0f, -5000.0f}, {5000.0f, 500.0f, 5000.0f}};
     wa.ListenerProbe().SetRayFn(field.Fn());
     wa.SetListener(glm::vec3(200.0f, 0.0f, 0.0f));
     wa.Update(0.5f);
-    const float inside = be.LastReverb.DecayTime;
-    CHECK(std::fabs(inside - ReverbPresetFor((int)SpaceClass::IndoorLarge).DecayTime) < 0.01f);
+    CHECK(be.LastReverb.Count == 1 && be.LastReverb.Layers[0].Ir == "assets/Audio/IR/indoor_large_1.wav");
     world.Registry.get<TransformComponent>(zone).Position = glm::vec3(900.0f, 0.0f, 0.0f);
     wa.Update(0.016f);
-    CHECK(std::fabs(be.LastReverb.DecayTime - ReverbPresetFor((int)SpaceClass::OutdoorOpen).DecayTime) < 0.01f);
+    CHECK(be.LastReverb.Count == 1 && be.LastReverb.Layers[0].Ir == "assets/Audio/IR/outdoor_open_1.wav");
     wa.Stop();
 }
 
@@ -1791,13 +1713,15 @@ void TestPortalVoicesAndFallback() {
     const entt::entity roomA = MakeZone(world, glm::vec3(0.75f, 0.0f, 0.0f), (int)SpaceClass::IndoorSmall, glm::vec3(5.75f, 3.0f, 6.0f), "RoomA");
     ReverbZoneComponent& zb = world.Registry.get<ReverbZoneComponent>(MakeZone(world, glm::vec3(11.25f, 0.0f, 0.0f), (int)SpaceClass::IndoorLarge, glm::vec3(5.75f, 3.0f, 6.0f), "RoomB"));
     zb.ReverbMode = 1;
-    zb.Reverb = {0.8f, 2.2f, 0.5f, 20.0f, 0.4f, 0.3f};
+    zb.Ir = "assets/Audio/IR/room_b.wav";
+    zb.WetDb = 1.5f;
     MakeZone(world, glm::vec3(60.0f, 0.0f, 0.0f), (int)SpaceClass::IndoorSmall, glm::vec3(5.0f), "RoomC");
     const entt::entity portal = MakePortal(world, glm::vec3(6.0f, 0.0f, 0.0f), 90.0f);
     (void)roomA;
     FakeBackend be;
     WeaponAudio& wa = WeaponAudio::Get();
     wa.StartForTest("", &be);
+    wa.SetManifestForTest(IrManifest());
     wa.SetWorld(&world);
     wa.Zones().Build(world);
     SoundPlayer& pl = wa.Player();
@@ -1839,8 +1763,8 @@ void TestPortalVoicesAndFallback() {
     wa.PlayKeyed(*s, glm::vec3(-3.0f, 0.0f, 0.0f), false, 1.0f);
     wa.Update(0.1f);
     CHECK(be.RemoteActive && be.RemoteCalls >= 1);
-    CHECK(std::fabs(be.LastRemote.DecayTime - ReverbPresetFor((int)SpaceClass::IndoorSmall).DecayTime) < 0.01f); // room A's preset
-    CHECK(std::fabs(be.LastReverb.DecayTime - 2.2f) < 0.01f);                                                    // the listener's own room (B, custom) on the main bus
+    CHECK(be.LastRemote.Count == 1 && be.LastRemote.Layers[0].Ir == "assets/Audio/IR/indoor_small_1.wav"); // room A's reverb
+    CHECK(be.LastReverb.Count == 1 && be.LastReverb.Layers[0].Ir == "assets/Audio/IR/room_b.wav");          // the listener's own room (B, custom) on the main bus
     be.Voices[0].Playing = false; // the voice ends
     wa.Update(1.0f);
     CHECK(be.RemoteActive); // still ringing
@@ -1875,6 +1799,693 @@ void TestPortalVoicesAndFallback() {
     wa.Stop();
 }
 
+// --- convolution reverb, limiter, meters, mix_db, ambience (the sound engine, round SE-1) -------------------------------------------
+
+// A decaying noise burst: an impulse response fixture (a test signal, not engine audio).
+std::vector<float> NoiseIr(int n, float rt60Seconds, std::uint32_t seed, int rate = 48000) {
+    Lcg rng;
+    rng.S = seed;
+    std::vector<float> h((size_t)n);
+    for (int i = 0; i < n; ++i) h[(size_t)i] = rng.Next() * std::exp(-6.9078f * (float)i / (rt60Seconds * (float)rate));
+    return h;
+}
+
+void ProcessInBlocks(Convolver& c, const std::vector<float>& in, std::vector<float>& l, std::vector<float>& r, int sleepMs = 0) {
+    const int sizes[] = {480, 37, 1024, 256, 255, 4096, 1}; // an audio callback is not a multiple of anything
+    l.assign(in.size(), 0.0f);
+    r.assign(in.size(), 0.0f);
+    size_t pos = 0;
+    int k = 0;
+    while (pos < in.size()) {
+        const size_t b = std::min((size_t)sizes[k++ % 7], in.size() - pos);
+        c.Process(in.data() + pos, l.data() + pos, r.data() + pos, (int)b);
+        pos += b;
+        if (sleepMs > 0) std::this_thread::sleep_for(std::chrono::milliseconds(sleepMs));
+    }
+}
+
+void TestConvolverUnitImpulseAndPartitionBoundaries() {
+    // A unit impulse in gives the impulse response out (both channels), across the direct taps (< 256), the head partitions (256 ..
+    // 8191) and the tail's 4096 partitions (8192 ..): 17288 taps = three tail partitions.
+    const int n = 3 * 4096 + 5000;
+    Lcg rng;
+    std::vector<float> l((size_t)n), r((size_t)n);
+    for (int i = 0; i < n; ++i) {
+        const float decay = std::exp(-3.0f * (float)i / (float)n);
+        l[(size_t)i] = rng.Next() * decay;
+        r[(size_t)i] = rng.Next() * decay;
+    }
+    IrBuildOptions raw;
+    raw.Normalize = false;
+    raw.FadeSeconds = 0.0f;
+    const auto ir = IrData::FromSamples(l.data(), r.data(), n, 48000, raw);
+    CHECK(ir->Length == n && ir->HeadParts == Conv::kHeadParts && ir->TailParts == 3);
+    const int total = n + 2500;
+    std::vector<float> in((size_t)total, 0.0f), yl, yr;
+    in[0] = 1.0f;
+    Convolver c(ir, nullptr);
+    ProcessInBlocks(c, in, yl, yr);
+    float worst = 0.0f;
+    for (int i = 0; i < total; ++i) {
+        const float el = i < n ? l[(size_t)i] : 0.0f, er = i < n ? r[(size_t)i] : 0.0f;
+        worst = std::max({worst, std::fabs(yl[(size_t)i] - el), std::fabs(yr[(size_t)i] - er)});
+    }
+    CHECK(worst < 1e-4f);
+    // The boundaries themselves: the taps either side of 256, 8192 and each partition edge.
+    for (int edge : {255, 256, 257, 8191, 8192, 8193, 12287, 12288, 16383, 16384})
+        CHECK(std::fabs(yl[(size_t)edge] - l[(size_t)edge]) < 1e-4f && std::fabs(yr[(size_t)edge] - r[(size_t)edge]) < 1e-4f);
+    // An impulse later in the stream: the response starts there (no wrap, no history error).
+    std::vector<float> in2((size_t)total, 0.0f);
+    in2[5000] = 0.5f;
+    Convolver c2(ir, nullptr);
+    ProcessInBlocks(c2, in2, yl, yr);
+    float worst2 = 0.0f;
+    for (int i = 5000; i < total; ++i) worst2 = std::max(worst2, std::fabs(yl[(size_t)i] - (i - 5000 < n ? 0.5f * l[(size_t)(i - 5000)] : 0.0f)));
+    for (int i = 0; i < 5000; ++i) worst2 = std::max(worst2, std::fabs(yl[(size_t)i]));
+    CHECK(worst2 < 1e-4f);
+    // Reset forgets the history: the same impulse again gives the same response.
+    c.Reset();
+    ProcessInBlocks(c, in, yl, yr);
+    CHECK(std::fabs(yl[300] - l[300]) < 1e-4f && std::fabs(yl[9000] - l[9000]) < 1e-4f);
+}
+
+void TestConvolverAgainstDirectConvolution() {
+    // Arbitrary input: the output is the direct convolution (brute force), IR 9500 taps (a head, one tail partition), input long enough
+    // for the tail to matter.
+    Lcg rng;
+    const int ni = 10000, nh = 9500;
+    std::vector<float> h = NoiseIr(nh, 0.15f, 7u), x((size_t)ni);
+    for (float& v : x) v = rng.Next();
+    IrBuildOptions raw;
+    raw.Normalize = false;
+    raw.FadeSeconds = 0.0f;
+    const auto ir = IrData::FromSamples(h.data(), nullptr, nh, 48000, raw); // mono IR: both channels the same
+    const int total = ni + nh;
+    std::vector<float> in((size_t)total, 0.0f), yl, yr;
+    std::copy(x.begin(), x.end(), in.begin());
+    Convolver c(ir, nullptr);
+    ProcessInBlocks(c, in, yl, yr);
+    double worst = 0.0;
+    for (int i = 0; i < total; i += 7) { // every 7th output frame against the sum
+        double ref = 0.0;
+        const int k0 = std::max(0, i - (ni - 1)), k1 = std::min(nh - 1, i);
+        for (int k = k0; k <= k1; ++k) ref += (double)h[(size_t)k] * x[(size_t)(i - k)];
+        worst = std::max({worst, std::fabs(ref - yl[(size_t)i]), std::fabs(ref - yr[(size_t)i])});
+    }
+    CHECK(worst < 1e-3);
+}
+
+void TestConvolverWorkerThreadMatchesInline() {
+    // The tail blocks on the worker thread give the same signal as the inline run (paced like real time: the audio thread never waits),
+    // with none missed.
+    const int n = 3 * 4096 + 5000;
+    std::vector<float> l = NoiseIr(n, 0.3f, 11u), r = NoiseIr(n, 0.3f, 12u);
+    IrBuildOptions raw;
+    raw.Normalize = false;
+    raw.FadeSeconds = 0.0f;
+    const auto ir = IrData::FromSamples(l.data(), r.data(), n, 48000, raw);
+    const int total = n + 2000;
+    std::vector<float> in((size_t)total, 0.0f), a, ar, b, br;
+    Lcg rng;
+    for (int i = 0; i < 9000; ++i) in[(size_t)i] = 0.3f * rng.Next();
+    Convolver inl(ir, nullptr);
+    ProcessInBlocks(inl, in, a, ar);
+    TailWorker worker;
+    Convolver thr(ir, &worker);
+    ProcessInBlocks(thr, in, b, br, 5);
+    while (!thr.Idle()) std::this_thread::yield();
+    float worst = 0.0f;
+    for (size_t i = 0; i < a.size(); ++i) worst = std::max({worst, std::fabs(a[i] - b[i]), std::fabs(ar[i] - br[i])});
+    CHECK(thr.LateBlocks() == 0 && worst < 1e-5f && worker.Jobs() >= 4);
+}
+
+void TestConvolutionReverbCrossfadeContinuity() {
+    const int rate = 48000;
+    const std::vector<float> a = NoiseIr(rate / 3, 0.25f, 21u), b = NoiseIr(rate / 3, 0.25f, 22u);
+    const auto irA = IrData::FromSamples(a.data(), b.data(), (int)a.size(), rate), irB = IrData::FromSamples(b.data(), a.data(), (int)a.size(), rate);
+    ConvolutionReverb verb(rate, false);
+    const int ia = verb.AddIr(irA), ib = verb.AddIr(irB);
+    CHECK(ia == 0 && ib == 1 && verb.GetInfo().Active == 0);
+    auto target = [&](int inst) {
+        ReverbRtTarget t;
+        t.Count = 1;
+        t.Layers[0].Instance = inst;
+        t.Layers[0].Weight = 1.0f;
+        t.Layers[0].WetLin = 1.0f;
+        t.GlideSeconds = 0.5f;
+        verb.SetTarget(t);
+    };
+    // A steady tone through space A, then B: the output is one continuous tone-ish signal (no step at the change of space), and the second
+    // convolver only runs while the layers cross.
+    const int block = 480;
+    std::vector<float> in((size_t)block * 2), out((size_t)block * 2);
+    float phase = 0.0f;
+    std::vector<float> wet;
+    auto run = [&](int blocks, bool tone) {
+        Lcg rng;
+        for (int k = 0; k < blocks; ++k) {
+            for (int i = 0; i < block; ++i) {
+                phase += 6.2831853f * 220.0f / (float)rate;
+                in[(size_t)(2 * i)] = in[(size_t)(2 * i + 1)] = tone ? 0.3f * std::sin(phase) : 0.3f * rng.Next();
+            }
+            verb.Process(in.data(), out.data(), block);
+            for (int i = 0; i < block; ++i) wet.push_back(out[(size_t)(2 * i)]);
+        }
+    };
+    target(0);
+    run(100, true); // 1 s in A
+    const size_t steadyEnd = wet.size();
+    CHECK(verb.GetInfo().Active == 1 && verb.GetInfo().Weight[0] > 0.99f);
+    target(1);
+    run(5, true);
+    CHECK(verb.GetInfo().Active == 2); // crossfading: both run
+    run(60, true);                     // the whole 0.5 s glide and then some
+    CHECK(verb.GetInfo().Active == 1 && !verb.GetInfo().On[0] && verb.GetInfo().On[1]);
+    float steadyStep = 0.0f, steadyStepB = 0.0f, crossStep = 0.0f;
+    for (size_t i = steadyEnd - 4800 + 1; i < steadyEnd; ++i) steadyStep = std::max(steadyStep, std::fabs(wet[i] - wet[i - 1]));
+    for (size_t i = wet.size() - 4800 + 1; i < wet.size(); ++i) steadyStepB = std::max(steadyStepB, std::fabs(wet[i] - wet[i - 1]));
+    for (size_t i = steadyEnd + 1; i < steadyEnd + 33600; ++i) crossStep = std::max(crossStep, std::fabs(wet[i] - wet[i - 1]));
+    CHECK(steadyStep > 1e-4f && steadyStepB > 1e-4f && crossStep < 1.6f * std::max(steadyStep, steadyStepB)); // a click would be many times the tone's own step
+    // Equal power: noise through two uncorrelated responses of the same energy keeps its level across the crossfade.
+    ConvolutionReverb v2(rate, false);
+    v2.AddIr(irA);
+    v2.AddIr(irB);
+    ReverbRtTarget t;
+    t.Count = 1;
+    t.Layers[0] = {0, 1.0f, 1.0f, 0.0f, 0.0f, 0.0f};
+    t.GlideSeconds = 1.0f;
+    v2.SetTarget(t);
+    Lcg rng;
+    std::vector<double> e; // energy per block
+    auto runNoise = [&](int blocks) {
+        for (int k = 0; k < blocks; ++k) {
+            for (int i = 0; i < block * 2; ++i) in[(size_t)i] = 0.3f * rng.Next();
+            for (int i = 0; i < block; ++i) in[(size_t)(2 * i + 1)] = in[(size_t)(2 * i)];
+            v2.Process(in.data(), out.data(), block);
+            double s = 0.0;
+            for (int i = 0; i < block * 2; ++i) s += (double)out[(size_t)i] * out[(size_t)i];
+            e.push_back(s);
+        }
+    };
+    runNoise(150);
+    t.Layers[0].Instance = 1;
+    v2.SetTarget(t);
+    runNoise(150); // the 1 s crossfade and 0.5 s after
+    auto mean = [&](size_t from, size_t to) { double s = 0.0; for (size_t i = from; i < to; ++i) s += e[i]; return s / (double)(to - from); };
+    const double before = mean(100, 150), mid = mean(150 + 40, 150 + 60), after = mean(150 + 110, 300);
+    CHECK(std::fabs(Db(mid / before)) < 2.0 && std::fabs(Db(after / before)) < 2.0);
+}
+
+void TestConvolutionReverbLevelAndFilters() {
+    const int rate = 48000;
+    // Calibration: a normalised response and a wet gain of 0.5 return -6 dB of the dry energy (the send x wet contract).
+    const std::vector<float> h = NoiseIr(rate * 2 / 5, 0.3f, 31u), h2 = NoiseIr(rate * 2 / 5, 0.3f, 32u);
+    const auto ir = IrData::FromSamples(h.data(), h2.data(), (int)h.size(), rate);
+    ConvolutionReverb verb(rate, false);
+    verb.AddIr(ir);
+    ReverbRtTarget t;
+    t.Count = 1;
+    t.Layers[0] = {0, 1.0f, 0.5f, 0.0f, 0.0f, 0.0f};
+    t.GlideSeconds = 0.01f;
+    verb.SetTarget(t);
+    Lcg rng;
+    std::vector<float> in(960), out(960);
+    double dry = 0.0, wet = 0.0;
+    for (int k = 0; k < 400; ++k) { // 4 s: 3 s of noise, 1 s of tail
+        for (int i = 0; i < 480; ++i) in[(size_t)(2 * i)] = in[(size_t)(2 * i + 1)] = k < 300 ? 0.2f * rng.Next() : 0.0f;
+        verb.Process(in.data(), out.data(), 480);
+        for (int i = 0; i < 960; ++i) {
+            dry += (double)in[(size_t)i] * in[(size_t)i];
+            wet += (double)out[(size_t)i] * out[(size_t)i];
+        }
+    }
+    CHECK(std::fabs(Db(wet / dry) - 20.0 * std::log10(0.5)) < 1.0);
+    // Pre-delay: an impulse through a one-tap response comes out Pre-Delay later.
+    std::vector<float> delta(600, 0.0f);
+    delta[0] = 1.0f;
+    const auto tap = IrData::FromSamples(delta.data(), delta.data(), 600, rate, IrBuildOptions{true, 8.0f, 0.0f});
+    auto impulseResponse = [&](float preMs, float hfDb, float lowCutHz, float toneHz) {
+        ConvolutionReverb v(rate, false);
+        v.AddIr(tap);
+        ReverbRtTarget tt;
+        tt.Count = 1;
+        tt.Layers[0] = {0, 1.0f, 1.0f, preMs, hfDb, lowCutHz};
+        tt.GlideSeconds = 0.01f;
+        v.SetTarget(tt);
+        std::vector<float> a(960, 0.0f), o(960), res;
+        if (toneHz <= 0.0f) a[0] = a[1] = 1.0f;
+        float ph = 0.0f;
+        for (int k = 0; k < (toneHz > 0.0f ? 100 : 4); ++k) {
+            if (toneHz > 0.0f)
+                for (int i = 0; i < 480; ++i) {
+                    ph += 6.2831853f * toneHz / (float)rate;
+                    a[(size_t)(2 * i)] = a[(size_t)(2 * i + 1)] = 0.5f * std::sin(ph);
+                }
+            v.Process(a.data(), o.data(), 480);
+            for (int i = 0; i < 480; ++i) res.push_back(o[(size_t)(2 * i)]);
+            std::fill(a.begin(), a.end(), 0.0f);
+        }
+        return res;
+    };
+    const std::vector<float> pd = impulseResponse(10.0f, 0.0f, 0.0f, 0.0f);
+    size_t peak = 0;
+    for (size_t i = 0; i < pd.size(); ++i)
+        if (std::fabs(pd[i]) > std::fabs(pd[peak])) peak = i;
+    CHECK(peak >= 478 && peak <= 482 && std::fabs(pd[100]) < 1e-3f);
+    // HF damping: 12 dB on a high shelf at 4 kHz takes ~12 dB off a 10 kHz tone and leaves a 200 Hz tone alone.
+    auto level = [&](const std::vector<float>& x) { double s = 0.0; for (size_t i = x.size() / 2; i < x.size(); ++i) s += (double)x[i] * x[i]; return Db(s); };
+    const double flat10k = level(impulseResponse(0.0f, 0.0f, 0.0f, 10000.0f)), damped10k = level(impulseResponse(0.0f, 12.0f, 0.0f, 10000.0f));
+    const double flat200 = level(impulseResponse(0.0f, 0.0f, 0.0f, 200.0f)), damped200 = level(impulseResponse(0.0f, 12.0f, 0.0f, 200.0f));
+    CHECK(flat10k - damped10k > 10.0 && flat10k - damped10k < 13.0 && std::fabs(flat200 - damped200) < 1.0);
+    // Low cut: 500 Hz takes a 100 Hz tone well down and leaves 2 kHz alone.
+    const double cut100 = level(impulseResponse(0.0f, 0.0f, 500.0f, 100.0f)), free100 = level(impulseResponse(0.0f, 0.0f, 0.0f, 100.0f));
+    const double cut2k = level(impulseResponse(0.0f, 0.0f, 500.0f, 2000.0f)), free2k = level(impulseResponse(0.0f, 0.0f, 0.0f, 2000.0f));
+    CHECK(free100 - cut100 > 15.0 && std::fabs(free2k - cut2k) < 1.5);
+}
+
+void TestConvolverCost() {
+    // The budget: <= 2 % of one core per active convolver (a 3 s response, 48 kHz, 480-frame callbacks). Measured here and printed:
+    // `inline` is the head and the tail together (the worst case, no worker); `audio thread` is what the callback does with the tail
+    // on the worker.
+    const int rate = 48000, n = 3 * rate;
+    const std::vector<float> l = NoiseIr(n, 1.2f, 41u), r = NoiseIr(n, 1.2f, 42u);
+    const auto ir = IrData::FromSamples(l.data(), r.data(), n, rate);
+    const int seconds = 10, block = 480, blocks = seconds * rate / block;
+    std::vector<float> in((size_t)block), a((size_t)block), b((size_t)block);
+    Lcg rng;
+    for (float& v : in) v = 0.2f * rng.Next();
+    auto measure = [&](Convolver& c) {
+        for (int k = 0; k < 40; ++k) c.Process(in.data(), a.data(), b.data(), block); // warm
+        const auto t0 = std::chrono::steady_clock::now();
+        for (int k = 0; k < blocks; ++k) c.Process(in.data(), a.data(), b.data(), block);
+        return std::chrono::duration<double>(std::chrono::steady_clock::now() - t0).count();
+    };
+    Convolver inl(ir, nullptr);
+    const double tInline = measure(inl);
+    TailWorker worker;
+    Convolver thr(ir, &worker);
+    const double tAudio = measure(thr);
+    while (!thr.Idle()) std::this_thread::yield();
+    const double tWorker = worker.TotalMicros() * 1e-6;
+    std::printf("[AudioPerf] convolver, 3 s IR, 48 kHz: inline %.2f %% of a core; audio thread %.2f %%, tail worker %.2f %% (%llu blocks, %llu late)\n",
+                100.0 * tInline / (double)(seconds + 0.4), 100.0 * tAudio / (double)(seconds + 0.4), 100.0 * tWorker / (double)(seconds + 0.4),
+                (unsigned long long)worker.Jobs(), (unsigned long long)thr.LateBlocks());
+    CHECK(tInline / (double)seconds < 0.05); // (a loose bound: other jobs share the machine; the printed numbers are the report)
+}
+
+void TestMasterLimiterNeverExceedsCeiling() {
+    const int rate = 48000;
+    MasterLimiter lim(rate);
+    const float ceil = std::pow(10.0f, -1.0f / 20.0f);
+    CHECK(lim.LatencyFrames() == (int)std::lround(0.0015f * (float)rate) + 2);
+    // quiet, a +12 dB burst (a 1 kHz tone at 4.0, then noise at +-4), quiet again.
+    std::vector<float> in;
+    Lcg rng;
+    auto tone = [&](int frames, float amp, float hz) {
+        for (int i = 0; i < frames; ++i) {
+            const float v = amp * std::sin(6.2831853f * hz * (float)in.size() / 2.0f / (float)rate);
+            in.push_back(v);
+            in.push_back(v);
+        }
+    };
+    tone(rate / 10, 0.05f, 1000.0f);
+    const size_t burstStart = in.size() / 2;
+    tone(rate / 25, 3.98f, 1000.0f);
+    for (int i = 0; i < 2000; ++i) {
+        const float v = 3.98f * rng.Next();
+        in.push_back(v);
+        in.push_back(-v);
+    }
+    const size_t burstEnd = in.size() / 2;
+    tone(rate * 7 / 10, 0.05f, 1000.0f);
+    std::vector<float> out(in.size());
+    for (size_t pos = 0; pos < in.size() / 2; pos += 480) lim.Process(in.data() + 2 * pos, out.data() + 2 * pos, (int)std::min<size_t>(480, in.size() / 2 - pos));
+    float peak = 0.0f, inter = 0.0f;
+    for (size_t i = 0; i < out.size() / 2; ++i) {
+        peak = std::max({peak, std::fabs(out[2 * i]), std::fabs(out[2 * i + 1])});
+        if (i >= 3 && i + 1 < out.size() / 2) // an inter-sample estimate (the same cubic the limiter reads)
+            for (int q = 1; q <= 3; ++q) {
+                const float p0 = out[2 * (i - 2)], p1 = out[2 * (i - 1)], p2 = out[2 * i], p3 = out[2 * (i + 1)], t = 0.25f * (float)q;
+                inter = std::max(inter, std::fabs(0.5f * ((2.0f * p1) + (-p0 + p2) * t + (2.0f * p0 - 5.0f * p1 + 4.0f * p2 - p3) * t * t + (-p0 + 3.0f * p1 - 3.0f * p2 + p3) * t * t * t)));
+            }
+    }
+    CHECK(peak <= ceil + 1e-6f);  // the sample peak is a guarantee
+    CHECK(inter <= ceil * 1.04f); // and the reconstructed peak stays within a few tenths of a dB of it
+    CHECK(lim.TakeGainReductionDb() > 11.0f);
+    // Below the ceiling it does nothing: the input, delayed by the latency, bit for bit.
+    const int lat = lim.LatencyFrames();
+    float maxDiff = 0.0f;
+    for (int i = 0; i < (int)burstStart - 100 - lat; ++i) maxDiff = std::max(maxDiff, std::fabs(out[2 * (size_t)(i + lat)] - in[2 * (size_t)i]));
+    CHECK(maxDiff < 1e-6f);
+    // The release: not instant (a few ms after the burst the quiet tone is still ducked), and fully back well after it.
+    auto amp = [&](size_t from, size_t frames) { float m = 0.0f; for (size_t i = from; i < from + frames; ++i) m = std::max(m, std::fabs(out[2 * i])); return m; };
+    CHECK(amp(burstEnd + (size_t)lat + 100, 48) < 0.7f * 0.05f);
+    CHECK(amp(burstEnd + (size_t)(0.6f * (float)rate), 480) > 0.95f * 0.05f * 0.99f);
+    // The ceiling is a setting; off passes everything (delayed).
+    LimiterSettings s;
+    s.CeilingDb = -6.0f;
+    lim.Configure(s);
+    std::vector<float> loud(2 * 48000), y(loud.size());
+    for (size_t i = 0; i < 48000; ++i) loud[2 * i] = loud[2 * i + 1] = 2.0f * std::sin(0.05f * (float)i);
+    lim.Process(loud.data(), y.data(), 48000);
+    float p6 = 0.0f;
+    for (float v : y) p6 = std::max(p6, std::fabs(v));
+    CHECK(p6 <= std::pow(10.0f, -6.0f / 20.0f) + 1e-6f && p6 > 0.4f);
+    s.Enabled = false;
+    lim.Configure(s);
+    lim.Process(loud.data(), y.data(), 48000);
+    float pOff = 0.0f;
+    for (float v : y) pOff = std::max(pOff, std::fabs(v));
+    CHECK(pOff > 1.9f);
+}
+
+void TestLoudnessMeterReadsALevel() {
+    const int rate = 48000;
+    LoudnessMeter m(rate);
+    std::vector<float> x((size_t)rate * 2 * 5);
+    for (size_t i = 0; i < x.size() / 2; ++i) x[2 * i] = x[2 * i + 1] = 0.1f * std::sin(6.2831853f * 1000.0f * (float)i / (float)rate);
+    for (size_t pos = 0; pos < x.size() / 2; pos += 480) m.Process(x.data() + 2 * pos, 480);
+    // The K-weighting is +0.69 dB at 1 kHz, which the -0.691 offset takes back: two channels of a 0.1 sine read 10 log10(2 x 0.005) = -20 LUFS,
+    // the peak -20 dBFS.
+    CHECK(std::fabs(m.MomentaryLufs() + 20.0f) < 0.2f && std::fabs(m.ShortTermLufs() + 20.0f) < 0.2f && std::fabs(m.PeakDb() + 20.0f) < 0.2f);
+    CHECK(std::fabs(LoudnessMeter::MomentaryMax(x, rate, 0, x.size() / 2) + 20.0f) < 0.2f);
+    CHECK(std::fabs(LoudnessMeter::PeakDb(x, 0, x.size() / 2) + 20.0f) < 0.1f && std::fabs(LoudnessMeter::RmsDb(x, 0, x.size() / 2) + 23.0f) < 0.1f);
+    // Louder by 6 dB reads 6 dB more.
+    for (float& v : x) v *= 2.0f;
+    LoudnessMeter m2(rate);
+    for (size_t pos = 0; pos < x.size() / 2; pos += 480) m2.Process(x.data() + 2 * pos, 480);
+    CHECK(std::fabs((m2.MomentaryLufs() - m.MomentaryLufs()) - 6.02f) < 0.1f);
+}
+
+SoundManifest MixManifest() {
+    SoundManifest m;
+    const char* text = R"({"mix":{"distance_refs_m":{"impact":5,"npc_shot":10,"body_fall":5}},"files":[
+        {"file":"Impacts/concrete_1.wav","key":"snd.impact.concrete","layer":"","mix_db":-6},
+        {"file":"Weapons/AKS74U/fire_close_1.wav","key":"snd.ak.fire_close","layer":"close","mix_db":-3},
+        {"file":"Foley/step_wood/walk_1.wav","key":"snd.foley.step_wood.walk","layer":"","mix_db":-9.5},
+        {"file":"Ambience/amb_a_1.wav","key":"snd.amb.a","layer":"ambience","mix_db":-4,"loop":true},
+        {"file":"Ambience/amb_b_1.wav","key":"snd.amb.b","layer":"ambience","mix_db":-8,"loop":true}]})";
+    CHECK(SoundManifest::FromJson(text, m));
+    return m;
+}
+
+void TestMixDbAppliedOnceAndRefDistance() {
+    FakeBackend be;
+    WeaponAudio& wa = WeaponAudio::Get();
+    wa.StartForTest("", &be);
+    wa.SetManifestForTest(MixManifest());
+    SoundPlayer::Limiter off;
+    off.Enabled = false;
+    wa.Player().SetLimiter(off);
+    CHECK(wa.Manifest().DistanceRef("impact") == 5.0f && wa.Manifest().DistanceRef("npc_shot") == 10.0f && wa.Manifest().DistanceRef("nope") == 0.0f);
+    // A keyed set: every voice plays at the set's volume x 10^(mix_db / 20), once. 2D: nothing else on it.
+    SoundSet* imp = wa.KeySet("snd.impact.concrete", [](SoundSet& s) { s.MinDistance = 2.0f; s.MaxDistance = 60.0f; s.VolumeJitterDb = 0.0f; });
+    CHECK(imp->Files.size() == 1 && imp->FileGainDb.size() == 1 && imp->FileGainDb[0] == -6.0f && imp->RefDistance == 5.0f);
+    const float lin = std::pow(10.0f, -6.0f / 20.0f);
+    wa.PlayKeyed(*imp, glm::vec3(0.0f), true, 1.0f);
+    CHECK(std::fabs(be.Voices.back().Volume - lin) < 1e-4f);
+    // 3D: calibrated so it is the spec (0 dB re mix_db) at the reference distance: the log rolloff gives Min / d there, the set carries d / Min.
+    wa.PlayKeyed(*imp, glm::vec3(8.0f, 0.0f, 0.0f), false, 1.0f);
+    CHECK(std::fabs(be.Voices.back().Volume - lin * 5.0f / 2.0f) < 1e-3f);
+    CHECK(std::fabs(be.Voices.back().Volume * (2.0f / 5.0f) - lin) < 1e-3f); // x the rolloff at 5 m (Min / d) = the spec
+    // The gun's layers: close at -3 dB, the player's shot also at the player gain (and that only), a soldier's at the 10 m reference.
+    WeaponAudioProfile* p = wa.Profile("ak");
+    p->Close.Set.VolumeJitterDb = 0.0f;
+    wa.FillSet(p->Close.Set);
+    CHECK(p->Close.Set.Files.size() == 1 && p->Close.Set.FileGainDb[0] == -3.0f && p->Close.Set.RefDistance == 10.0f);
+    be.Voices.clear();
+    wa.Shot("ak", glm::vec3(0.0f), true);
+    CHECK(be.Voices.size() == 1 && std::fabs(be.Voices[0].Volume - p->PlayerGain * p->Volume * std::pow(10.0f, -3.0f / 20.0f)) < 1e-3f);
+    be.Voices.clear();
+    wa.Update(1.0f);
+    wa.SetListener(glm::vec3(0.0f));
+    wa.Shot("ak", glm::vec3(10.0f, 0.0f, 0.0f), false);
+    CHECK(be.Voices.size() == 1 && std::fabs(be.Voices[0].Volume - std::pow(10.0f, -3.0f / 20.0f) * 10.0f / p->Close.Set.MinDistance) < 2e-3f);
+    // Foley steps (no ref distance): the same single mix_db.
+    SoundSet* step = wa.FoleySet("step_wood", "walk");
+    step->VolumeJitterDb = 0.0f;
+    be.Voices.clear();
+    SoundPlayer::Request r;
+    wa.Player().Play(*step, r);
+    CHECK(be.Voices.size() == 1 && std::fabs(be.Voices[0].Volume - std::pow(10.0f, -9.5f / 20.0f)) < 1e-4f);
+    // A Data File's own files and mixDb win over the manifest's: the manifest does not replace them, the set's mixDb replaces mix_db.
+    p->ApplyJson(R"({"layers":{"mech":{"files":["assets/mine.wav"],"mixDb":-12}}})");
+    CHECK(p->Mech.Set.FilesExplicit && p->Mech.Set.Files.size() == 1 && p->Mech.Set.FileGainDb.empty() && std::fabs(p->Mech.Set.GainLin(0) - std::pow(10.0f, -12.0f / 20.0f)) < 1e-5f);
+    wa.FillSet(p->Mech.Set); // (has files: left alone)
+    CHECK(p->Mech.Set.Files[0] == "assets/mine.wav");
+    SoundSet viaJson = SoundSet::FromJson("snd.x.y", R"({"files":["a.wav"],"mixDb":-3})");
+    CHECK(viaJson.HasMixDb && viaJson.MixDb == -3.0f && SoundSet::FromJson("snd.x.y", viaJson.ToJson()).MixDb == -3.0f);
+    wa.Stop();
+}
+
+ReverbZoneVolume AmbienceZone(const glm::vec3& at, float radius, SpaceClass c, const char* key, float volume, int priority, float fade) {
+    ReverbZoneVolume z;
+    z.Center = at;
+    z.Shape = 1;
+    z.Radius = radius;
+    z.FadeDistance = fade;
+    z.Class = c;
+    z.Reverb.Class = (int)c;
+    z.Priority = priority;
+    z.Ambience = key;
+    z.AmbienceVolume = volume;
+    return z;
+}
+
+void TestZoneAmbienceBeds() {
+    FakeBackend be;
+    WeaponAudio& wa = WeaponAudio::Get();
+    wa.StartForTest("", &be);
+    wa.SetManifestForTest(MixManifest());
+    BoxRoom field{{-5000.0f, -50.0f, -5000.0f}, {5000.0f, 500.0f, 5000.0f}};
+    wa.ListenerProbe().SetRayFn(field.Fn());
+    // Two zones side by side: A (hall) with "snd.amb.a", B (room) with "snd.amb.b" at half volume, a 4 m fade on each.
+    wa.Zones().Set({AmbienceZone(glm::vec3(0.0f), 10.0f, SpaceClass::IndoorLarge, "snd.amb.a", 1.0f, 0, 4.0f),
+                    AmbienceZone(glm::vec3(30.0f, 0.0f, 0.0f), 10.0f, SpaceClass::IndoorSmall, "snd.amb.b", 0.5f, 0, 4.0f)});
+    auto level = [&](const char* file) {
+        float v = -1.0f;
+        for (const auto& x : be.Voices)
+            if (x.Playing && x.Voice.File == file) v = x.Volume;
+        return v;
+    };
+    auto step = [&](float seconds) {
+        for (float t = 0.0f; t < seconds - 1e-4f; t += 0.05f) wa.Update(0.05f);
+    };
+    const float baseA = std::pow(10.0f, -4.0f / 20.0f), baseB = std::pow(10.0f, -8.0f / 20.0f);
+    // Nothing yet: outside both zones, no bed plays.
+    wa.SetListener(glm::vec3(15.0f, 0.0f, 0.0f));
+    step(1.5f);
+    CHECK(level("assets/Audio/Ambience/amb_a_1.wav") < 0.0f && level("assets/Audio/Ambience/amb_b_1.wav") < 0.0f);
+    // Inside A: the bed starts, a 2D loop on the ambient bus with no reverb send, fading in over a second to its mix_db level.
+    wa.SetListener(glm::vec3(0.0f));
+    step(0.25f);
+    const float early = level("assets/Audio/Ambience/amb_a_1.wav");
+    CHECK(early > 0.0f && early < 0.4f * baseA); // a quarter of the way up the 1 s fade
+    step(1.2f);
+    CHECK(std::fabs(level("assets/Audio/Ambience/amb_a_1.wav") - baseA) < 0.01f && level("assets/Audio/Ambience/amb_b_1.wav") < 0.0f);
+    int loops = 0;
+    for (const auto& v : be.Voices)
+        if (v.Playing && v.Voice.Loop) {
+            ++loops;
+            CHECK(!v.Voice.Spatial && v.Voice.Bus == AudioEngine::Bus::Ambient && v.Voice.ReverbSend == 0.0f && !v.Voice.Occlusion);
+        }
+    CHECK(loops == 1);
+    // On the edge shared by two zones the beds crossfade by their zone weights (equal power): half each -> sqrt(0.5) of A, sqrt(0.5) x 0.5 of B.
+    wa.Zones().Set({AmbienceZone(glm::vec3(0.0f), 12.0f, SpaceClass::IndoorLarge, "snd.amb.a", 1.0f, 0, 4.0f),
+                    AmbienceZone(glm::vec3(20.0f, 0.0f, 0.0f), 12.0f, SpaceClass::IndoorSmall, "snd.amb.b", 0.5f, 0, 4.0f)});
+    wa.SetListener(glm::vec3(10.0f, 0.0f, 0.0f)); // 2 m inside each 4 m fade: both zones at weight 0.5
+    const ReverbZoneMix mid = wa.Zones().Mix(glm::vec3(10.0f, 0.0f, 0.0f));
+    CHECK(mid.ClaimCount == 2);
+    float wa_ = 0.0f, wb = 0.0f;
+    for (int i = 0; i < mid.ClaimCount; ++i) (wa.Zones().Zones()[(size_t)mid.Claims[i].Zone].Ambience == "snd.amb.a" ? wa_ : wb) = mid.Claims[i].Weight;
+    step(2.5f);
+    CHECK(std::fabs(level("assets/Audio/Ambience/amb_a_1.wav") - std::sqrt(wa_) * baseA) < 0.01f);
+    CHECK(std::fabs(level("assets/Audio/Ambience/amb_b_1.wav") - std::sqrt(wb) * 0.5f * baseB) < 0.01f);
+    // A teleport is a fade, not a step: from B back to A, A comes up by at most 1 per second.
+    wa.SetListener(glm::vec3(0.0f));
+    wa.Update(0.1f);
+    CHECK(level("assets/Audio/Ambience/amb_a_1.wav") < std::sqrt(wa_) * baseA + 0.1f * baseA + 0.01f);
+    step(2.0f);
+    CHECK(std::fabs(level("assets/Audio/Ambience/amb_a_1.wav") - baseA) < 0.01f && level("assets/Audio/Ambience/amb_b_1.wav") < 0.0f); // B faded out and stopped
+    // No ambience key: nothing plays; a key with no recording: nothing plays either.
+    wa.Zones().Set({AmbienceZone(glm::vec3(0.0f), 12.0f, SpaceClass::IndoorLarge, "", 1.0f, 0, 0.0f)});
+    step(1.5f);
+    CHECK(level("assets/Audio/Ambience/amb_a_1.wav") < 0.0f);
+    wa.Zones().Set({AmbienceZone(glm::vec3(0.0f), 12.0f, SpaceClass::IndoorLarge, "snd.amb.missing", 1.0f, 0, 0.0f)});
+    const size_t before = be.Voices.size();
+    step(1.5f);
+    CHECK(be.Voices.size() == before);
+    // Stop (the end of Play) stops them all.
+    wa.Zones().Set({AmbienceZone(glm::vec3(0.0f), 12.0f, SpaceClass::IndoorLarge, "snd.amb.a", 1.0f, 0, 0.0f)});
+    step(1.5f);
+    CHECK(level("assets/Audio/Ambience/amb_a_1.wav") > 0.0f);
+    wa.Stop();
+    CHECK(be.Live() == 0);
+}
+
+void TestReverbZoneOldKeysAndNewFields() {
+    if (ComponentRegistry::All().empty()) ComponentRegistry::RegisterEngineComponents();
+    // A scene saved before the convolution reverb: its Reverb Zone keys still load and mean something sensible.
+    const char* oldScene = R"({"formatVersion":4,"empties":[
+        {"id":1,"name":"Hall","parentId":-1,"position":[0,0,0],"rotation":[0,0,0,1],"scale":[1,1,1],
+         "Reverb Zone":{"Decay Time":3.4,"Early/Late Mix":0.4,"Enabled":true,"Extents":[25,8,15],"Fade Distance":1.5,"HF Damping":0.2,"Pre-Delay ms":36.0,
+                        "Priority":30,"Radius":6.0,"Reverb Mode":"Custom","Room Size":0.95,"Shape":"Box","Tail Class":"Indoor Large","Tail Gain":1.1,"Wet Level":0.35}}]})";
+    World world;
+    AssetLibrary assets;
+    CHECK(SceneSerializer::LoadFromString(world, assets, oldScene));
+    const ReverbZoneComponent* z = nullptr;
+    for (const entt::entity e : world.Registry.view<ReverbZoneComponent>()) z = &world.Registry.get<ReverbZoneComponent>(e);
+    CHECK(z != nullptr);
+    if (!z) return;
+    CHECK(z->ReverbMode == 1 && z->TailClass == 3 && z->PreDelayMs == 36.0f && z->Old.WetLevel == 0.35f && z->Old.HfDamping == 0.2f && z->Priority == 30);
+    const ReverbPreset r = z->Resolved();
+    CHECK(std::fabs(r.WetDb) < 1e-4f && std::fabs(r.HfDampDb - 2.0f) < 1e-4f && r.PreDelayMs == 36.0f && r.Ir.empty() && r.Class == 3); // 0.35 is that class's old default: no trim
+    CHECK(z->Ambience.empty() && z->AmbienceVolume == 1.0f && z->WetDb == 0.0f && z->LowCutHz == 80.0f);
+    // The new fields round-trip, under their own keys.
+    World w2;
+    {
+        const entt::entity e = w2.Registry.create();
+        w2.Registry.emplace<TransformComponent>(e);
+        w2.Registry.emplace<NameComponent>(e).Name = "Room";
+        ReverbZoneComponent& c = w2.Registry.emplace<ReverbZoneComponent>(e);
+        c.ReverbMode = 1;
+        c.Ir = "assets/Audio/IR/x.wav";
+        c.WetDb = -2.5f;
+        c.PreDelayMs = 12.0f;
+        c.HfDampDb = 3.0f;
+        c.LowCutHz = 140.0f;
+        c.Ambience = "snd.amb.indoor_large";
+        c.AmbienceVolume = 0.6f;
+    }
+    const std::string saved = SceneSerializer::SaveToString(w2, assets);
+    CHECK(saved.find("\"Wet dB\"") != std::string::npos && saved.find("\"Ambience\"") != std::string::npos && saved.find("\"Ambience Volume\"") != std::string::npos);
+    World w3;
+    CHECK(SceneSerializer::LoadFromString(w3, assets, saved));
+    const ReverbZoneComponent* c3 = nullptr;
+    for (const entt::entity e : w3.Registry.view<ReverbZoneComponent>()) c3 = &w3.Registry.get<ReverbZoneComponent>(e);
+    CHECK(c3 && c3->Ir == "assets/Audio/IR/x.wav" && c3->WetDb == -2.5f && c3->PreDelayMs == 12.0f && c3->HfDampDb == 3.0f && c3->LowCutHz == 140.0f &&
+          c3->Ambience == "snd.amb.indoor_large" && std::fabs(c3->AmbienceVolume - 0.6f) < 1e-6f);
+    // The fields are reflected with tooltips and the labels the scene lanes write.
+    for (const char* label : {"IR", "Wet (dB)", "Pre-Delay (ms)", "HF Damping (dB)", "Low Cut (Hz)", "Ambience", "Ambience Volume", "Tail Class", "Reverb Mode"}) {
+        bool found = false;
+        for (const auto& rc : ComponentRegistry::All())
+            if (std::string(rc.Meta.Name) == "Reverb Zone")
+                for (const ReflectField& f : rc.Meta.Fields)
+                    if (std::string(f.Name) == label) found = f.Tooltip && f.Tooltip[0];
+        CHECK(found);
+    }
+}
+
+// --- the real node graph, offline (no audio device) -------------------------------------------------------------------------
+
+void WriteWav16(const std::filesystem::path& path, const std::vector<float>& stereo, int rate) {
+    std::ofstream f(path, std::ios::binary);
+    auto u32 = [&](std::uint32_t v) { f.write(reinterpret_cast<const char*>(&v), 4); };
+    auto u16 = [&](std::uint16_t v) { f.write(reinterpret_cast<const char*>(&v), 2); };
+    const std::uint32_t bytes = (std::uint32_t)stereo.size() * 2;
+    f.write("RIFF", 4);
+    u32(36 + bytes);
+    f.write("WAVEfmt ", 8);
+    u32(16);
+    u16(1);
+    u16(2);
+    u32((std::uint32_t)rate);
+    u32((std::uint32_t)rate * 4);
+    u16(4);
+    u16(16);
+    f.write("data", 4);
+    u32(bytes);
+    for (float v : stereo) {
+        const std::int16_t s = (std::int16_t)std::lround(std::clamp(v, -1.0f, 1.0f) * 32767.0f);
+        f.write(reinterpret_cast<const char*>(&s), 2);
+    }
+}
+
+void TestOfflineEngineLimiterAndReverbCalibration() {
+    namespace fs = std::filesystem;
+    const fs::path dir = fs::temp_directory_path() / "tartarus_audio_ut";
+    std::error_code ec;
+    fs::create_directories(dir, ec);
+    const int rate = 48000;
+    Lcg rng;
+    std::vector<float> tone((size_t)rate / 2 * 2), noise((size_t)rate * 2 * 2), ir;
+    for (size_t i = 0; i < tone.size() / 2; ++i) tone[2 * i] = tone[2 * i + 1] = std::sin(6.2831853f * 1000.0f * (float)i / (float)rate);
+    for (size_t i = 0; i < noise.size() / 2; ++i) noise[2 * i] = noise[2 * i + 1] = 0.25f * rng.Next();
+    const std::vector<float> hl = NoiseIr(rate * 3 / 10, 0.25f, 51u), hr = NoiseIr(rate * 3 / 10, 0.25f, 52u);
+    for (size_t i = 0; i < hl.size(); ++i) { ir.push_back(hl[i]); ir.push_back(hr[i]); }
+    const std::string tonePath = (dir / "tone.wav").string(), noisePath = (dir / "noise.wav").string(), irPath = (dir / "ir.wav").string();
+    WriteWav16(tonePath, tone, rate);
+    WriteWav16(noisePath, noise, rate);
+    WriteWav16(irPath, ir, rate);
+
+    AudioEngine::InitOffline(rate);
+    CHECK(AudioEngine::IsInitialized() && AudioEngine::IsOffline() && AudioEngine::SampleRate() == rate);
+    if (!AudioEngine::IsInitialized()) return;
+    AudioEngine::EnableTaps(true);
+    CHECK(AudioEngine::Load(tonePath) && AudioEngine::Load(noisePath) && AudioEngine::PreloadIr(irPath));
+    std::vector<float> master, pre, wet;
+    auto render = [&](float seconds) {
+        for (int done = 0; done < (int)(seconds * (float)rate); done += 480) {
+            AudioEngine::RenderOffline(nullptr, 480);
+            AudioEngine::Update();
+        }
+        AudioEngine::DrainTaps(master, pre, wet);
+    };
+    // The master limiter: a full-scale tone played at +12 dB comes out under the ceiling (the tap before the limiter proves it was over).
+    AudioEngine::SetReverbGlide(0.01f);
+    const AudioEngine::SoundHandle h = AudioEngine::Play(tonePath, 4.0f);
+    CHECK(h != AudioEngine::InvalidHandle);
+    render(0.7f);
+    const float ceil = std::pow(10.0f, -1.0f / 20.0f);
+    CHECK(LoudnessMeter::PeakDb(pre, 0, pre.size() / 2) > 9.0f);                       // +12 dBFS going in
+    CHECK(LoudnessMeter::PeakDb(master, 0, master.size() / 2) <= -1.0f + 1e-3f);      // never over the ceiling
+    CHECK(AudioEngine::TakeLimiterGainReductionDb() > 10.0f && AudioEngine::GetMeter(AudioEngine::MeterMaster).PeakDb <= -0.99f);
+    CHECK(AudioEngine::VoiceCount() >= 0);
+    // The limiter is a setting: raised to 0 dB the same tone reaches it.
+    LimiterSettings ls = AudioEngine::GetMasterLimiter();
+    CHECK(ls.Enabled && ls.CeilingDb == -1.0f && ls.LookaheadMs == 1.5f && ls.ReleaseMs == 80.0f);
+    ls.CeilingDb = -6.0f;
+    AudioEngine::SetMasterLimiter(ls);
+    master.clear(); pre.clear(); wet.clear();
+    AudioEngine::Play(tonePath, 4.0f);
+    render(0.7f);
+    CHECK(LoudnessMeter::PeakDb(master, 0, master.size() / 2) <= -6.0f + 1e-3f && LoudnessMeter::PeakDb(master, 0, master.size() / 2) > -6.5f);
+    ls.CeilingDb = -1.0f;
+    AudioEngine::SetMasterLimiter(ls);
+    AudioEngine::StopAll();
+    render(0.3f);
+
+    // The calibration contract: a send of 1 into a space at Wet -6 dB returns -6 dB of the dry sound (RMS over the event and its tail).
+    AudioEngine::ReverbSpec spec;
+    spec.Count = 1;
+    spec.Layers[0].Ir = irPath;
+    spec.Layers[0].Weight = 1.0f;
+    spec.Layers[0].WetDb = -6.0f;
+    AudioEngine::SetReverb(spec);
+    master.clear(); pre.clear(); wet.clear();
+    AudioEngine::VoiceFx fx;
+    fx.ReverbSend = 1.0f;
+    AudioEngine::Play(noisePath, 1.0f, false, AudioEngine::Bus::SFX, 0.0f, &fx);
+    render(2.8f);
+    std::vector<float> dry(pre.size());
+    for (size_t i = 0; i < pre.size(); ++i) dry[i] = pre[i] - wet[i];
+    const float ratio = LoudnessMeter::RmsDb(wet, 0, wet.size() / 2) - LoudnessMeter::RmsDb(dry, 0, dry.size() / 2);
+    std::printf("[AudioTest] offline engine: wet/dry %.2f dB (expected -6.0)\n", ratio);
+    CHECK(std::fabs(ratio + 6.0f) < 1.5f);
+    CHECK(AudioEngine::GetReverbInfo().Instances == 1);
+    CHECK(AudioEngine::GetMeter(AudioEngine::MeterBusFirst).ShortTermLufs > -60.0f); // the SFX bus meter saw the noise
+    // No layers (no impulse response for the space): the reverb fades to silence.
+    AudioEngine::SetReverb(AudioEngine::ReverbSpec{});
+    render(0.5f);
+    master.clear(); pre.clear(); wet.clear();
+    AudioEngine::Play(noisePath, 1.0f, false, AudioEngine::Bus::SFX, 0.0f, &fx);
+    render(1.0f);
+    CHECK(LoudnessMeter::RmsDb(wet, 0, wet.size() / 2) < -100.0f);
+    AudioEngine::Shutdown();
+    CHECK(!AudioEngine::IsInitialized());
+    fs::remove_all(dir, ec);
+}
+
 void RegisterAudioTests(UnitTestSupport::TestList& tests) {
     tests.push_back({"SoundSetRoundRobinNeverRepeats", TestSoundSetRoundRobinNeverRepeats});
     tests.push_back({"SoundSetStealOldest", TestSoundSetStealOldest});
@@ -1896,8 +2507,6 @@ void RegisterAudioTests(UnitTestSupport::TestList& tests) {
     tests.push_back({"EnvironmentTailSelectionAndFallback", TestEnvironmentTailSelectionAndFallback});
     tests.push_back({"ReverbZoneContainmentPriorityAndBlend", TestReverbZoneContainmentPriorityAndBlend});
     tests.push_back({"EnvironmentZonesBeatTheProbe", TestEnvironmentZonesBeatTheProbe});
-    tests.push_back({"ReverbFdnImpulseAndDecay", TestReverbFdnImpulseAndDecay});
-    tests.push_back({"ReverbFdnParameterGlide", TestReverbFdnParameterGlide});
     tests.push_back({"ReverbSendRoutingByCategory", TestReverbSendRoutingByCategory});
     tests.push_back({"OcclusionLowPass", TestOcclusionLowPass});
     tests.push_back({"ReverbFollowsListenerSpace", TestReverbFollowsListenerSpace});
@@ -1907,4 +2516,16 @@ void RegisterAudioTests(UnitTestSupport::TestList& tests) {
     tests.push_back({"ZonesMoveAtRuntime", TestZonesMoveAtRuntime});
     tests.push_back({"PortalPathsAndLoss", TestPortalPathsAndLoss});
     tests.push_back({"PortalVoicesAndFallback", TestPortalVoicesAndFallback});
+    tests.push_back({"ConvolverUnitImpulseAndPartitionBoundaries", TestConvolverUnitImpulseAndPartitionBoundaries});
+    tests.push_back({"ConvolverAgainstDirectConvolution", TestConvolverAgainstDirectConvolution});
+    tests.push_back({"ConvolverWorkerThreadMatchesInline", TestConvolverWorkerThreadMatchesInline});
+    tests.push_back({"ConvolutionReverbCrossfadeContinuity", TestConvolutionReverbCrossfadeContinuity});
+    tests.push_back({"ConvolutionReverbLevelAndFilters", TestConvolutionReverbLevelAndFilters});
+    tests.push_back({"ConvolverCost", TestConvolverCost});
+    tests.push_back({"MasterLimiterNeverExceedsCeiling", TestMasterLimiterNeverExceedsCeiling});
+    tests.push_back({"LoudnessMeterReadsALevel", TestLoudnessMeterReadsALevel});
+    tests.push_back({"MixDbAppliedOnceAndRefDistance", TestMixDbAppliedOnceAndRefDistance});
+    tests.push_back({"ZoneAmbienceBeds", TestZoneAmbienceBeds});
+    tests.push_back({"ReverbZoneOldKeysAndNewFields", TestReverbZoneOldKeysAndNewFields});
+    tests.push_back({"OfflineEngineLimiterAndReverbCalibration", TestOfflineEngineLimiterAndReverbCalibration});
 }

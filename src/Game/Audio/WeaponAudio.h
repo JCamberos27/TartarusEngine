@@ -49,8 +49,16 @@ struct SoundSet {
     // (ms), the mix level (dB) and the true peak (dBTP). Variants of one key differ, so these are used per play, not per key.
     std::vector<float> FileAnchorMs, FileGainDb, FilePeakDb;
     float AnchorMs(size_t i) const { return i < FileAnchorMs.size() ? FileAnchorMs[i] : 0.0f; }
+    // The level contract: a voice plays at Volume x 10^(mix_db / 20) (GainLin), nothing else loudness-related on top. mix_db is the
+    // manifest's (per file), or the set's own "mixDb" from a Data File (HasMixDb), which wins.
+    bool HasMixDb = false;
+    float MixDb = 0.0f;
     float GainLin(size_t i) const;
     float PeakLin(size_t i) const;
+    bool FilesExplicit = false;            // the files came from a Data File: the manifest does not replace them
+    // 3D plays are calibrated so the level is the spec's (0 dB re mix_db) at this distance: the log rolloff would otherwise put
+    // Min / RefDistance on it. From the manifest's mix.distance_refs_m (0 = no calibration).
+    float RefDistance = 0.0f;
 
     static SoundSet FromJson(const std::string& key, const std::string& text, const SoundSet& base = SoundSet{});
     std::string ToJson() const;
@@ -68,10 +76,14 @@ struct BlendCurve {
 struct SoundManifestEntry {
     std::string File, Key, Category, Layer;
     float AnchorMs = 0.0f, MixDb = 0.0f, PeakDb = -3.0f;
+    float Rt60S = 0.0f, PreDelayMs = 0.0f; // impulse responses (layer "ir", key ir.<class>)
     bool Loop = false;
 };
 struct SoundManifest {
     std::vector<SoundManifestEntry> Entries;
+    std::map<std::string, float> DistanceRefs; // top-level mix.distance_refs_m: npc_shot, impact, body_fall (metres)
+    float DistanceRef(const std::string& name) const { const auto it = DistanceRefs.find(name); return it == DistanceRefs.end() ? 0.0f : it->second; }
+    const SoundManifestEntry* FirstFor(const std::string& key) const; // the first variant of `key` (file-name order), null when none
     static bool FromJson(const std::string& text, SoundManifest& out, std::string* error = nullptr);
     // Every variant of `key`, in file-name order (empty when none).
     std::vector<std::string> FilesFor(const std::string& key) const;
@@ -116,9 +128,11 @@ struct SoundBackend {
     virtual void SetOcclusion(AudioEngine::SoundHandle, float /*cutoffHz*/, float /*gain*/ = 1.0f) {}
     virtual void SetVoicePosition(AudioEngine::SoundHandle, const glm::vec3&) {}
     virtual void SetReverbSendBus(AudioEngine::SoundHandle, int /*bus*/) {}
-    virtual void SetReverb(const ReverbParams&, int /*bus*/ = 0) {}
+    virtual void SetReverb(const AudioEngine::ReverbSpec&, int /*bus*/ = 0) {}
     virtual void SetReverbBusActive(int /*bus*/, bool /*active*/) {}
     virtual void ConfigureReverb(bool /*enabled*/, float /*returnLevel*/, float /*glideSeconds*/) {}
+    virtual void PreloadIr(const std::string& /*file*/) {}
+    virtual void ConfigureLimiter(const LimiterSettings&) {}
     static SoundBackend& Engine(); // AudioEngine-backed; paths resolved through ProjectPaths
 };
 
@@ -302,6 +316,8 @@ struct WeaponAudioProfile {
     // Full auto: layer.Every = N plays that layer on every Nth shot of a burst (the first shot of a burst always plays all);
     // a burst ends after BurstGap seconds without a shot.
     float BurstGap = 0.4f;
+    // 3D reach of the gun's gear / foley sounds in the world (Weapon Audio: Event Min / Max Distance).
+    float EventMinDistance = 1.5f, EventMaxDistance = 25.0f;
     // Gear sounds that are the shared foley's (snd.foley.weapon.*) rather than the gun's own: element -> full key.
     std::map<std::string, std::string> Aliases;
     std::map<std::string, SoundSet> Events; // element -> set; an element not listed gets a default set from the manifest
@@ -380,6 +396,8 @@ public:
     void SetRecording(bool on) { m_Record = on; }
     const std::vector<Emitted>& Transcript() const { return m_Transcript; }
     int ShotVoicesStarted() const { return m_ShotVoices; }
+    // Tests: the manifest the class impulse responses and sets are looked up in.
+    void SetManifestForTest(const SoundManifest& m) { m_Manifest = m; }
     // Tests: starts with a given set of profiles and no scene.
     void StartForTest(const std::string& projectRoot, SoundBackend* backend);
 
@@ -389,9 +407,21 @@ public:
     const ReverbBusComponent& Bus() const { return m_Bus; }
     // The category's send level for a set key ("snd.foley.step_wood.walk" -> footsteps ...); 0 for the gun tails.
     float SendFor(const std::string& key) const;
-    // The reverb at `pos`: the zones' presets (layered, faded), the probe class presets for what no zone claims.
-    ReverbParams ReverbAt(const glm::vec3& pos);
-    const ReverbParams& CurrentReverb() const { return m_ReverbSent; }
+    // The reverb at `pos`: the zones' reverbs (layered, faded), the probe's class reverbs for what no zone claims; the two heaviest
+    // impulse responses, weights summing to 1 (Count 0: no impulse response for this space, the reverb is off).
+    AudioEngine::ReverbSpec ReverbAt(const glm::vec3& pos);
+    const AudioEngine::ReverbSpec& CurrentReverb() const { return m_ReverbSent; }
+    // The class impulse response / pre-delay (from the manifest's ir.<class>) and the final wet level of a space (dB): the Reverb Bus's
+    // calibrated level for the class + the preset's trim.
+    std::string ClassIr(int tailClass) const;
+    float ClassPreDelayMs(int tailClass) const;
+    float ClassWetDb(int tailClass) const;
+    // --- zone ambience beds ---
+    struct AmbienceDebug { std::string Key; float Target = 0.0f, Level = 0.0f; bool Playing = false; };
+    const std::vector<AmbienceDebug>& Ambience() const { return m_AmbienceDebug; }
+    // What the editor's Audio panel shows: the zones at the listener (the last Update) and the spec sent to the reverb.
+    const ReverbZoneMix& ListenerMix() const { return m_ListenerMix; }
+    const AudioEngine::ReverbSpec& RemoteSpec() const { return m_RemoteSent; }
     // A set by exact key (filled from the manifest on first use): the impact, casing and flyby sets use this; `init` runs once
     // on creation for the set's defaults.
     SoundSet* KeySet(const std::string& key, const std::function<void(SoundSet&)>& init = nullptr);
@@ -438,8 +468,23 @@ private:
     ReverbZones m_Zones;
     SpaceMix m_LastSpace;
     ReverbBusComponent m_Bus;
-    ReverbParams m_ReverbSent;
+    AudioEngine::ReverbSpec m_ReverbSent, m_RemoteSent;
+    ReverbZoneMix m_ListenerMix;
     bool m_ReverbValid = false;
+    std::vector<AmbienceDebug> m_AmbienceDebug;
+    struct Bed {
+        std::string Key;
+        AudioEngine::SoundHandle Handle = AudioEngine::InvalidHandle;
+        float BaseVolume = 1.0f;     // the file's volume with its mix_db
+        float Level = 0.0f;          // the fade, 0 .. the target
+        float Target = 0.0f;
+    };
+    std::vector<Bed> m_Beds;
+    void UpdateAmbience(float dt);
+    bool BuildLayer(const ReverbPreset& p, float weight, AudioEngine::ReverbLayerSpec& out);
+    static bool SpecDiffers(const AudioEngine::ReverbSpec& a, const AudioEngine::ReverbSpec& b);
+    void StopAmbience();
+    unsigned m_IrWarned = 0;         // bit per tail class: the "no impulse response" line was printed
     double m_LastReverbLog = -1e9;
     std::map<std::string, SoundSet> m_Keyed;
     static float ClampSend(float s) { return s < 0.0f ? 0.0f : s; }
