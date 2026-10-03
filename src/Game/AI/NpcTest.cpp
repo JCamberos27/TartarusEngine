@@ -572,6 +572,23 @@ void NpcTest::Deaths(World& world, NpcDirector& npcs, float now) {
     };
     auto step = [&](int to) { m_DStep = to; m_DAt = now; };
 
+    // The Scene view watches the soldier being shot (for NPC_TEST_RECORD): placed off his side when he
+    // becomes the target, then it only turns to keep his pelvis in frame as he falls.
+    if (Npc* t = m_DNpc[0].empty() ? nullptr : find(m_DNpc[0])) {
+        glm::vec3 pelvis;
+        if (t->Body.BoneWorld(world, "pelvis", pelvis)) {
+            if (m_DCamFor != t->Name) {
+                m_DCamFor = t->Name;
+                const float yaw = t->Body.Yaw();
+                const glm::vec3 side(std::cos(yaw), 0.0f, -std::sin(yaw)), fwd(std::sin(yaw), 0.0f, std::cos(yaw));
+                m_CamPos = pelvis + side * 3.2f + fwd * 1.6f + glm::vec3(0.0f, 0.6f, 0.0f);
+            }
+            const glm::vec3 d = glm::normalize(pelvis - glm::vec3(0.0f, 0.2f, 0.0f) - m_CamPos);
+            m_CamYaw = glm::degrees(std::atan2(d.z, d.x));
+            m_CamPitch = glm::degrees(std::asin(std::clamp(d.y, -1.0f, 1.0f)));
+            m_HaveCam = true;
+        }
+    }
     switch (m_DStep) {
     case 0: { // wait for a squad with hitboxes
         int ready = 0;
