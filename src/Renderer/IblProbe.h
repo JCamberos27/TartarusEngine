@@ -92,6 +92,10 @@ public:
 
     void Release();
 
+    // Builds the probe's targets and programs and bakes the BRDF LUT now (load-time warm-up),
+    // instead of on the first frame's bake.
+    void WarmUp();
+
 private:
     void EnsureCreated();
     void BakeBrdfLut();

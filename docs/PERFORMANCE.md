@@ -157,6 +157,20 @@ What is left, roughly by expected value. At 1080p the GPU is the limit, at 1440p
     ~0.1 ms). Still stalling on first use: frame 3 of the Scene view (~175 ms: SSAO depth pre-pass 20 ms, cluster
     cull 40 ms, model program variants), Play press (`Animator Clip Warm-up` ~1.1 s on the first Play frame, Enemy AI
     ~110 ms, asset pump ~87 ms on frame 3 of Play; not in the renderer).
+    Round 4 moved more of it behind the load: `IblProbe::WarmUp` (programs + BRDF LUT), `Tonemapper::WarmUp`,
+    `LightBuffer`/`ClusterGrid::WarmUp` (buffers + cull programs) and `SceneRenderer::WarmShaderVariants` (every
+    material's ShaderAsset variant). First-frame CPU Scene Draw 64 -> 22 ms, IBL bake CPU 20.6 -> ~0, GPU Cluster
+    Cull 47 -> under the 3 ms report line, SSAO pre-pass 21.7 -> 4.8 ms. The worst early frame (frame 3, ~175 ms wall)
+    did NOT move (A/B x2: 174/175 base, 52/175 new): it is GPU-side first use - the urgent IBL convolve (~45 ms of real
+    work, needs the first sky capture, so it cannot run at load), first-touch of textures/buffers by the driver, and
+    NVIDIA's one-time "vertex shader recompiled based on GL state" for each shadow program (2 warnings; only a real
+    mesh draw triggers it).
+12. GL warnings, fixed: the periodic "texture object (0) bound to texture image unit 0 does not have a defined base
+    level" burst (14 every ~4 s; 228 per weapon-test) was the IBL convolve (and the SSAO warm-up) leaving their
+    program current with its cube/2D texture unbound, so the next draw/clear validated a program sampling texture 0.
+    `BakeStateScope`, `IblProbe::Bake` and `Ssao::WarmUp` now `glUseProgram(0)` on exit; the spot/point shadow passes bind
+    the white default to unit 0 before their first clear. Headless.log texture-state warnings: 228 -> 0. The
+    MaterialPreview smoke pass still logs 7 (units 0/11-13), not in the game path.
 11. An enemy soldier's respawn is ~1.8 ms (it was 6-7: the gun's clip matching and setup measurements are now shared
     between soldiers): ~1 ms of it is building the soldier's entities from Soldier.json. Pooling soldiers (reusing a
     dead one's entities and weapon rig) would take it to ~0.
