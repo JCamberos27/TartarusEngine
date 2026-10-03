@@ -16,9 +16,11 @@
 
 #include <algorithm>
 #include <cstdio>
+#include <cstdlib>
 #include <chrono>
 #include <cmath>
 #include <filesystem>
+#include <functional>
 #include <fstream>
 #include <cstdint>
 #include <sstream>
@@ -946,6 +948,23 @@ struct Sampler {
     }
 };
 
+// Resolves every clip `smp`'s track can reach (attaching the ones in other files), once per
+// model + controller + track. A pointer reused by a later model only skips the warm-up; clips
+// still resolve lazily.
+void WarmControllerClips(const AnimatorController& ctrl, Sampler& smp) {
+    static std::unordered_set<std::uint64_t> s_Warmed;
+    const std::uint64_t key = (std::uint64_t)(std::uintptr_t)&smp.M * 1099511628211ull ^
+                              (std::uint64_t)(std::uintptr_t)&ctrl * 31ull ^ (std::uint64_t)smp.Track;
+    if (!s_Warmed.insert(key).second) return;
+    PROFILE_SCOPE("Animator Clip Warm-up");
+    for (const auto& L : ctrl.Layers)
+        for (const auto& s : L.States) {
+            const auto& m = s.MotionFor(smp.Track);
+            if (!m.IsBlendTree()) smp.Clip(m.Clip);
+            for (const auto& child : m.Children) smp.Clip(child.Clip);
+        }
+}
+
 // The pose one layer's crossfade stack produces. `base` fills in for empty motions.
 // `top`, when given, also receives the current (topmost) state's own unblended pose.
 void SampleLayer(const AnimatorController::Layer& L, const AnimatorLayerRuntime& rt, Sampler& smp,
@@ -1181,21 +1200,10 @@ void UpdateAnimatorControllers(World& world, AssetLibrary& assets, float dt) {
             if (r.M) samplers.push_back({*r.M, assets, ctrl->TrackIndex(r.AC->Track), {}, {}});
         // Resolve every clip a rig's track can reach the first time the rig meets this controller:
         // a clip in another file loads (and attaches) on first use, and entering a new state
-        // mid-Play used to hitch a frame by ~20 ms. A pointer reused by a later model only skips
-        // the warm-up; clips still resolve lazily.
-        static std::unordered_set<std::uint64_t> s_Warmed;
-        for (Sampler& smp : samplers) {
-            const std::uint64_t key = (std::uint64_t)(std::uintptr_t)&smp.M * 1099511628211ull ^
-                                      (std::uint64_t)(std::uintptr_t)ctrl.get() * 31ull ^ (std::uint64_t)smp.Track;
-            if (!s_Warmed.insert(key).second) continue;
-            PROFILE_SCOPE("Animator Clip Warm-up");
-            for (const auto& L : ctrl->Layers)
-                for (const auto& s : L.States) {
-                    const auto& m = s.MotionFor(smp.Track);
-                    if (!m.IsBlendTree()) smp.Clip(m.Clip);
-                    for (const auto& child : m.Children) smp.Clip(child.Clip);
-                }
-        }
+        // mid-Play used to hitch a frame by ~20 ms. PrefetchAnimatorClips normally did this behind
+        // the editor already (the files on worker threads, the attach on the main thread), so this
+        // is the fallback for a rig that appeared since.
+        for (Sampler& smp : samplers) WarmControllerClips(*ctrl, smp);
         // Once the animator has advanced, the parameters are fixed for the frame, and so is each state's
         // length: every rig's pose asks for the same few (per crossfade entry, per layer), each a pass
         // over every rig's clips, so they are worked out once.
@@ -1257,5 +1265,111 @@ void UpdateAnimatorControllers(World& world, AssetLibrary& assets, float dt) {
             r.AC->SkippedTime = 0.0f;
             ApplyRootMotion(world, r.E, rmo, motion, stepDt);
         }
+    }
+}
+
+std::vector<std::string> AnimatorControllerClipFiles(const AnimatorController& ctrl, int track) {
+    std::vector<std::string> files;
+    std::unordered_set<std::string> seen;
+    const auto add = [&](const std::string& ref) {
+        if (ref.empty()) return;
+        std::string path = ref.substr(0, ref.find('#'));
+        std::string ext = fs::u8path(path).extension().u8string();
+        for (char& c : ext) c = (char)std::tolower((unsigned char)c);
+        if (ext != ".fbx" && ext != ".gltf" && ext != ".glb" && ext != ".dae" && ext != ".obj") return; // an own clip
+        if (seen.insert(path).second) files.push_back(std::move(path));
+    };
+    for (const auto& L : ctrl.Layers)
+        for (const auto& s : L.States) {
+            const auto& m = s.MotionFor(track);
+            if (!m.IsBlendTree()) add(m.Clip);
+            for (const auto& child : m.Children) add(child.Clip);
+        }
+    return files;
+}
+
+void PrefetchAnimatorClips(World& world, AssetLibrary& assets) {
+    // Twice a second is plenty: a controller or rig that appears is picked up well before Play is pressed.
+    static const bool s_Off = [] { // A/B switch for timing runs
+        char* e = nullptr;
+        size_t n = 0;
+        _dupenv_s(&e, &n, "TARTARUS_NO_ANIM_PREFETCH");
+        const bool off = e && *e;
+        std::free(e);
+        return off;
+    }();
+    if (s_Off) return;
+    static std::chrono::steady_clock::time_point s_Next;
+    const auto now = std::chrono::steady_clock::now();
+    if (now < s_Next) return;
+    s_Next = now + std::chrono::milliseconds(500);
+    static std::unordered_map<std::string, AssetLibrary::AsyncHandle> s_Requested;
+    // Prefetches one controller's clip files (the rigs' own track, or every track for `track` < 0); true once all are loaded.
+    const auto request = [&](const AnimatorController& ctrl, int track) {
+        bool ready = true;
+        std::vector<std::string> files;
+        if (track >= 0) files = AnimatorControllerClipFiles(ctrl, track);
+        else {
+            size_t tracks = 1;
+            for (const auto& L : ctrl.Layers)
+                for (const auto& s : L.States) tracks = std::max(tracks, s.Motions.size());
+            for (size_t t = 0; t < tracks; ++t)
+                for (std::string& f : AnimatorControllerClipFiles(ctrl, (int)t))
+                    if (std::find(files.begin(), files.end(), f) == files.end()) files.push_back(std::move(f));
+        }
+        for (const std::string& rel : files) {
+            const std::string abs = fs::u8path(rel).is_absolute() ? rel : ProjectPaths::Resolve(rel);
+            auto it = s_Requested.find(abs);
+            if (it == s_Requested.end()) {
+                std::error_code ec;
+                if (!fs::exists(fs::u8path(abs), ec)) continue; // a ref that doesn't resolve stays lazy
+                it = s_Requested.emplace(abs, assets.RequestModelAsync(abs)).first;
+            }
+            if (!AssetLibrary::IsReady(it->second)) ready = false;
+        }
+        return ready;
+    };
+    // The enemy squad's soldiers are built at Play from Soldier.json: their controller's clips are loaded too, or the
+    // first soldier spawned stalls its frame on them.
+    if (!world.Registry.view<NpcSpawnComponent>().empty()) {
+        static std::vector<std::string> s_SoldierControllers;
+        static bool s_Read = false;
+        if (!s_Read) {
+            s_Read = true;
+            std::ifstream in(fs::u8path(ProjectPaths::Resolve("assets/AI/Soldier.json")), std::ios::binary);
+            const json doc = json::parse(in, nullptr, /*allow_exceptions=*/false);
+            // Every "Controller" string anywhere in the prefab: the soldier's pieces each carry one.
+            const std::function<void(const json&)> collect = [&](const json& j) {
+                if (j.is_object()) {
+                    for (auto it = j.begin(); it != j.end(); ++it) {
+                        if (it.key() == "Controller" && it->is_string()) {
+                            const std::string ref = it->get<std::string>();
+                            if (!ref.empty() && std::find(s_SoldierControllers.begin(), s_SoldierControllers.end(), ref) ==
+                                                    s_SoldierControllers.end())
+                                s_SoldierControllers.push_back(ref);
+                        } else {
+                            collect(*it);
+                        }
+                    }
+                } else if (j.is_array()) {
+                    for (const json& e : j) collect(e);
+                }
+            };
+            if (!doc.is_discarded()) collect(doc);
+        }
+        for (const std::string& ref : s_SoldierControllers)
+            if (const auto ctrl = GetAnimatorController(ref)) request(*ctrl, -1);
+    }
+    auto view = world.Registry.view<AnimatorControllerComponent, RenderableComponent>();
+    for (auto e : view) {
+        Model* m = view.get<RenderableComponent>(e).ModelRef.get();
+        if (!m) continue;
+        auto& ac = view.get<AnimatorControllerComponent>(e);
+        const auto ctrl = GetAnimatorController(ac.Controller);
+        if (!ctrl) continue;
+        const int track = ctrl->TrackIndex(ac.Track);
+        if (!request(*ctrl, track)) continue;
+        Sampler smp{*m, assets, track, {}, {}};
+        WarmControllerClips(*ctrl, smp);
     }
 }
