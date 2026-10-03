@@ -23708,6 +23708,200 @@
         1.0,
         1.0
       ]
+    },
+    {
+      "id": 706,
+      "name": "Audio / Reverb Zones",
+      "order": 706,
+      "parentId": -1,
+      "position": [
+        0.0,
+        0.0,
+        0.0
+      ],
+      "rotation": [
+        0.0,
+        0.0,
+        0.0,
+        1.0
+      ],
+      "scale": [
+        1.0,
+        1.0,
+        1.0
+      ]
+    },
+    {
+      "Reverb Zone": {
+        "Decay Time": 3.4000000953674316,
+        "Early/Late Mix": 0.4000000059604645,
+        "Enabled": true,
+        "Extents": [
+          25.260000228881836,
+          7.900000095367432,
+          15.199999809265137
+        ],
+        "Fade Distance": 1.5,
+        "HF Damping": 0.20000000298023224,
+        "Pre-Delay ms": 36.0,
+        "Priority": 30,
+        "Radius": 6.0,
+        "Reverb Mode": "Class Default",
+        "Room Size": 0.949999988079071,
+        "Shape": "Box",
+        "Tail Class": "Indoor Large",
+        "Tail Gain": 1.0,
+        "Wet Level": 0.4000000059604645
+      },
+      "id": 707,
+      "name": "RZ Glass Arena",
+      "order": 707,
+      "parentId": 706,
+      "position": [
+        0.0,
+        6.900000095367432,
+        36.810001373291016
+      ],
+      "rotation": [
+        0.0,
+        0.0,
+        0.0,
+        1.0
+      ],
+      "scale": [
+        1.0,
+        1.0,
+        1.0
+      ]
+    },
+    {
+      "Reverb Zone": {
+        "Decay Time": 0.8999999761581421,
+        "Early/Late Mix": 0.75,
+        "Enabled": true,
+        "Extents": [
+          11.800000190734863,
+          2.25,
+          2.9000000953674316
+        ],
+        "Fade Distance": 1.0,
+        "HF Damping": 0.3499999940395355,
+        "Pre-Delay ms": 3.0,
+        "Priority": 20,
+        "Radius": 6.0,
+        "Reverb Mode": "Class Default",
+        "Room Size": 0.30000001192092896,
+        "Shape": "Box",
+        "Tail Class": "Outdoor Urban",
+        "Tail Gain": 1.0,
+        "Wet Level": 0.30000001192092896
+      },
+      "id": 708,
+      "name": "RZ Range Firing Line",
+      "order": 708,
+      "parentId": 706,
+      "position": [
+        48.0,
+        1.25,
+        -2.9000000953674316
+      ],
+      "rotation": [
+        0.0,
+        0.0,
+        0.0,
+        1.0
+      ],
+      "scale": [
+        1.0,
+        1.0,
+        1.0
+      ]
+    },
+    {
+      "Reverb Zone": {
+        "Decay Time": 1.2999999523162842,
+        "Early/Late Mix": 0.550000011920929,
+        "Enabled": true,
+        "Extents": [
+          11.550000190734863,
+          5.5,
+          29.799999237060547
+        ],
+        "Fade Distance": 2.5,
+        "HF Damping": 0.44999998807907104,
+        "Pre-Delay ms": 8.0,
+        "Priority": 10,
+        "Radius": 6.0,
+        "Reverb Mode": "Class Default",
+        "Room Size": 0.6000000238418579,
+        "Shape": "Box",
+        "Tail Class": "Outdoor Urban",
+        "Tail Gain": 1.0,
+        "Wet Level": 0.2800000011920929
+      },
+      "id": 709,
+      "name": "RZ Range Lanes",
+      "order": 709,
+      "parentId": 706,
+      "position": [
+        47.75,
+        4.5,
+        29.0
+      ],
+      "rotation": [
+        0.0,
+        0.0,
+        0.0,
+        1.0
+      ],
+      "scale": [
+        1.0,
+        1.0,
+        1.0
+      ]
+    },
+    {
+      "Reverb Zone": {
+        "Decay Time": 2.799999952316284,
+        "Early/Late Mix": 0.20000000298023224,
+        "Enabled": true,
+        "Extents": [
+          34.0,
+          12.0,
+          21.5
+        ],
+        "Fade Distance": 8.0,
+        "HF Damping": 0.550000011920929,
+        "Pre-Delay ms": 20.0,
+        "Priority": -10,
+        "Radius": 6.0,
+        "Reverb Mode": "Class Default",
+        "Room Size": 1.0,
+        "Shape": "Box",
+        "Tail Class": "Outdoor Open",
+        "Tail Gain": 1.0,
+        "Wet Level": 0.25
+      },
+      "id": 710,
+      "name": "RZ Open Ground",
+      "order": 710,
+      "parentId": 706,
+      "position": [
+        0.0,
+        10.0,
+        -2.5
+      ],
+      "rotation": [
+        0.0,
+        0.0,
+        0.0,
+        1.0
+      ],
+      "scale": [
+        1.0,
+        1.0,
+        1.0
+      ]
     }
   ],
   "exposureEV": 0.0,

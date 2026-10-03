@@ -19,6 +19,7 @@ inline constexpr const char* Console      = ICON_FA_TERMINAL "  Console###Consol
 inline constexpr const char* Statistics   = ICON_FA_CHART_SIMPLE "  Statistics###Statistics";
 inline constexpr const char* History      = ICON_FA_CLOCK_ROTATE_LEFT "  History###History";
 inline constexpr const char* Lighting     = ICON_FA_LIGHTBULB "  Lighting###Lighting";
+inline constexpr const char* Audio        = ICON_FA_VOLUME_HIGH "  Audio###Audio";
 inline constexpr const char* Settings     = ICON_FA_GEAR "  Settings###Settings";
 inline constexpr const char* PhysicsDebug = ICON_FA_CUBES "  Physics Debug###PhysicsDebug";
 inline constexpr const char* Animator     = ICON_FA_DIAGRAM_PROJECT "  Animator###Animator";

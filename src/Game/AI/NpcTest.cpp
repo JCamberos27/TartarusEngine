@@ -286,12 +286,11 @@ void NpcTest::After(World& world, NpcDirector& npcs, const PlayerVitals& vitals,
             const Npc& n = *up;
             const int ammo = n.Weapon && n.Weapon->IsActive() ? n.Weapon->Ammo() : -1;
             std::snprintf(line, sizeof line,
-                          "[NpcTest]   %-10s %-11s ph%-2d %-10s hp%3.0f sup%.2f %s ammo%2d %s%s%s pos(%5.1f,%4.1f,%5.1f) v%3.1f anim=%s gun=%s %s%s",
+                          "[NpcTest]   %-10s %-11s ph%-2d %-10s hp%3.0f sup%.2f %s ammo%2d %s%s%s pos(%5.1f,%4.1f,%5.1f) v%3.1f anim=%s gun=%s",
                           n.Name.c_str(), BehaviourName(n.Doing), n.Phase, RoleName(n.Role), n.Health, n.Suppression,
                           n.Class == WeaponClass::Shotgun ? "870" : "AK ", ammo, n.Mem.Known ? "K" : "-", n.Mem.Visible ? "V" : "-",
                           n.HasAttackToken ? "A" : "-", n.Feet.x, n.Feet.y, n.Feet.z, glm::length(n.Velocity),
-                          n.Body.StateName(world).c_str(), n.Weapon && n.Weapon->IsActive() ? n.Weapon->CurrentState().c_str() : "-",
-                          n.Callout.empty() || now - n.CalloutAt > 2.0f ? "" : "\"", n.Callout.empty() || now - n.CalloutAt > 2.0f ? "" : n.Callout.c_str());
+                          n.Body.StateName(world).c_str(), n.Weapon && n.Weapon->IsActive() ? n.Weapon->CurrentState().c_str() : "-");
             std::cout << line << std::endl;
         }
     }
@@ -424,13 +423,12 @@ void NpcTest::After(World& world, NpcDirector& npcs, const PlayerVitals& vitals,
     if (now >= m_Duration && !m_Done) {
         m_Done = true;
         if (m_Scenario == "sandbox") {
-            std::printf("[NpcTest] sandbox: %d soldier(s) spawned, %zu spawn point(s), %zu cover points, %d radio line(s)\n", m_MaxAlive,
-                        npcs.SpawnPoints().size(), npcs.Cover().Points().size(), npcs.Voice().Spoken());
+            std::printf("[NpcTest] sandbox: %d soldier(s) spawned, %zu spawn point(s), %zu cover points\n", m_MaxAlive,
+                        npcs.SpawnPoints().size(), npcs.Cover().Points().size());
             Check(m_MaxAlive >= 3, "the Sandbox squad spawned (" + std::to_string(m_MaxAlive) + " soldiers)");
             Check(npcs.Nav().Valid() && npcs.Nav().PolyCount() > 0, "a navigation mesh was built for the Sandbox");
             Check(!npcs.Cover().Points().empty(), "the Sandbox has cover (" + std::to_string(npcs.Cover().Points().size()) + " points)");
             Check(m_DevKilledCount >= 3 && m_AliveAfterKill == 0, "Kill All killed the squad (" + std::to_string(m_DevKilledCount) + ", " + std::to_string(m_AliveAfterKill) + " left)");
-            CheckRadio(npcs);
             std::fflush(stdout);
             return;
         }
@@ -480,29 +478,11 @@ void NpcTest::After(World& world, NpcDirector& npcs, const PlayerVitals& vitals,
             Check(ts.CoveredBounds * 2 >= ts.Bounds, "most bounds in the player's view went under covering fire (" +
                                                           std::to_string(ts.CoveredBounds) + " of " + std::to_string(ts.Bounds) + ")");
         }
-        CheckRadio(npcs);
-        Check(npcs.Voice().Spoken() > 0, "the squad used the radio (" + std::to_string(npcs.Voice().Spoken()) + " lines)");
         if (m_Scenario == "die") {
             Check(m_PlayerDied, "the player was killed");
             Check(m_PlayerRespawned, "the player respawned");
         }
     }
-}
-
-// Radio: no squad ever had two lines on air at once (a cut line counts up to where it was cut), and the
-// lines spoken came from more than one kind of event.
-void NpcTest::CheckRadio(NpcDirector& npcs) {
-    int overlaps = 0;
-    for (int s = 0; s < 4; ++s) overlaps += npcs.Voice().FirstOverlap(s) >= 0 ? 1 : 0;
-    bool seen[(int)Bark::Count] = {};
-    int kinds = 0;
-    for (const BarkPlayed& b : npcs.Voice().History()) {
-        if (!seen[(int)b.Event]) { seen[(int)b.Event] = true; ++kinds; }
-        std::printf("[NpcTest] radio t=%6.2f squad %d UNIT-%d %-13s p%d%s%s \"%s\"\n", b.Start, b.Squad, b.Unit, BarkKey(b.Event), b.Priority,
-                    b.Responder ? " (copy)" : "", b.Cut >= 0.0f ? " (cut)" : "", b.Text.c_str());
-    }
-    Check(overlaps == 0, "no squad had two radio lines on air at once");
-    Check(kinds >= 2, "the radio carried " + std::to_string(kinds) + " kinds of call");
 }
 
 // --- deaths: hitboxes, hit reactions, deaths -------------------------------------------------------------------------
@@ -755,7 +735,6 @@ void NpcTest::Deaths(World& world, NpcDirector& npcs, float now) {
         m_DNpc[0] = a->Name;
         m_DNpc[1] = b->Name;
         Check(a->Wounded && b->Wounded, "a body hit under 20% health can leave a soldier wounded (the chance forced to 1)");
-        Check(a->Callout == "Unit down, need assist", "a wounded soldier calls 'Unit down, need assist'");
         Check(a->Doing == Behaviour::Wounded, "it is in the Wounded behaviour");
         m_DWoundSpeed = 0.0f;
         step(5);

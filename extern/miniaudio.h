@@ -52538,6 +52538,9 @@ MA_API ma_result ma_spatializer_process_pcm_frames(ma_spatializer* pSpatializer,
         if (distance > 0) {
             ma_vec3f unitPos = relativePos;
             float distanceInv = 1/distance;
+            /* TARTARUS PATCH (constant-power panning): the sum of the squared pan gains of the spatial channels, see below. */
+            float panPowerSum = 0;
+            ma_uint32 panChannels = 0;
             unitPos.x *= distanceInv;
             unitPos.y *= distanceInv;
             unitPos.z *= distanceInv;
@@ -52599,6 +52602,10 @@ MA_API ma_result ma_spatializer_process_pcm_frames(ma_spatializer* pSpatializer,
                     d = (d + 1) * 0.5f;  /* -1..1 to 0..1 */
                     d = ma_max(d, dMin);
                     pSpatializer->pNewChannelGainsOut[iChannel] *= d;
+                    if (ma_is_spatial_channel_position(channelOut)) {
+                        panPowerSum += d*d;
+                        panChannels += 1;
+                    }
                 }
                 #else
                 {
@@ -52613,6 +52620,21 @@ MA_API ma_result ma_spatializer_process_pcm_frames(ma_spatializer* pSpatializer,
                     }
                 }
                 #endif
+            }
+
+            /*
+            TARTARUS PATCH (constant-power panning). The panning above plays a source straight ahead at 0.5 per speaker (-6 dB
+            against the same sound unpositioned) and one at the side near full level, so a 3D sound's loudness swung by 3 dB with
+            the listener's heading and every positioned sound sat 6 dB under its mix level. Scale the spatial channels' pan gains so
+            their power is that of unpanned unity gains, wherever the source is: the direction moves the image, not the level.
+            */
+            if (panChannels > 0 && panPowerSum > 0) {
+                float panScale = (float)ma_sqrtd((double)panChannels / panPowerSum);
+                for (iChannel = 0; iChannel < channelsOut; iChannel += 1) {
+                    if (ma_is_spatial_channel_position(ma_channel_map_get_channel(pChannelMapOut, channelsOut, iChannel))) {
+                        pSpatializer->pNewChannelGainsOut[iChannel] *= panScale;
+                    }
+                }
             }
         } else {
             /* Assume the sound is right on top of us. Don't do any panning. */

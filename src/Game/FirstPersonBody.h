@@ -100,6 +100,9 @@ public:
     // Diagnostics (--stock-probe): a standard bone's world position as last posed - from the arms
     // piece when it has the bone (the arms after ArmsLateUpdate), else the driver.
     bool BoneWorld(const World& world, const std::string& standard, glm::vec3& out) const;
+    // Each foot's height above the body's feet as last posed (m; [0] left, [1] right), for the footsteps
+    // (FoleyAudio). False with no body or no foot bones.
+    bool FootHeights(const World& world, float (&out)[2]) const;
     // Diagnostics (--stock-probe): how close segment a-b (world) comes to the drawn head and neck - every
     // vertex of the world twins (else the pieces) skinned mostly to neck_01, neck_02 or the head bone, so a
     // hood or collar counts. Negative when there are none; `piece` / `along` (0..1 on a-b) say where.
