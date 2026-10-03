@@ -28,4 +28,8 @@ unsigned int DepthCubeArray();  // GL_TEXTURE_CUBE_MAP_ARRAY, one cube
 // is none (no in-scattered light, full transmittance).
 unsigned int Volume();
 
+// 1x1 GL_TEXTURE_CUBE_MAP RGBA8 (0,0,0,1): a complete cube for samplerCube slots (IBL irradiance /
+// specular) when the probe has no baked maps, so the sampler never reads an undefined texture.
+unsigned int BlackCube();
+
 } // namespace DefaultTextures
