@@ -10,7 +10,7 @@ can be fired from an animator event on the contact frame of our own clip.
 
 | Item | Where | Meaning |
 |---|---|---|
-| `audio_manifest.json` | `project/assets/Audio/` | one entry per wav: `file` (relative to `project/assets/Audio`), `key`, `layer`, `variant`, `anchor_ms`, `lufs_m_max`, `true_peak_dbtp`, `length_s`, `channels`, `source`, optional `lead_ms`, `mix_db`, `loop`. |
+| `audio_manifest.json` | `project/assets/Audio/` | one entry per wav: `file` (relative to `project/assets/Audio`), `key`, `layer`, `variant`, `anchor_ms`, `lufs_m_max`, `true_peak_dbtp`, `length_s`, `channels`, `source`, `mix_db` (float dB, every entry; see "Mix"), optional `lead_ms`, `loop`. The top-level `mix` block holds the shot reference the `mix_db` values were derived from. |
 | `sync_map.json` | `tools/audio/` | `"<gun>/<Clip>": [{"key","frame","time","src","conf"}]` for every FP clip of both guns. |
 | keys | | weapon `snd.<ak|870>.<element>`, foley `snd.foley.<category>.<element>`; variants of one key share it, pick randomly and never the previous take. |
 
@@ -22,7 +22,7 @@ can be fired from an animator event on the contact frame of our own clip.
   `anchor_ms = 0` with no transient (cloth, melee swing, foley handling, loops) means "starts with the motion".
 * `snd.<gun>.fire` in `sync_map.json` is not a file: it expands to the five layers `snd.<gun>.fire_close|sub|mech|tail|far`
   (all start at the shot instant; tails and far carry their own leading silence / delay). Play each layer at its
-  manifest `mix_db` (close 0, sub -2, mech -3, tail -4, far -7) into a weapon bus with a limiter.
+  manifest `mix_db` (see "Mix": close ~0, sub -2, mech -3, tail -9 + space, far -15 relative to the shot sum) into a weapon bus with a limiter.
 * **Full auto**: close/sub/mech on every shot, **tail every 2nd shot, far every 3rd** (the audition reel does exactly
   this). Stacking a 3 s tail per shot at 650 rpm sums to +10 dB and buries the transients. Even so ten AK shots sum to
   about +4 dBFS before the bus limiter, so the bus limiter (-1 dBTP) is required.
@@ -83,6 +83,8 @@ build_elements.py   # weapon action one-shots   (recipes/elements.json)
 build_fire.py       # five gunfire layers       (recipes/ak_fire.json, recipes/remington870_fire.json)
 build_tails.py      # environment tails         (recipes/tails.json; real recordings only, writes `sources` to the manifest)
 build_foley.py      # foley + footsteps + loops (recipes/foley.json)
+build_ui.py         # hitmarker ticks (UI/) + body fall (Body/)  (recipes/ui.json)
+apply_mix.py        # rewrite mix_db on every manifest entry from recipes/mix.json (every build_*.py does this too)
 check_audio.py      # acceptance checks, exit code 0 = pass
 render_reel.py      # audition reels to C:\tb\audio-reel (not committed); `render_reel.py tails` for the environment tails
 ```
@@ -109,6 +111,55 @@ script, run `check_audio.py`, then listen to the reel.
 * **Variant counts**: close 6, sub 5, mech 4, tail 5, far 4 per gun; action elements 3-4; foley 3-4; footsteps 5-8.
 * **Dither**: every file is written 16-bit with TPDF dither.
 
+## Mix (`recipes/mix.json`, `mixspec.py`)
+
+Every file is normalised to a loudness target of its own layer, so the files alone say nothing about the hierarchy (a cloth
+rustle and a bolt slam are both -21 LUFS-M). The hierarchy lives in one table, `recipes/mix.json`: the playback level of every key
+in dB **relative to the player's own gunshot** (close + sub + mech as played = 0 dB). `mixspec.py` turns it into a `mix_db` on
+every manifest entry:
+
+    mix_db = spec level - (the file's LUFS-M - the shot reference)
+
+**Contract with the engine**: a voice plays at (set volume) x 10^(mix_db / 20) and the engine does no other loudness math. The only
+other factor is Player Gain 0.75 on the layers of the player's own report (it scales close / sub / mech / tail alike, so their
+relative levels hold). Everything else plays at set volume 1.0.
+
+**Reference** (stored as `mix.shot_lufs_m` in the manifest, re-measured by `check_audio.py`): the mean over every variant combination
+of both guns of the LUFS-M max of close + sub + mech at their `mix_db`, summed from t = 0: about -12.8 LUFS-M; after Player Gain 0.75
+(-2.5 dB) the shot as played is about -15.3. Shot layers (close, sub, mech, tail, far) are stored relative to the unscaled sum
+(the engine applies Player Gain on top); every other key relative to the as-played reference. Rules on top of the formula, so a
+click's LUFS-M (dominated by its length, not its punch) cannot make one variant far louder than its siblings: variants of one key stay
+within +-3 dB of the key's median `mix_db`; a file's true peak plus its `mix_db` never passes -0.5 dBFS; close / sub / mech are
+their layer offset (0 / -2 / -3) plus a compensation to the layer's loudness target limited to -2..+1.5 dB (and by that peak rule),
+so every shot variant plays equally loud.
+
+Hierarchy (dB re the player's shot; surface and space offsets added where noted; `mix.json` is the source of truth):
+
+| Group | Level | Group | Level |
+|---|---|---|---|
+| player shot (close + sub + mech) | 0 | gun tail (player) | -9, + space |
+| NPC shot at 10 m | -6 | far layer | -15 |
+| flyby | -9 | bolt_release / mag_in / pump_fwd / shell_load_chamber | -14 |
+| flesh impact | -10 | mag_out / pump_back / shell_insert / bolt_back / mag_tap / mag_release | -17 |
+| impacts at 5 m | -12, + surface | handle | -21 |
+| body fall at 5 m | -12 | cloth | -25 |
+| melee_hit | -6 | dry_fire | -18 |
+| melee_swing | -16 | ADS in / out, equip, unequip, firemode | -22 |
+| draw / holster | -18 | footsteps walk / run | -24 / -20, + surface |
+| land (step land, `move.land_light`) | -16, + surface for step land | `move.land_heavy` | -12 |
+| jump | -20 | sprint loop | -24 |
+| casings | -24, + surface | UI hitmarker / kill | -16 / -13 |
+| ambience loops (phase 2) | -26 | impulse responses | no level (mix_db 0) |
+
+Surface offsets (footsteps, casings, impacts): metal +2, glass +1, wood 0, concrete 0, tile 0, dirt -2, carpet -5, water -1 (ice 0).
+Tail space offsets: indoor_small -2, indoor_large +1, outdoor_urban 0 (also the generic `fire_tail`), outdoor_open -3.
+
+Distance-based levels (NPC shot 10 m, impacts 5 m, body fall 5 m, `distance_refs` in `mix.json`) are stored as the level *at that
+distance*: the file's `mix_db` is the spec-at-distance, so the engine's rolloff for that set must be 0 dB at the reference distance.
+
+Change a number in `mix.json`, run `apply_mix.py` (no audio is touched), run `check_audio.py`: it recomputes every `mix_db` from the
+wavs themselves and fails on a mismatch (+-0.1 dB), a missing `mix_db`, a key `mix.json` does not cover, or a stale manifest.
+
 ## Loudness targets (`recipes/targets.json`, enforced by `check_audio.py`)
 
 Metric: **LUFS-M max** = loudest 400 ms momentary window (BS.1770 K-weighted). A one-shot is too short for an integrated
@@ -122,7 +173,10 @@ loop's mean sample step).
 | mech | -20 | -23..-17 | | foley | -21 | -24..-18 |
 | sub | -19 | -23..-15 | | step (walk -24, run -22) | -23 | -28..-20 |
 | tail | -22 | -26..-18 | | loop | -24 | -27..-21 |
-| far | -25 | -29..-21 | | | | |
+| far | -25 | -29..-21 | | ui (hitmarker ticks) | -25 | -31..-19 |
+| casing | -26 | -32..-20 | | bodyfall | -17 | -22..-12 |
+| impact | -17 | -22..-12 | | flyby | -21 | -26..-16 |
+| ambience (phase 2) | -30 | -34..-26 | | ir (phase 2) | no window | |
 
 A limiter-aware loop (`abuild.finish`) measures what is actually shipped: gain to target, limiter only if the peak
 needs it, at most 7-10 dB of limiter work, so spiky one-shots stop at their peak ceiling rather than turn to mush
@@ -164,6 +218,23 @@ is plain rounding).
 Every `anchor_ms` of a sliced element is now the *designed* contact lead (`lead_ms` / pitch ratio), not a detection
 (draw / holster = the thud position, melee / dry fire / cloth = 0), so a controller sync stays on the contact frame.
 
+### Combat placeholders replaced (`build_ui.py`, `recipes/ui.json`)
+
+`tools/gen_combat_sounds.py` synthesised the files in `Audio/Combat/` (hitmarker, body_fall, whizz, flesh_hit, dry_fire, reload,
+shotgun_pump, ak_shot*, shotgun_shot*): they were louder than the real material and are gone, script and files. The recorded
+replacements are `Impacts/flyby_*` (whizz), `snd.impact.flesh`, `snd.<gun>.dry_fire / pump_back / mag_out ...`, the gun layers, and:
+
+| Key | Files | Real material |
+|---|---|---|
+| `snd.ui.hitmarker` | `UI/hitmarker_1..5.wav` | SculpTunes 9 mm brass casing ticks (8.9 kHz, 10-16 ms), high-passed, layered with Pole Position SAIGA-12 / Steyr TMP handling clicks |
+| `snd.ui.hitmarker_kill` | `UI/hitmarker_kill_1..4.wav` | the same ticks, then a heavier second contact ~70 ms later (G36C handling pitched down 2-3 st) over a low Shapeforms thud |
+| `snd.body_fall` | `Body/body_fall_1..4.wav` | The Chris Alan body slam / deep punch + Gamemaster body thump + Shapeforms low thud, a cloth rustle and two AK105 pack handling taps (the gear rattle) |
+
+`CombatFx` plays them through `WeaponAudio::KeySet` / `PlayKeyed` (the manifest's `mix_db` is the level, no other scaling): hitmarkers 2D,
+body fall 3D. The Pump / Reload / DryFire cues make no sound of their own any more (the animators' `snd.*` events do), the flesh cue is
+`snd.impact.flesh`, the whizz is `snd.flyby`. Folders `Audio/Combat`, `UI`, `Body`, `Ambience` (phase 2), `IR` (phase 2) are all covered
+by `check_audio.py`: a wav under any of them that the manifest does not list fails (so a `Combat/` placeholder cannot come back).
+
 ### New sets: casings, impacts, flyby (`build_impacts.py`, `recipes/casings_impacts.json`)
 
 Keys `snd.casing.<rifle|shell>.<concrete|wood|tile|carpet|metal|dirt>`, `snd.impact.<concrete|metal|wood|dirt|glass|flesh|ice>`,
@@ -193,7 +264,7 @@ Loudness (LUFS-M max): casing -26 (window -32..-20), impact -17 (-22..-12), flyb
   Listen to the reels and re-time `t` / `dur` in `recipes/elements.json` if a take includes a neighbour.
 * 870 pump strokes from TS / Wav Junction / SAIGA are quick cocks (rear and front contacts 80-200 ms apart); the rear-stop
   slices are short (80-90 ms of body) so they do not run into the forward stroke.
-* Water walk has only 5 steps; there is no real water impact, shell-on-metal, shell-on-wood, shell-on-carpet or bullet-in-wood.
+* Water walk has only 5 steps; there is no real water impact, shell-on-metal, shell-on-wood, shell-on-carpet or bullet-in-wood. Candidate real sources (water / wood impacts, shells on metal / wood, room tones, real IRs) are listed for approval in `C:\tb\audio-downloads-r2.md`.
 * `conf: medium` sync events (hands) are heuristic.
 * Pole Position indoor / outdoor and the Audiobeast room recordings are reserved for the tail lane; only their direct
   (first ~0.4 s) body is used here, for `fire_sub`.
@@ -327,7 +398,7 @@ footsteps use the same stride rule per soldier, 3D, skipped beyond NPC Step Max 
 
 `WEAPON_TEST_AUDIO_LOG=<file>` (or `NPC_TEST_RECORD=<dir>`, writing `<dir>/audio.txt`) logs, with the existing `S` / `L` lines:
 `W <sim time> <key> <file|-> <voices> <volume> <pitch> <2d> <x y z>` for every weapon and foley voice (`-` = the key has no
-recorded file yet). `tools/mix_npc_video.py` reads only the `S` lines (Combat folder placeholders): it needs `W` support to
+recorded file yet). `tools/mix_npc_video.py` reads only the `S` lines (the Combat placeholders that no longer exist, so it hears nothing of the game's audio now): it needs `W` support to
 mix the new layers.
 
 ### Tests
