@@ -45,14 +45,17 @@ def slice_variant(v):
 
 
 def fit_variant(v):
-    """cloth lead [t0, main) varispeed-fitted to main_at_ms, then the thud + its tail from `main` on."""
+    """cloth lead [t0, main) fitted to main_at_ms WITHOUT any pitch / varispeed (the lead's start is dropped when it is too long, silence
+    is put in front when it is too short), then the thud + its tail from `main` on."""
     x = src(v["src"])
     a = int(v["t0"] * SR)
     m = adsp.find_onset(x, v["main"]) - int(0.003 * SR)
     b = min(len(x), m + int((v["dur"] - (v["main"] - v["t0"])) * SR))
     pre = adsp.fade(adsp.cut(x, a, m), int(0.025 * SR), 0)
     post = adsp.cut(x, m, b)
-    pre = adsp.stretch_to(pre, int(v["main_at_ms"] / 1000 * SR))
+    want = int(v["main_at_ms"] / 1000 * SR)
+    pre = pre[len(pre) - want:] if len(pre) >= want else np.concatenate([np.zeros((want - len(pre), pre.shape[1]), np.float32), pre])
+    pre = adsp.fade(pre, int(0.025 * SR), 0)
     y = np.concatenate([pre, post])
     y = adsp.fade(y, 0, int(max(0.03, 0.25 * (b - m) / SR) * SR))
     y = adsp.pitch(y, v.get("pitch", 0.0))

@@ -1,0 +1,408 @@
+{
+ "_doc": "Recorded replacements for the synthesised Combat/ placeholders (tools/gen_combat_sounds.py, deleted). Every layer is a slice of a real recording dropped in at delay_ms (composite(), build_elements.py): tick = SculpTunes 9 mm brass casing ticks (8.9 kHz, 10-16 ms ring) + Pole Position SAIGA / Steyr handling clicks, high-passed and tight; kill tick = a first contact then a heavier second contact ~70 ms later (G36C handling pitched down) over a short low body of a Shapeforms thud. Body fall = The Chris Alan body slam + Gamemaster body thump + Shapeforms low thud, a cloth rustle and a short gear rattle (AK105 pack handling taps) after it.",
+ "hitmarker": [
+  {
+   "layers": [
+    {
+     "src": "sonniss/SculpTunes/9 mm",
+     "t": 10.704,
+     "dur": 0.07,
+     "hp": 1500
+    },
+    {
+     "src": "sonniss/Pole Position Production/SAIGA-12",
+     "t": 4.463,
+     "dur": 0.05,
+     "hp": 2500,
+     "gain_db": -4
+    }
+   ]
+  },
+  {
+   "layers": [
+    {
+     "src": "sonniss/SculpTunes/9 mm",
+     "t": 17.869,
+     "dur": 0.07,
+     "hp": 1500,
+     "pitch": 1.0
+    }
+   ]
+  },
+  {
+   "layers": [
+    {
+     "src": "sonniss/SculpTunes/9 mm",
+     "t": 22.619,
+     "dur": 0.08,
+     "hp": 1500
+    },
+    {
+     "src": "sonniss/Pole Position Production/Steyr",
+     "t": 0.557,
+     "dur": 0.04,
+     "hp": 3000,
+     "gain_db": -8
+    }
+   ]
+  },
+  {
+   "layers": [
+    {
+     "src": "sonniss/SculpTunes/9 mm",
+     "t": 0.195,
+     "dur": 0.08,
+     "hp": 1500,
+     "pitch": -1.0
+    }
+   ]
+  },
+  {
+   "layers": [
+    {
+     "src": "sonniss/Pole Position Production/SAIGA-12",
+     "t": 7.977,
+     "dur": 0.06,
+     "hp": 2000
+    },
+    {
+     "src": "sonniss/SculpTunes/9 mm",
+     "t": 10.704,
+     "dur": 0.06,
+     "hp": 2000,
+     "gain_db": -3,
+     "pitch": 2.0
+    }
+   ]
+  }
+ ],
+ "hitmarker_kill": [
+  {
+   "layers": [
+    {
+     "src": "sonniss/Pole Position Production/SAIGA-12",
+     "t": 2.318,
+     "dur": 0.09,
+     "hp": 1800
+    },
+    {
+     "src": "sonniss/SculpTunes/9 mm",
+     "t": 10.704,
+     "dur": 0.07,
+     "hp": 2000,
+     "gain_db": -2
+    },
+    {
+     "src": "sonniss/Pole Position Production/Heckler",
+     "t": 6.614,
+     "dur": 0.12,
+     "hp": 900,
+     "pitch": -2.0,
+     "delay_ms": 70
+    },
+    {
+     "src": "sonniss/Shapeforms/IMPACT_LOW_THUD_10",
+     "t": 0.099,
+     "dur": 0.15,
+     "lp": 500,
+     "gain_db": -10,
+     "delay_ms": 70
+    }
+   ]
+  },
+  {
+   "layers": [
+    {
+     "src": "sonniss/Pole Position Production/SAIGA-12",
+     "t": 4.463,
+     "dur": 0.08,
+     "hp": 1800
+    },
+    {
+     "src": "sonniss/SculpTunes/9 mm",
+     "t": 17.869,
+     "dur": 0.07,
+     "hp": 2000,
+     "gain_db": -2
+    },
+    {
+     "src": "sonniss/Pole Position Production/Heckler",
+     "t": 16.126,
+     "dur": 0.12,
+     "hp": 900,
+     "pitch": -2.0,
+     "delay_ms": 65
+    },
+    {
+     "src": "sonniss/Shapeforms/IMPACT_LOW_THUD_10",
+     "t": 0.099,
+     "dur": 0.15,
+     "lp": 450,
+     "gain_db": -11,
+     "pitch": -2.0,
+     "delay_ms": 65
+    }
+   ]
+  },
+  {
+   "layers": [
+    {
+     "src": "sonniss/Pole Position Production/SAIGA-12",
+     "t": 0.182,
+     "dur": 0.09,
+     "hp": 1800
+    },
+    {
+     "src": "sonniss/SculpTunes/9 mm",
+     "t": 22.619,
+     "dur": 0.07,
+     "hp": 2000,
+     "gain_db": -2
+    },
+    {
+     "src": "sonniss/Pole Position Production/Heckler",
+     "t": 11.558,
+     "dur": 0.12,
+     "hp": 900,
+     "pitch": -2.0,
+     "delay_ms": 75
+    },
+    {
+     "src": "sonniss/Shapeforms/IMPACT_LOW_THUD_10",
+     "t": 0.099,
+     "dur": 0.15,
+     "lp": 500,
+     "gain_db": -10,
+     "delay_ms": 75
+    }
+   ]
+  },
+  {
+   "layers": [
+    {
+     "src": "sonniss/Pole Position Production/Steyr",
+     "t": 13.214,
+     "dur": 0.08,
+     "hp": 1800
+    },
+    {
+     "src": "sonniss/SculpTunes/9 mm",
+     "t": 0.195,
+     "dur": 0.07,
+     "hp": 2000,
+     "gain_db": -2
+    },
+    {
+     "src": "sonniss/Pole Position Production/Heckler",
+     "t": 18.343,
+     "dur": 0.12,
+     "hp": 900,
+     "pitch": -2.0,
+     "delay_ms": 72
+    },
+    {
+     "src": "sonniss/Shapeforms/IMPACT_LOW_THUD_10",
+     "t": 0.099,
+     "dur": 0.15,
+     "lp": 480,
+     "gain_db": -10,
+     "pitch": -2.0,
+     "delay_ms": 72
+    }
+   ]
+  }
+ ],
+ "body_fall": [
+  {
+   "layers": [
+    {
+     "src": "sonniss/The Chris Alan/Hand-to-Hand Combat - Body Hits - Body Slam Floor 08",
+     "t": 0.12,
+     "dur": 0.4
+    },
+    {
+     "src": "sonniss/Gamemaster Audio -  Bullet/bullet_impact_body_thump_02",
+     "t": 0.087,
+     "dur": 0.45,
+     "pitch": -2.0,
+     "gain_db": -3,
+     "delay_ms": 20
+    },
+    {
+     "src": "sonniss/Shapeforms/IMPACT_LOW_THUD_10",
+     "t": 0.099,
+     "dur": 0.2,
+     "pitch": -2.0,
+     "gain_db": -4,
+     "delay_ms": 8
+    },
+    {
+     "src": "sonniss/Shapeforms/CLOTHING_MATERIAL_MOVEMENT_08",
+     "t": 0.0,
+     "dur": 0.3,
+     "gain_db": -10,
+     "delay_ms": 40,
+     "snap": false
+    },
+    {
+     "src": "AK105/Actions/S_AK105_Reload_Empty.WAV",
+     "t": 2.016,
+     "dur": 0.12,
+     "gain_db": -9,
+     "delay_ms": 150
+    },
+    {
+     "src": "AK105/Actions/S_AK105_Reload_Empty.WAV",
+     "t": 2.163,
+     "dur": 0.12,
+     "gain_db": -11,
+     "delay_ms": 270
+    }
+   ]
+  },
+  {
+   "layers": [
+    {
+     "src": "sonniss/The Chris Alan/Hand-to-Hand Combat - Body Hits - Body Slam Floor 08",
+     "t": 0.12,
+     "dur": 0.4,
+     "pitch": -2.0
+    },
+    {
+     "src": "sonniss/The Chris Alan/Hand-to-Hand Combat - Body Hits - Deep Punch 02",
+     "t": 0.039,
+     "dur": 0.2,
+     "pitch": -2.0,
+     "gain_db": -3,
+     "delay_ms": 15
+    },
+    {
+     "src": "sonniss/Shapeforms/IMPACT_LOW_THUD_10",
+     "t": 0.099,
+     "dur": 0.2,
+     "pitch": -2.0,
+     "gain_db": -3,
+     "delay_ms": 5
+    },
+    {
+     "src": "AK105/Actions/S_AK105_Reload_Tactical.WAV",
+     "t": 1.935,
+     "dur": 0.12,
+     "gain_db": -9,
+     "delay_ms": 130
+    },
+    {
+     "src": "AK105/Actions/S_AK105_Reload_Tactical.WAV",
+     "t": 2.043,
+     "dur": 0.12,
+     "gain_db": -11,
+     "delay_ms": 230
+    },
+    {
+     "src": "sonniss/Shapeforms/CLOTHING_MATERIAL_MOVEMENT_08",
+     "t": 0.0,
+     "dur": 0.3,
+     "gain_db": -10,
+     "delay_ms": 60,
+     "snap": false
+    }
+   ]
+  },
+  {
+   "layers": [
+    {
+     "src": "sonniss/Gamemaster Audio -  Bullet/bullet_impact_body_thump_02",
+     "t": 0.087,
+     "dur": 0.45,
+     "pitch": -2.0
+    },
+    {
+     "src": "sonniss/The Chris Alan/Hand-to-Hand Combat - Body Hits - Body Slam Floor 08",
+     "t": 0.12,
+     "dur": 0.4,
+     "pitch": -2.0,
+     "gain_db": -2,
+     "delay_ms": 30
+    },
+    {
+     "src": "sonniss/Shapeforms/IMPACT_LOW_THUD_10",
+     "t": 0.099,
+     "dur": 0.2,
+     "pitch": -2.0,
+     "gain_db": -2,
+     "delay_ms": 0
+    },
+    {
+     "src": "AK105/Actions/S_AK105_Reload_Empty.WAV",
+     "t": 3.172,
+     "dur": 0.12,
+     "gain_db": -9,
+     "delay_ms": 170
+    },
+    {
+     "src": "AK105/Actions/S_AK105_Reload_Empty.WAV",
+     "t": 3.321,
+     "dur": 0.12,
+     "gain_db": -12,
+     "delay_ms": 300
+    },
+    {
+     "src": "sonniss/The Chris Alan/Hand-to-Hand Combat - Body Hits - Deep Punch 02",
+     "t": 0.039,
+     "dur": 0.2,
+     "pitch": -2.0,
+     "gain_db": -9,
+     "delay_ms": 330
+    }
+   ]
+  },
+  {
+   "layers": [
+    {
+     "src": "sonniss/The Chris Alan/Hand-to-Hand Combat - Body Hits - Body Slam Floor 08",
+     "t": 0.12,
+     "dur": 0.4,
+     "pitch": 1.0
+    },
+    {
+     "src": "sonniss/Gamemaster Audio -  Bullet/bullet_impact_body_thump_02",
+     "t": 0.087,
+     "dur": 0.45,
+     "pitch": -2.0,
+     "gain_db": -4,
+     "delay_ms": 12
+    },
+    {
+     "src": "sonniss/Shapeforms/IMPACT_LOW_THUD_10",
+     "t": 0.099,
+     "dur": 0.2,
+     "pitch": -2.0,
+     "gain_db": -3,
+     "delay_ms": 0
+    },
+    {
+     "src": "sonniss/Shapeforms/CLOTHING_MATERIAL_MOVEMENT_08",
+     "t": 0.0,
+     "dur": 0.3,
+     "gain_db": -9,
+     "delay_ms": 30,
+     "snap": false
+    },
+    {
+     "src": "AK105/Actions/S_AK105_Reload_Tactical.WAV",
+     "t": 2.189,
+     "dur": 0.12,
+     "gain_db": -10,
+     "delay_ms": 120
+    },
+    {
+     "src": "AK105/Actions/S_AK105_Reload_Tactical.WAV",
+     "t": 2.85,
+     "dur": 0.12,
+     "gain_db": -12,
+     "delay_ms": 220
+    }
+   ]
+  }
+ ]
+}
