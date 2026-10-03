@@ -1302,7 +1302,7 @@ void NpcDirector::LateUpdate(World& world, float dt, const PlayerSnapshot& p) {
         LatePose(world, n, lateDt, p, /*alive=*/true);
         // Footsteps on the posed feet's touch-downs (a body without foot bones walks by the stride rule, in the weapon update).
         if (float feet[2]; n.Body.FootHeights(feet))
-            FoleyAudio::Get().NpcFeet(world, n.Index, n.Feet, feet, n.Body.Sprinting(), lateDt);
+            FoleyAudio::Get().NpcFeet(world, n.Index, n.Feet, feet, n.Body.Sprinting(), glm::length(glm::vec2(n.Velocity.x, n.Velocity.z)), lateDt);
         UpdateHitboxes(n, p, /*posed=*/true);
         // The hit flinch goes on after the hitboxes took their pose (and the eye and the aim were read): visual only.
         if (const auto it = m_Flinch.find(n.Index); it != m_Flinch.end()) {
