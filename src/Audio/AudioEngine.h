@@ -3,7 +3,7 @@
 #include <vector>
 #include <cstdint>
 #include <glm/glm.hpp>
-#include "ReverbFdn.h"
+#include "MasterLimiter.h"
 
 // Thin wrapper over miniaudio's ma_engine: loads sounds by path (wav/mp3/flac/ogg) and plays
 // them as individually addressable voices.
@@ -73,20 +73,73 @@ public:
     // The send level of a voice that was started with a ReverbSend > 0.
     static void SetReverbSend(SoundHandle handle, float level);
 
-    // The reverb bus: a send every voice with a ReverbSend feeds, one FDN reverb (ReverbFdn) summed into the output. The
-    // parameters are targets the DSP glides to (no zipper noise); safe to call from the game thread every frame.
+    // The reverb bus: a send every voice with a ReverbSend feeds, one convolution reverb (Audio/ConvolutionReverb, real recorded
+    // impulse responses) summed into the output through the master limiter. A space is up to two weighted layers; the DSP glides to
+    // what it is told (a change of space is an equal-power crossfade, no clicks), so it is safe to call from the game thread every
+    // frame. A layer whose IR cannot be loaded is dropped; with no layers the reverb fades to silence.
+    struct ReverbLayerSpec {
+        std::string Ir;                // the impulse response file (resolved path)
+        float Weight = 1.0f;           // crossfade weight (the layers' weights sum to 1)
+        float WetDb = 0.0f;            // return level of this layer (dB)
+        float PreDelayMs = 0.0f;
+        float HfDampDb = 0.0f;         // attenuation (dB) of a high shelf at 4 kHz on the reverb input
+        float LowCutHz = 0.0f;         // high-pass on the reverb input (0 = off)
+    };
+    struct ReverbSpec {
+        int Count = 0;
+        ReverbLayerSpec Layers[2];
+    };
+    // Decodes and prepares an impulse response ahead of its first use (the first SetReverb naming it would otherwise do it on the
+    // game thread). False if the file is missing or cannot be decoded.
+    static bool PreloadIr(const std::string& path);
     static void SetReverbEnabled(bool enabled, int bus = 0); // bus 1 (the remote room) is off until a portal voice needs it
     static bool ReverbEnabled(int bus = 0);
-    static void SetReverb(const ReverbParams& target, int bus = 0);
+    static void SetReverb(const ReverbSpec& target, int bus = 0);
     static void SetReverbReturn(float level); // linear gain of the wet signal into the output (times the SFX bus volume)
-    static void SetReverbGlide(float seconds); // how long the reverb takes to follow a change of its parameters
+    static void SetReverbGlide(float seconds); // how long the reverb takes to follow a change of space (the crossfade)
     struct ReverbStats {
         std::uint64_t Callbacks = 0;
         double TotalMicros = 0.0, MaxMicros = 0.0;
         int Frames = 0;            // frames of the last callback
+        std::uint64_t WorkerJobs = 0, LateBlocks = 0; // tail blocks run on the worker thread / not finished in time
+        double WorkerMicros = 0.0;
+        int ActiveConvolvers = 0;
     };
     static ReverbStats GetReverbStats(int bus = 0);
     static void ResetReverbStats();
+    // What the reverb is doing now (the editor's Audio panel): the IRs it holds, which run and at what weight.
+    struct ReverbInfo {
+        int Instances = 0;
+        struct Entry { std::string Ir; bool Running = false; float Weight = 0.0f; };
+        std::vector<Entry> Entries;
+    };
+    static ReverbInfo GetReverbInfo(int bus = 0);
+
+    // The master peak limiter: the last node before the output (after every bus and the reverb returns).
+    static void SetMasterLimiter(const LimiterSettings& s);
+    static LimiterSettings GetMasterLimiter();
+    static float TakeLimiterGainReductionDb(); // the deepest gain reduction since the last call (dB, >= 0)
+
+    // Level meters: the master (after the limiter), each mixer bus, the reverb return. K-weighted loudness and peak.
+    enum MeterId { MeterMaster = 0, MeterBusFirst = 1, MeterWet = 1 + kBusCount, MeterCount = 2 + kBusCount };
+    struct MeterReading { float PeakDb = -120.0f, MomentaryLufs = -120.0f, ShortTermLufs = -120.0f; };
+    static MeterReading GetMeter(int id);
+    static int VoiceCount(); // voices that have been started and not yet reaped
+
+    // Capture. AUDIO_CAPTURE=<wav path> in the environment records the master output (after the limiter) as a float WAV for the whole
+    // session. EnableTaps keeps the last seconds of three streams for DrainTaps (the --audio-test): the master output, the signal
+    // entering the limiter (dry + wet) and the reverb returns alone.
+    static bool StartCapture(const std::string& wavPath);
+    static void StopCapture();
+    static void EnableTaps(bool on);
+    static size_t DrainTaps(std::vector<float>& master, std::vector<float>& beforeLimiter, std::vector<float>& wet); // appends stereo frames
+    static int SampleRate();
+
+    // An engine with no audio device that renders on demand (the --audio-test, unit tests): deterministic and faster than real
+    // time. Everything else (voices, buses, the reverb, the limiter) is the same code; the reverb's tail runs inline.
+    static void InitOffline(int sampleRate = 48000);
+    static void RenderOffline(float* interleavedStereo, int frames);
+    static bool IsOffline();
 
     // All no-ops / false for a stale or invalid handle.
     static void Stop(SoundHandle handle);
