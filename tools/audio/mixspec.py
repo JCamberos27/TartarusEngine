@@ -113,7 +113,8 @@ def shot_comp_db(e, lufs_m, extra_db=0.0):
     lo, hi = SPEC["reference"]["shot_layer_comp_db"]
     off = SPEC["reference"]["shot_layer_db"][_layer_of(e)]
     tgt = abuild.TARGETS["layers"][e["layer"]]["target"]
-    hi = min(hi, PEAK_CAP_DB - e["true_peak_dbtp"] - off - extra_db)
+    cap = PEAK_CAP_DB + float(SPEC["reference"].get("layer_peak_headroom_db", {}).get(_layer_of(e), 0.0))
+    hi = min(hi, cap - e["true_peak_dbtp"] - off - extra_db)
     return min(hi, max(lo, tgt - lufs_m))
 
 

@@ -1,5 +1,5 @@
 {
- "_doc": "Remington 870 gunfire: same layer set as the AK. 12 ga: huge low-mid blast, little crack. close = Herrington 11-87 report (wide stereo) + SRM-12 / Mk14 body weight; sub is deeper and longer; mech is the recoil thump of the receiver / forend (the pump itself is its own element, fired from the Pump clip). Round 4: fire_sub is built from real recordings only (low-passed shot + the same shot pitched down); no synthesis. Round 4: no algorithmic reverb anywhere; the far layer is the real recorded tail, low-passed and compressed. Round 5 (2026-10-03 revamp): 8 close variants over the three Herrington recordings, each layered with a different shot of the real Remington 870 (Audiobeast, medium warehouse, 10 m: 80 Hz - 2.5 kHz, 7 dB down) for the gun's own boom, SRM-12 / Mk14 weight or the TS Sound 12-gauge crack on some; chain eased for crest. Round 6 (2026-10-03): the close layer rebuilt from the Tactical Shooter Pack only, on the AK's recipe - the pack's SRM-12 shotgun shot (the Herrington takes start soft and clip flat 40-60 ms in) under a TR15 crack (high-passed), an R08 / WK-11 mid layer (150 Hz - 5 kHz) and Mk14 weight, variety from the layers and +-0.9 st, through the AK's chain with a shotgun's low end - so both guns share one recording style. (The Audiobeast warehouse and TS Sound layers are gone from it.) Round 7 (2026-10-03, 'not punchy enough, a huge trail'): close 0.5 s (was 0.85) with a decay envelope (hold 30 ms, -30 dB over 220 ms) and a harder transient chain; the sub from front-loaded sources only (SRM-12, Mk14, real thuds - the Herrington booms peak 40-60 ms late, the warehouse takes ring) with its own decay; the recorded tail's compressor eased and the gun's tails 3 dB down (mix.json reference.gun_tail_db).",
+ "_doc": "Remington 870 gunfire: same layer set as the AK. 12 ga: huge low-mid blast, little crack. close = Herrington 11-87 report (wide stereo) + SRM-12 / Mk14 body weight; sub is deeper and longer; mech is the recoil thump of the receiver / forend (the pump itself is its own element, fired from the Pump clip). Round 4: fire_sub is built from real recordings only (low-passed shot + the same shot pitched down); no synthesis. Round 4: no algorithmic reverb anywhere; the far layer is the real recorded tail, low-passed and compressed. Round 5 (2026-10-03 revamp): 8 close variants over the three Herrington recordings, each layered with a different shot of the real Remington 870 (Audiobeast, medium warehouse, 10 m: 80 Hz - 2.5 kHz, 7 dB down) for the gun's own boom, SRM-12 / Mk14 weight or the TS Sound 12-gauge crack on some; chain eased for crest. Round 6 (2026-10-03): the close layer rebuilt from the Tactical Shooter Pack only, on the AK's recipe - the pack's SRM-12 shotgun shot (the Herrington takes start soft and clip flat 40-60 ms in) under a TR15 crack (high-passed), an R08 / WK-11 mid layer (150 Hz - 5 kHz) and Mk14 weight, variety from the layers and +-0.9 st, through the AK's chain with a shotgun's low end - so both guns share one recording style. (The Audiobeast warehouse and TS Sound layers are gone from it.) Round 7 (2026-10-03, 'not punchy enough, a huge trail'): close 0.5 s (was 0.85) with a decay envelope (hold 30 ms, -30 dB over 220 ms) and a harder transient chain; the sub from front-loaded sources only (SRM-12, Mk14, real thuds - the Herrington booms peak 40-60 ms late, the warehouse takes ring) with its own decay; the recorded tail's compressor eased and the gun's tails 3 dB down (mix.json reference.gun_tail_db). Round 8 (2026-10-03, 'more kick / boom'): sub +7.5 dB (gun_db), held 80 ms and decaying over 380 ms; close +3 dB with a 70 Hz lift. Round 9 ('hit hard, big bang, cinematic'): the sub's real thud donors at full level up to 150 Hz (the slam), sub saturation 1.7 (harmonics that read on small speakers, and a denser peak that leaves room for the level), close drive 1.6 and Mk14 body -2 dB.",
  "gun": "870",
  "dir": "Weapons/Remington870",
  "rpm": 70,
@@ -9,7 +9,12 @@
    "hp": 42,
    "eq": [
     [
-     90,
+     70,
+     3.0,
+     0.9
+    ],
+    [
+     95,
      4.5,
      0.8
     ],
@@ -42,7 +47,7 @@
     "attack_ms": 4,
     "release_ms": 80
    },
-   "drive": 1.4
+   "drive": 1.6
   },
   "variants": [
    {
@@ -66,7 +71,7 @@
      "src": "Mk14EBR/S_Mk14EBR_Fire_02.WAV",
      "dur": 0.45,
      "lp": 650,
-     "gain_db": -4
+     "gain_db": -2
     }
    },
    {
@@ -90,7 +95,7 @@
      "src": "Mk14EBR/S_Mk14EBR_Fire_03.WAV",
      "dur": 0.45,
      "lp": 650,
-     "gain_db": -4
+     "gain_db": -2
     },
     "pitch": -0.6
    },
@@ -115,7 +120,7 @@
      "src": "Mk14EBR/S_Mk14EBR_Fire_01.WAV",
      "dur": 0.45,
      "lp": 650,
-     "gain_db": -4
+     "gain_db": -2
     },
     "pitch": 0.6
    },
@@ -140,7 +145,7 @@
      "src": "Mk14EBR/S_Mk14EBR_Fire_02.WAV",
      "dur": 0.45,
      "lp": 650,
-     "gain_db": -4
+     "gain_db": -2
     },
     "pitch": -0.3
    },
@@ -165,7 +170,7 @@
      "src": "Mk14EBR/S_Mk14EBR_Fire_03.WAV",
      "dur": 0.45,
      "lp": 650,
-     "gain_db": -4
+     "gain_db": -2
     },
     "pitch": 0.3
    },
@@ -190,7 +195,7 @@
      "src": "Mk14EBR/S_Mk14EBR_Fire_01.WAV",
      "dur": 0.45,
      "lp": 650,
-     "gain_db": -4
+     "gain_db": -2
     },
     "pitch": -0.4
    },
@@ -215,7 +220,7 @@
      "src": "Mk14EBR/S_Mk14EBR_Fire_02.WAV",
      "dur": 0.45,
      "lp": 650,
-     "gain_db": -4
+     "gain_db": -2
     },
     "pitch": 0.9
    },
@@ -240,7 +245,7 @@
      "src": "Mk14EBR/S_Mk14EBR_Fire_03.WAV",
      "dur": 0.45,
      "lp": 650,
-     "gain_db": -4
+     "gain_db": -2
     },
     "pitch": 0.15
    }
@@ -305,7 +310,7 @@
   ]
  },
  "sub": {
-  "length_s": 0.55,
+  "length_s": 0.65,
   "variants": [
    {
     "src": "SRM-12/Actions/S_SRM-12_ShotOnly.wav",
@@ -320,10 +325,11 @@
       "src": "sonniss/Shapeforms/IMPACT_LOW_THUD_10",
       "shot": false,
       "t": 0.09,
-      "lp": 110,
-      "gain_db": -3
+      "lp": 150,
+      "gain_db": 0.0
      }
-    ]
+    ],
+    "drive": 1.7
    },
    {
     "src": "SRM-12/Actions/S_SRM-12_ShotOnly.wav",
@@ -338,11 +344,12 @@
       "src": "sonniss/Gamemaster Audio -  Bullet/bullet_impact_body_thump_02",
       "shot": false,
       "t": 0.087,
-      "lp": 120,
-      "gain_db": -5,
+      "lp": 150,
+      "gain_db": 0.0,
       "pitch": -2.0
      }
-    ]
+    ],
+    "drive": 1.7
    },
    {
     "src": "Mk14EBR/S_Mk14EBR_Fire_03.WAV",
@@ -357,10 +364,11 @@
       "src": "sonniss/Shapeforms/IMPACT_LOW_THUD_10",
       "shot": false,
       "t": 0.09,
-      "lp": 110,
-      "gain_db": -4
+      "lp": 150,
+      "gain_db": 0.0
      }
-    ]
+    ],
+    "drive": 1.7
    },
    {
     "src": "SRM-12/Actions/S_SRM-12_ShotOnly.wav",
@@ -375,10 +383,11 @@
       "src": "sonniss/The Chris Alan/Hand-to-Hand Combat - Body Hits - Body Slam Floor 08",
       "shot": false,
       "t": 0.12,
-      "lp": 110,
-      "gain_db": -6
+      "lp": 150,
+      "gain_db": 0.0
      }
-    ]
+    ],
+    "drive": 1.7
    },
    {
     "src": "Mk14EBR/S_Mk14EBR_Fire_02.WAV",
@@ -393,16 +402,17 @@
       "src": "sonniss/Gamemaster Audio -  Bullet/bullet_impact_body_thump_02",
       "shot": false,
       "t": 0.087,
-      "lp": 120,
-      "gain_db": -5
+      "lp": 150,
+      "gain_db": 0.0
      }
-    ]
+    ],
+    "drive": 1.7
    }
   ],
   "decay": {
-   "hold_ms": 60,
+   "hold_ms": 80,
    "to_db": -24,
-   "over_ms": 320
+   "over_ms": 380
   }
  },
  "tail": {
