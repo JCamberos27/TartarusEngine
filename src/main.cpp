@@ -1434,6 +1434,13 @@ int main(int argc, char** argv) {
             if (world.SkySourceMode == World::SkySource::Atmosphere) skyAtmosphere.WarmUp(world.Sky.CloudsEnabled);
             if (world.SsaoEnabled) Ssao::WarmUp(ssaoComputeShader, ssaoBlurShader);
             if (world.ShadowsEnabled) shadowMap.Configure(world.ShadowResolution, world.ShadowCascades);
+            iblProbe.WarmUp();
+            tonemapper.WarmUp();
+            lightBuffer.WarmUp();
+            clusterGrid.WarmUp();
+            SceneRenderer::WarmShaderVariants(world);
+            glUseProgram(0);
+            GLStateCache::Invalidate();
         };
         warmRenderResources();
 
@@ -3323,6 +3330,9 @@ int main(int argc, char** argv) {
                 glCullFace(GL_BACK);
 
                 localShadowShader.Bind(); // linear distance-to-light depth
+                // The program's sampler2D uAlbedo reads unit 0 at the pass's first clear/blit/draw, before
+                // DrawDepthOnly binds anything there (KHR 131204 on frame 1).
+                GLStateCache::BindTexture2D(0, DefaultTextures::White());
                 // #194: resolve once, outside the per-spot x per-caster loop.
                 int localLightViewProjLoc = localShadowShader.Loc("uLightViewProj");
                 int localLightPosLoc = localShadowShader.Loc("uShadowLightPos");
@@ -3436,6 +3446,9 @@ int main(int argc, char** argv) {
                 glCullFace(GL_BACK);
 
                 localShadowShader.Bind(); // linear distance-to-light depth
+                // The program's sampler2D uAlbedo reads unit 0 at the pass's first clear/blit/draw, before
+                // DrawDepthOnly binds anything there (KHR 131204 on frame 1).
+                GLStateCache::BindTexture2D(0, DefaultTextures::White());
                 // #194: resolve once, outside the per-point x 6-face x per-caster loop.
                 int cubeLightPosLoc = localShadowShader.Loc("uShadowLightPos");
                 int cubeFarLoc = localShadowShader.Loc("uShadowFar");

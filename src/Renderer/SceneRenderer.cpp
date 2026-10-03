@@ -244,6 +244,23 @@ void SceneRenderer::ApplyFrameState(Shader& program, const FrameState& fs) const
     program.SetInt("uApplyTonemap", 0);
 }
 
+int SceneRenderer::WarmShaderVariants(World& world) {
+    std::unordered_map<ShaderAsset*, std::vector<ShaderVariantKey>> done;
+    int built = 0;
+    for (auto entity : world.Registry.view<RenderableComponent>()) {
+        for (const auto& ma : world.Registry.get<RenderableComponent>(entity).Materials) {
+            if (!ma || !ma->Shader) continue;
+            const ShaderVariantKey key = ShaderVariantKeyFor(ma->Mat, *ma->Shader);
+            std::vector<ShaderVariantKey>& keys = done[ma->Shader.get()];
+            if (std::find(keys.begin(), keys.end(), key) != keys.end()) continue;
+            keys.push_back(key);
+            ma->Shader->Variant(key);
+            ++built;
+        }
+    }
+    return built;
+}
+
 void SceneRenderer::RenderScene(World& world, const RenderFrameContext& ctx,
                                 const SceneRenderInputs& in, RenderStats* outStats) {
     Sky&        sky         = *in.sky;
