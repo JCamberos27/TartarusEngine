@@ -2951,7 +2951,16 @@
    "element": "fire_tail",
    "variant": 1,
    "source": "S_AK105_Fire_Unsuppressed_0.wav tail from +0.12s",
-   "mix_db": -4.0
+   "mix_db": -4.0,
+   "sources": [
+    {
+     "file": "tsp/Tactical Shooter Pack/AK105/Fire/S_AK105_Fire_Unsuppressed_0.wav",
+     "start_s": 0.169,
+     "end_s": 3.249,
+     "gain_db": 0.0,
+     "pitch_st": 0.0
+    }
+   ]
   },
   {
    "file": "Weapons/AKS74U/fire_tail_2.wav",
@@ -2969,7 +2978,16 @@
    "element": "fire_tail",
    "variant": 2,
    "source": "S_AK105_Fire_Unsuppressed_1.wav tail from +0.12s",
-   "mix_db": -4.0
+   "mix_db": -4.0,
+   "sources": [
+    {
+     "file": "tsp/Tactical Shooter Pack/AK105/Fire/S_AK105_Fire_Unsuppressed_1.wav",
+     "start_s": 0.168,
+     "end_s": 3.248,
+     "gain_db": 0.0,
+     "pitch_st": 0.0
+    }
+   ]
   },
   {
    "file": "Weapons/AKS74U/fire_tail_3.wav",
@@ -2987,7 +3005,16 @@
    "element": "fire_tail",
    "variant": 3,
    "source": "S_AK105_Fire_Unsuppressed_2.wav tail from +0.12s",
-   "mix_db": -4.0
+   "mix_db": -4.0,
+   "sources": [
+    {
+     "file": "tsp/Tactical Shooter Pack/AK105/Fire/S_AK105_Fire_Unsuppressed_2.wav",
+     "start_s": 0.17,
+     "end_s": 3.25,
+     "gain_db": 0.0,
+     "pitch_st": -0.5
+    }
+   ]
   },
   {
    "file": "Weapons/AKS74U/fire_tail_4.wav",
@@ -3005,7 +3032,16 @@
    "element": "fire_tail",
    "variant": 4,
    "source": "S_TR15_V4_Unsuppressed_With_Tail_0.wav tail from +0.12s",
-   "mix_db": -4.0
+   "mix_db": -4.0,
+   "sources": [
+    {
+     "file": "tsp/Tactical Shooter Pack/TR15/Fire/S_TR15_V4_Unsuppressed_With_Tail_0.wav",
+     "start_s": 0.127,
+     "end_s": 3.207,
+     "gain_db": 0.0,
+     "pitch_st": -2.0
+    }
+   ]
   },
   {
    "file": "Weapons/AKS74U/fire_tail_5.wav",
@@ -3023,7 +3059,316 @@
    "element": "fire_tail",
    "variant": 5,
    "source": "S_Mk14EBR_Fire_02.WAV tail from +0.12s",
-   "mix_db": -4.0
+   "mix_db": -4.0,
+   "sources": [
+    {
+     "file": "tsp/Tactical Shooter Pack/Mk14EBR/S_Mk14EBR_Fire_02.WAV",
+     "start_s": 0.124,
+     "end_s": 3.204,
+     "gain_db": 0.0,
+     "pitch_st": 0.0
+    }
+   ]
+  },
+  {
+   "file": "Weapons/AKS74U/fire_tail_indoor_large_1.wav",
+   "key": "snd.ak.fire_tail_indoor_large",
+   "layer": "tail",
+   "channels": 2,
+   "sample_rate": 48000,
+   "lufs_i": -24.45,
+   "lufs_m_max": -21.5,
+   "true_peak_dbtp": -9.49,
+   "length_s": 1.3,
+   "peak_ms": 145.5,
+   "anchor_ms": 119.5,
+   "gun": "ak",
+   "element": "fire_tail_indoor_large",
+   "space": "indoor_large",
+   "variant": 1,
+   "source": "AK4_long_corridor_single_shots_blanks_be 0.55-1.75s",
+   "sources": [
+    {
+     "file": "sonniss/Pole Position - The Indoor Gun Acoustics Library/AK4_long_corridor_single_shots_blanks_behind_gun_in_corner_M10.wav",
+     "start_s": 0.552,
+     "end_s": 1.752,
+     "gain_db": 0.0,
+     "pitch_st": 0.0
+    }
+   ],
+   "mix_db": -4.0,
+   "mono_fold_loss_db": -0.39
+  },
+  {
+   "file": "Weapons/AKS74U/fire_tail_indoor_large_2.wav",
+   "key": "snd.ak.fire_tail_indoor_large",
+   "layer": "tail",
+   "channels": 2,
+   "sample_rate": 48000,
+   "lufs_i": -24.47,
+   "lufs_m_max": -21.5,
+   "true_peak_dbtp": -9.2,
+   "length_s": 1.4,
+   "peak_ms": 162.5,
+   "anchor_ms": 119.5,
+   "gun": "ak",
+   "element": "fire_tail_indoor_large",
+   "space": "indoor_large",
+   "variant": 2,
+   "source": "AK4_long_corridor_single_shots_blanks_be 15.62-16.93s",
+   "sources": [
+    {
+     "file": "sonniss/Pole Position - The Indoor Gun Acoustics Library/AK4_long_corridor_single_shots_blanks_behind_gun_in_corner_M10.wav",
+     "start_s": 15.625,
+     "end_s": 16.925,
+     "gain_db": 0.0,
+     "pitch_st": 0.0
+    }
+   ],
+   "mix_db": -4.0,
+   "mono_fold_loss_db": -0.39
+  },
+  {
+   "file": "Weapons/AKS74U/fire_tail_indoor_large_3.wav",
+   "key": "snd.ak.fire_tail_indoor_large",
+   "layer": "tail",
+   "channels": 2,
+   "sample_rate": 48000,
+   "lufs_i": -24.18,
+   "lufs_m_max": -21.5,
+   "true_peak_dbtp": -8.66,
+   "length_s": 1.328,
+   "peak_ms": 228.1,
+   "anchor_ms": 141.0,
+   "gun": "ak",
+   "element": "fire_tail_indoor_large",
+   "space": "indoor_large",
+   "variant": 3,
+   "source": "AK4_long_corridor_single_shots_blanks_be 39.77-40.95s",
+   "sources": [
+    {
+     "file": "sonniss/Pole Position - The Indoor Gun Acoustics Library/AK4_long_corridor_single_shots_blanks_behind_gun_in_corner_M10.wav",
+     "start_s": 39.771,
+     "end_s": 40.951,
+     "gain_db": 0.0,
+     "pitch_st": -0.4
+    }
+   ],
+   "mix_db": -4.0,
+   "mono_fold_loss_db": -0.33
+  },
+  {
+   "file": "Weapons/AKS74U/fire_tail_indoor_large_4.wav",
+   "key": "snd.ak.fire_tail_indoor_large",
+   "layer": "tail",
+   "channels": 2,
+   "sample_rate": 48000,
+   "lufs_i": -24.9,
+   "lufs_m_max": -21.5,
+   "true_peak_dbtp": -13.95,
+   "length_s": 1.844,
+   "peak_ms": 299.0,
+   "anchor_ms": 140.3,
+   "gun": "ak",
+   "element": "fire_tail_indoor_large",
+   "space": "indoor_large",
+   "variant": 4,
+   "source": "Audiobeast_Medium_Warehouse_Remington_87 29.11-30.99s",
+   "sources": [
+    {
+     "file": "sonniss/Audiobeast - The London Warehouse Firearms Library/Audiobeast_Medium_Warehouse_Remington_870_12g_Pump_Action_Shotgun_10m_U87_001_Single_Shot_x8.wav",
+     "start_s": 29.107,
+     "end_s": 30.987,
+     "gain_db": 0.0,
+     "pitch_st": 1.5,
+     "lp_hz": 7000
+    }
+   ],
+   "mix_db": -4.0,
+   "mono_fold_loss_db": 0.0
+  },
+  {
+   "file": "Weapons/AKS74U/fire_tail_indoor_large_5.wav",
+   "key": "snd.ak.fire_tail_indoor_large",
+   "layer": "tail",
+   "channels": 2,
+   "sample_rate": 48000,
+   "lufs_i": -24.91,
+   "lufs_m_max": -21.5,
+   "true_peak_dbtp": -14.59,
+   "length_s": 1.884,
+   "peak_ms": 157.7,
+   "anchor_ms": 134.9,
+   "gun": "ak",
+   "element": "fire_tail_indoor_large",
+   "space": "indoor_large",
+   "variant": 5,
+   "source": "Audiobeast_Medium_Warehouse_Remington_87 46.83-48.81s",
+   "sources": [
+    {
+     "file": "sonniss/Audiobeast - The London Warehouse Firearms Library/Audiobeast_Medium_Warehouse_Remington_870_12g_Pump_Action_Shotgun_10m_U87_001_Single_Shot_x8.wav",
+     "start_s": 46.83,
+     "end_s": 48.81,
+     "gain_db": 0.0,
+     "pitch_st": 2.0,
+     "lp_hz": 6500
+    }
+   ],
+   "mix_db": -4.0,
+   "mono_fold_loss_db": 0.0
+  },
+  {
+   "file": "Weapons/AKS74U/fire_tail_indoor_small_1.wav",
+   "key": "snd.ak.fire_tail_indoor_small",
+   "layer": "tail",
+   "channels": 2,
+   "sample_rate": 48000,
+   "lufs_i": -23.81,
+   "lufs_m_max": -21.0,
+   "true_peak_dbtp": -10.62,
+   "length_s": 0.95,
+   "peak_ms": 85.6,
+   "anchor_ms": 70.7,
+   "gun": "ak",
+   "element": "fire_tail_indoor_small",
+   "space": "indoor_small",
+   "variant": 1,
+   "source": "Audiobeast_Small_Room_H&K_416_5.56_Assau 3.88-4.77s",
+   "sources": [
+    {
+     "file": "sonniss/Audiobeast - The London Warehouse Firearms Library/Audiobeast_Small_Room_H&K_416_5.56_Assault_Rifle_05m_LS5_001_Single_Shot_x1.wav",
+     "start_s": 3.878,
+     "end_s": 4.768,
+     "gain_db": 0.0,
+     "pitch_st": 0.0
+    }
+   ],
+   "mix_db": -4.0,
+   "mono_fold_loss_db": -0.59
+  },
+  {
+   "file": "Weapons/AKS74U/fire_tail_indoor_small_2.wav",
+   "key": "snd.ak.fire_tail_indoor_small",
+   "layer": "tail",
+   "channels": 2,
+   "sample_rate": 48000,
+   "lufs_i": -23.45,
+   "lufs_m_max": -21.0,
+   "true_peak_dbtp": -13.27,
+   "length_s": 1.0,
+   "peak_ms": 118.4,
+   "anchor_ms": 98.6,
+   "gun": "ak",
+   "element": "fire_tail_indoor_small",
+   "space": "indoor_small",
+   "variant": 2,
+   "source": "AK47_catacombs_burst_blanks_in_front_of_ 1.16-2.08s",
+   "sources": [
+    {
+     "file": "sonniss/Pole Position - The Indoor Gun Acoustics Library/AK47_catacombs_burst_blanks_in_front_of_gun_MKH8020_wide_stereo.wav",
+     "start_s": 1.16,
+     "end_s": 2.08,
+     "gain_db": 0.0,
+     "pitch_st": 0.0
+    }
+   ],
+   "mix_db": -4.0,
+   "mono_fold_loss_db": -2.96
+  },
+  {
+   "file": "Weapons/AKS74U/fire_tail_indoor_small_3.wav",
+   "key": "snd.ak.fire_tail_indoor_small",
+   "layer": "tail",
+   "channels": 2,
+   "sample_rate": 48000,
+   "lufs_i": -23.05,
+   "lufs_m_max": -21.0,
+   "true_peak_dbtp": -11.8,
+   "length_s": 0.872,
+   "peak_ms": 181.7,
+   "anchor_ms": 113.7,
+   "gun": "ak",
+   "element": "fire_tail_indoor_small",
+   "space": "indoor_small",
+   "variant": 3,
+   "source": "Audiobeast_Small_Room_H&K_416_5.56_Assau 3.92-4.67s",
+   "sources": [
+    {
+     "file": "sonniss/Audiobeast - The London Warehouse Firearms Library/Audiobeast_Small_Room_H&K_416_5.56_Assault_Rifle_05m_LS5_001_Single_Shot_x1.wav",
+     "start_s": 3.918,
+     "end_s": 4.668,
+     "gain_db": 0.0,
+     "pitch_st": -0.5
+    }
+   ],
+   "mix_db": -4.0,
+   "mono_fold_loss_db": -0.45
+  },
+  {
+   "file": "Weapons/AKS74U/fire_tail_indoor_small_4.wav",
+   "key": "snd.ak.fire_tail_indoor_small",
+   "layer": "tail",
+   "channels": 2,
+   "sample_rate": 48000,
+   "lufs_i": -23.59,
+   "lufs_m_max": -21.0,
+   "true_peak_dbtp": -13.56,
+   "length_s": 0.876,
+   "peak_ms": 116.8,
+   "anchor_ms": 73.1,
+   "gun": "ak",
+   "element": "fire_tail_indoor_small",
+   "space": "indoor_small",
+   "variant": 4,
+   "source": "AK47_catacombs_burst_blanks_in_front_of_ 1.14-1.98s",
+   "sources": [
+    {
+     "file": "sonniss/Pole Position - The Indoor Gun Acoustics Library/AK47_catacombs_burst_blanks_in_front_of_gun_MKH8020_wide_stereo.wav",
+     "start_s": 1.14,
+     "end_s": 1.98,
+     "gain_db": 0.0,
+     "pitch_st": 0.5,
+     "lp_hz": 9000
+    }
+   ],
+   "mix_db": -4.0,
+   "mono_fold_loss_db": -2.99
+  },
+  {
+   "file": "Weapons/AKS74U/fire_tail_indoor_small_5.wav",
+   "key": "snd.ak.fire_tail_indoor_small",
+   "layer": "tail",
+   "channels": 2,
+   "sample_rate": 48000,
+   "lufs_i": -23.01,
+   "lufs_m_max": -21.0,
+   "true_peak_dbtp": -12.56,
+   "length_s": 0.9,
+   "peak_ms": 170.9,
+   "anchor_ms": 81.3,
+   "gun": "ak",
+   "element": "fire_tail_indoor_small",
+   "space": "indoor_small",
+   "variant": 5,
+   "source": "Audiobeast_Small_Room_H&K_416_5.56_Assau 3.89-4.72s + AK47_catacombs_burst_blanks_in_front_of_ 1.17-1.98s",
+   "sources": [
+    {
+     "file": "sonniss/Audiobeast - The London Warehouse Firearms Library/Audiobeast_Small_Room_H&K_416_5.56_Assault_Rifle_05m_LS5_001_Single_Shot_x1.wav",
+     "start_s": 3.888,
+     "end_s": 4.718,
+     "gain_db": 0.0,
+     "pitch_st": 0.0
+    },
+    {
+     "file": "sonniss/Pole Position - The Indoor Gun Acoustics Library/AK47_catacombs_burst_blanks_in_front_of_gun_MKH8020_wide_stereo.wav",
+     "start_s": 1.17,
+     "end_s": 1.98,
+     "gain_db": -7.0,
+     "pitch_st": 0.0
+    }
+   ],
+   "mix_db": -4.0,
+   "mono_fold_loss_db": -1.43
   },
   {
    "file": "Weapons/AKS74U/fire_tail_outdoor_open_1.wav",
@@ -3031,19 +3376,28 @@
    "layer": "tail",
    "channels": 2,
    "sample_rate": 48000,
-   "lufs_i": -28.23,
+   "lufs_i": -26.85,
    "lufs_m_max": -23.0,
-   "true_peak_dbtp": -10.89,
-   "length_s": 3.54,
-   "peak_ms": 203.5,
-   "anchor_ms": 185.5,
+   "true_peak_dbtp": -5.59,
+   "length_s": 1.5,
+   "peak_ms": 180.6,
+   "anchor_ms": 175.1,
    "gun": "ak",
    "element": "fire_tail_outdoor_open",
    "space": "outdoor_open",
    "variant": 1,
-   "source": "S_AK105_Fire_Unsuppressed_0.wav +0.14s",
+   "source": "AK47_big_open_area_2m_above_behind_gun_R 0.95-2.33s",
+   "sources": [
+    {
+     "file": "sonniss/Pole Position - The Outdoor Gun Acoustics Library/AK47_big_open_area_2m_above_behind_gun_RSM191_M.wav",
+     "start_s": 0.955,
+     "end_s": 2.335,
+     "gain_db": 0.0,
+     "pitch_st": 0.0
+    }
+   ],
    "mix_db": -4.0,
-   "mono_fold_loss_db": -3.18
+   "mono_fold_loss_db": 0.0
   },
   {
    "file": "Weapons/AKS74U/fire_tail_outdoor_open_2.wav",
@@ -3051,19 +3405,28 @@
    "layer": "tail",
    "channels": 2,
    "sample_rate": 48000,
-   "lufs_i": -29.03,
+   "lufs_i": -26.47,
    "lufs_m_max": -23.0,
-   "true_peak_dbtp": -11.84,
-   "length_s": 3.54,
-   "peak_ms": 186.8,
-   "anchor_ms": 186.8,
+   "true_peak_dbtp": -12.57,
+   "length_s": 1.6,
+   "peak_ms": 194.4,
+   "anchor_ms": 145.4,
    "gun": "ak",
    "element": "fire_tail_outdoor_open",
    "space": "outdoor_open",
    "variant": 2,
-   "source": "S_AK105_Fire_Unsuppressed_1.wav +0.14s",
+   "source": "MP5_forest_road_10m_behind_gun_pointing_ 0.49-1.97s",
+   "sources": [
+    {
+     "file": "sonniss/Pole Position - The Outdoor Gun Acoustics Library/MP5_forest_road_10m_behind_gun_pointing_at_forest_off_axis_MKH8060.wav",
+     "start_s": 0.492,
+     "end_s": 1.972,
+     "gain_db": 0.0,
+     "pitch_st": 0.0
+    }
+   ],
    "mix_db": -4.0,
-   "mono_fold_loss_db": -2.8
+   "mono_fold_loss_db": 0.0
   },
   {
    "file": "Weapons/AKS74U/fire_tail_outdoor_open_3.wav",
@@ -3071,19 +3434,28 @@
    "layer": "tail",
    "channels": 2,
    "sample_rate": 48000,
-   "lufs_i": -28.83,
+   "lufs_i": -26.7,
    "lufs_m_max": -23.0,
-   "true_peak_dbtp": -10.93,
-   "length_s": 3.64,
-   "peak_ms": 225.8,
-   "anchor_ms": 187.8,
+   "true_peak_dbtp": -10.66,
+   "length_s": 3.5,
+   "peak_ms": 203.5,
+   "anchor_ms": 166.7,
    "gun": "ak",
    "element": "fire_tail_outdoor_open",
    "space": "outdoor_open",
    "variant": 3,
-   "source": "S_AK105_Fire_Unsuppressed_2.wav +0.14s",
+   "source": "S_AK105_Fire_Unsuppressed_0.wav 0.19-3.55s",
+   "sources": [
+    {
+     "file": "tsp/Tactical Shooter Pack/AK105/Fire/S_AK105_Fire_Unsuppressed_0.wav",
+     "start_s": 0.189,
+     "end_s": 3.549,
+     "gain_db": 0.0,
+     "pitch_st": 0.0
+    }
+   ],
    "mix_db": -4.0,
-   "mono_fold_loss_db": -2.92
+   "mono_fold_loss_db": -3.59
   },
   {
    "file": "Weapons/AKS74U/fire_tail_outdoor_open_4.wav",
@@ -3091,19 +3463,35 @@
    "layer": "tail",
    "channels": 2,
    "sample_rate": 48000,
-   "lufs_i": -28.71,
+   "lufs_i": -25.92,
    "lufs_m_max": -23.0,
-   "true_peak_dbtp": -10.83,
-   "length_s": 3.742,
-   "peak_ms": 260.5,
-   "anchor_ms": 201.8,
+   "true_peak_dbtp": -6.0,
+   "length_s": 3.6,
+   "peak_ms": 180.5,
+   "anchor_ms": 179.4,
    "gun": "ak",
    "element": "fire_tail_outdoor_open",
    "space": "outdoor_open",
    "variant": 4,
-   "source": "S_WK-11_Viper_2_With_Tail.wav +0.14s",
+   "source": "AK47_big_open_area_2m_above_behind_gun_R 9.68-11.05s + S_AK105_Fire_Unsuppressed_1.wav 0.35-3.65s",
+   "sources": [
+    {
+     "file": "sonniss/Pole Position - The Outdoor Gun Acoustics Library/AK47_big_open_area_2m_above_behind_gun_RSM191_M.wav",
+     "start_s": 9.675,
+     "end_s": 11.055,
+     "gain_db": 0.0,
+     "pitch_st": 0.0
+    },
+    {
+     "file": "tsp/Tactical Shooter Pack/AK105/Fire/S_AK105_Fire_Unsuppressed_1.wav",
+     "start_s": 0.348,
+     "end_s": 3.648,
+     "gain_db": -6.0,
+     "pitch_st": 0.0
+    }
+   ],
    "mix_db": -4.0,
-   "mono_fold_loss_db": -2.9
+   "mono_fold_loss_db": -3.13
   },
   {
    "file": "Weapons/AKS74U/fire_tail_outdoor_open_5.wav",
@@ -3111,19 +3499,35 @@
    "layer": "tail",
    "channels": 2,
    "sample_rate": 48000,
-   "lufs_i": -28.3,
+   "lufs_i": -27.77,
    "lufs_m_max": -23.0,
-   "true_peak_dbtp": -12.56,
-   "length_s": 3.58,
-   "peak_ms": 334.6,
-   "anchor_ms": 251.0,
+   "true_peak_dbtp": -13.1,
+   "length_s": 3.796,
+   "peak_ms": 160.1,
+   "anchor_ms": 143.2,
    "gun": "ak",
    "element": "fire_tail_outdoor_open",
    "space": "outdoor_open",
    "variant": 5,
-   "source": "S_WK-11_Viper_3_With_Tail.wav +0.18s",
+   "source": "MP5_forest_road_10m_behind_gun_pointing_ 9.88-11.36s + S_WK-11_Viper_2_With_Tail.wav 0.35-3.65s",
+   "sources": [
+    {
+     "file": "sonniss/Pole Position - The Outdoor Gun Acoustics Library/MP5_forest_road_10m_behind_gun_pointing_at_forest_off_axis_MKH8060.wav",
+     "start_s": 9.881,
+     "end_s": 11.361,
+     "gain_db": 0.0,
+     "pitch_st": 0.0
+    },
+    {
+     "file": "tsp/Tactical Shooter Pack/WK-11_Viper/Fire/S_WK-11_Viper_2_With_Tail.wav",
+     "start_s": 0.346,
+     "end_s": 3.647,
+     "gain_db": -6.0,
+     "pitch_st": -1.0
+    }
+   ],
    "mix_db": -4.0,
-   "mono_fold_loss_db": -2.9
+   "mono_fold_loss_db": -1.56
   },
   {
    "file": "Weapons/AKS74U/fire_tail_outdoor_urban_1.wav",
@@ -3131,19 +3535,28 @@
    "layer": "tail",
    "channels": 2,
    "sample_rate": 48000,
-   "lufs_i": -25.72,
+   "lufs_i": -25.09,
    "lufs_m_max": -22.0,
-   "true_peak_dbtp": -7.95,
-   "length_s": 1.62,
-   "peak_ms": 166.8,
-   "anchor_ms": 139.9,
+   "true_peak_dbtp": -13.6,
+   "length_s": 2.4,
+   "peak_ms": 388.5,
+   "anchor_ms": 122.0,
    "gun": "ak",
    "element": "fire_tail_outdoor_urban",
    "space": "outdoor_urban",
    "variant": 1,
-   "source": "S_TR15_V1_Unsupressed_With_Tail_1.wav +0.12s",
+   "source": "AK5_valley_field_forest_50m_behind_gun_o 0.34-2.64s",
+   "sources": [
+    {
+     "file": "sonniss/Pole Position - The Outdoor Gun Acoustics Library/AK5_valley_field_forest_50m_behind_gun_off_axis_behind_buildings_M10.wav",
+     "start_s": 0.343,
+     "end_s": 2.643,
+     "gain_db": 0.0,
+     "pitch_st": 0.0
+    }
+   ],
    "mix_db": -4.0,
-   "mono_fold_loss_db": -1.38
+   "mono_fold_loss_db": -0.35
   },
   {
    "file": "Weapons/AKS74U/fire_tail_outdoor_urban_2.wav",
@@ -3151,19 +3564,28 @@
    "layer": "tail",
    "channels": 2,
    "sample_rate": 48000,
-   "lufs_i": -25.64,
+   "lufs_i": -25.34,
    "lufs_m_max": -22.0,
-   "true_peak_dbtp": -11.22,
-   "length_s": 1.577,
-   "peak_ms": 167.8,
-   "anchor_ms": 142.0,
+   "true_peak_dbtp": -13.98,
+   "length_s": 2.4,
+   "peak_ms": 622.4,
+   "anchor_ms": 118.4,
    "gun": "ak",
    "element": "fire_tail_outdoor_urban",
    "space": "outdoor_urban",
    "variant": 2,
-   "source": "S_TR15_V2_Unsupressed_With_Tail_0.wav +0.12s",
+   "source": "AK5_valley_field_forest_50m_behind_gun_o 7.50-9.80s",
+   "sources": [
+    {
+     "file": "sonniss/Pole Position - The Outdoor Gun Acoustics Library/AK5_valley_field_forest_50m_behind_gun_off_axis_behind_buildings_M10.wav",
+     "start_s": 7.501,
+     "end_s": 9.801,
+     "gain_db": 0.0,
+     "pitch_st": 0.0
+    }
+   ],
    "mix_db": -4.0,
-   "mono_fold_loss_db": -2.16
+   "mono_fold_loss_db": -0.52
   },
   {
    "file": "Weapons/AKS74U/fire_tail_outdoor_urban_3.wav",
@@ -3171,19 +3593,28 @@
    "layer": "tail",
    "channels": 2,
    "sample_rate": 48000,
-   "lufs_i": -25.8,
+   "lufs_i": -25.39,
    "lufs_m_max": -22.0,
-   "true_peak_dbtp": -9.98,
-   "length_s": 1.664,
-   "peak_ms": 173.0,
-   "anchor_ms": 133.6,
+   "true_peak_dbtp": -12.77,
+   "length_s": 2.25,
+   "peak_ms": 171.8,
+   "anchor_ms": 128.7,
    "gun": "ak",
    "element": "fire_tail_outdoor_urban",
    "space": "outdoor_urban",
    "variant": 3,
-   "source": "S_TR15_V3_Unsuppressed_With_Tail_2.wav +0.12s",
+   "source": "AK5_valley_field_forest_50m_behind_gun_o 21.60-23.80s",
+   "sources": [
+    {
+     "file": "sonniss/Pole Position - The Outdoor Gun Acoustics Library/AK5_valley_field_forest_50m_behind_gun_off_axis_behind_buildings_M10.wav",
+     "start_s": 21.604,
+     "end_s": 23.803,
+     "gain_db": 0.0,
+     "pitch_st": 0.4
+    }
+   ],
    "mix_db": -4.0,
-   "mono_fold_loss_db": -1.66
+   "mono_fold_loss_db": -0.58
   },
   {
    "file": "Weapons/AKS74U/fire_tail_outdoor_urban_4.wav",
@@ -3191,19 +3622,28 @@
    "layer": "tail",
    "channels": 2,
    "sample_rate": 48000,
-   "lufs_i": -25.85,
+   "lufs_i": -25.73,
    "lufs_m_max": -22.0,
-   "true_peak_dbtp": -9.22,
-   "length_s": 1.6,
-   "peak_ms": 169.5,
-   "anchor_ms": 124.4,
+   "true_peak_dbtp": -12.83,
+   "length_s": 2.4,
+   "peak_ms": 145.4,
+   "anchor_ms": 122.4,
    "gun": "ak",
    "element": "fire_tail_outdoor_urban",
    "space": "outdoor_urban",
    "variant": 4,
-   "source": "S_WK-11_Viper_Shot_1_With_Tail.wav +0.10s",
+   "source": "AK5_valley_field_forest_50m_behind_gun_o 45.76-48.06s",
+   "sources": [
+    {
+     "file": "sonniss/Pole Position - The Outdoor Gun Acoustics Library/AK5_valley_field_forest_50m_behind_gun_off_axis_behind_buildings_M10.wav",
+     "start_s": 45.76,
+     "end_s": 48.06,
+     "gain_db": 0.0,
+     "pitch_st": 0.0
+    }
+   ],
    "mix_db": -4.0,
-   "mono_fold_loss_db": -2.68
+   "mono_fold_loss_db": -0.54
   },
   {
    "file": "Weapons/AKS74U/fire_tail_outdoor_urban_5.wav",
@@ -3211,19 +3651,28 @@
    "layer": "tail",
    "channels": 2,
    "sample_rate": 48000,
-   "lufs_i": -26.67,
+   "lufs_i": -25.01,
    "lufs_m_max": -22.0,
-   "true_peak_dbtp": -8.17,
-   "length_s": 1.84,
-   "peak_ms": 186.7,
-   "anchor_ms": 169.3,
+   "true_peak_dbtp": -12.25,
+   "length_s": 2.454,
+   "peak_ms": 633.1,
+   "anchor_ms": 132.0,
    "gun": "ak",
    "element": "fire_tail_outdoor_urban",
    "space": "outdoor_urban",
    "variant": 5,
-   "source": "S_AK105_Fire_Unsuppressed_1.wav +0.14s",
+   "source": "AK5_valley_field_forest_50m_behind_gun_o 52.64-54.94s",
+   "sources": [
+    {
+     "file": "sonniss/Pole Position - The Outdoor Gun Acoustics Library/AK5_valley_field_forest_50m_behind_gun_off_axis_behind_buildings_M10.wav",
+     "start_s": 52.642,
+     "end_s": 54.942,
+     "gain_db": 0.0,
+     "pitch_st": -0.4
+    }
+   ],
    "mix_db": -4.0,
-   "mono_fold_loss_db": -2.54
+   "mono_fold_loss_db": -0.35
   },
   {
    "file": "Weapons/AKS74U/firemode_1.wav",
@@ -4282,7 +4731,16 @@
    "element": "fire_tail",
    "variant": 1,
    "source": "S_Herrington_11-87_Unsuppressed_1_With_Tail.wav tail from +0.16s",
-   "mix_db": -4.0
+   "mix_db": -4.0,
+   "sources": [
+    {
+     "file": "tsp/Tactical Shooter Pack/Herrington_11-87/Fire/S_Herrington_11-87_Unsuppressed_1_With_Tail.wav",
+     "start_s": 0.2,
+     "end_s": 3.84,
+     "gain_db": 0.0,
+     "pitch_st": 0.0
+    }
+   ]
   },
   {
    "file": "Weapons/Remington870/fire_tail_2.wav",
@@ -4300,7 +4758,16 @@
    "element": "fire_tail",
    "variant": 2,
    "source": "S_Herrington_11-87_Unsuppressed_2_With_Tail.wav tail from +0.16s",
-   "mix_db": -4.0
+   "mix_db": -4.0,
+   "sources": [
+    {
+     "file": "tsp/Tactical Shooter Pack/Herrington_11-87/Fire/S_Herrington_11-87_Unsuppressed_2_With_Tail.wav",
+     "start_s": 0.198,
+     "end_s": 3.838,
+     "gain_db": 0.0,
+     "pitch_st": 0.0
+    }
+   ]
   },
   {
    "file": "Weapons/Remington870/fire_tail_3.wav",
@@ -4318,7 +4785,16 @@
    "element": "fire_tail",
    "variant": 3,
    "source": "S_Herrington_11-87_Unsuppressed_3_With_Tail.wav tail from +0.16s",
-   "mix_db": -4.0
+   "mix_db": -4.0,
+   "sources": [
+    {
+     "file": "tsp/Tactical Shooter Pack/Herrington_11-87/Fire/S_Herrington_11-87_Unsuppressed_3_With_Tail.wav",
+     "start_s": 0.215,
+     "end_s": 3.855,
+     "gain_db": 0.0,
+     "pitch_st": -0.5
+    }
+   ]
   },
   {
    "file": "Weapons/Remington870/fire_tail_4.wav",
@@ -4336,7 +4812,16 @@
    "element": "fire_tail",
    "variant": 4,
    "source": "S_SRM-12_ShotOnly.wav tail from +0.16s",
-   "mix_db": -4.0
+   "mix_db": -4.0,
+   "sources": [
+    {
+     "file": "tsp/Tactical Shooter Pack/SRM-12/Actions/S_SRM-12_ShotOnly.wav",
+     "start_s": 0.218,
+     "end_s": 3.858,
+     "gain_db": 0.0,
+     "pitch_st": 1.5
+    }
+   ]
   },
   {
    "file": "Weapons/Remington870/fire_tail_5.wav",
@@ -4354,7 +4839,314 @@
    "element": "fire_tail",
    "variant": 5,
    "source": "S_Mk14EBR_Fire_01.WAV tail from +0.16s",
-   "mix_db": -4.0
+   "mix_db": -4.0,
+   "sources": [
+    {
+     "file": "tsp/Tactical Shooter Pack/Mk14EBR/S_Mk14EBR_Fire_01.WAV",
+     "start_s": 0.17,
+     "end_s": 3.81,
+     "gain_db": 0.0,
+     "pitch_st": 0.0
+    }
+   ]
+  },
+  {
+   "file": "Weapons/Remington870/fire_tail_indoor_large_1.wav",
+   "key": "snd.870.fire_tail_indoor_large",
+   "layer": "tail",
+   "channels": 2,
+   "sample_rate": 48000,
+   "lufs_i": -25.25,
+   "lufs_m_max": -21.5,
+   "true_peak_dbtp": -13.7,
+   "length_s": 2.2,
+   "peak_ms": 161.9,
+   "anchor_ms": 137.1,
+   "gun": "870",
+   "element": "fire_tail_indoor_large",
+   "space": "indoor_large",
+   "variant": 1,
+   "source": "Audiobeast_Medium_Warehouse_Remington_87 22.37-24.45s",
+   "sources": [
+    {
+     "file": "sonniss/Audiobeast - The London Warehouse Firearms Library/Audiobeast_Medium_Warehouse_Remington_870_12g_Pump_Action_Shotgun_10m_U87_001_Single_Shot_x8.wav",
+     "start_s": 22.371,
+     "end_s": 24.451,
+     "gain_db": 0.0,
+     "pitch_st": 0.0
+    }
+   ],
+   "mix_db": -4.0,
+   "mono_fold_loss_db": 0.0
+  },
+  {
+   "file": "Weapons/Remington870/fire_tail_indoor_large_2.wav",
+   "key": "snd.870.fire_tail_indoor_large",
+   "layer": "tail",
+   "channels": 2,
+   "sample_rate": 48000,
+   "lufs_i": -25.17,
+   "lufs_m_max": -21.5,
+   "true_peak_dbtp": -14.01,
+   "length_s": 2.2,
+   "peak_ms": 315.0,
+   "anchor_ms": 136.6,
+   "gun": "870",
+   "element": "fire_tail_indoor_large",
+   "space": "indoor_large",
+   "variant": 2,
+   "source": "Audiobeast_Medium_Warehouse_Remington_87 34.52-36.60s",
+   "sources": [
+    {
+     "file": "sonniss/Audiobeast - The London Warehouse Firearms Library/Audiobeast_Medium_Warehouse_Remington_870_12g_Pump_Action_Shotgun_10m_U87_001_Single_Shot_x8.wav",
+     "start_s": 34.521,
+     "end_s": 36.601,
+     "gain_db": 0.0,
+     "pitch_st": 0.0
+    }
+   ],
+   "mix_db": -4.0,
+   "mono_fold_loss_db": 0.0
+  },
+  {
+   "file": "Weapons/Remington870/fire_tail_indoor_large_3.wav",
+   "key": "snd.870.fire_tail_indoor_large",
+   "layer": "tail",
+   "channels": 2,
+   "sample_rate": 48000,
+   "lufs_i": -25.28,
+   "lufs_m_max": -21.5,
+   "true_peak_dbtp": -14.5,
+   "length_s": 2.2,
+   "peak_ms": 315.8,
+   "anchor_ms": 136.6,
+   "gun": "870",
+   "element": "fire_tail_indoor_large",
+   "space": "indoor_large",
+   "variant": 3,
+   "source": "Audiobeast_Medium_Warehouse_Remington_87 38.69-40.77s",
+   "sources": [
+    {
+     "file": "sonniss/Audiobeast - The London Warehouse Firearms Library/Audiobeast_Medium_Warehouse_Remington_870_12g_Pump_Action_Shotgun_10m_U87_001_Single_Shot_x8.wav",
+     "start_s": 38.693,
+     "end_s": 40.773,
+     "gain_db": 0.0,
+     "pitch_st": 0.0
+    }
+   ],
+   "mix_db": -4.0,
+   "mono_fold_loss_db": 0.0
+  },
+  {
+   "file": "Weapons/Remington870/fire_tail_indoor_large_4.wav",
+   "key": "snd.870.fire_tail_indoor_large",
+   "layer": "tail",
+   "channels": 2,
+   "sample_rate": 48000,
+   "lufs_i": -25.24,
+   "lufs_m_max": -21.5,
+   "true_peak_dbtp": -15.07,
+   "length_s": 2.2,
+   "peak_ms": 247.2,
+   "anchor_ms": 136.7,
+   "gun": "870",
+   "element": "fire_tail_indoor_large",
+   "space": "indoor_large",
+   "variant": 4,
+   "source": "Audiobeast_Medium_Warehouse_Remington_87 43.25-45.33s",
+   "sources": [
+    {
+     "file": "sonniss/Audiobeast - The London Warehouse Firearms Library/Audiobeast_Medium_Warehouse_Remington_870_12g_Pump_Action_Shotgun_10m_U87_001_Single_Shot_x8.wav",
+     "start_s": 43.251,
+     "end_s": 45.331,
+     "gain_db": 0.0,
+     "pitch_st": 0.0
+    }
+   ],
+   "mix_db": -4.0,
+   "mono_fold_loss_db": 0.0
+  },
+  {
+   "file": "Weapons/Remington870/fire_tail_indoor_large_5.wav",
+   "key": "snd.870.fire_tail_indoor_large",
+   "layer": "tail",
+   "channels": 2,
+   "sample_rate": 48000,
+   "lufs_i": -25.24,
+   "lufs_m_max": -21.5,
+   "true_peak_dbtp": -14.81,
+   "length_s": 2.2,
+   "peak_ms": 450.0,
+   "anchor_ms": 142.2,
+   "gun": "870",
+   "element": "fire_tail_indoor_large",
+   "space": "indoor_large",
+   "variant": 5,
+   "source": "Audiobeast_Medium_Warehouse_Remington_87 49.55-51.63s",
+   "sources": [
+    {
+     "file": "sonniss/Audiobeast - The London Warehouse Firearms Library/Audiobeast_Medium_Warehouse_Remington_870_12g_Pump_Action_Shotgun_10m_U87_001_Single_Shot_x8.wav",
+     "start_s": 49.553,
+     "end_s": 51.633,
+     "gain_db": 0.0,
+     "pitch_st": 0.0
+    }
+   ],
+   "mix_db": -4.0,
+   "mono_fold_loss_db": 0.0
+  },
+  {
+   "file": "Weapons/Remington870/fire_tail_indoor_small_1.wav",
+   "key": "snd.870.fire_tail_indoor_small",
+   "layer": "tail",
+   "channels": 2,
+   "sample_rate": 48000,
+   "lufs_i": -23.14,
+   "lufs_m_max": -21.0,
+   "true_peak_dbtp": -12.67,
+   "length_s": 1.113,
+   "peak_ms": 100.4,
+   "anchor_ms": 87.9,
+   "gun": "870",
+   "element": "fire_tail_indoor_small",
+   "space": "indoor_small",
+   "variant": 1,
+   "source": "Audiobeast_Small_Room_H&K_416_5.56_Assau 3.90-4.82s",
+   "sources": [
+    {
+     "file": "sonniss/Audiobeast - The London Warehouse Firearms Library/Audiobeast_Small_Room_H&K_416_5.56_Assault_Rifle_05m_LS5_001_Single_Shot_x1.wav",
+     "start_s": 3.898,
+     "end_s": 4.818,
+     "gain_db": 0.0,
+     "pitch_st": -2.0
+    }
+   ],
+   "mix_db": -4.0,
+   "mono_fold_loss_db": -0.52
+  },
+  {
+   "file": "Weapons/Remington870/fire_tail_indoor_small_2.wav",
+   "key": "snd.870.fire_tail_indoor_small",
+   "layer": "tail",
+   "channels": 2,
+   "sample_rate": 48000,
+   "lufs_i": -23.96,
+   "lufs_m_max": -21.0,
+   "true_peak_dbtp": -14.04,
+   "length_s": 1.166,
+   "peak_ms": 144.1,
+   "anchor_ms": 120.2,
+   "gun": "870",
+   "element": "fire_tail_indoor_small",
+   "space": "indoor_small",
+   "variant": 2,
+   "source": "AK47_catacombs_burst_blanks_in_front_of_ 1.18-2.13s",
+   "sources": [
+    {
+     "file": "sonniss/Pole Position - The Indoor Gun Acoustics Library/AK47_catacombs_burst_blanks_in_front_of_gun_MKH8020_wide_stereo.wav",
+     "start_s": 1.18,
+     "end_s": 2.13,
+     "gain_db": 0.0,
+     "pitch_st": -2.0
+    }
+   ],
+   "mix_db": -4.0,
+   "mono_fold_loss_db": -2.96
+  },
+  {
+   "file": "Weapons/Remington870/fire_tail_indoor_small_3.wav",
+   "key": "snd.870.fire_tail_indoor_small",
+   "layer": "tail",
+   "channels": 2,
+   "sample_rate": 48000,
+   "lufs_i": -22.86,
+   "lufs_m_max": -21.0,
+   "true_peak_dbtp": -12.35,
+   "length_s": 1.111,
+   "peak_ms": 194.4,
+   "anchor_ms": 115.8,
+   "gun": "870",
+   "element": "fire_tail_indoor_small",
+   "space": "indoor_small",
+   "variant": 3,
+   "source": "Audiobeast_Small_Room_H&K_416_5.56_Assau 3.92-4.77s",
+   "sources": [
+    {
+     "file": "sonniss/Audiobeast - The London Warehouse Firearms Library/Audiobeast_Small_Room_H&K_416_5.56_Assault_Rifle_05m_LS5_001_Single_Shot_x1.wav",
+     "start_s": 3.918,
+     "end_s": 4.768,
+     "gain_db": 0.0,
+     "pitch_st": -3.0
+    }
+   ],
+   "mix_db": -4.0,
+   "mono_fold_loss_db": -0.46
+  },
+  {
+   "file": "Weapons/Remington870/fire_tail_indoor_small_4.wav",
+   "key": "snd.870.fire_tail_indoor_small",
+   "layer": "tail",
+   "channels": 2,
+   "sample_rate": 48000,
+   "lufs_i": -23.82,
+   "lufs_m_max": -21.0,
+   "true_peak_dbtp": -13.9,
+   "length_s": 1.174,
+   "peak_ms": 125.7,
+   "anchor_ms": 100.6,
+   "gun": "870",
+   "element": "fire_tail_indoor_small",
+   "space": "indoor_small",
+   "variant": 4,
+   "source": "AK47_catacombs_burst_blanks_in_front_of_ 1.16-2.08s",
+   "sources": [
+    {
+     "file": "sonniss/Pole Position - The Indoor Gun Acoustics Library/AK47_catacombs_burst_blanks_in_front_of_gun_MKH8020_wide_stereo.wav",
+     "start_s": 1.16,
+     "end_s": 2.08,
+     "gain_db": 0.0,
+     "pitch_st": -3.0,
+     "lp_hz": 9000
+    }
+   ],
+   "mix_db": -4.0,
+   "mono_fold_loss_db": -2.96
+  },
+  {
+   "file": "Weapons/Remington870/fire_tail_indoor_small_5.wav",
+   "key": "snd.870.fire_tail_indoor_small",
+   "layer": "tail",
+   "channels": 2,
+   "sample_rate": 48000,
+   "lufs_i": -23.52,
+   "lufs_m_max": -21.0,
+   "true_peak_dbtp": -12.78,
+   "length_s": 1.141,
+   "peak_ms": 255.9,
+   "anchor_ms": 102.5,
+   "gun": "870",
+   "element": "fire_tail_indoor_small",
+   "space": "indoor_small",
+   "variant": 5,
+   "source": "Audiobeast_Small_Room_H&K_416_5.56_Assau 3.91-4.82s + AK47_catacombs_burst_blanks_in_front_of_ 1.19-2.08s",
+   "sources": [
+    {
+     "file": "sonniss/Audiobeast - The London Warehouse Firearms Library/Audiobeast_Small_Room_H&K_416_5.56_Assault_Rifle_05m_LS5_001_Single_Shot_x1.wav",
+     "start_s": 3.908,
+     "end_s": 4.818,
+     "gain_db": 0.0,
+     "pitch_st": -2.5
+    },
+    {
+     "file": "sonniss/Pole Position - The Indoor Gun Acoustics Library/AK47_catacombs_burst_blanks_in_front_of_gun_MKH8020_wide_stereo.wav",
+     "start_s": 1.19,
+     "end_s": 2.08,
+     "gain_db": -7.0,
+     "pitch_st": -2.5
+    }
+   ],
+   "mix_db": -4.0,
+   "mono_fold_loss_db": -1.35
   },
   {
    "file": "Weapons/Remington870/fire_tail_outdoor_open_1.wav",
@@ -4362,19 +5154,28 @@
    "layer": "tail",
    "channels": 2,
    "sample_rate": 48000,
-   "lufs_i": -27.4,
+   "lufs_i": -27.18,
    "lufs_m_max": -23.0,
-   "true_peak_dbtp": -10.77,
-   "length_s": 3.96,
-   "peak_ms": 218.3,
-   "anchor_ms": 190.5,
+   "true_peak_dbtp": -5.79,
+   "length_s": 1.827,
+   "peak_ms": 186.8,
+   "anchor_ms": 180.6,
    "gun": "870",
    "element": "fire_tail_outdoor_open",
    "space": "outdoor_open",
    "variant": 1,
-   "source": "S_Herrington_11-87_Unsuppressed_1_With_Tail.wav +0.16s",
+   "source": "AK47_big_open_area_2m_above_behind_gun_R 5.70-7.16s",
+   "sources": [
+    {
+     "file": "sonniss/Pole Position - The Outdoor Gun Acoustics Library/AK47_big_open_area_2m_above_behind_gun_RSM191_M.wav",
+     "start_s": 5.702,
+     "end_s": 7.162,
+     "gain_db": 0.0,
+     "pitch_st": -2.5
+    }
+   ],
    "mix_db": -4.0,
-   "mono_fold_loss_db": -1.89
+   "mono_fold_loss_db": 0.0
   },
   {
    "file": "Weapons/Remington870/fire_tail_outdoor_open_2.wav",
@@ -4382,19 +5183,28 @@
    "layer": "tail",
    "channels": 2,
    "sample_rate": 48000,
-   "lufs_i": -27.52,
+   "lufs_i": -26.3,
    "lufs_m_max": -23.0,
-   "true_peak_dbtp": -11.94,
-   "length_s": 3.96,
-   "peak_ms": 316.2,
-   "anchor_ms": 187.9,
+   "true_peak_dbtp": -11.78,
+   "length_s": 1.942,
+   "peak_ms": 222.0,
+   "anchor_ms": 167.5,
    "gun": "870",
    "element": "fire_tail_outdoor_open",
    "space": "outdoor_open",
    "variant": 2,
-   "source": "S_Herrington_11-87_Unsuppressed_2_With_Tail.wav +0.16s",
+   "source": "MP5_forest_road_10m_behind_gun_pointing_ 3.52-5.08s",
+   "sources": [
+    {
+     "file": "sonniss/Pole Position - The Outdoor Gun Acoustics Library/MP5_forest_road_10m_behind_gun_pointing_at_forest_off_axis_MKH8060.wav",
+     "start_s": 3.52,
+     "end_s": 5.08,
+     "gain_db": 0.0,
+     "pitch_st": -2.5
+    }
+   ],
    "mix_db": -4.0,
-   "mono_fold_loss_db": -1.81
+   "mono_fold_loss_db": 0.0
   },
   {
    "file": "Weapons/Remington870/fire_tail_outdoor_open_3.wav",
@@ -4402,19 +5212,28 @@
    "layer": "tail",
    "channels": 2,
    "sample_rate": 48000,
-   "lufs_i": -27.71,
+   "lufs_i": -29.06,
    "lufs_m_max": -23.0,
-   "true_peak_dbtp": -8.84,
-   "length_s": 4.071,
-   "peak_ms": 244.5,
-   "anchor_ms": 185.5,
+   "true_peak_dbtp": -9.9,
+   "length_s": 4.0,
+   "peak_ms": 218.3,
+   "anchor_ms": 194.3,
    "gun": "870",
    "element": "fire_tail_outdoor_open",
    "space": "outdoor_open",
    "variant": 3,
-   "source": "S_Herrington_11-87_Unsuppressed_3_With_Tail.wav +0.16s",
+   "source": "S_Herrington_11-87_Unsuppressed_1_With_T 0.20-4.04s",
+   "sources": [
+    {
+     "file": "tsp/Tactical Shooter Pack/Herrington_11-87/Fire/S_Herrington_11-87_Unsuppressed_1_With_Tail.wav",
+     "start_s": 0.2,
+     "end_s": 4.04,
+     "gain_db": 0.0,
+     "pitch_st": 0.0
+    }
+   ],
    "mix_db": -4.0,
-   "mono_fold_loss_db": -1.87
+   "mono_fold_loss_db": -1.39
   },
   {
    "file": "Weapons/Remington870/fire_tail_outdoor_open_4.wav",
@@ -4422,19 +5241,35 @@
    "layer": "tail",
    "channels": 2,
    "sample_rate": 48000,
-   "lufs_i": -27.1,
+   "lufs_i": -28.7,
    "lufs_m_max": -23.0,
-   "true_peak_dbtp": -11.84,
-   "length_s": 4.364,
-   "peak_ms": 299.2,
-   "anchor_ms": 253.8,
+   "true_peak_dbtp": -4.6,
+   "length_s": 4.0,
+   "peak_ms": 186.8,
+   "anchor_ms": 185.5,
    "gun": "870",
    "element": "fire_tail_outdoor_open",
    "space": "outdoor_open",
    "variant": 4,
-   "source": "S_Herrington_11-87_Unsuppressed_1_With_Tail.wav +0.22s",
+   "source": "AK47_big_open_area_2m_above_behind_gun_R 14.00-15.46s + S_Herrington_11-87_Unsuppressed_2_With_T 0.34-4.04s",
+   "sources": [
+    {
+     "file": "sonniss/Pole Position - The Outdoor Gun Acoustics Library/AK47_big_open_area_2m_above_behind_gun_RSM191_M.wav",
+     "start_s": 14.001,
+     "end_s": 15.461,
+     "gain_db": 0.0,
+     "pitch_st": -2.5
+    },
+    {
+     "file": "tsp/Tactical Shooter Pack/Herrington_11-87/Fire/S_Herrington_11-87_Unsuppressed_2_With_Tail.wav",
+     "start_s": 0.338,
+     "end_s": 4.038,
+     "gain_db": -6.0,
+     "pitch_st": 0.0
+    }
+   ],
    "mix_db": -4.0,
-   "mono_fold_loss_db": -2.04
+   "mono_fold_loss_db": -1.04
   },
   {
    "file": "Weapons/Remington870/fire_tail_outdoor_open_5.wav",
@@ -4442,19 +5277,35 @@
    "layer": "tail",
    "channels": 2,
    "sample_rate": 48000,
-   "lufs_i": -27.5,
+   "lufs_i": -28.1,
    "lufs_m_max": -23.0,
-   "true_peak_dbtp": -11.75,
-   "length_s": 3.809,
-   "peak_ms": 310.0,
-   "anchor_ms": 186.8,
+   "true_peak_dbtp": -12.58,
+   "length_s": 4.108,
+   "peak_ms": 204.6,
+   "anchor_ms": 167.0,
    "gun": "870",
    "element": "fire_tail_outdoor_open",
    "space": "outdoor_open",
    "variant": 5,
-   "source": "S_Herrington_11-87_Unsuppressed_2_With_Tail.wav +0.16s",
+   "source": "MP5_forest_road_10m_behind_gun_pointing_ 13.17-14.73s + S_Herrington_11-87_Unsuppressed_3_With_T 0.35-4.05s",
+   "sources": [
+    {
+     "file": "sonniss/Pole Position - The Outdoor Gun Acoustics Library/MP5_forest_road_10m_behind_gun_pointing_at_forest_off_axis_MKH8060.wav",
+     "start_s": 13.169,
+     "end_s": 14.729,
+     "gain_db": 0.0,
+     "pitch_st": -2.5
+    },
+    {
+     "file": "tsp/Tactical Shooter Pack/Herrington_11-87/Fire/S_Herrington_11-87_Unsuppressed_3_With_Tail.wav",
+     "start_s": 0.355,
+     "end_s": 4.055,
+     "gain_db": -6.0,
+     "pitch_st": -0.5
+    }
+   ],
    "mix_db": -4.0,
-   "mono_fold_loss_db": -1.82
+   "mono_fold_loss_db": -0.45
   },
   {
    "file": "Weapons/Remington870/fire_tail_outdoor_urban_1.wav",
@@ -4462,19 +5313,28 @@
    "layer": "tail",
    "channels": 2,
    "sample_rate": 48000,
-   "lufs_i": -25.42,
+   "lufs_i": -25.28,
    "lufs_m_max": -22.0,
-   "true_peak_dbtp": -12.35,
-   "length_s": 1.9,
-   "peak_ms": 343.8,
-   "anchor_ms": 325.8,
+   "true_peak_dbtp": -13.45,
+   "length_s": 2.87,
+   "peak_ms": 278.0,
+   "anchor_ms": 152.1,
    "gun": "870",
    "element": "fire_tail_outdoor_urban",
    "space": "outdoor_urban",
    "variant": 1,
-   "source": "S_Herrington_11-87_Unsuppressed_3_With_Tail.wav +0.30s",
+   "source": "AK5_valley_field_forest_50m_behind_gun_o 0.36-2.74s",
+   "sources": [
+    {
+     "file": "sonniss/Pole Position - The Outdoor Gun Acoustics Library/AK5_valley_field_forest_50m_behind_gun_off_axis_behind_buildings_M10.wav",
+     "start_s": 0.363,
+     "end_s": 2.743,
+     "gain_db": 0.0,
+     "pitch_st": -2.5
+    }
+   ],
    "mix_db": -4.0,
-   "mono_fold_loss_db": -1.64
+   "mono_fold_loss_db": -0.32
   },
   {
    "file": "Weapons/Remington870/fire_tail_outdoor_urban_2.wav",
@@ -4482,19 +5342,28 @@
    "layer": "tail",
    "channels": 2,
    "sample_rate": 48000,
-   "lufs_i": -25.36,
+   "lufs_i": -25.22,
    "lufs_m_max": -22.0,
-   "true_peak_dbtp": -11.34,
-   "length_s": 1.903,
-   "peak_ms": 414.2,
-   "anchor_ms": 372.7,
+   "true_peak_dbtp": -13.43,
+   "length_s": 2.87,
+   "peak_ms": 182.2,
+   "anchor_ms": 150.1,
    "gun": "870",
    "element": "fire_tail_outdoor_urban",
    "space": "outdoor_urban",
    "variant": 2,
-   "source": "S_Herrington_11-87_Unsuppressed_1_With_Tail.wav +0.34s",
+   "source": "AK5_valley_field_forest_50m_behind_gun_o 7.52-9.90s",
+   "sources": [
+    {
+     "file": "sonniss/Pole Position - The Outdoor Gun Acoustics Library/AK5_valley_field_forest_50m_behind_gun_off_axis_behind_buildings_M10.wav",
+     "start_s": 7.521,
+     "end_s": 9.901,
+     "gain_db": 0.0,
+     "pitch_st": -2.5
+    }
+   ],
    "mix_db": -4.0,
-   "mono_fold_loss_db": -1.91
+   "mono_fold_loss_db": -0.48
   },
   {
    "file": "Weapons/Remington870/fire_tail_outdoor_urban_3.wav",
@@ -4502,19 +5371,28 @@
    "layer": "tail",
    "channels": 2,
    "sample_rate": 48000,
-   "lufs_i": -25.81,
+   "lufs_i": -25.21,
    "lufs_m_max": -22.0,
-   "true_peak_dbtp": -7.26,
-   "length_s": 2.043,
-   "peak_ms": 225.9,
-   "anchor_ms": 174.7,
+   "true_peak_dbtp": -11.9,
+   "length_s": 2.95,
+   "peak_ms": 183.6,
+   "anchor_ms": 162.6,
    "gun": "870",
    "element": "fire_tail_outdoor_urban",
    "space": "outdoor_urban",
    "variant": 3,
-   "source": "S_TR15_V1_Unsupressed_With_Tail_1.wav +0.14s",
+   "source": "AK5_valley_field_forest_50m_behind_gun_o 21.62-24.00s",
+   "sources": [
+    {
+     "file": "sonniss/Pole Position - The Outdoor Gun Acoustics Library/AK5_valley_field_forest_50m_behind_gun_off_axis_behind_buildings_M10.wav",
+     "start_s": 21.623,
+     "end_s": 24.003,
+     "gain_db": 0.0,
+     "pitch_st": -3.0
+    }
+   ],
    "mix_db": -4.0,
-   "mono_fold_loss_db": -1.92
+   "mono_fold_loss_db": -0.52
   },
   {
    "file": "Weapons/Remington870/fire_tail_outdoor_urban_4.wav",
@@ -4522,19 +5400,28 @@
    "layer": "tail",
    "channels": 2,
    "sample_rate": 48000,
-   "lufs_i": -25.9,
+   "lufs_i": -25.3,
    "lufs_m_max": -22.0,
-   "true_peak_dbtp": -10.1,
-   "length_s": 2.098,
-   "peak_ms": 178.7,
-   "anchor_ms": 173.0,
+   "true_peak_dbtp": -12.84,
+   "length_s": 2.791,
+   "peak_ms": 396.2,
+   "anchor_ms": 147.2,
    "gun": "870",
    "element": "fire_tail_outdoor_urban",
    "space": "outdoor_urban",
    "variant": 4,
-   "source": "S_TR15_V3_Unsuppressed_With_Tail_2.wav +0.14s",
+   "source": "AK5_valley_field_forest_50m_behind_gun_o 45.78-48.16s",
+   "sources": [
+    {
+     "file": "sonniss/Pole Position - The Outdoor Gun Acoustics Library/AK5_valley_field_forest_50m_behind_gun_off_axis_behind_buildings_M10.wav",
+     "start_s": 45.78,
+     "end_s": 48.16,
+     "gain_db": 0.0,
+     "pitch_st": -2.0
+    }
+   ],
    "mix_db": -4.0,
-   "mono_fold_loss_db": -2.09
+   "mono_fold_loss_db": -0.47
   },
   {
    "file": "Weapons/Remington870/fire_tail_outdoor_urban_5.wav",
@@ -4542,19 +5429,28 @@
    "layer": "tail",
    "channels": 2,
    "sample_rate": 48000,
-   "lufs_i": -25.56,
+   "lufs_i": -25.06,
    "lufs_m_max": -22.0,
-   "true_peak_dbtp": -9.78,
-   "length_s": 2.023,
-   "peak_ms": 279.0,
-   "anchor_ms": 164.8,
+   "true_peak_dbtp": -11.97,
+   "length_s": 2.95,
+   "peak_ms": 715.7,
+   "anchor_ms": 153.6,
    "gun": "870",
    "element": "fire_tail_outdoor_urban",
    "space": "outdoor_urban",
    "variant": 5,
-   "source": "S_WK-11_Viper_2_With_Tail.wav +0.12s",
+   "source": "AK5_valley_field_forest_50m_behind_gun_o 52.66-55.04s",
+   "sources": [
+    {
+     "file": "sonniss/Pole Position - The Outdoor Gun Acoustics Library/AK5_valley_field_forest_50m_behind_gun_off_axis_behind_buildings_M10.wav",
+     "start_s": 52.662,
+     "end_s": 55.042,
+     "gain_db": 0.0,
+     "pitch_st": -3.0
+    }
+   ],
    "mix_db": -4.0,
-   "mono_fold_loss_db": -2.81
+   "mono_fold_loss_db": -0.32
   },
   {
    "file": "Weapons/Remington870/handle_1.wav",
