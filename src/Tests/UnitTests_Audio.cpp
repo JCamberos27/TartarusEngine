@@ -274,8 +274,8 @@ void TestDistanceBlendWeights() {
     FakeBackend be;
     WeaponAudio& wa = WeaponAudio::Get();
     wa.StartForTest("", &be);
-    wa.Profile("ak")->Close.Set.Files = {"assets/Audio/Combat/ak_shot.wav"};
-    wa.Profile("ak")->Far.Set.Files = {"assets/Audio/Combat/ak_shot_far.wav"};
+    wa.Profile("ak")->Close.Set.Files = {"test/fire_close.wav"};
+    wa.Profile("ak")->Far.Set.Files = {"test/fire_far.wav"};
     wa.SetListener(glm::vec3(0.0f));
     SoundPlayer::Limiter off;
     off.Enabled = false;
@@ -287,13 +287,13 @@ void TestDistanceBlendWeights() {
         return v;
     };
     wa.Shot("ak", glm::vec3(10.0f, 0.0f, 0.0f), false);
-    CHECK(volumeOf("assets/Audio/Combat/ak_shot.wav") > 0.7f); // the crack, full (+-1 dB)
-    CHECK(volumeOf("assets/Audio/Combat/ak_shot_far.wav") > 0.05f && volumeOf("assets/Audio/Combat/ak_shot_far.wav") < 0.15f);
+    CHECK(volumeOf("test/fire_close.wav") > 0.7f); // the crack, full (+-1 dB)
+    CHECK(volumeOf("test/fire_far.wav") > 0.05f && volumeOf("test/fire_far.wav") < 0.15f);
     be.Voices.clear();
     wa.Update(1.0f); // a new burst
     wa.Shot("ak", glm::vec3(70.0f, 0.0f, 0.0f), false);
-    CHECK(volumeOf("assets/Audio/Combat/ak_shot.wav") < 0.0f); // no crack at 70 m
-    CHECK(volumeOf("assets/Audio/Combat/ak_shot_far.wav") > 0.7f);
+    CHECK(volumeOf("test/fire_close.wav") < 0.0f); // no crack at 70 m
+    CHECK(volumeOf("test/fire_far.wav") > 0.7f);
     CHECK(be.Voices.back().Voice.Spatial);
     be.Voices.clear();
     // The player's own gun: 2D, no distant layer, at the player gain.

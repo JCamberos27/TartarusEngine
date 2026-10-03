@@ -10,6 +10,9 @@ The soundtrack is mixed offline with the engine's inverse distance model and a s
 2D voices keep their stereo. WEAPON_TEST_AUDIO_LOG=<file> / NPC_TEST_RECORD record --weapon-test too (no L lines there:
 the listener is the player and every voice is 2D). Writes <dir>/npc_pov.mp4 (the player's view) and <dir>/npc_cinematic.mp4 (the
 Scene-view camera).
+
+The offline mix is dry (no reverb, no master limiter). Run the engine with AUDIO_CAPTURE=<dir>/master.wav to record what it
+actually played (after the limiter); when that file is there it is the soundtrack instead.
 """
 import os
 import subprocess
@@ -141,9 +144,11 @@ def main():
     d = sys.argv[1]
     frames = len([f for f in os.listdir(d) if f.startswith("game_") and f.endswith(".jpg")])
     seconds = frames / FPS
-    audio = os.path.join(d, "soundtrack.wav")
-    log = os.path.join(d, "audio.txt")
-    write_wav(audio, mix(log, seconds) if os.path.exists(log) else np.zeros((int(seconds * RATE), 2)))
+    audio = os.path.join(d, "master.wav")  # AUDIO_CAPTURE: the engine's own output
+    if not os.path.exists(audio):
+        audio = os.path.join(d, "soundtrack.wav")
+        log = os.path.join(d, "audio.txt")
+        write_wav(audio, mix(log, seconds) if os.path.exists(log) else np.zeros((int(seconds * RATE), 2)))
     ff = ffmpeg_exe()
     for stem, name in (("game", "npc_pov.mp4"), ("scene", "npc_cinematic.mp4")):
         if encode(ff, d, stem, audio, os.path.join(d, name)):
