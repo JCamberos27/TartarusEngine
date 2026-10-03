@@ -480,6 +480,8 @@ void NpcDirector::Despawn(World& world, Npc& n, bool keepBody) {
     m_Cover.Release(n.Index, m_Now);
     n.Hitboxes.reset();
     n.Ragdoll.reset();
+    if (n.Dropped) n.Dropped->Stop(world);
+    n.Dropped.reset();
     if (n.Weapon) n.Weapon->Stop(world);
     n.Weapon.reset();
     n.Body.Stop();
@@ -1161,6 +1163,7 @@ void NpcDirector::LateUpdate(World& world, float dt, const PlayerSnapshot& p) {
                 SubTimer timer(*this, SubRagdoll);
                 n.Ragdoll->Update(dt);
             }
+            if (n.Dropped) n.Dropped->Update(world, dt);
             if (n.FallSoundAt > 0.0f && m_Now >= n.FallSoundAt) {
                 n.FallSoundAt = -1.0f;
                 if (Fx) Fx->Play(CombatFx::Cue::BodyFall, n.Ragdoll ? n.Ragdoll->Root() : n.Feet);
@@ -1437,7 +1440,7 @@ bool NpcDirector::OnPlayerHit(World& world, unsigned entity, const glm::vec3& po
                 }
                 const float amount = DamageForHit(weapon, HitZone::Torso, dist);
                 const glm::vec3 d = glm::length(dir) > 1e-6f ? glm::normalize(dir) : glm::vec3(0.0f, 0.0f, 1.0f);
-                n.Ragdoll->Shove(part, d * NpcRagdoll::PartMass(&m_RagdollCfg, part) * (m_RagdollCfg.CorpseShotBase + m_RagdollCfg.CorpseShotPerDamage * amount), point);
+                n.Ragdoll->HitCorpse(part, d, amount, point, m_RagdollCfg);
                 if (Fx) Fx->Play(CombatFx::Cue::FleshHit, point, false, 0.5f);
             }
             return true;
@@ -1595,6 +1598,8 @@ void NpcDirector::Kill(World& world, Npc& n, const glm::vec3& dir, const glm::ve
 
 void NpcDirector::FinishDeath(World& world, Npc& n) {
     n.DeathPending = false;
+    // The gun leaves his hands (copied before the weapon presentation goes) and the arm solve lets go.
+    if (n.Weapon && n.Weapon->IsActive()) n.Dropped = NpcDroppedWeapon::Drop(world, n.Body, n.Weapon->WeaponEntity(), n.DeathDir * n.DeathShove);
     if (n.Weapon) n.Weapon->Stop(world);
     n.Weapon.reset();
     // Down: the animators stop and the physics takes the body, shoved along the round's line on the bone it struck.

@@ -202,6 +202,307 @@ float NpcRagdoll::DriveFadeTime() const {
     return t;
 }
 
+// ---- The muscles ----------------------------------------------------------------------------------------------------------
+
+static_assert(NpcRagdoll::kRagParts == 16, "NpcRagdollMotor::Fall::Neutral holds one rotation per ragdoll part");
+
+NpcRagdollMotor::Fall::Fall() {
+    for (glm::quat& q : Neutral) q = glm::quat(1.0f, 0.0f, 0.0f, 0.0f);
+}
+
+NpcRagdollMotor::Group NpcRagdollMotor::GroupOf(int part) {
+    switch (kRagDefs[std::clamp(part, 0, NpcRagdoll::kRagParts - 1)].R) {
+    case Region::Thigh: case Region::Calf: case Region::Foot: return Group::Legs;
+    case Region::Head: case Region::Neck: return Group::Neck;
+    case Region::UpperArm: case Region::Forearm: case Region::Hand: return Group::Arms;
+    default: return Group::Spine;
+    }
+}
+
+bool NpcRagdollMotor::IsHeadHit(int hitPart) { return hitPart == 2 || hitPart == NpcRagdoll::kNeck; }
+
+float NpcRagdollMotor::LegLead(const Fall& fall, int part) {
+    const RagDef& rd = kRagDefs[std::clamp(part, 0, NpcRagdoll::kRagParts - 1)];
+    if (rd.R != Region::Thigh && rd.R != Region::Calf && rd.R != Region::Foot) return 0.0f;
+    // The left leg leads when the body falls toward its left; a body's own lean breaks the tie when the fall is straight on.
+    return std::clamp((rd.Left ? 1.0f : -1.0f) * (fall.Lat + 0.3f * fall.Bias), -1.0f, 1.0f);
+}
+
+namespace {
+float GroupTime(const RagdollSettingsComponent& c, NpcRagdollMotor::Group g) {
+    switch (g) {
+    case NpcRagdollMotor::Group::Legs: return c.LegsToneTime;
+    case NpcRagdollMotor::Group::Neck: return c.NeckToneTime;
+    case NpcRagdollMotor::Group::Arms: return c.ArmsToneTime;
+    default: return c.SpineToneTime;
+    }
+}
+float Smooth(float x) {
+    x = std::clamp(x, 0.0f, 1.0f);
+    return x * x * (3.0f - 2.0f * x);
+}
+// The lying phase exists with a Relax Tone and a collapse to relax from; it ends (the target has arrived) at this time.
+bool RelaxOn(const RagdollSettingsComponent& c) { return c.RelaxTone > 0.0f && c.CollapseAmount > 0.0f; }
+float RelaxArrives(const RagdollSettingsComponent& c) { return std::max(c.RelaxDelay, 0.0f) + std::max(c.RelaxTime, 1e-3f); }
+} // namespace
+
+float NpcRagdollMotor::RelaxAmount(const RagdollSettingsComponent& cfg, float t) {
+    return RelaxOn(cfg) ? Smooth((t - std::max(cfg.RelaxDelay, 0.0f)) / std::max(cfg.RelaxTime, 1e-3f)) : 0.0f;
+}
+
+float NpcRagdollMotor::RelaxStrength(const RagdollSettingsComponent& cfg, float t) {
+    if (!RelaxOn(cfg)) return 0.0f;
+    // In as the collapse finishes, held until the pose has formed (and a moment after), then out.
+    const float in = Smooth((t - 0.6f * std::max(cfg.RelaxDelay, 0.0f)) / 0.25f);
+    const float out = 1.0f - Smooth((t - RelaxArrives(cfg) - std::max(cfg.RelaxHold, 0.0f)) / 0.5f);
+    return std::clamp(cfg.RelaxTone, 0.0f, 1.0f) * in * out;
+}
+
+float NpcRagdollMotor::WoundGrab(const RagdollSettingsComponent& cfg, const Fall& fall, float t) {
+    if (fall.WoundSide == 0 || fall.Head) return 0.0f;
+    return std::clamp(cfg.WoundGrabWeight, 0.0f, 1.0f) * Smooth((t - 0.04f) / 0.12f) * (1.0f - Smooth((t - cfg.WoundGrabTime) / 0.3f));
+}
+
+float NpcRagdollMotor::PartStrength(const RagdollSettingsComponent& cfg, int part, float t, int hitPart, const Fall* fall) {
+    part = std::clamp(part, 0, NpcRagdoll::kRagParts - 1);
+    if (part == 0) return 1.0f; // the pelvis has no joint
+    const Group g = GroupOf(part);
+    const bool legs = g == Group::Legs;
+    const bool headKill = IsHeadHit(hitPart);
+    float hold = legs ? std::max(cfg.StaggerTime, 0.0f) : 0.0f;
+    // The lead leg gives out sooner (the other holds a little longer).
+    if (legs && fall) hold *= std::clamp(1.0f - cfg.BuckleLead * LegLead(*fall, part), 0.1f, 2.0f);
+    float decay = std::max(GroupTime(cfg, g), 1e-3f);
+    if (headKill && !legs) decay = std::max(decay * cfg.HeadKillLimp, 1e-3f); // lights out: the arms and neck let go at once
+    const float x = std::clamp((t - hold) / decay, 0.0f, 1.0f);
+    const float curve = (1.0f - x) * (1.0f - x);
+    float scale = legs ? cfg.StaggerLegStrength : 1.0f;
+    // The struck joint takes the round instead of holding against it: the part's own (a hit pelvis: both hips; a hit head: the neck too).
+    const bool struck = part == hitPart || (hitPart == 0 && (part == 7 || part == 9)) || (hitPart == 2 && part == NpcRagdoll::kNeck);
+    if (struck) scale *= cfg.HitWeakness;
+    const float residual = std::clamp(cfg.ToneResidual, 0.0f, 1.0f);
+    const float s = residual + (1.0f - residual) * curve * std::clamp(scale, 0.0f, 1.0f);
+    // The lying pose is held by the legs while it forms (the arms and spine only follow it, loosely: held stiff, hanging arms would prop a prone body up).
+    return legs ? std::max(s, RelaxStrength(cfg, t)) : s;
+}
+
+float NpcRagdollMotor::CollapseFlexion(const RagdollSettingsComponent& cfg, int part, const Fall& fall) {
+    const bool forward = fall.Fwd >= 0.0f;
+    const float front = std::clamp(0.5f + 0.5f * fall.Fwd, 0.0f, 1.0f); // 1 falling forward, 0 falling back
+    const float brace = fall.Head ? 0.0f : std::clamp(cfg.BraceWeight, 0.0f, 1.0f);
+    const float tuck = fall.Head ? 0.0f : std::clamp(cfg.HeadTuckWeight, 0.0f, 1.0f);
+    switch (kRagDefs[std::clamp(part, 0, NpcRagdoll::kRagParts - 1)].R) {
+    case Region::Thigh: return cfg.HipFlexCollapse * glm::mix(cfg.BackHipScale, 1.0f, front); // sitting down: the legs go forward
+    case Region::Calf: return cfg.KneeFlexCollapse * glm::mix(cfg.BackKneeScale, 1.0f, front) * std::max(0.0f, 1.0f + cfg.BuckleAsymmetry * LegLead(fall, part));
+    case Region::Spine: return forward ? cfg.SpineCurlCollapse : -0.4f * cfg.SpineCurlCollapse;
+    case Region::Neck: return forward ? -0.75f * cfg.NeckCollapse : cfg.NeckCollapse * tuck;
+    case Region::Head: return forward ? -0.4f * cfg.NeckCollapse : 0.4f * cfg.NeckCollapse * tuck;
+    // The arms reach toward the fall: forward when it is forward, back (and a little out, see TargetAt) when it is back.
+    case Region::UpperArm: return cfg.ShoulderCollapse * brace * (forward ? fall.Fwd : 0.45f * fall.Fwd);
+    case Region::Forearm: return (forward ? cfg.ElbowCollapse : 0.8f * cfg.ElbowCollapse) * (fall.Head ? 0.5f : 1.0f);
+    default: return 0.0f;
+    }
+}
+
+float NpcRagdollMotor::CollapseFlexion(const RagdollSettingsComponent& cfg, int part, bool forward) {
+    Fall f;
+    f.Fwd = forward ? 1.0f : -1.0f;
+    return CollapseFlexion(cfg, part, f);
+}
+
+glm::quat NpcRagdollMotor::TargetAt(const RagdollSettingsComponent& cfg, int part, float t, const Fall& fall) {
+    part = std::clamp(part, 0, NpcRagdoll::kRagParts - 1);
+    const Region r = kRagDefs[part].R;
+    const float x = std::clamp(t / std::max(cfg.CollapseBlendTime, 1e-3f), 0.0f, 1.0f);
+    const float blend = x * x * (3.0f - 2.0f * x) * cfg.CollapseAmount;
+    // The joint frame's +Z is the flexion axis (X, the bone, turns toward +Y, the flexion direction); a swing about +Y leans the limb toward the body's left.
+    const glm::vec3 axisY(0.0f, 1.0f, 0.0f), axisZ(0.0f, 0.0f, 1.0f);
+    const float armSide = kRagDefs[part].Left ? 1.0f : -1.0f;
+    glm::quat q = glm::angleAxis(glm::radians(CollapseFlexion(cfg, part, fall) * blend), axisZ);
+    if (r == Region::UpperArm && !fall.Head) {
+        // Reaching sideways: both arms swing toward a sideways fall, the one on that side further.
+        const float reach = std::clamp(cfg.BraceWeight, 0.0f, 1.0f) * cfg.BraceLateral * fall.Lat * (armSide * fall.Lat > 0.0f ? 1.0f : 0.4f);
+        q = glm::angleAxis(glm::radians(reach * blend), axisY) * q;
+    }
+    // On to the lying pose: straight limbs (back to the neutral each joint's frame holds) with a little bend, the spine mostly upright.
+    const float relax = RelaxAmount(cfg, t);
+    if (relax > 0.0f) {
+        float flex = 0.0f, share = 0.0f;
+        switch (r) {
+        case Region::Thigh: flex = cfg.LyingHip; share = 1.0f; break;
+        case Region::Calf: flex = cfg.LyingKnee; share = 1.0f; break;
+        case Region::Forearm: flex = cfg.LyingElbow; share = 1.0f; break;
+        case Region::UpperArm: share = cfg.LyingArms; break;
+        case Region::Spine: case Region::Neck: case Region::Head: share = cfg.LyingSpine; break;
+        default: break;
+        }
+        if (share > 0.0f || flex > 0.0f) {
+            const glm::quat neutral = fall.HaveNeutral ? glm::slerp(glm::quat(1.0f, 0.0f, 0.0f, 0.0f), fall.Neutral[part], std::clamp(share, 0.0f, 1.0f))
+                                                       : glm::quat(1.0f, 0.0f, 0.0f, 0.0f);
+            q = glm::slerp(q, glm::angleAxis(glm::radians(flex), axisZ) * neutral, relax);
+        }
+    }
+    // The wound grab: the struck side's hand goes to the wound (layered on, gone again within Wound Grab Time).
+    const float grab = WoundGrab(cfg, fall, t);
+    if (grab > 0.0f && (r == Region::UpperArm || r == Region::Forearm) && fall.WoundSide == (int)armSide) {
+        const glm::quat d = r == Region::UpperArm
+                                ? glm::angleAxis(glm::radians(-armSide * 0.8f * cfg.WoundShoulder), axisY) *
+                                      glm::angleAxis(glm::radians(cfg.WoundShoulder * (fall.WoundFront ? 1.0f : -0.6f)), axisZ)
+                                : glm::angleAxis(glm::radians(cfg.WoundElbow), axisZ);
+        q = glm::slerp(glm::quat(1.0f, 0.0f, 0.0f, 0.0f), d, grab) * q;
+    }
+    return q;
+}
+
+glm::quat NpcRagdollMotor::TargetAt(const RagdollSettingsComponent& cfg, int part, float t, bool forward) {
+    Fall f;
+    f.Fwd = forward ? 1.0f : -1.0f;
+    return TargetAt(cfg, part, t, f);
+}
+
+void NpcRagdollMotor::Begin(int id, const PhysicsWorld::RagdollPart* parts, const glm::mat4& root, const glm::vec3& fallDir, int hitPart,
+                            const RagdollSettingsComponent& cfg, const glm::vec3& point, const glm::vec3& shot) {
+    m_Id = id;
+    m_HitPart = hitPart;
+    m_Cfg = std::make_shared<RagdollSettingsComponent>(cfg);
+    m_Time = m_Settle = m_Still = m_LooseUntil = 0.0f;
+    m_AppliedSettle = -1.0f;
+    m_Resting = false;
+    m_Push = m_Folded = false;
+    m_Frames = parts && parts[1].Anatomical;
+    {
+        float p[3], q[4];
+        m_Height0 = PhysicsWorld::GetRagdollPart(id, 0, p, q) ? std::max(p[1], 0.3f) : 1.0f;
+    }
+    // The fall in the body's own axes.
+    m_Fall = Fall();
+    const glm::vec3 fwd = glm::normalize(glm::vec3(root[2])), left = glm::normalize(glm::vec3(root[0]));
+    const glm::vec3 flat(fallDir.x, 0.0f, fallDir.z);
+    const float fl = glm::length(flat);
+    if (fl > 1e-4f) {
+        const glm::vec3 d = flat / fl;
+        const glm::vec3 fwdFlat(fwd.x, 0.0f, fwd.z), leftFlat(left.x, 0.0f, left.z);
+        if (glm::length(fwdFlat) > 1e-4f) m_Fall.Fwd = glm::dot(d, glm::normalize(fwdFlat));
+        if (glm::length(leftFlat) > 1e-4f) m_Fall.Lat = glm::dot(d, glm::normalize(leftFlat));
+    }
+    m_Fall.Bias = (float)(((unsigned)id * 2654435761u >> 12) & 1023u) / 511.5f - 1.0f; // this body's own lean, always the same for the same body
+    m_Fall.Head = IsHeadHit(hitPart);
+    // A torso hit: the hand on the struck side goes to the wound (a round that entered the front reaches to the front).
+    if ((hitPart == 0 || hitPart == 1) && !m_Fall.Head && glm::dot(shot, shot) > 1e-8f) {
+        const float side = glm::dot(point - glm::vec3(root[3]), left);
+        m_Fall.WoundSide = std::fabs(side) > 0.03f ? (side > 0.0f ? 1 : -1) : (m_Fall.Bias >= 0.0f ? 1 : -1);
+        m_Fall.WoundFront = glm::dot(shot, fwd) <= 0.0f;
+    }
+    // Each joint's way back to neutral, from the frames it was built with: the lying pose aims there.
+    if (m_Frames)
+        for (int i = 1; i < NpcRagdoll::kRagParts; ++i) {
+            if (!parts[i].Anatomical) continue;
+            const glm::quat frame(parts[i].LimitFrame[3], parts[i].LimitFrame[0], parts[i].LimitFrame[1], parts[i].LimitFrame[2]);
+            const glm::quat now(parts[i].Rotation[3], parts[i].Rotation[0], parts[i].Rotation[1], parts[i].Rotation[2]);
+            const glm::vec3 inFrame = glm::normalize(glm::inverse(frame) * (now * glm::vec3(1.0f, 0.0f, 0.0f)));
+            m_Fall.Neutral[i] = glm::rotation(inFrame, glm::vec3(1.0f, 0.0f, 0.0f));
+        }
+    m_Fall.HaveNeutral = m_Frames;
+    m_Strongest = 1.0f;
+    Update(0.0f);
+}
+
+void NpcRagdollMotor::Update(float dt) {
+    if (m_Id < 0 || !m_Cfg) return;
+    const RagdollSettingsComponent& c = *m_Cfg;
+    m_Time += std::max(dt, 0.0f);
+    float lin = 0.0f, ang = 0.0f;
+    if (!PhysicsWorld::RagdollMotion(m_Id, &lin, &ang)) return;
+    // The lying pose has formed by then: a body does not sleep before (or while a round has it loose).
+    const float arrived = RelaxOn(c) ? RelaxArrives(c) : 0.0f;
+    const bool loose = m_Time < m_LooseUntil;
+    // Settling: once the parts are slow the body heavies up (damping, friction, joint friction); it unwinds fast if something moves it again.
+    if (dt > 0.0f) {
+        float pp[3], pq[4];
+        const bool down = m_Time >= 0.2f && PhysicsWorld::GetRagdollPart(m_Id, 0, pp, pq) && pp[1] < c.DownHeight * m_Height0;
+        const bool slow = !loose && (down || (m_Time >= c.SettleDelay && lin < c.SettleSpeed && ang < 4.0f * c.SettleSpeed));
+        const float ramp = std::max(c.SettleRamp, 1e-3f);
+        // A body that is not lying yet (kneeling on a strut of friction, curled up) is not settled: it stays loose, and once the lying
+        // pose has formed its legs push (for up to Rest Fix Time) so the strut gives and it goes down.
+        const bool window = RelaxOn(c) && c.RestFixTime > 0.0f && m_Time < arrived + c.RestFixTime;
+        m_Folded = window && m_Time >= 0.2f && !Lying();
+        m_Push = m_Folded && m_Time >= arrived;
+        m_Settle = slow ? std::min(1.0f, m_Settle + dt / ramp) : std::max(0.0f, m_Settle - 2.0f * dt / ramp);
+        if (m_Folded) m_Settle = std::min(m_Settle, std::clamp(c.RelaxLoose, 0.0f, 1.0f));
+        // At rest: still for RestTime, then asleep (and nothing writes to it until it is hit).
+        if (lin < c.RestSpeed && ang < 10.0f * c.RestSpeed) m_Still += dt; else m_Still = 0.0f;
+        if (!m_Resting && !loose && m_Time >= c.SettleDelay && m_Time >= arrived && m_Still >= c.RestTime) {
+            if (m_Folded) m_Still = 0.0f; // still, but kneeling or curled up is not a lying pose: not put to sleep yet
+            else {
+                PhysicsWorld::RagdollSleep(m_Id);
+                m_Resting = true;
+            }
+        }
+        if (m_Resting && !PhysicsWorld::RagdollAsleep(m_Id)) m_Resting = false; // woken by something else
+    }
+    if (m_Resting) return;
+    if (m_Settle != m_AppliedSettle) {
+        const float s = m_Settle;
+        PhysicsWorld::SetRagdollDamping(m_Id, glm::mix(c.LinearDamping, c.SettleLinearDamping, s), glm::mix(c.AngularDamping, c.SettleAngularDamping, s));
+        PhysicsWorld::SetRagdollFriction(m_Id, glm::mix(c.StaticFriction, c.SettleFriction, s), glm::mix(c.DynamicFriction, c.SettleFriction * 0.92f, s));
+    }
+    // The joints: strength (spring and damper, with the joint friction floor) and target, until the tone has decayed and the settle is in.
+    float driveEnd = c.CollapseBlendTime;
+    for (int i = 1; i < NpcRagdoll::kRagParts; ++i) {
+        const Group g = GroupOf(i);
+        driveEnd = std::max(driveEnd, (g == Group::Legs ? c.StaggerTime * (1.0f + std::max(c.BuckleLead, 0.0f)) : 0.0f) + GroupTime(c, g));
+    }
+    if (RelaxOn(c)) driveEnd = std::max(driveEnd, arrived + std::max(c.RelaxHold, 0.0f) + 0.5f);
+    const bool driving = m_Time <= driveEnd + 0.05f || m_Folded;
+    if (driving || m_Settle != m_AppliedSettle) {
+        m_Strongest = 0.0f;
+        // (Until the lying pose has formed the joints' friction floor is held to Relax Loose of the settle: the limbs can still move on the floor.)
+        const float jointSettle = m_Time < arrived || m_Folded ? std::min(m_Settle, std::clamp(c.RelaxLoose, 0.0f, 1.0f)) : m_Settle;
+        const float floorDamp = glm::mix(c.JointFriction, c.SettleJointFriction, jointSettle);
+        for (int i = 1; i < NpcRagdoll::kRagParts; ++i) {
+            float s = PartStrength(c, i, m_Time, m_HitPart, &m_Fall);
+            if (m_Push && GroupOf(i) == Group::Legs) s = std::max(s, std::clamp(c.RestFixTone, 0.0f, 1.0f));
+            m_Strongest = std::max(m_Strongest, s);
+            const bool distal = kRagDefs[i].R == Region::Hand || kRagDefs[i].R == Region::Foot;
+            PhysicsWorld::SetRagdollPartDrive(m_Id, i, c.ToneStiffness * s * s, std::max({c.ToneDamping * s, floorDamp, distal ? c.DistalJointDamping : 0.0f}));
+            if (m_Frames && driving) {
+                const glm::quat q = TargetAt(c, i, m_Time, m_Fall);
+                const float r[4] = {q.x, q.y, q.z, q.w};
+                PhysicsWorld::SetRagdollDriveTarget(m_Id, i, r);
+            }
+        }
+    }
+    m_AppliedSettle = m_Settle;
+}
+
+bool NpcRagdollMotor::Lying() const {
+    const RagdollSettingsComponent& c = *m_Cfg;
+    float p[3], q[4], chest[3];
+    if (!PhysicsWorld::GetRagdollPart(m_Id, 0, p, q) || !PhysicsWorld::GetRagdollPart(m_Id, 1, chest, q)) return true;
+    auto dir = [&](int part) {
+        float pp[3], qq[4];
+        PhysicsWorld::GetRagdollPart(m_Id, part, pp, qq);
+        return glm::quat(qq[3], qq[0], qq[1], qq[2]) * glm::vec3(1.0f, 0.0f, 0.0f);
+    };
+    const auto angle = [&](int a, int b) { return glm::degrees(std::acos(std::clamp(glm::dot(dir(a), dir(b)), -1.0f, 1.0f))); };
+    // A knee's flexion is the angle between thigh and calf; a hip's is how far the thigh has come toward the trunk's line (0 = in line).
+    if (std::max(angle(7, 8), angle(9, 10)) > c.RestKneeMax) return false;
+    if (180.0f - std::min(angle(0, 7), angle(0, 9)) > c.RestHipMax) return false;
+    return p[1] <= c.RestPelvisMax && chest[1] <= c.RestChestMax;
+}
+
+void NpcRagdollMotor::Wake() {
+    m_Settle = 0.0f;
+    m_Still = 0.0f;
+    m_Resting = false;
+    m_AppliedSettle = -1.0f;
+}
+
+void NpcRagdollMotor::Poke(float looseTime) {
+    Wake();
+    m_LooseUntil = m_Time + std::max(looseTime, 0.0f);
+}
+
 namespace {
 // The bones a snapshot holds: every part's start and end bone, and the neck; the last four are optional.
 const char* const kSnapNames[NpcRagdoll::kSnapBones] = {"pelvis", "spine_02", "spine_03", "neck_01", "head", "upperarm_l", "lowerarm_l", "hand_l",
@@ -250,6 +551,7 @@ PhysicsWorld::RagdollParams NpcRagdoll::BodyParams(const RagdollSettingsComponen
     p.SolverPosIters = c.SolverPosIters; p.SolverVelIters = c.SolverVelIters;
     p.Depenetration = c.Depenetration; p.SleepThreshold = c.SleepThreshold;
     p.StaticFriction = c.StaticFriction; p.DynamicFriction = c.DynamicFriction; p.Restitution = c.Restitution;
+    if (c.PoweredRagdoll) { p.Grip = c.GripFloor; p.StabilizationThreshold = c.StabilizationThreshold; }
     return p;
 }
 
@@ -308,6 +610,58 @@ void NpcRagdoll::Stop() {
     m_Id = -1;
     m_Pieces.clear();
     m_Drive = 0.0f;
+    m_Powered = false;
+}
+
+int NpcRagdoll::Launch(int id, const PhysicsWorld::RagdollPart* parts, const glm::mat4* partWorld, const glm::mat4& root, const glm::vec3& velocity,
+                       const glm::vec3& impulse, const glm::vec3& point, int hitPart, const RagdollSettingsComponent& cfg, NpcRagdollMotor* motor) {
+    // The round's shove, on the part it struck (else the one nearest where it did).
+    int target = hitPart;
+    if (target < 0 || target >= kRagParts) {
+        target = 1;
+        float best = 1e9f;
+        for (int i = 0; i < kRagParts; ++i) {
+            const float d2 = glm::length(glm::vec3(partWorld[i][3]) - point);
+            if (d2 < best) { best = d2; target = i; }
+        }
+    }
+    const float scale = motor ? std::max(cfg.HitImpulseScale, 0.0f) : 1.0f;
+    // A light part (a forearm, a skull) shoved with the whole round's momentum would leave the body at 30 m/s and tear
+    // its joints: the part takes what it can (6 m/s), the rest goes into the chest, so the body still moves as hard.
+    float total = glm::length(impulse) * scale;
+    if (motor && total > 1e-6f) {
+        // The body's share pushes every part by mass (the whole soldier is carried along the shot); the rest is the struck part's.
+        const float share = std::clamp(cfg.HitBodyShare, 0.0f, 1.0f);
+        float mass = 0.0f;
+        for (int i = 0; i < kRagParts; ++i) mass += PartMass(&cfg, i);
+        const glm::vec3 dv = impulse / glm::length(impulse) * (total * share / std::max(mass, 1.0f));
+        for (int i = 0; i < kRagParts; ++i) {
+            const glm::vec3 j = dv * PartMass(&cfg, i);
+            const float ji[3] = {j.x, j.y, j.z}, at[3] = {partWorld[i][3][0], partWorld[i][3][1], partWorld[i][3][2]};
+            PhysicsWorld::RagdollImpulse(id, i, ji, at);
+        }
+        total *= 1.0f - share;
+    }
+    const float cap = PartMass(&cfg, target) * cfg.PartImpulseSpeed;
+    const float onPart = std::min(total, cap);
+    if (total > 1e-6f) {
+        const glm::vec3 dir = impulse / glm::length(impulse);
+        const glm::vec3 a = dir * onPart, rest = dir * std::min(total - onPart, PartMass(&cfg, 1) * cfg.ChestImpulseSpeed);
+        const float ja[3] = {a.x, a.y, a.z}, at[3] = {point.x, point.y, point.z};
+        PhysicsWorld::RagdollImpulse(id, target, ja, at);
+        if (glm::dot(rest, rest) > 1e-8f && target != 1) {
+            const float jr[3] = {rest.x, rest.y, rest.z}, centre[3] = {partWorld[1][3][0], partWorld[1][3][1], partWorld[1][3][2]};
+            PhysicsWorld::RagdollImpulse(id, 1, jr, centre);
+        }
+    }
+    if (motor) {
+        // Muscle tone from here: the struck joint weak, the legs partial, the target going to the collapse; the way it is going to fall is
+        // the body's momentum plus the round's.
+        float mass = 0.0f;
+        for (int i = 0; i < kRagParts; ++i) mass += PartMass(&cfg, i);
+        motor->Begin(id, parts, root, velocity * mass + impulse * scale, target, cfg, point, impulse);
+    }
+    return target;
 }
 
 bool NpcRagdoll::Start(NpcBody& body, const glm::vec3& velocity, const glm::vec3& impulse, const glm::vec3& point, int hitPart,
@@ -338,8 +692,11 @@ bool NpcRagdoll::Start(NpcBody& body, const glm::vec3& velocity, const glm::vec3
     if (m_Id < 0) return false;
     // Powered at first: the joints hold the death pose (their drive targets are the pose they were built in).
     m_Stiffness = cfg.DriveStiffness; m_Damping = cfg.DriveDamping; m_DistalDamping = cfg.DistalJointDamping;
-    for (int i = 0; i < kRagParts; ++i) m_PartFade[i] = PartFade(&cfg, i);
-    PhysicsWorld::SetRagdollDrive(m_Id, m_Stiffness, m_Damping);
+    m_Powered = cfg.PoweredRagdoll;
+    for (int i = 0; i < kRagParts; ++i)
+        m_PartFade[i] = m_Powered ? (NpcRagdollMotor::GroupOf(i) == NpcRagdollMotor::Group::Legs ? cfg.StaggerTime : 0.0f) + (NpcRagdollMotor::GroupOf(i) == NpcRagdollMotor::Group::Legs ? cfg.LegsToneTime : NpcRagdollMotor::GroupOf(i) == NpcRagdollMotor::Group::Neck ? cfg.NeckToneTime : NpcRagdollMotor::GroupOf(i) == NpcRagdollMotor::Group::Arms ? cfg.ArmsToneTime : cfg.SpineToneTime)
+                                  : PartFade(&cfg, i);
+    if (!m_Powered) PhysicsWorld::SetRagdollDrive(m_Id, m_Stiffness, m_Damping);
     m_Drive = 1.0f;
     m_Time = 0.0f;
     m_Settled = false;
@@ -380,38 +737,19 @@ bool NpcRagdoll::Start(NpcBody& body, const glm::vec3& velocity, const glm::vec3
         link("clavicle_r", 1, 1);
         if (any) m_Pieces.push_back(std::move(pb));
     }
-    // The round's shove, on the part it struck (else the one nearest where it did).
-    int target = hitPart;
-    if (target < 0 || target >= kRagParts) {
-        target = 1;
-        float best = 1e9f;
-        for (int i = 0; i < kRagParts; ++i) {
-            const float d2 = glm::length(glm::vec3(partWorld[i][3]) - point);
-            if (d2 < best) { best = d2; target = i; }
-        }
-    }
-    // A light part (a forearm, a skull) shoved with the whole round's momentum would leave the body at 30 m/s and tear
-    // its joints: the part takes what it can (6 m/s), the rest goes into the chest, so the body still moves as hard.
-    const float total = glm::length(impulse);
-    const float cap = PartMass(&cfg, target) * cfg.PartImpulseSpeed;
-    const float onPart = std::min(total, cap);
-    if (total > 1e-6f) {
-        const glm::vec3 dir = impulse / total;
-        const glm::vec3 a = dir * onPart, rest = dir * std::min(total - onPart, PartMass(&cfg, 1) * cfg.ChestImpulseSpeed);
-        const float ja[3] = {a.x, a.y, a.z}, at[3] = {point.x, point.y, point.z};
-        PhysicsWorld::RagdollImpulse(m_Id, target, ja, at);
-        if (glm::dot(rest, rest) > 1e-8f && target != 1) {
-            const float jr[3] = {rest.x, rest.y, rest.z}, centre[3] = {partWorld[1][3][0], partWorld[1][3][1], partWorld[1][3][2]};
-            PhysicsWorld::RagdollImpulse(m_Id, 1, jr, centre);
-        }
-    }
+    Launch(m_Id, parts, partWorld, root, velocity, impulse, point, hitPart, cfg, m_Powered ? &m_Motor : nullptr);
+    m_Drive = m_Powered ? m_Motor.Strength() : m_Drive;
     return true;
 }
 
 void NpcRagdoll::Update(float dt) {
     if (m_Id < 0) return;
+    if (m_Powered) {
+        m_Motor.Update(dt);
+        m_Drive = m_Motor.Strength();
+    }
     // The drives fade out, each region on its own clock: stiff at the moment of death, limp a quarter second on (by default).
-    if (m_Drive > 0.0f && dt > 0.0f) {
+    if (!m_Powered && m_Drive > 0.0f && dt > 0.0f) {
         m_Time += dt;
         m_Drive = 0.0f;
         for (int i = 1; i < kRagParts; ++i) {
@@ -423,7 +761,7 @@ void NpcRagdoll::Update(float dt) {
     }
     // A body at rest stays as it lies: one last write once it sleeps, then nothing per frame.
     const bool asleep = Asleep();
-    if (asleep && m_Settled && m_Drive <= 0.0f) return;
+    if (asleep && m_Settled && (m_Powered || m_Drive <= 0.0f)) return;
     m_Settled = asleep;
     glm::mat4 partWorld[kRagParts];
     for (int i = 0; i < kRagParts; ++i) {
@@ -466,6 +804,18 @@ void NpcRagdoll::Shove(int part, const glm::vec3& impulse, const glm::vec3& poin
     const float j[3] = {impulse.x, impulse.y, impulse.z}, at[3] = {point.x, point.y, point.z};
     PhysicsWorld::RagdollImpulse(m_Id, std::clamp(part, 0, kRagParts - 1), j, at);
     m_Settled = false; // awake again: the pose follows the parts from here
+    if (m_Powered) m_Motor.Wake();
+}
+
+float NpcRagdoll::HitCorpse(int part, const glm::vec3& dir, float damage, const glm::vec3& point, const RagdollSettingsComponent& cfg) {
+    if (m_Id < 0) return 0.0f;
+    part = std::clamp(part, 0, kRagParts - 1);
+    const float dl = glm::length(dir);
+    const glm::vec3 d = dl > 1e-6f ? dir / dl : glm::vec3(0.0f, 0.0f, 1.0f);
+    const float speed = std::min(cfg.CorpseShotBase + cfg.CorpseShotPerDamage * std::max(damage, 0.0f), std::max(cfg.CorpseShotMaxSpeed, 0.0f));
+    Shove(part, d * (PartMass(&cfg, part) * speed), point); // a point impulse on the struck part: it, and what hangs off it, move first
+    if (m_Powered) m_Motor.Poke(cfg.CorpseWakeTime);        // loose a moment (no settling), then it settles and sleeps again
+    return speed;
 }
 
 glm::vec3 NpcRagdoll::PartPosition(int part) const {

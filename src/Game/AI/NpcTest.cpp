@@ -572,6 +572,23 @@ void NpcTest::Deaths(World& world, NpcDirector& npcs, float now) {
     };
     auto step = [&](int to) { m_DStep = to; m_DAt = now; };
 
+    // The Scene view watches the soldier being shot (for NPC_TEST_RECORD): placed off his side when he
+    // becomes the target, then it only turns to keep his pelvis in frame as he falls.
+    if (Npc* t = m_DNpc[0].empty() ? nullptr : find(m_DNpc[0])) {
+        glm::vec3 pelvis;
+        if (t->Body.BoneWorld(world, "pelvis", pelvis)) {
+            if (m_DCamFor != t->Name) {
+                m_DCamFor = t->Name;
+                const float yaw = t->Body.Yaw();
+                const glm::vec3 side(std::cos(yaw), 0.0f, -std::sin(yaw)), fwd(std::sin(yaw), 0.0f, std::cos(yaw));
+                m_CamPos = pelvis + side * 3.2f + fwd * 1.6f + glm::vec3(0.0f, 0.6f, 0.0f);
+            }
+            const glm::vec3 d = glm::normalize(pelvis - glm::vec3(0.0f, 0.2f, 0.0f) - m_CamPos);
+            m_CamYaw = glm::degrees(std::atan2(d.z, d.x));
+            m_CamPitch = glm::degrees(std::asin(std::clamp(d.y, -1.0f, 1.0f)));
+            m_HaveCam = true;
+        }
+    }
     switch (m_DStep) {
     case 0: { // wait for a squad with hitboxes
         int ready = 0;
@@ -676,6 +693,19 @@ void NpcTest::Deaths(World& world, NpcDirector& npcs, float now) {
         if (m_DNpc[1].empty()) {
             m_DNpc[1] = corpse->Name;
             m_DCorpseAsleep = asleep;
+            std::printf("[NpcTest] corpse %s %.1f s after death\n", asleep ? "asleep" : "still moving", now - corpse->DiedAt);
+            Check(asleep || !npcs.RagdollSettings().PoweredRagdoll, "a powered corpse has come to rest and sleeps within 7 s");
+            {
+                // At rest it lies, not kneels: no knee folded past 60 degrees (thigh centre -> calf centre -> foot centre).
+                float worst = 0.0f;
+                for (int side = 0; side < 2; ++side) {
+                    const glm::vec3 a = corpse->Ragdoll->PartPosition(7 + 2 * side), b = corpse->Ragdoll->PartPosition(8 + 2 * side), f = corpse->Ragdoll->PartPosition(14 + side);
+                    const glm::vec3 u = glm::normalize(b - a), v = glm::normalize(f - b);
+                    worst = std::max(worst, glm::degrees(std::acos(std::clamp(glm::dot(u, v), -1.0f, 1.0f))));
+                }
+                std::printf("[NpcTest] corpse at rest: worst knee bend %.0f deg\n", worst);
+                Check(worst < 60.0f || !npcs.RagdollSettings().PoweredRagdoll, "a powered corpse at rest lies, its knees not folded past 60 degrees (" + std::to_string(worst) + ")");
+            }
             for (int k = 0; k < NpcRagdoll::kParts; ++k) m_DCorpseBefore[k] = corpse->Ragdoll->PartPosition(k);
             for (int k = 0; k < 4; ++k) corpse->Body.BoneWorld(kCorpseBones[k], m_DBoneBefore[k]);
             // From the side at the chest part's middle.

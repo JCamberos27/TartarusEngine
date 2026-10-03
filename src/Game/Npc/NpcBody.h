@@ -158,6 +158,13 @@ public:
     std::string StateName(const World& world) const;
     // The pose is the ragdoll's from now on: Tick / LateUpdate stop touching the pose.
     void SetPoseOwnedElsewhere(bool owned) { m_PoseExternal = owned; }
+    // The weapon leaves the hands (NpcDroppedWeapon): the hold's solve stops for good - the arms are the ragdoll's.
+    void ReleaseWeaponHold();
+    bool WeaponReleased() const { return m_WeaponReleased; }
+    // The gun's world velocity (m/s), from the position HoldWeapon was given each frame (smoothed over a few frames): a
+    // dropped gun leaves the hand at it. TrackGun is HoldWeapon's per-frame step, exposed for tests.
+    void TrackGun(const glm::vec3& position, float dt);
+    glm::vec3 GunVelocity() const { return m_GunVelocity; }
 
 private:
     glm::mat4 RootWorld() const;
@@ -168,6 +175,9 @@ private:
     std::vector<std::shared_ptr<Model>> m_Models;       // per piece (index-matched)
     std::shared_ptr<Model> m_DriverModel;
     bool m_PoseExternal = false;
+    bool m_WeaponReleased = false;                           // the gun has been let go (ReleaseWeaponHold)
+    glm::vec3 m_GunPrev{0.0f}, m_GunVelocity{0.0f};          // the gun's last position (world) and its smoothed velocity
+    bool m_HaveGunPrev = false;
 
     glm::vec3 m_Feet{0.0f};
     float m_Yaw = 0.0f;
