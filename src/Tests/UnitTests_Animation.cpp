@@ -440,6 +440,114 @@ static void TestArmShapeLinksMatchNameWalk() {
     }
 }
 
+// ---- foot slide correction (stride warp + foot pin) ----
+namespace {
+// A treadmill gait: each foot plants for 0.4 s sliding back at `clipSpeed` in the capsule's frame, then swings forward; the capsule
+// travels at `groundSpeed`. Returns the mean planted-foot drift (m) over the plants after a 2 s warm-up; `last` = the final output.
+float FootSlideSim(const IK::FootSlideSettings& set, float clipSpeed, float groundSpeed, IK::FootSlideStats* stats = nullptr, IK::FootSlideOutput* last = nullptr, float ankle = 0.0f) {
+    IK::FootSlide fs;
+    const float dt = 1.0f / 120.0f;
+    const float stance = 0.4f, half = 0.8f * 0.5f;
+    float z = 0.0f;
+    for (int f = 0; f < 120 * 8; ++f) {
+        const float t = f * dt;
+        if (t >= 2.0f && f == (int)(2.0f / dt)) fs.Stats.Clear();
+        z += groundSpeed * dt;
+        IK::FootSlideInput in;
+        in.Feet = glm::vec3(0.0f, 0.0f, z);
+        in.Velocity = glm::vec3(0.0f, 0.0f, groundSpeed);
+        in.Dt = dt;
+        in.Pelvis = in.Feet + glm::vec3(0.0f, 1.0f, 0.0f);
+        for (int s = 0; s < 2; ++s) {
+            const float ph = std::fmod(t + s * half, 2.0f * half);
+            float rel, h;
+            if (ph < stance) { rel = 0.5f * clipSpeed * stance - clipSpeed * ph; h = 0.0f; }
+            else { const float u = (ph - stance) / (2.0f * half - stance); rel = -0.5f * clipSpeed * stance + clipSpeed * stance * u; h = 0.15f * std::sqrt(std::sin(3.14159265f * u)); } // lifts off quickly, like a heel-off
+            h += ankle; // the ankle bone rides a few cm over the sole
+            in.Foot[s] = in.Feet + glm::vec3(0.0f, h, rel);
+            in.Height[s] = h;
+        }
+        const IK::FootSlideOutput o = fs.Step(set, in, !set.Active());
+        if (last) *last = o;
+    }
+    if (stats) *stats = fs.Stats;
+    return fs.Stats.Plants > 0 ? fs.Stats.SumSlide / fs.Stats.Plants : -1.0f;
+}
+} // namespace
+
+void TestStrideScaleMath() {
+    CHECK(std::abs(IK::StrideScale(3.0f, 2.0f, 0.75f, 1.35f) - 1.35f) < 1e-5f);  // clamped high
+    CHECK(std::abs(IK::StrideScale(1.0f, 2.0f, 0.75f, 1.35f) - 0.75f) < 1e-5f);  // clamped low
+    CHECK(std::abs(IK::StrideScale(2.2f, 2.0f, 0.75f, 1.35f) - 1.1f) < 1e-5f);   // in range: the ratio
+    CHECK(IK::StrideScale(0.1f, 2.0f, 0.75f, 1.35f) == 1.0f && IK::StrideScale(2.0f, 0.0f, 0.75f, 1.35f) == 1.0f); // standing / no estimate
+    CHECK(IK::StrideWarpPelvisDrop(0.9f, 0.4f, 1.0f, 1.0f) == 0.0f && IK::StrideWarpPelvisDrop(0.9f, 0.4f, 0.8f, 1.0f) == 0.0f);
+    const float drop = IK::StrideWarpPelvisDrop(0.9f, 0.4f, 1.3f, 1.0f);
+    CHECK(drop > 0.005f && drop <= 0.15f);
+    CHECK(IK::StrideWarpPelvisDrop(0.9f, 0.4f, 1.3f, 0.0f) == 0.0f);
+}
+
+void TestFootSlideDefaultsOff() {
+    IK::FootSlideSettings off;
+    CHECK(!off.Active());
+    FirstPersonBodyComponent body;
+    CHECK(!body.FootPinEnabled && !body.StrideWarpEnabled && !IK::FootSlideFrom(body).Active());
+    IK::FootSlideOutput o;
+    FootSlideSim(off, 2.0f, 3.0f, nullptr, &o);
+    CHECK(o.Shift[0] == glm::vec3(0.0f) && o.Shift[1] == glm::vec3(0.0f) && o.PelvisDrop == 0.0f && o.Scale == 1.0f); // the pose is the clips'
+}
+
+void TestFootSlidePinHoldsPlantedFeet() {
+    IK::FootSlideStats base, pin, warp, both;
+    IK::FootSlideSettings set;
+    const float slideOff = FootSlideSim(set, 2.0f, 2.4f, &base);
+    CHECK(base.Plants >= 6 && slideOff > 0.12f);          // plants are detected; the clips' feet slide ~16 cm a plant
+    set.PinEnabled = true;
+    const float slidePin = FootSlideSim(set, 2.0f, 2.4f, &pin);
+    CHECK(slidePin < 0.03f && pin.Plants == base.Plants); // pinned within the leash: held
+    IK::FootSlideSettings w;
+    w.StrideEnabled = true;
+    const float slideWarp = FootSlideSim(w, 2.0f, 2.4f, &warp);
+    CHECK(slideWarp < slideOff * 0.4f);                   // the stride matched to the ground speed: most of it gone
+    w.PinEnabled = true;
+    const float slideBoth = FootSlideSim(w, 2.0f, 2.4f, &both);
+    std::printf("[FootSlide] unit sim (clip 2.0, ground 2.4 m/s) drift per plant: clips %.1f cm, pin %.1f cm (%d/%d plants), warp %.1f cm, both %.1f cm\n", slideOff * 100, slidePin * 100, pin.Plants, base.Plants, slideWarp * 100, slideBoth * 100);
+    CHECK(slideBoth < 0.02f);
+    // A mismatch beyond the leash: the pin is dragged along, never further behind than Pin Max Drift.
+    IK::FootSlideSettings leash;
+    leash.PinEnabled = true;
+    leash.PinMaxDrift = 0.1f;
+    const float slideLeash = FootSlideSim(leash, 2.0f, 4.0f);
+    CHECK(slideLeash > 0.05f && slideLeash < FootSlideSim(IK::FootSlideSettings{}, 2.0f, 4.0f));
+    // The ankle bone rides 7 cm over the ground even planted: plants are still found, judged against each foot's own lowest height.
+    IK::FootSlideStats ankleStats;
+    IK::FootSlideSettings ap;
+    ap.PinEnabled = true;
+    CHECK(FootSlideSim(ap, 2.0f, 2.4f, &ankleStats, nullptr, 0.07f) < 0.03f && ankleStats.Plants == base.Plants);
+    // Weight 0 = the clips' feet.
+    IK::FootSlideSettings z;
+    z.PinEnabled = true;
+    z.PinWeight = 0.0f;
+    CHECK(std::abs(FootSlideSim(z, 2.0f, 2.4f) - slideOff) < 0.005f);
+}
+
+void TestStrideWarpMatchesGroundSpeed() {
+    IK::FootSlideSettings w;
+    w.StrideEnabled = true;
+    IK::FootSlideOutput o;
+    FootSlideSim(w, 2.0f, 2.6f, nullptr, &o);
+    CHECK(o.Scale > 1.25f && o.Scale <= 1.35f + 1e-4f);   // ~1.3 for 2.6 over 2.0
+    CHECK(o.PelvisDrop > 0.0f);
+    FootSlideSim(w, 2.0f, 5.0f, nullptr, &o);
+    CHECK(o.Scale <= 1.35f + 1e-4f);                      // clamped
+    w.StrideMax = 1.1f;
+    FootSlideSim(w, 2.0f, 5.0f, nullptr, &o);
+    CHECK(o.Scale <= 1.1f + 1e-4f);                       // the limit is tunable
+    w.StrideMax = 1.35f;
+    w.StrideWeight = 0.0f;
+    FootSlideSim(w, 2.0f, 2.6f, nullptr, &o);
+    CHECK(std::abs(o.Scale - 1.0f) < 1e-4f);
+}
+
 void RegisterAnimationTests(UnitTestSupport::TestList& tests) {
     tests.push_back({"FirstPersonBody NPC tunables save/load round-trip", TestFirstPersonBodyNpcTunablesRoundTrip});
     tests.push_back({"NPC turn threshold affects turning", TestNpcTurnThresholdAffectsTurning});
@@ -456,4 +564,8 @@ void RegisterAnimationTests(UnitTestSupport::TestList& tests) {
     tests.push_back({"Free-aim dead zone", TestFreeAimDeadZoneMath});
     tests.push_back({"ADS blend pieces: additive, crouch, camera share", TestAdsBlendPieces});
     tests.push_back({"Arm-shape links match the per-frame name walk", TestArmShapeLinksMatchNameWalk});
+    tests.push_back({"Stride scale and pelvis drop math", TestStrideScaleMath});
+    tests.push_back({"Foot slide correction defaults off (identical pose)", TestFootSlideDefaultsOff});
+    tests.push_back({"Foot pin holds planted feet (slide cm per plant)", TestFootSlidePinHoldsPlantedFeet});
+    tests.push_back({"Stride warp matches the ground speed within its limits", TestStrideWarpMatchesGroundSpeed});
 }

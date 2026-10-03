@@ -243,6 +243,7 @@ void NpcBody::FootPass(float dt) {
                         m_DriverLeg[1][0] >= 0 && m_DriverLeg[1][1] >= 0 && m_DriverLeg[1][2] >= 0;
     if (m_FootWeight < 1e-3f || !rigged) {
         m_HaveFootGround = false;
+        m_Slide.Reset();
         return;
     }
     Model& m = *m_DriverModel;
@@ -253,8 +254,31 @@ void NpcBody::FootPass(float dt) {
     const glm::mat4 rootW = RootWorld();
     const glm::mat3 toModel3 = glm::transpose(glm::mat3(rootW)); // a yaw: its inverse is its transpose
     float animHeight[2];
+    // Foot slide correction (stride warp, then pin) on the animated feet; off = the clips' own feet.
+    IK::FootSlideSettings slideSet = m_Set.FootSlide;
+    const int probe = IK::FootSlideProbeMode();
+    if (probe == 1) { slideSet = IK::FootSlideSettings{}; slideSet.PinEnabled = slideSet.StrideEnabled = true; }
+    const bool slideOn = slideSet.Active();
+    IK::FootSlideOutput slide;
+    if (slideOn || probe >= 0) {
+        const float unit = glm::length(glm::vec3(rootW[0]));
+        IK::FootSlideInput sin;
+        sin.Feet = m_Feet;
+        sin.Velocity = glm::vec3(m_In.Velocity.x, 0.0f, m_In.Velocity.z);
+        sin.PlantHeight = 0.05f;
+        sin.Dt = dt;
+        for (int s = 0; s < 2; ++s) {
+            sin.Foot[s] = glm::vec3(rootW * glm::vec4(IK::Position(m_Globals[(size_t)m_DriverLeg[s][2]]), 1.0f));
+            sin.Height[s] = sin.Foot[s].y - m_Feet.y;
+        }
+        sin.Pelvis = glm::vec3(rootW * glm::vec4(IK::Position(m_Globals[(size_t)m_DriverPelvis]), 1.0f));
+        sin.LegLength = unit * (glm::length(IK::Position(m_Globals[(size_t)m_DriverLeg[0][0]]) - IK::Position(m_Globals[(size_t)m_DriverLeg[0][1]])) +
+                                glm::length(IK::Position(m_Globals[(size_t)m_DriverLeg[0][1]]) - IK::Position(m_Globals[(size_t)m_DriverLeg[0][2]])));
+        slide = m_Slide.Step(slideSet, sin, !slideOn);
+        if (probe >= 0) IK::FootSlideProbeLog("npc", m_Slide.Stats, glm::length(glm::vec2(sin.Velocity.x, sin.Velocity.z)), m_Slide.ClipSpeed(), m_Slide.Scale());
+    }
     for (int s = 0; s < 2; ++s) {
-        const glm::vec3 foot = glm::vec3(rootW * glm::vec4(IK::Position(m_Globals[(size_t)m_DriverLeg[s][2]]), 1.0f));
+        const glm::vec3 foot = glm::vec3(rootW * glm::vec4(IK::Position(m_Globals[(size_t)m_DriverLeg[s][2]]), 1.0f)) + slide.Shift[s];
         animHeight[s] = foot.y - m_Feet.y;
         float offset = 0.0f;
         glm::vec3 normal(0.0f, 1.0f, 0.0f);
@@ -274,13 +298,13 @@ void NpcBody::FootPass(float dt) {
     m_HaveFootGround = true;
     const bool flat = std::abs(m_FootOffset[0]) < 0.004f && std::abs(m_FootOffset[1]) < 0.004f && m_FootNormal[0].y > 0.999f &&
                       m_FootNormal[1].y > 0.999f;
-    if (flat) return; // the clips' own feet are right
+    if (flat && !slideOn) return; // the clips' own feet are right
     const float w = m_FootWeight;
-    const float pelvisDelta = FirstPersonBodyFootPelvis(m_FootOffset[0], m_FootOffset[1], m_Set.FootIKMaxDrop, m_Set.FootIKPelvisRaise) * w;
+    const float pelvisDelta = (FirstPersonBodyFootPelvis(m_FootOffset[0], m_FootOffset[1], m_Set.FootIKMaxDrop, m_Set.FootIKPelvisRaise) - slide.PelvisDrop) * w;
     IK::OffsetBone(pose, m_DriverParents, m_Globals, m_DriverPelvis, glm::vec3(0.0f, pelvisDelta, 0.0f), glm::quat(1.0f, 0.0f, 0.0f, 0.0f), glm::vec3(0.0f));
     for (int s = 0; s < 2; ++s) {
         const int thigh = m_DriverLeg[s][0], calf = m_DriverLeg[s][1], foot = m_DriverLeg[s][2];
-        const glm::vec3 target = IK::Position(m_Globals[(size_t)foot]) + glm::vec3(0.0f, m_FootOffset[s] * w - pelvisDelta, 0.0f);
+        const glm::vec3 target = IK::Position(m_Globals[(size_t)foot]) + glm::vec3(0.0f, m_FootOffset[s] * w - pelvisDelta, 0.0f) + toModel3 * slide.Shift[s] * w;
         // A planted foot lies on its slope; one swinging through the air keeps the clip's angle.
         const float planted = 1.0f - std::clamp((animHeight[s] - 0.06f) / 0.09f, 0.0f, 1.0f);
         const glm::vec3 normal = toModel3 * m_FootNormal[s];
