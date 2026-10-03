@@ -80,6 +80,7 @@ struct NpcHoldSettings {
     float FootOffsetEase = 0.05f;    // seconds: vertical foot adjustment easing
     float FootNormalEase = 0.08f;    // seconds: ground normal easing
     float FootIKFade = 0.15f;        // seconds: foot IK enable/disable easing
+    IK::FootSlideSettings FootSlide; // foot pinning + stride warping (off by default; the player body's settings)
 };
 
 struct NpcBodyInput {
@@ -201,6 +202,7 @@ private:
     void SyncLower(); // the driver's pelvis and legs onto every other piece
     std::vector<std::vector<std::pair<int, int>>> m_LowerMap; // per piece: (piece node, driver node), pelvis and legs
     int m_DriverPelvis = -1, m_DriverLeg[2][3] = {{-1, -1, -1}, {-1, -1, -1}}; // thigh, calf, foot
+    IK::FootSlide m_Slide;
     float m_FootWeight = 0.0f, m_FootOffset[2] = {0.0f, 0.0f};
     glm::vec3 m_FootNormal[2] = {glm::vec3(0.0f, 1.0f, 0.0f), glm::vec3(0.0f, 1.0f, 0.0f)};
     bool m_HaveFootGround = false;

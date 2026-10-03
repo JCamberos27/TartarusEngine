@@ -722,6 +722,18 @@ struct FirstPersonBodyComponent {
     float NpcFootOffsetEase = 0.05f; // NPC Foot Offset Ease (seconds; vertical foot adjustment easing)
     float NpcFootNormalEase = 0.08f; // NPC Foot Normal Ease (seconds; ground normal easing)
     float NpcFootIKFade = 0.15f; // NPC Foot IK Fade (seconds; foot IK enable/disable easing)
+    // ---- lane A ----
+    // Foot slide correction (docs/CAS_PARITY.md #8); both layers off by default, NPCs use the same numbers
+    bool FootPinEnabled = false; // Foot Pin Enabled
+    float FootPinWeight = 1.0f; // Foot Pin Weight
+    float FootPinRelease = 0.06f; // Foot Pin Release (seconds)
+    float FootPinMaxDrift = 0.25f; // Foot Pin Max Drift (metres)
+    bool StrideWarpEnabled = false; // Stride Warp Enabled
+    float StrideWarpWeight = 1.0f; // Stride Warp Weight
+    float StrideScaleMin = 0.75f; // Stride Scale Min
+    float StrideScaleMax = 1.35f; // Stride Scale Max
+    float StridePelvisAdjust = 1.0f; // Stride Pelvis Adjust
+    // ---- end lane A ----
 };
 
 // A character dressed from a wardrobe (docs/CHARACTER_OUTFITS.md): put it on the body's root. Its children
