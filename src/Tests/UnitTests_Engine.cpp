@@ -9,6 +9,8 @@
 #include "SceneSerializer.h"
 #include "World.h"
 #include "../Renderer/Animation.h"
+#include "../Renderer/SceneRenderer.h"
+#include "../Renderer/MaterialAsset.h"
 #include <random>
 #include <glm/gtc/quaternion.hpp>
 #include <glm/gtc/matrix_transform.hpp>
@@ -119,10 +121,23 @@ static void Test_Model_AffinePaletteMatchesGeneric() {
     CHECK(worst < 1e-5f);
 }
 
+// Load-time shader-variant warm-up: materials without a ShaderAsset draw through the model shader
+// (already built), so there is nothing to compile - and no GL context is touched.
+void Test_SceneRenderer_WarmShaderVariantsSkipsShaderless() {
+    World world;
+    CHECK(SceneRenderer::WarmShaderVariants(world) == 0);
+    const entt::entity e = world.Registry.create();
+    RenderableComponent& rc = world.Registry.emplace<RenderableComponent>(e);
+    rc.Materials.push_back(nullptr);
+    rc.Materials.push_back(std::make_shared<MaterialAsset>());
+    CHECK(SceneRenderer::WarmShaderVariants(world) == 0);
+}
+
 void RegisterEngineTests(UnitTestSupport::TestList& tests) {
     tests.push_back({"FirstPersonController::NewFieldsRoundTrip", Test_FirstPersonController_NewFieldsRoundTrip});
     tests.push_back({"FxHudSettings::RoundTrip", Test_FxHudSettings_RoundTrip});
     tests.push_back({"GravityGun::AssistReach", Test_GravityGun_AssistReach});
     tests.push_back({"Model::AffinePaletteMatchesGeneric", Test_Model_AffinePaletteMatchesGeneric});
+    tests.push_back({"SceneRenderer::WarmShaderVariantsSkipsShaderless", Test_SceneRenderer_WarmShaderVariantsSkipsShaderless});
     tests.push_back({"FxHud::SettingsDrivePureHelpers", Test_FxHud_SettingsDrivePureHelpers});
 }
