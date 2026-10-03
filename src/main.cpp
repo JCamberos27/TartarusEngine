@@ -1646,7 +1646,15 @@ int main(int argc, char** argv) {
         // path could introduce, not a hand-rolled approximation of it.
         // --perf-bench measures each scene twice: kPerfPhaseFrames in edit mode, then as many in Play.
         constexpr int kPerfPhaseFrames = 600;
-        constexpr int kPerfBenchWarmup = 100; // frames skipped at the start of each phase
+        // Frames skipped at the start of each phase. TARTARUS_PERF_WARMUP=0 keeps them, to measure first-use hitches.
+        const int kPerfBenchWarmup = [] {
+            char* e = nullptr;
+            size_t n = 0;
+            int frames = 100;
+            if (_dupenv_s(&e, &n, "TARTARUS_PERF_WARMUP") == 0 && e && *e) frames = std::max(0, std::atoi(e));
+            std::free(e);
+            return frames;
+        }();
         // --weapon-test ends its scene itself when the script is done; this is only its safety cap (6 min at 60 Hz).
         // --outfit-shots: kOutfitShotSettle frames on each pose before it's captured (temporal effects converge).
         constexpr int kOutfitShotStart = 60, kOutfitShotSettle = 20, kOutfitShotMax = 24;
@@ -2901,6 +2909,7 @@ int main(int argc, char** argv) {
             // models and materials are now all in memory lands in one frame.
             {
             PROFILE_SCOPE("Asset Pump + Outfit Hiding");
+            PrefetchAnimatorClips(world, assets); // clip files for Play, loaded behind the editor
             assets.PumpAsync(3.0);
             OutfitSystem::UpdatePending(world, assets);
             OutfitSystem::UpdateHiding(world); // outfit skin under clothing (only when an outfit's pieces changed)

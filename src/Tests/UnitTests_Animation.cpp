@@ -473,6 +473,27 @@ float FootSlideSim(const IK::FootSlideSettings& set, float clipSpeed, float grou
     if (stats) *stats = fs.Stats;
     return fs.Stats.Plants > 0 ? fs.Stats.SumSlide / fs.Stats.Plants : -1.0f;
 }
+// ---- lane A round 6 ----
+// The clip files a controller reaches are what the editor prefetches: each file once, no "#clip" suffix, no
+// own clips, blend-tree children included (a missing one is the 1 s first-Play-frame hitch).
+void TestControllerClipFilesForPrefetch() {
+    AnimatorController c;
+    AnimatorController::State a, b, d;
+    a.Name = "A"; a.Motions.resize(1); a.Motions[0].Clip = "anims/Walk.FBX#Walk";
+    b.Name = "B"; b.Motions.resize(1); b.Motions[0].Clip = "Idle"; // a clip the model owns
+    d.Name = "D";
+    AnimatorController::BlendChild k0, k1, k2;
+    k0.Clip = "anims/Walk.FBX#Run";
+    k1.Clip = "anims/Strafe.glb";
+    k2.Clip = "";
+    d.Motions.resize(1); d.Motions[0].Children = {k0, k1, k2};
+    c.Layers[0].States = {a, b, d};
+    const auto files = AnimatorControllerClipFiles(c, 0);
+    CHECK(files.size() == 2);
+    CHECK(files.size() == 2 && files[0] == "anims/Walk.FBX" && files[1] == "anims/Strafe.glb");
+}
+// ---- end lane A round 6 ----
+
 } // namespace
 
 void TestStrideScaleMath() {
@@ -564,6 +585,7 @@ void RegisterAnimationTests(UnitTestSupport::TestList& tests) {
     tests.push_back({"Free-aim dead zone", TestFreeAimDeadZoneMath});
     tests.push_back({"ADS blend pieces: additive, crouch, camera share", TestAdsBlendPieces});
     tests.push_back({"Arm-shape links match the per-frame name walk", TestArmShapeLinksMatchNameWalk});
+    tests.push_back({"Controller clip files for the editor prefetch", TestControllerClipFilesForPrefetch});
     tests.push_back({"Stride scale and pelvis drop math", TestStrideScaleMath});
     tests.push_back({"Foot slide correction defaults off (identical pose)", TestFootSlideDefaultsOff});
     tests.push_back({"Foot pin holds planted feet (slide cm per plant)", TestFootSlidePinHoldsPlantedFeet});
