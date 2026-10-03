@@ -1457,6 +1457,25 @@ struct WeaponAudioComponent {
     float LimiterWindow = 0.15f;       // seconds a transient counts toward the sum
     float LimiterMinGain = 0.1f;       // the most a voice is ducked (linear)
     std::string DataFile;              // json of SoundSet overrides by element (empty = none)
+    // Environment tails: the shot's tail follows the space the shooter is in (a Reverb Zone volume first, else a few raycasts
+    // around the shooter; see Game/Audio/EnvironmentProbe.h). A class with no recorded files plays the generic fire_tail.
+    bool EnvEnabled = true;            // off: every shot plays the generic tail
+    int EnvRayCount = 12;
+    float EnvMaxDistance = 40.0f;
+    float EnvIndoorCover = 0.7f;
+    float EnvUrbanWall = 0.35f;
+    float EnvUrbanDistance = 25.0f;
+    float EnvLargeRoomDistance = 8.0f;
+    float EnvBlendFraction = 0.15f;
+    float EnvBlendDistance = 0.3f;
+    float EnvRefreshInterval = 0.25f;
+    float EnvRefreshMoveDistance = 1.0f;
+    float EnvMatchRadius = 2.0f;
+    float EnvTailGainOutdoorOpen = 1.0f;
+    float EnvTailGainOutdoorUrban = 1.0f;
+    float EnvTailGainIndoorSmall = 1.0f;
+    float EnvTailGainIndoorLarge = 1.0f;
+    bool EnvDebugDraw = false;
 };
 // Footsteps, jumps, landings and the sprint cloth loop (Game/Audio/FoleyAudio). One per scene (the first counts).
 struct FoleyAudioComponent {
@@ -1485,5 +1504,39 @@ struct FoleyAudioComponent {
     std::string DefaultSurface = "concrete";
     // surface=word,word;surface=word  - the first surface with a word in the ground's physics material, tag or name.
     std::string SurfaceTable = "wood=wood,plank,floor,parquet;metal=metal,steel,iron,grate;glass=glass;carpet=carpet,rug;water=water,puddle;concrete=concrete,asphalt,tile,stone,gravel,dirt,soil,sand,grass";
+};
+// A designer-placed space for the gunshot tails (and the runtime reverb bus to come): inside the volume the shots' tail is the
+// Tail Class's, crossfaded over Fade Distance at the edge; a shot in no zone falls back to the raycast probe. Overlapping
+// zones: the higher Priority sits on top (fades in over the lower ones). The entity's position and rotation place it (Scale is
+// ignored: extents and radius are metres).
+struct ReverbPreset {
+    float RoomSize = 0.5f;             // 0 = a closet .. 1 = a canyon
+    float DecayTime = 1.0f;            // seconds (RT60)
+    float HfDamping = 0.4f;            // 0 = bright .. 1 = dark
+    float PreDelayMs = 10.0f;
+    float WetLevel = 0.3f;             // 0..1
+    float EarlyLateMix = 0.5f;         // 0 = all late tail .. 1 = all early reflections
+};
+// The preset of a tail class (0 outdoor open, 1 outdoor urban, 2 indoor small, 3 indoor large).
+inline ReverbPreset ReverbPresetFor(int tailClass) {
+    switch (tailClass) {
+    case 0: return {1.0f, 2.8f, 0.55f, 20.0f, 0.25f, 0.2f};
+    case 1: return {0.7f, 1.4f, 0.4f, 12.0f, 0.3f, 0.5f};
+    case 3: return {0.8f, 1.8f, 0.6f, 25.0f, 0.35f, 0.35f};
+    default: return {0.15f, 0.5f, 0.25f, 2.0f, 0.3f, 0.7f};
+    }
+}
+struct ReverbZoneComponent {
+    bool Enabled = true;
+    int Shape = 0;                     // 0 box, 1 sphere
+    glm::vec3 Extents{6.0f, 3.0f, 6.0f}; // box half extents, metres
+    float Radius = 6.0f;               // sphere radius, metres
+    int Priority = 0;                  // higher sits on top of lower
+    float FadeDistance = 2.0f;         // metres inside the edge over which the zone fades in (0 = hard edge)
+    int TailClass = 2;                 // 0 outdoor open, 1 outdoor urban, 2 indoor small, 3 indoor large
+    float TailGain = 1.0f;             // on the shot's tail layer while inside
+    int ReverbMode = 0;                // 0 = the Tail Class's preset, 1 = the values below
+    ReverbPreset Reverb = ReverbPresetFor(2);
+    ReverbPreset Resolved() const { return ReverbMode == 1 ? Reverb : ReverbPresetFor(TailClass); }
 };
 // ---- end lane S ----

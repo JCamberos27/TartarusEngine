@@ -1,9 +1,13 @@
 #include "UnitTestSupport.h"
 
 #include "../Game/Audio/FoleyAudio.h"
+#include "../Game/Audio/EnvironmentProbe.h"
+#include "../Game/Audio/ReverbZones.h"
 #include "../Game/Audio/WeaponAudio.h"
 #include "../Game/ComponentRegistry.h"
 #include "World.h"
+
+#include <glm/gtc/matrix_transform.hpp>
 
 #include <algorithm>
 #include <cmath>
@@ -739,6 +743,397 @@ void TestAnchoredEventsLandOnTheContact() {
 
 } // namespace
 
+
+// --- environment tails: probe, classifier, zones ----------------------------------------------------------------------
+
+// A box room around the origin as the physics world would answer: the ray exits through the first face it crosses, which
+// is a wall (hit) only when that face is solid; an open face (no ceiling, a doorway) is a miss.
+struct BoxRoom {
+    glm::vec3 Min, Max;
+    bool Solid[6] = {true, true, true, true, true, true}; // -x +x -y +y -z +z
+    EnvironmentProbe::RayFn Fn(int* casts = nullptr) const {
+        const BoxRoom room = *this;
+        return [room, casts](const glm::vec3& o, const glm::vec3& d, float maxD, float& hit) {
+            if (casts) ++*casts;
+            float tBest = 1e30f;
+            int face = -1;
+            for (int a = 0; a < 3; ++a) {
+                if (std::fabs(d[a]) < 1e-6f) continue;
+                const bool pos = d[a] > 0.0f;
+                const float t = ((pos ? room.Max[a] : room.Min[a]) - o[a]) / d[a];
+                if (t > 0.0f && t < tBest) {
+                    tBest = t;
+                    face = a * 2 + (pos ? 1 : 0);
+                }
+            }
+            if (face < 0 || !room.Solid[face] || tBest > maxD) return false;
+            hit = tBest;
+            return true;
+        };
+    }
+};
+
+EnvironmentReading ProbeRoom(const BoxRoom& room, const EnvironmentSettings& s = EnvironmentSettings{}) {
+    EnvironmentProbe probe;
+    probe.SetRayFn(room.Fn());
+    return probe.Probe(glm::vec3(0.0f, 1.5f, 0.0f), s);
+}
+
+float WeightSum(const float w[kSpaceClassCount]) { return w[0] + w[1] + w[2] + w[3]; }
+
+void TestEnvironmentClassifier() {
+    const EnvironmentSettings s;
+    // The ray set: one up, a diagonal ring, a horizontal ring; count follows the setting.
+    for (int n : {6, 12, 24, 64}) {
+        const std::vector<EnvironmentRay> rays = EnvironmentProbe::Rays(n);
+        CHECK((int)rays.size() == n);
+        CHECK(rays[0].Type == EnvironmentRay::Kind::Up);
+        int h = 0;
+        for (const EnvironmentRay& r : rays) {
+            CHECK(std::fabs(glm::length(r.Dir) - 1.0f) < 1e-4f);
+            h += r.Type == EnvironmentRay::Kind::Horizontal ? 1 : 0;
+        }
+        CHECK(h >= 3);
+    }
+    CHECK(EnvironmentProbe::Rays(1).size() == 6 && EnvironmentProbe::Rays(500).size() == 64); // clamped
+
+    // A 4 x 3 x 5 m room: tight, covered -> indoor_small.
+    const EnvironmentReading small = ProbeRoom({{-2.0f, 0.0f, -2.5f}, {2.0f, 3.0f, 2.5f}});
+    CHECK(small.Valid && small.Dominant == SpaceClass::IndoorSmall && small.CeilingHit && small.Cover > 0.95f);
+    CHECK(small.Weights[(int)SpaceClass::IndoorSmall] > 0.9f);
+    // A 40 x 12 x 50 m hall: covered, far walls -> indoor_large.
+    const EnvironmentReading large = ProbeRoom({{-20.0f, 0.0f, -25.0f}, {20.0f, 12.0f, 25.0f}});
+    CHECK(large.Dominant == SpaceClass::IndoorLarge && large.MeanWallDistance > s.LargeRoomDistance);
+    CHECK(large.Weights[(int)SpaceClass::IndoorLarge] > 0.9f);
+    // A courtyard: walls 10 m around, open to the sky -> outdoor_urban.
+    BoxRoom court{{-10.0f, -50.0f, -10.0f}, {10.0f, 50.0f, 10.0f}};
+    court.Solid[3] = false; // no ceiling
+    const EnvironmentReading urban = ProbeRoom(court);
+    CHECK(urban.Dominant == SpaceClass::OutdoorUrban && !urban.CeilingHit && urban.Wall > 0.9f);
+    CHECK(urban.Weights[(int)SpaceClass::OutdoorUrban] > 0.9f);
+    // Open ground: nothing in reach -> outdoor_open.
+    BoxRoom field{{-500.0f, -50.0f, -500.0f}, {500.0f, 500.0f, 500.0f}};
+    const EnvironmentReading open = ProbeRoom(field);
+    CHECK(open.Dominant == SpaceClass::OutdoorOpen && open.Enclosure == 0.0f && open.Weights[(int)SpaceClass::OutdoorOpen] > 0.99f);
+    CHECK(std::fabs(open.MeanDistance - s.MaxDistance) < 1e-3f); // a miss counts as the max distance
+    // The same hall under a smaller max distance: its far walls are out of reach, so the room reads as open.
+    EnvironmentSettings shortSight = s;
+    shortSight.MaxDistance = 6.0f;
+    CHECK(ProbeRoom({{-20.0f, 0.0f, -25.0f}, {20.0f, 12.0f, 25.0f}}, shortSight).Dominant == SpaceClass::OutdoorOpen);
+    // A tunable threshold moves the decision: the courtyard stops being urban when its walls count as too far away.
+    EnvironmentSettings farWalls = s;
+    farWalls.UrbanDistance = 5.0f;
+    CHECK(ProbeRoom(court, farWalls).Dominant == SpaceClass::OutdoorOpen);
+    for (const EnvironmentReading& r : {small, large, urban, open}) CHECK(std::fabs(WeightSum(r.Weights) - 1.0f) < 1e-4f);
+}
+
+void TestEnvironmentCrossfadeWeights() {
+    EnvironmentSettings s;
+    // Every feature sweep: the weights sum to 1, stay in [0,1] and move in small steps (no hard switch), through each threshold.
+    auto sweep = [&](auto feature, float from, float to, int steps, float maxStep) {
+        float prev[kSpaceClassCount] = {0, 0, 0, 0};
+        float worst = 0.0f;
+        for (int i = 0; i <= steps; ++i) {
+            const float x = from + (to - from) * (float)i / (float)steps;
+            float w[kSpaceClassCount];
+            feature(x, w);
+            CHECK(std::fabs(WeightSum(w) - 1.0f) < 1e-4f);
+            for (int c = 0; c < kSpaceClassCount; ++c) {
+                CHECK(w[c] >= -1e-6f && w[c] <= 1.0f + 1e-6f);
+                if (i > 0) worst = std::max(worst, std::fabs(w[c] - prev[c]));
+                prev[c] = w[c];
+            }
+        }
+        CHECK(worst <= maxStep);
+    };
+    sweep([&](float x, float* w) { EnvironmentProbe::Weights(x, 0.0f, 3.0f, s, w); }, 0.0f, 1.0f, 1000, 0.01f);      // cover
+    sweep([&](float x, float* w) { EnvironmentProbe::Weights(0.0f, x, 3.0f, s, w); }, 0.0f, 1.0f, 1000, 0.01f);      // wall
+    sweep([&](float x, float* w) { EnvironmentProbe::Weights(1.0f, 0.0f, x, s, w); }, 0.0f, 30.0f, 3000, 0.01f);     // wall distance
+    // At each threshold the two classes it separates are even.
+    float w[kSpaceClassCount];
+    EnvironmentProbe::Weights(s.IndoorCover, 0.0f, 3.0f, s, w);
+    CHECK(std::fabs(w[(int)SpaceClass::IndoorSmall] - 0.5f) < 1e-4f && std::fabs(w[(int)SpaceClass::OutdoorOpen] - 0.5f) < 1e-4f);
+    EnvironmentProbe::Weights(0.0f, s.UrbanWall, 3.0f, s, w);
+    CHECK(std::fabs(w[(int)SpaceClass::OutdoorUrban] - 0.5f) < 1e-4f && std::fabs(w[(int)SpaceClass::OutdoorOpen] - 0.5f) < 1e-4f);
+    EnvironmentProbe::Weights(1.0f, 0.0f, s.LargeRoomDistance, s, w);
+    CHECK(std::fabs(w[(int)SpaceClass::IndoorSmall] - 0.5f) < 1e-4f && std::fabs(w[(int)SpaceClass::IndoorLarge] - 0.5f) < 1e-4f);
+    // Just either side of a threshold the dominant class flips but only by a hair of weight.
+    float a[kSpaceClassCount], b[kSpaceClassCount];
+    EnvironmentProbe::Weights(s.IndoorCover - 0.001f, 0.0f, 3.0f, s, a);
+    EnvironmentProbe::Weights(s.IndoorCover + 0.001f, 0.0f, 3.0f, s, b);
+    CHECK(std::fabs(a[(int)SpaceClass::IndoorSmall] - b[(int)SpaceClass::IndoorSmall]) < 0.01f);
+    // A zero blend width is a hard switch, still a valid mix.
+    s.BlendFraction = 0.0f;
+    EnvironmentProbe::Weights(s.IndoorCover - 0.01f, 0.0f, 3.0f, s, a);
+    EnvironmentProbe::Weights(s.IndoorCover + 0.01f, 0.0f, 3.0f, s, b);
+    CHECK(a[(int)SpaceClass::OutdoorOpen] == 1.0f && b[(int)SpaceClass::IndoorSmall] == 1.0f);
+}
+
+void TestEnvironmentRefreshThrottle() {
+    EnvironmentSettings s; // 0.25 s, 1 m
+    int casts = 0;
+    EnvironmentProbe probe;
+    probe.SetRayFn(BoxRoom{{-2.0f, 0.0f, -2.0f}, {2.0f, 3.0f, 2.0f}}.Fn(&casts));
+    const int rays = s.RayCount;
+    bool refreshed = false;
+    glm::vec3 p(0.0f, 1.5f, 0.0f);
+    probe.Query(7, p, 0.0, s, &refreshed);
+    CHECK(refreshed && casts == rays);
+    probe.Query(7, p, 0.10, s, &refreshed);
+    CHECK(!refreshed && casts == rays); // cached
+    probe.Query(7, p + glm::vec3(0.5f, 0.0f, 0.0f), 0.20, s, &refreshed);
+    CHECK(!refreshed); // moved less than a metre, younger than 0.25 s
+    probe.Query(7, p, 0.26, s, &refreshed);
+    CHECK(refreshed && casts == 2 * rays); // aged out
+    probe.Query(7, p + glm::vec3(1.5f, 0.0f, 0.0f), 0.30, s, &refreshed);
+    CHECK(refreshed && casts == 3 * rays); // moved more than a metre
+    CHECK(probe.GetStats().Refreshes == 3 && probe.GetStats().Rays == 3 * rays);
+    // Ten seconds of a shooter firing at 600 rpm (10 shots a second): 100 shots, a refresh every 0.25 s - not per shot.
+    EnvironmentProbe burst;
+    int bc = 0;
+    burst.SetRayFn(BoxRoom{{-2.0f, 0.0f, -2.0f}, {2.0f, 3.0f, 2.0f}}.Fn(&bc));
+    for (int i = 0; i < 100; ++i) burst.Query(1, p, 0.1 * i, s);
+    CHECK(burst.GetStats().Refreshes >= 32 && burst.GetStats().Refreshes <= 36); // one per 0.3 s (the first shot past 0.25 s), not 100
+    // The cadence is a setting: no refresh interval re-probes only on movement, a long one holds the reading.
+    s.RefreshInterval = 100.0f;
+    EnvironmentProbe held;
+    held.SetRayFn(BoxRoom{{-2.0f, 0.0f, -2.0f}, {2.0f, 3.0f, 2.0f}}.Fn());
+    for (int i = 0; i < 100; ++i) held.Query(1, p, 0.1 * i, s);
+    CHECK(held.GetStats().Refreshes == 1);
+    // Unnamed shooters are told apart by position: two close shots are one shooter, a far one another.
+    s = EnvironmentSettings{};
+    EnvironmentProbe npcs;
+    npcs.SetRayFn(BoxRoom{{-2.0f, 0.0f, -2.0f}, {2.0f, 3.0f, 2.0f}}.Fn());
+    npcs.Query(0, glm::vec3(0.0f), 0.0, s);
+    npcs.Query(0, glm::vec3(0.4f, 0.0f, 0.0f), 0.05, s);
+    CHECK(npcs.Shooters() == 1);
+    npcs.Query(0, glm::vec3(30.0f, 0.0f, 0.0f), 0.1, s);
+    CHECK(npcs.Shooters() == 2);
+    // The number of rays and their reach come from the settings.
+    int c2 = 0;
+    EnvironmentProbe custom;
+    custom.SetRayFn(BoxRoom{{-2.0f, 0.0f, -2.0f}, {2.0f, 3.0f, 2.0f}}.Fn(&c2));
+    s.RayCount = 20;
+    custom.Probe(p, s);
+    CHECK(c2 == 20);
+}
+
+// A tail layer playing from fake files: key -> the file its set plays.
+void GiveTailFiles(WeaponAudioProfile* p, bool generic, std::initializer_list<SpaceClass> classes) {
+    if (generic) p->Tail.Set.Files = {"tail_generic.wav"};
+    for (SpaceClass c : classes) p->TailClass[(int)c].Set.Files = {std::string("tail_") + SpaceClassName(c) + ".wav"};
+    p->Tail.Set.FilePeakDb = {-30.0f}; // quiet files: the bus limiter does not duck these test voices
+    for (auto& tc : p->TailClass) tc.Set.FilePeakDb = {-30.0f};
+    for (WeaponAudioProfile::Layer* l : {&p->Tail, &p->TailClass[0], &p->TailClass[1], &p->TailClass[2], &p->TailClass[3]}) {
+        l->Set.StealFadeTime = 0.0f;
+        l->Set.MaxVoices = 64;
+    }
+    p->Tail.Every = 1;
+}
+
+void TestEnvironmentTailSelectionAndFallback() {
+    FakeBackend be;
+    WeaponAudio& wa = WeaponAudio::Get();
+    wa.StartForTest("", &be);
+    WeaponAudioProfile* p = wa.Profile("ak");
+    for (WeaponAudioProfile::Layer* l : {&p->Close, &p->Mech, &p->Sub, &p->Far}) l->Set.Files.clear();
+    p->PlayerGain = 1.0f;
+    p->Tail.Set.VolumeJitterDb = 0.0f;
+    for (auto& tc : p->TailClass) tc.Set.VolumeJitterDb = 0.0f;
+    GiveTailFiles(p, true, {SpaceClass::OutdoorOpen, SpaceClass::IndoorSmall}); // urban and large have no recordings yet
+    auto fire = [&](const BoxRoom& room, double dt = 1.0) {
+        wa.Probe().Clear();
+        wa.Probe().SetRayFn(room.Fn());
+        be.Voices.clear();
+        wa.Update((float)dt);
+        wa.Shot("ak", glm::vec3(0.0f, 1.5f, 0.0f), true);
+    };
+    BoxRoom small{{-2.0f, 0.0f, -2.5f}, {2.0f, 3.0f, 2.5f}};
+    BoxRoom hall{{-20.0f, 0.0f, -25.0f}, {20.0f, 12.0f, 25.0f}};
+    BoxRoom field{{-500.0f, -50.0f, -500.0f}, {500.0f, 500.0f, 500.0f}};
+    fire(small);
+    CHECK(be.Started("tail_indoor_small.wav") == 1 && be.Started("tail_generic.wav") == 0 && be.Voices.size() == 1);
+    CHECK(wa.LastSpace().Valid && wa.LastSpace().Probed && wa.LastSpace().Reading.Dominant == SpaceClass::IndoorSmall);
+    fire(field);
+    CHECK(be.Started("tail_outdoor_open.wav") == 1 && be.Started("tail_generic.wav") == 0);
+    // A space with no files falls back to the generic fire_tail.
+    fire(hall);
+    CHECK(be.Started("tail_generic.wav") == 1 && be.Started("tail_indoor_large.wav") == 0 && be.Voices.size() == 1);
+    // The logical emission stays the layer's key (the weapon test counts snd.ak.fire_tail) and says which space it was.
+    const auto& hist = wa.History();
+    CHECK(!hist.empty() && hist.back().Key == "snd.ak.fire_tail" && hist.back().Space == "generic");
+    // Environment off: always the generic tail, and no probing at all.
+    p->Env.Enabled = false;
+    int casts = 0;
+    wa.Probe().SetRayFn(small.Fn(&casts));
+    be.Voices.clear();
+    wa.Update(1.0f);
+    wa.Shot("ak", glm::vec3(0.0f, 1.5f, 0.0f), true);
+    CHECK(be.Started("tail_generic.wav") == 1 && casts == 0 && !wa.LastSpace().Valid);
+    p->Env.Enabled = true;
+    // The generic set empty and the class's empty too: nothing to play, nothing crashes.
+    p->Tail.Set.Files.clear();
+    fire(hall);
+    CHECK(be.Voices.empty());
+    // Per-space tail gain scales the class tail.
+    GiveTailFiles(p, true, {SpaceClass::IndoorSmall});
+    p->Env.TailGain[(int)SpaceClass::IndoorSmall] = 0.5f;
+    fire(small);
+    CHECK(be.Voices.size() == 1 && std::fabs(be.Voices[0].Voice.Volume - 0.5f * p->Tail.Set.Volume) < 0.02f);
+    // The probe is not asked per shot: a burst at 600 rpm probes about every 0.25 s.
+    p->Env.TailGain[(int)SpaceClass::IndoorSmall] = 1.0f;
+    int burstCasts = 0;
+    wa.Probe().Clear();
+    wa.Probe().SetRayFn(small.Fn(&burstCasts));
+    wa.Update(5.0f);
+    for (int i = 0; i < 40; ++i) { // 4 s at 10 shots / s
+        wa.Shot("ak", glm::vec3(0.0f, 1.5f, 0.0f), true);
+        wa.Update(0.1f);
+    }
+    CHECK(burstCasts >= 12 * p->Env.RayCount && burstCasts <= 16 * p->Env.RayCount); // ~ 14 probes (one per 0.3 s), not 40
+    wa.Stop();
+}
+
+void TestReverbZoneContainmentPriorityAndBlend() {
+    // Containment: a box turned 90 degrees (extents 8 x 2 x 3 -> 3 deep in world x, 8 in world z).
+    ReverbZoneVolume box;
+    box.Center = glm::vec3(10.0f, 0.0f, 0.0f);
+    box.Shape = 0;
+    box.Extents = glm::vec3(8.0f, 2.0f, 3.0f);
+    box.ToLocal = glm::transpose(glm::mat3(glm::rotate(glm::mat4(1.0f), glm::radians(90.0f), glm::vec3(0.0f, 1.0f, 0.0f))));
+    box.FadeDistance = 0.0f;
+    box.Class = SpaceClass::IndoorLarge;
+    CHECK(box.Weight(glm::vec3(10.0f, 0.0f, 7.5f)) == 1.0f);  // along the long (rotated) axis
+    CHECK(box.Weight(glm::vec3(10.0f, 0.0f, -7.5f)) == 1.0f);
+    CHECK(box.Weight(glm::vec3(16.0f, 0.0f, 0.0f)) == 0.0f);  // beyond the short side
+    CHECK(box.Weight(glm::vec3(12.5f, 0.0f, 0.0f)) == 1.0f);
+    CHECK(box.Weight(glm::vec3(10.0f, 2.5f, 0.0f)) == 0.0f);  // above
+    ReverbZoneVolume ball;
+    ball.Center = glm::vec3(0.0f);
+    ball.Shape = 1;
+    ball.Radius = 5.0f;
+    ball.FadeDistance = 0.0f;
+    CHECK(ball.Weight(glm::vec3(3.0f, 3.0f, 0.0f)) == 1.0f && ball.Weight(glm::vec3(3.6f, 3.6f, 0.0f)) == 0.0f);
+    // Edge blend: weight 0 at the surface, smoothstep to 1 FadeDistance inside (half way = 0.5).
+    ball.FadeDistance = 4.0f;
+    CHECK(ball.Weight(glm::vec3(5.0f, 0.0f, 0.0f)) == 0.0f);
+    CHECK(std::fabs(ball.Weight(glm::vec3(3.0f, 0.0f, 0.0f)) - 0.5f) < 1e-4f);
+    CHECK(ball.Weight(glm::vec3(1.0f, 0.0f, 0.0f)) == 1.0f && ball.Weight(glm::vec3(0.0f)) == 1.0f);
+    float prev = 0.0f;
+    for (int i = 0; i <= 500; ++i) { // continuous and monotonic across the fade
+        const float w = ball.Weight(glm::vec3(5.0f - 0.01f * (float)i, 0.0f, 0.0f));
+        CHECK(w >= prev - 1e-6f && w - prev < 0.02f);
+        prev = w;
+    }
+
+    // Layering: indoor_small (priority 1) inside a hall (priority 0) inside nothing; what no zone claims is the probe's.
+    ReverbZoneVolume hall = ball, room = ball;
+    hall.Radius = 20.0f;
+    hall.FadeDistance = 4.0f;
+    hall.Class = SpaceClass::IndoorLarge;
+    hall.Priority = 0;
+    hall.TailGain = 2.0f;
+    room.Radius = 5.0f;
+    room.FadeDistance = 2.0f;
+    room.Class = SpaceClass::IndoorSmall;
+    room.Priority = 1;
+    ReverbZones zones;
+    zones.Set({hall, room}); // given low-priority first: Set sorts
+    CHECK(zones.Zones().size() == 2 && zones.Zones()[0].Priority == 1);
+    ReverbZoneMix deep = zones.Mix(glm::vec3(0.0f));
+    CHECK(deep.Weights[(int)SpaceClass::IndoorSmall] == 1.0f && deep.Weights[(int)SpaceClass::IndoorLarge] == 0.0f && deep.ProbeShare == 0.0f); // priority wins
+    ReverbZoneMix mid = zones.Mix(glm::vec3(4.0f, 0.0f, 0.0f)); // on the room's fade, deep in the hall
+    CHECK(mid.Weights[(int)SpaceClass::IndoorSmall] > 0.05f && mid.Weights[(int)SpaceClass::IndoorSmall] < 0.95f);
+    CHECK(mid.Weights[(int)SpaceClass::IndoorLarge] > 0.05f && mid.ProbeShare == 0.0f);
+    CHECK(std::fabs(WeightSum(mid.Weights) + mid.ProbeShare - 1.0f) < 1e-5f);
+    CHECK(mid.Gain > 1.0f && mid.Gain < 2.0f && mid.Zones == 2); // the hall's gain is only partly in
+    const ReverbZoneMix edge = zones.Mix(glm::vec3(21.0f, 0.0f, 0.0f)); // outside both
+    CHECK(edge.ProbeShare == 1.0f && edge.Zones == 0 && edge.Gain == 1.0f && WeightSum(edge.Weights) == 0.0f);
+    const ReverbZoneMix rim = zones.Mix(glm::vec3(18.0f, 0.0f, 0.0f)); // on the hall's fade: part zone, part probe
+    CHECK(rim.ProbeShare > 0.05f && rim.ProbeShare < 0.95f && std::fabs(WeightSum(rim.Weights) + rim.ProbeShare - 1.0f) < 1e-5f);
+    // Same priority: the order is by entity id, deterministic.
+    ReverbZoneVolume a = ball, b = ball;
+    a.Entity = 5; a.Class = SpaceClass::OutdoorUrban;
+    b.Entity = 3; b.Class = SpaceClass::OutdoorOpen;
+    ReverbZones tie;
+    tie.Set({a, b});
+    CHECK(tie.Zones()[0].Entity == 3);
+
+    // Zones come from the scene: Reverb Zone components placed by their entities, disabled ones left out.
+    World world;
+    auto mk = [&](const glm::vec3& at, int cls, bool enabled) {
+        const entt::entity e = world.Registry.create();
+        world.Registry.emplace<TransformComponent>(e).Position = at;
+        ReverbZoneComponent& z = world.Registry.emplace<ReverbZoneComponent>(e);
+        z.TailClass = cls;
+        z.Enabled = enabled;
+        z.FadeDistance = 0.0f;
+        z.Extents = glm::vec3(2.0f);
+        return e;
+    };
+    mk(glm::vec3(100.0f, 0.0f, 0.0f), 3, true);
+    mk(glm::vec3(0.0f, 0.0f, 100.0f), 2, false);
+    ReverbZones built;
+    built.Build(world);
+    CHECK(built.Zones().size() == 1 && built.Zones()[0].Class == SpaceClass::IndoorLarge);
+    CHECK(built.Mix(glm::vec3(101.0f, 0.5f, -1.0f)).Weights[(int)SpaceClass::IndoorLarge] == 1.0f);
+    CHECK(built.Mix(glm::vec3(0.0f, 0.0f, 100.0f)).ProbeShare == 1.0f);
+    // The reverb values are stored: the class presets by default, the component's own with Custom.
+    ReverbZoneComponent zc;
+    zc.TailClass = 3;
+    CHECK(zc.Resolved().DecayTime == ReverbPresetFor(3).DecayTime);
+    zc.ReverbMode = 1;
+    zc.Reverb.DecayTime = 7.0f;
+    CHECK(zc.Resolved().DecayTime == 7.0f);
+    CHECK(ReverbPresetFor(2).DecayTime < ReverbPresetFor(3).DecayTime && ReverbPresetFor(3).DecayTime < ReverbPresetFor(0).DecayTime);
+    CHECK(ReverbPresetFor(2).RoomSize < ReverbPresetFor(3).RoomSize && ReverbPresetFor(2).PreDelayMs < ReverbPresetFor(3).PreDelayMs);
+    if (ComponentRegistry::All().empty()) ComponentRegistry::RegisterEngineComponents();
+    bool registered = false;
+    for (const auto& rc : ComponentRegistry::All()) registered |= std::string(rc.Meta.Name) == "Reverb Zone";
+    CHECK(registered);
+}
+
+void TestEnvironmentZonesBeatTheProbe() {
+    FakeBackend be;
+    WeaponAudio& wa = WeaponAudio::Get();
+    wa.StartForTest("", &be);
+    WeaponAudioProfile* p = wa.Profile("ak");
+    for (WeaponAudioProfile::Layer* l : {&p->Close, &p->Mech, &p->Sub, &p->Far}) l->Set.Files.clear();
+    p->PlayerGain = 1.0f;
+    p->Tail.Set.VolumeJitterDb = 0.0f;
+    for (auto& tc : p->TailClass) tc.Set.VolumeJitterDb = 0.0f;
+    GiveTailFiles(p, true, {SpaceClass::OutdoorOpen, SpaceClass::OutdoorUrban, SpaceClass::IndoorSmall, SpaceClass::IndoorLarge});
+    int casts = 0;
+    BoxRoom field{{-500.0f, -50.0f, -500.0f}, {500.0f, 500.0f, 500.0f}};
+    wa.Probe().SetRayFn(field.Fn(&casts)); // the probe says: open ground
+    ReverbZoneVolume z;
+    z.Center = glm::vec3(0.0f);
+    z.Shape = 0;
+    z.Extents = glm::vec3(10.0f, 5.0f, 10.0f);
+    z.FadeDistance = 4.0f;
+    z.Class = SpaceClass::IndoorLarge;
+    wa.Zones().Set({z});
+    // Deep inside the zone: its class, and the probe is never asked.
+    wa.Update(1.0f);
+    wa.Shot("ak", glm::vec3(0.0f, 0.0f, 0.0f), true);
+    CHECK(be.Started("tail_indoor_large.wav") == 1 && be.Voices.size() == 1 && casts == 0 && !wa.LastSpace().Probed);
+    // Outside every zone: the probe decides.
+    be.Voices.clear();
+    wa.Update(1.0f);
+    wa.Shot("ak", glm::vec3(50.0f, 0.0f, 0.0f), true);
+    CHECK(be.Started("tail_outdoor_open.wav") == 1 && be.Voices.size() == 1 && casts > 0 && wa.LastSpace().Probed);
+    // On the zone's edge: the two classes crossfade (equal-power) and sum to the same loudness as a single class at the middle.
+    be.Voices.clear();
+    wa.Update(1.0f);
+    wa.Shot("ak", glm::vec3(8.0f, 0.0f, 0.0f), true); // 2 m inside a 4 m fade: half the zone, half the probe
+    CHECK(be.Started("tail_indoor_large.wav") == 1 && be.Started("tail_outdoor_open.wav") == 1 && be.Voices.size() == 2);
+    const float gl = be.Voices[0].Voice.File == "tail_indoor_large.wav" ? be.Voices[0].Volume : be.Voices[1].Volume;
+    const float go = be.Voices[0].Voice.File == "tail_outdoor_open.wav" ? be.Voices[0].Volume : be.Voices[1].Volume;
+    CHECK(std::fabs(gl - go) < 0.05f && std::fabs(gl * gl + go * go - 1.0f) < 0.1f); // sqrt(0.5) each
+    CHECK(wa.History().back().Space.find('+') != std::string::npos);
+    wa.Stop();
+}
+
 void RegisterAudioTests(UnitTestSupport::TestList& tests) {
     tests.push_back({"SoundSetRoundRobinNeverRepeats", TestSoundSetRoundRobinNeverRepeats});
     tests.push_back({"SoundSetStealOldest", TestSoundSetStealOldest});
@@ -754,4 +1149,10 @@ void RegisterAudioTests(UnitTestSupport::TestList& tests) {
     tests.push_back({"FoleyFootstepCadence", TestFoleyFootstepCadence});
     tests.push_back({"FoleyRules", TestFoleyRules});
     tests.push_back({"FoleyLandingAndJump", TestFoleyLandingAndJump});
+    tests.push_back({"EnvironmentClassifier", TestEnvironmentClassifier});
+    tests.push_back({"EnvironmentCrossfadeWeights", TestEnvironmentCrossfadeWeights});
+    tests.push_back({"EnvironmentRefreshThrottle", TestEnvironmentRefreshThrottle});
+    tests.push_back({"EnvironmentTailSelectionAndFallback", TestEnvironmentTailSelectionAndFallback});
+    tests.push_back({"ReverbZoneContainmentPriorityAndBlend", TestReverbZoneContainmentPriorityAndBlend});
+    tests.push_back({"EnvironmentZonesBeatTheProbe", TestEnvironmentZonesBeatTheProbe});
 }

@@ -1922,13 +1922,36 @@ void RegisterEngineComponents() {
             { "Limiter Window", T::Float, TARTARUS_REFLECT_FIELD(W, LimiterWindow), 0.005f, "Seconds a transient counts toward the sum.", 0.02f, 1.0f },
             { "Limiter Min Gain", T::Float, TARTARUS_REFLECT_FIELD(W, LimiterMinGain), 0.01f, "The most a voice is ducked by the limiter (linear gain).", 0.0f, 1.0f },
             { "Data File", T::String, TARTARUS_REFLECT_FIELD(W, DataFile), 0.0f, "Optional json of SoundSet overrides by element (files, volume, jitter, pitch, bus, range, voices). Relative to the project." },
+            { "Env Enabled", T::Bool, TARTARUS_REFLECT_FIELD(W, EnvEnabled), 0.0f, "The shot's tail follows the space the shooter is in: a Reverb Zone volume first, else a raycast probe around the shooter. Off: always the generic tail (fire_tail). A space with no recorded tail files also plays the generic one." },
+            { "Env Ray Count", T::Int, TARTARUS_REFLECT_FIELD(W, EnvRayCount), 1.0f, "Rays per probe (1 up, a diagonal ring and a horizontal ring). More = a finer read of the space, a little more cost per refresh.", 6.0f, 64.0f },
+            { "Env Max Distance", T::Float, TARTARUS_REFLECT_FIELD(W, EnvMaxDistance), 0.5f, "Metres each ray looks; a miss counts as this far.", 5.0f, 200.0f },
+            { "Env Indoor Cover", T::Float, TARTARUS_REFLECT_FIELD(W, EnvIndoorCover), 0.01f, "Overhead cover (half the up ray, half the share of upward diagonals that hit) at which a space turns indoor. The centre of the crossfade.", 0.0f, 1.0f },
+            { "Env Urban Wall", T::Float, TARTARUS_REFLECT_FIELD(W, EnvUrbanWall), 0.01f, "Share of the horizon with a wall within Urban Distance at which open air turns urban (building slaps).", 0.0f, 1.0f },
+            { "Env Urban Distance", T::Float, TARTARUS_REFLECT_FIELD(W, EnvUrbanDistance), 0.5f, "Metres: a wall farther than this is not a building slap.", 1.0f, 200.0f },
+            { "Env Large Room Distance", T::Float, TARTARUS_REFLECT_FIELD(W, EnvLargeRoomDistance), 0.1f, "Mean wall distance (m) at which an indoor space turns from small to large.", 1.0f, 100.0f },
+            { "Env Blend Fraction", T::Float, TARTARUS_REFLECT_FIELD(W, EnvBlendFraction), 0.005f, "Half-width of the crossfade around the cover and wall thresholds (0 = a hard switch).", 0.0f, 0.5f },
+            { "Env Blend Distance", T::Float, TARTARUS_REFLECT_FIELD(W, EnvBlendDistance), 0.005f, "Half-width of the small/large crossfade, as a share of Env Large Room Distance.", 0.0f, 0.9f },
+            { "Env Refresh Interval", T::Float, TARTARUS_REFLECT_FIELD(W, EnvRefreshInterval), 0.01f, "Seconds between probes of one shooter (cached in between, never per shot).", 0.0f, 10.0f },
+            { "Env Refresh Move Distance", T::Float, TARTARUS_REFLECT_FIELD(W, EnvRefreshMoveDistance), 0.05f, "Metres a shooter moves that probe it again at once.", 0.0f, 50.0f },
+            { "Env Match Radius", T::Float, TARTARUS_REFLECT_FIELD(W, EnvMatchRadius), 0.1f, "Shots from a shooter the game does not name are told apart by position: shots this close are one shooter.", 0.1f, 20.0f },
+            { "Env Gain Outdoor Open", T::Float, TARTARUS_REFLECT_FIELD(W, EnvTailGainOutdoorOpen), 0.01f, "Gain of the tail in open ground, on top of the tail layer's.", 0.0f, 4.0f },
+            { "Env Gain Outdoor Urban", T::Float, TARTARUS_REFLECT_FIELD(W, EnvTailGainOutdoorUrban), 0.01f, "Gain of the tail among buildings.", 0.0f, 4.0f },
+            { "Env Gain Indoor Small", T::Float, TARTARUS_REFLECT_FIELD(W, EnvTailGainIndoorSmall), 0.01f, "Gain of the tail in a small room.", 0.0f, 4.0f },
+            { "Env Gain Indoor Large", T::Float, TARTARUS_REFLECT_FIELD(W, EnvTailGainIndoorLarge), 0.01f, "Gain of the tail in a hall / warehouse.", 0.0f, 4.0f },
+            { "Env Debug Draw", T::Bool, TARTARUS_REFLECT_FIELD(W, EnvDebugDraw), 0.0f, "Keep each shooter's probe rays for the overlay (WeaponAudio::EnvironmentDebugLines)." },
         };
         const std::pair<const char*, const char*> groups[] = {
             {"Shot Pitch Min", "Shot"}, {"Shot Pitch Max", "Shot"}, {"Volume Jitter dB", "Shot"},
             {"Close Full Distance", "Distance Blend"}, {"Close Zero Distance", "Distance Blend"}, {"Far Min Weight", "Distance Blend"},
             {"Far Max Weight", "Distance Blend"}, {"Max Distance", "Distance Blend"}, {"Far Max Distance", "Distance Blend"},
             {"Tail Max Voices", "Full Auto"}, {"Tail Every", "Full Auto"}, {"Far Every", "Full Auto"}, {"Burst Gap", "Full Auto"},
-            {"Limiter Enabled", "Bus Limiter"}, {"Limiter Ceiling dB", "Bus Limiter"}, {"Limiter Window", "Bus Limiter"}, {"Limiter Min Gain", "Bus Limiter"}, {"Tail Fade Time", "Full Auto"}, {"Tail Min Interval", "Full Auto"}, {"Tail Duck Per Voice", "Full Auto"}};
+            {"Limiter Enabled", "Bus Limiter"}, {"Limiter Ceiling dB", "Bus Limiter"}, {"Limiter Window", "Bus Limiter"}, {"Limiter Min Gain", "Bus Limiter"}, {"Tail Fade Time", "Full Auto"}, {"Tail Min Interval", "Full Auto"}, {"Tail Duck Per Voice", "Full Auto"},
+            {"Env Enabled", "Environment"}, {"Env Ray Count", "Environment"}, {"Env Max Distance", "Environment"}, {"Env Indoor Cover", "Environment"},
+            {"Env Urban Wall", "Environment"}, {"Env Urban Distance", "Environment"}, {"Env Large Room Distance", "Environment"},
+            {"Env Blend Fraction", "Environment"}, {"Env Blend Distance", "Environment"}, {"Env Refresh Interval", "Environment"},
+            {"Env Refresh Move Distance", "Environment"}, {"Env Match Radius", "Environment"}, {"Env Gain Outdoor Open", "Environment"},
+            {"Env Gain Outdoor Urban", "Environment"}, {"Env Gain Indoor Small", "Environment"}, {"Env Gain Indoor Large", "Environment"},
+            {"Env Debug Draw", "Environment"}};
         for (ReflectField& f : m.Fields)
             for (const auto& [n, g] : groups)
                 if (std::strcmp(f.Name, n) == 0) f.Group = g;
@@ -1976,6 +1999,42 @@ void RegisterEngineComponents() {
             for (const auto& [n, g] : groups)
                 if (std::strcmp(f.Name, n) == 0) f.Group = g;
         Register<FoleyAudioComponent>(std::move(m));
+    }
+    {
+        ReflectComponent m;
+        m.Name = "Reverb Zone"; m.Icon = ICON_FA_VOLUME_HIGH; m.Category = "Audio";
+        m.Tooltip = "A space for sound. Inside this box / sphere a gunshot's tail is the Tail Class's (crossfaded over Fade Distance at the edge);\n"
+                    "outside every zone the shooter's raycast probe decides. The higher Priority sits on top where zones overlap.\n"
+                    "The entity's position and rotation place it (Scale is ignored). The reverb values are stored for the runtime reverb bus.";
+        using Z = ReverbZoneComponent;
+        m.Fields = {
+            { "Enabled", T::Bool, TARTARUS_REFLECT_FIELD(Z, Enabled), 0.0f, "Off: the zone is ignored." },
+            { "Shape", T::Enum, TARTARUS_REFLECT_FIELD(Z, Shape), 0.0f, "Box (half extents) or sphere (radius)." },
+            { "Extents", T::Vec3, TARTARUS_REFLECT_FIELD(Z, Extents), 0.1f, "Box half extents in metres (the box is 2x this on each axis).", 0.05f, 500.0f },
+            { "Radius", T::Float, TARTARUS_REFLECT_FIELD(Z, Radius), 0.1f, "Sphere radius in metres.", 0.05f, 500.0f },
+            { "Priority", T::Int, TARTARUS_REFLECT_FIELD(Z, Priority), 1.0f, "Overlapping zones: the higher priority sits on top of the lower.", -100.0f, 100.0f },
+            { "Fade Distance", T::Float, TARTARUS_REFLECT_FIELD(Z, FadeDistance), 0.05f, "Metres inside the edge over which the zone fades in (0 = a hard edge). The tails crossfade over it.", 0.0f, 100.0f },
+            { "Tail Class", T::Enum, TARTARUS_REFLECT_FIELD(Z, TailClass), 0.0f, "Which gunshot tail set plays inside. A class with no recorded files plays the generic fire_tail." },
+            { "Tail Gain", T::Float, TARTARUS_REFLECT_FIELD(Z, TailGain), 0.01f, "Gain on the shot's tail layer inside this zone.", 0.0f, 4.0f },
+            { "Reverb Mode", T::Enum, TARTARUS_REFLECT_FIELD(Z, ReverbMode), 0.0f, "Class Default: the Tail Class's preset. Custom: the values below." },
+            { "Room Size", T::Float, TARTARUS_REFLECT_FIELD(Z, Reverb.RoomSize), 0.01f, "0 = a closet .. 1 = a canyon.", 0.0f, 1.0f },
+            { "Decay Time", T::Float, TARTARUS_REFLECT_FIELD(Z, Reverb.DecayTime), 0.05f, "Seconds (RT60).", 0.05f, 20.0f },
+            { "HF Damping", T::Float, TARTARUS_REFLECT_FIELD(Z, Reverb.HfDamping), 0.01f, "0 = bright .. 1 = dark.", 0.0f, 1.0f },
+            { "Pre-Delay ms", T::Float, TARTARUS_REFLECT_FIELD(Z, Reverb.PreDelayMs), 0.5f, "Milliseconds before the first reflections.", 0.0f, 250.0f },
+            { "Wet Level", T::Float, TARTARUS_REFLECT_FIELD(Z, Reverb.WetLevel), 0.01f, "How much of the reverb is mixed in.", 0.0f, 1.0f },
+            { "Early/Late Mix", T::Float, TARTARUS_REFLECT_FIELD(Z, Reverb.EarlyLateMix), 0.01f, "0 = all late tail .. 1 = all early reflections.", 0.0f, 1.0f },
+        };
+        m.Fields[1].EnumLabels = "Box\0Sphere\0"; m.Fields[1].EnumCount = 2;
+        m.Fields[2].VisibleIfField = "Shape"; m.Fields[2].VisibleIfValue = 0;
+        m.Fields[3].VisibleIfField = "Shape"; m.Fields[3].VisibleIfValue = 1;
+        m.Fields[6].EnumLabels = "Outdoor Open\0Outdoor Urban\0Indoor Small\0Indoor Large\0"; m.Fields[6].EnumCount = 4;
+        m.Fields[8].EnumLabels = "Class Default\0Custom\0"; m.Fields[8].EnumCount = 2;
+        for (size_t i = 9; i < m.Fields.size(); ++i) {
+            m.Fields[i].VisibleIfField = "Reverb Mode";
+            m.Fields[i].VisibleIfValue = 1;
+            m.Fields[i].Group = "Reverb";
+        }
+        Register<ReverbZoneComponent>(std::move(m));
     }
     // ---- end lane S ----
 

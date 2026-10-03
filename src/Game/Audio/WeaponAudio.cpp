@@ -438,6 +438,8 @@ WeaponAudioProfile::Layer* WeaponAudioProfile::LayerByName(const std::string& na
     if (name == "sub") return &Sub;
     if (name == "tail") return &Tail;
     if (name == "far") return &Far;
+    SpaceClass c;
+    if (name.rfind("tail_", 0) == 0 && ParseSpaceClass(name.c_str() + 5, c)) return &TailClass[(int)c];
     return nullptr;
 }
 
@@ -463,6 +465,10 @@ WeaponAudioProfile WeaponAudioProfile::Default(const std::string& gun) {
     p.Far.Player2D = false;
     p.Tail.Every = 2; // full auto: close / sub / mech every shot, tail every 2nd, far every 3rd (S1's mix policy)
     p.Far.Every = 3;
+    for (int c = 0; c < kSpaceClassCount; ++c) { // the tail by space: the same set of rules, its own files
+        p.TailClass[c] = p.Tail;
+        p.TailClass[c].Set.Key = k + "tail_" + SpaceClassName((SpaceClass)c);
+    }
     for (const char* e : {"ads_in", "ads_out", "equip", "unequip"}) p.Aliases[e] = std::string("snd.foley.weapon.") + e;
     // Until the recorded takes land, the placeholders the squad has always used.
     const char* dir = "assets/Audio/Combat/";
@@ -511,6 +517,29 @@ void WeaponAudioProfile::ApplyComponent(const WeaponAudioComponent& c) {
     Tail.Every = std::max(1, c.TailEvery);
     Far.Every = std::max(1, c.FarEvery);
     BurstGap = c.BurstGap;
+    for (Layer& l : TailClass) { // the class tails follow the tail layer's voice policy
+        l.Set.VolumeJitterDb = c.VolumeJitterDb;
+        l.Set.MaxDistance = c.FarMaxDistance;
+        l.Set.MaxVoices = std::max(1, c.TailMaxVoices);
+        l.Set.StealFadeTime = c.TailFadeTime;
+    }
+    Env.Enabled = c.EnvEnabled;
+    Env.RayCount = std::clamp(c.EnvRayCount, 6, 64);
+    Env.MaxDistance = std::max(c.EnvMaxDistance, 1.0f);
+    Env.IndoorCover = c.EnvIndoorCover;
+    Env.UrbanWall = c.EnvUrbanWall;
+    Env.UrbanDistance = c.EnvUrbanDistance;
+    Env.LargeRoomDistance = std::max(c.EnvLargeRoomDistance, 0.1f);
+    Env.BlendFraction = c.EnvBlendFraction;
+    Env.BlendDistance = c.EnvBlendDistance;
+    Env.RefreshInterval = std::max(c.EnvRefreshInterval, 0.0f);
+    Env.RefreshMoveDistance = std::max(c.EnvRefreshMoveDistance, 0.0f);
+    Env.MatchRadius = std::max(c.EnvMatchRadius, 0.1f);
+    Env.TailGain[(int)SpaceClass::OutdoorOpen] = c.EnvTailGainOutdoorOpen;
+    Env.TailGain[(int)SpaceClass::OutdoorUrban] = c.EnvTailGainOutdoorUrban;
+    Env.TailGain[(int)SpaceClass::IndoorSmall] = c.EnvTailGainIndoorSmall;
+    Env.TailGain[(int)SpaceClass::IndoorLarge] = c.EnvTailGainIndoorLarge;
+    Env.DebugDraw = c.EnvDebugDraw;
 }
 
 void WeaponAudioProfile::ApplyJson(const std::string& text) {
@@ -526,6 +555,14 @@ void WeaponAudioProfile::ApplyJson(const std::string& text) {
             const std::string key = layer->Set.Key;
             layer->Set = ApplySetJson(l.value(), layer->Set);
             layer->Set.Key = key;
+            if (layer == &Tail)
+                for (Layer& tc : TailClass) {
+                    const std::string ck = tc.Set.Key;
+                    const std::vector<std::string> cf = tc.Set.Files;
+                    tc.Set = ApplySetJson(l.value(), tc.Set);
+                    tc.Set.Key = ck;
+                    tc.Set.Files = cf; // the generic tail's files are not the class tails'
+                }
             layer->Player2D = Flag(l.value(), "player2d", layer->Player2D);
             layer->Every = std::max(1, (int)Num(l.value(), "every", (float)layer->Every));
             if (const auto c = l.value().find("curve"); c != l.value().end() && c->is_object()) {
@@ -562,6 +599,7 @@ std::string WeaponAudioProfile::ToJson() const {
                        {"nearWeight", l->Curve.NearWeight}, {"farWeight", l->Curve.FarWeight}};
         j["layers"][name] = lj;
     }
+    for (int c = 0; c < kSpaceClassCount; ++c) j["layers"][std::string("tail_") + SpaceClassName((SpaceClass)c)] = SetToJson(TailClass[c].Set);
     for (const auto& [e, s] : Events) j["events"][e] = SetToJson(s);
     return j.dump(2);
 }
@@ -612,6 +650,11 @@ void WeaponAudio::StartForTest(const std::string& projectRoot, SoundBackend* bac
     m_Manifest = SoundManifest{};
     m_ShotVoices = 0;
     m_LastTail = -1e9;
+    m_Probe = EnvironmentProbe{};
+    m_Zones.Set({});
+    m_LastSpace = SpaceMix{};
+    m_LastDominant.clear();
+    m_SpaceLines = 0;
     for (const char* g : {"ak", "870"}) m_Profiles[g] = WeaponAudioProfile::Default(g);
     InstallLog();
     m_Active = true;
@@ -659,7 +702,7 @@ void WeaponAudio::Start(World& world, const std::string& projectRoot) {
     // Every layer from the manifest (keys snd.<gun>.fire_<layer>, each file at its mix_db); recorded takes replace the
     // placeholders (the old Combat/ files stay only where the manifest has none). Event sets likewise.
     for (auto& [gun, p] : m_Profiles) {
-        for (const char* name : {"close", "mech", "sub", "tail", "far"}) {
+        for (const std::string name : {"close", "mech", "sub", "tail", "far", "tail_outdoor_open", "tail_outdoor_urban", "tail_indoor_small", "tail_indoor_large"}) {
             WeaponAudioProfile::Layer* l = p.LayerByName(name);
             SoundSet fresh;
             fresh.Key = l->Set.Key;
@@ -682,7 +725,7 @@ void WeaponAudio::Start(World& world, const std::string& projectRoot) {
                 es.FilePeakDb = fresh.FilePeakDb;
             }
         }
-        for (const char* name : {"close", "mech", "sub", "tail", "far"})
+        for (const std::string name : {"close", "mech", "sub", "tail", "far", "tail_outdoor_open", "tail_outdoor_urban", "tail_indoor_small", "tail_indoor_large"})
             for (const std::string& f : p.LayerByName(name)->Set.Files) m_Player.Backend().Preload(f);
     }
     // Every manifest key is a set: variants preloaded so the first play has no decode hitch.
@@ -693,10 +736,20 @@ void WeaponAudio::Start(World& world, const std::string& projectRoot) {
     m_Transcript.clear();
     m_ShotVoices = 0;
     m_LastTail = -1e9;
+    m_Probe = EnvironmentProbe{};
+    m_Zones.Build(world);
+    m_LastSpace = SpaceMix{};
+    m_LastDominant.clear();
+    m_SpaceLines = 0;
     m_Active = true;
 }
 
 void WeaponAudio::Stop() {
+    if (m_Active && m_Probe.GetStats().Refreshes > 0) {
+        const EnvironmentProbe::Stats& st = m_Probe.GetStats();
+        std::printf("[WeaponAudio] environment probe: %d refreshes (%d rays), mean %.1f us, max %.1f us per refresh; %d zone(s)\n", st.Refreshes, st.Rays,
+                    st.TotalMicros / st.Refreshes, st.MaxMicros, (int)m_Zones.Zones().size());
+    }
     m_Player.StopAll();
     m_Profiles.clear();
     m_Foley.clear();
@@ -716,13 +769,13 @@ WeaponAudioProfile* WeaponAudio::Profile(const std::string& gun) {
     return &m_Profiles.emplace(gun, WeaponAudioProfile::Default(gun)).first->second;
 }
 
-void WeaponAudio::Note(const std::string& key, bool at2D) {
-    m_History.push_back({m_Player.Now(), key, at2D});
-    if (m_Record) m_Transcript.push_back({m_Player.Now(), key, at2D});
+void WeaponAudio::Note(const std::string& key, bool at2D, const std::string& space) {
+    m_History.push_back({m_Player.Now(), key, at2D, space});
+    if (m_Record) m_Transcript.push_back({m_Player.Now(), key, at2D, space});
     if (m_History.size() > kMaxHistory) m_History.pop_front();
 }
 
-int WeaponAudio::Shot(const std::string& gun, const glm::vec3& pos, bool at2D) {
+int WeaponAudio::Shot(const std::string& gun, const glm::vec3& pos, bool at2D, std::uint32_t shooter) {
     if (!m_Active) return 0;
     WeaponAudioProfile* p = Profile(gun);
     if (!p || !p->Enabled) return 0;
@@ -745,17 +798,117 @@ int WeaponAudio::Shot(const std::string& gun, const glm::vec3& pos, bool at2D) {
         r.At2D = at2D;
         r.PitchScale = pitch;
         r.Gain = p->Volume * w * (at2D ? p->PlayerGain : 1.0f);
-        const bool tail = l == &p->Tail;
-        if (tail) {
+        if (l == &p->Tail) { // the tail follows the space the shooter is in (Reverb Zone, else the probe)
             if (m_Player.Now() - m_LastTail < p->TailMinInterval) continue;
-            r.Gain /= 1.0f + p->TailDuckPerVoice * (float)m_Player.AudibleVoices(l->Set.Key);
+            r.Gain /= 1.0f + p->TailDuckPerVoice * (float)TailVoices(*p);
+            m_LastTail = m_Player.Now();
+            started += PlayTail(*p, r, shooter, pos, at2D);
+            continue;
         }
         Note(l->Set.Key, at2D);
-        if (tail) m_LastTail = m_Player.Now();
         if (m_Player.Play(l->Set, r).Started) ++started;
     }
     m_ShotVoices += started;
     return started;
+}
+
+int WeaponAudio::TailVoices(const WeaponAudioProfile& p) const {
+    int n = m_Player.AudibleVoices(p.Tail.Set.Key);
+    for (const WeaponAudioProfile::Layer& l : p.TailClass) n += m_Player.AudibleVoices(l.Set.Key);
+    return n;
+}
+
+namespace {
+constexpr std::uint32_t kPlayerShooter = 0xFFFFFFFEu; // the first-person player (2D shots no one named)
+}
+
+WeaponAudio::SpaceMix WeaponAudio::ResolveSpace(const WeaponAudioProfile& p, std::uint32_t shooter, const glm::vec3& pos, bool at2D) {
+    SpaceMix m;
+    const EnvironmentSettings& s = p.Env;
+    if (!s.Enabled) return m;
+    m.Valid = true;
+    const ReverbZoneMix z = m_Zones.Mix(pos);
+    for (int i = 0; i < kSpaceClassCount; ++i) m.Weights[i] = z.Weights[i];
+    m.Gain = z.Gain;
+    m.ZoneShare = 1.0f - z.ProbeShare;
+    if (z.ProbeShare > 1e-3f) { // whatever no zone claims (everything outside the zones) is the probe's call
+        const std::uint32_t id = shooter != 0 ? shooter : (at2D ? kPlayerShooter : 0u);
+        bool refreshed = false;
+        m.Reading = m_Probe.Query(id, pos, m_Player.Now(), s, &refreshed);
+        m.Probed = true;
+        for (int i = 0; i < kSpaceClassCount; ++i) m.Weights[i] += z.ProbeShare * m.Reading.Weights[i];
+        if (refreshed) {
+            const EnvironmentReading& r = m.Reading;
+            if (m_LogFile)
+                std::fprintf(m_LogFile, "E %.4f %u %s %.3f %.3f %.3f %.3f cover %.2f wall %.2f wallDist %.1f enclosure %.2f\n", m_Player.Now(), (unsigned)id,
+                             SpaceClassName(r.Dominant), r.Weights[0], r.Weights[1], r.Weights[2], r.Weights[3], r.Cover, r.Wall, r.MeanWallDistance, r.Enclosure);
+            const std::string who = id == kPlayerShooter ? "player" : id != 0 ? "shooter " + std::to_string(id) : "npc";
+            const auto it = m_LastDominant.find(who);
+            if ((it == m_LastDominant.end() || it->second != r.Dominant) && m_SpaceLines < 48) {
+                ++m_SpaceLines;
+                std::printf("[WeaponAudio] %s space -> %s (cover %.2f wall %.2f wallDist %.1f m enclosure %.2f; weights open %.2f urban %.2f small %.2f large %.2f; zones %.0f%%)\n",
+                            who.c_str(), SpaceClassName(r.Dominant), r.Cover, r.Wall, r.MeanWallDistance, r.Enclosure, m.Weights[0], m.Weights[1], m.Weights[2],
+                            m.Weights[3], m.ZoneShare * 100.0f);
+            }
+            m_LastDominant[who] = r.Dominant;
+        }
+    }
+    return m;
+}
+
+int WeaponAudio::PlayTail(WeaponAudioProfile& p, const SoundPlayer::Request& base, std::uint32_t shooter, const glm::vec3& pos, bool at2D) {
+    const SpaceMix mix = ResolveSpace(p, shooter, pos, at2D);
+    m_LastSpace = mix;
+    int started = 0;
+    if (!mix.Valid) { // environment off: the generic tail, as ever
+        Note(p.Tail.Set.Key, at2D, "generic");
+        return m_Player.Play(p.Tail.Set, base).Started ? 1 : 0;
+    }
+    // The two heaviest classes, renormalised; each plays equal-power (the tails are different recordings, not one signal).
+    int order[kSpaceClassCount];
+    for (int i = 0; i < kSpaceClassCount; ++i) order[i] = i;
+    std::stable_sort(order, order + kSpaceClassCount, [&](int a, int b) { return mix.Weights[a] > mix.Weights[b]; });
+    int kept[2];
+    int nKept = 0;
+    float sumW = 0.0f;
+    for (int k = 0; k < 2; ++k)
+        if (k == 0 || mix.Weights[order[k]] >= WeaponAudioProfile::kMinClassWeight) {
+            kept[nKept++] = order[k];
+            sumW += mix.Weights[order[k]];
+        }
+    float fallbackPower = 0.0f;
+    std::string space;
+    for (int k = 0; k < nKept; ++k) {
+        const int c = kept[k];
+        const float wn = sumW > 1e-6f ? mix.Weights[c] / sumW : 1.0f;
+        const float g = p.Env.TailGain[c] * mix.Gain;
+        SoundSet& set = p.TailClass[c].Set;
+        if (!space.empty()) space += "+";
+        if (set.Files.empty()) { // no recorded tail for this space (yet): its share plays the generic tail
+            fallbackPower += wn * g * g;
+            space += "generic";
+            continue;
+        }
+        space += SpaceClassName((SpaceClass)c);
+        SoundPlayer::Request r = base;
+        r.Gain *= std::sqrt(wn) * g;
+        if (m_Player.Play(set, r).Started) ++started;
+    }
+    if (fallbackPower > 0.0f) {
+        SoundPlayer::Request r = base;
+        r.Gain *= std::sqrt(fallbackPower);
+        if (m_Player.Play(p.Tail.Set, r).Started) ++started;
+    }
+    Note(p.Tail.Set.Key, at2D, space);
+    return started;
+}
+
+void WeaponAudio::EnvironmentDebugLines(std::vector<float>& out) const {
+    bool any = false;
+    for (const auto& [gun, p] : m_Profiles) any |= p.Env.DebugDraw;
+    if (!any) return;
+    m_Zones.DebugLines(out);
+    m_Probe.DebugLines(out);
 }
 
 bool WeaponAudio::ParseKey(const std::string& name, std::string& gun, std::string& element, float* leadMs) {
