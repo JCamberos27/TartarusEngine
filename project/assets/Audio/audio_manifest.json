@@ -3,6 +3,2398 @@
  "sample_rate": 48000,
  "files": [
   {
+   "file": "Casings/rifle/carpet_1.wav",
+   "key": "snd.casing.rifle.carpet",
+   "layer": "casing",
+   "channels": 2,
+   "sample_rate": 48000,
+   "lufs_i": -28.69,
+   "lufs_m_max": -26.0,
+   "true_peak_dbtp": -3.5,
+   "length_s": 0.538,
+   "peak_ms": 4.6,
+   "sources": [
+    {
+     "file": "sonniss/SculpTunes - Cartridges & Casings Shell/Cartridges and Casings Shell - drop on Carpeted Floor - Internal -.wav",
+     "start": 0.101,
+     "end": 0.639
+    }
+   ],
+   "anchor_ms": 0.0,
+   "kind": "rifle",
+   "material": "carpet",
+   "variant": 1,
+   "short": false,
+   "proxy": false,
+   "source": "Cartridges and Casings Shell - drop on Carpeted Floor - Internal -.wav drop@0.10s bounce"
+  },
+  {
+   "file": "Casings/rifle/carpet_10.wav",
+   "key": "snd.casing.rifle.carpet",
+   "layer": "casing",
+   "channels": 2,
+   "sample_rate": 48000,
+   "lufs_i": -28.13,
+   "lufs_m_max": -28.09,
+   "true_peak_dbtp": -1.4,
+   "length_s": 0.282,
+   "peak_ms": 2.8,
+   "sources": [
+    {
+     "file": "sonniss/SculpTunes - Cartridges & Casings Shell/Cartridges and Casings Shell - drop on Carpeted Floor - Internal -.wav",
+     "start": 1.554,
+     "end": 1.836
+    }
+   ],
+   "anchor_ms": 0.0,
+   "kind": "rifle",
+   "material": "carpet",
+   "variant": 10,
+   "short": true,
+   "proxy": false,
+   "source": "Cartridges and Casings Shell - drop on Carpeted Floor - Internal -.wav drop@1.56s short"
+  },
+  {
+   "file": "Casings/rifle/carpet_2.wav",
+   "key": "snd.casing.rifle.carpet",
+   "layer": "casing",
+   "channels": 2,
+   "sample_rate": 48000,
+   "lufs_i": -26.04,
+   "lufs_m_max": -26.0,
+   "true_peak_dbtp": -3.76,
+   "length_s": 0.553,
+   "peak_ms": 2.7,
+   "sources": [
+    {
+     "file": "sonniss/SculpTunes - Cartridges & Casings Shell/Cartridges and Casings Shell - drop on Carpeted Floor - Internal -.wav",
+     "start": 7.169,
+     "end": 7.721
+    }
+   ],
+   "anchor_ms": 0.0,
+   "kind": "rifle",
+   "material": "carpet",
+   "variant": 2,
+   "short": false,
+   "proxy": false,
+   "source": "Cartridges and Casings Shell - drop on Carpeted Floor - Internal -.wav drop@7.17s bounce"
+  },
+  {
+   "file": "Casings/rifle/carpet_3.wav",
+   "key": "snd.casing.rifle.carpet",
+   "layer": "casing",
+   "channels": 2,
+   "sample_rate": 48000,
+   "lufs_i": -27.6,
+   "lufs_m_max": -26.0,
+   "true_peak_dbtp": -2.0,
+   "length_s": 0.845,
+   "peak_ms": 272.1,
+   "sources": [
+    {
+     "file": "sonniss/SculpTunes - Cartridges & Casings Shell/Cartridges and Casings Shell - drop on Carpeted Floor - Internal -.wav",
+     "start": 16.825,
+     "end": 17.67
+    }
+   ],
+   "anchor_ms": 0.0,
+   "kind": "rifle",
+   "material": "carpet",
+   "variant": 3,
+   "short": false,
+   "proxy": false,
+   "source": "Cartridges and Casings Shell - drop on Carpeted Floor - Internal -.wav drop@16.83s bounce"
+  },
+  {
+   "file": "Casings/rifle/carpet_4.wav",
+   "key": "snd.casing.rifle.carpet",
+   "layer": "casing",
+   "channels": 2,
+   "sample_rate": 48000,
+   "lufs_i": -31.12,
+   "lufs_m_max": -26.0,
+   "true_peak_dbtp": -2.97,
+   "length_s": 0.671,
+   "peak_ms": 5.9,
+   "sources": [
+    {
+     "file": "sonniss/SculpTunes - Cartridges & Casings Shell/Cartridges and Casings Shell - drop on Carpeted Floor - Internal -.wav",
+     "start": 24.583,
+     "end": 25.254
+    }
+   ],
+   "anchor_ms": 0.0,
+   "kind": "rifle",
+   "material": "carpet",
+   "variant": 4,
+   "short": false,
+   "proxy": false,
+   "source": "Cartridges and Casings Shell - drop on Carpeted Floor - Internal -.wav drop@24.59s bounce"
+  },
+  {
+   "file": "Casings/rifle/carpet_5.wav",
+   "key": "snd.casing.rifle.carpet",
+   "layer": "casing",
+   "channels": 2,
+   "sample_rate": 48000,
+   "lufs_i": -30.2,
+   "lufs_m_max": -26.0,
+   "true_peak_dbtp": -4.56,
+   "length_s": 0.579,
+   "peak_ms": 3.1,
+   "sources": [
+    {
+     "file": "sonniss/SculpTunes - Cartridges & Casings Shell/Cartridges and Casings Shell - drop on Carpeted Floor - Internal -.wav",
+     "start": 34.515,
+     "end": 35.094
+    }
+   ],
+   "anchor_ms": 0.0,
+   "kind": "rifle",
+   "material": "carpet",
+   "variant": 5,
+   "short": false,
+   "proxy": false,
+   "source": "Cartridges and Casings Shell - drop on Carpeted Floor - Internal -.wav drop@34.52s bounce"
+  },
+  {
+   "file": "Casings/rifle/carpet_6.wav",
+   "key": "snd.casing.rifle.carpet",
+   "layer": "casing",
+   "channels": 2,
+   "sample_rate": 48000,
+   "lufs_i": -34.07,
+   "lufs_m_max": -28.72,
+   "true_peak_dbtp": -3.66,
+   "length_s": 0.707,
+   "peak_ms": 2.9,
+   "sources": [
+    {
+     "file": "sonniss/SculpTunes - Cartridges & Casings Shell/Cartridges and Casings Shell - drop on Carpeted Floor - Internal -.wav",
+     "start": 43.198,
+     "end": 43.905
+    }
+   ],
+   "anchor_ms": 0.0,
+   "kind": "rifle",
+   "material": "carpet",
+   "variant": 6,
+   "short": false,
+   "proxy": false,
+   "source": "Cartridges and Casings Shell - drop on Carpeted Floor - Internal -.wav drop@43.20s bounce"
+  },
+  {
+   "file": "Casings/rifle/carpet_7.wav",
+   "key": "snd.casing.rifle.carpet",
+   "layer": "casing",
+   "channels": 2,
+   "sample_rate": 48000,
+   "lufs_i": -28.71,
+   "lufs_m_max": -28.67,
+   "true_peak_dbtp": -2.88,
+   "length_s": 0.282,
+   "peak_ms": 5.2,
+   "sources": [
+    {
+     "file": "sonniss/SculpTunes - Cartridges & Casings Shell/Cartridges and Casings Shell - drop on Carpeted Floor - Internal -.wav",
+     "start": 41.594,
+     "end": 41.876
+    }
+   ],
+   "anchor_ms": 0.0,
+   "kind": "rifle",
+   "material": "carpet",
+   "variant": 7,
+   "short": true,
+   "proxy": false,
+   "source": "Cartridges and Casings Shell - drop on Carpeted Floor - Internal -.wav drop@41.60s short"
+  },
+  {
+   "file": "Casings/rifle/carpet_8.wav",
+   "key": "snd.casing.rifle.carpet",
+   "layer": "casing",
+   "channels": 2,
+   "sample_rate": 48000,
+   "lufs_i": -26.04,
+   "lufs_m_max": -26.0,
+   "true_peak_dbtp": -5.14,
+   "length_s": 0.282,
+   "peak_ms": 2.8,
+   "sources": [
+    {
+     "file": "sonniss/SculpTunes - Cartridges & Casings Shell/Cartridges and Casings Shell - drop on Carpeted Floor - Internal -.wav",
+     "start": 28.489,
+     "end": 28.771
+    }
+   ],
+   "anchor_ms": 0.0,
+   "kind": "rifle",
+   "material": "carpet",
+   "variant": 8,
+   "short": true,
+   "proxy": false,
+   "source": "Cartridges and Casings Shell - drop on Carpeted Floor - Internal -.wav drop@28.49s short"
+  },
+  {
+   "file": "Casings/rifle/carpet_9.wav",
+   "key": "snd.casing.rifle.carpet",
+   "layer": "casing",
+   "channels": 2,
+   "sample_rate": 48000,
+   "lufs_i": -28.49,
+   "lufs_m_max": -28.45,
+   "true_peak_dbtp": -3.29,
+   "length_s": 0.282,
+   "peak_ms": 3.0,
+   "sources": [
+    {
+     "file": "sonniss/SculpTunes - Cartridges & Casings Shell/Cartridges and Casings Shell - drop on Carpeted Floor - Internal -.wav",
+     "start": 13.497,
+     "end": 13.779
+    }
+   ],
+   "anchor_ms": 0.0,
+   "kind": "rifle",
+   "material": "carpet",
+   "variant": 9,
+   "short": true,
+   "proxy": false,
+   "source": "Cartridges and Casings Shell - drop on Carpeted Floor - Internal -.wav drop@13.50s short"
+  },
+  {
+   "file": "Casings/rifle/concrete_1.wav",
+   "key": "snd.casing.rifle.concrete",
+   "layer": "casing",
+   "channels": 2,
+   "sample_rate": 48000,
+   "lufs_i": -33.32,
+   "lufs_m_max": -25.57,
+   "true_peak_dbtp": -1.0,
+   "length_s": 1.416,
+   "peak_ms": 2.0,
+   "sources": [
+    {
+     "file": "sonniss/SculpTunes - Cartridges & Casings Shell/9 mm x 21  - Casings Shell & Cartdridges - Roll on Concrete Floor - Outdoor.wav",
+     "start": 0.193,
+     "end": 1.608
+    }
+   ],
+   "anchor_ms": 0.0,
+   "kind": "rifle",
+   "material": "concrete",
+   "variant": 1,
+   "short": false,
+   "proxy": false,
+   "source": "9 mm x 21  - Casings Shell & Cartdridges - Roll on Concrete Floor - Outdoor.wav drop@0.19s bounce"
+  },
+  {
+   "file": "Casings/rifle/concrete_10.wav",
+   "key": "snd.casing.rifle.concrete",
+   "layer": "casing",
+   "channels": 2,
+   "sample_rate": 48000,
+   "lufs_i": -26.22,
+   "lufs_m_max": -26.18,
+   "true_peak_dbtp": -1.0,
+   "length_s": 0.282,
+   "peak_ms": 2.0,
+   "sources": [
+    {
+     "file": "sonniss/SculpTunes - Cartridges & Casings Shell/9 mm x 21  - Casings Shell & Cartdridges - Roll on Concrete Floor - Outdoor.wav",
+     "start": 2.344,
+     "end": 2.626
+    }
+   ],
+   "anchor_ms": 0.0,
+   "kind": "rifle",
+   "material": "concrete",
+   "variant": 10,
+   "short": true,
+   "proxy": false,
+   "source": "9 mm x 21  - Casings Shell & Cartdridges - Roll on Concrete Floor - Outdoor.wav drop@2.35s short"
+  },
+  {
+   "file": "Casings/rifle/concrete_2.wav",
+   "key": "snd.casing.rifle.concrete",
+   "layer": "casing",
+   "channels": 2,
+   "sample_rate": 48000,
+   "lufs_i": -32.87,
+   "lufs_m_max": -25.81,
+   "true_peak_dbtp": -1.0,
+   "length_s": 1.602,
+   "peak_ms": 2.1,
+   "sources": [
+    {
+     "file": "sonniss/SculpTunes - Cartridges & Casings Shell/9 mm x 21  - Casings Shell & Cartdridges - Roll on Concrete Floor - Outdoor.wav",
+     "start": 4.824,
+     "end": 6.426
+    }
+   ],
+   "anchor_ms": 0.0,
+   "kind": "rifle",
+   "material": "concrete",
+   "variant": 2,
+   "short": false,
+   "proxy": false,
+   "source": "9 mm x 21  - Casings Shell & Cartdridges - Roll on Concrete Floor - Outdoor.wav drop@4.83s bounce"
+  },
+  {
+   "file": "Casings/rifle/concrete_3.wav",
+   "key": "snd.casing.rifle.concrete",
+   "layer": "casing",
+   "channels": 2,
+   "sample_rate": 48000,
+   "lufs_i": -29.44,
+   "lufs_m_max": -29.4,
+   "true_peak_dbtp": -1.0,
+   "length_s": 0.383,
+   "peak_ms": 2.0,
+   "sources": [
+    {
+     "file": "sonniss/SculpTunes - Cartridges & Casings Shell/9 mm x 21  - Casings Shell & Cartdridges - Roll on Concrete Floor - Outdoor.wav",
+     "start": 10.702,
+     "end": 11.084
+    }
+   ],
+   "anchor_ms": 0.0,
+   "kind": "rifle",
+   "material": "concrete",
+   "variant": 3,
+   "short": false,
+   "proxy": false,
+   "source": "9 mm x 21  - Casings Shell & Cartdridges - Roll on Concrete Floor - Outdoor.wav drop@10.70s bounce"
+  },
+  {
+   "file": "Casings/rifle/concrete_4.wav",
+   "key": "snd.casing.rifle.concrete",
+   "layer": "casing",
+   "channels": 2,
+   "sample_rate": 48000,
+   "lufs_i": -33.01,
+   "lufs_m_max": -28.02,
+   "true_peak_dbtp": -1.93,
+   "length_s": 1.442,
+   "peak_ms": 2.1,
+   "sources": [
+    {
+     "file": "sonniss/SculpTunes - Cartridges & Casings Shell/9 mm x 21  - Casings Shell & Cartdridges - Roll on Concrete Floor - Outdoor.wav",
+     "start": 13.759,
+     "end": 15.201
+    }
+   ],
+   "anchor_ms": 0.0,
+   "kind": "rifle",
+   "material": "concrete",
+   "variant": 4,
+   "short": false,
+   "proxy": false,
+   "source": "9 mm x 21  - Casings Shell & Cartdridges - Roll on Concrete Floor - Outdoor.wav drop@13.76s bounce"
+  },
+  {
+   "file": "Casings/rifle/concrete_5.wav",
+   "key": "snd.casing.rifle.concrete",
+   "layer": "casing",
+   "channels": 2,
+   "sample_rate": 48000,
+   "lufs_i": -30.45,
+   "lufs_m_max": -26.0,
+   "true_peak_dbtp": -2.92,
+   "length_s": 1.177,
+   "peak_ms": 2.1,
+   "sources": [
+    {
+     "file": "sonniss/SculpTunes - Cartridges & Casings Shell/9 mm x 21  - Casings Shell & Cartdridges - Roll on Concrete Floor - Outdoor.wav",
+     "start": 19.972,
+     "end": 21.149
+    }
+   ],
+   "anchor_ms": 0.0,
+   "kind": "rifle",
+   "material": "concrete",
+   "variant": 5,
+   "short": false,
+   "proxy": false,
+   "source": "9 mm x 21  - Casings Shell & Cartdridges - Roll on Concrete Floor - Outdoor.wav drop@19.97s bounce"
+  },
+  {
+   "file": "Casings/rifle/concrete_6.wav",
+   "key": "snd.casing.rifle.concrete",
+   "layer": "casing",
+   "channels": 2,
+   "sample_rate": 48000,
+   "lufs_i": -33.64,
+   "lufs_m_max": -25.85,
+   "true_peak_dbtp": -1.0,
+   "length_s": 1.1,
+   "peak_ms": 2.0,
+   "sources": [
+    {
+     "file": "sonniss/SculpTunes - Cartridges & Casings Shell/9 mm x 21  - Casings Shell & Cartdridges - Roll on Concrete Floor - Outdoor.wav",
+     "start": 28.082,
+     "end": 29.181
+    }
+   ],
+   "anchor_ms": 0.0,
+   "kind": "rifle",
+   "material": "concrete",
+   "variant": 6,
+   "short": false,
+   "proxy": false,
+   "source": "9 mm x 21  - Casings Shell & Cartdridges - Roll on Concrete Floor - Outdoor.wav drop@28.08s bounce"
+  },
+  {
+   "file": "Casings/rifle/concrete_7.wav",
+   "key": "snd.casing.rifle.concrete",
+   "layer": "casing",
+   "channels": 2,
+   "sample_rate": 48000,
+   "lufs_i": -26.12,
+   "lufs_m_max": -26.08,
+   "true_peak_dbtp": -1.0,
+   "length_s": 0.282,
+   "peak_ms": 2.0,
+   "sources": [
+    {
+     "file": "sonniss/SculpTunes - Cartridges & Casings Shell/9 mm x 21  - Casings Shell & Cartdridges - Roll on Concrete Floor - Outdoor.wav",
+     "start": 25.459,
+     "end": 25.741
+    }
+   ],
+   "anchor_ms": 0.0,
+   "kind": "rifle",
+   "material": "concrete",
+   "variant": 7,
+   "short": true,
+   "proxy": false,
+   "source": "9 mm x 21  - Casings Shell & Cartdridges - Roll on Concrete Floor - Outdoor.wav drop@25.46s short"
+  },
+  {
+   "file": "Casings/rifle/concrete_8.wav",
+   "key": "snd.casing.rifle.concrete",
+   "layer": "casing",
+   "channels": 2,
+   "sample_rate": 48000,
+   "lufs_i": -25.88,
+   "lufs_m_max": -25.84,
+   "true_peak_dbtp": -1.0,
+   "length_s": 0.282,
+   "peak_ms": 2.1,
+   "sources": [
+    {
+     "file": "sonniss/SculpTunes - Cartridges & Casings Shell/9 mm x 21  - Casings Shell & Cartdridges - Roll on Concrete Floor - Outdoor.wav",
+     "start": 15.946,
+     "end": 16.228
+    }
+   ],
+   "anchor_ms": 0.0,
+   "kind": "rifle",
+   "material": "concrete",
+   "variant": 8,
+   "short": true,
+   "proxy": false,
+   "source": "9 mm x 21  - Casings Shell & Cartdridges - Roll on Concrete Floor - Outdoor.wav drop@15.95s short"
+  },
+  {
+   "file": "Casings/rifle/concrete_9.wav",
+   "key": "snd.casing.rifle.concrete",
+   "layer": "casing",
+   "channels": 2,
+   "sample_rate": 48000,
+   "lufs_i": -26.04,
+   "lufs_m_max": -26.0,
+   "true_peak_dbtp": -1.02,
+   "length_s": 0.282,
+   "peak_ms": 106.1,
+   "sources": [
+    {
+     "file": "sonniss/SculpTunes - Cartridges & Casings Shell/9 mm x 21  - Casings Shell & Cartdridges - Roll on Concrete Floor - Outdoor.wav",
+     "start": 8.735,
+     "end": 9.017
+    }
+   ],
+   "anchor_ms": 0.0,
+   "kind": "rifle",
+   "material": "concrete",
+   "variant": 9,
+   "short": true,
+   "proxy": false,
+   "source": "9 mm x 21  - Casings Shell & Cartdridges - Roll on Concrete Floor - Outdoor.wav drop@8.74s short"
+  },
+  {
+   "file": "Casings/rifle/dirt_1.wav",
+   "key": "snd.casing.rifle.dirt",
+   "layer": "casing",
+   "channels": 2,
+   "sample_rate": 48000,
+   "lufs_i": -28.81,
+   "lufs_m_max": -26.0,
+   "true_peak_dbtp": -5.91,
+   "length_s": 0.648,
+   "peak_ms": 78.5,
+   "sources": [
+    {
+     "file": "sonniss/Stuart Duffield - Bullet SFX/Bullet_Drop_Leaves_03.wav",
+     "start": 0.0,
+     "end": 0.648
+    }
+   ],
+   "anchor_ms": 0.0,
+   "kind": "rifle",
+   "material": "dirt",
+   "variant": 1,
+   "short": false,
+   "proxy": true,
+   "source": "Bullet_Drop_Leaves_03.wav {\"pitch\": 0.0}"
+  },
+  {
+   "file": "Casings/rifle/dirt_2.wav",
+   "key": "snd.casing.rifle.dirt",
+   "layer": "casing",
+   "channels": 2,
+   "sample_rate": 48000,
+   "lufs_i": -28.82,
+   "lufs_m_max": -26.0,
+   "true_peak_dbtp": -5.61,
+   "length_s": 0.605,
+   "peak_ms": 74.0,
+   "sources": [
+    {
+     "file": "sonniss/Stuart Duffield - Bullet SFX/Bullet_Drop_Leaves_03.wav",
+     "start": 0.0,
+     "end": 0.648
+    }
+   ],
+   "anchor_ms": 0.0,
+   "kind": "rifle",
+   "material": "dirt",
+   "variant": 2,
+   "short": false,
+   "proxy": true,
+   "source": "Bullet_Drop_Leaves_03.wav {\"pitch\": 1.2, \"gain_db\": -1.0}"
+  },
+  {
+   "file": "Casings/rifle/dirt_3.wav",
+   "key": "snd.casing.rifle.dirt",
+   "layer": "casing",
+   "channels": 2,
+   "sample_rate": 48000,
+   "lufs_i": -28.76,
+   "lufs_m_max": -26.0,
+   "true_peak_dbtp": -6.1,
+   "length_s": 0.687,
+   "peak_ms": 83.2,
+   "sources": [
+    {
+     "file": "sonniss/Stuart Duffield - Bullet SFX/Bullet_Drop_Leaves_03.wav",
+     "start": 0.0,
+     "end": 0.648
+    }
+   ],
+   "anchor_ms": 0.0,
+   "kind": "rifle",
+   "material": "dirt",
+   "variant": 3,
+   "short": false,
+   "proxy": true,
+   "source": "Bullet_Drop_Leaves_03.wav {\"pitch\": -1.0}"
+  },
+  {
+   "file": "Casings/rifle/dirt_4.wav",
+   "key": "snd.casing.rifle.dirt",
+   "layer": "casing",
+   "channels": 2,
+   "sample_rate": 48000,
+   "lufs_i": -28.87,
+   "lufs_m_max": -26.0,
+   "true_peak_dbtp": -5.43,
+   "length_s": 0.571,
+   "peak_ms": 69.1,
+   "sources": [
+    {
+     "file": "sonniss/Stuart Duffield - Bullet SFX/Bullet_Drop_Leaves_03.wav",
+     "start": 0.0,
+     "end": 0.648
+    }
+   ],
+   "anchor_ms": 0.0,
+   "kind": "rifle",
+   "material": "dirt",
+   "variant": 4,
+   "short": false,
+   "proxy": true,
+   "source": "Bullet_Drop_Leaves_03.wav {\"pitch\": 2.2, \"gain_db\": -2.0}"
+  },
+  {
+   "file": "Casings/rifle/dirt_5.wav",
+   "key": "snd.casing.rifle.dirt",
+   "layer": "casing",
+   "channels": 2,
+   "sample_rate": 48000,
+   "lufs_i": -30.26,
+   "lufs_m_max": -26.0,
+   "true_peak_dbtp": -7.28,
+   "length_s": 0.727,
+   "peak_ms": 89.1,
+   "sources": [
+    {
+     "file": "sonniss/Stuart Duffield - Bullet SFX/Bullet_Drop_Leaves_03.wav",
+     "start": 0.0,
+     "end": 0.648
+    }
+   ],
+   "anchor_ms": 0.0,
+   "kind": "rifle",
+   "material": "dirt",
+   "variant": 5,
+   "short": false,
+   "proxy": true,
+   "source": "Bullet_Drop_Leaves_03.wav {\"pitch\": -2.0, \"lp\": 6000}"
+  },
+  {
+   "file": "Casings/rifle/dirt_6.wav",
+   "key": "snd.casing.rifle.dirt",
+   "layer": "casing",
+   "channels": 2,
+   "sample_rate": 48000,
+   "lufs_i": -28.83,
+   "lufs_m_max": -26.0,
+   "true_peak_dbtp": -5.49,
+   "length_s": 0.626,
+   "peak_ms": 76.2,
+   "sources": [
+    {
+     "file": "sonniss/Stuart Duffield - Bullet SFX/Bullet_Drop_Leaves_03.wav",
+     "start": 0.0,
+     "end": 0.648
+    }
+   ],
+   "anchor_ms": 0.0,
+   "kind": "rifle",
+   "material": "dirt",
+   "variant": 6,
+   "short": false,
+   "proxy": true,
+   "source": "Bullet_Drop_Leaves_03.wav {\"pitch\": 0.6, \"eq\": [[\"peak\", 3000, -3.0, 0.8]]}"
+  },
+  {
+   "file": "Casings/rifle/metal_1.wav",
+   "key": "snd.casing.rifle.metal",
+   "layer": "casing",
+   "channels": 2,
+   "sample_rate": 48000,
+   "lufs_i": -26.04,
+   "lufs_m_max": -26.0,
+   "true_peak_dbtp": -13.9,
+   "length_s": 0.334,
+   "peak_ms": 50.3,
+   "sources": [
+    {
+     "file": "sonniss/Gamemaster Audio -  Bullet Impact Sounds/bullet_impact_metal_heavy_08.wav",
+     "start": 0.0,
+     "end": 0.5
+    }
+   ],
+   "anchor_ms": 0.0,
+   "kind": "rifle",
+   "material": "metal",
+   "variant": 1,
+   "short": false,
+   "proxy": true,
+   "source": "bullet_impact_metal_heavy_08.wav {\"pitch\": 7.0, \"dur\": 0.5}"
+  },
+  {
+   "file": "Casings/rifle/metal_2.wav",
+   "key": "snd.casing.rifle.metal",
+   "layer": "casing",
+   "channels": 2,
+   "sample_rate": 48000,
+   "lufs_i": -26.04,
+   "lufs_m_max": -26.0,
+   "true_peak_dbtp": -12.22,
+   "length_s": 0.306,
+   "peak_ms": 77.2,
+   "sources": [
+    {
+     "file": "sonniss/Gamemaster Audio -  Bullet Impact Sounds/bullet_impact_metal_heavy_08.wav",
+     "start": 0.0,
+     "end": 0.5
+    }
+   ],
+   "anchor_ms": 0.0,
+   "kind": "rifle",
+   "material": "metal",
+   "variant": 2,
+   "short": false,
+   "proxy": true,
+   "source": "bullet_impact_metal_heavy_08.wav {\"pitch\": 8.5, \"dur\": 0.5}"
+  },
+  {
+   "file": "Casings/rifle/metal_3.wav",
+   "key": "snd.casing.rifle.metal",
+   "layer": "casing",
+   "channels": 2,
+   "sample_rate": 48000,
+   "lufs_i": -26.04,
+   "lufs_m_max": -26.0,
+   "true_peak_dbtp": -13.31,
+   "length_s": 0.389,
+   "peak_ms": 89.2,
+   "sources": [
+    {
+     "file": "sonniss/Gamemaster Audio -  Bullet Impact Sounds/bullet_impact_metal_heavy_08.wav",
+     "start": 0.0,
+     "end": 0.55
+    }
+   ],
+   "anchor_ms": 0.0,
+   "kind": "rifle",
+   "material": "metal",
+   "variant": 3,
+   "short": false,
+   "proxy": true,
+   "source": "bullet_impact_metal_heavy_08.wav {\"pitch\": 6.0, \"dur\": 0.55}"
+  },
+  {
+   "file": "Casings/rifle/metal_4.wav",
+   "key": "snd.casing.rifle.metal",
+   "layer": "casing",
+   "channels": 2,
+   "sample_rate": 48000,
+   "lufs_i": -26.04,
+   "lufs_m_max": -26.0,
+   "true_peak_dbtp": -12.18,
+   "length_s": 0.26,
+   "peak_ms": 73.4,
+   "sources": [
+    {
+     "file": "sonniss/Gamemaster Audio -  Bullet Impact Sounds/bullet_impact_metal_heavy_08.wav",
+     "start": 0.0,
+     "end": 0.45
+    }
+   ],
+   "anchor_ms": 0.0,
+   "kind": "rifle",
+   "material": "metal",
+   "variant": 4,
+   "short": false,
+   "proxy": true,
+   "source": "bullet_impact_metal_heavy_08.wav {\"pitch\": 9.5, \"dur\": 0.45}"
+  },
+  {
+   "file": "Casings/rifle/metal_5.wav",
+   "key": "snd.casing.rifle.metal",
+   "layer": "casing",
+   "channels": 2,
+   "sample_rate": 48000,
+   "lufs_i": -26.04,
+   "lufs_m_max": -26.0,
+   "true_peak_dbtp": -13.54,
+   "length_s": 0.324,
+   "peak_ms": 83.8,
+   "sources": [
+    {
+     "file": "sonniss/Gamemaster Audio -  Bullet Impact Sounds/bullet_impact_metal_heavy_08.wav",
+     "start": 0.0,
+     "end": 0.5
+    }
+   ],
+   "anchor_ms": 0.0,
+   "kind": "rifle",
+   "material": "metal",
+   "variant": 5,
+   "short": false,
+   "proxy": true,
+   "source": "bullet_impact_metal_heavy_08.wav {\"pitch\": 7.5, \"dur\": 0.5, \"gain_db\": -2.0}"
+  },
+  {
+   "file": "Casings/rifle/metal_6.wav",
+   "key": "snd.casing.rifle.metal",
+   "layer": "casing",
+   "channels": 2,
+   "sample_rate": 48000,
+   "lufs_i": -26.04,
+   "lufs_m_max": -26.0,
+   "true_peak_dbtp": -13.84,
+   "length_s": 0.45,
+   "peak_ms": 94.5,
+   "sources": [
+    {
+     "file": "sonniss/Gamemaster Audio -  Bullet Impact Sounds/bullet_impact_metal_heavy_08.wav",
+     "start": 0.0,
+     "end": 0.6
+    }
+   ],
+   "anchor_ms": 0.0,
+   "kind": "rifle",
+   "material": "metal",
+   "variant": 6,
+   "short": false,
+   "proxy": true,
+   "source": "bullet_impact_metal_heavy_08.wav {\"pitch\": 5.0, \"dur\": 0.6}"
+  },
+  {
+   "file": "Casings/rifle/tile_1.wav",
+   "key": "snd.casing.rifle.tile",
+   "layer": "casing",
+   "channels": 2,
+   "sample_rate": 48000,
+   "lufs_i": -32.79,
+   "lufs_m_max": -25.93,
+   "true_peak_dbtp": -1.0,
+   "length_s": 1.602,
+   "peak_ms": 2.1,
+   "sources": [
+    {
+     "file": "sonniss/SculpTunes - Cartridges & Casings Shell/7 62 x 39 PPU  - Casings Shell & Cartdridges  - Impact and Roll on Tile Floor - Inside.wav",
+     "start": 0.016,
+     "end": 1.618
+    }
+   ],
+   "anchor_ms": 0.0,
+   "kind": "rifle",
+   "material": "tile",
+   "variant": 1,
+   "short": false,
+   "proxy": false,
+   "source": "7 62 x 39 PPU  - Casings Shell & Cartdridges  - Impact and Roll on Tile Floor - Inside.wav drop@0.02s bounce"
+  },
+  {
+   "file": "Casings/rifle/tile_2.wav",
+   "key": "snd.casing.rifle.tile",
+   "layer": "casing",
+   "channels": 2,
+   "sample_rate": 48000,
+   "lufs_i": -31.19,
+   "lufs_m_max": -29.6,
+   "true_peak_dbtp": -4.6,
+   "length_s": 1.602,
+   "peak_ms": 2.3,
+   "sources": [
+    {
+     "file": "sonniss/SculpTunes - Cartridges & Casings Shell/7 62 x 39 PPU  - Casings Shell & Cartdridges  - Impact and Roll on Tile Floor - Inside.wav",
+     "start": 5.295,
+     "end": 6.897
+    }
+   ],
+   "anchor_ms": 0.0,
+   "kind": "rifle",
+   "material": "tile",
+   "variant": 2,
+   "short": false,
+   "proxy": false,
+   "source": "7 62 x 39 PPU  - Casings Shell & Cartdridges  - Impact and Roll on Tile Floor - Inside.wav drop@5.30s bounce"
+  },
+  {
+   "file": "Casings/rifle/tile_3.wav",
+   "key": "snd.casing.rifle.tile",
+   "layer": "casing",
+   "channels": 2,
+   "sample_rate": 48000,
+   "lufs_i": -26.04,
+   "lufs_m_max": -26.0,
+   "true_peak_dbtp": -4.74,
+   "length_s": 0.455,
+   "peak_ms": 2.7,
+   "sources": [
+    {
+     "file": "sonniss/SculpTunes - Cartridges & Casings Shell/7 62 x 39 PPU  - Casings Shell & Cartdridges  - Impact and Roll on Tile Floor - Inside.wav",
+     "start": 8.554,
+     "end": 9.009
+    }
+   ],
+   "anchor_ms": 0.0,
+   "kind": "rifle",
+   "material": "tile",
+   "variant": 3,
+   "short": false,
+   "proxy": false,
+   "source": "7 62 x 39 PPU  - Casings Shell & Cartdridges  - Impact and Roll on Tile Floor - Inside.wav drop@8.56s bounce"
+  },
+  {
+   "file": "Casings/rifle/tile_4.wav",
+   "key": "snd.casing.rifle.tile",
+   "layer": "casing",
+   "channels": 2,
+   "sample_rate": 48000,
+   "lufs_i": -30.96,
+   "lufs_m_max": -25.93,
+   "true_peak_dbtp": -1.0,
+   "length_s": 1.602,
+   "peak_ms": 2.3,
+   "sources": [
+    {
+     "file": "sonniss/SculpTunes - Cartridges & Casings Shell/7 62 x 39 PPU  - Casings Shell & Cartdridges  - Impact and Roll on Tile Floor - Inside.wav",
+     "start": 9.081,
+     "end": 10.683
+    }
+   ],
+   "anchor_ms": 0.0,
+   "kind": "rifle",
+   "material": "tile",
+   "variant": 4,
+   "short": false,
+   "proxy": false,
+   "source": "7 62 x 39 PPU  - Casings Shell & Cartdridges  - Impact and Roll on Tile Floor - Inside.wav drop@9.08s bounce"
+  },
+  {
+   "file": "Casings/rifle/tile_5.wav",
+   "key": "snd.casing.rifle.tile",
+   "layer": "casing",
+   "channels": 2,
+   "sample_rate": 48000,
+   "lufs_i": -32.52,
+   "lufs_m_max": -26.0,
+   "true_peak_dbtp": -3.75,
+   "length_s": 1.602,
+   "peak_ms": 2.2,
+   "sources": [
+    {
+     "file": "sonniss/SculpTunes - Cartridges & Casings Shell/7 62 x 39 PPU  - Casings Shell & Cartdridges  - Impact and Roll on Tile Floor - Inside.wav",
+     "start": 13.899,
+     "end": 15.501
+    }
+   ],
+   "anchor_ms": 0.0,
+   "kind": "rifle",
+   "material": "tile",
+   "variant": 5,
+   "short": false,
+   "proxy": false,
+   "source": "7 62 x 39 PPU  - Casings Shell & Cartdridges  - Impact and Roll on Tile Floor - Inside.wav drop@13.90s bounce"
+  },
+  {
+   "file": "Casings/rifle/tile_6.wav",
+   "key": "snd.casing.rifle.tile",
+   "layer": "casing",
+   "channels": 2,
+   "sample_rate": 48000,
+   "lufs_i": -26.04,
+   "lufs_m_max": -26.0,
+   "true_peak_dbtp": -2.84,
+   "length_s": 0.282,
+   "peak_ms": 2.2,
+   "sources": [
+    {
+     "file": "sonniss/SculpTunes - Cartridges & Casings Shell/7 62 x 39 PPU  - Casings Shell & Cartdridges  - Impact and Roll on Tile Floor - Inside.wav",
+     "start": 13.899,
+     "end": 14.181
+    }
+   ],
+   "anchor_ms": 0.0,
+   "kind": "rifle",
+   "material": "tile",
+   "variant": 6,
+   "short": true,
+   "proxy": false,
+   "source": "7 62 x 39 PPU  - Casings Shell & Cartdridges  - Impact and Roll on Tile Floor - Inside.wav drop@13.90s short"
+  },
+  {
+   "file": "Casings/rifle/tile_7.wav",
+   "key": "snd.casing.rifle.tile",
+   "layer": "casing",
+   "channels": 2,
+   "sample_rate": 48000,
+   "lufs_i": -26.04,
+   "lufs_m_max": -26.0,
+   "true_peak_dbtp": -4.74,
+   "length_s": 0.282,
+   "peak_ms": 2.7,
+   "sources": [
+    {
+     "file": "sonniss/SculpTunes - Cartridges & Casings Shell/7 62 x 39 PPU  - Casings Shell & Cartdridges  - Impact and Roll on Tile Floor - Inside.wav",
+     "start": 8.554,
+     "end": 8.836
+    }
+   ],
+   "anchor_ms": 0.0,
+   "kind": "rifle",
+   "material": "tile",
+   "variant": 7,
+   "short": true,
+   "proxy": false,
+   "source": "7 62 x 39 PPU  - Casings Shell & Cartdridges  - Impact and Roll on Tile Floor - Inside.wav drop@8.56s short"
+  },
+  {
+   "file": "Casings/rifle/tile_8.wav",
+   "key": "snd.casing.rifle.tile",
+   "layer": "casing",
+   "channels": 2,
+   "sample_rate": 48000,
+   "lufs_i": -25.98,
+   "lufs_m_max": -25.93,
+   "true_peak_dbtp": -1.0,
+   "length_s": 0.282,
+   "peak_ms": 2.1,
+   "sources": [
+    {
+     "file": "sonniss/SculpTunes - Cartridges & Casings Shell/7 62 x 39 PPU  - Casings Shell & Cartdridges  - Impact and Roll on Tile Floor - Inside.wav",
+     "start": 0.016,
+     "end": 0.298
+    }
+   ],
+   "anchor_ms": 0.0,
+   "kind": "rifle",
+   "material": "tile",
+   "variant": 8,
+   "short": true,
+   "proxy": false,
+   "source": "7 62 x 39 PPU  - Casings Shell & Cartdridges  - Impact and Roll on Tile Floor - Inside.wav drop@0.02s short"
+  },
+  {
+   "file": "Casings/rifle/wood_1.wav",
+   "key": "snd.casing.rifle.wood",
+   "layer": "casing",
+   "channels": 2,
+   "sample_rate": 48000,
+   "lufs_i": -30.41,
+   "lufs_m_max": -26.0,
+   "true_peak_dbtp": -2.66,
+   "length_s": 0.681,
+   "peak_ms": 3.6,
+   "sources": [
+    {
+     "file": "sonniss/SculpTunes - Cartridges & Casings Shell/6 35 GFL - Casings Shell & Cartridges - Drop bounce and roll on Wooden Floor - Outdoor.wav",
+     "start": 0.034,
+     "end": 0.716
+    }
+   ],
+   "anchor_ms": 0.0,
+   "kind": "rifle",
+   "material": "wood",
+   "variant": 1,
+   "short": false,
+   "proxy": false,
+   "source": "6 35 GFL - Casings Shell & Cartridges - Drop bounce and roll on Wooden Floor - Outdoor.wav drop@0.04s bounce"
+  },
+  {
+   "file": "Casings/rifle/wood_2.wav",
+   "key": "snd.casing.rifle.wood",
+   "layer": "casing",
+   "channels": 2,
+   "sample_rate": 48000,
+   "lufs_i": -26.04,
+   "lufs_m_max": -26.0,
+   "true_peak_dbtp": -2.4,
+   "length_s": 1.209,
+   "peak_ms": 2.4,
+   "sources": [
+    {
+     "file": "sonniss/SculpTunes - Cartridges & Casings Shell/6 35 GFL - Casings Shell & Cartridges - Drop bounce and roll on Wooden Floor - Outdoor.wav",
+     "start": 1.589,
+     "end": 2.798
+    }
+   ],
+   "anchor_ms": 0.0,
+   "kind": "rifle",
+   "material": "wood",
+   "variant": 2,
+   "short": false,
+   "proxy": false,
+   "source": "6 35 GFL - Casings Shell & Cartridges - Drop bounce and roll on Wooden Floor - Outdoor.wav drop@1.59s bounce"
+  },
+  {
+   "file": "Casings/rifle/wood_3.wav",
+   "key": "snd.casing.rifle.wood",
+   "layer": "casing",
+   "channels": 2,
+   "sample_rate": 48000,
+   "lufs_i": -29.87,
+   "lufs_m_max": -26.0,
+   "true_peak_dbtp": -2.86,
+   "length_s": 1.174,
+   "peak_ms": 2.5,
+   "sources": [
+    {
+     "file": "sonniss/SculpTunes - Cartridges & Casings Shell/6 35 GFL - Casings Shell & Cartridges - Drop bounce and roll on Wooden Floor - Outdoor.wav",
+     "start": 3.411,
+     "end": 4.586
+    }
+   ],
+   "anchor_ms": 0.0,
+   "kind": "rifle",
+   "material": "wood",
+   "variant": 3,
+   "short": false,
+   "proxy": false,
+   "source": "6 35 GFL - Casings Shell & Cartridges - Drop bounce and roll on Wooden Floor - Outdoor.wav drop@3.41s bounce"
+  },
+  {
+   "file": "Casings/rifle/wood_4.wav",
+   "key": "snd.casing.rifle.wood",
+   "layer": "casing",
+   "channels": 2,
+   "sample_rate": 48000,
+   "lufs_i": -28.87,
+   "lufs_m_max": -26.0,
+   "true_peak_dbtp": -3.87,
+   "length_s": 0.578,
+   "peak_ms": 3.2,
+   "sources": [
+    {
+     "file": "sonniss/SculpTunes - Cartridges & Casings Shell/6 35 GFL - Casings Shell & Cartridges - Drop bounce and roll on Wooden Floor - Outdoor.wav",
+     "start": 4.895,
+     "end": 5.473
+    }
+   ],
+   "anchor_ms": 0.0,
+   "kind": "rifle",
+   "material": "wood",
+   "variant": 4,
+   "short": false,
+   "proxy": false,
+   "source": "6 35 GFL - Casings Shell & Cartridges - Drop bounce and roll on Wooden Floor - Outdoor.wav drop@4.90s bounce"
+  },
+  {
+   "file": "Casings/rifle/wood_5.wav",
+   "key": "snd.casing.rifle.wood",
+   "layer": "casing",
+   "channels": 2,
+   "sample_rate": 48000,
+   "lufs_i": -30.42,
+   "lufs_m_max": -26.0,
+   "true_peak_dbtp": -1.82,
+   "length_s": 0.76,
+   "peak_ms": 2.3,
+   "sources": [
+    {
+     "file": "sonniss/SculpTunes - Cartridges & Casings Shell/6 35 GFL - Casings Shell & Cartridges - Drop bounce and roll on Wooden Floor - Outdoor.wav",
+     "start": 6.703,
+     "end": 7.463
+    }
+   ],
+   "anchor_ms": 0.0,
+   "kind": "rifle",
+   "material": "wood",
+   "variant": 5,
+   "short": false,
+   "proxy": false,
+   "source": "6 35 GFL - Casings Shell & Cartridges - Drop bounce and roll on Wooden Floor - Outdoor.wav drop@6.70s bounce"
+  },
+  {
+   "file": "Casings/rifle/wood_6.wav",
+   "key": "snd.casing.rifle.wood",
+   "layer": "casing",
+   "channels": 2,
+   "sample_rate": 48000,
+   "lufs_i": -26.04,
+   "lufs_m_max": -26.0,
+   "true_peak_dbtp": -1.81,
+   "length_s": 0.282,
+   "peak_ms": 2.3,
+   "sources": [
+    {
+     "file": "sonniss/SculpTunes - Cartridges & Casings Shell/6 35 GFL - Casings Shell & Cartridges - Drop bounce and roll on Wooden Floor - Outdoor.wav",
+     "start": 6.703,
+     "end": 6.985
+    }
+   ],
+   "anchor_ms": 0.0,
+   "kind": "rifle",
+   "material": "wood",
+   "variant": 6,
+   "short": true,
+   "proxy": false,
+   "source": "6 35 GFL - Casings Shell & Cartridges - Drop bounce and roll on Wooden Floor - Outdoor.wav drop@6.70s short"
+  },
+  {
+   "file": "Casings/rifle/wood_7.wav",
+   "key": "snd.casing.rifle.wood",
+   "layer": "casing",
+   "channels": 2,
+   "sample_rate": 48000,
+   "lufs_i": -26.04,
+   "lufs_m_max": -26.0,
+   "true_peak_dbtp": -2.47,
+   "length_s": 0.282,
+   "peak_ms": 2.5,
+   "sources": [
+    {
+     "file": "sonniss/SculpTunes - Cartridges & Casings Shell/6 35 GFL - Casings Shell & Cartridges - Drop bounce and roll on Wooden Floor - Outdoor.wav",
+     "start": 3.411,
+     "end": 3.693
+    }
+   ],
+   "anchor_ms": 0.0,
+   "kind": "rifle",
+   "material": "wood",
+   "variant": 7,
+   "short": true,
+   "proxy": false,
+   "source": "6 35 GFL - Casings Shell & Cartridges - Drop bounce and roll on Wooden Floor - Outdoor.wav drop@3.41s short"
+  },
+  {
+   "file": "Casings/rifle/wood_8.wav",
+   "key": "snd.casing.rifle.wood",
+   "layer": "casing",
+   "channels": 2,
+   "sample_rate": 48000,
+   "lufs_i": -26.04,
+   "lufs_m_max": -26.0,
+   "true_peak_dbtp": -2.58,
+   "length_s": 0.282,
+   "peak_ms": 3.6,
+   "sources": [
+    {
+     "file": "sonniss/SculpTunes - Cartridges & Casings Shell/6 35 GFL - Casings Shell & Cartridges - Drop bounce and roll on Wooden Floor - Outdoor.wav",
+     "start": 0.034,
+     "end": 0.316
+    }
+   ],
+   "anchor_ms": 0.0,
+   "kind": "rifle",
+   "material": "wood",
+   "variant": 8,
+   "short": true,
+   "proxy": false,
+   "source": "6 35 GFL - Casings Shell & Cartridges - Drop bounce and roll on Wooden Floor - Outdoor.wav drop@0.04s short"
+  },
+  {
+   "file": "Casings/rifle/wood_9.wav",
+   "key": "snd.casing.rifle.wood",
+   "layer": "casing",
+   "channels": 2,
+   "sample_rate": 48000,
+   "lufs_i": -29.8,
+   "lufs_m_max": -26.0,
+   "true_peak_dbtp": -4.69,
+   "length_s": 0.68,
+   "peak_ms": 21.0,
+   "sources": [
+    {
+     "file": "sonniss/Stuart Duffield - Bullet SFX/Bullet_Drop_Wood_04.wav",
+     "start": 0.0,
+     "end": 0.72
+    }
+   ],
+   "anchor_ms": 0.0,
+   "kind": "rifle",
+   "material": "wood",
+   "variant": 9,
+   "short": false,
+   "proxy": false,
+   "source": "Bullet_Drop_Wood_04.wav {\"pitch\": 1.0}"
+  },
+  {
+   "file": "Casings/shell/carpet_1.wav",
+   "key": "snd.casing.shell.carpet",
+   "layer": "casing",
+   "channels": 2,
+   "sample_rate": 48000,
+   "lufs_i": -31.13,
+   "lufs_m_max": -26.0,
+   "true_peak_dbtp": -4.06,
+   "length_s": 0.678,
+   "peak_ms": 5.9,
+   "sources": [
+    {
+     "file": "sonniss/SculpTunes - Cartridges & Casings Shell/Cartridges and Casings Shell - drop on Carpeted Floor - Internal -.wav",
+     "start": 0.101,
+     "end": 0.639
+    }
+   ],
+   "anchor_ms": 0.0,
+   "kind": "shell",
+   "material": "carpet",
+   "variant": 1,
+   "short": false,
+   "proxy": true,
+   "source": "Cartridges and Casings Shell - drop on Carpeted Floor - Internal -.wav drop@0.10s bounce"
+  },
+  {
+   "file": "Casings/shell/carpet_2.wav",
+   "key": "snd.casing.shell.carpet",
+   "layer": "casing",
+   "channels": 2,
+   "sample_rate": 48000,
+   "lufs_i": -28.57,
+   "lufs_m_max": -28.53,
+   "true_peak_dbtp": -3.51,
+   "length_s": 0.531,
+   "peak_ms": 3.3,
+   "sources": [
+    {
+     "file": "sonniss/SculpTunes - Cartridges & Casings Shell/Cartridges and Casings Shell - drop on Carpeted Floor - Internal -.wav",
+     "start": 10.648,
+     "end": 11.069
+    }
+   ],
+   "anchor_ms": 0.0,
+   "kind": "shell",
+   "material": "carpet",
+   "variant": 2,
+   "short": false,
+   "proxy": true,
+   "source": "Cartridges and Casings Shell - drop on Carpeted Floor - Internal -.wav drop@10.65s bounce"
+  },
+  {
+   "file": "Casings/shell/carpet_3.wav",
+   "key": "snd.casing.shell.carpet",
+   "layer": "casing",
+   "channels": 2,
+   "sample_rate": 48000,
+   "lufs_i": -32.56,
+   "lufs_m_max": -26.0,
+   "true_peak_dbtp": -1.8,
+   "length_s": 0.751,
+   "peak_ms": 2.6,
+   "sources": [
+    {
+     "file": "sonniss/SculpTunes - Cartridges & Casings Shell/Cartridges and Casings Shell - drop on Carpeted Floor - Internal -.wav",
+     "start": 21.786,
+     "end": 22.382
+    }
+   ],
+   "anchor_ms": 0.0,
+   "kind": "shell",
+   "material": "carpet",
+   "variant": 3,
+   "short": false,
+   "proxy": true,
+   "source": "Cartridges and Casings Shell - drop on Carpeted Floor - Internal -.wav drop@21.79s bounce"
+  },
+  {
+   "file": "Casings/shell/carpet_4.wav",
+   "key": "snd.casing.shell.carpet",
+   "layer": "casing",
+   "channels": 2,
+   "sample_rate": 48000,
+   "lufs_i": -26.62,
+   "lufs_m_max": -26.0,
+   "true_peak_dbtp": -5.67,
+   "length_s": 0.783,
+   "peak_ms": 4.4,
+   "sources": [
+    {
+     "file": "sonniss/SculpTunes - Cartridges & Casings Shell/Cartridges and Casings Shell - drop on Carpeted Floor - Internal -.wav",
+     "start": 31.724,
+     "end": 32.346
+    }
+   ],
+   "anchor_ms": 0.0,
+   "kind": "shell",
+   "material": "carpet",
+   "variant": 4,
+   "short": false,
+   "proxy": true,
+   "source": "Cartridges and Casings Shell - drop on Carpeted Floor - Internal -.wav drop@31.73s bounce"
+  },
+  {
+   "file": "Casings/shell/carpet_5.wav",
+   "key": "snd.casing.shell.carpet",
+   "layer": "casing",
+   "channels": 2,
+   "sample_rate": 48000,
+   "lufs_i": -32.22,
+   "lufs_m_max": -26.0,
+   "true_peak_dbtp": -1.44,
+   "length_s": 0.891,
+   "peak_ms": 3.7,
+   "sources": [
+    {
+     "file": "sonniss/SculpTunes - Cartridges & Casings Shell/Cartridges and Casings Shell - drop on Carpeted Floor - Internal -.wav",
+     "start": 43.198,
+     "end": 43.905
+    }
+   ],
+   "anchor_ms": 0.0,
+   "kind": "shell",
+   "material": "carpet",
+   "variant": 5,
+   "short": false,
+   "proxy": true,
+   "source": "Cartridges and Casings Shell - drop on Carpeted Floor - Internal -.wav drop@43.20s bounce"
+  },
+  {
+   "file": "Casings/shell/carpet_6.wav",
+   "key": "snd.casing.shell.carpet",
+   "layer": "casing",
+   "channels": 2,
+   "sample_rate": 48000,
+   "lufs_i": -28.98,
+   "lufs_m_max": -28.94,
+   "true_peak_dbtp": -3.76,
+   "length_s": 0.355,
+   "peak_ms": 6.6,
+   "sources": [
+    {
+     "file": "sonniss/SculpTunes - Cartridges & Casings Shell/Cartridges and Casings Shell - drop on Carpeted Floor - Internal -.wav",
+     "start": 41.594,
+     "end": 41.876
+    }
+   ],
+   "anchor_ms": 0.0,
+   "kind": "shell",
+   "material": "carpet",
+   "variant": 6,
+   "short": true,
+   "proxy": true,
+   "source": "Cartridges and Casings Shell - drop on Carpeted Floor - Internal -.wav drop@41.60s short"
+  },
+  {
+   "file": "Casings/shell/carpet_7.wav",
+   "key": "snd.casing.shell.carpet",
+   "layer": "casing",
+   "channels": 2,
+   "sample_rate": 48000,
+   "lufs_i": -27.99,
+   "lufs_m_max": -27.94,
+   "true_peak_dbtp": -1.75,
+   "length_s": 0.355,
+   "peak_ms": 4.5,
+   "sources": [
+    {
+     "file": "sonniss/SculpTunes - Cartridges & Casings Shell/Cartridges and Casings Shell - drop on Carpeted Floor - Internal -.wav",
+     "start": 20.252,
+     "end": 20.534
+    }
+   ],
+   "anchor_ms": 0.0,
+   "kind": "shell",
+   "material": "carpet",
+   "variant": 7,
+   "short": true,
+   "proxy": true,
+   "source": "Cartridges and Casings Shell - drop on Carpeted Floor - Internal -.wav drop@20.25s short"
+  },
+  {
+   "file": "Casings/shell/carpet_8.wav",
+   "key": "snd.casing.shell.carpet",
+   "layer": "casing",
+   "channels": 2,
+   "sample_rate": 48000,
+   "lufs_i": -28.3,
+   "lufs_m_max": -28.25,
+   "true_peak_dbtp": -2.12,
+   "length_s": 0.355,
+   "peak_ms": 3.5,
+   "sources": [
+    {
+     "file": "sonniss/SculpTunes - Cartridges & Casings Shell/Cartridges and Casings Shell - drop on Carpeted Floor - Internal -.wav",
+     "start": 1.554,
+     "end": 1.836
+    }
+   ],
+   "anchor_ms": 0.0,
+   "kind": "shell",
+   "material": "carpet",
+   "variant": 8,
+   "short": true,
+   "proxy": true,
+   "source": "Cartridges and Casings Shell - drop on Carpeted Floor - Internal -.wav drop@1.56s short"
+  },
+  {
+   "file": "Casings/shell/concrete_1.wav",
+   "key": "snd.casing.shell.concrete",
+   "layer": "casing",
+   "channels": 2,
+   "sample_rate": 48000,
+   "lufs_i": -28.74,
+   "lufs_m_max": -26.0,
+   "true_peak_dbtp": -4.31,
+   "length_s": 0.876,
+   "peak_ms": 38.3,
+   "sources": [
+    {
+     "file": "sonniss/Stuart Duffield - Bullet SFX/ShotgunShell_Land_Concrete_02.wav",
+     "start": 0.0,
+     "end": 0.876
+    }
+   ],
+   "anchor_ms": 0.0,
+   "kind": "shell",
+   "material": "concrete",
+   "variant": 1,
+   "short": false,
+   "proxy": false,
+   "source": "ShotgunShell_Land_Concrete_02.wav {\"pitch\": 0.0}"
+  },
+  {
+   "file": "Casings/shell/concrete_2.wav",
+   "key": "snd.casing.shell.concrete",
+   "layer": "casing",
+   "channels": 2,
+   "sample_rate": 48000,
+   "lufs_i": -28.61,
+   "lufs_m_max": -26.0,
+   "true_peak_dbtp": -4.84,
+   "length_s": 0.928,
+   "peak_ms": 40.6,
+   "sources": [
+    {
+     "file": "sonniss/Stuart Duffield - Bullet SFX/ShotgunShell_Land_Concrete_02.wav",
+     "start": 0.0,
+     "end": 0.876
+    }
+   ],
+   "anchor_ms": 0.0,
+   "kind": "shell",
+   "material": "concrete",
+   "variant": 2,
+   "short": false,
+   "proxy": false,
+   "source": "ShotgunShell_Land_Concrete_02.wav {\"pitch\": -1.0}"
+  },
+  {
+   "file": "Casings/shell/concrete_3.wav",
+   "key": "snd.casing.shell.concrete",
+   "layer": "casing",
+   "channels": 2,
+   "sample_rate": 48000,
+   "lufs_i": -28.76,
+   "lufs_m_max": -26.0,
+   "true_peak_dbtp": -4.59,
+   "length_s": 0.827,
+   "peak_ms": 36.1,
+   "sources": [
+    {
+     "file": "sonniss/Stuart Duffield - Bullet SFX/ShotgunShell_Land_Concrete_02.wav",
+     "start": 0.0,
+     "end": 0.876
+    }
+   ],
+   "anchor_ms": 0.0,
+   "kind": "shell",
+   "material": "concrete",
+   "variant": 3,
+   "short": false,
+   "proxy": false,
+   "source": "ShotgunShell_Land_Concrete_02.wav {\"pitch\": 1.0}"
+  },
+  {
+   "file": "Casings/shell/concrete_4.wav",
+   "key": "snd.casing.shell.concrete",
+   "layer": "casing",
+   "channels": 2,
+   "sample_rate": 48000,
+   "lufs_i": -36.49,
+   "lufs_m_max": -27.09,
+   "true_peak_dbtp": -1.21,
+   "length_s": 1.89,
+   "peak_ms": 2.8,
+   "sources": [
+    {
+     "file": "sonniss/SculpTunes - Cartridges & Casings Shell/9 mm x 21  - Casings Shell & Cartdridges - Roll on Concrete Floor - Outdoor.wav",
+     "start": 0.193,
+     "end": 1.608
+    }
+   ],
+   "anchor_ms": 0.0,
+   "kind": "shell",
+   "material": "concrete",
+   "variant": 4,
+   "short": false,
+   "proxy": true,
+   "source": "9 mm x 21  - Casings Shell & Cartdridges - Roll on Concrete Floor - Outdoor.wav drop@0.19s bounce"
+  },
+  {
+   "file": "Casings/shell/concrete_5.wav",
+   "key": "snd.casing.shell.concrete",
+   "layer": "casing",
+   "channels": 2,
+   "sample_rate": 48000,
+   "lufs_i": -33.45,
+   "lufs_m_max": -29.03,
+   "true_peak_dbtp": -1.66,
+   "length_s": 0.754,
+   "peak_ms": 3.2,
+   "sources": [
+    {
+     "file": "sonniss/SculpTunes - Cartridges & Casings Shell/9 mm x 21  - Casings Shell & Cartdridges - Roll on Concrete Floor - Outdoor.wav",
+     "start": 12.109,
+     "end": 12.674
+    }
+   ],
+   "anchor_ms": 0.0,
+   "kind": "shell",
+   "material": "concrete",
+   "variant": 5,
+   "short": false,
+   "proxy": true,
+   "source": "9 mm x 21  - Casings Shell & Cartdridges - Roll on Concrete Floor - Outdoor.wav drop@12.11s bounce"
+  },
+  {
+   "file": "Casings/shell/concrete_6.wav",
+   "key": "snd.casing.shell.concrete",
+   "layer": "casing",
+   "channels": 2,
+   "sample_rate": 48000,
+   "lufs_i": -34.88,
+   "lufs_m_max": -26.0,
+   "true_peak_dbtp": -1.75,
+   "length_s": 1.468,
+   "peak_ms": 2.9,
+   "sources": [
+    {
+     "file": "sonniss/SculpTunes - Cartridges & Casings Shell/9 mm x 21  - Casings Shell & Cartdridges - Roll on Concrete Floor - Outdoor.wav",
+     "start": 28.082,
+     "end": 29.181
+    }
+   ],
+   "anchor_ms": 0.0,
+   "kind": "shell",
+   "material": "concrete",
+   "variant": 6,
+   "short": false,
+   "proxy": true,
+   "source": "9 mm x 21  - Casings Shell & Cartdridges - Roll on Concrete Floor - Outdoor.wav drop@28.08s bounce"
+  },
+  {
+   "file": "Casings/shell/concrete_7.wav",
+   "key": "snd.casing.shell.concrete",
+   "layer": "casing",
+   "channels": 2,
+   "sample_rate": 48000,
+   "lufs_i": -25.94,
+   "lufs_m_max": -25.9,
+   "true_peak_dbtp": -1.0,
+   "length_s": 0.376,
+   "peak_ms": 2.8,
+   "sources": [
+    {
+     "file": "sonniss/SculpTunes - Cartridges & Casings Shell/9 mm x 21  - Casings Shell & Cartdridges - Roll on Concrete Floor - Outdoor.wav",
+     "start": 25.459,
+     "end": 25.741
+    }
+   ],
+   "anchor_ms": 0.0,
+   "kind": "shell",
+   "material": "concrete",
+   "variant": 7,
+   "short": true,
+   "proxy": true,
+   "source": "9 mm x 21  - Casings Shell & Cartdridges - Roll on Concrete Floor - Outdoor.wav drop@25.46s short"
+  },
+  {
+   "file": "Casings/shell/concrete_8.wav",
+   "key": "snd.casing.shell.concrete",
+   "layer": "casing",
+   "channels": 2,
+   "sample_rate": 48000,
+   "lufs_i": -28.44,
+   "lufs_m_max": -28.39,
+   "true_peak_dbtp": -1.63,
+   "length_s": 0.376,
+   "peak_ms": 2.9,
+   "sources": [
+    {
+     "file": "sonniss/SculpTunes - Cartridges & Casings Shell/9 mm x 21  - Casings Shell & Cartdridges - Roll on Concrete Floor - Outdoor.wav",
+     "start": 2.344,
+     "end": 2.626
+    }
+   ],
+   "anchor_ms": 0.0,
+   "kind": "shell",
+   "material": "concrete",
+   "variant": 8,
+   "short": true,
+   "proxy": true,
+   "source": "9 mm x 21  - Casings Shell & Cartdridges - Roll on Concrete Floor - Outdoor.wav drop@2.35s short"
+  },
+  {
+   "file": "Casings/shell/dirt_1.wav",
+   "key": "snd.casing.shell.dirt",
+   "layer": "casing",
+   "channels": 2,
+   "sample_rate": 48000,
+   "lufs_i": -30.26,
+   "lufs_m_max": -26.0,
+   "true_peak_dbtp": -6.38,
+   "length_s": 0.771,
+   "peak_ms": 93.4,
+   "sources": [
+    {
+     "file": "sonniss/Stuart Duffield - Bullet SFX/Bullet_Drop_Leaves_03.wav",
+     "start": 0.0,
+     "end": 0.648
+    }
+   ],
+   "anchor_ms": 0.0,
+   "kind": "shell",
+   "material": "dirt",
+   "variant": 1,
+   "short": false,
+   "proxy": true,
+   "source": "Bullet_Drop_Leaves_03.wav {\"pitch\": -3.0}"
+  },
+  {
+   "file": "Casings/shell/dirt_2.wav",
+   "key": "snd.casing.shell.dirt",
+   "layer": "casing",
+   "channels": 2,
+   "sample_rate": 48000,
+   "lufs_i": -29.01,
+   "lufs_m_max": -26.0,
+   "true_peak_dbtp": -6.65,
+   "length_s": 0.84,
+   "peak_ms": 101.8,
+   "sources": [
+    {
+     "file": "sonniss/Stuart Duffield - Bullet SFX/Bullet_Drop_Leaves_03.wav",
+     "start": 0.0,
+     "end": 0.648
+    }
+   ],
+   "anchor_ms": 0.0,
+   "kind": "shell",
+   "material": "dirt",
+   "variant": 2,
+   "short": false,
+   "proxy": true,
+   "source": "Bullet_Drop_Leaves_03.wav {\"pitch\": -4.5}"
+  },
+  {
+   "file": "Casings/shell/dirt_3.wav",
+   "key": "snd.casing.shell.dirt",
+   "layer": "casing",
+   "channels": 2,
+   "sample_rate": 48000,
+   "lufs_i": -28.71,
+   "lufs_m_max": -26.0,
+   "true_peak_dbtp": -6.58,
+   "length_s": 0.727,
+   "peak_ms": 89.0,
+   "sources": [
+    {
+     "file": "sonniss/Stuart Duffield - Bullet SFX/Bullet_Drop_Leaves_03.wav",
+     "start": 0.0,
+     "end": 0.648
+    }
+   ],
+   "anchor_ms": 0.0,
+   "kind": "shell",
+   "material": "dirt",
+   "variant": 3,
+   "short": false,
+   "proxy": true,
+   "source": "Bullet_Drop_Leaves_03.wav {\"pitch\": -2.0, \"gain_db\": -1.0}"
+  },
+  {
+   "file": "Casings/shell/dirt_4.wav",
+   "key": "snd.casing.shell.dirt",
+   "layer": "casing",
+   "channels": 2,
+   "sample_rate": 48000,
+   "lufs_i": -28.85,
+   "lufs_m_max": -26.0,
+   "true_peak_dbtp": -7.06,
+   "length_s": 0.89,
+   "peak_ms": 109.0,
+   "sources": [
+    {
+     "file": "sonniss/Stuart Duffield - Bullet SFX/Bullet_Drop_Leaves_03.wav",
+     "start": 0.0,
+     "end": 0.648
+    }
+   ],
+   "anchor_ms": 0.0,
+   "kind": "shell",
+   "material": "dirt",
+   "variant": 4,
+   "short": false,
+   "proxy": true,
+   "source": "Bullet_Drop_Leaves_03.wav {\"pitch\": -5.5}"
+  },
+  {
+   "file": "Casings/shell/dirt_5.wav",
+   "key": "snd.casing.shell.dirt",
+   "layer": "casing",
+   "channels": 2,
+   "sample_rate": 48000,
+   "lufs_i": -29.98,
+   "lufs_m_max": -26.0,
+   "true_peak_dbtp": -7.36,
+   "length_s": 0.793,
+   "peak_ms": 97.1,
+   "sources": [
+    {
+     "file": "sonniss/Stuart Duffield - Bullet SFX/Bullet_Drop_Leaves_03.wav",
+     "start": 0.0,
+     "end": 0.648
+    }
+   ],
+   "anchor_ms": 0.0,
+   "kind": "shell",
+   "material": "dirt",
+   "variant": 5,
+   "short": false,
+   "proxy": true,
+   "source": "Bullet_Drop_Leaves_03.wav {\"pitch\": -3.5, \"lp\": 5000}"
+  },
+  {
+   "file": "Casings/shell/dirt_6.wav",
+   "key": "snd.casing.shell.dirt",
+   "layer": "casing",
+   "channels": 2,
+   "sample_rate": 48000,
+   "lufs_i": -29.76,
+   "lufs_m_max": -26.0,
+   "true_peak_dbtp": -6.82,
+   "length_s": 0.816,
+   "peak_ms": 98.9,
+   "sources": [
+    {
+     "file": "sonniss/Stuart Duffield - Bullet SFX/Bullet_Drop_Leaves_03.wav",
+     "start": 0.0,
+     "end": 0.648
+    }
+   ],
+   "anchor_ms": 0.0,
+   "kind": "shell",
+   "material": "dirt",
+   "variant": 6,
+   "short": false,
+   "proxy": true,
+   "source": "Bullet_Drop_Leaves_03.wav {\"pitch\": -4.0, \"gain_db\": -2.0}"
+  },
+  {
+   "file": "Casings/shell/metal_1.wav",
+   "key": "snd.casing.shell.metal",
+   "layer": "casing",
+   "channels": 2,
+   "sample_rate": 48000,
+   "lufs_i": -27.58,
+   "lufs_m_max": -26.0,
+   "true_peak_dbtp": -15.05,
+   "length_s": 0.566,
+   "peak_ms": 119.0,
+   "sources": [
+    {
+     "file": "sonniss/Gamemaster Audio -  Bullet Impact Sounds/bullet_impact_metal_heavy_08.wav",
+     "start": 0.0,
+     "end": 0.6
+    }
+   ],
+   "anchor_ms": 0.0,
+   "kind": "shell",
+   "material": "metal",
+   "variant": 1,
+   "short": false,
+   "proxy": true,
+   "source": "bullet_impact_metal_heavy_08.wav {\"pitch\": 1.0, \"dur\": 0.6}"
+  },
+  {
+   "file": "Casings/shell/metal_2.wav",
+   "key": "snd.casing.shell.metal",
+   "layer": "casing",
+   "channels": 2,
+   "sample_rate": 48000,
+   "lufs_i": -27.88,
+   "lufs_m_max": -26.0,
+   "true_peak_dbtp": -14.57,
+   "length_s": 0.519,
+   "peak_ms": 109.9,
+   "sources": [
+    {
+     "file": "sonniss/Gamemaster Audio -  Bullet Impact Sounds/bullet_impact_metal_heavy_08.wav",
+     "start": 0.0,
+     "end": 0.6
+    }
+   ],
+   "anchor_ms": 0.0,
+   "kind": "shell",
+   "material": "metal",
+   "variant": 2,
+   "short": false,
+   "proxy": true,
+   "source": "bullet_impact_metal_heavy_08.wav {\"pitch\": 2.5, \"dur\": 0.6}"
+  },
+  {
+   "file": "Casings/shell/metal_3.wav",
+   "key": "snd.casing.shell.metal",
+   "layer": "casing",
+   "channels": 2,
+   "sample_rate": 48000,
+   "lufs_i": -27.35,
+   "lufs_m_max": -26.0,
+   "true_peak_dbtp": -15.47,
+   "length_s": 0.65,
+   "peak_ms": 126.1,
+   "sources": [
+    {
+     "file": "sonniss/Gamemaster Audio -  Bullet Impact Sounds/bullet_impact_metal_heavy_08.wav",
+     "start": 0.0,
+     "end": 0.65
+    }
+   ],
+   "anchor_ms": 0.0,
+   "kind": "shell",
+   "material": "metal",
+   "variant": 3,
+   "short": false,
+   "proxy": true,
+   "source": "bullet_impact_metal_heavy_08.wav {\"pitch\": 0.0, \"dur\": 0.65}"
+  },
+  {
+   "file": "Casings/shell/metal_4.wav",
+   "key": "snd.casing.shell.metal",
+   "layer": "casing",
+   "channels": 2,
+   "sample_rate": 48000,
+   "lufs_i": -26.04,
+   "lufs_m_max": -26.0,
+   "true_peak_dbtp": -14.0,
+   "length_s": 0.449,
+   "peak_ms": 103.8,
+   "sources": [
+    {
+     "file": "sonniss/Gamemaster Audio -  Bullet Impact Sounds/bullet_impact_metal_heavy_08.wav",
+     "start": 0.0,
+     "end": 0.55
+    }
+   ],
+   "anchor_ms": 0.0,
+   "kind": "shell",
+   "material": "metal",
+   "variant": 4,
+   "short": false,
+   "proxy": true,
+   "source": "bullet_impact_metal_heavy_08.wav {\"pitch\": 3.5, \"dur\": 0.55}"
+  },
+  {
+   "file": "Casings/shell/metal_5.wav",
+   "key": "snd.casing.shell.metal",
+   "layer": "casing",
+   "channels": 2,
+   "sample_rate": 48000,
+   "lufs_i": -27.74,
+   "lufs_m_max": -26.0,
+   "true_peak_dbtp": -14.75,
+   "length_s": 0.541,
+   "peak_ms": 113.7,
+   "sources": [
+    {
+     "file": "sonniss/Gamemaster Audio -  Bullet Impact Sounds/bullet_impact_metal_heavy_08.wav",
+     "start": 0.0,
+     "end": 0.6
+    }
+   ],
+   "anchor_ms": 0.0,
+   "kind": "shell",
+   "material": "metal",
+   "variant": 5,
+   "short": false,
+   "proxy": true,
+   "source": "bullet_impact_metal_heavy_08.wav {\"pitch\": 1.8, \"dur\": 0.6, \"gain_db\": -2.0}"
+  },
+  {
+   "file": "Casings/shell/metal_6.wav",
+   "key": "snd.casing.shell.metal",
+   "layer": "casing",
+   "channels": 2,
+   "sample_rate": 48000,
+   "lufs_i": -27.14,
+   "lufs_m_max": -26.0,
+   "true_peak_dbtp": -14.89,
+   "length_s": 0.742,
+   "peak_ms": 133.6,
+   "sources": [
+    {
+     "file": "sonniss/Gamemaster Audio -  Bullet Impact Sounds/bullet_impact_metal_heavy_08.wav",
+     "start": 0.0,
+     "end": 0.7
+    }
+   ],
+   "anchor_ms": 0.0,
+   "kind": "shell",
+   "material": "metal",
+   "variant": 6,
+   "short": false,
+   "proxy": true,
+   "source": "bullet_impact_metal_heavy_08.wav {\"pitch\": -1.0, \"dur\": 0.7}"
+  },
+  {
+   "file": "Casings/shell/tile_1.wav",
+   "key": "snd.casing.shell.tile",
+   "layer": "casing",
+   "channels": 2,
+   "sample_rate": 48000,
+   "lufs_i": -29.76,
+   "lufs_m_max": -26.0,
+   "true_peak_dbtp": -1.85,
+   "length_s": 0.853,
+   "peak_ms": 27.9,
+   "sources": [
+    {
+     "file": "sonniss/Stuart Duffield - Bullet SFX/ShotgunShell_Land_Lino_03.wav",
+     "start": 0.0,
+     "end": 0.853
+    }
+   ],
+   "anchor_ms": 0.0,
+   "kind": "shell",
+   "material": "tile",
+   "variant": 1,
+   "short": false,
+   "proxy": true,
+   "source": "ShotgunShell_Land_Lino_03.wav {\"pitch\": 0.0}"
+  },
+  {
+   "file": "Casings/shell/tile_2.wav",
+   "key": "snd.casing.shell.tile",
+   "layer": "casing",
+   "channels": 2,
+   "sample_rate": 48000,
+   "lufs_i": -30.55,
+   "lufs_m_max": -26.0,
+   "true_peak_dbtp": -1.95,
+   "length_s": 0.904,
+   "peak_ms": 29.6,
+   "sources": [
+    {
+     "file": "sonniss/Stuart Duffield - Bullet SFX/ShotgunShell_Land_Lino_03.wav",
+     "start": 0.0,
+     "end": 0.853
+    }
+   ],
+   "anchor_ms": 0.0,
+   "kind": "shell",
+   "material": "tile",
+   "variant": 2,
+   "short": false,
+   "proxy": true,
+   "source": "ShotgunShell_Land_Lino_03.wav {\"pitch\": -1.0}"
+  },
+  {
+   "file": "Casings/shell/tile_3.wav",
+   "key": "snd.casing.shell.tile",
+   "layer": "casing",
+   "channels": 2,
+   "sample_rate": 48000,
+   "lufs_i": -30.32,
+   "lufs_m_max": -26.0,
+   "true_peak_dbtp": -2.18,
+   "length_s": 0.805,
+   "peak_ms": 26.4,
+   "sources": [
+    {
+     "file": "sonniss/Stuart Duffield - Bullet SFX/ShotgunShell_Land_Lino_03.wav",
+     "start": 0.0,
+     "end": 0.853
+    }
+   ],
+   "anchor_ms": 0.0,
+   "kind": "shell",
+   "material": "tile",
+   "variant": 3,
+   "short": false,
+   "proxy": true,
+   "source": "ShotgunShell_Land_Lino_03.wav {\"pitch\": 1.0}"
+  },
+  {
+   "file": "Casings/shell/tile_4.wav",
+   "key": "snd.casing.shell.tile",
+   "layer": "casing",
+   "channels": 2,
+   "sample_rate": 48000,
+   "lufs_i": -33.6,
+   "lufs_m_max": -25.97,
+   "true_peak_dbtp": -1.0,
+   "length_s": 2.138,
+   "peak_ms": 2.8,
+   "sources": [
+    {
+     "file": "sonniss/SculpTunes - Cartridges & Casings Shell/7 62 x 39 PPU  - Casings Shell & Cartdridges  - Impact and Roll on Tile Floor - Inside.wav",
+     "start": 0.016,
+     "end": 1.618
+    }
+   ],
+   "anchor_ms": 0.0,
+   "kind": "shell",
+   "material": "tile",
+   "variant": 4,
+   "short": false,
+   "proxy": true,
+   "source": "7 62 x 39 PPU  - Casings Shell & Cartdridges  - Impact and Roll on Tile Floor - Inside.wav drop@0.02s bounce"
+  },
+  {
+   "file": "Casings/shell/tile_5.wav",
+   "key": "snd.casing.shell.tile",
+   "layer": "casing",
+   "channels": 2,
+   "sample_rate": 48000,
+   "lufs_i": -26.04,
+   "lufs_m_max": -26.0,
+   "true_peak_dbtp": -4.66,
+   "length_s": 0.607,
+   "peak_ms": 3.7,
+   "sources": [
+    {
+     "file": "sonniss/SculpTunes - Cartridges & Casings Shell/7 62 x 39 PPU  - Casings Shell & Cartdridges  - Impact and Roll on Tile Floor - Inside.wav",
+     "start": 8.554,
+     "end": 9.009
+    }
+   ],
+   "anchor_ms": 0.0,
+   "kind": "shell",
+   "material": "tile",
+   "variant": 5,
+   "short": false,
+   "proxy": true,
+   "source": "7 62 x 39 PPU  - Casings Shell & Cartdridges  - Impact and Roll on Tile Floor - Inside.wav drop@8.56s bounce"
+  },
+  {
+   "file": "Casings/shell/tile_6.wav",
+   "key": "snd.casing.shell.tile",
+   "layer": "casing",
+   "channels": 2,
+   "sample_rate": 48000,
+   "lufs_i": -33.42,
+   "lufs_m_max": -26.0,
+   "true_peak_dbtp": -3.18,
+   "length_s": 2.138,
+   "peak_ms": 2.9,
+   "sources": [
+    {
+     "file": "sonniss/SculpTunes - Cartridges & Casings Shell/7 62 x 39 PPU  - Casings Shell & Cartdridges  - Impact and Roll on Tile Floor - Inside.wav",
+     "start": 13.899,
+     "end": 15.501
+    }
+   ],
+   "anchor_ms": 0.0,
+   "kind": "shell",
+   "material": "tile",
+   "variant": 6,
+   "short": false,
+   "proxy": true,
+   "source": "7 62 x 39 PPU  - Casings Shell & Cartdridges  - Impact and Roll on Tile Floor - Inside.wav drop@13.90s bounce"
+  },
+  {
+   "file": "Casings/shell/tile_7.wav",
+   "key": "snd.casing.shell.tile",
+   "layer": "casing",
+   "channels": 2,
+   "sample_rate": 48000,
+   "lufs_i": -28.26,
+   "lufs_m_max": -28.22,
+   "true_peak_dbtp": -1.58,
+   "length_s": 0.376,
+   "peak_ms": 3.1,
+   "sources": [
+    {
+     "file": "sonniss/SculpTunes - Cartridges & Casings Shell/7 62 x 39 PPU  - Casings Shell & Cartdridges  - Impact and Roll on Tile Floor - Inside.wav",
+     "start": 9.081,
+     "end": 9.363
+    }
+   ],
+   "anchor_ms": 0.0,
+   "kind": "shell",
+   "material": "tile",
+   "variant": 7,
+   "short": true,
+   "proxy": true,
+   "source": "7 62 x 39 PPU  - Casings Shell & Cartdridges  - Impact and Roll on Tile Floor - Inside.wav drop@9.08s short"
+  },
+  {
+   "file": "Casings/shell/tile_8.wav",
+   "key": "snd.casing.shell.tile",
+   "layer": "casing",
+   "channels": 2,
+   "sample_rate": 48000,
+   "lufs_i": -26.04,
+   "lufs_m_max": -26.0,
+   "true_peak_dbtp": -1.51,
+   "length_s": 0.376,
+   "peak_ms": 3.1,
+   "sources": [
+    {
+     "file": "sonniss/SculpTunes - Cartridges & Casings Shell/7 62 x 39 PPU  - Casings Shell & Cartdridges  - Impact and Roll on Tile Floor - Inside.wav",
+     "start": 5.295,
+     "end": 5.577
+    }
+   ],
+   "anchor_ms": 0.0,
+   "kind": "shell",
+   "material": "tile",
+   "variant": 8,
+   "short": true,
+   "proxy": true,
+   "source": "7 62 x 39 PPU  - Casings Shell & Cartdridges  - Impact and Roll on Tile Floor - Inside.wav drop@5.30s short"
+  },
+  {
+   "file": "Casings/shell/wood_1.wav",
+   "key": "snd.casing.shell.wood",
+   "layer": "casing",
+   "channels": 2,
+   "sample_rate": 48000,
+   "lufs_i": -33.14,
+   "lufs_m_max": -26.0,
+   "true_peak_dbtp": -3.24,
+   "length_s": 0.909,
+   "peak_ms": 4.7,
+   "sources": [
+    {
+     "file": "sonniss/SculpTunes - Cartridges & Casings Shell/6 35 GFL - Casings Shell & Cartridges - Drop bounce and roll on Wooden Floor - Outdoor.wav",
+     "start": 0.034,
+     "end": 0.716
+    }
+   ],
+   "anchor_ms": 0.0,
+   "kind": "shell",
+   "material": "wood",
+   "variant": 1,
+   "short": false,
+   "proxy": true,
+   "source": "6 35 GFL - Casings Shell & Cartridges - Drop bounce and roll on Wooden Floor - Outdoor.wav drop@0.04s bounce"
+  },
+  {
+   "file": "Casings/shell/wood_2.wav",
+   "key": "snd.casing.shell.wood",
+   "layer": "casing",
+   "channels": 2,
+   "sample_rate": 48000,
+   "lufs_i": -26.04,
+   "lufs_m_max": -26.0,
+   "true_peak_dbtp": -3.08,
+   "length_s": 1.613,
+   "peak_ms": 3.2,
+   "sources": [
+    {
+     "file": "sonniss/SculpTunes - Cartridges & Casings Shell/6 35 GFL - Casings Shell & Cartridges - Drop bounce and roll on Wooden Floor - Outdoor.wav",
+     "start": 1.589,
+     "end": 2.798
+    }
+   ],
+   "anchor_ms": 0.0,
+   "kind": "shell",
+   "material": "wood",
+   "variant": 2,
+   "short": false,
+   "proxy": true,
+   "source": "6 35 GFL - Casings Shell & Cartridges - Drop bounce and roll on Wooden Floor - Outdoor.wav drop@1.59s bounce"
+  },
+  {
+   "file": "Casings/shell/wood_3.wav",
+   "key": "snd.casing.shell.wood",
+   "layer": "casing",
+   "channels": 2,
+   "sample_rate": 48000,
+   "lufs_i": -30.46,
+   "lufs_m_max": -26.0,
+   "true_peak_dbtp": -4.44,
+   "length_s": 0.771,
+   "peak_ms": 4.3,
+   "sources": [
+    {
+     "file": "sonniss/SculpTunes - Cartridges & Casings Shell/6 35 GFL - Casings Shell & Cartridges - Drop bounce and roll on Wooden Floor - Outdoor.wav",
+     "start": 4.895,
+     "end": 5.473
+    }
+   ],
+   "anchor_ms": 0.0,
+   "kind": "shell",
+   "material": "wood",
+   "variant": 3,
+   "short": false,
+   "proxy": true,
+   "source": "6 35 GFL - Casings Shell & Cartridges - Drop bounce and roll on Wooden Floor - Outdoor.wav drop@4.90s bounce"
+  },
+  {
+   "file": "Casings/shell/wood_4.wav",
+   "key": "snd.casing.shell.wood",
+   "layer": "casing",
+   "channels": 2,
+   "sample_rate": 48000,
+   "lufs_i": -30.26,
+   "lufs_m_max": -26.0,
+   "true_peak_dbtp": -2.46,
+   "length_s": 1.015,
+   "peak_ms": 3.1,
+   "sources": [
+    {
+     "file": "sonniss/SculpTunes - Cartridges & Casings Shell/6 35 GFL - Casings Shell & Cartridges - Drop bounce and roll on Wooden Floor - Outdoor.wav",
+     "start": 6.703,
+     "end": 7.463
+    }
+   ],
+   "anchor_ms": 0.0,
+   "kind": "shell",
+   "material": "wood",
+   "variant": 4,
+   "short": false,
+   "proxy": true,
+   "source": "6 35 GFL - Casings Shell & Cartridges - Drop bounce and roll on Wooden Floor - Outdoor.wav drop@6.70s bounce"
+  },
+  {
+   "file": "Casings/shell/wood_5.wav",
+   "key": "snd.casing.shell.wood",
+   "layer": "casing",
+   "channels": 2,
+   "sample_rate": 48000,
+   "lufs_i": -26.04,
+   "lufs_m_max": -26.0,
+   "true_peak_dbtp": -3.31,
+   "length_s": 0.376,
+   "peak_ms": 3.4,
+   "sources": [
+    {
+     "file": "sonniss/SculpTunes - Cartridges & Casings Shell/6 35 GFL - Casings Shell & Cartridges - Drop bounce and roll on Wooden Floor - Outdoor.wav",
+     "start": 3.411,
+     "end": 3.693
+    }
+   ],
+   "anchor_ms": 0.0,
+   "kind": "shell",
+   "material": "wood",
+   "variant": 5,
+   "short": true,
+   "proxy": true,
+   "source": "6 35 GFL - Casings Shell & Cartridges - Drop bounce and roll on Wooden Floor - Outdoor.wav drop@3.41s short"
+  },
+  {
+   "file": "Casings/shell/wood_6.wav",
+   "key": "snd.casing.shell.wood",
+   "layer": "casing",
+   "channels": 2,
+   "sample_rate": 48000,
+   "lufs_i": -30.91,
+   "lufs_m_max": -26.0,
+   "true_peak_dbtp": -5.51,
+   "length_s": 0.907,
+   "peak_ms": 28.1,
+   "sources": [
+    {
+     "file": "sonniss/Stuart Duffield - Bullet SFX/Bullet_Drop_Wood_04.wav",
+     "start": 0.0,
+     "end": 0.72
+    }
+   ],
+   "anchor_ms": 0.0,
+   "kind": "shell",
+   "material": "wood",
+   "variant": 6,
+   "short": false,
+   "proxy": true,
+   "source": "Bullet_Drop_Wood_04.wav {\"pitch\": -4.0}"
+  },
+  {
+   "file": "Casings/shell/wood_7.wav",
+   "key": "snd.casing.shell.wood",
+   "layer": "casing",
+   "channels": 2,
+   "sample_rate": 48000,
+   "lufs_i": -30.45,
+   "lufs_m_max": -26.0,
+   "true_peak_dbtp": -5.7,
+   "length_s": 0.989,
+   "peak_ms": 30.6,
+   "sources": [
+    {
+     "file": "sonniss/Stuart Duffield - Bullet SFX/Bullet_Drop_Wood_04.wav",
+     "start": 0.0,
+     "end": 0.72
+    }
+   ],
+   "anchor_ms": 0.0,
+   "kind": "shell",
+   "material": "wood",
+   "variant": 7,
+   "short": false,
+   "proxy": true,
+   "source": "Bullet_Drop_Wood_04.wav {\"pitch\": -5.5}"
+  },
+  {
    "file": "Foley/move/jump_1.wav",
    "key": "snd.foley.move.jump",
    "layer": "foley",
@@ -13,6 +2405,13 @@
    "true_peak_dbtp": -3.41,
    "length_s": 0.55,
    "peak_ms": 329.3,
+   "sources": [
+    {
+     "file": "tsp/Tactical Shooter Pack/General/S_Jump.WAV",
+     "start": 0.0,
+     "end": 0.55
+    }
+   ],
    "anchor_ms": 0.0,
    "element": "jump",
    "category": "move",
@@ -30,6 +2429,13 @@
    "true_peak_dbtp": -3.48,
    "length_s": 0.583,
    "peak_ms": 348.9,
+   "sources": [
+    {
+     "file": "tsp/Tactical Shooter Pack/General/S_Jump.WAV",
+     "start": 0.0,
+     "end": 0.55
+    }
+   ],
    "anchor_ms": 0.0,
    "element": "jump",
    "category": "move",
@@ -47,6 +2453,13 @@
    "true_peak_dbtp": -3.08,
    "length_s": 0.519,
    "peak_ms": 310.8,
+   "sources": [
+    {
+     "file": "tsp/Tactical Shooter Pack/General/S_Jump.WAV",
+     "start": 0.0,
+     "end": 0.55
+    }
+   ],
    "anchor_ms": 0.0,
    "element": "jump",
    "category": "move",
@@ -64,6 +2477,23 @@
    "true_peak_dbtp": -8.45,
    "length_s": 0.621,
    "peak_ms": 53.6,
+   "sources": [
+    {
+     "file": "tsp/Tactical Shooter Pack/General/S_Land.WAV",
+     "start": 0.035,
+     "end": 0.588
+    },
+    {
+     "file": "sonniss/Shapeforms - Hit & Punch/IMPACT_LOW_THUD_10.wav",
+     "start": 0.0,
+     "end": 0.205
+    },
+    {
+     "file": "tsp/Tactical Shooter Pack/AK105/Actions/S_AK105_Reload_Tactical.WAV",
+     "start": 1.881,
+     "end": 2.064
+    }
+   ],
    "anchor_ms": 13.8,
    "element": "land_heavy",
    "category": "move",
@@ -81,6 +2511,23 @@
    "true_peak_dbtp": -8.27,
    "length_s": 0.658,
    "peak_ms": 35.4,
+   "sources": [
+    {
+     "file": "tsp/Tactical Shooter Pack/General/S_Land.WAV",
+     "start": 0.035,
+     "end": 0.588
+    },
+    {
+     "file": "sonniss/Shapeforms - Hit & Punch/IMPACT_LOW_THUD_10.wav",
+     "start": 0.0,
+     "end": 0.205
+    },
+    {
+     "file": "tsp/Tactical Shooter Pack/AK105/Actions/S_AK105_Reload_Empty.WAV",
+     "start": 1.977,
+     "end": 2.16
+    }
+   ],
    "anchor_ms": 22.0,
    "element": "land_heavy",
    "category": "move",
@@ -98,6 +2545,23 @@
    "true_peak_dbtp": -7.36,
    "length_s": 0.593,
    "peak_ms": 22.3,
+   "sources": [
+    {
+     "file": "tsp/Tactical Shooter Pack/General/S_Land.WAV",
+     "start": 0.035,
+     "end": 0.588
+    },
+    {
+     "file": "sonniss/Shapeforms - Hit & Punch/IMPACT_LOW_THUD_10.wav",
+     "start": 0.0,
+     "end": 0.205
+    },
+    {
+     "file": "tsp/Tactical Shooter Pack/AK105/Actions/S_AK105_MagCheck.WAV",
+     "start": 2.757,
+     "end": 2.94
+    }
+   ],
    "anchor_ms": 13.2,
    "element": "land_heavy",
    "category": "move",
@@ -115,6 +2579,13 @@
    "true_peak_dbtp": -1.54,
    "length_s": 0.37,
    "peak_ms": 23.9,
+   "sources": [
+    {
+     "file": "tsp/Tactical Shooter Pack/General/S_Land.WAV",
+     "start": 0.035,
+     "end": 0.438
+    }
+   ],
    "anchor_ms": 11.3,
    "element": "land_light",
    "category": "move",
@@ -132,6 +2603,13 @@
    "true_peak_dbtp": -1.29,
    "length_s": 0.349,
    "peak_ms": 22.5,
+   "sources": [
+    {
+     "file": "tsp/Tactical Shooter Pack/General/S_Land.WAV",
+     "start": 0.035,
+     "end": 0.438
+    }
+   ],
    "anchor_ms": 10.7,
    "element": "land_light",
    "category": "move",
@@ -149,6 +2627,13 @@
    "true_peak_dbtp": -1.73,
    "length_s": 0.385,
    "peak_ms": 24.8,
+   "sources": [
+    {
+     "file": "tsp/Tactical Shooter Pack/General/S_Land.WAV",
+     "start": 0.035,
+     "end": 0.438
+    }
+   ],
    "anchor_ms": 11.8,
    "element": "land_light",
    "category": "move",
@@ -166,12 +2651,49 @@
    "true_peak_dbtp": -6.62,
    "length_s": 1.2,
    "peak_ms": 353.8,
+   "sources": [
+    {
+     "file": "tsp/Tactical Shooter Pack/AK105/Actions/S_AK105_Draw.WAV",
+     "start": 0.297,
+     "end": 0.75
+    },
+    {
+     "file": "sonniss/Shapeforms - Hit & Punch/CLOTHING_MATERIAL_MOVEMENT_08.wav",
+     "start": 0.0,
+     "end": 0.33
+    },
+    {
+     "file": "tsp/Tactical Shooter Pack/Herrington_11-87/Actions/S_Herrington_11-87_Draw.WAV",
+     "start": 0.097,
+     "end": 0.6
+    },
+    {
+     "file": "tsp/Tactical Shooter Pack/AK105/Actions/S_AK105_Reload_Empty.WAV",
+     "start": 3.927,
+     "end": 4.21
+    },
+    {
+     "file": "tsp/Tactical Shooter Pack/AK105/Actions/S_AK105_Inspect.WAV",
+     "start": 4.325,
+     "end": 4.628
+    },
+    {
+     "file": "tsp/Tactical Shooter Pack/AK105/Actions/S_AK105_MagCheck.WAV",
+     "start": 3.723,
+     "end": 3.976
+    },
+    {
+     "file": "tsp/Tactical Shooter Pack/AK105/Actions/S_AK105_Reload_Empty.WAV",
+     "start": 3.995,
+     "end": 4.218
+    }
+   ],
    "anchor_ms": 0.0,
    "element": "sprint_loop",
    "category": "move",
    "variant": 1,
    "loop": true,
-   "source": "synth seed=1 steps_per_loop=2"
+   "source": "real cloth + rattle slices, seed=1 steps_per_loop=2"
   },
   {
    "file": "Foley/move/sprint_loop_2.wav",
@@ -184,12 +2706,44 @@
    "true_peak_dbtp": -9.77,
    "length_s": 1.1,
    "peak_ms": 838.5,
+   "sources": [
+    {
+     "file": "tsp/Tactical Shooter Pack/AK105/Actions/S_AK105_Draw.WAV",
+     "start": 0.297,
+     "end": 0.75
+    },
+    {
+     "file": "tsp/Tactical Shooter Pack/Herrington_11-87/Actions/S_Herrington_11-87_Draw.WAV",
+     "start": 0.097,
+     "end": 0.6
+    },
+    {
+     "file": "sonniss/Shapeforms - Hit & Punch/CLOTHING_MATERIAL_MOVEMENT_08.wav",
+     "start": 0.0,
+     "end": 0.33
+    },
+    {
+     "file": "tsp/Tactical Shooter Pack/AK105/Actions/S_AK105_Reload_Empty.WAV",
+     "start": 3.927,
+     "end": 4.21
+    },
+    {
+     "file": "tsp/Tactical Shooter Pack/AK105/Actions/S_AK105_MagCheck.WAV",
+     "start": 3.723,
+     "end": 3.976
+    },
+    {
+     "file": "tsp/Tactical Shooter Pack/AK105/Actions/S_AK105_Inspect.WAV",
+     "start": 4.325,
+     "end": 4.628
+    }
+   ],
    "anchor_ms": 0.0,
    "element": "sprint_loop",
    "category": "move",
    "variant": 2,
    "loop": true,
-   "source": "synth seed=2 steps_per_loop=2"
+   "source": "real cloth + rattle slices, seed=2 steps_per_loop=2"
   },
   {
    "file": "Foley/move/sprint_loop_3.wav",
@@ -202,12 +2756,39 @@
    "true_peak_dbtp": -4.19,
    "length_s": 1.3,
    "peak_ms": 882.1,
+   "sources": [
+    {
+     "file": "tsp/Tactical Shooter Pack/AK105/Actions/S_AK105_Draw.WAV",
+     "start": 0.297,
+     "end": 0.75
+    },
+    {
+     "file": "tsp/Tactical Shooter Pack/AK105/Actions/S_AK105_Holster.WAV",
+     "start": 0.427,
+     "end": 0.88
+    },
+    {
+     "file": "tsp/Tactical Shooter Pack/Herrington_11-87/Actions/S_Herrington_11-87_Draw.WAV",
+     "start": 0.097,
+     "end": 0.6
+    },
+    {
+     "file": "tsp/Tactical Shooter Pack/AK105/Actions/S_AK105_Inspect.WAV",
+     "start": 4.325,
+     "end": 4.628
+    },
+    {
+     "file": "tsp/Tactical Shooter Pack/AK105/Actions/S_AK105_Reload_Empty.WAV",
+     "start": 3.995,
+     "end": 4.218
+    }
+   ],
    "anchor_ms": 0.0,
    "element": "sprint_loop",
    "category": "move",
    "variant": 3,
    "loop": true,
-   "source": "synth seed=3 steps_per_loop=2"
+   "source": "real cloth + rattle slices, seed=3 steps_per_loop=2"
   },
   {
    "file": "Foley/step_carpet/run_1.wav",
@@ -220,6 +2801,13 @@
    "true_peak_dbtp": -4.29,
    "length_s": 0.28,
    "peak_ms": 8.6,
+   "sources": [
+    {
+     "file": "boots/Boots/Carpet/FEETHmn_BOOTS-Boots Run Carpet Sequence_Ocular_Stride.wav",
+     "start": 0.626,
+     "end": 0.906
+    }
+   ],
    "anchor_ms": 5.5,
    "element": "run",
    "category": "step_carpet",
@@ -238,6 +2826,13 @@
    "true_peak_dbtp": -4.69,
    "length_s": 0.28,
    "peak_ms": 8.6,
+   "sources": [
+    {
+     "file": "boots/Boots/Carpet/FEETHmn_BOOTS-Boots Run Carpet Sequence_Ocular_Stride.wav",
+     "start": 3.147,
+     "end": 3.427
+    }
+   ],
    "anchor_ms": 5.6,
    "element": "run",
    "category": "step_carpet",
@@ -256,6 +2851,13 @@
    "true_peak_dbtp": -3.75,
    "length_s": 0.28,
    "peak_ms": 13.6,
+   "sources": [
+    {
+     "file": "boots/Boots/Carpet/FEETHmn_BOOTS-Boots Run Carpet Sequence_Ocular_Stride.wav",
+     "start": 6.013,
+     "end": 6.293
+    }
+   ],
    "anchor_ms": 5.2,
    "element": "run",
    "category": "step_carpet",
@@ -274,6 +2876,13 @@
    "true_peak_dbtp": -2.57,
    "length_s": 0.28,
    "peak_ms": 12.8,
+   "sources": [
+    {
+     "file": "boots/Boots/Carpet/FEETHmn_BOOTS-Boots Run Carpet Sequence_Ocular_Stride.wav",
+     "start": 11.164,
+     "end": 11.444
+    }
+   ],
    "anchor_ms": 4.4,
    "element": "run",
    "category": "step_carpet",
@@ -292,6 +2901,13 @@
    "true_peak_dbtp": -3.65,
    "length_s": 0.28,
    "peak_ms": 13.1,
+   "sources": [
+    {
+     "file": "boots/Boots/Carpet/FEETHmn_BOOTS-Boots Run Carpet Sequence_Ocular_Stride.wav",
+     "start": 16.889,
+     "end": 17.169
+    }
+   ],
    "anchor_ms": 5.1,
    "element": "run",
    "category": "step_carpet",
@@ -310,6 +2926,13 @@
    "true_peak_dbtp": -3.26,
    "length_s": 0.28,
    "peak_ms": 12.5,
+   "sources": [
+    {
+     "file": "boots/Boots/Carpet/FEETHmn_BOOTS-Boots Run Carpet Sequence_Ocular_Stride.wav",
+     "start": 26.883,
+     "end": 27.163
+    }
+   ],
    "anchor_ms": 4.6,
    "element": "run",
    "category": "step_carpet",
@@ -328,6 +2951,13 @@
    "true_peak_dbtp": -7.13,
    "length_s": 0.34,
    "peak_ms": 15.8,
+   "sources": [
+    {
+     "file": "boots/Boots/Carpet/FEETHmn_BOOTS-Boots Walk Carpet Sequence_Ocular_Stride.wav",
+     "start": 1.356,
+     "end": 1.696
+    }
+   ],
    "anchor_ms": 4.0,
    "element": "walk",
    "category": "step_carpet",
@@ -346,6 +2976,13 @@
    "true_peak_dbtp": -6.38,
    "length_s": 0.34,
    "peak_ms": 17.3,
+   "sources": [
+    {
+     "file": "boots/Boots/Carpet/FEETHmn_BOOTS-Boots Walk Carpet Sequence_Ocular_Stride.wav",
+     "start": 5.344,
+     "end": 5.684
+    }
+   ],
    "anchor_ms": 4.0,
    "element": "walk",
    "category": "step_carpet",
@@ -364,6 +3001,13 @@
    "true_peak_dbtp": -6.54,
    "length_s": 0.34,
    "peak_ms": 9.8,
+   "sources": [
+    {
+     "file": "boots/Boots/Carpet/FEETHmn_BOOTS-Boots Walk Carpet Sequence_Ocular_Stride.wav",
+     "start": 14.044,
+     "end": 14.384
+    }
+   ],
    "anchor_ms": 4.2,
    "element": "walk",
    "category": "step_carpet",
@@ -382,6 +3026,13 @@
    "true_peak_dbtp": -8.49,
    "length_s": 0.34,
    "peak_ms": 88.8,
+   "sources": [
+    {
+     "file": "boots/Boots/Carpet/FEETHmn_BOOTS-Boots Carpet Single Step 01_Ocular_Stride.wav",
+     "start": 0.029,
+     "end": 0.369
+    }
+   ],
    "anchor_ms": 4.7,
    "element": "walk",
    "category": "step_carpet",
@@ -400,6 +3051,13 @@
    "true_peak_dbtp": -8.19,
    "length_s": 0.34,
    "peak_ms": 24.1,
+   "sources": [
+    {
+     "file": "boots/Boots/Carpet/FEETHmn_BOOTS-Boots Carpet Single Step 02_Ocular_Stride.wav",
+     "start": 0.025,
+     "end": 0.365
+    }
+   ],
    "anchor_ms": 6.5,
    "element": "walk",
    "category": "step_carpet",
@@ -418,6 +3076,13 @@
    "true_peak_dbtp": -6.68,
    "length_s": 0.34,
    "peak_ms": 12.6,
+   "sources": [
+    {
+     "file": "boots/Boots/Carpet/FEETHmn_BOOTS-Boots Carpet Single Step 03_Ocular_Stride.wav",
+     "start": 0.067,
+     "end": 0.407
+    }
+   ],
    "anchor_ms": 12.7,
    "element": "walk",
    "category": "step_carpet",
@@ -436,6 +3101,13 @@
    "true_peak_dbtp": -1.22,
    "length_s": 0.273,
    "peak_ms": 4.9,
+   "sources": [
+    {
+     "file": "boots/Boots/Concrete/FEETHmn_BOOTS-Boots Concrete Stomp 01_Ocular_Stride.wav",
+     "start": 0.0,
+     "end": 0.274
+    }
+   ],
    "anchor_ms": 4.6,
    "element": "land",
    "category": "step_concrete",
@@ -454,6 +3126,13 @@
    "true_peak_dbtp": -1.0,
    "length_s": 0.3,
    "peak_ms": 4.8,
+   "sources": [
+    {
+     "file": "boots/Boots/Concrete/FEETHmn_BOOTS-Boots Concrete Stomp 02_Ocular_Stride.wav",
+     "start": 0.0,
+     "end": 0.3
+    }
+   ],
    "anchor_ms": 4.0,
    "element": "land",
    "category": "step_concrete",
@@ -472,6 +3151,13 @@
    "true_peak_dbtp": -2.02,
    "length_s": 0.3,
    "peak_ms": 26.5,
+   "sources": [
+    {
+     "file": "boots/Boots/Concrete/FEETHmn_BOOTS-Boots Concrete Stomp 03_Ocular_Stride.wav",
+     "start": 0.0,
+     "end": 0.3
+    }
+   ],
    "anchor_ms": 4.2,
    "element": "land",
    "category": "step_concrete",
@@ -490,6 +3176,13 @@
    "true_peak_dbtp": -1.79,
    "length_s": 0.3,
    "peak_ms": 3.8,
+   "sources": [
+    {
+     "file": "boots/Boots/Concrete/FEETHmn_BOOTS-Boots Concrete Stomp 04_Ocular_Stride.wav",
+     "start": 0.0,
+     "end": 0.3
+    }
+   ],
    "anchor_ms": 3.5,
    "element": "land",
    "category": "step_concrete",
@@ -508,6 +3201,13 @@
    "true_peak_dbtp": -2.43,
    "length_s": 0.3,
    "peak_ms": 3.6,
+   "sources": [
+    {
+     "file": "boots/Boots/Concrete/FEETHmn_BOOTS-Boots Concrete Stomp 05_Ocular_Stride.wav",
+     "start": 0.0,
+     "end": 0.3
+    }
+   ],
    "anchor_ms": 3.4,
    "element": "land",
    "category": "step_concrete",
@@ -526,6 +3226,13 @@
    "true_peak_dbtp": -2.96,
    "length_s": 0.28,
    "peak_ms": 19.9,
+   "sources": [
+    {
+     "file": "boots/Boots/Concrete/FEETHmn_BOOTS-Boots Run Concrete Sequence_Ocular_Stride.wav",
+     "start": 2.858,
+     "end": 3.138
+    }
+   ],
    "anchor_ms": 4.2,
    "element": "run",
    "category": "step_concrete",
@@ -544,6 +3251,13 @@
    "true_peak_dbtp": -3.75,
    "length_s": 0.28,
    "peak_ms": 22.2,
+   "sources": [
+    {
+     "file": "boots/Boots/Concrete/FEETHmn_BOOTS-Boots Run Concrete Sequence_Ocular_Stride.wav",
+     "start": 5.122,
+     "end": 5.402
+    }
+   ],
    "anchor_ms": 4.7,
    "element": "run",
    "category": "step_concrete",
@@ -562,6 +3276,13 @@
    "true_peak_dbtp": -2.6,
    "length_s": 0.28,
    "peak_ms": 4.9,
+   "sources": [
+    {
+     "file": "boots/Boots/Concrete/FEETHmn_BOOTS-Boots Run Concrete Sequence_Ocular_Stride.wav",
+     "start": 7.403,
+     "end": 7.683
+    }
+   ],
    "anchor_ms": 4.6,
    "element": "run",
    "category": "step_concrete",
@@ -580,6 +3301,13 @@
    "true_peak_dbtp": -1.96,
    "length_s": 0.28,
    "peak_ms": 4.8,
+   "sources": [
+    {
+     "file": "boots/Boots/Concrete/FEETHmn_BOOTS-Boots Run Concrete Sequence_Ocular_Stride.wav",
+     "start": 18.591,
+     "end": 18.871
+    }
+   ],
    "anchor_ms": 4.1,
    "element": "run",
    "category": "step_concrete",
@@ -598,6 +3326,13 @@
    "true_peak_dbtp": -4.4,
    "length_s": 0.28,
    "peak_ms": 20.8,
+   "sources": [
+    {
+     "file": "boots/Boots/Concrete/FEETHmn_BOOTS-Boots Run Concrete Sequence_Ocular_Stride.wav",
+     "start": 19.122,
+     "end": 19.402
+    }
+   ],
    "anchor_ms": 4.5,
    "element": "run",
    "category": "step_concrete",
@@ -616,6 +3351,13 @@
    "true_peak_dbtp": -2.69,
    "length_s": 0.28,
    "peak_ms": 5.0,
+   "sources": [
+    {
+     "file": "boots/Boots/Concrete/FEETHmn_BOOTS-Boots Run Concrete Sequence_Ocular_Stride.wav",
+     "start": 23.701,
+     "end": 23.981
+    }
+   ],
    "anchor_ms": 4.7,
    "element": "run",
    "category": "step_concrete",
@@ -634,6 +3376,13 @@
    "true_peak_dbtp": -2.11,
    "length_s": 0.3,
    "peak_ms": 10.5,
+   "sources": [
+    {
+     "file": "tsp/Tactical Shooter Pack/General/Run/S_Run_Concrete_2.WAV",
+     "start": 0.08,
+     "end": 0.38
+    }
+   ],
    "anchor_ms": 5.0,
    "element": "run",
    "category": "step_concrete",
@@ -652,6 +3401,13 @@
    "true_peak_dbtp": -1.0,
    "length_s": 0.3,
    "peak_ms": 6.4,
+   "sources": [
+    {
+     "file": "tsp/Tactical Shooter Pack/General/Run/S_Run_Concrete_4.WAV",
+     "start": 0.082,
+     "end": 0.382
+    }
+   ],
    "anchor_ms": 5.5,
    "element": "run",
    "category": "step_concrete",
@@ -670,6 +3426,13 @@
    "true_peak_dbtp": -4.34,
    "length_s": 0.34,
    "peak_ms": 5.2,
+   "sources": [
+    {
+     "file": "boots/Boots/Concrete/FEETHmn_BOOTS-Boots Walk Concrete Sequence_Ocular_Stride.wav",
+     "start": 0.622,
+     "end": 0.962
+    }
+   ],
    "anchor_ms": 4.4,
    "element": "walk",
    "category": "step_concrete",
@@ -688,6 +3451,13 @@
    "true_peak_dbtp": -5.17,
    "length_s": 0.34,
    "peak_ms": 5.4,
+   "sources": [
+    {
+     "file": "boots/Boots/Concrete/FEETHmn_BOOTS-Boots Walk Concrete Sequence_Ocular_Stride.wav",
+     "start": 6.0,
+     "end": 6.34
+    }
+   ],
    "anchor_ms": 4.4,
    "element": "walk",
    "category": "step_concrete",
@@ -706,6 +3476,13 @@
    "true_peak_dbtp": -3.69,
    "length_s": 0.34,
    "peak_ms": 5.2,
+   "sources": [
+    {
+     "file": "boots/Boots/Concrete/FEETHmn_BOOTS-Boots Walk Concrete Sequence_Ocular_Stride.wav",
+     "start": 11.313,
+     "end": 11.653
+    }
+   ],
    "anchor_ms": 4.0,
    "element": "walk",
    "category": "step_concrete",
@@ -721,9 +3498,16 @@
    "sample_rate": 48000,
    "lufs_i": -24.04,
    "lufs_m_max": -24.0,
-   "true_peak_dbtp": -3.36,
+   "true_peak_dbtp": -3.35,
    "length_s": 0.292,
    "peak_ms": 2.2,
+   "sources": [
+    {
+     "file": "boots/Boots/Concrete/FEETHmn_BOOTS-Boots Concrete Single Step 01_Ocular_Stride.wav",
+     "start": 0.0,
+     "end": 0.292
+    }
+   ],
    "anchor_ms": 1.3,
    "element": "walk",
    "category": "step_concrete",
@@ -742,6 +3526,13 @@
    "true_peak_dbtp": -2.19,
    "length_s": 0.292,
    "peak_ms": 2.4,
+   "sources": [
+    {
+     "file": "boots/Boots/Concrete/FEETHmn_BOOTS-Boots Concrete Single Step 02_Ocular_Stride.wav",
+     "start": 0.0,
+     "end": 0.292
+    }
+   ],
    "anchor_ms": 1.6,
    "element": "walk",
    "category": "step_concrete",
@@ -760,6 +3551,13 @@
    "true_peak_dbtp": -4.97,
    "length_s": 0.331,
    "peak_ms": 2.3,
+   "sources": [
+    {
+     "file": "boots/Boots/Concrete/FEETHmn_BOOTS-Boots Concrete Single Step 03_Ocular_Stride.wav",
+     "start": 0.0,
+     "end": 0.331
+    }
+   ],
    "anchor_ms": 1.5,
    "element": "walk",
    "category": "step_concrete",
@@ -778,6 +3576,13 @@
    "true_peak_dbtp": -3.14,
    "length_s": 0.3,
    "peak_ms": 17.2,
+   "sources": [
+    {
+     "file": "tsp/Tactical Shooter Pack/General/Walk/S_Walk_Concrete_1.WAV",
+     "start": 0.081,
+     "end": 0.381
+    }
+   ],
    "anchor_ms": 16.2,
    "element": "walk",
    "category": "step_concrete",
@@ -796,6 +3601,13 @@
    "true_peak_dbtp": -4.02,
    "length_s": 0.3,
    "peak_ms": 6.4,
+   "sources": [
+    {
+     "file": "tsp/Tactical Shooter Pack/General/Walk/S_Walk_Concrete_3.WAV",
+     "start": 0.082,
+     "end": 0.382
+    }
+   ],
    "anchor_ms": 5.5,
    "element": "walk",
    "category": "step_concrete",
@@ -814,6 +3626,13 @@
    "true_peak_dbtp": -6.44,
    "length_s": 0.45,
    "peak_ms": 53.4,
+   "sources": [
+    {
+     "file": "boots/Boots/Glass/FEETHmn_BOOTS-Boots Glass Stomp 01_Ocular_Stride.wav",
+     "start": 0.0,
+     "end": 0.45
+    }
+   ],
    "anchor_ms": 2.2,
    "element": "land",
    "category": "step_glass",
@@ -832,6 +3651,13 @@
    "true_peak_dbtp": -3.89,
    "length_s": 0.45,
    "peak_ms": 60.5,
+   "sources": [
+    {
+     "file": "boots/Boots/Glass/FEETHmn_BOOTS-Boots Glass Stomp 02_Ocular_Stride.wav",
+     "start": 0.0,
+     "end": 0.45
+    }
+   ],
    "anchor_ms": 3.1,
    "element": "land",
    "category": "step_glass",
@@ -850,6 +3676,13 @@
    "true_peak_dbtp": -3.92,
    "length_s": 0.45,
    "peak_ms": 41.8,
+   "sources": [
+    {
+     "file": "boots/Boots/Glass/FEETHmn_BOOTS-Boots Glass Stomp 03_Ocular_Stride.wav",
+     "start": 0.059,
+     "end": 0.509
+    }
+   ],
    "anchor_ms": 8.0,
    "element": "land",
    "category": "step_glass",
@@ -868,6 +3701,13 @@
    "true_peak_dbtp": -6.67,
    "length_s": 0.45,
    "peak_ms": 71.3,
+   "sources": [
+    {
+     "file": "boots/Boots/Glass/FEETHmn_BOOTS-Boots Glass Stomp 04_Ocular_Stride.wav",
+     "start": 0.0,
+     "end": 0.45
+    }
+   ],
    "anchor_ms": 14.6,
    "element": "land",
    "category": "step_glass",
@@ -886,6 +3726,13 @@
    "true_peak_dbtp": -3.68,
    "length_s": 0.45,
    "peak_ms": 86.9,
+   "sources": [
+    {
+     "file": "boots/Boots/Glass/FEETHmn_BOOTS-Boots Glass Stomp 05_Ocular_Stride.wav",
+     "start": 0.0,
+     "end": 0.45
+    }
+   ],
    "anchor_ms": 13.3,
    "element": "land",
    "category": "step_glass",
@@ -904,6 +3751,13 @@
    "true_peak_dbtp": -1.95,
    "length_s": 0.28,
    "peak_ms": 4.9,
+   "sources": [
+    {
+     "file": "boots/Boots/Glass/FEETHmn_BOOTS-Boots Run Glass Sequence_Ocular_Stride.wav",
+     "start": 0.294,
+     "end": 0.574
+    }
+   ],
    "anchor_ms": 4.5,
    "element": "run",
    "category": "step_glass",
@@ -922,6 +3776,13 @@
    "true_peak_dbtp": -2.12,
    "length_s": 0.28,
    "peak_ms": 20.8,
+   "sources": [
+    {
+     "file": "boots/Boots/Glass/FEETHmn_BOOTS-Boots Run Glass Sequence_Ocular_Stride.wav",
+     "start": 2.856,
+     "end": 3.136
+    }
+   ],
    "anchor_ms": 4.6,
    "element": "run",
    "category": "step_glass",
@@ -940,6 +3801,13 @@
    "true_peak_dbtp": -6.81,
    "length_s": 0.28,
    "peak_ms": 21.0,
+   "sources": [
+    {
+     "file": "boots/Boots/Glass/FEETHmn_BOOTS-Boots Run Glass Sequence_Ocular_Stride.wav",
+     "start": 8.606,
+     "end": 8.886
+    }
+   ],
    "anchor_ms": 20.0,
    "element": "run",
    "category": "step_glass",
@@ -958,6 +3826,13 @@
    "true_peak_dbtp": -1.05,
    "length_s": 0.28,
    "peak_ms": 37.9,
+   "sources": [
+    {
+     "file": "boots/Boots/Glass/FEETHmn_BOOTS-Boots Run Glass Sequence_Ocular_Stride.wav",
+     "start": 13.154,
+     "end": 13.434
+    }
+   ],
    "anchor_ms": 37.2,
    "element": "run",
    "category": "step_glass",
@@ -976,6 +3851,13 @@
    "true_peak_dbtp": -2.82,
    "length_s": 0.28,
    "peak_ms": 19.9,
+   "sources": [
+    {
+     "file": "boots/Boots/Glass/FEETHmn_BOOTS-Boots Run Glass Sequence_Ocular_Stride.wav",
+     "start": 16.607,
+     "end": 16.887
+    }
+   ],
    "anchor_ms": 19.5,
    "element": "run",
    "category": "step_glass",
@@ -994,6 +3876,13 @@
    "true_peak_dbtp": -3.63,
    "length_s": 0.28,
    "peak_ms": 20.7,
+   "sources": [
+    {
+     "file": "boots/Boots/Glass/FEETHmn_BOOTS-Boots Run Glass Sequence_Ocular_Stride.wav",
+     "start": 18.591,
+     "end": 18.871
+    }
+   ],
    "anchor_ms": 4.2,
    "element": "run",
    "category": "step_glass",
@@ -1012,6 +3901,13 @@
    "true_peak_dbtp": -4.32,
    "length_s": 0.34,
    "peak_ms": 81.4,
+   "sources": [
+    {
+     "file": "boots/Boots/Glass/FEETHmn_BOOTS-Boots Walk Glass Sequence_Ocular_Stride.wav",
+     "start": 6.001,
+     "end": 6.341
+    }
+   ],
    "anchor_ms": 80.9,
    "element": "walk",
    "category": "step_glass",
@@ -1030,6 +3926,13 @@
    "true_peak_dbtp": -3.32,
    "length_s": 0.34,
    "peak_ms": 5.0,
+   "sources": [
+    {
+     "file": "boots/Boots/Glass/FEETHmn_BOOTS-Boots Walk Glass Sequence_Ocular_Stride.wav",
+     "start": 9.435,
+     "end": 9.775
+    }
+   ],
    "anchor_ms": 4.6,
    "element": "walk",
    "category": "step_glass",
@@ -1048,6 +3951,13 @@
    "true_peak_dbtp": -2.49,
    "length_s": 0.34,
    "peak_ms": 4.2,
+   "sources": [
+    {
+     "file": "boots/Boots/Glass/FEETHmn_BOOTS-Boots Walk Glass Sequence_Ocular_Stride.wav",
+     "start": 16.747,
+     "end": 17.087
+    }
+   ],
    "anchor_ms": 4.1,
    "element": "walk",
    "category": "step_glass",
@@ -1066,6 +3976,13 @@
    "true_peak_dbtp": -4.23,
    "length_s": 0.34,
    "peak_ms": 64.9,
+   "sources": [
+    {
+     "file": "boots/Boots/Glass/FEETHmn_BOOTS-Boots Glass Single Step 01_Ocular_Stride.wav",
+     "start": 0.0,
+     "end": 0.34
+    }
+   ],
    "anchor_ms": 3.0,
    "element": "walk",
    "category": "step_glass",
@@ -1084,6 +4001,13 @@
    "true_peak_dbtp": -5.43,
    "length_s": 0.34,
    "peak_ms": 65.0,
+   "sources": [
+    {
+     "file": "boots/Boots/Glass/FEETHmn_BOOTS-Boots Glass Single Step 02_Ocular_Stride.wav",
+     "start": 0.0,
+     "end": 0.34
+    }
+   ],
    "anchor_ms": 2.3,
    "element": "walk",
    "category": "step_glass",
@@ -1102,6 +4026,13 @@
    "true_peak_dbtp": -1.97,
    "length_s": 0.34,
    "peak_ms": 65.1,
+   "sources": [
+    {
+     "file": "boots/Boots/Glass/FEETHmn_BOOTS-Boots Glass Single Step 03_Ocular_Stride.wav",
+     "start": 0.0,
+     "end": 0.34
+    }
+   ],
    "anchor_ms": 64.1,
    "element": "walk",
    "category": "step_glass",
@@ -1120,6 +4051,13 @@
    "true_peak_dbtp": -1.17,
    "length_s": 0.337,
    "peak_ms": 4.0,
+   "sources": [
+    {
+     "file": "boots/Boots/Metal/FEETHmn_BOOTS-Boots Metal Stomp 01_Ocular_Stride.wav",
+     "start": 0.0,
+     "end": 0.337
+    }
+   ],
    "anchor_ms": 2.0,
    "element": "land",
    "category": "step_metal",
@@ -1138,6 +4076,13 @@
    "true_peak_dbtp": -1.0,
    "length_s": 0.35,
    "peak_ms": 2.1,
+   "sources": [
+    {
+     "file": "boots/Boots/Metal/FEETHmn_BOOTS-Boots Metal Stomp 02_Ocular_Stride.wav",
+     "start": 0.0,
+     "end": 0.35
+    }
+   ],
    "anchor_ms": 2.0,
    "element": "land",
    "category": "step_metal",
@@ -1156,6 +4101,13 @@
    "true_peak_dbtp": -1.6,
    "length_s": 0.394,
    "peak_ms": 2.1,
+   "sources": [
+    {
+     "file": "boots/Boots/Metal/FEETHmn_BOOTS-Boots Metal Stomp 03_Ocular_Stride.wav",
+     "start": 0.0,
+     "end": 0.394
+    }
+   ],
    "anchor_ms": 2.1,
    "element": "land",
    "category": "step_metal",
@@ -1174,6 +4126,13 @@
    "true_peak_dbtp": -1.0,
    "length_s": 0.311,
    "peak_ms": 2.1,
+   "sources": [
+    {
+     "file": "boots/Boots/Metal/FEETHmn_BOOTS-Boots Metal Stomp 04_Ocular_Stride.wav",
+     "start": 0.0,
+     "end": 0.311
+    }
+   ],
    "anchor_ms": 2.1,
    "element": "land",
    "category": "step_metal",
@@ -1192,6 +4151,13 @@
    "true_peak_dbtp": -2.96,
    "length_s": 0.37,
    "peak_ms": 21.0,
+   "sources": [
+    {
+     "file": "boots/Boots/Metal/FEETHmn_BOOTS-Boots Metal Stomp 05_Ocular_Stride.wav",
+     "start": 0.0,
+     "end": 0.37
+    }
+   ],
    "anchor_ms": 14.1,
    "element": "land",
    "category": "step_metal",
@@ -1210,6 +4176,13 @@
    "true_peak_dbtp": -3.77,
    "length_s": 0.28,
    "peak_ms": 23.8,
+   "sources": [
+    {
+     "file": "boots/Boots/Metal/FEETHmn_BOOTS-Boots Run Metal Sequence_Ocular_Stride.wav",
+     "start": 1.703,
+     "end": 1.983
+    }
+   ],
    "anchor_ms": 4.5,
    "element": "run",
    "category": "step_metal",
@@ -1228,6 +4201,13 @@
    "true_peak_dbtp": -2.54,
    "length_s": 0.28,
    "peak_ms": 4.7,
+   "sources": [
+    {
+     "file": "boots/Boots/Metal/FEETHmn_BOOTS-Boots Run Metal Sequence_Ocular_Stride.wav",
+     "start": 3.704,
+     "end": 3.984
+    }
+   ],
    "anchor_ms": 4.0,
    "element": "run",
    "category": "step_metal",
@@ -1246,6 +4226,13 @@
    "true_peak_dbtp": -1.81,
    "length_s": 0.28,
    "peak_ms": 4.6,
+   "sources": [
+    {
+     "file": "boots/Boots/Metal/FEETHmn_BOOTS-Boots Run Metal Sequence_Ocular_Stride.wav",
+     "start": 5.123,
+     "end": 5.403
+    }
+   ],
    "anchor_ms": 4.5,
    "element": "run",
    "category": "step_metal",
@@ -1264,6 +4251,13 @@
    "true_peak_dbtp": -2.16,
    "length_s": 0.28,
    "peak_ms": 4.7,
+   "sources": [
+    {
+     "file": "boots/Boots/Metal/FEETHmn_BOOTS-Boots Run Metal Sequence_Ocular_Stride.wav",
+     "start": 11.423,
+     "end": 11.703
+    }
+   ],
    "anchor_ms": 4.0,
    "element": "run",
    "category": "step_metal",
@@ -1282,6 +4276,13 @@
    "true_peak_dbtp": -3.79,
    "length_s": 0.28,
    "peak_ms": 4.6,
+   "sources": [
+    {
+     "file": "boots/Boots/Metal/FEETHmn_BOOTS-Boots Run Metal Sequence_Ocular_Stride.wav",
+     "start": 17.998,
+     "end": 18.278
+    }
+   ],
    "anchor_ms": 4.5,
    "element": "run",
    "category": "step_metal",
@@ -1300,6 +4301,13 @@
    "true_peak_dbtp": -3.05,
    "length_s": 0.28,
    "peak_ms": 20.8,
+   "sources": [
+    {
+     "file": "boots/Boots/Metal/FEETHmn_BOOTS-Boots Run Metal Sequence_Ocular_Stride.wav",
+     "start": 25.718,
+     "end": 25.998
+    }
+   ],
    "anchor_ms": 4.5,
    "element": "run",
    "category": "step_metal",
@@ -1318,6 +4326,13 @@
    "true_peak_dbtp": -5.43,
    "length_s": 0.34,
    "peak_ms": 11.3,
+   "sources": [
+    {
+     "file": "boots/Boots/Metal/FEETHmn_BOOTS-Boots Walk Metal Sequence_Ocular_Stride.wav",
+     "start": 4.714,
+     "end": 5.054
+    }
+   ],
    "anchor_ms": 4.5,
    "element": "walk",
    "category": "step_metal",
@@ -1336,6 +4351,13 @@
    "true_peak_dbtp": -7.46,
    "length_s": 0.34,
    "peak_ms": 135.8,
+   "sources": [
+    {
+     "file": "boots/Boots/Metal/FEETHmn_BOOTS-Boots Walk Metal Sequence_Ocular_Stride.wav",
+     "start": 9.406,
+     "end": 9.746
+    }
+   ],
    "anchor_ms": 5.0,
    "element": "walk",
    "category": "step_metal",
@@ -1354,6 +4376,13 @@
    "true_peak_dbtp": -5.21,
    "length_s": 0.34,
    "peak_ms": 4.6,
+   "sources": [
+    {
+     "file": "boots/Boots/Metal/FEETHmn_BOOTS-Boots Walk Metal Sequence_Ocular_Stride.wav",
+     "start": 22.093,
+     "end": 22.433
+    }
+   ],
    "anchor_ms": 4.4,
    "element": "walk",
    "category": "step_metal",
@@ -1372,6 +4401,13 @@
    "true_peak_dbtp": -4.7,
    "length_s": 0.235,
    "peak_ms": 67.3,
+   "sources": [
+    {
+     "file": "boots/Boots/Metal/FEETHmn_BOOTS-Boots Metal Single Step 01_Ocular_Stride.wav",
+     "start": 0.0,
+     "end": 0.235
+    }
+   ],
    "anchor_ms": 2.0,
    "element": "walk",
    "category": "step_metal",
@@ -1390,6 +4426,13 @@
    "true_peak_dbtp": -4.65,
    "length_s": 0.235,
    "peak_ms": 2.2,
+   "sources": [
+    {
+     "file": "boots/Boots/Metal/FEETHmn_BOOTS-Boots Metal Single Step 02_Ocular_Stride.wav",
+     "start": 0.0,
+     "end": 0.235
+    }
+   ],
    "anchor_ms": 1.9,
    "element": "walk",
    "category": "step_metal",
@@ -1408,6 +4451,13 @@
    "true_peak_dbtp": -6.51,
    "length_s": 0.247,
    "peak_ms": 5.4,
+   "sources": [
+    {
+     "file": "boots/Boots/Metal/FEETHmn_BOOTS-Boots Metal Single Step 03_Ocular_Stride.wav",
+     "start": 0.0,
+     "end": 0.247
+    }
+   ],
    "anchor_ms": 2.4,
    "element": "walk",
    "category": "step_metal",
@@ -1426,6 +4476,13 @@
    "true_peak_dbtp": -6.1,
    "length_s": 0.45,
    "peak_ms": 11.8,
+   "sources": [
+    {
+     "file": "boots/Boots/Water/FEETHmn_BOOTS-Boots Water Stomp 01_Ocular_Stride.wav",
+     "start": 0.0,
+     "end": 0.45
+    }
+   ],
    "anchor_ms": 11.4,
    "element": "land",
    "category": "step_water",
@@ -1444,6 +4501,13 @@
    "true_peak_dbtp": -2.7,
    "length_s": 0.45,
    "peak_ms": 31.2,
+   "sources": [
+    {
+     "file": "boots/Boots/Water/FEETHmn_BOOTS-Boots Water Stomp 02_Ocular_Stride.wav",
+     "start": 0.001,
+     "end": 0.451
+    }
+   ],
    "anchor_ms": 4.3,
    "element": "land",
    "category": "step_water",
@@ -1462,6 +4526,13 @@
    "true_peak_dbtp": -4.97,
    "length_s": 0.45,
    "peak_ms": 33.4,
+   "sources": [
+    {
+     "file": "boots/Boots/Water/FEETHmn_BOOTS-Boots Water Stomp 03_Ocular_Stride.wav",
+     "start": 0.006,
+     "end": 0.456
+    }
+   ],
    "anchor_ms": 18.2,
    "element": "land",
    "category": "step_water",
@@ -1480,6 +4551,13 @@
    "true_peak_dbtp": -1.0,
    "length_s": 0.45,
    "peak_ms": 4.0,
+   "sources": [
+    {
+     "file": "boots/Boots/Water/FEETHmn_BOOTS-Boots Water Stomp 04_Ocular_Stride.wav",
+     "start": 0.027,
+     "end": 0.477
+    }
+   ],
    "anchor_ms": 3.8,
    "element": "land",
    "category": "step_water",
@@ -1498,6 +4576,13 @@
    "true_peak_dbtp": -3.66,
    "length_s": 0.45,
    "peak_ms": 14.9,
+   "sources": [
+    {
+     "file": "boots/Boots/Water/FEETHmn_BOOTS-Boots Water Stomp 05_Ocular_Stride.wav",
+     "start": 0.048,
+     "end": 0.498
+    }
+   ],
    "anchor_ms": 4.8,
    "element": "land",
    "category": "step_water",
@@ -1516,6 +4601,13 @@
    "true_peak_dbtp": -2.69,
    "length_s": 0.28,
    "peak_ms": 5.5,
+   "sources": [
+    {
+     "file": "boots/Boots/Water/FEETHmn_BOOTS-Boots Run Water Sequence_Ocular_Stride.wav",
+     "start": 3.73,
+     "end": 4.01
+    }
+   ],
    "anchor_ms": 4.9,
    "element": "run",
    "category": "step_water",
@@ -1534,6 +4626,13 @@
    "true_peak_dbtp": -1.34,
    "length_s": 0.28,
    "peak_ms": 10.2,
+   "sources": [
+    {
+     "file": "boots/Boots/Water/FEETHmn_BOOTS-Boots Run Water Sequence_Ocular_Stride.wav",
+     "start": 6.879,
+     "end": 7.159
+    }
+   ],
    "anchor_ms": 9.9,
    "element": "run",
    "category": "step_water",
@@ -1552,6 +4651,13 @@
    "true_peak_dbtp": -4.05,
    "length_s": 0.28,
    "peak_ms": 35.8,
+   "sources": [
+    {
+     "file": "boots/Boots/Water/FEETHmn_BOOTS-Boots Run Water Sequence_Ocular_Stride.wav",
+     "start": 15.121,
+     "end": 15.401
+    }
+   ],
    "anchor_ms": 35.2,
    "element": "run",
    "category": "step_water",
@@ -1570,6 +4676,13 @@
    "true_peak_dbtp": -4.96,
    "length_s": 0.28,
    "peak_ms": 37.6,
+   "sources": [
+    {
+     "file": "boots/Boots/Water/FEETHmn_BOOTS-Boots Run Water Sequence_Ocular_Stride.wav",
+     "start": 16.874,
+     "end": 17.154
+    }
+   ],
    "anchor_ms": 36.9,
    "element": "run",
    "category": "step_water",
@@ -1588,6 +4701,13 @@
    "true_peak_dbtp": -6.94,
    "length_s": 0.28,
    "peak_ms": 10.8,
+   "sources": [
+    {
+     "file": "boots/Boots/Water/FEETHmn_BOOTS-Boots Run Water Sequence_Ocular_Stride.wav",
+     "start": 19.434,
+     "end": 19.714
+    }
+   ],
    "anchor_ms": 5.4,
    "element": "run",
    "category": "step_water",
@@ -1606,6 +4726,13 @@
    "true_peak_dbtp": -2.41,
    "length_s": 0.28,
    "peak_ms": 43.5,
+   "sources": [
+    {
+     "file": "boots/Boots/Water/FEETHmn_BOOTS-Boots Run Water Sequence_Ocular_Stride.wav",
+     "start": 25.996,
+     "end": 26.276
+    }
+   ],
    "anchor_ms": 4.3,
    "element": "run",
    "category": "step_water",
@@ -1624,6 +4751,13 @@
    "true_peak_dbtp": -6.7,
    "length_s": 0.34,
    "peak_ms": 69.4,
+   "sources": [
+    {
+     "file": "boots/Boots/Water/FEETHmn_BOOTS-Boots Walk Water Sequence_Ocular_Stride.wav",
+     "start": 12.002,
+     "end": 12.342
+    }
+   ],
    "anchor_ms": 4.3,
    "element": "walk",
    "category": "step_water",
@@ -1642,6 +4776,13 @@
    "true_peak_dbtp": -3.2,
    "length_s": 0.34,
    "peak_ms": 10.2,
+   "sources": [
+    {
+     "file": "boots/Boots/Water/FEETHmn_BOOTS-Boots Walk Water Sequence_Ocular_Stride.wav",
+     "start": 18.103,
+     "end": 18.443
+    }
+   ],
    "anchor_ms": 9.9,
    "element": "walk",
    "category": "step_water",
@@ -1660,6 +4801,13 @@
    "true_peak_dbtp": -1.77,
    "length_s": 0.247,
    "peak_ms": 3.3,
+   "sources": [
+    {
+     "file": "boots/Boots/Water/FEETHmn_BOOTS-Boots Water Single Step 01_Ocular_Stride.wav",
+     "start": 0.0,
+     "end": 0.247
+    }
+   ],
    "anchor_ms": 2.9,
    "element": "walk",
    "category": "step_water",
@@ -1678,6 +4826,13 @@
    "true_peak_dbtp": -3.72,
    "length_s": 0.259,
    "peak_ms": 4.2,
+   "sources": [
+    {
+     "file": "boots/Boots/Water/FEETHmn_BOOTS-Boots Water Single Step 02_Ocular_Stride.wav",
+     "start": 0.0,
+     "end": 0.259
+    }
+   ],
    "anchor_ms": 3.9,
    "element": "walk",
    "category": "step_water",
@@ -1696,6 +4851,13 @@
    "true_peak_dbtp": -1.42,
    "length_s": 0.228,
    "peak_ms": 2.6,
+   "sources": [
+    {
+     "file": "boots/Boots/Water/FEETHmn_BOOTS-Boots Water Single Step 03_Ocular_Stride.wav",
+     "start": 0.0,
+     "end": 0.228
+    }
+   ],
    "anchor_ms": 1.7,
    "element": "walk",
    "category": "step_water",
@@ -1714,6 +4876,13 @@
    "true_peak_dbtp": -1.0,
    "length_s": 0.25,
    "peak_ms": 1.4,
+   "sources": [
+    {
+     "file": "boots/Boots/Wood/FEETHmn_BOOTS-Boots Wood Stomp 01_Ocular_Stride.wav",
+     "start": 0.0,
+     "end": 0.25
+    }
+   ],
    "anchor_ms": 1.0,
    "element": "land",
    "category": "step_wood",
@@ -1732,6 +4901,13 @@
    "true_peak_dbtp": -1.0,
    "length_s": 0.246,
    "peak_ms": 1.4,
+   "sources": [
+    {
+     "file": "boots/Boots/Wood/FEETHmn_BOOTS-Boots Wood Stomp 02_Ocular_Stride.wav",
+     "start": 0.0,
+     "end": 0.246
+    }
+   ],
    "anchor_ms": 1.4,
    "element": "land",
    "category": "step_wood",
@@ -1750,6 +4926,13 @@
    "true_peak_dbtp": -1.0,
    "length_s": 0.225,
    "peak_ms": 1.4,
+   "sources": [
+    {
+     "file": "boots/Boots/Wood/FEETHmn_BOOTS-Boots Wood Stomp 03_Ocular_Stride.wav",
+     "start": 0.0,
+     "end": 0.225
+    }
+   ],
    "anchor_ms": 1.3,
    "element": "land",
    "category": "step_wood",
@@ -1768,6 +4951,13 @@
    "true_peak_dbtp": -1.0,
    "length_s": 0.274,
    "peak_ms": 1.5,
+   "sources": [
+    {
+     "file": "boots/Boots/Wood/FEETHmn_BOOTS-Boots Wood Stomp 04_Ocular_Stride.wav",
+     "start": 0.0,
+     "end": 0.274
+    }
+   ],
    "anchor_ms": 1.5,
    "element": "land",
    "category": "step_wood",
@@ -1786,6 +4976,13 @@
    "true_peak_dbtp": -1.0,
    "length_s": 0.337,
    "peak_ms": 3.3,
+   "sources": [
+    {
+     "file": "boots/Boots/Wood/FEETHmn_BOOTS-Boots Wood Stomp 05_Ocular_Stride.wav",
+     "start": 0.0,
+     "end": 0.337
+    }
+   ],
    "anchor_ms": 3.2,
    "element": "land",
    "category": "step_wood",
@@ -1804,6 +5001,13 @@
    "true_peak_dbtp": -5.81,
    "length_s": 0.28,
    "peak_ms": 27.3,
+   "sources": [
+    {
+     "file": "boots/Boots/Wood/FEETHmn_BOOTS-Boots Run Wood Sequence_Ocular_Stride.wav",
+     "start": 0.857,
+     "end": 1.137
+    }
+   ],
    "anchor_ms": 4.1,
    "element": "run",
    "category": "step_wood",
@@ -1822,6 +5026,13 @@
    "true_peak_dbtp": -4.59,
    "length_s": 0.28,
    "peak_ms": 6.8,
+   "sources": [
+    {
+     "file": "boots/Boots/Wood/FEETHmn_BOOTS-Boots Run Wood Sequence_Ocular_Stride.wav",
+     "start": 9.419,
+     "end": 9.699
+    }
+   ],
    "anchor_ms": 4.0,
    "element": "run",
    "category": "step_wood",
@@ -1840,6 +5051,13 @@
    "true_peak_dbtp": -4.14,
    "length_s": 0.28,
    "peak_ms": 22.7,
+   "sources": [
+    {
+     "file": "boots/Boots/Wood/FEETHmn_BOOTS-Boots Run Wood Sequence_Ocular_Stride.wav",
+     "start": 15.123,
+     "end": 15.403
+    }
+   ],
    "anchor_ms": 5.5,
    "element": "run",
    "category": "step_wood",
@@ -1858,6 +5076,13 @@
    "true_peak_dbtp": -3.56,
    "length_s": 0.28,
    "peak_ms": 24.2,
+   "sources": [
+    {
+     "file": "boots/Boots/Wood/FEETHmn_BOOTS-Boots Run Wood Sequence_Ocular_Stride.wav",
+     "start": 21.123,
+     "end": 21.403
+    }
+   ],
    "anchor_ms": 23.7,
    "element": "run",
    "category": "step_wood",
@@ -1876,6 +5101,13 @@
    "true_peak_dbtp": -6.19,
    "length_s": 0.28,
    "peak_ms": 6.4,
+   "sources": [
+    {
+     "file": "boots/Boots/Wood/FEETHmn_BOOTS-Boots Run Wood Sequence_Ocular_Stride.wav",
+     "start": 23.701,
+     "end": 23.981
+    }
+   ],
    "anchor_ms": 4.1,
    "element": "run",
    "category": "step_wood",
@@ -1894,6 +5126,13 @@
    "true_peak_dbtp": -2.08,
    "length_s": 0.28,
    "peak_ms": 5.5,
+   "sources": [
+    {
+     "file": "boots/Boots/Wood/FEETHmn_BOOTS-Boots Run Wood Sequence_Ocular_Stride.wav",
+     "start": 26.59,
+     "end": 26.87
+    }
+   ],
    "anchor_ms": 4.1,
    "element": "run",
    "category": "step_wood",
@@ -1912,6 +5151,13 @@
    "true_peak_dbtp": -7.31,
    "length_s": 0.34,
    "peak_ms": 8.1,
+   "sources": [
+    {
+     "file": "boots/Boots/Wood/FEETHmn_BOOTS-Boots Walk Wood Sequence_Ocular_Stride.wav",
+     "start": 4.621,
+     "end": 4.961
+    }
+   ],
    "anchor_ms": 5.2,
    "element": "walk",
    "category": "step_wood",
@@ -1930,6 +5176,13 @@
    "true_peak_dbtp": -7.93,
    "length_s": 0.34,
    "peak_ms": 7.5,
+   "sources": [
+    {
+     "file": "boots/Boots/Wood/FEETHmn_BOOTS-Boots Walk Wood Sequence_Ocular_Stride.wav",
+     "start": 10.0,
+     "end": 10.34
+    }
+   ],
    "anchor_ms": 5.0,
    "element": "walk",
    "category": "step_wood",
@@ -1948,6 +5201,13 @@
    "true_peak_dbtp": -7.58,
    "length_s": 0.34,
    "peak_ms": 10.1,
+   "sources": [
+    {
+     "file": "boots/Boots/Wood/FEETHmn_BOOTS-Boots Walk Wood Sequence_Ocular_Stride.wav",
+     "start": 17.313,
+     "end": 17.653
+    }
+   ],
    "anchor_ms": 6.0,
    "element": "walk",
    "category": "step_wood",
@@ -1966,6 +5226,13 @@
    "true_peak_dbtp": -7.71,
    "length_s": 0.222,
    "peak_ms": 2.5,
+   "sources": [
+    {
+     "file": "boots/Boots/Wood/FEETHmn_BOOTS-Boots Wood Single Step 01_Ocular_Stride.wav",
+     "start": 0.0,
+     "end": 0.222
+    }
+   ],
    "anchor_ms": 2.4,
    "element": "walk",
    "category": "step_wood",
@@ -1984,6 +5251,13 @@
    "true_peak_dbtp": -7.26,
    "length_s": 0.219,
    "peak_ms": 4.0,
+   "sources": [
+    {
+     "file": "boots/Boots/Wood/FEETHmn_BOOTS-Boots Wood Single Step 02_Ocular_Stride.wav",
+     "start": 0.0,
+     "end": 0.219
+    }
+   ],
    "anchor_ms": 3.2,
    "element": "walk",
    "category": "step_wood",
@@ -2002,6 +5276,13 @@
    "true_peak_dbtp": -8.33,
    "length_s": 0.22,
    "peak_ms": 68.1,
+   "sources": [
+    {
+     "file": "boots/Boots/Wood/FEETHmn_BOOTS-Boots Wood Single Step 03_Ocular_Stride.wav",
+     "start": 0.0,
+     "end": 0.22
+    }
+   ],
    "anchor_ms": 2.6,
    "element": "walk",
    "category": "step_wood",
@@ -2020,6 +5301,13 @@
    "true_peak_dbtp": -2.23,
    "length_s": 0.703,
    "peak_ms": 197.2,
+   "sources": [
+    {
+     "file": "tsp/Tactical Shooter Pack/General/S_Aim_In.WAV",
+     "start": 0.197,
+     "end": 0.9
+    }
+   ],
    "anchor_ms": 0.0,
    "element": "ads_in",
    "category": "weapon",
@@ -2037,6 +5325,13 @@
    "true_peak_dbtp": -2.15,
    "length_s": 0.623,
    "peak_ms": 115.5,
+   "sources": [
+    {
+     "file": "tsp/Tactical Shooter Pack/General/S_Aim_In_edit.wav",
+     "start": 0.047,
+     "end": 0.67
+    }
+   ],
    "anchor_ms": 0.0,
    "element": "ads_in",
    "category": "weapon",
@@ -2054,6 +5349,13 @@
    "true_peak_dbtp": -2.31,
    "length_s": 0.745,
    "peak_ms": 208.9,
+   "sources": [
+    {
+     "file": "tsp/Tactical Shooter Pack/General/S_Aim_In.WAV",
+     "start": 0.197,
+     "end": 0.9
+    }
+   ],
    "anchor_ms": 0.0,
    "element": "ads_in",
    "category": "weapon",
@@ -2071,6 +5373,13 @@
    "true_peak_dbtp": -1.87,
    "length_s": 0.588,
    "peak_ms": 109.1,
+   "sources": [
+    {
+     "file": "tsp/Tactical Shooter Pack/General/S_Aim_In_edit.wav",
+     "start": 0.047,
+     "end": 0.67
+    }
+   ],
    "anchor_ms": 0.0,
    "element": "ads_in",
    "category": "weapon",
@@ -2088,6 +5397,13 @@
    "true_peak_dbtp": -1.0,
    "length_s": 0.853,
    "peak_ms": 123.5,
+   "sources": [
+    {
+     "file": "tsp/Tactical Shooter Pack/General/S_Aim_Out.WAV",
+     "start": 0.097,
+     "end": 0.95
+    }
+   ],
    "anchor_ms": 0.0,
    "element": "ads_out",
    "category": "weapon",
@@ -2105,6 +5421,13 @@
    "true_peak_dbtp": -1.21,
    "length_s": 0.914,
    "peak_ms": 133.8,
+   "sources": [
+    {
+     "file": "tsp/Tactical Shooter Pack/General/S_Aim_Out.WAV",
+     "start": 0.097,
+     "end": 0.95
+    }
+   ],
    "anchor_ms": 0.0,
    "element": "ads_out",
    "category": "weapon",
@@ -2122,6 +5445,13 @@
    "true_peak_dbtp": -1.0,
    "length_s": 0.796,
    "peak_ms": 115.3,
+   "sources": [
+    {
+     "file": "tsp/Tactical Shooter Pack/General/S_Aim_Out.WAV",
+     "start": 0.097,
+     "end": 0.95
+    }
+   ],
    "anchor_ms": 0.0,
    "element": "ads_out",
    "category": "weapon",
@@ -2139,6 +5469,13 @@
    "true_peak_dbtp": -2.29,
    "length_s": 0.699,
    "peak_ms": 129.7,
+   "sources": [
+    {
+     "file": "tsp/Tactical Shooter Pack/General/S_Aim_In_edit.wav",
+     "start": 0.047,
+     "end": 0.67
+    }
+   ],
    "anchor_ms": 0.0,
    "element": "ads_out",
    "category": "weapon",
@@ -2156,6 +5493,13 @@
    "true_peak_dbtp": -5.4,
    "length_s": 0.753,
    "peak_ms": 468.6,
+   "sources": [
+    {
+     "file": "tsp/Tactical Shooter Pack/General/S_Equip.WAV",
+     "start": 0.147,
+     "end": 0.9
+    }
+   ],
    "anchor_ms": 0.0,
    "element": "equip",
    "category": "weapon",
@@ -2173,6 +5517,13 @@
    "true_peak_dbtp": -5.59,
    "length_s": 0.798,
    "peak_ms": 496.5,
+   "sources": [
+    {
+     "file": "tsp/Tactical Shooter Pack/General/S_Equip.WAV",
+     "start": 0.147,
+     "end": 0.9
+    }
+   ],
    "anchor_ms": 0.0,
    "element": "equip",
    "category": "weapon",
@@ -2190,6 +5541,13 @@
    "true_peak_dbtp": -5.74,
    "length_s": 0.711,
    "peak_ms": 442.4,
+   "sources": [
+    {
+     "file": "tsp/Tactical Shooter Pack/General/S_Equip.WAV",
+     "start": 0.147,
+     "end": 0.9
+    }
+   ],
    "anchor_ms": 0.0,
    "element": "equip",
    "category": "weapon",
@@ -2207,6 +5565,13 @@
    "true_peak_dbtp": -1.83,
    "length_s": 0.853,
    "peak_ms": 160.0,
+   "sources": [
+    {
+     "file": "tsp/Tactical Shooter Pack/General/S_Pickup.WAV",
+     "start": 0.297,
+     "end": 1.15
+    }
+   ],
    "anchor_ms": 0.0,
    "element": "equip",
    "category": "weapon",
@@ -2224,6 +5589,13 @@
    "true_peak_dbtp": -3.42,
    "length_s": 0.303,
    "peak_ms": 12.4,
+   "sources": [
+    {
+     "file": "tsp/Tactical Shooter Pack/General/S_FireMode.WAV",
+     "start": 0.037,
+     "end": 0.34
+    }
+   ],
    "anchor_ms": 0.0,
    "element": "firemode",
    "category": "weapon",
@@ -2241,6 +5613,13 @@
    "true_peak_dbtp": -3.57,
    "length_s": 0.34,
    "peak_ms": 11.4,
+   "sources": [
+    {
+     "file": "tsp/Tactical Shooter Pack/General/S_FireMode.WAV",
+     "start": 0.037,
+     "end": 0.34
+    }
+   ],
    "anchor_ms": 0.0,
    "element": "firemode",
    "category": "weapon",
@@ -2258,6 +5637,13 @@
    "true_peak_dbtp": -2.89,
    "length_s": 0.278,
    "peak_ms": 11.3,
+   "sources": [
+    {
+     "file": "tsp/Tactical Shooter Pack/General/S_FireMode.WAV",
+     "start": 0.037,
+     "end": 0.34
+    }
+   ],
    "anchor_ms": 0.0,
    "element": "firemode",
    "category": "weapon",
@@ -2275,6 +5661,13 @@
    "true_peak_dbtp": -2.1,
    "length_s": 0.653,
    "peak_ms": 67.7,
+   "sources": [
+    {
+     "file": "tsp/Tactical Shooter Pack/General/S_UnEquip.WAV",
+     "start": 0.277,
+     "end": 0.93
+    }
+   ],
    "anchor_ms": 0.0,
    "element": "unequip",
    "category": "weapon",
@@ -2292,6 +5685,13 @@
    "true_peak_dbtp": -2.63,
    "length_s": 0.692,
    "peak_ms": 71.7,
+   "sources": [
+    {
+     "file": "tsp/Tactical Shooter Pack/General/S_UnEquip.WAV",
+     "start": 0.277,
+     "end": 0.93
+    }
+   ],
    "anchor_ms": 0.0,
    "element": "unequip",
    "category": "weapon",
@@ -2309,6 +5709,13 @@
    "true_peak_dbtp": -2.18,
    "length_s": 0.616,
    "peak_ms": 115.0,
+   "sources": [
+    {
+     "file": "tsp/Tactical Shooter Pack/General/S_UnEquip.WAV",
+     "start": 0.277,
+     "end": 0.93
+    }
+   ],
    "anchor_ms": 0.0,
    "element": "unequip",
    "category": "weapon",
@@ -2326,11 +5733,1014 @@
    "true_peak_dbtp": -6.21,
    "length_s": 0.653,
    "peak_ms": 484.6,
+   "sources": [
+    {
+     "file": "tsp/Tactical Shooter Pack/General/S_UnEquip_Pistol.WAV",
+     "start": 0.197,
+     "end": 0.85
+    }
+   ],
    "anchor_ms": 0.0,
    "element": "unequip",
    "category": "weapon",
    "variant": 4,
    "source": "S_UnEquip_Pistol.WAV@0.2"
+  },
+  {
+   "file": "Impacts/concrete_1.wav",
+   "key": "snd.impact.concrete",
+   "layer": "impact",
+   "channels": 2,
+   "sample_rate": 48000,
+   "lufs_i": -17.04,
+   "lufs_m_max": -17.0,
+   "true_peak_dbtp": -3.72,
+   "length_s": 0.346,
+   "peak_ms": 92.7,
+   "sources": [
+    {
+     "file": "sonniss/Gamemaster Audio -  Bullet Impact Sounds/bullet_impact_concrete_brick_01.wav",
+     "start": 0.0,
+     "end": 0.346
+    }
+   ],
+   "anchor_ms": 0.0,
+   "material": "concrete",
+   "variant": 1,
+   "proxy": false,
+   "source": "bullet_impact_concrete_brick_01.wav {}"
+  },
+  {
+   "file": "Impacts/concrete_2.wav",
+   "key": "snd.impact.concrete",
+   "layer": "impact",
+   "channels": 2,
+   "sample_rate": 48000,
+   "lufs_i": -17.04,
+   "lufs_m_max": -17.0,
+   "true_peak_dbtp": -3.58,
+   "length_s": 0.377,
+   "peak_ms": 101.1,
+   "sources": [
+    {
+     "file": "sonniss/Gamemaster Audio -  Bullet Impact Sounds/bullet_impact_concrete_brick_01.wav",
+     "start": 0.0,
+     "end": 0.346
+    }
+   ],
+   "anchor_ms": 0.0,
+   "material": "concrete",
+   "variant": 2,
+   "proxy": false,
+   "source": "bullet_impact_concrete_brick_01.wav {\"pitch\": -1.5}"
+  },
+  {
+   "file": "Impacts/concrete_3.wav",
+   "key": "snd.impact.concrete",
+   "layer": "impact",
+   "channels": 2,
+   "sample_rate": 48000,
+   "lufs_i": -17.04,
+   "lufs_m_max": -17.0,
+   "true_peak_dbtp": -2.81,
+   "length_s": 0.317,
+   "peak_ms": 85.0,
+   "sources": [
+    {
+     "file": "sonniss/Gamemaster Audio -  Bullet Impact Sounds/bullet_impact_concrete_brick_01.wav",
+     "start": 0.0,
+     "end": 0.346
+    }
+   ],
+   "anchor_ms": 0.0,
+   "material": "concrete",
+   "variant": 3,
+   "proxy": false,
+   "source": "bullet_impact_concrete_brick_01.wav {\"pitch\": 1.5, \"eq\": [[\"peak\", 5000, -2.0, 0.8]]}"
+  },
+  {
+   "file": "Impacts/concrete_4.wav",
+   "key": "snd.impact.concrete",
+   "layer": "impact",
+   "channels": 2,
+   "sample_rate": 48000,
+   "lufs_i": -17.04,
+   "lufs_m_max": -17.0,
+   "true_peak_dbtp": -3.83,
+   "length_s": 0.411,
+   "peak_ms": 110.2,
+   "sources": [
+    {
+     "file": "sonniss/Gamemaster Audio -  Bullet Impact Sounds/bullet_impact_concrete_brick_01.wav",
+     "start": 0.0,
+     "end": 0.346
+    }
+   ],
+   "anchor_ms": 0.0,
+   "material": "concrete",
+   "variant": 4,
+   "proxy": false,
+   "source": "bullet_impact_concrete_brick_01.wav {\"pitch\": -3.0, \"gain_db\": -1.0}"
+  },
+  {
+   "file": "Impacts/concrete_5.wav",
+   "key": "snd.impact.concrete",
+   "layer": "impact",
+   "channels": 2,
+   "sample_rate": 48000,
+   "lufs_i": -17.04,
+   "lufs_m_max": -17.0,
+   "true_peak_dbtp": -2.82,
+   "length_s": 0.216,
+   "peak_ms": 80.2,
+   "sources": [
+    {
+     "file": "sonniss/Gamemaster Audio -  Bullet Impact Sounds/bullet_impact_concrete_brick_01.wav",
+     "start": 0.0,
+     "end": 0.25
+    }
+   ],
+   "anchor_ms": 0.0,
+   "material": "concrete",
+   "variant": 5,
+   "proxy": false,
+   "source": "bullet_impact_concrete_brick_01.wav {\"pitch\": 2.5, \"dur\": 0.25}"
+  },
+  {
+   "file": "Impacts/dirt_1.wav",
+   "key": "snd.impact.dirt",
+   "layer": "impact",
+   "channels": 2,
+   "sample_rate": 48000,
+   "lufs_i": -20.34,
+   "lufs_m_max": -17.0,
+   "true_peak_dbtp": -4.76,
+   "length_s": 1.705,
+   "peak_ms": 166.6,
+   "sources": [
+    {
+     "file": "sonniss/PMSFX - Bullet Bys &Impacts/PM_BBI_Bullet_Impact_Dirt_3.wav",
+     "start": 0.0,
+     "end": 1.705
+    }
+   ],
+   "anchor_ms": 0.0,
+   "material": "dirt",
+   "variant": 1,
+   "proxy": false,
+   "source": "PM_BBI_Bullet_Impact_Dirt_3.wav {}"
+  },
+  {
+   "file": "Impacts/dirt_2.wav",
+   "key": "snd.impact.dirt",
+   "layer": "impact",
+   "channels": 2,
+   "sample_rate": 48000,
+   "lufs_i": -19.92,
+   "lufs_m_max": -17.0,
+   "true_peak_dbtp": -4.91,
+   "length_s": 1.859,
+   "peak_ms": 181.7,
+   "sources": [
+    {
+     "file": "sonniss/PMSFX - Bullet Bys &Impacts/PM_BBI_Bullet_Impact_Dirt_3.wav",
+     "start": 0.0,
+     "end": 1.705
+    }
+   ],
+   "anchor_ms": 0.0,
+   "material": "dirt",
+   "variant": 2,
+   "proxy": false,
+   "source": "PM_BBI_Bullet_Impact_Dirt_3.wav {\"pitch\": -1.5}"
+  },
+  {
+   "file": "Impacts/dirt_3.wav",
+   "key": "snd.impact.dirt",
+   "layer": "impact",
+   "channels": 2,
+   "sample_rate": 48000,
+   "lufs_i": -19.76,
+   "lufs_m_max": -17.0,
+   "true_peak_dbtp": -4.98,
+   "length_s": 1.563,
+   "peak_ms": 152.8,
+   "sources": [
+    {
+     "file": "sonniss/PMSFX - Bullet Bys &Impacts/PM_BBI_Bullet_Impact_Dirt_3.wav",
+     "start": 0.0,
+     "end": 1.705
+    }
+   ],
+   "anchor_ms": 0.0,
+   "material": "dirt",
+   "variant": 3,
+   "proxy": false,
+   "source": "PM_BBI_Bullet_Impact_Dirt_3.wav {\"pitch\": 1.5}"
+  },
+  {
+   "file": "Impacts/dirt_4.wav",
+   "key": "snd.impact.dirt",
+   "layer": "impact",
+   "channels": 2,
+   "sample_rate": 48000,
+   "lufs_i": -20.28,
+   "lufs_m_max": -17.0,
+   "true_peak_dbtp": -5.37,
+   "length_s": 2.027,
+   "peak_ms": 200.7,
+   "sources": [
+    {
+     "file": "sonniss/PMSFX - Bullet Bys &Impacts/PM_BBI_Bullet_Impact_Dirt_3.wav",
+     "start": 0.0,
+     "end": 1.705
+    }
+   ],
+   "anchor_ms": 0.0,
+   "material": "dirt",
+   "variant": 4,
+   "proxy": false,
+   "source": "PM_BBI_Bullet_Impact_Dirt_3.wav {\"pitch\": -3.0, \"gain_db\": -1.0}"
+  },
+  {
+   "file": "Impacts/dirt_5.wav",
+   "key": "snd.impact.dirt",
+   "layer": "impact",
+   "channels": 2,
+   "sample_rate": 48000,
+   "lufs_i": -19.01,
+   "lufs_m_max": -17.0,
+   "true_peak_dbtp": -4.96,
+   "length_s": 0.692,
+   "peak_ms": 146.1,
+   "sources": [
+    {
+     "file": "sonniss/PMSFX - Bullet Bys &Impacts/PM_BBI_Bullet_Impact_Dirt_3.wav",
+     "start": 0.0,
+     "end": 0.8
+    }
+   ],
+   "anchor_ms": 0.0,
+   "material": "dirt",
+   "variant": 5,
+   "proxy": false,
+   "source": "PM_BBI_Bullet_Impact_Dirt_3.wav {\"pitch\": 2.5, \"dur\": 0.8}"
+  },
+  {
+   "file": "Impacts/flesh_1.wav",
+   "key": "snd.impact.flesh",
+   "layer": "impact",
+   "channels": 2,
+   "sample_rate": 48000,
+   "lufs_i": -17.04,
+   "lufs_m_max": -17.0,
+   "true_peak_dbtp": -4.27,
+   "length_s": 0.93,
+   "peak_ms": 242.4,
+   "sources": [
+    {
+     "file": "sonniss/PMSFX - Bullet Bys &Impacts/PM_BBI_Bullet_Impact_Hit_Body_Flesh_25.wav",
+     "start": 0.0,
+     "end": 0.93
+    }
+   ],
+   "anchor_ms": 0.0,
+   "material": "flesh",
+   "variant": 1,
+   "proxy": false,
+   "source": "PM_BBI_Bullet_Impact_Hit_Body_Flesh_25.wav {}"
+  },
+  {
+   "file": "Impacts/flesh_2.wav",
+   "key": "snd.impact.flesh",
+   "layer": "impact",
+   "channels": 2,
+   "sample_rate": 48000,
+   "lufs_i": -18.02,
+   "lufs_m_max": -17.0,
+   "true_peak_dbtp": -5.07,
+   "length_s": 1.015,
+   "peak_ms": 264.3,
+   "sources": [
+    {
+     "file": "sonniss/PMSFX - Bullet Bys &Impacts/PM_BBI_Bullet_Impact_Hit_Body_Flesh_25.wav",
+     "start": 0.0,
+     "end": 0.93
+    }
+   ],
+   "anchor_ms": 0.0,
+   "material": "flesh",
+   "variant": 2,
+   "proxy": false,
+   "source": "PM_BBI_Bullet_Impact_Hit_Body_Flesh_25.wav {\"pitch\": -1.5}"
+  },
+  {
+   "file": "Impacts/flesh_3.wav",
+   "key": "snd.impact.flesh",
+   "layer": "impact",
+   "channels": 2,
+   "sample_rate": 48000,
+   "lufs_i": -17.04,
+   "lufs_m_max": -17.0,
+   "true_peak_dbtp": -4.68,
+   "length_s": 0.853,
+   "peak_ms": 223.3,
+   "sources": [
+    {
+     "file": "sonniss/PMSFX - Bullet Bys &Impacts/PM_BBI_Bullet_Impact_Hit_Body_Flesh_25.wav",
+     "start": 0.0,
+     "end": 0.93
+    }
+   ],
+   "anchor_ms": 0.0,
+   "material": "flesh",
+   "variant": 3,
+   "proxy": false,
+   "source": "PM_BBI_Bullet_Impact_Hit_Body_Flesh_25.wav {\"pitch\": 1.5}"
+  },
+  {
+   "file": "Impacts/flesh_4.wav",
+   "key": "snd.impact.flesh",
+   "layer": "impact",
+   "channels": 2,
+   "sample_rate": 48000,
+   "lufs_i": -19.65,
+   "lufs_m_max": -17.0,
+   "true_peak_dbtp": -2.5,
+   "length_s": 0.471,
+   "peak_ms": 93.9,
+   "sources": [
+    {
+     "file": "sonniss/Gamemaster Audio -  Bullet Impact Sounds/bullet_impact_body_thump_02.wav",
+     "start": 0.0,
+     "end": 0.471
+    }
+   ],
+   "anchor_ms": 0.0,
+   "material": "flesh",
+   "variant": 4,
+   "proxy": false,
+   "source": "bullet_impact_body_thump_02.wav {}"
+  },
+  {
+   "file": "Impacts/flesh_5.wav",
+   "key": "snd.impact.flesh",
+   "layer": "impact",
+   "channels": 2,
+   "sample_rate": 48000,
+   "lufs_i": -18.95,
+   "lufs_m_max": -17.0,
+   "true_peak_dbtp": -3.07,
+   "length_s": 0.529,
+   "peak_ms": 94.9,
+   "sources": [
+    {
+     "file": "sonniss/Gamemaster Audio -  Bullet Impact Sounds/bullet_impact_body_thump_02.wav",
+     "start": 0.0,
+     "end": 0.471
+    }
+   ],
+   "anchor_ms": 0.0,
+   "material": "flesh",
+   "variant": 5,
+   "proxy": false,
+   "source": "bullet_impact_body_thump_02.wav {\"pitch\": -2.0}"
+  },
+  {
+   "file": "Impacts/flesh_6.wav",
+   "key": "snd.impact.flesh",
+   "layer": "impact",
+   "channels": 2,
+   "sample_rate": 48000,
+   "lufs_i": -17.04,
+   "lufs_m_max": -17.0,
+   "true_peak_dbtp": -2.68,
+   "length_s": 0.511,
+   "peak_ms": 47.8,
+   "sources": [
+    {
+     "file": "sonniss/Gamemaster Audio - Punch and Combat Sounds/punch_grit_wet_impact_05.wav",
+     "start": 0.0,
+     "end": 0.511
+    }
+   ],
+   "anchor_ms": 0.0,
+   "material": "flesh",
+   "variant": 6,
+   "proxy": false,
+   "source": "punch_grit_wet_impact_05.wav {}"
+  },
+  {
+   "file": "Impacts/flesh_7.wav",
+   "key": "snd.impact.flesh",
+   "layer": "impact",
+   "channels": 2,
+   "sample_rate": 48000,
+   "lufs_i": -17.04,
+   "lufs_m_max": -17.0,
+   "true_peak_dbtp": -2.52,
+   "length_s": 0.468,
+   "peak_ms": 44.0,
+   "sources": [
+    {
+     "file": "sonniss/Gamemaster Audio - Punch and Combat Sounds/punch_grit_wet_impact_05.wav",
+     "start": 0.0,
+     "end": 0.511
+    }
+   ],
+   "anchor_ms": 0.0,
+   "material": "flesh",
+   "variant": 7,
+   "proxy": false,
+   "source": "punch_grit_wet_impact_05.wav {\"pitch\": 1.5}"
+  },
+  {
+   "file": "Impacts/flyby_1.wav",
+   "key": "snd.flyby",
+   "layer": "flyby",
+   "channels": 2,
+   "sample_rate": 48000,
+   "lufs_i": -21.04,
+   "lufs_m_max": -21.0,
+   "true_peak_dbtp": -6.97,
+   "length_s": 0.511,
+   "peak_ms": 191.0,
+   "sources": [
+    {
+     "file": "sonniss/Gamemaster Audio -  Bullet Impact Sounds/bullet_flyby_fast_05.wav",
+     "start": 0.0,
+     "end": 0.511
+    }
+   ],
+   "anchor_ms": 0.0,
+   "variant": 1,
+   "source": "bullet_flyby_fast_05.wav {}"
+  },
+  {
+   "file": "Impacts/flyby_2.wav",
+   "key": "snd.flyby",
+   "layer": "flyby",
+   "channels": 2,
+   "sample_rate": 48000,
+   "lufs_i": -21.12,
+   "lufs_m_max": -21.0,
+   "true_peak_dbtp": -7.21,
+   "length_s": 0.573,
+   "peak_ms": 213.9,
+   "sources": [
+    {
+     "file": "sonniss/Gamemaster Audio -  Bullet Impact Sounds/bullet_flyby_fast_05.wav",
+     "start": 0.0,
+     "end": 0.511
+    }
+   ],
+   "anchor_ms": 0.0,
+   "variant": 2,
+   "source": "bullet_flyby_fast_05.wav {\"pitch\": -2.0}"
+  },
+  {
+   "file": "Impacts/flyby_3.wav",
+   "key": "snd.flyby",
+   "layer": "flyby",
+   "channels": 2,
+   "sample_rate": 48000,
+   "lufs_i": -21.04,
+   "lufs_m_max": -21.0,
+   "true_peak_dbtp": -6.96,
+   "length_s": 0.468,
+   "peak_ms": 174.8,
+   "sources": [
+    {
+     "file": "sonniss/Gamemaster Audio -  Bullet Impact Sounds/bullet_flyby_fast_05.wav",
+     "start": 0.0,
+     "end": 0.511
+    }
+   ],
+   "anchor_ms": 0.0,
+   "variant": 3,
+   "source": "bullet_flyby_fast_05.wav {\"pitch\": 1.5}"
+  },
+  {
+   "file": "Impacts/flyby_4.wav",
+   "key": "snd.flyby",
+   "layer": "flyby",
+   "channels": 2,
+   "sample_rate": 48000,
+   "lufs_i": -21.05,
+   "lufs_m_max": -21.0,
+   "true_peak_dbtp": -6.34,
+   "length_s": 0.554,
+   "peak_ms": 170.1,
+   "sources": [
+    {
+     "file": "sonniss/Gamemaster Audio - Guns, Bullets and Explosions/bullet_flyby_fast_06.wav",
+     "start": 0.0,
+     "end": 0.554
+    }
+   ],
+   "anchor_ms": 0.0,
+   "variant": 4,
+   "source": "bullet_flyby_fast_06.wav {}"
+  },
+  {
+   "file": "Impacts/flyby_5.wav",
+   "key": "snd.flyby",
+   "layer": "flyby",
+   "channels": 2,
+   "sample_rate": 48000,
+   "lufs_i": -22.33,
+   "lufs_m_max": -21.0,
+   "true_peak_dbtp": -6.32,
+   "length_s": 0.622,
+   "peak_ms": 208.5,
+   "sources": [
+    {
+     "file": "sonniss/Gamemaster Audio - Guns, Bullets and Explosions/bullet_flyby_fast_06.wav",
+     "start": 0.0,
+     "end": 0.554
+    }
+   ],
+   "anchor_ms": 0.0,
+   "variant": 5,
+   "source": "bullet_flyby_fast_06.wav {\"pitch\": -2.0}"
+  },
+  {
+   "file": "Impacts/flyby_6.wav",
+   "key": "snd.flyby",
+   "layer": "flyby",
+   "channels": 2,
+   "sample_rate": 48000,
+   "lufs_i": -21.05,
+   "lufs_m_max": -21.0,
+   "true_peak_dbtp": -5.65,
+   "length_s": 0.508,
+   "peak_ms": 156.0,
+   "sources": [
+    {
+     "file": "sonniss/Gamemaster Audio - Guns, Bullets and Explosions/bullet_flyby_fast_06.wav",
+     "start": 0.0,
+     "end": 0.554
+    }
+   ],
+   "anchor_ms": 0.0,
+   "variant": 6,
+   "source": "bullet_flyby_fast_06.wav {\"pitch\": 1.5}"
+  },
+  {
+   "file": "Impacts/glass_1.wav",
+   "key": "snd.impact.glass",
+   "layer": "impact",
+   "channels": 2,
+   "sample_rate": 48000,
+   "lufs_i": -20.01,
+   "lufs_m_max": -17.0,
+   "true_peak_dbtp": -7.1,
+   "length_s": 1.307,
+   "peak_ms": 164.8,
+   "sources": [
+    {
+     "file": "sonniss/PMSFX - Bullet Bys &Impacts/PM_BBI_Bullet_Impact_Glass_1.wav",
+     "start": 0.0,
+     "end": 1.307
+    }
+   ],
+   "anchor_ms": 0.0,
+   "material": "glass",
+   "variant": 1,
+   "proxy": false,
+   "source": "PM_BBI_Bullet_Impact_Glass_1.wav {}"
+  },
+  {
+   "file": "Impacts/glass_2.wav",
+   "key": "snd.impact.glass",
+   "layer": "impact",
+   "channels": 2,
+   "sample_rate": 48000,
+   "lufs_i": -20.35,
+   "lufs_m_max": -17.0,
+   "true_peak_dbtp": -7.03,
+   "length_s": 1.426,
+   "peak_ms": 179.8,
+   "sources": [
+    {
+     "file": "sonniss/PMSFX - Bullet Bys &Impacts/PM_BBI_Bullet_Impact_Glass_1.wav",
+     "start": 0.0,
+     "end": 1.307
+    }
+   ],
+   "anchor_ms": 0.0,
+   "material": "glass",
+   "variant": 2,
+   "proxy": false,
+   "source": "PM_BBI_Bullet_Impact_Glass_1.wav {\"pitch\": -1.5}"
+  },
+  {
+   "file": "Impacts/glass_3.wav",
+   "key": "snd.impact.glass",
+   "layer": "impact",
+   "channels": 2,
+   "sample_rate": 48000,
+   "lufs_i": -19.64,
+   "lufs_m_max": -17.0,
+   "true_peak_dbtp": -6.86,
+   "length_s": 1.199,
+   "peak_ms": 153.8,
+   "sources": [
+    {
+     "file": "sonniss/PMSFX - Bullet Bys &Impacts/PM_BBI_Bullet_Impact_Glass_1.wav",
+     "start": 0.0,
+     "end": 1.307
+    }
+   ],
+   "anchor_ms": 0.0,
+   "material": "glass",
+   "variant": 3,
+   "proxy": false,
+   "source": "PM_BBI_Bullet_Impact_Glass_1.wav {\"pitch\": 1.5}"
+  },
+  {
+   "file": "Impacts/glass_4.wav",
+   "key": "snd.impact.glass",
+   "layer": "impact",
+   "channels": 2,
+   "sample_rate": 48000,
+   "lufs_i": -20.58,
+   "lufs_m_max": -17.0,
+   "true_peak_dbtp": -7.23,
+   "length_s": 1.555,
+   "peak_ms": 196.0,
+   "sources": [
+    {
+     "file": "sonniss/PMSFX - Bullet Bys &Impacts/PM_BBI_Bullet_Impact_Glass_1.wav",
+     "start": 0.0,
+     "end": 1.307
+    }
+   ],
+   "anchor_ms": 0.0,
+   "material": "glass",
+   "variant": 4,
+   "proxy": false,
+   "source": "PM_BBI_Bullet_Impact_Glass_1.wav {\"pitch\": -3.0}"
+  },
+  {
+   "file": "Impacts/glass_5.wav",
+   "key": "snd.impact.glass",
+   "layer": "impact",
+   "channels": 2,
+   "sample_rate": 48000,
+   "lufs_i": -19.0,
+   "lufs_m_max": -17.0,
+   "true_peak_dbtp": -6.18,
+   "length_s": 0.673,
+   "peak_ms": 138.6,
+   "sources": [
+    {
+     "file": "sonniss/PMSFX - Bullet Bys &Impacts/PM_BBI_Bullet_Impact_Glass_1.wav",
+     "start": 0.0,
+     "end": 0.8
+    }
+   ],
+   "anchor_ms": 0.0,
+   "material": "glass",
+   "variant": 5,
+   "proxy": false,
+   "source": "PM_BBI_Bullet_Impact_Glass_1.wav {\"pitch\": 3.0, \"dur\": 0.8}"
+  },
+  {
+   "file": "Impacts/ice_1.wav",
+   "key": "snd.impact.ice",
+   "layer": "impact",
+   "channels": 2,
+   "sample_rate": 48000,
+   "lufs_i": -21.53,
+   "lufs_m_max": -17.0,
+   "true_peak_dbtp": -2.38,
+   "length_s": 0.798,
+   "peak_ms": 88.0,
+   "sources": [
+    {
+     "file": "sonniss/Gamemaster Audio - Guns, Bullets and Explosions/bullet_impact_ice_06.wav",
+     "start": 0.0,
+     "end": 0.798
+    }
+   ],
+   "anchor_ms": 0.0,
+   "material": "ice",
+   "variant": 1,
+   "proxy": false,
+   "source": "bullet_impact_ice_06.wav {}"
+  },
+  {
+   "file": "Impacts/ice_2.wav",
+   "key": "snd.impact.ice",
+   "layer": "impact",
+   "channels": 2,
+   "sample_rate": 48000,
+   "lufs_i": -21.14,
+   "lufs_m_max": -17.0,
+   "true_peak_dbtp": -2.59,
+   "length_s": 0.871,
+   "peak_ms": 96.0,
+   "sources": [
+    {
+     "file": "sonniss/Gamemaster Audio - Guns, Bullets and Explosions/bullet_impact_ice_06.wav",
+     "start": 0.0,
+     "end": 0.798
+    }
+   ],
+   "anchor_ms": 0.0,
+   "material": "ice",
+   "variant": 2,
+   "proxy": false,
+   "source": "bullet_impact_ice_06.wav {\"pitch\": -1.5}"
+  },
+  {
+   "file": "Impacts/ice_3.wav",
+   "key": "snd.impact.ice",
+   "layer": "impact",
+   "channels": 2,
+   "sample_rate": 48000,
+   "lufs_i": -20.6,
+   "lufs_m_max": -17.0,
+   "true_peak_dbtp": -2.18,
+   "length_s": 0.732,
+   "peak_ms": 71.3,
+   "sources": [
+    {
+     "file": "sonniss/Gamemaster Audio - Guns, Bullets and Explosions/bullet_impact_ice_06.wav",
+     "start": 0.0,
+     "end": 0.798
+    }
+   ],
+   "anchor_ms": 0.0,
+   "material": "ice",
+   "variant": 3,
+   "proxy": false,
+   "source": "bullet_impact_ice_06.wav {\"pitch\": 1.5}"
+  },
+  {
+   "file": "Impacts/ice_4.wav",
+   "key": "snd.impact.ice",
+   "layer": "impact",
+   "channels": 2,
+   "sample_rate": 48000,
+   "lufs_i": -20.58,
+   "lufs_m_max": -17.0,
+   "true_peak_dbtp": -2.69,
+   "length_s": 0.949,
+   "peak_ms": 104.6,
+   "sources": [
+    {
+     "file": "sonniss/Gamemaster Audio - Guns, Bullets and Explosions/bullet_impact_ice_06.wav",
+     "start": 0.0,
+     "end": 0.798
+    }
+   ],
+   "anchor_ms": 0.0,
+   "material": "ice",
+   "variant": 4,
+   "proxy": false,
+   "source": "bullet_impact_ice_06.wav {\"pitch\": -3.0}"
+  },
+  {
+   "file": "Impacts/metal_1.wav",
+   "key": "snd.impact.metal",
+   "layer": "impact",
+   "channels": 2,
+   "sample_rate": 48000,
+   "lufs_i": -18.35,
+   "lufs_m_max": -17.0,
+   "true_peak_dbtp": -6.47,
+   "length_s": 0.82,
+   "peak_ms": 126.1,
+   "sources": [
+    {
+     "file": "sonniss/Gamemaster Audio -  Bullet Impact Sounds/bullet_impact_metal_heavy_08.wav",
+     "start": 0.0,
+     "end": 0.82
+    }
+   ],
+   "anchor_ms": 0.0,
+   "material": "metal",
+   "variant": 1,
+   "proxy": false,
+   "source": "bullet_impact_metal_heavy_08.wav {}"
+  },
+  {
+   "file": "Impacts/metal_2.wav",
+   "key": "snd.impact.metal",
+   "layer": "impact",
+   "channels": 2,
+   "sample_rate": 48000,
+   "lufs_i": -19.71,
+   "lufs_m_max": -17.0,
+   "true_peak_dbtp": -6.19,
+   "length_s": 0.894,
+   "peak_ms": 137.5,
+   "sources": [
+    {
+     "file": "sonniss/Gamemaster Audio -  Bullet Impact Sounds/bullet_impact_metal_heavy_08.wav",
+     "start": 0.0,
+     "end": 0.82
+    }
+   ],
+   "anchor_ms": 0.0,
+   "material": "metal",
+   "variant": 2,
+   "proxy": false,
+   "source": "bullet_impact_metal_heavy_08.wav {\"pitch\": -1.5}"
+  },
+  {
+   "file": "Impacts/metal_3.wav",
+   "key": "snd.impact.metal",
+   "layer": "impact",
+   "channels": 2,
+   "sample_rate": 48000,
+   "lufs_i": -18.62,
+   "lufs_m_max": -17.0,
+   "true_peak_dbtp": -5.84,
+   "length_s": 0.752,
+   "peak_ms": 115.6,
+   "sources": [
+    {
+     "file": "sonniss/Gamemaster Audio -  Bullet Impact Sounds/bullet_impact_metal_heavy_08.wav",
+     "start": 0.0,
+     "end": 0.82
+    }
+   ],
+   "anchor_ms": 0.0,
+   "material": "metal",
+   "variant": 3,
+   "proxy": false,
+   "source": "bullet_impact_metal_heavy_08.wav {\"pitch\": 1.5, \"eq\": [[\"peak\", 4000, -2.0, 0.8]]}"
+  },
+  {
+   "file": "Impacts/metal_4.wav",
+   "key": "snd.impact.metal",
+   "layer": "impact",
+   "channels": 2,
+   "sample_rate": 48000,
+   "lufs_i": -19.38,
+   "lufs_m_max": -17.0,
+   "true_peak_dbtp": -6.83,
+   "length_s": 0.975,
+   "peak_ms": 150.0,
+   "sources": [
+    {
+     "file": "sonniss/Gamemaster Audio -  Bullet Impact Sounds/bullet_impact_metal_heavy_08.wav",
+     "start": 0.0,
+     "end": 0.82
+    }
+   ],
+   "anchor_ms": 0.0,
+   "material": "metal",
+   "variant": 4,
+   "proxy": false,
+   "source": "bullet_impact_metal_heavy_08.wav {\"pitch\": -3.0}"
+  },
+  {
+   "file": "Impacts/metal_5.wav",
+   "key": "snd.impact.metal",
+   "layer": "impact",
+   "channels": 2,
+   "sample_rate": 48000,
+   "lufs_i": -17.04,
+   "lufs_m_max": -17.0,
+   "true_peak_dbtp": -5.47,
+   "length_s": 0.42,
+   "peak_ms": 106.8,
+   "sources": [
+    {
+     "file": "sonniss/Gamemaster Audio -  Bullet Impact Sounds/bullet_impact_metal_heavy_08.wav",
+     "start": 0.0,
+     "end": 0.5
+    }
+   ],
+   "anchor_ms": 0.0,
+   "material": "metal",
+   "variant": 5,
+   "proxy": false,
+   "source": "bullet_impact_metal_heavy_08.wav {\"pitch\": 3.0, \"dur\": 0.5}"
+  },
+  {
+   "file": "Impacts/wood_1.wav",
+   "key": "snd.impact.wood",
+   "layer": "impact",
+   "channels": 2,
+   "sample_rate": 48000,
+   "lufs_i": -18.24,
+   "lufs_m_max": -17.94,
+   "true_peak_dbtp": -1.0,
+   "length_s": 0.749,
+   "peak_ms": 33.3,
+   "sources": [
+    {
+     "file": "sonniss/Stuart Duffield - Bullet SFX/Bullet_Drop_Wood_04.wav",
+     "start": 0.0,
+     "end": 0.5
+    }
+   ],
+   "anchor_ms": 0.0,
+   "material": "wood",
+   "variant": 1,
+   "proxy": true,
+   "source": "Bullet_Drop_Wood_04.wav {\"pitch\": -7.0, \"dur\": 0.5}"
+  },
+  {
+   "file": "Impacts/wood_2.wav",
+   "key": "snd.impact.wood",
+   "layer": "impact",
+   "channels": 2,
+   "sample_rate": 48000,
+   "lufs_i": -18.2,
+   "lufs_m_max": -17.56,
+   "true_peak_dbtp": -1.0,
+   "length_s": 0.817,
+   "peak_ms": 36.3,
+   "sources": [
+    {
+     "file": "sonniss/Stuart Duffield - Bullet SFX/Bullet_Drop_Wood_04.wav",
+     "start": 0.0,
+     "end": 0.5
+    }
+   ],
+   "anchor_ms": 0.0,
+   "material": "wood",
+   "variant": 2,
+   "proxy": true,
+   "source": "Bullet_Drop_Wood_04.wav {\"pitch\": -8.5, \"dur\": 0.5}"
+  },
+  {
+   "file": "Impacts/wood_3.wav",
+   "key": "snd.impact.wood",
+   "layer": "impact",
+   "channels": 2,
+   "sample_rate": 48000,
+   "lufs_i": -18.02,
+   "lufs_m_max": -17.32,
+   "true_peak_dbtp": -1.0,
+   "length_s": 0.707,
+   "peak_ms": 31.4,
+   "sources": [
+    {
+     "file": "sonniss/Stuart Duffield - Bullet SFX/Bullet_Drop_Wood_04.wav",
+     "start": 0.0,
+     "end": 0.5
+    }
+   ],
+   "anchor_ms": 0.0,
+   "material": "wood",
+   "variant": 3,
+   "proxy": true,
+   "source": "Bullet_Drop_Wood_04.wav {\"pitch\": -6.0, \"dur\": 0.5}"
+  },
+  {
+   "file": "Impacts/wood_4.wav",
+   "key": "snd.impact.wood",
+   "layer": "impact",
+   "channels": 2,
+   "sample_rate": 48000,
+   "lufs_i": -17.03,
+   "lufs_m_max": -17.0,
+   "true_peak_dbtp": -4.03,
+   "length_s": 0.182,
+   "peak_ms": 42.9,
+   "sources": [
+    {
+     "file": "sonniss/Shapeforms - Hit & Punch/IMPACT_LOW_THUD_10.wav",
+     "start": 0.0,
+     "end": 0.205
+    }
+   ],
+   "anchor_ms": 0.0,
+   "material": "wood",
+   "variant": 4,
+   "proxy": true,
+   "source": "IMPACT_LOW_THUD_10.wav {\"pitch\": 2.0, \"lp\": 3500}"
+  },
+  {
+   "file": "Impacts/wood_5.wav",
+   "key": "snd.impact.wood",
+   "layer": "impact",
+   "channels": 2,
+   "sample_rate": 48000,
+   "lufs_i": -17.03,
+   "lufs_m_max": -17.0,
+   "true_peak_dbtp": -4.13,
+   "length_s": 0.163,
+   "peak_ms": 38.3,
+   "sources": [
+    {
+     "file": "sonniss/Shapeforms - Hit & Punch/IMPACT_LOW_THUD_10.wav",
+     "start": 0.0,
+     "end": 0.205
+    }
+   ],
+   "anchor_ms": 0.0,
+   "material": "wood",
+   "variant": 5,
+   "proxy": true,
+   "source": "IMPACT_LOW_THUD_10.wav {\"pitch\": 4.0, \"lp\": 3000}"
   },
   {
    "file": "Weapons/AKS74U/bolt_back_1.wav",
@@ -2343,6 +6753,13 @@
    "true_peak_dbtp": -1.0,
    "length_s": 0.236,
    "peak_ms": 44.4,
+   "sources": [
+    {
+     "file": "tsp/Tactical Shooter Pack/AK105/Actions/S_AK105_Reload_Empty.WAV",
+     "start": 2.612,
+     "end": 2.848
+    }
+   ],
    "anchor_ms": 36.0,
    "gun": "ak",
    "element": "bolt_back",
@@ -2361,6 +6778,13 @@
    "true_peak_dbtp": -3.61,
    "length_s": 0.247,
    "peak_ms": 43.8,
+   "sources": [
+    {
+     "file": "tsp/Tactical Shooter Pack/TR15/Actions/S_TR15_Reload_Empty.wav",
+     "start": 2.574,
+     "end": 2.809
+    }
+   ],
    "anchor_ms": 37.7,
    "gun": "ak",
    "element": "bolt_back",
@@ -2379,6 +6803,13 @@
    "true_peak_dbtp": -3.71,
    "length_s": 0.269,
    "peak_ms": 85.9,
+   "sources": [
+    {
+     "file": "tsp/Tactical Shooter Pack/Mk14EBR/S_Mk14EBR_Reload_Empty.WAV",
+     "start": 2.401,
+     "end": 2.683
+    }
+   ],
    "anchor_ms": 78.3,
    "gun": "ak",
    "element": "bolt_back",
@@ -2397,6 +6828,13 @@
    "true_peak_dbtp": -5.47,
    "length_s": 0.168,
    "peak_ms": 128.6,
+   "sources": [
+    {
+     "file": "tsp/Tactical Shooter Pack/AK105/Actions/S_AK105_Reload_Empty.WAV",
+     "start": 3.04,
+     "end": 3.208
+    }
+   ],
    "anchor_ms": 28.0,
    "gun": "ak",
    "element": "bolt_release",
@@ -2415,6 +6853,13 @@
    "true_peak_dbtp": -7.2,
    "length_s": 0.344,
    "peak_ms": 98.8,
+   "sources": [
+    {
+     "file": "tsp/Tactical Shooter Pack/TR15/Actions/S_TR15_Reload_Empty.wav",
+     "start": 3.04,
+     "end": 3.374
+    }
+   ],
    "anchor_ms": 35.0,
    "gun": "ak",
    "element": "bolt_release",
@@ -2433,6 +6878,13 @@
    "true_peak_dbtp": -8.57,
    "length_s": 0.235,
    "peak_ms": 149.9,
+   "sources": [
+    {
+     "file": "tsp/Tactical Shooter Pack/Mk14EBR/S_Mk14EBR_Reload_Empty.WAV",
+     "start": 3.782,
+     "end": 4.024
+    }
+   ],
    "anchor_ms": 40.8,
    "gun": "ak",
    "element": "bolt_release",
@@ -2451,6 +6903,13 @@
    "true_peak_dbtp": -1.0,
    "length_s": 0.453,
    "peak_ms": 286.4,
+   "sources": [
+    {
+     "file": "tsp/Tactical Shooter Pack/AK105/Actions/S_AK105_Draw.WAV",
+     "start": 0.297,
+     "end": 0.75
+    }
+   ],
    "anchor_ms": 0.0,
    "gun": "ak",
    "element": "cloth",
@@ -2468,6 +6927,13 @@
    "true_peak_dbtp": -1.0,
    "length_s": 0.453,
    "peak_ms": 241.6,
+   "sources": [
+    {
+     "file": "tsp/Tactical Shooter Pack/AK105/Actions/S_AK105_Holster.WAV",
+     "start": 0.427,
+     "end": 0.88
+    }
+   ],
    "anchor_ms": 0.0,
    "gun": "ak",
    "element": "cloth",
@@ -2485,6 +6951,13 @@
    "true_peak_dbtp": -1.94,
    "length_s": 0.453,
    "peak_ms": 92.5,
+   "sources": [
+    {
+     "file": "tsp/Tactical Shooter Pack/AK105/Actions/S_AK105_Inspect.WAV",
+     "start": 0.237,
+     "end": 0.69
+    }
+   ],
    "anchor_ms": 0.0,
    "gun": "ak",
    "element": "cloth",
@@ -2502,6 +6975,18 @@
    "true_peak_dbtp": -1.0,
    "length_s": 0.936,
    "peak_ms": 363.3,
+   "sources": [
+    {
+     "file": "tsp/Tactical Shooter Pack/AK105/Actions/S_AK105_Draw.WAV",
+     "start": 0.28,
+     "end": 0.58
+    },
+    {
+     "file": "tsp/Tactical Shooter Pack/AK105/Actions/S_AK105_Draw.WAV",
+     "start": 0.58,
+     "end": 1.156
+    }
+   ],
    "anchor_ms": 360.0,
    "gun": "ak",
    "element": "draw",
@@ -2519,6 +7004,18 @@
    "true_peak_dbtp": -1.0,
    "length_s": 0.882,
    "peak_ms": 353.8,
+   "sources": [
+    {
+     "file": "tsp/Tactical Shooter Pack/TR15/Actions/S_TR15_Draw.wav",
+     "start": 0.6,
+     "end": 0.918
+    },
+    {
+     "file": "tsp/Tactical Shooter Pack/TR15/Actions/S_TR15_Draw.wav",
+     "start": 0.918,
+     "end": 1.466
+    }
+   ],
    "anchor_ms": 360.0,
    "gun": "ak",
    "element": "draw",
@@ -2536,6 +7033,18 @@
    "true_peak_dbtp": -1.0,
    "length_s": 0.951,
    "peak_ms": 393.1,
+   "sources": [
+    {
+     "file": "tsp/Tactical Shooter Pack/WK-11_Viper/Actions/S_WK-11_Viper_Draw.wav",
+     "start": 0.6,
+     "end": 0.885
+    },
+    {
+     "file": "tsp/Tactical Shooter Pack/WK-11_Viper/Actions/S_WK-11_Viper_Draw.wav",
+     "start": 0.885,
+     "end": 1.449
+    }
+   ],
    "anchor_ms": 360.0,
    "gun": "ak",
    "element": "draw",
@@ -2549,10 +7058,17 @@
    "channels": 2,
    "sample_rate": 48000,
    "lufs_i": -21.34,
-   "lufs_m_max": -21.3,
+   "lufs_m_max": -21.29,
    "true_peak_dbtp": -1.0,
    "length_s": 0.143,
    "peak_ms": 4.3,
+   "sources": [
+    {
+     "file": "sonniss/Pole Position Production - Various Gun Foley & Handling/Steyr_TMP_9mm_foley_distant_MKH418S_S_cocking_&_dry_fire.wav",
+     "start": 1.968,
+     "end": 2.111
+    }
+   ],
    "anchor_ms": 0.0,
    "gun": "ak",
    "element": "dry_fire",
@@ -2570,6 +7086,13 @@
    "true_peak_dbtp": -1.73,
    "length_s": 0.151,
    "peak_ms": 6.7,
+   "sources": [
+    {
+     "file": "sonniss/Pole Position Production - Various Gun Foley & Handling/Steyr_TMP_9mm_foley_distant_MKH418S_S_cocking_&_dry_fire.wav",
+     "start": 6.931,
+     "end": 7.074
+    }
+   ],
    "anchor_ms": 0.0,
    "gun": "ak",
    "element": "dry_fire",
@@ -2587,6 +7110,13 @@
    "true_peak_dbtp": -1.0,
    "length_s": 0.137,
    "peak_ms": 4.9,
+   "sources": [
+    {
+     "file": "sonniss/Pole Position Production - Various Gun Foley & Handling/Steyr_TMP_9mm_foley_distant_MKH418S_S_cocking_&_dry_fire.wav",
+     "start": 15.633,
+     "end": 15.776
+    }
+   ],
    "anchor_ms": 0.0,
    "gun": "ak",
    "element": "dry_fire",
@@ -2604,6 +7134,13 @@
    "true_peak_dbtp": -1.0,
    "length_s": 0.161,
    "peak_ms": 5.2,
+   "sources": [
+    {
+     "file": "sonniss/Pole Position Production - Various Gun Foley & Handling/Steyr_TMP_9mm_foley_distant_MKH418S_S_cocking_&_dry_fire.wav",
+     "start": 21.281,
+     "end": 21.424
+    }
+   ],
    "anchor_ms": 0.0,
    "gun": "ak",
    "element": "dry_fire",
@@ -2621,6 +7158,23 @@
    "true_peak_dbtp": -1.23,
    "length_s": 0.46,
    "peak_ms": 3.8,
+   "sources": [
+    {
+     "file": "tsp/Tactical Shooter Pack/AK105/Fire/S_AK105_Fire_Unsuppressed_0.wav",
+     "start": 0.046,
+     "end": 0.506
+    },
+    {
+     "file": "tsp/Tactical Shooter Pack/TR15/Fire/S_TR15_V1_Unsupressed_With_Tail_0.wav",
+     "start": 0.006,
+     "end": 0.146
+    },
+    {
+     "file": "tsp/Tactical Shooter Pack/Mk14EBR/S_Mk14EBR_Fire_02.WAV",
+     "start": 0.001,
+     "end": 0.401
+    }
+   ],
    "anchor_ms": 2.0,
    "gun": "ak",
    "element": "fire_close",
@@ -2639,7 +7193,19 @@
    "true_peak_dbtp": -1.0,
    "length_s": 0.46,
    "peak_ms": 3.0,
-   "anchor_ms": 0.6,
+   "sources": [
+    {
+     "file": "tsp/Tactical Shooter Pack/AK105/Fire/S_AK105_Fire_Unsuppressed_1.wav",
+     "start": 0.045,
+     "end": 0.505
+    },
+    {
+     "file": "tsp/Tactical Shooter Pack/TR15/Fire/S_TR15_V2_Unsupressed_With_Tail_0.wav",
+     "start": 0.002,
+     "end": 0.142
+    }
+   ],
+   "anchor_ms": 1.1,
    "gun": "ak",
    "element": "fire_close",
    "variant": 2,
@@ -2657,6 +7223,23 @@
    "true_peak_dbtp": -1.0,
    "length_s": 0.46,
    "peak_ms": 2.2,
+   "sources": [
+    {
+     "file": "tsp/Tactical Shooter Pack/AK105/Fire/S_AK105_Fire_Unsuppressed_2.wav",
+     "start": 0.047,
+     "end": 0.507
+    },
+    {
+     "file": "tsp/Tactical Shooter Pack/TR15/Fire/S_TR15_V3_Unsuppressed_With_Tail_0.wav",
+     "start": 0.006,
+     "end": 0.146
+    },
+    {
+     "file": "tsp/Tactical Shooter Pack/Mk14EBR/S_Mk14EBR_Fire_03.WAV",
+     "start": 0.013,
+     "end": 0.413
+    }
+   ],
    "anchor_ms": 2.4,
    "gun": "ak",
    "element": "fire_close",
@@ -2675,6 +7258,18 @@
    "true_peak_dbtp": -1.0,
    "length_s": 0.471,
    "peak_ms": 3.1,
+   "sources": [
+    {
+     "file": "tsp/Tactical Shooter Pack/AK105/Fire/S_AK105_Fire_Unsuppressed_0.wav",
+     "start": 0.046,
+     "end": 0.506
+    },
+    {
+     "file": "tsp/Tactical Shooter Pack/TR15/Fire/S_TR15_V4_Unsuppressed_With_Tail_0.wav",
+     "start": 0.004,
+     "end": 0.144
+    }
+   ],
    "anchor_ms": 3.0,
    "gun": "ak",
    "element": "fire_close",
@@ -2693,6 +7288,23 @@
    "true_peak_dbtp": -1.0,
    "length_s": 0.452,
    "peak_ms": 3.2,
+   "sources": [
+    {
+     "file": "tsp/Tactical Shooter Pack/AK105/Fire/S_AK105_Fire_Unsuppressed_1.wav",
+     "start": 0.045,
+     "end": 0.505
+    },
+    {
+     "file": "tsp/Tactical Shooter Pack/TR15/Fire/S_TR15_V1_Unsupressed_With_Tail_1.wav",
+     "start": 0.035,
+     "end": 0.175
+    },
+    {
+     "file": "tsp/Tactical Shooter Pack/Mk14EBR/S_Mk14EBR_Fire_01.WAV",
+     "start": 0.007,
+     "end": 0.407
+    }
+   ],
    "anchor_ms": 2.9,
    "gun": "ak",
    "element": "fire_close",
@@ -2711,6 +7323,18 @@
    "true_peak_dbtp": -1.0,
    "length_s": 0.465,
    "peak_ms": 3.0,
+   "sources": [
+    {
+     "file": "tsp/Tactical Shooter Pack/AK105/Fire/S_AK105_Fire_Unsuppressed_2.wav",
+     "start": 0.047,
+     "end": 0.507
+    },
+    {
+     "file": "tsp/Tactical Shooter Pack/TR15/Fire/S_TR15_V4_Unsuppressed_With_Tail_1.wav",
+     "start": 0.004,
+     "end": 0.144
+    }
+   ],
    "anchor_ms": 3.0,
    "gun": "ak",
    "element": "fire_close",
@@ -2724,12 +7348,19 @@
    "layer": "far",
    "channels": 1,
    "sample_rate": 48000,
-   "lufs_i": -31.91,
-   "lufs_m_max": -26.17,
-   "true_peak_dbtp": -9.23,
+   "lufs_i": -32.5,
+   "lufs_m_max": -25.0,
+   "true_peak_dbtp": -7.17,
    "length_s": 3.485,
    "peak_ms": 91.5,
-   "anchor_ms": 88.4,
+   "sources": [
+    {
+     "file": "tsp/Tactical Shooter Pack/AK105/Fire/S_AK105_Fire_Unsuppressed_0.wav",
+     "start": 0.049,
+     "end": 3.449
+    }
+   ],
+   "anchor_ms": 88.5,
    "gun": "ak",
    "element": "fire_far",
    "variant": 1,
@@ -2742,12 +7373,19 @@
    "layer": "far",
    "channels": 1,
    "sample_rate": 48000,
-   "lufs_i": -32.15,
-   "lufs_m_max": -26.38,
-   "true_peak_dbtp": -8.32,
+   "lufs_i": -30.12,
+   "lufs_m_max": -25.0,
+   "true_peak_dbtp": -5.9,
    "length_s": 3.51,
    "peak_ms": 120.9,
-   "anchor_ms": 112.9,
+   "sources": [
+    {
+     "file": "tsp/Tactical Shooter Pack/AK105/Fire/S_AK105_Fire_Unsuppressed_1.wav",
+     "start": 0.048,
+     "end": 3.448
+    }
+   ],
+   "anchor_ms": 113.0,
    "gun": "ak",
    "element": "fire_far",
    "variant": 2,
@@ -2760,12 +7398,19 @@
    "layer": "far",
    "channels": 1,
    "sample_rate": 48000,
-   "lufs_i": -32.33,
-   "lufs_m_max": -26.19,
-   "true_peak_dbtp": -7.58,
+   "lufs_i": -32.58,
+   "lufs_m_max": -25.0,
+   "true_peak_dbtp": -5.52,
    "length_s": 3.47,
    "peak_ms": 76.4,
-   "anchor_ms": 72.8,
+   "sources": [
+    {
+     "file": "tsp/Tactical Shooter Pack/AK105/Fire/S_AK105_Fire_Unsuppressed_2.wav",
+     "start": 0.05,
+     "end": 3.45
+    }
+   ],
+   "anchor_ms": 72.9,
    "gun": "ak",
    "element": "fire_far",
    "variant": 3,
@@ -2778,11 +7423,18 @@
    "layer": "far",
    "channels": 1,
    "sample_rate": 48000,
-   "lufs_i": -31.75,
-   "lufs_m_max": -25.77,
-   "true_peak_dbtp": -10.99,
+   "lufs_i": -30.88,
+   "lufs_m_max": -25.0,
+   "true_peak_dbtp": -9.44,
    "length_s": 3.304,
    "peak_ms": 102.6,
+   "sources": [
+    {
+     "file": "tsp/Tactical Shooter Pack/Mk14EBR/S_Mk14EBR_Fire_03.WAV",
+     "start": 0.016,
+     "end": 3.416
+    }
+   ],
    "anchor_ms": 98.6,
    "gun": "ak",
    "element": "fire_far",
@@ -2801,6 +7453,13 @@
    "true_peak_dbtp": -5.8,
    "length_s": 0.3,
    "peak_ms": 79.5,
+   "sources": [
+    {
+     "file": "tsp/Tactical Shooter Pack/AK105/Actions/S_AK105_Reload_Empty.WAV",
+     "start": 3.061,
+     "end": 3.184
+    }
+   ],
    "anchor_ms": 23.4,
    "gun": "ak",
    "element": "fire_mech",
@@ -2819,6 +7478,13 @@
    "true_peak_dbtp": -5.04,
    "length_s": 0.3,
    "peak_ms": 60.3,
+   "sources": [
+    {
+     "file": "tsp/Tactical Shooter Pack/TR15/Actions/S_TR15_Reload_Empty.wav",
+     "start": 3.045,
+     "end": 3.148
+    }
+   ],
    "anchor_ms": 60.2,
    "gun": "ak",
    "element": "fire_mech",
@@ -2837,6 +7503,13 @@
    "true_peak_dbtp": -2.71,
    "length_s": 0.3,
    "peak_ms": 64.3,
+   "sources": [
+    {
+     "file": "tsp/Tactical Shooter Pack/Mk14EBR/S_Mk14EBR_Reload_Empty.WAV",
+     "start": 3.774,
+     "end": 3.897
+    }
+   ],
    "anchor_ms": 64.1,
    "gun": "ak",
    "element": "fire_mech",
@@ -2855,6 +7528,13 @@
    "true_peak_dbtp": -1.0,
    "length_s": 0.3,
    "peak_ms": 74.2,
+   "sources": [
+    {
+     "file": "tsp/Tactical Shooter Pack/AK105/Actions/S_AK105_Reload_Empty.WAV",
+     "start": 2.592,
+     "end": 2.675
+    }
+   ],
    "anchor_ms": 73.7,
    "gun": "ak",
    "element": "fire_mech",
@@ -2873,6 +7553,13 @@
    "true_peak_dbtp": -5.44,
    "length_s": 0.45,
    "peak_ms": 41.9,
+   "sources": [
+    {
+     "file": "tsp/Tactical Shooter Pack/AK105/Fire/S_AK105_Fire_Unsuppressed_0.wav",
+     "start": 0.047,
+     "end": 1.127
+    }
+   ],
    "anchor_ms": 22.3,
    "gun": "ak",
    "element": "fire_sub",
@@ -2891,6 +7578,13 @@
    "true_peak_dbtp": -5.18,
    "length_s": 0.45,
    "peak_ms": 44.1,
+   "sources": [
+    {
+     "file": "tsp/Tactical Shooter Pack/AK105/Fire/S_AK105_Fire_Unsuppressed_1.wav",
+     "start": 0.046,
+     "end": 1.126
+    }
+   ],
    "anchor_ms": 16.8,
    "gun": "ak",
    "element": "fire_sub",
@@ -2909,6 +7603,13 @@
    "true_peak_dbtp": -6.52,
    "length_s": 0.45,
    "peak_ms": 46.7,
+   "sources": [
+    {
+     "file": "tsp/Tactical Shooter Pack/Mk14EBR/S_Mk14EBR_Fire_01.WAV",
+     "start": 0.008,
+     "end": 1.088
+    }
+   ],
    "anchor_ms": 11.4,
    "gun": "ak",
    "element": "fire_sub",
@@ -2927,6 +7628,13 @@
    "true_peak_dbtp": -4.13,
    "length_s": 0.45,
    "peak_ms": 7.7,
+   "sources": [
+    {
+     "file": "sonniss/Audiobeast - The London Warehouse Firearms Library/Audiobeast_Small_Room_H&K_416_5.56_Assault_Rifle_05m_LS5_001_Single_Shot_x1.wav",
+     "start": 1.808,
+     "end": 2.888
+    }
+   ],
    "anchor_ms": 6.1,
    "gun": "ak",
    "element": "fire_sub",
@@ -2945,6 +7653,13 @@
    "true_peak_dbtp": -11.11,
    "length_s": 0.45,
    "peak_ms": 48.3,
+   "sources": [
+    {
+     "file": "sonniss/Pole Position - The Indoor Gun Acoustics Library/AK47_catacombs_burst_blanks_in_front_of_gun_MKH8020_wide_stereo.wav",
+     "start": 0.452,
+     "end": 1.532
+    }
+   ],
    "anchor_ms": 28.3,
    "gun": "ak",
    "element": "fire_sub",
@@ -2963,6 +7678,13 @@
    "true_peak_dbtp": -9.22,
    "length_s": 3.2,
    "peak_ms": 203.5,
+   "sources": [
+    {
+     "file": "tsp/Tactical Shooter Pack/AK105/Fire/S_AK105_Fire_Unsuppressed_0.wav",
+     "start": 0.169,
+     "end": 3.249
+    }
+   ],
    "anchor_ms": 161.2,
    "gun": "ak",
    "element": "fire_tail",
@@ -2981,6 +7703,13 @@
    "true_peak_dbtp": -6.86,
    "length_s": 3.2,
    "peak_ms": 186.7,
+   "sources": [
+    {
+     "file": "tsp/Tactical Shooter Pack/AK105/Fire/S_AK105_Fire_Unsuppressed_1.wav",
+     "start": 0.168,
+     "end": 3.248
+    }
+   ],
    "anchor_ms": 159.1,
    "gun": "ak",
    "element": "fire_tail",
@@ -2999,6 +7728,13 @@
    "true_peak_dbtp": -11.13,
    "length_s": 3.29,
    "peak_ms": 226.3,
+   "sources": [
+    {
+     "file": "tsp/Tactical Shooter Pack/AK105/Fire/S_AK105_Fire_Unsuppressed_2.wav",
+     "start": 0.17,
+     "end": 3.25
+    }
+   ],
    "anchor_ms": 164.2,
    "gun": "ak",
    "element": "fire_tail",
@@ -3017,6 +7753,13 @@
    "true_peak_dbtp": -9.93,
    "length_s": 3.577,
    "peak_ms": 177.9,
+   "sources": [
+    {
+     "file": "tsp/Tactical Shooter Pack/TR15/Fire/S_TR15_V4_Unsuppressed_With_Tail_0.wav",
+     "start": 0.127,
+     "end": 3.207
+    }
+   ],
    "anchor_ms": 145.0,
    "gun": "ak",
    "element": "fire_tail",
@@ -3035,6 +7778,13 @@
    "true_peak_dbtp": -10.48,
    "length_s": 3.2,
    "peak_ms": 186.1,
+   "sources": [
+    {
+     "file": "tsp/Tactical Shooter Pack/Mk14EBR/S_Mk14EBR_Fire_02.WAV",
+     "start": 0.124,
+     "end": 3.204
+    }
+   ],
    "anchor_ms": 140.6,
    "gun": "ak",
    "element": "fire_tail",
@@ -3053,6 +7803,13 @@
    "true_peak_dbtp": -3.42,
    "length_s": 0.303,
    "peak_ms": 12.4,
+   "sources": [
+    {
+     "file": "tsp/Tactical Shooter Pack/General/S_FireMode.WAV",
+     "start": 0.037,
+     "end": 0.34
+    }
+   ],
    "anchor_ms": 3.0,
    "gun": "ak",
    "element": "firemode",
@@ -3070,6 +7827,13 @@
    "true_peak_dbtp": -3.57,
    "length_s": 0.34,
    "peak_ms": 11.4,
+   "sources": [
+    {
+     "file": "tsp/Tactical Shooter Pack/General/S_FireMode.WAV",
+     "start": 0.037,
+     "end": 0.34
+    }
+   ],
    "anchor_ms": 3.4,
    "gun": "ak",
    "element": "firemode",
@@ -3087,6 +7851,13 @@
    "true_peak_dbtp": -2.89,
    "length_s": 0.278,
    "peak_ms": 11.3,
+   "sources": [
+    {
+     "file": "tsp/Tactical Shooter Pack/General/S_FireMode.WAV",
+     "start": 0.037,
+     "end": 0.34
+    }
+   ],
    "anchor_ms": 2.8,
    "gun": "ak",
    "element": "firemode",
@@ -3104,6 +7875,13 @@
    "true_peak_dbtp": -1.0,
    "length_s": 0.223,
    "peak_ms": 11.8,
+   "sources": [
+    {
+     "file": "tsp/Tactical Shooter Pack/AK105/Actions/S_AK105_Reload_Empty.WAV",
+     "start": 3.995,
+     "end": 4.218
+    }
+   ],
    "anchor_ms": 3.0,
    "gun": "ak",
    "element": "handle",
@@ -3121,6 +7899,13 @@
    "true_peak_dbtp": -1.0,
    "length_s": 0.303,
    "peak_ms": 3.0,
+   "sources": [
+    {
+     "file": "tsp/Tactical Shooter Pack/AK105/Actions/S_AK105_Inspect.WAV",
+     "start": 4.325,
+     "end": 4.628
+    }
+   ],
    "anchor_ms": 3.0,
    "gun": "ak",
    "element": "handle",
@@ -3138,6 +7923,13 @@
    "true_peak_dbtp": -1.01,
    "length_s": 0.253,
    "peak_ms": 7.2,
+   "sources": [
+    {
+     "file": "tsp/Tactical Shooter Pack/AK105/Actions/S_AK105_MagCheck.WAV",
+     "start": 3.723,
+     "end": 3.976
+    }
+   ],
    "anchor_ms": 3.0,
    "gun": "ak",
    "element": "handle",
@@ -3155,6 +7947,13 @@
    "true_peak_dbtp": -1.62,
    "length_s": 0.303,
    "peak_ms": 8.7,
+   "sources": [
+    {
+     "file": "tsp/Tactical Shooter Pack/AK105/Actions/S_AK105_Inspect.WAV",
+     "start": 4.634,
+     "end": 4.937
+    }
+   ],
    "anchor_ms": 3.0,
    "gun": "ak",
    "element": "handle",
@@ -3172,6 +7971,18 @@
    "true_peak_dbtp": -1.0,
    "length_s": 0.868,
    "peak_ms": 303.0,
+   "sources": [
+    {
+     "file": "tsp/Tactical Shooter Pack/AK105/Actions/S_AK105_Holster.WAV",
+     "start": 0.43,
+     "end": 0.666
+    },
+    {
+     "file": "tsp/Tactical Shooter Pack/AK105/Actions/S_AK105_Holster.WAV",
+     "start": 0.666,
+     "end": 1.234
+    }
+   ],
    "anchor_ms": 300.0,
    "gun": "ak",
    "element": "holster",
@@ -3189,6 +8000,18 @@
    "true_peak_dbtp": -1.0,
    "length_s": 0.861,
    "peak_ms": 294.3,
+   "sources": [
+    {
+     "file": "tsp/Tactical Shooter Pack/TR15/Actions/S_TR15_Holster.wav",
+     "start": 0.24,
+     "end": 0.47
+    },
+    {
+     "file": "tsp/Tactical Shooter Pack/TR15/Actions/S_TR15_Holster.wav",
+     "start": 0.47,
+     "end": 1.056
+    }
+   ],
    "anchor_ms": 300.0,
    "gun": "ak",
    "element": "holster",
@@ -3206,6 +8029,18 @@
    "true_peak_dbtp": -1.0,
    "length_s": 0.91,
    "peak_ms": 311.9,
+   "sources": [
+    {
+     "file": "tsp/Tactical Shooter Pack/WK-11_Viper/Actions/S_WK-11_Viper_Holster.wav",
+     "start": 0.3,
+     "end": 0.537
+    },
+    {
+     "file": "tsp/Tactical Shooter Pack/WK-11_Viper/Actions/S_WK-11_Viper_Holster.wav",
+     "start": 0.537,
+     "end": 1.121
+    }
+   ],
    "anchor_ms": 300.0,
    "gun": "ak",
    "element": "holster",
@@ -3223,6 +8058,13 @@
    "true_peak_dbtp": -1.04,
    "length_s": 0.173,
    "peak_ms": 4.2,
+   "sources": [
+    {
+     "file": "tsp/Tactical Shooter Pack/AK105/Actions/S_AK105_Reload_Tactical.WAV",
+     "start": 1.698,
+     "end": 1.871
+    }
+   ],
    "anchor_ms": 3.0,
    "gun": "ak",
    "element": "mag_in",
@@ -3240,6 +8082,13 @@
    "true_peak_dbtp": -1.18,
    "length_s": 0.168,
    "peak_ms": 5.9,
+   "sources": [
+    {
+     "file": "tsp/Tactical Shooter Pack/AK105/Actions/S_AK105_Reload_Empty.WAV",
+     "start": 1.752,
+     "end": 1.92
+    }
+   ],
    "anchor_ms": 3.0,
    "gun": "ak",
    "element": "mag_in",
@@ -3257,6 +8106,13 @@
    "true_peak_dbtp": -1.0,
    "length_s": 0.188,
    "peak_ms": 38.0,
+   "sources": [
+    {
+     "file": "tsp/Tactical Shooter Pack/AK105/Actions/S_AK105_MagCheck.WAV",
+     "start": 2.55,
+     "end": 2.737
+    }
+   ],
    "anchor_ms": 38.0,
    "gun": "ak",
    "element": "mag_in",
@@ -3275,6 +8131,13 @@
    "true_peak_dbtp": -4.19,
    "length_s": 0.165,
    "peak_ms": 99.8,
+   "sources": [
+    {
+     "file": "tsp/Tactical Shooter Pack/TR15/Actions/S_TR15_Reload_Tactical.wav",
+     "start": 1.892,
+     "end": 2.043
+    }
+   ],
    "anchor_ms": 39.3,
    "gun": "ak",
    "element": "mag_in",
@@ -3293,6 +8156,13 @@
    "true_peak_dbtp": -1.68,
    "length_s": 0.128,
    "peak_ms": 27.5,
+   "sources": [
+    {
+     "file": "tsp/Tactical Shooter Pack/AK105/Actions/S_AK105_Reload_Tactical.WAV",
+     "start": 0.506,
+     "end": 0.634
+    }
+   ],
    "anchor_ms": 3.0,
    "gun": "ak",
    "element": "mag_out",
@@ -3310,6 +8180,13 @@
    "true_peak_dbtp": -1.0,
    "length_s": 0.123,
    "peak_ms": 3.0,
+   "sources": [
+    {
+     "file": "tsp/Tactical Shooter Pack/AK105/Actions/S_AK105_Reload_Empty.WAV",
+     "start": 0.531,
+     "end": 0.654
+    }
+   ],
    "anchor_ms": 3.0,
    "gun": "ak",
    "element": "mag_out",
@@ -3327,6 +8204,13 @@
    "true_peak_dbtp": -2.21,
    "length_s": 0.133,
    "peak_ms": 25.3,
+   "sources": [
+    {
+     "file": "tsp/Tactical Shooter Pack/AK105/Actions/S_AK105_MagCheck.WAV",
+     "start": 0.429,
+     "end": 0.562
+    }
+   ],
    "anchor_ms": 3.0,
    "gun": "ak",
    "element": "mag_out",
@@ -3344,6 +8228,13 @@
    "true_peak_dbtp": -1.0,
    "length_s": 0.13,
    "peak_ms": 41.9,
+   "sources": [
+    {
+     "file": "tsp/Tactical Shooter Pack/TR15/Actions/S_TR15_Reload_Tactical.wav",
+     "start": 0.871,
+     "end": 0.994
+    }
+   ],
    "anchor_ms": 3.2,
    "gun": "ak",
    "element": "mag_out",
@@ -3361,6 +8252,13 @@
    "true_peak_dbtp": -1.0,
    "length_s": 0.043,
    "peak_ms": 3.0,
+   "sources": [
+    {
+     "file": "tsp/Tactical Shooter Pack/AK105/Actions/S_AK105_Reload_Tactical.WAV",
+     "start": 0.441,
+     "end": 0.484
+    }
+   ],
    "anchor_ms": 3.0,
    "gun": "ak",
    "element": "mag_release",
@@ -3378,6 +8276,13 @@
    "true_peak_dbtp": -1.0,
    "length_s": 0.049,
    "peak_ms": 3.3,
+   "sources": [
+    {
+     "file": "tsp/Tactical Shooter Pack/AK105/Actions/S_AK105_Reload_Empty.WAV",
+     "start": 0.46,
+     "end": 0.509
+    }
+   ],
    "anchor_ms": 3.0,
    "gun": "ak",
    "element": "mag_release",
@@ -3395,6 +8300,13 @@
    "true_peak_dbtp": -1.06,
    "length_s": 0.073,
    "peak_ms": 8.5,
+   "sources": [
+    {
+     "file": "tsp/Tactical Shooter Pack/AK105/Actions/S_AK105_MagCheck.WAV",
+     "start": 0.343,
+     "end": 0.416
+    }
+   ],
    "anchor_ms": 3.0,
    "gun": "ak",
    "element": "mag_release",
@@ -3412,6 +8324,13 @@
    "true_peak_dbtp": -1.38,
    "length_s": 0.039,
    "peak_ms": 3.8,
+   "sources": [
+    {
+     "file": "tsp/Tactical Shooter Pack/Mk14EBR/S_Mk14EBR_Reload_Tactical.WAV",
+     "start": 0.462,
+     "end": 0.505
+    }
+   ],
    "anchor_ms": 2.8,
    "gun": "ak",
    "element": "mag_release",
@@ -3429,6 +8348,13 @@
    "true_peak_dbtp": -1.0,
    "length_s": 0.123,
    "peak_ms": 50.1,
+   "sources": [
+    {
+     "file": "tsp/Tactical Shooter Pack/AK105/Actions/S_AK105_Reload_Tactical.WAV",
+     "start": 1.881,
+     "end": 2.004
+    }
+   ],
    "anchor_ms": 3.0,
    "gun": "ak",
    "element": "mag_tap",
@@ -3441,11 +8367,18 @@
    "layer": "action",
    "channels": 2,
    "sample_rate": 48000,
-   "lufs_i": -21.65,
+   "lufs_i": -21.66,
    "lufs_m_max": -21.61,
    "true_peak_dbtp": -1.0,
    "length_s": 0.123,
    "peak_ms": 3.0,
+   "sources": [
+    {
+     "file": "tsp/Tactical Shooter Pack/AK105/Actions/S_AK105_Reload_Tactical.WAV",
+     "start": 2.036,
+     "end": 2.159
+    }
+   ],
    "anchor_ms": 3.0,
    "gun": "ak",
    "element": "mag_tap",
@@ -3463,6 +8396,13 @@
    "true_peak_dbtp": -1.31,
    "length_s": 0.123,
    "peak_ms": 34.5,
+   "sources": [
+    {
+     "file": "tsp/Tactical Shooter Pack/AK105/Actions/S_AK105_Reload_Empty.WAV",
+     "start": 1.977,
+     "end": 2.1
+    }
+   ],
    "anchor_ms": 3.0,
    "gun": "ak",
    "element": "mag_tap",
@@ -3480,6 +8420,13 @@
    "true_peak_dbtp": -1.0,
    "length_s": 0.108,
    "peak_ms": 2.9,
+   "sources": [
+    {
+     "file": "tsp/Tactical Shooter Pack/AK105/Actions/S_AK105_MagCheck.WAV",
+     "start": 2.757,
+     "end": 2.865
+    }
+   ],
    "anchor_ms": 3.0,
    "gun": "ak",
    "element": "mag_tap",
@@ -3497,6 +8444,23 @@
    "true_peak_dbtp": -2.65,
    "length_s": 0.2,
    "peak_ms": 20.1,
+   "sources": [
+    {
+     "file": "sonniss/The Chris Alan - Hand-to-Hand Combat - Body Hits & Vocal Excursions/Hand-to-Hand Combat - Body Hits - Deep Punch 02.wav",
+     "start": 0.016,
+     "end": 0.208
+    },
+    {
+     "file": "tsp/Tactical Shooter Pack/AK105/Actions/S_AK105_Reload_Tactical.WAV",
+     "start": 2.036,
+     "end": 2.159
+    },
+    {
+     "file": "sonniss/Shapeforms - Hit & Punch/CLOTHING_MATERIAL_MOVEMENT_08.wav",
+     "start": 0.0,
+     "end": 0.2
+    }
+   ],
    "anchor_ms": 0.0,
    "gun": "ak",
    "element": "melee_hit",
@@ -3514,6 +8478,23 @@
    "true_peak_dbtp": -8.06,
    "length_s": 0.219,
    "peak_ms": 18.6,
+   "sources": [
+    {
+     "file": "sonniss/Shapeforms - Hit & Punch/PUNCH_PERCUSSIVE_HEAVY_06.wav",
+     "start": 0.02,
+     "end": 0.184
+    },
+    {
+     "file": "sonniss/Shapeforms - Hit & Punch/IMPACT_LOW_THUD_10.wav",
+     "start": 0.0,
+     "end": 0.202
+    },
+    {
+     "file": "tsp/Tactical Shooter Pack/AK105/Actions/S_AK105_Reload_Empty.WAV",
+     "start": 3.995,
+     "end": 4.198
+    }
+   ],
    "anchor_ms": 0.0,
    "gun": "ak",
    "element": "melee_hit",
@@ -3531,6 +8512,23 @@
    "true_peak_dbtp": -7.48,
    "length_s": 0.403,
    "peak_ms": 89.8,
+   "sources": [
+    {
+     "file": "sonniss/Gamemaster Audio -  Bullet Impact Sounds/bullet_impact_body_thump_02.wav",
+     "start": 0.004,
+     "end": 0.407
+    },
+    {
+     "file": "sonniss/The Chris Alan - Hand-to-Hand Combat - Body Hits & Vocal Excursions/Hand-to-Hand Combat - Body Hits - Deep Punch 02.wav",
+     "start": 0.016,
+     "end": 0.208
+    },
+    {
+     "file": "tsp/Tactical Shooter Pack/AK105/Actions/S_AK105_Reload_Empty.WAV",
+     "start": 1.977,
+     "end": 2.1
+    }
+   ],
    "anchor_ms": 0.0,
    "gun": "ak",
    "element": "melee_hit",
@@ -3548,6 +8546,23 @@
    "true_peak_dbtp": -4.95,
    "length_s": 0.4,
    "peak_ms": 119.8,
+   "sources": [
+    {
+     "file": "sonniss/The Chris Alan - Hand-to-Hand Combat - Body Hits & Vocal Excursions/Hand-to-Hand Combat - Body Hits - Body Slam Floor 08.wav",
+     "start": 0.0,
+     "end": 0.4
+    },
+    {
+     "file": "tsp/Tactical Shooter Pack/AK105/Actions/S_AK105_Reload_Empty.WAV",
+     "start": 1.752,
+     "end": 1.875
+    },
+    {
+     "file": "sonniss/Shapeforms - Hit & Punch/CLOTHING_MATERIAL_MOVEMENT_08.wav",
+     "start": 0.0,
+     "end": 0.2
+    }
+   ],
    "anchor_ms": 0.0,
    "gun": "ak",
    "element": "melee_hit",
@@ -3565,6 +8580,13 @@
    "true_peak_dbtp": -10.31,
    "length_s": 0.45,
    "peak_ms": 75.9,
+   "sources": [
+    {
+     "file": "sonniss/David Dumais Audio - Weapon Sounds - Weapon Swings/MeleeSwingsPack_96khz_Stereo_NormalSwings39.wav",
+     "start": 0.16,
+     "end": 0.61
+    }
+   ],
    "anchor_ms": 0.0,
    "gun": "ak",
    "element": "melee_swing",
@@ -3582,6 +8604,13 @@
    "true_peak_dbtp": -4.36,
    "length_s": 0.337,
    "peak_ms": 75.7,
+   "sources": [
+    {
+     "file": "sonniss/David Dumais Audio - Weapon Sounds - Weapon Swings/MeleeSwingsPack_96khz_Stereo_HighSwings15.wav",
+     "start": 0.013,
+     "end": 0.313
+    }
+   ],
    "anchor_ms": 0.0,
    "gun": "ak",
    "element": "melee_swing",
@@ -3599,6 +8628,13 @@
    "true_peak_dbtp": -2.25,
    "length_s": 0.294,
    "peak_ms": 92.2,
+   "sources": [
+    {
+     "file": "sonniss/Gamemaster Audio - Punch and Combat Sounds/whoosh_weapon_knife_swing_04.wav",
+     "start": 0.012,
+     "end": 0.246
+    }
+   ],
    "anchor_ms": 0.0,
    "gun": "ak",
    "element": "melee_swing",
@@ -3616,6 +8652,13 @@
    "true_peak_dbtp": -11.54,
    "length_s": 0.477,
    "peak_ms": 12.0,
+   "sources": [
+    {
+     "file": "sonniss/David Dumais Audio - Weapon Sounds - Weapon Swings/MeleeSwingsPack_96khz_Mono_DesignedSwings12.wav",
+     "start": 0.255,
+     "end": 0.705
+    }
+   ],
    "anchor_ms": 0.0,
    "gun": "ak",
    "element": "melee_swing",
@@ -3633,6 +8676,13 @@
    "true_peak_dbtp": -5.75,
    "length_s": 0.503,
    "peak_ms": 311.7,
+   "sources": [
+    {
+     "file": "tsp/Tactical Shooter Pack/Herrington_11-87/Actions/S_Herrington_11-87_Draw.WAV",
+     "start": 0.097,
+     "end": 0.6
+    }
+   ],
    "anchor_ms": 0.0,
    "gun": "870",
    "element": "cloth",
@@ -3650,6 +8700,13 @@
    "true_peak_dbtp": -2.83,
    "length_s": 0.503,
    "peak_ms": 227.6,
+   "sources": [
+    {
+     "file": "tsp/Tactical Shooter Pack/Herrington_11-87/Actions/S_Herrington_11-87_Holster.WAV",
+     "start": 0.097,
+     "end": 0.6
+    }
+   ],
    "anchor_ms": 0.0,
    "gun": "870",
    "element": "cloth",
@@ -3667,6 +8724,13 @@
    "true_peak_dbtp": -3.48,
    "length_s": 0.503,
    "peak_ms": 255.2,
+   "sources": [
+    {
+     "file": "tsp/Tactical Shooter Pack/Herrington_11-87/Actions/S_Herrington_11-87_Reload_End.WAV",
+     "start": 0.097,
+     "end": 0.6
+    }
+   ],
    "anchor_ms": 0.0,
    "gun": "870",
    "element": "cloth",
@@ -3684,6 +8748,18 @@
    "true_peak_dbtp": -11.09,
    "length_s": 0.757,
    "peak_ms": 413.2,
+   "sources": [
+    {
+     "file": "sonniss/Shapeforms - Hit & Punch/CLOTHING_MATERIAL_MOVEMENT_08.wav",
+     "start": 0.0,
+     "end": 0.335
+    },
+    {
+     "file": "sonniss/Pole Position Production - Various Gun Foley & Handling/SAIGA-12_12g_solid_slug_foley_close_up_RSM191_R_cocking.wav",
+     "start": 6.11,
+     "end": 6.513
+    }
+   ],
    "anchor_ms": 330.0,
    "gun": "870",
    "element": "draw",
@@ -3701,6 +8777,18 @@
    "true_peak_dbtp": -11.91,
    "length_s": 0.772,
    "peak_ms": 353.1,
+   "sources": [
+    {
+     "file": "tsp/Tactical Shooter Pack/Herrington_11-87/Actions/S_Herrington_11-87_Draw.WAV",
+     "start": 0.047,
+     "end": 0.45
+    },
+    {
+     "file": "sonniss/Pole Position Production - Various Gun Foley & Handling/SAIGA-12_12g_solid_slug_foley_close_up_RSM191_R_cocking.wav",
+     "start": 15.294,
+     "end": 15.697
+    }
+   ],
    "anchor_ms": 320.0,
    "gun": "870",
    "element": "draw",
@@ -3718,6 +8806,18 @@
    "true_peak_dbtp": -11.8,
    "length_s": 0.779,
    "peak_ms": 434.4,
+   "sources": [
+    {
+     "file": "sonniss/Shapeforms - Hit & Punch/CLOTHING_MATERIAL_MOVEMENT_08.wav",
+     "start": 0.0,
+     "end": 0.335
+    },
+    {
+     "file": "sonniss/Pole Position Production - Various Gun Foley & Handling/SAIGA-12_12g_solid_slug_foley_close_up_RSM191_R_cocking.wav",
+     "start": 21.708,
+     "end": 22.111
+    }
+   ],
    "anchor_ms": 340.0,
    "gun": "870",
    "element": "draw",
@@ -3735,6 +8835,13 @@
    "true_peak_dbtp": -1.0,
    "length_s": 0.183,
    "peak_ms": 3.0,
+   "sources": [
+    {
+     "file": "sonniss/Wav Junction Sound Effects - Shotguns/0023_Shotgun_Safety_Switch_On_Off_2.wav",
+     "start": 1.095,
+     "end": 1.258
+    }
+   ],
    "anchor_ms": 0.0,
    "gun": "870",
    "element": "dry_fire",
@@ -3752,6 +8859,13 @@
    "true_peak_dbtp": -1.0,
    "length_s": 0.173,
    "peak_ms": 2.9,
+   "sources": [
+    {
+     "file": "sonniss/Wav Junction Sound Effects - Shotguns/0023_Shotgun_Safety_Switch_On_Off_2.wav",
+     "start": 2.306,
+     "end": 2.469
+    }
+   ],
    "anchor_ms": 0.0,
    "gun": "870",
    "element": "dry_fire",
@@ -3769,6 +8883,13 @@
    "true_peak_dbtp": -1.0,
    "length_s": 0.194,
    "peak_ms": 6.1,
+   "sources": [
+    {
+     "file": "sonniss/Pole Position Production - Various Gun Foley & Handling/Steyr_TMP_9mm_foley_distant_MKH418S_S_cocking_&_dry_fire.wav",
+     "start": 25.245,
+     "end": 25.408
+    }
+   ],
    "anchor_ms": 0.0,
    "gun": "870",
    "element": "dry_fire",
@@ -3786,6 +8907,13 @@
    "true_peak_dbtp": -1.0,
    "length_s": 0.205,
    "peak_ms": 4.8,
+   "sources": [
+    {
+     "file": "sonniss/Pole Position Production - Various Gun Foley & Handling/Steyr_TMP_9mm_foley_distant_MKH418S_S_cocking_&_dry_fire.wav",
+     "start": 30.666,
+     "end": 30.829
+    }
+   ],
    "anchor_ms": 0.0,
    "gun": "870",
    "element": "dry_fire",
@@ -3803,6 +8931,18 @@
    "true_peak_dbtp": -2.93,
    "length_s": 0.85,
    "peak_ms": 64.5,
+   "sources": [
+    {
+     "file": "tsp/Tactical Shooter Pack/Herrington_11-87/Fire/S_Herrington_11-87_Unsuppressed_1_With_Tail.wav",
+     "start": 0.037,
+     "end": 0.887
+    },
+    {
+     "file": "tsp/Tactical Shooter Pack/SRM-12/Actions/S_SRM-12_ShotOnly.wav",
+     "start": 0.055,
+     "end": 0.655
+    }
+   ],
    "anchor_ms": 2.2,
    "gun": "870",
    "element": "fire_close",
@@ -3821,6 +8961,18 @@
    "true_peak_dbtp": -3.2,
    "length_s": 0.85,
    "peak_ms": 83.0,
+   "sources": [
+    {
+     "file": "tsp/Tactical Shooter Pack/Herrington_11-87/Fire/S_Herrington_11-87_Unsuppressed_2_With_Tail.wav",
+     "start": 0.035,
+     "end": 0.885
+    },
+    {
+     "file": "tsp/Tactical Shooter Pack/SRM-12/Actions/S_SRM-12_ShotOnly.wav",
+     "start": 0.055,
+     "end": 0.655
+    }
+   ],
    "anchor_ms": 2.2,
    "gun": "870",
    "element": "fire_close",
@@ -3839,6 +8991,18 @@
    "true_peak_dbtp": -2.02,
    "length_s": 0.865,
    "peak_ms": 89.2,
+   "sources": [
+    {
+     "file": "tsp/Tactical Shooter Pack/Herrington_11-87/Fire/S_Herrington_11-87_Unsuppressed_3_With_Tail.wav",
+     "start": 0.052,
+     "end": 0.902
+    },
+    {
+     "file": "tsp/Tactical Shooter Pack/SRM-12/Actions/S_SRM-12_ShotOnly.wav",
+     "start": 0.055,
+     "end": 0.655
+    }
+   ],
    "anchor_ms": 0.6,
    "gun": "870",
    "element": "fire_close",
@@ -3857,6 +9021,18 @@
    "true_peak_dbtp": -4.26,
    "length_s": 0.835,
    "peak_ms": 108.2,
+   "sources": [
+    {
+     "file": "tsp/Tactical Shooter Pack/Herrington_11-87/Fire/S_Herrington_11-87_Unsuppressed_1_With_Tail.wav",
+     "start": 0.037,
+     "end": 0.887
+    },
+    {
+     "file": "tsp/Tactical Shooter Pack/Mk14EBR/S_Mk14EBR_Fire_02.WAV",
+     "start": 0.001,
+     "end": 0.601
+    }
+   ],
    "anchor_ms": 2.2,
    "gun": "870",
    "element": "fire_close",
@@ -3875,6 +9051,18 @@
    "true_peak_dbtp": -2.84,
    "length_s": 0.85,
    "peak_ms": 78.4,
+   "sources": [
+    {
+     "file": "tsp/Tactical Shooter Pack/Herrington_11-87/Fire/S_Herrington_11-87_Unsuppressed_2_With_Tail.wav",
+     "start": 0.035,
+     "end": 0.885
+    },
+    {
+     "file": "tsp/Tactical Shooter Pack/Mk14EBR/S_Mk14EBR_Fire_03.WAV",
+     "start": 0.013,
+     "end": 0.613
+    }
+   ],
    "anchor_ms": 2.2,
    "gun": "870",
    "element": "fire_close",
@@ -3893,7 +9081,24 @@
    "true_peak_dbtp": -1.84,
    "length_s": 0.84,
    "peak_ms": 86.7,
-   "anchor_ms": 0.6,
+   "sources": [
+    {
+     "file": "tsp/Tactical Shooter Pack/Herrington_11-87/Fire/S_Herrington_11-87_Unsuppressed_3_With_Tail.wav",
+     "start": 0.052,
+     "end": 0.902
+    },
+    {
+     "file": "tsp/Tactical Shooter Pack/AK105/Fire/S_AK105_Fire_Unsuppressed_0.wav",
+     "start": 0.046,
+     "end": 0.166
+    },
+    {
+     "file": "tsp/Tactical Shooter Pack/SRM-12/Actions/S_SRM-12_ShotOnly.wav",
+     "start": 0.055,
+     "end": 0.655
+    }
+   ],
+   "anchor_ms": 0.7,
    "gun": "870",
    "element": "fire_close",
    "variant": 6,
@@ -3906,11 +9111,18 @@
    "layer": "far",
    "channels": 1,
    "sample_rate": 48000,
-   "lufs_i": -32.04,
-   "lufs_m_max": -25.75,
-   "true_peak_dbtp": -13.71,
+   "lufs_i": -32.23,
+   "lufs_m_max": -25.0,
+   "true_peak_dbtp": -12.22,
    "length_s": 3.895,
    "peak_ms": 162.3,
+   "sources": [
+    {
+     "file": "tsp/Tactical Shooter Pack/Herrington_11-87/Fire/S_Herrington_11-87_Unsuppressed_1_With_Tail.wav",
+     "start": 0.04,
+     "end": 3.84
+    }
+   ],
    "anchor_ms": 134.3,
    "gun": "870",
    "element": "fire_far",
@@ -3924,11 +9136,18 @@
    "layer": "far",
    "channels": 1,
    "sample_rate": 48000,
-   "lufs_i": -31.73,
-   "lufs_m_max": -25.87,
-   "true_peak_dbtp": -13.59,
+   "lufs_i": -32.15,
+   "lufs_m_max": -25.0,
+   "true_peak_dbtp": -12.59,
    "length_s": 3.92,
    "peak_ms": 195.7,
+   "sources": [
+    {
+     "file": "tsp/Tactical Shooter Pack/Herrington_11-87/Fire/S_Herrington_11-87_Unsuppressed_2_With_Tail.wav",
+     "start": 0.038,
+     "end": 3.838
+    }
+   ],
    "anchor_ms": 138.7,
    "gun": "870",
    "element": "fire_far",
@@ -3942,11 +9161,18 @@
    "layer": "far",
    "channels": 1,
    "sample_rate": 48000,
-   "lufs_i": -32.01,
-   "lufs_m_max": -25.97,
-   "true_peak_dbtp": -13.98,
+   "lufs_i": -32.05,
+   "lufs_m_max": -25.0,
+   "true_peak_dbtp": -12.27,
    "length_s": 3.88,
    "peak_ms": 158.3,
+   "sources": [
+    {
+     "file": "tsp/Tactical Shooter Pack/Herrington_11-87/Fire/S_Herrington_11-87_Unsuppressed_3_With_Tail.wav",
+     "start": 0.055,
+     "end": 3.855
+    }
+   ],
    "anchor_ms": 124.2,
    "gun": "870",
    "element": "fire_far",
@@ -3960,11 +9186,18 @@
    "layer": "far",
    "channels": 1,
    "sample_rate": 48000,
-   "lufs_i": -32.51,
-   "lufs_m_max": -25.83,
-   "true_peak_dbtp": -8.42,
+   "lufs_i": -31.94,
+   "lufs_m_max": -25.0,
+   "true_peak_dbtp": -6.93,
    "length_s": 3.692,
    "peak_ms": 110.0,
+   "sources": [
+    {
+     "file": "tsp/Tactical Shooter Pack/SRM-12/Actions/S_SRM-12_ShotOnly.wav",
+     "start": 0.058,
+     "end": 3.858
+    }
+   ],
    "anchor_ms": 109.9,
    "gun": "870",
    "element": "fire_far",
@@ -3983,6 +9216,13 @@
    "true_peak_dbtp": -5.77,
    "length_s": 0.35,
    "peak_ms": 83.8,
+   "sources": [
+    {
+     "file": "tsp/Tactical Shooter Pack/SRM-12/Actions/S_SRM-12_ShotBoltOnly.wav",
+     "start": 0.854,
+     "end": 1.137
+    }
+   ],
    "anchor_ms": 31.0,
    "gun": "870",
    "element": "fire_mech",
@@ -4001,6 +9241,13 @@
    "true_peak_dbtp": -5.91,
    "length_s": 0.35,
    "peak_ms": 89.8,
+   "sources": [
+    {
+     "file": "tsp/Tactical Shooter Pack/SRM-12/Actions/S_SRM-12_ShotBoltOnlyTimed.wav",
+     "start": 0.631,
+     "end": 0.914
+    }
+   ],
    "anchor_ms": 35.4,
    "gun": "870",
    "element": "fire_mech",
@@ -4019,6 +9266,13 @@
    "true_peak_dbtp": -10.31,
    "length_s": 0.35,
    "peak_ms": 163.3,
+   "sources": [
+    {
+     "file": "tsp/Tactical Shooter Pack/AK105/Actions/S_AK105_Reload_Empty.WAV",
+     "start": 3.061,
+     "end": 3.344
+    }
+   ],
    "anchor_ms": 47.8,
    "gun": "870",
    "element": "fire_mech",
@@ -4033,10 +9287,17 @@
    "channels": 2,
    "sample_rate": 48000,
    "lufs_i": -21.3,
-   "lufs_m_max": -21.25,
+   "lufs_m_max": -21.26,
    "true_peak_dbtp": -1.0,
    "length_s": 0.35,
    "peak_ms": 19.7,
+   "sources": [
+    {
+     "file": "tsp/Tactical Shooter Pack/Herrington_11-87/Actions/S_Herrington_11-87_Reload_Loop.wav",
+     "start": 0.583,
+     "end": 0.866
+    }
+   ],
    "anchor_ms": 19.6,
    "gun": "870",
    "element": "fire_mech",
@@ -4055,6 +9316,13 @@
    "true_peak_dbtp": -7.62,
    "length_s": 0.6,
    "peak_ms": 160.9,
+   "sources": [
+    {
+     "file": "tsp/Tactical Shooter Pack/Herrington_11-87/Fire/S_Herrington_11-87_Unsuppressed_1_With_Tail.wav",
+     "start": 0.038,
+     "end": 1.478
+    }
+   ],
    "anchor_ms": 20.0,
    "gun": "870",
    "element": "fire_sub",
@@ -4073,6 +9341,13 @@
    "true_peak_dbtp": -3.87,
    "length_s": 0.6,
    "peak_ms": 57.5,
+   "sources": [
+    {
+     "file": "tsp/Tactical Shooter Pack/SRM-12/Actions/S_SRM-12_ShotOnly.wav",
+     "start": 0.056,
+     "end": 1.496
+    }
+   ],
    "anchor_ms": 18.0,
    "gun": "870",
    "element": "fire_sub",
@@ -4091,6 +9366,13 @@
    "true_peak_dbtp": -6.32,
    "length_s": 0.6,
    "peak_ms": 21.4,
+   "sources": [
+    {
+     "file": "sonniss/TS Sound - 12 Gauge Shotgun/Shotgun_Fire_Round Eject_01.wav",
+     "start": 0.0,
+     "end": 1.44
+    }
+   ],
    "anchor_ms": 18.7,
    "gun": "870",
    "element": "fire_sub",
@@ -4109,6 +9391,13 @@
    "true_peak_dbtp": -9.54,
    "length_s": 0.6,
    "peak_ms": 80.1,
+   "sources": [
+    {
+     "file": "sonniss/Audiobeast - The London Warehouse Firearms Library/Audiobeast_Medium_Warehouse_Remington_870_12g_Pump_Action_Shotgun_10m_U87_001_Single_Shot_x8.wav",
+     "start": 22.249,
+     "end": 23.689
+    }
+   ],
    "anchor_ms": 34.4,
    "gun": "870",
    "element": "fire_sub",
@@ -4127,6 +9416,13 @@
    "true_peak_dbtp": -10.4,
    "length_s": 0.6,
    "peak_ms": 101.4,
+   "sources": [
+    {
+     "file": "sonniss/Audiobeast - The London Warehouse Firearms Library/Audiobeast_Medium_Warehouse_Remington_870_12g_Pump_Action_Shotgun_10m_U87_001_Single_Shot_x8.wav",
+     "start": 28.985,
+     "end": 30.425
+    }
+   ],
    "anchor_ms": 32.6,
    "gun": "870",
    "element": "fire_sub",
@@ -4145,6 +9441,13 @@
    "true_peak_dbtp": -9.25,
    "length_s": 3.8,
    "peak_ms": 218.3,
+   "sources": [
+    {
+     "file": "tsp/Tactical Shooter Pack/Herrington_11-87/Fire/S_Herrington_11-87_Unsuppressed_1_With_Tail.wav",
+     "start": 0.2,
+     "end": 3.84
+    }
+   ],
    "anchor_ms": 180.6,
    "gun": "870",
    "element": "fire_tail",
@@ -4163,6 +9466,13 @@
    "true_peak_dbtp": -10.35,
    "length_s": 3.8,
    "peak_ms": 214.3,
+   "sources": [
+    {
+     "file": "tsp/Tactical Shooter Pack/Herrington_11-87/Fire/S_Herrington_11-87_Unsuppressed_2_With_Tail.wav",
+     "start": 0.198,
+     "end": 3.838
+    }
+   ],
    "anchor_ms": 181.2,
    "gun": "870",
    "element": "fire_tail",
@@ -4181,6 +9491,13 @@
    "true_peak_dbtp": -8.17,
    "length_s": 3.907,
    "peak_ms": 244.5,
+   "sources": [
+    {
+     "file": "tsp/Tactical Shooter Pack/Herrington_11-87/Fire/S_Herrington_11-87_Unsuppressed_3_With_Tail.wav",
+     "start": 0.215,
+     "end": 3.855
+    }
+   ],
    "anchor_ms": 185.5,
    "gun": "870",
    "element": "fire_tail",
@@ -4199,6 +9516,13 @@
    "true_peak_dbtp": -10.51,
    "length_s": 3.498,
    "peak_ms": 343.1,
+   "sources": [
+    {
+     "file": "tsp/Tactical Shooter Pack/SRM-12/Actions/S_SRM-12_ShotOnly.wav",
+     "start": 0.218,
+     "end": 3.858
+    }
+   ],
    "anchor_ms": 198.2,
    "gun": "870",
    "element": "fire_tail",
@@ -4217,6 +9541,13 @@
    "true_peak_dbtp": -8.8,
    "length_s": 3.8,
    "peak_ms": 221.1,
+   "sources": [
+    {
+     "file": "tsp/Tactical Shooter Pack/Mk14EBR/S_Mk14EBR_Fire_01.WAV",
+     "start": 0.17,
+     "end": 3.81
+    }
+   ],
    "anchor_ms": 182.7,
    "gun": "870",
    "element": "fire_tail",
@@ -4235,6 +9566,13 @@
    "true_peak_dbtp": -1.46,
    "length_s": 0.258,
    "peak_ms": 67.9,
+   "sources": [
+    {
+     "file": "tsp/Tactical Shooter Pack/Herrington_11-87/Actions/S_Herrington_11-87_Inspect.WAV",
+     "start": 2.897,
+     "end": 3.155
+    }
+   ],
    "anchor_ms": 58.0,
    "gun": "870",
    "element": "handle",
@@ -4253,6 +9591,13 @@
    "true_peak_dbtp": -1.0,
    "length_s": 0.303,
    "peak_ms": 3.1,
+   "sources": [
+    {
+     "file": "tsp/Tactical Shooter Pack/Herrington_11-87/Actions/S_Herrington_11-87_Inspect.WAV",
+     "start": 3.209,
+     "end": 3.512
+    }
+   ],
    "anchor_ms": 3.0,
    "gun": "870",
    "element": "handle",
@@ -4270,6 +9615,13 @@
    "true_peak_dbtp": -1.32,
    "length_s": 0.303,
    "peak_ms": 4.0,
+   "sources": [
+    {
+     "file": "tsp/Tactical Shooter Pack/Herrington_11-87/Actions/S_Herrington_11-87_Inspect.WAV",
+     "start": 5.058,
+     "end": 5.361
+    }
+   ],
    "anchor_ms": 3.0,
    "gun": "870",
    "element": "handle",
@@ -4287,6 +9639,13 @@
    "true_peak_dbtp": -1.0,
    "length_s": 0.289,
    "peak_ms": 14.0,
+   "sources": [
+    {
+     "file": "tsp/Tactical Shooter Pack/AK105/Actions/S_AK105_Reload_Empty.WAV",
+     "start": 3.995,
+     "end": 4.238
+    }
+   ],
    "anchor_ms": 3.6,
    "gun": "870",
    "element": "handle",
@@ -4304,6 +9663,18 @@
    "true_peak_dbtp": -10.85,
    "length_s": 0.707,
    "peak_ms": 361.7,
+   "sources": [
+    {
+     "file": "sonniss/Shapeforms - Hit & Punch/CLOTHING_MATERIAL_MOVEMENT_08.wav",
+     "start": 0.0,
+     "end": 0.335
+    },
+    {
+     "file": "sonniss/Pole Position Production - Various Gun Foley & Handling/SAIGA-12_12g_solid_slug_foley_close_up_RSM191_R_cocking.wav",
+     "start": 18.503,
+     "end": 18.906
+    }
+   ],
    "anchor_ms": 280.0,
    "gun": "870",
    "element": "holster",
@@ -4321,6 +9692,18 @@
    "true_peak_dbtp": -8.72,
    "length_s": 0.722,
    "peak_ms": 274.2,
+   "sources": [
+    {
+     "file": "tsp/Tactical Shooter Pack/Herrington_11-87/Actions/S_Herrington_11-87_Holster.WAV",
+     "start": 0.047,
+     "end": 0.4
+    },
+    {
+     "file": "sonniss/Pole Position Production - Various Gun Foley & Handling/SAIGA-12_12g_solid_slug_foley_close_up_RSM191_R_cocking.wav",
+     "start": 13.49,
+     "end": 13.893
+    }
+   ],
    "anchor_ms": 270.0,
    "gun": "870",
    "element": "holster",
@@ -4338,6 +9721,18 @@
    "true_peak_dbtp": -7.05,
    "length_s": 0.729,
    "peak_ms": 313.1,
+   "sources": [
+    {
+     "file": "sonniss/Shapeforms - Hit & Punch/CLOTHING_MATERIAL_MOVEMENT_08.wav",
+     "start": 0.0,
+     "end": 0.335
+    },
+    {
+     "file": "sonniss/Pole Position Production - Various Gun Foley & Handling/SAIGA-12_12g_solid_slug_foley_close_up_RSM191_R_cocking.wav",
+     "start": 4.574,
+     "end": 4.977
+    }
+   ],
    "anchor_ms": 290.0,
    "gun": "870",
    "element": "holster",
@@ -4355,6 +9750,23 @@
    "true_peak_dbtp": -9.29,
    "length_s": 0.318,
    "peak_ms": 34.3,
+   "sources": [
+    {
+     "file": "sonniss/Shapeforms - Hit & Punch/IMPACT_LOW_THUD_10.wav",
+     "start": 0.0,
+     "end": 0.202
+    },
+    {
+     "file": "sonniss/The Chris Alan - Hand-to-Hand Combat - Body Hits & Vocal Excursions/Hand-to-Hand Combat - Body Hits - Deep Punch 02.wav",
+     "start": 0.016,
+     "end": 0.208
+    },
+    {
+     "file": "tsp/Tactical Shooter Pack/Herrington_11-87/Actions/S_Herrington_11-87_Inspect.WAV",
+     "start": 3.209,
+     "end": 3.512
+    }
+   ],
    "anchor_ms": 0.0,
    "gun": "870",
    "element": "melee_hit",
@@ -4372,6 +9784,23 @@
    "true_peak_dbtp": -8.72,
    "length_s": 0.446,
    "peak_ms": 119.8,
+   "sources": [
+    {
+     "file": "sonniss/The Chris Alan - Hand-to-Hand Combat - Body Hits & Vocal Excursions/Hand-to-Hand Combat - Body Hits - Body Slam Floor 08.wav",
+     "start": 0.0,
+     "end": 0.446
+    },
+    {
+     "file": "sonniss/Shapeforms - Hit & Punch/PUNCH_PERCUSSIVE_HEAVY_06.wav",
+     "start": 0.02,
+     "end": 0.184
+    },
+    {
+     "file": "sonniss/TS Sound - 12 Gauge Shotgun/Shotgun_Quick Pump_01.wav",
+     "start": 0.343,
+     "end": 0.476
+    }
+   ],
    "anchor_ms": 0.0,
    "gun": "870",
    "element": "melee_hit",
@@ -4389,6 +9818,23 @@
    "true_peak_dbtp": -6.78,
    "length_s": 0.453,
    "peak_ms": 80.4,
+   "sources": [
+    {
+     "file": "sonniss/Gamemaster Audio -  Bullet Impact Sounds/bullet_impact_body_thump_02.wav",
+     "start": 0.004,
+     "end": 0.457
+    },
+    {
+     "file": "sonniss/Shapeforms - Hit & Punch/IMPACT_LOW_THUD_10.wav",
+     "start": 0.0,
+     "end": 0.202
+    },
+    {
+     "file": "sonniss/Pole Position Production - Various Gun Foley & Handling/SAIGA-12_12g_solid_slug_foley_close_up_RSM191_R_cocking.wav",
+     "start": 6.11,
+     "end": 6.363
+    }
+   ],
    "anchor_ms": 0.0,
    "gun": "870",
    "element": "melee_hit",
@@ -4406,6 +9852,23 @@
    "true_peak_dbtp": -7.41,
    "length_s": 0.453,
    "peak_ms": 44.5,
+   "sources": [
+    {
+     "file": "sonniss/Gamemaster Audio - Punch and Combat Sounds/punch_grit_wet_impact_05.wav",
+     "start": 0.01,
+     "end": 0.463
+    },
+    {
+     "file": "sonniss/Shapeforms - Hit & Punch/IMPACT_LOW_THUD_10.wav",
+     "start": 0.0,
+     "end": 0.202
+    },
+    {
+     "file": "sonniss/Wav Junction Sound Effects - Shotguns/0019_Shotgun_Pump_Action_1.wav",
+     "start": 0.895,
+     "end": 1.098
+    }
+   ],
    "anchor_ms": 0.0,
    "gun": "870",
    "element": "melee_hit",
@@ -4423,6 +9886,13 @@
    "true_peak_dbtp": -9.48,
    "length_s": 0.6,
    "peak_ms": 48.2,
+   "sources": [
+    {
+     "file": "sonniss/David Dumais Audio - Weapon Sounds - Weapon Swings/MeleeSwingsPack_96khz_Stereo_LowSwings31.wav",
+     "start": 0.133,
+     "end": 0.733
+    }
+   ],
    "anchor_ms": 0.0,
    "gun": "870",
    "element": "melee_swing",
@@ -4440,6 +9910,13 @@
    "true_peak_dbtp": -10.91,
    "length_s": 0.595,
    "peak_ms": 132.8,
+   "sources": [
+    {
+     "file": "sonniss/David Dumais Audio - Weapon Sounds - Weapon Swings/MeleeSwingsPack_96khz_Stereo_NormalSwings39.wav",
+     "start": 0.155,
+     "end": 0.655
+    }
+   ],
    "anchor_ms": 0.0,
    "gun": "870",
    "element": "melee_swing",
@@ -4457,6 +9934,13 @@
    "true_peak_dbtp": -11.71,
    "length_s": 0.693,
    "peak_ms": 126.3,
+   "sources": [
+    {
+     "file": "sonniss/David Dumais Audio - Weapon Sounds - Weapon Swings/MeleeSwingsPack_96khz_Mono_DesignedSwings12.wav",
+     "start": 0.245,
+     "end": 0.795
+    }
+   ],
    "anchor_ms": 0.0,
    "gun": "870",
    "element": "melee_swing",
@@ -4474,6 +9958,13 @@
    "true_peak_dbtp": -9.69,
    "length_s": 0.6,
    "peak_ms": 41.7,
+   "sources": [
+    {
+     "file": "sonniss/David Dumais Audio - Weapon Sounds - Weapon Swings/MeleeSwingsPack_96khz_Stereo_LowSwings31.wav",
+     "start": 0.143,
+     "end": 0.693
+    }
+   ],
    "anchor_ms": 0.0,
    "gun": "870",
    "element": "melee_swing",
@@ -4491,6 +9982,13 @@
    "true_peak_dbtp": -1.81,
    "length_s": 0.18,
    "peak_ms": 106.6,
+   "sources": [
+    {
+     "file": "sonniss/TS Sound - 12 Gauge Shotgun/Shotgun_Quick Pump_01.wav",
+     "start": 0.05,
+     "end": 0.23
+    }
+   ],
    "anchor_ms": 100.0,
    "gun": "870",
    "element": "pump_back",
@@ -4509,6 +10007,13 @@
    "true_peak_dbtp": -3.17,
    "length_s": 0.199,
    "peak_ms": 42.4,
+   "sources": [
+    {
+     "file": "sonniss/TS Sound - 12 Gauge Shotgun/Shotgun_Quick Pump_01.wav",
+     "start": 1.049,
+     "end": 1.239
+    }
+   ],
    "anchor_ms": 104.7,
    "gun": "870",
    "element": "pump_back",
@@ -4527,6 +10032,13 @@
    "true_peak_dbtp": -5.67,
    "length_s": 0.39,
    "peak_ms": 97.8,
+   "sources": [
+    {
+     "file": "sonniss/Wav Junction Sound Effects - Shotguns/0019_Shotgun_Pump_Action_1.wav",
+     "start": 0.367,
+     "end": 0.757
+    }
+   ],
    "anchor_ms": 90.0,
    "gun": "870",
    "element": "pump_back",
@@ -4545,6 +10057,13 @@
    "true_peak_dbtp": -7.96,
    "length_s": 0.27,
    "peak_ms": 57.9,
+   "sources": [
+    {
+     "file": "sonniss/Pole Position Production - Various Gun Foley & Handling/SAIGA-12_12g_solid_slug_foley_close_up_RSM191_R_cocking.wav",
+     "start": 0.06,
+     "end": 0.33
+    }
+   ],
    "anchor_ms": 100.0,
    "gun": "870",
    "element": "pump_back",
@@ -4563,6 +10082,13 @@
    "true_peak_dbtp": -8.54,
    "length_s": 0.371,
    "peak_ms": 176.4,
+   "sources": [
+    {
+     "file": "sonniss/Pole Position Production - Various Gun Foley & Handling/SAIGA-12_12g_solid_slug_foley_close_up_RSM191_R_cocking.wav",
+     "start": 2.339,
+     "end": 2.689
+    }
+   ],
    "anchor_ms": 158.9,
    "gun": "870",
    "element": "pump_back",
@@ -4581,6 +10107,13 @@
    "true_peak_dbtp": -4.35,
    "length_s": 0.35,
    "peak_ms": 119.5,
+   "sources": [
+    {
+     "file": "sonniss/TS Sound - 12 Gauge Shotgun/Shotgun_Quick Pump_01.wav",
+     "start": 0.246,
+     "end": 0.596
+    }
+   ],
    "anchor_ms": 100.0,
    "gun": "870",
    "element": "pump_fwd",
@@ -4599,6 +10132,13 @@
    "true_peak_dbtp": -4.73,
    "length_s": 0.241,
    "peak_ms": 126.0,
+   "sources": [
+    {
+     "file": "sonniss/TS Sound - 12 Gauge Shotgun/Shotgun_Quick Pump_01.wav",
+     "start": 1.247,
+     "end": 1.477
+    }
+   ],
    "anchor_ms": 104.7,
    "gun": "870",
    "element": "pump_fwd",
@@ -4617,6 +10157,13 @@
    "true_peak_dbtp": -5.61,
    "length_s": 0.44,
    "peak_ms": 153.1,
+   "sources": [
+    {
+     "file": "sonniss/Wav Junction Sound Effects - Shotguns/0019_Shotgun_Pump_Action_1.wav",
+     "start": 0.758,
+     "end": 1.198
+    }
+   ],
    "anchor_ms": 140.0,
    "gun": "870",
    "element": "pump_fwd",
@@ -4635,6 +10182,13 @@
    "true_peak_dbtp": -10.07,
    "length_s": 0.41,
    "peak_ms": 128.6,
+   "sources": [
+    {
+     "file": "sonniss/Pole Position Production - Various Gun Foley & Handling/SAIGA-12_12g_solid_slug_foley_close_up_RSM191_R_cocking.wav",
+     "start": 0.328,
+     "end": 0.738
+    }
+   ],
    "anchor_ms": 110.0,
    "gun": "870",
    "element": "pump_fwd",
@@ -4653,6 +10207,13 @@
    "true_peak_dbtp": -10.56,
    "length_s": 0.381,
    "peak_ms": 139.5,
+   "sources": [
+    {
+     "file": "sonniss/Pole Position Production - Various Gun Foley & Handling/SAIGA-12_12g_solid_slug_foley_close_up_RSM191_R_cocking.wav",
+     "start": 2.717,
+     "end": 3.077
+    }
+   ],
    "anchor_ms": 63.6,
    "gun": "870",
    "element": "pump_fwd",
@@ -4671,6 +10232,13 @@
    "true_peak_dbtp": -4.33,
    "length_s": 0.3,
    "peak_ms": 107.9,
+   "sources": [
+    {
+     "file": "sonniss/TS Sound - 12 Gauge Shotgun/Shell Load_Round Eject.wav",
+     "start": 2.829,
+     "end": 3.129
+    }
+   ],
    "anchor_ms": 80.0,
    "gun": "870",
    "element": "shell_insert",
@@ -4689,6 +10257,13 @@
    "true_peak_dbtp": -1.0,
    "length_s": 0.41,
    "peak_ms": 134.0,
+   "sources": [
+    {
+     "file": "sonniss/TS Sound - 12 Gauge Shotgun/Shell Load_Round Eject.wav",
+     "start": 4.29,
+     "end": 4.7
+    }
+   ],
    "anchor_ms": 110.0,
    "gun": "870",
    "element": "shell_insert",
@@ -4702,11 +10277,18 @@
    "layer": "action",
    "channels": 2,
    "sample_rate": 48000,
-   "lufs_i": -22.08,
+   "lufs_i": -22.09,
    "lufs_m_max": -22.04,
    "true_peak_dbtp": -1.0,
    "length_s": 0.292,
    "peak_ms": 42.0,
+   "sources": [
+    {
+     "file": "sonniss/TS Sound - 12 Gauge Shotgun/Shell Load_Round Eject.wav",
+     "start": 0.564,
+     "end": 0.856
+    }
+   ],
    "anchor_ms": 42.0,
    "gun": "870",
    "element": "shell_insert",
@@ -4725,6 +10307,13 @@
    "true_peak_dbtp": -1.0,
    "length_s": 0.29,
    "peak_ms": 90.4,
+   "sources": [
+    {
+     "file": "tsp/Tactical Shooter Pack/Herrington_11-87/Actions/S_Herrington_11-87_Reload_Loop.wav",
+     "start": 0.496,
+     "end": 0.786
+    }
+   ],
    "anchor_ms": 90.0,
    "gun": "870",
    "element": "shell_insert",
@@ -4743,6 +10332,13 @@
    "true_peak_dbtp": -3.62,
    "length_s": 0.275,
    "peak_ms": 102.7,
+   "sources": [
+    {
+     "file": "sonniss/TS Sound - 12 Gauge Shotgun/Shell Load_Round Eject.wav",
+     "start": 2.829,
+     "end": 3.129
+    }
+   ],
    "anchor_ms": 73.4,
    "gun": "870",
    "element": "shell_insert",
@@ -4761,6 +10357,13 @@
    "true_peak_dbtp": -1.0,
    "length_s": 0.425,
    "peak_ms": 70.0,
+   "sources": [
+    {
+     "file": "sonniss/TS Sound - 12 Gauge Shotgun/Shell Load_Round Eject.wav",
+     "start": 4.36,
+     "end": 4.75
+    }
+   ],
    "anchor_ms": 43.6,
    "gun": "870",
    "element": "shell_load_chamber",
@@ -4779,6 +10382,13 @@
    "true_peak_dbtp": -3.72,
    "length_s": 0.403,
    "peak_ms": 54.9,
+   "sources": [
+    {
+     "file": "sonniss/TS Sound - 12 Gauge Shotgun/Shell Load_Round Eject.wav",
+     "start": 2.879,
+     "end": 3.259
+    }
+   ],
    "anchor_ms": 31.8,
    "gun": "870",
    "element": "shell_load_chamber",
@@ -4797,6 +10407,13 @@
    "true_peak_dbtp": -1.0,
    "length_s": 0.223,
    "peak_ms": 3.7,
+   "sources": [
+    {
+     "file": "tsp/Tactical Shooter Pack/Herrington_11-87/Actions/S_Herrington_11-87_Reload_Start_Empty.wav",
+     "start": 1.276,
+     "end": 1.499
+    }
+   ],
    "anchor_ms": 3.0,
    "gun": "870",
    "element": "shell_load_chamber",
@@ -4814,6 +10431,13 @@
    "true_peak_dbtp": -1.92,
    "length_s": 0.154,
    "peak_ms": 42.0,
+   "sources": [
+    {
+     "file": "tsp/Tactical Shooter Pack/Herrington_11-87/Actions/S_Herrington_11-87_Reload_Start_Empty.wav",
+     "start": 1.764,
+     "end": 1.918
+    }
+   ],
    "anchor_ms": 34.0,
    "gun": "870",
    "element": "shell_load_chamber",

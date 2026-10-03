@@ -27,12 +27,50 @@ def resolve_sonniss(spec):
     return hits[0]
 
 
+class Src(np.ndarray):
+    """A loaded source recording: an ndarray that remembers its file and its offset inside it, so every cut made
+    through adsp.cut() is recorded as provenance (file + start/end seconds)."""
+    def __array_finalize__(self, obj):
+        self.path = getattr(obj, "path", None)
+        self.off = getattr(obj, "off", 0)
+
+    def __getitem__(self, k):
+        r = super().__getitem__(k)
+        if isinstance(r, Src) and isinstance(k, slice) and k.start:
+            r.off = self.off + (k.start if k.start >= 0 else len(self) + k.start)
+        return r
+
+
+_USES = []
+
+
+def cut(x, a, b):
+    """x[a:b] as a plain copy, recording (source file, start s, end s) when x is a loaded source."""
+    a, b = max(0, int(a)), min(len(x), int(b))
+    if isinstance(x, Src) and x.path and b > a:
+        _USES.append({"file": x.path, "start": round((x.off + a) / SR, 3), "end": round((x.off + b) / SR, 3)})
+    return np.asarray(x[a:b]).copy()
+
+
+def take_uses():
+    """Pop the provenance list (merged duplicates) of everything cut since the last call."""
+    out, seen = [], set()
+    for u in _USES:
+        k = (u["file"], u["start"], u["end"])
+        if k not in seen:
+            seen.add(k)
+            out.append(u)
+    _USES.clear()
+    return out
+
+
 def load(path, mono=False):
     """Load a wav as float32 (n, 2) @ 48 kHz (resampled if needed); `path` may be relative to the TSP folder."""
     if path.startswith("sonniss/"):
         path = resolve_sonniss(path)
     elif not os.path.isabs(path):
         path = os.path.join(TSP, path)
+    rel = os.path.relpath(path, SRC_ROOT).replace("\\", "/")
     x, sr = sf.read(path, dtype="float32", always_2d=True)
     if sr != SR:
         g = math.gcd(sr, SR)
@@ -43,6 +81,8 @@ def load(path, mono=False):
         x = x[:, :2]
     if mono:
         x = np.repeat(x.mean(axis=1, keepdims=True), 2, axis=1)
+    x = np.ascontiguousarray(x).view(Src)
+    x.path, x.off = rel, 0
     return x
 
 
@@ -51,13 +91,10 @@ def to_mono(x):
 
 
 def write_wav(path, x, mono=False, dither_seed=0):
-    """16-bit PCM with TPDF dither (so quiet fades do not truncate-distort). mono=True writes 1 channel."""
+    """16-bit PCM, plain rounding (no dither: nothing is generated, not even noise). mono=True writes 1 channel."""
     os.makedirs(os.path.dirname(path), exist_ok=True)
     y = to_mono(x)[:, None] if mono else x
-    rng = np.random.default_rng(dither_seed)
-    lsb = 1.0 / 32768.0
-    d = (rng.random(y.shape) - rng.random(y.shape)) * lsb
-    y = np.clip(y + d, -1.0, 32767.0 / 32768.0)
+    y = np.clip(np.asarray(y), -1.0, 32767.0 / 32768.0)
     sf.write(path, y, SR, subtype="PCM_16")
 
 
@@ -137,14 +174,14 @@ def anchor_ms(x, frac=0.5, hp=250.0):
 
 
 def fade(x, n_in=0, n_out=0, curve="cos"):
-    x = x.copy()
+    x = np.array(x, dtype=np.float32)
     if n_in > 0:
         n_in = min(n_in, len(x))
-        w = 0.5 - 0.5 * np.cos(np.linspace(0, np.pi, n_in, dtype=np.float32))
+        w = np.hanning(2 * n_in)[:n_in].astype(np.float32)          # raised-cosine ramp (a window, not a signal)
         x[:n_in] *= w[:, None]
     if n_out > 0:
         n_out = min(n_out, len(x))
-        w = 0.5 + 0.5 * np.cos(np.linspace(0, np.pi, n_out, dtype=np.float32))
+        w = np.hanning(2 * n_out)[n_out:].astype(np.float32)
         x[-n_out:] *= w[:, None]
     return x
 
@@ -154,7 +191,7 @@ def slice_at(x, t, dur, preroll_ms=3.0, fade_in_ms=1.5, fade_out_ms=None, snap=T
     on = find_onset(x, t, hp=hp) if snap else int(t * SR)
     a = max(0, on - int(preroll_ms / 1000 * SR))
     b = min(len(x), on + int(dur * SR))
-    y = x[a:b].copy()
+    y = cut(x, a, b)
     fo = int((fade_out_ms if fade_out_ms is not None else max(25.0, dur * 250.0)) / 1000 * SR)
     return fade(y, int(fade_in_ms / 1000 * SR), fo)
 

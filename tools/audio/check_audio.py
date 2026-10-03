@@ -10,6 +10,7 @@ Per file (from project/assets/Audio/audio_manifest.json, re-measured from the wa
 """
 import json
 import os
+import re
 import sys
 
 import numpy as np
@@ -18,8 +19,35 @@ import soundfile as sf
 import abuild
 import adsp
 
-MIN_VARIANTS = {"close": 4, "sub": 4, "mech": 4, "tail": 4, "far": 4, "action": 3, "foley": 3, "step": 5, "loop": 3}
+MIN_VARIANTS = {"close": 4, "sub": 4, "mech": 4, "tail": 4, "far": 4, "action": 3, "foley": 3, "step": 5, "loop": 3, "casing": 6, "impact": 3, "flyby": 3}
 LAYER_GROUPS = ("close", "mech", "sub", "tail", "far")
+
+
+FORBIDDEN = [
+    (r"np\.(sin|cos|tan|sinc)\(", "oscillator / tone generation"),
+    (r"signal\.(chirp|square|sawtooth|gausspulse|unit_impulse|max_len_seq)", "scipy signal generator"),
+    (r"standard_normal|\.normal\(|randn|np\.random\.(rand|uniform|normal|randint)|\.random\(", "noise generator"),
+    (r"np\.exp\(\s*-\s*t\b|np\.exp\(\s*-\s*\w*\s*/\s*\(?\s*[\d.]+\s*\*", "synthetic decay envelope used as audio"),
+    (r"Reverb\(|Chorus\(|Phaser\(|Delay\(|Convolution\(\s*(?!path)", "algorithmic reverb / modulation generator (convolution with a real IR file is the only allowed space)"),
+    (r"np\.random\.default_rng", None),            # only adsp.deterministic_rng (selection / jitter, never audio)
+]
+
+
+def scan_generators():
+    errs = []
+    for f in sorted(os.listdir(abuild.HERE)):
+        if not f.endswith(".py") or f in ("check_audio.py", "clip_contacts.py"):
+            continue
+        text = open(os.path.join(abuild.HERE, f), encoding="utf-8").read()
+        for pat, why in FORBIDDEN:
+            for m in re.finditer(pat, text):
+                line = text[:m.start()].count("\n") + 1
+                if why is None:
+                    if f != "adsp.py":
+                        errs.append(f"{f}:{line}: np.random generator outside adsp.deterministic_rng")
+                    continue
+                errs.append(f"{f}:{line}: forbidden generator ({why}): {m.group(0)}")
+    return errs
 
 
 def main():
@@ -30,7 +58,7 @@ def main():
     on_disk = set()
     for root, _, fs in os.walk(abuild.AUDIO_DIR):
         for f in fs:
-            if f.lower().endswith(".wav") and (os.path.relpath(root, abuild.AUDIO_DIR).replace("\\", "/").startswith(("Weapons", "Foley"))):
+            if f.lower().endswith(".wav") and (os.path.relpath(root, abuild.AUDIO_DIR).replace("\\", "/").startswith(("Weapons", "Foley", "Impacts", "Casings"))):
                 on_disk.add(os.path.relpath(os.path.join(root, f), abuild.AUDIO_DIR).replace("\\", "/"))
     listed = {e["file"] for e in files}
     for f in sorted(on_disk - listed):
@@ -79,12 +107,25 @@ def main():
             allowed = e.get("lead_ms", 0.0) * 1.35 + 20.0
             if e["anchor_ms"] > allowed:
                 warns.append(f"{tag}: contact transient at {e['anchor_ms']} ms, expected <= {allowed:.0f} ms")
+        # provenance: every output must name the recorded files it is made of (hard rule: nothing is synthesised)
+        srcs = e.get("sources")
+        if not srcs:
+            errs.append(f"{tag}: no `sources` (provenance) in the manifest")
+        else:
+            for s in srcs:
+                if not s.get("file") or not (s.get("end", 0) > s.get("start", 1)):
+                    errs.append(f"{tag}: bad source entry {s}")
+                elif os.path.isdir(adsp.SRC_ROOT) and not os.path.exists(os.path.join(adsp.SRC_ROOT, s["file"])):
+                    errs.append(f"{tag}: source file not found under {adsp.SRC_ROOT}: {s['file']}")
         key = (e["key"], layer)
         counts[key] = counts.get(key, 0) + 1
         worst[layer] = (min(worst.get(layer, (9, 9))[0], lm), max(worst.get(layer, (-99, -99))[1], lm))
     for (key, layer), n in sorted(counts.items()):
         if n < MIN_VARIANTS[layer]:
             warns.append(f"{key}: only {n} variants (want >= {MIN_VARIANTS[layer]})")
+
+    # no generators in any build script (oscillators, noise, synthetic envelopes / IRs, algorithmic reverb)
+    errs += scan_generators()
 
     # sync_map <-> audio keys
     keys = {k for k, _ in counts}
@@ -102,6 +143,9 @@ def main():
             elif k not in keys:
                 errs.append(f"sync_map {clip}: no audio for key {k}")
 
+    n_src = sum(len(e.get("sources", [])) for e in files)
+    print(f"provenance: {sum(1 for e in files if e.get('sources'))}/{len(files)} outputs list sources ({n_src} source cuts); "
+          f"generator scan of tools/audio/*.py: {'clean' if not any('forbidden generator' in x or 'np.random' in x for x in errs) else 'VIOLATIONS'}")
     print(f"{len(files)} files checked; loudness range per layer (LUFS-M): " +
           ", ".join(f"{l} {a:.1f}..{b:.1f}" for l, (a, b) in sorted(worst.items())))
     for w in warns:

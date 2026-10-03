@@ -19,7 +19,7 @@ import soundfile as sf
 import abuild
 import adsp
 
-OUT = r"C:\tb\audio-reel"
+OUT = r"C:\tb\audio-reel\v2"
 SR = adsp.SR
 FPS = 60.0
 LAYERS = ("close", "sub", "mech", "tail", "far")
@@ -64,7 +64,7 @@ class Picker:
     """Variant picker that never repeats the previous take of a key (what the engine should do too)."""
     def __init__(self, by_key, seed=7):
         self.by_key, self.last = by_key, {}
-        self.rng = np.random.default_rng(seed)
+        self.rng = adsp.deterministic_rng("reel", seed)
 
     def pick(self, key):
         v = self.by_key[key]
@@ -164,6 +164,46 @@ def main():
             r.put(wav(e), t)
             t += max(0.6, e["length_s"] + 0.3)
     r.save("foley_misc.wav")
+    extra_reels(by_key, pk)
+
+
+def extra_reels(by_key, pk):
+    """Round 4 reels: melee (swing -> hit 6/8 frames later), dry fire, casings per material, impacts per material, flyby."""
+    for gun, hit_frame in (("ak", 6), ("870", 8)):
+        r = Reel(40)
+        t = 0.3
+        for rep in range(8):
+            sw, ht = pk.pick(f"snd.{gun}.melee_swing"), pk.pick(f"snd.{gun}.melee_hit")
+            r.put(wav(sw), t - sw["anchor_ms"] / 1000)
+            r.put(wav(ht), t + hit_frame / FPS - ht["anchor_ms"] / 1000)
+            t += 1.5
+        r.save(f"{gun}_melee.wav")
+        r = Reel(30)
+        t = 0.3
+        for e in by_key[f"snd.{gun}.dry_fire"] * 2:
+            r.put(wav(e), t)
+            t += 0.8
+        r.save(f"{gun}_dry_fire.wav")
+    r = Reel(400)
+    t, idx = 0.3, []
+    for key in sorted(k for k in by_key if k.startswith("snd.casing.")):
+        for e in by_key[key]:
+            r.put(wav(e), t)
+            idx.append(f"{t:7.2f}s  {e['file']}{'  [proxy]' if e.get('proxy') else ''}")
+            t += min(e["length_s"], 1.7) + 0.35
+        t += 0.8
+    r.save("casings.wav")
+    open(os.path.join(OUT, "casings_index.txt"), "w").write("\n".join(idx))
+    r = Reel(120)
+    t, idx = 0.3, []
+    for key in sorted(k for k in by_key if k.startswith("snd.impact.") or k == "snd.flyby"):
+        for e in by_key[key]:
+            r.put(wav(e), t)
+            idx.append(f"{t:7.2f}s  {e['file']}{'  [proxy]' if e.get('proxy') else ''}")
+            t += min(e["length_s"], 1.5) + 0.4
+        t += 0.8
+    r.save("impacts_flyby.wav")
+    open(os.path.join(OUT, "impacts_index.txt"), "w").write("\n".join(idx))
 
 
 if __name__ == "__main__":

@@ -12,6 +12,9 @@
     "action": {"target": -21.0, "min": -29.0, "max": -18.0},
     "foley":  {"target": -21.0, "min": -24.0, "max": -18.0},
     "step":   {"target": -23.0, "min": -28.0, "max": -20.0},
-    "loop":   {"target": -24.0, "min": -27.0, "max": -21.0}
+    "loop":   {"target": -24.0, "min": -27.0, "max": -21.0},
+    "casing":  {"target": -26.0, "min": -32.0, "max": -20.0},
+    "impact":  {"target": -17.0, "min": -22.0, "max": -12.0},
+    "flyby":   {"target": -21.0, "min": -26.0, "max": -16.0}
   }
 }
