@@ -34,6 +34,11 @@ public:
 
     unsigned int ResolvedColorTexture() const { return m_ResolveColor; } // RGBA16F, linear-filtered, sampleable
 
+    // Mid-pass: resolves only the depth into ResolvedDepthTexture() (provisioning it on first use) -
+    // for a pass that reconstructs the surfaces drawn so far while the MSAA target stays bound (the
+    // blood decals, docs/BLOOD_FX.md). Leaves the draw framebuffer binding alone.
+    void ResolveDepthOnly() const;
+
     // Single-sample DEPTH_COMPONENT32F (#121) — lazily created on first call rather than at
     // Resize()/Create() time (#206). Until something (a future SSAO / screen-space pass) actually
     // calls this, the resolve target has no depth attachment and ResolveTo() blits colour only:

@@ -232,7 +232,19 @@ void Test_Blood_SprayTiming() {
         CHECK(glm::dot(x, glm::normalize(glm::vec3(dir.x, 0, dir.z))) > 0.9999f);
         CHECK(glm::length(glm::vec3(m * glm::vec4(0, 1, 0, 0)) - glm::vec3(0, 0.5f, 0)) < 1e-5f); // gravity stays down
         CHECK(glm::length(glm::vec3(m[3]) - glm::vec3(1, 2, 3)) < 1e-6f);
+        // A prefab that throws along its -X (blood7/8) turns that onto the line instead.
+        const glm::mat4 r = BloodFx::PrefabToWorld(glm::vec3(0.0f), dir, 1.0f, 0.0f, glm::vec3(-1, 0, 0));
+        CHECK(glm::dot(glm::normalize(glm::vec3(r * glm::vec4(-1, 0, 0, 0))), glm::normalize(glm::vec3(dir.x, 0, dir.z))) > 0.9999f);
     }
+    // The axis comes from where the sims' fluid ends up (+X when unknown).
+    BloodPresetDef p{"t", 0.75f, 2.0f, {{"a", {-1, 0, 0, 0, 0, 1, 0, 0, 0, 0, -1, 0}, 2.0f, 10.0f}}, {}};
+    BloodFxImport::VatFrame last{};
+    last.Centroid[0] = -5.0f; // the sim's -X, mirrored by the spray's matrix onto the prefab's +X
+    auto lookup = [&](const char*, glm::vec3& o) -> const BloodFxImport::VatFrame* { o = glm::vec3(0.0f); return &last; };
+    CHECK(glm::dot(BloodFx::PrefabAxis(p, lookup), glm::vec3(1, 0, 0)) > 0.999f);
+    p.Sprays[0].M[0] = 1.0f;
+    CHECK(glm::dot(BloodFx::PrefabAxis(p, lookup), glm::vec3(-1, 0, 0)) > 0.999f);
+    CHECK(glm::dot(BloodFx::PrefabAxis(p, nullptr), glm::vec3(1, 0, 0)) > 0.999f);
 }
 
 void Test_Blood_FleshHits() {
@@ -255,7 +267,7 @@ void Test_Blood_FleshHits() {
     h.Killed = true;
     fx.OnFleshHit(h);
     CHECK(fx.SpraysSpawned() >= 1 && !fx.Sprays().empty());
-    CHECK(rays == 1);
+    CHECK(rays >= 1);
     CHECK(fx.LastSprayClipped());
     // The fluid in front of the wall is kept, behind it clipped.
     const glm::vec4 plane = fx.Sprays()[0].ClipPlane;
@@ -282,6 +294,87 @@ void Test_Blood_FleshHits() {
     fx.OnFleshHit(h);
     CHECK(fx.SpraysSpawned() == before);
 }
+void Test_Blood_Decals() {
+    BloodFx fx;
+    fx.SetSimLookup([](const char*) { return 0; });
+    fx.SetDecalSetLookup([](const char*) { return 0; });
+    glm::vec3 corpse(0.0f, 0.3f, -0.5f);
+    bool corpseThere = true;
+    fx.SetBodyLookup([&](unsigned, glm::vec3& c) { c = corpse; return corpseThere; });
+    // A floor at y = 0 everywhere, a wall 1 m along -Z, a ceiling at 2.6 m.
+    fx.SetRaycast([](const glm::vec3& o, const glm::vec3& d, float maxD, glm::vec3& p, glm::vec3& n) {
+        if (d.y < -0.5f) { if (o.y > maxD) return false; p = glm::vec3(o.x, 0.0f, o.z); n = glm::vec3(0, 1, 0); return true; }
+        if (d.y > 0.5f) { if (2.6f - o.y > maxD) return false; p = glm::vec3(o.x, 2.6f, o.z); n = glm::vec3(0, -1, 0); return true; }
+        if (d.z < -0.5f) { if (o.z + 1.0f > maxD) return false; p = glm::vec3(o.x, o.y, -1.0f); n = glm::vec3(0, 0, 1); return true; }
+        return false;
+    });
+    BloodFx::Hit h;
+    h.Point = glm::vec3(0, 1.6f, 0);
+    h.Direction = glm::vec3(0, 0, -1);
+    h.Entity = 3;
+    h.Damage = 100.0f;
+    h.Killed = true;
+    h.Head = true;
+    fx.OnFleshHit(h);
+    const auto& ds = fx.Decals();
+    bool floor = false, wall = false, ceiling = false, boxesRight = true;
+    for (const BloodFx::Decal& d : ds) {
+        const glm::vec3 up = glm::normalize(glm::vec3(d.Model[1])), at(d.Model[3]);
+        floor |= up.y > 0.9f && std::abs(at.y - 0.01f) < 0.02f;
+        wall |= up.z > 0.9f && std::abs(at.z + 1.0f) < 0.02f;
+        ceiling |= up.y < -0.9f && std::abs(at.y - 2.6f) < 0.02f;
+        boxesRight &= glm::determinant(d.Model) > 0.0f; // the box shader draws its far faces: no mirrors
+        boxesRight &= d.Age <= 0.0f;                    // nothing lands the moment it's thrown
+    }
+    CHECK(floor);
+    CHECK(wall);
+    CHECK(ceiling);
+    CHECK(boxesRight);
+    // Stains land, spread in and hold; a dead body's pool appears once it has come to rest, then spreads.
+    const size_t thrown = ds.size();
+    fx.Update(1.5f);
+    CHECK(fx.Decals().size() == thrown);
+    fx.Update(2.0f);
+    CHECK(fx.Decals().size() == thrown + 1);
+    const BloodFx::Decal pool = fx.Decals().back();
+    CHECK(pool.Reveal == nullptr && pool.PoolGrow > 5.0f);
+    CHECK(std::abs(glm::vec3(pool.Model[3]).x - corpse.x) < 1e-4f && std::abs(glm::vec3(pool.Model[3]).y - 0.01f) < 1e-3f);
+    BloodFx::Decal grow = pool;
+    grow.Age = 0.0f;
+    const float c0 = BloodFx::DecalCutout(grow);
+    grow.Age = grow.PoolGrow * 0.5f;
+    const float c1 = BloodFx::DecalCutout(grow);
+    grow.Age = grow.PoolGrow + 1.0f;
+    CHECK(c0 > c1 && c1 > BloodFx::DecalCutout(grow) && BloodFx::DecalCutout(grow) < 0.01f);
+    grow.Age = grow.Life - 0.01f;
+    CHECK(BloodFx::DecalCutout(grow) > 0.95f); // shrinks away at the end
+    // The reveal-curve stains: hidden, spread by 0.3 of the curve, held, then the curve's tail.
+    BloodCurve curve{3, {{0.0f, 1.0f, 0, 0}, {0.3f, 0.0f, 0, 0}, {1.0f, 1.0f, 0, 0}}};
+    BloodFx::Decal r;
+    r.Reveal = &curve;
+    r.RevealSeconds = 10.0f;
+    r.Life = 100.0f;
+    r.Age = 0.0f;
+    CHECK(BloodFx::DecalCutout(r) > 0.99f);
+    r.Age = 50.0f;
+    CHECK(BloodFx::DecalCutout(r) < 0.01f);
+    r.Age = 99.9f;
+    CHECK(BloodFx::DecalCutout(r) > 0.95f);
+    // Stains go at the end of their life; the cap keeps the oldest out.
+    fx.Update(fx.Config.DecalLifetime * 1.2f);
+    CHECK(fx.Decals().empty());
+    fx.Config.MaxDecals = 3;
+    for (unsigned e = 50; e < 60; ++e) { h.Entity = e; h.Point.x = (float)e; fx.OnFleshHit(h); }
+    CHECK((int)fx.Decals().size() <= 3);
+    // No pool for a body that's gone by then.
+    fx.Clear();
+    corpseThere = false;
+    h.Entity = 99;
+    fx.OnFleshHit(h);
+    const size_t before = fx.Decals().size();
+    fx.Update(5.0f);
+    CHECK(fx.Decals().size() == before);
+}
 } // namespace
 
 void RegisterBloodTests(UnitTestSupport::TestList& tests) {
@@ -292,4 +385,5 @@ void RegisterBloodTests(UnitTestSupport::TestList& tests) {
     tests.push_back({"Blood::Presets", Test_Blood_Presets});
     tests.push_back({"Blood::SprayTiming", Test_Blood_SprayTiming});
     tests.push_back({"Blood::FleshHits", Test_Blood_FleshHits});
+    tests.push_back({"Blood::Decals", Test_Blood_Decals});
 }
