@@ -203,7 +203,7 @@
      "src": "General/S_Land.WAV",
      "t": 0.032,
      "dur": 0.4,
-     "pitch": 2.5,
+     "pitch": 2.0,
      "lp": 6500
     },
     {
@@ -236,7 +236,7 @@
      "src": "General/S_Land.WAV",
      "t": 0.032,
      "dur": 0.55,
-     "pitch": -3.0,
+     "pitch": -2.0,
      "rattle": {
       "src": "AK105/Actions/S_AK105_Reload_Empty.WAV",
       "t": 1.968

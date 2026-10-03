@@ -80,8 +80,9 @@ def classify(e):
         return "ui", L["ui"][m.group(1)], "played"
     if key == "snd.body_fall":
         return "body_fall", L["body_fall"], "played"
-    if re.fullmatch(r"snd\.amb\.\w+", key):
-        return "ambience", L["ambience"], "played"
+    m = re.fullmatch(r"snd\.amb\.(\w+)", key)
+    if m and m.group(1) in L["ambience"]:
+        return "ambience", L["ambience"][m.group(1)], "played"
     if re.fullmatch(r"ir\.\w+", key):
         return "ir", None, "none"
     return "unspecified", None, "none"
