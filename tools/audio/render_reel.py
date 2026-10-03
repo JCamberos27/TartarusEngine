@@ -1,6 +1,10 @@
 """Render audition reels to C:\\tb\\audio-reel (NOT committed): listen before trusting the numbers.
 
-  uv run --with numpy --with scipy --with soundfile --with pedalboard --with pyloudnorm python tools/audio/render_reel.py
+  uv run --with numpy --with scipy --with soundfile --with pedalboard --with pyloudnorm python tools/audio/render_reel.py [tails]
+
+`tails` renders only the environment-tail audition reels to C:\\tb\\audio-reel\\tails: per gun, <gun>_tails_single.wav (one shot with the
+generic fire_tail, then with each built space class) and <gun>_tails_burst_<class>.wav (a 10-round AK burst / 3 pumped 870 shots per
+space, tail policy of the engine: every 2nd shot).
 
 Per gun:
   <gun>_elements.wav      every committed element/variant in order, 0.45 s apart, with <gun>_elements_index.txt (time -> file)
@@ -120,8 +124,47 @@ def sync_reels(by_key, gun_tag, sm):
             r.save(f"{gun_tag}_{name}_sync.wav")
 
 
+def tails_reels(by_key):
+    global OUT
+    base = OUT
+    OUT = os.path.join(base, "tails")
+    os.makedirs(OUT, exist_ok=True)
+    classes = ["outdoor_open", "outdoor_urban", "indoor_small", "indoor_large"]
+    for gun in ("ak", "870"):
+        have = [c for c in classes if f"snd.{gun}.fire_tail_{c}" in by_key]
+        # the engine's fallback for a class with no files is the generic tail, so the reel plays that for it too
+        names = ["generic"] + classes
+        r = Reel(len(names) * 5.5 + 4)
+        idx, t = [], 0.3
+        for name in names:
+            key = f"snd.{gun}.fire_tail" if name == "generic" or name not in have else f"snd.{gun}.fire_tail_{name}"
+            pk = Picker(by_key, seed=21)
+            shot(r, pk, gun, t, layers=("close", "sub", "mech"))
+            e = pk.pick(key)
+            r.put(wav(e), t, e.get("mix_db", 0.0))
+            idx.append(f"{t:6.2f}s  {name:14s} {e['file']}" + ("" if name == "generic" or name in have else "  (no files: generic fallback)"))
+            t += 5.5
+        r.save(f"{gun}_tails_single.wav")
+        open(os.path.join(OUT, f"{gun}_tails_index.txt"), "w").write(chr(10).join(idx))
+        for name in ["generic"] + have:
+            key = f"snd.{gun}.fire_tail" if name == "generic" else f"snd.{gun}.fire_tail_{name}"
+            pk = Picker(by_key, seed=5)
+            shots, gap = (10, 60.0 / 650.0) if gun == "ak" else (3, 1.6)
+            r = Reel(shots * gap + 6)
+            for i in range(shots):
+                shot(r, pk, gun, 0.2 + i * gap, layers=("close", "sub", "mech"))
+                if i % 2 == 0:
+                    e = pk.pick(key)
+                    r.put(wav(e), 0.2 + i * gap, e.get("mix_db", 0.0))
+            r.save(f"{gun}_tails_burst_{name}.wav")
+    OUT = base
+
+
 def main():
     by_key = load_manifest()
+    if "tails" in sys.argv[1:]:
+        tails_reels(by_key)
+        return
     sm = json.load(open(os.path.join(abuild.HERE, "sync_map.json")))
     os.makedirs(OUT, exist_ok=True)
     pk = Picker(by_key, seed=3)
