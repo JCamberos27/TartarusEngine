@@ -805,6 +805,7 @@ void FirstPersonBody::Tick(World& world, const Player& player, const Camera& cam
             m_StepOffset = std::clamp(m_StepOffset - rise, -0.3f, 0.3f);
         m_StepOffset -= m_StepOffset * Follow(dt, player.Grounded && cfg.FootIK ? cfg.StairEase : 0.03f);
         m_LastCapsuleY = f[1];
+        m_GroundVelocity = glm::vec3(player.Velocity.x, 0.0f, player.Velocity.z);
         m_LastGrounded = player.Grounded;
         m_HaveCapsule = true;
         m_Feet = glm::vec3(f[0], f[1] + m_StepOffset, f[2]);
@@ -1397,6 +1398,7 @@ void FirstPersonBody::ApplyFootIK(World& world, const FirstPersonBodyComponent& 
         m_HaveFoot = false;
         m_FootPlanted[0] = m_FootPlanted[1] = false;
         m_FootLockWeight[0] = m_FootLockWeight[1] = 0.0f;
+        m_Slide.Reset();
         return;
     }
     const auto* rc = reg.try_get<RenderableComponent>(m_Driver);
@@ -1417,16 +1419,40 @@ void FirstPersonBody::ApplyFootIK(World& world, const FirstPersonBodyComponent& 
 
     const float maxDrop = std::max(cfg.FootIKMaxDrop, 0.0f);
     float animHeight[2];
+    // Foot slide correction (stride warp, then pin) on the animated feet; off = the clips' own feet and the plain foot lock below.
+    IK::FootSlideSettings slideSet = IK::FootSlideFrom(cfg);
+    const int probe = IK::FootSlideProbeMode();
+    if (probe == 1) { slideSet = IK::FootSlideSettings{}; slideSet.PinEnabled = slideSet.StrideEnabled = true; }
+    const bool slideOn = slideSet.Active();
+    IK::FootSlideOutput slide;
+    glm::vec3 footAnim[2];
+    for (int s = 0; s < 2; ++s) footAnim[s] = m_Feet + yaw * (scale * IK::Position(globals[footNode[s]]));
+    if (slideOn || probe >= 0) {
+        IK::FootSlideInput in;
+        in.Feet = m_Feet;
+        in.Velocity = m_GroundVelocity;
+        in.PlantHeight = cfg.FootPlantedHeight;
+        in.Dt = dt;
+        for (int s = 0; s < 2; ++s) { in.Foot[s] = footAnim[s]; in.Height[s] = footAnim[s].y - m_Feet.y; }
+        const int pelvisNode = drv.NodeIndex(Bone(FPBody::kBonePelvis));
+        const int thighNode = drv.NodeIndex(Bone(FPBody::kBoneThigh[0])), calfNode = drv.NodeIndex(Bone(FPBody::kBoneCalf[0]));
+        in.Pelvis = pelvisNode >= 0 ? m_Feet + yaw * (scale * IK::Position(globals[pelvisNode])) : m_Feet + glm::vec3(0.0f, 1.0f, 0.0f);
+        if (thighNode >= 0 && calfNode >= 0)
+            in.LegLength = scale * (glm::length(IK::Position(globals[thighNode]) - IK::Position(globals[calfNode])) +
+                                    glm::length(IK::Position(globals[calfNode]) - IK::Position(globals[footNode[0]])));
+        slide = m_Slide.Step(slideSet, in, !slideOn);
+        if (probe >= 0) IK::FootSlideProbeLog("player", m_Slide.Stats, glm::length(m_GroundVelocity), m_Slide.ClipSpeed(), m_Slide.Scale());
+    }
     glm::vec3 lockShift[2] = {glm::vec3(0.0f), glm::vec3(0.0f)}; // world, horizontal: animated foot -> pinned foot
     // No pinning while the body turns on the spot (the feet must step) or the heading swings.
     const bool yawSteady = !m_Turning && std::abs(FirstPersonBodyWrapAngle(m_Yaw - m_FootYaw)) < glm::radians(2.0f);
     m_FootYaw = m_Yaw;
     for (int s = 0; s < 2; ++s) {
-        const glm::vec3 footWorld = m_Feet + yaw * (scale * IK::Position(globals[footNode[s]]));
+        const glm::vec3 footWorld = footAnim[s] + slide.Shift[s]; // the stride-warped foot (pinned, below, when the pin is on)
         animHeight[s] = footWorld.y - m_Feet.y;
         // Foot lock: a planted foot stays where it landed instead of sliding when the animation and the
         // capsule's travel disagree a little; it lets go when the foot lifts or the mismatch gets big.
-        const bool planted = animHeight[s] < cfg.FootPlantedHeight && yawSteady;
+        const bool planted = animHeight[s] < cfg.FootPlantedHeight && yawSteady && !slideSet.PinEnabled; // the pin replaces the plain lock
         if (planted) {
             if (!m_FootPlanted[s]) { m_FootPlanted[s] = true; m_FootLock[s] = footWorld; }
             const glm::vec3 drift(footWorld.x - m_FootLock[s].x, 0.0f, footWorld.z - m_FootLock[s].z);
@@ -1435,7 +1461,8 @@ void FirstPersonBody::ApplyFootIK(World& world, const FirstPersonBodyComponent& 
             m_FootPlanted[s] = false;
         }
         m_FootLockWeight[s] += ((m_FootPlanted[s] ? 1.0f : 0.0f) - m_FootLockWeight[s]) * Follow(dt, m_FootPlanted[s] ? cfg.FootLockEaseIn : cfg.FootLockEaseOut);
-        lockShift[s] = glm::vec3(m_FootLock[s].x - footWorld.x, 0.0f, m_FootLock[s].z - footWorld.z) * (m_FootLockWeight[s] * m_FootWeight);
+        lockShift[s] = glm::vec3(m_FootLock[s].x - footWorld.x, 0.0f, m_FootLock[s].z - footWorld.z) * (m_FootLockWeight[s] * m_FootWeight) +
+                       slide.Shift[s] * m_FootWeight;
         float offset = 0.0f;
         glm::vec3 normal(0.0f, 1.0f, 0.0f);
         const float origin[3] = {footWorld.x, footWorld.y + cfg.FootRayUp, footWorld.z};
@@ -1468,7 +1495,7 @@ void FirstPersonBody::ApplyFootIK(World& world, const FirstPersonBodyComponent& 
         for (int s = 0; s < 2; ++s) { d.FootOffset[s] = m_FootOffset[s]; d.FootPlanted[s] = m_FootPlanted[s]; d.FootLock[s] = m_FootLockWeight[s]; }
     }
 
-    const float pelvisDelta = FirstPersonBodyFootPelvis(m_FootOffset[0], m_FootOffset[1], maxDrop, cfg.PelvisMaxRaise) * m_FootWeight;
+    const float pelvisDelta = (FirstPersonBodyFootPelvis(m_FootOffset[0], m_FootOffset[1], maxDrop, cfg.PelvisMaxRaise) - slide.PelvisDrop) * m_FootWeight;
     static const char* const kLegs[2][3] = {{FPBody::kBoneThigh[0], FPBody::kBoneCalf[0], FPBody::kBoneFoot[0]}, {FPBody::kBoneThigh[1], FPBody::kBoneCalf[1], FPBody::kBoneFoot[1]}};
     const glm::quat yawInverse = glm::inverse(yaw);
     for (const auto& mp : m_Models) {

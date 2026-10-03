@@ -7,7 +7,11 @@
 #include <glm/gtx/quaternion.hpp>
 
 #include <algorithm>
+#include <chrono>
 #include <cmath>
+#include <cstdio>
+#include <cstdlib>
+#include <map>
 #include <limits>
 
 namespace IK {
@@ -400,6 +404,161 @@ std::vector<std::string> MissingBones(const IKRigComponent& rig, const Model& mo
     }
     if (rig.LookAtEnabled) { need(rig.LookAtBone); need(rig.LookAtTarget); }
     return missing;
+}
+
+// ---- foot slide correction (docs/CAS_PARITY.md #8) ----
+namespace {
+float FollowK(float dt, float seconds) { return seconds > 1e-4f ? 1.0f - std::exp(-dt / seconds) : 1.0f; }
+} // namespace
+
+float StrideScale(float groundSpeed, float clipSpeed, float lo, float hi) {
+    if (groundSpeed < 0.25f || clipSpeed < 0.3f) return 1.0f;
+    if (lo > hi) std::swap(lo, hi);
+    return std::clamp(groundSpeed / clipSpeed, lo, hi);
+}
+
+float StrideWarpPelvisDrop(float legLength, float reach, float scale, float adjust) {
+    if (scale <= 1.0f || legLength < 1e-3f) return 0.0f;
+    const float L2 = legLength * legLength;
+    const float d0 = std::min(std::abs(reach), legLength * 0.98f);
+    const float d1 = std::min(d0 * scale, legLength * 0.98f);
+    const float drop = std::sqrt(std::max(L2 - d0 * d0, 0.0f)) - std::sqrt(std::max(L2 - d1 * d1, 0.0f));
+    return std::clamp(drop, 0.0f, 0.15f) * std::clamp(adjust, 0.0f, 1.0f);
+}
+
+FootSlideOutput FootSlide::Step(const FootSlideSettings& set, const FootSlideInput& in, bool measureOnly) {
+    FootSlideOutput out;
+    const float dt = in.Dt;
+    if (dt <= 1e-5f) return out;
+    const glm::vec2 vel(in.Velocity.x, in.Velocity.z);
+    const float speed = glm::length(vel);
+    const glm::vec2 dir = speed > 1e-3f ? vel / speed : glm::vec2(0.0f, 1.0f);
+    glm::vec2 rel[2];
+    for (int s = 0; s < 2; ++s) rel[s] = glm::vec2(in.Foot[s].x - in.Feet.x, in.Foot[s].z - in.Feet.z);
+
+    // The ankle bone sits a few cm over the ground even when the foot is flat on it, so a plant is judged against each foot's own
+    // lowest height (it creeps up slowly so a rig change or a first frame in the air does not stick).
+    float height[2];
+    for (int s = 0; s < 2; ++s) {
+        m_Floor[s] = m_HavePrev ? std::min(m_Floor[s] + 0.03f * dt, in.Height[s]) : in.Height[s];
+        height[s] = in.Height[s] - m_Floor[s];
+    }
+    // The clips' own ground speed: a planted foot slides back along the travel at it, in the capsule's frame.
+    if (m_HavePrev) {
+        float sample = 0.0f;
+        int n = 0;
+        for (int s = 0; s < 2; ++s)
+            if (m_Planted[s] && height[s] < in.PlantHeight && m_PlantTime[s] > 0.04f) {
+                sample += -glm::dot((rel[s] - m_PrevRel[s]) / dt, dir);
+                ++n;
+            }
+        if (n > 0 && speed > 0.25f) {
+            sample /= (float)n;
+            if (sample > 0.2f && sample < 12.0f) m_ClipSpeed = m_ClipSpeed < 0.0f ? sample : m_ClipSpeed + (sample - m_ClipSpeed) * FollowK(dt, 0.12f);
+        }
+    }
+    for (int s = 0; s < 2; ++s) m_PrevRel[s] = rel[s];
+    m_HavePrev = true;
+
+    const bool warp = set.StrideEnabled && !measureOnly;
+    const float target = warp ? StrideScale(speed, m_ClipSpeed, set.StrideMin, set.StrideMax) : 1.0f;
+    m_Scale += (target - m_Scale) * FollowK(dt, 0.1f);
+    const float k = 1.0f + (m_Scale - 1.0f) * std::clamp(set.StrideWeight, 0.0f, 1.0f);
+    out.Scale = k;
+
+    float reach = 0.0f;
+    glm::vec3 warped[2];
+    for (int s = 0; s < 2; ++s) {
+        warped[s] = in.Foot[s];
+        if (std::abs(k - 1.0f) < 1e-5f) continue;
+        const glm::vec2 relP(in.Foot[s].x - in.Pelvis.x, in.Foot[s].z - in.Pelvis.z);
+        const float along = glm::dot(relP, dir);
+        reach = std::max(reach, std::abs(along));
+        warped[s].x += dir.x * along * (k - 1.0f);
+        warped[s].z += dir.y * along * (k - 1.0f);
+    }
+    if (warp) out.PelvisDrop = StrideWarpPelvisDrop(in.LegLength, reach, k, set.PelvisAdjust);
+
+    const bool pin = set.PinEnabled && !measureOnly;
+    for (int s = 0; s < 2; ++s) {
+        const bool planted = height[s] < in.PlantHeight;
+        glm::vec3 fin = warped[s];
+        if (planted) {
+            if (!m_Planted[s]) { m_Planted[s] = true; m_PlantTime[s] = 0.0f; m_Lock[s] = warped[s]; m_Slide[s] = 0.0f; m_PlantStart[s] = glm::vec3(-1e9f); }
+            m_PlantTime[s] += dt;
+            // The leash: a pin that lags too far is dragged along rather than snapping.
+            const glm::vec2 lag(m_Lock[s].x - warped[s].x, m_Lock[s].z - warped[s].z);
+            const float len = glm::length(lag);
+            const float maxDrift = std::max(set.PinMaxDrift, 0.01f);
+            if (len > maxDrift) m_Lock[s] = glm::vec3(warped[s].x + lag.x / len * maxDrift, warped[s].y, warped[s].z + lag.y / len * maxDrift);
+        } else if (m_Planted[s]) {
+            m_Planted[s] = false;
+            if (m_PlantTime[s] > 0.08f) { // a real plant, not a chatter at the threshold
+                ++Stats.Plants;
+                Stats.SumSlide += m_Slide[s];
+                Stats.MaxSlide = std::max(Stats.MaxSlide, m_Slide[s]);
+            }
+        }
+        if (pin) {
+            m_PinWeight[s] += ((planted ? 1.0f : 0.0f) - m_PinWeight[s]) * FollowK(dt, planted ? set.PinRelease * 0.5f : set.PinRelease);
+            // Lifting off, the pin lets go with the foot's height too, so a swinging foot is never dragged back.
+            const float lift = 1.0f - std::clamp((height[s] - in.PlantHeight) / std::max(in.PlantHeight, 1e-3f), 0.0f, 1.0f);
+            const float w = m_PinWeight[s] * lift * std::clamp(set.PinWeight, 0.0f, 1.0f);
+            fin.x += (m_Lock[s].x - warped[s].x) * w;
+            fin.z += (m_Lock[s].z - warped[s].z) * w;
+        } else {
+            m_PinWeight[s] = 0.0f;
+        }
+        out.Shift[s] = glm::vec3(fin.x - in.Foot[s].x, 0.0f, fin.z - in.Foot[s].z);
+        if (planted && m_PlantTime[s] > 0.04f) { // measured once the pin has taken hold
+            if (m_PlantStart[s].x < -1e8f) m_PlantStart[s] = fin;
+            m_Slide[s] = std::max(m_Slide[s], std::hypot(fin.x - m_PlantStart[s].x, fin.z - m_PlantStart[s].z));
+        }
+    }
+    return out;
+}
+
+int FootSlideProbeMode() {
+    static const int mode = [] {
+        char* e = nullptr;
+        size_t n = 0;
+        _dupenv_s(&e, &n, "TARTARUS_FOOT_SLIDE_PROBE");
+        const int m = e && *e ? (std::atoi(e) != 0 ? 1 : 0) : -1;
+        std::free(e);
+        return m;
+    }();
+    return mode;
+}
+
+void FootSlideProbeLog(const char* who, FootSlideStats& stats, float speed, float clipSpeed, float scale) {
+    struct Window { FootSlideStats Sum; std::chrono::steady_clock::time_point Last = std::chrono::steady_clock::now(); };
+    static std::map<std::string, Window> windows;
+    Window& w = windows[who];
+    w.Sum.Plants += stats.Plants;
+    w.Sum.SumSlide += stats.SumSlide;
+    w.Sum.MaxSlide = std::max(w.Sum.MaxSlide, stats.MaxSlide);
+    stats.Clear();
+    const auto now = std::chrono::steady_clock::now();
+    if (std::chrono::duration<float>(now - w.Last).count() < 1.5f) return;
+    w.Last = now;
+    if (w.Sum.Plants > 0)
+        std::printf("[FootSlide] %s probe=%d speed %.2f m/s clip %.2f scale %.2f: %d plants, drift mean %.1f cm max %.1f cm\n", who, FootSlideProbeMode(), speed, clipSpeed, scale,
+                    w.Sum.Plants, w.Sum.SumSlide / w.Sum.Plants * 100.0f, w.Sum.MaxSlide * 100.0f);
+    w.Sum.Clear();
+}
+
+FootSlideSettings FootSlideFrom(const FirstPersonBodyComponent& b) {
+    FootSlideSettings s;
+    s.PinEnabled = b.FootPinEnabled;
+    s.PinWeight = b.FootPinWeight;
+    s.PinRelease = b.FootPinRelease;
+    s.PinMaxDrift = b.FootPinMaxDrift;
+    s.StrideEnabled = b.StrideWarpEnabled;
+    s.StrideWeight = b.StrideWarpWeight;
+    s.StrideMin = b.StrideScaleMin;
+    s.StrideMax = b.StrideScaleMax;
+    s.PelvisAdjust = b.StridePelvisAdjust;
+    return s;
 }
 
 } // namespace IK
