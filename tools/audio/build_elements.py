@@ -62,13 +62,38 @@ def fit_variant(v):
     pre = pre[len(pre) - want:] if len(pre) >= want else np.concatenate([np.zeros((want - len(pre), pre.shape[1]), np.float32), pre])
     pre = adsp.fade(pre, int(0.025 * SR), 0)
     if v.get("motion_only"):
-        # Only the movement: the cloth / gear up to the arrival, faded out as the hands settle - no thud on reaching the idle
-        # pose (user: heard while moving, nothing extra once the hands come to rest).
-        y = adsp.fade(pre, 0, int(min(0.09, 0.3 * len(pre) / SR) * SR))
-        y = adsp.pitch(y, v.get("pitch", 0.0))
-        return apply_eq(y, v)
+        return motion_variant(v, pre, post)
     y = np.concatenate([pre, post])
     y = adsp.fade(y, 0, int(max(0.03, 0.25 * (b - m) / SR) * SR))
+    y = adsp.pitch(y, v.get("pitch", 0.0))
+    return apply_eq(y, v)
+
+
+def motion_variant(v, pre, post):
+    """A draw / holster heard over the movement, nothing extra on arriving at the idle pose (user, 2026-10-03), and never cut:
+    the gun's own handling recording runs on through the arrival but is eased down by settle_db (default -15) from 50 ms before
+    it to 25 ms after, so its ring dies away instead of thudding or stopping dead; then a zip / webbing layer (v.zip: a real
+    gear recording, its level matched to the handling's and set by gain_db) spans the movement and fades out just past the
+    arrival; the whole thing ends on a long fade."""
+    want = len(pre)                                               # the arrival, in the file
+    y = np.concatenate([pre, post])
+    t = np.arange(len(y))
+    r0, r1 = want - int(0.05 * SR), want + int(0.025 * SR)
+    k = np.clip((t - r0) / max(r1 - r0, 1), 0.0, 1.0)
+    settle = 10 ** (v.get("settle_db", -15.0) / 20)
+    y = (y * (1.0 - (1.0 - settle) * (k * k * (3.0 - 2.0 * k)))[:, None]).astype(np.float32)   # smoothstep ease (a gain curve)
+    z = v.get("zip")
+    if z:
+        g = src(z["src"])
+        zl = want + int(z.get("over_ms", 120.0) / 1000 * SR)
+        a = int(z["t0"] * SR) if "t0" in z else max(0, adsp.first_onset(np.asarray(g)) - int(0.01 * SR))
+        zz = adsp.cut(g, a, a + zl)
+        zz = apply_eq(zz, z)
+        zz = adsp.fade(zz, int(0.03 * SR), int(min(0.18, 0.4 * len(zz) / SR) * SR))
+        rms = lambda s: float(np.sqrt(np.mean(np.square(s)) + 1e-12))
+        zz = zz * (rms(y[:want]) / rms(zz[:min(len(zz), want)])) * 10 ** (z.get("gain_db", -3.0) / 20)
+        y = adsp.mix([(y, 0, 0.0), (zz.astype(np.float32), int(z.get("delay_ms", 0.0) / 1000 * SR), 0.0)])
+    y = adsp.fade(y, 0, int(min(0.25, 0.5 * max(len(y) - want, 1) / SR) * SR))
     y = adsp.pitch(y, v.get("pitch", 0.0))
     return apply_eq(y, v)
 
@@ -147,7 +172,7 @@ def main():
                 snap = recipe.get("snap")
                 if snap and elem not in snap.get("skip", []):   # mechanical contacts: harder attack, shorter ring
                     y = adsp.transient_shape(y, snap.get("attack", 0.0), snap.get("sustain", 0.0))
-                y = abuild.finish(y, "action", trim_bleed="layers" not in v)   # (a composite's later layers are meant)
+                y = abuild.finish(y, "action", trim_bleed="layers" not in v and not v.get("motion_only"))   # (a composite's later layers are meant)
                 rel = f"{g['dir']}/{elem}_{n}.wav"
                 extra = {"gun": gun, "element": elem, "variant": n, "source": describe(v)}
                 if "anchor_ms" in v:                 # the recipe says where the contact is (a composite of several)
