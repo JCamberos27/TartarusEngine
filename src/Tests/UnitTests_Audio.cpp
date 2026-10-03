@@ -587,14 +587,14 @@ void TestFoleyFootstepCadence() {
         WeaponAudio::Get().ClearHistory();
         for (float time = 0.0f; time < 5.0f; time += dt) {
             const float h[2] = {gait(time, 0), gait(time, 1)};
-            CHECK(fo.NpcFeet(world, 7, glm::vec3(0.0f), h, false, dt));
+            CHECK(fo.NpcFeet(world, 7, glm::vec3(0.0f), h, false, 2.0f, dt));
         }
         const auto& hist = WeaponAudio::Get().History();
         CHECK(hist.size() >= 8 && hist.size() <= 10 && !hist.front().At2D);
         t.StepsFromFeet = false;
         fo.StartForTest(t);
         const float h[2] = {0.1f, 0.1f};
-        CHECK(!fo.NpcFeet(world, 7, glm::vec3(0.0f), h, false, dt));
+        CHECK(!fo.NpcFeet(world, 7, glm::vec3(0.0f), h, false, 2.0f, dt));
         t = FoleyAudioComponent{};
     }
     {
@@ -614,6 +614,20 @@ void TestFoleyFootstepCadence() {
             if (up.Update(h2, dt, 0.05f, 0.02f) & 1) { ++downs; landedAt = i; }
         }
         CHECK(downs == 1 && landedAt >= 24 && landedAt <= 26); // the tread is reached at frame 24
+        // A walk's first stride lifts the ankle ~3.5 cm: a step when moving (Foot Lift Moving), none when standing (Foot Lift Height).
+        FoleyAudioComponent ft;
+        CHECK(FoleyAudio::LiftHeight(ft, 2.0f) == ft.FootLiftMoving && FoleyAudio::LiftHeight(ft, 0.0f) == ft.FootLiftHeight);
+        auto shuffle = [&](float lift) {
+            FootContactDetector sd;
+            int n = 0;
+            for (int i = 0; i < 40; ++i) {
+                const float y = 0.088f + 0.035f * std::max(0.0f, std::sin(3.14159265f * (i * dt) / 0.4f));
+                const float h2[2] = {y, 0.088f};
+                n += sd.Update(h2, dt, lift, ft.FootContactHeight) & 1;
+            }
+            return n;
+        };
+        CHECK(shuffle(FoleyAudio::LiftHeight(ft, 2.0f)) == 1 && shuffle(FoleyAudio::LiftHeight(ft, 0.0f)) == 0);
     }
     WeaponAudio::Get().Stop();
 }

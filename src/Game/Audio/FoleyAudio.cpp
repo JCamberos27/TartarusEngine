@@ -182,7 +182,7 @@ void FoleyAudio::UpdatePlayer(World& world, float dt, const FoleyPlayerInput& in
     int n = 0;
     if (in.Grounded && fromFeet) {
         // The body's own feet: a step each time one touches down, at any speed (turning on the spot steps too).
-        const int down = m_Feet.Update(in.FootHeight, dt, m_T.FootLiftHeight, m_T.FootContactHeight);
+        const int down = m_Feet.Update(in.FootHeight, dt, LiftHeight(m_T, speed), m_T.FootContactHeight);
         n = (down & 1) + ((down >> 1) & 1);
     } else if (in.Grounded && speed >= m_T.MinStepSpeed) {
         n = m_Stepper.Advance(speed * dt, StepDistance(m_T, in));
@@ -228,12 +228,12 @@ void FoleyAudio::NpcWalk(World& world, int id, const glm::vec3& feet, const glm:
         NpcStep(world, feet, sprint);
 }
 
-bool FoleyAudio::NpcFeet(World& world, int id, const glm::vec3& feet, const float height[2], bool sprint, float dt) {
+bool FoleyAudio::NpcFeet(World& world, int id, const glm::vec3& feet, const float height[2], bool sprint, float speed, float dt) {
     if (!m_Active || !m_T.Enabled) return true;
     if (!m_T.StepsFromFeet) return false;
     // Tracked at any range (the feet stay primed), heard within the NPC step range.
     FootContactDetector& fd = m_NpcFeet[id];
-    const int down = fd.Update(height, dt, m_T.FootLiftHeight, m_T.FootContactHeight);
+    const int down = fd.Update(height, dt, LiftHeight(m_T, speed), m_T.FootContactHeight);
 #pragma warning(suppress : 4996)
     static const bool feetLog = std::getenv("FOLEY_FEET_LOG") != nullptr;
     if (feetLog) {
