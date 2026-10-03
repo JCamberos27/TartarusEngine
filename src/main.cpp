@@ -68,7 +68,7 @@
 #include "CrosshairOverlay.h"
 #include "WeaponFxRenderer.h" // the weapon's laser and bullet holes
 #include "BulletHoles.h"
-#include "AudioTest.h" // --audio-test
+#include "Audio/AudioTest.h" // --audio-test
 #include "ShellCasings.h"
 #include "AI/NpcDirector.h"     // the enemy squad
 #include "Combat/CombatFx.h"
