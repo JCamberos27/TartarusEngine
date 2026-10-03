@@ -14,9 +14,13 @@
     ],
     "variant_spread_db": 3.0,
     "gun_db": {
-      "_doc": "dB on a gun's whole report (close / sub / mech) over the 0 dB reference, which is measured without it: the 12-gauge hits harder than the 5.45 carbine (user, 2026-10-03: 'it should be loud'). Its close layer is built denser (remington870_fire.json close.target / max_gr_db) to leave the peak headroom for it.",
+      "_doc": "dB on a gun's report (one number, or per layer close / sub / mech) over the 0 dB reference, which is measured without it: the 12-gauge hits harder than the 5.45 carbine (user, 2026-10-03: 'it should be loud'). Its close layer is built denser (remington870_fire.json close.target / max_gr_db) to leave the peak headroom for it. The 870's sub +5: the boom (user: 'more low end, boomier, more impactful').",
       "ak": 0.0,
-      "870": 2.0
+      "870": {
+        "close": 2.0,
+        "sub": 5.0,
+        "mech": 2.0
+      }
     },
     "gun_tail_db": {
       "_doc": "dB on a gun's tails (fire_tail, fire_tail_<space>) over levels.shot.tail: the 12-gauge's recorded tails ring longer than the carbine's (user, 2026-10-03: 'a huge trail anywhere you go').",

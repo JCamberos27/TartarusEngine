@@ -9,9 +9,14 @@
    "hp": 42,
    "eq": [
     [
-     95,
-     3.0,
+     90,
+     4.5,
      0.8
+    ],
+    [
+     180,
+     2.0,
+     0.9
     ],
     [
      450,
@@ -61,7 +66,7 @@
      "src": "Mk14EBR/S_Mk14EBR_Fire_02.WAV",
      "dur": 0.45,
      "lp": 650,
-     "gain_db": -7
+     "gain_db": -4
     }
    },
    {
@@ -85,7 +90,7 @@
      "src": "Mk14EBR/S_Mk14EBR_Fire_03.WAV",
      "dur": 0.45,
      "lp": 650,
-     "gain_db": -7
+     "gain_db": -4
     },
     "pitch": -0.6
    },
@@ -110,7 +115,7 @@
      "src": "Mk14EBR/S_Mk14EBR_Fire_01.WAV",
      "dur": 0.45,
      "lp": 650,
-     "gain_db": -7
+     "gain_db": -4
     },
     "pitch": 0.6
    },
@@ -135,7 +140,7 @@
      "src": "Mk14EBR/S_Mk14EBR_Fire_02.WAV",
      "dur": 0.45,
      "lp": 650,
-     "gain_db": -7
+     "gain_db": -4
     },
     "pitch": -0.3
    },
@@ -160,7 +165,7 @@
      "src": "Mk14EBR/S_Mk14EBR_Fire_03.WAV",
      "dur": 0.45,
      "lp": 650,
-     "gain_db": -7
+     "gain_db": -4
     },
     "pitch": 0.3
    },
@@ -185,7 +190,7 @@
      "src": "Mk14EBR/S_Mk14EBR_Fire_01.WAV",
      "dur": 0.45,
      "lp": 650,
-     "gain_db": -6
+     "gain_db": -4
     },
     "pitch": -0.4
    },
@@ -210,7 +215,7 @@
      "src": "Mk14EBR/S_Mk14EBR_Fire_02.WAV",
      "dur": 0.45,
      "lp": 650,
-     "gain_db": -7
+     "gain_db": -4
     },
     "pitch": 0.9
    },
@@ -235,7 +240,7 @@
      "src": "Mk14EBR/S_Mk14EBR_Fire_03.WAV",
      "dur": 0.45,
      "lp": 650,
-     "gain_db": -7
+     "gain_db": -4
     },
     "pitch": 0.15
    }
@@ -243,9 +248,9 @@
   "target": -12.0,
   "max_gr_db": 8.0,
   "decay": {
-   "hold_ms": 30,
-   "to_db": -30,
-   "over_ms": 220
+   "hold_ms": 35,
+   "to_db": -28,
+   "over_ms": 240
   }
  },
  "mech": {
@@ -300,7 +305,7 @@
   ]
  },
  "sub": {
-  "length_s": 0.4,
+  "length_s": 0.55,
   "variants": [
    {
     "src": "SRM-12/Actions/S_SRM-12_ShotOnly.wav",
@@ -395,9 +400,9 @@
    }
   ],
   "decay": {
-   "hold_ms": 35,
+   "hold_ms": 60,
    "to_db": -24,
-   "over_ms": 200
+   "over_ms": 320
   }
  },
  "tail": {

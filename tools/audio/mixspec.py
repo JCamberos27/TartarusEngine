@@ -100,8 +100,11 @@ def _layer_of(e):
 
 def gun_db(e):
     """The gun's own offset on its report (reference.gun_db, e.g. the shotgun above the carbine); 0 for anything else."""
-    m = re.match(r"snd\.(ak|870)\.fire_", e["key"])
-    return float(SPEC["reference"].get("gun_db", {}).get(m.group(1), 0.0)) if m else 0.0
+    m = re.match(r"snd\.(ak|870)\.fire_(close|sub|mech)\b", e["key"])
+    if not m:
+        return 0.0
+    g = SPEC["reference"].get("gun_db", {}).get(m.group(1), 0.0)
+    return float(g.get(m.group(2), 0.0) if isinstance(g, dict) else g)   # one number for the report, or per layer
 
 
 def shot_comp_db(e, lufs_m, extra_db=0.0):
@@ -121,9 +124,9 @@ def shot_layer_mix_db(e, lufs_m, with_gun=True):
     return SPEC["reference"]["shot_layer_db"][_layer_of(e)] + shot_comp_db(e, lufs_m, g) + g
 
 
-def compute_reference(files, lufs_of):
+def compute_reference(files, lufs_of, with_gun=False):
     """Mean over variant combinations (both guns) of the LUFS-M of close + sub + mech at their mix_db, summed from t = 0.
-    -> (unscaled shot LUFS-M, per-gun means)."""
+    -> (unscaled shot LUFS-M, per-gun means). with_gun: as played, the guns' own offsets (reference.gun_db) included."""
     per_gun = {}
     for gun in ("ak", "870"):
         by = {l: [e for e in files if e["key"] == f"snd.{gun}.fire_{l}"] for l in SHOT_LAYERS}
@@ -136,7 +139,7 @@ def compute_reference(files, lufs_of):
                 e = v[i % len(v)]
                 x = read_wav(e)
                 n = min(len(mix), len(x))
-                mix[:n] += (x[:n] * 10 ** (shot_layer_mix_db(e, lufs_of(e), with_gun=False) / 20)).astype(np.float32)
+                mix[:n] += (x[:n] * 10 ** (shot_layer_mix_db(e, lufs_of(e), with_gun=with_gun) / 20)).astype(np.float32)
             res.append(adsp.lufs(mix)[1])
         per_gun[gun] = float(np.mean(res))
     if not per_gun:
@@ -151,6 +154,7 @@ def compute(files, lufs_of=None):
     peak + mix_db, before the engine's Player Gain). Close / sub / mech are their nominal offset + the clamped compensation."""
     lufs_of = lufs_of or (lambda e: e["lufs_m_max"])
     shot, per_gun = compute_reference(files, lufs_of)
+    _, per_gun_played = compute_reference(files, lufs_of, with_gun=True)
     ref = {"shot": shot, "played": shot + 20 * math.log10(SPEC["reference"]["player_gain"])}
     raw = {}
     for e in files:
@@ -178,6 +182,8 @@ def compute(files, lufs_of=None):
     out = {f: round(v, 2) for f, v in out.items()}
     meta = {"spec": "recipes/mix.json", "shot_lufs_m": round(shot, 2), "reference_lufs_m": round(ref["played"], 2),
             "player_gain": SPEC["reference"]["player_gain"], "per_gun_lufs_m": {g: round(v, 2) for g, v in per_gun.items()},
+            # each gun's report as played over the 0 dB reference (its reference.gun_db, measured): --audio-test's spec for it
+            "gun_offset_db": {g: round(per_gun_played[g] - shot, 2) for g in per_gun_played},
             "distance": distance_models(ref)}
     return out, meta
 
