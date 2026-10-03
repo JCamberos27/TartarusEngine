@@ -1,5 +1,6 @@
 #include "UnitTestSupport.h"
 
+#include "AI/NavMesh.h"
 #include "AI/NpcDirector.h"
 #include "AssetLibrary.h"
 #include "ComponentRegistry.h"
@@ -14,6 +15,7 @@
 
 #include <algorithm>
 
+#include <chrono>
 #include <cmath>
 #include <cstring>
 #include <map>
@@ -497,6 +499,49 @@ void TestRagdollNewFieldsRoundTrip() {
     CHECK(seen == 1);
 }
 
+// A level with a lot of walls: the open edges are merged into whole walls (nothing left that joins end to start), and
+// finding them is quick - the merge was cubic, and it ran on the first Play frame (~70 ms on the Sandbox).
+void TestNavBoundaryEdgesMergeQuickly() {
+    std::vector<float> verts;
+    std::vector<int> tris;
+    auto quadFloor = [&](float h) {
+        const int b = (int)verts.size() / 3;
+        const float v[4][3] = {{-70, 0, -70}, {-70, 0, 70}, {70, 0, 70}, {70, 0, -70}};
+        for (auto& p : v) { verts.push_back(p[0]); verts.push_back(h); verts.push_back(p[2]); }
+        for (int i : {0, 1, 2, 0, 2, 3}) tris.push_back(b + i);
+    };
+    quadFloor(0.0f);
+    static const int f[12][3] = {{0, 2, 1}, {1, 2, 3}, {4, 5, 6}, {5, 7, 6}, {0, 1, 4}, {1, 5, 4},
+                                 {2, 6, 3}, {3, 6, 7}, {0, 4, 2}, {2, 4, 6}, {1, 3, 5}, {3, 7, 5}};
+    for (int gx = 0; gx < 24; ++gx)
+        for (int gz = 0; gz < 24; ++gz) {
+            const float cx = -57.5f + 5.0f * (float)gx, cz = -57.5f + 5.0f * (float)gz, hs = 1.0f + 0.05f * (float)((gx + gz) % 5);
+            const int b = (int)verts.size() / 3;
+            for (int i = 0; i < 8; ++i) {
+                verts.push_back(cx + ((i & 1) ? hs : -hs));
+                verts.push_back((i & 2) ? 2.5f : 0.0f);
+                verts.push_back(cz + ((i & 4) ? hs : -hs));
+            }
+            for (const auto& t : f) { tris.push_back(b + t[0]); tris.push_back(b + t[1]); tris.push_back(b + t[2]); }
+        }
+    NavMesh nav;
+    std::string error;
+    CHECK(nav.Build(verts, tris, NavBuildSettings(), &error));
+    std::vector<NavMesh::Edge> edges;
+    const auto t0 = std::chrono::steady_clock::now();
+    nav.BoundaryEdges(edges);
+    const double ms = std::chrono::duration<double, std::milli>(std::chrono::steady_clock::now() - t0).count();
+    CHECK(edges.size() >= 24 * 24 * 4);
+    CHECK(ms < 250.0); // the cubic merge needed seconds here
+    int joinable = 0;
+    for (size_t i = 0; i < edges.size(); ++i)
+        for (size_t j = 0; j < edges.size(); ++j) {
+            if (i == j || glm::length(edges[i].B - edges[j].A) > 0.02f || glm::dot(edges[i].Out, edges[j].Out) < 0.999f) continue;
+            if (glm::dot(glm::normalize(edges[i].B - edges[i].A), glm::normalize(edges[j].B - edges[j].A)) >= 0.999f) ++joinable;
+        }
+    CHECK(joinable == 0);
+}
+
 } // namespace
 
 void RegisterRagdollTests(UnitTestSupport::TestList& tests) {
@@ -512,4 +557,5 @@ void RegisterRagdollTests(UnitTestSupport::TestList& tests) {
     tests.push_back({"RagdollHandsAndFeetRestOnTheFloor", TestRagdollHandsAndFeetRestOnTheFloor});
     tests.push_back({"NpcFlinchKicksAndSettles", TestNpcFlinchKicksAndSettles});
     tests.push_back({"RagdollNewFieldsRoundTrip", TestRagdollNewFieldsRoundTrip});
+    tests.push_back({"NavBoundaryEdgesMergeQuickly", TestNavBoundaryEdgesMergeQuickly});
 }

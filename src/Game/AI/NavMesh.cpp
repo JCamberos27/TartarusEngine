@@ -8,12 +8,14 @@
 #include <Recast.h>
 
 #include <algorithm>
+#include <unordered_map>
 #include <cfloat>
 #include <cmath>
 #include <cstring>
 #include <fstream>
 #include <map>
 #include <random>
+#include <set>
 
 namespace {
 
@@ -315,20 +317,69 @@ void NavMesh::BoundaryEdges(std::vector<Edge>& out) const {
             }
         }
     }
-    // Merge runs of collinear edges that share an end (Recast splits long walls into short pieces).
-    bool merged = true;
-    while (merged) {
-        merged = false;
-        for (size_t i = 0; i < out.size() && !merged; ++i)
-            for (size_t j = 0; j < out.size() && !merged; ++j) {
-                if (i == j || glm::length(out[i].B - out[j].A) > 0.02f || glm::dot(out[i].Out, out[j].Out) < 0.999f) continue;
-                const glm::vec3 d0 = glm::normalize(out[i].B - out[i].A), d1 = glm::normalize(out[j].B - out[j].A);
-                if (glm::dot(d0, d1) < 0.999f) continue;
-                out[i].B = out[j].B;
-                out.erase(out.begin() + (long long)j);
-                merged = true;
-            }
+    // Merge runs of collinear edges that share an end (Recast splits long walls into short pieces). The first
+    // pair in (i, j) order that joins is merged, then the search starts again: done with the candidate lists
+    // (edges whose end meets another's start, facing the same way) kept per edge and only the touched edges
+    // refreshed after a merge - the plain restart-from-scratch double loop was cubic (~70 ms on the Sandbox).
+    const size_t n = out.size();
+    std::vector<char> alive(n, 1);
+    std::vector<std::vector<int>> cand(n);
+    std::vector<int> best(n, -1);
+    std::unordered_map<long long, std::vector<int>> starts; // edge start points in 5 cm cells
+    auto cellKey = [](const glm::vec3& p) {
+        const long long x = (long long)std::floor(p.x * 20.0f), y = (long long)std::floor(p.y * 20.0f), z = (long long)std::floor(p.z * 20.0f);
+        return x * 73856093ll ^ y * 19349663ll ^ z * 83492791ll;
+    };
+    for (size_t i = 0; i < n; ++i) starts[cellKey(out[i].A)].push_back((int)i);
+    std::vector<std::vector<int>> rev(n); // rev[j]: the edges that list j as a candidate (stale entries are harmless)
+    std::set<int> ready;                  // edges that have a merge waiting, smallest first
+    auto findCands = [&](size_t i) {
+        cand[i].clear();
+        const glm::vec3& e = out[i].B;
+        for (int dx = -1; dx <= 1; ++dx)
+            for (int dy = -1; dy <= 1; ++dy)
+                for (int dz = -1; dz <= 1; ++dz) {
+                    const auto it = starts.find(cellKey(e + glm::vec3((float)dx, (float)dy, (float)dz) * 0.05f));
+                    if (it == starts.end()) continue;
+                    for (int j : it->second)
+                        if ((size_t)j != i && !(glm::length(e - out[(size_t)j].A) > 0.02f) && !(glm::dot(out[i].Out, out[(size_t)j].Out) < 0.999f))
+                            cand[i].push_back(j);
+                }
+        std::sort(cand[i].begin(), cand[i].end());
+        cand[i].erase(std::unique(cand[i].begin(), cand[i].end()), cand[i].end());
+        for (int j : cand[i]) rev[(size_t)j].push_back((int)i);
+    };
+    auto findBest = [&](size_t i) {
+        best[i] = -1;
+        ready.erase((int)i);
+        for (int j : cand[i]) {
+            if (!alive[(size_t)j]) continue;
+            const glm::vec3 d0 = glm::normalize(out[i].B - out[i].A), d1 = glm::normalize(out[(size_t)j].B - out[(size_t)j].A);
+            if (glm::dot(d0, d1) < 0.999f) continue;
+            best[i] = j;
+            ready.insert((int)i);
+            return;
+        }
+    };
+    for (size_t i = 0; i < n; ++i) { findCands(i); findBest(i); }
+    while (!ready.empty()) {
+        const size_t i = (size_t)*ready.begin();
+        const int j = best[i];
+        out[i].B = out[(size_t)j].B;
+        alive[(size_t)j] = 0;
+        ready.erase((int)j);
+        findCands(i);
+        // Whoever listed i (its direction changed) or j (gone) may now pair differently, and so may i itself.
+        std::vector<int> touched = rev[i];
+        touched.insert(touched.end(), rev[(size_t)j].begin(), rev[(size_t)j].end());
+        touched.push_back((int)i);
+        for (int x : touched)
+            if (alive[(size_t)x]) findBest((size_t)x);
     }
+    size_t w = 0;
+    for (size_t i = 0; i < n; ++i)
+        if (alive[i]) out[w++] = out[i];
+    out.resize(w);
 }
 
 void NavMesh::DebugTriangles(std::vector<float>& out) const {
