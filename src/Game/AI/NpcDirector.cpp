@@ -250,6 +250,7 @@ bool NpcDirector::Start(World& world, AssetLibrary& assets, const FirstPersonCon
         m_HoldSettings.FootNormalEase = fpb.NpcFootNormalEase;
         m_HoldSettings.FootIKFade = fpb.NpcFootIKFade;
         m_HoldSettings.Spine = fpb.Spine; // per-bone spine weights and limits
+        m_HoldSettings.FootSlide = IK::FootSlideFrom(fpb); // foot pinning and stride warping
     }
     m_Active = true;
     m_Started = false;
