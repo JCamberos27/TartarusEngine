@@ -45,6 +45,9 @@ public:
     // #171 - mixer buses (Unity's Audio Mixer groups, fixed set). Every voice plays through one;
     // its volume scales everything on that bus. Values are serialized by index.
     enum class Bus { SFX = 0, Music = 1, Ambient = 2, UI = 3, Voice = 4 };
+    // #171 - Unity's rolloff modes. Logarithmic = miniaudio's inverse model; Linear fades to silence exactly at maxDistance;
+    // Exponential = (d / min)^-rolloff past min: a fixed dB per doubling of distance (6.02 x rolloff), the mix's distance model.
+    enum class Rolloff { Logarithmic = 0, Linear = 1, Exponential = 2 };
     static constexpr int kBusCount = 5;
     static void SetBusVolume(Bus bus, float volume);  // 0..1
     static float BusVolume(Bus bus);
@@ -61,6 +64,15 @@ public:
         float Cutoff = 20000.0f;   // the occlusion low-pass it starts with (Hz), and the gain after it (so the first block is already right)
         float Gain = 1.0f;
         int ReverbBus = 0;         // which reverb the send feeds (see SetReverbSendBus)
+        // Set before the voice starts, so its first block is already placed, pitched and ducked (setting them after Play() let
+        // the audio thread render a block unspatialised at the voice's full calibrated gain).
+        float Pitch = 1.0f;
+        float Duck = 1.0f;         // the mix's duck gain (the voice's fader; SetDuck moves it)
+        bool Spatial = false;
+        glm::vec3 Position{0.0f};
+        Rolloff RolloffMode = Rolloff::Logarithmic;
+        float MinDistance = 1.0f, MaxDistance = 40.0f;
+        float RolloffFactor = 1.0f; // Exponential only
     };
     static SoundHandle Play(const std::string& path, float volume = 1.0f, bool loop = false, Bus bus = Bus::SFX,
                             float startOffsetSeconds = 0.0f, const VoiceFx* fx = nullptr);
@@ -119,6 +131,7 @@ public:
     static void SetMasterLimiter(const LimiterSettings& s);
     static LimiterSettings GetMasterLimiter();
     static float TakeLimiterGainReductionDb(); // the deepest gain reduction since the last call (dB, >= 0)
+    static float TakeGlueGainReductionDb();    // the glue compressor's, the same way
 
     // Level meters: the master (after the limiter), each mixer bus, the reverb return. K-weighted loudness and peak.
     enum MeterId { MeterMaster = 0, MeterBusFirst = 1, MeterWet = 1 + kBusCount, MeterCount = 2 + kBusCount };
@@ -144,6 +157,8 @@ public:
     // All no-ops / false for a stale or invalid handle.
     static void Stop(SoundHandle handle);
     static void SetVolume(SoundHandle handle, float volume);
+    // The mix's duck gain on a voice (linear, on top of its volume), ramped over `seconds` from where it is now.
+    static void SetDuck(SoundHandle handle, float gain, float seconds);
     static void SetPitch(SoundHandle handle, float pitch);
     static bool IsPlaying(SoundHandle handle);
 
@@ -153,10 +168,7 @@ public:
     // past maxDistance, rolloff shaping the curve between them (miniaudio's inverse model).
     static void SetAttenuation(SoundHandle handle, float minDistance, float maxDistance,
                                float rolloff = 1.0f);
-    // #171 - Unity's rolloff modes. Logarithmic = the inverse model above; Linear fades to
-    // silence exactly at maxDistance.
-    enum class Rolloff { Logarithmic = 0, Linear = 1 };
-    static void SetRolloff(SoundHandle handle, Rolloff mode, float minDistance, float maxDistance);
+    static void SetRolloff(SoundHandle handle, Rolloff mode, float minDistance, float maxDistance, float factor = 1.0f);
     // Turns positional audio off (2D: no panning, no distance falloff) or back on.
     static void SetSpatial(SoundHandle handle, bool spatial);
     // #171 - Doppler. Unity's Doppler Level (0 = off, 1 = physical): scales the pitch shift from

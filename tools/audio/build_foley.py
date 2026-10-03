@@ -3,7 +3,7 @@
   uv run --with numpy --with scipy --with soundfile --with pedalboard --with pyloudnorm python tools/audio/build_foley.py
 
 Writes project/assets/Audio/Foley/<category>/<element>_<n>.wav, key snd.foley.<category>.<element>.
-Categories: weapon (ads_in ads_out equip unequip firemode), move (jump land_light land_heavy sprint_loop),
+Categories: weapon (ads_in ads_out equip unequip firemode), move (jump land_light land_heavy),
 step_<surface> (walk run land).
 """
 import glob
@@ -20,6 +20,51 @@ import build_elements as be
 SR = adsp.SR
 
 
+STEP_BANDS = ((40, 120), (120, 300), (300, 900), (900, 2500), (2500, 6000), (6000, 16000))
+
+
+def step_features(seg):
+    """(band profile dB re the total, unit envelope of the first 250 ms at 4 ms) of one footstep."""
+    m = adsp.to_mono(seg)
+    f, p = signal.welch(m, SR, nperseg=2048)
+    tot = p[f >= 40].sum() + 1e-20
+    bands = np.array([10 * np.log10(max(p[(f >= a) & (f < b)].sum() / tot, 1e-12)) for a, b in STEP_BANDS])
+    env = np.abs(m)
+    k = int(0.004 * SR)
+    env = np.array([env[i:i + k].max() for i in range(0, min(len(env), int(0.25 * SR)), k)])
+    return bands, env / (np.linalg.norm(env) + 1e-12)
+
+
+def diverse_steps(x, peaks, n, dur, seed):
+    """Of the isolated steps at `peaks` (sample indices), the n that sound most unlike each other while staying in one voice:
+    steps whose band balance strays more than 3 dB from the pool's median (another shoe angle, a scuff, a knock) are dropped,
+    then farthest-point selection on envelope shape (heel / toe timing, ring) and band balance picks the set. Deterministic.
+    Returns indices into `peaks`."""
+    feats = []
+    for t in peaks:
+        a = max(0, t - int(0.04 * SR))
+        feats.append(step_features(np.asarray(x[a:a + int(dur * SR)])))
+    if len(feats) <= n:
+        return list(range(len(feats)))
+    B = np.array([b for b, _ in feats])
+    med = np.median(B, axis=0)
+    loud = med > -25.0                                   # only the bands a step actually has
+    ok = [i for i in range(len(feats)) if np.all(np.abs(B[i] - med)[loud] <= 3.0)]
+    if len(ok) < n:
+        ok = sorted(range(len(feats)), key=lambda i: float(np.abs(B[i] - med)[loud].max()))[:max(n, len(ok))]
+
+    def dist(i, j):
+        ei, ej = feats[i][1], feats[j][1]
+        m = min(len(ei), len(ej))
+        return (1.0 - float(np.dot(ei[:m], ej[:m]))) + 0.05 * float(np.abs(B[i] - B[j])[loud].mean())
+    start = min(ok, key=lambda i: float(np.abs(B[i] - med)[loud].mean()))   # the most typical step first
+    chosen = [start]
+    while len(chosen) < n:
+        best = max((i for i in ok if i not in chosen), key=lambda i: min(dist(i, c) for c in chosen))
+        chosen.append(best)
+    return sorted(chosen)
+
+
 def pick_steps(x, n, dur, isolated_gap, seed, lo_db=-4.5):
     """Cut n isolated, similar-level footsteps out of a long walk/run sequence."""
     m = adsp.to_mono(x)
@@ -32,10 +77,7 @@ def pick_steps(x, n, dur, isolated_gap, seed, lo_db=-4.5):
     for i in range(1, len(pk) - 1):
         if (pk[i] - pk[i - 1]) / SR >= isolated_gap and (pk[i + 1] - pk[i]) / SR >= isolated_gap * 0.7 and lv[i] >= lo_db:
             good.append(i)
-    rng = adsp.deterministic_rng("steps", seed)
-    rng.shuffle(good)
-    # spread: take steps from different parts of the file
-    good = sorted(good[:n * 2])[::2][:n] if len(good) >= n * 2 else sorted(good[:n])
+    good = [good[j] for j in diverse_steps(x, [pk[i] for i in good], n, dur, seed)]
     out = []
     for i in good:
         t = pk[i] / SR
@@ -110,43 +152,6 @@ def land_heavy(v):
     return adsp.fade(y, int(0.0005 * SR), int(0.12 * SR))
 
 
-def sprint_loop(v):
-    """Sprint gear loop from REAL cloth movement + gear rattle: `steps` footfall pulses per loop, each a real cloth slice
-    (plus a half-step swish) and rattle hits; everything is placed with a circular wrap so the loop point is seamless."""
-    r = adsp.deterministic_rng("sprint", v["seed"])
-    n = int(v["dur"] * SR)
-    cloths = [("AK105/Actions/S_AK105_Draw.WAV", 0.30, 0.45), ("AK105/Actions/S_AK105_Holster.WAV", 0.43, 0.45),
-              ("AK105/Actions/S_AK105_Inspect.WAV", 0.24, 0.45), ("sonniss/Shapeforms/CLOTHING_MATERIAL_MOVEMENT_08", 0.0, 0.33),
-              ("Herrington_11-87/Actions/S_Herrington_11-87_Draw.WAV", 0.10, 0.5)]
-    out = np.zeros((n, 2), np.float32)
-
-    def place(s, t, gain):
-        padded = np.zeros((n, 2), np.float32)
-        m = min(len(s), n)
-        padded[:m] = s[:m]
-        nonlocal out
-        pos = int(t * n) % n
-        if pos < int(0.04 * SR) or pos > n - int(0.04 * SR):     # no onset on the loop point itself
-            pos = int(0.06 * SR)
-        out += np.roll(padded, pos, axis=0) * 10 ** (gain / 20)
-    for k in range(v["steps"]):
-        for half, g in ((0.0, 0.0), (0.5, -5.0)):
-            p, tt, d = cloths[int(r.integers(len(cloths)))]
-            s = adsp.slice_at(be.src(p), tt, d, snap=False, fade_in_ms=40)
-            s = adsp.normalize_peak(s, -6.0)
-            s = adsp.pitch(s, float(r.uniform(-1.5, 1.5)))
-            place(s, (k + half) / v["steps"] + float(r.uniform(-0.03, 0.03)), g + float(r.uniform(-2, 0)))
-    donors = [("AK105/Actions/S_AK105_Reload_Empty.WAV", 3.994, 0.22), ("AK105/Actions/S_AK105_Reload_Empty.WAV", 3.926, 0.28),
-              ("AK105/Actions/S_AK105_Inspect.WAV", 4.322, 0.30), ("AK105/Actions/S_AK105_MagCheck.WAV", 3.720, 0.25)]
-    for k in range(v["rattle"]):
-        p, tt, d = donors[int(r.integers(len(donors)))]
-        s = adsp.slice_at(be.src(p), tt, d)
-        s = adsp.normalize_peak(s, -9.0)
-        s = adsp.pitch(s, float(r.uniform(-2, 1)))
-        place(s, k / v["rattle"] + float(r.uniform(-0.04, 0.04)), float(r.uniform(-12, -6)) + 6)
-    return out
-
-
 def main():
     cfg = json.load(open(os.path.join(abuild.HERE, "recipes", "foley.json")))
     entries = []
@@ -159,25 +164,13 @@ def main():
                 else:
                     y = be.render_variant(v)
                 uses = adsp.take_uses()
-                y = abuild.finish(y, "foley")
+                y = abuild.finish(y, "foley", trim_bleed=not elem.startswith("land"))   # (a landing's rattle after the thud is meant)
                 extra = {"element": elem, "category": cat, "variant": n, "source": be.describe(v)}
                 if not elem.startswith("land"):
                     extra["anchor_ms"] = 0.0           # handling / jump cloth: starts with the action, no contact
                 e = abuild.emit(f"Foley/{cat}/{elem}_{n}.wav", y, f"snd.foley.{cat}.{elem}", "foley", extra, sources=uses)
                 entries.append(e)
                 print(f"{e['file']:42s} LUFS-M {e['lufs_m_max']:6.1f}  TP {e['true_peak_dbtp']:5.1f}  {e['length_s']:.2f}s")
-    for elem, variants in cfg["loops"].items():
-        for n, v in enumerate(variants, 1):
-            adsp.take_uses()
-            y = sprint_loop(v)
-            uses = adsp.take_uses()
-            y = abuild.finish(y, "loop", loop=True)
-            e = abuild.emit(f"Foley/move/{elem}_{n}.wav", y, f"snd.foley.move.{elem}", "loop",
-                            {"element": elem, "category": "move", "variant": n, "loop": True, "anchor_ms": 0.0,
-                             "source": f"real cloth + rattle slices, seed={v['seed']} steps_per_loop={v['steps']}"},
-                            sources=uses)
-            entries.append(e)
-            print(f"{e['file']:42s} LUFS-M {e['lufs_m_max']:6.1f}  TP {e['true_peak_dbtp']:5.1f}  {e['length_s']:.2f}s loop")
     build_steps(cfg, entries)
     print("manifest files:", abuild.update_manifest(entries, ["Foley/"]))
 

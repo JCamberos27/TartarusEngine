@@ -25,6 +25,10 @@ public:
     // whole range.
     static float MomentaryMax(const std::vector<float>& stereo, int sampleRate, size_t from, size_t to);
     static double KWeightedEnergy(const std::vector<float>& stereo, int sampleRate); // sum of squares after K-weighting, both channels
+    // BS.1770-4 integrated loudness (400 ms blocks, 75 % overlap, absolute gate -70 LUFS, relative gate -10 LU); -120 when silent.
+    static float Integrated(const std::vector<float>& stereo, int sampleRate);
+    // EBU Tech 3342 loudness range: the 10th to 95th percentile of the 3 s short-term loudness (1 s hop), gated at -70 and -20 LU.
+    static float ShortTermRange(const std::vector<float>& stereo, int sampleRate);
     static float RmsDb(const std::vector<float>& stereo, size_t from, size_t to); // plain RMS of both channels, dBFS
     static float PeakDb(const std::vector<float>& stereo, size_t from, size_t to);
 
@@ -39,6 +43,7 @@ private:
         }
     };
     static void Design(int rate, Biquad& shelf, Biquad& hp);
+    static std::vector<double> BlockPowers(const std::vector<float>& stereo, int sampleRate); // K-weighted mean square per 100 ms
     int m_Rate, m_Block;
     Biquad m_Shelf[2], m_Hp[2];
     double m_Sum = 0.0;

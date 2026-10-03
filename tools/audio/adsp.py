@@ -201,6 +201,64 @@ def slice_at(x, t, dur, preroll_ms=3.0, fade_in_ms=1.5, fade_out_ms=None, snap=T
     return fade(y, int(fade_in_ms / 1000 * SR), fo)
 
 
+def secondary_event(x, settle_db=-24.0, rise_db=-14.0, min_gap_ms=25.0):
+    """Sample index where a NEW event starts after the main one (the next sound of the source bleeding into a slice): after the
+    file's peak the envelope first decays below `settle_db` (re the peak), then climbs back above `rise_db`. None when clean."""
+    m = np.abs(to_mono(x))
+    a = math.exp(-1.0 / (0.004 * SR))
+    env = signal.lfilter([1 - a], [1, -a], m)
+    pk = int(np.argmax(env))
+    ref = env[pk] + 1e-12
+    db = 20 * np.log10(env / ref + 1e-12)
+    i = pk + int(min_gap_ms / 1000 * SR)
+    settled = np.where(db[i:] < settle_db)[0]
+    if settled.size == 0:
+        return None
+    s = i + int(settled[0])
+    rise = np.where(db[s:] > rise_db)[0]
+    if rise.size == 0:
+        return None
+    r = s + int(rise[0])
+    back = np.where(db[s:r][::-1] < settle_db)[0]   # where the new event leaves the floor
+    return r - int(back[0]) if back.size else r
+
+
+def trim_secondary(x, fade_ms=12.0):
+    """End a one-shot just before a second event of its source (see secondary_event), with a short fade."""
+    k = secondary_event(x)
+    if k is None:
+        return x
+    n = max(int(fade_ms / 1000 * SR), 1)
+    return fade(np.asarray(x)[:max(k, n + 1)], 0, n)
+
+
+def expand_floor(x, below_db=-50.0, depth_db=24.0, release_ms=80.0, hold_ms=30.0):
+    """Downward expander for a one-shot's noise floor: where the (peak-held, 80 ms release) envelope sits more than `below_db` under the
+    file's peak, the gain slides down by up to `depth_db`. The sound itself (anything louder) passes untouched."""
+    m = np.abs(to_mono(x))
+    pk = float(m.max()) + 1e-12
+    att = math.exp(-1.0 / (0.0005 * SR))
+    rel = math.exp(-1.0 / (release_ms / 1000 * SR))
+    env = np.empty_like(m)
+    e, hold = 0.0, 0
+    hn = int(hold_ms / 1000 * SR)
+    for i, v in enumerate(m):                       # (per sample: one-shots are short)
+        if v > e:
+            e = att * e + (1 - att) * v
+            hold = hn
+        elif hold > 0:
+            hold -= 1
+        else:
+            e = rel * e + (1 - rel) * v
+        env[i] = e
+    lvl = 20 * np.log10(env / pk + 1e-12)
+    under = np.clip(below_db - lvl, 0.0, depth_db)  # dB under the threshold, capped at the depth
+    g = 10 ** (-under / 20)
+    sm = math.exp(-1.0 / (0.003 * SR))
+    g = signal.lfilter([1 - sm], [1, -sm], g)      # (smooth the gain: no zipper)
+    return (np.asarray(x) * g[:, None]).astype(np.float32)
+
+
 def remove_dc(x, hz=18.0):
     sos = signal.butter(2, hz, "hp", fs=SR, output="sos")
     return signal.sosfilt(sos, x - x.mean(axis=0), axis=0).astype(np.float32)

@@ -1383,6 +1383,7 @@ void FirstPersonPresentation::Tick(float dt, const glm::vec3& velocity, bool spr
     // The aim press drives the corner peek, even up against cover; tucked off a wall with no
     // peek to lean out on, the sights can't come up.
     if (aiming != m_Aiming && m_Equipped && !ac->HasTag(K::kTagHidden)) WeaponSound(*this, m_SetFile, m_Options.OwnerView, aiming ? "ads_in" : "ads_out");
+    if (m_Options.OwnerView) WeaponAudio::Get().SetFocus(aiming && m_Equipped); // the mix's focus: the world comes forward down the sights
     m_Aiming = aiming;
     if (WallBlocked() && m_PeekSide == 0) aiming = false;
     ac->SetBool(K::kAim, aiming);

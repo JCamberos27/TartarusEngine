@@ -44,8 +44,6 @@ void FoleyAudio::Start(World& world) {
 
 void FoleyAudio::Stop() {
     m_NpcSteppers.clear();
-    if (m_Loop != AudioEngine::InvalidHandle) WeaponAudio::Get().Player().Backend().Stop(m_Loop);
-    m_Loop = AudioEngine::InvalidHandle;
     m_Active = false;
 }
 
@@ -83,12 +81,6 @@ float FoleyAudio::LandGain(const FoleyAudioComponent& t, float fallSpeed) {
     if (fallSpeed < t.LandMinSpeed) return 0.0f;
     const float k = std::clamp((fallSpeed - t.LandMinSpeed) / std::max(t.LandFullSpeed - t.LandMinSpeed, 1e-3f), 0.0f, 1.0f);
     return t.LandVolume * (0.3f + 0.7f * k);
-}
-
-float FoleyAudio::ClothLoopGain(const FoleyAudioComponent& t, float planarSpeed, bool grounded) {
-    if (!grounded || planarSpeed <= t.ClothLoopMinSpeed) return 0.0f;
-    const float k = std::clamp((planarSpeed - t.ClothLoopMinSpeed) / std::max(t.RunSpeed - t.ClothLoopMinSpeed, 1e-3f), 0.0f, 1.0f);
-    return t.ClothLoopVolume * k;
 }
 
 std::string FoleyAudio::SurfaceAt(World& world, const glm::vec3& feet) const {
@@ -155,28 +147,6 @@ void FoleyAudio::UpdatePlayer(World& world, float dt, const FoleyPlayerInput& in
             const std::string surface = "step_" + SurfaceAt(world, in.Feet);
             for (int i = 0; i < n; ++i) Play(surface, element, gain, true, in.Feet);
             m_Steps += n;
-        }
-    }
-    // The sprint cloth / gear loop rides the speed.
-    WeaponAudio& wa = WeaponAudio::Get();
-    const float loopGain = ClothLoopGain(m_T, speed, in.Grounded) * m_T.Volume;
-    if (loopGain > 0.01f && m_Loop == AudioEngine::InvalidHandle && wa.Active()) {
-        SoundSet* s = wa.FoleySet("move", "sprint_loop");
-        if (!s->Files.empty()) {
-            SoundVoice v;
-            v.File = s->Files.front();
-            v.Volume = loopGain;
-            v.Loop = true;
-            v.Bus = s->Bus;
-            m_Loop = wa.Player().Backend().Start(v);
-            wa.Note(s->Key, true);
-        }
-    } else if (m_Loop != AudioEngine::InvalidHandle) {
-        if (loopGain <= 0.01f) {
-            wa.Player().Backend().Stop(m_Loop);
-            m_Loop = AudioEngine::InvalidHandle;
-        } else {
-            wa.Player().Backend().SetVolume(m_Loop, loopGain);
         }
     }
     m_PrevGrounded = in.Grounded;

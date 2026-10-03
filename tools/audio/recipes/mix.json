@@ -1,49 +1,145 @@
 {
-  "_doc": "Mix spec: the playback level of every sound key in dB relative to the player's own gunshot (close + sub + mech as played = 0 dB). tools/audio/mixspec.py turns it into `mix_db` on every manifest entry: mix_db = spec level - (the file's LUFS-M relative to the shot reference), so the engine only multiplies each voice by 10^(mix_db/20) and the hierarchy below is exactly what is heard. Edit a number here, run `python apply_mix.py`, run check_audio.py. Metric: LUFS-M max (loudest 400 ms, BS.1770) of the file vs of the reference.",
+  "_doc": "Mix spec: the playback level of every sound key in dB relative to the player's own gunshot (close + sub + mech as played = 0 dB), arranged in tiers at least ~4 dB apart so each layer reads (docs/AUDIO.md, \"Mix hierarchy\"). tools/audio/mixspec.py turns it into `mix_db` on every manifest entry: mix_db = spec level - (the file's LUFS-M relative to the shot reference), so the engine only multiplies each voice by 10^(mix_db/20) and the hierarchy below is exactly what is heard (3D sounds: at their distance model's reference distance). Edit a number here, run `python apply_mix.py`, run check_audio.py. Metric: LUFS-M max (loudest 400 ms, BS.1770) of the file vs of the reference.",
   "reference": {
     "_doc": "The 0 dB point = the player's shot as played: the close + sub + mech layers of a gun at their nominal layer offsets (+ the per-file compensation to the layer's loudness target, so variants play equally loud), summed from t = 0, then x player_gain (the engine's Weapon Audio Player Gain, applied to every layer of the player's own report). Measured by mixspec.py over every variant combination of both guns (mean) and stored in the manifest as `mix.shot_lufs_m` (unscaled) / `mix.reference_lufs_m` (after player_gain). Shot layers (close / sub / mech / tail / far) are therefore stored relative to the UNSCALED sum: the engine applies player_gain on top for the player and its distance curves for soldiers. Every other key plays at set volume 1.0 x mix_db with no other loudness math.",
     "player_gain": 0.75,
-    "shot_layer_db": {"close": 0.0, "sub": -2.0, "mech": -3.0},
-    "shot_layer_comp_db": [-2.0, 1.5],
+    "shot_layer_db": {
+      "close": 0.0,
+      "sub": -2.0,
+      "mech": -3.0
+    },
+    "shot_layer_comp_db": [
+      -2.0,
+      1.5
+    ],
     "variant_spread_db": 3.0
   },
   "levels": {
-    "_doc": "dB relative to the player's shot (= 0). Values are the level at the stated reference distance where one is given (distance_refs); the engine calibrates its rolloff so the voice is at exactly this level at that distance.",
-    "shot": {"tail": -9.0, "far": -15.0},
-    "npc_shot": -6.0,
-    "flyby": -9.0,
-    "impact": -12.0,
-    "flesh": -10.0,
-    "body_fall": -12.0,
-    "melee_hit": -6.0,
-    "melee_swing": -16.0,
+    "_doc": "dB relative to the player's shot (= 0). Tiers: 0 anchor (your gun) / 1 threat (soldiers' shots, flybys) / 2 feedback (hit markers, melee, flesh) / 3 your hands (reloads, gear) / 4 world (impacts, bodies) / 5 movement (steps; soldiers' louder than yours, see distance.npc_step) / 6 debris (casings) / 7 beds (ambience). A 3D category's level holds at its distance model's ref_m (see \"distance\").",
+    "shot": {
+      "tail": -10.0,
+      "far": -15.0
+    },
+    "npc_shot": -8.0,
+    "flyby": -6.0,
+    "impact": -14.0,
+    "flesh": -12.0,
+    "body_fall": -14.0,
+    "melee_hit": -8.0,
+    "melee_swing": -18.0,
     "elements": {
-      "bolt_release": -14.0, "mag_in": -14.0, "pump_fwd": -14.0, "shell_load_chamber": -14.0,
-      "mag_out": -17.0, "pump_back": -17.0, "shell_insert": -17.0, "bolt_back": -17.0, "mag_tap": -17.0, "mag_release": -17.0,
-      "handle": -21.0, "cloth": -25.0, "dry_fire": -18.0,
-      "draw": -18.0, "holster": -18.0,
+      "bolt_release": -15.0,
+      "mag_in": -15.0,
+      "pump_fwd": -15.0,
+      "shell_load_chamber": -15.0,
+      "mag_out": -19.0,
+      "pump_back": -19.0,
+      "shell_insert": -19.0,
+      "bolt_back": -19.0,
+      "mag_tap": -19.0,
+      "mag_release": -19.0,
+      "handle": -23.0,
+      "cloth": -27.0,
+      "dry_fire": -17.0,
+      "draw": -18.0,
+      "holster": -18.0,
       "firemode": -22.0
     },
-    "gear": {"ads_in": -22.0, "ads_out": -22.0, "equip": -22.0, "unequip": -22.0, "firemode": -22.0},
-    "step": {"walk": -24.0, "run": -20.0, "land": -16.0},
-    "move": {"jump": -20.0, "land_light": -16.0, "land_heavy": -12.0, "sprint_loop": -24.0},
-    "casing": -24.0,
-    "ui": {"hitmarker": -16.0, "hitmarker_kill": -13.0},
-    "ambience": {"_doc": "per class: the beds are quiet under a fight; the tonal indoor hums sit lower than the outdoor beds", "indoor_small": -30.0, "indoor_large": -30.0, "outdoor_urban": -28.0, "outdoor_open": -27.0},
+    "gear": {
+      "ads_in": -24.0,
+      "ads_out": -24.0,
+      "equip": -22.0,
+      "unequip": -22.0,
+      "firemode": -22.0
+    },
+    "step": {
+      "walk": -22.0,
+      "run": -18.0,
+      "land": -16.0
+    },
+    "move": {
+      "jump": -24.0,
+      "land_light": -18.0,
+      "land_heavy": -14.0
+    },
+    "casing": -26.0,
+    "ui": {
+      "hitmarker": -14.0,
+      "hitmarker_kill": -11.0
+    },
+    "ambience": {
+      "_doc": "per class: under everything that matters (your own walk sits 4-6 dB above), ducked further under gunfire",
+      "indoor_small": -34.0,
+      "indoor_large": -34.0,
+      "outdoor_urban": -32.0,
+      "outdoor_open": -32.0
+    },
     "ir": 0.0
   },
   "surface_db": {
     "_doc": "Added to footsteps (walk / run / land), casings and impacts of that surface / material. Flesh and everything not on a surface has none.",
-    "metal": 2.0, "glass": 1.0, "wood": 0.0, "concrete": 0.0, "tile": 0.0, "dirt": -2.0, "carpet": -5.0, "water": -1.0, "ice": 0.0
+    "metal": 2.0,
+    "glass": 1.0,
+    "wood": 0.0,
+    "concrete": 0.0,
+    "tile": 0.0,
+    "dirt": -2.0,
+    "carpet": -5.0,
+    "water": -1.0,
+    "ice": 0.0
   },
   "space_db": {
     "_doc": "Added to the gunshot tail of that space (the generic fire_tail is outdoor_urban's 0).",
-    "indoor_small": -2.0, "indoor_large": 1.0, "outdoor_urban": 0.0, "outdoor_open": -3.0
+    "indoor_small": -2.0,
+    "indoor_large": 1.0,
+    "outdoor_urban": 0.0,
+    "outdoor_open": -3.0
   },
-  "distance_refs": {
-    "_doc": "Distance (m) at which the level above holds: the engine's rolloff for that set is calibrated to 0 dB attenuation there.",
-    "npc_shot": 10.0,
-    "impact": 5.0,
-    "body_fall": 5.0
+  "distance": {
+    "_doc": "How each category's level holds in the world (3D). The level above holds at ref_m; closer it rises slope_db per halving up to near_db above it (the close-up cap: nothing but your own gun reaches 0 dB), farther it falls slope_db per doubling, held past max_m. offset_db is added to the files' own level when they play in the world: a soldier's shot is your shot's files (offset = npc_shot level - the shot layers' level, computed by mixspec.py), a soldier's step is the step files louder than yours (gameplay: you have to hear them), their gear a little quieter than yours. The engine derives each set's Min Distance (where the cap is reached) and an exponential rolloff from these.",
+    "npc_shot": {
+      "ref_m": 10.0,
+      "near_db": 5.0,
+      "slope_db": 5.0,
+      "max_m": 250.0
+    },
+    "flyby": {
+      "ref_m": 1.0,
+      "near_db": 0.0,
+      "slope_db": 4.0,
+      "max_m": 15.0
+    },
+    "impact": {
+      "ref_m": 5.0,
+      "near_db": 5.0,
+      "slope_db": 6.0,
+      "max_m": 60.0
+    },
+    "body_fall": {
+      "ref_m": 5.0,
+      "near_db": 5.0,
+      "slope_db": 6.0,
+      "max_m": 40.0
+    },
+    "npc_step": {
+      "ref_m": 5.0,
+      "near_db": 4.0,
+      "slope_db": 4.5,
+      "max_m": 35.0,
+      "offset_db": 3.0
+    },
+    "npc_gear": {
+      "ref_m": 4.0,
+      "near_db": 3.0,
+      "slope_db": 6.0,
+      "max_m": 25.0,
+      "offset_db": -2.0
+    },
+    "casing": {
+      "ref_m": 1.5,
+      "near_db": 0.0,
+      "slope_db": 8.0,
+      "max_m": 20.0
+    }
   }
 }

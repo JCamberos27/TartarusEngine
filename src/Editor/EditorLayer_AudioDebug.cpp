@@ -1,5 +1,6 @@
-// Window > Audio: what the audio engine is doing right now (docs/AUDIO.md, "Audio panel"). Read-only: the levels live on the
-// Reverb Bus / Reverb Zone components and in Project Settings > Audio.
+// Window > Audio: what the audio engine is doing right now (docs/AUDIO.md, "Audio panel"), and in Play the live mix: the ducking, the
+// focus, the air, the master's glue and trim and the rooms' wet levels, tuned by ear while playing ("Keep after Play" writes them to
+// the scene's Audio Mix / Reverb Bus components when Play stops).
 #include "EditorLayer.h"
 #include "EditorLayerInternal.h"
 #include "EditorPanels.h"
@@ -7,6 +8,9 @@
 #include "EditorUIPrimitives.h"
 #include "AudioEngine.h"
 #include "Audio/WeaponAudio.h"
+#include "Components.h"
+#include "Log.h"
+#include "World.h"
 
 #include <imgui.h>
 #include <algorithm>
@@ -36,7 +40,26 @@ std::string ShortName(const std::string& path) {
 
 } // namespace
 
-void EditorLayer::DrawAudioDebugPanel() {
+void EditorLayer::ApplyKeptAudioMix(World& world) {
+    if (!m_AudioKeepMix && !m_AudioKeepBus) return;
+    entt::entity host = entt::null, mixHost = entt::null;
+    for (const entt::entity e : world.Registry.view<ReverbBusComponent>()) { host = e; break; }
+    for (const entt::entity e : world.Registry.view<AudioMixComponent>()) { mixHost = e; break; }
+    if (mixHost == entt::null) mixHost = host;
+    if (host == entt::null && mixHost == entt::null) {
+        Log::Warn("Audio: the mix was not kept - the scene has no Reverb Bus or Audio Mix component to hold it.");
+    } else {
+        PushUndo(world, "Keep Audio Mix");
+        if (m_AudioKeepBus && host != entt::null) world.Registry.get<ReverbBusComponent>(host) = *m_AudioKeepBus;
+        if (m_AudioKeepMix && mixHost != entt::null) world.Registry.emplace_or_replace<AudioMixComponent>(mixHost, *m_AudioKeepMix);
+        Log::Info("Audio: kept the mix tuned in Play (Audio Mix / Reverb Bus); save the scene to keep it.");
+    }
+    m_AudioKeepMix.reset();
+    m_AudioKeepBus.reset();
+}
+
+void EditorLayer::DrawAudioDebugPanel(World& world) {
+    (void)world;
     if (!m_ShowAudioDebug) return;
     ImGui::SetNextWindowSize(ImVec2(380.0f * m_UIScale, 460.0f * m_UIScale), ImGuiCond_FirstUseEver);
     PushTabChromeText();
@@ -67,6 +90,94 @@ void EditorLayer::DrawAudioDebugPanel() {
                              "the mix is hitting the ceiling: lower the loud sets rather than relying on the limiter.");
     ImGui::Text("Voices: %d", AudioEngine::VoiceCount());
 
+    WeaponAudio& wa = WeaponAudio::Get();
+    EditorUIPrimitives::SectionHeader("Mix");
+    if (!wa.Active()) {
+        ImGui::TextDisabled("Enter Play to see the mix move and tune it live.");
+    } else {
+        const MixDucker& duck = wa.Ducker();
+        m_AudioGlueHold = std::max(AudioEngine::TakeGlueGainReductionDb(), m_AudioGlueHold - 20.0f * ImGui::GetIO().DeltaTime);
+        m_AudioGlueHold = std::max(m_AudioGlueHold, 0.0f);
+        char overlay[48];
+        std::snprintf(overlay, sizeof(overlay), "duck %.0f%%", 100.0f * duck.Amount());
+        ImGui::ProgressBar(duck.Amount(), ImVec2(bar, 0.0f), overlay);
+        ImGui::SameLine();
+        ImGui::Text("focus %.0f%%  glue %.1f dB", 100.0f * duck.Focus(), m_AudioGlueHold);
+        if (ImGui::IsItemHovered())
+            EditorUI::SetTooltip("Duck: how far the groups under a loud event are down (a shot, a round cracking past).\n"
+                                 "Focus: aiming down sights. Glue: the master compressor's gain reduction (a few dB in a fight is right).");
+        int voices[(int)MixGroup::Count];
+        wa.Player().GroupVoices(voices);
+        for (int g = 1; g < (int)MixGroup::Count; ++g)
+            ImGui::BulletText("%-10s %2d voice(s)  %+.1f dB", MixGroupName((MixGroup)g), voices[g], duck.GainDb((MixGroup)g));
+        AudioMixComponent& m = wa.Mix();
+        bool changed = false;
+        ImGui::PushItemWidth(150.0f * m_UIScale);
+        if (ImGui::TreeNode("Ducking")) {
+            changed |= ImGui::Checkbox("Enabled", &m.DuckEnabled);
+            changed |= ImGui::SliderFloat("Beds dB", &m.DuckBedDb, 0.0f, 24.0f, "%.1f");
+            changed |= ImGui::SliderFloat("Own foley dB", &m.DuckOwnFoleyDb, 0.0f, 24.0f, "%.1f");
+            changed |= ImGui::SliderFloat("Casings dB", &m.DuckDebrisDb, 0.0f, 24.0f, "%.1f");
+            changed |= ImGui::SliderFloat("Impacts dB", &m.DuckWorldDb, 0.0f, 24.0f, "%.1f");
+            changed |= ImGui::SliderFloat("Threshold dB", &m.DuckThresholdDb, -40.0f, 0.0f, "%.1f");
+            changed |= ImGui::SliderFloat("Full at dB", &m.DuckFullDb, -30.0f, 6.0f, "%.1f");
+            changed |= ImGui::SliderFloat("Hold s", &m.DuckHold, 0.0f, 2.0f, "%.2f");
+            changed |= ImGui::SliderFloat("Release s", &m.DuckRelease, 0.05f, 5.0f, "%.2f");
+            ImGui::TreePop();
+        }
+        if (ImGui::TreeNode("Focus (aiming)")) {
+            changed |= ImGui::Checkbox("Enabled", &m.FocusEnabled);
+            changed |= ImGui::SliderFloat("Beds dB", &m.FocusBedDb, 0.0f, 24.0f, "%.1f");
+            changed |= ImGui::SliderFloat("Own foley dB", &m.FocusOwnFoleyDb, 0.0f, 24.0f, "%.1f");
+            changed |= ImGui::SliderFloat("Casings dB", &m.FocusDebrisDb, 0.0f, 24.0f, "%.1f");
+            changed |= ImGui::SliderFloat("Time s", &m.FocusTime, 0.01f, 2.0f, "%.2f");
+            ImGui::TreePop();
+        }
+        if (ImGui::TreeNode("Air (distance)")) {
+            changed |= ImGui::Checkbox("Enabled", &m.AirEnabled);
+            changed |= ImGui::SliderFloat("Start m", &m.AirStartDistance, 1.0f, 200.0f, "%.0f");
+            changed |= ImGui::SliderFloat("Exponent", &m.AirExponent, 0.1f, 2.0f, "%.2f");
+            changed |= ImGui::SliderFloat("Min Hz", &m.AirMinHz, 500.0f, 20000.0f, "%.0f");
+            ImGui::TreePop();
+        }
+        if (ImGui::TreeNode("Master")) {
+            changed |= ImGui::SliderFloat("Trim dB", &m.MasterTrimDb, -24.0f, 12.0f, "%.1f");
+            changed |= ImGui::Checkbox("Glue", &m.GlueEnabled);
+            changed |= ImGui::SliderFloat("Glue threshold dB", &m.GlueThresholdDb, -40.0f, 0.0f, "%.1f");
+            changed |= ImGui::SliderFloat("Glue ratio", &m.GlueRatio, 1.0f, 10.0f, "%.1f");
+            changed |= ImGui::SliderFloat("Glue attack ms", &m.GlueAttackMs, 0.1f, 200.0f, "%.1f");
+            changed |= ImGui::SliderFloat("Glue release ms", &m.GlueReleaseMs, 10.0f, 2000.0f, "%.0f");
+            ImGui::TreePop();
+        }
+        if (ImGui::TreeNode("Rooms (reverb wet)")) {
+            ReverbBusComponent& b = wa.Bus();
+            ImGui::SliderFloat("Small room dB", &b.WetIndoorSmallDb, -40.0f, 6.0f, "%.1f");
+            ImGui::SliderFloat("Hall dB", &b.WetIndoorLargeDb, -40.0f, 6.0f, "%.1f");
+            ImGui::SliderFloat("Urban dB", &b.WetOutdoorUrbanDb, -40.0f, 6.0f, "%.1f");
+            ImGui::SliderFloat("Open dB", &b.WetOutdoorOpenDb, -40.0f, 6.0f, "%.1f");
+            ImGui::SliderFloat("Trim dB", &b.WetTrimDb, -12.0f, 6.0f, "%.1f");
+            ImGui::TreePop();
+        }
+        ImGui::PopItemWidth();
+        if (changed) wa.ApplyMix();
+        if (ImGui::Button("Keep after Play")) {
+            m_AudioKeepMix = std::make_shared<AudioMixComponent>(wa.Mix());
+            m_AudioKeepBus = std::make_shared<ReverbBusComponent>(wa.Bus());
+        }
+        if (ImGui::IsItemHovered())
+            EditorUI::SetTooltip("Writes these values to the scene's Audio Mix and Reverb Bus components when Play stops (Play otherwise\n"
+                                 "restores the scene as it was). Save the scene after.");
+        ImGui::SameLine();
+        if (ImGui::Button("Defaults")) {
+            m = AudioMixComponent{};
+            wa.ApplyMix();
+        }
+        if (m_AudioKeepMix) {
+            ImGui::SameLine();
+            ImGui::TextDisabled("kept: written on Stop");
+        }
+    }
+
     EditorUIPrimitives::SectionHeader("Reverb");
     for (int bus = 0; bus < 2; ++bus) {
         const AudioEngine::ReverbInfo info = AudioEngine::GetReverbInfo(bus);
@@ -86,7 +197,6 @@ void EditorLayer::DrawAudioDebugPanel() {
                                 st.TotalMicros / (double)st.Callbacks, st.MaxMicros, (unsigned long long)st.LateBlocks);
     }
 
-    WeaponAudio& wa = WeaponAudio::Get();
     EditorUIPrimitives::SectionHeader("Listener's space");
     if (!wa.Active()) {
         ImGui::TextDisabled("Enter Play to see the zones, the reverb's target and the ambience.");
