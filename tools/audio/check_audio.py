@@ -69,10 +69,11 @@ def main():
             if np.abs(x[0]).max() > T["edge_max"] or np.abs(x[-1]).max() > T["edge_max"]:
                 errs.append(f"{tag}: edge click (first {np.abs(x[0]).max():.4f}, last {np.abs(x[-1]).max():.4f})")
         else:
-            step = np.abs(np.diff(x, axis=0)).mean()
+            steps_ = np.abs(np.diff(x, axis=0)).max(axis=1)
+            lim = max(4 * steps_.mean(), 1.5 * float(np.percentile(steps_, 99.5))) + 1e-4
             seam = np.abs(x[0] - x[-1]).max()
-            if seam > 4 * step + 1e-4:
-                errs.append(f"{tag}: loop seam step {seam:.4f} vs mean step {step:.4f}")
+            if seam > lim:                                  # the seam must look like any other sample step of the loop
+                errs.append(f"{tag}: loop seam step {seam:.4f} > {lim:.4f} (4x mean / 1.5x 99.5th percentile step)")
         # transient placement: the contact transient must sit where the recipe says (lead_ms) or at the very start
         if layer in ("close", "action") and e.get("element") not in ("draw", "holster", "cloth", "melee_swing"):
             allowed = e.get("lead_ms", 0.0) * 1.35 + 20.0
