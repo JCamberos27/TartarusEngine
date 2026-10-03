@@ -1315,7 +1315,7 @@ void FirstPersonPresentation::ToggleFireMode() {
         return;
     }
     m_FullAuto = !m_FullAuto;
-    WeaponSound(*this, m_SetFile, m_Options.OwnerView, "fire_mode");
+    WeaponSound(*this, m_SetFile, m_Options.OwnerView, "firemode");
     Log::Info(std::string("Fire mode: ") + (m_FullAuto ? "Full-Auto" : "Semi-Auto"));
 }
 

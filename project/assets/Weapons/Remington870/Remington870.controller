@@ -147,8 +147,16 @@
         {
           "events": [
             {
-              "name": "snd.870.regrip",
-              "time": 0.3
+              "name": "snd.870.cloth@0",
+              "time": 0.0263
+            },
+            {
+              "name": "snd.870.handle@67",
+              "time": 0.5259
+            },
+            {
+              "name": "snd.870.handle@67",
+              "time": 0.8681
             }
           ],
           "loop": false,
@@ -205,12 +213,40 @@
         {
           "events": [
             {
-              "name": "snd.870.inspect_move",
-              "time": 0.2
+              "name": "snd.870.handle@67",
+              "time": 0.09
             },
             {
-              "name": "snd.870.inspect_rattle",
-              "time": 0.6
+              "name": "snd.870.cloth@0",
+              "time": 0.57
+            },
+            {
+              "name": "snd.870.handle@67",
+              "time": 0.6133
+            },
+            {
+              "name": "snd.870.pump_back@91",
+              "time": 0.6252
+            },
+            {
+              "name": "snd.870.cloth@0",
+              "time": 0.76
+            },
+            {
+              "name": "snd.870.pump_fwd@97",
+              "time": 0.7606
+            },
+            {
+              "name": "snd.870.cloth@0",
+              "time": 0.8133
+            },
+            {
+              "name": "snd.870.handle@67",
+              "time": 0.8333
+            },
+            {
+              "name": "snd.870.handle@67",
+              "time": 0.9233
             }
           ],
           "loop": false,
@@ -238,8 +274,32 @@
         {
           "events": [
             {
-              "name": "snd.870.shell_check",
-              "time": 0.4
+              "name": "snd.870.cloth@0",
+              "time": 0.0417
+            },
+            {
+              "name": "snd.870.pump_back@91",
+              "time": 0.2192
+            },
+            {
+              "name": "snd.870.cloth@0",
+              "time": 0.2222
+            },
+            {
+              "name": "snd.870.pump_fwd@97",
+              "time": 0.5013
+            },
+            {
+              "name": "snd.870.cloth@0",
+              "time": 0.5069
+            },
+            {
+              "name": "snd.870.cloth@0",
+              "time": 0.6111
+            },
+            {
+              "name": "snd.870.handle@67",
+              "time": 0.8402
             }
           ],
           "loop": false,
@@ -268,8 +328,16 @@
         {
           "events": [
             {
-              "name": "snd.870.melee_swing",
-              "time": 0.25
+              "name": "snd.870.melee_swing@0",
+              "time": 0.0
+            },
+            {
+              "name": "snd.870.melee_hit@0",
+              "time": 0.1194
+            },
+            {
+              "name": "snd.870.cloth@0",
+              "time": 0.2537
             }
           ],
           "loop": false,
@@ -297,8 +365,8 @@
         {
           "events": [
             {
-              "name": "snd.870.draw",
-              "time": 0.05
+              "name": "snd.870.draw@340",
+              "time": 0.1217
             }
           ],
           "loop": false,
@@ -326,8 +394,8 @@
         {
           "events": [
             {
-              "name": "snd.870.holster",
-              "time": 0.1
+              "name": "snd.870.holster@290",
+              "time": 0.3429
             }
           ],
           "loop": false,
@@ -378,16 +446,16 @@
         {
           "events": [
             {
-              "name": "snd.870.pump_back",
-              "time": 0.1
+              "name": "snd.870.pump_back@91",
+              "time": 0.0581
             },
             {
               "name": "Eject",
               "time": 0.2
             },
             {
-              "name": "snd.870.pump_forward",
-              "time": 0.55
+              "name": "snd.870.pump_fwd@97",
+              "time": 0.277
             }
           ],
           "loop": false,
@@ -416,8 +484,12 @@
         {
           "events": [
             {
-              "name": "snd.870.shell_grab",
-              "time": 0.3
+              "name": "snd.870.cloth@0",
+              "time": 0.1667
+            },
+            {
+              "name": "snd.870.handle@67",
+              "time": 0.8329
             }
           ],
           "loop": false,
@@ -446,20 +518,44 @@
         {
           "events": [
             {
-              "name": "snd.870.pump_back",
-              "time": 0.15
+              "name": "snd.870.pump_back@91",
+              "time": 0.0285
             },
             {
-              "name": "snd.870.shell_grab",
-              "time": 0.45
+              "name": "snd.870.cloth@0",
+              "time": 0.1313
+            },
+            {
+              "name": "snd.870.handle@67",
+              "time": 0.1687
+            },
+            {
+              "name": "snd.870.handle@67",
+              "time": 0.2562
+            },
+            {
+              "name": "snd.870.shell_load_chamber@41",
+              "time": 0.3221
+            },
+            {
+              "name": "snd.870.handle@67",
+              "time": 0.5812
+            },
+            {
+              "name": "snd.870.pump_fwd@97",
+              "time": 0.7012
             },
             {
               "name": "LoadRound",
               "time": 0.74
             },
             {
-              "name": "snd.870.shell_insert",
-              "time": 0.74
+              "name": "snd.870.cloth@0",
+              "time": 0.8125
+            },
+            {
+              "name": "snd.870.handle@67",
+              "time": 0.9249
             }
           ],
           "loop": false,
@@ -488,16 +584,32 @@
         {
           "events": [
             {
-              "name": "snd.870.shell_grab",
-              "time": 0.15
+              "name": "snd.870.cloth@0",
+              "time": 0.0143
+            },
+            {
+              "name": "snd.870.shell_insert@18",
+              "time": 0.1421
+            },
+            {
+              "name": "snd.870.shell_insert@18",
+              "time": 0.2421
+            },
+            {
+              "name": "snd.870.handle@67",
+              "time": 0.5998
             },
             {
               "name": "LoadRound",
               "time": 0.6
             },
             {
-              "name": "snd.870.shell_insert",
-              "time": 0.6
+              "name": "snd.870.cloth@0",
+              "time": 0.7714
+            },
+            {
+              "name": "snd.870.handle@67",
+              "time": 0.8998
             }
           ],
           "loop": false,
@@ -526,16 +638,32 @@
         {
           "events": [
             {
-              "name": "snd.870.shell_grab",
-              "time": 0.12
+              "name": "snd.870.cloth@0",
+              "time": 0.0102
+            },
+            {
+              "name": "snd.870.shell_insert@18",
+              "time": 0.1015
+            },
+            {
+              "name": "snd.870.shell_insert@18",
+              "time": 0.173
+            },
+            {
+              "name": "snd.870.handle@67",
+              "time": 0.408
             },
             {
               "name": "LoadRound",
               "time": 0.43
             },
             {
-              "name": "snd.870.shell_insert",
-              "time": 0.43
+              "name": "snd.870.cloth@0",
+              "time": 0.5612
+            },
+            {
+              "name": "snd.870.handle@67",
+              "time": 0.7652
             }
           ],
           "loop": false,
@@ -564,8 +692,12 @@
         {
           "events": [
             {
-              "name": "snd.870.pump_forward",
-              "time": 0.35
+              "name": "snd.870.cloth@0",
+              "time": 0.06
+            },
+            {
+              "name": "snd.870.handle@67",
+              "time": 0.4597
             }
           ],
           "loop": false,

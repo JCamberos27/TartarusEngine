@@ -135,8 +135,16 @@
         {
           "events": [
             {
-              "name": "snd.ak.regrip",
-              "time": 0.3
+              "name": "snd.ak.cloth@0",
+              "time": 0.275
+            },
+            {
+              "name": "snd.ak.handle@4",
+              "time": 0.5948
+            },
+            {
+              "name": "snd.ak.handle@4",
+              "time": 0.9948
             }
           ],
           "loop": false,
@@ -189,12 +197,40 @@
         {
           "events": [
             {
-              "name": "snd.ak.inspect_move",
-              "time": 0.2
+              "name": "snd.ak.cloth@0",
+              "time": 0.0177
             },
             {
-              "name": "snd.ak.inspect_rattle",
-              "time": 0.6
+              "name": "snd.ak.handle@4",
+              "time": 0.1092
+            },
+            {
+              "name": "snd.ak.cloth@0",
+              "time": 0.4043
+            },
+            {
+              "name": "snd.ak.handle@4",
+              "time": 0.5241
+            },
+            {
+              "name": "snd.ak.handle@4",
+              "time": 0.5773
+            },
+            {
+              "name": "snd.ak.bolt_back@59",
+              "time": 0.6008
+            },
+            {
+              "name": "snd.ak.bolt_release@49",
+              "time": 0.7414
+            },
+            {
+              "name": "snd.ak.cloth@0",
+              "time": 0.7908
+            },
+            {
+              "name": "snd.ak.handle@4",
+              "time": 0.8822
             }
           ],
           "loop": false,
@@ -222,12 +258,36 @@
         {
           "events": [
             {
-              "name": "snd.ak.mag_check_out",
-              "time": 0.25
+              "name": "snd.ak.cloth@0",
+              "time": 0.0192
             },
             {
-              "name": "snd.ak.mag_check_in",
-              "time": 0.7
+              "name": "snd.ak.handle@4",
+              "time": 0.0646
+            },
+            {
+              "name": "snd.ak.mag_release@7",
+              "time": 0.0906
+            },
+            {
+              "name": "snd.ak.cloth@0",
+              "time": 0.1115
+            },
+            {
+              "name": "snd.ak.mag_out@8",
+              "time": 0.1482
+            },
+            {
+              "name": "snd.ak.handle@4",
+              "time": 0.1761
+            },
+            {
+              "name": "snd.ak.mag_in@44",
+              "time": 0.7437
+            },
+            {
+              "name": "snd.ak.cloth@0",
+              "time": 0.8077
             }
           ],
           "loop": false,
@@ -256,8 +316,16 @@
         {
           "events": [
             {
-              "name": "snd.ak.melee_swing",
-              "time": 0.25
+              "name": "snd.ak.melee_swing@0",
+              "time": 0.0
+            },
+            {
+              "name": "snd.ak.melee_hit@0",
+              "time": 0.0923
+            },
+            {
+              "name": "snd.ak.cloth@0",
+              "time": 0.3538
             }
           ],
           "loop": false,
@@ -285,20 +353,44 @@
         {
           "events": [
             {
-              "name": "snd.ak.mag_release",
-              "time": 0.2
+              "name": "snd.ak.cloth@0",
+              "time": 0.0294
             },
             {
-              "name": "snd.ak.mag_out",
-              "time": 0.3
+              "name": "snd.ak.handle@4",
+              "time": 0.1105
             },
             {
-              "name": "snd.ak.mag_in",
-              "time": 0.62
+              "name": "snd.ak.handle@4",
+              "time": 0.1635
             },
             {
-              "name": "snd.ak.mag_seat",
-              "time": 0.72
+              "name": "snd.ak.mag_release@7",
+              "time": 0.2797
+            },
+            {
+              "name": "snd.ak.mag_out@8",
+              "time": 0.3561
+            },
+            {
+              "name": "snd.ak.mag_in@44",
+              "time": 0.5257
+            },
+            {
+              "name": "snd.ak.mag_tap@6",
+              "time": 0.6037
+            },
+            {
+              "name": "snd.ak.cloth@0",
+              "time": 0.6765
+            },
+            {
+              "name": "snd.ak.handle@4",
+              "time": 0.7694
+            },
+            {
+              "name": "snd.ak.handle@4",
+              "time": 0.8752
             },
             {
               "name": "Refill",
@@ -331,24 +423,52 @@
         {
           "events": [
             {
-              "name": "snd.ak.mag_release",
-              "time": 0.15
+              "name": "snd.ak.cloth@0",
+              "time": 0.0227
             },
             {
-              "name": "snd.ak.mag_out",
-              "time": 0.25
+              "name": "snd.ak.mag_release@7",
+              "time": 0.1071
             },
             {
-              "name": "snd.ak.mag_in",
-              "time": 0.5
+              "name": "snd.ak.mag_out@8",
+              "time": 0.1661
             },
             {
-              "name": "snd.ak.mag_seat",
-              "time": 0.58
+              "name": "snd.ak.handle@4",
+              "time": 0.199
             },
             {
-              "name": "snd.ak.bolt_release",
-              "time": 0.8
+              "name": "snd.ak.handle@4",
+              "time": 0.3354
+            },
+            {
+              "name": "snd.ak.mag_in@44",
+              "time": 0.4517
+            },
+            {
+              "name": "snd.ak.handle@4",
+              "time": 0.4854
+            },
+            {
+              "name": "snd.ak.cloth@0",
+              "time": 0.5182
+            },
+            {
+              "name": "snd.ak.handle@4",
+              "time": 0.5763
+            },
+            {
+              "name": "snd.ak.bolt_back@59",
+              "time": 0.6474
+            },
+            {
+              "name": "snd.ak.bolt_release@49",
+              "time": 0.6958
+            },
+            {
+              "name": "snd.ak.handle@4",
+              "time": 0.8536
             },
             {
               "name": "Refill",
@@ -381,8 +501,8 @@
         {
           "events": [
             {
-              "name": "snd.ak.draw",
-              "time": 0.05
+              "name": "snd.ak.draw@360",
+              "time": 0.0522
             }
           ],
           "loop": false,
@@ -406,8 +526,8 @@
         {
           "events": [
             {
-              "name": "snd.ak.holster",
-              "time": 0.1
+              "name": "snd.ak.holster@300",
+              "time": 0.3214
             }
           ],
           "loop": false,

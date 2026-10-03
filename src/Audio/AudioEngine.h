@@ -50,7 +50,10 @@ public:
     static void SetMasterVolume(float volume);        // 0..1, applied on top of every bus
     static float MasterVolume();
 
-    static SoundHandle Play(const std::string& path, float volume = 1.0f, bool loop = false, Bus bus = Bus::SFX);
+    // startOffsetSeconds > 0 starts the voice that far into the file (skips a lead-in: weapon sounds whose contact
+    // transient has to land on an animation frame that is nearer than the file's lead).
+    static SoundHandle Play(const std::string& path, float volume = 1.0f, bool loop = false, Bus bus = Bus::SFX,
+                            float startOffsetSeconds = 0.0f);
 
     // All no-ops / false for a stale or invalid handle.
     static void Stop(SoundHandle handle);
