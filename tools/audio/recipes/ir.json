@@ -1,0 +1,30 @@
+{
+  "_doc": "Real recorded room impulse responses for the engine's convolution reverb (build_ir.py). Nothing is generated or synthesised: every IR is a measurement of a real space (EchoThief, OpenAIR), trimmed (leading silence and the direct sound removed, `predelay_ms` records how long the first reflection comes after the direct sound), cut to max_s with a cosine fade, peak-normalised to -3 dBFS, 48 kHz stereo. A mono / ORTF-less source is paired from two real microphone positions of the same space (L = receiver 1, R = receiver 2), never duplicated. `src` entries are relative to C:\\tb\\audio-src\\ir (a bare name = searched under the EchoThief library). rt60_s = Schroeder backward-integration T20 of the untrimmed recording. Licenses: EchoThief = derivative artistic use (convolution) allowed, not for AI training (Chris Warren, SDSU); OpenAIR = CC BY 4.0, University of York.",
+  "direct_ms": 3.0,
+  "classes": {
+    "indoor_small": {"max_s": 2.5, "irs": [
+      {"name": "3000C Street Garage Stairwell", "license": "echothief", "src": ["3000CStreetGarageStairwell"]},
+      {"name": "CCRMA Stairwell", "license": "echothief", "src": ["CCRMAStairwell"]},
+      {"name": "Stairway, University of York", "license": "openair", "src": ["stairway-university-york/stairway-university-york/stereo/stairwell_ortf.wav"]}
+    ]},
+    "indoor_large": {"max_s": 2.5, "irs": [
+      {"name": "Terry's Factory Warehouse, York", "license": "openair", "src": ["terrys-factory-warehouse/terrys-factory-warehouse/stereo/terrys_warehouse_stereo.wav"]},
+      {"name": "R1 Nuclear Reactor Hall, Dunfermline", "license": "openair", "src": ["r1-nuclear-reactor-hall/r1-nuclear-reactor-hall/stereo/r1_ortf-48k.wav"]},
+      {"name": "Natatorium", "license": "echothief", "src": ["Natatorium"]}
+    ]},
+    "outdoor_urban": {"max_s": 3.0, "irs": [
+      {"name": "Humanities Social Sciences Courtyard", "license": "echothief", "src": ["HumanitiesSocialSciencesCourtyard"]},
+      {"name": "Castillo de los Tres Reyes del Morro Courtyard", "license": "echothief", "src": ["CastilloDeLosTresReyesDelMorroCourtyard"]},
+      {"name": "Academic Quadrangle", "license": "echothief", "src": ["AcademicQuadrangle"]}
+    ]},
+    "outdoor_open": {"max_s": 3.0, "irs": [
+      {"name": "Forest in Wheldrake Wood, York (receivers 1 + 2)", "license": "openair", "src": ["Forest-in-WheldrakeWood/Forest-in-WheldrakeWood/IR_M30/S1R1_M30.wav", "Forest-in-WheldrakeWood/Forest-in-WheldrakeWood/IR_M30/S1R2_M30.wav"]},
+      {"name": "Koli National Park forest, summer (sites 1 + 2)", "license": "openair", "src": ["koli-national-park-summer/koli-national-park-summer/mono/koli_summer_site1_1way_mono.wav", "koli-national-park-summer/koli-national-park-summer/mono/koli_summer_site2_1way_mono.wav"]},
+      {"name": "Koli National Park forest, summer (sites 3 + 4)", "license": "openair", "src": ["koli-national-park-summer/koli-national-park-summer/mono/koli_summer_site3_1way_mono.wav", "koli-national-park-summer/koli-national-park-summer/mono/koli_summer_site4_1way_mono.wav"]}
+    ]}
+  },
+  "licenses": {
+    "echothief": "EchoThief Impulse Response Library (c) Dr. Chris Warren, SDSU: free to use for derivative artistic work such as convolution reverb; any other use needs permission (cwarren@sdsu.edu); not authorized for AI training",
+    "openair": "OpenAIR, Audiolab, University of York: Creative Commons Attribution 4.0 International (credit: University of York OpenAIR library, openairlib.net)"
+  }
+}

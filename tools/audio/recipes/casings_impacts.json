@@ -1,0 +1,591 @@
+{
+ "_doc": "Casing drops, bullet impacts and flybys, all sliced from the real Sonniss recordings (no synthesis). casings.<kind>.<material>: list of source specs. {drops:{long,short}} = auto-slice a long take into its individual fresh drops (long = drop + bounce / roll tail up to 1.6 s, short = first 0.28 s); {single:true} = the file is one drop. pitch = semitones applied to the slice (shell proxies from small casings are pitched down); proxy:true marks material that is not a real recording of that exact thing (see docs/AUDIO.md coverage). variants = extra per-source takes (pitch / eq / gain) for single-file sources. A kind never cuts one drop twice (casing_takes): with few drops in a take a key gets fewer, distinct variants; rifle metal (proxy) takes the 9 mm drops rifle concrete leaves. Carpet takes are low-passed at 6 kHz (a few drops ping off another casing; a casing on carpet is dull). Casings ship mono (point_source).",
+ "casings": {
+  "rifle": {
+   "concrete": [
+    {
+     "src": "sonniss/SculpTunes/9 mm",
+     "drops": {
+      "long": 6,
+      "short": 4
+     }
+    }
+   ],
+   "wood": [
+    {
+     "src": "sonniss/SculpTunes/6 35",
+     "drops": {
+      "long": 5,
+      "short": 0
+     }
+    },
+    {
+     "src": "sonniss/Stuart Duffield/Bullet_Drop_Wood_04",
+     "single": true,
+     "variants": [
+      {
+       "pitch": 1.0
+      }
+     ]
+    }
+   ],
+   "tile": [
+    {
+     "src": "sonniss/SculpTunes/7 62",
+     "drops": {
+      "long": 5,
+      "short": 0
+     }
+    }
+   ],
+   "carpet": [
+    {
+     "src": "sonniss/SculpTunes/Cartridges and",
+     "drops": {
+      "long": 6,
+      "short": 4
+     },
+     "lp": 6000
+    }
+   ],
+   "dirt": [
+    {
+     "src": "sonniss/Stuart Duffield/Bullet_Drop_Leaves_03",
+     "single": true,
+     "variants": [
+      {
+       "pitch": 0.0
+      },
+      {
+       "pitch": 1.2,
+       "gain_db": -1.0
+      },
+      {
+       "pitch": -1.0
+      },
+      {
+       "pitch": 2.0,
+       "gain_db": -2.0,
+       "lp": 7000
+      },
+      {
+       "pitch": -2.0,
+       "lp": 6000
+      },
+      {
+       "pitch": 0.6,
+       "eq": [
+        [
+         "peak",
+         3000,
+         -3.0,
+         0.8
+        ]
+       ]
+      }
+     ],
+     "proxy": true
+    }
+   ],
+   "metal": [
+    {
+     "src": "sonniss/SculpTunes/9 mm",
+     "drops": {
+      "long": 4,
+      "short": 2
+     },
+     "proxy": true,
+     "eq": [
+      [
+       "peak",
+       4500,
+       4.0,
+       1.2
+      ],
+      [
+       "peak",
+       1800,
+       2.0,
+       1.5
+      ]
+     ],
+     "hp": 400
+    }
+   ]
+  },
+  "shell": {
+   "concrete": [
+    {
+     "src": "sonniss/Stuart Duffield/ShotgunShell_Land_Concrete_02",
+     "single": true,
+     "variants": [
+      {
+       "pitch": 0.0
+      },
+      {
+       "pitch": -1.0
+      },
+      {
+       "pitch": 1.0
+      },
+      {
+       "pitch": -2.0,
+       "lp": 7000
+      },
+      {
+       "pitch": 1.8,
+       "eq": [
+        [
+         "peak",
+         3500,
+         -2.0,
+         0.8
+        ]
+       ]
+      },
+      {
+       "pitch": 0.0,
+       "eq": [
+        [
+         "peak",
+         600,
+         3.0,
+         0.9
+        ]
+       ],
+       "dur": 0.45
+      }
+     ]
+    }
+   ],
+   "tile": [
+    {
+     "src": "sonniss/Stuart Duffield/ShotgunShell_Land_Lino_03",
+     "single": true,
+     "proxy": true,
+     "variants": [
+      {
+       "pitch": 0.0
+      },
+      {
+       "pitch": -1.0
+      },
+      {
+       "pitch": 1.0
+      },
+      {
+       "pitch": -2.0,
+       "lp": 7000
+      },
+      {
+       "pitch": 1.8,
+       "eq": [
+        [
+         "peak",
+         3500,
+         -2.0,
+         0.8
+        ]
+       ]
+      },
+      {
+       "pitch": 0.0,
+       "eq": [
+        [
+         "peak",
+         600,
+         3.0,
+         0.9
+        ]
+       ],
+       "dur": 0.45
+      }
+     ]
+    }
+   ],
+   "wood": [
+    {
+     "src": "sonniss/SculpTunes/6 35",
+     "drops": {
+      "long": 3,
+      "short": 2
+     },
+     "pitch": -2.0,
+     "proxy": true,
+     "eq": [
+      [
+       "peak",
+       450,
+       3.0,
+       0.9
+      ]
+     ]
+    },
+    {
+     "src": "sonniss/Stuart Duffield/Bullet_Drop_Wood_04",
+     "single": true,
+     "proxy": true,
+     "variants": [
+      {
+       "pitch": -2.0
+      },
+      {
+       "pitch": -1.0,
+       "eq": [
+        [
+         "peak",
+         450,
+         3.0,
+         0.9
+        ]
+       ]
+      }
+     ]
+    }
+   ],
+   "carpet": [
+    {
+     "src": "sonniss/SculpTunes/Cartridges and",
+     "drops": {
+      "long": 4,
+      "short": 3
+     },
+     "pitch": -2.0,
+     "proxy": true,
+     "eq": [
+      [
+       "peak",
+       400,
+       2.0,
+       0.9
+      ]
+     ],
+     "lp": 6000
+    }
+   ],
+   "dirt": [
+    {
+     "src": "sonniss/Stuart Duffield/Bullet_Drop_Leaves_03",
+     "single": true,
+     "proxy": true,
+     "variants": [
+      {
+       "pitch": -2.0
+      },
+      {
+       "pitch": -1.5
+      },
+      {
+       "pitch": -1.0,
+       "gain_db": -1.0
+      },
+      {
+       "pitch": -2.0,
+       "lp": 5000
+      },
+      {
+       "pitch": -1.0,
+       "lp": 4500
+      },
+      {
+       "pitch": 0.0,
+       "gain_db": -2.0
+      }
+     ]
+    }
+   ],
+   "metal": [
+    {
+     "src": "sonniss/Gamemaster Audio -  Bullet/bullet_impact_metal_heavy_08",
+     "single": true,
+     "proxy": true,
+     "variants": [
+      {
+       "pitch": 0.0,
+       "dur": 0.65
+      },
+      {
+       "pitch": 1.0,
+       "dur": 0.6
+      },
+      {
+       "pitch": 2.0,
+       "dur": 0.55
+      },
+      {
+       "pitch": -1.0,
+       "dur": 0.7
+      },
+      {
+       "pitch": 1.0,
+       "dur": 0.6,
+       "gain_db": -2.0,
+       "hp": 600
+      },
+      {
+       "pitch": 0.0,
+       "dur": 0.5,
+       "eq": [
+        [
+         "peak",
+         3000,
+         3.0,
+         1.0
+        ]
+       ]
+      }
+     ]
+    }
+   ]
+  }
+ },
+ "impacts": {
+  "concrete": {
+   "sources": [
+    {
+     "src": "sonniss/Gamemaster Audio -  Bullet/bullet_impact_concrete_brick_01",
+     "variants": [
+      {},
+      {
+       "pitch": -1.5
+      },
+      {
+       "pitch": 1.5,
+       "eq": [
+        [
+         "peak",
+         5000,
+         -2.0,
+         0.8
+        ]
+       ]
+      },
+      {
+       "pitch": -2.0,
+       "gain_db": -1.0,
+       "lp": 7000
+      },
+      {
+       "pitch": 2.0,
+       "dur": 0.25,
+       "hp": 300
+      }
+     ]
+    }
+   ]
+  },
+  "metal": {
+   "sources": [
+    {
+     "src": "sonniss/Gamemaster Audio -  Bullet/bullet_impact_metal_heavy_08",
+     "variants": [
+      {},
+      {
+       "pitch": -1.5
+      },
+      {
+       "pitch": 1.5,
+       "eq": [
+        [
+         "peak",
+         4000,
+         -2.0,
+         0.8
+        ]
+       ]
+      },
+      {
+       "pitch": -2.0,
+       "lp": 7000
+      },
+      {
+       "pitch": 2.0,
+       "dur": 0.5,
+       "hp": 300
+      }
+     ]
+    }
+   ]
+  },
+  "dirt": {
+   "sources": [
+    {
+     "src": "sonniss/PMSFX/PM_BBI_Bullet_Impact_Dirt_3",
+     "variants": [
+      {},
+      {
+       "pitch": -1.5
+      },
+      {
+       "pitch": 1.5
+      },
+      {
+       "pitch": -2.0,
+       "gain_db": -1.0,
+       "lp": 7000
+      },
+      {
+       "pitch": 2.0,
+       "dur": 0.8,
+       "hp": 300
+      }
+     ]
+    }
+   ]
+  },
+  "glass": {
+   "sources": [
+    {
+     "src": "sonniss/PMSFX/PM_BBI_Bullet_Impact_Glass_1",
+     "variants": [
+      {},
+      {
+       "pitch": -1.5
+      },
+      {
+       "pitch": 1.5
+      },
+      {
+       "pitch": -2.0,
+       "lp": 7000
+      },
+      {
+       "pitch": 2.0,
+       "dur": 0.8,
+       "hp": 300
+      }
+     ]
+    }
+   ]
+  },
+  "flesh": {
+   "sources": [
+    {
+     "src": "sonniss/PMSFX/PM_BBI_Bullet_Impact_Hit_Body_Flesh_25",
+     "variants": [
+      {},
+      {
+       "pitch": -1.5
+      },
+      {
+       "pitch": 1.5
+      }
+     ]
+    },
+    {
+     "src": "sonniss/Gamemaster Audio -  Bullet/bullet_impact_body_thump_02",
+     "variants": [
+      {},
+      {
+       "pitch": -2.0
+      }
+     ]
+    },
+    {
+     "src": "sonniss/Gamemaster Audio - Punch/punch_grit_wet_impact_05",
+     "variants": [
+      {},
+      {
+       "pitch": 1.5
+      }
+     ]
+    }
+   ]
+  },
+  "ice": {
+   "sources": [
+    {
+     "src": "sonniss/Gamemaster Audio - Guns/bullet_impact_ice_06",
+     "variants": [
+      {},
+      {
+       "pitch": -1.5
+      },
+      {
+       "pitch": 1.5
+      },
+      {
+       "pitch": -2.0,
+       "lp": 7000
+      }
+     ]
+    }
+   ]
+  },
+  "wood": {
+   "proxy": true,
+   "sources": [
+    {
+     "src": "sonniss/Stuart Duffield/Bullet_Drop_Wood_04",
+     "variants": [
+      {
+       "dur": 0.5
+      },
+      {
+       "pitch": -1.5,
+       "dur": 0.5
+      },
+      {
+       "pitch": 1.5,
+       "dur": 0.45,
+       "eq": [
+        [
+         "peak",
+         3000,
+         2.0,
+         0.9
+        ]
+       ]
+      },
+      {
+       "pitch": -2.0,
+       "dur": 0.5,
+       "lp": 6000
+      }
+     ]
+    },
+    {
+     "src": "sonniss/Shapeforms/IMPACT_LOW_THUD_10",
+     "variants": [
+      {
+       "lp": 3500
+      },
+      {
+       "pitch": 2.0,
+       "lp": 3000
+      }
+     ]
+    }
+   ]
+  }
+ },
+ "flyby": {
+  "sources": [
+   {
+    "src": "sonniss/Gamemaster Audio -  Bullet/bullet_flyby_fast_05",
+    "variants": [
+     {},
+     {
+      "pitch": -2.0
+     },
+     {
+      "pitch": 1.5
+     }
+    ]
+   },
+   {
+    "src": "sonniss/Gamemaster Audio - Guns/bullet_flyby_fast_06",
+    "variants": [
+     {},
+     {
+      "pitch": -2.0
+     },
+     {
+      "pitch": 1.5
+     }
+    ]
+   }
+  ],
+  "remove_tones": true
+ }
+}

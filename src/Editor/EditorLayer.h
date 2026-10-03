@@ -29,6 +29,8 @@
 #include "MaterialPreviewRenderer.h"
 #include <optional>
 #include "AudioEngine.h" // AudioEngine::SoundHandle - m_PlayModeAudioHandles
+struct AudioMixComponent;
+struct ReverbBusComponent;
 
 struct GLFWwindow;
 struct RootMotionOptions;
@@ -1043,6 +1045,7 @@ private:
     // that were split between Preferences ▸ Environment and Preferences ▸ Performance. The three
     // section helpers are shared, so Preferences renders the same widgets.
     void DrawLightingPanel(World& world);
+    void DrawAudioDebugPanel(World& world); // EditorLayer_AudioDebug.cpp
     void DrawAssetLibraryPanel(World& world, AssetLibrary& assets); // EditorLayer_AssetLibraryPanel.cpp
     void DrawEnvironmentSettings(World& world, float itemWidth);
     void DrawPhysicalSkySettings(World& world, float itemWidth); // EditorLayer_Sky.cpp
@@ -1053,6 +1056,14 @@ private:
     // light gather; this is the first and only place anything writes to either set.
     void DrawLightsSection(World& world, float itemWidth);
     bool m_ShowLighting = false;
+    bool m_ShowAudioDebug = false;
+    float m_AudioGrHold = 0.0f;      // the Audio panel's limiter gain-reduction readout (held, decaying)
+    float m_AudioGlueHold = 0.0f;    // ... and the glue compressor's
+    // The Audio panel's "Keep after Play": the live mix values written to the scene once Play stops (the scene is restored from its
+    // pre-Play snapshot, which would otherwise drop them).
+    std::shared_ptr<AudioMixComponent> m_AudioKeepMix;
+    std::shared_ptr<ReverbBusComponent> m_AudioKeepBus;
+    void ApplyKeptAudioMix(World& world); // EditorLayer_AudioDebug.cpp
 
     // Settings window (Ctrl+,) — #4 item 3 merged the old separate Preferences (per-user,
     // editor_prefs.json) and Project Settings (#236 A4; project-scoped, project/settings.json +

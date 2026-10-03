@@ -30,7 +30,6 @@
 #include "FirstPersonAdsCarry.h"
 #include "AudioEngine.h"
 #include "AI/AiMath.h"
-#include "AI/SquadVoice.h"
 #include <set>
 #include "Log.h" // #178 stack traces
 #include "InputMap.h"
@@ -4754,7 +4753,6 @@ void TestAssetPackImport() {
     fs::remove_all(base, ec);
 }
 
-// The squad radio: one speaker per squad, priority preemption, per-event cooldowns, "copy" responders.
 // The enemy AI's pure rules (AiMath): perception, memory, accuracy and the squad's tactics.
 void TestAiMath() {
     // Perception: nearer, more central, more of the body, moving, and firing all notice faster; out of range or
@@ -4843,126 +4841,6 @@ void TestAiMath() {
     }
 }
 
-void TestSquadVoice() {
-    namespace fs = std::filesystem;
-    const glm::vec3 pos(0.0f);
-    // The built-in tables: unique keys, wounded outranks everything but nothing outranks the others' copy.
-    {
-        std::set<std::string> keys;
-        for (int i = 0; i < (int)Bark::Count; ++i) keys.insert(BarkKey((Bark)i));
-        CHECK(keys.size() == (size_t)Bark::Count);
-        CHECK(BarkDefaults(Bark::Wounded).Priority > BarkDefaults(Bark::ManDown).Priority);
-        CHECK(BarkDefaults(Bark::Copy).Priority == 0);
-    }
-    // Priority and cooldown.
-    {
-        SquadVoice v;
-        v.SetAudio(false);
-        CHECK(v.Say(0.0f, 0, 1, 11, Bark::Contact, pos));
-        CHECK(v.Busy(0, 0.5f));
-        CHECK(!v.Say(0.5f, 0, 2, 12, Bark::Reloading, pos));            // busy, lower priority
-        CHECK(!v.Say(0.5f, 0, 2, 12, Bark::Contact, pos));              // equal priority and cooling down
-        CHECK(v.Say(0.5f, 0, 2, 12, Bark::Wounded, pos));               // higher: cuts in
-        CHECK(v.History().size() == 2);
-        CHECK(std::abs(v.History()[0].Cut - 0.5f) < 1e-5f);
-        CHECK(v.Cuts() == 1);
-        CHECK(v.FirstOverlap(0) < 0);
-        const float free = v.History()[1].End + 0.5f;
-        CHECK(!v.Busy(0, free));
-        CHECK(!v.Say(free, 0, 2, 12, Bark::Wounded, pos));              // wounded cools down (4 s)
-        CHECK(v.Say(free + v.Cooldown(Bark::Wounded), 0, 2, 12, Bark::Wounded, pos));
-        // A second squad has its own channel.
-        CHECK(v.Say(0.6f, 1, 5, 15, Bark::Reloading, pos));
-        CHECK(v.FirstOverlap(1) < 0);
-        // A copy never cuts anything.
-        SquadVoice w;
-        w.SetAudio(false);
-        CHECK(w.Say(0.0f, 0, 1, 1, Bark::Idle, pos));
-        CHECK(!w.Say(0.1f, 0, 2, 2, Bark::Copy, pos));
-        const auto sub = w.TakeSubtitles();
-        CHECK(sub.size() == 1 && !sub[0].Text.empty() && sub[0].Unit == 1);
-        CHECK(w.TakeSubtitles().empty());
-    }
-    // Responders answer "copy" after the line, never over it.
-    {
-        SquadVoice v;
-        v.SetAudio(false);
-        int copies = 0;
-        float t = 0.0f;
-        for (int k = 0; k < 40; ++k) {
-            t += 40.0f;
-            CHECK(v.Say(t, 0, 1, 1, Bark::ManDown, pos, 2, 2, pos));
-            const float end = v.History().back().End;
-            for (float u = t; u < end + 3.0f; u += 0.05f) v.Update(u);
-        }
-        for (const BarkPlayed& b : v.History()) copies += b.Responder ? 1 : 0;
-        CHECK(copies > 5 && copies < 40);
-        CHECK(v.FirstOverlap(0) < 0);
-        for (size_t i = 1; i < v.History().size(); ++i)
-            if (v.History()[i].Responder) CHECK(v.History()[i].Start >= v.History()[i - 1].End && v.History()[i].Speaker == 2);
-    }
-    // A manifest sets priorities, cooldowns, texts and the clip lengths that hold the channel.
-    {
-        const fs::path dir = fs::temp_directory_path() / "tartarus_squadvoice_test";
-        std::error_code ec;
-        fs::create_directories(dir, ec);
-        {
-            std::ofstream m(dir / "manifest.json");
-            m << R"({"sampleRate":22050,"voices":2,"events":{
-                "contact":{"priority":2,"cooldown":1.0,"lines":[{"text":"Test contact.","files":["a.wav","b.wav"],"duration":[3.0,4.0]}]},
-                "reloading":{"priority":6,"cooldown":0.0,"lines":[{"text":"Test reload.","files":["c.wav","d.wav"],"duration":[1.0,1.0]}]}}})";
-        }
-        SquadVoice v;
-        v.SetAudio(false);
-        CHECK(v.LoadManifest(dir.string()));
-        CHECK(v.Priority(Bark::Contact) == 2 && v.Priority(Bark::Reloading) == 6);
-        CHECK(v.Say(0.0f, 0, 1, 7, Bark::Contact, pos));                // voice 1: 4 s
-        CHECK(std::abs(v.History()[0].End - 4.0f) < 1e-4f && v.History()[0].Text == "Test contact.");
-        CHECK(v.Say(1.0f, 0, 2, 8, Bark::Reloading, pos));              // the manifest made reloading outrank contact
-        CHECK(v.History()[0].Cut >= 0.0f);
-        CHECK(v.FirstOverlap(0) < 0);
-        fs::remove_all(dir, ec);
-    }
-    // A long random session over three squads: nothing overlaps, no event repeats inside its cooldown.
-    {
-        SquadVoice v;
-        v.SetAudio(false);
-        std::uint32_t rng = 12345u;
-        auto rnd = [&]() { rng = rng * 1664525u + 1013904223u; return (rng >> 8) & 0xFFFF; };
-        for (float t = 0.0f; t < 900.0f; t += 0.1f) {
-            const int tries = (int)(rnd() % 3u);
-            for (int k = 0; k < tries; ++k) {
-                const int squad = (int)(rnd() % 3u);
-                const Bark b = (Bark)(rnd() % (unsigned)Bark::Count);
-                v.Say(t, squad, squad * 4 + (int)(rnd() % 4u), 1, b, pos, (int)(rnd() % 4u) - 1 + squad * 4);
-            }
-            v.Update(t);
-        }
-        CHECK(v.Spoken() > 100);
-        for (int s = 0; s < 3; ++s) CHECK(v.FirstOverlap(s) < 0);
-        float last[3][(int)Bark::Count];
-        for (auto& row : last) for (float& f : row) f = -1e9f;
-        bool cooldownsHold = true;
-        for (const BarkPlayed& b : v.History()) {
-            if (b.Responder) continue;
-            if (b.Start - last[b.Squad][(int)b.Event] < v.Cooldown(b.Event) - 1e-3f) cooldownsHold = false;
-            last[b.Squad][(int)b.Event] = b.Start;
-        }
-        CHECK(cooldownsHold);
-    }
-    // The real manifest, when the project is around (the generator's output): every event has lines.
-    {
-        SquadVoice v;
-        v.SetAudio(false);
-        const std::string root = ProjectPaths::Resolve("assets/Audio/Voice/combine");
-        if (fs::exists(fs::path(root) / "manifest.json")) {
-            CHECK(v.LoadManifest(root));
-            for (int i = 0; i < (int)Bark::Count; ++i) CHECK(v.Say(1000.0f * (float)(i + 1), 0, i, 1, (Bark)i, pos));
-            for (const BarkPlayed& b : v.History()) CHECK(!b.File.empty() && b.End > b.Start + 0.3f && fs::exists(fs::path(root) / b.File));
-        }
-    }
-}
-
 int RunUnitTests() {
     UnitTestSupport::TestList tests = {
         {"AssetGuid", TestAssetGuid},
@@ -5030,7 +4908,6 @@ int RunUnitTests() {
         {"NpcBodyParts", TestNpcBodyParts},
         {"PhysicsWorldSync", TestPhysicsWorldSync},
         {"PhysicalSky", TestPhysicalSky},
-        {"SquadVoice", TestSquadVoice},
         {"AiMath", TestAiMath},
     };
     RegisterRagdollTests(tests);
@@ -5038,6 +4915,7 @@ int RunUnitTests() {
     RegisterEditorTests(tests);
     RegisterEngineTests(tests);
     RegisterBloodTests(tests);
+    { void RegisterAudioTests(UnitTestSupport::TestList&); RegisterAudioTests(tests); } // UnitTests_Audio.cpp
     for (const auto& [name, fn] : tests) {
         g_CurrentTest = name;
         const int before = g_Failures;

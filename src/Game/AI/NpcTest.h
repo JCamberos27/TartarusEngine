@@ -67,7 +67,6 @@ public:
 
 private:
     void Check(bool ok, const std::string& what);
-    void CheckRadio(NpcDirector& npcs);
     void PrintCosts(const NpcDirector& npcs) const;
     void Pose(World& world, NpcDirector& npcs, float now);
     void Deaths(World& world, NpcDirector& npcs, float now);
