@@ -103,8 +103,13 @@ go through motion sounds, steps, the shotgun and everything")
   carpet run 3 pairs, concrete walk / glass walk / water run 1 each — real strides of one take; acceptable.
 * Left as is (source-limited — only 2–4 files per Sonniss pack are on disk; the full free GDC bundles would fix them): casing
   dirt / shell metal / shell concrete pitch variants of one drop (near-dups), impact flesh 6~7, carpet casings with a bright ping
-  (carpet 3), hitmarker variants differ in mid (+12–16 dB on the SAIGA-layer ones). **Ask the user** whether to fetch more of the
-  free Sonniss GDC packs (impacts, casings) before polishing those further.
+  (carpet 3), hitmarker variants differ in mid (+12–16 dB on the SAIGA-layer ones).
+* **TODO (user approved 2026-10-03): fetch more of the free Sonniss GDC bundle packs** for bullet impacts (dirt, flesh, wood,
+  metal, concrete, glass), casings / shells (dirt, metal, concrete, tile, wood) and flybys — e.g. PMSFX Bullet Bys & Impacts,
+  Gamemaster Bullet Impact Sounds, SculpTunes Cartridges & Casings, Stuart Duffield Bullet SFX. Free packs only (never paid).
+  Ask the user before each download (name, source, size); place files under `C:\tb\audio-src\sonniss\<pack>`; then add takes to
+  `recipes/casings_impacts.json`, rebuild `build_impacts.py`, `check_audio.py`, `analyze_audio.py snd.casing snd.impact snd.flyby`
+  (goal: ≥ 6 distinct real takes per key, no pitch-only variants).
 * Next: the user's ear notes; then docs/AUDIO.md (finish policy, variant counts, mono casings, analyzer) and memory.
 
 ### B1. Finishing policy (code done, NOT yet rebuilt for all builders)
