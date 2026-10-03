@@ -676,6 +676,8 @@ void NpcTest::Deaths(World& world, NpcDirector& npcs, float now) {
         if (m_DNpc[1].empty()) {
             m_DNpc[1] = corpse->Name;
             m_DCorpseAsleep = asleep;
+            std::printf("[NpcTest] corpse %s %.1f s after death\n", asleep ? "asleep" : "still moving", now - corpse->DiedAt);
+            Check(asleep || !npcs.RagdollSettings().PoweredRagdoll, "a powered corpse has come to rest and sleeps within 7 s");
             for (int k = 0; k < NpcRagdoll::kParts; ++k) m_DCorpseBefore[k] = corpse->Ragdoll->PartPosition(k);
             for (int k = 0; k < 4; ++k) corpse->Body.BoneWorld(kCorpseBones[k], m_DBoneBefore[k]);
             // From the side at the chest part's middle.

@@ -144,9 +144,22 @@ struct RagdollParams {
     int SolverPosIters = 16, SolverVelIters = 4;
     float Depenetration = 3.0f, SleepThreshold = 0.08f;
     float StaticFriction = 0.8f, DynamicFriction = 0.7f, Restitution = 0.05f;
+    // Grip: the part's friction wins against a softer floor (max-combined, so a slick floor material can't make a corpse skate) and its
+    // bounce is multiplied (a part with 0 restitution never bounces, whatever the floor's). Off: the floor's average-combined modes.
+    bool Grip = false;
+    // PxRigidBody stabilization threshold (mass-normalised kinetic energy below which a part is held still against contact jitter); < 0 = PhysX's.
+    float StabilizationThreshold = -1.0f;
 };
 int  CreateRagdoll(unsigned entity, const RagdollPart* parts, int count, const RagdollParams* params = nullptr); // -1 on failure
 void DestroyRagdoll(int ragdoll);
+// Every part's linear / angular damping (a body settling heavies up).
+void SetRagdollDamping(int ragdoll, float linear, float angular);
+// The parts' friction against the world (the shared material: applies to every part at once).
+void SetRagdollFriction(int ragdoll, float staticFriction, float dynamicFriction);
+// The fastest part's linear speed (m/s) and angular speed (rad/s); false when there is no such ragdoll.
+bool RagdollMotion(int ragdoll, float* outMaxLinear, float* outMaxAngular);
+// Puts every part to sleep now (a body that has come to rest stays so until something hits it: RagdollImpulse wakes it).
+void RagdollSleep(int ragdoll);
 void RagdollImpulse(int ragdoll, int part, const float impulse[3], const float point[3]);
 bool GetRagdollPart(int ragdoll, int part, float outPos[3], float outRotXYZW[4]);
 bool RagdollAsleep(int ragdoll);
