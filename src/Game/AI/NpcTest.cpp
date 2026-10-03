@@ -9,6 +9,7 @@
 #include "NpcDirector.h"
 #include "PhysicsWorld.h"
 #include "Player.h"
+#include "Npc/NpcRagdoll.h"
 
 #include <algorithm>
 #include <cmath>
@@ -37,6 +38,7 @@ NpcTest::NpcTest(const std::string& scenario) : m_Scenario(scenario.empty() ? "w
     if (m_Scenario == "feet") m_Duration = 10.0f;
     if (m_Scenario == "reload") m_Duration = 28.0f;
     if (m_Scenario == "flame") m_Duration = 14.0f;
+    if (m_Scenario == "blood") m_Duration = 25.0f;
     if (const char* t = EnvVar("NPC_TEST_SECONDS")) m_Duration = std::max(5.0f, (float)std::atof(t));
     if (const char* r = EnvVar("NPC_TEST_RECORD")) m_RecordDir = r;
     std::cout << "[NpcTest] scenario '" << m_Scenario << "', " << m_Duration << " s" << std::endl;
@@ -200,6 +202,10 @@ void NpcTest::After(World& world, NpcDirector& npcs, const PlayerVitals& vitals,
     m_Shot.clear();
     if (m_Scenario == "deaths") {
         Deaths(world, npcs, now);
+        return;
+    }
+    if (m_Scenario == "blood") {
+        Blood(world, npcs, now);
         return;
     }
     if (m_Scenario == "feet") {
@@ -1139,5 +1145,117 @@ void NpcTest::Feet(NpcDirector& npcs, float now) {
     if (now >= 9.0f && !m_Done) {
         m_Done = true;
         Check(m_FMeasured == 3, "every stage ran");
+    }
+}
+
+// --- blood: the volumetric blood on every kind of hit (docs/BLOOD_FX.md) ----------------------------------------------
+// scenes/BloodTest.json: four soldiers in a line with a wall 1.5 m behind them, frozen, holding fire. One is wounded in
+// the chest, one killed through the chest (the spray meets the wall), one through the head, and the chest kill's
+// corpse is shot. The Scene view watches each from the side; shots at the moments the spray is up, falling and down.
+void NpcTest::Blood(World& world, NpcDirector& npcs, float now) {
+    npcs.HoldFire = true;
+    npcs.NoLod = true;
+    npcs.Frozen = true;
+    m_Shot.clear();
+    struct Case { const char* Name; int Part; float Damage; bool Corpse; };
+    static const Case kCases[] = {
+        {"wound", 1, 12.0f, false}, {"chest_kill", 1, 400.0f, false}, {"head_kill", 2, 400.0f, false}, {"corpse", 1, 30.0f, true}};
+    constexpr int kCaseCount = (int)(sizeof(kCases) / sizeof(kCases[0]));
+    static const float kShotTimes[] = {0.1f, 0.3f, 0.6f, 1.0f, 1.8f};
+    constexpr int kShotCount = (int)(sizeof(kShotTimes) / sizeof(kShotTimes[0]));
+    auto find = [&](const std::string& name) -> Npc* {
+        for (const auto& up : npcs.Npcs())
+            if (up && up->Name == name) return up.get();
+        return nullptr;
+    };
+    // The Scene view off the soldier's left, a little in front, level with the chest.
+    auto frame = [&](const Npc& n) {
+        glm::vec3 chest = n.Feet + glm::vec3(0.0f, 1.2f, 0.0f);
+        if (n.Hitboxes && n.Hitboxes->Active()) chest = n.Hitboxes->Centre(n.Body, 1);
+        if (m_BCamSet) return;
+        m_BCamSet = true;
+        // Square to the spray's line (it leaves along -Z toward the wall), a little in front and above.
+        m_CamPos = chest + glm::vec3(-2.6f, 0.4f, 0.1f);
+        const glm::vec3 d = glm::normalize(chest + glm::vec3(0.0f, -0.45f, -0.8f) - m_CamPos);
+        m_CamYaw = glm::degrees(std::atan2(d.z, d.x));
+        m_CamPitch = glm::degrees(std::asin(std::clamp(d.y, -1.0f, 1.0f)));
+        m_HaveCam = true;
+    };
+    switch (m_BStep) {
+    case 0: { // a line of soldiers with hitboxes, sorted west to east
+        std::vector<const Npc*> ready;
+        for (const auto& up : npcs.Npcs())
+            if (up && !up->Dead && up->Hitboxes && up->Hitboxes->Active()) ready.push_back(up.get());
+        if (now < 3.0f || ready.size() < 3) break;
+        std::sort(ready.begin(), ready.end(), [](const Npc* a, const Npc* b) { return a->Feet.x < b->Feet.x; });
+        m_BLine.clear();
+        for (const Npc* n : ready) m_BLine.push_back(n->Name);
+        Check(BloodStats && BloodStats->Loaded, "the volumetric blood data is imported and loaded");
+        m_BStep = 1;
+        m_BAt = now;
+        break;
+    }
+    case 1: { // the cases, 3 s apart
+        if (m_BCase >= kCaseCount) { m_BStep = 2; m_BAt = now; break; }
+        const Case& c = kCases[m_BCase];
+        // The wound and the kills each on their own soldier; the corpse is the chest kill's.
+        const std::string& who = m_BLine[std::min<size_t>(c.Corpse ? 1 : (size_t)m_BCase, m_BLine.size() - 1)];
+        Npc* n = find(who);
+        if (!n) { ++m_BCase; break; }
+        if (!m_BFired) {
+            if (now - m_BAt < 0.5f) break;
+            m_BCamSet = false;
+            frame(*n);
+            FirstPersonWeaponGameplay w;
+            w.Damage = c.Damage;
+            w.FalloffStart = 1000.0f;
+            w.FalloffEnd = 2000.0f;
+            w.FalloffMin = 1.0f;
+            glm::vec3 target = n->Feet + glm::vec3(0.0f, 1.2f, 0.0f);
+            if (!c.Corpse && n->Hitboxes && n->Hitboxes->Active()) target = n->Hitboxes->Centre(n->Body, c.Part);
+            if (c.Corpse && n->Ragdoll) target = n->Ragdoll->PartPosition(c.Part);
+            // From the player's side of the line (+Z), level: out through the back, toward the wall.
+            const glm::vec3 dir = c.Corpse ? glm::normalize(glm::vec3(0.0f, -0.6f, -1.0f)) : glm::vec3(0.0f, 0.0f, -1.0f);
+            const glm::vec3 origin = target - dir * 4.0f;
+            bool killed = false, head = false;
+            const bool hit = npcs.OnPlayerHit(world, RootId(*n), target, origin, dir, w, &killed, &head);
+            m_BSpawnBefore = BloodStats ? BloodStats->SpraysSpawned : 0;
+            m_BFired = true;
+            m_BFiredAt = now;
+            m_BShot = 0;
+            std::printf("[NpcTest] blood %s: %s hit=%d killed=%d head=%d\n", c.Name, who.c_str(), hit ? 1 : 0, killed ? 1 : 0, head ? 1 : 0);
+            break;
+        }
+        frame(*n);
+        const float t = now - m_BFiredAt;
+        if (m_BShot < kShotCount && t >= kShotTimes[m_BShot]) {
+            char name[64];
+            std::snprintf(name, sizeof(name), "blood_%d_%s_%02d", m_BCase, c.Name, (int)(kShotTimes[m_BShot] * 10.0f + 0.5f));
+            m_Shot = name;
+            ++m_BShot;
+        }
+        if (!m_BChecked && t > 0.05f && BloodStats) {
+            // The hit threw a spray (the director queued the flesh hit; the host drained it into the blood).
+            m_BChecked = true;
+            Check(BloodStats->SpraysSpawned > m_BSpawnBefore,
+                  std::string("blood ") + c.Name + ": a spray thrown (" + std::to_string(BloodStats->SpraysSpawned - m_BSpawnBefore) + ")");
+            if (std::string(c.Name) == "chest_kill")
+                Check(BloodStats->LastSprayClipped, "blood chest_kill: the spray meets the wall behind (clip plane set)");
+        }
+        if (t >= 3.0f) { ++m_BCase; m_BFired = false; m_BChecked = false; m_BAt = now; }
+        break;
+    }
+    case 2: // every spray has fallen and is gone
+        if (now - m_BAt < 2.0f) break;
+        if (BloodStats) {
+            std::printf("[NpcTest] blood: %d sprays thrown, %d still playing, GPU %.3f ms avg / %.3f ms worst frame\n",
+                        BloodStats->SpraysSpawned, BloodStats->ActiveSprays, BloodStats->GpuMsAvg, BloodStats->GpuMsMax);
+            Check(BloodStats->ActiveSprays == 0, "every spray played out and was dropped");
+        }
+        m_Done = true;
+        m_BStep = 3;
+        break;
+    default:
+        break;
     }
 }
