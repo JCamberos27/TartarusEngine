@@ -255,8 +255,9 @@ glm::vec3 NpcBody::WeaponEye(const World& world, entt::entity armsRig, const std
 
 glm::vec3 NpcBody::HoldWeapon(World& world, entt::entity armsRig, entt::entity weapon, const FirstPersonWorldGunInput* gun, const Camera& cam,
                               float dt, bool meshChecks) {
-    if (!IsActive() || m_PoseExternal) return glm::vec3(0.0f);
+    if (!IsActive() || m_PoseExternal || m_WeaponReleased) return glm::vec3(0.0f);
     auto& reg = world.Registry;
+    if (weapon != entt::null && reg.valid(weapon)) TrackGun(world.WorldSpaceTransform(weapon).Position, dt);
     const bool haveRig = gun && armsRig != entt::null && reg.valid(armsRig) && reg.all_of<RenderableComponent>(armsRig) &&
                          reg.get<RenderableComponent>(armsRig).ModelRef;
     // Drawn, the arms take the rig's hands from the first frame; holstered they ease back to the clips'.
@@ -752,6 +753,28 @@ glm::vec3 NpcBody::HoldWeapon(World& world, entt::entity armsRig, entt::entity w
         if (m_DriverModel->NodeTransform("head", hd)) m_Eye = glm::vec3(rootW * hd[3]);
     }
     return m_GunShift;
+}
+
+void NpcBody::TrackGun(const glm::vec3& position, float dt) {
+    if (dt < 1e-4f) return;
+    if (m_HaveGunPrev) {
+        const glm::vec3 v = (position - m_GunPrev) / dt;
+        // A teleport (a respawn, a held frame catching up) is no velocity worth keeping; the rest is eased over ~3 frames.
+        if (glm::length(v) < 40.0f) m_GunVelocity += (v - m_GunVelocity) * std::min(1.0f, dt * 40.0f);
+    }
+    m_GunPrev = position;
+    m_HaveGunPrev = true;
+}
+
+void NpcBody::ReleaseWeaponHold() {
+    m_WeaponReleased = true;
+    m_ArmsWeight = 0.0f;
+    m_GunShift = glm::vec3(0.0f);
+    m_HaveElbowAim[0] = m_HaveElbowAim[1] = false;
+    m_ElbowClear[0] = m_ElbowClear[1] = 0.0f;
+    m_HaveRigLine = false;
+    m_CheekWeld = 0.0f;
+    m_Hold = NpcHoldReport{};
 }
 
 NpcHoldReport NpcBody::MeasureHold(const World& world, entt::entity armsRig, const glm::vec3& butt, const glm::vec3& muzzle) const {
