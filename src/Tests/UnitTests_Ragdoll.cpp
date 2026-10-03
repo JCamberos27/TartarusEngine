@@ -5,6 +5,9 @@
 #include "AssetLibrary.h"
 #include "ComponentRegistry.h"
 #include "Components.h"
+#include "GameModuleAPI.h" // BodyState
+#include "Npc/NpcBody.h"
+#include "Npc/NpcDroppedWeapon.h"
 #include "Npc/NpcRagdoll.h"
 #include "PhysicsWorld.h"
 #include "SceneSerializer.h"
@@ -913,6 +916,174 @@ void TestRagdollPoweredSettings() {
     CHECK(found == 1);
 }
 
+// ---- gear on death: the dropped weapon (Npc/NpcDroppedWeapon) ----
+
+// A world with a floor whose top is at `top`, physics up.
+entt::entity GearFloor(World& world, float top) {
+    const entt::entity floorE = world.CreateEmptyEntity(glm::vec3(0.0f, top - 0.5f, 0.0f), glm::vec3(0.0f), glm::vec3(1.0f), "Floor");
+    ColliderComponent col;
+    col.Kind = ColliderComponent::Shape::Box;
+    col.HalfExtents = glm::vec3(40.0f, 0.5f, 40.0f);
+    world.Registry.emplace<ColliderComponent>(floorE, col);
+    world.SyncActiveInHierarchy();
+    world.RebuildWorldTransformCache();
+    PhysicsWorld::Create(world);
+    return floorE;
+}
+
+// The gun leaves the hands at the hands' velocity (plus a capped share of the round's impulse), with or without the collision delay.
+void TestDroppedWeaponTakesTheHandsVelocity() {
+    World world;
+    GearFloor(world, -100.0f);
+    if (!PhysicsWorld::IsActive()) return;
+    const entt::entity gun = world.CreateEmptyEntity(glm::vec3(0.0f, 1.2f, 0.0f), glm::vec3(0.0f), glm::vec3(1.0f), "Gun");
+    DroppedWeaponSettingsComponent cfg;
+    cfg.Spin = 0.0f;
+    cfg.CollisionDelay = 0.0f;
+    cfg.ImpulseShare = 0.0f;
+    auto drop = NpcDroppedWeapon::DropAt(world, gun, glm::vec3(3.0f, 0.0f, -2.0f), glm::vec3(0.0f), cfg);
+    CHECK(drop && drop->Built());
+    for (int k = 0; k < 4; ++k) { drop->Update(world, 1.0f / 60.0f); PhysicsWorld::Step(1.0f / 60.0f, world, {}); }
+    BodyState s;
+    CHECK(PhysicsWorld::GetBodyState((unsigned)entt::to_integral(drop->Entity()), s) && s.Valid);
+    CHECK(std::abs(s.Velocity[0] - 3.0f) < 0.3f && std::abs(s.Velocity[2] + 2.0f) < 0.3f); // the hands' velocity, not zero
+    drop->Stop(world);
+    // The round's share: along its line, capped by Max Shot Speed.
+    cfg.ImpulseShare = 0.2f;
+    cfg.MaxShotSpeed = 1.5f;
+    auto shot = NpcDroppedWeapon::DropAt(world, gun, glm::vec3(0.0f), glm::vec3(0.0f, 0.0f, 100.0f), cfg);
+    CHECK(shot && std::abs(shot->StartVelocity().z - 1.5f) < 1e-4f && std::abs(shot->StartVelocity().x) < 1e-4f);
+    shot->Stop(world);
+    cfg.MaxShotSpeed = 50.0f;
+    auto soft = NpcDroppedWeapon::DropAt(world, gun, glm::vec3(0.0f), glm::vec3(0.0f, 0.0f, 35.0f), cfg);
+    CHECK(soft && std::abs(soft->StartVelocity().z - 0.2f * 35.0f / cfg.Mass) < 1e-3f);
+    soft->Stop(world);
+    // With the collision delay it flies on its own first (hands' velocity and gravity), then the body takes it at that speed.
+    cfg.ImpulseShare = 0.0f;
+    cfg.CollisionDelay = 0.1f;
+    auto late = NpcDroppedWeapon::DropAt(world, gun, glm::vec3(6.0f, 0.0f, 0.0f), glm::vec3(0.0f), cfg);
+    CHECK(late && !late->Built());
+    const float y0 = world.WorldSpaceTransform(late->Entity()).Position.y;
+    for (int k = 0; k < 5; ++k) late->Update(world, 1.0f / 60.0f);
+    CHECK(!late->Built() && world.WorldSpaceTransform(late->Entity()).Position.x > 0.4f && world.WorldSpaceTransform(late->Entity()).Position.y < y0);
+    for (int k = 0; k < 3; ++k) { late->Update(world, 1.0f / 60.0f); PhysicsWorld::Step(1.0f / 60.0f, world, {}); }
+    CHECK(late->Built() && PhysicsWorld::GetBodyState((unsigned)entt::to_integral(late->Entity()), s) && s.Valid && s.Velocity[0] > 5.0f);
+    late->Stop(world);
+    PhysicsWorld::Destroy();
+}
+
+// Thrown over a floor, the gun comes down, tumbles on and comes to rest (asleep) lying on it, not through it.
+void TestDroppedWeaponSettlesAndSleeps() {
+    World world;
+    GearFloor(world, 0.0f);
+    if (!PhysicsWorld::IsActive()) return;
+    const entt::entity gun = world.CreateEmptyEntity(glm::vec3(0.0f, 1.3f, 0.0f), glm::vec3(0.0f, 30.0f, 0.0f), glm::vec3(1.0f), "Gun");
+    const DroppedWeaponSettingsComponent cfg; // the defaults: delay, spin, damping
+    auto drop = NpcDroppedWeapon::DropAt(world, gun, glm::vec3(2.0f, 0.5f, 1.0f), glm::vec3(0.0f, 0.0f, 20.0f), cfg);
+    CHECK(drop && !drop->Asleep());
+    float sleptAt = -1.0f;
+    float lowest = 1e9f;
+    for (int k = 0; k < 60 * 8; ++k) {
+        drop->Update(world, 1.0f / 60.0f);
+        PhysicsWorld::Step(1.0f / 60.0f, world, {});
+        lowest = std::min(lowest, world.WorldSpaceTransform(drop->Entity()).Position.y);
+        if (sleptAt < 0.0f && drop->Asleep()) sleptAt = (float)k / 60.0f;
+    }
+    const glm::vec3 at = world.WorldSpaceTransform(drop->Entity()).Position;
+    std::printf("[UnitTest] dropped gun asleep after %.2f s at (%.2f %.2f %.2f), lowest %.3f\n", sleptAt, at.x, at.y, at.z, lowest);
+    CHECK(sleptAt > 0.2f && sleptAt < 6.0f && drop->Asleep()); // it fell and rested
+    CHECK(at.y > -0.02f && at.y < 0.3f && lowest > -0.05f);    // on the floor, never through it
+    CHECK(at.x > 0.5f);                                        // it travelled with the hands
+    drop->Stop(world);
+    PhysicsWorld::Destroy();
+}
+
+// The drop goes with the corpse: Stop (or Lifetime) removes the entity and its body; off in the settings, nothing drops.
+void TestDroppedWeaponGoesWithTheCorpse() {
+    World world;
+    GearFloor(world, 0.0f);
+    if (!PhysicsWorld::IsActive()) return;
+    const entt::entity gun = world.CreateEmptyEntity(glm::vec3(0.0f, 1.0f, 0.0f), glm::vec3(0.0f), glm::vec3(1.0f), "Gun");
+    DroppedWeaponSettingsComponent cfg;
+    cfg.CollisionDelay = 0.0f;
+    auto drop = NpcDroppedWeapon::DropAt(world, gun, glm::vec3(0.0f), glm::vec3(0.0f), cfg);
+    CHECK(drop);
+    const entt::entity e = drop->Entity();
+    PhysicsWorld::Step(1.0f / 60.0f, world, {});
+    BodyState s;
+    CHECK(world.Registry.valid(e) && PhysicsWorld::GetBodyState((unsigned)entt::to_integral(e), s) && s.Valid);
+    drop->Stop(world);
+    PhysicsWorld::Step(1.0f / 60.0f, world, {});
+    CHECK(!world.Registry.valid(e) && !(PhysicsWorld::GetBodyState((unsigned)entt::to_integral(e), s) && s.Valid));
+    CHECK(world.Registry.valid(gun)); // the weapon presentation's own entity is its own to stop
+    // Lifetime: it goes by itself.
+    cfg.Lifetime = 0.5f;
+    auto brief = NpcDroppedWeapon::DropAt(world, gun, glm::vec3(0.0f), glm::vec3(0.0f), cfg);
+    const entt::entity e2 = brief->Entity();
+    for (int k = 0; k < 20; ++k) { brief->Update(world, 1.0f / 60.0f); PhysicsWorld::Step(1.0f / 60.0f, world, {}); }
+    CHECK(world.Registry.valid(e2));
+    for (int k = 0; k < 20; ++k) { brief->Update(world, 1.0f / 60.0f); PhysicsWorld::Step(1.0f / 60.0f, world, {}); }
+    CHECK(!world.Registry.valid(e2));
+    // Off: no drop. A hidden (holstered) gun: no drop.
+    cfg.Enabled = false;
+    CHECK(!NpcDroppedWeapon::DropAt(world, gun, glm::vec3(0.0f), glm::vec3(0.0f), cfg));
+    cfg.Enabled = true;
+    world.Registry.emplace<DeactivatedTag>(gun);
+    CHECK(!NpcDroppedWeapon::DropAt(world, gun, glm::vec3(0.0f), glm::vec3(0.0f), cfg));
+    PhysicsWorld::Destroy();
+}
+
+// Dropping the gun releases the body's weapon hold (the arms are the ragdoll's); the body tracks the gun's velocity for the drop.
+void TestDroppedWeaponReleasesTheHold() {
+    World world;
+    const entt::entity gun = world.CreateEmptyEntity(glm::vec3(0.0f, 1.0f, 0.0f), glm::vec3(0.0f), glm::vec3(1.0f), "Gun");
+    NpcBody body;
+    CHECK(!body.WeaponReleased());
+    auto drop = NpcDroppedWeapon::Drop(world, body, gun, glm::vec3(0.0f));
+    CHECK(body.WeaponReleased() && drop);
+    if (drop) drop->Stop(world);
+    // The same with no gun to drop (the hold still lets go).
+    NpcBody bare;
+    CHECK(!NpcDroppedWeapon::Drop(world, bare, entt::null, glm::vec3(0.0f)) && bare.WeaponReleased());
+    // The gun's velocity, from the positions it was seen at.
+    NpcBody mover;
+    CHECK(glm::length(mover.GunVelocity()) == 0.0f);
+    for (int k = 0; k < 30; ++k) mover.TrackGun(glm::vec3(5.0f * (float)k / 60.0f, 1.0f, 0.0f), 1.0f / 60.0f);
+    CHECK(std::abs(mover.GunVelocity().x - 5.0f) < 0.3f && std::abs(mover.GunVelocity().y) < 1e-3f);
+    // A bound: it is also what the drop gets.
+    NpcBody fast;
+    for (int k = 0; k < 30; ++k) fast.TrackGun(glm::vec3(5.0f * (float)k / 60.0f, 1.0f, 0.0f), 1.0f / 60.0f);
+    auto moving = NpcDroppedWeapon::Drop(world, fast, gun, glm::vec3(0.0f));
+    CHECK(moving && std::abs(moving->StartVelocity().x - fast.GunVelocity().x) < 1e-4f);
+    if (moving) moving->Stop(world);
+}
+
+// The settings: defaults without the component, the scene's when there is one, and they survive a save.
+void TestDroppedWeaponSettings() {
+    World none;
+    const DroppedWeaponSettingsComponent d;
+    const DroppedWeaponSettingsComponent got = NpcDroppedWeapon::SettingsIn(none);
+    CHECK(got.Enabled && got.Mass == d.Mass && got.ImpulseShare == d.ImpulseShare && got.Lifetime == 0.0f);
+    CHECK(d.Mass > 2.0f && d.Mass < 6.0f && d.Bounciness < 0.3f);
+    World world;
+    AssetLibrary assets;
+    const entt::entity e = world.CreateEmptyEntity(glm::vec3(0.0f), glm::vec3(0.0f), glm::vec3(1.0f), "Rules");
+    auto& c = world.Registry.emplace<DroppedWeaponSettingsComponent>(e);
+    c.Enabled = false; c.Mass = 2.5f; c.ImpulseShare = 0.4f; c.Lifetime = 30.0f; c.CollisionDelay = 0.2f;
+    CHECK(!NpcDroppedWeapon::SettingsIn(world).Enabled && NpcDroppedWeapon::SettingsIn(world).Mass == 2.5f);
+    const std::string json = SceneSerializer::SaveToString(world, assets);
+    World back;
+    AssetLibrary assets2;
+    CHECK(SceneSerializer::LoadFromString(back, assets2, json));
+    int seen = 0;
+    for (entt::entity b : back.Registry.view<DroppedWeaponSettingsComponent>()) {
+        const auto& r = back.Registry.get<DroppedWeaponSettingsComponent>(b);
+        ++seen;
+        CHECK(!r.Enabled && r.Mass == 2.5f && r.ImpulseShare == 0.4f && r.Lifetime == 30.0f && r.CollisionDelay == 0.2f && r.Friction == d.Friction);
+    }
+    CHECK(seen == 1);
+}
+
 } // namespace
 
 void RegisterRagdollTests(UnitTestSupport::TestList& tests) {
@@ -934,4 +1105,9 @@ void RegisterRagdollTests(UnitTestSupport::TestList& tests) {
     tests.push_back({"RagdollMusclesFoldTheKnees", TestRagdollMusclesFoldTheKnees});
     tests.push_back({"RagdollSettlesAndSleeps", TestRagdollSettlesAndSleeps});
     tests.push_back({"RagdollPoweredSettings", TestRagdollPoweredSettings});
+    tests.push_back({"DroppedWeaponTakesTheHandsVelocity", TestDroppedWeaponTakesTheHandsVelocity});
+    tests.push_back({"DroppedWeaponSettlesAndSleeps", TestDroppedWeaponSettlesAndSleeps});
+    tests.push_back({"DroppedWeaponGoesWithTheCorpse", TestDroppedWeaponGoesWithTheCorpse});
+    tests.push_back({"DroppedWeaponReleasesTheHold", TestDroppedWeaponReleasesTheHold});
+    tests.push_back({"DroppedWeaponSettings", TestDroppedWeaponSettings});
 }
