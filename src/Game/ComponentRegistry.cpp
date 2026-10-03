@@ -2038,6 +2038,29 @@ void RegisterEngineComponents() {
     }
     {
         ReflectComponent m;
+        m.Name = "Reverb Portal"; m.Icon = ICON_FA_VOLUME_HIGH; m.Category = "Audio";
+        m.Tooltip = "An opening between two Reverb Zones (a door, a window). A sound from the next room is heard from here: its direction, the length of\n"
+                    "the path through, softened by Open Amount and by the bend round the opening, with its own room's reverb. Faces local +Z.\n"
+                    "With no portal joining two rooms the sound takes the direct path (occlusion applies). Gameplay opens / closes it by writing Open Amount.";
+        using P = ReverbPortalComponent;
+        m.Fields = {
+            { "Enabled", T::Bool, TARTARUS_REFLECT_FIELD(P, Enabled), 0.0f, "Off: the portal is ignored." },
+            { "Extents", T::Vec3, TARTARUS_REFLECT_FIELD(P, Extents), 0.05f, "Half width, half height, half thickness of the opening in metres (local X / Y / Z).", 0.01f, 50.0f },
+            { "Open Amount", T::Float, TARTARUS_REFLECT_FIELD(P, OpenAmount), 0.01f, "0 = closed .. 1 = fully open. Set from gameplay to swing a door.", 0.0f, 1.0f },
+            { "Room A", T::String, TARTARUS_REFLECT_FIELD(P, RoomA), 0.0f, "Name of the Reverb Zone entity on the -Z side. Empty: the zone found one Probe Distance out on that side." },
+            { "Room B", T::String, TARTARUS_REFLECT_FIELD(P, RoomB), 0.0f, "Name of the Reverb Zone entity on the +Z side. Empty: the zone found one Probe Distance out on that side." },
+            { "Probe Distance", T::Float, TARTARUS_REFLECT_FIELD(P, ProbeDistance), 0.05f, "Metres out from the opening, on each side, where the rooms are looked up.", 0.05f, 10.0f },
+            { "Closed Gain dB", T::Float, TARTARUS_REFLECT_FIELD(P, ClosedGainDb), 0.5f, "Gain a fully closed portal lets through.", -80.0f, 0.0f },
+            { "Closed Cutoff", T::Float, TARTARUS_REFLECT_FIELD(P, ClosedCutoff), 10.0f, "Hz of the low-pass of a fully closed portal.", 100.0f, 20000.0f },
+            { "Diffraction Cutoff", T::Float, TARTARUS_REFLECT_FIELD(P, DiffractionCutoff), 10.0f, "Hz of the low-pass at Diffraction Max Angle (a sound bending hard round the opening is muffled).", 100.0f, 20000.0f },
+            { "Diffraction Max Angle", T::Float, TARTARUS_REFLECT_FIELD(P, DiffractionMaxAngle), 1.0f, "Degrees of bend (the angle between the way in and the way out) at which the loss is full.", 5.0f, 180.0f },
+            { "Diffraction Gain dB", T::Float, TARTARUS_REFLECT_FIELD(P, DiffractionGainDb), 0.5f, "Gain at that bend.", -60.0f, 0.0f },
+        };
+        m.Fields[2].Slider = true; m.Fields[2].Format = "%.2f";
+        Register<ReverbPortalComponent>(std::move(m));
+    }
+    {
+        ReflectComponent m;
         m.Name = "Reverb Bus"; m.Icon = ICON_FA_VOLUME_HIGH; m.Category = "Audio";
         m.Tooltip = "The runtime reverb: what each kind of sound sends into it, how it follows the listener's space (Reverb Zones, else the raycast\n"
                     "probe) and the occlusion low-pass for sources behind geometry. One per scene (the first counts). Gun tails are recorded in their\n"
@@ -2061,13 +2084,15 @@ void RegisterEngineComponents() {
             { "Occlusion Interval", T::Float, TARTARUS_REFLECT_FIELD(B, OcclusionInterval), 0.01f, "Seconds between line-of-sight checks of one voice.", 0.02f, 2.0f },
             { "Occlusion Rays Per Frame", T::Int, TARTARUS_REFLECT_FIELD(B, OcclusionRaysPerFrame), 1.0f, "Line-of-sight casts a frame, over every voice.", 1.0f, 64.0f },
             { "Occlusion Min Distance", T::Float, TARTARUS_REFLECT_FIELD(B, OcclusionMinDistance), 0.1f, "Closer sources are never occluded.", 0.0f, 50.0f },
-            { "Occlusion Glide", T::Float, TARTARUS_REFLECT_FIELD(B, OcclusionGlide), 0.1f, "Per second: how fast the low-pass follows a change (a source stepping behind a corner closes up, no click).", 0.5f, 100.0f },
+            { "Occlusion Glide", T::Float, TARTARUS_REFLECT_FIELD(B, OcclusionGlide), 0.1f, "Per second: how fast the low-pass follows a change (a source stepping behind a corner closes up, no click), and a portal voice follows a door swinging.", 0.5f, 100.0f },
+            { "Portals Enabled", T::Bool, TARTARUS_REFLECT_FIELD(B, PortalsEnabled), 0.0f, "A voice in another room is heard from the Reverb Portal that joins the rooms (direction, path length, open amount, bend), with its own room's reverb." },
+            { "Remote Reverb Hold", T::Float, TARTARUS_REFLECT_FIELD(B, RemoteReverbHold), 0.1f, "Seconds the remote room's reverb keeps running after the last voice heard through a portal (its tail rings out).", 0.0f, 30.0f },
         };
         const std::pair<const char*, const char*> groups[] = {
             {"Send Foley", "Sends"}, {"Send Footsteps", "Sends"}, {"Send Actions", "Sends"}, {"Send Impacts", "Sends"}, {"Send Casings", "Sends"},
             {"Send Voice", "Sends"}, {"Send Shot", "Sends"}, {"Send Tail", "Sends"},
             {"Occlusion Enabled", "Occlusion"}, {"Occlusion Cutoff", "Occlusion"}, {"Occlusion Interval", "Occlusion"}, {"Occlusion Rays Per Frame", "Occlusion"},
-            {"Occlusion Min Distance", "Occlusion"}, {"Occlusion Glide", "Occlusion"}};
+            {"Occlusion Min Distance", "Occlusion"}, {"Occlusion Glide", "Occlusion"}, {"Portals Enabled", "Portals"}, {"Remote Reverb Hold", "Portals"}};
         for (ReflectField& f : m.Fields)
             for (const auto& [n, g] : groups)
                 if (std::strcmp(f.Name, n) == 0) f.Group = g;

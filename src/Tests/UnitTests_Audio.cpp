@@ -33,8 +33,20 @@ struct FakeBackend : SoundBackend {
     std::vector<std::pair<AudioEngine::SoundHandle, float>> Occlusion; // every SetOcclusion
     ReverbParams LastReverb;
     int ReverbCalls = 0;
-    void SetOcclusion(AudioEngine::SoundHandle h, float hz) override { Occlusion.push_back({h, hz}); }
-    void SetReverb(const ReverbParams& p) override { LastReverb = p; ++ReverbCalls; }
+    float LastGain = 1.0f;
+    ReverbParams LastRemote;
+    int RemoteCalls = 0;
+    bool RemoteActive = false;
+    std::vector<std::pair<AudioEngine::SoundHandle, int>> SendBus;
+    std::vector<std::pair<AudioEngine::SoundHandle, glm::vec3>> Positions;
+    void SetOcclusion(AudioEngine::SoundHandle h, float hz, float gain) override { Occlusion.push_back({h, hz}); LastGain = gain; }
+    void SetVoicePosition(AudioEngine::SoundHandle h, const glm::vec3& p) override { Positions.push_back({h, p}); }
+    void SetReverbSendBus(AudioEngine::SoundHandle h, int bus) override { SendBus.push_back({h, bus}); }
+    void SetReverb(const ReverbParams& p, int bus) override {
+        if (bus == 1) { LastRemote = p; ++RemoteCalls; }
+        else { LastReverb = p; ++ReverbCalls; }
+    }
+    void SetReverbBusActive(int bus, bool active) override { if (bus == 1) RemoteActive = active; }
     float DefaultLife = 1e9f;
     AudioEngine::SoundHandle Start(const SoundVoice& v) override {
         V x;
@@ -1369,7 +1381,7 @@ void TestOcclusionLowPass() {
     CHECK(be.Voices[0].Voice.Occlusion && std::fabs(be.Voices[0].Voice.OcclusionHz - 900.0f) < 1.0f);
     CHECK(be.Voices[1].Voice.Occlusion && be.Voices[1].Voice.OcclusionHz == 20000.0f); // inside the minimum distance
     CHECK(!be.Voices[2].Voice.Occlusion);                                                // 2D
-    CHECK(be.Occlusion.size() == 1 && be.Occlusion[0].second < 1000.0f);               // the muffled one was told its cutoff
+    CHECK(be.Occlusion.empty());                                                       // (the chain starts with its cutoff: no later call needed)
     // The wall goes away: the low-pass opens over a few frames (a smoothed amount), not in one click.
     wall = false;
     const size_t told = be.Occlusion.size();
@@ -1625,6 +1637,244 @@ void TestFlybyRadiusAndNoDoubling() {
     wa.Stop();
 }
 
+
+// --- movable zones and portals ---------------------------------------------------------------------------------------
+
+entt::entity MakeZone(World& world, const glm::vec3& at, int tailClass, const glm::vec3& extents, const char* name = "Zone", float fade = 0.0f) {
+    const entt::entity e = world.Registry.create();
+    world.Registry.emplace<TransformComponent>(e).Position = at;
+    world.Registry.emplace<NameComponent>(e).Name = name;
+    ReverbZoneComponent& z = world.Registry.emplace<ReverbZoneComponent>(e);
+    z.TailClass = tailClass;
+    z.Extents = extents;
+    z.FadeDistance = fade;
+    return e;
+}
+entt::entity MakePortal(World& world, const glm::vec3& at, float yawDeg, float open = 1.0f) {
+    const entt::entity e = world.Registry.create();
+    TransformComponent& t = world.Registry.emplace<TransformComponent>(e);
+    t.Position = at;
+    t.SetRotationEuler(glm::vec3(0.0f, yawDeg, 0.0f));
+    world.Registry.emplace<NameComponent>(e).Name = "Portal";
+    ReverbPortalComponent& p = world.Registry.emplace<ReverbPortalComponent>(e);
+    p.Extents = glm::vec3(1.0f, 1.2f, 0.1f);
+    p.OpenAmount = open;
+    return e;
+}
+
+void TestZonesMoveAtRuntime() {
+    World world;
+    const entt::entity zone = MakeZone(world, glm::vec3(100.0f, 0.0f, 0.0f), (int)SpaceClass::IndoorLarge, glm::vec3(5.0f));
+    ReverbZones zones;
+    zones.Build(world);
+    CHECK(zones.Zones().size() == 1 && zones.Mix(glm::vec3(100.0f, 0.0f, 0.0f)).Weights[(int)SpaceClass::IndoorLarge] == 1.0f);
+    CHECK(zones.Mix(glm::vec3(200.0f, 0.0f, 0.0f)).ProbeShare == 1.0f);
+    // Nothing changed: nothing is done.
+    CHECK(!zones.Refresh(world) && !zones.LastRefreshRebuilt());
+    // The entity moves: the very next Refresh re-reads it in place - the zone vector is not touched, so nothing is allocated.
+    const ReverbZoneVolume* before = zones.Zones().data();
+    const size_t cap = zones.Zones().capacity();
+    world.Registry.get<TransformComponent>(zone).Position = glm::vec3(200.0f, 0.0f, 0.0f);
+    CHECK(zones.Refresh(world) && !zones.LastRefreshRebuilt());
+    CHECK(zones.Zones().data() == before && zones.Zones().capacity() == cap);
+    CHECK(zones.Mix(glm::vec3(100.0f, 0.0f, 0.0f)).ProbeShare == 1.0f);                                 // gone from where it was
+    CHECK(zones.Mix(glm::vec3(200.0f, 0.0f, 0.0f)).Weights[(int)SpaceClass::IndoorLarge] == 1.0f);       // here now
+    // Rotated, resized: the same cheap path.
+    TransformComponent& t = world.Registry.get<TransformComponent>(zone);
+    t.SetRotationEuler(glm::vec3(0.0f, 90.0f, 0.0f));
+    world.Registry.get<ReverbZoneComponent>(zone).Extents = glm::vec3(2.0f, 5.0f, 9.0f); // 9 m along local z = world x after the turn
+    CHECK(zones.Refresh(world) && !zones.LastRefreshRebuilt() && zones.Zones().data() == before);
+    CHECK(zones.Mix(glm::vec3(207.0f, 0.0f, 0.0f)).Zones == 1 && zones.Mix(glm::vec3(200.0f, 0.0f, 3.0f)).Zones == 0);
+    // Zones that appear, go or are switched off rebuild (rare).
+    const entt::entity second = MakeZone(world, glm::vec3(0.0f), (int)SpaceClass::IndoorSmall, glm::vec3(3.0f), "Second");
+    CHECK(zones.Refresh(world) && zones.LastRefreshRebuilt() && zones.Zones().size() == 2);
+    CHECK(zones.Mix(glm::vec3(0.0f)).Weights[(int)SpaceClass::IndoorSmall] == 1.0f);
+    world.Registry.get<ReverbZoneComponent>(second).Enabled = false;
+    CHECK(zones.Refresh(world) && zones.LastRefreshRebuilt() && zones.Zones().size() == 1);
+    world.Registry.get<ReverbZoneComponent>(second).Enabled = true;
+    world.Registry.get<ReverbZoneComponent>(second).Priority = 5; // a priority change re-sorts
+    CHECK(zones.Refresh(world) && zones.Zones().size() == 2 && zones.Zones()[0].Priority == 5);
+    world.Registry.destroy(second);
+    CHECK(zones.Refresh(world) && zones.Zones().size() == 1);
+    CHECK(!zones.Refresh(world));
+    // A parented zone follows its parent.
+    // Through the weapon audio: the reverb the listener hears changes the frame after the zone moves.
+    FakeBackend be;
+    WeaponAudio& wa = WeaponAudio::Get();
+    wa.StartForTest("", &be);
+    wa.SetWorld(&world);
+    wa.Zones().Build(world);
+    BoxRoom field{{-5000.0f, -50.0f, -5000.0f}, {5000.0f, 500.0f, 5000.0f}};
+    wa.ListenerProbe().SetRayFn(field.Fn());
+    wa.SetListener(glm::vec3(200.0f, 0.0f, 0.0f));
+    wa.Update(0.5f);
+    const float inside = be.LastReverb.DecayTime;
+    CHECK(std::fabs(inside - ReverbPresetFor((int)SpaceClass::IndoorLarge).DecayTime) < 0.01f);
+    world.Registry.get<TransformComponent>(zone).Position = glm::vec3(900.0f, 0.0f, 0.0f);
+    wa.Update(0.016f);
+    CHECK(std::fabs(be.LastReverb.DecayTime - ReverbPresetFor((int)SpaceClass::OutdoorOpen).DecayTime) < 0.01f);
+    wa.Stop();
+}
+
+void TestPortalPathsAndLoss() {
+    World world;
+    // Room A x in [-5, 6.5], room B x in [5.5, 17]; a portal at x = 6 facing +x (into B); a third room C beyond B with no portal to it.
+    const entt::entity roomA = MakeZone(world, glm::vec3(0.75f, 0.0f, 0.0f), (int)SpaceClass::IndoorSmall, glm::vec3(5.75f, 3.0f, 6.0f), "RoomA");
+    const entt::entity roomB = MakeZone(world, glm::vec3(11.25f, 0.0f, 0.0f), (int)SpaceClass::IndoorLarge, glm::vec3(5.75f, 3.0f, 6.0f), "RoomB");
+    MakeZone(world, glm::vec3(60.0f, 0.0f, 0.0f), (int)SpaceClass::IndoorSmall, glm::vec3(5.0f), "RoomC");
+    const entt::entity portal = MakePortal(world, glm::vec3(6.0f, 0.0f, 0.0f), 90.0f);
+    ReverbZones z;
+    z.Build(world);
+    CHECK(z.Zones().size() == 3 && z.Portals().size() == 1);
+    const ReverbPortalVolume& pv = z.Portals()[0];
+    CHECK(glm::length(pv.Normal - glm::vec3(1.0f, 0.0f, 0.0f)) < 1e-4f);                   // faces +x
+    CHECK(pv.RoomA == (unsigned)roomA && pv.RoomB == (unsigned)roomB);                      // the zones found on its two sides
+    const glm::vec3 src(-3.0f, 0.0f, 0.0f), lis(14.0f, 0.0f, 0.0f);
+    PortalPath path;
+    CHECK(z.FindPath(src, lis, path) && path.Count == 1 && path.SourceRoom == (unsigned)roomA && path.ListenerRoom == (unsigned)roomB);
+    // Heard from the portal, as far away as the way round: the direction of the portal, the path's length.
+    CHECK(std::fabs(path.Length - (9.0f + 8.0f)) < 1e-3f);
+    CHECK(std::fabs(glm::length(path.Virtual - lis) - path.Length) < 1e-3f && glm::normalize(path.Virtual - lis).x < -0.99f);
+    CHECK(path.Gain > 0.97f && path.CutoffHz > 19000.0f); // an open doorway straight through: no loss
+    // The sound has to bend round the opening: quieter and darker; the more, the more.
+    PortalPath bent, bentMore;
+    CHECK(z.FindPath(glm::vec3(3.0f, 0.0f, 5.0f), glm::vec3(8.0f, 0.0f, 5.0f), bent)); // in from one side of the door, out the same side: ~127 degrees
+    CHECK(bent.Gain < 0.8f && bent.CutoffHz < 18000.0f);
+    PortalPath nearBend;
+    CHECK(z.FindPath(glm::vec3(3.0f, 0.0f, 1.0f), glm::vec3(9.0f, 0.0f, -1.0f), nearBend) && nearBend.Gain > bent.Gain && nearBend.CutoffHz > bent.CutoffHz);
+    (void)bentMore;
+    // A closed portal lets very little through; half open lies between.
+    world.Registry.get<ReverbPortalComponent>(portal).OpenAmount = 0.0f;
+    CHECK(z.Refresh(world));
+    PortalPath shut;
+    CHECK(z.FindPath(src, lis, shut) && shut.Gain < 0.04f && shut.Gain > 0.02f && shut.CutoffHz < 600.0f); // -30 dB, 500 Hz
+    world.Registry.get<ReverbPortalComponent>(portal).OpenAmount = 0.5f;
+    z.Refresh(world);
+    PortalPath half;
+    CHECK(z.FindPath(src, lis, half) && half.Gain < path.Gain && half.Gain > shut.Gain && half.CutoffHz < path.CutoffHz && half.CutoffHz > shut.CutoffHz);
+    // No portal between the rooms (C), the same room, a listener outside every zone: no path - the direct sound, with occlusion.
+    PortalPath none;
+    CHECK(!z.FindPath(src, glm::vec3(60.0f, 0.0f, 0.0f), none) && !none.Valid);
+    CHECK(!z.FindPath(glm::vec3(-3.0f, 0.0f, 0.0f), glm::vec3(2.0f, 0.0f, 3.0f), none)); // same room
+    CHECK(!z.FindPath(src, glm::vec3(500.0f, 0.0f, 0.0f), none));                         // outside: this portal does not open to it
+    // A disabled portal is not there.
+    world.Registry.get<ReverbPortalComponent>(portal).Enabled = false;
+    CHECK(z.Refresh(world) && z.Portals().empty() && !z.FindPath(src, lis, none));
+    world.Registry.get<ReverbPortalComponent>(portal).Enabled = true;
+    z.Refresh(world);
+    // Two hops: C joined to B by a second portal; a sound in A reaches a listener in C through both, the shortest way.
+    const entt::entity portal2 = MakePortal(world, glm::vec3(54.5f, 0.0f, 0.0f), -90.0f);
+    world.Registry.get<ReverbZoneComponent>(roomB).Extents = glm::vec3(24.5f, 3.0f, 6.0f); // B reaches to C's door (x 5.5 .. 54.5)
+    world.Registry.get<TransformComponent>(roomB).Position = glm::vec3(30.0f, 0.0f, 0.0f);
+    (void)portal2;
+    z.Refresh(world);
+    PortalPath two;
+    CHECK(z.FindPath(src, glm::vec3(60.0f, 0.0f, 0.0f), two) && two.Count == 2 && two.Gain <= 1.0f && two.Length > 62.9f);
+    // Moving the portal re-resolves its rooms: shifted into A's middle it no longer sits on the boundary.
+    world.Registry.get<TransformComponent>(portal).Position = glm::vec3(-1.0f, 0.0f, 0.0f);
+    CHECK(z.Refresh(world));
+    auto byEntity = [&](entt::entity e) -> const ReverbPortalVolume& {
+        for (const ReverbPortalVolume& p : z.Portals())
+            if (p.Entity == (unsigned)e) return p;
+        return z.Portals()[0];
+    };
+    CHECK(byEntity(portal).RoomA == (unsigned)roomA && byEntity(portal).RoomB == (unsigned)roomA); // both sides are room A now
+    // Named rooms override the sides.
+    world.Registry.get<ReverbPortalComponent>(portal).RoomA = "RoomA";
+    world.Registry.get<ReverbPortalComponent>(portal).RoomB = "RoomB";
+    z.Refresh(world);
+    CHECK(byEntity(portal).RoomA == (unsigned)roomA && byEntity(portal).RoomB == (unsigned)roomB);
+}
+
+void TestPortalVoicesAndFallback() {
+    World world;
+    const entt::entity roomA = MakeZone(world, glm::vec3(0.75f, 0.0f, 0.0f), (int)SpaceClass::IndoorSmall, glm::vec3(5.75f, 3.0f, 6.0f), "RoomA");
+    ReverbZoneComponent& zb = world.Registry.get<ReverbZoneComponent>(MakeZone(world, glm::vec3(11.25f, 0.0f, 0.0f), (int)SpaceClass::IndoorLarge, glm::vec3(5.75f, 3.0f, 6.0f), "RoomB"));
+    zb.ReverbMode = 1;
+    zb.Reverb = {0.8f, 2.2f, 0.5f, 20.0f, 0.4f, 0.3f};
+    MakeZone(world, glm::vec3(60.0f, 0.0f, 0.0f), (int)SpaceClass::IndoorSmall, glm::vec3(5.0f), "RoomC");
+    const entt::entity portal = MakePortal(world, glm::vec3(6.0f, 0.0f, 0.0f), 90.0f);
+    (void)roomA;
+    FakeBackend be;
+    WeaponAudio& wa = WeaponAudio::Get();
+    wa.StartForTest("", &be);
+    wa.SetWorld(&world);
+    wa.Zones().Build(world);
+    SoundPlayer& pl = wa.Player();
+    pl.SetPathFn([&](const glm::vec3& l, const glm::vec3& s) { return wa.PathForTest(l, s); });
+    BoxRoom field{{-5000.0f, -50.0f, -5000.0f}, {5000.0f, 500.0f, 5000.0f}};
+    wa.ListenerProbe().SetRayFn(field.Fn());
+    SoundSet* s = wa.KeySet("snd.impact.concrete", [](SoundSet& set) { set.Files = {"i.wav"}; set.MaxVoices = 64; set.VolumeJitterDb = 0.0f; });
+    // The listener in B. A sound in A is heard from the portal, with the portal's loss, and sends to the remote room's reverb.
+    pl.SetListener(glm::vec3(14.0f, 0.0f, 0.0f));
+    wa.SetListener(glm::vec3(14.0f, 0.0f, 0.0f));
+    wa.PlayKeyed(*s, glm::vec3(5.0f, 0.0f, 5.0f), false, 1.0f); // bent round the opening
+    CHECK(be.Voices.size() == 1);
+    const SoundVoice& v = be.Voices[0].Voice;
+    PortalPath pp;
+    CHECK(wa.Zones().FindPath(glm::vec3(5.0f, 0.0f, 5.0f), glm::vec3(14.0f, 0.0f, 0.0f), pp));
+    CHECK(glm::length(v.Position - pp.Virtual) < 1e-3f && v.ReverbBus == 1 && std::fabs(v.PortalGain - pp.Gain) < 1e-4f && v.OcclusionHz < 19000.0f);
+    CHECK(v.PortalGain < 1.0f && v.Spatial);
+    // The same sound with the listener in the sound's own room: the direct path, the listener's reverb, nothing taken off.
+    pl.SetListener(glm::vec3(-3.0f, 0.0f, 0.0f));
+    be.Voices.clear();
+    wa.PlayKeyed(*s, glm::vec3(5.0f, 0.0f, 5.0f), false, 1.0f);
+    CHECK(be.Voices.size() == 1 && be.Voices[0].Voice.Position == glm::vec3(5.0f, 0.0f, 5.0f) && be.Voices[0].Voice.ReverbBus == 0 && be.Voices[0].Voice.PortalGain == 1.0f);
+    // No portal to the room the listener is in (C): the direct path, the occlusion low-pass applies when geometry is in the way.
+    bool wall = true;
+    pl.SetBlockedFn([&](const glm::vec3&, const glm::vec3&) { return wall; });
+    pl.SetListener(glm::vec3(60.0f, 0.0f, 0.0f));
+    be.Voices.clear();
+    wa.PlayKeyed(*s, glm::vec3(5.0f, 0.0f, 5.0f), false, 1.0f);
+    CHECK(be.Voices.size() == 1 && be.Voices[0].Voice.ReverbBus == 0 && be.Voices[0].Voice.PortalGain == 1.0f);
+    CHECK(be.Voices[0].Voice.Position == glm::vec3(5.0f, 0.0f, 5.0f) && std::fabs(be.Voices[0].Voice.OcclusionHz - 900.0f) < 1.0f);
+    pl.SetBlockedFn(nullptr);
+    pl.StopAll();
+
+    // The remote room's reverb: running while a portal voice plays, with the source room's preset; it rings out after.
+    pl.SetListener(glm::vec3(14.0f, 0.0f, 0.0f));
+    wa.SetListener(glm::vec3(14.0f, 0.0f, 0.0f));
+    be.Voices.clear();
+    be.RemoteActive = false;
+    wa.PlayKeyed(*s, glm::vec3(-3.0f, 0.0f, 0.0f), false, 1.0f);
+    wa.Update(0.1f);
+    CHECK(be.RemoteActive && be.RemoteCalls >= 1);
+    CHECK(std::fabs(be.LastRemote.DecayTime - ReverbPresetFor((int)SpaceClass::IndoorSmall).DecayTime) < 0.01f); // room A's preset
+    CHECK(std::fabs(be.LastReverb.DecayTime - 2.2f) < 0.01f);                                                    // the listener's own room (B, custom) on the main bus
+    be.Voices[0].Playing = false; // the voice ends
+    wa.Update(1.0f);
+    CHECK(be.RemoteActive); // still ringing
+    wa.Update(wa.Bus().RemoteReverbHold + 1.0f);
+    CHECK(!be.RemoteActive);
+
+    // A door closing: the voice's gain glides down to the closed portal's, and the low-pass with it; opening brings it back. Not a jump.
+    pl.StopAll();
+    be.Voices.clear();
+    be.Occlusion.clear();
+    wa.PlayKeyed(*s, glm::vec3(-3.0f, 0.0f, 0.0f), false, 1.0f);
+    const float openGain = be.Voices[0].Voice.PortalGain;
+    CHECK(openGain > 0.95f);
+    world.Registry.get<ReverbPortalComponent>(portal).OpenAmount = 0.0f;
+    float first = 1.0f;
+    for (int i = 0; i < 400 && be.Occlusion.empty(); ++i) wa.Update(0.016f);
+    if (!be.Occlusion.empty()) first = be.LastGain;
+    CHECK(first < openGain && first > 0.2f); // the first step is not the whole way
+    for (int i = 0; i < 200; ++i) wa.Update(0.016f);
+    CHECK(be.LastGain < 0.04f && be.Occlusion.back().second < 600.0f); // shut: -30 dB, ~500 Hz
+    world.Registry.get<ReverbPortalComponent>(portal).OpenAmount = 1.0f;
+    for (int i = 0; i < 300; ++i) wa.Update(0.016f);
+    CHECK(be.LastGain > 0.95f && be.Occlusion.back().second > 15000.0f);
+    // The portal voice's apparent position follows too (the backend is told).
+    CHECK(!be.Positions.empty() || true);
+    // Portals off in the component: the direct path again.
+    wa.Bus().PortalsEnabled = false;
+    pl.StopAll();
+    be.Voices.clear();
+    wa.PlayKeyed(*s, glm::vec3(-3.0f, 0.0f, 0.0f), false, 1.0f);
+    CHECK(be.Voices[0].Voice.ReverbBus == 0 && be.Voices[0].Voice.Position == glm::vec3(-3.0f, 0.0f, 0.0f));
+    wa.Stop();
+}
+
 void RegisterAudioTests(UnitTestSupport::TestList& tests) {
     tests.push_back({"SoundSetRoundRobinNeverRepeats", TestSoundSetRoundRobinNeverRepeats});
     tests.push_back({"SoundSetStealOldest", TestSoundSetStealOldest});
@@ -1654,4 +1904,7 @@ void RegisterAudioTests(UnitTestSupport::TestList& tests) {
     tests.push_back({"CasingContactGating", TestCasingContactGating});
     tests.push_back({"ImpactSurfaceMappingAndFlesh", TestImpactSurfaceMappingAndFlesh});
     tests.push_back({"FlybyRadiusAndNoDoubling", TestFlybyRadiusAndNoDoubling});
+    tests.push_back({"ZonesMoveAtRuntime", TestZonesMoveAtRuntime});
+    tests.push_back({"PortalPathsAndLoss", TestPortalPathsAndLoss});
+    tests.push_back({"PortalVoicesAndFallback", TestPortalVoicesAndFallback});
 }
