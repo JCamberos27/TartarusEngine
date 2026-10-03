@@ -2708,6 +2708,7 @@ void EditorLayer::Draw(World& world, AssetLibrary& assets, Camera& editorCamera,
     DrawRevertScenePrompt(world, assets);
     DrawSettingsWindow(world); // #4 item 3 — merged Preferences + Project Settings
     DrawLightingPanel(world); // #236 R2
+    DrawAudioDebugPanel();
     DrawAssetLibraryPanel(world, assets);
     DrawAnimatorWindow(world); // Animator v2
     DrawPhysicsDebugWindow(world); // #185 debug tooling

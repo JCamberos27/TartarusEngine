@@ -268,9 +268,8 @@ Choosing the space (`WeaponAudio::ResolveSpace`), per tail that plays:
    metres, Scale ignored). A zone has a Tail Class, a Tail Gain, a Priority and a Fade Distance. Its weight is 0 at the
    surface and rises (smoothstep) to 1 Fade Distance inside. Zones layer from the highest priority down, each taking its weight
    of what is still unclaimed, so an edge is a crossfade and a small room inside a hall sits on top of it. The zones also
-   store the reverb preset for the runtime reverb bus to come (Room Size, Decay Time, HF Damping, Pre-Delay, Wet Level,
-   Early/Late Mix): Reverb Mode "Class Default" uses the preset of the Tail Class (`ReverbPresetFor`), "Custom" the fields.
-   Zones are read when Play starts (they do not move).
+   drive the runtime reverb and the ambience beds (see "Reverb bus" below). Zones that move, open or change are re-read each
+   frame (`ReverbZones::Refresh`).
 2. Whatever share of the mix no zone claims (all of it, outside every zone) is the **probe's**
    (`EnvironmentProbe`): rays from the muzzle through `PhysicsWorld::RaycastSolid` (statics and kinematic bodies; props, ragdolls
    and triggers do not count): one up, a diagonal ring at 45 degrees, a horizontal ring (Env Ray Count, default 12 = 1 + 4 + 7).
@@ -326,9 +325,11 @@ footsteps use the same stride rule per soldier, 3D, skipped beyond NPC Step Max 
 ### Audio log
 
 `WEAPON_TEST_AUDIO_LOG=<file>` (or `NPC_TEST_RECORD=<dir>`, writing `<dir>/audio.txt`) logs, with the existing `S` / `L` lines:
-`W <sim time> <key> <file|-> <voices> <volume> <pitch> <2d> <x y z>` for every weapon and foley voice (`-` = the key has no
-recorded file yet). `tools/mix_npc_video.py` reads only the `S` lines (Combat folder placeholders): it needs `W` support to
-mix the new layers.
+`W <sim time> <key> <file|-> <voices> <volume> <pitch> <2d> <x y z> <min> <max> <seek>` for every weapon and foley voice (`-` = the
+key has no recorded file yet), and `R <sim time> <layers> (<ir> <weight> <wet dB> <pre-delay ms>)...` when the reverb's target
+changes. `tools/mix_npc_video.py` mixes the `S` and `W` lines (dry). For the real thing, reverb and limiter included, set
+`AUDIO_CAPTURE=<wav>`: the engine records its master output (after the limiter, 48 kHz float) for the whole session, and
+`mix_npc_video.py` uses `<dir>/master.wav` instead of its own mix when it is there.
 
 ### Tests
 
@@ -337,6 +338,89 @@ weights, the autofire voice cap, `snd.` event to set and 2D / 3D, manifest and l
 surfaces, landing and cloth-loop rules; environment tails: the ray set, the classifier on analytic rooms (small room, hall,
 courtyard, open ground), crossfade weights (sum to 1, continuous through every threshold), probe refresh throttling (per shooter,
 by time and by distance), class selection and the fallback to the generic tail, Reverb Zone containment / priority / edge blend /
-fallback to the probe. `--weapon-test` ends by replaying every frame's animator state against the
+fallback to the probe; the convolver (exact against a direct convolution, threaded tail identical to inline, cost), the reverb's
+crossfade (no step, equal power), level calibration and filters, the master limiter (never over the ceiling, transparent below it,
+release), the loudness meter (BS.1770 reference tones), the offline engine end to end. `--audio-test` (below) checks the mix.
+`--weapon-test` ends by replaying every frame's animator state against the
 controllers' `snd.*` events: each crossed event must have been played, in order, within +-1 frame, plus counts for the
 gear sounds (ADS, fire mode, dry fire, equip / unequip) and the shot layers.
+
+## Reverb bus, master limiter, ambience
+
+Code: `src/Audio/` (`Convolution`, `ConvolutionReverb`, `MasterLimiter`, `LoudnessMeter`, wired in `AudioEngine`) and
+`WeaponAudio` (what the reverb is told, the ambience beds).
+
+**Output graph.** Voices -> their bus (SFX, Music, Ambient, UI, Voice; Project Settings > Audio) -> a meter per bus -> the
+**master limiter** -> the device. A voice with a reverb send also feeds one of two reverb buses through a splitter (post fader,
+post spatialisation, post occlusion): bus 0 is the listener's room, bus 1 the "remote room" of a voice heard through a portal.
+The reverb returns go into the limiter too, at Reverb Bus > Return Level x the SFX bus volume.
+
+**Convolution reverb.** Real recorded impulse responses only (manifest keys `ir.<class>`, `Audio/IR/`; credits with the sources
+above). A mono sum of the send is convolved with the stereo IR: taps 0-255 directly, 256-8191 as 256-frame FFT partitions on the
+audio thread, the rest as 4096-frame partitions on a worker thread with a whole block of slack (a late block is skipped and
+counted, never waited for). Zero latency. IRs are energy-normalised when loaded, so a send of 1 into a space puts its return at
+exactly that space's Wet dB under the dry sound. A space is up to two layers (the two heaviest IRs of the listener's zones and,
+for what no zone claims, the listener's probe); a change of space is a linear crossfade of the layers' weights at equal power
+(gain sqrt(weight)) over Glide Time, and only the weights move: a layer on its way out keeps its level and filters. A convolver
+only runs while its layer is audible. Each layer: IR, Wet dB, Pre-Delay (glided at <= 2 % so it never pitch-shifts), HF Damping
+(dB cut of a 4 kHz high shelf on the input), Low Cut (2nd-order high-pass on the input).
+
+**Calibration** (Reverb Bus component). Wet / dry at the listener for a send of 1: Outdoor Open -20 dB, Outdoor Urban -12,
+Indoor Small -6, Indoor Large -4 (Wet <class> dB), x Wet Scale, + the zone's Wet (dB) trim. Sends are per category and 1 by
+default (foley, footsteps, gun actions, impacts / flybys, casings, the shot's close / mech / sub); the recorded tails send 0
+(they already hold their room) and so do the ambience beds.
+
+**Reverb Zone fields.** Reverb Mode "Class Default" = the class's IR at the class's level; "Custom": IR (a file; empty = the
+class's), Wet (dB) trim, Pre-Delay, HF Damping (dB), Low Cut (Hz). Ambience (a sound key, e.g. `snd.amb.indoor_large`) and
+Ambience Volume (linear). Scenes saved with the old feedback-network reverb still load: their Wet Level becomes a trim (its ratio
+to the class's old default, +-12 dB) and HF Damping 0..1 becomes 0..10 dB; Room Size, Decay Time and Early/Late Mix are ignored
+(the IR is the room).
+
+**Ambience beds.** Each zone with an Ambience key adds a looping 2D bed on the Ambient bus at sqrt(the share the listener's zones
+with that key claim) x their Ambience Volume (equal power across a zone edge), moving at most 1 per second (a teleport is a 1 s
+fade). A bed starts when it becomes audible and stops once faded out.
+
+**Master limiter.** -1 dBFS ceiling, 1.5 ms lookahead, 80 ms release (Reverb Bus > Master Limiter, Ceiling, Lookahead, Release):
+the sample peak never exceeds the ceiling, the inter-sample peak stays within a few tenths of a dB of it, and below the ceiling the
+signal passes bit for bit (delayed by the lookahead).
+
+## Mix and 3D distance
+
+A voice plays at `set volume x 10^(mix_db / 20)`: `mix_db` is the manifest's per file (written by `tools/audio/apply_mix.py` from
+`recipes/mix.json`, the level hierarchy relative to the player's shot), applied once, nothing loudness-related on top. Component
+volumes (Foley, Impact, Weapon Audio) default to 1 and only scale (per gait, per fall speed, ...). Player Gain (0.75) applies to
+the player's own shot layers only.
+
+Every 3D sound is logarithmic: full level inside Min, then Min / d (-6 dB per doubling), held at Max. Sets the spec levels at a
+distance (`mix.distance_refs_m`) are calibrated so the level at that distance is the spec's: gain x Ref / Min.
+
+| Sound | Min (m) | Max (m) | Spec level holds at |
+| --- | --- | --- | --- |
+| Shot close / mech (Weapon Audio Shot Min Distance) | 3 | 90 (Max Distance) | npc_shot 10 m |
+| Shot sub / tail / far (Bass Min Distance) | 6 | 90 / 160 (Far Max Distance) | npc_shot 10 m |
+| Gun gear / foley in the world (Event Min / Max Distance) | 1.5 | 25 | |
+| Soldier footsteps (Foley NPC Step Min / Max Distance) | 2.5 | 28 | |
+| Bullet impacts (Impact Min / Max Distance) | 2 | 60 | 5 m |
+| Casings (Casing Min / Max Distance) | 1.5 | 25 | |
+| Flybys (Flyby Min / Max Distance) | 0.5 | 14 | |
+
+## Audio panel
+
+Window > Audio (editor): peak and loudness meters for the master, each bus and the reverb return, the limiter's gain reduction,
+the voice count, each reverb bus's running IRs and weights, and in Play the zones at the listener, the reverb's target and the
+ambience beds.
+
+## --audio-test
+
+`TartarusEngine.exe --audio-test [scene] [--report <file>]` (default scene `AudioLab`): the real engine rendered offline (no device,
+no window) under the real `WeaponAudio`, over the scene's Reverb Zones.
+
+1. Levels: every manifest key played alone, dry and without jitter, LUFS-M max against `recipes/mix.json` (reference + level +
+   surface offset), 3D at its reference distance where the spec gives one; the player's and a soldier's shot (close + sub + mech).
+2. Wet / dry: an impact 2 m in front of the centre of each zone; reverb return energy against the dry signal's, against the zone's
+   calibrated level x the impacts' send.
+3. Ambience: each zone's bed at its centre against the spec's ambience level.
+4. Peak: a 30-round burst with impacts and a soldier's shots in the first Indoor Large zone; the master never exceeds the ceiling.
+
+Exit 1 when a level is off by more than 2 dB, a wet / dry by more than 3 dB, the master peak is over the ceiling, or a part could
+not run (no manifest reference, no spec, a zone with no IR).
