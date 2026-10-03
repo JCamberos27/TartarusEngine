@@ -1,0 +1,59 @@
+{
+  "_doc": "Environment-aware gunshot tails (build_tails.py). REAL RECORDINGS ONLY: every file is a time-split, EQ'd, faded slice of the Tactical Shooter Pack's own With_Tail / long-tail recordings - nothing is synthesised, no IR is convolved. All of the pack's tails were recorded outdoors (field / built-up site), so only the two outdoor classes can be built honestly; indoor_small and indoor_large need real measured impulse responses (or real indoor gunfire) and are NOT built: the engine plays the generic fire_tail for them until files named fire_tail_indoor_small_<n>.wav / fire_tail_indoor_large_<n>.wav + manifest keys exist (no code change). Slice = [onset + start_s, onset + start_s + length_s]; the fade-in hides the body that the close layer carries; fade_out is the share of the slice the cosine fade-out takes. outdoor_open keeps the whole rolling decay of the longest-ringing recordings; outdoor_urban keeps the discrete reflections (the slaps off the buildings at 0.2-1.0 s in the TR15 / Viper / AK105 recordings) with the low rumble filtered out and a shorter, steeper fade.",
+  "guns": {
+    "ak": {
+      "dir": "Weapons/AKS74U",
+      "classes": {
+        "outdoor_open": {
+          "target_lufs_m": -23.0, "start_s": 0.14, "length_s": 3.4, "fade_in_s": 0.12, "fade_out": 0.55,
+          "chain": {"hp": 80, "lp": 9000, "comp": {"threshold_db": -40, "ratio": 3.0, "attack_ms": 25, "release_ms": 600}},
+          "variants": [
+            {"src": "AK105/Fire/S_AK105_Fire_Unsuppressed_0.wav"},
+            {"src": "AK105/Fire/S_AK105_Fire_Unsuppressed_1.wav", "lp": 7500},
+            {"src": "AK105/Fire/S_AK105_Fire_Unsuppressed_2.wav", "pitch": -0.5},
+            {"src": "WK-11_Viper/Fire/S_WK-11_Viper_2_With_Tail.wav", "pitch": -1.0},
+            {"src": "WK-11_Viper/Fire/S_WK-11_Viper_3_With_Tail.wav", "start_s": 0.18}
+          ]
+        },
+        "outdoor_urban": {
+          "target_lufs_m": -22.0, "start_s": 0.12, "length_s": 1.5, "fade_in_s": 0.06, "fade_out": 0.6,
+          "chain": {"hp": 220, "lp": 10500, "eq": [[2800, 2.0, 0.8]], "comp": {"threshold_db": -36, "ratio": 3.0, "attack_ms": 8, "release_ms": 250}},
+          "variants": [
+            {"src": "TR15/Fire/S_TR15_V1_Unsupressed_With_Tail_1.wav"},
+            {"src": "TR15/Fire/S_TR15_V2_Unsupressed_With_Tail_0.wav", "pitch": 0.5},
+            {"src": "TR15/Fire/S_TR15_V3_Unsuppressed_With_Tail_2.wav", "pitch": -0.5},
+            {"src": "WK-11_Viper/Fire/S_WK-11_Viper_Shot_1_With_Tail.wav", "start_s": 0.1},
+            {"src": "AK105/Fire/S_AK105_Fire_Unsuppressed_1.wav", "start_s": 0.14, "length_s": 1.7}
+          ]
+        }
+      }
+    },
+    "870": {
+      "dir": "Weapons/Remington870",
+      "classes": {
+        "outdoor_open": {
+          "target_lufs_m": -23.0, "start_s": 0.16, "length_s": 3.8, "fade_in_s": 0.14, "fade_out": 0.55,
+          "chain": {"hp": 55, "lp": 8500, "comp": {"threshold_db": -40, "ratio": 3.0, "attack_ms": 25, "release_ms": 700}},
+          "variants": [
+            {"src": "Herrington_11-87/Fire/S_Herrington_11-87_Unsuppressed_1_With_Tail.wav"},
+            {"src": "Herrington_11-87/Fire/S_Herrington_11-87_Unsuppressed_2_With_Tail.wav"},
+            {"src": "Herrington_11-87/Fire/S_Herrington_11-87_Unsuppressed_3_With_Tail.wav", "pitch": -0.5},
+            {"src": "Herrington_11-87/Fire/S_Herrington_11-87_Unsuppressed_1_With_Tail.wav", "pitch": -1.5, "start_s": 0.22},
+            {"src": "Herrington_11-87/Fire/S_Herrington_11-87_Unsuppressed_2_With_Tail.wav", "pitch": 0.7, "lp": 6500}
+          ]
+        },
+        "outdoor_urban": {
+          "target_lufs_m": -22.0, "start_s": 0.14, "length_s": 1.6, "fade_in_s": 0.08, "fade_out": 0.6,
+          "chain": {"hp": 140, "lp": 9500, "eq": [[2200, 1.5, 0.8]], "comp": {"threshold_db": -36, "ratio": 3.0, "attack_ms": 10, "release_ms": 280}},
+          "variants": [
+            {"src": "Herrington_11-87/Fire/S_Herrington_11-87_Unsuppressed_3_With_Tail.wav", "start_s": 0.3},
+            {"src": "Herrington_11-87/Fire/S_Herrington_11-87_Unsuppressed_1_With_Tail.wav", "start_s": 0.34, "pitch": 0.4},
+            {"src": "TR15/Fire/S_TR15_V1_Unsupressed_With_Tail_1.wav", "pitch": -3.0},
+            {"src": "TR15/Fire/S_TR15_V3_Unsuppressed_With_Tail_2.wav", "pitch": -3.5, "hp": 110},
+            {"src": "WK-11_Viper/Fire/S_WK-11_Viper_2_With_Tail.wav", "pitch": -3.0, "start_s": 0.12}
+          ]
+        }
+      }
+    }
+  }
+}
