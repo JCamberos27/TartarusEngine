@@ -9,6 +9,7 @@
 #include <mutex>
 #include <thread>
 #include <unordered_map>
+#include <vector>
 
 #ifdef _WIN32
 #ifndef NOMINMAX
@@ -40,6 +41,7 @@ std::atomic<bool> g_Running{false};
 std::string g_Root;
 #ifdef _WIN32
 HANDLE g_StopEvent = nullptr;
+HANDLE g_ReadyEvent = nullptr; // set once the first directory read is armed (Start waits on it)
 #endif
 
 std::string Key(const std::string& p) {
@@ -116,6 +118,7 @@ void ThreadMain(std::wstring rootW) {
     if (dir == INVALID_HANDLE_VALUE) {
         Log::Warn("Project watcher: can't watch '" + g_Root + "' - changes made outside the editor are picked up on restart.");
         g_Running = false;
+        SetEvent(g_ReadyEvent);
         return;
     }
     OVERLAPPED ov{};
@@ -125,9 +128,16 @@ void ThreadMain(std::wstring rootW) {
                          FILE_NOTIFY_CHANGE_LAST_WRITE | FILE_NOTIFY_CHANGE_SIZE;
     const fs::path root(g_Root);
 
-    while (g_Running) {
+    std::vector<BYTE> events; // a copy of each batch, so the next read is armed before this one is processed
+    bool firstArm = true;
+    auto arm = [&] {
         ResetEvent(ov.hEvent);
-        if (!ReadDirectoryChangesW(dir, buffer, sizeof(buffer), TRUE, filter, nullptr, &ov, nullptr)) {
+        return ReadDirectoryChangesW(dir, buffer, sizeof(buffer), TRUE, filter, nullptr, &ov, nullptr) != FALSE;
+    };
+    bool armed = arm();
+    while (g_Running) {
+        if (firstArm) { firstArm = false; SetEvent(g_ReadyEvent); }
+        if (!armed) {
             Log::Warn("Project watcher: stopped (ReadDirectoryChangesW failed).");
             break;
         }
@@ -135,12 +145,14 @@ void ThreadMain(std::wstring rootW) {
         const DWORD w = WaitForMultipleObjects(2, waits, FALSE, INFINITE);
         if (w != WAIT_OBJECT_0) { CancelIoEx(dir, &ov); break; } // stop requested
         DWORD bytes = 0;
-        if (!GetOverlappedResult(dir, &ov, &bytes, FALSE)) continue;
+        if (!GetOverlappedResult(dir, &ov, &bytes, FALSE)) { armed = arm(); continue; }
+        events.assign(buffer, buffer + bytes);
+        armed = arm(); // re-arm now: changes made while this batch is processed must not fall in a gap
         std::lock_guard<std::mutex> lk(g_Mutex);
         if (bytes == 0) { g_Overflowed = true; continue; } // too many changes at once: rescan
 
         std::wstring renamedFrom;
-        for (auto* info = reinterpret_cast<FILE_NOTIFY_INFORMATION*>(buffer);;) {
+        for (auto* info = reinterpret_cast<FILE_NOTIFY_INFORMATION*>(events.data());;) {
             const std::wstring relW(info->FileName, info->FileNameLength / sizeof(WCHAR));
             const fs::path rel(relW);
             const fs::path abs = (root / rel).lexically_normal();
@@ -203,8 +215,10 @@ bool Start(const std::string& root) {
     if (!fs::is_directory(root, ec)) return false;
     g_Root = fs::absolute(root, ec).lexically_normal().string();
     g_StopEvent = CreateEventW(nullptr, TRUE, FALSE, nullptr);
+    g_ReadyEvent = CreateEventW(nullptr, TRUE, FALSE, nullptr);
     g_Running = true;
     g_Thread = std::thread(ThreadMain, fs::path(g_Root).wstring());
+    WaitForSingleObject(g_ReadyEvent, 5000); // the watch is live when Start returns: nothing after it is missed
     return true;
 #else
     (void)root;
@@ -220,6 +234,8 @@ void Stop() {
     g_Thread.join();
     CloseHandle(g_StopEvent);
     g_StopEvent = nullptr;
+    CloseHandle(g_ReadyEvent);
+    g_ReadyEvent = nullptr;
     std::lock_guard<std::mutex> lk(g_Mutex);
     g_Pending.clear();
     g_Overflowed = false;

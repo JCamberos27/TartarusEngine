@@ -227,6 +227,7 @@ unsigned int MaterialPreviewRenderer::Render(const std::shared_ptr<MaterialAsset
         glCullFace((GLenum)prevCullMode);
         glBlendFuncSeparate((GLenum)prevBlendSrcRgb, (GLenum)prevBlendDstRgb, (GLenum)prevBlendSrcA, (GLenum)prevBlendDstA);
         glActiveTexture((GLenum)prevActiveTex);
+        glUseProgram(0); // the preview program samples units 11-13 (IBL); left current it would be validated against whatever those units hold next
         // Raw binds below bypassed the cache: the scene's next Texture::Bind / Shader::Bind
         // must not be skipped as redundant.
         GLStateCache::Invalidate();
@@ -364,11 +365,11 @@ unsigned int MaterialPreviewRenderer::Render(const std::shared_ptr<MaterialAsset
     glActiveTexture(GL_TEXTURE0 + 10);
     glBindTexture(GL_TEXTURE_CUBE_MAP_ARRAY, DefaultTextures::DepthCubeArray());
     glActiveTexture(GL_TEXTURE0 + 11);
-    glBindTexture(GL_TEXTURE_CUBE_MAP, m_Ibl->IrradianceMap());
+    glBindTexture(GL_TEXTURE_CUBE_MAP, m_Ibl->IrradianceMap() ? m_Ibl->IrradianceMap() : DefaultTextures::BlackCube());
     glActiveTexture(GL_TEXTURE0 + 12);
-    glBindTexture(GL_TEXTURE_CUBE_MAP, m_Ibl->SpecularMap());
+    glBindTexture(GL_TEXTURE_CUBE_MAP, m_Ibl->SpecularMap() ? m_Ibl->SpecularMap() : DefaultTextures::BlackCube());
     glActiveTexture(GL_TEXTURE0 + 13);
-    glBindTexture(GL_TEXTURE_2D, m_Ibl->BrdfLut());
+    glBindTexture(GL_TEXTURE_2D, m_Ibl->BrdfLut() ? m_Ibl->BrdfLut() : DefaultTextures::Black());
     glActiveTexture(GL_TEXTURE0 + 14);
     glBindTexture(GL_TEXTURE_2D, m_BackdropTex);
     glActiveTexture(GL_TEXTURE0 + 15);
@@ -378,6 +379,7 @@ unsigned int MaterialPreviewRenderer::Render(const std::shared_ptr<MaterialAsset
     glActiveTexture(GL_TEXTURE0 + 31); // physical sky: cloud shadows (off here)
     glBindTexture(GL_TEXTURE_2D, DefaultTextures::White());
     glActiveTexture(GL_TEXTURE0);
+    glBindTexture(GL_TEXTURE_2D, DefaultTextures::White()); // unit 0: a material with no albedo map still samples it
 
     glEnable(GL_DEPTH_TEST);
     glDepthFunc(GL_LESS);
