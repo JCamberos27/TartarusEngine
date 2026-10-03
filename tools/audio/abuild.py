@@ -35,8 +35,8 @@ def finish(x, layer, ceiling_db=None, max_gr_db=None, trim_edges=True, target=No
         x = adsp.expand_floor(x)
     if not loop:                                       # a loop keeps its (circularly continuous) edges untouched
         x = adsp.remove_dc(x)
-    if trim_edges and not loop:                        # guarantee a click-free start and end
-        x = adsp.fade(x, int(0.0008 * adsp.SR), int(0.004 * adsp.SR))
+    if trim_edges and not loop:                        # a click-free start; an end that dies away, never a hard stop
+        x = adsp.fade(x, int(0.0008 * adsp.SR), int(min(0.06, 0.2 * len(x) / adsp.SR) * adsp.SR))
     _, m = adsp.lufs(x)
     g0 = tgt - m
     g = g0

@@ -36,9 +36,13 @@ def apply_eq(x, v):
     return x
 
 
+MIN_DUR_S = 0.0   # set from the recipe's min_dur_s (main)
+
+
 def slice_variant(v):
     x = src(v["src"])
-    y = adsp.slice_at(x, v["t"], v["dur"], preroll_ms=v.get("lead_ms", v.get("preroll_ms", 3.0)),
+    dur = max(v["dur"], MIN_DUR_S)   # the trim (abuild.finish trim_bleed) still stops it before the source's next event
+    y = adsp.slice_at(x, v["t"], dur, preroll_ms=v.get("lead_ms", v.get("preroll_ms", 3.0)),
                       fade_in_ms=v.get("fade_in_ms", 1.5), snap=v.get("snap", True))
     y = adsp.pitch(y, v.get("pitch", 0.0))
     return apply_eq(y, v)
@@ -123,7 +127,9 @@ def describe(v):
 
 
 def main():
+    global MIN_DUR_S
     recipe = json.load(open(os.path.join(abuild.HERE, "recipes", "elements.json")))
+    MIN_DUR_S = float(recipe.get("min_dur_s", 0.0))
     entries = []
     for gun, g in recipe["guns"].items():
         for elem, variants in g["elements"].items():
