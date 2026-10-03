@@ -1457,8 +1457,6 @@ void RegisterEngineComponents() {
               "Seconds a kill feed line stays on screen.", 0.1f, 60.0f },
             { "Streak Window", T::Float, TARTARUS_REFLECT_FIELD(FxHudSettingsComponent, StreakWindow), 0.1f,
               "Seconds to count consecutive kills for streak display.", 0.1f, 60.0f },
-            { "Sub Linger", T::Float, TARTARUS_REFLECT_FIELD(FxHudSettingsComponent, SubLinger), 0.01f,
-              "Seconds a subtitle lingers after its clip ends.", 0.01f, 10.0f },
         },
     });
     // ---- lane R ----

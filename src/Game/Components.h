@@ -1207,7 +1207,6 @@ struct FxHudSettingsComponent {
     // HUD display parameters (Combat/CombatHud.cpp)
     float FeedLife = 4.5f;                  // seconds a kill feed line stays on screen; HUD group
     float StreakWindow = 4.0f;               // seconds to count consecutive kills for streak display; HUD group
-    float SubLinger = 1.1f;                 // seconds a subtitle lingers after its clip ends; HUD group
 };
 // ---- end lane P ----
 // ---- lane R ----
