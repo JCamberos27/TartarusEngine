@@ -20,7 +20,7 @@ SR = adsp.SR
 _cache = {}
 # default bus balance of the five layers (every file is delivered at its own loudness target; the engine plays each
 # layer at mix_db relative to that, then a limiter on the weapon bus). Starting point for S2, not a mastering decision.
-MIX_DB = {"close": 0.0, "sub": -2.0, "mech": -3.0, "tail": -4.0, "far": -7.0}
+# (superseded: mix_db now comes from recipes/mix.json via mixspec.py, applied by abuild.update_manifest)
 
 
 def src(path):
@@ -91,28 +91,41 @@ def render_close(v, cfg):
     return y, "base:" + os.path.basename(v["base"]["src"]) + " " + " ".join(notes)
 
 
+def _low_donor(d, n):
+    """The low end of another REAL recording (a shot, or a thud / thump): onset-aligned, low-passed, at most 2 st of pitch."""
+    x = src(d["src"])
+    if "start_s" in d:
+        x = x[int(d["start_s"] * SR):]
+    on = shot_onset(x) if d.get("shot", True) else adsp.find_onset(x, d.get("t", 0.0), back_ms=20, fwd_ms=30, hp=60.0)
+    s0 = max(0, on - int(0.002 * SR))
+    seg = adsp.cut(x, s0, s0 + int(n * 1.4))
+    seg = adsp.pitch(seg, d.get("pitch", 0.0))
+    seg = adsp.filt(seg, "lp", d["lp"], 4)[:n]
+    seg = adsp.fade(seg, 0, int(0.3 * len(seg)))
+    return adsp.gain_db(seg, d.get("gain_db", -3.0))
+
+
 def render_sub(v, cfg, ref):
-    """Sub punch from REAL recordings only: the low end of a real shot (4th-order low-pass at v.lp) plus the same shot
-    pitched down v.down_st semitones and low-passed again (the classic 'drop the recording an octave' weight). Both keep
-    the shot's own onset; the pair is saturated lightly for audible harmonics and polarity/lag-matched to the close."""
+    """Sub punch from REAL recordings only: the low end of a real shot (4th-order low-pass at v.lp) plus the low end of other
+    real shots / thuds (v.donors, each onset-aligned, low-passed, <= 2 st of pitch). Nothing is dropped an octave: the weight comes
+    from layering real low-end energy, lightly saturated for audible harmonics, polarity / lag matched to the close."""
     x = src(v["src"])
     if "start_s" in v:
         x = x[int(v["start_s"] * SR):]
     on = shot_onset(x)
     n = int(cfg["length_s"] * SR)
     s0 = max(0, on - int(0.002 * SR))
-    seg = adsp.cut(x, s0, s0 + int(n * 2.4))
-    a = adsp.filt(seg, "lp", v["lp"], 4)[:n]
-    b = adsp.pitch(seg, -v["down_st"])
-    b = adsp.filt(b, "lp", v.get("lp2", 90), 4)[:n]
+    seg = adsp.cut(x, s0, s0 + int(n * 1.4))
     pad = lambda z: np.pad(z, ((0, max(0, n - len(z))), (0, 0)))
-    y = pad(a) + pad(b) * 10 ** (v.get("down_gain_db", -3.0) / 20)
+    y = pad(adsp.filt(seg, "lp", v["lp"], 4)[:n])
+    for d in v.get("donors", []):
+        y = y + pad(_low_donor(d, n))
     y = adsp.filt(y, "hp", 28.0, 2)
     y = adsp.soft_sat(y / (np.abs(y).max() + 1e-9), v.get("drive", 1.8))
     y = adsp.fade(y, int(0.0008 * SR), int(0.35 * n))
     y, lag, pol = adsp.phase_align(ref, y, band=(35.0, 160.0), win_ms=18.0, max_lag_ms=0.4)
     y = np.pad(y, ((0, max(0, n - len(y))), (0, 0)))[:n]
-    return y, f"real {os.path.basename(v['src'])} lp={v['lp']} down={v['down_st']}st lag={lag}smp pol={pol:+d}"
+    return y, f"real {os.path.basename(v['src'])} lp={v['lp']} +{len(v.get('donors', []))} low donors lag={lag}smp pol={pol:+d}"
 
 
 def render_mech(v, cfg):
@@ -189,7 +202,7 @@ def build(recipe_path, layers=None):
         rel = f"{d}/fire_{layer}_{n}.wav"
         e = abuild.emit(rel, y, f"snd.{gun}.fire_{layer}", layer,
                         {"gun": gun, "element": f"fire_{layer}", "variant": n, "source": note,
-                         "mix_db": MIX_DB[layer]}, mono=mono, sources=uses)
+                         }, mono=mono, sources=uses)
         out.append(e)
         print(f"{rel:46s} LUFS-M {e['lufs_m_max']:6.1f}  TP {e['true_peak_dbtp']:5.1f}  {e['length_s']:.2f}s  {note}")
     return out, [f"{d}/fire_{l}_" for l in (layers or LAYER_NAMES)]

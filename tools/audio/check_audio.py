@@ -19,8 +19,15 @@ import soundfile as sf
 
 import abuild
 import adsp
+import mixspec
 
-MIN_VARIANTS = {"close": 4, "sub": 4, "mech": 4, "tail": 4, "far": 4, "action": 3, "foley": 3, "step": 5, "loop": 3, "casing": 6, "impact": 3, "flyby": 3}
+MIN_VARIANTS = {"close": 4, "sub": 4, "mech": 4, "tail": 4, "far": 4, "action": 3, "foley": 3, "step": 5, "loop": 3, "casing": 6, "impact": 3, "flyby": 3,
+                "ui": 3, "bodyfall": 3, "ambience": 1, "ir": 1}
+# every folder of recorded game audio: a wav there that the manifest does not list fails (Combat/ is here on purpose: the synthesised
+# placeholders are gone and must not come back). Root-level project wavs (basketball, voice) are not part of this pipeline.
+AUDIO_FOLDERS = ("Weapons", "Foley", "Impacts", "Casings", "Combat", "UI", "Body", "Ambience", "IR")
+NO_LOUDNESS_WINDOW = ("ir",)      # an impulse response has no meaningful programme loudness (its rt60 / trim are checked in phase 2)
+MAX_PITCH_ST = 2.0       # no pitch / varispeed shift of a source cut beyond this (it sounds bad); variety comes from takes, cuts, EQ
 MONO_FOLD_MAX_DB = 4.0   # a fully decorrelated stereo pair loses 3 dB on a mono fold; a little more is tolerated
 LAYER_GROUPS = ("close", "mech", "sub", "tail", "far")
 
@@ -60,7 +67,7 @@ def main():
     on_disk = set()
     for root, _, fs in os.walk(abuild.AUDIO_DIR):
         for f in fs:
-            if f.lower().endswith(".wav") and (os.path.relpath(root, abuild.AUDIO_DIR).replace("\\", "/").startswith(("Weapons", "Foley", "Impacts", "Casings"))):
+            if f.lower().endswith(".wav") and (os.path.relpath(root, abuild.AUDIO_DIR).replace("\\", "/").startswith(AUDIO_FOLDERS)):
                 on_disk.add(os.path.relpath(os.path.join(root, f), abuild.AUDIO_DIR).replace("\\", "/"))
     listed = {e["file"] for e in files}
     for f in sorted(on_disk - listed):
@@ -70,6 +77,7 @@ def main():
 
     counts = {}
     worst = {}
+    measured = {}
     for e in files:
         p = os.path.join(abuild.AUDIO_DIR, e["file"])
         if not os.path.exists(p):
@@ -88,8 +96,11 @@ def main():
         win = T["layers"][layer]
         if tp > T["peak_dbtp_max"] + 0.05:
             errs.append(f"{tag}: true peak {tp:.2f} dBTP > {T['peak_dbtp_max']}")
-        if not (win["min"] <= lm <= win["max"]):
+        measured[e["file"]] = lm
+        if layer not in NO_LOUDNESS_WINDOW and not (win["min"] <= lm <= win["max"]):
             errs.append(f"{tag}: {lm:.1f} LUFS-M outside {layer} window [{win['min']}, {win['max']}]")
+        if abs(lm - e["lufs_m_max"]) > 0.3:                  # mix_db is derived from the manifest's number: it must be the file's
+            errs.append(f"{tag}: manifest lufs_m_max {e['lufs_m_max']} but the file measures {lm:.2f} (stale manifest)")
         if e.get("space") or e["key"].endswith(".fire_tail"):   # every gunshot tail is cut from real recordings: it names them
             srcs = e.get("sources")
             if not srcs:
@@ -106,7 +117,9 @@ def main():
                 errs.append(f"{tag}: mono fold loses {-fold:.1f} dB (> {MONO_FOLD_MAX_DB}); not mono compatible")
         if np.abs(x).max() >= 0.9995 or (np.abs(x) >= 32767 / 32768).sum() > 0:
             errs.append(f"{tag}: clipped samples")
-        if not e.get("loop"):
+        if layer == "ir":
+            pass                                            # an impulse response is trimmed to its direct sound and faded by its own recording
+        elif not e.get("loop"):
             dc = adsp.dc_offset(x)
             if dc > T["dc_max"]:
                 errs.append(f"{tag}: DC offset {dc:.4f} > {T['dc_max']}")
@@ -133,6 +146,11 @@ def main():
                 end = s.get("end", s.get("end_s", 0))
                 if not s.get("file") or not (end > start):
                     errs.append(f"{tag}: bad source entry {s}")
+                # the pitch rule (user, 2026-10-03): nothing is pitched around; no source cut is shifted more than 2 semitones
+                if not isinstance(s.get("pitch_st"), (int, float)):
+                    errs.append(f"{tag}: source {s.get('file')} has no `pitch_st` (record the pitch shift, 0 if none)")
+                elif abs(s["pitch_st"]) > MAX_PITCH_ST + 1e-6:
+                    errs.append(f"{tag}: source {s.get('file')} pitched {s['pitch_st']:+.2f} st (> {MAX_PITCH_ST:g} st cap)")
                 elif os.path.isdir(adsp.SRC_ROOT) and not os.path.exists(os.path.join(adsp.SRC_ROOT, s["file"])):
                     errs.append(f"{tag}: source file not found under {adsp.SRC_ROOT}: {s['file']}")
         key = (e["key"], layer)
@@ -141,6 +159,26 @@ def main():
     for (key, layer), n in sorted(counts.items()):
         if n < MIN_VARIANTS[layer]:
             warns.append(f"{key}: only {n} variants (want >= {MIN_VARIANTS[layer]})")
+
+    # the mix: every entry has mix_db and it is what recipes/mix.json asks for (spec level - the file's LUFS-M relative to the shot
+    # reference), recomputed here from the wavs themselves. mix.json must cover every key.
+    mix_line = ""
+    try:
+        want, meta = mixspec.compute([e for e in files if e["file"] in measured], lufs_of=lambda e: measured[e["file"]])
+        for e in files:
+            tag = e["file"]
+            if "mix_db" not in e or not isinstance(e["mix_db"], (int, float)):
+                errs.append(f"{tag}: no `mix_db` (run apply_mix.py)")
+            elif tag in want and abs(e["mix_db"] - want[tag]) > mixspec.TOLERANCE_DB:
+                errs.append(f"{tag}: mix_db {e['mix_db']} but recipes/mix.json asks for {want[tag]:.2f} for key {e['key']} (run apply_mix.py)")
+        stored = doc.get("mix", {})
+        if abs(stored.get("shot_lufs_m", 1e9) - meta["shot_lufs_m"]) > mixspec.TOLERANCE_DB:
+            errs.append(f"manifest mix.shot_lufs_m {stored.get('shot_lufs_m')} but the shot layers measure {meta['shot_lufs_m']} (run apply_mix.py)")
+        mix_line = f"mix reference {meta['shot_lufs_m']} LUFS-M (as played x{meta['player_gain']}: {meta['reference_lufs_m']}); "
+    except KeyError as ex:
+        errs.append(f"mix spec: {ex.args[0]}")
+    except RuntimeError as ex:
+        errs.append(f"mix spec: {ex}")
 
     # no generators in any build script (oscillators, noise, synthetic envelopes / IRs, algorithmic reverb)
     errs += scan_generators()
@@ -164,7 +202,7 @@ def main():
     n_src = sum(len(e.get("sources", [])) for e in files)
     print(f"provenance: {sum(1 for e in files if e.get('sources'))}/{len(files)} outputs list sources ({n_src} source cuts); "
           f"generator scan of tools/audio/*.py: {'clean' if not any('forbidden generator' in x or 'np.random' in x for x in errs) else 'VIOLATIONS'}")
-    print(f"{len(files)} files checked; loudness range per layer (LUFS-M): " +
+    print(f"{mix_line}{len(files)} files checked; loudness range per layer (LUFS-M): " +
           ", ".join(f"{l} {a:.1f}..{b:.1f}" for l, (a, b) in sorted(worst.items())))
     for w in warns:
         print("WARN ", w)

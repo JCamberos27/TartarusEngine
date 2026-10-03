@@ -183,33 +183,95 @@
    {
     "src": "AK105/Fire/S_AK105_Fire_Unsuppressed_0.wav",
     "lp": 120,
-    "down_st": 12,
-    "lp2": 90
+    "donors": [
+     {
+      "src": "Mk14EBR/S_Mk14EBR_Fire_01.WAV",
+      "lp": 100,
+      "gain_db": -4
+     },
+     {
+      "src": "sonniss/Shapeforms/IMPACT_LOW_THUD_10",
+      "shot": false,
+      "t": 0.09,
+      "lp": 110,
+      "gain_db": -4
+     }
+    ]
    },
    {
     "src": "AK105/Fire/S_AK105_Fire_Unsuppressed_1.wav",
     "lp": 110,
-    "down_st": 14,
-    "lp2": 85,
-    "drive": 2.0
+    "drive": 2.0,
+    "donors": [
+     {
+      "src": "sonniss/Audiobeast/Audiobeast_Small_Room_H&K_416",
+      "lp": 100,
+      "gain_db": -4
+     },
+     {
+      "src": "sonniss/Gamemaster Audio -  Bullet/bullet_impact_body_thump_02",
+      "shot": false,
+      "t": 0.087,
+      "lp": 120,
+      "gain_db": -8,
+      "pitch": -2.0
+     }
+    ]
    },
    {
     "src": "Mk14EBR/S_Mk14EBR_Fire_01.WAV",
     "lp": 130,
-    "down_st": 10,
-    "lp2": 95
+    "donors": [
+     {
+      "src": "AK105/Fire/S_AK105_Fire_Unsuppressed_2.wav",
+      "lp": 100,
+      "gain_db": -3
+     },
+     {
+      "src": "sonniss/Shapeforms/IMPACT_LOW_THUD_10",
+      "shot": false,
+      "t": 0.09,
+      "lp": 110,
+      "gain_db": -5,
+      "pitch": -2.0
+     }
+    ]
    },
    {
     "src": "sonniss/Audiobeast/Audiobeast_Small_Room_H&K_416",
     "lp": 120,
-    "down_st": 12,
-    "lp2": 90
+    "donors": [
+     {
+      "src": "Mk14EBR/S_Mk14EBR_Fire_02.WAV",
+      "lp": 100,
+      "gain_db": -4
+     },
+     {
+      "src": "sonniss/The Chris Alan/Hand-to-Hand Combat - Body Hits - Body Slam Floor 08",
+      "shot": false,
+      "t": 0.12,
+      "lp": 110,
+      "gain_db": -8
+     }
+    ]
    },
    {
     "src": "sonniss/Pole Position - The Indoor/AK47_catacombs_burst",
     "lp": 110,
-    "down_st": 12,
-    "lp2": 90
+    "donors": [
+     {
+      "src": "AK105/Fire/S_AK105_Fire_Unsuppressed_0.wav",
+      "lp": 100,
+      "gain_db": -3
+     },
+     {
+      "src": "sonniss/Shapeforms/IMPACT_LOW_THUD_10",
+      "shot": false,
+      "t": 0.09,
+      "lp": 110,
+      "gain_db": -6
+     }
+    ]
    }
   ]
  },

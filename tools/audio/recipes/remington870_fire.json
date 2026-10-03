@@ -143,28 +143,28 @@
     "t": 0.85,
     "dur": 0.28,
     "delay_ms": 14,
-    "pitch": -6.0
+    "pitch": -2.0
    },
    {
     "src": "SRM-12/Actions/S_SRM-12_ShotBoltOnlyTimed.wav",
     "t": 0.626,
     "dur": 0.28,
     "delay_ms": 18,
-    "pitch": -6.5
+    "pitch": -2.0
    },
    {
     "src": "AK105/Actions/S_AK105_Reload_Empty.WAV",
     "t": 3.052,
     "dur": 0.28,
     "delay_ms": 12,
-    "pitch": -6.0
+    "pitch": -2.0
    },
    {
     "src": "Herrington_11-87/Actions/S_Herrington_11-87_Reload_Loop.wav",
     "t": 0.584,
     "dur": 0.28,
     "delay_ms": 16,
-    "pitch": -4.0
+    "pitch": -2.0
    }
   ]
  },
@@ -174,34 +174,95 @@
    {
     "src": "Herrington_11-87/Fire/S_Herrington_11-87_Unsuppressed_1_With_Tail.wav",
     "lp": 110,
-    "down_st": 14,
-    "lp2": 80
+    "donors": [
+     {
+      "src": "SRM-12/Actions/S_SRM-12_ShotOnly.wav",
+      "lp": 100,
+      "gain_db": -3
+     },
+     {
+      "src": "sonniss/Shapeforms/IMPACT_LOW_THUD_10",
+      "shot": false,
+      "t": 0.09,
+      "lp": 110,
+      "gain_db": -4
+     }
+    ]
    },
    {
     "src": "SRM-12/Actions/S_SRM-12_ShotOnly.wav",
     "lp": 100,
-    "down_st": 12,
-    "lp2": 80
+    "donors": [
+     {
+      "src": "sonniss/TS Sound/Shotgun_Fire_Round Eject_01",
+      "lp": 110,
+      "gain_db": -3
+     },
+     {
+      "src": "sonniss/Gamemaster Audio -  Bullet/bullet_impact_body_thump_02",
+      "shot": false,
+      "t": 0.087,
+      "lp": 120,
+      "gain_db": -6,
+      "pitch": -2.0
+     }
+    ]
    },
    {
     "src": "sonniss/TS Sound/Shotgun_Fire_Round Eject_01",
     "lp": 110,
-    "down_st": 12,
-    "lp2": 85
+    "donors": [
+     {
+      "src": "Herrington_11-87/Fire/S_Herrington_11-87_Unsuppressed_2_With_Tail.wav",
+      "lp": 100,
+      "gain_db": -3
+     },
+     {
+      "src": "sonniss/Shapeforms/IMPACT_LOW_THUD_10",
+      "shot": false,
+      "t": 0.09,
+      "lp": 110,
+      "gain_db": -5
+     }
+    ]
    },
    {
     "src": "sonniss/Audiobeast/Audiobeast_Medium_Warehouse_Remington_870",
     "start_s": 22.15,
     "lp": 100,
-    "down_st": 14,
-    "lp2": 80
+    "donors": [
+     {
+      "src": "Mk14EBR/S_Mk14EBR_Fire_02.WAV",
+      "lp": 100,
+      "gain_db": -4
+     },
+     {
+      "src": "sonniss/The Chris Alan/Hand-to-Hand Combat - Body Hits - Body Slam Floor 08",
+      "shot": false,
+      "t": 0.12,
+      "lp": 110,
+      "gain_db": -8
+     }
+    ]
    },
    {
     "src": "sonniss/Audiobeast/Audiobeast_Medium_Warehouse_Remington_870",
     "start_s": 28.9,
     "lp": 120,
-    "down_st": 12,
-    "lp2": 85
+    "donors": [
+     {
+      "src": "SRM-12/Actions/S_SRM-12_ShotOnly.wav",
+      "lp": 100,
+      "gain_db": -3
+     },
+     {
+      "src": "sonniss/Shapeforms/IMPACT_LOW_THUD_10",
+      "shot": false,
+      "t": 0.09,
+      "lp": 110,
+      "gain_db": -4
+     }
+    ]
    }
   ]
  },
