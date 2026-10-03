@@ -160,7 +160,7 @@ void EditorLayer::DrawAudioDebugPanel(World& world) {
         }
         ImGui::PopItemWidth();
         if (changed) wa.ApplyMix();
-        if (ImGui::Button("Keep after Play")) {
+        if (EditorUIPrimitives::SecondaryButton("Keep after Play")) {
             m_AudioKeepMix = std::make_shared<AudioMixComponent>(wa.Mix());
             m_AudioKeepBus = std::make_shared<ReverbBusComponent>(wa.Bus());
         }
@@ -168,7 +168,7 @@ void EditorLayer::DrawAudioDebugPanel(World& world) {
             EditorUI::SetTooltip("Writes these values to the scene's Audio Mix and Reverb Bus components when Play stops (Play otherwise\n"
                                  "restores the scene as it was). Save the scene after.");
         ImGui::SameLine();
-        if (ImGui::Button("Defaults")) {
+        if (EditorUIPrimitives::SecondaryButton("Defaults")) {
             m = AudioMixComponent{};
             wa.ApplyMix();
         }
