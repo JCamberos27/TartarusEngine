@@ -1,5 +1,5 @@
 {
- "_doc": "AKS-74U gunfire: five separately delivered layers, all timelined from the shot instant (t = 0) so the engine starts them together. See build_fire.py. src paths relative to the extracted Tactical Shooter Pack. 5.45 carbine: short barrel = bright crack + flash, so the close chain leans on 3-4 kHz and the body is kept tight. Round 4: fire_sub is built from real recordings only (low-passed shot + the same shot pitched down); no synthesis.",
+ "_doc": "AKS-74U gunfire: five separately delivered layers, all timelined from the shot instant (t = 0) so the engine starts them together. See build_fire.py. src paths relative to the extracted Tactical Shooter Pack. 5.45 carbine: short barrel = bright crack + flash, so the close chain leans on 3-4 kHz and the body is kept tight. Round 4: fire_sub is built from real recordings only (low-passed shot + the same shot pitched down); no synthesis. Round 4: no algorithmic reverb anywhere; the far layer is the real recorded tail, low-passed and compressed.",
  "gun": "ak",
  "dir": "Weapons/AKS74U",
  "rpm": 650,
@@ -254,12 +254,6 @@
    "hp": 60,
    "lp": 2400,
    "lp_order": 4,
-   "reverb": {
-    "room_size": 0.85,
-    "damping": 0.55,
-    "wet_level": 0.28,
-    "dry_level": 0.72
-   },
    "comp": {
     "threshold_db": -34,
     "ratio": 3.0,

@@ -1,5 +1,5 @@
 {
- "_doc": "Remington 870 gunfire: same layer set as the AK. 12 ga: huge low-mid blast, little crack. close = Herrington 11-87 report (wide stereo) + SRM-12 / Mk14 body weight; sub is deeper and longer; mech is the recoil thump of the receiver / forend (the pump itself is its own element, fired from the Pump clip). Round 4: fire_sub is built from real recordings only (low-passed shot + the same shot pitched down); no synthesis.",
+ "_doc": "Remington 870 gunfire: same layer set as the AK. 12 ga: huge low-mid blast, little crack. close = Herrington 11-87 report (wide stereo) + SRM-12 / Mk14 body weight; sub is deeper and longer; mech is the recoil thump of the receiver / forend (the pump itself is its own element, fired from the Pump clip). Round 4: fire_sub is built from real recordings only (low-passed shot + the same shot pitched down); no synthesis. Round 4: no algorithmic reverb anywhere; the far layer is the real recorded tail, low-passed and compressed.",
  "gun": "870",
  "dir": "Weapons/Remington870",
  "rpm": 70,
@@ -247,12 +247,6 @@
    "hp": 55,
    "lp": 2200,
    "lp_order": 4,
-   "reverb": {
-    "room_size": 0.88,
-    "damping": 0.55,
-    "wet_level": 0.3,
-    "dry_level": 0.7
-   },
    "comp": {
     "threshold_db": -34,
     "ratio": 3.0,

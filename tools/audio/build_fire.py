@@ -36,7 +36,7 @@ def shot_onset(x, frac=0.12):
 
 
 def chain(x, c):
-    from pedalboard import PeakFilter, Compressor, Reverb
+    from pedalboard import PeakFilter, Compressor
     if "hp" in c:
         x = adsp.filt(x, "hp", c["hp"])
     if "lp" in c:
@@ -45,8 +45,6 @@ def chain(x, c):
         x = adsp.board(x, *[PeakFilter(cutoff_frequency_hz=hz, gain_db=g, q=q) for hz, g, q in c["eq"]])
     if c.get("attack") or c.get("sustain"):
         x = adsp.transient_shape(x, c.get("attack", 0.0), c.get("sustain", 0.0))
-    if c.get("reverb"):
-        x = adsp.board(x, Reverb(**c["reverb"]))
     if c.get("comp"):
         cc = c["comp"]
         x = adsp.board(x, Compressor(threshold_db=cc["threshold_db"], ratio=cc["ratio"],
@@ -61,7 +59,7 @@ def _donor(d, ref):
     x = src(d["src"])
     on = shot_onset(x)
     a = max(0, on - int(0.003 * SR))
-    z = x[a:a + int(d["dur"] * SR)].copy()
+    z = adsp.cut(x, a, a + int(d["dur"] * SR))
     z = adsp.fade(z, int(0.0008 * SR), int(max(0.02, d["dur"] * 0.3) * SR))
     if "hp" in d:
         z = adsp.filt(z, "hp", d["hp"])
@@ -77,7 +75,8 @@ def render_close(v, cfg):
     x = src(v["base"]["src"])
     on = shot_onset(x)
     n = int(cfg["length_s"] * SR)
-    base = x[max(0, on - int(0.003 * SR)):][:n].copy()
+    b0 = max(0, on - int(0.003 * SR))
+    base = adsp.cut(x, b0, b0 + n)
     base = adsp.fade(base, int(0.0008 * SR), int(0.25 * n))
     notes = []
     layers = [(base, 0, 0.0)]
@@ -101,7 +100,8 @@ def render_sub(v, cfg, ref):
         x = x[int(v["start_s"] * SR):]
     on = shot_onset(x)
     n = int(cfg["length_s"] * SR)
-    seg = x[max(0, on - int(0.002 * SR)):][:int(n * 2.4)].copy()
+    s0 = max(0, on - int(0.002 * SR))
+    seg = adsp.cut(x, s0, s0 + int(n * 2.4))
     a = adsp.filt(seg, "lp", v["lp"], 4)[:n]
     b = adsp.pitch(seg, -v["down_st"])
     b = adsp.filt(b, "lp", v.get("lp2", 90), 4)[:n]
@@ -130,7 +130,7 @@ def render_tail(v, cfg):
     on = shot_onset(x)
     st = int(cfg["start_s"] * SR)
     n = int(cfg["length_s"] * SR)
-    seg = x[on + st:on + n].copy()
+    seg = adsp.cut(x, on + st, on + n)
     seg = adsp.pitch(seg, v.get("pitch", 0.0))
     if "lp" in v:
         seg = adsp.filt(seg, "lp", v["lp"])
@@ -144,7 +144,7 @@ def render_far(v, cfg):
     x = src(v["src"])
     on = shot_onset(x)
     n = int(cfg["length_s"] * SR)
-    seg = x[on:on + n].copy()
+    seg = adsp.cut(x, on, on + n)
     seg = adsp.pitch(seg, v.get("pitch", 0.0))
     seg = np.repeat(adsp.to_mono(seg)[:, None], 2, axis=1)          # far is mono
     seg = adsp.fade(seg, int(0.012 * SR), int(0.5 * len(seg)))
@@ -160,31 +160,36 @@ def build(recipe_path, layers=None):
     closes = []
     want = lambda l: layers is None or l in layers
     for n, v in enumerate(cfg["close"]["variants"], 1):
+        adsp.take_uses()
         y, note = render_close(v, cfg["close"])
         closes.append(y)
         if want("close"):
-            entries.append(("close", n, y, note, False))
+            entries.append(("close", n, y, note, False, adsp.take_uses()))
     for n, v in enumerate(cfg["sub"]["variants"] if want("sub") else [], 1):
         ref = closes[(n - 1) % len(closes)]
+        adsp.take_uses()
         y, note = render_sub(v, cfg["sub"], ref)
-        entries.append(("sub", n, y, note, False))
+        entries.append(("sub", n, y, note, False, adsp.take_uses()))
     for n, v in enumerate(cfg["mech"]["variants"] if want("mech") else [], 1):
+        adsp.take_uses()
         y, note = render_mech(v, cfg["mech"])
-        entries.append(("mech", n, y, note, False))
+        entries.append(("mech", n, y, note, False, adsp.take_uses()))
     for n, v in enumerate(cfg["tail"]["variants"] if want("tail") else [], 1):
+        adsp.take_uses()
         y, note = render_tail(v, cfg["tail"])
-        entries.append(("tail", n, y, note, False))
+        entries.append(("tail", n, y, note, False, adsp.take_uses()))
     for n, v in enumerate(cfg["far"]["variants"] if want("far") else [], 1):
+        adsp.take_uses()
         y, note = render_far(v, cfg["far"])
-        entries.append(("far", n, y, note, True))
+        entries.append(("far", n, y, note, True, adsp.take_uses()))
     out = []
-    for layer, n, y, note, mono in entries:
+    for layer, n, y, note, mono, uses in entries:
         gr = 10.0 if layer in ("close", "sub") else 7.0
         y = abuild.finish(y, layer, max_gr_db=gr)
         rel = f"{d}/fire_{layer}_{n}.wav"
         e = abuild.emit(rel, y, f"snd.{gun}.fire_{layer}", layer,
                         {"gun": gun, "element": f"fire_{layer}", "variant": n, "source": note,
-                         "mix_db": MIX_DB[layer]}, mono=mono)
+                         "mix_db": MIX_DB[layer]}, mono=mono, sources=uses)
         out.append(e)
         print(f"{rel:46s} LUFS-M {e['lufs_m_max']:6.1f}  TP {e['true_peak_dbtp']:5.1f}  {e['length_s']:.2f}s  {note}")
     return out, [f"{d}/fire_{l}_" for l in (layers or LAYER_NAMES)]

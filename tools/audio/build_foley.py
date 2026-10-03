@@ -41,8 +41,8 @@ def pick_steps(x, n, dur, isolated_gap, seed, lo_db=-4.5):
         t = pk[i] / SR
         on = adsp.find_onset(x, t - 0.04, back_ms=45, fwd_ms=60, frac=0.25, hp=150)
         a = max(0, on - int(0.004 * SR))
-        s = x[a:a + int(dur * SR)].copy()
-        out.append((adsp.fade(s, int(0.001 * SR), int(max(0.04, dur * 0.35) * SR)), t))
+        s = adsp.cut(x, a, a + int(dur * SR))
+        out.append((adsp.fade(s, int(0.001 * SR), int(max(0.04, dur * 0.35) * SR)), t, adsp.take_uses()))
     return out
 
 
@@ -62,36 +62,39 @@ def build_steps(cfg, entries):
         jobs = {"walk": [], "run": [], "land": []}
         if seqW:
             x = adsp.load(seqW[0])
-            for s, t in pick_steps(x, st["walk"]["seq_variants"], st["walk"]["dur"], 0.55, surface + "w"):
-                jobs["walk"].append((s, f"{os.path.basename(seqW[0])}@{t:.2f}s"))
+            adsp.take_uses()
+            for s, t, u in pick_steps(x, st["walk"]["seq_variants"], st["walk"]["dur"], 0.55, surface + "w"):
+                jobs["walk"].append((s, f"{os.path.basename(seqW[0])}@{t:.2f}s", u))
         for f in singles[:st["walk"]["single_variants"]]:
             x = adsp.load(f)
             on = adsp.find_onset(x, 0.05, back_ms=50, fwd_ms=200, frac=0.25, hp=150)
-            s = adsp.fade(x[max(0, on - int(0.004 * SR)):][:int(st["walk"]["dur"] * SR)], int(0.001 * SR),
-                          int(0.12 * SR))
-            jobs["walk"].append((s, os.path.basename(f)))
+            a0 = max(0, on - int(0.004 * SR))
+            s = adsp.fade(adsp.cut(x, a0, a0 + int(st["walk"]["dur"] * SR)), int(0.001 * SR), int(0.12 * SR))
+            jobs["walk"].append((s, os.path.basename(f), adsp.take_uses()))
         if seqR:
             x = adsp.load(seqR[0])
-            for s, t in pick_steps(x, st["run"]["seq_variants"], st["run"]["dur"], 0.22, surface + "r", lo_db=-6.0):
-                jobs["run"].append((s, f"{os.path.basename(seqR[0])}@{t:.2f}s"))
+            for s, t, u in pick_steps(x, st["run"]["seq_variants"], st["run"]["dur"], 0.22, surface + "r", lo_db=-6.0):
+                jobs["run"].append((s, f"{os.path.basename(seqR[0])}@{t:.2f}s", u))
         for f in stomps[:st["land"]["stomp_variants"]]:
             x = adsp.load(f)
             on = adsp.find_onset(x, 0.05, back_ms=50, fwd_ms=200, frac=0.25, hp=150)
-            s = adsp.fade(x[max(0, on - int(0.004 * SR)):][:int(st["land"]["dur"] * SR)], int(0.001 * SR), int(0.18 * SR))
-            jobs["land"].append((s, os.path.basename(f)))
+            a0 = max(0, on - int(0.004 * SR))
+            s = adsp.fade(adsp.cut(x, a0, a0 + int(st["land"]["dur"] * SR)), int(0.001 * SR), int(0.18 * SR))
+            jobs["land"].append((s, os.path.basename(f), adsp.take_uses()))
         if surface == "Concrete":                          # the Tactical pack's own concrete steps as extra variants
             for kind in ("walk", "run"):
                 for p in st["general_concrete"][kind]:
                     x = adsp.load(p)
                     on = adsp.find_onset(x, 0.03, back_ms=30, fwd_ms=150, frac=0.25, hp=150)
-                    s = adsp.fade(x[max(0, on - int(0.004 * SR)):][:int(0.30 * SR)], int(0.001 * SR), int(0.1 * SR))
-                    jobs[kind].append((s, p.replace("\\", "/").split("/")[-1]))
+                    a0 = max(0, on - int(0.004 * SR))
+                    s = adsp.fade(adsp.cut(x, a0, a0 + int(0.30 * SR)), int(0.001 * SR), int(0.1 * SR))
+                    jobs[kind].append((s, p.replace("\\", "/").split("/")[-1], adsp.take_uses()))
         for kind, lst in jobs.items():
             tgt = st[kind]["target_lufs"]
-            for n, (s, note) in enumerate(lst, 1):
+            for n, (s, note, uses) in enumerate(lst, 1):
                 y = abuild.finish(s, "step" if kind != "land" else "foley", target=tgt)
                 e = abuild.emit(f"{base}/{kind}_{n}.wav", y, f"snd.foley.{cat}.{kind}", "step" if kind != "land" else "foley",
-                                {"element": kind, "category": cat, "variant": n, "source": note, "surface": surface.lower()})
+                                {"element": kind, "category": cat, "variant": n, "source": note, "surface": surface.lower()}, sources=uses)
                 entries.append(e)
                 print(f"{e['file']:42s} LUFS-M {e['lufs_m_max']:6.1f}  TP {e['true_peak_dbtp']:5.1f}  {e['length_s']:.2f}s")
 
@@ -150,24 +153,29 @@ def main():
     for cat, elems in cfg["one_shots"].items():
         for elem, variants in elems.items():
             for n, v in enumerate(variants, 1):
+                adsp.take_uses()
                 if "thump" in v:
                     y = land_heavy(v)
                 else:
                     y = be.render_variant(v)
+                uses = adsp.take_uses()
                 y = abuild.finish(y, "foley")
                 extra = {"element": elem, "category": cat, "variant": n, "source": be.describe(v)}
                 if not elem.startswith("land"):
                     extra["anchor_ms"] = 0.0           # handling / jump cloth: starts with the action, no contact
-                e = abuild.emit(f"Foley/{cat}/{elem}_{n}.wav", y, f"snd.foley.{cat}.{elem}", "foley", extra)
+                e = abuild.emit(f"Foley/{cat}/{elem}_{n}.wav", y, f"snd.foley.{cat}.{elem}", "foley", extra, sources=uses)
                 entries.append(e)
                 print(f"{e['file']:42s} LUFS-M {e['lufs_m_max']:6.1f}  TP {e['true_peak_dbtp']:5.1f}  {e['length_s']:.2f}s")
     for elem, variants in cfg["loops"].items():
         for n, v in enumerate(variants, 1):
+            adsp.take_uses()
             y = sprint_loop(v)
+            uses = adsp.take_uses()
             y = abuild.finish(y, "loop", loop=True)
             e = abuild.emit(f"Foley/move/{elem}_{n}.wav", y, f"snd.foley.move.{elem}", "loop",
                             {"element": elem, "category": "move", "variant": n, "loop": True, "anchor_ms": 0.0,
-                             "source": f"synth seed={v['seed']} steps_per_loop={v['steps']}"})
+                             "source": f"real cloth + rattle slices, seed={v['seed']} steps_per_loop={v['steps']}"},
+                            sources=uses)
             entries.append(e)
             print(f"{e['file']:42s} LUFS-M {e['lufs_m_max']:6.1f}  TP {e['true_peak_dbtp']:5.1f}  {e['length_s']:.2f}s loop")
     build_steps(cfg, entries)

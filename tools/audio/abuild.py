@@ -44,15 +44,15 @@ def measure(x):
             "peak_ms": round(float(np.argmax(np.abs(x).max(axis=1))) * 1000.0 / adsp.SR, 1)}
 
 
-def emit(rel_path, x, key, layer, extra=None, mono=False):
+def emit(rel_path, x, key, layer, extra=None, mono=False, sources=None):
     """Write project/assets/Audio/<rel_path> and return its manifest entry."""
     path = os.path.join(AUDIO_DIR, rel_path)
     y = adsp.to_mono(x)[:, None].repeat(2, axis=1).astype(np.float32) if mono else x
-    seed = sum(map(ord, rel_path))                     # stable dither seed per file (hash() is salted per run)
-    adsp.write_wav(path, y, mono=mono, dither_seed=seed)
+    adsp.write_wav(path, y, mono=mono)
     entry = {"file": rel_path.replace("\\", "/"), "key": key, "layer": layer, "channels": 1 if mono else 2,
              "sample_rate": adsp.SR}
     entry.update(measure(y))
+    entry["sources"] = adsp.take_uses() if sources is None else sources     # every recording this file is made of
     entry["anchor_ms"] = round(adsp.anchor_ms(y), 1)       # contact transient inside the file (see docs/AUDIO.md)
     if extra:
         entry.update(extra)
