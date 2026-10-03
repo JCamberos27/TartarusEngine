@@ -8,11 +8,14 @@
 #include "../Assets/BloodFxImport.h"
 
 class Shader;
+class HdrTarget;
 
 // Volumetric blood rendering (docs/BLOOD_FX.md). Owns the GPU side of the imported sims and draws
 // what the game side (Game/Combat/BloodFx) queues each frame:
 //   - sprays: the airborne fluid, a vertex-animation-texture sim per spray, one instanced draw per
 //     sim, depth-written and lit through ModelFragment.glsl in the opaque pass.
+//   - decals: blood on the static world (floors, walls, ceilings, level props), box-projected onto
+//     the depth of the static geometry before the moving things draw over it - one instanced draw.
 // Queue with Add* after BeginFrame; SceneRenderer draws the queue at the right points of the pass.
 class BloodRenderer {
 public:
@@ -52,6 +55,27 @@ public:
     glm::vec3 FluidAlbedo{0.32f, 0.012f, 0.009f};
     float FluidRoughness = 0.07f;
 
+    // --- decals ---
+    int DecalSet(const std::string& name) const; // a decal texture set ("blood1", "char", ...); -1 unknown
+    int DecalSetCount() const { return (int)m_SetNames.size(); }
+    struct Decal {
+        glm::mat4 Model{1.0f};     // unit box -> world; projects along its +Y (out of the surface)
+        int Set = -1;
+        float Cutout = 0.0f;       // 0 fully spread .. 1 gone (the mask's reveal order)
+        float Dry = 0.0f;          // 0 fresh and glossy .. 1 dried dark and matte
+        float Opacity = 1.0f;
+        float NormalStrength = 0.6f;
+    };
+    void AddDecal(const Decal& d);
+    int QueuedDecals() const { return (int)m_Decals.size(); }
+    // Draws the queued decals onto what the bound HDR target holds so far (resolving its depth first).
+    // `viewport` is x, y, w, h. Returns draw calls.
+    int DrawDecals(const glm::mat4& view, const glm::mat4& proj, const int viewport[4], const HdrTarget& target,
+                   const std::function<void(Shader&)>& applyFrameState);
+    // The stains' albedo, fresh (matching the drops) and dried dark red-brown.
+    glm::vec3 FilmFresh{0.26f, 0.010f, 0.008f};
+    glm::vec3 FilmDried{0.075f, 0.022f, 0.016f};
+
 private:
     BloodRenderer() = default;
     void EnsureProgram();
@@ -66,4 +90,13 @@ private:
     unsigned int m_EmptyVao = 0;
     std::unique_ptr<Shader> m_Program;
     std::vector<Spray> m_Sprays;
+
+    bool BuildAtlas();
+    unsigned int m_AtlasNorm = 0, m_AtlasMask = 0, m_Lookup = 0;
+    std::vector<std::string> m_SetNames;
+    std::vector<glm::vec4> m_RectNorm, m_RectMask;
+    std::vector<Decal> m_Decals;
+    unsigned int m_DecalBuffer = 0;
+    size_t m_DecalCapacity = 0;
+    std::unique_ptr<Shader> m_DecalProgram;
 };

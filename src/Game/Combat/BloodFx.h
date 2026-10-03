@@ -6,19 +6,27 @@
 #include <glm/glm.hpp>
 
 #include "BloodFxPresets.h"
+#include "BloodFxImport.h"
 
 class BloodRenderer;
 
 // The game side of the volumetric blood (docs/BLOOD_FX.md): turns a round going into a body into
 // the blood it throws - a fluid spray out of the exit wound along the round's line (the imported
-// sims, scaled to the hit and timed to real gravity) - and keeps each spray playing until it has
-// fallen. Owns no GL; Submit() hands this frame's state to the BloodRenderer.
+// sims, scaled to the hit and timed to real gravity) - and where that blood lands: the splat on the
+// ground under the spray (the prefab's own decal, placed and timed by how far it fell), the spatter
+// on a wall or ceiling the spray met, and the pool that spreads under a corpse. Stains spread in,
+// dry darker and matte, and fade out at the end of their life. Owns no GL; Submit() hands this
+// frame's state to the BloodRenderer.
 class BloodFx {
 public:
     struct Settings {
         bool Enabled = true;
         float Size = 1.0f;       // x every spray's size (1 = the tuned default)
         int MaxSprays = 24;      // the oldest is dropped past this
+        int MaxDecals = 320;     // stains; the oldest is dropped past this
+        float DecalLifetime = 300.0f; // seconds a stain stays before it shrinks away
+        float DrySeconds = 90.0f;     // fresh and glossy to dried dark and matte
+        bool Pools = true;            // a pool spreads under each corpse
     };
     Settings Config;
 
@@ -41,6 +49,11 @@ public:
     // Sim name -> the renderer's metadata index (-1 = not loaded). Defaults to BloodRenderer::Get().
     using SimFn = std::function<int(const char* sim)>;
     void SetSimLookup(SimFn fn) { m_SimLookup = std::move(fn); }
+    // Decal set name -> the renderer's index (-1 = none). Defaults to BloodRenderer::Get().
+    void SetDecalSetLookup(SimFn fn) { m_SetLookup = std::move(fn); }
+    // Where a body is now (its pelvis), for the pool under a corpse; false once it's gone. Set by the host.
+    using BodyFn = std::function<bool(unsigned entity, glm::vec3& centre)>;
+    void SetBodyLookup(BodyFn fn) { m_Body = std::move(fn); }
 
     void OnFleshHit(const Hit& hit);
     void Update(float dt);
@@ -58,6 +71,23 @@ public:
         unsigned Entity = 0xFFFFFFFFu;
     };
     const std::vector<Spray>& Sprays() const { return m_Sprays; }
+    struct Decal {
+        int Set = -1;
+        glm::mat4 Model{1.0f};            // unit box -> world, projecting along +Y
+        float Age = 0.0f;                 // negative: not landed yet
+        float Life = 300.0f;
+        float RevealSeconds = 15.0f;      // the reveal curve's time scale
+        const BloodCurve* Reveal = nullptr; // null: a pool, spreading over PoolGrow seconds
+        float PoolGrow = 0.0f;
+        float DrySeconds = 90.0f;
+        float Opacity = 1.0f;
+    };
+    const std::vector<Decal>& Decals() const { return m_Decals; }
+    int DecalsSpawned() const { return m_DecalsSpawned; }
+    int PoolsSpawned() const { return m_PoolsSpawned; }
+    // The mask cutout a stain shows now: BFX_ShaderProperies' reveal, held through its life, then the
+    // rest of the curve as it shrinks away (1 = gone). Pools spread instead.
+    static float DecalCutout(const Decal& d);
     int SpraysSpawned() const { return m_SpraysSpawned; }
     bool LastSprayClipped() const { return m_LastClipped; } // the last hit's spray met an obstacle
 
@@ -70,18 +100,36 @@ public:
     // Seconds a spray plays: the authored length, x sqrt(size) - a smaller splash falls a shorter
     // way, and free fall takes time with the square root of the distance.
     static float PlaybackSeconds(const BloodSprayDef& def, float animationSpeed, float size);
-    // The prefab -> world transform for a spray thrown from `exitPoint` along `dir` (yaw only: the
-    // sims' gravity is baked toward -Y).
-    static glm::mat4 PrefabToWorld(const glm::vec3& exitPoint, const glm::vec3& dir, float size, float yawJitterRad);
+    // The prefab -> world transform for a spray thrown from `exitPoint` along `dir`: the prefab's own
+    // spray direction `prefabAxis` (horizontal) turned onto the round's flattened line - yaw only, the
+    // sims' gravity is baked toward -Y.
+    static glm::mat4 PrefabToWorld(const glm::vec3& exitPoint, const glm::vec3& dir, float size, float yawJitterRad,
+                                   const glm::vec3& prefabAxis = glm::vec3(1.0f, 0.0f, 0.0f));
+    // Which way a prefab throws its blood, in its own frame: where its sims' fluid ends up, flattened
+    // (+X when the sims aren't loaded or it's a burst with no direction).
+    static glm::vec3 PrefabAxis(const BloodPresetDef& preset, const std::function<const BloodFxImport::VatFrame*(const char* sim, glm::vec3& origin)>& lastFrame);
 
 private:
     void SpawnSprays(const BloodPresetDef& preset, const glm::mat4& prefabToWorld, float size, const glm::vec3& wound,
                      const glm::vec3& flatDir, unsigned entity, float tint);
+    void SpawnFloorDecals(const BloodPresetDef& preset, const glm::mat4& prefabToWorld, float size, const glm::vec3& wound,
+                          const glm::vec3& flatDir);
+    // A stain on the surface at `centre` facing `up`, its streaks along `along`; `extent` is the box (x along,
+    // y depth, z across) in metres.
+    Decal* AddDecal(const char* set, const glm::vec3& centre, const glm::vec3& up, const glm::vec3& along, const glm::vec3& extent,
+                    float delay);
+    glm::vec3 RandomTangent(const glm::vec3& n);
+    void EnsureHooks();
     float Random01();
 
     RayFn m_Ray;
-    SimFn m_SimLookup;
+    SimFn m_SimLookup, m_SetLookup;
+    BodyFn m_Body;
     std::vector<Spray> m_Sprays;
+    std::vector<Decal> m_Decals;
+    int m_DecalsSpawned = 0, m_PoolsSpawned = 0;
+    struct PendingPool { unsigned Entity; float At; float Size; };
+    std::vector<PendingPool> m_Pools;
     std::uint32_t m_Rng = 0x9E3779B9u;
     float m_Now = 0.0f;
     int m_SpraysSpawned = 0;

@@ -59,7 +59,7 @@ public:
     // The blood scenario's view of the blood, filled by the host each frame.
     struct BloodView {
         bool Loaded = false;
-        int SpraysSpawned = 0, ActiveSprays = 0;
+        int SpraysSpawned = 0, ActiveSprays = 0, DecalsSpawned = 0, PoolsSpawned = 0;
         bool LastSprayClipped = false;
         float GpuMsAvg = 0.0f, GpuMsMax = 0.0f;
     };
@@ -75,7 +75,7 @@ private:
     void Blood(World& world, NpcDirector& npcs, float now);
     // blood
     int m_BStep = 0, m_BCase = 0, m_BShot = 0, m_BSpawnBefore = 0;
-    bool m_BFired = false, m_BChecked = false, m_BCamSet = false;
+    bool m_BFired = false, m_BChecked = false, m_BCamSet = false, m_BOverview = false;
     float m_BAt = 0.0f, m_BFiredAt = 0.0f;
     std::vector<std::string> m_BLine;
     // reload

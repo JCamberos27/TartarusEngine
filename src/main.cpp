@@ -74,6 +74,8 @@
 #include "AI/NpcDirector.h"     // the enemy squad
 #include "Combat/CombatFx.h"
 #include "Combat/BloodFx.h"
+#include "AI/Npc.h"
+#include "Npc/NpcRagdoll.h"
 #include "BloodRenderer.h"
 #include "Audio/FoleyAudio.h"
 #include "AI/NpcTest.h"         // --npc-test
@@ -865,6 +867,14 @@ int main(int argc, char** argv) {
         NpcDirector npcDirector;    // the enemy squad, in scenes with NPC Spawns
         CombatFx combatFx;          // its (and the player's) gunfire, flashes, tracers and hits
         BloodFx bloodFx;            // the volumetric blood out of every body a round goes into (docs/BLOOD_FX.md)
+        bloodFx.SetBodyLookup([&npcDirector](unsigned entity, glm::vec3& centre) { // where a corpse lies, for its pool
+            for (const auto& n : npcDirector.Npcs()) {
+                if (!n || (unsigned)entt::to_integral(n->Root) != entity) continue;
+                centre = n->Ragdoll ? n->Ragdoll->PartPosition(0) : n->Feet + glm::vec3(0.0f, 0.9f, 0.0f);
+                return true;
+            }
+            return false;
+        });
         npcDirector.Fx = &combatFx;
         PlayerVitals playerVitals;  // the player's health in Play
         PlayerHudOverlay playerHud; // health, damage direction, hitmarker, death
@@ -2909,6 +2919,8 @@ int main(int argc, char** argv) {
                         npcTestBlood.SpraysSpawned = bloodFx.SpraysSpawned();
                         npcTestBlood.ActiveSprays = (int)bloodFx.Sprays().size();
                         npcTestBlood.LastSprayClipped = bloodFx.LastSprayClipped();
+                        npcTestBlood.DecalsSpawned = bloodFx.DecalsSpawned();
+                        npcTestBlood.PoolsSpawned = bloodFx.PoolsSpawned();
                         for (const Profiler::Entry& e : Profiler::GetLastFrameGpu()) {
                             if (e.Name != "Blood Sprays") continue;
                             npcTestBloodGpuSum += e.Milliseconds;

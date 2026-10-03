@@ -386,6 +386,9 @@ void SceneRenderer::RenderScene(World& world, const RenderFrameContext& ctx,
         // OutfitHideTag::Visible: the piece's triangles not covered entirely, drawn instead of its own.
         const VisibleIndexBuffer* Visible = nullptr;
         float LayerPull = 0.0f; // OutfitLayerTag: drawn this many metres nearer the camera (depth only)
+        // Skinned or a rigidbody: drawn after the blood decals (docs/BLOOD_FX.md), which project only onto
+        // the static world - a character walking through a pool or a crate on a stain covers it instead.
+        bool Dynamic = false;
     };
     static std::vector<DrawItem> drawList;
     static std::vector<DrawItem> transparentList;
@@ -452,6 +455,7 @@ void SceneRenderer::RenderScene(World& world, const RenderFrameContext& ctx,
         const auto* outfitPiece = world.Registry.try_get<OutfitPieceComponent>(entity);
         const bool clothing = outfitPiece && !(outfitPiece->Flags & OutfitPieceBodyPart);
         glm::mat4 model = world.GetCachedWorldTransform(entity);
+        const bool dynamicItem = renderable.ModelRef->HasBones() || world.Registry.all_of<RigidbodyComponent>(entity);
 
         // Frustum culling: skip the draw call entirely for anything outside the camera's view.
         // Bounds come from the same Model::BoundsMin/Max already used for gizmo framing and Snap
@@ -555,6 +559,7 @@ void SceneRenderer::RenderScene(World& world, const RenderFrameContext& ctx,
                 renderable.ReceiveShadows, layerBit, nearHide, hideBones, noSsao, hideVerts, nearHideWidth, collarVerts };
             item.DoubleSided = clothing;
             item.LayerPull = layerPull;
+            item.Dynamic = dynamicItem;
             if (outfitHide && outfitHide->Visible) {
                 item.Visible = outfitHide->Visible.get();
                 item.Tris = (int)item.Visible->Triangles();
@@ -584,6 +589,7 @@ void SceneRenderer::RenderScene(World& world, const RenderFrameContext& ctx,
     // first and hide what is behind them). Shared with the view-model sub-pass, which draws the
     // same way under a different projection.
     const auto opaqueOrder = [](const DrawItem& a, const DrawItem& b) {
+        if (a.Dynamic != b.Dynamic) return !a.Dynamic; // the static world first: the blood decals go between
         if (a.Prog != b.Prog) return std::less<const Shader*>()(a.Prog, b.Prog);
         if (a.MatKey != b.MatKey) return a.MatKey < b.MatKey;
         return a.ViewDepth < b.ViewDepth;
@@ -632,7 +638,20 @@ void SceneRenderer::RenderScene(World& world, const RenderFrameContext& ctx,
 
     passAlphaBlend = 0;
     modelShader.SetInt("uAlphaBlend", 0); // explicit: ensure opaque pass outputs alpha=1
+    // The blood decals (docs/BLOOD_FX.md) land on the static world drawn so far, then the moving things
+    // draw over them.
+    bool decalsDone = false;
+    auto drawBloodDecals = [&] {
+        decalsDone = true;
+        if (!ctx.TxHdr || !ctx.TxHdr->IsValid() || BloodRenderer::Get().QueuedDecals() == 0) return;
+        localStats.DrawCalls += BloodRenderer::Get().DrawDecals(ctx.View, ctx.Proj, fs.vp, *ctx.TxHdr,
+                                                                [&](Shader& p) { ApplyFrameState(p, fs); });
+        modelShader.Bind();
+        // The model program's state is unchanged, but GL's blend / cull / depth state was restored to the
+        // pass baseline and the material-bind cache invalidated.
+    };
     for (const DrawItem& it : drawList) {
+        if (it.Dynamic && !decalsDone) drawBloodDecals();
         probeItem = &it;
         it.Ref->DrawSelected(modelShader, it.Xform, *it.Slots, selectProgram, 1.0f, perDraw, it.Pass, it.DoubleSided, it.Visible);
 
@@ -640,6 +659,7 @@ void SceneRenderer::RenderScene(World& world, const RenderFrameContext& ctx,
         localStats.Triangles += it.Tris;
         localStats.Vertices += it.Verts;
     }
+    if (!decalsDone) drawBloodDecals();
 
     // Volumetric blood in the air (docs/BLOOD_FX.md): opaque fluid, so before the sky and with the
     // opaque geometry it lands on already in depth.
