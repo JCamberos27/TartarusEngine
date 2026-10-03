@@ -2480,6 +2480,31 @@ void TestOfflineEngineLimiterAndReverbCalibration() {
     AudioEngine::Play(noisePath, 1.0f, false, AudioEngine::Bus::SFX, 0.0f, &fx);
     render(1.0f);
     CHECK(LoudnessMeter::RmsDb(wet, 0, wet.size() / 2) < -100.0f);
+    // Constant-power panning (the patched miniaudio spatializer): a 3D voice inside its Min Distance has the power of the same voice
+    // played 2D, whether it is ahead, to the side or behind; only the balance of the channels moves.
+    AudioEngine::SetListener(glm::vec3(0.0f), glm::vec3(0.0f, 0.0f, -1.0f));
+    AudioEngine::StopAll(); // (the noise above is still playing)
+    auto powerAt = [&](const glm::vec3* where, float* rightShare) {
+        render(0.2f);
+        master.clear(); pre.clear(); wet.clear();
+        const AudioEngine::SoundHandle v = AudioEngine::Play(tonePath, 0.25f);
+        if (where) {
+            AudioEngine::SetPosition(v, *where);
+            AudioEngine::SetRolloff(v, AudioEngine::Rolloff::Logarithmic, 2.0f, 50.0f);
+        }
+        render(0.4f);
+        double l = 0.0, r = 0.0;
+        for (size_t i = pre.size() / 4; i < pre.size() / 2; ++i) { l += (double)pre[2 * i] * pre[2 * i]; r += (double)pre[2 * i + 1] * pre[2 * i + 1]; }
+        if (rightShare) *rightShare = (float)(r / std::max(l + r, 1e-30));
+        return 10.0 * std::log10(std::max(l + r, 1e-30));
+    };
+    const double flat = powerAt(nullptr, nullptr);
+    const glm::vec3 ahead(0.0f, 0.0f, -1.0f), right(1.0f, 0.0f, 0.0f), behind(0.0f, 0.0f, 1.0f);
+    float shareAhead = 0.0f, shareRight = 0.0f;
+    const double pAhead = powerAt(&ahead, &shareAhead), pRight = powerAt(&right, &shareRight), pBehind = powerAt(&behind, nullptr);
+    std::printf("[AudioTest] 3D power re 2D: ahead %+.2f dB, right %+.2f dB, behind %+.2f dB\n", pAhead - flat, pRight - flat, pBehind - flat);
+    CHECK(std::fabs(pAhead - flat) < 0.3 && std::fabs(pRight - flat) < 0.3 && std::fabs(pBehind - flat) < 0.3);
+    CHECK(std::fabs(shareAhead - 0.5f) < 0.02f && shareRight > 0.8f); // centred ahead, panned (not just louder) to the side
     AudioEngine::Shutdown();
     CHECK(!AudioEngine::IsInitialized());
     fs::remove_all(dir, ec);
