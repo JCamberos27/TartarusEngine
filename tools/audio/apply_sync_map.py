@@ -1,19 +1,25 @@
 #!/usr/bin/env python3
-"""Puts the weapon-audio animator events (snd.<gun>.<element>) into the weapons' .controller files.
+"""Puts the weapon-audio animator events (snd.<gun>.<element>@<lead ms>) into the weapons' .controller files.
 
-  python tools/audio/apply_sync_map.py --placeholders      # the built-in guessed times (no sync map yet)
-  python tools/audio/apply_sync_map.py                     # tools/audio/sync_map.json, once lane S1 has measured it
-  python tools/audio/apply_sync_map.py --check             # exit 1 when the controllers differ from what this would write
+  python tools/audio/apply_sync_map.py            # tools/audio/sync_map.json + project/assets/Audio/audio_manifest.json
+  python tools/audio/apply_sync_map.py --check    # exit 1 when the controllers differ from what this would write
 
-sync_map.json: {"<gun>/<StateClip>": [{"key": "snd.ak.mag_out", "frame": 38, "time": 0.31}, ...]}
-  <gun>        AKS74U or Remington870 (the folder under project/assets/Weapons)
-  <StateClip>  the controller state's name (TacReload, EmptyReload, Pump, ReloadLoop ...)
-  time         0..1, normalized time in that state's clip (what the animator's events use). If it is missing the
-               entry is skipped with a warning (frame alone can't be normalized without the clip length).
+sync_map.json: {"<gun>/<Clip>": [{"key", "frame", "time", ...}]}, frame = the CONTACT frame (0-based, 60 fps) of the sound.
+  <gun>   AKS74U or Remington870 -> ak / 870 (folder under project/assets/Weapons)
+  <Clip>  Tac_Reload ... -> the controller state with the underscores removed (TacReload ...)
 
-Only events whose name starts with "snd." are touched: they are replaced state by state (a state the map doesn't name
-keeps the events it has), every other event (Shot, Refill, LoadRound, Eject) and every other field is left alone.
-The files keep their formatting (indent 2, sorted keys, CRLF, trailing newline as found).
+A sound file carries its contact transient `anchor_ms` into the file (pump / bolt lead-ins 28-130 ms, draw / holster ~300 ms),
+so the sound has to START before the contact frame. Variants of one key have different anchors; the engine decides per played
+file. This script writes one event per sound at   t_event = contact - lead   where lead = the key's largest anchor_ms
+(clamped to the contact time, so the event is never before the clip start), as the event name suffix "@<lead ms>":
+    snd.ak.mag_out@95      normalized time = (frame/60 - 0.095) / (clip frames / 60)
+The engine (SoundPlayer, Request::LeadMs) starts the chosen variant (lead - its anchor) later, or - when the contact is
+nearer than that variant's lead-in (clamped event) - starts it that far into the file (AudioEngine start offset), so every
+variant's transient lands on the contact frame.
+
+snd.<gun>.fire is not placed on the Fire state: shots play from the round (WeaponAudio::Shot expands it to the fire_* layers),
+so hip and ADS fire sound the same. Every other event and field of a controller is left alone; the old snd.* events are
+replaced everywhere. Files keep their formatting (indent 2, sorted keys, CRLF / trailing newline as found).
 """
 import argparse
 import json
@@ -23,42 +29,14 @@ from pathlib import Path
 ROOT = Path(__file__).resolve().parent.parent.parent
 WEAPONS = ROOT / "project" / "assets" / "Weapons"
 SYNC_MAP = Path(__file__).resolve().parent / "sync_map.json"
-
-# Guessed times until the sync map exists: {gun: {state: [(key, normalized time), ...]}}.
-PLACEHOLDERS = {
-    "AKS74U": {
-        "Draw": [("snd.ak.draw", 0.05)],
-        "Holster": [("snd.ak.holster", 0.1)],
-        "Regrip": [("snd.ak.regrip", 0.3)],
-        "Inspect": [("snd.ak.inspect_move", 0.2), ("snd.ak.inspect_rattle", 0.6)],
-        "MagCheck": [("snd.ak.mag_check_out", 0.25), ("snd.ak.mag_check_in", 0.7)],
-        "Melee": [("snd.ak.melee_swing", 0.25)],
-        "TacReload": [("snd.ak.mag_release", 0.2), ("snd.ak.mag_out", 0.3), ("snd.ak.mag_in", 0.62), ("snd.ak.mag_seat", 0.72)],
-        "EmptyReload": [("snd.ak.mag_release", 0.15), ("snd.ak.mag_out", 0.25), ("snd.ak.mag_in", 0.5),
-                        ("snd.ak.mag_seat", 0.58), ("snd.ak.bolt_release", 0.8)],
-    },
-    "Remington870": {
-        "Draw": [("snd.870.draw", 0.05)],
-        "Holster": [("snd.870.holster", 0.1)],
-        "Regrip": [("snd.870.regrip", 0.3)],
-        "Inspect": [("snd.870.inspect_move", 0.2), ("snd.870.inspect_rattle", 0.6)],
-        "MagCheck": [("snd.870.shell_check", 0.4)],
-        "Melee": [("snd.870.melee_swing", 0.25)],
-        "Pump": [("snd.870.pump_back", 0.1), ("snd.870.pump_forward", 0.55)],
-        "ReloadStart": [("snd.870.shell_grab", 0.3)],
-        "ReloadStartEmpty": [("snd.870.pump_back", 0.15), ("snd.870.shell_grab", 0.45), ("snd.870.shell_insert", 0.74)],
-        "ReloadLoop": [("snd.870.shell_grab", 0.15), ("snd.870.shell_insert", 0.6)],
-        "ReloadLoopEnd": [("snd.870.shell_grab", 0.12), ("snd.870.shell_insert", 0.43)],
-        "ReloadEnd": [("snd.870.pump_forward", 0.35)],
-    },
-}
+MANIFEST = ROOT / "project" / "assets" / "Audio" / "audio_manifest.json"
+FPS = 60.0
+GUNS = {"ak": "AKS74U", "870": "Remington870"}
 
 
 def load_controller(path):
     raw = path.read_bytes().decode("utf-8")
-    crlf = "\r\n" in raw
-    trailing = raw.endswith("\n")
-    return json.loads(raw), crlf, trailing
+    return json.loads(raw), "\r\n" in raw, raw.endswith("\n")
 
 
 def dump_controller(data, crlf, trailing):
@@ -70,78 +48,85 @@ def dump_controller(data, crlf, trailing):
     return text.encode("utf-8")
 
 
-def states_of(data):
-    for layer in data.get("layers", []):
-        for state in layer.get("states", []):
-            yield state
+def max_anchors():
+    out = {}
+    if MANIFEST.is_file():
+        for e in json.loads(MANIFEST.read_text(encoding="utf-8")).get("files", []):
+            out[e["key"]] = max(out.get(e["key"], 0.0), float(e.get("anchor_ms", 0.0)))
+    return out
 
 
-def apply(gun, per_state):
-    """per_state: {state name: [(key, time), ...]}. Returns (new bytes, old bytes, warnings)."""
-    path = WEAPONS / gun / (gun + ".controller")
+def plan_from_sync_map(path, anchors):
+    """{folder: {state: [(event name, normalized time)]}} and warnings."""
+    table = json.loads(path.read_text(encoding="utf-8"))
+    out, warnings = {}, []
+    for clip_key, entries in table.items():
+        if clip_key.startswith("_") or "/" not in clip_key:
+            continue
+        gun, clip = clip_key.split("/", 1)
+        folder = GUNS.get(gun) or gun
+        state = clip.replace("_", "")
+        # The clip's length in frames: frame / time of any event past frame 0 (time = frame / frames).
+        frames = next((round(e["frame"] / e["time"]) for e in entries if e.get("time") and e["frame"] > 0), None)
+        for e in entries:
+            key = e["key"]
+            if key.endswith(".fire"):
+                continue  # the shot layers play from the round
+            if frames is None:
+                warnings.append(f"{clip_key}: cannot derive the clip length; skipped")
+                break
+            contact = e["frame"] / FPS
+            lead = min(anchors.get(key, 0.0) / 1000.0, contact)
+            norm = (contact - lead) / (frames / FPS)
+            out.setdefault(folder, {}).setdefault(state, []).append((f"{key}@{round(lead * 1000)}", round(norm, 4)))
+    return out, warnings
+
+
+def apply(folder, per_state):
+    path = WEAPONS / folder / (folder + ".controller")
     old = path.read_bytes()
     data, crlf, trailing = load_controller(path)
     warnings = []
-    by_name = {s.get("name"): s for s in states_of(data)}
+    states = {s.get("name"): s for layer in data.get("layers", []) for s in layer.get("states", [])}
+    for s in states.values():
+        kept = [ev for ev in s.get("events", []) if not str(ev.get("name", "")).startswith("snd.")]
+        if kept:
+            s["events"] = kept
+        else:
+            s.pop("events", None)
     for state_name, events in per_state.items():
-        state = by_name.get(state_name)
-        if state is None:
-            warnings.append(f"{gun}: no state '{state_name}' in the controller")
+        s = states.get(state_name)
+        if s is None:
+            warnings.append(f"{folder}: no state '{state_name}' in the controller")
             continue
-        kept = [e for e in state.get("events", []) if not str(e.get("name", "")).startswith("snd.")]
-        added = [{"name": key, "time": round(float(t), 4)} for key, t in events]
-        merged = sorted(kept + added, key=lambda e: (e["time"], e["name"]))
-        state["events"] = merged
+        merged = s.get("events", []) + [{"name": n, "time": t} for n, t in events]
+        s["events"] = sorted(merged, key=lambda ev: (ev["time"], ev["name"]))
     return dump_controller(data, crlf, trailing), old, warnings, path
-
-
-def from_sync_map(path):
-    table = json.loads(path.read_text(encoding="utf-8"))
-    out = {}
-    warnings = []
-    for clip_key, entries in table.items():
-        if "/" not in clip_key:
-            warnings.append(f"sync map: '{clip_key}' isn't <gun>/<StateClip>")
-            continue
-        gun, state = clip_key.split("/", 1)
-        for e in entries:
-            if "time" not in e:
-                warnings.append(f"sync map: {clip_key} {e.get('key')} has no normalized 'time'; skipped")
-                continue
-            out.setdefault(gun, {}).setdefault(state, []).append((e["key"], e["time"]))
-    return out, warnings
 
 
 def main():
     ap = argparse.ArgumentParser(description=__doc__, formatter_class=argparse.RawDescriptionHelpFormatter)
-    ap.add_argument("--placeholders", action="store_true", help="apply the built-in guessed times instead of the sync map")
     ap.add_argument("--check", action="store_true", help="write nothing; exit 1 if the controllers would change")
     ap.add_argument("--sync-map", type=Path, default=SYNC_MAP)
     args = ap.parse_args()
-
-    warnings = []
-    if args.placeholders:
-        plan = PLACEHOLDERS
-    else:
-        if not args.sync_map.is_file():
-            print(f"no sync map at {args.sync_map} (lane S1 writes it); use --placeholders for the guessed times", file=sys.stderr)
-            return 2
-        plan, warnings = from_sync_map(args.sync_map)
-
+    if not args.sync_map.is_file():
+        print(f"no sync map at {args.sync_map}", file=sys.stderr)
+        return 2
+    plan, warnings = plan_from_sync_map(args.sync_map, max_anchors())
     changed = 0
-    for gun, per_state in plan.items():
-        if not (WEAPONS / gun / (gun + ".controller")).is_file():
-            warnings.append(f"no controller for '{gun}'")
+    for folder in GUNS.values():
+        if not (WEAPONS / folder / (folder + ".controller")).is_file():
+            warnings.append(f"no controller for '{folder}'")
             continue
-        new, old, w, path = apply(gun, per_state)
+        new, old, w, path = apply(folder, plan.get(folder, {}))
         warnings += w
         if new != old:
             changed += 1
-            if not args.check:
+            if args.check:
+                print(f"would update {path.relative_to(ROOT)}")
+            else:
                 path.write_bytes(new)
                 print(f"updated {path.relative_to(ROOT)}")
-            else:
-                print(f"would update {path.relative_to(ROOT)}")
     for w in warnings:
         print("warning:", w, file=sys.stderr)
     if args.check:

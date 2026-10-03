@@ -111,8 +111,12 @@ std::string FoleyAudio::SurfaceAt(World& world, const glm::vec3& feet) const {
 void FoleyAudio::Play(const std::string& surface, const std::string& element, float gain, bool at2D, const glm::vec3& pos) {
     WeaponAudio& wa = WeaponAudio::Get();
     if (!wa.Active()) return;
+    // `surface` is the foley category: step_<surface> for footsteps, move for the body.
     SoundSet* base = wa.FoleySet(surface, element);
-    if (base->Files.empty() && surface != m_T.DefaultSurface) base = wa.FoleySet(m_T.DefaultSurface, element);
+    if (base->Files.empty() && element == "crouch") // no crouch takes: the walk's, quieter by the crouch volume
+        if (SoundSet* walk = wa.FoleySet(surface, "walk"); !walk->Files.empty()) base = walk;
+    if (base->Files.empty() && surface != "step_" + m_T.DefaultSurface && surface.rfind("step_", 0) == 0)
+        base = wa.FoleySet("step_" + m_T.DefaultSurface, element);
     SoundSet set = *base;
     set.PitchMin = std::min(m_T.PitchMin, m_T.PitchMax);
     set.PitchMax = std::max(m_T.PitchMin, m_T.PitchMax);
@@ -134,18 +138,21 @@ void FoleyAudio::UpdatePlayer(World& world, float dt, const FoleyPlayerInput& in
     const float speed = glm::length(glm::vec2(in.Velocity.x, in.Velocity.z));
     // Landing: the fall speed the frame before touching down.
     if (in.Grounded && !m_PrevGrounded) {
-        const float g = LandGain(m_T, std::max(0.0f, -m_PrevVy));
-        if (g > 0.0f) Play(SurfaceAt(world, in.Feet), "land", g, true, in.Feet);
+        const float fall = std::max(0.0f, -m_PrevVy), g = LandGain(m_T, fall);
+        if (g > 0.0f) {
+            Play("move", fall >= m_T.LandHeavySpeed ? "land_heavy" : "land_light", g, true, in.Feet);
+            Play("step_" + SurfaceAt(world, in.Feet), "land", g * 0.7f, true, in.Feet);
+        }
         m_Stepper.Reset();
     }
-    if (in.Jumped) Play(SurfaceAt(world, in.Feet), "jump", m_T.JumpVolume, true, in.Feet);
+    if (in.Jumped) Play("move", "jump", m_T.JumpVolume, true, in.Feet);
     if (in.Grounded && speed >= m_T.MinStepSpeed) {
         const int n = m_Stepper.Advance(speed * dt, StepDistance(m_T, in));
         if (n > 0) {
             const bool run = !in.Crouched && (in.Sprinting || speed >= m_T.RunSpeed);
             const char* element = in.Crouched ? "crouch" : run ? "run" : "walk";
             const float gain = in.Crouched ? m_T.CrouchVolume : run ? m_T.RunVolume : m_T.WalkVolume;
-            const std::string surface = SurfaceAt(world, in.Feet);
+            const std::string surface = "step_" + SurfaceAt(world, in.Feet);
             for (int i = 0; i < n; ++i) Play(surface, element, gain, true, in.Feet);
             m_Steps += n;
         }
@@ -154,7 +161,7 @@ void FoleyAudio::UpdatePlayer(World& world, float dt, const FoleyPlayerInput& in
     WeaponAudio& wa = WeaponAudio::Get();
     const float loopGain = ClothLoopGain(m_T, speed, in.Grounded) * m_T.Volume;
     if (loopGain > 0.01f && m_Loop == AudioEngine::InvalidHandle && wa.Active()) {
-        SoundSet* s = wa.FoleySet("cloth", "sprint_loop");
+        SoundSet* s = wa.FoleySet("move", "sprint_loop");
         if (!s->Files.empty()) {
             SoundVoice v;
             v.File = s->Files.front();
@@ -178,7 +185,7 @@ void FoleyAudio::UpdatePlayer(World& world, float dt, const FoleyPlayerInput& in
 
 void FoleyAudio::NpcStep(World& world, const glm::vec3& feet, bool sprint) {
     if (!m_Active || !m_T.Enabled) return;
-    Play(SurfaceAt(world, feet), sprint ? "run" : "walk", m_T.NpcStepVolume * (sprint ? m_T.RunVolume : m_T.WalkVolume) / std::max(m_T.WalkVolume, 0.01f), false, feet);
+    Play("step_" + SurfaceAt(world, feet), sprint ? "run" : "walk", m_T.NpcStepVolume * (sprint ? m_T.RunVolume : m_T.WalkVolume) / std::max(m_T.WalkVolume, 0.01f), false, feet);
 }
 
 void FoleyAudio::NpcWalk(World& world, int id, const glm::vec3& feet, const glm::vec3& velocity, bool sprint, float dt) {

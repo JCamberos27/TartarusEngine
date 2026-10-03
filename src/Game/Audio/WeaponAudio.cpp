@@ -8,6 +8,7 @@
 
 #include <algorithm>
 #include <cmath>
+#include <cstdlib>
 #include <cctype>
 #include <filesystem>
 #include <fstream>
@@ -117,6 +118,9 @@ SoundSet SoundSet::FromJson(const std::string& key, const std::string& text, con
 
 std::string SoundSet::ToJson() const { return SetToJson(*this).dump(2); }
 
+float SoundSet::GainLin(size_t i) const { return i < FileGainDb.size() ? std::pow(10.0f, FileGainDb[i] / 20.0f) : 1.0f; }
+float SoundSet::PeakLin(size_t i) const { return i < FilePeakDb.size() ? std::pow(10.0f, FilePeakDb[i] / 20.0f) : 0.7f; }
+
 float BlendCurve::Weight(float distance) const {
     const float span = FarDistance - NearDistance;
     const float t = span > 1e-4f ? std::clamp((distance - NearDistance) / span, 0.0f, 1.0f) : (distance >= FarDistance ? 1.0f : 0.0f);
@@ -139,6 +143,10 @@ bool SoundManifest::FromJson(const std::string& text, SoundManifest& out, std::s
         m.Key = Str(e, "key");
         m.Category = Str(e, "category");
         m.Layer = Str(e, "layer");
+        m.AnchorMs = Num(e, "anchor_ms", 0.0f);
+        m.MixDb = Num(e, "mix_db", 0.0f);
+        m.PeakDb = Num(e, "true_peak_dbtp", -3.0f);
+        m.Loop = Flag(e, "loop", false);
         if (!m.Key.empty()) out.Entries.push_back(std::move(m));
     };
     const json* list = &j;
@@ -225,7 +233,7 @@ namespace {
 struct EngineBackend : SoundBackend {
     AudioEngine::SoundHandle Start(const SoundVoice& v) override {
         if (!AudioEngine::IsInitialized()) return AudioEngine::InvalidHandle;
-        const AudioEngine::SoundHandle h = AudioEngine::Play(ProjectPaths::Resolve(v.File), std::clamp(v.Volume, 0.0f, 4.0f), v.Loop, v.Bus);
+        const AudioEngine::SoundHandle h = AudioEngine::Play(ProjectPaths::Resolve(v.File), std::clamp(v.Volume, 0.0f, 4.0f), v.Loop, v.Bus, v.StartOffset);
         if (h == AudioEngine::InvalidHandle) return h;
         AudioEngine::SetPitch(h, v.Pitch);
         if (v.Spatial) {
@@ -278,6 +286,15 @@ int SoundPlayer::AudibleVoices(const std::string& key) const {
     return it == m_Pools.end() ? 0 : (int)it->second.Voices.size();
 }
 
+float SoundPlayer::LimiterLoad() const {
+    float load = 0.0f;
+    for (const Peak& p : m_Peaks) {
+        const float age = (float)(m_Now - p.Time);
+        if (age < m_Limiter.Window) load += p.Amp * (1.0f - age / std::max(m_Limiter.Window, 1e-3f));
+    }
+    return load;
+}
+
 SoundPlayer::Played SoundPlayer::Play(const SoundSet& set, const Request& req) {
     Played out;
     Pool& pool = m_Pools[set.Key];
@@ -299,6 +316,26 @@ SoundPlayer::Played SoundPlayer::Play(const SoundSet& set, const Request& req) {
         }
     }
     pool.LastIndex = idx;
+    float seek = 0.0f;
+    if (req.LeadMs >= 0.0f) {
+        // This variant's own lead-in decides: start it (LeadMs - anchor) from now, or skip into it when the frame is nearer.
+        const float delay = (req.LeadMs - set.AnchorMs((size_t)idx)) * 0.001f;
+        if (delay > 1e-3f) {
+            m_Pending.push_back({set, idx, req, m_Now + (double)delay});
+            out.File = set.Files[idx];
+            out.Pending = true;
+            out.Voices = Voices(set.Key);
+            return out;
+        }
+        seek = std::max(0.0f, -delay);
+    }
+    return Start(set, idx, req, seek);
+}
+
+SoundPlayer::Played SoundPlayer::Start(const SoundSet& set, int idx, const Request& req, float seek) {
+    Played out;
+    Pool& pool = m_Pools[set.Key];
+    Reap(pool);
     // At the cap the oldest live voice goes (faded out over StealFadeTime, or cut).
     if (set.MaxVoices > 0) {
         while (Voices(set.Key) >= set.MaxVoices) {
@@ -318,7 +355,7 @@ SoundPlayer::Played SoundPlayer::Play(const SoundSet& set, const Request& req) {
     const float jitter = set.VolumeJitterDb > 0.0f ? std::pow(10.0f, (Rand01() * 2.0f - 1.0f) * set.VolumeJitterDb / 20.0f) : 1.0f;
     SoundVoice v;
     v.File = set.Files[idx];
-    v.Volume = set.Volume * req.Gain * jitter;
+    v.Volume = set.Volume * req.Gain * jitter * set.GainLin((size_t)idx);
     v.Pitch = (set.PitchMin + (set.PitchMax - set.PitchMin) * Rand01()) * req.PitchScale;
     v.Loop = set.Loop;
     v.Bus = set.Bus;
@@ -327,6 +364,16 @@ SoundPlayer::Played SoundPlayer::Play(const SoundSet& set, const Request& req) {
     v.MinDistance = set.MinDistance;
     v.MaxDistance = set.MaxDistance;
     v.Rolloff = set.Rolloff;
+    v.StartOffset = seek;
+    // The bus limiter: duck this voice by what headroom the live transients leave.
+    if (m_Limiter.Enabled && !set.Loop) {
+        const float peak = set.PeakLin((size_t)idx) * v.Volume;
+        if (peak > 1e-5f) {
+            const float ceiling = std::pow(10.0f, m_Limiter.CeilingDb / 20.0f);
+            v.Volume *= std::clamp((ceiling - LimiterLoad()) / peak, m_Limiter.MinGain, 1.0f);
+        }
+        m_Peaks.push_back({m_Now, set.PeakLin((size_t)idx) * v.Volume});
+    }
     out.File = v.File;
     out.Volume = v.Volume;
     out.Pitch = v.Pitch;
@@ -347,6 +394,18 @@ SoundPlayer::Played SoundPlayer::Play(const SoundSet& set, const Request& req) {
 void SoundPlayer::Update(float dt) {
     m_Now += dt;
     SoundBackend& be = Backend();
+    // Delayed starts (animation events that fire ahead of their contact) that have come due; a start that lands a frame late
+    // skips that much of the file so the contact is still on time.
+    for (size_t i = 0; i < m_Pending.size();) {
+        if (m_Pending[i].Due <= m_Now) {
+            Pending p = std::move(m_Pending[i]);
+            m_Pending.erase(m_Pending.begin() + (std::ptrdiff_t)i);
+            Start(p.Set, p.Index, p.Req, (float)(m_Now - p.Due));
+        } else {
+            ++i;
+        }
+    }
+    m_Peaks.erase(std::remove_if(m_Peaks.begin(), m_Peaks.end(), [&](const Peak& p) { return m_Now - p.Time >= m_Limiter.Window; }), m_Peaks.end());
     for (auto& [key, pool] : m_Pools) {
         for (Voice& v : pool.Voices) {
             if (v.FadeLeft < 0.0f) continue;
@@ -367,6 +426,8 @@ void SoundPlayer::StopAll() {
     for (auto& [key, pool] : m_Pools)
         for (Voice& v : pool.Voices) be.Stop(v.Handle);
     m_Pools.clear();
+    m_Pending.clear();
+    m_Peaks.clear();
 }
 
 // --- profile -----------------------------------------------------------------------------------
@@ -383,7 +444,7 @@ WeaponAudioProfile::Layer* WeaponAudioProfile::LayerByName(const std::string& na
 WeaponAudioProfile WeaponAudioProfile::Default(const std::string& gun) {
     WeaponAudioProfile p;
     p.Gun = gun;
-    const std::string k = "snd." + gun + ".shot_";
+    const std::string k = "snd." + gun + ".fire_";
     auto layer = [&](Layer& l, const char* name, float full, float zero, float nearW, float farW, float minD, float maxD, int voices, float fade) {
         l.Set.Key = k + name;
         l.Set.MinDistance = minD;
@@ -400,6 +461,9 @@ WeaponAudioProfile WeaponAudioProfile::Default(const std::string& gun) {
     layer(p.Tail, "tail", 30.0f, 120.0f, 1.0f, 0.7f, 6.0f, 140.0f, 3, 0.25f);
     layer(p.Far, "far", 18.0f, 43.0f, 0.1f, 1.0f, 6.0f, 160.0f, 6, 0.1f);
     p.Far.Player2D = false;
+    p.Tail.Every = 2; // full auto: close / sub / mech every shot, tail every 2nd, far every 3rd (S1's mix policy)
+    p.Far.Every = 3;
+    for (const char* e : {"ads_in", "ads_out", "equip", "unequip"}) p.Aliases[e] = std::string("snd.foley.weapon.") + e;
     // Until the recorded takes land, the placeholders the squad has always used.
     const char* dir = "assets/Audio/Combat/";
     if (gun == "ak") {
@@ -444,6 +508,9 @@ void WeaponAudioProfile::ApplyComponent(const WeaponAudioComponent& c) {
     Tail.Set.StealFadeTime = c.TailFadeTime;
     TailMinInterval = c.TailMinInterval;
     TailDuckPerVoice = c.TailDuckPerVoice;
+    Tail.Every = std::max(1, c.TailEvery);
+    Far.Every = std::max(1, c.FarEvery);
+    BurstGap = c.BurstGap;
 }
 
 void WeaponAudioProfile::ApplyJson(const std::string& text) {
@@ -451,6 +518,7 @@ void WeaponAudioProfile::ApplyJson(const std::string& text) {
     if (!j.is_object()) return;
     TailMinInterval = Num(j, "tailMinInterval", TailMinInterval);
     TailDuckPerVoice = Num(j, "tailDuckPerVoice", TailDuckPerVoice);
+    BurstGap = Num(j, "burstGap", BurstGap);
     if (const auto it = j.find("layers"); it != j.end() && it->is_object())
         for (auto l = it->begin(); l != it->end(); ++l) {
             Layer* layer = LayerByName(l.key());
@@ -459,6 +527,7 @@ void WeaponAudioProfile::ApplyJson(const std::string& text) {
             layer->Set = ApplySetJson(l.value(), layer->Set);
             layer->Set.Key = key;
             layer->Player2D = Flag(l.value(), "player2d", layer->Player2D);
+            layer->Every = std::max(1, (int)Num(l.value(), "every", (float)layer->Every));
             if (const auto c = l.value().find("curve"); c != l.value().end() && c->is_object()) {
                 layer->Curve.NearDistance = Num(*c, "nearDistance", layer->Curve.NearDistance);
                 layer->Curve.FarDistance = Num(*c, "farDistance", layer->Curve.FarDistance);
@@ -484,9 +553,11 @@ std::string WeaponAudioProfile::ToJson() const {
     j["gun"] = Gun;
     j["tailMinInterval"] = TailMinInterval;
     j["tailDuckPerVoice"] = TailDuckPerVoice;
+    j["burstGap"] = BurstGap;
     for (const auto& [name, l] : {std::pair<const char*, const Layer*>{"close", &Close}, {"mech", &Mech}, {"sub", &Sub}, {"tail", &Tail}, {"far", &Far}}) {
         json lj = SetToJson(l->Set);
         lj["player2d"] = l->Player2D;
+        lj["every"] = l->Every;
         lj["curve"] = {{"nearDistance", l->Curve.NearDistance}, {"farDistance", l->Curve.FarDistance},
                        {"nearWeight", l->Curve.NearWeight}, {"farWeight", l->Curve.FarWeight}};
         j["layers"][name] = lj;
@@ -513,7 +584,17 @@ void WeaponAudio::InstallLog() {
 
 void WeaponAudio::FillSet(SoundSet& set) {
     if (!set.Files.empty()) return;
-    set.Files = m_Manifest.FilesFor(set.Key);
+    set.FileAnchorMs.clear();
+    set.FileGainDb.clear();
+    set.FilePeakDb.clear();
+    for (const SoundManifestEntry& e : m_Manifest.Entries)
+        if (e.Key == set.Key) {
+            set.Files.push_back(e.File);
+            set.FileAnchorMs.push_back(e.AnchorMs);
+            set.FileGainDb.push_back(e.MixDb);
+            set.FilePeakDb.push_back(e.PeakDb);
+            if (e.Loop) set.Loop = true;
+        }
     if (set.Files.empty() && !m_Root.empty()) set.Files = SoundFilesByLayout(m_Root, set.Key);
 }
 
@@ -521,6 +602,8 @@ void WeaponAudio::StartForTest(const std::string& projectRoot, SoundBackend* bac
     m_Root = projectRoot;
     m_Player.SetBackend(backend);
     m_Player.Seed(12345u);
+    m_Player.SetLimiter(SoundPlayer::Limiter{});
+    m_Bursts.clear();
     m_Profiles.clear();
     m_Foley.clear();
     m_History.clear();
@@ -537,6 +620,7 @@ void WeaponAudio::Start(World& world, const std::string& projectRoot) {
     m_Root = projectRoot.empty() ? ProjectPaths::Resolve("") : projectRoot;
     m_Player.SetBackend(nullptr);
     m_Player.Seed(0xA5F00Du);
+    m_Player.SetLimiter(SoundPlayer::Limiter{});
     m_Manifest = SoundManifest{};
     {
         std::ifstream in(std::filesystem::path(m_Root) / "assets/Audio/audio_manifest.json", std::ios::binary);
@@ -553,6 +637,14 @@ void WeaponAudio::Start(World& world, const std::string& projectRoot) {
         auto it = m_Profiles.find(c.Gun);
         if (it == m_Profiles.end()) it = m_Profiles.emplace(c.Gun, WeaponAudioProfile::Default(c.Gun)).first;
         it->second.ApplyComponent(c);
+        {   // the weapon bus's limiter is shared: the last Weapon Audio component read sets it
+            SoundPlayer::Limiter lim;
+            lim.Enabled = c.LimiterEnabled;
+            lim.CeilingDb = c.LimiterCeilingDb;
+            lim.Window = c.LimiterWindow;
+            lim.MinGain = c.LimiterMinGain;
+            m_Player.SetLimiter(lim);
+        }
         if (!c.DataFile.empty()) {
             std::ifstream in(std::filesystem::path(m_Root) / c.DataFile, std::ios::binary);
             if (in) {
@@ -562,18 +654,32 @@ void WeaponAudio::Start(World& world, const std::string& projectRoot) {
             }
         }
     }
-    // Every layer from the manifest (key snd.<gun>.shot + layer, or key snd.<gun>.shot_<layer>); recorded takes replace placeholders.
+    // Every layer from the manifest (keys snd.<gun>.fire_<layer>, each file at its mix_db); recorded takes replace the
+    // placeholders (the old Combat/ files stay only where the manifest has none). Event sets likewise.
     for (auto& [gun, p] : m_Profiles) {
         for (const char* name : {"close", "mech", "sub", "tail", "far"}) {
             WeaponAudioProfile::Layer* l = p.LayerByName(name);
-            std::vector<std::string> files;
-            for (const SoundManifestEntry& e : m_Manifest.Entries)
-                if (e.Key == "snd." + gun + ".shot" && e.Layer == name) files.push_back(e.File);
-            if (files.empty()) files = m_Manifest.FilesFor(l->Set.Key);
-            if (files.empty() && !m_Root.empty() && l->Set.Files.empty()) files = SoundFilesByLayout(m_Root, l->Set.Key);
-            if (!files.empty()) l->Set.Files = files;
+            SoundSet fresh;
+            fresh.Key = l->Set.Key;
+            FillSet(fresh);
+            if (!fresh.Files.empty()) {
+                l->Set.Files = fresh.Files;
+                l->Set.FileAnchorMs = fresh.FileAnchorMs;
+                l->Set.FileGainDb = fresh.FileGainDb;
+                l->Set.FilePeakDb = fresh.FilePeakDb;
+            }
         }
-        for (auto& [element, s] : p.Events) FillSet(s);
+        for (auto& [element, es] : p.Events) {
+            SoundSet fresh;
+            fresh.Key = es.Key;
+            FillSet(fresh);
+            if (!fresh.Files.empty()) {
+                es.Files = fresh.Files;
+                es.FileAnchorMs = fresh.FileAnchorMs;
+                es.FileGainDb = fresh.FileGainDb;
+                es.FilePeakDb = fresh.FilePeakDb;
+            }
+        }
         for (const char* name : {"close", "mech", "sub", "tail", "far"})
             for (const std::string& f : p.LayerByName(name)->Set.Files) m_Player.Backend().Preload(f);
     }
@@ -592,6 +698,7 @@ void WeaponAudio::Stop() {
     m_Player.StopAll();
     m_Profiles.clear();
     m_Foley.clear();
+    m_Bursts.clear();
     m_Active = false;
 }
 
@@ -620,8 +727,15 @@ int WeaponAudio::Shot(const std::string& gun, const glm::vec3& pos, bool at2D) {
     const float pitch = p->ShotPitchMin + (p->ShotPitchMax - p->ShotPitchMin) * m_Player.Rand01();
     const float d = at2D ? 0.0f : glm::length(pos - m_Listener);
     int started = 0;
+    // Full auto: which shot of the burst this is decides which layers sound (close / sub / mech every shot, the long tails and
+    // the distant report on every Nth), so a burst doesn't stack a tail per round.
+    Burst& burst = m_Bursts[gun + (at2D ? "/2d" : "/3d")];
+    if (m_Player.Now() - burst.Last > p->BurstGap) burst.Count = 0;
+    const int shotNumber = burst.Count++;
+    burst.Last = m_Player.Now();
     for (WeaponAudioProfile::Layer* l : {&p->Close, &p->Mech, &p->Sub, &p->Far, &p->Tail}) {
         if (at2D && !l->Player2D) continue;
+        if (l->Every > 1 && shotNumber % l->Every != 0) continue;
         const float w = at2D ? 1.0f : l->Curve.Weight(d);
         if (w < 0.01f) continue;
         SoundPlayer::Request r;
@@ -642,14 +756,25 @@ int WeaponAudio::Shot(const std::string& gun, const glm::vec3& pos, bool at2D) {
     return started;
 }
 
-bool WeaponAudio::ParseKey(const std::string& name, std::string& gun, std::string& element) {
+bool WeaponAudio::ParseKey(const std::string& name, std::string& gun, std::string& element, float* leadMs) {
     if (name.rfind("snd.", 0) != 0) return false;
-    const std::string rest = name.substr(4);
+    std::string rest = name.substr(4);
+    if (leadMs) *leadMs = -1.0f;
+    if (const size_t at = rest.find('@'); at != std::string::npos) {
+        if (leadMs) *leadMs = (float)std::atof(rest.c_str() + at + 1);
+        rest.resize(at);
+    }
     const size_t dot = rest.find('.');
     if (dot == std::string::npos || dot == 0 || dot + 1 >= rest.size()) return false;
     gun = rest.substr(0, dot);
     element = rest.substr(dot + 1);
     return true;
+}
+
+bool WeaponAudio::HasEventFiles(const std::string& gun, const std::string& element) {
+    if (!m_Active) return false;
+    WeaponAudioProfile* p = Profile(gun);
+    return p && !EventSet(*p, element)->Files.empty();
 }
 
 SoundSet* WeaponAudio::EventSet(WeaponAudioProfile& p, const std::string& element) {
@@ -692,29 +817,40 @@ SoundSet* WeaponAudio::FoleySet(const std::string& category, const std::string& 
 bool WeaponAudio::PlayEvent(const std::string& name, const std::string& gun, const glm::vec3& pos, bool at2D, float gain) {
     if (!m_Active) return false;
     std::string g = gun, element = name;
-    if (std::string pg, pe; ParseKey(name, pg, pe)) {
+    float lead = -1.0f;
+    if (std::string pg, pe; ParseKey(name, pg, pe, &lead)) {
         g = pg;
         element = pe;
     }
     if (g.empty() || element.empty()) return false;
-    if (g == "foley") { // snd.foley.<category>.<element>: gear / cloth events on the weapon's animations
+    if (g != "foley") {
+        WeaponAudioProfile* p = Profile(g);
+        if (!p || !p->Enabled) return false;
+        // A gear sound the shared foley owns (ads_in, equip ...): the same event, the foley's key.
+        if (const auto al = p->Aliases.find(element); al != p->Aliases.end() && al->second != "snd." + g + "." + element) {
+            std::string ag, ae;
+            if (ParseKey(al->second, ag, ae)) {
+                g = ag;
+                element = ae;
+            }
+        }
+    }
+    SoundPlayer::Request r;
+    r.Position = pos;
+    r.At2D = at2D;
+    r.Gain = gain;
+    r.LeadMs = lead;
+    if (g == "foley") { // snd.foley.<category>.<element>: shared gear / cloth sounds
         const size_t dot = element.find('.');
         if (dot == std::string::npos || dot == 0 || dot + 1 >= element.size()) return false;
         SoundSet* fs = FoleySet(element.substr(0, dot), element.substr(dot + 1));
-        SoundPlayer::Request fr;
-        fr.Position = pos;
-        fr.At2D = at2D;
-        fr.Gain = gain;
         Note(fs->Key, at2D);
-        m_Player.Play(*fs, fr);
+        m_Player.Play(*fs, r);
         return true;
     }
     WeaponAudioProfile* p = Profile(g);
     if (!p || !p->Enabled) return false;
     SoundSet* set = EventSet(*p, element);
-    SoundPlayer::Request r;
-    r.Position = pos;
-    r.At2D = at2D;
     r.Gain = p->Volume * gain;
     Note(set->Key, at2D);
     m_Player.Play(*set, r);

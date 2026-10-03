@@ -1449,6 +1449,13 @@ struct WeaponAudioComponent {
     float TailFadeTime = 0.25f;        // seconds a stolen tail fades out over
     float TailMinInterval = 0.0f;      // seconds between tails (0 = one per shot, the cap still applies)
     float TailDuckPerVoice = 0.3f;     // each tail still ringing ducks a new one by this share
+    int TailEvery = 2;                 // full auto: the tail layer plays on every Nth shot of a burst (1 = every shot)
+    int FarEvery = 3;                  // ... and the distant report on every Nth
+    float BurstGap = 0.4f;             // seconds without a shot that end a burst (the next shot plays every layer)
+    bool LimiterEnabled = true;        // weapon bus peak limiter (gain ducking, shared by all guns: the last component read wins)
+    float LimiterCeilingDb = -1.0f;    // dBFS the summed peaks of live transients are kept under
+    float LimiterWindow = 0.15f;       // seconds a transient counts toward the sum
+    float LimiterMinGain = 0.1f;       // the most a voice is ducked (linear)
     std::string DataFile;              // json of SoundSet overrides by element (empty = none)
 };
 // Footsteps, jumps, landings and the sprint cloth loop (Game/Audio/FoleyAudio). One per scene (the first counts).
@@ -1469,6 +1476,7 @@ struct FoleyAudioComponent {
     float LandVolume = 0.9f;
     float LandMinSpeed = 2.5f;         // m/s of fall below which landing is silent
     float LandFullSpeed = 9.0f;        // m/s at which it is at LandVolume (a hard landing)
+    float LandHeavySpeed = 6.0f;       // m/s of fall from which the heavy landing plays (light below)
     float ClothLoopVolume = 0.35f;     // sprint cloth / gear loop
     float ClothLoopMinSpeed = 3.0f;    // m/s: silent below, full at RunSpeed
     float NpcStepVolume = 0.7f;
@@ -1476,6 +1484,6 @@ struct FoleyAudioComponent {
     float NpcStepMinDistance = 2.5f;
     std::string DefaultSurface = "concrete";
     // surface=word,word;surface=word  - the first surface with a word in the ground's physics material, tag or name.
-    std::string SurfaceTable = "wood=wood,plank,floor,parquet;metal=metal,steel,iron,grate;grass=grass,turf,lawn;dirt=dirt,soil,sand,mud;gravel=gravel,stone,rock;concrete=concrete,asphalt,tile";
+    std::string SurfaceTable = "wood=wood,plank,floor,parquet;metal=metal,steel,iron,grate;glass=glass;carpet=carpet,rug;water=water,puddle;concrete=concrete,asphalt,tile,stone,gravel,dirt,soil,sand,grass";
 };
 // ---- end lane S ----

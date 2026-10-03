@@ -37,6 +37,12 @@ struct SoundSet {
     int MaxVoices = 8;                     // simultaneous voices of this set (0 = unlimited); the oldest is stolen
     float StealFadeTime = 0.03f;           // seconds the stolen voice fades out over (0 = cut)
     bool Loop = false;
+    // Per file (parallel to Files; empty = zeros / defaults), from the manifest: where the contact transient sits in the file
+    // (ms), the mix level (dB) and the true peak (dBTP). Variants of one key differ, so these are used per play, not per key.
+    std::vector<float> FileAnchorMs, FileGainDb, FilePeakDb;
+    float AnchorMs(size_t i) const { return i < FileAnchorMs.size() ? FileAnchorMs[i] : 0.0f; }
+    float GainLin(size_t i) const;
+    float PeakLin(size_t i) const;
 
     static SoundSet FromJson(const std::string& key, const std::string& text, const SoundSet& base = SoundSet{});
     std::string ToJson() const;
@@ -53,6 +59,8 @@ struct BlendCurve {
 // One entry of tools/audio's manifest (assets/Audio/audio_manifest.json): file, key, category, layer.
 struct SoundManifestEntry {
     std::string File, Key, Category, Layer;
+    float AnchorMs = 0.0f, MixDb = 0.0f, PeakDb = -3.0f;
+    bool Loop = false;
 };
 struct SoundManifest {
     std::vector<SoundManifestEntry> Entries;
@@ -82,6 +90,7 @@ struct SoundVoice {
     glm::vec3 Position{0.0f};
     float MinDistance = 1.0f, MaxDistance = 40.0f;
     AudioEngine::Rolloff Rolloff = AudioEngine::Rolloff::Logarithmic;
+    float StartOffset = 0.0f; // seconds into the file
 };
 struct SoundBackend {
     virtual ~SoundBackend() = default;
@@ -101,12 +110,17 @@ public:
         bool At2D = true;       // un-positioned: first-person player, UI
         float Gain = 1.0f;      // on top of the set's volume
         float PitchScale = 1.0f;
+        // >= 0: this play is an animation event that fires LeadMs before the contact it sounds for. A file whose contact
+        // transient sits AnchorMs into it starts (LeadMs - AnchorMs) later, or - when that is negative - that far into
+        // the file, so the transient lands on the frame whatever the variant's lead-in. < 0: start now.
+        float LeadMs = -1.0f;
     };
     struct Played {
         bool Started = false;   // a voice started (false: no files, or the engine is down)
         std::string File;
         float Volume = 0.0f, Pitch = 1.0f;
         int Voices = 0;         // this set's live voices after the play
+        bool Pending = false;   // scheduled (a later start, see Request::LeadMs)
         AudioEngine::SoundHandle Handle = AudioEngine::InvalidHandle;
     };
     // Every play (and every play that found no file): sim time, key, file ("" none), the set's voices, request.
@@ -116,6 +130,19 @@ public:
     void SetBackend(SoundBackend* backend) { m_Backend = backend; }
     SoundBackend& Backend() { return m_Backend ? *m_Backend : SoundBackend::Engine(); }
     void SetLog(LogFn fn) { m_Log = std::move(fn); }
+    // The weapon bus's peak limiter, as gain ducking (there is no DSP in AudioEngine): every voice's peak (file true peak x
+    // its volume) counts toward a running estimate that decays over `window` seconds (a transient's life); a voice that
+    // would push the estimate past the ceiling is played quieter, down to minGain.
+    struct Limiter {
+        bool Enabled = true;
+        float CeilingDb = -1.0f;
+        float Window = 0.15f;
+        float MinGain = 0.1f;
+    };
+    void SetLimiter(const Limiter& l) { m_Limiter = l; }
+    const Limiter& GetLimiter() const { return m_Limiter; }
+    // The estimate right now (linear), for tests / the log.
+    float LimiterLoad() const;
     void Seed(std::uint32_t s) { m_Rng = s ? s : 1u; }
 
     Played Play(const SoundSet& set, const Request& req);
@@ -139,6 +166,20 @@ private:
         std::vector<Voice> Voices;
         int LastIndex = -1;
     };
+    struct Pending {
+        SoundSet Set;
+        int Index = 0;
+        Request Req;
+        double Due = 0.0;
+    };
+    struct Peak {
+        double Time = 0.0;
+        float Amp = 0.0f;
+    };
+    std::vector<Pending> m_Pending;
+    std::vector<Peak> m_Peaks;
+    Limiter m_Limiter;
+    Played Start(const SoundSet& set, int index, const Request& req, float seek);
     SoundBackend* m_Backend = nullptr;
     LogFn m_Log;
     std::unordered_map<std::string, Pool> m_Pools;
@@ -159,6 +200,7 @@ struct WeaponAudioProfile {
         SoundSet Set;
         BlendCurve Curve;
         bool Player2D = true;              // the first-person shooter hears this layer (the far one is for those at distance)
+        int Every = 1;                     // full auto: plays on every Nth shot of a burst
     };
     // close: the crack. mech: the action. sub: the low thump. tail: the room / field decay. far: the distant report.
     Layer Close, Mech, Sub, Tail, Far;
@@ -167,6 +209,11 @@ struct WeaponAudioProfile {
     // voice still ringing ducks the new one by TailDuckPerVoice.
     float TailMinInterval = 0.0f;
     float TailDuckPerVoice = 0.3f;
+    // Full auto: layer.Every = N plays that layer on every Nth shot of a burst (the first shot of a burst always plays all);
+    // a burst ends after BurstGap seconds without a shot.
+    float BurstGap = 0.4f;
+    // Gear sounds that are the shared foley's (snd.foley.weapon.*) rather than the gun's own: element -> full key.
+    std::map<std::string, std::string> Aliases;
     std::map<std::string, SoundSet> Events; // element -> set; an element not listed gets a default set from the manifest
 
     Layer* LayerByName(const std::string& name);
@@ -196,7 +243,10 @@ public:
     // False when it isn't a weapon key or the gun has no audio.
     bool PlayEvent(const std::string& name, const std::string& gun, const glm::vec3& pos, bool at2D, float gain = 1.0f);
     // The key without its "snd.<gun>." - "mag_out" - and the gun id, from an event name. False if not "snd.".
-    static bool ParseKey(const std::string& name, std::string& gun, std::string& element);
+    // An event may end in "@<ms>": the lead before the contact (apply_sync_map.py), returned in `leadMs` (-1 = none).
+    static bool ParseKey(const std::string& name, std::string& gun, std::string& element, float* leadMs = nullptr);
+    // Has this gun's element any recorded file (so the old placeholder cues stay quiet)?
+    bool HasEventFiles(const std::string& gun, const std::string& element);
 
     WeaponAudioProfile* Profile(const std::string& gun);
     const SoundManifest& Manifest() const { return m_Manifest; }
@@ -233,6 +283,8 @@ private:
     bool m_Record = false;
     double m_LastTail = -1e9;
     int m_ShotVoices = 0;
+    struct Burst { int Count = 0; double Last = -1e9; };
+    std::map<std::string, Burst> m_Bursts;
     friend class FoleyAudio;
     void Note(const std::string& key, bool at2D);
     void InstallLog();
