@@ -5,7 +5,8 @@
 Per file (from project/assets/Audio/audio_manifest.json, re-measured from the wav itself, not trusted from the manifest):
   48 kHz / 16-bit / channel count as declared; true peak <= -1 dBTP; loudness (LUFS-M max) inside its layer window from
   recipes/targets.json; no clipped samples; DC offset below dc_max; click-free edges (first/last sample <= edge_max;
-  loops: seam step no bigger than 4x the loop's own mean sample step); manifest <-> disk match; variant counts; every
+  loops: seam step no bigger than 4x the loop's own mean sample step); every gunshot tail (fire_tail*, incl. the environment
+  tails) lists its real-recording `sources` (file, start_s, end_s); environment tails fold to mono within 4 dB; manifest <-> disk match; variant counts; every
   event key in tools/audio/sync_map.json has audio (snd.<gun>.fire expands to the fire_* layers).
 """
 import json
@@ -20,6 +21,7 @@ import abuild
 import adsp
 
 MIN_VARIANTS = {"close": 4, "sub": 4, "mech": 4, "tail": 4, "far": 4, "action": 3, "foley": 3, "step": 5, "loop": 3, "casing": 6, "impact": 3, "flyby": 3}
+MONO_FOLD_MAX_DB = 4.0   # a fully decorrelated stereo pair loses 3 dB on a mono fold; a little more is tolerated
 LAYER_GROUPS = ("close", "mech", "sub", "tail", "far")
 
 
@@ -88,6 +90,20 @@ def main():
             errs.append(f"{tag}: true peak {tp:.2f} dBTP > {T['peak_dbtp_max']}")
         if not (win["min"] <= lm <= win["max"]):
             errs.append(f"{tag}: {lm:.1f} LUFS-M outside {layer} window [{win['min']}, {win['max']}]")
+        if e.get("space") or e["key"].endswith(".fire_tail"):   # every gunshot tail is cut from real recordings: it names them
+            srcs = e.get("sources")
+            if not srcs:
+                errs.append(f"{tag}: no `sources` (tails must be built from real recordings and say which)")
+            else:
+                for s in srcs:
+                    if not (s.get("file") and isinstance(s.get("start_s"), (int, float)) and isinstance(s.get("end_s"), (int, float))
+                            and s["end_s"] > s["start_s"]):
+                        errs.append(f"{tag}: malformed source {s}")
+        if e.get("space") and x.shape[1] == 2:        # environment tails (build_tails.py): must fold to mono without a hole
+            l, r = x[:, 0].astype(np.float64), x[:, 1].astype(np.float64)
+            fold = 10 * np.log10(max(np.mean(((l + r) * 0.5) ** 2), 1e-12) / max(0.5 * (np.mean(l ** 2) + np.mean(r ** 2)), 1e-12))
+            if fold < -MONO_FOLD_MAX_DB:
+                errs.append(f"{tag}: mono fold loses {-fold:.1f} dB (> {MONO_FOLD_MAX_DB}); not mono compatible")
         if np.abs(x).max() >= 0.9995 or (np.abs(x) >= 32767 / 32768).sum() > 0:
             errs.append(f"{tag}: clipped samples")
         if not e.get("loop"):
@@ -113,7 +129,9 @@ def main():
             errs.append(f"{tag}: no `sources` (provenance) in the manifest")
         else:
             for s in srcs:
-                if not s.get("file") or not (s.get("end", 0) > s.get("start", 1)):
+                start = s.get("start", s.get("start_s", 1))   # build_tails.py writes start_s / end_s
+                end = s.get("end", s.get("end_s", 0))
+                if not s.get("file") or not (end > start):
                     errs.append(f"{tag}: bad source entry {s}")
                 elif os.path.isdir(adsp.SRC_ROOT) and not os.path.exists(os.path.join(adsp.SRC_ROOT, s["file"])):
                     errs.append(f"{tag}: source file not found under {adsp.SRC_ROOT}: {s['file']}")

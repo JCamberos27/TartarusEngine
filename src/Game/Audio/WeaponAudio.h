@@ -1,6 +1,8 @@
 #pragma once
 
 #include "AudioEngine.h"
+#include "EnvironmentProbe.h"
+#include "ReverbZones.h"
 
 #include <glm/glm.hpp>
 
@@ -204,6 +206,11 @@ struct WeaponAudioProfile {
     };
     // close: the crack. mech: the action. sub: the low thump. tail: the room / field decay. far: the distant report.
     Layer Close, Mech, Sub, Tail, Far;
+    // The tail by space (snd.<gun>.fire_tail_<class>, indexed by SpaceClass): a class with no files plays Tail (the generic
+    // fire_tail) instead. They share Tail's distance curve, decimation and voice policy; each is its own voice pool.
+    Layer TailClass[kSpaceClassCount];
+    EnvironmentSettings Env;               // how the space is read (Weapon Audio "Environment")
+    static constexpr float kMinClassWeight = 0.03f; // a class lighter than this is not played (the two heaviest are, renormalised)
     // Full auto: a tail per shot would pile up and clip. Starting one steals the oldest past Tail.Set.MaxVoices
     // (it fades out over Tail.Set.StealFadeTime), a tail never starts within TailMinInterval of the last, and each
     // voice still ringing ducks the new one by TailDuckPerVoice.
@@ -237,8 +244,27 @@ public:
     void SetLogFile(std::FILE* f) { m_LogFile = f; }
 
     // The report of a round from `gun` at `pos`: every layer weighted by `distance` (from the listener) when 3D.
-    // Returns the number of voices started.
-    int Shot(const std::string& gun, const glm::vec3& pos, bool at2D);
+    // `shooter` names who fired (any stable id, e.g. an NPC index + 1) so the tail's environment probe is cached per shooter;
+    // 0 = not named: the player when `at2D`, otherwise told apart by position. Returns the number of voices started.
+    int Shot(const std::string& gun, const glm::vec3& pos, bool at2D, std::uint32_t shooter = 0);
+
+    // The space a shot from `pos` is in: Reverb Zone volumes first (layered by priority, faded at their edges), the shooter's
+    // cached raycast probe for what no zone claims. Weights sum to 1; Gain is the zones' tail gain. Valid = false when the
+    // gun's environment is off (the generic tail then).
+    struct SpaceMix {
+        bool Valid = false;
+        float Weights[kSpaceClassCount] = {1.0f, 0.0f, 0.0f, 0.0f};
+        float Gain = 1.0f;
+        float ZoneShare = 0.0f;            // how much of the mix the zones claimed
+        bool Probed = false;               // the probe's reading was part of it
+        EnvironmentReading Reading;        // the probe's (when Probed)
+    };
+    SpaceMix ResolveSpace(const WeaponAudioProfile& p, std::uint32_t shooter, const glm::vec3& pos, bool at2D);
+    const SpaceMix& LastSpace() const { return m_LastSpace; }
+    EnvironmentProbe& Probe() { return m_Probe; }
+    ReverbZones& Zones() { return m_Zones; }
+    // Overlay lines (zones, and the probe rays of guns with Env Debug Draw): 7 floats per vertex, two vertices per line.
+    void EnvironmentDebugLines(std::vector<float>& out) const;
     // An animator event / gear sound: "snd.ak.mag_out" (or "mag_out" with `gun`), at the gun (3D) or on the player (2D).
     // False when it isn't a weapon key or the gun has no audio.
     bool PlayEvent(const std::string& name, const std::string& gun, const glm::vec3& pos, bool at2D, float gain = 1.0f);
@@ -259,7 +285,7 @@ public:
     void FillSet(SoundSet& set);
 
     // Everything emitted since Start (sim time and key, in order): the weapon test asserts on it.
-    struct Emitted { double Time = 0.0; std::string Key; bool At2D = true; };
+    struct Emitted { double Time = 0.0; std::string Key; bool At2D = true; std::string Space; /* tail: "outdoor_open" or "a+b" (the classes heard) */ };
     const std::deque<Emitted>& History() const { return m_History; }
     void ClearHistory() { m_History.clear(); }
     // Tests: keep every emission since Start (unbounded, unlike History); the flag survives Start / Stop.
@@ -286,6 +312,14 @@ private:
     struct Burst { int Count = 0; double Last = -1e9; };
     std::map<std::string, Burst> m_Bursts;
     friend class FoleyAudio;
-    void Note(const std::string& key, bool at2D);
+    void Note(const std::string& key, bool at2D, const std::string& space = std::string());
+    // The tail of one shot: the space's tail sets (the two heaviest classes, equal-power), or the generic one.
+    int PlayTail(WeaponAudioProfile& p, const SoundPlayer::Request& base, std::uint32_t shooter, const glm::vec3& pos, bool at2D);
+    int TailVoices(const WeaponAudioProfile& p) const;
+    EnvironmentProbe m_Probe;
+    ReverbZones m_Zones;
+    SpaceMix m_LastSpace;
+    std::map<std::string, SpaceClass> m_LastDominant; // per shooter key, for the console line when it changes
+    int m_SpaceLines = 0;
     void InstallLog();
 };
