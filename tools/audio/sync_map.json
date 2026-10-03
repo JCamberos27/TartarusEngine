@@ -499,24 +499,10 @@
    "conf": "high"
   },
   {
-   "key": "snd.870.handle",
-   "frame": 46,
-   "time": 0.6571,
-   "src": "hand_r arrives / settles",
-   "conf": "medium"
-  },
-  {
    "key": "snd.870.cloth",
    "frame": 54,
    "time": 0.7714,
    "src": "hand_l starts moving (peak 0.97)",
-   "conf": "medium"
-  },
-  {
-   "key": "snd.870.handle",
-   "frame": 67,
-   "time": 0.9571,
-   "src": "hand_l arrives / settles",
    "conf": "medium"
   }
  ],
@@ -536,24 +522,10 @@
    "conf": "high"
   },
   {
-   "key": "snd.870.handle",
-   "frame": 44,
-   "time": 0.449,
-   "src": "hand_r arrives / settles",
-   "conf": "medium"
-  },
-  {
    "key": "snd.870.cloth",
    "frame": 55,
    "time": 0.5612,
    "src": "hand_l starts moving (peak 0.37)",
-   "conf": "medium"
-  },
-  {
-   "key": "snd.870.handle",
-   "frame": 79,
-   "time": 0.8061,
-   "src": "hand_r arrives / settles",
    "conf": "medium"
   }
  ],

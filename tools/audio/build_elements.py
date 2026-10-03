@@ -61,6 +61,12 @@ def fit_variant(v):
     want = int(v["main_at_ms"] / 1000 * SR)
     pre = pre[len(pre) - want:] if len(pre) >= want else np.concatenate([np.zeros((want - len(pre), pre.shape[1]), np.float32), pre])
     pre = adsp.fade(pre, int(0.025 * SR), 0)
+    if v.get("motion_only"):
+        # Only the movement: the cloth / gear up to the arrival, faded out as the hands settle - no thud on reaching the idle
+        # pose (user: heard while moving, nothing extra once the hands come to rest).
+        y = adsp.fade(pre, 0, int(min(0.09, 0.3 * len(pre) / SR) * SR))
+        y = adsp.pitch(y, v.get("pitch", 0.0))
+        return apply_eq(y, v)
     y = np.concatenate([pre, post])
     y = adsp.fade(y, 0, int(max(0.03, 0.25 * (b - m) / SR) * SR))
     y = adsp.pitch(y, v.get("pitch", 0.0))
