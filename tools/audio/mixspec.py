@@ -45,7 +45,8 @@ def classify(e):
             return "shot_" + part, SPEC["reference"]["shot_layer_db"][part], "shot-layer"
         if part == "far":
             return "shot_far", L["shot"]["far"], "shot"
-        return "shot_tail", L["shot"]["tail"] + SPEC["space_db"].get(space or "outdoor_urban", 0.0), "shot"
+        gun_tail = float(SPEC["reference"].get("gun_tail_db", {}).get(m.group(1), 0.0))
+        return "shot_tail", L["shot"]["tail"] + SPEC["space_db"].get(space or "outdoor_urban", 0.0) + gun_tail, "shot"
     if key == "snd.flyby":
         return "flyby", L["flyby"], "played"
     m = re.fullmatch(r"snd\.impact\.(\w+)", key)

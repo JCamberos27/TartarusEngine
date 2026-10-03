@@ -61,6 +61,17 @@ def chain(x, c):
     return x
 
 
+def decay(x, d):
+    """A layer's own envelope, front-loaded: unchanged for hold_ms, then down to_db (dB, linear in dB = an exponential decay)
+    over over_ms, held there. The punch is the first tens of ms; a recording whose body keeps blooming after it (a sustained
+    12-gauge boom) is made to die like the hit it is. Processing of the recording, not a generated sound."""
+    if not d:
+        return x
+    t = np.arange(len(x)) / SR * 1000.0
+    k = np.clip((t - d.get("hold_ms", 40.0)) / max(d.get("over_ms", 250.0), 1.0), 0.0, 1.0)
+    return (x * (10.0 ** (d.get("to_db", -30.0) * k / 20.0))[:, None]).astype(np.float32)
+
+
 def _donor(d, ref):
     """Slice a donor shot from its own onset, filter it, phase-align it to `ref`, return (audio, lag, polarity)."""
     x = src(d["src"])
@@ -95,6 +106,7 @@ def render_close(v, cfg):
     y = adsp.mix(layers, n)
     y = adsp.pitch(y, v.get("pitch", 0.0))
     y = chain(y, cfg["chain"])
+    y = decay(y, cfg.get("decay"))
     return y, "base:" + os.path.basename(v["base"]["src"]) + " " + " ".join(notes)
 
 
@@ -132,6 +144,7 @@ def render_sub(v, cfg, ref):
     # a touch of saturation (audible harmonics on small speakers) without flattening the punch
     y = adsp.soft_sat(0.6 * y / (np.abs(y).max() + 1e-9), v.get("drive", 1.25)) / 0.6
     y = adsp.fade(y, int(0.0008 * SR), int(0.35 * n))
+    y = decay(y, cfg.get("decay"))
     y, lag, pol = adsp.phase_align(ref, y, band=(35.0, 160.0), win_ms=18.0, max_lag_ms=0.4)
     y = np.pad(y, ((0, max(0, n - len(y))), (0, 0)))[:n]
     return y, f"real {os.path.basename(v['src'])} lp={v['lp']} +{len(v.get('donors', []))} low donors lag={lag}smp pol={pol:+d}"
