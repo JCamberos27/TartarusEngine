@@ -67,8 +67,21 @@ def pick_spread(items, n):
     return [items[int(round(i * (len(items) - 1) / max(1, n - 1)))] for i in range(n)]
 
 
-def casing_takes(spec):
-    """-> list of (audio, note, short, sources)"""
+def point_source(x):
+    """Mono of a stereo take for a 3D voice. A spaced-pair recording of a small source is decorrelated (or out of phase): folding
+    it to mid thins it and comb-filters, so such a take keeps its louder channel; a coherent one is folded."""
+    l, r = x[:, 0], x[:, 1]
+    corr = float(np.sum(l * r) / (math.sqrt(float(np.sum(l * l) * np.sum(r * r))) + 1e-20))
+    if corr >= 0.5:
+        m = adsp.to_mono(x)
+    else:
+        m = l if float(np.sum(l * l)) >= float(np.sum(r * r)) else r
+    return np.repeat(np.asarray(m, np.float32)[:, None], 2, axis=1)
+
+
+def casing_takes(spec, used):
+    """-> list of (audio, note, short, sources). `used` = drops (source, onset) already cut for this key: a key never gets one
+    drop twice (a long and a short cut of the same drop sound like one variant), so it gets fewer variants when the take is short."""
     x = be.src(spec["src"])
     name = os.path.basename(adsp.resolve_sonniss(spec["src"]))
     out = []
@@ -82,9 +95,11 @@ def casing_takes(spec):
     drops, env = find_drops(x)
     nxt = {d: (drops[i + 1] if i + 1 < len(drops) else None) for i, d in enumerate(drops)}
     nl, ns = spec["drops"]["long"], spec["drops"]["short"]
-    longs = pick_spread(drops, nl)
-    rest = [d for d in drops if d not in longs] or drops
+    free = [d for d in drops if (spec["src"], d) not in used]
+    longs = pick_spread(free, nl)
+    rest = [d for d in free if d not in longs]
     shorts = pick_spread(rest[::-1], ns)
+    used.update((spec["src"], d) for d in longs + shorts)
     for d in longs:
         adsp.take_uses()
         out.append((post(cut_drop(x, env, d, nxt[d], True), spec), f"{name} drop@{d / SR:.2f}s bounce", False, adsp.take_uses()))
@@ -99,17 +114,21 @@ def main():
     entries = []
 
     def emit(rel, y, key, layer, extra, uses):
+        mono = layer == "casing"                         # a casing is a point source in 3D: ship it mono
+        if mono:
+            y = point_source(y)
         y = abuild.finish(y, layer)
-        e = abuild.emit(rel, y, key, layer, extra, sources=uses)
+        e = abuild.emit(rel, y, key, layer, extra, mono=mono, sources=uses)
         entries.append(e)
         print(f"{rel:44s} LUFS-M {e['lufs_m_max']:6.1f}  TP {e['true_peak_dbtp']:5.1f}  {e['length_s']:.2f}s"
               f"{'  proxy' if e.get('proxy') else ''}")
 
     for kind, mats in cfg["casings"].items():
+        used = set()                                     # per kind: a proxy material takes the drops a real one left
         for mat, specs in mats.items():
             n = 0
             for spec in specs:
-                for y, note, short, uses in casing_takes(spec):
+                for y, note, short, uses in casing_takes(spec, used):
                     n += 1
                     emit(f"Casings/{kind}/{mat}_{n}.wav", y, f"snd.casing.{kind}.{mat}", "casing",
                          {"kind": kind, "material": mat, "variant": n, "short": short, "anchor_ms": 0.0,

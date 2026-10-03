@@ -1,5 +1,5 @@
 {
- "_doc": "Casing drops, bullet impacts and flybys, all sliced from the real Sonniss recordings (no synthesis). casings.<kind>.<material>: list of source specs. {drops:{long,short}} = auto-slice a long take into its individual fresh drops (long = drop + bounce / roll tail up to 1.6 s, short = first 0.28 s); {single:true} = the file is one drop. pitch = semitones applied to the slice (shell proxies from small casings are pitched down); proxy:true marks material that is not a real recording of that exact thing (see docs/AUDIO.md coverage). variants = extra per-source takes (pitch / eq / gain) for single-file sources.",
+ "_doc": "Casing drops, bullet impacts and flybys, all sliced from the real Sonniss recordings (no synthesis). casings.<kind>.<material>: list of source specs. {drops:{long,short}} = auto-slice a long take into its individual fresh drops (long = drop + bounce / roll tail up to 1.6 s, short = first 0.28 s); {single:true} = the file is one drop. pitch = semitones applied to the slice (shell proxies from small casings are pitched down); proxy:true marks material that is not a real recording of that exact thing (see docs/AUDIO.md coverage). variants = extra per-source takes (pitch / eq / gain) for single-file sources. A kind never cuts one drop twice (casing_takes): with few drops in a take a key gets fewer, distinct variants; rifle metal (proxy) takes the 9 mm drops rifle concrete leaves. Carpet takes are low-passed at 6 kHz (a few drops ping off another casing; a casing on carpet is dull). Casings ship mono (point_source).",
  "casings": {
   "rifle": {
    "concrete": [
@@ -16,7 +16,7 @@
      "src": "sonniss/SculpTunes/6 35",
      "drops": {
       "long": 5,
-      "short": 3
+      "short": 0
      }
     },
     {
@@ -34,7 +34,7 @@
      "src": "sonniss/SculpTunes/7 62",
      "drops": {
       "long": 5,
-      "short": 3
+      "short": 0
      }
     }
    ],
@@ -44,7 +44,8 @@
      "drops": {
       "long": 6,
       "short": 4
-     }
+     },
+     "lp": 6000
     }
    ],
    "dirt": [
@@ -88,10 +89,10 @@
    ],
    "metal": [
     {
-     "src": "sonniss/SculpTunes/7 62",
+     "src": "sonniss/SculpTunes/9 mm",
      "drops": {
-      "long": 5,
-      "short": 3
+      "long": 4,
+      "short": 2
      },
      "proxy": true,
      "eq": [
@@ -258,7 +259,8 @@
        2.0,
        0.9
       ]
-     ]
+     ],
+     "lp": 6000
     }
    ],
    "dirt": [

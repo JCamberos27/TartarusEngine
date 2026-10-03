@@ -1,4 +1,4 @@
-"""Build player foley from recipes/foley.json: weapon handling, jump/land, sprint loop, footsteps x 6 surfaces.
+"""Build player foley from recipes/foley.json: weapon handling, jump/land, footsteps x 6 surfaces.
 
   uv run --with numpy --with scipy --with soundfile --with pedalboard --with pyloudnorm python tools/audio/build_foley.py
 
@@ -38,12 +38,16 @@ def step_features(seg):
 def diverse_steps(x, peaks, n, dur, seed):
     """Of the isolated steps at `peaks` (sample indices), the n that sound most unlike each other while staying in one voice:
     steps whose band balance strays more than 3 dB from the pool's median (another shoe angle, a scuff, a knock) are dropped,
-    then farthest-point selection on envelope shape (heel / toe timing, ring) and band balance picks the set. Deterministic.
+    then farthest-point selection on the analyzer's likeness (analyze_audio.similarity: fine envelope + the spectral character
+    left after removing the pool's mean spectrum) picks the set, starting from the most typical step. Deterministic.
     Returns indices into `peaks`."""
-    feats = []
+    import analyze_audio as aa
+    segs, feats = [], []
     for t in peaks:
         a = max(0, t - int(0.04 * SR))
-        feats.append(step_features(np.asarray(x[a:a + int(dur * SR)])))
+        seg = np.asarray(x[a:a + int(dur * SR)])
+        segs.append(seg)
+        feats.append(step_features(seg))
     if len(feats) <= n:
         return list(range(len(feats)))
     B = np.array([b for b, _ in feats])
@@ -52,12 +56,16 @@ def diverse_steps(x, peaks, n, dur, seed):
     ok = [i for i in range(len(feats)) if np.all(np.abs(B[i] - med)[loud] <= 3.0)]
     if len(ok) < n:
         ok = sorted(range(len(feats)), key=lambda i: float(np.abs(B[i] - med)[loud].max()))[:max(n, len(ok))]
+    group = np.mean([aa.log_spectrum(segs[i]) for i in ok], axis=0)
+    memo = {}
 
     def dist(i, j):
-        ei, ej = feats[i][1], feats[j][1]
-        m = min(len(ei), len(ej))
-        return (1.0 - float(np.dot(ei[:m], ej[:m]))) + 0.05 * float(np.abs(B[i] - B[j])[loud].mean())
-    start = min(ok, key=lambda i: float(np.abs(B[i] - med)[loud].mean()))   # the most typical step first
+        k = (min(i, j), max(i, j))
+        if k not in memo:
+            es, ss = aa.similarity(segs[i], segs[j], group)
+            memo[k] = (1.0 - es) + 0.25 * (1.0 - ss)
+        return memo[k]
+    start = min(ok, key=lambda i: float(np.abs(B[i] - med)[loud].mean()))
     chosen = [start]
     while len(chosen) < n:
         best = max((i for i in ok if i not in chosen), key=lambda i: min(dist(i, c) for c in chosen))

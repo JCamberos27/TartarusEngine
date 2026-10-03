@@ -130,10 +130,10 @@
      "gain_db": -6
     },
     "body": {
-     "src": "Mk14EBR/S_Mk14EBR_Fire_03.WAV",
+     "src": "Herrington_11-87/Fire/S_Herrington_11-87_Unsuppressed_2_With_Tail.wav",
      "dur": 0.4,
-     "lp": 700,
-     "gain_db": -9
+     "lp": 600,
+     "gain_db": -4
     }
    },
    {
@@ -227,9 +227,9 @@
     "pitch": -2.0
    },
    {
-    "src": "SRM-12/Actions/S_SRM-12_ShotBoltOnlyTimed.wav",
-    "t": 0.626,
-    "dur": 0.28,
+    "src": "SRM-12/Actions/S_SRM-12_ShotBoltOnly.wav",
+    "t": 0.7,
+    "dur": 0.13,
     "delay_ms": 18,
     "pitch": -2.0
    },
