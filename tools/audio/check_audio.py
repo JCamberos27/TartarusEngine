@@ -27,6 +27,7 @@ MIN_VARIANTS = {"close": 4, "sub": 4, "mech": 4, "tail": 4, "far": 4, "action": 
 # placeholders are gone and must not come back). Root-level project wavs (basketball, voice) are not part of this pipeline.
 AUDIO_FOLDERS = ("Weapons", "Foley", "Impacts", "Casings", "Combat", "UI", "Body", "Ambience", "IR")
 NO_LOUDNESS_WINDOW = ("ir",)      # an impulse response has no meaningful programme loudness (its rt60 / trim are checked in phase 2)
+MAX_PITCH_ST = 2.0       # no pitch / varispeed shift of a source cut beyond this (it sounds bad); variety comes from takes, cuts, EQ
 MONO_FOLD_MAX_DB = 4.0   # a fully decorrelated stereo pair loses 3 dB on a mono fold; a little more is tolerated
 LAYER_GROUPS = ("close", "mech", "sub", "tail", "far")
 
@@ -145,6 +146,11 @@ def main():
                 end = s.get("end", s.get("end_s", 0))
                 if not s.get("file") or not (end > start):
                     errs.append(f"{tag}: bad source entry {s}")
+                # the pitch rule (user, 2026-10-03): nothing is pitched around; no source cut is shifted more than 2 semitones
+                if not isinstance(s.get("pitch_st"), (int, float)):
+                    errs.append(f"{tag}: source {s.get('file')} has no `pitch_st` (record the pitch shift, 0 if none)")
+                elif abs(s["pitch_st"]) > MAX_PITCH_ST + 1e-6:
+                    errs.append(f"{tag}: source {s.get('file')} pitched {s['pitch_st']:+.2f} st (> {MAX_PITCH_ST:g} st cap)")
                 elif os.path.isdir(adsp.SRC_ROOT) and not os.path.exists(os.path.join(adsp.SRC_ROOT, s["file"])):
                     errs.append(f"{tag}: source file not found under {adsp.SRC_ROOT}: {s['file']}")
         key = (e["key"], layer)

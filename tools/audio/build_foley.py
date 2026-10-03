@@ -105,7 +105,7 @@ def land_heavy(v):
     n = len(y)
     th = be.slice_variant(v["thump"])
     r = adsp.slice_at(be.src(v["rattle"]["src"]), v["rattle"]["t"], 0.18)
-    r = adsp.gain_db(adsp.pitch(r, -4.0), -4.0)
+    r = adsp.gain_db(adsp.pitch(r, -2.0), -4.0)
     y = adsp.mix([(y, 0, 0.0), (th, 0, v["thump"].get("gain_db", -2.0)), (r, int(0.018 * SR), 0.0)], n)
     return adsp.fade(y, int(0.0005 * SR), int(0.12 * SR))
 
@@ -142,7 +142,7 @@ def sprint_loop(v):
         p, tt, d = donors[int(r.integers(len(donors)))]
         s = adsp.slice_at(be.src(p), tt, d)
         s = adsp.normalize_peak(s, -9.0)
-        s = adsp.pitch(s, float(r.uniform(-3, 1)))
+        s = adsp.pitch(s, float(r.uniform(-2, 1)))
         place(s, k / v["rattle"] + float(r.uniform(-0.04, 0.04)), float(r.uniform(-12, -6)) + 6)
     return out
 
