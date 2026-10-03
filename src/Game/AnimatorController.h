@@ -244,3 +244,13 @@ bool AnimatorStartInState(const AnimatorController& ctrl, AnimatorControllerComp
 // mirror their driver. Entities with one skip the plain Animation component. `dt` is the game
 // step (0 while paused).
 void UpdateAnimatorControllers(World& world, AssetLibrary& assets, float dt);
+
+// The model files (relative or absolute, no "#clip") the clips of `ctrl`'s states reach for `track`,
+// each once; clips a rig owns (no file extension) are not in it. Pure data.
+std::vector<std::string> AnimatorControllerClipFiles(const AnimatorController& ctrl, int track);
+
+// Loads the clip files of every Animator Controller in the world on worker threads, then attaches the
+// clips to each rig, so pressing Play meets them ready (the first Play frame used to stall ~1 s on it).
+// Call once per frame from the editor loop, on the main thread, with AssetLibrary::PumpAsync running;
+// it does its work twice a second and only does anything for what is new. Never loads synchronously.
+void PrefetchAnimatorClips(World& world, AssetLibrary& assets);
