@@ -4335,19 +4335,26 @@ int main(int argc, char** argv) {
                     stbi_write_png(out.c_str(), outW, outH, 4, image.data(), outW * 4);
                 }
                 // NPC_TEST_RECORD=<dir>: both views every other frame (30 fps of the fixed 60 Hz), for a video.
-                if (npcTest && playing && !npcTest->RecordDir().empty()) {
+                // (--weapon-test records the same way: its frames are the fixed step too, 30 fps, into the same dir.)
+                static std::string weaponRecordDir = [] {
+#pragma warning(suppress : 4996)
+                    const char* r = std::getenv("NPC_TEST_RECORD");
+                    return r ? std::string(r) : std::string();
+                }();
+                const std::string recordDir = npcTest ? npcTest->RecordDir() : (weaponTest ? weaponRecordDir : std::string());
+                if ((npcTest || weaponTest) && playing && !recordDir.empty()) {
                     static int recordFrame = 0;
-                    const int recordStep = npcTest->RecordStep();
+                    const int recordStep = npcTest ? npcTest->RecordStep() : 2;
                     if ((recordFrame++ % recordStep) == 0) {
                         std::error_code ec;
-                        std::filesystem::create_directories(npcTest->RecordDir(), ec);
+                        std::filesystem::create_directories(recordDir, ec);
                         auto save = [&](unsigned fbo, int w, int h, const char* stem) {
                             glBindFramebuffer(GL_READ_FRAMEBUFFER, fbo);
                             std::vector<unsigned char> px = Screenshot::GrabRegion(0, 0, w, h);
                             stbi_flip_vertically_on_write(1);
                             char name[64];
                             std::snprintf(name, sizeof name, "%s_%05d.jpg", stem, recordFrame / recordStep);
-                            stbi_write_jpg((std::filesystem::path(npcTest->RecordDir()) / name).string().c_str(), w, h, 4, px.data(), 92);
+                            stbi_write_jpg((std::filesystem::path(recordDir) / name).string().c_str(), w, h, 4, px.data(), 92);
                             stbi_flip_vertically_on_write(0);
                         };
                         save(gameView.GetFramebuffer().Handle(), gvWidth, gvHeight, "game");
