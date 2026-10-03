@@ -174,6 +174,8 @@ def main():
         stored = doc.get("mix", {})
         if abs(stored.get("shot_lufs_m", 1e9) - meta["shot_lufs_m"]) > mixspec.TOLERANCE_DB:
             errs.append(f"manifest mix.shot_lufs_m {stored.get('shot_lufs_m')} but the shot layers measure {meta['shot_lufs_m']} (run apply_mix.py)")
+        if stored.get("distance") != meta["distance"]:
+            errs.append("manifest mix.distance differs from recipes/mix.json \"distance\" (run apply_mix.py)")
         mix_line = f"mix reference {meta['shot_lufs_m']} LUFS-M (as played x{meta['player_gain']}: {meta['reference_lufs_m']}); "
     except KeyError as ex:
         errs.append(f"mix spec: {ex.args[0]}")

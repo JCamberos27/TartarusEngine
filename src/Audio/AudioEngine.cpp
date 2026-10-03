@@ -75,9 +75,11 @@ struct LimiterNode {
     MasterLimiter* Lim = nullptr;
     LoudnessMeter* Master = nullptr;
     std::vector<float> Scratch;
-    std::atomic<bool> Enabled{true};
-    std::atomic<float> CeilingDb{-1.0f}, LookaheadMs{1.5f}, ReleaseMs{80.0f};
-    std::atomic<float> LastGrDb{0.0f};
+    // Settings from the game thread: written under Lock, picked up by the audio thread when Dirty and the lock is free (it never waits).
+    std::mutex Lock;
+    LimiterSettings Pending;
+    std::atomic<bool> Dirty{false};
+    std::atomic<float> LastGrDb{0.0f}, LastGlueGrDb{0.0f};
 };
 LimiterNode* s_Limiter = nullptr;
 MeterNode* s_BusMeters[AudioEngine::kBusCount] = {};
@@ -103,15 +105,12 @@ void LimiterProcess(ma_node* pNode, const float** ppIn, ma_uint32* pFrameCountIn
         std::fill(n->Scratch.begin(), n->Scratch.begin() + 2 * (size_t)frames, 0.0f);
         in = n->Scratch.data();
     }
-    LimiterSettings want;
-    want.Enabled = n->Enabled.load(std::memory_order_relaxed);
-    want.CeilingDb = n->CeilingDb.load(std::memory_order_relaxed);
-    want.LookaheadMs = n->LookaheadMs.load(std::memory_order_relaxed);
-    want.ReleaseMs = n->ReleaseMs.load(std::memory_order_relaxed);
-    const LimiterSettings& have = n->Lim->Settings();
-    if (want.Enabled != have.Enabled || want.CeilingDb != have.CeilingDb || want.ReleaseMs != have.ReleaseMs ||
-        std::fabs(want.LookaheadMs - have.LookaheadMs) > 1e-4f)
+    if (n->Dirty.load(std::memory_order_acquire) && n->Lock.try_lock()) {
+        const LimiterSettings want = n->Pending;
+        n->Dirty.store(false, std::memory_order_relaxed);
+        n->Lock.unlock();
         n->Lim->Configure(want);
+    }
     TapRing* taps = s_Taps.load(std::memory_order_acquire);
     unsigned long long w = 0;
     if (taps) {
@@ -126,6 +125,8 @@ void LimiterProcess(ma_node* pNode, const float** ppIn, ma_uint32* pFrameCountIn
     n->Master->Process(out, (int)frames);
     const float gr = n->Lim->TakeGainReductionDb();
     if (gr > 0.0f) n->LastGrDb.store(std::max(gr, n->LastGrDb.load(std::memory_order_relaxed)), std::memory_order_relaxed);
+    const float glue = n->Lim->TakeGlueReductionDb();
+    if (glue > 0.0f) n->LastGlueGrDb.store(std::max(glue, n->LastGlueGrDb.load(std::memory_order_relaxed)), std::memory_order_relaxed);
     if (taps) {
         for (ma_uint32 i = 0; i < frames; ++i) {
             const size_t at = (size_t)((w + i) & (TapRing::kFrames - 1)) * 2;
@@ -276,6 +277,17 @@ void UpdateReturnGains() {
 }
 
 ma_node* AsNode(ma_node_base* n) { return (ma_node*)n; }
+
+void ApplyRolloff(ma_sound* sound, AudioEngine::Rolloff mode, float minDistance, float maxDistance, float factor) {
+    minDistance = std::max(minDistance, 0.01f);
+    maxDistance = std::max(maxDistance, minDistance + 0.01f);
+    ma_sound_set_attenuation_model(sound, mode == AudioEngine::Rolloff::Linear        ? ma_attenuation_model_linear
+                                          : mode == AudioEngine::Rolloff::Exponential ? ma_attenuation_model_exponential
+                                                                                      : ma_attenuation_model_inverse);
+    ma_sound_set_min_distance(sound, minDistance);
+    ma_sound_set_max_distance(sound, maxDistance);
+    ma_sound_set_rolloff(sound, mode == AudioEngine::Rolloff::Exponential ? std::max(factor, 0.0f) : 1.0f);
+}
 
 bool InitNode(ma_node_vtable* vt, ma_node_base* node) {
     ma_node_config nc = ma_node_config_init();
@@ -553,9 +565,18 @@ AudioEngine::SoundHandle AudioEngine::Play(const std::string& path, float volume
 
     ma_sound_set_looping(sound.get(), loop ? MA_TRUE : MA_FALSE);
     ma_sound_set_volume(sound.get(), volume);
-    // Off until someone calls SetPosition: an unpositioned voice would otherwise sit at the
+    // Off until someone calls SetPosition (or the fx place it): an unpositioned voice would otherwise sit at the
     // origin and get attenuated against the listener, which is wrong for UI and preview sounds.
     ma_sound_set_spatialization_enabled(sound.get(), MA_FALSE);
+    if (fx) {
+        ma_sound_set_pitch(sound.get(), fx->Pitch);
+        if (fx->Duck != 1.0f) ma_sound_set_fade_in_pcm_frames(sound.get(), std::max(fx->Duck, 0.0f), std::max(fx->Duck, 0.0f), 0);
+        if (fx->Spatial) {
+            ma_sound_set_spatialization_enabled(sound.get(), MA_TRUE);
+            ma_sound_set_position(sound.get(), fx->Position.x, fx->Position.y, fx->Position.z);
+            ApplyRolloff(sound.get(), fx->RolloffMode, fx->MinDistance, fx->MaxDistance, fx->RolloffFactor);
+        }
+    }
     if (startOffsetSeconds > 0.0f) {
         ma_uint32 sampleRate = 0;
         if (ma_sound_get_data_format(sound.get(), nullptr, nullptr, &sampleRate, nullptr, 0) == MA_SUCCESS && sampleRate > 0)
@@ -797,24 +818,23 @@ void AudioEngine::ResetReverbStats() {
 
 void AudioEngine::SetMasterLimiter(const LimiterSettings& s) {
     if (!s_Limiter) return;
-    s_Limiter->Enabled.store(s.Enabled);
-    s_Limiter->CeilingDb.store(std::min(s.CeilingDb, 0.0f));
-    s_Limiter->LookaheadMs.store(std::clamp(s.LookaheadMs, 0.1f, 10.0f));
-    s_Limiter->ReleaseMs.store(std::max(s.ReleaseMs, 1.0f));
+    std::lock_guard<std::mutex> lk(s_Limiter->Lock);
+    LimiterSettings& p = s_Limiter->Pending;
+    p = s;
+    p.CeilingDb = std::min(s.CeilingDb, 0.0f);
+    p.LookaheadMs = std::clamp(s.LookaheadMs, 0.1f, 10.0f);
+    p.ReleaseMs = std::max(s.ReleaseMs, 1.0f);
+    s_Limiter->Dirty.store(true, std::memory_order_release);
 }
 
 LimiterSettings AudioEngine::GetMasterLimiter() {
-    LimiterSettings s;
-    if (s_Limiter) {
-        s.Enabled = s_Limiter->Enabled.load();
-        s.CeilingDb = s_Limiter->CeilingDb.load();
-        s.LookaheadMs = s_Limiter->LookaheadMs.load();
-        s.ReleaseMs = s_Limiter->ReleaseMs.load();
-    }
-    return s;
+    if (!s_Limiter) return LimiterSettings{};
+    std::lock_guard<std::mutex> lk(s_Limiter->Lock);
+    return s_Limiter->Pending;
 }
 
 float AudioEngine::TakeLimiterGainReductionDb() { return s_Limiter ? s_Limiter->LastGrDb.exchange(0.0f, std::memory_order_relaxed) : 0.0f; }
+float AudioEngine::TakeGlueGainReductionDb() { return s_Limiter ? s_Limiter->LastGlueGrDb.exchange(0.0f, std::memory_order_relaxed) : 0.0f; }
 
 AudioEngine::MeterReading AudioEngine::GetMeter(int id) {
     MeterReading m;
@@ -924,6 +944,11 @@ void AudioEngine::SetVolume(SoundHandle handle, float volume) {
     if (ma_sound* sound = Resolve(handle)) ma_sound_set_volume(sound, volume);
 }
 
+void AudioEngine::SetDuck(SoundHandle handle, float gain, float seconds) {
+    if (ma_sound* sound = Resolve(handle))
+        ma_sound_set_fade_in_milliseconds(sound, -1.0f, std::max(gain, 0.0f), (ma_uint64)std::max(seconds * 1000.0f, 0.0f));
+}
+
 void AudioEngine::SetPitch(SoundHandle handle, float pitch) {
     if (ma_sound* sound = Resolve(handle)) ma_sound_set_pitch(sound, pitch);
 }
@@ -950,16 +975,8 @@ void AudioEngine::SetAttenuation(SoundHandle handle, float minDistance, float ma
     ma_sound_set_rolloff(sound, rolloff);
 }
 
-void AudioEngine::SetRolloff(SoundHandle handle, Rolloff mode, float minDistance, float maxDistance) {
-    ma_sound* sound = Resolve(handle);
-    if (!sound) return;
-    minDistance = std::max(minDistance, 0.01f);
-    maxDistance = std::max(maxDistance, minDistance + 0.01f);
-    ma_sound_set_attenuation_model(sound, mode == Rolloff::Linear ? ma_attenuation_model_linear
-                                                                  : ma_attenuation_model_inverse);
-    ma_sound_set_min_distance(sound, minDistance);
-    ma_sound_set_max_distance(sound, maxDistance);
-    ma_sound_set_rolloff(sound, 1.0f);
+void AudioEngine::SetRolloff(SoundHandle handle, Rolloff mode, float minDistance, float maxDistance, float factor) {
+    if (ma_sound* sound = Resolve(handle)) ApplyRolloff(sound, mode, minDistance, maxDistance, factor);
 }
 
 void AudioEngine::SetSpatial(SoundHandle handle, bool spatial) {

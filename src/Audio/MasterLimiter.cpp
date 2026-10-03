@@ -28,6 +28,7 @@ void MasterLimiter::Reset() {
     m_N = 0;
     m_Gs = 1.0;
     m_PrevSeg = 0.0f;
+    m_GlueGr = 0.0;
 }
 
 void MasterLimiter::Configure(const LimiterSettings& s) {
@@ -41,6 +42,11 @@ void MasterLimiter::Configure(const LimiterSettings& s) {
     m_L = l;
     m_Alpha = 1.0 - std::exp(-1.0 / ((double)m_S.ReleaseMs * 0.001 * (double)m_Rate));
     m_CeilLin = std::pow(10.0f, m_S.CeilingDb / 20.0f);
+    m_S.GlueRatio = std::max(s.GlueRatio, 1.0f);
+    m_S.GlueKneeDb = std::max(s.GlueKneeDb, 0.0f);
+    m_GlueAtk = 1.0 - std::exp(-1.0 / (std::max((double)s.GlueAttackMs, 0.1) * 0.001 * (double)m_Rate));
+    m_GlueRel = 1.0 - std::exp(-1.0 / (std::max((double)s.GlueReleaseMs, 1.0) * 0.001 * (double)m_Rate));
+    m_Trim = std::pow(10.0f, s.TrimDb / 20.0f);
     if (restart) Reset();
 }
 
@@ -49,8 +55,23 @@ void MasterLimiter::Process(const float* in, float* out, int frames) {
     const int L = m_L;
     const float ceil = m_CeilLin;
     float worstGs = 1.0f;
+    double worstGlue = 0.0;
+    const bool glue = m_S.GlueEnabled;
+    const double gT = m_S.GlueThresholdDb, gW = m_S.GlueKneeDb, gS = 1.0 - 1.0 / (double)m_S.GlueRatio;
     for (int f = 0; f < frames; ++f) {
-        const float inL = in[2 * (size_t)f], inR = in[2 * (size_t)f + 1];
+        float inL = in[2 * (size_t)f] * m_Trim, inR = in[2 * (size_t)f + 1] * m_Trim;
+        if (glue) { // the glue: a soft-knee gain computer on the linked peak, its reduction smoothed (attack / release) in dB
+            const double x = 20.0 * std::log10(std::max((double)std::max(std::fabs(inL), std::fabs(inR)), 1e-9));
+            const double over = x - gT;
+            double want = 0.0;
+            if (2.0 * over >= gW) want = gS * over;
+            else if (gW > 0.0 && 2.0 * over > -gW) want = gS * (over + gW * 0.5) * (over + gW * 0.5) / (2.0 * gW);
+            m_GlueGr += (want > m_GlueGr ? m_GlueAtk : m_GlueRel) * (want - m_GlueGr);
+            const float gg = (float)std::pow(10.0, -m_GlueGr / 20.0);
+            inL *= gg;
+            inR *= gg;
+            worstGlue = std::max(worstGlue, m_GlueGr);
+        }
         const long long n = m_N++;
         m_X[0][(size_t)(n % cap)] = inL;
         m_X[1][(size_t)(n % cap)] = inR;
@@ -99,6 +120,11 @@ void MasterLimiter::Process(const float* in, float* out, int frames) {
             out[2 * (size_t)f] = yl;
             out[2 * (size_t)f + 1] = yr;
         }
+    }
+    if (worstGlue > 0.0) {
+        const float gr = (float)worstGlue;
+        float cur = m_GlueGrDb.load(std::memory_order_relaxed);
+        while (gr > cur && !m_GlueGrDb.compare_exchange_weak(cur, gr, std::memory_order_relaxed)) {}
     }
     if (worstGs < 1.0f) {
         const float gr = -20.0f * std::log10(std::max(worstGs, 1e-6f));

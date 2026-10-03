@@ -131,7 +131,7 @@ def main():
                 adsp.take_uses()
                 y = render_variant(v)
                 uses = adsp.take_uses()
-                y = abuild.finish(y, "action")
+                y = abuild.finish(y, "action", trim_bleed="layers" not in v)   # (a composite's later layers are meant)
                 rel = f"{g['dir']}/{elem}_{n}.wav"
                 extra = {"gun": gun, "element": elem, "variant": n, "source": describe(v)}
                 if "thud" in v:                      # contact = where the thud layer lands

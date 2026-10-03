@@ -1,6 +1,7 @@
 #pragma once
 
 #include "AudioEngine.h"
+#include "AudioMix.h"
 #include "EnvironmentProbe.h"
 #include "ReverbZones.h"
 
@@ -48,6 +49,7 @@ struct SoundSet {
     // Per file (parallel to Files; empty = zeros / defaults), from the manifest: where the contact transient sits in the file
     // (ms), the mix level (dB) and the true peak (dBTP). Variants of one key differ, so these are used per play, not per key.
     std::vector<float> FileAnchorMs, FileGainDb, FilePeakDb;
+    std::vector<float> FileLufs;           // the files' LUFS-M max (empty: unknown), for the duck's key
     float AnchorMs(size_t i) const { return i < FileAnchorMs.size() ? FileAnchorMs[i] : 0.0f; }
     // The level contract: a voice plays at Volume x 10^(mix_db / 20) (GainLin), nothing else loudness-related on top. mix_db is the
     // manifest's (per file), or the set's own "mixDb" from a Data File (HasMixDb), which wins.
@@ -56,9 +58,9 @@ struct SoundSet {
     float GainLin(size_t i) const;
     float PeakLin(size_t i) const;
     bool FilesExplicit = false;            // the files came from a Data File: the manifest does not replace them
-    // 3D plays are calibrated so the level is the spec's (0 dB re mix_db) at this distance: the log rolloff would otherwise put
-    // Min / RefDistance on it. From the manifest's mix.distance_refs_m (0 = no calibration).
-    float RefDistance = 0.0f;
+    // 3D plays of a category the mix spec places in the world (manifest mix.distance, by key): the level holds at the model's
+    // reference distance, capped close up, its own slope beyond; MinDistance / MaxDistance / Rolloff above are then not used.
+    DistanceModel Distance;
 
     static SoundSet FromJson(const std::string& key, const std::string& text, const SoundSet& base = SoundSet{});
     std::string ToJson() const;
@@ -76,13 +78,18 @@ struct BlendCurve {
 struct SoundManifestEntry {
     std::string File, Key, Category, Layer;
     float AnchorMs = 0.0f, MixDb = 0.0f, PeakDb = -3.0f;
+    float LufsM = 0.0f; bool HasLufs = false; // lufs_m_max: the file's loudness (the mix's level of a voice is this + its gain - the reference)
     float Rt60S = 0.0f, PreDelayMs = 0.0f; // impulse responses (layer "ir", key ir.<class>)
     bool Loop = false;
 };
 struct SoundManifest {
     std::vector<SoundManifestEntry> Entries;
-    std::map<std::string, float> DistanceRefs; // top-level mix.distance_refs_m: npc_shot, impact, body_fall (metres)
-    float DistanceRef(const std::string& name) const { const auto it = DistanceRefs.find(name); return it == DistanceRefs.end() ? 0.0f : it->second; }
+    // Top-level mix.distance (tools/audio/recipes/mix.json "distance"): npc_shot, impact, body_fall, npc_step, npc_gear, casing, flyby.
+    std::map<std::string, DistanceModel> Distance;
+    float ShotOverReferenceDb = 0.0f;  // mix.shot_lufs_m - mix.reference_lufs_m: a shot layer's mix_db is relative to the unscaled shot
+    float ReferenceLufs = 0.0f; bool HasReference = false; // mix.reference_lufs_m: the player's shot as played (0 dB of the mix)
+    DistanceModel DistanceFor(const std::string& name) const { const auto it = Distance.find(name); return it == Distance.end() ? DistanceModel{} : it->second; }
+    float DistanceRef(const std::string& name) const { return DistanceFor(name).RefM; }
     const SoundManifestEntry* FirstFor(const std::string& key) const; // the first variant of `key` (file-name order), null when none
     static bool FromJson(const std::string& text, SoundManifest& out, std::string* error = nullptr);
     // Every variant of `key`, in file-name order (empty when none).
@@ -110,18 +117,22 @@ struct SoundVoice {
     glm::vec3 Position{0.0f};
     float MinDistance = 1.0f, MaxDistance = 40.0f;
     AudioEngine::Rolloff Rolloff = AudioEngine::Rolloff::Logarithmic;
+    float RolloffFactor = 1.0f;   // Exponential only
     float StartOffset = 0.0f; // seconds into the file
     float ReverbSend = 0.0f;  // see SoundSet
     bool Occlusion = false;
     float OcclusionHz = 20000.0f; // the low-pass it starts with (20000 = open)
     float PortalGain = 1.0f;      // the gain after that filter (a portal's loss)
     int ReverbBus = 0;            // 1 = the remote room's reverb (heard through a portal)
+    MixGroup Group = MixGroup::Default;
+    float Duck = 1.0f;            // the group's duck gain when it starts (SetDuck moves it after)
 };
 struct SoundBackend {
     virtual ~SoundBackend() = default;
     virtual AudioEngine::SoundHandle Start(const SoundVoice& v) = 0;
     virtual void Stop(AudioEngine::SoundHandle h) = 0;
     virtual void SetVolume(AudioEngine::SoundHandle h, float volume) = 0;
+    virtual void SetDuck(AudioEngine::SoundHandle, float /*gain*/, float /*seconds*/) {}
     virtual bool IsPlaying(AudioEngine::SoundHandle h) = 0;
     virtual void Preload(const std::string&) {}
     // Low-pass cutoff (Hz; >= 20000 = open) of a voice started with Occlusion; the reverb the bus runs (targets, glided).
@@ -164,19 +175,6 @@ public:
     void SetBackend(SoundBackend* backend) { m_Backend = backend; }
     SoundBackend& Backend() { return m_Backend ? *m_Backend : SoundBackend::Engine(); }
     void SetLog(LogFn fn) { m_Log = std::move(fn); }
-    // The weapon bus's peak limiter, as gain ducking (there is no DSP in AudioEngine): every voice's peak (file true peak x
-    // its volume) counts toward a running estimate that decays over `window` seconds (a transient's life); a voice that
-    // would push the estimate past the ceiling is played quieter, down to minGain.
-    struct Limiter {
-        bool Enabled = true;
-        float CeilingDb = -1.0f;
-        float Window = 0.15f;
-        float MinGain = 0.1f;
-    };
-    void SetLimiter(const Limiter& l) { m_Limiter = l; }
-    const Limiter& GetLimiter() const { return m_Limiter; }
-    // The estimate right now (linear), for tests / the log.
-    float LimiterLoad() const;
     void Seed(std::uint32_t s) { m_Rng = s ? s : 1u; }
 
     // What a set sends to the reverb bus and whether it is occluded, by its key (sets with -1 ask this). Set by WeaponAudio.
@@ -196,6 +194,9 @@ public:
         float MinDistance = 3.0f;      // closer sources are never occluded
         float GlideRate = 10.0f;       // per second: how fast the amount follows a change
         float Clearance = 0.3f;        // a hit this close to the source is the source's own surface, not an occluder
+        // Air absorption (every 3D voice, occluded or not): AirCutoffHz of the mix settings, folded into the same low-pass.
+        bool AirEnabled = false;
+        float AirStartDistance = 15.0f, AirExponent = 0.6f, AirMinHz = 4000.0f;
     };
     // The way a sound takes to a listener in another room (WeaponAudio's portals): heard from the portal, as far away as the path is long,
     // quieter and darker by the portals' open amount and the bend, with its own room's reverb (`Remote`, the source room's preset).
@@ -217,6 +218,14 @@ public:
     const OcclusionSettings& GetOcclusion() const { return m_Occ; }
     void SetBlockedFn(BlockedFn fn) { m_Blocked = std::move(fn); }
     void SetListener(const glm::vec3& p) { m_ListenerPos = p; }
+    // The mix's duck gains by group (null = none); every live voice follows its group's gain.
+    // A Weapon / Threat voice keys the duck with its level at the listener: the file's loudness + its gain + the distance's, against
+    // the mix reference (LUFS-M of the player's shot as played). No reference: no keying.
+    void SetDucker(MixDucker* d) { m_Ducker = d; }
+    void SetReferenceLufs(bool has, float lufs) { m_HasRef = has; m_RefLufs = lufs; }
+    // Live voices by mix group (the Audio panel).
+    void GroupVoices(int (&out)[(int)MixGroup::Count]) const;
+    static float AirCutoff(const OcclusionSettings& s, float distance);
     int OccludedVoices() const { return (int)m_Occluded.size(); }
     int OcclusionChecks() const { return m_OccChecks; }
     // Cutoff for an occlusion amount 0..1 (log-spaced from open to CutoffHz).
@@ -238,6 +247,8 @@ private:
         double Started = 0.0;
         float Volume = 1.0f;
         float FadeLeft = -1.0f, FadeTotal = 0.0f; // >= 0: fading out
+        MixGroup Group = MixGroup::Default;
+        float SentDuck = 1.0f;
     };
     struct Pool {
         std::vector<Voice> Voices;
@@ -249,16 +260,13 @@ private:
         Request Req;
         double Due = 0.0;
     };
-    struct Peak {
-        double Time = 0.0;
-        float Amp = 0.0f;
-    };
     struct Tracked {
         AudioEngine::SoundHandle Handle = AudioEngine::InvalidHandle;
         glm::vec3 Pos{0.0f};
         float Amount = 0.0f, Target = 0.0f, LastCutoff = 20000.0f;
         double NextCheck = 0.0;
         float MinDist = 3.0f;
+        bool Raycast = true;               // occlusion / portals (false: tracked for the air absorption only)
         bool Portal = false;               // heard through a portal
         glm::vec3 CurPos{0.0f}, TargetPos{0.0f}, SentPos{0.0f};
         float Gain = 1.0f, TargetGain = 1.0f, SentGain = 1.0f;
@@ -276,8 +284,9 @@ private:
     size_t m_OccCursor = 0;
     void UpdateOcclusion(float dt);
     std::vector<Pending> m_Pending;
-    std::vector<Peak> m_Peaks;
-    Limiter m_Limiter;
+    MixDucker* m_Ducker = nullptr;
+    bool m_HasRef = false;
+    float m_RefLufs = 0.0f;
     Played Start(const SoundSet& set, int index, const Request& req, float seek);
     SoundBackend* m_Backend = nullptr;
     LogFn m_Log;
@@ -397,7 +406,7 @@ public:
     const std::vector<Emitted>& Transcript() const { return m_Transcript; }
     int ShotVoicesStarted() const { return m_ShotVoices; }
     // Tests: the manifest the class impulse responses and sets are looked up in.
-    void SetManifestForTest(const SoundManifest& m) { m_Manifest = m; }
+    void SetManifestForTest(const SoundManifest& m) { m_Manifest = m; m_Player.SetReferenceLufs(m.HasReference, m.ReferenceLufs); }
     // Tests: starts with a given set of profiles and no scene.
     void StartForTest(const std::string& projectRoot, SoundBackend* backend);
 
@@ -405,6 +414,15 @@ public:
     // Send levels by category, and what the reverb is told as the listener moves (zones first, the probe outside them).
     ReverbBusComponent& Bus() { return m_Bus; }
     const ReverbBusComponent& Bus() const { return m_Bus; }
+    // --- the dynamic mix (docs/AUDIO.md, "Dynamic mix") ---
+    // The settings in use (the scene's Audio Mix component at Start, or the defaults); ApplyMix after changing them live.
+    AudioMixComponent& Mix() { return m_Mix; }
+    void ApplyMix();
+    const MixDucker& Ducker() const { return m_Ducker; }
+    // Aiming down sights (the player's own): the focus state.
+    void SetFocus(bool aiming) { m_Ducker.SetFocus(aiming); }
+    // A loud event heard at the listener (dB re the player's own shot): ducks the groups under it.
+    void KeyDuck(float levelDb) { m_Ducker.Key(levelDb); }
     // The category's send level for a set key ("snd.foley.step_wood.walk" -> footsteps ...); 0 for the gun tails.
     float SendFor(const std::string& key) const;
     // The reverb at `pos`: the zones' reverbs (layered, faded), the probe's class reverbs for what no zone claims; the two heaviest
@@ -468,6 +486,8 @@ private:
     ReverbZones m_Zones;
     SpaceMix m_LastSpace;
     ReverbBusComponent m_Bus;
+    AudioMixComponent m_Mix;
+    MixDucker m_Ducker;
     AudioEngine::ReverbSpec m_ReverbSent, m_RemoteSent;
     ReverbZoneMix m_ListenerMix;
     bool m_ReverbValid = false;

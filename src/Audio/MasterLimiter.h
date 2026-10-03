@@ -17,6 +17,15 @@ struct LimiterSettings {
     float CeilingDb = -1.0f;     // dBFS
     float LookaheadMs = 1.5f;    // 0.1 .. 10
     float ReleaseMs = 80.0f;     // time constant of the gain's recovery
+    // Before the limiter: the master trim, then the glue compressor (feed-forward, linked stereo, peak detector, soft knee, the
+    // gain reduction smoothed with separate attack / release). Off = bypassed bit for bit.
+    float TrimDb = 0.0f;
+    bool GlueEnabled = false;
+    float GlueThresholdDb = -12.0f;
+    float GlueRatio = 2.0f;
+    float GlueKneeDb = 6.0f;
+    float GlueAttackMs = 15.0f;
+    float GlueReleaseMs = 200.0f;
 };
 
 class MasterLimiter {
@@ -30,6 +39,7 @@ public:
     int LatencyFrames() const { return m_L + 2; }
     // The deepest gain reduction (dB, >= 0) since the last call; read from any thread.
     float TakeGainReductionDb() { return m_GrDb.exchange(0.0f, std::memory_order_relaxed); }
+    float TakeGlueReductionDb() { return m_GlueGrDb.exchange(0.0f, std::memory_order_relaxed); } // the glue's, the same way
     float CurrentGain() const { return (float)m_Gs; }
     void Reset();
 
@@ -47,7 +57,10 @@ private:
     long long m_N = 0;              // frames received
     double m_Gs = 1.0;              // the smoothed gain
     float m_PrevSeg = 0.0f;         // peak of the previous segment
-    std::atomic<float> m_GrDb{0.0f};
+    std::atomic<float> m_GrDb{0.0f}, m_GlueGrDb{0.0f};
+    double m_GlueGr = 0.0;          // the glue's smoothed gain reduction (dB, >= 0)
+    double m_GlueAtk = 0.0, m_GlueRel = 0.0;
+    float m_Trim = 1.0f;
     double m_Alpha = 0.0;
     float m_CeilLin = 0.89f;
 };

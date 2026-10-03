@@ -168,8 +168,23 @@ def compute(files, lufs_of=None):
     out = {f: round(v, 2) for f, v in out.items()}
     meta = {"spec": "recipes/mix.json", "shot_lufs_m": round(shot, 2), "reference_lufs_m": round(ref["played"], 2),
             "player_gain": SPEC["reference"]["player_gain"], "per_gun_lufs_m": {g: round(v, 2) for g, v in per_gun.items()},
-            "distance_refs_m": {k: v for k, v in SPEC["distance_refs"].items() if not k.startswith("_")}}
+            "distance": distance_models(ref)}
     return out, meta
+
+
+def distance_models(ref):
+    """The manifest's `mix.distance`: recipes/mix.json "distance", with npc_shot's offset computed. A soldier's shot plays the shot layer
+    files, whose mix_db is relative to the UNSCALED shot (ref["shot"]); the spec wants it at levels.npc_shot re the reference as played."""
+    out = {}
+    for name, m in SPEC["distance"].items():
+        if name.startswith("_"):
+            continue
+        d = {k: v for k, v in m.items() if not k.startswith("_")}
+        if name == "npc_shot":
+            d["offset_db"] = round(_lvl()["npc_shot"] - (ref["shot"] - ref["played"]), 2)
+        d.setdefault("offset_db", 0.0)
+        out[name] = d
+    return out
 
 
 def apply_to(files):

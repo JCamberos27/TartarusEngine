@@ -35,6 +35,13 @@ def shot_onset(x, frac=0.12):
     return int(np.argmax(h > frac * h.max()))
 
 
+def onset_of(x, d):
+    """The shot instant in a source: near d["t"] (seconds) in a recording of several shots, else the file's first blast."""
+    if "t" in d:
+        return adsp.find_onset(x, d["t"], back_ms=40.0, fwd_ms=80.0, frac=0.15)
+    return shot_onset(x)
+
+
 def chain(x, c):
     from pedalboard import PeakFilter, Compressor
     if "hp" in c:
@@ -57,7 +64,7 @@ def chain(x, c):
 def _donor(d, ref):
     """Slice a donor shot from its own onset, filter it, phase-align it to `ref`, return (audio, lag, polarity)."""
     x = src(d["src"])
-    on = shot_onset(x)
+    on = onset_of(x, d)
     a = max(0, on - int(0.003 * SR))
     z = adsp.cut(x, a, a + int(d["dur"] * SR))
     z = adsp.fade(z, int(0.0008 * SR), int(max(0.02, d["dur"] * 0.3) * SR))
@@ -67,20 +74,20 @@ def _donor(d, ref):
         z = adsp.filt(z, "lp", d["lp"], 2)
     # align on the band the donor actually contributes: crack = presence band, body = low-mid
     band = (1500.0, 6500.0) if d.get("hp", 0) >= 1500 else (60.0, 700.0)
-    z, lag, pol = adsp.phase_align(ref, z, band=band, max_lag_ms=1.2)
+    z, lag, pol = adsp.phase_align(ref, z, band=band, max_lag_ms=1.2 if d.get("hp", 0) >= 1500 else 2.5)   # (a body's onset is less sharp)
     return adsp.gain_db(z, d.get("gain_db", 0.0)), lag, pol
 
 
 def render_close(v, cfg):
     x = src(v["base"]["src"])
-    on = shot_onset(x)
+    on = onset_of(x, v["base"])
     n = int(cfg["length_s"] * SR)
     b0 = max(0, on - int(0.003 * SR))
     base = adsp.cut(x, b0, b0 + n)
     base = adsp.fade(base, int(0.0008 * SR), int(0.25 * n))
     notes = []
     layers = [(base, 0, 0.0)]
-    for key in ("crack", "body"):
+    for key in ("crack", "body", "layer"):
         if key in v:
             z, lag, pol = _donor(v[key], base)
             layers.append((z, 0, 0.0))
@@ -121,7 +128,9 @@ def render_sub(v, cfg, ref):
     for d in v.get("donors", []):
         y = y + pad(_low_donor(d, n))
     y = adsp.filt(y, "hp", 28.0, 2)
-    y = adsp.soft_sat(y / (np.abs(y).max() + 1e-9), v.get("drive", 1.8))
+    y = np.repeat(adsp.to_mono(y)[:, None], 2, axis=1)               # low end is mono: no phase smear between the ears
+    # a touch of saturation (audible harmonics on small speakers) without flattening the punch
+    y = adsp.soft_sat(0.6 * y / (np.abs(y).max() + 1e-9), v.get("drive", 1.25)) / 0.6
     y = adsp.fade(y, int(0.0008 * SR), int(0.35 * n))
     y, lag, pol = adsp.phase_align(ref, y, band=(35.0, 160.0), win_ms=18.0, max_lag_ms=0.4)
     y = np.pad(y, ((0, max(0, n - len(y))), (0, 0)))[:n]
@@ -155,7 +164,7 @@ def render_tail(v, cfg):
 
 def render_far(v, cfg):
     x = src(v["src"])
-    on = shot_onset(x)
+    on = onset_of(x, v)
     n = int(cfg["length_s"] * SR)
     seg = adsp.cut(x, on, on + n)
     seg = adsp.pitch(seg, v.get("pitch", 0.0))
@@ -182,7 +191,7 @@ def build(recipe_path, layers=None):
         ref = closes[(n - 1) % len(closes)]
         adsp.take_uses()
         y, note = render_sub(v, cfg["sub"], ref)
-        entries.append(("sub", n, y, note, False, adsp.take_uses()))
+        entries.append(("sub", n, y, note, True, adsp.take_uses()))
     for n, v in enumerate(cfg["mech"]["variants"] if want("mech") else [], 1):
         adsp.take_uses()
         y, note = render_mech(v, cfg["mech"])
@@ -197,8 +206,7 @@ def build(recipe_path, layers=None):
         entries.append(("far", n, y, note, True, adsp.take_uses()))
     out = []
     for layer, n, y, note, mono, uses in entries:
-        gr = 10.0 if layer in ("close", "sub") else 7.0
-        y = abuild.finish(y, layer, max_gr_db=gr)
+        y = abuild.finish(y, layer, trim_bleed=layer == "mech")   # (limiting budget per layer: abuild.GR_BUDGET_DB)
         rel = f"{d}/fire_{layer}_{n}.wav"
         e = abuild.emit(rel, y, f"snd.{gun}.fire_{layer}", layer,
                         {"gun": gun, "element": f"fire_{layer}", "variant": n, "source": note,

@@ -82,9 +82,14 @@ float ReverbZoneVolume::Depth(const glm::vec3& p) const {
 }
 
 float ReverbZoneVolume::Weight(const glm::vec3& p) const {
-    const float depth = Depth(p);
+    float depth = Depth(p);
     if (depth <= 0.0f) return 0.0f;
     if (FadeDistance <= 1e-4f) return 1.0f;
+    if (Shape == 0) { // a box fades in across its walls and its ceiling, never its floor: the listener stands on it
+        const glm::vec3 l = ToLocal * (p - Center);
+        const glm::vec3 d = Extents - glm::abs(l);
+        depth = std::min({d.x, d.z, Extents.y - l.y});
+    }
     const float t = std::clamp(depth / FadeDistance, 0.0f, 1.0f);
     return t * t * (3.0f - 2.0f * t);
 }

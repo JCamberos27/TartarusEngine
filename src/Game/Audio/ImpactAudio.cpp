@@ -67,7 +67,7 @@ SoundSet* ImpactAudio::ImpactSet(const std::string& surface) {
         s.StealFadeTime = 0.03f;
         s.PitchMin = 0.97f;
         s.PitchMax = 1.03f;
-        s.VolumeJitterDb = 1.5f;
+        s.VolumeJitterDb = 1.0f;
     });
 }
 
@@ -80,7 +80,7 @@ SoundSet* ImpactAudio::CasingSet(bool shell, const std::string& surface) {
         s.StealFadeTime = 0.05f;
         s.PitchMin = 0.96f;
         s.PitchMax = 1.04f;
-        s.VolumeJitterDb = 2.0f;
+        s.VolumeJitterDb = 1.0f;
     });
 }
 
@@ -139,7 +139,7 @@ bool ImpactAudio::Flyby(const glm::vec3& point, float miss) {
         s.StealFadeTime = 0.03f;
         s.PitchMin = 0.95f;
         s.PitchMax = 1.05f;
-        s.VolumeJitterDb = 1.5f;
+        s.VolumeJitterDb = 1.0f;
     });
     if (set->Files.empty()) return false;
     const float g = FlybyGain(m_T, miss);
