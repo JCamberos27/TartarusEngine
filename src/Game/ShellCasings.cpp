@@ -1,6 +1,7 @@
 #include "ShellCasings.h"
 
 #include "AssetLibrary.h"
+#include "Audio/ImpactAudio.h"
 #include "Camera.h"
 #include "Components.h"
 #include "GameModuleAPI.h"
@@ -109,6 +110,7 @@ void ShellCasings::Spawn(World& world, AssetLibrary& assets, const CasingSpawn& 
     c.LongAxis[axis] = 1.0f;
     c.Length = size[axis];
     c.Radius = 0.5f * std::min({size[(axis + 1) % 3], size[(axis + 2) % 3]});
+    c.Shell = ImpactAudio::IsShell(ImpactAudio::Get().Tuning(), c.Radius);
     c.Position = spawn.Position;
     c.Velocity = spawn.Velocity;
     c.Rotation = glm::normalize(spawn.Rotation);
@@ -151,6 +153,8 @@ void ShellCasings::Step(Case& c, float dt) {
         const float travel = std::max(hit.Distance - 1e-4f, 0.0f);
         c.Position += dir * travel;
         const glm::vec3 vn = glm::dot(c.Velocity, n) * n, vt = c.Velocity - vn;
+        // The sound hook: the first few ground contacts, by how hard it came down (ImpactAudio gates and picks the surface).
+        if (n.y > 0.5f && m_StepWorld) ImpactAudio::Get().CasingContact(*m_StepWorld, c.Position, glm::length(vn), hit.Entity, c.Shell, c.GroundContacts++);
         c.Velocity = vt * (1.0f - m_Settings.Friction) - vn * m_Settings.Restitution;
         // A hard knock sets it tumbling a new way; a soft one just slows the spin.
         std::uniform_real_distribution<float> u(-1.0f, 1.0f);
@@ -185,6 +189,7 @@ void ShellCasings::Update(World& world, float dt, const Camera& camera, const gl
                                  [&](const Case& c) { return !world.Registry.valid(c.Entity); }),
                   m_Cases.end());
     if (m_Cases.empty()) return;
+    m_StepWorld = &world;
 
     if (dt > 0.0f) {
         const bool recording = PhysicsWorld::GetQueryRecording();

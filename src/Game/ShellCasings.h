@@ -83,6 +83,8 @@ private:
         float Age = 0.0f;
         bool Sleeping = false;
         std::uint64_t Order = 0;
+        int GroundContacts = 0;               // contacts with ground-facing surfaces so far (the first few make a sound)
+        bool Shell = false;                   // a shotgun shell rather than a rifle case (picks the casing sounds)
     };
     struct Kind {
         std::shared_ptr<Model> Mesh;
@@ -95,4 +97,5 @@ private:
     std::map<std::string, Kind> m_Kinds; // by model + material
     std::uint64_t m_Order = 0;
     std::mt19937 m_Rng{0x5eed};
+    World* m_StepWorld = nullptr;             // the world Update is stepping (the casing sounds read the struck collider's surface)
 };
