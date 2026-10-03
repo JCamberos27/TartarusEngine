@@ -904,6 +904,35 @@ void RegisterEngineComponents() {
         m.Fields.push_back({ "NPC Foot IK Fade", T::Float, TARTARUS_REFLECT_FIELD(FirstPersonBodyComponent, NpcFootIKFade), 0.005f,
               "NPCs: seconds foot IK takes to fade in and out.", 0.005f, 1.0f });
         m.Fields.back().Group = "NPC Foot IK";
+        // ---- lane A ----
+        m.Fields.push_back({ "Foot Pin Enabled", T::Bool, TARTARUS_REFLECT_FIELD(FirstPersonBodyComponent, FootPinEnabled), 0.0f,
+              "Holds each planted foot where it landed while the body moves past it, so the feet stop sliding in sprints, strafes and turns; the leg is re-solved to the pinned foot. Off = the clips' own feet. NPCs use the same settings." });
+        m.Fields.back().Group = "Foot Pinning";
+        m.Fields.push_back({ "Foot Pin Weight", T::Float, TARTARUS_REFLECT_FIELD(FirstPersonBodyComponent, FootPinWeight), 0.05f,
+              "How much of the pin is applied (0 = the clips' feet, 1 = fully pinned).", 0.0f, 1.0f });
+        m.Fields.back().Group = "Foot Pinning";
+        m.Fields.push_back({ "Foot Pin Release", T::Float, TARTARUS_REFLECT_FIELD(FirstPersonBodyComponent, FootPinRelease), 0.005f,
+              "Seconds the pin takes to let go once the foot lifts (it grabs in half that).", 0.005f, 0.5f });
+        m.Fields.back().Group = "Foot Pinning";
+        m.Fields.push_back({ "Foot Pin Max Drift", T::Float, TARTARUS_REFLECT_FIELD(FirstPersonBodyComponent, FootPinMaxDrift), 0.01f,
+              "Metres a pinned foot may lag behind the body before the pin is dragged along with it (a leash, so the leg never overstretches).", 0.02f, 0.8f });
+        m.Fields.back().Group = "Foot Pinning";
+        m.Fields.push_back({ "Stride Warp Enabled", T::Bool, TARTARUS_REFLECT_FIELD(FirstPersonBodyComponent, StrideWarpEnabled), 0.0f,
+              "Scales the stride (the feet's offsets from the pelvis along the travel) so the feet cover the ground at the capsule's real speed when it differs from the clips' (blend-tree speeds, speed multipliers, crouch speed). Off = the clips' own stride." });
+        m.Fields.back().Group = "Stride Warping";
+        m.Fields.push_back({ "Stride Warp Weight", T::Float, TARTARUS_REFLECT_FIELD(FirstPersonBodyComponent, StrideWarpWeight), 0.05f,
+              "How much of the warp is applied (0 = the clips' stride, 1 = fully matched to the ground speed).", 0.0f, 1.0f });
+        m.Fields.back().Group = "Stride Warping";
+        m.Fields.push_back({ "Stride Scale Min", T::Float, TARTARUS_REFLECT_FIELD(FirstPersonBodyComponent, StrideScaleMin), 0.01f,
+              "The stride is never shortened below this multiple of the clip's.", 0.3f, 1.0f });
+        m.Fields.back().Group = "Stride Warping";
+        m.Fields.push_back({ "Stride Scale Max", T::Float, TARTARUS_REFLECT_FIELD(FirstPersonBodyComponent, StrideScaleMax), 0.01f,
+              "The stride is never lengthened beyond this multiple of the clip's.", 1.0f, 2.0f });
+        m.Fields.back().Group = "Stride Warping";
+        m.Fields.push_back({ "Stride Pelvis Adjust", T::Float, TARTARUS_REFLECT_FIELD(FirstPersonBodyComponent, StridePelvisAdjust), 0.05f,
+              "How much the pelvis sinks for a longer stride so the legs do not overstretch (0 = not at all, 1 = the full amount).", 0.0f, 1.0f });
+        m.Fields.back().Group = "Stride Warping";
+        // ---- end lane A ----
         // Groups, by name (not by position: reordering fields must not move them).
         {
             static const std::pair<const char*, const char*> kGroups[] = {
