@@ -145,6 +145,20 @@
           "speed": 1.0
         },
         {
+          "events": [
+            {
+              "name": "snd.870.cloth@0",
+              "time": 0.0263
+            },
+            {
+              "name": "snd.870.handle@3",
+              "time": 0.6262
+            },
+            {
+              "name": "snd.870.handle@3",
+              "time": 0.9683
+            }
+          ],
           "loop": false,
           "motions": {
             "arms": {
@@ -197,6 +211,44 @@
           ]
         },
         {
+          "events": [
+            {
+              "name": "snd.870.handle@3",
+              "time": 0.1027
+            },
+            {
+              "name": "snd.870.cloth@0",
+              "time": 0.57
+            },
+            {
+              "name": "snd.870.pump_back@159",
+              "time": 0.6116
+            },
+            {
+              "name": "snd.870.handle@3",
+              "time": 0.626
+            },
+            {
+              "name": "snd.870.pump_fwd@140",
+              "time": 0.752
+            },
+            {
+              "name": "snd.870.cloth@0",
+              "time": 0.76
+            },
+            {
+              "name": "snd.870.cloth@0",
+              "time": 0.8133
+            },
+            {
+              "name": "snd.870.handle@3",
+              "time": 0.846
+            },
+            {
+              "name": "snd.870.handle@3",
+              "time": 0.936
+            }
+          ],
           "loop": false,
           "motions": {
             "arms": {
@@ -220,6 +272,36 @@
           ]
         },
         {
+          "events": [
+            {
+              "name": "snd.870.cloth@0",
+              "time": 0.0417
+            },
+            {
+              "name": "snd.870.pump_back@159",
+              "time": 0.1907
+            },
+            {
+              "name": "snd.870.cloth@0",
+              "time": 0.2222
+            },
+            {
+              "name": "snd.870.pump_fwd@140",
+              "time": 0.4833
+            },
+            {
+              "name": "snd.870.cloth@0",
+              "time": 0.5069
+            },
+            {
+              "name": "snd.870.cloth@0",
+              "time": 0.6111
+            },
+            {
+              "name": "snd.870.handle@3",
+              "time": 0.8666
+            }
+          ],
           "loop": false,
           "motions": {
             "arms": {
@@ -244,6 +326,20 @@
           ]
         },
         {
+          "events": [
+            {
+              "name": "snd.870.melee_swing@0",
+              "time": 0.0
+            },
+            {
+              "name": "snd.870.melee_hit@0",
+              "time": 0.1194
+            },
+            {
+              "name": "snd.870.cloth@0",
+              "time": 0.2537
+            }
+          ],
           "loop": false,
           "motions": {
             "arms": {
@@ -267,6 +363,12 @@
           ]
         },
         {
+          "events": [
+            {
+              "name": "snd.870.draw@360",
+              "time": 0.0957
+            }
+          ],
           "loop": false,
           "motions": {
             "arms": {
@@ -290,6 +392,12 @@
           ]
         },
         {
+          "events": [
+            {
+              "name": "snd.870.holster@300",
+              "time": 0.3214
+            }
+          ],
           "loop": false,
           "motions": {
             "arms": {
@@ -338,8 +446,16 @@
         {
           "events": [
             {
+              "name": "snd.870.pump_back@133",
+              "time": 0.0
+            },
+            {
               "name": "Eject",
               "time": 0.2
+            },
+            {
+              "name": "snd.870.pump_fwd@140",
+              "time": 0.2182
             }
           ],
           "loop": false,
@@ -366,6 +482,16 @@
           ]
         },
         {
+          "events": [
+            {
+              "name": "snd.870.cloth@0",
+              "time": 0.1667
+            },
+            {
+              "name": "snd.870.handle@3",
+              "time": 0.9599
+            }
+          ],
           "loop": false,
           "motions": {
             "arms": {
@@ -392,8 +518,44 @@
         {
           "events": [
             {
+              "name": "snd.870.pump_back@159",
+              "time": 0.0029
+            },
+            {
+              "name": "snd.870.cloth@0",
+              "time": 0.1313
+            },
+            {
+              "name": "snd.870.handle@3",
+              "time": 0.1925
+            },
+            {
+              "name": "snd.870.handle@3",
+              "time": 0.28
+            },
+            {
+              "name": "snd.870.shell_load_chamber@44",
+              "time": 0.3212
+            },
+            {
+              "name": "snd.870.handle@3",
+              "time": 0.605
+            },
+            {
+              "name": "snd.870.pump_fwd@140",
+              "time": 0.685
+            },
+            {
               "name": "LoadRound",
               "time": 0.74
+            },
+            {
+              "name": "snd.870.cloth@0",
+              "time": 0.8125
+            },
+            {
+              "name": "snd.870.handle@3",
+              "time": 0.9487
             }
           ],
           "loop": false,
@@ -422,8 +584,20 @@
         {
           "events": [
             {
+              "name": "snd.870.cloth@0",
+              "time": 0.0143
+            },
+            {
+              "name": "snd.870.shell_insert@3",
+              "time": 0.1546
+            },
+            {
               "name": "LoadRound",
               "time": 0.6
+            },
+            {
+              "name": "snd.870.cloth@0",
+              "time": 0.7714
             }
           ],
           "loop": false,
@@ -452,8 +626,20 @@
         {
           "events": [
             {
+              "name": "snd.870.cloth@0",
+              "time": 0.0102
+            },
+            {
+              "name": "snd.870.shell_insert@3",
+              "time": 0.1104
+            },
+            {
               "name": "LoadRound",
               "time": 0.43
+            },
+            {
+              "name": "snd.870.cloth@0",
+              "time": 0.5612
             }
           ],
           "loop": false,
@@ -480,6 +666,16 @@
           ]
         },
         {
+          "events": [
+            {
+              "name": "snd.870.cloth@0",
+              "time": 0.06
+            },
+            {
+              "name": "snd.870.handle@3",
+              "time": 0.5359
+            }
+          ],
           "loop": false,
           "motions": {
             "arms": {

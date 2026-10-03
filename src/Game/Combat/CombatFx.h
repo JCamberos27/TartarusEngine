@@ -15,8 +15,8 @@ class World;
 // The noise and light of a firefight, Play only: gun reports (near and distant layers, 3D for the
 // squad, 2D for the player), muzzle flashes (a short point light plus additive sparks and a puff of
 // smoke), tracers, rounds whizzing past the player's head, flesh hits, hitmarker ticks, pumps,
-// reloads and bodies falling. Sounds live in assets/Audio/Combat/ (tools/gen_combat_sounds.py makes
-// placeholders). Everything it creates is runtime-only and destroyed by Stop.
+// reloads and bodies falling. Every sound is a recorded set played through Game/Audio (WeaponAudio, ImpactAudio; keys in
+// docs/AUDIO.md). Everything it creates is runtime-only and destroyed by Stop.
 class CombatFx {
 public:
     enum class Gun { Rifle, Shotgun };
@@ -39,13 +39,20 @@ public:
     void SetAudioLog(const std::string& path);
 
     // A round left a muzzle at `origin` heading for `end`. `fromPlayer`: the report is 2D, the flash
-    // light softer and the flame rides the gun (FollowMuzzle), `tracer`: a streak along the line.
-    void Shot(World& world, Gun gun, const glm::vec3& origin, const glm::vec3& end, bool fromPlayer, bool tracer);
+    // light softer and the flame rides the gun (FollowMuzzle), `tracer`: a streak along the line. `shooter`: any stable id of
+    // who fired (e.g. the soldier's index + 1) so the report's tail knows the space per shooter; 0 = unnamed (the player's
+    // gun, else told apart by position).
+    void Shot(World& world, Gun gun, const glm::vec3& origin, const glm::vec3& end, bool fromPlayer, bool tracer, std::uint32_t shooter = 0);
     // The player's gun this frame (FirstPersonPresentation::MuzzleFrames: the first-person gun's muzzle,
     // the world copy's, and the bore): the player's flames move with it.
     void FollowMuzzle(World& world, const glm::vec3& firstPerson, const glm::vec3& worldCopy, const glm::vec3& bore);
-    // A round passing the player's head at `point`.
-    void Whizz(const glm::vec3& point);
+    // A round passing the player's head at `point`, `miss` metres from the listener: the recorded flyby (snd.flyby) within Impact
+    // Audio's Flyby Radius.
+    void Whizz(const glm::vec3& point, float miss = 0.0f);
+    // How far from the listener a passing round is worth a Whizz call (the flyby radius, at least 1.6 m).
+    float FlybyReach() const;
+    // A round struck `entity` at `point` (a wall, a prop - not a soldier: the flesh hit has its own cue): snd.impact.<surface>.
+    void Impact(World& world, std::uint32_t entity, const glm::vec3& point);
     // A one-shot at `pos` (3D), or on the listener when `at2D`.
     void Play(Cue cue, const glm::vec3& pos, bool at2D = false, float volume = 1.0f);
 
@@ -72,5 +79,4 @@ private:
     int m_ShotsHeard = 0, m_Whizzes = 0;
 
     float Rand01();
-    void PlaySound(const std::string& file, const glm::vec3& pos, bool at2D, float volume, float pitch, float minDist, float maxDist);
 };

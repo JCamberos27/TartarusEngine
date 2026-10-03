@@ -9,7 +9,6 @@
 
 namespace {
 
-constexpr int kMaxSubs = 3;
 constexpr int kMaxFeed = 5;
 
 glm::vec4 WithAlpha(glm::vec4 c, float a) { c.a *= a; return c; }
@@ -20,7 +19,6 @@ unsigned Id(entt::entity e) { return (unsigned)entt::to_integral(e); }
 
 void CombatHud::Reset() {
     m_Feed.clear();
-    m_Subs.clear();
     m_Kills = m_Streak = 0;
     m_LastKillAt = m_StreakAt = -1e9f;
 }
@@ -119,31 +117,6 @@ void CombatHud::DrawFeed(const CombatHudInput& in, float now) {
     }
 }
 
-void CombatHud::DrawSubtitles(const CombatHudInput& in, float now) {
-    const float s = m_Text.Scale();
-    const float W = (float)in.Width, H = (float)in.Height;
-    m_Subs.erase(std::remove_if(m_Subs.begin(), m_Subs.end(), [&](const Subtitle& b) { return now > b.End; }), m_Subs.end());
-    const int count = (int)m_Subs.size();
-    const int first = std::max(0, count - kMaxSubs);
-    for (int i = count - 1; i >= first; --i) {
-        const Subtitle& b = m_Subs[(size_t)i];
-        const float a = std::clamp((b.End - now) / 0.7f, 0.0f, 1.0f) * std::clamp((now - b.Start) / 0.1f + 0.3f, 0.0f, 1.0f);
-        const float y = H - 190.0f * s - (float)(count - 1 - i) * 30.0f * s;
-        const std::string tag = "[RADIO] ", unit = b.Unit + ": ";
-        const float size = 26.0f;
-        const float w = m_Text.Measure(tag + unit + b.Text, size);
-        float x = W * 0.5f - w * 0.5f;
-        m_Text.Rect(x - 36.0f * s, y - 4.0f * s, w + 46.0f * s, 30.0f * s, glm::vec4(0.0f, 0.0f, 0.0f, 0.38f * a));
-        // A chevron toward the speaker when it isn't right at the player.
-        if (glm::length(b.Pos - in.CamPos) > 3.0f)
-            m_Text.Chevron(glm::vec2(x - 18.0f * s, y + 11.0f * s), DamageIndicatorAngle(in.CamPos, in.CamYawDeg, b.Pos), 14.0f * s, 2.6f * s,
-                           glm::vec4(0.45f, 0.85f, 1.0f, a));
-        x += m_Text.Text(x, y, tag, size, glm::vec4(0.45f, 0.85f, 1.0f, a));
-        x += m_Text.Text(x, y, unit, size, glm::vec4(1.0f, 1.0f, 1.0f, a));
-        m_Text.Text(x, y, b.Text, size, glm::vec4(0.82f, 0.94f, 1.0f, a));
-    }
-}
-
 void CombatHud::DrawAwareness(const CombatHudInput& in, const NpcDirector& npcs) {
     const float s = m_Text.Scale();
     const glm::vec2 centre((float)in.Width * 0.5f, (float)in.Height * 0.5f);
@@ -189,7 +162,6 @@ void CombatHud::DrawDebug(const CombatHudInput& in, const NpcDirector& npcs) {
         m_Text.Line(pa, pb, 2.0f * s, col);
     }
     // A label over each soldier's head.
-    const float now = npcs.Now();
     for (const auto& up : npcs.Npcs()) {
         if (!up || up->Dead) continue;
         const Npc& n = *up;
@@ -205,8 +177,7 @@ void CombatHud::DrawDebug(const CombatHudInput& in, const NpcDirector& npcs) {
         const float size = 15.0f;
         const float w = std::max({m_Text.Measure(l1, size), m_Text.Measure(l2, size), m_Text.Measure(l3, size)});
         const float lh = m_Text.LineHeight(size);
-        const bool said = now - n.CalloutAt < 3.0f && !n.Callout.empty();
-        const float h = lh * (said ? 4.0f : 3.0f) + 6.0f * s;
+        const float h = lh * 3.0f + 6.0f * s;
         const float x = p.x, y = p.y - h - 6.0f * s;
         const glm::vec3 tint = n.Mem.Visible ? glm::vec3(1.0f, 0.35f, 0.3f) : n.Mem.Known ? glm::vec3(1.0f, 0.75f, 0.2f)
                                                                                      : n.Mem.Awareness > 0.04f ? glm::vec3(1.0f, 0.95f, 0.4f) : glm::vec3(0.7f, 1.0f, 0.7f);
@@ -215,7 +186,6 @@ void CombatHud::DrawDebug(const CombatHudInput& in, const NpcDirector& npcs) {
         m_Text.Text(x, y, l1, size, glm::vec4(tint, 1.0f), HudText::Align::Center, false);
         m_Text.Text(x, y + lh, l2, size, glm::vec4(0.85f, 0.85f, 0.85f, 1.0f), HudText::Align::Center, false);
         m_Text.Text(x, y + lh * 2.0f, l3, size, glm::vec4(0.7f, 0.85f, 1.0f, 1.0f), HudText::Align::Center, false);
-        if (said) m_Text.Text(x, y + lh * 3.0f, "\"" + n.Callout + "\"", size, glm::vec4(0.55f, 0.9f, 1.0f, 1.0f), HudText::Align::Center, false);
     }
     m_Text.Text(40.0f * s, 40.0f * s, "AI DEBUG (F9)", 18.0f, glm::vec4(0.55f, 0.9f, 1.0f, 0.9f));
 }
@@ -224,20 +194,6 @@ void CombatHud::Draw(const CombatHudInput& in, NpcDirector& npcs) {
     if (in.Width <= 0 || in.Height <= 0) return;
     m_Text.Begin(in.Width, in.Height);
     const float now = npcs.Now();
-    for (const BarkPlayed& b : npcs.Voice().TakeSubtitles()) {
-        if (now > b.End + Settings.SubLinger) continue;
-        for (Subtitle& o : m_Subs) // the new line cut the old one off: its subtitle goes soon after
-            if (o.Squad == b.Squad && o.AudioEnd > b.Start) o.End = std::min(o.End, b.Start + 0.4f);
-        Subtitle sub;
-        sub.Unit = "UNIT-" + std::to_string(b.Unit);
-        sub.Text = b.Text;
-        sub.Pos = b.Pos;
-        sub.Squad = b.Squad;
-        sub.Start = b.Start;
-        sub.AudioEnd = b.End;
-        sub.End = b.End + Settings.SubLinger;
-        m_Subs.push_back(sub);
-    }
     const float s = m_Text.Scale();
     if (in.AiOverlay) DrawDebug(in, npcs);
     if (!in.PlayerDead) {
@@ -246,6 +202,5 @@ void CombatHud::Draw(const CombatHudInput& in, NpcDirector& npcs) {
         if (in.God) m_Text.Text(40.0f * s, (float)in.Height - 50.0f * s - 34.0f * s, "GOD MODE", 24.0f, glm::vec4(1.0f, 0.82f, 0.25f, 0.95f));
     }
     DrawFeed(in, now);
-    DrawSubtitles(in, now);
     m_Text.Flush(in.Fbo);
 }

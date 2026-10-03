@@ -131,6 +131,10 @@ public:
     NpcHoldReport MeasureHold(const World& world, entt::entity armsRig, const glm::vec3& butt, const glm::vec3& muzzle) const;
     const NpcHoldReport& LastHold() const { return m_Hold; }
     glm::vec3 GunShift() const { return m_GunShift; } // the gun off where the rig holds it (world)
+    // Each foot's height above the capsule's feet as last posed (m; [0] left, [1] right), for the footsteps. False when
+    // the driver has no foot bones.
+    bool FootHeights(float (&out)[2]) const;
+    bool Sprinting() const { return m_In.Sprint; } // this frame's gait (NpcBodyInput::Sprint)
 
     // A hit: the upper body flinches away along `dirWorld` (the round's travel).
     // `point` / `part` (a hitbox part, see NpcRagdoll) steer it by where the round struck; both optional.

@@ -133,6 +133,20 @@
           "speed": 1.0
         },
         {
+          "events": [
+            {
+              "name": "snd.ak.cloth@0",
+              "time": 0.275
+            },
+            {
+              "name": "snd.ak.handle@3",
+              "time": 0.5955
+            },
+            {
+              "name": "snd.ak.handle@3",
+              "time": 0.9955
+            }
+          ],
           "loop": false,
           "motions": {
             "arms": {
@@ -181,6 +195,44 @@
           ]
         },
         {
+          "events": [
+            {
+              "name": "snd.ak.cloth@0",
+              "time": 0.0177
+            },
+            {
+              "name": "snd.ak.handle@3",
+              "time": 0.1093
+            },
+            {
+              "name": "snd.ak.cloth@0",
+              "time": 0.4043
+            },
+            {
+              "name": "snd.ak.handle@3",
+              "time": 0.5242
+            },
+            {
+              "name": "snd.ak.handle@3",
+              "time": 0.5774
+            },
+            {
+              "name": "snd.ak.bolt_back@78",
+              "time": 0.5968
+            },
+            {
+              "name": "snd.ak.bolt_release@41",
+              "time": 0.7431
+            },
+            {
+              "name": "snd.ak.cloth@0",
+              "time": 0.7908
+            },
+            {
+              "name": "snd.ak.handle@3",
+              "time": 0.8823
+            }
+          ],
           "loop": false,
           "motions": {
             "arms": {
@@ -204,6 +256,40 @@
           ]
         },
         {
+          "events": [
+            {
+              "name": "snd.ak.cloth@0",
+              "time": 0.0192
+            },
+            {
+              "name": "snd.ak.handle@3",
+              "time": 0.0647
+            },
+            {
+              "name": "snd.ak.mag_release@3",
+              "time": 0.0916
+            },
+            {
+              "name": "snd.ak.cloth@0",
+              "time": 0.1115
+            },
+            {
+              "name": "snd.ak.mag_out@3",
+              "time": 0.1493
+            },
+            {
+              "name": "snd.ak.handle@3",
+              "time": 0.1762
+            },
+            {
+              "name": "snd.ak.mag_in@39",
+              "time": 0.7448
+            },
+            {
+              "name": "snd.ak.cloth@0",
+              "time": 0.8077
+            }
+          ],
           "loop": false,
           "motions": {
             "arms": {
@@ -228,6 +314,20 @@
           ]
         },
         {
+          "events": [
+            {
+              "name": "snd.ak.melee_swing@0",
+              "time": 0.0
+            },
+            {
+              "name": "snd.ak.melee_hit@0",
+              "time": 0.0923
+            },
+            {
+              "name": "snd.ak.cloth@0",
+              "time": 0.3538
+            }
+          ],
           "loop": false,
           "motions": {
             "arms": {
@@ -252,6 +352,46 @@
         },
         {
           "events": [
+            {
+              "name": "snd.ak.cloth@0",
+              "time": 0.0294
+            },
+            {
+              "name": "snd.ak.handle@3",
+              "time": 0.1107
+            },
+            {
+              "name": "snd.ak.handle@3",
+              "time": 0.1636
+            },
+            {
+              "name": "snd.ak.mag_release@3",
+              "time": 0.2813
+            },
+            {
+              "name": "snd.ak.mag_out@3",
+              "time": 0.3577
+            },
+            {
+              "name": "snd.ak.mag_in@39",
+              "time": 0.5273
+            },
+            {
+              "name": "snd.ak.mag_tap@3",
+              "time": 0.6048
+            },
+            {
+              "name": "snd.ak.cloth@0",
+              "time": 0.6765
+            },
+            {
+              "name": "snd.ak.handle@3",
+              "time": 0.7695
+            },
+            {
+              "name": "snd.ak.handle@3",
+              "time": 0.8754
+            },
             {
               "name": "Refill",
               "time": 1.0
@@ -283,6 +423,54 @@
         {
           "events": [
             {
+              "name": "snd.ak.cloth@0",
+              "time": 0.0227
+            },
+            {
+              "name": "snd.ak.mag_release@3",
+              "time": 0.1083
+            },
+            {
+              "name": "snd.ak.mag_out@3",
+              "time": 0.1673
+            },
+            {
+              "name": "snd.ak.handle@3",
+              "time": 0.1992
+            },
+            {
+              "name": "snd.ak.handle@3",
+              "time": 0.3355
+            },
+            {
+              "name": "snd.ak.mag_in@39",
+              "time": 0.4529
+            },
+            {
+              "name": "snd.ak.handle@3",
+              "time": 0.4855
+            },
+            {
+              "name": "snd.ak.cloth@0",
+              "time": 0.5182
+            },
+            {
+              "name": "snd.ak.handle@3",
+              "time": 0.5765
+            },
+            {
+              "name": "snd.ak.bolt_back@78",
+              "time": 0.6423
+            },
+            {
+              "name": "snd.ak.bolt_release@41",
+              "time": 0.698
+            },
+            {
+              "name": "snd.ak.handle@3",
+              "time": 0.8537
+            },
+            {
               "name": "Refill",
               "time": 1.0
             }
@@ -311,6 +499,12 @@
           ]
         },
         {
+          "events": [
+            {
+              "name": "snd.ak.draw@360",
+              "time": 0.0522
+            }
+          ],
           "loop": false,
           "motions": {
             "arms": {
@@ -330,6 +524,12 @@
           ]
         },
         {
+          "events": [
+            {
+              "name": "snd.ak.holster@300",
+              "time": 0.3214
+            }
+          ],
           "loop": false,
           "motions": {
             "arms": {
