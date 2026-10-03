@@ -1407,3 +1407,21 @@ struct RagdollSettingsComponent {
     float CorpseShotMaxSpeed = 4.0f;   // m/s: the most a round adds to the struck part, whatever the damage
 };
 // ---- end lane R ----
+// ---- lane R-gear ----
+// The gun a soldier drops when he dies (Npc/NpcDroppedWeapon): its own simulated body, tumbling to rest. On any object in the scene
+// (the first one counts); without one the NPCs use these same defaults.
+struct DroppedWeaponSettingsComponent {
+    bool Enabled = true;               // the gun leaves the hands and lies where it falls (off: it vanishes with the soldier, as before)
+    float Mass = 3.5f;                 // kg
+    float ImpulseShare = 0.15f;        // the share of the killing round's impulse the gun takes (velocity change = share x impulse / mass)
+    float MaxShotSpeed = 5.0f;         // m/s: the most speed the round can add
+    float Spin = 0.5f;                 // tumble: rad/s of spin per m/s of speed leaving the hands (0 = none)
+    float MaxSpin = 8.0f;              // rad/s
+    float CollisionDelay = 0.1f;       // seconds the gun flies without colliding, clear of the falling body's arms and torso
+    float Friction = 0.7f;
+    float Bounciness = 0.1f;           // restitution
+    float LinearDamping = 0.1f;
+    float AngularDamping = 0.6f;
+    float Lifetime = 0.0f;             // seconds before the gun goes (0 = it lies as long as the corpse does)
+};
+// ---- end lane R-gear ----
