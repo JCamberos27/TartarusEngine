@@ -764,6 +764,9 @@ void EditorLayer::DrawWindowMenuBody() {
             ImGui::MenuItem(ICON_FA_LIGHTBULB "  Lighting", nullptr, &m_ShowLighting);
             if (ImGui::IsItemHovered())
                 EditorUI::SetTooltip("Environment (sky / ambient), post-processing (exposure / tone map) and shadow settings in one place.");
+            ImGui::MenuItem(ICON_FA_VOLUME_HIGH "  Audio", nullptr, &m_ShowAudioDebug);
+            if (ImGui::IsItemHovered())
+                EditorUI::SetTooltip("Live audio: loudness / peak meters per bus, the master limiter, the reverb's rooms and impulse responses, ambience beds, voices.");
             {
                 bool consoleOpen = EditorModuleHost::ConsoleState().Visible;
                 if (ImGui::MenuItem(ICON_FA_TERMINAL "  Console", nullptr, &consoleOpen))

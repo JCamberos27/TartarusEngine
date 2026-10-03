@@ -7,14 +7,11 @@
 
 namespace {
 
-bool SamePreset(const ReverbPreset& a, const ReverbPreset& b) {
-    return a.RoomSize == b.RoomSize && a.DecayTime == b.DecayTime && a.HfDamping == b.HfDamping && a.PreDelayMs == b.PreDelayMs &&
-           a.WetLevel == b.WetLevel && a.EarlyLateMix == b.EarlyLateMix;
-}
 bool Same(const ReverbZoneComponent& a, const ReverbZoneComponent& b) {
     return a.Enabled == b.Enabled && a.Shape == b.Shape && a.Extents == b.Extents && a.Radius == b.Radius && a.Priority == b.Priority &&
            a.FadeDistance == b.FadeDistance && a.TailClass == b.TailClass && a.TailGain == b.TailGain && a.ReverbMode == b.ReverbMode &&
-           SamePreset(a.Reverb, b.Reverb);
+           a.Ir == b.Ir && a.WetDb == b.WetDb && a.PreDelayMs == b.PreDelayMs && a.HfDampDb == b.HfDampDb && a.LowCutHz == b.LowCutHz &&
+           a.Ambience == b.Ambience && a.AmbienceVolume == b.AmbienceVolume && a.Old.WetLevel == b.Old.WetLevel && a.Old.HfDamping == b.Old.HfDamping;
 }
 bool Same(const ReverbPortalComponent& a, const ReverbPortalComponent& b) {
     return a.Enabled == b.Enabled && a.Extents == b.Extents && a.OpenAmount == b.OpenAmount && a.RoomA == b.RoomA && a.RoomB == b.RoomB &&
@@ -38,6 +35,8 @@ void ApplyZone(ReverbZoneVolume& v, const ReverbZoneComponent& c, const glm::mat
     v.Class = (SpaceClass)std::clamp(c.TailClass, 0, kSpaceClassCount - 1);
     v.TailGain = c.TailGain;
     v.Reverb = c.Resolved();
+    v.Ambience = c.Ambience;
+    v.AmbienceVolume = std::max(c.AmbienceVolume, 0.0f);
     v.Entity = (unsigned)e;
     v.Placed = m;
     v.Src = c;
@@ -200,12 +199,7 @@ ReverbZoneMix ReverbZones::Mix(const glm::vec3& p) const {
         const float take = remaining * w;
         mix.Weights[(int)z.Class] += take;
         gain += take * z.TailGain;
-        mix.Reverb.RoomSize += take * z.Reverb.RoomSize;
-        mix.Reverb.DecayTime += take * z.Reverb.DecayTime;
-        mix.Reverb.HfDamping += take * z.Reverb.HfDamping;
-        mix.Reverb.PreDelayMs += take * z.Reverb.PreDelayMs;
-        mix.Reverb.WetLevel += take * z.Reverb.WetLevel;
-        mix.Reverb.EarlyLateMix += take * z.Reverb.EarlyLateMix;
+        if (mix.ClaimCount < ReverbZoneMix::kMaxClaims) mix.Claims[mix.ClaimCount++] = {(int)(&z - m_Zones.data()), take};
         remaining -= take;
         ++mix.Zones;
     }

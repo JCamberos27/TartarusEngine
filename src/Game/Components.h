@@ -1443,6 +1443,12 @@ struct WeaponAudioComponent {
     float FarMaxWeight = 1.0f;         // ... and past CloseZeroDistance
     float MaxDistance = 90.0f;         // close / mech / sub layers' audible range
     float FarMaxDistance = 160.0f;
+    // 3D rolloff (docs/AUDIO.md, "3D distance"): every 3D sound is logarithmic - full volume inside Min, -6 dB per doubling past it, held
+    // at Min / Max past Max. These are the guns' Min distances and the reach of the gear sounds (reloads, ADS, equip ...).
+    float ShotMinDistance = 3.0f;      // close / mech layers
+    float BassMinDistance = 6.0f;      // sub / tail / far layers (low end carries)
+    float EventMinDistance = 1.5f;     // the gun's gear / foley sounds in the world
+    float EventMaxDistance = 25.0f;
     int ShotMaxVoices = 6;             // per layer; the oldest is stolen
     int TailMaxVoices = 3;             // full auto: tails ringing at once
     float TailFadeTime = 0.25f;        // seconds a stolen tail fades out over
@@ -1480,9 +1486,9 @@ struct WeaponAudioComponent {
 struct FoleyAudioComponent {
     bool Enabled = true;
     float Volume = 1.0f;
-    float WalkVolume = 0.55f;
-    float RunVolume = 0.8f;
-    float CrouchVolume = 0.3f;
+    float WalkVolume = 1.0f;           // (the static level of every sound is its manifest mix_db; these only scale)
+    float RunVolume = 1.0f;
+    float CrouchVolume = 0.55f;        // crouch plays the walk takes, quieter
     float VolumeJitterDb = 1.5f;
     float PitchMin = 0.94f;
     float PitchMax = 1.06f;
@@ -1490,40 +1496,39 @@ struct FoleyAudioComponent {
     float CrouchStrideScale = 0.8f;
     float MinStepSpeed = 0.6f;         // m/s below which there are no footsteps
     float RunSpeed = 4.5f;             // m/s from which the run set plays
-    float JumpVolume = 0.6f;
-    float LandVolume = 0.9f;
+    float JumpVolume = 1.0f;
+    float LandVolume = 1.0f;
     float LandMinSpeed = 2.5f;         // m/s of fall below which landing is silent
     float LandFullSpeed = 9.0f;        // m/s at which it is at LandVolume (a hard landing)
     float LandHeavySpeed = 6.0f;       // m/s of fall from which the heavy landing plays (light below)
-    float ClothLoopVolume = 0.35f;     // sprint cloth / gear loop
+    float ClothLoopVolume = 1.0f;      // sprint cloth / gear loop
     float ClothLoopMinSpeed = 3.0f;    // m/s: silent below, full at RunSpeed
-    float NpcStepVolume = 0.7f;
+    float NpcStepVolume = 1.0f;
     float NpcStepMaxDistance = 28.0f;
     float NpcStepMinDistance = 2.5f;
     std::string DefaultSurface = "concrete";
     // surface=word,word;surface=word  - the first surface with a word in the ground's physics material, tag or name.
     std::string SurfaceTable = "wood=wood,plank,floor,parquet;metal=metal,steel,iron,grate;glass=glass;carpet=carpet,rug;water=water,puddle;concrete=concrete,asphalt,tile,stone,gravel,dirt,soil,sand,grass";
 };
-// A designer-placed space for the gunshot tails (and the runtime reverb bus to come): inside the volume the shots' tail is the
-// Tail Class's, crossfaded over Fade Distance at the edge; a shot in no zone falls back to the raycast probe. Overlapping
-// zones: the higher Priority sits on top (fades in over the lower ones). The entity's position and rotation place it (Scale is
-// ignored: extents and radius are metres).
+// A designer-placed space for sound: inside the volume the shots' tail is the Tail Class's, the runtime reverb convolves with the
+// zone's impulse response and the zone's ambience bed fades in; all crossfaded over Fade Distance at the edge. A shot in no zone falls
+// back to the raycast probe. Overlapping zones: the higher Priority sits on top (fades in over the lower ones). The entity's position and
+// rotation place it (Scale is ignored: extents and radius are metres).
+//
+// What a space asks of the convolution reverb (Audio/ConvolutionReverb): the zone's resolved reverb, or a tail class's default.
 struct ReverbPreset {
-    float RoomSize = 0.5f;             // 0 = a closet .. 1 = a canyon
-    float DecayTime = 1.0f;            // seconds (RT60)
-    float HfDamping = 0.4f;            // 0 = bright .. 1 = dark
-    float PreDelayMs = 10.0f;
-    float WetLevel = 0.3f;             // 0..1
-    float EarlyLateMix = 0.5f;         // 0 = all late tail .. 1 = all early reflections
+    std::string Ir;                    // impulse response file (project-relative); empty = the Tail Class's (manifest key ir.<class>)
+    float WetDb = 0.0f;                // trim (dB) on the class's calibrated return level (Reverb Bus: Wet <class> dB)
+    float PreDelayMs = -1.0f;          // < 0: the class IR's own (manifest predelay_ms)
+    float HfDampDb = 0.0f;             // dB of high-shelf attenuation on the reverb input
+    float LowCutHz = -1.0f;            // < 0: the Reverb Bus's Low Cut
+    int Class = 2;                     // the tail class (0 outdoor open, 1 outdoor urban, 2 indoor small, 3 indoor large)
 };
-// The preset of a tail class (0 outdoor open, 1 outdoor urban, 2 indoor small, 3 indoor large).
+// The default reverb of a tail class (0 outdoor open, 1 outdoor urban, 2 indoor small, 3 indoor large).
 inline ReverbPreset ReverbPresetFor(int tailClass) {
-    switch (tailClass) {
-    case 0: return {0.9f, 1.6f, 0.7f, 25.0f, 0.12f, 0.15f};   // open ground: a faint, dark, far wash
-    case 1: return {0.7f, 1.2f, 0.5f, 15.0f, 0.2f, 0.5f};     // among buildings: slaps and a short tail
-    case 3: return {0.8f, 1.8f, 0.6f, 25.0f, 0.35f, 0.35f};   // hall / warehouse
-    default: return {0.15f, 0.45f, 0.25f, 2.0f, 0.3f, 0.7f};  // small room: tight and bright
-    }
+    ReverbPreset p;
+    p.Class = tailClass < 0 ? 0 : tailClass > 3 ? 3 : tailClass;
+    return p;
 }
 struct ReverbZoneComponent {
     bool Enabled = true;
@@ -1534,9 +1539,42 @@ struct ReverbZoneComponent {
     float FadeDistance = 2.0f;         // metres inside the edge over which the zone fades in (0 = hard edge)
     int TailClass = 2;                 // 0 outdoor open, 1 outdoor urban, 2 indoor small, 3 indoor large
     float TailGain = 1.0f;             // on the shot's tail layer while inside
-    int ReverbMode = 0;                // 0 = the Tail Class's preset, 1 = the values below
-    ReverbPreset Reverb = ReverbPresetFor(2);
-    ReverbPreset Resolved() const { return ReverbMode == 1 ? Reverb : ReverbPresetFor(TailClass); }
+    int ReverbMode = 0;                // 0 = the Tail Class's default reverb, 1 = the values below
+    // Convolution reverb (Custom mode).
+    std::string Ir;                    // impulse response file; empty = the Tail Class's
+    float WetDb = 0.0f;                // trim on the class's calibrated level
+    float PreDelayMs = 10.0f;
+    float HfDampDb = 0.0f;             // high-shelf attenuation of the reverb input
+    float LowCutHz = 80.0f;
+    // Ambience bed: a looping 2D sound (sound key, e.g. snd.amb.indoor_large) crossfaded by the listener's zone weights.
+    std::string Ambience;              // empty = none
+    float AmbienceVolume = 1.0f;       // linear, on top of the sound's mix_db
+    // Scenes saved before the convolution reverb carry the old feedback-network values under these keys. They still load; the wet level
+    // and the damping are read as trims (see Resolved()), the rest is not used. -1 = absent.
+    struct Legacy {
+        float RoomSize = 0.5f;
+        float DecayTime = 1.0f;
+        float HfDamping = -1.0f;
+        float WetLevel = -1.0f;
+        float EarlyLateMix = 0.5f;
+    } Old;
+    static float LegacyDefaultWet(int tailClass) { return tailClass == 0 ? 0.12f : tailClass == 1 ? 0.2f : tailClass == 3 ? 0.35f : 0.3f; }
+    ReverbPreset Resolved() const {
+        if (ReverbMode != 1) return ReverbPresetFor(TailClass);
+        ReverbPreset p;
+        p.Class = TailClass < 0 ? 0 : TailClass > 3 ? 3 : TailClass;
+        p.Ir = Ir;
+        p.PreDelayMs = PreDelayMs;
+        p.LowCutHz = LowCutHz;
+        p.WetDb = WetDb;
+        p.HfDampDb = HfDampDb;
+        if (Old.WetLevel >= 0.0f) { // an old Wet Level: its ratio to that class's old default, in dB (+- 12)
+            const float r = Old.WetLevel / LegacyDefaultWet(p.Class);
+            p.WetDb += r <= 0.2512f ? -12.0f : r >= 3.981f ? 12.0f : 20.0f * std::log10(r);
+        }
+        if (Old.HfDamping >= 0.0f) p.HfDampDb += 10.0f * Old.HfDamping; // 0 = bright .. 1 = dark -> 0 .. 10 dB
+        return p;
+    }
 };
 // An opening between two Reverb Zones (Wwise "rooms and portals"): a door, a window, a breach. A 3D voice whose source and listener are in
 // different rooms joined by portals is heard from the portal (its direction and the path's length), softened by the portal's open amount
@@ -1555,22 +1593,32 @@ struct ReverbPortalComponent {
     float DiffractionMaxAngle = 120.0f; // degrees of bend at which the diffraction loss is full
     float DiffractionGainDb = -6.0f;   // gain at that bend
 };
-// The runtime reverb bus (Audio/ReverbFdn, wired in AudioEngine): what each category of sound sends into it, how the reverb
-// follows the listener's space (Reverb Zones, else the raycast probe), and the listener-side occlusion low-pass. One per scene
-// (the first counts). The gun tails are recorded in their spaces and send nothing (Send Tail stays 0).
+// The runtime reverb bus (Audio/ConvolutionReverb, wired in AudioEngine): what each category of sound sends into it, the calibrated wet
+// level of each kind of space, how the reverb follows the listener's space (Reverb Zones, else the raycast probe), the listener-side
+// occlusion low-pass and the master limiter. One per scene (the first counts). The gun tails are recorded in their spaces and send
+// nothing (Send Tail stays 0).
+//
+// Level: the reverb return of a space is wet / dry = (the sound's send) x (the space's Wet dB below + the zone's Wet (dB) trim); the
+// impulse responses are energy-normalised, so a send of 1 puts the return at that many dB under the dry sound.
 struct ReverbBusComponent {
     bool Enabled = true;
     float ReturnLevel = 1.0f;          // linear gain of the wet signal into the mix (times the SFX bus volume)
-    float WetScale = 1.0f;             // on every space's preset Wet Level
-    float GlideTime = 0.35f;           // seconds the reverb takes to follow a change of space (the DSP's smoothing)
-    // Sends by category (linear, into the reverb after the voice's own fader and spatialisation).
-    float SendFoley = 0.35f;           // cloth, jumps, landings, ADS / equip / fire-mode gear
-    float SendFootsteps = 0.30f;
-    float SendActions = 0.40f;         // each gun's own mags, bolts, pumps, shells
-    float SendImpacts = 0.50f;         // bullet impacts, flesh hits, flybys
-    float SendCasings = 0.50f;
-    float SendVoice = 0.30f;
-    float SendShot = 0.12f;            // the close / mech / sub layers: a little, so the crack sits in the room
+    float WetScale = 1.0f;             // linear, on every space's wet level
+    float GlideTime = 0.35f;           // seconds a change of space takes (the crossfade between impulse responses)
+    // Calibrated wet / dry at the listener (dB) per kind of space, for a send of 1.
+    float WetOutdoorOpenDb = -20.0f;
+    float WetOutdoorUrbanDb = -12.0f;
+    float WetIndoorSmallDb = -6.0f;
+    float WetIndoorLargeDb = -4.0f;
+    float LowCutHz = 80.0f;            // the reverb input's high-pass for a space with no Low Cut of its own
+    // Sends by category (linear, into the reverb after the voice's own fader and spatialisation; 1 = the space's calibrated level).
+    float SendFoley = 1.0f;            // cloth, jumps, landings, ADS / equip / fire-mode gear
+    float SendFootsteps = 1.0f;
+    float SendActions = 1.0f;          // each gun's own mags, bolts, pumps, shells
+    float SendImpacts = 1.0f;          // bullet impacts, flesh hits, flybys
+    float SendCasings = 1.0f;
+    float SendVoice = 1.0f;            // (the voice system is gone: the key still loads, nothing reads it)
+    float SendShot = 1.0f;             // the close / mech / sub layers of a gunshot: the crack feeds the room
     float SendTail = 0.0f;             // the recorded tails already hold their room
     // Occlusion: a 3D voice whose line of sight from the listener is blocked by solid geometry is low-passed.
     bool OcclusionEnabled = true;
@@ -1582,6 +1630,11 @@ struct ReverbBusComponent {
     // Portals (Reverb Portal components): a voice in another room is heard from the portal that joins the rooms.
     bool PortalsEnabled = true;
     float RemoteReverbHold = 5.0f;     // seconds the remote room's reverb keeps running after the last voice heard through a portal
+    // The master peak limiter (the last node before the output).
+    bool MasterLimiterEnabled = true;
+    float MasterCeilingDb = -1.0f;     // dBFS
+    float MasterLookaheadMs = 1.5f;
+    float MasterReleaseMs = 80.0f;
 };
 // Bullet impacts, shell casings and rounds passing the listener (Game/Audio/ImpactAudio). One per scene (the first counts).
 struct ImpactAudioComponent {
@@ -1595,24 +1648,24 @@ struct ImpactAudioComponent {
     float CasingMinSpeed = 0.9f;       // m/s into the surface below which a contact is silent
     float CasingFullSpeed = 4.0f;      // m/s at which it plays at full gain
     float CasingGainMin = 0.25f;       // gain just above the minimum speed
-    float CasingVolume = 0.8f;
+    float CasingVolume = 1.0f;
     float CasingMinDistance = 1.5f;
     float CasingMaxDistance = 25.0f;
     int CasingMaxVoices = 6;           // the oldest is stolen
     float ShellRadius = 0.0075f;       // metres: a case wider than this is a shotgun shell (snd.casing.shell), else a rifle case
     // Bullet impacts at the hit point (3D).
     bool ImpactsEnabled = true;
-    float ImpactVolume = 0.9f;
+    float ImpactVolume = 1.0f;
     float ImpactMinDistance = 2.0f;
     float ImpactMaxDistance = 60.0f;
     int ImpactMaxVoices = 8;
     float ImpactMinInterval = 0.03f;   // seconds between impacts of one surface (a shotgun's nine pellets are not nine voices)
     bool FleshUsesRecordings = true;   // the flesh-hit cue plays snd.impact.flesh instead of the placeholder wav (no doubling)
-    float FleshVolume = 0.9f;
+    float FleshVolume = 1.0f;
     // Rounds passing the listener.
     bool FlybyEnabled = true;
     float FlybyRadius = 5.0f;          // metres: a soldier's round that passes closer than this to the listener whips by
-    float FlybyVolume = 0.9f;
+    float FlybyVolume = 1.0f;
     float FlybyMinInterval = 0.07f;    // seconds: a burst reads as a few cracks, not a smear
     float FlybyMinDistance = 0.5f;
     float FlybyMaxDistance = 14.0f;
