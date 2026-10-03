@@ -1,4 +1,5 @@
 #include "Ssao.h"
+#include "GLStateCache.h"
 #include "GLStateScope.h"
 #include "GLFramebufferCheck.h"
 #include "Shader.h"
@@ -121,6 +122,15 @@ void Ssao::Resize(int width, int height) {
     Release();
     m_NoiseTex = savedNoise;
     Create(width, height);
+}
+
+void Ssao::WarmUp(Shader& ssaoShader, Shader& blurShader) {
+    Ssao tmp;
+    tmp.Resize(16, 16);
+    if (!tmp.IsValid()) return;
+    tmp.Compute(ssaoShader, glm::perspective(glm::radians(60.0f), 1.0f, 0.1f, 100.0f));
+    tmp.Blur(blurShader);
+    GLStateCache::Invalidate();
 }
 
 void Ssao::Compute(Shader& ssaoShader, const glm::mat4& proj, float radius, float bias) {

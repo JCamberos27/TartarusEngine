@@ -150,8 +150,13 @@ What is left, roughly by expected value. At 1080p the GPU is the limit, at 1440p
 9. Animator controllers ~0.46 ms.
 
 **Hitches**
-10. Edit-mode SSAO prepass ~117 ms on first use (shader compile); sun shadow pass spike on the first
-    edit frames.
+10. First-use stalls, measured on Sandbox with the first 60 frames of each `--perf-bench` phase logged. Fixed by
+    `warmRenderResources` (main.cpp, run behind the load): the physical sky's programs, LUT resources and cloud noise
+    bake (`SkyAtmosphere::WarmUp`, GPU 268 ms on frame 3 down to ~6 ms), `Ssao::WarmUp` (compute+blur on a 16x16
+    target) and the sun shadow array allocation. Edit-phase worst frame 12.2 ms down to 7.7 ms (A/B x2, noise
+    ~0.1 ms). Still stalling on first use: frame 3 of the Scene view (~175 ms: SSAO depth pre-pass 20 ms, cluster
+    cull 40 ms, model program variants), Play press (`Animator Clip Warm-up` ~1.1 s on the first Play frame, Enemy AI
+    ~110 ms, asset pump ~87 ms on frame 3 of Play; not in the renderer).
 11. An enemy soldier's respawn is ~1.8 ms (it was 6-7: the gun's clip matching and setup measurements are now shared
     between soldiers): ~1 ms of it is building the soldier's entities from Soldier.json. Pooling soldiers (reusing a
     dead one's entities and weapon rig) would take it to ~0.
