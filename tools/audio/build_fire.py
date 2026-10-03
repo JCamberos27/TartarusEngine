@@ -93,22 +93,26 @@ def render_close(v, cfg):
 
 
 def render_sub(v, cfg, ref):
-    """Synth sub punch: exponential down-sweep sine with a short low-passed click, saturated for harmonics."""
+    """Sub punch from REAL recordings only: the low end of a real shot (4th-order low-pass at v.lp) plus the same shot
+    pitched down v.down_st semitones and low-passed again (the classic 'drop the recording an octave' weight). Both keep
+    the shot's own onset; the pair is saturated lightly for audible harmonics and polarity/lag-matched to the close."""
+    x = src(v["src"])
+    if "start_s" in v:
+        x = x[int(v["start_s"] * SR):]
+    on = shot_onset(x)
     n = int(cfg["length_s"] * SR)
-    t = np.arange(n) / SR
-    f = v["f1"] + (v["f0"] - v["f1"]) * np.exp(-t / (v["sweep_ms"] / 1000))
-    ph = 2 * np.pi * np.cumsum(f) / SR
-    env = np.exp(-t / (v["tau_ms"] / 1000)) * (1 - np.exp(-t / 0.0015))
-    sine = np.sin(ph) * env
-    r = adsp.deterministic_rng("sub", v["f0"], v["tau_ms"])
-    click = signal.sosfilt(signal.butter(2, 260, "lp", fs=SR, output="sos"), r.standard_normal(n)) * np.exp(-t / (v["click_ms"] / 1000)) * 0.9
-    m = np.tanh((sine + click * 0.5) * v["drive"]) / v["drive"]
-    m = signal.sosfilt(signal.butter(2, 28, "hp", fs=SR, output="sos"), m)
-    y = np.stack([m, m], 1).astype(np.float32)
-    y = adsp.fade(y, int(0.0005 * SR), int(0.3 * n))
+    seg = x[max(0, on - int(0.002 * SR)):][:int(n * 2.4)].copy()
+    a = adsp.filt(seg, "lp", v["lp"], 4)[:n]
+    b = adsp.pitch(seg, -v["down_st"])
+    b = adsp.filt(b, "lp", v.get("lp2", 90), 4)[:n]
+    pad = lambda z: np.pad(z, ((0, max(0, n - len(z))), (0, 0)))
+    y = pad(a) + pad(b) * 10 ** (v.get("down_gain_db", -3.0) / 20)
+    y = adsp.filt(y, "hp", 28.0, 2)
+    y = adsp.soft_sat(y / (np.abs(y).max() + 1e-9), v.get("drive", 1.8))
+    y = adsp.fade(y, int(0.0008 * SR), int(0.35 * n))
     y, lag, pol = adsp.phase_align(ref, y, band=(35.0, 160.0), win_ms=18.0, max_lag_ms=0.4)
     y = np.pad(y, ((0, max(0, n - len(y))), (0, 0)))[:n]
-    return y, f"synth f0={v['f0']} f1={v['f1']} tau={v['tau_ms']}ms lag={lag}smp pol={pol:+d}"
+    return y, f"real {os.path.basename(v['src'])} lp={v['lp']} down={v['down_st']}st lag={lag}smp pol={pol:+d}"
 
 
 def render_mech(v, cfg):
@@ -149,26 +153,28 @@ def render_far(v, cfg):
     return np.concatenate([np.zeros((d, 2), np.float32), y]), f"{os.path.basename(v['src'])} delay={d * 1000 // SR}ms"
 
 
-def build(recipe_path, only=None):
+def build(recipe_path, layers=None):
     cfg = json.load(open(recipe_path))
     gun, d = cfg["gun"], cfg["dir"]
     entries = []
     closes = []
+    want = lambda l: layers is None or l in layers
     for n, v in enumerate(cfg["close"]["variants"], 1):
         y, note = render_close(v, cfg["close"])
         closes.append(y)
-        entries.append(("close", n, y, note, False))
-    for n, v in enumerate(cfg["sub"]["variants"], 1):
+        if want("close"):
+            entries.append(("close", n, y, note, False))
+    for n, v in enumerate(cfg["sub"]["variants"] if want("sub") else [], 1):
         ref = closes[(n - 1) % len(closes)]
         y, note = render_sub(v, cfg["sub"], ref)
         entries.append(("sub", n, y, note, False))
-    for n, v in enumerate(cfg["mech"]["variants"], 1):
+    for n, v in enumerate(cfg["mech"]["variants"] if want("mech") else [], 1):
         y, note = render_mech(v, cfg["mech"])
         entries.append(("mech", n, y, note, False))
-    for n, v in enumerate(cfg["tail"]["variants"], 1):
+    for n, v in enumerate(cfg["tail"]["variants"] if want("tail") else [], 1):
         y, note = render_tail(v, cfg["tail"])
         entries.append(("tail", n, y, note, False))
-    for n, v in enumerate(cfg["far"]["variants"], 1):
+    for n, v in enumerate(cfg["far"]["variants"] if want("far") else [], 1):
         y, note = render_far(v, cfg["far"])
         entries.append(("far", n, y, note, True))
     out = []
@@ -181,18 +187,23 @@ def build(recipe_path, only=None):
                          "mix_db": MIX_DB[layer]}, mono=mono)
         out.append(e)
         print(f"{rel:46s} LUFS-M {e['lufs_m_max']:6.1f}  TP {e['true_peak_dbtp']:5.1f}  {e['length_s']:.2f}s  {note}")
-    return out, f"{d}/fire_"
+    return out, [f"{d}/fire_{l}_" for l in (layers or LAYER_NAMES)]
+
+
+LAYER_NAMES = ("close", "sub", "mech", "tail", "far")
 
 
 def main():
+    """build_fire.py [ak|870] [layer ...]   -- e.g.  build_fire.py ak sub   rebuilds only the AK sub layer."""
     only = sys.argv[1] if len(sys.argv) > 1 else None
+    layers = sys.argv[2:] or None
     allent, prefixes = [], []
     for name, path in (("ak", "ak_fire.json"), ("870", "remington870_fire.json")):
         if only and only != name:
             continue
-        e, p = build(os.path.join(abuild.HERE, "recipes", path))
+        e, p = build(os.path.join(abuild.HERE, "recipes", path), layers)
         allent += e
-        prefixes.append(p)
+        prefixes += p
     print("manifest files:", abuild.update_manifest(allent, prefixes))
 
 
