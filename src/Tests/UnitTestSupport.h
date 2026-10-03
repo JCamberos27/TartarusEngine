@@ -33,3 +33,4 @@ void RegisterRagdollTests(UnitTestSupport::TestList& tests);   // UnitTests_Ragd
 void RegisterAnimationTests(UnitTestSupport::TestList& tests); // UnitTests_Animation.cpp
 void RegisterEditorTests(UnitTestSupport::TestList& tests);    // UnitTests_Editor.cpp
 void RegisterEngineTests(UnitTestSupport::TestList& tests);    // UnitTests_Engine.cpp
+void RegisterBloodTests(UnitTestSupport::TestList& tests);     // UnitTests_Blood.cpp

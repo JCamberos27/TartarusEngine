@@ -28,6 +28,8 @@ class World;
 //   flame   the player's muzzle flames: the AK's and the Remington's (second slot), shots from the hip
 //           then on the sights (record it: NPC_TEST_RECORD, every frame)
 //   feet    foot IK: a soldier's feet measured over the ground on the flat, then across and up the Arena's ramp
+//   blood   the volumetric blood (scenes/BloodTest.json): a wound, a chest kill against a wall, a head kill and a
+//           corpse shot, each watched from the side in shots through the spray's flight (docs/BLOOD_FX.md)
 //   pose    the weapon hold, close up: an AK and a Remington soldier, the AI frozen, put through aim level /
 //           up / down / to the side, at the hip, crouched, strafing, reloading and sprinting; four views of each
 //           and the gun's / elbows' / hands' clearances (NpcBody::MeasureHold) logged and checked
@@ -54,6 +56,14 @@ public:
     bool Aiming() const { return !m_Target.empty(); }   // sights up (rounds go where the view looks)
     bool WantsReload() const { return m_Reload; }
     bool WantsAiOverlay() const { return m_Scenario == "sandbox"; } // the AI overlay in the sandbox shots
+    // The blood scenario's view of the blood, filled by the host each frame.
+    struct BloodView {
+        bool Loaded = false;
+        int SpraysSpawned = 0, ActiveSprays = 0;
+        bool LastSprayClipped = false;
+        float GpuMsAvg = 0.0f, GpuMsMax = 0.0f;
+    };
+    const BloodView* BloodStats = nullptr;
 
 private:
     void Check(bool ok, const std::string& what);
@@ -63,6 +73,12 @@ private:
     void Deaths(World& world, NpcDirector& npcs, float now);
     void Feet(NpcDirector& npcs, float now);
     void Reload(World& world, NpcDirector& npcs, float now);
+    void Blood(World& world, NpcDirector& npcs, float now);
+    // blood
+    int m_BStep = 0, m_BCase = 0, m_BShot = 0, m_BSpawnBefore = 0;
+    bool m_BFired = false, m_BChecked = false, m_BCamSet = false;
+    float m_BAt = 0.0f, m_BFiredAt = 0.0f;
+    std::vector<std::string> m_BLine;
     // reload
     unsigned m_Frame = 0, m_Reloads = 0, m_Fidgets = 0;
     // flame
