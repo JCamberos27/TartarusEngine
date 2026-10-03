@@ -42,6 +42,7 @@ class Src(np.ndarray):
 
 
 _USES = []
+_PITCH = []      # every pitch / varispeed applied since the last take_uses(): semitones (the 2 st cap is checked per source in check_audio.py)
 
 
 def cut(x, a, b):
@@ -53,14 +54,18 @@ def cut(x, a, b):
 
 
 def take_uses():
-    """Pop the provenance list (merged duplicates) of everything cut since the last call."""
+    """Pop the provenance list (merged duplicates) of everything cut since the last call. Each use carries `pitch_st`: the largest
+    pitch / varispeed shift (semitones, signed) applied while that file was rendered (a render that mixes several cuts reports its
+    biggest shift on all of them: conservative, never under-reports)."""
+    st = max(_PITCH, key=abs, default=0.0)
     out, seen = [], set()
     for u in _USES:
         k = (u["file"], u["start"], u["end"])
         if k not in seen:
             seen.add(k)
-            out.append(u)
+            out.append({**u, "pitch_st": round(float(st), 2)})
     _USES.clear()
+    _PITCH.clear()
     return out
 
 
@@ -204,6 +209,7 @@ def remove_dc(x, hz=18.0):
 # ----------------------------------------------------------------------------------------------------------- shaping
 def pitch(x, semitones):
     """Resample pitch shift (changes length) -- fine for one-shots / foley."""
+    _PITCH.append(float(semitones))
     if abs(semitones) < 1e-6:
         return x
     r = 2 ** (semitones / 12.0)
@@ -214,6 +220,7 @@ def pitch(x, semitones):
 
 def stretch_to(x, n):
     """Resample a clip to exactly n samples (varispeed)."""
+    _PITCH.append(12.0 * math.log2(len(x) / max(1, n)))
     t = np.linspace(0, len(x) - 1, n)
     return np.stack([np.interp(t, np.arange(len(x)), x[:, c]) for c in range(x.shape[1])], 1).astype(np.float32)
 

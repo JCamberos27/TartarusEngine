@@ -66,6 +66,13 @@ def update_manifest(entries, owner_prefixes, keep=None):
     if os.path.exists(MANIFEST):
         old = json.load(open(MANIFEST)).get("files", [])
     kept = [e for e in old if (keep and keep(e)) or not any(e["file"].startswith(p) for p in owner_prefixes)]
+    new_files = {e["file"] for e in entries}
+    for e in old:        # a file this build no longer makes must not linger on disk (check_audio fails a wav the manifest does not list)
+        if e not in kept and e["file"] not in new_files:
+            try:
+                os.remove(os.path.join(AUDIO_DIR, e["file"]))
+            except OSError:
+                pass
     files = sorted(kept + entries, key=lambda e: e["file"])
     import mixspec                                       # lazy: mixspec imports this module
     mix = mixspec.apply_to(files)                        # every entry gets mix_db from recipes/mix.json
