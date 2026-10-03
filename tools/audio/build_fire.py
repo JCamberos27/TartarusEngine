@@ -206,7 +206,8 @@ def build(recipe_path, layers=None):
         entries.append(("far", n, y, note, True, adsp.take_uses()))
     out = []
     for layer, n, y, note, mono, uses in entries:
-        y = abuild.finish(y, layer, trim_bleed=layer == "mech")   # (limiting budget per layer: abuild.GR_BUDGET_DB)
+        # (limiting budget per layer: abuild.GR_BUDGET_DB; a recipe layer may set its own loudness target / budget)
+        y = abuild.finish(y, layer, trim_bleed=layer == "mech", target=cfg[layer].get("target"), max_gr_db=cfg[layer].get("max_gr_db"))
         rel = f"{d}/fire_{layer}_{n}.wav"
         e = abuild.emit(rel, y, f"snd.{gun}.fire_{layer}", layer,
                         {"gun": gun, "element": f"fire_{layer}", "variant": n, "source": note,
