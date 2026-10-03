@@ -9,7 +9,7 @@
     "sub":    {"target": -19.0, "min": -23.0, "max": -15.0},
     "tail":   {"target": -22.0, "min": -26.0, "max": -18.0},
     "far":    {"target": -25.0, "min": -29.0, "max": -21.0},
-    "action": {"target": -21.0, "min": -26.0, "max": -18.0},
+    "action": {"target": -21.0, "min": -29.0, "max": -18.0},
     "foley":  {"target": -21.0, "min": -24.0, "max": -18.0},
     "step":   {"target": -23.0, "min": -28.0, "max": -20.0},
     "loop":   {"target": -24.0, "min": -27.0, "max": -21.0}
