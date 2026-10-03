@@ -8,6 +8,7 @@
 #include "LoudnessMeter.h"
 #include "ProjectPaths.h"
 #include "SceneSerializer.h"
+#include "Window.h"
 #include "World.h"
 
 #include <json.hpp>
@@ -52,6 +53,7 @@ void Out(const char* fmt, ...) {
     std::vsnprintf(buf, sizeof(buf), fmt, ap);
     va_end(ap);
     std::fputs(buf, stdout);
+    std::fflush(stdout); // (a crash must not take the lines before it)
     if (s_Report.is_open()) s_Report << buf;
 }
 
@@ -171,7 +173,8 @@ struct Rig {
         const int n = (int)(cap * (float)kRate / (float)kBlock);
         int i = 0;
         for (; i < n && AudioEngine::IsPlaying(h); ++i) Step();
-        Run(0.25f);
+        Run(std::max(0.25f, 0.6f - (float)i * (float)kBlock / (float)kRate)); // at least one full 400 ms loudness window, even for a click
+
     }
     size_t Frames() const { return Pre.size() / 2; }
 };
@@ -214,21 +217,26 @@ int RunAudioTest(int argc, char** argv) {
     else if (scenePath.is_relative() && !fs::exists(scenePath)) scenePath = root / scenePath;
     Out("[audio-test] scene %s\n", scenePath.string().c_str());
 
+    // Loading a scene uploads its textures and meshes: a GL context has to exist. The window stays hidden (it is only shown after a
+    // first frame, which never comes here).
+    Window window(64, 64, "Tartarus Engine (audio test)");
     World world;
     AssetLibrary assets;
     if (!SceneSerializer::Load(world, assets, scenePath.string(), /*persistMigration=*/false)) {
         Out("[audio-test] FAIL: could not load the scene\n");
         return 1;
     }
+    Out("[audio-test] scene loaded\n");
     json manifest, spec;
     const bool haveManifest = ReadJson(root / "assets/Audio/audio_manifest.json", manifest);
-    const bool haveSpec = ReadJson(root.parent_path() / "tools/audio/recipes/mix.json", spec) && spec.contains("levels");
+    const bool haveSpec = ReadJson((root / "..").lexically_normal() / "tools/audio/recipes/mix.json", spec) && spec.contains("levels");
     float refLufs = 0.0f;
     const bool haveRef = haveManifest && manifest.contains("mix") && Num(manifest["mix"], "reference_lufs_m", refLufs);
     if (!haveRef || !haveSpec) Out("[audio-test] FAIL: no %s: the levels and the ambience are not checked\n", !haveRef ? "mix.reference_lufs_m in the manifest" : "tools/audio/recipes/mix.json");
     Check(haveRef && haveSpec);
 
     AudioEngine::InitOffline(kRate);
+    Out("[audio-test] offline engine up\n");
     AudioEngine::EnableTaps(true);
     WeaponAudio& wa = WeaponAudio::Get();
     wa.Start(world);
@@ -352,7 +360,7 @@ int RunAudioTest(int argc, char** argv) {
     // --- 2. wet / dry per zone ---------------------------------------------------------------------------------------
     wa.Bus().Enabled = true;
     AudioEngine::SetReverbEnabled(true, 0);
-    Out("\n== wet / dry per zone (reverb return energy re the dry signal, an impact 2 m in front; tolerance %.1f dB)\n", kWetTolDb);
+    Out("\n== wet / dry per zone (K-weighted reverb return energy re the dry signal, an impact 2 m in front; tolerance %.1f dB)\n", kWetTolDb);
     Out("%-28s %-14s %8s %8s %7s\n", "zone", "class", "wet/dry", "calib", "diff");
     SoundSet* probe = wa.KeySet("snd.impact.concrete");
     if (!probe || probe->Files.empty()) {
@@ -378,28 +386,28 @@ int RunAudioTest(int argc, char** argv) {
             double calib = 0.0;
             for (int l = 0; l < spec0.Count; ++l) calib += spec0.Layers[l].Weight * std::pow(10.0, spec0.Layers[l].WetDb / 10.0);
             const float calibDb = (float)(10.0 * std::log10(std::max(calib, 1e-12))) + sendDb;
-            double wet = 0.0, dry = 0.0;
+            double wet = 0.0, dry = 0.0, wetRaw = 0.0, dryRaw = 0.0; // K-weighted (as heard) and plain energies
             for (int k = 0; k < 2; ++k) {
                 rig.Clear();
                 const SoundPlayer::Played pl = wa.PlayKeyed(*probe, rig.Pos + rig.Fwd * std::min(2.0f, 0.5f * room), false, 1.0f);
                 if (!pl.Started) continue;
                 rig.Run(3.5f); // the event and the longest tail
-                const double w = Energy(rig.Wet);
-                double d = 0.0;
-                for (size_t s = 0; s < rig.Pre.size(); ++s) {
-                    const double v = (double)rig.Pre[s] - (double)rig.Wet[s];
-                    d += v * v;
-                }
-                wet += w;
-                dry += d;
+                std::vector<float> d(rig.Pre.size());
+                for (size_t s = 0; s < rig.Pre.size(); ++s) d[s] = rig.Pre[s] - rig.Wet[s];
+                wet += LoudnessMeter::KWeightedEnergy(rig.Wet, kRate);
+                dry += LoudnessMeter::KWeightedEnergy(d, kRate);
+                wetRaw += Energy(rig.Wet);
+                dryRaw += Energy(d);
             }
             if (dry <= 0.0) {
                 Out("%-28s %-14s the impact did not play %s\n", name, SpaceClassName(z.Class), Verdict(Check(false)));
                 continue;
             }
             const float measured = (float)(10.0 * std::log10(std::max(wet / dry, 1e-12)));
+            const float raw = (float)(10.0 * std::log10(std::max(wetRaw / std::max(dryRaw, 1e-30), 1e-12)));
             const float diff = measured - calibDb;
-            Out("%-28s %-14s %8.1f %8.1f %+7.1f %s\n", name, SpaceClassName(z.Class), measured, calibDb, diff, Verdict(Check(std::fabs(diff) <= kWetTolDb)));
+            Out("%-28s %-14s %8.1f %8.1f %+7.1f %s  (unweighted %.1f)\n", name, SpaceClassName(z.Class), measured, calibDb, diff,
+                Verdict(Check(std::fabs(diff) <= kWetTolDb)), raw);
         }
     }
 
@@ -423,7 +431,7 @@ int RunAudioTest(int argc, char** argv) {
             rig.Place(p, f);
             rig.Run(2.5f); // the bed fades in (1 s), the last zone's fades out
             rig.Clear();
-            rig.Run(3.0f);
+            rig.Run(16.5f); // a whole loop: the spec is the file's loudest 400 ms
             const float rel = LufsMax(rig.Pre) - refLufs, diff = rel - level;
             Out("zone %d %-24s %8.1f %8.1f %+7.1f %s\n", (int)i, z.Ambience.c_str(), rel, level, diff, Verdict(Check(std::fabs(diff) <= kLevelTolDb)));
         }

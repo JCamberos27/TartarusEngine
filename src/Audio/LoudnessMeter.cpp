@@ -110,6 +110,18 @@ float LoudnessMeter::MomentaryMax(const std::vector<float>& stereo, int sampleRa
     return best;
 }
 
+double LoudnessMeter::KWeightedEnergy(const std::vector<float>& stereo, int sampleRate) {
+    Biquad shelf[2], hp[2];
+    for (int c = 0; c < 2; ++c) Design(sampleRate, shelf[c], hp[c]);
+    double s = 0.0;
+    for (size_t i = 0; i < stereo.size() / 2; ++i)
+        for (int c = 0; c < 2; ++c) {
+            const double y = hp[c].Run(shelf[c].Run((double)stereo[2 * i + (size_t)c]));
+            s += y * y;
+        }
+    return s;
+}
+
 float LoudnessMeter::RmsDb(const std::vector<float>& stereo, size_t from, size_t to) {
     to = std::min(to, stereo.size() / 2);
     if (from >= to) return -180.0f;

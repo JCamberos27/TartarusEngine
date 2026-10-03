@@ -435,8 +435,7 @@ with the AK (key 1), the Remington (key 2) and the gravity gun (key 3), exactly 
 | NPC squads | "Lab / NPC Squads (disabled)": two spawns in the small room, two 40 m out in the field facing the alley. Spawns are inactive (tick them active in the Hierarchy to enable) | flybys, soldier footsteps, shots heard through portals |
 
 Surfaces are matched on the collider's physics material, tag and name against each component's Surface Table (see Foley / Impact above);
-avoid naming other colliders with a table word (for example "Floor" reads as wood). The zones also set `Ambience` / `Ambience Volume`
-(ignored by builds without those fields).
+avoid naming other colliders with a table word (for example "Floor" reads as wood). The zones also set `Ambience` / `Ambience Volume`.
 
 ## Reverb bus, master limiter, ambience
 
@@ -483,6 +482,8 @@ A voice plays at `set volume x 10^(mix_db / 20)`: `mix_db` is the manifest's per
 `recipes/mix.json`, the level hierarchy relative to the player's shot), applied once, nothing loudness-related on top. Component
 volumes (Foley, Impact, Weapon Audio) default to 1 and only scale (per gait, per fall speed, ...). Player Gain (0.75) applies to
 the player's own shot layers only.
+
+Panning is constant-power (a patch in `extern/miniaudio.h`, marked TARTARUS PATCH): a 3D sound has the power it has played 2D, whichever way the listener faces; stock miniaudio played a source straight ahead 6 dB down and one at the side about 3 dB louder than that.
 
 Every 3D sound is logarithmic: full level inside Min, then Min / d (-6 dB per doubling), held at Max. Sets the spec levels at a
 distance (`mix.distance_refs_m`) are calibrated so the level at that distance is the spec's: gain x Ref / Min.

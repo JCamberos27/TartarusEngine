@@ -2571,7 +2571,7 @@
     {
       "Reverb Zone": {
         "Ambience": "snd.amb.indoor_large",
-        "Ambience Volume": 0.5,
+        "Ambience Volume": 1.0,
         "Enabled": true,
         "Extents": [
           15,
@@ -2610,7 +2610,7 @@
     {
       "Reverb Zone": {
         "Ambience": "snd.amb.indoor_small",
-        "Ambience Volume": 0.5,
+        "Ambience Volume": 1.0,
         "Enabled": true,
         "Extents": [
           2.5,
@@ -2649,7 +2649,7 @@
     {
       "Reverb Zone": {
         "Ambience": "snd.amb.outdoor_urban",
-        "Ambience Volume": 0.5,
+        "Ambience Volume": 1.0,
         "Enabled": true,
         "Extents": [
           15,
@@ -2688,7 +2688,7 @@
     {
       "Reverb Zone": {
         "Ambience": "snd.amb.outdoor_open",
-        "Ambience Volume": 0.5,
+        "Ambience Volume": 1.0,
         "Enabled": true,
         "Extents": [
           60,

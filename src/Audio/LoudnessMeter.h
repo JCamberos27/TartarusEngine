@@ -24,6 +24,7 @@ public:
     // -120 when the range is shorter than a window or silent. `energy` (optional) receives the mean-square K-weighted energy of the
     // whole range.
     static float MomentaryMax(const std::vector<float>& stereo, int sampleRate, size_t from, size_t to);
+    static double KWeightedEnergy(const std::vector<float>& stereo, int sampleRate); // sum of squares after K-weighting, both channels
     static float RmsDb(const std::vector<float>& stereo, size_t from, size_t to); // plain RMS of both channels, dBFS
     static float PeakDb(const std::vector<float>& stereo, size_t from, size_t to);
 
