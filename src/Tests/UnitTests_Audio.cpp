@@ -194,7 +194,7 @@ void TestSoundSetJitterPitchAndRequest() {
     CHECK(!be.Voices.back().Voice.Spatial);
     // A set with no files starts nothing but still reports the play to the log.
     int logged = 0;
-    player.SetLog([&](double, const std::string& key, const std::string& file, int, const SoundPlayer::Request&, float, float) {
+    player.SetLog([&](double, const std::string& key, const std::string& file, int, const SoundPlayer::Request&, float, float, const SoundVoice*) {
         if (key == "t.empty" && file.empty()) ++logged;
     });
     const size_t before = be.Voices.size();
