@@ -90,7 +90,7 @@ Impact on visible realism, then effort (S under a day, M a few days, L a week or
 
 ### Big items
 
-8. **Stride warping + foot pinning (L).** Biggest realism gain for sprint/strafe sliding; needs stride-curve preprocessing of the Quantum clips and a trajectory component.
+8. **Stride warping + foot pinning (DONE, opt-in, off by default).** `IK::FootSlide` (IK.h/.cpp), used by the player body and NPC feet: planted feet are found from each foot's own lowest height, the clips' ground speed is measured from the planted feet (no stride-curve preprocessing needed), the stride is scaled to the capsule's speed (Stride Scale Min/Max, pelvis sinks), and a planted foot is pinned with a leash (Foot Pin Max Drift) and a short release. Measured with `TARTARUS_FOOT_SLIDE_PROBE=0|1` under `--stock-probe ak` (planted-foot drift per plant, layers off -> on): moving 31 -> 16 cm, turning 28 -> 14 cm, steady sprint 5.1 -> 0.9 cm; NPC `--npc-test` moving 54 -> 33 cm. Remaining: accelerating, strafing and turning plants beyond the leash (a trajectory-aware plan would fix them).
 9. **Step and pivot modifiers (M-L).** Procedural steps on stance change/turn/stop; spine and pelvis response to start/stop. Today only clip-based.
 10. **Triggered IK motions (M).** Curve-asset additive bone motions on demand (equip, aim-in jiggle, hit reactions).
 11. **Mirroring (M-L).** Pose mirror table per skeleton; low priority unless left-handed play matters.
