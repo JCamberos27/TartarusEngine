@@ -1907,6 +1907,10 @@ void RegisterEngineComponents() {
             { "Far Max Weight", T::Float, TARTARUS_REFLECT_FIELD(W, FarMaxWeight), 0.01f, "Gain of the distant report past Close Zero Distance.", 0.0f, 1.0f },
             { "Max Distance", T::Float, TARTARUS_REFLECT_FIELD(W, MaxDistance), 1.0f, "Metres the close, mech and sub layers carry.", 1.0f, 1000.0f },
             { "Far Max Distance", T::Float, TARTARUS_REFLECT_FIELD(W, FarMaxDistance), 1.0f, "Metres the distant report carries.", 1.0f, 2000.0f },
+            { "Shot Min Distance", T::Float, TARTARUS_REFLECT_FIELD(W, ShotMinDistance), 0.1f, "3D rolloff (logarithmic, -6 dB per doubling): metres inside which the close and mech layers are full volume.", 0.1f, 100.0f },
+            { "Bass Min Distance", T::Float, TARTARUS_REFLECT_FIELD(W, BassMinDistance), 0.1f, "The same for the sub, tail and distant layers (low end carries).", 0.1f, 100.0f },
+            { "Event Min Distance", T::Float, TARTARUS_REFLECT_FIELD(W, EventMinDistance), 0.1f, "The same for the gun's gear and foley sounds in the world (reloads, ADS, equip).", 0.1f, 100.0f },
+            { "Event Max Distance", T::Float, TARTARUS_REFLECT_FIELD(W, EventMaxDistance), 0.5f, "Metres past which a gear sound stops getting quieter.", 1.0f, 500.0f },
             { "Shot Max Voices", T::Int, TARTARUS_REFLECT_FIELD(W, ShotMaxVoices), 1.0f, "Close / mech / sub voices at once, per layer; past it the oldest is stolen.", 1.0f, 32.0f },
             { "Tail Max Voices", T::Int, TARTARUS_REFLECT_FIELD(W, TailMaxVoices), 1.0f, "Full auto: tails ringing at once; past it the oldest fades out.", 1.0f, 16.0f },
             { "Tail Fade Time", T::Float, TARTARUS_REFLECT_FIELD(W, TailFadeTime), 0.01f, "Seconds a stolen tail fades out over.", 0.0f, 2.0f },
@@ -1942,6 +1946,7 @@ void RegisterEngineComponents() {
             {"Shot Pitch Min", "Shot"}, {"Shot Pitch Max", "Shot"}, {"Volume Jitter dB", "Shot"},
             {"Close Full Distance", "Distance Blend"}, {"Close Zero Distance", "Distance Blend"}, {"Far Min Weight", "Distance Blend"},
             {"Far Max Weight", "Distance Blend"}, {"Max Distance", "Distance Blend"}, {"Far Max Distance", "Distance Blend"},
+            {"Shot Min Distance", "Distance Blend"}, {"Bass Min Distance", "Distance Blend"}, {"Event Min Distance", "Distance Blend"}, {"Event Max Distance", "Distance Blend"},
             {"Tail Max Voices", "Full Auto"}, {"Tail Every", "Full Auto"}, {"Far Every", "Full Auto"}, {"Burst Gap", "Full Auto"},
             {"Limiter Enabled", "Bus Limiter"}, {"Limiter Ceiling dB", "Bus Limiter"}, {"Limiter Window", "Bus Limiter"}, {"Limiter Min Gain", "Bus Limiter"}, {"Tail Fade Time", "Full Auto"}, {"Tail Min Interval", "Full Auto"}, {"Tail Duck Per Voice", "Full Auto"},
             {"Env Enabled", "Environment"}, {"Env Ray Count", "Environment"}, {"Env Max Distance", "Environment"}, {"Env Indoor Cover", "Environment"},
@@ -2001,9 +2006,10 @@ void RegisterEngineComponents() {
     {
         ReflectComponent m;
         m.Name = "Reverb Zone"; m.Icon = ICON_FA_VOLUME_HIGH; m.Category = "Audio";
-        m.Tooltip = "A space for sound. Inside this box / sphere a gunshot's tail is the Tail Class's (crossfaded over Fade Distance at the edge);\n"
-                    "outside every zone the shooter's raycast probe decides. The higher Priority sits on top where zones overlap.\n"
-                    "The entity's position and rotation place it (Scale is ignored). The reverb values are stored for the runtime reverb bus.";
+        m.Tooltip = "A space for sound. Inside this box / sphere a gunshot's tail is the Tail Class's, the runtime reverb convolves with the zone's\n"
+                    "impulse response and the zone's Ambience bed plays (all crossfaded over Fade Distance at the edge); outside every zone the\n"
+                    "shooter's raycast probe decides. The higher Priority sits on top where zones overlap. The entity's position and rotation\n"
+                    "place it (Scale is ignored).";
         using Z = ReverbZoneComponent;
         m.Fields = {
             { "Enabled", T::Bool, TARTARUS_REFLECT_FIELD(Z, Enabled), 0.0f, "Off: the zone is ignored." },
@@ -2011,26 +2017,43 @@ void RegisterEngineComponents() {
             { "Extents", T::Vec3, TARTARUS_REFLECT_FIELD(Z, Extents), 0.1f, "Box half extents in metres (the box is 2x this on each axis).", 0.05f, 500.0f },
             { "Radius", T::Float, TARTARUS_REFLECT_FIELD(Z, Radius), 0.1f, "Sphere radius in metres.", 0.05f, 500.0f },
             { "Priority", T::Int, TARTARUS_REFLECT_FIELD(Z, Priority), 1.0f, "Overlapping zones: the higher priority sits on top of the lower.", -100.0f, 100.0f },
-            { "Fade Distance", T::Float, TARTARUS_REFLECT_FIELD(Z, FadeDistance), 0.05f, "Metres inside the edge over which the zone fades in (0 = a hard edge). The tails crossfade over it.", 0.0f, 100.0f },
-            { "Tail Class", T::Enum, TARTARUS_REFLECT_FIELD(Z, TailClass), 0.0f, "Which gunshot tail set plays inside. A class with no recorded files plays the generic fire_tail." },
-            { "Tail Gain", T::Float, TARTARUS_REFLECT_FIELD(Z, TailGain), 0.01f, "Gain on the shot's tail layer inside this zone.", 0.0f, 4.0f },
-            { "Reverb Mode", T::Enum, TARTARUS_REFLECT_FIELD(Z, ReverbMode), 0.0f, "Class Default: the Tail Class's preset. Custom: the values below." },
-            { "Room Size", T::Float, TARTARUS_REFLECT_FIELD(Z, Reverb.RoomSize), 0.01f, "0 = a closet .. 1 = a canyon.", 0.0f, 1.0f },
-            { "Decay Time", T::Float, TARTARUS_REFLECT_FIELD(Z, Reverb.DecayTime), 0.05f, "Seconds (RT60).", 0.05f, 20.0f },
-            { "HF Damping", T::Float, TARTARUS_REFLECT_FIELD(Z, Reverb.HfDamping), 0.01f, "0 = bright .. 1 = dark.", 0.0f, 1.0f },
-            { "Pre-Delay ms", T::Float, TARTARUS_REFLECT_FIELD(Z, Reverb.PreDelayMs), 0.5f, "Milliseconds before the first reflections.", 0.0f, 250.0f },
-            { "Wet Level", T::Float, TARTARUS_REFLECT_FIELD(Z, Reverb.WetLevel), 0.01f, "How much of the reverb is mixed in.", 0.0f, 1.0f },
-            { "Early/Late Mix", T::Float, TARTARUS_REFLECT_FIELD(Z, Reverb.EarlyLateMix), 0.01f, "0 = all late tail .. 1 = all early reflections.", 0.0f, 1.0f },
+            { "Fade Distance", T::Float, TARTARUS_REFLECT_FIELD(Z, FadeDistance), 0.05f, "Metres inside the edge over which the zone fades in (0 = a hard edge). The tails, the reverb and the ambience crossfade over it.", 0.0f, 100.0f },
+            { "Tail Class", T::Enum, TARTARUS_REFLECT_FIELD(Z, TailClass), 0.0f, "Which gunshot tail set plays inside, and which class impulse response (manifest ir.<class>) and calibrated wet level the reverb uses. A class with no recorded files plays the generic fire_tail." },
+            { "Tail Gain", T::Float, TARTARUS_REFLECT_FIELD(Z, TailGain), 0.01f, "Gain on the shot's tail layer while inside this zone.", 0.0f, 4.0f },
+            { "Reverb Mode", T::Enum, TARTARUS_REFLECT_FIELD(Z, ReverbMode), 0.0f, "Class Default: the Tail Class's impulse response, calibrated level and low cut. Custom: the values below." },
+            { "IR", T::String, TARTARUS_REFLECT_FIELD(Z, Ir), 0.0f, "Impulse response file (a recorded wav, project-relative, e.g. assets/Audio/IR/indoor_large_1.wav). Empty: the Tail Class's. Normalised to unit energy, so Wet (dB) is the same whatever the file." },
+            { "Wet (dB)", T::Float, TARTARUS_REFLECT_FIELD(Z, WetDb), 0.1f, "Return level trim on top of the Tail Class's calibrated wet / dry (Reverb Bus: Wet Indoor Large dB ...). 0 = the calibrated level.", -30.0f, 24.0f },
+            { "Pre-Delay (ms)", T::Float, TARTARUS_REFLECT_FIELD(Z, PreDelayMs), 0.5f, "Milliseconds before the reverb starts (a delay on the reverb's input).", 0.0f, 250.0f },
+            { "HF Damping (dB)", T::Float, TARTARUS_REFLECT_FIELD(Z, HfDampDb), 0.1f, "Attenuation (dB) of a high shelf at 4 kHz on the reverb's input: a darker return. 0 = the recording as it is.", 0.0f, 24.0f },
+            { "Low Cut (Hz)", T::Float, TARTARUS_REFLECT_FIELD(Z, LowCutHz), 1.0f, "High-pass on the reverb's input: keeps low end out of the return (0 = off).", 0.0f, 1000.0f },
+            { "Ambience", T::String, TARTARUS_REFLECT_FIELD(Z, Ambience), 0.0f, "Sound key of a looping ambience bed for this space (e.g. snd.amb.indoor_large). Empty: none. 2D, crossfaded by the listener's zone weights (1 s fades), started and stopped with Play." },
+            { "Ambience Volume", T::Float, TARTARUS_REFLECT_FIELD(Z, AmbienceVolume), 0.01f, "Linear gain of the ambience bed, on top of its mix_db.", 0.0f, 4.0f },
+            // Scenes saved before the convolution reverb: loaded, not drawn (Wet Level and HF Damping are read as trims in Custom mode).
+            { "Room Size", T::Float, TARTARUS_REFLECT_FIELD(Z, Old.RoomSize), 0.01f, "Old feedback-network value (not used).", 0.0f, 1.0f },
+            { "Decay Time", T::Float, TARTARUS_REFLECT_FIELD(Z, Old.DecayTime), 0.05f, "Old feedback-network value (not used).", 0.05f, 20.0f },
+            { "HF Damping", T::Float, TARTARUS_REFLECT_FIELD(Z, Old.HfDamping), 0.01f, "Old 0..1 damping: read as 0 .. 10 dB of HF Damping (dB) in Custom mode. -1 = absent.", -1.0f, 1.0f },
+            { "Wet Level", T::Float, TARTARUS_REFLECT_FIELD(Z, Old.WetLevel), 0.01f, "Old wet level: read as a trim in dB relative to the Tail Class's old default (Custom mode). -1 = absent.", -1.0f, 1.0f },
+            { "Early/Late Mix", T::Float, TARTARUS_REFLECT_FIELD(Z, Old.EarlyLateMix), 0.01f, "Old feedback-network value (not used).", 0.0f, 1.0f },
         };
         m.Fields[1].EnumLabels = "Box\0Sphere\0"; m.Fields[1].EnumCount = 2;
         m.Fields[2].VisibleIfField = "Shape"; m.Fields[2].VisibleIfValue = 0;
         m.Fields[3].VisibleIfField = "Shape"; m.Fields[3].VisibleIfValue = 1;
         m.Fields[6].EnumLabels = "Outdoor Open\0Outdoor Urban\0Indoor Small\0Indoor Large\0"; m.Fields[6].EnumCount = 4;
         m.Fields[8].EnumLabels = "Class Default\0Custom\0"; m.Fields[8].EnumCount = 2;
-        for (size_t i = 9; i < m.Fields.size(); ++i) {
-            m.Fields[i].VisibleIfField = "Reverb Mode";
-            m.Fields[i].VisibleIfValue = 1;
-            m.Fields[i].Group = "Reverb";
+        for (ReflectField& f : m.Fields) {
+            const std::string n = f.Name;
+            if (n == "Wet (dB)") f.Key = "Wet dB";                    // (the old "Wet Level" key is a different unit: it stays its own, hidden, field)
+            if (n == "Pre-Delay (ms)") f.Key = "Pre-Delay ms";        // the old key: same unit, old scenes' values carry over
+            if (n == "HF Damping (dB)") f.Key = "HF Damping dB";
+            if (n == "IR" || n == "Wet (dB)" || n == "Pre-Delay (ms)" || n == "HF Damping (dB)" || n == "Low Cut (Hz)") {
+                f.VisibleIfField = "Reverb Mode";
+                f.VisibleIfValue = 1;
+                f.Group = "Reverb";
+            } else if (n == "Ambience" || n == "Ambience Volume") {
+                f.Group = "Ambience";
+            } else if (n == "Room Size" || n == "Decay Time" || n == "HF Damping" || n == "Wet Level" || n == "Early/Late Mix") {
+                f.EditorHidden = true;
+            }
         }
         Register<ReverbZoneComponent>(std::move(m));
     }
@@ -2060,22 +2083,28 @@ void RegisterEngineComponents() {
     {
         ReflectComponent m;
         m.Name = "Reverb Bus"; m.Icon = ICON_FA_VOLUME_HIGH; m.Category = "Audio";
-        m.Tooltip = "The runtime reverb: what each kind of sound sends into it, how it follows the listener's space (Reverb Zones, else the raycast\n"
-                    "probe) and the occlusion low-pass for sources behind geometry. One per scene (the first counts). Gun tails are recorded in their\n"
-                    "spaces and send nothing.";
+        m.Tooltip = "The runtime reverb (convolution with recorded impulse responses): what each kind of sound sends into it, the calibrated wet level\n"
+                    "of each kind of space, how it follows the listener's space (Reverb Zones, else the raycast probe), the occlusion low-pass for\n"
+                    "sources behind geometry, and the master limiter. One per scene (the first counts). Gun tails are recorded in their spaces and\n"
+                    "send nothing.";
         using B = ReverbBusComponent;
         m.Fields = {
             { "Enabled", T::Bool, TARTARUS_REFLECT_FIELD(B, Enabled), 0.0f, "Off: no reverb at all (the sends are not built)." },
             { "Return Level", T::Float, TARTARUS_REFLECT_FIELD(B, ReturnLevel), 0.01f, "Gain of the wet signal into the mix (times the SFX bus volume).", 0.0f, 4.0f },
-            { "Wet Scale", T::Float, TARTARUS_REFLECT_FIELD(B, WetScale), 0.01f, "On every space's preset Wet Level.", 0.0f, 4.0f },
-            { "Glide Time", T::Float, TARTARUS_REFLECT_FIELD(B, GlideTime), 0.01f, "Seconds the reverb takes to follow a change of space (walking through a zone).", 0.01f, 5.0f },
-            { "Send Foley", T::Float, TARTARUS_REFLECT_FIELD(B, SendFoley), 0.01f, "Cloth, jumps, landings, ADS / equip / fire-mode gear.", 0.0f, 2.0f },
+            { "Wet Scale", T::Float, TARTARUS_REFLECT_FIELD(B, WetScale), 0.01f, "Linear gain on every space's wet level.", 0.0f, 4.0f },
+            { "Glide Time", T::Float, TARTARUS_REFLECT_FIELD(B, GlideTime), 0.01f, "Seconds a change of space takes: the impulse responses crossfade (equal power) over it.", 0.01f, 5.0f },
+            { "Wet Outdoor Open dB", T::Float, TARTARUS_REFLECT_FIELD(B, WetOutdoorOpenDb), 0.1f, "Calibrated wet / dry (RMS of the reverb return against the dry sound at the listener) in open ground, for a send of 1.", -60.0f, 12.0f },
+            { "Wet Outdoor Urban dB", T::Float, TARTARUS_REFLECT_FIELD(B, WetOutdoorUrbanDb), 0.1f, "The same among buildings.", -60.0f, 12.0f },
+            { "Wet Indoor Small dB", T::Float, TARTARUS_REFLECT_FIELD(B, WetIndoorSmallDb), 0.1f, "The same in a small room.", -60.0f, 12.0f },
+            { "Wet Indoor Large dB", T::Float, TARTARUS_REFLECT_FIELD(B, WetIndoorLargeDb), 0.1f, "The same in a hall / warehouse.", -60.0f, 12.0f },
+            { "Low Cut Hz", T::Float, TARTARUS_REFLECT_FIELD(B, LowCutHz), 1.0f, "High-pass on the reverb's input for a space with no Low Cut of its own (0 = off).", 0.0f, 1000.0f },
+            { "Send Foley", T::Float, TARTARUS_REFLECT_FIELD(B, SendFoley), 0.01f, "Cloth, jumps, landings, ADS / equip / fire-mode gear. 1 = the space's calibrated wet level.", 0.0f, 2.0f },
             { "Send Footsteps", T::Float, TARTARUS_REFLECT_FIELD(B, SendFootsteps), 0.01f, "Player and soldier footfalls.", 0.0f, 2.0f },
             { "Send Actions", T::Float, TARTARUS_REFLECT_FIELD(B, SendActions), 0.01f, "Each gun's own mags, bolts, pumps, shells.", 0.0f, 2.0f },
             { "Send Impacts", T::Float, TARTARUS_REFLECT_FIELD(B, SendImpacts), 0.01f, "Bullet impacts, flesh hits and flybys.", 0.0f, 2.0f },
             { "Send Casings", T::Float, TARTARUS_REFLECT_FIELD(B, SendCasings), 0.01f, "Shell casings on the ground.", 0.0f, 2.0f },
-            { "Send Voice", T::Float, TARTARUS_REFLECT_FIELD(B, SendVoice), 0.01f, "Voices.", 0.0f, 2.0f },
-            { "Send Shot", T::Float, TARTARUS_REFLECT_FIELD(B, SendShot), 0.01f, "The close / mech / sub layers of a gunshot: a little, so the crack sits in the room.", 0.0f, 2.0f },
+            { "Send Voice", T::Float, TARTARUS_REFLECT_FIELD(B, SendVoice), 0.01f, "(Not used: the voice system was removed. The key still loads.)", 0.0f, 2.0f },
+            { "Send Shot", T::Float, TARTARUS_REFLECT_FIELD(B, SendShot), 0.01f, "The close / mech / sub layers of a gunshot: the crack feeds the room, which is what makes it audible indoors.", 0.0f, 2.0f },
             { "Send Tail", T::Float, TARTARUS_REFLECT_FIELD(B, SendTail), 0.01f, "The recorded gun tails (and the far layer). 0: they already hold their room.", 0.0f, 2.0f },
             { "Occlusion Enabled", T::Bool, TARTARUS_REFLECT_FIELD(B, OcclusionEnabled), 0.0f, "A 3D voice whose line of sight from the listener is blocked by solid geometry is low-passed." },
             { "Occlusion Cutoff", T::Float, TARTARUS_REFLECT_FIELD(B, OcclusionCutoff), 10.0f, "Hz of a fully occluded voice's low-pass.", 100.0f, 10000.0f },
@@ -2085,15 +2114,24 @@ void RegisterEngineComponents() {
             { "Occlusion Glide", T::Float, TARTARUS_REFLECT_FIELD(B, OcclusionGlide), 0.1f, "Per second: how fast the low-pass follows a change (a source stepping behind a corner closes up, no click), and a portal voice follows a door swinging.", 0.5f, 100.0f },
             { "Portals Enabled", T::Bool, TARTARUS_REFLECT_FIELD(B, PortalsEnabled), 0.0f, "A voice in another room is heard from the Reverb Portal that joins the rooms (direction, path length, open amount, bend), with its own room's reverb." },
             { "Remote Reverb Hold", T::Float, TARTARUS_REFLECT_FIELD(B, RemoteReverbHold), 0.1f, "Seconds the remote room's reverb keeps running after the last voice heard through a portal (its tail rings out).", 0.0f, 30.0f },
+            { "Master Limiter", T::Bool, TARTARUS_REFLECT_FIELD(B, MasterLimiterEnabled), 0.0f, "The master peak limiter: the last node before the output, after every bus and the reverb returns." },
+            { "Master Ceiling dB", T::Float, TARTARUS_REFLECT_FIELD(B, MasterCeilingDb), 0.1f, "dBFS the output never exceeds.", -12.0f, 0.0f },
+            { "Master Lookahead ms", T::Float, TARTARUS_REFLECT_FIELD(B, MasterLookaheadMs), 0.1f, "The limiter looks this far ahead so the gain is down before the peak arrives (adds this much latency).", 0.1f, 10.0f },
+            { "Master Release ms", T::Float, TARTARUS_REFLECT_FIELD(B, MasterReleaseMs), 1.0f, "Time constant of the gain recovering after a peak.", 1.0f, 1000.0f },
         };
         const std::pair<const char*, const char*> groups[] = {
+            {"Wet Outdoor Open dB", "Wet Level"}, {"Wet Outdoor Urban dB", "Wet Level"}, {"Wet Indoor Small dB", "Wet Level"}, {"Wet Indoor Large dB", "Wet Level"},
+            {"Low Cut Hz", "Wet Level"},
             {"Send Foley", "Sends"}, {"Send Footsteps", "Sends"}, {"Send Actions", "Sends"}, {"Send Impacts", "Sends"}, {"Send Casings", "Sends"},
             {"Send Voice", "Sends"}, {"Send Shot", "Sends"}, {"Send Tail", "Sends"},
             {"Occlusion Enabled", "Occlusion"}, {"Occlusion Cutoff", "Occlusion"}, {"Occlusion Interval", "Occlusion"}, {"Occlusion Rays Per Frame", "Occlusion"},
-            {"Occlusion Min Distance", "Occlusion"}, {"Occlusion Glide", "Occlusion"}, {"Portals Enabled", "Portals"}, {"Remote Reverb Hold", "Portals"}};
-        for (ReflectField& f : m.Fields)
+            {"Occlusion Min Distance", "Occlusion"}, {"Occlusion Glide", "Occlusion"}, {"Portals Enabled", "Portals"}, {"Remote Reverb Hold", "Portals"},
+            {"Master Limiter", "Master Limiter"}, {"Master Ceiling dB", "Master Limiter"}, {"Master Lookahead ms", "Master Limiter"}, {"Master Release ms", "Master Limiter"}};
+        for (ReflectField& f : m.Fields) {
             for (const auto& [n, g] : groups)
                 if (std::strcmp(f.Name, n) == 0) f.Group = g;
+            if (std::strcmp(f.Name, "Send Voice") == 0) f.EditorHidden = true;
+        }
         Register<ReverbBusComponent>(std::move(m));
     }
     {

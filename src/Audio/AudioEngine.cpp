@@ -1,12 +1,18 @@
 #include "AudioEngine.h"
 #include "Log.h"
+#include "ConvolutionReverb.h"
+#include "LoudnessMeter.h"
+#include "MasterLimiter.h"
 #include "miniaudio.h"
 #include <algorithm>
 #include <atomic>
 #include <chrono>
 #include <cmath>
+#include <cstdlib>
 #include <fstream>
+#include <map>
 #include <memory>
+#include <mutex>
 #include <unordered_map>
 #include <vector>
 
@@ -44,49 +50,145 @@ struct Voice {
 
 std::vector<Voice> s_Voices;
 
+// --- the output graph ----------------------------------------------------------------------------------------------
+// sound groups (the mixer buses) -> a meter node each -> the MASTER LIMITER node -> the endpoint, and the two reverb returns -> the limiter.
+// All three kinds are pass-through / processing nodes written here; miniaudio sums what is attached to an input bus.
+
+// Taps (the --audio-test, AUDIO_CAPTURE): three equal rings of stereo frames. The reverb nodes add their return at the position the
+// limiter is about to write; the limiter writes the other two and advances the count (they run in that order within one graph read).
+struct TapRing {
+    static constexpr unsigned long long kFrames = 1ull << 19; // 10.9 s at 48 kHz
+    std::vector<float> Master, Pre, Wet;                      // kFrames x 2 each
+    std::atomic<unsigned long long> Written{0};
+    unsigned long long Read = 0;
+    unsigned long long Lost = 0;
+};
+std::atomic<TapRing*> s_Taps{nullptr};
+std::unique_ptr<TapRing> s_TapStorage;
+
+struct MeterNode {
+    ma_node_base Base;
+    LoudnessMeter* Meter = nullptr;
+};
+struct LimiterNode {
+    ma_node_base Base;
+    MasterLimiter* Lim = nullptr;
+    LoudnessMeter* Master = nullptr;
+    std::vector<float> Scratch;
+    std::atomic<bool> Enabled{true};
+    std::atomic<float> CeilingDb{-1.0f}, LookaheadMs{1.5f}, ReleaseMs{80.0f};
+    std::atomic<float> LastGrDb{0.0f};
+};
+LimiterNode* s_Limiter = nullptr;
+MeterNode* s_BusMeters[AudioEngine::kBusCount] = {};
+
+void MeterProcess(ma_node* pNode, const float** ppIn, ma_uint32* pFrameCountIn, float** ppOut, ma_uint32* pFrameCountOut) {
+    MeterNode* n = reinterpret_cast<MeterNode*>(pNode);
+    const ma_uint32 frames = *pFrameCountOut;
+    float* out = ppOut[0];
+    if (ppIn && ppIn[0]) std::copy(ppIn[0], ppIn[0] + 2 * (size_t)frames, out);
+    else std::fill(out, out + 2 * (size_t)frames, 0.0f);
+    if (n->Meter) n->Meter->Process(out, (int)frames);
+    (void)pFrameCountIn;
+}
+ma_node_vtable s_MeterVtable = {MeterProcess, nullptr, 1, 1, MA_NODE_FLAG_CONTINUOUS_PROCESSING | MA_NODE_FLAG_ALLOW_NULL_INPUT};
+
+void LimiterProcess(ma_node* pNode, const float** ppIn, ma_uint32* pFrameCountIn, float** ppOut, ma_uint32* pFrameCountOut) {
+    LimiterNode* n = reinterpret_cast<LimiterNode*>(pNode);
+    const ma_uint32 frames = *pFrameCountOut;
+    float* out = ppOut[0];
+    const float* in = ppIn && ppIn[0] ? ppIn[0] : nullptr;
+    if (!in) {
+        if (n->Scratch.size() < 2 * (size_t)frames) n->Scratch.assign(2 * (size_t)frames, 0.0f); // (grows on the first callbacks only)
+        std::fill(n->Scratch.begin(), n->Scratch.begin() + 2 * (size_t)frames, 0.0f);
+        in = n->Scratch.data();
+    }
+    LimiterSettings want;
+    want.Enabled = n->Enabled.load(std::memory_order_relaxed);
+    want.CeilingDb = n->CeilingDb.load(std::memory_order_relaxed);
+    want.LookaheadMs = n->LookaheadMs.load(std::memory_order_relaxed);
+    want.ReleaseMs = n->ReleaseMs.load(std::memory_order_relaxed);
+    const LimiterSettings& have = n->Lim->Settings();
+    if (want.Enabled != have.Enabled || want.CeilingDb != have.CeilingDb || want.ReleaseMs != have.ReleaseMs ||
+        std::fabs(want.LookaheadMs - have.LookaheadMs) > 1e-4f)
+        n->Lim->Configure(want);
+    TapRing* taps = s_Taps.load(std::memory_order_acquire);
+    unsigned long long w = 0;
+    if (taps) {
+        w = taps->Written.load(std::memory_order_relaxed);
+        for (ma_uint32 i = 0; i < frames; ++i) {
+            const size_t at = (size_t)((w + i) & (TapRing::kFrames - 1)) * 2;
+            taps->Pre[at] = in[2 * (size_t)i];
+            taps->Pre[at + 1] = in[2 * (size_t)i + 1];
+        }
+    }
+    n->Lim->Process(in, out, (int)frames);
+    n->Master->Process(out, (int)frames);
+    const float gr = n->Lim->TakeGainReductionDb();
+    if (gr > 0.0f) n->LastGrDb.store(std::max(gr, n->LastGrDb.load(std::memory_order_relaxed)), std::memory_order_relaxed);
+    if (taps) {
+        for (ma_uint32 i = 0; i < frames; ++i) {
+            const size_t at = (size_t)((w + i) & (TapRing::kFrames - 1)) * 2;
+            taps->Master[at] = out[2 * (size_t)i];
+            taps->Master[at + 1] = out[2 * (size_t)i + 1];
+        }
+        taps->Written.store(w + frames, std::memory_order_release);
+    }
+    (void)pFrameCountIn;
+}
+ma_node_vtable s_LimiterVtable = {LimiterProcess, nullptr, 1, 1, MA_NODE_FLAG_CONTINUOUS_PROCESSING | MA_NODE_FLAG_ALLOW_NULL_INPUT};
+
 // --- the reverb bus ------------------------------------------------------------------------------------------------
-// One node, input bus 0 = every send (miniaudio sums what is attached to an input bus), output bus 0 -> the engine endpoint.
-// The game thread writes the target parameters into atomics; the audio callback copies them into the FDN, which glides.
+// One node, input bus 0 = every send (miniaudio sums what is attached to an input bus), output bus 0 -> the limiter.
+// The game thread states where the reverb is heading (ConvolutionReverb::SetTarget); the audio callback glides there.
 struct ReverbNode {
     ma_node_base Base;
-    ReverbFdn* Fdn = nullptr;
-    std::atomic<float> Target[7]; // the six ReverbParams, then the glide time
+    ConvolutionReverb* Verb = nullptr;
+    LoudnessMeter* Meter = nullptr;
+    std::atomic<float> Return{1.0f};    // linear gain of the wet signal (the reverb return level x the SFX bus volume)
     std::atomic<bool> Enabled{true};
     std::atomic<std::uint64_t> Callbacks{0};
     std::atomic<double> TotalMicros{0.0}, MaxMicros{0.0};
     std::atomic<int> LastFrames{0};
+    std::map<std::string, int> IrIndex; // game thread only: path -> the convolver's index
+    std::vector<std::string> IrPaths;   // game thread only: by index
 };
 ReverbNode* s_Reverbs[2] = {nullptr, nullptr}; // 0: the listener's room, 1: the remote room (a portal voice's own)
 bool s_ReverbInit = false;
 float s_ReverbReturn = 1.0f;
-ReverbParams s_ReverbTargets[2];
+float s_ReverbGlide = 0.35f;
+bool s_Offline = false;
+std::map<std::string, std::shared_ptr<const IrData>> s_IrCache; // game thread
 
 void ReverbProcess(ma_node* pNode, const float** ppIn, ma_uint32* pFrameCountIn, float** ppOut, ma_uint32* pFrameCountOut) {
     ReverbNode* n = reinterpret_cast<ReverbNode*>(pNode);
     const ma_uint32 frames = *pFrameCountOut;
     float* out = ppOut[0];
-    if (!n->Fdn || !n->Enabled.load(std::memory_order_relaxed)) {
+    (void)pFrameCountIn;
+    if (!n->Verb || !n->Enabled.load(std::memory_order_relaxed)) {
         std::fill(out, out + 2 * (size_t)frames, 0.0f);
-        (void)pFrameCountIn;
+        if (n->Meter) n->Meter->Process(out, (int)frames);
         return;
     }
     const auto t0 = std::chrono::steady_clock::now();
-    ReverbParams p;
-    p.RoomSize = n->Target[0].load(std::memory_order_relaxed);
-    p.DecayTime = n->Target[1].load(std::memory_order_relaxed);
-    p.HfDamping = n->Target[2].load(std::memory_order_relaxed);
-    p.PreDelayMs = n->Target[3].load(std::memory_order_relaxed);
-    p.WetLevel = n->Target[4].load(std::memory_order_relaxed);
-    p.EarlyLateMix = n->Target[5].load(std::memory_order_relaxed);
-    n->Fdn->SetTarget(p);
-    n->Fdn->SetSmoothingTime(n->Target[6].load(std::memory_order_relaxed));
     static thread_local std::vector<float> silence;
     const float* in = ppIn && ppIn[0] ? ppIn[0] : nullptr;
     if (!in) {
         if (silence.size() < 2 * (size_t)frames) silence.assign(2 * (size_t)frames, 0.0f); // (grows once, on the first callback)
         in = silence.data();
     }
-    n->Fdn->Process(in, out, (int)frames);
+    n->Verb->Process(in, out, (int)frames);
+    const float gain = n->Return.load(std::memory_order_relaxed);
+    for (size_t i = 0; i < 2 * (size_t)frames; ++i) out[i] *= gain;
+    if (n->Meter) n->Meter->Process(out, (int)frames);
+    if (TapRing* taps = s_Taps.load(std::memory_order_acquire)) {
+        const unsigned long long w = taps->Written.load(std::memory_order_relaxed);
+        for (ma_uint32 i = 0; i < frames; ++i) {
+            const size_t at = (size_t)((w + i) & (TapRing::kFrames - 1)) * 2;
+            taps->Wet[at] += out[2 * (size_t)i];
+            taps->Wet[at + 1] += out[2 * (size_t)i + 1];
+        }
+    }
     const double us = std::chrono::duration<double, std::micro>(std::chrono::steady_clock::now() - t0).count();
     n->Callbacks.fetch_add(1, std::memory_order_relaxed);
     n->TotalMicros.store(n->TotalMicros.load(std::memory_order_relaxed) + us, std::memory_order_relaxed);
@@ -95,6 +197,13 @@ void ReverbProcess(ma_node* pNode, const float** ppIn, ma_uint32* pFrameCountIn,
 }
 
 ma_node_vtable s_ReverbVtable = {ReverbProcess, nullptr, 1, 1, MA_NODE_FLAG_CONTINUOUS_PROCESSING | MA_NODE_FLAG_ALLOW_NULL_INPUT};
+
+LoudnessMeter* s_WetMeter = nullptr;
+LoudnessMeter* s_BusLoudness[AudioEngine::kBusCount] = {};
+MasterLimiter* s_LimiterDsp = nullptr;
+LoudnessMeter* s_MasterMeter = nullptr;
+ma_encoder s_Encoder;
+bool s_EncoderOpen = false;
 
 // #171 - mixer buses: every voice plays through one sound group, whose volume is the bus
 // volume. Master is the engine volume (times the editor's Mute).
@@ -158,15 +267,56 @@ void FreeSlot(uint32_t index) {
 }
 }
 
-void AudioEngine::Init() {
-    if (s_Initialized) return;
-    if (ma_engine_init(nullptr, &s_Engine) != MA_SUCCESS) {
+static bool s_TapsExternal = false;
+namespace {
+
+void UpdateReturnGains() {
+    for (ReverbNode* r : s_Reverbs)
+        if (r) r->Return.store(s_ReverbReturn * s_BusVolume[0], std::memory_order_relaxed); // the returns follow the SFX bus
+}
+
+ma_node* AsNode(ma_node_base* n) { return (ma_node*)n; }
+
+bool InitNode(ma_node_vtable* vt, ma_node_base* node) {
+    ma_node_config nc = ma_node_config_init();
+    ma_uint32 ch = 2;
+    nc.vtable = vt;
+    nc.pInputChannels = &ch;
+    nc.pOutputChannels = &ch;
+    return ma_node_init(ma_engine_get_node_graph(&s_Engine), &nc, nullptr, node) == MA_SUCCESS;
+}
+
+bool InitImpl(bool offline, int rate) {
+    if (s_Initialized) return true;
+    ma_engine_config cfg = ma_engine_config_init();
+    std::string capture;
+#ifdef _WIN32
+    {
+        char* env = nullptr;
+        size_t len = 0;
+        if (_dupenv_s(&env, &len, "AUDIO_CAPTURE") == 0 && env) {
+            capture = env;
+            std::free(env);
+        }
+    }
+#else
+    if (const char* env = std::getenv("AUDIO_CAPTURE")) capture = env;
+#endif
+    if (offline) {
+        cfg.noDevice = MA_TRUE;
+        cfg.channels = 2;
+        cfg.sampleRate = (ma_uint32)rate;
+    } else if (!capture.empty()) {
+        cfg.sampleRate = 48000; // a capture is a 48 kHz file
+    }
+    if (ma_engine_init(&cfg, &s_Engine) != MA_SUCCESS) {
         Log::Error("Audio: failed to initialize the audio engine.");
-        return;
+        return false;
     }
     s_Initialized = true;
+    s_Offline = offline;
     s_BusesReady = true;
-    for (int b = 0; b < kBusCount; ++b) {
+    for (int b = 0; b < AudioEngine::kBusCount; ++b) {
         if (ma_sound_group_init(&s_Engine, 0, nullptr, &s_Buses[b]) != MA_SUCCESS) {
             Log::Error("Audio: failed to create mixer bus " + std::to_string(b) + "; playing without buses.");
             for (int k = 0; k < b; ++k) ma_sound_group_uninit(&s_Buses[k]);
@@ -176,37 +326,87 @@ void AudioEngine::Init() {
         ma_sound_group_set_volume(&s_Buses[b], s_BusVolume[b]);
     }
     ApplyMasterVolume(s_Engine);
-    // The reverb bus. If it can't be built, voices simply start without a send.
-    for (int bus = 0; bus < 2; ++bus) {
-        const ma_uint32 sr = ma_engine_get_sample_rate(&s_Engine);
-        ma_node_config nc = ma_node_config_init();
-        ma_uint32 ch = 2;
-        nc.vtable = &s_ReverbVtable;
-        nc.pInputChannels = &ch;
-        nc.pOutputChannels = &ch;
-        auto* node = new ReverbNode();
-        node->Fdn = new ReverbFdn((int)sr);
-        node->Fdn->Reset(s_ReverbTargets[bus]);
-        const ReverbParams& rp = s_ReverbTargets[bus];
-        const float t[6] = {rp.RoomSize, rp.DecayTime, rp.HfDamping, rp.PreDelayMs, rp.WetLevel, rp.EarlyLateMix};
-        for (int i = 0; i < 6; ++i) node->Target[i].store(t[i]);
-        node->Target[6].store(0.35f);
-        node->Enabled.store(bus == 0); // the remote room's reverb runs only while a portal voice feeds it
-        if (ma_engine_get_channels(&s_Engine) == 2 && ma_node_init(ma_engine_get_node_graph(&s_Engine), &nc, nullptr, &node->Base) == MA_SUCCESS) {
-            ma_node_attach_output_bus(&node->Base, 0, ma_engine_get_endpoint(&s_Engine), 0);
-            ma_node_set_output_bus_volume(&node->Base, 0, s_ReverbReturn * s_BusVolume[0]);
-            s_Reverbs[bus] = node;
-            s_ReverbInit = true;
+    const int sr = (int)ma_engine_get_sample_rate(&s_Engine);
+    // The output graph: buses -> meters -> limiter -> endpoint, reverb returns -> limiter. Without it (a mono device) every group keeps
+    // its default attachment to the endpoint and voices play without a send.
+    if (ma_engine_get_channels(&s_Engine) == 2) {
+        auto* lim = new LimiterNode();
+        lim->Lim = new MasterLimiter(sr);
+        lim->Master = new LoudnessMeter(sr);
+        if (InitNode(&s_LimiterVtable, &lim->Base)) {
+            ma_node_attach_output_bus(&lim->Base, 0, ma_engine_get_endpoint(&s_Engine), 0);
+            s_Limiter = lim;
+            s_LimiterDsp = lim->Lim;
+            s_MasterMeter = lim->Master;
         } else {
-            Log::Warn("Audio: could not create the reverb bus; voices play without a send.");
-            delete node->Fdn;
-            delete node;
+            Log::Warn("Audio: could not create the master limiter; playing without it.");
+            delete lim->Lim;
+            delete lim->Master;
+            delete lim;
         }
+        if (s_Limiter && s_BusesReady) {
+            for (int b = 0; b < AudioEngine::kBusCount; ++b) {
+                auto* m = new MeterNode();
+                m->Meter = new LoudnessMeter(sr);
+                if (InitNode(&s_MeterVtable, &m->Base)) {
+                    ma_node_attach_output_bus(AsNode(&m->Base), 0, &s_Limiter->Base, 0);
+                    ma_node_attach_output_bus((ma_node*)&s_Buses[b], 0, &m->Base, 0);
+                    s_BusMeters[b] = m;
+                    s_BusLoudness[b] = m->Meter;
+                } else {
+                    delete m->Meter;
+                    delete m;
+                }
+            }
+        }
+        // The reverb buses. If they can't be built, voices simply start without a send.
+        for (int bus = 0; bus < 2; ++bus) {
+            auto* node = new ReverbNode();
+            node->Verb = new ConvolutionReverb(sr, !offline);
+            node->Meter = new LoudnessMeter(sr);
+            node->Verb->SetTarget(ReverbRtTarget{});
+            node->Enabled.store(bus == 0); // the remote room's reverb runs only while a portal voice feeds it
+            if (InitNode(&s_ReverbVtable, &node->Base)) {
+                ma_node_attach_output_bus(&node->Base, 0, s_Limiter ? &s_Limiter->Base : ma_engine_get_endpoint(&s_Engine), 0);
+                s_Reverbs[bus] = node;
+                s_ReverbInit = true;
+            } else {
+                Log::Warn("Audio: could not create the reverb bus; voices play without a send.");
+                delete node->Verb;
+                delete node->Meter;
+                delete node;
+            }
+        }
+        UpdateReturnGains();
     }
+    if (!capture.empty()) AudioEngine::StartCapture(capture);
+    return true;
+}
+
+} // namespace
+
+void AudioEngine::Init() { InitImpl(false, 0); }
+
+void AudioEngine::InitOffline(int sampleRate) { InitImpl(true, sampleRate); }
+
+bool AudioEngine::IsOffline() { return s_Offline; }
+
+int AudioEngine::SampleRate() { return s_Initialized ? (int)ma_engine_get_sample_rate(&s_Engine) : 48000; }
+
+void AudioEngine::RenderOffline(float* out, int frames) {
+    if (!s_Initialized || frames <= 0) return;
+    static std::vector<float> scratch;
+    if (!out) {
+        if (scratch.size() < 2 * (size_t)frames) scratch.assign(2 * (size_t)frames, 0.0f);
+        out = scratch.data();
+    }
+    ma_uint64 read = 0;
+    ma_engine_read_pcm_frames(&s_Engine, out, (ma_uint64)frames, &read);
 }
 
 void AudioEngine::Shutdown() {
     if (!s_Initialized) return;
+    StopCapture();
     StopPreview();
     StopAll();
     s_Voices.clear();
@@ -218,13 +418,35 @@ void AudioEngine::Shutdown() {
     for (ReverbNode*& r : s_Reverbs)
         if (r) {
             ma_node_uninit(&r->Base, nullptr);
-            delete r->Fdn;
+            delete r->Verb;
+            delete r->Meter;
             delete r;
             r = nullptr;
         }
+    for (int b = 0; b < kBusCount; ++b)
+        if (s_BusMeters[b]) {
+            ma_node_uninit(&s_BusMeters[b]->Base, nullptr);
+            delete s_BusMeters[b]->Meter;
+            delete s_BusMeters[b];
+            s_BusMeters[b] = nullptr;
+            s_BusLoudness[b] = nullptr;
+        }
+    if (s_Limiter) {
+        ma_node_uninit(&s_Limiter->Base, nullptr);
+        delete s_Limiter->Lim;
+        delete s_Limiter->Master;
+        delete s_Limiter;
+        s_Limiter = nullptr;
+        s_LimiterDsp = nullptr;
+        s_MasterMeter = nullptr;
+    }
     s_ReverbInit = false;
+    s_IrCache.clear();
     ma_engine_uninit(&s_Engine);
+    s_Taps.store(nullptr);
+    s_TapStorage.reset();
     s_Initialized = false;
+    s_Offline = false;
 }
 
 void AudioEngine::Update() {
@@ -247,6 +469,10 @@ void AudioEngine::Update() {
     if (s_PreviewSound && (ma_sound_at_end(s_PreviewSound.get()) ||
                            !ma_sound_is_playing(s_PreviewSound.get()))) {
         StopPreview();
+    }
+    if (s_EncoderOpen && !s_TapsExternal) { // AUDIO_CAPTURE: keep the file fed
+        std::vector<float> a, b, c;
+        DrainTaps(a, b, c);
     }
 }
 
@@ -433,23 +659,116 @@ void AudioEngine::SetReverbEnabled(bool enabled, int bus) {
 }
 bool AudioEngine::ReverbEnabled(int bus) { return s_Reverbs[bus == 1 ? 1 : 0] && s_Reverbs[bus == 1 ? 1 : 0]->Enabled.load(); }
 
-void AudioEngine::SetReverb(const ReverbParams& p, int bus) {
+namespace {
+// Decodes an impulse response (any wav / flac / ogg / mp3) to the engine's rate and prepares it. Cached by path; null on failure.
+std::shared_ptr<const IrData> LoadIr(const std::string& path) {
+    const auto it = s_IrCache.find(path);
+    if (it != s_IrCache.end()) return it->second;
+    std::shared_ptr<const IrData> ir;
+    if (s_Initialized) {
+        ma_decoder_config cfg = ma_decoder_config_init(ma_format_f32, 2, ma_engine_get_sample_rate(&s_Engine));
+        ma_uint64 frames = 0;
+        void* pcm = nullptr;
+        if (ma_decode_file(path.c_str(), &cfg, &frames, &pcm) == MA_SUCCESS && pcm && frames > 0) {
+            const float* in = static_cast<const float*>(pcm);
+            std::vector<float> l((size_t)frames), r((size_t)frames);
+            for (size_t i = 0; i < (size_t)frames; ++i) {
+                l[i] = in[2 * i];
+                r[i] = in[2 * i + 1];
+            }
+            ma_free(pcm, nullptr);
+            ir = IrData::FromSamples(l.data(), r.data(), (int)frames, (int)ma_engine_get_sample_rate(&s_Engine));
+        } else {
+            Log::Warn("Audio: could not load the impulse response '" + path + "'.", LogContext::Asset(path));
+        }
+    }
+    s_IrCache[path] = ir; // (a failure is remembered too: one warning, not one per frame)
+    return ir;
+}
+
+// The convolver of `path` on a bus (registered on first use).
+int IrIndexFor(int bus, const std::string& path) {
+    ReverbNode* r = s_Reverbs[bus];
+    if (!r || path.empty()) return -1;
+    const auto it = r->IrIndex.find(path);
+    if (it != r->IrIndex.end()) return it->second;
+    const std::shared_ptr<const IrData> ir = LoadIr(path);
+    if (!ir) {
+        r->IrIndex[path] = -1;
+        return -1;
+    }
+    const int idx = r->Verb->AddIr(ir);
+    r->IrIndex[path] = idx;
+    if (idx >= 0) {
+        if ((int)r->IrPaths.size() <= idx) r->IrPaths.resize((size_t)idx + 1);
+        r->IrPaths[(size_t)idx] = path;
+    } else {
+        Log::Warn("Audio: too many impulse responses on one reverb bus; '" + path + "' is not used.");
+    }
+    return idx;
+}
+} // namespace
+
+bool AudioEngine::PreloadIr(const std::string& path) {
+    if (!s_Initialized || path.empty()) return false;
+    const bool ok = LoadIr(path) != nullptr;
+    if (ok) IrIndexFor(0, path);
+    return ok;
+}
+
+void AudioEngine::SetReverb(const ReverbSpec& spec, int bus) {
     const int b = bus == 1 ? 1 : 0;
-    s_ReverbTargets[b] = p;
-    if (!s_Reverbs[b]) return;
-    const float t[6] = {p.RoomSize, p.DecayTime, p.HfDamping, p.PreDelayMs, p.WetLevel, p.EarlyLateMix};
-    for (int i = 0; i < 6; ++i) s_Reverbs[b]->Target[i].store(t[i], std::memory_order_relaxed);
+    ReverbNode* r = s_Reverbs[b];
+    if (!r) return;
+    ReverbRtTarget t;
+    t.GlideSeconds = s_ReverbGlide;
+    float total = 0.0f;
+    for (int i = 0; i < spec.Count && i < 2; ++i) {
+        const ReverbLayerSpec& L = spec.Layers[i];
+        const int idx = IrIndexFor(b, L.Ir);
+        if (idx < 0 || L.Weight <= 0.0f) continue;
+        ReverbRtLayer& o = t.Layers[t.Count++];
+        o.Instance = idx;
+        o.Weight = L.Weight;
+        o.WetLin = std::pow(10.0f, L.WetDb / 20.0f);
+        o.PreDelayMs = L.PreDelayMs;
+        o.HfDampDb = L.HfDampDb;
+        o.LowCutHz = L.LowCutHz;
+        total += L.Weight;
+    }
+    for (int i = 0; i < t.Count; ++i) t.Layers[i].Weight /= total; // (the layers that could be loaded carry the whole weight)
+    r->Verb->SetTarget(t);
+}
+
+AudioEngine::ReverbInfo AudioEngine::GetReverbInfo(int bus) {
+    ReverbInfo out;
+    ReverbNode* r = s_Reverbs[bus == 1 ? 1 : 0];
+    if (!r) return out;
+    const ConvolutionReverb::Info info = r->Verb->GetInfo();
+    out.Instances = info.Instances;
+    for (int k = 0; k < info.Instances; ++k) {
+        ReverbInfo::Entry e;
+        if ((size_t)k < r->IrPaths.size()) e.Ir = r->IrPaths[(size_t)k];
+        e.Running = info.On[k];
+        e.Weight = info.Weight[k];
+        out.Entries.push_back(e);
+    }
+    return out;
 }
 
 void AudioEngine::SetReverbGlide(float seconds) {
+    s_ReverbGlide = std::max(seconds, 0.01f);
     for (ReverbNode* r : s_Reverbs)
-        if (r) r->Target[6].store(std::max(seconds, 0.001f), std::memory_order_relaxed);
+        if (r) {
+            ReverbRtTarget t = r->Verb->Target();
+            t.GlideSeconds = s_ReverbGlide;
+            r->Verb->SetTarget(t);
+        }
 }
 
 void AudioEngine::SetReverbReturn(float level) {
     s_ReverbReturn = std::max(level, 0.0f);
-    for (ReverbNode* r : s_Reverbs)
-        if (r) ma_node_set_output_bus_volume(&r->Base, 0, s_ReverbReturn * s_BusVolume[0]);
+    UpdateReturnGains();
 }
 
 AudioEngine::ReverbStats AudioEngine::GetReverbStats(int bus) {
@@ -460,6 +779,10 @@ AudioEngine::ReverbStats AudioEngine::GetReverbStats(int bus) {
     st.TotalMicros = r->TotalMicros.load();
     st.MaxMicros = r->MaxMicros.load();
     st.Frames = r->LastFrames.load();
+    st.WorkerJobs = r->Verb->WorkerJobs();
+    st.WorkerMicros = r->Verb->WorkerMicros();
+    st.LateBlocks = r->Verb->LateBlocks();
+    st.ActiveConvolvers = r->Verb->GetInfo().Active;
     return st;
 }
 
@@ -470,6 +793,126 @@ void AudioEngine::ResetReverbStats() {
             r->TotalMicros.store(0.0);
             r->MaxMicros.store(0.0);
         }
+}
+
+void AudioEngine::SetMasterLimiter(const LimiterSettings& s) {
+    if (!s_Limiter) return;
+    s_Limiter->Enabled.store(s.Enabled);
+    s_Limiter->CeilingDb.store(std::min(s.CeilingDb, 0.0f));
+    s_Limiter->LookaheadMs.store(std::clamp(s.LookaheadMs, 0.1f, 10.0f));
+    s_Limiter->ReleaseMs.store(std::max(s.ReleaseMs, 1.0f));
+}
+
+LimiterSettings AudioEngine::GetMasterLimiter() {
+    LimiterSettings s;
+    if (s_Limiter) {
+        s.Enabled = s_Limiter->Enabled.load();
+        s.CeilingDb = s_Limiter->CeilingDb.load();
+        s.LookaheadMs = s_Limiter->LookaheadMs.load();
+        s.ReleaseMs = s_Limiter->ReleaseMs.load();
+    }
+    return s;
+}
+
+float AudioEngine::TakeLimiterGainReductionDb() { return s_Limiter ? s_Limiter->LastGrDb.exchange(0.0f, std::memory_order_relaxed) : 0.0f; }
+
+AudioEngine::MeterReading AudioEngine::GetMeter(int id) {
+    MeterReading m;
+    const LoudnessMeter* lm = nullptr;
+    if (id == MeterMaster) lm = s_MasterMeter;
+    else if (id >= MeterBusFirst && id < MeterBusFirst + kBusCount) lm = s_BusLoudness[id - MeterBusFirst];
+    else if (id == MeterWet) {
+        const LoudnessMeter* a = s_Reverbs[0] ? s_Reverbs[0]->Meter : nullptr;
+        const LoudnessMeter* b = s_Reverbs[1] ? s_Reverbs[1]->Meter : nullptr;
+        lm = (b && (!a || b->MomentaryLufs() > a->MomentaryLufs())) ? b : a;
+    }
+    if (!lm) return m;
+    m.PeakDb = lm->PeakDb();
+    m.MomentaryLufs = lm->MomentaryLufs();
+    m.ShortTermLufs = lm->ShortTermLufs();
+    return m;
+}
+
+int AudioEngine::VoiceCount() {
+    int n = 0;
+    for (const Voice& v : s_Voices)
+        if (v.Sound) ++n;
+    return n;
+}
+
+void AudioEngine::EnableTaps(bool on) {
+    if (!s_Initialized) return;
+    s_TapsExternal = on;
+    if (on) {
+        if (!s_TapStorage) {
+            s_TapStorage = std::make_unique<TapRing>();
+            s_TapStorage->Master.assign(2 * (size_t)TapRing::kFrames, 0.0f);
+            s_TapStorage->Pre.assign(2 * (size_t)TapRing::kFrames, 0.0f);
+            s_TapStorage->Wet.assign(2 * (size_t)TapRing::kFrames, 0.0f);
+        }
+        s_Taps.store(s_TapStorage.get(), std::memory_order_release);
+    } else if (!s_EncoderOpen) {
+        s_Taps.store(nullptr, std::memory_order_release);
+    }
+}
+
+size_t AudioEngine::DrainTaps(std::vector<float>& master, std::vector<float>& pre, std::vector<float>& wet) {
+    TapRing* t = s_TapStorage.get();
+    if (!t || !s_Taps.load()) return 0;
+    const unsigned long long w = t->Written.load(std::memory_order_acquire);
+    if (w - t->Read > TapRing::kFrames) {
+        t->Lost += w - t->Read - TapRing::kFrames;
+        t->Read = w - TapRing::kFrames;
+    }
+    const size_t n = (size_t)(w - t->Read);
+    const size_t at0 = master.size();
+    master.resize(at0 + 2 * n);
+    pre.resize(at0 + 2 * n);
+    wet.resize(at0 + 2 * n);
+    for (size_t i = 0; i < n; ++i) {
+        const size_t slot = (size_t)((t->Read + i) & (TapRing::kFrames - 1)) * 2;
+        master[at0 + 2 * i] = t->Master[slot];
+        master[at0 + 2 * i + 1] = t->Master[slot + 1];
+        pre[at0 + 2 * i] = t->Pre[slot];
+        pre[at0 + 2 * i + 1] = t->Pre[slot + 1];
+        wet[at0 + 2 * i] = t->Wet[slot];
+        wet[at0 + 2 * i + 1] = t->Wet[slot + 1];
+        t->Wet[slot] = t->Wet[slot + 1] = 0.0f; // the returns add into zeros next lap
+    }
+    if (s_EncoderOpen && n > 0) {
+        ma_uint64 written = 0;
+        ma_encoder_write_pcm_frames(&s_Encoder, master.data() + at0, (ma_uint64)n, &written);
+    }
+    t->Read = w;
+    return n;
+}
+
+bool AudioEngine::StartCapture(const std::string& wavPath) {
+    if (!s_Initialized || s_EncoderOpen || wavPath.empty()) return false;
+    ma_encoder_config cfg = ma_encoder_config_init(ma_encoding_format_wav, ma_format_f32, 2, ma_engine_get_sample_rate(&s_Engine));
+    if (ma_encoder_init_file(wavPath.c_str(), &cfg, &s_Encoder) != MA_SUCCESS) {
+        Log::Warn("Audio: could not open the capture file '" + wavPath + "'.");
+        return false;
+    }
+    s_EncoderOpen = true;
+    Log::Info("Audio: capturing the master output to '" + wavPath + "'.");
+    if (!s_TapStorage) {
+        s_TapStorage = std::make_unique<TapRing>();
+        s_TapStorage->Master.assign(2 * (size_t)TapRing::kFrames, 0.0f);
+        s_TapStorage->Pre.assign(2 * (size_t)TapRing::kFrames, 0.0f);
+        s_TapStorage->Wet.assign(2 * (size_t)TapRing::kFrames, 0.0f);
+    }
+    s_Taps.store(s_TapStorage.get(), std::memory_order_release);
+    return true;
+}
+
+void AudioEngine::StopCapture() {
+    if (!s_EncoderOpen) return;
+    std::vector<float> a, b, c;
+    DrainTaps(a, b, c); // (the last frames)
+    ma_encoder_uninit(&s_Encoder);
+    s_EncoderOpen = false;
+    if (!s_TapsExternal) s_Taps.store(nullptr, std::memory_order_release);
 }
 
 void AudioEngine::Stop(SoundHandle handle) {
@@ -585,9 +1028,7 @@ void AudioEngine::SetBusVolume(Bus bus, float volume) {
     const int b = std::clamp((int)bus, 0, kBusCount - 1);
     s_BusVolume[b] = std::clamp(volume, 0.0f, 1.0f);
     if (s_BusesReady) ma_sound_group_set_volume(&s_Buses[b], s_BusVolume[b]);
-    if (b == 0)
-        for (ReverbNode* r : s_Reverbs)
-            if (r) ma_node_set_output_bus_volume(&r->Base, 0, s_ReverbReturn * s_BusVolume[0]); // the returns follow the SFX bus
+    if (b == 0) UpdateReturnGains(); // the returns follow the SFX bus
 }
 float AudioEngine::BusVolume(Bus bus) { return s_BusVolume[std::clamp((int)bus, 0, kBusCount - 1)]; }
 
