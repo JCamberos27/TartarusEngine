@@ -17,45 +17,85 @@ namespace PhysicsWorld { struct RagdollPart; struct RagdollParams; }
 
 // The muscles of a ragdoll (a dead body that is still powered, Euphoria-style "physical animation"): every joint keeps a slerp drive
 // toward a target pose, whose strength decays per region to a small residual (legs first, then spine, neck and arms) and whose target
-// goes from the pose the body died in to a procedural collapse (hips and knees fold, the spine curls, the arms brace or drop). The struck
-// joint is weak from the start (it takes the round), the legs start at a partial strength and hold it a beat (the body is carried by
-// the round and topples along the shot, not straight down). Once its parts slow, the body settles: damping, friction and joint friction
-// ramp up and, at rest, it is put to sleep. Pure physics and settings (no GL, no body): the tests drive it on a bare ragdoll.
+// goes from the pose the body died in to a procedural collapse (hips and knees fold, the spine curls, the arms brace or drop) and on to a
+// relaxed lying pose (legs extend, hips and arms relax: a body does not end frozen kneeling). The collapse is shaped by the way the body
+// falls: the leg on the side it falls toward buckles first, a back fall sits and folds the knees less, the arms reach toward the fall, the
+// hand of the struck side goes to a torso wound for a moment; a head kill has none of that, it goes limp. The struck joint is weak from the
+// start (it takes the round), the legs start at a partial strength and hold it a beat (the body is carried by the round and topples along
+// the shot, not straight down). Once its parts slow, the body settles: damping, friction and joint friction ramp up and, at rest, it is put
+// to sleep; a round into it wakes it and loosens it a moment (Poke). Pure physics and settings (no GL, no body): the tests drive it on a bare ragdoll.
 class NpcRagdollMotor {
 public:
     enum class Group { Legs, Spine, Neck, Arms };
+    // How the body is going down, in its own axes: the fall's direction, which way the round came, which arm reaches for the wound.
+    struct Fall {
+        float Fwd = 1.0f;          // the fall's horizontal direction along the body's forward: 1 = falls forward .. -1 = falls back
+        float Lat = 0.0f;          // ... and toward its left (+1) or right (-1)
+        float Bias = 0.0f;         // this body's own lean (-1..1, from its ragdoll id): which leg gives first when the fall is straight on
+        bool Head = false;         // a head kill: no reactions, limp at once
+        int WoundSide = 0;         // a torso hit: the arm that goes to the wound (+1 left, -1 right; 0 none) ...
+        bool WoundFront = true;    // ... and whether the round entered the front (else the back)
+        bool HaveNeutral = false;
+        glm::quat Neutral[16];     // each joint's rotation from the death pose back to its neutral (straight limb, upright spine); needs the joint frames
+        Fall();
+    };
     // Starts powering ragdoll `id`, built from `parts` (BuildParts: the joints' frames) in a body whose axes are `root`'s (x left,
     // y up, z forward). `fallDir`: the way the body is going to fall (the round's, or the body's momentum; world, need not be level,
-    // zero: forward); `hitPart`: the part the round struck (-1 none). `cfg` is copied.
-    void Begin(int id, const PhysicsWorld::RagdollPart* parts, const glm::mat4& root, const glm::vec3& fallDir, int hitPart, const RagdollSettingsComponent& cfg);
+    // zero: forward); `hitPart`: the part the round struck (-1 none); `point` / `shot`: where the round struck (world) and its direction
+    // (a zero shot: no wound reaction). `cfg` is copied.
+    void Begin(int id, const PhysicsWorld::RagdollPart* parts, const glm::mat4& root, const glm::vec3& fallDir, int hitPart, const RagdollSettingsComponent& cfg,
+               const glm::vec3& point = glm::vec3(0.0f), const glm::vec3& shot = glm::vec3(0.0f));
     // Once per frame (`dt` seconds): the drives' strengths and targets, the settle, the rest.
     void Update(float dt);
     // Something shoved the body: the settle and the sleep start over.
     void Wake();
+    // A round into the body at rest: it wakes and stays loose (no settling) for `looseTime` seconds, the muscles at their residual, so the
+    // part the round struck reacts, then it settles and sleeps again.
+    void Poke(float looseTime);
     float Time() const { return m_Time; }
     // The settle's progress, 0 (moving) .. 1 (settled values applied).
     float Settle() const { return m_Settle; }
     // The strongest joint's strength now (0..1).
     float Strength() const { return m_Strongest; }
     bool ForcedToRest() const { return m_Resting; }
+    // The body is about to rest kneeling, curled up or propped and its legs are pushing it toward the lying pose (see Rest Pelvis Max).
+    bool Pushing() const { return m_Push; }
+    const Fall& FallState() const { return m_Fall; }
 
     static Group GroupOf(int part);
+    static bool IsHeadHit(int hitPart);
+    // The leg's lead in this fall, -1..1: positive for the leg on the side the body falls toward (the far side from the shot), which
+    // buckles first; 0 for any part that is not a leg.
+    static float LegLead(const Fall& fall, int part);
     // The strength (0..1) of the joint that holds `part`, `t` seconds after death (hitPart: the struck part or -1): the group's decay
-    // curve from its start strength (the legs: Stagger Leg Strength, held for Stagger Time) to the residual, the struck joint weaker.
-    static float PartStrength(const RagdollSettingsComponent& cfg, int part, float t, int hitPart);
-    // The collapse pose's flexion of the joint of `part` in degrees (positive: the joint's own flexion direction), for a body falling
-    // forward (`forward` true) or back.
+    // curve from its start strength (the legs: Stagger Leg Strength, held for Stagger Time, shorter for the lead leg) to the residual, the
+    // struck joint weaker, and the lying tone as the body relaxes. A head kill lets the arms and neck go in Head Kill Limp of the time.
+    static float PartStrength(const RagdollSettingsComponent& cfg, int part, float t, int hitPart, const Fall* fall = nullptr);
+    // The collapse pose's flexion of the joint of `part` in degrees (positive: the joint's own flexion direction), for a body falling as
+    // `fall` (or straight forward / back).
+    static float CollapseFlexion(const RagdollSettingsComponent& cfg, int part, const Fall& fall);
     static float CollapseFlexion(const RagdollSettingsComponent& cfg, int part, bool forward);
-    // The drive target (the joint frame's rotation from the pose it was built in) of `part` at `t` seconds.
+    // The drive target (the joint frame's rotation from the pose it was built in) of `part` at `t` seconds: the collapse pose (the arms'
+    // brace, the wound grab layered on), going over to the lying pose.
+    static glm::quat TargetAt(const RagdollSettingsComponent& cfg, int part, float t, const Fall& fall);
     static glm::quat TargetAt(const RagdollSettingsComponent& cfg, int part, float t, bool forward);
+    // How far the target has gone from the collapse to the lying pose (0..1) and the strength that holds it (0..Relax Tone) at `t`.
+    static float RelaxAmount(const RagdollSettingsComponent& cfg, float t);
+    static float RelaxStrength(const RagdollSettingsComponent& cfg, float t);
+    // How much of the wound grab is on at `t` (0..Wound Grab Weight): up quick, held for Wound Grab Time, then let go.
+    static float WoundGrab(const RagdollSettingsComponent& cfg, const Fall& fall, float t);
 
 private:
+    bool Lying() const; // the pelvis and chest low, the knees and hips not folded past the Rest limits
     int m_Id = -1;
     int m_HitPart = -1;
-    bool m_Forward = true;
+    Fall m_Fall;
     bool m_Frames = false;            // anatomical joint frames: the collapse pose is available
     bool m_Resting = false;
+    bool m_Push = false;              // not lying once the pose should have formed: the legs push
+    bool m_Folded = false;            // not lying (yet): curled up, kneeling or propped
     float m_Time = 0.0f, m_Settle = 0.0f, m_Still = 0.0f, m_Strongest = 1.0f;
+    float m_LooseUntil = 0.0f;        // a round into the body: no settling until then
     float m_AppliedSettle = -1.0f;
     float m_Height0 = 1.0f;           // the pelvis's height at death
     std::shared_ptr<RagdollSettingsComponent> m_Cfg; // a copy (the director's may change under a body that is already down)
@@ -93,6 +133,10 @@ public:
     // A round (or anything) shoves part `part` by `impulse` (N s) at `point` (world): wakes it, and the pose is
     // rewritten from now on.
     void Shove(int part, const glm::vec3& impulse, const glm::vec3& point);
+    // A round into the corpse: part `part` is struck along `dir` at `point` (world) by a round of `damage`: a point impulse on that part
+    // (Corpse Shot Base + Per Damage, in m/s, capped by Corpse Shot Max Speed, times the part's mass), the body wakes and stays loose for
+    // Corpse Wake Time, then settles and sleeps again. Returns the speed given.
+    float HitCorpse(int part, const glm::vec3& dir, float damage, const glm::vec3& point, const RagdollSettingsComponent& cfg);
     // Part `part`'s centre (world), as last stepped.
     glm::vec3 PartPosition(int part) const;
     // The drive's strength now (the strongest region's), 1 at the moment of death to 0 once faded.
