@@ -15,15 +15,62 @@ class NpcBody;
 struct RagdollSettingsComponent;
 namespace PhysicsWorld { struct RagdollPart; struct RagdollParams; }
 
+// The muscles of a ragdoll (a dead body that is still powered, Euphoria-style "physical animation"): every joint keeps a slerp drive
+// toward a target pose, whose strength decays per region to a small residual (legs first, then spine, neck and arms) and whose target
+// goes from the pose the body died in to a procedural collapse (hips and knees fold, the spine curls, the arms brace or drop). The struck
+// joint is weak from the start (it takes the round), the legs start at a partial strength and hold it a beat (the body is carried by
+// the round and topples along the shot, not straight down). Once its parts slow, the body settles: damping, friction and joint friction
+// ramp up and, at rest, it is put to sleep. Pure physics and settings (no GL, no body): the tests drive it on a bare ragdoll.
+class NpcRagdollMotor {
+public:
+    enum class Group { Legs, Spine, Neck, Arms };
+    // Starts powering ragdoll `id`, built from `parts` (BuildParts: the joints' frames) in a body whose axes are `root`'s (x left,
+    // y up, z forward). `fallDir`: the way the body is going to fall (the round's, or the body's momentum; world, need not be level,
+    // zero: forward); `hitPart`: the part the round struck (-1 none). `cfg` is copied.
+    void Begin(int id, const PhysicsWorld::RagdollPart* parts, const glm::mat4& root, const glm::vec3& fallDir, int hitPart, const RagdollSettingsComponent& cfg);
+    // Once per frame (`dt` seconds): the drives' strengths and targets, the settle, the rest.
+    void Update(float dt);
+    // Something shoved the body: the settle and the sleep start over.
+    void Wake();
+    float Time() const { return m_Time; }
+    // The settle's progress, 0 (moving) .. 1 (settled values applied).
+    float Settle() const { return m_Settle; }
+    // The strongest joint's strength now (0..1).
+    float Strength() const { return m_Strongest; }
+    bool ForcedToRest() const { return m_Resting; }
+
+    static Group GroupOf(int part);
+    // The strength (0..1) of the joint that holds `part`, `t` seconds after death (hitPart: the struck part or -1): the group's decay
+    // curve from its start strength (the legs: Stagger Leg Strength, held for Stagger Time) to the residual, the struck joint weaker.
+    static float PartStrength(const RagdollSettingsComponent& cfg, int part, float t, int hitPart);
+    // The collapse pose's flexion of the joint of `part` in degrees (positive: the joint's own flexion direction), for a body falling
+    // forward (`forward` true) or back.
+    static float CollapseFlexion(const RagdollSettingsComponent& cfg, int part, bool forward);
+    // The drive target (the joint frame's rotation from the pose it was built in) of `part` at `t` seconds.
+    static glm::quat TargetAt(const RagdollSettingsComponent& cfg, int part, float t, bool forward);
+
+private:
+    int m_Id = -1;
+    int m_HitPart = -1;
+    bool m_Forward = true;
+    bool m_Frames = false;            // anatomical joint frames: the collapse pose is available
+    bool m_Resting = false;
+    float m_Time = 0.0f, m_Settle = 0.0f, m_Still = 0.0f, m_Strongest = 1.0f;
+    float m_AppliedSettle = -1.0f;
+    float m_Height0 = 1.0f;           // the pelvis's height at death
+    std::shared_ptr<RagdollSettingsComponent> m_Cfg; // a copy (the director's may change under a body that is already down)
+};
+
 // A soldier going down: the body's pose at the moment of death becomes sixteen jointed capsules
 // (pelvis, chest, head, upper and lower arms, thighs and calves, and the ragdoll's own neck, hands and feet) in the physics world, carrying the
 // body's velocity and the round's shove, and from then on the physics drives the pose - every outfit
 // piece's bones follow the capsule they belong to (bones in between keep their last animated shape).
 //
-// The death is a powered blend, not a cut: the joints start with slerp drives holding the pose the body died in
-// (so a soldier hit running keeps its stride for a beat and falls as it was), and the drives fade to nothing over
-// kDriveFade seconds (each region on its own clock: the Ragdoll Settings' fade scales), after which it is a rag. Every part
-// starts with its own bone's velocity from the last two animated poses, so limbs keep their swing.
+// The death is a powered blend, not a cut (NpcRagdollMotor): the joints keep slerp drives toward the pose the body died in, blending
+// into a procedural collapse, their strength decaying per region to a small residual, so a soldier hit running keeps its stride for a
+// beat and falls as it was, and goes down along the shot; then it settles and sleeps. (Powered Ragdoll off: the drives fade to nothing
+// over kDriveFade seconds, each region on its own clock, after which it is a rag.) Every part starts with its own bone's velocity from the
+// last two animated poses, so limbs keep their swing.
 class NpcRagdoll {
 public:
     ~NpcRagdoll();
@@ -80,6 +127,11 @@ public:
     static bool BuildParts(const std::function<bool(const char*, glm::vec3&)>& bone, const glm::mat4& root, const glm::vec3& velocity,
                            const RagdollSettingsComponent& cfg, PhysicsWorld::RagdollPart* parts, glm::mat4* partWorld = nullptr);
     static PhysicsWorld::RagdollParams BodyParams(const RagdollSettingsComponent& cfg);
+    // The death's shove and (with a `motor`: Powered Ragdoll) its muscles, on ragdoll `id` built from `parts` / `partWorld` (BuildParts) in
+    // a body of axes `root`: `impulse` (N s) at `point` (world) on part `hitPart` (-1: the nearest), the body going `velocity`. Returns
+    // the part struck. Start does this; it is exposed so the tests can kill a bare ragdoll.
+    static int Launch(int id, const PhysicsWorld::RagdollPart* parts, const glm::mat4* partWorld, const glm::mat4& root, const glm::vec3& velocity,
+                      const glm::vec3& impulse, const glm::vec3& point, int hitPart, const RagdollSettingsComponent& cfg, NpcRagdollMotor* motor);
     // Part `part`'s mass under `cfg` (null: the default).
     static float PartMass(const RagdollSettingsComponent* cfg, int part);
 
@@ -108,6 +160,8 @@ private:
     std::vector<PieceBones> m_Pieces;
     bool m_Settled = false;          // asleep, and the pieces already show the resting pose
     float m_Drive = 0.0f;
+    NpcRagdollMotor m_Motor;         // the powered body (cfg.PoweredRagdoll); else the legacy fade below
+    bool m_Powered = false;
     float m_Time = 0.0f;             // seconds since death
     float m_PartFade[kRagParts];        // per part: seconds to limp
     float m_DistalDamping = 0.0f;    // the hands' and feet's joint damping floor
