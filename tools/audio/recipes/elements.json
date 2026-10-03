@@ -1103,5 +1103,16 @@
     ]
    }
   }
+ },
+ "snap": {
+  "_doc": "Every mechanical action one-shot (not cloth, draw / holster or swings) goes through a transient designer before finishing: more attack, less ring, so mags, bolts, pumps and shells hit hard and short (user, 2026-10-03: 'louder, hit harder, snappier'). adsp.transient_shape, [-1, 1].",
+  "attack": 0.85,
+  "sustain": -0.4,
+  "skip": [
+   "cloth",
+   "draw",
+   "holster",
+   "melee_swing"
+  ]
  }
 }
