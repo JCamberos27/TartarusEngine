@@ -25,8 +25,9 @@ def src(path):
 
 
 def apply_eq(x, v):
-    from pedalboard import PeakFilter
-    plugs = [PeakFilter(cutoff_frequency_hz=hz, gain_db=g, q=q) for kind, hz, g, q in v.get("eq", [])]
+    from pedalboard import PeakFilter, LowShelfFilter, HighShelfFilter
+    kinds = {"peak": PeakFilter, "low_shelf": LowShelfFilter, "high_shelf": HighShelfFilter}
+    plugs = [kinds[kind](cutoff_frequency_hz=hz, gain_db=g, q=q) for kind, hz, g, q in v.get("eq", [])]
     if plugs:
         x = adsp.board(x, *plugs)
     if "hp" in v:
