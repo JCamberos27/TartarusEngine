@@ -5037,6 +5037,7 @@ int RunUnitTests() {
     RegisterAnimationTests(tests);
     RegisterEditorTests(tests);
     RegisterEngineTests(tests);
+    { void RegisterAudioTests(UnitTestSupport::TestList&); RegisterAudioTests(tests); } // UnitTests_Audio.cpp
     for (const auto& [name, fn] : tests) {
         g_CurrentTest = name;
         const int before = g_Failures;

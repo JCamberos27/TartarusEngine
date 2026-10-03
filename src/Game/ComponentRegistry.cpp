@@ -1888,6 +1888,87 @@ void RegisterEngineComponents() {
         Register<DroppedWeaponSettingsComponent>(std::move(m));
     }
     // ---- end lane R-gear ----
+    // ---- lane S ----
+    {
+        ReflectComponent m;
+        m.Name = "Weapon Audio"; m.Icon = ICON_FA_VOLUME_HIGH; m.Category = "Audio";
+        m.Tooltip = "One gun's report and gear sounds (add one per gun; Gun is its key prefix, e.g. ak or 870).\n"
+                    "A gun with none uses the built-in defaults. Animator events named snd.<gun>.<element> play the set of that key.";
+        using W = WeaponAudioComponent;
+        m.Fields = {
+            { "Gun", T::String, TARTARUS_REFLECT_FIELD(W, Gun), 0.0f, "Key prefix: events snd.<Gun>.<element>, files Audio/Weapons/<folder>/. ak = AKS74U, 870 = Remington870." },
+            { "Enabled", T::Bool, TARTARUS_REFLECT_FIELD(W, Enabled), 0.0f, "Off: this gun is silent." },
+            { "Volume", T::Float, TARTARUS_REFLECT_FIELD(W, Volume), 0.01f, "Master gain for everything this gun plays.", 0.0f, 2.0f },
+            { "Player Gain", T::Float, TARTARUS_REFLECT_FIELD(W, PlayerGain), 0.01f, "Gain of the report when it is the first-person player's (2D).", 0.0f, 2.0f },
+            { "Shot Pitch Min", T::Float, TARTARUS_REFLECT_FIELD(W, ShotPitchMin), 0.005f, "Random playback rate per shot (shared by the layers so they stay coherent).", 0.5f, 2.0f },
+            { "Shot Pitch Max", T::Float, TARTARUS_REFLECT_FIELD(W, ShotPitchMax), 0.005f, "Upper end of the per-shot playback rate.", 0.5f, 2.0f },
+            { "Volume Jitter dB", T::Float, TARTARUS_REFLECT_FIELD(W, VolumeJitterDb), 0.1f, "+- dB of random gain per layer per shot.", 0.0f, 12.0f },
+            { "Close Full Distance", T::Float, TARTARUS_REFLECT_FIELD(W, CloseFullDistance), 0.5f, "Metres inside which the close crack plays at full gain (3D shots).", 0.0f, 300.0f },
+            { "Close Zero Distance", T::Float, TARTARUS_REFLECT_FIELD(W, CloseZeroDistance), 0.5f, "Metres from which the close crack is gone and the distant report is full.", 0.0f, 600.0f },
+            { "Far Min Weight", T::Float, TARTARUS_REFLECT_FIELD(W, FarMinWeight), 0.01f, "Gain of the distant report up close.", 0.0f, 1.0f },
+            { "Far Max Weight", T::Float, TARTARUS_REFLECT_FIELD(W, FarMaxWeight), 0.01f, "Gain of the distant report past Close Zero Distance.", 0.0f, 1.0f },
+            { "Max Distance", T::Float, TARTARUS_REFLECT_FIELD(W, MaxDistance), 1.0f, "Metres the close, mech and sub layers carry.", 1.0f, 1000.0f },
+            { "Far Max Distance", T::Float, TARTARUS_REFLECT_FIELD(W, FarMaxDistance), 1.0f, "Metres the distant report carries.", 1.0f, 2000.0f },
+            { "Shot Max Voices", T::Int, TARTARUS_REFLECT_FIELD(W, ShotMaxVoices), 1.0f, "Close / mech / sub voices at once, per layer; past it the oldest is stolen.", 1.0f, 32.0f },
+            { "Tail Max Voices", T::Int, TARTARUS_REFLECT_FIELD(W, TailMaxVoices), 1.0f, "Full auto: tails ringing at once; past it the oldest fades out.", 1.0f, 16.0f },
+            { "Tail Fade Time", T::Float, TARTARUS_REFLECT_FIELD(W, TailFadeTime), 0.01f, "Seconds a stolen tail fades out over.", 0.0f, 2.0f },
+            { "Tail Min Interval", T::Float, TARTARUS_REFLECT_FIELD(W, TailMinInterval), 0.005f, "Seconds between tails (0 = one per shot, capped by Tail Max Voices).", 0.0f, 1.0f },
+            { "Tail Duck Per Voice", T::Float, TARTARUS_REFLECT_FIELD(W, TailDuckPerVoice), 0.01f, "Each tail still ringing quietens a new one by this share, so a long burst doesn't clip.", 0.0f, 1.0f },
+            { "Data File", T::String, TARTARUS_REFLECT_FIELD(W, DataFile), 0.0f, "Optional json of SoundSet overrides by element (files, volume, jitter, pitch, bus, range, voices). Relative to the project." },
+        };
+        const std::pair<const char*, const char*> groups[] = {
+            {"Shot Pitch Min", "Shot"}, {"Shot Pitch Max", "Shot"}, {"Volume Jitter dB", "Shot"},
+            {"Close Full Distance", "Distance Blend"}, {"Close Zero Distance", "Distance Blend"}, {"Far Min Weight", "Distance Blend"},
+            {"Far Max Weight", "Distance Blend"}, {"Max Distance", "Distance Blend"}, {"Far Max Distance", "Distance Blend"},
+            {"Tail Max Voices", "Full Auto"}, {"Tail Fade Time", "Full Auto"}, {"Tail Min Interval", "Full Auto"}, {"Tail Duck Per Voice", "Full Auto"}};
+        for (ReflectField& f : m.Fields)
+            for (const auto& [n, g] : groups)
+                if (std::strcmp(f.Name, n) == 0) f.Group = g;
+        Register<WeaponAudioComponent>(std::move(m));
+    }
+    {
+        ReflectComponent m;
+        m.Name = "Foley Audio"; m.Icon = ICON_FA_SHOE_PRINTS; m.Category = "Audio";
+        m.Tooltip = "Footsteps (on the view bob's stride), jumps, landings and the sprint cloth loop; soldiers' footsteps. The first one in the scene counts.";
+        using Fo = FoleyAudioComponent;
+        m.Fields = {
+            { "Enabled", T::Bool, TARTARUS_REFLECT_FIELD(Fo, Enabled), 0.0f, "Off: no foley." },
+            { "Volume", T::Float, TARTARUS_REFLECT_FIELD(Fo, Volume), 0.01f, "Master gain for all foley.", 0.0f, 2.0f },
+            { "Walk Volume", T::Float, TARTARUS_REFLECT_FIELD(Fo, WalkVolume), 0.01f, "Footstep gain walking.", 0.0f, 2.0f },
+            { "Run Volume", T::Float, TARTARUS_REFLECT_FIELD(Fo, RunVolume), 0.01f, "Footstep gain running.", 0.0f, 2.0f },
+            { "Crouch Volume", T::Float, TARTARUS_REFLECT_FIELD(Fo, CrouchVolume), 0.01f, "Footstep gain crouched.", 0.0f, 2.0f },
+            { "Volume Jitter dB", T::Float, TARTARUS_REFLECT_FIELD(Fo, VolumeJitterDb), 0.1f, "+- dB of random gain per step.", 0.0f, 12.0f },
+            { "Pitch Min", T::Float, TARTARUS_REFLECT_FIELD(Fo, PitchMin), 0.005f, "Random playback rate per step.", 0.5f, 2.0f },
+            { "Pitch Max", T::Float, TARTARUS_REFLECT_FIELD(Fo, PitchMax), 0.005f, "Upper end of the per-step playback rate.", 0.5f, 2.0f },
+            { "Step Stride Scale", T::Float, TARTARUS_REFLECT_FIELD(Fo, StepStrideScale), 0.01f, "Footfall spacing against the view bob's stride (two footfalls per stride): above 1 = slower steps.", 0.25f, 4.0f },
+            { "Crouch Stride Scale", T::Float, TARTARUS_REFLECT_FIELD(Fo, CrouchStrideScale), 0.01f, "Footfall spacing when crouched, on top of Step Stride Scale.", 0.25f, 4.0f },
+            { "Min Step Speed", T::Float, TARTARUS_REFLECT_FIELD(Fo, MinStepSpeed), 0.05f, "m/s of planar speed below which there are no footsteps.", 0.0f, 10.0f },
+            { "Run Speed", T::Float, TARTARUS_REFLECT_FIELD(Fo, RunSpeed), 0.05f, "m/s from which the run set plays; the cloth loop is full here.", 0.5f, 20.0f },
+            { "Jump Volume", T::Float, TARTARUS_REFLECT_FIELD(Fo, JumpVolume), 0.01f, "Gain of the jump.", 0.0f, 2.0f },
+            { "Land Volume", T::Float, TARTARUS_REFLECT_FIELD(Fo, LandVolume), 0.01f, "Gain of a landing at Land Full Speed.", 0.0f, 2.0f },
+            { "Land Min Speed", T::Float, TARTARUS_REFLECT_FIELD(Fo, LandMinSpeed), 0.05f, "m/s of fall below which a landing is silent.", 0.0f, 30.0f },
+            { "Land Full Speed", T::Float, TARTARUS_REFLECT_FIELD(Fo, LandFullSpeed), 0.05f, "m/s of fall at which a landing is at Land Volume.", 0.1f, 40.0f },
+            { "Cloth Loop Volume", T::Float, TARTARUS_REFLECT_FIELD(Fo, ClothLoopVolume), 0.01f, "Gain of the sprint cloth / gear loop at Run Speed.", 0.0f, 2.0f },
+            { "Cloth Loop Min Speed", T::Float, TARTARUS_REFLECT_FIELD(Fo, ClothLoopMinSpeed), 0.05f, "m/s below which the loop is silent.", 0.0f, 20.0f },
+            { "NPC Step Volume", T::Float, TARTARUS_REFLECT_FIELD(Fo, NpcStepVolume), 0.01f, "Gain of soldiers' footsteps.", 0.0f, 2.0f },
+            { "NPC Step Min Distance", T::Float, TARTARUS_REFLECT_FIELD(Fo, NpcStepMinDistance), 0.1f, "Metres inside which a soldier's step is full volume.", 0.1f, 50.0f },
+            { "NPC Step Max Distance", T::Float, TARTARUS_REFLECT_FIELD(Fo, NpcStepMaxDistance), 0.5f, "Metres a soldier's step carries.", 1.0f, 200.0f },
+            { "Default Surface", T::String, TARTARUS_REFLECT_FIELD(Fo, DefaultSurface), 0.0f, "Surface when the ground matches nothing in the table." },
+            { "Surface Table", T::String, TARTARUS_REFLECT_FIELD(Fo, SurfaceTable), 0.0f, "surface=word,word;surface=word. The first surface with a word in the ground's physics material, tag or name. Surfaces are foley categories (Audio/Foley/<surface>/)." },
+        };
+        const std::pair<const char*, const char*> groups[] = {
+            {"Walk Volume", "Footsteps"}, {"Run Volume", "Footsteps"}, {"Crouch Volume", "Footsteps"}, {"Volume Jitter dB", "Footsteps"},
+            {"Pitch Min", "Footsteps"}, {"Pitch Max", "Footsteps"}, {"Step Stride Scale", "Footsteps"}, {"Crouch Stride Scale", "Footsteps"},
+            {"Min Step Speed", "Footsteps"}, {"Run Speed", "Footsteps"},
+            {"Jump Volume", "Jump / Land"}, {"Land Volume", "Jump / Land"}, {"Land Min Speed", "Jump / Land"}, {"Land Full Speed", "Jump / Land"},
+            {"Cloth Loop Volume", "Cloth Loop"}, {"Cloth Loop Min Speed", "Cloth Loop"},
+            {"NPC Step Volume", "NPC Footsteps"}, {"NPC Step Min Distance", "NPC Footsteps"}, {"NPC Step Max Distance", "NPC Footsteps"}};
+        for (ReflectField& f : m.Fields)
+            for (const auto& [n, g] : groups)
+                if (std::strcmp(f.Name, n) == 0) f.Group = g;
+        Register<FoleyAudioComponent>(std::move(m));
+    }
+    // ---- end lane S ----
 
     // #132 - String fields that hold asset paths: tracked by GUID so renaming or moving the file
     // outside the editor keeps the reference (see ReflectField::AssetPath).

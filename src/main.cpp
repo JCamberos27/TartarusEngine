@@ -71,6 +71,7 @@
 #include "ShellCasings.h"
 #include "AI/NpcDirector.h"     // the enemy squad
 #include "Combat/CombatFx.h"
+#include "Audio/FoleyAudio.h"
 #include "AI/NpcTest.h"         // --npc-test
 #include "Combat/PlayerVitals.h" // the player's health, death and respawn
 #include "PlayerHudOverlay.h"
@@ -1569,6 +1570,24 @@ int main(int argc, char** argv) {
                         combatFx.SetAudioLog((std::filesystem::path(npcTest->RecordDir()) / "audio.txt").string());
                     }
                 }
+                // Play-mode audio (the guns' report layers, gear sounds, foley) and the muzzle effects don't wait for a squad:
+                // a scene with no NPC Spawns, --weapon-test and --stock-probe have the player's gun too.
+                if (!combatFx.Active()) {
+                    combatFx.Start(world);
+                    if (weaponTest) {
+                        // WEAPON_TEST_AUDIO_LOG=<file>, or NPC_TEST_RECORD=<dir> (-> <dir>/audio.txt): every weapon / foley voice, timed.
+#pragma warning(suppress : 4996)
+                        const char* logFile = std::getenv("WEAPON_TEST_AUDIO_LOG");
+#pragma warning(suppress : 4996)
+                        const char* recordDir = std::getenv("NPC_TEST_RECORD");
+                        if (logFile && *logFile) combatFx.SetAudioLog(logFile);
+                        else if (recordDir && *recordDir) {
+                            std::error_code ec;
+                            std::filesystem::create_directories(recordDir, ec);
+                            combatFx.SetAudioLog((std::filesystem::path(recordDir) / "audio.txt").string());
+                        }
+                    }
+                }
             } else if ((playCameraEntity = FindActiveSceneCamera(world)) != entt::null) {
                 playerVitals.Reset({});
                 playUsesPlayer = false;
@@ -2779,8 +2798,7 @@ int main(int argc, char** argv) {
                     }
                     // Every pellet's line: the report, and rounds cracking past soldiers' heads (suppression).
                     for (const FirstPersonPresentation::ShotTrace& t : firstPersonPresentation.TakeShotTraces()) {
-                        if (!npcDirector.Active()) continue;
-                        npcDirector.OnPlayerShotLine(t.Origin, t.End);
+                        if (npcDirector.Active()) npcDirector.OnPlayerShotLine(t.Origin, t.End);
                         if (t.FirstPellet)
                             combatFx.Shot(world, firstPersonPresentation.Set().Gameplay.Pellets > 1 ? CombatFx::Gun::Shotgun : CombatFx::Gun::Rifle,
                                           t.Origin, t.End, true, false);
@@ -2811,9 +2829,27 @@ int main(int argc, char** argv) {
                         playerVitals.ApplyDamage(e.Amount, e.SourcePos);
                         if (playerVitals.Health() < before) combatFx.Play(CombatFx::Cue::FleshHit, e.Point, true, 0.8f);
                     }
-                    combatFx.SetListener(player.Cam.Position, player.Cam.Front());
-                    combatFx.Update(world, gameDt);
                     if (npcTest) npcTest->After(world, npcDirector, playerVitals, player);
+                }
+                combatFx.SetListener(player.Cam.Position, player.Cam.Front());
+                combatFx.Update(world, gameDt); // (a no-op until Start: runs with or without a squad)
+                if (playUsesPlayer && combatFx.Active()) {
+                    FoleyPlayerInput fi;
+                    fi.Velocity = player.Velocity;
+                    fi.Feet = player.Cam.Position - glm::vec3(0.0f, player.EyeHeight, 0.0f);
+                    if (float foot[3], r = 0.3f, cyl = 0.6f; PhysicsWorld::HasCharacter()) {
+                        PhysicsWorld::GetCharacterCapsule(foot, &r, &cyl);
+                        fi.Feet = glm::vec3(foot[0], foot[1], foot[2]);
+                    }
+                    fi.Grounded = player.Grounded;
+                    fi.Sprinting = weaponTest ? weaponTest->Sprint() : (gameHasInput && InputMap::GetButton("Sprint"));
+                    fi.Crouched = player.Crouched;
+                    fi.Jumped = player.Jumped;
+                    if (firstPersonPresentation.IsActive()) {
+                        fi.WalkStride = firstPersonPresentation.Set().Procedural.Bob.WalkStride;
+                        fi.SprintStride = firstPersonPresentation.Set().Procedural.Bob.SprintStride;
+                    }
+                    FoleyAudio::Get().UpdatePlayer(world, gameDt, fi);
                 }
                 if (playUsesPlayer) {
                     playerVitals.Tick(gameDt);

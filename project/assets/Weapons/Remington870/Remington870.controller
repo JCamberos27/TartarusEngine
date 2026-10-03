@@ -145,6 +145,12 @@
           "speed": 1.0
         },
         {
+          "events": [
+            {
+              "name": "snd.870.regrip",
+              "time": 0.3
+            }
+          ],
           "loop": false,
           "motions": {
             "arms": {
@@ -197,6 +203,16 @@
           ]
         },
         {
+          "events": [
+            {
+              "name": "snd.870.inspect_move",
+              "time": 0.2
+            },
+            {
+              "name": "snd.870.inspect_rattle",
+              "time": 0.6
+            }
+          ],
           "loop": false,
           "motions": {
             "arms": {
@@ -220,6 +236,12 @@
           ]
         },
         {
+          "events": [
+            {
+              "name": "snd.870.shell_check",
+              "time": 0.4
+            }
+          ],
           "loop": false,
           "motions": {
             "arms": {
@@ -244,6 +266,12 @@
           ]
         },
         {
+          "events": [
+            {
+              "name": "snd.870.melee_swing",
+              "time": 0.25
+            }
+          ],
           "loop": false,
           "motions": {
             "arms": {
@@ -267,6 +295,12 @@
           ]
         },
         {
+          "events": [
+            {
+              "name": "snd.870.draw",
+              "time": 0.05
+            }
+          ],
           "loop": false,
           "motions": {
             "arms": {
@@ -290,6 +324,12 @@
           ]
         },
         {
+          "events": [
+            {
+              "name": "snd.870.holster",
+              "time": 0.1
+            }
+          ],
           "loop": false,
           "motions": {
             "arms": {
@@ -338,8 +378,16 @@
         {
           "events": [
             {
+              "name": "snd.870.pump_back",
+              "time": 0.1
+            },
+            {
               "name": "Eject",
               "time": 0.2
+            },
+            {
+              "name": "snd.870.pump_forward",
+              "time": 0.55
             }
           ],
           "loop": false,
@@ -366,6 +414,12 @@
           ]
         },
         {
+          "events": [
+            {
+              "name": "snd.870.shell_grab",
+              "time": 0.3
+            }
+          ],
           "loop": false,
           "motions": {
             "arms": {
@@ -392,7 +446,19 @@
         {
           "events": [
             {
+              "name": "snd.870.pump_back",
+              "time": 0.15
+            },
+            {
+              "name": "snd.870.shell_grab",
+              "time": 0.45
+            },
+            {
               "name": "LoadRound",
+              "time": 0.74
+            },
+            {
+              "name": "snd.870.shell_insert",
               "time": 0.74
             }
           ],
@@ -422,7 +488,15 @@
         {
           "events": [
             {
+              "name": "snd.870.shell_grab",
+              "time": 0.15
+            },
+            {
               "name": "LoadRound",
+              "time": 0.6
+            },
+            {
+              "name": "snd.870.shell_insert",
               "time": 0.6
             }
           ],
@@ -452,7 +526,15 @@
         {
           "events": [
             {
+              "name": "snd.870.shell_grab",
+              "time": 0.12
+            },
+            {
               "name": "LoadRound",
+              "time": 0.43
+            },
+            {
+              "name": "snd.870.shell_insert",
               "time": 0.43
             }
           ],
@@ -480,6 +562,12 @@
           ]
         },
         {
+          "events": [
+            {
+              "name": "snd.870.pump_forward",
+              "time": 0.35
+            }
+          ],
           "loop": false,
           "motions": {
             "arms": {
