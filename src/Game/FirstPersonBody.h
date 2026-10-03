@@ -186,6 +186,8 @@ private:
     float m_StepOffset = 0.0f;     // metres the body is off the capsule's height: a stair's pop, eased out
     float m_LastCapsuleY = 0.0f;
     bool m_HaveCapsule = false, m_LastGrounded = false;
+    glm::vec3 m_GroundVelocity{0.0f};           // the capsule's horizontal velocity (foot slide correction)
+    IK::FootSlide m_Slide;                      // foot pinning + stride warping (off by default)
     bool m_FootPlanted[2] = {false, false};     // foot lock: pinned in the world while planted
     glm::vec3 m_FootLock[2] = {glm::vec3(0.0f), glm::vec3(0.0f)};
     float m_FootLockWeight[2] = {0.0f, 0.0f};
