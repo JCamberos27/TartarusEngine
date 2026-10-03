@@ -58,6 +58,7 @@ int CoverSystem::Build(const NavMesh& nav, const CoverTuning& tune) {
             const glm::vec3 p = e.A + (e.B - e.A) * t;
             CoverProbe probe;
             probe.BlockedKnee = SolidRay(p + glm::vec3(0, tune.Knee, 0), e.Out, tune.Reach);
+            if (!probe.BlockedKnee) continue; // ClassifyCover rejects it: the head and peek rays would be wasted
             probe.BlockedHead = SolidRay(p + glm::vec3(0, tune.Head, 0), e.Out, tune.Reach);
             // Facing the cover (Out), its left is Out rotated +90 about up: (Out.z, 0, -Out.x) is the right.
             const glm::vec3 right(-e.Out.z, 0.0f, e.Out.x);
@@ -82,13 +83,23 @@ int CoverSystem::Build(const NavMesh& nav, const CoverTuning& tune) {
             c.PeekPos[0] = peekPos[0];
             c.PeekPos[1] = peekPos[1];
             // Two samples this close facing the same way are one place to stand.
+            // (The grid is filled as points are kept, so only the 3x3 cells round this one can hold a neighbour.)
             bool dup = false;
-            for (const CoverPoint& o : m_Points)
-                if (glm::length(o.Pos - c.Pos) < 0.7f && glm::dot(o.Normal, c.Normal) > 0.7f) { dup = true; break; }
-            if (!dup) m_Points.push_back(c);
+            const long long cx = (long long)std::floor(c.Pos.x / kCell), cz = (long long)std::floor(c.Pos.z / kCell);
+            for (long long x = cx - 1; x <= cx + 1 && !dup; ++x)
+                for (long long z = cz - 1; z <= cz + 1 && !dup; ++z) {
+                    const auto it = m_Grid.find((x << 32) ^ (z & 0xffffffffll));
+                    if (it == m_Grid.end()) continue;
+                    for (int k : it->second) {
+                        const CoverPoint& o = m_Points[(size_t)k];
+                        if (glm::length(o.Pos - c.Pos) < 0.7f && glm::dot(o.Normal, c.Normal) > 0.7f) { dup = true; break; }
+                    }
+                }
+            if (dup) continue;
+            m_Points.push_back(c);
+            m_Grid[Cell(c.Pos.x, c.Pos.z)].push_back((int)m_Points.size() - 1);
         }
     }
-    for (int i = 0; i < (int)m_Points.size(); ++i) m_Grid[Cell(m_Points[(size_t)i].Pos.x, m_Points[(size_t)i].Pos.z)].push_back(i);
     return (int)m_Points.size();
 }
 

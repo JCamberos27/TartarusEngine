@@ -212,3 +212,7 @@ Hitbox. `--npc-test` prints them at the end.
 | sandbox | The Sandbox squad spawns, uses the radio and dies to Kill All. |
 
 `--weapon-test` and `--stock-probe` run without the enemy squad.
+
+## First Play frame
+
+On Play the director builds its navigation mesh (from `Library/NavCache` after the first Play), the cover points and the squad on the first frame: Sandbox 96 ms down to 27 ms. The open-edge merge in `NavMesh::BoundaryEdges` restarted a cubic search after every merge (~70 ms of it); it now keeps per-edge candidate lists found through a hash of edge starts and gives the same edges (6700 edges: 15 ms, `NavBoundaryEdgesMergeQuickly`). Cover probing skips the head and peek rays when the knee ray finds nothing (they could not change the result) and de-duplicates through its grid. What is left is the four soldiers and two spare bodies (~20 ms, first use of the rifle and shotgun rigs). Respawns and deaths show nothing above 2.3 ms in `--npc-test deaths`.
