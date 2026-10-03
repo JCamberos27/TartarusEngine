@@ -79,7 +79,7 @@ def build(gun, cfg, sources):
     for cname, c in cfg["classes"].items():
         for n, v in enumerate(c["variants"], 1):
             y, srcs = render(v, c, sources)
-            y = abuild.finish(y, "tail", max_gr_db=7.0, target=c["target_lufs_m"])
+            y = abuild.finish(y, "tail", target=c["target_lufs_m"])
             rel = f"{cfg['dir']}/fire_tail_{cname}_{n}.wav"
             note = " + ".join(f"{os.path.basename(s['file'])[:40]} {s['start_s']:.2f}-{s['end_s']:.2f}s" for s in srcs)
             e = abuild.emit(rel, y, f"snd.{gun}.fire_tail_{cname}", "tail",

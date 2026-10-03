@@ -106,9 +106,9 @@ def main():
             if not srcs:
                 errs.append(f"{tag}: no `sources` (tails must be built from real recordings and say which)")
             else:
-                for s in srcs:
-                    if not (s.get("file") and isinstance(s.get("start_s"), (int, float)) and isinstance(s.get("end_s"), (int, float))
-                            and s["end_s"] > s["start_s"]):
+                for s in srcs:                           # (build_tails writes start_s / end_s, adsp.take_uses start / end)
+                    a, b = s.get("start_s", s.get("start")), s.get("end_s", s.get("end"))
+                    if not (s.get("file") and isinstance(a, (int, float)) and isinstance(b, (int, float)) and b > a):
                         errs.append(f"{tag}: malformed source {s}")
         if e.get("space") and x.shape[1] == 2:        # environment tails (build_tails.py): must fold to mono without a hole
             l, r = x[:, 0].astype(np.float64), x[:, 1].astype(np.float64)

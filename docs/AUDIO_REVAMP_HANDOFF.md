@@ -78,6 +78,35 @@ go through motion sounds, steps, the shotgun and everything")
 * `adsp.secondary_event / trim_secondary` (cut a slice before the next event of the source bleeding in) and `adsp.expand_floor`
   (downward expander 50 dB under the peak, up to 24 dB) — used by `abuild.finish`.
 
+### Status 2026-10-03 (second session) — B1–B4 done, B5 partly; uncommitted until the user asks
+* Every builder rebuilt with the new finish policy (tails now use the default 3 dB limiter budget, was 7). `check_audio.py` PASS
+  (warn: rifle tile casings 5 variants — the 7.62 take has only 5 drops). `--audio-test` 99 checks / 0 failures, firefight
+  −19.0 LUFS integrated, peak −4.1 dBFS. No engine code changed (no unit-test run needed). Editor launched for listening.
+* `analyze_audio.py`: duplicate detector rewritten (2 ms envelope, best alignment ±10 ms, and spectral *character* = log
+  1/6-octave spectrum minus the key's mean; pair = env > 0.95 and character > 0.8; keys of 2 files compare raw spectra, stricter).
+  The old one called every footstep of one floor a duplicate. "noise" split into "noise before onset" (often a natural pre-roll:
+  pump strokes, cloth) and "ends at" (a cut tail or the next event; expected on reload elements, which end where the next element
+  starts). Low crest on whooshes / thuds / body falls is natural, not limiting (finish now limits ≤ 1.5 dB there).
+* Fixed: 870 close 5 (Herrington 2 low body −4 dB instead of Mk14 — sub back in line); 870 mech 2 was the same recording as mech 1
+  (SRM-12 ShotBoltOnly / Timed / ShotWithBolt are one take) → now the bolt-back event (ShotBoltOnly t 0.70, 0.13 s); 870
+  shell_load_chamber 4 now holds both the click and the chamber slam (dur 0.30). Casings: a key never cuts one drop twice
+  (long + short of one drop were duplicates), rifle metal proxy now uses the 9 mm drops concrete leaves (was the tile take
+  re-EQ'd = duplicate of tile), carpet low-passed 6 kHz, casings ship **mono** (`point_source`: louder channel of a decorrelated
+  spaced-pair take, else mid fold — stereo casings were phasey, corr down to −0.4). `check_audio.py` accepts `start/end` and
+  `start_s/end_s` sources on tails.
+* B4 done: AK +8 takes from AK-pattern / rocking-mag rifles (template matching `scratchpad match.py`, kept in the session only):
+  mag_release + SRM-12 EmptyReload 0.524; mag_out + SRM-12 TacticalReload 0.731 (hp 300), SRM-12 MagCheck 0.941; mag_in + SRM-12
+  EmptyReload 1.907, Mk14 MagCheck 3.027, SRM-12 MagCheck 2.58; bolt_back + SRM-12 EmptyReload 3.12; bolt_release + SRM-12
+  EmptyReload 4.222. Sub outliers high-passed (mag_release 1, mag_tap 4, bolt_back 2, bolt_release 2, mag_in 4).
+  Counts: release 5, out 6, in 7, tap 4, bolt back 4, bolt release 4.
+* Footsteps: `diverse_steps` now uses `analyze_audio.similarity` for its farthest-point distance. Duplicates left (new metric):
+  carpet run 3 pairs, concrete walk / glass walk / water run 1 each — real strides of one take; acceptable.
+* Left as is (source-limited — only 2–4 files per Sonniss pack are on disk; the full free GDC bundles would fix them): casing
+  dirt / shell metal / shell concrete pitch variants of one drop (near-dups), impact flesh 6~7, carpet casings with a bright ping
+  (carpet 3), hitmarker variants differ in mid (+12–16 dB on the SAIGA-layer ones). **Ask the user** whether to fetch more of the
+  free Sonniss GDC packs (impacts, casings) before polishing those further.
+* Next: the user's ear notes; then docs/AUDIO.md (finish policy, variant counts, mono casings, analyzer) and memory.
+
 ### B1. Finishing policy (code done, NOT yet rebuilt for all builders)
 * `abuild.finish`: limiter budget per layer `GR_BUDGET_DB` (close 4, sub 1, tail/far 3, ambience/loop 2, everything else 1.5 dB).
   Old behaviour limited up to 7–10 dB just to hit a loudness target the mix then turned down again → squashed punch (melee hits crest

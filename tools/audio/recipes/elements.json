@@ -8,7 +8,8 @@
      {
       "src": "AK105/Actions/S_AK105_Reload_Tactical.WAV",
       "t": 0.44,
-      "dur": 0.04
+      "dur": 0.04,
+      "hp": 300
      },
      {
       "src": "AK105/Actions/S_AK105_Reload_Empty.WAV",
@@ -25,6 +26,11 @@
       "t": 0.462,
       "dur": 0.04,
       "pitch": 1.5
+     },
+     {
+      "src": "SRM-12/Actions/S_SRM-12_EmptyReload.wav",
+      "t": 0.524,
+      "dur": 0.05
      }
     ],
     "mag_out": [
@@ -48,6 +54,17 @@
       "t": 0.872,
       "dur": 0.12,
       "pitch": -1.0
+     },
+     {
+      "src": "SRM-12/Actions/S_SRM-12_TacticalReload.wav",
+      "t": 0.731,
+      "dur": 0.12,
+      "hp": 300
+     },
+     {
+      "src": "SRM-12/Actions/S_SRM-12_MagCheck.wav",
+      "t": 0.941,
+      "dur": 0.09
      }
     ],
     "mag_in": [
@@ -72,7 +89,23 @@
       "t": 1.93,
       "lead_ms": 36,
       "dur": 0.115,
-      "pitch": -1.5
+      "pitch": -1.5,
+      "hp": 150
+     },
+     {
+      "src": "SRM-12/Actions/S_SRM-12_EmptyReload.wav",
+      "t": 1.907,
+      "dur": 0.16
+     },
+     {
+      "src": "Mk14EBR/S_Mk14EBR_MagCheck.WAV",
+      "t": 3.027,
+      "dur": 0.16
+     },
+     {
+      "src": "SRM-12/Actions/S_SRM-12_MagCheck.wav",
+      "t": 2.58,
+      "dur": 0.16
      }
     ],
     "mag_tap": [
@@ -94,7 +127,8 @@
      {
       "src": "AK105/Actions/S_AK105_MagCheck.WAV",
       "t": 2.748,
-      "dur": 0.105
+      "dur": 0.105,
+      "hp": 250
      }
     ],
     "bolt_back": [
@@ -109,7 +143,8 @@
       "t": 2.604,
       "lead_ms": 36,
       "dur": 0.2,
-      "pitch": -0.8
+      "pitch": -0.8,
+      "hp": 150
      },
      {
       "src": "Mk14EBR/S_Mk14EBR_Reload_Empty.WAV",
@@ -117,6 +152,11 @@
       "lead_ms": 82,
       "dur": 0.2,
       "pitch": 0.8
+     },
+     {
+      "src": "SRM-12/Actions/S_SRM-12_EmptyReload.wav",
+      "t": 3.12,
+      "dur": 0.2
      }
     ],
     "bolt_release": [
@@ -131,7 +171,8 @@
       "t": 3.078,
       "lead_ms": 34,
       "dur": 0.3,
-      "pitch": -0.5
+      "pitch": -0.5,
+      "hp": 150
      },
      {
       "src": "Mk14EBR/S_Mk14EBR_Reload_Empty.WAV",
@@ -139,6 +180,11 @@
       "lead_ms": 42,
       "dur": 0.2,
       "pitch": 0.5
+     },
+     {
+      "src": "SRM-12/Actions/S_SRM-12_EmptyReload.wav",
+      "t": 4.222,
+      "dur": 0.14
      }
     ],
     "handle": [
@@ -765,7 +811,7 @@
       "src": "Herrington_11-87/Actions/S_Herrington_11-87_Reload_Start_Empty.wav",
       "t": 1.796,
       "lead_ms": 34,
-      "dur": 0.12,
+      "dur": 0.3,
       "eq": [
        [
         "peak",
