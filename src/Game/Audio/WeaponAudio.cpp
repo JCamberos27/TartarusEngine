@@ -984,14 +984,14 @@ void WeaponAudio::Start(World& world, const std::string& projectRoot) {
     m_SpaceLines = 0;
     m_Keyed.clear();
     m_Bus = ReverbBusComponent{};
-    for (const entt::entity e : world.Registry.view<ReverbBusComponent>()) {
+    if (const auto first = world.Registry.view<ReverbBusComponent>(); first.begin() != first.end()) { // the first one counts
+        const entt::entity e = *first.begin();
         m_Bus = world.Registry.get<ReverbBusComponent>(e);
-        break;
     }
     m_Mix = AudioMixComponent{};
-    for (const entt::entity e : world.Registry.view<AudioMixComponent>()) {
+    if (const auto first = world.Registry.view<AudioMixComponent>(); first.begin() != first.end()) { // the first one counts
+        const entt::entity e = *first.begin();
         m_Mix = world.Registry.get<AudioMixComponent>(e);
-        break;
     }
     m_Ducker.Reset();
     m_Player.SetDucker(&m_Ducker);

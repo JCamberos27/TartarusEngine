@@ -43,8 +43,8 @@ std::string ShortName(const std::string& path) {
 void EditorLayer::ApplyKeptAudioMix(World& world) {
     if (!m_AudioKeepMix && !m_AudioKeepBus) return;
     entt::entity host = entt::null, mixHost = entt::null;
-    for (const entt::entity e : world.Registry.view<ReverbBusComponent>()) { host = e; break; }
-    for (const entt::entity e : world.Registry.view<AudioMixComponent>()) { mixHost = e; break; }
+    if (const auto v = world.Registry.view<ReverbBusComponent>(); v.begin() != v.end()) host = *v.begin();
+    if (const auto v = world.Registry.view<AudioMixComponent>(); v.begin() != v.end()) mixHost = *v.begin();
     if (mixHost == entt::null) mixHost = host;
     if (host == entt::null && mixHost == entt::null) {
         Log::Warn("Audio: the mix was not kept - the scene has no Reverb Bus or Audio Mix component to hold it.");
