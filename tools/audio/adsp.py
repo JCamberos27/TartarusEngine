@@ -210,7 +210,7 @@ def slice_at(x, t, dur, preroll_ms=3.0, fade_in_ms=1.5, fade_out_ms=None, snap=T
     return fade(y, int(fade_in_ms / 1000 * SR), fo)
 
 
-def secondary_event(x, settle_db=-24.0, rise_db=-14.0, min_gap_ms=25.0):
+def secondary_event(x, settle_db=-24.0, rise_db=-14.0, min_gap_ms=60.0):
     """Sample index where a NEW event starts after the main one (the next sound of the source bleeding into a slice): after the
     file's peak the envelope first decays below `settle_db` (re the peak), then climbs back above `rise_db`. None when clean."""
     m = np.abs(to_mono(x))
@@ -232,10 +232,16 @@ def secondary_event(x, settle_db=-24.0, rise_db=-14.0, min_gap_ms=25.0):
     return r - int(back[0]) if back.size else r
 
 
-def trim_secondary(x, fade_ms=12.0):
-    """End a one-shot just before a second event of its source (see secondary_event), with a short fade."""
+def trim_secondary(x, fade_ms=45.0, min_keep_ms=90.0):
+    """End a one-shot just before a second event of its source (see secondary_event), fading out over fade_ms. Never within
+    min_keep_ms of the file's peak: a contact's own rattle / ring right after it is not a second event (cutting there left
+    40 ms reload clicks that stopped dead)."""
     k = secondary_event(x)
     if k is None:
+        return x
+    pk = int(np.argmax(np.abs(to_mono(x))))
+    k = max(k, pk + int(min_keep_ms / 1000 * SR))
+    if k >= len(x):
         return x
     n = max(int(fade_ms / 1000 * SR), 1)
     return fade(np.asarray(x)[:max(k, n + 1)], 0, n)

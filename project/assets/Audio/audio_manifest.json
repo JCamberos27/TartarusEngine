@@ -743,7 +743,7 @@
    "sample_rate": 48000,
    "lufs_i": -26.04,
    "lufs_m_max": -26.0,
-   "true_peak_dbtp": -7.5,
+   "true_peak_dbtp": -7.49,
    "length_s": 0.282,
    "peak_ms": 5.4,
    "sources": [
@@ -3084,7 +3084,7 @@
    "sample_rate": 48000,
    "lufs_i": -22.03,
    "lufs_m_max": -22.0,
-   "true_peak_dbtp": -5.22,
+   "true_peak_dbtp": -5.2,
    "length_s": 0.28,
    "peak_ms": 9.5,
    "sources": [
@@ -6054,7 +6054,7 @@
    "sample_rate": 48000,
    "lufs_i": -22.04,
    "lufs_m_max": -22.0,
-   "true_peak_dbtp": -9.64,
+   "true_peak_dbtp": -9.63,
    "length_s": 0.28,
    "peak_ms": 52.9,
    "sources": [
@@ -6567,7 +6567,7 @@
    "sample_rate": 48000,
    "lufs_i": -22.04,
    "lufs_m_max": -22.0,
-   "true_peak_dbtp": -3.85,
+   "true_peak_dbtp": -3.84,
    "length_s": 0.28,
    "peak_ms": 7.7,
    "sources": [
@@ -9034,20 +9034,20 @@
    "sample_rate": 48000,
    "lufs_i": -25.04,
    "lufs_m_max": -25.0,
-   "true_peak_dbtp": -1.05,
-   "length_s": 0.073,
-   "peak_ms": 3.0,
+   "true_peak_dbtp": -4.33,
+   "length_s": 0.115,
+   "peak_ms": 43.8,
    "sources": [
     {
      "file": "sonniss/SculpTunes - Cartridges & Casings Shell/9 mm x 21  - Casings Shell & Cartdridges - Roll on Concrete Floor - Outdoor.wav",
      "start": 10.701,
-     "end": 10.774,
+     "end": 10.816,
      "pitch_st": 0.0
     },
     {
      "file": "sonniss/Pole Position Production - Various Gun Foley & Handling/SAIGA-12_12g_solid_slug_foley_close_up_RSM191_R_cocking.wav",
      "start": 4.458,
-     "end": 4.511,
+     "end": 4.541,
      "pitch_st": 0.0
     }
    ],
@@ -9062,23 +9062,23 @@
    "layer": "ui",
    "channels": 2,
    "sample_rate": 48000,
-   "lufs_i": -26.26,
-   "lufs_m_max": -26.22,
+   "lufs_i": -26.0,
+   "lufs_m_max": -25.95,
    "true_peak_dbtp": -1.0,
-   "length_s": 0.069,
+   "length_s": 0.109,
    "peak_ms": 2.8,
    "sources": [
     {
      "file": "sonniss/SculpTunes - Cartridges & Casings Shell/9 mm x 21  - Casings Shell & Cartdridges - Roll on Concrete Floor - Outdoor.wav",
      "start": 17.865,
-     "end": 17.938,
+     "end": 17.98,
      "pitch_st": 1.0
     }
    ],
    "anchor_ms": 2.8,
    "variant": 2,
    "source": "9 mm@17.869",
-   "mix_db": -2.94
+   "mix_db": -3.21
   },
   {
    "file": "UI/hitmarker_3.wav",
@@ -9086,29 +9086,29 @@
    "layer": "ui",
    "channels": 2,
    "sample_rate": 48000,
-   "lufs_i": -27.7,
-   "lufs_m_max": -27.66,
-   "true_peak_dbtp": -2.8,
-   "length_s": 0.083,
+   "lufs_i": -27.75,
+   "lufs_m_max": -27.71,
+   "true_peak_dbtp": -2.92,
+   "length_s": 0.131,
    "peak_ms": 3.1,
    "sources": [
     {
      "file": "sonniss/SculpTunes - Cartridges & Casings Shell/9 mm x 21  - Casings Shell & Cartdridges - Roll on Concrete Floor - Outdoor.wav",
      "start": 22.616,
-     "end": 22.699,
+     "end": 22.747,
      "pitch_st": 0.0
     },
     {
      "file": "sonniss/Pole Position Production - Various Gun Foley & Handling/Steyr_TMP_9mm_foley_distant_MKH418S_S_cocking_&_dry_fire.wav",
      "start": 0.549,
-     "end": 0.592,
+     "end": 0.622,
      "pitch_st": 0.0
     }
    ],
    "anchor_ms": 3.0,
    "variant": 3,
    "source": "9 mm@22.619+Steyr@0.557",
-   "mix_db": -1.5
+   "mix_db": -1.45
   },
   {
    "file": "UI/hitmarker_4.wav",
@@ -9118,14 +9118,14 @@
    "sample_rate": 48000,
    "lufs_i": -25.04,
    "lufs_m_max": -25.0,
-   "true_peak_dbtp": -3.32,
-   "length_s": 0.088,
+   "true_peak_dbtp": -3.69,
+   "length_s": 0.139,
    "peak_ms": 6.5,
    "sources": [
     {
      "file": "sonniss/SculpTunes - Cartridges & Casings Shell/9 mm x 21  - Casings Shell & Cartdridges - Roll on Concrete Floor - Outdoor.wav",
      "start": 0.192,
-     "end": 0.275,
+     "end": 0.323,
      "pitch_st": -1.0
     }
    ],
@@ -9142,20 +9142,20 @@
    "sample_rate": 48000,
    "lufs_i": -25.04,
    "lufs_m_max": -25.0,
-   "true_peak_dbtp": -4.48,
-   "length_s": 0.063,
+   "true_peak_dbtp": -4.49,
+   "length_s": 0.099,
    "peak_ms": 11.2,
    "sources": [
     {
      "file": "sonniss/Pole Position Production - Various Gun Foley & Handling/SAIGA-12_12g_solid_slug_foley_close_up_RSM191_R_cocking.wav",
      "start": 7.964,
-     "end": 8.027,
+     "end": 8.063,
      "pitch_st": 2.0
     },
     {
      "file": "sonniss/SculpTunes - Cartridges & Casings Shell/9 mm x 21  - Casings Shell & Cartdridges - Roll on Concrete Floor - Outdoor.wav",
      "start": 10.701,
-     "end": 10.764,
+     "end": 10.8,
      "pitch_st": 2.0
     }
    ],
@@ -9172,26 +9172,26 @@
    "sample_rate": 48000,
    "lufs_i": -25.04,
    "lufs_m_max": -25.0,
-   "true_peak_dbtp": -1.1,
-   "length_s": 0.208,
+   "true_peak_dbtp": -3.63,
+   "length_s": 0.289,
    "peak_ms": 78.9,
    "sources": [
     {
      "file": "sonniss/Pole Position Production - Various Gun Foley & Handling/SAIGA-12_12g_solid_slug_foley_close_up_RSM191_R_cocking.wav",
      "start": 2.314,
-     "end": 2.407,
+     "end": 2.461,
      "pitch_st": -2.0
     },
     {
      "file": "sonniss/SculpTunes - Cartridges & Casings Shell/9 mm x 21  - Casings Shell & Cartdridges - Roll on Concrete Floor - Outdoor.wav",
      "start": 10.701,
-     "end": 10.774,
+     "end": 10.816,
      "pitch_st": -2.0
     },
     {
      "file": "sonniss/Pole Position Production - Various Gun Foley & Handling/Heckler_&_Koch_G36C_5.56mm_foley_close_up_MKH60_mag_in_&_out.wav",
      "start": 6.604,
-     "end": 6.727,
+     "end": 6.799,
      "pitch_st": -2.0
     },
     {
@@ -9214,26 +9214,26 @@
    "sample_rate": 48000,
    "lufs_i": -25.04,
    "lufs_m_max": -25.0,
-   "true_peak_dbtp": -7.01,
-   "length_s": 0.203,
-   "peak_ms": 73.8,
+   "true_peak_dbtp": -8.01,
+   "length_s": 0.284,
+   "peak_ms": 73.6,
    "sources": [
     {
      "file": "sonniss/Pole Position Production - Various Gun Foley & Handling/SAIGA-12_12g_solid_slug_foley_close_up_RSM191_R_cocking.wav",
      "start": 4.458,
-     "end": 4.541,
+     "end": 4.589,
      "pitch_st": -2.0
     },
     {
      "file": "sonniss/SculpTunes - Cartridges & Casings Shell/9 mm x 21  - Casings Shell & Cartdridges - Roll on Concrete Floor - Outdoor.wav",
      "start": 17.865,
-     "end": 17.938,
+     "end": 17.98,
      "pitch_st": -2.0
     },
     {
      "file": "sonniss/Pole Position Production - Various Gun Foley & Handling/Heckler_&_Koch_G36C_5.56mm_foley_close_up_MKH60_mag_in_&_out.wav",
      "start": 16.118,
-     "end": 16.241,
+     "end": 16.313,
      "pitch_st": -2.0
     },
     {
@@ -9256,26 +9256,26 @@
    "sample_rate": 48000,
    "lufs_i": -25.04,
    "lufs_m_max": -25.0,
-   "true_peak_dbtp": -6.95,
-   "length_s": 0.213,
+   "true_peak_dbtp": -6.96,
+   "length_s": 0.294,
    "peak_ms": 12.0,
    "sources": [
     {
      "file": "sonniss/Pole Position Production - Various Gun Foley & Handling/SAIGA-12_12g_solid_slug_foley_close_up_RSM191_R_cocking.wav",
      "start": 0.168,
-     "end": 0.261,
+     "end": 0.315,
      "pitch_st": -2.0
     },
     {
      "file": "sonniss/SculpTunes - Cartridges & Casings Shell/9 mm x 21  - Casings Shell & Cartdridges - Roll on Concrete Floor - Outdoor.wav",
      "start": 22.616,
-     "end": 22.689,
+     "end": 22.731,
      "pitch_st": -2.0
     },
     {
      "file": "sonniss/Pole Position Production - Various Gun Foley & Handling/Heckler_&_Koch_G36C_5.56mm_foley_close_up_MKH60_mag_in_&_out.wav",
      "start": 11.546,
-     "end": 11.669,
+     "end": 11.741,
      "pitch_st": -2.0
     },
     {
@@ -9299,25 +9299,25 @@
    "lufs_i": -25.04,
    "lufs_m_max": -25.0,
    "true_peak_dbtp": -5.05,
-   "length_s": 0.21,
+   "length_s": 0.291,
    "peak_ms": 75.9,
    "sources": [
     {
      "file": "sonniss/Pole Position Production - Various Gun Foley & Handling/Steyr_TMP_9mm_foley_distant_MKH418S_S_cocking_&_dry_fire.wav",
      "start": 13.202,
-     "end": 13.285,
+     "end": 13.333,
      "pitch_st": -2.0
     },
     {
      "file": "sonniss/SculpTunes - Cartridges & Casings Shell/9 mm x 21  - Casings Shell & Cartdridges - Roll on Concrete Floor - Outdoor.wav",
      "start": 0.192,
-     "end": 0.265,
+     "end": 0.307,
      "pitch_st": -2.0
     },
     {
      "file": "sonniss/Pole Position Production - Various Gun Foley & Handling/Heckler_&_Koch_G36C_5.56mm_foley_close_up_MKH60_mag_in_&_out.wav",
      "start": 18.338,
-     "end": 18.461,
+     "end": 18.533,
      "pitch_st": -2.0
     },
     {
@@ -9447,14 +9447,14 @@
    "sample_rate": 48000,
    "lufs_i": -21.04,
    "lufs_m_max": -21.0,
-   "true_peak_dbtp": -4.63,
-   "length_s": 0.168,
+   "true_peak_dbtp": -4.64,
+   "length_s": 0.188,
    "peak_ms": 129.9,
    "sources": [
     {
      "file": "tsp/Tactical Shooter Pack/AK105/Actions/S_AK105_Reload_Empty.WAV",
      "start": 3.04,
-     "end": 3.208,
+     "end": 3.228,
      "pitch_st": 0.0
     }
    ],
@@ -9529,13 +9529,13 @@
    "lufs_i": -21.04,
    "lufs_m_max": -21.0,
    "true_peak_dbtp": -3.79,
-   "length_s": 0.143,
+   "length_s": 0.163,
    "peak_ms": 45.3,
    "sources": [
     {
      "file": "tsp/Tactical Shooter Pack/SRM-12/Actions/S_SRM-12_EmptyReload.wav",
      "start": 4.208,
-     "end": 4.351,
+     "end": 4.371,
      "pitch_st": 0.0
     }
    ],
@@ -9553,7 +9553,7 @@
    "channels": 2,
    "sample_rate": 48000,
    "lufs_i": -22.37,
-   "lufs_m_max": -22.3,
+   "lufs_m_max": -22.31,
    "true_peak_dbtp": -1.0,
    "length_s": 0.453,
    "peak_ms": 286.6,
@@ -9570,7 +9570,7 @@
    "element": "cloth",
    "variant": 1,
    "source": "S_AK105_Draw.WAV@0.3",
-   "mix_db": -19.86
+   "mix_db": -19.85
   },
   {
    "file": "Weapons/AKS74U/cloth_2.wav",
@@ -9729,13 +9729,13 @@
    "lufs_i": -21.93,
    "lufs_m_max": -21.89,
    "true_peak_dbtp": -1.0,
-   "length_s": 0.143,
+   "length_s": 0.163,
    "peak_ms": 4.3,
    "sources": [
     {
      "file": "sonniss/Pole Position Production - Various Gun Foley & Handling/Steyr_TMP_9mm_foley_distant_MKH418S_S_cocking_&_dry_fire.wav",
      "start": 1.968,
-     "end": 2.111,
+     "end": 2.131,
      "pitch_st": 0.0
     }
    ],
@@ -9754,14 +9754,14 @@
    "sample_rate": 48000,
    "lufs_i": -21.04,
    "lufs_m_max": -21.0,
-   "true_peak_dbtp": -1.55,
-   "length_s": 0.151,
+   "true_peak_dbtp": -1.54,
+   "length_s": 0.173,
    "peak_ms": 6.7,
    "sources": [
     {
      "file": "sonniss/Pole Position Production - Various Gun Foley & Handling/Steyr_TMP_9mm_foley_distant_MKH418S_S_cocking_&_dry_fire.wav",
      "start": 6.931,
-     "end": 7.074,
+     "end": 7.094,
      "pitch_st": -1.0
     }
    ],
@@ -9781,13 +9781,13 @@
    "lufs_i": -20.87,
    "lufs_m_max": -20.82,
    "true_peak_dbtp": -1.0,
-   "length_s": 0.137,
+   "length_s": 0.156,
    "peak_ms": 4.9,
    "sources": [
     {
      "file": "sonniss/Pole Position Production - Various Gun Foley & Handling/Steyr_TMP_9mm_foley_distant_MKH418S_S_cocking_&_dry_fire.wav",
      "start": 15.633,
-     "end": 15.776,
+     "end": 15.796,
      "pitch_st": 0.8
     }
    ],
@@ -9807,13 +9807,13 @@
    "lufs_i": -20.91,
    "lufs_m_max": -20.87,
    "true_peak_dbtp": -1.0,
-   "length_s": 0.161,
+   "length_s": 0.183,
    "peak_ms": 5.2,
    "sources": [
     {
      "file": "sonniss/Pole Position Production - Various Gun Foley & Handling/Steyr_TMP_9mm_foley_distant_MKH418S_S_cocking_&_dry_fire.wav",
      "start": 21.281,
-     "end": 21.424,
+     "end": 21.444,
      "pitch_st": -2.0
     }
    ],
@@ -11425,8 +11425,8 @@
    "layer": "action",
    "channels": 2,
    "sample_rate": 48000,
-   "lufs_i": -22.51,
-   "lufs_m_max": -22.47,
+   "lufs_i": -22.64,
+   "lufs_m_max": -22.6,
    "true_peak_dbtp": -1.0,
    "length_s": 0.126,
    "peak_ms": 5.1,
@@ -11443,7 +11443,7 @@
    "element": "handle",
    "variant": 1,
    "source": "S_AK105_Reload_Empty.WAV@3.994",
-   "mix_db": -12.69
+   "mix_db": -12.56
   },
   {
    "file": "Weapons/AKS74U/handle_2.wav",
@@ -11651,11 +11651,11 @@
    "layer": "action",
    "channels": 2,
    "sample_rate": 48000,
-   "lufs_i": -21.99,
-   "lufs_m_max": -21.95,
+   "lufs_i": -20.52,
+   "lufs_m_max": -20.48,
    "true_peak_dbtp": -1.0,
-   "length_s": 0.036,
-   "peak_ms": 3.7,
+   "length_s": 0.094,
+   "peak_ms": 4.6,
    "sources": [
     {
      "file": "tsp/Tactical Shooter Pack/AK105/Actions/S_AK105_Reload_Empty.WAV",
@@ -11669,7 +11669,7 @@
    "element": "mag_in",
    "variant": 2,
    "source": "S_AK105_Reload_Empty.WAV@1.754",
-   "mix_db": -5.21
+   "mix_db": -6.68
   },
   {
    "file": "Weapons/AKS74U/mag_in_3.wav",
@@ -11677,16 +11677,16 @@
    "layer": "action",
    "channels": 2,
    "sample_rate": 48000,
-   "lufs_i": -22.55,
-   "lufs_m_max": -22.51,
+   "lufs_i": -22.07,
+   "lufs_m_max": -22.02,
    "true_peak_dbtp": -1.0,
-   "length_s": 0.078,
+   "length_s": 0.198,
    "peak_ms": 38.0,
    "sources": [
     {
      "file": "tsp/Tactical Shooter Pack/AK105/Actions/S_AK105_MagCheck.WAV",
      "start": 2.55,
-     "end": 2.737,
+     "end": 2.748,
      "pitch_st": 0.0
     }
    ],
@@ -11696,7 +11696,7 @@
    "variant": 3,
    "source": "S_AK105_MagCheck.WAV@2.582",
    "lead_ms": 38,
-   "mix_db": -4.65
+   "mix_db": -5.14
   },
   {
    "file": "Weapons/AKS74U/mag_in_4.wav",
@@ -11706,14 +11706,14 @@
    "sample_rate": 48000,
    "lufs_i": -21.04,
    "lufs_m_max": -21.0,
-   "true_peak_dbtp": -3.44,
-   "length_s": 0.165,
+   "true_peak_dbtp": -3.71,
+   "length_s": 0.214,
    "peak_ms": 94.0,
    "sources": [
     {
      "file": "tsp/Tactical Shooter Pack/TR15/Actions/S_TR15_Reload_Tactical.wav",
      "start": 1.892,
-     "end": 2.043,
+     "end": 2.088,
      "pitch_st": -1.5
     }
    ],
@@ -11731,11 +11731,11 @@
    "layer": "action",
    "channels": 2,
    "sample_rate": 48000,
-   "lufs_i": -21.61,
-   "lufs_m_max": -21.57,
-   "true_peak_dbtp": -1.0,
-   "length_s": 0.039,
-   "peak_ms": 3.1,
+   "lufs_i": -23.13,
+   "lufs_m_max": -23.09,
+   "true_peak_dbtp": -1.43,
+   "length_s": 0.163,
+   "peak_ms": 3.8,
    "sources": [
     {
      "file": "tsp/Tactical Shooter Pack/SRM-12/Actions/S_SRM-12_EmptyReload.wav",
@@ -11749,7 +11749,7 @@
    "element": "mag_in",
    "variant": 5,
    "source": "S_SRM-12_EmptyReload.wav@1.907",
-   "mix_db": -5.59
+   "mix_db": -4.07
   },
   {
    "file": "Weapons/AKS74U/mag_in_6.wav",
@@ -11809,16 +11809,16 @@
    "layer": "action",
    "channels": 2,
    "sample_rate": 48000,
-   "lufs_i": -20.94,
+   "lufs_i": -20.95,
    "lufs_m_max": -20.9,
    "true_peak_dbtp": -1.0,
-   "length_s": 0.109,
+   "length_s": 0.117,
    "peak_ms": 25.0,
    "sources": [
     {
      "file": "tsp/Tactical Shooter Pack/AK105/Actions/S_AK105_Reload_Tactical.WAV",
      "start": 0.506,
-     "end": 0.634,
+     "end": 0.669,
      "pitch_st": 0.0
     }
    ],
@@ -11835,16 +11835,16 @@
    "layer": "action",
    "channels": 2,
    "sample_rate": 48000,
-   "lufs_i": -23.6,
-   "lufs_m_max": -23.55,
+   "lufs_i": -23.61,
+   "lufs_m_max": -23.57,
    "true_peak_dbtp": -1.0,
-   "length_s": 0.123,
+   "length_s": 0.127,
    "peak_ms": 3.1,
    "sources": [
     {
      "file": "tsp/Tactical Shooter Pack/AK105/Actions/S_AK105_Reload_Empty.WAV",
      "start": 0.531,
-     "end": 0.654,
+     "end": 0.694,
      "pitch_st": 0.0
     }
    ],
@@ -11853,7 +11853,7 @@
    "element": "mag_out",
    "variant": 2,
    "source": "S_AK105_Reload_Empty.WAV@0.508",
-   "mix_db": -7.61
+   "mix_db": -7.59
   },
   {
    "file": "Weapons/AKS74U/mag_out_3.wav",
@@ -11861,16 +11861,16 @@
    "layer": "action",
    "channels": 2,
    "sample_rate": 48000,
-   "lufs_i": -21.69,
-   "lufs_m_max": -21.64,
-   "true_peak_dbtp": -1.0,
-   "length_s": 0.09,
-   "peak_ms": 5.2,
+   "lufs_i": -22.84,
+   "lufs_m_max": -22.8,
+   "true_peak_dbtp": -1.86,
+   "length_s": 0.163,
+   "peak_ms": 108.0,
    "sources": [
     {
      "file": "tsp/Tactical Shooter Pack/AK105/Actions/S_AK105_MagCheck.WAV",
      "start": 0.429,
-     "end": 0.562,
+     "end": 0.592,
      "pitch_st": 0.0
     }
    ],
@@ -11879,7 +11879,7 @@
    "element": "mag_out",
    "variant": 3,
    "source": "S_AK105_MagCheck.WAV@0.414",
-   "mix_db": -9.52
+   "mix_db": -8.36
   },
   {
    "file": "Weapons/AKS74U/mag_out_4.wav",
@@ -11887,16 +11887,16 @@
    "layer": "action",
    "channels": 2,
    "sample_rate": 48000,
-   "lufs_i": -22.47,
-   "lufs_m_max": -22.42,
+   "lufs_i": -22.65,
+   "lufs_m_max": -22.61,
    "true_peak_dbtp": -1.0,
-   "length_s": 0.13,
+   "length_s": 0.132,
    "peak_ms": 41.9,
    "sources": [
     {
      "file": "tsp/Tactical Shooter Pack/TR15/Actions/S_TR15_Reload_Tactical.wav",
      "start": 0.871,
-     "end": 0.994,
+     "end": 1.034,
      "pitch_st": -1.0
     }
    ],
@@ -11905,7 +11905,7 @@
    "element": "mag_out",
    "variant": 4,
    "source": "S_TR15_Reload_Tactical.wav@0.872",
-   "mix_db": -8.74
+   "mix_db": -8.55
   },
   {
    "file": "Weapons/AKS74U/mag_out_5.wav",
@@ -11913,16 +11913,16 @@
    "layer": "action",
    "channels": 2,
    "sample_rate": 48000,
-   "lufs_i": -24.65,
-   "lufs_m_max": -24.61,
+   "lufs_i": -24.64,
+   "lufs_m_max": -24.6,
    "true_peak_dbtp": -1.0,
-   "length_s": 0.123,
+   "length_s": 0.163,
    "peak_ms": 3.3,
    "sources": [
     {
      "file": "tsp/Tactical Shooter Pack/SRM-12/Actions/S_SRM-12_TacticalReload.wav",
      "start": 0.738,
-     "end": 0.861,
+     "end": 0.901,
      "pitch_st": 0.0
     }
    ],
@@ -11931,7 +11931,7 @@
    "element": "mag_out",
    "variant": 5,
    "source": "S_SRM-12_TacticalReload.wav@0.731",
-   "mix_db": -6.55
+   "mix_db": -6.56
   },
   {
    "file": "Weapons/AKS74U/mag_out_6.wav",
@@ -11940,15 +11940,15 @@
    "channels": 2,
    "sample_rate": 48000,
    "lufs_i": -20.9,
-   "lufs_m_max": -20.86,
+   "lufs_m_max": -20.85,
    "true_peak_dbtp": -1.0,
-   "length_s": 0.093,
-   "peak_ms": 30.0,
+   "length_s": 0.163,
+   "peak_ms": 30.3,
    "sources": [
     {
      "file": "tsp/Tactical Shooter Pack/SRM-12/Actions/S_SRM-12_MagCheck.wav",
      "start": 0.947,
-     "end": 1.04,
+     "end": 1.11,
      "pitch_st": 0.0
     }
    ],
@@ -11957,7 +11957,7 @@
    "element": "mag_out",
    "variant": 6,
    "source": "S_SRM-12_MagCheck.wav@0.941",
-   "mix_db": -10.3
+   "mix_db": -10.31
   },
   {
    "file": "Weapons/AKS74U/mag_release_1.wav",
@@ -11965,16 +11965,16 @@
    "layer": "action",
    "channels": 2,
    "sample_rate": 48000,
-   "lufs_i": -23.92,
-   "lufs_m_max": -23.88,
+   "lufs_i": -20.63,
+   "lufs_m_max": -20.59,
    "true_peak_dbtp": -1.0,
-   "length_s": 0.043,
-   "peak_ms": 3.1,
+   "length_s": 0.163,
+   "peak_ms": 90.8,
    "sources": [
     {
      "file": "tsp/Tactical Shooter Pack/AK105/Actions/S_AK105_Reload_Tactical.WAV",
      "start": 0.441,
-     "end": 0.484,
+     "end": 0.604,
      "pitch_st": 0.0
     }
    ],
@@ -11983,7 +11983,7 @@
    "element": "mag_release",
    "variant": 1,
    "source": "S_AK105_Reload_Tactical.WAV@0.44",
-   "mix_db": -7.28
+   "mix_db": -10.57
   },
   {
    "file": "Weapons/AKS74U/mag_release_2.wav",
@@ -11991,16 +11991,16 @@
    "layer": "action",
    "channels": 2,
    "sample_rate": 48000,
-   "lufs_i": -21.57,
-   "lufs_m_max": -21.53,
+   "lufs_i": -22.27,
+   "lufs_m_max": -22.22,
    "true_peak_dbtp": -1.0,
-   "length_s": 0.049,
-   "peak_ms": 3.4,
+   "length_s": 0.163,
+   "peak_ms": 74.6,
    "sources": [
     {
      "file": "tsp/Tactical Shooter Pack/AK105/Actions/S_AK105_Reload_Empty.WAV",
      "start": 0.46,
-     "end": 0.509,
+     "end": 0.623,
      "pitch_st": 0.0
     }
    ],
@@ -12009,7 +12009,7 @@
    "element": "mag_release",
    "variant": 2,
    "source": "S_AK105_Reload_Empty.WAV@0.46",
-   "mix_db": -9.63
+   "mix_db": -8.94
   },
   {
    "file": "Weapons/AKS74U/mag_release_3.wav",
@@ -12017,16 +12017,16 @@
    "layer": "action",
    "channels": 2,
    "sample_rate": 48000,
-   "lufs_i": -20.88,
-   "lufs_m_max": -20.84,
-   "true_peak_dbtp": -1.0,
-   "length_s": 0.073,
-   "peak_ms": 7.4,
+   "lufs_i": -21.04,
+   "lufs_m_max": -21.0,
+   "true_peak_dbtp": -1.59,
+   "length_s": 0.163,
+   "peak_ms": 95.3,
    "sources": [
     {
      "file": "tsp/Tactical Shooter Pack/AK105/Actions/S_AK105_MagCheck.WAV",
      "start": 0.343,
-     "end": 0.416,
+     "end": 0.506,
      "pitch_st": 0.0
     }
    ],
@@ -12035,7 +12035,7 @@
    "element": "mag_release",
    "variant": 3,
    "source": "S_AK105_MagCheck.WAV@0.338",
-   "mix_db": -10.32
+   "mix_db": -10.16
   },
   {
    "file": "Weapons/AKS74U/mag_release_4.wav",
@@ -12043,16 +12043,16 @@
    "layer": "action",
    "channels": 2,
    "sample_rate": 48000,
-   "lufs_i": -22.62,
-   "lufs_m_max": -22.58,
-   "true_peak_dbtp": -1.62,
-   "length_s": 0.039,
-   "peak_ms": 18.0,
+   "lufs_i": -22.5,
+   "lufs_m_max": -22.46,
+   "true_peak_dbtp": -2.4,
+   "length_s": 0.149,
+   "peak_ms": 43.5,
    "sources": [
     {
      "file": "tsp/Tactical Shooter Pack/Mk14EBR/S_Mk14EBR_Reload_Tactical.WAV",
      "start": 0.462,
-     "end": 0.505,
+     "end": 0.625,
      "pitch_st": 1.5
     }
    ],
@@ -12061,7 +12061,7 @@
    "element": "mag_release",
    "variant": 4,
    "source": "S_Mk14EBR_Reload_Tactical.WAV@0.462",
-   "mix_db": -8.58
+   "mix_db": -8.7
   },
   {
    "file": "Weapons/AKS74U/mag_release_5.wav",
@@ -12069,16 +12069,16 @@
    "layer": "action",
    "channels": 2,
    "sample_rate": 48000,
-   "lufs_i": -22.38,
-   "lufs_m_max": -22.34,
-   "true_peak_dbtp": -2.08,
-   "length_s": 0.053,
-   "peak_ms": 20.9,
+   "lufs_i": -21.04,
+   "lufs_m_max": -21.0,
+   "true_peak_dbtp": -3.43,
+   "length_s": 0.163,
+   "peak_ms": 95.1,
    "sources": [
     {
      "file": "tsp/Tactical Shooter Pack/SRM-12/Actions/S_SRM-12_EmptyReload.wav",
      "start": 0.512,
-     "end": 0.565,
+     "end": 0.675,
      "pitch_st": 0.0
     }
    ],
@@ -12087,7 +12087,7 @@
    "element": "mag_release",
    "variant": 5,
    "source": "S_SRM-12_EmptyReload.wav@0.524",
-   "mix_db": -8.82
+   "mix_db": -10.16
   },
   {
    "file": "Weapons/AKS74U/mag_tap_1.wav",
@@ -12098,13 +12098,13 @@
    "lufs_i": -21.18,
    "lufs_m_max": -21.14,
    "true_peak_dbtp": -1.0,
-   "length_s": 0.123,
+   "length_s": 0.163,
    "peak_ms": 50.1,
    "sources": [
     {
      "file": "tsp/Tactical Shooter Pack/AK105/Actions/S_AK105_Reload_Tactical.WAV",
      "start": 1.881,
-     "end": 2.004,
+     "end": 2.044,
      "pitch_st": 0.0
     }
    ],
@@ -12122,15 +12122,15 @@
    "channels": 2,
    "sample_rate": 48000,
    "lufs_i": -21.18,
-   "lufs_m_max": -21.13,
+   "lufs_m_max": -21.14,
    "true_peak_dbtp": -1.0,
-   "length_s": 0.123,
+   "length_s": 0.117,
    "peak_ms": 3.3,
    "sources": [
     {
      "file": "tsp/Tactical Shooter Pack/AK105/Actions/S_AK105_Reload_Tactical.WAV",
      "start": 2.036,
-     "end": 2.159,
+     "end": 2.199,
      "pitch_st": 0.0
     }
    ],
@@ -12139,7 +12139,7 @@
    "element": "mag_tap",
    "variant": 2,
    "source": "S_AK105_Reload_Tactical.WAV@2.014",
-   "mix_db": -10.03
+   "mix_db": -10.02
   },
   {
    "file": "Weapons/AKS74U/mag_tap_3.wav",
@@ -12147,16 +12147,16 @@
    "layer": "action",
    "channels": 2,
    "sample_rate": 48000,
-   "lufs_i": -22.28,
-   "lufs_m_max": -22.24,
+   "lufs_i": -20.89,
+   "lufs_m_max": -20.84,
    "true_peak_dbtp": -1.0,
-   "length_s": 0.034,
-   "peak_ms": 3.1,
+   "length_s": 0.163,
+   "peak_ms": 3.3,
    "sources": [
     {
      "file": "tsp/Tactical Shooter Pack/AK105/Actions/S_AK105_Reload_Empty.WAV",
      "start": 1.977,
-     "end": 2.1,
+     "end": 2.14,
      "pitch_st": 0.0
     }
    ],
@@ -12165,7 +12165,7 @@
    "element": "mag_tap",
    "variant": 3,
    "source": "S_AK105_Reload_Empty.WAV@1.968",
-   "mix_db": -8.92
+   "mix_db": -10.32
   },
   {
    "file": "Weapons/AKS74U/mag_tap_4.wav",
@@ -12173,16 +12173,16 @@
    "layer": "action",
    "channels": 2,
    "sample_rate": 48000,
-   "lufs_i": -23.52,
-   "lufs_m_max": -23.48,
+   "lufs_i": -23.5,
+   "lufs_m_max": -23.46,
    "true_peak_dbtp": -1.0,
-   "length_s": 0.108,
+   "length_s": 0.126,
    "peak_ms": 3.0,
    "sources": [
     {
      "file": "tsp/Tactical Shooter Pack/AK105/Actions/S_AK105_MagCheck.WAV",
      "start": 2.757,
-     "end": 2.865,
+     "end": 2.92,
      "pitch_st": 0.0
     }
    ],
@@ -12191,7 +12191,7 @@
    "element": "mag_tap",
    "variant": 4,
    "source": "S_AK105_MagCheck.WAV@2.748",
-   "mix_db": -7.68
+   "mix_db": -7.7
   },
   {
    "file": "Weapons/AKS74U/melee_hit_1.wav",
@@ -12201,7 +12201,7 @@
    "sample_rate": 48000,
    "lufs_i": -21.04,
    "lufs_m_max": -21.0,
-   "true_peak_dbtp": -1.97,
+   "true_peak_dbtp": -2.18,
    "length_s": 0.2,
    "peak_ms": 20.1,
    "sources": [
@@ -12214,7 +12214,7 @@
     {
      "file": "tsp/Tactical Shooter Pack/AK105/Actions/S_AK105_Reload_Tactical.WAV",
      "start": 2.036,
-     "end": 2.159,
+     "end": 2.199,
      "pitch_st": 0.0
     },
     {
@@ -12296,7 +12296,7 @@
     {
      "file": "tsp/Tactical Shooter Pack/AK105/Actions/S_AK105_Reload_Empty.WAV",
      "start": 1.977,
-     "end": 2.1,
+     "end": 2.14,
      "pitch_st": 0.0
     }
    ],
@@ -12328,7 +12328,7 @@
     {
      "file": "tsp/Tactical Shooter Pack/AK105/Actions/S_AK105_Reload_Empty.WAV",
      "start": 1.752,
-     "end": 1.875,
+     "end": 1.915,
      "pitch_st": 0.0
     },
     {
@@ -12509,7 +12509,7 @@
    "sample_rate": 48000,
    "lufs_i": -24.24,
    "lufs_m_max": -24.17,
-   "true_peak_dbtp": -3.48,
+   "true_peak_dbtp": -3.47,
    "length_s": 0.503,
    "peak_ms": 255.2,
    "sources": [
@@ -13243,7 +13243,7 @@
    "sample_rate": 48000,
    "lufs_i": -20.04,
    "lufs_m_max": -20.0,
-   "true_peak_dbtp": -9.81,
+   "true_peak_dbtp": -9.8,
    "length_s": 0.35,
    "peak_ms": 132.1,
    "sources": [
@@ -13491,8 +13491,9 @@
    "sources": [
     {
      "file": "tsp/Tactical Shooter Pack/Herrington_11-87/Fire/S_Herrington_11-87_Unsuppressed_1_With_Tail.wav",
-     "start": 0.2,
-     "end": 3.04,
+     "start_s": 0.2,
+     "end_s": 3.04,
+     "gain_db": 0.0,
      "pitch_st": 0.0
     }
    ],
@@ -13517,8 +13518,9 @@
    "sources": [
     {
      "file": "tsp/Tactical Shooter Pack/Herrington_11-87/Fire/S_Herrington_11-87_Unsuppressed_2_With_Tail.wav",
-     "start": 0.198,
-     "end": 3.038,
+     "start_s": 0.198,
+     "end_s": 3.038,
+     "gain_db": 0.0,
      "pitch_st": 0.0
     }
    ],
@@ -13543,8 +13545,9 @@
    "sources": [
     {
      "file": "tsp/Tactical Shooter Pack/Herrington_11-87/Fire/S_Herrington_11-87_Unsuppressed_3_With_Tail.wav",
-     "start": 0.215,
-     "end": 3.055,
+     "start_s": 0.215,
+     "end_s": 3.055,
+     "gain_db": 0.0,
      "pitch_st": -0.5
     }
    ],
@@ -13569,8 +13572,9 @@
    "sources": [
     {
      "file": "tsp/Tactical Shooter Pack/SRM-12/Actions/S_SRM-12_ShotOnly.wav",
-     "start": 0.218,
-     "end": 3.058,
+     "start_s": 0.218,
+     "end_s": 3.058,
+     "gain_db": 0.0,
      "pitch_st": 1.5
     }
    ],
@@ -13595,8 +13599,9 @@
    "sources": [
     {
      "file": "tsp/Tactical Shooter Pack/Mk14EBR/S_Mk14EBR_Fire_01.WAV",
-     "start": 0.17,
-     "end": 3.01,
+     "start_s": 0.17,
+     "end_s": 3.01,
+     "gain_db": 0.0,
      "pitch_st": 0.0
     }
    ],
@@ -14215,16 +14220,16 @@
    "layer": "action",
    "channels": 2,
    "sample_rate": 48000,
-   "lufs_i": -21.47,
-   "lufs_m_max": -21.43,
+   "lufs_i": -21.45,
+   "lufs_m_max": -21.41,
    "true_peak_dbtp": -1.0,
-   "length_s": 0.098,
+   "length_s": 0.121,
    "peak_ms": 11.9,
    "sources": [
     {
      "file": "tsp/Tactical Shooter Pack/Herrington_11-87/Actions/S_Herrington_11-87_Inspect.WAV",
      "start": 2.952,
-     "end": 3.05,
+     "end": 3.115,
      "pitch_st": 0.0
     }
    ],
@@ -14233,7 +14238,7 @@
    "element": "handle",
    "variant": 1,
    "source": "S_Herrington_11-87_Inspect.WAV@2.955",
-   "mix_db": -13.73
+   "mix_db": -13.75
   },
   {
    "file": "Weapons/Remington870/handle_2.wav",
@@ -14241,8 +14246,8 @@
    "layer": "action",
    "channels": 2,
    "sample_rate": 48000,
-   "lufs_i": -24.01,
-   "lufs_m_max": -23.96,
+   "lufs_i": -24.2,
+   "lufs_m_max": -24.16,
    "true_peak_dbtp": -1.0,
    "length_s": 0.113,
    "peak_ms": 3.1,
@@ -14259,7 +14264,7 @@
    "element": "handle",
    "variant": 2,
    "source": "S_Herrington_11-87_Inspect.WAV@3.21",
-   "mix_db": -11.2
+   "mix_db": -11.0
   },
   {
    "file": "Weapons/Remington870/handle_3.wav",
@@ -14267,9 +14272,9 @@
    "layer": "action",
    "channels": 2,
    "sample_rate": 48000,
-   "lufs_i": -23.86,
-   "lufs_m_max": -23.82,
-   "true_peak_dbtp": -2.6,
+   "lufs_i": -23.7,
+   "lufs_m_max": -23.66,
+   "true_peak_dbtp": -2.17,
    "length_s": 0.218,
    "peak_ms": 4.0,
    "sources": [
@@ -14285,7 +14290,7 @@
    "element": "handle",
    "variant": 3,
    "source": "S_Herrington_11-87_Inspect.WAV@5.058",
-   "mix_db": -11.34
+   "mix_db": -11.5
   },
   {
    "file": "Weapons/Remington870/handle_4.wav",
@@ -14293,8 +14298,8 @@
    "layer": "action",
    "channels": 2,
    "sample_rate": 48000,
-   "lufs_i": -21.8,
-   "lufs_m_max": -21.76,
+   "lufs_i": -21.91,
+   "lufs_m_max": -21.87,
    "true_peak_dbtp": -1.0,
    "length_s": 0.141,
    "peak_ms": 5.7,
@@ -14311,7 +14316,7 @@
    "element": "handle",
    "variant": 4,
    "source": "S_AK105_Reload_Empty.WAV@3.994",
-   "mix_db": -13.4
+   "mix_db": -13.29
   },
   {
    "file": "Weapons/Remington870/holster_1.wav",
@@ -14474,7 +14479,7 @@
     {
      "file": "sonniss/TS Sound - 12 Gauge Shotgun/Shotgun_Quick Pump_01.wav",
      "start": 0.343,
-     "end": 0.476,
+     "end": 0.506,
      "pitch_st": 0.0
     }
    ],
@@ -14673,14 +14678,14 @@
    "sample_rate": 48000,
    "lufs_i": -21.04,
    "lufs_m_max": -21.0,
-   "true_peak_dbtp": -1.15,
-   "length_s": 0.18,
+   "true_peak_dbtp": -1.19,
+   "length_s": 0.26,
    "peak_ms": 106.6,
    "sources": [
     {
      "file": "sonniss/TS Sound - 12 Gauge Shotgun/Shotgun_Quick Pump_01.wav",
      "start": 0.05,
-     "end": 0.23,
+     "end": 0.31,
      "pitch_st": 0.0
     }
    ],
@@ -14700,14 +14705,14 @@
    "sample_rate": 48000,
    "lufs_i": -21.04,
    "lufs_m_max": -21.0,
-   "true_peak_dbtp": -2.1,
-   "length_s": 0.199,
-   "peak_ms": 40.2,
+   "true_peak_dbtp": -2.22,
+   "length_s": 0.272,
+   "peak_ms": 42.4,
    "sources": [
     {
      "file": "sonniss/TS Sound - 12 Gauge Shotgun/Shotgun_Quick Pump_01.wav",
      "start": 1.049,
-     "end": 1.239,
+     "end": 1.309,
      "pitch_st": -0.8
     }
    ],
@@ -14836,13 +14841,13 @@
    "lufs_i": -21.04,
    "lufs_m_max": -21.0,
    "true_peak_dbtp": -3.6,
-   "length_s": 0.241,
+   "length_s": 0.249,
    "peak_ms": 126.0,
    "sources": [
     {
      "file": "sonniss/TS Sound - 12 Gauge Shotgun/Shotgun_Quick Pump_01.wav",
      "start": 1.247,
-     "end": 1.477,
+     "end": 1.484,
      "pitch_st": -0.8
     }
    ],
@@ -14969,14 +14974,14 @@
    "sample_rate": 48000,
    "lufs_i": -21.04,
    "lufs_m_max": -21.0,
-   "true_peak_dbtp": -2.97,
+   "true_peak_dbtp": -4.99,
    "length_s": 0.38,
-   "peak_ms": 121.8,
+   "peak_ms": 123.3,
    "sources": [
     {
      "file": "sonniss/TS Sound - 12 Gauge Shotgun/Shell Load_Round Eject.wav",
      "start": 2.856,
-     "end": 2.919,
+     "end": 3.019,
      "pitch_st": 0.0
     },
     {
@@ -14999,16 +15004,16 @@
    "layer": "action",
    "channels": 2,
    "sample_rate": 48000,
-   "lufs_i": -21.48,
-   "lufs_m_max": -21.44,
-   "true_peak_dbtp": -1.0,
+   "lufs_i": -21.71,
+   "lufs_m_max": -21.67,
+   "true_peak_dbtp": -1.65,
    "length_s": 0.38,
-   "peak_ms": 142.8,
+   "peak_ms": 143.6,
    "sources": [
     {
      "file": "sonniss/TS Sound - 12 Gauge Shotgun/Shell Load_Round Eject.wav",
      "start": 4.342,
-     "end": 4.405,
+     "end": 4.505,
      "pitch_st": 0.0
     },
     {
@@ -15023,7 +15028,7 @@
    "element": "shell_insert",
    "variant": 3,
    "source": "Shell Load_Round Eject@4.345+Shell Load_Round Eject@4.413",
-   "mix_db": -9.72
+   "mix_db": -9.49
   },
   {
    "file": "Weapons/Remington870/shell_insert_4.wav",
@@ -15033,14 +15038,14 @@
    "sample_rate": 48000,
    "lufs_i": -21.04,
    "lufs_m_max": -21.0,
-   "true_peak_dbtp": -1.28,
+   "true_peak_dbtp": -2.55,
    "length_s": 0.38,
    "peak_ms": 121.8,
    "sources": [
     {
      "file": "tsp/Tactical Shooter Pack/Herrington_11-87/Actions/S_Herrington_11-87_Reload_Start_Normal.WAV",
      "start": 0.223,
-     "end": 0.281,
+     "end": 0.386,
      "pitch_st": 0.0
     },
     {
@@ -15063,16 +15068,16 @@
    "layer": "action",
    "channels": 2,
    "sample_rate": 48000,
-   "lufs_i": -20.94,
-   "lufs_m_max": -20.9,
-   "true_peak_dbtp": -1.0,
+   "lufs_i": -23.87,
+   "lufs_m_max": -23.82,
+   "true_peak_dbtp": -1.46,
    "length_s": 0.38,
-   "peak_ms": 120.4,
+   "peak_ms": 121.2,
    "sources": [
     {
      "file": "tsp/Tactical Shooter Pack/Herrington_11-87/Actions/S_Herrington_11-87_Reload_End.WAV",
      "start": 0.265,
-     "end": 0.343,
+     "end": 0.428,
      "pitch_st": 0.0
     },
     {
@@ -15087,7 +15092,7 @@
    "element": "shell_insert",
    "variant": 5,
    "source": "S_Herrington_11-87_Reload_End.WAV@0.268+S_Herrington_11-87_Reload_End.WAV@0.351",
-   "mix_db": -10.26
+   "mix_db": -7.34
   },
   {
    "file": "Weapons/Remington870/shell_load_chamber_1.wav",
