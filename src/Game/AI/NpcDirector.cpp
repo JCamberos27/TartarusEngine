@@ -1,6 +1,7 @@
 #include "NpcDirector.h"
 
 #include "AssetLibrary.h"
+#include "Audio/FoleyAudio.h"
 #include "Combat/CombatFx.h"
 #include "Components.h"
 #include "FirstPersonPresentation.h"
@@ -1137,6 +1138,7 @@ void NpcDirector::AimAndFire(World& world, Npc& n, const PlayerSnapshot& p, floa
     // (The body counts as moving from the same 0.25 m/s; the player's own gun reads 0 standing still.)
     const glm::vec3 gunVelocity = glm::length(glm::vec2(n.Velocity.x, n.Velocity.z)) > 0.25f ? n.Velocity : glm::vec3(0.0f);
     w.Tick(dt, gunVelocity, sprinting, aimGun && !sprinting, 0.0f, true);
+    FoleyAudio::Get().NpcWalk(world, n.Index, n.Feet, n.Velocity, sprinting, dt);
     // (After the tick, before the animators: the weapon clears its triggers at the start of each frame.)
     if (n.WeaponAction) w.TriggerAction(n.WeaponAction);
     n.WeaponAction = nullptr;

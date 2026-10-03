@@ -138,6 +138,20 @@ private:
     bool m_HaveSceneCam = false;
     glm::vec3 m_SceneCamPos{0.0f};
     float m_SceneCamYaw = 0.0f, m_SceneCamPitch = 0.0f;
+    // Audio (docs/AUDIO.md): each frame's animator state and phase beside what the weapon audio emitted, checked at the end
+    // against the controllers' snd.* events (CheckAudio).
+    struct AudioFrame {
+        int Slot = 0;
+        std::string State;
+        float Phase = 0.0f;
+        std::string Controller;
+        std::vector<std::string> Keys; // emitted since the frame before
+    };
+    std::vector<AudioFrame> m_AudioFrames;
+    size_t m_AudioSeen = 0;
+    bool m_AudioChecked = false;
+    void RecordAudioFrame(const World& world, const FirstPersonPresentation& p);
+    void CheckAudio();
     void PrintSample(const std::string& label) const;
     void BuildProbe();
     void BuildPoseProbe(); // STOCK_PROBE_POSE=1: the third-person body standing / crouched, at the hip and on the sights
