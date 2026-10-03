@@ -67,7 +67,9 @@ public:
     void NpcWalk(World& world, int id, const glm::vec3& feet, const glm::vec3& velocity, bool sprint, float dt);
     // A soldier's animated feet (NpcBody::FootHeights), each frame it is animated: a step on each touch-down. `dt` = the time
     // since its last animated frame. Returns false (nothing done) with Steps From Feet off: walk him with NpcWalk instead.
-    bool NpcFeet(World& world, int id, const glm::vec3& feet, const float height[2], bool sprint, float dt);
+    bool NpcFeet(World& world, int id, const glm::vec3& feet, const float height[2], bool sprint, float speed, float dt);
+    // The lift a swing must clear: Foot Lift Moving at or above Min Step Speed (m/s, planar), else Foot Lift Height.
+    static float LiftHeight(const FoleyAudioComponent& t, float speed) { return speed >= t.MinStepSpeed ? t.FootLiftMoving : t.FootLiftHeight; }
     const FoleyAudioComponent& Tuning() const { return m_T; }
     void SetTuning(const FoleyAudioComponent& t) { m_T = t; }
     void StartForTest(const FoleyAudioComponent& t) { m_T = t; m_Active = true; m_Stepper.Reset(); m_Feet.Reset(); m_PrevGrounded = true; m_PrevVy = 0.0f; m_Steps = 0; m_NpcSteppers.clear(); m_NpcFeet.clear(); }

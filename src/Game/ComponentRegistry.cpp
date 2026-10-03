@@ -1984,7 +1984,8 @@ void RegisterEngineComponents() {
             { "Min Step Speed", T::Float, TARTARUS_REFLECT_FIELD(Fo, MinStepSpeed), 0.05f, "m/s of planar speed below which there are no footsteps.", 0.0f, 10.0f },
             { "Run Speed", T::Float, TARTARUS_REFLECT_FIELD(Fo, RunSpeed), 0.05f, "m/s from which the run set plays.", 0.5f, 20.0f },
             { "Steps From Feet", T::Bool, TARTARUS_REFLECT_FIELD(Fo, StepsFromFeet), 0.0f, "A footstep when an animated foot (the player's body, a soldier's) touches down. Off, or with no body: one every half stride of travel." },
-            { "Foot Lift Height", T::Float, TARTARUS_REFLECT_FIELD(Fo, FootLiftHeight), 0.005f, "m a foot must rise above its planted height before its next touch-down counts (shuffles below this are silent).", 0.01f, 0.3f },
+            { "Foot Lift Height", T::Float, TARTARUS_REFLECT_FIELD(Fo, FootLiftHeight), 0.005f, "Standing (below Min Step Speed): m a foot must rise above its planted height before its next touch-down counts. Weight shifts below this are silent.", 0.01f, 0.3f },
+            { "Foot Lift Moving", T::Float, TARTARUS_REFLECT_FIELD(Fo, FootLiftMoving), 0.005f, "The same while moving: lower, so a walk's first, shuffling stride still steps.", 0.005f, 0.3f },
             { "Foot Contact Height", T::Float, TARTARUS_REFLECT_FIELD(Fo, FootContactHeight), 0.005f, "m above its planted height at which a lowering foot counts as down: higher = the step a little earlier.", 0.0f, 0.2f },
             { "Jump Volume", T::Float, TARTARUS_REFLECT_FIELD(Fo, JumpVolume), 0.01f, "Gain of the jump.", 0.0f, 2.0f },
             { "Land Volume", T::Float, TARTARUS_REFLECT_FIELD(Fo, LandVolume), 0.01f, "Gain of a landing at Land Full Speed.", 0.0f, 2.0f },
@@ -2000,7 +2001,7 @@ void RegisterEngineComponents() {
         const std::pair<const char*, const char*> groups[] = {
             {"Walk Volume", "Footsteps"}, {"Run Volume", "Footsteps"}, {"Crouch Volume", "Footsteps"}, {"Volume Jitter dB", "Footsteps"},
             {"Pitch Min", "Footsteps"}, {"Pitch Max", "Footsteps"}, {"Step Stride Scale", "Footsteps"}, {"Crouch Stride Scale", "Footsteps"},
-            {"Min Step Speed", "Footsteps"}, {"Run Speed", "Footsteps"}, {"Steps From Feet", "Footsteps"}, {"Foot Lift Height", "Footsteps"},
+            {"Min Step Speed", "Footsteps"}, {"Run Speed", "Footsteps"}, {"Steps From Feet", "Footsteps"}, {"Foot Lift Height", "Footsteps"}, {"Foot Lift Moving", "Footsteps"},
             {"Foot Contact Height", "Footsteps"},
             {"Jump Volume", "Jump / Land"}, {"Land Volume", "Jump / Land"}, {"Land Min Speed", "Jump / Land"}, {"Land Heavy Speed", "Jump / Land"}, {"Land Full Speed", "Jump / Land"},
             
