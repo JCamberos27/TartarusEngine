@@ -168,6 +168,16 @@ glm::mat4 NpcBody::RootWorld() const {
     return glm::translate(glm::mat4(1.0f), m_Feet) * glm::mat4_cast(YawRotation(m_Yaw));
 }
 
+bool NpcBody::FootHeights(float (&out)[2]) const {
+    if (!IsActive() || !m_DriverModel) return false;
+    for (int s = 0; s < 2; ++s) {
+        glm::mat4 g(1.0f);
+        if (m_DriverLeg[s][2] < 0 || !m_DriverModel->NodeTransformAt(m_DriverLeg[s][2], g)) return false;
+        out[s] = g[3].y; // the driver's model space stands on the feet, unrotated in height (RootWorld)
+    }
+    return true;
+}
+
 void NpcBody::Tick(World& world, const NpcBodyInput& in, float dt) {
     if (!IsActive() || m_PoseExternal) return;
     auto& reg = world.Registry;

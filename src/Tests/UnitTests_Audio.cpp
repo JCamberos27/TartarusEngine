@@ -541,6 +541,80 @@ void TestFoleyFootstepCadence() {
         all3D &= !e.At2D;
     }
     CHECK(std::abs(npcSteps - 75) <= 2 && all3D); // 25 + 50
+
+    // Steps From Feet: a step on each animated touch-down, not by distance. A gait at 1 stride/s (each ankle 9 cm up planted,
+    // lifting 12 cm, the feet half a cycle apart) on a slope that raises both by 10 cm over the run: one step per foot per
+    // stride, whatever the speed says, each on the frame the foot comes down.
+    {
+        const float dt = 1.0f / 60.0f, pi = 3.14159265f;
+        auto gait = [&](float time, int s) { return 0.09f + 0.01f * time + 0.12f * std::max(0.0f, std::sin(2.0f * pi * time + s * pi)); };
+        fo.StartForTest(t);
+        FoleyPlayerInput in;
+        in.Velocity = glm::vec3(9.0f, 0.0f, 0.0f); // the stride rule would make ~80 steps in 10 s
+        in.HaveFootHeights = true;
+        int offBeat = 0, steps = 0;
+        for (float time = 0.0f; time < 10.0f; time += dt) {
+            for (int s = 0; s < 2; ++s) in.FootHeight[s] = gait(time, s);
+            const int before = fo.StepsPlayed();
+            fo.UpdatePlayer(world, dt, in);
+            if (fo.StepsPlayed() > before) {
+                steps += fo.StepsPlayed() - before;
+                // The left foot lands at half a cycle, the right at the whole: within 3 frames of it, never between.
+                const float phase = std::fmod(time, 1.0f);
+                const float off = std::min(std::abs(phase - 0.5f), std::min(phase, 1.0f - phase));
+                offBeat += off > 3.0f * dt;
+            }
+        }
+        CHECK(steps >= 18 && steps <= 20); // 10 strides x 2 feet, the first touch-downs only learn the floor
+        CHECK(offBeat == 0);
+        // Standing: the idle sways the ankles a centimetre - no steps. In the air: none.
+        fo.StartForTest(t);
+        in.Velocity = glm::vec3(0.0f);
+        for (float time = 0.0f; time < 5.0f; time += dt) {
+            for (int s = 0; s < 2; ++s) in.FootHeight[s] = 0.09f + 0.01f * std::sin(3.0f * time + s);
+            fo.UpdatePlayer(world, dt, in);
+        }
+        CHECK(fo.StepsPlayed() == 0);
+        fo.StartForTest(t);
+        in.Grounded = false;
+        for (float time = 0.0f; time < 3.0f; time += dt) {
+            for (int s = 0; s < 2; ++s) in.FootHeight[s] = gait(time, s);
+            fo.UpdatePlayer(world, dt, in);
+        }
+        CHECK(fo.StepsPlayed() == 0);
+        // Soldiers: the same rule per id, in 3D; Steps From Feet off hands them back to the stride rule (NpcWalk).
+        fo.StartForTest(t);
+        WeaponAudio::Get().ClearHistory();
+        for (float time = 0.0f; time < 5.0f; time += dt) {
+            const float h[2] = {gait(time, 0), gait(time, 1)};
+            CHECK(fo.NpcFeet(world, 7, glm::vec3(0.0f), h, false, dt));
+        }
+        const auto& hist = WeaponAudio::Get().History();
+        CHECK(hist.size() >= 8 && hist.size() <= 10 && !hist.front().At2D);
+        t.StepsFromFeet = false;
+        fo.StartForTest(t);
+        const float h[2] = {0.1f, 0.1f};
+        CHECK(!fo.NpcFeet(world, 7, glm::vec3(0.0f), h, false, dt));
+        t = FoleyAudioComponent{};
+    }
+    {
+        // The detector alone: a foot that never rose past Lift Height never lands.
+        FootContactDetector d;
+        const float a[2] = {0.10f, 0.10f}, b[2] = {0.14f, 0.10f}, c[2] = {0.10f, 0.10f}, e[2] = {0.20f, 0.10f};
+        CHECK(d.Update(a, 0.016f, 0.05f, 0.02f) == 0 && d.Update(b, 0.016f, 0.05f, 0.02f) == 0 && d.Update(c, 0.016f, 0.05f, 0.02f) == 0);
+        CHECK(d.Update(e, 0.016f, 0.05f, 0.02f) == 0 && d.Update(c, 0.016f, 0.05f, 0.02f) == 1);
+        // A step up (stairs): up 30 cm, down onto a tread 18 cm higher, standing there - one touch-down, as it stops.
+        FootContactDetector up;
+        const float dt = 1.0f / 60.0f;
+        int downs = 0, landedAt = -1;
+        for (int i = 0; i < 42; ++i) {
+            const float time = i * dt;
+            const float y = time < 0.25f ? 0.1f + 1.2f * time : time < 0.4f ? 0.4f - 0.8f * (time - 0.25f) : 0.28f;
+            const float h2[2] = {y, 0.1f};
+            if (up.Update(h2, dt, 0.05f, 0.02f) & 1) { ++downs; landedAt = i; }
+        }
+        CHECK(downs == 1 && landedAt >= 24 && landedAt <= 26); // the tread is reached at frame 24
+    }
     WeaponAudio::Get().Stop();
 }
 
