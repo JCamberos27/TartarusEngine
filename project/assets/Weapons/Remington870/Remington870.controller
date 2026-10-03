@@ -365,8 +365,8 @@
         {
           "events": [
             {
-              "name": "snd.870.draw@340",
-              "time": 0.1217
+              "name": "snd.870.draw@360",
+              "time": 0.0957
             }
           ],
           "loop": false,
@@ -394,8 +394,8 @@
         {
           "events": [
             {
-              "name": "snd.870.holster@290",
-              "time": 0.3429
+              "name": "snd.870.holster@300",
+              "time": 0.3214
             }
           ],
           "loop": false,
@@ -596,16 +596,8 @@
               "time": 0.6
             },
             {
-              "name": "snd.870.handle@3",
-              "time": 0.6542
-            },
-            {
               "name": "snd.870.cloth@0",
               "time": 0.7714
-            },
-            {
-              "name": "snd.870.handle@3",
-              "time": 0.9542
             }
           ],
           "loop": false,
@@ -646,16 +638,8 @@
               "time": 0.43
             },
             {
-              "name": "snd.870.handle@3",
-              "time": 0.4469
-            },
-            {
               "name": "snd.870.cloth@0",
               "time": 0.5612
-            },
-            {
-              "name": "snd.870.handle@3",
-              "time": 0.804
             }
           ],
           "loop": false,
