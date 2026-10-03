@@ -156,10 +156,25 @@ def compute(files, lufs_of=None):
     shot, per_gun = compute_reference(files, lufs_of)
     _, per_gun_played = compute_reference(files, lufs_of, with_gun=True)
     ref = {"shot": shot, "played": shot + 20 * math.log10(SPEC["reference"]["player_gain"])}
+    # Short keys (clicks, steps, impacts): each file's loudness for levelling is its 100 ms loudness, shifted by the key's median
+    # (LUFS-M - short) so the key as a whole still sits at its spec level by LUFS-M; only the variants are evened out by what they
+    # sound like (a 60 ms click and a 300 ms rustle of one key read 6-10 dB apart by LUFS-M alone).
+    short_max = SPEC["reference"].get("short_key_max_s", 0.9)
+    eff, bykey = {}, {}
+    for e in files:
+        if classify(e)[2] in ("shot", "played") and not e.get("loop") and e["length_s"] <= short_max:
+            bykey.setdefault(e["key"], []).append(e)
+    for g in bykey.values():
+        if len(g) < 2:
+            continue
+        sh = {e["file"]: adsp.loudness_short(read_wav(e)) for e in g}
+        d = float(np.median([lufs_of(e) - sh[e["file"]] for e in g]))
+        for e in g:
+            eff[e["file"]] = sh[e["file"]] + d
     raw = {}
     for e in files:
         fam, level, rel = classify(e)
-        lm = lufs_of(e)
+        lm = eff.get(e["file"], lufs_of(e))
         if rel == "shot-layer":
             raw[e["file"]] = shot_layer_mix_db(e, lm)
         elif rel in ("shot", "played"):

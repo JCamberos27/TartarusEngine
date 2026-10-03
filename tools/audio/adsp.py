@@ -135,6 +135,21 @@ def lufs(x):
     return integ, best
 
 
+def loudness_short(x, win_s=0.1, hop_s=0.025):
+    """Max K-weighted loudness over short windows (default 100 ms): what a click or a step is heard at. The 400 ms momentary
+    window reads a 60 ms click by its length rather than its punch, so variants of one short key are levelled by this."""
+    y = x if x.ndim == 2 else x[:, None]
+    win, hop = int(win_s * SR), int(hop_s * SR)
+    if len(y) < win:
+        y = np.concatenate([y, np.zeros((win - len(y), y.shape[1]), np.float32)])
+    kw = _k_weight(y)
+    e = np.sum(kw ** 2, axis=1)
+    c = np.concatenate([[0.0], np.cumsum(e)])
+    starts = np.arange(0, len(e) - win + 1, hop)
+    ms = (c[starts + win] - c[starts]) / win
+    return float(-0.691 + 10 * np.log10(max(float(ms.max()), 1e-12)))
+
+
 def _k_weight(y):
     """BS.1770 K-weighting at 48 kHz (high shelf + RLB high-pass), per channel."""
     b1 = [1.53512485958697, -2.69169618940638, 1.19839281085285]
