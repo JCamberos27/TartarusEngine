@@ -68,7 +68,7 @@
 #include "CrosshairOverlay.h"
 #include "WeaponFxRenderer.h" // the weapon's laser and bullet holes
 #include "BulletHoles.h"
-#include "ReverbRender.h"
+#include "AudioTest.h" // --audio-test
 #include "ShellCasings.h"
 #include "AI/NpcDirector.h"     // the enemy squad
 #include "Combat/CombatFx.h"
@@ -570,9 +570,9 @@ int main(int argc, char** argv) {
         CrashHandler::SetInteractive(false);
         return RunUnitTests() == 0 ? 0 : 1;
     }
-    // `--reverb-render`: the audio reverb over a recorded send mix, for tools/mix_npc_video.py (no window, no audio device).
+    // `--audio-test [scene]`: the audio engine's own test, offline (no window, no audio device): a scripted tour of a scene's reverb zones.
     for (int i = 1; i < argc; ++i)
-        if (std::string(argv[i]) == "--reverb-render") return RunReverbRender(argc, argv);
+        if (std::string(argv[i]) == "--audio-test") return RunAudioTest(argc, argv);
     const bool resaveMode = !resaveIn.empty();
     // --smoke-test and --resave are non-interactive: no splash, and fatal errors go to stderr +
     // a nonzero exit instead of a modal MessageBox that a headless/CI desktop never dismisses

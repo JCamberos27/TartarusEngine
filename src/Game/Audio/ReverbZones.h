@@ -5,6 +5,7 @@
 
 #include <glm/glm.hpp>
 
+#include <string>
 #include <vector>
 
 class World;
@@ -32,7 +33,9 @@ struct ReverbZoneVolume {
     float FadeDistance = 0.0f;
     SpaceClass Class = SpaceClass::IndoorSmall;
     float TailGain = 1.0f;
-    ReverbPreset Reverb;       // the resolved preset (the class default, or the zone's own)
+    ReverbPreset Reverb;       // the resolved reverb (the class default, or the zone's own)
+    std::string Ambience;      // the ambience bed's sound key ("" = none)
+    float AmbienceVolume = 1.0f;
     unsigned Entity = 0xFFFFFFFFu;
     glm::mat4 Placed{1.0f};            // the world matrix it was built from (Refresh compares against the entity's)
     ReverbZoneComponent Src;           // the component it was built from (Refresh compares)
@@ -43,11 +46,19 @@ struct ReverbZoneVolume {
     float Weight(const glm::vec3& p) const;
 };
 
+// What one zone claimed at a point: its index in ReverbZones::Zones() and the share of the mix it took.
+struct ReverbZoneClaim {
+    int Zone = -1;
+    float Weight = 0.0f;
+};
+
 struct ReverbZoneMix {
+    static constexpr int kMaxClaims = 8;
     float Weights[kSpaceClassCount] = {0, 0, 0, 0}; // what the zones claim, per class
     float ProbeShare = 1.0f;           // the rest, left to the probe (Weights + ProbeShare = 1)
     float Gain = 1.0f;                 // the zones' tail gain, weighted (the probe's share counts 1)
-    ReverbPreset Reverb{0, 0, 0, 0, 0, 0}; // the zones' reverb presets, each times the weight it took (not renormalised: add ProbeShare x the probe's)
+    ReverbZoneClaim Claims[kMaxClaims]; // the zones that took a share, highest priority first (the reverb and the ambience follow these)
+    int ClaimCount = 0;
     int Zones = 0;                     // zones with any weight at the point
 };
 
