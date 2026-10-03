@@ -1,5 +1,8 @@
 #include "FirstPersonProcedural.h"
 
+#include "AnimatorController.h"
+#include "Components.h"
+
 #include <glm/gtc/constants.hpp>
 
 #include <algorithm>
@@ -227,6 +230,7 @@ json WeaponProceduralSettings::ToJson() const {
         {"maxRotation", w.MaxRotation}, {"maxPosition", w.MaxPosition},
         {"movePosition", w.MovePosition}, {"moveRoll", w.MoveRoll}, {"adsScale", w.AdsScale},
         {"spring", SpringJson(w.Spring)}, {"lookSmoothing", w.LookSmoothing},
+        {"freeAimZone", Vec(w.FreeAimZone)}, {"freeAimReturn", w.FreeAimReturn}, {"freeAimAdsScale", w.FreeAimAdsScale},
     };
     const auto& b = Bob;
     j["bob"] = {
@@ -265,7 +269,10 @@ json WeaponProceduralSettings::ToJson() const {
     };
     j["aim"] = {{"position", Vec(Aim.Position)}, {"rotation", Vec(Aim.Rotation)},
                 {"hipPosition", Vec(Aim.HipPosition)}, {"hipRotation", Vec(Aim.HipRotation)},
-                {"blendTime", Aim.BlendTime}, {"blend", Aim.Blend.ToJson()}};
+                {"blendTime", Aim.BlendTime}, {"blend", Aim.Blend.ToJson()},
+                {"positionAdditive", Aim.PositionAdditive}, {"rotationAdditive", Aim.RotationAdditive},
+                {"crouchPosition", Vec(Aim.CrouchPosition)}, {"crouchRotation", Vec(Aim.CrouchRotation)},
+                {"crouchBlendTime", Aim.CrouchBlendTime}, {"cameraShare", Aim.CameraShare}};
     json offsets = json::array();
     for (const auto& o : StateOffsets)
         offsets.push_back({{"match", o.Match}, {"position", Vec(o.Position)}, {"rotation", Vec(o.Rotation)},
@@ -283,7 +290,11 @@ json WeaponProceduralSettings::ToJson() const {
     j["ik"] = {{"enabled", k.Enabled}, {"gunBone", k.GunBone},
                {"rightUpper", k.RightUpper}, {"rightLower", k.RightLower}, {"rightHand", k.RightHand},
                {"leftUpper", k.LeftUpper}, {"leftLower", k.LeftLower}, {"leftHand", k.LeftHand},
-               {"offTag", k.OffTag}, {"blendTime", k.BlendTime}};
+               {"offTag", k.OffTag}, {"blendTime", k.BlendTime},
+               {"useClipCurves", k.UseClipCurves}, {"curveAll", k.CurveAll}, {"curveRightHand", k.CurveRightHand},
+               {"curveLeftHand", k.CurveLeftHand}, {"curveLook", k.CurveLook},
+               {"rightHandPosition", Vec(k.RightHandPosition)}, {"rightHandRotation", Vec(k.RightHandRotation)},
+               {"leftHandPosition", Vec(k.LeftHandPosition)}, {"leftHandRotation", Vec(k.LeftHandRotation)}};
     return j;
 }
 
@@ -352,6 +363,9 @@ bool WeaponProceduralSettings::FromJson(const json& j, WeaponProceduralSettings&
         r.Number("adsScale", o.AdsScale);
         r.Spring("spring", o.Spring);
         r.Number("lookSmoothing", o.LookSmoothing);
+        r.Vector("freeAimZone", o.FreeAimZone);
+        r.Number("freeAimReturn", o.FreeAimReturn);
+        r.Number("freeAimAdsScale", o.FreeAimAdsScale);
     });
     root.Object("bob", [&](Reader& r) {
         auto& o = s.Bob;
@@ -430,6 +444,12 @@ bool WeaponProceduralSettings::FromJson(const json& j, WeaponProceduralSettings&
         r.Vector("hipRotation", s.Aim.HipRotation);
         r.Number("blendTime", s.Aim.BlendTime);
         r.CurveField("blend", s.Aim.Blend);
+        r.Number("positionAdditive", s.Aim.PositionAdditive);
+        r.Number("rotationAdditive", s.Aim.RotationAdditive);
+        r.Vector("crouchPosition", s.Aim.CrouchPosition);
+        r.Vector("crouchRotation", s.Aim.CrouchRotation);
+        r.Number("crouchBlendTime", s.Aim.CrouchBlendTime);
+        r.Number("cameraShare", s.Aim.CameraShare);
     });
     if (const auto it = j.find("stateOffsets"); it != j.end()) {
         if (!it->is_array()) {
@@ -483,6 +503,15 @@ bool WeaponProceduralSettings::FromJson(const json& j, WeaponProceduralSettings&
         r.String("leftHand", o.LeftHand);
         r.String("offTag", o.OffTag);
         r.Number("blendTime", o.BlendTime);
+        r.Bool("useClipCurves", o.UseClipCurves);
+        r.String("curveAll", o.CurveAll);
+        r.String("curveRightHand", o.CurveRightHand);
+        r.String("curveLeftHand", o.CurveLeftHand);
+        r.String("curveLook", o.CurveLook);
+        r.Vector("rightHandPosition", o.RightHandPosition);
+        r.Vector("rightHandRotation", o.RightHandRotation);
+        r.Vector("leftHandPosition", o.LeftHandPosition);
+        r.Vector("leftHandRotation", o.LeftHandRotation);
     });
     if (!root.Ok) return false;
 
@@ -579,6 +608,31 @@ void WeaponProceduralState::PreviewShot(const WeaponRecoilSettings& r, float sec
     position = r.Position.Evaluate(u);
 }
 
+IKCurveWeights SampleIKCurves(const WeaponIKSettings& ik, const AnimatorController& ctrl,
+                              const AnimatorControllerComponent& ac, int layer) {
+    IKCurveWeights w;
+    if (!ik.UseClipCurves) return w;
+    const auto get = [&](const std::string& name) {
+        return std::clamp(AnimatorSampleCurve(ctrl, ac, layer, name, 1.0f), 0.0f, 1.0f);
+    };
+    w.All = get(ik.CurveAll);
+    w.RightHand = get(ik.CurveRightHand);
+    w.LeftHand = get(ik.CurveLeftHand);
+    w.Look = get(ik.CurveLook);
+    return w;
+}
+
+glm::vec2 StepFreeAim(glm::vec2 offset, glm::vec2 lookDelta, glm::vec2 zone, float returnSpeed, bool returning,
+                      float dt) {
+    zone = glm::max(zone, glm::vec2(0.0f));
+    offset = glm::clamp(offset + lookDelta, -zone, zone);
+    if (returning && returnSpeed > 0.0f) {
+        const float len = glm::length(offset), step = returnSpeed * dt;
+        offset = len <= step ? glm::vec2(0.0f) : offset * ((len - step) / len);
+    }
+    return offset;
+}
+
 const WeaponProceduralPose& WeaponProceduralState::Update(const WeaponProceduralSettings& s,
                                                           const WeaponProceduralInput& in) {
     const float dt = std::clamp(std::isfinite(in.Dt) ? in.Dt : 0.0f, 0.0f, 0.1f);
@@ -590,7 +644,7 @@ const WeaponProceduralPose& WeaponProceduralState::Update(const WeaponProcedural
     m_Ads = MoveToward(m_Ads, in.Ads ? 1.0f : 0.0f, s.Aim.BlendTime > 0.0f ? dt / s.Aim.BlendTime : 1.0f);
     const float ads = s.Aim.Blend.Empty() ? m_Ads : std::clamp(s.Aim.Blend.Evaluate(m_Ads), 0.0f, 1.0f);
     const auto adsMix = [ads](float hip, float aim) { return hip + (aim - hip) * ads; };
-    pose.IKWeight = m_IK;
+    pose.IKWeight = m_IK * std::clamp(in.IKCurve, 0.0f, 1.0f);
 
     // Recoil: every live shot's curves, summed, then smoothed by a spring so full-auto builds
     // into a climb and settles back instead of stepping.
@@ -673,6 +727,16 @@ const WeaponProceduralPose& WeaponProceduralState::Update(const WeaponProcedural
     m_Look = w.LookSmoothing > 0.0f
                  ? m_Look + (in.LookRate - m_Look) * (1.0f - std::exp(-glm::two_pi<float>() * w.LookSmoothing * dt))
                  : in.LookRate;
+    // Free aim: the gun holds its line while the view turns inside the zone (raw rate: the zone is in
+    // degrees actually turned).
+    glm::vec3 freeAimRot(0.0f);
+    {
+        const glm::vec2 zone = w.Enabled ? glm::max(w.FreeAimZone, glm::vec2(0.0f)) * adsMix(1.0f, w.FreeAimAdsScale)
+                                         : glm::vec2(0.0f);
+        const bool still = glm::length(in.LookRate) < 2.0f; // degrees/second: the view has stopped
+        m_FreeAim = StepFreeAim(m_FreeAim, in.LookRate * dt, zone, w.FreeAimReturn, still, dt);
+        freeAimRot = glm::vec3(-m_FreeAim.y, m_FreeAim.x, 0.0f); // the gun lags the turn, like the look sway
+    }
     if (w.Enabled) {
         const glm::vec2 look = m_Look / 100.0f;
         swayRot = glm::vec3(-look.y, look.x, -0.5f * look.x) * w.LookRotation;
@@ -687,7 +751,7 @@ const WeaponProceduralPose& WeaponProceduralState::Update(const WeaponProcedural
     }
     m_SwayRot.Step(swayRot, dt, w.Spring);
     m_SwayPos.Step(swayPos, dt, w.Spring);
-    pose.Rotation += m_SwayRot.X;
+    pose.Rotation += m_SwayRot.X + freeAimRot;
     pose.Position += m_SwayPos.X;
 
     // Bob: phase-locked to distance travelled, so it never slides against the footsteps.
@@ -773,8 +837,15 @@ const WeaponProceduralPose& WeaponProceduralState::Update(const WeaponProcedural
 
     // ADS aim offset. (The hip carry, Aim.Hip*, is placed on the whole rig by the presentation:
     // through IK it would fade out with the IK in Draw and Regrip.)
-    pose.Position += s.Aim.Position * ads;
-    pose.Rotation += s.Aim.Rotation * ads;
+    // Crouched, the sights-up pose gets its own offset on top.
+    m_CrouchAds = MoveToward(m_CrouchAds, std::clamp(in.Crouch, 0.0f, 1.0f),
+                             s.Aim.CrouchBlendTime > 0.0f ? dt / s.Aim.CrouchBlendTime : 1.0f);
+    const glm::vec3 aimPos = s.Aim.Position + s.Aim.CrouchPosition * m_CrouchAds;
+    const glm::vec3 aimRot = s.Aim.Rotation + s.Aim.CrouchRotation * m_CrouchAds;
+    const float camShare = std::clamp(s.Aim.CameraShare, 0.0f, 1.0f);
+    pose.Position = BlendAdsChannel(pose.Position, aimPos * (1.0f - camShare), ads, std::clamp(s.Aim.PositionAdditive, 0.0f, 1.0f));
+    pose.Rotation = BlendAdsChannel(pose.Rotation, aimRot, ads, std::clamp(s.Aim.RotationAdditive, 0.0f, 1.0f));
+    pose.CameraOffset -= aimPos * (camShare * ads); // the view moves toward the gun by the share the gun doesn't
 
     // Per-state pose offsets.
     m_StateWeights.resize(s.StateOffsets.size(), 0.0f);

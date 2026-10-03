@@ -28,6 +28,7 @@ public:
     // #165 - were hard-coded.
     float MouseSensitivity = 0.1f;
     bool InvertY = false;
+    float StickLookDegPerSec = 180.0f; // gamepad right stick turn rate
     float KillY = -20.0f;
     glm::vec3 RespawnFeet{0.0f, 1.0f, 0.0f};
 

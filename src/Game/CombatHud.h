@@ -1,6 +1,7 @@
 #pragma once
 
 #include "HudText.h"
+#include "Components.h"
 
 #include <glm/glm.hpp>
 
@@ -33,6 +34,13 @@ struct CombatHudInput {
 
 class CombatHud {
 public:
+    // Scene tuning (feed life, streak window, subtitle linger); the defaults are the old fixed values.
+    FxHudSettingsComponent Settings;
+    // The kill streak after a kill `sinceLastKill` seconds after the previous one.
+    static int NextStreak(const FxHudSettingsComponent& s, int streak, float sinceLastKill) {
+        return sinceLastKill <= s.StreakWindow ? streak + 1 : 1;
+    }
+    static bool FeedExpired(const FxHudSettingsComponent& s, float age) { return age > s.FeedLife; }
     // Forgets the feed, the subtitles and the streak (a new Play).
     void Reset();
     // The player's round killed `entity` (a soldier of `npcs`).

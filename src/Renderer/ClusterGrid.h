@@ -62,6 +62,9 @@ public:
     // fragment shader turn a view-space depth into a slice index with one log + fma.
     static glm::vec4 ZParams(float nearZ, float farZ);
 
+    // Allocates the cluster buffers and builds the cull programs now (load-time warm-up).
+    void WarmUp() { EnsureCreated(); }
+
 private:
     void EnsureCreated();
     // binding 2. #160: one AABB set per recently-used projection. With a single set, the Scene and

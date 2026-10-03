@@ -5,6 +5,7 @@
 #include <glm/gtc/quaternion.hpp>
 
 #include "FirstPersonBodyContract.h"
+#include "IK.h" // IK::SpineDistribution
 
 #include <cstdint>
 #include <functional>
@@ -19,6 +20,9 @@ class Player;
 class World;
 struct FirstPersonBodyComponent;
 struct LocalTRS;
+
+// One body node's arm-shape link to the arms rig (FirstPersonBodyArmShapeLinks).
+struct FirstPersonArmShapeLink { int Body, Rig; bool Clavicle; };
 
 // The world gun this frame (FirstPersonPresentation::WorldGunInput): the first-person gun's butt and
 // bore (world), and how the world copy is placed off it - its butt into the body's right shoulder
@@ -125,11 +129,14 @@ private:
     void ApplySpineAim(const Camera& camera, float amount, float twist);
     // Turns the chest by `modelDelta` (model space), spread evenly down the spine bones, on every piece.
     void ApplySpineRotation(const glm::quat& modelDelta);
-    // The spine's per-bone turn for a spine of `n` bones, applied bone by bone on every piece.
-    void RotateSpine(const std::function<glm::quat(int)>& stepFor);
-    // The same over any chain of (standard-named) bones, root first - on `models` (default: the pieces).
-    void RotateChain(const std::vector<std::string>& bones, const std::function<glm::quat(int)>& stepFor,
-                     const std::vector<std::shared_ptr<Model>>* models = nullptr);
+    // The spine's per-bone turn, applied bone by bone on every piece. `stepFor(divisor)` gives the turn a bone takes:
+    // the whole turn divided by `divisor` (the bone count for the even spread; see IK::ChainDivisors).
+    void RotateSpine(const std::function<glm::quat(float)>& stepFor);
+    // The same over any chain of (standard-named) bones, root first - on `models` (default: the pieces). With
+    // `dist` (spine chains) the bones take weighted shares, per-bone limits and a pelvis share; null = even.
+    void RotateChain(const std::vector<std::string>& bones, const std::function<glm::quat(float)>& stepFor,
+                     const std::vector<std::shared_ptr<Model>>* models = nullptr, const IK::SpineDistribution* dist = nullptr);
+    IK::SpineDistribution m_Spine; // the body component's Spine fields, as of the last update
     void MakeTwins(World& world);
     void SyncTwins(World& world); // each twin onto its piece: transform, and the pose as posed so far
     // Rigid head wear's twins (a balaclava, glasses) onto the head twin's head bone, once the twins are posed.
@@ -179,6 +186,8 @@ private:
     float m_StepOffset = 0.0f;     // metres the body is off the capsule's height: a stair's pop, eased out
     float m_LastCapsuleY = 0.0f;
     bool m_HaveCapsule = false, m_LastGrounded = false;
+    glm::vec3 m_GroundVelocity{0.0f};           // the capsule's horizontal velocity (foot slide correction)
+    IK::FootSlide m_Slide;                      // foot pinning + stride warping (off by default)
     bool m_FootPlanted[2] = {false, false};     // foot lock: pinned in the world while planted
     glm::vec3 m_FootLock[2] = {glm::vec3(0.0f), glm::vec3(0.0f)};
     float m_FootLockWeight[2] = {0.0f, 0.0f};
@@ -217,6 +226,12 @@ private:
     // Per model: does it skin anything the arms' solve moves (under its top spine bone or the clavicles)?
     // Legs, feet and rigid pieces don't, so the solve leaves them be (nothing of theirs it moves is drawn).
     std::map<const Model*, bool> m_SkinsUpperBody;
+    // The body / arms-rig node pairs CopyArmShape works out by name, per (piece model, rig): the same pairs every
+    // frame, so found once. Keyed by model addresses and node counts; cleared at Stop like m_HeadVerts.
+    struct ArmShapeCache { const Model* Body; const Model* Rig; int BodyNodes, RigNodes; std::vector<FirstPersonArmShapeLink> Links; };
+    std::vector<ArmShapeCache> m_ArmShapeCache;
+    void CopyArmShapeCached(const Model& m, const Model& rig, float weight, std::vector<LocalTRS>& pose, const std::vector<int>& parents,
+                            float clavicleWeight);
     bool SkinsUpperBody(const Model& m);
     // The same question for any set of roots (a chain's bones), cached by the chain's first name.
     std::map<std::pair<const Model*, std::string>, bool> m_SkinsUnder;
@@ -307,11 +322,14 @@ void FirstPersonBodyCopyArmShape(const Model& m, const Model& rig, float weight,
                                  const std::vector<int>& parents, float clavicleWeight);
 // The same with the body / rig node pairs worked out once (FirstPersonBodyArmShapeLinks), for a body that holds the
 // same rig frame after frame - no name lookups per frame.
-struct FirstPersonArmShapeLink { int Body, Rig; bool Clavicle; };
 void FirstPersonBodyArmShapeLinks(const Model& m, const Model& rig, const std::vector<int>& parents,
                                   std::vector<FirstPersonArmShapeLink>& out);
 void FirstPersonBodyCopyArmShape(const std::vector<FirstPersonArmShapeLink>& links, const Model& rig, float weight,
                                  std::vector<LocalTRS>& pose, float clavicleWeight);
+// FirstPersonBodyArmShapeLinks' core, by node index: `rigOf(i)` is body node i's counterpart in the rig (-1 none),
+// `clavicles` the body's two collarbone nodes (-1 none). The nodes under a clavicle (parents come first), in order.
+void FirstPersonBodyArmShapeLinksFrom(int count, const std::vector<int>& parents, const int (&clavicles)[2],
+                                      const std::function<int(int)>& rigOf, std::vector<FirstPersonArmShapeLink>& out);
 float FirstPersonBodyFootPelvis(float offL, float offR, float maxDrop, float maxRaise);
 glm::vec3 FirstPersonBodyEye(const glm::vec3& restHead, const glm::vec3& head, float bob, const glm::vec3& offset);
 // A piece's Near Hide: the body's, and for clothing at least Clothing Near Hide.

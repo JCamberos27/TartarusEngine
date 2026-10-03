@@ -107,6 +107,7 @@ bool FirstPersonPresentation::Start(World& world, AssetLibrary& assets,
     m_PendingSlot = -1;
     m_WalkSpeed = config.MoveSpeed;
     m_SprintSpeed = config.MoveSpeed * config.SprintMultiplier;
+    m_EyeRadius = config.EyeRadius;
     // The other slots' spent cases too (StartSet warms its own): a swap to the other gun mustn't stall on its first round.
     for (size_t i = 1; i < m_SlotSets.size(); ++i) WarmEjectAssets(assets, m_SlotSets[i]);
     return StartSet(world, assets, 0, false);
@@ -966,6 +967,9 @@ void FirstPersonPresentation::WriteIK() {
     const glm::quat C = NormalizeRotation(QuaternionFromEulerYXZ(m_Set.ViewRotation) * QuaternionFromEulerYXZ(m_Rotation));
     const glm::quat Ci = glm::inverse(C);
     rig->Weight = p.IKWeight;
+    rig->LimbA.CurveWeight = m_IKCurves.RightHand;
+    rig->LimbB.CurveWeight = m_IKCurves.LeftHand;
+    rig->LookCurveWeight = m_IKCurves.Look;
     // With the sights up through a reload or mag check, only the GUN is carried onto Aim's sight
     // line (about the camera bone, in model space); the arms follow it by IK, so the shoulders
     // stay where the body is and nothing has to settle back when the action ends.
@@ -988,6 +992,13 @@ void FirstPersonPresentation::WriteIK() {
     WriteHandAnchor(*rig, carry, adsR, adsT);
     rig->LimbA.Swivel = carry.Swivel[0];
     rig->LimbB.Swivel = carry.Swivel[1];
+    {   // hand-vs-gun offsets (metres to the arms rig's units)
+        const WeaponIKSettings& ik = m_Set.Procedural.IK;
+        rig->LimbA.GripPosition = ik.RightHandPosition / m_Scale;
+        rig->LimbA.GripRotation = ik.RightHandRotation;
+        rig->LimbB.GripPosition = ik.LeftHandPosition / m_Scale;
+        rig->LimbB.GripRotation = ik.LeftHandRotation;
+    }
     rig->LocalRotations.clear();
     if (carry.Action)
         for (const auto& [bone, d] : carry.Action->Locals)
@@ -1428,6 +1439,9 @@ void FirstPersonPresentation::Tick(float dt, const glm::vec3& velocity, bool spr
     in.WallSide = m_WallSide;
     in.Ads = ac->HasTag(K::kTagAds);
     in.IKOff = ac->HasTag(K::kTagHidden) || (!m_Set.Procedural.IK.OffTag.empty() && ac->HasTag(m_Set.Procedural.IK.OffTag.c_str()));
+    m_IKCurves = m_Controller ? SampleIKCurves(m_Set.Procedural.IK, *m_Controller, *ac) : IKCurveWeights{};
+    in.IKCurve = m_IKCurves.All;
+    in.Crouch = m_Crouch;
     in.Lean = m_Equipped ? std::clamp(lean + m_PeekLean, -1.0f, 1.0f) : 0.0f;
     in.WalkSpeed = m_WalkSpeed;
     in.SprintSpeed = m_SprintSpeed;
@@ -1497,11 +1511,11 @@ void FirstPersonPresentation::Update(World& world, Camera& camera) {
             const glm::vec3 dir = camera.Right() * (side > 0.0f ? 1.0f : -1.0f);
             const float origin[3] = {camera.Position.x, camera.Position.y, camera.Position.z};
             const float d[3] = {dir.x, dir.y, dir.z};
-            constexpr float kEyeRadius = 0.12f; // keeps the near plane off the wall
+            // keeps the near plane off the wall; tunable from FirstPersonControllerComponent
             RaycastHit hit;
             QueryFilter filter;
             filter.HitTriggers = 0;
-            if (PhysicsWorld::SphereCastFiltered(origin, d, kEyeRadius, std::fabs(side), filter, hit) && hit.Hit) {
+            if (PhysicsWorld::SphereCastFiltered(origin, d, m_EyeRadius, std::fabs(side), filter, hit) && hit.Hit) {
                 const float room = std::max(0.0f, hit.Distance - 0.02f);
                 const float fraction = room / std::fabs(side);
                 side *= fraction;

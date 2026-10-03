@@ -938,21 +938,13 @@ void EditorLayer::DrawAssetImportInspector(World& world, AssetLibrary& assets, c
             // Channel isolation toggles - "Combined" shows the texture as normal; R/G/B/A each
             // broadcast that one channel to grayscale, e.g. to check what a MaskMap's alpha
             // (often Smoothness) actually contains without exporting it to a separate file first.
-            auto channelButton = [&](const char* label, int channel) {
-                bool active = m_ChannelPreviewChannel == channel;
-                if (active) ImGui::PushStyleColor(ImGuiCol_Button, ImGui::GetStyleColorVec4(ImGuiCol_ButtonActive));
-                if (ImGui::Button(label)) m_ChannelPreviewChannel = channel;
-                if (active) ImGui::PopStyleColor();
-            };
-            channelButton("Combined", -1);
-            ImGui::SameLine();
-            channelButton("R", 0);
-            ImGui::SameLine();
-            channelButton("G", 1);
-            ImGui::SameLine();
-            channelButton("B", 2);
-            ImGui::SameLine();
-            channelButton("A", 3);
+            {
+                static const char* const kChannelLabels[] = {"Combined", "R", "G", "B", "A"};
+                static const char* const kChannelTips[] = {"Show the texture as authored", "Red channel as grayscale",
+                    "Green channel as grayscale", "Blue channel as grayscale", "Alpha channel as grayscale"};
+                int seg = m_ChannelPreviewChannel + 1; // -1 (Combined) .. 3 (A) -> 0..4
+                if (Segmented("##channelPreview", &seg, kChannelLabels, 5, kChannelTips)) m_ChannelPreviewChannel = seg - 1;
+            }
 
             // Render (or reuse) the offscreen preview - only when the inspected asset or the
             // selected channel actually changed since the last frame, not unconditionally.
@@ -1239,7 +1231,7 @@ bool EditorLayer::TexturePickerPopup(const char* popupId, AssetLibrary& assets, 
         ImGui::EndChild();
 
         ImGui::Separator();
-        if (ImGui::Button("Import from disk...", ImVec2(-FLT_MIN, 0.0f))) {
+        if (EditorUIPrimitives::SecondaryButton("Import from disk...", ImVec2(-FLT_MIN, 0.0f))) {
             std::string diskPath = FileDialog::OpenFile(
                 "Images\0*.png;*.jpg;*.jpeg;*.tga;*.bmp\0All Files\0*.*\0", m_Window);
             if (!diskPath.empty()) {
@@ -1299,7 +1291,7 @@ bool EditorLayer::MaterialPickerPopup(const char* popupId, AssetLibrary& assets,
         ImGui::EndChild();
 
         ImGui::Separator();
-        if (ImGui::Button("Import from disk...", ImVec2(-FLT_MIN, 0.0f))) {
+        if (EditorUIPrimitives::SecondaryButton("Import from disk...", ImVec2(-FLT_MIN, 0.0f))) {
             std::string diskPath = FileDialog::OpenFile("Material\0*.mat\0All Files\0*.*\0", m_Window);
             if (!diskPath.empty()) {
                 outPath = diskPath;
@@ -1359,12 +1351,16 @@ void EditorLayer::DrawMaterialPreview(const std::shared_ptr<MaterialAsset>& ma, 
         }
         ImGui::SameLine();
     }
-    for (int i = 0; i < (int)Shape::Count; ++i) {
-        if (i > 0) ImGui::SameLine(0.0f, 2.0f);
-        const bool active = (int)m_MaterialPreviewShape == i;
-        if (active) ImGui::PushStyleColor(ImGuiCol_Button, ImGui::GetStyleColorVec4(ImGuiCol_ButtonActive));
-        if (ImGui::SmallButton(MaterialPreviewRenderer::ShapeName((Shape)i))) m_MaterialPreviewShape = (Shape)i;
-        if (active) ImGui::PopStyleColor();
+    {
+        static const char* kShapeLabels[(int)Shape::Count] = {};
+        if (!kShapeLabels[0]) {
+            for (int i = 0; i < (int)Shape::Count; ++i) {
+                kShapeLabels[i] = MaterialPreviewRenderer::ShapeName((Shape)i);
+            }
+        }
+        int shape = (int)m_MaterialPreviewShape;
+        EditorUIPrimitives::Segmented("##materialPreviewShapes", &shape, kShapeLabels, (int)Shape::Count);
+        m_MaterialPreviewShape = (Shape)shape;
     }
 
     const float avail = ImGui::GetContentRegionAvail().x;

@@ -70,8 +70,24 @@ struct AnimatorController {
         float Time = 1.0f;
     };
 
+    // A named float curve authored on a state, over the state's normalized time (0 = entry, 1 = the end
+    // of one pass; a looping state repeats it). Game code reads them back through AnimatorSampleCurve to
+    // scale layers of its own - e.g. "IK_LeftHand" 1 -> 0 over the frames where the hand leaves the gun.
+    struct CurveKey {
+        float Time = 0.0f;
+        float Value = 1.0f;
+    };
+    struct Curve {
+        std::string Name;
+        std::vector<CurveKey> Keys; // sorted by Time; linear between keys, held outside them
+    };
+    // Value of `keys` at normalized time `t` (`fallback` when there are no keys).
+    static float EvaluateCurve(const std::vector<CurveKey>& keys, float t, float fallback = 1.0f);
+
     struct State {
         std::string Name;
+        std::vector<Curve> Curves;   // weight curves by name (see Curve)
+        const Curve* FindCurve(const std::string& name) const;
         std::vector<Motion> Motions; // one per track (missing entries = empty)
         float Speed = 1.0f;
         std::string SpeedParam;      // optional Float parameter multiplying Speed
@@ -204,6 +220,13 @@ std::shared_ptr<const AnimatorController> GetAnimatorController(const std::strin
 // Project-relative paths of every .controller file under the project, sorted.
 std::vector<std::string> FindAnimatorControllers();
 
+// The value of the weight curve `name` on `layer` of `ac` right now: every state in the layer's crossfade
+// stack is sampled at its own phase and the results blend by the same eased fades the pose does. A state
+// without the curve contributes `fallback` (so no curve anywhere = `fallback`, i.e. today's behaviour).
+// Pure data: no model or GPU. `ctrl` must be the controller `ac` plays.
+float AnimatorSampleCurve(const AnimatorController& ctrl, const AnimatorControllerComponent& ac, int layer,
+                          const std::string& name, float fallback = 1.0f);
+
 // Advances one component's state machines by `dt` without touching any model: transitions,
 // crossfade stacks, phases, events and the base-layer state fields. `stateLength(layer, state)`
 // returns a state's length in seconds for the current parameters (<= 0 counts as 1 s). Split
@@ -221,3 +244,13 @@ bool AnimatorStartInState(const AnimatorController& ctrl, AnimatorControllerComp
 // mirror their driver. Entities with one skip the plain Animation component. `dt` is the game
 // step (0 while paused).
 void UpdateAnimatorControllers(World& world, AssetLibrary& assets, float dt);
+
+// The model files (relative or absolute, no "#clip") the clips of `ctrl`'s states reach for `track`,
+// each once; clips a rig owns (no file extension) are not in it. Pure data.
+std::vector<std::string> AnimatorControllerClipFiles(const AnimatorController& ctrl, int track);
+
+// Loads the clip files of every Animator Controller in the world on worker threads, then attaches the
+// clips to each rig, so pressing Play meets them ready (the first Play frame used to stall ~1 s on it).
+// Call once per frame from the editor loop, on the main thread, with AssetLibrary::PumpAsync running;
+// it does its work twice a second and only does anything for what is new. Never loads synchronously.
+void PrefetchAnimatorClips(World& world, AssetLibrary& assets);

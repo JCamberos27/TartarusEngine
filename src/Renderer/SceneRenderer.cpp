@@ -244,6 +244,23 @@ void SceneRenderer::ApplyFrameState(Shader& program, const FrameState& fs) const
     program.SetInt("uApplyTonemap", 0);
 }
 
+int SceneRenderer::WarmShaderVariants(World& world) {
+    std::unordered_map<ShaderAsset*, std::vector<ShaderVariantKey>> done;
+    int built = 0;
+    for (auto entity : world.Registry.view<RenderableComponent>()) {
+        for (const auto& ma : world.Registry.get<RenderableComponent>(entity).Materials) {
+            if (!ma || !ma->Shader) continue;
+            const ShaderVariantKey key = ShaderVariantKeyFor(ma->Mat, *ma->Shader);
+            std::vector<ShaderVariantKey>& keys = done[ma->Shader.get()];
+            if (std::find(keys.begin(), keys.end(), key) != keys.end()) continue;
+            keys.push_back(key);
+            ma->Shader->Variant(key);
+            ++built;
+        }
+    }
+    return built;
+}
+
 void SceneRenderer::RenderScene(World& world, const RenderFrameContext& ctx,
                                 const SceneRenderInputs& in, RenderStats* outStats) {
     Sky&        sky         = *in.sky;
@@ -447,8 +464,10 @@ void SceneRenderer::RenderScene(World& world, const RenderFrameContext& ctx,
         const bool playerBody = bodyTag && !ctx.EditorView && ctx.OwnerView;
         if (validBounds && !playerBody) {
             // Bounds are bind-pose only. A skinned model's limbs can swing well past them, so
-            // inflate around the centre before the frustum test for animated models (#113).
-            if (renderable.ModelRef->HasAnimations()) {
+            // inflate around the centre before the frustum test for rigged models (#113).
+            // Check HasBones() rather than HasAnimations() to handle characters whose animation
+            // clips live in other files - they have bones but report HasAnimations() false.
+            if (renderable.ModelRef->HasBones()) {
                 glm::vec3 c = (boundsMin + boundsMax) * 0.5f;
                 glm::vec3 h = (boundsMax - boundsMin) * 0.5f * 1.75f;
                 boundsMin = c - h;

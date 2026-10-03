@@ -1922,7 +1922,7 @@ bool CharacterFitsAt(float cylinderHalfHeight) {
 
 // --- Ragdolls --------------------------------------------------------------------------------
 
-int CreateRagdoll(unsigned entity, const RagdollPart* parts, int count) {
+int CreateRagdoll(unsigned entity, const RagdollPart* parts, int count, const RagdollParams* params) {
     if (!g_State || !g_State->scene || !parts || count <= 0) return -1;
     PhysicsState& s = *g_State;
     int id = -1;
@@ -1930,7 +1930,8 @@ int CreateRagdoll(unsigned entity, const RagdollPart* parts, int count) {
         if (s.ragdolls[i].Bodies.empty()) { id = (int)i; break; }
     if (id < 0) { id = (int)s.ragdolls.size(); s.ragdolls.emplace_back(); }
     PhysicsState::Ragdoll& rd = s.ragdolls[(size_t)id];
-    PxMaterial* mat = s.physics->createMaterial(0.8f, 0.7f, 0.05f);
+    const RagdollParams prm = params ? *params : RagdollParams();
+    PxMaterial* mat = s.physics->createMaterial(prm.StaticFriction, prm.DynamicFriction, prm.Restitution);
     for (int i = 0; i < count; ++i) {
         const RagdollPart& p = parts[i];
         const PxTransform pose(PxVec3(p.Position[0], p.Position[1], p.Position[2]),
@@ -1941,12 +1942,31 @@ int CreateRagdoll(unsigned entity, const RagdollPart* parts, int count) {
         sh->setQueryFilterData(PxFilterData(1u, 0u, (PxU32)id + 1u, 0u));
         sh->userData = reinterpret_cast<void*>(static_cast<std::uintptr_t>((2u << 16) | (unsigned)i)); // RaycastBodyParts: ragdoll part i
         PxRigidBodyExt::setMassAndUpdateInertia(*b, std::max(p.Mass, 0.1f));
-        b->setLinearDamping(0.08f);
-        b->setAngularDamping(0.25f);
-        b->setSolverIterationCounts(16, 4);
-        b->setMaxDepenetrationVelocity(3.0f);
-        b->setSleepThreshold(0.08f);
+        if (p.InertiaHalfWidth > 0.0f || p.InertiaScale != 1.0f) {
+            PxVec3 I = b->getMassSpaceInertiaTensor();
+            if (p.InertiaHalfWidth > 0.0f) {
+                // A box of the part's width and depth, as long as its capsule: principal axes along the bone, across the body, and
+                // front to back.
+                const float m = b->getMass(), w = 2.0f * p.InertiaHalfWidth, d = 2.0f * std::max(p.InertiaHalfDepth, 0.01f);
+                const float L = 2.0f * (std::max(p.HalfLength, 0.005f) + std::max(p.Radius, 0.01f));
+                PxVec3 lat = pose.q.rotateInv(PxVec3(p.InertiaLateral[0], p.InertiaLateral[1], p.InertiaLateral[2]));
+                lat.x = 0.0f;
+                if (lat.magnitudeSquared() > 1e-6f) {
+                    lat.normalize();
+                    const PxVec3 x(1.0f, 0.0f, 0.0f), z = x.cross(lat);
+                    b->setCMassLocalPose(PxTransform(PxVec3(0.0f), PxQuat(PxMat33(x, lat, z)).getNormalized()));
+                    I = PxVec3(m / 12.0f * (w * w + d * d), m / 12.0f * (d * d + L * L), m / 12.0f * (w * w + L * L));
+                }
+            }
+            b->setMassSpaceInertiaTensor(I * std::max(p.InertiaScale, 0.05f));
+        }
+        b->setLinearDamping(prm.LinearDamping);
+        b->setAngularDamping(prm.AngularDamping);
+        b->setSolverIterationCounts((PxU32)std::max(prm.SolverPosIters, 1), (PxU32)std::max(prm.SolverVelIters, 1));
+        b->setMaxDepenetrationVelocity(prm.Depenetration);
+        b->setSleepThreshold(prm.SleepThreshold);
         b->setLinearVelocity(PxVec3(p.Velocity[0], p.Velocity[1], p.Velocity[2]));
+        b->setAngularVelocity(PxVec3(p.AngularVelocity[0], p.AngularVelocity[1], p.AngularVelocity[2]));
         b->userData = reinterpret_cast<void*>(static_cast<std::uintptr_t>(entity));
         s.scene->addActor(*b);
         rd.Bodies.push_back(b);
@@ -1955,22 +1975,47 @@ int CreateRagdoll(unsigned entity, const RagdollPart* parts, int count) {
     rd.Drive.assign((size_t)count, nullptr);
     for (int i = 1; i < count; ++i) {
         const RagdollPart& p = parts[i];
-        if (p.Parent < 0 || p.Parent >= i) continue;
+        if (p.Parent < 0 || p.Parent >= count || p.Parent == i) continue; // any other part (the head hangs off the neck, which comes after it)
         PxRigidDynamic* parent = rd.Bodies[(size_t)p.Parent];
         PxRigidDynamic* child = rd.Bodies[(size_t)i];
-        // The joint frame: at the anchor, its X along the child (the twist axis).
+        // The joint frame: at the anchor, its X along the child (the twist axis); an anatomical joint's is its neutral frame.
         const PxTransform childPose = child->getGlobalPose();
-        const PxTransform frame(PxVec3(p.Anchor[0], p.Anchor[1], p.Anchor[2]), childPose.q);
+        const PxQuat frameQ = p.Anatomical ? PxQuat(p.LimitFrame[0], p.LimitFrame[1], p.LimitFrame[2], p.LimitFrame[3]).getNormalized() : childPose.q;
+        const PxTransform frame(PxVec3(p.Anchor[0], p.Anchor[1], p.Anchor[2]), frameQ);
         PxD6Joint* j = PxD6JointCreate(*s.physics, parent, parent->getGlobalPose().transformInv(frame), child, childPose.transformInv(frame));
         if (!j) continue;
         j->setMotion(PxD6Axis::eTWIST, PxD6Motion::eLIMITED);
         j->setMotion(PxD6Axis::eSWING1, PxD6Motion::eLIMITED);
         j->setMotion(PxD6Axis::eSWING2, PxD6Motion::eLIMITED);
-        const float tw = PxPi * std::clamp(p.TwistDeg, 1.0f, 170.0f) / 180.0f;
-        const float sw = PxPi * std::clamp(p.SwingDeg, 1.0f, 170.0f) / 180.0f;
-        j->setTwistLimit(PxJointAngularLimitPair(-tw, tw));
-        j->setSwingLimit(PxJointLimitCone(sw, sw));
+        if (p.Anatomical) {
+            // Built in the death pose, the joint's rest is where it is: the ranges are from the neutral, so each shifts by where the
+            // bone already points (its direction in the neutral frame, as the swing angles PhysX measures: 4 atan(q / (1 + w))),
+            // widened to hold the pose it starts in.
+            const PxVec3 d = frameQ.rotateInv(childPose.q.rotate(PxVec3(1.0f, 0.0f, 0.0f)));
+            const float w = 1.0f + d.x, qy = -d.z, qz = d.y; // the shortest arc from +X to d, unnormalised
+            const float n = std::sqrt(w * w + qy * qy + qz * qz);
+            const float offY = n > 1e-6f ? 4.0f * std::atan2(qy / n, 1.0f + w / n) : 0.0f;
+            const float offZ = n > 1e-6f ? 4.0f * std::atan2(qz / n, 1.0f + w / n) : 0.0f;
+            const float lim = PxPi - 0.02f;
+            auto range = [&](float lo, float hi, float off, float& outLo, float& outHi) {
+                lo = PxPi * lo / 180.0f - off; hi = PxPi * hi / 180.0f - off;
+                outLo = std::clamp(std::min(lo, -0.005f), -lim, 0.0f);
+                outHi = std::clamp(std::max(hi, 0.005f), 0.0f, lim);
+            };
+            float y0, y1, z0, z1;
+            range(p.SwingYMin, p.SwingYMax, offY, y0, y1);
+            range(p.SwingZMin, p.SwingZMax, offZ, z0, z1);
+            j->setPyramidSwingLimit(PxJointLimitPyramid(y0, y1, z0, z1));
+            const float t0 = std::clamp(PxPi * p.TwistMin / 180.0f, -lim, -0.005f), t1 = std::clamp(PxPi * p.TwistMax / 180.0f, 0.005f, lim);
+            j->setTwistLimit(PxJointAngularLimitPair(t0, t1));
+        } else {
+            const float tw = PxPi * std::clamp(p.TwistDeg, 1.0f, 170.0f) / 180.0f;
+            const float sw = PxPi * std::clamp(p.SwingDeg, 1.0f, 170.0f) / 180.0f;
+            j->setTwistLimit(PxJointAngularLimitPair(-tw, tw));
+            j->setSwingLimit(PxJointLimitCone(sw, sw));
+        }
         j->setDrivePosition(PxTransform(PxIdentity));
+        if (p.JointDamping > 0.0f) j->setDrive(PxD6Drive::eSLERP, PxD6JointDrive(0.0f, p.JointDamping, PX_MAX_F32, true));
         rd.Drive[(size_t)i] = j;
         rd.Joints.push_back(j);
     }
@@ -2019,6 +2064,22 @@ void SetRagdollDrive(int ragdoll, float stiffness, float damping) {
     const PxD6JointDrive drive(std::max(stiffness, 0.0f), std::max(damping, 0.0f), PX_MAX_F32, /*isAcceleration=*/true);
     for (PxD6Joint* j : g_State->ragdolls[(size_t)ragdoll].Drive)
         if (j) j->setDrive(PxD6Drive::eSLERP, drive);
+}
+
+void SetRagdollPartDrive(int ragdoll, int part, float stiffness, float damping) {
+    if (!g_State || ragdoll < 0 || ragdoll >= (int)g_State->ragdolls.size()) return;
+    auto& drive = g_State->ragdolls[(size_t)ragdoll].Drive;
+    if (part < 0 || part >= (int)drive.size() || !drive[(size_t)part]) return;
+    drive[(size_t)part]->setDrive(PxD6Drive::eSLERP, PxD6JointDrive(std::max(stiffness, 0.0f), std::max(damping, 0.0f), PX_MAX_F32, true));
+}
+
+bool GetRagdollPartInertia(int ragdoll, int part, float out[3]) {
+    if (!g_State || ragdoll < 0 || ragdoll >= (int)g_State->ragdolls.size() || !out) return false;
+    auto& rd = g_State->ragdolls[(size_t)ragdoll];
+    if (part < 0 || part >= (int)rd.Bodies.size() || !rd.Bodies[(size_t)part]) return false;
+    const PxVec3 I = rd.Bodies[(size_t)part]->getMassSpaceInertiaTensor();
+    out[0] = I.x; out[1] = I.y; out[2] = I.z;
+    return true;
 }
 
 void SetRagdollDriveTarget(int ragdoll, int part, const float rotXYZW[4]) {

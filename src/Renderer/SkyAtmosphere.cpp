@@ -154,6 +154,11 @@ SkyAtmosphere::~SkyAtmosphere() {
     if (m_Vao) glDeleteVertexArrays(1, &m_Vao);
 }
 
+void SkyAtmosphere::WarmUp(bool clouds) {
+    EnsureResources();
+    if (clouds) m_Clouds.WarmUp();
+}
+
 void SkyAtmosphere::EnsureResources() {
     if (m_Ubo) return;
     m_TransmittanceShader = std::make_unique<Shader>(ShaderLibrary::ReadFileRequired("AtmosphereTransmittance.comp.glsl"), "AtmosphereTransmittance");

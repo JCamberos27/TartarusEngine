@@ -2,6 +2,7 @@
 
 #include "AiMath.h"
 #include "Combat/Damage.h"
+#include "Components.h" // SquadSettingsComponent, RagdollSettingsComponent
 #include "CoverSystem.h"
 #include "NavMesh.h"
 #include "Npc.h"
@@ -56,6 +57,10 @@ public:
     // Remembers the scene's spawns and settings; the navigation mesh and the first soldiers come on the
     // first Think, once the physics world is up. False when the scene has no NPC Spawn.
     bool Start(World& world, AssetLibrary& assets, const FirstPersonControllerComponent* playerConfig);
+    // Reads the scene's Squad Settings and Ragdoll Settings (Start does; the defaults without them).
+    void ApplySettings(const entt::registry& reg);
+    const SquadSettingsComponent& Settings() const { return m_Cfg; }
+    const RagdollSettingsComponent& RagdollSettings() const { return m_RagdollCfg; }
     void Stop(World& world);
     bool Active() const { return m_Active; }
 
@@ -78,6 +83,8 @@ public:
 
     // --- debug / tests ---
     const std::vector<std::unique_ptr<Npc>>& Npcs() const { return m_Npcs; }
+    // Soldier `index` has hit-flinch kicks still settling (for tests).
+    bool FlinchActive(int index) const { const auto it = m_Flinch.find(index); return it != m_Flinch.end() && it->second.Active(m_Now); }
     const NavMesh& Nav() const { return m_Nav; }
     const CoverSystem& Cover() const { return m_Cover; }
     CombatFx* Fx = nullptr;    // gun reports, flashes, tracers, whizzes (optional; the host owns it)
@@ -197,6 +204,11 @@ private:
     std::vector<SpawnPoint> m_Spawns;
     int m_SquadSize = 4;
     float m_RespawnDelay = 8.0f, m_Difficulty = 1.0f, m_DamageScale = 0.45f;
+    SquadSettingsComponent m_Cfg;            // the scene's Squad Settings (defaults without one)
+    struct DeathCapture { NpcRagdoll::BoneSnapshot Bones; float Dt = 0.0f; };
+    std::unordered_map<int, DeathCapture> m_DeathBones; // by soldier index, from the hit to the ragdoll's start
+    std::unordered_map<int, NpcFlinch> m_Flinch;       // by soldier index: the hit-flinch kicks still settling
+    RagdollSettingsComponent m_RagdollCfg;   // ... and Ragdoll Settings
     bool m_Respawn = true;
     std::shared_ptr<FirstPersonControllerComponent> m_ViewConfig;
     NpcHoldSettings m_HoldSettings;        // the scene player's First Person Body numbers

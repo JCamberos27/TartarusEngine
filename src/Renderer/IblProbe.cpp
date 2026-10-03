@@ -235,6 +235,7 @@ void IblProbe::Bake(const glm::vec3& horizonColor, const glm::vec3& zenithColor)
     // GL, so GLStateCache's shadow of those is now stale. Without this, the first frame after a
     // bake (the sky IBL bake runs on scene load) skips a real bind it thinks is redundant and
     // samplers read undefined texture state — audit GL-206 / the residual KHR 131204/131222.
+    glUseProgram(0); // a program left current would validate its (now unbound) cube on the next frame's first draw
     GLStateCache::Invalidate();
 
     m_Baked = true;
@@ -260,6 +261,7 @@ struct BakeStateScope {
     }
     ~BakeStateScope() {
         glBindTexture(GL_TEXTURE_CUBE_MAP, 0);
+        glUseProgram(0);
         glBindVertexArray(0);
         glBindFramebuffer(GL_FRAMEBUFFER, 0);
         if (WasDepthTest) glEnable(GL_DEPTH_TEST);
@@ -271,6 +273,14 @@ struct BakeStateScope {
     }
 };
 } // namespace
+
+void IblProbe::WarmUp() {
+    EnsureCreated();
+    if (!m_Fbo || m_BrdfLutBaked) return;
+    BakeStateScope state;
+    glBindVertexArray(m_Vao);
+    BakeBrdfLut();
+}
 
 bool IblProbe::Convolve(unsigned int irradiance, unsigned int specular, unsigned int envCube, int faceSize,
                         float rotationRadians, float radianceClamp, int first, int last) {

@@ -8,6 +8,7 @@
 #include <glm/glm.hpp>
 #include "RotationMath.h"
 #include "Animation.h" // LocalTRS
+#include "IK.h"        // IK::SpineDistribution
 #include <entt/entt.hpp>
 
 class SkinHideBuffer; // OutfitHideTag, PlayerBodyTag
@@ -480,6 +481,10 @@ struct FirstPersonControllerComponent {
         const float h = glm::radians(std::clamp(FieldOfView, 1.0f, 179.0f));
         return glm::degrees(2.0f * std::atan(std::tan(0.5f * h) * (9.0f / 16.0f)));
     }
+    // Gamepad right stick look speed (turn rate, not a delta)
+    float StickLookDegPerSec = 180.0f;  // degrees per second; Gamepad Input group
+    // Camera lean collision: the sphere radius used for wall-detection during camera lean
+    float EyeRadius = 0.12f;            // metres; keeps the near plane off the wall; Camera group
     float KillY = -20.0f;           // falling below this respawns at the spawn point
     bool  GravityGun = true;        // the built-in pick-up/throw tool (right/left mouse)
     float Gravity = 18.0f;          // m/s^2 pulling the player down - game feel, separate from the physics world's
@@ -488,6 +493,14 @@ struct FirstPersonControllerComponent {
     float MaxThrowSpeed = 18.0f;    // m/s, fully charged
     float ThrowChargeTime = 1.0f;   // seconds to full power
     float ThrowBackspin = 2.0f;     // revolutions per second given to a thrown ball (round bodies only)
+    // Gravity gun grab: aiming distance for the primary pick-up ray
+    float GrabRange = 100.0f;       // metres; Gravity Gun group
+    // Gravity gun aim assist: search radius when no object is under the exact crosshair
+    float AssistRange = 30.0f;      // metres; Gravity Gun group
+    // Gravity gun assist cone: within this many degrees of the crosshair
+    float AssistConeDeg = 7.0f;     // degrees; Gravity Gun group
+    // Gravity gun scroll-wheel tuning: rotation applied per scroll notch while holding an object
+    float ScrollTurnDeg = 15.0f;    // degrees per notch; Gravity Gun group
 
     // Optional camera-bound arms + weapon presentation. The .fpsanim asset defines paired clips;
     // leaving this empty preserves the existing controller exactly (including Sandbox gravity gun
@@ -570,6 +583,11 @@ struct FirstPersonBodyComponent {
     // How much of the camera's pitch the spine takes (0 = the body stays upright, 1 = the chest
     // tilts as far as the view), so the shoulders follow the view and the hands stay in reach.
     float SpineAim = 0.0f;
+    // ---- lane A ----
+    // How the spine's turns (view pitch, twist, shoulder line) are shared over spine_01..05, pelvis alpha:
+    // the default is the even spread. Used by the player body and, copied at Play, by NPCs.
+    IK::SpineDistribution Spine;
+    // ---- end lane A ----
     // The same looking down. Armed, the eye hangs off the shoulders as the arms rig's does, so looking
     // down it comes over the chest only as far as the chest pitches with it.
     float SpineAimDown = 0.9f;
@@ -679,6 +697,43 @@ struct FirstPersonBodyComponent {
     float StairPopRise = 0.03f; // Stair Pop Rise
     float StairPopRate = 2.5f; // Stair Pop Rate
     float StairEase = 0.09f; // Stair Ease
+    // --- Arm IK (Player body: elbow tracking and clearance) ---
+    float ElbowEase = 0.06f; // Elbow Ease
+    float ElbowMaxRate = 540.0f; // Elbow Max Rate (degrees/s)
+    // --- NPC body tuning (copied to NPC soldiers from the scene's player body) ---
+    // NPC body heading and turns
+    float NpcTurnThreshold = glm::degrees(1.15f); // NPC Turn Threshold (degrees; ~66 deg body can lag before turning on the spot)
+    float NpcMoveEase = 0.1f; // NPC Move Ease (seconds; blend tree parameter easing)
+    float NpcFaceEase = 0.09f; // NPC Face Ease (seconds; heading easing while moving)
+    // NPC spine and body aim
+    float NpcMaxTwist = glm::degrees(1.2f); // NPC Max Twist (degrees; spine twists toward aim)
+    float NpcAimLean = glm::degrees(0.1f); // NPC Aim Lean (degrees; torso forward lean aiming, standing)
+    float NpcAimLeanCrouched = glm::degrees(0.22f); // NPC Aim Lean Crouched (degrees; ~13 deg)
+    float NpcReadyLeanCrouched = glm::degrees(0.4f); // NPC Ready Lean Crouched (degrees; ~23 deg, low ready stance)
+    float NpcCowerHunch = glm::degrees(0.35f); // NPC Cower Hunch (degrees; spine curls forward ducking)
+    // NPC head look
+    float NpcHeadMaxYaw = glm::degrees(1.2f); // NPC Head Max Yaw (degrees; ~70 deg head turns past chest)
+    float NpcHeadMaxPitch = glm::degrees(0.6f); // NPC Head Max Pitch (degrees; ~35 deg nod up/down)
+    // NPC foot IK
+    float NpcFootIKMaxDrop = 0.35f; // NPC Foot IK Max Drop (metres)
+    float NpcFootIKMaxRaise = 0.35f; // NPC Foot IK Max Raise (metres)
+    float NpcFootIKPelvisRaise = 0.08f; // NPC Foot IK Pelvis Raise (metres; pelvis height adjustment)
+    float NpcFootIKTiltMax = glm::degrees(0.5f); // NPC Foot IK Tilt Max (degrees; max foot angle to ground normal)
+    float NpcFootOffsetEase = 0.05f; // NPC Foot Offset Ease (seconds; vertical foot adjustment easing)
+    float NpcFootNormalEase = 0.08f; // NPC Foot Normal Ease (seconds; ground normal easing)
+    float NpcFootIKFade = 0.15f; // NPC Foot IK Fade (seconds; foot IK enable/disable easing)
+    // ---- lane A ----
+    // Foot slide correction (docs/CAS_PARITY.md #8); both layers off by default, NPCs use the same numbers
+    bool FootPinEnabled = false; // Foot Pin Enabled
+    float FootPinWeight = 1.0f; // Foot Pin Weight
+    float FootPinRelease = 0.06f; // Foot Pin Release (seconds)
+    float FootPinMaxDrift = 0.25f; // Foot Pin Max Drift (metres)
+    bool StrideWarpEnabled = false; // Stride Warp Enabled
+    float StrideWarpWeight = 1.0f; // Stride Warp Weight
+    float StrideScaleMin = 0.75f; // Stride Scale Min
+    float StrideScaleMax = 1.35f; // Stride Scale Max
+    float StridePelvisAdjust = 1.0f; // Stride Pelvis Adjust
+    // ---- end lane A ----
 };
 
 // A character dressed from a wardrobe (docs/CHARACTER_OUTFITS.md): put it on the body's root. Its children
@@ -891,6 +946,18 @@ struct IKLimb {
     bool KeepAnimatedOffset = true;
     bool MatchRotation = true;     // also turn the end to the goal's rotation
     float Weight = 1.0f;
+    // ---- lane A ----
+    // Elbow/knee hint (IK.h TwoBoneHint). HintWeight 0 keeps the animated bend plane, as before.
+    std::string PoleBone;          // node whose position the elbow points toward (empty = the animated elbow)
+    float HintWeight = 0.0f;       // 0..1
+    glm::vec3 HintOffset{0.0f};    // model-space move of the pole point
+    float MaxLimbScale = 1.0f;     // longest the limb may stretch toward an out-of-reach target (1 = never)
+    float CurveWeight = 1.0f;      // runtime: clip weight curve scale on Weight (game code writes it; 1 = none)
+    // The end's grip on the Target, moved in the Target bone's own frame (model units, degrees pitch/yaw/roll);
+    // zero = the grip as animated. First-person weapon IK writes the hand-vs-gun offsets here.
+    glm::vec3 GripPosition{0.0f};
+    glm::vec3 GripRotation{0.0f};
+    // ---- end lane A ----
     // Runtime: radians to swing the solved limb about its root->end line (the elbow's "door"),
     // after the solve - the end stays put. Game code writes it (first-person ADS actions do).
     float Swivel = 0.0f;
@@ -924,6 +991,7 @@ struct IKRigComponent {
     glm::vec3 LookAtAxis{0.0f, 0.0f, 1.0f}; // the bone's local axis that should face the target
     float LookAtMaxAngle = 60.0f;
     float LookAtWeight = 1.0f;
+    float LookCurveWeight = 1.0f;   // runtime: clip weight curve scale on LookAtWeight (lane A; 1 = none)
 
     // --- runtime (not serialized) ---
     std::vector<IKBoneOffset> Offsets;
@@ -1037,6 +1105,26 @@ struct SquadSettingsComponent {
     float Difficulty = 1.0f;      // scales the NPCs' accuracy and reaction
     float NpcDamageScale = 0.45f; // NPC rounds do this much of the weapon's damage to the player
     bool Respawn = true;          // false: dead NPCs stay dead
+    // Combat / AI tunables (Npc/NpcDirector, CoverSystem). Defaults are the values these were hard-coded to.
+    float HeavyHitDamage = 40.0f;
+    float StaggerTime = 0.4f;
+    float BleedOutTime = 20.0f;
+    float CrawlSpeed = 0.6f;
+    float LimpSpeedScale = 0.6f;
+    float LimpTime = 6.0f;
+    float CorpseTime = 14.0f;
+    float FallGravity = 18.0f;
+    float MeleeDamage = 25.0f;
+    float MeleeTime = 0.55f;
+    float MeleeHitTime = 0.22f;
+    float HitboxRange = 60.0f;
+    float FootIKRange = 25.0f;
+    float MeshCheckRange = 12.0f;
+    float CoverSpacing = 0.9f;
+    float CoverReach = 0.85f;
+    float CoverKneeHeight = 0.85f;
+    float CoverHeadHeight = 1.55f;
+    float CoverStep = 0.8f;
 };
 
 struct ScoreDigitComponent {
@@ -1098,3 +1186,149 @@ struct ReflectionProbeComponent {
     glm::vec3 Size{5.0f, 5.0f, 5.0f}; // full extents of the capture volume, in world units
     float Importance{1.0f};            // higher wins 2-probe selection tie-breaks
 };
+
+// ---- lane P ----
+// Scene-level visual effects and HUD settings (Lane P quality pass).
+// Add one to the scene to tune muzzle flash, laser beam and HUD display parameters.
+// Defaults match the values these effects had before they were tunable; read once when Play starts.
+struct FxHudSettingsComponent {
+    // Muzzle flash parameters (Combat/CombatFx.cpp)
+    float FlashTime = 0.055f;               // seconds the muzzle flash light stays on; Muzzle Flash group
+    float PlayerFlashScale = 0.35f;         // player's flash light scale relative to soldier's; Muzzle Flash group
+    float FlameGlow = 150.0f;               // flame peak emission intensity (red channel); Muzzle Flash group
+    float FlameScale = 1.75f;               // flame tongue length/width scale vs. tactical shooter pack; Muzzle Flash group
+
+    // Laser beam parameters (src/Renderer/WeaponFxRenderer.cpp)
+    float BeamRange = 150.0f;               // metres drawn; past that it's gone in the haze; Laser Beam group
+    float BeamHalfWidth = 0.0015f;          // beam width in metres (3 mm); Laser Beam group
+    float BeamFalloff = 2.5f;               // glow falloff distance in metres near the emitter; Laser Beam group
+    float BeamBend = 4.0f;                  // metres over which a view-model emitter eases onto the true path; Laser Beam group
+
+    // HUD display parameters (Combat/CombatHud.cpp)
+    float FeedLife = 4.5f;                  // seconds a kill feed line stays on screen; HUD group
+    float StreakWindow = 4.0f;               // seconds to count consecutive kills for streak display; HUD group
+    float SubLinger = 1.1f;                 // seconds a subtitle lingers after its clip ends; HUD group
+};
+// ---- end lane P ----
+// ---- lane R ----
+// A soldier's ragdoll (Npc/NpcRagdoll): masses, joint ranges of motion, drives, body physics, impulse caps. On any object in
+// the scene (the first one counts); without one the NPCs use these same defaults. Hitbox shapes are not exposed (they change gameplay).
+// Joint limits are degrees from each joint's neutral pose (arm and leg hanging, spine and head upright).
+struct RagdollSettingsComponent {
+    bool AnatomicalLimits = true;
+    float DriveStiffness = 700.0f;
+    float DriveDamping = 60.0f;
+    float DriveFade = 0.25f;
+    float LinearDamping = 0.08f;
+    float AngularDamping = 0.25f;
+    int SolverPosIters = 16;
+    int SolverVelIters = 4;
+    float Depenetration = 3.0f;
+    float SleepThreshold = 0.08f;
+    float StaticFriction = 0.8f;
+    float DynamicFriction = 0.7f;
+    float Restitution = 0.05f;
+    float PartImpulseSpeed = 6.0f;
+    float ChestImpulseSpeed = 5.0f;
+    float CorpseShotBase = 1.5f;
+    float CorpseShotPerDamage = 0.04f;
+    float PelvisMass = 15.0f;
+    float SpineMass = 19.0f;
+    float SpineFlexMax = 45.0f;
+    float SpineExtMax = 20.0f;
+    float SpineLatIn = 25.0f;
+    float SpineLatOut = 25.0f;
+    float SpineTwistIn = 30.0f;
+    float SpineTwistOut = 30.0f;
+    float HeadMass = 4.5f;
+    float HeadFlexMax = 25.0f;
+    float HeadExtMax = 30.0f;
+    float HeadLatIn = 20.0f;
+    float HeadLatOut = 20.0f;
+    float HeadTwistIn = 35.0f;
+    float HeadTwistOut = 35.0f;
+    float UpperArmMass = 2.5f;
+    float UpperArmFlexMax = 170.0f;
+    float UpperArmExtMax = 60.0f;
+    float UpperArmLatIn = 40.0f;
+    float UpperArmLatOut = 150.0f;
+    float UpperArmTwistIn = 70.0f;
+    float UpperArmTwistOut = 80.0f;
+    float ForearmMass = 1.6f;
+    float ForearmFlexMax = 145.0f;
+    float ForearmExtMax = 0.0f;
+    float ForearmLatIn = 3.0f;
+    float ForearmLatOut = 3.0f;
+    float ForearmTwistIn = 10.0f;
+    float ForearmTwistOut = 10.0f;
+    float ThighMass = 8.0f;
+    float ThighFlexMax = 120.0f;
+    float ThighExtMax = 20.0f;
+    float ThighLatIn = 30.0f;
+    float ThighLatOut = 45.0f;
+    float ThighTwistIn = 40.0f;
+    float ThighTwistOut = 45.0f;
+    float CalfMass = 4.0f;
+    float CalfFlexMax = 140.0f;
+    float CalfExtMax = 0.0f;
+    float CalfLatIn = 3.0f;
+    float CalfLatOut = 3.0f;
+    float CalfTwistIn = 5.0f;
+    float CalfTwistOut = 5.0f;
+    // Death momentum: each part starts with its own bone's velocity (from the last two animated poses), not just the body's.
+    float LimbVelocityScale = 1.0f;
+    float MaxLimbSpeed = 8.0f;
+    float MaxLimbSpin = 30.0f;
+    // Shaped inertia: the torso parts turn like a box wider than deep rather than a round capsule.
+    bool ShapedTorsoInertia = true;
+    float TorsoHalfWidth = 0.18f;
+    float TorsoHalfDepth = 0.11f;
+    float InertiaScale = 1.0f;
+    // The drive fade per region: DriveFade times this (1 = all together).
+    float PelvisFadeScale = 1.0f;
+    float SpineFadeScale = 1.0f;
+    float HeadFadeScale = 1.0f;
+    float UpperArmFadeScale = 1.0f;
+    float ForearmFadeScale = 1.0f;
+    float ThighFadeScale = 1.0f;
+    float CalfFadeScale = 1.0f;
+    // The neck, hands and feet are ragdoll-only parts (the hitboxes stay the eleven): the head's range above is the head on the neck,
+    // the neck's the neck on the chest (together the cervical range). Hand: flexion = palm side, lateral = radial / ulnar deviation.
+    // Foot: flexion = dorsiflexion (toes up), extension = plantarflexion, lateral = toes in / out, twist = inversion / eversion.
+    float NeckMass = 1.0f;
+    float NeckFlexMax = 30.0f;
+    float NeckExtMax = 35.0f;
+    float NeckLatIn = 25.0f;
+    float NeckLatOut = 25.0f;
+    float NeckTwistIn = 40.0f;
+    float NeckTwistOut = 40.0f;
+    float HandMass = 0.5f;
+    float HandFlexMax = 75.0f;
+    float HandExtMax = 70.0f;
+    float HandLatIn = 25.0f;
+    float HandLatOut = 25.0f;
+    float HandTwistIn = 15.0f;
+    float HandTwistOut = 15.0f;
+    float FootMass = 1.0f;
+    float FootFlexMax = 20.0f;
+    float FootExtMax = 50.0f;
+    float FootLatIn = 15.0f;
+    float FootLatOut = 15.0f;
+    float FootTwistIn = 35.0f;
+    float FootTwistOut = 15.0f;
+    float NeckFadeScale = 1.0f;
+    float HandFadeScale = 1.0f;
+    float FootFadeScale = 1.0f;
+    // Hands and feet are light end links that whip the limb above through their joint limit: their rotational inertia is multiplied by
+    // Distal Inertia Scale (on top of Inertia Scale) and their joint carries a viscous Distal Joint Damping that stays on after the drives fade.
+    float DistalInertiaScale = 6.0f;
+    float DistalJointDamping = 40.0f;
+    // Hit flinch: a round that doesn't kill kicks the struck region's bones (a damped spring, on top of the hit animation), scaled by
+    // the damage, and they settle back within FlinchDuration. Visual only: aim, eye and hitboxes don't move.
+    bool HitFlinch = true;
+    float FlinchAngle = 7.0f;
+    float FlinchDuration = 0.3f;
+    float FlinchDamageRef = 40.0f;
+    float FlinchMaxAngle = 28.0f;
+};
+// ---- end lane R ----
