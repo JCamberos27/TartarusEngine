@@ -353,6 +353,10 @@ int RunAudioTest(int argc, char** argv) {
             WeaponAudioProfile* p = wa.Profile(gun);
             if (!p) continue;
             QuietShotExtras(*p, true);
+            // A gun may sit off the reference by design (mix.json reference.gun_db: the 12-gauge over the carbine), measured by
+            // mixspec into the manifest's mix.gun_offset_db.
+            float gunDb = 0.0f;
+            if (manifest["mix"].contains("gun_offset_db")) Num(manifest["mix"]["gun_offset_db"], gun, gunDb);
             for (int pass = 0; pass < 3; ++pass) {
                 if (pass > 0 && !haveNpc) break;
                 const float dist = pass == 1 ? npcShot.RefM : pass == 2 ? std::max(1.0f, 0.5f * npcShot.MinDistance()) : 0.0f;
@@ -368,7 +372,7 @@ int RunAudioTest(int argc, char** argv) {
                 char what[64];
                 if (pass == 0) std::snprintf(what, sizeof(what), "shot %s (player)", gun);
                 else std::snprintf(what, sizeof(what), "shot %s (soldier, %.0f m%s)", gun, dist, pass == 2 ? ", cap" : "");
-                report(what, sum / (float)shots, pass == 0 ? 0.0f : pass == 1 ? npcDb : npcDb + npcShot.NearDb);
+                report(what, sum / (float)shots, gunDb + (pass == 0 ? 0.0f : pass == 1 ? npcDb : npcDb + npcShot.NearDb));
             }
             QuietShotExtras(*p, false);
         }
