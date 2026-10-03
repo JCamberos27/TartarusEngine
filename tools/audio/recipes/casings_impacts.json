@@ -585,6 +585,7 @@
      }
     ]
    }
-  ]
+  ],
+  "remove_tones": true
  }
 }

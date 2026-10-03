@@ -8370,7 +8370,7 @@
    "sample_rate": 48000,
    "lufs_i": -21.04,
    "lufs_m_max": -21.0,
-   "true_peak_dbtp": -6.97,
+   "true_peak_dbtp": -6.25,
    "length_s": 0.511,
    "peak_ms": 191.0,
    "sources": [
@@ -8394,9 +8394,9 @@
    "sample_rate": 48000,
    "lufs_i": -21.12,
    "lufs_m_max": -21.0,
-   "true_peak_dbtp": -7.21,
+   "true_peak_dbtp": -6.83,
    "length_s": 0.573,
-   "peak_ms": 213.9,
+   "peak_ms": 214.4,
    "sources": [
     {
      "file": "sonniss/Gamemaster Audio -  Bullet Impact Sounds/bullet_flyby_fast_05.wav",
@@ -8418,9 +8418,9 @@
    "sample_rate": 48000,
    "lufs_i": -21.04,
    "lufs_m_max": -21.0,
-   "true_peak_dbtp": -6.96,
+   "true_peak_dbtp": -5.86,
    "length_s": 0.468,
-   "peak_ms": 174.8,
+   "peak_ms": 175.1,
    "sources": [
     {
      "file": "sonniss/Gamemaster Audio -  Bullet Impact Sounds/bullet_flyby_fast_05.wav",
@@ -8442,7 +8442,7 @@
    "sample_rate": 48000,
    "lufs_i": -21.05,
    "lufs_m_max": -21.0,
-   "true_peak_dbtp": -6.34,
+   "true_peak_dbtp": -6.59,
    "length_s": 0.554,
    "peak_ms": 170.1,
    "sources": [
@@ -8456,7 +8456,7 @@
    "anchor_ms": 0.0,
    "variant": 4,
    "source": "bullet_flyby_fast_06.wav {}",
-   "mix_db": 0.01
+   "mix_db": 0.0
   },
   {
    "file": "Impacts/flyby_5.wav",
@@ -8466,7 +8466,7 @@
    "sample_rate": 48000,
    "lufs_i": -22.33,
    "lufs_m_max": -21.0,
-   "true_peak_dbtp": -6.32,
+   "true_peak_dbtp": -6.28,
    "length_s": 0.622,
    "peak_ms": 208.5,
    "sources": [
@@ -8490,7 +8490,7 @@
    "sample_rate": 48000,
    "lufs_i": -21.05,
    "lufs_m_max": -21.0,
-   "true_peak_dbtp": -5.65,
+   "true_peak_dbtp": -5.69,
    "length_s": 0.508,
    "peak_ms": 156.0,
    "sources": [

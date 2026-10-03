@@ -157,7 +157,10 @@ def main():
             adsp.take_uses()
             y = adsp.fade(adsp.cut(x, 0, len(x)), int(0.003 * SR), int(0.1 * SR))
             uses = adsp.take_uses()
-            emit(f"Impacts/flyby_{n}.wav", post(y, v), "snd.flyby", "flyby",
+            y = post(y, v)
+            if cfg["flyby"].get("remove_tones"):              # the whine riding on the whoosh (user: "a high pitch that sounds goofy")
+                y = adsp.detone(y)
+            emit(f"Impacts/flyby_{n}.wav", y, "snd.flyby", "flyby",
                  {"variant": n, "anchor_ms": 0.0, "source": f"{os.path.basename(adsp.resolve_sonniss(spec['src']))} {json.dumps(v)}"}, uses)
     print("manifest files:", abuild.update_manifest(entries, ["Casings/", "Impacts/"]))
 
