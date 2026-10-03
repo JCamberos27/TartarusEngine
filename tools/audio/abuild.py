@@ -15,7 +15,8 @@ TARGETS = json.load(open(os.path.join(HERE, "recipes", "targets.json")))
 # How much limiting finish() may use to reach a layer's loudness target. The mix (mix_db) sets every file's playback level, so a
 # file only needs to be loud where it plays near full scale: the shot's close layer. Everywhere else limiting would only trade the
 # transient (the punch, the click) for a number the mix then turns down again; a file that stops short of its target is fine.
-GR_BUDGET_DB = {"close": 4.0, "sub": 1.0, "tail": 3.0, "far": 3.0, "ambience": 2.0, "loop": 2.0}
+GR_BUDGET_DB = {"close": 4.0, "sub": 1.0, "tail": 3.0, "far": 3.0, "ambience": 2.0, "loop": 2.0,
+                "action": 0.5}   # reload / handling clicks: never flattened (the mix levels them; their snap is the point)
 SUSTAINED = ("tail", "far", "ambience", "loop", "ir")
 
 

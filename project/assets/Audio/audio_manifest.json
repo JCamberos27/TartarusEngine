@@ -9552,8 +9552,8 @@
    "layer": "action",
    "channels": 2,
    "sample_rate": 48000,
-   "lufs_i": -22.37,
-   "lufs_m_max": -22.31,
+   "lufs_i": -22.3,
+   "lufs_m_max": -22.24,
    "true_peak_dbtp": -1.0,
    "length_s": 0.453,
    "peak_ms": 286.6,
@@ -9570,7 +9570,7 @@
    "element": "cloth",
    "variant": 1,
    "source": "S_AK105_Draw.WAV@0.3",
-   "mix_db": -19.85
+   "mix_db": -19.92
   },
   {
    "file": "Weapons/AKS74U/cloth_2.wav",
@@ -9578,11 +9578,11 @@
    "layer": "action",
    "channels": 2,
    "sample_rate": 48000,
-   "lufs_i": -22.54,
-   "lufs_m_max": -22.49,
+   "lufs_i": -22.7,
+   "lufs_m_max": -22.66,
    "true_peak_dbtp": -1.0,
    "length_s": 0.453,
-   "peak_ms": 243.0,
+   "peak_ms": 243.1,
    "sources": [
     {
      "file": "tsp/Tactical Shooter Pack/AK105/Actions/S_AK105_Holster.WAV",
@@ -9596,7 +9596,7 @@
    "element": "cloth",
    "variant": 2,
    "source": "S_AK105_Holster.WAV@0.43",
-   "mix_db": -19.72
+   "mix_db": -19.54
   },
   {
    "file": "Weapons/AKS74U/cloth_3.wav",
@@ -9622,7 +9622,7 @@
    "element": "cloth",
    "variant": 3,
    "source": "S_AK105_Inspect.WAV@0.24",
-   "mix_db": -18.41
+   "mix_db": -18.4
   },
   {
    "file": "Weapons/AKS74U/draw_1.wav",
@@ -9630,8 +9630,8 @@
    "layer": "action",
    "channels": 2,
    "sample_rate": 48000,
-   "lufs_i": -21.97,
-   "lufs_m_max": -21.53,
+   "lufs_i": -22.19,
+   "lufs_m_max": -21.81,
    "true_peak_dbtp": -1.0,
    "length_s": 0.936,
    "peak_ms": 363.5,
@@ -9660,7 +9660,7 @@
    "element": "draw",
    "variant": 1,
    "source": "S_AK105_Draw.WAV@0.28",
-   "mix_db": -8.63
+   "mix_db": -8.35
   },
   {
    "file": "Weapons/AKS74U/draw_2.wav",
@@ -9744,8 +9744,8 @@
    "layer": "action",
    "channels": 2,
    "sample_rate": 48000,
-   "lufs_i": -21.93,
-   "lufs_m_max": -21.89,
+   "lufs_i": -21.74,
+   "lufs_m_max": -21.7,
    "true_peak_dbtp": -1.0,
    "length_s": 0.163,
    "peak_ms": 4.3,
@@ -9762,7 +9762,7 @@
    "element": "dry_fire",
    "variant": 1,
    "source": "Steyr_TMP@1.962",
-   "mix_db": -7.27
+   "mix_db": -7.46
   },
   {
    "file": "Weapons/AKS74U/dry_fire_2.wav",
@@ -11443,11 +11443,11 @@
    "layer": "action",
    "channels": 2,
    "sample_rate": 48000,
-   "lufs_i": -22.64,
-   "lufs_m_max": -22.6,
+   "lufs_i": -23.14,
+   "lufs_m_max": -23.1,
    "true_peak_dbtp": -1.0,
    "length_s": 0.126,
-   "peak_ms": 5.1,
+   "peak_ms": 11.8,
    "sources": [
     {
      "file": "tsp/Tactical Shooter Pack/AK105/Actions/S_AK105_Reload_Empty.WAV",
@@ -11461,7 +11461,7 @@
    "element": "handle",
    "variant": 1,
    "source": "S_AK105_Reload_Empty.WAV@3.994",
-   "mix_db": -20.57
+   "mix_db": -20.08
   },
   {
    "file": "Weapons/AKS74U/handle_2.wav",
@@ -11469,8 +11469,8 @@
    "layer": "action",
    "channels": 2,
    "sample_rate": 48000,
-   "lufs_i": -24.74,
-   "lufs_m_max": -24.7,
+   "lufs_i": -24.25,
+   "lufs_m_max": -24.21,
    "true_peak_dbtp": -1.0,
    "length_s": 0.303,
    "peak_ms": 9.6,
@@ -11487,7 +11487,7 @@
    "element": "handle",
    "variant": 2,
    "source": "S_AK105_Inspect.WAV@4.322",
-   "mix_db": -17.9
+   "mix_db": -18.51
   },
   {
    "file": "Weapons/AKS74U/handle_3.wav",
@@ -11513,7 +11513,7 @@
    "element": "handle",
    "variant": 3,
    "source": "S_AK105_MagCheck.WAV@3.72",
-   "mix_db": -19.85
+   "mix_db": -19.84
   },
   {
    "file": "Weapons/AKS74U/handle_4.wav",
@@ -11539,7 +11539,7 @@
    "element": "handle",
    "variant": 4,
    "source": "S_AK105_Inspect.WAV@4.634",
-   "mix_db": -22.38
+   "mix_db": -22.37
   },
   {
    "file": "Weapons/AKS74U/holster_1.wav",
@@ -11547,11 +11547,11 @@
    "layer": "action",
    "channels": 2,
    "sample_rate": 48000,
-   "lufs_i": -22.33,
-   "lufs_m_max": -22.15,
+   "lufs_i": -22.51,
+   "lufs_m_max": -22.36,
    "true_peak_dbtp": -1.0,
    "length_s": 0.868,
-   "peak_ms": 303.8,
+   "peak_ms": 304.5,
    "sources": [
     {
      "file": "tsp/Tactical Shooter Pack/AK105/Actions/S_AK105_Holster.WAV",
@@ -11577,7 +11577,7 @@
    "element": "holster",
    "variant": 1,
    "source": "S_AK105_Holster.WAV@0.43",
-   "mix_db": -8.05
+   "mix_db": -7.84
   },
   {
    "file": "Weapons/AKS74U/holster_2.wav",
@@ -11585,11 +11585,11 @@
    "layer": "action",
    "channels": 2,
    "sample_rate": 48000,
-   "lufs_i": -21.74,
-   "lufs_m_max": -21.63,
+   "lufs_i": -22.25,
+   "lufs_m_max": -22.15,
    "true_peak_dbtp": -1.0,
    "length_s": 0.861,
-   "peak_ms": 294.4,
+   "peak_ms": 297.7,
    "sources": [
     {
      "file": "tsp/Tactical Shooter Pack/TR15/Actions/S_TR15_Holster.wav",
@@ -11615,7 +11615,7 @@
    "element": "holster",
    "variant": 2,
    "source": "S_TR15_Holster.wav@0.24",
-   "mix_db": -8.49
+   "mix_db": -7.97
   },
   {
    "file": "Weapons/AKS74U/holster_3.wav",
@@ -11623,8 +11623,8 @@
    "layer": "action",
    "channels": 2,
    "sample_rate": 48000,
-   "lufs_i": -22.91,
-   "lufs_m_max": -22.53,
+   "lufs_i": -23.35,
+   "lufs_m_max": -23.03,
    "true_peak_dbtp": -1.0,
    "length_s": 0.91,
    "peak_ms": 311.9,
@@ -11653,7 +11653,7 @@
    "element": "holster",
    "variant": 3,
    "source": "S_WK-11_Viper_Holster.wav@0.3",
-   "mix_db": -7.63
+   "mix_db": -7.13
   },
   {
    "file": "Weapons/AKS74U/mag_in_1.wav",
@@ -11713,8 +11713,8 @@
    "layer": "action",
    "channels": 2,
    "sample_rate": 48000,
-   "lufs_i": -22.07,
-   "lufs_m_max": -22.02,
+   "lufs_i": -22.18,
+   "lufs_m_max": -22.14,
    "true_peak_dbtp": -1.0,
    "length_s": 0.198,
    "peak_ms": 38.0,
@@ -11732,7 +11732,7 @@
    "variant": 3,
    "source": "S_AK105_MagCheck.WAV@2.582",
    "lead_ms": 38,
-   "mix_db": -5.14
+   "mix_db": -5.02
   },
   {
    "file": "Weapons/AKS74U/mag_in_4.wav",
@@ -11759,7 +11759,7 @@
    "variant": 4,
    "source": "S_TR15_Reload_Tactical.wav@1.93",
    "lead_ms": 36,
-   "mix_db": -6.15
+   "mix_db": -6.14
   },
   {
    "file": "Weapons/AKS74U/mag_in_5.wav",
@@ -11871,8 +11871,8 @@
    "layer": "action",
    "channels": 2,
    "sample_rate": 48000,
-   "lufs_i": -23.61,
-   "lufs_m_max": -23.57,
+   "lufs_i": -23.69,
+   "lufs_m_max": -23.65,
    "true_peak_dbtp": -1.0,
    "length_s": 0.127,
    "peak_ms": 3.1,
@@ -11889,7 +11889,7 @@
    "element": "mag_out",
    "variant": 2,
    "source": "S_AK105_Reload_Empty.WAV@0.508",
-   "mix_db": -7.63
+   "mix_db": -7.55
   },
   {
    "file": "Weapons/AKS74U/mag_out_3.wav",
@@ -11923,8 +11923,8 @@
    "layer": "action",
    "channels": 2,
    "sample_rate": 48000,
-   "lufs_i": -22.65,
-   "lufs_m_max": -22.61,
+   "lufs_i": -22.88,
+   "lufs_m_max": -22.84,
    "true_peak_dbtp": -1.0,
    "length_s": 0.132,
    "peak_ms": 41.9,
@@ -11941,7 +11941,7 @@
    "element": "mag_out",
    "variant": 4,
    "source": "S_TR15_Reload_Tactical.wav@0.872",
-   "mix_db": -8.49
+   "mix_db": -8.28
   },
   {
    "file": "Weapons/AKS74U/mag_out_5.wav",
@@ -11949,8 +11949,8 @@
    "layer": "action",
    "channels": 2,
    "sample_rate": 48000,
-   "lufs_i": -24.64,
-   "lufs_m_max": -24.6,
+   "lufs_i": -24.83,
+   "lufs_m_max": -24.79,
    "true_peak_dbtp": -1.0,
    "length_s": 0.163,
    "peak_ms": 3.3,
@@ -11967,7 +11967,7 @@
    "element": "mag_out",
    "variant": 5,
    "source": "S_SRM-12_TacticalReload.wav@0.731",
-   "mix_db": -6.61
+   "mix_db": -6.42
   },
   {
    "file": "Weapons/AKS74U/mag_out_6.wav",
@@ -11993,7 +11993,7 @@
    "element": "mag_out",
    "variant": 6,
    "source": "S_SRM-12_MagCheck.wav@0.941",
-   "mix_db": -10.27
+   "mix_db": -10.26
   },
   {
    "file": "Weapons/AKS74U/mag_release_1.wav",
@@ -12027,8 +12027,8 @@
    "layer": "action",
    "channels": 2,
    "sample_rate": 48000,
-   "lufs_i": -22.27,
-   "lufs_m_max": -22.22,
+   "lufs_i": -22.17,
+   "lufs_m_max": -22.13,
    "true_peak_dbtp": -1.0,
    "length_s": 0.163,
    "peak_ms": 74.6,
@@ -12045,7 +12045,7 @@
    "element": "mag_release",
    "variant": 2,
    "source": "S_AK105_Reload_Empty.WAV@0.46",
-   "mix_db": -9.05
+   "mix_db": -9.15
   },
   {
    "file": "Weapons/AKS74U/mag_release_3.wav",
@@ -12209,8 +12209,8 @@
    "layer": "action",
    "channels": 2,
    "sample_rate": 48000,
-   "lufs_i": -23.5,
-   "lufs_m_max": -23.46,
+   "lufs_i": -23.57,
+   "lufs_m_max": -23.53,
    "true_peak_dbtp": -1.0,
    "length_s": 0.126,
    "peak_ms": 3.0,
@@ -12227,7 +12227,7 @@
    "element": "mag_tap",
    "variant": 4,
    "source": "S_AK105_MagCheck.WAV@2.748",
-   "mix_db": -7.69
+   "mix_db": -7.62
   },
   {
    "file": "Weapons/AKS74U/melee_hit_1.wav",
@@ -12607,8 +12607,8 @@
    "layer": "action",
    "channels": 2,
    "sample_rate": 48000,
-   "lufs_i": -22.17,
-   "lufs_m_max": -22.13,
+   "lufs_i": -22.27,
+   "lufs_m_max": -22.22,
    "true_peak_dbtp": -1.0,
    "length_s": 0.782,
    "peak_ms": 373.7,
@@ -12637,7 +12637,7 @@
    "element": "draw",
    "variant": 2,
    "source": "S_SRM-12_Draw.wav@0.2",
-   "mix_db": -9.78
+   "mix_db": -9.68
   },
   {
    "file": "Weapons/Remington870/draw_3.wav",
@@ -12683,8 +12683,8 @@
    "layer": "action",
    "channels": 2,
    "sample_rate": 48000,
-   "lufs_i": -27.06,
-   "lufs_m_max": -27.02,
+   "lufs_i": -27.36,
+   "lufs_m_max": -27.32,
    "true_peak_dbtp": -1.0,
    "length_s": 0.183,
    "peak_ms": 3.4,
@@ -12701,7 +12701,7 @@
    "element": "dry_fire",
    "variant": 1,
    "source": "0023_Shotgun_Safety@0.29",
-   "mix_db": -2.14
+   "mix_db": -1.84
   },
   {
    "file": "Weapons/Remington870/dry_fire_2.wav",
@@ -12709,8 +12709,8 @@
    "layer": "action",
    "channels": 2,
    "sample_rate": 48000,
-   "lufs_i": -21.68,
-   "lufs_m_max": -21.64,
+   "lufs_i": -21.77,
+   "lufs_m_max": -21.73,
    "true_peak_dbtp": -1.0,
    "length_s": 0.173,
    "peak_ms": 4.0,
@@ -12727,7 +12727,7 @@
    "element": "dry_fire",
    "variant": 2,
    "source": "0023_Shotgun_Safety@0.656",
-   "mix_db": -7.52
+   "mix_db": -7.43
   },
   {
    "file": "Weapons/Remington870/dry_fire_3.wav",
@@ -12735,8 +12735,8 @@
    "layer": "action",
    "channels": 2,
    "sample_rate": 48000,
-   "lufs_i": -21.38,
-   "lufs_m_max": -21.34,
+   "lufs_i": -21.42,
+   "lufs_m_max": -21.38,
    "true_peak_dbtp": -1.0,
    "length_s": 0.183,
    "peak_ms": 5.8,
@@ -12753,7 +12753,7 @@
    "element": "dry_fire",
    "variant": 3,
    "source": "Steyr_TMP@25.244",
-   "mix_db": -7.82
+   "mix_db": -7.78
   },
   {
    "file": "Weapons/Remington870/dry_fire_4.wav",
@@ -14278,7 +14278,7 @@
    "lufs_m_max": -21.41,
    "true_peak_dbtp": -1.0,
    "length_s": 0.121,
-   "peak_ms": 11.9,
+   "peak_ms": 12.0,
    "sources": [
     {
      "file": "tsp/Tactical Shooter Pack/Herrington_11-87/Actions/S_Herrington_11-87_Inspect.WAV",
@@ -14300,8 +14300,8 @@
    "layer": "action",
    "channels": 2,
    "sample_rate": 48000,
-   "lufs_i": -24.2,
-   "lufs_m_max": -24.16,
+   "lufs_i": -23.69,
+   "lufs_m_max": -23.64,
    "true_peak_dbtp": -1.0,
    "length_s": 0.113,
    "peak_ms": 3.1,
@@ -14318,7 +14318,7 @@
    "element": "handle",
    "variant": 2,
    "source": "S_Herrington_11-87_Inspect.WAV@3.21",
-   "mix_db": -19.03
+   "mix_db": -19.54
   },
   {
    "file": "Weapons/Remington870/handle_3.wav",
@@ -14344,7 +14344,7 @@
    "element": "handle",
    "variant": 3,
    "source": "S_Herrington_11-87_Inspect.WAV@5.058",
-   "mix_db": -18.83
+   "mix_db": -18.82
   },
   {
    "file": "Weapons/Remington870/handle_4.wav",
@@ -14352,11 +14352,11 @@
    "layer": "action",
    "channels": 2,
    "sample_rate": 48000,
-   "lufs_i": -21.91,
-   "lufs_m_max": -21.87,
+   "lufs_i": -22.43,
+   "lufs_m_max": -22.39,
    "true_peak_dbtp": -1.0,
    "length_s": 0.141,
-   "peak_ms": 5.7,
+   "peak_ms": 13.2,
    "sources": [
     {
      "file": "tsp/Tactical Shooter Pack/AK105/Actions/S_AK105_Reload_Empty.WAV",
@@ -14370,7 +14370,7 @@
    "element": "handle",
    "variant": 4,
    "source": "S_AK105_Reload_Empty.WAV@3.994",
-   "mix_db": -21.26
+   "mix_db": -20.75
   },
   {
    "file": "Weapons/Remington870/holster_1.wav",
@@ -14416,8 +14416,8 @@
    "layer": "action",
    "channels": 2,
    "sample_rate": 48000,
-   "lufs_i": -23.62,
-   "lufs_m_max": -23.57,
+   "lufs_i": -23.53,
+   "lufs_m_max": -23.48,
    "true_peak_dbtp": -1.0,
    "length_s": 0.721,
    "peak_ms": 312.0,
@@ -14446,7 +14446,7 @@
    "element": "holster",
    "variant": 2,
    "source": "S_SRM-12_Holster.wav@0.05",
-   "mix_db": -7.85
+   "mix_db": -7.94
   },
   {
    "file": "Weapons/Remington870/holster_3.wav",
@@ -15018,8 +15018,8 @@
    "layer": "action",
    "channels": 2,
    "sample_rate": 48000,
-   "lufs_i": -22.6,
-   "lufs_m_max": -22.56,
+   "lufs_i": -23.1,
+   "lufs_m_max": -23.05,
    "true_peak_dbtp": -1.0,
    "length_s": 0.323,
    "peak_ms": 121.7,
@@ -15036,7 +15036,7 @@
    "element": "shell_insert",
    "variant": 1,
    "source": "S_Herrington_11-87_Reload_Loop.wav@0.468",
-   "mix_db": -8.77
+   "mix_db": -8.26
   },
   {
    "file": "Weapons/Remington870/shell_insert_2.wav",
@@ -15044,8 +15044,8 @@
    "layer": "action",
    "channels": 2,
    "sample_rate": 48000,
-   "lufs_i": -22.37,
-   "lufs_m_max": -22.33,
+   "lufs_i": -22.97,
+   "lufs_m_max": -22.93,
    "true_peak_dbtp": -1.0,
    "length_s": 0.323,
    "peak_ms": 121.7,
@@ -15062,7 +15062,7 @@
    "element": "shell_insert",
    "variant": 2,
    "source": "S_Herrington_11-87_Reload_Loop.wav@0.468",
-   "mix_db": -8.87
+   "mix_db": -8.24
   },
   {
    "file": "Weapons/Remington870/shell_insert_3.wav",
@@ -15070,8 +15070,8 @@
    "layer": "action",
    "channels": 2,
    "sample_rate": 48000,
-   "lufs_i": -22.34,
-   "lufs_m_max": -22.29,
+   "lufs_i": -22.8,
+   "lufs_m_max": -22.76,
    "true_peak_dbtp": -1.0,
    "length_s": 0.329,
    "peak_ms": 123.8,
@@ -15088,7 +15088,7 @@
    "element": "shell_insert",
    "variant": 3,
    "source": "S_Herrington_11-87_Reload_Loop.wav@0.468",
-   "mix_db": -8.76
+   "mix_db": -8.23
   },
   {
    "file": "Weapons/Remington870/shell_insert_4.wav",
@@ -15096,8 +15096,8 @@
    "layer": "action",
    "channels": 2,
    "sample_rate": 48000,
-   "lufs_i": -21.38,
-   "lufs_m_max": -21.34,
+   "lufs_i": -21.83,
+   "lufs_m_max": -21.79,
    "true_peak_dbtp": -1.0,
    "length_s": 0.317,
    "peak_ms": 119.6,
@@ -15114,7 +15114,7 @@
    "element": "shell_insert",
    "variant": 4,
    "source": "S_Herrington_11-87_Reload_Loop.wav@0.468",
-   "mix_db": -9.78
+   "mix_db": -9.36
   },
   {
    "file": "Weapons/Remington870/shell_load_chamber_1.wav",
@@ -15141,7 +15141,7 @@
    "variant": 1,
    "source": "Shell Load_Round Eject@4.394",
    "lead_ms": 40,
-   "mix_db": -6.22
+   "mix_db": -6.21
   },
   {
    "file": "Weapons/Remington870/shell_load_chamber_2.wav",
@@ -15176,8 +15176,8 @@
    "layer": "action",
    "channels": 2,
    "sample_rate": 48000,
-   "lufs_i": -22.58,
-   "lufs_m_max": -22.53,
+   "lufs_i": -22.98,
+   "lufs_m_max": -22.94,
    "true_peak_dbtp": -1.0,
    "length_s": 0.223,
    "peak_ms": 3.7,
@@ -15194,7 +15194,7 @@
    "element": "shell_load_chamber",
    "variant": 3,
    "source": "S_Herrington_11-87_Reload_Start_Empty.wav@1.27",
-   "mix_db": -4.63
+   "mix_db": -4.22
   },
   {
    "file": "Weapons/Remington870/shell_load_chamber_4.wav",
