@@ -4,6 +4,7 @@
 #include "Camera.h"
 #include "FirstPersonAnimation.h" // FirstPersonWeaponGameplay
 #include "Npc/NpcBody.h"
+#include "Npc/NpcDroppedWeapon.h"
 #include "Npc/NpcHitboxes.h"
 #include "Npc/NpcRagdoll.h"
 #include "PhysicsWorld.h"
@@ -73,6 +74,7 @@ struct Npc {
 
     NpcBody Body;
     std::unique_ptr<NpcRagdoll> Ragdoll; // once dead
+    std::unique_ptr<NpcDroppedWeapon> Dropped; // the gun he dropped (lies as long as the corpse)
     std::unique_ptr<NpcHitboxes> Hitboxes; // while alive and near the player: the bones the player's rounds hit
     int HitboxTries = 0;
     std::unique_ptr<FirstPersonPresentation> Weapon;
