@@ -50,8 +50,8 @@ def fit_variant(v):
     a = int(v["t0"] * SR)
     m = adsp.find_onset(x, v["main"]) - int(0.003 * SR)
     b = min(len(x), m + int((v["dur"] - (v["main"] - v["t0"])) * SR))
-    pre = adsp.fade(x[a:m], int(0.025 * SR), 0)
-    post = x[m:b]
+    pre = adsp.fade(adsp.cut(x, a, m), int(0.025 * SR), 0)
+    post = adsp.cut(x, m, b)
     pre = adsp.stretch_to(pre, int(v["main_at_ms"] / 1000 * SR))
     y = np.concatenate([pre, post])
     y = adsp.fade(y, 0, int(max(0.03, 0.25 * (b - m) / SR) * SR))
@@ -82,7 +82,7 @@ def peak_aligned(v):
     sm = np.convolve(np.abs(m), np.ones(int(0.012 * SR)) / int(0.012 * SR), mode="same")
     pk = int(np.argmax(sm))
     a = max(0, pk - int(v["peak_at_ms"] / 1000 * SR))
-    y = x[a:a + int(v["dur"] * SR)].copy()
+    y = adsp.cut(x, a, a + int(v["dur"] * SR))
     y = adsp.fade(y, int(v.get("fade_in_ms", 6) / 1000 * SR), int(max(0.06, v["dur"] * 0.4) * SR))
     y = adsp.pitch(y, v.get("pitch", 0.0))
     return apply_eq(y, v)
@@ -125,7 +125,10 @@ def main():
     for gun, g in recipe["guns"].items():
         for elem, variants in g["elements"].items():
             for n, v in enumerate(variants, 1):
-                y = abuild.finish(render_variant(v), "action")
+                adsp.take_uses()
+                y = render_variant(v)
+                uses = adsp.take_uses()
+                y = abuild.finish(y, "action")
                 rel = f"{g['dir']}/{elem}_{n}.wav"
                 extra = {"gun": gun, "element": elem, "variant": n, "source": describe(v)}
                 if "thud" in v:                      # contact = where the thud layer lands
@@ -138,7 +141,7 @@ def main():
                     extra["anchor_ms"] = round(v.get("lead_ms", v.get("preroll_ms", 3.0)) / 2 ** (v.get("pitch", 0.0) / 12), 1)
                 if "lead_ms" in v:
                     extra["lead_ms"] = v["lead_ms"]
-                entries.append(abuild.emit(rel, y, f"snd.{gun}.{elem}", "action", extra))
+                entries.append(abuild.emit(rel, y, f"snd.{gun}.{elem}", "action", extra, sources=uses))
                 e = entries[-1]
                 print(f"{rel:48s} LUFS-M {e['lufs_m_max']:6.1f}  TP {e['true_peak_dbtp']:5.1f}  {e['length_s']:.2f}s")
     total = abuild.update_manifest(entries, [f"{g['dir']}/{e}_" for g in recipe["guns"].values() for e in g["elements"]])
