@@ -70,7 +70,7 @@ void DevPanel::Draw(const Context& c) {
         ++alive;
         if (up->Mem.Known) ++known;
     }
-    ImGui::Text("%d alive, %d in combat, %d radio calls (%d cut)", alive, known, d.Voice().Spoken(), d.Voice().Cuts());
+    ImGui::Text("%d alive, %d in combat", alive, known);
     ImGui::SeparatorText("World");
     float scale = Time::TimeScale();
     if (ImGui::SliderFloat("Time scale", &scale, 0.05f, 2.0f, "%.2f")) Time::SetTimeScale(scale);
