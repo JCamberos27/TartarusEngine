@@ -1,0 +1,486 @@
+{
+ "_doc": "Remington 870 gunfire: same layer set as the AK. 12 ga: huge low-mid blast, little crack. close = Herrington 11-87 report (wide stereo) + SRM-12 / Mk14 body weight; sub is deeper and longer; mech is the recoil thump of the receiver / forend (the pump itself is its own element, fired from the Pump clip). Round 4: fire_sub is built from real recordings only (low-passed shot + the same shot pitched down); no synthesis. Round 4: no algorithmic reverb anywhere; the far layer is the real recorded tail, low-passed and compressed. Round 5 (2026-10-03 revamp): 8 close variants over the three Herrington recordings, each layered with a different shot of the real Remington 870 (Audiobeast, medium warehouse, 10 m: 80 Hz - 2.5 kHz, 7 dB down) for the gun's own boom, SRM-12 / Mk14 weight or the TS Sound 12-gauge crack on some; chain eased for crest. Round 6 (2026-10-03): the close layer rebuilt from the Tactical Shooter Pack only, on the AK's recipe - the pack's SRM-12 shotgun shot (the Herrington takes start soft and clip flat 40-60 ms in) under a TR15 crack (high-passed), an R08 / WK-11 mid layer (150 Hz - 5 kHz) and Mk14 weight, variety from the layers and +-0.9 st, through the AK's chain with a shotgun's low end - so both guns share one recording style. (The Audiobeast warehouse and TS Sound layers are gone from it.) Round 7 (2026-10-03, 'not punchy enough, a huge trail'): close 0.5 s (was 0.85) with a decay envelope (hold 30 ms, -30 dB over 220 ms) and a harder transient chain; the sub from front-loaded sources only (SRM-12, Mk14, real thuds - the Herrington booms peak 40-60 ms late, the warehouse takes ring) with its own decay; the recorded tail's compressor eased and the gun's tails 3 dB down (mix.json reference.gun_tail_db). Round 8 (2026-10-03, 'more kick / boom'): sub +7.5 dB (gun_db), held 80 ms and decaying over 380 ms; close +3 dB with a 70 Hz lift. Round 9 ('hit hard, big bang, cinematic'): the sub's real thud donors at full level up to 150 Hz (the slam), sub saturation 1.7 (harmonics that read on small speakers, and a denser peak that leaves room for the level), close drive 1.6 and Mk14 body -2 dB.",
+ "gun": "870",
+ "dir": "Weapons/Remington870",
+ "rpm": 70,
+ "close": {
+  "length_s": 0.5,
+  "chain": {
+   "hp": 42,
+   "eq": [
+    [
+     70,
+     3.0,
+     0.9
+    ],
+    [
+     95,
+     4.5,
+     0.8
+    ],
+    [
+     180,
+     2.0,
+     0.9
+    ],
+    [
+     450,
+     -3.0,
+     0.9
+    ],
+    [
+     2600,
+     2.5,
+     0.8
+    ],
+    [
+     6500,
+     2.0,
+     0.7
+    ]
+   ],
+   "attack": 0.9,
+   "sustain": -0.5,
+   "comp": {
+    "threshold_db": -20,
+    "ratio": 3.0,
+    "attack_ms": 4,
+    "release_ms": 80
+   },
+   "drive": 1.6
+  },
+  "variants": [
+   {
+    "base": {
+     "src": "SRM-12/Actions/S_SRM-12_ShotOnly.wav"
+    },
+    "crack": {
+     "src": "TR15/Fire/S_TR15_V1_Unsupressed_With_Tail_0.wav",
+     "dur": 0.14,
+     "hp": 2000,
+     "gain_db": -3
+    },
+    "layer": {
+     "src": "R08/S_R08_Fire_01.WAV",
+     "dur": 0.3,
+     "hp": 150,
+     "lp": 5000,
+     "gain_db": -7
+    },
+    "body": {
+     "src": "Mk14EBR/S_Mk14EBR_Fire_02.WAV",
+     "dur": 0.45,
+     "lp": 650,
+     "gain_db": -2
+    }
+   },
+   {
+    "base": {
+     "src": "SRM-12/Actions/S_SRM-12_ShotOnly.wav"
+    },
+    "crack": {
+     "src": "TR15/Fire/S_TR15_V2_Unsupressed_With_Tail_0.wav",
+     "dur": 0.14,
+     "hp": 2100,
+     "gain_db": -3
+    },
+    "layer": {
+     "src": "WK-11_Viper/Fire/S_WK-11_Viper_Shot_1_With_Tail.wav",
+     "dur": 0.3,
+     "hp": 150,
+     "lp": 5000,
+     "gain_db": -7
+    },
+    "body": {
+     "src": "Mk14EBR/S_Mk14EBR_Fire_03.WAV",
+     "dur": 0.45,
+     "lp": 650,
+     "gain_db": -2
+    },
+    "pitch": -0.6
+   },
+   {
+    "base": {
+     "src": "SRM-12/Actions/S_SRM-12_ShotOnly.wav"
+    },
+    "crack": {
+     "src": "TR15/Fire/S_TR15_V3_Unsuppressed_With_Tail_0.wav",
+     "dur": 0.14,
+     "hp": 2200,
+     "gain_db": -3
+    },
+    "layer": {
+     "src": "R08/S_R08_Fire_02.WAV",
+     "dur": 0.3,
+     "hp": 150,
+     "lp": 5000,
+     "gain_db": -7
+    },
+    "body": {
+     "src": "Mk14EBR/S_Mk14EBR_Fire_01.WAV",
+     "dur": 0.45,
+     "lp": 650,
+     "gain_db": -2
+    },
+    "pitch": 0.6
+   },
+   {
+    "base": {
+     "src": "SRM-12/Actions/S_SRM-12_ShotOnly.wav"
+    },
+    "crack": {
+     "src": "TR15/Fire/S_TR15_V4_Unsuppressed_With_Tail_0.wav",
+     "dur": 0.14,
+     "hp": 2300,
+     "gain_db": -3
+    },
+    "layer": {
+     "src": "WK-11_Viper/Fire/S_WK-11_Viper_2_With_Tail.wav",
+     "dur": 0.3,
+     "hp": 150,
+     "lp": 5000,
+     "gain_db": -7
+    },
+    "body": {
+     "src": "Mk14EBR/S_Mk14EBR_Fire_02.WAV",
+     "dur": 0.45,
+     "lp": 650,
+     "gain_db": -2
+    },
+    "pitch": -0.3
+   },
+   {
+    "base": {
+     "src": "SRM-12/Actions/S_SRM-12_ShotOnly.wav"
+    },
+    "crack": {
+     "src": "TR15/Fire/S_TR15_V1_Unsupressed_With_Tail_1.wav",
+     "dur": 0.14,
+     "hp": 2000,
+     "gain_db": -3
+    },
+    "layer": {
+     "src": "R08/S_R08_Fire_03.WAV",
+     "dur": 0.3,
+     "hp": 150,
+     "lp": 5000,
+     "gain_db": -7
+    },
+    "body": {
+     "src": "Mk14EBR/S_Mk14EBR_Fire_03.WAV",
+     "dur": 0.45,
+     "lp": 650,
+     "gain_db": -2
+    },
+    "pitch": 0.3
+   },
+   {
+    "base": {
+     "src": "SRM-12/Actions/S_SRM-12_ShotOnly.wav"
+    },
+    "crack": {
+     "src": "TR15/Fire/S_TR15_V2_Unsupressed_With_Tail_1.wav",
+     "dur": 0.14,
+     "hp": 2100,
+     "gain_db": -3
+    },
+    "layer": {
+     "src": "R08/S_R08_Fire_01.WAV",
+     "dur": 0.3,
+     "hp": 150,
+     "lp": 5000,
+     "gain_db": -6
+    },
+    "body": {
+     "src": "Mk14EBR/S_Mk14EBR_Fire_01.WAV",
+     "dur": 0.45,
+     "lp": 650,
+     "gain_db": -2
+    },
+    "pitch": -0.4
+   },
+   {
+    "base": {
+     "src": "SRM-12/Actions/S_SRM-12_ShotOnly.wav"
+    },
+    "crack": {
+     "src": "TR15/Fire/S_TR15_V3_Unsuppressed_With_Tail_1.wav",
+     "dur": 0.14,
+     "hp": 2200,
+     "gain_db": -3
+    },
+    "layer": {
+     "src": "Mk14EBR/S_Mk14EBR_Fire_03.WAV",
+     "dur": 0.3,
+     "hp": 150,
+     "lp": 5000,
+     "gain_db": -7
+    },
+    "body": {
+     "src": "Mk14EBR/S_Mk14EBR_Fire_02.WAV",
+     "dur": 0.45,
+     "lp": 650,
+     "gain_db": -2
+    },
+    "pitch": 0.9
+   },
+   {
+    "base": {
+     "src": "SRM-12/Actions/S_SRM-12_ShotOnly.wav"
+    },
+    "crack": {
+     "src": "TR15/Fire/S_TR15_V4_Unsuppressed_With_Tail_1.wav",
+     "dur": 0.14,
+     "hp": 2300,
+     "gain_db": -3
+    },
+    "layer": {
+     "src": "Mk14EBR/S_Mk14EBR_Fire_01.WAV",
+     "dur": 0.3,
+     "hp": 150,
+     "lp": 5000,
+     "gain_db": -7
+    },
+    "body": {
+     "src": "Mk14EBR/S_Mk14EBR_Fire_03.WAV",
+     "dur": 0.45,
+     "lp": 650,
+     "gain_db": -2
+    },
+    "pitch": 0.15
+   }
+  ],
+  "target": -12.0,
+  "max_gr_db": 8.0,
+  "decay": {
+   "hold_ms": 35,
+   "to_db": -28,
+   "over_ms": 240
+  }
+ },
+ "mech": {
+  "length_s": 0.35,
+  "chain": {
+   "hp": 140,
+   "lp": 4500,
+   "eq": [
+    [
+     400,
+     2.0,
+     0.9
+    ]
+   ],
+   "comp": {
+    "threshold_db": -16,
+    "ratio": 3.0,
+    "attack_ms": 3,
+    "release_ms": 80
+   },
+   "drive": 1.3
+  },
+  "variants": [
+   {
+    "src": "SRM-12/Actions/S_SRM-12_ShotBoltOnly.wav",
+    "t": 0.85,
+    "dur": 0.28,
+    "delay_ms": 14,
+    "pitch": -2.0
+   },
+   {
+    "src": "SRM-12/Actions/S_SRM-12_ShotBoltOnly.wav",
+    "t": 0.7,
+    "dur": 0.13,
+    "delay_ms": 18,
+    "pitch": -2.0
+   },
+   {
+    "src": "AK105/Actions/S_AK105_Reload_Empty.WAV",
+    "t": 3.052,
+    "dur": 0.28,
+    "delay_ms": 12,
+    "pitch": -2.0
+   },
+   {
+    "src": "Herrington_11-87/Actions/S_Herrington_11-87_Reload_Loop.wav",
+    "t": 0.584,
+    "dur": 0.28,
+    "delay_ms": 16,
+    "pitch": -2.0
+   }
+  ]
+ },
+ "sub": {
+  "length_s": 0.65,
+  "variants": [
+   {
+    "src": "SRM-12/Actions/S_SRM-12_ShotOnly.wav",
+    "lp": 110,
+    "donors": [
+     {
+      "src": "Mk14EBR/S_Mk14EBR_Fire_01.WAV",
+      "lp": 100,
+      "gain_db": -3
+     },
+     {
+      "src": "sonniss/Shapeforms/IMPACT_LOW_THUD_10",
+      "shot": false,
+      "t": 0.09,
+      "lp": 150,
+      "gain_db": 0.0
+     }
+    ],
+    "drive": 1.7
+   },
+   {
+    "src": "SRM-12/Actions/S_SRM-12_ShotOnly.wav",
+    "lp": 100,
+    "donors": [
+     {
+      "src": "Mk14EBR/S_Mk14EBR_Fire_02.WAV",
+      "lp": 100,
+      "gain_db": -3
+     },
+     {
+      "src": "sonniss/Gamemaster Audio -  Bullet/bullet_impact_body_thump_02",
+      "shot": false,
+      "t": 0.087,
+      "lp": 150,
+      "gain_db": 0.0,
+      "pitch": -2.0
+     }
+    ],
+    "drive": 1.7
+   },
+   {
+    "src": "Mk14EBR/S_Mk14EBR_Fire_03.WAV",
+    "lp": 110,
+    "donors": [
+     {
+      "src": "SRM-12/Actions/S_SRM-12_ShotOnly.wav",
+      "lp": 100,
+      "gain_db": -2
+     },
+     {
+      "src": "sonniss/Shapeforms/IMPACT_LOW_THUD_10",
+      "shot": false,
+      "t": 0.09,
+      "lp": 150,
+      "gain_db": 0.0
+     }
+    ],
+    "drive": 1.7
+   },
+   {
+    "src": "SRM-12/Actions/S_SRM-12_ShotOnly.wav",
+    "lp": 120,
+    "donors": [
+     {
+      "src": "Mk14EBR/S_Mk14EBR_Fire_03.WAV",
+      "lp": 100,
+      "gain_db": -4
+     },
+     {
+      "src": "sonniss/The Chris Alan/Hand-to-Hand Combat - Body Hits - Body Slam Floor 08",
+      "shot": false,
+      "t": 0.12,
+      "lp": 150,
+      "gain_db": 0.0
+     }
+    ],
+    "drive": 1.7
+   },
+   {
+    "src": "Mk14EBR/S_Mk14EBR_Fire_02.WAV",
+    "lp": 110,
+    "donors": [
+     {
+      "src": "SRM-12/Actions/S_SRM-12_ShotOnly.wav",
+      "lp": 100,
+      "gain_db": -2
+     },
+     {
+      "src": "sonniss/Gamemaster Audio -  Bullet/bullet_impact_body_thump_02",
+      "shot": false,
+      "t": 0.087,
+      "lp": 150,
+      "gain_db": 0.0
+     }
+    ],
+    "drive": 1.7
+   }
+  ],
+  "decay": {
+   "hold_ms": 80,
+   "to_db": -24,
+   "over_ms": 380
+  }
+ },
+ "tail": {
+  "length_s": 3.0,
+  "start_s": 0.16,
+  "chain": {
+   "hp": 60,
+   "lp": 10000,
+   "comp": {
+    "threshold_db": -32,
+    "ratio": 2.5,
+    "attack_ms": 20,
+    "release_ms": 400
+   }
+  },
+  "variants": [
+   {
+    "src": "Herrington_11-87/Fire/S_Herrington_11-87_Unsuppressed_1_With_Tail.wav"
+   },
+   {
+    "src": "Herrington_11-87/Fire/S_Herrington_11-87_Unsuppressed_2_With_Tail.wav"
+   },
+   {
+    "src": "Herrington_11-87/Fire/S_Herrington_11-87_Unsuppressed_3_With_Tail.wav",
+    "pitch": -0.5
+   },
+   {
+    "src": "SRM-12/Actions/S_SRM-12_ShotOnly.wav",
+    "pitch": 1.5
+   },
+   {
+    "src": "Mk14EBR/S_Mk14EBR_Fire_01.WAV",
+    "pitch": 0.0,
+    "lp": 6500
+   }
+  ]
+ },
+ "far": {
+  "length_s": 3.8,
+  "delay_ms": 95,
+  "chain": {
+   "hp": 55,
+   "lp": 2200,
+   "lp_order": 4,
+   "comp": {
+    "threshold_db": -34,
+    "ratio": 3.0,
+    "attack_ms": 25,
+    "release_ms": 550
+   }
+  },
+  "variants": [
+   {
+    "src": "Herrington_11-87/Fire/S_Herrington_11-87_Unsuppressed_1_With_Tail.wav"
+   },
+   {
+    "src": "Herrington_11-87/Fire/S_Herrington_11-87_Unsuppressed_2_With_Tail.wav",
+    "delay_ms": 120
+   },
+   {
+    "src": "Herrington_11-87/Fire/S_Herrington_11-87_Unsuppressed_3_With_Tail.wav",
+    "delay_ms": 80
+   },
+   {
+    "src": "SRM-12/Actions/S_SRM-12_ShotOnly.wav",
+    "delay_ms": 105,
+    "pitch": 1.0
+   }
+  ]
+ }
+}

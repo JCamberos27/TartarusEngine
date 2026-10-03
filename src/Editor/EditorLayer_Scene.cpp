@@ -886,6 +886,8 @@ void EditorLayer::OnExitPlayMode(World& world, AssetLibrary& assets) {
     }
     // Deliberately does NOT set m_Dirty: the scene is back exactly as it was before Play, so
     // there's nothing new to save — the same reason Unity doesn't dirty a scene on play/stop.
+    // (Unless the Audio panel asked to keep its live mix: that is an edit, with its own undo entry.)
+    ApplyKeptAudioMix(world);
     Log::Info("Exited play mode - scene state restored.");
 }
 void EditorLayer::NewScene(World& world, AssetLibrary& assets) {

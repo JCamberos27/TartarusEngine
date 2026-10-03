@@ -274,7 +274,7 @@ void NpcBrain::Enter(NpcDirector& d, Npc& n, int behaviour, const PlayerSnapshot
             if (n.Squad < (int)d.m_Squads.size() && d.m_Squads[(size_t)n.Squad].PincerHolder == n.Index) ++d.m_Tactics.Pincers;
             const CoverPoint& c = d.m_Cover.Points()[(size_t)n.Cover];
             const glm::vec3 right = glm::normalize(glm::cross(FlatDir(n.Feet, threat), glm::vec3(0, 1, 0)));
-            d.Callout(n, glm::dot(c.Pos - n.Feet, right) > 0.0f ? Bark::FlankRight : Bark::FlankLeft);
+            d.Callout(n, glm::dot(c.Pos - n.Feet, right) > 0.0f ? CallKind::FlankRight : CallKind::FlankLeft);
             n.Body.Signal(c.Pos - n.Feet);
             n.BoundWaitFrom = now; // the order given, it goes once someone covers it
         }
@@ -287,7 +287,7 @@ void NpcBrain::Enter(NpcDirector& d, Npc& n, int behaviour, const PlayerSnapshot
             n.Phase = n.Class == WeaponClass::Shotgun ? 2 : -1;
         }
         if (n.Phase >= 0) {
-            d.Callout(n, Bark::MovingUp);
+            d.Callout(n, CallKind::MovingUp);
             n.Body.Signal((n.Cover >= 0 ? d.m_Cover.Points()[(size_t)n.Cover].Pos : threat) - n.Feet);
             if (n.Cover >= 0) n.BoundWaitFrom = now;
         }
@@ -295,20 +295,20 @@ void NpcBrain::Enter(NpcDirector& d, Npc& n, int behaviour, const PlayerSnapshot
     case Behaviour::Retreat:
         n.Retreated = true;
         if (FindCover(d, n, CoverGoal::Retreat, threat) < 0) n.Phase = -1;
-        else d.Callout(n, Bark::FallingBack);
+        else d.Callout(n, CallKind::FallingBack);
         break;
     case Behaviour::Investigate:
-        d.Callout(n, Bark::Investigating);
+        d.Callout(n, CallKind::Investigating);
         break;
     case Behaviour::CoverFight:
         n.PhaseUntil = now + 0.6f + 0.8f * Rand01(d);
         break;
     case Behaviour::Search:
-        d.Callout(n, Bark::LostTarget);
+        d.Callout(n, CallKind::LostTarget);
         n.Goal = threat;
         break;
     case Behaviour::Idle:
-        if (prev == Behaviour::Investigate || prev == Behaviour::Search) d.Callout(n, Bark::AllClear);
+        if (prev == Behaviour::Investigate || prev == Behaviour::Search) d.Callout(n, CallKind::AllClear);
         d.m_Cover.Release(n.Index, now);
         n.Cover = -1;
         n.IdleUntil = now + 1.0f + 3.0f * Rand01(d);

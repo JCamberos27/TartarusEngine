@@ -1,7 +1,7 @@
 # Enemy AI
 
 The enemy squad: soldiers that see and hear the player, take cover, flank, bound under covering fire, blind-fire,
-fight hand to hand, talk on a Combine-style radio, and die into ragdolls. This page covers how it is built, what
+fight hand to hand, and die into ragdolls. This page covers how it is built, what
 can be tuned, and how it is tested.
 
 ## Putting a squad in a scene
@@ -38,13 +38,12 @@ Both scenes have a squad. `scenes/Arena.json` is the test arena. `scenes/Sandbox
 |---|---|
 | F7 | Dev panel (`src/Game/DevPanel.*`). It holds:<br>• god mode<br>• infinite ammo<br>• freeze AI<br>• hold fire<br>• invisible to the AI<br>• difficulty slider<br>• time scale<br>• Kill All<br>• Respawn Squad<br>• the overlay toggle |
 | F8 | God mode (a GOD tag shows on the HUD) |
-| F9 | AI overlay. It draws, over the squad:<br>• behaviour and phase<br>• utility scores<br>• last decision and callout<br>• cover claims<br>• sight lines |
+| F9 | AI overlay. It draws, over the squad:<br>• behaviour and phase<br>• utility scores<br>• last decision<br>• cover claims<br>• sight lines |
 
 The combat HUD (`src/Game/CombatHud.*`, text by `src/Renderer/HudText.*`) shows:
 
 - ammo
 - kill feed and streaks
-- radio subtitles
 - awareness chevrons for soldiers that are suspicious but haven't found the player
 
 ## Architecture
@@ -55,7 +54,7 @@ The combat HUD (`src/Game/CombatHud.*`, text by `src/Renderer/HudText.*`) shows:
 | `AI/NpcBrain.*` | Decisions. A utility choice among behaviours (below), then each behaviour's own small state machine. |
 | `AI/AiMath.*` | The pure rules, unit tested:<br>• detection rate<br>• target memory<br>• hit probability and reaction time<br>• utility curves<br>• tactics (`MayBound`, `WantsBlindFire`, `WantsMelee`, `DangerScale`) |
 | `AI/CoverSystem.*`, `AI/NavMesh.*` | Cover points probed from the scene (low or high, with peek positions), and the Recast navmesh with a DetourCrowd. |
-| `AI/SquadVoice.*`, `AI/NpcDirectorVoice.cpp` | The radio. Each squad gets one channel with priorities, cooldowns and "copy" responders. Callouts come from decisions, and reload, covering, kill and idle chatter come from state edges. |
+| `AI/NpcDirector.cpp` (callouts) | The squad's silent callouts. Each squad has one channel with priorities, cooldowns and "copy" responders; a call that gets through makes squadmates in earshot glance toward the caller. Callouts come from decisions, and reload, covering, kill and idle chatter come from state edges. There is no sound and no text: the voice lines and subtitles were removed. |
 | `Npc/NpcBody.*` | The soldier's body: outfit pieces on one Quantum skeleton. The torso piece drives; the rest copy its pose. Sprung aim, head look-at, cower, hand signals. |
 | `Npc/NpcWeaponHold.cpp` | The weapon hold: the player's world body's solve, step for step and by the player's First Person Body numbers. The weapon's eye hangs off the shoulders as the player's camera does (Head Bob, Camera Smoothing, Eye Slack, Armed Eye Offset, Look Down Push). The gun goes into the shoulder and clear of the head, and the arms go onto the rig's hands, with elbow and cheek-weld clearance against the drawn body. Off the sights the gun is at the hip, the view level along the chest; reloads are worked there, the view level on the threat, the stance kept. `--npc-test reload` against `--stock-probe ak` compares the two. |
 | `Npc/NpcHitboxes.*` | Per-bone hitboxes for live soldiers within 60 m: 11 query-only capsules posed from the skeleton. |
@@ -207,13 +206,11 @@ Hitbox. `--npc-test` prints them at the end.
   - Squad Settings / Ragdoll Settings: the combat, cover and ragdoll numbers above are inspector fields now, not constants.
   - `AiMath.cpp`: perception, accuracy and the tactics thresholds.
   - `NpcBrain.cpp`: behaviour scores.
-- **Voice lines:** `tools/gen_combine_voice.py` renders them with Windows TTS and a radio chain into `project/assets/Audio/Voice/combine/`. Each event's lines, subtitle, priority and cooldown are in `manifest.json` there.
 
 ## Tests
 
 - `--unit-tests`:
   - `AiMath`: perception, memory, accuracy, tactics
-  - `SquadVoice`
   - `NpcHitRegions`
   - `NpcBodyParts`
   - `PoweredRagdollDeathsAgainstPassive` (the table above, asserted), `RagdollMuscleToneCurves`, `RagdollMusclesFoldTheKnees`, `RagdollSettlesAndSleeps`, `RagdollPoweredSettings`, `RagdollEndsLyingNotKneeling`, `RagdollKneesBuckleWithTheShot`, `RagdollReactionsLayerTheTarget`, `RagdollCorpseHitReacts`, `RagdollLyingFieldsRoundTrip`
@@ -229,7 +226,7 @@ Hitbox. `--npc-test` prints them at the end.
 | pose | The weapon hold close up: aim, hip, crouch, strafe, reload, sprint, signal. Checks clearances. |
 | reload | An AK and a Remington soldier aimed, at the hip, reloading at each, an empty reload and the idle regrip. Logs the butt against the right shoulder and the eye off it as `--stock-probe ak` logs the player's body (the two should agree), checks the hands stay on the gun. |
 | tactics | Pins a soldier: it blind-fires. Checks that bounds go under covering fire. Then steps up to a soldier and takes a rifle butt. |
-| sandbox | The Sandbox squad spawns, uses the radio and dies to Kill All. |
+| sandbox | The Sandbox squad spawns and dies to Kill All. |
 
 `--weapon-test` and `--stock-probe` run without the enemy squad.
 

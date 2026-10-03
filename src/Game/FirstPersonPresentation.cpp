@@ -1,6 +1,7 @@
 #include "FirstPersonPresentation.h"
 
 #include "AnimationSystem.h"
+#include "Audio/WeaponAudio.h"
 #include "AnimatorController.h"
 #include "AssetLibrary.h"
 #include "Camera.h"
@@ -24,6 +25,25 @@
 #include <unordered_map>
 
 namespace {
+
+// A weapon sound (an animator's snd.* event, or a gear sound like ads_in / dry_fire / equip): 2D on the player's own
+// gun, 3D at the world gun for everyone else's. `name` is a full key (snd.ak.mag_out) or an element (ads_in).
+void WeaponSound(const FirstPersonPresentation& p, const std::filesystem::path& setFile, bool ownerView, const std::string& name) {
+    WeaponAudio& wa = WeaponAudio::Get();
+    if (!wa.Active()) return;
+    glm::vec3 fp(0.0f), world(0.0f), bore(0.0f, 0.0f, -1.0f);
+    if (!ownerView) p.MuzzleFrames(fp, world, bore);
+    wa.PlayEvent(name, WeaponAudioGunId(setFile.string()), world, ownerView);
+}
+
+// The shared gear rattle of putting a weapon up / away (snd.foley.weapon.equip / unequip) - only for a gun without draw /
+// holster takes of its own: those play from its Draw / Holster clips, and with both a weapon switch stacked four sounds
+// (rattle, holster, rattle, draw).
+void GearSound(const FirstPersonPresentation& p, const std::filesystem::path& setFile, bool ownerView, bool equip) {
+    WeaponAudio& wa = WeaponAudio::Get();
+    if (!wa.Active() || wa.HasEventFiles(WeaponAudioGunId(setFile.string()), equip ? "draw" : "holster")) return;
+    WeaponSound(p, setFile, ownerView, equip ? "equip" : "unequip");
+}
 
 // What a weapon's setup measures from its assets alone - the bolt's stroke, the barrel found along it, the ADS carry -
 // kept per weapon definition (and its file's time) for the presentations without an owner view (enemy soldiers'
@@ -1160,7 +1180,14 @@ bool FirstPersonPresentation::Fire() {
         m_StopReload = m_Ammo > 0;
         return false;
     }
-    if (m_Ammo <= 0) return false; // dry: the player has to press Reload themselves
+    if (m_Ammo <= 0) {
+        // Dry: the player has to press Reload themselves. The click, once per pull (a held full-auto trigger clicks at 3 Hz).
+        if (!ac->HasTag(K::kTagReload) && !ac->HasTag(K::kTagBusy)) {
+            WeaponSound(*this, m_SetFile, m_Options.OwnerView, "dry_fire");
+            m_FireCooldown = std::max(m_FireCooldown, 0.33f);
+        }
+        return false;
+    }
     if (!m_Chambered || ac->HasTag(K::kTagCycling)) return false; // the pump / bolt hasn't been worked yet
     if (WallBlocked()) return false; // tucked off a wall: the muzzle is in it
     // Reloading or otherwise busy hands: no round, whether the state is a hip clip the controller
@@ -1256,6 +1283,7 @@ void FirstPersonPresentation::SelectSlot(int slot) {
     }
     // Put this one away first; Tick swaps the rigs once it's holstered (at once if it already is).
     m_PendingSlot = slot;
+    if (m_Equipped) GearSound(*this, m_SetFile, m_Options.OwnerView, false);
     m_Equipped = false;
     if (auto* ac = Animator()) ac->SetBool(K::kEquipped, false);
 }
@@ -1285,6 +1313,7 @@ void FirstPersonPresentation::SwapToPendingSlot() {
     }
     m_WalkSpeed = walk;
     m_SprintSpeed = sprint;
+    GearSound(*this, m_SetFile, m_Options.OwnerView, true); // (StartSet has the gun in hand already: SetEquipped sees no change)
     SetEquipped(true);
 }
 
@@ -1295,6 +1324,7 @@ void FirstPersonPresentation::ToggleFireMode() {
         return;
     }
     m_FullAuto = !m_FullAuto;
+    WeaponSound(*this, m_SetFile, m_Options.OwnerView, "firemode");
     Log::Info(std::string("Fire mode: ") + (m_FullAuto ? "Full-Auto" : "Semi-Auto"));
 }
 
@@ -1335,6 +1365,7 @@ bool FirstPersonPresentation::TriggerAction(const std::string& trigger) {
 void FirstPersonPresentation::SetEquipped(bool equipped) {
     if (!IsActive()) return;
     if (!equipped) m_PendingSlot = -1;
+    if (equipped != m_Equipped) GearSound(*this, m_SetFile, m_Options.OwnerView, equipped);
     m_Equipped = equipped;
     if (auto* ac = Animator()) ac->SetBool(K::kEquipped, equipped);
 }
@@ -1360,6 +1391,8 @@ void FirstPersonPresentation::Tick(float dt, const glm::vec3& velocity, bool spr
     ac->SetBool(K::kSprint, sprinting);
     // The aim press drives the corner peek, even up against cover; tucked off a wall with no
     // peek to lean out on, the sights can't come up.
+    if (aiming != m_Aiming && m_Equipped && !ac->HasTag(K::kTagHidden)) WeaponSound(*this, m_SetFile, m_Options.OwnerView, aiming ? "ads_in" : "ads_out");
+    if (m_Options.OwnerView) WeaponAudio::Get().SetFocus(aiming && m_Equipped); // the mix's focus: the world comes forward down the sights
     m_Aiming = aiming;
     if (WallBlocked() && m_PeekSide == 0) aiming = false;
     ac->SetBool(K::kAim, aiming);
@@ -1576,6 +1609,9 @@ void FirstPersonPresentation::Update(World& world, Camera& camera) {
             if (m_Ammo == 0) m_Chambered = true;
             m_Ammo = std::min(m_Set.Gameplay.Magazine, m_Ammo + 1);
         }
+        // The audio the controller's states carry: events named snd.<gun>.<element> (see docs/AUDIO.md) play that set.
+        for (const std::string& e : ac->FiredEvents)
+            if (e.rfind("snd.", 0) == 0) WeaponSound(*this, m_SetFile, m_Options.OwnerView, e);
         ac->FiredEvents.clear();
         // Triggers live for exactly one controller update: an input the controller refused
         // (fire during a reload, say) is dropped rather than firing late.
