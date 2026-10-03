@@ -62,12 +62,11 @@ static void Test_FxHudSettings_RoundTrip() {
     in.BeamBend = 8.0f;
     in.FeedLife = 9.0f;
     in.StreakWindow = 2.0f;
-    in.SubLinger = 3.0f;
     FxHudSettingsComponent out;
     CHECK(RoundTrip(world, assets, "FX & HUD Settings", in, out));
     CHECK(out.FlashTime == 0.1f && out.PlayerFlashScale == 0.5f && out.FlameGlow == 90.0f && out.FlameScale == 2.5f);
     CHECK(out.BeamRange == 60.0f && out.BeamHalfWidth == 0.003f && out.BeamFalloff == 5.0f && out.BeamBend == 8.0f);
-    CHECK(out.FeedLife == 9.0f && out.StreakWindow == 2.0f && out.SubLinger == 3.0f);
+    CHECK(out.FeedLife == 9.0f && out.StreakWindow == 2.0f);
 }
 
 static void Test_GravityGun_AssistReach() {
