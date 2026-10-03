@@ -73,6 +73,10 @@ public:
 
     bool NoiseReady() const { return m_NoiseReady; }
 
+    // Compiles the cloud programs and bakes the noise volumes now rather than on the first frame
+    // that draws clouds (a ~230 ms stall). Idempotent.
+    void WarmUp() { EnsureResources(); }
+
     // The wind's texture offsets (km), wrapped at whole tiles. For tests.
     glm::vec2 WeatherOffset() const { return m_WeatherOffset; }
     glm::vec2 ShapeOffset() const { return m_ShapeOffset; }

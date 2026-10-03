@@ -122,6 +122,10 @@ public:
     // the sun sets through twilight).
     static float NightBrightnessStops(const SkySettings& s, const glm::vec3& sunDir);
 
+    // Compiles the sky's programs and builds its fixed resources (and the clouds', when asked) at
+    // load, so the first frame that shows the physical sky does not stall ~270 ms. Idempotent.
+    void WarmUp(bool clouds);
+
     const VolumetricClouds& Clouds() const { return m_Clouds; }
     float ClockOffsetHours() const { return m_ClockOffsetHours; }
 
