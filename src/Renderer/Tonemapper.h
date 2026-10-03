@@ -75,6 +75,9 @@ public:
     // bloomIntensity: additive scale for the glow before the tone curve.
     void Apply(unsigned int srcHdrTexture, unsigned int dstFbo, int dstW, int dstH, const PostSettings& post);
 
+    // Builds the tone-map and FXAA programs now (load-time warm-up) instead of on the first frame.
+    void WarmUp() { EnsureCreated(); }
+
 private:
     void EnsureCreated();
     // #162 - meters srcHdrTexture and updates the slot's adapted EV; returns that 1x1 texture.

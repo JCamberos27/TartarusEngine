@@ -130,6 +130,9 @@ void Ssao::WarmUp(Shader& ssaoShader, Shader& blurShader) {
     if (!tmp.IsValid()) return;
     tmp.Compute(ssaoShader, glm::perspective(glm::radians(60.0f), 1.0f, 0.1f, 100.0f));
     tmp.Blur(blurShader);
+    // tmp's textures die with this scope; leaving the blur program current would sample them
+    // (now texture 0) on the first draw of the next frame (KHR 131204).
+    glUseProgram(0);
     GLStateCache::Invalidate();
 }
 

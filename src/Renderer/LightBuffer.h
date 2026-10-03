@@ -65,6 +65,9 @@ public:
     bool Overflowed() const { return m_Overflowed; }
     void MarkOverflowed() { m_Overflowed = true; }
 
+    // Allocates the light SSBO now (load-time warm-up).
+    void WarmUp() { EnsureCreated(); }
+
 private:
     struct GpuLight {
         glm::vec4 PositionType; // xyz = world pos (point/spot); w = Type
