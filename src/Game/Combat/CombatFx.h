@@ -39,8 +39,10 @@ public:
     void SetAudioLog(const std::string& path);
 
     // A round left a muzzle at `origin` heading for `end`. `fromPlayer`: the report is 2D, the flash
-    // light softer and the flame rides the gun (FollowMuzzle), `tracer`: a streak along the line.
-    void Shot(World& world, Gun gun, const glm::vec3& origin, const glm::vec3& end, bool fromPlayer, bool tracer);
+    // light softer and the flame rides the gun (FollowMuzzle), `tracer`: a streak along the line. `shooter`: any stable id of
+    // who fired (e.g. the soldier's index + 1) so the report's tail knows the space per shooter; 0 = unnamed (the player's
+    // gun, else told apart by position).
+    void Shot(World& world, Gun gun, const glm::vec3& origin, const glm::vec3& end, bool fromPlayer, bool tracer, std::uint32_t shooter = 0);
     // The player's gun this frame (FirstPersonPresentation::MuzzleFrames: the first-person gun's muzzle,
     // the world copy's, and the bore): the player's flames move with it.
     void FollowMuzzle(World& world, const glm::vec3& firstPerson, const glm::vec3& worldCopy, const glm::vec3& bore);
