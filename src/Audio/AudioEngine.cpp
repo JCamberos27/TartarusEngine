@@ -2,6 +2,8 @@
 #include "Log.h"
 #include "miniaudio.h"
 #include <algorithm>
+#include <atomic>
+#include <chrono>
 #include <cmath>
 #include <fstream>
 #include <memory>
@@ -31,6 +33,8 @@ std::unordered_map<std::string, std::shared_ptr<const PreloadedClip>> s_Preloade
 // previous occupant of the slot no longer resolve.
 struct Voice {
     std::unique_ptr<ma_sound> Sound;         // null when the slot is free
+    std::unique_ptr<ma_lpf_node> Lpf;        // occlusion low-pass, between the sound and its splitter / bus
+    std::unique_ptr<ma_splitter_node> Split; // output 0: the bus, output 1: the reverb send (its volume is the send level)
     std::unique_ptr<ma_audio_buffer> Buffer; // non-null only for a voice playing preloaded data (#202)
     std::shared_ptr<const PreloadedClip> Clip; // keeps Buffer's PCM alive past Unload() (#171)
     uint16_t Generation = 1;                 // never 0, so a live handle is never InvalidHandle
@@ -39,6 +43,58 @@ struct Voice {
 };
 
 std::vector<Voice> s_Voices;
+
+// --- the reverb bus ------------------------------------------------------------------------------------------------
+// One node, input bus 0 = every send (miniaudio sums what is attached to an input bus), output bus 0 -> the engine endpoint.
+// The game thread writes the target parameters into atomics; the audio callback copies them into the FDN, which glides.
+struct ReverbNode {
+    ma_node_base Base;
+    ReverbFdn* Fdn = nullptr;
+    std::atomic<float> Target[7]; // the six ReverbParams, then the glide time
+    std::atomic<bool> Enabled{true};
+    std::atomic<std::uint64_t> Callbacks{0};
+    std::atomic<double> TotalMicros{0.0}, MaxMicros{0.0};
+    std::atomic<int> LastFrames{0};
+};
+ReverbNode* s_Reverb = nullptr;
+bool s_ReverbInit = false;
+float s_ReverbReturn = 1.0f;
+ReverbParams s_ReverbTarget;
+
+void ReverbProcess(ma_node* pNode, const float** ppIn, ma_uint32* pFrameCountIn, float** ppOut, ma_uint32* pFrameCountOut) {
+    ReverbNode* n = reinterpret_cast<ReverbNode*>(pNode);
+    const ma_uint32 frames = *pFrameCountOut;
+    float* out = ppOut[0];
+    if (!n->Fdn || !n->Enabled.load(std::memory_order_relaxed)) {
+        std::fill(out, out + 2 * (size_t)frames, 0.0f);
+        (void)pFrameCountIn;
+        return;
+    }
+    const auto t0 = std::chrono::steady_clock::now();
+    ReverbParams p;
+    p.RoomSize = n->Target[0].load(std::memory_order_relaxed);
+    p.DecayTime = n->Target[1].load(std::memory_order_relaxed);
+    p.HfDamping = n->Target[2].load(std::memory_order_relaxed);
+    p.PreDelayMs = n->Target[3].load(std::memory_order_relaxed);
+    p.WetLevel = n->Target[4].load(std::memory_order_relaxed);
+    p.EarlyLateMix = n->Target[5].load(std::memory_order_relaxed);
+    n->Fdn->SetTarget(p);
+    n->Fdn->SetSmoothingTime(n->Target[6].load(std::memory_order_relaxed));
+    static thread_local std::vector<float> silence;
+    const float* in = ppIn && ppIn[0] ? ppIn[0] : nullptr;
+    if (!in) {
+        if (silence.size() < 2 * (size_t)frames) silence.assign(2 * (size_t)frames, 0.0f); // (grows once, on the first callback)
+        in = silence.data();
+    }
+    n->Fdn->Process(in, out, (int)frames);
+    const double us = std::chrono::duration<double, std::micro>(std::chrono::steady_clock::now() - t0).count();
+    n->Callbacks.fetch_add(1, std::memory_order_relaxed);
+    n->TotalMicros.store(n->TotalMicros.load(std::memory_order_relaxed) + us, std::memory_order_relaxed);
+    if (us > n->MaxMicros.load(std::memory_order_relaxed)) n->MaxMicros.store(us, std::memory_order_relaxed);
+    n->LastFrames.store((int)frames, std::memory_order_relaxed);
+}
+
+ma_node_vtable s_ReverbVtable = {ReverbProcess, nullptr, 1, 1, MA_NODE_FLAG_CONTINUOUS_PROCESSING | MA_NODE_FLAG_ALLOW_NULL_INPUT};
 
 // #171 - mixer buses: every voice plays through one sound group, whose volume is the bus
 // volume. Master is the engine volume (times the editor's Mute).
@@ -81,6 +137,14 @@ void FreeSlot(uint32_t index) {
     ma_sound_stop(voice.Sound.get());
     ma_sound_uninit(voice.Sound.get());
     voice.Sound.reset();
+    if (voice.Split) { // after the sound: nothing feeds them any more
+        ma_splitter_node_uninit(voice.Split.get(), nullptr);
+        voice.Split.reset();
+    }
+    if (voice.Lpf) {
+        ma_lpf_node_uninit(voice.Lpf.get(), nullptr);
+        voice.Lpf.reset();
+    }
     if (voice.Buffer) {
         ma_audio_buffer_uninit(voice.Buffer.get());
         voice.Buffer.reset();
@@ -112,6 +176,32 @@ void AudioEngine::Init() {
         ma_sound_group_set_volume(&s_Buses[b], s_BusVolume[b]);
     }
     ApplyMasterVolume(s_Engine);
+    // The reverb bus. If it can't be built, voices simply start without a send.
+    {
+        const ma_uint32 sr = ma_engine_get_sample_rate(&s_Engine);
+        ma_node_config nc = ma_node_config_init();
+        ma_uint32 ch = 2;
+        nc.vtable = &s_ReverbVtable;
+        nc.pInputChannels = &ch;
+        nc.pOutputChannels = &ch;
+        auto* node = new ReverbNode();
+        node->Fdn = new ReverbFdn((int)sr);
+        node->Fdn->Reset(s_ReverbTarget);
+        const float t[6] = {s_ReverbTarget.RoomSize, s_ReverbTarget.DecayTime, s_ReverbTarget.HfDamping, s_ReverbTarget.PreDelayMs,
+                            s_ReverbTarget.WetLevel, s_ReverbTarget.EarlyLateMix};
+        for (int i = 0; i < 6; ++i) node->Target[i].store(t[i]);
+        node->Target[6].store(0.35f);
+        if (ma_engine_get_channels(&s_Engine) == 2 && ma_node_init(ma_engine_get_node_graph(&s_Engine), &nc, nullptr, &node->Base) == MA_SUCCESS) {
+            ma_node_attach_output_bus(&node->Base, 0, ma_engine_get_endpoint(&s_Engine), 0);
+            ma_node_set_output_bus_volume(&node->Base, 0, s_ReverbReturn * s_BusVolume[0]);
+            s_Reverb = node;
+            s_ReverbInit = true;
+        } else {
+            Log::Warn("Audio: could not create the reverb bus; voices play without a send.");
+            delete node->Fdn;
+            delete node;
+        }
+    }
 }
 
 void AudioEngine::Shutdown() {
@@ -124,6 +214,13 @@ void AudioEngine::Shutdown() {
     s_Paused = false;
     if (s_BusesReady) for (int b = 0; b < kBusCount; ++b) ma_sound_group_uninit(&s_Buses[b]);
     s_BusesReady = false;
+    if (s_Reverb) {
+        ma_node_uninit(&s_Reverb->Base, nullptr);
+        delete s_Reverb->Fdn;
+        delete s_Reverb;
+        s_Reverb = nullptr;
+    }
+    s_ReverbInit = false;
     ma_engine_uninit(&s_Engine);
     s_Initialized = false;
 }
@@ -190,7 +287,7 @@ void AudioEngine::UnloadAll() {
     s_Preloaded.clear();
 }
 
-AudioEngine::SoundHandle AudioEngine::Play(const std::string& path, float volume, bool loop, Bus bus, float startOffsetSeconds) {
+AudioEngine::SoundHandle AudioEngine::Play(const std::string& path, float volume, bool loop, Bus bus, float startOffsetSeconds, const VoiceFx* fx) {
     if (!s_Initialized) return InvalidHandle;
     const int busIndex = std::clamp((int)bus, 0, kBusCount - 1);
     ma_sound_group* group = s_BusesReady ? &s_Buses[busIndex] : nullptr;
@@ -236,9 +333,44 @@ AudioEngine::SoundHandle AudioEngine::Play(const std::string& path, float volume
         if (ma_sound_get_data_format(sound.get(), nullptr, nullptr, &sampleRate, nullptr, 0) == MA_SUCCESS && sampleRate > 0)
             ma_sound_seek_to_pcm_frame(sound.get(), (ma_uint64)(startOffsetSeconds * (float)sampleRate));
     }
+    // The node chain: sound -> [occlusion low-pass] -> [splitter: bus | reverb send]. Built before the voice starts, so its first
+    // block already goes through it. A failure leaves the voice on the plain path.
+    std::unique_ptr<ma_lpf_node> lpf;
+    std::unique_ptr<ma_splitter_node> split;
+    if (fx && group && ma_engine_get_channels(&s_Engine) == 2) {
+        ma_node* tail = sound.get();
+        const ma_uint32 sr = ma_engine_get_sample_rate(&s_Engine);
+        if (fx->Occlusion) {
+            auto n = std::make_unique<ma_lpf_node>();
+            ma_lpf_node_config lc = ma_lpf_node_config_init(2, sr, 20000.0, 2);
+            if (ma_lpf_node_init(ma_engine_get_node_graph(&s_Engine), &lc, nullptr, n.get()) == MA_SUCCESS) {
+                ma_node_attach_output_bus(tail, 0, n.get(), 0);
+                tail = n.get();
+                lpf = std::move(n);
+            }
+        }
+        if (fx->ReverbSend > 0.0f && s_Reverb) {
+            auto n = std::make_unique<ma_splitter_node>();
+            ma_splitter_node_config sc = ma_splitter_node_config_init(2);
+            if (ma_splitter_node_init(ma_engine_get_node_graph(&s_Engine), &sc, nullptr, n.get()) == MA_SUCCESS) {
+                ma_node_attach_output_bus(tail, 0, n.get(), 0);
+                ma_node_attach_output_bus(n.get(), 0, group, 0);
+                ma_node_attach_output_bus(n.get(), 1, &s_Reverb->Base, 0);
+                ma_node_set_output_bus_volume(n.get(), 1, fx->ReverbSend);
+                tail = n.get();
+                split = std::move(n);
+            }
+        }
+        if (lpf && !split) ma_node_attach_output_bus(lpf.get(), 0, group, 0);
+    }
+    auto dropChain = [&] {
+        if (split) ma_splitter_node_uninit(split.get(), nullptr);
+        if (lpf) ma_lpf_node_uninit(lpf.get(), nullptr);
+    };
     if (ma_sound_start(sound.get()) != MA_SUCCESS) {
         Log::Error("Audio: failed to start sound '" + path + "'.", LogContext::Asset(path));
         ma_sound_uninit(sound.get());
+        dropChain();
         if (buffer) ma_audio_buffer_uninit(buffer.get());
         return InvalidHandle;
     }
@@ -253,6 +385,7 @@ AudioEngine::SoundHandle AudioEngine::Play(const std::string& path, float volume
         if (s_Voices.size() > kIndexMask) {
             Log::Error("Audio: voice limit reached; dropping '" + path + "'.", LogContext::Asset(path));
             ma_sound_uninit(sound.get());
+            dropChain();
             return InvalidHandle;
         }
         index = static_cast<uint32_t>(s_Voices.size());
@@ -261,10 +394,65 @@ AudioEngine::SoundHandle AudioEngine::Play(const std::string& path, float volume
 
     Voice& voice = s_Voices[index];
     voice.Sound = std::move(sound);
+    voice.Lpf = std::move(lpf);
+    voice.Split = std::move(split);
     voice.Buffer = std::move(buffer);
     voice.Clip = std::move(clipRef);
     voice.Looping = loop;
     return MakeHandle(index, voice.Generation);
+}
+
+void AudioEngine::SetOcclusion(SoundHandle handle, float cutoffHz) {
+    if (!Resolve(handle)) return;
+    Voice& v = s_Voices[handle & kIndexMask];
+    if (!v.Lpf) return;
+    const double hz = (cutoffHz <= 0.0f || cutoffHz >= 20000.0f) ? 20000.0 : std::max(80.0, (double)cutoffHz);
+    ma_lpf_node_config lc = ma_lpf_node_config_init(2, ma_engine_get_sample_rate(&s_Engine), hz, 2);
+    ma_lpf_node_reinit(&lc.lpf, v.Lpf.get());
+}
+
+void AudioEngine::SetReverbSend(SoundHandle handle, float level) {
+    if (!Resolve(handle)) return;
+    Voice& v = s_Voices[handle & kIndexMask];
+    if (v.Split) ma_node_set_output_bus_volume(v.Split.get(), 1, std::max(level, 0.0f));
+}
+
+void AudioEngine::SetReverbEnabled(bool enabled) {
+    if (s_Reverb) s_Reverb->Enabled.store(enabled);
+}
+bool AudioEngine::ReverbEnabled() { return s_Reverb && s_Reverb->Enabled.load(); }
+
+void AudioEngine::SetReverb(const ReverbParams& p) {
+    s_ReverbTarget = p;
+    if (!s_Reverb) return;
+    const float t[6] = {p.RoomSize, p.DecayTime, p.HfDamping, p.PreDelayMs, p.WetLevel, p.EarlyLateMix};
+    for (int i = 0; i < 6; ++i) s_Reverb->Target[i].store(t[i], std::memory_order_relaxed);
+}
+
+void AudioEngine::SetReverbGlide(float seconds) {
+    if (s_Reverb) s_Reverb->Target[6].store(std::max(seconds, 0.001f), std::memory_order_relaxed);
+}
+
+void AudioEngine::SetReverbReturn(float level) {
+    s_ReverbReturn = std::max(level, 0.0f);
+    if (s_Reverb) ma_node_set_output_bus_volume(&s_Reverb->Base, 0, s_ReverbReturn * s_BusVolume[0]);
+}
+
+AudioEngine::ReverbStats AudioEngine::GetReverbStats() {
+    ReverbStats st;
+    if (!s_Reverb) return st;
+    st.Callbacks = s_Reverb->Callbacks.load();
+    st.TotalMicros = s_Reverb->TotalMicros.load();
+    st.MaxMicros = s_Reverb->MaxMicros.load();
+    st.Frames = s_Reverb->LastFrames.load();
+    return st;
+}
+
+void AudioEngine::ResetReverbStats() {
+    if (!s_Reverb) return;
+    s_Reverb->Callbacks.store(0);
+    s_Reverb->TotalMicros.store(0.0);
+    s_Reverb->MaxMicros.store(0.0);
 }
 
 void AudioEngine::Stop(SoundHandle handle) {
@@ -380,6 +568,7 @@ void AudioEngine::SetBusVolume(Bus bus, float volume) {
     const int b = std::clamp((int)bus, 0, kBusCount - 1);
     s_BusVolume[b] = std::clamp(volume, 0.0f, 1.0f);
     if (s_BusesReady) ma_sound_group_set_volume(&s_Buses[b], s_BusVolume[b]);
+    if (s_Reverb && b == 0) ma_node_set_output_bus_volume(&s_Reverb->Base, 0, s_ReverbReturn * s_BusVolume[0]); // the return follows the SFX bus
 }
 float AudioEngine::BusVolume(Bus bus) { return s_BusVolume[std::clamp((int)bus, 0, kBusCount - 1)]; }
 

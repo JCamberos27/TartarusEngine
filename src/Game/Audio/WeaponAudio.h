@@ -17,6 +17,7 @@
 #include <vector>
 
 struct WeaponAudioComponent;
+struct ReverbBusComponent;
 class World;
 
 // Engine-side weapon and foley audio (docs/AUDIO.md, "Engine"). Everything here is data: a SoundSet
@@ -39,6 +40,11 @@ struct SoundSet {
     int MaxVoices = 8;                     // simultaneous voices of this set (0 = unlimited); the oldest is stolen
     float StealFadeTime = 0.03f;           // seconds the stolen voice fades out over (0 = cut)
     bool Loop = false;
+    // The reverb bus: this set's send level (linear, post fader), or -1 = by category (the Reverb Bus component's table: gun
+    // tails 0, shot layers a little, foley / gear / impacts / casings more). Occlusion: -1 = by category (3D voices on),
+    // 0 = off, 1 = a low-pass when geometry stands between the listener and the source.
+    float ReverbSend = -1.0f;
+    int Occlusion = -1;
     // Per file (parallel to Files; empty = zeros / defaults), from the manifest: where the contact transient sits in the file
     // (ms), the mix level (dB) and the true peak (dBTP). Variants of one key differ, so these are used per play, not per key.
     std::vector<float> FileAnchorMs, FileGainDb, FilePeakDb;
@@ -93,6 +99,9 @@ struct SoundVoice {
     float MinDistance = 1.0f, MaxDistance = 40.0f;
     AudioEngine::Rolloff Rolloff = AudioEngine::Rolloff::Logarithmic;
     float StartOffset = 0.0f; // seconds into the file
+    float ReverbSend = 0.0f;  // see SoundSet
+    bool Occlusion = false;
+    float OcclusionHz = 20000.0f; // the low-pass it starts with (20000 = open)
 };
 struct SoundBackend {
     virtual ~SoundBackend() = default;
@@ -101,6 +110,10 @@ struct SoundBackend {
     virtual void SetVolume(AudioEngine::SoundHandle h, float volume) = 0;
     virtual bool IsPlaying(AudioEngine::SoundHandle h) = 0;
     virtual void Preload(const std::string&) {}
+    // Low-pass cutoff (Hz; >= 20000 = open) of a voice started with Occlusion; the reverb the bus runs (targets, glided).
+    virtual void SetOcclusion(AudioEngine::SoundHandle, float /*cutoffHz*/) {}
+    virtual void SetReverb(const ReverbParams&) {}
+    virtual void ConfigureReverb(bool /*enabled*/, float /*returnLevel*/, float /*glideSeconds*/) {}
     static SoundBackend& Engine(); // AudioEngine-backed; paths resolved through ProjectPaths
 };
 
@@ -147,6 +160,35 @@ public:
     float LimiterLoad() const;
     void Seed(std::uint32_t s) { m_Rng = s ? s : 1u; }
 
+    // What a set sends to the reverb bus and whether it is occluded, by its key (sets with -1 ask this). Set by WeaponAudio.
+    struct Routing {
+        float Send = 0.0f;
+        bool Occlusion = false;
+    };
+    using RoutingFn = std::function<Routing(const std::string& key)>;
+    void SetRouting(RoutingFn fn) { m_Routing = std::move(fn); }
+    // Occlusion: a throttled line of sight from the listener to each positioned voice that wants it; a blocked one is low-passed
+    // (a smoothed amount, so a source stepping behind a corner closes up rather than clicks).
+    struct OcclusionSettings {
+        bool Enabled = true;
+        float CutoffHz = 900.0f;       // where a fully occluded voice's low-pass sits
+        float Interval = 0.15f;        // seconds between checks of one voice
+        int RaysPerFrame = 8;          // line-of-sight casts a frame, over every tracked voice
+        float MinDistance = 3.0f;      // closer sources are never occluded
+        float GlideRate = 10.0f;       // per second: how fast the amount follows a change
+        float Clearance = 0.3f;        // a hit this close to the source is the source's own surface, not an occluder
+    };
+    // True when something solid is between the two points.
+    using BlockedFn = std::function<bool(const glm::vec3& from, const glm::vec3& to)>;
+    void SetOcclusion(const OcclusionSettings& s) { m_Occ = s; }
+    const OcclusionSettings& GetOcclusion() const { return m_Occ; }
+    void SetBlockedFn(BlockedFn fn) { m_Blocked = std::move(fn); }
+    void SetListener(const glm::vec3& p) { m_ListenerPos = p; }
+    int OccludedVoices() const { return (int)m_Occluded.size(); }
+    int OcclusionChecks() const { return m_OccChecks; }
+    // Cutoff for an occlusion amount 0..1 (log-spaced from open to CutoffHz).
+    static float OcclusionCutoff(const OcclusionSettings& s, float amount);
+
     Played Play(const SoundSet& set, const Request& req);
     // Advances time, fades stolen voices out and forgets finished ones. Once per frame.
     void Update(float dt);
@@ -178,6 +220,21 @@ private:
         double Time = 0.0;
         float Amp = 0.0f;
     };
+    struct Tracked {
+        AudioEngine::SoundHandle Handle = AudioEngine::InvalidHandle;
+        glm::vec3 Pos{0.0f};
+        float Amount = 0.0f, Target = 0.0f, LastCutoff = 20000.0f;
+        double NextCheck = 0.0;
+        float MinDist = 3.0f;
+    };
+    std::vector<Tracked> m_Occluded;
+    OcclusionSettings m_Occ;
+    BlockedFn m_Blocked;
+    RoutingFn m_Routing;
+    glm::vec3 m_ListenerPos{0.0f};
+    int m_OccChecks = 0;
+    size_t m_OccCursor = 0;
+    void UpdateOcclusion(float dt);
     std::vector<Pending> m_Pending;
     std::vector<Peak> m_Peaks;
     Limiter m_Limiter;
@@ -230,6 +287,10 @@ struct WeaponAudioProfile {
     std::string ToJson() const;
 };
 
+// Wire boxes / spheres of the scene's Reverb Zones (when `zones`) and, in Play, each shooter's probe rays for the guns with Env Debug
+// Draw on: 7 floats per vertex (xyz rgba), two vertices per line. Called by the editor's collider gizmo.
+void AppendAudioDebugLines(const World& world, std::vector<float>& out, bool zones);
+
 class WeaponAudio {
 public:
     static WeaponAudio& Get();
@@ -262,9 +323,10 @@ public:
     SpaceMix ResolveSpace(const WeaponAudioProfile& p, std::uint32_t shooter, const glm::vec3& pos, bool at2D);
     const SpaceMix& LastSpace() const { return m_LastSpace; }
     EnvironmentProbe& Probe() { return m_Probe; }
+    EnvironmentProbe& ListenerProbe() { return m_ListenerProbe; }
     ReverbZones& Zones() { return m_Zones; }
     // Overlay lines (zones, and the probe rays of guns with Env Debug Draw): 7 floats per vertex, two vertices per line.
-    void EnvironmentDebugLines(std::vector<float>& out) const;
+    void EnvironmentDebugLines(std::vector<float>& out, bool withZones = true) const;
     // An animator event / gear sound: "snd.ak.mag_out" (or "mag_out" with `gun`), at the gun (3D) or on the player (2D).
     // False when it isn't a weapon key or the gun has no audio.
     bool PlayEvent(const std::string& name, const std::string& gun, const glm::vec3& pos, bool at2D, float gain = 1.0f);
@@ -295,6 +357,23 @@ public:
     // Tests: starts with a given set of profiles and no scene.
     void StartForTest(const std::string& projectRoot, SoundBackend* backend);
 
+    // --- the reverb bus (docs/AUDIO.md, "Reverb bus") ---
+    // Send levels by category, and what the reverb is told as the listener moves (zones first, the probe outside them).
+    ReverbBusComponent& Bus() { return m_Bus; }
+    const ReverbBusComponent& Bus() const { return m_Bus; }
+    // The category's send level for a set key ("snd.foley.step_wood.walk" -> footsteps ...); 0 for the gun tails.
+    float SendFor(const std::string& key) const;
+    // The reverb at `pos`: the zones' presets (layered, faded), the probe class presets for what no zone claims.
+    ReverbParams ReverbAt(const glm::vec3& pos);
+    const ReverbParams& CurrentReverb() const { return m_ReverbSent; }
+    // A set by exact key (filled from the manifest on first use): the impact, casing and flyby sets use this; `init` runs once
+    // on creation for the set's defaults.
+    SoundSet* KeySet(const std::string& key, const std::function<void(SoundSet&)>& init = nullptr);
+    // Plays a keyed set (note + play), 3D at `pos` unless at2D.
+    SoundPlayer::Played PlayKeyed(SoundSet& set, const glm::vec3& pos, bool at2D, float gain, float pitchScale = 1.0f);
+    // Closest listener position the game last gave (SetListener).
+    const glm::vec3& Listener() const { return m_Listener; }
+
 private:
     bool m_Active = false;
     std::string m_Root;
@@ -314,11 +393,20 @@ private:
     friend class FoleyAudio;
     void Note(const std::string& key, bool at2D, const std::string& space = std::string());
     // The tail of one shot: the space's tail sets (the two heaviest classes, equal-power), or the generic one.
+    void InstallRouting();
+    SoundPlayer::BlockedFn EnvironmentBlockedFn();
     int PlayTail(WeaponAudioProfile& p, const SoundPlayer::Request& base, std::uint32_t shooter, const glm::vec3& pos, bool at2D);
     int TailVoices(const WeaponAudioProfile& p) const;
     EnvironmentProbe m_Probe;
+    EnvironmentProbe m_ListenerProbe;   // the listener's space, for the reverb (its own cache and cast count)
     ReverbZones m_Zones;
     SpaceMix m_LastSpace;
+    ReverbBusComponent m_Bus;
+    ReverbParams m_ReverbSent;
+    bool m_ReverbValid = false;
+    double m_LastReverbLog = -1e9;
+    std::map<std::string, SoundSet> m_Keyed;
+    static float ClampSend(float s) { return s < 0.0f ? 0.0f : s; }
     std::map<std::string, SpaceClass> m_LastDominant; // per shooter key, for the console line when it changes
     int m_SpaceLines = 0;
     void InstallLog();

@@ -2,6 +2,7 @@
 
 #include "AudioEngine.h"
 #include "Audio/FoleyAudio.h"
+#include "Audio/ImpactAudio.h"
 #include "Audio/WeaponAudio.h"
 #include "Components.h"
 #include "ProjectPaths.h"
@@ -64,6 +65,7 @@ void CombatFx::Start(World& world) {
         for (const char* s : kAllSounds) AudioEngine::Load(Path(s)); // decoded up front: no hitch on the first shot
     WeaponAudio::Get().Start(world); // the guns' report layers, gear sounds and the foley (Play-mode audio, whatever else is in the scene)
     WeaponAudio::Get().SetLogFile(m_Log);
+    ImpactAudio::Get().Start(world);
     FoleyAudio::Get().Start(world);
     for (int i = 0; i < kFlashLights; ++i) {
         Flash f;
@@ -111,6 +113,7 @@ void CombatFx::SetAudioLog(const std::string& path) {
 void CombatFx::Stop(World& world) {
     if (m_Log) std::fflush(m_Log);
     FoleyAudio::Get().Stop();
+    ImpactAudio::Get().Stop();
     WeaponAudio::Get().Stop();
     for (Flash& f : m_Flashes)
         if (world.Registry.valid(f.Light)) world.DestroyEntityAndChildren(f.Light);
@@ -233,8 +236,22 @@ void CombatFx::FollowMuzzle(World& world, const glm::vec3& firstPerson, const gl
     }
 }
 
-void CombatFx::Whizz(const glm::vec3& point) {
-    if (!m_Active || m_Now - m_LastWhizz < 0.07f) return; // a burst reads as a few cracks, not a smear
+float CombatFx::FlybyReach() const { return std::max(1.6f, ImpactAudio::Get().FlybyRadius()); }
+
+void CombatFx::Impact(World& world, std::uint32_t entity, const glm::vec3& point) {
+    if (!m_Active) return;
+    ImpactAudio::Get().Impact(world, entity, point);
+}
+
+void CombatFx::Whizz(const glm::vec3& point, float miss) {
+    if (!m_Active) return;
+    const int before = ImpactAudio::Get().Played().Flybys;
+    if (ImpactAudio::Get().Flyby(point, miss)) { // the recorded flyby: no placeholder on top of it
+        if (ImpactAudio::Get().Played().Flybys > before) ++m_Whizzes;
+        return;
+    }
+    if (miss > 1.6f) return; // the placeholder keeps its old reach
+    if (m_Now - m_LastWhizz < 0.07f) return; // a burst reads as a few cracks, not a smear
     m_LastWhizz = m_Now;
     ++m_Whizzes;
     static const char* kWhizz[] = {"whizz_1.wav", "whizz_2.wav", "whizz_3.wav"};
@@ -256,7 +273,9 @@ void CombatFx::Play(Cue cue, const glm::vec3& pos, bool at2D, float volume) {
         break;
     case Cue::DryFire: PlaySound("dry_fire.wav", pos, at2D, 0.6f * volume, pitch, 1.0f, 10.0f); break;
     case Cue::BodyFall: PlaySound("body_fall.wav", pos, at2D, 0.9f * volume, pitch, 2.0f, 30.0f); break;
-    case Cue::FleshHit: PlaySound("flesh_hit.wav", pos, at2D, 0.8f * volume, pitch, 1.0f, 25.0f); break;
+    case Cue::FleshHit:
+        if (ImpactAudio::Get().Flesh(pos, at2D, volume)) break; // the recorded flesh impact, not the placeholder on top of it
+        PlaySound("flesh_hit.wav", pos, at2D, 0.8f * volume, pitch, 1.0f, 25.0f); break;
     case Cue::Hitmarker: PlaySound("hitmarker.wav", pos, true, 0.45f * volume, 1.0f, 1, 1); break;
     case Cue::HitmarkerKill: PlaySound("hitmarker_kill.wav", pos, true, 0.6f * volume, 1.0f, 1, 1); break;
     }
