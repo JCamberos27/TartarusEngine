@@ -1,5 +1,5 @@
 {
- "_doc": "Weapon action one-shots. src is relative to the extracted Tactical Shooter Pack (C:/tb/audio-src/tsp/Tactical Shooter Pack). t = approximate time of the CONTACT transient in the source (snapped to the real transient, +-12 ms); dur = seconds kept after it -- chosen from the source's onset map so a slice never swallows the next, louder event of the pack's own (longer) animation. lead_ms = extra source kept BEFORE the contact (slide / approach scrape of pump and bolt strokes); the manifest records the resulting anchor_ms and the engine starts the file at (contact time - anchor_ms). Other optional fields: pitch (semitones), gain_db, eq [[kind,hz,gain_db,q]], hp/lp (Hz), fade_in_ms, snap (false for noise-like cloth), preroll_ms (default 3). Draw/holster variants: t0..main = cloth lead varispeed-fitted to main_at_ms so the thud lands on the animation's arrival; thud = extra layer {src,t,dur,pitch,delay_ms,gain_db} dropped in at delay_ms. synth = procedural one-shot (build_elements.py). Round 4: no synthesised element anywhere -- melee, dry fire and the 870 handling are slices / layer composites of real recordings (sonniss/<pack>/<file> paths resolve under C:/tb/audio-src/sonniss). A variant with 'layers' is a composite; 'peak_at_ms' cuts a whoosh so its loudest part lands there. shell_insert (2026-10-03): ONE event per shell, at the port contact (frame 11 of Reload_Loop / Reload_Loop_End); every take holds both contacts - the push into the port and the click home past the latch 117 ms (7 frames) later - either as recorded (the Herrington loop, 120 ms apart) or as a composite of a push and a click placed 117 ms apart. anchor_ms on a variant overrides the computed anchor. min_dur_s (2026-10-03): no action slice is cut shorter than this - the 40-120 ms slices stopped dead; a slice that would run into the source's next event is ended before it by the trim (adsp.trim_secondary, 30 ms fade). shell_insert (2026-10-03, user): only the Kinemation Herrington 11-87 shell loads - the loop's (as recorded) and the reload start's / end's (push + click home re-spaced to 117 ms, their low-mid handling noise shelved down) - each with two mild EQ colours. (2026-10-03, user) shell_insert: only the metallic Herrington reload-loop take, in four mild EQ / +-0.3 st colours. draw / holster: motion_only - the Kinemation draw / holster recordings (AK105 / TR15 / WK-11; Herrington / SRM-12 / Mk14 for the 870) up to the arrival, faded out as the hands settle, no arrival thud.",
+ "_doc": "Weapon action one-shots. src is relative to the extracted Tactical Shooter Pack (C:/tb/audio-src/tsp/Tactical Shooter Pack). t = approximate time of the CONTACT transient in the source (snapped to the real transient, +-12 ms); dur = seconds kept after it -- chosen from the source's onset map so a slice never swallows the next, louder event of the pack's own (longer) animation. lead_ms = extra source kept BEFORE the contact (slide / approach scrape of pump and bolt strokes); the manifest records the resulting anchor_ms and the engine starts the file at (contact time - anchor_ms). Other optional fields: pitch (semitones), gain_db, eq [[kind,hz,gain_db,q]], hp/lp (Hz), fade_in_ms, snap (false for noise-like cloth), preroll_ms (default 3). Draw/holster variants: t0..main = cloth lead varispeed-fitted to main_at_ms so the thud lands on the animation's arrival; thud = extra layer {src,t,dur,pitch,delay_ms,gain_db} dropped in at delay_ms. synth = procedural one-shot (build_elements.py). Round 4: no synthesised element anywhere -- melee, dry fire and the 870 handling are slices / layer composites of real recordings (sonniss/<pack>/<file> paths resolve under C:/tb/audio-src/sonniss). A variant with 'layers' is a composite; 'peak_at_ms' cuts a whoosh so its loudest part lands there. shell_insert (2026-10-03): ONE event per shell, at the port contact (frame 11 of Reload_Loop / Reload_Loop_End); every take holds both contacts - the push into the port and the click home past the latch 117 ms (7 frames) later - either as recorded (the Herrington loop, 120 ms apart) or as a composite of a push and a click placed 117 ms apart. anchor_ms on a variant overrides the computed anchor. min_dur_s (2026-10-03): no action slice is cut shorter than this - the 40-120 ms slices stopped dead; a slice that would run into the source's next event is ended before it by the trim (adsp.trim_secondary, 30 ms fade). shell_insert (2026-10-03, user): only the Kinemation Herrington 11-87 shell loads - the loop's (as recorded) and the reload start's / end's (push + click home re-spaced to 117 ms, their low-mid handling noise shelved down) - each with two mild EQ colours. (2026-10-03, user) shell_insert: only the metallic Herrington reload-loop take, in four mild EQ / +-0.3 st colours. draw / holster: motion_only - the Kinemation draw / holster recordings (AK105 / TR15 / WK-11; Herrington / SRM-12 / Mk14 for the 870) up to the arrival, faded out as the hands settle, no arrival thud. draw / holster (2026-10-03, AAA pass): motion_variant - the handling recording eased 15 dB down through the arrival (no thud, no cut), a Kinemation zip / webbing layer (General: Equip / UnEquip / pistol holster / Pickup) over the movement, a long end fade.",
  "guns": {
   "ak": {
    "dir": "Weapons/AKS74U",
@@ -239,7 +239,12 @@
       "main": 0.554,
       "dur": 0.85,
       "main_at_ms": 360,
-      "motion_only": true
+      "motion_only": true,
+      "zip": {
+       "src": "General/S_Equip.WAV",
+       "gain_db": -4,
+       "hp": 150
+      }
      },
      {
       "src": "TR15/Actions/S_TR15_Draw.wav",
@@ -248,7 +253,12 @@
       "dur": 0.85,
       "main_at_ms": 360,
       "pitch": 0.5,
-      "motion_only": true
+      "motion_only": true,
+      "zip": {
+       "src": "General/S_DrawPistolWithHolster.WAV",
+       "gain_db": -5,
+       "hp": 150
+      }
      },
      {
       "src": "WK-11_Viper/Actions/S_WK-11_Viper_Draw.wav",
@@ -257,7 +267,12 @@
       "dur": 0.85,
       "main_at_ms": 360,
       "pitch": -0.5,
-      "motion_only": true
+      "motion_only": true,
+      "zip": {
+       "src": "General/S_Pickup.WAV",
+       "gain_db": -6,
+       "hp": 180
+      }
      }
     ],
     "holster": [
@@ -267,7 +282,12 @@
       "main": 0.662,
       "dur": 0.8,
       "main_at_ms": 300,
-      "motion_only": true
+      "motion_only": true,
+      "zip": {
+       "src": "General/S_UnEquip.WAV",
+       "gain_db": -4,
+       "hp": 150
+      }
      },
      {
       "src": "TR15/Actions/S_TR15_Holster.wav",
@@ -276,7 +296,12 @@
       "dur": 0.8,
       "main_at_ms": 300,
       "pitch": 0.5,
-      "motion_only": true
+      "motion_only": true,
+      "zip": {
+       "src": "General/S_HolsterPistolWithHolster.WAV",
+       "gain_db": -5,
+       "hp": 150
+      }
      },
      {
       "src": "WK-11_Viper/Actions/S_WK-11_Viper_Holster.wav",
@@ -285,7 +310,12 @@
       "dur": 0.8,
       "main_at_ms": 300,
       "pitch": -0.5,
-      "motion_only": true
+      "motion_only": true,
+      "zip": {
+       "src": "General/S_UnEquip_Pistol.WAV",
+       "gain_db": -5,
+       "hp": 150
+      }
      }
     ],
     "firemode": [
@@ -868,27 +898,42 @@
       "src": "Herrington_11-87/Actions/S_Herrington_11-87_Draw.WAV",
       "t0": 0.0,
       "main": 0.383,
-      "dur": 0.6,
+      "dur": 0.783,
       "main_at_ms": 360,
-      "motion_only": true
+      "motion_only": true,
+      "zip": {
+       "src": "General/S_DrawPistolWithHolster.WAV",
+       "gain_db": -5,
+       "hp": 150
+      }
      },
      {
       "src": "SRM-12/Actions/S_SRM-12_Draw.wav",
       "t0": 0.2,
       "main": 0.627,
-      "dur": 0.6,
+      "dur": 0.827,
       "main_at_ms": 360,
       "motion_only": true,
-      "pitch": -0.5
+      "pitch": -0.5,
+      "zip": {
+       "src": "General/S_Pickup.WAV",
+       "gain_db": -6,
+       "hp": 180
+      }
      },
      {
       "src": "Mk14EBR/S_Mk14EBR_Draw.WAV",
       "t0": 0.15,
       "main": 0.559,
-      "dur": 0.6,
+      "dur": 0.809,
       "main_at_ms": 360,
       "motion_only": true,
-      "pitch": -0.5
+      "pitch": -0.5,
+      "zip": {
+       "src": "General/S_Equip.WAV",
+       "gain_db": -4,
+       "hp": 150
+      }
      }
     ],
     "holster": [
@@ -896,27 +941,42 @@
       "src": "Herrington_11-87/Actions/S_Herrington_11-87_Holster.WAV",
       "t0": 0.0,
       "main": 0.304,
-      "dur": 0.6,
+      "dur": 0.704,
       "main_at_ms": 300,
-      "motion_only": true
+      "motion_only": true,
+      "zip": {
+       "src": "General/S_HolsterPistolWithHolster.WAV",
+       "gain_db": -5,
+       "hp": 150
+      }
      },
      {
       "src": "SRM-12/Actions/S_SRM-12_Holster.wav",
       "t0": 0.05,
       "main": 0.449,
-      "dur": 0.6,
+      "dur": 0.799,
       "main_at_ms": 300,
       "motion_only": true,
-      "pitch": -0.5
+      "pitch": -0.5,
+      "zip": {
+       "src": "General/S_UnEquip_Pistol.WAV",
+       "gain_db": -5,
+       "hp": 150
+      }
      },
      {
       "src": "Mk14EBR/S_Mk14EBR_Holster.WAV",
       "t0": 0.0,
       "main": 0.483,
-      "dur": 0.6,
+      "dur": 0.883,
       "main_at_ms": 300,
       "motion_only": true,
-      "pitch": -0.5
+      "pitch": -0.5,
+      "zip": {
+       "src": "General/S_UnEquip.WAV",
+       "gain_db": -4,
+       "hp": 150
+      }
      }
     ],
     "dry_fire": [
