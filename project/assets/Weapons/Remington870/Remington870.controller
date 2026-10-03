@@ -151,12 +151,12 @@
               "time": 0.0263
             },
             {
-              "name": "snd.870.handle@58",
-              "time": 0.54
+              "name": "snd.870.handle@3",
+              "time": 0.6262
             },
             {
-              "name": "snd.870.handle@58",
-              "time": 0.8821
+              "name": "snd.870.handle@3",
+              "time": 0.9683
             }
           ],
           "loop": false,
@@ -213,8 +213,8 @@
         {
           "events": [
             {
-              "name": "snd.870.handle@58",
-              "time": 0.0917
+              "name": "snd.870.handle@3",
+              "time": 0.1027
             },
             {
               "name": "snd.870.cloth@0",
@@ -225,8 +225,8 @@
               "time": 0.6116
             },
             {
-              "name": "snd.870.handle@58",
-              "time": 0.6151
+              "name": "snd.870.handle@3",
+              "time": 0.626
             },
             {
               "name": "snd.870.pump_fwd@140",
@@ -241,12 +241,12 @@
               "time": 0.8133
             },
             {
-              "name": "snd.870.handle@58",
-              "time": 0.8351
+              "name": "snd.870.handle@3",
+              "time": 0.846
             },
             {
-              "name": "snd.870.handle@58",
-              "time": 0.9251
+              "name": "snd.870.handle@3",
+              "time": 0.936
             }
           ],
           "loop": false,
@@ -298,8 +298,8 @@
               "time": 0.6111
             },
             {
-              "name": "snd.870.handle@58",
-              "time": 0.8439
+              "name": "snd.870.handle@3",
+              "time": 0.8666
             }
           ],
           "loop": false,
@@ -488,8 +488,8 @@
               "time": 0.1667
             },
             {
-              "name": "snd.870.handle@58",
-              "time": 0.8507
+              "name": "snd.870.handle@3",
+              "time": 0.9599
             }
           ],
           "loop": false,
@@ -526,20 +526,20 @@
               "time": 0.1313
             },
             {
-              "name": "snd.870.handle@58",
-              "time": 0.172
+              "name": "snd.870.handle@3",
+              "time": 0.1925
             },
             {
-              "name": "snd.870.handle@58",
-              "time": 0.2595
+              "name": "snd.870.handle@3",
+              "time": 0.28
             },
             {
               "name": "snd.870.shell_load_chamber@44",
               "time": 0.3212
             },
             {
-              "name": "snd.870.handle@58",
-              "time": 0.5845
+              "name": "snd.870.handle@3",
+              "time": 0.605
             },
             {
               "name": "snd.870.pump_fwd@140",
@@ -554,8 +554,8 @@
               "time": 0.8125
             },
             {
-              "name": "snd.870.handle@58",
-              "time": 0.9283
+              "name": "snd.870.handle@3",
+              "time": 0.9487
             }
           ],
           "loop": false,
@@ -588,28 +588,24 @@
               "time": 0.0143
             },
             {
-              "name": "snd.870.shell_insert@110",
-              "time": 0.0629
-            },
-            {
-              "name": "snd.870.shell_insert@110",
-              "time": 0.1629
+              "name": "snd.870.shell_insert@3",
+              "time": 0.1546
             },
             {
               "name": "LoadRound",
               "time": 0.6
             },
             {
-              "name": "snd.870.handle@58",
-              "time": 0.6074
+              "name": "snd.870.handle@3",
+              "time": 0.6542
             },
             {
               "name": "snd.870.cloth@0",
               "time": 0.7714
             },
             {
-              "name": "snd.870.handle@58",
-              "time": 0.9074
+              "name": "snd.870.handle@3",
+              "time": 0.9542
             }
           ],
           "loop": false,
@@ -642,28 +638,24 @@
               "time": 0.0102
             },
             {
-              "name": "snd.870.shell_insert@110",
-              "time": 0.0449
-            },
-            {
-              "name": "snd.870.shell_insert@110",
-              "time": 0.1163
-            },
-            {
-              "name": "snd.870.handle@58",
-              "time": 0.4135
+              "name": "snd.870.shell_insert@3",
+              "time": 0.1104
             },
             {
               "name": "LoadRound",
               "time": 0.43
             },
             {
+              "name": "snd.870.handle@3",
+              "time": 0.4469
+            },
+            {
               "name": "snd.870.cloth@0",
               "time": 0.5612
             },
             {
-              "name": "snd.870.handle@58",
-              "time": 0.7706
+              "name": "snd.870.handle@3",
+              "time": 0.804
             }
           ],
           "loop": false,
@@ -696,8 +688,8 @@
               "time": 0.06
             },
             {
-              "name": "snd.870.handle@58",
-              "time": 0.4704
+              "name": "snd.870.handle@3",
+              "time": 0.5359
             }
           ],
           "loop": false,
