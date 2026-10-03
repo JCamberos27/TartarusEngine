@@ -67,9 +67,9 @@ FoleyAudio& FoleyAudio::Get() {
 void FoleyAudio::Start(World& world) {
     Stop();
     m_T = FoleyAudioComponent{};
-    for (const entt::entity e : world.Registry.view<FoleyAudioComponent>()) {
+    if (const auto first = world.Registry.view<FoleyAudioComponent>(); first.begin() != first.end()) { // the first one counts
+        const entt::entity e = *first.begin();
         m_T = world.Registry.get<FoleyAudioComponent>(e);
-        break;
     }
     m_Stepper.Reset();
     m_Feet.Reset();

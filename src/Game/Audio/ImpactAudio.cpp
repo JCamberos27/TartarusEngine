@@ -14,9 +14,9 @@ ImpactAudio& ImpactAudio::Get() {
 void ImpactAudio::Start(World& world) {
     Stop();
     m_T = ImpactAudioComponent{};
-    for (const entt::entity e : world.Registry.view<ImpactAudioComponent>()) {
+    if (const auto first = world.Registry.view<ImpactAudioComponent>(); first.begin() != first.end()) { // the first one counts
+        const entt::entity e = *first.begin();
         m_T = world.Registry.get<ImpactAudioComponent>(e);
-        break;
     }
     m_LastImpact.clear();
     m_LastFlyby = -1e9;
