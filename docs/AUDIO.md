@@ -101,15 +101,36 @@ script, run `check_audio.py`, then listen to the reel.
 * **Slicing** (`adsp.slice_at`): onset snapped to the real transient (first crossing of 22 % of the local high-passed
   peak, +-12 ms), 3 ms pre-roll (or `lead_ms`), 1.5 ms cosine fade-in, natural cosine fade-out; `dur` is chosen from the
   source onset map so a slice never swallows the next event of the pack's animation.
-* **Gunfire layers** (`build_fire.py`): close = pack report (AK105 / Herrington) + crack donor (TR15, high-passed
-  2-2.5 kHz) + body donor (Mk14 / SRM-12, low-passed 650-1000 Hz), donors phase-aligned to the base (best lag and polarity
-  in the band they contribute, +-1.2 ms), then HPF, EQ, transient shaper, compressor, tanh saturation, limiter. Sub =
-  synthesised exponential down-sweep sine + low click, saturated for harmonics, polarity-matched to the close layer.
-  Mech = bolt / forend slam from the action sources, delayed 12-21 ms, high-passed (AK) or pitched down 6 st (870
-  receiver thump). Tail = the source from +0.12/0.16 s with a 100 ms fade-in (body stays in `close`), upward-compressed
-  so the room decay is audible. Far = mono, low-passed 2.2-2.4 kHz (24 dB/oct), reverb, delayed 70-120 ms.
-* **Variant counts**: close 6, sub 5, mech 4, tail 5, far 4 per gun; action elements 3-4; foley 3-4; footsteps 5-8.
-* **Dither**: every file is written 16-bit with TPDF dither.
+* **Gunfire layers** (`build_fire.py`), both guns from the Tactical Shooter Pack on one recipe: close = base report + a
+  TR15 crack (high-passed 2-2.5 kHz) + a mid layer (150 Hz - 5/6 kHz) + low body (Mk14, low-passed 600-750 Hz), donors
+  phase-aligned to the base (best lag and polarity in the band they contribute, +-1.2 / 2.5 ms), then HPF, EQ, transient
+  shaper, compressor, saturation. AK: AK105 base, TR15 mid layer. 870: the SRM-12 shot as base (the Herrington takes start
+  soft and clip flat 40-60 ms in), R08 / WK-11 / Mk14 mid layer, a 12-gauge low end (70 / 95 / 180 Hz), built denser
+  (`close.target` -12, `max_gr_db` 8) and shaped by a `decay` envelope (hold 30 ms, -30 dB over 220 ms) so the hit is
+  front-loaded. Sub = the low end of real shots plus real thuds (`donors`, onset-aligned, low-passed, <= 2 st), saturated;
+  the 870's from front-loaded sources only (SRM-12, Mk14, Shapeforms / Gamemaster / Chris Alan thuds at full level up to
+  150 Hz, drive 1.7) with its own decay (hold 80 ms, -24 dB over 380 ms). Mech = bolt / forend slam from the action
+  sources, delayed 12-21 ms. Tail = the source from +0.12/0.16 s, lightly upward-compressed. Far = real distant shots
+  (Pole Position, AK) or the tail low-passed (870), delayed 70-120 ms.
+* **Variant counts**: close 8, sub 5, mech 4, tail 5, far 4-6 per gun; action elements 4-7; foley 3-4; footsteps 8-13.
+* **Finishing** (`abuild.finish`): gain to the layer's loudness target with a limiting budget per layer (`GR_BUDGET_DB`:
+  close 4, sub 1, tails 3, reload / handling clicks 0.5, others 1.5 dB - a file that stops short of its target is levelled
+  by the mix); a downward expander under the noise floor; a bleeding second event of the source trimmed off
+  (`trim_secondary`: never within 90 ms of the peak, a real event only from 60 ms on, 45 ms fade); a 0.8 ms fade-in and an
+  end fade of up to 60 ms (20 % of the file). No file ends above -40 dB re its peak (last 5 ms). Every file is 16-bit.
+* **Reload / handling**: action slices are at least `min_dur_s` 0.16 s; mechanical contacts (not cloth, draw / holster,
+  swings) go through a transient designer (`snap`: attack 0.85, sustain -0.4) for a hard, short click.
+* **Draw / holster** (`motion_only`, `build_elements.motion_variant`): heard over the movement, nothing extra when the hands
+  reach the idle pose. The gun's own Kinemation draw / holster recording (AK105 / TR15 / WK-11; Herrington / SRM-12 / Mk14
+  for the 870) runs through the arrival, eased 15 dB down from 50 ms before it to 25 ms after (no thud, no cut), under a
+  zip / webbing layer (Kinemation General: Equip / UnEquip / pistol holster / Pickup) level-matched to it; 250 ms end fade.
+* **870 shell insert**: one event per shell at the port contact (frame 11 of Reload_Loop / Reload_Loop_End); every take is
+  the Herrington 11-87 reload-loop shell load (push and click home 120 ms apart as recorded, the clip's are 117 ms), in four
+  mild EQ / +-0.3 st colours. `anchor_ms` on a recipe variant sets its contact.
+* **Impacts** start on the hit: each source is cut from its first sound (5 % of its peak) minus 2 ms; `check_audio.py`
+  fails an impact whose first sound (-40 dB) is more than 5 ms in.
+* **Flybys**: the whine riding on the whoosh is removed per frame (`adsp.detone`: bins 1.5-16 kHz over 6 dB above the
+  local spectral median pulled to 2 dB over it).
 
 ## Mix (`recipes/mix.json`, `mixspec.py`)
 
@@ -129,7 +150,7 @@ of both guns of the LUFS-M max of close + sub + mech at their `mix_db`, summed f
 (-2.5 dB) the shot as played is about -15.3. Shot layers (close, sub, mech, tail, far) are stored relative to the unscaled sum
 (the engine applies Player Gain on top); every other key relative to the as-played reference. Rules on top of the formula, so a
 click's LUFS-M (dominated by its length, not its punch) cannot make one variant far louder than its siblings: variants of one key stay
-within +-3 dB of the key's median `mix_db`; a file's true peak plus its `mix_db` never passes -0.5 dBFS; close / sub / mech are
+within +-6 dB of the key's median `mix_db` (short keys: see below); a file's true peak plus its `mix_db` never passes -0.5 dBFS; close / sub / mech are
 their layer offset (0 / -2 / -3) plus a compensation to the layer's loudness target limited to -2..+1.5 dB (and by that peak rule),
 so every shot variant plays equally loud.
 
@@ -141,10 +162,10 @@ least ~4 dB apart so each layer reads; a 3D category's level holds at its distan
 | 0 anchor | player shot (close + sub + mech) / gun tail / far layer | 0 / -10 + space / -15 |
 | 1 threat | soldier's shot at 10 m (close-up cap -3) / flyby at 1 m | -8 / -6 |
 | 2 feedback | hitmarker / kill / melee_hit / flesh at 5 m | -14 / -11 / -8 / -12 |
-| 3 your hands | bolt_release, mag_in, pump_fwd, shell_load_chamber | -15 |
-| | mag_out, pump_back, shell_insert, bolt_back, mag_tap, mag_release | -19 |
-| | dry_fire / draw, holster / handle / cloth / melee_swing | -17 / -18 / -23 / -27 / -18 |
-| | equip, unequip, firemode / ADS in, out | -22 / -24 |
+| 3 your hands | bolt_release, mag_in, pump_fwd, shell_load_chamber | -12 |
+| | mag_out, pump_back, shell_insert, bolt_back, mag_tap, mag_release | -16 |
+| | dry_fire / draw, holster / handle / cloth / melee_swing | -14 / -15 / -28 / -27 / -18 |
+| | equip, unequip, firemode / ADS in, out | -20 / -22 |
 | 4 world | impacts at 5 m (+ surface; cap -9) / body fall at 5 m (cap -9) | -14 / -14 |
 | 5 movement | your walk / run / land (+ surface) | -22 / -18 / -16 |
 | | jump / move.land_light / move.land_heavy | -24 / -18 / -14 |
@@ -152,6 +173,17 @@ least ~4 dB apart so each layer reads; a 3D category's level holds at its distan
 | 6 debris | casings (+ surface) | -26 |
 | 7 beds | ambience: indoor small, indoor large / outdoor urban, open | -34 / -32 |
 | | impulse responses | no level (mix_db 0) |
+
+**Short keys** (no longer than `short_key_max_s` 0.9 s: clicks, steps, impacts, casings): within a key each file is levelled by
+its 100 ms K-weighted loudness (`adsp.loudness_short`) rather than its LUFS-M, shifted by the key's median (LUFS-M - short) so
+the key as a whole still sits at its spec level - a 60 ms click and a 300 ms rustle of one key read 6-10 dB apart by LUFS-M.
+Variants stay within +-`variant_spread_db` (6) of the key's median `mix_db`.
+
+**Per gun** (`reference`): `gun_db` puts a gun's report over the 0 dB reference, which is measured without it (one number, or per
+layer: the 870 is close +3, sub +7.5, mech +2 - the 12-gauge hits harder than the carbine); `mixspec.py` measures each gun's
+report as played into the manifest's `mix.gun_offset_db` (870 about +3.1), which `--audio-test` uses as that gun's spec.
+`gun_tail_db` moves a gun's tails (870 -3: its recorded tails ring longer). `layer_peak_headroom_db` lets a shot layer's file
+peak pass the -0.5 dBFS cap (870 sub +2; still under -1 dBFS after Player Gain, and the master limiter stays idle).
 
 Surface offsets (footsteps, casings, impacts): metal +2, glass +1, wood 0, concrete 0, tile 0, dirt -2, carpet -5, water -1 (ice 0).
 Tail space offsets: indoor_small -2, indoor_large +1, outdoor_urban 0 (also the generic `fire_tail`), outdoor_open -3.
@@ -404,12 +436,20 @@ pitch_st) and `check_audio.py` fails any tail without them. Sources live in C:\t
 
 ### Foley
 
-Player footsteps come from distance travelled, one every half of the view bob's stride (Bob Walk / Sprint Stride of the
-weapon; the bob itself is untouched), so cadence follows speed exactly. Walk, run (sprinting, or over Run Speed) and crouch
-sets; the surface is a downward ray's collider. A set with no files for a surface falls back to the default surface's. Landing is
-scaled by the fall speed (silent below Land Min Speed); the sprint cloth loop's gain follows planar speed. Soldiers'
-footsteps use the same stride rule per soldier, 3D, skipped beyond NPC Step Max Distance
-(`FoleyAudio::NpcWalk`, called from `NpcDirector::AimAndFire`).
+Footsteps land on the animated feet (Foley Audio "Steps From Feet", on by default): every animated frame the body reports each
+foot's height above its feet (`FirstPersonBody::FootHeights`, `NpcBody::FootHeights`) and a `FootContactDetector` plays a step
+when a foot touches down - it must first rise Foot Lift Height (5 cm) above its planted height standing, or Foot Lift Moving
+(2.5 cm; a walk's first stride barely lifts the ankle) when moving above Min Step Speed, then come back within Foot Contact
+Height (2 cm) of it, or stop on the way down (a step up, foot IK). Each touch-down re-bases the planted height; standing weight
+shifts stay silent and turning on the spot steps. Without foot bones (or with the option off) steps come from distance travelled,
+one every half of the view bob's stride. Walk, run (sprinting, or over Run Speed) and crouch sets; the surface is a downward
+ray's collider; a set with no files for a surface falls back to the default surface's. Landing is scaled by the fall speed
+(silent below Land Min Speed) and re-bases the feet. Soldiers step on their own animated feet the same way, 3D, heard within NPC
+Step Max Distance (`FoleyAudio::NpcFeet`, from `NpcDirector`'s late pose; animation LOD samples them every 2nd / 4th frame
+far away). `FOLEY_FEET_LOG=1` prints the feet the steps are read from, a line a frame.
+
+A weapon switch is the old gun's holster and the new gun's draw (their clips' events); the shared gear rattle
+(`snd.foley.weapon.equip / unequip`) plays only for a gun with no draw / holster takes of its own.
 
 ### Audio log
 
