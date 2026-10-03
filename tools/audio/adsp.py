@@ -150,6 +150,47 @@ def loudness_short(x, win_s=0.1, hop_s=0.025):
     return float(-0.691 + 10 * np.log10(max(float(ms.max()), 1e-12)))
 
 
+def remove_tones(x, lo=1500.0, hi=16000.0, min_db=5.0, max_notches=6, depth_db=None):
+    """Notch out whistles: the narrow spectral peaks standing min_db or more above the spectrum's local median in [lo, hi], each
+    cut by its own excess (or depth_db) with a bandwidth of ~1/6 octave. A bullet flyby's whine is a tone riding on its whoosh;
+    the whoosh and crack stay. EQ on the recording - nothing added."""
+    from pedalboard import PeakFilter
+    m = to_mono(x)
+    fr, _, S = signal.stft(m, SR, nperseg=4096, noverlap=3072)
+    p = np.mean(np.abs(S) ** 2, axis=1)
+    ton = 10 * np.log10(p / (signal.medfilt(p, 31) + 1e-15) + 1e-15)
+    band = (fr >= lo) & (fr <= hi)
+    plugs, taken = [], []
+    for i in np.argsort(-(ton * band)):
+        if len(plugs) >= max_notches or ton[i] < min_db or not band[i]:
+            break
+        if any(abs(math.log2(fr[i] / f)) < 1 / 6 for f in taken):
+            continue
+        taken.append(float(fr[i]))
+        plugs.append(PeakFilter(cutoff_frequency_hz=float(fr[i]), gain_db=-float(depth_db or min(ton[i] + 3.0, 18.0)), q=8.0))
+    return board(x, *plugs) if plugs else x
+
+
+def detone(x, lo=1500.0, hi=16000.0, thresh_db=6.0, keep_db=2.0, med_bins=31):
+    """Time-varying whistle removal: per STFT frame (2048 / hop 512), every bin in [lo, hi] standing more than thresh_db over the
+    frame's local spectral median (med_bins wide) is pulled down to keep_db over it. Catches a Doppler-sweeping whine that a
+    fixed notch misses; broadband whoosh and crack pass. Spectral gain on the recording - nothing added."""
+    y = np.asarray(x, dtype=np.float32)
+    y2 = y if y.ndim == 2 else y[:, None]
+    out = np.zeros_like(y2)
+    for c in range(y2.shape[1]):
+        fr, _, S = signal.stft(y2[:, c], SR, nperseg=2048, noverlap=1536)
+        M = np.abs(S) + 1e-12
+        med = signal.medfilt2d(M, kernel_size=(med_bins, 1))
+        band = ((fr >= lo) & (fr <= hi))[:, None]
+        over = M / (med + 1e-12)
+        g = np.where(band & (over > 10 ** (thresh_db / 20)), (10 ** (keep_db / 20)) / over, 1.0)
+        _, z = signal.istft(S * g, SR, nperseg=2048, noverlap=1536)
+        n = min(len(z), len(y2))
+        out[:n, c] = z[:n]
+    return out if y.ndim == 2 else out[:, 0]
+
+
 def _k_weight(y):
     """BS.1770 K-weighting at 48 kHz (high shelf + RLB high-pass), per channel."""
     b1 = [1.53512485958697, -2.69169618940638, 1.19839281085285]
