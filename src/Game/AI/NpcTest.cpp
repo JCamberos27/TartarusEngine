@@ -38,7 +38,7 @@ NpcTest::NpcTest(const std::string& scenario) : m_Scenario(scenario.empty() ? "w
     if (m_Scenario == "feet") m_Duration = 10.0f;
     if (m_Scenario == "reload") m_Duration = 28.0f;
     if (m_Scenario == "flame") m_Duration = 14.0f;
-    if (m_Scenario == "blood") m_Duration = 25.0f;
+    if (m_Scenario == "blood") m_Duration = 35.0f;
     if (const char* t = EnvVar("NPC_TEST_SECONDS")) m_Duration = std::max(5.0f, (float)std::atof(t));
     if (const char* r = EnvVar("NPC_TEST_RECORD")) m_RecordDir = r;
     std::cout << "[NpcTest] scenario '" << m_Scenario << "', " << m_Duration << " s" << std::endl;
@@ -1224,12 +1224,23 @@ void NpcTest::Blood(World& world, NpcDirector& npcs, float now) {
         if (t >= 3.0f) { ++m_BCase; m_BFired = false; m_BChecked = false; m_BAt = now; }
         break;
     }
-    case 2: // every spray has fallen and is gone
-        if (now - m_BAt < 2.0f) break;
+    case 2: // every spray has fallen and is gone; the pools have spread: an overview of what's left
+        if (now - m_BAt < 16.0f) {
+            m_CamPos = glm::vec3(-2.5f, 3.2f, 0.5f);
+            const glm::vec3 d = glm::normalize(glm::vec3(0.5f, 0.0f, -5.0f) - m_CamPos);
+            m_CamYaw = glm::degrees(std::atan2(d.z, d.x));
+            m_CamPitch = glm::degrees(std::asin(std::clamp(d.y, -1.0f, 1.0f)));
+            m_HaveCam = true;
+            if (!m_BOverview && now - m_BAt > 15.0f) { m_Shot = "blood_overview"; m_BOverview = true; }
+            break;
+        }
         if (BloodStats) {
             std::printf("[NpcTest] blood: %d sprays thrown, %d still playing, GPU %.3f ms avg / %.3f ms worst frame\n",
                         BloodStats->SpraysSpawned, BloodStats->ActiveSprays, BloodStats->GpuMsAvg, BloodStats->GpuMsMax);
             Check(BloodStats->ActiveSprays == 0, "every spray played out and was dropped");
+            std::printf("[NpcTest] blood: %d stains, %d pools\n", BloodStats->DecalsSpawned, BloodStats->PoolsSpawned);
+            Check(BloodStats->DecalsSpawned >= 6, "the blood left stains (floor splats, wall spatter)");
+            Check(BloodStats->PoolsSpawned >= 2, "a pool spread under each of the two corpses");
         }
         m_Done = true;
         m_BStep = 3;

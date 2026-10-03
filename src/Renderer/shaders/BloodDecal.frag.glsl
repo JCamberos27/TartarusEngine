@@ -1,0 +1,119 @@
+#version 460 core
+// Blood decals (docs/BLOOD_FX.md). The surface under each pixel comes back out of the depth of the static
+// geometry drawn so far; inside the decal's box it gets a layer of blood. The layer is lit like any mesh -
+// its own albedo and wet GGX coat under the same sun, shadows, clustered lights and sky (ModelShading.glsl)
+// - and covers the surface by how thick it is: the thin edges let some of the surface through, tinted by
+// what the blood absorbs, the pooled core hides it. Dual-source blending: dst = Add + dst * Mul.
+
+// ModelShading's functions read vWorldPos; here it's the reconstructed surface.
+vec3 vWorldPos;
+#include "ModelShading.glsl"
+
+struct BloodDecal {
+    mat4 Model;
+    mat4 InvModel;
+    vec4 RectNorm;
+    vec4 RectMask;
+    vec4 Params;
+    vec4 Axis;
+};
+layout(std430, binding = 9) readonly buffer BloodDecals { BloodDecal uDecals[]; };
+
+layout(binding = 17) uniform sampler2D uSceneDepth;  // single-sample resolve of the static geometry
+layout(binding = 18) uniform sampler2D uDecalNorm;   // atlas: rg normal, a coverage
+layout(binding = 19) uniform sampler2D uDecalMask;   // atlas: r reveal order, b thick core
+layout(binding = 20) uniform sampler2D uDecalLookup; // fade across the box's depth
+uniform mat4 uInvViewProj;
+uniform vec4 uViewport; // x, y, width, height in the target
+uniform vec3 uFreshColor; // the layer's albedo, fresh / dried
+uniform vec3 uDriedColor;
+
+flat in int vDecal;
+layout(location = 0, index = 0) out vec4 oAdd;
+layout(location = 0, index = 1) out vec4 oMul;
+
+vec3 WorldAt(vec2 frag, float depth) {
+    vec2 ndc = (frag - uViewport.xy) / uViewport.zw * 2.0 - 1.0;
+    vec4 w = uInvViewProj * vec4(ndc, depth * 2.0 - 1.0, 1.0);
+    return w.xyz / w.w;
+}
+
+void main() {
+    BloodDecal d = uDecals[vDecal];
+    ivec2 px = ivec2(gl_FragCoord.xy);
+    float depth = texelFetch(uSceneDepth, px, 0).r;
+    if (depth >= 1.0) discard; // sky
+    vec3 world = WorldAt(gl_FragCoord.xy, depth);
+    vec3 local = (d.InvModel * vec4(world, 1.0)).xyz;
+    if (any(greaterThan(abs(local), vec3(0.5)))) discard;
+
+    // The surface's own normal, from the neighbouring depths (the side with the smaller step, so a
+    // silhouette edge doesn't bend it).
+    vec3 px1 = WorldAt(gl_FragCoord.xy + vec2(1.0, 0.0), texelFetch(uSceneDepth, px + ivec2(1, 0), 0).r);
+    vec3 px0 = WorldAt(gl_FragCoord.xy - vec2(1.0, 0.0), texelFetch(uSceneDepth, px - ivec2(1, 0), 0).r);
+    vec3 py1 = WorldAt(gl_FragCoord.xy + vec2(0.0, 1.0), texelFetch(uSceneDepth, px + ivec2(0, 1), 0).r);
+    vec3 py0 = WorldAt(gl_FragCoord.xy - vec2(0.0, 1.0), texelFetch(uSceneDepth, px - ivec2(0, 1), 0).r);
+    vec3 dx = length(px1 - world) < length(world - px0) ? px1 - world : world - px0;
+    vec3 dy = length(py1 - world) < length(world - py0) ? py1 - world : world - py0;
+    vec3 Ng = normalize(cross(dx, dy));
+    vec3 V = normalize(uViewPos - world);
+    if (dot(Ng, V) < 0.0) Ng = -Ng;
+    vec3 axis = normalize(d.Axis.xyz);
+    float facing = smoothstep(0.35, 0.65, dot(Ng, axis)); // only surfaces the box looks down onto
+
+    // Unity's decal uv: the box's x / z (our z is mirrored), v up; the atlas keeps the PNGs top row first.
+    vec2 uv = vec2(local.x, -local.z) + 0.5;
+    vec2 t = vec2(uv.x, 1.0 - uv.y);
+    vec4 na = texture(uDecalNorm, d.RectNorm.xy + t * d.RectNorm.zw);
+    vec3 mask = texture(uDecalMask, d.RectMask.xy + t * d.RectMask.zw).rgb;
+    float coverage = clamp(na.a * 2.0, 0.0, 1.0);
+    float cutout = d.Params.x;
+    float alpha = clamp((mask.r - cutout) * 20.0, 0.0, 1.0) * coverage;
+    float core = clamp((mask.r - cutout) * 5.0, 0.0, 1.0) * coverage * mask.b; // the pooled, thicker middle
+    float a = alpha * facing * texture(uDecalLookup, vec2(local.y + 0.5, 0.5)).r * d.Params.z;
+    if (a < 0.004) discard;
+
+    // The film's normal: the map's slope (Unity: (x, 1, y) in box space) bent onto the real surface.
+    vec2 slope = (na.xy * 2.0 - 1.0) * d.Params.w;
+    vec3 bx = normalize(vec3(d.Model[0])), bz = normalize(vec3(d.Model[2]));
+    vec3 N = normalize(Ng + bx * slope.x - bz * slope.y);
+
+    float dry = d.Params.y;
+    vWorldPos = world;
+    float rough = mix(0.06, 0.55, dry);
+    vec3 F0 = vec3(0.02);
+    // Darker and browner as it dries; the pooled core darker still (more of it).
+    vec3 albedo = mix(uFreshColor, uDriedColor, dry) * mix(1.0, 0.6, core);
+    vec3 lit = vec3(0.0);
+    for (uint i = 0u; i < uDirectionalCount; ++i) {
+        vec3 L = normalize(-uLights[i].DirCutoff.xyz);
+        vec3 radiance = uLights[i].ColorRange.rgb * (uLights[i].Params.y >= 0.0 ? SunShadow(world, Ng, L) * CloudShadow(world) : 1.0);
+        lit += ShadeLight(N, V, L, radiance, albedo, F0, 0.0, rough);
+    }
+    if (uClusterEnabled == 1) {
+        uint cl = clusterIndex();
+        uint off = uClusterRange[cl].offset, count = uClusterRange[cl].count;
+        for (uint j = 0u; j < count; ++j) lit += ShadePointSpot(uClusterLightIndices[off + j], N, V, albedo, F0, 0.0, rough);
+    }
+    if (uIBLEnabled == 1) {
+        float NdotV = max(dot(N, V), 0.0);
+        vec3 F = FresnelSchlickRoughness(NdotV, F0, rough);
+        vec2 ab = texture(uBrdfLut, vec2(NdotV, rough)).rg;
+        vec3 ambient = (1.0 - F) * texture(uIrradianceMap, Ng).rgb * albedo
+                     + textureLod(uPrefilteredMap, reflect(-V, N), rough * uIBLSpecularMaxLod).rgb * (F * ab.x + ab.y);
+        lit += ambient * uIBLIntensity;
+    } else {
+        lit += vec3(0.03) * albedo;
+    }
+    // How much of the surface the layer hides: thin at the streaks' edges, opaque where it pooled.
+    float cover = mix(0.6, 0.97, clamp(core * 1.5 + alpha * 0.3, 0.0, 1.0));
+    vec3 through = sqrt(albedo) * 0.9; // what a thin layer lets through of the surface beneath
+    vec3 mul = vec3(1.0) - a * (vec3(1.0) - (1.0 - cover) * through);
+    vec3 add = lit * a * cover;
+    // Haze between the eye and the surface: the film fades into it the way the surface does.
+    float fogKeep = (ApplyFog(vec3(1.0)) - ApplyFog(vec3(0.0))).r;
+    vec3 apKeep = ApplyAerialPerspective(vec3(1.0)) - ApplyAerialPerspective(vec3(0.0));
+    float keep = fogKeep * apKeep.g;
+    oAdd = vec4(add * keep, 0.0);
+    oMul = vec4(mix(vec3(1.0), mul, keep), 1.0);
+}

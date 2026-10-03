@@ -1,6 +1,8 @@
 #include "BloodRenderer.h"
 
 #include "Frustum.h"
+#include "HdrTarget.h"
+#include <stb_image.h>
 #include "AABB.h"
 #include "GLStateCache.h"
 #include "Log.h"
@@ -11,6 +13,8 @@
 #include "Core/Profiler.h"
 
 #include <algorithm>
+#include <cmath>
+#include <cstring>
 #include <filesystem>
 
 #ifndef GL_CLIP_DISTANCE0
@@ -21,6 +25,12 @@
 #endif
 #ifndef GL_RGBA_INTEGER
 #define GL_RGBA_INTEGER 0x8D99
+#endif
+#ifndef GL_SRC1_COLOR
+#define GL_SRC1_COLOR 0x88F9
+#endif
+#ifndef GL_FRONT
+#define GL_FRONT 0x0404
 #endif
 #ifndef GL_CW
 #define GL_CW 0x0900
@@ -105,6 +115,7 @@ bool BloodRenderer::Load() {
         m_Sims.push_back(std::move(info));
         m_Gpu.push_back(g);
     }
+    if (!BuildAtlas()) Log::Warn("Blood: no decal images in assets/Effects/Blood/decals - blood leaves no stains");
     if (m_Sims.empty()) return false;
     glCreateBuffers(1, &m_FrameBuffer);
     glNamedBufferStorage(m_FrameBuffer, (GLsizeiptr)(frameBounds.size() * sizeof(glm::vec4)), frameBounds.data(), 0);
@@ -122,7 +133,10 @@ void BloodRenderer::EnsureProgram() {
                                          "BloodVat");
 }
 
-void BloodRenderer::BeginFrame() { m_Sprays.clear(); }
+void BloodRenderer::BeginFrame() {
+    m_Sprays.clear();
+    m_Decals.clear();
+}
 
 void BloodRenderer::AddSpray(const Spray& s) {
     if (s.Sim >= 0 && s.Sim < (int)m_Sims.size()) m_Sprays.push_back(s);
@@ -208,4 +222,206 @@ int BloodRenderer::DrawSprays(const glm::mat4& view, const glm::mat4& proj,
     glBindVertexArray(0);
     GLStateCache::Invalidate();
     return draws;
+}
+
+// --- decals --------------------------------------------------------------------------------------------------------
+
+namespace {
+struct GpuDecal { // std430, matches BloodDecal.*.glsl
+    glm::mat4 Model;
+    glm::mat4 InvModel;
+    glm::vec4 RectNorm;
+    glm::vec4 RectMask;
+    glm::vec4 Params;
+    glm::vec4 Axis;
+};
+static_assert(sizeof(GpuDecal) == 192, "std430 layout");
+constexpr unsigned kDecalBinding = 9, kDepthUnit = 17, kNormUnit = 18, kMaskUnit = 19, kLookupUnit = 20;
+constexpr int kAtlasWidth = 2048, kAtlasPad = 4, kMaxDecalSide = 512;
+
+// Bilinear resample of an RGBA8 image (at exact 2:1 it's a 2x2 box filter).
+std::vector<unsigned char> Resample(const unsigned char* src, int w, int h, int dw, int dh) {
+    std::vector<unsigned char> out((size_t)dw * dh * 4);
+    for (int y = 0; y < dh; ++y) {
+        const float sy = std::clamp(((float)y + 0.5f) * (float)h / (float)dh - 0.5f, 0.0f, (float)(h - 1));
+        const int y0 = (int)sy, y1 = std::min(y0 + 1, h - 1);
+        const float fy = sy - (float)y0;
+        for (int x = 0; x < dw; ++x) {
+            const float sx = std::clamp(((float)x + 0.5f) * (float)w / (float)dw - 0.5f, 0.0f, (float)(w - 1));
+            const int x0 = (int)sx, x1 = std::min(x0 + 1, w - 1);
+            const float fx = sx - (float)x0;
+            for (int c = 0; c < 4; ++c) {
+                const float a = src[((size_t)y0 * w + x0) * 4 + c], b = src[((size_t)y0 * w + x1) * 4 + c];
+                const float d = src[((size_t)y1 * w + x0) * 4 + c], e = src[((size_t)y1 * w + x1) * 4 + c];
+                const float v = (a + (b - a) * fx) + ((d + (e - d) * fx) - (a + (b - a) * fx)) * fy;
+                out[((size_t)y * dw + x) * 4 + c] = (unsigned char)std::clamp((int)std::lround(v), 0, 255);
+            }
+        }
+    }
+    return out;
+}
+} // namespace
+
+int BloodRenderer::DecalSet(const std::string& name) const {
+    for (size_t i = 0; i < m_SetNames.size(); ++i)
+        if (m_SetNames[i] == name) return (int)i;
+    return -1;
+}
+
+bool BloodRenderer::BuildAtlas() {
+    namespace fs = std::filesystem;
+    const fs::path dir = fs::u8path(ProjectPaths::Resolve("assets/Effects/Blood/decals"));
+    struct Img { std::string Name; int W, H; std::vector<unsigned char> Norm, Mask; int X = 0, Y = 0; };
+    std::vector<Img> imgs;
+    std::error_code ec;
+    for (const auto& e : fs::directory_iterator(dir, ec)) {
+        const std::string file = e.path().filename().u8string();
+        const size_t at = file.rfind("_norm.png");
+        if (at == std::string::npos || at + 9 != file.size()) continue;
+        const std::string name = file.substr(0, at);
+        int nw, nh, nc, mw, mh, mc;
+        unsigned char* n = stbi_load((dir / file).u8string().c_str(), &nw, &nh, &nc, 4);
+        unsigned char* m = stbi_load((dir / (name + "_mask.png")).u8string().c_str(), &mw, &mh, &mc, 4);
+        if (n && m) {
+            const float s = std::min(1.0f, (float)kMaxDecalSide / (float)std::max(nw, nh));
+            Img img;
+            img.Name = name;
+            img.W = std::max(4, (int)std::lround(nw * s));
+            img.H = std::max(4, (int)std::lround(nh * s));
+            img.Norm = Resample(n, nw, nh, img.W, img.H);
+            img.Mask = Resample(m, mw, mh, img.W, img.H);
+            imgs.push_back(std::move(img));
+        } else {
+            Log::Warn("Blood: decal set '" + name + "' is missing its normal or mask image");
+        }
+        if (n) stbi_image_free(n);
+        if (m) stbi_image_free(m);
+    }
+    if (imgs.empty()) return false;
+    std::sort(imgs.begin(), imgs.end(), [](const Img& a, const Img& b) { return a.H != b.H ? a.H > b.H : a.Name < b.Name; });
+    // Shelves, tallest first.
+    int x = kAtlasPad, y = kAtlasPad, shelf = 0;
+    for (Img& img : imgs) {
+        if (x + img.W + kAtlasPad > kAtlasWidth) { x = kAtlasPad; y += shelf + kAtlasPad; shelf = 0; }
+        img.X = x;
+        img.Y = y;
+        x += img.W + kAtlasPad;
+        shelf = std::max(shelf, img.H);
+    }
+    int height = 64;
+    while (height < y + shelf + kAtlasPad) height *= 2;
+    std::vector<unsigned char> norm((size_t)kAtlasWidth * height * 4, 0), mask((size_t)kAtlasWidth * height * 4, 0);
+    for (const Img& img : imgs) {
+        for (int r = 0; r < img.H; ++r) {
+            std::memcpy(&norm[((size_t)(img.Y + r) * kAtlasWidth + img.X) * 4], &img.Norm[(size_t)r * img.W * 4], (size_t)img.W * 4);
+            std::memcpy(&mask[((size_t)(img.Y + r) * kAtlasWidth + img.X) * 4], &img.Mask[(size_t)r * img.W * 4], (size_t)img.W * 4);
+        }
+        m_SetNames.push_back(img.Name);
+        // Half a texel in, so bilinear never reads the padding at the rect's edge.
+        const glm::vec4 rect(((float)img.X + 0.5f) / kAtlasWidth, ((float)img.Y + 0.5f) / height, ((float)img.W - 1.0f) / kAtlasWidth,
+                             ((float)img.H - 1.0f) / height);
+        m_RectNorm.push_back(rect);
+        m_RectMask.push_back(rect);
+    }
+    auto upload = [&](unsigned int& tex, const std::vector<unsigned char>& px) {
+        glCreateTextures(GL_TEXTURE_2D, 1, &tex);
+        glTextureStorage2D(tex, 5, GL_RGBA8, kAtlasWidth, height);
+        glTextureSubImage2D(tex, 0, 0, 0, kAtlasWidth, height, GL_RGBA, GL_UNSIGNED_BYTE, px.data());
+        glGenerateTextureMipmap(tex);
+        glTextureParameteri(tex, GL_TEXTURE_MIN_FILTER, GL_LINEAR_MIPMAP_LINEAR);
+        glTextureParameteri(tex, GL_TEXTURE_MAG_FILTER, GL_LINEAR);
+        glTextureParameteri(tex, GL_TEXTURE_WRAP_S, GL_CLAMP_TO_EDGE);
+        glTextureParameteri(tex, GL_TEXTURE_WRAP_T, GL_CLAMP_TO_EDGE);
+        const float aniso = 4.0f;
+        glTextureParameterfv(tex, GL_TEXTURE_MAX_ANISOTROPY, &aniso);
+    };
+    upload(m_AtlasNorm, norm);
+    upload(m_AtlasMask, mask);
+    {   // The fade across a box's depth; a flat 1 when the image is missing.
+        int lw = 0, lh = 0, lc = 0;
+        unsigned char* l = stbi_load((dir / "lookup.png").u8string().c_str(), &lw, &lh, &lc, 4);
+        std::vector<unsigned char> row = l ? std::vector<unsigned char>(l, l + (size_t)lw * 4) : std::vector<unsigned char>(4, 255);
+        if (!l) lw = 1;
+        if (l) stbi_image_free(l);
+        glCreateTextures(GL_TEXTURE_2D, 1, &m_Lookup);
+        glTextureStorage2D(m_Lookup, 1, GL_RGBA8, lw, 1);
+        glTextureSubImage2D(m_Lookup, 0, 0, 0, lw, 1, GL_RGBA, GL_UNSIGNED_BYTE, row.data());
+        glTextureParameteri(m_Lookup, GL_TEXTURE_MIN_FILTER, GL_LINEAR);
+        glTextureParameteri(m_Lookup, GL_TEXTURE_MAG_FILTER, GL_LINEAR);
+        glTextureParameteri(m_Lookup, GL_TEXTURE_WRAP_S, GL_CLAMP_TO_EDGE);
+        glTextureParameteri(m_Lookup, GL_TEXTURE_WRAP_T, GL_CLAMP_TO_EDGE);
+    }
+    Log::Info("Blood: " + std::to_string(imgs.size()) + " decal sets in a " + std::to_string(kAtlasWidth) + " x " +
+              std::to_string(height) + " atlas");
+    return true;
+}
+
+void BloodRenderer::AddDecal(const Decal& d) {
+    if (d.Set >= 0 && d.Set < (int)m_SetNames.size() && d.Opacity > 0.0f && d.Cutout < 1.0f) m_Decals.push_back(d);
+}
+
+int BloodRenderer::DrawDecals(const glm::mat4& view, const glm::mat4& proj, const int viewport[4], const HdrTarget& target,
+                              const std::function<void(Shader&)>& applyFrameState) {
+    if (m_Decals.empty() || !m_AtlasNorm) return 0;
+    PROFILE_GPU_SCOPE("Blood Decals");
+    const Frustum frustum = Frustum::FromViewProj(proj * view);
+    static std::vector<GpuDecal> gpu;
+    gpu.clear();
+    for (const Decal& d : m_Decals) {
+        const AABB box = AABB{glm::vec3(-0.5f), glm::vec3(0.5f)}.Transformed(d.Model);
+        if (!frustum.Intersects(box)) continue;
+        GpuDecal g;
+        g.Model = d.Model;
+        g.InvModel = glm::inverse(d.Model);
+        g.RectNorm = m_RectNorm[d.Set];
+        g.RectMask = m_RectMask[d.Set];
+        g.Params = glm::vec4(d.Cutout, d.Dry, d.Opacity, d.NormalStrength);
+        g.Axis = glm::vec4(glm::normalize(glm::vec3(d.Model[1])), 0.0f);
+        gpu.push_back(g);
+    }
+    if (gpu.empty()) return 0;
+    if (!m_DecalProgram)
+        m_DecalProgram = std::make_unique<Shader>(ShaderLibrary::ReadFile("BloodDecal.vert.glsl"),
+                                                  ShaderLibrary::ReadFile("BloodDecal.frag.glsl"), "BloodDecal");
+    if (gpu.size() > m_DecalCapacity) {
+        if (m_DecalBuffer) glDeleteBuffers(1, &m_DecalBuffer);
+        m_DecalCapacity = std::max<size_t>(gpu.size(), 128);
+        glCreateBuffers(1, &m_DecalBuffer);
+        glNamedBufferStorage(m_DecalBuffer, (GLsizeiptr)(m_DecalCapacity * sizeof(GpuDecal)), nullptr, GL_DYNAMIC_STORAGE_BIT);
+    }
+    glNamedBufferSubData(m_DecalBuffer, 0, (GLsizeiptr)(gpu.size() * sizeof(GpuDecal)), gpu.data());
+
+    target.ResolveDepthOnly(); // the static geometry's depth, read while the MSAA target stays bound
+    Shader& prog = *m_DecalProgram;
+    applyFrameState(prog);
+    prog.SetMat4("uView", view);
+    prog.SetMat4("uProj", proj);
+    prog.SetMat4("uInvViewProj", glm::inverse(proj * view));
+    prog.SetVec4("uViewport", glm::vec4((float)viewport[0], (float)viewport[1], (float)viewport[2], (float)viewport[3]));
+    prog.SetVec3("uFreshColor", FilmFresh);
+    prog.SetVec3("uDriedColor", FilmDried);
+    prog.SetInt("uNoReceiveShadows", 0);
+    prog.SetInt("uObjectLayerBit", 0);
+    glBindTextureUnit(kDepthUnit, target.ResolvedDepthTexture());
+    glBindTextureUnit(kNormUnit, m_AtlasNorm);
+    glBindTextureUnit(kMaskUnit, m_AtlasMask);
+    glBindTextureUnit(kLookupUnit, m_Lookup);
+    glBindBufferBase(GL_SHADER_STORAGE_BUFFER, kDecalBinding, m_DecalBuffer);
+    glBindVertexArray(m_EmptyVao);
+    // The box's far faces only (the eye may be inside it), no depth test: the depth texture decides.
+    glDisable(GL_DEPTH_TEST);
+    glDepthMask(GL_FALSE);
+    glEnable(GL_CULL_FACE);
+    glCullFace(GL_FRONT);
+    glEnable(GL_BLEND);
+    glBlendEquation(GL_FUNC_ADD);
+    glBlendFunc(GL_ONE, GL_SRC1_COLOR); // dst = add + dst * mul
+    glDrawArraysInstancedBaseInstance(GL_TRIANGLES, 0, 36, (int)gpu.size(), 0);
+    glDisable(GL_BLEND);
+    glCullFace(GL_BACK);
+    glEnable(GL_DEPTH_TEST);
+    glDepthMask(GL_TRUE);
+    glBindVertexArray(0);
+    GLStateCache::Invalidate();
+    return 1;
 }
