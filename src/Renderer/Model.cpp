@@ -279,25 +279,33 @@ std::shared_ptr<Model> Model::CreatePrimitive(const std::string& kind, const std
     model->m_Path = path;
     model->m_D->GlobalInverseTransform = glm::mat4(1.0f);
 
-    std::vector<ModelVertex> verts;
-    std::vector<unsigned int> indices;
-    if (kind == "sphere") PrimitiveMeshes::GenerateSphere(verts, indices);
-    else if (kind == "cylinder") PrimitiveMeshes::GenerateCylinder(verts, indices);
-    else if (kind == "cone") PrimitiveMeshes::GenerateCone(verts, indices);
-    else if (kind == "plane") PrimitiveMeshes::GeneratePlane(verts, indices);
-    else if (kind == "pyramid") PrimitiveMeshes::GeneratePyramid(verts, indices);
-    else if (kind == "donut") PrimitiveMeshes::GenerateDonut(verts, indices);
-    else if (kind == "capsule") PrimitiveMeshes::GenerateCapsule(verts, indices);
-    else PrimitiveMeshes::GenerateCube(verts, indices); // default/"cube"
-
-    for (const auto& v : verts) {
-        model->m_D->BoundsMin = glm::min(model->m_D->BoundsMin, v.Position);
-        model->m_D->BoundsMax = glm::max(model->m_D->BoundsMax, v.Position);
+    // One mesh per primitive kind: every placed sphere, cube... draws from the same GPU buffers (it used to
+    // generate and upload its own, 139 spheres of 1152 triangles in the Sandbox) and has its own material.
+    // Process-lifetime like the bone ring, so no GL delete runs after the context is gone.
+    static std::map<std::string, std::unique_ptr<ModelMesh>>* const s_Templates = new std::map<std::string, std::unique_ptr<ModelMesh>>();
+    const std::string key = kind == "sphere" || kind == "cylinder" || kind == "cone" || kind == "plane" ||
+                            kind == "pyramid" || kind == "donut" || kind == "capsule" ? kind : std::string("cube");
+    std::unique_ptr<ModelMesh>& tmpl = (*s_Templates)[key];
+    if (!tmpl) {
+        std::vector<ModelVertex> verts;
+        std::vector<unsigned int> indices;
+        if (key == "sphere") PrimitiveMeshes::GenerateSphere(verts, indices);
+        else if (key == "cylinder") PrimitiveMeshes::GenerateCylinder(verts, indices);
+        else if (key == "cone") PrimitiveMeshes::GenerateCone(verts, indices);
+        else if (key == "plane") PrimitiveMeshes::GeneratePlane(verts, indices);
+        else if (key == "pyramid") PrimitiveMeshes::GeneratePyramid(verts, indices);
+        else if (key == "donut") PrimitiveMeshes::GenerateDonut(verts, indices);
+        else if (key == "capsule") PrimitiveMeshes::GenerateCapsule(verts, indices);
+        else PrimitiveMeshes::GenerateCube(verts, indices);
+        tmpl = std::make_unique<ModelMesh>(verts, indices);
+        tmpl->Mat.BaseColor = glm::vec3(0.75f); // neutral default; override via the Inspector's PBR Material section
     }
 
-    auto mesh = std::make_unique<ModelMesh>(verts, indices);
-    mesh->Mat.BaseColor = glm::vec3(0.75f); // neutral default; override via the Inspector's PBR Material section
-    model->m_D->Meshes.push_back(std::move(mesh));
+    for (const glm::vec3& p : tmpl->LocalPositions()) {
+        model->m_D->BoundsMin = glm::min(model->m_D->BoundsMin, p);
+        model->m_D->BoundsMax = glm::max(model->m_D->BoundsMax, p);
+    }
+    model->m_D->Meshes.push_back(std::make_unique<ModelMesh>(*tmpl, ModelMesh::ShareGeometry{}));
 
     model->m_FinalBoneMatrices.assign(MAX_BONES, glm::mat4(1.0f));
     return model;
@@ -1489,7 +1497,7 @@ void Model::ResolveNodeGlobal(int node) const {
         const int i = *it, p = nodes[i].Parent;
         const glm::mat4 local = m_AppliedPose[i].ToMatrix();
         m_NodeGlobals[i] = p >= 0 ? AffineMul(m_NodeGlobals[p], local) : local;
-        if ((size_t)i < m_HiddenNodes.size() && m_HiddenNodes[i]) m_NodeGlobals[i] = m_NodeGlobals[i] * kCollapse;
+        if ((size_t)i < m_HiddenNodes.size() && m_HiddenNodes[i]) m_NodeGlobals[i] = AffineMul(m_NodeGlobals[i], kCollapse);
         m_GlobalValid[i] = 1;
     }
 }
@@ -1551,8 +1559,8 @@ void Model::EvaluatePose() {
             }
         }
         m_NodeGlobals[i] = n.Parent >= 0 ? m_NodeGlobals[n.Parent] * local : local;
-        if (i < m_HiddenNodes.size() && m_HiddenNodes[i]) m_NodeGlobals[i] = m_NodeGlobals[i] * kCollapse;
-        if (n.BoneId >= 0) m_FinalBoneMatrices[n.BoneId] = m_D->GlobalInverseTransform * m_NodeGlobals[i] * n.BoneOffset;
+        if (i < m_HiddenNodes.size() && m_HiddenNodes[i]) m_NodeGlobals[i] = AffineMul(m_NodeGlobals[i], kCollapse);
+        if (n.BoneId >= 0) m_FinalBoneMatrices[n.BoneId] = AffineMul(AffineMul(m_D->GlobalInverseTransform, m_NodeGlobals[i]), n.BoneOffset);
     }
 }
 
@@ -1609,7 +1617,7 @@ void Model::ResolveAppliedPose() const {
         const AnimNode& n = nodes[i];
         const glm::mat4 local = pose[i].ToMatrix();
         m_NodeGlobals[i] = n.Parent >= 0 ? AffineMul(m_NodeGlobals[n.Parent], local) : local;
-        if (i < m_HiddenNodes.size() && m_HiddenNodes[i]) m_NodeGlobals[i] = m_NodeGlobals[i] * kCollapse;
+        if (i < m_HiddenNodes.size() && m_HiddenNodes[i]) m_NodeGlobals[i] = AffineMul(m_NodeGlobals[i], kCollapse);
     }
 }
 
@@ -1620,7 +1628,7 @@ void Model::ResolvePalette() const {
     const auto& nodes = m_D->Nodes;
     for (size_t i = 0; i < nodes.size(); ++i) {
         const AnimNode& n = nodes[i];
-        if (n.BoneId >= 0) m_FinalBoneMatrices[n.BoneId] = m_D->GlobalInverseTransform * m_NodeGlobals[i] * n.BoneOffset;
+        if (n.BoneId >= 0) m_FinalBoneMatrices[n.BoneId] = AffineMul(AffineMul(m_D->GlobalInverseTransform, m_NodeGlobals[i]), n.BoneOffset);
     }
 }
 

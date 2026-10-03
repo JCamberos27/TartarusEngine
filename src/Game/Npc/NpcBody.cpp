@@ -34,16 +34,11 @@ void Spring(float& x, float& rate, float target, float omega, float zeta, float 
 
 glm::quat YawRotation(float yaw) { return glm::angleAxis(yaw, glm::vec3(0.0f, 1.0f, 0.0f)); }
 
-constexpr float kTurnThreshold = 1.15f;  // radians (66 deg): a still body further off than this turns on the spot
-constexpr float kMaxTwist = 1.2f;        // radians the spine twists toward the aim
-constexpr float kMoveEase = 0.1f;        // seconds: the blend tree's parameters
-constexpr float kFaceEase = 0.09f;       // seconds: the heading while moving
-constexpr float kAimLean = 0.1f;         // radians (6 deg): the torso's forward lean aiming, standing
-constexpr float kAimLeanCrouched = 0.22f; // ... and crouched (13 deg)
-constexpr float kReadyLeanCrouched = 0.4f; // ... crouched at the low ready (23 deg)
-constexpr float kHeadMaxYaw = 1.2f;      // radians (70 deg) the head turns past the chest
-constexpr float kHeadMaxPitch = 0.6f;    // radians (35 deg) it nods up or down
-constexpr float kCowerHunch = 0.35f;     // radians (20 deg) the spine curls forward ducking
+// NPC body tuning is now in NpcHoldSettings (copied from FirstPersonBodyComponent in NpcDirector::Start).
+// Replaced: kTurnThreshold → m_Set.TurnThreshold, kMaxTwist → m_Set.MaxTwist, kMoveEase → m_Set.MoveEase,
+// kFaceEase → m_Set.FaceEase, kAimLean → m_Set.AimLean, kAimLeanCrouched → m_Set.AimLeanCrouched,
+// kReadyLeanCrouched → m_Set.ReadyLeanCrouched, kHeadMaxYaw → m_Set.HeadMaxYaw,
+// kHeadMaxPitch → m_Set.HeadMaxPitch, kCowerHunch → m_Set.CowerHunch
 
 } // namespace
 
@@ -108,7 +103,7 @@ bool NpcBody::Start(World& world, entt::entity root) {
         m_DriverHead = d.NodeIndex("head");
         m_DriverSpineCount = 0;
         for (int k = 0; k < 5; ++k)
-            if (const int b = d.NodeIndex(FPBody::kBoneSpine[k]); b >= 0) m_DriverSpine[m_DriverSpineCount++] = b;
+            if (const int b = d.NodeIndex(FPBody::kBoneSpine[k]); b >= 0) { m_DriverSpineSlot[m_DriverSpineCount] = k; m_DriverSpine[m_DriverSpineCount++] = b; }
         // The upper body: spine_01 and everything under it, mapped onto each piece by name.
         std::vector<char> upper((size_t)d.NodeCount(), 0);
         if (const int s = d.NodeIndex(FPBody::kBoneSpine[0]); s >= 0) upper[(size_t)s] = 1;
@@ -191,7 +186,7 @@ void NpcBody::Tick(World& world, const NpcBodyInput& in, float dt) {
     if (moving) {
         m_Turning = false;
         m_StillTime = 0.0f;
-        m_Yaw += offset * Follow(dt, kFaceEase);
+        m_Yaw += offset * Follow(dt, m_Set.FaceEase);
     } else {
         m_StillTime += dt;
         if (m_Turning) {
@@ -201,7 +196,7 @@ void NpcBody::Tick(World& world, const NpcBodyInput& in, float dt) {
             offset = FirstPersonBodyWrapAngle(want - m_Yaw);
             const bool clipDone = m_TurnTime > 0.25f && !ac.InState(FPBody::kStateTurn) && !ac.InState(FPBody::kStateCrouchTurn);
             if (std::abs(offset) < glm::radians(8.0f) || clipDone || m_TurnTime > 1.6f) m_Turning = false;
-        } else if (m_StillTime > 0.15f && NpcShouldTurn(offset, kTurnThreshold)) {
+        } else if (m_StillTime > 0.15f && NpcShouldTurn(offset, m_Set.TurnThreshold)) {
             m_Turning = true;
             m_TurnTime = 0.0f;
             ac.SetFloat(FPBody::kTurnAngle, std::clamp(glm::degrees(offset), -180.0f, 180.0f));
@@ -212,7 +207,7 @@ void NpcBody::Tick(World& world, const NpcBodyInput& in, float dt) {
         }
         // Never more than the spine can twist behind what it faces: the feet slide a little instead.
         const float lag = FirstPersonBodyWrapAngle(want - m_Yaw);
-        const float maxLag = kTurnThreshold + 0.6f;
+        const float maxLag = m_Set.TurnThreshold + 0.6f;
         if (std::abs(lag) > maxLag) m_Yaw = want - std::copysign(maxLag, lag);
     }
     m_Yaw = FirstPersonBodyWrapAngle(m_Yaw);
@@ -220,7 +215,7 @@ void NpcBody::Tick(World& world, const NpcBodyInput& in, float dt) {
 
     // The blend tree's parameters are the clips' own speeds, which the soldier's gaits are tuned to.
     const glm::vec2 local = FirstPersonBodyLocalMove(flat, m_Yaw);
-    m_Move += (local - m_Move) * Follow(dt, kMoveEase);
+    m_Move += (local - m_Move) * Follow(dt, m_Set.MoveEase);
     ac.SetFloat(FPBody::kMoveX, m_Move.x);
     ac.SetFloat(FPBody::kMoveY, m_Move.y);
     ac.SetFloat(FPBody::kSpeed, glm::length(m_Move));
@@ -243,12 +238,12 @@ void NpcBody::Tick(World& world, const NpcBodyInput& in, float dt) {
 // player body's foot IK, without its foot lock). Solved on the driver and handed to the other pieces; flat ground costs
 // only the two rays.
 void NpcBody::FootPass(float dt) {
-    constexpr float kMaxDrop = 0.35f, kMaxRaise = 0.35f, kPelvisRaise = 0.08f, kTiltMax = 0.5f; // m, m, m, rad
-    m_FootWeight += ((m_In.FootIK ? 1.0f : 0.0f) - m_FootWeight) * Follow(dt, 0.15f);
+    m_FootWeight += ((m_In.FootIK ? 1.0f : 0.0f) - m_FootWeight) * Follow(dt, m_Set.FootIKFade);
     const bool rigged = m_DriverPelvis >= 0 && m_DriverLeg[0][0] >= 0 && m_DriverLeg[0][1] >= 0 && m_DriverLeg[0][2] >= 0 &&
                         m_DriverLeg[1][0] >= 0 && m_DriverLeg[1][1] >= 0 && m_DriverLeg[1][2] >= 0;
     if (m_FootWeight < 1e-3f || !rigged) {
         m_HaveFootGround = false;
+        m_Slide.Reset();
         return;
     }
     Model& m = *m_DriverModel;
@@ -259,8 +254,31 @@ void NpcBody::FootPass(float dt) {
     const glm::mat4 rootW = RootWorld();
     const glm::mat3 toModel3 = glm::transpose(glm::mat3(rootW)); // a yaw: its inverse is its transpose
     float animHeight[2];
+    // Foot slide correction (stride warp, then pin) on the animated feet; off = the clips' own feet.
+    IK::FootSlideSettings slideSet = m_Set.FootSlide;
+    const int probe = IK::FootSlideProbeMode();
+    if (probe == 1) { slideSet = IK::FootSlideSettings{}; slideSet.PinEnabled = slideSet.StrideEnabled = true; }
+    const bool slideOn = slideSet.Active();
+    IK::FootSlideOutput slide;
+    if (slideOn || probe >= 0) {
+        const float unit = glm::length(glm::vec3(rootW[0]));
+        IK::FootSlideInput sin;
+        sin.Feet = m_Feet;
+        sin.Velocity = glm::vec3(m_In.Velocity.x, 0.0f, m_In.Velocity.z);
+        sin.PlantHeight = 0.05f;
+        sin.Dt = dt;
+        for (int s = 0; s < 2; ++s) {
+            sin.Foot[s] = glm::vec3(rootW * glm::vec4(IK::Position(m_Globals[(size_t)m_DriverLeg[s][2]]), 1.0f));
+            sin.Height[s] = sin.Foot[s].y - m_Feet.y;
+        }
+        sin.Pelvis = glm::vec3(rootW * glm::vec4(IK::Position(m_Globals[(size_t)m_DriverPelvis]), 1.0f));
+        sin.LegLength = unit * (glm::length(IK::Position(m_Globals[(size_t)m_DriverLeg[0][0]]) - IK::Position(m_Globals[(size_t)m_DriverLeg[0][1]])) +
+                                glm::length(IK::Position(m_Globals[(size_t)m_DriverLeg[0][1]]) - IK::Position(m_Globals[(size_t)m_DriverLeg[0][2]])));
+        slide = m_Slide.Step(slideSet, sin, !slideOn);
+        if (probe >= 0) IK::FootSlideProbeLog("npc", m_Slide.Stats, glm::length(glm::vec2(sin.Velocity.x, sin.Velocity.z)), m_Slide.ClipSpeed(), m_Slide.Scale());
+    }
     for (int s = 0; s < 2; ++s) {
-        const glm::vec3 foot = glm::vec3(rootW * glm::vec4(IK::Position(m_Globals[(size_t)m_DriverLeg[s][2]]), 1.0f));
+        const glm::vec3 foot = glm::vec3(rootW * glm::vec4(IK::Position(m_Globals[(size_t)m_DriverLeg[s][2]]), 1.0f)) + slide.Shift[s];
         animHeight[s] = foot.y - m_Feet.y;
         float offset = 0.0f;
         glm::vec3 normal(0.0f, 1.0f, 0.0f);
@@ -268,29 +286,29 @@ void NpcBody::FootPass(float dt) {
         QueryFilter filter;
         filter.HitTriggers = 0;
         RaycastHit hit;
-        if (PhysicsWorld::RaycastSolid(origin, down, 0.45f + kMaxDrop + 0.2f, filter, hit) && hit.Hit) {
-            offset = std::clamp(hit.Point[1] - m_Feet.y, -kMaxDrop, kMaxRaise);
+        if (PhysicsWorld::RaycastSolid(origin, down, 0.45f + m_Set.FootIKMaxDrop + 0.2f, filter, hit) && hit.Hit) {
+            offset = std::clamp(hit.Point[1] - m_Feet.y, -m_Set.FootIKMaxDrop, m_Set.FootIKMaxRaise);
             normal = glm::normalize(glm::vec3(hit.Normal[0], hit.Normal[1], hit.Normal[2]));
             if (normal.y < 0.5f) normal = glm::vec3(0.0f, 1.0f, 0.0f); // a wall, not a floor
         }
         if (!m_HaveFootGround) { m_FootOffset[s] = offset; m_FootNormal[s] = normal; }
-        m_FootOffset[s] += (offset - m_FootOffset[s]) * Follow(dt, 0.05f);
-        m_FootNormal[s] = glm::normalize(m_FootNormal[s] + (normal - m_FootNormal[s]) * Follow(dt, 0.08f));
+        m_FootOffset[s] += (offset - m_FootOffset[s]) * Follow(dt, m_Set.FootOffsetEase);
+        m_FootNormal[s] = glm::normalize(m_FootNormal[s] + (normal - m_FootNormal[s]) * Follow(dt, m_Set.FootNormalEase));
     }
     m_HaveFootGround = true;
     const bool flat = std::abs(m_FootOffset[0]) < 0.004f && std::abs(m_FootOffset[1]) < 0.004f && m_FootNormal[0].y > 0.999f &&
                       m_FootNormal[1].y > 0.999f;
-    if (flat) return; // the clips' own feet are right
+    if (flat && !slideOn) return; // the clips' own feet are right
     const float w = m_FootWeight;
-    const float pelvisDelta = FirstPersonBodyFootPelvis(m_FootOffset[0], m_FootOffset[1], kMaxDrop, kPelvisRaise) * w;
+    const float pelvisDelta = (FirstPersonBodyFootPelvis(m_FootOffset[0], m_FootOffset[1], m_Set.FootIKMaxDrop, m_Set.FootIKPelvisRaise) - slide.PelvisDrop) * w;
     IK::OffsetBone(pose, m_DriverParents, m_Globals, m_DriverPelvis, glm::vec3(0.0f, pelvisDelta, 0.0f), glm::quat(1.0f, 0.0f, 0.0f, 0.0f), glm::vec3(0.0f));
     for (int s = 0; s < 2; ++s) {
         const int thigh = m_DriverLeg[s][0], calf = m_DriverLeg[s][1], foot = m_DriverLeg[s][2];
-        const glm::vec3 target = IK::Position(m_Globals[(size_t)foot]) + glm::vec3(0.0f, m_FootOffset[s] * w - pelvisDelta, 0.0f);
+        const glm::vec3 target = IK::Position(m_Globals[(size_t)foot]) + glm::vec3(0.0f, m_FootOffset[s] * w - pelvisDelta, 0.0f) + toModel3 * slide.Shift[s] * w;
         // A planted foot lies on its slope; one swinging through the air keeps the clip's angle.
         const float planted = 1.0f - std::clamp((animHeight[s] - 0.06f) / 0.09f, 0.0f, 1.0f);
         const glm::vec3 normal = toModel3 * m_FootNormal[s];
-        const float angle = std::min(std::acos(std::clamp(normal.y, -1.0f, 1.0f)), kTiltMax) * planted * w;
+        const float angle = std::min(std::acos(std::clamp(normal.y, -1.0f, 1.0f)), m_Set.FootIKTiltMax) * planted * w;
         glm::quat footRot = IK::Rotation(m_Globals[(size_t)foot]);
         const glm::vec3 axis = glm::cross(glm::vec3(0.0f, 1.0f, 0.0f), normal);
         if (angle > 1e-4f && glm::dot(axis, axis) > 1e-8f) footRot = glm::angleAxis(angle, glm::normalize(axis)) * footRot;
@@ -343,7 +361,7 @@ void NpcBody::LateUpdate(World& world, float dt, const Camera* weaponCam) {
         // The chest takes the player's share of the aim's pitch (Spine Aim / Spine Aim Down); the gun, hung off
         // the shoulders on the weapon's camera, takes the rest.
         wantPitch *= std::clamp(wantPitch < 0.0f ? m_Set.SpineAimDown : m_Set.SpineAim, 0.0f, 1.0f);
-        wantTwist = NpcSpineTwist(NpcYawOf(d, m_Yaw) - m_Yaw, kMaxTwist);
+        wantTwist = NpcSpineTwist(NpcYawOf(d, m_Yaw) - m_Yaw, m_Set.MaxTwist);
     } else if (!m_Turning) {
         // Looking about while not aiming: the twist only (a soldier scanning, not bending over).
         const glm::vec3 d = m_In.LookPoint - chestW;
@@ -366,7 +384,7 @@ void NpcBody::LateUpdate(World& world, float dt, const Camera* weaponCam) {
             // Crouched with a gun but not aiming (a low ready, moving between cover) the hunch is eased too, to a
             // ready crouch: the crouch walk's own was so deep the gun's stock rode up past the hood.
             const bool armedCrouch = m_In.Crouched && m_ArmsWeight > 0.5f;
-            const float leanWant = m_In.Crouched ? glm::mix(kReadyLeanCrouched, kAimLeanCrouched, m_AimWeight) : kAimLean;
+            const float leanWant = m_In.Crouched ? glm::mix(m_Set.ReadyLeanCrouched, m_Set.AimLeanCrouched, m_AimWeight) : m_Set.AimLean;
             const float weight = armedCrouch ? 1.0f : m_AimWeight;
             straighten = std::clamp(leanWant - leanNow, -0.9f, 0.4f) * weight;
         }
@@ -383,10 +401,11 @@ void NpcBody::LateUpdate(World& world, float dt, const Camera* weaponCam) {
             IK::ComputeGlobals(pose, m_DriverParents, m_Globals);
             // Rotating +Z about +X by theta gives (0, -sin, cos): looking up is a negative angle about X.
             // The lean rolls about the body's forward (+Z): + = the top toward -X, the body's right.
-            const glm::quat step = glm::angleAxis(m_AimTwist / (float)n, glm::vec3(0, 1, 0)) *
-                                   glm::angleAxis((m_Straighten - m_AimPitch + kCowerHunch * m_Cower) / (float)n, glm::vec3(1, 0, 0)) *
-                                   glm::angleAxis(m_Lean * 0.38f / (float)n, glm::vec3(0, 0, 1));
-            OffsetSpine(step);
+            OffsetSpine([&](float d) {
+                return glm::angleAxis(m_AimTwist / d, glm::vec3(0, 1, 0)) *
+                       glm::angleAxis((m_Straighten - m_AimPitch + m_Set.CowerHunch * m_Cower) / d, glm::vec3(1, 0, 0)) *
+                       glm::angleAxis(m_Lean * 0.38f / d, glm::vec3(0, 0, 1));
+            });
             m.ApplyLocalPose(pose);
             m_PiecesStale = true;
         }
@@ -421,8 +440,8 @@ void NpcBody::LateUpdate(World& world, float dt, const Camera* weaponCam) {
             const glm::vec3 d = glm::vec3(glm::inverse(rootW) * glm::vec4(m_In.LookPoint, 1.0f)) - glm::vec3(hd[3]);
             const float flat = std::sqrt(d.x * d.x + d.z * d.z);
             if (flat > 0.2f || std::abs(d.y) > 0.2f) {
-                lookYaw = std::clamp(FirstPersonBodyWrapAngle(NpcYawOf(d, 0.0f) - m_AimTwist), -kHeadMaxYaw, kHeadMaxYaw);
-                lookPitch = std::clamp(std::atan2(d.y, std::max(flat, 0.05f)), -kHeadMaxPitch, kHeadMaxPitch);
+                lookYaw = std::clamp(FirstPersonBodyWrapAngle(NpcYawOf(d, 0.0f) - m_AimTwist), -m_Set.HeadMaxYaw, m_Set.HeadMaxYaw);
+                lookPitch = std::clamp(std::atan2(d.y, std::max(flat, 0.05f)), -m_Set.HeadMaxPitch, m_Set.HeadMaxPitch);
             }
         }
         const float free = 1.0f - std::clamp(m_AimWeight, 0.0f, 1.0f);
@@ -454,11 +473,27 @@ void NpcBody::LateUpdate(World& world, float dt, const Camera* weaponCam) {
     m_Eye = m_DriverModel->NodeTransform("head", head) ? glm::vec3(rootW * head[3]) : m_Feet + glm::vec3(0.0f, 1.62f, 0.0f);
 }
 
-void NpcBody::OffsetSpine(const glm::quat& step) {
+void NpcBody::OffsetSpine(const std::function<glm::quat(float)>& stepFor) {
+    // Each bone's share of the turn: even (the bone count) with the default Spine distribution.
+    float divisor[8], weight[8];
+    const int n = std::min(m_DriverSpineCount, 5);
+    for (int k = 0; k < n; ++k) weight[k] = m_Set.Spine.Weight[std::min(m_DriverSpineSlot[k], 4)];
+    IK::ChainDivisors(weight, n, divisor);
+    const float pelvisAlpha = std::clamp(m_Set.Spine.PelvisAlpha, 0.0f, 1.0f);
+    if (pelvisAlpha > 0.0f && m_DriverPelvis >= 0 && m_DriverSpineCount > 0) { // the pelvis takes its share first
+        IK::RefreshPath(m_Pose, m_DriverParents, m_Globals, -1, m_DriverPelvis);
+        IK::OffsetBoneOnly(m_Pose, m_DriverParents, m_Globals, m_DriverPelvis, glm::vec3(0.0f), stepFor(1.0f / pelvisAlpha),
+                           IK::Position(m_Globals[(size_t)m_DriverPelvis]));
+        IK::RefreshPath(m_Pose, m_DriverParents, m_Globals, m_DriverPelvis, m_DriverSpine[m_DriverSpineCount - 1]);
+    }
     // Down the chain, each bone's own global is made current before the next is read; everything below (arms, fingers) is
     // refreshed once at the end instead of after every bone.
     for (int k = 0; k < m_DriverSpineCount; ++k) {
         const int b = m_DriverSpine[k];
+        float d = k < n ? divisor[k] : (float)m_DriverSpineCount;
+        if (pelvisAlpha > 0.0f) d /= 1.0f - pelvisAlpha;
+        glm::quat step = stepFor(d);
+        if (k < n) step = IK::ClampStepAngle(step, m_Set.Spine.MaxAngle[std::min(m_DriverSpineSlot[k], 4)]);
         IK::OffsetBoneOnly(m_Pose, m_DriverParents, m_Globals, b, glm::vec3(0.0f), step, IK::Position(m_Globals[(size_t)b]));
         if (k + 1 < m_DriverSpineCount) IK::RefreshPath(m_Pose, m_DriverParents, m_Globals, b, m_DriverSpine[k + 1]);
     }

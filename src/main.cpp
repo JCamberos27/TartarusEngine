@@ -1142,6 +1142,7 @@ int main(int argc, char** argv) {
         // --stock-probe captures the Scene view (the body) beside the Game view (the first-person view).
         if (stockProbeMode || npcTestMode) editor.RequestSceneGameSplit();
         editor.Init(window.Handle());
+        editor.SetHeadless(headless);
         // #148: a hard crash (access violation, stack overflow, abort...) never reaches the
         // exception-path EmergencyRecoverySave, so the crash handler gets its own hook. Pointers
         // live in statics because the handler takes a plain function; the guard below clears the
@@ -1427,6 +1428,22 @@ int main(int argc, char** argv) {
             editor.HandleDroppedFiles(world, assets, editorCamera, editorUIVisible, paths);
         });
 
+        // First-use stalls moved behind the load: the programs/volumes a scene is about to need are
+        // built now instead of on its first frames (sky ~270 ms, SSAO ~100 ms, shadow array alloc).
+        auto warmRenderResources = [&]() {
+            if (world.SkySourceMode == World::SkySource::Atmosphere) skyAtmosphere.WarmUp(world.Sky.CloudsEnabled);
+            if (world.SsaoEnabled) Ssao::WarmUp(ssaoComputeShader, ssaoBlurShader);
+            if (world.ShadowsEnabled) shadowMap.Configure(world.ShadowResolution, world.ShadowCascades);
+            iblProbe.WarmUp();
+            tonemapper.WarmUp();
+            lightBuffer.WarmUp();
+            clusterGrid.WarmUp();
+            SceneRenderer::WarmShaderVariants(world);
+            glUseProgram(0);
+            GLStateCache::Invalidate();
+        };
+        warmRenderResources();
+
         bool firstFramePresented = false; // gates the splash -> editor handoff at the loop's end
 
         int appliedVSyncMode = -1; // != any real mode, so the first iteration applies the saved pref
@@ -1479,6 +1496,13 @@ int main(int argc, char** argv) {
             gravityGun.Settings = GravityGunSettings{};
             playCameraEntity = entt::null;
             playControllerEntity = FindFirstPersonController(world);
+            {   // the scene's effect and HUD tuning: the first FX / HUD Settings component, defaults when none
+                FxHudSettingsComponent fx;
+                for (auto e : world.Registry.view<FxHudSettingsComponent>()) { fx = world.Registry.get<FxHudSettingsComponent>(e); break; }
+                combatFx.Settings = fx;
+                combatHud.Settings = fx;
+                weaponFx.Settings = fx;
+            }
             if (entt::entity ctrl = playControllerEntity; ctrl != entt::null) {
                 const auto& fp = world.Registry.get<FirstPersonControllerComponent>(ctrl);
                 player.MoveSpeed = fp.MoveSpeed;
@@ -1497,9 +1521,14 @@ int main(int argc, char** argv) {
                 playBaseSensitivity = fp.MouseSensitivity;
                 playBaseFov = fp.VerticalFov();
                 player.InvertY = fp.InvertY;
+                player.StickLookDegPerSec = fp.StickLookDegPerSec;
                 player.KillY = fp.KillY;
                 player.Cam.Fov = fp.VerticalFov();
                 playGravityGun = fp.GravityGun;
+                gravityGun.Settings.GrabRange = fp.GrabRange;
+                gravityGun.Settings.AssistRange = fp.AssistRange;
+                gravityGun.Settings.AssistConeDeg = fp.AssistConeDeg;
+                gravityGun.Settings.ScrollTurnDeg = fp.ScrollTurnDeg;
                 gravityGun.Settings.MinThrowSpeed = fp.MinThrowSpeed;
                 gravityGun.Settings.MaxThrowSpeed = std::max(fp.MaxThrowSpeed, fp.MinThrowSpeed);
                 gravityGun.Settings.ChargeTime = fp.ThrowChargeTime;
@@ -1617,7 +1646,15 @@ int main(int argc, char** argv) {
         // path could introduce, not a hand-rolled approximation of it.
         // --perf-bench measures each scene twice: kPerfPhaseFrames in edit mode, then as many in Play.
         constexpr int kPerfPhaseFrames = 600;
-        constexpr int kPerfBenchWarmup = 100; // frames skipped at the start of each phase
+        // Frames skipped at the start of each phase. TARTARUS_PERF_WARMUP=0 keeps them, to measure first-use hitches.
+        const int kPerfBenchWarmup = [] {
+            char* e = nullptr;
+            size_t n = 0;
+            int frames = 100;
+            if (_dupenv_s(&e, &n, "TARTARUS_PERF_WARMUP") == 0 && e && *e) frames = std::max(0, std::atoi(e));
+            std::free(e);
+            return frames;
+        }();
         // --weapon-test ends its scene itself when the script is done; this is only its safety cap (6 min at 60 Hz).
         // --outfit-shots: kOutfitShotSettle frames on each pose before it's captured (temporal effects converge).
         constexpr int kOutfitShotStart = 60, kOutfitShotSettle = 20, kOutfitShotMax = 24;
@@ -1744,6 +1781,7 @@ int main(int argc, char** argv) {
                     // from loading it (audit #77; tests/smoke-scenes-invalid/ in particular is
                     // documented as static, hand-authored fixtures).
                     smokeSceneLoadOk = SceneSerializer::Load(world, assets, path, /*persistMigration=*/false);
+                    warmRenderResources(); // the editor does the same at startup, before its first frame
                     std::cout << "[SmokeTest] Loading " << path
                               << (smokeSceneLoadOk ? "" : "  (Load() reported failure)") << std::endl;
                     // #116 regression: the exact triangle raycast behind editor picking / surface
@@ -2581,6 +2619,7 @@ int main(int argc, char** argv) {
                     firstPersonBody.Tick(world, player, player.Cam, gameDt);
                     if (firstPersonPresentation.IsActive()) {
                         firstPersonPresentation.Update(world, player.Cam);
+                        firstPersonPresentation.SetCrouch(player.CrouchBlend); // the crouched ADS pose eases in with the eye height
                         if (weaponTest) {
                             // The script is the player: its trigger, aim and weapon keys, nothing else.
                             weaponTest->SetCamera(&player.Cam);
@@ -2870,6 +2909,7 @@ int main(int argc, char** argv) {
             // models and materials are now all in memory lands in one frame.
             {
             PROFILE_SCOPE("Asset Pump + Outfit Hiding");
+            PrefetchAnimatorClips(world, assets); // clip files for Play, loaded behind the editor
             assets.PumpAsync(3.0);
             OutfitSystem::UpdatePending(world, assets);
             OutfitSystem::UpdateHiding(world); // outfit skin under clothing (only when an outfit's pieces changed)
@@ -3090,9 +3130,10 @@ int main(int argc, char** argv) {
                     glm::vec3 bmin = sc.model->BoundsMin(), bmax = sc.model->BoundsMax();
                     sc.bounded = bmin.x <= bmax.x && bmin.y <= bmax.y && bmin.z <= bmax.z;
                     if (!sc.bounded) continue;
-                    // Bounds are bind-pose only (#113): pad animated models around the centre so
+                    // Bounds are bind-pose only (#113): pad rigged models around the centre so
                     // a swinging limb stays inside, the same inflation the main pass culls with.
-                    if (sc.model->HasAnimations()) {
+                    // HasBones(): a character's clips may live in other files, so HasAnimations() misses it.
+                    if (sc.model->HasBones()) {
                         const glm::vec3 c = (bmin + bmax) * 0.5f, h = (bmax - bmin) * 0.5f * 1.75f;
                         bmin = c - h; bmax = c + h;
                     }
@@ -3298,6 +3339,9 @@ int main(int argc, char** argv) {
                 glCullFace(GL_BACK);
 
                 localShadowShader.Bind(); // linear distance-to-light depth
+                // The program's sampler2D uAlbedo reads unit 0 at the pass's first clear/blit/draw, before
+                // DrawDepthOnly binds anything there (KHR 131204 on frame 1).
+                GLStateCache::BindTexture2D(0, DefaultTextures::White());
                 // #194: resolve once, outside the per-spot x per-caster loop.
                 int localLightViewProjLoc = localShadowShader.Loc("uLightViewProj");
                 int localLightPosLoc = localShadowShader.Loc("uShadowLightPos");
@@ -3411,6 +3455,9 @@ int main(int argc, char** argv) {
                 glCullFace(GL_BACK);
 
                 localShadowShader.Bind(); // linear distance-to-light depth
+                // The program's sampler2D uAlbedo reads unit 0 at the pass's first clear/blit/draw, before
+                // DrawDepthOnly binds anything there (KHR 131204 on frame 1).
+                GLStateCache::BindTexture2D(0, DefaultTextures::White());
                 // #194: resolve once, outside the per-point x 6-face x per-caster loop.
                 int cubeLightPosLoc = localShadowShader.Loc("uShadowLightPos");
                 int cubeFarLoc = localShadowShader.Loc("uShadowFar");
@@ -3669,7 +3716,8 @@ int main(int argc, char** argv) {
                     const glm::mat4 model = world.GetCachedWorldTransform(entity);
                     glm::vec3 bmin = rc.ModelRef->BoundsMin(), bmax = rc.ModelRef->BoundsMax();
                     if (bmin.x <= bmax.x && bmin.y <= bmax.y && bmin.z <= bmax.z) {
-                        if (rc.ModelRef->HasAnimations()) { // same inflation as the main pass
+                        // same inflation as the main pass
+                        if (rc.ModelRef->HasBones()) {
                             const glm::vec3 c = (bmin + bmax) * 0.5f, hext = (bmax - bmin) * 0.5f * 1.75f;
                             bmin = c - hext; bmax = c + hext;
                         }

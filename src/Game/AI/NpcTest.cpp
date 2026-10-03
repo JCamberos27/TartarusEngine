@@ -630,7 +630,10 @@ void NpcTest::Deaths(World& world, NpcDirector& npcs, float now) {
             m_DUsed.push_back(n->Name);
             const bool first = shoot(*n, dc.Part, dc.Damage);
             if (dc.DiesFirst) Check(first && n->Dead, std::string(dc.Name) + ": one round kills");
-            else Check(!n->Dead, std::string(dc.Name) + ": the first round doesn't kill");
+            else {
+                Check(!n->Dead, std::string(dc.Name) + ": the first round doesn't kill");
+                Check(!npcs.RagdollSettings().HitFlinch || npcs.FlinchActive(n->Index), std::string(dc.Name) + ": a round that doesn't kill kicks the struck region (hit flinch)");
+            }
             if (dc.LimpAfterFirst) Check(n->LimpUntil > npcs.Now(), std::string(dc.Name) + ": a leg hit leaves it limping");
             else Check(n->LimpUntil < npcs.Now(), std::string(dc.Name) + ": no limp");
             if (dc.StaggerAfterFirst)
@@ -655,7 +658,7 @@ void NpcTest::Deaths(World& world, NpcDirector& npcs, float now) {
                 Check(n->DeathPop >= 0.0f && n->DeathPop <= 0.15f,
                       std::string(kDeathCases[m_DCase].Name) + ": no pose pop over 15 cm (" + std::to_string(n->DeathPop * 100.0f) + " cm)");
                 m_DWorstPop = std::max(m_DWorstPop, n->DeathPop);
-                Check(n->Ragdoll->DriveLeft() > 0.0f || npcs.Now() - n->DiedAt > NpcRagdoll::kDriveFade,
+                Check(n->Ragdoll->DriveLeft() > 0.0f || npcs.Now() - n->DiedAt > n->Ragdoll->DriveFadeTime(),
                       std::string(kDeathCases[m_DCase].Name) + ": the joints start powered");
             }
             m_DNpc[0].clear();

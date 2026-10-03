@@ -170,6 +170,44 @@ void RegisterEngineComponents() {
               "Scales the enemies' accuracy and reaction speed.", 0.25f, 2.0f },
             { "NPC Damage Scale", T::Float, TARTARUS_REFLECT_FIELD(SquadSettingsComponent, NpcDamageScale), 0.01f,
               "Enemy rounds do this much of their weapon's damage to the player.", 0.0f, 4.0f },
+            { "Heavy Hit Damage", T::Float, TARTARUS_REFLECT_FIELD(SquadSettingsComponent, HeavyHitDamage), 0.5f,
+              "A single hit of at least this much damage (from the player) staggers the enemy.", 0.0f, 500.0f },
+            { "Stagger Time", T::Float, TARTARUS_REFLECT_FIELD(SquadSettingsComponent, StaggerTime), 0.01f,
+              "Seconds an enemy's aim is paused after a heavy hit.", 0.0f, 5.0f },
+            { "Bleed-Out Time", T::Float, TARTARUS_REFLECT_FIELD(SquadSettingsComponent, BleedOutTime), 0.5f,
+              "A wounded (downed) enemy dies this many seconds after going down.", 0.0f, 300.0f },
+            { "Crawl Speed", T::Float, TARTARUS_REFLECT_FIELD(SquadSettingsComponent, CrawlSpeed), 0.01f,
+              "A wounded enemy crawls at this speed (m/s).", 0.0f, 5.0f },
+            { "Limp Speed Scale", T::Float, TARTARUS_REFLECT_FIELD(SquadSettingsComponent, LimpSpeedScale), 0.01f,
+              "A leg-shot enemy moves at this fraction of its normal speed.", 0.05f, 1.0f },
+            { "Limp Time", T::Float, TARTARUS_REFLECT_FIELD(SquadSettingsComponent, LimpTime), 0.1f,
+              "Seconds a leg wound slows an enemy.", 0.0f, 120.0f },
+            { "Corpse Time", T::Float, TARTARUS_REFLECT_FIELD(SquadSettingsComponent, CorpseTime), 0.5f,
+              "Seconds a dead enemy's body stays before it is removed.", 0.0f, 600.0f },
+            { "Fall Gravity", T::Float, TARTARUS_REFLECT_FIELD(SquadSettingsComponent, FallGravity), 0.1f,
+              "Gravity (m/s^2) on an enemy that steps off a ledge. Ragdolls use the physics world's gravity.", 0.0f, 60.0f },
+            { "Melee Damage", T::Float, TARTARUS_REFLECT_FIELD(SquadSettingsComponent, MeleeDamage), 0.5f,
+              "Damage of a rifle-butt strike at the player (scaled by Difficulty, 0.5 to 1.5).", 0.0f, 500.0f },
+            { "Melee Time", T::Float, TARTARUS_REFLECT_FIELD(SquadSettingsComponent, MeleeTime), 0.01f,
+              "A strike's length, wind-up to recovery (seconds).", 0.1f, 3.0f },
+            { "Melee Hit Time", T::Float, TARTARUS_REFLECT_FIELD(SquadSettingsComponent, MeleeHitTime), 0.01f,
+              "The blow lands this many seconds into the strike.", 0.0f, 3.0f },
+            { "Hitbox Range", T::Float, TARTARUS_REFLECT_FIELD(SquadSettingsComponent, HitboxRange), 1.0f,
+              "Enemies further than this from the player (m) keep only their movement capsule, no per-bone hitboxes.", 5.0f, 500.0f },
+            { "Foot IK Range", T::Float, TARTARUS_REFLECT_FIELD(SquadSettingsComponent, FootIKRange), 0.5f,
+              "Enemies this close (m) and in view put their feet on uneven ground.", 0.0f, 200.0f },
+            { "Mesh Check Range", T::Float, TARTARUS_REFLECT_FIELD(SquadSettingsComponent, MeshCheckRange), 0.5f,
+              "Within this distance (m) the weapon hold checks the gun and elbows against the drawn body.", 0.0f, 100.0f },
+            { "Cover Sample Spacing", T::Float, TARTARUS_REFLECT_FIELD(SquadSettingsComponent, CoverSpacing), 0.05f,
+              "Metres between cover samples along a navigation-mesh edge.", 0.3f, 4.0f },
+            { "Cover Reach", T::Float, TARTARUS_REFLECT_FIELD(SquadSettingsComponent, CoverReach), 0.05f,
+              "How far beyond the edge something must stand to count as cover (m).", 0.2f, 3.0f },
+            { "Low Cover Height", T::Float, TARTARUS_REFLECT_FIELD(SquadSettingsComponent, CoverKneeHeight), 0.05f,
+              "Probe height for low cover (m): something solid here means crouch-behind cover.", 0.2f, 1.5f },
+            { "High Cover Height", T::Float, TARTARUS_REFLECT_FIELD(SquadSettingsComponent, CoverHeadHeight), 0.05f,
+              "Probe height for high cover (m): solid here too means stand-behind cover.", 0.8f, 2.5f },
+            { "Cover Peek Step", T::Float, TARTARUS_REFLECT_FIELD(SquadSettingsComponent, CoverStep), 0.05f,
+              "High cover: how far along the wall an enemy steps to peek round the end (m).", 0.2f, 3.0f },
         },
     });
     {
@@ -326,6 +364,18 @@ void RegisterEngineComponents() {
             { "Limb A Match Rotation", T::Bool, TARTARUS_REFLECT_FIELD(IKRigComponent, LimbA.MatchRotation), 0.0f,
               "Also turn the end bone to the goal's rotation." },
             { "Limb A Weight", T::Float, TARTARUS_REFLECT_FIELD(IKRigComponent, LimbA.Weight), 0.01f, "Limb blend.", 0.0f, 1.0f },
+            { "Limb A Pole Bone", T::String, TARTARUS_REFLECT_FIELD(IKRigComponent, LimbA.PoleBone), 0.0f,
+              "Bone the elbow/knee points toward (e.g. a hint bone). Empty = the animated elbow's own position." },
+            { "Limb A Hint Weight", T::Float, TARTARUS_REFLECT_FIELD(IKRigComponent, LimbA.HintWeight), 0.01f,
+              "0 = keep the animated bend plane (default); 1 = the elbow/knee sits in the plane of the pole and the root-target line, so it cannot flip when the target crosses the bend plane.", 0.0f, 1.0f },
+            { "Limb A Hint Offset", T::Vec3, TARTARUS_REFLECT_FIELD(IKRigComponent, LimbA.HintOffset), 0.01f,
+              "Model-space offset added to the pole point: pushes the elbow/knee out, in or up." },
+            { "Limb A Max Limb Scale", T::Float, TARTARUS_REFLECT_FIELD(IKRigComponent, LimbA.MaxLimbScale), 0.01f,
+              "How far the limb may stretch toward an out-of-reach target, x its length. 1 = never (reaches along the straightened chain).", 1.0f, 2.0f },
+            { "Limb A Grip Position", T::Vec3, TARTARUS_REFLECT_FIELD(IKRigComponent, LimbA.GripPosition), 0.001f,
+              "Moves the end's grip in the Target bone's own frame (model units). Zero = the grip as animated." },
+            { "Limb A Grip Rotation", T::Vec3, TARTARUS_REFLECT_FIELD(IKRigComponent, LimbA.GripRotation), 0.5f,
+              "Turns the end's grip in the Target bone's frame: pitch, yaw, roll in degrees. Zero = as animated." },
 
             { "Limb B Enabled", T::Bool, TARTARUS_REFLECT_FIELD(IKRigComponent, LimbB.Enabled), 0.0f, "Solve this limb." },
             { "Limb B Upper", T::String, TARTARUS_REFLECT_FIELD(IKRigComponent, LimbB.Upper), 0.0f, "Upper bone, e.g. upperarm_l." },
@@ -337,6 +387,18 @@ void RegisterEngineComponents() {
             { "Limb B Match Rotation", T::Bool, TARTARUS_REFLECT_FIELD(IKRigComponent, LimbB.MatchRotation), 0.0f,
               "Also turn the end bone to the goal's rotation." },
             { "Limb B Weight", T::Float, TARTARUS_REFLECT_FIELD(IKRigComponent, LimbB.Weight), 0.01f, "Limb blend.", 0.0f, 1.0f },
+            { "Limb B Pole Bone", T::String, TARTARUS_REFLECT_FIELD(IKRigComponent, LimbB.PoleBone), 0.0f,
+              "Bone the elbow/knee points toward (e.g. a hint bone). Empty = the animated elbow's own position." },
+            { "Limb B Hint Weight", T::Float, TARTARUS_REFLECT_FIELD(IKRigComponent, LimbB.HintWeight), 0.01f,
+              "0 = keep the animated bend plane (default); 1 = the elbow/knee sits in the plane of the pole and the root-target line, so it cannot flip when the target crosses the bend plane.", 0.0f, 1.0f },
+            { "Limb B Hint Offset", T::Vec3, TARTARUS_REFLECT_FIELD(IKRigComponent, LimbB.HintOffset), 0.01f,
+              "Model-space offset added to the pole point: pushes the elbow/knee out, in or up." },
+            { "Limb B Max Limb Scale", T::Float, TARTARUS_REFLECT_FIELD(IKRigComponent, LimbB.MaxLimbScale), 0.01f,
+              "How far the limb may stretch toward an out-of-reach target, x its length. 1 = never (reaches along the straightened chain).", 1.0f, 2.0f },
+            { "Limb B Grip Position", T::Vec3, TARTARUS_REFLECT_FIELD(IKRigComponent, LimbB.GripPosition), 0.001f,
+              "Moves the end's grip in the Target bone's own frame (model units). Zero = the grip as animated." },
+            { "Limb B Grip Rotation", T::Vec3, TARTARUS_REFLECT_FIELD(IKRigComponent, LimbB.GripRotation), 0.5f,
+              "Turns the end's grip in the Target bone's frame: pitch, yaw, roll in degrees. Zero = as animated." },
 
             { "Look At Enabled", T::Bool, TARTARUS_REFLECT_FIELD(IKRigComponent, LookAtEnabled), 0.0f, "Aim a bone at another." },
             { "Look At Bone", T::String, TARTARUS_REFLECT_FIELD(IKRigComponent, LookAtBone), 0.0f, "The bone that turns, e.g. head." },
@@ -349,7 +411,7 @@ void RegisterEngineComponents() {
         };
         // Collapsible groups in the Inspector.
         for (size_t i = 0; i < m.Fields.size(); ++i) {
-            m.Fields[i].Group = i < 2 ? nullptr : i < 10 ? "Limb A" : i < 18 ? "Limb B" : "Look At";
+            m.Fields[i].Group = i < 2 ? nullptr : i < 16 ? "Limb A" : i < 30 ? "Limb B" : "Look At";
         }
         Register<IKRigComponent>(std::move(m));
     }
@@ -436,6 +498,10 @@ void RegisterEngineComponents() {
               "Degrees of turn per pixel of mouse movement.", 0.01f, 1.0f },
             { "Invert Y", T::Bool, TARTARUS_REFLECT_FIELD(FirstPersonControllerComponent, InvertY), 0.0f,
               "Moving the mouse up looks down." },
+            { "Stick Look Deg/Sec", T::Float, TARTARUS_REFLECT_FIELD(FirstPersonControllerComponent, StickLookDegPerSec), 5.0f,
+              "Gamepad right stick: turn rate in degrees per second (not a delta).", 1.0f, 720.0f },
+            { "Eye Radius", T::Float, TARTARUS_REFLECT_FIELD(FirstPersonControllerComponent, EyeRadius), 0.001f,
+              "Camera lean collision: sphere radius used for wall detection, metres (keeps the near plane off the wall).", 0.01f, 1.0f },
             { "Field of View", T::Float, TARTARUS_REFLECT_FIELD(FirstPersonControllerComponent, FieldOfView), 0.25f,
               "Horizontal field of view in degrees, measured on a 16:9 screen (90 = the usual shooter FOV). "
               "Wider screens see more at the sides.", 30.0f, 150.0f },
@@ -456,6 +522,14 @@ void RegisterEngineComponents() {
             { "Throw Backspin", T::Float, TARTARUS_REFLECT_FIELD(FirstPersonControllerComponent, ThrowBackspin), 0.05f,
               "Gravity gun: backspin (revolutions per second) put on a thrown ball, like a real shot.\n"
               "Only round (sphere collider) bodies get it.", 0.0f, 20.0f },
+            { "Grab Range", T::Float, TARTARUS_REFLECT_FIELD(FirstPersonControllerComponent, GrabRange), 1.0f,
+              "Gravity gun: aiming distance for the primary pick-up ray, metres.", 10.0f, 1000.0f },
+            { "Assist Range", T::Float, TARTARUS_REFLECT_FIELD(FirstPersonControllerComponent, AssistRange), 1.0f,
+              "Gravity gun: search radius when no object is under the exact crosshair, metres.", 1.0f, 500.0f },
+            { "Assist Cone Deg", T::Float, TARTARUS_REFLECT_FIELD(FirstPersonControllerComponent, AssistConeDeg), 0.5f,
+              "Gravity gun: within this many degrees of the crosshair during aim assist, degrees.", 1.0f, 45.0f },
+            { "Scroll Turn Deg", T::Float, TARTARUS_REFLECT_FIELD(FirstPersonControllerComponent, ScrollTurnDeg), 0.5f,
+              "Gravity gun: rotation applied per scroll notch while holding an object, degrees.", 1.0f, 90.0f },
             { "Animation Set", T::String, TARTARUS_REFLECT_FIELD(FirstPersonControllerComponent, AnimationSet), 0.0f,
               "Optional .fpsanim asset for a camera-bound first-person arms and weapon presentation." },
             { "Secondary Animation Set", T::String, TARTARUS_REFLECT_FIELD(FirstPersonControllerComponent, SecondaryAnimationSet), 0.0f,
@@ -548,6 +622,39 @@ void RegisterEngineComponents() {
         m.Fields.push_back({ "Spine Aim Down", T::Float, TARTARUS_REFLECT_FIELD(FirstPersonBodyComponent, SpineAimDown), 0.01f,
               "Spine Aim for looking down. Armed, the camera hangs off the shoulders as the arms rig's does, so it clears the\n"
               "chest looking down only as far as the chest pitches with the view: lower it and the torso may be seen from inside.", 0.0f, 1.0f });
+        m.Fields.push_back({ "Spine Weight 1", T::Float, TARTARUS_REFLECT_FIELD(FirstPersonBodyComponent, Spine.Weight[0]), 0.05f,
+              "Relative share of the spine's look, twist and shoulder turns that spine_01 takes. All equal = the even spread; 0 = it takes none.", 0.0f, 4.0f });
+        m.Fields.back().Group = "Spine Distribution";
+        m.Fields.push_back({ "Spine Max Angle 1", T::Float, TARTARUS_REFLECT_FIELD(FirstPersonBodyComponent, Spine.MaxAngle[0]), 0.5f,
+              "Most (degrees) spine_01 turns from one spread. 0 = no limit.", 0.0f, 90.0f });
+        m.Fields.back().Group = "Spine Distribution";
+        m.Fields.push_back({ "Spine Weight 2", T::Float, TARTARUS_REFLECT_FIELD(FirstPersonBodyComponent, Spine.Weight[1]), 0.05f,
+              "Relative share of the spine's look, twist and shoulder turns that spine_02 takes. All equal = the even spread; 0 = it takes none.", 0.0f, 4.0f });
+        m.Fields.back().Group = "Spine Distribution";
+        m.Fields.push_back({ "Spine Max Angle 2", T::Float, TARTARUS_REFLECT_FIELD(FirstPersonBodyComponent, Spine.MaxAngle[1]), 0.5f,
+              "Most (degrees) spine_02 turns from one spread. 0 = no limit.", 0.0f, 90.0f });
+        m.Fields.back().Group = "Spine Distribution";
+        m.Fields.push_back({ "Spine Weight 3", T::Float, TARTARUS_REFLECT_FIELD(FirstPersonBodyComponent, Spine.Weight[2]), 0.05f,
+              "Relative share of the spine's look, twist and shoulder turns that spine_03 takes. All equal = the even spread; 0 = it takes none.", 0.0f, 4.0f });
+        m.Fields.back().Group = "Spine Distribution";
+        m.Fields.push_back({ "Spine Max Angle 3", T::Float, TARTARUS_REFLECT_FIELD(FirstPersonBodyComponent, Spine.MaxAngle[2]), 0.5f,
+              "Most (degrees) spine_03 turns from one spread. 0 = no limit.", 0.0f, 90.0f });
+        m.Fields.back().Group = "Spine Distribution";
+        m.Fields.push_back({ "Spine Weight 4", T::Float, TARTARUS_REFLECT_FIELD(FirstPersonBodyComponent, Spine.Weight[3]), 0.05f,
+              "Relative share of the spine's look, twist and shoulder turns that spine_04 takes. All equal = the even spread; 0 = it takes none.", 0.0f, 4.0f });
+        m.Fields.back().Group = "Spine Distribution";
+        m.Fields.push_back({ "Spine Max Angle 4", T::Float, TARTARUS_REFLECT_FIELD(FirstPersonBodyComponent, Spine.MaxAngle[3]), 0.5f,
+              "Most (degrees) spine_04 turns from one spread. 0 = no limit.", 0.0f, 90.0f });
+        m.Fields.back().Group = "Spine Distribution";
+        m.Fields.push_back({ "Spine Weight 5", T::Float, TARTARUS_REFLECT_FIELD(FirstPersonBodyComponent, Spine.Weight[4]), 0.05f,
+              "Relative share of the spine's look, twist and shoulder turns that spine_05 takes. All equal = the even spread; 0 = it takes none.", 0.0f, 4.0f });
+        m.Fields.back().Group = "Spine Distribution";
+        m.Fields.push_back({ "Spine Max Angle 5", T::Float, TARTARUS_REFLECT_FIELD(FirstPersonBodyComponent, Spine.MaxAngle[4]), 0.5f,
+              "Most (degrees) spine_05 turns from one spread. 0 = no limit.", 0.0f, 90.0f });
+        m.Fields.back().Group = "Spine Distribution";
+        m.Fields.push_back({ "Pelvis Alpha", T::Float, TARTARUS_REFLECT_FIELD(FirstPersonBodyComponent, Spine.PelvisAlpha), 0.01f,
+              "Share (0..1) of the spine's turn the pelvis takes; the spine takes the rest, so the chest still turns as far.", 0.0f, 1.0f });
+        m.Fields.back().Group = "Spine Distribution";
         m.Fields.push_back({ "Shoulder Line Match", T::Float, TARTARUS_REFLECT_FIELD(FirstPersonBodyComponent, ShoulderLineMatch), 0.01f,
               "Armed, how far the chest takes the arms rig's stance - its shoulder line (bladed, the support shoulder forward) -\n"
               "instead of squaring to the view. 1 = the rig's: both hands then reach the gun without the shoulders moving.", 0.0f, 1.0f });
@@ -740,6 +847,92 @@ void RegisterEngineComponents() {
         m.Fields.push_back({ "Stair Ease", T::Float, TARTARUS_REFLECT_FIELD(FirstPersonBodyComponent, StairEase), 0.005f,
               "Seconds the body takes to ease up or down a stair (0.03 s when Foot IK is off).", 0.005f, 1.0f });
         m.Fields.back().Group = "Foot IK (advanced)";
+        m.Fields.push_back({ "Elbow Ease", T::Float, TARTARUS_REFLECT_FIELD(FirstPersonBodyComponent, ElbowEase), 0.005f,
+              "Seconds the player body's elbow takes to follow its target direction (smooths elbow jitter).", 0.005f, 1.0f });
+        m.Fields.back().Group = "Arms";
+        m.Fields.push_back({ "Elbow Max Rate", T::Float, TARTARUS_REFLECT_FIELD(FirstPersonBodyComponent, ElbowMaxRate), 10.0f,
+              "The fastest (degrees per second) a player-body elbow may swing toward its target.", 30.0f, 3600.0f });
+        m.Fields.back().Group = "Arms";
+        m.Fields.push_back({ "NPC Turn Threshold", T::Float, TARTARUS_REFLECT_FIELD(FirstPersonBodyComponent, NpcTurnThreshold), 1.0f,
+              "NPCs: a still body this many degrees off its aim turns on the spot. NPCs copy this from the scene's player body when Play starts.", 0.0f, 180.0f });
+        m.Fields.back().Group = "NPC Body";
+        m.Fields.push_back({ "NPC Move Ease", T::Float, TARTARUS_REFLECT_FIELD(FirstPersonBodyComponent, NpcMoveEase), 0.005f,
+              "NPCs: seconds the locomotion blend tree's speed and direction take to follow the movement.", 0.005f, 1.0f });
+        m.Fields.back().Group = "NPC Body";
+        m.Fields.push_back({ "NPC Face Ease", T::Float, TARTARUS_REFLECT_FIELD(FirstPersonBodyComponent, NpcFaceEase), 0.005f,
+              "NPCs: seconds the body heading takes to ease toward the movement direction while walking.", 0.005f, 1.0f });
+        m.Fields.back().Group = "NPC Body";
+        m.Fields.push_back({ "NPC Max Twist", T::Float, TARTARUS_REFLECT_FIELD(FirstPersonBodyComponent, NpcMaxTwist), 1.0f,
+              "NPCs: the most (degrees) the spine twists to aim past the legs' heading.", 0.0f, 120.0f });
+        m.Fields.back().Group = "NPC Body";
+        m.Fields.push_back({ "NPC Aim Lean", T::Float, TARTARUS_REFLECT_FIELD(FirstPersonBodyComponent, NpcAimLean), 0.5f,
+              "NPCs: degrees the torso leans forward when aiming standing.", 0.0f, 45.0f });
+        m.Fields.back().Group = "NPC Body";
+        m.Fields.push_back({ "NPC Aim Lean Crouched", T::Float, TARTARUS_REFLECT_FIELD(FirstPersonBodyComponent, NpcAimLeanCrouched), 0.5f,
+              "NPCs: degrees the torso leans forward when aiming crouched.", 0.0f, 60.0f });
+        m.Fields.back().Group = "NPC Body";
+        m.Fields.push_back({ "NPC Ready Lean Crouched", T::Float, TARTARUS_REFLECT_FIELD(FirstPersonBodyComponent, NpcReadyLeanCrouched), 0.5f,
+              "NPCs: degrees the torso leans forward at low ready, crouched.", 0.0f, 60.0f });
+        m.Fields.back().Group = "NPC Body";
+        m.Fields.push_back({ "NPC Cower Hunch", T::Float, TARTARUS_REFLECT_FIELD(FirstPersonBodyComponent, NpcCowerHunch), 0.5f,
+              "NPCs: degrees the spine curls forward when ducking for cover.", 0.0f, 60.0f });
+        m.Fields.back().Group = "NPC Body";
+        m.Fields.push_back({ "NPC Head Max Yaw", T::Float, TARTARUS_REFLECT_FIELD(FirstPersonBodyComponent, NpcHeadMaxYaw), 1.0f,
+              "NPCs: the most (degrees) the head turns left or right past the chest to look at a target.", 0.0f, 120.0f });
+        m.Fields.back().Group = "NPC Head";
+        m.Fields.push_back({ "NPC Head Max Pitch", T::Float, TARTARUS_REFLECT_FIELD(FirstPersonBodyComponent, NpcHeadMaxPitch), 1.0f,
+              "NPCs: the most (degrees) the head nods up or down to look at a target.", 0.0f, 90.0f });
+        m.Fields.back().Group = "NPC Head";
+        m.Fields.push_back({ "NPC Foot IK Max Drop", T::Float, TARTARUS_REFLECT_FIELD(FirstPersonBodyComponent, NpcFootIKMaxDrop), 0.01f,
+              "NPCs: the most (metres) the pelvis drops to let the lower foot reach the ground.", 0.0f, 1.0f });
+        m.Fields.back().Group = "NPC Foot IK";
+        m.Fields.push_back({ "NPC Foot IK Max Raise", T::Float, TARTARUS_REFLECT_FIELD(FirstPersonBodyComponent, NpcFootIKMaxRaise), 0.01f,
+              "NPCs: the most (metres) a foot is lifted to meet higher ground.", 0.0f, 1.0f });
+        m.Fields.back().Group = "NPC Foot IK";
+        m.Fields.push_back({ "NPC Foot IK Pelvis Raise", T::Float, TARTARUS_REFLECT_FIELD(FirstPersonBodyComponent, NpcFootIKPelvisRaise), 0.005f,
+              "NPCs: the most (metres) the pelvis may rise when both feet are on higher ground.", 0.0f, 0.5f });
+        m.Fields.back().Group = "NPC Foot IK";
+        m.Fields.push_back({ "NPC Foot IK Tilt Max", T::Float, TARTARUS_REFLECT_FIELD(FirstPersonBodyComponent, NpcFootIKTiltMax), 1.0f,
+              "NPCs: the most (degrees) a planted foot tilts to lie on a slope.", 0.0f, 60.0f });
+        m.Fields.back().Group = "NPC Foot IK";
+        m.Fields.push_back({ "NPC Foot Offset Ease", T::Float, TARTARUS_REFLECT_FIELD(FirstPersonBodyComponent, NpcFootOffsetEase), 0.005f,
+              "NPCs: seconds the ground height under each foot takes to follow the ray.", 0.005f, 1.0f });
+        m.Fields.back().Group = "NPC Foot IK";
+        m.Fields.push_back({ "NPC Foot Normal Ease", T::Float, TARTARUS_REFLECT_FIELD(FirstPersonBodyComponent, NpcFootNormalEase), 0.005f,
+              "NPCs: seconds the ground's slope under each foot takes to follow the ray.", 0.005f, 1.0f });
+        m.Fields.back().Group = "NPC Foot IK";
+        m.Fields.push_back({ "NPC Foot IK Fade", T::Float, TARTARUS_REFLECT_FIELD(FirstPersonBodyComponent, NpcFootIKFade), 0.005f,
+              "NPCs: seconds foot IK takes to fade in and out.", 0.005f, 1.0f });
+        m.Fields.back().Group = "NPC Foot IK";
+        // ---- lane A ----
+        m.Fields.push_back({ "Foot Pin Enabled", T::Bool, TARTARUS_REFLECT_FIELD(FirstPersonBodyComponent, FootPinEnabled), 0.0f,
+              "Holds each planted foot where it landed while the body moves past it, so the feet stop sliding in sprints, strafes and turns; the leg is re-solved to the pinned foot. Off = the clips' own feet. NPCs use the same settings." });
+        m.Fields.back().Group = "Foot Pinning";
+        m.Fields.push_back({ "Foot Pin Weight", T::Float, TARTARUS_REFLECT_FIELD(FirstPersonBodyComponent, FootPinWeight), 0.05f,
+              "How much of the pin is applied (0 = the clips' feet, 1 = fully pinned).", 0.0f, 1.0f });
+        m.Fields.back().Group = "Foot Pinning";
+        m.Fields.push_back({ "Foot Pin Release", T::Float, TARTARUS_REFLECT_FIELD(FirstPersonBodyComponent, FootPinRelease), 0.005f,
+              "Seconds the pin takes to let go once the foot lifts (it grabs in half that).", 0.005f, 0.5f });
+        m.Fields.back().Group = "Foot Pinning";
+        m.Fields.push_back({ "Foot Pin Max Drift", T::Float, TARTARUS_REFLECT_FIELD(FirstPersonBodyComponent, FootPinMaxDrift), 0.01f,
+              "Metres a pinned foot may lag behind the body before the pin is dragged along with it (a leash, so the leg never overstretches).", 0.02f, 0.8f });
+        m.Fields.back().Group = "Foot Pinning";
+        m.Fields.push_back({ "Stride Warp Enabled", T::Bool, TARTARUS_REFLECT_FIELD(FirstPersonBodyComponent, StrideWarpEnabled), 0.0f,
+              "Scales the stride (the feet's offsets from the pelvis along the travel) so the feet cover the ground at the capsule's real speed when it differs from the clips' (blend-tree speeds, speed multipliers, crouch speed). Off = the clips' own stride." });
+        m.Fields.back().Group = "Stride Warping";
+        m.Fields.push_back({ "Stride Warp Weight", T::Float, TARTARUS_REFLECT_FIELD(FirstPersonBodyComponent, StrideWarpWeight), 0.05f,
+              "How much of the warp is applied (0 = the clips' stride, 1 = fully matched to the ground speed).", 0.0f, 1.0f });
+        m.Fields.back().Group = "Stride Warping";
+        m.Fields.push_back({ "Stride Scale Min", T::Float, TARTARUS_REFLECT_FIELD(FirstPersonBodyComponent, StrideScaleMin), 0.01f,
+              "The stride is never shortened below this multiple of the clip's.", 0.3f, 1.0f });
+        m.Fields.back().Group = "Stride Warping";
+        m.Fields.push_back({ "Stride Scale Max", T::Float, TARTARUS_REFLECT_FIELD(FirstPersonBodyComponent, StrideScaleMax), 0.01f,
+              "The stride is never lengthened beyond this multiple of the clip's.", 1.0f, 2.0f });
+        m.Fields.back().Group = "Stride Warping";
+        m.Fields.push_back({ "Stride Pelvis Adjust", T::Float, TARTARUS_REFLECT_FIELD(FirstPersonBodyComponent, StridePelvisAdjust), 0.05f,
+              "How much the pelvis sinks for a longer stride so the legs do not overstretch (0 = not at all, 1 = the full amount).", 0.0f, 1.0f });
+        m.Fields.back().Group = "Stride Warping";
+        // ---- end lane A ----
         // Groups, by name (not by position: reordering fields must not move them).
         {
             static const std::pair<const char*, const char*> kGroups[] = {
@@ -1236,6 +1429,347 @@ void RegisterEngineComponents() {
         m.GenericInspector = false;
         Register<RenderableComponent>(std::move(m));
     }
+
+    // Lane P: scene-level visual effects and HUD settings
+    Register<FxHudSettingsComponent>({
+        "FX & HUD Settings", ICON_FA_SLIDERS,
+        "Scene-level visual effects and HUD display parameters (add one per scene to tune muzzle flash,\n"
+        "laser beam and HUD display).",
+        "Gameplay",
+        {
+            { "Flash Time", T::Float, TARTARUS_REFLECT_FIELD(FxHudSettingsComponent, FlashTime), 0.001f,
+              "Seconds the muzzle flash light stays on.", 0.001f, 1.0f },
+            { "Player Flash Scale", T::Float, TARTARUS_REFLECT_FIELD(FxHudSettingsComponent, PlayerFlashScale), 0.01f,
+              "Player's flash light scale relative to soldier's.", 0.01f, 2.0f },
+            { "Flame Glow", T::Float, TARTARUS_REFLECT_FIELD(FxHudSettingsComponent, FlameGlow), 5.0f,
+              "Flame peak emission intensity (red channel).", 0.0f, 1000.0f },
+            { "Flame Scale", T::Float, TARTARUS_REFLECT_FIELD(FxHudSettingsComponent, FlameScale), 0.05f,
+              "Flame tongue length/width scale vs. tactical shooter pack.", 0.1f, 5.0f },
+            { "Beam Range", T::Float, TARTARUS_REFLECT_FIELD(FxHudSettingsComponent, BeamRange), 1.0f,
+              "Laser beam metres drawn before fading in the haze.", 1.0f, 500.0f },
+            { "Beam Half Width", T::Float, TARTARUS_REFLECT_FIELD(FxHudSettingsComponent, BeamHalfWidth), 0.0001f,
+              "Laser beam width in metres.", 0.0001f, 0.1f },
+            { "Beam Falloff", T::Float, TARTARUS_REFLECT_FIELD(FxHudSettingsComponent, BeamFalloff), 0.1f,
+              "Laser beam glow falloff distance in metres near the emitter.", 0.1f, 50.0f },
+            { "Beam Bend", T::Float, TARTARUS_REFLECT_FIELD(FxHudSettingsComponent, BeamBend), 0.1f,
+              "Laser beam easing distance over which view-model emitter eases onto the true path (metres).", 0.1f, 20.0f },
+            { "Feed Life", T::Float, TARTARUS_REFLECT_FIELD(FxHudSettingsComponent, FeedLife), 0.1f,
+              "Seconds a kill feed line stays on screen.", 0.1f, 60.0f },
+            { "Streak Window", T::Float, TARTARUS_REFLECT_FIELD(FxHudSettingsComponent, StreakWindow), 0.1f,
+              "Seconds to count consecutive kills for streak display.", 0.1f, 60.0f },
+            { "Sub Linger", T::Float, TARTARUS_REFLECT_FIELD(FxHudSettingsComponent, SubLinger), 0.01f,
+              "Seconds a subtitle lingers after its clip ends.", 0.01f, 10.0f },
+        },
+    });
+    // ---- lane R ----
+    {
+        ReflectComponent m;
+        m.Name = "Ragdoll Settings"; m.Icon = ICON_FA_PERSON_FALLING; m.Category = "AI";
+        m.Tooltip = "How dead soldiers' ragdolls are built and behave (the first Ragdoll Settings in the scene counts).\nJoint limits are degrees from the neutral pose.";
+        m.Fields = {
+            { "Anatomical Limits", T::Bool, TARTARUS_REFLECT_FIELD(RagdollSettingsComponent, AnatomicalLimits), 0.0f,
+              "Joints use human ranges of motion (knees and elbows are one-way hinges). Off: the old generous symmetric cones, which let knees and elbows bend backwards." },
+            { "Drive Stiffness", T::Float, TARTARUS_REFLECT_FIELD(RagdollSettingsComponent, DriveStiffness), 5.0f,
+              "Strength of the joint drives that hold the death pose (acceleration units, so independent of mass). 0 = limp at once.", 0.0f, 5000.0f },
+            { "Drive Damping", T::Float, TARTARUS_REFLECT_FIELD(RagdollSettingsComponent, DriveDamping), 1.0f,
+              "Damping of those drives.", 0.0f, 500.0f },
+            { "Drive Fade", T::Float, TARTARUS_REFLECT_FIELD(RagdollSettingsComponent, DriveFade), 0.01f,
+              "Seconds from death until the drives are off and the body is limp (squared fade).", 0.01f, 5.0f },
+            { "Linear Damping", T::Float, TARTARUS_REFLECT_FIELD(RagdollSettingsComponent, LinearDamping), 0.005f,
+              "Air drag on every part.", 0.0f, 5.0f },
+            { "Angular Damping", T::Float, TARTARUS_REFLECT_FIELD(RagdollSettingsComponent, AngularDamping), 0.005f,
+              "Rotational drag on every part.", 0.0f, 10.0f },
+            { "Solver Position Iterations", T::Int, TARTARUS_REFLECT_FIELD(RagdollSettingsComponent, SolverPosIters), 1.0f,
+              "Joint accuracy: more is stiffer and costs more per corpse.", 1.0f, 64.0f },
+            { "Solver Velocity Iterations", T::Int, TARTARUS_REFLECT_FIELD(RagdollSettingsComponent, SolverVelIters), 1.0f,
+              "Velocity-solver iterations per part.", 1.0f, 64.0f },
+            { "Depenetration Speed", T::Float, TARTARUS_REFLECT_FIELD(RagdollSettingsComponent, Depenetration), 0.1f,
+              "Max speed (m/s) at which overlapping parts are pushed apart.", 0.0f, 50.0f },
+            { "Sleep Threshold", T::Float, TARTARUS_REFLECT_FIELD(RagdollSettingsComponent, SleepThreshold), 0.005f,
+              "Kinetic energy per mass below which a part sleeps; a body is at rest when all parts sleep.", 0.0f, 2.0f },
+            { "Static Friction", T::Float, TARTARUS_REFLECT_FIELD(RagdollSettingsComponent, StaticFriction), 0.01f,
+              "Part against world.", 0.0f, 4.0f },
+            { "Dynamic Friction", T::Float, TARTARUS_REFLECT_FIELD(RagdollSettingsComponent, DynamicFriction), 0.01f,
+              "Part against world, sliding.", 0.0f, 4.0f },
+            { "Restitution", T::Float, TARTARUS_REFLECT_FIELD(RagdollSettingsComponent, Restitution), 0.01f,
+              "Bounciness of a part.", 0.0f, 1.0f },
+            { "Part Impulse Speed", T::Float, TARTARUS_REFLECT_FIELD(RagdollSettingsComponent, PartImpulseSpeed), 0.1f,
+              "A shot's shove on the struck part is capped at mass x this (m/s), so a light forearm is not torn off.", 0.1f, 50.0f },
+            { "Chest Impulse Speed", T::Float, TARTARUS_REFLECT_FIELD(RagdollSettingsComponent, ChestImpulseSpeed), 0.1f,
+              "The remainder of the shove goes into the chest, capped at chest mass x this (m/s).", 0.0f, 50.0f },
+            { "Corpse Shot Base", T::Float, TARTARUS_REFLECT_FIELD(RagdollSettingsComponent, CorpseShotBase), 0.05f,
+              "A shot into a corpse shoves the part with mass x (this + Per Damage x damage) N s.", 0.0f, 20.0f },
+            { "Corpse Shot Per Damage", T::Float, TARTARUS_REFLECT_FIELD(RagdollSettingsComponent, CorpseShotPerDamage), 0.005f,
+              "See Corpse Shot Base.", 0.0f, 1.0f },
+            { "Pelvis Mass", T::Float, TARTARUS_REFLECT_FIELD(RagdollSettingsComponent, PelvisMass), 0.1f,
+              "kg. The whole body is about 75 kg.", 0.1f, 200.0f },
+            { "Spine Mass", T::Float, TARTARUS_REFLECT_FIELD(RagdollSettingsComponent, SpineMass), 0.1f,
+              "kg, each side. Heavier parts drag the body harder.", 0.1f, 200.0f },
+            { "Spine Flexion Max", T::Float, TARTARUS_REFLECT_FIELD(RagdollSettingsComponent, SpineFlexMax), 0.5f,
+              "Degrees the part can swing in its flexion direction (forward for spine, head, shoulder and hip; the way the joint folds for elbow and knee), from its neutral pose.", 0.0f, 175.0f },
+            { "Spine Extension Max", T::Float, TARTARUS_REFLECT_FIELD(RagdollSettingsComponent, SpineExtMax), 0.5f,
+              "Degrees it can swing the other way (back). 0 on an elbow or knee: it cannot hyperextend.", 0.0f, 175.0f },
+            { "Spine Lateral In", T::Float, TARTARUS_REFLECT_FIELD(RagdollSettingsComponent, SpineLatIn), 0.5f,
+              "Degrees toward the body's midline (adduction); a spine or head leans this far either way.", 0.0f, 175.0f },
+            { "Spine Lateral Out", T::Float, TARTARUS_REFLECT_FIELD(RagdollSettingsComponent, SpineLatOut), 0.5f,
+              "Degrees away from the midline (abduction).", 0.0f, 175.0f },
+            { "Spine Twist In", T::Float, TARTARUS_REFLECT_FIELD(RagdollSettingsComponent, SpineTwistIn), 0.5f,
+              "Degrees of inward rotation along the bone (toes or thumb toward the midline).", 0.0f, 175.0f },
+            { "Spine Twist Out", T::Float, TARTARUS_REFLECT_FIELD(RagdollSettingsComponent, SpineTwistOut), 0.5f,
+              "Degrees of outward rotation along the bone.", 0.0f, 175.0f },
+            { "Head Mass", T::Float, TARTARUS_REFLECT_FIELD(RagdollSettingsComponent, HeadMass), 0.1f,
+              "kg, each side. Heavier parts drag the body harder.", 0.1f, 200.0f },
+            { "Head Flexion Max", T::Float, TARTARUS_REFLECT_FIELD(RagdollSettingsComponent, HeadFlexMax), 0.5f,
+              "Degrees the part can swing in its flexion direction (forward for spine, head, shoulder and hip; the way the joint folds for elbow and knee), from its neutral pose.", 0.0f, 175.0f },
+            { "Head Extension Max", T::Float, TARTARUS_REFLECT_FIELD(RagdollSettingsComponent, HeadExtMax), 0.5f,
+              "Degrees it can swing the other way (back). 0 on an elbow or knee: it cannot hyperextend.", 0.0f, 175.0f },
+            { "Head Lateral In", T::Float, TARTARUS_REFLECT_FIELD(RagdollSettingsComponent, HeadLatIn), 0.5f,
+              "Degrees toward the body's midline (adduction); a spine or head leans this far either way.", 0.0f, 175.0f },
+            { "Head Lateral Out", T::Float, TARTARUS_REFLECT_FIELD(RagdollSettingsComponent, HeadLatOut), 0.5f,
+              "Degrees away from the midline (abduction).", 0.0f, 175.0f },
+            { "Head Twist In", T::Float, TARTARUS_REFLECT_FIELD(RagdollSettingsComponent, HeadTwistIn), 0.5f,
+              "Degrees of inward rotation along the bone (toes or thumb toward the midline).", 0.0f, 175.0f },
+            { "Head Twist Out", T::Float, TARTARUS_REFLECT_FIELD(RagdollSettingsComponent, HeadTwistOut), 0.5f,
+              "Degrees of outward rotation along the bone.", 0.0f, 175.0f },
+            { "Upper Arm Mass", T::Float, TARTARUS_REFLECT_FIELD(RagdollSettingsComponent, UpperArmMass), 0.1f,
+              "kg, each side. Heavier parts drag the body harder.", 0.1f, 200.0f },
+            { "Upper Arm Flexion Max", T::Float, TARTARUS_REFLECT_FIELD(RagdollSettingsComponent, UpperArmFlexMax), 0.5f,
+              "Degrees the part can swing in its flexion direction (forward for spine, head, shoulder and hip; the way the joint folds for elbow and knee), from its neutral pose.", 0.0f, 175.0f },
+            { "Upper Arm Extension Max", T::Float, TARTARUS_REFLECT_FIELD(RagdollSettingsComponent, UpperArmExtMax), 0.5f,
+              "Degrees it can swing the other way (back). 0 on an elbow or knee: it cannot hyperextend.", 0.0f, 175.0f },
+            { "Upper Arm Lateral In", T::Float, TARTARUS_REFLECT_FIELD(RagdollSettingsComponent, UpperArmLatIn), 0.5f,
+              "Degrees toward the body's midline (adduction); a spine or head leans this far either way.", 0.0f, 175.0f },
+            { "Upper Arm Lateral Out", T::Float, TARTARUS_REFLECT_FIELD(RagdollSettingsComponent, UpperArmLatOut), 0.5f,
+              "Degrees away from the midline (abduction).", 0.0f, 175.0f },
+            { "Upper Arm Twist In", T::Float, TARTARUS_REFLECT_FIELD(RagdollSettingsComponent, UpperArmTwistIn), 0.5f,
+              "Degrees of inward rotation along the bone (toes or thumb toward the midline).", 0.0f, 175.0f },
+            { "Upper Arm Twist Out", T::Float, TARTARUS_REFLECT_FIELD(RagdollSettingsComponent, UpperArmTwistOut), 0.5f,
+              "Degrees of outward rotation along the bone.", 0.0f, 175.0f },
+            { "Forearm Mass", T::Float, TARTARUS_REFLECT_FIELD(RagdollSettingsComponent, ForearmMass), 0.1f,
+              "kg, each side. Heavier parts drag the body harder.", 0.1f, 200.0f },
+            { "Forearm Flexion Max", T::Float, TARTARUS_REFLECT_FIELD(RagdollSettingsComponent, ForearmFlexMax), 0.5f,
+              "Degrees the part can swing in its flexion direction (forward for spine, head, shoulder and hip; the way the joint folds for elbow and knee), from its neutral pose.", 0.0f, 175.0f },
+            { "Forearm Extension Max", T::Float, TARTARUS_REFLECT_FIELD(RagdollSettingsComponent, ForearmExtMax), 0.5f,
+              "Degrees it can swing the other way (back). 0 on an elbow or knee: it cannot hyperextend.", 0.0f, 175.0f },
+            { "Forearm Sideways In", T::Float, TARTARUS_REFLECT_FIELD(RagdollSettingsComponent, ForearmLatIn), 0.5f,
+              "Degrees of sideways wobble the hinge allows (slack so the joint doesn't bind).", 0.0f, 175.0f },
+            { "Forearm Sideways Out", T::Float, TARTARUS_REFLECT_FIELD(RagdollSettingsComponent, ForearmLatOut), 0.5f,
+              "Degrees of sideways wobble the hinge allows (slack so the joint doesn't bind).", 0.0f, 175.0f },
+            { "Forearm Twist In", T::Float, TARTARUS_REFLECT_FIELD(RagdollSettingsComponent, ForearmTwistIn), 0.5f,
+              "Degrees of inward rotation along the bone (toes or thumb toward the midline).", 0.0f, 175.0f },
+            { "Forearm Twist Out", T::Float, TARTARUS_REFLECT_FIELD(RagdollSettingsComponent, ForearmTwistOut), 0.5f,
+              "Degrees of outward rotation along the bone.", 0.0f, 175.0f },
+            { "Thigh Mass", T::Float, TARTARUS_REFLECT_FIELD(RagdollSettingsComponent, ThighMass), 0.1f,
+              "kg, each side. Heavier parts drag the body harder.", 0.1f, 200.0f },
+            { "Thigh Flexion Max", T::Float, TARTARUS_REFLECT_FIELD(RagdollSettingsComponent, ThighFlexMax), 0.5f,
+              "Degrees the part can swing in its flexion direction (forward for spine, head, shoulder and hip; the way the joint folds for elbow and knee), from its neutral pose.", 0.0f, 175.0f },
+            { "Thigh Extension Max", T::Float, TARTARUS_REFLECT_FIELD(RagdollSettingsComponent, ThighExtMax), 0.5f,
+              "Degrees it can swing the other way (back). 0 on an elbow or knee: it cannot hyperextend.", 0.0f, 175.0f },
+            { "Thigh Lateral In", T::Float, TARTARUS_REFLECT_FIELD(RagdollSettingsComponent, ThighLatIn), 0.5f,
+              "Degrees toward the body's midline (adduction); a spine or head leans this far either way.", 0.0f, 175.0f },
+            { "Thigh Lateral Out", T::Float, TARTARUS_REFLECT_FIELD(RagdollSettingsComponent, ThighLatOut), 0.5f,
+              "Degrees away from the midline (abduction).", 0.0f, 175.0f },
+            { "Thigh Twist In", T::Float, TARTARUS_REFLECT_FIELD(RagdollSettingsComponent, ThighTwistIn), 0.5f,
+              "Degrees of inward rotation along the bone (toes or thumb toward the midline).", 0.0f, 175.0f },
+            { "Thigh Twist Out", T::Float, TARTARUS_REFLECT_FIELD(RagdollSettingsComponent, ThighTwistOut), 0.5f,
+              "Degrees of outward rotation along the bone.", 0.0f, 175.0f },
+            { "Calf Mass", T::Float, TARTARUS_REFLECT_FIELD(RagdollSettingsComponent, CalfMass), 0.1f,
+              "kg, each side. Heavier parts drag the body harder.", 0.1f, 200.0f },
+            { "Calf Flexion Max", T::Float, TARTARUS_REFLECT_FIELD(RagdollSettingsComponent, CalfFlexMax), 0.5f,
+              "Degrees the part can swing in its flexion direction (forward for spine, head, shoulder and hip; the way the joint folds for elbow and knee), from its neutral pose.", 0.0f, 175.0f },
+            { "Calf Extension Max", T::Float, TARTARUS_REFLECT_FIELD(RagdollSettingsComponent, CalfExtMax), 0.5f,
+              "Degrees it can swing the other way (back). 0 on an elbow or knee: it cannot hyperextend.", 0.0f, 175.0f },
+            { "Calf Sideways In", T::Float, TARTARUS_REFLECT_FIELD(RagdollSettingsComponent, CalfLatIn), 0.5f,
+              "Degrees of sideways wobble the hinge allows (slack so the joint doesn't bind).", 0.0f, 175.0f },
+            { "Calf Sideways Out", T::Float, TARTARUS_REFLECT_FIELD(RagdollSettingsComponent, CalfLatOut), 0.5f,
+              "Degrees of sideways wobble the hinge allows (slack so the joint doesn't bind).", 0.0f, 175.0f },
+            { "Calf Twist In", T::Float, TARTARUS_REFLECT_FIELD(RagdollSettingsComponent, CalfTwistIn), 0.5f,
+              "Degrees of inward rotation along the bone (toes or thumb toward the midline).", 0.0f, 175.0f },
+            { "Calf Twist Out", T::Float, TARTARUS_REFLECT_FIELD(RagdollSettingsComponent, CalfTwistOut), 0.5f,
+              "Degrees of outward rotation along the bone.", 0.0f, 175.0f },
+            { "Limb Velocity Scale", T::Float, TARTARUS_REFLECT_FIELD(RagdollSettingsComponent, LimbVelocityScale), 0.05f,
+              "How much of each bone's own motion (from the last two animated poses) the parts keep at death: a soldier shot mid-stride keeps his swinging limbs. 0 = only the body's velocity.", 0.0f, 2.0f },
+            { "Max Limb Speed", T::Float, TARTARUS_REFLECT_FIELD(RagdollSettingsComponent, MaxLimbSpeed), 0.1f,
+              "Cap on a part's speed relative to the body from that (m/s); stops a teleport or a bad first frame throwing a limb.", 0.0f, 30.0f },
+            { "Max Limb Spin", T::Float, TARTARUS_REFLECT_FIELD(RagdollSettingsComponent, MaxLimbSpin), 0.5f,
+              "Cap on a part's spin from that (rad/s).", 0.0f, 100.0f },
+            { "Shaped Torso Inertia", T::Bool, TARTARUS_REFLECT_FIELD(RagdollSettingsComponent, ShapedTorsoInertia), 0.0f,
+              "Pelvis and chest turn like a box wider than deep (a human trunk) instead of a round capsule. Off: the capsule's own inertia." },
+            { "Torso Half Width", T::Float, TARTARUS_REFLECT_FIELD(RagdollSettingsComponent, TorsoHalfWidth), 0.005f,
+              "Half the trunk's width (shoulder to shoulder), for its inertia only; hitboxes are unchanged.", 0.05f, 0.4f },
+            { "Torso Half Depth", T::Float, TARTARUS_REFLECT_FIELD(RagdollSettingsComponent, TorsoHalfDepth), 0.005f,
+              "Half the trunk's depth (chest to back), for its inertia only.", 0.05f, 0.3f },
+            { "Inertia Scale", T::Float, TARTARUS_REFLECT_FIELD(RagdollSettingsComponent, InertiaScale), 0.05f,
+              "Multiplies every part's rotational inertia. Above 1 the parts turn more slowly (stabler), below 1 they whip about.", 0.2f, 5.0f },
+            { "Pelvis Fade Scale", T::Float, TARTARUS_REFLECT_FIELD(RagdollSettingsComponent, PelvisFadeScale), 0.05f,
+              "Multiplies Drive Fade for this region's joint drive: below 1 it goes limp sooner (legs give out first), above 1 it holds longer (spine and neck). 1 = with the rest.", 0.1f, 4.0f },
+            { "Spine Fade Scale", T::Float, TARTARUS_REFLECT_FIELD(RagdollSettingsComponent, SpineFadeScale), 0.05f,
+              "Multiplies Drive Fade for this region's joint drive: below 1 it goes limp sooner (legs give out first), above 1 it holds longer (spine and neck). 1 = with the rest.", 0.1f, 4.0f },
+            { "Head Fade Scale", T::Float, TARTARUS_REFLECT_FIELD(RagdollSettingsComponent, HeadFadeScale), 0.05f,
+              "Multiplies Drive Fade for this region's joint drive: below 1 it goes limp sooner (legs give out first), above 1 it holds longer (spine and neck). 1 = with the rest.", 0.1f, 4.0f },
+            { "Upper Arm Fade Scale", T::Float, TARTARUS_REFLECT_FIELD(RagdollSettingsComponent, UpperArmFadeScale), 0.05f,
+              "Multiplies Drive Fade for this region's joint drive: below 1 it goes limp sooner (legs give out first), above 1 it holds longer (spine and neck). 1 = with the rest.", 0.1f, 4.0f },
+            { "Forearm Fade Scale", T::Float, TARTARUS_REFLECT_FIELD(RagdollSettingsComponent, ForearmFadeScale), 0.05f,
+              "Multiplies Drive Fade for this region's joint drive: below 1 it goes limp sooner (legs give out first), above 1 it holds longer (spine and neck). 1 = with the rest.", 0.1f, 4.0f },
+            { "Thigh Fade Scale", T::Float, TARTARUS_REFLECT_FIELD(RagdollSettingsComponent, ThighFadeScale), 0.05f,
+              "Multiplies Drive Fade for this region's joint drive: below 1 it goes limp sooner (legs give out first), above 1 it holds longer (spine and neck). 1 = with the rest.", 0.1f, 4.0f },
+            { "Calf Fade Scale", T::Float, TARTARUS_REFLECT_FIELD(RagdollSettingsComponent, CalfFadeScale), 0.05f,
+              "Multiplies Drive Fade for this region's joint drive: below 1 it goes limp sooner (legs give out first), above 1 it holds longer (spine and neck). 1 = with the rest.", 0.1f, 4.0f },
+        };
+        m.Fields[0].Group = "Joints";
+        m.Fields[1].Group = "Death Drive";
+        m.Fields[2].Group = "Death Drive";
+        m.Fields[3].Group = "Death Drive";
+        m.Fields[4].Group = "Body Physics";
+        m.Fields[5].Group = "Body Physics";
+        m.Fields[6].Group = "Body Physics";
+        m.Fields[7].Group = "Body Physics";
+        m.Fields[8].Group = "Body Physics";
+        m.Fields[9].Group = "Body Physics";
+        m.Fields[10].Group = "Contact";
+        m.Fields[11].Group = "Contact";
+        m.Fields[12].Group = "Contact";
+        m.Fields[13].Group = "Impulse Caps";
+        m.Fields[14].Group = "Impulse Caps";
+        m.Fields[15].Group = "Impulse Caps";
+        m.Fields[16].Group = "Impulse Caps";
+        m.Fields[17].Group = "Pelvis";
+        m.Fields[18].Group = "Spine";
+        m.Fields[19].Group = "Spine";
+        m.Fields[20].Group = "Spine";
+        m.Fields[21].Group = "Spine";
+        m.Fields[22].Group = "Spine";
+        m.Fields[23].Group = "Spine";
+        m.Fields[24].Group = "Spine";
+        m.Fields[25].Group = "Head";
+        m.Fields[26].Group = "Head";
+        m.Fields[27].Group = "Head";
+        m.Fields[28].Group = "Head";
+        m.Fields[29].Group = "Head";
+        m.Fields[30].Group = "Head";
+        m.Fields[31].Group = "Head";
+        m.Fields[32].Group = "Upper Arm";
+        m.Fields[33].Group = "Upper Arm";
+        m.Fields[34].Group = "Upper Arm";
+        m.Fields[35].Group = "Upper Arm";
+        m.Fields[36].Group = "Upper Arm";
+        m.Fields[37].Group = "Upper Arm";
+        m.Fields[38].Group = "Upper Arm";
+        m.Fields[39].Group = "Forearm";
+        m.Fields[40].Group = "Forearm";
+        m.Fields[41].Group = "Forearm";
+        m.Fields[42].Group = "Forearm";
+        m.Fields[43].Group = "Forearm";
+        m.Fields[44].Group = "Forearm";
+        m.Fields[45].Group = "Forearm";
+        m.Fields[46].Group = "Thigh";
+        m.Fields[47].Group = "Thigh";
+        m.Fields[48].Group = "Thigh";
+        m.Fields[49].Group = "Thigh";
+        m.Fields[50].Group = "Thigh";
+        m.Fields[51].Group = "Thigh";
+        m.Fields[52].Group = "Thigh";
+        m.Fields[53].Group = "Calf";
+        m.Fields[54].Group = "Calf";
+        m.Fields[55].Group = "Calf";
+        m.Fields[56].Group = "Calf";
+        m.Fields[57].Group = "Calf";
+        m.Fields[58].Group = "Calf";
+        m.Fields[59].Group = "Calf";
+        m.Fields[60].Group = "Death Momentum";
+        m.Fields[61].Group = "Death Momentum";
+        m.Fields[62].Group = "Death Momentum";
+        m.Fields[63].Group = "Inertia";
+        m.Fields[64].Group = "Inertia";
+        m.Fields[65].Group = "Inertia";
+        m.Fields[66].Group = "Inertia";
+        m.Fields[67].Group = "Death Drive";
+        m.Fields[68].Group = "Death Drive";
+        m.Fields[69].Group = "Death Drive";
+        m.Fields[70].Group = "Death Drive";
+        m.Fields[71].Group = "Death Drive";
+        m.Fields[72].Group = "Death Drive";
+        m.Fields[73].Group = "Death Drive";
+        {
+            // The neck, hands and feet: ragdoll-only parts (the hitboxes are unchanged).
+            struct R { const char* Label; void* (*Ptr)(void*); float Step; const char* Tip; float Lo, Hi; const char* Group; };
+            const R rows[] = {
+                { "Neck Mass", TARTARUS_REFLECT_FIELD(RagdollSettingsComponent, NeckMass), 0.1f, "kg. A ragdoll-only part between the chest and the head.", 0.1f, 200.0f, "Neck" },
+                { "Neck Flexion Max", TARTARUS_REFLECT_FIELD(RagdollSettingsComponent, NeckFlexMax), 0.5f, "Degrees the part can swing in its flexion direction (forward), from its neutral pose.", 0.0f, 175.0f, "Neck" },
+                { "Neck Extension Max", TARTARUS_REFLECT_FIELD(RagdollSettingsComponent, NeckExtMax), 0.5f, "Degrees it can swing the other way (back).", 0.0f, 175.0f, "Neck" },
+                { "Neck Lateral In", TARTARUS_REFLECT_FIELD(RagdollSettingsComponent, NeckLatIn), 0.5f, "Degrees toward the body's midline (adduction). A neck leans this far either way.", 0.0f, 175.0f, "Neck" },
+                { "Neck Lateral Out", TARTARUS_REFLECT_FIELD(RagdollSettingsComponent, NeckLatOut), 0.5f, "Degrees away from the midline (abduction).", 0.0f, 175.0f, "Neck" },
+                { "Neck Twist In", TARTARUS_REFLECT_FIELD(RagdollSettingsComponent, NeckTwistIn), 0.5f, "Degrees of inward rotation along the bone.", 0.0f, 175.0f, "Neck" },
+                { "Neck Twist Out", TARTARUS_REFLECT_FIELD(RagdollSettingsComponent, NeckTwistOut), 0.5f, "Degrees of outward rotation along the bone.", 0.0f, 175.0f, "Neck" },
+                { "Hand Mass", TARTARUS_REFLECT_FIELD(RagdollSettingsComponent, HandMass), 0.1f, "kg, each side. A ragdoll-only part (the forearm's hitbox still covers the hand).", 0.1f, 200.0f, "Hand" },
+                { "Hand Flexion Max", TARTARUS_REFLECT_FIELD(RagdollSettingsComponent, HandFlexMax), 0.5f, "Degrees the part can swing in its flexion direction (the palm side (wrist flexion)), from its neutral pose.", 0.0f, 175.0f, "Hand" },
+                { "Hand Extension Max", TARTARUS_REFLECT_FIELD(RagdollSettingsComponent, HandExtMax), 0.5f, "Degrees it can swing the other way (the back of the hand (wrist extension)).", 0.0f, 175.0f, "Hand" },
+                { "Hand Lateral In", TARTARUS_REFLECT_FIELD(RagdollSettingsComponent, HandLatIn), 0.5f, "Degrees toward the body's midline (adduction).", 0.0f, 175.0f, "Hand" },
+                { "Hand Lateral Out", TARTARUS_REFLECT_FIELD(RagdollSettingsComponent, HandLatOut), 0.5f, "Degrees away from the midline (abduction).", 0.0f, 175.0f, "Hand" },
+                { "Hand Twist In", TARTARUS_REFLECT_FIELD(RagdollSettingsComponent, HandTwistIn), 0.5f, "Degrees of inward rotation along the bone.", 0.0f, 175.0f, "Hand" },
+                { "Hand Twist Out", TARTARUS_REFLECT_FIELD(RagdollSettingsComponent, HandTwistOut), 0.5f, "Degrees of outward rotation along the bone.", 0.0f, 175.0f, "Hand" },
+                { "Foot Mass", TARTARUS_REFLECT_FIELD(RagdollSettingsComponent, FootMass), 0.1f, "kg, each side. A ragdoll-only part (the calf's hitbox still covers the foot).", 0.1f, 200.0f, "Foot" },
+                { "Foot Flexion Max", TARTARUS_REFLECT_FIELD(RagdollSettingsComponent, FootFlexMax), 0.5f, "Degrees the part can swing in its flexion direction (toes up (dorsiflexion)), from its neutral pose.", 0.0f, 175.0f, "Foot" },
+                { "Foot Extension Max", TARTARUS_REFLECT_FIELD(RagdollSettingsComponent, FootExtMax), 0.5f, "Degrees it can swing the other way (toes down (plantarflexion)).", 0.0f, 175.0f, "Foot" },
+                { "Foot Lateral In", TARTARUS_REFLECT_FIELD(RagdollSettingsComponent, FootLatIn), 0.5f, "Degrees toward the body's midline (adduction).", 0.0f, 175.0f, "Foot" },
+                { "Foot Lateral Out", TARTARUS_REFLECT_FIELD(RagdollSettingsComponent, FootLatOut), 0.5f, "Degrees away from the midline (abduction).", 0.0f, 175.0f, "Foot" },
+                { "Foot Twist In", TARTARUS_REFLECT_FIELD(RagdollSettingsComponent, FootTwistIn), 0.5f, "Degrees of inward rotation along the bone (foot: inversion).", 0.0f, 175.0f, "Foot" },
+                { "Foot Twist Out", TARTARUS_REFLECT_FIELD(RagdollSettingsComponent, FootTwistOut), 0.5f, "Degrees of outward rotation along the bone (foot: eversion).", 0.0f, 175.0f, "Foot" },
+                { "Neck Fade Scale", TARTARUS_REFLECT_FIELD(RagdollSettingsComponent, NeckFadeScale), 0.05f, "Multiplies Drive Fade for this region's joint drive: below 1 it goes limp sooner (legs give out first), above 1 it holds longer (spine and neck). 1 = with the rest.", 0.1f, 4.0f, "Death Drive" },
+                { "Hand Fade Scale", TARTARUS_REFLECT_FIELD(RagdollSettingsComponent, HandFadeScale), 0.05f, "Multiplies Drive Fade for this region's joint drive: below 1 it goes limp sooner (legs give out first), above 1 it holds longer (spine and neck). 1 = with the rest.", 0.1f, 4.0f, "Death Drive" },
+                { "Foot Fade Scale", TARTARUS_REFLECT_FIELD(RagdollSettingsComponent, FootFadeScale), 0.05f, "Multiplies Drive Fade for this region's joint drive: below 1 it goes limp sooner (legs give out first), above 1 it holds longer (spine and neck). 1 = with the rest.", 0.1f, 4.0f, "Death Drive" },
+            };
+            for (const R& r : rows) {
+                m.Fields.push_back({ r.Label, T::Float, r.Ptr, r.Step, r.Tip, r.Lo, r.Hi });
+                m.Fields.back().Group = r.Group;
+            }
+        }
+        {
+            // Hit flinch (see NpcFlinch).
+            m.Fields.push_back({ "Hit Flinch", T::Bool, TARTARUS_REFLECT_FIELD(RagdollSettingsComponent, HitFlinch), 0.0f,
+              "A round that doesn't kill kicks the struck region (a damped spring on top of the hit animation) and it settles back. Visual only: aim and hitboxes don't move." });
+            m.Fields.push_back({ "Flinch Angle", T::Float, TARTARUS_REFLECT_FIELD(RagdollSettingsComponent, FlinchAngle), 0.25f,
+              "Degrees the struck bone kicks at the reference damage (each region scales it: a head or an arm kicks further than the chest).", 0.0f, 60.0f });
+            m.Fields.push_back({ "Flinch Duration", T::Float, TARTARUS_REFLECT_FIELD(RagdollSettingsComponent, FlinchDuration), 0.01f,
+              "Seconds until the kick has settled back to the animation.", 0.05f, 2.0f });
+            m.Fields.push_back({ "Flinch Damage Reference", T::Float, TARTARUS_REFLECT_FIELD(RagdollSettingsComponent, FlinchDamageRef), 1.0f,
+              "The damage that gives the full Flinch Angle; lighter rounds kick proportionally less (down to 30%), heavier up to twice as much.", 1.0f, 500.0f });
+            m.Fields.push_back({ "Flinch Max Angle", T::Float, TARTARUS_REFLECT_FIELD(RagdollSettingsComponent, FlinchMaxAngle), 0.5f,
+              "Cap on a bone's total kick (degrees) when rounds land in quick succession.", 1.0f, 90.0f });
+            for (size_t k = m.Fields.size() - 5; k < m.Fields.size(); ++k) m.Fields[k].Group = "Hit Flinch";
+            m.Fields.push_back({ "Distal Inertia Scale", T::Float, TARTARUS_REFLECT_FIELD(RagdollSettingsComponent, DistalInertiaScale), 0.1f,
+              "Multiplies the hands' and feet's rotational inertia (on top of Inertia Scale). Light end links whip the forearm or calf through its joint limit; 1 = off.", 0.2f, 40.0f });
+            m.Fields.push_back({ "Distal Joint Damping", T::Float, TARTARUS_REFLECT_FIELD(RagdollSettingsComponent, DistalJointDamping), 1.0f,
+              "Viscous damping of the wrist and ankle joints (acceleration units), kept on after the death drives fade. Keeps the hands and feet from whipping the limb above; 0 = off.", 0.0f, 500.0f });
+            m.Fields[m.Fields.size() - 2].Group = "Body Physics";
+            m.Fields[m.Fields.size() - 1].Group = "Body Physics";
+        }
+        Register<RagdollSettingsComponent>(std::move(m));
+    }
+    for (RegisteredComponent& rc : Storage())
+        if (std::strcmp(rc.Meta.Name, "Squad Settings") == 0)
+            for (ReflectField& f : rc.Meta.Fields) {
+                if (std::strcmp(f.Name, "Heavy Hit Damage") == 0) f.Group = "Damage / Stagger";
+                if (std::strcmp(f.Name, "Stagger Time") == 0) f.Group = "Damage / Stagger";
+                if (std::strcmp(f.Name, "Bleed-Out Time") == 0) f.Group = "Wounded";
+                if (std::strcmp(f.Name, "Crawl Speed") == 0) f.Group = "Wounded";
+                if (std::strcmp(f.Name, "Limp Speed Scale") == 0) f.Group = "Wounded";
+                if (std::strcmp(f.Name, "Limp Time") == 0) f.Group = "Wounded";
+                if (std::strcmp(f.Name, "Corpse Time") == 0) f.Group = "Corpses";
+                if (std::strcmp(f.Name, "Fall Gravity") == 0) f.Group = "Corpses";
+                if (std::strcmp(f.Name, "Melee Damage") == 0) f.Group = "Melee";
+                if (std::strcmp(f.Name, "Melee Time") == 0) f.Group = "Melee";
+                if (std::strcmp(f.Name, "Melee Hit Time") == 0) f.Group = "Melee";
+                if (std::strcmp(f.Name, "Hitbox Range") == 0) f.Group = "Distances / LOD";
+                if (std::strcmp(f.Name, "Foot IK Range") == 0) f.Group = "Distances / LOD";
+                if (std::strcmp(f.Name, "Mesh Check Range") == 0) f.Group = "Distances / LOD";
+                if (std::strcmp(f.Name, "Cover Sample Spacing") == 0) f.Group = "Cover";
+                if (std::strcmp(f.Name, "Cover Reach") == 0) f.Group = "Cover";
+                if (std::strcmp(f.Name, "Low Cover Height") == 0) f.Group = "Cover";
+                if (std::strcmp(f.Name, "High Cover Height") == 0) f.Group = "Cover";
+                if (std::strcmp(f.Name, "Cover Peek Step") == 0) f.Group = "Cover";
+            }
+    // ---- end lane R ----
 
     // #132 - String fields that hold asset paths: tracked by GUID so renaming or moving the file
     // outside the editor keeps the reference (see ReflectField::AssetPath).
