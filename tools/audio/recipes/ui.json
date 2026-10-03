@@ -1,18 +1,18 @@
 {
- "_doc": "Recorded replacements for the synthesised Combat/ placeholders (tools/gen_combat_sounds.py, deleted). Every layer is a slice of a real recording dropped in at delay_ms (composite(), build_elements.py): tick = SculpTunes 9 mm brass casing ticks (8.9 kHz, 10-16 ms ring) + Pole Position SAIGA / Steyr handling clicks, high-passed and tight; kill tick = a first contact then a heavier second contact ~70 ms later (G36C handling pitched down) over a short low body of a Shapeforms thud. Body fall = The Chris Alan body slam + Gamemaster body thump + Shapeforms low thud, a cloth rustle and a short gear rattle (AK105 pack handling taps) after it.",
+ "_doc": "Recorded replacements for the synthesised Combat/ placeholders (tools/gen_combat_sounds.py, deleted). Every layer is a slice of a real recording dropped in at delay_ms (composite(), build_elements.py): tick = SculpTunes 9 mm brass casing ticks (8.9 kHz, 10-16 ms ring) + Pole Position SAIGA / Steyr handling clicks, high-passed and tight; kill tick = a first contact then a heavier second contact ~70 ms later (G36C handling pitched down) over a short low body of a Shapeforms thud. Body fall = The Chris Alan body slam + Gamemaster body thump + Shapeforms low thud, a cloth rustle and a short gear rattle (AK105 pack handling taps) after it. (2026-10-03: layers 1.6x longer so the ticks ring out instead of stopping dead.)",
  "hitmarker": [
   {
    "layers": [
     {
      "src": "sonniss/SculpTunes/9 mm",
      "t": 10.704,
-     "dur": 0.07,
+     "dur": 0.112,
      "hp": 1500
     },
     {
      "src": "sonniss/Pole Position Production/SAIGA-12",
      "t": 4.463,
-     "dur": 0.05,
+     "dur": 0.08,
      "hp": 2500,
      "gain_db": -4
     }
@@ -23,7 +23,7 @@
     {
      "src": "sonniss/SculpTunes/9 mm",
      "t": 17.869,
-     "dur": 0.07,
+     "dur": 0.112,
      "hp": 1500,
      "pitch": 1.0
     }
@@ -34,13 +34,13 @@
     {
      "src": "sonniss/SculpTunes/9 mm",
      "t": 22.619,
-     "dur": 0.08,
+     "dur": 0.128,
      "hp": 1500
     },
     {
      "src": "sonniss/Pole Position Production/Steyr",
      "t": 0.557,
-     "dur": 0.04,
+     "dur": 0.07,
      "hp": 3000,
      "gain_db": -8
     }
@@ -51,7 +51,7 @@
     {
      "src": "sonniss/SculpTunes/9 mm",
      "t": 0.195,
-     "dur": 0.08,
+     "dur": 0.128,
      "hp": 1500,
      "pitch": -1.0
     }
@@ -62,13 +62,13 @@
     {
      "src": "sonniss/Pole Position Production/SAIGA-12",
      "t": 7.977,
-     "dur": 0.06,
+     "dur": 0.096,
      "hp": 2000
     },
     {
      "src": "sonniss/SculpTunes/9 mm",
      "t": 10.704,
-     "dur": 0.06,
+     "dur": 0.096,
      "hp": 2000,
      "gain_db": -3,
      "pitch": 2.0
@@ -82,20 +82,20 @@
     {
      "src": "sonniss/Pole Position Production/SAIGA-12",
      "t": 2.318,
-     "dur": 0.09,
+     "dur": 0.144,
      "hp": 1800
     },
     {
      "src": "sonniss/SculpTunes/9 mm",
      "t": 10.704,
-     "dur": 0.07,
+     "dur": 0.112,
      "hp": 2000,
      "gain_db": -2
     },
     {
      "src": "sonniss/Pole Position Production/Heckler",
      "t": 6.614,
-     "dur": 0.12,
+     "dur": 0.192,
      "hp": 900,
      "pitch": -2.0,
      "delay_ms": 70
@@ -103,7 +103,7 @@
     {
      "src": "sonniss/Shapeforms/IMPACT_LOW_THUD_10",
      "t": 0.099,
-     "dur": 0.15,
+     "dur": 0.24,
      "lp": 500,
      "gain_db": -10,
      "delay_ms": 70
@@ -115,20 +115,20 @@
     {
      "src": "sonniss/Pole Position Production/SAIGA-12",
      "t": 4.463,
-     "dur": 0.08,
+     "dur": 0.128,
      "hp": 1800
     },
     {
      "src": "sonniss/SculpTunes/9 mm",
      "t": 17.869,
-     "dur": 0.07,
+     "dur": 0.112,
      "hp": 2000,
      "gain_db": -2
     },
     {
      "src": "sonniss/Pole Position Production/Heckler",
      "t": 16.126,
-     "dur": 0.12,
+     "dur": 0.192,
      "hp": 900,
      "pitch": -2.0,
      "delay_ms": 65
@@ -136,7 +136,7 @@
     {
      "src": "sonniss/Shapeforms/IMPACT_LOW_THUD_10",
      "t": 0.099,
-     "dur": 0.15,
+     "dur": 0.24,
      "lp": 450,
      "gain_db": -11,
      "pitch": -2.0,
@@ -149,20 +149,20 @@
     {
      "src": "sonniss/Pole Position Production/SAIGA-12",
      "t": 0.182,
-     "dur": 0.09,
+     "dur": 0.144,
      "hp": 1800
     },
     {
      "src": "sonniss/SculpTunes/9 mm",
      "t": 22.619,
-     "dur": 0.07,
+     "dur": 0.112,
      "hp": 2000,
      "gain_db": -2
     },
     {
      "src": "sonniss/Pole Position Production/Heckler",
      "t": 11.558,
-     "dur": 0.12,
+     "dur": 0.192,
      "hp": 900,
      "pitch": -2.0,
      "delay_ms": 75
@@ -170,7 +170,7 @@
     {
      "src": "sonniss/Shapeforms/IMPACT_LOW_THUD_10",
      "t": 0.099,
-     "dur": 0.15,
+     "dur": 0.24,
      "lp": 500,
      "gain_db": -10,
      "delay_ms": 75
@@ -182,20 +182,20 @@
     {
      "src": "sonniss/Pole Position Production/Steyr",
      "t": 13.214,
-     "dur": 0.08,
+     "dur": 0.128,
      "hp": 1800
     },
     {
      "src": "sonniss/SculpTunes/9 mm",
      "t": 0.195,
-     "dur": 0.07,
+     "dur": 0.112,
      "hp": 2000,
      "gain_db": -2
     },
     {
      "src": "sonniss/Pole Position Production/Heckler",
      "t": 18.343,
-     "dur": 0.12,
+     "dur": 0.192,
      "hp": 900,
      "pitch": -2.0,
      "delay_ms": 72
@@ -203,7 +203,7 @@
     {
      "src": "sonniss/Shapeforms/IMPACT_LOW_THUD_10",
      "t": 0.099,
-     "dur": 0.15,
+     "dur": 0.24,
      "lp": 480,
      "gain_db": -10,
      "pitch": -2.0,
