@@ -1,6 +1,8 @@
 {
  "formatVersion": 2,
  "_comment": "Engine-owned smoke scene for #110: 16 shadowed spots + 8 shadowed points with the budgets at their ceilings (maxSpotShadows 16, maxPointShadows 8), so every spot layer / point cube and the full-size shader arrays are exercised. Engine primitives only.",
+ "exposureEV": 0.0, "tonemapOperator": 1, "msaaSamples": 4, "ssaoEnabled": false, "bloomEnabled": false, "bloomThreshold": 1.0, "bloomKnee": 0.5, "bloomIntensity": 0.25,
+ "shadowsEnabled": true, "shadowResolution": 4096, "shadowCascades": 4, "shadowDistance": 500.0,
  "skyHorizonColor": [
   0.2,
   0.22,

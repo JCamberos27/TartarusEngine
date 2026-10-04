@@ -1,6 +1,8 @@
 {
   "formatVersion": 2,
   "_comment": "Engine-owned smoke scene for the physical sky (World::SkySource::Atmosphere): atmosphere LUTs, sky-view + aerial perspective, volumetric clouds with temporal accumulation, cirrus, cloud shadows and the IBL capture, lit by a clock-driven sun. Engine primitives only.",
+  "exposureEV": 0.0, "tonemapOperator": 1, "msaaSamples": 4, "ssaoEnabled": false, "bloomEnabled": false, "bloomThreshold": 1.0, "bloomKnee": 0.5, "bloomIntensity": 0.25,
+  "shadowsEnabled": true, "shadowResolution": 4096, "shadowCascades": 4, "shadowDistance": 500.0,
   "skySource": 2,
   "sky": {
     "timeOfDay": true,
