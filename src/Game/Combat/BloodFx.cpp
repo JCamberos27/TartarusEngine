@@ -141,6 +141,7 @@ void BloodFx::Clear() {
     m_Splats.clear();
     m_Pools.clear();
     m_Recent.clear();
+    m_Walkers.clear();
     m_Now = 0.0f;
 }
 
@@ -250,6 +251,77 @@ BloodFx::Decal* BloodFx::AddKnifeDecal(const char* entry, const glm::vec3& centr
     m_Decals.push_back(d);
     ++m_DecalsSpawned;
     return &m_Decals.back();
+}
+
+int BloodFx::BloodySteps(int walker) const {
+    for (const Walker& w : m_Walkers)
+        if (w.Id == walker) return w.Steps;
+    return 0;
+}
+
+bool BloodFx::InFreshBlood(const glm::vec3& feet) const {
+    int printId = -2, cells = 0;
+    if (m_KnifeLookup) printId = m_KnifeLookup("footprint", cells);
+    for (const Decal& d : m_Decals) {
+        if (d.Age < 0.5f || d.Age > kFreshSeconds || (d.Knife >= 0 && d.Knife == printId)) continue;
+        const glm::vec3 up = glm::normalize(glm::vec3(d.Model[1]));
+        if (up.y < 0.7f) continue; // the ground only
+        const glm::vec3 c(d.Model[3]);
+        if (std::abs(feet.y - c.y) > 0.35f) continue;
+        // Within the stain's middle (its box is bigger than the blood in it), grown in far enough by now.
+        const float half = 0.3f * std::min(glm::length(glm::vec3(d.Model[0])), glm::length(glm::vec3(d.Model[2])));
+        if (DecalCutout(d) > 0.5f) continue;
+        if (glm::length(glm::vec2(feet.x - c.x, feet.z - c.z)) < half) return true;
+    }
+    return false;
+}
+
+void BloodFx::OnFootstep(int walker, const glm::vec3& feet, const glm::vec3& velocity, int foot) {
+    if (!Config.Enabled || Config.Gore <= 0) return;
+    EnsureHooks();
+    Walker* w = nullptr;
+    for (Walker& x : m_Walkers)
+        if (x.Id == walker) w = &x;
+    if (!w) {
+        Walker nw;
+        nw.Id = walker;
+        m_Walkers.push_back(nw);
+        w = &m_Walkers.back();
+    }
+    // Which way they're walking: the velocity, else from the last step.
+    const glm::vec3 flatVel(velocity.x, 0.0f, velocity.z);
+    if (glm::length(flatVel) > 0.3f) w->Forward = glm::normalize(flatVel);
+    else if (w->HasLast && glm::length(glm::vec2(feet.x - w->Last.x, feet.z - w->Last.z)) > 0.15f)
+        w->Forward = glm::normalize(glm::vec3(feet.x - w->Last.x, 0.0f, feet.z - w->Last.z));
+    w->Last = feet;
+    w->HasLast = true;
+    const bool left = foot == 0 ? true : foot == 1 ? false : !w->Left;
+    w->Left = left;
+
+    if (InFreshBlood(feet)) { // soles soaked: the next steps carry it out
+        if (w->Steps == 0) {
+            int cells = 1;
+            m_KnifeLookup("footprint", cells);
+            w->Shoe = std::min(cells - 1, (int)(Random01() * (float)std::max(cells, 1)));
+        }
+        w->Steps = kPrintSteps;
+        return;
+    }
+    if (w->Steps <= 0) return;
+    const float strength = (float)w->Steps / (float)kPrintSteps;
+    --w->Steps;
+    const glm::vec3 right = glm::normalize(glm::cross(w->Forward, glm::vec3(0.0f, 1.0f, 0.0f)));
+    const glm::vec3 at = feet + right * (left ? -0.11f : 0.11f);
+    glm::vec3 p, n;
+    if (!m_Ray(at + glm::vec3(0.0f, 0.4f, 0.0f), glm::vec3(0.0f, -1.0f, 0.0f), 1.0f, p, n) || n.y < 0.6f) return;
+    // The print's toe (the image's top) forward: v runs heel-ward, so u = forward x up.
+    const glm::vec3 along = glm::cross(w->Forward, n);
+    if (Decal* d = AddKnifeDecal("footprint", p + n * 0.005f, n, along, glm::vec3(0.13f, 0.15f, 0.3f), 0.0f, w->Shoe)) {
+        d->Opacity = 0.35f + 0.6f * strength; // each print a little fainter
+        d->PoolGrow = 0.05f;
+        d->Life = std::min(d->Life, 120.0f);
+        ++m_PrintsSpawned;
+    }
 }
 
 void BloodFx::SpawnWallDrips(const glm::vec3& at, const glm::vec3& n, float size, float land) {
