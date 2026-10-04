@@ -143,6 +143,10 @@ public:
     };
     const std::vector<Decal>& Decals() const { return m_Decals; }
     int DripsSpawned() const { return m_DripsSpawned; }
+    int StainsMerged() const { return m_StainsMerged; }
+    // A new stain that would land on a fresh one just like it (same image, centre within 15% of its size, same facing):
+    // the old one stands for both. Index into Decals(), or -1.
+    int DuplicateOf(int set, int knife, const glm::mat4& model) const;
     struct Splat {
         unsigned Group = 0xFFFFFFFFu;
         unsigned Member = 0xFFFFFFFFu; // the entity that draws it (its bind space)
@@ -209,6 +213,7 @@ private:
     void SpawnWallDrips(const glm::vec3& at, const glm::vec3& n, float size, float land);
     KnifeFn m_KnifeLookup;
     int m_DripsSpawned = 0;
+    int m_StainsMerged = 0;
     struct Walker {
         int Id = 0;
         int Steps = 0;          // prints still to leave
