@@ -1,6 +1,7 @@
 #include "BloodFx.h"
 
 #include "BloodRenderer.h"
+#include "FxSprites.h"
 #include "GameModuleAPI.h"
 #include "PhysicsWorld.h"
 
@@ -76,13 +77,54 @@ glm::vec3 BloodFx::PrefabAxis(const BloodPresetDef& preset,
 }
 
 glm::mat4 BloodFx::PrefabToWorld(const glm::vec3& exitPoint, const glm::vec3& dir, float size, float yawJitterRad,
-                                 const glm::vec3& prefabAxis) {
+                                 const glm::vec3& prefabAxis, float stretch) {
     const glm::vec3 f = Flat(dir);
     // The prefab's axis onto f (right-handed, about +Y).
     const float yaw = std::atan2(-f.z, f.x) - std::atan2(-prefabAxis.z, prefabAxis.x) + yawJitterRad;
     glm::mat4 m = glm::translate(glm::mat4(1.0f), exitPoint);
+    if (stretch != 1.0f) { // longer along the (jittered) line of flight: I + (k - 1) a a^T
+        const glm::vec3 a = glm::vec3(glm::rotate(glm::mat4(1.0f), yaw, glm::vec3(0.0f, 1.0f, 0.0f)) * glm::vec4(prefabAxis, 0.0f));
+        glm::mat4 st(1.0f);
+        for (int c = 0; c < 3; ++c)
+            for (int r = 0; r < 3; ++r) st[c][r] += (stretch - 1.0f) * a[c] * a[r];
+        m = m * st;
+    }
     m = glm::rotate(m, yaw, glm::vec3(0.0f, 1.0f, 0.0f));
     return glm::scale(m, glm::vec3(size));
+}
+
+float BloodFx::Energy(const Hit& hit) {
+    // Damage per round: ~35-45 for a rifle. A shotgun's pellets arrive as one load (most of them land up close).
+    float e = hit.Damage / 38.0f;
+    if (hit.Pellets > 1) e *= std::sqrt((float)std::min(hit.Pellets, 12)) * 0.9f;
+    if (hit.Origin != glm::vec3(0.0f)) { // a round slows over distance
+        const float d = glm::length(hit.Point - hit.Origin);
+        e *= std::clamp(1.25f - d / 80.0f, 0.65f, 1.25f);
+    }
+    if (hit.Head) e *= 1.25f;
+    return std::clamp(e, 0.25f, 3.0f);
+}
+
+bool BloodFx::FindExit(const glm::vec3& entry, const glm::vec3& dir, unsigned entity, bool head, const BodyRayFn& bodyRay,
+                       glm::vec3& exit) {
+    exit = entry + dir * (head ? 0.07f : 0.13f);
+    if (!bodyRay) return false;
+    // From past the far side, back toward the entry: the first part of the same body is where the round came out.
+    // Someone standing right behind is looked past.
+    const float reach = head ? 0.45f : 0.7f;
+    glm::vec3 from = entry + dir * reach;
+    for (int tries = 0; tries < 3; ++tries) {
+        const float left = glm::dot(from - entry, dir) - 0.01f;
+        unsigned who = 0xFFFFFFFFu;
+        int part = -1;
+        glm::vec3 p;
+        if (left <= 0.0f || !bodyRay(from, -dir, left, who, part, p)) return false;
+        if (who != entity) { from = p - dir * 0.005f; continue; }
+        if (glm::dot(p - entry, dir) < 0.03f) return false; // only the entry itself: no far side
+        exit = p;
+        return true;
+    }
+    return false;
 }
 
 float BloodFx::Random01() {
@@ -231,22 +273,42 @@ void BloodFx::SpawnFloorDecals(const BloodPresetDef& preset, const glm::mat4& pr
 }
 
 void BloodFx::OnFleshHit(const Hit& hit) {
-    if (!Config.Enabled) return;
-    // One spray per body per moment: a shotgun's pellets arrive together.
+    if (!Config.Enabled || Config.Gore <= 0) return;
+    EnsureHooks();
+    const glm::vec3 dir = glm::length(hit.Direction) > 1e-5f ? glm::normalize(hit.Direction) : glm::vec3(0.0f, 0.0f, -1.0f);
+    // One spray per body per moment: a shotgun's pellets arrive together (the first carries the load's energy);
+    // the rest each still puff where they go in.
     for (const Recent& r : m_Recent)
-        if (r.Entity == hit.Entity && m_Now - r.Time < 0.08f) return;
+        if (r.Entity == hit.Entity && m_Now - r.Time < 0.08f) {
+            if (!hit.Player && Config.ImpactPuffs) SpawnPuffs(hit, dir, Energy(hit) * 0.5f * Config.EnergyScale, false, hit.Point, true);
+            return;
+        }
     m_Recent.push_back({hit.Entity, m_Now});
 
-    Choice c = Choose(hit, Random01());
+    const float energy = Energy(hit) * Config.EnergyScale;
+    m_LastEnergy = energy;
+    // Out of the far side: where the round really leaves the body (its hitbox / ragdoll part along the line),
+    // when it has the energy to. Otherwise it stays in, and the blood comes back out of the entry.
+    glm::vec3 exitPoint = hit.Point + dir * (hit.Head ? 0.07f : 0.13f);
+    const bool canExit = energy >= kExitEnergy && !hit.Player;
+    m_LastExitFound = canExit && FindExit(hit.Point, dir, hit.Entity, hit.Head, m_BodyRay, exitPoint);
+
+    m_LastExited = canExit;
+    m_LastExitPoint = exitPoint;
+    if (Config.ImpactPuffs && !hit.Player) SpawnPuffs(hit, dir, energy, canExit, exitPoint, false);
+
+    const bool forward = canExit || hit.Player || hit.Corpse;
+    Choice c = forward ? Choose(hit, Random01()) : Choice{Random01() < 0.5f ? "blood5" : "blood3", 0.5f};
     const BloodPresetDef* preset = FindBloodPreset(c.Preset);
     if (!preset) return;
     float size = c.Size * Config.Size * (0.88f + 0.24f * Random01());
-    size *= std::clamp(0.85f + hit.Damage / 220.0f, 0.85f, 1.2f);
-    if (hit.Pellets > 1) size *= 1.15f;
-
-    const glm::vec3 dir = glm::length(hit.Direction) > 1e-5f ? glm::normalize(hit.Direction) : glm::vec3(0.0f, 0.0f, -1.0f);
-    // Out of the far side: the round's exit, still inside the body's silhouette.
-    const glm::vec3 exitPoint = hit.Point + dir * (hit.Head ? 0.07f : 0.13f);
+    size *= std::clamp(0.8f + 0.22f * energy, 0.85f, 1.3f);
+    // Faster with energy: the same fall, carried further along the line.
+    const float stretch = std::clamp(0.85f + 0.25f * energy, 0.9f, 1.5f);
+    // A round that stayed in: a smaller spurt back out of the entry, toward the shooter.
+    const glm::vec3 sprayDir = forward ? dir : -dir;
+    const glm::vec3 sprayFrom = forward ? exitPoint : hit.Point - dir * 0.03f;
+    if (!forward) size *= 0.75f;
     const float jitter = (Random01() - 0.5f) * 0.45f;
     const glm::vec3 axis = PrefabAxis(*preset, [](const char* sim, glm::vec3& origin) -> const BloodFxImport::VatFrame* {
         const BloodRenderer::SimInfo* info = BloodRenderer::Get().Sim(BloodRenderer::Get().SimIndex(sim));
@@ -255,9 +317,9 @@ void BloodFx::OnFleshHit(const Hit& hit) {
         // A quarter of the way in: the burst's own heading, before most of it has fallen.
         return &info->Frames[info->Frames.size() / 4];
     });
-    const glm::mat4 toWorld = PrefabToWorld(exitPoint, dir, size, jitter, axis);
-    SpawnSprays(*preset, toWorld, size, exitPoint, Flat(dir), hit.Entity, 0.85f + 0.25f * Random01());
-    SpawnFloorDecals(*preset, toWorld, size, exitPoint, Flat(dir));
+    const glm::mat4 toWorld = PrefabToWorld(sprayFrom, sprayDir, size, jitter, axis, stretch);
+    SpawnSprays(*preset, toWorld, size, sprayFrom, Flat(sprayDir), hit.Entity, 0.85f + 0.25f * Random01());
+    SpawnFloorDecals(*preset, toWorld, size, sprayFrom, Flat(sprayDir));
 
     // On the body: the entry wound (a tight blot that seeps out over a few seconds) and, out of the far side,
     // the exit's wider mess; on the living, a run of it down from the wound. The hit point is on the hit part's
@@ -266,9 +328,9 @@ void BloodFx::OnFleshHit(const Hit& hit) {
         const float k = std::clamp(0.8f + hit.Damage / 150.0f, 0.8f, 1.4f);
         AddSplat(hit.Entity, hit.Part, hit.Corpse, hit.Point, -dir, RandomTangent(-dir), "attached", 0.08f * k, 0.3f, 0.0f, 4.0f);
         if (!hit.Corpse) {
-            const glm::vec3 back = hit.Point + dir * (hit.Head ? 0.16f : 0.24f);
-            AddSplat(hit.Entity, hit.Part, false, back, dir, RandomTangent(dir), Random01() < 0.5f ? "blood7" : "attached", 0.14f * k,
-                     0.3f, 0.05f, 1.5f);
+            if (canExit) // the exit's wider mess, on the far side where the round came out (or about where it must have)
+                AddSplat(hit.Entity, hit.Part, false, m_LastExitFound ? exitPoint + dir * 0.03f : hit.Point + dir * (hit.Head ? 0.16f : 0.24f), dir, RandomTangent(dir), Random01() < 0.5f ? "blood7" : "attached",
+                         0.14f * k, 0.3f, 0.05f, 1.5f);
             AddSplat(hit.Entity, hit.Part, false, hit.Point - glm::vec3(0.0f, 0.12f * k, 0.0f), -dir, glm::vec3(0.0f, -1.0f, 0.0f),
                      "char", 0.15f * k, 0.3f, 0.3f, 6.0f);
         }
@@ -286,7 +348,7 @@ void BloodFx::OnFleshHit(const Hit& hit) {
         if (d < 2.5f && Random01() < 1.2f - d / 2.5f) SpatterGear(d < 1.2f ? 3 : 1 + (int)(Random01() * 2.0f), 1.3f - d / 2.5f, d / 8.0f);
     }
     // Whoever stands in the spray's path gets it on them: a few rays through the cone behind the body.
-    if (!hit.Corpse) {
+    if (!hit.Corpse && canExit) {
         const glm::vec3 from = exitPoint + dir * 0.25f;
         for (int r = 0; r < 3; ++r) {
             const glm::vec3 jitterDir = glm::normalize(dir + RandomTangent(dir) * 0.25f + glm::vec3(0.0f, -0.08f, 0.0f));
@@ -316,6 +378,160 @@ void BloodFx::OnFleshHit(const Hit& hit) {
     }
     // A body that died here bleeds out where it comes to rest.
     if (hit.Killed && !hit.Player && Config.Pools) m_Pools.push_back({hit.Entity, m_Now + 2.0f + Random01(), size});
+}
+
+void BloodFx::SpawnPuffs(const Hit& hit, const glm::vec3& dir, float energy, bool exited, const glm::vec3& exitPoint, bool extraPellet) {
+    if (!m_Sprites) return;
+    FxSprites& fx = *m_Sprites;
+    // Knife "Real Blood" BloodHit / BloodExplosion, re-timed for a round: everything here is over in well under a
+    // second - the frame the round goes in has to read as a hit before the volumetric spray has moved.
+    static const glm::vec3 kBlood(0.30f, 0.012f, 0.010f);  // the liquid in a thin sheet (brighter than a pool)
+    static const glm::vec3 kMist(0.17f, 0.014f, 0.012f);   // a fine dark-red haze (Knife's BloodCloud, darkened for our sun)
+    const int hitSheet = fx.Entry("blood_hit"), burst = fx.Entry("blood_burst"), jet = fx.Entry("blood_jet");
+    const int cloud = fx.Entry("blood_cloud"), drop = fx.Entry("blood_drop"), fan = fx.Entry("blood_fan");
+    const float k = std::sqrt(std::max(energy, 0.1f));
+    const glm::vec3 back = -dir; // out of the entry, toward the shooter
+    auto jittered = [&](const glm::vec3& d, float spread) {
+        return glm::normalize(d + RandomTangent(d) * (spread * Random01()) + glm::vec3(0.0f, 0.15f, 0.0f));
+    };
+    ++m_PuffsSpawned;
+
+    // The entry: a small burst of the liquid back out, a puff of mist around it.
+    if (hitSheet >= 0) {
+        FxSprites::Emit e;
+        e.Entry = hitSheet;
+        e.Mode = FxSprites::Shade::Blood;
+        e.Pos = hit.Point + back * 0.04f;
+        e.Vel = back * 0.6f;
+        e.Life = 0.32f + 0.08f * Random01();
+        e.Size0 = 0.45f * k;
+        e.Size1 = 0.55f * k;
+        e.Rot = Random01() * 6.2832f;
+        e.Color = kBlood;
+        e.Erosion0 = 0.05f;
+        e.Erosion1 = 0.75f;
+        e.Softness = 0.18f;
+        e.FadeOut = 0.2f;
+        fx.Spawn(e);
+    }
+    if (cloud >= 0) {
+        const int n = hit.Head ? 3 : extraPellet ? 1 : 2;
+        for (int i = 0; i < n; ++i) {
+            FxSprites::Emit e;
+            e.Entry = cloud;
+            e.Mode = FxSprites::Shade::Lit;
+            e.Pos = hit.Point + back * 0.05f;
+            e.Vel = jittered(back, 0.6f) * (0.5f + 0.5f * Random01()) * k;
+            e.Drag = 3.0f;
+            e.Gravity = 0.02f;
+            e.Life = (hit.Head ? 0.9f : 0.55f) + 0.3f * Random01();
+            e.Size0 = (hit.Head ? 0.3f : 0.22f) * k;
+            e.Size1 = (hit.Head ? 0.75f : 0.5f) * k;
+            e.Rot = Random01() * 6.2832f;
+            e.Spin = (Random01() - 0.5f) * 1.5f;
+            e.Color = hit.Head ? kMist * 1.15f : kMist;
+            e.Alpha = (hit.Head ? 0.6f : 0.45f) * std::min(1.0f, 0.6f + 0.4f * energy);
+            e.FadeIn = 0.05f;
+            e.FadeOut = 0.8f;
+            fx.Spawn(e);
+        }
+    }
+    if (extraPellet) return;
+
+    // The exit: the liquid bursting out of the far side along the line - the sheet's spray, the jet, droplets.
+    if (exited) {
+        const glm::vec3 out = glm::normalize(dir + glm::vec3(0.0f, 0.1f, 0.0f));
+        if (burst >= 0) {
+            FxSprites::Emit e;
+            e.Entry = burst;
+            e.Mode = FxSprites::Shade::Blood;
+            e.Pos = exitPoint + dir * 0.12f * k;
+            e.Vel = out * 1.2f * k;
+            e.Drag = 2.0f;
+            e.Life = 0.42f + 0.1f * Random01();
+            e.Size0 = 0.75f * k;
+            e.Size1 = 0.95f * k;
+            e.Rot = Random01() * 6.2832f;
+            e.Color = kBlood;
+            e.Erosion0 = 0.0f;
+            e.Erosion1 = 0.6f;
+            e.Softness = 0.2f;
+            e.FadeOut = 0.15f;
+            fx.Spawn(e);
+        }
+        if (jet >= 0) {
+            FxSprites::Emit e;
+            e.Entry = jet;
+            e.Mode = FxSprites::Shade::Blood;
+            e.Pos = exitPoint + out * 0.18f * k;
+            e.Axis = out * 2.0f; // the sheet's jet runs along u
+            e.Vel = out * 0.8f;
+            e.Life = 0.3f;
+            e.Size0 = 0.3f * k;
+            e.Size1 = 0.4f * k;
+            e.Color = kBlood;
+            e.Erosion1 = 0.5f;
+            e.Softness = 0.2f;
+            fx.Spawn(e);
+        }
+        if (cloud >= 0) {
+            FxSprites::Emit e;
+            e.Entry = cloud;
+            e.Mode = FxSprites::Shade::Lit;
+            e.Pos = exitPoint + dir * 0.1f;
+            e.Vel = out * 1.5f * k;
+            e.Drag = 3.5f;
+            e.Life = (hit.Head ? 1.1f : 0.7f) + 0.3f * Random01();
+            e.Size0 = 0.25f * k;
+            e.Size1 = (hit.Head ? 0.9f : 0.6f) * k;
+            e.Rot = Random01() * 6.2832f;
+            e.Spin = (Random01() - 0.5f) * 1.2f;
+            e.Color = hit.Head ? kMist * 1.15f : kMist;
+            e.Alpha = hit.Head ? 0.6f : 0.4f;
+            e.FadeIn = 0.04f;
+            e.FadeOut = 0.8f;
+            fx.Spawn(e);
+        }
+    } else if (fan >= 0 && !hit.Corpse) {
+        // No exit: what comes back out of the entry fans toward the shooter.
+        FxSprites::Emit e;
+        e.Entry = fan;
+        e.Mode = FxSprites::Shade::Blood;
+        e.Pos = hit.Point + back * 0.1f;
+        e.Vel = back * 0.5f;
+        e.Life = 0.35f;
+        e.Size0 = 0.45f * k;
+        e.Size1 = 0.55f * k;
+        e.Rot = std::atan2(back.y, 1.0f) + (Random01() - 0.5f) * 0.6f;
+        e.Color = kBlood;
+        e.Erosion1 = 0.7f;
+        e.Softness = 0.2f;
+        fx.Spawn(e);
+    }
+    // Droplets thrown on: streaks along their flight, falling.
+    if (drop >= 0) {
+        const glm::vec3 from = exited ? exitPoint : hit.Point;
+        const glm::vec3 way = exited ? dir : back;
+        const int n = (int)((hit.Head ? 16.0f : 8.0f) * std::min(energy, 2.0f) + 3.0f * Random01());
+        for (int i = 0; i < n; ++i) {
+            FxSprites::Emit e;
+            e.Entry = drop;
+            e.Mode = FxSprites::Shade::Blood;
+            e.Pos = from + way * 0.05f;
+            e.Vel = jittered(way, 0.9f) * ((2.0f + 4.5f * Random01()) * k);
+            e.Gravity = 1.0f;
+            e.Drag = 0.6f;
+            e.Life = 0.35f + 0.35f * Random01();
+            e.Size0 = e.Size1 = 0.03f + 0.035f * Random01();
+            e.Stretch = 0.09f;
+            e.Color = kBlood;
+            e.Erosion0 = 0.15f;
+            e.Erosion1 = 0.55f;
+            e.Softness = 0.25f;
+            e.FadeOut = 0.25f;
+            fx.Spawn(e);
+        }
+    }
 }
 
 void BloodFx::SpawnSprays(const BloodPresetDef& preset, const glm::mat4& prefabToWorld, float size, const glm::vec3& wound,

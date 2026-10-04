@@ -1490,6 +1490,12 @@ void RegisterEngineComponents() {
               "Blood on bodies, ragdolls and loose props." },
             { "Gear Spatter", T::Bool, TARTARUS_REFLECT_FIELD(BloodSettingsComponent, GearSpatter), 0.0f,
               "Point-blank blood on the player's gun and hands, and their own wounds." },
+            { "Energy Scale", T::Float, TARTARUS_REFLECT_FIELD(BloodSettingsComponent, EnergyScale), 0.05f,
+              "x every hit's energy: how far and fast the spray is thrown, how much mist, whether rounds come out the far side.", 0.2f, 3.0f },
+            { "Impact Puffs", T::Bool, TARTARUS_REFLECT_FIELD(BloodSettingsComponent, ImpactPuffs), 0.0f,
+              "The burst, mist and droplets on the frame a round goes in (needs --import-knife-fx)." },
+            { "Gore", T::Int, TARTARUS_REFLECT_FIELD(BloodSettingsComponent, Gore), 1.0f,
+              "0 off (no sprays or stains), 1 mild (no headshot gore), 2 full.", 0.0f, 2.0f },
         },
     });
     // ---- lane R ----

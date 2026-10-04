@@ -1221,6 +1221,9 @@ struct BloodSettingsComponent {
     bool Pools = true;            // a pool spreads under each corpse
     bool BodySplats = true;       // blood on bodies, ragdolls and props
     bool GearSpatter = true;      // point-blank blood on the player's gun and hands, and their own wounds
+    float EnergyScale = 1.0f;     // x every hit's energy: spray reach and speed, mist, whether rounds exit
+    bool ImpactPuffs = true;      // the flipbook burst, mist and droplets the frame a round goes in (Knife packs)
+    int Gore = 2;                 // 0 off (no sprays or stains), 1 mild (no headshot gore), 2 full
 };
 // ---- end lane P ----
 // ---- lane R ----
