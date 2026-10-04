@@ -446,13 +446,13 @@ int BloodRenderer::DrawDecals(const glm::mat4& view, const glm::mat4& proj, cons
         g.Axis = glm::vec4(glm::normalize(glm::vec3(d.Model[1])), 0.0f);
         g.Knife = glm::ivec4(-1, -1, 0, 0);
         g.Grid = glm::vec4(1.0f, 1.0f, 0.0f, 0.5f);
-        g.Kind = glm::ivec4(0);
+        g.Kind = glm::ivec4(0, 0, 0, d.Mirror ? 1 : 0);
         if (const KnifeFxLibrary::Entry* k = lib.At(d.Knife)) {
             if (k->Lib == KnifeFxImport::Library::Sprite) continue;
             g.RectNorm = g.RectMask = glm::vec4(0.0f);
             g.Knife = glm::ivec4(k->ColorLayer, k->NormalLayer, d.Cell, d.NextCell);
             g.Grid = glm::vec4((float)k->Cols, (float)k->Rows, d.CellBlend, k->Smoothness);
-            g.Kind = glm::ivec4(k->Lib == KnifeFxImport::Library::DecalLarge ? 0 : 1, (int)k->Flags, d.Blood ? 1 : 0, 0);
+            g.Kind = glm::ivec4(k->Lib == KnifeFxImport::Library::DecalLarge ? 0 : 1, (int)k->Flags, d.Blood ? 1 : 0, d.Mirror ? 1 : 0);
         } else {
             if (!m_AtlasNorm || d.Set < 0) continue;
             g.RectNorm = m_RectNorm[d.Set];
