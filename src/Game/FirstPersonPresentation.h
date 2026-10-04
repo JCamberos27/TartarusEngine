@@ -51,6 +51,7 @@ public:
     // when it starts; left to the first round fired (ShellCasings::Spawn), the FBX import stalls that frame for up to a second.
     static void WarmEjectAssets(AssetLibrary& assets, const std::string& animationSet);
     static void WarmEjectAssets(AssetLibrary& assets, const FirstPersonAnimationSet& set);
+    void PreloadClips(AssetLibrary& assets); // every slot's clip files, imported clip-only in parallel (Play start)
     // Where rounds go instead of down the zeroed bore: from the muzzle toward `point` (pellets
     // spread about that line). Null = the bore, as the player's do. Copied.
     void SetShotTarget(const glm::vec3* point) {
@@ -161,7 +162,7 @@ public:
     struct ShotHit {
         glm::vec3 Point{0.0f}, Normal{0.0f, 1.0f, 0.0f};
         unsigned Entity = 0xFFFFFFFFu;
-        float HoleRadius = 0.0045f; // the weapon's bullet hole, metres
+        float HoleRadius = 0.0027f; // the weapon's bullet hole, metres (a 5.45 mm round)
         glm::vec3 Origin{0.0f}, Direction{0.0f, 0.0f, -1.0f}; // the ray it came down (muzzle, unit)
         int Pellets = 1;            // rays in the round it belongs to (a shotgun's pellets)
     };

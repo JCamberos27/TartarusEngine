@@ -249,7 +249,7 @@ int BloodRenderer::DrawSprays(const glm::mat4& view, const glm::mat4& proj,
     prog.SetInt("uAlphaBlend", 0);
     prog.SetInt("uSSAOEnabled", 0); // the AO pre-pass never saw the fluid
     prog.SetInt("uNoReceiveShadows", 0);
-    prog.SetVec3("uSubsurfaceColor", glm::vec3(0.42f, 0.012f, 0.008f));
+    prog.SetVec3("uSubsurfaceColor", BloodPalette::Subsurface);
     prog.SetFloat("uThickness", 0.55f);
 
     glBindBufferBase(GL_SHADER_STORAGE_BUFFER, kSprayBinding, m_SprayBuffer);
@@ -443,16 +443,16 @@ int BloodRenderer::DrawDecals(const glm::mat4& view, const glm::mat4& proj, cons
         g.Model = d.Model;
         g.InvModel = glm::inverse(d.Model);
         g.Params = glm::vec4(d.Cutout, d.Dry, d.Opacity, d.NormalStrength);
-        g.Axis = glm::vec4(glm::normalize(glm::vec3(d.Model[1])), 0.0f);
+        g.Axis = glm::vec4(glm::normalize(glm::vec3(d.Model[1])), d.Rim);
         g.Knife = glm::ivec4(-1, -1, 0, 0);
         g.Grid = glm::vec4(1.0f, 1.0f, 0.0f, 0.5f);
-        g.Kind = glm::ivec4(0);
+        g.Kind = glm::ivec4(0, 0, 0, d.Mirror ? 1 : 0);
         if (const KnifeFxLibrary::Entry* k = lib.At(d.Knife)) {
             if (k->Lib == KnifeFxImport::Library::Sprite) continue;
             g.RectNorm = g.RectMask = glm::vec4(0.0f);
             g.Knife = glm::ivec4(k->ColorLayer, k->NormalLayer, d.Cell, d.NextCell);
             g.Grid = glm::vec4((float)k->Cols, (float)k->Rows, d.CellBlend, k->Smoothness);
-            g.Kind = glm::ivec4(k->Lib == KnifeFxImport::Library::DecalLarge ? 0 : 1, (int)k->Flags, 0, 0);
+            g.Kind = glm::ivec4(k->Lib == KnifeFxImport::Library::DecalLarge ? 0 : 1, (int)k->Flags, d.Blood ? 1 : 0, d.Mirror ? 1 : 0);
         } else {
             if (!m_AtlasNorm || d.Set < 0) continue;
             g.RectNorm = m_RectNorm[d.Set];
@@ -481,6 +481,7 @@ int BloodRenderer::DrawDecals(const glm::mat4& view, const glm::mat4& proj, cons
     prog.SetVec4("uViewport", glm::vec4((float)viewport[0], (float)viewport[1], (float)viewport[2], (float)viewport[3]));
     prog.SetVec3("uFreshColor", FilmFresh);
     prog.SetVec3("uDriedColor", FilmDried);
+    prog.SetVec3("uRough", glm::vec3(BloodPalette::RoughFresh, BloodPalette::RoughPool, BloodPalette::RoughDried));
     prog.SetInt("uNoReceiveShadows", 0);
     prog.SetInt("uObjectLayerBit", 0);
     glBindTextureUnit(kDepthUnit, target.ResolvedDepthTexture());

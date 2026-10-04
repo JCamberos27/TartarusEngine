@@ -24,15 +24,16 @@ public:
         bool Enabled = true;
         float Size = 1.0f;       // x every spray's size (1 = the tuned default)
         int MaxSprays = 24;      // the oldest is dropped past this
-        int MaxDecals = 320;     // stains; the oldest is dropped past this
-        float DecalLifetime = 300.0f; // seconds a stain stays before it shrinks away
-        float DrySeconds = 90.0f;     // fresh and glossy to dried dark and matte
+        int MaxDecals = 1024;    // stains; past this the farthest small one out of view goes (prints have their own)
+        float DecalLifetime = 0.0f;   // seconds a stain stays (once out of view); 0 = for good
+        float DrySeconds = 1800.0f;   // fresh and wet to dried dark and matte - counted only while it's out of view
+        float Speed = 2.0f;           // x how fast the sprays play and the blood lands (1 = the packs' cinematic timing)
         bool Pools = true;            // a pool spreads under each corpse
         bool BodySplats = true;       // blood on bodies, ragdolls and props
         bool GearSpatter = true;      // the player's gun and hands, and their own wounds
         float EnergyScale = 1.0f;     // x every hit's energy (spray reach and speed, mist, exits)
         bool ImpactPuffs = true;      // the flipbook burst, mist and droplets on the frame a round goes in
-        int Gore = 2;                 // 0 off, 1 mild (no headshot gore), 2 full
+        int Gore = 1;                 // 0 off, 1 on
     };
     Settings Config;
 
@@ -54,6 +55,10 @@ public:
     // the round comes out the far side.
     static float Energy(const Hit& hit);
     static constexpr float kExitEnergy = 0.6f; // below this the round stays in: blood only back out of the entry
+    // A big headshot kill (the heavier gore sound over the flesh hit): a head kill at energy >= 1.3, not the player.
+    static bool BigHeadshot(const Hit& hit, float energy, int gore) {
+        return hit.Head && hit.Killed && !hit.Player && gore >= 1 && energy >= 1.3f;
+    }
 
     // The world ray the spray's obstacle test uses: true and the hit point / normal when something
     // solid lies within `maxDistance`. Defaults to PhysicsWorld::RaycastSolid; tests replace it.
@@ -80,7 +85,16 @@ public:
     struct SplatSpace {
         unsigned Group = 0xFFFFFFFFu;
         std::vector<std::pair<unsigned, glm::mat4>> Members; // drawing entity, world -> its bind space
+        // Per member (or empty): a key that outlives the entity - the player's gun is rebuilt on every weapon swap, and
+        // its blood must come back with it. 0 = none (the entity itself).
+        std::vector<unsigned> Keys;
     };
+    // Part for AddSplat's `part` meaning "the player's body only" (their own wound: never on the gun).
+    static constexpr int kBodyOnlyPart = -2;
+    // Key -> the entity drawing it now (0xFFFFFFFF: not out). Keyed splats are drawn on whatever it returns.
+    using ResolveFn = std::function<unsigned(unsigned key)>;
+    void SetMemberResolver(ResolveFn fn) { m_Resolve = std::move(fn); }
+    static constexpr int kMaxGearSplats = 14; // on one of the player's meshes: speckles, never a coat (and they stay)
     using SplatSpaceFn = std::function<bool(unsigned entity, int part, bool corpse, const glm::vec3& point, SplatSpace& out)>;
     void SetSplatSpace(SplatSpaceFn fn) { m_SplatSpace = std::move(fn); }
     // Whether `group` (a body) is still there; false once it's gone (its splats go with it). `entities` is unused.
@@ -108,11 +122,20 @@ public:
     void SpatterWallAt(const glm::vec3& at, const glm::vec3& normal, float size);
     // A footfall (FoleyAudio's step listener): `walker` -1 the player, else a soldier; `foot` 0 left, 1 right, -1 unknown.
     // Stepping in fresh blood on the ground wets that walker's soles; the next steps leave prints, fading.
-    void OnFootstep(int walker, const glm::vec3& feet, const glm::vec3& velocity, int foot);
-    static constexpr int kPrintSteps = 6;     // prints after stepping in it
+    // `facing` (optional, any length): the way the walker faces - the prints point that way; else the way they move.
+    void OnFootstep(int walker, const glm::vec3& feet, const glm::vec3& velocity, int foot, const glm::vec3& facing = glm::vec3(0.0f));
+    static constexpr int kPrintSteps = 14;    // prints after stepping in it
     static constexpr float kFreshSeconds = 60.0f; // blood on the ground this young still marks a sole
     int PrintsSpawned() const { return m_PrintsSpawned; }
     int BloodySteps(int walker) const;        // prints left for that walker (0: clean soles)
+    // Where the player looks from (each frame): stains only ever leave out of view - behind, or far off.
+    void SetViewer(const glm::vec3& eye, const glm::vec3& forward) {
+        m_Eye = eye;
+        m_Forward = glm::length(forward) > 1e-5f ? glm::normalize(forward) : glm::vec3(0.0f, 0.0f, -1.0f);
+        m_HasViewer = true;
+    }
+    static constexpr float kVisibleReach = 60.0f; // further than this a stain may go whatever the camera faces
+    static constexpr int kMaxPrints = 200;         // footprints among themselves: the oldest out of view goes first
     void Update(float dt);
     void Submit(BloodRenderer& renderer) const;
     void Clear();
@@ -132,10 +155,11 @@ public:
         int Set = -1;
         glm::mat4 Model{1.0f};            // unit box -> world, projecting along +Y
         float Age = 0.0f;                 // negative: not landed yet
-        float Life = 300.0f;
+        float Life = 1e9f;                // seconds; leaves only out of view once past it
         float RevealSeconds = 15.0f;      // the reveal curve's time scale
         const BloodCurve* Reveal = nullptr; // null: a pool, spreading over PoolGrow seconds
         float PoolGrow = 0.0f;
+        bool Spread = false;              // a pool: it grows from a small patch to its full size over PoolGrow (PoolScale)
         float DrySeconds = 90.0f;
         float Opacity = 1.0f;
         // A Knife library decal (v2) instead of a KriptoFX set: its id and cell; a flipbook (the wall drips)
@@ -143,8 +167,15 @@ public:
         int Knife = -1;
         int Cell = 0, Frames = 1;
         float FrameSeconds = 0.0f;
+        bool Mirror = false;              // drawn flipped across (variety)
+        float DryAge = 0.0f;              // seconds spent out of view: it only dries while nobody looks
+        bool Print = false;               // a footprint (its own budget; fades slowly once old)
+        float FadeAt = 1e9f, FadeLen = 1.0f; // a print fades out from FadeAt (its age) over FadeLen seconds, then goes
     };
+    static constexpr float kPrintLife = 600.0f, kPrintFade = 180.0f; // prints stay 10 min, then fade over 3
     const std::vector<Decal>& Decals() const { return m_Decals; }
+    // Whether a stain could be on screen now: within reach and inside a cone wider than any view. True with no viewer.
+    bool InView(const Decal& d) const;
     int DripsSpawned() const { return m_DripsSpawned; }
     int StainsMerged() const { return m_StainsMerged; }
     // A new stain that would land on a fresh one just like it (same image, centre within 15% of its size, same facing):
@@ -157,14 +188,24 @@ public:
         float Radius = 0.1f, Depth = 0.1f;                         // bind units
         int Set = -1;
         float Age = 0.0f, Grow = 1.0f, DrySeconds = 120.0f, Opacity = 1.0f;
+        unsigned Key = 0;      // SplatSpace::Keys: drawn on whatever entity the key resolves to now
+        float DryAge = 0.0f;   // seconds its body spent out of view
     };
     const std::vector<Splat>& Splats() const { return m_Splats; }
+    // The entity a splat is drawn on now: a keyed one on whatever its key resolves to (the player's gun after a swap),
+    // 0xFFFFFFFF while that isn't out.
+    unsigned DrawnOn(const Splat& s) const { return s.Key ? (m_Resolve ? m_Resolve(s.Key) : 0xFFFFFFFFu) : s.Member; }
     int SplatsSpawned() const { return m_SplatHits; }
     int DecalsSpawned() const { return m_DecalsSpawned; }
     int PoolsSpawned() const { return m_PoolsSpawned; }
+    bool Pooled(unsigned entity) const;       // that body has had its pool (or is about to)
     // The mask cutout a stain shows now: BFX_ShaderProperies' reveal, held through its life, then the
     // rest of the curve as it shrinks away (1 = gone). Pools spread instead.
     static float DecalCutout(const Decal& d);
+    // How big a spreading pool is now, x its full size: a small patch where the blood first collects, widening fast
+    // and then slower as it thins out (1 for anything that doesn't spread).
+    static float PoolScale(const Decal& d);
+    static constexpr float kPoolStartScale = 0.08f;
     int SpraysSpawned() const { return m_SpraysSpawned; }
     bool LastSprayClipped() const { return m_LastClipped; } // the last hit's spray met an obstacle
     // The last hit's exit wound: found on the far side of the body (`LastExitFound`) and where; no exit when
@@ -174,6 +215,16 @@ public:
     glm::vec3 LastExitPoint() const { return m_LastExitPoint; }
     float LastEnergy() const { return m_LastEnergy; }
     int PuffsSpawned() const { return m_PuffsSpawned; }
+    int GroundSplatters() const { return m_GroundSplatters; } // hits whose thrown blood landed somewhere
+    // A splash of blood on a surface - one of the KriptoFX stains or one of Real Blood's splatters (the palette makes
+    // them one material), mirrored at random: Big a splash's body, Streak thrown fast, Drop a drop or a few.
+    enum class Splash { Big, Streak, Drop };
+    Decal* AddSplash(Splash kind, const glm::vec3& centre, const glm::vec3& up, const glm::vec3& along, const glm::vec3& extent, float delay);
+    int BleedDrops() const { return m_BleedDrops; }           // drops a wounded soldier left as he went
+    bool Bleeding(unsigned entity) const;
+    static constexpr float kBleedSeconds = 8.0f;              // a living wound drips this long after the last hit
+    // How big the splatter a hit throws on the ground is (metres across its body): a head throws more, a kill more again.
+    static float GroundSplatterSize(const Hit& hit, float energy);
     // Where the round leaves a body: back along its line from 0.7 m past the entry onto the same body's parts.
     // False (and `exit` a guess just past the entry) when the ray finds nothing of it.
     static bool FindExit(const glm::vec3& entry, const glm::vec3& dir, unsigned entity, bool head, const BodyRayFn& bodyRay,
@@ -186,7 +237,7 @@ public:
     struct Choice { const char* Preset; float Size; };
     static Choice Choose(const Hit& hit, float roll);
     // Seconds a spray plays: the authored length, x sqrt(size) - a smaller splash falls a shorter
-    // way, and free fall takes time with the square root of the distance.
+    // way, and free fall takes time with the square root of the distance. (Config.Speed divides it.)
     static float PlaybackSeconds(const BloodSprayDef& def, float animationSpeed, float size);
     // The prefab -> world transform for a spray thrown from `exitPoint` along `dir`: the prefab's own
     // spray direction `prefabAxis` (horizontal) turned onto the round's flattened line - yaw only, the
@@ -226,6 +277,11 @@ private:
         glm::vec3 Last{0.0f}, Forward{0.0f, 0.0f, -1.0f};
     };
     std::vector<Walker> m_Walkers;
+    // Room for one more stain: the farthest out of view goes (a print for a print), else the oldest.
+    void MakeRoom(bool print);
+    int m_PrintId = -2;
+    glm::vec3 m_Eye{0.0f}, m_Forward{0.0f, 0.0f, -1.0f};
+    bool m_HasViewer = false;
     int m_PrintsSpawned = 0;
     // Fresh blood on the ground under `feet`: a stain (not a print) younger than kFreshSeconds.
     bool InFreshBlood(const glm::vec3& feet) const;
@@ -257,7 +313,24 @@ private:
     std::vector<Spray> m_Sprays;
     std::vector<Decal> m_Decals;
     int m_DecalsSpawned = 0, m_PoolsSpawned = 0;
-    struct PendingPool { unsigned Entity; float At; float Size; };
+    // Every hit: blood thrown out along the round's line on a falling arc, splashed on the first thing it meets (floor,
+    // wall, crate) when it gets there, stretched the way it was going - the bulk, and drops flung wider.
+    void SpawnGroundSplatter(const Hit& hit, float energy, const glm::vec3& from, const glm::vec3& flatDir, bool forward);
+    // The falling arc from `from` at `velocity` (m/s): where it first meets a surface, its normal, its velocity then and
+    // how long it took. False: nothing within 1.4 s.
+    bool ThrowArc(const glm::vec3& from, const glm::vec3& velocity, glm::vec3& point, glm::vec3& normal, glm::vec3& vel,
+                  float& seconds, float step = 0.035f) const;
+    // A shot into a body lying there: blood splashing out around the wound onto what it lies on, and a little pool.
+    void SpawnCorpseSplash(const Hit& hit, float energy);
+    int m_GroundSplatters = 0, m_BleedDrops = 0;
+    struct Bleed { unsigned Entity; float Until; float Next; float Rate; };
+    std::vector<Bleed> m_Bleeds;
+    // A body that died: once it has come to rest (its centre still between two looks 0.2 s apart, or 4 s on), one pool
+    // spreads from under its centre. Each body pools once.
+    struct PendingPool { unsigned Entity; float At; float Size; glm::vec3 Last{0.0f}; bool HasLast = false; float Deadline = 0.0f; };
+    std::vector<unsigned> m_Pooled;
+    ResolveFn m_Resolve;
+    bool InViewPoint(const glm::vec3& c, float r) const;
     std::vector<PendingPool> m_Pools;
     std::uint32_t m_Rng = 0x9E3779B9u;
     float m_Now = 0.0f;

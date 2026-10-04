@@ -40,6 +40,7 @@
       "falloffMin": 0.6
     },
     "allowFullAuto": true,
+    "bulletHoleRadius": 0.0027,
     "impactImpulse": 5.0,
     "impactMaxSpeed": 7.0,
     "magazine": 30,

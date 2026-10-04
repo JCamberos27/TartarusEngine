@@ -42,23 +42,31 @@ const char* ImpactFx::HoleEntry(const std::string& s) {
     return "hole_concrete";
 }
 
-float ImpactFx::HoleSize(const std::string& s, float radius) {
-    // The procedural hole's radius is the round's (~4.5 mm rifle, more for buckshot clusters); the PRO decals hold the
-    // crater and chipped rim around it, the cell ~1.4x the visible damage.
-    const float k = s == "glass" ? 34.0f : s == "metal" ? 14.0f : s == "wood" ? 18.0f : (s == "mud" || s == "sand") ? 22.0f : 24.0f;
-    return std::clamp(radius * k, 0.05f, 0.2f);
+float ImpactFx::HoleFraction(const std::string& s) {
+    // How wide the hole itself is in each PRO decal, x its cell (measured off the albedos: the dark - or, glass, clear -
+    // core's equivalent diameter, the four variants averaged). The rest of the cell is the chipped rim.
+    if (s == "asphalt") return 0.07f;
+    if (s == "brick" || s == "rock") return 0.08f;
+    if (s == "wood") return 0.11f;
+    if (s == "glass" || s == "tile") return 0.11f;
+    if (s == "metal") return 0.2f;
+    if (s == "mud") return 0.2f;
+    if (s == "sand") return 0.22f;
+    return 0.14f; // concrete
 }
 
-glm::vec3 ImpactFx::DustColor(const std::string& s) {
-    if (s == "brick") return {0.42f, 0.17f, 0.11f};
-    if (s == "wood") return {0.38f, 0.26f, 0.14f};
-    if (s == "mud") return {0.2f, 0.15f, 0.09f};
-    if (s == "sand") return {0.5f, 0.42f, 0.28f};
-    if (s == "asphalt") return {0.18f, 0.18f, 0.18f};
-    if (s == "metal") return {0.3f, 0.3f, 0.3f};
-    if (s == "glass") return {0.6f, 0.62f, 0.65f};
-    if (s == "rock") return {0.33f, 0.31f, 0.29f};
-    return {0.45f, 0.44f, 0.42f}; // concrete, tile
+float ImpactFx::HoleSize(const std::string& s, float radius) {
+    // The hole a little bigger than the round (kHoleScale x its calibre: torn edges, and it reads at a distance): the cell
+    // is that over the hole's share of it.
+    return std::clamp(2.0f * radius * kHoleScale / HoleFraction(s), 0.01f, 0.2f);
+}
+
+float ImpactFx::HoleRim(const std::string& s) {
+    // How far out the chipped rim shows, in the cell's half-widths (it fades from 2/3 of this): 3x the hole's radius,
+    // so the mark is the hole and a thin ring of chips; glass keeps its cracks, a tile its spall.
+    if (s == "glass") return 0.9f;
+    if (s == "tile") return 0.55f;
+    return 3.5f * HoleFraction(s);
 }
 
 void ImpactFx::Spawn(const std::string& surface, const glm::vec3& point, const glm::vec3& normal, const glm::vec3& dir) {
@@ -75,52 +83,10 @@ void ImpactFx::Spawn(const std::string& surface, const glm::vec3& point, const g
         const float a = U() * 6.2832f, r = spread * std::sqrt(U());
         return glm::normalize(axis + (t * std::cos(a) + b * std::sin(a)) * r);
     };
-    const glm::vec3 dust = DustColor(surface);
     const glm::vec4 plane(n, -glm::dot(n, point) + 0.002f);
-    const bool soft = surface == "mud" || surface == "sand";
     const bool hard = surface == "metal" || surface == "rock" || surface == "concrete" || surface == "brick" || surface == "asphalt" || surface == "tile";
     ++m_Spawned;
 
-    // The puff (PRO "Smoke": 3 of it, 0.2-0.4 m, out at 3-7 m/s and stopped fast, 1.5-2.5 s, faint).
-    if (const int smoke = fx.Entry("smoke_impact"); smoke >= 0 && surface != "glass") {
-        for (int i = 0; i < (soft ? 4 : 3); ++i) {
-            FxSprites::Emit e;
-            e.Entry = smoke;
-            e.Mode = FxSprites::Shade::Lit;
-            e.Pos = point + n * 0.03f;
-            e.Vel = cone(refl, 0.6f) * (2.0f + 3.0f * U());
-            e.Drag = 6.0f;
-            e.Gravity = -0.01f;
-            e.Life = 1.4f + 1.0f * U();
-            e.Size0 = 0.12f + 0.08f * U();
-            e.Size1 = (soft ? 0.7f : 0.5f) + 0.2f * U();
-            e.Rot = U() * 6.2832f;
-            e.Spin = (U() - 0.5f) * 1.0f;
-            e.BlendFrames = true;
-            e.Color = dust;
-            e.Alpha = soft ? 0.55f : surface == "metal" ? 0.25f : 0.45f;
-            e.FadeIn = 0.03f;
-            e.FadeOut = 0.7f;
-            fx.Spawn(e);
-        }
-        // The streak: dust shot straight out of the hole (PRO "Smoke Stretched": 7 of it at 7-8 m/s).
-        for (int i = 0; i < (surface == "metal" ? 2 : 5); ++i) {
-            FxSprites::Emit e;
-            e.Entry = smoke;
-            e.Mode = FxSprites::Shade::Lit;
-            e.Pos = point + n * 0.02f;
-            e.Vel = cone(refl, 0.35f) * (6.0f + 2.0f * U());
-            e.Drag = 7.0f;
-            e.Life = 0.5f + 0.4f * U();
-            e.Size0 = 0.05f;
-            e.Size1 = 0.12f;
-            e.Stretch = 0.05f;
-            e.Color = dust;
-            e.Alpha = 0.4f;
-            e.FadeOut = 0.8f;
-            fx.Spawn(e);
-        }
-    }
     // Chips of it, falling and bouncing on the surface they came off (PRO "Rocks": 3, 1-3 m/s, gravity).
     const char* debris = surface == "wood" ? "debris_wood" : surface == "glass" ? "debris_glass"
                        : (surface == "rock" || surface == "mud" || surface == "sand") ? "debris_rock" : surface == "metal" ? nullptr : "debris_concrete";

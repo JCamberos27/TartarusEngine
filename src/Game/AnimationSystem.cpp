@@ -194,7 +194,8 @@ int ResolveExternalClip(Model& model, const std::string& clipRef, AssetLibrary& 
             s_Known.insert(abs);
         }
     }
-    std::shared_ptr<Model> src = assets.LoadModel(abs);
+    // Only its clips are wanted: a clip-only import (no mesh, materials or textures), unless it's loaded whole already.
+    std::shared_ptr<Model> src = assets.LoadAnimationSource(abs);
     if (!src || src.get() == &model || src->OwnAnimationCount() == 0) return -1;
     int srcClip = 0;
     if (!clipName.empty()) {

@@ -336,12 +336,6 @@ struct HiddenFromOwnerTag {};
 // floating beside the hand. SleeveBones marks the arm's palette bones (the upper arms and everything under
 // them); with SleevesInViewModel set, the renderer draws the piece twice: the world pass without the
 // vertices weighted mostly to them, the view-model pass with only those. The seam is at the shoulder.
-// Headshot gore (Combat/HeadGore, docs/BLOOD_FX.md): this skinned piece no longer draws the vertices weighted mostly
-// to these palette bones (the head and everything under it) - in every view. Runtime only.
-struct GoreHideTag {
-    std::uint32_t Bones[16] = {}; // bit per palette bone
-};
-
 struct PlayerBodyTag {
     // Not drawn in the camera's world pass at all (the head, and what an outfit hangs on it): the camera is
     // inside it. Shadows, the Scene view and every other view still draw it.
@@ -1222,16 +1216,16 @@ struct BloodSettingsComponent {
     bool Enabled = true;
     float Size = 1.0f;            // x every spray's size (and its playback time, by sqrt: gravity stays right)
     int MaxSprays = 24;           // airborne sprays at once; the oldest is dropped past this
-    int MaxStains = 320;          // stains on the world; the oldest is dropped past this
-    float StainLifetime = 300.0f; // seconds a stain stays before it shrinks away
-    float DrySeconds = 90.0f;     // fresh and glossy to dried dark and matte (pools 2.5x, cloth 1.5x)
+    int MaxStains = 1024;         // stains on the world; past this the farthest small one out of view goes
+    float StainLifetime = 0.0f;   // seconds a stain stays (it only ever leaves out of view); 0 = for good
+    float DrySeconds = 1800.0f;   // fresh and wet to dried dark and matte, counted out of view only (pools 2.5x, cloth 1.5x)
+    float Speed = 2.0f;           // x how fast sprays play and blood lands (1 = the packs' cinematic timing)
     bool Pools = true;            // a pool spreads under each corpse
     bool BodySplats = true;       // blood on bodies, ragdolls and props
     bool GearSpatter = true;      // point-blank blood on the player's gun and hands, and their own wounds
     float EnergyScale = 1.0f;     // x every hit's energy: spray reach and speed, mist, whether rounds exit
     bool ImpactPuffs = true;      // the flipbook burst, mist and droplets the frame a round goes in (Knife packs)
-    int Gore = 2;                 // 0 off (no sprays or stains), 1 mild (no headshot gore), 2 full
-    bool ScreenBlood = true;      // blood splashed on the view's edge when the player is hurt
+    int Gore = 1;                 // 0 off (no sprays or stains), 1 on
 };
 // ---- end lane P ----
 // ---- lane R ----
