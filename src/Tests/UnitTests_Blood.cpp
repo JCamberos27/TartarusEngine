@@ -6,6 +6,7 @@
 #include "Combat/FxSprites.h"
 #include "Combat/ScreenBlood.h"
 #include "Combat/HeadGore.h"
+#include "Combat/ImpactFx.h"
 #include "GameModuleAPI.h"
 #include "KnifeFxImport.h"
 
@@ -710,6 +711,23 @@ void Test_Blood_HeadGore() {
     CHECK((lying * glm::vec3(0, 1, 0)).z > 0.99f);
 }
 
+
+void Test_ImpactFx_Surfaces() {
+    // Substring words: none may hide inside another surface's name ("pane" in "Panel" did).
+    CHECK(ImpactFx::SurfaceFromName("Metal Plate") == "metal");
+    CHECK(ImpactFx::SurfaceFromName("Wood Panel") == "wood");
+    CHECK(ImpactFx::SurfaceFromName("Brick Panel") == "brick");
+    CHECK(ImpactFx::SurfaceFromName("Glass Pane") == "glass");
+    CHECK(ImpactFx::SurfaceFromName("Mud Bank") == "mud");
+    CHECK(ImpactFx::SurfaceFromName("Tile Panel") == "tile");
+    CHECK(ImpactFx::SurfaceFromName("Concrete Block") == "concrete");
+    CHECK(ImpactFx::SurfaceFromName("Back Wall") == "concrete");
+    CHECK(ImpactFx::SurfaceFromName("Loose Crate 1") == "wood");
+    CHECK(ImpactFx::SurfaceFromName("something else") == "concrete");
+    CHECK(std::string(ImpactFx::HoleEntry("brick")) == "hole_brick" && std::string(ImpactFx::HoleEntry("anything")) == "hole_concrete");
+    CHECK(ImpactFx::HoleSize("glass", 0.0045f) > ImpactFx::HoleSize("metal", 0.0045f));
+}
+
 void Test_FxSprites_Sim() {
     int a, b;
     float t;
@@ -827,6 +845,7 @@ void RegisterBloodTests(UnitTestSupport::TestList& tests) {
     tests.push_back({"Blood::Footprints", Test_Blood_Footprints});
     tests.push_back({"Blood::ScreenBlood", Test_Blood_ScreenBlood});
     tests.push_back({"Blood::HeadGore", Test_Blood_HeadGore});
+    tests.push_back({"ImpactFx::Surfaces", Test_ImpactFx_Surfaces});
     tests.push_back({"FxSprites::Sim", Test_FxSprites_Sim});
     tests.push_back({"KnifeFx::Library", Test_KnifeFx_Library});
 }
