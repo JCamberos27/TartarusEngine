@@ -38,7 +38,7 @@ public:
     // The listener (the player's eye) for choosing near / distant reports.
     void SetListener(const glm::vec3& eye, const glm::vec3& forward) { m_Listener = eye; m_ListenerFwd = forward; }
     // Tests: every sound started, and the listener each frame, as text lines in `path` (a video's
-    // soundtrack is mixed from it offline: tools/mix_npc_video.py). Empty closes it.
+    // soundtrack can be mixed from it offline). Empty closes it.
     void SetAudioLog(const std::string& path);
 
     // A round left a muzzle at `origin` heading for `end`. `fromPlayer`: the report is 2D, the flash

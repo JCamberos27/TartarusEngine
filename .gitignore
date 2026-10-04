@@ -22,8 +22,7 @@ project/shortcuts.json
 # copy in the working directory is only read once, to migrate an existing layout.
 imgui.ini
 
-# Local scratch folder: probe output, logs, re-exported FBX copies. Nothing here is tracked;
-# probe and export sources live in tools/probes/ and tools/weapons/ (probe exes build into build/).
+# Local scratch folder: probe output, logs, re-exported FBX copies. Nothing here is tracked.
 work/
 
 # HDRI skies (Poly Haven, CC0) used by the Sandbox scene - too big for git; download into
@@ -61,8 +60,8 @@ project/assets/**/*.[bB][iI][nN]
 project/assets/**/*.[oO][bB][jJ]
 project/assets/**/*.[bB][lL][eE][nN][dD]
 # ...except content made for this project (procedural / modelled here), which stays in git:
-# tools/gen_sandbox_assets.py output (basketball, court, two basketball sounds), the prototype grids
-# (tools/gen_sandbox_scene.py), the Apartment
+# tools/gen_sandbox_assets.py output (basketball, court, two basketball sounds), the prototype grids,
+# the Apartment
 # meshes (modelled from measurements; its baked textures are NOT ours to be sure, so they go to Drive),
 # the UV-transform test quad, and the generated brow/lash cards.
 !project/assets/Props/Basketball/**
