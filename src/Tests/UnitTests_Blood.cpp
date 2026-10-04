@@ -5,6 +5,7 @@
 #include "Combat/BloodFxPresets.h"
 #include "Combat/FxSprites.h"
 #include "Combat/ScreenBlood.h"
+#include "Combat/HeadGore.h"
 #include "GameModuleAPI.h"
 #include "KnifeFxImport.h"
 
@@ -691,6 +692,24 @@ void Test_Blood_ScreenBlood() {
     CHECK(sb.Splats().empty());
 }
 
+
+void Test_Blood_HeadGore() {
+    // Only the big ones: a head kill, energy enough, Gore at Full, never the player.
+    CHECK(HeadGore::ShouldBurst(true, true, false, 2.0f, 2));
+    CHECK(!HeadGore::ShouldBurst(true, true, false, 1.0f, 2));
+    CHECK(!HeadGore::ShouldBurst(true, true, false, 2.0f, 1));
+    CHECK(!HeadGore::ShouldBurst(true, false, false, 2.0f, 2));
+    CHECK(!HeadGore::ShouldBurst(false, true, false, 2.0f, 2));
+    CHECK(!HeadGore::ShouldBurst(true, true, true, 2.0f, 2));
+    // The stump stands along the neck, its front toward the body's facing.
+    const glm::quat q = HeadGore::StumpRotation(glm::vec3(0, 1.5f, 0), glm::vec3(0, 1.6f, 0.02f), glm::vec3(1, 0, 0));
+    const glm::vec3 up = q * glm::vec3(0, 1, 0), front = q * glm::vec3(0, 0, 1);
+    CHECK(up.y > 0.97f && front.x > 0.97f && std::abs(glm::dot(up, front)) < 1e-4f);
+    // Lying on his back (neck -> head along +Z): up follows the neck.
+    const glm::quat lying = HeadGore::StumpRotation(glm::vec3(0, 0.1f, 0), glm::vec3(0, 0.1f, 0.12f), glm::vec3(0, 1, 0));
+    CHECK((lying * glm::vec3(0, 1, 0)).z > 0.99f);
+}
+
 void Test_FxSprites_Sim() {
     int a, b;
     float t;
@@ -807,6 +826,7 @@ void RegisterBloodTests(UnitTestSupport::TestList& tests) {
     tests.push_back({"Blood::KnifeDecals", Test_Blood_KnifeDecals});
     tests.push_back({"Blood::Footprints", Test_Blood_Footprints});
     tests.push_back({"Blood::ScreenBlood", Test_Blood_ScreenBlood});
+    tests.push_back({"Blood::HeadGore", Test_Blood_HeadGore});
     tests.push_back({"FxSprites::Sim", Test_FxSprites_Sim});
     tests.push_back({"KnifeFx::Library", Test_KnifeFx_Library});
 }

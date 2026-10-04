@@ -1204,6 +1204,8 @@ void NpcTest::Blood(World& world, NpcDirector& npcs, float now) {
             bool killed = false, head = false;
             const bool hit = npcs.OnPlayerHit(world, RootId(*n), target, origin, dir, w, &killed, &head);
             m_BSpawnBefore = BloodStats ? BloodStats->SpraysSpawned : 0;
+            m_BPuffsBefore = BloodStats ? BloodStats->Puffs : 0;
+            m_BBurstsBefore = BloodStats ? BloodStats->HeadBursts : 0;
             m_BFired = true;
             m_BFiredAt = now;
             m_BShot = 0;
@@ -1223,8 +1225,15 @@ void NpcTest::Blood(World& world, NpcDirector& npcs, float now) {
             m_BChecked = true;
             Check(BloodStats->SpraysSpawned > m_BSpawnBefore,
                   std::string("blood ") + c.Name + ": a spray thrown (" + std::to_string(BloodStats->SpraysSpawned - m_BSpawnBefore) + ")");
-            if (std::string(c.Name) == "chest_kill")
+            if (std::string(c.Name) == "chest_kill") {
                 Check(BloodStats->LastSprayClipped, "blood chest_kill: the spray meets the wall behind (clip plane set)");
+                Check(BloodStats->LastExited && BloodStats->LastExitFound, "blood chest_kill: the round exits where his back really is");
+            }
+            if (!c.Corpse)
+                Check(BloodStats->Puffs > m_BPuffsBefore, std::string("blood ") + c.Name + ": the impact puff (burst, mist, droplets)");
+            if (std::string(c.Name) == "head_kill")
+                Check(BloodStats->HeadBursts > m_BBurstsBefore && BloodStats->GoreChunks > 0,
+                      "blood head_kill: headshot gore - head off, stump on, " + std::to_string(BloodStats->GoreChunks) + " chunks thrown");
             if (pointBlank)
                 Check(BloodStats->GearSplats > m_BGearBefore,
                       "blood point_blank: blood back on the player's gun / hands (" + std::to_string(BloodStats->GearSplats - m_BGearBefore) + ")");
