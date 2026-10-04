@@ -611,6 +611,58 @@ void Test_Blood_KnifeDecals() {
     CHECK(pool && fx.PoolsSpawned() == 1);
 }
 
+
+void Test_Blood_Footprints() {
+    BloodFx fx;
+    fx.SetSimLookup([](const char*) { return 0; });
+    fx.SetDecalSetLookup([](const char*) { return 0; });
+    fx.SetKnifeLookup([](const char* e, int& cells) {
+        const std::string n(e);
+        cells = n == "footprint" ? 8 : 4;
+        return n == "pool_smooth" || n == "pool_big" ? 10 : n == "footprint" ? 30 : -1;
+    });
+    fx.SetBodyRay([](const glm::vec3&, const glm::vec3&, float, unsigned&, int&, glm::vec3&) { return false; });
+    const glm::vec3 corpse(0.0f, 0.3f, 0.0f);
+    fx.SetBodyLookup([&](unsigned, glm::vec3& c) { c = corpse; return true; });
+    fx.SetRaycast([](const glm::vec3& o, const glm::vec3& d, float maxD, glm::vec3& p, glm::vec3& n) {
+        if (d.y > -0.5f || o.y > maxD) return false;
+        p = glm::vec3(o.x, 0.0f, o.z);
+        n = glm::vec3(0, 1, 0);
+        return true;
+    });
+    // A corpse's pool, grown in.
+    BloodFx::Hit h;
+    h.Point = glm::vec3(0, 1.3f, 0);
+    h.Direction = glm::vec3(1, 0, 0);
+    h.Entity = 3;
+    h.Damage = 40.0f;
+    h.Killed = true;
+    fx.OnFleshHit(h);
+    for (int i = 0; i < 300; ++i) fx.Update(0.1f);
+    CHECK(fx.PoolsSpawned() == 1);
+    // Walking clean: no prints.
+    fx.OnFootstep(-1, glm::vec3(5, 0, 5), glm::vec3(0, 0, -1.5f), 0);
+    CHECK(fx.PrintsSpawned() == 0 && fx.BloodySteps(-1) == 0);
+    // Through the pool, then away: the next steps print, fainter each, then stop.
+    fx.OnFootstep(-1, glm::vec3(0, 0, 0), glm::vec3(0, 0, -1.5f), 1);
+    CHECK(fx.BloodySteps(-1) == BloodFx::kPrintSteps);
+    float lastOpacity = 2.0f;
+    bool fading = true;
+    for (int i = 0; i < 10; ++i) {
+        fx.OnFootstep(-1, glm::vec3(0, 0, -2.0f - 0.7f * (float)i), glm::vec3(0, 0, -1.5f), i % 2);
+        const BloodFx::Decal& d = fx.Decals().back();
+        if (d.Knife == 30 && i < BloodFx::kPrintSteps) { fading &= d.Opacity < lastOpacity; lastOpacity = d.Opacity; }
+    }
+    CHECK(fx.PrintsSpawned() == BloodFx::kPrintSteps && fading && fx.BloodySteps(-1) == 0);
+    // The prints point the way they walked (toe = the image's top = -z of the box, so the box's z runs back).
+    const BloodFx::Decal& print = fx.Decals().back();
+    CHECK(print.Knife == 30 && glm::normalize(glm::vec3(print.Model[2])).z > 0.99f);
+    // Old blood doesn't mark a sole.
+    for (int i = 0; i < 700; ++i) fx.Update(0.1f);
+    fx.OnFootstep(7, glm::vec3(0, 0, 0), glm::vec3(1, 0, 0), -1);
+    CHECK(fx.BloodySteps(7) == 0);
+}
+
 void Test_FxSprites_Sim() {
     int a, b;
     float t;
@@ -725,6 +777,7 @@ void RegisterBloodTests(UnitTestSupport::TestList& tests) {
     tests.push_back({"Blood::ExitWound", Test_Blood_ExitWound});
     tests.push_back({"Blood::Puffs", Test_Blood_Puffs});
     tests.push_back({"Blood::KnifeDecals", Test_Blood_KnifeDecals});
+    tests.push_back({"Blood::Footprints", Test_Blood_Footprints});
     tests.push_back({"FxSprites::Sim", Test_FxSprites_Sim});
     tests.push_back({"KnifeFx::Library", Test_KnifeFx_Library});
 }

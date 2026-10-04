@@ -103,6 +103,13 @@ public:
     void SetSprites(FxSprites* sprites) { m_Sprites = sprites; }
 
     void OnFleshHit(const Hit& hit);
+    // A footfall (FoleyAudio's step listener): `walker` -1 the player, else a soldier; `foot` 0 left, 1 right, -1 unknown.
+    // Stepping in fresh blood on the ground wets that walker's soles; the next steps leave prints, fading.
+    void OnFootstep(int walker, const glm::vec3& feet, const glm::vec3& velocity, int foot);
+    static constexpr int kPrintSteps = 6;     // prints after stepping in it
+    static constexpr float kFreshSeconds = 60.0f; // blood on the ground this young still marks a sole
+    int PrintsSpawned() const { return m_PrintsSpawned; }
+    int BloodySteps(int walker) const;        // prints left for that walker (0: clean soles)
     void Update(float dt);
     void Submit(BloodRenderer& renderer) const;
     void Clear();
@@ -202,6 +209,18 @@ private:
     void SpawnWallDrips(const glm::vec3& at, const glm::vec3& n, float size, float land);
     KnifeFn m_KnifeLookup;
     int m_DripsSpawned = 0;
+    struct Walker {
+        int Id = 0;
+        int Steps = 0;          // prints still to leave
+        int Shoe = 0;           // the footprint cell (one sole pattern per walker)
+        bool Left = false;      // which foot printed last (when the step doesn't say)
+        bool HasLast = false;
+        glm::vec3 Last{0.0f}, Forward{0.0f, 0.0f, -1.0f};
+    };
+    std::vector<Walker> m_Walkers;
+    int m_PrintsSpawned = 0;
+    // Fresh blood on the ground under `feet`: a stain (not a print) younger than kFreshSeconds.
+    bool InFreshBlood(const glm::vec3& feet) const;
     // A splat on `entity` at world `point`, facing world `normal`, `radius` / `depth` in metres.
     void AddSplat(unsigned entity, int part, bool corpse, const glm::vec3& point, const glm::vec3& normal, const glm::vec3& along,
                   const char* set, float radius, float depth, float delay, float grow);
