@@ -89,6 +89,7 @@
 #include "ScreenBloodOverlay.h"
 #include "Combat/ScreenBlood.h"
 #include "Combat/HeadGore.h"
+#include "Combat/ImpactFx.h"
 #include "CombatHud.h"          // ammo, kill feed, radio subtitles, awareness markers, AI overlay
 #include "DevPanel.h"           // F7 dev overlay in Play
 #include "GameViewPanel.h"
@@ -884,6 +885,30 @@ int main(int argc, char** argv) {
         BloodFx bloodFx;            // the volumetric blood out of every body a round goes into (docs/BLOOD_FX.md)
         FxSprites fxSprites;        // the Knife flipbook particles: blood mist, impact dust and debris, muzzle smoke
         bloodFx.SetSprites(&fxSprites);
+        ImpactFx impactFx;          // rounds into the world: per-surface holes and bursts (docs/BLOOD_FX.md)
+        impactFx.SetSprites(&fxSprites);
+        // A round into the world: the surface's burst, and its textured hole on the static world (the procedural
+        // one follows a moving prop).
+        auto worldImpact = [&](std::uint32_t entity, const glm::vec3& point, const glm::vec3& normal, const glm::vec3& dir, float radius) {
+            const glm::vec3 p = point, n = normal;
+            const std::string surface = impactFx.SurfaceOf(world, entity);
+            impactFx.Spawn(surface, p, n, dir);
+            int decal = -1;
+            if (ImpactFx::IsStatic(world, entity)) decal = KnifeFxLibrary::Get().Find(ImpactFx::HoleEntry(surface));
+            bulletHoles.Add(world, static_cast<entt::entity>(entity), point, normal, radius, decal, ImpactFx::HoleSize(surface, radius));
+        };
+        if (npcTest)
+            npcTest->ShootWorld = [&](const glm::vec3& from, const glm::vec3& dir) { // --npc-test blood: rounds into the surfaces
+                const float o[3] = {from.x, from.y, from.z}, d[3] = {dir.x, dir.y, dir.z};
+                QueryFilter f;
+                f.HitTriggers = 0;
+                RaycastHit h;
+                if (!PhysicsWorld::RaycastFiltered(o, d, 20.0f, f, h) || !h.Hit) return false;
+                const glm::vec3 p(h.Point[0], h.Point[1], h.Point[2]), n(h.Normal[0], h.Normal[1], h.Normal[2]);
+                combatFx.Impact(world, h.Entity, p);
+                worldImpact(h.Entity, p, n, dir, 0.0045f);
+                return true;
+            };
         HeadGore headGore;          // big headshot kills: the head blown off (docs/BLOOD_FX.md)
         headGore.SetSprites(&fxSprites);
         headGore.SetBody([&](unsigned entity, HeadGore::Body& out) {
@@ -1107,7 +1132,7 @@ int main(int argc, char** argv) {
             return [&, v, p, eye, h] {
                 bulletHoles.Resolve(world, placedHoles);
                 for (const BulletHoleList::Placed& hole : placedHoles)
-                    weaponFx.AddHole(hole.Position, hole.Normal, hole.Tangent, hole.Radius, hole.Seed);
+                    if (hole.Decal < 0) weaponFx.AddHole(hole.Position, hole.Normal, hole.Tangent, hole.Radius, hole.Seed);
                 FirstPersonPresentation::Laser laser;
                 if (firstPersonPresentation.IsActive() && firstPersonPresentation.LaserBeam(laser)) {
                     // Already from the barrel as seen (FirstPersonPresentation aims from the view
@@ -3019,7 +3044,7 @@ int main(int argc, char** argv) {
                             }
                         }
                         combatFx.Impact(world, hit.Entity, glm::vec3(hit.Point[0], hit.Point[1], hit.Point[2]));
-                        bulletHoles.Add(world, static_cast<entt::entity>(hit.Entity), hit.Point, hit.Normal, hit.HoleRadius);
+                        worldImpact(hit.Entity, hit.Point, hit.Normal, glm::vec3(hit.Direction[0], hit.Direction[1], hit.Direction[2]), hit.HoleRadius);
                     }
                     // Every pellet's line: the report, and rounds cracking past soldiers' heads (suppression).
                     for (const FirstPersonPresentation::ShotTrace& t : firstPersonPresentation.TakeShotTraces()) {
@@ -3048,7 +3073,7 @@ int main(int argc, char** argv) {
                     npcDirector.LateUpdate(world, gameDt, playerSnap);
                     for (const NpcDirector::Impact& imp : npcDirector.TakeImpacts()) {
                         combatFx.Impact(world, imp.Entity, glm::vec3(imp.Point[0], imp.Point[1], imp.Point[2]));
-                        bulletHoles.Add(world, static_cast<entt::entity>(imp.Entity), imp.Point, imp.Normal, imp.Radius);
+                        worldImpact(imp.Entity, imp.Point, imp.Normal, -glm::vec3(imp.Normal[0], imp.Normal[1], imp.Normal[2]), imp.Radius);
                     }
                     for (const CasingSpawn& spawn : npcDirector.TakeEjections()) shellCasings.Spawn(world, assets, spawn);
                     for (const DamageEvent& e : npcDirector.TakePlayerDamage()) {
@@ -3113,6 +3138,22 @@ int main(int argc, char** argv) {
                     headGore.Update(world, gameDt);
                     BloodRenderer::Get().BeginFrame();
                     bloodFx.Submit(BloodRenderer::Get());
+                    {   // The textured bullet holes go in with the blood's decals (the static world, before the moving things).
+                        static std::vector<BulletHoleList::Placed> holes;
+                        bulletHoles.Resolve(world, holes);
+                        for (const BulletHoleList::Placed& hole : holes) {
+                            if (hole.Decal < 0) continue;
+                            const glm::vec3 y = hole.Normal, x = hole.Tangent, z = glm::cross(x, y);
+                            BloodRenderer::Decal d;
+                            d.Model = glm::mat4(glm::vec4(x * hole.Size, 0.0f), glm::vec4(y * 0.06f, 0.0f), glm::vec4(z * hole.Size, 0.0f),
+                                                glm::vec4(hole.Position, 1.0f));
+                            d.Knife = hole.Decal;
+                            d.Cell = (int)(hole.Seed * 4.0f) & 3;
+                            d.NextCell = d.Cell;
+                            d.NormalStrength = 1.0f;
+                            BloodRenderer::Get().AddDecal(d);
+                        }
+                    }
                     FxSpriteRenderer::Get().BeginFrame();
                     fxSprites.Submit(FxSpriteRenderer::Get());
                     if (npcTest) {
@@ -3127,6 +3168,13 @@ int main(int argc, char** argv) {
                         npcTestBlood.LastExited = bloodFx.LastExited();
                         npcTestBlood.LastExitFound = bloodFx.LastExitFound();
                         npcTestBlood.HeadBursts = headGore.Bursts();
+                        npcTestBlood.Impacts = impactFx.Spawned();
+                        npcTestBlood.TexturedHoles = 0;
+                        {
+                            static std::vector<BulletHoleList::Placed> all;
+                            bulletHoles.Resolve(world, all);
+                            for (const auto& hole : all) npcTestBlood.TexturedHoles += hole.Decal >= 0;
+                        }
                         npcTestBlood.GoreChunks = headGore.Chunks();
                         npcTestBlood.GearSplats = 0;
                         for (const BloodFx::Splat& s : bloodFx.Splats()) npcTestBlood.GearSplats += s.Group == kPlayerEntity;
