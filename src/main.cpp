@@ -82,11 +82,13 @@
 #include "Npc/NpcRagdoll.h"
 #include "BloodRenderer.h"
 #include "Audio/FoleyAudio.h"
+#include "Audio/ImpactAudio.h"
 #include "AI/NpcTest.h"         // --npc-test
 #include "Combat/PlayerVitals.h" // the player's health, death and respawn
 #include "PlayerHudOverlay.h"
 #include "ScreenBloodOverlay.h"
 #include "Combat/ScreenBlood.h"
+#include "Combat/HeadGore.h"
 #include "CombatHud.h"          // ammo, kill feed, radio subtitles, awareness markers, AI overlay
 #include "DevPanel.h"           // F7 dev overlay in Play
 #include "GameViewPanel.h"
@@ -882,6 +884,23 @@ int main(int argc, char** argv) {
         BloodFx bloodFx;            // the volumetric blood out of every body a round goes into (docs/BLOOD_FX.md)
         FxSprites fxSprites;        // the Knife flipbook particles: blood mist, impact dust and debris, muzzle smoke
         bloodFx.SetSprites(&fxSprites);
+        HeadGore headGore;          // big headshot kills: the head blown off (docs/BLOOD_FX.md)
+        headGore.SetSprites(&fxSprites);
+        headGore.SetBody([&](unsigned entity, HeadGore::Body& out) {
+            for (const auto& n : npcDirector.Npcs()) {
+                if (!n || (unsigned)entt::to_integral(n->Root) != entity) continue;
+                const entt::entity driver = n->Body.Driver();
+                if (driver == entt::null || !world.Registry.valid(driver)) return false;
+                out.Pieces.clear();
+                out.Pieces.push_back(driver);
+                for (entt::entity p : n->Body.Pieces())
+                    if (p != driver) out.Pieces.push_back(p);
+                if (!n->Body.BoneWorld(world, "head", out.Head) || !n->Body.BoneWorld(world, "neck_01", out.Neck)) return false;
+                out.Forward = glm::vec3(world.GetCachedWorldTransform(n->Root)[2]); // the body root's facing
+                return true;
+            }
+            return false;
+        });
         FoleyAudio::Get().SetStepListener([&bloodFx](int walker, const glm::vec3& feet, const glm::vec3& vel, int foot) {
             bloodFx.OnFootstep(walker, feet, vel, foot); // bloody footprints out of fresh blood
         });
@@ -1679,6 +1698,7 @@ int main(int argc, char** argv) {
             bloodFx.Clear();
             fxSprites.Clear();
             screenBlood.Clear();
+            headGore.Clear(world);
             {   // the scene's blood tuning: the first Blood Settings component, defaults when none
                 BloodSettingsComponent b;
                 if (const auto all = world.Registry.view<BloodSettingsComponent>(); all.begin() != all.end())
@@ -1814,6 +1834,7 @@ int main(int argc, char** argv) {
             fxSprites.Clear();
             FxSpriteRenderer::Get().BeginFrame();
             screenBlood.Clear();
+            headGore.Clear(world);
             shellCasings.Clear(world);
             editor.OnExitPlayMode(world, assets);
             playing = false;
@@ -3055,6 +3076,11 @@ int main(int argc, char** argv) {
                         h.Origin = f.Origin;
                         h.ByPlayer = f.ByPlayer;
                         bloodFx.OnFleshHit(h);
+                        // A head taken apart: off it comes, with the wet crunch over the flesh hit (AE Master's gore takes).
+                        if (bloodFx.Config.Enabled &&
+                            HeadGore::ShouldBurst(h.Head, h.Killed, h.Player, bloodFx.LastEnergy(), bloodFx.Config.Gore) &&
+                            headGore.Burst(world, assets, h.Entity, h.Point, h.Direction, bloodFx.LastEnergy()))
+                            ImpactAudio::Get().Gore(h.Point, 1.0f);
                     }
                     if (npcTest) npcTest->After(world, npcDirector, playerVitals, player);
                 }
@@ -3084,6 +3110,7 @@ int main(int argc, char** argv) {
                     bloodFx.Update(gameDt);
                     fxSprites.Update(gameDt);
                     screenBlood.Update(gameDt);
+                    headGore.Update(world, gameDt);
                     BloodRenderer::Get().BeginFrame();
                     bloodFx.Submit(BloodRenderer::Get());
                     FxSpriteRenderer::Get().BeginFrame();
@@ -3096,6 +3123,11 @@ int main(int argc, char** argv) {
                         npcTestBlood.DecalsSpawned = bloodFx.DecalsSpawned();
                         npcTestBlood.PoolsSpawned = bloodFx.PoolsSpawned();
                         npcTestBlood.SplatsSpawned = bloodFx.SplatsSpawned();
+                        npcTestBlood.Puffs = bloodFx.PuffsSpawned();
+                        npcTestBlood.LastExited = bloodFx.LastExited();
+                        npcTestBlood.LastExitFound = bloodFx.LastExitFound();
+                        npcTestBlood.HeadBursts = headGore.Bursts();
+                        npcTestBlood.GoreChunks = headGore.Chunks();
                         npcTestBlood.GearSplats = 0;
                         for (const BloodFx::Splat& s : bloodFx.Splats()) npcTestBlood.GearSplats += s.Group == kPlayerEntity;
                         for (const Profiler::Entry& e : Profiler::GetLastFrameGpu()) {

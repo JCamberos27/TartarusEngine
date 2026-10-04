@@ -52,8 +52,8 @@ def classify(e):
     m = re.fullmatch(r"snd\.impact\.(\w+)", key)
     if m:
         mat = m.group(1)
-        if mat == "flesh":
-            return "flesh", L["flesh"], "played"
+        if mat in ("flesh", "gore"):
+            return "flesh", L["flesh"] + (2.0 if mat == "gore" else 0.0), "played"
         return "impact", L["impact"] + S.get(mat, 0.0), "played"
     m = re.fullmatch(r"snd\.casing\.(rifle|shell)\.(\w+)", key)
     if m:
