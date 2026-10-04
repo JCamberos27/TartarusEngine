@@ -511,6 +511,19 @@ sprays played at the packs' cinematic pace, and stains dried and vanished in fro
   sheet join the KriptoFX stains (round drops only on floors); every splash may be mirrored. All in the palette.
 - **Footprints:** pool-coloured (an explicit `Blood` flag replaces the gloss test), point the way the player faces,
   14 prints a trail (128 kept).
+- **v3.1 (play-test feedback):**
+  - **Bullet holes at calibre:** AKS-74U 5.45 mm (`bulletHoleRadius` 0.0027), Remington 00 buck 8.4 mm (0.0042). The
+    PRO decal is sized so its hole is 1.15x the calibre (`ImpactFx::HoleFraction`, measured per surface off the albedos),
+    and its chipped rim fades out at 3x the hole radius (`HoleRim`, `BloodRenderer::Decal::Rim`, the shader's rim cut).
+  - **One pool per body**, from the torso's middle (pelvis toward chest), once the body has stopped moving (two looks
+    0.2 s apart within 3 cm, or 4 s); corpse shots splash but no longer pool.
+  - **Faster, bloodier:** Speed 2.0; landed splashes pop in (0.04-0.08 s); throws 25% faster; ~1.3x drops, 1.5x specks.
+  - **The player's gear:** their own wound never lands on the gun (`kBodyOnlyPart`); gun blood is small speckles, not
+    stacked, at most 14, and never evicted or dried. Gun splats are keyed by the weapon model
+    (`SplatSpace::Keys`, `SetMemberResolver`, `DrawnOn`), so a weapon swap brings them back.
+  - **Drying only out of view** (`DryAge`), 30 min (pools 2.5x); body splats dry only while their body is out of view.
+  - **Stain budget:** 1024; the farthest small unseen mark goes first; never a print or pool while anything else can.
+  - **Footprints:** their own budget (200), kept 10 min, then a 3 min fade; over budget the oldest fades over 20 s.
 - **Removed:** screen blood and headshot gore (see v2 above). `Gore` is now 0 off / 1 on.
 - **Lighter import:** the Knife catalogue only holds what's drawn (dropped trails, handprints, the skin hole,
   `blood_side`, `blood_spurt`, `blood_blob`, `pool_big`).

@@ -161,7 +161,7 @@ public:
     struct ShotHit {
         glm::vec3 Point{0.0f}, Normal{0.0f, 1.0f, 0.0f};
         unsigned Entity = 0xFFFFFFFFu;
-        float HoleRadius = 0.0045f; // the weapon's bullet hole, metres
+        float HoleRadius = 0.0027f; // the weapon's bullet hole, metres (a 5.45 mm round)
         glm::vec3 Origin{0.0f}, Direction{0.0f, 0.0f, -1.0f}; // the ray it came down (muzzle, unit)
         int Pellets = 1;            // rays in the round it belongs to (a shotgun's pellets)
     };

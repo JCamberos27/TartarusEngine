@@ -30,6 +30,8 @@ public:
     // The surface's hole decal (a KnifeFxLibrary id; -1 when the library lacks it) and its size (metres across).
     static const char* HoleEntry(const std::string& surface);
     static float HoleSize(const std::string& surface, float radius);
+    static float HoleFraction(const std::string& surface); // the hole's width in its decal, x the cell
+    static float HoleRim(const std::string& surface);      // how far out its chipped rim shows (cell half-widths)
     // Whether `entity` is part of the static world (a decal projects onto it): no rigidbody, no skeleton.
     static bool IsStatic(const World& world, std::uint32_t entity);
 
