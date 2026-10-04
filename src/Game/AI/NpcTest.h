@@ -64,6 +64,9 @@ public:
         int GearSplats = 0; // splats on the player's gun / hands / body
         bool LastSprayClipped = false;
         float GpuMsAvg = 0.0f, GpuMsMax = 0.0f;
+        // v2 (the Knife packs): impact puffs, exits, headshot gore
+        int Puffs = 0, HeadBursts = 0, GoreChunks = 0;
+        bool LastExited = false, LastExitFound = false;
     };
     const BloodView* BloodStats = nullptr;
 
@@ -76,7 +79,7 @@ private:
     void Reload(World& world, NpcDirector& npcs, float now);
     void Blood(World& world, NpcDirector& npcs, float now);
     // blood
-    int m_BStep = 0, m_BCase = 0, m_BShot = 0, m_BSpawnBefore = 0, m_BGearBefore = 0;
+    int m_BStep = 0, m_BCase = 0, m_BShot = 0, m_BSpawnBefore = 0, m_BGearBefore = 0, m_BPuffsBefore = 0, m_BBurstsBefore = 0;
     bool m_BFired = false, m_BChecked = false, m_BCamSet = false, m_BOverview = false, m_BCloseUp = false;
     float m_BAt = 0.0f, m_BFiredAt = 0.0f;
     std::vector<std::string> m_BLine;

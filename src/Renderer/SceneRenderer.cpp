@@ -448,6 +448,10 @@ void SceneRenderer::RenderScene(World& world, const RenderFrameContext& ctx,
             for (int w = 0; w < 16; ++w) cameraMask[w] |= bodyTag->SleeveBones[w];
             anyCameraMask = true;
         }
+        if (const auto* gore = world.Registry.try_get<GoreHideTag>(entity)) { // a head blown off: gone in every view
+            for (int w = 0; w < 16; ++w) cameraMask[w] |= gore->Bones[w];
+            anyCameraMask = true;
+        }
         const float nearHideWidth = cameraBody ? bodyTag->NearHideWidth : 0.0f;
         const unsigned collarVerts = cameraBody && bodyTag->CollarVerts ? bodyTag->CollarVerts->Id() : 0u;
         const auto* outfitHide = world.Registry.try_get<OutfitHideTag>(entity);

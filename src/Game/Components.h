@@ -336,6 +336,12 @@ struct HiddenFromOwnerTag {};
 // floating beside the hand. SleeveBones marks the arm's palette bones (the upper arms and everything under
 // them); with SleevesInViewModel set, the renderer draws the piece twice: the world pass without the
 // vertices weighted mostly to them, the view-model pass with only those. The seam is at the shoulder.
+// Headshot gore (Combat/HeadGore, docs/BLOOD_FX.md): this skinned piece no longer draws the vertices weighted mostly
+// to these palette bones (the head and everything under it) - in every view. Runtime only.
+struct GoreHideTag {
+    std::uint32_t Bones[16] = {}; // bit per palette bone
+};
+
 struct PlayerBodyTag {
     // Not drawn in the camera's world pass at all (the head, and what an outfit hangs on it): the camera is
     // inside it. Shadows, the Scene view and every other view still draw it.
