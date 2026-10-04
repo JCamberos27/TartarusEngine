@@ -887,6 +887,7 @@ int main(int argc, char** argv) {
         bloodFx.SetSprites(&fxSprites);
         ImpactFx impactFx;          // rounds into the world: per-surface holes and bursts (docs/BLOOD_FX.md)
         impactFx.SetSprites(&fxSprites);
+        combatFx.SetSprites(&fxSprites); // PRO Effects' muzzle layers (Muzzle Style 1)
         // A round into the world: the surface's burst, and its textured hole on the static world (the procedural
         // one follows a moving prop).
         auto worldImpact = [&](std::uint32_t entity, const glm::vec3& point, const glm::vec3& normal, const glm::vec3& dir, float radius) {
