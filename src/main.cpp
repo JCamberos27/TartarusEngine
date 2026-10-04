@@ -90,6 +90,7 @@
 #include "Combat/ScreenBlood.h"
 #include "Combat/HeadGore.h"
 #include "Combat/ImpactFx.h"
+#include "Combat/BloodLab.h"
 #include "CombatHud.h"          // ammo, kill feed, radio subtitles, awareness markers, AI overlay
 #include "DevPanel.h"           // F7 dev overlay in Play
 #include "GameViewPanel.h"
@@ -910,7 +911,77 @@ int main(int argc, char** argv) {
                 worldImpact(h.Entity, p, n, dir, 0.0045f);
                 return true;
             };
+        BloodLab bloodLab;          // F7 -> Blood Lab: fire any blood / impact effect at the crosshair, tune it live
+        // What the crosshair is on: a soldier's part (entity, part) or the world (entity, normal). False: nothing in reach.
+        auto aimAt = [&](glm::vec3& point, glm::vec3& normal, unsigned& entity, int& part, bool& body) {
+            const glm::vec3 o = player.Cam.Position, d = player.Cam.Front();
+            const float oo[3] = {o.x, o.y, o.z}, dd[3] = {d.x, d.y, d.z};
+            PhysicsWorld::BodyPartHit bp;
+            QueryFilter f;
+            f.HitTriggers = 0;
+            RaycastHit h;
+            const bool world_ = PhysicsWorld::RaycastFiltered(oo, dd, 200.0f, f, h) && h.Hit;
+            if (PhysicsWorld::RaycastBodyParts(oo, dd, 200.0f, bp) && (!world_ || glm::length(glm::vec3(bp.Point[0], bp.Point[1], bp.Point[2]) - o) < h.Distance)) {
+                point = glm::vec3(bp.Point[0], bp.Point[1], bp.Point[2]);
+                normal = -d;
+                entity = bp.Entity;
+                part = bp.Part;
+                body = true;
+                return true;
+            }
+            if (!world_) return false;
+            point = glm::vec3(h.Point[0], h.Point[1], h.Point[2]);
+            normal = glm::vec3(h.Normal[0], h.Normal[1], h.Normal[2]);
+            entity = h.Entity;
+            part = -1;
+            body = false;
+            return true;
+        };
+        bloodLab.Actions.FireAtCrosshair = [&](float damage, int pellets, bool head) {
+            glm::vec3 p, n;
+            unsigned e = 0;
+            int part = -1;
+            bool body = false;
+            if (!aimAt(p, n, e, part, body)) return;
+            const glm::vec3 o = player.Cam.Position, d = glm::normalize(p - o);
+            if (!body) { worldImpact(e, p, n, d, 0.0045f); return; }
+            if (head) // on the head whatever part was under the crosshair
+                for (const auto& npc : npcDirector.Npcs())
+                    if (npc && (unsigned)entt::to_integral(npc->Root) == e && npc->Hitboxes && npc->Hitboxes->Active()) p = npc->Hitboxes->Centre(npc->Body, 2);
+            FirstPersonWeaponGameplay w = firstPersonPresentation.Set().Gameplay;
+            w.Damage = damage;
+            w.Pellets = pellets;
+            bool killed = false, headHit = false;
+            for (int i = 0; i < pellets; ++i)
+                npcDirector.OnPlayerHit(world, e, p + glm::vec3((float)(i % 3) - 1.0f, (float)(i / 3) - 1.0f, 0.0f) * (pellets > 1 ? 0.06f : 0.0f), o,
+                                        glm::normalize(p - o), w, &killed, &headHit);
+        };
+        bloodLab.Actions.PoolAtCrosshair = [&] {
+            glm::vec3 p, n;
+            unsigned e = 0;
+            int part = -1;
+            bool body = false;
+            if (aimAt(p, n, e, part, body) && !body && n.y > 0.6f) bloodFx.SpawnPoolAt(p, n, 1.2f);
+        };
+        bloodLab.Actions.DripsAtCrosshair = [&] {
+            glm::vec3 p, n;
+            unsigned e = 0;
+            int part = -1;
+            bool body = false;
+            if (aimAt(p, n, e, part, body) && !body) bloodFx.SpatterWallAt(p, n, 0.6f);
+        };
+        bloodLab.Actions.ImpactAtCrosshair = [&] {
+            glm::vec3 p, n;
+            unsigned e = 0;
+            int part = -1;
+            bool body = false;
+            if (aimAt(p, n, e, part, body) && !body) {
+                combatFx.Impact(world, e, p);
+                worldImpact(e, p, n, glm::normalize(p - player.Cam.Position), 0.0045f);
+            }
+        };
         HeadGore headGore;          // big headshot kills: the head blown off (docs/BLOOD_FX.md)
+
         headGore.SetSprites(&fxSprites);
         headGore.SetBody([&](unsigned entity, HeadGore::Body& out) {
             for (const auto& n : npcDirector.Npcs()) {
@@ -1063,6 +1134,14 @@ int main(int argc, char** argv) {
         PlayerHudOverlay playerHud; // health, damage direction, hitmarker, death
         ScreenBlood screenBlood;    // blood on the view when the player is hurt (docs/BLOOD_FX.md)
         ScreenBloodOverlay screenBloodOverlay;
+        bloodLab.Actions.Hurt = [&](float damage) { screenBlood.OnHurt(damage, 1.5708f, playerVitals.Health01()); };
+        bloodLab.Actions.ClearAll = [&] {
+            bloodFx.Clear();
+            fxSprites.Clear();
+            bulletHoles.Clear();
+            headGore.Clear(world);
+            screenBlood.Clear();
+        };
         CombatHud combatHud;        // ammo, kill feed, radio subtitles, awareness chevrons, AI debug overlay
         DevPanel devPanel;          // F7 / F8 / F9 dev tools in Play
         glm::vec3 deathCamOffset(0.0f); // the death camera's drop, on the camera only after the late pose
@@ -4444,7 +4523,25 @@ int main(int argc, char** argv) {
                     ctx.Npcs = &npcDirector;
                     ctx.Vitals = &playerVitals;
                     ctx.Weapon = &firstPersonPresentation;
+                    ctx.BloodLab = &bloodLab.Open;
                     devPanel.Draw(ctx); // the F7 dev panel (an ImGui window over docked or maximized play)
+                }
+                if (playing && devKeys && playUsesPlayer && bloodLab.Open) {
+                    BloodLab::Stats st;
+                    st.Sprays = (int)bloodFx.Sprays().size();
+                    st.Stains = (int)bloodFx.Decals().size();
+                    st.Splats = (int)bloodFx.Splats().size();
+                    st.Sprites = (int)fxSprites.Live().size();
+                    st.Holes = (int)bulletHoles.Size();
+                    for (const Profiler::Entry& e : Profiler::GetLastFrameGpu()) {
+                        if (e.Name == "Blood Sprays") st.SprayMs = e.Milliseconds;
+                        if (e.Name == "Blood Decals") st.DecalMs = e.Milliseconds;
+                        if (e.Name == "FX Sprites") st.SpriteMs = e.Milliseconds;
+                    }
+                    st.BloodData = BloodRenderer::Get().Loaded();
+                    st.KnifeData = KnifeFxLibrary::Get().Loaded();
+                    st.GoreMeshes = std::filesystem::exists(std::filesystem::u8path(ProjectPaths::Resolve("assets/Effects/Knife/Gore/exploded_head.fbx")));
+                    bloodLab.Draw(bloodFx, screenBlood, st);
                 }
                 // One coalesced, atomic prefs write per frame for however many preference
                 // controls changed this frame (audit CPP-206 / PERF-211).
