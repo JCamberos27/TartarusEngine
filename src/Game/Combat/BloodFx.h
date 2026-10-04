@@ -65,6 +65,9 @@ public:
     void SetSimLookup(SimFn fn) { m_SimLookup = std::move(fn); }
     // Decal set name -> the renderer's index (-1 = none). Defaults to BloodRenderer::Get().
     void SetDecalSetLookup(SimFn fn) { m_SetLookup = std::move(fn); }
+    // Knife library entry name -> id and its cell count (-1 = not there). Defaults to KnifeFxLibrary::Get().
+    using KnifeFn = std::function<int(const char* entry, int& cells)>;
+    void SetKnifeLookup(KnifeFn fn) { m_KnifeLookup = std::move(fn); }
     // Where a body is now (its pelvis), for the pool under a corpse; false once it's gone. Set by the host.
     using BodyFn = std::function<bool(unsigned entity, glm::vec3& centre)>;
     void SetBodyLookup(BodyFn fn) { m_Body = std::move(fn); }
@@ -125,8 +128,14 @@ public:
         float PoolGrow = 0.0f;
         float DrySeconds = 90.0f;
         float Opacity = 1.0f;
+        // A Knife library decal (v2) instead of a KriptoFX set: its id and cell; a flipbook (the wall drips)
+        // runs through Frames cells, FrameSeconds each, from landing.
+        int Knife = -1;
+        int Cell = 0, Frames = 1;
+        float FrameSeconds = 0.0f;
     };
     const std::vector<Decal>& Decals() const { return m_Decals; }
+    int DripsSpawned() const { return m_DripsSpawned; }
     struct Splat {
         unsigned Group = 0xFFFFFFFFu;
         unsigned Member = 0xFFFFFFFFu; // the entity that draws it (its bind space)
@@ -185,6 +194,14 @@ private:
     Decal* AddDecal(const char* set, const glm::vec3& centre, const glm::vec3& up, const glm::vec3& along, const glm::vec3& extent,
                     float delay);
     glm::vec3 RandomTangent(const glm::vec3& n);
+    // A Knife decal: `entry`'s cell `cell` (-1 a random one) on the surface at `centre` facing `up`; the image's
+    // u along `along`, its v (top to bottom) along up x along. Null when the library lacks it.
+    Decal* AddKnifeDecal(const char* entry, const glm::vec3& centre, const glm::vec3& up, const glm::vec3& along, const glm::vec3& extent,
+                         float delay, int cell = -1);
+    // Drips running down a wall from the spatter at `at` (facing `n`), from `land` seconds on.
+    void SpawnWallDrips(const glm::vec3& at, const glm::vec3& n, float size, float land);
+    KnifeFn m_KnifeLookup;
+    int m_DripsSpawned = 0;
     // A splat on `entity` at world `point`, facing world `normal`, `radius` / `depth` in metres.
     void AddSplat(unsigned entity, int part, bool corpse, const glm::vec3& point, const glm::vec3& normal, const glm::vec3& along,
                   const char* set, float radius, float depth, float delay, float grow);

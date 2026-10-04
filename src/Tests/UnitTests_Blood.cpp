@@ -566,6 +566,51 @@ void Test_Blood_Puffs() {
     CHECK(sprites.Live().empty());
 }
 
+
+void Test_Blood_KnifeDecals() {
+    BloodFx fx;
+    fx.SetSimLookup([](const char*) { return 0; });
+    fx.SetDecalSetLookup([](const char*) { return 0; });
+    fx.SetKnifeLookup([](const char* e, int& cells) {
+        const std::string n(e);
+        cells = n.rfind("leak", 0) == 0 ? 30 : 4;
+        return n == "pool_smooth" ? 10 : n == "pool_big" ? 11 : n.rfind("leak", 0) == 0 ? 20 : -1;
+    });
+    fx.SetBodyRay([](const glm::vec3&, const glm::vec3&, float, unsigned&, int&, glm::vec3&) { return false; });
+    glm::vec3 corpse(0.0f, 0.3f, -0.5f);
+    fx.SetBodyLookup([&](unsigned, glm::vec3& c) { c = corpse; return true; });
+    // A floor at y = 0 and a wall 1 m along -Z.
+    fx.SetRaycast([](const glm::vec3& o, const glm::vec3& d, float maxD, glm::vec3& p, glm::vec3& n) {
+        if (d.y < -0.5f) { if (o.y > maxD) return false; p = glm::vec3(o.x, 0.0f, o.z); n = glm::vec3(0, 1, 0); return true; }
+        if (d.z < -0.5f) { if (o.z + 1.0f > maxD) return false; p = glm::vec3(o.x, o.y, -1.0f); n = glm::vec3(0, 0, 1); return true; }
+        return false;
+    });
+    BloodFx::Hit h;
+    h.Point = glm::vec3(0, 1.3f, 0);
+    h.Direction = glm::vec3(0, 0, -1);
+    h.Entity = 3;
+    h.Damage = 40.0f;
+    h.Killed = true;
+    fx.OnFleshHit(h);
+    // The wall spatter runs down in drips: Knife leak flipbooks hanging under it, image top at the spatter.
+    CHECK(fx.DripsSpawned() >= 1);
+    const BloodFx::Decal* drip = nullptr;
+    for (const BloodFx::Decal& d : fx.Decals())
+        if (d.Knife == 20) drip = &d;
+    CHECK(drip && drip->Frames == 30 && drip->Cell == 0 && drip->FrameSeconds > 0.0f);
+    if (drip) {
+        const glm::vec3 x(drip->Model[0]), y(drip->Model[1]), z(drip->Model[2]);
+        CHECK(glm::normalize(y).z > 0.99f);              // projects onto the wall
+        CHECK(glm::normalize(z).y < -0.99f);             // the image's v runs down it
+        CHECK(std::abs(glm::normalize(x).y) < 1e-3f);    // u across, level
+    }
+    // The corpse's pool is a Knife PBR pool.
+    for (int i = 0; i < 40; ++i) fx.Update(0.1f);
+    bool pool = false;
+    for (const BloodFx::Decal& d : fx.Decals()) pool |= d.Knife == 10 || d.Knife == 11;
+    CHECK(pool && fx.PoolsSpawned() == 1);
+}
+
 void Test_FxSprites_Sim() {
     int a, b;
     float t;
@@ -679,6 +724,7 @@ void RegisterBloodTests(UnitTestSupport::TestList& tests) {
     tests.push_back({"Blood::Energy", Test_Blood_Energy});
     tests.push_back({"Blood::ExitWound", Test_Blood_ExitWound});
     tests.push_back({"Blood::Puffs", Test_Blood_Puffs});
+    tests.push_back({"Blood::KnifeDecals", Test_Blood_KnifeDecals});
     tests.push_back({"FxSprites::Sim", Test_FxSprites_Sim});
     tests.push_back({"KnifeFx::Library", Test_KnifeFx_Library});
 }
