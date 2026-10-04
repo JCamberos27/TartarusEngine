@@ -115,7 +115,7 @@ void main() {
         float wet = uRough.x; // a film
         if ((d.Kind.y & kEntryAlbedo) != 0) {
             albedo = pow(col.rgb, vec3(2.2)); // authored sRGB
-            blood = gloss > 0.85; // Real Blood's pools and prints; the bullet holes are their surface's own
+            blood = d.Kind.z != 0; // Real Blood's pools and prints; the bullet holes are their surface's own
             if (blood) {
                 // The pack's own colour is a different red from the rest: keep only how light or dark each texel is
                 // (its detail) and take the hue from the palette, so every stain is one material.
@@ -124,10 +124,8 @@ void main() {
                 // The pack's alpha is its edge, not a thickness (Unity blends it as transparency): the body of the
                 // stain is solid, or the floor shows through it milky at a grazing look.
                 core = clamp(col.a * 1.6, 0.0, 1.0) * alpha;
-                if (d.Kind.x == 0) { // the large library: pools - deep, so darker, like a spatter's pooled core
-                    wet = uRough.y;
-                    albedo *= 0.65;
-                }
+                albedo *= 0.65; // pools and the prints out of them: the same deep red as a spatter's pooled core
+                if (d.Kind.x == 0) wet = uRough.y; // the large library: pools
             }
         } else {
             albedo = mix(uFreshColor, uDriedColor, dry) * mix(1.0, 0.6, core);

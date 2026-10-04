@@ -143,6 +143,7 @@ void BloodFx::Clear() {
     m_Pools.clear();
     m_Recent.clear();
     m_Walkers.clear();
+    m_Bleeds.clear();
     m_Now = 0.0f;
 }
 
@@ -371,7 +372,7 @@ bool BloodFx::InFreshBlood(const glm::vec3& feet) const {
     return false;
 }
 
-void BloodFx::OnFootstep(int walker, const glm::vec3& feet, const glm::vec3& velocity, int foot) {
+void BloodFx::OnFootstep(int walker, const glm::vec3& feet, const glm::vec3& velocity, int foot, const glm::vec3& facing) {
     if (!Config.Enabled || Config.Gore <= 0) return;
     EnsureHooks();
     Walker* w = nullptr;
@@ -383,9 +384,10 @@ void BloodFx::OnFootstep(int walker, const glm::vec3& feet, const glm::vec3& vel
         m_Walkers.push_back(nw);
         w = &m_Walkers.back();
     }
-    // Which way they're walking: the velocity, else from the last step.
-    const glm::vec3 flatVel(velocity.x, 0.0f, velocity.z);
-    if (glm::length(flatVel) > 0.3f) w->Forward = glm::normalize(flatVel);
+    // Which way the feet point: where they face when that's known, else the way they walk (the velocity, the last step).
+    const glm::vec3 flatFace(facing.x, 0.0f, facing.z), flatVel(velocity.x, 0.0f, velocity.z);
+    if (glm::length(flatFace) > 0.1f) w->Forward = glm::normalize(flatFace);
+    else if (glm::length(flatVel) > 0.3f) w->Forward = glm::normalize(flatVel);
     else if (w->HasLast && glm::length(glm::vec2(feet.x - w->Last.x, feet.z - w->Last.z)) > 0.15f)
         w->Forward = glm::normalize(glm::vec3(feet.x - w->Last.x, 0.0f, feet.z - w->Last.z));
     w->Last = feet;
@@ -412,7 +414,7 @@ void BloodFx::OnFootstep(int walker, const glm::vec3& feet, const glm::vec3& vel
     // The print's toe (the image's top) forward: v runs heel-ward, so u = forward x up.
     const glm::vec3 along = glm::cross(w->Forward, n);
     if (Decal* d = AddKnifeDecal("footprint", p + n * 0.005f, n, along, glm::vec3(0.13f, 0.15f, 0.3f), 0.0f, w->Shoe)) {
-        d->Opacity = 0.35f + 0.6f * strength; // each print a little fainter
+        d->Opacity = 0.45f + 0.55f * strength; // each print a little fainter, the trail running out over kPrintSteps
         d->PoolGrow = 0.05f;
         ++m_PrintsSpawned;
     }
@@ -551,14 +553,16 @@ void BloodFx::OnFleshHit(const Hit& hit) {
     // the exit's wider mess; on the living, a run of it down from the wound. The hit point is on the hit part's
     // capsule, not the cloth, so each projects 30 cm deep; only surfaces facing its way take it.
     if (!hit.Player) {
+        // A torso wound is a tight hole in the cloth; a head wound bleeds wide (scalp and face), its exit wider still.
         const float k = std::clamp(0.8f + hit.Damage / 150.0f, 0.8f, 1.4f);
-        AddSplat(hit.Entity, hit.Part, hit.Corpse, hit.Point, -dir, RandomTangent(-dir), "attached", 0.08f * k, 0.3f, 0.0f, 0.15f);
+        const float entry = hit.Head ? 0.075f : 0.05f, exitR = hit.Head ? 0.16f : 0.095f, run = hit.Head ? 0.13f : 0.1f;
+        AddSplat(hit.Entity, hit.Part, hit.Corpse, hit.Point, -dir, RandomTangent(-dir), "attached", entry * k, 0.3f, 0.0f, 0.15f);
         if (!hit.Corpse) {
             if (canExit) // the exit's wider mess, on the far side where the round came out (or about where it must have)
                 AddSplat(hit.Entity, hit.Part, false, m_LastExitFound ? exitPoint + dir * 0.03f : hit.Point + dir * (hit.Head ? 0.16f : 0.24f), dir, RandomTangent(dir), Random01() < 0.5f ? "blood7" : "attached",
-                         0.14f * k, 0.3f, 0.0f, 0.2f);
+                         exitR * k, 0.3f, 0.0f, 0.2f);
             AddSplat(hit.Entity, hit.Part, false, hit.Point - glm::vec3(0.0f, 0.12f * k, 0.0f), -dir, glm::vec3(0.0f, -1.0f, 0.0f),
-                     "char", 0.15f * k, 0.3f, 0.05f, 1.5f);
+                     "char", run * k, 0.3f, 0.05f, 1.5f);
         }
     }
     // The player's own: a wound where they were hit, and some of it on their hands and gun.
@@ -593,6 +597,19 @@ void BloodFx::OnFleshHit(const Hit& hit) {
             AddSplat(prop, -1, false, p, n, RandomTangent(n), Random01() < 0.5f ? "blood1" : "blood6", 0.3f * size, 0.15f,
                      glm::length(p - from) / 12.0f, 0.15f);
     }
+    if (!hit.Player) SpawnGroundSplatter(hit, energy, sprayFrom, Flat(sprayDir), forward);
+    // A living wound keeps bleeding: drops under him as he goes (a head or a hard hit bleeds faster).
+    if (!hit.Player && !hit.Killed && !hit.Corpse) {
+        Bleed* b = nullptr;
+        for (Bleed& x : m_Bleeds)
+            if (x.Entity == hit.Entity) b = &x;
+        if (!b) {
+            m_Bleeds.push_back({hit.Entity, 0.0f, m_Now + 0.4f, 0.0f});
+            b = &m_Bleeds.back();
+        }
+        b->Until = m_Now + kBleedSeconds;
+        b->Rate = std::max(b->Rate, std::clamp(0.45f / std::max(energy, 0.3f), 0.25f, 0.8f) * (hit.Head ? 0.7f : 1.0f)); // seconds between drops
+    }
     // A head shot throws some of it up: the ceiling above, if there's one within reach.
     if (hit.Head && !hit.Player) {
         glm::vec3 p, n;
@@ -604,6 +621,83 @@ void BloodFx::OnFleshHit(const Hit& hit) {
     }
     // A body that died here bleeds out where it comes to rest.
     if (hit.Killed && !hit.Player && Config.Pools) m_Pools.push_back({hit.Entity, m_Now + 0.8f + 0.5f * Random01(), size});
+}
+
+float BloodFx::GroundSplatterSize(const Hit& hit, float energy) {
+    float s = hit.Head ? 0.5f : 0.3f;
+    if (hit.Head && hit.Killed) s = 0.7f;
+    if (hit.Corpse) s = 0.22f;
+    return s * std::clamp(0.75f + 0.25f * energy, 0.8f, 1.4f);
+}
+
+bool BloodFx::Bleeding(unsigned entity) const {
+    for (const Bleed& b : m_Bleeds)
+        if (b.Entity == entity && m_Now <= b.Until) return true;
+    return false;
+}
+
+bool BloodFx::ThrowArc(const glm::vec3& from, const glm::vec3& velocity, glm::vec3& point, glm::vec3& normal, glm::vec3& vel,
+                       float& seconds) const {
+    // Short straight steps along the fall (gravity only: the drops are heavy and quick), the first surface met.
+    constexpr float kStep = 0.035f, kMax = 1.4f; // ~40 short rays an arc at most
+    glm::vec3 p = from, v = velocity;
+    for (float t = 0.0f; t < kMax; t += kStep) {
+        const glm::vec3 nv = v + glm::vec3(0.0f, -9.81f, 0.0f) * kStep;
+        const glm::vec3 np = p + (v + nv) * (0.5f * kStep);
+        const glm::vec3 seg = np - p;
+        const float len = glm::length(seg);
+        glm::vec3 hp, hn;
+        if (len > 1e-5f && m_Ray(p, seg / len, len, hp, hn)) {
+            point = hp;
+            normal = glm::normalize(hn);
+            vel = v;
+            seconds = t + kStep * glm::length(hp - p) / len;
+            return true;
+        }
+        p = np;
+        v = nv;
+    }
+    return false;
+}
+
+void BloodFx::SpawnGroundSplatter(const Hit& hit, float energy, const glm::vec3& from, const glm::vec3& flatDir, bool forward) {
+    EnsureHooks();
+    // Thrown out of the wound along the round's line, faster the harder the hit (a corpse's barely leaves it, a round
+    // that stayed in only spills back out), and splashed on whatever it comes down on: floor, wall, crate, stairs.
+    const float speed = hit.Corpse ? 0.4f : forward ? (2.2f + 1.6f * std::min(energy, 2.0f)) * (hit.Head ? 1.15f : 1.0f) : 1.2f;
+    const glm::vec3 up(0.0f, 1.0f, 0.0f);
+    const glm::vec3 side = glm::normalize(glm::cross(flatDir, up));
+    const float timeScale = 1.6f / std::max(Config.Speed, 0.1f); // the default Speed is real time; it scales like the sprays
+    static const char* const kStreaks[] = {"blood1", "blood2_right", "blood9", "blood3"};
+    auto splash = [&](const glm::vec3& v0, float size, const char* set, float grow) -> bool {
+        glm::vec3 p, n, v;
+        float t = 0.0f;
+        if (!ThrowArc(from, v0, p, n, v, t)) return false;
+        // Stretched along the way it was going on that surface, longer the more it skidded in (a grazing landing).
+        glm::vec3 along = v - n * glm::dot(v, n);
+        const float skid = glm::length(along) / std::max(glm::length(v), 1e-3f);
+        along = glm::length(along) > 1e-3f ? along : RandomTangent(n);
+        const float stretch = 1.0f + 1.2f * skid * std::clamp(glm::length(v) / 4.0f, 0.3f, 1.0f);
+        Decal* d = AddDecal(set, p + n * 0.01f, n, along, glm::vec3(size * stretch, 0.3f, size), t * timeScale);
+        if (d) d->PoolGrow = grow;
+        if (d && std::abs(n.y) < 0.5f) SpawnWallDrips(p, n, size, t * timeScale); // a wall: it runs
+        return d != nullptr;
+    };
+    // The splatter: the bulk of it (skipped when the spray already spattered a wall in its path - that's this blood).
+    const float s = GroundSplatterSize(hit, energy) * (0.85f + 0.3f * Random01());
+    bool landed = false;
+    if (!m_LastClipped || hit.Corpse) {
+        const glm::vec3 v0 = flatDir * speed + up * (hit.Corpse ? 0.0f : 0.6f) + side * ((Random01() - 0.5f) * 0.4f);
+        landed = splash(v0, s, hit.Corpse ? "blood3" : kStreaks[std::min(3, (int)(Random01() * 4.0f))], 0.25f);
+    }
+    // Drops flung wider, each its own arc and its own landing.
+    const int drops = hit.Corpse ? 0 : 2 + (int)(Random01() * (hit.Head ? 4.0f : 2.5f));
+    for (int i = 0; i < drops; ++i) {
+        const float k = 0.5f + 0.8f * Random01();
+        const glm::vec3 v0 = flatDir * (speed * k) + up * (0.3f + 1.2f * Random01()) + side * ((Random01() - 0.5f) * 1.6f);
+        landed |= splash(v0, s * (0.15f + 0.2f * Random01()), Random01() < 0.5f ? "blood3" : "blood9", 0.15f);
+    }
+    if (landed) ++m_GroundSplatters;
 }
 
 void BloodFx::SpawnPuffs(const Hit& hit, const glm::vec3& dir, float energy, bool exited, const glm::vec3& exitPoint, bool extraPellet) {
@@ -848,6 +942,26 @@ void BloodFx::Update(float dt) {
             ++m_PoolsSpawned;
             d->DrySeconds *= 2.5f; // a pool stays wet far longer than a spatter
         }
+    }
+    // The wounded drip as they go: a drop on the ground under him every so often, falling from about the wound.
+    for (size_t i = 0; i < m_Bleeds.size();) {
+        Bleed& b = m_Bleeds[i];
+        glm::vec3 centre, p, n;
+        if (m_Now > b.Until || !m_Body || !m_Body(b.Entity, centre)) { m_Bleeds.erase(m_Bleeds.begin() + (std::ptrdiff_t)i); continue; }
+        if (m_Now >= b.Next) {
+            b.Next = m_Now + b.Rate * (0.7f + 0.6f * Random01());
+            EnsureHooks();
+            const glm::vec3 at = centre + glm::vec3((Random01() - 0.5f) * 0.3f, 0.0f, (Random01() - 0.5f) * 0.3f);
+            if (m_Ray(at, glm::vec3(0.0f, -1.0f, 0.0f), 2.5f, p, n) && n.y > 0.6f) {
+                const float s = 0.05f + 0.06f * Random01();
+                const float fall = std::sqrt(2.0f * std::max(at.y - p.y, 0.05f) / 9.81f);
+                if (Decal* d = AddDecal(Random01() < 0.5f ? "blood3" : "blood9", p + n * 0.01f, n, RandomTangent(n), glm::vec3(s, 0.3f, s), fall)) {
+                    d->PoolGrow = 0.15f;
+                    ++m_BleedDrops;
+                }
+            }
+        }
+        ++i;
     }
     m_Sprays.erase(std::remove_if(m_Sprays.begin(), m_Sprays.end(), [](const Spray& s) { return s.Age >= s.Duration; }),
                    m_Sprays.end());
