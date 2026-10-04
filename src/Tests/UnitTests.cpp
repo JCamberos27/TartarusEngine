@@ -4306,7 +4306,7 @@ void TestWeaponZero() {
     CHECK(roundTrip(set, none) && !none.Gameplay.HasSightLine);
 
     // The barrel and laser: defaults, then a hand-set muzzle, a laser and a hole size round trip.
-    CHECK(none.Muzzle.Auto && none.Laser.Enabled && std::abs(none.Gameplay.BulletHoleRadius - 0.012f) < 1e-6f);
+    CHECK(none.Muzzle.Auto && none.Laser.Enabled && std::abs(none.Gameplay.BulletHoleRadius - 0.004f) < 1e-6f);
     set.Muzzle.Auto = false;
     set.Muzzle.Origin = glm::vec3(0.0f, 0.05f, -0.4f);
     set.Muzzle.Direction = glm::vec3(0.0f, 0.0f, -2.0f);

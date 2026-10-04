@@ -102,7 +102,7 @@
       "enabled": true,
       "delay": 0.12
     },
-    "bulletHoleRadius": 0.007
+    "bulletHoleRadius": 0.0042
   },
   "procedural": {
     "bob": {

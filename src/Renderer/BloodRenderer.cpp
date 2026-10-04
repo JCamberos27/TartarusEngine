@@ -443,7 +443,7 @@ int BloodRenderer::DrawDecals(const glm::mat4& view, const glm::mat4& proj, cons
         g.Model = d.Model;
         g.InvModel = glm::inverse(d.Model);
         g.Params = glm::vec4(d.Cutout, d.Dry, d.Opacity, d.NormalStrength);
-        g.Axis = glm::vec4(glm::normalize(glm::vec3(d.Model[1])), 0.0f);
+        g.Axis = glm::vec4(glm::normalize(glm::vec3(d.Model[1])), d.Rim);
         g.Knife = glm::ivec4(-1, -1, 0, 0);
         g.Grid = glm::vec4(1.0f, 1.0f, 0.0f, 0.5f);
         g.Kind = glm::ivec4(0, 0, 0, d.Mirror ? 1 : 0);

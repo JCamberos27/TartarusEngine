@@ -1216,10 +1216,10 @@ struct BloodSettingsComponent {
     bool Enabled = true;
     float Size = 1.0f;            // x every spray's size (and its playback time, by sqrt: gravity stays right)
     int MaxSprays = 24;           // airborne sprays at once; the oldest is dropped past this
-    int MaxStains = 512;          // stains on the world; past this the farthest out of view goes
+    int MaxStains = 1024;         // stains on the world; past this the farthest small one out of view goes
     float StainLifetime = 0.0f;   // seconds a stain stays (it only ever leaves out of view); 0 = for good
-    float DrySeconds = 900.0f;    // fresh and wet to dried dark and matte (pools 2.5x, cloth 1.5x)
-    float Speed = 1.6f;           // x how fast sprays play and blood lands (1 = the packs' cinematic timing)
+    float DrySeconds = 1800.0f;   // fresh and wet to dried dark and matte, counted out of view only (pools 2.5x, cloth 1.5x)
+    float Speed = 2.0f;           // x how fast sprays play and blood lands (1 = the packs' cinematic timing)
     bool Pools = true;            // a pool spreads under each corpse
     bool BodySplats = true;       // blood on bodies, ragdolls and props
     bool GearSpatter = true;      // point-blank blood on the player's gun and hands, and their own wounds
