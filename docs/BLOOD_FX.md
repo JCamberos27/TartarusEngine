@@ -14,7 +14,7 @@ can pick the work up.
 | L1 | Importer, VAT spray renderer, hit wiring, BloodTest scene, `--npc-test blood`, unit tests | **done**: PR #523 |
 | L2 | Projected world decals: floor splats under sprays, wall/ceiling spatter, corpse pools, drying | **done**: PR #523 |
 | L3 | Splats on characters, ragdolls, guns (incl. the player's view model), moving props | **done** (PR after #523) |
-| L4 | Tuning, a `BloodSettingsComponent`, perf pass, final docs | planned |
+| L4 | `BloodSettingsComponent`, the fluid's shading fixed (normals), perf A/B, final docs | **done** (same PR as L3) |
 
 ## Restoring the data (it is not in git)
 
@@ -58,8 +58,10 @@ Without the data the game logs one warning and plays with no blood.
 - **Output format.** `RGBA16UI` texels, with:
   - xyz: position quantised into *that frame's* bounds, which gives sub-millimetre precision
   - w: octahedral normal, 8+8 bits
-- **Winding.** The fluid's outside winds clockwise in our space. `BloodRenderer` sets `glFrontFace`
-  from the header flag (verified visually in L1).
+- **Winding and normals.** The sims' baked normals point *into* the fluid. The header flag records the
+  corner order against those normals, so the outside winds the other way. `BloodRenderer` sets
+  `glFrontFace` to match, and `BloodVat.vert` negates the normals; without the negation every droplet
+  shades like its own back and reads white-pink.
 
 ### Presets (`src/Game/Combat/BloodFxPresets.*`)
 
@@ -115,8 +117,8 @@ Damage and shotgun pellets scale it. The spray leaves from the exit point (hit +
 - **Shading.** The fragment stage is the engine's own `ModelFragment.glsl`, built with `_SUBSURFACE`, so
   the fluid gets every light the scene has: sun with CSM shadows, clustered point/spot lights, IBL, fog
   and aerial perspective. Its parameters:
-  - albedo (0.32, 0.012, 0.009) linear
-  - roughness 0.07
+  - albedo (0.2, 0.007, 0.005) linear
+  - roughness 0.1
   - back-lit red transmission
   - the instance tint arrives as the vertex colour
 - **GPU cost.** The `--npc-test blood` measurement is 0.05 ms/frame average for one to two live sprays.
@@ -257,9 +259,43 @@ and a `blood_wounded` close-up of the standing wounded soldier.
 - The pools under corpses that lie against a wall merge into the floor splats.
 - The scene-view ragdoll gizmos clutter the test shots.
 
-## Next step (L4)
+### Settings and performance (L4)
 
-1. **`BloodSettingsComponent`.** A reflected scene settings component (the `FxHudSettingsComponent` pattern) carrying `BloodFx::Settings`, copied at Play start in `main.cpp`.
-2. **Perf pass.** Measure `--perf-bench` with heavy blood (many decals and splats). Consider BC-compressing the atlas, and verify the static/dynamic sort didn't cost batching.
-3. **Visual tuning in the user's real scenes.** Check spray sizes against "bloody, not over the top" and how readable blood is on dark gear.
-4. **Leftovers from the plan, if wanted.** Drips while the player is badly hurt; ceiling drips.
+**Blood Settings component** (`BloodSettingsComponent`, under Gameplay in the Add Component menu). The
+first one in the scene is copied into `BloodFx::Settings` at Play start. It holds:
+
+- Enabled
+- Size
+- Max Sprays, Max Stains
+- Stain Lifetime, Dry Seconds
+- Pools, Body Splats, Gear Spatter
+
+A scene without one uses the same defaults.
+
+**Performance A/B** (2026-10-04): `--perf-bench` on the Sandbox at 1920x1080, `origin/main` against this
+branch, both built Release in separate directories and run back to back on the same project:
+
+| | edit | play | play-max |
+|---|---|---|---|
+| main | 197.9 fps | 147.5 fps | 184.3 fps |
+| blood | 209.3 fps | 146.4 fps | 187.4 fps |
+
+GPU Scene Draw: 1.22 ms on main, 1.20 ms on this branch. So there is no regression from:
+
+- the static/dynamic opaque split
+- the extra varyings
+- the splat branch in `ModelFragment`
+- the per-draw splat lookup
+
+Live blood itself costs about 0.05 ms per frame for the sprays. Decals and splats only cost where they
+cover pixels. Both runs are below `docs/PERFORMANCE.md`'s 258 fps. That gap is environmental: main
+itself measures 184 here, and this worktree lacks the git-ignored Quantum textures.
+
+## Next steps
+
+1. **Tuning in the user's real scenes** (hands-on). Check spray sizes against "bloody, not over the top"
+   (`BloodFx::Choose`), and how readable blood is on dark gear.
+2. **The known gaps above**: the BC-compressed atlas, the pools by walls.
+3. **Leftovers from the plan, if wanted.** Drips while the player is badly hurt; ceiling drips; exit
+   wounds that follow the round's real path through the hitbox (the hit point is the hitbox centre for
+   scripted hits).

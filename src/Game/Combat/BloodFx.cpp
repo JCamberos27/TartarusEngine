@@ -252,10 +252,8 @@ void BloodFx::OnFleshHit(const Hit& hit) {
         const BloodRenderer::SimInfo* info = BloodRenderer::Get().Sim(BloodRenderer::Get().SimIndex(sim));
         if (!info || info->Frames.size() < 2) return nullptr;
         origin = glm::vec3(info->Header.Origin[0], info->Header.Origin[1], info->Header.Origin[2]);
-        // The last frame that still has fluid in it.
-        for (size_t i = info->Frames.size(); i-- > 1;)
-            if (info->Frames[i].LiveTris > info->Header.VertexCount / 12) return &info->Frames[i];
-        return nullptr;
+        // A quarter of the way in: the burst's own heading, before most of it has fallen.
+        return &info->Frames[info->Frames.size() / 4];
     });
     const glm::mat4 toWorld = PrefabToWorld(exitPoint, dir, size, jitter, axis);
     SpawnSprays(*preset, toWorld, size, exitPoint, Flat(dir), hit.Entity, 0.85f + 0.25f * Random01());

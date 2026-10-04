@@ -53,8 +53,8 @@ public:
                    const std::function<void(Shader&)>& applyFrameState);
 
     // The look (linear albedo, roughness), shared with the decals so a pool matches its drops.
-    glm::vec3 FluidAlbedo{0.32f, 0.012f, 0.009f};
-    float FluidRoughness = 0.07f;
+    glm::vec3 FluidAlbedo{0.2f, 0.007f, 0.005f};
+    float FluidRoughness = 0.1f;
 
     // --- decals ---
     int DecalSet(const std::string& name) const; // a decal texture set ("blood1", "char", ...); -1 unknown
