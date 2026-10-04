@@ -62,7 +62,9 @@ frames and are the first thing to tune by ear.
 
 Extracted by `tools/audio/extract.py` (Sonniss GDC bundles are placed under `C:\tb\audio-src\sonniss\<pack>` by hand; recipes
 address them as `sonniss/<pack prefix>/<file prefix>`) to `C:\tb\audio-src` (`C:\Program Files\WinRAR\UnRAR.exe` for the .rar, `zipfile`
-for the .zip), from `C:\Users\jacob\OneDrive\Desktop\ASSETS TO IMPORT\`:
+for the .zip), from `C:\Users\jacob\OneDrive\Desktop\ASSETS TO IMPORT\`. Both the extracted `audio-src` tree and the packs are on the
+shared Drive under `Tartarus Assets\Raw\Audio` (docs/ASSETS.md); set `TARTARUS_AUDIO_SRC` to its `audio-src` folder to
+rebuild assets from there:
 
 * `Tactical Shooter Pack.rar` (48 kHz stereo 16-bit): AK105 (fire + actions), Herrington 11-87 (fire + actions), Mk14EBR,
   TR15, WK-11 Viper, SRM-12, R08 (donors), General (aim, equip, fire mode, jump, land, concrete steps).

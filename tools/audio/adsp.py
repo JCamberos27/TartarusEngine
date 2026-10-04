@@ -10,7 +10,9 @@ import soundfile as sf
 from scipy import signal
 
 SR = 48000
-SRC_ROOT = r"C:\tb\audio-src"
+# Raw recordings (never committed): C:\tb\audio-src on the original machine, or the shared Drive's
+# "Tartarus Assets\Raw\Audio\audio-src" - point TARTARUS_AUDIO_SRC at it (docs/ASSETS.md).
+SRC_ROOT = os.environ.get("TARTARUS_AUDIO_SRC", r"C:\tb\audio-src")
 TSP = os.path.join(SRC_ROOT, "tsp", "Tactical Shooter Pack")
 BOOTS = os.path.join(SRC_ROOT, "boots", "Boots")
 

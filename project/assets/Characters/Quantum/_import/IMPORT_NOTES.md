@@ -53,7 +53,8 @@ Presets, FaceRig (.mb/.dna), Female Camo/MakeUp/tattoo variants, `.psd`/`.tx` so
 - Asian and Young bodies have no textures of their own; they reuse the European body/arms materials.
 - Some meshes ship a second skin layer (e.g. tucked T-shirt under a jacket); both layers are wired.
 
-## Git: clothing textures are not committed
-`Textures/Clothing/**/*.png` (~9 GB) is in `.gitignore`; their `.meta` files, the models and the materials are tracked.
-A fresh clone has untextured clothing until the PNGs are restored from the pack: back up "Quantum Characters" (e.g. to
-Google Drive) and re-run the import script, or copy the `Textures/Clothing` folder over from a machine that has it.
+## Git: models and textures are not committed
+The pack's licence doesn't allow redistributing it, so every Quantum `.fbx` and `.png` (except the generated
+`Textures/Eyes/T_*Brows_Lashes.png`) is in `.gitignore`; their `.meta` files and the materials are tracked. They live on the
+team's shared Google Drive under `Tartarus Assets\Used`, at the same paths; `tools\assets\fetch-assets.ps1` copies them in
+(docs/ASSETS.md). The parts of the original pack we have are in `Tartarus Assets\Raw\Characters`.

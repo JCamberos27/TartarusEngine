@@ -673,21 +673,29 @@ install(FILES
 #
 # That choice is load-bearing. project/assets/sky/ (Poly Haven HDRIs) is gitignored and absent
 # on CI, but it DOES exist in a developer's working tree; and the third-party packs under
-# assets/Characters/, assets/Weapons/ and assets/Animations/Mocap/ were never part of the sample
-# (Mixamo-style licences don't allow redistributing such files). An exclude-list that someone
+# assets/Characters/, assets/Weapons/, assets/Animations/Mocap/ and assets/Effects/ were never part
+# of the sample (their licences don't allow redistributing them; they aren't even in git - see
+# docs/ASSETS.md). An exclude-list that someone
 # later edits wrongly ships them; an allow-list
 # that someone later forgets to extend merely omits a folder from the sample. Wrong in the safe
 # direction.
 #
 # Library/ and screenshots/ are per-user output, not content. .shutter.wav is the exception -
 # the Screenshots folder's own sound, which is tracked and has to come along.
+#
+# The allowed folders also hold third-party files a developer fetched from the shared Drive
+# (docs/ASSETS.md): the recorded sounds under assets/Audio/<category>/ and the Apartment's baked
+# textures. Absent on CI, present locally - so they are excluded here too. What remains is what
+# git tracks (the generated basketball sounds, the Apartment meshes, ...).
 foreach(_projdir scenes scripts assets/Audio assets/Environments assets/Props assets/Materials assets/Test
                  assets/Animations/Controllers)
   if(EXISTS "${CMAKE_SOURCE_DIR}/project/${_projdir}")
     install(DIRECTORY "${CMAKE_SOURCE_DIR}/project/${_projdir}/"
             DESTINATION "project/${_projdir}"
             PATTERN "*.recovery.json" EXCLUDE
-            PATTERN "*.json.bak"      EXCLUDE)
+            PATTERN "*.json.bak"      EXCLUDE
+            REGEX "/assets/Audio/[^/]+/.*\\.wav$" EXCLUDE
+            REGEX "/assets/Environments/Apartment/Textures/.*\\.png$" EXCLUDE)
   endif()
 endforeach()
 install(FILES

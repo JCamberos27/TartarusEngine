@@ -37,11 +37,42 @@ project/screenshots/*
 !project/screenshots/.shutter.wav
 !project/screenshots/.shutter.wav.meta
 
-
-# Quantum clothing textures (~9 GB) - too big for git, same as the sky HDRIs above. The .meta files stay
-# tracked so GUIDs are stable; the PNGs come from the "Quantum Characters" pack (see
-# project/assets/Characters/Quantum/_import/IMPORT_NOTES.md for how to restore them).
-project/assets/Characters/Quantum/Textures/Clothing/**/*.png
+# Third-party asset payloads: models, textures and audio from licensed packs (Quantum Characters,
+# MC Core Motion, Kinemation, Tactical Shooter, Sonniss, KriptoFX, Knife...) may not be redistributed,
+# so they are not in git. They live on the team's shared Google Drive ("Tartarus Assets\Used"),
+# laid out exactly like this repo; tools/assets/fetch-assets.ps1 copies them in (docs/ASSETS.md).
+# Their .meta files STAY tracked, so GUIDs and every scene/material reference survive, and
+# project/external_assets.csv lists each file so the editor never prunes those .meta files as orphans.
+project/assets/**/*.[fF][bB][xX]
+project/assets/**/*.[pP][nN][gG]
+project/assets/**/*.[jJ][pP][gG]
+project/assets/**/*.[jJ][pP][eE][gG]
+project/assets/**/*.[tT][gG][aA]
+project/assets/**/*.[dD][dD][sS]
+project/assets/**/*.[eE][xX][rR]
+project/assets/**/*.[hH][dD][rR]
+project/assets/**/*.[wW][aA][vV]
+project/assets/**/*.[oO][gG][gG]
+project/assets/**/*.[mM][pP]3
+project/assets/**/*.[fF][lL][aA][cC]
+project/assets/**/*.[gG][lL][tT][fF]
+project/assets/**/*.[gG][lL][bB]
+project/assets/**/*.[bB][iI][nN]
+project/assets/**/*.[oO][bB][jJ]
+project/assets/**/*.[bB][lL][eE][nN][dD]
+# ...except content made for this project (procedural / modelled here), which stays in git:
+# tools/gen_sandbox_assets.py output (basketball, court, two basketball sounds), the prototype grids
+# (tools/gen_sandbox_scene.py), the Apartment
+# meshes (modelled from measurements; its baked textures are NOT ours to be sure, so they go to Drive),
+# the UV-transform test quad, and the generated brow/lash cards.
+!project/assets/Props/Basketball/**
+!project/assets/Materials/Prototype/**
+!project/assets/Audio/basket_score.wav
+!project/assets/Audio/basketball_bounce.wav
+!project/assets/Environments/Apartment/Models/**
+!project/assets/Test/**
+!project/assets/Characters/Quantum/Textures/Eyes/T_Brows_Lashes.png
+!project/assets/Characters/Quantum/Textures/Eyes/T_F_Brows_Lashes.png
 
 # Hat textures from the Quantum zip: the hats were removed from the project, so the editor
 # must not re-create .meta files for local copies of them.

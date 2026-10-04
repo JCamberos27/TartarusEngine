@@ -80,3 +80,17 @@ values and function signatures it declares come from the Khronos OpenGL Registry
 
 Branding assets under `extern/branding/` (the Tartarus Engine wordmark, monogram, and icons)
 are project assets and are **not** covered by the project's source-code license.
+
+---
+
+## Third-party content NOT in this repository
+
+The game content under `project/assets` comes largely from licensed packs that may not be
+redistributed. Those files are deliberately **not** in this repository or its history: they are
+listed in `.gitignore` and `project/external_assets.csv` and shared privately with the team (see
+`docs/ASSETS.md`). Only their `.meta` sidecars, materials and other project data are tracked. The packs
+include the Quantum Characters modular pack, the MC Core Motion animation pack, the AKS-74U and
+Remington 870 models, Kinemation's FPS Animation Pack and Tactical Shooter Pack, KriptoFX Volumetric Blood
+Fluids, Knife Real Blood and PRO Effects, Sonniss GDC bundle recordings, the OpenAIR impulse responses
+(CC BY 4.0, University of York, openairlib.net), the EchoThief impulse responses (Dr. Chris Warren, SDSU)
+and Poly Haven HDRIs (CC0).
