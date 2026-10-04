@@ -1,4 +1,5 @@
 #include "NpcTest.h"
+#include "World.h"
 
 #include "Combat/CombatFx.h"
 #include "DevPanel.h"
@@ -1178,7 +1179,7 @@ void NpcTest::Blood(World& world, NpcDirector& npcs, float now) {
         break;
     }
     case 1: { // the cases, 3 s apart
-        if (m_BCase >= kCaseCount) { m_BStep = 2; m_BAt = now; break; }
+        if (m_BCase >= kCaseCount) { m_BStep = 4; m_BAt = now; m_BSurface = 0; m_BFired = false; break; }
         const Case& c = kCases[m_BCase];
         // The wound and the kills each on their own soldier; the corpse is the chest kill's.
         const bool pointBlank = std::string(c.Name) == "point_blank";
@@ -1277,6 +1278,47 @@ void NpcTest::Blood(World& world, NpcDirector& npcs, float now) {
         m_Done = true;
         m_BStep = 3;
         break;
+    case 4: { // rounds into each surface panel: its own burst and its own textured hole
+        static const char* const kPanels[] = {"Metal Plate", "Wood Panel", "Brick Panel", "Glass Pane", "Mud Bank", "Tile Panel", "Concrete Block"};
+        constexpr int kPanelCount = (int)(sizeof(kPanels) / sizeof(kPanels[0]));
+        if (m_BSurface >= kPanelCount || !ShootWorld || !BloodStats) { m_BStep = 2; m_BAt = now; break; }
+        glm::vec3 centre(0.0f);
+        bool found = false;
+        for (auto [e, name] : world.Registry.view<NameComponent>().each())
+            if (name.Name == kPanels[m_BSurface]) { centre = glm::vec3(world.GetCachedWorldTransform(e)[3]); found = true; }
+        if (!found) { ++m_BSurface; break; }
+        // Square on, from the room side (+X), a little above.
+        m_CamPos = centre + glm::vec3(1.6f, 0.35f, 0.25f);
+        const glm::vec3 look = glm::normalize(centre - m_CamPos);
+        m_CamYaw = glm::degrees(std::atan2(look.z, look.x));
+        m_CamPitch = glm::degrees(std::asin(std::clamp(look.y, -1.0f, 1.0f)));
+        m_HaveCam = true;
+        const float t = now - m_BAt;
+        if (!m_BFired && t > 0.4f) {
+            m_BImpactsBefore = BloodStats->Impacts;
+            m_BHolesBefore = BloodStats->TexturedHoles;
+            for (int k = 0; k < 3; ++k) // three rounds, a hand's width apart
+                ShootWorld(centre + glm::vec3(3.0f, 0.25f - 0.2f * (float)k, -0.2f + 0.2f * (float)k), glm::vec3(-1.0f, 0.0f, 0.0f));
+            m_BFired = true;
+            m_BFiredAt = now;
+        }
+        if (m_BFired) {
+            const float s = now - m_BFiredAt;
+            std::string panel = kPanels[m_BSurface];
+            for (char& c : panel) c = c == ' ' ? '_' : (char)std::tolower((unsigned char)c);
+            if (s >= 0.08f && s - (float)(1.0 / 60.0) < 0.08f) m_Shot = "surface_" + panel + "_burst";
+            if (s >= 1.6f) {
+                m_Shot = "surface_" + panel + "_hole";
+                Check(BloodStats->Impacts >= m_BImpactsBefore + 3 && BloodStats->TexturedHoles >= m_BHolesBefore + 3,
+                      std::string("surface ") + kPanels[m_BSurface] + ": its burst and textured holes (" +
+                          std::to_string(BloodStats->TexturedHoles - m_BHolesBefore) + ")");
+                ++m_BSurface;
+                m_BFired = false;
+                m_BAt = now;
+            }
+        }
+        break;
+    }
     default:
         break;
     }

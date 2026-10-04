@@ -1,4 +1,5 @@
 #pragma once
+#include <functional>
 
 #include <glm/glm.hpp>
 
@@ -67,7 +68,10 @@ public:
         // v2 (the Knife packs): impact puffs, exits, headshot gore
         int Puffs = 0, HeadBursts = 0, GoreChunks = 0;
         bool LastExited = false, LastExitFound = false;
+        int Impacts = 0, TexturedHoles = 0; // ImpactFx bursts; bullet holes drawn as PRO Effects decals
     };
+    // Fires a round into the world from `from` along `dir` (the host's world-impact path: burst + hole). False: a miss.
+    std::function<bool(const glm::vec3& from, const glm::vec3& dir)> ShootWorld;
     const BloodView* BloodStats = nullptr;
 
 private:
@@ -79,6 +83,7 @@ private:
     void Reload(World& world, NpcDirector& npcs, float now);
     void Blood(World& world, NpcDirector& npcs, float now);
     // blood
+    int m_BSurface = 0, m_BImpactsBefore = 0, m_BHolesBefore = 0;
     int m_BStep = 0, m_BCase = 0, m_BShot = 0, m_BSpawnBefore = 0, m_BGearBefore = 0, m_BPuffsBefore = 0, m_BBurstsBefore = 0;
     bool m_BFired = false, m_BChecked = false, m_BCamSet = false, m_BOverview = false, m_BCloseUp = false;
     float m_BAt = 0.0f, m_BFiredAt = 0.0f;
