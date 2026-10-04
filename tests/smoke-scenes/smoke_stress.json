@@ -1,6 +1,8 @@
 {
   "formatVersion": 2,
   "_comment": "Engine-owned smoke/regression scene (audit TEST-101). ~64 primitive boxes in a grid plus 4 point lights + sun. Exercises draw-call scaling, the material-sorted draw list, clustered light-list saturation, and frustum culling at volume. Engine primitives only.",
+  "exposureEV": 0.0, "tonemapOperator": 1, "msaaSamples": 4, "ssaoEnabled": false, "bloomEnabled": false, "bloomThreshold": 1.0, "bloomKnee": 0.5, "bloomIntensity": 0.25,
+  "shadowsEnabled": true, "shadowResolution": 4096, "shadowCascades": 4, "shadowDistance": 500.0,
   "skyHorizonColor": [0.4, 0.5, 0.62],
   "skyZenithColor": [0.12, 0.26, 0.55],
   "skyAmbientIntensity": 1.0,

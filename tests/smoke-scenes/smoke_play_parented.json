@@ -1,6 +1,8 @@
 {
   "formatVersion": 2,
   "_comment": "Regression scene for #114/#115 (runs Play -> Stop twice: filename contains 'smoke_play'). A dynamic box parented under a rotated, offset empty must be simulated from its WORLD pose and fall onto the ground (the harness prints each body's world position before Stop); a static box rotated 30 deg must get an oriented collider. Engine primitives only.",
+  "exposureEV": 0.0, "tonemapOperator": 1, "msaaSamples": 4, "ssaoEnabled": false, "bloomEnabled": false, "bloomThreshold": 1.0, "bloomKnee": 0.5, "bloomIntensity": 0.25,
+  "shadowsEnabled": true, "shadowResolution": 4096, "shadowCascades": 4, "shadowDistance": 500.0,
   "skyHorizonColor": [0.40, 0.48, 0.60],
   "skyZenithColor": [0.12, 0.24, 0.52],
   "skyAmbientIntensity": 1.0,

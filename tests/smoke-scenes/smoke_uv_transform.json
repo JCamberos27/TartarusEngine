@@ -1,6 +1,8 @@
 {
  "formatVersion": 2,
  "_comment": "Engine-owned smoke/regression scene for #113: a glTF quad whose baseColorTexture carries KHR_texture_transform (offset 0.25,0.5 scale 2,3). The importer must turn that into the material's UV tiling/offset - the smoke test prints it as 'uv=' on the model line, and a regression shows up as uv=1,1+0,0. Uses only the checked-in fixture under project/models.",
+ "exposureEV": 0.0, "tonemapOperator": 1, "msaaSamples": 4, "ssaoEnabled": false, "bloomEnabled": false, "bloomThreshold": 1.0, "bloomKnee": 0.5, "bloomIntensity": 0.25,
+ "shadowsEnabled": true, "shadowResolution": 4096, "shadowCascades": 4, "shadowDistance": 500.0,
  "skyHorizonColor": [
   0.45,
   0.55,

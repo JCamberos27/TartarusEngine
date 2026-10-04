@@ -1,6 +1,8 @@
 {
   "formatVersion": 2,
   "_comment": "Regression scene for #132: at frame 15 the smoke harness writes a PNG and a material into project/__smoke_sync, then moves the PNG (leaving its .meta behind) and deletes it, checking after each step that the project watcher kept the library, GUIDs, .meta files and references in step. Engine primitives only; the folder is removed afterwards.",
+  "exposureEV": 0.0, "tonemapOperator": 1, "msaaSamples": 4, "ssaoEnabled": false, "bloomEnabled": false, "bloomThreshold": 1.0, "bloomKnee": 0.5, "bloomIntensity": 0.25,
+  "shadowsEnabled": true, "shadowResolution": 4096, "shadowCascades": 4, "shadowDistance": 500.0,
   "skyHorizonColor": [
     0.45,
     0.55,

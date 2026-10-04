@@ -1,6 +1,8 @@
 {
   "formatVersion": 2,
   "_comment": "Engine-owned smoke/regression scene (audit TEST-101). Minimal lit scene: ground, one shadow-casting cube, one directional light. Exercises the PBR opaque path, cascaded sun shadows, procedural sky + IBL, and frustum culling. Uses only engine primitives and no external asset files or absolute paths.",
+  "exposureEV": 0.0, "tonemapOperator": 1, "msaaSamples": 4, "ssaoEnabled": false, "bloomEnabled": false, "bloomThreshold": 1.0, "bloomKnee": 0.5, "bloomIntensity": 0.25,
+  "shadowsEnabled": true, "shadowResolution": 4096, "shadowCascades": 4, "shadowDistance": 500.0,
   "skyHorizonColor": [0.45, 0.55, 0.68],
   "skyZenithColor": [0.15, 0.30, 0.60],
   "skyAmbientIntensity": 1.0,
