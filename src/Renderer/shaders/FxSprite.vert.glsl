@@ -1,5 +1,5 @@
 #version 460 core
-// Flipbook particles (docs/BLOOD_FX.md, "v2"): one quad per instance from gl_VertexID, no vertex buffer.
+// Flipbook particles: one quad per instance from gl_VertexID, no vertex buffer.
 // A sprite faces the camera (turned by its rotation), or stands along a world axis - its velocity, a
 // barrel - turned about it to face the eye, the texture's u along the axis.
 

@@ -3505,7 +3505,7 @@ void EditorLayer::DrawReflectedComponentExtra(const char* componentName, World& 
 
     // First Person Body: check the setup against what the body needs (the controller's parameters and
     // states, bones, piece names) so a missing piece is said out loud instead of a feature silently
-    // doing nothing. FPBody::Validate is the same table the docs (docs/BODY_SETUP.md) are written from.
+    // doing nothing.
     if (std::strcmp(componentName, "Character Outfit") == 0 && phase == ReflectExtraPhase::Bottom) {
         DrawCharacterOutfitEditor(world, entity);
         return;

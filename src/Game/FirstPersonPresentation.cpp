@@ -1649,7 +1649,7 @@ void FirstPersonPresentation::Update(World& world, Camera& camera) {
             if (m_Ammo == 0) m_Chambered = true;
             m_Ammo = std::min(m_Set.Gameplay.Magazine, m_Ammo + 1);
         }
-        // The audio the controller's states carry: events named snd.<gun>.<element> (see docs/AUDIO.md) play that set.
+        // The audio the controller's states carry: events named snd.<gun>.<element> play that set.
         for (const std::string& e : ac->FiredEvents)
             if (e.rfind("snd.", 0) == 0) WeaponSound(*this, m_SetFile, m_Options.OwnerView, e);
         ac->FiredEvents.clear();

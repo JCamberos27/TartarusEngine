@@ -90,7 +90,7 @@ bool KnifeFxLibrary::Load() {
         }
     }
     if (m_Entries.empty()) {
-        Log::Warn("KnifeFx: no Knife texture libraries in assets/Effects/Knife - run TartarusEngine --import-knife-fx <folder> (docs/BLOOD_FX.md)");
+        Log::Warn("KnifeFx: no Knife texture libraries in assets/Effects/Knife - run TartarusEngine --import-knife-fx <folder>");
         return false;
     }
     m_Loaded = true;

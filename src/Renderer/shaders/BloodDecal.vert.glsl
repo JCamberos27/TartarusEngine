@@ -1,5 +1,5 @@
 #version 460 core
-// Blood decals (docs/BLOOD_FX.md): each instance is a unit box (-0.5..0.5) projected onto whatever
+// Blood decals: each instance is a unit box (-0.5..0.5) projected onto whatever
 // static surface lies inside it. The box comes from gl_VertexID (36 vertices, no buffer).
 
 struct BloodDecal {

@@ -7,7 +7,7 @@
 class Shader;
 class HdrTarget;
 
-// Draws the flipbook particles FxSprites queues (docs/BLOOD_FX.md, "v2") from the Knife sprite library
+// Draws the flipbook particles FxSprites queues from the Knife sprite library
 // (KnifeFxLibrary): every sprite of a pass in one instanced draw, back to front, premultiplied - an
 // additive sprite is just one with no coverage - soft against the scene's depth, and lit through
 // ModelShading.glsl (sun with its shadows, clustered lights, sky, fog). Queue after BeginFrame.

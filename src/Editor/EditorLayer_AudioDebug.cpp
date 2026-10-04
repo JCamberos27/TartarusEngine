@@ -1,4 +1,4 @@
-// Window > Audio: what the audio engine is doing right now (docs/AUDIO.md, "Audio panel"), and in Play the live mix: the ducking, the
+// Window > Audio: what the audio engine is doing right now, and in Play the live mix: the ducking, the
 // focus, the air, the master's glue and trim and the rooms' wet levels, tuned by ear while playing ("Keep after Play" writes them to
 // the scene's Audio Mix / Reverb Bus components when Play stops).
 #include "EditorLayer.h"

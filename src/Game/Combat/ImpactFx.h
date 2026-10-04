@@ -8,7 +8,7 @@
 class FxSprites;
 class World;
 
-// Bullet impacts on the world (docs/BLOOD_FX.md, v2): what a round leaves where it strikes, by what it struck.
+// Bullet impacts on the world: what a round leaves where it strikes, by what it struck.
 // The surface comes from the same words the impact sounds use (the collider's physics material, the tag, the
 // name), with a finer table: concrete, brick, asphalt, rock, tile, metal, wood, glass, mud, sand.
 //   - the hole: PRO Effects' textured decal for that surface (4 variants, turned at random) - on the static

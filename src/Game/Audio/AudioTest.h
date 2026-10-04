@@ -1,4 +1,4 @@
 #pragma once
 
-// `TartarusEngine.exe --audio-test [scene]` (docs/AUDIO.md, "--audio-test"): headless, offline.
+// `TartarusEngine.exe --audio-test [scene]`: headless, offline.
 int RunAudioTest(int argc, char** argv);

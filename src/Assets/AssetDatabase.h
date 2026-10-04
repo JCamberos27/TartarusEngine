@@ -26,7 +26,7 @@ namespace AssetDatabase {
 // A .meta whose asset is gone is pruned, unless the asset is listed in external_assets.csv.
 void ScanProject();
 
-// project/external_assets.csv (docs/ASSETS.md) lists the third-party files kept on the team's
+// project/external_assets.csv lists the third-party files kept on the team's
 // shared Drive instead of in git, so a fresh clone has their tracked .meta files but not the
 // files. Scans must keep those .meta files (their GUIDs carry every reference). Returns the
 // project-relative paths in the first column; the header row, blank lines and '#' lines skipped.

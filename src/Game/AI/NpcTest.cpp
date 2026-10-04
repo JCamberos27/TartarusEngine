@@ -1128,7 +1128,7 @@ void NpcTest::Feet(NpcDirector& npcs, float now) {
     }
 }
 
-// --- blood: the volumetric blood on every kind of hit (docs/BLOOD_FX.md) ----------------------------------------------
+// --- blood: the volumetric blood on every kind of hit ----------------------------------------------
 // scenes/BloodTest.json: four soldiers in a line with a wall 1.5 m behind them, frozen, holding fire. One is wounded in
 // the chest, one killed through the chest (the spray meets the wall), one through the head, and the chest kill's
 // corpse is shot. The Scene view watches each from the side; shots at the moments the spray is up, falling and down.

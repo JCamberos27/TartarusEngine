@@ -6,7 +6,7 @@
 #include <functional>
 #include <vector>
 
-// What kind of space a shooter stands in, for choosing the gunshot tail (docs/AUDIO.md, "Environment tails").
+// What kind of space a shooter stands in, for choosing the gunshot tail.
 // A handful of raycasts around the shooter (up, a diagonal ring and a horizontal ring) say how covered the space is
 // (ceiling, overhead), how far its walls are and how much of the horizon is built up; those become four class weights
 // that move smoothly between spaces, so walking through a doorway is a crossfade of tails, not a switch.

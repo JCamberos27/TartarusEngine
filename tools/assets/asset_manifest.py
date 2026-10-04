@@ -1,4 +1,4 @@
-# Third-party assets that live on the team's shared Google Drive instead of in git (docs/ASSETS.md).
+# Third-party assets that live on the team's shared Google Drive instead of in git.
 #
 #   python tools/assets/asset_manifest.py build <repo>              writes <repo>/project/external_assets.csv
 #   python tools/assets/asset_manifest.py export <repo> <Used dir>  copies every listed file into <Used dir>

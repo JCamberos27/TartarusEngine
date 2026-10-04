@@ -532,7 +532,7 @@ void ScanProject() {
     if (missingExternal > 0)
         Log::Warn("AssetDatabase: " + std::to_string(missingExternal) + " of " + std::to_string(external.size()) +
                   " third-party asset file(s) in external_assets.csv are missing - copy them from the shared Drive "
-                  "with tools/assets/fetch-assets.ps1 (docs/ASSETS.md). Their .meta files are kept.");
+                  "with tools/assets/fetch-assets.ps1. Their .meta files are kept.");
 
     // Unity deletes a .meta whose asset no longer exists; do the same, but say which ones.
     for (const std::string& meta : orphanMetas) {

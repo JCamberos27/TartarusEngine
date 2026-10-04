@@ -1,5 +1,5 @@
 #version 460 core
-// Volumetric blood (docs/BLOOD_FX.md): one Houdini fluid sim, played back from its vertex-animation
+// Volumetric blood: one Houdini fluid sim, played back from its vertex-animation
 // texture. The mesh is a triangle soup with no vertex buffer - vertex v reads its own texel, so the
 // texel comes from gl_VertexID (BloodFxImport::VatTexel). Shaded by ModelFragment.glsl like any
 // other surface (sun + shadows, clustered lights, IBL, fog), with the instance tint as vertex colour.

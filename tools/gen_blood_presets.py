@@ -1,6 +1,6 @@
 """Regenerates src/Game/Combat/BloodFxPresets.inc from the KriptoFX "Volumetric Blood Fluids" prefabs.
 
-The package itself is not in git (docs/BLOOD_FX.md); this script reads its Prefabs/*.prefab (Unity YAML)
+The package itself is not in git; this script reads its Prefabs/*.prefab (Unity YAML)
 and writes the numbers the game needs - each prefab's sprays (sim, transform, playback) and floor decals
 (decal set, box, height response, reveal curve) - converted to this engine's right-handed axes (z negated).
 

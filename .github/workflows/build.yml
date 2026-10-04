@@ -299,7 +299,7 @@ jobs:
           if ($missing) { throw "package is missing: $($missing -join ', ')" }
 
           # The character packs' licences do not allow redistributing them, and the sky HDRIs are
-          # too large to ship. Neither is in git (docs/ASSETS.md), so neither exists on a runner,
+          # too large to ship. Neither is in git, so neither exists on a runner,
           # and this asserts the install
           # rules stay an allow-list - on a developer machine, where both DO exist, an
           # exclude-list edited wrongly would quietly put them in the ZIP.

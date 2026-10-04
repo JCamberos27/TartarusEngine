@@ -13,7 +13,7 @@ void BloodLab::Draw(BloodFx& blood, const Stats& s) {
         return;
     }
     if (!s.BloodData || !s.KnifeData)
-        ImGui::TextColored(ImVec4(1.0f, 0.6f, 0.3f, 1.0f), "Missing data: %s%s (docs/BLOOD_FX.md)", s.BloodData ? "" : "--import-blood-fx ",
+        ImGui::TextColored(ImVec4(1.0f, 0.6f, 0.3f, 1.0f), "Missing data: %s%s", s.BloodData ? "" : "--import-blood-fx ",
                            s.KnifeData ? "" : "--import-knife-fx");
 
     ImGui::SeparatorText("At the crosshair");

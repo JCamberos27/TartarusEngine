@@ -2398,7 +2398,7 @@ void TestOutfitCoverage() {
 void TestWardrobeQuantum() {
     // The Quantum pack is project content, not engine data: a packaged engine (CI's standalone check)
     // runs without it, and then there's nothing to test. Its models are on the shared Drive, not in
-    // git (docs/ASSETS.md), so a clone has the wardrobe file but no meshes until they're fetched.
+    // git, so a clone has the wardrobe file but no meshes until they're fetched.
     if (!std::filesystem::exists(ProjectPaths::Resolve("assets/Characters/Quantum/Quantum.wardrobe")) ||
         !std::filesystem::exists(ProjectPaths::Resolve("assets/Characters/Quantum/Models/European/Quantum_Torso.fbx"))) {
         Log::Info("WardrobeQuantum: no Quantum pack in this project - skipped.");
@@ -2551,7 +2551,7 @@ void TestAsyncImportCpu() {
         return Model::ImportDeferred(ProjectPaths::Resolve(rel), ModelImportSettings{});
     };
     // The model half needs the Quantum pack's meshes (project content from the shared Drive, absent
-    // from a packaged engine and from a clone that hasn't fetched them - docs/ASSETS.md).
+    // from a packaged engine and from a clone that hasn't fetched them).
     const bool quantum = std::filesystem::exists(
         ProjectPaths::Resolve("assets/Characters/Quantum/Models/Female/Body/Heads/SKM_F_Vivian_Head.fbx"));
     if (quantum) {

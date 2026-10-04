@@ -1,6 +1,6 @@
 """The mix spec (recipes/mix.json) applied to the manifest: every entry gets `mix_db`.
 
-  mix_db = spec level - (the file's LUFS-M - the shot reference)         (see recipes/mix.json, docs/AUDIO.md "Mix")
+  mix_db = spec level - (the file's LUFS-M - the shot reference)         (see recipes/mix.json)
 
 The reference is the player's own gunshot (close + sub + mech of a gun at their nominal layer offsets, summed from t = 0).
 Shot layers (close / sub / mech / tail / far) are stored relative to that UNSCALED sum, because the engine multiplies every

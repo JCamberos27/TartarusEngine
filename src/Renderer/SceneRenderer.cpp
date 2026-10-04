@@ -388,7 +388,7 @@ void SceneRenderer::RenderScene(World& world, const RenderFrameContext& ctx,
         // OutfitHideTag::Visible: the piece's triangles not covered entirely, drawn instead of its own.
         const VisibleIndexBuffer* Visible = nullptr;
         float LayerPull = 0.0f; // OutfitLayerTag: drawn this many metres nearer the camera (depth only)
-        // Skinned or a rigidbody: drawn after the blood decals (docs/BLOOD_FX.md), which project only onto
+        // Skinned or a rigidbody: drawn after the blood decals, which project only onto
         // the static world - a character walking through a pool or a crate on a stain covers it instead.
         bool Dynamic = false;
         unsigned Entity = 0xFFFFFFFFu; // for the blood splats on it (BloodRenderer::SplatRange)
@@ -638,7 +638,7 @@ void SceneRenderer::RenderScene(World& world, const RenderFrameContext& ctx,
         SkinHideBuffer::Bind(probeItem->CollarVerts, SkinHideBuffer::kCollarBinding);
         prog.SetInt("uCollarVerts", probeItem->CollarVerts ? 1 : 0);
         prog.SetFloat("uLayerPull", probeItem->LayerPull);
-        int bloodFirst = 0, bloodCount = 0; // blood on this mesh (docs/BLOOD_FX.md)
+        int bloodFirst = 0, bloodCount = 0; // blood on this mesh
         BloodRenderer::Get().SplatRange(probeItem->Entity, bloodFirst, bloodCount);
         prog.SetInt("uBloodSplatCount", bloodCount);
         if (bloodCount > 0) {
@@ -651,7 +651,7 @@ void SceneRenderer::RenderScene(World& world, const RenderFrameContext& ctx,
 
     passAlphaBlend = 0;
     modelShader.SetInt("uAlphaBlend", 0); // explicit: ensure opaque pass outputs alpha=1
-    // The blood decals (docs/BLOOD_FX.md) land on the static world drawn so far, then the moving things
+    // The blood decals land on the static world drawn so far, then the moving things
     // draw over them.
     bool decalsDone = false;
     auto drawBloodDecals = [&] {
@@ -674,7 +674,7 @@ void SceneRenderer::RenderScene(World& world, const RenderFrameContext& ctx,
     }
     if (!decalsDone) drawBloodDecals();
 
-    // Volumetric blood in the air (docs/BLOOD_FX.md): opaque fluid, so before the sky and with the
+    // Volumetric blood in the air: opaque fluid, so before the sky and with the
     // opaque geometry it lands on already in depth.
     localStats.DrawCalls += BloodRenderer::Get().DrawSprays(ctx.View, ctx.Proj,
                                                             [&](Shader& p) { ApplyFrameState(p, fs); });
@@ -747,7 +747,7 @@ void SceneRenderer::RenderScene(World& world, const RenderFrameContext& ctx,
     // #177 - particles last: depth-tested against everything above, blended, no depth write.
     // The player's own muzzle flame waits for the view-model sub-pass.
     if (Particles()->Draw(world, ctx, viewModelPass) > 0) ++localStats.DrawCalls;
-    // The Knife flipbook particles (docs/BLOOD_FX.md): blood mist, impact dust and debris, muzzle smoke.
+    // The Knife flipbook particles: blood mist, impact dust and debris, muzzle smoke.
     localStats.DrawCalls += FxSpriteRenderer::Get().Draw(ctx.View, ctx.Proj, fs.vp, ctx.TxHdr, false,
                                                          [&](Shader& p) { ApplyFrameState(p, fs); });
     if (ctx.WorldOverlay) {

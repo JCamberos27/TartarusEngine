@@ -15,8 +15,8 @@ class World;
 // The noise and light of a firefight, Play only: gun reports (near and distant layers, 3D for the
 // squad, 2D for the player), muzzle flashes (a short point light plus additive sparks and a puff of
 // smoke), tracers, rounds whizzing past the player's head, flesh hits, hitmarker ticks, pumps,
-// reloads and bodies falling. Every sound is a recorded set played through Game/Audio (WeaponAudio, ImpactAudio; keys in
-// docs/AUDIO.md). Everything it creates is runtime-only and destroyed by Stop.
+// reloads and bodies falling. Every sound is a recorded set played through Game/Audio (WeaponAudio, ImpactAudio).
+// Everything it creates is runtime-only and destroyed by Stop.
 class CombatFx {
 public:
     enum class Gun { Rifle, Shotgun };

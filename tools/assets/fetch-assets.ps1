@@ -1,5 +1,5 @@
 # Copies the third-party assets that are not in git from the team's shared Google Drive into this
-# checkout, then checks the checkout against project/external_assets.csv (docs/ASSETS.md).
+# checkout, then checks the checkout against project/external_assets.csv.
 #
 #   powershell -ExecutionPolicy Bypass -File tools\assets\fetch-assets.ps1 -Source "<...>\Tartarus Assets"
 #   powershell -ExecutionPolicy Bypass -File tools\assets\fetch-assets.ps1 -VerifyOnly

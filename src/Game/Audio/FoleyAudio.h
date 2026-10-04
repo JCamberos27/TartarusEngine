@@ -51,7 +51,7 @@ struct FoleyPlayerInput {
     float FootHeight[2] = {0.0f, 0.0f};
 };
 
-// Player and soldier foley (docs/AUDIO.md). Surfaces are foley categories (Audio/Foley/<surface>/<element>_<n>.wav,
+// Player and soldier foley. Surfaces are foley categories (Audio/Foley/<surface>/<element>_<n>.wav,
 // keys snd.foley.<surface>.<element>): walk, run, crouch, jump, land for each.
 class FoleyAudio {
 public:

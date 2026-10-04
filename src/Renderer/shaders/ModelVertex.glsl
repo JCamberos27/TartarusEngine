@@ -23,7 +23,7 @@ out vec2 vUV;
 out mat3 vTBN;
 out vec4 vColor;
 // The vertex before skinning, in the mesh's own (bind-pose) space: blood splats on a body or a gun are pinned
-// there, so they move and deform with it (docs/BLOOD_FX.md).
+// there, so they move and deform with it.
 out vec3 vBindPos;
 out vec3 vBindNormal;
 // The player's own body in the camera's view (PlayerBodyTag): skin weighted to these palette bones isn't

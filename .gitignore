@@ -40,7 +40,7 @@ project/screenshots/*
 # Third-party asset payloads: models, textures and audio from licensed packs (Quantum Characters,
 # MC Core Motion, Kinemation, Tactical Shooter, Sonniss, KriptoFX, Knife...) may not be redistributed,
 # so they are not in git. They live on the team's shared Google Drive ("Tartarus Assets\Used"),
-# laid out exactly like this repo; tools/assets/fetch-assets.ps1 copies them in (docs/ASSETS.md).
+# laid out exactly like this repo; tools/assets/fetch-assets.ps1 copies them in.
 # Their .meta files STAY tracked, so GUIDs and every scene/material reference survive, and
 # project/external_assets.csv lists each file so the editor never prunes those .meta files as orphans.
 project/assets/**/*.[fF][bB][xX]
@@ -79,7 +79,7 @@ project/assets/**/*.[bB][lL][eE][nN][dD]
 project/assets/Characters/Quantum/Textures/Clothing/Hats/
 videos/
 # Volumetric blood data converted from the KriptoFX asset (can't be redistributed) - rebuild with
-# TartarusEngine --import-blood-fx <package> (docs/BLOOD_FX.md).
+# TartarusEngine --import-blood-fx <package>.
 project/assets/Effects/Blood/
 project/assets/Effects/Knife/
 blood_v2_preview/

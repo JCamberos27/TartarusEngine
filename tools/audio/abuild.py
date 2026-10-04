@@ -68,7 +68,7 @@ def emit(rel_path, x, key, layer, extra=None, mono=False, sources=None):
              "sample_rate": adsp.SR}
     entry.update(measure(y))
     entry["sources"] = adsp.take_uses() if sources is None else sources     # every recording this file is made of
-    entry["anchor_ms"] = round(adsp.anchor_ms(y), 1)       # contact transient inside the file (see docs/AUDIO.md)
+    entry["anchor_ms"] = round(adsp.anchor_ms(y), 1)       # contact transient inside the file
     if extra:
         entry.update(extra)
     return entry
