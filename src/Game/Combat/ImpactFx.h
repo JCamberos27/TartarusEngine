@@ -13,9 +13,8 @@ class World;
 // name), with a finer table: concrete, brick, asphalt, rock, tile, metal, wood, glass, mud, sand.
 //   - the hole: PRO Effects' textured decal for that surface (4 variants, turned at random) - on the static
 //     world; a moving prop keeps the procedural hole that follows it (WeaponFxRenderer);
-//   - the burst: PRO Effects' impact, rebuilt as flipbook sprites - a puff of dust in the surface's colour, a
-//     fast streak of it off the surface, chips of it (concrete, rock, brick, wood splinters, glass shards),
-//     sparks off metal and stone.
+//   - the burst: PRO Effects' impact debris as flipbook sprites - chips of it (concrete, rock, brick, wood
+//     splinters, glass shards), sparks off metal and stone. No dust or smoke (dropped: it read badly).
 class ImpactFx {
 public:
     void SetSprites(FxSprites* fx) { m_Sprites = fx; }
@@ -31,14 +30,15 @@ public:
     // The surface's hole decal (a KnifeFxLibrary id; -1 when the library lacks it) and its size (metres across).
     static const char* HoleEntry(const std::string& surface);
     static float HoleSize(const std::string& surface, float radius);
+    static float HoleFraction(const std::string& surface); // the hole's width in its decal, x the cell
+    static constexpr float kHoleScale = 2.0f;              // the hole's width x the round's calibre
+    static float HoleRim(const std::string& surface);      // how far out its chipped rim shows (cell half-widths)
     // Whether `entity` is part of the static world (a decal projects onto it): no rigidbody, no skeleton.
     static bool IsStatic(const World& world, std::uint32_t entity);
 
     // The burst where a round travelling `dir` struck `surface` at `point` (surface normal `normal`).
     void Spawn(const std::string& surface, const glm::vec3& point, const glm::vec3& normal, const glm::vec3& dir);
     int Spawned() const { return m_Spawned; }
-    // A surface's dust colour (linear albedo).
-    static glm::vec3 DustColor(const std::string& surface);
 
 private:
     FxSprites* m_Sprites = nullptr;

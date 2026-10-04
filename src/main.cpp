@@ -86,9 +86,6 @@
 #include "AI/NpcTest.h"         // --npc-test
 #include "Combat/PlayerVitals.h" // the player's health, death and respawn
 #include "PlayerHudOverlay.h"
-#include "ScreenBloodOverlay.h"
-#include "Combat/ScreenBlood.h"
-#include "Combat/HeadGore.h"
 #include "Combat/ImpactFx.h"
 #include "Combat/BloodLab.h"
 #include "CombatHud.h"          // ammo, kill feed, radio subtitles, awareness markers, AI overlay
@@ -897,7 +894,8 @@ int main(int argc, char** argv) {
             impactFx.Spawn(surface, p, n, dir);
             int decal = -1;
             if (ImpactFx::IsStatic(world, entity)) decal = KnifeFxLibrary::Get().Find(ImpactFx::HoleEntry(surface));
-            bulletHoles.Add(world, static_cast<entt::entity>(entity), point, normal, radius, decal, ImpactFx::HoleSize(surface, radius));
+            bulletHoles.Add(world, static_cast<entt::entity>(entity), point, normal, radius, decal, ImpactFx::HoleSize(surface, radius),
+                            ImpactFx::HoleRim(surface));
         };
         if (npcTest)
             npcTest->ShootWorld = [&](const glm::vec3& from, const glm::vec3& dir) { // --npc-test blood: rounds into the surfaces
@@ -908,7 +906,7 @@ int main(int argc, char** argv) {
                 if (!PhysicsWorld::RaycastFiltered(o, d, 20.0f, f, h) || !h.Hit) return false;
                 const glm::vec3 p(h.Point[0], h.Point[1], h.Point[2]), n(h.Normal[0], h.Normal[1], h.Normal[2]);
                 combatFx.Impact(world, h.Entity, p);
-                worldImpact(h.Entity, p, n, dir, 0.0045f);
+                worldImpact(h.Entity, p, n, dir, 0.0027f); // a 5.45 mm round
                 return true;
             };
         BloodLab bloodLab;          // F7 -> Blood Lab: fire any blood / impact effect at the crosshair, tune it live
@@ -944,7 +942,7 @@ int main(int argc, char** argv) {
             bool body = false;
             if (!aimAt(p, n, e, part, body)) return;
             const glm::vec3 o = player.Cam.Position, d = glm::normalize(p - o);
-            if (!body) { worldImpact(e, p, n, d, 0.0045f); return; }
+            if (!body) { worldImpact(e, p, n, d, 0.0027f); return; }
             if (head) // on the head whatever part was under the crosshair
                 for (const auto& npc : npcDirector.Npcs())
                     if (npc && (unsigned)entt::to_integral(npc->Root) == e && npc->Hitboxes && npc->Hitboxes->Active()) p = npc->Hitboxes->Centre(npc->Body, 2);
@@ -977,34 +975,19 @@ int main(int argc, char** argv) {
             bool body = false;
             if (aimAt(p, n, e, part, body) && !body) {
                 combatFx.Impact(world, e, p);
-                worldImpact(e, p, n, glm::normalize(p - player.Cam.Position), 0.0045f);
+                worldImpact(e, p, n, glm::normalize(p - player.Cam.Position), 0.0027f);
             }
         };
-        HeadGore headGore;          // big headshot kills: the head blown off (docs/BLOOD_FX.md)
-
-        headGore.SetSprites(&fxSprites);
-        headGore.SetBody([&](unsigned entity, HeadGore::Body& out) {
-            for (const auto& n : npcDirector.Npcs()) {
-                if (!n || (unsigned)entt::to_integral(n->Root) != entity) continue;
-                const entt::entity driver = n->Body.Driver();
-                if (driver == entt::null || !world.Registry.valid(driver)) return false;
-                out.Pieces.clear();
-                out.Pieces.push_back(driver);
-                for (entt::entity p : n->Body.Pieces())
-                    if (p != driver) out.Pieces.push_back(p);
-                if (!n->Body.BoneWorld(world, "head", out.Head) || !n->Body.BoneWorld(world, "neck_01", out.Neck)) return false;
-                out.Forward = glm::vec3(world.GetCachedWorldTransform(n->Root)[2]); // the body root's facing
-                return true;
-            }
-            return false;
-        });
-        FoleyAudio::Get().SetStepListener([&bloodFx](int walker, const glm::vec3& feet, const glm::vec3& vel, int foot) {
-            bloodFx.OnFootstep(walker, feet, vel, foot); // bloody footprints out of fresh blood
+        int bigHeadshots = 0;       // big headshot kills (the gore sound), for --npc-test blood
+        FoleyAudio::Get().SetStepListener([&bloodFx, &player](int walker, const glm::vec3& feet, const glm::vec3& vel, int foot) {
+            // Bloody footprints out of fresh blood; the player's point the way they face (turning on the spot too).
+            bloodFx.OnFootstep(walker, feet, vel, foot, walker < 0 ? player.Cam.Front() : glm::vec3(0.0f));
         });
         bloodFx.SetBodyLookup([&npcDirector](unsigned entity, glm::vec3& centre) { // where a corpse lies, for its pool
             for (const auto& n : npcDirector.Npcs()) {
                 if (!n || (unsigned)entt::to_integral(n->Root) != entity) continue;
-                centre = n->Ragdoll ? n->Ragdoll->PartPosition(0) : n->Feet + glm::vec3(0.0f, 0.9f, 0.0f);
+                // The middle of the body: pelvis toward chest (its pool spreads from under there).
+                centre = n->Ragdoll ? glm::mix(n->Ragdoll->PartPosition(0), n->Ragdoll->PartPosition(1), 0.4f) : n->Feet + glm::vec3(0.0f, 0.9f, 0.0f);
                 return true;
             }
             return false;
@@ -1031,6 +1014,13 @@ int main(int argc, char** argv) {
             worldToBind = glm::inverse(w * m.FinalBoneMatrix(best));
             return true;
         };
+        auto gunKey = [](const std::string& model) { return (unsigned)(std::hash<std::string>{}(model) | 1u); };
+        bloodFx.SetMemberResolver([&, gunKey](unsigned key) -> unsigned { // the gun out now, if it's that one
+            if (!firstPersonPresentation.IsActive()) return 0xFFFFFFFFu;
+            const entt::entity g = firstPersonPresentation.WeaponEntity();
+            if (g == entt::null || gunKey(firstPersonPresentation.Set().WeaponModel) != key) return 0xFFFFFFFFu;
+            return (unsigned)entt::to_integral(g);
+        });
         bloodFx.SetSplatSpace([&](unsigned entity, int part, bool corpse, const glm::vec3& point, BloodFx::SplatSpace& out) {
             if (entity == kPlayerEntity) { // the player's own body pieces, arms and gun near the point
                 out.Group = entity;
@@ -1040,9 +1030,14 @@ int main(int argc, char** argv) {
                 for (auto e : world.Registry.view<PlayerBodyTag, RenderableComponent>())
                     if (!world.Registry.all_of<PoseSourceTag>(e) && meshSpace(e, point, 0.16f, w2b))
                         out.Members.emplace_back((unsigned)entt::to_integral(e), w2b);
-                if (firstPersonPresentation.IsActive())
-                    if (entt::entity g = firstPersonPresentation.WeaponEntity(); g != entt::null && meshSpace(g, point, 0.6f, w2b))
+                // The gun: speckles off a point-blank hit - never the player's own wound (kBodyOnlyPart). Keyed by its model,
+                // so the blood comes back with it after a weapon swap rebuilds it.
+                if (part != BloodFx::kBodyOnlyPart && firstPersonPresentation.IsActive())
+                    if (entt::entity g = firstPersonPresentation.WeaponEntity(); g != entt::null && meshSpace(g, point, 0.6f, w2b)) {
+                        out.Keys.resize(out.Members.size(), 0u);
                         out.Members.emplace_back((unsigned)entt::to_integral(g), w2b);
+                        out.Keys.push_back(gunKey(firstPersonPresentation.Set().WeaponModel));
+                    }
                 return !out.Members.empty();
             }
             for (const auto& n : npcDirector.Npcs()) {
@@ -1132,15 +1127,10 @@ int main(int argc, char** argv) {
         npcDirector.Fx = &combatFx;
         PlayerVitals playerVitals;  // the player's health in Play
         PlayerHudOverlay playerHud; // health, damage direction, hitmarker, death
-        ScreenBlood screenBlood;    // blood on the view when the player is hurt (docs/BLOOD_FX.md)
-        ScreenBloodOverlay screenBloodOverlay;
-        bloodLab.Actions.Hurt = [&](float damage) { screenBlood.OnHurt(damage, 1.5708f, playerVitals.Health01()); };
         bloodLab.Actions.ClearAll = [&] {
             bloodFx.Clear();
             fxSprites.Clear();
             bulletHoles.Clear();
-            headGore.Clear(world);
-            screenBlood.Clear();
         };
         CombatHud combatHud;        // ammo, kill feed, radio subtitles, awareness chevrons, AI debug overlay
         DevPanel devPanel;          // F7 / F8 / F9 dev tools in Play
@@ -1802,8 +1792,6 @@ int main(int argc, char** argv) {
             }
             bloodFx.Clear();
             fxSprites.Clear();
-            screenBlood.Clear();
-            headGore.Clear(world);
             {   // the scene's blood tuning: the first Blood Settings component, defaults when none
                 BloodSettingsComponent b;
                 if (const auto all = world.Registry.view<BloodSettingsComponent>(); all.begin() != all.end())
@@ -1814,13 +1802,13 @@ int main(int argc, char** argv) {
                 bloodFx.Config.MaxDecals = b.MaxStains;
                 bloodFx.Config.DecalLifetime = b.StainLifetime;
                 bloodFx.Config.DrySeconds = b.DrySeconds;
+                bloodFx.Config.Speed = b.Speed;
                 bloodFx.Config.Pools = b.Pools;
                 bloodFx.Config.BodySplats = b.BodySplats;
                 bloodFx.Config.GearSpatter = b.GearSpatter;
                 bloodFx.Config.EnergyScale = b.EnergyScale;
                 bloodFx.Config.ImpactPuffs = b.ImpactPuffs;
                 bloodFx.Config.Gore = b.Gore;
-                screenBlood.Enabled = b.Enabled && b.Gore > 0 && b.ScreenBlood;
             }
             BloodRenderer::Get().Load(); // once; a missing import just leaves the blood off
             KnifeFxLibrary::Get().Load(); // likewise the Knife packs (--import-knife-fx)
@@ -1938,8 +1926,6 @@ int main(int argc, char** argv) {
             BloodRenderer::Get().BeginFrame(); // nothing of Play's blood left in the editor
             fxSprites.Clear();
             FxSpriteRenderer::Get().BeginFrame();
-            screenBlood.Clear();
-            headGore.Clear(world);
             shellCasings.Clear(world);
             editor.OnExitPlayMode(world, assets);
             playing = false;
@@ -3159,11 +3145,7 @@ int main(int argc, char** argv) {
                     for (const DamageEvent& e : npcDirector.TakePlayerDamage()) {
                         const float before = playerVitals.Health();
                         playerVitals.ApplyDamage(e.Amount, e.SourcePos);
-                        if (playerVitals.Health() < before) {
-                            combatFx.Play(CombatFx::Cue::FleshHit, e.Point, true, 0.8f);
-                            screenBlood.OnHurt(before - playerVitals.Health(), DamageIndicatorAngle(player.Cam.Position, player.Cam.Yaw, e.SourcePos),
-                                               playerVitals.Health01());
-                        }
+                        if (playerVitals.Health() < before) combatFx.Play(CombatFx::Cue::FleshHit, e.Point, true, 0.8f);
                     }
                     // Every round that went into a body this frame - theirs and the player's - bleeds.
                     for (const NpcDirector::FleshHit& f : npcDirector.TakeFleshHits()) {
@@ -3181,11 +3163,11 @@ int main(int argc, char** argv) {
                         h.Origin = f.Origin;
                         h.ByPlayer = f.ByPlayer;
                         bloodFx.OnFleshHit(h);
-                        // A head taken apart: off it comes, with the wet crunch over the flesh hit (AE Master's gore takes).
-                        if (bloodFx.Config.Enabled &&
-                            HeadGore::ShouldBurst(h.Head, h.Killed, h.Player, bloodFx.LastEnergy(), bloodFx.Config.Gore) &&
-                            headGore.Burst(world, assets, h.Entity, h.Point, h.Direction, bloodFx.LastEnergy()))
+                        // A big headshot kill: the wet crunch over the flesh hit (AE Master's gore takes).
+                        if (bloodFx.Config.Enabled && BloodFx::BigHeadshot(h, bloodFx.LastEnergy(), bloodFx.Config.Gore)) {
                             ImpactAudio::Get().Gore(h.Point, 1.0f);
+                            ++bigHeadshots;
+                        }
                     }
                     if (npcTest) npcTest->After(world, npcDirector, playerVitals, player);
                 }
@@ -3212,10 +3194,9 @@ int main(int argc, char** argv) {
                 }
                 {
                     PROFILE_SCOPE("Blood");
+                    bloodFx.SetViewer(player.Cam.Position, player.Cam.Front()); // stains leave only out of view
                     bloodFx.Update(gameDt);
                     fxSprites.Update(gameDt);
-                    screenBlood.Update(gameDt);
-                    headGore.Update(world, gameDt);
                     BloodRenderer::Get().BeginFrame();
                     bloodFx.Submit(BloodRenderer::Get());
                     {   // The textured bullet holes go in with the blood's decals (the static world, before the moving things).
@@ -3231,6 +3212,8 @@ int main(int argc, char** argv) {
                             d.Cell = (int)(hole.Seed * 4.0f) & 3;
                             d.NextCell = d.Cell;
                             d.NormalStrength = 1.0f;
+                            d.Blood = false; // the surface's own broken material
+                            d.Rim = hole.Rim;
                             BloodRenderer::Get().AddDecal(d);
                         }
                     }
@@ -3247,7 +3230,7 @@ int main(int argc, char** argv) {
                         npcTestBlood.Puffs = bloodFx.PuffsSpawned();
                         npcTestBlood.LastExited = bloodFx.LastExited();
                         npcTestBlood.LastExitFound = bloodFx.LastExitFound();
-                        npcTestBlood.HeadBursts = headGore.Bursts();
+                        npcTestBlood.BigHeadshots = bigHeadshots;
                         npcTestBlood.Impacts = impactFx.Spawned();
                         npcTestBlood.TexturedHoles = 0;
                         {
@@ -3255,7 +3238,6 @@ int main(int argc, char** argv) {
                             bulletHoles.Resolve(world, all);
                             for (const auto& hole : all) npcTestBlood.TexturedHoles += hole.Decal >= 0;
                         }
-                        npcTestBlood.GoreChunks = headGore.Chunks();
                         npcTestBlood.GearSplats = 0;
                         for (const BloodFx::Splat& s : bloodFx.Splats()) npcTestBlood.GearSplats += s.Group == kPlayerEntity;
                         for (const Profiler::Entry& e : Profiler::GetLastFrameGpu()) {
@@ -4540,8 +4522,7 @@ int main(int argc, char** argv) {
                     }
                     st.BloodData = BloodRenderer::Get().Loaded();
                     st.KnifeData = KnifeFxLibrary::Get().Loaded();
-                    st.GoreMeshes = std::filesystem::exists(std::filesystem::u8path(ProjectPaths::Resolve("assets/Effects/Knife/Gore/exploded_head.fbx")));
-                    bloodLab.Draw(bloodFx, screenBlood, st);
+                    bloodLab.Draw(bloodFx, st);
                 }
                 // One coalesced, atomic prefs write per frame for however many preference
                 // controls changed this frame (audit CPP-206 / PERF-211).
@@ -4730,7 +4711,6 @@ int main(int argc, char** argv) {
                                    gravityGunLive() && gravityGun.IsCharging() ? gravityGun.Charge() : -1.0f,
                                    crosshairDot(gvView, gvProj, gvWidth, gvHeight));
                 if (playing && playUsesPlayer && npcDirector.Active()) {
-                    screenBloodOverlay.Draw(gameView.GetFramebuffer().Handle(), gvWidth, gvHeight, screenBlood);
                     playerHud.Draw(gameView.GetFramebuffer().Handle(), gvWidth, gvHeight,
                                    MakePlayerHudState(playerVitals, player.Cam.Position, player.Cam.Yaw), (float)glfwGetTime());
                     drawCombatHud(gameView.GetFramebuffer().Handle(), gvWidth, gvHeight, gvView, gvProj);
@@ -4981,7 +4961,6 @@ int main(int argc, char** argv) {
                                    gravityGunLive() && gravityGun.IsCharging() ? gravityGun.Charge() : -1.0f,
                                    crosshairDot(view, proj, mw, mh));
                 if (playing && playUsesPlayer && npcDirector.Active()) {
-                    screenBloodOverlay.Draw(0, mw, mh, screenBlood);
                     playerHud.Draw(0, mw, mh, MakePlayerHudState(playerVitals, player.Cam.Position, player.Cam.Yaw), (float)glfwGetTime());
                     drawCombatHud(0, mw, mh, view, proj);
                 }

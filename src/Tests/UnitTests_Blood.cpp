@@ -4,8 +4,6 @@
 #include "Combat/BloodFx.h"
 #include "Combat/BloodFxPresets.h"
 #include "Combat/FxSprites.h"
-#include "Combat/ScreenBlood.h"
-#include "Combat/HeadGore.h"
 #include "Combat/ImpactFx.h"
 #include "BloodRenderer.h"
 #include "GameModuleAPI.h"
@@ -292,7 +290,7 @@ void Test_Blood_FleshHits() {
     fx.OnFleshHit(h);
     CHECK(fx.SpraysSpawned() > after && !fx.LastSprayClipped());
     // Each spray plays out and is dropped; MaxSprays caps the live ones.
-    fx.Update(0.5f);
+    fx.Update(0.2f);
     CHECK(!fx.Sprays().empty());
     fx.Update(5.0f);
     CHECK(fx.Sprays().empty());
@@ -343,12 +341,25 @@ void Test_Blood_Decals() {
     CHECK(boxesRight);
     // Stains land, spread in and hold; a dead body's pool appears once it has come to rest, then spreads.
     const size_t thrown = ds.size();
-    fx.Update(1.5f);
+    fx.Update(0.5f);
     CHECK(fx.Decals().size() == thrown);
-    fx.Update(2.0f);
+    for (int i = 0; i < 6; ++i) fx.Update(0.1f); // a body at rest: looked at twice, 0.2 s apart, then its pool (by ~0.8 s)
     CHECK(fx.Decals().size() == thrown + 1);
     const BloodFx::Decal pool = fx.Decals().back();
-    CHECK(pool.Reveal == nullptr && pool.PoolGrow > 5.0f);
+    CHECK(pool.Reveal == nullptr && pool.PoolGrow > 15.0f && pool.Spread);
+    {   // It starts as a small patch and widens slowly, fast at first: never a full pool popping in.
+        BloodFx::Decal p = pool;
+        p.Age = 0.0f;
+        const float s0 = BloodFx::PoolScale(p);
+        p.Age = 2.0f;
+        const float s2 = BloodFx::PoolScale(p);
+        p.Age = p.PoolGrow * 0.5f;
+        const float sHalf = BloodFx::PoolScale(p);
+        p.Age = p.PoolGrow + 1.0f;
+        const float sEnd = BloodFx::PoolScale(p);
+        CHECK(s0 < 0.1f && s2 < 0.4f && s2 > s0 && sHalf > 0.7f && sHalf < 1.0f && std::abs(sEnd - 1.0f) < 1e-5f);
+        CHECK(sHalf - s0 > sEnd - sHalf); // the spread slows
+    }
     CHECK(std::abs(glm::vec3(pool.Model[3]).x - corpse.x) < 1e-4f && std::abs(glm::vec3(pool.Model[3]).y - 0.01f) < 1e-3f);
     BloodFx::Decal grow = pool;
     grow.Age = 0.0f;
@@ -357,8 +368,8 @@ void Test_Blood_Decals() {
     const float c1 = BloodFx::DecalCutout(grow);
     grow.Age = grow.PoolGrow + 1.0f;
     CHECK(c0 > c1 && c1 > BloodFx::DecalCutout(grow) && BloodFx::DecalCutout(grow) < 0.01f);
-    grow.Age = grow.Life - 0.01f;
-    CHECK(BloodFx::DecalCutout(grow) > 0.95f); // shrinks away at the end
+    grow.Age = 5000.0f;
+    CHECK(BloodFx::DecalCutout(grow) < 0.01f); // and stays: stains don't shrink away
     // The reveal-curve stains: hidden, spread by 0.3 of the curve, held, then the curve's tail.
     BloodCurve curve{3, {{0.0f, 1.0f, 0, 0}, {0.3f, 0.0f, 0, 0}, {1.0f, 1.0f, 0, 0}}};
     BloodFx::Decal r;
@@ -370,10 +381,10 @@ void Test_Blood_Decals() {
     r.Age = 50.0f;
     CHECK(BloodFx::DecalCutout(r) < 0.01f);
     r.Age = 99.9f;
-    CHECK(BloodFx::DecalCutout(r) > 0.95f);
-    // Stains go at the end of their life; the cap keeps the oldest out.
-    fx.Update(fx.Config.DecalLifetime * 1.2f);
-    CHECK(fx.Decals().empty());
+    CHECK(BloodFx::DecalCutout(r) < 0.01f); // held, past its old lifetime
+    // Stains stay for good by default; the cap still holds the count.
+    fx.Update(1000.0f);
+    CHECK(!fx.Decals().empty());
     fx.Config.MaxDecals = 3;
     for (unsigned e = 50; e < 60; ++e) { h.Entity = e; h.Point.x = (float)e; fx.OnFleshHit(h); }
     CHECK((int)fx.Decals().size() <= 3);
@@ -652,7 +663,7 @@ void Test_Blood_Footprints() {
     CHECK(fx.BloodySteps(-1) == BloodFx::kPrintSteps);
     float lastOpacity = 2.0f;
     bool fading = true;
-    for (int i = 0; i < 10; ++i) {
+    for (int i = 0; i < BloodFx::kPrintSteps + 4; ++i) {
         fx.OnFootstep(-1, glm::vec3(0, 0, -2.0f - 0.7f * (float)i), glm::vec3(0, 0, -1.5f), i % 2);
         const BloodFx::Decal& d = fx.Decals().back();
         if (d.Knife == 30 && i < BloodFx::kPrintSteps) { fading &= d.Opacity < lastOpacity; lastOpacity = d.Opacity; }
@@ -661,6 +672,14 @@ void Test_Blood_Footprints() {
     // The prints point the way they walked (toe = the image's top = -z of the box, so the box's z runs back).
     const BloodFx::Decal& print = fx.Decals().back();
     CHECK(print.Knife == 30 && glm::normalize(glm::vec3(print.Model[2])).z > 0.99f);
+    // Facing wins over the way they move: stepping in it again and turning to face +x while moving -z, the print's
+    // toe points +x.
+    fx.Clear();
+    fx.OnFleshHit(h);
+    for (int i = 0; i < 300; ++i) fx.Update(0.1f);
+    fx.OnFootstep(-1, glm::vec3(0, 0, 0), glm::vec3(0, 0, -1.5f), 1);
+    fx.OnFootstep(-1, glm::vec3(0, 0, -2.0f), glm::vec3(0, 0, -1.5f), 0, glm::vec3(1, 0, 0));
+    CHECK(fx.Decals().back().Knife == 30 && glm::normalize(glm::vec3(fx.Decals().back().Model[2])).x < -0.99f);
     // Old blood doesn't mark a sole.
     for (int i = 0; i < 700; ++i) fx.Update(0.1f);
     fx.OnFootstep(7, glm::vec3(0, 0, 0), glm::vec3(1, 0, 0), -1);
@@ -668,49 +687,8 @@ void Test_Blood_Footprints() {
 }
 
 
-void Test_Blood_ScreenBlood() {
-    // A hit from the right lands on the right edge; from behind, the bottom; ahead, the top.
-    CHECK(ScreenBlood::EdgePoint(1.5708f).x > 0.85f);
-    CHECK(ScreenBlood::EdgePoint(3.1416f).y < 0.15f);
-    CHECK(ScreenBlood::EdgePoint(0.0f).y > 0.85f);
-    // In fast, held at the fullest frame, thinning out to nothing.
-    int f = 0;
-    float o = 0.0f;
-    ScreenBlood::FrameAt(0.0f, 2.0f, 16, f, o);
-    CHECK(f == 0 && o == 1.0f);
-    ScreenBlood::FrameAt(0.5f, 2.0f, 16, f, o);
-    CHECK(f == 8 && o == 1.0f);
-    ScreenBlood::FrameAt(1.99f, 2.0f, 16, f, o);
-    CHECK(f >= 14 && o < 0.05f);
-    ScreenBlood sb;
-    sb.OnHurt(10.0f, 1.5708f, 0.9f);
-    CHECK(sb.Splats().size() == 1 && sb.Splats()[0].Pos.x > 0.7f);
-    sb.OnHurt(40.0f, -1.5708f, 0.2f); // a hard hit at low health: more of it
-    CHECK(sb.Splats().size() == 4);
-    for (int i = 0; i < 100; ++i) sb.Update(0.05f);
-    CHECK(sb.Splats().empty());
-    sb.Enabled = false;
-    sb.OnHurt(40.0f, 0.0f, 0.5f);
-    CHECK(sb.Splats().empty());
-}
 
 
-void Test_Blood_HeadGore() {
-    // Only the big ones: a head kill, energy enough, Gore at Full, never the player.
-    CHECK(HeadGore::ShouldBurst(true, true, false, 2.0f, 2));
-    CHECK(!HeadGore::ShouldBurst(true, true, false, 1.0f, 2));
-    CHECK(!HeadGore::ShouldBurst(true, true, false, 2.0f, 1));
-    CHECK(!HeadGore::ShouldBurst(true, false, false, 2.0f, 2));
-    CHECK(!HeadGore::ShouldBurst(false, true, false, 2.0f, 2));
-    CHECK(!HeadGore::ShouldBurst(true, true, true, 2.0f, 2));
-    // The stump stands along the neck, its front toward the body's facing.
-    const glm::quat q = HeadGore::StumpRotation(glm::vec3(0, 1.5f, 0), glm::vec3(0, 1.6f, 0.02f), glm::vec3(1, 0, 0));
-    const glm::vec3 up = q * glm::vec3(0, 1, 0), front = q * glm::vec3(0, 0, 1);
-    CHECK(up.y > 0.97f && front.x > 0.97f && std::abs(glm::dot(up, front)) < 1e-4f);
-    // Lying on his back (neck -> head along +Z): up follows the neck.
-    const glm::quat lying = HeadGore::StumpRotation(glm::vec3(0, 0.1f, 0), glm::vec3(0, 0.1f, 0.12f), glm::vec3(0, 1, 0));
-    CHECK((lying * glm::vec3(0, 1, 0)).z > 0.99f);
-}
 
 
 void Test_ImpactFx_Surfaces() {
@@ -726,7 +704,12 @@ void Test_ImpactFx_Surfaces() {
     CHECK(ImpactFx::SurfaceFromName("Loose Crate 1") == "wood");
     CHECK(ImpactFx::SurfaceFromName("something else") == "concrete");
     CHECK(std::string(ImpactFx::HoleEntry("brick")) == "hole_brick" && std::string(ImpactFx::HoleEntry("anything")) == "hole_concrete");
-    CHECK(ImpactFx::HoleSize("glass", 0.0045f) > ImpactFx::HoleSize("metal", 0.0045f));
+    // The hole a little bigger than the round: the cell x the hole's share of it = kHoleScale x the calibre.
+    for (const char* s : {"concrete", "brick", "wood", "metal", "glass", "mud", "sand", "tile", "asphalt", "rock"}) {
+        const float hole = ImpactFx::HoleSize(s, 0.0027f) * ImpactFx::HoleFraction(s);
+        CHECK(std::abs(hole - 0.0027f * 2.0f * ImpactFx::kHoleScale) < 1e-4f && ImpactFx::HoleRim(s) > ImpactFx::HoleFraction(s));
+    }
+    CHECK(ImpactFx::HoleSize("concrete", 0.0027f) < 0.1f); // not a 15 cm crater
 }
 
 
@@ -788,6 +771,352 @@ void Test_Blood_LabActions() {
     const int sprays = fx.SpraysSpawned();
     fx.OnFleshHit(h);
     CHECK(fx.SpraysSpawned() == sprays);
+}
+
+void Test_Blood_GroundSplatter() {
+    // Every hit throws blood out along its line, landing on whatever it meets when it has fallen there; a head throws more.
+    BloodFx fx;
+    fx.SetSimLookup([](const char*) { return 0; });
+    fx.SetDecalSetLookup([](const char*) { return 0; });
+    fx.SetKnifeLookup([](const char*, int&) { return -1; });
+    fx.SetBodyRay([](const glm::vec3&, const glm::vec3&, float, unsigned&, int&, glm::vec3&) { return false; });
+    float wallX = 100.0f; // a wall facing -x at x = wallX, and the floor at y = 0
+    fx.SetRaycast([&](const glm::vec3& o, const glm::vec3& d, float maxD, glm::vec3& p, glm::vec3& n) {
+        float best = maxD;
+        bool hit = false;
+        if (d.y < -1e-4f && -o.y / d.y <= best) { best = -o.y / d.y; n = glm::vec3(0, 1, 0); hit = true; }
+        if (d.x > 1e-4f && (wallX - o.x) / d.x >= 0.0f && (wallX - o.x) / d.x <= best) { best = (wallX - o.x) / d.x; n = glm::vec3(-1, 0, 0); hit = true; }
+        if (hit) p = o + d * best;
+        return hit;
+    });
+    glm::vec3 body(0.0f, 0.0f, 0.0f);
+    fx.SetBodyLookup([&](unsigned, glm::vec3& c) { c = body + glm::vec3(0, 1.0f, 0); return true; });
+    BloodFx::Hit h;
+    h.Point = glm::vec3(0, 1.3f, 0);
+    h.Direction = glm::vec3(1, 0, 0);
+    h.Entity = 3;
+    h.Damage = 40.0f;
+    fx.OnFleshHit(h);
+    CHECK(fx.GroundSplatters() == 1);
+    bool beyond = false, timed = false;
+    for (const BloodFx::Decal& d : fx.Decals()) {
+        const glm::vec3 at(d.Model[3]);
+        beyond |= at.x > 0.3f && std::abs(at.y - 0.01f) < 0.02f;
+        timed |= d.Age < -0.2f && d.Age > -0.8f; // ~ the fall from chest height
+    }
+    CHECK(beyond && timed);
+    // A wall in the way: it lands on the wall, facing out of it.
+    fx.Clear();
+    wallX = 1.2f;
+    h.Entity = 9;
+    fx.OnFleshHit(h);
+    bool onWall = false;
+    for (const BloodFx::Decal& d : fx.Decals()) onWall |= std::abs(glm::vec3(d.Model[3]).x - 1.2f) < 0.02f && glm::normalize(glm::vec3(d.Model[1])).x < -0.9f;
+    CHECK(onWall && fx.GroundSplatters() >= 1);
+    wallX = 100.0f;
+    fx.Clear();
+    h.Entity = 3;
+    fx.OnFleshHit(h);
+    // Head bigger than body, a head kill bigger again.
+    BloodFx::Hit head = h;
+    head.Head = true;
+    const float headWound = BloodFx::GroundSplatterSize(head, 1.0f);
+    CHECK(headWound > BloodFx::GroundSplatterSize(h, 1.0f));
+    head.Killed = true;
+    CHECK(BloodFx::GroundSplatterSize(head, 1.0f) > headWound);
+    // The living wound drips as he walks away; a kill doesn't (it pools instead).
+    CHECK(fx.Bleeding(3));
+    const int before = fx.BleedDrops();
+    for (int i = 0; i < 50; ++i) { body.x -= 0.05f; fx.Update(0.1f); }
+    CHECK(fx.BleedDrops() >= before + 4);
+    for (int i = 0; i < 60; ++i) fx.Update(0.1f);
+    CHECK(!fx.Bleeding(3));
+    h.Entity = 4;
+    h.Killed = true;
+    fx.OnFleshHit(h);
+    CHECK(!fx.Bleeding(4));
+}
+
+void Test_Blood_CorpseSplash() {
+    // Shooting a body lying on the floor: blood splashes round it on the floor, and the wound pools.
+    BloodFx fx;
+    fx.SetSimLookup([](const char*) { return 0; });
+    fx.SetDecalSetLookup([](const char*) { return 0; });
+    fx.SetKnifeLookup([](const char*, int&) { return -1; });
+    fx.SetBodyRay([](const glm::vec3&, const glm::vec3&, float, unsigned&, int&, glm::vec3&) { return false; });
+    fx.SetRaycast([](const glm::vec3& o, const glm::vec3& d, float maxD, glm::vec3& p, glm::vec3& n) {
+        if (d.y > -1e-4f || -o.y / d.y > maxD || o.y < 0.0f) return false; // the floor at y = 0, from above only
+        p = o + d * (-o.y / d.y);
+        n = glm::vec3(0, 1, 0);
+        return true;
+    });
+    BloodFx::Hit h;
+    h.Point = glm::vec3(0, 0.15f, 0);
+    h.Direction = glm::normalize(glm::vec3(0, -0.6f, -1));
+    h.Entity = 6;
+    h.Damage = 40.0f;
+    h.Corpse = true;
+    fx.OnFleshHit(h);
+    int onFloor = 0;
+    bool pool = false;
+    for (const BloodFx::Decal& d : fx.Decals()) {
+        onFloor += std::abs(glm::vec3(d.Model[3]).y - 0.01f) < 0.02f && glm::length(glm::vec2(d.Model[3].x, d.Model[3].z)) < 2.5f;
+        pool |= d.Spread;
+    }
+    CHECK(onFloor >= 3 && !pool && fx.GroundSplatters() == 1); // its splash; the body's one pool comes from its death
+}
+
+void Test_Blood_SplashVariety() {
+    // The thrown blood draws on all the shapes there are: the KriptoFX stains and Real Blood's splatters, mirrored.
+    BloodFx fx;
+    std::vector<std::string> asked;
+    fx.SetDecalSetLookup([](const char*) { return 0; });
+    fx.SetKnifeLookup([&](const char* e, int& cells) {
+        asked.push_back(e);
+        cells = std::string(e) == "drops" ? 16 : 4;
+        return 40;
+    });
+    int mirrored = 0;
+    std::vector<int> cells;
+    for (int i = 0; i < 200; ++i) {
+        const auto kind = (BloodFx::Splash)(i % 3);
+        BloodFx::Decal* d = fx.AddSplash(kind, glm::vec3((float)i, 0, 0), glm::vec3(0, 1, 0), glm::vec3(1, 0, 0), glm::vec3(0.3f, 0.3f, 0.3f), 0.0f);
+        CHECK(d != nullptr);
+        if (!d) continue;
+        mirrored += d->Mirror;
+        if (kind == BloodFx::Splash::Drop && d->Knife == 40) cells.push_back(d->Cell);
+    }
+    const auto has = [&](const char* n) { return std::find(asked.begin(), asked.end(), std::string(n)) != asked.end(); };
+    CHECK(has("splat_small") && has("splat_wide") && has("splat_medium") && has("drops"));
+    CHECK(mirrored > 30 && mirrored < 110);
+    // On a floor only the round drops of the sheet (not the runs).
+    for (int c : cells) CHECK(c == 3 || c == 4 || c == 6 || c == 8 || c == 9 || c == 10 || c == 11 || c == 13 || c == 15);
+}
+
+void Test_Blood_OnePool() {
+    // One pool per body, from under its middle once it has stopped moving - not where it was mid-fall.
+    BloodFx fx;
+    fx.SetSimLookup([](const char*) { return 0; });
+    fx.SetDecalSetLookup([](const char*) { return 0; });
+    fx.SetKnifeLookup([](const char*, int&) { return -1; });
+    fx.SetBodyRay([](const glm::vec3&, const glm::vec3&, float, unsigned&, int&, glm::vec3&) { return false; });
+    fx.SetRaycast([](const glm::vec3& o, const glm::vec3& d, float maxD, glm::vec3& p, glm::vec3& n) {
+        if (d.y > -1e-4f || -o.y / d.y > maxD || o.y < 0.0f) return false;
+        p = o + d * (-o.y / d.y);
+        n = glm::vec3(0, 1, 0);
+        return true;
+    });
+    glm::vec3 body(0.0f, 1.0f, 0.0f);
+    fx.SetBodyLookup([&](unsigned, glm::vec3& c) { c = body; return true; });
+    BloodFx::Hit h;
+    h.Point = glm::vec3(0, 1.3f, 0);
+    h.Direction = glm::vec3(1, 0, 0);
+    h.Entity = 5;
+    h.Damage = 60.0f;
+    h.Killed = true;
+    fx.OnFleshHit(h);
+    fx.OnFleshHit(h); // a second kill hit (a pellet) queues nothing more
+    // Falling for 1.5 s (sliding 1 m along x), then still.
+    for (int i = 0; i < 15; ++i) { body.x += 0.07f; body.y = std::max(0.2f, body.y - 0.06f); fx.Update(0.1f); }
+    CHECK(fx.PoolsSpawned() == 0 && fx.Pooled(5));
+    for (int i = 0; i < 10; ++i) fx.Update(0.1f);
+    CHECK(fx.PoolsSpawned() == 1);
+    for (const BloodFx::Decal& d : fx.Decals())
+        if (d.Spread) CHECK(std::abs(d.Model[3].x - body.x) < 1e-3f && std::abs(d.Model[3].z) < 1e-3f);
+    // Shot again later, killed again: still the one pool.
+    h.Corpse = true;
+    fx.OnFleshHit(h);
+    for (int i = 0; i < 60; ++i) fx.Update(0.1f);
+    CHECK(fx.PoolsSpawned() == 1);
+}
+
+void Test_Blood_Gear() {
+    // The player's gun: speckles that don't stack into a coat, never their own wound, and they stay - across a swap too.
+    BloodFx fx;
+    fx.SetDecalSetLookup([](const char*) { return 0; });
+    unsigned gunEntity = 70;
+    const unsigned key = 0xABCDu;
+    int bodyOnlyAsks = 0;
+    fx.SetSplatSpace([&](unsigned entity, int part, bool, const glm::vec3&, BloodFx::SplatSpace& out) {
+        if (entity != kPlayerEntity) return false; // the soldiers' own wounds aren't on the player's gear
+        out.Group = kPlayerEntity;
+        out.Members.emplace_back(10u, glm::mat4(1.0f)); // a body piece
+        out.Keys.push_back(0u);
+        if (part == BloodFx::kBodyOnlyPart) { ++bodyOnlyAsks; return true; }
+        out.Members.emplace_back(gunEntity, glm::mat4(1.0f));
+        out.Keys.push_back(key);
+        return true;
+    });
+    fx.SetSplatMembers([](unsigned, std::vector<unsigned>&) { return true; });
+    bool gunOut = true;
+    fx.SetMemberResolver([&](unsigned k) { return k == key && gunOut ? gunEntity : 0xFFFFFFFFu; });
+    // Being shot: the wound is on the body only.
+    BloodFx::Hit hurt;
+    hurt.Point = glm::vec3(0, 1.2f, 0);
+    hurt.Entity = kPlayerEntity;
+    hurt.Player = true;
+    hurt.Damage = 30.0f;
+    fx.OnFleshHit(hurt);
+    int onGun = 0;
+    for (const BloodFx::Splat& s : fx.Splats()) onGun += s.Key == key;
+    CHECK(bodyOnlyAsks >= 1 && onGun == 0);
+    // Speckles from many hits: at most kMaxGearSplats on the gun, never two on one spot, none lost.
+    BloodFx::Hit near;
+    near.Entity = 3;
+    near.Damage = 40.0f;
+    fx.SetSimLookup([](const char*) { return -1; });
+    fx.SetKnifeLookup([](const char*, int&) { return -1; });
+    fx.SetRaycast([](const glm::vec3&, const glm::vec3&, float, glm::vec3&, glm::vec3&) { return false; });
+    fx.SetBodyRay([](const glm::vec3&, const glm::vec3&, float, unsigned&, int&, glm::vec3&) { return false; });
+    int calls = 0;
+    fx.SetPlayerGear([&](glm::vec3* p, glm::vec3* n, int max) {
+        const int k = std::min(max, 8);
+        for (int i = 0; i < k; ++i) { p[i] = glm::vec3(0.01f * (float)((calls * 7 + i) % 40), 0.0f, 0.0f); n[i] = glm::vec3(0, 1, 0); }
+        ++calls;
+        return k;
+    });
+    for (int i = 0; i < 80; ++i) {
+        near.Entity = 100u + (unsigned)i;
+        near.ByPlayer = true;
+        near.Origin = glm::vec3(0, 1.3f, 0.5f);
+        near.Point = glm::vec3(0, 1.3f, 0);
+        fx.OnFleshHit(near);
+        fx.Update(0.3f);
+    }
+    std::vector<const BloodFx::Splat*> gun;
+    for (const BloodFx::Splat& s : fx.Splats())
+        if (s.Key == key) gun.push_back(&s);
+    CHECK(!gun.empty() && (int)gun.size() <= BloodFx::kMaxGearSplats);
+    bool stacked = false;
+    for (size_t a = 0; a < gun.size(); ++a)
+        for (size_t b = a + 1; b < gun.size(); ++b)
+            stacked |= glm::length(gun[a]->Center - gun[b]->Center) < 0.7f * std::max(gun[a]->Radius, gun[b]->Radius);
+    CHECK(!stacked);
+    for (const BloodFx::Splat* s : gun) CHECK(s->Radius <= 0.031f && s->DryAge == 0.0f); // speckles; gear never dries
+    // A swap: the gun rebuilt as entity 71 - its blood is drawn on the new one; put away, it isn't drawn (but kept).
+    gunEntity = 71;
+    for (const BloodFx::Splat* s : gun) CHECK(fx.DrawnOn(*s) == 71u);
+    gunOut = false;
+    for (const BloodFx::Splat* s : gun) CHECK(fx.DrawnOn(*s) == 0xFFFFFFFFu);
+    CHECK((int)std::count_if(fx.Splats().begin(), fx.Splats().end(), [&](const BloodFx::Splat& s) { return s.Key == key; }) == (int)gun.size());
+}
+
+void Test_Blood_DryOutOfView() {
+    // Blood doesn't dry while you look at it; turned away, it does - slowly.
+    BloodFx fx;
+    fx.SetDecalSetLookup([](const char*) { return 0; });
+    fx.SetKnifeLookup([](const char*, int&) { return -1; });
+    fx.SetViewer(glm::vec3(0.0f), glm::vec3(0, 0, -1));
+    fx.SpatterWallAt(glm::vec3(0, 1, -5), glm::vec3(0, 0, 1), 0.5f);
+    fx.Update(600.0f);
+    CHECK(fx.Decals()[0].DryAge == 0.0f);
+    fx.SetViewer(glm::vec3(0.0f), glm::vec3(0, 0, 1));
+    fx.Update(60.0f);
+    CHECK(fx.Decals()[0].DryAge > 59.0f && fx.Decals()[0].DryAge / fx.Decals()[0].DrySeconds < 0.06f);
+}
+
+void Test_Blood_PrintsStay() {
+    // Footprints keep through the stain cap; old ones fade out slowly (the oldest first), never popping.
+    BloodFx fx;
+    fx.SetDecalSetLookup([](const char*) { return 0; });
+    fx.SetKnifeLookup([](const char* e, int& cells) { cells = 8; return std::string(e) == "footprint" ? 30 : -1; });
+    fx.SetRaycast([](const glm::vec3& o, const glm::vec3&, float, glm::vec3& p, glm::vec3& n) { p = glm::vec3(o.x, 0.0f, o.z); n = glm::vec3(0, 1, 0); return true; });
+    fx.Config.MaxDecals = 20;
+    // A pool to step in, then a trail.
+    fx.SpawnPoolAt(glm::vec3(0, 0, 0), glm::vec3(0, 1, 0), 2.0f);
+    fx.Update(30.0f);
+    fx.OnFootstep(-1, glm::vec3(0, 0, 0), glm::vec3(0, 0, -1), 0);
+    for (int i = 0; i < BloodFx::kPrintSteps; ++i) fx.OnFootstep(-1, glm::vec3(0, 0, -2.0f - 0.7f * (float)i), glm::vec3(0, 0, -1), i % 2);
+    const int prints = fx.PrintsSpawned();
+    CHECK(prints == BloodFx::kPrintSteps);
+    // Lots of other blood: the cap takes the others, never the prints.
+    for (int i = 0; i < 60; ++i) fx.SpatterWallAt(glm::vec3((float)i, 1, -5), glm::vec3(0, 0, 1), 0.3f);
+    int kept = 0;
+    for (const BloodFx::Decal& d : fx.Decals()) kept += d.Print;
+    CHECK(kept == prints);
+    // Still there at 9 minutes; gone after 10 + 3.
+    fx.Update(500.0f);
+    kept = 0;
+    for (const BloodFx::Decal& d : fx.Decals()) kept += d.Print;
+    CHECK(kept == prints);
+    fx.Update(300.0f); // 830 s on: past 10 min + the 3 min fade
+    kept = 0;
+    for (const BloodFx::Decal& d : fx.Decals()) kept += d.Print;
+    CHECK(kept == 0);
+}
+
+void Test_Blood_Persist() {
+    // Stains never leave in view: past their lifetime or over the cap, the one that goes is out of view (behind, far).
+    BloodFx fx;
+    fx.SetDecalSetLookup([](const char*) { return 0; });
+    fx.SetKnifeLookup([](const char*, int&) { return -1; });
+    fx.SetViewer(glm::vec3(0.0f), glm::vec3(0, 0, -1));
+    fx.Config.MaxDecals = 3;
+    fx.SpatterWallAt(glm::vec3(0, 1, -5), glm::vec3(0, 0, 1), 0.5f);  // ahead: in view
+    const size_t ahead = fx.Decals().size();
+    CHECK(ahead >= 1);
+    fx.Config.MaxDecals = (int)ahead + 1;
+    fx.SpawnPoolAt(glm::vec3(0, 0, 30), glm::vec3(0, 1, 0), 1.0f);  // behind
+    fx.SpawnPoolAt(glm::vec3(0, 0, -8), glm::vec3(0, 1, 0), 1.0f);  // ahead again: over the cap, the one behind goes
+    bool behind = false;
+    for (const BloodFx::Decal& d : fx.Decals()) behind |= glm::vec3(d.Model[3]).z > 20.0f;
+    CHECK(!behind && (int)fx.Decals().size() == fx.Config.MaxDecals);
+    // A lifetime set: in view it stays past it; turn away and it goes.
+    fx.Clear();
+    fx.Config.MaxDecals = 64;
+    fx.Config.DecalLifetime = 10.0f;
+    fx.SpawnPoolAt(glm::vec3(0, 0, -5), glm::vec3(0, 1, 0), 1.0f);
+    fx.Update(30.0f);
+    CHECK(fx.Decals().size() == 1);
+    fx.SetViewer(glm::vec3(0.0f), glm::vec3(0, 0, 1));
+    fx.Update(0.1f);
+    CHECK(fx.Decals().empty());
+    // Far off counts as out of view whichever way you face.
+    fx.SpawnPoolAt(glm::vec3(0, 0, 200), glm::vec3(0, 1, 0), 1.0f);
+    CHECK(!fx.InView(fx.Decals().back()));
+    // Drying is slow: barely started a minute in.
+    BloodFx::Settings defaults;
+    CHECK(60.0f / (defaults.DrySeconds * 0.8f) < 0.1f && defaults.DecalLifetime == 0.0f);
+}
+
+void Test_Blood_Palette() {
+    // One material: the sprays, the stains, the splats and the bursts share the palette's hue, and none is mirror-glossy.
+    auto hue = [](const glm::vec3& c) { return glm::vec2(c.g / c.r, c.b / c.r); };
+    const glm::vec2 h = hue(BloodPalette::Fresh);
+    BloodRenderer& r = BloodRenderer::Get();
+    for (const glm::vec3& c : {r.FluidAlbedo, r.FilmFresh, BloodPalette::Thin, BloodPalette::Mist})
+        CHECK(glm::length(hue(c) - h) < 0.05f);
+    CHECK(r.FluidRoughness >= 0.15f && BloodPalette::RoughPool >= 0.15f && BloodPalette::RoughFresh >= 0.2f && BloodPalette::RoughSprite >= 0.2f);
+}
+
+void Test_Blood_Speed() {
+    // The spray is out of the wound on the frame of the hit; Speed divides its playback.
+    auto spray = [](float speed) {
+        BloodFx fx;
+        fx.Config.Speed = speed;
+        fx.SetSimLookup([](const char*) { return 0; });
+        fx.SetDecalSetLookup([](const char*) { return 0; });
+        fx.SetKnifeLookup([](const char*, int&) { return -1; });
+        fx.SetRaycast([](const glm::vec3&, const glm::vec3&, float, glm::vec3&, glm::vec3&) { return false; });
+        fx.SetBodyRay([](const glm::vec3&, const glm::vec3&, float, unsigned&, int&, glm::vec3&) { return false; });
+        BloodFx::Hit hit;
+        hit.Point = glm::vec3(0, 1.3f, 0);
+        hit.Entity = 4;
+        hit.Damage = 40.0f;
+        fx.OnFleshHit(hit);
+        return fx.Sprays().empty() ? BloodFx::Spray{} : fx.Sprays()[0];
+    };
+    const BloodFx::Spray slow = spray(1.0f), fast = spray(2.0f);
+    CHECK(fast.Age > 0.0f && fast.FramesCount > 0.0f && BloodFx::FrameAt(fast.Age / fast.Duration, fast.FramesCount) >= 1);
+    CHECK(std::abs(slow.Duration / fast.Duration - 2.0f) < 1e-3f);
+    BloodFx::Hit h;
+    h.Point = glm::vec3(0, 1.3f, 0);
+    // Gore's sound: a big headshot kill only.
+    BloodFx::Hit head = h;
+    head.Head = head.Killed = true;
+    CHECK(BloodFx::BigHeadshot(head, 1.5f, 1) && !BloodFx::BigHeadshot(head, 1.0f, 1) && !BloodFx::BigHeadshot(head, 1.5f, 0));
+    head.Player = true;
+    CHECK(!BloodFx::BigHeadshot(head, 2.0f, 1));
 }
 
 void Test_FxSprites_Sim() {
@@ -905,8 +1234,16 @@ void RegisterBloodTests(UnitTestSupport::TestList& tests) {
     tests.push_back({"Blood::Puffs", Test_Blood_Puffs});
     tests.push_back({"Blood::KnifeDecals", Test_Blood_KnifeDecals});
     tests.push_back({"Blood::Footprints", Test_Blood_Footprints});
-    tests.push_back({"Blood::ScreenBlood", Test_Blood_ScreenBlood});
-    tests.push_back({"Blood::HeadGore", Test_Blood_HeadGore});
+    tests.push_back({"Blood::Persist", Test_Blood_Persist});
+    tests.push_back({"Blood::GroundSplatter", Test_Blood_GroundSplatter});
+    tests.push_back({"Blood::OnePool", Test_Blood_OnePool});
+    tests.push_back({"Blood::Gear", Test_Blood_Gear});
+    tests.push_back({"Blood::DryOutOfView", Test_Blood_DryOutOfView});
+    tests.push_back({"Blood::PrintsStay", Test_Blood_PrintsStay});
+    tests.push_back({"Blood::CorpseSplash", Test_Blood_CorpseSplash});
+    tests.push_back({"Blood::SplashVariety", Test_Blood_SplashVariety});
+    tests.push_back({"Blood::Palette", Test_Blood_Palette});
+    tests.push_back({"Blood::Speed", Test_Blood_Speed});
     tests.push_back({"ImpactFx::Surfaces", Test_ImpactFx_Surfaces});
     tests.push_back({"Blood::Perf", Test_Blood_Perf});
     tests.push_back({"Blood::LabActions", Test_Blood_LabActions});

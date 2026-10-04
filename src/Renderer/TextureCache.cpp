@@ -45,7 +45,13 @@ constexpr char kMagic[4] = {'T', 'T', 'E', 'X'};
 // entries are unreachable and treated as stale by Prune (version mismatch).
 // v4 (#156): the Max Size downsample now averages sRGB textures in linear space, alpha-weighted.
 // v5 (#156): header gains the compressed format + mip level sizes (BCn entries).
-constexpr uint32_t kVersion = 5;
+// v6: one entry per (texture, settings) - the filename carries the settings hash. A texture loaded two ways (a model's
+// own material at the defaults, a material asset at its .meta's) used to share one entry and evict each other every
+// session: both re-decoded and, the compressed one, re-encoded on every Play (~7 s for one 4K weapon set).
+constexpr uint32_t kVersion = 6;
+// A variant whose settings aren't the texture's current .meta ones is still wanted (a model's own material loads it at
+// the defaults); it goes only once nothing has used it for this long.
+constexpr auto kUnusedVariantAge = std::chrono::hours(24 * 14);
 
 std::string CacheDir() {
     static const std::string dir = ProjectPaths::Resolve("Library/Textures");
@@ -56,7 +62,7 @@ std::string CacheDir() {
 // falling back to an FNV hash of the absolute path for unregistered sources. The source path is
 // also written into the header and compared on load, so even with GUID keying a collision (two
 // different GUIDs happening to share a prefix) would produce a miss rather than wrong pixels.
-std::string EntryPath(const std::string& sourcePath) {
+std::string EntryPath(const std::string& sourcePath, const TextureImportSettings& settings) {
     AssetGuid guid = AssetDatabase::GuidForPath(sourcePath);
     std::string stem;
     if (guid.IsValid()) {
@@ -72,7 +78,9 @@ std::string EntryPath(const std::string& sourcePath) {
         snprintf(buf, sizeof(buf), "%016llx", (unsigned long long)h);
         stem = buf;
     }
-    return (std::filesystem::path(CacheDir()) / (stem + ".ttex")).string();
+    char variant[10];
+    snprintf(variant, sizeof(variant), "_%08x", (unsigned)(HashSettings(settings) & 0xFFFFFFFFu));
+    return (std::filesystem::path(CacheDir()) / (stem + variant + ".ttex")).string();
 }
 
 bool SourceStamp(const std::string& path, uint64_t& outSize, uint64_t& outMtime) {
@@ -120,7 +128,7 @@ bool Load(const std::string& sourcePath, const TextureImportSettings& settings, 
     uint64_t srcSize = 0, srcMtime = 0;
     if (!SourceStamp(sourcePath, srcSize, srcMtime)) return false; // source gone: nothing to validate against
 
-    const std::string entryPath = EntryPath(sourcePath);
+    const std::string entryPath = EntryPath(sourcePath, settings);
     std::ifstream f(entryPath, std::ios::binary);
     if (!f) return false;
 
@@ -190,7 +198,7 @@ void Store(const std::string& sourcePath, const TextureImportSettings& settings,
     // The temp name is unique per process and per call (#159): two editor instances, or two
     // threads, baking the same entry must never share, and so truncate, one temp file.
     static std::atomic<uint32_t> s_TempCounter{0};
-    const std::string finalPath = EntryPath(sourcePath);
+    const std::string finalPath = EntryPath(sourcePath, settings);
     const std::string tempPath = finalPath + "." + std::to_string(TT_GETPID()) + "-" +
                                  std::to_string(s_TempCounter.fetch_add(1)) + ".tmp";
     {
@@ -287,10 +295,12 @@ void Prune(const std::function<std::optional<uint64_t>(const std::string& source
             if (!std::filesystem::exists(storedPath, existsEc) || existsEc) {
                 stale = true; // source texture was deleted from the project
             } else if (currentSettingsHash) {
+                // Not the .meta's settings: another loader's variant (kept while it's used), or the settings
+                // changed since it was baked (unused from then on, so it ages out).
                 std::optional<uint64_t> current = currentSettingsHash(storedPath);
-                if (current.has_value() && *current != storedHash) {
-                    stale = true; // settings changed since this entry was baked
-                }
+                std::error_code timeEc;
+                const auto used = entry.last_write_time(timeEc);
+                if (current.has_value() && *current != storedHash && !timeEc && now - used > kUnusedVariantAge) stale = true;
             }
         }
 

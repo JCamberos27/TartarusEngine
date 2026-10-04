@@ -394,29 +394,8 @@ Without these files the game logs one warning, and the effects that need them ar
   - offset left or right by 11 cm, toe forward;
   - each fainter than the last;
   - one sole pattern per walker.
-- **Screen blood** (`Combat/ScreenBlood`, `Renderer/ScreenBloodOverlay`, `ScreenBlood.*.glsl`).
-  - When the player is hurt, Real Blood's `blood_side` flipbook lands on the screen edge the round came from
-    (`DamageIndicatorAngle`).
-  - It splashes in over 0.12 s, holds wet with a glint from its normal map, and slides down slightly.
-  - It then thins out through the sheet's breaking frames.
-  - A hard hit or low health adds splats.
-  - It draws under the HUD. Blood Settings: `Screen Blood`.
-- **Headshot gore** (`Combat/HeadGore`).
-  - **Trigger:** a head kill at energy >= 1.3, with Gore set to Full.
-  - **Head hidden.** A `GoreHideTag` bone mask hides the head in every view: the body from the `head` bone
-    up, clothing from `neck_01` up. `SceneRenderer` ORs it into the draw's bone mask.
-  - **Stump.** Real Blood's burst stump follows the neck, upright along neck→head, facing the body root's
-    forward.
-  - **Brain chunks.** 2–3 chunks tumble out with a sphere-swept integrator: a wet bounce, then they stick.
-  - **Burst.** Spurt, blobs and droplets.
-  - **Sound.** `snd.impact.gore` plays on top.
-  - **Meshes.** Baked by `tools/knife_gore_bake.py`, which runs Blender and writes git-ignored
-    `assets/Effects/Knife/Gore`:
-    - the head frozen at its burst frame 101, pivoted on frame 1's neck base;
-    - brain parts 1–4, each recentred;
-    - texture sets the model loader matches by name.
-  - **Known gap:** hoodie hoods are skinned to the chest bones, so a collar stays standing around the stump.
-    Fixing it needs per-vertex hiding, like the first-person collar vertices.
+- **Screen blood** and **headshot gore** (the stump, brain chunks, `GoreHideTag`, `tools/knife_gore_bake.py`) were
+  built here and **removed in v3** (2026-10-04, the user's call): blood only. The gore sound stays on big headshot kills.
 - **Gore and flesh audio.** From AE Master (the Unity project at `OneDrive\Desktop\AE Master`):
   - ColdBore's `FleshImpact_01-06` join `snd.impact.flesh`, making 13 variants.
   - The Free Pack's "Bloody punch" becomes `snd.impact.gore` (3 variants, pitch within 1.5 semitones).
@@ -429,8 +408,8 @@ Without these files the game logs one warning, and the effects that need them ar
     plain substrings: "pane" was dropped because it matched "Panel".
   - **Holes on static entities** draw as PRO Effects' surface decal (4 variants) in the blood decal pass.
     `BulletHoleList` carries the decal id; moving props keep the procedural hole.
-  - **Burst:** a lit dust puff and a fast streak in the surface's colour, plus chips (concrete, rock, wood,
-    glass).
+  - **Burst:** chips (concrete, rock, wood, glass). The PRO dust puff and streak were dropped (2026-10-04): they
+    read badly.
   - **Metal** adds sparks and a flash.
 - **Muzzle flash** (`CombatFx::MuzzleSpritesFor`, FX/HUD Settings `Muzzle Style`).
   - Style 1, the default, layers PRO Effects' Shoot FX over the Tactical Shooter flame:
@@ -483,25 +462,93 @@ Without these files the game logs one warning, and the effects that need them ar
   entry sheet is 0.45 m x sqrt(energy). The mist is a dark red haze (0.17, 0.014, 0.012) at 0.4 to 0.6
   alpha. Brighter read as pink fog in daylight.
 
-### v2 next steps
+## v3: one material, instant, persistent (branch `claude/blood-v3-polish`)
 
-1. **Hands-on in the Blood Lab.**
-   - Mist, puff and muzzle sizes.
-   - The stump's facing (it uses the body root's +Z; flip it if it looks backward).
-   - Dust brightness in shade.
-2. **The remaining C items:** crawl and drag trails, handprints, Knife wound decals on bodies.
-3. **Headshot gore:** hide the hood (per-vertex mask).
-4. **Water impacts:** the PRO water splash sheet isn't imported.
-5. **Spray LOD by triangle count.**
+The polish pass after v2 (2026-10-04). Three packs' blood read as three materials, everything was mirror-glossy, the
+sprays played at the packs' cinematic pace, and stains dried and vanished in front of you.
 
-### Restoring v2's data in the Work clone
+- **One palette** (`src/Renderer/BloodPalette.h`). Every piece takes its colour and roughness from it: the sprays
+  (`BloodRenderer::FluidAlbedo`), the stains (`FilmFresh` / `FilmDried`, `uRough`), the splats on bodies
+  (`ModelFragment.glsl` `uBloodFresh` / `uBloodDried`), and the flipbook bursts (`BloodFx::SpawnPuffs`, and the blood
+  sprites' roughness in `FxSpriteRenderer`).
+
+  | | colour (linear) | roughness |
+  |---|---|---|
+  | fresh film / pool | 0.16, 0.006, 0.005 | film 0.38, pool 0.32 |
+  | dried | 0.045, 0.014, 0.010 | 0.75 |
+  | thin sheet (bursts) | 0.20, 0.0075, 0.006 | 0.30 |
+  | mist | 0.09, 0.0034, 0.0028 | |
+  | spray fluid | fresh | 0.28 |
+  | on cloth / skin | fresh | 0.35 |
+
+  - **Knife albedo stains** (pools, prints) keep only their light/dark detail; the hue is the palette's
+    (`BloodDecal.frag.glsl`). Pools are darker (deep), and solid through their body.
+  - **Specular occlusion** at grazing views on blood decals, so a pool doesn't go milky pink with the sky across a room.
+  - `pool_big` was dropped (baked highlights and holes); every pool is `pool_smooth`.
+- **Speed** (`Blood Settings > Speed`, default 1.6, Blood Lab slider).
+  - Sprays play 1.6x faster and start 6% in, so the blood is out of the wound on the hit's frame.
+  - Floor splats land and spread by the same factor.
+  - Wall, ceiling and body spatter land at about 12 m/s (was 4).
+  - Body wounds show at once: entry 0.15 s, exit 0.2 s, the run below over 1.5 s.
+  - Pools start 0.8-1.3 s after the death and spread over 10-14 s.
+  - Puffs and mist are about 25% shorter.
+- **Stains stay** (`BloodFx::SetViewer`, `InView`, `MakeRoom`).
+  - Drying takes 15 min (`Dry Seconds` 900; pools 2.5x), linear: nothing visibly changes while you watch.
+  - `Stain Lifetime` 0 = for good; no stain ever shrinks away.
+  - A stain only leaves when it's out of view (outside a 75 degree cone from the camera, or past 60 m): over the cap
+    (`Max Stains` 512) the farthest unseen one goes, else the oldest; footprints have their own cap (48).
+  - Drawing cost stays bounded by `BloodRenderer::WorthDrawing` (distance and screen size).
+- **Pools grow** from a small patch (8%) to full size over 20-28 s, fast then slow (`BloodFx::PoolScale`, `Decal::Spread`).
+- **Thrown blood lands anywhere** (`SpawnGroundSplatter`, `ThrowArc`): every hit throws the bulk, drops and fine specks
+  out of the wound on falling arcs; each splashes on the first surface it meets (floor, wall, crate), when it gets
+  there, stretched the way it was going (longer when it skids in at a grazing angle); on a wall it runs. A few drops
+  spill back toward the shooter. Head > body; a head kill the most.
+- **Corpses** (`SpawnCorpseSplash`): a shot into a body lying down splashes round the wound onto what it lies on, and the
+  new wound pools (a small spreading pool).
+- **Wounded soldiers bleed** for 8 s after a hit: drops under them as they move (`m_Bleeds`).
+- **Body stains:** smaller on the torso, wider on the head.
+- **Variety** (`AddSplash`): Real Blood's `splat_small`, `splat_wide`, `splat_medium` (4 each) and the 16-cell `drops`
+  sheet join the KriptoFX stains (round drops only on floors); every splash may be mirrored. All in the palette.
+- **Footprints:** pool-coloured (an explicit `Blood` flag replaces the gloss test), point the way the player faces,
+  14 prints a trail (128 kept).
+- **v3.1 (play-test feedback):**
+  - **Bullet holes by calibre:** AKS-74U 5.45 mm (`bulletHoleRadius` 0.0027), Remington 00 buck 8.4 mm (0.0042). The
+    PRO decal is sized so its hole is `ImpactFx::kHoleScale` (2x) the calibre (`HoleFraction`, measured per surface off
+    the albedos), and its chipped rim fades out at 3.5x the hole radius (`HoleRim`, `BloodRenderer::Decal::Rim`).
+  - **No pixelated splatter:** thrown splashes are capped (head kill ~1.5 m, stretch <= 1.6x); Real Blood's splatters and
+    drops live in the 2048 library (1024 px a splatter); KriptoFX's stains (512 px) only for small marks.
+  - **One pool per body**, from the torso's middle (pelvis toward chest), once the body has stopped moving (two looks
+    0.2 s apart within 3 cm, or 4 s); corpse shots splash but no longer pool.
+  - **Faster, bloodier:** Speed 2.0; landed splashes pop in (0.04-0.08 s); throws 25% faster; ~1.3x drops, 1.5x specks.
+  - **The player's gear:** their own wound never lands on the gun (`kBodyOnlyPart`); gun blood is small speckles, not
+    stacked, at most 14, and never evicted or dried. Gun splats are keyed by the weapon model
+    (`SplatSpace::Keys`, `SetMemberResolver`, `DrawnOn`), so a weapon swap brings them back.
+  - **Drying only out of view** (`DryAge`), 30 min (pools 2.5x); body splats dry only while their body is out of view.
+  - **Stain budget:** 1024; the farthest small unseen mark goes first; never a print or pool while anything else can.
+  - **Footprints:** their own budget (200), kept 10 min, then a 3 min fade; over budget the oldest fades over 20 s.
+- **Removed:** screen blood and headshot gore (see v2 above). `Gore` is now 0 off / 1 on.
+- **Lighter import:** the Knife catalogue only holds what's drawn (dropped trails, handprints, the skin hole,
+  `blood_side`, `blood_spurt`, `blood_blob`, `pool_big`).
+- **Tests:**
+  - New unit tests: `Blood::Persist`, `Blood::Palette`, `Blood::Speed`, `Blood::GroundSplatter`, `Blood::CorpseSplash`,
+    `Blood::SplashVariety`.
+  - `--npc-test blood`: 25/25, the head kill now checks the big-headshot sound.
+  - Its screenshots were checked for the pools' colour at a grazing view.
+
+### Next steps
+
+1. Hands-on: Speed, mist size, pool darkness in the user's scenes.
+2. Crawl and drag trails, handprints, wound decals (re-add their catalogue entries).
+3. Water impacts; spray LOD by triangle count.
+
+### Restoring the Knife data in the Work clone
 
 ```
 TartarusEngine.exe --project project --import-knife-fx "C:\Users\jacob\OneDrive\Desktop\ASSETS TO IMPORT"
-"C:\Program Files\Blender Foundation\Blender 5.1\blender.exe" -b --factory-startup -P tools/knife_gore_bake.py -- "C:\Users\jacob\OneDrive\Desktop\ASSETS TO IMPORT" project/assets/Effects/Knife/Gore
 ```
 
-The gore and flesh sounds are committed, so they need no step.
+The gore and flesh sounds are committed, so they need no step. `assets/Effects/Knife/Gore` (v2's baked gore) can be
+deleted.
 
 ## Next steps (v1)
 

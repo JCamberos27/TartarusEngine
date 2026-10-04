@@ -22,12 +22,13 @@ public:
         float Radius = 0.0045f;
         int Decal = -1;     // a textured hole (KnifeFxLibrary id, ImpactFx) instead of the procedural one
         float Size = 0.1f;  // its decal's size across, metres
+        float Rim = 0.0f;   // how far out the decal's chipped rim shows (cell half-widths; 0 = all of it)
     };
 
     // `entity` is what the round hit (entt::null or an invalid one: the hole stays in world space). `decal` >= 0: draw
     // that textured hole, `size` metres across, instead of the procedural one.
     void Add(const World& world, entt::entity entity, const glm::vec3& point, const glm::vec3& normal,
-             float radius = 0.0045f, int decal = -1, float size = 0.1f);
+             float radius = 0.0045f, int decal = -1, float size = 0.1f, float rim = 0.0f);
     void Clear() { m_Holes.clear(); m_Next = 0; }
     std::size_t Size() const { return m_Holes.size(); }
     // This frame's world-space holes, dropping any whose entity is gone.
@@ -41,6 +42,7 @@ private:
         float Radius = 0.0045f;
         int Decal = -1;
         float Size = 0.1f;
+        float Rim = 0.0f;
     };
     std::vector<Hole> m_Holes;
     std::size_t m_Next = 0; // the slot the next hole overwrites once full
