@@ -1,5 +1,6 @@
 #include "Texture.h"
 #include "Log.h"
+#include "AssetDatabase.h"
 #include "gl.h"
 #include "GLStateCache.h"
 #include "TextureCache.h"
@@ -348,7 +349,8 @@ TextureCpuData Decode(const std::string& path, std::vector<unsigned char> memory
         src = data;
     }
     if (!src) {
-        Log::Error("Texture: failed to load '" + path + "'.", LogContext::Asset(path));
+        if (!AssetDatabase::IsUnfetchedExternal(path)) // a Drive file not fetched yet: the scan's warning counts it
+            Log::Error("Texture: failed to load '" + path + "'.", LogContext::Asset(path));
         out.Memory = std::move(memory);
         return out;
     }
