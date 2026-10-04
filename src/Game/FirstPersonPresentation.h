@@ -51,6 +51,7 @@ public:
     // when it starts; left to the first round fired (ShellCasings::Spawn), the FBX import stalls that frame for up to a second.
     static void WarmEjectAssets(AssetLibrary& assets, const std::string& animationSet);
     static void WarmEjectAssets(AssetLibrary& assets, const FirstPersonAnimationSet& set);
+    void PreloadClips(AssetLibrary& assets); // every slot's clip files, imported clip-only in parallel (Play start)
     // Where rounds go instead of down the zeroed bore: from the muzzle toward `point` (pellets
     // spread about that line). Null = the bore, as the player's do. Copied.
     void SetShotTarget(const glm::vec3* point) {
