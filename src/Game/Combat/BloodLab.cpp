@@ -1,11 +1,10 @@
 #include "BloodLab.h"
 
 #include "BloodFx.h"
-#include "ScreenBlood.h"
 
 #include <imgui.h>
 
-void BloodLab::Draw(BloodFx& blood, ScreenBlood& screen, const Stats& s) {
+void BloodLab::Draw(BloodFx& blood, const Stats& s) {
     if (!Open) return;
     ImGui::SetNextWindowPos(ImVec2(360.0f, 80.0f), ImGuiCond_FirstUseEver);
     ImGui::SetNextWindowBgAlpha(0.92f);
@@ -16,7 +15,6 @@ void BloodLab::Draw(BloodFx& blood, ScreenBlood& screen, const Stats& s) {
     if (!s.BloodData || !s.KnifeData)
         ImGui::TextColored(ImVec4(1.0f, 0.6f, 0.3f, 1.0f), "Missing data: %s%s (docs/BLOOD_FX.md)", s.BloodData ? "" : "--import-blood-fx ",
                            s.KnifeData ? "" : "--import-knife-fx");
-    if (!s.GoreMeshes) ImGui::TextDisabled("No headshot gore meshes (tools/knife_gore_bake.py)");
 
     ImGui::SeparatorText("At the crosshair");
     auto button = [](const char* label, const std::function<void()>& fn) {
@@ -33,9 +31,6 @@ void BloodLab::Draw(BloodFx& blood, ScreenBlood& screen, const Stats& s) {
     button("Pool", Actions.PoolAtCrosshair);
     ImGui::SameLine();
     button("Wall spatter + drips", Actions.DripsAtCrosshair);
-    if (ImGui::Button("Hurt me (25)") && Actions.Hurt) Actions.Hurt(25.0f);
-    ImGui::SameLine();
-    if (ImGui::Button("Hurt me (60)") && Actions.Hurt) Actions.Hurt(60.0f);
 
     ImGui::SeparatorText("Settings (live)");
     BloodFx::Settings& c = blood.Config;
@@ -43,9 +38,9 @@ void BloodLab::Draw(BloodFx& blood, ScreenBlood& screen, const Stats& s) {
     ImGui::SameLine();
     ImGui::Checkbox("Impact puffs", &c.ImpactPuffs);
     ImGui::SameLine();
-    ImGui::Checkbox("Screen blood", &screen.Enabled);
-    static const char* const kGore[] = {"Off", "Mild", "Full"};
-    ImGui::Combo("Gore", &c.Gore, kGore, 3);
+    bool gore = c.Gore > 0;
+    if (ImGui::Checkbox("Gore", &gore)) c.Gore = gore ? 1 : 0;
+    ImGui::SliderFloat("Speed", &c.Speed, 0.5f, 3.0f, "%.2f");
     ImGui::SliderFloat("Spray size", &c.Size, 0.2f, 3.0f, "%.2f");
     ImGui::SliderFloat("Energy scale", &c.EnergyScale, 0.2f, 3.0f, "%.2f");
     ImGui::SliderFloat("Dry seconds", &c.DrySeconds, 5.0f, 600.0f, "%.0f");

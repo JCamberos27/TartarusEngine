@@ -27,6 +27,7 @@
 #include "Camera.h"    // MakePerspective — the view-model sub-pass's one projection switch
 #include "ParticleRenderer.h"
 #include "BloodRenderer.h"
+#include "BloodPalette.h"
 #include "FxSpriteRenderer.h"
 #include "GLStateCache.h"
 #include "gl.h"
@@ -448,10 +449,6 @@ void SceneRenderer::RenderScene(World& world, const RenderFrameContext& ctx,
             for (int w = 0; w < 16; ++w) cameraMask[w] |= bodyTag->SleeveBones[w];
             anyCameraMask = true;
         }
-        if (const auto* gore = world.Registry.try_get<GoreHideTag>(entity)) { // a head blown off: gone in every view
-            for (int w = 0; w < 16; ++w) cameraMask[w] |= gore->Bones[w];
-            anyCameraMask = true;
-        }
         const float nearHideWidth = cameraBody ? bodyTag->NearHideWidth : 0.0f;
         const unsigned collarVerts = cameraBody && bodyTag->CollarVerts ? bodyTag->CollarVerts->Id() : 0u;
         const auto* outfitHide = world.Registry.try_get<OutfitHideTag>(entity);
@@ -644,7 +641,11 @@ void SceneRenderer::RenderScene(World& world, const RenderFrameContext& ctx,
         int bloodFirst = 0, bloodCount = 0; // blood on this mesh (docs/BLOOD_FX.md)
         BloodRenderer::Get().SplatRange(probeItem->Entity, bloodFirst, bloodCount);
         prog.SetInt("uBloodSplatCount", bloodCount);
-        if (bloodCount > 0) prog.SetInt("uBloodSplatFirst", bloodFirst);
+        if (bloodCount > 0) {
+            prog.SetInt("uBloodSplatFirst", bloodFirst);
+            prog.SetVec4("uBloodFresh", glm::vec4(BloodPalette::Fresh, BloodPalette::RoughCloth));
+            prog.SetVec4("uBloodDried", glm::vec4(BloodPalette::Dried, BloodPalette::RoughDried));
+        }
     };
     BloodRenderer::Get().BindSplatResources();
 

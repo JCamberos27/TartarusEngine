@@ -249,7 +249,7 @@ int BloodRenderer::DrawSprays(const glm::mat4& view, const glm::mat4& proj,
     prog.SetInt("uAlphaBlend", 0);
     prog.SetInt("uSSAOEnabled", 0); // the AO pre-pass never saw the fluid
     prog.SetInt("uNoReceiveShadows", 0);
-    prog.SetVec3("uSubsurfaceColor", glm::vec3(0.42f, 0.012f, 0.008f));
+    prog.SetVec3("uSubsurfaceColor", BloodPalette::Subsurface);
     prog.SetFloat("uThickness", 0.55f);
 
     glBindBufferBase(GL_SHADER_STORAGE_BUFFER, kSprayBinding, m_SprayBuffer);
@@ -481,6 +481,7 @@ int BloodRenderer::DrawDecals(const glm::mat4& view, const glm::mat4& proj, cons
     prog.SetVec4("uViewport", glm::vec4((float)viewport[0], (float)viewport[1], (float)viewport[2], (float)viewport[3]));
     prog.SetVec3("uFreshColor", FilmFresh);
     prog.SetVec3("uDriedColor", FilmDried);
+    prog.SetVec3("uRough", glm::vec3(BloodPalette::RoughFresh, BloodPalette::RoughPool, BloodPalette::RoughDried));
     prog.SetInt("uNoReceiveShadows", 0);
     prog.SetInt("uObjectLayerBit", 0);
     glBindTextureUnit(kDepthUnit, target.ResolvedDepthTexture());

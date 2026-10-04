@@ -2,6 +2,7 @@
 
 #include "BloodRenderer.h"
 #include "FxSprites.h"
+#include "BloodPalette.h"
 #include "KnifeFxLibrary.h"
 #include "GameModuleAPI.h"
 #include "PhysicsWorld.h"
@@ -216,16 +217,12 @@ glm::vec3 BloodFx::RandomTangent(const glm::vec3& n) {
 
 float BloodFx::DecalCutout(const Decal& d) {
     const float t = std::max(d.Age, 0.0f);
-    // The last stretch of its life: what's left shrinks back along the reveal order.
-    const float tail = d.Reveal ? 0.7f * d.RevealSeconds : 8.0f;
-    const float fade = std::clamp((t - (d.Life - tail)) / tail, 0.0f, 1.0f);
+    // Stains don't shrink away: one leaves whole, out of view (Update).
     if (!d.Reveal) {
         const float grow = std::clamp(t / std::max(d.PoolGrow, 1e-3f), 0.0f, 1.0f);
-        const float spread = 0.9f * (1.0f - grow) * (1.0f - grow) * (1.0f - grow); // fast at first, slowing as it thins
-        return std::max(spread, fade);
+        return 0.9f * (1.0f - grow) * (1.0f - grow) * (1.0f - grow); // fast at first, slowing as it thins
     }
     const float g = std::max(d.RevealSeconds, 1e-3f);
-    if (fade > 0.0f) return std::clamp(d.Reveal->Eval(0.3f + 0.7f * fade), 0.0f, 1.0f);
     return std::clamp(d.Reveal->Eval(std::min(t / g, 0.3f)), 0.0f, 1.0f);
 }
 
@@ -250,7 +247,7 @@ BloodFx::Decal* BloodFx::AddKnifeDecal(const char* entry, const glm::vec3& centr
     int cells = 1;
     const int id = m_KnifeLookup(entry, cells);
     if (id < 0) return nullptr;
-    if ((int)m_Decals.size() >= std::max(1, Config.MaxDecals)) m_Decals.erase(m_Decals.begin());
+    MakeRoom(std::string(entry) == "footprint");
     const glm::vec3 y = glm::normalize(up);
     glm::vec3 x = along - y * glm::dot(along, y);
     x = glm::length(x) > 1e-4f ? glm::normalize(x) : RandomTangent(y);
@@ -261,7 +258,7 @@ BloodFx::Decal* BloodFx::AddKnifeDecal(const char* entry, const glm::vec3& centr
     d.Frames = std::max(cells, 1);
     d.Model = glm::mat4(glm::vec4(x * extent.x, 0.0f), glm::vec4(y * extent.y, 0.0f), glm::vec4(z * extent.z, 0.0f), glm::vec4(centre, 1.0f));
     d.Age = -std::max(delay, 0.0f);
-    d.Life = Config.DecalLifetime * (0.9f + 0.2f * Random01());
+    d.Life = Config.DecalLifetime > 0.0f ? Config.DecalLifetime * (0.9f + 0.2f * Random01()) : 1e9f;
     d.DrySeconds = Config.DrySeconds * (0.8f + 0.4f * Random01());
     if (const int dup = DuplicateOf(d.Set, d.Knife, d.Model); dup >= 0 && d.FrameSeconds <= 0.0f) {
         ++m_StainsMerged;
@@ -272,13 +269,56 @@ BloodFx::Decal* BloodFx::AddKnifeDecal(const char* entry, const glm::vec3& centr
     return &m_Decals.back();
 }
 
+bool BloodFx::InView(const Decal& d) const {
+    if (!m_HasViewer) return true;
+    const glm::vec3 c(d.Model[3]);
+    const float r = 0.5f * std::max(glm::length(glm::vec3(d.Model[0])), glm::length(glm::vec3(d.Model[2])));
+    const glm::vec3 to = c - m_Eye;
+    const float dist = glm::length(to);
+    if (dist - r > kVisibleReach) return false;
+    if (dist <= r + 2.0f) return true; // right here: under your feet counts as seen
+    // A 75 degree half-angle cone (wider than any view and its edges), grown by the stain's size.
+    return glm::dot(to / dist, m_Forward) > std::cos(std::min(1.309f + std::asin(std::min(r / dist, 1.0f)), 3.1416f));
+}
+
+void BloodFx::MakeRoom(bool print) {
+    if (m_PrintId == -2 && m_KnifeLookup) {
+        int cells = 0;
+        m_PrintId = m_KnifeLookup("footprint", cells);
+    }
+    auto isPrint = [&](const Decal& d) { return d.Knife >= 0 && d.Knife == m_PrintId; };
+    int count = 0, cap = std::max(1, Config.MaxDecals);
+    if (print) {
+        for (const Decal& d : m_Decals) count += isPrint(d);
+        cap = kMaxPrints;
+    } else {
+        count = (int)m_Decals.size();
+    }
+    for (; count >= cap; --count) { // (a lowered cap trims down to it)
+        // The farthest one nobody can see; failing that (everything in view), the oldest.
+        int pick = -1, oldest = -1;
+        float far = -1.0f;
+        for (int i = 0; i < (int)m_Decals.size(); ++i) {
+            const Decal& d = m_Decals[(size_t)i];
+            if (print && !isPrint(d)) continue;
+            if (oldest < 0) oldest = i;
+            if (InView(d)) continue;
+            const float dist = glm::length(glm::vec3(d.Model[3]) - m_Eye);
+            if (dist > far) { far = dist; pick = i; }
+        }
+        if (pick < 0) pick = oldest;
+        if (pick < 0) return;
+        m_Decals.erase(m_Decals.begin() + pick);
+    }
+}
+
 void BloodFx::SpawnPoolAt(const glm::vec3& at, const glm::vec3& normal, float size) {
     EnsureHooks();
     const glm::vec3 n = glm::normalize(normal);
-    Decal* d = AddKnifeDecal(Random01() < 0.6f ? "pool_smooth" : "pool_big", at + n * 0.01f, n, RandomTangent(n), glm::vec3(size * 1.25f, 0.3f, size * 1.25f), 0.0f);
+    Decal* d = AddKnifeDecal("pool_smooth", at + n * 0.01f, n, RandomTangent(n), glm::vec3(size * 1.25f, 0.3f, size * 1.25f), 0.0f);
     if (!d) d = AddDecal("attached", at + n * 0.01f, n, RandomTangent(n), glm::vec3(size, 0.3f, size), 0.0f);
     if (d) {
-        d->PoolGrow = 12.0f;
+        d->PoolGrow = 10.0f;
         d->DrySeconds *= 2.5f;
         ++m_PoolsSpawned;
     }
@@ -361,7 +401,6 @@ void BloodFx::OnFootstep(int walker, const glm::vec3& feet, const glm::vec3& vel
     if (Decal* d = AddKnifeDecal("footprint", p + n * 0.005f, n, along, glm::vec3(0.13f, 0.15f, 0.3f), 0.0f, w->Shoe)) {
         d->Opacity = 0.35f + 0.6f * strength; // each print a little fainter
         d->PoolGrow = 0.05f;
-        d->Life = std::min(d->Life, 120.0f);
         ++m_PrintsSpawned;
     }
 }
@@ -380,7 +419,7 @@ void BloodFx::SpawnWallDrips(const glm::vec3& at, const glm::vec3& n, float size
         const float w = h * 0.5f;
         const glm::vec3 top = at + across * ((Random01() - 0.5f) * 0.5f * size) + n * 0.005f;
         Decal* d = AddKnifeDecal(kLeaks[std::min(2, (int)(Random01() * 3.0f))], top + down * (0.5f * h), n, across, glm::vec3(w, 0.2f, h),
-                                 land + 0.15f + 0.4f * Random01(), 0);
+                                 land + 0.05f + 0.15f * Random01(), 0);
         if (!d) return;
         d->FrameSeconds = (2.0f + 3.0f * Random01()) / (float)std::max(d->Frames, 1); // runs down over 2-5 s, then stops
         d->PoolGrow = 0.05f;
@@ -393,7 +432,7 @@ BloodFx::Decal* BloodFx::AddDecal(const char* set, const glm::vec3& centre, cons
     EnsureHooks();
     const int s = m_SetLookup(set);
     if (s < 0) return nullptr;
-    if ((int)m_Decals.size() >= std::max(1, Config.MaxDecals)) m_Decals.erase(m_Decals.begin());
+    MakeRoom(false);
     const glm::vec3 y = glm::normalize(up);
     glm::vec3 x = along - y * glm::dot(along, y);
     x = glm::length(x) > 1e-4f ? glm::normalize(x) : RandomTangent(y);
@@ -402,7 +441,7 @@ BloodFx::Decal* BloodFx::AddDecal(const char* set, const glm::vec3& centre, cons
     d.Set = s;
     d.Model = glm::mat4(glm::vec4(x * extent.x, 0.0f), glm::vec4(y * extent.y, 0.0f), glm::vec4(z * extent.z, 0.0f), glm::vec4(centre, 1.0f));
     d.Age = -std::max(delay, 0.0f);
-    d.Life = Config.DecalLifetime * (0.9f + 0.2f * Random01());
+    d.Life = Config.DecalLifetime > 0.0f ? Config.DecalLifetime * (0.9f + 0.2f * Random01()) : 1e9f;
     d.DrySeconds = Config.DrySeconds * (0.8f + 0.4f * Random01());
     if (const int dup = DuplicateOf(d.Set, d.Knife, d.Model); dup >= 0 && d.FrameSeconds <= 0.0f) {
         ++m_StainsMerged;
@@ -437,11 +476,12 @@ void BloodFx::SpawnFloorDecals(const BloodPresetDef& preset, const glm::mat4& pr
         glm::vec3 x(box[0]), z(box[2]);
         // Lying on the ground; projected through 40 cm, so steps and kerbs take it but walls don't.
         const glm::vec3 centre(box[3].x, ground.y + 0.01f, box[3].z);
-        const float delay = def.DelayByHeight.Eval(k) / std::max(preset.AnimationSpeed, 1e-3f) * std::sqrt(size);
+        const float speed = std::max(Config.Speed, 0.1f);
+        const float delay = def.DelayByHeight.Eval(k) / std::max(preset.AnimationSpeed, 1e-3f) * std::sqrt(size) / speed;
         Decal* d = AddDecal(def.Set, centre, glm::vec3(0, 1, 0), x, glm::vec3(glm::length(x), 0.4f, glm::length(z)), delay);
         if (!d) continue;
         d->Reveal = &def.Reveal;
-        d->RevealSeconds = def.RevealSeconds;
+        d->RevealSeconds = def.RevealSeconds / speed;
     }
 }
 
@@ -491,7 +531,7 @@ void BloodFx::OnFleshHit(const Hit& hit) {
         return &info->Frames[info->Frames.size() / 4];
     });
     const glm::mat4 toWorld = PrefabToWorld(sprayFrom, sprayDir, size, jitter, axis, stretch);
-    SpawnSprays(*preset, toWorld, size, sprayFrom, Flat(sprayDir), hit.Entity, 0.85f + 0.25f * Random01());
+    SpawnSprays(*preset, toWorld, size, sprayFrom, Flat(sprayDir), hit.Entity, 0.92f + 0.13f * Random01());
     SpawnFloorDecals(*preset, toWorld, size, sprayFrom, Flat(sprayDir));
 
     // On the body: the entry wound (a tight blot that seeps out over a few seconds) and, out of the far side,
@@ -499,26 +539,26 @@ void BloodFx::OnFleshHit(const Hit& hit) {
     // capsule, not the cloth, so each projects 30 cm deep; only surfaces facing its way take it.
     if (!hit.Player) {
         const float k = std::clamp(0.8f + hit.Damage / 150.0f, 0.8f, 1.4f);
-        AddSplat(hit.Entity, hit.Part, hit.Corpse, hit.Point, -dir, RandomTangent(-dir), "attached", 0.08f * k, 0.3f, 0.0f, 4.0f);
+        AddSplat(hit.Entity, hit.Part, hit.Corpse, hit.Point, -dir, RandomTangent(-dir), "attached", 0.08f * k, 0.3f, 0.0f, 0.15f);
         if (!hit.Corpse) {
             if (canExit) // the exit's wider mess, on the far side where the round came out (or about where it must have)
                 AddSplat(hit.Entity, hit.Part, false, m_LastExitFound ? exitPoint + dir * 0.03f : hit.Point + dir * (hit.Head ? 0.16f : 0.24f), dir, RandomTangent(dir), Random01() < 0.5f ? "blood7" : "attached",
-                         0.14f * k, 0.3f, 0.05f, 1.5f);
+                         0.14f * k, 0.3f, 0.0f, 0.2f);
             AddSplat(hit.Entity, hit.Part, false, hit.Point - glm::vec3(0.0f, 0.12f * k, 0.0f), -dir, glm::vec3(0.0f, -1.0f, 0.0f),
-                     "char", 0.15f * k, 0.3f, 0.3f, 6.0f);
+                     "char", 0.15f * k, 0.3f, 0.05f, 1.5f);
         }
     }
     // The player's own: a wound where they were hit, and some of it on their hands and gun.
     if (hit.Player) {
-        AddSplat(kPlayerEntity, -1, false, hit.Point, -dir, RandomTangent(-dir), "attached", 0.08f, 0.3f, 0.0f, 3.0f);
+        AddSplat(kPlayerEntity, -1, false, hit.Point, -dir, RandomTangent(-dir), "attached", 0.08f, 0.3f, 0.0f, 0.15f);
         AddSplat(kPlayerEntity, -1, false, hit.Point - glm::vec3(0.0f, 0.1f, 0.0f), -dir, glm::vec3(0.0f, -1.0f, 0.0f), "char", 0.13f,
-                 0.3f, 0.2f, 5.0f);
+                 0.3f, 0.05f, 1.5f);
         if (Random01() < 0.5f) SpatterGear(1 + (int)(Random01() * 2.0f), 0.8f, 0.1f);
     }
     // Point blank, what comes out of the entry comes back at the shooter: specks on the gun and hands.
     if (hit.ByPlayer && !hit.Corpse) {
         const float d = glm::length(hit.Point - hit.Origin);
-        if (d < 2.5f && (d < 1.6f || Random01() < 1.2f - d / 2.5f)) SpatterGear(d < 1.2f ? 3 : 1 + (int)(Random01() * 2.0f), 1.3f - d / 2.5f, d / 8.0f);
+        if (d < 2.5f && (d < 1.6f || Random01() < 1.2f - d / 2.5f)) SpatterGear(d < 1.2f ? 3 : 1 + (int)(Random01() * 2.0f), 1.3f - d / 2.5f, d / 24.0f);
     }
     // Whoever stands in the spray's path gets it on them: a few rays through the cone behind the body.
     if (!hit.Corpse && canExit) {
@@ -531,26 +571,26 @@ void BloodFx::OnFleshHit(const Hit& hit) {
             if (!m_BodyRay(from, jitterDir, 2.5f * size / 0.6f, other, part, at) || other == hit.Entity) continue;
             const float d = glm::length(at - from);
             AddSplat(other, part, false, at, -jitterDir, RandomTangent(-jitterDir), r == 0 ? "blood9" : "blood3",
-                     (0.12f + 0.08f * Random01()) * std::clamp(1.3f - d / 2.5f, 0.5f, 1.0f), 0.12f, d / 4.0f, 0.3f);
+                     (0.12f + 0.08f * Random01()) * std::clamp(1.3f - d / 2.5f, 0.5f, 1.0f), 0.12f, d / 12.0f, 0.15f);
         }
         // A loose prop in the way (a crate, a dropped gun): it's spattered too.
         glm::vec3 p, n;
         unsigned prop = 0xFFFFFFFFu;
         if (m_PropRay && m_PropRay(from, Flat(dir), 2.0f * size / 0.6f, p, n, prop))
             AddSplat(prop, -1, false, p, n, RandomTangent(n), Random01() < 0.5f ? "blood1" : "blood6", 0.3f * size, 0.15f,
-                     glm::length(p - from) / 4.0f, 0.3f);
+                     glm::length(p - from) / 12.0f, 0.15f);
     }
     // A head shot throws some of it up: the ceiling above, if there's one within reach.
     if (hit.Head && !hit.Player) {
         glm::vec3 p, n;
         if (m_Ray(exitPoint, glm::vec3(0.0f, 1.0f, 0.0f), 2.2f, p, n) && n.y < -0.5f) {
             const float s = size * (0.7f + 0.3f * Random01());
-            if (Decal* d = AddDecal("blood7", p, n, RandomTangent(n), glm::vec3(1.1f * s, 0.3f, 1.1f * s), 0.12f + glm::length(p - exitPoint) / 6.0f))
+            if (Decal* d = AddDecal("blood7", p, n, RandomTangent(n), glm::vec3(1.1f * s, 0.3f, 1.1f * s), glm::length(p - exitPoint) / 12.0f))
                 d->Opacity = 0.85f;
         }
     }
     // A body that died here bleeds out where it comes to rest.
-    if (hit.Killed && !hit.Player && Config.Pools) m_Pools.push_back({hit.Entity, m_Now + 2.0f + Random01(), size});
+    if (hit.Killed && !hit.Player && Config.Pools) m_Pools.push_back({hit.Entity, m_Now + 0.8f + 0.5f * Random01(), size});
 }
 
 void BloodFx::SpawnPuffs(const Hit& hit, const glm::vec3& dir, float energy, bool exited, const glm::vec3& exitPoint, bool extraPellet) {
@@ -558,8 +598,8 @@ void BloodFx::SpawnPuffs(const Hit& hit, const glm::vec3& dir, float energy, boo
     FxSprites& fx = *m_Sprites;
     // Knife "Real Blood" BloodHit / BloodExplosion, re-timed for a round: everything here is over in well under a
     // second - the frame the round goes in has to read as a hit before the volumetric spray has moved.
-    static const glm::vec3 kBlood(0.30f, 0.012f, 0.010f);  // the liquid in a thin sheet (brighter than a pool)
-    static const glm::vec3 kMist(0.17f, 0.014f, 0.012f);   // a fine dark-red haze (Knife's BloodCloud, darkened for our sun)
+    const glm::vec3 kBlood = BloodPalette::Thin; // the liquid in a thin sheet (the palette: one material with the stains)
+    const glm::vec3 kMist = BloodPalette::Mist;  // a fine dark-red haze
     const int hitSheet = fx.Entry("blood_hit"), burst = fx.Entry("blood_burst"), jet = fx.Entry("blood_jet");
     const int cloud = fx.Entry("blood_cloud"), drop = fx.Entry("blood_drop"), fan = fx.Entry("blood_fan");
     const float k = std::sqrt(std::max(energy, 0.1f));
@@ -576,7 +616,7 @@ void BloodFx::SpawnPuffs(const Hit& hit, const glm::vec3& dir, float energy, boo
         e.Mode = FxSprites::Shade::Blood;
         e.Pos = hit.Point + back * 0.04f;
         e.Vel = back * 0.6f;
-        e.Life = 0.32f + 0.08f * Random01();
+        e.Life = 0.26f + 0.06f * Random01();
         e.Size0 = 0.45f * k;
         e.Size1 = 0.55f * k;
         e.Rot = Random01() * 6.2832f;
@@ -597,7 +637,7 @@ void BloodFx::SpawnPuffs(const Hit& hit, const glm::vec3& dir, float energy, boo
             e.Vel = jittered(back, 0.6f) * (0.5f + 0.5f * Random01()) * k;
             e.Drag = 3.0f;
             e.Gravity = 0.02f;
-            e.Life = (hit.Head ? 0.9f : 0.55f) + 0.3f * Random01();
+            e.Life = (hit.Head ? 0.6f : 0.4f) + 0.2f * Random01();
             e.Size0 = (hit.Head ? 0.3f : 0.22f) * k;
             e.Size1 = (hit.Head ? 0.75f : 0.5f) * k;
             e.Rot = Random01() * 6.2832f;
@@ -621,7 +661,7 @@ void BloodFx::SpawnPuffs(const Hit& hit, const glm::vec3& dir, float energy, boo
             e.Pos = exitPoint + dir * 0.12f * k;
             e.Vel = out * 1.2f * k;
             e.Drag = 2.0f;
-            e.Life = 0.42f + 0.1f * Random01();
+            e.Life = 0.34f + 0.08f * Random01();
             e.Size0 = 0.75f * k;
             e.Size1 = 0.95f * k;
             e.Rot = Random01() * 6.2832f;
@@ -654,7 +694,7 @@ void BloodFx::SpawnPuffs(const Hit& hit, const glm::vec3& dir, float energy, boo
             e.Pos = exitPoint + dir * 0.1f;
             e.Vel = out * 1.5f * k;
             e.Drag = 3.5f;
-            e.Life = (hit.Head ? 1.1f : 0.7f) + 0.3f * Random01();
+            e.Life = (hit.Head ? 0.75f : 0.5f) + 0.2f * Random01();
             e.Size0 = 0.25f * k;
             e.Size1 = (hit.Head ? 0.9f : 0.6f) * k;
             e.Rot = Random01() * 6.2832f;
@@ -721,7 +761,7 @@ void BloodFx::SpawnSprays(const BloodPresetDef& preset, const glm::mat4& prefabT
             clip = glm::vec4(n, -glm::dot(n, p) + 0.004f);
             m_LastClipped = true;
             // The spatter where it strikes: streaks fanning across the wall, a little below the line (it's
-            // already falling), landing when the fluid gets there (about 4 m/s out of a wound).
+            // already falling), landing when the fluid gets there (~12 m/s out of a wound).
             static const char* const kStreaks[] = {"blood1", "blood3", "blood9", "blood2_right"};
             const float dist = glm::length(p - wound);
             const float s = size * (0.85f + 0.3f * Random01()) * std::clamp(1.4f - dist / reach, 0.6f, 1.2f);
@@ -729,7 +769,7 @@ void BloodFx::SpawnSprays(const BloodPresetDef& preset, const glm::mat4& prefabT
             glm::vec3 along = RandomTangent(n);
             if (along.y > 0.0f) along = -along; // streaks run out and down, not up
             // The splash's body (a blot with its spokes) and the streaks thrown out of it.
-            const float land = dist / 4.0f;
+            const float land = dist / 12.0f;
             const char* blot = Random01() < 0.5f ? "blood7" : "attached";
             if (Decal* body = AddDecal(blot, at, n, RandomTangent(n), glm::vec3(0.75f * s, 0.25f, 0.75f * s), land)) body->PoolGrow = 0.35f;
             const char* streaks = kStreaks[std::min(3, (int)(Random01() * 4.0f))];
@@ -744,7 +784,8 @@ void BloodFx::SpawnSprays(const BloodPresetDef& preset, const glm::mat4& prefabT
         Spray s;
         s.Sim = sim;
         s.Model = prefabToWorld * FromRows(def.M);
-        s.Duration = PlaybackSeconds(def, preset.AnimationSpeed, size);
+        s.Duration = PlaybackSeconds(def, preset.AnimationSpeed, size) / std::max(Config.Speed, 0.1f);
+        s.Age = 0.06f * s.Duration; // out of the wound on the frame of the hit, not still inside it
         s.FramesCount = def.FramesCount;
         s.ClipPlane = clip;
         s.Tint = glm::vec3(tint);
@@ -771,7 +812,9 @@ void BloodFx::Update(float dt) {
     m_Now += dt;
     for (Spray& s : m_Sprays) s.Age += dt;
     for (Decal& d : m_Decals) d.Age += dt;
-    m_Decals.erase(std::remove_if(m_Decals.begin(), m_Decals.end(), [](const Decal& d) { return d.Age >= d.Life; }), m_Decals.end());
+    // Past its lifetime (when one is set) a stain still waits until it's out of view: nothing vanishes in front of you.
+    m_Decals.erase(std::remove_if(m_Decals.begin(), m_Decals.end(), [&](const Decal& d) { return d.Age >= d.Life && !InView(d); }),
+                   m_Decals.end());
     // Corpses that have come to rest: the pool under the pelvis.
     for (size_t i = 0; i < m_Pools.size();) {
         if (m_Now < m_Pools[i].At) { ++i; continue; }
@@ -783,11 +826,11 @@ void BloodFx::Update(float dt) {
         if (!m_Ray(centre + glm::vec3(0.0f, 0.3f, 0.0f), glm::vec3(0.0f, -1.0f, 0.0f), 1.8f, p, n) || n.y < 0.6f) continue;
         const float s = std::clamp(pp.Size, 0.5f, 1.0f) * (1.3f + 0.4f * Random01());
         // Real Blood's PBR pools when the Knife library is there (bigger: the pool fills ~70% of its cell).
-        Decal* d = AddKnifeDecal(Random01() < 0.6f ? "pool_smooth" : "pool_big", p + glm::vec3(0.0f, 0.01f, 0.0f), n, RandomTangent(n),
+        Decal* d = AddKnifeDecal("pool_smooth", p + glm::vec3(0.0f, 0.01f, 0.0f), n, RandomTangent(n),
                                  glm::vec3(s * 1.25f, 0.3f, s * 1.25f), 0.0f);
         if (!d) d = AddDecal("attached", p + glm::vec3(0.0f, 0.01f, 0.0f), n, RandomTangent(n), glm::vec3(s, 0.3f, s), 0.0f);
         if (d) {
-            d->PoolGrow = 20.0f + 10.0f * Random01();
+            d->PoolGrow = 10.0f + 4.0f * Random01();
             ++m_PoolsSpawned;
             d->DrySeconds *= 2.5f; // a pool stays wet far longer than a spatter
         }
@@ -836,8 +879,7 @@ void BloodFx::Submit(BloodRenderer& renderer) const {
                 r.Set = s.Set;
                 const float grow = std::clamp(s.Age / std::max(s.Grow, 1e-3f), 0.0f, 1.0f);
                 r.Cutout = 0.85f * (1.0f - grow) * (1.0f - grow);
-                const float dry = std::clamp(s.Age / std::max(s.DrySeconds, 1.0f), 0.0f, 1.0f);
-                r.Dry = dry * dry * (3.0f - 2.0f * dry);
+                r.Dry = std::clamp(s.Age / std::max(s.DrySeconds, 1.0f), 0.0f, 1.0f);
                 r.Opacity = s.Opacity;
                 splats.push_back(r);
             }
@@ -860,8 +902,7 @@ void BloodFx::Submit(BloodRenderer& renderer) const {
             r.CellBlend = f - std::floor(f);
         }
         r.Cutout = DecalCutout(d);
-        const float dry = std::clamp(d.Age / std::max(d.DrySeconds, 1.0f), 0.0f, 1.0f);
-        r.Dry = dry * dry * (3.0f - 2.0f * dry);
+        r.Dry = std::clamp(d.Age / std::max(d.DrySeconds, 1.0f), 0.0f, 1.0f);
         r.Opacity = d.Opacity;
         renderer.AddDecal(r);
     }
