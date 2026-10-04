@@ -45,6 +45,11 @@ FirstPersonWeaponTest::FirstPersonWeaponTest(bool stockProbe, bool probeAk) : m_
     auto mem = std::make_shared<Mem>();
     using C = Ctx;
     auto fire = [](C& c) { ++c.Pulls; };
+    // The muzzle flash on its first frames (docs/BLOOD_FX.md: PRO Effects' layers over the flame), captured as `stem`_<frame>.
+    auto flashShots = [](C& c, const char* stem) {
+        const int f = (int)std::lround(c.Time / std::max(c.Dt, 1e-4f));
+        if (f == 1 || f == 2 || f == 4 || f == 30) c.Shot = std::string(stem) + "_" + std::to_string(f);
+    };
     auto settled = [](C& c, const char* rest) { return c.State() == rest && c.P->Chambered(); };
     auto check = [](C& c, bool ok, const std::string& what) { c.Check(ok, what); };
     auto ammoIs = [check](C& c, int n) { check(c, c.P->Ammo() == n, "ammo " + std::to_string(c.P->Ammo()) + " (want " + std::to_string(n) + ")"); };
@@ -99,7 +104,7 @@ FirstPersonWeaponTest::FirstPersonWeaponTest(bool stockProbe, bool probeAk) : m_
     m_Steps = {
         {"AK in hand at Play", nullptr, [](C& c) { return c.State() == "Idle"; }, 30.0f,
          [=](C& c) { check(c, c.P->Slot() == 0, "slot 0"); ammoIs(c, kAkMagazine); }},
-        {"AK hip round", fire, [](C& c) { return c.Time > 0.5f; }, 2.0f,
+        {"AK hip round", fire, [=](C& c) { flashShots(c, "muzzle_ak_hip"); return c.Time > 0.5f; }, 2.0f,
          [=](C& c) {
              ammoIs(c, kAkMagazine - 1);
              check(c, c.Hits.size() == 1, std::to_string(c.Hits.size()) + " hit(s) (want 1)");
@@ -119,7 +124,7 @@ FirstPersonWeaponTest::FirstPersonWeaponTest(bool stockProbe, bool probeAk) : m_
          }},
         {"AK ADS round", [](C& c) { c.Aim = true; }, [](C& c) { return c.State() == "Aim" && c.Time > 0.6f; }, 3.0f,
          [=](C& c) { mem->Ammo = c.P->Ammo(); }},
-        {"AK ADS round fires", fire, [](C& c) { return c.Time > 0.4f; }, 2.0f,
+        {"AK ADS round fires", fire, [=](C& c) { flashShots(c, "muzzle_ak_ads"); return c.Time > 0.4f; }, 2.0f,
          [=](C& c) {
              ammoIs(c, mem->Ammo - 1);
              check(c, c.State() == "Aim", "stays on the sights (" + c.State() + ")");
@@ -160,7 +165,7 @@ FirstPersonWeaponTest::FirstPersonWeaponTest(bool stockProbe, bool probeAk) : m_
              ammoIs(c, kShotgunShells);
              check(c, c.P->Chambered(), "chambered");
          }},
-        {"Remington hip round + pump", fire, [=](C& c) { return c.Saw("Pump") && settled(c, "Idle"); }, 5.0f,
+        {"Remington hip round + pump", fire, [=](C& c) { flashShots(c, "muzzle_870_hip"); return c.Saw("Pump") && settled(c, "Idle"); }, 5.0f,
          [=](C& c) {
              ammoIs(c, kShotgunShells - 1);
              pelletsInCone(c, c.P->Set().Gameplay.SpreadHip);
