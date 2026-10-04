@@ -272,6 +272,29 @@ BloodFx::Decal* BloodFx::AddKnifeDecal(const char* entry, const glm::vec3& centr
     return &m_Decals.back();
 }
 
+void BloodFx::SpawnPoolAt(const glm::vec3& at, const glm::vec3& normal, float size) {
+    EnsureHooks();
+    const glm::vec3 n = glm::normalize(normal);
+    Decal* d = AddKnifeDecal(Random01() < 0.6f ? "pool_smooth" : "pool_big", at + n * 0.01f, n, RandomTangent(n), glm::vec3(size * 1.25f, 0.3f, size * 1.25f), 0.0f);
+    if (!d) d = AddDecal("attached", at + n * 0.01f, n, RandomTangent(n), glm::vec3(size, 0.3f, size), 0.0f);
+    if (d) {
+        d->PoolGrow = 12.0f;
+        d->DrySeconds *= 2.5f;
+        ++m_PoolsSpawned;
+    }
+}
+
+void BloodFx::SpatterWallAt(const glm::vec3& at, const glm::vec3& normal, float size) {
+    EnsureHooks();
+    const glm::vec3 n = glm::normalize(normal);
+    glm::vec3 along = RandomTangent(n);
+    if (along.y > 0.0f) along = -along;
+    if (Decal* body = AddDecal(Random01() < 0.5f ? "blood7" : "attached", at, n, RandomTangent(n), glm::vec3(0.75f * size, 0.25f, 0.75f * size), 0.0f))
+        body->PoolGrow = 0.35f;
+    if (Decal* streak = AddDecal("blood1", at, n, along, glm::vec3(1.3f * size, 0.25f, 0.9f * size), 0.0f)) streak->PoolGrow = 0.25f;
+    SpawnWallDrips(at, n, size, 0.0f);
+}
+
 int BloodFx::BloodySteps(int walker) const {
     for (const Walker& w : m_Walkers)
         if (w.Id == walker) return w.Steps;
