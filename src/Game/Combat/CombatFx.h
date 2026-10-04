@@ -24,6 +24,9 @@ public:
 
     // Scene tuning (muzzle flash and flame); the defaults are the look before it was tunable. Set before Start.
     FxHudSettingsComponent Settings;
+    // The Knife flipbook sprites the PRO Effects muzzle layers go to (Muzzle Style 1); none: the flame alone.
+    void SetSprites(class FxSprites* fx) { m_Sprites = fx; }
+    int MuzzleSprites() const { return m_MuzzleSprites; }
     // The peak intensity of a muzzle flash light: a soldier's, scaled down for the player's own gun.
     static float FlashPeak(const FxHudSettingsComponent& s, bool shotgun, bool fromPlayer) {
         return (shotgun ? 26.0f : 18.0f) * (fromPlayer ? s.PlayerFlashScale : 1.0f);
@@ -63,6 +66,9 @@ public:
     int WhizzesHeard() const { return m_Whizzes; }
 
 private:
+    class FxSprites* m_Sprites = nullptr;
+    int m_MuzzleSprites = 0;
+    void MuzzleSpritesFor(bool shotgun, bool fromPlayer, const glm::vec3& origin, const glm::vec3& dir);
     struct Flash {
         entt::entity Light = entt::null;
         float Left = 0.0f;

@@ -184,8 +184,13 @@ void FoleyAudio::UpdatePlayer(World& world, float dt, const FoleyPlayerInput& in
         // The body's own feet: a step each time one touches down, at any speed (turning on the spot steps too).
         const int down = m_Feet.Update(in.FootHeight, dt, LiftHeight(m_T, speed), m_T.FootContactHeight);
         n = (down & 1) + ((down >> 1) & 1);
+        if (m_StepListener)
+            for (int f = 0; f < 2; ++f)
+                if (down & (1 << f)) m_StepListener(-1, in.Feet, in.Velocity, f);
     } else if (in.Grounded && speed >= m_T.MinStepSpeed) {
         n = m_Stepper.Advance(speed * dt, StepDistance(m_T, in));
+        if (m_StepListener)
+            for (int i = 0; i < n; ++i) { m_PlayerFoot = !m_PlayerFoot; m_StepListener(-1, in.Feet, in.Velocity, m_PlayerFoot ? 0 : 1); }
     }
     if (n > 0) {
         const bool run = !in.Crouched && (in.Sprinting || speed >= m_T.RunSpeed);
@@ -223,9 +228,10 @@ void FoleyAudio::NpcWalk(World& world, int id, const glm::vec3& feet, const glm:
     }
     FoleyPlayerInput in;
     in.Sprinting = sprint;
-    if (st.Advance(speed * dt, StepDistance(m_T, in)) > 0 &&
-        glm::length(feet - WeaponAudio::Get().m_Listener) <= m_T.NpcStepMaxDistance)
-        NpcStep(world, feet, sprint);
+    if (st.Advance(speed * dt, StepDistance(m_T, in)) > 0) {
+        if (m_StepListener) m_StepListener(id, feet, velocity, -1);
+        if (glm::length(feet - WeaponAudio::Get().m_Listener) <= m_T.NpcStepMaxDistance) NpcStep(world, feet, sprint);
+    }
 }
 
 bool FoleyAudio::NpcFeet(World& world, int id, const glm::vec3& feet, const float height[2], bool sprint, float speed, float dt) {
@@ -241,6 +247,9 @@ bool FoleyAudio::NpcFeet(World& world, int id, const glm::vec3& feet, const floa
         std::printf("[NpcFeet] %d %.3f h %.3f %.3f floor %.3f %.3f up %d %d down %d at %.3f %.3f\n", id, clock[id] += dt, height[0], height[1],
                     fd.Floor[0], fd.Floor[1], (int)fd.Lifted[0], (int)fd.Lifted[1], down, feet.x, feet.z);
     }
+    if (down && m_StepListener)
+        for (int s = 0; s < 2; ++s)
+            if (down & (1 << s)) m_StepListener(id, feet, glm::vec3(0.0f), s);
     if (down && glm::length(feet - WeaponAudio::Get().m_Listener) <= m_T.NpcStepMaxDistance)
         for (int s = 0; s < 2; ++s)
             if (down & (1 << s)) NpcStep(world, feet, sprint);

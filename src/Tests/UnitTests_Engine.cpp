@@ -82,10 +82,15 @@ static void Test_BloodSettings_RoundTrip() {
     in.Pools = false;
     in.BodySplats = false;
     in.GearSpatter = false;
+    in.EnergyScale = 1.5f;
+    in.ImpactPuffs = false;
+    in.Gore = 1;
+    in.ScreenBlood = false;
     BloodSettingsComponent out;
     CHECK(RoundTrip(world, assets, "Blood Settings", in, out));
     CHECK(!out.Enabled && out.Size == 0.7f && out.MaxSprays == 9 && out.MaxStains == 100 && out.StainLifetime == 42.0f);
     CHECK(out.DrySeconds == 30.0f && !out.Pools && !out.BodySplats && !out.GearSpatter);
+    CHECK(out.EnergyScale == 1.5f && !out.ImpactPuffs && out.Gore == 1 && !out.ScreenBlood);
 }
 
 static void Test_GravityGun_AssistReach() {

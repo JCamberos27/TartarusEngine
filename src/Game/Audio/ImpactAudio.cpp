@@ -117,6 +117,17 @@ bool ImpactAudio::Impact(const World& world, std::uint32_t entity, const glm::ve
     return true;
 }
 
+bool ImpactAudio::Gore(const glm::vec3& pos, float gain) {
+    if (!m_Active || !m_T.Enabled || !m_T.FleshUsesRecordings) return false;
+    WeaponAudio& wa = WeaponAudio::Get();
+    if (!wa.Active()) return false;
+    SoundSet* set = ImpactSet("gore");
+    if (set->Files.empty()) return false;
+    wa.PlayKeyed(*set, pos, false, m_T.FleshVolume * gain);
+    ++m_Played.Flesh;
+    return true;
+}
+
 bool ImpactAudio::Flesh(const glm::vec3& pos, bool at2D, float gain) {
     if (!m_Active || !m_T.Enabled || !m_T.FleshUsesRecordings) return false;
     WeaponAudio& wa = WeaponAudio::Get();

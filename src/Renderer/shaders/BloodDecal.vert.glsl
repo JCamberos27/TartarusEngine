@@ -9,6 +9,9 @@ struct BloodDecal {
     vec4 RectMask; // atlas rect of the mask (r reveal order, b thick core)
     vec4 Params;   // x cutout (0 spread .. 1 gone), y dryness 0..1, z opacity, w normal strength
     vec4 Axis;     // xyz the box's +Y in world (out of the surface), w unused
+    ivec4 Knife;   // a Knife library decal: colour layer (-1: a KriptoFX set), normal layer, cell, next cell
+    vec4 Grid;     // cols, rows, cell blend, smoothness
+    ivec4 Kind;    // library (0 large, 1 small), entry flags
 };
 layout(std430, binding = 9) readonly buffer BloodDecals { BloodDecal uDecals[]; };
 

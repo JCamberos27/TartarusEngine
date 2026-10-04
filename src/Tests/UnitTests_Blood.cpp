@@ -3,6 +3,13 @@
 #include "BloodFxImport.h"
 #include "Combat/BloodFx.h"
 #include "Combat/BloodFxPresets.h"
+#include "Combat/FxSprites.h"
+#include "Combat/ScreenBlood.h"
+#include "Combat/HeadGore.h"
+#include "Combat/ImpactFx.h"
+#include "BloodRenderer.h"
+#include "GameModuleAPI.h"
+#include "KnifeFxImport.h"
 
 #include <glm/glm.hpp>
 #include <glm/gtc/matrix_transform.hpp>
@@ -12,6 +19,7 @@
 #include <cmath>
 #include <cstdlib>
 #include <cstring>
+#include <filesystem>
 #include <string>
 #include <vector>
 
@@ -435,6 +443,451 @@ void Test_Blood_Splats() {
     CHECK(!any5);
     CHECK(!fx.Splats().empty());
 }
+
+// --- v2: the Knife packs, energy, exits, flipbook puffs ---------------------------------------------------------
+void Test_Blood_Energy() {
+    BloodFx::Hit h;
+    h.Point = glm::vec3(0, 1.3f, 0);
+    h.Origin = glm::vec3(0, 1.5f, 15.0f);
+    h.Damage = 38.0f;
+    const float rifle = BloodFx::Energy(h);
+    CHECK(rifle > 0.85f && rifle < 1.2f);
+    BloodFx::Hit far = h;
+    far.Origin = glm::vec3(0, 1.5f, 120.0f);
+    CHECK(BloodFx::Energy(far) < rifle);
+    BloodFx::Hit head = h;
+    head.Head = true;
+    CHECK(BloodFx::Energy(head) > rifle);
+    BloodFx::Hit shotgun = h;     // one pellet of a 9-pellet load, carrying the load
+    shotgun.Damage = 14.0f;
+    shotgun.Pellets = 9;
+    CHECK(BloodFx::Energy(shotgun) > BloodFx::Energy(BloodFx::Hit{h.Point, h.Direction, 0, -1, 14.0f}));
+    BloodFx::Hit graze = h;
+    graze.Damage = 8.0f;
+    CHECK(BloodFx::Energy(graze) < BloodFx::kExitEnergy);
+    CHECK(BloodFx::Energy(BloodFx::Hit{h.Point, h.Direction, 0, -1, 10000.0f}) <= 3.0f);
+    // The spray's stretch: along the line of flight longer, across it unchanged.
+    const glm::mat4 m = BloodFx::PrefabToWorld(glm::vec3(0.0f), glm::vec3(1, 0, 0), 1.0f, 0.0f, glm::vec3(1, 0, 0), 1.4f);
+    CHECK(std::abs(glm::length(glm::vec3(m * glm::vec4(1, 0, 0, 0))) - 1.4f) < 1e-4f);
+    CHECK(std::abs(glm::length(glm::vec3(m * glm::vec4(0, 0, 1, 0))) - 1.0f) < 1e-4f);
+    CHECK(std::abs(glm::length(glm::vec3(m * glm::vec4(0, 1, 0, 0))) - 1.0f) < 1e-4f);
+}
+
+void Test_Blood_ExitWound() {
+    // Body 7 is a slab 0.3 m thick behind the entry (z 0 .. -0.3); body 9 stands behind it.
+    BloodFx::BodyRayFn ray = [](const glm::vec3& o, const glm::vec3& d, float maxD, unsigned& entity, int& part, glm::vec3& point) {
+        if (d.z <= 0.5f) return false; // only rays coming back along +Z
+        part = 1;
+        const float tExit = (-0.3f - o.z) / d.z, tOther = (-0.5f - o.z) / d.z;
+        if (tOther >= 0.0f && tOther <= maxD && tOther < tExit) { entity = 9; point = o + d * tOther; return true; }
+        if (tExit < 0.0f || tExit > maxD) return false;
+        entity = 7;
+        point = o + d * tExit;
+        return true;
+    };
+    glm::vec3 exit;
+    CHECK(BloodFx::FindExit(glm::vec3(0, 1.3f, 0), glm::vec3(0, 0, -1), 7, false, ray, exit));
+    CHECK(std::abs(exit.z + 0.3f) < 1e-3f && std::abs(exit.y - 1.3f) < 1e-3f);
+    // (Body 9 behind was looked past.) A body the line never leaves: the guess just past the entry.
+    CHECK(!BloodFx::FindExit(glm::vec3(0, 1.3f, 0), glm::vec3(0, 0, -1), 8, false, ray, exit));
+    CHECK(std::abs(exit.z + 0.13f) < 1e-3f);
+
+    // Through OnFleshHit: a rifle exits where the body really ends; a graze stays in and sprays back out of the entry.
+    BloodFx fx;
+    fx.SetSimLookup([](const char*) { return 0; });
+    fx.SetRaycast([](const glm::vec3&, const glm::vec3&, float, glm::vec3&, glm::vec3&) { return false; });
+    fx.SetBodyRay(ray);
+    BloodFx::Hit h;
+    h.Point = glm::vec3(0, 1.3f, 0);
+    h.Direction = glm::vec3(0, 0, -1);
+    h.Entity = 7;
+    h.Damage = 40.0f;
+    fx.OnFleshHit(h);
+    CHECK(fx.LastExited() && fx.LastExitFound() && std::abs(fx.LastExitPoint().z + 0.3f) < 1e-3f);
+    CHECK(!fx.Sprays().empty() && fx.Sprays().back().Model[3].z < -0.25f); // thrown from the far side
+    h.Entity = 11;
+    h.Damage = 6.0f;
+    fx.OnFleshHit(h);
+    CHECK(!fx.LastExited());
+    CHECK(fx.Sprays().back().Model[3].z > -0.01f); // out of the entry, toward the shooter
+}
+
+void Test_Blood_Puffs() {
+    FxSprites sprites;
+    sprites.SetLookup([](const std::string& name, FxSprites::EntryInfo& info) {
+        info.Frames = name == "blood_hit" || name == "blood_burst" ? 16 : 1;
+        return name == "blood_hit" ? 0 : name == "blood_burst" ? 1 : name == "blood_cloud" ? 2 : name == "blood_drop" ? 3 : -1;
+    });
+    BloodFx fx;
+    fx.SetSimLookup([](const char*) { return 0; });
+    fx.SetRaycast([](const glm::vec3&, const glm::vec3&, float, glm::vec3&, glm::vec3&) { return false; });
+    fx.SetBodyRay([](const glm::vec3&, const glm::vec3&, float, unsigned&, int&, glm::vec3&) { return false; });
+    fx.SetSprites(&sprites);
+    BloodFx::Hit h;
+    h.Point = glm::vec3(0, 1.3f, 0);
+    h.Direction = glm::vec3(0, 0, -1);
+    h.Entity = 1;
+    h.Damage = 40.0f;
+    fx.OnFleshHit(h);
+    const int body = (int)sprites.Live().size();
+    CHECK(body >= 6 && fx.PuffsSpawned() == 1);
+    bool blood = false, mist = false;
+    for (const auto& p : sprites.Live()) { blood |= p.E.Mode == FxSprites::Shade::Blood; mist |= p.E.Entry == 2; }
+    CHECK(blood && mist);
+    // A head shot reads denser: more of it.
+    sprites.Clear();
+    h.Entity = 2;
+    h.Head = true;
+    fx.OnFleshHit(h);
+    CHECK((int)sprites.Live().size() > body);
+    // The load's other pellets: a puff each, no spray.
+    const int sprays = fx.SpraysSpawned(), puffs = fx.PuffsSpawned();
+    fx.OnFleshHit(h);
+    CHECK(fx.SpraysSpawned() == sprays && fx.PuffsSpawned() == puffs + 1);
+    // Off: none; the player's own wounds never puff in front of their eyes.
+    sprites.Clear();
+    fx.Config.ImpactPuffs = false;
+    h.Entity = 3;
+    fx.OnFleshHit(h);
+    CHECK(sprites.Live().empty());
+    fx.Config.ImpactPuffs = true;
+    h.Entity = kPlayerEntity;
+    h.Player = true;
+    fx.OnFleshHit(h);
+    CHECK(sprites.Live().empty());
+    // Gore off: nothing at all.
+    fx.Config.Gore = 0;
+    h.Player = false;
+    h.Entity = 4;
+    const int before = fx.SpraysSpawned();
+    fx.OnFleshHit(h);
+    CHECK(fx.SpraysSpawned() == before && sprites.Live().empty());
+    // Everything is gone within a second and a half.
+    fx.Config.Gore = 2;
+    h.Entity = 5;
+    fx.OnFleshHit(h);
+    for (int i = 0; i < 30; ++i) sprites.Update(0.05f);
+    CHECK(sprites.Live().empty());
+}
+
+
+void Test_Blood_KnifeDecals() {
+    BloodFx fx;
+    fx.SetSimLookup([](const char*) { return 0; });
+    fx.SetDecalSetLookup([](const char*) { return 0; });
+    fx.SetKnifeLookup([](const char* e, int& cells) {
+        const std::string n(e);
+        cells = n.rfind("leak", 0) == 0 ? 30 : 4;
+        return n == "pool_smooth" ? 10 : n == "pool_big" ? 11 : n.rfind("leak", 0) == 0 ? 20 : -1;
+    });
+    fx.SetBodyRay([](const glm::vec3&, const glm::vec3&, float, unsigned&, int&, glm::vec3&) { return false; });
+    glm::vec3 corpse(0.0f, 0.3f, -0.5f);
+    fx.SetBodyLookup([&](unsigned, glm::vec3& c) { c = corpse; return true; });
+    // A floor at y = 0 and a wall 1 m along -Z.
+    fx.SetRaycast([](const glm::vec3& o, const glm::vec3& d, float maxD, glm::vec3& p, glm::vec3& n) {
+        if (d.y < -0.5f) { if (o.y > maxD) return false; p = glm::vec3(o.x, 0.0f, o.z); n = glm::vec3(0, 1, 0); return true; }
+        if (d.z < -0.5f) { if (o.z + 1.0f > maxD) return false; p = glm::vec3(o.x, o.y, -1.0f); n = glm::vec3(0, 0, 1); return true; }
+        return false;
+    });
+    BloodFx::Hit h;
+    h.Point = glm::vec3(0, 1.3f, 0);
+    h.Direction = glm::vec3(0, 0, -1);
+    h.Entity = 3;
+    h.Damage = 40.0f;
+    h.Killed = true;
+    fx.OnFleshHit(h);
+    // The wall spatter runs down in drips: Knife leak flipbooks hanging under it, image top at the spatter.
+    CHECK(fx.DripsSpawned() >= 1);
+    const BloodFx::Decal* drip = nullptr;
+    for (const BloodFx::Decal& d : fx.Decals())
+        if (d.Knife == 20) drip = &d;
+    CHECK(drip && drip->Frames == 30 && drip->Cell == 0 && drip->FrameSeconds > 0.0f);
+    if (drip) {
+        const glm::vec3 x(drip->Model[0]), y(drip->Model[1]), z(drip->Model[2]);
+        CHECK(glm::normalize(y).z > 0.99f);              // projects onto the wall
+        CHECK(glm::normalize(z).y < -0.99f);             // the image's v runs down it
+        CHECK(std::abs(glm::normalize(x).y) < 1e-3f);    // u across, level
+    }
+    // The corpse's pool is a Knife PBR pool.
+    for (int i = 0; i < 40; ++i) fx.Update(0.1f);
+    bool pool = false;
+    for (const BloodFx::Decal& d : fx.Decals()) pool |= d.Knife == 10 || d.Knife == 11;
+    CHECK(pool && fx.PoolsSpawned() == 1);
+}
+
+
+void Test_Blood_Footprints() {
+    BloodFx fx;
+    fx.SetSimLookup([](const char*) { return 0; });
+    fx.SetDecalSetLookup([](const char*) { return 0; });
+    fx.SetKnifeLookup([](const char* e, int& cells) {
+        const std::string n(e);
+        cells = n == "footprint" ? 8 : 4;
+        return n == "pool_smooth" || n == "pool_big" ? 10 : n == "footprint" ? 30 : -1;
+    });
+    fx.SetBodyRay([](const glm::vec3&, const glm::vec3&, float, unsigned&, int&, glm::vec3&) { return false; });
+    const glm::vec3 corpse(0.0f, 0.3f, 0.0f);
+    fx.SetBodyLookup([&](unsigned, glm::vec3& c) { c = corpse; return true; });
+    fx.SetRaycast([](const glm::vec3& o, const glm::vec3& d, float maxD, glm::vec3& p, glm::vec3& n) {
+        if (d.y > -0.5f || o.y > maxD) return false;
+        p = glm::vec3(o.x, 0.0f, o.z);
+        n = glm::vec3(0, 1, 0);
+        return true;
+    });
+    // A corpse's pool, grown in.
+    BloodFx::Hit h;
+    h.Point = glm::vec3(0, 1.3f, 0);
+    h.Direction = glm::vec3(1, 0, 0);
+    h.Entity = 3;
+    h.Damage = 40.0f;
+    h.Killed = true;
+    fx.OnFleshHit(h);
+    for (int i = 0; i < 300; ++i) fx.Update(0.1f);
+    CHECK(fx.PoolsSpawned() == 1);
+    // Walking clean: no prints.
+    fx.OnFootstep(-1, glm::vec3(5, 0, 5), glm::vec3(0, 0, -1.5f), 0);
+    CHECK(fx.PrintsSpawned() == 0 && fx.BloodySteps(-1) == 0);
+    // Through the pool, then away: the next steps print, fainter each, then stop.
+    fx.OnFootstep(-1, glm::vec3(0, 0, 0), glm::vec3(0, 0, -1.5f), 1);
+    CHECK(fx.BloodySteps(-1) == BloodFx::kPrintSteps);
+    float lastOpacity = 2.0f;
+    bool fading = true;
+    for (int i = 0; i < 10; ++i) {
+        fx.OnFootstep(-1, glm::vec3(0, 0, -2.0f - 0.7f * (float)i), glm::vec3(0, 0, -1.5f), i % 2);
+        const BloodFx::Decal& d = fx.Decals().back();
+        if (d.Knife == 30 && i < BloodFx::kPrintSteps) { fading &= d.Opacity < lastOpacity; lastOpacity = d.Opacity; }
+    }
+    CHECK(fx.PrintsSpawned() == BloodFx::kPrintSteps && fading && fx.BloodySteps(-1) == 0);
+    // The prints point the way they walked (toe = the image's top = -z of the box, so the box's z runs back).
+    const BloodFx::Decal& print = fx.Decals().back();
+    CHECK(print.Knife == 30 && glm::normalize(glm::vec3(print.Model[2])).z > 0.99f);
+    // Old blood doesn't mark a sole.
+    for (int i = 0; i < 700; ++i) fx.Update(0.1f);
+    fx.OnFootstep(7, glm::vec3(0, 0, 0), glm::vec3(1, 0, 0), -1);
+    CHECK(fx.BloodySteps(7) == 0);
+}
+
+
+void Test_Blood_ScreenBlood() {
+    // A hit from the right lands on the right edge; from behind, the bottom; ahead, the top.
+    CHECK(ScreenBlood::EdgePoint(1.5708f).x > 0.85f);
+    CHECK(ScreenBlood::EdgePoint(3.1416f).y < 0.15f);
+    CHECK(ScreenBlood::EdgePoint(0.0f).y > 0.85f);
+    // In fast, held at the fullest frame, thinning out to nothing.
+    int f = 0;
+    float o = 0.0f;
+    ScreenBlood::FrameAt(0.0f, 2.0f, 16, f, o);
+    CHECK(f == 0 && o == 1.0f);
+    ScreenBlood::FrameAt(0.5f, 2.0f, 16, f, o);
+    CHECK(f == 8 && o == 1.0f);
+    ScreenBlood::FrameAt(1.99f, 2.0f, 16, f, o);
+    CHECK(f >= 14 && o < 0.05f);
+    ScreenBlood sb;
+    sb.OnHurt(10.0f, 1.5708f, 0.9f);
+    CHECK(sb.Splats().size() == 1 && sb.Splats()[0].Pos.x > 0.7f);
+    sb.OnHurt(40.0f, -1.5708f, 0.2f); // a hard hit at low health: more of it
+    CHECK(sb.Splats().size() == 4);
+    for (int i = 0; i < 100; ++i) sb.Update(0.05f);
+    CHECK(sb.Splats().empty());
+    sb.Enabled = false;
+    sb.OnHurt(40.0f, 0.0f, 0.5f);
+    CHECK(sb.Splats().empty());
+}
+
+
+void Test_Blood_HeadGore() {
+    // Only the big ones: a head kill, energy enough, Gore at Full, never the player.
+    CHECK(HeadGore::ShouldBurst(true, true, false, 2.0f, 2));
+    CHECK(!HeadGore::ShouldBurst(true, true, false, 1.0f, 2));
+    CHECK(!HeadGore::ShouldBurst(true, true, false, 2.0f, 1));
+    CHECK(!HeadGore::ShouldBurst(true, false, false, 2.0f, 2));
+    CHECK(!HeadGore::ShouldBurst(false, true, false, 2.0f, 2));
+    CHECK(!HeadGore::ShouldBurst(true, true, true, 2.0f, 2));
+    // The stump stands along the neck, its front toward the body's facing.
+    const glm::quat q = HeadGore::StumpRotation(glm::vec3(0, 1.5f, 0), glm::vec3(0, 1.6f, 0.02f), glm::vec3(1, 0, 0));
+    const glm::vec3 up = q * glm::vec3(0, 1, 0), front = q * glm::vec3(0, 0, 1);
+    CHECK(up.y > 0.97f && front.x > 0.97f && std::abs(glm::dot(up, front)) < 1e-4f);
+    // Lying on his back (neck -> head along +Z): up follows the neck.
+    const glm::quat lying = HeadGore::StumpRotation(glm::vec3(0, 0.1f, 0), glm::vec3(0, 0.1f, 0.12f), glm::vec3(0, 1, 0));
+    CHECK((lying * glm::vec3(0, 1, 0)).z > 0.99f);
+}
+
+
+void Test_ImpactFx_Surfaces() {
+    // Substring words: none may hide inside another surface's name ("pane" in "Panel" did).
+    CHECK(ImpactFx::SurfaceFromName("Metal Plate") == "metal");
+    CHECK(ImpactFx::SurfaceFromName("Wood Panel") == "wood");
+    CHECK(ImpactFx::SurfaceFromName("Brick Panel") == "brick");
+    CHECK(ImpactFx::SurfaceFromName("Glass Pane") == "glass");
+    CHECK(ImpactFx::SurfaceFromName("Mud Bank") == "mud");
+    CHECK(ImpactFx::SurfaceFromName("Tile Panel") == "tile");
+    CHECK(ImpactFx::SurfaceFromName("Concrete Block") == "concrete");
+    CHECK(ImpactFx::SurfaceFromName("Back Wall") == "concrete");
+    CHECK(ImpactFx::SurfaceFromName("Loose Crate 1") == "wood");
+    CHECK(ImpactFx::SurfaceFromName("something else") == "concrete");
+    CHECK(std::string(ImpactFx::HoleEntry("brick")) == "hole_brick" && std::string(ImpactFx::HoleEntry("anything")) == "hole_concrete");
+    CHECK(ImpactFx::HoleSize("glass", 0.0045f) > ImpactFx::HoleSize("metal", 0.0045f));
+}
+
+
+void Test_Blood_Perf() {
+    // Culling: far or tiny on screen isn't drawn; near, or with the eye inside it, is.
+    BloodRenderer& r = BloodRenderer::Get();
+    const glm::vec3 eye(0.0f);
+    CHECK(r.WorthDrawing(glm::vec3(0, 0, -10), 0.5f, eye, 80.0f));
+    CHECK(!r.WorthDrawing(glm::vec3(0, 0, -100), 0.5f, eye, 80.0f));
+    CHECK(!r.WorthDrawing(glm::vec3(0, 0, -50), 0.05f, eye, 80.0f));   // 1 mm-ish on screen
+    CHECK(r.WorthDrawing(glm::vec3(0, 0, -0.1f), 0.5f, eye, 80.0f));   // inside it
+    // Stain dedupe: a stain landing right on a fresh one like it is the same stain.
+    BloodFx fx;
+    fx.SetSimLookup([](const char*) { return 0; });
+    fx.SetDecalSetLookup([](const char*) { return 0; });
+    fx.SetBodyRay([](const glm::vec3&, const glm::vec3&, float, unsigned&, int&, glm::vec3&) { return false; });
+    fx.SetRaycast([](const glm::vec3& o, const glm::vec3& d, float maxD, glm::vec3& p, glm::vec3& n) {
+        if (d.y > -0.5f || o.y > maxD) return false;
+        p = glm::vec3(o.x, 0.0f, o.z);
+        n = glm::vec3(0, 1, 0);
+        return true;
+    });
+    BloodFx::Hit h;
+    h.Point = glm::vec3(0, 1.3f, 0);
+    h.Direction = glm::vec3(1, 0, 0);
+    h.Entity = 1;
+    h.Damage = 40.0f;
+    fx.OnFleshHit(h);
+    for (int i = 0; i < 20; ++i) fx.Update(0.05f);
+    CHECK(!fx.Decals().empty());
+    if (!fx.Decals().empty()) {
+        const BloodFx::Decal& d = fx.Decals().front();
+        CHECK(fx.DuplicateOf(d.Set, d.Knife, d.Model) == 0);
+        glm::mat4 moved = d.Model;
+        moved[3] += glm::vec4(1.0f, 0.0f, 0.0f, 0.0f);
+        CHECK(fx.DuplicateOf(d.Set, d.Knife, moved) == -1);
+        CHECK(fx.DuplicateOf(d.Set, 99, d.Model) == -1);
+    }
+}
+
+
+void Test_Blood_LabActions() {
+    BloodFx fx;
+    fx.SetDecalSetLookup([](const char*) { return 0; });
+    fx.SetKnifeLookup([](const char* e, int& cells) {
+        const std::string n(e);
+        cells = n.rfind("leak", 0) == 0 ? 30 : 4;
+        return n == "pool_smooth" || n == "pool_big" ? 10 : n.rfind("leak", 0) == 0 ? 20 : -1;
+    });
+    fx.SpawnPoolAt(glm::vec3(1, 0, 1), glm::vec3(0, 1, 0), 1.2f);
+    CHECK(fx.PoolsSpawned() == 1 && !fx.Decals().empty() && (fx.Decals().back().Knife == 10));
+    const size_t before = fx.Decals().size();
+    fx.SpatterWallAt(glm::vec3(0, 1.4f, -1), glm::vec3(0, 0, 1), 0.6f);
+    CHECK(fx.Decals().size() >= before + 3 && fx.DripsSpawned() >= 1); // the blot, the streaks, the drips
+    fx.Config.Gore = 0; // the lab's pool / spatter ignore Gore (they're asked for); hits don't
+    BloodFx::Hit h;
+    h.Entity = 3;
+    h.Damage = 40.0f;
+    const int sprays = fx.SpraysSpawned();
+    fx.OnFleshHit(h);
+    CHECK(fx.SpraysSpawned() == sprays);
+}
+
+void Test_FxSprites_Sim() {
+    int a, b;
+    float t;
+    FxSprites::FrameAt(0.0f, 16, 0, true, a, b, t);
+    CHECK(a == 0 && b == 1 && t == 0.0f);
+    FxSprites::FrameAt(0.5f, 16, 0, true, a, b, t);
+    CHECK(a == 8 && b == 9);
+    FxSprites::FrameAt(1.0f, 16, 0, true, a, b, t);
+    CHECK(a == 15 && b == 15);
+    FxSprites::FrameAt(0.5f, 4, 2, false, a, b, t);
+    CHECK(a == 2 && b == 2 && t == 0.0f);
+    FxSprites::FrameAt(0.99f, 4, 9, true, a, b, t); // a start past the end is clamped
+    CHECK(a == 3 && b == 3);
+
+    FxSprites fx;
+    fx.SetLookup([](const std::string&, FxSprites::EntryInfo& info) { info.Frames = 4; return 0; });
+    FxSprites::Emit e;
+    e.Entry = fx.Entry("x");
+    e.Vel = glm::vec3(1, 0, 0);
+    e.Gravity = 1.0f;
+    e.Life = 1.0f;
+    e.Frame = -1; // a random variant
+    fx.Spawn(e);
+    CHECK(fx.Live().size() == 1 && fx.Live()[0].Frames == 4 && fx.Live()[0].E.Frame >= 0 && fx.Live()[0].E.Frame < 4);
+    for (int i = 0; i < 10; ++i) fx.Update(0.05f);
+    const glm::vec3 p = fx.Live()[0].E.Pos;
+    CHECK(std::abs(p.x - 0.5f) < 1e-3f && p.y < -1.0f && p.y > -1.6f); // ~ -g t^2 / 2 = -1.23 at 0.5 s
+    fx.Update(0.6f);
+    CHECK(fx.Live().empty());
+    // A floor at y = 0: it bounces and stays above.
+    e.Pos = glm::vec3(0, 0.2f, 0);
+    e.Vel = glm::vec3(0, -3, 0);
+    e.Plane = glm::vec4(0, 1, 0, 0);
+    e.Life = 2.0f;
+    fx.Spawn(e);
+    for (int i = 0; i < 20; ++i) { fx.Update(0.02f); CHECK(fx.Live()[0].E.Pos.y >= -1e-4f); }
+    // The pool is capped: the oldest go first.
+    fx.Clear();
+    fx.MaxLive = 5;
+    for (int i = 0; i < 9; ++i) { e.Pos.x = (float)i; fx.Spawn(e); }
+    CHECK(fx.Live().size() == 5 && fx.Live()[0].E.Pos.x == 4.0f);
+}
+
+void Test_KnifeFx_Library() {
+    using namespace KnifeFxImport;
+    CHECK(MipCount(1024) == 9 && MipCount(2048) == 10 && MipCount(4) == 1);
+    CHECK(LayerBytes(8, 2) == 4 * 16 + 16);
+    // Area average: a 4x4 checker of 0 / 255 into one 2x2 cell is mid grey; alpha-weighted colour ignores
+    // transparent texels.
+    Image src;
+    src.W = src.H = 4;
+    src.Px.resize(64);
+    for (int i = 0; i < 16; ++i) {
+        const bool on = ((i % 4) + (i / 4)) % 2 == 0;
+        src.Px[i * 4 + 0] = on ? 255 : 0;
+        src.Px[i * 4 + 1] = 0;
+        src.Px[i * 4 + 2] = 0;
+        src.Px[i * 4 + 3] = on ? 255 : 0;
+    }
+    Image half = HalfSize(src, false);
+    CHECK(half.W == 2 && half.H == 2 && std::abs((int)half.Px[0] - 128) <= 1 && std::abs((int)half.Px[3] - 128) <= 1);
+    Image weighted = HalfSize(src, true);
+    CHECK(weighted.Px[0] >= 254 && std::abs((int)weighted.Px[3] - 128) <= 1);
+    // BC3 / BC5 blocks: 16 bytes per 4x4.
+    std::vector<std::uint8_t> bc;
+    CompressBC3(src, bc);
+    CHECK(bc.size() == 16);
+    CompressBC5(src, bc);
+    CHECK(bc.size() == 32);
+    // A library survives the file.
+    LibraryData lib;
+    lib.Header.Size = 8;
+    lib.Header.Mips = 2;
+    lib.Header.ColorLayers = 1;
+    lib.Header.NormalLayers = 0;
+    FileEntry e;
+    std::memcpy(e.Name, "blood_hit", 10);
+    e.ColorLayer = 0;
+    e.Cols = 4;
+    e.Rows = 4;
+    e.Frames = 16;
+    e.Flags = EntryMask;
+    lib.Entries.push_back(e);
+    lib.Color.assign(LayerBytes(8, 2), 0x5A);
+    const std::string path = (std::filesystem::temp_directory_path() / "tartarus_kfx_test.kfx").string();
+    CHECK(WriteLibrary(path, lib));
+    LibraryData back;
+    std::string err;
+    CHECK(ReadLibrary(path, back, &err));
+    CHECK(back.Entries.size() == 1 && std::string(back.Entries[0].Name) == "blood_hit" && back.Entries[0].Frames == 16);
+    CHECK(back.Color.size() == lib.Color.size() && back.Color[5] == 0x5A);
+    // A bad entry is refused.
+    lib.Entries[0].Frames = 17;
+    CHECK(WriteLibrary(path, lib));
+    CHECK(!ReadLibrary(path, back, &err));
+    std::error_code ec;
+    std::filesystem::remove(path, ec);
+}
 } // namespace
 
 void RegisterBloodTests(UnitTestSupport::TestList& tests) {
@@ -447,4 +900,16 @@ void RegisterBloodTests(UnitTestSupport::TestList& tests) {
     tests.push_back({"Blood::FleshHits", Test_Blood_FleshHits});
     tests.push_back({"Blood::Decals", Test_Blood_Decals});
     tests.push_back({"Blood::Splats", Test_Blood_Splats});
+    tests.push_back({"Blood::Energy", Test_Blood_Energy});
+    tests.push_back({"Blood::ExitWound", Test_Blood_ExitWound});
+    tests.push_back({"Blood::Puffs", Test_Blood_Puffs});
+    tests.push_back({"Blood::KnifeDecals", Test_Blood_KnifeDecals});
+    tests.push_back({"Blood::Footprints", Test_Blood_Footprints});
+    tests.push_back({"Blood::ScreenBlood", Test_Blood_ScreenBlood});
+    tests.push_back({"Blood::HeadGore", Test_Blood_HeadGore});
+    tests.push_back({"ImpactFx::Surfaces", Test_ImpactFx_Surfaces});
+    tests.push_back({"Blood::Perf", Test_Blood_Perf});
+    tests.push_back({"Blood::LabActions", Test_Blood_LabActions});
+    tests.push_back({"FxSprites::Sim", Test_FxSprites_Sim});
+    tests.push_back({"KnifeFx::Library", Test_KnifeFx_Library});
 }
