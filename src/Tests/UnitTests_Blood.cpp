@@ -346,7 +346,20 @@ void Test_Blood_Decals() {
     fx.Update(1.0f); // the pool starts within 1.3 s of the death
     CHECK(fx.Decals().size() == thrown + 1);
     const BloodFx::Decal pool = fx.Decals().back();
-    CHECK(pool.Reveal == nullptr && pool.PoolGrow > 5.0f);
+    CHECK(pool.Reveal == nullptr && pool.PoolGrow > 15.0f && pool.Spread);
+    {   // It starts as a small patch and widens slowly, fast at first: never a full pool popping in.
+        BloodFx::Decal p = pool;
+        p.Age = 0.0f;
+        const float s0 = BloodFx::PoolScale(p);
+        p.Age = 2.0f;
+        const float s2 = BloodFx::PoolScale(p);
+        p.Age = p.PoolGrow * 0.5f;
+        const float sHalf = BloodFx::PoolScale(p);
+        p.Age = p.PoolGrow + 1.0f;
+        const float sEnd = BloodFx::PoolScale(p);
+        CHECK(s0 < 0.1f && s2 < 0.4f && s2 > s0 && sHalf > 0.7f && sHalf < 1.0f && std::abs(sEnd - 1.0f) < 1e-5f);
+        CHECK(sHalf - s0 > sEnd - sHalf); // the spread slows
+    }
     CHECK(std::abs(glm::vec3(pool.Model[3]).x - corpse.x) < 1e-4f && std::abs(glm::vec3(pool.Model[3]).y - 0.01f) < 1e-3f);
     BloodFx::Decal grow = pool;
     grow.Age = 0.0f;
