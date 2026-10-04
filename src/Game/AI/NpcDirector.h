@@ -88,6 +88,18 @@ public:
     struct Impact { glm::vec3 Point, Normal; unsigned Entity; float Radius; };
     std::vector<Impact> TakeImpacts();
     std::vector<CasingSpawn> TakeEjections();
+    // Every round that went into a body this frame - a soldier (living or dead) or the player - for
+    // the blood (Game/Combat/BloodFx). `Entity` is the soldier's root or kPlayerEntity; `Part` the
+    // hitbox / ragdoll part index when known (-1 otherwise).
+    struct FleshHit {
+        glm::vec3 Point, Direction;
+        unsigned Entity;
+        int Part;
+        float Damage;
+        bool Killed, Head, Corpse;
+        int Pellets;
+    };
+    std::vector<FleshHit> TakeFleshHits();
 
     // --- debug / tests ---
     const std::vector<std::unique_ptr<Npc>>& Npcs() const { return m_Npcs; }
@@ -236,6 +248,7 @@ private:
     std::vector<Noise> m_Noises;
     std::vector<DamageEvent> m_PlayerDamage;
     std::vector<Impact> m_Impacts;
+    std::vector<FleshHit> m_FleshHits;
     std::vector<CasingSpawn> m_Ejections;
     std::mt19937 m_Rng{0x5eedu};
     PlayerSnapshot m_Player;

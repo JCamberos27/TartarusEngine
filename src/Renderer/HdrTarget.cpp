@@ -115,6 +115,15 @@ unsigned int HdrTarget::ResolvedDepthTexture() const {
     return m_ResolveDepth;
 }
 
+void HdrTarget::ResolveDepthOnly() const {
+    if (!m_MsFbo || !m_ResolveFbo) return;
+    ResolvedDepthTexture();
+    glBlitNamedFramebuffer(m_MsFbo, m_ResolveFbo,
+        0, 0, m_Width, m_Height,
+        0, 0, m_Width, m_Height,
+        GL_DEPTH_BUFFER_BIT, GL_NEAREST);
+}
+
 void HdrTarget::ResolveTo() const {
     if (!m_MsFbo || !m_ResolveFbo) return;
     // MSAA down-resolve (a plain copy when m_Samples == 1). Colour always, for the tonemap pass.
