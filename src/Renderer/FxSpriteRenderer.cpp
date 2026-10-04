@@ -2,6 +2,7 @@
 
 #include "GLStateCache.h"
 #include "HdrTarget.h"
+#include "BloodPalette.h"
 #include "KnifeFxLibrary.h"
 #include "Shader.h"
 #include "ShaderLibrary.h"
@@ -53,7 +54,7 @@ int FxSpriteRenderer::Draw(const glm::mat4& view, const glm::mat4& proj, const i
         if (const KnifeFxLibrary::Entry* e = lib.At(s.Entry); e && colorArray && e->Lib == KnifeFxImport::Library::Sprite) {
             g.Tex = glm::ivec4(e->ColorLayer, e->NormalLayer, s.CellA, s.CellB);
             g.Info = glm::ivec4(e->Cols, e->Rows, s.Mode, (int)e->Flags);
-            g.Extra.x = e->Smoothness;
+            g.Extra.x = s.Mode == 0 ? 1.0f - BloodPalette::RoughSprite : e->Smoothness; // blood: one material
         } else if (s.Entry >= 0) {
             continue; // the library isn't there: nothing to draw it with
         }

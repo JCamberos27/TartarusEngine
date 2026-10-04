@@ -28,6 +28,8 @@ layout(binding = 28) uniform sampler2D uBloodNormAtlas; // 28, 29: reserved past
 layout(binding = 29) uniform sampler2D uBloodMaskAtlas;
 uniform int uBloodSplatFirst;
 uniform int uBloodSplatCount;
+uniform vec4 uBloodFresh; // BloodPalette: rgb fresh, a its roughness on cloth / skin
+uniform vec4 uBloodDried; // rgb dried, a its roughness
 
 // How much of this fragment is under blood (x), its pooled core (y) and how dried (z).
 vec3 BloodSplatCover() {
@@ -157,9 +159,9 @@ void main() {
         // Soaked in: fabric and skin take the blood's colour, darker where it pooled, glossy while wet.
         vec3 blood = BloodSplatCover();
         if (blood.x > 0.0) {
-            vec3 bloodAlbedo = mix(vec3(0.24, 0.009, 0.007), vec3(0.07, 0.02, 0.015), blood.z) * mix(1.0, 0.6, blood.y);
+            vec3 bloodAlbedo = mix(uBloodFresh.rgb, uBloodDried.rgb, blood.z) * mix(1.0, 0.6, blood.y);
             albedo = mix(albedo, bloodAlbedo, blood.x * 0.95);
-            roughness = mix(roughness, mix(0.18, 0.65, blood.z), blood.x);
+            roughness = mix(roughness, mix(uBloodFresh.a, uBloodDried.a, blood.z), blood.x);
             metallic = mix(metallic, 0.0, blood.x);
         }
     }

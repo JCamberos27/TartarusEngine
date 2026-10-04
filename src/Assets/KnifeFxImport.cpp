@@ -178,26 +178,12 @@ struct Source {
 // What the game uses of the two packs. Cells are read in reading order (channel-packed smoke: the
 // red channel's 16 frames, then green's, ...), so a thinned flipbook keeps its whole timeline.
 const Source kSources[] = {
-    // Pools and trails (Real Blood "Puddles/Smooth", "BigPuddle", "Trails").
+    // Pools (Real Blood "Puddles/Smooth"; "BigPuddle" has baked highlights and holes that don't match the rest).
     {"pool_smooth", Library::DecalLarge, kRealBlood, "Textures/Puddles/Smooth/decal_meash_decal_AlbedoTransparency (3).tga", Mode::Albedo,
      "Textures/Puddles/Smooth/decal_meash_decal_Normal (1) fixed.tga", 2, 2, 2, 2, 1, 0, 0.92f},
-    {"pool_big", Library::DecalLarge, kRealBlood, "Textures/BigPuddle/low1_blood puddles_AlbedoTransparency.png", Mode::Albedo,
-     "Textures/BigPuddle/low1_blood puddles_Normal fixed.png", 2, 2, 2, 2, 1, 0, 0.9f},
-    {"trail", Library::DecalLarge, kRealBlood, "Textures/Trails/blood_trails_2_AlbedoTransparency.tga", Mode::Albedo,
-     "Textures/Trails/blood_trails_2_Normal.tga", 1, 4, 1, 4, 1, 0, 0.9f},
-    // Splatter, prints, drips (Real Blood).
-    {"splat_medium", Library::DecalSmall, kRealBlood, "Textures/Puddles/medium/Puddle_medium_size_1_AlbedoTransparency.tga", Mode::Albedo,
-     "Textures/Puddles/medium/Puddle_medium_size_1_Normal fixed.tga", 2, 2, 2, 2, 1, 0, 0.9f},
-    {"splat_small", Library::DecalSmall, kRealBlood, "Textures/SmallPuddles/Puddle_small_size_AlbedoTransparency.tga", Mode::Albedo,
-     "Textures/SmallPuddles/Puddle_small_size_Normal fixed.tga", 2, 2, 2, 2, 1, 0, 0.9f},
-    {"trail_thin", Library::DecalSmall, kRealBlood, "Textures/Trails/blood_trails_1_AlbedoTransparency.tga", Mode::Albedo,
-     "Textures/Trails/blood_trails_1_Normal.tga", 1, 4, 1, 4, 1, 0, 0.9f},
+    // Prints (Real Blood).
     {"footprint", Library::DecalSmall, kRealBlood, "Textures/Decals/FootPrint Albedo.tga", Mode::Albedo, "Textures/Decals/FootPrint Normal.tga",
      4, 2, 4, 2, 1, 0, 0.8f},
-    {"handprint", Library::DecalSmall, kRealBlood, "Textures/Handprints/handprint_AlbedoTransparency.tga", Mode::Albedo,
-     "Textures/Handprints/handprint_Normal fixed.tga", 2, 2, 2, 2, 1, 0, 0.8f},
-    {"drips", Library::DecalSmall, kRealBlood, "Textures/Damage/decal_meash_decal_AlbedoTransparency (2).tga", Mode::Albedo,
-     "Textures/Damage/decal_meash_decal_Normal (1).tga", 4, 4, 4, 4, 1, 0, 0.9f},
     // Wall drips running down: 8 x 4 reveal flipbooks, the shape in the red channel.
     {"leak1", Library::DecalSmall, kRealBlood, "Textures/Leaks/Blood_drop_1-1.png", Mode::MaskR, "Textures/Leaks/Blood_drop_1-1 normal.png", 8, 4, 8, 4,
      1, 0, 0.92f},
@@ -219,8 +205,6 @@ const Source kSources[] = {
     {"hole_mud", Library::DecalSmall, kProFx, "Decals/Textures/mud 1/|Albedo", Mode::Albedo, "Decals/Textures/mud 1/|Normal", 2, 2, 2, 2, 1, 0, 0.35f},
     {"hole_sand", Library::DecalSmall, kProFx, "Decals/Textures/sand/|Albedo", Mode::Albedo, "Decals/Textures/sand/|Normal", 2, 2, 2, 2, 1, 0, 0.15f},
     {"hole_tile", Library::DecalSmall, kProFx, "Decals/Textures/tile/|Albedo", Mode::Albedo, "Decals/Textures/tile/|Normal", 2, 2, 2, 2, 1, 0, 0.7f},
-    {"hole_skin", Library::DecalSmall, kProFx, "Decals/Textures/skin/BODY_DECAL_LOW_BODY_DECAL_AlbedoTransparency.tga", Mode::Albedo,
-     "Decals/Textures/skin/BODY_DECAL_LOW_BODY_DECAL_Normal.tga", 2, 2, 2, 2, 1, 0, 0.8f},
     // Blood particles (Real Blood "Common"): white shapes, eroded and tinted at runtime.
     {"blood_hit", Library::Sprite, kRealBlood, "Textures/Common/Sheets/Blood_1-2.png", Mode::MaskR, "Textures/Common/Sheets/Blood_1-2_n.png", 4, 4, 4, 4,
      1, 0, 0.95f},
@@ -228,14 +212,8 @@ const Source kSources[] = {
      8, 8, 4, 4, 4, 16, 0.95f},
     {"blood_jet", Library::Sprite, kRealBlood, "Textures/Common/Sheets/blood_jet_1.png", Mode::MaskR, "Textures/Common/Sheets/blood_jet_1_n.png", 4, 8, 4,
      4, 2, 16, 0.95f},
-    {"blood_side", Library::Sprite, kRealBlood, "Textures/Common/Sheets/Blood_1-10.png", Mode::MaskR, "Textures/Common/Sheets/Blood_1-10_n.png", 4, 4, 4,
-     4, 1, 0, 0.95f},
-    {"blood_spurt", Library::Sprite, kRealBlood, "Textures/Common/Sheets/blood_from_black_hole1.png", Mode::MaskR,
-     "Textures/Common/Sheets/blood_from_black_hole1_n.png", 4, 4, 4, 4, 1, 0, 0.95f},
     {"blood_fan", Library::Sprite, kRealBlood, "Textures/Common/Sheets/Blood_1-5.png", Mode::MaskR, "Textures/Common/Sheets/Blood_1-5_n.png", 4, 4, 4, 4,
      1, 0, 0.95f},
-    {"blood_blob", Library::Sprite, kRealBlood, "Textures/Common/Particles/Blood6.png", Mode::MaskR, "Textures/Common/Particles/Blood6_n.png", 2, 1, 2, 2,
-     1, 2, 0.95f},
     {"blood_drop", Library::Sprite, kRealBlood, "Textures/Common/Particles/blood particle 2.png", Mode::MaskR,
      "Textures/Common/Particles/blood particle 2 normal.png", 1, 1, 1, 1, 1, 0, 0.95f},
     {"blood_cloud", Library::Sprite, kRealBlood, "Textures/Common/ParticleCloudWhite.png", Mode::MaskA, nullptr, 1, 1, 1, 1, 1, 0, 0.3f},
