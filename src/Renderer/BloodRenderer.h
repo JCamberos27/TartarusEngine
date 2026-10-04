@@ -52,6 +52,15 @@ public:
     int DrawSprays(const glm::mat4& view, const glm::mat4& proj,
                    const std::function<void(Shader&)>& applyFrameState);
 
+    // Culling (docs/BLOOD_FX.md, v2 performance): nothing past MaxDistance metres, nor smaller on screen than MinScreen
+    // (its bounding radius over its distance - ~2 px at 1080p and a 70 degree view).
+    float SprayMaxDistance = 80.0f, DecalMaxDistance = 120.0f, MinScreen = 0.0025f;
+    // Bounding sphere (centre, radius) -> drawn at all from `eye`.
+    bool WorthDrawing(const glm::vec3& centre, float radius, const glm::vec3& eye, float maxDistance) const {
+        const float d = glm::length(centre - eye);
+        return d - radius <= maxDistance && (d <= radius || radius / d >= MinScreen);
+    }
+    int CulledSprays() const { return m_CulledSprays; }
     // The look (linear albedo, roughness), shared with the decals so a pool matches its drops.
     glm::vec3 FluidAlbedo{0.2f, 0.007f, 0.005f};
     float FluidRoughness = 0.1f;
@@ -66,6 +75,11 @@ public:
         float Dry = 0.0f;          // 0 fresh and glossy .. 1 dried dark and matte
         float Opacity = 1.0f;
         float NormalStrength = 0.6f;
+        // A Knife library decal instead of a set (docs/BLOOD_FX.md, v2): KnifeFxLibrary id, its cell (and the
+        // next, blended in - a flipbook such as the wall drips), and for a cell's albedo how the blood dries.
+        int Knife = -1;
+        int Cell = 0, NextCell = 0;
+        float CellBlend = 0.0f;
     };
     void AddDecal(const Decal& d);
     int QueuedDecals() const { return (int)m_Decals.size(); }
@@ -108,6 +122,7 @@ private:
     unsigned int m_EmptyVao = 0;
     std::unique_ptr<Shader> m_Program;
     std::vector<Spray> m_Sprays;
+    int m_CulledSprays = 0;
 
     bool BuildAtlas();
     unsigned int m_AtlasNorm = 0, m_AtlasMask = 0, m_Lookup = 0;

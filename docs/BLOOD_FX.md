@@ -291,7 +291,219 @@ Live blood itself costs about 0.05 ms per frame for the sprays. Decals and splat
 cover pixels. Both runs are below `docs/PERFORMANCE.md`'s 258 fps. That gap is environmental: main
 itself measures 184 here, and this worktree lacks the git-ignored Quantum textures.
 
-## Next steps
+## v2: the Knife packs (branch `blood-v2-knife`)
+
+The v2 pass brings the blood to AAA using two Knife Entertainment Asset Store packs the user owns:
+
+- **Real Blood**: puddles, trails, prints, wall drips ("Leaks"), wound decals, blood particle sheets,
+  screen damage, and the exploded head / brain parts.
+- **PRO Effects FPS Muzzle Flashes & Impacts**: bullet holes for 13 surfaces, impact debris and smoke,
+  and muzzle flashes.
+
+These are blended with five improvements: real exit wounds, spray speed by energy, headshots that read
+instantly, performance, and tooling. The approved plan has landmarks A to F.
+
+| Landmark | What | State |
+|---|---|---|
+| A | `--import-knife-fx`, the texture-array library, flipbook sprite renderer; PBR decal kind | **done** (first v2 PR) |
+| B | Energy model, real exit wounds, pellet puffs, instant impact puff and mist, headshot mist | **done** (first v2 PR); Knife wound decals on bodies moved to C |
+| C | PBR pools, crawl/drag trails, footprints, handprints, wall drips (Leaks), screen blood, body wound decals | pools, drips, **footprints**, **screen blood** done; trails, handprints, wound decals todo |
+| D | Headshot gore: hide the head, exploded-head stump, brain chunks; `Gore` setting; gore audio | **done** (hood-collar gap below) |
+| E | Surface types, per-surface PRO bullet holes and impacts, muzzle flash and smoke | **done** (water splash todo) |
+| F | Distance / screen-size cull, stain dedupe, perf A/B, DevPanel "Blood Lab" | **done** (spray triangle LOD not done) |
+
+### Restoring the Knife data (not in git)
+
+The packs are extracted as plain files into `C:\Users\jacob\OneDrive\Desktop\ASSETS TO IMPORT\`, one
+folder each: "Knife Real Blood" and "Knife PRO Effects FPS Muzzle Flashes Impacts". Then run:
+
+```
+TartarusEngine.exe --project <project dir> --import-knife-fx "C:\Users\jacob\OneDrive\Desktop\ASSETS TO IMPORT"
+```
+
+The import takes about 5 s. It writes 131 MB into `project/assets/Effects/Knife/`:
+
+| File | Layer size | What |
+|---|---|---|
+| `decals_large.kfx` | 2048 | pools and trails |
+| `decals_small.kfx` | 1024 | splatter, prints, drips, leaks, 13 bullet-hole sets |
+| `sprites.kfx` | 1024 | blood sheets, mist, smoke, debris, muzzle flashes |
+
+Without these files the game logs one warning, and the effects that need them are skipped.
+
+### How v2 works
+
+- **Import** (`src/Assets/KnifeFxImport.*`).
+  - The curated catalogue `kSources` names what to take from each pack, with its grid and smoothness.
+  - Each entry becomes one array layer. Its grid cells are re-packed (flipbooks are thinned to 16 frames
+    by a stride), area-filtered, mip-mapped, and compressed to BC3 colour plus BC5 normals.
+  - Two kinds of colour data:
+    - **Mask** entries (blood sheets, leaks, flashes) are white, with the shape in alpha.
+    - **Albedo** entries (puddles, holes, debris) keep their colour, averaged by coverage.
+  - The channel-packed smoke sheets are unpacked first; they hold 64 frames across r, g, b and a.
+  - Empty trailing cells are trimmed, which sets the frame count.
+- **GPU library** (`src/Renderer/KnifeFxLibrary.*`). Loads the `.kfx` files into texture arrays.
+  `Find(name)` returns an id, and `At(id)` returns the layer, grid and frame count.
+- **Sprites** (`src/Game/Combat/FxSprites.*`, `src/Renderer/FxSpriteRenderer.*`,
+  `shaders/FxSprite.*.glsl`).
+  - A pooled CPU sim with gravity, drag, a one-plane bounce, size, alpha, erosion over life, and the
+    flipbook frame.
+  - Everything draws in one sorted, premultiplied instanced draw after the particles, plus one in the
+    view-model pass.
+  - Modes:
+    - **Blood**: Knife's erosion threshold, glossy, normal-mapped, back-lit.
+    - **Lit**: smoke and dust get half-Lambert lighting; debris gets PBR.
+    - **Additive**: written with zero alpha, so it adds light.
+  - Soft against the resolved scene depth.
+  - Units 17 (depth), 21 and 22 (arrays); SSBO binding 10.
+- **Hits** (`BloodFx`).
+  - **Energy.** `Energy(hit)` is about 1 for a rifle at combat range. It scales with damage, a
+    shotgun's whole load, distance and headshots.
+    - It drives spray size, and a horizontal stretch along the line of flight (`PrefabToWorld`'s
+      `stretch`): faster, with the same baked fall.
+    - Below `kExitEnergy` the round stays in. The spray is then a smaller spurt back out of the entry,
+      and nothing exits the far side.
+  - **Exit wounds.** `FindExit` casts a body-part ray back from 0.7 m past the entry, looking past
+    anyone standing behind. The exit spray and the exit splat start where the body really ends.
+  - **Puffs.** `SpawnPuffs` fires the frame the round goes in:
+    - the entry burst (`blood_hit`) and mist (`blood_cloud`);
+    - with an exit: the burst (`blood_burst`), the jet (`blood_jet`) and more mist;
+    - without one: the fan back out (`blood_fan`);
+    - velocity-stretched droplets (`blood_drop`);
+    - headshots get denser mist and twice the droplets;
+    - a shotgun's other pellets each puff, without another spray.
+- **Knife decals** (`BloodRenderer::Decal::Knife`, `BloodDecal.frag.glsl`).
+  - A decal can name a Knife library entry and a cell instead of a KriptoFX set.
+  - The arrays are bound on units 21-24: the large library on 21/22, the small one on 23/24.
+  - **Mask** entries take the film's fresh or dried colour. **Albedo** entries are decoded from sRGB.
+  - Entries with smoothness over 0.85 are blood and dry darker. The rest, the bullet holes, keep their
+    own material and fully cover what's under them.
+  - Pools spread out from the middle of the cell, because the cutout eats the outer coverage first.
+  - A flipbook decal (the Leaks drips) steps through its cells from landing, then holds the last one.
+  - Users:
+    - **Corpse pools.** `pool_smooth` / `pool_big`, falling back to KriptoFX `attached` when the library
+      is missing.
+    - **Wall drips.** `SpawnWallDrips` puts 1 to 3 Leaks under each wall spatter, running down over
+      2 to 5 s.
+- **Footprints** (`BloodFx::OnFootstep`). `FoleyAudio::SetStepListener` reports every footfall, heard or not:
+  - the player's comes from the body's foot contacts, or from the distance stepper;
+  - the soldiers' comes from `NpcWalk` / `NpcFeet`.
+
+  A step into a fresh floor stain (under 60 s old, inside its middle) wets that walker's soles. The next 6
+  steps leave `footprint` decals:
+  - offset left or right by 11 cm, toe forward;
+  - each fainter than the last;
+  - one sole pattern per walker.
+- **Screen blood** (`Combat/ScreenBlood`, `Renderer/ScreenBloodOverlay`, `ScreenBlood.*.glsl`).
+  - When the player is hurt, Real Blood's `blood_side` flipbook lands on the screen edge the round came from
+    (`DamageIndicatorAngle`).
+  - It splashes in over 0.12 s, holds wet with a glint from its normal map, and slides down slightly.
+  - It then thins out through the sheet's breaking frames.
+  - A hard hit or low health adds splats.
+  - It draws under the HUD. Blood Settings: `Screen Blood`.
+- **Headshot gore** (`Combat/HeadGore`).
+  - **Trigger:** a head kill at energy >= 1.3, with Gore set to Full.
+  - **Head hidden.** A `GoreHideTag` bone mask hides the head in every view: the body from the `head` bone
+    up, clothing from `neck_01` up. `SceneRenderer` ORs it into the draw's bone mask.
+  - **Stump.** Real Blood's burst stump follows the neck, upright along neck→head, facing the body root's
+    forward.
+  - **Brain chunks.** 2–3 chunks tumble out with a sphere-swept integrator: a wet bounce, then they stick.
+  - **Burst.** Spurt, blobs and droplets.
+  - **Sound.** `snd.impact.gore` plays on top.
+  - **Meshes.** Baked by `tools/knife_gore_bake.py`, which runs Blender and writes git-ignored
+    `assets/Effects/Knife/Gore`:
+    - the head frozen at its burst frame 101, pivoted on frame 1's neck base;
+    - brain parts 1–4, each recentred;
+    - texture sets the model loader matches by name.
+  - **Known gap:** hoodie hoods are skinned to the chest bones, so a collar stays standing around the stump.
+    Fixing it needs per-vertex hiding, like the first-person collar vertices.
+- **Gore and flesh audio.** From AE Master (the Unity project at `OneDrive\Desktop\AE Master`):
+  - ColdBore's `FleshImpact_01-06` join `snd.impact.flesh`, making 13 variants.
+  - The Free Pack's "Bloody punch" becomes `snd.impact.gore` (3 variants, pitch within 1.5 semitones).
+  - `tools/audio/extract.py` copies the source takes to `C:\tb\audio-src\ae`, and `adsp` resolves `ae/...`
+    sources.
+  - Rebuild with `build_impacts.py`, then check with `check_audio.py` (PASS).
+  - ColdBore also holds real impacts for 15 surfaces (brick, drywall, steel, water...), unused so far.
+- **World impacts** (`Combat/ImpactFx`).
+  - **Surface.** Read from the collider material, tag and name, using `ImpactFx::kSurfaceTable`. Words are
+    plain substrings: "pane" was dropped because it matched "Panel".
+  - **Holes on static entities** draw as PRO Effects' surface decal (4 variants) in the blood decal pass.
+    `BulletHoleList` carries the decal id; moving props keep the procedural hole.
+  - **Burst:** a lit dust puff and a fast streak in the surface's colour, plus chips (concrete, rock, wood,
+    glass).
+  - **Metal** adds sparks and a flash.
+- **Muzzle flash** (`CombatFx::MuzzleSpritesFor`, FX/HUD Settings `Muzzle Style`).
+  - Style 1, the default, layers PRO Effects' Shoot FX over the Tactical Shooter flame:
+    - the star (rifle) or burst (shotgun);
+    - side jets;
+    - a glow;
+    - the gas puff;
+    - a thin afterfire wisp.
+  - The player's own copy follows the muzzle (`FxSprites::Follow`) in the view-model pass, at 0.5x the size
+    and 0.4x the light.
+  - Style 0 is the flame alone.
+- **Performance.**
+  - Culling (`BloodRenderer::WorthDrawing`): sprays past 80 m, decals past 120 m, sprites past 150 m, and
+    anything under about 2 px.
+  - Stain dedupe (`BloodFx::DuplicateOf`): a fresh stain with the same image, size and facing merges.
+  - **A/B** (2026-10-04), Sandbox at 1080p, `origin/main` vs this branch:
+
+    | | play | play-max | GPU Scene Draw (play) |
+    |---|---|---|---|
+    | main | 147.9 fps | 189.4 fps | 2.61 ms |
+    | v2 | 146.9 fps | 187.6 fps | 2.67 ms |
+
+    That is within noise.
+- **Blood Lab** (F7 dev panel → "Blood Lab", `Combat/BloodLab`).
+  - Fire at the crosshair: rifle, 9-pellet shotgun, headshot kill, graze, surface impact, pool, wall
+    spatter with drips, hurt me.
+  - Live Blood Settings.
+  - Live counts and GPU ms.
+  - Clear all.
+- **Settings.** `BloodSettingsComponent` gains:
+  - `EnergyScale`
+  - `ImpactPuffs`
+  - `Gore`: 0 is off, 1 is mild (no headshot gore), 2 is full
+
+### v2 testing
+
+- **`--npc-test blood`**: 25/25 checks, adding the exit, puff and headshot-gore checks and a surface step.
+  - The surface step shoots seven tagged panels on the BloodTest scene's west wall (metal, wood, brick, glass,
+    mud, tile, concrete).
+  - It saves `surface_*_burst` and `surface_*_hole` screenshots.
+- **`--weapon-test`**: 81/81. It now saves the muzzle flash's first frames (`muzzle_*`).
+- **More unit tests**: `Blood::KnifeDecals`, `Blood::Footprints`, `Blood::ScreenBlood`, `Blood::HeadGore`,
+  `ImpactFx::Surfaces`, `Blood::Perf`, `Blood::LabActions`.
+
+- **Unit tests**: `Blood::Energy`, `Blood::ExitWound`, `Blood::Puffs`, `FxSprites::Sim`,
+  `KnifeFx::Library`, plus the BloodSettings round-trip.
+- **`--npc-test blood`**: 12/12 checks pass. Its smoke status reads FAIL in this worktree only because
+  of the missing git-ignored Quantum textures.
+- **Tuning so far.** Flipbook cells start small inside the cell, so the sprites are sized large: the
+  entry sheet is 0.45 m x sqrt(energy). The mist is a dark red haze (0.17, 0.014, 0.012) at 0.4 to 0.6
+  alpha. Brighter read as pink fog in daylight.
+
+### v2 next steps
+
+1. **Hands-on in the Blood Lab.**
+   - Mist, puff and muzzle sizes.
+   - The stump's facing (it uses the body root's +Z; flip it if it looks backward).
+   - Dust brightness in shade.
+2. **The remaining C items:** crawl and drag trails, handprints, Knife wound decals on bodies.
+3. **Headshot gore:** hide the hood (per-vertex mask).
+4. **Water impacts:** the PRO water splash sheet isn't imported.
+5. **Spray LOD by triangle count.**
+
+### Restoring v2's data in the Work clone
+
+```
+TartarusEngine.exe --project project --import-knife-fx "C:\Users\jacob\OneDrive\Desktop\ASSETS TO IMPORT"
+"C:\Program Files\Blender Foundation\Blender 5.1\blender.exe" -b --factory-startup -P tools/knife_gore_bake.py -- "C:\Users\jacob\OneDrive\Desktop\ASSETS TO IMPORT" project/assets/Effects/Knife/Gore
+```
+
+The gore and flesh sounds are committed, so they need no step.
+
+## Next steps (v1)
 
 1. **Tuning in the user's real scenes** (hands-on). Check spray sizes against "bloody, not over the top"
    (`BloodFx::Choose`), and how readable blood is on dark gear.

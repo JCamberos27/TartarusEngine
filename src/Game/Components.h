@@ -336,6 +336,12 @@ struct HiddenFromOwnerTag {};
 // floating beside the hand. SleeveBones marks the arm's palette bones (the upper arms and everything under
 // them); with SleevesInViewModel set, the renderer draws the piece twice: the world pass without the
 // vertices weighted mostly to them, the view-model pass with only those. The seam is at the shoulder.
+// Headshot gore (Combat/HeadGore, docs/BLOOD_FX.md): this skinned piece no longer draws the vertices weighted mostly
+// to these palette bones (the head and everything under it) - in every view. Runtime only.
+struct GoreHideTag {
+    std::uint32_t Bones[16] = {}; // bit per palette bone
+};
+
 struct PlayerBodyTag {
     // Not drawn in the camera's world pass at all (the head, and what an outfit hangs on it): the camera is
     // inside it. Shadows, the Scene view and every other view still draw it.
@@ -1197,6 +1203,7 @@ struct FxHudSettingsComponent {
     float PlayerFlashScale = 0.35f;         // player's flash light scale relative to soldier's; Muzzle Flash group
     float FlameGlow = 150.0f;               // flame peak emission intensity (red channel); Muzzle Flash group
     float FlameScale = 1.75f;               // flame tongue length/width scale vs. tactical shooter pack; Muzzle Flash group
+    int MuzzleStyle = 1;                    // 0 the Tactical Shooter flame alone, 1 + PRO Effects' flash, jets and smoke; Muzzle Flash group
 
     // Laser beam parameters (src/Renderer/WeaponFxRenderer.cpp)
     float BeamRange = 150.0f;               // metres drawn; past that it's gone in the haze; Laser Beam group
@@ -1221,6 +1228,10 @@ struct BloodSettingsComponent {
     bool Pools = true;            // a pool spreads under each corpse
     bool BodySplats = true;       // blood on bodies, ragdolls and props
     bool GearSpatter = true;      // point-blank blood on the player's gun and hands, and their own wounds
+    float EnergyScale = 1.0f;     // x every hit's energy: spray reach and speed, mist, whether rounds exit
+    bool ImpactPuffs = true;      // the flipbook burst, mist and droplets the frame a round goes in (Knife packs)
+    int Gore = 2;                 // 0 off (no sprays or stains), 1 mild (no headshot gore), 2 full
+    bool ScreenBlood = true;      // blood splashed on the view's edge when the player is hurt
 };
 // ---- end lane P ----
 // ---- lane R ----

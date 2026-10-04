@@ -27,6 +27,7 @@
 #include "Camera.h"    // MakePerspective — the view-model sub-pass's one projection switch
 #include "ParticleRenderer.h"
 #include "BloodRenderer.h"
+#include "FxSpriteRenderer.h"
 #include "GLStateCache.h"
 #include "gl.h"
 #include "Core/Profiler.h"
@@ -447,6 +448,10 @@ void SceneRenderer::RenderScene(World& world, const RenderFrameContext& ctx,
             for (int w = 0; w < 16; ++w) cameraMask[w] |= bodyTag->SleeveBones[w];
             anyCameraMask = true;
         }
+        if (const auto* gore = world.Registry.try_get<GoreHideTag>(entity)) { // a head blown off: gone in every view
+            for (int w = 0; w < 16; ++w) cameraMask[w] |= gore->Bones[w];
+            anyCameraMask = true;
+        }
         const float nearHideWidth = cameraBody ? bodyTag->NearHideWidth : 0.0f;
         const unsigned collarVerts = cameraBody && bodyTag->CollarVerts ? bodyTag->CollarVerts->Id() : 0u;
         const auto* outfitHide = world.Registry.try_get<OutfitHideTag>(entity);
@@ -741,6 +746,9 @@ void SceneRenderer::RenderScene(World& world, const RenderFrameContext& ctx,
     // #177 - particles last: depth-tested against everything above, blended, no depth write.
     // The player's own muzzle flame waits for the view-model sub-pass.
     if (Particles()->Draw(world, ctx, viewModelPass) > 0) ++localStats.DrawCalls;
+    // The Knife flipbook particles (docs/BLOOD_FX.md): blood mist, impact dust and debris, muzzle smoke.
+    localStats.DrawCalls += FxSpriteRenderer::Get().Draw(ctx.View, ctx.Proj, fs.vp, ctx.TxHdr, false,
+                                                         [&](Shader& p) { ApplyFrameState(p, fs); });
     if (ctx.WorldOverlay) {
         ctx.WorldOverlay();
         GLStateCache::Invalidate();
@@ -848,6 +856,8 @@ void SceneRenderer::RenderScene(World& world, const RenderFrameContext& ctx,
         // The player's own muzzle flame, at the gun's projection, behind or in front of the arms and gun
         // as it really is.
         if (Particles()->Draw(world, vmCtx, true, true) > 0) ++localStats.DrawCalls;
+        localStats.DrawCalls += FxSpriteRenderer::Get().Draw(vmCtx.View, vmCtx.Proj, vmFs.vp, nullptr, true,
+                                                             [&](Shader& p) { ApplyFrameState(p, vmFs); });
 
         glDisable(0x864F /*GL_DEPTH_CLAMP*/);
         activeFs = &fs; // nothing below reads it; leave the selector on the caller's state

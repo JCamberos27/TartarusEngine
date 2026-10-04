@@ -489,6 +489,42 @@
        "pitch": 1.5
       }
      ]
+    },
+    {
+     "src": "ae/ColdBore Flesh/FleshImpact_01",
+     "variants": [
+      {}
+     ]
+    },
+    {
+     "src": "ae/ColdBore Flesh/FleshImpact_02",
+     "variants": [
+      {}
+     ]
+    },
+    {
+     "src": "ae/ColdBore Flesh/FleshImpact_03",
+     "variants": [
+      {}
+     ]
+    },
+    {
+     "src": "ae/ColdBore Flesh/FleshImpact_04",
+     "variants": [
+      {}
+     ]
+    },
+    {
+     "src": "ae/ColdBore Flesh/FleshImpact_05",
+     "variants": [
+      {}
+     ]
+    },
+    {
+     "src": "ae/ColdBore Flesh/FleshImpact_06",
+     "variants": [
+      {}
+     ]
     }
    ]
   },
@@ -553,6 +589,23 @@
       {
        "pitch": 2.0,
        "lp": 3000
+      }
+     ]
+    }
+   ]
+  },
+  "gore": {
+   "sources": [
+    {
+     "src": "ae/Free Pack/Bloody punch",
+     "variants": [
+      {},
+      {
+       "pitch": -1.5
+      },
+      {
+       "pitch": 1.0,
+       "hp": 120
       }
      ]
     }

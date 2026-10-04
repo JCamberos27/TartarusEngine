@@ -77,6 +77,7 @@ void DevPanel::Draw(const Context& c) {
     ImGui::SameLine();
     if (ImGui::SmallButton("1x")) Time::SetTimeScale(1.0f);
     ImGui::Checkbox("AI debug overlay (F9)", &AiOverlay);
+    if (c.BloodLab) ImGui::Checkbox("Blood Lab", c.BloodLab);
     ImGui::TextDisabled("F7 panel   F8 god mode   F9 AI overlay");
     ImGui::End();
 }
