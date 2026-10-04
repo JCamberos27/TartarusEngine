@@ -27,6 +27,8 @@ public:
         float DecalLifetime = 300.0f; // seconds a stain stays before it shrinks away
         float DrySeconds = 90.0f;     // fresh and glossy to dried dark and matte
         bool Pools = true;            // a pool spreads under each corpse
+        bool BodySplats = true;       // blood on bodies, ragdolls and props
+        bool GearSpatter = true;      // the player's gun and hands, and their own wounds
     };
     Settings Config;
 
@@ -39,6 +41,8 @@ public:
         float Damage = 0.0f;
         bool Killed = false, Head = false, Corpse = false, Player = false;
         int Pellets = 1;
+        glm::vec3 Origin{0.0f};  // the shooter's muzzle
+        bool ByPlayer = false;   // the player fired: at point blank it comes back onto the gun and hands
     };
 
     // The world ray the spray's obstacle test uses: true and the hit point / normal when something
@@ -54,6 +58,34 @@ public:
     // Where a body is now (its pelvis), for the pool under a corpse; false once it's gone. Set by the host.
     using BodyFn = std::function<bool(unsigned entity, glm::vec3& centre)>;
     void SetBodyLookup(BodyFn fn) { m_Body = std::move(fn); }
+
+    // --- splats: blood on bodies, guns and props, pinned in their meshes' bind-pose space ---
+    // Where blood on `entity` near `point` goes: every mesh that draws that body (a soldier's driver and each
+    // clothing piece; a prop itself), each with its own world -> bind-pose transform through the hit part's bone
+    // as posed now - pieces needn't share a bind pose. `Group` is the body (the cap and lifetime go by it).
+    // False: nothing to bleed on.
+    struct SplatSpace {
+        unsigned Group = 0xFFFFFFFFu;
+        std::vector<std::pair<unsigned, glm::mat4>> Members; // drawing entity, world -> its bind space
+    };
+    using SplatSpaceFn = std::function<bool(unsigned entity, int part, bool corpse, const glm::vec3& point, SplatSpace& out)>;
+    void SetSplatSpace(SplatSpaceFn fn) { m_SplatSpace = std::move(fn); }
+    // Whether `group` (a body) is still there; false once it's gone (its splats go with it). `entities` is unused.
+    using MembersFn = std::function<bool(unsigned group, std::vector<unsigned>& entities)>;
+    void SetSplatMembers(MembersFn fn) { m_Members = std::move(fn); }
+    // A ray against the bodies of soldiers (hitboxes / ragdoll parts): who's caught in a spray. Defaults to
+    // PhysicsWorld::RaycastBodyParts.
+    using BodyRayFn = std::function<bool(const glm::vec3& origin, const glm::vec3& dir, float maxDistance, unsigned& entity, int& part,
+                                         glm::vec3& point)>;
+    void SetBodyRay(BodyRayFn fn) { m_BodyRay = std::move(fn); }
+    // A ray that hits only loose props (simulated bodies with a mesh): the host's. None set: props aren't spattered.
+    using PropRayFn = std::function<bool(const glm::vec3& origin, const glm::vec3& dir, float maxDistance, glm::vec3& point,
+                                         glm::vec3& normal, unsigned& entity)>;
+    void SetPropRay(PropRayFn fn) { m_PropRay = std::move(fn); }
+    // Points on the player's gun and hands as drawn now (world), with the way each faces; returns how many.
+    // Back-spatter and the player's own bleeding land there. None set: the player's gear stays clean.
+    using GearFn = std::function<int(glm::vec3* points, glm::vec3* normals, int max)>;
+    void SetPlayerGear(GearFn fn) { m_Gear = std::move(fn); }
 
     void OnFleshHit(const Hit& hit);
     void Update(float dt);
@@ -83,6 +115,16 @@ public:
         float Opacity = 1.0f;
     };
     const std::vector<Decal>& Decals() const { return m_Decals; }
+    struct Splat {
+        unsigned Group = 0xFFFFFFFFu;
+        unsigned Member = 0xFFFFFFFFu; // the entity that draws it (its bind space)
+        glm::vec3 Center{0.0f}, Normal{0, 1, 0}, Tangent{1, 0, 0}; // bind space
+        float Radius = 0.1f, Depth = 0.1f;                         // bind units
+        int Set = -1;
+        float Age = 0.0f, Grow = 1.0f, DrySeconds = 120.0f, Opacity = 1.0f;
+    };
+    const std::vector<Splat>& Splats() const { return m_Splats; }
+    int SplatsSpawned() const { return m_SplatHits; }
     int DecalsSpawned() const { return m_DecalsSpawned; }
     int PoolsSpawned() const { return m_PoolsSpawned; }
     // The mask cutout a stain shows now: BFX_ShaderProperies' reveal, held through its life, then the
@@ -105,7 +147,7 @@ public:
     // sims' gravity is baked toward -Y.
     static glm::mat4 PrefabToWorld(const glm::vec3& exitPoint, const glm::vec3& dir, float size, float yawJitterRad,
                                    const glm::vec3& prefabAxis = glm::vec3(1.0f, 0.0f, 0.0f));
-    // Which way a prefab throws its blood, in its own frame: where its sims' fluid ends up, flattened
+    // Which way a prefab throws its blood, in its own frame: where its sims' fluid is heading early on, flattened
     // (+X when the sims aren't loaded or it's a burst with no direction).
     static glm::vec3 PrefabAxis(const BloodPresetDef& preset, const std::function<const BloodFxImport::VatFrame*(const char* sim, glm::vec3& origin)>& lastFrame);
 
@@ -119,12 +161,24 @@ private:
     Decal* AddDecal(const char* set, const glm::vec3& centre, const glm::vec3& up, const glm::vec3& along, const glm::vec3& extent,
                     float delay);
     glm::vec3 RandomTangent(const glm::vec3& n);
+    // A splat on `entity` at world `point`, facing world `normal`, `radius` / `depth` in metres.
+    void AddSplat(unsigned entity, int part, bool corpse, const glm::vec3& point, const glm::vec3& normal, const glm::vec3& along,
+                  const char* set, float radius, float depth, float delay, float grow);
     void EnsureHooks();
     float Random01();
 
     RayFn m_Ray;
     SimFn m_SimLookup, m_SetLookup;
     BodyFn m_Body;
+    SplatSpaceFn m_SplatSpace;
+    MembersFn m_Members;
+    BodyRayFn m_BodyRay;
+    PropRayFn m_PropRay;
+    GearFn m_Gear;
+    void SpatterGear(int drops, float sizeScale, float delay);
+    std::vector<Splat> m_Splats;
+    int m_SplatsSpawned = 0;
+    int m_SplatHits = 0; // splat placements (one per hit, however many meshes it lands on)
     std::vector<Spray> m_Sprays;
     std::vector<Decal> m_Decals;
     int m_DecalsSpawned = 0, m_PoolsSpawned = 0;

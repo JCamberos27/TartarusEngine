@@ -875,6 +875,126 @@ int main(int argc, char** argv) {
             }
             return false;
         });
+        // Blood on a soldier is pinned to the bone of the part it struck, in the bind pose every one of his pieces
+        // shares (the driver's); on a loose prop, to its mesh.
+        // A mesh's world -> bind transform through its bone nearest `point` (as posed now), or its own for a rigid
+        // one; false when its nearest bone is further than `reach` (the blood isn't on that piece).
+        auto meshSpace = [&](entt::entity e, const glm::vec3& point, float reach, glm::mat4& worldToBind) {
+            const auto* r = world.Registry.valid(e) ? world.Registry.try_get<RenderableComponent>(e) : nullptr;
+            if (!r || !r->ModelRef) return false;
+            const Model& m = *r->ModelRef;
+            const glm::mat4 w = world.GetCachedWorldTransform(e);
+            if (!m.HasBones()) { worldToBind = glm::inverse(w); return true; }
+            int best = -1;
+            float bestD = reach;
+            for (int i = 0; i < m.NodeCount(); ++i) {
+                const int b = m.BoneId(m.NodeName(i));
+                glm::mat4 node;
+                if (b < 0 || !m.NodeTransformAt(i, node)) continue;
+                if (const float d = glm::length(glm::vec3(w * node[3]) - point); d < bestD) { bestD = d; best = b; }
+            }
+            if (best < 0) return false;
+            worldToBind = glm::inverse(w * m.FinalBoneMatrix(best));
+            return true;
+        };
+        bloodFx.SetSplatSpace([&](unsigned entity, int part, bool corpse, const glm::vec3& point, BloodFx::SplatSpace& out) {
+            if (entity == kPlayerEntity) { // the player's own body pieces, arms and gun near the point
+                out.Group = entity;
+                glm::mat4 w2b;
+                // Tight reach: the view-model arms and the world body's copies stand in different places, and blood
+                // meant for the hands the player sees mustn't land on the hidden ones (or the other way round).
+                for (auto e : world.Registry.view<PlayerBodyTag, RenderableComponent>())
+                    if (!world.Registry.all_of<PoseSourceTag>(e) && meshSpace(e, point, 0.16f, w2b))
+                        out.Members.emplace_back((unsigned)entt::to_integral(e), w2b);
+                if (firstPersonPresentation.IsActive())
+                    if (entt::entity g = firstPersonPresentation.WeaponEntity(); g != entt::null && meshSpace(g, point, 0.6f, w2b))
+                        out.Members.emplace_back((unsigned)entt::to_integral(g), w2b);
+                return !out.Members.empty();
+            }
+            for (const auto& n : npcDirector.Npcs()) {
+                if (!n || (unsigned)entt::to_integral(n->Root) != entity) continue;
+                const Model* m = n->Body.DriverModel();
+                const entt::entity driver = n->Body.Driver();
+                if (!m || driver == entt::null || !world.Registry.valid(driver)) return false;
+                std::string bone = part >= 0 ? (corpse ? NpcRagdollDefOf(part).Bone : NpcPartDefOf(part).Bone) : "";
+                if (bone.empty()) { // the nearest part's bone
+                    float best = 1e9f;
+                    for (int i = 0; i < NpcRagdoll::kParts; ++i) {
+                        glm::vec3 at;
+                        if (!n->Body.BoneWorld(world, NpcPartDefOf(i).Bone, at)) continue;
+                        if (const float d = glm::length(at - point); d < best) { best = d; bone = NpcPartDefOf(i).Bone; }
+                    }
+                }
+                if (bone.empty()) return false;
+                // Each mesh through its own copy of that bone, as posed now: pieces don't share a bind pose.
+                out.Group = entity;
+                auto add = [&](entt::entity piece) {
+                    const auto* r = world.Registry.valid(piece) ? world.Registry.try_get<RenderableComponent>(piece) : nullptr;
+                    if (!r || !r->ModelRef) return;
+                    const int b = r->ModelRef->BoneId(bone);
+                    if (b < 0) return;
+                    out.Members.emplace_back((unsigned)entt::to_integral(piece),
+                                             glm::inverse(world.GetCachedWorldTransform(piece) * r->ModelRef->FinalBoneMatrix(b)));
+                };
+                add(driver);
+                for (entt::entity p : n->Body.Pieces())
+                    if (p != driver) add(p);
+                (void)m;
+                return !out.Members.empty();
+            }
+            const entt::entity e = static_cast<entt::entity>(entity);
+            if (!world.Registry.valid(e) || !world.Registry.all_of<RigidbodyComponent, RenderableComponent>(e)) return false;
+            out.Group = entity;
+            out.Members.emplace_back(entity, glm::inverse(world.GetCachedWorldTransform(e)));
+            return true;
+        });
+        bloodFx.SetPlayerGear([&](glm::vec3* points, glm::vec3* normals, int max) {
+            // Along the barrel from the muzzle back, and the hands on it (the view model's world positions).
+            int n = 0;
+            glm::vec3 fpMuzzle, worldMuzzle, bore;
+            if (!firstPersonPresentation.IsActive() || !firstPersonPresentation.MuzzleFrames(fpMuzzle, worldMuzzle, bore)) return 0;
+            const glm::vec3 up(0.0f, 1.0f, 0.0f);
+            const glm::vec3 side = glm::normalize(glm::cross(bore, up));
+            for (float t : {0.08f, 0.2f, 0.35f}) {
+                if (n >= max) break;
+                points[n] = fpMuzzle - bore * t + up * 0.02f;
+                normals[n++] = glm::normalize(up + bore * 0.6f);
+            }
+            for (auto e : world.Registry.view<PlayerBodyTag, RenderableComponent, ViewModelTag>()) { // the arms the player sees
+                const auto& r = world.Registry.get<RenderableComponent>(e);
+                if (!r.ModelRef || !r.ModelRef->HasBones()) continue;
+                for (const char* hand : {"hand_r", "hand_l"}) {
+                    glm::mat4 node;
+                    if (n >= max || !r.ModelRef->NodeTransform(hand, node)) continue;
+                    points[n] = glm::vec3(world.GetCachedWorldTransform(e) * node[3]) + up * 0.03f;
+                    normals[n++] = glm::normalize(up + bore * 0.5f + side * (hand[5] == 'r' ? 0.3f : -0.3f));
+                }
+                break; // one piece carries the hand bones for all
+            }
+            return n;
+        });
+        bloodFx.SetSplatMembers([&](unsigned group, std::vector<unsigned>& out) {
+            if (group == kPlayerEntity) return true;
+            for (const auto& n : npcDirector.Npcs())
+                if (n && (unsigned)entt::to_integral(n->Root) == group) return true;
+            const entt::entity e = static_cast<entt::entity>(group);
+            if (!world.Registry.valid(e) || !world.Registry.all_of<RigidbodyComponent, RenderableComponent>(e)) return false;
+            out.push_back(group);
+            return true;
+        });
+        bloodFx.SetPropRay([&](const glm::vec3& o, const glm::vec3& d, float maxD, glm::vec3& p, glm::vec3& n, unsigned& entity) {
+            const float oo[3] = {o.x, o.y, o.z}, dd[3] = {d.x, d.y, d.z};
+            QueryFilter f;
+            f.HitTriggers = 0;
+            RaycastHit h;
+            if (!PhysicsWorld::RaycastFiltered(oo, dd, maxD, f, h) || !h.Hit) return false;
+            const entt::entity e = static_cast<entt::entity>(h.Entity);
+            if (!world.Registry.valid(e) || !world.Registry.all_of<RigidbodyComponent, RenderableComponent>(e)) return false;
+            p = glm::vec3(h.Point[0], h.Point[1], h.Point[2]);
+            n = glm::vec3(h.Normal[0], h.Normal[1], h.Normal[2]);
+            entity = h.Entity;
+            return true;
+        });
         npcDirector.Fx = &combatFx;
         PlayerVitals playerVitals;  // the player's health in Play
         PlayerHudOverlay playerHud; // health, damage direction, hitmarker, death
@@ -1537,6 +1657,20 @@ int main(int argc, char** argv) {
                 weaponFx.Settings = fx;
             }
             bloodFx.Clear();
+            {   // the scene's blood tuning: the first Blood Settings component, defaults when none
+                BloodSettingsComponent b;
+                if (const auto all = world.Registry.view<BloodSettingsComponent>(); all.begin() != all.end())
+                    b = world.Registry.get<BloodSettingsComponent>(*all.begin());
+                bloodFx.Config.Enabled = b.Enabled;
+                bloodFx.Config.Size = b.Size;
+                bloodFx.Config.MaxSprays = b.MaxSprays;
+                bloodFx.Config.MaxDecals = b.MaxStains;
+                bloodFx.Config.DecalLifetime = b.StainLifetime;
+                bloodFx.Config.DrySeconds = b.DrySeconds;
+                bloodFx.Config.Pools = b.Pools;
+                bloodFx.Config.BodySplats = b.BodySplats;
+                bloodFx.Config.GearSpatter = b.GearSpatter;
+            }
             BloodRenderer::Get().Load(); // once; a missing import just leaves the blood off
             if (entt::entity ctrl = playControllerEntity; ctrl != entt::null) {
                 const auto& fp = world.Registry.get<FirstPersonControllerComponent>(ctrl);
@@ -2884,6 +3018,8 @@ int main(int argc, char** argv) {
                         h.Corpse = f.Corpse;
                         h.Player = f.Entity == kPlayerEntity;
                         h.Pellets = f.Pellets;
+                        h.Origin = f.Origin;
+                        h.ByPlayer = f.ByPlayer;
                         bloodFx.OnFleshHit(h);
                     }
                     if (npcTest) npcTest->After(world, npcDirector, playerVitals, player);
@@ -2921,6 +3057,9 @@ int main(int argc, char** argv) {
                         npcTestBlood.LastSprayClipped = bloodFx.LastSprayClipped();
                         npcTestBlood.DecalsSpawned = bloodFx.DecalsSpawned();
                         npcTestBlood.PoolsSpawned = bloodFx.PoolsSpawned();
+                        npcTestBlood.SplatsSpawned = bloodFx.SplatsSpawned();
+                        npcTestBlood.GearSplats = 0;
+                        for (const BloodFx::Splat& s : bloodFx.Splats()) npcTestBlood.GearSplats += s.Group == kPlayerEntity;
                         for (const Profiler::Entry& e : Profiler::GetLastFrameGpu()) {
                             if (e.Name != "Blood Sprays") continue;
                             npcTestBloodGpuSum += e.Milliseconds;
@@ -4114,7 +4253,7 @@ int main(int argc, char** argv) {
                 {
                     const bool showShapes = EditorSettings::Get().ShowColliders;
                     const bool showDebug  = EditorSettings::Get().PhysicsDebugDrawFlags != 0u || BodyDebug::Enabled();
-                    if ((showShapes || showDebug) && !editor.OverlaysHidden()) {
+                    if ((showShapes || showDebug) && !editor.OverlaysHidden() && !(npcTest && npcTest->WantsCleanViews())) {
                         glEnable(GL_DEPTH_TEST);
                         glDepthMask(GL_FALSE);
                         colliderGizmo.Draw(sceneViewMat, sceneProjMat, world, showShapes);

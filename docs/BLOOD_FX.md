@@ -12,9 +12,9 @@ can pick the work up.
 | Landmark | What | State |
 |---|---|---|
 | L1 | Importer, VAT spray renderer, hit wiring, BloodTest scene, `--npc-test blood`, unit tests | **done**: PR #523 |
-| L2 | Projected world decals: floor splats under sprays, wall/ceiling spatter, corpse pools, drying | **done** (PR after #523) |
-| L3 | Object-space splats on characters, ragdolls, guns (incl. the player's view model), moving props | planned |
-| L4 | Tuning, a `BloodSettingsComponent`, perf pass, final docs | planned |
+| L2 | Projected world decals: floor splats under sprays, wall/ceiling spatter, corpse pools, drying | **done**: PR #523 |
+| L3 | Splats on characters, ragdolls, guns (incl. the player's view model), moving props | **done** (PR after #523) |
+| L4 | `BloodSettingsComponent`, the fluid's shading fixed (normals), perf A/B, final docs | **done** (same PR as L3) |
 
 ## Restoring the data (it is not in git)
 
@@ -58,8 +58,10 @@ Without the data the game logs one warning and plays with no blood.
 - **Output format.** `RGBA16UI` texels, with:
   - xyz: position quantised into *that frame's* bounds, which gives sub-millimetre precision
   - w: octahedral normal, 8+8 bits
-- **Winding.** The fluid's outside winds clockwise in our space. `BloodRenderer` sets `glFrontFace`
-  from the header flag (verified visually in L1).
+- **Winding and normals.** The sims' baked normals point *into* the fluid. The header flag records the
+  corner order against those normals, so the outside winds the other way. `BloodRenderer` sets
+  `glFrontFace` to match, and `BloodVat.vert` negates the normals; without the negation every droplet
+  shades like its own back and reads white-pink.
 
 ### Presets (`src/Game/Combat/BloodFxPresets.*`)
 
@@ -115,8 +117,8 @@ Damage and shotgun pellets scale it. The spray leaves from the exit point (hit +
 - **Shading.** The fragment stage is the engine's own `ModelFragment.glsl`, built with `_SUBSURFACE`, so
   the fluid gets every light the scene has: sun with CSM shadows, clustered point/spot lights, IBL, fog
   and aerial perspective. Its parameters:
-  - albedo (0.32, 0.012, 0.009) linear
-  - roughness 0.07
+  - albedo (0.2, 0.007, 0.005) linear
+  - roughness 0.1
   - back-lit red transmission
   - the instance tint arrives as the vertex colour
 - **GPU cost.** The `--npc-test blood` measurement is 0.05 ms/frame average for one to two live sprays.
@@ -201,25 +203,99 @@ dry over about 90 s (pools 2.5x slower): darker, browner and matte. A stain live
 - **VRAM.** The sims cost 94 MB. 16-bit positions cost 8 B/texel; a 10-bit-per-axis variant would halve
   that, at about 2 mm of jitter. Kept at 16-bit for quality.
 
-## Next step (L3)
+### Splats on bodies, guns and props (L3)
 
-Blood on things that move: characters, ragdolls, guns, physics props.
+**What a splat is.** A splat is a decal box pinned in a mesh's **bind-pose space**, so it moves and
+deforms with the mesh. The shader side:
 
-- **Splat storage.** Splats are stored in each entity's bind-pose / mesh space, so they deform with
-  skinning: up to 24 per entity, in an SSBO at binding 6.
-- **Shading.** `ModelVertex.glsl` passes the pre-skin position and normal. `ModelFragment.glsl` loops
-  over the splats before lighting and blends the albedo, roughness and normal toward blood. It uses the
-  decal atlas.
-- **Placing a splat.** Inverse-skin the hit point with the hit part's bone (`Model::FinalBoneMatrix`,
-  the entity's world transform).
-- **Which hits make splats.**
-  - The entry wound on the victim.
-  - Spatter on nearby soldiers caught in the exit cone.
-  - Point-blank back-spatter onto the player's gun and arms.
-  - The player's own wounds.
+- `ModelVertex.glsl` passes the pre-skin position and normal (`vBindPos` / `vBindNormal`; `BloodVat.vert`
+  writes zeros).
+- `ModelFragment.glsl` (`BloodSplatCover`) loops over the entity's splats before lighting, turning the
+  albedo toward blood (fresh to dried, darker at the core), raising roughness as it dries and dropping
+  metallic. Blood is therefore lit by the real material pipeline.
+- Draws without splats pay one uniform branch (`uBloodSplatCount` 0).
+- The splats live in an SSBO at binding 6. The atlas sits on texture **units 28 and 29**, which
+  `ShaderAsset` now keeps out of the material units: its cap went from 30 to 28.
+- The atlas is read with an explicit LOD from `fwidth(vBindPos)`. The reads happen inside a loop that
+  skips splats per fragment, where implicit derivatives are undefined; the first version read the
+  coarsest mip and painted solid boxes.
+
+**Per piece.** Every mesh that draws a body gets its own copy of each splat, through its own copy of the
+bone, as posed now: `world -> bind = inverse(world(piece) x FinalBoneMatrix(bone))`. That covers the
+driver plus every clothing piece. Pieces don't have to share a bind pose. `BloodFx::SplatSpace` lists
+the members.
+
+- At most 24 splats per mesh.
+- A body's splats go when the body does: `SetSplatMembers` reports whether it is alive.
+- The hit point lies on the hitbox capsule, not the cloth, so splats project 30 cm deep. The facing
+  test, `smoothstep(-0.2, 0.35, dot(bindNormal, splatNormal))`, keeps them on the side that faces the
+  splat.
+
+**What each hit leaves.**
+
+- **On the victim:**
+  - an entry blot (`attached`) that seeps out over 4 s
+  - for the living, the exit's mess out of the back (`blood7` / `attached`) and a run of blood down from
+    the wound (`char`, the asset's character drip)
+- **In the spray's path:** three body-part rays through the exit cone find soldiers in the way. Up to
+  2.5 m away, they get spatter (`blood9` / `blood3`), landing at dist / 4 m/s.
+- **Loose props:** a host ray (`SetPropRay`) that hits only rigidbodies with a mesh. They get spatter in
+  their mesh space.
+- **The player:**
+  - **Shot.** A wound and a run on their own body pieces near the hit, plus a 50% chance of drops on the
+    gun and hands.
+  - **Point blank (< 2.5 m).** Specks come back onto the gun and the hands the player sees. `SetPlayerGear`
+    supplies the points: along the barrel from the muzzle, and the hands of the `ViewModelTag` arms piece.
+  - **Member matching.** The player's members are matched by bone distance with tight reaches (16 cm
+    for body pieces, 60 cm for the gun), so blood meant for the visible view-model arms doesn't land on
+    the hidden world-body copies.
+
+`--npc-test blood` adds a fifth case, `point_blank`, which checks that blood reached the player's gear,
+and a `blood_wounded` close-up of the standing wounded soldier.
 
 **Known gaps to revisit.**
 
 - The atlas is 2 x 16 MB of RGBA8 plus mips; BC3 would cut it by 4x.
 - The pools under corpses that lie against a wall merge into the floor splats.
 - The scene-view ragdoll gizmos clutter the test shots.
+
+### Settings and performance (L4)
+
+**Blood Settings component** (`BloodSettingsComponent`, under Gameplay in the Add Component menu). The
+first one in the scene is copied into `BloodFx::Settings` at Play start. It holds:
+
+- Enabled
+- Size
+- Max Sprays, Max Stains
+- Stain Lifetime, Dry Seconds
+- Pools, Body Splats, Gear Spatter
+
+A scene without one uses the same defaults.
+
+**Performance A/B** (2026-10-04): `--perf-bench` on the Sandbox at 1920x1080, `origin/main` against this
+branch, both built Release in separate directories and run back to back on the same project:
+
+| | edit | play | play-max |
+|---|---|---|---|
+| main | 197.9 fps | 147.5 fps | 184.3 fps |
+| blood | 209.3 fps | 146.4 fps | 187.4 fps |
+
+GPU Scene Draw: 1.22 ms on main, 1.20 ms on this branch. So there is no regression from:
+
+- the static/dynamic opaque split
+- the extra varyings
+- the splat branch in `ModelFragment`
+- the per-draw splat lookup
+
+Live blood itself costs about 0.05 ms per frame for the sprays. Decals and splats only cost where they
+cover pixels. Both runs are below `docs/PERFORMANCE.md`'s 258 fps. That gap is environmental: main
+itself measures 184 here, and this worktree lacks the git-ignored Quantum textures.
+
+## Next steps
+
+1. **Tuning in the user's real scenes** (hands-on). Check spray sizes against "bloody, not over the top"
+   (`BloodFx::Choose`), and how readable blood is on dark gear.
+2. **The known gaps above**: the BC-compressed atlas, the pools by walls.
+3. **Leftovers from the plan, if wanted.** Drips while the player is badly hurt; ceiling drips; exit
+   wounds that follow the round's real path through the hitbox (the hit point is the hitbox centre for
+   scripted hits).
