@@ -1397,12 +1397,15 @@ int main(int argc, char** argv) {
             return 0;
         }
 
-        // persistMigration is false for every headless mode that reaches this line (currently
-        // just --smoke-test; --resave/--undo-bench/--asset-load-bench already returned above):
-        // the harness must never rewrite the startup scene just from opening it for a read-only
-        // regression check (audit #77). Ordinary interactive startup keeps the existing
-        // "upgrade once" behavior.
-        bool sceneLoaded = SceneSerializer::Load(world, assets, scenePath, /*persistMigration=*/!headless && !playerMode);
+        // The smoke harness (and --weapon-test / --npc-test / --perf-bench, built on it) loads its own
+        // scenes in the loop below, so the startup scene would be loaded only to be thrown away - for
+        // the Sandbox, 666 objects and every model it uses, before the first test scene.
+        const bool loadStartupScene = !smokeTestMode;
+        // persistMigration is false for every headless mode: the harness must never rewrite a scene
+        // just from opening it for a read-only check (audit #77). Ordinary interactive startup keeps
+        // the existing "upgrade once" behavior.
+        bool sceneLoaded = loadStartupScene &&
+                           SceneSerializer::Load(world, assets, scenePath, /*persistMigration=*/!headless && !playerMode);
         if (sceneLoaded) {
             std::cout << "Loaded scene from " << scenePath << std::endl;
         }
@@ -1447,7 +1450,7 @@ int main(int argc, char** argv) {
         } emergencySaveGuard;
         {
             std::error_code existsEc;
-            if (!sceneLoaded && std::filesystem::exists(scenePath, existsEc))
+            if (loadStartupScene && !sceneLoaded && std::filesystem::exists(scenePath, existsEc))
                 editor.OnStartupSceneLoadFailed(scenePath); // #84
         }
         // Headless runs (--smoke-test / --resave / the benches) must not write imgui.ini either
@@ -1629,7 +1632,7 @@ int main(int argc, char** argv) {
                 if (sceneLoaded)
                     Log::Info("Scene loaded from " + ProjectPaths::Relativize(scenePath) + " - " +
                               std::to_string(objs) + (objs == 1 ? " object." : " objects."));
-                else
+                else if (loadStartupScene)
                     Log::Info("No scene file - started empty.");
             }
         }

@@ -1,6 +1,8 @@
 {
   "formatVersion": 2,
   "_comment": "Engine-owned smoke/regression scene (audit TEST-101). Directional + point + spot lights, each shadow-casting, over creased/overlapping geometry. Exercises clustered-forward light culling, all three shadow map paths (cascaded / cube / perspective), SSAO on the box seams, and bloom on the bright spot highlight. Engine primitives only.",
+  "exposureEV": 0.0, "tonemapOperator": 1, "msaaSamples": 4, "ssaoEnabled": true, "bloomEnabled": true, "bloomThreshold": 1.0, "bloomKnee": 0.5, "bloomIntensity": 0.25,
+  "shadowsEnabled": true, "shadowResolution": 4096, "shadowCascades": 4, "shadowDistance": 500.0,
   "skyHorizonColor": [0.20, 0.22, 0.28],
   "skyZenithColor": [0.05, 0.06, 0.12],
   "skyAmbientIntensity": 0.6,

@@ -1,6 +1,8 @@
 {
   "formatVersion": 2,
   "_comment": "Regression scene for #177 (runs Play -> Stop twice: filename contains 'smoke_play'). Two Particle Systems - an additive fire jet and an alpha-blended, gravity-affected dust fountain - viewed through a scene Camera. The smoke log prints each system's live count and height range. Engine primitives only.",
+  "exposureEV": 0.0, "tonemapOperator": 1, "msaaSamples": 4, "ssaoEnabled": false, "bloomEnabled": false, "bloomThreshold": 1.0, "bloomKnee": 0.5, "bloomIntensity": 0.25,
+  "shadowsEnabled": true, "shadowResolution": 4096, "shadowCascades": 4, "shadowDistance": 500.0,
   "skyHorizonColor": [0.40, 0.48, 0.60],
   "skyZenithColor": [0.12, 0.24, 0.52],
   "skyAmbientIntensity": 1.0,

@@ -1,6 +1,8 @@
 {
  "formatVersion": 2,
  "_comment": "Engine-owned smoke/regression scene for #162 motion blur. Play mode moves the camera, so the reprojection pass actually runs with a non-zero velocity. The MotionBlur shader is only compiled when the effect is enabled, so this scene is what proves it compiles and runs without GL or log errors at all: without it, a broken MotionBlur.frag.glsl would ship green.",
+ "exposureEV": 0.0, "tonemapOperator": 1, "msaaSamples": 4, "ssaoEnabled": false, "bloomEnabled": false, "bloomThreshold": 1.0, "bloomKnee": 0.5, "bloomIntensity": 0.25,
+ "shadowsEnabled": true, "shadowResolution": 4096, "shadowCascades": 4, "shadowDistance": 500.0,
  "skyHorizonColor": [
   0.4,
   0.48,
