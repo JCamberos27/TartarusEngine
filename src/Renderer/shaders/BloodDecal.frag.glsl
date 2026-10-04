@@ -79,6 +79,7 @@ void main() {
     // Unity's decal uv: the box's x / z (our z is mirrored), v up; the atlas keeps the PNGs top row first.
     vec2 uv = vec2(local.x, -local.z) + 0.5;
     vec2 t = vec2(uv.x, 1.0 - uv.y);
+    if (d.Kind.w != 0) t.x = 1.0 - t.x; // mirrored: another shape out of the same stain
     float cutout = d.Params.x;
     float dry = d.Params.y;
     vec3 bx = normalize(vec3(d.Model[0])), bz = normalize(vec3(d.Model[2]));

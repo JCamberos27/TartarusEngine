@@ -158,6 +158,7 @@ public:
         int Knife = -1;
         int Cell = 0, Frames = 1;
         float FrameSeconds = 0.0f;
+        bool Mirror = false;              // drawn flipped across (variety)
     };
     const std::vector<Decal>& Decals() const { return m_Decals; }
     // Whether a stain could be on screen now: within reach and inside a cone wider than any view. True with no viewer.
@@ -196,6 +197,10 @@ public:
     float LastEnergy() const { return m_LastEnergy; }
     int PuffsSpawned() const { return m_PuffsSpawned; }
     int GroundSplatters() const { return m_GroundSplatters; } // hits whose thrown blood landed somewhere
+    // A splash of blood on a surface - one of the KriptoFX stains or one of Real Blood's splatters (the palette makes
+    // them one material), mirrored at random: Big a splash's body, Streak thrown fast, Drop a drop or a few.
+    enum class Splash { Big, Streak, Drop };
+    Decal* AddSplash(Splash kind, const glm::vec3& centre, const glm::vec3& up, const glm::vec3& along, const glm::vec3& extent, float delay);
     int BleedDrops() const { return m_BleedDrops; }           // drops a wounded soldier left as he went
     bool Bleeding(unsigned entity) const;
     static constexpr float kBleedSeconds = 8.0f;              // a living wound drips this long after the last hit
@@ -295,7 +300,9 @@ private:
     // The falling arc from `from` at `velocity` (m/s): where it first meets a surface, its normal, its velocity then and
     // how long it took. False: nothing within 1.4 s.
     bool ThrowArc(const glm::vec3& from, const glm::vec3& velocity, glm::vec3& point, glm::vec3& normal, glm::vec3& vel,
-                  float& seconds) const;
+                  float& seconds, float step = 0.035f) const;
+    // A shot into a body lying there: blood splashing out around the wound onto what it lies on, and a little pool.
+    void SpawnCorpseSplash(const Hit& hit, float energy);
     int m_GroundSplatters = 0, m_BleedDrops = 0;
     struct Bleed { unsigned Entity; float Until; float Next; float Rate; };
     std::vector<Bleed> m_Bleeds;

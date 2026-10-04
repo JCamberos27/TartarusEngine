@@ -832,6 +832,62 @@ void Test_Blood_GroundSplatter() {
     CHECK(!fx.Bleeding(4));
 }
 
+void Test_Blood_CorpseSplash() {
+    // Shooting a body lying on the floor: blood splashes round it on the floor, and the wound pools.
+    BloodFx fx;
+    fx.SetSimLookup([](const char*) { return 0; });
+    fx.SetDecalSetLookup([](const char*) { return 0; });
+    fx.SetKnifeLookup([](const char*, int&) { return -1; });
+    fx.SetBodyRay([](const glm::vec3&, const glm::vec3&, float, unsigned&, int&, glm::vec3&) { return false; });
+    fx.SetRaycast([](const glm::vec3& o, const glm::vec3& d, float maxD, glm::vec3& p, glm::vec3& n) {
+        if (d.y > -1e-4f || -o.y / d.y > maxD || o.y < 0.0f) return false; // the floor at y = 0, from above only
+        p = o + d * (-o.y / d.y);
+        n = glm::vec3(0, 1, 0);
+        return true;
+    });
+    BloodFx::Hit h;
+    h.Point = glm::vec3(0, 0.15f, 0);
+    h.Direction = glm::normalize(glm::vec3(0, -0.6f, -1));
+    h.Entity = 6;
+    h.Damage = 40.0f;
+    h.Corpse = true;
+    fx.OnFleshHit(h);
+    int onFloor = 0;
+    bool pool = false;
+    for (const BloodFx::Decal& d : fx.Decals()) {
+        onFloor += std::abs(glm::vec3(d.Model[3]).y - 0.01f) < 0.02f && glm::length(glm::vec2(d.Model[3].x, d.Model[3].z)) < 2.5f;
+        pool |= d.Spread;
+    }
+    CHECK(onFloor >= 3 && pool && fx.GroundSplatters() == 1);
+}
+
+void Test_Blood_SplashVariety() {
+    // The thrown blood draws on all the shapes there are: the KriptoFX stains and Real Blood's splatters, mirrored.
+    BloodFx fx;
+    std::vector<std::string> asked;
+    fx.SetDecalSetLookup([](const char*) { return 0; });
+    fx.SetKnifeLookup([&](const char* e, int& cells) {
+        asked.push_back(e);
+        cells = std::string(e) == "drops" ? 16 : 4;
+        return 40;
+    });
+    int mirrored = 0;
+    std::vector<int> cells;
+    for (int i = 0; i < 200; ++i) {
+        const auto kind = (BloodFx::Splash)(i % 3);
+        BloodFx::Decal* d = fx.AddSplash(kind, glm::vec3((float)i, 0, 0), glm::vec3(0, 1, 0), glm::vec3(1, 0, 0), glm::vec3(0.3f, 0.3f, 0.3f), 0.0f);
+        CHECK(d != nullptr);
+        if (!d) continue;
+        mirrored += d->Mirror;
+        if (kind == BloodFx::Splash::Drop && d->Knife == 40) cells.push_back(d->Cell);
+    }
+    const auto has = [&](const char* n) { return std::find(asked.begin(), asked.end(), std::string(n)) != asked.end(); };
+    CHECK(has("splat_small") && has("splat_wide") && has("splat_medium") && has("drops"));
+    CHECK(mirrored > 30 && mirrored < 110);
+    // On a floor only the round drops of the sheet (not the runs).
+    for (int c : cells) CHECK(c == 3 || c == 4 || c == 6 || c == 8 || c == 9 || c == 10 || c == 11 || c == 13 || c == 15);
+}
+
 void Test_Blood_Persist() {
     // Stains never leave in view: past their lifetime or over the cap, the one that goes is out of view (behind, far).
     BloodFx fx;
@@ -1023,6 +1079,8 @@ void RegisterBloodTests(UnitTestSupport::TestList& tests) {
     tests.push_back({"Blood::Footprints", Test_Blood_Footprints});
     tests.push_back({"Blood::Persist", Test_Blood_Persist});
     tests.push_back({"Blood::GroundSplatter", Test_Blood_GroundSplatter});
+    tests.push_back({"Blood::CorpseSplash", Test_Blood_CorpseSplash});
+    tests.push_back({"Blood::SplashVariety", Test_Blood_SplashVariety});
     tests.push_back({"Blood::Palette", Test_Blood_Palette});
     tests.push_back({"Blood::Speed", Test_Blood_Speed});
     tests.push_back({"ImpactFx::Surfaces", Test_ImpactFx_Surfaces});
