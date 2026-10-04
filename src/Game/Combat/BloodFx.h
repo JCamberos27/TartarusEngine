@@ -103,6 +103,9 @@ public:
     void SetSprites(FxSprites* sprites) { m_Sprites = sprites; }
 
     void OnFleshHit(const Hit& hit);
+    // The Blood Lab's direct effects: a pool spreading on the ground at `at`; a wall spatter (and its drips) at `at`.
+    void SpawnPoolAt(const glm::vec3& at, const glm::vec3& normal, float size);
+    void SpatterWallAt(const glm::vec3& at, const glm::vec3& normal, float size);
     // A footfall (FoleyAudio's step listener): `walker` -1 the player, else a soldier; `foot` 0 left, 1 right, -1 unknown.
     // Stepping in fresh blood on the ground wets that walker's soles; the next steps leave prints, fading.
     void OnFootstep(int walker, const glm::vec3& feet, const glm::vec3& velocity, int foot);

@@ -767,6 +767,29 @@ void Test_Blood_Perf() {
     }
 }
 
+
+void Test_Blood_LabActions() {
+    BloodFx fx;
+    fx.SetDecalSetLookup([](const char*) { return 0; });
+    fx.SetKnifeLookup([](const char* e, int& cells) {
+        const std::string n(e);
+        cells = n.rfind("leak", 0) == 0 ? 30 : 4;
+        return n == "pool_smooth" || n == "pool_big" ? 10 : n.rfind("leak", 0) == 0 ? 20 : -1;
+    });
+    fx.SpawnPoolAt(glm::vec3(1, 0, 1), glm::vec3(0, 1, 0), 1.2f);
+    CHECK(fx.PoolsSpawned() == 1 && !fx.Decals().empty() && (fx.Decals().back().Knife == 10));
+    const size_t before = fx.Decals().size();
+    fx.SpatterWallAt(glm::vec3(0, 1.4f, -1), glm::vec3(0, 0, 1), 0.6f);
+    CHECK(fx.Decals().size() >= before + 3 && fx.DripsSpawned() >= 1); // the blot, the streaks, the drips
+    fx.Config.Gore = 0; // the lab's pool / spatter ignore Gore (they're asked for); hits don't
+    BloodFx::Hit h;
+    h.Entity = 3;
+    h.Damage = 40.0f;
+    const int sprays = fx.SpraysSpawned();
+    fx.OnFleshHit(h);
+    CHECK(fx.SpraysSpawned() == sprays);
+}
+
 void Test_FxSprites_Sim() {
     int a, b;
     float t;
@@ -886,6 +909,7 @@ void RegisterBloodTests(UnitTestSupport::TestList& tests) {
     tests.push_back({"Blood::HeadGore", Test_Blood_HeadGore});
     tests.push_back({"ImpactFx::Surfaces", Test_ImpactFx_Surfaces});
     tests.push_back({"Blood::Perf", Test_Blood_Perf});
+    tests.push_back({"Blood::LabActions", Test_Blood_LabActions});
     tests.push_back({"FxSprites::Sim", Test_FxSprites_Sim});
     tests.push_back({"KnifeFx::Library", Test_KnifeFx_Library});
 }
