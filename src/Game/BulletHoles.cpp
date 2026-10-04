@@ -19,9 +19,11 @@ glm::vec3 SafeNormalize(const glm::vec3& v, const glm::vec3& fallback) {
 } // namespace
 
 void BulletHoleList::Add(const World& world, entt::entity entity, const glm::vec3& point, const glm::vec3& normal,
-                         float radius) {
+                         float radius, int decal, float size) {
     Hole h;
     h.Radius = radius;
+    h.Decal = decal;
+    h.Size = size;
     const glm::vec3 n = SafeNormalize(normal, glm::vec3(0.0f, 1.0f, 0.0f));
     // Each hole turned its own way (a golden-ratio walk), so their ragged edges don't line up.
     ++m_Count;
@@ -57,6 +59,8 @@ void BulletHoleList::Resolve(const World& world, std::vector<Placed>& out) {
         Placed p;
         p.Seed = h.Seed;
         p.Radius = h.Radius;
+        p.Decal = h.Decal;
+        p.Size = h.Size;
         if (h.Entity == entt::null) {
             p.Position = h.Position;
             p.Normal = h.Normal;

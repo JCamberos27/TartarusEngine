@@ -123,6 +123,14 @@ block('East Wall', 8.2, -1.0, 0.4, 4.0, 10.0, env)
 box('Low Ceiling', (-4.5, 2.7, -4.0), (3.4, 0.2, 4.4), env, WALL)  # over the westmost soldier
 for k in range(6):                                                # stairs up to the east, beside soldier 4
     block(f'Step {k + 1}', 6.6, -4.0 + k * 0.45, 2.4, 0.18 * (k + 1), 0.45, env, ACCENT)
+# Surface panels along the west wall's inside (docs/BLOOD_FX.md, v2): the impacts and holes by what they strike
+# (ImpactFx reads the surface from the name). Tinted so each reads as its stuff.
+surfaces = group('Surface Panels')
+for k, (name, tint) in enumerate([('Metal Plate', (0.55, 0.57, 0.6)), ('Wood Panel', (0.7, 0.5, 0.3)),
+                                  ('Brick Panel', (0.65, 0.3, 0.22)), ('Glass Pane', (0.75, 0.85, 0.9)),
+                                  ('Mud Bank', (0.35, 0.27, 0.18)), ('Tile Panel', (0.85, 0.85, 0.82)),
+                                  ('Concrete Block', (0.6, 0.6, 0.58))]):
+    box(name, (-7.95, 1.1, 2.6 - k * 1.1), (0.1, 1.4, 1.0), surfaces, mat('light', 0.8, tint))
 props = group('Props')
 for k, (x, y, z) in enumerate([(2.6, 0.3, -4.9), (3.3, 0.3, -4.9), (2.95, 0.9, -4.9)]):
     box(f'Loose Crate {k + 1}', (x, y, z), (0.6, 0.6, 0.6), props, CRATE, rigidbody=rigidbody(6.0))

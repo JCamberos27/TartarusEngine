@@ -5,6 +5,7 @@
 #include "Audio/ImpactAudio.h"
 #include "Audio/WeaponAudio.h"
 #include "Components.h"
+#include "FxSprites.h"
 #include "ProjectPaths.h"
 #include "World.h"
 
@@ -210,6 +211,7 @@ void CombatFx::Shot(World& world, Gun gun, const glm::vec3& origin, const glm::v
             ps->Live.push_back(p);
         }
     }
+    if (Settings.MuzzleStyle >= 1) MuzzleSpritesFor(shotgun, fromPlayer, origin, dir);
     // A tracer: a short dashed streak flying down the line at a few hundred metres a second.
     if (tracer && len > 2.0f) {
         if (auto* ps = world.Registry.try_get<ParticleSystemComponent>(m_Tracers)) {
@@ -225,7 +227,109 @@ void CombatFx::Shot(World& world, Gun gun, const glm::vec3& origin, const glm::v
     }
 }
 
+// PRO Effects' muzzle flash (Shoot FX: Assault Rifle / Shotgun MuzzleflashEmitter + AfterfireSmoke), as flipbook sprites over
+// the flame: the star (rifle, 0.08 s, 0.8-1.1 Unity units ~ 0.25-0.35 m here, +-15 degrees) or the shotgun's burst (0.12 s),
+// side jets along the bore, a core glow, the gas puff (alpha ~0.06-0.1) and a thin column of barrel smoke that thickens
+// as the shots pile up.
+void CombatFx::MuzzleSpritesFor(bool shotgun, bool fromPlayer, const glm::vec3& origin, const glm::vec3& dir) {
+    if (!m_Sprites) return;
+    FxSprites& fx = *m_Sprites;
+    const int follow = fromPlayer ? 1 : 0;
+    const glm::vec3 hot(1.0f, 0.62f, 0.3f);
+    auto add = [&](FxSprites::Emit e) {
+        e.ViewModel = fromPlayer && e.Mode == FxSprites::Shade::Additive; // the player's flash with the gun; smoke in the world
+        e.Follow = e.ViewModel ? follow : 0;
+        fx.Spawn(e);
+        ++m_MuzzleSprites;
+    };
+    // Seen from behind the gun, half a metre from the eye, the flash is mostly hidden by the gun and must not white out the
+    // view: the player's own is a third of the size and a fraction of the light of what a soldier's reads as across a room.
+    const float k = Settings.FlameScale / 1.75f * (fromPlayer ? 0.5f : 1.0f);
+    const float heat = fromPlayer ? 0.4f : 1.0f;
+    if (const int flash = fx.Entry(shotgun ? "muzzle_burst" : "muzzle_star"); flash >= 0) {
+        FxSprites::Emit e;
+        e.Entry = flash;
+        e.Mode = FxSprites::Shade::Additive;
+        e.FollowAhead = shotgun ? 0.07f : 0.05f;
+        e.Pos = origin + dir * e.FollowAhead;
+        e.Life = shotgun ? 0.11f : 0.065f;
+        e.Size0 = (shotgun ? 0.38f : 0.26f + 0.08f * Rand01()) * k;
+        e.Size1 = e.Size0 * 1.15f;
+        e.Rot = (Rand01() - 0.5f) * 0.52f + (shotgun ? Rand01() * 6.28f : 0.0f);
+        e.Color = hot;
+        e.Intensity = 14.0f * heat * (0.8f + 0.4f * Rand01());
+        e.FadeOut = 0.6f;
+        add(e);
+    }
+    if (const int jets = fx.Entry("muzzle_side"); jets >= 0 && !shotgun) {
+        FxSprites::Emit e;
+        e.Entry = jets;
+        e.Mode = FxSprites::Shade::Additive;
+        e.FollowAhead = 0.09f;
+        e.Pos = origin + dir * e.FollowAhead;
+        e.Axis = dir * 1.6f; // the bowtie's long side along the bore
+        e.Life = 0.05f;
+        e.Size0 = e.Size1 = 0.12f * k;
+        e.Color = hot;
+        e.Intensity = 10.0f * heat;
+        e.FadeOut = 0.7f;
+        add(e);
+    }
+    if (const int glow = fx.Entry("glow"); glow >= 0) {
+        FxSprites::Emit e;
+        e.Entry = glow;
+        e.Mode = FxSprites::Shade::Additive;
+        e.FollowAhead = 0.03f;
+        e.Pos = origin + dir * e.FollowAhead;
+        e.Life = 0.07f;
+        e.Size0 = 0.3f * k;
+        e.Size1 = 0.4f * k;
+        e.Color = glm::vec3(1.0f, 0.55f, 0.25f);
+        e.Intensity = 3.0f * heat;
+        e.FadeOut = 1.0f;
+        add(e);
+    }
+    if (const int puff = fx.Entry("smoke_muzzle"); puff >= 0) {
+        for (int i = 0; i < (shotgun ? 2 : 1); ++i) {
+            FxSprites::Emit e;
+            e.Entry = puff;
+            e.Mode = FxSprites::Shade::Lit;
+            e.Pos = origin + dir * (0.12f + 0.1f * Rand01());
+            e.Vel = dir * (1.0f + 1.5f * Rand01()) + glm::vec3(0.0f, 0.15f, 0.0f);
+            e.Drag = 3.0f;
+            e.Gravity = -0.02f;
+            e.Life = 2.0f + Rand01();
+            e.Size0 = 0.12f;
+            e.Size1 = shotgun ? 0.6f : 0.45f;
+            e.Rot = Rand01() * 6.2832f;
+            e.Spin = (Rand01() - 0.5f) * 0.6f;
+            e.BlendFrames = true;
+            e.Color = glm::vec3(0.62f, 0.6f, 0.58f);
+            e.Alpha = shotgun ? 0.35f : 0.18f;
+            e.FadeIn = 0.05f;
+            e.FadeOut = 0.7f;
+            add(e);
+        }
+    }
+    if (const int column = fx.Entry("smoke_gun"); column >= 0 && Rand01() < (shotgun ? 1.0f : 0.5f)) {
+        FxSprites::Emit e; // AfterfireSmoke: a thin rising wisp off the hot barrel
+        e.Entry = column;
+        e.Mode = FxSprites::Shade::Lit;
+        e.Pos = origin - dir * 0.05f + glm::vec3(0.0f, 0.12f, 0.0f);
+        e.Vel = glm::vec3(0.0f, 0.12f, 0.0f);
+        e.Life = 2.5f + Rand01();
+        e.Size0 = e.Size1 = 0.35f;
+        e.BlendFrames = true;
+        e.Color = glm::vec3(0.7f, 0.68f, 0.66f);
+        e.Alpha = shotgun ? 0.3f : 0.14f;
+        e.FadeIn = 0.15f;
+        e.FadeOut = 0.5f;
+        add(e);
+    }
+}
+
 void CombatFx::FollowMuzzle(World& world, const glm::vec3& firstPerson, const glm::vec3& worldCopy, const glm::vec3& bore) {
+    if (m_Sprites) m_Sprites->Follow(1, firstPerson, bore);
     for (const auto& [e, muzzle] : {std::pair{m_PlayerFlame, firstPerson}, std::pair{m_PlayerWorldFlame, worldCopy}}) {
         if (!world.Registry.valid(e)) continue;
         if (auto* ps = world.Registry.try_get<ParticleSystemComponent>(e))

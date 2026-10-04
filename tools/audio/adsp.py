@@ -16,11 +16,14 @@ BOOTS = os.path.join(SRC_ROOT, "boots", "Boots")
 
 
 # ----------------------------------------------------------------------------------------------------------- io
+LIBRARIES = ("sonniss/", "ae/")  # ae: wavs copied out of the AE Master Unity project by extract.py
+
+
 def resolve_sonniss(spec):
-    """'sonniss/<pack dir prefix>/<file name prefix>' -> the single matching wav under C:/tb/audio-src/sonniss."""
+    """'<sonniss|ae>/<pack dir prefix>/<file name prefix>' -> the single matching wav under C:/tb/audio-src/<library>."""
     import glob
-    _, pack, name = spec.split("/", 2)
-    hits = glob.glob(os.path.join(SRC_ROOT, "sonniss", glob.escape(pack) + "*", glob.escape(name) + "*.wav"))
+    lib, pack, name = spec.split("/", 2)
+    hits = glob.glob(os.path.join(SRC_ROOT, lib, glob.escape(pack) + "*", glob.escape(name) + "*.wav"))
     hits = [h for h in hits if h.lower().endswith(".wav")]
     if len(hits) != 1:
         raise FileNotFoundError(f"{spec}: {len(hits)} matches")
@@ -71,7 +74,7 @@ def take_uses():
 
 def load(path, mono=False):
     """Load a wav as float32 (n, 2) @ 48 kHz (resampled if needed); `path` may be relative to the TSP folder."""
-    if path.startswith("sonniss/"):
+    if path.startswith(LIBRARIES):
         path = resolve_sonniss(path)
     elif not os.path.isabs(path):
         path = os.path.join(TSP, path)

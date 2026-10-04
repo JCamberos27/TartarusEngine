@@ -49,6 +49,8 @@ public:
     // The flesh hit (a soldier or the player struck): snd.impact.flesh. False when the recordings are off / missing (the caller
     // then plays its placeholder, so there is never both).
     bool Flesh(const glm::vec3& pos, bool at2D, float gain);
+    // The wet crunch over it when a round takes a head apart (snd.impact.gore; docs/BLOOD_FX.md). 3D.
+    bool Gore(const glm::vec3& pos, float gain);
     // A round passed `miss` metres from the listener at `point`. False when it is out of the radius, too soon after the last,
     // or the flyby has no files (the caller's placeholder whizz plays then).
     bool Flyby(const glm::vec3& point, float miss);

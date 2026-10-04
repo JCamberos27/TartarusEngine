@@ -6,6 +6,7 @@
 
 #include <glm/glm.hpp>
 
+#include <functional>
 #include <string>
 #include <unordered_map>
 
@@ -84,6 +85,10 @@ public:
     std::string SurfaceAt(World& world, const glm::vec3& feet) const;
     // What the player's last frame emitted, for tests.
     int StepsPlayed() const { return m_Steps; }
+    // Every footfall, heard or not (the blood's footprints): who (-1 the player, else the soldier's id), where the feet
+    // are, how they move (zero when only the feet are known), which foot (0 left, 1 right, -1 unknown).
+    using StepListener = std::function<void(int walker, const glm::vec3& feet, const glm::vec3& velocity, int foot)>;
+    void SetStepListener(StepListener fn) { m_StepListener = std::move(fn); }
 
 private:
     bool m_Active = false;
@@ -95,5 +100,7 @@ private:
     bool m_PrevGrounded = true;
     float m_PrevVy = 0.0f;
     int m_Steps = 0;
+    StepListener m_StepListener;
+    bool m_PlayerFoot = false; // alternates when the steps come from distance
     void Play(const std::string& surface, const std::string& element, float gain, bool at2D, const glm::vec3& pos);
 };

@@ -8204,7 +8204,111 @@
    "variant": 1,
    "proxy": false,
    "source": "PM_BBI_Bullet_Impact_Hit_Body_Flesh_25.wav {}",
-   "mix_db": -10.16
+   "mix_db": -10.14
+  },
+  {
+   "file": "Impacts/flesh_10.wav",
+   "key": "snd.impact.flesh",
+   "layer": "impact",
+   "channels": 2,
+   "sample_rate": 48000,
+   "lufs_i": -17.84,
+   "lufs_m_max": -17.8,
+   "true_peak_dbtp": -1.0,
+   "length_s": 0.371,
+   "peak_ms": 2.2,
+   "sources": [
+    {
+     "file": "ae/ColdBore Flesh/FleshImpact_03.wav",
+     "start": 0.0,
+     "end": 0.371,
+     "pitch_st": 0.0
+    }
+   ],
+   "anchor_ms": 0.0,
+   "material": "flesh",
+   "variant": 10,
+   "proxy": false,
+   "source": "FleshImpact_03.wav {}",
+   "mix_db": -9.46
+  },
+  {
+   "file": "Impacts/flesh_11.wav",
+   "key": "snd.impact.flesh",
+   "layer": "impact",
+   "channels": 2,
+   "sample_rate": 48000,
+   "lufs_i": -17.19,
+   "lufs_m_max": -17.15,
+   "true_peak_dbtp": -1.0,
+   "length_s": 0.368,
+   "peak_ms": 3.9,
+   "sources": [
+    {
+     "file": "ae/ColdBore Flesh/FleshImpact_04.wav",
+     "start": 0.0,
+     "end": 0.368,
+     "pitch_st": 0.0
+    }
+   ],
+   "anchor_ms": 0.0,
+   "material": "flesh",
+   "variant": 11,
+   "proxy": false,
+   "source": "FleshImpact_04.wav {}",
+   "mix_db": -10.11
+  },
+  {
+   "file": "Impacts/flesh_12.wav",
+   "key": "snd.impact.flesh",
+   "layer": "impact",
+   "channels": 2,
+   "sample_rate": 48000,
+   "lufs_i": -17.18,
+   "lufs_m_max": -17.14,
+   "true_peak_dbtp": -1.0,
+   "length_s": 0.344,
+   "peak_ms": 2.5,
+   "sources": [
+    {
+     "file": "ae/ColdBore Flesh/FleshImpact_05.wav",
+     "start": 0.0,
+     "end": 0.344,
+     "pitch_st": 0.0
+    }
+   ],
+   "anchor_ms": 0.0,
+   "material": "flesh",
+   "variant": 12,
+   "proxy": false,
+   "source": "FleshImpact_05.wav {}",
+   "mix_db": -10.12
+  },
+  {
+   "file": "Impacts/flesh_13.wav",
+   "key": "snd.impact.flesh",
+   "layer": "impact",
+   "channels": 2,
+   "sample_rate": 48000,
+   "lufs_i": -17.18,
+   "lufs_m_max": -17.14,
+   "true_peak_dbtp": -1.0,
+   "length_s": 0.357,
+   "peak_ms": 5.1,
+   "sources": [
+    {
+     "file": "ae/ColdBore Flesh/FleshImpact_06.wav",
+     "start": 0.0,
+     "end": 0.357,
+     "pitch_st": 0.0
+    }
+   ],
+   "anchor_ms": 0.0,
+   "material": "flesh",
+   "variant": 13,
+   "proxy": false,
+   "source": "FleshImpact_06.wav {}",
+   "mix_db": -10.12
   },
   {
    "file": "Impacts/flesh_2.wav",
@@ -8230,7 +8334,7 @@
    "variant": 2,
    "proxy": false,
    "source": "PM_BBI_Bullet_Impact_Hit_Body_Flesh_25.wav {\"pitch\": -1.5}",
-   "mix_db": -10.23
+   "mix_db": -10.21
   },
   {
    "file": "Impacts/flesh_3.wav",
@@ -8256,7 +8360,7 @@
    "variant": 3,
    "proxy": false,
    "source": "PM_BBI_Bullet_Impact_Hit_Body_Flesh_25.wav {\"pitch\": 1.5}",
-   "mix_db": -10.23
+   "mix_db": -10.22
   },
   {
    "file": "Impacts/flesh_4.wav",
@@ -8282,7 +8386,7 @@
    "variant": 4,
    "proxy": false,
    "source": "bullet_impact_body_thump_02.wav {}",
-   "mix_db": -10.25
+   "mix_db": -10.23
   },
   {
    "file": "Impacts/flesh_5.wav",
@@ -8308,7 +8412,7 @@
    "variant": 5,
    "proxy": false,
    "source": "bullet_impact_body_thump_02.wav {\"pitch\": -2.0}",
-   "mix_db": -10.21
+   "mix_db": -10.19
   },
   {
    "file": "Impacts/flesh_6.wav",
@@ -8334,7 +8438,7 @@
    "variant": 6,
    "proxy": false,
    "source": "punch_grit_wet_impact_05.wav {}",
-   "mix_db": -10.21
+   "mix_db": -10.19
   },
   {
    "file": "Impacts/flesh_7.wav",
@@ -8360,7 +8464,59 @@
    "variant": 7,
    "proxy": false,
    "source": "punch_grit_wet_impact_05.wav {\"pitch\": 1.5}",
-   "mix_db": -10.25
+   "mix_db": -10.24
+  },
+  {
+   "file": "Impacts/flesh_8.wav",
+   "key": "snd.impact.flesh",
+   "layer": "impact",
+   "channels": 2,
+   "sample_rate": 48000,
+   "lufs_i": -17.81,
+   "lufs_m_max": -17.77,
+   "true_peak_dbtp": -1.0,
+   "length_s": 0.367,
+   "peak_ms": 1.8,
+   "sources": [
+    {
+     "file": "ae/ColdBore Flesh/FleshImpact_01.wav",
+     "start": 0.0,
+     "end": 0.367,
+     "pitch_st": 0.0
+    }
+   ],
+   "anchor_ms": 0.0,
+   "material": "flesh",
+   "variant": 8,
+   "proxy": false,
+   "source": "FleshImpact_01.wav {}",
+   "mix_db": -9.49
+  },
+  {
+   "file": "Impacts/flesh_9.wav",
+   "key": "snd.impact.flesh",
+   "layer": "impact",
+   "channels": 2,
+   "sample_rate": 48000,
+   "lufs_i": -17.19,
+   "lufs_m_max": -17.15,
+   "true_peak_dbtp": -1.0,
+   "length_s": 0.448,
+   "peak_ms": 5.1,
+   "sources": [
+    {
+     "file": "ae/ColdBore Flesh/FleshImpact_02.wav",
+     "start": 0.0,
+     "end": 0.448,
+     "pitch_st": 0.0
+    }
+   ],
+   "anchor_ms": 0.0,
+   "material": "flesh",
+   "variant": 9,
+   "proxy": false,
+   "source": "FleshImpact_02.wav {}",
+   "mix_db": -10.07
   },
   {
    "file": "Impacts/flyby_1.wav",
@@ -8635,6 +8791,84 @@
    "proxy": false,
    "source": "PM_BBI_Bullet_Impact_Glass_1.wav {\"pitch\": 2.0, \"dur\": 0.8, \"hp\": 300}",
    "mix_db": -11.23
+  },
+  {
+   "file": "Impacts/gore_1.wav",
+   "key": "snd.impact.gore",
+   "layer": "impact",
+   "channels": 2,
+   "sample_rate": 48000,
+   "lufs_i": -20.85,
+   "lufs_m_max": -17.0,
+   "true_peak_dbtp": -5.42,
+   "length_s": 0.559,
+   "peak_ms": 31.8,
+   "sources": [
+    {
+     "file": "ae/Free Pack/Bloody punch.wav",
+     "start": 0.003,
+     "end": 0.563,
+     "pitch_st": 0.0
+    }
+   ],
+   "anchor_ms": 0.0,
+   "material": "gore",
+   "variant": 1,
+   "proxy": false,
+   "source": "Bloody punch.wav {}",
+   "mix_db": -8.23
+  },
+  {
+   "file": "Impacts/gore_2.wav",
+   "key": "snd.impact.gore",
+   "layer": "impact",
+   "channels": 2,
+   "sample_rate": 48000,
+   "lufs_i": -20.76,
+   "lufs_m_max": -17.0,
+   "true_peak_dbtp": -5.23,
+   "length_s": 0.61,
+   "peak_ms": 34.6,
+   "sources": [
+    {
+     "file": "ae/Free Pack/Bloody punch.wav",
+     "start": 0.003,
+     "end": 0.563,
+     "pitch_st": 0.0
+    }
+   ],
+   "anchor_ms": 0.0,
+   "material": "gore",
+   "variant": 2,
+   "proxy": false,
+   "source": "Bloody punch.wav {\"pitch\": -1.5}",
+   "mix_db": -8.12
+  },
+  {
+   "file": "Impacts/gore_3.wav",
+   "key": "snd.impact.gore",
+   "layer": "impact",
+   "channels": 2,
+   "sample_rate": 48000,
+   "lufs_i": -19.44,
+   "lufs_m_max": -17.0,
+   "true_peak_dbtp": -1.71,
+   "length_s": 0.528,
+   "peak_ms": 13.7,
+   "sources": [
+    {
+     "file": "ae/Free Pack/Bloody punch.wav",
+     "start": 0.003,
+     "end": 0.563,
+     "pitch_st": 0.0
+    }
+   ],
+   "anchor_ms": 0.0,
+   "material": "gore",
+   "variant": 3,
+   "proxy": false,
+   "source": "Bloody punch.wav {\"pitch\": 1.0, \"hp\": 120}",
+   "mix_db": -8.5
   },
   {
    "file": "Impacts/ice_1.wav",
