@@ -2,6 +2,7 @@
 
 #include "BloodRenderer.h"
 #include "FxSprites.h"
+#include "KnifeFxLibrary.h"
 #include "GameModuleAPI.h"
 #include "PhysicsWorld.h"
 
@@ -146,6 +147,14 @@ void BloodFx::Clear() {
 void BloodFx::EnsureHooks() {
     if (!m_SimLookup) m_SimLookup = [](const char* sim) { return BloodRenderer::Get().SimIndex(sim); };
     if (!m_SetLookup) m_SetLookup = [](const char* set) { return BloodRenderer::Get().DecalSet(set); };
+    if (!m_KnifeLookup)
+        m_KnifeLookup = [](const char* entry, int& cells) {
+            const KnifeFxLibrary& lib = KnifeFxLibrary::Get();
+            const KnifeFxLibrary::Entry* e = lib.At(lib.Find(entry));
+            if (!e || e->Lib == KnifeFxImport::Library::Sprite) return -1;
+            cells = e->Frames;
+            return lib.Find(entry);
+        };
     if (!m_Ray) m_Ray = PhysicsRay;
     if (!m_BodyRay)
         m_BodyRay = [](const glm::vec3& o, const glm::vec3& d, float maxD, unsigned& entity, int& part, glm::vec3& point) {
@@ -217,6 +226,52 @@ float BloodFx::DecalCutout(const Decal& d) {
     const float g = std::max(d.RevealSeconds, 1e-3f);
     if (fade > 0.0f) return std::clamp(d.Reveal->Eval(0.3f + 0.7f * fade), 0.0f, 1.0f);
     return std::clamp(d.Reveal->Eval(std::min(t / g, 0.3f)), 0.0f, 1.0f);
+}
+
+BloodFx::Decal* BloodFx::AddKnifeDecal(const char* entry, const glm::vec3& centre, const glm::vec3& up, const glm::vec3& along,
+                                       const glm::vec3& extent, float delay, int cell) {
+    EnsureHooks();
+    int cells = 1;
+    const int id = m_KnifeLookup(entry, cells);
+    if (id < 0) return nullptr;
+    if ((int)m_Decals.size() >= std::max(1, Config.MaxDecals)) m_Decals.erase(m_Decals.begin());
+    const glm::vec3 y = glm::normalize(up);
+    glm::vec3 x = along - y * glm::dot(along, y);
+    x = glm::length(x) > 1e-4f ? glm::normalize(x) : RandomTangent(y);
+    const glm::vec3 z = glm::cross(x, y);
+    Decal d;
+    d.Knife = id;
+    d.Cell = cell >= 0 ? std::min(cell, std::max(cells - 1, 0)) : std::min(cells - 1, (int)(Random01() * (float)cells));
+    d.Frames = std::max(cells, 1);
+    d.Model = glm::mat4(glm::vec4(x * extent.x, 0.0f), glm::vec4(y * extent.y, 0.0f), glm::vec4(z * extent.z, 0.0f), glm::vec4(centre, 1.0f));
+    d.Age = -std::max(delay, 0.0f);
+    d.Life = Config.DecalLifetime * (0.9f + 0.2f * Random01());
+    d.DrySeconds = Config.DrySeconds * (0.8f + 0.4f * Random01());
+    m_Decals.push_back(d);
+    ++m_DecalsSpawned;
+    return &m_Decals.back();
+}
+
+void BloodFx::SpawnWallDrips(const glm::vec3& at, const glm::vec3& n, float size, float land) {
+    if (std::abs(n.y) > 0.5f) return; // walls only: on a floor it pools, a ceiling drips straight down
+    static const char* const kLeaks[] = {"leak1", "leak2", "leak3"};
+    // The image's top at the spatter, running down the wall: u across (horizontal), v down.
+    const glm::vec3 down(0.0f, -1.0f, 0.0f);
+    glm::vec3 across = glm::cross(n, down);
+    if (glm::length(across) < 1e-3f) return;
+    across = glm::normalize(across);
+    const int count = 1 + (int)(Random01() * 2.5f * std::min(size / 0.6f, 1.3f));
+    for (int i = 0; i < count; ++i) {
+        const float h = (0.35f + 0.3f * Random01()) * std::clamp(size / 0.6f, 0.6f, 1.3f); // how far it runs
+        const float w = h * 0.5f;
+        const glm::vec3 top = at + across * ((Random01() - 0.5f) * 0.5f * size) + n * 0.005f;
+        Decal* d = AddKnifeDecal(kLeaks[std::min(2, (int)(Random01() * 3.0f))], top + down * (0.5f * h), n, across, glm::vec3(w, 0.2f, h),
+                                 land + 0.15f + 0.4f * Random01(), 0);
+        if (!d) return;
+        d->FrameSeconds = (2.0f + 3.0f * Random01()) / (float)std::max(d->Frames, 1); // runs down over 2-5 s, then stops
+        d->PoolGrow = 0.05f;
+        ++m_DripsSpawned;
+    }
 }
 
 BloodFx::Decal* BloodFx::AddDecal(const char* set, const glm::vec3& centre, const glm::vec3& up, const glm::vec3& along,
@@ -345,7 +400,7 @@ void BloodFx::OnFleshHit(const Hit& hit) {
     // Point blank, what comes out of the entry comes back at the shooter: specks on the gun and hands.
     if (hit.ByPlayer && !hit.Corpse) {
         const float d = glm::length(hit.Point - hit.Origin);
-        if (d < 2.5f && Random01() < 1.2f - d / 2.5f) SpatterGear(d < 1.2f ? 3 : 1 + (int)(Random01() * 2.0f), 1.3f - d / 2.5f, d / 8.0f);
+        if (d < 2.5f && (d < 1.6f || Random01() < 1.2f - d / 2.5f)) SpatterGear(d < 1.2f ? 3 : 1 + (int)(Random01() * 2.0f), 1.3f - d / 2.5f, d / 8.0f);
     }
     // Whoever stands in the spray's path gets it on them: a few rays through the cone behind the body.
     if (!hit.Corpse && canExit) {
@@ -561,6 +616,7 @@ void BloodFx::SpawnSprays(const BloodPresetDef& preset, const glm::mat4& prefabT
             if (Decal* body = AddDecal(blot, at, n, RandomTangent(n), glm::vec3(0.75f * s, 0.25f, 0.75f * s), land)) body->PoolGrow = 0.35f;
             const char* streaks = kStreaks[std::min(3, (int)(Random01() * 4.0f))];
             if (Decal* streak = AddDecal(streaks, at, n, along, glm::vec3(1.3f * s, 0.25f, 0.9f * s), land)) streak->PoolGrow = 0.25f;
+            SpawnWallDrips(at, n, s, land);
         }
     }
     for (const BloodSprayDef& def : preset.Sprays) {
@@ -608,7 +664,11 @@ void BloodFx::Update(float dt) {
         EnsureHooks();
         if (!m_Ray(centre + glm::vec3(0.0f, 0.3f, 0.0f), glm::vec3(0.0f, -1.0f, 0.0f), 1.8f, p, n) || n.y < 0.6f) continue;
         const float s = std::clamp(pp.Size, 0.5f, 1.0f) * (1.3f + 0.4f * Random01());
-        if (Decal* d = AddDecal("attached", p + glm::vec3(0.0f, 0.01f, 0.0f), n, RandomTangent(n), glm::vec3(s, 0.3f, s), 0.0f)) {
+        // Real Blood's PBR pools when the Knife library is there (bigger: the pool fills ~70% of its cell).
+        Decal* d = AddKnifeDecal(Random01() < 0.6f ? "pool_smooth" : "pool_big", p + glm::vec3(0.0f, 0.01f, 0.0f), n, RandomTangent(n),
+                                 glm::vec3(s * 1.25f, 0.3f, s * 1.25f), 0.0f);
+        if (!d) d = AddDecal("attached", p + glm::vec3(0.0f, 0.01f, 0.0f), n, RandomTangent(n), glm::vec3(s, 0.3f, s), 0.0f);
+        if (d) {
             d->PoolGrow = 20.0f + 10.0f * Random01();
             ++m_PoolsSpawned;
             d->DrySeconds *= 2.5f; // a pool stays wet far longer than a spatter
@@ -673,6 +733,14 @@ void BloodFx::Submit(BloodRenderer& renderer) const {
         BloodRenderer::Decal r;
         r.Model = d.Model;
         r.Set = d.Set;
+        r.Knife = d.Knife;
+        r.Cell = r.NextCell = d.Cell;
+        if (d.FrameSeconds > 0.0f && d.Frames > 1) { // a flipbook: on to its last cell, then held
+            const float f = std::min(d.Age / d.FrameSeconds, (float)(d.Frames - 1));
+            r.Cell = std::min(d.Cell + (int)f, d.Frames - 1);
+            r.NextCell = std::min(r.Cell + 1, d.Frames - 1);
+            r.CellBlend = f - std::floor(f);
+        }
         r.Cutout = DecalCutout(d);
         const float dry = std::clamp(d.Age / std::max(d.DrySeconds, 1.0f), 0.0f, 1.0f);
         r.Dry = dry * dry * (3.0f - 2.0f * dry);
