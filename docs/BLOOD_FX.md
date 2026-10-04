@@ -429,8 +429,8 @@ Without these files the game logs one warning, and the effects that need them ar
     plain substrings: "pane" was dropped because it matched "Panel".
   - **Holes on static entities** draw as PRO Effects' surface decal (4 variants) in the blood decal pass.
     `BulletHoleList` carries the decal id; moving props keep the procedural hole.
-  - **Burst:** a lit dust puff and a fast streak in the surface's colour, plus chips (concrete, rock, wood,
-    glass).
+  - **Burst:** chips (concrete, rock, wood, glass). The PRO dust puff and streak were dropped (2026-10-04): they
+    read badly.
   - **Metal** adds sparks and a flash.
 - **Muzzle flash** (`CombatFx::MuzzleSpritesFor`, FX/HUD Settings `Muzzle Style`).
   - Style 1, the default, layers PRO Effects' Shoot FX over the Tactical Shooter flame:

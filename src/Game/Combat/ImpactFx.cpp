@@ -49,18 +49,6 @@ float ImpactFx::HoleSize(const std::string& s, float radius) {
     return std::clamp(radius * k, 0.05f, 0.2f);
 }
 
-glm::vec3 ImpactFx::DustColor(const std::string& s) {
-    if (s == "brick") return {0.42f, 0.17f, 0.11f};
-    if (s == "wood") return {0.38f, 0.26f, 0.14f};
-    if (s == "mud") return {0.2f, 0.15f, 0.09f};
-    if (s == "sand") return {0.5f, 0.42f, 0.28f};
-    if (s == "asphalt") return {0.18f, 0.18f, 0.18f};
-    if (s == "metal") return {0.3f, 0.3f, 0.3f};
-    if (s == "glass") return {0.6f, 0.62f, 0.65f};
-    if (s == "rock") return {0.33f, 0.31f, 0.29f};
-    return {0.45f, 0.44f, 0.42f}; // concrete, tile
-}
-
 void ImpactFx::Spawn(const std::string& surface, const glm::vec3& point, const glm::vec3& normal, const glm::vec3& dir) {
     if (!Enabled || !m_Sprites) return;
     FxSprites& fx = *m_Sprites;
@@ -75,52 +63,10 @@ void ImpactFx::Spawn(const std::string& surface, const glm::vec3& point, const g
         const float a = U() * 6.2832f, r = spread * std::sqrt(U());
         return glm::normalize(axis + (t * std::cos(a) + b * std::sin(a)) * r);
     };
-    const glm::vec3 dust = DustColor(surface);
     const glm::vec4 plane(n, -glm::dot(n, point) + 0.002f);
-    const bool soft = surface == "mud" || surface == "sand";
     const bool hard = surface == "metal" || surface == "rock" || surface == "concrete" || surface == "brick" || surface == "asphalt" || surface == "tile";
     ++m_Spawned;
 
-    // The puff (PRO "Smoke": 3 of it, 0.2-0.4 m, out at 3-7 m/s and stopped fast, 1.5-2.5 s, faint).
-    if (const int smoke = fx.Entry("smoke_impact"); smoke >= 0 && surface != "glass") {
-        for (int i = 0; i < (soft ? 4 : 3); ++i) {
-            FxSprites::Emit e;
-            e.Entry = smoke;
-            e.Mode = FxSprites::Shade::Lit;
-            e.Pos = point + n * 0.03f;
-            e.Vel = cone(refl, 0.6f) * (2.0f + 3.0f * U());
-            e.Drag = 6.0f;
-            e.Gravity = -0.01f;
-            e.Life = 1.4f + 1.0f * U();
-            e.Size0 = 0.12f + 0.08f * U();
-            e.Size1 = (soft ? 0.7f : 0.5f) + 0.2f * U();
-            e.Rot = U() * 6.2832f;
-            e.Spin = (U() - 0.5f) * 1.0f;
-            e.BlendFrames = true;
-            e.Color = dust;
-            e.Alpha = soft ? 0.55f : surface == "metal" ? 0.25f : 0.45f;
-            e.FadeIn = 0.03f;
-            e.FadeOut = 0.7f;
-            fx.Spawn(e);
-        }
-        // The streak: dust shot straight out of the hole (PRO "Smoke Stretched": 7 of it at 7-8 m/s).
-        for (int i = 0; i < (surface == "metal" ? 2 : 5); ++i) {
-            FxSprites::Emit e;
-            e.Entry = smoke;
-            e.Mode = FxSprites::Shade::Lit;
-            e.Pos = point + n * 0.02f;
-            e.Vel = cone(refl, 0.35f) * (6.0f + 2.0f * U());
-            e.Drag = 7.0f;
-            e.Life = 0.5f + 0.4f * U();
-            e.Size0 = 0.05f;
-            e.Size1 = 0.12f;
-            e.Stretch = 0.05f;
-            e.Color = dust;
-            e.Alpha = 0.4f;
-            e.FadeOut = 0.8f;
-            fx.Spawn(e);
-        }
-    }
     // Chips of it, falling and bouncing on the surface they came off (PRO "Rocks": 3, 1-3 m/s, gravity).
     const char* debris = surface == "wood" ? "debris_wood" : surface == "glass" ? "debris_glass"
                        : (surface == "rock" || surface == "mud" || surface == "sand") ? "debris_rock" : surface == "metal" ? nullptr : "debris_concrete";
