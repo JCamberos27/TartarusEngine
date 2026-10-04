@@ -56,6 +56,7 @@ public:
     bool Aiming() const { return !m_Target.empty(); }   // sights up (rounds go where the view looks)
     bool WantsReload() const { return m_Reload; }
     bool WantsAiOverlay() const { return m_Scenario == "sandbox"; } // the AI overlay in the sandbox shots
+    bool WantsCleanViews() const { return m_Scenario == "blood"; } // no collider / physics-debug overlays (the blood shots)
     // The blood scenario's view of the blood, filled by the host each frame.
     struct BloodView {
         bool Loaded = false;
