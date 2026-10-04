@@ -1657,6 +1657,19 @@ int main(int argc, char** argv) {
                 weaponFx.Settings = fx;
             }
             bloodFx.Clear();
+            {   // the scene's blood tuning: the first Blood Settings component, defaults when none
+                BloodSettingsComponent b;
+                for (auto e : world.Registry.view<BloodSettingsComponent>()) { b = world.Registry.get<BloodSettingsComponent>(e); break; }
+                bloodFx.Config.Enabled = b.Enabled;
+                bloodFx.Config.Size = b.Size;
+                bloodFx.Config.MaxSprays = b.MaxSprays;
+                bloodFx.Config.MaxDecals = b.MaxStains;
+                bloodFx.Config.DecalLifetime = b.StainLifetime;
+                bloodFx.Config.DrySeconds = b.DrySeconds;
+                bloodFx.Config.Pools = b.Pools;
+                bloodFx.Config.BodySplats = b.BodySplats;
+                bloodFx.Config.GearSpatter = b.GearSpatter;
+            }
             BloodRenderer::Get().Load(); // once; a missing import just leaves the blood off
             if (entt::entity ctrl = playControllerEntity; ctrl != entt::null) {
                 const auto& fp = world.Registry.get<FirstPersonControllerComponent>(ctrl);

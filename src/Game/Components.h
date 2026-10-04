@@ -1208,6 +1208,20 @@ struct FxHudSettingsComponent {
     float FeedLife = 4.5f;                  // seconds a kill feed line stays on screen; HUD group
     float StreakWindow = 4.0f;               // seconds to count consecutive kills for streak display; HUD group
 };
+
+// The volumetric blood (docs/BLOOD_FX.md, Game/Combat/BloodFx): on any object in the scene (the first one counts);
+// without one Play uses these same defaults. Copied into BloodFx::Settings when Play starts.
+struct BloodSettingsComponent {
+    bool Enabled = true;
+    float Size = 1.0f;            // x every spray's size (and its playback time, by sqrt: gravity stays right)
+    int MaxSprays = 24;           // airborne sprays at once; the oldest is dropped past this
+    int MaxStains = 320;          // stains on the world; the oldest is dropped past this
+    float StainLifetime = 300.0f; // seconds a stain stays before it shrinks away
+    float DrySeconds = 90.0f;     // fresh and glossy to dried dark and matte (pools 2.5x, cloth 1.5x)
+    bool Pools = true;            // a pool spreads under each corpse
+    bool BodySplats = true;       // blood on bodies, ragdolls and props
+    bool GearSpatter = true;      // point-blank blood on the player's gun and hands, and their own wounds
+};
 // ---- end lane P ----
 // ---- lane R ----
 // A soldier's ragdoll (Npc/NpcRagdoll): masses, joint ranges of motion, drives, body physics, impulse caps. On any object in
