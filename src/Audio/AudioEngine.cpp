@@ -1,5 +1,6 @@
 #include "AudioEngine.h"
 #include "Log.h"
+#include "AssetDatabase.h"
 #include "ConvolutionReverb.h"
 #include "LoudnessMeter.h"
 #include "MasterLimiter.h"
@@ -501,7 +502,8 @@ bool AudioEngine::Load(const std::string& path) {
     ma_uint64 frameCount = 0;
     void* pFrames = nullptr;
     if (ma_decode_file(path.c_str(), &config, &frameCount, &pFrames) != MA_SUCCESS) {
-        Log::Error("Audio: failed to preload '" + path + "'.", LogContext::Asset(path));
+        if (!AssetDatabase::IsUnfetchedExternal(path)) // a Drive file not fetched yet: the scan's warning counts it
+            Log::Error("Audio: failed to preload '" + path + "'.", LogContext::Asset(path));
         return false;
     }
 

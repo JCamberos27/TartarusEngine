@@ -818,7 +818,7 @@ void WeaponAudio::InstallLog() {
     m_Player.SetLog([this](double t, const std::string& key, const std::string& file, int voices, const SoundPlayer::Request& r, float vol, float pitch, const SoundVoice* v) {
         if (!m_LogFile) return;
         // W <t> <key> <file|-> <voices> <vol> <pitch> <2d> <x y z> <min dist> <max dist> <start offset s>   (CombatFx's audio.txt, beside
-        // its S / L lines; tools/mix_npc_video.py mixes them)
+        // its S / L lines)
         std::fprintf(m_LogFile, "W %.4f %s %s %d %.3f %.3f %d %.3f %.3f %.3f %.2f %.2f %.4f %.3f %.0f\n", t, key.c_str(), file.empty() ? "-" : file.c_str(), voices,
                      vol, pitch, r.At2D ? 1 : 0, r.Position.x, r.Position.y, r.Position.z, v ? v->MinDistance : 1.0f, v ? v->MaxDistance : 40.0f,
                      v ? v->StartOffset : 0.0f, v ? v->ReverbSend : 0.0f, v ? v->OcclusionHz : 20000.0f);

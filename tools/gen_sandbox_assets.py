@@ -408,8 +408,8 @@ def mat(name, file, props, queue=None, comment=None, opacity=None, advanced=Fals
 
 def build_materials():
     T = 'assets/Props/Basketball/Textures/'
-    # The scene lays this floor out at COURT_SCALE x the regulation size (gen_sandbox_scene.py's
-    # COURT_S); the detail maps tile per 0.8 m of the scaled floor.
+    # The scene lays this floor out at COURT_SCALE x the regulation size (the Sandbox's
+    # court); the detail maps tile per 0.8 m of the scaled floor.
     COURT_SCALE = 1.5
     mat('Court Floor', 'court_floor.mat', {
         '_BaseColor': [1, 1, 1], '_Metallic': 0.0, '_Roughness': 0.62,
