@@ -818,7 +818,7 @@ void DrawBarrel(PropertyRows& r, FirstPersonAnimationSet& s, const FirstPersonBa
     r.Check("Eject Cases", ej.Enabled, "Throw a spent case out of the ejection port. They lie where they land until the player is\n"
                                    "well away and can't see them.");
     if (ej.Enabled) {
-        r.Path("Case Model", ej.Model, {AssetExts::Models, false, "ASSET_MODEL_PATH", true, "(none)", "Models\0*.fbx;*.gltf;*.glb;*.obj;*.dae\0All Files\0*.*\0", false, nullptr}, "The case mesh (.fbx). tools/weapons/extract_casings.py makes them from the weapon FBXs.");
+        r.Path("Case Model", ej.Model, {AssetExts::Models, false, "ASSET_MODEL_PATH", true, "(none)", "Models\0*.fbx;*.gltf;*.glb;*.obj;*.dae\0All Files\0*.*\0", false, nullptr}, "The case mesh (.fbx).");
         r.Path("Case Material", ej.Material, {AssetExts::Materials, false, "ASSET_MATERIAL_PATH", true, "(keep import)", "Materials\0*.mat\0All Files\0*.*\0", false, nullptr}, "A .mat for every submesh of the case; empty keeps the import.");
         bool onEvent = ej.When == FirstPersonEjectSettings::Trigger::Event;
         if (r.Check("On Eject Event", onEvent,
