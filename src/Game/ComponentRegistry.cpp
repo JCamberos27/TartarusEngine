@@ -1466,6 +1466,32 @@ void RegisterEngineComponents() {
               "Seconds to count consecutive kills for streak display.", 0.1f, 60.0f },
         },
     });
+    Register<BloodSettingsComponent>({
+        "Blood Settings", ICON_FA_DROPLET,
+        "The volumetric blood (the first Blood Settings in the scene counts; docs/BLOOD_FX.md): how big the sprays are,\n"
+        "how many stains stay and for how long, and what blood lands on.",
+        "Gameplay",
+        {
+            { "Enabled", T::Bool, TARTARUS_REFLECT_FIELD(BloodSettingsComponent, Enabled), 0.0f,
+              "Blood at all." },
+            { "Size", T::Float, TARTARUS_REFLECT_FIELD(BloodSettingsComponent, Size), 0.05f,
+              "x every spray's size; its fall time follows (by the square root), so gravity stays right.", 0.2f, 3.0f },
+            { "Max Sprays", T::Int, TARTARUS_REFLECT_FIELD(BloodSettingsComponent, MaxSprays), 1.0f,
+              "Airborne sprays at once; past this the oldest is dropped.", 1.0f, 128.0f },
+            { "Max Stains", T::Int, TARTARUS_REFLECT_FIELD(BloodSettingsComponent, MaxStains), 1.0f,
+              "Stains on the world at once; past this the oldest is dropped.", 8.0f, 2048.0f },
+            { "Stain Lifetime", T::Float, TARTARUS_REFLECT_FIELD(BloodSettingsComponent, StainLifetime), 1.0f,
+              "Seconds a stain stays before it shrinks away.", 10.0f, 3600.0f },
+            { "Dry Seconds", T::Float, TARTARUS_REFLECT_FIELD(BloodSettingsComponent, DrySeconds), 1.0f,
+              "Seconds for fresh, glossy blood to dry dark and matte (pools take 2.5x, cloth 1.5x).", 5.0f, 1200.0f },
+            { "Pools", T::Bool, TARTARUS_REFLECT_FIELD(BloodSettingsComponent, Pools), 0.0f,
+              "A pool spreads under each corpse." },
+            { "Body Splats", T::Bool, TARTARUS_REFLECT_FIELD(BloodSettingsComponent, BodySplats), 0.0f,
+              "Blood on bodies, ragdolls and loose props." },
+            { "Gear Spatter", T::Bool, TARTARUS_REFLECT_FIELD(BloodSettingsComponent, GearSpatter), 0.0f,
+              "Point-blank blood on the player's gun and hands, and their own wounds." },
+        },
+    });
     // ---- lane R ----
     {
         ReflectComponent m;

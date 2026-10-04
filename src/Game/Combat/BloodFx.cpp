@@ -119,6 +119,7 @@ void BloodFx::EnsureHooks() {
 
 void BloodFx::AddSplat(unsigned entity, int part, bool corpse, const glm::vec3& point, const glm::vec3& normal, const glm::vec3& along,
                        const char* set, float radius, float depth, float delay, float grow) {
+    if (!Config.BodySplats || (entity == kPlayerEntity && !Config.GearSpatter)) return;
     EnsureHooks();
     SplatSpace space;
     if (!m_SplatSpace || !m_SplatSpace(entity, part, corpse, point, space)) return;
