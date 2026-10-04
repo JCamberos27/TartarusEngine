@@ -5,6 +5,9 @@
 #include "Combat/BloodFxPresets.h"
 
 #include <glm/glm.hpp>
+#include <glm/gtc/matrix_transform.hpp>
+
+#include <algorithm>
 
 #include <cmath>
 #include <cstdlib>
@@ -375,6 +378,63 @@ void Test_Blood_Decals() {
     fx.Update(5.0f);
     CHECK(fx.Decals().size() == before);
 }
+void Test_Blood_Splats() {
+    BloodFx fx;
+    fx.SetSimLookup([](const char*) { return 0; });
+    fx.SetDecalSetLookup([](const char*) { return 0; });
+    fx.SetRaycast([](const glm::vec3&, const glm::vec3&, float, glm::vec3&, glm::vec3&) { return false; });
+    // Soldier 5: two meshes, each in its own bind space (one shifted 1 m up, one at 100x scale);
+    // soldier 6 stands 1.5 m behind him, in the spray's path.
+    std::vector<unsigned> alive = {5, 6};
+    fx.SetSplatSpace([&](unsigned entity, int, bool, const glm::vec3&, BloodFx::SplatSpace& out) {
+        if (std::find(alive.begin(), alive.end(), entity) == alive.end()) return false;
+        out.Group = entity;
+        out.Members.emplace_back(entity * 10 + 1, glm::translate(glm::mat4(1.0f), glm::vec3(0, 1, 0)));
+        out.Members.emplace_back(entity * 10 + 2, glm::scale(glm::mat4(1.0f), glm::vec3(100.0f)));
+        return true;
+    });
+    fx.SetSplatMembers([&](unsigned group, std::vector<unsigned>&) {
+        return std::find(alive.begin(), alive.end(), group) != alive.end();
+    });
+    fx.SetBodyRay([](const glm::vec3& o, const glm::vec3& d, float maxD, unsigned& e, int& part, glm::vec3& p) {
+        if (d.z > -0.5f || maxD < 1.5f) return false;
+        e = 6;
+        part = 1;
+        p = o + d * 1.5f;
+        return true;
+    });
+    BloodFx::Hit h;
+    h.Point = glm::vec3(0, 1.3f, 0);
+    h.Direction = glm::vec3(0, 0, -1);
+    h.Entity = 5;
+    h.Part = 1;
+    h.Damage = 30.0f;
+    fx.OnFleshHit(h);
+    bool entry = false, exit = false, onOther = false, scaled = false;
+    for (const BloodFx::Splat& s : fx.Splats()) {
+        if (s.Member == 51 && std::abs(s.Center.y - 2.3f) < 1e-4f && s.Normal.z > 0.99f) entry = true;     // facing the shooter
+        if (s.Member == 51 && s.Center.z < -0.2f && s.Normal.z < -0.99f) exit = true;                     // out of the back
+        if (s.Member == 52 && std::abs(s.Center.y - 130.0f) < 1e-2f && s.Radius > 5.0f) scaled = true;   // its own units
+        onOther |= s.Group == 6;
+    }
+    CHECK(entry);
+    CHECK(exit);
+    CHECK(scaled);
+    CHECK(onOther);
+    CHECK(fx.SplatsSpawned() >= 4);
+    // A mesh holds 24 at most.
+    for (int i = 0; i < 40; ++i) { h.Entity = 5; fx.Update(0.3f); fx.OnFleshHit(h); }
+    int on51 = 0;
+    for (const BloodFx::Splat& s : fx.Splats()) on51 += s.Member == 51;
+    CHECK(on51 <= 24 && on51 > 0);
+    // When the body goes, its blood goes with it.
+    alive = {6};
+    fx.Update(0.1f);
+    bool any5 = false;
+    for (const BloodFx::Splat& s : fx.Splats()) any5 |= s.Group == 5;
+    CHECK(!any5);
+    CHECK(!fx.Splats().empty());
+}
 } // namespace
 
 void RegisterBloodTests(UnitTestSupport::TestList& tests) {
@@ -386,4 +446,5 @@ void RegisterBloodTests(UnitTestSupport::TestList& tests) {
     tests.push_back({"Blood::SprayTiming", Test_Blood_SprayTiming});
     tests.push_back({"Blood::FleshHits", Test_Blood_FleshHits});
     tests.push_back({"Blood::Decals", Test_Blood_Decals});
+    tests.push_back({"Blood::Splats", Test_Blood_Splats});
 }

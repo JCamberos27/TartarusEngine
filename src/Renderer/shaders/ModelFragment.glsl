@@ -7,9 +7,58 @@ in vec4 vColor; // #113
 out vec4 FragColor;
 
 in float vHidden; // ModelVertex: the share of the vertex moved by uHideBones
+in vec3 vBindPos;    // the surface in the mesh's bind-pose space (ModelVertex)
+in vec3 vBindNormal;
 
 // Every uniform and shading function (lights, shadows, IBL, fog): shared with the blood decals (docs/BLOOD_FX.md).
 #include "ModelShading.glsl"
+
+// Blood splats on this mesh (docs/BLOOD_FX.md): the BloodRenderer's list for the entity, in the mesh's bind-pose
+// space. Each is a box like a world decal - projected along its normal, read from the decal atlas - that turns
+// what it covers into blood before the surface is lit. uBloodSplatCount 0 (every draw that has none) costs a branch.
+struct BloodSplat {
+    vec4 CenterRadius; // xyz centre, w the box's half-size (bind units)
+    vec4 NormalDepth;  // xyz out of the surface, w the projection's half-depth
+    vec4 Tangent;      // xyz the decal's u axis, w unused
+    vec4 Rect;         // atlas rect (offset, size)
+    vec4 Params;       // x cutout, y dryness, z opacity, w unused
+};
+layout(std430, binding = 6) readonly buffer BloodSplats { BloodSplat uBloodSplats[]; };
+layout(binding = 28) uniform sampler2D uBloodNormAtlas; // 28, 29: reserved past the material units (ShaderAsset)
+layout(binding = 29) uniform sampler2D uBloodMaskAtlas;
+uniform int uBloodSplatFirst;
+uniform int uBloodSplatCount;
+
+// How much of this fragment is under blood (x), its pooled core (y) and how dried (z).
+vec3 BloodSplatCover() {
+    vec3 acc = vec3(0.0);
+    vec3 bn = normalize(vBindNormal);
+    // The atlas is read inside a loop that skips splats per fragment, where implicit derivatives are undefined:
+    // the mip comes from the surface's own footprint instead (bind units per pixel), taken out here.
+    float footprint = max(length(fwidth(vBindPos)), 1e-7);
+    vec2 atlasSize = vec2(textureSize(uBloodNormAtlas, 0));
+    for (int i = 0; i < uBloodSplatCount; ++i) {
+        BloodSplat s = uBloodSplats[uBloodSplatFirst + i];
+        vec3 d = vBindPos - s.CenterRadius.xyz;
+        float r = s.CenterRadius.w;
+        if (dot(d, d) > 3.0 * r * r) continue;
+        vec3 n = s.NormalDepth.xyz, t = s.Tangent.xyz, b = cross(n, t);
+        vec3 l = vec3(dot(d, t), dot(d, n), dot(d, b)) / vec3(2.0 * r, 2.0 * s.NormalDepth.w, 2.0 * r);
+        if (any(greaterThan(abs(l), vec3(0.5)))) continue;
+        float facing = smoothstep(-0.2, 0.35, dot(bn, n)); // wraps a little round the curve of a limb
+        vec2 uv = vec2(l.x, -l.z) + 0.5;
+        vec2 tc = s.Rect.xy + vec2(uv.x, 1.0 - uv.y) * s.Rect.zw;
+        float lod = log2(max(footprint / (2.0 * r) * max(s.Rect.z * atlasSize.x, s.Rect.w * atlasSize.y), 1e-4));
+        float coverage = clamp(textureLod(uBloodNormAtlas, tc, lod).a * 2.0, 0.0, 1.0);
+        vec3 mask = textureLod(uBloodMaskAtlas, tc, lod).rgb;
+        float a = clamp((mask.r - s.Params.x) * 20.0, 0.0, 1.0) * coverage * facing * s.Params.z;
+        float core = clamp((mask.r - s.Params.x) * 5.0, 0.0, 1.0) * coverage * mask.b;
+        if (a > acc.x) acc.z = s.Params.y;
+        acc.x = max(acc.x, a);
+        acc.y = max(acc.y, core * facing);
+    }
+    return acc;
+}
 
 void main() {
     if (uNearHide > 0.0) {
@@ -103,6 +152,16 @@ void main() {
         N = normalize(tbn * tn);
     } else if (backFace) {
         N = -N;
+    }
+    if (uBloodSplatCount > 0) {
+        // Soaked in: fabric and skin take the blood's colour, darker where it pooled, glossy while wet.
+        vec3 blood = BloodSplatCover();
+        if (blood.x > 0.0) {
+            vec3 bloodAlbedo = mix(vec3(0.24, 0.009, 0.007), vec3(0.07, 0.02, 0.015), blood.z) * mix(1.0, 0.6, blood.y);
+            albedo = mix(albedo, bloodAlbedo, blood.x * 0.95);
+            roughness = mix(roughness, mix(0.18, 0.65, blood.z), blood.x);
+            metallic = mix(metallic, 0.0, blood.x);
+        }
     }
 
     // --- Scene-view debug draw modes (#236 R2) ---

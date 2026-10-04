@@ -38,7 +38,7 @@ NpcTest::NpcTest(const std::string& scenario) : m_Scenario(scenario.empty() ? "w
     if (m_Scenario == "feet") m_Duration = 10.0f;
     if (m_Scenario == "reload") m_Duration = 28.0f;
     if (m_Scenario == "flame") m_Duration = 14.0f;
-    if (m_Scenario == "blood") m_Duration = 35.0f;
+    if (m_Scenario == "blood") m_Duration = 44.0f;
     if (const char* t = EnvVar("NPC_TEST_SECONDS")) m_Duration = std::max(5.0f, (float)std::atof(t));
     if (const char* r = EnvVar("NPC_TEST_RECORD")) m_RecordDir = r;
     std::cout << "[NpcTest] scenario '" << m_Scenario << "', " << m_Duration << " s" << std::endl;
@@ -1137,8 +1137,11 @@ void NpcTest::Blood(World& world, NpcDirector& npcs, float now) {
     npcs.Frozen = true;
     m_Shot.clear();
     struct Case { const char* Name; int Part; float Damage; bool Corpse; };
-    static const Case kCases[] = {
-        {"wound", 1, 12.0f, false}, {"chest_kill", 1, 400.0f, false}, {"head_kill", 2, 400.0f, false}, {"corpse", 1, 30.0f, true}};
+    static const Case kCases[] = {{"wound", 1, 12.0f, false},
+                                  {"chest_kill", 1, 400.0f, false},
+                                  {"head_kill", 2, 400.0f, false},
+                                  {"corpse", 1, 30.0f, true},
+                                  {"point_blank", 1, 12.0f, false}}; // a round from a metre away: back onto the gun
     constexpr int kCaseCount = (int)(sizeof(kCases) / sizeof(kCases[0]));
     static const float kShotTimes[] = {0.1f, 0.3f, 0.6f, 1.0f, 1.8f};
     constexpr int kShotCount = (int)(sizeof(kShotTimes) / sizeof(kShotTimes[0]));
@@ -1178,7 +1181,8 @@ void NpcTest::Blood(World& world, NpcDirector& npcs, float now) {
         if (m_BCase >= kCaseCount) { m_BStep = 2; m_BAt = now; break; }
         const Case& c = kCases[m_BCase];
         // The wound and the kills each on their own soldier; the corpse is the chest kill's.
-        const std::string& who = m_BLine[std::min<size_t>(c.Corpse ? 1 : (size_t)m_BCase, m_BLine.size() - 1)];
+        const bool pointBlank = std::string(c.Name) == "point_blank";
+        const std::string& who = m_BLine[std::min<size_t>(c.Corpse ? 1 : pointBlank ? 3 : (size_t)m_BCase, m_BLine.size() - 1)];
         Npc* n = find(who);
         if (!n) { ++m_BCase; break; }
         if (!m_BFired) {
@@ -1195,7 +1199,8 @@ void NpcTest::Blood(World& world, NpcDirector& npcs, float now) {
             if (c.Corpse && n->Ragdoll) target = n->Ragdoll->PartPosition(c.Part);
             // From the player's side of the line (+Z), level: out through the back, toward the wall.
             const glm::vec3 dir = c.Corpse ? glm::normalize(glm::vec3(0.0f, -0.6f, -1.0f)) : glm::vec3(0.0f, 0.0f, -1.0f);
-            const glm::vec3 origin = target - dir * 4.0f;
+            const glm::vec3 origin = target - dir * (pointBlank ? 1.0f : 4.0f);
+            m_BGearBefore = BloodStats ? BloodStats->GearSplats : 0;
             bool killed = false, head = false;
             const bool hit = npcs.OnPlayerHit(world, RootId(*n), target, origin, dir, w, &killed, &head);
             m_BSpawnBefore = BloodStats ? BloodStats->SpraysSpawned : 0;
@@ -1220,11 +1225,27 @@ void NpcTest::Blood(World& world, NpcDirector& npcs, float now) {
                   std::string("blood ") + c.Name + ": a spray thrown (" + std::to_string(BloodStats->SpraysSpawned - m_BSpawnBefore) + ")");
             if (std::string(c.Name) == "chest_kill")
                 Check(BloodStats->LastSprayClipped, "blood chest_kill: the spray meets the wall behind (clip plane set)");
+            if (pointBlank)
+                Check(BloodStats->GearSplats > m_BGearBefore,
+                      "blood point_blank: blood back on the player's gun / hands (" + std::to_string(BloodStats->GearSplats - m_BGearBefore) + ")");
         }
         if (t >= 3.0f) { ++m_BCase; m_BFired = false; m_BChecked = false; m_BAt = now; }
         break;
     }
     case 2: // every spray has fallen and is gone; the pools have spread: an overview of what's left
+        if (now - m_BAt < 5.0f && !m_BLine.empty()) {
+            // Close on the wounded soldier (still standing): the entry wound and the run below it.
+            if (const Npc* w = find(m_BLine[0])) {
+                const glm::vec3 chest = w->Feet + glm::vec3(0.0f, 1.25f, 0.0f);
+                m_CamPos = chest + glm::vec3(0.35f, 0.15f, 1.15f);
+                const glm::vec3 d = glm::normalize(chest - glm::vec3(0.0f, 0.1f, 0.0f) - m_CamPos);
+                m_CamYaw = glm::degrees(std::atan2(d.z, d.x));
+                m_CamPitch = glm::degrees(std::asin(std::clamp(d.y, -1.0f, 1.0f)));
+                m_HaveCam = true;
+                if (!m_BCloseUp && now - m_BAt > 4.0f) { m_Shot = "blood_wounded"; m_BCloseUp = true; }
+            }
+            break;
+        }
         if (now - m_BAt < 16.0f) {
             m_CamPos = glm::vec3(-2.5f, 3.2f, 0.5f);
             const glm::vec3 d = glm::normalize(glm::vec3(0.5f, 0.0f, -5.0f) - m_CamPos);
@@ -1241,6 +1262,8 @@ void NpcTest::Blood(World& world, NpcDirector& npcs, float now) {
             std::printf("[NpcTest] blood: %d stains, %d pools\n", BloodStats->DecalsSpawned, BloodStats->PoolsSpawned);
             Check(BloodStats->DecalsSpawned >= 6, "the blood left stains (floor splats, wall spatter)");
             Check(BloodStats->PoolsSpawned >= 2, "a pool spread under each of the two corpses");
+            std::printf("[NpcTest] blood: %d splats on bodies\n", BloodStats->SplatsSpawned);
+            Check(BloodStats->SplatsSpawned >= 4, "the hits left blood on the bodies (entry, exit, the run below)");
         }
         m_Done = true;
         m_BStep = 3;

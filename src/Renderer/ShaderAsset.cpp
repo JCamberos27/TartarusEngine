@@ -378,7 +378,7 @@ void ShaderAsset::BuildBindings() {
     if (s_MaxUnits == 0) {
         GLint n = 16;
         glGetIntegerv(GL_MAX_TEXTURE_IMAGE_UNITS, &n);
-        s_MaxUnits = std::clamp((int)n, 16, 30);
+        s_MaxUnits = std::clamp((int)n, 16, 28); // 28, 29: the blood splat atlas; 30, 31: the physical sky
     }
     int unit = 1;
     for (int i = 0; i < (int)m_Props.size(); ++i) {

@@ -136,6 +136,60 @@ void BloodRenderer::EnsureProgram() {
 void BloodRenderer::BeginFrame() {
     m_Sprays.clear();
     m_Decals.clear();
+    m_SplatRanges.clear();
+    m_SplatCount = 0;
+}
+
+namespace {
+struct GpuSplat { // std430, matches ModelFragment.glsl's BloodSplat
+    glm::vec4 CenterRadius;
+    glm::vec4 NormalDepth;
+    glm::vec4 Tangent;
+    glm::vec4 Rect;
+    glm::vec4 Params;
+};
+static_assert(sizeof(GpuSplat) == 80, "std430 layout");
+constexpr unsigned kSplatBinding = 6;
+} // namespace
+
+void BloodRenderer::SetSplats(const std::vector<Splat>& splats, const std::vector<std::pair<unsigned, glm::ivec2>>& ranges) {
+    m_SplatRanges.clear();
+    m_SplatCount = 0;
+    if (splats.empty() || !m_AtlasNorm) return;
+    static std::vector<GpuSplat> gpu;
+    gpu.clear();
+    for (const Splat& s : splats) {
+        const int set = s.Set >= 0 && s.Set < (int)m_RectNorm.size() ? s.Set : 0;
+        gpu.push_back({glm::vec4(s.Center, s.Radius), glm::vec4(s.Normal, s.Depth), glm::vec4(s.Tangent, 0.0f), m_RectNorm[set],
+                       glm::vec4(s.Cutout, s.Dry, s.Opacity, 0.0f)});
+    }
+    if (gpu.size() > m_SplatCapacity) {
+        if (m_SplatBuffer) glDeleteBuffers(1, &m_SplatBuffer);
+        m_SplatCapacity = std::max<size_t>(gpu.size() * 2, 64);
+        glCreateBuffers(1, &m_SplatBuffer);
+        glNamedBufferStorage(m_SplatBuffer, (GLsizeiptr)(m_SplatCapacity * sizeof(GpuSplat)), nullptr, GL_DYNAMIC_STORAGE_BIT);
+    }
+    glNamedBufferSubData(m_SplatBuffer, 0, (GLsizeiptr)(gpu.size() * sizeof(GpuSplat)), gpu.data());
+    m_SplatCount = (int)gpu.size();
+    for (const auto& [entity, range] : ranges)
+        if (range.x >= 0 && range.y > 0 && range.x + range.y <= m_SplatCount) m_SplatRanges[entity] = range;
+}
+
+bool BloodRenderer::SplatRange(unsigned entity, int& first, int& count) const {
+    first = count = 0;
+    if (m_SplatRanges.empty()) return false;
+    const auto it = m_SplatRanges.find(entity);
+    if (it == m_SplatRanges.end()) return false;
+    first = it->second.x;
+    count = it->second.y;
+    return true;
+}
+
+void BloodRenderer::BindSplatResources() const {
+    if (!m_SplatCount || !m_SplatBuffer) return;
+    glBindBufferBase(GL_SHADER_STORAGE_BUFFER, kSplatBinding, m_SplatBuffer);
+    glBindTextureUnit(28, m_AtlasNorm); // ModelFragment.glsl: units 28 and 29, kept out of the material units
+    glBindTextureUnit(29, m_AtlasMask);
 }
 
 void BloodRenderer::AddSpray(const Spray& s) {
@@ -190,8 +244,8 @@ int BloodRenderer::DrawSprays(const glm::mat4& view, const glm::mat4& proj,
     prog.SetInt("uAlphaBlend", 0);
     prog.SetInt("uSSAOEnabled", 0); // the AO pre-pass never saw the fluid
     prog.SetInt("uNoReceiveShadows", 0);
-    prog.SetVec3("uSubsurfaceColor", glm::vec3(0.9f, 0.04f, 0.03f));
-    prog.SetFloat("uThickness", 0.35f);
+    prog.SetVec3("uSubsurfaceColor", glm::vec3(0.42f, 0.012f, 0.008f));
+    prog.SetFloat("uThickness", 0.55f);
 
     glBindBufferBase(GL_SHADER_STORAGE_BUFFER, kSprayBinding, m_SprayBuffer);
     glBindBufferBase(GL_SHADER_STORAGE_BUFFER, kFrameBinding, m_FrameBuffer);
