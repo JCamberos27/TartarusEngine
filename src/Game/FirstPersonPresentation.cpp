@@ -1003,7 +1003,7 @@ void FirstPersonPresentation::Eject() {
     c.Material = ej.Material;
     c.Position = port;
     c.Velocity = m_PlayerVelocity + dir * ej.Speed * (1.0f + ej.SpeedJitter * s(m_Rng));
-    // The mesh's long axis is its local +Y (tools/weapons/extract_casings.py).
+    // The mesh's long axis is its local +Y.
     glm::vec3 across = glm::cross(bore, dir);
     if (glm::dot(across, across) < 1e-6f) across = glm::vec3(0.0f, 1.0f, 0.0f);
     const glm::vec3 a = glm::normalize(across);
