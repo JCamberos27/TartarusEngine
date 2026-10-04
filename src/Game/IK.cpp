@@ -406,7 +406,7 @@ std::vector<std::string> MissingBones(const IKRigComponent& rig, const Model& mo
     return missing;
 }
 
-// ---- foot slide correction (docs/CAS_PARITY.md #8) ----
+// ---- foot slide correction ----
 namespace {
 float FollowK(float dt, float seconds) { return seconds > 1e-4f ? 1.0f - std::exp(-dt / seconds) : 1.0f; }
 } // namespace

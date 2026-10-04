@@ -1,5 +1,5 @@
 // ModelFragment.glsl's uniforms and shading functions, split out so other fragment shaders can light a surface
-// exactly as a mesh is lit (the blood decals, docs/BLOOD_FX.md). Expects vWorldPos to exist: ModelFragment's
+// exactly as a mesh is lit (the blood decals). Expects vWorldPos to exist: ModelFragment's
 // input, or a global the includer fills before calling anything that reads it.
 #pragma once
 

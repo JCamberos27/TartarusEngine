@@ -28,7 +28,7 @@ public:
         NpcDirector* Npcs = nullptr;
         PlayerVitals* Vitals = nullptr;
         FirstPersonPresentation* Weapon = nullptr;
-        bool* BloodLab = nullptr; // the Blood Lab window's open flag (docs/BLOOD_FX.md)
+        bool* BloodLab = nullptr; // the Blood Lab window's open flag
     };
     void Draw(const Context& ctx); // call inside an ImGui frame while Open
 

@@ -182,7 +182,7 @@ const Source kSources[] = {
     {"pool_smooth", Library::DecalLarge, kRealBlood, "Textures/Puddles/Smooth/decal_meash_decal_AlbedoTransparency (3).tga", Mode::Albedo,
      "Textures/Puddles/Smooth/decal_meash_decal_Normal (1) fixed.tga", 2, 2, 2, 2, 1, 0, 0.92f},
     // Splatter (Real Blood "SmallPuddles", "Puddles/medium", "Damage"): more shapes for the thrown blood, drawn in the
-    // palette's colour like every stain (docs/BLOOD_FX.md, v3). In the 2048 library: they're drawn up to ~1.5 m.
+    // palette's colour like every stain. In the 2048 library: they're drawn up to ~1.5 m.
     {"splat_small", Library::DecalLarge, kRealBlood, "Textures/SmallPuddles/Puddle_small_size_AlbedoTransparency.tga", Mode::Albedo,
      "Textures/SmallPuddles/Puddle_small_size_Normal fixed.tga", 2, 2, 2, 2, 1, 0, 0.9f},
     {"splat_wide", Library::DecalLarge, kRealBlood, "Textures/SmallPuddles/low1_blood_puddles_AlbedoTransparency 1.png", Mode::Albedo,

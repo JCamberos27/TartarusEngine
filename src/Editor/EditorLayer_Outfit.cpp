@@ -1,4 +1,4 @@
-// The Character Outfit component's editor (docs/CHARACTER_OUTFITS.md): gender and race up top, a tab per slot,
+// The Character Outfit component's editor: gender and race up top, a tab per slot,
 // the slot's items as a list, a 3D preview of the item you point at (or the one worn) that you can spin, the
 // equipped item's colourways by name, Randomize (with locks) and presets. Everything goes through
 // OutfitSystem, after PushUndo.

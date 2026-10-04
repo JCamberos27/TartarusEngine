@@ -1,4 +1,4 @@
-# Generates project/scenes/BloodTest.json: a small range for the volumetric blood (docs/BLOOD_FX.md).
+# Generates project/scenes/BloodTest.json: a small range for the volumetric blood.
 # A line of four soldiers stands with a wall close behind them (exit sprays and wall spatter), one under a
 # low ceiling (spray clipped against it, ceiling drips), one beside a staircase (blood down the steps)
 # and one by a stack of loose physics crates (blood on moving props). The player (Player Spawn and its
@@ -123,7 +123,7 @@ block('East Wall', 8.2, -1.0, 0.4, 4.0, 10.0, env)
 box('Low Ceiling', (-4.5, 2.7, -4.0), (3.4, 0.2, 4.4), env, WALL)  # over the westmost soldier
 for k in range(6):                                                # stairs up to the east, beside soldier 4
     block(f'Step {k + 1}', 6.6, -4.0 + k * 0.45, 2.4, 0.18 * (k + 1), 0.45, env, ACCENT)
-# Surface panels along the west wall's inside (docs/BLOOD_FX.md, v2): the impacts and holes by what they strike
+# Surface panels along the west wall's inside: the impacts and holes by what they strike
 # (ImpactFx reads the surface from the name). Tinted so each reads as its stuff.
 surfaces = group('Surface Panels')
 for k, (name, tint) in enumerate([('Metal Plate', (0.55, 0.57, 0.6)), ('Wood Panel', (0.7, 0.5, 0.3)),

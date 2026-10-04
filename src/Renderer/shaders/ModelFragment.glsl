@@ -10,10 +10,10 @@ in float vHidden; // ModelVertex: the share of the vertex moved by uHideBones
 in vec3 vBindPos;    // the surface in the mesh's bind-pose space (ModelVertex)
 in vec3 vBindNormal;
 
-// Every uniform and shading function (lights, shadows, IBL, fog): shared with the blood decals (docs/BLOOD_FX.md).
+// Every uniform and shading function (lights, shadows, IBL, fog): shared with the blood decals.
 #include "ModelShading.glsl"
 
-// Blood splats on this mesh (docs/BLOOD_FX.md): the BloodRenderer's list for the entity, in the mesh's bind-pose
+// Blood splats on this mesh: the BloodRenderer's list for the entity, in the mesh's bind-pose
 // space. Each is a box like a world decal - projected along its normal, read from the decal atlas - that turns
 // what it covers into blood before the surface is lit. uBloodSplatCount 0 (every draw that has none) costs a branch.
 struct BloodSplat {

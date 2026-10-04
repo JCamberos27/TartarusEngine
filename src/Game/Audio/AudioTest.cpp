@@ -23,7 +23,7 @@
 #include <string>
 #include <vector>
 
-// The audio engine's own test (docs/AUDIO.md, "--audio-test"). Offline: the real engine (voices, buses, the convolution reverb, the
+// The audio engine's own test. Offline: the real engine (voices, buses, the convolution reverb, the
 // master limiter) rendered on demand at 48 kHz with no device, driven by the real WeaponAudio over a scene's Reverb Zones. Four parts:
 //  0. The tier ladder: the spec's levels and distance models, checked against the hierarchy's rules (nothing outranks the player's
 //     gun up close, soldiers' steps carry over the beds, ...). No audio.

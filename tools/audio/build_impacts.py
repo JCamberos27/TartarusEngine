@@ -5,7 +5,7 @@
   project/assets/Audio/Casings/<rifle|shell>/<material>_<n>.wav   key snd.casing.<kind>.<material>
   project/assets/Audio/Impacts/<material>_<n>.wav                 key snd.impact.<material>
   project/assets/Audio/Impacts/flyby_<n>.wav                      key snd.flyby
-Manifest extras: kind, material, proxy (true = not a recording of exactly that thing, see docs/AUDIO.md), short.
+Manifest extras: kind, material, proxy (true = not a recording of exactly that thing), short.
 """
 import json
 import math

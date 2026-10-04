@@ -21,7 +21,7 @@
 #include <string>
 #include <vector>
 
-// Unit tests for the volumetric blood (docs/BLOOD_FX.md): the importer's EXR / VAT maths, the presets
+// Unit tests for the volumetric blood: the importer's EXR / VAT maths, the presets
 // and the game-side spray logic. No GL: the renderer's sim lookup and the physics ray are stubbed.
 
 namespace {

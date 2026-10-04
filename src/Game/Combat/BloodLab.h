@@ -6,7 +6,7 @@ class BloodFx;
 class FxSprites;
 class ImpactFx;
 
-// The Blood Lab (docs/BLOOD_FX.md, v2): an ImGui window off the F7 dev panel for tuning the blood in Play. Fire any
+// The Blood Lab: an ImGui window off the F7 dev panel for tuning the blood in Play. Fire any
 // effect at the crosshair - a body hit (rifle / shotgun / headshot), a pool, wall drips, a surface impact - move the Blood Settings live, read what's alive and what it costs, clear it all. The host wires the actions
 // (it owns the world, the squad and the camera); the window only calls them.
 class BloodLab {

@@ -4,7 +4,7 @@
 
 struct AudioMixComponent;
 
-// The dynamic half of the mix (docs/AUDIO.md, "Mix hierarchy" and "Dynamic mix"). The static half is the manifest: every file's
+// The dynamic half of the mix. The static half is the manifest: every file's
 // mix_db puts it on its tier, and a DistanceModel per 3D category says how that level holds with distance. On top of that:
 //
 //  - Mix groups: every voice belongs to one, from its key and whether it is the player's own (2D) or in the world (3D).

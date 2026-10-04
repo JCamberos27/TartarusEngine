@@ -540,8 +540,7 @@ bool ImportPackage(const std::string& packageDir, const std::string& outDir) {
     readme << "# Volumetric blood data (generated, git-ignored)\n\n"
               "Converted from the KriptoFX \"Volumetric Blood Fluids\" Unity asset (v1.0.3), which can't be\n"
               "redistributed, so this folder is not in git. Rebuild it with:\n\n"
-              "    TartarusEngine.exe --import-blood-fx \"<path to the VolumetricBloodFX package folder>\"\n\n"
-              "See docs/BLOOD_FX.md.\n";
+              "    TartarusEngine.exe --import-blood-fx \"<path to the VolumetricBloodFX package folder>\"\n";
     Log::Info("BloodFx import: " + std::string(ok ? "done" : "FAILED") + ", " + std::to_string(totalBytes / (1024 * 1024)) +
               " MB of sims written to " + dst.u8string());
     return ok;

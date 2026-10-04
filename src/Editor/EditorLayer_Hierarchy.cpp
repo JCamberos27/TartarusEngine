@@ -722,7 +722,7 @@ void EditorLayer::DrawAddEntityItems(World& world, AssetLibrary& assets, Camera&
         world.Registry.emplace_or_replace<FirstPersonControllerComponent>(e);
         world.Registry.emplace_or_replace<FirstPersonBodyComponent>(e);
         SelectItem(e, false);
-        Log::Info("Added a Player Spawn with a First Person Controller and Body. Next: add the body pieces as children and a locomotion controller (see docs/BODY_SETUP.md); the Body's Setup box lists what is missing.");
+        Log::Info("Added a Player Spawn with a First Person Controller and Body. Next: add the body pieces as children and a locomotion controller; the Body's Setup box lists what is missing.");
     }
     if (ImGui::MenuItem(ICON_FA_VIDEO "  Camera")) {
         entt::entity e = CreateEmptyAt(world, &editorCamera, "Camera", false);

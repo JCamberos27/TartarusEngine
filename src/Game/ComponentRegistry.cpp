@@ -956,7 +956,7 @@ void RegisterEngineComponents() {
         Register<FirstPersonBodyComponent>(std::move(m));
     }
 
-    // Character outfits (docs/CHARACTER_OUTFITS.md): the Inspector's outfit editor draws the choices.
+    // Character outfits: the Inspector's outfit editor draws the choices.
     {
         ReflectComponent m;
         m.Name = "Character Outfit"; m.Icon = ICON_FA_PERSON_DRESS; m.Category = "Gameplay";
@@ -1471,7 +1471,7 @@ void RegisterEngineComponents() {
     });
     Register<BloodSettingsComponent>({
         "Blood Settings", ICON_FA_DROPLET,
-        "The volumetric blood (the first Blood Settings in the scene counts; docs/BLOOD_FX.md): how big the sprays are,\n"
+        "The volumetric blood (the first Blood Settings in the scene counts): how big the sprays are,\n"
         "how many stains stay and for how long, and what blood lands on.",
         "Gameplay",
         {

@@ -7,7 +7,7 @@
 
 class FxSpriteRenderer;
 
-// Flipbook particles (docs/BLOOD_FX.md, "v2"): the short-lived billboards of the Knife packs - blood
+// Flipbook particles: the short-lived billboards of the Knife packs - blood
 // mist and bursts on a hit, impact dust and debris, muzzle flashes and smoke. A pooled CPU sim (motion
 // under gravity and drag, a bounce off one plane, size / alpha / erosion over life, the flipbook's frame);
 // Submit() hands the live ones to the FxSpriteRenderer, which draws them all in one sorted instanced draw.

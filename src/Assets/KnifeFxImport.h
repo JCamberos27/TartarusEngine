@@ -3,7 +3,7 @@
 #include <string>
 #include <vector>
 
-// Knife Entertainment packs import (docs/BLOOD_FX.md, "v2"). Converts the chosen textures of the
+// Knife Entertainment packs import. Converts the chosen textures of the
 // "Real Blood" and "PRO Effects FPS Muzzle Flashes & Impacts" Unity packs (extracted to plain files
 // under one folder) into the engine's runtime texture libraries under project/assets/Effects/Knife/.
 // The output is git-ignored (the packs can't be redistributed);

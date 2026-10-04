@@ -3,7 +3,7 @@
 #include <string>
 #include <vector>
 
-// Volumetric blood import (docs/BLOOD_FX.md). Converts the KriptoFX "Volumetric Blood Fluids" source
+// Volumetric blood import. Converts the KriptoFX "Volumetric Blood Fluids" source
 // package (a Unity asset: Houdini vertex-animation-texture fluid sims as EXR + ASCII FBX, and decal
 // PNGs) into the engine's runtime files under project/assets/Effects/Blood/. The output is git-ignored
 // (the package can't be redistributed); `TartarusEngine --import-blood-fx <package dir>` rebuilds it.

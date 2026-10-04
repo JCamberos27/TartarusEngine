@@ -12,7 +12,7 @@
 
 class World;
 
-// Bullet impacts, shell casings on the ground and rounds whipping past the listener (docs/AUDIO.md, "Impacts, casings, flyby").
+// Bullet impacts, shell casings on the ground and rounds whipping past the listener.
 // All 3D, all sets from the manifest (snd.impact.<surface>, snd.casing.<rifle|shell>.<surface>, snd.flyby), played through the
 // weapon audio's SoundPlayer so they get the reverb send, the occlusion low-pass and the voice caps like everything else.
 // The surface comes from the struck collider's physics material, tag and name against the Impact Audio component's table.
@@ -49,7 +49,7 @@ public:
     // The flesh hit (a soldier or the player struck): snd.impact.flesh. False when the recordings are off / missing (the caller
     // then plays its placeholder, so there is never both).
     bool Flesh(const glm::vec3& pos, bool at2D, float gain);
-    // The wet crunch over it when a round takes a head apart (snd.impact.gore; docs/BLOOD_FX.md). 3D.
+    // The wet crunch over it when a round takes a head apart (snd.impact.gore). 3D.
     bool Gore(const glm::vec3& pos, float gain);
     // A round passed `miss` metres from the listener at `point`. False when it is out of the radius, too soon after the last,
     // or the flyby has no files (the caller's placeholder whizz plays then).

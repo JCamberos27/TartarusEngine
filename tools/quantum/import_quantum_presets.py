@@ -1,6 +1,6 @@
 # Turns the Quantum pack's 60 preset characters into outfit presets (.outfit, OutfitSystem::LoadPreset).
 #
-# The presets ship as merged FBXs (not imported - see _import/IMPORT_NOTES.md), but each still names the
+# The presets ship as merged FBXs (not imported), but each still names the
 # item meshes it was built from. Those names are matched to the items we did import; the result is the
 # artist's own outfits as presets, and a check that the wardrobe's rules allow what the artist made
 # (TartarusEngine --outfit-audit resolves every one).

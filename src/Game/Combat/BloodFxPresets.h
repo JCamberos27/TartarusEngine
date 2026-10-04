@@ -1,7 +1,7 @@
 #pragma once
 #include <vector>
 
-// The KriptoFX blood prefabs' setups (docs/BLOOD_FX.md), generated into BloodFxPresets.inc by
+// The KriptoFX blood prefabs' setups, generated into BloodFxPresets.inc by
 // tools/gen_blood_presets.py: which sims each prefab plays where, and the floor decal it leaves.
 // Engine axes; matrices are 3x4 row-major into the prefab's own frame (spray toward +X, gravity -Y).
 
