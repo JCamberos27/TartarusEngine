@@ -666,7 +666,7 @@ void BloodFx::OnFleshHit(const Hit& hit) {
         glm::vec3 p, n;
         if (m_Ray(exitPoint, glm::vec3(0.0f, 1.0f, 0.0f), 2.2f, p, n) && n.y < -0.5f) {
             const float s = size * (0.7f + 0.3f * Random01());
-            if (Decal* d = AddDecal("blood7", p, n, RandomTangent(n), glm::vec3(1.1f * s, 0.3f, 1.1f * s), glm::length(p - exitPoint) / 12.0f))
+            if (Decal* d = AddSplash(Splash::Big, p, n, RandomTangent(n), glm::vec3(1.1f * s, 0.3f, 1.1f * s), glm::length(p - exitPoint) / 12.0f))
                 d->Opacity = 0.85f;
         }
     }
@@ -679,10 +679,10 @@ void BloodFx::OnFleshHit(const Hit& hit) {
 }
 
 float BloodFx::GroundSplatterSize(const Hit& hit, float energy) {
-    float s = hit.Head ? 0.5f : 0.3f;
-    if (hit.Head && hit.Killed) s = 0.7f;
+    float s = hit.Head ? 0.45f : 0.3f;
+    if (hit.Head && hit.Killed) s = 0.55f;
     if (hit.Corpse) s = 0.22f;
-    return s * std::clamp(0.75f + 0.25f * energy, 0.8f, 1.4f);
+    return s * std::clamp(0.75f + 0.25f * energy, 0.8f, 1.25f);
 }
 
 bool BloodFx::Bleeding(unsigned entity) const {
@@ -726,13 +726,15 @@ BloodFx::Decal* BloodFx::AddSplash(Splash kind, const glm::vec3& centre, const g
     case Splash::Big: {
         static const char* const kKnife[] = {"splat_small", "splat_wide", "splat_medium"};
         static const char* const kSets[] = {"blood7", "attached", "blood6", "blood4"};
-        if (r < 0.55f) d = AddKnifeDecal(pick(kKnife, 3), centre, up, along, extent * 1.2f, delay); // their splat fills ~80% of the cell
+        // Real Blood's (1024 px) for anything big; KriptoFX's stains are 512 px at most, kept to small splashes.
+        const bool big = std::max(extent.x, extent.z) > 0.45f;
+        if (big || r < 0.55f) d = AddKnifeDecal(pick(kKnife, 3), centre, up, along, extent * 1.2f, delay); // their splat fills ~80% of the cell
         if (!d) d = AddDecal(pick(kSets, 4), centre, up, along, extent, delay);
         break;
     }
     case Splash::Streak: {
         static const char* const kSets[] = {"blood1", "blood2_right", "blood9", "blood3", "blood2_left"};
-        if (r < 0.3f) d = AddKnifeDecal("splat_small", centre, up, along, extent * 1.2f, delay);
+        if (r < 0.3f || std::max(extent.x, extent.z) > 0.6f) d = AddKnifeDecal("splat_small", centre, up, along, extent * 1.2f, delay);
         if (!d) d = AddDecal(pick(kSets, 5), centre, up, along, extent, delay);
         break;
     }
@@ -767,7 +769,8 @@ void BloodFx::SpawnGroundSplatter(const Hit& hit, float energy, const glm::vec3&
         glm::vec3 along = v - n * glm::dot(v, n);
         const float skid = glm::length(along) / std::max(glm::length(v), 1e-3f);
         along = glm::length(along) > 1e-3f ? along : RandomTangent(n);
-        const float stretch = kind == Splash::Drop ? 1.0f + 0.4f * skid : 1.0f + 1.2f * skid * std::clamp(glm::length(v) / 4.0f, 0.3f, 1.0f);
+        // (Capped: drawn out further the images' texels show.)
+        const float stretch = kind == Splash::Drop ? 1.0f + 0.3f * skid : 1.0f + 0.6f * skid * std::clamp(glm::length(v) / 4.0f, 0.3f, 1.0f);
         Decal* d = AddSplash(kind, p + n * 0.01f, n, along, glm::vec3(size * stretch, 0.3f, size), t * timeScale);
         if (d) d->PoolGrow = grow;
         if (d && kind != Splash::Drop && std::abs(n.y) < 0.5f) SpawnWallDrips(p, n, size, t * timeScale); // a wall: it runs
