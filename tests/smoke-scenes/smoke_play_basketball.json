@@ -1,6 +1,8 @@
 {
  "formatVersion": 3,
  "_comment": "Sandbox basketball regression: real-ball bounce (drop 1.8 m, restitution 0.84 on the court) and a free throw solved for a swish, which must score 2 on the Scoreboard through the Goal Trigger + ScoringSystem in TartarusGame.dll. Uses the Sandbox rim / ball / materials.",
+ "exposureEV": 0.0, "tonemapOperator": 1, "msaaSamples": 4, "ssaoEnabled": false, "bloomEnabled": false, "bloomThreshold": 1.0, "bloomKnee": 0.5, "bloomIntensity": 0.25,
+ "shadowResolution": 4096, "shadowCascades": 4, "shadowDistance": 500.0,
  "skySource": 0,
  "skyHorizonColor": [
   0.7,

@@ -1,6 +1,8 @@
 {
   "formatVersion": 2,
   "_comment": "Engine-owned smoke/regression scene (audit TEST-101 / #368). Play-mode coverage: the --smoke-test harness runs two Play -> Stop cycles over this scene (filename contains 'smoke_play') and then exits, so CI exercises OnEnterPlayMode/OnExitPlayMode, the scene snapshot save+restore, PhysX world create/destroy, and the exit-teardown ordering that #389 broke. DELIBERATELY carries no authored Spin / Transform Controller blocks: those systems live in TartarusGame.dll, so entering Play is the first thing to instantiate their entt registry storage (from DLL code) — exactly the condition that made #389 an access violation on shutdown. One Animator block (AnimationSystem is engine-side) exercises that path too. Engine primitives only; no external assets or absolute paths.",
+  "exposureEV": 0.0, "tonemapOperator": 1, "msaaSamples": 4, "ssaoEnabled": false, "bloomEnabled": false, "bloomThreshold": 1.0, "bloomKnee": 0.5, "bloomIntensity": 0.25,
+  "shadowsEnabled": true, "shadowResolution": 4096, "shadowCascades": 4, "shadowDistance": 500.0,
   "skyHorizonColor": [0.40, 0.48, 0.60],
   "skyZenithColor": [0.12, 0.24, 0.52],
   "skyAmbientIntensity": 1.0,

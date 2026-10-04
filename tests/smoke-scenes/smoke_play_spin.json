@@ -1,6 +1,8 @@
 {
   "formatVersion": 2,
   "_comment": "Regression scene for #123 (runs Play -> Stop twice: filename contains 'smoke_play'). Two cubes spin about a DIAGONAL axis, one through each Euler-driven system (Animator, Transform Controller); each must keep turning about that axis, not add equal pitch and yaw. Play must run them without a crash or a logged error. Engine primitives only.",
+  "exposureEV": 0.0, "tonemapOperator": 1, "msaaSamples": 4, "ssaoEnabled": false, "bloomEnabled": false, "bloomThreshold": 1.0, "bloomKnee": 0.5, "bloomIntensity": 0.25,
+  "shadowsEnabled": true, "shadowResolution": 4096, "shadowCascades": 4, "shadowDistance": 500.0,
   "skyHorizonColor": [0.40, 0.48, 0.60],
   "skyZenithColor": [0.12, 0.24, 0.52],
   "skyAmbientIntensity": 1.0,
