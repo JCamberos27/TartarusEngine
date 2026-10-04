@@ -1496,6 +1496,8 @@ void RegisterEngineComponents() {
               "The burst, mist and droplets on the frame a round goes in (needs --import-knife-fx)." },
             { "Gore", T::Int, TARTARUS_REFLECT_FIELD(BloodSettingsComponent, Gore), 1.0f,
               "0 off (no sprays or stains), 1 mild (no headshot gore), 2 full.", 0.0f, 2.0f },
+            { "Screen Blood", T::Bool, TARTARUS_REFLECT_FIELD(BloodSettingsComponent, ScreenBlood), 0.0f,
+              "Blood splashed onto the edge of the view, from the side the round came, when the player is hurt." },
         },
     });
     // ---- lane R ----
