@@ -229,6 +229,21 @@ float BloodFx::DecalCutout(const Decal& d) {
     return std::clamp(d.Reveal->Eval(std::min(t / g, 0.3f)), 0.0f, 1.0f);
 }
 
+int BloodFx::DuplicateOf(int set, int knife, const glm::mat4& model) const {
+    const glm::vec3 c(model[3]), up = glm::normalize(glm::vec3(model[1]));
+    const float size = std::max(glm::length(glm::vec3(model[0])), glm::length(glm::vec3(model[2])));
+    for (int i = (int)m_Decals.size() - 1; i >= 0; --i) {
+        const Decal& d = m_Decals[(size_t)i];
+        if (d.Set != set || d.Knife != knife || d.Age > 5.0f) continue;
+        const float other = std::max(glm::length(glm::vec3(d.Model[0])), glm::length(glm::vec3(d.Model[2])));
+        if (std::abs(other - size) > 0.25f * size) continue;
+        if (glm::length(glm::vec3(d.Model[3]) - c) > 0.15f * size) continue;
+        if (glm::dot(glm::normalize(glm::vec3(d.Model[1])), up) < 0.9f) continue;
+        return i;
+    }
+    return -1;
+}
+
 BloodFx::Decal* BloodFx::AddKnifeDecal(const char* entry, const glm::vec3& centre, const glm::vec3& up, const glm::vec3& along,
                                        const glm::vec3& extent, float delay, int cell) {
     EnsureHooks();
@@ -248,6 +263,10 @@ BloodFx::Decal* BloodFx::AddKnifeDecal(const char* entry, const glm::vec3& centr
     d.Age = -std::max(delay, 0.0f);
     d.Life = Config.DecalLifetime * (0.9f + 0.2f * Random01());
     d.DrySeconds = Config.DrySeconds * (0.8f + 0.4f * Random01());
+    if (const int dup = DuplicateOf(d.Set, d.Knife, d.Model); dup >= 0 && d.FrameSeconds <= 0.0f) {
+        ++m_StainsMerged;
+        return &m_Decals[(size_t)dup];
+    }
     m_Decals.push_back(d);
     ++m_DecalsSpawned;
     return &m_Decals.back();
@@ -362,6 +381,10 @@ BloodFx::Decal* BloodFx::AddDecal(const char* set, const glm::vec3& centre, cons
     d.Age = -std::max(delay, 0.0f);
     d.Life = Config.DecalLifetime * (0.9f + 0.2f * Random01());
     d.DrySeconds = Config.DrySeconds * (0.8f + 0.4f * Random01());
+    if (const int dup = DuplicateOf(d.Set, d.Knife, d.Model); dup >= 0 && d.FrameSeconds <= 0.0f) {
+        ++m_StainsMerged;
+        return &m_Decals[(size_t)dup];
+    }
     m_Decals.push_back(d);
     ++m_DecalsSpawned;
     return &m_Decals.back();

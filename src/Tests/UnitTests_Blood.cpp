@@ -7,6 +7,7 @@
 #include "Combat/ScreenBlood.h"
 #include "Combat/HeadGore.h"
 #include "Combat/ImpactFx.h"
+#include "BloodRenderer.h"
 #include "GameModuleAPI.h"
 #include "KnifeFxImport.h"
 
@@ -728,6 +729,44 @@ void Test_ImpactFx_Surfaces() {
     CHECK(ImpactFx::HoleSize("glass", 0.0045f) > ImpactFx::HoleSize("metal", 0.0045f));
 }
 
+
+void Test_Blood_Perf() {
+    // Culling: far or tiny on screen isn't drawn; near, or with the eye inside it, is.
+    BloodRenderer& r = BloodRenderer::Get();
+    const glm::vec3 eye(0.0f);
+    CHECK(r.WorthDrawing(glm::vec3(0, 0, -10), 0.5f, eye, 80.0f));
+    CHECK(!r.WorthDrawing(glm::vec3(0, 0, -100), 0.5f, eye, 80.0f));
+    CHECK(!r.WorthDrawing(glm::vec3(0, 0, -50), 0.05f, eye, 80.0f));   // 1 mm-ish on screen
+    CHECK(r.WorthDrawing(glm::vec3(0, 0, -0.1f), 0.5f, eye, 80.0f));   // inside it
+    // Stain dedupe: a stain landing right on a fresh one like it is the same stain.
+    BloodFx fx;
+    fx.SetSimLookup([](const char*) { return 0; });
+    fx.SetDecalSetLookup([](const char*) { return 0; });
+    fx.SetBodyRay([](const glm::vec3&, const glm::vec3&, float, unsigned&, int&, glm::vec3&) { return false; });
+    fx.SetRaycast([](const glm::vec3& o, const glm::vec3& d, float maxD, glm::vec3& p, glm::vec3& n) {
+        if (d.y > -0.5f || o.y > maxD) return false;
+        p = glm::vec3(o.x, 0.0f, o.z);
+        n = glm::vec3(0, 1, 0);
+        return true;
+    });
+    BloodFx::Hit h;
+    h.Point = glm::vec3(0, 1.3f, 0);
+    h.Direction = glm::vec3(1, 0, 0);
+    h.Entity = 1;
+    h.Damage = 40.0f;
+    fx.OnFleshHit(h);
+    for (int i = 0; i < 20; ++i) fx.Update(0.05f);
+    CHECK(!fx.Decals().empty());
+    if (!fx.Decals().empty()) {
+        const BloodFx::Decal& d = fx.Decals().front();
+        CHECK(fx.DuplicateOf(d.Set, d.Knife, d.Model) == 0);
+        glm::mat4 moved = d.Model;
+        moved[3] += glm::vec4(1.0f, 0.0f, 0.0f, 0.0f);
+        CHECK(fx.DuplicateOf(d.Set, d.Knife, moved) == -1);
+        CHECK(fx.DuplicateOf(d.Set, 99, d.Model) == -1);
+    }
+}
+
 void Test_FxSprites_Sim() {
     int a, b;
     float t;
@@ -846,6 +885,7 @@ void RegisterBloodTests(UnitTestSupport::TestList& tests) {
     tests.push_back({"Blood::ScreenBlood", Test_Blood_ScreenBlood});
     tests.push_back({"Blood::HeadGore", Test_Blood_HeadGore});
     tests.push_back({"ImpactFx::Surfaces", Test_ImpactFx_Surfaces});
+    tests.push_back({"Blood::Perf", Test_Blood_Perf});
     tests.push_back({"FxSprites::Sim", Test_FxSprites_Sim});
     tests.push_back({"KnifeFx::Library", Test_KnifeFx_Library});
 }

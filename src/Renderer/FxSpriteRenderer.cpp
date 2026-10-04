@@ -41,6 +41,7 @@ int FxSpriteRenderer::Draw(const glm::mat4& view, const glm::mat4& proj, const i
         if (s.ViewModel != viewModel) continue;
         const float depth = -(view * glm::vec4(s.Pos, 1.0f)).z;
         if (depth < 0.02f - s.Size) continue; // behind the eye
+        if (!viewModel && (depth > 150.0f || s.Size / std::max(depth, 0.01f) < 0.002f)) continue; // too far / too small to see
         GpuSprite g;
         g.PosSize = glm::vec4(s.Pos, s.Size);
         g.AxisRot = glm::vec4(s.Axis, s.Rot);
