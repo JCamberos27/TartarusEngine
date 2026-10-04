@@ -27,6 +27,8 @@ public:
         float DecalLifetime = 300.0f; // seconds a stain stays before it shrinks away
         float DrySeconds = 90.0f;     // fresh and glossy to dried dark and matte
         bool Pools = true;            // a pool spreads under each corpse
+        bool BodySplats = true;       // blood on bodies, ragdolls and props
+        bool GearSpatter = true;      // the player's gun and hands, and their own wounds
     };
     Settings Config;
 

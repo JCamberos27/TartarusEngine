@@ -69,6 +69,25 @@ static void Test_FxHudSettings_RoundTrip() {
     CHECK(out.FeedLife == 9.0f && out.StreakWindow == 2.0f);
 }
 
+static void Test_BloodSettings_RoundTrip() {
+    World world;
+    AssetLibrary assets;
+    BloodSettingsComponent in;
+    in.Enabled = false;
+    in.Size = 0.7f;
+    in.MaxSprays = 9;
+    in.MaxStains = 100;
+    in.StainLifetime = 42.0f;
+    in.DrySeconds = 30.0f;
+    in.Pools = false;
+    in.BodySplats = false;
+    in.GearSpatter = false;
+    BloodSettingsComponent out;
+    CHECK(RoundTrip(world, assets, "Blood Settings", in, out));
+    CHECK(!out.Enabled && out.Size == 0.7f && out.MaxSprays == 9 && out.MaxStains == 100 && out.StainLifetime == 42.0f);
+    CHECK(out.DrySeconds == 30.0f && !out.Pools && !out.BodySplats && !out.GearSpatter);
+}
+
 static void Test_GravityGun_AssistReach() {
     GravityGunSettings s;
     CHECK(GravityGun::AssistReach(s, -1.0f) == 30.0f);   // nothing under the crosshair: the full assist range
@@ -135,6 +154,7 @@ void Test_SceneRenderer_WarmShaderVariantsSkipsShaderless() {
 void RegisterEngineTests(UnitTestSupport::TestList& tests) {
     tests.push_back({"FirstPersonController::NewFieldsRoundTrip", Test_FirstPersonController_NewFieldsRoundTrip});
     tests.push_back({"FxHudSettings::RoundTrip", Test_FxHudSettings_RoundTrip});
+    tests.push_back({"BloodSettings::RoundTrip", Test_BloodSettings_RoundTrip});
     tests.push_back({"GravityGun::AssistReach", Test_GravityGun_AssistReach});
     tests.push_back({"Model::AffinePaletteMatchesGeneric", Test_Model_AffinePaletteMatchesGeneric});
     tests.push_back({"SceneRenderer::WarmShaderVariantsSkipsShaderless", Test_SceneRenderer_WarmShaderVariantsSkipsShaderless});
