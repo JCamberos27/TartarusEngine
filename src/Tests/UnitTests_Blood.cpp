@@ -4,6 +4,7 @@
 #include "Combat/BloodFx.h"
 #include "Combat/BloodFxPresets.h"
 #include "Combat/FxSprites.h"
+#include "Combat/ScreenBlood.h"
 #include "GameModuleAPI.h"
 #include "KnifeFxImport.h"
 
@@ -663,6 +664,33 @@ void Test_Blood_Footprints() {
     CHECK(fx.BloodySteps(7) == 0);
 }
 
+
+void Test_Blood_ScreenBlood() {
+    // A hit from the right lands on the right edge; from behind, the bottom; ahead, the top.
+    CHECK(ScreenBlood::EdgePoint(1.5708f).x > 0.85f);
+    CHECK(ScreenBlood::EdgePoint(3.1416f).y < 0.15f);
+    CHECK(ScreenBlood::EdgePoint(0.0f).y > 0.85f);
+    // In fast, held at the fullest frame, thinning out to nothing.
+    int f = 0;
+    float o = 0.0f;
+    ScreenBlood::FrameAt(0.0f, 2.0f, 16, f, o);
+    CHECK(f == 0 && o == 1.0f);
+    ScreenBlood::FrameAt(0.5f, 2.0f, 16, f, o);
+    CHECK(f == 8 && o == 1.0f);
+    ScreenBlood::FrameAt(1.99f, 2.0f, 16, f, o);
+    CHECK(f >= 14 && o < 0.05f);
+    ScreenBlood sb;
+    sb.OnHurt(10.0f, 1.5708f, 0.9f);
+    CHECK(sb.Splats().size() == 1 && sb.Splats()[0].Pos.x > 0.7f);
+    sb.OnHurt(40.0f, -1.5708f, 0.2f); // a hard hit at low health: more of it
+    CHECK(sb.Splats().size() == 4);
+    for (int i = 0; i < 100; ++i) sb.Update(0.05f);
+    CHECK(sb.Splats().empty());
+    sb.Enabled = false;
+    sb.OnHurt(40.0f, 0.0f, 0.5f);
+    CHECK(sb.Splats().empty());
+}
+
 void Test_FxSprites_Sim() {
     int a, b;
     float t;
@@ -778,6 +806,7 @@ void RegisterBloodTests(UnitTestSupport::TestList& tests) {
     tests.push_back({"Blood::Puffs", Test_Blood_Puffs});
     tests.push_back({"Blood::KnifeDecals", Test_Blood_KnifeDecals});
     tests.push_back({"Blood::Footprints", Test_Blood_Footprints});
+    tests.push_back({"Blood::ScreenBlood", Test_Blood_ScreenBlood});
     tests.push_back({"FxSprites::Sim", Test_FxSprites_Sim});
     tests.push_back({"KnifeFx::Library", Test_KnifeFx_Library});
 }

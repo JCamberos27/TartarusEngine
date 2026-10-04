@@ -1224,6 +1224,7 @@ struct BloodSettingsComponent {
     float EnergyScale = 1.0f;     // x every hit's energy: spray reach and speed, mist, whether rounds exit
     bool ImpactPuffs = true;      // the flipbook burst, mist and droplets the frame a round goes in (Knife packs)
     int Gore = 2;                 // 0 off (no sprays or stains), 1 mild (no headshot gore), 2 full
+    bool ScreenBlood = true;      // blood splashed on the view's edge when the player is hurt
 };
 // ---- end lane P ----
 // ---- lane R ----
