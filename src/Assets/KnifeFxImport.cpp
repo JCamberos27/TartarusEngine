@@ -182,14 +182,14 @@ const Source kSources[] = {
     {"pool_smooth", Library::DecalLarge, kRealBlood, "Textures/Puddles/Smooth/decal_meash_decal_AlbedoTransparency (3).tga", Mode::Albedo,
      "Textures/Puddles/Smooth/decal_meash_decal_Normal (1) fixed.tga", 2, 2, 2, 2, 1, 0, 0.92f},
     // Splatter (Real Blood "SmallPuddles", "Puddles/medium", "Damage"): more shapes for the thrown blood, drawn in the
-    // palette's colour like every stain (docs/BLOOD_FX.md, v3).
-    {"splat_small", Library::DecalSmall, kRealBlood, "Textures/SmallPuddles/Puddle_small_size_AlbedoTransparency.tga", Mode::Albedo,
+    // palette's colour like every stain (docs/BLOOD_FX.md, v3). In the 2048 library: they're drawn up to ~1.5 m.
+    {"splat_small", Library::DecalLarge, kRealBlood, "Textures/SmallPuddles/Puddle_small_size_AlbedoTransparency.tga", Mode::Albedo,
      "Textures/SmallPuddles/Puddle_small_size_Normal fixed.tga", 2, 2, 2, 2, 1, 0, 0.9f},
-    {"splat_wide", Library::DecalSmall, kRealBlood, "Textures/SmallPuddles/low1_blood_puddles_AlbedoTransparency 1.png", Mode::Albedo,
+    {"splat_wide", Library::DecalLarge, kRealBlood, "Textures/SmallPuddles/low1_blood_puddles_AlbedoTransparency 1.png", Mode::Albedo,
      "Textures/SmallPuddles/low1_blood_puddles_Normal 1.png", 2, 2, 2, 2, 1, 0, 0.9f},
-    {"splat_medium", Library::DecalSmall, kRealBlood, "Textures/Puddles/medium/Puddle_medium_size_1_AlbedoTransparency.tga", Mode::Albedo,
+    {"splat_medium", Library::DecalLarge, kRealBlood, "Textures/Puddles/medium/Puddle_medium_size_1_AlbedoTransparency.tga", Mode::Albedo,
      "Textures/Puddles/medium/Puddle_medium_size_1_Normal fixed.tga", 2, 2, 2, 2, 1, 0, 0.9f},
-    {"drops", Library::DecalSmall, kRealBlood, "Textures/Damage/decal_meash_decal_AlbedoTransparency (2).tga", Mode::Albedo,
+    {"drops", Library::DecalLarge, kRealBlood, "Textures/Damage/decal_meash_decal_AlbedoTransparency (2).tga", Mode::Albedo,
      "Textures/Damage/decal_meash_decal_Normal (1).tga", 4, 4, 4, 4, 1, 0, 0.9f},
     // Prints (Real Blood).
     {"footprint", Library::DecalSmall, kRealBlood, "Textures/Decals/FootPrint Albedo.tga", Mode::Albedo, "Textures/Decals/FootPrint Normal.tga",
