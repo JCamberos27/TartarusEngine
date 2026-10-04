@@ -23,7 +23,14 @@ namespace AssetDatabase {
 
 // Walks ProjectPaths::Root() and calls EnsureGuid on every file with a known asset extension,
 // creating missing .meta files. Safe to call multiple times (idempotent per path).
+// A .meta whose asset is gone is pruned, unless the asset is listed in external_assets.csv.
 void ScanProject();
+
+// project/external_assets.csv (docs/ASSETS.md) lists the third-party files kept on the team's
+// shared Drive instead of in git, so a fresh clone has their tracked .meta files but not the
+// files. Scans must keep those .meta files (their GUIDs carry every reference). Returns the
+// project-relative paths in the first column; the header row, blank lines and '#' lines skipped.
+std::vector<std::string> ParseExternalAssetList(const std::string& csvText);
 
 // #132 - ScanProject on a worker thread, so a big project's scan overlaps window / GL / shader
 // start-up instead of blocking it. Every lookup below (from another thread) waits for the scan

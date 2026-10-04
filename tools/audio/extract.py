@@ -11,7 +11,7 @@ import subprocess
 import zipfile
 
 SRC_ROOT = r"C:\Users\jacob\OneDrive\Desktop\ASSETS TO IMPORT"
-OUT = r"C:\tb\audio-src"
+OUT = os.environ.get("TARTARUS_AUDIO_SRC", r"C:\tb\audio-src")  # see adsp.SRC_ROOT
 UNRAR = r"C:\Program Files\WinRAR\UnRAR.exe"
 AE_ROOT = r"C:\Users\jacob\OneDrive\Desktop\AE Master\Assets"
 AE_PACKS = [

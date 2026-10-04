@@ -39,6 +39,9 @@ used to develop and prove out the engine's systems.
 
 ## Working on the engine
 
+- **Assets (first thing on a new clone):** the third-party models, textures and sounds are not in
+  git. Copy them in from the team's shared Google Drive with `tools\assets\fetch-assets.ps1`; see
+  `docs/ASSETS.md`. Without them the editor runs, but characters, weapons and sounds are missing.
 - **Build:** `cmake --build build --config Release --target TartarusEngine`. `run-editor.cmd`
   (the desktop shortcut) rebuilds the checkout it lives in and launches the editor.
 - **Tests:** `build\Release\TartarusEngine.exe --unit-tests` and

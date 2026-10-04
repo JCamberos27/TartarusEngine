@@ -3737,6 +3737,12 @@ void TestAssetIdentity() {
     CHECK(AssetDatabase::AssetType(ProjectPaths::Resolve("scenes/Level.recovery.json")).empty());
     CHECK(AssetDatabase::AssetType(ProjectPaths::Resolve("settings.json")).empty());
 
+    // external_assets.csv: first column only; header, comments, blanks and CRLF handled; quoted paths.
+    const std::vector<std::string> ext = AssetDatabase::ParseExternalAssetList(
+        "path,size,sha256\r\n# comment\r\n\r\nassets/A/b.fbx,12,ab\r\n\"assets/C, D/e.png\",3,cd\r\nassets/f.wav\n");
+    CHECK(ext.size() == 3);
+    CHECK(ext.size() == 3 && ext[0] == "assets/A/b.fbx" && ext[1] == "assets/C, D/e.png" && ext[2] == "assets/f.wav");
+
     // A reference ("file#clip") follows its file to a new name by GUID; the suffix survives.
     const std::string model = (dir / "Hero.fbx").string(), moved = (dir / "Sub" / "HeroRig.fbx").string();
     CHECK(AtomicFile::WriteBytes(model, "not really an fbx", true));

@@ -25,7 +25,8 @@ The repo is public and the asset can't be redistributed, so the converted data i
 TartarusEngine.exe --project <project dir> --import-blood-fx "<path to the VolumetricBloodFX package folder>"
 ```
 
-The source package lives at `C:\Users\jacob\OneDrive\Desktop\ASSETS TO IMPORT\VolumetricBloodFX`. The
+The source package lives on the shared Drive at `Tartarus Assets\Raw\Effects\VolumetricBloodFX` (docs/ASSETS.md;
+originally `C:\Users\jacob\OneDrive\Desktop\ASSETS TO IMPORT\VolumetricBloodFX`). The
 import takes about 5 s and writes 94 MB:
 
 - 11 `*.bvat` files
@@ -314,11 +315,11 @@ instantly, performance, and tooling. The approved plan has landmarks A to F.
 
 ### Restoring the Knife data (not in git)
 
-The packs are extracted as plain files into `C:\Users\jacob\OneDrive\Desktop\ASSETS TO IMPORT\`, one
+The packs are extracted as plain files on the shared Drive in `Tartarus Assets\Raw\Effects\` (docs/ASSETS.md), one
 folder each: "Knife Real Blood" and "Knife PRO Effects FPS Muzzle Flashes Impacts". Then run:
 
 ```
-TartarusEngine.exe --project <project dir> --import-knife-fx "C:\Users\jacob\OneDrive\Desktop\ASSETS TO IMPORT"
+TartarusEngine.exe --project <project dir> --import-knife-fx "<shared Drive>\Tartarus Assets\Raw\Effects"
 ```
 
 The import takes about 5 s. It writes 131 MB into `project/assets/Effects/Knife/`:
@@ -544,7 +545,7 @@ sprays played at the packs' cinematic pace, and stains dried and vanished in fro
 ### Restoring the Knife data in the Work clone
 
 ```
-TartarusEngine.exe --project project --import-knife-fx "C:\Users\jacob\OneDrive\Desktop\ASSETS TO IMPORT"
+TartarusEngine.exe --project project --import-knife-fx "<shared Drive>\Tartarus Assets\Raw\Effects"
 ```
 
 The gore and flesh sounds are committed, so they need no step. `assets/Effects/Knife/Gore` (v2's baked gore) can be

@@ -405,7 +405,7 @@ Axis reference used throughout: Blender (Z-up, cm) → engine (Y-up, m) is
 ## 7. The asset pipeline
 
 ```
-C:\Users\jacob\OneDrive\Desktop\AKS-74U 60fps (Revised).blend      (read-only ground truth)
+C:\Users\jacob\OneDrive\Desktop\AKS-74U 60fps (Revised).blend      (read-only ground truth; shared Drive: Raw\Weapons\AKS-74U Blender)
         │  tools/weapons/export_clip.py (headless Blender), ranges in export_manifest.json
         ▼
 project/assets/Weapons/AKS74U/
