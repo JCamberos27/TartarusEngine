@@ -4252,7 +4252,7 @@ int main(int argc, char** argv) {
                 {
                     const bool showShapes = EditorSettings::Get().ShowColliders;
                     const bool showDebug  = EditorSettings::Get().PhysicsDebugDrawFlags != 0u || BodyDebug::Enabled();
-                    if ((showShapes || showDebug) && !editor.OverlaysHidden()) {
+                    if ((showShapes || showDebug) && !editor.OverlaysHidden() && !(npcTest && npcTest->WantsCleanViews())) {
                         glEnable(GL_DEPTH_TEST);
                         glDepthMask(GL_FALSE);
                         colliderGizmo.Draw(sceneViewMat, sceneProjMat, world, showShapes);
