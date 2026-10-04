@@ -19,6 +19,10 @@
 #include "AudioEngine.h"
 #include "AssetLibrary.h"
 #include "BloodFxImport.h"
+#include "KnifeFxImport.h"
+#include "KnifeFxLibrary.h"
+#include "FxSpriteRenderer.h"
+#include "Combat/FxSprites.h"
 #include "HotReloadGameModule.h"
 #include "HotReloadEditorModule.h"
 #include "EditorModuleAPI.h" // EditorConsoleState (Clear on Play / Error Pause — #236 A5)
@@ -582,6 +586,13 @@ int main(int argc, char** argv) {
         CrashHandler::SetInteractive(false);
         return BloodFxImport::ImportPackage(argv[i + 1], ProjectPaths::Resolve("assets/Effects/Blood")) ? 0 : 1;
     }
+    // `--import-knife-fx <folder holding the extracted Knife packs>`: the Real Blood and PRO Effects textures
+    // into project/assets/Effects/Knife (git-ignored; docs/BLOOD_FX.md). No GL needed.
+    for (int i = 1; i + 1 < argc; ++i) {
+        if (std::string(argv[i]) != "--import-knife-fx") continue;
+        CrashHandler::SetInteractive(false);
+        return KnifeFxImport::ImportPacks(argv[i + 1], ProjectPaths::Resolve("assets/Effects/Knife")) ? 0 : 1;
+    }
     // `--audio-test [scene]`: the audio engine's own test, offline (no window, no audio device): a scripted tour of a scene's reverb zones.
     for (int i = 1; i < argc; ++i)
         if (std::string(argv[i]) == "--audio-test") return RunAudioTest(argc, argv);
@@ -867,6 +878,8 @@ int main(int argc, char** argv) {
         NpcDirector npcDirector;    // the enemy squad, in scenes with NPC Spawns
         CombatFx combatFx;          // its (and the player's) gunfire, flashes, tracers and hits
         BloodFx bloodFx;            // the volumetric blood out of every body a round goes into (docs/BLOOD_FX.md)
+        FxSprites fxSprites;        // the Knife flipbook particles: blood mist, impact dust and debris, muzzle smoke
+        bloodFx.SetSprites(&fxSprites);
         bloodFx.SetBodyLookup([&npcDirector](unsigned entity, glm::vec3& centre) { // where a corpse lies, for its pool
             for (const auto& n : npcDirector.Npcs()) {
                 if (!n || (unsigned)entt::to_integral(n->Root) != entity) continue;
@@ -1657,6 +1670,7 @@ int main(int argc, char** argv) {
                 weaponFx.Settings = fx;
             }
             bloodFx.Clear();
+            fxSprites.Clear();
             {   // the scene's blood tuning: the first Blood Settings component, defaults when none
                 BloodSettingsComponent b;
                 if (const auto all = world.Registry.view<BloodSettingsComponent>(); all.begin() != all.end())
@@ -1670,8 +1684,12 @@ int main(int argc, char** argv) {
                 bloodFx.Config.Pools = b.Pools;
                 bloodFx.Config.BodySplats = b.BodySplats;
                 bloodFx.Config.GearSpatter = b.GearSpatter;
+                bloodFx.Config.EnergyScale = b.EnergyScale;
+                bloodFx.Config.ImpactPuffs = b.ImpactPuffs;
+                bloodFx.Config.Gore = b.Gore;
             }
             BloodRenderer::Get().Load(); // once; a missing import just leaves the blood off
+            KnifeFxLibrary::Get().Load(); // likewise the Knife packs (--import-knife-fx)
             if (entt::entity ctrl = playControllerEntity; ctrl != entt::null) {
                 const auto& fp = world.Registry.get<FirstPersonControllerComponent>(ctrl);
                 player.MoveSpeed = fp.MoveSpeed;
@@ -1784,6 +1802,8 @@ int main(int argc, char** argv) {
             bulletHoles.Clear();
             bloodFx.Clear();
             BloodRenderer::Get().BeginFrame(); // nothing of Play's blood left in the editor
+            fxSprites.Clear();
+            FxSpriteRenderer::Get().BeginFrame();
             shellCasings.Clear(world);
             editor.OnExitPlayMode(world, assets);
             playing = false;
@@ -3048,8 +3068,11 @@ int main(int argc, char** argv) {
                 {
                     PROFILE_SCOPE("Blood");
                     bloodFx.Update(gameDt);
+                    fxSprites.Update(gameDt);
                     BloodRenderer::Get().BeginFrame();
                     bloodFx.Submit(BloodRenderer::Get());
+                    FxSpriteRenderer::Get().BeginFrame();
+                    fxSprites.Submit(FxSpriteRenderer::Get());
                     if (npcTest) {
                         npcTestBlood.Loaded = BloodRenderer::Get().Loaded();
                         npcTestBlood.SpraysSpawned = bloodFx.SpraysSpawned();

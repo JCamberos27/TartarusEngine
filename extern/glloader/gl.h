@@ -414,6 +414,7 @@ typedef void (__stdcall* PFNGLTEXTURESTORAGE2DMULTISAMPLEPROC)(GLuint, GLsizei, 
 typedef void (__stdcall* PFNGLTEXTURESUBIMAGE2DPROC)(GLuint, GLint, GLint, GLint, GLsizei, GLsizei, GLenum, GLenum, const void*);
 typedef void (__stdcall* PFNGLCOMPRESSEDTEXTURESUBIMAGE2DPROC)(GLuint, GLint, GLint, GLint, GLsizei, GLsizei, GLenum, GLsizei, const void*);
 typedef void (__stdcall* PFNGLTEXTURESUBIMAGE3DPROC)(GLuint, GLint, GLint, GLint, GLint, GLsizei, GLsizei, GLsizei, GLenum, GLenum, const void*);
+typedef void (__stdcall* PFNGLCOMPRESSEDTEXTURESUBIMAGE3DPROC)(GLuint, GLint, GLint, GLint, GLint, GLsizei, GLsizei, GLsizei, GLenum, GLsizei, const void*);
 typedef void (__stdcall* PFNGLTEXTUREPARAMETERIPROC)(GLuint, GLenum, GLint);
 typedef void (__stdcall* PFNGLTEXTUREPARAMETERFVPROC)(GLuint, GLenum, const GLfloat*);
 typedef void (__stdcall* PFNGLGENERATETEXTUREMIPMAPPROC)(GLuint);
@@ -519,6 +520,7 @@ extern PFNGLTEXTURESTORAGE2DMULTISAMPLEPROC glTextureStorage2DMultisample;
 extern PFNGLTEXTURESUBIMAGE2DPROC glTextureSubImage2D;
 extern PFNGLCOMPRESSEDTEXTURESUBIMAGE2DPROC glCompressedTextureSubImage2D; // #156
 extern PFNGLTEXTURESUBIMAGE3DPROC glTextureSubImage3D;
+extern PFNGLCOMPRESSEDTEXTURESUBIMAGE3DPROC glCompressedTextureSubImage3D; // the blood / FX texture arrays (BC3, BC5)
 extern PFNGLTEXTUREPARAMETERIPROC glTextureParameteri;
 extern PFNGLTEXTUREPARAMETERFVPROC glTextureParameterfv;
 extern PFNGLGENERATETEXTUREMIPMAPPROC glGenerateTextureMipmap;
