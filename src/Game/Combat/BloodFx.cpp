@@ -218,12 +218,24 @@ glm::vec3 BloodFx::RandomTangent(const glm::vec3& n) {
 float BloodFx::DecalCutout(const Decal& d) {
     const float t = std::max(d.Age, 0.0f);
     // Stains don't shrink away: one leaves whole, out of view (Update).
+    if (d.Spread) { // the pool grows by its size (PoolScale): only its edge firms up as it goes
+        const float grow = std::clamp(t / std::max(d.PoolGrow, 1e-3f), 0.0f, 1.0f);
+        return 0.3f * (1.0f - grow) * (1.0f - grow);
+    }
     if (!d.Reveal) {
         const float grow = std::clamp(t / std::max(d.PoolGrow, 1e-3f), 0.0f, 1.0f);
         return 0.9f * (1.0f - grow) * (1.0f - grow) * (1.0f - grow); // fast at first, slowing as it thins
     }
     const float g = std::max(d.RevealSeconds, 1e-3f);
     return std::clamp(d.Reveal->Eval(std::min(t / g, 0.3f)), 0.0f, 1.0f);
+}
+
+float BloodFx::PoolScale(const Decal& d) {
+    if (!d.Spread) return 1.0f;
+    const float g = std::clamp(std::max(d.Age, 0.0f) / std::max(d.PoolGrow, 1e-3f), 0.0f, 1.0f);
+    // Ease-out: blood pouring onto the floor spreads quickly at first, then creeps as the film thins.
+    const float k = 1.0f - std::pow(1.0f - g, 2.2f);
+    return kPoolStartScale + (1.0f - kPoolStartScale) * k;
 }
 
 int BloodFx::DuplicateOf(int set, int knife, const glm::mat4& model) const {
@@ -318,7 +330,8 @@ void BloodFx::SpawnPoolAt(const glm::vec3& at, const glm::vec3& normal, float si
     Decal* d = AddKnifeDecal("pool_smooth", at + n * 0.01f, n, RandomTangent(n), glm::vec3(size * 1.25f, 0.3f, size * 1.25f), 0.0f);
     if (!d) d = AddDecal("attached", at + n * 0.01f, n, RandomTangent(n), glm::vec3(size, 0.3f, size), 0.0f);
     if (d) {
-        d->PoolGrow = 10.0f;
+        d->PoolGrow = 22.0f;
+        d->Spread = true;
         d->DrySeconds *= 2.5f;
         ++m_PoolsSpawned;
     }
@@ -351,7 +364,7 @@ bool BloodFx::InFreshBlood(const glm::vec3& feet) const {
         const glm::vec3 c(d.Model[3]);
         if (std::abs(feet.y - c.y) > 0.35f) continue;
         // Within the stain's middle (its box is bigger than the blood in it), grown in far enough by now.
-        const float half = 0.3f * std::min(glm::length(glm::vec3(d.Model[0])), glm::length(glm::vec3(d.Model[2])));
+        const float half = 0.3f * PoolScale(d) * std::min(glm::length(glm::vec3(d.Model[0])), glm::length(glm::vec3(d.Model[2])));
         if (DecalCutout(d) > 0.5f) continue;
         if (glm::length(glm::vec2(feet.x - c.x, feet.z - c.z)) < half) return true;
     }
@@ -830,7 +843,8 @@ void BloodFx::Update(float dt) {
                                  glm::vec3(s * 1.25f, 0.3f, s * 1.25f), 0.0f);
         if (!d) d = AddDecal("attached", p + glm::vec3(0.0f, 0.01f, 0.0f), n, RandomTangent(n), glm::vec3(s, 0.3f, s), 0.0f);
         if (d) {
-            d->PoolGrow = 10.0f + 4.0f * Random01();
+            d->PoolGrow = 20.0f + 8.0f * Random01(); // a slow spread from a small patch (PoolScale)
+            d->Spread = true;
             ++m_PoolsSpawned;
             d->DrySeconds *= 2.5f; // a pool stays wet far longer than a spatter
         }
@@ -892,6 +906,11 @@ void BloodFx::Submit(BloodRenderer& renderer) const {
         if (d.Age < 0.0f) continue;
         BloodRenderer::Decal r;
         r.Model = d.Model;
+        if (d.Spread) { // a pool widens (x, z); its projection depth stays
+            const float k = PoolScale(d);
+            r.Model[0] *= k;
+            r.Model[2] *= k;
+        }
         r.Set = d.Set;
         r.Knife = d.Knife;
         r.Cell = r.NextCell = d.Cell;

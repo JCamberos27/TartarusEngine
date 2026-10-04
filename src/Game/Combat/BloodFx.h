@@ -149,6 +149,7 @@ public:
         float RevealSeconds = 15.0f;      // the reveal curve's time scale
         const BloodCurve* Reveal = nullptr; // null: a pool, spreading over PoolGrow seconds
         float PoolGrow = 0.0f;
+        bool Spread = false;              // a pool: it grows from a small patch to its full size over PoolGrow (PoolScale)
         float DrySeconds = 90.0f;
         float Opacity = 1.0f;
         // A Knife library decal (v2) instead of a KriptoFX set: its id and cell; a flipbook (the wall drips)
@@ -180,6 +181,10 @@ public:
     // The mask cutout a stain shows now: BFX_ShaderProperies' reveal, held through its life, then the
     // rest of the curve as it shrinks away (1 = gone). Pools spread instead.
     static float DecalCutout(const Decal& d);
+    // How big a spreading pool is now, x its full size: a small patch where the blood first collects, widening fast
+    // and then slower as it thins out (1 for anything that doesn't spread).
+    static float PoolScale(const Decal& d);
+    static constexpr float kPoolStartScale = 0.08f;
     int SpraysSpawned() const { return m_SpraysSpawned; }
     bool LastSprayClipped() const { return m_LastClipped; } // the last hit's spray met an obstacle
     // The last hit's exit wound: found on the far side of the body (`LastExitFound`) and where; no exit when
