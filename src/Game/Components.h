@@ -1203,6 +1203,7 @@ struct FxHudSettingsComponent {
     float PlayerFlashScale = 0.35f;         // player's flash light scale relative to soldier's; Muzzle Flash group
     float FlameGlow = 150.0f;               // flame peak emission intensity (red channel); Muzzle Flash group
     float FlameScale = 1.75f;               // flame tongue length/width scale vs. tactical shooter pack; Muzzle Flash group
+    int MuzzleStyle = 1;                    // 0 the Tactical Shooter flame alone, 1 + PRO Effects' flash, jets and smoke; Muzzle Flash group
 
     // Laser beam parameters (src/Renderer/WeaponFxRenderer.cpp)
     float BeamRange = 150.0f;               // metres drawn; past that it's gone in the haze; Laser Beam group

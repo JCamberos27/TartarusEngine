@@ -1450,6 +1450,9 @@ void RegisterEngineComponents() {
               "Player's flash light scale relative to soldier's.", 0.01f, 2.0f },
             { "Flame Glow", T::Float, TARTARUS_REFLECT_FIELD(FxHudSettingsComponent, FlameGlow), 5.0f,
               "Flame peak emission intensity (red channel).", 0.0f, 1000.0f },
+            { "Muzzle Style", T::Int, TARTARUS_REFLECT_FIELD(FxHudSettingsComponent, MuzzleStyle), 1.0f,
+              "0: the Tactical Shooter flame alone. 1: plus PRO Effects' flash (star / burst), side jets, core glow, gas puff and barrel smoke "
+              "(needs --import-knife-fx).", 0.0f, 1.0f },
             { "Flame Scale", T::Float, TARTARUS_REFLECT_FIELD(FxHudSettingsComponent, FlameScale), 0.05f,
               "Flame tongue length/width scale vs. tactical shooter pack.", 0.1f, 5.0f },
             { "Beam Range", T::Float, TARTARUS_REFLECT_FIELD(FxHudSettingsComponent, BeamRange), 1.0f,

@@ -41,6 +41,8 @@ public:
         glm::vec4 Plane{0.0f};       // xyz normal, w offset: bounces off it (n.p + w = 0); zero = none
         float Bounce = 0.3f;
         bool ViewModel = false;      // drawn with the arms and gun (the player's own muzzle)
+        int Follow = 0;              // non-zero: Follow(tag, ...) keeps it on a moving emitter (a muzzle)
+        float FollowAhead = 0.0f;    // ... this far along the emitter's axis
     };
 
     // Entry name -> id (KnifeFxLibrary by default; tests replace it). Frames / cols come with it.
@@ -52,6 +54,8 @@ public:
     int MaxLive = 1500; // the oldest go first past this
     void Spawn(const Emit& e);
     void Update(float dt);
+    // Every live sprite spawned with Follow == `tag` back onto the emitter at `pos`, along `axis` (unit).
+    void Follow(int tag, const glm::vec3& pos, const glm::vec3& axis);
     void Clear() { m_Live.clear(); }
     void Submit(FxSpriteRenderer& r) const;
 

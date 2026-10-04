@@ -72,6 +72,15 @@ void FxSprites::Update(float dt) {
     m_Live.erase(std::remove_if(m_Live.begin(), m_Live.end(), [](const Particle& p) { return p.Age >= p.E.Life; }), m_Live.end());
 }
 
+void FxSprites::Follow(int tag, const glm::vec3& pos, const glm::vec3& axis) {
+    if (tag == 0) return;
+    for (Particle& p : m_Live) {
+        if (p.E.Follow != tag) continue;
+        p.E.Pos = pos + axis * p.E.FollowAhead;
+        if (p.E.Axis != glm::vec3(0.0f)) p.E.Axis = axis * glm::length(p.E.Axis);
+    }
+}
+
 void FxSprites::FrameAt(float t, int frames, int first, bool animate, int& cellA, int& cellB, float& blend) {
     frames = std::max(1, frames);
     if (!animate || frames == 1) {
