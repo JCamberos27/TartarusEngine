@@ -1538,6 +1538,29 @@ void TestAtomicFile() {
     std::filesystem::remove(path, ec);
 }
 
+// --- TextureCache: one texture loaded two ways (a model's own material at the defaults, a material asset at its .meta's)
+// keeps both entries - they used to share one and evict each other every session, re-decoding (and re-compressing) both.
+void TestTextureCacheVariants() {
+    const std::string src = (std::filesystem::temp_directory_path() / "tt_cache_variant_test.png").string();
+    {
+        std::ofstream f(src, std::ios::binary);
+        f << "not really a png - only its size and time stamp key the entry";
+    }
+    TextureImportSettings a, b;
+    b.MaxTextureSize = 4096;
+    b.CompressionMode = TextureImportSettings::Compression::HighQuality;
+    TextureCache::Image ia, ib, out;
+    ia.SourceWidth = ia.Width = 2; ia.SourceHeight = ia.Height = 2; ia.Channels = 4; ia.Pixels.assign(16, 7);
+    ib = ia;
+    ib.Pixels.assign(16, 9);
+    TextureCache::Store(src, a, ia);
+    TextureCache::Store(src, b, ib);
+    CHECK(TextureCache::Load(src, a, out) && out.Pixels.size() == 16 && out.Pixels[0] == 7);
+    CHECK(TextureCache::Load(src, b, out) && out.Pixels.size() == 16 && out.Pixels[0] == 9);
+    std::error_code ec;
+    std::filesystem::remove(src, ec);
+}
+
 // --- TextureCache keys: pixel-affecting settings change the hash, sampler state doesn't ------
 void TestTextureCacheHash() {
     TextureImportSettings a;
@@ -2483,6 +2506,39 @@ void TestWardrobeQuantum() {
     locked.Items = {{"Top", item("Clothing/Male/Tops/SKM_Shirt_Hawaii.fbx")}};
     CHECK(Wardrobe::Randomize(cat->W, cat->Items, locked, 7, {"Top"}).Items.at("Top") == locked.Items["Top"]);
     CHECK(Wardrobe::FindStyle(cat->W, "Formal") && Wardrobe::FindStyle(cat->W, "Formal")->Gender == 0);
+}
+
+// A clip source imported clip-only (ModelImportSettings::AnimationOnly - what Play start loads the first-person clips
+// as, in parallel) holds exactly a full import's node tree and keys, and no meshes; two import at once on threads.
+void TestClipOnlyImport() {
+    const std::string fire = ProjectPaths::Resolve("assets/Weapons/AKS74U/Weapon/AKS-74U_A_W_Fire.fbx"); // the gun's take: mesh and all
+    const std::string draw = ProjectPaths::Resolve("assets/Weapons/AKS74U/FirstPerson/AKS-74U_A_FP_Draw.fbx");
+    if (!std::filesystem::exists(fire) || !std::filesystem::exists(draw)) return; // project content
+    ModelImportSettings clipOnly;
+    clipOnly.AnimationOnly = true;
+    const auto full = Model::ImportDeferred(fire, ModelImportSettings{});
+    const auto lean = Model::ImportDeferred(fire, clipOnly);
+    CHECK(full && lean && lean->MeshCount() == 0 && full->MeshCount() > 0);
+    CHECK(full->NodeCount() == lean->NodeCount() && full->OwnAnimationCount() == lean->OwnAnimationCount() && lean->OwnAnimationCount() > 0);
+    bool same = full->NodeCount() == lean->NodeCount();
+    for (int i = 0; same && i < full->NodeCount(); ++i) same = full->NodeName(i) == lean->NodeName(i) && full->NodeParent(i) == lean->NodeParent(i);
+    CHECK(same);
+    std::vector<LocalTRS> a, b;
+    for (float t : {0.0f, 0.1f, 0.25f}) {
+        full->SampleLocalPose(0, t, AnimationWrapMode::ClampForever, a);
+        lean->SampleLocalPose(0, t, AnimationWrapMode::ClampForever, b);
+        float err = a.size() == b.size() ? 0.0f : 1.0f;
+        for (size_t i = 0; i < a.size() && i < b.size(); ++i)
+            err = std::max({err, glm::length(a[i].T - b[i].T), glm::length(glm::vec4(a[i].R.x - b[i].R.x, a[i].R.y - b[i].R.y, a[i].R.z - b[i].R.z, a[i].R.w - b[i].R.w))});
+        CHECK(err < 1e-5f);
+    }
+    // Two on threads at once.
+    std::shared_ptr<Model> x, y;
+    std::thread t1([&] { x = std::make_shared<Model>(fire, clipOnly); });
+    std::thread t2([&] { y = std::make_shared<Model>(draw, clipOnly); });
+    t1.join();
+    t2.join();
+    CHECK(x && y && x->OwnAnimationCount() > 0 && y->OwnAnimationCount() > 0 && x->MeshCount() == 0 && y->MeshCount() == 0);
 }
 
 // Async loading's CPU halves (AssetLibrary::RequestModelAsync's workers run these): no GL anywhere, so
@@ -4847,6 +4903,7 @@ int RunUnitTests() {
         {"UndoDeltaChain", TestUndoDeltaChain},
         {"AtomicFile", TestAtomicFile},
         {"TextureCacheHash", TestTextureCacheHash},
+        {"TextureCacheVariants", TestTextureCacheVariants},
         {"OutfitEdgeBandPosed", TestOutfitEdgeBandPosed},
         {"OutfitRigidUnderHood", TestOutfitRigidUnderHood},
         {"AssetPackImport", TestAssetPackImport},
@@ -4860,6 +4917,7 @@ int RunUnitTests() {
         {"OutfitCoverage", TestOutfitCoverage},
         {"WardrobeQuantum", TestWardrobeQuantum},
         {"AsyncImportCpu", TestAsyncImportCpu},
+        {"ClipOnlyImport", TestClipOnlyImport},
         {"FirstPersonBodyTuning", TestFirstPersonBodyTuning},
         {"FirstPersonWeaponValidate", TestFirstPersonWeaponValidate},
         {"ClipTrim", TestClipTrim},

@@ -75,8 +75,20 @@ the rest of the scene ~0.8 ms. Sun shadows are vertex-bound.
   vertex-cache-ordered meshes (meshoptimizer).
 - **CPU:** uniform value and location caches, cheaper material hash, `AABB::Transformed` in
   center-extent form, fewer ImGui GLFW platform queries.
+- **Play start (2026-10-04): 15-18 s -> ~1.2 s** (first Play of a session, two-gun player).
+  - The texture cache keeps one entry per (texture, settings) (`TextureCache` v6). A weapon's 4K maps
+    are loaded twice, by the model's own material (defaults: 2048, uncompressed) and by its material
+    asset (.meta: 4096, high-quality BC). One shared entry evicted the other every session, so the maps
+    were re-decoded and re-compressed on every Play (~7 s for the AK, ~2 s for the other gun's casing).
+  - The first-person clips (one FBX per state and track, ~60 files) load clip-only
+    (`ModelImportSettings::AnimationOnly`) on worker threads (`AssetLibrary::PreloadAnimationSources`) at
+    `FirstPersonPresentation::Start`: ~0.7 s. The log line `Play start: first-person clips - ...` reports it.
 
 ## Rules these rely on (don't undo)
+
+- **Texture cache variants.** An entry's filename carries its settings hash; a variant that isn't the
+  `.meta`'s is pruned only after 14 days unused. Keying entries by GUID alone again would bring back the
+  per-session re-encode.
 
 - **Render state shadow.** `extern/glloader` shadows viewport, caps, depth, cull, blend and framebuffer
   bindings, answers reads from the shadow and drops redundant sets. Code that changes that state behind

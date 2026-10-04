@@ -22,6 +22,12 @@ public:
     AssetLibrary();
 
     std::shared_ptr<Model> LoadModel(const std::string& path);
+    // A file whose animation clips another model plays: imported clip-only (ModelImportSettings::AnimationOnly - no
+    // meshes, materials or textures), cached apart from full models. Already loaded as a full model: that one.
+    std::shared_ptr<Model> LoadAnimationSource(const std::string& path);
+    // Imports these clip sources clip-only on worker threads, waiting for them; the ones already loaded are skipped.
+    // Returns how many it imported.
+    int PreloadAnimationSources(const std::vector<std::string>& paths);
     // #369 - what a texture is used for, which decides its default import colour space. Colour
     // (albedo, emissive) is sRGB; Data (metallic, roughness, AO, height, ...) and Normal are raw
     // linear values, and Normal also gets the NormalMap import type. Only a *default*: an
@@ -280,6 +286,7 @@ private:
     std::uint64_t m_KeyEpoch = 0;
 
     std::map<std::string, std::shared_ptr<Model>> m_ModelCache;
+    std::map<std::string, std::shared_ptr<Model>> m_ClipSourceCache; // by AssetDatabase::PathKey
     std::map<std::string, std::shared_ptr<Texture>> m_TextureCache;
     std::map<std::string, std::shared_ptr<MaterialAsset>> m_MaterialCache;
     std::map<std::string, std::shared_ptr<ShaderAsset>> m_ShaderCache;

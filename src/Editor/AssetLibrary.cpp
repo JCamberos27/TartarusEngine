@@ -1,4 +1,7 @@
 #include "AssetLibrary.h"
+
+#include <atomic>
+#include <thread>
 #include "MaterialAsset.h"
 #include "ShaderAsset.h"
 #include "Model.h"
@@ -138,6 +141,46 @@ std::shared_ptr<Model> AssetLibrary::LoadModel(const std::string& path) {
 
     PrepareModelImport(path);
     return RegisterModel(path, std::make_shared<Model>(path, GetModelSettings(path)));
+}
+
+std::shared_ptr<Model> AssetLibrary::LoadAnimationSource(const std::string& path) {
+    if (HasModel(path)) return LoadModel(path);
+    const std::string key = AssetDatabase::PathKey(path);
+    if (auto it = m_ClipSourceCache.find(key); it != m_ClipSourceCache.end()) return it->second;
+    PrepareModelImport(path);
+    ModelImportSettings settings = GetModelSettings(path);
+    settings.AnimationOnly = true;
+    auto model = std::make_shared<Model>(path, settings);
+    m_ClipSourceCache[key] = model;
+    return model;
+}
+
+int AssetLibrary::PreloadAnimationSources(const std::vector<std::string>& paths) {
+    // The settings (each file's .meta: its scale, clip trims) are read here, on this thread; the imports - Assimp and
+    // the clip copy, no GL - run on workers.
+    struct Job { std::string Path, Key; ModelImportSettings Settings; std::shared_ptr<Model> Result; };
+    std::vector<Job> jobs;
+    for (const std::string& p : paths) {
+        const std::string key = AssetDatabase::PathKey(p);
+        if (HasModel(p) || m_ClipSourceCache.count(key)) continue;
+        if (std::any_of(jobs.begin(), jobs.end(), [&](const Job& j) { return j.Key == key; })) continue;
+        PrepareModelImport(p);
+        Job j{p, key, GetModelSettings(p), nullptr};
+        j.Settings.AnimationOnly = true;
+        jobs.push_back(std::move(j));
+    }
+    if (jobs.empty()) return 0;
+    const unsigned hw = std::max(2u, std::thread::hardware_concurrency());
+    const size_t workers = std::min<size_t>({jobs.size(), (size_t)std::min(6u, hw - 1u)});
+    std::atomic<size_t> next{0};
+    std::vector<std::thread> pool;
+    for (size_t w = 0; w < workers; ++w)
+        pool.emplace_back([&] {
+            for (size_t i = next++; i < jobs.size(); i = next++) jobs[i].Result = std::make_shared<Model>(jobs[i].Path, jobs[i].Settings);
+        });
+    for (std::thread& t : pool) t.join();
+    for (Job& j : jobs) m_ClipSourceCache[j.Key] = std::move(j.Result);
+    return (int)jobs.size();
 }
 
 bool AssetLibrary::HasModel(const std::string& path) { return FindAnySpelling(m_ModelCache, m_ModelKeys, m_KeyEpoch, path) != m_ModelCache.end(); }

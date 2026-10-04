@@ -20,7 +20,9 @@
 #include <glm/gtc/quaternion.hpp>
 
 #include <algorithm>
+#include <chrono>
 #include <cmath>
+#include <filesystem>
 #include <cstdio>
 #include <unordered_map>
 
@@ -130,7 +132,45 @@ bool FirstPersonPresentation::Start(World& world, AssetLibrary& assets,
     m_EyeRadius = config.EyeRadius;
     // The other slots' spent cases too (StartSet warms its own): a swap to the other gun mustn't stall on its first round.
     for (size_t i = 1; i < m_SlotSets.size(); ++i) WarmEjectAssets(assets, m_SlotSets[i]);
+    PreloadClips(assets);
     return StartSet(world, assets, 0, false);
+}
+
+void FirstPersonPresentation::PreloadClips(AssetLibrary& assets) {
+    // Every clip the slots' sets play is its own FBX (an arms and a weapon take per state, ~60 files for two guns).
+    // Imported one by one as whole models on this thread they were most of Play's start (~18 s); clip-only, all at
+    // once on worker threads, before the first set attaches them.
+    const auto start = std::chrono::steady_clock::now();
+    std::vector<std::string> files;
+    for (const std::string& setRef : m_SlotSets) {
+        FirstPersonAnimationSet set;
+        if (!FirstPersonAnimationSet::LoadFile(ProjectPaths::Resolve(setRef), set, nullptr) || set.Controller.empty()) continue;
+        const auto ctrl = GetAnimatorController(set.Controller);
+        if (!ctrl) continue;
+        auto add = [&](const std::string& clip) {
+            const std::string path = clip.substr(0, clip.find('#'));
+            if (path.empty()) return;
+            std::string ext = std::filesystem::u8path(path).extension().u8string();
+            for (char& c : ext) c = (char)std::tolower((unsigned char)c);
+            if (ext != ".fbx" && ext != ".gltf" && ext != ".glb" && ext != ".dae") return;
+            const std::string abs = std::filesystem::u8path(path).is_absolute() ? path : ProjectPaths::Resolve(path);
+            std::error_code ec;
+            if (std::filesystem::exists(std::filesystem::u8path(abs), ec)) files.push_back(abs);
+        };
+        for (const auto& layer : ctrl->Layers)
+            for (const auto& state : layer.States)
+                for (int track = 0; track < (int)ctrl->Tracks.size() || track < 2; ++track) {
+                    const auto& m = state.MotionFor(track);
+                    add(m.Clip);
+                    for (const auto& child : m.Children) add(child.Clip);
+                }
+    }
+    const int imported = assets.PreloadAnimationSources(files);
+    const double ms = std::chrono::duration<double, std::milli>(std::chrono::steady_clock::now() - start).count();
+    char line[160];
+    std::snprintf(line, sizeof(line), "Play start: first-person clips - %d file(s) imported clip-only in %.0f ms (%d already loaded).", imported,
+                  ms, (int)files.size() - imported);
+    Log::Info(line);
 }
 
 void FirstPersonPresentation::WarmEjectAssets(AssetLibrary& assets, const std::string& animationSet) {
