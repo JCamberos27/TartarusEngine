@@ -22,6 +22,10 @@ out vec3 vNormal;
 out vec2 vUV;
 out mat3 vTBN;
 out vec4 vColor;
+// The vertex before skinning, in the mesh's own (bind-pose) space: blood splats on a body or a gun are pinned
+// there, so they move and deform with it (docs/BLOOD_FX.md).
+out vec3 vBindPos;
+out vec3 vBindNormal;
 // The player's own body in the camera's view (PlayerBodyTag): skin weighted to these palette bones isn't
 // drawn - vHidden carries how much of the vertex they move, and the fragment shader drops > 0.5.
 uniform int uHideBoneCount;
@@ -45,6 +49,8 @@ uniform int uCollarVerts;
 uniform float uLayerPull;
 
 void main() {
+    vBindPos = aPos;
+    vBindNormal = aNormal;
     vec4 localPos = vec4(aPos, 1.0);
     vec3 localNormal = aNormal;
     vec3 localTangent = aTangent;
