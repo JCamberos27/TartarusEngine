@@ -50,7 +50,8 @@ void main() {
 
     vec4 world = s.Model * vec4(local, 1.0);
     vWorldPos = world.xyz;
-    vNormal = normalize(mat3(s.Model) * UnpackOct(q.w));
+    // The sims' baked normals point into the fluid (as their corner order winds the other way): out of it here.
+    vNormal = -normalize(mat3(s.Model) * UnpackOct(q.w));
     vec3 T = normalize(abs(vNormal.y) < 0.99 ? cross(vec3(0.0, 1.0, 0.0), vNormal) : cross(vec3(1.0, 0.0, 0.0), vNormal));
     vTBN = mat3(T, cross(vNormal, T), vNormal);
     vUV = vec2(0.0);

@@ -244,8 +244,8 @@ int BloodRenderer::DrawSprays(const glm::mat4& view, const glm::mat4& proj,
     prog.SetInt("uAlphaBlend", 0);
     prog.SetInt("uSSAOEnabled", 0); // the AO pre-pass never saw the fluid
     prog.SetInt("uNoReceiveShadows", 0);
-    prog.SetVec3("uSubsurfaceColor", glm::vec3(0.9f, 0.04f, 0.03f));
-    prog.SetFloat("uThickness", 0.35f);
+    prog.SetVec3("uSubsurfaceColor", glm::vec3(0.42f, 0.012f, 0.008f));
+    prog.SetFloat("uThickness", 0.55f);
 
     glBindBufferBase(GL_SHADER_STORAGE_BUFFER, kSprayBinding, m_SprayBuffer);
     glBindBufferBase(GL_SHADER_STORAGE_BUFFER, kFrameBinding, m_FrameBuffer);

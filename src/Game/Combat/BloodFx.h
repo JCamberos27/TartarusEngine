@@ -147,7 +147,7 @@ public:
     // sims' gravity is baked toward -Y.
     static glm::mat4 PrefabToWorld(const glm::vec3& exitPoint, const glm::vec3& dir, float size, float yawJitterRad,
                                    const glm::vec3& prefabAxis = glm::vec3(1.0f, 0.0f, 0.0f));
-    // Which way a prefab throws its blood, in its own frame: where its sims' fluid ends up, flattened
+    // Which way a prefab throws its blood, in its own frame: where its sims' fluid is heading early on, flattened
     // (+X when the sims aren't loaded or it's a burst with no direction).
     static glm::vec3 PrefabAxis(const BloodPresetDef& preset, const std::function<const BloodFxImport::VatFrame*(const char* sim, glm::vec3& origin)>& lastFrame);
 
