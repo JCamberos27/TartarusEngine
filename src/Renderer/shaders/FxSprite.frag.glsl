@@ -100,7 +100,8 @@ void main() {
         float nz = sqrt(clamp(1.0 - dot(nxy, nxy), 0.0, 1.0));
         N = normalize(vRight * nxy.x + vUp * nxy.y + F * nz);
     }
-    vec3 albedo = mode == 0 ? s.Color.rgb : tex.rgb * s.Color.rgb;
+    vec3 texColor = (s.Info.w & 2) != 0 ? pow(tex.rgb, vec3(2.2)) : tex.rgb; // an albedo entry is authored sRGB
+    vec3 albedo = mode == 0 ? s.Color.rgb : texColor * s.Color.rgb;
     float rough = clamp(1.0 - s.Extra.x, 0.04, 1.0);
     vec3 lit = vec3(0.0);
     if (mode == 0 || hasNormal) {

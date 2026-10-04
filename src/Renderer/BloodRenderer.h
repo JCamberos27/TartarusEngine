@@ -66,6 +66,11 @@ public:
         float Dry = 0.0f;          // 0 fresh and glossy .. 1 dried dark and matte
         float Opacity = 1.0f;
         float NormalStrength = 0.6f;
+        // A Knife library decal instead of a set (docs/BLOOD_FX.md, v2): KnifeFxLibrary id, its cell (and the
+        // next, blended in - a flipbook such as the wall drips), and for a cell's albedo how the blood dries.
+        int Knife = -1;
+        int Cell = 0, NextCell = 0;
+        float CellBlend = 0.0f;
     };
     void AddDecal(const Decal& d);
     int QueuedDecals() const { return (int)m_Decals.size(); }

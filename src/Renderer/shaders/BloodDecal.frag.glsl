@@ -16,6 +16,9 @@ struct BloodDecal {
     vec4 RectMask;
     vec4 Params;
     vec4 Axis;
+    ivec4 Knife;
+    vec4 Grid;
+    ivec4 Kind;
 };
 layout(std430, binding = 9) readonly buffer BloodDecals { BloodDecal uDecals[]; };
 
@@ -23,6 +26,17 @@ layout(binding = 17) uniform sampler2D uSceneDepth;  // single-sample resolve of
 layout(binding = 18) uniform sampler2D uDecalNorm;   // atlas: rg normal, a coverage
 layout(binding = 19) uniform sampler2D uDecalMask;   // atlas: r reveal order, b thick core
 layout(binding = 20) uniform sampler2D uDecalLookup; // fade across the box's depth
+// The Knife decal libraries (KnifeFxLibrary): BC3 colour + BC5 normals, 2048 (pools, trails) and 1024 layers.
+layout(binding = 21) uniform sampler2DArray uKnifeLargeColor;
+layout(binding = 22) uniform sampler2DArray uKnifeLargeNormal;
+layout(binding = 23) uniform sampler2DArray uKnifeSmallColor;
+layout(binding = 24) uniform sampler2DArray uKnifeSmallNormal;
+const int kEntryMask = 1, kEntryAlbedo = 2;
+
+vec3 KnifeUV(int cell, vec2 t, vec2 grid, int layer) {
+    vec2 c = vec2(float(cell % int(grid.x)), float(cell / int(grid.x)));
+    return vec3((c + clamp(t, 0.002, 0.998)) / grid, float(layer));
+}
 uniform mat4 uInvViewProj;
 uniform vec4 uViewport; // x, y, width, height in the target
 uniform vec3 uFreshColor; // the layer's albedo, fresh / dried
@@ -64,26 +78,64 @@ void main() {
     // Unity's decal uv: the box's x / z (our z is mirrored), v up; the atlas keeps the PNGs top row first.
     vec2 uv = vec2(local.x, -local.z) + 0.5;
     vec2 t = vec2(uv.x, 1.0 - uv.y);
-    vec4 na = texture(uDecalNorm, d.RectNorm.xy + t * d.RectNorm.zw);
-    vec3 mask = texture(uDecalMask, d.RectMask.xy + t * d.RectMask.zw).rgb;
-    float coverage = clamp(na.a * 2.0, 0.0, 1.0);
     float cutout = d.Params.x;
-    float alpha = clamp((mask.r - cutout) * 20.0, 0.0, 1.0) * coverage;
-    float core = clamp((mask.r - cutout) * 5.0, 0.0, 1.0) * coverage * mask.b; // the pooled, thicker middle
-    float a = alpha * facing * texture(uDecalLookup, vec2(local.y + 0.5, 0.5)).r * d.Params.z;
-    if (a < 0.004) discard;
-
-    // The film's normal: the map's slope (Unity: (x, 1, y) in box space) bent onto the real surface.
-    vec2 slope = (na.xy * 2.0 - 1.0) * d.Params.w;
-    vec3 bx = normalize(vec3(d.Model[0])), bz = normalize(vec3(d.Model[2]));
-    vec3 N = normalize(Ng + bx * slope.x - bz * slope.y);
-
     float dry = d.Params.y;
-    vWorldPos = world;
-    float rough = mix(0.06, 0.55, dry);
+    vec3 bx = normalize(vec3(d.Model[0])), bz = normalize(vec3(d.Model[2]));
+    float alpha, core, a;
+    vec3 N, albedo;
+    float rough;
     vec3 F0 = vec3(0.02);
-    // Darker and browner as it dries; the pooled core darker still (more of it).
-    vec3 albedo = mix(uFreshColor, uDriedColor, dry) * mix(1.0, 0.6, core);
+    bool knife = d.Knife.x >= 0;
+    bool blood = true; // a liquid film (not a bullet hole's own material)
+    if (knife) {
+        // A Knife decal: the cell's own colour (or, for a mask, the film's), coverage and normal map.
+        vec3 cu = KnifeUV(d.Knife.z, t, d.Grid.xy, d.Knife.x);
+        vec4 col;
+        vec2 nxy = vec2(0.0);
+        if (d.Kind.x == 0) {
+            col = texture(uKnifeLargeColor, cu);
+            if (d.Grid.z > 0.0) col = mix(col, texture(uKnifeLargeColor, KnifeUV(d.Knife.w, t, d.Grid.xy, d.Knife.x)), d.Grid.z);
+            if (d.Knife.y >= 0) nxy = texture(uKnifeLargeNormal, KnifeUV(d.Knife.z, t, d.Grid.xy, d.Knife.y)).rg * 2.0 - 1.0;
+        } else {
+            col = texture(uKnifeSmallColor, cu);
+            if (d.Grid.z > 0.0) col = mix(col, texture(uKnifeSmallColor, KnifeUV(d.Knife.w, t, d.Grid.xy, d.Knife.x)), d.Grid.z);
+            if (d.Knife.y >= 0) nxy = texture(uKnifeSmallNormal, KnifeUV(d.Knife.z, t, d.Grid.xy, d.Knife.y)).rg * 2.0 - 1.0;
+        }
+        // Spreads out from the middle: the cutout eats the thin, outer coverage first.
+        float r = length(t - 0.5) * 2.0;
+        float reveal = col.a - cutout * (0.6 + 0.6 * r);
+        alpha = clamp(reveal * 6.0, 0.0, 1.0);
+        core = clamp((col.a - 0.6) * 2.5, 0.0, 1.0) * alpha;
+        a = alpha * facing * texture(uDecalLookup, vec2(local.y + 0.5, 0.5)).r * d.Params.z;
+        if (a < 0.004) discard;
+        vec2 slope = nxy * d.Params.w;
+        N = normalize(Ng + bx * slope.x - bz * slope.y);
+        float gloss = d.Grid.w;
+        if ((d.Kind.y & kEntryAlbedo) != 0) {
+            albedo = pow(col.rgb, vec3(2.2)); // authored sRGB
+            blood = gloss > 0.85; // Real Blood's pools and splatter; the bullet holes are their surface's own
+            if (blood) albedo = mix(albedo, albedo * vec3(0.4, 0.5, 0.5), dry); // dries darker, browner
+        } else {
+            albedo = mix(uFreshColor, uDriedColor, dry) * mix(1.0, 0.6, core);
+        }
+        rough = blood ? mix(1.0 - gloss, 0.55, dry) : 1.0 - gloss;
+        if (!blood) F0 = vec3(0.04);
+    } else {
+        vec4 na = texture(uDecalNorm, d.RectNorm.xy + t * d.RectNorm.zw);
+        vec3 mask = texture(uDecalMask, d.RectMask.xy + t * d.RectMask.zw).rgb;
+        float coverage = clamp(na.a * 2.0, 0.0, 1.0);
+        alpha = clamp((mask.r - cutout) * 20.0, 0.0, 1.0) * coverage;
+        core = clamp((mask.r - cutout) * 5.0, 0.0, 1.0) * coverage * mask.b; // the pooled, thicker middle
+        a = alpha * facing * texture(uDecalLookup, vec2(local.y + 0.5, 0.5)).r * d.Params.z;
+        if (a < 0.004) discard;
+        // The film's normal: the map's slope (Unity: (x, 1, y) in box space) bent onto the real surface.
+        vec2 slope = (na.xy * 2.0 - 1.0) * d.Params.w;
+        N = normalize(Ng + bx * slope.x - bz * slope.y);
+        rough = mix(0.06, 0.55, dry);
+        // Darker and browner as it dries; the pooled core darker still (more of it).
+        albedo = mix(uFreshColor, uDriedColor, dry) * mix(1.0, 0.6, core);
+    }
+    vWorldPos = world;
     vec3 lit = vec3(0.0);
     for (uint i = 0u; i < uDirectionalCount; ++i) {
         vec3 L = normalize(-uLights[i].DirCutoff.xyz);
@@ -106,7 +158,7 @@ void main() {
         lit += vec3(0.03) * albedo;
     }
     // How much of the surface the layer hides: thin at the streaks' edges, opaque where it pooled.
-    float cover = mix(0.6, 0.97, clamp(core * 1.5 + alpha * 0.3, 0.0, 1.0));
+    float cover = blood ? mix(0.6, 0.97, clamp(core * 1.5 + alpha * 0.3, 0.0, 1.0)) : 1.0;
     vec3 through = sqrt(albedo) * 0.9; // what a thin layer lets through of the surface beneath
     vec3 mul = vec3(1.0) - a * (vec3(1.0) - (1.0 - cover) * through);
     vec3 add = lit * a * cover;

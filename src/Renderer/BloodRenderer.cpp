@@ -2,6 +2,7 @@
 
 #include "Frustum.h"
 #include "HdrTarget.h"
+#include "KnifeFxLibrary.h"
 #include <stb_image.h>
 #include "AABB.h"
 #include "GLStateCache.h"
@@ -288,9 +289,13 @@ struct GpuDecal { // std430, matches BloodDecal.*.glsl
     glm::vec4 RectMask;
     glm::vec4 Params;
     glm::vec4 Axis;
+    glm::ivec4 Knife; // colour layer (-1: a KriptoFX set), normal layer, cell, next cell
+    glm::vec4 Grid;   // cols, rows, cell blend, smoothness
+    glm::ivec4 Kind;  // library (0 large, 1 small), entry flags
 };
-static_assert(sizeof(GpuDecal) == 192, "std430 layout");
+static_assert(sizeof(GpuDecal) == 240, "std430 layout");
 constexpr unsigned kDecalBinding = 9, kDepthUnit = 17, kNormUnit = 18, kMaskUnit = 19, kLookupUnit = 20;
+constexpr unsigned kLargeColorUnit = 21, kLargeNormalUnit = 22, kSmallColorUnit = 23, kSmallNormalUnit = 24;
 constexpr int kAtlasWidth = 2048, kAtlasPad = 4, kMaxDecalSide = 512;
 
 // Bilinear resample of an RGBA8 image (at exact 2:1 it's a 2x2 box filter).
@@ -411,12 +416,16 @@ bool BloodRenderer::BuildAtlas() {
 }
 
 void BloodRenderer::AddDecal(const Decal& d) {
-    if (d.Set >= 0 && d.Set < (int)m_SetNames.size() && d.Opacity > 0.0f && d.Cutout < 1.0f) m_Decals.push_back(d);
+    const bool set = d.Set >= 0 && d.Set < (int)m_SetNames.size();
+    const KnifeFxLibrary::Entry* k = KnifeFxLibrary::Get().At(d.Knife);
+    const bool knife = k && k->Lib != KnifeFxImport::Library::Sprite;
+    if ((set || knife) && d.Opacity > 0.0f && d.Cutout < 1.0f) m_Decals.push_back(d);
 }
 
 int BloodRenderer::DrawDecals(const glm::mat4& view, const glm::mat4& proj, const int viewport[4], const HdrTarget& target,
                               const std::function<void(Shader&)>& applyFrameState) {
-    if (m_Decals.empty() || !m_AtlasNorm) return 0;
+    if (m_Decals.empty()) return 0;
+    const KnifeFxLibrary& lib = KnifeFxLibrary::Get();
     PROFILE_GPU_SCOPE("Blood Decals");
     const Frustum frustum = Frustum::FromViewProj(proj * view);
     static std::vector<GpuDecal> gpu;
@@ -427,10 +436,22 @@ int BloodRenderer::DrawDecals(const glm::mat4& view, const glm::mat4& proj, cons
         GpuDecal g;
         g.Model = d.Model;
         g.InvModel = glm::inverse(d.Model);
-        g.RectNorm = m_RectNorm[d.Set];
-        g.RectMask = m_RectMask[d.Set];
         g.Params = glm::vec4(d.Cutout, d.Dry, d.Opacity, d.NormalStrength);
         g.Axis = glm::vec4(glm::normalize(glm::vec3(d.Model[1])), 0.0f);
+        g.Knife = glm::ivec4(-1, -1, 0, 0);
+        g.Grid = glm::vec4(1.0f, 1.0f, 0.0f, 0.5f);
+        g.Kind = glm::ivec4(0);
+        if (const KnifeFxLibrary::Entry* k = lib.At(d.Knife)) {
+            if (k->Lib == KnifeFxImport::Library::Sprite) continue;
+            g.RectNorm = g.RectMask = glm::vec4(0.0f);
+            g.Knife = glm::ivec4(k->ColorLayer, k->NormalLayer, d.Cell, d.NextCell);
+            g.Grid = glm::vec4((float)k->Cols, (float)k->Rows, d.CellBlend, k->Smoothness);
+            g.Kind = glm::ivec4(k->Lib == KnifeFxImport::Library::DecalLarge ? 0 : 1, (int)k->Flags, 0, 0);
+        } else {
+            if (!m_AtlasNorm || d.Set < 0) continue;
+            g.RectNorm = m_RectNorm[d.Set];
+            g.RectMask = m_RectMask[d.Set];
+        }
         gpu.push_back(g);
     }
     if (gpu.empty()) return 0;
@@ -460,6 +481,10 @@ int BloodRenderer::DrawDecals(const glm::mat4& view, const glm::mat4& proj, cons
     glBindTextureUnit(kNormUnit, m_AtlasNorm);
     glBindTextureUnit(kMaskUnit, m_AtlasMask);
     glBindTextureUnit(kLookupUnit, m_Lookup);
+    glBindTextureUnit(kLargeColorUnit, lib.ColorArray(KnifeFxImport::Library::DecalLarge));
+    glBindTextureUnit(kLargeNormalUnit, lib.NormalArray(KnifeFxImport::Library::DecalLarge));
+    glBindTextureUnit(kSmallColorUnit, lib.ColorArray(KnifeFxImport::Library::DecalSmall));
+    glBindTextureUnit(kSmallNormalUnit, lib.NormalArray(KnifeFxImport::Library::DecalSmall));
     glBindBufferBase(GL_SHADER_STORAGE_BUFFER, kDecalBinding, m_DecalBuffer);
     glBindVertexArray(m_EmptyVao);
     // The box's far faces only (the eye may be inside it), no depth test: the depth texture decides.
