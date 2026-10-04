@@ -13,9 +13,8 @@ class World;
 // name), with a finer table: concrete, brick, asphalt, rock, tile, metal, wood, glass, mud, sand.
 //   - the hole: PRO Effects' textured decal for that surface (4 variants, turned at random) - on the static
 //     world; a moving prop keeps the procedural hole that follows it (WeaponFxRenderer);
-//   - the burst: PRO Effects' impact, rebuilt as flipbook sprites - a puff of dust in the surface's colour, a
-//     fast streak of it off the surface, chips of it (concrete, rock, brick, wood splinters, glass shards),
-//     sparks off metal and stone.
+//   - the burst: PRO Effects' impact debris as flipbook sprites - chips of it (concrete, rock, brick, wood
+//     splinters, glass shards), sparks off metal and stone. No dust or smoke (dropped: it read badly).
 class ImpactFx {
 public:
     void SetSprites(FxSprites* fx) { m_Sprites = fx; }
@@ -37,8 +36,6 @@ public:
     // The burst where a round travelling `dir` struck `surface` at `point` (surface normal `normal`).
     void Spawn(const std::string& surface, const glm::vec3& point, const glm::vec3& normal, const glm::vec3& dir);
     int Spawned() const { return m_Spawned; }
-    // A surface's dust colour (linear albedo).
-    static glm::vec3 DustColor(const std::string& surface);
 
 private:
     FxSprites* m_Sprites = nullptr;
