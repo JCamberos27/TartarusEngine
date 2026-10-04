@@ -512,9 +512,11 @@ sprays played at the packs' cinematic pace, and stains dried and vanished in fro
 - **Footprints:** pool-coloured (an explicit `Blood` flag replaces the gloss test), point the way the player faces,
   14 prints a trail (128 kept).
 - **v3.1 (play-test feedback):**
-  - **Bullet holes at calibre:** AKS-74U 5.45 mm (`bulletHoleRadius` 0.0027), Remington 00 buck 8.4 mm (0.0042). The
-    PRO decal is sized so its hole is 1.15x the calibre (`ImpactFx::HoleFraction`, measured per surface off the albedos),
-    and its chipped rim fades out at 3x the hole radius (`HoleRim`, `BloodRenderer::Decal::Rim`, the shader's rim cut).
+  - **Bullet holes by calibre:** AKS-74U 5.45 mm (`bulletHoleRadius` 0.0027), Remington 00 buck 8.4 mm (0.0042). The
+    PRO decal is sized so its hole is `ImpactFx::kHoleScale` (2x) the calibre (`HoleFraction`, measured per surface off
+    the albedos), and its chipped rim fades out at 3.5x the hole radius (`HoleRim`, `BloodRenderer::Decal::Rim`).
+  - **No pixelated splatter:** thrown splashes are capped (head kill ~1.5 m, stretch <= 1.6x); Real Blood's splatters and
+    drops live in the 2048 library (1024 px a splatter); KriptoFX's stains (512 px) only for small marks.
   - **One pool per body**, from the torso's middle (pelvis toward chest), once the body has stopped moving (two looks
     0.2 s apart within 3 cm, or 4 s); corpse shots splash but no longer pool.
   - **Faster, bloodier:** Speed 2.0; landed splashes pop in (0.04-0.08 s); throws 25% faster; ~1.3x drops, 1.5x specks.

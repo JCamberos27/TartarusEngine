@@ -56,8 +56,9 @@ float ImpactFx::HoleFraction(const std::string& s) {
 }
 
 float ImpactFx::HoleSize(const std::string& s, float radius) {
-    // The hole the size of the round, a touch bigger (1.15x its calibre): the cell is that over the hole's share of it.
-    return std::clamp(2.0f * radius * 1.15f / HoleFraction(s), 0.01f, 0.15f);
+    // The hole a little bigger than the round (kHoleScale x its calibre: torn edges, and it reads at a distance): the cell
+    // is that over the hole's share of it.
+    return std::clamp(2.0f * radius * kHoleScale / HoleFraction(s), 0.01f, 0.2f);
 }
 
 float ImpactFx::HoleRim(const std::string& s) {
@@ -65,7 +66,7 @@ float ImpactFx::HoleRim(const std::string& s) {
     // so the mark is the hole and a thin ring of chips; glass keeps its cracks, a tile its spall.
     if (s == "glass") return 0.9f;
     if (s == "tile") return 0.55f;
-    return 3.0f * HoleFraction(s);
+    return 3.5f * HoleFraction(s);
 }
 
 void ImpactFx::Spawn(const std::string& surface, const glm::vec3& point, const glm::vec3& normal, const glm::vec3& dir) {

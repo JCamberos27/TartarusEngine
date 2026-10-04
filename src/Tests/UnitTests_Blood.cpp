@@ -704,12 +704,12 @@ void Test_ImpactFx_Surfaces() {
     CHECK(ImpactFx::SurfaceFromName("Loose Crate 1") == "wood");
     CHECK(ImpactFx::SurfaceFromName("something else") == "concrete");
     CHECK(std::string(ImpactFx::HoleEntry("brick")) == "hole_brick" && std::string(ImpactFx::HoleEntry("anything")) == "hole_concrete");
-    // The hole the round's size, a touch bigger: the cell x the hole's share of it = 1.15x the calibre.
+    // The hole a little bigger than the round: the cell x the hole's share of it = kHoleScale x the calibre.
     for (const char* s : {"concrete", "brick", "wood", "metal", "glass", "mud", "sand", "tile", "asphalt", "rock"}) {
         const float hole = ImpactFx::HoleSize(s, 0.0027f) * ImpactFx::HoleFraction(s);
-        CHECK(std::abs(hole - 0.0027f * 2.0f * 1.15f) < 1e-4f && ImpactFx::HoleRim(s) > ImpactFx::HoleFraction(s));
+        CHECK(std::abs(hole - 0.0027f * 2.0f * ImpactFx::kHoleScale) < 1e-4f && ImpactFx::HoleRim(s) > ImpactFx::HoleFraction(s));
     }
-    CHECK(ImpactFx::HoleSize("concrete", 0.0027f) < 0.06f); // not a 15 cm crater
+    CHECK(ImpactFx::HoleSize("concrete", 0.0027f) < 0.1f); // not a 15 cm crater
 }
 
 
