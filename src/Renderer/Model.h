@@ -58,6 +58,9 @@ struct ModelImportSettings {
         float EndSeconds = 0.0f;
     };
     std::vector<ClipTrim> ClipTrims;
+    // Only the node tree and the clips (no meshes, materials, textures or GL): a file another model plays clips out of
+    // (AssetLibrary::LoadAnimationSource). Never saved; safe to import on a worker thread.
+    bool AnimationOnly = false;
 };
 
 // An imported 3D asset (FBX/glTF/OBJ via Assimp): one or more meshes, optional skeleton,

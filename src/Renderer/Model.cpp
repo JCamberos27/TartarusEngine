@@ -134,6 +134,9 @@ void Model::ImportFromFile(const ModelImportSettings& settings) {
     if (settings.ImportNormals) flags |= aiProcess_GenSmoothNormals | aiProcess_CalcTangentSpace;
     if (settings.ImportSkeleton) flags |= aiProcess_LimitBoneWeights;
     if (settings.OptimizeGraph) flags |= aiProcess_JoinIdenticalVertices | aiProcess_OptimizeMeshes;
+    // A clip source: the same scale and pivot handling (so its nodes and keys are exactly a full import's), none of the
+    // mesh work - those flags only touch meshes, and the meshes aren't read.
+    if (settings.AnimationOnly) flags = aiProcess_GlobalScale;
 
     const aiScene* scene = importer.ReadFile(m_Path, flags);
 
@@ -167,7 +170,8 @@ void Model::ImportFromFile(const ModelImportSettings& settings) {
     m_ImportNodeGlobals.clear();
     CollectNodeGlobals(scene->mRootNode, glm::mat4(1.0f));
 
-    ProcessNode(scene->mRootNode, scene, glm::mat4(1.0f));
+    if (!settings.AnimationOnly) ProcessNode(scene->mRootNode, scene, glm::mat4(1.0f));
+    else m_D->BoundsMin = m_D->BoundsMax = glm::vec3(0.0f);
     ReadHierarchy(scene->mRootNode, -1);
     if (settings.ImportAnimations) ReadAnimations(scene);
     m_ImportNodeGlobals.clear();
