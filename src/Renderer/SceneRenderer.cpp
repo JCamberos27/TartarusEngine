@@ -389,6 +389,7 @@ void SceneRenderer::RenderScene(World& world, const RenderFrameContext& ctx,
         // Skinned or a rigidbody: drawn after the blood decals (docs/BLOOD_FX.md), which project only onto
         // the static world - a character walking through a pool or a crate on a stain covers it instead.
         bool Dynamic = false;
+        unsigned Entity = 0xFFFFFFFFu; // for the blood splats on it (BloodRenderer::SplatRange)
     };
     static std::vector<DrawItem> drawList;
     static std::vector<DrawItem> transparentList;
@@ -560,6 +561,7 @@ void SceneRenderer::RenderScene(World& world, const RenderFrameContext& ctx,
             item.DoubleSided = clothing;
             item.LayerPull = layerPull;
             item.Dynamic = dynamicItem;
+            item.Entity = (unsigned)entt::to_integral(entity);
             if (outfitHide && outfitHide->Visible) {
                 item.Visible = outfitHide->Visible.get();
                 item.Tris = (int)item.Visible->Triangles();
@@ -634,7 +636,12 @@ void SceneRenderer::RenderScene(World& world, const RenderFrameContext& ctx,
         SkinHideBuffer::Bind(probeItem->CollarVerts, SkinHideBuffer::kCollarBinding);
         prog.SetInt("uCollarVerts", probeItem->CollarVerts ? 1 : 0);
         prog.SetFloat("uLayerPull", probeItem->LayerPull);
+        int bloodFirst = 0, bloodCount = 0; // blood on this mesh (docs/BLOOD_FX.md)
+        BloodRenderer::Get().SplatRange(probeItem->Entity, bloodFirst, bloodCount);
+        prog.SetInt("uBloodSplatCount", bloodCount);
+        if (bloodCount > 0) prog.SetInt("uBloodSplatFirst", bloodFirst);
     };
+    BloodRenderer::Get().BindSplatResources();
 
     passAlphaBlend = 0;
     modelShader.SetInt("uAlphaBlend", 0); // explicit: ensure opaque pass outputs alpha=1

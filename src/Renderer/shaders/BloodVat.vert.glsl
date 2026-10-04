@@ -26,6 +26,8 @@ out vec2 vUV;
 out mat3 vTBN;
 out vec4 vColor;
 out float vHidden;
+out vec3 vBindPos;    // ModelFragment's blood splats: none on the fluid itself
+out vec3 vBindNormal;
 out gl_PerVertex { vec4 gl_Position; float gl_ClipDistance[1]; };
 
 vec3 UnpackOct(uint p) {
@@ -54,6 +56,8 @@ void main() {
     vUV = vec2(0.0);
     vColor = vec4(s.Tint.rgb, 1.0);
     vHidden = 0.0;
+    vBindPos = vec3(0.0);
+    vBindNormal = vec3(0.0, 1.0, 0.0);
     gl_ClipDistance[0] = dot(vec4(world.xyz, 1.0), s.ClipPlane);
     gl_Position = uProj * (uView * world);
 }
