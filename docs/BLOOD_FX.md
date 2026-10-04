@@ -291,7 +291,107 @@ Live blood itself costs about 0.05 ms per frame for the sprays. Decals and splat
 cover pixels. Both runs are below `docs/PERFORMANCE.md`'s 258 fps. That gap is environmental: main
 itself measures 184 here, and this worktree lacks the git-ignored Quantum textures.
 
-## Next steps
+## v2: the Knife packs (branch `Claude/blood-v2-knife`)
+
+The v2 pass brings the blood to AAA using two Knife Entertainment Asset Store packs the user owns:
+
+- **Real Blood**: puddles, trails, prints, wall drips ("Leaks"), wound decals, blood particle sheets,
+  screen damage, and the exploded head / brain parts.
+- **PRO Effects FPS Muzzle Flashes & Impacts**: bullet holes for 13 surfaces, impact debris and smoke,
+  and muzzle flashes.
+
+These are blended with five improvements: real exit wounds, spray speed by energy, headshots that read
+instantly, performance, and tooling. The approved plan has landmarks A to F.
+
+| Landmark | What | State |
+|---|---|---|
+| A | `--import-knife-fx`, the texture-array library, flipbook sprite renderer; PBR decal kind | importer, library and sprites **done**; PBR decals next |
+| B | Energy model, real exit wounds, pellet puffs, instant impact puff and mist, headshot mist | **done** except Knife wound decals on bodies |
+| C | PBR pools, crawl/drag trails, footprints, handprints, wall drips (Leaks), screen blood | todo |
+| D | Headshot gore: hide the head, exploded-head stump, brain chunks; `Gore` setting | setting only |
+| E | Surface types, per-surface PRO bullet holes and impacts, muzzle flash and smoke | todo |
+| F | Spray LOD and cull, stain dedupe, perf A/B, DevPanel "Blood Lab" | todo |
+
+### Restoring the Knife data (not in git)
+
+The packs are extracted as plain files into `C:\Users\jacob\OneDrive\Desktop\ASSETS TO IMPORT\`, one
+folder each: "Knife Real Blood" and "Knife PRO Effects FPS Muzzle Flashes Impacts". Then run:
+
+```
+TartarusEngine.exe --project <project dir> --import-knife-fx "C:\Users\jacob\OneDrive\Desktop\ASSETS TO IMPORT"
+```
+
+The import takes about 5 s. It writes 131 MB into `project/assets/Effects/Knife/`:
+
+| File | Layer size | What |
+|---|---|---|
+| `decals_large.kfx` | 2048 | pools and trails |
+| `decals_small.kfx` | 1024 | splatter, prints, drips, leaks, 13 bullet-hole sets |
+| `sprites.kfx` | 1024 | blood sheets, mist, smoke, debris, muzzle flashes |
+
+Without these files the game logs one warning, and the effects that need them are skipped.
+
+### How v2 works
+
+- **Import** (`src/Assets/KnifeFxImport.*`).
+  - The curated catalogue `kSources` names what to take from each pack, with its grid and smoothness.
+  - Each entry becomes one array layer. Its grid cells are re-packed (flipbooks are thinned to 16 frames
+    by a stride), area-filtered, mip-mapped, and compressed to BC3 colour plus BC5 normals.
+  - Two kinds of colour data:
+    - **Mask** entries (blood sheets, leaks, flashes) are white, with the shape in alpha.
+    - **Albedo** entries (puddles, holes, debris) keep their colour, averaged by coverage.
+  - The channel-packed smoke sheets are unpacked first; they hold 64 frames across r, g, b and a.
+  - Empty trailing cells are trimmed, which sets the frame count.
+- **GPU library** (`src/Renderer/KnifeFxLibrary.*`). Loads the `.kfx` files into texture arrays.
+  `Find(name)` returns an id, and `At(id)` returns the layer, grid and frame count.
+- **Sprites** (`src/Game/Combat/FxSprites.*`, `src/Renderer/FxSpriteRenderer.*`,
+  `shaders/FxSprite.*.glsl`).
+  - A pooled CPU sim with gravity, drag, a one-plane bounce, size, alpha, erosion over life, and the
+    flipbook frame.
+  - Everything draws in one sorted, premultiplied instanced draw after the particles, plus one in the
+    view-model pass.
+  - Modes:
+    - **Blood**: Knife's erosion threshold, glossy, normal-mapped, back-lit.
+    - **Lit**: smoke and dust get half-Lambert lighting; debris gets PBR.
+    - **Additive**: written with zero alpha, so it adds light.
+  - Soft against the resolved scene depth.
+  - Units 17 (depth), 21 and 22 (arrays); SSBO binding 10.
+- **Hits** (`BloodFx`).
+  - **Energy.** `Energy(hit)` is about 1 for a rifle at combat range. It scales with damage, a
+    shotgun's whole load, distance and headshots.
+    - It drives spray size, and a horizontal stretch along the line of flight (`PrefabToWorld`'s
+      `stretch`): faster, with the same baked fall.
+    - Below `kExitEnergy` the round stays in. The spray is then a smaller spurt back out of the entry,
+      and nothing exits the far side.
+  - **Exit wounds.** `FindExit` casts a body-part ray back from 0.7 m past the entry, looking past
+    anyone standing behind. The exit spray and the exit splat start where the body really ends.
+  - **Puffs.** `SpawnPuffs` fires the frame the round goes in:
+    - the entry burst (`blood_hit`) and mist (`blood_cloud`);
+    - with an exit: the burst (`blood_burst`), the jet (`blood_jet`) and more mist;
+    - without one: the fan back out (`blood_fan`);
+    - velocity-stretched droplets (`blood_drop`);
+    - headshots get denser mist and twice the droplets;
+    - a shotgun's other pellets each puff, without another spray.
+- **Settings.** `BloodSettingsComponent` gains:
+  - `EnergyScale`
+  - `ImpactPuffs`
+  - `Gore`: 0 is off, 1 is mild (no headshot gore), 2 is full
+
+### v2 testing
+
+- **Unit tests**: `Blood::Energy`, `Blood::ExitWound`, `Blood::Puffs`, `FxSprites::Sim`,
+  `KnifeFx::Library`, plus the BloodSettings round-trip.
+- **`--npc-test blood`**: 12/12 checks pass. Its smoke status reads FAIL in this worktree only because
+  of the missing git-ignored Quantum textures.
+- **Tuning so far.** Flipbook cells start small inside the cell, so the sprites are sized large: the
+  entry sheet is 0.45 m x sqrt(energy). The mist is a dark red haze (0.17, 0.014, 0.012) at 0.4 to 0.6
+  alpha. Brighter read as pink fog in daylight.
+
+### v2 next steps
+
+Work in the plan's order: A (PBR decals) → C → D → E → F. Merge at landmarks.
+
+## Next steps (v1)
 
 1. **Tuning in the user's real scenes** (hands-on). Check spray sizes against "bloody, not over the top"
    (`BloodFx::Choose`), and how readable blood is on dark gear.
