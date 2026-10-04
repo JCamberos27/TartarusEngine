@@ -3,6 +3,7 @@
 #include "MaterialAsset.h"
 #include "ShaderAsset.h"
 #include "Log.h"
+#include "AssetDatabase.h"
 #include "Texture.h"
 #include "Shader.h"
 #include "GLStateCache.h"
@@ -144,7 +145,8 @@ void Model::ImportFromFile(const ModelImportSettings& settings) {
     // Assimp flags INCOMPLETE; that's a valid clip asset, not a failed import.
     const bool animationOnly = scene && scene->mRootNode && scene->mNumMeshes == 0 && scene->mNumAnimations > 0;
     if (!scene || ((scene->mFlags & AI_SCENE_FLAGS_INCOMPLETE) && !animationOnly) || !scene->mRootNode) {
-        Log::Error("Model: import failed for '" + m_Path + "': " + importer.GetErrorString(), LogContext::Asset(m_Path));
+        if (!AssetDatabase::IsUnfetchedExternal(m_Path)) // a Drive file not fetched yet: the scan's warning counts it
+            Log::Error("Model: import failed for '" + m_Path + "': " + importer.GetErrorString(), LogContext::Asset(m_Path));
         // A failed import leaves an empty model's bounds collapsed to a finite point, so anything
         // that folds this model into a wider AABB (scene framing, focus) can't inherit the
         // inverted 1e30 sentinel and blow the result up to inf/NaN. A failed REimport keeps the
@@ -371,7 +373,7 @@ std::unique_ptr<ModelMesh> Model::ProcessMesh(aiMesh* mesh, const aiScene* scene
     // nodeTransform == I, C == the group's frame - the jacket lay on the floor). So: when C is the
     // global frame of the mesh node or any node above it, and not the identity, it is folded back
     // out; every other file (C == I at bind, or a posed import's per-bone delta, which is no node's
-    // frame) bakes as before. tools/probes/female_bake_probe.cpp --scan checks a pack against this.
+    // frame) bakes as before.
     //
     // The correction goes on the offsets, not the bake: those offsets are stored once per bone
     // NAME for the whole model (first mesh wins, ExtractBoneWeights), and one file can mix both

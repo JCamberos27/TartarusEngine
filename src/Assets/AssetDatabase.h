@@ -32,6 +32,12 @@ void ScanProject();
 // project-relative paths in the first column; the header row, blank lines and '#' lines skipped.
 std::vector<std::string> ParseExternalAssetList(const std::string& csvText);
 
+// True when `path` (absolute or project-relative) is listed in external_assets.csv and isn't on
+// disk: a Drive file this checkout hasn't fetched. ScanProject already warns once with the count,
+// so loaders skip their per-file error for these; a missing file that isn't listed still errors.
+// The list is read once per process.
+bool IsUnfetchedExternal(const std::string& path);
+
 // #132 - ScanProject on a worker thread, so a big project's scan overlaps window / GL / shader
 // start-up instead of blocking it. Every lookup below (from another thread) waits for the scan
 // to finish, so callers never see a half-registered project. WaitForScan blocks explicitly.

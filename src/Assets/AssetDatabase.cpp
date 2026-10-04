@@ -476,6 +476,18 @@ static std::vector<std::string> ExternalAssetPaths() {
     return paths;
 }
 
+bool IsUnfetchedExternal(const std::string& path) {
+    static std::once_flag s_Once;
+    static std::unordered_set<std::string> s_Keys;
+    std::call_once(s_Once, [] {
+        for (const std::string& p : ExternalAssetPaths()) s_Keys.insert(Key(p));
+    });
+    const std::string resolved = ProjectPaths::Resolve(path);
+    if (!s_Keys.count(Key(resolved))) return false;
+    std::error_code ec;
+    return !std::filesystem::exists(resolved, ec);
+}
+
 void ScanProject() {
     namespace fs = std::filesystem;
     const auto t0 = std::chrono::steady_clock::now();
