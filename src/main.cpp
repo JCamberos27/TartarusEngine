@@ -1659,7 +1659,8 @@ int main(int argc, char** argv) {
             bloodFx.Clear();
             {   // the scene's blood tuning: the first Blood Settings component, defaults when none
                 BloodSettingsComponent b;
-                for (auto e : world.Registry.view<BloodSettingsComponent>()) { b = world.Registry.get<BloodSettingsComponent>(e); break; }
+                if (const auto all = world.Registry.view<BloodSettingsComponent>(); all.begin() != all.end())
+                    b = world.Registry.get<BloodSettingsComponent>(*all.begin());
                 bloodFx.Config.Enabled = b.Enabled;
                 bloodFx.Config.Size = b.Size;
                 bloodFx.Config.MaxSprays = b.MaxSprays;
