@@ -19,7 +19,7 @@
     "handAnchor": {"near": 0.05, "far": 0.15, "bones": ["magazine", "mag2"]}
   },
   "eject": {
-    "_comment": "5.45x39 case (tools/weapons/extract_casings.py) out of the right of the receiver, a little forward and up, every round. Root space: -X down the bore, +Y up, -Z right.",
+    "_comment": "5.45x39 case out of the right of the receiver, a little forward and up, every round. Root space: -X down the bore, +Y up, -Z right.",
     "model": "assets/Weapons/AKS74U/Casing_545x39.fbx",
     "material": "assets/Weapons/AKS74U/Materials/Cartridge_545x39mm.mat",
     "origin": [-0.04, 0.015, -0.02],
