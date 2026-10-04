@@ -95,6 +95,7 @@ float BloodFx::Random01() {
 void BloodFx::Clear() {
     m_Sprays.clear();
     m_Decals.clear();
+    m_Splats.clear();
     m_Pools.clear();
     m_Recent.clear();
     m_Now = 0.0f;
@@ -104,6 +105,53 @@ void BloodFx::EnsureHooks() {
     if (!m_SimLookup) m_SimLookup = [](const char* sim) { return BloodRenderer::Get().SimIndex(sim); };
     if (!m_SetLookup) m_SetLookup = [](const char* set) { return BloodRenderer::Get().DecalSet(set); };
     if (!m_Ray) m_Ray = PhysicsRay;
+    if (!m_BodyRay)
+        m_BodyRay = [](const glm::vec3& o, const glm::vec3& d, float maxD, unsigned& entity, int& part, glm::vec3& point) {
+            const float oo[3] = {o.x, o.y, o.z}, dd[3] = {d.x, d.y, d.z};
+            PhysicsWorld::BodyPartHit bp;
+            if (!PhysicsWorld::RaycastBodyParts(oo, dd, maxD, bp)) return false;
+            entity = bp.Entity;
+            part = bp.Part;
+            point = glm::vec3(bp.Point[0], bp.Point[1], bp.Point[2]);
+            return true;
+        };
+}
+
+void BloodFx::AddSplat(unsigned entity, int part, bool corpse, const glm::vec3& point, const glm::vec3& normal, const glm::vec3& along,
+                       const char* set, float radius, float depth, float delay, float grow) {
+    EnsureHooks();
+    SplatSpace space;
+    if (!m_SplatSpace || !m_SplatSpace(entity, part, corpse, point, space)) return;
+    const int s = m_SetLookup(set);
+    if (s < 0 || space.Members.empty()) return;
+    const float dry = Config.DrySeconds * 1.5f; // soaked into cloth, it stays wet longer
+    for (const auto& [member, worldToBind] : space.Members) {
+        const glm::mat3 lin(worldToBind);
+        const float scale = glm::length(lin * glm::vec3(0.57735f)); // world metres -> bind units
+        Splat sp;
+        sp.Group = space.Group;
+        sp.Member = member;
+        sp.Center = glm::vec3(worldToBind * glm::vec4(point, 1.0f));
+        sp.Normal = glm::normalize(lin * normal);
+        glm::vec3 t = lin * along;
+        t -= sp.Normal * glm::dot(t, sp.Normal);
+        sp.Tangent = glm::length(t) > 1e-6f ? glm::normalize(t) : glm::normalize(glm::cross(sp.Normal, glm::vec3(0.3f, 0.9f, 0.1f)));
+        sp.Radius = radius * scale;
+        sp.Depth = depth * scale;
+        sp.Set = s;
+        sp.Age = -std::max(delay, 0.0f);
+        sp.Grow = grow;
+        sp.DrySeconds = dry;
+        // A mesh holds 24 (the shader loops them); past that its oldest goes.
+        int onMember = 0;
+        for (const Splat& o : m_Splats) onMember += o.Member == member;
+        if (onMember >= 24)
+            for (auto it = m_Splats.begin(); it != m_Splats.end(); ++it)
+                if (it->Member == member) { m_Splats.erase(it); break; }
+        m_Splats.push_back(sp);
+        ++m_SplatsSpawned;
+    }
+    ++m_SplatHits;
 }
 
 glm::vec3 BloodFx::RandomTangent(const glm::vec3& n) {
@@ -211,6 +259,53 @@ void BloodFx::OnFleshHit(const Hit& hit) {
     const glm::mat4 toWorld = PrefabToWorld(exitPoint, dir, size, jitter, axis);
     SpawnSprays(*preset, toWorld, size, exitPoint, Flat(dir), hit.Entity, 0.85f + 0.25f * Random01());
     SpawnFloorDecals(*preset, toWorld, size, exitPoint, Flat(dir));
+
+    // On the body: the entry wound (a tight blot that seeps out over a few seconds) and, out of the far side,
+    // the exit's wider mess; on the living, a run of it down from the wound. The hit point is on the hit part's
+    // capsule, not the cloth, so each projects 30 cm deep; only surfaces facing its way take it.
+    if (!hit.Player) {
+        const float k = std::clamp(0.8f + hit.Damage / 150.0f, 0.8f, 1.4f);
+        AddSplat(hit.Entity, hit.Part, hit.Corpse, hit.Point, -dir, RandomTangent(-dir), "attached", 0.08f * k, 0.3f, 0.0f, 4.0f);
+        if (!hit.Corpse) {
+            const glm::vec3 back = hit.Point + dir * (hit.Head ? 0.16f : 0.24f);
+            AddSplat(hit.Entity, hit.Part, false, back, dir, RandomTangent(dir), Random01() < 0.5f ? "blood7" : "attached", 0.14f * k,
+                     0.3f, 0.05f, 1.5f);
+            AddSplat(hit.Entity, hit.Part, false, hit.Point - glm::vec3(0.0f, 0.12f * k, 0.0f), -dir, glm::vec3(0.0f, -1.0f, 0.0f),
+                     "char", 0.15f * k, 0.3f, 0.3f, 6.0f);
+        }
+    }
+    // The player's own: a wound where they were hit, and some of it on their hands and gun.
+    if (hit.Player) {
+        AddSplat(kPlayerEntity, -1, false, hit.Point, -dir, RandomTangent(-dir), "attached", 0.08f, 0.3f, 0.0f, 3.0f);
+        AddSplat(kPlayerEntity, -1, false, hit.Point - glm::vec3(0.0f, 0.1f, 0.0f), -dir, glm::vec3(0.0f, -1.0f, 0.0f), "char", 0.13f,
+                 0.3f, 0.2f, 5.0f);
+        if (Random01() < 0.5f) SpatterGear(1 + (int)(Random01() * 2.0f), 0.8f, 0.1f);
+    }
+    // Point blank, what comes out of the entry comes back at the shooter: specks on the gun and hands.
+    if (hit.ByPlayer && !hit.Corpse) {
+        const float d = glm::length(hit.Point - hit.Origin);
+        if (d < 2.5f && Random01() < 1.2f - d / 2.5f) SpatterGear(d < 1.2f ? 3 : 1 + (int)(Random01() * 2.0f), 1.3f - d / 2.5f, d / 8.0f);
+    }
+    // Whoever stands in the spray's path gets it on them: a few rays through the cone behind the body.
+    if (!hit.Corpse) {
+        const glm::vec3 from = exitPoint + dir * 0.25f;
+        for (int r = 0; r < 3; ++r) {
+            const glm::vec3 jitterDir = glm::normalize(dir + RandomTangent(dir) * 0.25f + glm::vec3(0.0f, -0.08f, 0.0f));
+            unsigned other = 0xFFFFFFFFu;
+            int part = -1;
+            glm::vec3 at;
+            if (!m_BodyRay(from, jitterDir, 2.5f * size / 0.6f, other, part, at) || other == hit.Entity) continue;
+            const float d = glm::length(at - from);
+            AddSplat(other, part, false, at, -jitterDir, RandomTangent(-jitterDir), r == 0 ? "blood9" : "blood3",
+                     (0.12f + 0.08f * Random01()) * std::clamp(1.3f - d / 2.5f, 0.5f, 1.0f), 0.12f, d / 4.0f, 0.3f);
+        }
+        // A loose prop in the way (a crate, a dropped gun): it's spattered too.
+        glm::vec3 p, n;
+        unsigned prop = 0xFFFFFFFFu;
+        if (m_PropRay && m_PropRay(from, Flat(dir), 2.0f * size / 0.6f, p, n, prop))
+            AddSplat(prop, -1, false, p, n, RandomTangent(n), Random01() < 0.5f ? "blood1" : "blood6", 0.3f * size, 0.15f,
+                     glm::length(p - from) / 4.0f, 0.3f);
+    }
     // A head shot throws some of it up: the ceiling above, if there's one within reach.
     if (hit.Head && !hit.Player) {
         glm::vec3 p, n;
@@ -270,6 +365,19 @@ void BloodFx::SpawnSprays(const BloodPresetDef& preset, const glm::mat4& prefabT
     }
 }
 
+void BloodFx::SpatterGear(int drops, float sizeScale, float delay) {
+    if (!m_Gear || drops <= 0) return;
+    glm::vec3 points[8], normals[8];
+    const int n = std::min(m_Gear(points, normals, 8), 8);
+    for (int i = 0; i < drops && n > 0; ++i) {
+        const int k = std::min(n - 1, (int)(Random01() * (float)n));
+        const glm::vec3 nrm = glm::normalize(normals[k]);
+        const glm::vec3 at = points[k] + RandomTangent(nrm) * (0.03f * Random01());
+        AddSplat(kPlayerEntity, -1, false, at, nrm, RandomTangent(nrm), Random01() < 0.5f ? "blood3" : "blood9",
+                 (0.025f + 0.03f * Random01()) * sizeScale, 0.05f, delay, 0.15f);
+    }
+}
+
 void BloodFx::Update(float dt) {
     m_Now += dt;
     for (Spray& s : m_Sprays) s.Age += dt;
@@ -295,9 +403,56 @@ void BloodFx::Update(float dt) {
                    m_Sprays.end());
     m_Recent.erase(std::remove_if(m_Recent.begin(), m_Recent.end(), [&](const Recent& r) { return m_Now - r.Time > 0.25f; }),
                    m_Recent.end());
+    // Splats live as long as the body they're on.
+    for (Splat& s : m_Splats) s.Age += dt;
+    static std::vector<unsigned> alive, gone, scratch;
+    alive.clear();
+    gone.clear();
+    for (const Splat& s : m_Splats) {
+        if (std::find(alive.begin(), alive.end(), s.Group) != alive.end() || std::find(gone.begin(), gone.end(), s.Group) != gone.end())
+            continue;
+        scratch.clear();
+        (m_Members && m_Members(s.Group, scratch) ? alive : gone).push_back(s.Group);
+    }
+    if (!gone.empty())
+        m_Splats.erase(std::remove_if(m_Splats.begin(), m_Splats.end(),
+                                      [&](const Splat& s) { return std::find(gone.begin(), gone.end(), s.Group) != gone.end(); }),
+                       m_Splats.end());
 }
 
 void BloodFx::Submit(BloodRenderer& renderer) const {
+    {   // Splats, by the mesh that draws them: each entity's run of the list.
+        static std::vector<BloodRenderer::Splat> splats;
+        static std::vector<std::pair<unsigned, glm::ivec2>> ranges;
+        static std::vector<unsigned> members;
+        splats.clear();
+        ranges.clear();
+        members.clear();
+        for (const Splat& s : m_Splats)
+            if (std::find(members.begin(), members.end(), s.Member) == members.end()) members.push_back(s.Member);
+        for (unsigned member : members) {
+            const int first = (int)splats.size();
+            for (const Splat& s : m_Splats) {
+                if (s.Member != member || s.Age < 0.0f) continue;
+                BloodRenderer::Splat r;
+                r.Center = s.Center;
+                r.Radius = s.Radius;
+                r.Normal = s.Normal;
+                r.Depth = s.Depth;
+                r.Tangent = s.Tangent;
+                r.Set = s.Set;
+                const float grow = std::clamp(s.Age / std::max(s.Grow, 1e-3f), 0.0f, 1.0f);
+                r.Cutout = 0.85f * (1.0f - grow) * (1.0f - grow);
+                const float dry = std::clamp(s.Age / std::max(s.DrySeconds, 1.0f), 0.0f, 1.0f);
+                r.Dry = dry * dry * (3.0f - 2.0f * dry);
+                r.Opacity = s.Opacity;
+                splats.push_back(r);
+            }
+            const int count = (int)splats.size() - first;
+            if (count > 0) ranges.emplace_back(member, glm::ivec2(first, count));
+        }
+        renderer.SetSplats(splats, ranges);
+    }
     for (const Decal& d : m_Decals) {
         if (d.Age < 0.0f) continue;
         BloodRenderer::Decal r;

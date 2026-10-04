@@ -98,6 +98,8 @@ public:
         float Damage;
         bool Killed, Head, Corpse;
         int Pellets;
+        glm::vec3 Origin;  // where the round came from (the shooter's muzzle / eye)
+        bool ByPlayer;     // the player fired it
     };
     std::vector<FleshHit> TakeFleshHits();
 

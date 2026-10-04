@@ -1518,7 +1518,8 @@ void NpcDirector::HandleShots(World& world, Npc& n, const PlayerSnapshot& p, con
             e.SourcePos = n.Eye;
             m_PlayerDamage.push_back(e);
             if (m_FleshHits.size() < 64)
-                m_FleshHits.push_back({hit.Point, hit.Direction, kPlayerEntity, -1, e.Amount, false, zone == HitZone::Head, false, hit.Pellets});
+                m_FleshHits.push_back({hit.Point, hit.Direction, kPlayerEntity, -1, e.Amount, false, zone == HitZone::Head, false, hit.Pellets,
+                                       hit.Origin, false});
             Callout(n, CallKind::PlayerHurt);
             continue;
         }
@@ -1531,7 +1532,7 @@ void NpcDirector::HandleShots(World& world, Npc& n, const PlayerSnapshot& p, con
             o->Body.Flinch(world, hit.Direction);
             if (m_FleshHits.size() < 64)
                 m_FleshHits.push_back({hit.Point, hit.Direction, hit.Entity, -1, DamageForHit(n.Gun, HitZone::Torso, dist) * 0.5f,
-                                       false, false, false, hit.Pellets});
+                                       false, false, false, hit.Pellets, hit.Origin, false});
             onNpc = true;
             break;
         }
@@ -1569,7 +1570,7 @@ bool NpcDirector::OnPlayerHit(World& world, unsigned entity, const glm::vec3& po
                 n.Ragdoll->HitCorpse(part, d, amount, point, m_RagdollCfg);
                 if (Fx) Fx->Play(CombatFx::Cue::FleshHit, point, false, 0.5f);
                 if (m_FleshHits.size() < 64)
-                    m_FleshHits.push_back({point, d, entity, part, amount, false, part == 2, true, weapon.Pellets});
+                    m_FleshHits.push_back({point, d, entity, part, amount, false, part == 2, true, weapon.Pellets, origin, true});
             }
             return true;
         }
@@ -1581,7 +1582,7 @@ bool NpcDirector::OnPlayerHit(World& world, unsigned entity, const glm::vec3& po
         if (head) *head = zone == HitZone::Head;
         if (m_FleshHits.size() < 64) {
             const glm::vec3 d = glm::length(dir) > 1e-6f ? glm::normalize(dir) : glm::vec3(0.0f, 0.0f, 1.0f);
-            m_FleshHits.push_back({point, d, entity, part, dmg, n.Dead, zone == HitZone::Head, false, weapon.Pellets});
+            m_FleshHits.push_back({point, d, entity, part, dmg, n.Dead, zone == HitZone::Head, false, weapon.Pellets, origin, true});
         }
         return true;
     }

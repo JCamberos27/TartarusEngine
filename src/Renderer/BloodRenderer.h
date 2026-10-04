@@ -2,6 +2,7 @@
 #include <functional>
 #include <memory>
 #include <string>
+#include <unordered_map>
 #include <vector>
 #include <glm/glm.hpp>
 
@@ -72,6 +73,23 @@ public:
     // `viewport` is x, y, w, h. Returns draw calls.
     int DrawDecals(const glm::mat4& view, const glm::mat4& proj, const int viewport[4], const HdrTarget& target,
                    const std::function<void(Shader&)>& applyFrameState);
+    // --- splats: blood on a mesh, pinned in its bind-pose space (ModelFragment.glsl's BloodSplatCover) ---
+    struct Splat {
+        glm::vec3 Center{0.0f};      // bind space
+        float Radius = 0.1f;         // the box's half-size, bind units
+        glm::vec3 Normal{0, 1, 0};   // out of the surface
+        float Depth = 0.1f;          // the projection's half-depth
+        glm::vec3 Tangent{1, 0, 0};  // the decal's u axis
+        int Set = -1;
+        float Cutout = 0.0f, Dry = 0.0f, Opacity = 1.0f;
+    };
+    // This frame's splats and which entities draw which run of them (entity -> first, count).
+    void SetSplats(const std::vector<Splat>& splats, const std::vector<std::pair<unsigned, glm::ivec2>>& ranges);
+    bool SplatRange(unsigned entity, int& first, int& count) const;
+    int SplatCount() const { return m_SplatCount; }
+    // Binds the splat list and the decal atlas for the model shader (once per scene draw).
+    void BindSplatResources() const;
+
     // The stains' albedo, fresh (matching the drops) and dried dark red-brown.
     glm::vec3 FilmFresh{0.26f, 0.010f, 0.008f};
     glm::vec3 FilmDried{0.075f, 0.022f, 0.016f};
@@ -99,4 +117,8 @@ private:
     unsigned int m_DecalBuffer = 0;
     size_t m_DecalCapacity = 0;
     std::unique_ptr<Shader> m_DecalProgram;
+    unsigned int m_SplatBuffer = 0;
+    size_t m_SplatCapacity = 0;
+    int m_SplatCount = 0;
+    std::unordered_map<unsigned, glm::ivec2> m_SplatRanges;
 };
