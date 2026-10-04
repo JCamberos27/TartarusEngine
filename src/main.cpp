@@ -18,6 +18,7 @@
 
 #include "AudioEngine.h"
 #include "AssetLibrary.h"
+#include "BloodFxImport.h"
 #include "HotReloadGameModule.h"
 #include "HotReloadEditorModule.h"
 #include "EditorModuleAPI.h" // EditorConsoleState (Clear on Play / Error Pause — #236 A5)
@@ -72,6 +73,10 @@
 #include "ShellCasings.h"
 #include "AI/NpcDirector.h"     // the enemy squad
 #include "Combat/CombatFx.h"
+#include "Combat/BloodFx.h"
+#include "AI/Npc.h"
+#include "Npc/NpcRagdoll.h"
+#include "BloodRenderer.h"
 #include "Audio/FoleyAudio.h"
 #include "AI/NpcTest.h"         // --npc-test
 #include "Combat/PlayerVitals.h" // the player's health, death and respawn
@@ -570,6 +575,13 @@ int main(int argc, char** argv) {
         CrashHandler::SetInteractive(false);
         return RunUnitTests() == 0 ? 0 : 1;
     }
+    // `--import-blood-fx <VolumetricBloodFX package dir>`: converts the volumetric blood sims and
+    // decals into project/assets/Effects/Blood (git-ignored; docs/BLOOD_FX.md). No GL needed.
+    for (int i = 1; i + 1 < argc; ++i) {
+        if (std::string(argv[i]) != "--import-blood-fx") continue;
+        CrashHandler::SetInteractive(false);
+        return BloodFxImport::ImportPackage(argv[i + 1], ProjectPaths::Resolve("assets/Effects/Blood")) ? 0 : 1;
+    }
     // `--audio-test [scene]`: the audio engine's own test, offline (no window, no audio device): a scripted tour of a scene's reverb zones.
     for (int i = 1; i < argc; ++i)
         if (std::string(argv[i]) == "--audio-test") return RunAudioTest(argc, argv);
@@ -842,6 +854,10 @@ int main(int argc, char** argv) {
         if (weaponTestMode) weaponTest = std::make_unique<FirstPersonWeaponTest>(stockProbeMode, stockProbeAk);
         std::unique_ptr<NpcTest> npcTest;
         if (npcTestMode) npcTest = std::make_unique<NpcTest>(npcTestScenario);
+        NpcTest::BloodView npcTestBlood; // what the blood scenario reads of the blood each frame
+        float npcTestBloodGpuSum = 0.0f;
+        int npcTestBloodGpuFrames = 0;
+        if (npcTest) npcTest->BloodStats = &npcTestBlood;
         FirstPersonBody firstPersonBody; // #405 - true first person: the player's own body
         GravityGun gravityGun;
         CrosshairOverlay crosshair; // Play-mode crosshair + gravity gun hold / throw-charge indicator
@@ -850,6 +866,15 @@ int main(int argc, char** argv) {
         BulletHoleList bulletHoles; // where this Play's rounds struck
         NpcDirector npcDirector;    // the enemy squad, in scenes with NPC Spawns
         CombatFx combatFx;          // its (and the player's) gunfire, flashes, tracers and hits
+        BloodFx bloodFx;            // the volumetric blood out of every body a round goes into (docs/BLOOD_FX.md)
+        bloodFx.SetBodyLookup([&npcDirector](unsigned entity, glm::vec3& centre) { // where a corpse lies, for its pool
+            for (const auto& n : npcDirector.Npcs()) {
+                if (!n || (unsigned)entt::to_integral(n->Root) != entity) continue;
+                centre = n->Ragdoll ? n->Ragdoll->PartPosition(0) : n->Feet + glm::vec3(0.0f, 0.9f, 0.0f);
+                return true;
+            }
+            return false;
+        });
         npcDirector.Fx = &combatFx;
         PlayerVitals playerVitals;  // the player's health in Play
         PlayerHudOverlay playerHud; // health, damage direction, hitmarker, death
@@ -1511,6 +1536,8 @@ int main(int argc, char** argv) {
                 combatHud.Settings = fx;
                 weaponFx.Settings = fx;
             }
+            bloodFx.Clear();
+            BloodRenderer::Get().Load(); // once; a missing import just leaves the blood off
             if (entt::entity ctrl = playControllerEntity; ctrl != entt::null) {
                 const auto& fp = world.Registry.get<FirstPersonControllerComponent>(ctrl);
                 player.MoveSpeed = fp.MoveSpeed;
@@ -1621,6 +1648,8 @@ int main(int argc, char** argv) {
             firstPersonPresentation.Stop(world);
             firstPersonBody.Stop(world);
             bulletHoles.Clear();
+            bloodFx.Clear();
+            BloodRenderer::Get().BeginFrame(); // nothing of Play's blood left in the editor
             shellCasings.Clear(world);
             editor.OnExitPlayMode(world, assets);
             playing = false;
@@ -1735,7 +1764,10 @@ int main(int argc, char** argv) {
             }
             std::sort(smokeScenePaths.begin(), smokeScenePaths.end());
             if (weaponTestMode) smokeScenePaths.assign(1, ProjectPaths::Resolve("scenes/Sandbox.json"));
-            if (npcTestMode) smokeScenePaths.assign(1, ProjectPaths::Resolve(npcTestScenario == "sandbox" ? "scenes/Sandbox.json" : "scenes/Arena.json"));
+            if (npcTestMode)
+                smokeScenePaths.assign(1, ProjectPaths::Resolve(npcTestScenario == "sandbox" ? "scenes/Sandbox.json"
+                                                              : npcTestScenario == "blood" ? "scenes/BloodTest.json"
+                                                                                           : "scenes/Arena.json"));
             std::cout << "[SmokeTest] Found " << smokeScenePaths.size() << " scene(s) under "
                       << scenesDir << std::endl;
             if (smokeScenePaths.empty()) {
@@ -2839,6 +2871,21 @@ int main(int argc, char** argv) {
                         playerVitals.ApplyDamage(e.Amount, e.SourcePos);
                         if (playerVitals.Health() < before) combatFx.Play(CombatFx::Cue::FleshHit, e.Point, true, 0.8f);
                     }
+                    // Every round that went into a body this frame - theirs and the player's - bleeds.
+                    for (const NpcDirector::FleshHit& f : npcDirector.TakeFleshHits()) {
+                        BloodFx::Hit h;
+                        h.Point = f.Point;
+                        h.Direction = f.Direction;
+                        h.Entity = f.Entity;
+                        h.Part = f.Part;
+                        h.Damage = f.Damage;
+                        h.Killed = f.Killed;
+                        h.Head = f.Head;
+                        h.Corpse = f.Corpse;
+                        h.Player = f.Entity == kPlayerEntity;
+                        h.Pellets = f.Pellets;
+                        bloodFx.OnFleshHit(h);
+                    }
                     if (npcTest) npcTest->After(world, npcDirector, playerVitals, player);
                 }
                 combatFx.SetListener(player.Cam.Position, player.Cam.Front());
@@ -2861,6 +2908,27 @@ int main(int argc, char** argv) {
                         fi.SprintStride = firstPersonPresentation.Set().Procedural.Bob.SprintStride;
                     }
                     FoleyAudio::Get().UpdatePlayer(world, gameDt, fi);
+                }
+                {
+                    PROFILE_SCOPE("Blood");
+                    bloodFx.Update(gameDt);
+                    BloodRenderer::Get().BeginFrame();
+                    bloodFx.Submit(BloodRenderer::Get());
+                    if (npcTest) {
+                        npcTestBlood.Loaded = BloodRenderer::Get().Loaded();
+                        npcTestBlood.SpraysSpawned = bloodFx.SpraysSpawned();
+                        npcTestBlood.ActiveSprays = (int)bloodFx.Sprays().size();
+                        npcTestBlood.LastSprayClipped = bloodFx.LastSprayClipped();
+                        npcTestBlood.DecalsSpawned = bloodFx.DecalsSpawned();
+                        npcTestBlood.PoolsSpawned = bloodFx.PoolsSpawned();
+                        for (const Profiler::Entry& e : Profiler::GetLastFrameGpu()) {
+                            if (e.Name != "Blood Sprays") continue;
+                            npcTestBloodGpuSum += e.Milliseconds;
+                            ++npcTestBloodGpuFrames;
+                            npcTestBlood.GpuMsMax = std::max(npcTestBlood.GpuMsMax, e.Milliseconds);
+                        }
+                        npcTestBlood.GpuMsAvg = npcTestBloodGpuFrames ? npcTestBloodGpuSum / (float)npcTestBloodGpuFrames : 0.0f;
+                    }
                 }
                 if (playUsesPlayer) {
                     playerVitals.Tick(gameDt);

@@ -1,0 +1,321 @@
+#include "BloodFx.h"
+
+#include "BloodRenderer.h"
+#include "GameModuleAPI.h"
+#include "PhysicsWorld.h"
+
+#include <glm/gtc/matrix_transform.hpp>
+#include <glm/gtc/quaternion.hpp>
+#include <algorithm>
+#include <cmath>
+
+namespace {
+glm::mat4 FromRows(const float m[12]) {
+    glm::mat4 r(1.0f);
+    for (int row = 0; row < 3; ++row)
+        for (int col = 0; col < 4; ++col) r[col][row] = m[row * 4 + col];
+    return r;
+}
+
+bool PhysicsRay(const glm::vec3& origin, const glm::vec3& dir, float maxDistance, glm::vec3& point, glm::vec3& normal) {
+    const float o[3] = {origin.x, origin.y, origin.z}, d[3] = {dir.x, dir.y, dir.z};
+    QueryFilter f;
+    f.HitTriggers = 0;
+    RaycastHit h;
+    if (!PhysicsWorld::RaycastSolid(o, d, maxDistance, f, h) || !h.Hit) return false;
+    point = glm::vec3(h.Point[0], h.Point[1], h.Point[2]);
+    normal = glm::vec3(h.Normal[0], h.Normal[1], h.Normal[2]);
+    return true;
+}
+
+// A horizontal unit vector along `dir` (the sims only yaw); straight up / down falls back to +X.
+glm::vec3 Flat(const glm::vec3& dir) {
+    glm::vec3 f(dir.x, 0.0f, dir.z);
+    const float l = glm::length(f);
+    return l > 1e-4f ? f / l : glm::vec3(1.0f, 0.0f, 0.0f);
+}
+} // namespace
+
+int BloodFx::FrameAt(float t01, float framesCount) {
+    const float t = std::clamp(t01, 0.0f, 1.0f);
+    return std::clamp((int)std::floor(t * framesCount + 0.1f), 0, std::max(0, (int)framesCount));
+}
+
+float BloodFx::PlaybackSeconds(const BloodSprayDef& def, float animationSpeed, float size) {
+    return def.TimeLimit / std::max(animationSpeed, 1e-3f) * std::sqrt(std::max(size, 0.05f));
+}
+
+BloodFx::Choice BloodFx::Choose(const Hit& hit, float roll) {
+    // Sizes are x the prefab's authored splash, which is a cinematic few metres: the game's are
+    // smaller - bloody, not a fire hose - and grow with how bad the wound is.
+    if (hit.Player) return {"blood3", 0.45f};
+    if (hit.Corpse) return {roll < 0.5f ? "blood5" : "blood4", 0.5f};
+    if (hit.Direction.y < -0.8f) return {"blood2", 0.6f}; // straight down into someone on the ground
+    if (hit.Head && hit.Killed) return {roll < 0.5f ? "blood7" : "blood8", roll < 0.5f ? 0.8f : 0.65f};
+    if (hit.Killed) {
+        static const Choice kKill[] = {{"blood1", 0.75f}, {"blood9", 0.55f}, {"blood2_left", 0.75f}, {"blood2_right", 0.75f}};
+        return kKill[std::min(3, (int)(roll * 4.0f))];
+    }
+    if (hit.Head) return {"blood5", 0.9f};
+    static const Choice kHit[] = {{"blood3", 0.6f}, {"blood4", 0.85f}, {"blood6", 0.8f}, {"blood5", 0.95f}};
+    return kHit[std::min(3, (int)(roll * 4.0f))];
+}
+
+glm::vec3 BloodFx::PrefabAxis(const BloodPresetDef& preset,
+                              const std::function<const BloodFxImport::VatFrame*(const char* sim, glm::vec3& origin)>& lastFrame) {
+    glm::vec3 sum(0.0f);
+    for (const BloodSprayDef& def : preset.Sprays) {
+        glm::vec3 origin;
+        const BloodFxImport::VatFrame* f = lastFrame ? lastFrame(def.Sim, origin) : nullptr;
+        if (!f) continue;
+        // Where the fluid went, sim space -> the prefab's frame.
+        const glm::vec3 travel(FromRows(def.M) * glm::vec4(glm::vec3(f->Centroid[0], f->Centroid[1], f->Centroid[2]) - origin, 0.0f));
+        sum += glm::vec3(travel.x, 0.0f, travel.z);
+    }
+    return glm::length(sum) > 0.05f ? glm::normalize(sum) : glm::vec3(1.0f, 0.0f, 0.0f);
+}
+
+glm::mat4 BloodFx::PrefabToWorld(const glm::vec3& exitPoint, const glm::vec3& dir, float size, float yawJitterRad,
+                                 const glm::vec3& prefabAxis) {
+    const glm::vec3 f = Flat(dir);
+    // The prefab's axis onto f (right-handed, about +Y).
+    const float yaw = std::atan2(-f.z, f.x) - std::atan2(-prefabAxis.z, prefabAxis.x) + yawJitterRad;
+    glm::mat4 m = glm::translate(glm::mat4(1.0f), exitPoint);
+    m = glm::rotate(m, yaw, glm::vec3(0.0f, 1.0f, 0.0f));
+    return glm::scale(m, glm::vec3(size));
+}
+
+float BloodFx::Random01() {
+    m_Rng ^= m_Rng << 13;
+    m_Rng ^= m_Rng >> 17;
+    m_Rng ^= m_Rng << 5;
+    return (float)(m_Rng & 0xFFFFFFu) / 16777216.0f;
+}
+
+void BloodFx::Clear() {
+    m_Sprays.clear();
+    m_Decals.clear();
+    m_Pools.clear();
+    m_Recent.clear();
+    m_Now = 0.0f;
+}
+
+void BloodFx::EnsureHooks() {
+    if (!m_SimLookup) m_SimLookup = [](const char* sim) { return BloodRenderer::Get().SimIndex(sim); };
+    if (!m_SetLookup) m_SetLookup = [](const char* set) { return BloodRenderer::Get().DecalSet(set); };
+    if (!m_Ray) m_Ray = PhysicsRay;
+}
+
+glm::vec3 BloodFx::RandomTangent(const glm::vec3& n) {
+    const glm::vec3 a = glm::normalize(glm::cross(n, std::abs(n.y) < 0.9f ? glm::vec3(0, 1, 0) : glm::vec3(1, 0, 0)));
+    const glm::vec3 b = glm::cross(n, a);
+    const float t = Random01() * 6.2831853f;
+    return a * std::cos(t) + b * std::sin(t);
+}
+
+float BloodFx::DecalCutout(const Decal& d) {
+    const float t = std::max(d.Age, 0.0f);
+    // The last stretch of its life: what's left shrinks back along the reveal order.
+    const float tail = d.Reveal ? 0.7f * d.RevealSeconds : 8.0f;
+    const float fade = std::clamp((t - (d.Life - tail)) / tail, 0.0f, 1.0f);
+    if (!d.Reveal) {
+        const float grow = std::clamp(t / std::max(d.PoolGrow, 1e-3f), 0.0f, 1.0f);
+        const float spread = 0.9f * (1.0f - grow) * (1.0f - grow) * (1.0f - grow); // fast at first, slowing as it thins
+        return std::max(spread, fade);
+    }
+    const float g = std::max(d.RevealSeconds, 1e-3f);
+    if (fade > 0.0f) return std::clamp(d.Reveal->Eval(0.3f + 0.7f * fade), 0.0f, 1.0f);
+    return std::clamp(d.Reveal->Eval(std::min(t / g, 0.3f)), 0.0f, 1.0f);
+}
+
+BloodFx::Decal* BloodFx::AddDecal(const char* set, const glm::vec3& centre, const glm::vec3& up, const glm::vec3& along,
+                                  const glm::vec3& extent, float delay) {
+    EnsureHooks();
+    const int s = m_SetLookup(set);
+    if (s < 0) return nullptr;
+    if ((int)m_Decals.size() >= std::max(1, Config.MaxDecals)) m_Decals.erase(m_Decals.begin());
+    const glm::vec3 y = glm::normalize(up);
+    glm::vec3 x = along - y * glm::dot(along, y);
+    x = glm::length(x) > 1e-4f ? glm::normalize(x) : RandomTangent(y);
+    const glm::vec3 z = glm::cross(x, y);
+    Decal d;
+    d.Set = s;
+    d.Model = glm::mat4(glm::vec4(x * extent.x, 0.0f), glm::vec4(y * extent.y, 0.0f), glm::vec4(z * extent.z, 0.0f), glm::vec4(centre, 1.0f));
+    d.Age = -std::max(delay, 0.0f);
+    d.Life = Config.DecalLifetime * (0.9f + 0.2f * Random01());
+    d.DrySeconds = Config.DrySeconds * (0.8f + 0.4f * Random01());
+    m_Decals.push_back(d);
+    ++m_DecalsSpawned;
+    return &m_Decals.back();
+}
+
+void BloodFx::SpawnFloorDecals(const BloodPresetDef& preset, const glm::mat4& prefabToWorld, float size, const glm::vec3& wound,
+                               const glm::vec3& flatDir) {
+    // BFX_DecalSettings: the ground a step along the spray, how far the blood falls to it, and from
+    // that the splat's spread, slide and when it lands.
+    glm::vec3 ground, n;
+    const glm::vec3 probe = wound + flatDir * size + glm::vec3(0.0f, 0.2f, 0.0f);
+    if (!m_Ray(probe, glm::vec3(0.0f, -1.0f, 0.0f), 6.0f, ground, n) || n.y < 0.5f) return;
+    const float height = wound.y - ground.y;
+    for (const BloodDecalDef& def : preset.Decals) {
+        // Not shrunk with our smaller sprays: a small splash from chest height still reaches the floor.
+        const float hiH = def.HeightMax * preset.RootScale, loH = def.HeightMin * preset.RootScale;
+        if (height >= hiH || height <= loH) continue;
+        const float k = std::abs(height / hiH);
+        const glm::vec3 sMul = glm::mix(glm::vec3(def.ScaleMin[0], def.ScaleMin[1], def.ScaleMin[2]),
+                                        glm::vec3(def.ScaleMax[0], def.ScaleMax[1], def.ScaleMax[2]), k);
+        const glm::vec3 off = glm::mix(glm::vec3(def.OffsetMin[0], def.OffsetMin[1], def.OffsetMin[2]),
+                                       glm::vec3(def.OffsetMax[0], def.OffsetMax[1], def.OffsetMax[2]), k);
+        glm::mat4 local = glm::translate(glm::mat4(1.0f), glm::vec3(def.Pos[0], def.Pos[1], def.Pos[2]) + off);
+        local *= glm::mat4_cast(glm::quat(def.Rot[3], def.Rot[0], def.Rot[1], def.Rot[2]));
+        local = glm::scale(local, glm::vec3(def.Scale[0] * sMul.x, def.Scale[1], def.Scale[2] * sMul.z));
+        const glm::mat4 box = prefabToWorld * FromRows(def.Parent) * local;
+        glm::vec3 x(box[0]), z(box[2]);
+        // Lying on the ground; projected through 40 cm, so steps and kerbs take it but walls don't.
+        const glm::vec3 centre(box[3].x, ground.y + 0.01f, box[3].z);
+        const float delay = def.DelayByHeight.Eval(k) / std::max(preset.AnimationSpeed, 1e-3f) * std::sqrt(size);
+        Decal* d = AddDecal(def.Set, centre, glm::vec3(0, 1, 0), x, glm::vec3(glm::length(x), 0.4f, glm::length(z)), delay);
+        if (!d) continue;
+        d->Reveal = &def.Reveal;
+        d->RevealSeconds = def.RevealSeconds;
+    }
+}
+
+void BloodFx::OnFleshHit(const Hit& hit) {
+    if (!Config.Enabled) return;
+    // One spray per body per moment: a shotgun's pellets arrive together.
+    for (const Recent& r : m_Recent)
+        if (r.Entity == hit.Entity && m_Now - r.Time < 0.08f) return;
+    m_Recent.push_back({hit.Entity, m_Now});
+
+    Choice c = Choose(hit, Random01());
+    const BloodPresetDef* preset = FindBloodPreset(c.Preset);
+    if (!preset) return;
+    float size = c.Size * Config.Size * (0.88f + 0.24f * Random01());
+    size *= std::clamp(0.85f + hit.Damage / 220.0f, 0.85f, 1.2f);
+    if (hit.Pellets > 1) size *= 1.15f;
+
+    const glm::vec3 dir = glm::length(hit.Direction) > 1e-5f ? glm::normalize(hit.Direction) : glm::vec3(0.0f, 0.0f, -1.0f);
+    // Out of the far side: the round's exit, still inside the body's silhouette.
+    const glm::vec3 exitPoint = hit.Point + dir * (hit.Head ? 0.07f : 0.13f);
+    const float jitter = (Random01() - 0.5f) * 0.45f;
+    const glm::vec3 axis = PrefabAxis(*preset, [](const char* sim, glm::vec3& origin) -> const BloodFxImport::VatFrame* {
+        const BloodRenderer::SimInfo* info = BloodRenderer::Get().Sim(BloodRenderer::Get().SimIndex(sim));
+        if (!info || info->Frames.size() < 2) return nullptr;
+        origin = glm::vec3(info->Header.Origin[0], info->Header.Origin[1], info->Header.Origin[2]);
+        // The last frame that still has fluid in it.
+        for (size_t i = info->Frames.size(); i-- > 1;)
+            if (info->Frames[i].LiveTris > info->Header.VertexCount / 12) return &info->Frames[i];
+        return nullptr;
+    });
+    const glm::mat4 toWorld = PrefabToWorld(exitPoint, dir, size, jitter, axis);
+    SpawnSprays(*preset, toWorld, size, exitPoint, Flat(dir), hit.Entity, 0.85f + 0.25f * Random01());
+    SpawnFloorDecals(*preset, toWorld, size, exitPoint, Flat(dir));
+    // A head shot throws some of it up: the ceiling above, if there's one within reach.
+    if (hit.Head && !hit.Player) {
+        glm::vec3 p, n;
+        if (m_Ray(exitPoint, glm::vec3(0.0f, 1.0f, 0.0f), 2.2f, p, n) && n.y < -0.5f) {
+            const float s = size * (0.7f + 0.3f * Random01());
+            if (Decal* d = AddDecal("blood7", p, n, RandomTangent(n), glm::vec3(1.1f * s, 0.3f, 1.1f * s), 0.12f + glm::length(p - exitPoint) / 6.0f))
+                d->Opacity = 0.85f;
+        }
+    }
+    // A body that died here bleeds out where it comes to rest.
+    if (hit.Killed && !hit.Player && Config.Pools) m_Pools.push_back({hit.Entity, m_Now + 2.0f + Random01(), size});
+}
+
+void BloodFx::SpawnSprays(const BloodPresetDef& preset, const glm::mat4& prefabToWorld, float size, const glm::vec3& wound,
+                          const glm::vec3& flatDir, unsigned entity, float tint) {
+    EnsureHooks();
+    // An obstacle along the spray's path: the fluid stops at it rather than passing through.
+    glm::vec4 clip(0.0f, 0.0f, 0.0f, 1.0f);
+    m_LastClipped = false;
+    {
+        glm::vec3 p, n;
+        const float reach = 3.2f * size / 0.6f;
+        if (m_Ray(wound, flatDir, reach, p, n) && glm::dot(n, flatDir) < -0.2f) {
+            n = glm::normalize(n);
+            clip = glm::vec4(n, -glm::dot(n, p) + 0.004f);
+            m_LastClipped = true;
+            // The spatter where it strikes: streaks fanning across the wall, a little below the line (it's
+            // already falling), landing when the fluid gets there (about 4 m/s out of a wound).
+            static const char* const kStreaks[] = {"blood1", "blood3", "blood9", "blood2_right"};
+            const float dist = glm::length(p - wound);
+            const float s = size * (0.85f + 0.3f * Random01()) * std::clamp(1.4f - dist / reach, 0.6f, 1.2f);
+            const glm::vec3 at = p - glm::vec3(0.0f, 0.04f + 0.08f * dist, 0.0f);
+            glm::vec3 along = RandomTangent(n);
+            if (along.y > 0.0f) along = -along; // streaks run out and down, not up
+            // The splash's body (a blot with its spokes) and the streaks thrown out of it.
+            const float land = dist / 4.0f;
+            const char* blot = Random01() < 0.5f ? "blood7" : "attached";
+            if (Decal* body = AddDecal(blot, at, n, RandomTangent(n), glm::vec3(0.75f * s, 0.25f, 0.75f * s), land)) body->PoolGrow = 0.35f;
+            const char* streaks = kStreaks[std::min(3, (int)(Random01() * 4.0f))];
+            if (Decal* streak = AddDecal(streaks, at, n, along, glm::vec3(1.3f * s, 0.25f, 0.9f * s), land)) streak->PoolGrow = 0.25f;
+        }
+    }
+    for (const BloodSprayDef& def : preset.Sprays) {
+        const int sim = m_SimLookup(def.Sim);
+        if (sim < 0) continue;
+        if ((int)m_Sprays.size() >= std::max(1, Config.MaxSprays)) m_Sprays.erase(m_Sprays.begin());
+        Spray s;
+        s.Sim = sim;
+        s.Model = prefabToWorld * FromRows(def.M);
+        s.Duration = PlaybackSeconds(def, preset.AnimationSpeed, size);
+        s.FramesCount = def.FramesCount;
+        s.ClipPlane = clip;
+        s.Tint = glm::vec3(tint);
+        s.Entity = entity;
+        m_Sprays.push_back(s);
+        ++m_SpraysSpawned;
+    }
+}
+
+void BloodFx::Update(float dt) {
+    m_Now += dt;
+    for (Spray& s : m_Sprays) s.Age += dt;
+    for (Decal& d : m_Decals) d.Age += dt;
+    m_Decals.erase(std::remove_if(m_Decals.begin(), m_Decals.end(), [](const Decal& d) { return d.Age >= d.Life; }), m_Decals.end());
+    // Corpses that have come to rest: the pool under the pelvis.
+    for (size_t i = 0; i < m_Pools.size();) {
+        if (m_Now < m_Pools[i].At) { ++i; continue; }
+        const PendingPool pp = m_Pools[i];
+        m_Pools.erase(m_Pools.begin() + (std::ptrdiff_t)i);
+        glm::vec3 centre, p, n;
+        if (!m_Body || !m_Body(pp.Entity, centre)) continue;
+        EnsureHooks();
+        if (!m_Ray(centre + glm::vec3(0.0f, 0.3f, 0.0f), glm::vec3(0.0f, -1.0f, 0.0f), 1.8f, p, n) || n.y < 0.6f) continue;
+        const float s = std::clamp(pp.Size, 0.5f, 1.0f) * (1.3f + 0.4f * Random01());
+        if (Decal* d = AddDecal("attached", p + glm::vec3(0.0f, 0.01f, 0.0f), n, RandomTangent(n), glm::vec3(s, 0.3f, s), 0.0f)) {
+            d->PoolGrow = 20.0f + 10.0f * Random01();
+            ++m_PoolsSpawned;
+            d->DrySeconds *= 2.5f; // a pool stays wet far longer than a spatter
+        }
+    }
+    m_Sprays.erase(std::remove_if(m_Sprays.begin(), m_Sprays.end(), [](const Spray& s) { return s.Age >= s.Duration; }),
+                   m_Sprays.end());
+    m_Recent.erase(std::remove_if(m_Recent.begin(), m_Recent.end(), [&](const Recent& r) { return m_Now - r.Time > 0.25f; }),
+                   m_Recent.end());
+}
+
+void BloodFx::Submit(BloodRenderer& renderer) const {
+    for (const Decal& d : m_Decals) {
+        if (d.Age < 0.0f) continue;
+        BloodRenderer::Decal r;
+        r.Model = d.Model;
+        r.Set = d.Set;
+        r.Cutout = DecalCutout(d);
+        const float dry = std::clamp(d.Age / std::max(d.DrySeconds, 1.0f), 0.0f, 1.0f);
+        r.Dry = dry * dry * (3.0f - 2.0f * dry);
+        r.Opacity = d.Opacity;
+        renderer.AddDecal(r);
+    }
+    for (const Spray& s : m_Sprays) {
+        BloodRenderer::Spray d;
+        d.Sim = s.Sim;
+        d.Model = s.Model;
+        d.Frame = FrameAt(s.Age / std::max(s.Duration, 1e-3f), s.FramesCount);
+        d.Tint = s.Tint;
+        d.ClipPlane = s.ClipPlane;
+        renderer.AddSpray(d);
+    }
+}

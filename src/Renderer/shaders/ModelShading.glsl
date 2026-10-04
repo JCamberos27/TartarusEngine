@@ -1,0 +1,784 @@
+// ModelFragment.glsl's uniforms and shading functions, split out so other fragment shaders can light a surface
+// exactly as a mesh is lit (the blood decals, docs/BLOOD_FX.md). Expects vWorldPos to exist: ModelFragment's
+// input, or a global the includer fills before calling anything that reads it.
+#pragma once
+
+uniform vec3 uViewPos;
+// The player's own body (PlayerBodyTag): nothing of it within this many metres of the eye is drawn - the
+// near plane would slice it into slivers. 0 for everything else.
+uniform float uNearHide;
+// Clothing's Near Hide reaches further to the sides (PlayerBodyTag::NearHideWidth, 0 = a sphere), along the
+// view's flat right, uNearHideRight.
+uniform float uNearHideWidth;
+uniform vec3 uNearHideRight;
+
+// #162 - distance fog (Unity's Lighting > Fog), applied to lit surfaces in linear HDR. The sky
+// isn't fogged (same as Unity), so pick a fog colour close to the horizon.
+uniform int   uFogMode;          // 0 off, 1 linear, 2 exponential, 3 exponential squared
+uniform vec3  uFogColor;         // linear
+uniform float uFogDensity;
+uniform float uFogStart;
+uniform float uFogEnd;
+uniform float uFogHeightFalloff; // 0 = uniform; >0 = thins out above uFogBaseHeight
+uniform float uFogBaseHeight;
+
+vec3 ApplyFog(vec3 c) {
+    if (uFogMode == 0) return c;
+    vec3 ray = vWorldPos - uViewPos;
+    float dist = length(ray);
+    float fog;
+    if (uFogMode == 1) {
+        fog = clamp((dist - uFogStart) / max(uFogEnd - uFogStart, 1e-3), 0.0, 1.0);
+    } else {
+        float optical = uFogDensity * dist;
+        if (uFogHeightFalloff > 0.0) {
+            // Exponential height fog: density * exp(-k (y - base)) integrated along the ray.
+            float k = uFogHeightFalloff;
+            float t = k * ray.y;
+            float along = abs(t) > 1e-4 ? (1.0 - exp(-t)) / t : 1.0;
+            optical *= exp(-k * (uViewPos.y - uFogBaseHeight)) * along;
+        }
+        fog = uFogMode == 2 ? 1.0 - exp(-optical) : 1.0 - exp(-optical * optical);
+    }
+    return mix(c, uFogColor, clamp(fog, 0.0, 1.0));
+}
+
+// Physical sky (SkyAtmosphere): aerial perspective and cloud shadows. Both default to off
+// (uniform 0) and their units always hold a valid neutral texture, so other sky modes and the
+// preview renderers pay nothing. Units 30/31 sit above everything material maps can use.
+uniform int  uAerialOn;
+uniform vec4 uAerialViewport;   // x, y, width, height of this view in the framebuffer
+uniform float uAerialInvRange;  // 1 / world distance covered by the volume's last slice
+layout(binding = 30) uniform sampler3D uAerialVolume; // rgb in-scattered light, a transmittance
+uniform int  uCloudShadowOn;
+uniform vec4 uCloudShadowParams; // xy = world XZ at the map's centre, z = 1 / world extent, w = sea level Y
+uniform vec3 uCloudShadowLightDir;
+layout(binding = 31) uniform sampler2D uCloudShadowMap;
+
+// The atmosphere between the camera and this surface: the same haze and colour shift the sky
+// shows at that distance. The volume's slices are spaced quadratically (slice s ends at
+// range * ((s+1)/32)^2), so depth maps to sqrt(distance / range).
+vec3 ApplyAerialPerspective(vec3 c) {
+    if (uAerialOn == 0) return c;
+    float d = length(vWorldPos - uViewPos) * uAerialInvRange;
+    float w = sqrt(clamp(d, 0.0, 1.0));
+    vec2 uv = (gl_FragCoord.xy - uAerialViewport.xy) / uAerialViewport.zw;
+    const float kSlices = 32.0;
+    vec4 ap = texture(uAerialVolume, vec3(uv, max(w - 0.5 / kSlices, 0.5 / kSlices)));
+    // In front of the first slice, fade in from "no atmosphere".
+    ap = mix(vec4(0.0, 0.0, 0.0, 1.0), ap, clamp(w * kSlices, 0.0, 1.0));
+    return c * ap.a + ap.rgb;
+}
+
+// How much of the sun (or moon) gets through the clouds to this point: project it along the
+// light onto sea level, where the shadow map was traced from.
+float CloudShadow(vec3 p) {
+    if (uCloudShadowOn == 0) return 1.0;
+    vec3 L = uCloudShadowLightDir;
+    float ly = max(L.y, 0.05);
+    vec2 g = p.xz - L.xz * ((p.y - uCloudShadowParams.w) / ly);
+    vec2 uv = (g - uCloudShadowParams.xy) * uCloudShadowParams.z + 0.5;
+    return texture(uCloudShadowMap, uv).r;
+}
+
+// Every scene light (directional sun, point, spot) in one std430 SSBO — filled by LightBuffer
+// on the CPU, bound at binding = 0. This is the layout the clustered-forward cull pass will
+// consume later, so it doesn't change again when that lands.
+struct Light {
+    vec4 PositionType; // xyz = world pos (point/spot); w = type: 0 directional, 1 point, 2 spot
+    vec4 ColorRange;   // rgb = colour * intensity; a = range in metres (point/spot)
+    vec4 DirCutoff;    // xyz = normalized aim direction (spot/directional); w = spot outer-cone cos (-1 = none)
+    vec4 Params;       // x = spot inner-cone cos; y = shadow slot; z = excluded-layer bits (#203); w reserved
+};
+layout(std430, binding = 0) readonly buffer LightBuffer {
+    uint uLightCount;
+    uint uDirectionalCount; // directional lights are packed at the front of uLights[] (#188)
+    Light uLights[];
+};
+
+// #203 - lighting layers. uObjectLayerBit is 1 << this object's layer (0 = unfiltered, for
+// draws that never set it); a light skips objects whose bit is in its excluded-layer set.
+uniform int uObjectLayerBit;
+bool LightAffects(uint i) {
+    return (floatBitsToUint(uLights[i].Params.z) & uint(uObjectLayerBit)) == 0u;
+}
+
+// Clustered-forward light culling (#120). The view frustum is diced into a fixed
+// 16 x 9 x 24 grid of froxels; a per-frame compute pass (ClusterGrid) fills, for each
+// froxel, a {offset, count} range into one global compacted light-index list (#208) covering
+// the point/spot lights whose range reaches it. This fragment finds its own froxel from
+// gl_FragCoord + view depth and loops only that froxel's [offset, offset+count) slice of the
+// global list. uClusterEnabled == 0 (the offscreen model preview, which runs no compute pass)
+// falls back to looping every light.
+struct ClusterRange { uint offset; uint count; };
+layout(std430, binding = 3) readonly buffer ClusterCounts { ClusterRange uClusterRange[]; };
+layout(std430, binding = 4) readonly buffer ClusterIndex  { uint uClusterLightIndices[]; };
+uniform int  uClusterEnabled;
+uniform vec2 uClusterScreenSize;
+uniform vec4 uClusterZParams; // (near, far, GZ/ln(far/near), -GZ*ln(near)/ln(far/near))
+const uint C_GX = 16u, C_GY = 9u, C_GZ = 24u;
+
+// Cascaded shadow maps for the directional sun (see CascadedShadowMap). uView is also used to
+// pick the cascade by view-space depth.
+uniform mat4 uView;
+uniform int  uShadowEnabled;
+uniform int  uShadowCascadeCount;
+uniform vec4 uCascadeSplits;          // per-cascade far distance, view space (positive)
+uniform mat4 uShadowMatrices[4];
+uniform vec4  uShadowTexelWorld;      // world units per shadow texel, per cascade (#117)
+uniform float uShadowSoftness;        // PCF kernel radius in shadow-map texels (from the sun's angular size)
+// Per-light shadow multipliers (#140 phase 2). All default 1.0 -> identical to pre-phase-2.
+uniform float uSunShadowBias;        // x the sun's texel-proportional depth bias
+uniform float uSunShadowNormalBias;  // x the sun's normal-offset term
+uniform sampler2DArrayShadow uShadowMap;
+// Resolution is already known CPU-side (CascadedShadowMap::Configure) — a uniform instead of a
+// per-fragment textureSize() call (#190).
+uniform float uShadowMapResolution;
+
+// Spot-light shadow maps (#119): one perspective depth layer per casting spot, indexed by the
+// light's Params.y. The map stores LINEAR distance-to-light / far, so the compare below is
+// against distance(fragment, uSpotShadowPos) / uSpotShadowFar — bias uniform in world space,
+// shadow reaches the full light Range. Unit 9 (the sun CSM is unit 8, material maps 1..7).
+uniform int  uSpotShadowCount; // arrays below are sized to SpotShadowMap::kMaxSpots (#110)
+uniform mat4 uSpotShadowVP[16];
+uniform vec3 uSpotShadowPos[16];
+uniform float uSpotShadowFar[16];
+uniform float uSpotShadowHalfTan[16]; // tan(half-FOV) of each spot's map — the world texel footprint
+                                     // at distance d is 2*d*halfTan/res, NOT the 2*d/res that a
+                                     // 90° cube face gives; a narrow spot was over-offsetting (#134)
+uniform float uSpotShadowBias[16];       // per-light x depth bias   (#140 phase 2, default 1.0)
+uniform float uSpotShadowNormalBias[16]; // per-light x normal offset
+uniform float uSpotShadowSoftness[16];   // per-light x PCF tap spread
+uniform sampler2DArrayShadow uSpotShadowMap;
+uniform float uSpotShadowMapResolution; // known CPU-side (SpotShadowMap::Configure) (#190)
+
+// Point-light cube shadow maps (#119): one depth cube per casting point light, indexed by the
+// light's Params.y. Also stores linear distance / uPointShadowFar[slot] (the light's Range).
+// Unit 10.
+uniform int   uPointShadowCount; // arrays below are sized to PointShadowMap::kMaxPoints (#110)
+uniform float uPointShadowFar[8];
+uniform float uPointShadowBias[8];       // per-light x depth bias   (#140 phase 2, default 1.0)
+uniform float uPointShadowNormalBias[8]; // per-light x normal offset
+uniform samplerCubeArrayShadow uPointShadowMap;
+uniform float uPointShadowMapResolution; // known CPU-side (PointShadowMap::Configure) (#190)
+
+// Image-based lighting probes baked from the procedural sky (#196, see IblProbe.h). Explicit
+// binding qualifiers rather than SetInt(): every path that uses this shader (the real scene,
+// ModelPreviewRenderer's offscreen thumbnails, ChannelPreviewRenderer) then agrees on the units
+// without each having to remember to assign them, and units 11-13 can never collide with the
+// sampler2D on unit 0. uIBLEnabled == 0 (the GLSL default for a never-set uniform int) falls
+// back to the old constant ambient, which is exactly what the preview renderers want.
+uniform int uIBLEnabled;
+uniform float uIBLIntensity;             // scene's Ambient intensity control (World::SkyAmbientIntensity)
+uniform float uIBLSpecularMaxLod;        // kSpecularMips - 1
+layout(binding = 11) uniform samplerCube uIrradianceMap;
+layout(binding = 12) uniform samplerCube uPrefilteredMap;
+layout(binding = 13) uniform sampler2D uBrdfLut;
+
+// PR14 — Reflection probes: parallax box projection (#ifdef _REFLECTION_PROBES; zero-keyword: dead code)
+#ifdef _REFLECTION_PROBES
+uniform int   uProbeCount;        // 0-2 probes bound this draw call
+uniform vec3  uProbeCenter[2];    // world-space probe origin
+uniform vec3  uProbeHalfSize[2];  // half-extents of the capture box
+uniform float uProbeBlend[2];     // normalised blend weights (sum == 1)
+#endif
+
+// Fresnel with a roughness term: a rough surface's grazing-angle reflectance must not exceed
+// its own specular colour, which the plain Schlick form (which goes to white at 90 degrees)
+// gets badly wrong for ambient, where every direction is grazing for someone.
+vec3 FresnelSchlickRoughness(float cosTheta, vec3 F0, float roughness) {
+    return F0 + (max(vec3(1.0 - roughness), F0) - F0) * pow(clamp(1.0 - cosTheta, 0.0, 1.0), 5.0);
+}
+
+// Set for the editor's Unlit shading mode: skips all lighting and shows flat albedo, so
+// geometry/UV problems read clearly without shading hiding them.
+uniform int uUnlit;
+
+// Scene-view debug draw modes (#236 R2). 0 = off (normal path).
+//   1 Normals   — world-space normal as RGB.
+//   2 Cascades  — tint by which sun-shadow cascade covers this fragment.
+//   3 Mip       — texture LOD of the albedo map as a colour ramp.
+uniform int uDebugView;
+
+// 0 (the real scene path): output LINEAR HDR — the shared Tonemapper pass does exposure +
+// curve + gamma once, after MSAA resolve. 1 (offscreen model preview / any target without a
+// tonemap pass): keep the old baked Reinhard + gamma so those thumbnails look unchanged.
+uniform int uApplyTonemap;
+
+uniform vec3 uBaseColor;
+uniform int uAlphaClip;      // #101 — alpha cutout (AlphaTest queue / glTF MASK)
+uniform float uAlphaCutoff;
+uniform float uMetallic;
+uniform float uRoughness;
+uniform vec3 uEmissiveColor;
+
+// World-space triplanar projection (#checker-materials): projects each of the 3 axis-aligned
+// planes' UVs from world position and blends by how much the surface normal faces that axis,
+// instead of using the mesh's own (possibly badly-tiling) UVs. Used for level geometry like a
+// non-uniformly-scaled cube where 0..1 mesh UVs stretch a texture unrecognisably on long faces.
+uniform int uTriplanar;
+uniform float uTriplanarScale;
+
+// PR 9 — transparent queue. uAlphaBlend = 0 (opaque, default) keeps alpha = 1 (bit-identical).
+uniform int   uAlphaBlend;  // 0 = opaque pass, 1 = transparent pass
+uniform float uOpacity;     // material surface alpha (only used when uAlphaBlend != 0)
+
+uniform int uHasAlbedoMap;             uniform sampler2D uAlbedoMap;
+uniform int uHasNormalMap;             uniform sampler2D uNormalMap;
+uniform int uHasMetallicRoughnessMap;  uniform sampler2D uMetallicRoughnessMap;
+uniform int uHasMetallicMap;           uniform sampler2D uMetallicMap;
+uniform int uHasRoughnessMap;          uniform sampler2D uRoughnessMap;
+uniform int uHasAOMap;                 uniform sampler2D uAOMap;
+uniform int uHasEmissiveMap;           uniform sampler2D uEmissiveMap;
+
+// #102 / #113 — surface options shared by the built-in and Standard.shader paths. A program
+// that never gets them set reads 0s, which every use below treats as "off / identity".
+uniform vec2  uUVTiling;       // (0,0) = unset -> (1,1)
+uniform vec2  uUVOffset;
+uniform float uNormalStrength; // 0 = unset -> 1
+uniform int   uNormalFlipY;    // 1: DirectX-style normal map (green down)
+uniform int   uDoubleSided;    // 1: back faces are lit as front faces (culling is off for them)
+uniform int   uClothInterior;  // 1: clothing drawn double-sided - its back faces are the garment's inside, in its shadow
+// Unity Standard's Forward Rendering Options, as "off" flags so a caller that never sets them (a
+// preview renderer) keeps both: 1 drops the lights' specular highlight / the sky and probe
+// reflection, for a fully matte surface.
+uniform int   uNoSpecularHighlights;
+uniform int   uNoGlossyReflections;
+uniform int   uUseVertexColor; // 1: albedo (and alpha) x the mesh's vertex colour
+uniform int uHasHeightMap;             uniform sampler2D uHeightMap;        // parallax
+uniform float uParallaxScale;
+uniform int uHasDetailAlbedoMap;       uniform sampler2D uDetailAlbedoMap;  // x2 detail (neutral at 50% grey)
+uniform int uHasDetailNormalMap;       uniform sampler2D uDetailNormalMap;
+uniform vec2  uDetailTiling;   // (0,0) = unset -> (1,1)
+
+// PR10 — Clear Coat (#ifdef _CLEARCOAT; zero-keyword variant: dead code, bit-identical to PR9)
+#ifdef _CLEARCOAT
+uniform float uClearCoat;           // layer strength [0,1]
+uniform float uClearCoatRoughness;  // CC microfacet roughness [0,1]
+uniform int   uHasClearCoatMap;
+uniform sampler2D uClearCoatMap;    // masks uClearCoat via .r channel
+#endif
+
+// PR10 — Anisotropy (#ifdef _ANISO; zero-keyword variant: dead code, bit-identical to PR9)
+#ifdef _ANISO
+uniform float uAnisotropy;          // [-1,1]: +1 = highlight along T, -1 = along B
+uniform float uAnisotropyRotation;  // [0,1] maps to [0°,360°] rotation in tangent plane
+#endif
+
+// PR11 — Sheen/cloth (#ifdef _SHEEN; zero-keyword variant: dead code, bit-identical to PR10)
+#ifdef _SHEEN
+uniform vec3  uSheen;               // tint color (rgb); zero = sheen disabled
+uniform float uSheenRoughness;      // cloth microfacet roughness [0,1]
+#endif
+
+// PR11 — Subsurface translucency (#ifdef _SUBSURFACE; zero-keyword variant: dead code)
+#ifdef _SUBSURFACE
+uniform vec3  uSubsurfaceColor;     // transmitted tint
+uniform float uThickness;           // surface thickness scalar [0,1]
+uniform int   uHasThicknessMap;
+uniform sampler2D uThicknessMap;    // per-texel thickness (.r channel)
+#endif
+
+// Viewport size in pixels — used by Transmission (PR12) for NDC->UV and SSAO (PR15) for screenUV.
+uniform vec2 uScreenSize;
+
+// PR12 — Transmission + refraction (#ifdef _TRANSMISSION; zero-keyword variant: dead code)
+#ifdef _TRANSMISSION
+uniform sampler2D uOpaqueColor;         // resolved opaque scene color with mip chain (unit 14)
+uniform float     uTransmissionStrength;// [0,1]
+uniform float     uIOR;                 // index of refraction
+#endif
+
+// PR15 — Screen-space ambient occlusion. uSSAOEnabled == 0 (the GL default) = no occlusion.
+uniform sampler2D uSSAOMap;   // blurred R8 occlusion (unit 15); only read when uSSAOEnabled == 1
+uniform int       uSSAOEnabled;
+uniform float     uSSAOIntensity; // #160 — exponent on the occlusion; <= 0 (unset) means 1
+
+const float PI = 3.14159265359;
+
+float DistributionGGX(vec3 N, vec3 H, float roughness) {
+    float a = roughness * roughness;
+    float a2 = a * a;
+    float NdotH = max(dot(N, H), 0.0);
+    float NdotH2 = NdotH * NdotH;
+    float denom = (NdotH2 * (a2 - 1.0) + 1.0);
+    denom = PI * denom * denom;
+    return a2 / max(denom, 1e-7);
+}
+
+float GeometrySchlickGGX(float NdotV, float roughness) {
+    float r = roughness + 1.0;
+    float k = (r * r) / 8.0;
+    return NdotV / (NdotV * (1.0 - k) + k);
+}
+
+float GeometrySmith(vec3 N, vec3 V, vec3 L, float roughness) {
+    float NdotV = max(dot(N, V), 0.0);
+    float NdotL = max(dot(N, L), 0.0);
+    return GeometrySchlickGGX(NdotV, roughness) * GeometrySchlickGGX(NdotL, roughness);
+}
+
+vec3 FresnelSchlick(float cosTheta, vec3 F0) {
+    return F0 + (1.0 - F0) * pow(clamp(1.0 - cosTheta, 0.0, 1.0), 5.0);
+}
+
+// PR10 — Clear coat lobe: isotropic GGX with fixed F0 = 0.04. Returns scalar specular term.
+#ifdef _CLEARCOAT
+float ClearCoatLobe(vec3 N, vec3 V, vec3 L, float ccRoughness) {
+    vec3 H = normalize(V + L);
+    float NDF = DistributionGGX(N, H, ccRoughness);
+    float G   = GeometrySmith(N, V, L, ccRoughness);
+    float F   = FresnelSchlick(max(dot(H, V), 0.0), vec3(0.04)).r;
+    return (NDF * G * F) / (4.0 * max(dot(N, V), 0.0) * max(dot(N, L), 0.0) + 1e-4);
+}
+
+// CC attenuation factor on the base lobe: FresnelSchlick(NdotV, 0.04) * strength.
+// Applied once to Lo and ambient after all lights are accumulated.
+float ClearCoatFresnel(float NdotV, float ccStrength) {
+    return FresnelSchlick(NdotV, vec3(0.04)).r * ccStrength;
+}
+#endif
+
+// PR10 — Anisotropic BRDF (Burley / Filament §4.9). Only compiled in _ANISO variants.
+#ifdef _ANISO
+// Anisotropic GGX distribution (Heitz / Filament).
+float D_GGX_Aniso(float NdotH, float HdotT, float HdotB, float at, float ab) {
+    float a2 = at * ab;
+    vec3 v = vec3(ab * HdotT, at * HdotB, a2 * NdotH);
+    float v2 = dot(v, v);
+    return a2 * a2 / max(PI * v2 * v2, 1e-7);
+}
+
+// Smith height-correlated masking-shadowing for anisotropic GGX (Heitz 2014).
+float V_SmithGGX_Aniso(float NdotV, float VdotT, float VdotB,
+                        float NdotL, float LdotT, float LdotB, float at, float ab) {
+    float GGX_V = NdotL * length(vec3(at * VdotT, ab * VdotB, NdotV));
+    float GGX_L = NdotV * length(vec3(at * LdotT, ab * LdotB, NdotL));
+    return 0.5 / max(GGX_V + GGX_L, 1e-5);
+}
+
+vec3 ShadeLightAniso(vec3 N, vec3 V, vec3 L, vec3 radiance, vec3 albedo, vec3 F0,
+                     float metallic, float roughness, vec3 T, vec3 B) {
+    float aniso = clamp(uAnisotropy, -0.99, 0.99);
+    float at = max(roughness * (1.0 + aniso), 0.001);
+    float ab = max(roughness * (1.0 - aniso), 0.001);
+    vec3 H = normalize(V + L);
+    float NdotH = max(dot(N, H), 0.0);
+    float NdotV = max(dot(N, V), 0.0);
+    float NdotL = max(dot(N, L), 0.0);
+    float D   = D_GGX_Aniso(NdotH, dot(H, T), dot(H, B), at, ab);
+    float Vis = V_SmithGGX_Aniso(NdotV, dot(V, T), dot(V, B),
+                                  NdotL, dot(L, T), dot(L, B), at, ab);
+    vec3  F   = FresnelSchlick(max(dot(H, V), 0.0), F0);
+    vec3 specular = D * Vis * F;
+    vec3 kD = (1.0 - F) * (1.0 - metallic);
+    if (uNoSpecularHighlights == 1) { specular = vec3(0.0); kD = vec3(1.0 - metallic); }
+    return (kD * albedo / PI + specular) * radiance * NdotL;
+}
+#endif
+
+// PR11 — Sheen/cloth (Charlie D + Neubelt V + Estevez-Kulla analytic DFG, no new LUT)
+#ifdef _SHEEN
+// Charlie inverted-sine distribution (Estevez & Kulla 2017).
+float D_Charlie(float NdotH, float roughness) {
+    float r2 = roughness * roughness;
+    float sin2h = max(1.0 - NdotH * NdotH, 0.0078125);
+    return (2.0 + 1.0 / r2) * pow(sin2h, 0.5 / r2) / (2.0 * PI);
+}
+
+// Neubelt visibility for cloth (numerically stable, no division by NdotV*NdotL).
+float V_Neubelt(float NdotV, float NdotL) {
+    return clamp(1.0 / (4.0 * (NdotL + NdotV - NdotL * NdotV)), 0.0, 1.0);
+}
+
+// Estevez-Kulla analytic DFG for sheen (avoids a separate BRDF-LUT sample).
+// Approximates the sheen directional albedo as a function of NdotV and roughness.
+float SheenDFG(float NdotV, float roughness) {
+    return mix(0.0, clamp(1.0 - pow(1.0 - NdotV, 2.0 + 4.0 * roughness), 0.0, 1.0), roughness);
+}
+
+// Sheen lobe contribution for one light. Returns vec3 (colored by uSheen tint).
+vec3 SheenLobe(vec3 N, vec3 V, vec3 L, float sheenRoughness) {
+    vec3 H = normalize(V + L);
+    float NdotH = max(dot(N, H), 0.0);
+    float NdotV = max(dot(N, V), 0.0);
+    float NdotL = max(dot(N, L), 0.0);
+    float D   = D_Charlie(NdotH, max(sheenRoughness, 0.045));
+    float Vis = V_Neubelt(NdotV, NdotL);
+    return uSheen * D * Vis * NdotL;
+}
+#endif
+
+// PR11 — Subsurface translucency: wrapped diffuse + back-lit thin-surface transmission.
+#ifdef _SUBSURFACE
+// Wrapped diffuse NdotL — softens the terminator into the shadow side.
+float WrappedDiffuse(float NdotL, float wrap) {
+    return clamp((NdotL + wrap) / ((1.0 + wrap) * (1.0 + wrap)), 0.0, 1.0);
+}
+
+// Thin-surface back-lit transmission: light punching through from behind.
+// Only non-zero when the light is on the far side of the surface (-N·L > 0).
+vec3 SubsurfaceTransmission(vec3 N, vec3 L, vec3 radiance, float thickness) {
+    float backDot = max(dot(-N, L), 0.0);
+    float atten = backDot * (1.0 - thickness); // thinner surface = more light through
+    return uSubsurfaceColor * radiance * atten;
+}
+#endif
+
+// 16-tap Poisson disk for the soft PCF kernel — rotated per-fragment so the penumbra dithers
+// into noise instead of showing the concentric banding a fixed box filter leaves behind.
+const vec2 kPoisson16[16] = vec2[](
+    vec2(-0.942016, -0.399062), vec2( 0.945586, -0.768907),
+    vec2(-0.094184, -0.929389), vec2( 0.344959,  0.293878),
+    vec2(-0.915886,  0.457714), vec2(-0.815442, -0.879125),
+    vec2(-0.382775,  0.276768), vec2( 0.974844,  0.756484),
+    vec2( 0.443233, -0.975116), vec2( 0.537430, -0.473734),
+    vec2(-0.264969, -0.418930), vec2( 0.791975,  0.190902),
+    vec2(-0.241888,  0.997065), vec2(-0.814100,  0.914376),
+    vec2( 0.199841,  0.786414), vec2( 0.143832, -0.141008)
+);
+
+// One cascade's filtered sun visibility: 16 Poisson taps, each still hardware 2x2 depth-compared.
+// Most fragments are either fully lit or fully shadowed, not near a penumbra edge - a cheap
+// 4-tap probe (spread across the disk) first, and if all four agree, the full 16 almost
+// certainly would too, so return immediately (#189). The 4 probe taps are indices 0/4/8/12; the
+// loop below sums the other 12 and combines them with the already-taken 4, so a fragment that
+// DOES need the full kernel gets an identical result to always sampling all 16 - only the
+// early-out path skips work, the average itself is unchanged.
+float SampleCascade(int c, vec2 uv, float ref, float radiusTexels, float rot) {
+    vec2 texel = 1.0 / vec2(uShadowMapResolution);
+    float s = sin(rot), co = cos(rot);
+    mat2 R = mat2(co, s, -s, co);
+
+    float v0 = texture(uShadowMap, vec4(uv + (R * kPoisson16[0])  * radiusTexels * texel, float(c), ref));
+    float v1 = texture(uShadowMap, vec4(uv + (R * kPoisson16[4])  * radiusTexels * texel, float(c), ref));
+    float v2 = texture(uShadowMap, vec4(uv + (R * kPoisson16[8])  * radiusTexels * texel, float(c), ref));
+    float v3 = texture(uShadowMap, vec4(uv + (R * kPoisson16[12]) * radiusTexels * texel, float(c), ref));
+    float probeSum = v0 + v1 + v2 + v3;
+    if (probeSum <= 0.0) return 0.0; // all 4 probes fully shadowed
+    if (probeSum >= 4.0) return 1.0; // all 4 probes fully lit
+
+    float vis = probeSum;
+    for (int i = 0; i < 16; ++i) {
+        if (i == 0 || i == 4 || i == 8 || i == 12) continue; // already sampled above
+        vec2 o = (R * kPoisson16[i]) * radiusTexels * texel;
+        vis += texture(uShadowMap, vec4(uv + o, float(c), ref));
+    }
+    return vis / 16.0;
+}
+
+// Sun visibility at this fragment from the cascaded shadow maps: 1 = lit, 0 = fully shadowed.
+// Soft Poisson PCF whose radius comes from the sun's angular size, plus a smooth blend across
+// the cascade seam so there's no hard step where the resolution changes.
+// #163 - the object's Mesh Renderer has Receive Shadows off (0 = default, receives).
+uniform int uNoReceiveShadows;
+
+float SunShadow(vec3 worldPos, vec3 N, vec3 L) {
+    if (uShadowEnabled == 0 || uNoReceiveShadows == 1) return 1.0;
+
+    float viewDepth = abs((uView * vec4(worldPos, 1.0)).z);
+    int c = uShadowCascadeCount - 1;
+    for (int i = 0; i < uShadowCascadeCount; ++i) {
+        if (viewDepth < uCascadeSplits[i]) { c = i; break; }
+    }
+
+    float ndl = max(dot(N, L), 0.0);
+    // Normal offset + depth bias both scale with the selected cascade's world texel size (#117).
+    // The CSM pass now stores the LIGHT-FACING surface (back-face cull, #134), like spot/point,
+    // so a caster's own lit side can self-shadow and the depth bias below carries the acne
+    // protection. Keep the normal offset tiny — just enough to clear PCF kernel bleed at edges;
+    // any more and the shadow's contact edge visibly retreats from the base of what cast it.
+    float texel = uShadowTexelWorld[c];
+    // Bias is expressed in world units (multiples of the cascade texel) and divided into the
+    // cascade's [0,1] depth span so it stays a constant physical offset regardless of cascade
+    // size. Span = 2*radius + pullback; 2*radius == texel*resolution, pullback == 50.
+    vec3 offsetPos = worldPos + N * (texel * (0.5 + 0.5 * (1.0 - ndl)) * uSunShadowNormalBias);
+
+    vec4 lp = uShadowMatrices[c] * vec4(offsetPos, 1.0);
+    vec3 proj = (lp.xyz / lp.w) * 0.5 + 0.5;
+    if (proj.z >= 1.0) return 1.0;
+
+    float bias = (texel * (1.0 + 2.0 * (1.0 - ndl)) * uSunShadowBias) / (texel * uShadowMapResolution + 50.0);
+    // Hash gl_FragCoord to a rotation angle — turns kernel banding into per-pixel noise.
+    float rot = fract(sin(dot(gl_FragCoord.xy, vec2(12.9898, 78.233))) * 43758.5453) * 6.2831853;
+    // Farther cascades cover more world per texel, so widen the kernel a little to keep the
+    // apparent penumbra roughly constant across the seam.
+    float radius = max(uShadowSoftness, 0.5) * (1.0 + 0.35 * float(c));
+
+    float vis = SampleCascade(c, proj.xy, proj.z - bias, radius, rot);
+
+    // Cross-fade into the next cascade over the last slice of this one.
+    if (c + 1 < uShadowCascadeCount) {
+        float edge = uCascadeSplits[c];
+        float band = edge * 0.12;
+        if (viewDepth > edge - band) {
+            float texel2 = uShadowTexelWorld[c + 1];
+            vec3 offsetPos2 = worldPos + N * (texel2 * (0.5 + 0.5 * (1.0 - ndl)) * uSunShadowNormalBias);
+            vec4 lp2 = uShadowMatrices[c + 1] * vec4(offsetPos2, 1.0);
+            vec3 p2 = (lp2.xyz / lp2.w) * 0.5 + 0.5;
+            if (p2.z < 1.0) {
+                float bias2 = (texel2 * (1.0 + 2.0 * (1.0 - ndl)) * uSunShadowBias) / (texel2 * uShadowMapResolution + 50.0);
+                float v2 = SampleCascade(c + 1, p2.xy, p2.z - bias2,
+                                         max(uShadowSoftness, 0.5) * (1.0 + 0.35 * float(c + 1)), rot);
+                vis = mix(vis, v2, smoothstep(edge - band, edge, viewDepth));
+            }
+        }
+    }
+    return vis;
+}
+
+// Visibility from a spot light's shadow map. 1 = lit, 0 = shadowed. The map stores LINEAR
+// distance-to-light / far, so the compare reference is distance(fragment, light) / far and a
+// constant bias is uniform in world space — the shadow reaches the whole light Range. 4-tap PCF.
+float SpotShadow(int slot, vec3 worldPos, vec3 N) {
+    if (slot < 0 || slot >= uSpotShadowCount || uNoReceiveShadows == 1) return 1.0;
+    // The depth pass stores the light-facing surface (back-face cull), so a caster's own lit side
+    // CAN self-shadow — the bias below has to cover one shadow-texel of slope error, but no more,
+    // or the contact shadow peter-panning returns.
+    vec3 toL = uSpotShadowPos[slot] - worldPos;
+    float d0 = length(toL);
+    float nl = max(dot(N, toL / max(d0, 1e-4)), 0.0);
+    // World size of one shadow texel at the receiver, using the spot's REAL half-angle (the old
+    // 2*d/res assumed a 90° frustum and over-sized it for a tight cone). Both the normal nudge
+    // and the depth bias are expressed as multiples of this, so they auto-scale with distance and
+    // are independent of the light Range (#134).
+    float texelW = 2.0 * d0 * uSpotShadowHalfTan[slot] / uSpotShadowMapResolution;
+    vec3 biasedPos = worldPos + N * (texelW * (0.5 + 0.5 * (1.0 - nl)) * uSpotShadowNormalBias[slot]); // clears PCF kernel bleed at edges
+    vec4 lp = uSpotShadowVP[slot] * vec4(biasedPos, 1.0);
+    if (lp.w <= 0.0) return 1.0;                       // behind the light
+    vec3 p = (lp.xyz / lp.w) * 0.5 + 0.5;
+    if (any(lessThan(p.xy, vec2(0.0))) || any(greaterThan(p.xy, vec2(1.0))))
+        return 1.0;                                    // outside the cone -> unshadowed
+    float far = max(uSpotShadowFar[slot], 1e-3);
+    float d = distance(biasedPos, uSpotShadowPos[slot]);
+    if (d >= far) return 1.0;                          // past the shadow range
+    // Depth bias = one shadow texel of world size (a bit more at grazing angles, where the stored
+    // surface slopes fastest across a texel). Range-independent, unlike the old `d/far - 0.00035`
+    // whose gap grew to centimetres on a long-range light (#134).
+    float ref = (d - texelW * (1.0 + 2.0 * (1.0 - nl)) * uSpotShadowBias[slot]) / far;
+    vec2 texel = (1.0 / vec2(uSpotShadowMapResolution)) * max(uSpotShadowSoftness[slot], 0.0);
+    float vis = 0.0;
+    vis += texture(uSpotShadowMap, vec4(p.xy + vec2(-0.5, -0.5) * texel, float(slot), ref));
+    vis += texture(uSpotShadowMap, vec4(p.xy + vec2( 0.5, -0.5) * texel, float(slot), ref));
+    vis += texture(uSpotShadowMap, vec4(p.xy + vec2(-0.5,  0.5) * texel, float(slot), ref));
+    vis += texture(uSpotShadowMap, vec4(p.xy + vec2( 0.5,  0.5) * texel, float(slot), ref));
+    return vis * 0.25;
+}
+
+// Visibility from a point light's depth cube. 1 = lit, 0 = shadowed. Cube stores linear
+// distance / far, so this is a direct distance compare — no dominant-axis NDC reconstruction.
+float PointShadow(int slot, vec3 worldPos, vec3 lightPos, vec3 N) {
+    if (slot < 0 || slot >= uPointShadowCount || uNoReceiveShadows == 1) return 1.0;
+    float far = max(uPointShadowFar[slot], 1e-3);
+    // Same as SpotShadow: the cube pass stores the light-facing surface (back-face cull), so the
+    // bias covers ~one shadow texel of slope error and nothing more.
+    vec3 toLight = lightPos - worldPos;
+    float d0 = length(toLight);
+    float nl = max(dot(N, toLight / max(d0, 1e-4)), 0.0);
+    float texelW = 2.0 * d0 / uPointShadowMapResolution; // 90° cube face: 2*d/res is exact
+    vec3 dir = (worldPos + N * (texelW * (0.5 + 0.5 * (1.0 - nl)) * uPointShadowNormalBias[slot])) - lightPos; // cube lookup + distance
+    float d = length(dir);
+    if (d >= far) return 1.0;                // past the shadow range
+    // Texel-proportional, Range-independent depth bias — see SpotShadow (#134).
+    float ref = (d - texelW * (1.0 + 2.0 * (1.0 - nl)) * uPointShadowBias[slot]) / far;
+    return texture(uPointShadowMap, vec4(dir, float(slot)), ref);
+}
+
+// Cook-Torrance contribution for one light direction L delivering `radiance` to the fragment.
+// The sun and every point/spot light differ only in L and how much radiance survives to here.
+vec3 ShadeLight(vec3 N, vec3 V, vec3 L, vec3 radiance, vec3 albedo, vec3 F0,
+                float metallic, float roughness) {
+    vec3 H = normalize(V + L);
+    float NDF = DistributionGGX(N, H, roughness);
+    float G   = GeometrySmith(N, V, L, roughness);
+    vec3  F   = FresnelSchlick(max(dot(H, V), 0.0), F0);
+    vec3 specular = (NDF * G * F) / (4.0 * max(dot(N, V), 0.0) * max(dot(N, L), 0.0) + 1e-4);
+    vec3 kD = (1.0 - F) * (1.0 - metallic);
+    if (uNoSpecularHighlights == 1) { specular = vec3(0.0); kD = vec3(1.0 - metallic); }
+    return (kD * albedo / PI + specular) * radiance * max(dot(N, L), 0.0);
+}
+
+// Full shading for one point or spot light (index into uLights): range check, windowed
+// inverse-square falloff, spot cone + shadow, point shadow. Returns its Lo contribution, or
+// zero if the fragment is out of range / outside the cone. Shared by the clustered loop and
+// the non-clustered fallback.
+vec3 ShadePointSpot(uint i, vec3 N, vec3 V, vec3 albedo, vec3 F0, float metallic, float roughness) {
+    Light lt = uLights[i];
+    int type = int(lt.PositionType.w);
+
+    vec3 toLight = lt.PositionType.xyz - vWorldPos;
+    float dist = length(toLight);
+    float range = lt.ColorRange.a;
+    if (dist > range) return vec3(0.0);
+    vec3 L = toLight / max(dist, 1e-4);
+
+    // Windowed inverse-square: contribution reaches exactly zero at Range, no hard clip.
+    float t = dist / max(range, 1e-4);
+    float window = clamp(1.0 - t * t * t * t, 0.0, 1.0);
+    float atten = window * window / (1.0 + dist * dist);
+
+    if (type == 2) {
+        float cosAngle = dot(normalize(-lt.DirCutoff.xyz), L);
+        float outerCos = lt.DirCutoff.w;
+        float innerCos = lt.Params.x;
+        if (cosAngle < outerCos) return vec3(0.0);
+        atten *= smoothstep(outerCos, max(innerCos, outerCos + 1e-3), cosAngle);
+        // Early-out before the shadow-map sample, not just before shading (#191) — a fragment at
+        // the far edge of the cone/range falloff is already at atten==0 here, so this skips a
+        // full shadow-array texture fetch that would just get multiplied away.
+        if (atten <= 0.0) return vec3(0.0);
+        atten *= SpotShadow(int(lt.Params.y), vWorldPos, N); // #119
+    } else {
+        if (atten <= 0.0) return vec3(0.0);
+        atten *= PointShadow(int(lt.Params.y), vWorldPos, lt.PositionType.xyz, N); // #119
+    }
+    if (atten <= 0.0) return vec3(0.0);
+    return ShadeLight(N, V, L, lt.ColorRange.rgb * atten, albedo, F0, metallic, roughness);
+}
+
+#ifdef _ANISO
+// Anisotropic version of ShadePointSpot — identical attenuation/shadow logic, calls ShadeLightAniso.
+vec3 ShadePointSpotAniso(uint i, vec3 N, vec3 V, vec3 albedo, vec3 F0, float metallic, float roughness,
+                          vec3 T, vec3 B) {
+    Light lt = uLights[i];
+    int type = int(lt.PositionType.w);
+    vec3 toLight = lt.PositionType.xyz - vWorldPos;
+    float dist = length(toLight);
+    float range = lt.ColorRange.a;
+    if (dist > range) return vec3(0.0);
+    vec3 L = toLight / max(dist, 1e-4);
+    float t = dist / max(range, 1e-4);
+    float window = clamp(1.0 - t * t * t * t, 0.0, 1.0);
+    float atten = window * window / (1.0 + dist * dist);
+    if (type == 2) {
+        float cosAngle = dot(normalize(-lt.DirCutoff.xyz), L);
+        float outerCos = lt.DirCutoff.w;
+        float innerCos = lt.Params.x;
+        if (cosAngle < outerCos) return vec3(0.0);
+        atten *= smoothstep(outerCos, max(innerCos, outerCos + 1e-3), cosAngle);
+        if (atten <= 0.0) return vec3(0.0);
+        atten *= SpotShadow(int(lt.Params.y), vWorldPos, N);
+    } else {
+        if (atten <= 0.0) return vec3(0.0);
+        atten *= PointShadow(int(lt.Params.y), vWorldPos, lt.PositionType.xyz, N);
+    }
+    if (atten <= 0.0) return vec3(0.0);
+    return ShadeLightAniso(N, V, L, lt.ColorRange.rgb * atten, albedo, F0, metallic, roughness, T, B);
+}
+#endif
+
+#ifdef _CLEARCOAT
+// Clear coat contribution from one point/spot light — same attenuation as ShadePointSpot.
+vec3 ShadePointSpotCC(uint i, vec3 N, vec3 V, float ccRough) {
+    Light lt = uLights[i];
+    int type = int(lt.PositionType.w);
+    vec3 toLight = lt.PositionType.xyz - vWorldPos;
+    float dist = length(toLight);
+    float range = lt.ColorRange.a;
+    if (dist > range) return vec3(0.0);
+    vec3 L = toLight / max(dist, 1e-4);
+    float t = dist / max(range, 1e-4);
+    float window = clamp(1.0 - t * t * t * t, 0.0, 1.0);
+    float atten = window * window / (1.0 + dist * dist);
+    if (type == 2) {
+        float cosAngle = dot(normalize(-lt.DirCutoff.xyz), L);
+        float outerCos = lt.DirCutoff.w;
+        float innerCos = lt.Params.x;
+        if (cosAngle < outerCos) return vec3(0.0);
+        atten *= smoothstep(outerCos, max(innerCos, outerCos + 1e-3), cosAngle);
+        if (atten <= 0.0) return vec3(0.0);
+        atten *= SpotShadow(int(lt.Params.y), vWorldPos, N);
+    } else {
+        if (atten <= 0.0) return vec3(0.0);
+        atten *= PointShadow(int(lt.Params.y), vWorldPos, lt.PositionType.xyz, N);
+    }
+    if (atten <= 0.0) return vec3(0.0);
+    return lt.ColorRange.rgb * atten * max(dot(N, L), 0.0) * ClearCoatLobe(N, V, L, ccRough);
+}
+#endif
+
+#ifdef _SHEEN
+// Sheen contribution from one point/spot light — same attenuation as ShadePointSpot.
+vec3 ShadePointSpotSheen(uint i, vec3 N, vec3 V, float sheenRoughness) {
+    Light lt = uLights[i];
+    int type = int(lt.PositionType.w);
+    vec3 toLight = lt.PositionType.xyz - vWorldPos;
+    float dist = length(toLight);
+    float range = lt.ColorRange.a;
+    if (dist > range) return vec3(0.0);
+    vec3 L = toLight / max(dist, 1e-4);
+    float t = dist / max(range, 1e-4);
+    float window = clamp(1.0 - t * t * t * t, 0.0, 1.0);
+    float atten = window * window / (1.0 + dist * dist);
+    if (type == 2) {
+        float cosAngle = dot(normalize(-lt.DirCutoff.xyz), L);
+        float outerCos = lt.DirCutoff.w;
+        float innerCos = lt.Params.x;
+        if (cosAngle < outerCos) return vec3(0.0);
+        atten *= smoothstep(outerCos, max(innerCos, outerCos + 1e-3), cosAngle);
+        if (atten <= 0.0) return vec3(0.0);
+        atten *= SpotShadow(int(lt.Params.y), vWorldPos, N);
+    } else {
+        if (atten <= 0.0) return vec3(0.0);
+        atten *= PointShadow(int(lt.Params.y), vWorldPos, lt.PositionType.xyz, N);
+    }
+    if (atten <= 0.0) return vec3(0.0);
+    return SheenLobe(N, V, L, sheenRoughness) * lt.ColorRange.rgb * atten;
+}
+#endif
+
+#ifdef _SUBSURFACE
+// Subsurface back-lit transmission from one point/spot light.
+vec3 ShadePointSpotSSS(uint i, vec3 N, float thickness) {
+    Light lt = uLights[i];
+    int type = int(lt.PositionType.w);
+    vec3 toLight = lt.PositionType.xyz - vWorldPos;
+    float dist = length(toLight);
+    float range = lt.ColorRange.a;
+    if (dist > range) return vec3(0.0);
+    vec3 L = toLight / max(dist, 1e-4);
+    float t = dist / max(range, 1e-4);
+    float window = clamp(1.0 - t * t * t * t, 0.0, 1.0);
+    float atten = window * window / (1.0 + dist * dist);
+    if (type == 2) {
+        float cosAngle = dot(normalize(-lt.DirCutoff.xyz), L);
+        float outerCos = lt.DirCutoff.w;
+        if (cosAngle < outerCos) return vec3(0.0);
+        atten *= smoothstep(outerCos, max(lt.Params.x, outerCos + 1e-3), cosAngle);
+        if (atten <= 0.0) return vec3(0.0);
+        atten *= SpotShadow(int(lt.Params.y), vWorldPos, N); // #102: no light through occluders
+    } else {
+        if (atten <= 0.0) return vec3(0.0);
+        atten *= PointShadow(int(lt.Params.y), vWorldPos, lt.PositionType.xyz, N);
+    }
+    if (atten <= 0.0) return vec3(0.0);
+    return SubsurfaceTransmission(N, L, lt.ColorRange.rgb * atten, thickness);
+}
+#endif
+
+// Per-axis blend weights for triplanar projection, sharpened (raised to a power) so the blend
+// zone between two faces is narrow instead of muddying most of the surface.
+vec3 TriplanarWeights(vec3 n) {
+    vec3 w = pow(abs(n), vec3(4.0));
+    return w / max(w.x + w.y + w.z, 1e-5);
+}
+
+// Blends the same texture sampled from the 3 world-space axis planes. rgba so it works for both
+// colour maps and single-channel (metallic/roughness/AO) maps read via .r/.g/.b afterward.
+vec4 SampleTriplanar(sampler2D tex, vec3 worldPos, vec3 w, float scale) {
+    vec4 cx = texture(tex, worldPos.zy * scale);
+    vec4 cy = texture(tex, worldPos.xz * scale);
+    vec4 cz = texture(tex, worldPos.xy * scale);
+    return cx * w.x + cy * w.y + cz * w.z;
+}
+
+// This fragment's froxel index in the 16 x 9 x 24 cluster grid (#120).
+uint clusterIndex() {
+    uvec2 tile = uvec2(gl_FragCoord.xy / (uClusterScreenSize / vec2(float(C_GX), float(C_GY))));
+    tile = min(tile, uvec2(C_GX - 1u, C_GY - 1u));
+    float viewZ = -(uView * vec4(vWorldPos, 1.0)).z;             // positive view-space distance
+    viewZ = clamp(viewZ, uClusterZParams.x, uClusterZParams.y);
+    uint slice = uint(max(log(viewZ) * uClusterZParams.z + uClusterZParams.w, 0.0));
+    slice = min(slice, C_GZ - 1u);
+    return tile.x + tile.y * C_GX + slice * C_GX * C_GY;
+}
