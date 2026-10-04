@@ -305,9 +305,9 @@ instantly, performance, and tooling. The approved plan has landmarks A to F.
 
 | Landmark | What | State |
 |---|---|---|
-| A | `--import-knife-fx`, the texture-array library, flipbook sprite renderer; PBR decal kind | importer, library and sprites **done**; PBR decals next |
-| B | Energy model, real exit wounds, pellet puffs, instant impact puff and mist, headshot mist | **done** except Knife wound decals on bodies |
-| C | PBR pools, crawl/drag trails, footprints, handprints, wall drips (Leaks), screen blood | todo |
+| A | `--import-knife-fx`, the texture-array library, flipbook sprite renderer; PBR decal kind | **done** (first v2 PR) |
+| B | Energy model, real exit wounds, pellet puffs, instant impact puff and mist, headshot mist | **done** (first v2 PR); Knife wound decals on bodies moved to C |
+| C | PBR pools, crawl/drag trails, footprints, handprints, wall drips (Leaks), screen blood, body wound decals | pools and wall drips **done**; the rest todo |
 | D | Headshot gore: hide the head, exploded-head stump, brain chunks; `Gore` setting | setting only |
 | E | Surface types, per-surface PRO bullet holes and impacts, muzzle flash and smoke | todo |
 | F | Spray LOD and cull, stain dedupe, perf A/B, DevPanel "Blood Lab" | todo |
@@ -372,6 +372,19 @@ Without these files the game logs one warning, and the effects that need them ar
     - velocity-stretched droplets (`blood_drop`);
     - headshots get denser mist and twice the droplets;
     - a shotgun's other pellets each puff, without another spray.
+- **Knife decals** (`BloodRenderer::Decal::Knife`, `BloodDecal.frag.glsl`).
+  - A decal can name a Knife library entry and a cell instead of a KriptoFX set.
+  - The arrays are bound on units 21-24: the large library on 21/22, the small one on 23/24.
+  - **Mask** entries take the film's fresh or dried colour. **Albedo** entries are decoded from sRGB.
+  - Entries with smoothness over 0.85 are blood and dry darker. The rest, the bullet holes, keep their
+    own material and fully cover what's under them.
+  - Pools spread out from the middle of the cell, because the cutout eats the outer coverage first.
+  - A flipbook decal (the Leaks drips) steps through its cells from landing, then holds the last one.
+  - Users:
+    - **Corpse pools.** `pool_smooth` / `pool_big`, falling back to KriptoFX `attached` when the library
+      is missing.
+    - **Wall drips.** `SpawnWallDrips` puts 1 to 3 Leaks under each wall spatter, running down over
+      2 to 5 s.
 - **Settings.** `BloodSettingsComponent` gains:
   - `EnergyScale`
   - `ImpactPuffs`
