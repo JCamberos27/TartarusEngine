@@ -663,7 +663,7 @@ void Test_Blood_Footprints() {
     CHECK(fx.BloodySteps(-1) == BloodFx::kPrintSteps);
     float lastOpacity = 2.0f;
     bool fading = true;
-    for (int i = 0; i < 10; ++i) {
+    for (int i = 0; i < BloodFx::kPrintSteps + 4; ++i) {
         fx.OnFootstep(-1, glm::vec3(0, 0, -2.0f - 0.7f * (float)i), glm::vec3(0, 0, -1.5f), i % 2);
         const BloodFx::Decal& d = fx.Decals().back();
         if (d.Knife == 30 && i < BloodFx::kPrintSteps) { fading &= d.Opacity < lastOpacity; lastOpacity = d.Opacity; }
@@ -672,6 +672,14 @@ void Test_Blood_Footprints() {
     // The prints point the way they walked (toe = the image's top = -z of the box, so the box's z runs back).
     const BloodFx::Decal& print = fx.Decals().back();
     CHECK(print.Knife == 30 && glm::normalize(glm::vec3(print.Model[2])).z > 0.99f);
+    // Facing wins over the way they move: stepping in it again and turning to face +x while moving -z, the print's
+    // toe points +x.
+    fx.Clear();
+    fx.OnFleshHit(h);
+    for (int i = 0; i < 300; ++i) fx.Update(0.1f);
+    fx.OnFootstep(-1, glm::vec3(0, 0, 0), glm::vec3(0, 0, -1.5f), 1);
+    fx.OnFootstep(-1, glm::vec3(0, 0, -2.0f), glm::vec3(0, 0, -1.5f), 0, glm::vec3(1, 0, 0));
+    CHECK(fx.Decals().back().Knife == 30 && glm::normalize(glm::vec3(fx.Decals().back().Model[2])).x < -0.99f);
     // Old blood doesn't mark a sole.
     for (int i = 0; i < 700; ++i) fx.Update(0.1f);
     fx.OnFootstep(7, glm::vec3(0, 0, 0), glm::vec3(1, 0, 0), -1);
@@ -758,6 +766,70 @@ void Test_Blood_LabActions() {
     const int sprays = fx.SpraysSpawned();
     fx.OnFleshHit(h);
     CHECK(fx.SpraysSpawned() == sprays);
+}
+
+void Test_Blood_GroundSplatter() {
+    // Every hit throws blood out along its line, landing on whatever it meets when it has fallen there; a head throws more.
+    BloodFx fx;
+    fx.SetSimLookup([](const char*) { return 0; });
+    fx.SetDecalSetLookup([](const char*) { return 0; });
+    fx.SetKnifeLookup([](const char*, int&) { return -1; });
+    fx.SetBodyRay([](const glm::vec3&, const glm::vec3&, float, unsigned&, int&, glm::vec3&) { return false; });
+    float wallX = 100.0f; // a wall facing -x at x = wallX, and the floor at y = 0
+    fx.SetRaycast([&](const glm::vec3& o, const glm::vec3& d, float maxD, glm::vec3& p, glm::vec3& n) {
+        float best = maxD;
+        bool hit = false;
+        if (d.y < -1e-4f && -o.y / d.y <= best) { best = -o.y / d.y; n = glm::vec3(0, 1, 0); hit = true; }
+        if (d.x > 1e-4f && (wallX - o.x) / d.x >= 0.0f && (wallX - o.x) / d.x <= best) { best = (wallX - o.x) / d.x; n = glm::vec3(-1, 0, 0); hit = true; }
+        if (hit) p = o + d * best;
+        return hit;
+    });
+    glm::vec3 body(0.0f, 0.0f, 0.0f);
+    fx.SetBodyLookup([&](unsigned, glm::vec3& c) { c = body + glm::vec3(0, 1.0f, 0); return true; });
+    BloodFx::Hit h;
+    h.Point = glm::vec3(0, 1.3f, 0);
+    h.Direction = glm::vec3(1, 0, 0);
+    h.Entity = 3;
+    h.Damage = 40.0f;
+    fx.OnFleshHit(h);
+    CHECK(fx.GroundSplatters() == 1);
+    bool beyond = false, timed = false;
+    for (const BloodFx::Decal& d : fx.Decals()) {
+        const glm::vec3 at(d.Model[3]);
+        beyond |= at.x > 0.3f && std::abs(at.y - 0.01f) < 0.02f;
+        timed |= d.Age < -0.2f && d.Age > -0.8f; // ~ the fall from chest height
+    }
+    CHECK(beyond && timed);
+    // A wall in the way: it lands on the wall, facing out of it.
+    fx.Clear();
+    wallX = 1.2f;
+    h.Entity = 9;
+    fx.OnFleshHit(h);
+    bool onWall = false;
+    for (const BloodFx::Decal& d : fx.Decals()) onWall |= std::abs(glm::vec3(d.Model[3]).x - 1.2f) < 0.02f && glm::normalize(glm::vec3(d.Model[1])).x < -0.9f;
+    CHECK(onWall && fx.GroundSplatters() >= 1);
+    wallX = 100.0f;
+    fx.Clear();
+    h.Entity = 3;
+    fx.OnFleshHit(h);
+    // Head bigger than body, a head kill bigger again.
+    BloodFx::Hit head = h;
+    head.Head = true;
+    const float headWound = BloodFx::GroundSplatterSize(head, 1.0f);
+    CHECK(headWound > BloodFx::GroundSplatterSize(h, 1.0f));
+    head.Killed = true;
+    CHECK(BloodFx::GroundSplatterSize(head, 1.0f) > headWound);
+    // The living wound drips as he walks away; a kill doesn't (it pools instead).
+    CHECK(fx.Bleeding(3));
+    const int before = fx.BleedDrops();
+    for (int i = 0; i < 50; ++i) { body.x -= 0.05f; fx.Update(0.1f); }
+    CHECK(fx.BleedDrops() >= before + 4);
+    for (int i = 0; i < 60; ++i) fx.Update(0.1f);
+    CHECK(!fx.Bleeding(3));
+    h.Entity = 4;
+    h.Killed = true;
+    fx.OnFleshHit(h);
+    CHECK(!fx.Bleeding(4));
 }
 
 void Test_Blood_Persist() {
@@ -950,6 +1022,7 @@ void RegisterBloodTests(UnitTestSupport::TestList& tests) {
     tests.push_back({"Blood::KnifeDecals", Test_Blood_KnifeDecals});
     tests.push_back({"Blood::Footprints", Test_Blood_Footprints});
     tests.push_back({"Blood::Persist", Test_Blood_Persist});
+    tests.push_back({"Blood::GroundSplatter", Test_Blood_GroundSplatter});
     tests.push_back({"Blood::Palette", Test_Blood_Palette});
     tests.push_back({"Blood::Speed", Test_Blood_Speed});
     tests.push_back({"ImpactFx::Surfaces", Test_ImpactFx_Surfaces});

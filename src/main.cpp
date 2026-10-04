@@ -978,8 +978,9 @@ int main(int argc, char** argv) {
             }
         };
         int bigHeadshots = 0;       // big headshot kills (the gore sound), for --npc-test blood
-        FoleyAudio::Get().SetStepListener([&bloodFx](int walker, const glm::vec3& feet, const glm::vec3& vel, int foot) {
-            bloodFx.OnFootstep(walker, feet, vel, foot); // bloody footprints out of fresh blood
+        FoleyAudio::Get().SetStepListener([&bloodFx, &player](int walker, const glm::vec3& feet, const glm::vec3& vel, int foot) {
+            // Bloody footprints out of fresh blood; the player's point the way they face (turning on the spot too).
+            bloodFx.OnFootstep(walker, feet, vel, foot, walker < 0 ? player.Cam.Front() : glm::vec3(0.0f));
         });
         bloodFx.SetBodyLookup([&npcDirector](unsigned entity, glm::vec3& centre) { // where a corpse lies, for its pool
             for (const auto& n : npcDirector.Npcs()) {
@@ -3197,6 +3198,7 @@ int main(int argc, char** argv) {
                             d.Cell = (int)(hole.Seed * 4.0f) & 3;
                             d.NextCell = d.Cell;
                             d.NormalStrength = 1.0f;
+                            d.Blood = false; // the surface's own broken material
                             BloodRenderer::Get().AddDecal(d);
                         }
                     }
