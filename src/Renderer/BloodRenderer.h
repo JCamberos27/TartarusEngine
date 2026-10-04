@@ -81,6 +81,7 @@ public:
         int Knife = -1;
         int Cell = 0, NextCell = 0;
         float CellBlend = 0.0f;
+        bool Blood = true;         // the palette's blood (false: a bullet hole, its surface's own material)
     };
     void AddDecal(const Decal& d);
     int QueuedDecals() const { return (int)m_Decals.size(); }

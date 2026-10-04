@@ -113,8 +113,9 @@ public:
     void SpatterWallAt(const glm::vec3& at, const glm::vec3& normal, float size);
     // A footfall (FoleyAudio's step listener): `walker` -1 the player, else a soldier; `foot` 0 left, 1 right, -1 unknown.
     // Stepping in fresh blood on the ground wets that walker's soles; the next steps leave prints, fading.
-    void OnFootstep(int walker, const glm::vec3& feet, const glm::vec3& velocity, int foot);
-    static constexpr int kPrintSteps = 6;     // prints after stepping in it
+    // `facing` (optional, any length): the way the walker faces - the prints point that way; else the way they move.
+    void OnFootstep(int walker, const glm::vec3& feet, const glm::vec3& velocity, int foot, const glm::vec3& facing = glm::vec3(0.0f));
+    static constexpr int kPrintSteps = 14;    // prints after stepping in it
     static constexpr float kFreshSeconds = 60.0f; // blood on the ground this young still marks a sole
     int PrintsSpawned() const { return m_PrintsSpawned; }
     int BloodySteps(int walker) const;        // prints left for that walker (0: clean soles)
@@ -125,7 +126,7 @@ public:
         m_HasViewer = true;
     }
     static constexpr float kVisibleReach = 60.0f; // further than this a stain may go whatever the camera faces
-    static constexpr int kMaxPrints = 48;         // footprints among themselves: the oldest out of view goes first
+    static constexpr int kMaxPrints = 128;         // footprints among themselves: the oldest out of view goes first
     void Update(float dt);
     void Submit(BloodRenderer& renderer) const;
     void Clear();
@@ -194,6 +195,12 @@ public:
     glm::vec3 LastExitPoint() const { return m_LastExitPoint; }
     float LastEnergy() const { return m_LastEnergy; }
     int PuffsSpawned() const { return m_PuffsSpawned; }
+    int GroundSplatters() const { return m_GroundSplatters; } // hits whose thrown blood landed somewhere
+    int BleedDrops() const { return m_BleedDrops; }           // drops a wounded soldier left as he went
+    bool Bleeding(unsigned entity) const;
+    static constexpr float kBleedSeconds = 8.0f;              // a living wound drips this long after the last hit
+    // How big the splatter a hit throws on the ground is (metres across its body): a head throws more, a kill more again.
+    static float GroundSplatterSize(const Hit& hit, float energy);
     // Where the round leaves a body: back along its line from 0.7 m past the entry onto the same body's parts.
     // False (and `exit` a guess just past the entry) when the ray finds nothing of it.
     static bool FindExit(const glm::vec3& entry, const glm::vec3& dir, unsigned entity, bool head, const BodyRayFn& bodyRay,
@@ -282,6 +289,16 @@ private:
     std::vector<Spray> m_Sprays;
     std::vector<Decal> m_Decals;
     int m_DecalsSpawned = 0, m_PoolsSpawned = 0;
+    // Every hit: blood thrown out along the round's line on a falling arc, splashed on the first thing it meets (floor,
+    // wall, crate) when it gets there, stretched the way it was going - the bulk, and drops flung wider.
+    void SpawnGroundSplatter(const Hit& hit, float energy, const glm::vec3& from, const glm::vec3& flatDir, bool forward);
+    // The falling arc from `from` at `velocity` (m/s): where it first meets a surface, its normal, its velocity then and
+    // how long it took. False: nothing within 1.4 s.
+    bool ThrowArc(const glm::vec3& from, const glm::vec3& velocity, glm::vec3& point, glm::vec3& normal, glm::vec3& vel,
+                  float& seconds) const;
+    int m_GroundSplatters = 0, m_BleedDrops = 0;
+    struct Bleed { unsigned Entity; float Until; float Next; float Rate; };
+    std::vector<Bleed> m_Bleeds;
     struct PendingPool { unsigned Entity; float At; float Size; };
     std::vector<PendingPool> m_Pools;
     std::uint32_t m_Rng = 0x9E3779B9u;

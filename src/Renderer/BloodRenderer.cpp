@@ -452,7 +452,7 @@ int BloodRenderer::DrawDecals(const glm::mat4& view, const glm::mat4& proj, cons
             g.RectNorm = g.RectMask = glm::vec4(0.0f);
             g.Knife = glm::ivec4(k->ColorLayer, k->NormalLayer, d.Cell, d.NextCell);
             g.Grid = glm::vec4((float)k->Cols, (float)k->Rows, d.CellBlend, k->Smoothness);
-            g.Kind = glm::ivec4(k->Lib == KnifeFxImport::Library::DecalLarge ? 0 : 1, (int)k->Flags, 0, 0);
+            g.Kind = glm::ivec4(k->Lib == KnifeFxImport::Library::DecalLarge ? 0 : 1, (int)k->Flags, d.Blood ? 1 : 0, 0);
         } else {
             if (!m_AtlasNorm || d.Set < 0) continue;
             g.RectNorm = m_RectNorm[d.Set];
