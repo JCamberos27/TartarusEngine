@@ -880,6 +880,9 @@ int main(int argc, char** argv) {
         BloodFx bloodFx;            // the volumetric blood out of every body a round goes into (docs/BLOOD_FX.md)
         FxSprites fxSprites;        // the Knife flipbook particles: blood mist, impact dust and debris, muzzle smoke
         bloodFx.SetSprites(&fxSprites);
+        FoleyAudio::Get().SetStepListener([&bloodFx](int walker, const glm::vec3& feet, const glm::vec3& vel, int foot) {
+            bloodFx.OnFootstep(walker, feet, vel, foot); // bloody footprints out of fresh blood
+        });
         bloodFx.SetBodyLookup([&npcDirector](unsigned entity, glm::vec3& centre) { // where a corpse lies, for its pool
             for (const auto& n : npcDirector.Npcs()) {
                 if (!n || (unsigned)entt::to_integral(n->Root) != entity) continue;
