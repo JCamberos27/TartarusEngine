@@ -205,15 +205,19 @@ int BloodRenderer::DrawSprays(const glm::mat4& view, const glm::mat4& proj,
 
     // Cull, then group by sim: one instanced draw each.
     const Frustum frustum = Frustum::FromViewProj(proj * view);
+    const glm::vec3 eye = glm::vec3(glm::inverse(view)[3]);
     static std::vector<GpuSpray> gpu;
     static std::vector<int> order;
     order.clear();
+    m_CulledSprays = 0;
     for (int i = 0; i < (int)m_Sprays.size(); ++i) {
         const Spray& s = m_Sprays[i];
         const auto& h = m_Sims[s.Sim].Header;
         const AABB box = AABB{glm::vec3(h.BoundsMin[0], h.BoundsMin[1], h.BoundsMin[2]),
                               glm::vec3(h.BoundsMax[0], h.BoundsMax[1], h.BoundsMax[2])}.Transformed(s.Model);
-        if (frustum.Intersects(box)) order.push_back(i);
+        if (!frustum.Intersects(box)) continue;
+        if (!WorthDrawing((box.Min + box.Max) * 0.5f, glm::length(box.Max - box.Min) * 0.5f, eye, SprayMaxDistance)) { ++m_CulledSprays; continue; }
+        order.push_back(i);
     }
     if (order.empty()) return 0;
     std::sort(order.begin(), order.end(), [&](int a, int b) { return m_Sprays[a].Sim < m_Sprays[b].Sim; });
@@ -428,11 +432,13 @@ int BloodRenderer::DrawDecals(const glm::mat4& view, const glm::mat4& proj, cons
     const KnifeFxLibrary& lib = KnifeFxLibrary::Get();
     PROFILE_GPU_SCOPE("Blood Decals");
     const Frustum frustum = Frustum::FromViewProj(proj * view);
+    const glm::vec3 eye = glm::vec3(glm::inverse(view)[3]);
     static std::vector<GpuDecal> gpu;
     gpu.clear();
     for (const Decal& d : m_Decals) {
         const AABB box = AABB{glm::vec3(-0.5f), glm::vec3(0.5f)}.Transformed(d.Model);
         if (!frustum.Intersects(box)) continue;
+        if (!WorthDrawing((box.Min + box.Max) * 0.5f, glm::length(box.Max - box.Min) * 0.5f, eye, DecalMaxDistance)) continue;
         GpuDecal g;
         g.Model = d.Model;
         g.InvModel = glm::inverse(d.Model);
