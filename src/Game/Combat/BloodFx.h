@@ -9,6 +9,7 @@
 #include "BloodFxImport.h"
 
 class BloodRenderer;
+class FxSprites;
 
 // The game side of the volumetric blood (docs/BLOOD_FX.md): turns a round going into a body into
 // the blood it throws - a fluid spray out of the exit wound along the round's line (the imported
@@ -29,6 +30,9 @@ public:
         bool Pools = true;            // a pool spreads under each corpse
         bool BodySplats = true;       // blood on bodies, ragdolls and props
         bool GearSpatter = true;      // the player's gun and hands, and their own wounds
+        float EnergyScale = 1.0f;     // x every hit's energy (spray reach and speed, mist, exits)
+        bool ImpactPuffs = true;      // the flipbook burst, mist and droplets on the frame a round goes in
+        int Gore = 2;                 // 0 off, 1 mild (no headshot gore), 2 full
     };
     Settings Config;
 
@@ -44,6 +48,12 @@ public:
         glm::vec3 Origin{0.0f};  // the shooter's muzzle
         bool ByPlayer = false;   // the player fired: at point blank it comes back onto the gun and hands
     };
+
+    // How hard a hit is, ~1 for a rifle round at combat range: its damage (a shotgun's pellets arrive as one
+    // load), less with distance, more for a head. It sets the spray's size and speed, the mist, and whether
+    // the round comes out the far side.
+    static float Energy(const Hit& hit);
+    static constexpr float kExitEnergy = 0.6f; // below this the round stays in: blood only back out of the entry
 
     // The world ray the spray's obstacle test uses: true and the hit point / normal when something
     // solid lies within `maxDistance`. Defaults to PhysicsWorld::RaycastSolid; tests replace it.
@@ -86,6 +96,8 @@ public:
     // Back-spatter and the player's own bleeding land there. None set: the player's gear stays clean.
     using GearFn = std::function<int(glm::vec3* points, glm::vec3* normals, int max)>;
     void SetPlayerGear(GearFn fn) { m_Gear = std::move(fn); }
+    // The flipbook particles the impact puffs go to (none: no puffs).
+    void SetSprites(FxSprites* sprites) { m_Sprites = sprites; }
 
     void OnFleshHit(const Hit& hit);
     void Update(float dt);
@@ -132,6 +144,17 @@ public:
     static float DecalCutout(const Decal& d);
     int SpraysSpawned() const { return m_SpraysSpawned; }
     bool LastSprayClipped() const { return m_LastClipped; } // the last hit's spray met an obstacle
+    // The last hit's exit wound: found on the far side of the body (`LastExitFound`) and where; no exit when
+    // the round stayed in (`LastExited` false).
+    bool LastExited() const { return m_LastExited; }
+    bool LastExitFound() const { return m_LastExitFound; }
+    glm::vec3 LastExitPoint() const { return m_LastExitPoint; }
+    float LastEnergy() const { return m_LastEnergy; }
+    int PuffsSpawned() const { return m_PuffsSpawned; }
+    // Where the round leaves a body: back along its line from 0.7 m past the entry onto the same body's parts.
+    // False (and `exit` a guess just past the entry) when the ray finds nothing of it.
+    static bool FindExit(const glm::vec3& entry, const glm::vec3& dir, unsigned entity, bool head, const BodyRayFn& bodyRay,
+                         glm::vec3& exit);
 
     // The frame a spray shows `t01` (0..1) of the way through its playback - the Unity asset's
     // BFX_ManualAnimationUpdate stepping, kept exact.
@@ -145,8 +168,9 @@ public:
     // The prefab -> world transform for a spray thrown from `exitPoint` along `dir`: the prefab's own
     // spray direction `prefabAxis` (horizontal) turned onto the round's flattened line - yaw only, the
     // sims' gravity is baked toward -Y.
+    // `stretch` > 1 draws it out along the flattened line - the same fall in the same time, thrown faster.
     static glm::mat4 PrefabToWorld(const glm::vec3& exitPoint, const glm::vec3& dir, float size, float yawJitterRad,
-                                   const glm::vec3& prefabAxis = glm::vec3(1.0f, 0.0f, 0.0f));
+                                   const glm::vec3& prefabAxis = glm::vec3(1.0f, 0.0f, 0.0f), float stretch = 1.0f);
     // Which way a prefab throws its blood, in its own frame: where its sims' fluid is heading early on, flattened
     // (+X when the sims aren't loaded or it's a burst with no direction).
     static glm::vec3 PrefabAxis(const BloodPresetDef& preset, const std::function<const BloodFxImport::VatFrame*(const char* sim, glm::vec3& origin)>& lastFrame);
@@ -166,6 +190,13 @@ private:
                   const char* set, float radius, float depth, float delay, float grow);
     void EnsureHooks();
     float Random01();
+    // The frame the round goes in: a flipbook burst and mist at the entry (and the exit), droplets thrown on.
+    void SpawnPuffs(const Hit& hit, const glm::vec3& dir, float energy, bool exited, const glm::vec3& exitPoint, bool extraPellet);
+    FxSprites* m_Sprites = nullptr;
+    int m_PuffsSpawned = 0;
+    bool m_LastExited = false, m_LastExitFound = false;
+    glm::vec3 m_LastExitPoint{0.0f};
+    float m_LastEnergy = 0.0f;
 
     RayFn m_Ray;
     SimFn m_SimLookup, m_SetLookup;

@@ -50,3 +50,5 @@ videos/
 # Volumetric blood data converted from the KriptoFX asset (can't be redistributed) - rebuild with
 # TartarusEngine --import-blood-fx <package> (docs/BLOOD_FX.md).
 project/assets/Effects/Blood/
+project/assets/Effects/Knife/
+blood_v2_preview/
