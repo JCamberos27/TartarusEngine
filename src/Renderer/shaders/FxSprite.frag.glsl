@@ -1,5 +1,5 @@
 #version 460 core
-// Flipbook particles (docs/BLOOD_FX.md, "v2"). Three looks, all output premultiplied (dst = src + dst * (1 - a)):
+// Flipbook particles. Three looks, all output premultiplied (dst = src + dst * (1 - a)):
 //   0 blood    - Knife's "Liquid Blood Errosion": the cell's white shape thresholded by an erosion that
 //                rises over the life, so a burst breaks into droplets and thins away; the colour is the
 //                tint, glossy (the entry's smoothness) and normal-mapped, lit like the meshes.

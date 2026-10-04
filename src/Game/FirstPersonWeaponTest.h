@@ -138,7 +138,7 @@ private:
     bool m_HaveSceneCam = false;
     glm::vec3 m_SceneCamPos{0.0f};
     float m_SceneCamYaw = 0.0f, m_SceneCamPitch = 0.0f;
-    // Audio (docs/AUDIO.md): each frame's animator state and phase beside what the weapon audio emitted, checked at the end
+    // Audio: each frame's animator state and phase beside what the weapon audio emitted, checked at the end
     // against the controllers' snd.* events (CheckAudio).
     struct AudioFrame {
         int Slot = 0;

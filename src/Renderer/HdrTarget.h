@@ -36,7 +36,7 @@ public:
 
     // Mid-pass: resolves only the depth into ResolvedDepthTexture() (provisioning it on first use) -
     // for a pass that reconstructs the surfaces drawn so far while the MSAA target stays bound (the
-    // blood decals, docs/BLOOD_FX.md). Leaves the draw framebuffer binding alone.
+    // blood decals). Leaves the draw framebuffer binding alone.
     void ResolveDepthOnly() const;
 
     // Single-sample DEPTH_COMPONENT32F (#121) — lazily created on first call rather than at

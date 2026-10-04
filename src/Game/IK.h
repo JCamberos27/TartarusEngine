@@ -118,7 +118,7 @@ void ApplyRig(const IKRigComponent& rig, const Model& model, Pose& pose, const P
 // for the Inspector's warning. Empty when the rig can run as set up.
 std::vector<std::string> MissingBones(const IKRigComponent& rig, const Model& model);
 
-// ---- foot slide correction (docs/CAS_PARITY.md #8) ----
+// ---- foot slide correction ----
 // Two layers on top of the authored locomotion, both off by default, both weighted 0..1. Stride warping scales the
 // pelvis-relative foot offsets along the travel so the feet cover the ground at the capsule's real speed (blend-tree
 // speeds, speed multipliers, crouch speed) instead of the clip's authored one, and lowers the pelvis for the longer

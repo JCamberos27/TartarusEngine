@@ -173,7 +173,7 @@ def main():
         sync_reels(by_key, gun, sm)
     # AK: 10-shot full-auto burst with tails
     r = Reel(10 * 0.093 + 6)
-    # full-auto policy this reel demonstrates (and docs/AUDIO.md recommends): close/sub/mech on EVERY shot, tail on
+    # full-auto policy this reel demonstrates: close/sub/mech on EVERY shot, tail on
     # every 2nd, far on every 3rd -- stacking ten 3 s tails sums to +10 dB and drowns the transients.
     for i in range(10):
         ls = ["close", "sub", "mech"] + (["tail"] if i % 2 == 0 else []) + (["far"] if i % 3 == 0 else [])

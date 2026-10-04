@@ -583,14 +583,14 @@ int main(int argc, char** argv) {
         return RunUnitTests() == 0 ? 0 : 1;
     }
     // `--import-blood-fx <VolumetricBloodFX package dir>`: converts the volumetric blood sims and
-    // decals into project/assets/Effects/Blood (git-ignored; docs/BLOOD_FX.md). No GL needed.
+    // decals into project/assets/Effects/Blood (git-ignored). No GL needed.
     for (int i = 1; i + 1 < argc; ++i) {
         if (std::string(argv[i]) != "--import-blood-fx") continue;
         CrashHandler::SetInteractive(false);
         return BloodFxImport::ImportPackage(argv[i + 1], ProjectPaths::Resolve("assets/Effects/Blood")) ? 0 : 1;
     }
     // `--import-knife-fx <folder holding the extracted Knife packs>`: the Real Blood and PRO Effects textures
-    // into project/assets/Effects/Knife (git-ignored; docs/BLOOD_FX.md). No GL needed.
+    // into project/assets/Effects/Knife (git-ignored). No GL needed.
     for (int i = 1; i + 1 < argc; ++i) {
         if (std::string(argv[i]) != "--import-knife-fx") continue;
         CrashHandler::SetInteractive(false);
@@ -715,7 +715,7 @@ int main(int argc, char** argv) {
         EditorSettings::Load();
         if (!editorShotDir.empty() && editorShotScale > 0.0f) EditorSettings::Get().UiScaleOverride = editorShotScale;
         // A benchmark measures native resolution unless it asks for a render height, so its
-        // numbers stay comparable with the ones in docs/PERFORMANCE.md.
+        // numbers stay comparable between runs.
         if (renderHeightArg >= 0) EditorSettings::Get().RenderHeight = renderHeightArg;
         else if (perfBenchMode) EditorSettings::Get().RenderHeight = 0;
         // The editor starts with no splash: the console shows the load log until the main window
@@ -880,10 +880,10 @@ int main(int argc, char** argv) {
         BulletHoleList bulletHoles; // where this Play's rounds struck
         NpcDirector npcDirector;    // the enemy squad, in scenes with NPC Spawns
         CombatFx combatFx;          // its (and the player's) gunfire, flashes, tracers and hits
-        BloodFx bloodFx;            // the volumetric blood out of every body a round goes into (docs/BLOOD_FX.md)
+        BloodFx bloodFx;            // the volumetric blood out of every body a round goes into
         FxSprites fxSprites;        // the Knife flipbook particles: blood mist, impact dust and debris, muzzle smoke
         bloodFx.SetSprites(&fxSprites);
-        ImpactFx impactFx;          // rounds into the world: per-surface holes and bursts (docs/BLOOD_FX.md)
+        ImpactFx impactFx;          // rounds into the world: per-surface holes and bursts
         impactFx.SetSprites(&fxSprites);
         combatFx.SetSprites(&fxSprites); // PRO Effects' muzzle layers (Muzzle Style 1)
         // A round into the world: the surface's burst, and its textured hole on the static world (the procedural

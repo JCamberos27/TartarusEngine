@@ -12,7 +12,7 @@
 class Shader;
 class HdrTarget;
 
-// Volumetric blood rendering (docs/BLOOD_FX.md). Owns the GPU side of the imported sims and draws
+// Volumetric blood rendering. Owns the GPU side of the imported sims and draws
 // what the game side (Game/Combat/BloodFx) queues each frame:
 //   - sprays: the airborne fluid, a vertex-animation-texture sim per spray, one instanced draw per
 //     sim, depth-written and lit through ModelFragment.glsl in the opaque pass.
@@ -53,7 +53,7 @@ public:
     int DrawSprays(const glm::mat4& view, const glm::mat4& proj,
                    const std::function<void(Shader&)>& applyFrameState);
 
-    // Culling (docs/BLOOD_FX.md, v2 performance): nothing past MaxDistance metres, nor smaller on screen than MinScreen
+    // Culling: nothing past MaxDistance metres, nor smaller on screen than MinScreen
     // (its bounding radius over its distance - ~2 px at 1080p and a 70 degree view).
     float SprayMaxDistance = 80.0f, DecalMaxDistance = 120.0f, MinScreen = 0.0025f;
     // Bounding sphere (centre, radius) -> drawn at all from `eye`.
@@ -76,7 +76,7 @@ public:
         float Dry = 0.0f;          // 0 fresh and glossy .. 1 dried dark and matte
         float Opacity = 1.0f;
         float NormalStrength = 0.6f;
-        // A Knife library decal instead of a set (docs/BLOOD_FX.md, v2): KnifeFxLibrary id, its cell (and the
+        // A Knife library decal instead of a set: KnifeFxLibrary id, its cell (and the
         // next, blended in - a flipbook such as the wall drips), and for a cell's albedo how the blood dries.
         int Knife = -1;
         int Cell = 0, NextCell = 0;

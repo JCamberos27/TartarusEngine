@@ -723,7 +723,7 @@ struct FirstPersonBodyComponent {
     float NpcFootNormalEase = 0.08f; // NPC Foot Normal Ease (seconds; ground normal easing)
     float NpcFootIKFade = 0.15f; // NPC Foot IK Fade (seconds; foot IK enable/disable easing)
     // ---- lane A ----
-    // Foot slide correction (docs/CAS_PARITY.md #8); both layers off by default, NPCs use the same numbers
+    // Foot slide correction; both layers off by default, NPCs use the same numbers
     bool FootPinEnabled = false; // Foot Pin Enabled
     float FootPinWeight = 1.0f; // Foot Pin Weight
     float FootPinRelease = 0.06f; // Foot Pin Release (seconds)
@@ -736,7 +736,7 @@ struct FirstPersonBodyComponent {
     // ---- end lane A ----
 };
 
-// A character dressed from a wardrobe (docs/CHARACTER_OUTFITS.md): put it on the body's root. Its children
+// A character dressed from a wardrobe: put it on the body's root. Its children
 // tagged with an Outfit Piece are the outfit - body parts (torso, arms, legs, feet, head) and items
 // (hair, tops, pants, shoes, hats ...) - and the Inspector's outfit editor builds and swaps them from
 // the wardrobe's catalog. The children are the record of what is worn (each piece's model and its
@@ -1210,7 +1210,7 @@ struct FxHudSettingsComponent {
     float StreakWindow = 4.0f;               // seconds to count consecutive kills for streak display; HUD group
 };
 
-// The volumetric blood (docs/BLOOD_FX.md, Game/Combat/BloodFx): on any object in the scene (the first one counts);
+// The volumetric blood (Game/Combat/BloodFx): on any object in the scene (the first one counts);
 // without one Play uses these same defaults. Copied into BloodFx::Settings when Play starts.
 struct BloodSettingsComponent {
     bool Enabled = true;
@@ -1462,7 +1462,7 @@ struct WeaponAudioComponent {
     float FarMaxWeight = 1.0f;         // ... and past CloseZeroDistance
     float MaxDistance = 90.0f;         // close / mech / sub layers' audible range
     float FarMaxDistance = 160.0f;
-    // 3D rolloff (docs/AUDIO.md, "3D distance"): every 3D sound is logarithmic - full volume inside Min, -6 dB per doubling past it, held
+    // 3D rolloff: every 3D sound is logarithmic - full volume inside Min, -6 dB per doubling past it, held
     // at Min / Max past Max. These are the guns' Min distances and the reach of the gear sounds (reloads, ADS, equip ...).
     float ShotMinDistance = 3.0f;      // close / mech layers
     float BassMinDistance = 6.0f;      // sub / tail / far layers (low end carries)

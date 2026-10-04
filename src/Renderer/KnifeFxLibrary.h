@@ -4,7 +4,7 @@
 
 #include "../Assets/KnifeFxImport.h"
 
-// The Knife packs' texture libraries on the GPU (docs/BLOOD_FX.md, "v2"): one GL_TEXTURE_2D_ARRAY of
+// The Knife packs' texture libraries on the GPU: one GL_TEXTURE_2D_ARRAY of
 // BC3 colour and one of BC5 normals per library (KnifeFxImport::Library), read from the git-ignored
 // project/assets/Effects/Knife/*.kfx that `--import-knife-fx` writes. Entries are looked up by name
 // once (an id), then read per spawn.

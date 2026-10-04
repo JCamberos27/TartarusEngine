@@ -1,5 +1,5 @@
 #version 460 core
-// Blood decals (docs/BLOOD_FX.md). The surface under each pixel comes back out of the depth of the static
+// Blood decals. The surface under each pixel comes back out of the depth of the static
 // geometry drawn so far; inside the decal's box it gets a layer of blood. The layer is lit like any mesh -
 // its own albedo and wet GGX coat under the same sun, shadows, clustered lights and sky (ModelShading.glsl)
 // - and covers the surface by how thick it is: the thin edges let some of the surface through, tinted by

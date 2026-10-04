@@ -11,7 +11,7 @@
 class BloodRenderer;
 class FxSprites;
 
-// The game side of the volumetric blood (docs/BLOOD_FX.md): turns a round going into a body into
+// The game side of the volumetric blood: turns a round going into a body into
 // the blood it throws - a fluid spray out of the exit wound along the round's line (the imported
 // sims, scaled to the hit and timed to real gravity) - and where that blood lands: the splat on the
 // ground under the spray (the prefab's own decal, placed and timed by how far it fell), the spatter

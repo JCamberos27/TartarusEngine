@@ -1,7 +1,7 @@
 #pragma once
 #include <glm/glm.hpp>
 
-// One look for every piece of the blood (docs/BLOOD_FX.md, v3): the sprays, the stains, the pools, the splats on
+// One look for every piece of the blood: the sprays, the stains, the pools, the splats on
 // bodies and the flipbook bursts all take their colour and roughness from here, so blood from three packs reads as
 // one material. Dark, deep red when fresh, near-black brown dried; satin, not mirror-glossy. Linear albedo.
 namespace BloodPalette {

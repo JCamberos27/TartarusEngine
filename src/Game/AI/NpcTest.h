@@ -30,7 +30,7 @@ class World;
 //           then on the sights (record it: NPC_TEST_RECORD, every frame)
 //   feet    foot IK: a soldier's feet measured over the ground on the flat, then across and up the Arena's ramp
 //   blood   the volumetric blood (scenes/BloodTest.json): a wound, a chest kill against a wall, a head kill and a
-//           corpse shot, each watched from the side in shots through the spray's flight (docs/BLOOD_FX.md)
+//           corpse shot, each watched from the side in shots through the spray's flight
 //   pose    the weapon hold, close up: an AK and a Remington soldier, the AI frozen, put through aim level /
 //           up / down / to the side, at the hip, crouched, strafing, reloading and sprinting; four views of each
 //           and the gun's / elbows' / hands' clearances (NpcBody::MeasureHold) logged and checked

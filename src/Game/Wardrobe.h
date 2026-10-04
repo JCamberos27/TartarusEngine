@@ -7,7 +7,7 @@
 #include <string>
 #include <vector>
 
-// Character outfits (docs/CHARACTER_OUTFITS.md): what a character pack offers and how its pieces go
+// Character outfits: what a character pack offers and how its pieces go
 // together. Pure - no scene, GL or file access - so every rule is unit tested; OutfitSystem does the
 // scanning and the scene work.
 //

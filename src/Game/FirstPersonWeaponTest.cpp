@@ -45,7 +45,7 @@ FirstPersonWeaponTest::FirstPersonWeaponTest(bool stockProbe, bool probeAk) : m_
     auto mem = std::make_shared<Mem>();
     using C = Ctx;
     auto fire = [](C& c) { ++c.Pulls; };
-    // The muzzle flash on its first frames (docs/BLOOD_FX.md: PRO Effects' layers over the flame), captured as `stem`_<frame>.
+    // The muzzle flash on its first frames (PRO Effects' layers over the flame), captured as `stem`_<frame>.
     auto flashShots = [](C& c, const char* stem) {
         const int f = (int)std::lround(c.Time / std::max(c.Dt, 1e-4f));
         if (f == 1 || f == 2 || f == 4 || f == 30) c.Shot = std::string(stem) + "_" + std::to_string(f);

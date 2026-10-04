@@ -21,7 +21,7 @@ struct WeaponAudioComponent;
 struct ReverbBusComponent;
 class World;
 
-// Engine-side weapon and foley audio (docs/AUDIO.md, "Engine"). Everything here is data: a SoundSet
+// Engine-side weapon and foley audio. Everything here is data: a SoundSet
 // is a bag of variants plus how to play them (volume, jitter, pitch, bus, 3D range, round robin, voice
 // cap), a weapon profile maps animator event keys ("snd.ak.mag_out") and the shot layers (close, mech,
 // sub, tail, far) onto sets, and the sets are filled from the audio manifest by key, so recording a new
@@ -410,11 +410,11 @@ public:
     // Tests: starts with a given set of profiles and no scene.
     void StartForTest(const std::string& projectRoot, SoundBackend* backend);
 
-    // --- the reverb bus (docs/AUDIO.md, "Reverb bus") ---
+    // --- the reverb bus ---
     // Send levels by category, and what the reverb is told as the listener moves (zones first, the probe outside them).
     ReverbBusComponent& Bus() { return m_Bus; }
     const ReverbBusComponent& Bus() const { return m_Bus; }
-    // --- the dynamic mix (docs/AUDIO.md, "Dynamic mix") ---
+    // --- the dynamic mix ---
     // The settings in use (the scene's Audio Mix component at Start, or the defaults); ApplyMix after changing them live.
     AudioMixComponent& Mix() { return m_Mix; }
     void ApplyMix();

@@ -3,7 +3,7 @@
 #include <cstdint>
 #include <vector>
 
-// A piece's hidden vertices on the GPU (docs/CHARACTER_OUTFITS.md): one bit per vertex of its model, in
+// A piece's hidden vertices on the GPU: one bit per vertex of its model, in
 // the order Model::CollisionGeometry lists them (sub-mesh by sub-mesh). ModelVertex.glsl reads it as
 // the SSBO at binding kBinding, by gl_VertexID plus the sub-mesh's first vertex (uHideVertBase).
 class SkinHideBuffer {
