@@ -1517,6 +1517,8 @@ void NpcDirector::HandleShots(World& world, Npc& n, const PlayerSnapshot& p, con
             e.Direction = hit.Direction;
             e.SourcePos = n.Eye;
             m_PlayerDamage.push_back(e);
+            if (m_FleshHits.size() < 64)
+                m_FleshHits.push_back({hit.Point, hit.Direction, kPlayerEntity, -1, e.Amount, false, zone == HitZone::Head, false, hit.Pellets});
             Callout(n, CallKind::PlayerHurt);
             continue;
         }
@@ -1527,7 +1529,9 @@ void NpcDirector::HandleShots(World& world, Npc& n, const PlayerSnapshot& p, con
             // its head down, but squads don't kill their own.
             o->Suppression = std::min(1.0f, o->Suppression + 0.3f);
             o->Body.Flinch(world, hit.Direction);
-            (void)dist;
+            if (m_FleshHits.size() < 64)
+                m_FleshHits.push_back({hit.Point, hit.Direction, hit.Entity, -1, DamageForHit(n.Gun, HitZone::Torso, dist) * 0.5f,
+                                       false, false, false, hit.Pellets});
             onNpc = true;
             break;
         }
@@ -1564,6 +1568,8 @@ bool NpcDirector::OnPlayerHit(World& world, unsigned entity, const glm::vec3& po
                 const glm::vec3 d = glm::length(dir) > 1e-6f ? glm::normalize(dir) : glm::vec3(0.0f, 0.0f, 1.0f);
                 n.Ragdoll->HitCorpse(part, d, amount, point, m_RagdollCfg);
                 if (Fx) Fx->Play(CombatFx::Cue::FleshHit, point, false, 0.5f);
+                if (m_FleshHits.size() < 64)
+                    m_FleshHits.push_back({point, d, entity, part, amount, false, part == 2, true, weapon.Pellets});
             }
             return true;
         }
@@ -1573,6 +1579,10 @@ bool NpcDirector::OnPlayerHit(World& world, unsigned entity, const glm::vec3& po
         ApplyDamage(world, n, dmg, zone, point, dir, -1, part);
         if (killed) *killed = n.Dead;
         if (head) *head = zone == HitZone::Head;
+        if (m_FleshHits.size() < 64) {
+            const glm::vec3 d = glm::length(dir) > 1e-6f ? glm::normalize(dir) : glm::vec3(0.0f, 0.0f, 1.0f);
+            m_FleshHits.push_back({point, d, entity, part, dmg, n.Dead, zone == HitZone::Head, false, weapon.Pellets});
+        }
         return true;
     }
     return false;
@@ -1803,6 +1813,12 @@ std::vector<DamageEvent> NpcDirector::TakePlayerDamage() {
 std::vector<NpcDirector::Impact> NpcDirector::TakeImpacts() {
     std::vector<Impact> out;
     out.swap(m_Impacts);
+    return out;
+}
+
+std::vector<NpcDirector::FleshHit> NpcDirector::TakeFleshHits() {
+    std::vector<FleshHit> out;
+    out.swap(m_FleshHits);
     return out;
 }
 
