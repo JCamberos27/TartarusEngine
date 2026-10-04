@@ -2140,7 +2140,11 @@ void TestConvolverCost() {
     std::printf("[AudioPerf] convolver, 3 s IR, 48 kHz: inline %.2f %% of a core; audio thread %.2f %%, tail worker %.2f %% (%llu blocks, %llu late)\n",
                 100.0 * tInline / (double)(seconds + 0.4), 100.0 * tAudio / (double)(seconds + 0.4), 100.0 * tWorker / (double)(seconds + 0.4),
                 (unsigned long long)worker.Jobs(), (unsigned long long)thr.LateBlocks());
+#ifdef NDEBUG
     CHECK(tInline / (double)seconds < 0.05); // (a loose bound: other jobs share the machine; the printed numbers are the report)
+#endif
+    // (A Debug build's unoptimised FFTs run many times slower: the budget is the shipped build's, so it's only
+    // checked there; the numbers above still print.)
 }
 
 
