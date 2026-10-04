@@ -85,6 +85,8 @@
 #include "AI/NpcTest.h"         // --npc-test
 #include "Combat/PlayerVitals.h" // the player's health, death and respawn
 #include "PlayerHudOverlay.h"
+#include "ScreenBloodOverlay.h"
+#include "Combat/ScreenBlood.h"
 #include "CombatHud.h"          // ammo, kill feed, radio subtitles, awareness markers, AI overlay
 #include "DevPanel.h"           // F7 dev overlay in Play
 #include "GameViewPanel.h"
@@ -1014,6 +1016,8 @@ int main(int argc, char** argv) {
         npcDirector.Fx = &combatFx;
         PlayerVitals playerVitals;  // the player's health in Play
         PlayerHudOverlay playerHud; // health, damage direction, hitmarker, death
+        ScreenBlood screenBlood;    // blood on the view when the player is hurt (docs/BLOOD_FX.md)
+        ScreenBloodOverlay screenBloodOverlay;
         CombatHud combatHud;        // ammo, kill feed, radio subtitles, awareness chevrons, AI debug overlay
         DevPanel devPanel;          // F7 / F8 / F9 dev tools in Play
         glm::vec3 deathCamOffset(0.0f); // the death camera's drop, on the camera only after the late pose
@@ -1674,6 +1678,7 @@ int main(int argc, char** argv) {
             }
             bloodFx.Clear();
             fxSprites.Clear();
+            screenBlood.Clear();
             {   // the scene's blood tuning: the first Blood Settings component, defaults when none
                 BloodSettingsComponent b;
                 if (const auto all = world.Registry.view<BloodSettingsComponent>(); all.begin() != all.end())
@@ -1690,6 +1695,7 @@ int main(int argc, char** argv) {
                 bloodFx.Config.EnergyScale = b.EnergyScale;
                 bloodFx.Config.ImpactPuffs = b.ImpactPuffs;
                 bloodFx.Config.Gore = b.Gore;
+                screenBlood.Enabled = b.Enabled && b.Gore > 0 && b.ScreenBlood;
             }
             BloodRenderer::Get().Load(); // once; a missing import just leaves the blood off
             KnifeFxLibrary::Get().Load(); // likewise the Knife packs (--import-knife-fx)
@@ -1807,6 +1813,7 @@ int main(int argc, char** argv) {
             BloodRenderer::Get().BeginFrame(); // nothing of Play's blood left in the editor
             fxSprites.Clear();
             FxSpriteRenderer::Get().BeginFrame();
+            screenBlood.Clear();
             shellCasings.Clear(world);
             editor.OnExitPlayMode(world, assets);
             playing = false;
@@ -3026,7 +3033,11 @@ int main(int argc, char** argv) {
                     for (const DamageEvent& e : npcDirector.TakePlayerDamage()) {
                         const float before = playerVitals.Health();
                         playerVitals.ApplyDamage(e.Amount, e.SourcePos);
-                        if (playerVitals.Health() < before) combatFx.Play(CombatFx::Cue::FleshHit, e.Point, true, 0.8f);
+                        if (playerVitals.Health() < before) {
+                            combatFx.Play(CombatFx::Cue::FleshHit, e.Point, true, 0.8f);
+                            screenBlood.OnHurt(before - playerVitals.Health(), DamageIndicatorAngle(player.Cam.Position, player.Cam.Yaw, e.SourcePos),
+                                               playerVitals.Health01());
+                        }
                     }
                     // Every round that went into a body this frame - theirs and the player's - bleeds.
                     for (const NpcDirector::FleshHit& f : npcDirector.TakeFleshHits()) {
@@ -3072,6 +3083,7 @@ int main(int argc, char** argv) {
                     PROFILE_SCOPE("Blood");
                     bloodFx.Update(gameDt);
                     fxSprites.Update(gameDt);
+                    screenBlood.Update(gameDt);
                     BloodRenderer::Get().BeginFrame();
                     bloodFx.Submit(BloodRenderer::Get());
                     FxSpriteRenderer::Get().BeginFrame();
@@ -4540,6 +4552,7 @@ int main(int argc, char** argv) {
                                    gravityGunLive() && gravityGun.IsCharging() ? gravityGun.Charge() : -1.0f,
                                    crosshairDot(gvView, gvProj, gvWidth, gvHeight));
                 if (playing && playUsesPlayer && npcDirector.Active()) {
+                    screenBloodOverlay.Draw(gameView.GetFramebuffer().Handle(), gvWidth, gvHeight, screenBlood);
                     playerHud.Draw(gameView.GetFramebuffer().Handle(), gvWidth, gvHeight,
                                    MakePlayerHudState(playerVitals, player.Cam.Position, player.Cam.Yaw), (float)glfwGetTime());
                     drawCombatHud(gameView.GetFramebuffer().Handle(), gvWidth, gvHeight, gvView, gvProj);
@@ -4790,6 +4803,7 @@ int main(int argc, char** argv) {
                                    gravityGunLive() && gravityGun.IsCharging() ? gravityGun.Charge() : -1.0f,
                                    crosshairDot(view, proj, mw, mh));
                 if (playing && playUsesPlayer && npcDirector.Active()) {
+                    screenBloodOverlay.Draw(0, mw, mh, screenBlood);
                     playerHud.Draw(0, mw, mh, MakePlayerHudState(playerVitals, player.Cam.Position, player.Cam.Yaw), (float)glfwGetTime());
                     drawCombatHud(0, mw, mh, view, proj);
                 }
