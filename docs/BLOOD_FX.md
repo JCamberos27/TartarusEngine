@@ -498,11 +498,25 @@ sprays played at the packs' cinematic pace, and stains dried and vanished in fro
   - A stain only leaves when it's out of view (outside a 75 degree cone from the camera, or past 60 m): over the cap
     (`Max Stains` 512) the farthest unseen one goes, else the oldest; footprints have their own cap (48).
   - Drawing cost stays bounded by `BloodRenderer::WorthDrawing` (distance and screen size).
+- **Pools grow** from a small patch (8%) to full size over 20-28 s, fast then slow (`BloodFx::PoolScale`, `Decal::Spread`).
+- **Thrown blood lands anywhere** (`SpawnGroundSplatter`, `ThrowArc`): every hit throws the bulk, drops and fine specks
+  out of the wound on falling arcs; each splashes on the first surface it meets (floor, wall, crate), when it gets
+  there, stretched the way it was going (longer when it skids in at a grazing angle); on a wall it runs. A few drops
+  spill back toward the shooter. Head > body; a head kill the most.
+- **Corpses** (`SpawnCorpseSplash`): a shot into a body lying down splashes round the wound onto what it lies on, and the
+  new wound pools (a small spreading pool).
+- **Wounded soldiers bleed** for 8 s after a hit: drops under them as they move (`m_Bleeds`).
+- **Body stains:** smaller on the torso, wider on the head.
+- **Variety** (`AddSplash`): Real Blood's `splat_small`, `splat_wide`, `splat_medium` (4 each) and the 16-cell `drops`
+  sheet join the KriptoFX stains (round drops only on floors); every splash may be mirrored. All in the palette.
+- **Footprints:** pool-coloured (an explicit `Blood` flag replaces the gloss test), point the way the player faces,
+  14 prints a trail (128 kept).
 - **Removed:** screen blood and headshot gore (see v2 above). `Gore` is now 0 off / 1 on.
-- **Lighter import:** the Knife catalogue only holds what's drawn (dropped trails, handprints, medium/small
-  splats, Damage drips, the skin hole, `blood_side`, `blood_spurt`, `blood_blob`, `pool_big`).
+- **Lighter import:** the Knife catalogue only holds what's drawn (dropped trails, handprints, the skin hole,
+  `blood_side`, `blood_spurt`, `blood_blob`, `pool_big`).
 - **Tests:**
-  - New unit tests: `Blood::Persist`, `Blood::Palette`, `Blood::Speed`.
+  - New unit tests: `Blood::Persist`, `Blood::Palette`, `Blood::Speed`, `Blood::GroundSplatter`, `Blood::CorpseSplash`,
+    `Blood::SplashVariety`.
   - `--npc-test blood`: 25/25, the head kill now checks the big-headshot sound.
   - Its screenshots were checked for the pools' colour at a grazing view.
 

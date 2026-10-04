@@ -82,6 +82,7 @@ public:
         int Cell = 0, NextCell = 0;
         float CellBlend = 0.0f;
         bool Blood = true;         // the palette's blood (false: a bullet hole, its surface's own material)
+        bool Mirror = false;       // the image flipped across (the same stain, another shape)
     };
     void AddDecal(const Decal& d);
     int QueuedDecals() const { return (int)m_Decals.size(); }
