@@ -83,6 +83,7 @@ public:
         float CellBlend = 0.0f;
         bool Blood = true;         // the palette's blood (false: a bullet hole, its surface's own material)
         bool Mirror = false;       // the image flipped across (the same stain, another shape)
+        float Rim = 0.0f;          // a bullet hole's chipped rim fades out by here (cell half-widths; 0 = not cut)
     };
     void AddDecal(const Decal& d);
     int QueuedDecals() const { return (int)m_Decals.size(); }

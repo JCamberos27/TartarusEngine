@@ -24,10 +24,10 @@ public:
         bool Enabled = true;
         float Size = 1.0f;       // x every spray's size (1 = the tuned default)
         int MaxSprays = 24;      // the oldest is dropped past this
-        int MaxDecals = 512;     // stains; past this the farthest one out of view goes
+        int MaxDecals = 1024;    // stains; past this the farthest small one out of view goes (prints have their own)
         float DecalLifetime = 0.0f;   // seconds a stain stays (once out of view); 0 = for good
-        float DrySeconds = 900.0f;    // fresh and wet to dried dark and matte: slow, never in front of you
-        float Speed = 1.6f;           // x how fast the sprays play and the blood lands (1 = the packs' cinematic timing)
+        float DrySeconds = 1800.0f;   // fresh and wet to dried dark and matte - counted only while it's out of view
+        float Speed = 2.0f;           // x how fast the sprays play and the blood lands (1 = the packs' cinematic timing)
         bool Pools = true;            // a pool spreads under each corpse
         bool BodySplats = true;       // blood on bodies, ragdolls and props
         bool GearSpatter = true;      // the player's gun and hands, and their own wounds
@@ -85,7 +85,16 @@ public:
     struct SplatSpace {
         unsigned Group = 0xFFFFFFFFu;
         std::vector<std::pair<unsigned, glm::mat4>> Members; // drawing entity, world -> its bind space
+        // Per member (or empty): a key that outlives the entity - the player's gun is rebuilt on every weapon swap, and
+        // its blood must come back with it. 0 = none (the entity itself).
+        std::vector<unsigned> Keys;
     };
+    // Part for AddSplat's `part` meaning "the player's body only" (their own wound: never on the gun).
+    static constexpr int kBodyOnlyPart = -2;
+    // Key -> the entity drawing it now (0xFFFFFFFF: not out). Keyed splats are drawn on whatever it returns.
+    using ResolveFn = std::function<unsigned(unsigned key)>;
+    void SetMemberResolver(ResolveFn fn) { m_Resolve = std::move(fn); }
+    static constexpr int kMaxGearSplats = 14; // on one of the player's meshes: speckles, never a coat (and they stay)
     using SplatSpaceFn = std::function<bool(unsigned entity, int part, bool corpse, const glm::vec3& point, SplatSpace& out)>;
     void SetSplatSpace(SplatSpaceFn fn) { m_SplatSpace = std::move(fn); }
     // Whether `group` (a body) is still there; false once it's gone (its splats go with it). `entities` is unused.
@@ -126,7 +135,7 @@ public:
         m_HasViewer = true;
     }
     static constexpr float kVisibleReach = 60.0f; // further than this a stain may go whatever the camera faces
-    static constexpr int kMaxPrints = 128;         // footprints among themselves: the oldest out of view goes first
+    static constexpr int kMaxPrints = 200;         // footprints among themselves: the oldest out of view goes first
     void Update(float dt);
     void Submit(BloodRenderer& renderer) const;
     void Clear();
@@ -159,7 +168,11 @@ public:
         int Cell = 0, Frames = 1;
         float FrameSeconds = 0.0f;
         bool Mirror = false;              // drawn flipped across (variety)
+        float DryAge = 0.0f;              // seconds spent out of view: it only dries while nobody looks
+        bool Print = false;               // a footprint (its own budget; fades slowly once old)
+        float FadeAt = 1e9f, FadeLen = 1.0f; // a print fades out from FadeAt (its age) over FadeLen seconds, then goes
     };
+    static constexpr float kPrintLife = 600.0f, kPrintFade = 180.0f; // prints stay 10 min, then fade over 3
     const std::vector<Decal>& Decals() const { return m_Decals; }
     // Whether a stain could be on screen now: within reach and inside a cone wider than any view. True with no viewer.
     bool InView(const Decal& d) const;
@@ -175,11 +188,17 @@ public:
         float Radius = 0.1f, Depth = 0.1f;                         // bind units
         int Set = -1;
         float Age = 0.0f, Grow = 1.0f, DrySeconds = 120.0f, Opacity = 1.0f;
+        unsigned Key = 0;      // SplatSpace::Keys: drawn on whatever entity the key resolves to now
+        float DryAge = 0.0f;   // seconds its body spent out of view
     };
     const std::vector<Splat>& Splats() const { return m_Splats; }
+    // The entity a splat is drawn on now: a keyed one on whatever its key resolves to (the player's gun after a swap),
+    // 0xFFFFFFFF while that isn't out.
+    unsigned DrawnOn(const Splat& s) const { return s.Key ? (m_Resolve ? m_Resolve(s.Key) : 0xFFFFFFFFu) : s.Member; }
     int SplatsSpawned() const { return m_SplatHits; }
     int DecalsSpawned() const { return m_DecalsSpawned; }
     int PoolsSpawned() const { return m_PoolsSpawned; }
+    bool Pooled(unsigned entity) const;       // that body has had its pool (or is about to)
     // The mask cutout a stain shows now: BFX_ShaderProperies' reveal, held through its life, then the
     // rest of the curve as it shrinks away (1 = gone). Pools spread instead.
     static float DecalCutout(const Decal& d);
@@ -306,7 +325,12 @@ private:
     int m_GroundSplatters = 0, m_BleedDrops = 0;
     struct Bleed { unsigned Entity; float Until; float Next; float Rate; };
     std::vector<Bleed> m_Bleeds;
-    struct PendingPool { unsigned Entity; float At; float Size; };
+    // A body that died: once it has come to rest (its centre still between two looks 0.2 s apart, or 4 s on), one pool
+    // spreads from under its centre. Each body pools once.
+    struct PendingPool { unsigned Entity; float At; float Size; glm::vec3 Last{0.0f}; bool HasLast = false; float Deadline = 0.0f; };
+    std::vector<unsigned> m_Pooled;
+    ResolveFn m_Resolve;
+    bool InViewPoint(const glm::vec3& c, float r) const;
     std::vector<PendingPool> m_Pools;
     std::uint32_t m_Rng = 0x9E3779B9u;
     float m_Now = 0.0f;

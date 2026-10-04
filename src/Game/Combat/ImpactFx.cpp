@@ -42,11 +42,30 @@ const char* ImpactFx::HoleEntry(const std::string& s) {
     return "hole_concrete";
 }
 
+float ImpactFx::HoleFraction(const std::string& s) {
+    // How wide the hole itself is in each PRO decal, x its cell (measured off the albedos: the dark - or, glass, clear -
+    // core's equivalent diameter, the four variants averaged). The rest of the cell is the chipped rim.
+    if (s == "asphalt") return 0.07f;
+    if (s == "brick" || s == "rock") return 0.08f;
+    if (s == "wood") return 0.11f;
+    if (s == "glass" || s == "tile") return 0.11f;
+    if (s == "metal") return 0.2f;
+    if (s == "mud") return 0.2f;
+    if (s == "sand") return 0.22f;
+    return 0.14f; // concrete
+}
+
 float ImpactFx::HoleSize(const std::string& s, float radius) {
-    // The procedural hole's radius is the round's (~4.5 mm rifle, more for buckshot clusters); the PRO decals hold the
-    // crater and chipped rim around it, the cell ~1.4x the visible damage.
-    const float k = s == "glass" ? 34.0f : s == "metal" ? 14.0f : s == "wood" ? 18.0f : (s == "mud" || s == "sand") ? 22.0f : 24.0f;
-    return std::clamp(radius * k, 0.05f, 0.2f);
+    // The hole the size of the round, a touch bigger (1.15x its calibre): the cell is that over the hole's share of it.
+    return std::clamp(2.0f * radius * 1.15f / HoleFraction(s), 0.01f, 0.15f);
+}
+
+float ImpactFx::HoleRim(const std::string& s) {
+    // How far out the chipped rim shows, in the cell's half-widths (it fades from 2/3 of this): 3x the hole's radius,
+    // so the mark is the hole and a thin ring of chips; glass keeps its cracks, a tile its spall.
+    if (s == "glass") return 0.9f;
+    if (s == "tile") return 0.55f;
+    return 3.0f * HoleFraction(s);
 }
 
 void ImpactFx::Spawn(const std::string& surface, const glm::vec3& point, const glm::vec3& normal, const glm::vec3& dir) {

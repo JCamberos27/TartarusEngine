@@ -894,7 +894,8 @@ int main(int argc, char** argv) {
             impactFx.Spawn(surface, p, n, dir);
             int decal = -1;
             if (ImpactFx::IsStatic(world, entity)) decal = KnifeFxLibrary::Get().Find(ImpactFx::HoleEntry(surface));
-            bulletHoles.Add(world, static_cast<entt::entity>(entity), point, normal, radius, decal, ImpactFx::HoleSize(surface, radius));
+            bulletHoles.Add(world, static_cast<entt::entity>(entity), point, normal, radius, decal, ImpactFx::HoleSize(surface, radius),
+                            ImpactFx::HoleRim(surface));
         };
         if (npcTest)
             npcTest->ShootWorld = [&](const glm::vec3& from, const glm::vec3& dir) { // --npc-test blood: rounds into the surfaces
@@ -905,7 +906,7 @@ int main(int argc, char** argv) {
                 if (!PhysicsWorld::RaycastFiltered(o, d, 20.0f, f, h) || !h.Hit) return false;
                 const glm::vec3 p(h.Point[0], h.Point[1], h.Point[2]), n(h.Normal[0], h.Normal[1], h.Normal[2]);
                 combatFx.Impact(world, h.Entity, p);
-                worldImpact(h.Entity, p, n, dir, 0.0045f);
+                worldImpact(h.Entity, p, n, dir, 0.0027f); // a 5.45 mm round
                 return true;
             };
         BloodLab bloodLab;          // F7 -> Blood Lab: fire any blood / impact effect at the crosshair, tune it live
@@ -941,7 +942,7 @@ int main(int argc, char** argv) {
             bool body = false;
             if (!aimAt(p, n, e, part, body)) return;
             const glm::vec3 o = player.Cam.Position, d = glm::normalize(p - o);
-            if (!body) { worldImpact(e, p, n, d, 0.0045f); return; }
+            if (!body) { worldImpact(e, p, n, d, 0.0027f); return; }
             if (head) // on the head whatever part was under the crosshair
                 for (const auto& npc : npcDirector.Npcs())
                     if (npc && (unsigned)entt::to_integral(npc->Root) == e && npc->Hitboxes && npc->Hitboxes->Active()) p = npc->Hitboxes->Centre(npc->Body, 2);
@@ -974,7 +975,7 @@ int main(int argc, char** argv) {
             bool body = false;
             if (aimAt(p, n, e, part, body) && !body) {
                 combatFx.Impact(world, e, p);
-                worldImpact(e, p, n, glm::normalize(p - player.Cam.Position), 0.0045f);
+                worldImpact(e, p, n, glm::normalize(p - player.Cam.Position), 0.0027f);
             }
         };
         int bigHeadshots = 0;       // big headshot kills (the gore sound), for --npc-test blood
@@ -985,7 +986,8 @@ int main(int argc, char** argv) {
         bloodFx.SetBodyLookup([&npcDirector](unsigned entity, glm::vec3& centre) { // where a corpse lies, for its pool
             for (const auto& n : npcDirector.Npcs()) {
                 if (!n || (unsigned)entt::to_integral(n->Root) != entity) continue;
-                centre = n->Ragdoll ? n->Ragdoll->PartPosition(0) : n->Feet + glm::vec3(0.0f, 0.9f, 0.0f);
+                // The middle of the body: pelvis toward chest (its pool spreads from under there).
+                centre = n->Ragdoll ? glm::mix(n->Ragdoll->PartPosition(0), n->Ragdoll->PartPosition(1), 0.4f) : n->Feet + glm::vec3(0.0f, 0.9f, 0.0f);
                 return true;
             }
             return false;
@@ -1012,6 +1014,13 @@ int main(int argc, char** argv) {
             worldToBind = glm::inverse(w * m.FinalBoneMatrix(best));
             return true;
         };
+        auto gunKey = [](const std::string& model) { return (unsigned)(std::hash<std::string>{}(model) | 1u); };
+        bloodFx.SetMemberResolver([&, gunKey](unsigned key) -> unsigned { // the gun out now, if it's that one
+            if (!firstPersonPresentation.IsActive()) return 0xFFFFFFFFu;
+            const entt::entity g = firstPersonPresentation.WeaponEntity();
+            if (g == entt::null || gunKey(firstPersonPresentation.Set().WeaponModel) != key) return 0xFFFFFFFFu;
+            return (unsigned)entt::to_integral(g);
+        });
         bloodFx.SetSplatSpace([&](unsigned entity, int part, bool corpse, const glm::vec3& point, BloodFx::SplatSpace& out) {
             if (entity == kPlayerEntity) { // the player's own body pieces, arms and gun near the point
                 out.Group = entity;
@@ -1021,9 +1030,14 @@ int main(int argc, char** argv) {
                 for (auto e : world.Registry.view<PlayerBodyTag, RenderableComponent>())
                     if (!world.Registry.all_of<PoseSourceTag>(e) && meshSpace(e, point, 0.16f, w2b))
                         out.Members.emplace_back((unsigned)entt::to_integral(e), w2b);
-                if (firstPersonPresentation.IsActive())
-                    if (entt::entity g = firstPersonPresentation.WeaponEntity(); g != entt::null && meshSpace(g, point, 0.6f, w2b))
+                // The gun: speckles off a point-blank hit - never the player's own wound (kBodyOnlyPart). Keyed by its model,
+                // so the blood comes back with it after a weapon swap rebuilds it.
+                if (part != BloodFx::kBodyOnlyPart && firstPersonPresentation.IsActive())
+                    if (entt::entity g = firstPersonPresentation.WeaponEntity(); g != entt::null && meshSpace(g, point, 0.6f, w2b)) {
+                        out.Keys.resize(out.Members.size(), 0u);
                         out.Members.emplace_back((unsigned)entt::to_integral(g), w2b);
+                        out.Keys.push_back(gunKey(firstPersonPresentation.Set().WeaponModel));
+                    }
                 return !out.Members.empty();
             }
             for (const auto& n : npcDirector.Npcs()) {
@@ -3199,6 +3213,7 @@ int main(int argc, char** argv) {
                             d.NextCell = d.Cell;
                             d.NormalStrength = 1.0f;
                             d.Blood = false; // the surface's own broken material
+                            d.Rim = hole.Rim;
                             BloodRenderer::Get().AddDecal(d);
                         }
                     }

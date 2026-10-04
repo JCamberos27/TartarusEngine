@@ -107,6 +107,8 @@ void main() {
         float r = length(t - 0.5) * 2.0;
         float reveal = col.a - cutout * (0.6 + 0.6 * r);
         alpha = clamp(reveal * 6.0, 0.0, 1.0);
+        // A bullet hole the round's size: its chipped rim stops close round it (the cell holds a much wider crater).
+        if (d.Kind.z == 0 && d.Axis.w > 0.0) alpha *= 1.0 - smoothstep(d.Axis.w * 0.66, d.Axis.w, r);
         core = clamp((col.a - 0.6) * 2.5, 0.0, 1.0) * alpha;
         a = alpha * facing * texture(uDecalLookup, vec2(local.y + 0.5, 0.5)).r * d.Params.z;
         if (a < 0.004) discard;
