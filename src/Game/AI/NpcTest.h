@@ -66,7 +66,7 @@ public:
         bool LastSprayClipped = false;
         float GpuMsAvg = 0.0f, GpuMsMax = 0.0f;
         // v2 (the Knife packs): impact puffs, exits, headshot gore
-        int Puffs = 0, HeadBursts = 0, GoreChunks = 0;
+        int Puffs = 0, BigHeadshots = 0;
         bool LastExited = false, LastExitFound = false;
         int Impacts = 0, TexturedHoles = 0; // ImpactFx bursts; bullet holes drawn as PRO Effects decals
     };
@@ -84,7 +84,7 @@ private:
     void Blood(World& world, NpcDirector& npcs, float now);
     // blood
     int m_BSurface = 0, m_BImpactsBefore = 0, m_BHolesBefore = 0;
-    int m_BStep = 0, m_BCase = 0, m_BShot = 0, m_BSpawnBefore = 0, m_BGearBefore = 0, m_BPuffsBefore = 0, m_BBurstsBefore = 0;
+    int m_BStep = 0, m_BCase = 0, m_BShot = 0, m_BSpawnBefore = 0, m_BGearBefore = 0, m_BPuffsBefore = 0, m_BHeadshotsBefore = 0;
     bool m_BFired = false, m_BChecked = false, m_BCamSet = false, m_BOverview = false, m_BCloseUp = false;
     float m_BAt = 0.0f, m_BFiredAt = 0.0f;
     std::vector<std::string> m_BLine;

@@ -24,15 +24,16 @@ public:
         bool Enabled = true;
         float Size = 1.0f;       // x every spray's size (1 = the tuned default)
         int MaxSprays = 24;      // the oldest is dropped past this
-        int MaxDecals = 320;     // stains; the oldest is dropped past this
-        float DecalLifetime = 300.0f; // seconds a stain stays before it shrinks away
-        float DrySeconds = 90.0f;     // fresh and glossy to dried dark and matte
+        int MaxDecals = 512;     // stains; past this the farthest one out of view goes
+        float DecalLifetime = 0.0f;   // seconds a stain stays (once out of view); 0 = for good
+        float DrySeconds = 900.0f;    // fresh and wet to dried dark and matte: slow, never in front of you
+        float Speed = 1.6f;           // x how fast the sprays play and the blood lands (1 = the packs' cinematic timing)
         bool Pools = true;            // a pool spreads under each corpse
         bool BodySplats = true;       // blood on bodies, ragdolls and props
         bool GearSpatter = true;      // the player's gun and hands, and their own wounds
         float EnergyScale = 1.0f;     // x every hit's energy (spray reach and speed, mist, exits)
         bool ImpactPuffs = true;      // the flipbook burst, mist and droplets on the frame a round goes in
-        int Gore = 2;                 // 0 off, 1 mild (no headshot gore), 2 full
+        int Gore = 1;                 // 0 off, 1 on
     };
     Settings Config;
 
@@ -54,6 +55,10 @@ public:
     // the round comes out the far side.
     static float Energy(const Hit& hit);
     static constexpr float kExitEnergy = 0.6f; // below this the round stays in: blood only back out of the entry
+    // A big headshot kill (the heavier gore sound over the flesh hit): a head kill at energy >= 1.3, not the player.
+    static bool BigHeadshot(const Hit& hit, float energy, int gore) {
+        return hit.Head && hit.Killed && !hit.Player && gore >= 1 && energy >= 1.3f;
+    }
 
     // The world ray the spray's obstacle test uses: true and the hit point / normal when something
     // solid lies within `maxDistance`. Defaults to PhysicsWorld::RaycastSolid; tests replace it.
@@ -113,6 +118,14 @@ public:
     static constexpr float kFreshSeconds = 60.0f; // blood on the ground this young still marks a sole
     int PrintsSpawned() const { return m_PrintsSpawned; }
     int BloodySteps(int walker) const;        // prints left for that walker (0: clean soles)
+    // Where the player looks from (each frame): stains only ever leave out of view - behind, or far off.
+    void SetViewer(const glm::vec3& eye, const glm::vec3& forward) {
+        m_Eye = eye;
+        m_Forward = glm::length(forward) > 1e-5f ? glm::normalize(forward) : glm::vec3(0.0f, 0.0f, -1.0f);
+        m_HasViewer = true;
+    }
+    static constexpr float kVisibleReach = 60.0f; // further than this a stain may go whatever the camera faces
+    static constexpr int kMaxPrints = 48;         // footprints among themselves: the oldest out of view goes first
     void Update(float dt);
     void Submit(BloodRenderer& renderer) const;
     void Clear();
@@ -132,7 +145,7 @@ public:
         int Set = -1;
         glm::mat4 Model{1.0f};            // unit box -> world, projecting along +Y
         float Age = 0.0f;                 // negative: not landed yet
-        float Life = 300.0f;
+        float Life = 1e9f;                // seconds; leaves only out of view once past it
         float RevealSeconds = 15.0f;      // the reveal curve's time scale
         const BloodCurve* Reveal = nullptr; // null: a pool, spreading over PoolGrow seconds
         float PoolGrow = 0.0f;
@@ -145,6 +158,8 @@ public:
         float FrameSeconds = 0.0f;
     };
     const std::vector<Decal>& Decals() const { return m_Decals; }
+    // Whether a stain could be on screen now: within reach and inside a cone wider than any view. True with no viewer.
+    bool InView(const Decal& d) const;
     int DripsSpawned() const { return m_DripsSpawned; }
     int StainsMerged() const { return m_StainsMerged; }
     // A new stain that would land on a fresh one just like it (same image, centre within 15% of its size, same facing):
@@ -186,7 +201,7 @@ public:
     struct Choice { const char* Preset; float Size; };
     static Choice Choose(const Hit& hit, float roll);
     // Seconds a spray plays: the authored length, x sqrt(size) - a smaller splash falls a shorter
-    // way, and free fall takes time with the square root of the distance.
+    // way, and free fall takes time with the square root of the distance. (Config.Speed divides it.)
     static float PlaybackSeconds(const BloodSprayDef& def, float animationSpeed, float size);
     // The prefab -> world transform for a spray thrown from `exitPoint` along `dir`: the prefab's own
     // spray direction `prefabAxis` (horizontal) turned onto the round's flattened line - yaw only, the
@@ -226,6 +241,11 @@ private:
         glm::vec3 Last{0.0f}, Forward{0.0f, 0.0f, -1.0f};
     };
     std::vector<Walker> m_Walkers;
+    // Room for one more stain: the farthest out of view goes (a print for a print), else the oldest.
+    void MakeRoom(bool print);
+    int m_PrintId = -2;
+    glm::vec3 m_Eye{0.0f}, m_Forward{0.0f, 0.0f, -1.0f};
+    bool m_HasViewer = false;
     int m_PrintsSpawned = 0;
     // Fresh blood on the ground under `feet`: a stain (not a print) younger than kFreshSeconds.
     bool InFreshBlood(const glm::vec3& feet) const;

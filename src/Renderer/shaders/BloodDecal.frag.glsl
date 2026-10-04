@@ -41,6 +41,7 @@ uniform mat4 uInvViewProj;
 uniform vec4 uViewport; // x, y, width, height in the target
 uniform vec3 uFreshColor; // the layer's albedo, fresh / dried
 uniform vec3 uDriedColor;
+uniform vec3 uRough;      // BloodPalette: a film's roughness, a pool's, dried
 
 flat in int vDecal;
 layout(location = 0, index = 0) out vec4 oAdd;
@@ -111,14 +112,27 @@ void main() {
         vec2 slope = nxy * d.Params.w;
         N = normalize(Ng + bx * slope.x - bz * slope.y);
         float gloss = d.Grid.w;
+        float wet = uRough.x; // a film
         if ((d.Kind.y & kEntryAlbedo) != 0) {
             albedo = pow(col.rgb, vec3(2.2)); // authored sRGB
-            blood = gloss > 0.85; // Real Blood's pools and splatter; the bullet holes are their surface's own
-            if (blood) albedo = mix(albedo, albedo * vec3(0.4, 0.5, 0.5), dry); // dries darker, browner
+            blood = gloss > 0.85; // Real Blood's pools and prints; the bullet holes are their surface's own
+            if (blood) {
+                // The pack's own colour is a different red from the rest: keep only how light or dark each texel is
+                // (its detail) and take the hue from the palette, so every stain is one material.
+                float v = clamp(max(albedo.r, max(albedo.g, albedo.b)) / 0.25, 0.0, 1.0);
+                albedo = mix(uFreshColor, uDriedColor, dry) * mix(0.8, 1.0, v); // (its baked highlights stay out)
+                // The pack's alpha is its edge, not a thickness (Unity blends it as transparency): the body of the
+                // stain is solid, or the floor shows through it milky at a grazing look.
+                core = clamp(col.a * 1.6, 0.0, 1.0) * alpha;
+                if (d.Kind.x == 0) { // the large library: pools - deep, so darker, like a spatter's pooled core
+                    wet = uRough.y;
+                    albedo *= 0.65;
+                }
+            }
         } else {
             albedo = mix(uFreshColor, uDriedColor, dry) * mix(1.0, 0.6, core);
         }
-        rough = blood ? mix(1.0 - gloss, 0.55, dry) : 1.0 - gloss;
+        rough = blood ? mix(wet, uRough.z, dry) : 1.0 - gloss;
         if (!blood) F0 = vec3(0.04);
     } else {
         vec4 na = texture(uDecalNorm, d.RectNorm.xy + t * d.RectNorm.zw);
@@ -131,7 +145,7 @@ void main() {
         // The film's normal: the map's slope (Unity: (x, 1, y) in box space) bent onto the real surface.
         vec2 slope = (na.xy * 2.0 - 1.0) * d.Params.w;
         N = normalize(Ng + bx * slope.x - bz * slope.y);
-        rough = mix(0.06, 0.55, dry);
+        rough = mix(uRough.x, uRough.z, dry);
         // Darker and browner as it dries; the pooled core darker still (more of it).
         albedo = mix(uFreshColor, uDriedColor, dry) * mix(1.0, 0.6, core);
     }
@@ -151,8 +165,11 @@ void main() {
         float NdotV = max(dot(N, V), 0.0);
         vec3 F = FresnelSchlickRoughness(NdotV, F0, rough);
         vec2 ab = texture(uBrdfLut, vec2(NdotV, rough)).rg;
+        // Blood on the ground doesn't mirror the whole sky at a grazing look (the horizon and what stands around
+        // it occlude it): specular occlusion by the view angle, or a pool goes milky pink from across the room.
+        float specOcc = blood ? mix(0.25, 1.0, sqrt(NdotV)) : 1.0;
         vec3 ambient = (1.0 - F) * texture(uIrradianceMap, Ng).rgb * albedo
-                     + textureLod(uPrefilteredMap, reflect(-V, N), rough * uIBLSpecularMaxLod).rgb * (F * ab.x + ab.y);
+                     + textureLod(uPrefilteredMap, reflect(-V, N), rough * uIBLSpecularMaxLod).rgb * (F * ab.x + ab.y) * specOcc;
         lit += ambient * uIBLIntensity;
     } else {
         lit += vec3(0.03) * albedo;

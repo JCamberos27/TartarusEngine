@@ -1,4 +1,5 @@
 #pragma once
+#include "BloodPalette.h"
 #include <functional>
 #include <memory>
 #include <string>
@@ -61,9 +62,9 @@ public:
         return d - radius <= maxDistance && (d <= radius || radius / d >= MinScreen);
     }
     int CulledSprays() const { return m_CulledSprays; }
-    // The look (linear albedo, roughness), shared with the decals so a pool matches its drops.
-    glm::vec3 FluidAlbedo{0.2f, 0.007f, 0.005f};
-    float FluidRoughness = 0.1f;
+    // The look (linear albedo, roughness): BloodPalette, shared by every piece of the blood.
+    glm::vec3 FluidAlbedo = BloodPalette::Fresh;
+    float FluidRoughness = BloodPalette::RoughSpray;
 
     // --- decals ---
     int DecalSet(const std::string& name) const; // a decal texture set ("blood1", "char", ...); -1 unknown
@@ -104,9 +105,9 @@ public:
     // Binds the splat list and the decal atlas for the model shader (once per scene draw).
     void BindSplatResources() const;
 
-    // The stains' albedo, fresh (matching the drops) and dried dark red-brown.
-    glm::vec3 FilmFresh{0.26f, 0.010f, 0.008f};
-    glm::vec3 FilmDried{0.075f, 0.022f, 0.016f};
+    // The stains' albedo, fresh (matching the drops) and dried dark red-brown (BloodPalette).
+    glm::vec3 FilmFresh = BloodPalette::Fresh;
+    glm::vec3 FilmDried = BloodPalette::Dried;
 
 private:
     BloodRenderer() = default;
