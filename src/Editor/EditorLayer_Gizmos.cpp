@@ -2217,11 +2217,8 @@ void EditorLayer::ApplySurfaceSnap(World& world, Camera& editorCamera, entt::ent
 }
 
 void EditorLayer::DrawViewGizmo(World& world, Camera& editorCamera) {
+    m_ViewGizmoBlocking = false;
     if (m_ViewportSize.x <= 0.0f || m_ViewportSize.y <= 0.0f) return;
-
-    int w, h;
-    glfwGetWindowSize(m_Window, &w, &h);
-    if (w <= 0 || h <= 0) return;
 
     // The library's own defaults (256px rotate ring, 50px tool buttons) are sized for a full
     // editor viewport; scaled down to sit in the corner instead of taking it over. Phase 3 item
@@ -2241,26 +2238,12 @@ void EditorLayer::DrawViewGizmo(World& world, Camera& editorCamera) {
     ImVec2 rotatePos(m_ViewportPos.x + m_ViewportSize.x - margin - gizmoRadius,
         m_ViewportPos.y + margin + gizmoRadius);
 
-    // Same fullscreen-transparent-overlay trick as DrawGizmo(): the library hit-tests against
-    // raw mouse position within ImGui::GetWindowDrawList()'s owning window, so it needs a real
-    // hoverable window as the "current window"; NoInputs keeps it from stealing
-    // WantCaptureMouse everywhere else (which would otherwise block the editor fly-camera).
-    ImGui::SetNextWindowPos(ImVec2(0, 0));
-    ImGui::SetNextWindowSize(ImVec2((float)w, (float)h));
-    ImGui::PushStyleColor(ImGuiCol_WindowBg, ImVec4(0, 0, 0, 0));
-    ImGui::PushStyleVar(ImGuiStyleVar_WindowBorderSize, 0.0f);
-    ImGui::Begin("##ViewGizmoOverlay", nullptr,
-        ImGuiWindowFlags_NoTitleBar | ImGuiWindowFlags_NoResize | ImGuiWindowFlags_NoMove |
-        ImGuiWindowFlags_NoScrollbar | ImGuiWindowFlags_NoScrollWithMouse |
-        ImGuiWindowFlags_NoCollapse | ImGuiWindowFlags_NoBackground |
-        ImGuiWindowFlags_NoBringToFrontOnFocus | ImGuiWindowFlags_NoNavFocus |
-        ImGuiWindowFlags_NoFocusOnAppearing | ImGuiWindowFlags_NoInputs);
-    // See DrawGizmo's identical call for why this is needed - without it, "Scene" (newer, so
-    // higher in ImGui's window stack) covers this NoInputs overlay instead of the other way
-    // around.
-    ImGui::BringWindowToDisplayFront(ImGui::GetCurrentWindow());
-    KeepFloatingWindowsAboveOverlay(); // ...but keep it under Preferences / Project Settings
-
+    // Append to Scene itself: docked tabs and floating panels occlude this layer naturally.
+    if (!ImGui::Begin(EditorPanels::Scene)) {
+        m_ViewGizmoBlocking = false;
+        ImGui::End();
+        return;
+    }
     glm::vec3 camPos = editorCamera.Position;
     glm::quat camRot = glm::quatLookAt(editorCamera.Front(), glm::vec3(0.0f, 1.0f, 0.0f));
     // Orbit pivot for the Rotate ring: the current selection's bounds center when there is one,
@@ -2308,8 +2291,6 @@ void EditorLayer::DrawViewGizmo(World& world, Camera& editorCamera) {
     }
 
     ImGui::End();
-    ImGui::PopStyleVar();
-    ImGui::PopStyleColor();
 }
 
 void EditorLayer::DrawGroupGizmo(World& world, Camera& editorCamera) {

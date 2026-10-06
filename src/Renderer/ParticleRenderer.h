@@ -29,7 +29,7 @@ public:
 
 private:
     void EnsureCreated();
-    Texture* FlameTexture(const std::string& path); // null if it cannot load
+    Texture* ParticleTexture(const std::string& path, bool flame);
     std::unordered_map<std::string, std::shared_ptr<Texture>> m_Textures;
     Shader* m_Shader = nullptr;
     unsigned int m_Vao = 0;

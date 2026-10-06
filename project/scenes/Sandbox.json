@@ -54,7 +54,7 @@
       ],
       "name": "Ground",
       "order": 2,
-      "parentId": 597,
+      "parentId": 598,
       "position": [
         0.0,
         -0.5,
@@ -116,7 +116,7 @@
       ],
       "name": "Wall North",
       "order": 3,
-      "parentId": 597,
+      "parentId": 598,
       "position": [
         0.0,
         0.800000011920929,
@@ -178,7 +178,7 @@
       ],
       "name": "Wall South",
       "order": 4,
-      "parentId": 597,
+      "parentId": 598,
       "position": [
         0.0,
         0.800000011920929,
@@ -240,7 +240,7 @@
       ],
       "name": "Wall East",
       "order": 5,
-      "parentId": 597,
+      "parentId": 598,
       "position": [
         60.5,
         0.800000011920929,
@@ -302,7 +302,7 @@
       ],
       "name": "Wall West",
       "order": 6,
-      "parentId": 597,
+      "parentId": 598,
       "position": [
         -60.5,
         0.800000011920929,
@@ -361,7 +361,7 @@
       ],
       "name": "Plaza Floor",
       "order": 12,
-      "parentId": 602,
+      "parentId": 603,
       "position": [
         0.0,
         0.10000000149011612,
@@ -423,7 +423,7 @@
       ],
       "name": "Plaza Trim North",
       "order": 13,
-      "parentId": 602,
+      "parentId": 603,
       "position": [
         0.0,
         0.15000000596046448,
@@ -485,7 +485,7 @@
       ],
       "name": "Plaza Trim South",
       "order": 14,
-      "parentId": 602,
+      "parentId": 603,
       "position": [
         0.0,
         0.15000000596046448,
@@ -547,7 +547,7 @@
       ],
       "name": "Plaza Trim East",
       "order": 15,
-      "parentId": 602,
+      "parentId": 603,
       "position": [
         8.149999618530273,
         0.15000000596046448,
@@ -609,7 +609,7 @@
       ],
       "name": "Plaza Trim West",
       "order": 16,
-      "parentId": 602,
+      "parentId": 603,
       "position": [
         -8.149999618530273,
         0.15000000596046448,
@@ -668,7 +668,7 @@
       ],
       "name": "Lamp Post 1",
       "order": 29,
-      "parentId": 602,
+      "parentId": 603,
       "position": [
         -8.800000190734863,
         1.600000023841858,
@@ -727,7 +727,7 @@
       ],
       "name": "Lamp Post 2",
       "order": 32,
-      "parentId": 602,
+      "parentId": 603,
       "position": [
         8.800000190734863,
         1.600000023841858,
@@ -786,7 +786,7 @@
       ],
       "name": "Lamp Post 3",
       "order": 35,
-      "parentId": 602,
+      "parentId": 603,
       "position": [
         -8.800000190734863,
         1.600000023841858,
@@ -845,7 +845,7 @@
       ],
       "name": "Lamp Post 4",
       "order": 38,
-      "parentId": 602,
+      "parentId": 603,
       "position": [
         8.800000190734863,
         1.600000023841858,
@@ -904,7 +904,7 @@
       ],
       "name": "Physics Pad",
       "order": 42,
-      "parentId": 607,
+      "parentId": 608,
       "position": [
         22.0,
         0.05000000074505806,
@@ -984,7 +984,7 @@
       ],
       "name": "Pyramid Crate 0-0",
       "order": 43,
-      "parentId": 607,
+      "parentId": 608,
       "position": [
         14.0,
         0.6000000238418579,
@@ -1064,7 +1064,7 @@
       ],
       "name": "Pyramid Crate 0-1",
       "order": 44,
-      "parentId": 607,
+      "parentId": 608,
       "position": [
         15.020000457763672,
         0.6000000238418579,
@@ -1144,7 +1144,7 @@
       ],
       "name": "Pyramid Crate 0-2",
       "order": 45,
-      "parentId": 607,
+      "parentId": 608,
       "position": [
         16.040000915527344,
         0.6000000238418579,
@@ -1224,7 +1224,7 @@
       ],
       "name": "Pyramid Crate 0-3",
       "order": 46,
-      "parentId": 607,
+      "parentId": 608,
       "position": [
         17.059999465942383,
         0.6000000238418579,
@@ -1304,7 +1304,7 @@
       ],
       "name": "Pyramid Crate 0-4",
       "order": 47,
-      "parentId": 607,
+      "parentId": 608,
       "position": [
         18.079999923706055,
         0.6000000238418579,
@@ -1384,7 +1384,7 @@
       ],
       "name": "Pyramid Crate 0-5",
       "order": 48,
-      "parentId": 607,
+      "parentId": 608,
       "position": [
         19.100000381469727,
         0.6000000238418579,
@@ -1464,7 +1464,7 @@
       ],
       "name": "Pyramid Crate 1-0",
       "order": 49,
-      "parentId": 607,
+      "parentId": 608,
       "position": [
         14.510000228881836,
         1.6009999513626099,
@@ -1544,7 +1544,7 @@
       ],
       "name": "Pyramid Crate 1-1",
       "order": 50,
-      "parentId": 607,
+      "parentId": 608,
       "position": [
         15.529999732971191,
         1.6009999513626099,
@@ -1624,7 +1624,7 @@
       ],
       "name": "Pyramid Crate 1-2",
       "order": 51,
-      "parentId": 607,
+      "parentId": 608,
       "position": [
         16.549999237060547,
         1.6009999513626099,
@@ -1704,7 +1704,7 @@
       ],
       "name": "Pyramid Crate 1-3",
       "order": 52,
-      "parentId": 607,
+      "parentId": 608,
       "position": [
         17.56999969482422,
         1.6009999513626099,
@@ -1784,7 +1784,7 @@
       ],
       "name": "Pyramid Crate 1-4",
       "order": 53,
-      "parentId": 607,
+      "parentId": 608,
       "position": [
         18.59000015258789,
         1.6009999513626099,
@@ -1864,7 +1864,7 @@
       ],
       "name": "Pyramid Crate 2-0",
       "order": 54,
-      "parentId": 607,
+      "parentId": 608,
       "position": [
         15.020000457763672,
         2.6019999980926514,
@@ -1944,7 +1944,7 @@
       ],
       "name": "Pyramid Crate 2-1",
       "order": 55,
-      "parentId": 607,
+      "parentId": 608,
       "position": [
         16.040000915527344,
         2.6019999980926514,
@@ -2024,7 +2024,7 @@
       ],
       "name": "Pyramid Crate 2-2",
       "order": 56,
-      "parentId": 607,
+      "parentId": 608,
       "position": [
         17.059999465942383,
         2.6019999980926514,
@@ -2104,7 +2104,7 @@
       ],
       "name": "Pyramid Crate 2-3",
       "order": 57,
-      "parentId": 607,
+      "parentId": 608,
       "position": [
         18.079999923706055,
         2.6019999980926514,
@@ -2184,7 +2184,7 @@
       ],
       "name": "Pyramid Crate 3-0",
       "order": 58,
-      "parentId": 607,
+      "parentId": 608,
       "position": [
         15.529999732971191,
         3.6029999256134033,
@@ -2264,7 +2264,7 @@
       ],
       "name": "Pyramid Crate 3-1",
       "order": 59,
-      "parentId": 607,
+      "parentId": 608,
       "position": [
         16.549999237060547,
         3.6029999256134033,
@@ -2344,7 +2344,7 @@
       ],
       "name": "Pyramid Crate 3-2",
       "order": 60,
-      "parentId": 607,
+      "parentId": 608,
       "position": [
         17.56999969482422,
         3.6029999256134033,
@@ -2424,7 +2424,7 @@
       ],
       "name": "Pyramid Crate 4-0",
       "order": 61,
-      "parentId": 607,
+      "parentId": 608,
       "position": [
         16.040000915527344,
         4.604000091552734,
@@ -2504,7 +2504,7 @@
       ],
       "name": "Pyramid Crate 4-1",
       "order": 62,
-      "parentId": 607,
+      "parentId": 608,
       "position": [
         17.059999465942383,
         4.604000091552734,
@@ -2584,7 +2584,7 @@
       ],
       "name": "Pyramid Crate 5-0",
       "order": 63,
-      "parentId": 607,
+      "parentId": 608,
       "position": [
         16.549999237060547,
         5.605000019073486,
@@ -2664,7 +2664,7 @@
       ],
       "name": "Wall Brick 0-0",
       "order": 64,
-      "parentId": 607,
+      "parentId": 608,
       "position": [
         24.0,
         0.4000000059604645,
@@ -2744,7 +2744,7 @@
       ],
       "name": "Wall Brick 0-1",
       "order": 65,
-      "parentId": 607,
+      "parentId": 608,
       "position": [
         24.809999465942383,
         0.4000000059604645,
@@ -2824,7 +2824,7 @@
       ],
       "name": "Wall Brick 0-2",
       "order": 66,
-      "parentId": 607,
+      "parentId": 608,
       "position": [
         25.6200008392334,
         0.4000000059604645,
@@ -2904,7 +2904,7 @@
       ],
       "name": "Wall Brick 0-3",
       "order": 67,
-      "parentId": 607,
+      "parentId": 608,
       "position": [
         26.43000030517578,
         0.4000000059604645,
@@ -2984,7 +2984,7 @@
       ],
       "name": "Wall Brick 0-4",
       "order": 68,
-      "parentId": 607,
+      "parentId": 608,
       "position": [
         27.239999771118164,
         0.4000000059604645,
@@ -3064,7 +3064,7 @@
       ],
       "name": "Wall Brick 0-5",
       "order": 69,
-      "parentId": 607,
+      "parentId": 608,
       "position": [
         28.049999237060547,
         0.4000000059604645,
@@ -3144,9 +3144,9 @@
       ],
       "name": "Wall Brick 0-6",
       "order": 70,
-      "parentId": 607,
+      "parentId": 608,
       "position": [
-        28.860000610351563,
+        28.860000610351562,
         0.4000000059604645,
         -3.0
       ],
@@ -3224,7 +3224,7 @@
       ],
       "name": "Wall Brick 0-7",
       "order": 71,
-      "parentId": 607,
+      "parentId": 608,
       "position": [
         29.670000076293945,
         0.4000000059604645,
@@ -3304,7 +3304,7 @@
       ],
       "name": "Wall Brick 1-0",
       "order": 72,
-      "parentId": 607,
+      "parentId": 608,
       "position": [
         24.399999618530273,
         1.0010000467300415,
@@ -3384,7 +3384,7 @@
       ],
       "name": "Wall Brick 1-1",
       "order": 73,
-      "parentId": 607,
+      "parentId": 608,
       "position": [
         25.209999084472656,
         1.0010000467300415,
@@ -3464,7 +3464,7 @@
       ],
       "name": "Wall Brick 1-2",
       "order": 74,
-      "parentId": 607,
+      "parentId": 608,
       "position": [
         26.020000457763672,
         1.0010000467300415,
@@ -3544,7 +3544,7 @@
       ],
       "name": "Wall Brick 1-3",
       "order": 75,
-      "parentId": 607,
+      "parentId": 608,
       "position": [
         26.829999923706055,
         1.0010000467300415,
@@ -3624,7 +3624,7 @@
       ],
       "name": "Wall Brick 1-4",
       "order": 76,
-      "parentId": 607,
+      "parentId": 608,
       "position": [
         27.639999389648438,
         1.0010000467300415,
@@ -3704,7 +3704,7 @@
       ],
       "name": "Wall Brick 1-5",
       "order": 77,
-      "parentId": 607,
+      "parentId": 608,
       "position": [
         28.450000762939453,
         1.0010000467300415,
@@ -3784,7 +3784,7 @@
       ],
       "name": "Wall Brick 1-6",
       "order": 78,
-      "parentId": 607,
+      "parentId": 608,
       "position": [
         29.260000228881836,
         1.0010000467300415,
@@ -3864,7 +3864,7 @@
       ],
       "name": "Wall Brick 2-0",
       "order": 79,
-      "parentId": 607,
+      "parentId": 608,
       "position": [
         24.0,
         1.6019999980926514,
@@ -3944,7 +3944,7 @@
       ],
       "name": "Wall Brick 2-1",
       "order": 80,
-      "parentId": 607,
+      "parentId": 608,
       "position": [
         24.809999465942383,
         1.6019999980926514,
@@ -4024,7 +4024,7 @@
       ],
       "name": "Wall Brick 2-2",
       "order": 81,
-      "parentId": 607,
+      "parentId": 608,
       "position": [
         25.6200008392334,
         1.6019999980926514,
@@ -4104,7 +4104,7 @@
       ],
       "name": "Wall Brick 2-3",
       "order": 82,
-      "parentId": 607,
+      "parentId": 608,
       "position": [
         26.43000030517578,
         1.6019999980926514,
@@ -4184,7 +4184,7 @@
       ],
       "name": "Wall Brick 2-4",
       "order": 83,
-      "parentId": 607,
+      "parentId": 608,
       "position": [
         27.239999771118164,
         1.6019999980926514,
@@ -4264,7 +4264,7 @@
       ],
       "name": "Wall Brick 2-5",
       "order": 84,
-      "parentId": 607,
+      "parentId": 608,
       "position": [
         28.049999237060547,
         1.6019999980926514,
@@ -4344,9 +4344,9 @@
       ],
       "name": "Wall Brick 2-6",
       "order": 85,
-      "parentId": 607,
+      "parentId": 608,
       "position": [
-        28.860000610351563,
+        28.860000610351562,
         1.6019999980926514,
         -3.0
       ],
@@ -4424,7 +4424,7 @@
       ],
       "name": "Wall Brick 2-7",
       "order": 86,
-      "parentId": 607,
+      "parentId": 608,
       "position": [
         29.670000076293945,
         1.6019999980926514,
@@ -4504,7 +4504,7 @@
       ],
       "name": "Wall Brick 3-0",
       "order": 87,
-      "parentId": 607,
+      "parentId": 608,
       "position": [
         24.399999618530273,
         2.203000068664551,
@@ -4584,7 +4584,7 @@
       ],
       "name": "Wall Brick 3-1",
       "order": 88,
-      "parentId": 607,
+      "parentId": 608,
       "position": [
         25.209999084472656,
         2.203000068664551,
@@ -4664,7 +4664,7 @@
       ],
       "name": "Wall Brick 3-2",
       "order": 89,
-      "parentId": 607,
+      "parentId": 608,
       "position": [
         26.020000457763672,
         2.203000068664551,
@@ -4744,7 +4744,7 @@
       ],
       "name": "Wall Brick 3-3",
       "order": 90,
-      "parentId": 607,
+      "parentId": 608,
       "position": [
         26.829999923706055,
         2.203000068664551,
@@ -4824,7 +4824,7 @@
       ],
       "name": "Wall Brick 3-4",
       "order": 91,
-      "parentId": 607,
+      "parentId": 608,
       "position": [
         27.639999389648438,
         2.203000068664551,
@@ -4904,7 +4904,7 @@
       ],
       "name": "Wall Brick 3-5",
       "order": 92,
-      "parentId": 607,
+      "parentId": 608,
       "position": [
         28.450000762939453,
         2.203000068664551,
@@ -4984,7 +4984,7 @@
       ],
       "name": "Wall Brick 3-6",
       "order": 93,
-      "parentId": 607,
+      "parentId": 608,
       "position": [
         29.260000228881836,
         2.203000068664551,
@@ -5064,7 +5064,7 @@
       ],
       "name": "Wall Brick 4-0",
       "order": 94,
-      "parentId": 607,
+      "parentId": 608,
       "position": [
         24.0,
         2.803999900817871,
@@ -5144,7 +5144,7 @@
       ],
       "name": "Wall Brick 4-1",
       "order": 95,
-      "parentId": 607,
+      "parentId": 608,
       "position": [
         24.809999465942383,
         2.803999900817871,
@@ -5224,7 +5224,7 @@
       ],
       "name": "Wall Brick 4-2",
       "order": 96,
-      "parentId": 607,
+      "parentId": 608,
       "position": [
         25.6200008392334,
         2.803999900817871,
@@ -5304,7 +5304,7 @@
       ],
       "name": "Wall Brick 4-3",
       "order": 97,
-      "parentId": 607,
+      "parentId": 608,
       "position": [
         26.43000030517578,
         2.803999900817871,
@@ -5384,7 +5384,7 @@
       ],
       "name": "Wall Brick 4-4",
       "order": 98,
-      "parentId": 607,
+      "parentId": 608,
       "position": [
         27.239999771118164,
         2.803999900817871,
@@ -5464,7 +5464,7 @@
       ],
       "name": "Wall Brick 4-5",
       "order": 99,
-      "parentId": 607,
+      "parentId": 608,
       "position": [
         28.049999237060547,
         2.803999900817871,
@@ -5544,9 +5544,9 @@
       ],
       "name": "Wall Brick 4-6",
       "order": 100,
-      "parentId": 607,
+      "parentId": 608,
       "position": [
-        28.860000610351563,
+        28.860000610351562,
         2.803999900817871,
         -3.0
       ],
@@ -5624,7 +5624,7 @@
       ],
       "name": "Wall Brick 4-7",
       "order": 101,
-      "parentId": 607,
+      "parentId": 608,
       "position": [
         29.670000076293945,
         2.803999900817871,
@@ -5704,7 +5704,7 @@
       ],
       "name": "Wall Brick 5-0",
       "order": 102,
-      "parentId": 607,
+      "parentId": 608,
       "position": [
         24.399999618530273,
         3.4049999713897705,
@@ -5784,7 +5784,7 @@
       ],
       "name": "Wall Brick 5-1",
       "order": 103,
-      "parentId": 607,
+      "parentId": 608,
       "position": [
         25.209999084472656,
         3.4049999713897705,
@@ -5864,7 +5864,7 @@
       ],
       "name": "Wall Brick 5-2",
       "order": 104,
-      "parentId": 607,
+      "parentId": 608,
       "position": [
         26.020000457763672,
         3.4049999713897705,
@@ -5944,7 +5944,7 @@
       ],
       "name": "Wall Brick 5-3",
       "order": 105,
-      "parentId": 607,
+      "parentId": 608,
       "position": [
         26.829999923706055,
         3.4049999713897705,
@@ -6024,7 +6024,7 @@
       ],
       "name": "Wall Brick 5-4",
       "order": 106,
-      "parentId": 607,
+      "parentId": 608,
       "position": [
         27.639999389648438,
         3.4049999713897705,
@@ -6104,7 +6104,7 @@
       ],
       "name": "Wall Brick 5-5",
       "order": 107,
-      "parentId": 607,
+      "parentId": 608,
       "position": [
         28.450000762939453,
         3.4049999713897705,
@@ -6184,7 +6184,7 @@
       ],
       "name": "Wall Brick 5-6",
       "order": 108,
-      "parentId": 607,
+      "parentId": 608,
       "position": [
         29.260000228881836,
         3.4049999713897705,
@@ -6247,7 +6247,7 @@
       ],
       "name": "Ball Ramp",
       "order": 109,
-      "parentId": 607,
+      "parentId": 608,
       "position": [
         16.0,
         1.6450999975204468,
@@ -6309,7 +6309,7 @@
       ],
       "name": "Ramp Back Stop",
       "order": 110,
-      "parentId": 607,
+      "parentId": 608,
       "position": [
         16.0,
         3.690200090408325,
@@ -6389,7 +6389,7 @@
       ],
       "name": "Domino 1",
       "order": 116,
-      "parentId": 607,
+      "parentId": 608,
       "position": [
         26.0,
         0.800000011920929,
@@ -6469,7 +6469,7 @@
       ],
       "name": "Domino 2",
       "order": 117,
-      "parentId": 607,
+      "parentId": 608,
       "position": [
         26.0,
         0.699999988079071,
@@ -6549,7 +6549,7 @@
       ],
       "name": "Domino 3",
       "order": 118,
-      "parentId": 607,
+      "parentId": 608,
       "position": [
         26.0,
         0.699999988079071,
@@ -6629,7 +6629,7 @@
       ],
       "name": "Domino 4",
       "order": 119,
-      "parentId": 607,
+      "parentId": 608,
       "position": [
         26.0,
         0.699999988079071,
@@ -6709,7 +6709,7 @@
       ],
       "name": "Domino 5",
       "order": 120,
-      "parentId": 607,
+      "parentId": 608,
       "position": [
         26.0,
         0.699999988079071,
@@ -6789,7 +6789,7 @@
       ],
       "name": "Domino 6",
       "order": 121,
-      "parentId": 607,
+      "parentId": 608,
       "position": [
         26.0,
         0.699999988079071,
@@ -6869,7 +6869,7 @@
       ],
       "name": "Domino 7",
       "order": 122,
-      "parentId": 607,
+      "parentId": 608,
       "position": [
         26.0,
         0.699999988079071,
@@ -6949,7 +6949,7 @@
       ],
       "name": "Domino 8",
       "order": 123,
-      "parentId": 607,
+      "parentId": 608,
       "position": [
         26.0,
         0.699999988079071,
@@ -7029,7 +7029,7 @@
       ],
       "name": "Domino 9",
       "order": 124,
-      "parentId": 607,
+      "parentId": 608,
       "position": [
         26.0,
         0.699999988079071,
@@ -7109,7 +7109,7 @@
       ],
       "name": "Domino 10",
       "order": 125,
-      "parentId": 607,
+      "parentId": 608,
       "position": [
         26.0,
         0.699999988079071,
@@ -7189,7 +7189,7 @@
       ],
       "name": "Domino 11",
       "order": 126,
-      "parentId": 607,
+      "parentId": 608,
       "position": [
         26.0,
         0.699999988079071,
@@ -7269,7 +7269,7 @@
       ],
       "name": "Domino 12",
       "order": 127,
-      "parentId": 607,
+      "parentId": 608,
       "position": [
         26.0,
         0.699999988079071,
@@ -7349,7 +7349,7 @@
       ],
       "name": "Domino 13",
       "order": 128,
-      "parentId": 607,
+      "parentId": 608,
       "position": [
         26.0,
         0.699999988079071,
@@ -7429,7 +7429,7 @@
       ],
       "name": "Domino 14",
       "order": 129,
-      "parentId": 607,
+      "parentId": 608,
       "position": [
         26.0,
         0.699999988079071,
@@ -7509,7 +7509,7 @@
       ],
       "name": "Domino 15",
       "order": 130,
-      "parentId": 607,
+      "parentId": 608,
       "position": [
         26.0,
         0.699999988079071,
@@ -7589,7 +7589,7 @@
       ],
       "name": "Domino 16",
       "order": 131,
-      "parentId": 607,
+      "parentId": 608,
       "position": [
         26.0,
         0.699999988079071,
@@ -7669,7 +7669,7 @@
       ],
       "name": "Domino 17",
       "order": 132,
-      "parentId": 607,
+      "parentId": 608,
       "position": [
         26.0,
         0.699999988079071,
@@ -7749,7 +7749,7 @@
       ],
       "name": "Domino 18",
       "order": 133,
-      "parentId": 607,
+      "parentId": 608,
       "position": [
         26.0,
         0.699999988079071,
@@ -7811,7 +7811,7 @@
       ],
       "name": "Pit Floor",
       "order": 143,
-      "parentId": 608,
+      "parentId": 609,
       "position": [
         0.0,
         0.05000000074505806,
@@ -7873,7 +7873,7 @@
       ],
       "name": "Pit Wall N",
       "order": 144,
-      "parentId": 608,
+      "parentId": 609,
       "position": [
         0.0,
         0.6000000238418579,
@@ -7935,7 +7935,7 @@
       ],
       "name": "Pit Wall S",
       "order": 145,
-      "parentId": 608,
+      "parentId": 609,
       "position": [
         0.0,
         0.6000000238418579,
@@ -7997,7 +7997,7 @@
       ],
       "name": "Pit Wall E",
       "order": 146,
-      "parentId": 608,
+      "parentId": 609,
       "position": [
         4.150000095367432,
         0.6000000238418579,
@@ -8059,7 +8059,7 @@
       ],
       "name": "Pit Wall W",
       "order": 147,
-      "parentId": 608,
+      "parentId": 609,
       "position": [
         -4.150000095367432,
         0.6000000238418579,
@@ -8118,7 +8118,7 @@
       ],
       "name": "Course Pad",
       "order": 257,
-      "parentId": 609,
+      "parentId": 610,
       "position": [
         -22.0,
         0.05000000074505806,
@@ -8177,7 +8177,7 @@
       ],
       "name": "Stair 1",
       "order": 258,
-      "parentId": 609,
+      "parentId": 610,
       "position": [
         -14.0,
         0.20000000298023224,
@@ -8236,7 +8236,7 @@
       ],
       "name": "Stair 2",
       "order": 259,
-      "parentId": 609,
+      "parentId": 610,
       "position": [
         -14.399999618530273,
         0.30000001192092896,
@@ -8295,7 +8295,7 @@
       ],
       "name": "Stair 3",
       "order": 260,
-      "parentId": 609,
+      "parentId": 610,
       "position": [
         -14.800000190734863,
         0.4000000059604645,
@@ -8354,7 +8354,7 @@
       ],
       "name": "Stair 4",
       "order": 261,
-      "parentId": 609,
+      "parentId": 610,
       "position": [
         -15.199999809265137,
         0.5,
@@ -8413,7 +8413,7 @@
       ],
       "name": "Stair 5",
       "order": 262,
-      "parentId": 609,
+      "parentId": 610,
       "position": [
         -15.600000381469727,
         0.6000000238418579,
@@ -8472,7 +8472,7 @@
       ],
       "name": "Stair 6",
       "order": 263,
-      "parentId": 609,
+      "parentId": 610,
       "position": [
         -16.0,
         0.699999988079071,
@@ -8531,7 +8531,7 @@
       ],
       "name": "Stair 7",
       "order": 264,
-      "parentId": 609,
+      "parentId": 610,
       "position": [
         -16.399999618530273,
         0.800000011920929,
@@ -8590,7 +8590,7 @@
       ],
       "name": "Stair 8",
       "order": 265,
-      "parentId": 609,
+      "parentId": 610,
       "position": [
         -16.799999237060547,
         0.8999999761581421,
@@ -8649,7 +8649,7 @@
       ],
       "name": "Stair 9",
       "order": 266,
-      "parentId": 609,
+      "parentId": 610,
       "position": [
         -17.200000762939453,
         1.0,
@@ -8708,7 +8708,7 @@
       ],
       "name": "Stair 10",
       "order": 267,
-      "parentId": 609,
+      "parentId": 610,
       "position": [
         -17.600000381469727,
         1.100000023841858,
@@ -8770,7 +8770,7 @@
       ],
       "name": "Deck",
       "order": 268,
-      "parentId": 609,
+      "parentId": 610,
       "position": [
         -19.799999237060547,
         1.100000023841858,
@@ -8832,7 +8832,7 @@
       ],
       "name": "Ramp 10 deg",
       "order": 269,
-      "parentId": 609,
+      "parentId": 610,
       "position": [
         -14.0,
         0.6208999752998352,
@@ -8894,7 +8894,7 @@
       ],
       "name": "Ramp 20 deg",
       "order": 270,
-      "parentId": 609,
+      "parentId": 610,
       "position": [
         -18.5,
         1.126099944114685,
@@ -8956,7 +8956,7 @@
       ],
       "name": "Ramp 30 deg",
       "order": 271,
-      "parentId": 609,
+      "parentId": 610,
       "position": [
         -23.0,
         1.600000023841858,
@@ -9015,7 +9015,7 @@
       ],
       "name": "Step Test 0.1 m",
       "order": 272,
-      "parentId": 609,
+      "parentId": 610,
       "position": [
         -28.0,
         0.15000000596046448,
@@ -9074,7 +9074,7 @@
       ],
       "name": "Step Test 0.2 m",
       "order": 273,
-      "parentId": 609,
+      "parentId": 610,
       "position": [
         -28.0,
         0.20000000298023224,
@@ -9133,7 +9133,7 @@
       ],
       "name": "Step Test 0.3 m",
       "order": 274,
-      "parentId": 609,
+      "parentId": 610,
       "position": [
         -28.0,
         0.25,
@@ -9192,7 +9192,7 @@
       ],
       "name": "Step Test 0.4 m",
       "order": 275,
-      "parentId": 609,
+      "parentId": 610,
       "position": [
         -28.0,
         0.30000001192092896,
@@ -9251,7 +9251,7 @@
       ],
       "name": "Step Test 0.5 m",
       "order": 276,
-      "parentId": 609,
+      "parentId": 610,
       "position": [
         -28.0,
         0.3499999940395355,
@@ -9310,7 +9310,7 @@
       ],
       "name": "Step Test 0.6 m",
       "order": 277,
-      "parentId": 609,
+      "parentId": 610,
       "position": [
         -28.0,
         0.4000000059604645,
@@ -9372,7 +9372,7 @@
       ],
       "name": "Pillar 1",
       "order": 278,
-      "parentId": 609,
+      "parentId": 610,
       "position": [
         -30.0,
         1.600000023841858,
@@ -9434,7 +9434,7 @@
       ],
       "name": "Pillar 2",
       "order": 279,
-      "parentId": 609,
+      "parentId": 610,
       "position": [
         -26.0,
         1.600000023841858,
@@ -9496,7 +9496,7 @@
       ],
       "name": "Pillar 3",
       "order": 280,
-      "parentId": 609,
+      "parentId": 610,
       "position": [
         -30.0,
         1.600000023841858,
@@ -9558,7 +9558,7 @@
       ],
       "name": "Pillar 4",
       "order": 281,
-      "parentId": 609,
+      "parentId": 610,
       "position": [
         -26.0,
         1.600000023841858,
@@ -9596,7 +9596,7 @@
       ],
       "name": "Court Floor",
       "order": 283,
-      "parentId": 610,
+      "parentId": 611,
       "position": [
         0.0,
         0.05999999865889549,
@@ -9611,7 +9611,7 @@
       "scale": [
         48.974998474121094,
         0.11999999731779099,
-        28.860000610351563
+        28.860000610351562
       ]
     },
     {
@@ -9634,7 +9634,7 @@
       ],
       "name": "Glass Wall West",
       "order": 285,
-      "parentId": 611,
+      "parentId": 612,
       "position": [
         -25.487499237060547,
         7.5,
@@ -9649,7 +9649,7 @@
       "scale": [
         0.05999999865889549,
         15.0,
-        30.860000610351563
+        30.860000610351562
       ]
     },
     {
@@ -9672,7 +9672,7 @@
       ],
       "name": "Glass Wall East",
       "order": 286,
-      "parentId": 611,
+      "parentId": 612,
       "position": [
         25.487499237060547,
         7.5,
@@ -9687,7 +9687,7 @@
       "scale": [
         0.05999999865889549,
         15.0,
-        30.860000610351563
+        30.860000610351562
       ]
     },
     {
@@ -9710,7 +9710,7 @@
       ],
       "name": "Glass Wall South",
       "order": 287,
-      "parentId": 611,
+      "parentId": 612,
       "position": [
         0.0,
         7.5,
@@ -9748,7 +9748,7 @@
       ],
       "name": "Glass Wall North West",
       "order": 288,
-      "parentId": 611,
+      "parentId": 612,
       "position": [
         -13.393699645996094,
         7.5,
@@ -9786,7 +9786,7 @@
       ],
       "name": "Glass Wall North East",
       "order": 289,
-      "parentId": 611,
+      "parentId": 612,
       "position": [
         13.393699645996094,
         7.5,
@@ -9824,7 +9824,7 @@
       ],
       "name": "Glass Door Header",
       "order": 290,
-      "parentId": 611,
+      "parentId": 612,
       "position": [
         0.0,
         9.0,
@@ -9862,7 +9862,7 @@
       ],
       "name": "Glass Roof",
       "order": 291,
-      "parentId": 611,
+      "parentId": 612,
       "position": [
         0.0,
         15.029999732971191,
@@ -9900,7 +9900,7 @@
       ],
       "name": "Glass Door Baffle",
       "order": 292,
-      "parentId": 611,
+      "parentId": 612,
       "position": [
         0.0,
         1.75,
@@ -9959,7 +9959,7 @@
       ],
       "name": "Baffle Post West",
       "order": 293,
-      "parentId": 611,
+      "parentId": 612,
       "position": [
         -2.700000047683716,
         1.7999999523162842,
@@ -10018,7 +10018,7 @@
       ],
       "name": "Door Post West",
       "order": 294,
-      "parentId": 611,
+      "parentId": 612,
       "position": [
         -1.2999999523162842,
         7.5,
@@ -10077,7 +10077,7 @@
       ],
       "name": "Baffle Post East",
       "order": 295,
-      "parentId": 611,
+      "parentId": 612,
       "position": [
         2.700000047683716,
         1.7999999523162842,
@@ -10136,7 +10136,7 @@
       ],
       "name": "Door Post East",
       "order": 296,
-      "parentId": 611,
+      "parentId": 612,
       "position": [
         1.2999999523162842,
         7.5,
@@ -10195,7 +10195,7 @@
       ],
       "name": "Door Lintel",
       "order": 297,
-      "parentId": 611,
+      "parentId": 612,
       "position": [
         0.0,
         3.0,
@@ -10254,7 +10254,7 @@
       ],
       "name": "Mullion N0",
       "order": 298,
-      "parentId": 611,
+      "parentId": 612,
       "position": [
         -25.487499237060547,
         7.5,
@@ -10313,7 +10313,7 @@
       ],
       "name": "Mullion S0",
       "order": 299,
-      "parentId": 611,
+      "parentId": 612,
       "position": [
         -25.487499237060547,
         7.5,
@@ -10372,7 +10372,7 @@
       ],
       "name": "Mullion N1",
       "order": 300,
-      "parentId": 611,
+      "parentId": 612,
       "position": [
         -20.389999389648438,
         7.5,
@@ -10431,7 +10431,7 @@
       ],
       "name": "Mullion S1",
       "order": 301,
-      "parentId": 611,
+      "parentId": 612,
       "position": [
         -20.389999389648438,
         7.5,
@@ -10490,7 +10490,7 @@
       ],
       "name": "Mullion N2",
       "order": 302,
-      "parentId": 611,
+      "parentId": 612,
       "position": [
         -15.292499542236328,
         7.5,
@@ -10549,7 +10549,7 @@
       ],
       "name": "Mullion S2",
       "order": 303,
-      "parentId": 611,
+      "parentId": 612,
       "position": [
         -15.292499542236328,
         7.5,
@@ -10608,7 +10608,7 @@
       ],
       "name": "Mullion N3",
       "order": 304,
-      "parentId": 611,
+      "parentId": 612,
       "position": [
         -10.194999694824219,
         7.5,
@@ -10667,7 +10667,7 @@
       ],
       "name": "Mullion S3",
       "order": 305,
-      "parentId": 611,
+      "parentId": 612,
       "position": [
         -10.194999694824219,
         7.5,
@@ -10726,7 +10726,7 @@
       ],
       "name": "Mullion N4",
       "order": 306,
-      "parentId": 611,
+      "parentId": 612,
       "position": [
         -5.097499847412109,
         7.5,
@@ -10785,7 +10785,7 @@
       ],
       "name": "Mullion S4",
       "order": 307,
-      "parentId": 611,
+      "parentId": 612,
       "position": [
         -5.097499847412109,
         7.5,
@@ -10844,7 +10844,7 @@
       ],
       "name": "Mullion S5",
       "order": 308,
-      "parentId": 611,
+      "parentId": 612,
       "position": [
         0.0,
         7.5,
@@ -10903,7 +10903,7 @@
       ],
       "name": "Mullion N6",
       "order": 309,
-      "parentId": 611,
+      "parentId": 612,
       "position": [
         5.097499847412109,
         7.5,
@@ -10962,7 +10962,7 @@
       ],
       "name": "Mullion S6",
       "order": 310,
-      "parentId": 611,
+      "parentId": 612,
       "position": [
         5.097499847412109,
         7.5,
@@ -11021,7 +11021,7 @@
       ],
       "name": "Mullion N7",
       "order": 311,
-      "parentId": 611,
+      "parentId": 612,
       "position": [
         10.194999694824219,
         7.5,
@@ -11080,7 +11080,7 @@
       ],
       "name": "Mullion S7",
       "order": 312,
-      "parentId": 611,
+      "parentId": 612,
       "position": [
         10.194999694824219,
         7.5,
@@ -11139,7 +11139,7 @@
       ],
       "name": "Mullion N8",
       "order": 313,
-      "parentId": 611,
+      "parentId": 612,
       "position": [
         15.292499542236328,
         7.5,
@@ -11198,7 +11198,7 @@
       ],
       "name": "Mullion S8",
       "order": 314,
-      "parentId": 611,
+      "parentId": 612,
       "position": [
         15.292499542236328,
         7.5,
@@ -11257,7 +11257,7 @@
       ],
       "name": "Mullion N9",
       "order": 315,
-      "parentId": 611,
+      "parentId": 612,
       "position": [
         20.389999389648438,
         7.5,
@@ -11316,7 +11316,7 @@
       ],
       "name": "Mullion S9",
       "order": 316,
-      "parentId": 611,
+      "parentId": 612,
       "position": [
         20.389999389648438,
         7.5,
@@ -11375,7 +11375,7 @@
       ],
       "name": "Mullion N10",
       "order": 317,
-      "parentId": 611,
+      "parentId": 612,
       "position": [
         25.487499237060547,
         7.5,
@@ -11434,7 +11434,7 @@
       ],
       "name": "Mullion S10",
       "order": 318,
-      "parentId": 611,
+      "parentId": 612,
       "position": [
         25.487499237060547,
         7.5,
@@ -11493,7 +11493,7 @@
       ],
       "name": "Mullion W1",
       "order": 319,
-      "parentId": 611,
+      "parentId": 612,
       "position": [
         -25.487499237060547,
         7.5,
@@ -11552,7 +11552,7 @@
       ],
       "name": "Mullion E1",
       "order": 320,
-      "parentId": 611,
+      "parentId": 612,
       "position": [
         25.487499237060547,
         7.5,
@@ -11611,7 +11611,7 @@
       ],
       "name": "Mullion W2",
       "order": 321,
-      "parentId": 611,
+      "parentId": 612,
       "position": [
         -25.487499237060547,
         7.5,
@@ -11670,7 +11670,7 @@
       ],
       "name": "Mullion E2",
       "order": 322,
-      "parentId": 611,
+      "parentId": 612,
       "position": [
         25.487499237060547,
         7.5,
@@ -11729,7 +11729,7 @@
       ],
       "name": "Mullion W3",
       "order": 323,
-      "parentId": 611,
+      "parentId": 612,
       "position": [
         -25.487499237060547,
         7.5,
@@ -11788,7 +11788,7 @@
       ],
       "name": "Mullion E3",
       "order": 324,
-      "parentId": 611,
+      "parentId": 612,
       "position": [
         25.487499237060547,
         7.5,
@@ -11847,7 +11847,7 @@
       ],
       "name": "Mullion W4",
       "order": 325,
-      "parentId": 611,
+      "parentId": 612,
       "position": [
         -25.487499237060547,
         7.5,
@@ -11906,7 +11906,7 @@
       ],
       "name": "Mullion E4",
       "order": 326,
-      "parentId": 611,
+      "parentId": 612,
       "position": [
         25.487499237060547,
         7.5,
@@ -11965,7 +11965,7 @@
       ],
       "name": "Mullion W5",
       "order": 327,
-      "parentId": 611,
+      "parentId": 612,
       "position": [
         -25.487499237060547,
         7.5,
@@ -12024,7 +12024,7 @@
       ],
       "name": "Mullion E5",
       "order": 328,
-      "parentId": 611,
+      "parentId": 612,
       "position": [
         25.487499237060547,
         7.5,
@@ -12083,7 +12083,7 @@
       ],
       "name": "Ring Beam West",
       "order": 329,
-      "parentId": 611,
+      "parentId": 612,
       "position": [
         -25.487499237060547,
         14.850000381469727,
@@ -12142,7 +12142,7 @@
       ],
       "name": "Ring Beam East",
       "order": 330,
-      "parentId": 611,
+      "parentId": 612,
       "position": [
         25.487499237060547,
         14.850000381469727,
@@ -12201,7 +12201,7 @@
       ],
       "name": "Ring Beam North",
       "order": 331,
-      "parentId": 611,
+      "parentId": 612,
       "position": [
         0.0,
         14.850000381469727,
@@ -12260,7 +12260,7 @@
       ],
       "name": "Ring Beam South",
       "order": 332,
-      "parentId": 611,
+      "parentId": 612,
       "position": [
         0.0,
         14.850000381469727,
@@ -12319,7 +12319,7 @@
       ],
       "name": "Roof Truss 1",
       "order": 333,
-      "parentId": 611,
+      "parentId": 612,
       "position": [
         -20.389999389648438,
         14.649999618530273,
@@ -12334,7 +12334,7 @@
       "scale": [
         0.2199999988079071,
         0.5,
-        30.860000610351563
+        30.860000610351562
       ]
     },
     {
@@ -12378,7 +12378,7 @@
       ],
       "name": "Roof Truss 2",
       "order": 334,
-      "parentId": 611,
+      "parentId": 612,
       "position": [
         -15.292499542236328,
         14.649999618530273,
@@ -12393,7 +12393,7 @@
       "scale": [
         0.2199999988079071,
         0.5,
-        30.860000610351563
+        30.860000610351562
       ]
     },
     {
@@ -12437,7 +12437,7 @@
       ],
       "name": "Roof Truss 3",
       "order": 335,
-      "parentId": 611,
+      "parentId": 612,
       "position": [
         -10.194999694824219,
         14.649999618530273,
@@ -12452,7 +12452,7 @@
       "scale": [
         0.2199999988079071,
         0.5,
-        30.860000610351563
+        30.860000610351562
       ]
     },
     {
@@ -12496,7 +12496,7 @@
       ],
       "name": "Roof Truss 4",
       "order": 336,
-      "parentId": 611,
+      "parentId": 612,
       "position": [
         -5.097499847412109,
         14.649999618530273,
@@ -12511,7 +12511,7 @@
       "scale": [
         0.2199999988079071,
         0.5,
-        30.860000610351563
+        30.860000610351562
       ]
     },
     {
@@ -12555,7 +12555,7 @@
       ],
       "name": "Roof Truss 5",
       "order": 337,
-      "parentId": 611,
+      "parentId": 612,
       "position": [
         0.0,
         14.649999618530273,
@@ -12570,7 +12570,7 @@
       "scale": [
         0.2199999988079071,
         0.5,
-        30.860000610351563
+        30.860000610351562
       ]
     },
     {
@@ -12614,7 +12614,7 @@
       ],
       "name": "Roof Truss 6",
       "order": 338,
-      "parentId": 611,
+      "parentId": 612,
       "position": [
         5.097499847412109,
         14.649999618530273,
@@ -12629,7 +12629,7 @@
       "scale": [
         0.2199999988079071,
         0.5,
-        30.860000610351563
+        30.860000610351562
       ]
     },
     {
@@ -12673,7 +12673,7 @@
       ],
       "name": "Roof Truss 7",
       "order": 339,
-      "parentId": 611,
+      "parentId": 612,
       "position": [
         10.194999694824219,
         14.649999618530273,
@@ -12688,7 +12688,7 @@
       "scale": [
         0.2199999988079071,
         0.5,
-        30.860000610351563
+        30.860000610351562
       ]
     },
     {
@@ -12732,7 +12732,7 @@
       ],
       "name": "Roof Truss 8",
       "order": 340,
-      "parentId": 611,
+      "parentId": 612,
       "position": [
         15.292499542236328,
         14.649999618530273,
@@ -12747,7 +12747,7 @@
       "scale": [
         0.2199999988079071,
         0.5,
-        30.860000610351563
+        30.860000610351562
       ]
     },
     {
@@ -12791,7 +12791,7 @@
       ],
       "name": "Roof Truss 9",
       "order": 341,
-      "parentId": 611,
+      "parentId": 612,
       "position": [
         20.389999389648438,
         14.649999618530273,
@@ -12806,7 +12806,7 @@
       "scale": [
         0.2199999988079071,
         0.5,
-        30.860000610351563
+        30.860000610351562
       ]
     },
     {
@@ -12850,7 +12850,7 @@
       ],
       "name": "Kerb West",
       "order": 342,
-      "parentId": 611,
+      "parentId": 612,
       "position": [
         -25.6875,
         0.15000000596046448,
@@ -12909,7 +12909,7 @@
       ],
       "name": "Kerb East",
       "order": 343,
-      "parentId": 611,
+      "parentId": 612,
       "position": [
         25.6875,
         0.15000000596046448,
@@ -12968,7 +12968,7 @@
       ],
       "name": "Kerb South",
       "order": 344,
-      "parentId": 611,
+      "parentId": 612,
       "position": [
         0.0,
         0.15000000596046448,
@@ -13027,7 +13027,7 @@
       ],
       "name": "Kerb North West",
       "order": 345,
-      "parentId": 611,
+      "parentId": 612,
       "position": [
         -13.393699645996094,
         0.15000000596046448,
@@ -13086,7 +13086,7 @@
       ],
       "name": "Kerb North East",
       "order": 346,
-      "parentId": 611,
+      "parentId": 612,
       "position": [
         13.393699645996094,
         0.15000000596046448,
@@ -13124,9 +13124,9 @@
       ],
       "name": "Backboard West",
       "order": 348,
-      "parentId": 612,
+      "parentId": 613,
       "position": [
-        -19.672500610351563,
+        -19.672500610351562,
         3.940000057220459,
         36.810001373291016
       ],
@@ -13183,7 +13183,7 @@
       ],
       "name": "Backboard Frame Top West",
       "order": 349,
-      "parentId": 612,
+      "parentId": 613,
       "position": [
         -19.702499389648438,
         5.03000020980835,
@@ -13242,7 +13242,7 @@
       ],
       "name": "Backboard Frame Left West",
       "order": 350,
-      "parentId": 612,
+      "parentId": 613,
       "position": [
         -19.702499389648438,
         3.940000057220459,
@@ -13301,7 +13301,7 @@
       ],
       "name": "Backboard Frame Right West",
       "order": 351,
-      "parentId": 612,
+      "parentId": 613,
       "position": [
         -19.702499389648438,
         3.940000057220459,
@@ -13365,9 +13365,9 @@
       ],
       "name": "Backboard Pad West",
       "order": 352,
-      "parentId": 612,
+      "parentId": 613,
       "position": [
-        -19.672500610351563,
+        -19.672500610351562,
         2.8299999237060547,
         36.810001373291016
       ],
@@ -13401,7 +13401,7 @@
       ],
       "name": "Rim Bracket West",
       "order": 354,
-      "parentId": 612,
+      "parentId": 613,
       "position": [
         -19.61009979248047,
         3.140000104904175,
@@ -13465,7 +13465,7 @@
       ],
       "name": "Stanchion Base West",
       "order": 356,
-      "parentId": 612,
+      "parentId": 613,
       "position": [
         -23.037500381469727,
         0.6200000047683716,
@@ -13524,7 +13524,7 @@
       ],
       "name": "Stanchion Post West",
       "order": 357,
-      "parentId": 612,
+      "parentId": 613,
       "position": [
         -22.837499618530273,
         2.0799999237060547,
@@ -13588,7 +13588,7 @@
       ],
       "name": "Stanchion Post Pad West",
       "order": 358,
-      "parentId": 612,
+      "parentId": 613,
       "position": [
         -22.837499618530273,
         1.7200000286102295,
@@ -13647,7 +13647,7 @@
       ],
       "name": "Stanchion Arm West",
       "order": 359,
-      "parentId": 612,
+      "parentId": 613,
       "position": [
         -21.270000457763672,
         3.940000057220459,
@@ -13706,7 +13706,7 @@
       ],
       "name": "Stanchion Brace West",
       "order": 360,
-      "parentId": 612,
+      "parentId": 613,
       "position": [
         -21.89699935913086,
         3.440000057220459,
@@ -13744,9 +13744,9 @@
       ],
       "name": "Backboard East",
       "order": 366,
-      "parentId": 617,
+      "parentId": 618,
       "position": [
-        19.672500610351563,
+        19.672500610351562,
         3.940000057220459,
         36.810001373291016
       ],
@@ -13803,7 +13803,7 @@
       ],
       "name": "Backboard Frame Top East",
       "order": 367,
-      "parentId": 617,
+      "parentId": 618,
       "position": [
         19.702499389648438,
         5.03000020980835,
@@ -13862,7 +13862,7 @@
       ],
       "name": "Backboard Frame Left East",
       "order": 368,
-      "parentId": 617,
+      "parentId": 618,
       "position": [
         19.702499389648438,
         3.940000057220459,
@@ -13921,7 +13921,7 @@
       ],
       "name": "Backboard Frame Right East",
       "order": 369,
-      "parentId": 617,
+      "parentId": 618,
       "position": [
         19.702499389648438,
         3.940000057220459,
@@ -13985,9 +13985,9 @@
       ],
       "name": "Backboard Pad East",
       "order": 370,
-      "parentId": 617,
+      "parentId": 618,
       "position": [
-        19.672500610351563,
+        19.672500610351562,
         2.8299999237060547,
         36.810001373291016
       ],
@@ -14021,7 +14021,7 @@
       ],
       "name": "Rim Bracket East",
       "order": 372,
-      "parentId": 617,
+      "parentId": 618,
       "position": [
         19.61009979248047,
         3.140000104904175,
@@ -14085,7 +14085,7 @@
       ],
       "name": "Stanchion Base East",
       "order": 374,
-      "parentId": 617,
+      "parentId": 618,
       "position": [
         23.037500381469727,
         0.6200000047683716,
@@ -14144,7 +14144,7 @@
       ],
       "name": "Stanchion Post East",
       "order": 375,
-      "parentId": 617,
+      "parentId": 618,
       "position": [
         22.837499618530273,
         2.0799999237060547,
@@ -14208,7 +14208,7 @@
       ],
       "name": "Stanchion Post Pad East",
       "order": 376,
-      "parentId": 617,
+      "parentId": 618,
       "position": [
         22.837499618530273,
         1.7200000286102295,
@@ -14267,7 +14267,7 @@
       ],
       "name": "Stanchion Arm East",
       "order": 377,
-      "parentId": 617,
+      "parentId": 618,
       "position": [
         21.270000457763672,
         3.940000057220459,
@@ -14326,7 +14326,7 @@
       ],
       "name": "Stanchion Brace East",
       "order": 378,
-      "parentId": 617,
+      "parentId": 618,
       "position": [
         21.89699935913086,
         3.440000057220459,
@@ -14385,7 +14385,7 @@
       ],
       "name": "Scoreboard Body",
       "order": 385,
-      "parentId": 622,
+      "parentId": 623,
       "position": [
         0.0,
         10.600000381469727,
@@ -14444,7 +14444,7 @@
       ],
       "name": "Scoreboard Rim Top",
       "order": 386,
-      "parentId": 622,
+      "parentId": 623,
       "position": [
         0.0,
         11.649999618530273,
@@ -14503,7 +14503,7 @@
       ],
       "name": "Scoreboard Rim Bottom",
       "order": 387,
-      "parentId": 622,
+      "parentId": 623,
       "position": [
         0.0,
         9.550000190734863,
@@ -14562,7 +14562,7 @@
       ],
       "name": "Scoreboard Cable -1-1",
       "order": 388,
-      "parentId": 622,
+      "parentId": 623,
       "position": [
         -1.5,
         13.050000190734863,
@@ -14621,7 +14621,7 @@
       ],
       "name": "Scoreboard Cable -11",
       "order": 389,
-      "parentId": 622,
+      "parentId": 623,
       "position": [
         -1.5,
         13.050000190734863,
@@ -14680,7 +14680,7 @@
       ],
       "name": "Scoreboard Cable 1-1",
       "order": 390,
-      "parentId": 622,
+      "parentId": 623,
       "position": [
         1.5,
         13.050000190734863,
@@ -14739,7 +14739,7 @@
       ],
       "name": "Scoreboard Cable 11",
       "order": 391,
-      "parentId": 622,
+      "parentId": 623,
       "position": [
         1.5,
         13.050000190734863,
@@ -14798,7 +14798,7 @@
       ],
       "name": "Scoreboard Team Bar Home N",
       "order": 408,
-      "parentId": 622,
+      "parentId": 623,
       "position": [
         -0.8999999761581421,
         9.979999542236328,
@@ -14857,7 +14857,7 @@
       ],
       "name": "Scoreboard Team Bar Away N",
       "order": 425,
-      "parentId": 622,
+      "parentId": 623,
       "position": [
         0.8999999761581421,
         9.979999542236328,
@@ -14916,7 +14916,7 @@
       ],
       "name": "Scoreboard Team Bar Home S",
       "order": 442,
-      "parentId": 622,
+      "parentId": 623,
       "position": [
         -0.8999999761581421,
         9.979999542236328,
@@ -14975,7 +14975,7 @@
       ],
       "name": "Scoreboard Team Bar Away S",
       "order": 459,
-      "parentId": 622,
+      "parentId": 623,
       "position": [
         0.8999999761581421,
         9.979999542236328,
@@ -15034,7 +15034,7 @@
       ],
       "name": "Ball Rack Frame L",
       "order": 461,
-      "parentId": 632,
+      "parentId": 633,
       "position": [
         7.557000160217285,
         0.6485999822616577,
@@ -15093,7 +15093,7 @@
       ],
       "name": "Ball Rack Frame R",
       "order": 462,
-      "parentId": 632,
+      "parentId": 633,
       "position": [
         10.442999839782715,
         0.6485999822616577,
@@ -15153,7 +15153,7 @@
       ],
       "name": "Ball Rack Shelf 1",
       "order": 463,
-      "parentId": 632,
+      "parentId": 633,
       "position": [
         9.0,
         0.41999998688697815,
@@ -15212,7 +15212,7 @@
       ],
       "name": "Ball Rack Lip Front 1",
       "order": 464,
-      "parentId": 632,
+      "parentId": 633,
       "position": [
         9.0,
         0.4699999988079071,
@@ -15271,7 +15271,7 @@
       ],
       "name": "Ball Rack Lip Back 1",
       "order": 465,
-      "parentId": 632,
+      "parentId": 633,
       "position": [
         9.0,
         0.4699999988079071,
@@ -15331,7 +15331,7 @@
       ],
       "name": "Ball Rack Shelf 2",
       "order": 471,
-      "parentId": 632,
+      "parentId": 633,
       "position": [
         9.0,
         1.0972000360488892,
@@ -15390,7 +15390,7 @@
       ],
       "name": "Ball Rack Lip Front 2",
       "order": 472,
-      "parentId": 632,
+      "parentId": 633,
       "position": [
         9.0,
         1.1471999883651733,
@@ -15449,7 +15449,7 @@
       ],
       "name": "Ball Rack Lip Back 2",
       "order": 473,
-      "parentId": 632,
+      "parentId": 633,
       "position": [
         9.0,
         1.1471999883651733,
@@ -15510,7 +15510,7 @@
       ],
       "name": "Arena Fixture 1",
       "order": 484,
-      "parentId": 633,
+      "parentId": 634,
       "position": [
         -10.800000190734863,
         14.25,
@@ -15571,7 +15571,7 @@
       ],
       "name": "Arena Fixture 2",
       "order": 486,
-      "parentId": 633,
+      "parentId": 634,
       "position": [
         10.800000190734863,
         14.25,
@@ -15632,7 +15632,7 @@
       ],
       "name": "Arena Fixture 3",
       "order": 488,
-      "parentId": 633,
+      "parentId": 634,
       "position": [
         -10.800000190734863,
         14.25,
@@ -15693,7 +15693,7 @@
       ],
       "name": "Arena Fixture 4",
       "order": 490,
-      "parentId": 633,
+      "parentId": 634,
       "position": [
         10.800000190734863,
         14.25,
@@ -16972,7 +16972,7 @@
       ],
       "name": "Lift Platform",
       "order": 557,
-      "parentId": 609,
+      "parentId": 610,
       "position": [
         -19.799999237060547,
         1.2000000476837158,
@@ -21613,7 +21613,92 @@
   "dofMaxBlur": 8.0,
   "empties": [
     {
+      "First Person Controller": {
+        "Air Accel Time": 0.0,
+        "Animation Set": {
+          "path": "assets/Weapons/AKS74U/AKS74U.fpsanim",
+          "pathGuid": "c0ff631aac421f76"
+        },
+        "Assist Cone Deg": 7.0,
+        "Assist Range": 30.0,
+        "Camera Bone": "head",
+        "Capsule Height": 1.850000023841858,
+        "Capsule Radius": 0.30000001192092896,
+        "Coyote Time": 0.10000000149011612,
+        "Eye Height": 1.7000000476837158,
+        "Eye Radius": 0.11999999731779099,
+        "Field of View": 90.0,
+        "Grab Range": 100.0,
+        "Gravity": 18.0,
+        "Gravity Gun": true,
+        "Ground Accel Time": 0.0,
+        "Ground Decel Time": 0.0,
+        "Invert Y": false,
+        "Jump Buffer Time": 0.11999999731779099,
+        "Jump Speed": 5.5,
+        "Kill Height": -20.0,
+        "Max Health": 100.0,
+        "Max Throw Speed": 16.0,
+        "Min Throw Speed": 3.5,
+        "Mouse Sensitivity": 0.05000000074505806,
+        "Move Speed": 4.0,
+        "Regen Delay": 5.0,
+        "Regen Rate": 30.0,
+        "Respawn Delay": 3.0,
+        "Scroll Turn Deg": 15.0,
+        "Secondary Animation Set": {
+          "path": "assets/Weapons/Remington870/Remington870.fpsanim",
+          "pathGuid": "4e3925bded078f9a"
+        },
+        "Spawn Protection": 2.0,
+        "Sprint Multiplier": 1.600000023841858,
+        "Stick Look Deg/Sec": 180.0,
+        "Throw Backspin": 2.0,
+        "Throw Charge Time": 1.100000023841858,
+        "View Model FOV": 50.0,
+        "View Model Offset": [
+          0.05620000138878822,
+          -0.03200000151991844,
+          0.0
+        ],
+        "View Model Rotation": [
+          -0.23999999463558197,
+          0.38999998569488525,
+          0.0
+        ],
+        "View Model Scale": 1.0,
+        "Primary Weapon Prefab": {
+          "path": "assets/Weapons/AKS74U/AKS74U.prefab",
+          "pathGuid": "b19271e02ef840f1"
+        },
+        "Secondary Weapon Prefab": {
+          "path": "assets/Weapons/Remington870/Remington870.prefab",
+          "pathGuid": "cf1fec9edad348ec"
+        }
+      },
       "id": 597,
+      "name": "Player Spawn",
+      "order": 0,
+      "parentId": -1,
+      "position": [
+        0.0,
+        0.10000000149011612,
+        7.199999809265137
+      ],
+      "rotation": [
+        0.0,
+        1.0,
+        -0.0,
+        -4.371138828673793e-08
+      ],
+      "scale": [
+        1.0,
+        1.0,
+        1.0
+      ]
+    },
+    {
+      "id": 598,
       "name": "Environment",
       "order": 1,
       "parentId": -1,
@@ -21635,7 +21720,7 @@
       ]
     },
     {
-      "id": 598,
+      "id": 599,
       "name": "Lighting",
       "order": 7,
       "parentId": -1,
@@ -21678,10 +21763,10 @@
         "Spot Angle": 35.0,
         "Type": "Directional"
       },
-      "id": 599,
+      "id": 600,
       "name": "Sun",
       "order": 8,
-      "parentId": 598,
+      "parentId": 599,
       "position": [
         0.0,
         30.0,
@@ -21708,10 +21793,10 @@
           30.0
         ]
       },
-      "id": 600,
+      "id": 601,
       "name": "Plaza Reflection Probe",
       "order": 9,
-      "parentId": 598,
+      "parentId": 599,
       "position": [
         0.0,
         3.0,
@@ -21738,10 +21823,10 @@
           120.0
         ]
       },
-      "id": 601,
+      "id": 602,
       "name": "Sandbox Reflection Probe",
       "order": 10,
-      "parentId": 598,
+      "parentId": 599,
       "position": [
         0.0,
         6.0,
@@ -21760,7 +21845,7 @@
       ]
     },
     {
-      "id": 602,
+      "id": 603,
       "name": "Character Plaza",
       "order": 11,
       "parentId": -1,
@@ -21803,55 +21888,12 @@
         "Spot Angle": 35.0,
         "Type": "Point"
       },
-      "id": 603,
+      "id": 604,
       "name": "Lamp Light 1",
       "order": 31,
-      "parentId": 602,
+      "parentId": 603,
       "position": [
         -8.800000190734863,
-        3.3499999046325684,
-        -5.800000190734863
-      ],
-      "rotation": [
-        0.0,
-        0.0,
-        0.0,
-        1.0
-      ],
-      "scale": [
-        1.0,
-        1.0,
-        1.0
-      ]
-    },
-    {
-      "Light": {
-        "Angular Size": 0.5299999713897705,
-        "Cast Shadows": false,
-        "Color": [
-          1.0,
-          0.7200000286102295,
-          0.41999998688697815
-        ],
-        "ColorTempK": 0.0,
-        "Culling Mask": -1,
-        "Intensity": 6.0,
-        "Range": 9.0,
-        "Shadow Bias": 1.0,
-        "Shadow Near Plane": 0.05000000074505806,
-        "Shadow Normal Bias": 1.0,
-        "Shadow Resolution": "Follow global",
-        "Shadow Softness": 1.0,
-        "Shadow Update Mode": "Dynamic",
-        "Spot Angle": 35.0,
-        "Type": "Point"
-      },
-      "id": 604,
-      "name": "Lamp Light 2",
-      "order": 34,
-      "parentId": 602,
-      "position": [
-        8.800000190734863,
         3.3499999046325684,
         -5.800000190734863
       ],
@@ -21890,9 +21932,52 @@
         "Type": "Point"
       },
       "id": 605,
+      "name": "Lamp Light 2",
+      "order": 34,
+      "parentId": 603,
+      "position": [
+        8.800000190734863,
+        3.3499999046325684,
+        -5.800000190734863
+      ],
+      "rotation": [
+        0.0,
+        0.0,
+        0.0,
+        1.0
+      ],
+      "scale": [
+        1.0,
+        1.0,
+        1.0
+      ]
+    },
+    {
+      "Light": {
+        "Angular Size": 0.5299999713897705,
+        "Cast Shadows": false,
+        "Color": [
+          1.0,
+          0.7200000286102295,
+          0.41999998688697815
+        ],
+        "ColorTempK": 0.0,
+        "Culling Mask": -1,
+        "Intensity": 6.0,
+        "Range": 9.0,
+        "Shadow Bias": 1.0,
+        "Shadow Near Plane": 0.05000000074505806,
+        "Shadow Normal Bias": 1.0,
+        "Shadow Resolution": "Follow global",
+        "Shadow Softness": 1.0,
+        "Shadow Update Mode": "Dynamic",
+        "Spot Angle": 35.0,
+        "Type": "Point"
+      },
+      "id": 606,
       "name": "Lamp Light 3",
       "order": 37,
-      "parentId": 602,
+      "parentId": 603,
       "position": [
         -8.800000190734863,
         3.3499999046325684,
@@ -21932,10 +22017,10 @@
         "Spot Angle": 35.0,
         "Type": "Point"
       },
-      "id": 606,
+      "id": 607,
       "name": "Lamp Light 4",
       "order": 40,
-      "parentId": 602,
+      "parentId": 603,
       "position": [
         8.800000190734863,
         3.3499999046325684,
@@ -21954,7 +22039,7 @@
       ]
     },
     {
-      "id": 607,
+      "id": 608,
       "name": "Physics Playground",
       "order": 41,
       "parentId": -1,
@@ -21976,7 +22061,7 @@
       ]
     },
     {
-      "id": 608,
+      "id": 609,
       "name": "Ball Pit",
       "order": 142,
       "parentId": -1,
@@ -21998,7 +22083,7 @@
       ]
     },
     {
-      "id": 609,
+      "id": 610,
       "name": "Movement Course",
       "order": 256,
       "parentId": -1,
@@ -22020,7 +22105,7 @@
       ]
     },
     {
-      "id": 610,
+      "id": 611,
       "name": "Basketball Arena",
       "order": 282,
       "parentId": -1,
@@ -22042,10 +22127,10 @@
       ]
     },
     {
-      "id": 611,
+      "id": 612,
       "name": "Glass Hall",
       "order": 284,
-      "parentId": 610,
+      "parentId": 611,
       "position": [
         0.0,
         0.0,
@@ -22064,10 +22149,10 @@
       ]
     },
     {
-      "id": 612,
+      "id": 613,
       "name": "Hoop West",
       "order": 347,
-      "parentId": 610,
+      "parentId": 611,
       "position": [
         0.0,
         0.0,
@@ -22104,10 +22189,10 @@
         ],
         "isTrigger": true
       },
-      "id": 613,
+      "id": 614,
       "name": "Goal West",
       "order": 361,
-      "parentId": 612,
+      "parentId": 613,
       "position": [
         -19.087499618530273,
         2.609999895095825,
@@ -22151,10 +22236,10 @@
         "Start Size": 0.07000000029802322,
         "Start Speed": 4.5
       },
-      "id": 614,
+      "id": 615,
       "name": "Goal Sparks West",
       "order": 362,
-      "parentId": 613,
+      "parentId": 614,
       "position": [
         0.0,
         0.6100000143051147,
@@ -22198,10 +22283,10 @@
         "Start Size": 0.10000000149011612,
         "Start Speed": 5.5
       },
-      "id": 615,
+      "id": 616,
       "name": "Goal Confetti West",
       "order": 363,
-      "parentId": 613,
+      "parentId": 614,
       "position": [
         0.0,
         0.6600000262260437,
@@ -22241,10 +22326,10 @@
         "Spot Angle": 35.0,
         "Type": "Point"
       },
-      "id": 616,
+      "id": 617,
       "name": "Goal Flash West",
       "order": 364,
-      "parentId": 613,
+      "parentId": 614,
       "position": [
         0.0,
         1.3600000143051147,
@@ -22263,10 +22348,10 @@
       ]
     },
     {
-      "id": 617,
+      "id": 618,
       "name": "Hoop East",
       "order": 365,
-      "parentId": 610,
+      "parentId": 611,
       "position": [
         0.0,
         0.0,
@@ -22303,10 +22388,10 @@
         ],
         "isTrigger": true
       },
-      "id": 618,
+      "id": 619,
       "name": "Goal East",
       "order": 379,
-      "parentId": 617,
+      "parentId": 618,
       "position": [
         19.087499618530273,
         2.609999895095825,
@@ -22350,10 +22435,10 @@
         "Start Size": 0.07000000029802322,
         "Start Speed": 4.5
       },
-      "id": 619,
+      "id": 620,
       "name": "Goal Sparks East",
       "order": 380,
-      "parentId": 618,
+      "parentId": 619,
       "position": [
         0.0,
         0.6100000143051147,
@@ -22397,10 +22482,10 @@
         "Start Size": 0.10000000149011612,
         "Start Speed": 5.5
       },
-      "id": 620,
+      "id": 621,
       "name": "Goal Confetti East",
       "order": 381,
-      "parentId": 618,
+      "parentId": 619,
       "position": [
         0.0,
         0.6600000262260437,
@@ -22440,10 +22525,10 @@
         "Spot Angle": 35.0,
         "Type": "Point"
       },
-      "id": 621,
+      "id": 622,
       "name": "Goal Flash East",
       "order": 382,
-      "parentId": 618,
+      "parentId": 619,
       "position": [
         0.0,
         1.3600000143051147,
@@ -22462,10 +22547,10 @@
       ]
     },
     {
-      "id": 622,
+      "id": 623,
       "name": "Scoreboard",
       "order": 383,
-      "parentId": 610,
+      "parentId": 611,
       "position": [
         0.0,
         0.0,
@@ -22488,10 +22573,10 @@
         "Away": 0,
         "Home": 0
       },
-      "id": 623,
+      "id": 624,
       "name": "Score",
       "order": 384,
-      "parentId": 622,
+      "parentId": 623,
       "position": [
         0.0,
         10.600000381469727,
@@ -22516,10 +22601,10 @@
         "Place": "Tens",
         "Team": "Home"
       },
-      "id": 624,
+      "id": 625,
       "name": "Score Digit Home Tens N",
       "order": 392,
-      "parentId": 622,
+      "parentId": 623,
       "position": [
         -1.2000000476837158,
         10.75,
@@ -22544,10 +22629,10 @@
         "Place": "Ones",
         "Team": "Home"
       },
-      "id": 625,
+      "id": 626,
       "name": "Score Digit Home Ones N",
       "order": 400,
-      "parentId": 622,
+      "parentId": 623,
       "position": [
         -0.6000000238418579,
         10.75,
@@ -22570,40 +22655,40 @@
         "Off Strength": 0.05000000074505806,
         "On Strength": 7.0,
         "Place": "Tens",
-        "Team": "Away"
-      },
-      "id": 626,
-      "name": "Score Digit Away Tens N",
-      "order": 409,
-      "parentId": 622,
-      "position": [
-        0.6000000238418579,
-        10.75,
-        35.09000015258789
-      ],
-      "rotation": [
-        0.0,
-        0.0,
-        0.0,
-        1.0
-      ],
-      "scale": [
-        1.0,
-        1.0,
-        1.0
-      ]
-    },
-    {
-      "Score Digit": {
-        "Off Strength": 0.05000000074505806,
-        "On Strength": 7.0,
-        "Place": "Ones",
         "Team": "Away"
       },
       "id": 627,
+      "name": "Score Digit Away Tens N",
+      "order": 409,
+      "parentId": 623,
+      "position": [
+        0.6000000238418579,
+        10.75,
+        35.09000015258789
+      ],
+      "rotation": [
+        0.0,
+        0.0,
+        0.0,
+        1.0
+      ],
+      "scale": [
+        1.0,
+        1.0,
+        1.0
+      ]
+    },
+    {
+      "Score Digit": {
+        "Off Strength": 0.05000000074505806,
+        "On Strength": 7.0,
+        "Place": "Ones",
+        "Team": "Away"
+      },
+      "id": 628,
       "name": "Score Digit Away Ones N",
       "order": 417,
-      "parentId": 622,
+      "parentId": 623,
       "position": [
         1.2000000476837158,
         10.75,
@@ -22628,10 +22713,10 @@
         "Place": "Tens",
         "Team": "Home"
       },
-      "id": 628,
+      "id": 629,
       "name": "Score Digit Home Tens S",
       "order": 426,
-      "parentId": 622,
+      "parentId": 623,
       "position": [
         -0.6000000238418579,
         10.75,
@@ -22656,10 +22741,10 @@
         "Place": "Ones",
         "Team": "Home"
       },
-      "id": 629,
+      "id": 630,
       "name": "Score Digit Home Ones S",
       "order": 434,
-      "parentId": 622,
+      "parentId": 623,
       "position": [
         -1.2000000476837158,
         10.75,
@@ -22684,10 +22769,10 @@
         "Place": "Tens",
         "Team": "Away"
       },
-      "id": 630,
+      "id": 631,
       "name": "Score Digit Away Tens S",
       "order": 443,
-      "parentId": 622,
+      "parentId": 623,
       "position": [
         1.2000000476837158,
         10.75,
@@ -22712,36 +22797,14 @@
         "Place": "Ones",
         "Team": "Away"
       },
-      "id": 631,
+      "id": 632,
       "name": "Score Digit Away Ones S",
       "order": 451,
-      "parentId": 622,
+      "parentId": 623,
       "position": [
         0.6000000238418579,
         10.75,
         38.529998779296875
-      ],
-      "rotation": [
-        0.0,
-        0.0,
-        0.0,
-        1.0
-      ],
-      "scale": [
-        1.0,
-        1.0,
-        1.0
-      ]
-    },
-    {
-      "id": 632,
-      "name": "Basketballs",
-      "order": 460,
-      "parentId": 610,
-      "position": [
-        0.0,
-        0.0,
-        0.0
       ],
       "rotation": [
         0.0,
@@ -22757,9 +22820,9 @@
     },
     {
       "id": 633,
-      "name": "Arena Lighting",
-      "order": 482,
-      "parentId": 610,
+      "name": "Basketballs",
+      "order": 460,
+      "parentId": 611,
       "position": [
         0.0,
         0.0,
@@ -22778,41 +22841,20 @@
       ]
     },
     {
-      "Light": {
-        "Angular Size": 0.5299999713897705,
-        "Cast Shadows": true,
-        "Color": [
-          1.0,
-          0.9599999785423279,
-          0.8999999761581421
-        ],
-        "ColorTempK": 0.0,
-        "Culling Mask": -1,
-        "Intensity": 45.0,
-        "Range": 20.0,
-        "Shadow Bias": 1.0,
-        "Shadow Near Plane": 0.10000000149011612,
-        "Shadow Normal Bias": 1.0,
-        "Shadow Resolution": "Follow global",
-        "Shadow Softness": 1.2000000476837158,
-        "Shadow Update Mode": "Dynamic",
-        "Spot Angle": 42.0,
-        "Type": "Spot"
-      },
       "id": 634,
-      "name": "Arena Spot 1",
-      "order": 483,
-      "parentId": 633,
+      "name": "Arena Lighting",
+      "order": 482,
+      "parentId": 611,
       "position": [
-        -10.800000190734863,
-        14.100000381469727,
-        31.40999984741211
+        0.0,
+        0.0,
+        0.0
       ],
       "rotation": [
-        0.7071067690849304,
-        -0.0,
-        -0.0,
-        -0.7071067690849304
+        0.0,
+        0.0,
+        0.0,
+        1.0
       ],
       "scale": [
         1.0,
@@ -22843,11 +22885,11 @@
         "Type": "Spot"
       },
       "id": 635,
-      "name": "Arena Spot 2",
-      "order": 485,
-      "parentId": 633,
+      "name": "Arena Spot 1",
+      "order": 483,
+      "parentId": 634,
       "position": [
-        10.800000190734863,
+        -10.800000190734863,
         14.100000381469727,
         31.40999984741211
       ],
@@ -22886,9 +22928,52 @@
         "Type": "Spot"
       },
       "id": 636,
+      "name": "Arena Spot 2",
+      "order": 485,
+      "parentId": 634,
+      "position": [
+        10.800000190734863,
+        14.100000381469727,
+        31.40999984741211
+      ],
+      "rotation": [
+        0.7071067690849304,
+        -0.0,
+        -0.0,
+        -0.7071067690849304
+      ],
+      "scale": [
+        1.0,
+        1.0,
+        1.0
+      ]
+    },
+    {
+      "Light": {
+        "Angular Size": 0.5299999713897705,
+        "Cast Shadows": true,
+        "Color": [
+          1.0,
+          0.9599999785423279,
+          0.8999999761581421
+        ],
+        "ColorTempK": 0.0,
+        "Culling Mask": -1,
+        "Intensity": 45.0,
+        "Range": 20.0,
+        "Shadow Bias": 1.0,
+        "Shadow Near Plane": 0.10000000149011612,
+        "Shadow Normal Bias": 1.0,
+        "Shadow Resolution": "Follow global",
+        "Shadow Softness": 1.2000000476837158,
+        "Shadow Update Mode": "Dynamic",
+        "Spot Angle": 42.0,
+        "Type": "Spot"
+      },
+      "id": 637,
       "name": "Arena Spot 3",
       "order": 487,
-      "parentId": 633,
+      "parentId": 634,
       "position": [
         -10.800000190734863,
         14.100000381469727,
@@ -22928,10 +23013,10 @@
         "Spot Angle": 42.0,
         "Type": "Spot"
       },
-      "id": 637,
+      "id": 638,
       "name": "Arena Spot 4",
       "order": 489,
-      "parentId": 633,
+      "parentId": 634,
       "position": [
         10.800000190734863,
         14.100000381469727,
@@ -22955,13 +23040,13 @@
         "Size": [
           50.974998474121094,
           8.0,
-          30.860000610351563
+          30.860000610351562
         ]
       },
-      "id": 638,
+      "id": 639,
       "name": "Arena Reflection Probe",
       "order": 491,
-      "parentId": 633,
+      "parentId": 634,
       "position": [
         0.0,
         4.0,
@@ -22972,69 +23057,6 @@
         0.0,
         0.0,
         1.0
-      ],
-      "scale": [
-        1.0,
-        1.0,
-        1.0
-      ]
-    },
-    {
-      "First Person Controller": {
-        "Animation Set": {
-          "path": "assets/Weapons/AKS74U/AKS74U.fpsanim",
-          "pathGuid": "c0ff631aac421f76"
-        },
-        "Camera Bone": "head",
-        "Capsule Height": 1.850000023841858,
-        "Capsule Radius": 0.30000001192092896,
-        "Coyote Time": 0.10000000149011612,
-        "Eye Height": 1.7000000476837158,
-        "Field of View": 90.0,
-        "Gravity": 18.0,
-        "Gravity Gun": true,
-        "Invert Y": false,
-        "Jump Buffer Time": 0.11999999731779099,
-        "Jump Speed": 5.5,
-        "Kill Height": -20.0,
-        "Max Throw Speed": 16.0,
-        "Min Throw Speed": 3.5,
-        "Mouse Sensitivity": 0.05000000074505806,
-        "Move Speed": 4.0,
-        "Secondary Animation Set": {
-          "path": "assets/Weapons/Remington870/Remington870.fpsanim",
-          "pathGuid": "4e3925bded078f9a"
-        },
-        "Sprint Multiplier": 1.600000023841858,
-        "Throw Backspin": 2.0,
-        "Throw Charge Time": 1.100000023841858,
-        "View Model FOV": 50.0,
-        "View Model Offset": [
-          0.05620000138878822,
-          -0.03200000151991844,
-          0.0
-        ],
-        "View Model Rotation": [
-          -0.23999999463558197,
-          0.38999998569488525,
-          0.0
-        ],
-        "View Model Scale": 1.0
-      },
-      "id": 639,
-      "name": "Player Spawn",
-      "order": 0,
-      "parentId": -1,
-      "position": [
-        0.0,
-        0.10000000149011612,
-        7.2
-      ],
-      "rotation": [
-        0.0,
-        1.0,
-        -0.0,
-        -4.371138828673793e-08
       ],
       "scale": [
         1.0,
@@ -23254,7 +23276,7 @@
       "id": 646,
       "name": "Wrecking Ball",
       "order": 545,
-      "parentId": 607,
+      "parentId": 608,
       "position": [
         0.0,
         0.0,
@@ -23457,13 +23479,16 @@
           0.07999999821186066,
           0.10000000149011612
         ],
-        "Camera Smoothing": 0.05999999865889549,
+        "Camera Smoothing": 0.125,
         "Clavicle Follow": 0.3499999940395355,
         "Clothing Near Hide": 0.20000000298023224,
         "Clothing Near Hide Width": 0.2800000011920929,
         "Collar Hide Drop": 0.019999999552965164,
         "Crouch Height": 1.2000000476837158,
         "Crouch Speed": 0.41999998688697815,
+        "Elbow Clearance": 0.05999999865889549,
+        "Elbow Ease": 0.05999999865889549,
+        "Elbow Max Rate": 540.0,
         "Eye Slack": 0.03500000014901161,
         "Foot IK": true,
         "Foot IK Fade": 0.10000000149011612,
@@ -23474,6 +23499,10 @@
         "Foot Max Raise": 0.25,
         "Foot Normal Ease": 0.07999999821186066,
         "Foot Offset Ease": 0.05999999865889549,
+        "Foot Pin Enabled": true,
+        "Foot Pin Max Drift": 0.25,
+        "Foot Pin Release": 0.05999999865889549,
+        "Foot Pin Weight": 1.0,
         "Foot Planted Height": 0.05000000074505806,
         "Foot Ray Length": 1.0,
         "Foot Ray Up": 0.5,
@@ -23484,10 +23513,31 @@
         "Hidden Parts": "Head",
         "Look Down Push": 0.05999999865889549,
         "Look Down Start": 0.0,
+        "Max Play Rate": 1.5,
         "Max Turn Rate": 0.0,
+        "NPC Aim Lean": 5.729578018188477,
+        "NPC Aim Lean Crouched": 12.605072021484375,
+        "NPC Cower Hunch": 20.05352210998535,
+        "NPC Face Ease": 0.09000000357627869,
+        "NPC Foot IK Fade": 0.15000000596046448,
+        "NPC Foot IK Max Drop": 0.3499999940395355,
+        "NPC Foot IK Max Raise": 0.3499999940395355,
+        "NPC Foot IK Pelvis Raise": 0.07999999821186066,
+        "NPC Foot IK Tilt Max": 28.647890090942383,
+        "NPC Foot Normal Ease": 0.07999999821186066,
+        "NPC Foot Offset Ease": 0.05000000074505806,
+        "NPC Head Max Pitch": 34.37746810913086,
+        "NPC Head Max Yaw": 68.75493621826172,
+        "NPC Max Twist": 68.75493621826172,
+        "NPC Move Ease": 0.10000000149011612,
+        "NPC Ready Lean Crouched": 22.918312072753906,
+        "NPC Turn Threshold": 65.89014434814453,
         "Near Hide": 0.10000000149011612,
         "Parameter Smoothing": 0.11999999731779099,
+        "Pelvis Alpha": 0.0,
         "Pelvis Max Raise": 0.0,
+        "Player Run Speed": 0.0,
+        "Player Sprint Speed": 0.0,
         "Reach Lean Max": 15.0,
         "Reach Slack": 0.03999999910593033,
         "Responsiveness": 0.0,
@@ -23498,7 +23548,17 @@
         "Shrug Start": 0.9800000190734863,
         "Spine Aim": 0.6000000238418579,
         "Spine Aim Down": 0.8999999761581421,
+        "Spine Max Angle 1": 0.0,
+        "Spine Max Angle 2": 0.0,
+        "Spine Max Angle 3": 0.0,
+        "Spine Max Angle 4": 0.0,
+        "Spine Max Angle 5": 0.0,
         "Spine Twist": 1.0,
+        "Spine Weight 1": 0.0,
+        "Spine Weight 2": 0.30000001192092896,
+        "Spine Weight 3": 0.44999998807907104,
+        "Spine Weight 4": 0.6499999761581421,
+        "Spine Weight 5": 1.0,
         "Sprint Speed": 4.71999979019165,
         "Stair Ease": 0.09000000357627869,
         "Stair Pop Rate": 2.5,
@@ -23512,6 +23572,11 @@
         "Stop Min Speed": 1.2000000476837158,
         "Stop Min Speed (Crouched)": 0.6000000238418579,
         "Stop Run Forward": 0.699999988079071,
+        "Stride Pelvis Adjust": 1.0,
+        "Stride Scale Max": 1.350000023841858,
+        "Stride Scale Min": 0.75,
+        "Stride Warp Enabled": true,
+        "Stride Warp Weight": 1.0,
         "Turn End Angle": 8.0,
         "Turn Lag Floor": 45.0,
         "Turn Lag Margin": 5.0,
@@ -23524,7 +23589,7 @@
       "id": 654,
       "name": "Player Body",
       "order": 658,
-      "parentId": 639,
+      "parentId": 597,
       "position": [
         0.0,
         0.0,
@@ -23543,7 +23608,8 @@
       ]
     },
     {
-      "id": 700,
+      "active": false,
+      "id": 655,
       "name": "Enemies",
       "order": 700,
       "parentId": -1,
@@ -23566,16 +23632,35 @@
     },
     {
       "Squad Settings": {
+        "Bleed-Out Time": 20.0,
+        "Corpse Time": 14.0,
+        "Cover Peek Step": 0.800000011920929,
+        "Cover Reach": 0.8500000238418579,
+        "Cover Sample Spacing": 0.8999999761581421,
+        "Crawl Speed": 0.6000000238418579,
         "Difficulty": 1.0,
+        "Fall Gravity": 18.0,
+        "Foot IK Range": 25.0,
+        "Heavy Hit Damage": 40.0,
+        "High Cover Height": 1.5499999523162842,
+        "Hitbox Range": 60.0,
+        "Limp Speed Scale": 0.6000000238418579,
+        "Limp Time": 6.0,
+        "Low Cover Height": 0.8500000238418579,
+        "Melee Damage": 25.0,
+        "Melee Hit Time": 0.2199999988079071,
+        "Melee Time": 0.550000011920929,
+        "Mesh Check Range": 12.0,
         "NPC Damage Scale": 0.44999998807907104,
         "Respawn": true,
         "Respawn Delay": 8.0,
-        "Squad Size": 4
+        "Squad Size": 4,
+        "Stagger Time": 0.4000000059604645
       },
-      "id": 701,
+      "id": 656,
       "name": "AI Director",
       "order": 701,
-      "parentId": 700,
+      "parentId": 655,
       "position": [
         -44.0,
         0.0,
@@ -23597,14 +23682,14 @@
       "NPC Spawn": {
         "Brain": "Squad AI",
         "Outfit Seed": 0,
-        "Skill": 0.6,
+        "Skill": 0.6000000238418579,
         "Squad": 0,
         "Weapon": "AKS-74U"
       },
-      "id": 702,
+      "id": 657,
       "name": "Enemy Spawn 1",
       "order": 702,
-      "parentId": 700,
+      "parentId": 655,
       "position": [
         -44.0,
         0.10000000149011612,
@@ -23626,14 +23711,14 @@
       "NPC Spawn": {
         "Brain": "Squad AI",
         "Outfit Seed": 0,
-        "Skill": 0.65,
+        "Skill": 0.6499999761581421,
         "Squad": 0,
         "Weapon": "AKS-74U"
       },
-      "id": 703,
+      "id": 658,
       "name": "Enemy Spawn 2",
       "order": 703,
-      "parentId": 700,
+      "parentId": 655,
       "position": [
         -41.0,
         0.10000000149011612,
@@ -23655,14 +23740,14 @@
       "NPC Spawn": {
         "Brain": "Squad AI",
         "Outfit Seed": 0,
-        "Skill": 0.55,
+        "Skill": 0.550000011920929,
         "Squad": 0,
         "Weapon": "Remington 870"
       },
-      "id": 704,
+      "id": 659,
       "name": "Enemy Spawn 3",
       "order": 704,
-      "parentId": 700,
+      "parentId": 655,
       "position": [
         -44.0,
         0.10000000149011612,
@@ -23684,14 +23769,14 @@
       "NPC Spawn": {
         "Brain": "Squad AI",
         "Outfit Seed": 0,
-        "Skill": 0.6,
+        "Skill": 0.6000000238418579,
         "Squad": 0,
         "Weapon": "AKS-74U"
       },
-      "id": 705,
+      "id": 660,
       "name": "Enemy Spawn 4",
       "order": 705,
-      "parentId": 700,
+      "parentId": 655,
       "position": [
         -41.0,
         0.10000000149011612,
@@ -23710,7 +23795,7 @@
       ]
     },
     {
-      "id": 706,
+      "id": 661,
       "name": "Audio / Reverb Zones",
       "order": 706,
       "parentId": -1,
@@ -23733,6 +23818,8 @@
     },
     {
       "Reverb Zone": {
+        "Ambience": "",
+        "Ambience Volume": 1.0,
         "Decay Time": 3.4000000953674316,
         "Early/Late Mix": 0.4000000059604645,
         "Enabled": true,
@@ -23743,6 +23830,9 @@
         ],
         "Fade Distance": 1.5,
         "HF Damping": 0.20000000298023224,
+        "HF Damping dB": 0.0,
+        "IR": "",
+        "Low Cut (Hz)": 80.0,
         "Pre-Delay ms": 36.0,
         "Priority": 30,
         "Radius": 6.0,
@@ -23751,12 +23841,13 @@
         "Shape": "Box",
         "Tail Class": "Indoor Large",
         "Tail Gain": 1.0,
-        "Wet Level": 0.4000000059604645
+        "Wet Level": 0.4000000059604645,
+        "Wet dB": 0.0
       },
-      "id": 707,
+      "id": 662,
       "name": "RZ Glass Arena",
       "order": 707,
-      "parentId": 706,
+      "parentId": 661,
       "position": [
         0.0,
         6.900000095367432,
@@ -23776,6 +23867,8 @@
     },
     {
       "Reverb Zone": {
+        "Ambience": "",
+        "Ambience Volume": 1.0,
         "Decay Time": 0.8999999761581421,
         "Early/Late Mix": 0.75,
         "Enabled": true,
@@ -23786,6 +23879,9 @@
         ],
         "Fade Distance": 1.0,
         "HF Damping": 0.3499999940395355,
+        "HF Damping dB": 0.0,
+        "IR": "",
+        "Low Cut (Hz)": 80.0,
         "Pre-Delay ms": 3.0,
         "Priority": 20,
         "Radius": 6.0,
@@ -23794,12 +23890,13 @@
         "Shape": "Box",
         "Tail Class": "Outdoor Urban",
         "Tail Gain": 1.0,
-        "Wet Level": 0.30000001192092896
+        "Wet Level": 0.30000001192092896,
+        "Wet dB": 0.0
       },
-      "id": 708,
+      "id": 663,
       "name": "RZ Range Firing Line",
       "order": 708,
-      "parentId": 706,
+      "parentId": 661,
       "position": [
         48.0,
         1.25,
@@ -23819,6 +23916,8 @@
     },
     {
       "Reverb Zone": {
+        "Ambience": "",
+        "Ambience Volume": 1.0,
         "Decay Time": 1.2999999523162842,
         "Early/Late Mix": 0.550000011920929,
         "Enabled": true,
@@ -23829,6 +23928,9 @@
         ],
         "Fade Distance": 2.5,
         "HF Damping": 0.44999998807907104,
+        "HF Damping dB": 0.0,
+        "IR": "",
+        "Low Cut (Hz)": 80.0,
         "Pre-Delay ms": 8.0,
         "Priority": 10,
         "Radius": 6.0,
@@ -23837,12 +23939,13 @@
         "Shape": "Box",
         "Tail Class": "Outdoor Urban",
         "Tail Gain": 1.0,
-        "Wet Level": 0.2800000011920929
+        "Wet Level": 0.2800000011920929,
+        "Wet dB": 0.0
       },
-      "id": 709,
+      "id": 664,
       "name": "RZ Range Lanes",
       "order": 709,
-      "parentId": 706,
+      "parentId": 661,
       "position": [
         47.75,
         4.5,
@@ -23862,6 +23965,8 @@
     },
     {
       "Reverb Zone": {
+        "Ambience": "",
+        "Ambience Volume": 1.0,
         "Decay Time": 2.799999952316284,
         "Early/Late Mix": 0.20000000298023224,
         "Enabled": true,
@@ -23872,6 +23977,9 @@
         ],
         "Fade Distance": 8.0,
         "HF Damping": 0.550000011920929,
+        "HF Damping dB": 0.0,
+        "IR": "",
+        "Low Cut (Hz)": 80.0,
         "Pre-Delay ms": 20.0,
         "Priority": -10,
         "Radius": 6.0,
@@ -23880,12 +23988,13 @@
         "Shape": "Box",
         "Tail Class": "Outdoor Open",
         "Tail Gain": 1.0,
-        "Wet Level": 0.25
+        "Wet Level": 0.25,
+        "Wet dB": 0.0
       },
-      "id": 710,
+      "id": 665,
       "name": "RZ Open Ground",
       "order": 710,
-      "parentId": 706,
+      "parentId": 661,
       "position": [
         0.0,
         10.0,
@@ -24096,6 +24205,18 @@
     {
       "path": "assets/Characters/Quantum/Materials/Clothing/Balaclava/M_Balaclava_Crime_Green.mat",
       "pathGuid": "d5c1b70809da40d7"
+    },
+    {
+      "path": "assets/Characters/Quantum/Materials/Clothing/Tops/Hoodie_Hood_Up/M_Hoodie_Hood_Up_Black.mat",
+      "pathGuid": "02619ee0a88e6cae"
+    },
+    {
+      "path": "assets/Characters/Quantum/Materials/Clothing/Pants/Pants_Sport/M_Sport_Pants_Black.mat",
+      "pathGuid": "4a4ac6fabe21f2c8"
+    },
+    {
+      "path": "assets/Characters/Quantum/Materials/Clothing/Shoes/Socks/M_Socks.mat",
+      "pathGuid": "475670f667a70b3b"
     }
   ],
   "libraryModels": [
@@ -24386,6 +24507,318 @@
     {
       "path": "assets/Characters/Quantum/Models/Young/Quantum_Young_Head.fbx",
       "pathGuid": "0ccde7cf189bfaba"
+    },
+    {
+      "path": "assets/Characters/Quantum/Models/Clothing/Male/Tops/SKM_Hoodie_Hood_Up.fbx",
+      "pathGuid": "a93a8b58180d0f44"
+    },
+    {
+      "path": "assets/Characters/Quantum/Models/Clothing/Male/Pants/SKM_Sport_Pants.fbx",
+      "pathGuid": "c28a0a40272cd541"
+    },
+    {
+      "path": "assets/Characters/Quantum/Models/Clothing/Male/Shoes/SKM_Socks.fbx",
+      "pathGuid": "d2d9305f1b150870"
+    },
+    {
+      "path": "assets/Animations/Mocap/RootMotion/Ready/AM_Ready_Idle_01.fbx",
+      "pathGuid": "120c50e778307a32"
+    },
+    {
+      "path": "assets/Animations/Mocap/RootMotion/Locomotion_V2/AM_Walk/AM_Loco_Walk_Fwd.fbx",
+      "pathGuid": "2f725c6d0ecc731b"
+    },
+    {
+      "path": "assets/Animations/Mocap/RootMotion/Locomotion_V2/AM_Walk/AM_Loco_Walk_Fwd_Left.fbx",
+      "pathGuid": "52c90411529c91c3"
+    },
+    {
+      "path": "assets/Animations/Mocap/RootMotion/Locomotion_V2/AM_Walk/AM_Loco_Walk_Fwd_Right.fbx",
+      "pathGuid": "93bc5b9065345d9e"
+    },
+    {
+      "path": "assets/Animations/Mocap/RootMotion/Locomotion_V2/AM_Walk/AM_Loco_Walk_Left.fbx",
+      "pathGuid": "f39adef33b72b5e1"
+    },
+    {
+      "path": "assets/Animations/Mocap/RootMotion/Locomotion_V2/AM_Walk/AM_Loco_Walk_Right.fbx",
+      "pathGuid": "fa653474f4c4cc71"
+    },
+    {
+      "path": "assets/Animations/Mocap/RootMotion/Locomotion_V2/AM_Walk/AM_Loco_Walk_Bwd.fbx",
+      "pathGuid": "c0adf8ca675de297"
+    },
+    {
+      "path": "assets/Animations/Mocap/RootMotion/Locomotion_V2/AM_Walk/AM_Loco_Walk_Bwd_Left.fbx",
+      "pathGuid": "d9bba94a847fc1fe"
+    },
+    {
+      "path": "assets/Animations/Mocap/RootMotion/Locomotion_V2/AM_Walk/AM_Loco_Walk_Bwd_Right.fbx",
+      "pathGuid": "f9f0f26c140addb8"
+    },
+    {
+      "path": "assets/Animations/Mocap/RootMotion/Locomotion_V2/AM_Jog/AM_Loco_Jog_Fwd.fbx",
+      "pathGuid": "b34ad32375c7191b"
+    },
+    {
+      "path": "assets/Animations/Mocap/RootMotion/Locomotion_V2/AM_Jog/AM_Loco_Jog_Fwd_Left.fbx",
+      "pathGuid": "e0ed2f1bc132f6a8"
+    },
+    {
+      "path": "assets/Animations/Mocap/RootMotion/Locomotion_V2/AM_Jog/AM_Loco_Jog_Fwd_Right.fbx",
+      "pathGuid": "a2c0da63f8d8dbd7"
+    },
+    {
+      "path": "assets/Animations/Mocap/RootMotion/Locomotion_V2/AM_Jog/AM_Loco_Jog_Left.fbx",
+      "pathGuid": "a1c36c5b252282a4"
+    },
+    {
+      "path": "assets/Animations/Mocap/RootMotion/Locomotion_V2/AM_Jog/AM_Loco_Jog_Right.fbx",
+      "pathGuid": "40a6acc6bc0284b1"
+    },
+    {
+      "path": "assets/Animations/Mocap/RootMotion/Locomotion_V2/AM_Jog/AM_Loco_Jog_Bwd.fbx",
+      "pathGuid": "5ed68e19d0aa1f55"
+    },
+    {
+      "path": "assets/Animations/Mocap/RootMotion/Locomotion_V2/AM_Jog/AM_Loco_Jog_Bwd_Left.fbx",
+      "pathGuid": "8bebb836de70e21a"
+    },
+    {
+      "path": "assets/Animations/Mocap/RootMotion/Locomotion_V2/AM_Jog/AM_Loco_Jog_Bwd_Right.fbx",
+      "pathGuid": "7e9963070bcd70f7"
+    },
+    {
+      "path": "assets/Animations/Mocap/RootMotion/Locomotion_V2/AM_Run/AM_Loco_Run_Fwd.fbx",
+      "pathGuid": "6ffa5affd5def353"
+    },
+    {
+      "path": "assets/Animations/Mocap/RootMotion/Jump/AM_Jump.fbx",
+      "pathGuid": "d50e5115458fb134"
+    },
+    {
+      "path": "assets/Animations/Mocap/RootMotion/Jump/AM_Jump_Fall_Loop.fbx",
+      "pathGuid": "0cb61f754798296f"
+    },
+    {
+      "path": "assets/Animations/Mocap/RootMotion/Jump/AM_Jump_Land_Recovery.fbx",
+      "pathGuid": "149625c5c5d35512"
+    },
+    {
+      "path": "assets/Animations/Mocap/RootMotion/Turn/AM_Stand_Idle_Turn_R180.fbx",
+      "pathGuid": "4685634606e07d4e"
+    },
+    {
+      "path": "assets/Animations/Mocap/RootMotion/Turn/AM_Stand_Idle_Turn_R135.fbx",
+      "pathGuid": "aa3fbc64fad3f8b5"
+    },
+    {
+      "path": "assets/Animations/Mocap/RootMotion/Turn/AM_Stand_Idle_Turn_R090.fbx",
+      "pathGuid": "9cb7124f15924003"
+    },
+    {
+      "path": "assets/Animations/Mocap/RootMotion/Turn/AM_Stand_Idle_Turn_R045.fbx",
+      "pathGuid": "931eadf7c2b109a6"
+    },
+    {
+      "path": "assets/Animations/Mocap/RootMotion/Turn/AM_Stand_Idle_Turn_L045.fbx",
+      "pathGuid": "17e8a43d4fd11432"
+    },
+    {
+      "path": "assets/Animations/Mocap/RootMotion/Turn/AM_Stand_Idle_Turn_L090.fbx",
+      "pathGuid": "df03b6fd87d5fc7e"
+    },
+    {
+      "path": "assets/Animations/Mocap/RootMotion/Turn/AM_Stand_Idle_Turn_L135.fbx",
+      "pathGuid": "8a41eb401d24b425"
+    },
+    {
+      "path": "assets/Animations/Mocap/RootMotion/Turn/AM_Stand_Idle_Turn_L180.fbx",
+      "pathGuid": "c24904de04270a8f"
+    },
+    {
+      "path": "assets/Animations/Mocap/RootMotion/Locomotion_V2/AM_Jog/AM_Loco_Jog_Fwd_Start.fbx",
+      "pathGuid": "cc9447341944c738"
+    },
+    {
+      "path": "assets/Animations/Mocap/RootMotion/Locomotion_V2/AM_Jog/AM_Loco_Jog_Bwd_Start.fbx",
+      "pathGuid": "7aa3d42885420a73"
+    },
+    {
+      "path": "assets/Animations/Mocap/RootMotion/Locomotion_V2/AM_Jog/AM_Loco_Jog_Left_Start.fbx",
+      "pathGuid": "6f1d263d8c01c266"
+    },
+    {
+      "path": "assets/Animations/Mocap/RootMotion/Locomotion_V2/AM_Jog/AM_Loco_Jog_Right_Start.fbx",
+      "pathGuid": "fa7e16d0593addfe"
+    },
+    {
+      "path": "assets/Animations/Mocap/RootMotion/Locomotion_V2/AM_Jog/AM_Loco_Jog_Fwd_Stop.fbx",
+      "pathGuid": "2d98c50513c02b98"
+    },
+    {
+      "path": "assets/Animations/Mocap/RootMotion/Locomotion_V2/AM_Jog/AM_Loco_Jog_Bwd_Stop.fbx",
+      "pathGuid": "e185198b4cb3cd6d"
+    },
+    {
+      "path": "assets/Animations/Mocap/RootMotion/Locomotion_V2/AM_Jog/AM_Loco_Jog_Left_Stop.fbx",
+      "pathGuid": "c55e7fde8c4420cc"
+    },
+    {
+      "path": "assets/Animations/Mocap/RootMotion/Locomotion_V2/AM_Jog/AM_Loco_Jog_Right_Stop.fbx",
+      "pathGuid": "73d93f603830af9d"
+    },
+    {
+      "path": "assets/Animations/Mocap/RootMotion/Locomotion_V2/AM_Run/AM_Loco_Run_Fwd_Stop.fbx",
+      "pathGuid": "5d75ec66936312c5"
+    },
+    {
+      "path": "assets/Animations/Mocap/RootMotion/Crouch/AM_Crouch_Idle_01.fbx",
+      "pathGuid": "5bbbc16c5a7e53cb"
+    },
+    {
+      "path": "assets/Animations/Mocap/RootMotion/Locomotion_V2/AM_Crouch_Walk/AM_Crouch_Loco_Walk_Fwd.fbx",
+      "pathGuid": "15acb8dbcc868cd2"
+    },
+    {
+      "path": "assets/Animations/Mocap/RootMotion/Locomotion_V2/AM_Crouch_Walk/AM_Crouch_Loco_Walk_Fwd_Left.fbx",
+      "pathGuid": "263c5ce0379edfa8"
+    },
+    {
+      "path": "assets/Animations/Mocap/RootMotion/Locomotion_V2/AM_Crouch_Walk/AM_Crouch_Loco_Walk_Fwd_Right.fbx",
+      "pathGuid": "b667084faf565701"
+    },
+    {
+      "path": "assets/Animations/Mocap/RootMotion/Locomotion_V2/AM_Crouch_Walk/AM_Crouch_Loco_Walk_Left.fbx",
+      "pathGuid": "1a9d5c1c02701f5e"
+    },
+    {
+      "path": "assets/Animations/Mocap/RootMotion/Locomotion_V2/AM_Crouch_Walk/AM_Crouch_Loco_Walk_Right.fbx",
+      "pathGuid": "7e7b97b9e1892026"
+    },
+    {
+      "path": "assets/Animations/Mocap/RootMotion/Locomotion_V2/AM_Crouch_Walk/AM_Crouch_Loco_Walk_Bwd.fbx",
+      "pathGuid": "1b5d05a364c08afd"
+    },
+    {
+      "path": "assets/Animations/Mocap/RootMotion/Locomotion_V2/AM_Crouch_Walk/AM_Crouch_Loco_Walk_Bwd_Left.fbx",
+      "pathGuid": "64ef3a056ff93ce0"
+    },
+    {
+      "path": "assets/Animations/Mocap/RootMotion/Locomotion_V2/AM_Crouch_Walk/AM_Crouch_Loco_Walk_Bwd_Right.fbx",
+      "pathGuid": "4b6dc3b6f1e41038"
+    },
+    {
+      "path": "assets/Animations/Mocap/RootMotion/Crouch/AM_Crouch_Idle_Turn_R180.fbx",
+      "pathGuid": "52b24811ec0f0372"
+    },
+    {
+      "path": "assets/Animations/Mocap/RootMotion/Crouch/AM_Crouch_Idle_Turn_R135.fbx",
+      "pathGuid": "219732f3629879ea"
+    },
+    {
+      "path": "assets/Animations/Mocap/RootMotion/Crouch/AM_Crouch_Idle_Turn_R090.fbx",
+      "pathGuid": "f3f461f6ff4e9dfb"
+    },
+    {
+      "path": "assets/Animations/Mocap/RootMotion/Crouch/AM_Crouch_Idle_Turn_R045.fbx",
+      "pathGuid": "ef42cbd093a44da7"
+    },
+    {
+      "path": "assets/Animations/Mocap/RootMotion/Crouch/AM_Crouch_Idle_Turn_L045.fbx",
+      "pathGuid": "59c12678a0458cf5"
+    },
+    {
+      "path": "assets/Animations/Mocap/RootMotion/Crouch/AM_Crouch_Idle_Turn_L090.fbx",
+      "pathGuid": "1ba9e255270bd6ad"
+    },
+    {
+      "path": "assets/Animations/Mocap/RootMotion/Crouch/AM_Crouch_Idle_Turn_L135.fbx",
+      "pathGuid": "99bd3ca75283494a"
+    },
+    {
+      "path": "assets/Animations/Mocap/RootMotion/Crouch/AM_Crouch_Idle_Turn_L180.fbx",
+      "pathGuid": "85205c3b409224e3"
+    },
+    {
+      "path": "assets/Animations/Mocap/RootMotion/Crouch/AM_Stand_Idle_Trans_Crouch_02.fbx",
+      "pathGuid": "8c9fdfb2ae24e5ba"
+    },
+    {
+      "path": "assets/Animations/Mocap/RootMotion/Crouch/AM_Crouch_Idle_Trans_Stand_01.fbx",
+      "pathGuid": "6c94a5f0977ea438"
+    },
+    {
+      "path": "assets/Animations/Mocap/RootMotion/Locomotion_V2/AM_Crouch_Walk/AM_Crouch_Loco_Walk_Fwd_Start.fbx",
+      "pathGuid": "3c06fc15fecbb0a6"
+    },
+    {
+      "path": "assets/Animations/Mocap/RootMotion/Locomotion_V2/AM_Crouch_Walk/AM_Crouch_Loco_Walk_Bwd_Start.fbx",
+      "pathGuid": "783db248a2970435"
+    },
+    {
+      "path": "assets/Animations/Mocap/RootMotion/Locomotion_V2/AM_Crouch_Walk/AM_Crouch_Loco_Walk_Left_Start.fbx",
+      "pathGuid": "7b1209d617221eb0"
+    },
+    {
+      "path": "assets/Animations/Mocap/RootMotion/Locomotion_V2/AM_Crouch_Walk/AM_Crouch_Loco_Walk_Right_Start.fbx",
+      "pathGuid": "405245ef1bf03807"
+    },
+    {
+      "path": "assets/Animations/Mocap/RootMotion/Locomotion_V2/AM_Crouch_Walk/AM_Crouch_Loco_Walk_Fwd_Stop.fbx",
+      "pathGuid": "a01f53ceb2de0fd6"
+    },
+    {
+      "path": "assets/Animations/Mocap/RootMotion/Locomotion_V2/AM_Crouch_Walk/AM_Crouch_Loco_Walk_Bwd_Stop.fbx",
+      "pathGuid": "ff6a62f304227a31"
+    },
+    {
+      "path": "assets/Animations/Mocap/RootMotion/Locomotion_V2/AM_Crouch_Walk/AM_Crouch_Loco_Walk_Left_Stop.fbx",
+      "pathGuid": "9f701734f074f557"
+    },
+    {
+      "path": "assets/Animations/Mocap/RootMotion/Locomotion_V2/AM_Crouch_Walk/AM_Crouch_Loco_Walk_Right_Stop.fbx",
+      "pathGuid": "932102775d75aa9e"
+    },
+    {
+      "path": "assets/Animations/Mocap/RootMotion/React_Bump/AM_Stand_React_Bump_Light_Front.fbx",
+      "pathGuid": "393b3205c05192f0"
+    },
+    {
+      "path": "assets/Animations/Mocap/RootMotion/React_Bump/AM_Stand_React_Bump_Light_Back.fbx",
+      "pathGuid": "40de78d7fe0f3e61"
+    },
+    {
+      "path": "assets/Animations/Mocap/RootMotion/React_Bump/AM_Stand_React_Bump_Light_Front_Left.fbx",
+      "pathGuid": "b2f6eabe91bc0e81"
+    },
+    {
+      "path": "assets/Animations/Mocap/RootMotion/React_Bump/AM_Stand_React_Bump_Light_Front_Right.fbx",
+      "pathGuid": "64d3960ffdba6a55"
+    },
+    {
+      "path": "assets/Animations/Mocap/RootMotion/React_Bump/AM_Stand_React_Bump_Light_Back_Left.fbx",
+      "pathGuid": "eb3665bef780748b"
+    },
+    {
+      "path": "assets/Animations/Mocap/RootMotion/React_Bump/AM_Stand_React_Bump_Light_Back_Right.fbx",
+      "pathGuid": "4f552cc17a7ea031"
+    },
+    {
+      "path": "assets/Animations/Mocap/RootMotion/Locomotion_V2/AM_Walk/AM_Loco_Walk_Fwd_Start.fbx",
+      "pathGuid": "30f5c2cc48e2b44a"
+    },
+    {
+      "path": "assets/Animations/Mocap/RootMotion/Locomotion_V2/AM_Walk/AM_Loco_Walk_Fwd_Stop.fbx",
+      "pathGuid": "a8ea8223a81536da"
+    },
+    {
+      "path": "assets/Weapons/Remington870/Shell_12ga.fbx",
+      "pathGuid": "f037c3330b81b1e7"
+    },
+    {
+      "path": "assets/Weapons/AKS74U/Casing_545x39.fbx",
+      "pathGuid": "3400d0834ae58519"
     }
   ],
   "libraryPrefabs": [],
@@ -24563,126 +24996,48 @@
       "path": "assets/Characters/Quantum/Textures/Young/Head/T_Quantum_Basemesh_Head_Young_Occlusion.1001.png",
       "pathGuid": "55d925b21b2b6d41"
     },
-    {
-      "path": "assets/Characters/Quantum/Textures/Clothing/Balaclava/T_Balaclava_Crime_Black_BaseColor.png",
-      "pathGuid": "4b8aefef8d854415"
-    },
-    {
-      "path": "assets/Characters/Quantum/Textures/Clothing/Balaclava/T_Balaclava_Crime_Normal.png",
-      "pathGuid": "1b3f1ea1f85181ca"
-    },
-    {
-      "path": "assets/Characters/Quantum/Textures/Clothing/Balaclava/T_Balaclava_Crime_OcclusionRoughnessMetallic.png",
-      "pathGuid": "dac06e0953d0f1a5"
-    },
-    {
-      "path": "assets/Characters/Quantum/Textures/Clothing/Glasses/Glasses Aviator/T_Sunglasses_Brown_BaseColor.png",
-      "pathGuid": "c6a8af0d16bc8ecf"
-    },
-    {
-      "path": "assets/Characters/Quantum/Textures/Clothing/Glasses/Glasses Aviator/T_Sunglasses_Camo_Unity_Normal.png",
-      "pathGuid": "9f4421afee71ea4a"
-    },
-    {
-      "path": "assets/Characters/Quantum/Textures/Clothing/Glasses/Glasses Aviator/T_Sunglasses_Camo_Roughness.png",
-      "pathGuid": "a0da97fbf52d24ad"
-    },
-    {
-      "path": "assets/Characters/Quantum/Textures/Clothing/Glasses/Glasses Aviator/T_Sunglasses_Camo_Occlusion.png",
-      "pathGuid": "52cb6702c8f831e9"
-    },
-    {
-      "path": "assets/Characters/Quantum/Textures/Clothing/Pants/Pants_Cargo/T_Pants_Cargo_Black_BaseColor.png",
-      "pathGuid": "36fc41cbd4c5c281"
-    },
-    {
-      "path": "assets/Characters/Quantum/Textures/Clothing/Pants/Pants_Cargo/T_Pants_Cargo_Unity_Normal.png",
-      "pathGuid": "6640e70ecc7a215b"
-    },
-    {
-      "path": "assets/Characters/Quantum/Textures/Clothing/Pants/Pants_Cargo/T_Pants_Cargo_Roughness.png",
-      "pathGuid": "171417cd52427cf3"
-    },
-    {
-      "path": "assets/Characters/Quantum/Textures/Clothing/Pants/Pants_Cargo/T_Pants_Cargo_Occlusion.png",
-      "pathGuid": "1aa6a68120e52f02"
-    },
-    {
-      "path": "assets/Characters/Quantum/Textures/Clothing/Shoes/Sneakers/Sneakers_Leather/T_F_Sneakers_Leather_Black_BaseColor.png",
-      "pathGuid": "8e3df431656c6989"
-    },
-    {
-      "path": "assets/Characters/Quantum/Textures/Clothing/Shoes/Sneakers/Sneakers_Leather/T_F_Sneakers_Leather_Unity_Normal.png",
-      "pathGuid": "5346dc389402d8ba"
-    },
-    {
-      "path": "assets/Characters/Quantum/Textures/Clothing/Shoes/Sneakers/Sneakers_Leather/T_F_Sneakers_Leather_Roughness.png",
-      "pathGuid": "9b18ad03ad5ec47b"
-    },
-    {
-      "path": "assets/Characters/Quantum/Textures/Clothing/Shoes/Sneakers/Sneakers_Leather/T_F_Sneakers_Leather_Occlusion.png",
-      "pathGuid": "9c0d74e53b152f2c"
-    },
-    {
-      "path": "assets/Characters/Quantum/Textures/Clothing/Tops/TShirt/T_TShirt_Black_BaseColor.png",
-      "pathGuid": "f3f5b81961e09ab7"
-    },
-    {
-      "path": "assets/Characters/Quantum/Textures/Clothing/Tops/TShirt/T_TShirt_Unity_Normal.png",
-      "pathGuid": "7b0cc2301d351e56"
-    },
-    {
-      "path": "assets/Characters/Quantum/Textures/Clothing/Tops/TShirt/T_TShirt_Roughness.png",
-      "pathGuid": "ead0d73fa935a8e0"
-    },
-    {
-      "path": "assets/Characters/Quantum/Textures/Clothing/Tops/TShirt/T_TShirt_Occlusion.png",
-      "pathGuid": "805f678756395cf6"
-    },
-    {
-      "path": "assets/Characters/Quantum/Textures/Clothing/Balaclava/T_Balaclava_Crime_Print_BaseColor.png",
-      "pathGuid": "7edf0f8ddb9b52e7"
-    },
-    {
-      "path": "assets/Characters/Quantum/Textures/Clothing/Balaclava/T_Balaclava_Crime_Print_Normal.png",
-      "pathGuid": "5cd3393cf8ba4289"
-    },
-    {
-      "path": "assets/Characters/Quantum/Textures/Clothing/Balaclava/T_Balaclava_Crime_Print_OcclusionRoughnessMetallic.png",
-      "pathGuid": "b273318edffb81cb"
-    },
-    {
-      "path": "assets/Characters/Quantum/Textures/Clothing/Glasses/Glasses Aviator/T_Glasses_Aviator_Gold_BaseColor.png",
-      "pathGuid": "d9d6c15b94fd107c"
-    },
-    {
-      "path": "assets/Characters/Quantum/Textures/Clothing/Glasses/Glasses Aviator/T_Glasses_Aviator_Gold_Unity_Normal.png",
-      "pathGuid": "d95925de22104abf"
-    },
-    {
-      "path": "assets/Characters/Quantum/Textures/Clothing/Glasses/Glasses Aviator/T_Glasses_Aviator_Gold_Roughness.png",
-      "pathGuid": "c4091c06d0d19acd"
-    },
-    {
-      "path": "assets/Characters/Quantum/Textures/Clothing/Glasses/Glasses Aviator/T_Glasses_Aviator_Gold_Occlusion.png",
-      "pathGuid": "ed4eecf9d5033f2c"
-    },
-    {
-      "path": "assets/Characters/Quantum/Textures/Clothing/Pants/Pants_Cargo/T_Pants_Cargo_Blue_BaseColor.png",
-      "pathGuid": "3889487dfd0b78ea"
-    },
-    {
-      "path": "assets/Characters/Quantum/Textures/Clothing/Shoes/Sneakers/Sneakers_Leather/T_F_Sneakers_Leather_White_BaseColor.png",
-      "pathGuid": "8a2010d0c6a5ecff"
-    },
-    {
-      "path": "assets/Characters/Quantum/Textures/Clothing/Tops/TShirt/T_TShirt_White_BaseColor.png",
-      "pathGuid": "cf192a9cf6c428ce"
-    },
-    {
-      "path": "assets/Characters/Quantum/Textures/Clothing/Balaclava/T_Balaclava_Crime_Green_BaseColor.png",
-      "pathGuid": "49c1f5a5b7028511"
-    }
+    "assets/Characters/Quantum/Textures/Clothing/Balaclava/T_Balaclava_Crime_Black_BaseColor.png",
+    "assets/Characters/Quantum/Textures/Clothing/Balaclava/T_Balaclava_Crime_Normal.png",
+    "assets/Characters/Quantum/Textures/Clothing/Balaclava/T_Balaclava_Crime_OcclusionRoughnessMetallic.png",
+    "assets/Characters/Quantum/Textures/Clothing/Glasses/Glasses Aviator/T_Sunglasses_Brown_BaseColor.png",
+    "assets/Characters/Quantum/Textures/Clothing/Glasses/Glasses Aviator/T_Sunglasses_Camo_Unity_Normal.png",
+    "assets/Characters/Quantum/Textures/Clothing/Glasses/Glasses Aviator/T_Sunglasses_Camo_Roughness.png",
+    "assets/Characters/Quantum/Textures/Clothing/Glasses/Glasses Aviator/T_Sunglasses_Camo_Occlusion.png",
+    "assets/Characters/Quantum/Textures/Clothing/Pants/Pants_Cargo/T_Pants_Cargo_Black_BaseColor.png",
+    "assets/Characters/Quantum/Textures/Clothing/Pants/Pants_Cargo/T_Pants_Cargo_Unity_Normal.png",
+    "assets/Characters/Quantum/Textures/Clothing/Pants/Pants_Cargo/T_Pants_Cargo_Roughness.png",
+    "assets/Characters/Quantum/Textures/Clothing/Pants/Pants_Cargo/T_Pants_Cargo_Occlusion.png",
+    "assets/Characters/Quantum/Textures/Clothing/Shoes/Sneakers/Sneakers_Leather/T_F_Sneakers_Leather_Black_BaseColor.png",
+    "assets/Characters/Quantum/Textures/Clothing/Shoes/Sneakers/Sneakers_Leather/T_F_Sneakers_Leather_Unity_Normal.png",
+    "assets/Characters/Quantum/Textures/Clothing/Shoes/Sneakers/Sneakers_Leather/T_F_Sneakers_Leather_Roughness.png",
+    "assets/Characters/Quantum/Textures/Clothing/Shoes/Sneakers/Sneakers_Leather/T_F_Sneakers_Leather_Occlusion.png",
+    "assets/Characters/Quantum/Textures/Clothing/Tops/TShirt/T_TShirt_Black_BaseColor.png",
+    "assets/Characters/Quantum/Textures/Clothing/Tops/TShirt/T_TShirt_Unity_Normal.png",
+    "assets/Characters/Quantum/Textures/Clothing/Tops/TShirt/T_TShirt_Roughness.png",
+    "assets/Characters/Quantum/Textures/Clothing/Tops/TShirt/T_TShirt_Occlusion.png",
+    "assets/Characters/Quantum/Textures/Clothing/Balaclava/T_Balaclava_Crime_Print_BaseColor.png",
+    "assets/Characters/Quantum/Textures/Clothing/Balaclava/T_Balaclava_Crime_Print_Normal.png",
+    "assets/Characters/Quantum/Textures/Clothing/Balaclava/T_Balaclava_Crime_Print_OcclusionRoughnessMetallic.png",
+    "assets/Characters/Quantum/Textures/Clothing/Glasses/Glasses Aviator/T_Glasses_Aviator_Gold_BaseColor.png",
+    "assets/Characters/Quantum/Textures/Clothing/Glasses/Glasses Aviator/T_Glasses_Aviator_Gold_Unity_Normal.png",
+    "assets/Characters/Quantum/Textures/Clothing/Glasses/Glasses Aviator/T_Glasses_Aviator_Gold_Roughness.png",
+    "assets/Characters/Quantum/Textures/Clothing/Glasses/Glasses Aviator/T_Glasses_Aviator_Gold_Occlusion.png",
+    "assets/Characters/Quantum/Textures/Clothing/Pants/Pants_Cargo/T_Pants_Cargo_Blue_BaseColor.png",
+    "assets/Characters/Quantum/Textures/Clothing/Shoes/Sneakers/Sneakers_Leather/T_F_Sneakers_Leather_White_BaseColor.png",
+    "assets/Characters/Quantum/Textures/Clothing/Tops/TShirt/T_TShirt_White_BaseColor.png",
+    "assets/Characters/Quantum/Textures/Clothing/Balaclava/T_Balaclava_Crime_Green_BaseColor.png",
+    "assets/Characters/Quantum/Textures/Clothing/Tops/Hoodie_Hood_Up/T_Hoodie_Hood_Up_Black_BaseColor.png",
+    "assets/Characters/Quantum/Textures/Clothing/Tops/Hoodie_Hood_Up/T_Hoodie_Hood_Up_Unity_Normal.png",
+    "assets/Characters/Quantum/Textures/Clothing/Tops/Hoodie_Hood_Up/T_Hoodie_Hood_Up_Roughness.png",
+    "assets/Characters/Quantum/Textures/Clothing/Tops/Hoodie_Hood_Up/T_Hoodie_Hood_Up_Occlusion.png",
+    "assets/Characters/Quantum/Textures/Clothing/Pants/Pants_Sport/T_Sport_Pants_Black_BaseColor.png",
+    "assets/Characters/Quantum/Textures/Clothing/Pants/Pants_Sport/T_Sport_Pants_Unity_Normal.png",
+    "assets/Characters/Quantum/Textures/Clothing/Pants/Pants_Sport/T_Sport_Pants_Roughness.png",
+    "assets/Characters/Quantum/Textures/Clothing/Pants/Pants_Sport/T_Sport_Pants_Occlusion.png",
+    "assets/Characters/Quantum/Textures/Clothing/Shoes/Socks/T_Socks_BaseColor.png",
+    "assets/Characters/Quantum/Textures/Clothing/Shoes/Socks/T_Socks_Unity_Normal.png",
+    "assets/Characters/Quantum/Textures/Clothing/Shoes/Socks/T_Socks_Roughness.png",
+    "assets/Characters/Quantum/Textures/Clothing/Shoes/Socks/T_Socks_Occlusion.png"
   ],
   "maxPointShadows": 2,
   "maxSpotShadows": 4,
@@ -24720,7 +25075,7 @@
       ],
       "name": "Lamp Globe 1",
       "order": 30,
-      "parentId": 602,
+      "parentId": 603,
       "path": "primitive://sphere#s30",
       "position": [
         -8.800000190734863,
@@ -24772,7 +25127,7 @@
       ],
       "name": "Lamp Globe 2",
       "order": 33,
-      "parentId": 602,
+      "parentId": 603,
       "path": "primitive://sphere#s33",
       "position": [
         8.800000190734863,
@@ -24824,7 +25179,7 @@
       ],
       "name": "Lamp Globe 3",
       "order": 36,
-      "parentId": 602,
+      "parentId": 603,
       "path": "primitive://sphere#s36",
       "position": [
         -8.800000190734863,
@@ -24876,7 +25231,7 @@
       ],
       "name": "Lamp Globe 4",
       "order": 39,
-      "parentId": 602,
+      "parentId": 603,
       "path": "primitive://sphere#s39",
       "position": [
         8.800000190734863,
@@ -24959,7 +25314,7 @@
       ],
       "name": "Ramp Ball 1",
       "order": 111,
-      "parentId": 607,
+      "parentId": 608,
       "path": "primitive://sphere#s111",
       "position": [
         14.600000381469727,
@@ -25042,7 +25397,7 @@
       ],
       "name": "Ramp Ball 2",
       "order": 112,
-      "parentId": 607,
+      "parentId": 608,
       "path": "primitive://sphere#s112",
       "position": [
         15.300000190734863,
@@ -25125,7 +25480,7 @@
       ],
       "name": "Ramp Ball 3",
       "order": 113,
-      "parentId": 607,
+      "parentId": 608,
       "path": "primitive://sphere#s113",
       "position": [
         16.0,
@@ -25208,7 +25563,7 @@
       ],
       "name": "Ramp Ball 4",
       "order": 114,
-      "parentId": 607,
+      "parentId": 608,
       "path": "primitive://sphere#s114",
       "position": [
         16.700000762939453,
@@ -25291,7 +25646,7 @@
       ],
       "name": "Ramp Ball 5",
       "order": 115,
-      "parentId": 607,
+      "parentId": 608,
       "path": "primitive://sphere#s115",
       "position": [
         17.399999618530273,
@@ -25374,7 +25729,7 @@
       ],
       "name": "Physics Ball 1",
       "order": 134,
-      "parentId": 607,
+      "parentId": 608,
       "path": "primitive://sphere#s134",
       "position": [
         18.0,
@@ -25457,7 +25812,7 @@
       ],
       "name": "Physics Ball 2",
       "order": 135,
-      "parentId": 607,
+      "parentId": 608,
       "path": "primitive://sphere#s135",
       "position": [
         19.600000381469727,
@@ -25540,7 +25895,7 @@
       ],
       "name": "Physics Ball 3",
       "order": 136,
-      "parentId": 607,
+      "parentId": 608,
       "path": "primitive://sphere#s136",
       "position": [
         21.200000762939453,
@@ -25623,7 +25978,7 @@
       ],
       "name": "Physics Ball 4",
       "order": 137,
-      "parentId": 607,
+      "parentId": 608,
       "path": "primitive://sphere#s137",
       "position": [
         22.799999237060547,
@@ -25706,7 +26061,7 @@
       ],
       "name": "Physics Ball 5",
       "order": 138,
-      "parentId": 607,
+      "parentId": 608,
       "path": "primitive://sphere#s138",
       "position": [
         18.0,
@@ -25789,7 +26144,7 @@
       ],
       "name": "Physics Ball 6",
       "order": 139,
-      "parentId": 607,
+      "parentId": 608,
       "path": "primitive://sphere#s139",
       "position": [
         19.600000381469727,
@@ -25872,7 +26227,7 @@
       ],
       "name": "Physics Ball 7",
       "order": 140,
-      "parentId": 607,
+      "parentId": 608,
       "path": "primitive://sphere#s140",
       "position": [
         21.200000762939453,
@@ -25955,7 +26310,7 @@
       ],
       "name": "Physics Ball 8",
       "order": 141,
-      "parentId": 607,
+      "parentId": 608,
       "path": "primitive://sphere#s141",
       "position": [
         22.799999237060547,
@@ -26038,7 +26393,7 @@
       ],
       "name": "Pit Ball 1",
       "order": 148,
-      "parentId": 608,
+      "parentId": 609,
       "path": "primitive://sphere#s148",
       "position": [
         -3.152899980545044,
@@ -26121,7 +26476,7 @@
       ],
       "name": "Pit Ball 2",
       "order": 149,
-      "parentId": 608,
+      "parentId": 609,
       "path": "primitive://sphere#s149",
       "position": [
         -3.228300094604492,
@@ -26204,7 +26559,7 @@
       ],
       "name": "Pit Ball 3",
       "order": 150,
-      "parentId": 608,
+      "parentId": 609,
       "path": "primitive://sphere#s150",
       "position": [
         -3.075200080871582,
@@ -26287,7 +26642,7 @@
       ],
       "name": "Pit Ball 4",
       "order": 151,
-      "parentId": 608,
+      "parentId": 609,
       "path": "primitive://sphere#s151",
       "position": [
         -3.238800048828125,
@@ -26370,7 +26725,7 @@
       ],
       "name": "Pit Ball 5",
       "order": 152,
-      "parentId": 608,
+      "parentId": 609,
       "path": "primitive://sphere#s152",
       "position": [
         -3.177799940109253,
@@ -26453,7 +26808,7 @@
       ],
       "name": "Pit Ball 6",
       "order": 153,
-      "parentId": 608,
+      "parentId": 609,
       "path": "primitive://sphere#s153",
       "position": [
         -3.0018999576568604,
@@ -26536,7 +26891,7 @@
       ],
       "name": "Pit Ball 7",
       "order": 154,
-      "parentId": 608,
+      "parentId": 609,
       "path": "primitive://sphere#s154",
       "position": [
         -1.8207999467849731,
@@ -26619,7 +26974,7 @@
       ],
       "name": "Pit Ball 8",
       "order": 155,
-      "parentId": 608,
+      "parentId": 609,
       "path": "primitive://sphere#s155",
       "position": [
         -1.836899995803833,
@@ -26702,7 +27057,7 @@
       ],
       "name": "Pit Ball 9",
       "order": 156,
-      "parentId": 608,
+      "parentId": 609,
       "path": "primitive://sphere#s156",
       "position": [
         -1.996000051498413,
@@ -26785,7 +27140,7 @@
       ],
       "name": "Pit Ball 10",
       "order": 157,
-      "parentId": 608,
+      "parentId": 609,
       "path": "primitive://sphere#s157",
       "position": [
         -1.8842999935150146,
@@ -26868,7 +27223,7 @@
       ],
       "name": "Pit Ball 11",
       "order": 158,
-      "parentId": 608,
+      "parentId": 609,
       "path": "primitive://sphere#s158",
       "position": [
         -1.8418999910354614,
@@ -26951,7 +27306,7 @@
       ],
       "name": "Pit Ball 12",
       "order": 159,
-      "parentId": 608,
+      "parentId": 609,
       "path": "primitive://sphere#s159",
       "position": [
         -1.8355000019073486,
@@ -27034,7 +27389,7 @@
       ],
       "name": "Pit Ball 13",
       "order": 160,
-      "parentId": 608,
+      "parentId": 609,
       "path": "primitive://sphere#s160",
       "position": [
         -0.7408000230789185,
@@ -27117,12 +27472,12 @@
       ],
       "name": "Pit Ball 14",
       "order": 161,
-      "parentId": 608,
+      "parentId": 609,
       "path": "primitive://sphere#s161",
       "position": [
         -0.5842999815940857,
         1.5,
-        -19.861099243164063
+        -19.861099243164062
       ],
       "rotation": [
         0.0,
@@ -27200,7 +27555,7 @@
       ],
       "name": "Pit Ball 15",
       "order": 162,
-      "parentId": 608,
+      "parentId": 609,
       "path": "primitive://sphere#s162",
       "position": [
         -0.5368000268936157,
@@ -27283,7 +27638,7 @@
       ],
       "name": "Pit Ball 16",
       "order": 163,
-      "parentId": 608,
+      "parentId": 609,
       "path": "primitive://sphere#s163",
       "position": [
         -0.6614999771118164,
@@ -27366,7 +27721,7 @@
       ],
       "name": "Pit Ball 17",
       "order": 164,
-      "parentId": 608,
+      "parentId": 609,
       "path": "primitive://sphere#s164",
       "position": [
         -0.5602999925613403,
@@ -27449,7 +27804,7 @@
       ],
       "name": "Pit Ball 18",
       "order": 165,
-      "parentId": 608,
+      "parentId": 609,
       "path": "primitive://sphere#s165",
       "position": [
         -0.6123999953269958,
@@ -27532,7 +27887,7 @@
       ],
       "name": "Pit Ball 19",
       "order": 166,
-      "parentId": 608,
+      "parentId": 609,
       "path": "primitive://sphere#s166",
       "position": [
         0.5564000010490417,
@@ -27615,7 +27970,7 @@
       ],
       "name": "Pit Ball 20",
       "order": 167,
-      "parentId": 608,
+      "parentId": 609,
       "path": "primitive://sphere#s167",
       "position": [
         0.6236000061035156,
@@ -27698,7 +28053,7 @@
       ],
       "name": "Pit Ball 21",
       "order": 168,
-      "parentId": 608,
+      "parentId": 609,
       "path": "primitive://sphere#s168",
       "position": [
         0.5156000256538391,
@@ -27781,7 +28136,7 @@
       ],
       "name": "Pit Ball 22",
       "order": 169,
-      "parentId": 608,
+      "parentId": 609,
       "path": "primitive://sphere#s169",
       "position": [
         0.7585999965667725,
@@ -27864,7 +28219,7 @@
       ],
       "name": "Pit Ball 23",
       "order": 170,
-      "parentId": 608,
+      "parentId": 609,
       "path": "primitive://sphere#s170",
       "position": [
         0.5720000267028809,
@@ -27947,7 +28302,7 @@
       ],
       "name": "Pit Ball 24",
       "order": 171,
-      "parentId": 608,
+      "parentId": 609,
       "path": "primitive://sphere#s171",
       "position": [
         0.6439999938011169,
@@ -28030,7 +28385,7 @@
       ],
       "name": "Pit Ball 25",
       "order": 172,
-      "parentId": 608,
+      "parentId": 609,
       "path": "primitive://sphere#s172",
       "position": [
         1.993399977684021,
@@ -28113,7 +28468,7 @@
       ],
       "name": "Pit Ball 26",
       "order": 173,
-      "parentId": 608,
+      "parentId": 609,
       "path": "primitive://sphere#s173",
       "position": [
         1.7281999588012695,
@@ -28196,7 +28551,7 @@
       ],
       "name": "Pit Ball 27",
       "order": 174,
-      "parentId": 608,
+      "parentId": 609,
       "path": "primitive://sphere#s174",
       "position": [
         1.7954000234603882,
@@ -28279,7 +28634,7 @@
       ],
       "name": "Pit Ball 28",
       "order": 175,
-      "parentId": 608,
+      "parentId": 609,
       "path": "primitive://sphere#s175",
       "position": [
         1.7167999744415283,
@@ -28362,7 +28717,7 @@
       ],
       "name": "Pit Ball 29",
       "order": 176,
-      "parentId": 608,
+      "parentId": 609,
       "path": "primitive://sphere#s176",
       "position": [
         1.8933000564575195,
@@ -28445,7 +28800,7 @@
       ],
       "name": "Pit Ball 30",
       "order": 177,
-      "parentId": 608,
+      "parentId": 609,
       "path": "primitive://sphere#s177",
       "position": [
         1.940500020980835,
@@ -28528,7 +28883,7 @@
       ],
       "name": "Pit Ball 31",
       "order": 178,
-      "parentId": 608,
+      "parentId": 609,
       "path": "primitive://sphere#s178",
       "position": [
         3.0694000720977783,
@@ -28611,7 +28966,7 @@
       ],
       "name": "Pit Ball 32",
       "order": 179,
-      "parentId": 608,
+      "parentId": 609,
       "path": "primitive://sphere#s179",
       "position": [
         2.9742000102996826,
@@ -28694,7 +29049,7 @@
       ],
       "name": "Pit Ball 33",
       "order": 180,
-      "parentId": 608,
+      "parentId": 609,
       "path": "primitive://sphere#s180",
       "position": [
         3.2149999141693115,
@@ -28777,7 +29132,7 @@
       ],
       "name": "Pit Ball 34",
       "order": 181,
-      "parentId": 608,
+      "parentId": 609,
       "path": "primitive://sphere#s181",
       "position": [
         3.161900043487549,
@@ -28860,7 +29215,7 @@
       ],
       "name": "Pit Ball 35",
       "order": 182,
-      "parentId": 608,
+      "parentId": 609,
       "path": "primitive://sphere#s182",
       "position": [
         3.237299919128418,
@@ -28943,7 +29298,7 @@
       ],
       "name": "Pit Ball 36",
       "order": 183,
-      "parentId": 608,
+      "parentId": 609,
       "path": "primitive://sphere#s183",
       "position": [
         2.9953999519348145,
@@ -29026,7 +29381,7 @@
       ],
       "name": "Pit Ball 37",
       "order": 184,
-      "parentId": 608,
+      "parentId": 609,
       "path": "primitive://sphere#s184",
       "position": [
         -3.1045000553131104,
@@ -29109,7 +29464,7 @@
       ],
       "name": "Pit Ball 38",
       "order": 185,
-      "parentId": 608,
+      "parentId": 609,
       "path": "primitive://sphere#s185",
       "position": [
         -3.1654000282287598,
@@ -29192,7 +29547,7 @@
       ],
       "name": "Pit Ball 39",
       "order": 186,
-      "parentId": 608,
+      "parentId": 609,
       "path": "primitive://sphere#s186",
       "position": [
         -3.0671000480651855,
@@ -29275,7 +29630,7 @@
       ],
       "name": "Pit Ball 40",
       "order": 187,
-      "parentId": 608,
+      "parentId": 609,
       "path": "primitive://sphere#s187",
       "position": [
         -3.0429000854492188,
@@ -29358,7 +29713,7 @@
       ],
       "name": "Pit Ball 41",
       "order": 188,
-      "parentId": 608,
+      "parentId": 609,
       "path": "primitive://sphere#s188",
       "position": [
         -3.11299991607666,
@@ -29441,7 +29796,7 @@
       ],
       "name": "Pit Ball 42",
       "order": 189,
-      "parentId": 608,
+      "parentId": 609,
       "path": "primitive://sphere#s189",
       "position": [
         -3.1305999755859375,
@@ -29524,7 +29879,7 @@
       ],
       "name": "Pit Ball 43",
       "order": 190,
-      "parentId": 608,
+      "parentId": 609,
       "path": "primitive://sphere#s190",
       "position": [
         -1.819700002670288,
@@ -29607,7 +29962,7 @@
       ],
       "name": "Pit Ball 44",
       "order": 191,
-      "parentId": 608,
+      "parentId": 609,
       "path": "primitive://sphere#s191",
       "position": [
         -1.7145999670028687,
@@ -29690,7 +30045,7 @@
       ],
       "name": "Pit Ball 45",
       "order": 192,
-      "parentId": 608,
+      "parentId": 609,
       "path": "primitive://sphere#s192",
       "position": [
         -1.9079999923706055,
@@ -29773,7 +30128,7 @@
       ],
       "name": "Pit Ball 46",
       "order": 193,
-      "parentId": 608,
+      "parentId": 609,
       "path": "primitive://sphere#s193",
       "position": [
         -1.840000033378601,
@@ -29856,7 +30211,7 @@
       ],
       "name": "Pit Ball 47",
       "order": 194,
-      "parentId": 608,
+      "parentId": 609,
       "path": "primitive://sphere#s194",
       "position": [
         -1.8258999586105347,
@@ -29939,7 +30294,7 @@
       ],
       "name": "Pit Ball 48",
       "order": 195,
-      "parentId": 608,
+      "parentId": 609,
       "path": "primitive://sphere#s195",
       "position": [
         -1.8257999420166016,
@@ -30022,7 +30377,7 @@
       ],
       "name": "Pit Ball 49",
       "order": 196,
-      "parentId": 608,
+      "parentId": 609,
       "path": "primitive://sphere#s196",
       "position": [
         -0.48339998722076416,
@@ -30105,7 +30460,7 @@
       ],
       "name": "Pit Ball 50",
       "order": 197,
-      "parentId": 608,
+      "parentId": 609,
       "path": "primitive://sphere#s197",
       "position": [
         -0.7330999970436096,
@@ -30188,7 +30543,7 @@
       ],
       "name": "Pit Ball 51",
       "order": 198,
-      "parentId": 608,
+      "parentId": 609,
       "path": "primitive://sphere#s198",
       "position": [
         -0.6258999705314636,
@@ -30271,12 +30626,12 @@
       ],
       "name": "Pit Ball 52",
       "order": 199,
-      "parentId": 608,
+      "parentId": 609,
       "path": "primitive://sphere#s199",
       "position": [
         -0.739300012588501,
         2.799999952316284,
-        -17.427200317382813
+        -17.427200317382812
       ],
       "rotation": [
         0.0,
@@ -30354,7 +30709,7 @@
       ],
       "name": "Pit Ball 53",
       "order": 200,
-      "parentId": 608,
+      "parentId": 609,
       "path": "primitive://sphere#s200",
       "position": [
         -0.6263999938964844,
@@ -30437,7 +30792,7 @@
       ],
       "name": "Pit Ball 54",
       "order": 201,
-      "parentId": 608,
+      "parentId": 609,
       "path": "primitive://sphere#s201",
       "position": [
         -0.7084000110626221,
@@ -30520,7 +30875,7 @@
       ],
       "name": "Pit Ball 55",
       "order": 202,
-      "parentId": 608,
+      "parentId": 609,
       "path": "primitive://sphere#s202",
       "position": [
         0.5139999985694885,
@@ -30603,7 +30958,7 @@
       ],
       "name": "Pit Ball 56",
       "order": 203,
-      "parentId": 608,
+      "parentId": 609,
       "path": "primitive://sphere#s203",
       "position": [
         0.6973999738693237,
@@ -30686,7 +31041,7 @@
       ],
       "name": "Pit Ball 57",
       "order": 204,
-      "parentId": 608,
+      "parentId": 609,
       "path": "primitive://sphere#s204",
       "position": [
         0.6789000034332275,
@@ -30769,7 +31124,7 @@
       ],
       "name": "Pit Ball 58",
       "order": 205,
-      "parentId": 608,
+      "parentId": 609,
       "path": "primitive://sphere#s205",
       "position": [
         0.7425000071525574,
@@ -30852,7 +31207,7 @@
       ],
       "name": "Pit Ball 59",
       "order": 206,
-      "parentId": 608,
+      "parentId": 609,
       "path": "primitive://sphere#s206",
       "position": [
         0.629800021648407,
@@ -30935,7 +31290,7 @@
       ],
       "name": "Pit Ball 60",
       "order": 207,
-      "parentId": 608,
+      "parentId": 609,
       "path": "primitive://sphere#s207",
       "position": [
         0.6608999967575073,
@@ -31018,7 +31373,7 @@
       ],
       "name": "Pit Ball 61",
       "order": 208,
-      "parentId": 608,
+      "parentId": 609,
       "path": "primitive://sphere#s208",
       "position": [
         1.951799988746643,
@@ -31101,7 +31456,7 @@
       ],
       "name": "Pit Ball 62",
       "order": 209,
-      "parentId": 608,
+      "parentId": 609,
       "path": "primitive://sphere#s209",
       "position": [
         1.7699999809265137,
@@ -31184,7 +31539,7 @@
       ],
       "name": "Pit Ball 63",
       "order": 210,
-      "parentId": 608,
+      "parentId": 609,
       "path": "primitive://sphere#s210",
       "position": [
         2.0069000720977783,
@@ -31267,7 +31622,7 @@
       ],
       "name": "Pit Ball 64",
       "order": 211,
-      "parentId": 608,
+      "parentId": 609,
       "path": "primitive://sphere#s211",
       "position": [
         1.7877999544143677,
@@ -31350,7 +31705,7 @@
       ],
       "name": "Pit Ball 65",
       "order": 212,
-      "parentId": 608,
+      "parentId": 609,
       "path": "primitive://sphere#s212",
       "position": [
         1.8442000150680542,
@@ -31433,7 +31788,7 @@
       ],
       "name": "Pit Ball 66",
       "order": 213,
-      "parentId": 608,
+      "parentId": 609,
       "path": "primitive://sphere#s213",
       "position": [
         1.996500015258789,
@@ -31516,7 +31871,7 @@
       ],
       "name": "Pit Ball 67",
       "order": 214,
-      "parentId": 608,
+      "parentId": 609,
       "path": "primitive://sphere#s214",
       "position": [
         2.980600118637085,
@@ -31599,7 +31954,7 @@
       ],
       "name": "Pit Ball 68",
       "order": 215,
-      "parentId": 608,
+      "parentId": 609,
       "path": "primitive://sphere#s215",
       "position": [
         3.0113000869750977,
@@ -31682,7 +32037,7 @@
       ],
       "name": "Pit Ball 69",
       "order": 216,
-      "parentId": 608,
+      "parentId": 609,
       "path": "primitive://sphere#s216",
       "position": [
         3.0938000679016113,
@@ -31765,7 +32120,7 @@
       ],
       "name": "Pit Ball 70",
       "order": 217,
-      "parentId": 608,
+      "parentId": 609,
       "path": "primitive://sphere#s217",
       "position": [
         3.2004001140594482,
@@ -31848,10 +32203,10 @@
       ],
       "name": "Pit Ball 71",
       "order": 218,
-      "parentId": 608,
+      "parentId": 609,
       "path": "primitive://sphere#s218",
       "position": [
-        3.1847000122070313,
+        3.1847000122070312,
         2.799999952316284,
         -16.065000534057617
       ],
@@ -31931,7 +32286,7 @@
       ],
       "name": "Pit Ball 72",
       "order": 219,
-      "parentId": 608,
+      "parentId": 609,
       "path": "primitive://sphere#s219",
       "position": [
         3.2167000770568848,
@@ -32014,7 +32369,7 @@
       ],
       "name": "Pit Ball 73",
       "order": 220,
-      "parentId": 608,
+      "parentId": 609,
       "path": "primitive://sphere#s220",
       "position": [
         -3.2239999771118164,
@@ -32097,7 +32452,7 @@
       ],
       "name": "Pit Ball 74",
       "order": 221,
-      "parentId": 608,
+      "parentId": 609,
       "path": "primitive://sphere#s221",
       "position": [
         -3.1110999584198,
@@ -32180,7 +32535,7 @@
       ],
       "name": "Pit Ball 75",
       "order": 222,
-      "parentId": 608,
+      "parentId": 609,
       "path": "primitive://sphere#s222",
       "position": [
         -3.032599925994873,
@@ -32263,7 +32618,7 @@
       ],
       "name": "Pit Ball 76",
       "order": 223,
-      "parentId": 608,
+      "parentId": 609,
       "path": "primitive://sphere#s223",
       "position": [
         -3.2416999340057373,
@@ -32346,7 +32701,7 @@
       ],
       "name": "Pit Ball 77",
       "order": 224,
-      "parentId": 608,
+      "parentId": 609,
       "path": "primitive://sphere#s224",
       "position": [
         -3.007999897003174,
@@ -32429,7 +32784,7 @@
       ],
       "name": "Pit Ball 78",
       "order": 225,
-      "parentId": 608,
+      "parentId": 609,
       "path": "primitive://sphere#s225",
       "position": [
         -3.052799940109253,
@@ -32512,7 +32867,7 @@
       ],
       "name": "Pit Ball 79",
       "order": 226,
-      "parentId": 608,
+      "parentId": 609,
       "path": "primitive://sphere#s226",
       "position": [
         -2.0035998821258545,
@@ -32595,7 +32950,7 @@
       ],
       "name": "Pit Ball 80",
       "order": 227,
-      "parentId": 608,
+      "parentId": 609,
       "path": "primitive://sphere#s227",
       "position": [
         -1.8519999980926514,
@@ -32678,7 +33033,7 @@
       ],
       "name": "Pit Ball 81",
       "order": 228,
-      "parentId": 608,
+      "parentId": 609,
       "path": "primitive://sphere#s228",
       "position": [
         -1.7139999866485596,
@@ -32761,7 +33116,7 @@
       ],
       "name": "Pit Ball 82",
       "order": 229,
-      "parentId": 608,
+      "parentId": 609,
       "path": "primitive://sphere#s229",
       "position": [
         -2.0016000270843506,
@@ -32844,7 +33199,7 @@
       ],
       "name": "Pit Ball 83",
       "order": 230,
-      "parentId": 608,
+      "parentId": 609,
       "path": "primitive://sphere#s230",
       "position": [
         -1.780900001525879,
@@ -32927,7 +33282,7 @@
       ],
       "name": "Pit Ball 84",
       "order": 231,
-      "parentId": 608,
+      "parentId": 609,
       "path": "primitive://sphere#s231",
       "position": [
         -1.7596999406814575,
@@ -33010,7 +33365,7 @@
       ],
       "name": "Pit Ball 85",
       "order": 232,
-      "parentId": 608,
+      "parentId": 609,
       "path": "primitive://sphere#s232",
       "position": [
         -0.5006999969482422,
@@ -33093,7 +33448,7 @@
       ],
       "name": "Pit Ball 86",
       "order": 233,
-      "parentId": 608,
+      "parentId": 609,
       "path": "primitive://sphere#s233",
       "position": [
         -0.5218999981880188,
@@ -33176,7 +33531,7 @@
       ],
       "name": "Pit Ball 87",
       "order": 234,
-      "parentId": 608,
+      "parentId": 609,
       "path": "primitive://sphere#s234",
       "position": [
         -0.6104999780654907,
@@ -33259,7 +33614,7 @@
       ],
       "name": "Pit Ball 88",
       "order": 235,
-      "parentId": 608,
+      "parentId": 609,
       "path": "primitive://sphere#s235",
       "position": [
         -0.5081999897956848,
@@ -33342,7 +33697,7 @@
       ],
       "name": "Pit Ball 89",
       "order": 236,
-      "parentId": 608,
+      "parentId": 609,
       "path": "primitive://sphere#s236",
       "position": [
         -0.5371999740600586,
@@ -33425,7 +33780,7 @@
       ],
       "name": "Pit Ball 90",
       "order": 237,
-      "parentId": 608,
+      "parentId": 609,
       "path": "primitive://sphere#s237",
       "position": [
         -0.628000020980835,
@@ -33508,7 +33863,7 @@
       ],
       "name": "Pit Ball 91",
       "order": 238,
-      "parentId": 608,
+      "parentId": 609,
       "path": "primitive://sphere#s238",
       "position": [
         0.567799985408783,
@@ -33591,7 +33946,7 @@
       ],
       "name": "Pit Ball 92",
       "order": 239,
-      "parentId": 608,
+      "parentId": 609,
       "path": "primitive://sphere#s239",
       "position": [
         0.705299973487854,
@@ -33674,7 +34029,7 @@
       ],
       "name": "Pit Ball 93",
       "order": 240,
-      "parentId": 608,
+      "parentId": 609,
       "path": "primitive://sphere#s240",
       "position": [
         0.5444999933242798,
@@ -33757,7 +34112,7 @@
       ],
       "name": "Pit Ball 94",
       "order": 241,
-      "parentId": 608,
+      "parentId": 609,
       "path": "primitive://sphere#s241",
       "position": [
         0.6223000288009644,
@@ -33840,7 +34195,7 @@
       ],
       "name": "Pit Ball 95",
       "order": 242,
-      "parentId": 608,
+      "parentId": 609,
       "path": "primitive://sphere#s242",
       "position": [
         0.6029999852180481,
@@ -33923,7 +34278,7 @@
       ],
       "name": "Pit Ball 96",
       "order": 243,
-      "parentId": 608,
+      "parentId": 609,
       "path": "primitive://sphere#s243",
       "position": [
         0.6777999997138977,
@@ -34006,7 +34361,7 @@
       ],
       "name": "Pit Ball 97",
       "order": 244,
-      "parentId": 608,
+      "parentId": 609,
       "path": "primitive://sphere#s244",
       "position": [
         1.8623000383377075,
@@ -34089,7 +34444,7 @@
       ],
       "name": "Pit Ball 98",
       "order": 245,
-      "parentId": 608,
+      "parentId": 609,
       "path": "primitive://sphere#s245",
       "position": [
         1.986799955368042,
@@ -34172,7 +34527,7 @@
       ],
       "name": "Pit Ball 99",
       "order": 246,
-      "parentId": 608,
+      "parentId": 609,
       "path": "primitive://sphere#s246",
       "position": [
         1.9620000123977661,
@@ -34255,7 +34610,7 @@
       ],
       "name": "Pit Ball 100",
       "order": 247,
-      "parentId": 608,
+      "parentId": 609,
       "path": "primitive://sphere#s247",
       "position": [
         1.8277000188827515,
@@ -34338,7 +34693,7 @@
       ],
       "name": "Pit Ball 101",
       "order": 248,
-      "parentId": 608,
+      "parentId": 609,
       "path": "primitive://sphere#s248",
       "position": [
         1.8385000228881836,
@@ -34421,7 +34776,7 @@
       ],
       "name": "Pit Ball 102",
       "order": 249,
-      "parentId": 608,
+      "parentId": 609,
       "path": "primitive://sphere#s249",
       "position": [
         1.945199966430664,
@@ -34504,7 +34859,7 @@
       ],
       "name": "Pit Ball 103",
       "order": 250,
-      "parentId": 608,
+      "parentId": 609,
       "path": "primitive://sphere#s250",
       "position": [
         3.2318999767303467,
@@ -34587,7 +34942,7 @@
       ],
       "name": "Pit Ball 104",
       "order": 251,
-      "parentId": 608,
+      "parentId": 609,
       "path": "primitive://sphere#s251",
       "position": [
         2.9928998947143555,
@@ -34670,7 +35025,7 @@
       ],
       "name": "Pit Ball 105",
       "order": 252,
-      "parentId": 608,
+      "parentId": 609,
       "path": "primitive://sphere#s252",
       "position": [
         3.015899896621704,
@@ -34753,7 +35108,7 @@
       ],
       "name": "Pit Ball 106",
       "order": 253,
-      "parentId": 608,
+      "parentId": 609,
       "path": "primitive://sphere#s253",
       "position": [
         3.2155001163482666,
@@ -34836,7 +35191,7 @@
       ],
       "name": "Pit Ball 107",
       "order": 254,
-      "parentId": 608,
+      "parentId": 609,
       "path": "primitive://sphere#s254",
       "position": [
         2.9983999729156494,
@@ -34919,7 +35274,7 @@
       ],
       "name": "Pit Ball 108",
       "order": 255,
-      "parentId": 608,
+      "parentId": 609,
       "path": "primitive://sphere#s255",
       "position": [
         3.0517001152038574,
@@ -34954,7 +35309,7 @@
       ],
       "name": "Rim West",
       "order": 353,
-      "parentId": 612,
+      "parentId": 613,
       "path": "assets/Props/Basketball/Models/rim.obj",
       "pathGuid": "aa06bf914b4a03c0",
       "position": [
@@ -34984,7 +35339,7 @@
       ],
       "name": "Net West",
       "order": 355,
-      "parentId": 612,
+      "parentId": 613,
       "path": "assets/Props/Basketball/Models/net.obj",
       "pathGuid": "9f5eb74f6735cbca",
       "position": [
@@ -35020,7 +35375,7 @@
       ],
       "name": "Rim East",
       "order": 371,
-      "parentId": 617,
+      "parentId": 618,
       "path": "assets/Props/Basketball/Models/rim.obj",
       "pathGuid": "aa06bf914b4a03c0",
       "position": [
@@ -35050,7 +35405,7 @@
       ],
       "name": "Net East",
       "order": 373,
-      "parentId": 617,
+      "parentId": 618,
       "path": "assets/Props/Basketball/Models/net.obj",
       "pathGuid": "9f5eb74f6735cbca",
       "position": [
@@ -35103,7 +35458,7 @@
       ],
       "name": "Seg A",
       "order": 393,
-      "parentId": 624,
+      "parentId": 625,
       "path": "primitive://cube#p393",
       "position": [
         0.0,
@@ -35155,7 +35510,7 @@
       ],
       "name": "Seg B",
       "order": 394,
-      "parentId": 624,
+      "parentId": 625,
       "path": "primitive://cube#p394",
       "position": [
         0.20999999344348907,
@@ -35207,7 +35562,7 @@
       ],
       "name": "Seg C",
       "order": 395,
-      "parentId": 624,
+      "parentId": 625,
       "path": "primitive://cube#p395",
       "position": [
         0.20999999344348907,
@@ -35259,7 +35614,7 @@
       ],
       "name": "Seg D",
       "order": 396,
-      "parentId": 624,
+      "parentId": 625,
       "path": "primitive://cube#p396",
       "position": [
         0.0,
@@ -35311,7 +35666,7 @@
       ],
       "name": "Seg E",
       "order": 397,
-      "parentId": 624,
+      "parentId": 625,
       "path": "primitive://cube#p397",
       "position": [
         -0.20999999344348907,
@@ -35363,7 +35718,7 @@
       ],
       "name": "Seg F",
       "order": 398,
-      "parentId": 624,
+      "parentId": 625,
       "path": "primitive://cube#p398",
       "position": [
         -0.20999999344348907,
@@ -35415,7 +35770,7 @@
       ],
       "name": "Seg G",
       "order": 399,
-      "parentId": 624,
+      "parentId": 625,
       "path": "primitive://cube#p399",
       "position": [
         0.0,
@@ -35467,7 +35822,7 @@
       ],
       "name": "Seg A",
       "order": 401,
-      "parentId": 625,
+      "parentId": 626,
       "path": "primitive://cube#p401",
       "position": [
         0.0,
@@ -35519,7 +35874,7 @@
       ],
       "name": "Seg B",
       "order": 402,
-      "parentId": 625,
+      "parentId": 626,
       "path": "primitive://cube#p402",
       "position": [
         0.20999999344348907,
@@ -35571,7 +35926,7 @@
       ],
       "name": "Seg C",
       "order": 403,
-      "parentId": 625,
+      "parentId": 626,
       "path": "primitive://cube#p403",
       "position": [
         0.20999999344348907,
@@ -35623,7 +35978,7 @@
       ],
       "name": "Seg D",
       "order": 404,
-      "parentId": 625,
+      "parentId": 626,
       "path": "primitive://cube#p404",
       "position": [
         0.0,
@@ -35675,7 +36030,7 @@
       ],
       "name": "Seg E",
       "order": 405,
-      "parentId": 625,
+      "parentId": 626,
       "path": "primitive://cube#p405",
       "position": [
         -0.20999999344348907,
@@ -35727,7 +36082,7 @@
       ],
       "name": "Seg F",
       "order": 406,
-      "parentId": 625,
+      "parentId": 626,
       "path": "primitive://cube#p406",
       "position": [
         -0.20999999344348907,
@@ -35779,7 +36134,7 @@
       ],
       "name": "Seg G",
       "order": 407,
-      "parentId": 625,
+      "parentId": 626,
       "path": "primitive://cube#p407",
       "position": [
         0.0,
@@ -35831,7 +36186,7 @@
       ],
       "name": "Seg A",
       "order": 410,
-      "parentId": 626,
+      "parentId": 627,
       "path": "primitive://cube#p410",
       "position": [
         0.0,
@@ -35883,7 +36238,7 @@
       ],
       "name": "Seg B",
       "order": 411,
-      "parentId": 626,
+      "parentId": 627,
       "path": "primitive://cube#p411",
       "position": [
         0.20999999344348907,
@@ -35935,7 +36290,7 @@
       ],
       "name": "Seg C",
       "order": 412,
-      "parentId": 626,
+      "parentId": 627,
       "path": "primitive://cube#p412",
       "position": [
         0.20999999344348907,
@@ -35987,7 +36342,7 @@
       ],
       "name": "Seg D",
       "order": 413,
-      "parentId": 626,
+      "parentId": 627,
       "path": "primitive://cube#p413",
       "position": [
         0.0,
@@ -36039,7 +36394,7 @@
       ],
       "name": "Seg E",
       "order": 414,
-      "parentId": 626,
+      "parentId": 627,
       "path": "primitive://cube#p414",
       "position": [
         -0.20999999344348907,
@@ -36091,7 +36446,7 @@
       ],
       "name": "Seg F",
       "order": 415,
-      "parentId": 626,
+      "parentId": 627,
       "path": "primitive://cube#p415",
       "position": [
         -0.20999999344348907,
@@ -36143,7 +36498,7 @@
       ],
       "name": "Seg G",
       "order": 416,
-      "parentId": 626,
+      "parentId": 627,
       "path": "primitive://cube#p416",
       "position": [
         0.0,
@@ -36195,7 +36550,7 @@
       ],
       "name": "Seg A",
       "order": 418,
-      "parentId": 627,
+      "parentId": 628,
       "path": "primitive://cube#p418",
       "position": [
         0.0,
@@ -36247,7 +36602,7 @@
       ],
       "name": "Seg B",
       "order": 419,
-      "parentId": 627,
+      "parentId": 628,
       "path": "primitive://cube#p419",
       "position": [
         0.20999999344348907,
@@ -36299,7 +36654,7 @@
       ],
       "name": "Seg C",
       "order": 420,
-      "parentId": 627,
+      "parentId": 628,
       "path": "primitive://cube#p420",
       "position": [
         0.20999999344348907,
@@ -36351,7 +36706,7 @@
       ],
       "name": "Seg D",
       "order": 421,
-      "parentId": 627,
+      "parentId": 628,
       "path": "primitive://cube#p421",
       "position": [
         0.0,
@@ -36403,7 +36758,7 @@
       ],
       "name": "Seg E",
       "order": 422,
-      "parentId": 627,
+      "parentId": 628,
       "path": "primitive://cube#p422",
       "position": [
         -0.20999999344348907,
@@ -36455,7 +36810,7 @@
       ],
       "name": "Seg F",
       "order": 423,
-      "parentId": 627,
+      "parentId": 628,
       "path": "primitive://cube#p423",
       "position": [
         -0.20999999344348907,
@@ -36507,7 +36862,7 @@
       ],
       "name": "Seg G",
       "order": 424,
-      "parentId": 627,
+      "parentId": 628,
       "path": "primitive://cube#p424",
       "position": [
         0.0,
@@ -36559,7 +36914,7 @@
       ],
       "name": "Seg A",
       "order": 427,
-      "parentId": 628,
+      "parentId": 629,
       "path": "primitive://cube#p427",
       "position": [
         -0.0,
@@ -36611,7 +36966,7 @@
       ],
       "name": "Seg B",
       "order": 428,
-      "parentId": 628,
+      "parentId": 629,
       "path": "primitive://cube#p428",
       "position": [
         -0.20999999344348907,
@@ -36663,7 +37018,7 @@
       ],
       "name": "Seg C",
       "order": 429,
-      "parentId": 628,
+      "parentId": 629,
       "path": "primitive://cube#p429",
       "position": [
         -0.20999999344348907,
@@ -36715,7 +37070,7 @@
       ],
       "name": "Seg D",
       "order": 430,
-      "parentId": 628,
+      "parentId": 629,
       "path": "primitive://cube#p430",
       "position": [
         -0.0,
@@ -36767,7 +37122,7 @@
       ],
       "name": "Seg E",
       "order": 431,
-      "parentId": 628,
+      "parentId": 629,
       "path": "primitive://cube#p431",
       "position": [
         0.20999999344348907,
@@ -36819,7 +37174,7 @@
       ],
       "name": "Seg F",
       "order": 432,
-      "parentId": 628,
+      "parentId": 629,
       "path": "primitive://cube#p432",
       "position": [
         0.20999999344348907,
@@ -36871,7 +37226,7 @@
       ],
       "name": "Seg G",
       "order": 433,
-      "parentId": 628,
+      "parentId": 629,
       "path": "primitive://cube#p433",
       "position": [
         -0.0,
@@ -36923,7 +37278,7 @@
       ],
       "name": "Seg A",
       "order": 435,
-      "parentId": 629,
+      "parentId": 630,
       "path": "primitive://cube#p435",
       "position": [
         -0.0,
@@ -36975,7 +37330,7 @@
       ],
       "name": "Seg B",
       "order": 436,
-      "parentId": 629,
+      "parentId": 630,
       "path": "primitive://cube#p436",
       "position": [
         -0.20999999344348907,
@@ -37027,7 +37382,7 @@
       ],
       "name": "Seg C",
       "order": 437,
-      "parentId": 629,
+      "parentId": 630,
       "path": "primitive://cube#p437",
       "position": [
         -0.20999999344348907,
@@ -37079,7 +37434,7 @@
       ],
       "name": "Seg D",
       "order": 438,
-      "parentId": 629,
+      "parentId": 630,
       "path": "primitive://cube#p438",
       "position": [
         -0.0,
@@ -37131,7 +37486,7 @@
       ],
       "name": "Seg E",
       "order": 439,
-      "parentId": 629,
+      "parentId": 630,
       "path": "primitive://cube#p439",
       "position": [
         0.20999999344348907,
@@ -37183,7 +37538,7 @@
       ],
       "name": "Seg F",
       "order": 440,
-      "parentId": 629,
+      "parentId": 630,
       "path": "primitive://cube#p440",
       "position": [
         0.20999999344348907,
@@ -37235,7 +37590,7 @@
       ],
       "name": "Seg G",
       "order": 441,
-      "parentId": 629,
+      "parentId": 630,
       "path": "primitive://cube#p441",
       "position": [
         -0.0,
@@ -37287,7 +37642,7 @@
       ],
       "name": "Seg A",
       "order": 444,
-      "parentId": 630,
+      "parentId": 631,
       "path": "primitive://cube#p444",
       "position": [
         -0.0,
@@ -37339,7 +37694,7 @@
       ],
       "name": "Seg B",
       "order": 445,
-      "parentId": 630,
+      "parentId": 631,
       "path": "primitive://cube#p445",
       "position": [
         -0.20999999344348907,
@@ -37391,7 +37746,7 @@
       ],
       "name": "Seg C",
       "order": 446,
-      "parentId": 630,
+      "parentId": 631,
       "path": "primitive://cube#p446",
       "position": [
         -0.20999999344348907,
@@ -37443,7 +37798,7 @@
       ],
       "name": "Seg D",
       "order": 447,
-      "parentId": 630,
+      "parentId": 631,
       "path": "primitive://cube#p447",
       "position": [
         -0.0,
@@ -37495,7 +37850,7 @@
       ],
       "name": "Seg E",
       "order": 448,
-      "parentId": 630,
+      "parentId": 631,
       "path": "primitive://cube#p448",
       "position": [
         0.20999999344348907,
@@ -37547,7 +37902,7 @@
       ],
       "name": "Seg F",
       "order": 449,
-      "parentId": 630,
+      "parentId": 631,
       "path": "primitive://cube#p449",
       "position": [
         0.20999999344348907,
@@ -37599,7 +37954,7 @@
       ],
       "name": "Seg G",
       "order": 450,
-      "parentId": 630,
+      "parentId": 631,
       "path": "primitive://cube#p450",
       "position": [
         -0.0,
@@ -37651,7 +38006,7 @@
       ],
       "name": "Seg A",
       "order": 452,
-      "parentId": 631,
+      "parentId": 632,
       "path": "primitive://cube#p452",
       "position": [
         -0.0,
@@ -37703,7 +38058,7 @@
       ],
       "name": "Seg B",
       "order": 453,
-      "parentId": 631,
+      "parentId": 632,
       "path": "primitive://cube#p453",
       "position": [
         -0.20999999344348907,
@@ -37755,7 +38110,7 @@
       ],
       "name": "Seg C",
       "order": 454,
-      "parentId": 631,
+      "parentId": 632,
       "path": "primitive://cube#p454",
       "position": [
         -0.20999999344348907,
@@ -37807,7 +38162,7 @@
       ],
       "name": "Seg D",
       "order": 455,
-      "parentId": 631,
+      "parentId": 632,
       "path": "primitive://cube#p455",
       "position": [
         -0.0,
@@ -37859,7 +38214,7 @@
       ],
       "name": "Seg E",
       "order": 456,
-      "parentId": 631,
+      "parentId": 632,
       "path": "primitive://cube#p456",
       "position": [
         0.20999999344348907,
@@ -37911,7 +38266,7 @@
       ],
       "name": "Seg F",
       "order": 457,
-      "parentId": 631,
+      "parentId": 632,
       "path": "primitive://cube#p457",
       "position": [
         0.20999999344348907,
@@ -37963,7 +38318,7 @@
       ],
       "name": "Seg G",
       "order": 458,
-      "parentId": 631,
+      "parentId": 632,
       "path": "primitive://cube#p458",
       "position": [
         -0.0,
@@ -38024,7 +38379,7 @@
       ],
       "name": "Basketball 1",
       "order": 466,
-      "parentId": 632,
+      "parentId": 633,
       "path": "assets/Props/Basketball/Models/basketball.obj",
       "pathGuid": "3e65fa8b4567e911",
       "position": [
@@ -38087,7 +38442,7 @@
       ],
       "name": "Basketball 2",
       "order": 467,
-      "parentId": 632,
+      "parentId": 633,
       "path": "assets/Props/Basketball/Models/basketball.obj",
       "pathGuid": "3e65fa8b4567e911",
       "position": [
@@ -38150,7 +38505,7 @@
       ],
       "name": "Basketball 3",
       "order": 468,
-      "parentId": 632,
+      "parentId": 633,
       "path": "assets/Props/Basketball/Models/basketball.obj",
       "pathGuid": "3e65fa8b4567e911",
       "position": [
@@ -38213,7 +38568,7 @@
       ],
       "name": "Basketball 4",
       "order": 469,
-      "parentId": 632,
+      "parentId": 633,
       "path": "assets/Props/Basketball/Models/basketball.obj",
       "pathGuid": "3e65fa8b4567e911",
       "position": [
@@ -38276,7 +38631,7 @@
       ],
       "name": "Basketball 5",
       "order": 470,
-      "parentId": 632,
+      "parentId": 633,
       "path": "assets/Props/Basketball/Models/basketball.obj",
       "pathGuid": "3e65fa8b4567e911",
       "position": [
@@ -38339,7 +38694,7 @@
       ],
       "name": "Basketball 6",
       "order": 474,
-      "parentId": 632,
+      "parentId": 633,
       "path": "assets/Props/Basketball/Models/basketball.obj",
       "pathGuid": "3e65fa8b4567e911",
       "position": [
@@ -38402,7 +38757,7 @@
       ],
       "name": "Basketball 7",
       "order": 475,
-      "parentId": 632,
+      "parentId": 633,
       "path": "assets/Props/Basketball/Models/basketball.obj",
       "pathGuid": "3e65fa8b4567e911",
       "position": [
@@ -38465,7 +38820,7 @@
       ],
       "name": "Basketball 8",
       "order": 476,
-      "parentId": 632,
+      "parentId": 633,
       "path": "assets/Props/Basketball/Models/basketball.obj",
       "pathGuid": "3e65fa8b4567e911",
       "position": [
@@ -38528,7 +38883,7 @@
       ],
       "name": "Basketball 9",
       "order": 477,
-      "parentId": 632,
+      "parentId": 633,
       "path": "assets/Props/Basketball/Models/basketball.obj",
       "pathGuid": "3e65fa8b4567e911",
       "position": [
@@ -38591,7 +38946,7 @@
       ],
       "name": "Basketball 10",
       "order": 478,
-      "parentId": 632,
+      "parentId": 633,
       "path": "assets/Props/Basketball/Models/basketball.obj",
       "pathGuid": "3e65fa8b4567e911",
       "position": [
@@ -38654,7 +39009,7 @@
       ],
       "name": "Basketball Centre Court",
       "order": 479,
-      "parentId": 632,
+      "parentId": 633,
       "path": "assets/Props/Basketball/Models/basketball.obj",
       "pathGuid": "3e65fa8b4567e911",
       "position": [
@@ -38717,7 +39072,7 @@
       ],
       "name": "Basketball Free Throw West",
       "order": 480,
-      "parentId": 632,
+      "parentId": 633,
       "path": "assets/Props/Basketball/Models/basketball.obj",
       "pathGuid": "3e65fa8b4567e911",
       "position": [
@@ -38780,7 +39135,7 @@
       ],
       "name": "Basketball Free Throw East",
       "order": 481,
-      "parentId": 632,
+      "parentId": 633,
       "path": "assets/Props/Basketball/Models/basketball.obj",
       "pathGuid": "3e65fa8b4567e911",
       "position": [
@@ -40816,7 +41171,7 @@
       "position": [
         27.200000762939453,
         6.076300144195557,
-        -10.204299926757813
+        -10.204299926757812
       ],
       "rotation": [
         0.8870108127593994,
@@ -41109,7 +41464,7 @@
       ],
       "name": "Turntable",
       "order": 558,
-      "parentId": 609,
+      "parentId": 610,
       "path": "primitive://cylinder#p558",
       "position": [
         -19.0,
@@ -43272,7 +43627,7 @@
         },
         "Slot": "Top"
       },
-      "id": 594,
+      "id": 593,
       "materials": [
         {
           "guid": "02619ee0a88e6cae",
@@ -43322,7 +43677,7 @@
         },
         "Slot": "Pants"
       },
-      "id": 595,
+      "id": 594,
       "materials": [
         {
           "guid": "4a4ac6fabe21f2c8",
@@ -43372,7 +43727,7 @@
         },
         "Slot": "Shoes"
       },
-      "id": 596,
+      "id": 595,
       "materials": [
         {
           "guid": "6ff7cafa7e9d186a",
@@ -43422,7 +43777,7 @@
         },
         "Slot": "Socks"
       },
-      "id": 655,
+      "id": 596,
       "materials": [
         {
           "guid": "475670f667a70b3b",

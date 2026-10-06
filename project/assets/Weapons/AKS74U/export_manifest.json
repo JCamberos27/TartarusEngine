@@ -1,390 +1,414 @@
-﻿{
-  "source": "C:\\Users\\jacob\\OneDrive\\Desktop\\AKS-74U 60fps (Revised).blend",
+{
+  "source": "C:\\Users\\nickr\\Desktop\\AE_Exports\\AKS74U",
+  "retainedSource": "C:\\Users\\jacob\\OneDrive\\Desktop\\AKS-74U 60fps (Revised).blend",
   "fps": 60,
   "exports": [
     {
-      "file": "AKS-74U_A_FP_ADS.fbx",
-      "action": "A_FP_ADS",
-      "frameStart": 0,
-      "frameEnd": 0,
-      "fps": 60,
-      "skeleton": "Armature",
-      "meshes": [
-        "SK_Manny_Simple",
-        "SK_Manny_Arms",
-        "Quantum_Body_Full",
-        "Quantum_Body_Full.001",
-        "Quantum_Body_Full.002"
-      ],
-      "bytes": 1852412
-    },
-    {
-      "file": "AKS-74U_A_FP_Draw.fbx",
+      "file": "FirstPerson/AKS-74U_A_FP_Draw.fbx",
+      "source": "C:\\Users\\nickr\\Desktop\\AE_Exports\\AKS74U\\A_FP_AK_Draw.fbx",
       "action": "A_FP_Draw",
       "frameStart": 0,
-      "frameEnd": 46,
-      "fps": 60,
-      "skeleton": "Armature",
+      "frameEnd": 46.0,
+      "fps": 60.0,
+      "bytes": 2011292,
+      "sha256": "901b1b0dbbd2da6dfa60462fc4faaf25eea562ae3eaf73b8be86630be3348936",
+      "guid": "1938b9509f147780",
       "meshes": [
-        "SK_Manny_Simple",
-        "SK_Manny_Arms",
-        "Quantum_Body_Full",
-        "Quantum_Body_Full.001",
-        "Quantum_Body_Full.002"
+        "Mesh.001"
       ],
-      "bytes": 1970876
+      "note": "Supplied authored FBX; existing asset identity preserved."
     },
     {
-      "file": "AKS-74U_A_FP_Empty_Reload.fbx",
+      "file": "FirstPerson/AKS-74U_A_FP_Empty_Reload.fbx",
+      "source": "C:\\Users\\nickr\\Desktop\\AE_Exports\\AKS74U\\A_FP_AK_Empty_Reload.fbx",
       "action": "A_FP_Empty_Reload",
       "frameStart": 0,
-      "frameEnd": 220,
-      "fps": 60,
-      "skeleton": "Armature",
+      "frameEnd": 220.0,
+      "fps": 60.0,
+      "bytes": 2866972,
+      "sha256": "6e797cbf1edf70f59e579906890084e984e48aa5e521f2f0536f69889e30e0ce",
+      "guid": "3348386df4b6a44b",
       "meshes": [
-        "SK_Manny_Simple",
-        "SK_Manny_Arms",
-        "Quantum_Body_Full",
-        "Quantum_Body_Full.001",
-        "Quantum_Body_Full.002"
+        "Mesh.001"
       ],
-      "bytes": 4828780
+      "note": "Supplied authored FBX; existing asset identity preserved."
     },
     {
-      "file": "AKS-74U_A_FP_Fire.fbx",
-      "action": "A_FP_Fire",
-      "frameStart": 0,
-      "frameEnd": 36,
-      "fps": 60,
-      "skeleton": "Armature",
-      "meshes": [
-        "SK_Manny_Simple",
-        "SK_Manny_Arms",
-        "Quantum_Body_Full",
-        "Quantum_Body_Full.001",
-        "Quantum_Body_Full.002"
-      ],
-      "bytes": 1968620
-    },
-    {
-      "file": "AKS-74U_A_FP_Holster.fbx",
+      "file": "FirstPerson/AKS-74U_A_FP_Holster.fbx",
+      "source": "C:\\Users\\nickr\\Desktop\\AE_Exports\\AKS74U\\A_FP_AK_Holster.fbx",
       "action": "A_FP_Holster",
       "frameStart": 0,
-      "frameEnd": 28,
-      "fps": 60,
-      "skeleton": "Armature",
+      "frameEnd": 28.0,
+      "fps": 60.0,
+      "bytes": 1964956,
+      "sha256": "373496f6ed85a1cdefb5c3f9dcdc291309df6f465d6f93e7220f725bc4b2e62f",
+      "guid": "8d4c78b10f9caed1",
       "meshes": [
-        "SK_Manny_Simple",
-        "SK_Manny_Arms",
-        "Quantum_Body_Full",
-        "Quantum_Body_Full.001",
-        "Quantum_Body_Full.002"
+        "Mesh.001"
       ],
-      "bytes": 1979612
+      "note": "Supplied authored FBX; existing asset identity preserved."
     },
     {
-      "file": "AKS-74U_A_FP_Idle.fbx",
+      "file": "FirstPerson/AKS-74U_A_FP_Idle.fbx",
+      "source": "C:\\Users\\nickr\\Desktop\\AE_Exports\\AKS74U\\A_FP_AK_Idle.fbx",
       "action": "A_FP_Idle",
       "frameStart": 0,
-      "frameEnd": 128,
-      "fps": 60,
-      "skeleton": "Armature",
+      "frameEnd": 128.0,
+      "fps": 60.0,
+      "bytes": 2388572,
+      "sha256": "d71f479420f4ad5f9f1bffb47beae442a2803854ae85f33a72ce2c9edb002034",
+      "guid": "4168495e7bad8625",
       "meshes": [
-        "SK_Manny_Simple",
-        "SK_Manny_Arms",
-        "Quantum_Body_Full",
-        "Quantum_Body_Full.001",
-        "Quantum_Body_Full.002"
+        "Mesh.001"
       ],
-      "bytes": 3442364
+      "note": "Supplied authored FBX; existing asset identity preserved."
     },
     {
-      "file": "AKS-74U_A_FP_IdleToSprint.fbx",
+      "file": "FirstPerson/AKS-74U_A_FP_IdleToSprint.fbx",
+      "source": "C:\\Users\\nickr\\Desktop\\AE_Exports\\AKS74U\\A_FP_AK_Idle_To_Sprint.fbx",
       "action": "A_FP_IdleToSprint",
       "frameStart": 0,
-      "frameEnd": 16,
-      "fps": 60,
-      "skeleton": "Armature",
+      "frameEnd": 16.0,
+      "fps": 60.0,
+      "bytes": 1867260,
+      "sha256": "8eed24cd16683616e38f5ade311560a52ae8ff749daad7c6758b0ed243795866",
+      "guid": "e9c31ac6116dfd06",
       "meshes": [
-        "SK_Manny_Simple",
-        "SK_Manny_Arms",
-        "Quantum_Body_Full",
-        "Quantum_Body_Full.001",
-        "Quantum_Body_Full.002"
+        "Mesh.001"
       ],
-      "bytes": 1963804
+      "note": "Supplied authored FBX; existing asset identity preserved."
     },
     {
-      "file": "AKS-74U_A_FP_Inspect.fbx",
+      "file": "FirstPerson/AKS-74U_A_FP_Inspect.fbx",
+      "source": "C:\\Users\\nickr\\Desktop\\AE_Exports\\AKS74U\\A_FP_AK_Inspect.fbx",
       "action": "A_FP_Inspect",
       "frameStart": 0,
-      "frameEnd": 282,
-      "fps": 60,
-      "skeleton": "Armature",
+      "frameEnd": 282.0,
+      "fps": 60.0,
+      "bytes": 3159916,
+      "sha256": "9ee88bf3c499f4c7d64b5fcb4ca0752e2edba6c06edc772929a4ffab8e1bc527",
+      "guid": "19f07109f9ebb97d",
       "meshes": [
-        "SK_Manny_Simple",
-        "SK_Manny_Arms",
-        "Quantum_Body_Full",
-        "Quantum_Body_Full.001",
-        "Quantum_Body_Full.002"
+        "Mesh.001"
       ],
-      "bytes": 5682428
+      "note": "Supplied authored FBX; existing asset identity preserved."
     },
     {
-      "file": "AKS-74U_A_FP_Mag_Check.fbx",
+      "file": "FirstPerson/AKS-74U_A_FP_Mag_Check.fbx",
+      "source": "C:\\Users\\nickr\\Desktop\\AE_Exports\\AKS74U\\A_FP_AK_Mag_Check.fbx",
       "action": "A_FP_Mag_Check",
       "frameStart": 0,
-      "frameEnd": 260,
-      "fps": 60,
-      "skeleton": "Armature",
+      "frameEnd": 260.0,
+      "fps": 60.0,
+      "bytes": 3033116,
+      "sha256": "7cc930a07cea30aaebeaa4ceeb7e61c9bf3d3b824be33d62445e2815e2813c90",
+      "guid": "58a7ef1b4bd1ae0e",
       "meshes": [
-        "SK_Manny_Simple",
-        "SK_Manny_Arms",
-        "Quantum_Body_Full",
-        "Quantum_Body_Full.001",
-        "Quantum_Body_Full.002"
+        "Mesh.001"
       ],
-      "bytes": 2058172
+      "note": "Supplied authored FBX; existing asset identity preserved."
     },
     {
-      "file": "AKS-74U_A_FP_Melee.fbx",
+      "file": "FirstPerson/AKS-74U_A_FP_Melee.fbx",
+      "source": "C:\\Users\\nickr\\Desktop\\AE_Exports\\AKS74U\\A_FP_AK_Melee.fbx",
       "action": "A_FP_Melee",
       "frameStart": 0,
-      "frameEnd": 65,
-      "fps": 60,
-      "skeleton": "Armature",
+      "frameEnd": 65.0,
+      "fps": 60.0,
+      "bytes": 2110716,
+      "sha256": "3eb01bddf70d3b7ac23ca1df80976ad76bf59846611a82683d3d19ca1ae8f7cf",
+      "guid": "48e798f1913d3f54",
       "meshes": [
-        "SK_Manny_Simple",
-        "SK_Manny_Arms",
-        "Quantum_Body_Full",
-        "Quantum_Body_Full.001",
-        "Quantum_Body_Full.002"
+        "Mesh.001"
       ],
-      "bytes": 2604524
+      "note": "Supplied authored FBX; existing asset identity preserved."
     },
     {
-      "file": "AKS-74U_A_FP_Regrip.fbx",
+      "file": "FirstPerson/AKS-74U_A_FP_Regrip.fbx",
+      "source": "C:\\Users\\nickr\\Desktop\\AE_Exports\\AKS74U\\A_FP_AK_Regrip.fbx",
       "action": "A_FP_Regrip",
       "frameStart": 0,
-      "frameEnd": 40,
-      "fps": 60,
-      "skeleton": "Armature",
+      "frameEnd": 40.0,
+      "fps": 60.0,
+      "bytes": 1977964,
+      "sha256": "0beb8d464347fed050a5fff6bd99a8f6d5c11a7465bfd08efff239147ebce8c0",
+      "guid": "c10ae2c34481e1f7",
       "meshes": [
-        "SK_Manny_Simple",
-        "SK_Manny_Arms",
-        "Quantum_Body_Full",
-        "Quantum_Body_Full.001",
-        "Quantum_Body_Full.002"
+        "Mesh.001"
       ],
-      "bytes": 1969388
+      "note": "Supplied authored FBX; existing asset identity preserved."
     },
     {
-      "file": "AKS-74U_A_FP_Sprint.fbx",
+      "file": "FirstPerson/AKS-74U_A_FP_Sprint.fbx",
+      "source": "C:\\Users\\nickr\\Desktop\\AE_Exports\\AKS74U\\A_FP_AK_Sprint.fbx",
       "action": "A_FP_Sprint",
       "frameStart": 0,
-      "frameEnd": 44,
-      "fps": 60,
-      "skeleton": "Armature",
+      "frameEnd": 43.99999999870091,
+      "fps": 60.0,
+      "bytes": 1998060,
+      "sha256": "7cda98e99ce2643a1871079b25fe6843998b27e17eb4d44582ed1508b0daad0e",
+      "guid": "3862c30a005b6f45",
       "meshes": [
-        "SK_Manny_Simple",
-        "SK_Manny_Arms",
-        "Quantum_Body_Full",
-        "Quantum_Body_Full.001",
-        "Quantum_Body_Full.002"
+        "Mesh.001"
       ],
-      "bytes": 1970988
+      "note": "Supplied authored FBX; existing asset identity preserved."
     },
     {
-      "file": "AKS-74U_A_FP_SprintToIdle.fbx",
+      "file": "FirstPerson/AKS-74U_A_FP_SprintToIdle.fbx",
+      "source": "C:\\Users\\nickr\\Desktop\\AE_Exports\\AKS74U\\A_FP_AK_Sprint_To_Idle.fbx",
       "action": "A_FP_SprintToIdle",
       "frameStart": 0,
-      "frameEnd": 44,
-      "fps": 60,
-      "skeleton": "Armature",
+      "frameEnd": 43.99999999870091,
+      "fps": 60.0,
+      "bytes": 1998396,
+      "sha256": "f912ae1b51899a64df74c3382447212e1a89ad161799863ff9940b3133781163",
+      "guid": "b1146b87d6885ed2",
       "meshes": [
-        "SK_Manny_Simple",
-        "SK_Manny_Arms",
-        "Quantum_Body_Full",
-        "Quantum_Body_Full.001",
-        "Quantum_Body_Full.002"
+        "Mesh.001"
       ],
-      "bytes": 1969388
+      "note": "Supplied authored FBX; existing asset identity preserved."
     },
     {
-      "file": "AKS-74U_A_FP_Tac_Reload.fbx",
+      "file": "FirstPerson/AKS-74U_A_FP_Tac_Reload.fbx",
+      "source": "C:\\Users\\nickr\\Desktop\\AE_Exports\\AKS74U\\A_FP_AK_Tac_Reload.fbx",
       "action": "A_FP_Tac_Reload",
       "frameStart": 0,
-      "frameEnd": 170,
-      "fps": 60,
-      "skeleton": "Armature",
+      "frameEnd": 170.0,
+      "fps": 60.0,
+      "bytes": 2623612,
+      "sha256": "c79e592fa9dd0aa968e144edfbff625647dddf7432e62442cf5b09bfbd64c8d5",
+      "guid": "007cce9507dc0627",
       "meshes": [
-        "SK_Manny_Simple",
-        "SK_Manny_Arms",
-        "Quantum_Body_Full",
-        "Quantum_Body_Full.001",
-        "Quantum_Body_Full.002"
+        "Mesh.001"
       ],
-      "bytes": 2046572
+      "note": "Supplied authored FBX; existing asset identity preserved."
     },
     {
-      "file": "AKS-74U_A_FP_Walk.fbx",
+      "file": "FirstPerson/AKS-74U_A_FP_Walk.fbx",
+      "source": "C:\\Users\\nickr\\Desktop\\AE_Exports\\AKS74U\\A_FP_AK_Walk.fbx",
       "action": "A_FP_Walk",
       "frameStart": 0,
-      "frameEnd": 44,
-      "fps": 60,
-      "skeleton": "Armature",
+      "frameEnd": 43.99999999870091,
+      "fps": 60.0,
+      "bytes": 1997660,
+      "sha256": "3b4a97d497407aa3d775ec34ecd69de9a88990c2e795c556b1c77bd66c233b21",
+      "guid": "6e8123547b7ff1e4",
       "meshes": [
-        "SK_Manny_Simple",
-        "SK_Manny_Arms",
-        "Quantum_Body_Full",
-        "Quantum_Body_Full.001",
-        "Quantum_Body_Full.002"
+        "Mesh.001"
       ],
-      "bytes": 1969004
+      "note": "Supplied authored FBX; existing asset identity preserved."
     },
     {
-      "file": "AKS-74U_A_W_ADS.fbx",
-      "action": "A_W_ADS",
+      "file": "Weapon/AKS-74U_A_W_Empty_Reload.fbx",
+      "source": "C:\\Users\\nickr\\Desktop\\AE_Exports\\AKS74U\\A_W_AK_Empty_Reload.fbx",
+      "action": "A_W_Empty_Reload",
+      "frameStart": 0,
+      "frameEnd": 220.0,
+      "fps": 60.0,
+      "bytes": 1767756,
+      "sha256": "c5d838b3d1d537c2bf62af1ba7d2b50a847f045b95c173250e3154465b0fba09",
+      "guid": "d0dfc9ab0c48a48d",
+      "meshes": [
+        "Mesh",
+        "Mesh"
+      ],
+      "note": "Supplied authored FBX; existing asset identity preserved."
+    },
+    {
+      "file": "Weapon/AKS-74U_A_W_Fire.fbx",
+      "source": "C:\\Users\\nickr\\Desktop\\AE_Exports\\AKS74U\\A_W_AK_Fire.fbx",
+      "action": "A_W_Fire",
+      "frameStart": 0,
+      "frameEnd": 36.0,
+      "fps": 60.0,
+      "bytes": 1675196,
+      "sha256": "a40d9f15c33918f4bbfea1cb9a7df2138450ade35ac637acbe8bd93186f72cb1",
+      "guid": "77923d570c4ce1c5",
+      "meshes": [
+        "Mesh",
+        "Mesh"
+      ],
+      "note": "Supplied authored FBX; existing asset identity preserved."
+    },
+    {
+      "file": "Weapon/AKS-74U_A_W_ADS.fbx",
+      "source": "C:\\Users\\nickr\\Desktop\\AE_Exports\\AKS74U\\A_W_AK_Idle.fbx",
+      "action": "A_W_Idle",
+      "frameStart": 0,
+      "frameEnd": 16.0,
+      "fps": 60.0,
+      "bytes": 1668924,
+      "sha256": "914a2fb9d189cf2e47986242820953f7fd8f3cca0fe933bbccd3ca75676d5573",
+      "guid": "6f35fb7e3ac4ee7b",
+      "meshes": [
+        "Mesh",
+        "Mesh"
+      ],
+      "note": "Supplied authored FBX; existing asset identity preserved."
+    },
+    {
+      "file": "Weapon/AKS-74U_A_W_Inspect.fbx",
+      "source": "C:\\Users\\nickr\\Desktop\\AE_Exports\\AKS74U\\A_W_AK_Inspect.fbx",
+      "action": "A_W_Inspect",
+      "frameStart": 0,
+      "frameEnd": 282.0,
+      "fps": 60.0,
+      "bytes": 1794460,
+      "sha256": "ed56e0bdcc661d9f0f18c7974e7bdb3f536c8ce1cfdd994df074de1f749a2624",
+      "guid": "0b328cb32a01d270",
+      "meshes": [
+        "Mesh",
+        "Mesh"
+      ],
+      "note": "Supplied authored FBX; existing asset identity preserved."
+    },
+    {
+      "file": "Weapon/AKS-74U_A_W_Mag_Check.fbx",
+      "source": "C:\\Users\\nickr\\Desktop\\AE_Exports\\AKS74U\\A_W_AK_Mag_Check.fbx",
+      "action": "A_W_Mag_Check",
+      "frameStart": 0,
+      "frameEnd": 260.0,
+      "fps": 60.0,
+      "bytes": 1787900,
+      "sha256": "15757c8b6ce5d3323b73aa9c5c2916a32eb789c8851673cedb3b2d373c1c3446",
+      "guid": "a01aa15f799151d3",
+      "meshes": [
+        "Mesh",
+        "Mesh"
+      ],
+      "note": "Supplied authored FBX; existing asset identity preserved."
+    },
+    {
+      "file": "Weapon/AKS-74U_A_W_Tac_Reload.fbx",
+      "source": "C:\\Users\\nickr\\Desktop\\AE_Exports\\AKS74U\\A_W_AK_Tac_Reload.fbx",
+      "action": "A_W_Tac_Reload",
+      "frameStart": 0,
+      "frameEnd": 170.0,
+      "fps": 60.0,
+      "bytes": 1743884,
+      "sha256": "ec5cdab25acb8ed6a091f976e35f5830cd64a33cb7552eea8af19aff201ed9fb",
+      "guid": "81b5689d2228d3a9",
+      "meshes": [
+        "Mesh",
+        "Mesh"
+      ],
+      "note": "Supplied authored FBX; existing asset identity preserved."
+    },
+    {
+      "file": "Weapon/AKS-74U_A_W_Holster.fbx",
+      "source": "C:\\Users\\nickr\\Desktop\\AE_Exports\\AKS74U\\A_W_AK_Idle.fbx",
+      "action": "A_W_Idle",
+      "frameStart": 0,
+      "frameEnd": 28.0,
+      "fps": 60.0,
+      "bytes": 1668924,
+      "sha256": "f8673a0901acb824db5fd56c028938258d756a8bc25d4b98a9b1b03a0f681112",
+      "guid": "2a62a06dbf117169",
+      "meshes": [
+        "Mesh",
+        "Mesh"
+      ],
+      "note": "Neutral supplied weapon pose; no separate weapon take provided for this action. Original duration retained."
+    },
+    {
+      "file": "Weapon/AKS-74U_A_W_IdleToSprint.fbx",
+      "source": "C:\\Users\\nickr\\Desktop\\AE_Exports\\AKS74U\\A_W_AK_Idle.fbx",
+      "action": "A_W_Idle",
+      "frameStart": 0,
+      "frameEnd": 16.0,
+      "fps": 60.0,
+      "bytes": 1668924,
+      "sha256": "914a2fb9d189cf2e47986242820953f7fd8f3cca0fe933bbccd3ca75676d5573",
+      "guid": "971a40ef2e78a7a9",
+      "meshes": [
+        "Mesh",
+        "Mesh"
+      ],
+      "note": "Neutral supplied weapon pose; no separate weapon take provided for this action. Original duration retained."
+    },
+    {
+      "file": "Weapon/AKS-74U_A_W_Melee.fbx",
+      "source": "C:\\Users\\nickr\\Desktop\\AE_Exports\\AKS74U\\A_W_AK_Idle.fbx",
+      "action": "A_W_Idle",
+      "frameStart": 0,
+      "frameEnd": 65.0,
+      "fps": 60.0,
+      "bytes": 1668924,
+      "sha256": "c33e70110d26ac4dd1e18aa09c37316380318bf10a10d6b21ae8e58a35c2320b",
+      "guid": "6fb7b6fdfc2b4941",
+      "meshes": [
+        "Mesh",
+        "Mesh"
+      ],
+      "note": "Neutral supplied weapon pose; no separate weapon take provided for this action. Original duration retained."
+    },
+    {
+      "file": "Weapon/AKS-74U_A_W_Sprint.fbx",
+      "source": "C:\\Users\\nickr\\Desktop\\AE_Exports\\AKS74U\\A_W_AK_Idle.fbx",
+      "action": "A_W_Idle",
+      "frameStart": 0,
+      "frameEnd": 43.99999999870091,
+      "fps": 60.0,
+      "bytes": 1668924,
+      "sha256": "da5067d4ebeb206afa19cfcdc44aded226c9e59fc982eda7e09c904bfa30235b",
+      "guid": "438b9b2758b79a49",
+      "meshes": [
+        "Mesh",
+        "Mesh"
+      ],
+      "note": "Neutral supplied weapon pose; no separate weapon take provided for this action. Original duration retained."
+    },
+    {
+      "file": "Weapon/AKS-74U_A_W_SprintToIdle.fbx",
+      "source": "C:\\Users\\nickr\\Desktop\\AE_Exports\\AKS74U\\A_W_AK_Idle.fbx",
+      "action": "A_W_Idle",
+      "frameStart": 0,
+      "frameEnd": 43.99999999870091,
+      "fps": 60.0,
+      "bytes": 1668924,
+      "sha256": "da5067d4ebeb206afa19cfcdc44aded226c9e59fc982eda7e09c904bfa30235b",
+      "guid": "c5582401991a3963",
+      "meshes": [
+        "Mesh",
+        "Mesh"
+      ],
+      "note": "Neutral supplied weapon pose; no separate weapon take provided for this action. Original duration retained."
+    },
+    {
+      "file": "FirstPerson/AKS-74U_A_FP_ADS.fbx",
+      "source": "C:\\Users\\jacob\\OneDrive\\Desktop\\AKS-74U 60fps (Revised).blend",
+      "action": "Bind pose (no take)",
       "frameStart": 0,
       "frameEnd": 0,
       "fps": 60,
-      "skeleton": "AK",
-      "meshes": [
-        "aks74u"
-      ],
-      "bytes": 1652828
+      "bytes": 1852412,
+      "sha256": "22a460e085ad0ada7d2f470ada3526517d9cf9fbdcb1ea5b2e179b18391aaaca",
+      "guid": "101cd70269fca765",
+      "note": "Retained authored reference: no replacement provided; shared-rig poses remain compatible."
     },
     {
-      "file": "AKS-74U_A_W_Empty_Reload.fbx",
-      "action": "A_W_Empty_Reload",
+      "file": "FirstPerson/AKS-74U_A_FP_Aim.fbx",
+      "source": "C:\\Users\\jacob\\OneDrive\\Desktop\\AKS-74U 60fps (Revised).blend",
+      "action": "Scene",
       "frameStart": 0,
-      "frameEnd": 220,
-      "fps": 60,
-      "skeleton": "AK",
-      "meshes": [
-        "aks74u"
-      ],
-      "bytes": 1773100
-    },
-    {
-      "file": "AKS-74U_A_W_Fire.fbx",
-      "action": "A_W_Fire",
-      "frameStart": 0,
-      "frameEnd": 36,
-      "fps": 60,
-      "skeleton": "AK",
-      "meshes": [
-        "aks74u"
-      ],
-      "bytes": 1679852
-    },
-    {
-      "file": "AKS-74U_A_W_Holster.fbx",
-      "action": "A_W_Holster",
-      "frameStart": 0,
-      "frameEnd": 28,
-      "fps": 60,
-      "skeleton": "AK",
-      "meshes": [
-        "aks74u"
-      ],
-      "bytes": 1678620
-    },
-    {
-      "file": "AKS-74U_A_W_IdleToSprint.fbx",
-      "action": "A_W_IdleToSprint",
-      "frameStart": 0,
-      "frameEnd": 16,
-      "fps": 60,
-      "skeleton": "AK",
-      "meshes": [
-        "aks74u"
-      ],
-      "bytes": 1667644
-    },
-    {
-      "file": "AKS-74U_A_W_Inspect.fbx",
-      "action": "A_W_Inspect",
-      "frameStart": 0,
-      "frameEnd": 282,
-      "fps": 60,
-      "skeleton": "AK",
-      "meshes": [
-        "aks74u"
-      ],
-      "bytes": 1800300
-    },
-    {
-      "file": "AKS-74U_A_W_Mag_Check.fbx",
-      "action": "A_W_Mag_Check",
-      "frameStart": 0,
-      "frameEnd": 260,
-      "fps": 60,
-      "skeleton": "AK",
-      "meshes": [
-        "aks74u"
-      ],
-      "bytes": 1793324
-    },
-    {
-      "file": "AKS-74U_A_W_Melee.fbx",
-      "action": "A_W_Melee",
-      "frameStart": 0,
-      "frameEnd": 65,
-      "fps": 60,
-      "skeleton": "AK",
-      "meshes": [
-        "aks74u"
-      ],
-      "bytes": 1696476
-    },
-    {
-      "file": "AKS-74U_A_W_Sprint.fbx",
-      "action": "A_W_Sprint",
-      "frameStart": 0,
-      "frameEnd": 44,
-      "fps": 60,
-      "skeleton": "AK",
-      "meshes": [
-        "aks74u"
-      ],
-      "bytes": 1686108
-    },
-    {
-      "file": "AKS-74U_A_W_SprintToIdle.fbx",
-      "action": "A_W_SprintToIdle",
-      "frameStart": 0,
-      "frameEnd": 44,
-      "fps": 60,
-      "skeleton": "AK",
-      "meshes": [
-        "aks74u"
-      ],
-      "bytes": 1686108
-    },
-    {
-      "file": "AKS-74U_A_W_Tac_Reload.fbx",
-      "action": "A_W_Tac_Reload",
-      "frameStart": 0,
-      "frameEnd": 170,
-      "fps": 60,
-      "skeleton": "AK",
-      "meshes": [
-        "aks74u"
-      ],
-      "bytes": 1749324
-    },
-    {
-      "file": "AKS-74U_A_FP_Aim.fbx",
-      "action": "A_FP_ADS",
-      "frameStart": 0,
-      "frameEnd": 1,
-      "fps": 60,
-      "skeleton": "Armature",
-      "meshes": [],
+      "frameEnd": 1.0,
+      "fps": 60.0,
       "bytes": 1532556,
-      "note": "Armature only. Carries the A_FP_ADS single-frame pose so the Aim state can play it instead of falling back to the arms bind pose (which is the A-pose, 67.8 cm from the weapon). Exported with bake_anim=True because the action only keys CB_* control bones; the deform bones get their values from the constraint evaluation that baking samples. No meshes, so it adds no material or texture loads."
+      "sha256": "2ea82517c84e4470b96c72924f95ea7b040d6d620c2780068d99789cf83747b1",
+      "guid": "9004884db6cdfb0e",
+      "note": "Retained authored reference: no replacement provided; shared-rig poses remain compatible."
+    },
+    {
+      "file": "FirstPerson/AKS-74U_A_FP_Fire.fbx",
+      "source": "C:\\Users\\jacob\\OneDrive\\Desktop\\AKS-74U 60fps (Revised).blend",
+      "action": "Scene",
+      "frameStart": 0,
+      "frameEnd": 36.0,
+      "fps": 60.0,
+      "bytes": 2150892,
+      "sha256": "11dc122e4f5c22f8d6c00a3eda4724ed3d2c0a30a6b07cf71851f3e292bbbdaf",
+      "guid": "818ad9a16cc62d87",
+      "note": "Retained authored reference: no replacement provided; shared-rig poses remain compatible."
     }
-  ],
-  "errors": []
+  ]
 }

@@ -7,6 +7,71 @@
 
 namespace FPBody {
 
+float LocomotionSpineWeight(const AnimatorControllerComponent& animator, float& crouch) {
+    const auto ctrl = GetAnimatorController(animator.Controller);
+    if (!ctrl || ctrl->Layers.empty() || animator.Layers.empty() || animator.Layers[0].Stack.empty()) return 1.0f;
+    const auto& stack = animator.Layers[0].Stack;
+    std::vector<float> fades;
+    for (const auto& entry : stack) fades.push_back(entry.Fade);
+    const auto weights = AnimatorStackWeights(fades);
+    float gait = 0.0f, crouched = 0.0f;
+    for (size_t s = 0; s < stack.size(); ++s) {
+        const int state = stack[s].State;
+        if (state < 0 || state >= (int)ctrl->Layers[0].States.size()) continue;
+        const auto& st = ctrl->Layers[0].States[state];
+        if (st.Name == kStateCrouchDown || st.Name == kStateCrouchUp ||
+            st.Name == kStateJump || st.Name == kStateFall || st.Name == kStateLand) continue;
+        if (st.Name != kStateLocomotion && st.Name != kStateCrouchLoco &&
+            !st.HasTag("Locomotion") && !st.HasTag("Turn") && !st.HasTag("Start") && !st.HasTag("Stop")) continue;
+        gait += weights[s];
+        if (st.Name == kStateCrouchLoco || st.HasTag("Crouch")) crouched += weights[s];
+    }
+    if (gait > 1e-5f) crouch = std::clamp(crouched / gait, 0.0f, 1.0f);
+    // Preserve additive hit reactions instead of pinning their spine back to idle.
+    for (size_t layer = 1; layer < animator.Layers.size() && layer < ctrl->Layers.size(); ++layer) {
+        fades.clear();
+        for (const auto& entry : animator.Layers[layer].Stack) fades.push_back(entry.Fade);
+        const auto overlayWeights = AnimatorStackWeights(fades);
+        float hit = 0.0f;
+        for (size_t s = 0; s < animator.Layers[layer].Stack.size(); ++s) {
+            const int state = animator.Layers[layer].Stack[s].State;
+            if (state >= 0 && state < (int)ctrl->Layers[layer].States.size() && ctrl->Layers[layer].States[state].HasTag("Hit"))
+                hit += overlayWeights[s];
+        }
+        gait *= 1.0f - std::clamp(hit, 0.0f, 1.0f);
+    }
+    return gait;
+}
+
+void BlendLocomotionSpine(IK::Pose& pose, const std::vector<int>& parents, const std::array<int, 5>& bones,
+                         const std::vector<glm::mat4>& stand, const std::vector<glm::mat4>& crouch,
+                         float crouchWeight, float stability, float crouchDrop) {
+    stability = std::clamp(stability, 0.0f, 1.0f);
+    if (stability <= 0.0f || pose.size() != parents.size() || stand.size() != pose.size()) return;
+    crouchWeight = std::clamp(crouchWeight, 0.0f, 1.0f);
+    const bool haveCrouch = crouch.size() == pose.size();
+    std::vector<glm::mat4> globals;
+    IK::ComputeGlobals(pose, parents, globals);
+    std::vector<IK::GlobalTarget> targets;
+    constexpr float retained[5] = {0.10f, 0.05f, 0.0f, 0.0f, 0.0f};
+    for (size_t slot = 0; slot < bones.size(); ++slot) {
+        const int i = bones[slot];
+        if (i < 0 || i >= (int)pose.size()) continue;
+        const auto& a = stand[i];
+        const auto& b = haveCrouch ? crouch[i] : a;
+        glm::vec3 neutral = glm::mix(IK::Position(a), IK::Position(b), crouchWeight);
+        if (!haveCrouch) neutral.y -= crouchDrop * crouchWeight;
+        const glm::quat rotation = glm::normalize(glm::slerp(IK::Rotation(a), IK::Rotation(b), crouchWeight));
+        const float blend = stability * (1.0f - retained[slot]);
+        // Original model-space transforms cancel inherited pelvis motion too. SetGlobals converts
+        // through the corrected parents while leaving pelvis/leg local transforms untouched.
+        targets.push_back({i, glm::mix(IK::Position(globals[i]), neutral, blend),
+                           glm::normalize(glm::slerp(IK::Rotation(globals[i]), rotation, blend))});
+    }
+    std::sort(targets.begin(), targets.end(), [](const auto& a, const auto& b) { return a.Node < b.Node; });
+    IK::SetGlobals(pose, parents, globals, targets);
+}
+
 std::map<std::string, std::string> ParseBoneMap(const std::string& text) {
     std::map<std::string, std::string> out;
     auto trim = [](std::string v) {

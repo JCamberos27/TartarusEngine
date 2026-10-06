@@ -36,7 +36,8 @@ rem (exit 99, nothing built yet). Output goes to build\last-build.log. Exit code
 rem 10 / 11 the build failed and the screen already showed the errors and asked - launch the
 rem previous build / close. Anything else (the screen itself failed) falls back to the plain
 rem report below.
-powershell -NoProfile -ExecutionPolicy Bypass -File "%~dp0tools\launcher\launch-crt.ps1" -Build
+powershell -NoProfile -ExecutionPolicy Bypass -File "%~dp0tools\launcher\launch-crt.ps1" -Build -Launch
+if errorlevel 12 if not errorlevel 13 exit /b 0
 if errorlevel 99 if not errorlevel 100 (
   powershell -NoProfile -ExecutionPolicy Bypass -File "%~dp0tools\launcher\launch-screen.ps1" -Build
 )

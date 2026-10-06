@@ -2891,7 +2891,15 @@
           0.38999998569488525,
           0.0
         ],
-        "View Model Scale": 1.0
+        "View Model Scale": 1.0,
+        "Primary Weapon Prefab": {
+          "path": "assets/Weapons/AKS74U/AKS74U.prefab",
+          "pathGuid": "b19271e02ef840f1"
+        },
+        "Secondary Weapon Prefab": {
+          "path": "assets/Weapons/Remington870/Remington870.prefab",
+          "pathGuid": "cf1fec9edad348ec"
+        }
       },
       "id": 59,
       "name": "Player Spawn",

@@ -1,6 +1,8 @@
 #include "FirstPersonAnimation.h"
 #include "AnimatorController.h"
 #include "AtomicFile.h"
+#include "AssetDatabase.h"
+#include "ProjectPaths.h"
 
 #include <json.hpp>
 
@@ -11,6 +13,7 @@
 #include <fstream>
 #include <map>
 #include <unordered_set>
+#include <tuple>
 
 using json = nlohmann::json;
 
@@ -78,8 +81,42 @@ bool FirstPersonAnimationSet::FromJsonString(const std::string& text, FirstPerso
     parsed.ArmsModel = String(root, "armsModel");
     parsed.WeaponModel = String(root, "weaponModel");
     parsed.Controller = String(root, "controller");
+    parsed.RecoilProfile = String(root, "recoilProfile");
+    parsed.RecoilProfileGuid = String(root, "recoilProfileGuid");
+    for (const char* key : {"recoilProfile", "recoilProfileGuid"})
+        if (root.contains(key) && !root[key].is_string()) return Fail(error, std::string(key) + " must be a string");
     parsed.ViewRotation = Vec3(root, "viewRotation", glm::vec3(0.0f));
+    parsed.ViewPosition = Vec3(root, "viewPosition", glm::vec3(0.0f));
+    if(root.contains("adsLocomotionScale") && !root["adsLocomotionScale"].is_number())
+        return Fail(error,"'adsLocomotionScale' must be numeric");
+    parsed.AdsLocomotionScale=Number(root,"adsLocomotionScale",1.0f);
+    if (!std::isfinite(parsed.AdsLocomotionScale) || parsed.AdsLocomotionScale<0 || parsed.AdsLocomotionScale>1)
+        return Fail(error,"'adsLocomotionScale' must be between zero and one");
     parsed.WeaponSocket = String(root, "weaponSocket");
+    parsed.CameraShakeProfile=String(root,"cameraShakeProfile");
+    parsed.CameraShakeProfileGuid=String(root,"cameraShakeProfileGuid");
+    if(const auto it=root.find("actionCamera");it!=root.end()) {
+        if(!it->is_object()) return Fail(error,"actionCamera must be an object");
+        auto& c=parsed.ActionCamera;
+        c.Enabled=Bool(*it,"enabled",c.Enabled);
+        c.Node=String(*it,"node");
+        if(it->contains("referenceState")) c.ReferenceState=String(*it,"referenceState");
+        for(auto [key,dst]:{std::pair{"tags",&c.Tags},std::pair{"states",&c.States}}) {
+            if(!it->contains(key)) continue;
+            if(!it->at(key).is_array()) return Fail(error,std::string("actionCamera.")+key+" must be an array");
+            dst->clear();
+            for(const auto& value:it->at(key)) {
+                if(!value.is_string()) return Fail(error,"actionCamera tags/states must be strings");
+                dst->push_back(value.get<std::string>());
+            }
+        }
+        for(auto [key,dst,max]:{std::tuple{"rotationScale",&c.RotationScale,2.0f},
+                               std::tuple{"positionScale",&c.PositionScale,2.0f},std::tuple{"adsScale",&c.AdsScale,2.0f}}) {
+            if(it->contains(key) && !it->at(key).is_number()) return Fail(error,std::string("actionCamera.")+key+" must be numeric");
+            *dst=Number(*it,key,*dst);
+            if(!std::isfinite(*dst) || *dst<0 || *dst>max) return Fail(error,"actionCamera scales must be between 0 and 2");
+        }
+    }
     parsed.WeaponRoot = String(root, "weaponRoot");
     parsed.WeaponMountRotation = Vec3(root, "weaponMountRotation", glm::vec3(0.0f));
     parsed.WeaponMountOffset = Vec3(root, "weaponMountOffset", glm::vec3(0.0f));
@@ -94,6 +131,8 @@ bool FirstPersonAnimationSet::FromJsonString(const std::string& text, FirstPerso
     if (parsed.WeaponModel.empty()) return Fail(error, "missing required string 'weaponModel'");
     if (!Finite(parsed.ViewRotation))
         return Fail(error, "'viewRotation' must be three finite numbers (Y-X-Z degrees)");
+    if (!Finite(parsed.ViewPosition))
+        return Fail(error, "'viewPosition' must be three finite numbers (camera-space metres)");
     if (!Finite(parsed.WeaponMountRotation))
         return Fail(error, "'weaponMountRotation' must be three finite numbers (Y-X-Z degrees)");
     if (!Finite(parsed.WeaponMountOffset))
@@ -117,6 +156,10 @@ bool FirstPersonAnimationSet::FromJsonString(const std::string& text, FirstPerso
         gp.Magazine = std::max(1, (int)Number(*g, "magazine", (float)gp.Magazine));
         gp.RoundsPerMinute = Number(*g, "rpm", gp.RoundsPerMinute);
         gp.AllowFullAuto = Bool(*g, "allowFullAuto", gp.AllowFullAuto);
+        const float burstRounds = Number(*g, "burstRounds", 0.0f);
+        if (!std::isfinite(burstRounds) || burstRounds < 0.0f || burstRounds > 32.0f || burstRounds != std::floor(burstRounds))
+            return Fail(error, "gameplay.burstRounds must be an integer from 0 to 32");
+        gp.BurstRounds = (int)burstRounds;
         gp.ReloadHoldSeconds = Number(*g, "reloadHoldSeconds", gp.ReloadHoldSeconds);
         gp.RegripMin = Number(*g, "regripMin", gp.RegripMin);
         gp.RegripMax = Number(*g, "regripMax", gp.RegripMax);
@@ -332,7 +375,31 @@ bool FirstPersonAnimationSet::LoadFile(const std::string& path, FirstPersonAnima
                                         std::string* error) {
     std::ifstream in(std::filesystem::u8path(path));
     if (!in.is_open()) return Fail(error, "could not open '" + path + "'");
-    return FromJsonString(std::string(std::istreambuf_iterator<char>(in), {}), out, error);
+    FirstPersonAnimationSet parsed;
+    if (!FromJsonString(std::string(std::istreambuf_iterator<char>(in), {}), parsed, error)) return false;
+    if (!parsed.RecoilProfile.empty()) {
+        parsed.RecoilProfile = AssetDatabase::FollowRef(parsed.RecoilProfile, parsed.RecoilProfileGuid);
+        RecoilAsset profile;
+        if (!RecoilAsset::LoadFile(ProjectPaths::Resolve(parsed.RecoilProfile), profile, error)) return false;
+        // Bolt setup and firing policy belong to the weapon, not the shared profile.
+        const auto legacy = parsed.Procedural.Recoil;
+        parsed.Procedural.Recoil = profile.Data;
+        parsed.Procedural.Recoil.HipProcedural = true;
+        parsed.Procedural.Recoil.BoltBone = legacy.BoltBone;
+        parsed.Procedural.Recoil.BoltCycle = legacy.BoltCycle;
+        parsed.Procedural.Recoil.BoltTravel = legacy.BoltTravel;
+    }
+    if(!parsed.CameraShakeProfile.empty()) {
+        parsed.CameraShakeProfile=AssetDatabase::FollowRef(parsed.CameraShakeProfile,parsed.CameraShakeProfileGuid);
+        if(!CameraShakeAsset::LoadFile(ProjectPaths::Resolve(parsed.CameraShakeProfile),parsed.CameraShake,error)) return false;
+        // This profile is the complete firing camera motion: legacy punch/roll must not
+        // add another (potentially randomized) camera offset over the authored curves.
+        parsed.Procedural.Recoil.ShakeAmount=0;
+        parsed.Procedural.Recoil.CameraScale=0;
+        parsed.Procedural.Recoil.CameraRoll=0;
+    }
+    out = std::move(parsed);
+    return true;
 }
 
 std::string FirstPersonAnimationSet::ToJsonString() const {
@@ -342,7 +409,22 @@ std::string FirstPersonAnimationSet::ToJsonString() const {
     j["armsModel"] = ArmsModel;
     j["weaponModel"] = WeaponModel;
     j["controller"] = Controller;
+    j["actionCamera"]={{"enabled",ActionCamera.Enabled},{"node",ActionCamera.Node},
+        {"referenceState",ActionCamera.ReferenceState},{"tags",ActionCamera.Tags},{"states",ActionCamera.States},
+        {"rotationScale",ActionCamera.RotationScale},{"positionScale",ActionCamera.PositionScale},{"adsScale",ActionCamera.AdsScale}};
+    if(!CameraShakeProfile.empty()) {
+        j["cameraShakeProfile"]=CameraShakeProfile;
+        const auto guid=AssetDatabase::RefGuid(CameraShakeProfile);
+        j["cameraShakeProfileGuid"]=guid.empty()?CameraShakeProfileGuid:guid;
+    }
+    if (!RecoilProfile.empty()) {
+        j["recoilProfile"] = RecoilProfile;
+        const auto guid = AssetDatabase::RefGuid(RecoilProfile);
+        j["recoilProfileGuid"] = guid.empty() ? RecoilProfileGuid : guid;
+    }
     j["viewRotation"] = vec3(ViewRotation);
+    j["viewPosition"] = vec3(ViewPosition);
+    j["adsLocomotionScale"] = AdsLocomotionScale;
     if (!WeaponSocket.empty()) {
         j["weaponSocket"] = WeaponSocket;
         j["weaponRoot"] = WeaponRoot;
@@ -360,6 +442,7 @@ std::string FirstPersonAnimationSet::ToJsonString() const {
         {"magazine", gp.Magazine},
         {"rpm", gp.RoundsPerMinute},
         {"allowFullAuto", gp.AllowFullAuto},
+        {"burstRounds", gp.BurstRounds},
         {"reloadHoldSeconds", gp.ReloadHoldSeconds},
         {"regripMin", gp.RegripMin},
         {"regripMax", gp.RegripMax},
@@ -412,7 +495,11 @@ std::string FirstPersonAnimationSet::ToJsonString() const {
                   {"beamBrightness", Laser.BeamBrightness},
                   {"spotBrightness", Laser.SpotBrightness}};
     j["procedural"] = Procedural.ToJson();
+    // Source spring coefficients may be much smaller than the editor's display precision.
+    // Preserve their float values rather than rounding them into a different solver.
+    const json sway=j["procedural"]["sway"];
     RoundFloats(j);
+    if (Procedural.Sway.UnityPort) j["procedural"]["sway"]=sway;
     return j.dump(2);
 }
 
@@ -688,6 +775,7 @@ std::vector<FPBody::Check> FirstPersonWeaponValidate(const FirstPersonWeaponChec
             {kFidget, PT::Trigger, Sev::Info, "Set after a long idle: the fidget."},
         };
         for (const P& p : kParams) {
+            if (std::string(p.Name) == kFire && (set.Procedural.Recoil.HipProcedural || !set.RecoilProfile.empty())) continue;
             const AnimatorController::Parameter* found = c.FindParameter(p.Name);
             if (!found)
                 add(p.Level, std::string("The controller has no parameter '") + p.Name + "'. " + p.What,
@@ -713,7 +801,7 @@ std::vector<FPBody::Check> FirstPersonWeaponValidate(const FirstPersonWeaponChec
         if (set.Eject.Enabled && set.Eject.When == FirstPersonEjectSettings::Trigger::Event && !hasEvent(kEventEject))
             add(Sev::Warning, std::string("Casings eject on an event, but no state has an '") + kEventEject + "' event.",
                 "Add an 'Eject' event to the state that works the action (the pump), or set eject.trigger to \"shot\".");
-        if (!hasEvent(kEventShot))
+        if (!set.Procedural.Recoil.HipProcedural && set.RecoilProfile.empty() && !hasEvent(kEventShot))
             add(Sev::Warning, std::string("No state has a '") + kEventShot + "' event.",
                 "Add a 'Shot' event on the fire clip at the moment a round leaves the gun; without it hip fire spends no ammo.");
         const FirstPersonWeaponGameplay& gp = set.Gameplay;

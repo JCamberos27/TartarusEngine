@@ -12,6 +12,7 @@
 #include <cmath>
 
 using json = nlohmann::json;
+void EditorSettings::ReloadForUndo() {Get()=EditorSettings{};Load();}
 
 namespace {
 // Per-user, per-machine state (#42) — NOT under the project folder, so two teammates (or two

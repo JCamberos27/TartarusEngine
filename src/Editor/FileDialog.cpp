@@ -1,4 +1,5 @@
 #include "FileDialog.h"
+#include "AtomicFile.h"
 #include <windows.h>
 #include <shobjidl.h>
 #include <shellapi.h>
@@ -193,6 +194,7 @@ std::string FileDialog::SaveFile(const char* filter, const char* defaultExt, GLF
 }
 
 bool FileDialog::RecycleFile(const std::string& path, std::string& errorOut) {
+    AtomicFile::NotifyWillChange(std::filesystem::u8path(path));
     // SHFileOperationW's pFrom wants an absolute, backslash-separated, DOUBLE-null-terminated
     // string (a single trailing '\0' is not enough — it's a list format even for one entry).
     std::error_code ec;

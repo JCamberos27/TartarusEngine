@@ -628,6 +628,36 @@ void TestFoleyFootstepCadence() {
             return n;
         };
         CHECK(shuffle(FoleyAudio::LiftHeight(ft, 2.0f)) == 1 && shuffle(FoleyAudio::LiftHeight(ft, 0.0f)) == 0);
+        // Recorded sprint: a descending foot rebounds upward before the actual ground contact.
+        // The old stopped test reported an early landing, then another 50 ms later.
+        FootContactDetector rebound;
+        const float heights[]={.065f,.12f,.2f,.4f,.61f,.60f,.59f,.55f,.51f,.448f,.393f,.337f,
+            .293f,.248f,.219f,.189f,.163f,.204f,.244f,.265f,.204f,.142f,.101f,.079f,.074f,.069f};
+        int contacts=0,contactAt=-1;
+        for(int i=0;i<(int)std::size(heights);++i) {
+            const float feet[2]={heights[i],.08f};
+            if(rebound.Update(feet,dt,ft.FootLiftMoving,ft.FootContactHeight)&1) { ++contacts; contactAt=i; }
+        }
+        CHECK(contacts==1 && contactAt>=23);
+        // A real walking heel strike can have just one still frame before the foot rolls
+        // down onto its sole. Preserve that contact, without requiring a stationary pause.
+        FootContactDetector heel;
+        const float heelHeights[]={.029f,.35f,.3f,.180f,.160f,.145f,.139f,.136f,.135f,.128f,.119f,.105f,.090f,.080f,.074f};
+        int heelContacts=0,heelAt=-1;
+        for(int i=0;i<(int)std::size(heelHeights);++i) {
+            const float feet[2]={heelHeights[i],.08f};
+            if(heel.Update(feet,dt,ft.FootLiftMoving,ft.FootContactHeight)&1) { ++heelContacts; heelAt=i; }
+        }
+        CHECK(heelContacts==1 && heelAt==8);
+        // A planted foot's IK bounce must not rearm it; the next real swing still counts.
+        for(float h:{.11f,.12f,.08f,.11f,.08f}) {
+            const float feet[2]={h,.08f};
+            CHECK(rebound.Update(feet,dt,ft.FootLiftMoving,ft.FootContactHeight)==0);
+        }
+        for(int i=0;i<15;++i) { const float feet[2]={.08f,.08f}; rebound.Update(feet,dt,ft.FootLiftMoving,ft.FootContactHeight); }
+        const float raised[2]={.2f,.08f},ground[2]={.08f,.08f};
+        CHECK(rebound.Update(raised,dt,ft.FootLiftMoving,ft.FootContactHeight)==0);
+        CHECK(rebound.Update(ground,dt,ft.FootLiftMoving,ft.FootContactHeight)==1);
     }
     WeaponAudio::Get().Stop();
 }

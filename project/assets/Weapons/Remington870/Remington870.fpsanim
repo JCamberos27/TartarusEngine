@@ -1,4 +1,23 @@
 {
+  "actionCamera": {
+    "enabled": true,
+    "node": "head",
+    "referenceState": "Idle",
+    "tags": [
+      "Reload",
+      "Busy",
+      "Cycling"
+    ],
+    "states": [
+      "Draw",
+      "Holster"
+    ],
+    "rotationScale": 1.0,
+    "positionScale": 1.0,
+    "adsScale": 1.0
+  },
+  "cameraShakeProfile": "assets/Weapons/Remington870/Remington870.camerashake",
+  "cameraShakeProfileGuid": "197f6cbaf0434fc9",
   "armsMaterials": {
     "M_Quantum_Arms": "assets/Characters/Quantum/Materials/Characters/M_Quantum_Arms.mat"
   },
@@ -102,8 +121,11 @@
       "enabled": true,
       "delay": 0.12
     },
-    "bulletHoleRadius": 0.0042
+    "bulletHoleRadius": 0.0042,
+    "burstRounds": 0
   },
+  "recoilProfile": "assets/Weapons/Remington870/Remington870.recoil",
+  "recoilProfileGuid": "805d73c7082b4107",
   "procedural": {
     "bob": {
       "walkStride": 3.2,
@@ -545,7 +567,557 @@
       "shakeDecay": 3.2,
       "shakeAdsScale": 0.8,
       "fovPunch": 1.2
-    }
+    },
+    "sway": {
+      "enabled": true,
+      "weaponBone": "ik_hand_gun",
+      "weaponAdditiveBone": "weapon_bone_additive",
+      "aimingSway": {
+        "position": {
+          "damping": [
+            0.4,
+            0.4,
+            0.4
+          ],
+          "stiffness": [
+            0.4,
+            0.4,
+            0.8
+          ],
+          "speed": [
+            7,
+            7,
+            7
+          ],
+          "scale": [
+            1,
+            1,
+            1
+          ],
+          "clamp": [
+            1,
+            1,
+            1
+          ]
+        },
+        "rotation": {
+          "damping": [
+            0.4,
+            0.4,
+            0.3
+          ],
+          "stiffness": [
+            0.8,
+            0.8,
+            0.8
+          ],
+          "speed": [
+            15,
+            20,
+            15
+          ],
+          "scale": [
+            -2,
+            2,
+            -2
+          ],
+          "clamp": [
+            1,
+            1,
+            1
+          ]
+        },
+        "dampingFactor": 8,
+        "space": "ComponentSpace",
+        "adsScale": 0
+      },
+      "movementSway": {
+        "position": {
+          "damping": [
+            0.4,
+            0.4,
+            0.4
+          ],
+          "stiffness": [
+            0.8,
+            0.8,
+            0.8
+          ],
+          "speed": [
+            7,
+            7,
+            7
+          ],
+          "scale": [
+            1,
+            0,
+            1
+          ],
+          "clamp": [
+            0,
+            0,
+            0
+          ]
+        },
+        "rotation": {
+          "damping": [
+            0.4,
+            0.4,
+            0.4
+          ],
+          "stiffness": [
+            0.8,
+            0.8,
+            0.8
+          ],
+          "speed": [
+            12,
+            12,
+            12
+          ],
+          "scale": [
+            2,
+            2,
+            -2
+          ],
+          "clamp": [
+            0,
+            0,
+            0
+          ]
+        },
+        "dampingFactor": 8,
+        "space": "ComponentSpace",
+        "adsScale": 0
+      },
+      "spaceOffset": [
+        0,
+        0,
+        0,
+        1
+      ],
+      "adsCurveScale": 1,
+      "adsCurveSmoothing": 10
+    },
+    "aim": {
+      "blend": [
+        [
+          0.0,
+          0.0,
+          0.0,
+          0.0
+        ],
+        [
+          1.0,
+          1.0,
+          0.0,
+          0.0
+        ]
+      ],
+      "blendTime": 0.18,
+      "cameraShare": 0.0,
+      "crouchBlendTime": 0.25,
+      "crouchPosition": [
+        0.0,
+        0.0,
+        0.0
+      ],
+      "crouchRotation": [
+        0.0,
+        0.0,
+        0.0
+      ],
+      "hipPosition": [
+        0.0,
+        0.0,
+        0.0
+      ],
+      "hipRotation": [
+        0.0,
+        0.0,
+        0.0
+      ],
+      "position": [
+        0.0,
+        0.0,
+        0.0
+      ],
+      "positionAdditive": 1.0,
+      "rotation": [
+        0.0,
+        0.0,
+        0.0
+      ],
+      "rotationAdditive": 1.0
+    },
+    "breath": {
+      "adsScale": 0.35,
+      "driftFrequency": 0.3,
+      "driftPosition": [
+        0.0004,
+        0.0003,
+        0.0
+      ],
+      "driftRotation": [
+        0.1,
+        0.14,
+        0.18
+      ],
+      "enabled": true,
+      "exertionBuild": 4.0,
+      "exertionRate": 1.7,
+      "exertionRecover": 5.0,
+      "exertionScale": 2.2,
+      "hipScale": 1.0,
+      "period": 4.0,
+      "pitch": [
+        [
+          0.0,
+          0.0,
+          0.75398,
+          0.75398
+        ],
+        [
+          0.125,
+          0.08485,
+          0.53315,
+          0.53315
+        ],
+        [
+          0.25,
+          0.12,
+          -0.0,
+          -0.0
+        ],
+        [
+          0.375,
+          0.08485,
+          -0.53315,
+          -0.53315
+        ],
+        [
+          0.5,
+          -0.0,
+          -0.75398,
+          -0.75398
+        ],
+        [
+          0.625,
+          -0.08485,
+          -0.53315,
+          -0.53315
+        ],
+        [
+          0.75,
+          -0.12,
+          0.0,
+          0.0
+        ],
+        [
+          0.875,
+          -0.08485,
+          0.53315,
+          0.53315
+        ],
+        [
+          1.0,
+          0.0,
+          0.75398,
+          0.75398
+        ]
+      ],
+      "position": {
+        "x": [
+          [
+            0.0,
+            0.0003,
+            -0.0,
+            -0.0
+          ],
+          [
+            0.125,
+            0.00021,
+            -0.00133,
+            -0.00133
+          ],
+          [
+            0.25,
+            -0.0,
+            -0.00188,
+            -0.00188
+          ],
+          [
+            0.375,
+            -0.00021,
+            -0.00133,
+            -0.00133
+          ],
+          [
+            0.5,
+            -0.0003,
+            0.0,
+            0.0
+          ],
+          [
+            0.625,
+            -0.00021,
+            0.00133,
+            0.00133
+          ],
+          [
+            0.75,
+            0.0,
+            0.00188,
+            0.00188
+          ],
+          [
+            0.875,
+            0.00021,
+            0.00133,
+            0.00133
+          ],
+          [
+            1.0,
+            0.0003,
+            -0.0,
+            -0.0
+          ]
+        ],
+        "y": [
+          [
+            0.0,
+            0.0,
+            0.00377,
+            0.00377
+          ],
+          [
+            0.125,
+            0.00042,
+            0.00267,
+            0.00267
+          ],
+          [
+            0.25,
+            0.0006,
+            -0.0,
+            -0.0
+          ],
+          [
+            0.375,
+            0.00042,
+            -0.00267,
+            -0.00267
+          ],
+          [
+            0.5,
+            -0.0,
+            -0.00377,
+            -0.00377
+          ],
+          [
+            0.625,
+            -0.00042,
+            -0.00267,
+            -0.00267
+          ],
+          [
+            0.75,
+            -0.0006,
+            0.0,
+            0.0
+          ],
+          [
+            0.875,
+            -0.00042,
+            0.00267,
+            0.00267
+          ],
+          [
+            1.0,
+            0.0,
+            0.00377,
+            0.00377
+          ]
+        ],
+        "z": []
+      }
+    },
+    "cameraMotion": {
+      "adsScale": 0.4,
+      "enabled": true,
+      "landDip": 0.01,
+      "landPitch": 0.35,
+      "spring": {
+        "damping": 0.55,
+        "frequency": 1.4
+      },
+      "sprintBob": [
+        0.012,
+        0.5
+      ],
+      "strafeRoll": 0.2,
+      "walkBob": [
+        0.02,
+        0.2
+      ]
+    },
+    "ik": {
+      "blendTime": 0.12,
+      "curveAll": "IK",
+      "curveLeftHand": "IK_LeftHand",
+      "curveLook": "Look",
+      "curveRightHand": "IK_RightHand",
+      "enabled": true,
+      "gunBone": "ik_hand_gun",
+      "leftHand": "hand_l",
+      "leftHandPosition": [
+        0.0,
+        0.0,
+        0.0
+      ],
+      "leftHandRotation": [
+        0.0,
+        0.0,
+        0.0
+      ],
+      "leftLower": "lowerarm_l",
+      "leftUpper": "upperarm_l",
+      "offTag": "IKOff",
+      "rightHand": "hand_r",
+      "rightHandPosition": [
+        0.0,
+        0.0,
+        0.0
+      ],
+      "rightHandRotation": [
+        0.0,
+        0.0,
+        0.0
+      ],
+      "rightLower": "lowerarm_r",
+      "rightUpper": "upperarm_r",
+      "useClipCurves": true
+    },
+    "jump": {
+      "adsScale": 0.5,
+      "airPitch": 0.5,
+      "airPosition": 0.003,
+      "enabled": true,
+      "landPitch": 1.0,
+      "landPosition": 0.005,
+      "landRoll": 0.5,
+      "maxImpact": 12.0,
+      "maxPitch": 4.0,
+      "maxPosition": 0.025,
+      "minImpact": 1.5,
+      "spring": {
+        "damping": 0.45,
+        "frequency": 4.5
+      }
+    },
+    "lean": {
+      "angle": 14.0,
+      "cornerPeek": true,
+      "enabled": true,
+      "offset": 0.3,
+      "peekMargin": 0.08,
+      "peekRange": 1.0,
+      "spring": {
+        "damping": 0.8,
+        "frequency": 3.2
+      },
+      "weaponRoll": 4.0,
+      "weaponRollAds": 0.5,
+      "weaponSpring": {
+        "damping": 0.6,
+        "frequency": 2.4
+      },
+      "whileSprinting": false
+    },
+    "locomotion": {
+      "matchSpeed": true,
+      "maxRate": 1.4,
+      "minRate": 0.6,
+      "sprintReference": 0.0,
+      "walkReference": 0.0
+    },
+    "obstruction": {
+      "blockAt": 0.0,
+      "enabled": true,
+      "highPosition": [
+        0.0,
+        0.02,
+        0.04
+      ],
+      "highRotation": [
+        20.0,
+        -6.0,
+        -10.0
+      ],
+      "maxRetract": 0.12,
+      "position": [
+        0.015,
+        -0.015,
+        0.05
+      ],
+      "probeOffset": [
+        0.1,
+        -0.08
+      ],
+      "reach": 0.75,
+      "rotation": [
+        -12.0,
+        14.0,
+        16.0
+      ],
+      "sidePosition": [
+        -0.025,
+        -0.005,
+        0.04
+      ],
+      "sideRotation": [
+        -3.0,
+        16.0,
+        8.0
+      ],
+      "spring": {
+        "damping": 1.0,
+        "frequency": 8.0
+      },
+      "tuckRange": 0.2
+    },
+    "stateOffsets": [
+      {
+        "blendIn": 0.3,
+        "blendOut": 0.3,
+        "match": "Walk",
+        "position": [
+          0.0,
+          0.0,
+          0.0
+        ],
+        "rotation": [
+          0.0,
+          0.0,
+          0.0
+        ]
+      },
+      {
+        "blendIn": 0.2,
+        "blendOut": 0.25,
+        "match": "Sprint",
+        "position": [
+          0.0,
+          0.0,
+          0.0
+        ],
+        "rotation": [
+          0.0,
+          0.0,
+          0.0
+        ]
+      }
+    ]
   },
   "stockLock": {
     "enabled": true,
@@ -617,5 +1189,11 @@
     ],
     "beamBrightness": 1.1,
     "spotBrightness": 9.0
-  }
+  },
+  "viewPosition": [
+    0,
+    0,
+    0
+  ],
+  "adsLocomotionScale": 0.31
 }

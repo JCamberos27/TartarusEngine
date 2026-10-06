@@ -106,7 +106,7 @@ void CombatFx::Start(World& world) {
     struct FlameSystem { entt::entity* E; const char* Name; };
     for (const FlameSystem& f : {FlameSystem{&m_Flame, "[Runtime] Muzzle Flame"}, FlameSystem{&m_PlayerFlame, "[Runtime] Player Muzzle Flame"},
                                  FlameSystem{&m_PlayerWorldFlame, "[Runtime] Player Muzzle Flame (world)"}}) {
-        *f.E = MakeParticles(world, f.Name, 0.15f, 0.0f, 0.0f, glm::vec3(1.0f, 0.147f, 0.0177f), glm::vec3(0.0f), 1.0f, 0.0f, Settings.FlameGlow, 1);
+        *f.E = MakeParticles(world, f.Name, 0.15f, 0.0f, 0.0f, glm::vec3(1.0f), glm::vec3(0.0f), 1.0f, 0.0f, 1.0f, 1);
         world.Registry.get<ParticleSystemComponent>(*f.E).Texture = "assets/Effects/Muzzle/T_MuzzleFlame.png";
     }
     world.Registry.emplace<ViewModelTag>(m_PlayerFlame);
@@ -141,13 +141,26 @@ void CombatFx::Stop(World& world) {
     m_Active = false;
 }
 
-void CombatFx::Shot(World& world, Gun gun, const glm::vec3& origin, const glm::vec3& end, bool fromPlayer, bool tracer, std::uint32_t shooter) {
+void CombatFx::Shot(World& world, Gun gun, const glm::vec3& origin, const glm::vec3& end, bool fromPlayer, bool tracer,
+                    std::uint32_t shooter, const MuzzleEffectSettings* muzzle) {
     if (!m_Active) return;
     ++m_ShotsHeard;
     const bool shotgun = gun == Gun::Shotgun;
     // The report: every layer of this gun's audio (close, mech, sub, tail, far), weighted by distance for the squad's guns.
     WeaponAudio::Get().SetListener(m_Listener);
     WeaponAudio::Get().Shot(shotgun ? "870" : "ak", origin, fromPlayer, shooter);
+    MuzzleEffectSettings fallback;
+    fallback.FlashTime=Settings.FlashTime;fallback.PlayerFlashScale=Settings.PlayerFlashScale;
+    fallback.FlameGlow=Settings.FlameGlow*(shotgun?0.5f:1.0f);fallback.FlameScale=Settings.FlameScale;
+    fallback.MuzzleStyle=Settings.MuzzleStyle;
+    if(shotgun) {
+        fallback.LightIntensity=26;fallback.FlameLifetimeMin=.175f;fallback.FlameLifetimeMax=.275f;
+        fallback.FlameLengthMin=.2f;fallback.FlameLengthMax=.28f;fallback.FlashSprite="muzzle_burst";
+        fallback.FlashLifetime=.11f;fallback.FlashSizeMin=fallback.FlashSizeMax=.38f;
+        fallback.SideJets=false;fallback.SmokeAlpha=.35f;fallback.SparkCount=14;
+    }
+    const auto& fx=muzzle?*muzzle:fallback;
+    auto range=[&](float a,float b){return glm::mix(std::max(0.0f,std::min(a,b)),std::max(0.0f,std::max(a,b)),Rand01());};
 
     glm::vec3 dir = end - origin;
     const float len = glm::length(dir);
@@ -156,18 +169,20 @@ void CombatFx::Shot(World& world, Gun gun, const glm::vec3& origin, const glm::v
     // The light: off the muzzle a hand's width, so the gun and the shooter's hands catch it. The
     // player's is softer: its hands are right there, and it's the flash they see most of (looking
     // down the bore, the flame mostly hides behind the gun).
-    if (!m_Flashes.empty()) {
+    if (fx.Enabled && !m_Flashes.empty()) {
         Flash& f = m_Flashes[m_NextFlash++ % m_Flashes.size()];
         if (world.Registry.valid(f.Light)) {
             world.Registry.get<TransformComponent>(f.Light).Position = origin + dir * 0.12f;
-            f.Peak = FlashPeak(Settings, shotgun, fromPlayer);
-            f.Left = Settings.FlashTime;
+            f.Peak = std::max(0.0f,fx.LightIntensity) * (fromPlayer ? std::max(0.0f,fx.PlayerFlashScale) : 1.0f);
+            f.Left = f.Duration = std::max(0.001f,fx.FlashTime);
+            f.Range = std::max(0.0f,fx.LightRange);
+            world.Registry.get<LightComponent>(f.Light).Color=fx.LightColor;
         }
     }
     // The flash: a hot core plus a fan of sparks along the bore, then a puff of smoke drifting up.
     const glm::vec3 side = AnyPerpendicular(dir), up = glm::cross(side, dir);
-    if (auto* ps = world.Registry.try_get<ParticleSystemComponent>(m_Sparks); ps && !fromPlayer) {
-        const int n = shotgun ? 14 : 9;
+    if (auto* ps = world.Registry.try_get<ParticleSystemComponent>(m_Sparks); ps && !fromPlayer && fx.Enabled) {
+        const int n = std::clamp(fx.SparkCount,0,128);
         for (int i = 0; i < n; ++i) {
             ParticleSystemComponent::Particle p;
             const float a = Rand01() * 6.2831853f, r = Rand01() * (i == 0 ? 0.0f : 0.35f);
@@ -178,7 +193,7 @@ void CombatFx::Shot(World& world, Gun gun, const glm::vec3& origin, const glm::v
             ps->Live.push_back(p);
         }
     }
-    {
+    if(fx.Enabled && fx.FlameScale>0.0f && !fx.FlameTexture.empty()) {
         // The flame's one particle, on the muzzle's face (kFlameAhead), 0.04-0.06 m
         // wide when grown (start size 0.5-0.75, times 0.08 over its life). The AK's (P_AK105) is
         // 0.16-0.32 m long and lives 0.125-0.175 s; the shotgun's (P_SRM12's forward flame - not its
@@ -186,21 +201,22 @@ void CombatFx::Shot(World& world, Gun gun, const glm::vec3& origin, const glm::v
         ParticleSystemComponent::Particle p;
         p.Pos = origin + dir * kFlameAhead;
         p.Axis = dir;
-        p.Width = (0.04f + 0.02f * Rand01()) * Settings.FlameScale;
-        p.Length = (shotgun ? 0.2f + 0.08f * Rand01() : 0.16f + 0.16f * Rand01()) * Settings.FlameScale;
+        p.Width = range(fx.FlameWidthMin,fx.FlameWidthMax) * fx.FlameScale;
+        p.Length = range(fx.FlameLengthMin,fx.FlameLengthMax) * fx.FlameScale;
+        p.Tint=fx.FlameColor;p.IntensityScale=std::max(0.0f,fx.FlameGlow);p.TextureOverride=fx.FlameTexture;
         p.Seed = Rand01();
         // The emission is two randoms multiplied (the gradient's and M_Muzzle's); HDRP blows nearly
         // all of them out to white, so here the dimmest are kept to a third.
-        p.Glow = (0.33f + 0.67f * Rand01() * Rand01()) * (shotgun ? 0.5f : 1.0f);
+        p.Glow = (0.33f + 0.67f * Rand01() * Rand01());
         p.Alpha = 0.5f + 0.5f * Rand01();
-        p.Life = shotgun ? 0.175f + 0.1f * Rand01() : 0.125f + 0.05f * Rand01();
+        p.Life = std::max(.01f,range(fx.FlameLifetimeMin,fx.FlameLifetimeMax));
         p.Age = 0.008f; // half a frame in (a burst comes out partly simulated): grown from nothing it'd be unseen the frame it fires
         for (entt::entity e : {fromPlayer ? m_PlayerFlame : m_Flame, fromPlayer ? m_PlayerWorldFlame : entt::entity(entt::null)}) {
             if (!world.Registry.valid(e)) continue;
             if (auto* ps = world.Registry.try_get<ParticleSystemComponent>(e); ps && ps->Live.size() < 100) ps->Live.push_back(p);
         }
     }
-    if (auto* ps = world.Registry.try_get<ParticleSystemComponent>(m_Smoke)) {
+    if (auto* ps = world.Registry.try_get<ParticleSystemComponent>(m_Smoke); ps && fx.Enabled && fx.Smoke) {
         const int n = shotgun ? 3 : 1;
         for (int i = 0; i < n && ps->Live.size() < 1500; ++i) {
             ParticleSystemComponent::Particle p;
@@ -208,10 +224,11 @@ void CombatFx::Shot(World& world, Gun gun, const glm::vec3& origin, const glm::v
             p.Vel = dir * (0.6f + 0.8f * Rand01()) + glm::vec3(0.0f, 0.25f + 0.2f * Rand01(), 0.0f) +
                     (side * (Rand01() - 0.5f) + up * (Rand01() - 0.5f)) * 0.3f;
             p.Life = 0.6f + 0.6f * Rand01();
+            p.SizeScale=std::max(0.0f,fx.SmokeScale);p.Alpha=std::clamp(fx.SmokeAlpha/.18f,0.0f,6.0f);
             ps->Live.push_back(p);
         }
     }
-    if (Settings.MuzzleStyle >= 1) MuzzleSpritesFor(shotgun, fromPlayer, origin, dir);
+    if (fx.Enabled && fx.MuzzleStyle >= 1) MuzzleSpritesFor(shotgun, fromPlayer, origin, dir,fx);
     // A tracer: a short dashed streak flying down the line at a few hundred metres a second.
     if (tracer && len > 2.0f) {
         if (auto* ps = world.Registry.try_get<ParticleSystemComponent>(m_Tracers)) {
@@ -231,11 +248,11 @@ void CombatFx::Shot(World& world, Gun gun, const glm::vec3& origin, const glm::v
 // the flame: the star (rifle, 0.08 s, 0.8-1.1 Unity units ~ 0.25-0.35 m here, +-15 degrees) or the shotgun's burst (0.12 s),
 // side jets along the bore, a core glow, the gas puff (alpha ~0.06-0.1) and a thin column of barrel smoke that thickens
 // as the shots pile up.
-void CombatFx::MuzzleSpritesFor(bool shotgun, bool fromPlayer, const glm::vec3& origin, const glm::vec3& dir) {
+void CombatFx::MuzzleSpritesFor(bool shotgun, bool fromPlayer, const glm::vec3& origin, const glm::vec3& dir, const MuzzleEffectSettings& settings) {
     if (!m_Sprites) return;
     FxSprites& fx = *m_Sprites;
     const int follow = fromPlayer ? 1 : 0;
-    const glm::vec3 hot(1.0f, 0.62f, 0.3f);
+    const glm::vec3 hot=settings.LightColor;
     auto add = [&](FxSprites::Emit e) {
         e.ViewModel = fromPlayer && e.Mode == FxSprites::Shade::Additive; // the player's flash with the gun; smoke in the world
         e.Follow = e.ViewModel ? follow : 0;
@@ -244,24 +261,24 @@ void CombatFx::MuzzleSpritesFor(bool shotgun, bool fromPlayer, const glm::vec3& 
     };
     // Seen from behind the gun, half a metre from the eye, the flash is mostly hidden by the gun and must not white out the
     // view: the player's own is a third of the size and a fraction of the light of what a soldier's reads as across a room.
-    const float k = Settings.FlameScale / 1.75f * (fromPlayer ? 0.5f : 1.0f);
+    const float k = settings.FlameScale / 1.75f * (fromPlayer ? 0.5f : 1.0f);
     const float heat = fromPlayer ? 0.4f : 1.0f;
-    if (const int flash = fx.Entry(shotgun ? "muzzle_burst" : "muzzle_star"); flash >= 0) {
+    if (const int flash = fx.Entry(settings.FlashSprite); flash >= 0 && !settings.FlashSprite.empty()) {
         FxSprites::Emit e;
         e.Entry = flash;
         e.Mode = FxSprites::Shade::Additive;
         e.FollowAhead = shotgun ? 0.07f : 0.05f;
         e.Pos = origin + dir * e.FollowAhead;
-        e.Life = shotgun ? 0.11f : 0.065f;
-        e.Size0 = (shotgun ? 0.38f : 0.26f + 0.08f * Rand01()) * k;
+        e.Life = std::max(.001f,settings.FlashLifetime);
+        e.Size0 = glm::mix(std::min(settings.FlashSizeMin,settings.FlashSizeMax),std::max(settings.FlashSizeMin,settings.FlashSizeMax),Rand01()) * k;
         e.Size1 = e.Size0 * 1.15f;
         e.Rot = (Rand01() - 0.5f) * 0.52f + (shotgun ? Rand01() * 6.28f : 0.0f);
         e.Color = hot;
-        e.Intensity = 14.0f * heat * (0.8f + 0.4f * Rand01());
+        e.Intensity = settings.FlashIntensity * heat * (0.8f + 0.4f * Rand01());
         e.FadeOut = 0.6f;
         add(e);
     }
-    if (const int jets = fx.Entry("muzzle_side"); jets >= 0 && !shotgun) {
+    if (const int jets = fx.Entry("muzzle_side"); jets >= 0 && settings.SideJets) {
         FxSprites::Emit e;
         e.Entry = jets;
         e.Mode = FxSprites::Shade::Additive;
@@ -275,7 +292,7 @@ void CombatFx::MuzzleSpritesFor(bool shotgun, bool fromPlayer, const glm::vec3& 
         e.FadeOut = 0.7f;
         add(e);
     }
-    if (const int glow = fx.Entry("glow"); glow >= 0) {
+    if (const int glow = fx.Entry("glow"); glow >= 0 && settings.CoreGlow) {
         FxSprites::Emit e;
         e.Entry = glow;
         e.Mode = FxSprites::Shade::Additive;
@@ -289,7 +306,7 @@ void CombatFx::MuzzleSpritesFor(bool shotgun, bool fromPlayer, const glm::vec3& 
         e.FadeOut = 1.0f;
         add(e);
     }
-    if (const int puff = fx.Entry("smoke_muzzle"); puff >= 0) {
+    if (const int puff = fx.Entry("smoke_muzzle"); puff >= 0 && settings.Smoke) {
         for (int i = 0; i < (shotgun ? 2 : 1); ++i) {
             FxSprites::Emit e;
             e.Entry = puff;
@@ -298,30 +315,30 @@ void CombatFx::MuzzleSpritesFor(bool shotgun, bool fromPlayer, const glm::vec3& 
             e.Vel = dir * (1.0f + 1.5f * Rand01()) + glm::vec3(0.0f, 0.15f, 0.0f);
             e.Drag = 3.0f;
             e.Gravity = -0.02f;
-            e.Life = 2.0f + Rand01();
-            e.Size0 = 0.12f;
-            e.Size1 = shotgun ? 0.6f : 0.45f;
+            e.Life = std::max(.01f,glm::mix(std::min(settings.SmokeLifetimeMin,settings.SmokeLifetimeMax),std::max(settings.SmokeLifetimeMin,settings.SmokeLifetimeMax),Rand01()));
+            e.Size0 = 0.12f * settings.SmokeScale;
+            e.Size1 = (shotgun ? 0.6f : 0.45f) * settings.SmokeScale;
             e.Rot = Rand01() * 6.2832f;
             e.Spin = (Rand01() - 0.5f) * 0.6f;
             e.BlendFrames = true;
             e.Color = glm::vec3(0.62f, 0.6f, 0.58f);
-            e.Alpha = shotgun ? 0.35f : 0.18f;
+            e.Alpha = settings.SmokeAlpha;
             e.FadeIn = 0.05f;
             e.FadeOut = 0.7f;
             add(e);
         }
     }
-    if (const int column = fx.Entry("smoke_gun"); column >= 0 && Rand01() < (shotgun ? 1.0f : 0.5f)) {
+    if (const int column = fx.Entry("smoke_gun"); column >= 0 && settings.Smoke && settings.AfterfireSmoke && Rand01() < (shotgun ? 1.0f : 0.5f)) {
         FxSprites::Emit e; // AfterfireSmoke: a thin rising wisp off the hot barrel
         e.Entry = column;
         e.Mode = FxSprites::Shade::Lit;
         e.Pos = origin - dir * 0.05f + glm::vec3(0.0f, 0.12f, 0.0f);
         e.Vel = glm::vec3(0.0f, 0.12f, 0.0f);
-        e.Life = 2.5f + Rand01();
-        e.Size0 = e.Size1 = 0.35f;
+        e.Life = std::max(.01f,settings.SmokeLifetimeMax+.5f*Rand01());
+        e.Size0 = e.Size1 = 0.35f * settings.SmokeScale;
         e.BlendFrames = true;
         e.Color = glm::vec3(0.7f, 0.68f, 0.66f);
-        e.Alpha = shotgun ? 0.3f : 0.14f;
+        e.Alpha = settings.SmokeAlpha * .8f;
         e.FadeIn = 0.15f;
         e.FadeOut = 0.5f;
         add(e);
@@ -385,9 +402,9 @@ void CombatFx::Update(World& world, float dt) {
             continue;
         }
         // Full on the frame it fires, gone two or three frames later.
-        const float k = std::clamp(f.Left / std::max(Settings.FlashTime, 1e-4f), 0.0f, 1.0f);
+        const float k = std::clamp(f.Left / std::max(f.Duration, 1e-4f), 0.0f, 1.0f);
         l.Intensity = f.Peak * k * k;
-        l.Range = 7.0f;
+        l.Range = f.Range;
         f.Left -= dt;
     }
 }

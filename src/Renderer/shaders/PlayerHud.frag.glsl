@@ -54,13 +54,13 @@ void main() {
         col = over(col, vec4(0.95, 0.12, 0.08, ring * uArcAlpha[i] * 0.9));
     }
 
-    // Hitmarker: four short ticks off the centre; red on a kill, gold on a headshot.
+    // Hitmarker: red only for a lethal headshot; gold for a nonlethal headshot, white otherwise.
     if (uHitmarker > 0.0) {
         vec2 q = abs(p);
         float diag = abs(q.x - q.y) * 0.7071;
         float along = (q.x + q.y) * 0.7071;
         float tick = clamp(1.6 * s - diag + 0.5, 0.0, 1.0) * band(along, 7.0 * s, 15.0 * s);
-        vec3 c = uHitKill == 1 ? vec3(1.0, 0.18, 0.12) : (uHitHead == 1 ? vec3(1.0, 0.8, 0.25) : vec3(1.0));
+        vec3 c = (uHitKill == 1 && uHitHead == 1) ? vec3(1.0, 0.18, 0.12) : (uHitHead == 1 ? vec3(1.0, 0.8, 0.25) : vec3(1.0));
         col = over(col, vec4(c, tick * uHitmarker));
     }
 
