@@ -324,8 +324,7 @@ existing Apply/Revert controls to manage them. Script classes, fields and slot c
 can live on prefabs. Compiled code is shared by type; per-instance Inspector values remain
 separate. Changing a script's source changes its behavior everywhere that class is attached.
 
-See [weapon integration](FPS_WEAPON_INTEGRATION.md), [first-person animation](FPS_ANIMATION_SYSTEM.md),
-[recoil](PROCEDURAL_RECOIL.md) and [animator](ANIMATOR.md) for the native asset workflows.
+See [recoil](PROCEDURAL_RECOIL.md) for the native asset workflow.
 
 ## Customizing player and weapon gameplay
 

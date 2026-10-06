@@ -6,8 +6,8 @@ folder before repeating the import. The derived FBXs live in `Tartarus Assets/Us
 at the paths recorded in `project/external_assets.csv`; they are never committed to Git.
 The import report and backups remain local build artifacts.
 
-The October 2026 reimport uses `Desktop/AE_Exports/AKS74U` and
-`Desktop/AE_Exports/Remington 870`. The original export folders are read-only
+The October 2026 reimport uses `Raw/Weapons/AE_Exports/AKS74U` and
+`Raw/Weapons/AE_Exports/Remington 870`. The original export folders are read-only
 inputs. Existing project paths and `.fbx.meta` GUIDs are retained, including the
 AK neutral weapon model's historical `AKS-74U_A_W_ADS.fbx` filename.
 
