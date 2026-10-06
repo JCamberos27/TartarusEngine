@@ -1,6 +1,8 @@
 #include "FirstPersonWeaponTest.h"
 
 #include "AnimatorController.h"
+#include "AssetLibrary.h"
+#include "Model.h"
 #include "Audio/WeaponAudio.h"
 #include "Camera.h"
 #include "Components.h"
@@ -283,7 +285,11 @@ FirstPersonWeaponTest::FirstPersonWeaponTest(bool stockProbe, bool probeAk) : m_
     if (m_Probe) {
 #pragma warning(suppress : 4996)
         const char* pose = std::getenv("STOCK_PROBE_POSE");
-        if (pose && *pose && *pose != '0') BuildPoseProbe();
+#pragma warning(suppress : 4996)
+        const char* sprint = std::getenv("STOCK_PROBE_SPRINT");
+        m_SprintProbe = sprint && *sprint && *sprint != '0';
+        if (m_SprintProbe) BuildSprintProbe();
+        else if (pose && *pose && *pose != '0') BuildPoseProbe();
         else BuildProbe();
     }
 }
@@ -335,6 +341,23 @@ void FirstPersonWeaponTest::BuildPoseProbe() {
     }
     steps.push_back({"sights down", [](C& c) { c.Aim = false; c.Crouch = false; c.Cam->Pitch = 0.0f; },
                      [](C& c) { return c.State() == "Idle" && c.Time > 0.5f; }, 3.0f, nullptr});
+    m_Steps = std::move(steps);
+}
+
+void FirstPersonWeaponTest::BuildSprintProbe() {
+    using C = Ctx;
+    std::vector<Step> steps = {{"AK in hand", nullptr, [](C& c) { return c.State() == "Idle"; }, 30, nullptr}};
+    if (!m_ProbeAk)
+        steps.push_back({"switch to shotgun", [](C& c) { c.P->SelectSlot(1); }, [](C& c) { return c.P->Slot() == 1 && c.State() == "Idle"; }, 30, nullptr});
+    steps.push_back({"walk", [](C& c) { c.View = 2; c.Move = {0,1}; }, [](C& c) { return c.Time > 1; }, 4, nullptr});
+    steps.push_back({"to sprint", [](C& c) { c.Sprint = true; }, [](C& c) { return c.Time > 1.6f && c.State() == "Sprint"; }, 4, nullptr});
+    steps.push_back({"from sprint into walk", [](C& c) { c.Sprint = false; }, [](C& c) { return c.Time > 1.6f && c.State() == "Walk"; }, 4, nullptr});
+    steps.push_back({"aim walking", [](C& c) { c.Aim = true; }, [](C& c) { return c.Time > 0.7f && c.State() == "Aim"; }, 4, nullptr});
+    steps.push_back({"stop", [](C& c) { c.Aim = false; c.Move = {}; }, [](C& c) { return c.Time > 0.5f && c.State() == "Idle"; }, 4,
+        [this](C& c) {
+            for (const char* state : {"IdleToSprint", "SprintToIdle"})
+                c.Check(m_SprintSamples.count(std::string(state) + "_1") > 0, std::string("captured moving ") + state);
+        }});
     m_Steps = std::move(steps);
 }
 
@@ -521,6 +544,69 @@ void FirstPersonWeaponTest::BuildProbe() {
 }
 
 void FirstPersonWeaponTest::AfterPose(const World& world, const FirstPersonBody& body, const FirstPersonPresentation& p) {
+    if (m_SprintProbe) {
+        const auto* animator = world.Registry.try_get<AnimatorControllerComponent>(p.ArmsEntity());
+        const auto controller = GetAnimatorController(p.Set().Controller);
+        if (animator && controller && animator->Layers.size() >= 3 && !animator->Layers[1].Stack.empty()) {
+            const auto& item = animator->Layers[1].Stack.back();
+            const auto& state = controller->Layers[1].States[item.State];
+            if ((state.Name == "IdleToSprint" || state.Name == "SprintToIdle") && item.Phase >= 0.2f && item.Phase < 0.95f) {
+                const int sample = item.Phase < 0.45f ? 0 : item.Phase < 0.7f ? 1 : 2;
+                const std::string key = state.Name + "_" + std::to_string(sample);
+                if (m_SprintSamples.insert(key).second) {
+                    const float weight = AnimatorLayerWeight(*controller, *animator, 2);
+                    const auto& walk = animator->Layers[2].Stack.back();
+                    m_Ctx.Check(weight > 0.0f && controller->Layers[2].States[walk.State].Name == "Walk", key + " has additive walking");
+                    std::printf("[SprintWalk] %s phase %.3f walk weight %.3f walk phase %.3f\n", state.Name.c_str(), item.Phase, weight, walk.Phase);
+                    m_Shot = key;
+                }
+            }
+        }
+    }
+    static std::set<int> cameraChecked;
+    if(!m_Probe && m_Ctx.Aim && p.IsReloading() && m_Ctx.Time>.4f && !cameraChecked.count(p.Slot())) {
+        cameraChecked.insert(p.Slot());
+        const auto* render=world.Registry.try_get<RenderableComponent>(p.ArmsEntity());
+        const auto* weaponRender=world.Registry.try_get<RenderableComponent>(p.WeaponEntity());
+        const auto* animator=world.Registry.try_get<AnimatorControllerComponent>(p.ArmsEntity());
+        const auto controller=GetAnimatorController(p.Set().Controller);
+        m_Ctx.Check(render && render->ModelRef && animator && controller,"camera action sampler has live arms and animator");
+        if(render && render->ModelRef && animator && controller) {
+            AssetLibrary assets;
+            // A moving socket stands in for an exported camera bone; use actual reload keys.
+            ActionCameraSettings settings; settings.Enabled=true; settings.Node=p.Set().Procedural.IK.GunBone; settings.PositionScale=1;
+            Model& arms=*render->ModelRef;
+            Model* weapon=weaponRender?weaponRender->ModelRef.get():nullptr;
+            auto sample=[&](const AnimatorControllerComponent& ac) {
+                return AnimatorActionCamera(arms,weapon,assets,*controller,ac,settings,"",glm::quat(1,0,0,0),1,1);
+            };
+            auto full=*animator; full.Layers[0].Stack={full.Layers[0].Stack.back()}; full.Layers[0].Stack[0].Fade=1;
+            const auto effect=sample(full);
+            const auto testNode=settings.Node;
+            settings.Node=p.Set().ActionCamera.Node;
+            const auto headMotion=sample(full);
+            std::printf("[WeaponTest]     head camera motion: %.3f deg, %.3f cm\n",
+                glm::degrees(2*std::acos(std::clamp(std::abs(headMotion.Rotation.w),0.0f,1.0f))),glm::length(headMotion.Position)*100);
+            settings.Node=testNode;
+            m_Ctx.Check(glm::length(effect.Position)>1e-5f || std::abs(effect.Rotation.w-1)>1e-5f,"camera channel samples original action motion during ADS reload");
+            const int idle=controller->Layers[0].FindState("Idle");
+            auto fade=full; fade.Layers[0].Stack.push_back({idle,0,.5f});
+            const auto half=sample(fade);
+            m_Ctx.Check(glm::length(half.Position-effect.Position*.5f)<1e-5f &&
+                std::abs(glm::dot(half.Rotation,glm::slerp(effect.Rotation,glm::quat(1,0,0,0),.5f)))>.99999f,
+                "camera action crossfades back to neutral");
+            settings.AdsScale=0;
+            const auto off=sample(full);
+            m_Ctx.Check(glm::length(off.Position)==0 && std::abs(off.Rotation.w-1)<1e-5f,"camera action ADS scale zero disables motion");
+        }
+    }
+    if(!m_Probe && m_Ctx.Aim && p.CurrentState()=="Aim" && m_Ctx.Time>0.5f && m_Ctx.Time<=0.5f+m_Ctx.Dt) {
+        const auto* animator=world.Registry.try_get<AnimatorControllerComponent>(p.ArmsEntity());
+        m_Ctx.Check(animator && std::abs(animator->GetFloat("LayerWeight:Weapon Locomotion")-p.Set().AdsLocomotionScale)<1e-4f,
+                    "ADS locomotion weight reaches the weapon animator");
+        m_Ctx.Check(animator && std::abs(animator->GetFloat("LayerWeight:Weapon Walk")-p.Set().AdsLocomotionScale)<1e-4f,
+                    "ADS walk weight reaches the weapon animator");
+    }
     if (!m_Probe) RecordAudioFrame(world, p);
     if (!m_Probe || !m_Ctx.Cam) return;
     ++m_Frame;

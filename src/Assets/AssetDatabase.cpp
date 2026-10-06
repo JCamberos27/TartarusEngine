@@ -96,7 +96,10 @@ const std::unordered_map<std::string, std::string>& KnownExtensions() {
         // #132 / #175 - Animator Controllers and gameplay scripts are referenced from scenes too.
         {".controller", "animatorcontroller"},
         {".fpsanim", "firstpersonanimationset"},
+        {".recoil", "recoil"},
+        {".camerashake", "camerashake"},
         {".tescript", "script"},
+        {".cs", "script"},
         {".physicmaterial", "physicmaterial"}, // #170
         {".preset", "preset"},                 // #178 - saved component settings
     };
@@ -506,6 +509,10 @@ void ScanProject() {
     for (auto it = fs::recursive_directory_iterator(root, ec); it != fs::recursive_directory_iterator(); it.increment(ec)) {
         if (ec) { ec.clear(); continue; }
         const auto& entry = *it;
+        if(entry.is_directory(ec)) {
+            const auto folder=entry.path().filename().string();
+            if(folder=="bin" || folder=="obj") { it.disable_recursion_pending(); continue; }
+        }
         // #133 / #132 — Library/ holds caches (thumbnails etc.) and screenshots/ holds editor
         // captures, not assets. Scanning them gave every cached thumbnail and every screenshot
         // its own .meta and GUID. (A screenshot used as a texture still gets one on first use.)

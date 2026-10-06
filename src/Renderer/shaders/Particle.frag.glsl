@@ -1,36 +1,36 @@
 #version 460 core
-// #177 - soft round particle: alpha falls off smoothly towards the quad's edge.
-// Flame instances (the AK105 muzzle flash from the Tactical Shooter pack's M_Muzzle graph): the
-// texture packs four flame masks in its R/G/B/A channels, two flames side by side; the seed picks
-// the channel and the side. The mask is a smoky body's alpha, its square the emission (tinted and
-// timed by the particle colour), which fades out toward the tip. Output is premultiplied.
 in vec2 vCorner;
 in vec4 vColor;
-in float vSeed;
-flat in float vIsFlame;
+flat in vec4 vAtlas;
+flat in vec4 vParams;
+uniform sampler2D uParticleTex;
+uniform int uTextured;
 out vec4 FragColor;
-
-uniform sampler2D uFlameTex;
-
-// M_Muzzle's body is lit grey (base colour 0.25 in gamma); this stands in for it in daylight.
-const vec3 kFlameBody = vec3(0.12, 0.115, 0.11);
-
+vec2 cellUV(vec2 q,float cell) {
+    vec2 grid=max(vAtlas.xy,vec2(1));
+    vec2 cellXY=vec2(mod(cell,grid.x),grid.y-1.0-floor(cell/grid.x));
+    // Stay half a texel inside each cell to avoid bleeding across the atlas.
+    vec2 halfTexel=.5/vec2(textureSize(uParticleTex,0));
+    vec2 lo=cellXY/grid+halfTexel,hi=(cellXY+1.0)/grid-halfTexel;
+    return mix(lo,hi,q);
+}
 void main() {
-    if (vIsFlame > 0.5) {
-        vec2 q = vCorner * 0.5 + 0.5;           // q.y: 0 at the base, 1 at the tip
-        float side = step(0.5, vSeed) - 0.5;    // -0.5 / +0.5
-        float chan = floor(4.0 * fract(2.0 * vSeed));
-        vec2 uv = vec2(0.365 + 0.27 * q.x + 0.5 * side, 1.0 - q.y);
-        vec4 t = texture(uFlameTex, uv);
-        float m = chan < 0.5 ? t.r : chan < 1.5 ? t.g : chan < 2.5 ? t.b : t.a;
-        m = clamp(m, 0.0, 1.0);
-        float a = vColor.a * m;
-        vec3 glow = vColor.rgb * (m * m) * pow(max(1.0 - q.y, 1e-4), 0.1);
-        FragColor = vec4(kFlameBody * a + glow, a);
-        return;
+    if(vParams.w==1.0) {
+        vec2 q=vCorner*.5+.5;
+        float side=step(.5,vParams.z)-.5,chan=floor(4.0*fract(2.0*vParams.z));
+        vec4 sampleMask=texture(uParticleTex,vec2(.365+.27*q.x+.5*side,1-q.y));
+        float m=clamp(chan<.5?sampleMask.r:chan<1.5?sampleMask.g:chan<2.5?sampleMask.b:sampleMask.a,0,1);
+        float a=vColor.a*m;
+        vec3 glow=vColor.rgb*m*m*pow(max(1-q.y,1e-4),.1);
+        FragColor=vec4(vec3(.12,.115,.11)*a+glow,a);return;
     }
-    float r2 = dot(vCorner, vCorner);
-    if (r2 >= 1.0) discard;
-    float soft = 1.0 - smoothstep(0.0, 1.0, r2);
-    FragColor = vec4(vColor.rgb, vColor.a * soft);
+    if(uTextured!=0) {
+        vec2 q=vCorner*.5+.5;
+        vec4 a=texture(uParticleTex,cellUV(q,vAtlas.z)),b=texture(uParticleTex,cellUV(q,vAtlas.w));
+        FragColor=mix(a,b,vParams.y)*vColor;
+        if(FragColor.a<.001)discard;
+    } else {
+        float r2=dot(vCorner,vCorner);if(r2>=1)discard;
+        FragColor=vec4(vColor.rgb,vColor.a*(1-smoothstep(0,1,r2)));
+    }
 }

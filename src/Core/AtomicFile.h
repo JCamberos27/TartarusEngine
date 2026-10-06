@@ -3,6 +3,7 @@
 #include <filesystem>
 #include <string_view>
 #include <json.hpp>
+#include <functional>
 
 // Crash-safe file writes: serialize to a sibling temp file, flush it to disk (FlushFileBuffers on
 // Windows), then atomically replace the target (MoveFileExW REPLACE_EXISTING — the target is never
@@ -13,6 +14,11 @@
 //
 // Use for every engine-written .json / .meta / .mat / prefs / scene / prefab file.
 namespace AtomicFile {
+// Main-thread editor transactions capture a pre-image before any authored file changes.
+// Workers have their own thread-local observer and never enter editor history.
+using ChangeObserver = std::function<void(const std::filesystem::path&)>;
+void SetChangeObserver(ChangeObserver observer);
+void NotifyWillChange(const std::filesystem::path& path);
 
 // Writes `bytes` to `path` atomically. `binary` opens the temp stream in binary mode (no CRLF
 // translation) — pass true for anything that must round-trip byte-exact. Creates parent

@@ -34,7 +34,7 @@
             0.0,
             0.0
           ],
-          "speed": 1.0,
+          "speed": 0,
           "tags": [
             "Idle"
           ]
@@ -43,8 +43,8 @@
           "loop": true,
           "motions": {
             "arms": {
-              "clip": "assets/Weapons/Remington870/FirstPerson/Remington870_A_FP_Walk.fbx",
-              "clipGuid": "804d61b2efd90493"
+              "clip": "assets/Weapons/Remington870/FirstPerson/Remington870_A_FP_Idle.fbx",
+              "clipGuid": "d568615aaab5910b"
             },
             "weapon": {
               "clip": "assets/Weapons/Remington870/Weapon/Remington870_A_W_Idle.fbx",
@@ -56,8 +56,7 @@
             0.0,
             120.0
           ],
-          "speed": 1.0,
-          "speedParam": "WalkRate",
+          "speed": 0,
           "tags": [
             "Ready"
           ]
@@ -66,8 +65,8 @@
           "loop": true,
           "motions": {
             "arms": {
-              "clip": "assets/Weapons/Remington870/FirstPerson/Remington870_A_FP_Sprint.fbx",
-              "clipGuid": "b548d762261e5f5f"
+              "clip": "assets/Weapons/Remington870/FirstPerson/Remington870_A_FP_Idle.fbx",
+              "clipGuid": "d568615aaab5910b"
             },
             "weapon": {
               "clip": "assets/Weapons/Remington870/Weapon/Remington870_A_W_Idle.fbx",
@@ -79,8 +78,7 @@
             330.0,
             120.0
           ],
-          "speed": 1.0,
-          "speedParam": "SprintRate"
+          "speed": 0
         },
         {
           "loop": true,
@@ -108,8 +106,8 @@
           "loop": false,
           "motions": {
             "arms": {
-              "clip": "assets/Weapons/Remington870/FirstPerson/Remington870_A_FP_IdleToSprint.fbx",
-              "clipGuid": "ec955e725647bbc5"
+              "clip": "assets/Weapons/Remington870/FirstPerson/Remington870_A_FP_Idle.fbx",
+              "clipGuid": "d568615aaab5910b"
             },
             "weapon": {
               "clip": "assets/Weapons/Remington870/Weapon/Remington870_A_W_Idle.fbx",
@@ -122,14 +120,14 @@
             0.0
           ],
           "priority": 1,
-          "speed": 1.0
+          "speed": 0
         },
         {
           "loop": false,
           "motions": {
             "arms": {
-              "clip": "assets/Weapons/Remington870/FirstPerson/Remington870_A_FP_SprintToIdle.fbx",
-              "clipGuid": "18773d2bc32d2c08"
+              "clip": "assets/Weapons/Remington870/FirstPerson/Remington870_A_FP_Idle.fbx",
+              "clipGuid": "d568615aaab5910b"
             },
             "weapon": {
               "clip": "assets/Weapons/Remington870/Weapon/Remington870_A_W_Idle.fbx",
@@ -142,7 +140,7 @@
             240.0
           ],
           "priority": 1,
-          "speed": 1.0
+          "speed": 0
         },
         {
           "events": [
@@ -1117,19 +1115,36 @@
           "to": "SprintToIdle"
         },
         {
-          "conditions": [],
+          "conditions": [
+            {
+              "threshold": 0.0,
+              "param": "Sprint",
+              "mode": "if"
+            },
+            {
+              "threshold": 0.05,
+              "param": "Speed",
+              "mode": "greater"
+            }
+          ],
           "duration": 0.1,
           "exitTime": 1.0,
           "from": "IdleToSprint",
-          "hasExitTime": true,
+          "hasExitTime": false,
           "to": "Exit"
         },
         {
-          "conditions": [],
+          "conditions": [
+            {
+              "threshold": 0.0,
+              "param": "Sprint",
+              "mode": "ifNot"
+            }
+          ],
           "duration": 0.1,
           "exitTime": 1.0,
           "from": "SprintToIdle",
-          "hasExitTime": true,
+          "hasExitTime": false,
           "to": "Exit"
         },
         {
@@ -1427,9 +1442,629 @@
           "from": "Pump",
           "hasExitTime": true,
           "to": "Exit"
+        },
+        {
+          "conditions": [
+            {
+              "threshold": 0.05,
+              "param": "Speed",
+              "mode": "less"
+            }
+          ],
+          "duration": 0.1,
+          "exitTime": 1.0,
+          "from": "SprintToIdle",
+          "hasExitTime": false,
+          "to": "Exit"
         }
       ],
       "weight": 1.0
+    },
+    {
+      "additiveReferenceState": "Idle",
+      "anyPosition": [
+        -320.0,
+        -150.0
+      ],
+      "blending": "additive",
+      "defaultState": "Off",
+      "entryPosition": [
+        -640.0,
+        140.0
+      ],
+      "exitPosition": [
+        960.0,
+        140.0
+      ],
+      "name": "Weapon Locomotion",
+      "states": [
+        {
+          "loop": true,
+          "motions": {
+            "arms": {
+              "clip": "assets/Weapons/Remington870/FirstPerson/Remington870_A_FP_Idle.fbx",
+              "clipGuid": "d568615aaab5910b"
+            },
+            "weapon": {
+              "clip": "assets/Weapons/Remington870/Weapon/Remington870_A_W_Idle.fbx",
+              "clipGuid": "abfe8981a8954dee"
+            }
+          },
+          "name": "Idle",
+          "position": [
+            0.0,
+            0.0
+          ],
+          "speed": 1.0,
+          "tags": [
+            "Idle"
+          ]
+        },
+        {
+          "loop": true,
+          "motions": {
+            "arms": {
+              "clip": "assets/Weapons/Remington870/FirstPerson/Remington870_A_FP_Idle.fbx",
+              "clipGuid": "d568615aaab5910b"
+            },
+            "weapon": {
+              "clip": "assets/Weapons/Remington870/Weapon/Remington870_A_W_Idle.fbx",
+              "clipGuid": "abfe8981a8954dee"
+            }
+          },
+          "name": "Walk",
+          "position": [
+            0.0,
+            140.0
+          ],
+          "speed": 0.0,
+          "tags": [
+            "Ready"
+          ],
+          "curves": [
+            {
+              "keys": [
+                [
+                  0.0,
+                  1.0
+                ],
+                [
+                  1.0,
+                  1.0
+                ]
+              ],
+              "name": "WalkBlend"
+            }
+          ]
+        },
+        {
+          "loop": true,
+          "motions": {
+            "arms": {
+              "clip": "assets/Weapons/Remington870/FirstPerson/Remington870_A_FP_Sprint.fbx",
+              "clipGuid": "b548d762261e5f5f"
+            },
+            "weapon": {
+              "clip": "assets/Weapons/Remington870/Weapon/Remington870_A_W_Idle.fbx",
+              "clipGuid": "abfe8981a8954dee"
+            }
+          },
+          "name": "Sprint",
+          "position": [
+            640.0,
+            0.0
+          ],
+          "speed": 1.0,
+          "speedParam": "SprintRate"
+        },
+        {
+          "loop": false,
+          "motions": {
+            "arms": {
+              "clip": "assets/Weapons/Remington870/FirstPerson/Remington870_A_FP_IdleToSprint.fbx",
+              "clipGuid": "ec955e725647bbc5"
+            },
+            "weapon": {
+              "clip": "assets/Weapons/Remington870/Weapon/Remington870_A_W_Idle.fbx",
+              "clipGuid": "abfe8981a8954dee"
+            }
+          },
+          "name": "IdleToSprint",
+          "position": [
+            320.0,
+            0.0
+          ],
+          "priority": 1,
+          "speed": 1.0,
+          "curves": [
+            {
+              "keys": [
+                [
+                  0.0,
+                  1.0
+                ],
+                [
+                  1.0,
+                  1.0
+                ]
+              ],
+              "name": "WalkBlend"
+            }
+          ]
+        },
+        {
+          "loop": false,
+          "motions": {
+            "arms": {
+              "clip": "assets/Weapons/Remington870/FirstPerson/Remington870_A_FP_SprintToIdle.fbx",
+              "clipGuid": "18773d2bc32d2c08"
+            },
+            "weapon": {
+              "clip": "assets/Weapons/Remington870/Weapon/Remington870_A_W_Idle.fbx",
+              "clipGuid": "abfe8981a8954dee"
+            }
+          },
+          "name": "SprintToIdle",
+          "position": [
+            640.0,
+            140.0
+          ],
+          "priority": 1,
+          "speed": 1.0,
+          "curves": [
+            {
+              "keys": [
+                [
+                  0.0,
+                  1.0
+                ],
+                [
+                  1.0,
+                  1.0
+                ]
+              ],
+              "name": "WalkBlend"
+            }
+          ]
+        },
+        {
+          "loop": true,
+          "motions": {},
+          "name": "Off",
+          "position": [
+            -320.0,
+            140.0
+          ],
+          "speed": 1.0
+        }
+      ],
+      "transitions": [
+        {
+          "conditions": [
+            {
+              "mode": "if",
+              "param": "Aim",
+              "threshold": 0.0
+            },
+            {
+              "mode": "greater",
+              "param": "Speed",
+              "threshold": 0.05
+            }
+          ],
+          "duration": 0.12,
+          "exitTime": 0.9,
+          "from": "Sprint",
+          "hasExitTime": false,
+          "to": "Walk"
+        },
+        {
+          "conditions": [
+            {
+              "mode": "if",
+              "param": "Aim",
+              "threshold": 0.0
+            },
+            {
+              "mode": "less",
+              "param": "Speed",
+              "threshold": 0.05
+            }
+          ],
+          "duration": 0.12,
+          "exitTime": 0.9,
+          "from": "Sprint",
+          "hasExitTime": false,
+          "to": "Idle"
+        },
+        {
+          "conditions": [
+            {
+              "mode": "if",
+              "param": "Aim",
+              "threshold": 0.0
+            },
+            {
+              "mode": "greater",
+              "param": "Speed",
+              "threshold": 0.05
+            }
+          ],
+          "duration": 0.12,
+          "exitTime": 0.9,
+          "from": "IdleToSprint",
+          "hasExitTime": false,
+          "to": "Walk"
+        },
+        {
+          "conditions": [
+            {
+              "mode": "if",
+              "param": "Aim",
+              "threshold": 0.0
+            },
+            {
+              "mode": "less",
+              "param": "Speed",
+              "threshold": 0.05
+            }
+          ],
+          "duration": 0.12,
+          "exitTime": 0.9,
+          "from": "IdleToSprint",
+          "hasExitTime": false,
+          "to": "Idle"
+        },
+        {
+          "conditions": [
+            {
+              "mode": "if",
+              "param": "Aim",
+              "threshold": 0.0
+            },
+            {
+              "mode": "greater",
+              "param": "Speed",
+              "threshold": 0.05
+            }
+          ],
+          "duration": 0.12,
+          "exitTime": 0.9,
+          "from": "SprintToIdle",
+          "hasExitTime": false,
+          "to": "Walk"
+        },
+        {
+          "conditions": [
+            {
+              "mode": "if",
+              "param": "Aim",
+              "threshold": 0.0
+            },
+            {
+              "mode": "less",
+              "param": "Speed",
+              "threshold": 0.05
+            }
+          ],
+          "duration": 0.12,
+          "exitTime": 0.9,
+          "from": "SprintToIdle",
+          "hasExitTime": false,
+          "to": "Idle"
+        },
+        {
+          "conditions": [
+            {
+              "mode": "if",
+              "param": "Sprint",
+              "threshold": 0.0
+            },
+            {
+              "mode": "greater",
+              "param": "Speed",
+              "threshold": 0.05
+            }
+          ],
+          "duration": 0.2,
+          "exitTime": 1.0,
+          "from": "Idle",
+          "hasExitTime": false,
+          "to": "IdleToSprint"
+        },
+        {
+          "conditions": [
+            {
+              "mode": "greater",
+              "param": "Speed",
+              "threshold": 0.01
+            }
+          ],
+          "duration": 0.4,
+          "exitTime": 1.0,
+          "from": "Idle",
+          "hasExitTime": false,
+          "to": "Walk"
+        },
+        {
+          "conditions": [
+            {
+              "mode": "if",
+              "param": "Sprint",
+              "threshold": 0.0
+            },
+            {
+              "mode": "greater",
+              "param": "Speed",
+              "threshold": 0.05
+            }
+          ],
+          "duration": 0.2,
+          "exitTime": 1.0,
+          "from": "Walk",
+          "hasExitTime": false,
+          "to": "IdleToSprint"
+        },
+        {
+          "conditions": [
+            {
+              "mode": "less",
+              "param": "Speed",
+              "threshold": 0.01
+            }
+          ],
+          "duration": 0.4,
+          "exitTime": 1.0,
+          "from": "Walk",
+          "hasExitTime": false,
+          "to": "Idle"
+        },
+        {
+          "conditions": [
+            {
+              "mode": "ifNot",
+              "param": "Sprint",
+              "threshold": 0.0
+            }
+          ],
+          "duration": 0.15,
+          "exitTime": 1.0,
+          "from": "IdleToSprint",
+          "hasExitTime": false,
+          "to": "SprintToIdle"
+        },
+        {
+          "conditions": [
+            {
+              "mode": "less",
+              "param": "Speed",
+              "threshold": 0.05
+            }
+          ],
+          "duration": 0.15,
+          "exitTime": 1.0,
+          "from": "IdleToSprint",
+          "hasExitTime": false,
+          "to": "SprintToIdle"
+        },
+        {
+          "conditions": [],
+          "duration": 0.25,
+          "exitTime": 1.0,
+          "from": "IdleToSprint",
+          "hasExitTime": true,
+          "to": "Sprint"
+        },
+        {
+          "conditions": [
+            {
+              "mode": "ifNot",
+              "param": "Sprint",
+              "threshold": 0.0
+            }
+          ],
+          "duration": 0.05,
+          "exitTime": 1.0,
+          "from": "Sprint",
+          "hasExitTime": false,
+          "to": "SprintToIdle"
+        },
+        {
+          "conditions": [
+            {
+              "mode": "less",
+              "param": "Speed",
+              "threshold": 0.05
+            }
+          ],
+          "duration": 0.05,
+          "exitTime": 1.0,
+          "from": "Sprint",
+          "hasExitTime": false,
+          "to": "SprintToIdle"
+        },
+        {
+          "conditions": [
+            {
+              "mode": "if",
+              "param": "Sprint",
+              "threshold": 0.0
+            },
+            {
+              "mode": "greater",
+              "param": "Speed",
+              "threshold": 0.05
+            }
+          ],
+          "duration": 0.1,
+          "exitTime": 1.0,
+          "from": "SprintToIdle",
+          "hasExitTime": false,
+          "to": "IdleToSprint"
+        },
+        {
+          "conditions": [
+            {
+              "mode": "greater",
+              "param": "Speed",
+              "threshold": 0.05
+            }
+          ],
+          "duration": 0.1,
+          "exitTime": 1.0,
+          "from": "SprintToIdle",
+          "hasExitTime": true,
+          "to": "Walk"
+        },
+        {
+          "conditions": [],
+          "duration": 0.1,
+          "exitTime": 1.0,
+          "from": "SprintToIdle",
+          "hasExitTime": true,
+          "to": "Idle"
+        },
+        {
+          "conditions": [
+            {
+              "mode": "if",
+              "param": "Equipped",
+              "threshold": 0.0
+            }
+          ],
+          "duration": 0.1,
+          "exitTime": 0.9,
+          "from": "Off",
+          "hasExitTime": false,
+          "to": "Idle"
+        },
+        {
+          "conditions": [
+            {
+              "mode": "ifNot",
+              "param": "Equipped",
+              "threshold": 0.0
+            }
+          ],
+          "duration": 0.12,
+          "exitTime": 0.9,
+          "fromAny": true,
+          "hasExitTime": false,
+          "to": "Off"
+        }
+      ],
+      "weight": 1.0
+    },
+    {
+      "name": "Weapon Walk",
+      "blending": "additive",
+      "weight": 1.0,
+      "additiveReferenceState": "Off",
+      "weightCurve": "WalkBlend",
+      "weightCurveLayer": "Weapon Locomotion",
+      "defaultState": "Off",
+      "entryPosition": [
+        -640,
+        140
+      ],
+      "anyPosition": [
+        -320,
+        -150
+      ],
+      "exitPosition": [
+        960,
+        140
+      ],
+      "states": [
+        {
+          "loop": true,
+          "motions": {
+            "arms": {
+              "clip": "assets/Weapons/Remington870/FirstPerson/Remington870_A_FP_Walk.fbx",
+              "clipGuid": "804d61b2efd90493"
+            },
+            "weapon": {
+              "clip": "assets/Weapons/Remington870/Weapon/Remington870_A_W_Idle.fbx",
+              "clipGuid": "abfe8981a8954dee"
+            }
+          },
+          "name": "Walk",
+          "position": [
+            0.0,
+            140.0
+          ],
+          "speed": 1.0,
+          "speedParam": "WalkRate",
+          "tags": [
+            "Ready"
+          ]
+        },
+        {
+          "name": "Off",
+          "loop": true,
+          "speed": 0.0,
+          "motions": {
+            "arms": {
+              "clip": "assets/Weapons/Remington870/FirstPerson/Remington870_A_FP_Idle.fbx",
+              "clipGuid": "d568615aaab5910b"
+            },
+            "weapon": {
+              "clip": "assets/Weapons/Remington870/Weapon/Remington870_A_W_Idle.fbx",
+              "clipGuid": "abfe8981a8954dee"
+            }
+          },
+          "position": [
+            -320,
+            140
+          ]
+        }
+      ],
+      "transitions": [
+        {
+          "to": "Walk",
+          "hasExitTime": false,
+          "conditions": [
+            {
+              "param": "Equipped",
+              "threshold": 0.0,
+              "mode": "if"
+            },
+            {
+              "param": "Speed",
+              "threshold": 0.05,
+              "mode": "greater"
+            }
+          ],
+          "duration": 0.1,
+          "from": "Off"
+        },
+        {
+          "to": "Off",
+          "hasExitTime": false,
+          "conditions": [
+            {
+              "param": "Speed",
+              "threshold": 0.05,
+              "mode": "less"
+            }
+          ],
+          "duration": 0.1,
+          "from": "Walk"
+        },
+        {
+          "fromAny": true,
+          "to": "Off",
+          "hasExitTime": false,
+          "conditions": [
+            {
+              "param": "Equipped",
+              "threshold": 0.0,
+              "mode": "ifNot"
+            }
+          ],
+          "duration": 0.12
+        }
+      ]
     }
   ],
   "parameters": [

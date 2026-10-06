@@ -293,7 +293,24 @@ glm::mat4 LimbGoal(const glm::mat4& target, const glm::mat4& relative, bool keep
     return goalMove * (keepAnimatedOffset ? base * relative : base);
 }
 
-void ApplyRig(const IKRigComponent& rig, const Model& model, Pose& pose, const Pose* gripPose) {
+void ApplyHeldPose(Pose& pose,const Pose& held,const std::vector<float>& weights) {
+    if(held.size()!=pose.size() || weights.size()!=pose.size()) return;
+    for(size_t i=0;i<pose.size();++i)
+        if(weights[i]>0) pose[i]=LocalTRS::Blend(pose[i],held[i],std::clamp(weights[i],0.0f,1.0f));
+}
+
+void ApplyAdditivePose(Pose& pose,const Pose& layer,const Pose& reference,const std::vector<float>& mask,float weight) {
+    for(size_t i=0;i<pose.size() && i<layer.size() && i<reference.size();++i) {
+        const float w=weight*(i<mask.size()?mask[i]:1.0f);
+        if(w<=0) continue;
+        pose[i].T+=(layer[i].T-reference[i].T)*w;
+        const glm::quat delta=layer[i].R*glm::inverse(reference[i].R);
+        pose[i].R=glm::normalize(glm::slerp(glm::quat(1,0,0,0),delta,w)*pose[i].R);
+        pose[i].S*=glm::mix(glm::vec3(1),layer[i].S/glm::max(reference[i].S,glm::vec3(1e-6f)),w);
+    }
+}
+
+void ApplyRig(const IKRigComponent& rig, const Model& model, Pose& pose, const Pose* gripPose,bool holdAlreadyApplied) {
     const float w = std::clamp(rig.Weight, 0.0f, 1.0f);
     if (!rig.Enabled || w <= 0.0f || pose.empty() || (int)pose.size() != model.NodeCount()) return;
 
@@ -306,10 +323,18 @@ void ApplyRig(const IKRigComponent& rig, const Model& model, Pose& pose, const P
     // as animated (or the grip pose), before it.
     const bool hold = rig.HoldPose.size() == pose.size() && rig.HoldWeights.size() == pose.size();
     thread_local std::vector<glm::mat4> animated;
+    thread_local std::vector<glm::mat4> heldGripGlobals;
     if (hold) {
         ComputeGlobals(gripPose && gripPose->size() == pose.size() ? *gripPose : pose, parents, animated);
-        for (size_t i = 0; i < pose.size(); ++i)
-            if (rig.HoldWeights[i] > 0.0f) pose[i] = LocalTRS::Blend(pose[i], rig.HoldPose[i], std::min(rig.HoldWeights[i], 1.0f));
+        if (rig.PreserveBaseGrip) {
+            // Held and free grips must share the same pre-locomotion reference.
+            // Reading the held grip from the final blend would reintroduce hand drift.
+            thread_local Pose heldGripPose;
+            heldGripPose = gripPose && gripPose->size() == pose.size() ? *gripPose : pose;
+            ApplyHeldPose(heldGripPose,rig.HoldPose,rig.HoldWeights);
+            ComputeGlobals(heldGripPose,parents,heldGripGlobals);
+        }
+        if(!holdAlreadyApplied) ApplyHeldPose(pose,rig.HoldPose,rig.HoldWeights);
     }
     for (const auto& [bone, rot] : rig.LocalRotations) {
         const int i = model.NodeIndex(bone);
@@ -342,7 +367,8 @@ void ApplyRig(const IKRigComponent& rig, const Model& model, Pose& pose, const P
                 // Held hand: the held pose's grip; free hand: its animated grip; in between, a mix.
                 const float h = std::clamp(rig.HoldWeights[limb.End], 0.0f, 1.0f);
                 const glm::mat4 free = glm::inverse(animated[limb.Target]) * animated[limb.End];
-                const glm::mat4 held = glm::inverse(globals[limb.Target]) * globals[limb.End];
+                const auto& heldGlobals = rig.PreserveBaseGrip ? heldGripGlobals : globals;
+                const glm::mat4 held = glm::inverse(heldGlobals[limb.Target]) * heldGlobals[limb.End];
                 const glm::quat r = glm::slerp(Rotation(free), Rotation(held), h);
                 limb.Relative = glm::translate(glm::mat4(1.0f), glm::mix(Position(free), Position(held), h)) * glm::mat4_cast(r);
             }
@@ -350,7 +376,13 @@ void ApplyRig(const IKRigComponent& rig, const Model& model, Pose& pose, const P
         limbs[limbCount++] = limb;
     }
 
-    for (const IKBoneOffset& off : rig.Offsets) {
+    for (size_t offset=0;offset<=rig.Offsets.size();++offset) {
+        if (rig.SwayEnabled && offset==static_cast<size_t>(std::max(0,rig.SwayBeforeOffset)))
+            ApplySwayModifier(rig.SwaySettings,rig.SwayPose,pose,parents,globals,
+                              model.NodeIndex(rig.SwaySettings.WeaponBone),model.NodeIndex(rig.SwaySettings.WeaponAdditiveBone),
+                              rig.SwayModelToComponent,rig.SwayModelToWorld,rig.SwayMetresPerUnit,w);
+        if (offset==rig.Offsets.size()) break;
+        const IKBoneOffset& off=rig.Offsets[offset];
         const int i = model.NodeIndex(off.Bone);
         if (i < 0) continue;
         const int pivotBone = off.PivotBone.empty() ? i : model.NodeIndex(off.PivotBone);
@@ -411,6 +443,15 @@ namespace {
 float FollowK(float dt, float seconds) { return seconds > 1e-4f ? 1.0f - std::exp(-dt / seconds) : 1.0f; }
 } // namespace
 
+FootSlideOutput SmoothFootSlideOutput(const FootSlideOutput& current,const FootSlideOutput& target,float dt,float ease) {
+    const float alpha=dt>0?FollowK(dt,std::max(ease,0.03f)):0.0f;
+    FootSlideOutput out;
+    for(int s=0;s<2;++s) out.Shift[s]=glm::mix(current.Shift[s],target.Shift[s],alpha);
+    out.PelvisDrop=glm::mix(current.PelvisDrop,target.PelvisDrop,alpha);
+    out.Scale=glm::mix(current.Scale,target.Scale,alpha);
+    return out;
+}
+
 float StrideScale(float groundSpeed, float clipSpeed, float lo, float hi) {
     if (groundSpeed < 0.25f || clipSpeed < 0.3f) return 1.0f;
     if (lo > hi) std::swap(lo, hi);
@@ -432,6 +473,9 @@ FootSlideOutput FootSlide::Step(const FootSlideSettings& set, const FootSlideInp
     if (dt <= 1e-5f) return out;
     const glm::vec2 vel(in.Velocity.x, in.Velocity.z);
     const float speed = glm::length(vel);
+    // An idle pose has no stride to correct. Discard old walking pins rather than
+    // pulling the new stance back to a previous step's world position.
+    if (speed < 0.1f) { Reset(); return out; }
     const glm::vec2 dir = speed > 1e-3f ? vel / speed : glm::vec2(0.0f, 1.0f);
     glm::vec2 rel[2];
     for (int s = 0; s < 2; ++s) rel[s] = glm::vec2(in.Foot[s].x - in.Feet.x, in.Foot[s].z - in.Feet.z);

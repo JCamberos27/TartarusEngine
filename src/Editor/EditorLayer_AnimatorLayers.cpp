@@ -75,7 +75,12 @@ void DrawLayersAndParameters(AnimCtx& cx) {
             ImGui::PushID("layer");
             ImGui::TextUnformatted("Name");
             ImGui::SameLine(80.0f * S);
-            if (InputName("##lname", Ly.Name, -FLT_MIN)) changed = true;
+            const std::string oldName = Ly.Name;
+            if (InputName("##lname", Ly.Name, -FLT_MIN)) {
+                for (auto& layer : D.Layers)
+                    if (layer.WeightCurveLayer == oldName) layer.WeightCurveLayer = Ly.Name;
+                changed = true;
+            }
             if (W.Layer > 0) {
                 ImGui::TextUnformatted("Weight");
                 ImGui::SameLine(80.0f * S);
@@ -89,7 +94,31 @@ void DrawLayersAndParameters(AnimCtx& cx) {
                 if (ImGui::Combo("##lblend", &mode, "Override\0Additive\0")) { Ly.Mode = (AC::Blending)mode; changed = true; }
                 if (ImGui::IsItemHovered())
                     EditorUI::SetTooltip("Override replaces the pose beneath (by Weight, through the mask).\n"
-                                         "Additive adds this layer's motion relative to each clip's first frame.");
+                                         "Additive uses the Reference State's first frame, or each clip's first frame when unset.");
+                if(Ly.Mode==AC::Blending::Additive) {
+                    ImGui::TextUnformatted("Reference State");
+                    ImGui::SetNextItemWidth(-FLT_MIN);
+                    if(ImGui::BeginCombo("##additiveReference",Ly.AdditiveReferenceState.empty()?"Each clip's first frame":Ly.AdditiveReferenceState.c_str())) {
+                        if(ImGui::Selectable("Each clip's first frame",Ly.AdditiveReferenceState.empty())) {Ly.AdditiveReferenceState.clear();changed=true;}
+                        for(const auto& state:Ly.States)
+                            if(ImGui::Selectable(state.Name.c_str(),Ly.AdditiveReferenceState==state.Name)) {Ly.AdditiveReferenceState=state.Name;changed=true;}
+                        ImGui::EndCombo();
+                    }
+                }
+
+                ImGui::TextUnformatted("Weight Curve");
+                if (InputName("##weightCurve", Ly.WeightCurve, -FLT_MIN)) changed = true;
+                if (ImGui::IsItemHovered()) EditorUI::SetTooltip("Optional state curve multiplying this layer's weight. Missing curves contribute zero.");
+                if (!Ly.WeightCurve.empty()) {
+                    ImGui::TextUnformatted("Curve Layer");
+                    ImGui::SetNextItemWidth(-FLT_MIN);
+                    if (ImGui::BeginCombo("##curveLayer", Ly.WeightCurveLayer.empty() ? "This layer" : Ly.WeightCurveLayer.c_str())) {
+                        if (ImGui::Selectable("This layer", Ly.WeightCurveLayer.empty())) { Ly.WeightCurveLayer.clear(); changed = true; }
+                        for (const auto& layer : D.Layers)
+                            if (ImGui::Selectable(layer.Name.c_str(), Ly.WeightCurveLayer == layer.Name)) { Ly.WeightCurveLayer = layer.Name; changed = true; }
+                        ImGui::EndCombo();
+                    }
+                }
 
                 // Bone mask
                 EditorUIPrimitives::SectionHeader("Bone Mask");

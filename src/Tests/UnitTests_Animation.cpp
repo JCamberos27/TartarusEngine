@@ -6,8 +6,14 @@
 #include "AssetLibrary.h"
 #include "../Game/FirstPersonProcedural.h"
 #include "../Game/AnimatorController.h"
+#include "CameraEffects.h"
+#include "Camera.h"
+#include "FirstPersonAnimation.h"
+#include "ProjectPaths.h"
+#include "Model.h"
 #include <cmath>
 #include <cstdio>
+#include <filesystem>
 
 // Unit tests for animation poses and IK. Add a function per test and list it below.
 
@@ -349,6 +355,7 @@ void TestFreeAimDeadZoneMath() {
     auto pose = [&](glm::vec2 zoneSetting) {
         WeaponProceduralSettings s = WeaponProceduralSettings::Defaults();
         s.Sway.FreeAimZone = zoneSetting;
+        s.Sway.UnityPort = false;
         WeaponProceduralState st;
         WeaponProceduralInput in;
         in.Dt = 1.0f / 60.0f;
@@ -362,6 +369,7 @@ void TestFreeAimDeadZoneMath() {
     WeaponProceduralSettings k = WeaponProceduralSettings::Defaults(), back;
     k.Sway.FreeAimZone = glm::vec2(2.0f, 1.0f);
     k.Sway.FreeAimReturn = 12.0f;
+    k.Sway.UnityPort = false;
     CHECK(WeaponProceduralSettings::FromJson(k.ToJson(), back, nullptr));
     CHECK(back.Sway.FreeAimZone == k.Sway.FreeAimZone && back.Sway.FreeAimReturn == 12.0f);
 }
@@ -518,6 +526,30 @@ void TestFootSlideDefaultsOff() {
 }
 
 void TestFootSlidePinHoldsPlantedFeet() {
+    IK::FootSlideOutput previous;
+    previous.Shift[0]=glm::vec3(0.2f,0,0);
+    previous.PelvisDrop=0.05f;
+    const auto release=IK::SmoothFootSlideOutput(previous,{},1.0f/60.0f,0.06f);
+    CHECK(release.Shift[0].x>0.1f && release.Shift[0].x<0.2f);
+    CHECK(release.PelvisDrop>0 && release.PelvisDrop<previous.PelvisDrop);
+    auto split=IK::SmoothFootSlideOutput(previous,{},1.0f/120.0f,0.06f);
+    split=IK::SmoothFootSlideOutput(split,{},1.0f/120.0f,0.06f);
+    CHECK(glm::length(split.Shift[0]-release.Shift[0])<1e-6f);
+    IK::FootSlide idle;
+    IK::FootSlideSettings active;
+    active.PinEnabled=active.StrideEnabled=true;
+    IK::FootSlideInput input;
+    input.Dt=1.0f/60.0f;
+    input.Velocity=glm::vec3(0,0,2);
+    input.Foot[0]=glm::vec3(-0.1f,0,0);
+    input.Foot[1]=glm::vec3(0.1f,0,0);
+    idle.Step(active,input);
+    input.Velocity=glm::vec3(0);
+    input.Foot[0].z+=0.2f;
+    input.Foot[1].z+=0.2f;
+    const auto stopped=idle.Step(active,input);
+    CHECK(stopped.Shift[0]==glm::vec3(0) && stopped.Shift[1]==glm::vec3(0));
+    CHECK(stopped.PelvisDrop==0 && stopped.Scale==1);
     IK::FootSlideStats base, pin, warp, both;
     IK::FootSlideSettings set;
     const float slideOff = FootSlideSim(set, 2.0f, 2.4f, &base);
@@ -569,7 +601,120 @@ void TestStrideWarpMatchesGroundSpeed() {
     CHECK(std::abs(o.Scale - 1.0f) < 1e-4f);
 }
 
+void TestAdsReloadPreservesAdditiveLocomotion() {
+    IK::Pose reload(2),aim(2),reference(2),walk(2);
+    reload[0].T=glm::vec3(0,0,0.4f);
+    reload[1].T=glm::vec3(0.3f,0.2f,0);
+    aim[0].T=glm::vec3(0,0,-0.2f);
+    aim[1].T=glm::vec3(-1);
+    walk[0].T=glm::vec3(0.02f,0.03f,0);
+    walk[0].R=glm::angleAxis(0.1f,glm::vec3(0,1,0));
+    walk[1].T=glm::vec3(0.01f,0,0);
+    for(float strength : {0.0f,0.31f,1.0f}) {
+        auto result=reload;
+        IK::ApplyHeldPose(result,aim,{1,0});
+        IK::ApplyAdditivePose(result,walk,reference,{},strength);
+        CHECK(glm::length(result[0].T-(aim[0].T+walk[0].T*strength))<1e-6f);
+        CHECK(glm::length(result[1].T-(reload[1].T+walk[1].T*strength))<1e-6f); // reload hand stays free
+        CHECK(std::abs(glm::dot(result[0].R,glm::angleAxis(0.1f*strength,glm::vec3(0,1,0))))>0.99999f);
+    }
+    auto partial=reload;
+    IK::ApplyHeldPose(partial,aim,{0.5f,0});
+    IK::ApplyAdditivePose(partial,walk,reference,{},1);
+    CHECK(glm::length(partial[0].T-(glm::mix(reload[0].T,aim[0].T,0.5f)+walk[0].T))<1e-6f);
+}
+
+void TestCameraEffects() {
+    CameraShakeAsset asset,parsed;
+    std::string error;
+    CHECK(CameraShakeAsset::FromJsonString(asset.ToJsonString(),parsed,&error));
+    CHECK(parsed.Duration==asset.Duration && parsed.Rotation[0].Keys.size()==asset.Rotation[0].Keys.size());
+    const float original=parsed.Duration;
+    CHECK(!CameraShakeAsset::FromJsonString("{\"duration\":-1}",parsed,&error));
+    CHECK(parsed.Duration==original);
+    CHECK(!CameraShakeAsset::FromJsonString("{\"rotation\":[1,2]}",parsed,&error));
+    CHECK(!CameraShakeAsset::FromJsonString("{\"envelope\":[[0,1,0,0],[1,0,0,0]]}",parsed,&error));
+    CHECK(!CameraShakeAsset::FromJsonString("{\"version\":2,\"rotationCurves\":[\"bad\",[],[]]}",parsed,&error));
+    CHECK(CameraShakeAsset::FromJsonString("{\"version\":1,\"frequency\":20,\"rotation\":[1,2,3],\"envelope\":[[0,0],[0.5,1],[1,0]]}",parsed,&error));
+    CHECK(parsed.Rotation[2].Evaluate(.5f)==3 && parsed.ToJsonString().find("frequency")==std::string::npos);
+    asset.Rotation[0]=Curve::Kick(.08f);
+    asset.Position[0]=Curve::Kick(.08f);
+    for(auto& key:asset.Rotation[0].Keys) { key.Value*=-.6f; key.InTangent*=-.6f; key.OutTangent*=-.6f; }
+    for(auto& key:asset.Position[0].Keys) { key.Value*=-.002f; key.InTangent*=-.002f; key.OutTangent*=-.002f; }
+    CameraShakeState a,b,ads;
+    a.Reset(); b.Reset(); ads.Reset();
+    auto zero=a.Update(.01f);
+    CHECK(glm::length(zero.Position)==0 && std::abs(zero.Rotation.w-1)<1e-6f);
+    asset.AdsScale=0;
+    a.Trigger(asset,false); b.Trigger(asset,false); ads.Trigger(asset,true);
+    float motion=0;
+    for(int i=0;i<10;++i) {
+        const auto x=a.Update(.01f),y=b.Update(.01f),z=ads.Update(.01f);
+        CHECK(glm::length(x.Position-y.Position)<1e-8f && std::abs(glm::dot(x.Rotation,y.Rotation))>.999999f);
+        const float phase=(i+1)*.01f/asset.Duration;
+        CHECK(std::abs(x.Position.x-asset.Position[0].Evaluate(phase))<1e-7f && x.Position.y==0 && x.Position.z==0);
+        const auto expected=glm::angleAxis(glm::radians(asset.Rotation[0].Evaluate(phase)),glm::vec3(1,0,0));
+        CHECK(std::abs(glm::dot(x.Rotation,expected))>.999999f);
+        CHECK(glm::length(z.Position)==0 && std::abs(z.Rotation.w-1)<1e-6f);
+        motion+=glm::length(x.Position)+glm::length(glm::vec3(x.Rotation.x,x.Rotation.y,x.Rotation.z));
+    }
+    CHECK(motion>.001f);
+    a.Trigger(asset,false);
+    const auto ended=a.Update(10);
+    CHECK(glm::length(ended.Position)==0 && std::abs(ended.Rotation.w-1)<1e-6f);
+    a.Trigger(asset,false); a.Reset();
+    CHECK(glm::length(a.Update(.01f).Position)==0);
+
+    // The constrained head rotates a child camera's orientation AND its eye offset.
+    IK::Pose rest(2),posed(2);
+    rest[0].T={0,1.6f,0}; rest[1].T={0,0,-.1f}; posed=rest;
+    posed[0].R=glm::angleAxis(glm::radians(12.0f),glm::vec3(1,0,0));
+    std::vector<glm::mat4> r,p;
+    IK::ComputeGlobals(rest,{-1,0},r); IK::ComputeGlobals(posed,{-1,0},p);
+    const auto effect=ActionCameraDelta(r[1],p[1],glm::quat(1,0,0,0),1,1,1);
+    CHECK(glm::length(effect.Position-(glm::vec3(p[1][3])-glm::vec3(r[1][3])))<1e-6f);
+    Camera camera; camera.Yaw=33; camera.Pitch=25; camera.Roll=7;
+    const auto position=camera.Position;
+    const glm::mat3 basis(camera.Right(),camera.Up(),-camera.Front());
+    const glm::vec3 expectedForward=basis*(effect.Rotation*glm::vec3(0,0,-1));
+    ApplyCameraEffect(camera,effect);
+    CHECK(glm::length(camera.Front()-expectedForward)<1e-5f);
+    CHECK(glm::length(camera.Position-position-basis*effect.Position)<1e-6f);
+    const auto neutral=ActionCameraDelta(r[1],r[1],glm::quat(1,0,0,0),1,1,1);
+    CHECK(glm::length(neutral.Position)==0 && std::abs(neutral.Rotation.w-1)<1e-6f);
+    Camera identityCamera; identityCamera.Yaw=123; identityCamera.Pitch=-60; identityCamera.Roll=17;
+    const auto oldFront=identityCamera.Front(),oldUp=identityCamera.Up();
+    ApplyCameraEffect(identityCamera,neutral);
+    CHECK(glm::length(identityCamera.Front()-oldFront)<1e-5f && glm::length(identityCamera.Up()-oldUp)<1e-5f);
+    // Removing exactly the visible offset restores input before the next mouse-look frame.
+    const auto before=identityCamera;
+    const glm::vec3 oldAngles(before.Pitch,before.Yaw,before.Roll);
+    ApplyCameraEffect(identityCamera,effect);
+    const glm::vec3 angles=glm::vec3(identityCamera.Pitch,identityCamera.Yaw,identityCamera.Roll)-oldAngles;
+    const auto moved=identityCamera.Position-before.Position;
+    identityCamera.Pitch-=angles.x; identityCamera.Yaw-=angles.y; identityCamera.Roll-=angles.z;
+    identityCamera.Position-=moved;
+    CHECK(glm::length(identityCamera.Front()-before.Front())<1e-5f && glm::length(identityCamera.Position-before.Position)<1e-6f);
+
+    FirstPersonAnimationSet set;
+    set.ArmsModel="arms.fbx"; set.WeaponModel="weapon.fbx"; set.Controller="weapon.controller";
+    set.ActionCamera.Enabled=true; set.ActionCamera.Node="camera_anim"; set.ActionCamera.PositionScale=1;
+    set.ActionCamera.States={"Draw","Melee"}; set.CameraShakeProfile="test.camerashake";
+    FirstPersonAnimationSet read;
+    CHECK(FirstPersonAnimationSet::FromJsonString(set.ToJsonString(),read,&error));
+    CHECK(read.ActionCamera.Enabled && read.ActionCamera.Node=="camera_anim" && read.ActionCamera.States==set.ActionCamera.States);
+    CHECK(read.ActionCamera.PositionScale==1 && read.CameraShakeProfile==set.CameraShakeProfile);
+    // The sample package omits Weapons; solver/schema checks above always run.
+    if (std::filesystem::exists(ProjectPaths::Resolve("assets/Weapons"))) {
+        CHECK(CameraShakeAsset::LoadFile(ProjectPaths::Resolve("assets/Weapons/AKS74U/AKS74U.camerashake"),parsed,&error));
+        CHECK(CameraShakeAsset::LoadFile(ProjectPaths::Resolve("assets/Weapons/Remington870/Remington870.camerashake"),parsed,&error));
+    }
+}
+
 void RegisterAnimationTests(UnitTestSupport::TestList& tests) {
+
+    tests.push_back({"Action camera and firing shake",TestCameraEffects});
+    tests.push_back({"ADS reload preserves additive locomotion",TestAdsReloadPreservesAdditiveLocomotion});
     tests.push_back({"FirstPersonBody NPC tunables save/load round-trip", TestFirstPersonBodyNpcTunablesRoundTrip});
     tests.push_back({"NPC turn threshold affects turning", TestNpcTurnThresholdAffectsTurning});
     tests.push_back({"NPC spine twist clamping", TestNpcSpineTwistClamping});

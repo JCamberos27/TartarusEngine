@@ -82,3 +82,10 @@ videos/
 project/assets/Effects/Blood/
 project/assets/Effects/Knife/
 blood_v2_preview/
+
+# Managed builds and local compiler logs; script sources stay tracked.
+**/obj/
+**/bin/
+project/scripts/*.log
+__pycache__/
+*.py[cod]

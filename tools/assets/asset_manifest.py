@@ -86,10 +86,10 @@ def export(repo, used):
     rows = read_manifest(repo)
     on_disk = {c[len('project/'):].lower(): d for c, d in external_files(repo)}
     copied = 0
-    for rel, size, _ in rows:
+    for rel, size, digest in rows:
         src = os.path.join(repo, on_disk.get(rel.lower(), 'project/' + rel))
         dst = os.path.join(used, 'project', rel)
-        if os.path.isfile(dst) and os.path.getsize(dst) == size:
+        if os.path.isfile(dst) and os.path.getsize(dst) == size and sha256(dst) == digest:
             continue
         os.makedirs(os.path.dirname(dst), exist_ok=True)
         shutil.copy2(src, dst)

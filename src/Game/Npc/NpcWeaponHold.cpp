@@ -201,8 +201,14 @@ void NpcBody::SyncPieces() {
         IK::Pose& pose = m_Pose;
         pose = m.AppliedLocalPose();
         if ((int)pose.size() != m.NodeCount()) continue;
-        // Rotations only: every pass here turns bones, and a piece keeps its own bones' offsets.
-        for (const auto& [pn, dn] : m_UpperMap[k]) pose[(size_t)pn].R = src[(size_t)dn].R;
+        // Spine stabilization also shifts the spine to cancel inherited pelvis sway. Share those
+        // translations as well as the rotations, so clothing follows the stabilized torso.
+        // Other upper-body bones keep their own offsets.
+        for (const auto& [pn, dn] : m_UpperMap[k]) {
+            pose[(size_t)pn].R = src[(size_t)dn].R;
+            if (std::find(m_DriverSpine, m_DriverSpine + m_DriverSpineCount, dn) != m_DriverSpine + m_DriverSpineCount)
+                pose[(size_t)pn].T = src[(size_t)dn].T;
+        }
         m.ApplyLocalPose(pose);
     }
 }

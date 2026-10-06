@@ -19,6 +19,7 @@ class Model;
 class Player;
 class World;
 struct FirstPersonBodyComponent;
+struct AnimatorControllerComponent;
 struct LocalTRS;
 
 // One body node's arm-shape link to the arms rig (FirstPersonBodyArmShapeLinks).
@@ -129,6 +130,16 @@ public:
 
 private:
     void Fail(const std::string& message);
+    void ApplySpineStability(float weight, const AnimatorControllerComponent& animator);
+    std::string m_SpineIdleClip[2]; // standing / crouched reference from the locomotion controller
+    float m_SpineCrouch = 0.0f, m_SpineCrouchDrop = 0.0f;
+    struct SpineReference {
+        std::vector<int> Parents, Bones;
+        std::array<int, 5> SpineNodes = {-1, -1, -1, -1, -1};
+        std::vector<glm::mat4> Globals[2];
+        int Clips[2] = {-2, -2}; // rebuilt if an idle clip becomes available after startup
+    };
+    std::map<const Model*, SpineReference> m_SpineReferences;
     void ApplySpineAim(const Camera& camera, float amount, float twist);
     // Turns the chest by `modelDelta` (model space), spread evenly down the spine bones, on every piece.
     void ApplySpineRotation(const glm::quat& modelDelta);
@@ -191,6 +202,7 @@ private:
     bool m_HaveCapsule = false, m_LastGrounded = false;
     glm::vec3 m_GroundVelocity{0.0f};           // the capsule's horizontal velocity (foot slide correction)
     IK::FootSlide m_Slide;                      // foot pinning + stride warping (off by default)
+    IK::FootSlideOutput m_AppliedSlide;
     bool m_FootPlanted[2] = {false, false};     // foot lock: pinned in the world while planted
     glm::vec3 m_FootLock[2] = {glm::vec3(0.0f), glm::vec3(0.0f)};
     float m_FootLockWeight[2] = {0.0f, 0.0f};

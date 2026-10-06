@@ -1,6 +1,9 @@
 {
   "folder": "assets/Weapons/Remington870/FirstPerson",
   "guid": "3540eaf8772d8f2d",
+  "materialRemap": {
+    "M_Quantum_Arms_PBR": "assets/Characters/Quantum/Materials/Characters/M_Quantum_Arms.mat"
+  },
   "metaVersion": 1,
   "type": "model"
 }

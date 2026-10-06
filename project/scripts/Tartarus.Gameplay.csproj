@@ -1,0 +1,15 @@
+<Project Sdk="Microsoft.NET.Sdk">
+  <PropertyGroup>
+    <TargetFramework>net10.0</TargetFramework>
+    <AllowUnsafeBlocks>true</AllowUnsafeBlocks>
+    <Nullable>enable</Nullable>
+    <ImplicitUsings>enable</ImplicitUsings>
+    <TreatWarningsAsErrors>true</TreatWarningsAsErrors>
+    <EnableDefaultCompileItems>false</EnableDefaultCompileItems>
+    <RuntimeProject Condition="'$(RuntimeProject)' == ''">../../managed/Tartarus.Runtime/Tartarus.Runtime.csproj</RuntimeProject>
+  </PropertyGroup>
+  <ItemGroup>
+    <ProjectReference Include="$(RuntimeProject)" />
+    <Compile Include="../assets/**/*.cs" Exclude="../assets/Editor/**/*.cs;../assets/**/Editor/**/*.cs" />
+  </ItemGroup>
+</Project>

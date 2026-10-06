@@ -71,6 +71,60 @@ void Add(RegisteredComponent entry) { Storage().push_back(std::move(entry)); }
 void RegisterEngineComponents() {
     using T = ReflectFieldType;
 
+    Register<CSharpScriptComponent>({
+        "C# Script", ICON_FA_CODE, "Attach C# behaviours. Saving a source compiles it automatically; fields are edited below.", "Scripts",
+        {
+            {"Source", T::AssetRef, TARTARUS_REFLECT_FIELD(CSharpScriptComponent, SourcePath), 0.0f, "C# source asset (class name below selects its runtime type)."},
+            {"Class", T::String, TARTARUS_REFLECT_FIELD(CSharpScriptComponent, ClassName)},
+            {"Fields JSON", T::String, TARTARUS_REFLECT_FIELD(CSharpScriptComponent, Fields), 0.0f, "JSON object of public field values, for example {\"Height\":0.5}."},
+            {"Enabled", T::Bool, TARTARUS_REFLECT_FIELD(CSharpScriptComponent, Enabled)},
+            {"Scripts", T::String, TARTARUS_REFLECT_FIELD(CSharpScriptComponent, Scripts)},
+            {"Next Script ID", T::Int, TARTARUS_REFLECT_FIELD(CSharpScriptComponent, NextScriptId)},
+        }
+    });
+    for(auto& f : Storage().back().Meta.Fields) {
+        f.EditorHidden=true;
+        if(std::strcmp(f.Name,"Source")==0) f.AssetKind=ReflectAssetKind::Script;
+    }
+    Register<WeaponDefinitionComponent>({
+        "Weapon Definition", ICON_FA_CROSSHAIRS, "Weapon animation setup and per-weapon muzzle light, flame, flash and smoke.", "Gameplay",
+        {
+            {"Description", T::String, TARTARUS_REFLECT_FIELD(WeaponDefinitionComponent, Description)},
+            {"Animation Set", T::String, TARTARUS_REFLECT_FIELD(WeaponDefinitionComponent, AnimationSet)},
+        }
+    });
+        { ReflectField f{"Muzzle Enabled",T::Bool,[](void* p)->void* { return &static_cast<WeaponDefinitionComponent*>(p)->Muzzle.Enabled; },0.0f,"Enable this weapon's visual muzzle effects.",0.0f,0.0f}; f.Group="Overview"; Storage().back().Meta.Fields.push_back(f); }
+        { ReflectField f{"Flash Time",T::Float,[](void* p)->void* { return &static_cast<WeaponDefinitionComponent*>(p)->Muzzle.FlashTime; },0.001f,"Light duration in seconds.",0.001f,1.0f}; f.Group="Muzzle Light"; Storage().back().Meta.Fields.push_back(f); }
+        { ReflectField f{"Light Intensity",T::Float,[](void* p)->void* { return &static_cast<WeaponDefinitionComponent*>(p)->Muzzle.LightIntensity; },0.1f,"Peak intensity before the player's scale.",0.0f,1000.0f}; f.Group="Muzzle Light"; Storage().back().Meta.Fields.push_back(f); }
+        { ReflectField f{"Player Flash Scale",T::Float,[](void* p)->void* { return &static_cast<WeaponDefinitionComponent*>(p)->Muzzle.PlayerFlashScale; },0.01f,"Light multiplier for the player's own weapon.",0.0f,2.0f}; f.Group="Muzzle Light"; Storage().back().Meta.Fields.push_back(f); }
+        { ReflectField f{"Light Range",T::Float,[](void* p)->void* { return &static_cast<WeaponDefinitionComponent*>(p)->Muzzle.LightRange; },0.1f,"Metres illuminated by the flash.",0.0f,100.0f}; f.Group="Muzzle Light"; Storage().back().Meta.Fields.push_back(f); }
+        { ReflectField f{"Light Color",T::Color,[](void* p)->void* { return &static_cast<WeaponDefinitionComponent*>(p)->Muzzle.LightColor; },0.0f,"Flash light tint.",0.0f,0.0f}; f.Group="Muzzle Light"; Storage().back().Meta.Fields.push_back(f); }
+        { ReflectField f{"Flame Texture",T::AssetRef,[](void* p)->void* { return &static_cast<WeaponDefinitionComponent*>(p)->Muzzle.FlameTexture; },0.0f,"Packed muzzle-flame mask texture.",0.0f,0.0f}; f.Group="Flame"; f.AssetKind=ReflectAssetKind::Texture; Storage().back().Meta.Fields.push_back(f); }
+        { ReflectField f{"Flame Glow",T::Float,[](void* p)->void* { return &static_cast<WeaponDefinitionComponent*>(p)->Muzzle.FlameGlow; },1.0f,"HDR flame emission.",0.0f,1000.0f}; f.Group="Flame"; Storage().back().Meta.Fields.push_back(f); }
+        { ReflectField f{"Flame Scale",T::Float,[](void* p)->void* { return &static_cast<WeaponDefinitionComponent*>(p)->Muzzle.FlameScale; },0.01f,"Flame length and width multiplier.",0.0f,10.0f}; f.Group="Flame"; Storage().back().Meta.Fields.push_back(f); }
+        { ReflectField f{"Flame Color",T::Color,[](void* p)->void* { return &static_cast<WeaponDefinitionComponent*>(p)->Muzzle.FlameColor; },0.0f,"Flame emission tint.",0.0f,0.0f}; f.Group="Flame"; Storage().back().Meta.Fields.push_back(f); }
+        { ReflectField f{"Flame Lifetime Min",T::Float,[](void* p)->void* { return &static_cast<WeaponDefinitionComponent*>(p)->Muzzle.FlameLifetimeMin; },0.001f,"Seconds, sampled per shot.",0.0f,5.0f}; f.Group="Flame"; Storage().back().Meta.Fields.push_back(f); }
+        { ReflectField f{"Flame Lifetime Max",T::Float,[](void* p)->void* { return &static_cast<WeaponDefinitionComponent*>(p)->Muzzle.FlameLifetimeMax; },0.001f,"Seconds, sampled per shot.",0.0f,5.0f}; f.Group="Flame"; Storage().back().Meta.Fields.push_back(f); }
+        { ReflectField f{"Flame Length Min",T::Float,[](void* p)->void* { return &static_cast<WeaponDefinitionComponent*>(p)->Muzzle.FlameLengthMin; },0.001f,"Metres before Flame Scale.",0.0f,10.0f}; f.Group="Flame"; Storage().back().Meta.Fields.push_back(f); }
+        { ReflectField f{"Flame Length Max",T::Float,[](void* p)->void* { return &static_cast<WeaponDefinitionComponent*>(p)->Muzzle.FlameLengthMax; },0.001f,"Metres before Flame Scale.",0.0f,10.0f}; f.Group="Flame"; Storage().back().Meta.Fields.push_back(f); }
+        { ReflectField f{"Flame Width Min",T::Float,[](void* p)->void* { return &static_cast<WeaponDefinitionComponent*>(p)->Muzzle.FlameWidthMin; },0.001f,"Metres before Flame Scale.",0.0f,10.0f}; f.Group="Flame"; Storage().back().Meta.Fields.push_back(f); }
+        { ReflectField f{"Flame Width Max",T::Float,[](void* p)->void* { return &static_cast<WeaponDefinitionComponent*>(p)->Muzzle.FlameWidthMax; },0.001f,"Metres before Flame Scale.",0.0f,10.0f}; f.Group="Flame"; Storage().back().Meta.Fields.push_back(f); }
+        { ReflectField f{"Muzzle Style",T::Int,[](void* p)->void* { return &static_cast<WeaponDefinitionComponent*>(p)->Muzzle.MuzzleStyle; },1.0f,"0: flame only. 1: layered flash, glow and smoke.",0.0f,1.0f}; f.Group="Flash"; Storage().back().Meta.Fields.push_back(f); }
+        { ReflectField f{"Flash Sprite",T::String,[](void* p)->void* { return &static_cast<WeaponDefinitionComponent*>(p)->Muzzle.FlashSprite; },0.0f,"Imported FX entry name, e.g. muzzle_star or muzzle_burst.",0.0f,0.0f}; f.Group="Flash"; Storage().back().Meta.Fields.push_back(f); }
+        { ReflectField f{"Flash Lifetime",T::Float,[](void* p)->void* { return &static_cast<WeaponDefinitionComponent*>(p)->Muzzle.FlashLifetime; },0.001f,"Flash sprite lifetime in seconds.",0.001f,5.0f}; f.Group="Flash"; Storage().back().Meta.Fields.push_back(f); }
+        { ReflectField f{"Flash Size Min",T::Float,[](void* p)->void* { return &static_cast<WeaponDefinitionComponent*>(p)->Muzzle.FlashSizeMin; },0.01f,"Minimum flash diameter in metres.",0.0f,10.0f}; f.Group="Flash"; Storage().back().Meta.Fields.push_back(f); }
+        { ReflectField f{"Flash Size Max",T::Float,[](void* p)->void* { return &static_cast<WeaponDefinitionComponent*>(p)->Muzzle.FlashSizeMax; },0.01f,"Maximum flash diameter in metres.",0.0f,10.0f}; f.Group="Flash"; Storage().back().Meta.Fields.push_back(f); }
+        { ReflectField f{"Flash Intensity",T::Float,[](void* p)->void* { return &static_cast<WeaponDefinitionComponent*>(p)->Muzzle.FlashIntensity; },0.1f,"HDR flash sprite brightness.",0.0f,1000.0f}; f.Group="Flash"; Storage().back().Meta.Fields.push_back(f); }
+        { ReflectField f{"Side Jets",T::Bool,[](void* p)->void* { return &static_cast<WeaponDefinitionComponent*>(p)->Muzzle.SideJets; },0.0f,"Emit the barrel's side jets.",0.0f,0.0f}; f.Group="Flash"; Storage().back().Meta.Fields.push_back(f); }
+        { ReflectField f{"Core Glow",T::Bool,[](void* p)->void* { return &static_cast<WeaponDefinitionComponent*>(p)->Muzzle.CoreGlow; },0.0f,"Emit the muzzle core glow.",0.0f,0.0f}; f.Group="Flash"; Storage().back().Meta.Fields.push_back(f); }
+        { ReflectField f{"Spark Count",T::Int,[](void* p)->void* { return &static_cast<WeaponDefinitionComponent*>(p)->Muzzle.SparkCount; },1.0f,"World-view sparks per shot.",0.0f,128.0f}; f.Group="Flash"; Storage().back().Meta.Fields.push_back(f); }
+        { ReflectField f{"Smoke",T::Bool,[](void* p)->void* { return &static_cast<WeaponDefinitionComponent*>(p)->Muzzle.Smoke; },0.0f,"Emit smoke and gas puffs.",0.0f,0.0f}; f.Group="Smoke"; Storage().back().Meta.Fields.push_back(f); }
+        { ReflectField f{"Afterfire Smoke",T::Bool,[](void* p)->void* { return &static_cast<WeaponDefinitionComponent*>(p)->Muzzle.AfterfireSmoke; },0.0f,"Emit the lingering barrel wisp.",0.0f,0.0f}; f.Group="Smoke"; Storage().back().Meta.Fields.push_back(f); }
+        { ReflectField f{"Smoke Scale",T::Float,[](void* p)->void* { return &static_cast<WeaponDefinitionComponent*>(p)->Muzzle.SmokeScale; },0.01f,"Smoke size multiplier.",0.0f,10.0f}; f.Group="Smoke"; Storage().back().Meta.Fields.push_back(f); }
+        { ReflectField f{"Smoke Lifetime Min",T::Float,[](void* p)->void* { return &static_cast<WeaponDefinitionComponent*>(p)->Muzzle.SmokeLifetimeMin; },0.01f,"Minimum smoke lifetime in seconds.",0.01f,30.0f}; f.Group="Smoke"; Storage().back().Meta.Fields.push_back(f); }
+        { ReflectField f{"Smoke Lifetime Max",T::Float,[](void* p)->void* { return &static_cast<WeaponDefinitionComponent*>(p)->Muzzle.SmokeLifetimeMax; },0.01f,"Maximum smoke lifetime in seconds.",0.01f,30.0f}; f.Group="Smoke"; Storage().back().Meta.Fields.push_back(f); }
+        { ReflectField f{"Smoke Alpha",T::Float,[](void* p)->void* { return &static_cast<WeaponDefinitionComponent*>(p)->Muzzle.SmokeAlpha; },0.01f,"Gas puff opacity.",0.0f,1.0f}; f.Group="Smoke"; Storage().back().Meta.Fields.push_back(f); }
+
     {
         ReflectComponent m;
         m.Name = "Goal Trigger"; m.Icon = ICON_FA_BULLSEYE; m.Category = "Gameplay";
@@ -477,6 +531,10 @@ void RegisterEngineComponents() {
         "forward) with the settings below. WASD to move, Shift to sprint, Space to jump.",
         "Gameplay",
         {
+            { "Primary Weapon Prefab", T::String, TARTARUS_REFLECT_FIELD(FirstPersonControllerComponent, PrimaryWeaponPrefab), 0.0f,
+              "Weapon prefab for slot 0. Its Weapon Definition supplies the animation set; takes priority over Animation Set." },
+            { "Secondary Weapon Prefab", T::String, TARTARUS_REFLECT_FIELD(FirstPersonControllerComponent, SecondaryWeaponPrefab), 0.0f,
+              "Weapon prefab for slot 1. Its Weapon Definition supplies the animation set." },
             { "Move Speed", T::Float, TARTARUS_REFLECT_FIELD(FirstPersonControllerComponent, MoveSpeed), 0.05f,
               "Walking speed, metres per second.", 0.0f, 100.0f },
             { "Sprint Multiplier", T::Float, TARTARUS_REFLECT_FIELD(FirstPersonControllerComponent, SprintMultiplier), 0.01f,
@@ -629,6 +687,12 @@ void RegisterEngineComponents() {
         m.Fields.push_back({ "Spine Aim Down", T::Float, TARTARUS_REFLECT_FIELD(FirstPersonBodyComponent, SpineAimDown), 0.01f,
               "Spine Aim for looking down. Armed, the camera hangs off the shoulders as the arms rig's does, so it clears the\n"
               "chest looking down only as far as the chest pitches with the view: lower it and the torso may be seen from inside.", 0.0f, 1.0f });
+        m.Fields.push_back({ "Spine Stability", T::Float, TARTARUS_REFLECT_FIELD(FirstPersonBodyComponent, SpineStability), 0.01f,
+              "Controls lower-body motion reaching the spine, including inherited pelvis sway. Pelvis keeps the full lower-body pose.\n"
+              "0 = authored gait; 1 = 10% gait at spine 1, 5% at spine 2, none at spine 3-5. Applies to player and NPCs.\n"
+              "View aim and arm IK still apply.\n"
+              "Fades out for crouch transitions, jumping and landing.", 0.0f, 1.0f });
+        m.Fields.back().Group = "Spine Distribution";
         m.Fields.push_back({ "Spine Weight 1", T::Float, TARTARUS_REFLECT_FIELD(FirstPersonBodyComponent, Spine.Weight[0]), 0.05f,
               "Relative share of the spine's look, twist and shoulder turns that spine_01 takes. All equal = the even spread; 0 = it takes none.", 0.0f, 4.0f });
         m.Fields.back().Group = "Spine Distribution";
@@ -1002,7 +1066,7 @@ void RegisterEngineComponents() {
         static const char* kBlendLabels = "Alpha Blended\0Additive\0";
         ReflectComponent m;
         m.Name = "Particle System"; m.Icon = ICON_FA_FIRE; m.Category = "Effects";
-        m.Tooltip = "Emits soft, camera-facing particles from this object along its local +Y axis.";
+        m.Tooltip = "Modular CPU particles: emission cycles, bursts, shapes, forces, lifetime curves, collision and textured flipbooks.";
         m.Fields = {
             { "Emitting", T::Bool, TARTARUS_REFLECT_FIELD(ParticleSystemComponent, Emitting), 0.0f,
               "Spawn new particles. Turning it off lets the live ones finish." },
@@ -1039,6 +1103,54 @@ void RegisterEngineComponents() {
         };
         m.Fields.back().EnumLabels = kBlendLabels;
         m.Fields.back().EnumCount = 2;
+        for(auto& f:m.Fields) {
+            const std::string name=f.Name;
+            f.Group=(name=="Spread")?"Shape":(name=="Gravity Modifier")?"Motion":
+                (name=="Blend Mode" || name=="Intensity")?"Rendering":
+                (name=="Lifetime" || name=="Start Speed" || name.find("Size")!=std::string::npos || name.find("Color")!=std::string::npos || name.find("Alpha")!=std::string::npos)?"Lifetime":"Emission";
+        }
+        { ReflectField f{"Looping",T::Bool,TARTARUS_REFLECT_FIELD(ParticleSystemComponent, Looping),0.0f,"Repeat the emission cycle.",0.0f,0.0f}; f.Group="Emission"; m.Fields.push_back(f); }
+        { ReflectField f{"Duration",T::Float,TARTARUS_REFLECT_FIELD(ParticleSystemComponent, Duration),0.01f,"Emission cycle duration in seconds.",0.01f,600.0f}; f.Group="Emission"; m.Fields.push_back(f); }
+        { ReflectField f{"Start Delay",T::Float,TARTARUS_REFLECT_FIELD(ParticleSystemComponent, StartDelay),0.01f,"Delay before emission starts.",0.0f,60.0f}; f.Group="Emission"; m.Fields.push_back(f); }
+        { ReflectField f{"Burst Count",T::Int,TARTARUS_REFLECT_FIELD(ParticleSystemComponent, BurstCount),1.0f,"Particles emitted at cycle start.",0.0f,100000.0f}; f.Group="Emission"; m.Fields.push_back(f); }
+        { ReflectField f{"Burst Interval",T::Float,TARTARUS_REFLECT_FIELD(ParticleSystemComponent, BurstInterval),0.01f,"Seconds between bursts. Zero emits once per cycle.",0.0f,60.0f}; f.Group="Emission"; m.Fields.push_back(f); }
+        { ReflectField f{"Rate Over Distance",T::Float,TARTARUS_REFLECT_FIELD(ParticleSystemComponent, RateOverDistance),0.1f,"Particles per metre the emitter travels.",0.0f,10000.0f}; f.Group="Emission"; m.Fields.push_back(f); }
+        { ReflectField f{"Shape",T::Enum,TARTARUS_REFLECT_FIELD(ParticleSystemComponent, Shape),0.0f,"Emission volume in local space.",0.0f,0.0f}; f.Group="Shape"; f.EnumLabels="Point\0Cone\0Sphere\0Box\0Disc\0"; f.EnumCount=5; m.Fields.push_back(f); }
+        { ReflectField f{"Shape Radius",T::Float,TARTARUS_REFLECT_FIELD(ParticleSystemComponent, ShapeRadius),0.01f,"Cone, sphere or disc radius in metres.",0.0f,100.0f}; f.Group="Shape"; m.Fields.push_back(f); }
+        { ReflectField f{"Shape Length",T::Float,TARTARUS_REFLECT_FIELD(ParticleSystemComponent, ShapeLength),0.01f,"Cone volume length along local +Y.",0.0f,100.0f}; f.Group="Shape"; m.Fields.push_back(f); }
+        { ReflectField f{"Shape Box",T::Vec3,TARTARUS_REFLECT_FIELD(ParticleSystemComponent, ShapeBox),0.01f,"Box dimensions in metres.",0.0f,100.0f}; f.Group="Shape"; m.Fields.push_back(f); }
+        { ReflectField f{"Shape Surface",T::Bool,TARTARUS_REFLECT_FIELD(ParticleSystemComponent, ShapeSurface),0.0f,"Spawn on the shape surface instead of throughout its volume.",0.0f,0.0f}; f.Group="Shape"; m.Fields.push_back(f); }
+        { ReflectField f{"Local Space",T::Bool,TARTARUS_REFLECT_FIELD(ParticleSystemComponent, LocalSpace),0.0f,"New particles move with this object's transform.",0.0f,0.0f}; f.Group="Shape"; m.Fields.push_back(f); }
+        { ReflectField f{"Lifetime Randomness",T::Float,TARTARUS_REFLECT_FIELD(ParticleSystemComponent, LifetimeRandomness),0.01f,"Fractional variation around Lifetime.",0.0f,1.0f}; f.Group="Lifetime"; m.Fields.push_back(f); }
+        { ReflectField f{"Speed Randomness",T::Float,TARTARUS_REFLECT_FIELD(ParticleSystemComponent, SpeedRandomness),0.01f,"Fractional variation around Start Speed.",0.0f,1.0f}; f.Group="Lifetime"; m.Fields.push_back(f); }
+        { ReflectField f{"Size Randomness",T::Float,TARTARUS_REFLECT_FIELD(ParticleSystemComponent, SizeRandomness),0.01f,"Fractional variation of particle size.",0.0f,1.0f}; f.Group="Lifetime"; m.Fields.push_back(f); }
+        { ReflectField f{"Velocity Over Life",T::Vec3,TARTARUS_REFLECT_FIELD(ParticleSystemComponent, VelocityOverLife),0.01f,"Additional local or world velocity, metres per second.",-200.0f,200.0f}; f.Group="Motion"; m.Fields.push_back(f); }
+        { ReflectField f{"Acceleration",T::Vec3,TARTARUS_REFLECT_FIELD(ParticleSystemComponent, Acceleration),0.01f,"Additional local or world acceleration, metres per second squared.",-200.0f,200.0f}; f.Group="Motion"; m.Fields.push_back(f); }
+        { ReflectField f{"Drag",T::Float,TARTARUS_REFLECT_FIELD(ParticleSystemComponent, Drag),0.01f,"Exponential velocity damping per second.",0.0f,100.0f}; f.Group="Motion"; m.Fields.push_back(f); }
+        { ReflectField f{"Rotation Min",T::Float,TARTARUS_REFLECT_FIELD(ParticleSystemComponent, RotationMin),1.0f,"Minimum starting rotation in degrees.",-360.0f,360.0f}; f.Group="Motion"; m.Fields.push_back(f); }
+        { ReflectField f{"Rotation Max",T::Float,TARTARUS_REFLECT_FIELD(ParticleSystemComponent, RotationMax),1.0f,"Maximum starting rotation in degrees.",-360.0f,360.0f}; f.Group="Motion"; m.Fields.push_back(f); }
+        { ReflectField f{"Angular Velocity Min",T::Float,TARTARUS_REFLECT_FIELD(ParticleSystemComponent, AngularVelocityMin),1.0f,"Minimum spin in degrees per second.",-3600.0f,3600.0f}; f.Group="Motion"; m.Fields.push_back(f); }
+        { ReflectField f{"Angular Velocity Max",T::Float,TARTARUS_REFLECT_FIELD(ParticleSystemComponent, AngularVelocityMax),1.0f,"Maximum spin in degrees per second.",-3600.0f,3600.0f}; f.Group="Motion"; m.Fields.push_back(f); }
+        { ReflectField f{"Collision",T::Enum,TARTARUS_REFLECT_FIELD(ParticleSystemComponent, Collision),0.0f,"Plane works in edit mode; world collision uses PhysX during Play.",0.0f,0.0f}; f.Group="Collision"; f.EnumLabels="Off\0Plane\0World\0"; f.EnumCount=3; m.Fields.push_back(f); }
+        { ReflectField f{"Collision Plane Y",T::Float,TARTARUS_REFLECT_FIELD(ParticleSystemComponent, CollisionPlaneY),0.01f,"World-space plane height.",-10000.0f,10000.0f}; f.Group="Collision"; m.Fields.push_back(f); }
+        { ReflectField f{"Collision Radius",T::Float,TARTARUS_REFLECT_FIELD(ParticleSystemComponent, CollisionRadius),0.001f,"Collision skin above the hit surface.",0.0f,10.0f}; f.Group="Collision"; m.Fields.push_back(f); }
+        { ReflectField f{"Bounce",T::Float,TARTARUS_REFLECT_FIELD(ParticleSystemComponent, Bounce),0.01f,"Normal velocity retained after a collision.",0.0f,1.0f}; f.Group="Collision"; m.Fields.push_back(f); }
+        { ReflectField f{"Collision Friction",T::Float,TARTARUS_REFLECT_FIELD(ParticleSystemComponent, CollisionFriction),0.01f,"Fraction of tangential velocity lost on contact.",0.0f,1.0f}; f.Group="Collision"; m.Fields.push_back(f); }
+        { ReflectField f{"Collision Life Loss",T::Float,TARTARUS_REFLECT_FIELD(ParticleSystemComponent, CollisionLifeLoss),0.01f,"Fraction of particle lifetime consumed by each collision.",0.0f,1.0f}; f.Group="Collision"; m.Fields.push_back(f); }
+        { ReflectField f{"Max Bounces",T::Int,TARTARUS_REFLECT_FIELD(ParticleSystemComponent, MaxBounces),1.0f,"Retire after this many collisions; zero retires at the first hit.",0.0f,100.0f}; f.Group="Collision"; m.Fields.push_back(f); }
+        { ReflectField f{"Texture",T::AssetRef,TARTARUS_REFLECT_FIELD(ParticleSystemComponent, Texture),0.0f,"Sprite or flipbook texture; empty draws a soft disc.",0.0f,0.0f}; f.Group="Rendering"; f.AssetKind=ReflectAssetKind::Texture; m.Fields.push_back(f); }
+        { ReflectField f{"Alignment",T::Enum,TARTARUS_REFLECT_FIELD(ParticleSystemComponent, Alignment),0.0f,"Billboard faces the camera; stretched follows velocity; horizontal lies in world XZ.",0.0f,0.0f}; f.Group="Rendering"; f.EnumLabels="Billboard\0Velocity\0Horizontal\0"; f.EnumCount=3; m.Fields.push_back(f); }
+        { ReflectField f{"Velocity Stretch",T::Float,TARTARUS_REFLECT_FIELD(ParticleSystemComponent, VelocityStretch),0.01f,"Extra length per metre per second.",0.0f,10.0f}; f.Group="Rendering"; m.Fields.push_back(f); }
+        { ReflectField f{"Sheet Columns",T::Int,TARTARUS_REFLECT_FIELD(ParticleSystemComponent, SheetColumns),1.0f,"Columns in the sprite sheet.",1.0f,256.0f}; f.Group="Rendering"; m.Fields.push_back(f); }
+        { ReflectField f{"Sheet Rows",T::Int,TARTARUS_REFLECT_FIELD(ParticleSystemComponent, SheetRows),1.0f,"Rows in the sprite sheet.",1.0f,256.0f}; f.Group="Rendering"; m.Fields.push_back(f); }
+        { ReflectField f{"Sheet FPS",T::Float,TARTARUS_REFLECT_FIELD(ParticleSystemComponent, SheetFPS),0.1f,"Animation speed; zero traverses the sheet once over lifetime.",0.0f,240.0f}; f.Group="Rendering"; m.Fields.push_back(f); }
+        { ReflectField f{"Random Start Frame",T::Bool,TARTARUS_REFLECT_FIELD(ParticleSystemComponent, RandomStartFrame),0.0f,"Start each particle at a random sheet cell.",0.0f,0.0f}; f.Group="Rendering"; m.Fields.push_back(f); }
+        { ReflectField f{"Blend Frames",T::Bool,TARTARUS_REFLECT_FIELD(ParticleSystemComponent, BlendFrames),0.0f,"Cross-fade neighbouring sprite sheet frames.",0.0f,0.0f}; f.Group="Rendering"; m.Fields.push_back(f); }
+        { ReflectField f{"Size Curve",T::String,TARTARUS_REFLECT_FIELD(ParticleSystemComponent, SizeCurve),0.0f,"Edited in its separate curve window.",0.0f,0.0f}; f.Group="Lifetime"; f.EditorHidden=true; m.Fields.push_back(f); }
+        { ReflectField f{"Alpha Curve",T::String,TARTARUS_REFLECT_FIELD(ParticleSystemComponent, AlphaCurve),0.0f,"Edited in its separate curve window.",0.0f,0.0f}; f.Group="Lifetime"; f.EditorHidden=true; m.Fields.push_back(f); }
+        { ReflectField f{"Speed Curve",T::String,TARTARUS_REFLECT_FIELD(ParticleSystemComponent, SpeedCurve),0.0f,"Edited in its separate curve window.",0.0f,0.0f}; f.Group="Lifetime"; f.EditorHidden=true; m.Fields.push_back(f); }
+        { ReflectField f{"Emission Curve",T::String,TARTARUS_REFLECT_FIELD(ParticleSystemComponent, EmissionCurve),0.0f,"Edited in its separate curve window.",0.0f,0.0f}; f.Group="Lifetime"; f.EditorHidden=true; m.Fields.push_back(f); }
+        { ReflectField f{"Curve Editor ID",T::String,TARTARUS_REFLECT_FIELD(ParticleSystemComponent, EditorCurveIdentity)}; f.EditorHidden=true; m.Fields.push_back(f); }
         Register<ParticleSystemComponent>(std::move(m));
     }
 
@@ -1440,8 +1552,8 @@ void RegisterEngineComponents() {
     // Lane P: scene-level visual effects and HUD settings
     Register<FxHudSettingsComponent>({
         "FX & HUD Settings", ICON_FA_SLIDERS,
-        "Scene-level visual effects and HUD display parameters (add one per scene to tune muzzle flash,\n"
-        "laser beam and HUD display).",
+        "Scene-level laser and HUD display parameters. Weapons own their muzzle effects;\n"
+        "legacy muzzle values remain saved for older scenes.",
         "Gameplay",
         {
             { "Flash Time", T::Float, TARTARUS_REFLECT_FIELD(FxHudSettingsComponent, FlashTime), 0.001f,
@@ -1469,6 +1581,7 @@ void RegisterEngineComponents() {
               "Seconds to count consecutive kills for streak display.", 0.1f, 60.0f },
         },
     });
+    for(size_t i=0;i<5;++i)Storage().back().Meta.Fields[i].EditorHidden=true;
     Register<BloodSettingsComponent>({
         "Blood Settings", ICON_FA_DROPLET,
         "The volumetric blood (the first Blood Settings in the scene counts): how big the sprays are,\n"
@@ -2284,6 +2397,10 @@ void RegisterEngineComponents() {
         {"Transform Controller", "Script Path"},
         {"First Person Controller", "Animation Set"},
         {"First Person Controller", "Secondary Animation Set"},
+        {"First Person Controller", "Primary Weapon Prefab"},
+        {"First Person Controller", "Secondary Weapon Prefab"},
+        {"Weapon Definition", "Animation Set"},
+        {"C# Script", "Source"},
     };
     for (const auto& [component, field] : kAssetPathFields)
         for (RegisteredComponent& rc : Storage())

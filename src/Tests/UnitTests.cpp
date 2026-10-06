@@ -15,6 +15,7 @@
 // needs, and it keeps the engine's third-party surface unchanged.
 #include "TimeService.h"
 #include "UnitTestSupport.h"
+#include "../Game/FirstPersonMovementInput.h"
 #include "UnitTests.h"
 
 #include "AnimatorController.h"
@@ -131,6 +132,166 @@ std::string ReadAll(const std::filesystem::path& p) {
 }
 
 // --- Camera roll (#165) --------------------------------------------------------------------
+void TestRecoilProfile() {
+    RecoilAsset asset, loaded;
+    asset.Data = WeaponProceduralSettings::Defaults().Recoil; // exercise version-1 migration
+    asset.Data.AimPitch = glm::vec2(1.0f);
+    asset.Data.AimYaw = glm::vec2(-0.2f);
+    asset.Data.AimRecovery = 1.0f;
+    asset.Data.AimSmoothing = glm::vec2(50.0f);
+    asset.Data.NoiseSide = {-0.001f, 0.001f};
+    asset.Data.PushAmount = 0.01f;
+    asset.Data.PitchProgression = 0.3f;
+    asset.Data.UpProgression = 0.003f;
+    asset.Data.SwayPitch = glm::vec2(0.2f);
+    asset.Data.SustainedCurves = true;
+    asset.Data.SustainedDuration = 0.25f;
+    asset.Data.AdsPivot = {0.0f, 0.0f, 0.1f};
+    std::string why;
+    CHECK(RecoilAsset::FromJsonString(asset.ToJsonString(), loaded, &why));
+    CHECK(loaded.ToJsonString() == asset.ToJsonString());
+    const auto before = loaded.ToJsonString();
+    for (const char* invalid : {"null", "{}", "{\"type\":\"recoil\",\"version\":2,\"recoil\":{}}",
+         "{\"type\":\"recoil\",\"version\":1,\"recoil\":{\"duration\":0}}",
+         "{\"type\":\"recoil\",\"version\":1,\"recoil\":{\"aimPitch\":[2,1]}}",
+         "{\"type\":\"recoil\",\"version\":1,\"recoil\":{\"enabled\":\"yes\"}}",
+         "{\"type\":\"recoil\",\"version\":1,\"recoil\":{\"sustainedDuration\":0}}",
+         "{\"type\":\"recoil\",\"version\":1,\"recoil\":{\"aimSmoothing\":[-1,10]}}"}) {
+        CHECK(!RecoilAsset::FromJsonString(invalid, loaded, &why));
+        CHECK(loaded.ToJsonString() == before);
+    }
+    const auto profile = TempDir() / "shared.recoil";
+    CHECK(asset.SaveFile(profile.u8string()));
+    // Files outside the project deliberately receive no automatic sidecar.
+    const auto profileGuid = AssetGuid::Generate();
+    CHECK(AtomicFile::WriteBytes(profile.u8string() + ".meta",
+        json{{"guid", profileGuid.ToString()}, {"type", "recoil"}}.dump(), true));
+    CHECK(RecoilAsset::LoadFile(profile.u8string(), loaded, &why));
+    CHECK(AssetDatabase::AssetType(profile.u8string()) == "recoil");
+    FirstPersonAnimationSet weapon;
+    weapon.ArmsModel = "arms.fbx";
+    weapon.WeaponModel = "weapon.fbx";
+    weapon.Controller = "weapon.controller";
+    weapon.RecoilProfile = profile.u8string();
+    weapon.Procedural.Recoil.BoltBone = "action";
+    weapon.Procedural.Recoil.BoltTravel = {0.0f, 0.0f, 0.02f};
+    weapon.Procedural.Recoil.BoltCycle = 0.08f;
+    weapon.Gameplay.BurstRounds = 3;
+    const auto definition = TempDir() / "profile-weapon.fpsanim";
+    CHECK(weapon.SaveFile(definition.u8string()));
+    FirstPersonAnimationSet resolved;
+    CHECK(FirstPersonAnimationSet::LoadFile(definition.u8string(), resolved, &why));
+    CHECK(resolved.Procedural.Recoil.UnityPort && resolved.Procedural.Recoil.Unity.VerticalRecoil == glm::vec2(1.0f));
+    CHECK(resolved.Procedural.Recoil.HipProcedural);
+    CHECK(resolved.Procedural.Recoil.BoltBone == "action" && resolved.Procedural.Recoil.BoltTravel.z == 0.02f);
+    CHECK(resolved.Gameplay.BurstRounds == 3);
+    asset.Data.AimPitch = glm::vec2(2.0f);
+    CHECK(asset.SaveFile(profile.u8string()));
+    CHECK(FirstPersonAnimationSet::LoadFile(definition.u8string(), resolved, &why));
+    CHECK(resolved.Procedural.Recoil.Unity.VerticalRecoil == glm::vec2(2.0f));
+    const auto moved = TempDir() / "moved-shared.recoil";
+    std::error_code moveError;
+    std::filesystem::remove(moved, moveError);
+    std::filesystem::remove(moved.u8string() + ".meta", moveError);
+    std::filesystem::rename(profile, moved, moveError);
+    CHECK(!moveError);
+    AssetDatabase::NotifyMoved(profile.u8string(), moved.u8string());
+    CHECK(FirstPersonAnimationSet::LoadFile(definition.u8string(), resolved, &why));
+    CHECK(AssetDatabase::PathKey(resolved.RecoilProfile) == AssetDatabase::PathKey(moved.u8string()));
+    const auto resolvedBefore = resolved.ToJsonString();
+    std::error_code ec;
+    std::filesystem::remove(moved, ec);
+    CHECK(!FirstPersonAnimationSet::LoadFile(definition.u8string(), resolved, &why));
+    CHECK(resolved.ToJsonString() == resolvedBefore);
+
+    auto settings = WeaponProceduralSettings::Defaults();
+    settings.Recoil = loaded.Data;
+    settings.Recoil.UnityPort = false; // retain regression coverage for embedded legacy weapon definitions
+    settings.Recoil.AimPitch = glm::vec2(1.0f);
+    settings.Recoil.AimYaw = glm::vec2(0.0f);
+    settings.Recoil.AimSmoothing = glm::vec2(0.0f);
+    settings.Recoil.AimRecoveryDelay = 0.2f;
+    settings.Recoil.AimRecoverySpeed = 20.0f;
+    settings.Recoil.AimRecovery = 1.0f;
+    WeaponProceduralInput input;
+    input.Dt = 1.0f / 120.0f;
+    input.Ads = true;
+    WeaponProceduralState state;
+    state.OnShot(settings, true);
+    CHECK(state.Update(settings, input).AimKick.x == 1.0f);
+    CHECK(state.ConsumeAimKick().x == 1.0f);
+    CHECK(state.ConsumeAimKick() == glm::vec2(0.0f));
+    state.CompensateAim({-1.0f, 0.0f});
+    float recovery = 0.0f;
+    for (int i = 0; i < 240; ++i) recovery += state.Update(settings, input).AimKick.x;
+    CHECK(std::fabs(recovery) < 1e-5f); // player already countered all of it
+    state.Reset();
+    state.OnShot(settings, true);
+    state.Update(settings, input);
+    state.CompensateAim({-0.4f, 0.0f});
+    recovery = 0.0f;
+    for (int i = 0; i < 240; ++i) recovery += state.Update(settings, input).AimKick.x;
+    CHECK(std::fabs(recovery + 0.6f) < 1e-4f);
+    state.Reset();
+    state.OnShot(settings, true);
+    state.Update(settings, input);
+    state.CompensateAim({1.0f, 0.0f}); // moving with the kick does not count as compensation
+    recovery = 0.0f;
+    for (int i = 0; i < 240; ++i) recovery += state.Update(settings, input).AimKick.x;
+    CHECK(std::fabs(recovery + 1.0f) < 1e-4f);
+    state.Reset();
+    state.OnShot(settings, true);
+    state.SetFiring(true);
+    float heldAim = 0.0f;
+    for (int i = 0; i < 120; ++i) heldAim += state.Update(settings, input).AimKick.x;
+    CHECK(std::fabs(heldAim - 1.0f) < 1e-5f); // held fire postpones recovery even at a slow cadence
+    state.EndBurst();
+    for (int i = 0; i < 120; ++i) heldAim += state.Update(settings, input).AimKick.x;
+    CHECK(std::fabs(heldAim) < 1e-5f);
+    state.Reset();
+    state.OnShot(settings, true);
+    state.Update(settings, input);
+    state.DiscardClampedAim({1.0f, 0.0f});
+    recovery = 0.0f;
+    for (int i = 0; i < 240; ++i) recovery += state.Update(settings, input).AimKick.x;
+    CHECK(std::fabs(recovery) < 1e-5f); // a kick blocked by the pitch limit must not recover
+    settings.Recoil.AimAdsScale = 0.5f;
+    settings.Recoil.AdsScale = 0.0f;
+    state.Reset();
+    state.OnShot(settings, true);
+    CHECK(state.Update(settings, input).AimKick.x == 0.5f); // independent controller ADS multiplier
+    settings.Recoil.AimAdsScale = 1.0f;
+    settings.Recoil.AdsScale = 1.0f;
+
+    // Same impulses at several frame rates: controller integration stays constant and all visual layers settle.
+    settings.Recoil.AimRecovery = 0.0f;
+    settings.Recoil.AimSmoothing = {30.0f, 60.0f};
+    for (float dt : {1.0f / 30.0f, 1.0f / 60.0f, 1.0f / 144.0f}) {
+        WeaponProceduralState sim;
+        sim.Seed(42);
+        input.Dt = dt;
+        glm::vec2 integrated(0.0f);
+        int shots = 0;
+        for (int f = 0; f < (int)(5.0f / dt); ++f) {
+            if (shots < 5 && f * dt >= shots * 0.1f) { sim.OnShot(settings, true); ++shots; }
+            const auto& pose = sim.Update(settings, input);
+            integrated += pose.AimKick;
+            CHECK(std::isfinite(pose.Position.x) && std::isfinite(pose.Rotation.x));
+        }
+        CHECK(std::fabs(integrated.x - 5.0f) < 0.001f);
+        CHECK(sim.ActiveShots() == 0 && glm::length(sim.Pose().Position) < 0.001f);
+    }
+    // Shared asset stays immutable, and runtime states remain independent.
+    WeaponProceduralState a, b;
+    const auto tuning = loaded.ToJsonString();
+    a.OnShot(settings, true);
+    a.Update(settings, input);
+    CHECK(b.ActiveShots() == 0 && b.Pose().AimKick == glm::vec2(0.0f));
+    CHECK(loaded.ToJsonString() == tuning);
+    a.Reset();
+    CHECK(a.ActiveShots() == 0 && a.Pose().Position == glm::vec3(0.0f));
+}
+
 void TestCameraRoll() {
     auto near = [](glm::vec3 a, glm::vec3 b) { return glm::length(a - b) < 1e-4f; };
     Camera cam; // yaw -90: looking down -Z, right = +X, up = +Y
@@ -924,6 +1085,18 @@ void TestFramePacing() {
 }
 
 void TestPlayerAcceleration() {
+    // Body clips have different root travel by direction; sprint input must have equal speed.
+    for (const glm::vec3 direction : {glm::vec3(0,0,1),glm::vec3(0,0,-1),glm::vec3(1,0,0),
+                                     glm::vec3(-1,0,0),glm::normalize(glm::vec3(1,0,1))}) {
+        const glm::vec3 wish=direction*6.8f;
+        for (float weight : {0.0f,0.5f,1.0f}) {
+            const glm::vec3 target=PlayerMovementTarget(wish,direction*2.0f,weight,true);
+            CHECK(glm::length(target-wish)<1e-5f);
+            CHECK(std::abs(glm::length(target)-6.8f)<1e-5f);
+        }
+    }
+    CHECK(PlayerMovementTarget(glm::vec3(0,0,4),glm::vec3(0,0,2),0.5f,false)==glm::vec3(0,0,3));
+    CHECK(PlayerMovementTarget(glm::vec3(0),glm::vec3(0,0,2),1.0f,true)==glm::vec3(0,0,2));
     const glm::vec3 run(0.0f, 0.0f, 4.5f);
     CHECK(PlayerApproachVelocity(glm::vec3(0.0f), run, 1.0f / 60.0f, 0.0f, 0.0f) == run);
     CHECK(PlayerApproachVelocity(run, glm::vec3(0.0f), 1.0f / 60.0f, 0.07f, 0.0f) == glm::vec3(0.0f)); // no decel time: stops dead
@@ -1762,6 +1935,87 @@ void TestFirstPersonBodyController() {
     // Role matching: "Loco_Walk_Fwd" is that file, not the Fwd_Left one.
     CHECK(FPBody::PickLocomotionClip("Loco_Walk_Fwd", {"a/AM_Loco_Walk_Fwd_Left.fbx", "a/AM_Loco_Walk_Fwd.fbx"}) == "a/AM_Loco_Walk_Fwd.fbx");
     CHECK(FPBody::PickLocomotionClip("Loco_Walk_Fwd", {"a/AM_Loco_Walk_Fwd_Left.fbx"}).empty());
+}
+
+// Lower-body animation reaches only the first two spine bones while the pelvis stays authored.
+void TestFirstPersonBodySpineBlend() {
+    // A swinging pelvis carries every spine bone even when their local rotations are neutral.
+    // Verify the resulting model-space pose, including untouched pelvis and leg transforms.
+    const std::vector<int> parents = {-1, 0, 1, 2, 3, 4, 5, 1, 7};
+    const std::array<int, 5> bones = {2, 3, 4, 5, 6};
+    IK::Pose idle(9);
+    idle[1].T = glm::vec3(0.0f, 0.9f, 0.0f);
+    for (int i = 2; i <= 6; ++i) idle[i].T = glm::vec3(0.0f, 0.12f, 0.0f);
+    idle[7].T = glm::vec3(0.1f, -0.4f, 0.0f);
+    idle[8].T = glm::vec3(0.0f, -0.4f, 0.0f);
+    std::vector<glm::mat4> stand;
+    IK::ComputeGlobals(idle, parents, stand);
+    IK::Pose gait = idle;
+    gait[1].T += glm::vec3(0.08f, -0.03f, 0.02f);
+    gait[1].R = glm::angleAxis(0.4f, glm::vec3(0, 0, 1));
+    gait[7].R = glm::angleAxis(0.6f, glm::vec3(1, 0, 0));
+    std::vector<glm::mat4> before, after;
+    IK::ComputeGlobals(gait, parents, before);
+    IK::Pose masked = gait;
+    FPBody::BlendLocomotionSpine(masked, parents, bones, stand, {}, 0.0f, 1.0f);
+    IK::ComputeGlobals(masked, parents, after);
+    for (int node : {0, 1, 7, 8}) {
+        CHECK(glm::length(masked[node].T - gait[node].T) < 1e-6f);
+        CHECK(std::abs(glm::dot(masked[node].R, gait[node].R)) > 1.0f - 1e-6f);
+        CHECK(glm::length(IK::Position(after[node]) - IK::Position(before[node])) < 1e-5f);
+        CHECK(std::abs(glm::dot(IK::Rotation(after[node]), IK::Rotation(before[node]))) > 1.0f - 1e-5f);
+    }
+    for (size_t slot = 0; slot < bones.size(); ++slot) {
+        const int node = bones[slot];
+        const float retained = slot == 0 ? 0.10f : slot == 1 ? 0.05f : 0.0f;
+        CHECK(glm::length(IK::Position(after[node]) - glm::mix(IK::Position(stand[node]), IK::Position(before[node]), retained)) < 1e-5f);
+        const glm::quat want = glm::angleAxis(0.4f * retained, glm::vec3(0, 0, 1));
+        CHECK(std::abs(glm::dot(IK::Rotation(after[node]), want)) > 1.0f - 1e-5f);
+    }
+    IK::Pose unmasked = gait;
+    FPBody::BlendLocomotionSpine(unmasked, parents, bones, stand, {}, 0.0f, 0.0f);
+    CHECK(glm::length(unmasked[2].T - gait[2].T) < 1e-6f && std::abs(glm::dot(unmasked[2].R, gait[2].R)) > 1.0f - 1e-6f);
+    // Missing spine_01 must not turn spine_02's retention into the first bone's 10%.
+    masked = gait;
+    FPBody::BlendLocomotionSpine(masked, parents, {-1, 3, 4, 5, 6}, stand, {}, 0.0f, 1.0f);
+    IK::ComputeGlobals(masked, parents, after);
+    CHECK(std::abs(glm::dot(IK::Rotation(after[3]), glm::angleAxis(0.02f, glm::vec3(0, 0, 1)))) > 1.0f - 1e-5f);
+    // Crouch reference crossfades in model space without pulling the animated pelvis to idle.
+    IK::Pose crouched = idle;
+    crouched[1].T.y -= 0.3f;
+    std::vector<glm::mat4> crouch;
+    IK::ComputeGlobals(crouched, parents, crouch);
+    masked = gait;
+    FPBody::BlendLocomotionSpine(masked, parents, bones, stand, crouch, 0.5f, 1.0f);
+    IK::ComputeGlobals(masked, parents, after);
+    CHECK(glm::length(IK::Position(after[6]) - glm::mix(IK::Position(stand[6]), IK::Position(crouch[6]), 0.5f)) < 1e-5f);
+    CHECK(glm::length(masked[1].T - gait[1].T) < 1e-6f);
+    // Real controller stacks: crouch fades smoothly; actions and flinches stay authored.
+    auto ctrl = FPBody::BuildLocomotionController([](const std::string& role) { return role; });
+    ctrl.Layers.emplace_back();
+    AnimatorController::State none, flinch;
+    none.Name = "None";
+    flinch.Name = "Flinch"; flinch.Tags = {"Hit"};
+    ctrl.Layers[1].States = {none, flinch};
+    ctrl.Layers[1].DefaultState = "None";
+    const auto path = TempDir() / "spine-blend.controller";
+    CHECK(ctrl.SaveFile(path.string()));
+    AnimatorControllerComponent ac;
+    ac.Controller = path.string();
+    ac.Layers.resize(2);
+    const int loco = ctrl.Layers[0].FindState("Locomotion"), crouchedState = ctrl.Layers[0].FindState("CrouchLoco");
+    float crouchWeight = 0.0f;
+    ac.Layers[0].Stack = {{loco, 0.0f, 1.0f}, {crouchedState, 0.0f, 0.5f}};
+    ac.Layers[1].Stack = {{0, 0.0f, 1.0f}};
+    CHECK(std::abs(FPBody::LocomotionSpineWeight(ac, crouchWeight) - 1.0f) < 1e-5f);
+    CHECK(std::abs(crouchWeight - 0.5f) < 1e-5f);
+    ac.Layers[0].Stack = {{ctrl.Layers[0].FindState("Jump"), 0.0f, 1.0f}};
+    CHECK(FPBody::LocomotionSpineWeight(ac, crouchWeight) == 0.0f);
+    ac.Layers[0].Stack = {{loco, 0.0f, 1.0f}};
+    ac.Layers[1].Stack = {{0, 0.0f, 1.0f}, {1, 0.0f, 0.5f}};
+    CHECK(std::abs(FPBody::LocomotionSpineWeight(ac, crouchWeight) - 0.5f) < 1e-5f);
+    ac.Layers[1].Stack = {{1, 0.0f, 1.0f}};
+    CHECK(FPBody::LocomotionSpineWeight(ac, crouchWeight) == 0.0f);
 }
 
 // A foot near the contact threshold chatters: the debounce fills short gaps and drops short blips (cyclic).
@@ -3128,6 +3382,19 @@ void TestFirstPersonAnimationSet() {
     FirstPersonAnimationSet again;
     CHECK(FirstPersonAnimationSet::FromJsonString(set.ToJsonString(), again, &error));
     CHECK(again.WeaponMaterials == set.WeaponMaterials);
+    // Persistent view placement survives serialization and is absent by default in older sets.
+    CHECK(again.ViewPosition == glm::vec3(0.0f));
+    set.ViewPosition = glm::vec3(0.01f, -0.02f, 0.06f);
+    CHECK(FirstPersonAnimationSet::FromJsonString(set.ToJsonString(), again, &error));
+    CHECK(again.ViewPosition == set.ViewPosition);
+    CHECK(again.AdsLocomotionScale==1.0f);
+    set.AdsLocomotionScale=0.25f;
+    CHECK(FirstPersonAnimationSet::FromJsonString(set.ToJsonString(),again,&error));
+    CHECK(again.AdsLocomotionScale==0.25f);
+    CHECK(!FirstPersonAnimationSet::FromJsonString(
+        R"({"armsModel":"a","weaponModel":"w","controller":"c","adsLocomotionScale":2})",again,&error));
+    CHECK(!FirstPersonAnimationSet::FromJsonString(
+        R"({"armsModel":"a","weaponModel":"w","controller":"c","adsLocomotionScale":"bad"})",again,&error));
     CHECK(!FirstPersonAnimationSet::FromJsonString(
         R"({"armsModel":"a.fbx","weaponModel":"w.fbx","controller":"c.controller","weaponMaterials":{"aks74u":3}})",
         set, &error));
@@ -3136,6 +3403,167 @@ void TestFirstPersonAnimationSet() {
 
 // The shotgun options (Remington 870): pellets and spread, a per-round reload, a pump worked after every
 // round, and a mount with a translation - parsed, written back, and defaulting to the plain rifle's.
+void TestAKAdditiveWalking() {
+    // The distributable sample omits Weapons. Source checkouts still gate the authored graph.
+    if (!std::filesystem::exists(ProjectPaths::Resolve("assets/Weapons"))) {
+        Log::Info("AK additive walking: no weapon project data - skipped.");
+        return;
+    }
+    AnimatorController c;
+    std::string error;
+    CHECK(AnimatorController::LoadFile(ProjectPaths::Resolve("assets/Weapons/AKS74U/AKS74U.controller"),c,&error));
+    CHECK(c.Layers.size()==3);
+    if(c.Layers.size()!=3) return;
+    const auto& l=c.Layers[1];
+    CHECK(l.Name=="Weapon Locomotion" && l.Mode==AnimatorController::Blending::Additive);
+    CHECK(l.AdditiveReferenceState=="Idle");
+    AnimatorController roundTrip;
+    CHECK(AnimatorController::FromJsonString(c.ToJsonString(),roundTrip,&error));
+    CHECK(roundTrip.Layers[1].AdditiveReferenceState=="Idle");
+    for(const char* name : {"Idle","Walk","IdleToSprint","Sprint","SprintToIdle"}) {
+        CHECK(l.FindState(name)>=0);
+        const auto& base=c.Layers[0].States[c.Layers[0].FindState(name)];
+        CHECK(base.Speed==0 && base.MotionFor(0).Clip.find("Idle.fbx")!=std::string::npos);
+    }
+    std::vector<AnimatorParam> p={{"Sprint",2,1},{"Speed",0,4},{"Equipped",2,1}};
+    const auto dest=[&](const char* name,float phase) {
+        const int t=c.PickTransition(1,l.FindState(name),phase,p);
+        return t<0?std::string():l.Transitions[t].To;
+    };
+    CHECK(dest("Idle",0.3f)=="IdleToSprint");
+    CHECK(dest("Walk",0.3f)=="IdleToSprint");
+    CHECK(dest("IdleToSprint",0.5f).empty());
+    CHECK(dest("IdleToSprint",1)=="Sprint");
+    p[0].Value=0;
+    CHECK(dest("Sprint",0.3f)=="SprintToIdle");
+    CHECK(dest("SprintToIdle",1)=="Walk");
+    p[1].Value=0;
+    CHECK(dest("SprintToIdle",1)=="Idle");
+    p.push_back({"Aim",2,1});
+    p[1].Value=4;
+    CHECK(dest("Sprint",0.3f)=="Walk");
+    CHECK(dest("IdleToSprint",0.3f)=="Walk");
+    CHECK(dest("SprintToIdle",0.3f)=="Walk");
+    p.back().Value=0;
+    p[0].Value=1; // sprint button stayed held while aiming
+    CHECK(dest("Walk",0.3f)=="IdleToSprint");
+    p[0].Value=0;
+    p[1].Value=0;
+    p[2].Value=0;
+    CHECK(dest("Walk",0.3f)=="Off");
+    // A reload on the base layer does not interrupt the additive walking clock.
+    AnimatorControllerComponent ac;
+    ac.SetBool("Equipped",true);
+    ac.SetFloat("Speed",4);
+    CHECK(AnimatorStartInState(c,ac,"TacReload"));
+    ac.Layers[0].Stack.back().Phase=0.0f;
+    const auto length=[](int,int){return 1.0f;};
+    AdvanceAnimator(c,ac,0,length);
+    AdvanceAnimator(c,ac,0.11f,length);
+    AdvanceAnimator(c,ac,0.11f,length);
+    CHECK(ac.StateName=="TacReload");
+    CHECK(l.States[ac.Layers[1].Stack.back().State].Name=="Walk");
+    CHECK(WeaponAnimationInputSpeed(2,glm::vec2(0),true,4)==0);
+    // Weapon Blend Time overrides both animated aim entry and return fades.
+    ac=AnimatorControllerComponent{};
+    ac.SetBool("Equipped",true);
+    ac.SetBool("Aim",true);
+    ac.SetFloat("TransitionDuration:Aim",0.8f);
+    CHECK(AnimatorStartInState(c,ac,"Idle"));
+    AdvanceAnimator(c,ac,0,length);
+    CHECK(ac.StateName=="Aim" && ac.Layers[0].Stack.back().FadeDuration==0.8f);
+    AdvanceAnimator(c,ac,0.4f,length);
+    CHECK(std::abs(AnimatorCrossfadeWeight(ac.Layers[0].Stack.back().Fade)-0.5f)<1e-5f);
+    AdvanceAnimator(c,ac,0.41f,length);
+    ac.SetBool("Aim",false);
+    AdvanceAnimator(c,ac,0,length);
+    CHECK(ac.StateName=="Idle" && ac.Layers[0].Stack.back().FadeDuration==0.8f);
+}
+void TestSprintTransitionWalk() {
+    if (!std::filesystem::exists(ProjectPaths::Resolve("assets/Weapons"))) {
+        Log::Info("Sprint transition walk: no weapon project data - skipped.");
+        return;
+    }
+    for (const char* path : {"assets/Weapons/AKS74U/AKS74U.controller", "assets/Weapons/Remington870/Remington870.controller"}) {
+        AnimatorController c;
+        std::string error;
+        CHECK(AnimatorController::LoadFile(ProjectPaths::Resolve(path), c, &error));
+        CHECK(c.Layers.size() == 3);
+        if (c.Layers.size() != 3) continue;
+        const auto& gait = c.Layers[1];
+        const auto& walk = c.Layers[2];
+        CHECK(walk.Name == "Weapon Walk" && walk.Mode == AnimatorController::Blending::Additive);
+        CHECK(walk.AdditiveReferenceState == "Off" && walk.WeightCurve == "WalkBlend" && walk.WeightCurveLayer == gait.Name);
+        CHECK(walk.States[walk.FindState("Walk")].MotionFor(0).Clip.find("Walk.fbx") != std::string::npos);
+        CHECK(gait.States[gait.FindState("Walk")].Speed == 0);
+        CHECK(gait.States[gait.FindState("Walk")].MotionFor(0).Clip.find("Idle.fbx") != std::string::npos);
+        AnimatorController read;
+        CHECK(AnimatorController::FromJsonString(c.ToJsonString(), read, &error));
+        CHECK(read.Layers[2].WeightCurve == walk.WeightCurve && read.Layers[2].WeightCurveLayer == gait.Name);
+        AnimatorControllerComponent ac;
+        ac.Layers.resize(3);
+        for (const char* state : {"Walk", "IdleToSprint", "SprintToIdle"}) {
+            ac.Layers[1].Stack = {{gait.FindState(state), 0.5f, 1.0f}};
+            CHECK(AnimatorLayerWeight(c, ac, 2) == 1);
+        }
+        for (const char* state : {"Idle", "Sprint", "Off"}) {
+            ac.Layers[1].Stack = {{gait.FindState(state), 0.5f, 1.0f}};
+            CHECK(AnimatorLayerWeight(c, ac, 2) == 0);
+        }
+        // Walk survives the whole entry/exit clip, and follows the actual eased sprint fade.
+        ac.Layers[1].Stack = {{gait.FindState("IdleToSprint"), 1, 1}, {gait.FindState("Sprint"), 0.1f, 0.25f}};
+        CHECK(std::abs(AnimatorLayerWeight(c, ac, 2) - (1 - AnimatorCrossfadeWeight(0.25f))) < 1e-6f);
+        ac.Layers[1].Stack = {{gait.FindState("Sprint"), 0.3f, 1}, {gait.FindState("SprintToIdle"), 0.1f, 0.5f}};
+        CHECK(std::abs(AnimatorLayerWeight(c, ac, 2) - 0.5f) < 1e-6f);
+        ac.SetFloat("LayerWeight:Weapon Walk", 0.3f);
+        CHECK(std::abs(AnimatorLayerWeight(c, ac, 2) - 0.15f) < 1e-6f);
+        // Nested interruptions retain the exact stack contribution; ADS scales it once.
+        ac.Layers[1].Stack.push_back({gait.FindState("Walk"), 0, 0.5f});
+        CHECK(std::abs(AnimatorLayerWeight(c, ac, 2) - 0.225f) < 1e-6f);
+        c.Layers[2].WeightCurveLayer = "Missing";
+        CHECK(AnimatorLayerWeight(c, ac, 2) == 0);
+        c.Layers[2].WeightCurveLayer = gait.Name;
+        ac = {};
+        ac.SetBool("Equipped", true);
+        ac.SetFloat("Speed", 4);
+        ac.SetFloat("WalkRate", 1);
+        const auto length = [](int, int) { return 1.0f; };
+        const auto advance = [&](int frames) { for (int i = 0; i < frames; ++i) AdvanceAnimator(c, ac, 0.02f, length); };
+        advance(40); // Off -> Idle -> Walk includes the authored entry crossfades.
+        CHECK(walk.States[ac.Layers[2].Stack.back().State].Name == "Walk");
+        CHECK(AnimatorLayerWeight(c, ac, 2) == 1);
+        const float phase = ac.Layers[2].Stack.back().Phase;
+        ac.SetBool("Sprint", true);
+        advance(20);
+        CHECK(gait.States[ac.Layers[1].Stack.back().State].Name == "IdleToSprint");
+        CHECK(std::abs(ac.Layers[2].Stack.back().Phase - phase - 0.4f) < 1e-5f);
+        CHECK(AnimatorLayerWeight(c, ac, 2) == 1);
+        advance(60);
+        CHECK(gait.States[ac.Layers[1].Stack.back().State].Name == "Sprint");
+        CHECK(ac.StateName == "Sprint");
+        CHECK(AnimatorLayerWeight(c, ac, 2) == 0);
+        const float sprintPhase = ac.Layers[2].Stack.back().Phase;
+        ac.SetBool("Sprint", false);
+        advance(20);
+        CHECK(gait.States[ac.Layers[1].Stack.back().State].Name == "SprintToIdle");
+        CHECK(AnimatorLayerWeight(c, ac, 2) == 1);
+        CHECK(std::abs(ac.Layers[2].Stack.back().Phase - sprintPhase - 0.4f) < 1e-5f);
+        advance(60);
+        CHECK(gait.States[ac.Layers[1].Stack.back().State].Name == "Walk");
+        CHECK(ac.StateName == "Walk"); // Held base states cannot wait on an exit-time clock.
+        CHECK(AnimatorLayerWeight(c, ac, 2) == 1);
+        ac.SetFloat("Speed", 0);
+        advance(30); // Walk -> Idle keeps the existing 0.4 s fade.
+        CHECK(walk.States[ac.Layers[2].Stack.back().State].Name == "Off");
+        CHECK(AnimatorLayerWeight(c, ac, 2) == 0);
+        ac.SetFloat("Speed", 4);
+        advance(15);
+        ac.SetBool("Equipped", false);
+        advance(15);
+        CHECK(walk.States[ac.Layers[2].Stack.back().State].Name == "Off");
+        CHECK(AnimatorLayerWeight(c, ac, 2) == 0);
+    }
+}
 void TestFirstPersonShotgunSet() {
     using G = FirstPersonWeaponGameplay;
     FirstPersonAnimationSet set;
@@ -3950,6 +4378,7 @@ void TestWeaponProcedural() {
     {
         WeaponProceduralSettings sw = s;
         sw.Sway.Enabled = true;
+        sw.Sway.UnityPort = false;
         WeaponProceduralState st;
         WeaponProceduralInput in;
         in.LookRate = glm::vec2(200.0f, 0.0f);
@@ -3993,7 +4422,7 @@ void TestWeaponProcedural() {
         in.Velocity = glm::vec3(0.0f, 0.0f, -3.0f);
         const WeaponProceduralPose p = run(st, k, in, 2.0f);
         CHECK(p.IKWeight == 0.0f);
-        CHECK(std::fabs(p.CameraRoll - k.Lean.Angle) < 0.05f && std::fabs(p.CameraSide - k.Lean.Offset) < 0.01f);
+        CHECK(std::fabs(p.CameraRoll + k.Lean.Angle) < 0.05f && std::fabs(p.CameraSide - k.Lean.Offset) < 0.01f);
         CHECK(p.WalkRate == k.Locomotion.MinRate);                   // 3 / 6 m/s, clamped up to the minimum
         in.Velocity = glm::vec3(0.0f, 0.0f, -7.2f);
         CHECK(std::fabs(run(st, k, in, 0.1f).WalkRate - 1.2f) < 1e-4f);
@@ -4058,7 +4487,7 @@ void TestWeaponProcedural() {
         in.Sprinting = true;
         CHECK(std::fabs(run(st, l, in, 2.0f).CameraRoll) < 1e-3f);
         l.Lean.WhileSprinting = true;
-        CHECK(std::fabs(run(st, l, in, 2.0f).CameraRoll + l.Lean.Angle) < 0.05f);
+        CHECK(std::fabs(run(st, l, in, 2.0f).CameraRoll - l.Lean.Angle) < 0.05f);
         std::string err;
         WeaponProceduralSettings back = WeaponProceduralSettings::Defaults();
         CHECK(WeaponProceduralSettings::FromJson(l.ToJson(), back, &err) && back.Lean.WhileSprinting);
@@ -4182,6 +4611,7 @@ void TestWeaponProcedural() {
         // Sway eases into its limit instead of passing it, however hard the flick.
         WeaponProceduralSettings sw = f;
         sw.Sway.Enabled = true;
+        sw.Sway.UnityPort = false;
         WeaponProceduralState ss;
         WeaponProceduralInput flick;
         flick.LookRate = glm::vec2(5000.0f, 0.0f);
@@ -4197,14 +4627,23 @@ void TestWeaponProcedural() {
             WeaponProceduralInput right;
             right.Lean = 1.0f;
             const WeaponProceduralPose early = run(lst, ls, right, 0.08f);
-            const float headFrac = early.CameraRoll / ls.Lean.Angle;
+            const float headFrac = -early.CameraRoll / ls.Lean.Angle;
             const float gunFrac = -early.Rotation.z / ls.Lean.WeaponRoll;
             CHECK(headFrac > 0.02f && gunFrac < headFrac);
             const WeaponProceduralPose full = run(lst, ls, right, 3.0f);
             const float radius = ls.Lean.Offset / std::sin(glm::radians(ls.Lean.Angle));
             CHECK(std::fabs(full.CameraSide - ls.Lean.Offset) < 2e-3f);
             CHECK(std::fabs(full.CameraOffset.y + radius * (1.0f - std::cos(glm::radians(ls.Lean.Angle)))) < 2e-3f);
-            CHECK(std::fabs(full.CameraRoll - ls.Lean.Angle) < 0.1f && std::fabs(full.Rotation.z + ls.Lean.WeaponRoll) < 0.1f);
+            CHECK(std::fabs(full.CameraRoll + ls.Lean.Angle) < 0.1f && std::fabs(full.Rotation.z + ls.Lean.WeaponRoll) < 0.1f);
+            Camera view;
+            const glm::vec3 unrolledRight=view.Right();
+            view.Roll=full.CameraRoll;
+            CHECK(glm::dot(view.Up(),unrolledRight)>0); // right peek tilts right in the actual camera basis
+            WeaponProceduralState leftState;
+            right.Lean=-1;
+            const auto leftPose=run(leftState,ls,right,3.0f);
+            view.Roll=leftPose.CameraRoll;
+            CHECK(leftPose.CameraSide<0 && glm::dot(view.Up(),unrolledRight)<0);
         }
 
         // The new blocks round-trip.
@@ -4215,6 +4654,7 @@ void TestWeaponProcedural() {
         edited.Breath.ExertionScale = 3.0f;
         edited.Recoil.FovPunch = -0.4f;
         edited.Sway.LookSmoothing = 9.0f;
+        edited.Sway.UnityPort = false;
         WeaponProceduralSettings back = WeaponProceduralSettings::Defaults();
         std::string err;
         CHECK(WeaponProceduralSettings::FromJson(edited.ToJson(), back, &err));
@@ -4907,7 +5347,7 @@ void TestAiMath() {
     }
 }
 
-int RunUnitTests() {
+int RunUnitTests(const char* filter) {
     UnitTestSupport::TestList tests = {
         {"AssetGuid", TestAssetGuid},
         {"UndoDeltaChain", TestUndoDeltaChain},
@@ -4934,12 +5374,15 @@ int RunUnitTests() {
         {"FirstPersonBodyBoneMap", TestFirstPersonBodyBoneMap},
         {"ClipContactDebounce", TestClipContactDebounce},
         {"FirstPersonBodyController", TestFirstPersonBodyController},
+        {"FirstPersonBodySpineBlend", TestFirstPersonBodySpineBlend},
         {"FirstPersonWeaponWizard", TestFirstPersonWeaponWizard},
         {"AnimatorLint", TestAnimatorLint},
         {"BlendTree2D", TestBlendTree2D},
         {"FirstPersonAnimationSet", TestFirstPersonAnimationSet},
         {"FirstPersonAnimationFSM", TestFirstPersonAnimationFSM},
         {"FirstPersonShotgunSet", TestFirstPersonShotgunSet},
+        {"AK additive ADS walking", TestAKAdditiveWalking},
+        {"Sprint transition additive walk", TestSprintTransitionWalk},
         {"RemingtonController", TestRemingtonController},
         {"FirstPersonAds", TestFirstPersonAds},
         {"BulletHoles", TestBulletHoles},
@@ -4948,6 +5391,7 @@ int RunUnitTests() {
         {"Curve", TestCurve},
         {"IKSolver", TestIKSolver},
         {"WeaponProcedural", TestWeaponProcedural},
+        {"RecoilProfile", TestRecoilProfile},
         {"AssetIdentity", TestAssetIdentity},
         {"ProjectWatcher", TestProjectWatcher},
         {"LodGroup", TestLodGroup},
@@ -4981,10 +5425,14 @@ int RunUnitTests() {
     RegisterRagdollTests(tests);
     RegisterAnimationTests(tests);
     RegisterEditorTests(tests);
+    RegisterRecoilPortTests(tests);
+    RegisterSwayPortTests(tests);
     RegisterEngineTests(tests);
+    { void RegisterScriptingTests(UnitTestSupport::TestList&); RegisterScriptingTests(tests); }
     RegisterBloodTests(tests);
     { void RegisterAudioTests(UnitTestSupport::TestList&); RegisterAudioTests(tests); } // UnitTests_Audio.cpp
     for (const auto& [name, fn] : tests) {
+        if(filter && std::string(name).find(filter)==std::string::npos) continue;
         g_CurrentTest = name;
         const int before = g_Failures;
         try {

@@ -1,0 +1,77 @@
+{
+  "boxes": [],
+  "empties": [],
+  "models": [
+    {
+      "id": 0,
+      "order": 0,
+      "parentId": -1,
+      "name": "Remington 870",
+      "position": [
+        0,
+        0,
+        0
+      ],
+      "rotation": [
+        0,
+        0,
+        0,
+        1
+      ],
+      "scale": [
+        1,
+        1,
+        1
+      ],
+      "path": "assets/Weapons/Remington870/Weapon/Remington870_A_W_Idle.fbx",
+      "pathGuid": "abfe8981a8954dee",
+      "Weapon Definition": {
+        "Muzzle Enabled": true,
+        "Flash Time": 0.055,
+        "Light Intensity": 26,
+        "Player Flash Scale": 0.35,
+        "Light Range": 7,
+        "Light Color": [1,0.72,0.38],
+        "Flame Texture": "assets/Effects/Muzzle/T_MuzzleFlame.png",
+        "Flame Glow": 75,
+        "Flame Scale": 1.75,
+        "Flame Color": [1,0.147,0.0177],
+        "Flame Lifetime Min": 0.175,
+        "Flame Lifetime Max": 0.275,
+        "Flame Length Min": 0.2,
+        "Flame Length Max": 0.28,
+        "Flame Width Min": 0.04,
+        "Flame Width Max": 0.06,
+        "Muzzle Style": 1,
+        "Flash Sprite": "muzzle_burst",
+        "Flash Lifetime": 0.11,
+        "Flash Size Min": 0.38,
+        "Flash Size Max": 0.38,
+        "Flash Intensity": 14,
+        "Side Jets": false,
+        "Core Glow": true,
+        "Spark Count": 14,
+        "Smoke": true,
+        "Afterfire Smoke": true,
+        "Smoke Scale": 1,
+        "Smoke Lifetime Min": 2,
+        "Smoke Lifetime Max": 3,
+        "Smoke Alpha": 0.35,
+        "Description": "12-gauge pump shotgun. 6 shells, 8 pellets per shot, per-shell reload and manual pump cycle.",
+        "Animation Set": {
+          "path": "assets/Weapons/Remington870/Remington870.fpsanim",
+          "pathGuid": "4e3925bded078f9a"
+        }
+      },
+      "Animator Controller": {
+        "Controller": {
+          "path": "assets/Weapons/Remington870/Remington870.controller",
+          "pathGuid": "240cdc05ad87aed9"
+        },
+        "Speed": 1,
+        "Track": "weapon",
+        "rootMotion": "Off"
+      }
+    }
+  ]
+}

@@ -22,6 +22,9 @@
 #endif
 
 namespace AtomicFile {
+namespace { thread_local ChangeObserver changeObserver; }
+void SetChangeObserver(ChangeObserver observer) { changeObserver = std::move(observer); }
+void NotifyWillChange(const std::filesystem::path& path) { if (changeObserver) changeObserver(path); }
 
 namespace {
 
@@ -118,6 +121,7 @@ bool WrittenBySelfRecently(const std::filesystem::path& path, int withinMs) {
 }
 
 bool WriteBytes(const std::filesystem::path& path, std::string_view bytes, bool binary) {
+    NotifyWillChange(path);
     NoteSelfWrite(path); // before the rename, so the watcher's event always finds it
     std::error_code ec;
     if (path.has_parent_path()) {

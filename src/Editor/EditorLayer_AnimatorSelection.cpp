@@ -153,6 +153,7 @@ void DrawSelectionPanel(AnimCtx& cx) {
                     if (t.To == before) t.To = s.Name;
                 }
                 if (L.DefaultState == before) L.DefaultState = s.Name;
+                if (L.AdditiveReferenceState == before) L.AdditiveReferenceState = s.Name;
                 changed = true;
             }
         }
@@ -385,7 +386,7 @@ void DrawSelectionPanel(AnimCtx& cx) {
         if (s.Curves.empty())
             ImGui::TextDisabled("None: a state without a curve reads as 1 (full weight).");
         int removeCurve = -1;
-        const auto keyLess = [](const AC::CurveKey& a, const AC::CurveKey& b) { return a.Time < b.Time; };
+
         for (int ci = 0; ci < (int)s.Curves.size(); ++ci) {
             AC::Curve& cv = s.Curves[ci];
             ImGui::PushID(ci);
@@ -399,44 +400,13 @@ void DrawSelectionPanel(AnimCtx& cx) {
                                      "(0..1 scales on the arm IK, each hand and the look-at); any other name is for game code.");
             ImGui::SameLine();
             if (DangerIconButton(ICON_FA_TRASH, "Remove this curve", ImVec2(ImGui::GetFrameHeight(), 0.0f))) removeCurve = ci;
-            int removeKey = -1;
-            for (int ki = 0; ki < (int)cv.Keys.size(); ++ki) {
-                AC::CurveKey& k = cv.Keys[ki];
-                ImGui::PushID(ki);
-                row(ki == 0 ? "Keys" : "");
-                const float w = (ImGui::GetContentRegionAvail().x - ImGui::GetFrameHeight() - ImGui::GetStyle().ItemSpacing.x * 2.0f) * 0.5f;
-                ImGui::SetNextItemWidth(w);
-                if (ImGui::DragFloat("##kt", &k.Time, 0.005f, 0.0f, 1.0f, "t %.3f")) { k.Time = glm::clamp(k.Time, 0.0f, 1.0f); changed = true; }
-                if (ImGui::IsItemHovered())
-                    EditorUI::SetTooltip("Time as a fraction of one pass through the state (0 = entry, 1 = the end; a looping state repeats it).");
-                ImGui::SameLine();
-                ImGui::SetNextItemWidth(w);
-                if (ImGui::DragFloat("##kv", &k.Value, 0.005f, 0.0f, 1.0f, "v %.3f")) changed = true;
-                if (ImGui::IsItemHovered())
-                    EditorUI::SetTooltip("The curve's value at that time (1 = full weight, 0 = off). Linear between keys, held outside them.");
-                ImGui::SameLine();
-                if (DangerIconButton(ICON_FA_XMARK, "Remove this key", ImVec2(ImGui::GetFrameHeight(), 0.0f))) removeKey = ki;
-                ImGui::PopID();
-            }
-            if (removeKey >= 0) { cv.Keys.erase(cv.Keys.begin() + removeKey); changed = true; }
-            row("");
-            if (ActionButton(ICON_FA_PLUS "  Key", "Add a key after the last one, holding its value", false)) {
-                const float lastT = cv.Keys.empty() ? 0.0f : cv.Keys.back().Time;
-                const float lastV = cv.Keys.empty() ? 1.0f : cv.Keys.back().Value;
-                cv.Keys.push_back({cv.Keys.empty() ? 0.0f : glm::min(1.0f, lastT + 0.1f), lastV});
-                changed = true;
-            }
-            // Keys stay sorted by time (the evaluator needs it), re-sorted once no field is being dragged.
-            if (!ImGui::IsAnyItemActive() && !std::is_sorted(cv.Keys.begin(), cv.Keys.end(), keyLess)) {
-                std::stable_sort(cv.Keys.begin(), cv.Keys.end(), keyLess);
-                changed = true;
-            }
-            if (!cv.Keys.empty()) {
-                float plot[64];
-                for (int i = 0; i < 64; ++i) plot[i] = AC::EvaluateCurve(cv.Keys, i / 63.0f);
-                row("");
-                ImGui::PlotLines("##cplot", plot, 64, 0, nullptr, 0.0f, 1.0f, ImVec2(-FLT_MIN, ImGui::GetFrameHeight() * 2.0f));
-            }
+            ::Curve curve;
+            for(const auto& k:cv.Keys)curve.Keys.push_back({k.Time,k.Value,k.InTangent,k.OutTangent,k.Interpolation});
+            CurveEditor::AssetScope curves(W.Abs,D.ToJsonString(),[](const std::string& text,std::string& error){AC doc;return AC::FromJsonString(text,doc,&error);});
+            const auto escape=[](const std::string& name){std::string result;for(char c:name){if(c=='~')result+="~0";else if(c=='/')result+="~1";else result+=c;}return result;};
+            curves.Bind(curve,"/layers/@"+escape(L.Name)+"/states/@"+escape(s.Name)+"/curves/@"+escape(cv.Name)+"/keys",L.Name+" / "+s.Name+" / "+cv.Name);
+            CurveEditor::Options options;options.Title=cv.Name.c_str();options.LinearFallback=true;
+            row("");CurveEditor::Draw("##curve",curve,{0,ImGui::GetFrameHeight()*3},options);
             ImGui::PopID();
         }
         if (removeCurve >= 0) { s.Curves.erase(s.Curves.begin() + removeCurve); changed = true; }
