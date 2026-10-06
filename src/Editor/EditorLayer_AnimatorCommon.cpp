@@ -125,6 +125,7 @@ void DeleteStates(AnimCtx& c, AC::Layer& Ly, std::vector<int> which) {
                                             }),
                              Ly.Transitions.end());
         if (Ly.DefaultState == gone) Ly.DefaultState.clear();
+        if (Ly.AdditiveReferenceState == gone) Ly.AdditiveReferenceState.clear();
     }
     c.W.ClearSelection();
     c.changed = true;

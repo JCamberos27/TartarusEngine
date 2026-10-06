@@ -2220,7 +2220,7 @@
    "mix_db": -17.16
   },
   {
-   "file": "Casings/shell/dirt_6.wav",
+   "file": "Casings/rifle/dirt_1.wav",
    "key": "snd.casing.shell.dirt",
    "layer": "casing",
    "channels": 1,

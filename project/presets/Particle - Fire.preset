@@ -1,0 +1,83 @@
+{
+  "preset": 1,
+  "component": "Particle System",
+  "fields": {
+    "Emitting": true,
+    "Rate": 80,
+    "Max Particles": 500,
+    "Lifetime": 0.8,
+    "Start Speed": 1.2,
+    "Spread": 25,
+    "Start Size": 0.18,
+    "End Size": 0.04,
+    "Start Color": [
+      1,
+      0.75,
+      0.3
+    ],
+    "End Color": [
+      1,
+      0.2,
+      0.05
+    ],
+    "Start Alpha": 1,
+    "End Alpha": 0,
+    "Intensity": 8,
+    "Gravity Modifier": 0,
+    "Blend Mode": "Additive",
+    "Looping": true,
+    "Duration": 5,
+    "Start Delay": 0,
+    "Burst Count": 0,
+    "Burst Interval": 0,
+    "Rate Over Distance": 0,
+    "Shape": "Disc",
+    "Shape Radius": 0.15,
+    "Shape Length": 1,
+    "Shape Box": [
+      1,
+      1,
+      1
+    ],
+    "Shape Surface": false,
+    "Local Space": false,
+    "Lifetime Randomness": 0.15,
+    "Speed Randomness": 0.4,
+    "Size Randomness": 0.5,
+    "Velocity Over Life": [
+      0,
+      0,
+      0
+    ],
+    "Acceleration": [
+      0,
+      2,
+      0
+    ],
+    "Drag": 1,
+    "Rotation Min": -180,
+    "Rotation Max": 180,
+    "Angular Velocity Min": 0,
+    "Angular Velocity Max": 0,
+    "Collision": "Off",
+    "Collision Plane Y": 0,
+    "Collision Radius": 0.01,
+    "Bounce": 0.3,
+    "Collision Friction": 0.1,
+    "Collision Life Loss": 0,
+    "Max Bounces": 4,
+    "Texture": "",
+    "Alignment": "Billboard",
+    "Velocity Stretch": 0.1,
+    "Sheet Columns": 1,
+    "Sheet Rows": 1,
+    "Sheet FPS": 0,
+    "Random Start Frame": false,
+    "Blend Frames": true,
+    "Size Curve": "[[0,1,0,0],[1,1,0,0]]",
+    "Alpha Curve": "[[0,1,0,0],[1,1,0,0]]",
+    "Speed Curve": "[[0,1,0,0],[1,1,0,0]]",
+    "Emission Curve": "[[0,1,0,0],[1,1,0,0]]",
+    "Curve Editor ID": ""
+  }
+}

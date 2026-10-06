@@ -1,4 +1,7 @@
 #include "FirstPersonPresentation.h"
+#include "FirstPersonMovementInput.h"
+#include "Scripting/ScriptRuntime.h"
+#include "Scripting/WeaponPrefab.h"
 
 #include "AnimationSystem.h"
 #include "Audio/WeaponAudio.h"
@@ -14,6 +17,7 @@
 #include "ProjectPaths.h"
 #include "RotationMath.h"
 #include "World.h"
+#include "TimeService.h"
 
 #include <glm/gtc/constants.hpp>
 #include <glm/gtc/matrix_transform.hpp>
@@ -119,8 +123,22 @@ bool FirstPersonPresentation::Start(World& world, AssetLibrary& assets,
     Stop(world);
     m_Options = options;
     m_LastError.clear();
-    for (const std::string* set : {&config.AnimationSet, &config.SecondaryAnimationSet})
-        if (!set->empty()) m_SlotSets.push_back(*set);
+    for (auto slot : {std::pair<const std::string*,const std::string*>{&config.PrimaryWeaponPrefab,&config.AnimationSet},
+                      {&config.SecondaryWeaponPrefab,&config.SecondaryAnimationSet}}) {
+        std::string set=*slot.second;
+        WeaponDefinitionComponent definition;
+        if(!slot.first->empty()) {
+            std::string why;
+            if(!Scripting::ResolveWeaponPrefab(*slot.first,set,why,&definition)) { SetError(why); return false; }
+        }
+        if(!set.empty()) {
+            m_SlotSets.push_back(set);m_SlotPrefabs.push_back(*slot.first);m_SlotMuzzles.push_back(definition.Muzzle);
+            std::error_code ec;
+            m_SlotPrefabTimes.push_back(slot.first->empty()?std::filesystem::file_time_type{}:
+                std::filesystem::last_write_time(ProjectPaths::Resolve(*slot.first),ec));
+        }
+    }
+    if(!m_SlotSets.empty() && !Scripting::EnsureLoaded()) { SetError(Scripting::LastError()); return false; }
     if (m_SlotSets.empty()) return true;
     m_SlotAmmo.assign(m_SlotSets.size(), -1);
     m_Config = std::make_shared<FirstPersonControllerComponent>(config);
@@ -187,6 +205,7 @@ void FirstPersonPresentation::WarmEjectAssets(AssetLibrary& assets, const FirstP
 void FirstPersonPresentation::Stop(World& world) {
     StopSet(world);
     m_SlotSets.clear();
+    m_SlotPrefabs.clear();m_SlotMuzzles.clear();m_SlotPrefabTimes.clear();
     m_SlotAmmo.clear();
     m_Slot = 0;
     m_PendingSlot = -1;
@@ -211,7 +230,7 @@ bool FirstPersonPresentation::StartSet(World& world, AssetLibrary& assets, int s
     }
     // An enemy's gun takes the definition parsed for the last one (the same file, unchanged since).
     SharedSetup* shared = m_Options.OwnerView ? nullptr : &SharedSetupFor(m_SetFile.u8string(), m_SetFileTime);
-    if (shared && !shared->Set.Controller.empty()) {
+    if (shared && !shared->Set.Controller.empty() && shared->Set.RecoilProfile.empty() && shared->Set.CameraShakeProfile.empty()) {
         m_Set = shared->Set;
     } else {
         if (!FirstPersonAnimationSet::LoadFile(setPath, m_Set, &m_LastError)) {
@@ -219,6 +238,14 @@ bool FirstPersonPresentation::StartSet(World& world, AssetLibrary& assets, int s
             return false;
         }
         if (shared) shared->Set = m_Set;
+    }
+    {
+        std::error_code ec;
+        m_RecoilFileTime = m_Set.RecoilProfile.empty() ? std::filesystem::file_time_type{} :
+            std::filesystem::last_write_time(ProjectPaths::Resolve(m_Set.RecoilProfile), ec);
+        ec.clear();
+        m_ShakeFileTime=m_Set.CameraShakeProfile.empty()?std::filesystem::file_time_type{}:
+            std::filesystem::last_write_time(ProjectPaths::Resolve(m_Set.CameraShakeProfile),ec);
     }
     if (!FinitePositive(config.ViewModelScale)) {
         SetError("View Model Scale must be finite and greater than zero");
@@ -338,8 +365,12 @@ bool FirstPersonPresentation::StartSet(World& world, AssetLibrary& assets, int s
         return false;
     }
     m_Procedural.Reset();
+    m_CameraShake.Reset(); m_ShakePose={};
     m_Procedural.Seed(m_Rng()); // a fresh recoil pattern every Play, not the same one each time
+    m_Set.Procedural.Bob.Enabled=false;
+    m_Set.Procedural.Sway.UnityPort=true;
     m_UsesIK = SetupIK();
+    SetupSway();
     SetupBolt(assets, *ctrl);
     m_Assets = &assets;
     m_Controller = ctrl;
@@ -386,16 +417,45 @@ void FirstPersonPresentation::StopSet(World& world) {
     m_CycleSeen = false;
     m_StopReload = false;
     m_FullAuto = false;
+    m_BurstRemaining = 0;
+    m_WaitingAnimatedShot = false;
     m_FireCooldown = 0.0f;
     m_IdleTime = 0.0f;
-    m_ReloadKey = {};
+    ResetReloadKey();
     m_Procedural.Reset();
+    m_CameraShake.Reset(); m_ShakePose={};
     m_UsesIK = false;
+    m_Sway.Reset();
+    m_SwayLookInput=m_SwayMoveInput=glm::vec2(0);
+    m_HaveSwayMoveInput=false;
     m_HaveLook = false;
+    m_HavePlayerLookBaseline = false;
+    m_PlayerLookDelta = glm::vec2(0.0f);
     m_SetFile.clear();
     m_ReloadPoll = 0.0f;
+    if(m_Slot<(int)m_SlotPrefabs.size() && !m_SlotPrefabs[m_Slot].empty()) {
+        std::error_code prefabError;
+        const auto time=std::filesystem::last_write_time(ProjectPaths::Resolve(m_SlotPrefabs[m_Slot]),prefabError);
+        if(!prefabError && time!=m_SlotPrefabTimes[m_Slot]) {
+            std::string set,why;WeaponDefinitionComponent definition;
+            if(Scripting::ResolveWeaponPrefab(m_SlotPrefabs[m_Slot],set,why,&definition)) {
+                m_SlotMuzzles[m_Slot]=definition.Muzzle;m_SlotPrefabTimes[m_Slot]=time;
+            } else Log::Warn("Weapon muzzle settings: "+why);
+        }
+    }
     m_AdsHold = 0.0f;
     m_Zoom = m_ZoomRate = 0.0f;
+}
+
+void FirstPersonPresentation::SetupSway() {
+    if (m_UsesIK || !m_World || !m_World->Registry.valid(m_Arms)) return;
+    // Sway is a bone modifier in its own right: a missing/disabled arm chain must not
+    // prevent a valid gun bone from being animated. General procedural motion still
+    // uses the presentation's existing whole-rig fallback in this case.
+    auto& rig=m_World->Registry.get_or_emplace<IKRigComponent>(m_Arms);
+    rig=IKRigComponent{};
+    rig.LimbA.Enabled=rig.LimbB.Enabled=false;
+    rig.SwayBeforeOffset=0;
 }
 
 bool FirstPersonPresentation::SetupIK() {
@@ -476,6 +536,19 @@ void FirstPersonPresentation::SetupBolt(AssetLibrary& assets, const AnimatorCont
     if (!m_World || !m_WeaponModel) return;
     const int bolt = m_WeaponModel->NodeIndex(r.BoltBone);
     const int weaponTrack = ctrl.TrackIndex(TrackOr(ctrl, "weapon", 1));
+    if (bolt >= 0 && glm::length(r.BoltTravel) > 1e-6f) {
+        m_BoltStroke = r.BoltTravel;
+        m_SightMeasured = m_SightLogged = false;
+        m_SightSettled = 0.0f;
+        m_Barrel = {};
+        SetupMuzzle(bolt);
+        if (r.BoltCycle > 0.0f) {
+            auto& rig = m_World->Registry.emplace_or_replace<IKRigComponent>(m_Weapon);
+            rig.Offsets.assign(1, IKBoneOffset{});
+            rig.Offsets[0].Bone = r.BoltBone;
+        }
+        return;
+    }
     // A fresh Play measures its own sight line (a saved one wins anyway).
     m_SightMeasured = m_SightLogged = false;
     m_SightSettled = 0.0f;
@@ -720,6 +793,7 @@ AdsCarrySample FirstPersonPresentation::SampleAdsCarry(float dt) const {
 // Both are kept in the weapon root's space, which is what the socket moves. A hand-set muzzle
 // (muzzle.auto off) wins; what Auto found is still reported, for the Inspector to copy.
 void FirstPersonPresentation::SetupMuzzle(int bolt) {
+    m_Barrel.BoltTravel = m_BoltStroke;
     m_HaveMuzzle = false;
     m_Barrel.Detected = m_Barrel.HasMuzzle = false;
     m_Barrel.Problem.clear();
@@ -785,7 +859,7 @@ void FirstPersonPresentation::SetupMuzzle(int bolt) {
         m_HaveMuzzle = true;
     } else {
         m_Barrel.Problem = bolt < 0 || glm::length(m_BoltStroke) < 1e-5f
-                               ? "Auto needs the procedural bolt (recoil.boltBone, moved by the hip-fire clip) to find the barrel."
+                               ? "Auto needs a bolt bone and explicit Bolt Travel (or optional Fire clip measurement)."
                                : "Auto couldn't find the weapon mesh's front face along the bolt's travel.";
         Log::Warn("First-person: no muzzle - " + m_Barrel.Problem +
                   " Rounds hit nothing and there's no laser; set the muzzle by hand in the weapon Inspector (Barrel & Laser).");
@@ -1020,13 +1094,21 @@ void FirstPersonPresentation::WriteIK() {
     if (m_World && m_World->Registry.valid(m_Weapon))
         if (auto* bolt = m_World->Registry.try_get<IKRigComponent>(m_Weapon); bolt && !bolt->Offsets.empty())
             bolt->Offsets[0].Position = m_BoltStroke * m_Procedural.Pose().Bolt;
-    if (!m_UsesIK || !m_World || !m_World->Registry.valid(m_Arms)) return;
+    if (!m_World || !m_World->Registry.valid(m_Arms)) return;
     auto* rig = m_World->Registry.try_get<IKRigComponent>(m_Arms);
-    if (!rig || (int)rig->Offsets.size() <= kProceduralOffset) return;
+    if (!rig) return;
+    rig->PreserveBaseGrip = ReloadBlocksSprint();
     const WeaponProceduralPose& p = m_Procedural.Pose();
     const glm::quat C = NormalizeRotation(QuaternionFromEulerYXZ(m_Set.ViewRotation) * QuaternionFromEulerYXZ(m_Rotation));
     const glm::quat Ci = glm::inverse(C);
+    rig->SwayEnabled=m_Set.Procedural.Sway.UnityPort && m_Set.Procedural.Sway.Enabled;
+    rig->SwaySettings=m_Set.Procedural.Sway.Unity;
+    rig->SwayBeforeOffset=m_UsesIK?kProceduralOffset:0;
+    rig->SwayModelToComponent=C;
+    rig->SwayModelToWorld=IK::Rotation(m_ArmsWorld);
+    rig->SwayMetresPerUnit=m_Scale;
     rig->Weight = p.IKWeight;
+    if (!m_UsesIK || (int)rig->Offsets.size()<=kProceduralOffset) return;
     rig->LimbA.CurveWeight = m_IKCurves.RightHand;
     rig->LimbB.CurveWeight = m_IKCurves.LeftHand;
     rig->LookCurveWeight = m_IKCurves.Look;
@@ -1118,8 +1200,21 @@ void FirstPersonPresentation::ReloadIfChanged(float dt) {
     m_ReloadPoll = 0.0f;
     std::error_code ec;
     const auto stamp = std::filesystem::last_write_time(m_SetFile, ec);
-    if (ec || stamp == m_SetFileTime) return;
+    if (ec) return;
+    std::filesystem::file_time_type recoilStamp{};
+    if (!m_Set.RecoilProfile.empty()) {
+        recoilStamp = std::filesystem::last_write_time(ProjectPaths::Resolve(m_Set.RecoilProfile), ec);
+        if (ec) recoilStamp = {};
+    }
+    std::filesystem::file_time_type shakeStamp{};
+    if(!m_Set.CameraShakeProfile.empty()) {
+        shakeStamp=std::filesystem::last_write_time(ProjectPaths::Resolve(m_Set.CameraShakeProfile),ec);
+        if(ec) shakeStamp={};
+    }
+    if (stamp == m_SetFileTime && recoilStamp == m_RecoilFileTime && shakeStamp==m_ShakeFileTime) return;
     m_SetFileTime = stamp;
+    m_RecoilFileTime = recoilStamp;
+    m_ShakeFileTime=shakeStamp;
     FirstPersonAnimationSet fresh;
     std::string why;
     if (!FirstPersonAnimationSet::LoadFile(m_SetFile.u8string(), fresh, &why)) {
@@ -1139,10 +1234,26 @@ void FirstPersonPresentation::ReloadIfChanged(float dt) {
                            oldAds.MatchTwist != fresh.Ads.MatchTwist || oldAds.ActionBones != fresh.Ads.ActionBones;
     m_Set.Gameplay = fresh.Gameplay;
     m_Set.Ads = fresh.Ads;
+    m_Set.ViewPosition = fresh.ViewPosition;
+    m_Set.AdsLocomotionScale = fresh.AdsLocomotionScale;
+    m_Set.ActionCamera=fresh.ActionCamera;
+    if(m_Set.CameraShakeProfile!=fresh.CameraShakeProfile) { m_CameraShake.Reset(); m_ShakePose={}; }
+    m_Set.CameraShakeProfile=fresh.CameraShakeProfile;
+    m_Set.CameraShakeProfileGuid=fresh.CameraShakeProfileGuid;
+    m_Set.CameraShake=fresh.CameraShake;
+    const bool rebolt = m_Set.Procedural.Recoil.BoltTravel != fresh.Procedural.Recoil.BoltTravel ||
+        m_Set.Procedural.Recoil.BoltBone != fresh.Procedural.Recoil.BoltBone ||
+        m_Set.Procedural.Recoil.BoltCycle != fresh.Procedural.Recoil.BoltCycle;
+    if (m_Set.RecoilProfile != fresh.RecoilProfile) m_Procedural.Reset();
     m_Set.Procedural = fresh.Procedural;
+    m_Set.Procedural.Bob.Enabled=false;
+    m_Set.Procedural.Sway.UnityPort=true;
+    m_Set.RecoilProfile = fresh.RecoilProfile;
+    m_Set.RecoilProfileGuid = fresh.RecoilProfileGuid;
     m_Set.Muzzle = fresh.Muzzle;
     m_Set.Eject = fresh.Eject;
     m_Set.Laser = fresh.Laser;
+    if (rebolt && m_Controller && m_Assets) SetupBolt(*m_Assets, *m_Controller);
     if (remuzzle && m_WeaponModel)
         SetupMuzzle(glm::length(m_BoltStroke) >= 1e-5f ? m_WeaponModel->NodeIndex(m_Set.Procedural.Recoil.BoltBone) : -1);
     if (resight) {
@@ -1154,9 +1265,10 @@ void FirstPersonPresentation::ReloadIfChanged(float dt) {
     if (rebuildIK && m_World && m_World->Registry.valid(m_Arms)) {
         m_World->Registry.remove<IKRigComponent>(m_Arms);
         m_UsesIK = SetupIK();
+        SetupSway();
     }
     if (remeasure) SetupAdsCarry();
-    m_ReloadKey.HoldSeconds = m_Set.Gameplay.ReloadHoldSeconds;
+    // The managed reload button reads the current descriptor on every input update.
     m_Ammo = std::min(m_Ammo, m_Set.Gameplay.Magazine);
 }
 
@@ -1205,97 +1317,140 @@ bool FirstPersonPresentation::HasTag(const char* tag) const {
     return ac && ac->HasTag(tag);
 }
 
+bool FirstPersonPresentation::ReloadBlocksSprint() const {
+    const auto* ac = Animator();
+    if (!ac || !m_Equipped) return false;
+    if (ac->GetFloat(K::kReload) > 0.0f || ac->HasTag(K::kTagReload)) return true;
+    if (!m_Controller || m_Controller->Layers.empty() || ac->Layers.empty()) return false;
+    const auto& states = m_Controller->Layers[0].States;
+    for (const auto& item : ac->Layers[0].Stack)
+        if (item.State >= 0 && item.State < (int)states.size() && states[item.State].HasTag(K::kTagReload))
+            return true;
+    return false;
+}
+
 const std::string& FirstPersonPresentation::CurrentState() const {
     static const std::string kNone;
     const auto* ac = Animator();
     return ac ? ac->StateName : kNone;
 }
 
+Scripting::WeaponFrame FirstPersonPresentation::RunGameplay(int operation,float dt,bool pressed,bool held,int events) {
+    Scripting::WeaponFrame f;
+    const auto& g=m_Set.Gameplay;
+    f.Operation=operation; f.Dt=dt; f.Pressed=pressed; f.Held=held; f.Events=events;
+    auto* ac=Animator();
+    if(!ac) return f;
+    f.InTransition=ac->InTransition; f.WallBlocked=WallBlocked();
+    f.Random=std::uniform_real_distribution<float>(0.0f,1.0f)(m_Rng);
+    f.Ammo=m_Ammo;
+    f.Cooldown=m_FireCooldown;
+    f.CycleWait=m_CycleWait;
+    f.IdleTime=m_IdleTime;
+    f.RegripDelay=m_RegripDelay;
+    f.SinceShot=m_SinceShot;
+    f.SinceUnhidden=m_SinceUnhidden;
+    f.Equipped=m_Equipped;
+    f.Chambered=m_Chambered;
+    f.CycleSeen=m_CycleSeen;
+    f.StopReload=m_StopReload;
+    f.FullAuto=m_FullAuto;
+    f.BurstRemaining=m_BurstRemaining;
+    f.WaitingShot=m_WaitingAnimatedShot;
+    f.ReloadHeldSeconds=m_ManagedReloadSeconds;
+    f.ReloadWasDown=m_ManagedReloadDown;
+    f.ReloadHoldFired=m_ManagedReloadFired;
+    f.Rpm=g.RoundsPerMinute;
+    f.CycleDelay=g.CycleDelay;
+    f.HoldSeconds=g.ReloadHoldSeconds;
+    f.RegripMin=g.RegripMin;
+    f.RegripMax=g.RegripMax;
+    f.Magazine=g.Magazine;
+    f.BurstRounds=g.BurstRounds;
+    f.AllowFullAuto=g.AllowFullAuto;
+    f.PerRound=g.Reload==FirstPersonWeaponGameplay::ReloadMode::PerRound;
+    f.CycleAfterShot=g.CycleAfterShot;
+    f.HipProcedural=m_Set.Procedural.Recoil.HipProcedural;
+    f.RecoilProfile=!m_Set.RecoilProfile.empty();
+    f.UnityRecoil=m_Set.Procedural.Recoil.UnityPort;
+    if(ac->HasTag(K::kTagHidden)) f.Tags|=1;
+    if(ac->HasTag(K::kTagReload)) f.Tags|=2;
+    if(ac->HasTag(K::kTagBusy)) f.Tags|=4;
+    if(ac->HasTag(K::kTagCycling)) f.Tags|=8;
+    if(ac->HasTag(K::kTagAds)) f.Tags|=16;
+    if(ac->HasTag(K::kTagIdle)) f.Tags|=32;
+    if(ac->HasTag(K::kTagReady)) f.Tags|=64;
+    if(ac->HasTag(K::kTagIKOff)) f.Tags|=128;
+    if(!Scripting::Invoke(2,&f,sizeof f)) { f.Commands=0; f.Result=0; return f; }
+    m_Ammo=f.Ammo;
+    m_FireCooldown=f.Cooldown;
+    m_CycleWait=f.CycleWait;
+    m_IdleTime=f.IdleTime;
+    m_RegripDelay=f.RegripDelay;
+    m_SinceShot=f.SinceShot;
+    m_SinceUnhidden=f.SinceUnhidden;
+    m_Equipped=f.Equipped!=0;
+    m_Chambered=f.Chambered!=0;
+    m_CycleSeen=f.CycleSeen!=0;
+    m_StopReload=f.StopReload!=0;
+    m_FullAuto=f.FullAuto!=0;
+    m_BurstRemaining=f.BurstRemaining;
+    m_WaitingAnimatedShot=f.WaitingShot!=0;
+    m_ManagedReloadSeconds=f.ReloadHeldSeconds;
+    m_ManagedReloadDown=f.ReloadWasDown!=0;
+    m_ManagedReloadFired=f.ReloadHoldFired!=0;
+    if(f.Commands&8) { m_Procedural.EndBurst(); m_Procedural.SetFiring(false); }
+    if(f.Commands&1) WeaponSound(*this,m_SetFile,m_Options.OwnerView,"dry_fire");
+    if(f.Commands&4) ac->SetTrigger(K::kFire);
+    if(f.Commands&16) ac->SetTrigger(K::kCycle);
+    if(f.Commands&32) ac->SetTrigger(K::kFidget);
+    if(f.Commands&64) { ac->SetBool(K::kStopReload,false); ac->SetInt(K::kAmmo,m_Ammo); ac->SetTrigger(K::kReload); }
+    if(f.Commands&128) TriggerAction(K::kMagCheck);
+    return f;
+}
+
 bool FirstPersonPresentation::Fire() {
-    auto* ac = Animator();
-    if (!ac || !m_Equipped || HasTag(K::kTagHidden)) return false;
-    // A tube being loaded a round at a time: the trigger ends the reload after the round in hand
-    // (StopReload), and the next pull fires.
-    if (m_Set.Gameplay.Reload == FirstPersonWeaponGameplay::ReloadMode::PerRound && ac->HasTag(K::kTagReload)) {
-        m_StopReload = m_Ammo > 0;
-        return false;
-    }
-    if (m_Ammo <= 0) {
-        // Dry: the player has to press Reload themselves. The click, once per pull (a held full-auto trigger clicks at 3 Hz).
-        if (!ac->HasTag(K::kTagReload) && !ac->HasTag(K::kTagBusy)) {
-            WeaponSound(*this, m_SetFile, m_Options.OwnerView, "dry_fire");
-            m_FireCooldown = std::max(m_FireCooldown, 0.33f);
-        }
-        return false;
-    }
-    if (!m_Chambered || ac->HasTag(K::kTagCycling)) return false; // the pump / bolt hasn't been worked yet
-    if (WallBlocked()) return false; // tucked off a wall: the muzzle is in it
-    // Reloading or otherwise busy hands: no round, whether the state is a hip clip the controller
-    // would refuse to interrupt anyway or an ADS one that would otherwise kick procedurally.
-    if (ac->HasTag(K::kTagReload) || ac->HasTag(K::kTagBusy)) return false;
-    const bool ads = ac->HasTag(K::kTagAds);
-    // With recoil.hipProcedural, hip rounds kick procedurally too wherever the gun is simply
-    // being held (idle, walking, or still settling from a shot); anywhere else (sprinting, an
-    // inspect) the trigger still goes through the controller's Fire state, which cuts it short.
-    const bool hipProcedural = m_Set.Procedural.Recoil.HipProcedural &&
-                               (ac->HasTag(K::kTagIdle) || ac->HasTag(K::kTagReady));
-    if (ads || hipProcedural) {
-        // Each round starts its own recoil curves; full-auto overlaps them into a climb.
-        m_Procedural.OnShot(m_Set.Procedural, ads);
-        m_SinceShot = 0.0f;
-        --m_Ammo;
-        ShotImpact();
-        OnRoundSpent();
-        m_IdleTime = 0.0f; // shooting isn't settling: no fidget mid-burst
-        return true;
-    }
-    // Hip fire: the controller plays Fire (or refuses, e.g. mid-reload); the round is spent -
-    // and the hip recoil kicks - on its Shot event, so a refused trigger costs nothing.
-    ac->SetTrigger(K::kFire);
-    return true;
+    const auto f=RunGameplay(1);
+    if(f.Commands&2) CommitShot((f.Tags&16)!=0,true);
+    return f.Result!=0;
+}
+
+void FirstPersonPresentation::CommitShot(bool ads, bool cycleBolt) {
+    const auto mode = m_FullAuto ? RecoilFireMode::Auto :
+        m_Set.Gameplay.BurstRounds > 1 ? RecoilFireMode::Burst : RecoilFireMode::Semi;
+    m_Procedural.OnShot(m_Set.Procedural, ads, cycleBolt, m_Set.Gameplay.RoundsPerMinute, mode,
+                        Time::UnscaledTimeSinceStartup(), Time::DeltaTime());
+    if(m_Options.OwnerView && !m_Set.CameraShakeProfile.empty()) m_CameraShake.Trigger(m_Set.CameraShake,ads);
+    RunGameplay(2);
+    ShotImpact();
+
 }
 
 void FirstPersonPresentation::FireShot() {
     const auto& g = m_Set.Gameplay;
     if (!m_World || !m_AimPointValid) return;
-    // A shotgun's round is several pellets, each down its own line inside the spread cone; the
-    // round's shove is shared between them.
-    const float spread = HasTag(K::kTagAds) ? g.SpreadAds : g.SpreadHip;
-    const int pellets = std::max(1, g.Pellets);
-    std::uniform_real_distribution<float> unit(0.0f, 1.0f);
     glm::vec3 line = m_BoreDir;
     if (m_HasShotTarget && glm::length(m_ShotTarget - m_Muzzle) > 1e-3f) line = glm::normalize(m_ShotTarget - m_Muzzle);
-    for (int p = 0; p < pellets; ++p) {
-        const glm::vec3 dir = pellets > 1 || spread > 0.0f ? FirstPersonPelletDirection(line, spread, unit(m_Rng), unit(m_Rng))
-                                                           : line;
-        const float o[3] = {m_Muzzle.x, m_Muzzle.y, m_Muzzle.z}, d[3] = {dir.x, dir.y, dir.z};
-        RaycastHit hit;
-        QueryFilter filter;
-        filter.HitTriggers = 0;
-        const bool recording = PhysicsWorld::GetQueryRecording();
-        PhysicsWorld::SetQueryRecording(false);
-        const bool struck = PhysicsWorld::RaycastFiltered(o, d, 300.0f, filter, hit) && hit.Hit;
-        PhysicsWorld::SetQueryRecording(recording);
+    Scripting::ShotFrame frame;
+    frame.Origin={m_Muzzle.x,m_Muzzle.y,m_Muzzle.z}; frame.Direction={line.x,line.y,line.z};
+    frame.Spread=HasTag(K::kTagAds)?g.SpreadAds:g.SpreadHip;
+    frame.ImpactImpulse=g.ImpactImpulse; frame.ImpactMaxSpeed=g.ImpactMaxSpeed;
+    frame.BulletHoleRadius=g.BulletHoleRadius; frame.Range=300; frame.Pellets=g.Pellets;
+    frame.RandomSeed=static_cast<std::int32_t>(m_Rng());
+    int pellet=0;
+    Scripting::InvokeShot(*m_World,frame,[&](const Scripting::NativeRequest& trace) {
+        const glm::vec3 origin(trace.A.x,trace.A.y,trace.A.z), point(trace.B.x,trace.B.y,trace.B.z);
+        const bool struck=trace.Result!=0;
         if (m_ShotTraces.size() < 256)
-            m_ShotTraces.push_back({m_Muzzle, struck ? glm::vec3(hit.Point[0], hit.Point[1], hit.Point[2]) : m_Muzzle + dir * 300.0f,
-                                    struck, p == 0, struck ? hit.Entity : 0xFFFFFFFFu});
-        if (!struck) continue;
-        // Bounded, in case nothing drains it (no renderer this session).
-        if (m_ShotHits.size() < 256)
-            m_ShotHits.push_back({glm::vec3(hit.Point[0], hit.Point[1], hit.Point[2]),
-                                  glm::vec3(hit.Normal[0], hit.Normal[1], hit.Normal[2]), hit.Entity, g.BulletHoleRadius,
-                                  m_Muzzle, dir, pellets});
-        if (g.ImpactImpulse <= 0.0f) continue;
-        const auto e = static_cast<entt::entity>(hit.Entity);
-        const auto* rb = m_World->Registry.valid(e) ? m_World->Registry.try_get<RigidbodyComponent>(e) : nullptr;
-        if (!rb || rb->IsKinematic) continue;
-        // Light props: capped at ImpactMaxSpeed of velocity change; heavy ones just get the impulse.
-        float impulse = g.ImpactImpulse;
-        if (g.ImpactMaxSpeed > 0.0f) impulse = std::min(impulse, g.ImpactMaxSpeed * std::max(rb->Mass, 0.01f));
-        const glm::vec3 j = dir * (impulse / (float)pellets);
-        const float jv[3] = {j.x, j.y, j.z};
-        PhysicsWorld::AddForceAtPosition(hit.Entity, jv, hit.Point, ForceMode::Impulse);
-    }
+            m_ShotTraces.push_back({origin,point,struck,pellet==0,trace.Entity});
+        if(struck && m_ShotHits.size()<256) {
+            const glm::vec3 delta=point-origin;
+            const glm::vec3 direction=glm::length(delta)>1e-6f?glm::normalize(delta):line;
+            m_ShotHits.push_back({point,{trace.C.x,trace.C.y,trace.C.z},trace.Entity,trace.Value,
+                                  origin,direction,std::max(1,frame.Pellets)});
+        }
+        ++pellet;
+    });
 }
 
 void FirstPersonPresentation::RefillAmmo() {
@@ -1305,13 +1460,6 @@ void FirstPersonPresentation::RefillAmmo() {
     m_Chambered = true;
     m_CycleWait = 0.0f;
     if (auto* ac = Animator()) ac->SetInt(K::kAmmo, m_Ammo);
-}
-
-void FirstPersonPresentation::OnRoundSpent() {
-    if (!m_Set.Gameplay.CycleAfterShot) return;
-    m_Chambered = false;
-    m_CycleSeen = false;
-    m_CycleWait = m_Set.Gameplay.CycleDelay;
 }
 
 void FirstPersonPresentation::SelectSlot(int slot) {
@@ -1358,59 +1506,54 @@ void FirstPersonPresentation::SwapToPendingSlot() {
 }
 
 void FirstPersonPresentation::ToggleFireMode() {
-    if (!IsActive() || !m_Equipped) return;
-    if (!m_Set.Gameplay.AllowFullAuto) {
-        Log::Info("Fire mode: Semi-Auto (this weapon has no full-auto)");
-        return;
-    }
-    m_FullAuto = !m_FullAuto;
-    WeaponSound(*this, m_SetFile, m_Options.OwnerView, "firemode");
-    Log::Info(std::string("Fire mode: ") + (m_FullAuto ? "Full-Auto" : "Semi-Auto"));
+    if(!IsActive()||!m_Equipped) return;
+    const auto f=RunGameplay(6);
+    if(f.Result) WeaponSound(*this,m_SetFile,m_Options.OwnerView,"firemode");
+    Log::Info(std::string("Fire mode: ")+(m_FullAuto?"Full-Auto":"Semi-Auto"));
 }
 
 void FirstPersonPresentation::UpdateTrigger(bool pressed, bool held) {
-    if (m_FullAuto) {
-        if (!held || m_FireCooldown > 0.0f) return;
-    } else if (!pressed) {
-        return;
-    }
-    if (Fire()) m_FireCooldown = 60.0f / m_Set.Gameplay.RoundsPerMinute;
+    const auto request=RunGameplay(3,0.0f,pressed,held);
+    if(!request.Result) return;
+    const bool fired=Fire();
+    const auto result=RunGameplay(4,0.0f,fired,held);
+    m_Procedural.SetFiring(result.Result!=0);
 }
 
 void FirstPersonPresentation::UpdateReloadKey(bool down, float dt) {
-    switch (m_ReloadKey.Update(down, dt)) {
-        case FirstPersonReloadInput::Reload: Reload(); break;
-        case FirstPersonReloadInput::MagCheck: TriggerAction(K::kMagCheck); break;
-        case FirstPersonReloadInput::None: break;
-    }
+    const auto f=RunGameplay(9,dt,false,down);
+    if(f.Result) Reload();
 }
 
 bool FirstPersonPresentation::Reload() {
-    auto* ac = Animator();
-    if (!ac || !m_Equipped || ac->HasTag(K::kTagReload) || m_Ammo >= m_Set.Gameplay.Magazine) return false;
-    m_StopReload = false;
-    ac->SetBool(K::kStopReload, false);
-    ac->SetInt(K::kAmmo, m_Ammo);
-    ac->SetTrigger(K::kReload);
-    return true;
+    return RunGameplay(5).Result!=0;
 }
 
 bool FirstPersonPresentation::TriggerAction(const std::string& trigger) {
     auto* ac = Animator();
     if (!ac || !m_Equipped || ac->HasTag(K::kTagHidden)) return false;
     ac->SetTrigger(trigger);
+    m_BurstRemaining = 0;
+    m_Procedural.EndBurst();
+    m_Procedural.SetFiring(false);
     return true;
 }
 
 void FirstPersonPresentation::SetEquipped(bool equipped) {
     if (!IsActive()) return;
-    if (!equipped) m_PendingSlot = -1;
+    if (!equipped) {
+        m_PendingSlot = -1;
+        m_BurstRemaining = 0;
+        m_Procedural.EndBurst();
+        m_Procedural.SetFiring(false);
+    }
     if (equipped != m_Equipped) GearSound(*this, m_SetFile, m_Options.OwnerView, equipped);
     m_Equipped = equipped;
     if (auto* ac = Animator()) ac->SetBool(K::kEquipped, equipped);
 }
 
 void FirstPersonPresentation::Tick(float dt, const glm::vec3& velocity, bool sprinting, bool aiming, float lean, bool grounded) {
+    sprinting=sprinting && !aiming && !ReloadBlocksSprint();
     m_PlayerVelocity = velocity;
     auto* ac = Animator();
     if (!ac) return;
@@ -1420,14 +1563,11 @@ void FirstPersonPresentation::Tick(float dt, const glm::vec3& velocity, bool spr
         return;
     }
     if (m_Options.HotReload) ReloadIfChanged(dt);
-    const FirstPersonWeaponGameplay& g = m_Set.Gameplay;
-    const float planarSpeed = glm::length(glm::vec2(velocity.x, velocity.z));
-    m_FireCooldown = std::max(0.0f, m_FireCooldown - dt);
-
-    ac->SetFloat(K::kSpeed, planarSpeed);
-    m_PlanarSpeed = planarSpeed;
-    m_SinceShot += dt;
-    m_SinceUnhidden = ac->HasTag(K::kTagHidden) ? 0.0f : m_SinceUnhidden + dt;
+    RunGameplay(7,dt);
+    const FirstPersonWeaponGameplay& g=m_Set.Gameplay;
+    const float planarSpeed=glm::length(glm::vec2(velocity.x,velocity.z));
+    ac->SetFloat(K::kSpeed,WeaponAnimationInputSpeed(planarSpeed,m_SwayMoveInput,m_HaveSwayMoveInput,m_WalkSpeed));
+    m_PlanarSpeed=planarSpeed;
     ac->SetBool(K::kSprint, sprinting);
     // The aim press drives the corner peek, even up against cover; tucked off a wall with no
     // peek to lean out on, the sights can't come up.
@@ -1436,10 +1576,20 @@ void FirstPersonPresentation::Tick(float dt, const glm::vec3& velocity, bool spr
     m_Aiming = aiming;
     if (WallBlocked() && m_PeekSide == 0) aiming = false;
     ac->SetBool(K::kAim, aiming);
-    m_AdsHold = m_Set.Ads.AimHoldTime > 0.0f
-                    ? std::clamp(m_AdsHold + (aiming ? dt : -dt) / m_Set.Ads.AimHoldTime, 0.0f, 1.0f)
+    // Respond to movement intent before acceleration/collision smoothing. The animation's
+    // eased crossfade supplies the visual softness; waiting for speed stacks another delay
+    // on entry and keeps walking after the player releases movement. Scripted/NPC callers
+    // without action axes retain the velocity fallback.
+    const bool walkIntent=m_HaveSwayMoveInput?glm::length(m_SwayMoveInput)>0.05f:planarSpeed>0.05f;
+    ac->SetBool("AimWalk", aiming && m_Equipped && walkIntent); // compatibility for older ADS-only controllers
+    const float aimBlendTime=m_Set.Procedural.Aim.BlendTime;
+    ac->SetFloat("TransitionDuration:"+(m_Set.Ads.ReferenceState.empty()?std::string("Aim"):m_Set.Ads.ReferenceState),aimBlendTime);
+    m_AdsHold = aimBlendTime > 0.0f
+                    ? std::clamp(m_AdsHold + (aiming ? dt : -dt) / aimBlendTime, 0.0f, 1.0f)
                     : (aiming ? 1.0f : 0.0f);
     m_TickDt = dt;
+    ac->SetFloat("LayerWeight:Weapon Locomotion",glm::mix(1.0f,m_Set.AdsLocomotionScale,m_AdsHold));
+    ac->SetFloat("LayerWeight:Weapon Walk",glm::mix(1.0f,m_Set.AdsLocomotionScale,m_AdsHold));
     // ADS zoom: in while the sights are up - Aim, or a reload / mag check carried onto them -
     // and out otherwise. A critically damped spring eases both ends, and a re-press mid-way
     // turns around smoothly instead of restarting.
@@ -1476,30 +1626,15 @@ void FirstPersonPresentation::Tick(float dt, const glm::vec3& velocity, bool spr
     // A tube loaded a round at a time: the load loop leaves on LastRound (load it and finish) or
     // StopReload (the trigger was pulled: finish the round in hand), which lasts the reload out.
     if (g.Reload == FirstPersonWeaponGameplay::ReloadMode::PerRound) {
-        if (!ac->HasTag(K::kTagReload)) m_StopReload = false;
         ac->SetBool(K::kLastRound, m_Ammo >= g.Magazine - 1);
         ac->SetBool(K::kStopReload, m_StopReload);
     }
-    // A manual action: CycleDelay after the round, work it (the Cycle trigger, retried until the
-    // controller takes it - it waits out a reload or a draw); chambered once that state is done.
-    if (g.CycleAfterShot && !m_Chambered) {
-        if (ac->HasTag(K::kTagCycling)) {
-            m_CycleSeen = true;
-        } else if (m_CycleSeen) {
-            m_Chambered = true;
-        } else {
-            m_CycleWait -= dt;
-            if (m_CycleWait <= 0.0f && m_Equipped && !ac->HasTag(K::kTagHidden)) ac->SetTrigger(K::kCycle);
-        }
-    }
-
     // The procedural stack, fed from what the controller is doing and how the camera moved.
     WeaponProceduralInput in;
     in.Dt = dt;
     if (m_HaveLook && dt > 0.0f) {
-        float yaw = m_LookYaw - m_PrevLookYaw;
-        yaw = std::remainder(yaw, 360.0f); // yaw is unbounded; never read a wrap as a flick
-        in.LookRate = glm::vec2(yaw, m_LookPitch - m_PrevLookPitch) / dt;
+        in.LookRate = glm::vec2(m_PlayerLookDelta.y, m_PlayerLookDelta.x) / dt;
+        m_PlayerLookDelta = glm::vec2(0.0f);
     }
     m_PrevLookYaw = m_LookYaw;
     m_PrevLookPitch = m_LookPitch;
@@ -1510,7 +1645,8 @@ void FirstPersonPresentation::Tick(float dt, const glm::vec3& velocity, bool spr
     in.WallDistance = m_Equipped ? m_WallDistance : -1.0f;
     in.WallFacesUp = m_WallFacesUp;
     in.WallSide = m_WallSide;
-    in.Ads = ac->HasTag(K::kTagAds);
+    in.Ads = aiming && m_Equipped;
+    // Aim intent starts both blends together; carried actions already ease through m_AdsHold.
     in.IKOff = ac->HasTag(K::kTagHidden) || (!m_Set.Procedural.IK.OffTag.empty() && ac->HasTag(m_Set.Procedural.IK.OffTag.c_str()));
     m_IKCurves = m_Controller ? SampleIKCurves(m_Set.Procedural.IK, *m_Controller, *ac) : IKCurveWeights{};
     in.IKCurve = m_IKCurves.All;
@@ -1521,22 +1657,25 @@ void FirstPersonPresentation::Tick(float dt, const glm::vec3& velocity, bool spr
     in.StateName = &ac->StateName;
     in.StateTags = &ac->StateTags;
     const WeaponProceduralPose& pose = m_Procedural.Update(m_Set.Procedural, in);
+    m_ShakePose=m_CameraShake.Update(dt);
     ac->SetFloat(K::kWalkRate, pose.WalkRate);
     ac->SetFloat(K::kSprintRate, pose.SprintRate);
+    if (m_Set.Procedural.Sway.UnityPort && m_Set.Procedural.Sway.Enabled && m_ArmsModel) {
+        glm::vec2 move=m_SwayMoveInput;
+        if (!m_HaveSwayMoveInput) {
+            move={in.Velocity.x,-in.Velocity.z};
+            move/=std::max(m_WalkSpeed,0.01f);
+            if (glm::length(move)>1) move=glm::normalize(move);
+        }
+        const bool valid=m_ArmsModel->NodeIndex(m_Set.Procedural.Sway.Unity.WeaponBone)>=0;
+        const auto sway=m_Sway.Update(m_Set.Procedural.Sway.Unity,move,m_SwayLookInput,aiming,dt,pose.IKWeight,valid);
+        if (auto* rig=m_World->Registry.try_get<IKRigComponent>(m_Arms)) rig->SwayPose=sway;
+    }
+    m_SwayLookInput=glm::vec2(0);
+    m_HaveSwayMoveInput=false;
     WriteIK();
 
-    // The occasional fidget only interrupts a settled idle, never a pose the player asked for.
-    if (m_Equipped && ac->HasTag(K::kTagIdle) && !ac->InTransition) {
-        m_IdleTime += dt;
-        if (m_IdleTime >= m_RegripDelay) {
-            ac->SetTrigger(K::kFidget);
-            m_RegripDelay = FirstPersonRegripDelay(std::uniform_real_distribution<float>(0.0f, 1.0f)(m_Rng),
-                                                   g.RegripMin, g.RegripMax);
-            m_IdleTime = 0.0f;
-        }
-    } else {
-        m_IdleTime = 0.0f;
-    }
+
 }
 
 void FirstPersonPresentation::RemoveViewKick(Camera& camera) {
@@ -1556,6 +1695,18 @@ void FirstPersonPresentation::Update(World& world, Camera& camera) {
     RemoveViewKick(camera);
     m_LookYaw = camera.Yaw;
     m_LookPitch = camera.Pitch;
+    glm::vec2 controllerInput(0.0f);
+    if (m_HavePlayerLookBaseline) {
+        const glm::vec2 delta(camera.Pitch - m_PlayerLookBaseline.x,
+                             std::remainder(camera.Yaw - m_PlayerLookBaseline.y, 360.0f));
+        m_PlayerLookDelta += delta;
+        controllerInput = delta;
+    }
+    if (m_Set.Procedural.Recoil.UnityPort && m_HaveRawLookInput) controllerInput=m_RawLookInput;
+    const glm::vec2 swayLook=m_HaveRawLookInput?m_RawLookInput:controllerInput;
+    m_SwayLookInput+=glm::vec2(swayLook.y,swayLook.x);
+    if (m_Set.Procedural.Recoil.UnityPort || m_Set.Procedural.Recoil.AimCompensation) m_Procedural.CompensateAim(controllerInput);
+    m_HaveRawLookInput=false;
     if (!m_HaveLook) {
         m_PrevLookYaw = m_LookYaw;
         m_PrevLookPitch = m_LookPitch;
@@ -1570,10 +1721,14 @@ void FirstPersonPresentation::Update(World& world, Camera& camera) {
     if (m_Options.CornerPeek) UpdateCornerPeek(camera);
     // Aim climb: unlike the punch below it stays - the player has to pull it back down.
     {
-        const glm::vec2 climb = m_Procedural.Pose().AimKick;
+        const glm::vec2 climb = m_Procedural.ConsumeAimKick();
+        const float before = camera.Pitch;
         camera.Pitch = std::clamp(camera.Pitch + climb.x, -89.0f, 89.0f);
         camera.Yaw += climb.y;
+        m_Procedural.DiscardClampedAim(glm::vec2(climb.x - (camera.Pitch - before), 0.0f));
     }
+    m_PlayerLookBaseline = glm::vec2(camera.Pitch, camera.Yaw);
+    m_HavePlayerLookBaseline = true;
     // Recoil view punch and lean, on the camera the whole frame renders from.
     {
         const WeaponProceduralPose& p = m_Procedural.Pose();
@@ -1634,21 +1789,14 @@ void FirstPersonPresentation::Update(World& world, Camera& camera) {
     auto* ac = world.Registry.try_get<AnimatorControllerComponent>(m_Arms);
     if (ac) {
         // What the controller did last frame: rounds spent on hip fire, a reload that landed.
-        if (ac->EventFired(K::kEventShot)) {
-            m_Ammo = std::max(0, m_Ammo - 1);
-            m_Procedural.OnShot(m_Set.Procedural, false, /*cycleBolt=*/false); // the Fire clip cycles it
-            m_SinceShot = 0.0f;
-            ShotImpact();
-            OnRoundSpent();
+        if (m_WaitingAnimatedShot && ac->EventFired(K::kEventShot) && m_Set.RecoilProfile.empty() && !m_Set.Procedural.Recoil.HipProcedural &&
+            !ac->HasTag(K::kTagAds)) {
+            m_WaitingAnimatedShot = false;
+            CommitShot(false, false);
         }
         if (ac->EventFired(K::kEventEject) && m_Set.Eject.Enabled && m_Set.Eject.When == FirstPersonEjectSettings::Trigger::Event)
             ++m_PendingEjects; // the action worked: the spent hull comes out
-        if (ac->EventFired(K::kEventRefill)) m_Ammo = m_Set.Gameplay.Magazine;
-        if (ac->EventFired(K::kEventLoadRound)) {
-            // Into an empty gun the load clip chambers it itself (the empty start works the pump).
-            if (m_Ammo == 0) m_Chambered = true;
-            m_Ammo = std::min(m_Set.Gameplay.Magazine, m_Ammo + 1);
-        }
+        RunGameplay(8,0.0f,false,false,(ac->EventFired(K::kEventRefill)?1:0)|(ac->EventFired(K::kEventLoadRound)?2:0));
         // The audio the controller's states carry: events named snd.<gun>.<element> play that set.
         for (const std::string& e : ac->FiredEvents)
             if (e.rfind("snd.", 0) == 0) WeaponSound(*this, m_SetFile, m_Options.OwnerView, e);
@@ -1726,12 +1874,28 @@ void FirstPersonPresentation::UpdateCornerPeek(const Camera& camera) {
     m_PeekLean = (float)m_PeekSide * amount;
 }
 
-void FirstPersonPresentation::LateUpdate(World& world, const Camera& camera) {
+void FirstPersonPresentation::LateUpdate(World& world, Camera& camera) {
     if (!IsActive()) return;
     // Again once the animators have run: the frame Holster hands over to Holstered would
     // otherwise render visible, in Holstered's pose (Holster's first frame).
     ApplyHidden(world);
-    PlaceRigs(world, camera);
+    Camera placementCamera=camera;
+    if(m_Options.OwnerView && m_ArmsModel && m_Controller && m_Assets) {
+        CameraEffectPose action;
+        if(const auto* ac=Animator())
+            action=AnimatorActionCamera(*m_ArmsModel,m_WeaponModel.get(),*m_Assets,*m_Controller,*ac,
+                m_Set.ActionCamera,m_CameraBone,QuaternionFromEulerYXZ(m_Set.ViewRotation)*QuaternionFromEulerYXZ(m_Rotation),m_Scale,m_Zoom);
+        const glm::vec3 before(camera.Pitch,camera.Yaw,camera.Roll),position=camera.Position;
+        // The rig already subtracts its animated eye anchor. Carry it through the authored
+        // translation once; shake remains camera-only and must not drag the gun with it.
+        placementCamera.Position+=glm::mat3(camera.Right(),camera.Up(),-camera.Front())*action.Position;
+        ApplyCameraEffect(camera,action);
+        ApplyCameraEffect(camera,m_ShakePose);
+        m_KickAngles+=glm::vec3(camera.Pitch,camera.Yaw,camera.Roll)-before;
+        m_KickOffset+=camera.Position-position;
+        m_KickApplied=true;
+    }
+    PlaceRigs(world, camera,&placementCamera);
     for (; m_PendingShots > 0; --m_PendingShots) FireShot();
     for (; m_PendingEjects > 0; --m_PendingEjects) Eject();
 }
@@ -1783,8 +1947,9 @@ void FirstPersonPresentation::UpdateSpareMagazine(const glm::vec3& armsPos, cons
     }
 }
 
-void FirstPersonPresentation::PlaceRigs(World& world, const Camera& camera) {
-    const glm::quat cameraRotation = CameraRotation(camera);
+void FirstPersonPresentation::PlaceRigs(World& world, const Camera& camera,const Camera* placementCamera) {
+    const Camera& placement=placementCamera?*placementCamera:camera;
+    const glm::quat cameraRotation = CameraRotation(placement);
     // Without IK (switched off, or a rig lacking the gun bone or arm chains) the procedural pose
     // moves the whole view model about the eye instead, in the camera's own frame - faded by the
     // same weight IK uses, so Off-tagged states still play as authored.
@@ -1812,7 +1977,7 @@ void FirstPersonPresentation::PlaceRigs(World& world, const Camera& camera) {
     // Without IK, an ADS reload / mag check carries the whole rig instead (the IK path moves only
     // the gun - see WriteIK), by that clip's correction C about the camera bone:
     //     world(x) = camera + rotation * scale * (C.R * (x - bone) + C.T)
-    glm::vec3 position = camera.Position;
+    glm::vec3 position = placement.Position;
     glm::quat actionR(1.0f, 0.0f, 0.0f, 0.0f);
     glm::vec3 actionT(0.0f);
     if (!m_UsesIK) {
@@ -1831,6 +1996,7 @@ void FirstPersonPresentation::PlaceRigs(World& world, const Camera& camera) {
                   "' bone; placing the view model's root on the camera instead.");
     }
     position += cameraRotation * (m_Offset + procPosition);
+    if (m_Options.OwnerView) position += cameraRotation * m_Set.ViewPosition;
 
     // The hip carry (Aim.HipPosition / HipRotation): the whole rig, arms and gun together, turned
     // about the gun socket and moved in the camera's frame, by how far the sights are down. Rigid,

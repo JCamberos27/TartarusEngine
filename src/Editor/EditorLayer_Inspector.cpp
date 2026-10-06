@@ -31,6 +31,11 @@
 #include "EditorUIHelpers.h"
 #include "AssetImporterInspector.h"
 #include "ComponentRegistry.h"
+#include "ParticleSystem.h"
+#include "CurveEditor.h"
+#include "Scripting/ScriptRuntime.h"
+#include "Scripting/ScriptComponent.h"
+#include <json.hpp>
 #include "ProjectSettings.h" // project-defined tag vocabulary for the Tag dropdown (#236 A4)
 #include "LayerRegistry.h"
 #include "Profiler.h"
@@ -168,6 +173,7 @@ AssetPathPickerOptions AssetPathFieldOptions(const char* component, const char* 
     static const char* const kController[] = {".controller", nullptr};
     static const char* const kScript[]     = {".tescript", nullptr};
     static const char* const kWeapon[]     = {".fpsanim", nullptr};
+    static const char* const kPrefab[]     = {".prefab", nullptr};
     static const char* const kWardrobe[]   = {".wardrobe", nullptr};
     AssetPathPickerOptions o;
     auto is = [&](const char* c, const char* f) { return !std::strcmp(component, c) && !std::strcmp(field, f); };
@@ -175,7 +181,9 @@ AssetPathPickerOptions AssetPathFieldOptions(const char* component, const char* 
         o.Extensions = kController; o.DragPayload = "ASSET_FILE_PATH"; o.DialogFilter = "Animator Controller\0*.controller\0All Files\0*.*\0";
     } else if (is("Transform Controller", "Script Path")) {
         o.Extensions = kScript; o.DragPayload = "ASSET_FILE_PATH"; o.DialogFilter = "Scripts\0*.tescript\0All Files\0*.*\0";
-    } else if (!std::strcmp(component, "First Person Controller")) {
+    } else if (is("First Person Controller", "Primary Weapon Prefab") || is("First Person Controller", "Secondary Weapon Prefab")) {
+        o.Extensions = kPrefab; o.DragPayload = "ASSET_PREFAB_PATH"; o.DialogFilter = "Weapon Prefab\0*.prefab\0All Files\0*.*\0";
+    } else if (!std::strcmp(component, "First Person Controller") || is("Weapon Definition", "Animation Set")) {
         o.Extensions = kWeapon; o.DragPayload = "ASSET_FILE_PATH"; o.DialogFilter = "Weapon Animation Set\0*.fpsanim\0All Files\0*.*\0";
     } else if (is("Character Outfit", "Wardrobe")) {
         o.Extensions = kWardrobe; o.DragPayload = "ASSET_FILE_PATH"; o.DialogFilter = "Wardrobe\0*.wardrobe\0All Files\0*.*\0";
@@ -1922,7 +1930,8 @@ void EditorLayer::DrawReflectedField(World& world, AssetLibrary& assets, const R
             if (payloadType && ImGui::BeginDragDropTarget()) {
                 const ImGuiPayload* p = ImGui::AcceptDragDropPayload(payloadType);
                 if (p && f.AssetKind == ReflectAssetKind::Script &&
-                    std::filesystem::path((const char*)p->Data).extension() != ".tescript") p = nullptr;
+                    std::filesystem::path((const char*)p->Data).extension() != ".tescript" &&
+                    std::filesystem::path((const char*)p->Data).extension() != ".cs") p = nullptr;
                 if (p) {
                     std::string path((const char*)p->Data);
                     StageUndo(world);
@@ -2367,14 +2376,20 @@ void EditorLayer::DrawInspectorBody(World& world, AssetLibrary& assets) {
         // No scene entity selected — fall back to whatever's selected in the Asset Browser, if
         // anything, and show its Import Settings instead of just an empty placeholder.
         if (!m_SelectedAssetKey.empty() && !m_SelectedAssetIsFolder) {
+            ImGui::PushID(m_SelectedAssetKey.c_str());
             if (LowerExt(m_SelectedAssetKey) == ".mat")
                 DrawMaterialAssetEditor(world, assets, m_SelectedAssetKey);
             else if (LowerExt(m_SelectedAssetKey) == ".fpsanim")
                 DrawWeaponDefinitionEditor(m_SelectedAssetKey);
+            else if (LowerExt(m_SelectedAssetKey) == ".recoil")
+                DrawRecoilAssetEditor(m_SelectedAssetKey);
+            else if (LowerExt(m_SelectedAssetKey) == ".camerashake")
+                DrawCameraShakeAssetEditor(m_SelectedAssetKey);
             else if (LowerExt(m_SelectedAssetKey) == ".controller")
                 DrawControllerAssetInspector(m_SelectedAssetKey);
             else
                 DrawAssetImportInspector(world, assets, m_SelectedAssetKey);
+            ImGui::PopID();
             InspectorEnd();
             return;
         }
@@ -3005,6 +3020,10 @@ void EditorLayer::DrawInspectorBody(World& world, AssetLibrary& assets) {
                 return true;
             };
             DrawReflectedComponentExtra(rc.Meta.Name, world, entity, ReflectExtraPhase::Top);
+            if(DrawManagedInspector(world,assets,entity,rc.Meta.Name)) {
+                DrawReflectedComponentExtra(rc.Meta.Name,world,entity,ReflectExtraPhase::Bottom);
+                EndComponentSection();continue;
+            }
             const char* openGroup = nullptr; // current TreeNode group, nullptr = none
             bool groupNodeOpen = true;       // false = current group's node is collapsed
             // #6 Defect #44 — a one-element selection so the field switch below (shared with
@@ -3017,7 +3036,10 @@ void EditorLayer::DrawInspectorBody(World& world, AssetLibrary& assets) {
                     openGroup = f.Group;
                     if (openGroup) {
                         ImGui::Spacing();
-                        groupNodeOpen = ImGui::TreeNodeEx(openGroup, ImGuiTreeNodeFlags_SpanAvailWidth);
+                        // Separate groups can share a display label (e.g. several Arms groups).
+                        // Use their first field's stable key for independent IDs and open state.
+                        const std::string groupId=std::string("##group:")+(f.Key?f.Key:f.Name);
+                        groupNodeOpen = ImGui::TreeNodeEx(groupId.c_str(), ImGuiTreeNodeFlags_SpanAvailWidth, "%s", openGroup);
                     }
                 }
                 if (openGroup && !groupNodeOpen) continue; // collapsed group — skip its fields
@@ -3402,6 +3424,173 @@ void EditorLayer::DrawReflectedComponentExtra(const char* componentName, World& 
                                               entt::entity entity, ReflectExtraPhase phase) {
     auto& registry = world.Registry;
 
+    if(std::strcmp(componentName,"Particle System")==0 && phase==ReflectExtraPhase::Bottom) {
+        auto* ps=registry.try_get<ParticleSystemComponent>(entity);if(!ps)return;
+        if(ImGui::Button("Restart"))RestartParticleSystem(*ps);
+        ImGui::SameLine();
+        if(ImGui::Button("Emit Burst"))EmitParticleBurst(world,entity,std::max(1,ps->BurstCount));
+        ImGui::SameLine();if(ImGui::Button("Clear"))ps->Live.clear();
+        ImGui::TextDisabled("%zu / %d particles",ps->Live.size(),ps->MaxParticles);
+        if(ImGui::CollapsingHeader("Lifetime & Emission Curves")) {
+            if(ps->EditorCurveIdentity.empty()) {
+                PushUndo(world,"Initialize Particle Curves");ps->EditorCurveIdentity=AssetGuid::Generate().ToString();
+            }
+            const std::string identity=ps->EditorCurveIdentity;
+            const auto* orderComponent=registry.try_get<OrderComponent>(entity);
+            const int order=orderComponent?orderComponent->Value:-1;
+            const std::string ownerScene=m_CurrentScenePath,ownerPrefab=m_PrefabModePath;
+            const std::pair<const char*,std::string ParticleSystemComponent::*> fields[]={
+                {"Size over life",&ParticleSystemComponent::SizeCurve},
+                {"Alpha over life",&ParticleSystemComponent::AlphaCurve},
+                {"Speed over life",&ParticleSystemComponent::SpeedCurve},
+                {"Emission over cycle",&ParticleSystemComponent::EmissionCurve}};
+            for(const auto& field:fields) {
+                Curve curve=Curve::Constant(1);Curve::FromJson(nlohmann::json::parse(ps->*field.second,nullptr,false),curve);
+                CurveEditor::Options options;options.Title=field.first;
+                ImGui::TextUnformatted(field.first);
+                const auto member=field.second;
+                auto valid=[this,&world,order,identity,ownerScene,ownerPrefab]()->ParticleSystemComponent* {
+                    if(m_CurrentScenePath!=ownerScene||m_PrefabModePath!=ownerPrefab)return nullptr;
+                    for(auto [e,p,o]:world.Registry.view<ParticleSystemComponent,OrderComponent>().each())
+                        if(o.Value==order && p.EditorCurveIdentity==identity)return &p;
+                    return nullptr;
+                };
+                CurveEditor::DrawBound(field.first,curve,{0,50},options,
+                    "Particles "+identity+" "+std::to_string(order)+" - "+field.first,
+                    [valid,member](Curve& c,std::string& error) {
+                        auto* p=valid();if(!p){error="This emitter was removed or its scene was replaced.";return false;}
+                        return Curve::FromJson(nlohmann::json::parse(p->*member,nullptr,false),c);
+                    },
+                    [this,&world,valid,member](const Curve& c,std::string& error) {
+                        auto* p=valid();if(!p){error="This emitter was removed or its scene was replaced.";return false;}
+                        PushUndo(world,"Edit Particle Curve");p->*member=c.ToJson(false).dump();return true;
+                    });
+            }
+        }
+        return;
+    }
+
+    if(std::strcmp(componentName,"C# Script")==0 && phase==ReflectExtraPhase::Top) {
+        auto* component=registry.try_get<CSharpScriptComponent>(entity); if(!component) return;
+        using Json=nlohmann::json;
+        try {
+            auto slots=Scripting::GetSlots(*component);
+            const Json types=Json::parse(Scripting::Describe());
+            const auto classes=types.value("classes",std::vector<std::string>{});
+            if(Scripting::Building() || Scripting::BuildPending()) ImGui::TextDisabled("Compiling C#...");
+            auto persist=[&](bool changed,bool immediate=false) {
+                if(ImGui::IsItemActivated() || (changed && immediate)) StageUndo(world);
+                if(changed) Scripting::SetSlots(*component,slots);
+                if((changed && immediate) || ImGui::IsItemDeactivatedAfterEdit()) CommitStagedUndo(world,"Edit C# Script");
+            };
+            int remove=-1;
+            for(size_t index=0;index<slots.size();++index) {
+                auto& slot=slots[index]; ImGui::PushID(static_cast<int>(slot.Id));
+                const auto dot=slot.Class.find_last_of('.');
+                const std::string label=slot.Class.substr(dot==std::string::npos?0:dot+1);
+                const bool open=ImGui::TreeNodeEx("##behaviour",ImGuiTreeNodeFlags_DefaultOpen | ImGuiTreeNodeFlags_SpanAvailWidth,
+                                                "%s (Script)",label.empty()?"Choose a class":label.c_str());
+                if(open) {
+                    PropertyLabel("Enabled"); persist(ImGui::Checkbox("##enabled",&slot.Enabled),true);
+                    PropertyLabel("Script"); ImGui::SetNextItemWidth(-FLT_MIN);
+                    if(ImGui::BeginCombo("##class",slot.Class.empty()?"(choose a class)":slot.Class.c_str())) {
+                        for(const auto& name:classes) if(ImGui::Selectable(name.c_str(),name==slot.Class)) {
+                            slot.Class=name; slot.Fields="{}"; persist(true,true);
+                        }
+                        ImGui::EndCombo();
+                    }
+                    PropertyLabel("Source"); ImGui::SetNextItemWidth(-FLT_MIN);
+                    static const char* const extensions[]={".cs",nullptr};
+                    AssetPathPickerOptions options; options.Extensions=extensions; options.DragPayload="ASSET_FILE_PATH";
+                    options.DialogFilter="C# Script\0*.cs\0All Files\0*.*\0"; options.Owner=m_Window;
+                    if(AssetPathPicker("##source",slot.Source,options)) {
+                        const auto stem=std::filesystem::path(slot.Source).stem().string();
+                        const auto found=std::find_if(classes.begin(),classes.end(),[&](const std::string& name) {
+                            return name==stem || (name.size()>stem.size() && name.compare(name.size()-stem.size(),stem.size(),stem)==0 && name[name.size()-stem.size()-1]=='.');
+                        });
+                        if(!slot.Source.empty()) { slot.Class=found==classes.end()?"Tartarus.Gameplay."+stem:*found; slot.Fields="{}"; }
+                        persist(true,true);
+                    }
+                    if(!slot.Source.empty() && ImGui::Button("Edit in Script IDE"))OpenScriptIDE(ProjectPaths::Resolve(slot.Source));
+                    if(!slot.Source.empty() && ActionButton(ICON_FA_PEN_TO_SQUARE " Open Script","Open the C# source in your code editor"))
+                        Screenshot::OpenFile(ProjectPaths::Resolve(slot.Source));
+                    if(!slot.Class.empty()) {
+                        const Json metadata=Json::parse(Scripting::Describe(slot.Class));
+                        if(metadata.contains("error")) ImGui::TextWrapped("%s",metadata.at("error").get<std::string>().c_str());
+                        Json fields=Json::parse(slot.Fields,nullptr,false);
+                        if(!fields.is_object()) { ImGui::TextWrapped("Saved fields are invalid. Editing a field below will repair them."); fields=Json::object(); }
+                        const auto beforeCustom=slot.Fields;
+                        const bool custom=m_AssetsPtr && metadata.contains("fields") && DrawManagedInspector(world,*m_AssetsPtr,entity,slot.Class,&slot.Fields,metadata.dump());
+                        if(custom && slot.Fields!=beforeCustom) Scripting::SetSlots(*component,slots);
+                        if(!custom && metadata.contains("fields")) for(const auto& field:metadata.at("fields")) {
+                            const std::string name=field.at("name"), kind=field.at("kind"), tip=field.value("tooltip",std::string{});
+                            const Json value=fields.contains(name)?fields.at(name):field.at("default");
+                            ImGui::PushID(name.c_str()); PropertyLabel(name.c_str(),tip.empty()?nullptr:tip.c_str());
+                            ImGui::SetNextItemWidth(-FLT_MIN); bool changed=false, immediate=false;
+                            try {
+                            const bool range=field.contains("min") && !field.at("min").is_null() && !field.at("max").is_null();
+                            if(kind=="float") {
+                                float number=value.get<float>();
+                                changed=range?ImGui::SliderFloat("##value",&number,field.at("min").get<float>(),field.at("max").get<float>())
+                                    :ImGui::DragFloat("##value",&number,.05f);
+                                if(changed) fields[name]=number;
+                            } else if(kind=="int") {
+                                int number=value.get<int>(); changed=range?ImGui::SliderInt("##value",&number,field.at("min").get<int>(),field.at("max").get<int>())
+                                    :ImGui::DragInt("##value",&number,1);
+                                if(changed) fields[name]=number;
+                            } else if(kind=="bool") {
+                                bool checked=value.get<bool>(); changed=ImGui::Checkbox("##value",&checked); immediate=true;
+                                if(changed) fields[name]=checked;
+                            } else if(kind=="string") {
+                                std::string text=value.is_null()?std::string{}:value.get<std::string>();
+                                changed=InputTextString("##value","",text); if(changed) fields[name]=text;
+                            } else if(kind=="vec3") {
+                                float vector[3]={value.value("X",0.f),value.value("Y",0.f),value.value("Z",0.f)};
+                                changed=ImGui::DragFloat3("##value",vector,.05f);
+                                if(changed) fields[name]={{"X",vector[0]},{"Y",vector[1]},{"Z",vector[2]}};
+                            } else if(kind=="enum") {
+                                const auto labels=field.at("labels").get<std::vector<std::string>>();
+                                const auto values=field.at("values").get<std::vector<int>>();
+                                const int number=value.get<int>(); std::string preview="(unknown)";
+                                for(size_t i=0;i<values.size();++i) if(values[i]==number) preview=labels[i];
+                                if(ImGui::BeginCombo("##value",preview.c_str())) {
+                                    for(size_t i=0;i<values.size();++i) if(ImGui::Selectable(labels[i].c_str(),values[i]==number)) {
+                                        fields[name]=values[i]; changed=true; immediate=true;
+                                    }
+                                    ImGui::EndCombo();
+                                }
+                            } else ImGui::TextDisabled("Type not supported by the field Inspector");
+                            } catch(const std::exception&) { ImGui::TextDisabled("Saved value has the wrong type; reset this script's fields"); }
+                            if(changed) slot.Fields=fields.dump();
+                            persist(changed,immediate); ImGui::PopID();
+                        }
+                    }
+                    if(ImGui::TreeNode("Advanced##script")) {
+                        PropertyLabel("Class"); ImGui::SetNextItemWidth(-FLT_MIN);
+                        persist(InputTextString("##classname","Fully qualified class name",slot.Class));
+                        if(ActionButton(ICON_FA_ROTATE_LEFT " Reset Fields","Reset this script's Inspector fields to their C# defaults")) {
+                            slot.Fields="{}"; persist(true,true);
+                        }
+                        ImGui::TreePop();
+                    }
+                    if(ActionButton(ICON_FA_XMARK " Remove Script","Remove this script from the object")) remove=static_cast<int>(index);
+                    ImGui::TreePop();
+                }
+                ImGui::PopID();
+            }
+            if(remove>=0) { PushUndo(world,"Remove C# Script"); slots.erase(slots.begin()+remove); Scripting::SetSlots(*component,slots); }
+            ImGui::SetNextItemWidth(-FLT_MIN);
+            if(ImGui::BeginCombo("##addscript","Add Script",ImGuiComboFlags_HeightLarge)) {
+                if(classes.empty()) ImGui::TextDisabled("Save a C# script to compile it first");
+                for(const auto& name:classes) if(ImGui::Selectable(name.c_str())) {
+                    PushUndo(world,"Add C# Script"); Scripting::Attach(*component,"",name);
+                }
+                ImGui::EndCombo();
+            }
+        } catch(const std::exception& why) { ImGui::TextWrapped("C# Inspector: %s",why.what()); }
+        return;
+    }
+
     // #128 — Unity's "needs a Collider" box: a Rigidbody with no Collider isn't added to the
     // physics world at all, so it silently never falls or collides.
     if (std::strcmp(componentName, "Rigidbody") == 0 && phase == ReflectExtraPhase::Top &&
@@ -3596,15 +3785,24 @@ void EditorLayer::DrawReflectedComponentExtra(const char* componentName, World& 
     }
 
     // First Person Controller: the weapon's tuning (recoil, sway, bob, IK, ...) lives in its
-    // weapon definition, which otherwise only turns up in the Asset Browser's Animation folder.
+    // weapon definition, stored alongside the weapon's prefab and animation controller.
     if (std::strcmp(componentName, "First Person Controller") == 0 && phase == ReflectExtraPhase::Bottom) {
         const auto* fp = registry.try_get<FirstPersonControllerComponent>(entity);
-        if (!fp || fp->AnimationSet.empty()) return;
+        if (!fp) return;
+        for(const auto& slot:{std::pair<const char*,const std::string*>{"Edit Primary Weapon Definition",&fp->PrimaryWeaponPrefab},
+                              {"Edit Secondary Weapon Definition",&fp->SecondaryWeaponPrefab}}) {
+            if(slot.second->empty())continue;
+            ImGui::BeginDisabled(m_InPlayMode);
+            if(ActionButton(slot.first,"Open the weapon prefab's Definition and muzzle-effect tabs",false,ImVec2(-FLT_MIN,0)))
+                m_InspectorRequestedPrefab=ProjectPaths::Resolve(*slot.second);
+            ImGui::EndDisabled();
+        }
+        if (fp->AnimationSet.empty()) return;
         const std::string path = std::filesystem::u8path(ProjectPaths::Resolve(fp->AnimationSet)).generic_u8string();
         std::error_code ec;
         const bool exists = std::filesystem::exists(std::filesystem::u8path(path), ec);
         ImGui::BeginDisabled(!exists);
-        if (ActionButton(ICON_FA_CROSSHAIRS "  Edit Weapon Definition",
+        if (ActionButton(ICON_FA_CROSSHAIRS "  Edit Animation Set",
                          exists ? "Open this weapon's recoil, sway, bob, lean and IK tuning in the Inspector"
                                 : "The Animation Set file doesn't exist",
                          false, ImVec2(-FLT_MIN, 0.0f))) {
@@ -3612,7 +3810,7 @@ void EditorLayer::DrawReflectedComponentExtra(const char* componentName, World& 
             m_SelectedAssetKey = path;
             m_SelectedAssetIsFolder = false;
             m_ExtraAssetSelection.clear();
-            NavigateAssetFolder("Animation");
+            if (m_AssetsPtr) NavigateAssetFolder(m_AssetsPtr->DiskFolderFor(path));
         }
         ImGui::EndDisabled();
         return;
@@ -4053,6 +4251,10 @@ void EditorLayer::DrawReflectedComponentExtra(const char* componentName, World& 
 void EditorLayer::DrawReflectedComponentExtraMulti(const char* componentName, World& world,
                                                    const std::vector<entt::entity>& sel,
                                                    ReflectExtraPhase phase) {
+    if(std::strcmp(componentName,"C# Script")==0 && phase==ReflectExtraPhase::Top) {
+        ImGui::TextWrapped("Select one object to edit its script stack and Inspector fields.");
+        return;
+    }
     if (std::strcmp(componentName, "Rigidbody") == 0 && phase == ReflectExtraPhase::Top) { // #128
         int missing = 0;
         for (entt::entity e : sel) if (!world.Registry.all_of<ColliderComponent>(e)) ++missing;

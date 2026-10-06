@@ -1,6 +1,8 @@
 #pragma once
 
 #include "Curve.h"
+#include "RecoilAnimation.h"
+#include "SwayModifier.h"
 
 #include <glm/glm.hpp>
 #include <glm/gtc/quaternion.hpp>
@@ -43,6 +45,8 @@ struct FirstPersonSpring {
 };
 
 struct WeaponRecoilSettings {
+    bool UnityPort = false; // shared .recoil assets use the direct RecoilAnimation solver
+    RecoilAnimData Unity;
     bool Enabled = true;
     // Seconds one shot's curves span; they are keyed over 0..1 of it.
     float Duration = 0.4f;
@@ -79,6 +83,19 @@ struct WeaponRecoilSettings {
     float HipScale = 0.6f;    // hip fire also plays the Fire clip, so the kick is smaller
     float AdsScale = 1.0f;
     glm::vec3 Pivot{0.0f, 0.0f, 0.0f}; // rotation centre, camera frame, relative to the gun bone
+    glm::vec3 AdsPivot{0.0f};
+    glm::vec3 AdsRotationScale{1.0f}, AdsPositionScale{1.0f};
+    bool SustainedCurves = false;
+    FirstPersonCurve3 SustainedRotation, SustainedPosition;
+    float SustainedDuration = 0.4f;
+    glm::vec2 NoiseSide{0.0f}, NoiseUp{0.0f};
+    float NoiseAcceleration = 25.0f, NoiseDamping = 12.0f, NoiseAdsScale = 1.0f;
+    float PushAmount = 0.0f, PushAcceleration = 20.0f, PushDamping = 10.0f;
+    glm::vec2 SwayPitch{0.0f}, SwayYaw{0.0f};
+    float SwayRoll = 0.0f, SwayAcceleration = 20.0f, SwayDamping = 10.0f, SwayAdsScale = 1.0f;
+    glm::vec3 SwayPivot{0.0f};
+    float PitchProgression = 0.0f, UpProgression = 0.0f;
+    float ProgressionAcceleration = 20.0f, ProgressionDamping = 8.0f, ProgressionAdsScale = 1.0f;
     FirstPersonSpring Smoothing{22.0f, 0.7f};
     // Camera recoil: a view punch (degrees) that recovers on its own. Doesn't move where the
     // player aims, only what they see.
@@ -98,6 +115,10 @@ struct WeaponRecoilSettings {
     float AimRecovery = 0.0f;
     float AimRecoveryDelay = 0.12f;
     float AimRecoverySpeed = 8.0f;
+    // Attack rate per second, independently for pitch/yaw. Zero applies immediately.
+    glm::vec2 AimSmoothing{40.0f};
+    bool AimCompensation = true;
+    float AimAdsScale = 1.0f;
     // Camera shake: each round adds ShakeAmount of "trauma" (0..1, draining at ShakeDecay per
     // second); the view shakes by trauma^2 x ShakeMax degrees (pitch, yaw, roll) of smooth noise
     // at ShakeFrequency Hz. Squaring keeps a single round a tremor and lets full auto build into
@@ -121,10 +142,26 @@ struct WeaponRecoilSettings {
     // along the travel its Fire clip authors). 0 = no procedural bolt.
     float BoltCycle = 0.0f;
     std::string BoltBone = "bolt";
+    // Explicit stroke in weapon model units. Zero retains optional clip measurement.
+    glm::vec3 BoltTravel{0.0f};
+};
+
+// Shared, immutable tuning; all solver state belongs to WeaponProceduralState.
+struct RecoilAsset {
+    WeaponRecoilSettings Data = Defaults();
+    static WeaponRecoilSettings Defaults();
+    static bool FromJsonString(const std::string& text, RecoilAsset& out, std::string* error = nullptr);
+    static bool LoadFile(const std::string& path, RecoilAsset& out, std::string* error = nullptr);
+    std::string ToJsonString() const;
+    bool SaveFile(const std::string& path) const;
 };
 
 struct WeaponSwaySettings {
     bool Enabled = true;
+    bool UnityPort = true;
+    SwayModifierSettings Unity;
+    // Legacy embedded definitions retain these fields until upgraded. New definitions and
+    // the Inspector use the source modifier settings above.
     // Look sway: the gun lags behind the view. Per 100 degrees/second of turn.
     float LookRotation = 1.2f;     // degrees
     float LookPosition = 0.004f;   // metres
@@ -153,7 +190,7 @@ struct WeaponSwaySettings {
 glm::vec2 StepFreeAim(glm::vec2 offset, glm::vec2 lookDelta, glm::vec2 zone, float returnSpeed, bool returning, float dt);
 
 struct WeaponBobSettings {
-    bool Enabled = true;
+    bool Enabled = false; // retired: weapon locomotion comes from the additive animation layer
     // One cycle = one stride (two steps). Curves keyed over 0..1 of a cycle: side, up (metres),
     // roll (degrees).
     float WalkStride = 2.4f;       // metres per cycle
@@ -423,17 +460,26 @@ public:
     void Reset();
     // A round was fired: starts one recoil instance.
     // `cycleBolt` false when the weapon's Fire clip is already cycling the bolt itself.
-    void OnShot(const WeaponProceduralSettings& s, bool ads, bool cycleBolt = true);
+    void OnShot(const WeaponProceduralSettings& s, bool ads, bool cycleBolt = true, float rpm = 600.0f,
+                RecoilFireMode mode = RecoilFireMode::Semi, double unscaledTime = -1, float frameDt = -1);
     const WeaponProceduralPose& Update(const WeaponProceduralSettings& s, const WeaponProceduralInput& in);
     const WeaponProceduralPose& Pose() const { return m_Pose; }
-    int ActiveShots() const { return (int)m_Shots.size(); }
+    int ActiveShots() const { return (int)m_Shots.size() + (m_Unity.IsPlaying() ? 1 : 0); }
     void Seed(unsigned seed) { m_Rng.seed(seed); }
+    // Input and output use (pitch, yaw) degrees, before procedural view punch.
+    void CompensateAim(glm::vec2 playerDelta);
+    void DiscardClampedAim(glm::vec2 unappliedDelta);
+    void EndBurst() { m_BurstEnded = true; m_ControllerFiring = false; m_Unity.Stop(); }
+    void SetFiring(bool firing) { m_ControllerFiring = firing; if (!firing) m_Unity.Stop(); }
+    glm::vec2 ConsumeAimKick() { const auto delta = m_Pose.AimKick; m_Pose.AimKick = glm::vec2(0.0f); return delta; }
 
     // The summed recoil curves `seconds` after one shot with every random pick at 1 - what the
     // Inspector's recoil preview plots.
     static void PreviewShot(const WeaponRecoilSettings& r, float seconds, glm::vec3& rotation, glm::vec3& position);
 
 private:
+    RecoilAnimation m_Unity;
+    float m_SemiRecoveryTime = -1.0f; // held semi trigger expires after the committed shot's cadence
     struct Shot {
         float Time = 0.0f;
         float Scale = 1.0f;
@@ -442,6 +488,8 @@ private:
         float Lift = 0.0f;     // yaw taken from the pitch curve: the kick's direction off vertical
         float CamPitch = 1.0f;
         float CamYaw = 1.0f;
+        bool Sustained = false;
+        glm::vec3 RotScale{1.0f}, PosScale{1.0f};
     };
     struct Spring3 {
         glm::vec3 X{0.0f}, V{0.0f};
@@ -451,6 +499,12 @@ private:
     std::vector<Shot> m_Shots;
     glm::vec2 m_AimPending{0.0f};     // climb still to feed in (spread over a few frames)
     glm::vec2 m_AimRecoverable{0.0f}; // climb that recovery will hand back
+    glm::vec2 m_AimOutstanding{0.0f};
+    bool m_BurstEnded = true;
+    bool m_ControllerFiring = false;
+    glm::vec3 m_NoiseTarget{0.0f}, m_NoiseOut{0.0f};
+    glm::vec3 m_LayerTarget{0.0f}, m_LayerOut{0.0f}; // push, pitch progression, up progression
+    glm::vec3 m_RecoilSwayTarget{0.0f}, m_RecoilSwayOut{0.0f};
     float m_SinceShot = 1e9f;
     int m_BurstShots = 0;             // rounds so far in the current burst
     float m_Wander = 0.0f;            // the sideways drift's random walk (degrees per round)

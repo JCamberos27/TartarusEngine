@@ -356,7 +356,12 @@ void DrawAssetGrid(const EditorModuleHostAPI& host, float contentHeight) {
         if (cellsPerRow < 1) cellsPerRow = 1;
     }
     const int totalRows = cellCount == 0 ? 0 : (cellCount + cellsPerRow - 1) / cellsPerRow;
-    const float clipRowHeight = gridMode ? cellHeight : ImGui::GetFrameHeightWithSpacing();
+    // Match the actual cursor advance in DrawAssetCell: list rows are text-sized
+    // Selectables, not framed controls. A larger stride makes the clipper submit
+    // too few rows and leaves a blank band at the bottom of the list. Grid tiles
+    // advance by their explicit height plus the spacing between rows.
+    const float clipRowHeight = gridMode ? cellHeight + ImGui::GetStyle().ItemSpacing.y
+                                        : ImGui::GetTextLineHeightWithSpacing();
 
     if (detailsMode) {
         DrawDetailsTable(host, uiScale, cellCount, cellWidth, cellHeight);
@@ -507,12 +512,12 @@ void Draw(const EditorModuleHostAPI& host) {
         if (ActionButton(host, ICON_FA_ARROW_LEFT, "Back") && host.AssetFolderHistoryBack)
             host.AssetFolderHistoryBack();
         ImGui::EndDisabled();
-        ImGui::SameLine(0.0f, 2.0f);
+        ImGui::SameLine(0.0f, EditorTheme::Px(4.0f));
         ImGui::BeginDisabled(!canForward);
         if (ActionButton(host, ICON_FA_ARROW_RIGHT, "Forward") && host.AssetFolderHistoryForward)
             host.AssetFolderHistoryForward();
         ImGui::EndDisabled();
-        ImGui::SameLine(0.0f, 2.0f);
+        ImGui::SameLine(0.0f, EditorTheme::Px(4.0f));
         ImGui::BeginDisabled(!canUp);
         if (ActionButton(host, ICON_FA_ARROW_UP, "Up one folder") && host.SetCurrentAssetFolder)
             host.SetCurrentAssetFolder(ParentFolderOf(curFolder).c_str());
@@ -591,10 +596,11 @@ void Draw(const EditorModuleHostAPI& host) {
 
     // Search box + the trailing icon buttons (Filters, Sort, Refresh — #236 G), pinned to the
     // right edge (or a new line if the breadcrumb has crowded them out).
-    const float iconBtnW = ImGui::GetFrameHeight() + EditorTheme::Px(2.0f);
-    const float trailingButtonsWidth = iconBtnW * 5.0f; // favourites | scope | filter | sort | refresh
-    const float targetX = ImGui::GetWindowContentRegionMax().x - (searchWidth + trailingButtonsWidth);
-    if (targetX > ImGui::GetCursorPosX()) ImGui::SameLine(targetX);
+    const float clusterSpacing=EditorTheme::Px(4.0f);
+    const float trailingButtonsWidth=ImGui::GetFrameHeight()*5.0f+clusterSpacing*4.0f+EditorTheme::Px(6.0f);
+    const float targetX=ImGui::GetWindowContentRegionMax().x-EditorTheme::Px(6.0f)-(searchWidth+trailingButtonsWidth);
+    const float breadcrumbEndX=ImGui::GetItemRectMax().x-ImGui::GetWindowPos().x+EditorTheme::Px(8.0f);
+    if (targetX >= breadcrumbEndX) ImGui::SameLine(targetX);
     else ImGui::NewLine();
 
     char searchBuf[128];
@@ -631,7 +637,7 @@ void Draw(const EditorModuleHostAPI& host) {
 
     // Favourites-only toggle (#236 G).
     ImGui::SameLine(0.0f, EditorTheme::Px(6.0f));
-    ImGui::PushStyleVar(ImGuiStyleVar_ItemSpacing, ImVec2(EditorTheme::Px(2.0f), ImGui::GetStyle().ItemSpacing.y));
+    ImGui::PushStyleVar(ImGuiStyleVar_ItemSpacing, ImVec2(clusterSpacing, ImGui::GetStyle().ItemSpacing.y));
     {
         bool favOnly = host.GetAssetFavoritesOnly && host.GetAssetFavoritesOnly();
         if (ActionButton(host, ICON_FA_STAR, favOnly ? "Showing favorites only (click to show all)" // #19 — en-US

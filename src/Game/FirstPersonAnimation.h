@@ -2,6 +2,7 @@
 
 #include "FirstPersonBodyContract.h" // FPBody::Check: the weapon setup check reuses the body's result type
 #include "FirstPersonProcedural.h"
+#include "CameraEffects.h"
 
 #include <glm/glm.hpp>
 
@@ -35,6 +36,7 @@ struct FirstPersonWeaponGameplay {
     int Magazine = 30;
     float RoundsPerMinute = 700.0f;       // full-auto cadence
     bool AllowFullAuto = true;            // false: B does nothing (semi-only weapon)
+    int BurstRounds = 0; // >1: a semi trigger schedules this many rounds; release interrupts it
     float ReloadHoldSeconds = 0.35f;      // R held this long checks the magazine instead of reloading
     float RegripMin = 10.0f, RegripMax = 20.0f; // seconds of settled Idle before a Fidget
     // Each round shoves the dynamic body the bore hits: ImpactImpulse N*s at the hit point
@@ -149,6 +151,7 @@ struct FirstPersonStockLockSettings {
 // What Play found for a weapon's barrel and sights, kept per weapon definition (by file path)
 // after Play stops so the weapon Inspector can show it and save it.
 struct FirstPersonBarrelReport {
+    glm::vec3 BoltTravel{0.0f}; // measured or explicit weapon-model stroke, available for authoring
     bool Detected = false;            // Auto found a muzzle from the bolt
     glm::vec3 DetectedOrigin{0.0f}, DetectedDirection{0.0f, 0.0f, -1.0f}; // weapon-root space
     bool HasMuzzle = false;           // rounds and the laser have a muzzle to leave from
@@ -234,6 +237,10 @@ struct FirstPersonAnimationSet {
     // facing model +Z while the engine's camera looks down its own -Z, so without the 180 Y this
     // set renders the arms and weapon behind the camera.
     glm::vec3 ViewRotation{0.0f};
+    // Camera-space metres applied to the owner's entire view rig after animation and IK.
+    // Persists through ADS and actions; world presentations retain their authored mount.
+    glm::vec3 ViewPosition{0.0f};
+    float AdsLocomotionScale=1.0f;
     // The weapon rides the arms rig's gun socket rather than merely sharing the arms entity's
     // pose. `WeaponSocket` names a bone on the ARMS rig, `WeaponRoot` the bone on the WEAPON rig
     // that has to land on it, and `WeaponMountRotation` (Y-X-Z degrees) is the fixed mount between
@@ -269,6 +276,11 @@ struct FirstPersonAnimationSet {
     // Recoil, sway, bob, breathing, aim, per-state offsets, lean and IK (FirstPersonProcedural.h).
     // Files from before it existed load their old gameplay.recoil / adsBob numbers into it.
     WeaponProceduralSettings Procedural = WeaponProceduralSettings::Defaults();
+    std::string RecoilProfile; // project-relative .recoil asset, or empty for embedded legacy data
+    std::string RecoilProfileGuid;
+    ActionCameraSettings ActionCamera;
+    std::string CameraShakeProfile, CameraShakeProfileGuid;
+    CameraShakeAsset CameraShake; // resolved shared asset; no shake when the path is empty
     std::vector<FirstPersonAnimationClip> Clips; // wizard only, never saved
 
     const FirstPersonAnimationClip* Find(const std::string& state) const;

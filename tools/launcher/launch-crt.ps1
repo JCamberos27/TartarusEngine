@@ -1,20 +1,19 @@
 # The launch screen on a CRT: the same composition as launch-screen.ps1 (the art on the left; the
 # lockup, status, progress bar and version on the right) drawn in a borderless WPF window, with a
 # pixel shader (crt.fx / crt.ps) turning the whole window into a curved, scanlined tube that
-# powers on, with its sounds. The build runs in the background the whole time. Any key
-# (or a click) skips the intro; M mutes the sound, and is remembered.
+# powers on silently. The build runs in the background the whole time. Any key
+# (or a click) skips the intro. With -Launch, it stays up until the editor presents a frame.
 #
-#   launch-crt.ps1 [-Build]
-#     Exit codes: 0 built (or no -Build); on a failed build the screen lists the errors and asks -
+#   launch-crt.ps1 [-Build] [-Launch]
+#     Exit codes: 0 built (or no -Build); 12 editor already launched; on build failure asks -
 #     10 launch the previous build, 11 close. 99: this screen couldn't start (no WPF, no window);
 #     nothing was built, so run-editor.cmd falls back to the console screen (launch-screen.ps1).
-param([switch]$Build)
+param([switch]$Build, [switch]$Launch)
 
 $ErrorActionPreference = 'Stop'
 $root = Resolve-Path (Join-Path $PSScriptRoot '..\..')
 $buildLog = Join-Path $root 'build\last-build.log'
 $progressFile = Join-Path $root 'build\launch-progress.txt'
-$settingsFile = Join-Path $root 'build\launch-settings.txt'
 $invariant = [Globalization.CultureInfo]::InvariantCulture
 
 # --- everything that can fail before the build starts: a failure here means "use the console" ---
@@ -110,8 +109,6 @@ try {
             </StackPanel>
           </StackPanel>
         </Grid>
-        <TextBlock x:Name="SoundHint" HorizontalAlignment="Right" VerticalAlignment="Bottom" Margin="0,0,70,52"
-                   Foreground="#6A6A72" FontSize="10" LineHeight="12" Opacity="0"/>
         <Rectangle x:Name="Flash" Fill="#F4F7FF" Opacity="0" IsHitTestVisible="False"/>
       </Grid>
     </Viewbox>
@@ -120,7 +117,7 @@ try {
 '@
     $window = [Windows.Markup.XamlReader]::Parse($xaml)
     $ui = @{}
-    foreach ($n in 'Tube', 'Stage', 'Power', 'Glow', 'Art', 'Errors', 'ErrorList', 'Banner', 'Status', 'Bar', 'BarFill', 'Prompt', 'PromptYes', 'PromptNo', 'Version', 'SoundHint', 'Flash') {
+    foreach ($n in 'Tube', 'Stage', 'Power', 'Glow', 'Art', 'Errors', 'ErrorList', 'Banner', 'Status', 'Bar', 'BarFill', 'Prompt', 'PromptYes', 'PromptNo', 'Version', 'Flash') {
         $ui[$n] = $window.FindName($n)
     }
 
@@ -170,6 +167,7 @@ try {
     $workW = $screen.Width / $dpi; $workH = $screen.Height / $dpi
     $h = $workH * 0.8; $w = $h * 1.5
     if ($w -gt $workW * 0.9) { $w = $workW * 0.9; $h = $w / 1.5 }
+    $w *= 0.65; $h *= 0.65
     $window.Width = $w; $window.Height = $h
     $window.Left = $screen.Left / $dpi + ($workW - $w) / 2
     $window.Top = $screen.Top / $dpi + ($workH - $h) / 2
@@ -179,12 +177,6 @@ try {
     $taskbar = New-Object Windows.Shell.TaskbarItemInfo
     $window.TaskbarItemInfo = $taskbar
 
-    # The tube's sounds (CrtLaunchSound: synthesized and mixed on its own thread). A missing sound
-    # never stops the show.
-    $muted = $false
-    try { $muted = ([IO.File]::ReadAllText($settingsFile)) -match 'sound\s*=\s*off' } catch {}
-    $sound = $null
-    try { $sound = New-Object CrtLaunchSound; $sound.SetMuted($muted); $sound.Start() } catch { $sound = $null }
 } catch {
     exit 99
 }
@@ -222,7 +214,7 @@ $candle = [Windows.Media.Color]::FromRgb(255, 222, 170)
 $S = @{
     Phase = 'intro'; Skip = 0.0; PhaseAt = 0.0; Shown = 0.0; Projects = 0; LastPoll = -1.0
     Flicker = 0.12; FlickerTarget = 0.12; NextFlicker = 0.0; ExitCode = 0; BuildSeconds = 0.0; Crash = $null
-    Rand = (New-Object Random); Closing = $false; Started = $false
+    Rand = (New-Object Random); Closing = $false; Started = $false; Engine = $null
 }
 $clock = [Diagnostics.Stopwatch]::StartNew()
 $introEnd = 2.7
@@ -230,8 +222,14 @@ $introEnd = 2.7
 function Enter-Phase([string]$name) {
     $S.Phase = $name; $S.PhaseAt = $clock.Elapsed.TotalSeconds + $S.Skip
 }
-function Set-SoundHint { $ui.SoundHint.Text = if ($muted) { 'M   sound on' } else { 'M   mute' } }
-Set-SoundHint
+function Start-Editor {
+    $S.Engine = Start-Process -FilePath (Join-Path $root 'build\Release\TartarusEngine.exe') -WorkingDirectory $root -WindowStyle Hidden -PassThru
+    $S.ExitCode = 12 # the batch launcher must not start a second editor
+    $ui.Status.Inlines.Clear()
+    $ui.Status.Text = 'S T A R T I N G   E N G I N E'
+    $taskbar.ProgressState = 'Indeterminate'
+    Enter-Phase 'starting'
+}
 
 function Show-Failure {
     $log = Read-BuildLog
@@ -265,10 +263,6 @@ function Update-Frame {
         $crt.Size = New-Object Windows.Point ($ui.Tube.ActualWidth * $scale), ($ui.Tube.ActualHeight * $scale)
     }
     $since = $t - $S.PhaseAt
-    # The whine and hum rise with the picture, and fade out as the window closes.
-    if ($sound) {
-        $sound.SetHum($(switch ($S.Phase) { 'intro' { Clamp01 (($t - 0.25) / 1.1) } 'close' { 1.0 - (Clamp01 ($since / 0.15)) } default { 1.0 } }))
-    }
 
     switch ($S.Phase) {
         'intro' {
@@ -280,7 +274,6 @@ function Update-Frame {
             Set-Wipe (1.08 * (Clamp01 (($t - 1.7) / 0.75))) $white
             $late = Clamp01 (($t - 2.35) / 0.35)
             $ui.Version.Opacity = $late; $ui.Status.Opacity = $late; $ui.Bar.Opacity = $late
-            if ($sound) { $ui.SoundHint.Opacity = $late }
             if ($buildProc) { $ui.Status.Text = 'B U I L D I N G' }
             if ($t -ge $introEnd) { Enter-Phase 'build' }
         }
@@ -337,7 +330,24 @@ function Update-Frame {
                     }
                 }
             }
-            if ($since -ge 1.1) { $taskbar.ProgressState = 'None'; $S.ExitCode = 0; Enter-Phase 'close' }
+            if ($since -ge 1.1) {
+                if ($Launch) { Start-Editor }
+                else { $taskbar.ProgressState = 'None'; $S.ExitCode = 0; Enter-Phase 'close' }
+            }
+        }
+        'starting' {
+            $S.Engine.Refresh()
+            if ($S.Engine.HasExited) {
+                $ui.Status.Text = 'E N G I N E   S T A R T U P   F A I L E D'
+                $taskbar.ProgressState = 'Error'
+                Enter-Phase 'startupFailed'
+            } elseif ($S.Engine.MainWindowHandle -ne [IntPtr]::Zero -and [CrtLaunchNative]::IsWindowVisible($S.Engine.MainWindowHandle)) {
+                $taskbar.ProgressState = 'None'
+                Enter-Phase 'close'
+            }
+        }
+        'startupFailed' {
+            if ($since -ge 3.0) { Enter-Phase 'close' }
         }
         'failed' {
             $fade = Ease-Out ($since / 0.45)
@@ -348,8 +358,7 @@ function Update-Frame {
             Set-Wipe 1.2 $white
         }
         'close' {
-            # No power-off: the picture stays as it is while the hum fades (so it doesn't click
-            # off), then the window closes.
+            # Keep the finished picture during the handoff, then close.
             if ($since -ge 0.15 -and -not $S.Closing) { $S.Closing = $true; $window.Close() }
         }
     }
@@ -357,13 +366,6 @@ function Update-Frame {
 
 $window.Add_KeyDown({
     param($sender, $e)
-    if ($e.Key -eq 'M' -and $sound) {
-        $script:muted = -not $muted
-        Set-SoundHint
-        $sound.SetMuted($muted)
-        try { [IO.File]::WriteAllText($settingsFile, $(if ($muted) { "sound=off`r`n" } else { "sound=on`r`n" })) } catch {}
-        return
-    }
     if ($S.Phase -eq 'intro') {
         $S.Skip = $introEnd - $clock.Elapsed.TotalSeconds     # jump straight to the finished frame
     } elseif ($S.Phase -eq 'failed') {
@@ -371,7 +373,12 @@ $window.Add_KeyDown({
         elseif ($e.Key -eq 'N' -or $e.Key -eq 'Escape') { Choose 11 }
     }
 })
-function Choose([int]$code) { if ($S.Phase -eq 'failed') { $S.ExitCode = $code; Enter-Phase 'close' } }
+function Choose([int]$code) {
+    if ($S.Phase -eq 'failed') {
+        if ($code -eq 10 -and $Launch) { Start-Editor }
+        else { $S.ExitCode = $code; Enter-Phase 'close' }
+    }
+}
 $hover = New-Object Windows.Media.SolidColorBrush ([Windows.Media.Color]::FromRgb(255, 214, 140))
 $plain = New-Object Windows.Media.SolidColorBrush ([Windows.Media.Color]::FromRgb(200, 200, 206))
 foreach ($b in $ui.PromptYes, $ui.PromptNo) {
@@ -389,7 +396,6 @@ $onFrame = [EventHandler] {
     # the window's own start-up.
     if (-not $S.Started) {
         $S.Started = $true; $clock.Restart()
-        if ($sound) { $sound.PowerOnSound() }
     }
     try { Update-Frame } catch { $S.Crash = $_; $S.Closing = $true; $window.Close() }
 }
@@ -401,10 +407,10 @@ $window.Add_ContentRendered({
 [Windows.Media.CompositionTarget]::add_Rendering($onFrame)
 try { [void]$window.ShowDialog() } catch { $S.Crash = $_ }
 [Windows.Media.CompositionTarget]::remove_Rendering($onFrame)
-if ($sound) { $sound.Dispose() }
 
 # The screen broke mid-show: still report the build honestly (run-editor.cmd prints the log).
 if ($S.Crash) {
+    if ($S.Engine) { exit 12 }
     if ($buildProc) { $buildProc.WaitForExit(); if ($buildProc.ExitCode -ne 0) { exit 1 } }
     exit 0
 }

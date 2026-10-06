@@ -1,339 +1,254 @@
+#include "EditorUIPrimitives.h"
 #include "CurveEditor.h"
+#include "ImCurveAdapter.h"
 #include "EditorUIHelpers.h"
-
-#include <glm/gtc/constants.hpp>
-
-#include <algorithm>
+#include "../../extern/imcurve/imcurve_editor.hpp"
+#include <map>
+#include <set>
 #include <cmath>
-#include <cstdio>
+#include <cfloat>
 
 namespace CurveEditor {
-
+bool Preview(const char* id,const Curve& curve,const ImVec2& size,const Options& options) {
+    float samples[96];
+    for(int i=0;i<96;++i) samples[i]=curve.Evaluate(options.TimeMin+(options.TimeMax-options.TimeMin)*i/95.0f);
+    ImGui::PlotLines(id,samples,96,0,nullptr,FLT_MAX,FLT_MAX,ImVec2(size.x>0?size.x:ImGui::GetContentRegionAvail().x,size.y));
+    const bool hovered=ImGui::IsItemHovered();
+    if(hovered)EditorUI::SetTooltip("Read-only preview. Double-click to edit in a curve window.");
+    return hovered && ImGui::IsMouseDoubleClicked(ImGuiMouseButton_Left);
+}
 namespace {
-
-// Per-widget state kept in ImGui's storage, keyed off the widget id.
-struct State {
-    ImGuiID Id;
-    int Selected() const { return ImGui::GetStateStorage()->GetInt(Id ^ 0x51u, -1); }
-    void SetSelected(int i) { ImGui::GetStateStorage()->SetInt(Id ^ 0x51u, i); }
-    // 0 none, 1 key, 2 in-handle, 3 out-handle
-    int Drag() const { return ImGui::GetStateStorage()->GetInt(Id ^ 0x52u, 0); }
-    void SetDrag(int d) { ImGui::GetStateStorage()->SetInt(Id ^ 0x52u, d); }
-    float Lo() const { return ImGui::GetStateStorage()->GetFloat(Id ^ 0x53u, 0.0f); }
-    float Hi() const { return ImGui::GetStateStorage()->GetFloat(Id ^ 0x54u, 1.0f); }
-    void SetRange(float lo, float hi) {
-        ImGui::GetStateStorage()->SetFloat(Id ^ 0x53u, lo);
-        ImGui::GetStateStorage()->SetFloat(Id ^ 0x54u, hi);
-    }
+struct Session {
+    ImCurveEditor<float> Editor;
+    bool Pending=false,NumericPending=false,Expanded=false,Snap=false,Link=false,Playing=false,KeyList=true;
+    int LastFrame=0;ImVec2 Min{},Max{};
+    ImGuiID RootWindow=0;
+    float TimeStep=.01f,ValueStep=.01f,Playhead=0,InsertTime=0,InsertValue=0;
+    float TimeOffset=0,ValueOffset=0,TimeScale=1,ValueScale=1;
+    std::string Error;
 };
-
-void FitRange(const Curve& c, const Options& o, float& lo, float& hi) {
-    lo = 0.0f;
-    hi = 0.0f;
-    for (int i = 0; i <= 64; ++i) {
-        const float v = c.Evaluate(o.TimeMin + (o.TimeMax - o.TimeMin) * (float)i / 64.0f);
-        lo = std::min(lo, v);
-        hi = std::max(hi, v);
-    }
-    for (const CurveKey& k : c.Keys) { lo = std::min(lo, k.Value); hi = std::max(hi, k.Value); }
-    const float span = hi - lo;
-    if (span < 1e-6f) {
-        const float pad = std::max(std::fabs(hi), 1e-3f);
-        lo -= pad;
-        hi += pad;
-    } else {
-        lo -= span * 0.12f;
-        hi += span * 0.12f;
-    }
+std::map<std::pair<ImGuiContext*,ImGuiID>,Session> sessions;
+std::set<ImGuiContext*> contexts;
 }
-
-float PeakOf(const Curve& c, float fallback) {
-    float peak = 0.0f;
-    for (const CurveKey& k : c.Keys) peak = std::max(peak, std::fabs(k.Value));
-    return peak > 1e-6f ? peak : fallback;
+bool OwnsKeyboard() {
+    const auto* context=ImGui::GetCurrentContext();
+    if (!context) return false;
+    auto mouse=ImGui::GetIO().MousePos;
+    for (const auto& entry:sessions) {
+        const auto& s=entry.second;
+        const bool focused=context->NavWindow&&context->NavWindow->RootWindow->ID==s.RootWindow;
+        if (entry.first.first==context && s.LastFrame>=ImGui::GetFrameCount()-1 && (focused ||
+            (mouse.x>=s.Min.x && mouse.x<=s.Max.x && mouse.y>=s.Min.y && mouse.y<=s.Max.y))) return true;
+    }
+    return false;
 }
-
-} // namespace
-
-bool Draw(const char* id, Curve& curve, const ImVec2& sizeIn, const Options& o) {
+bool DrawCanvas(const char* id,Curve& curve,const ImVec2& requestedSize,const Options& o) {
     ImGui::PushID(id);
-    State st{ImGui::GetID("##curve")};
-    bool committed = false;
-
-    const float t0 = o.TimeMin, t1 = std::max(o.TimeMax, o.TimeMin + 1e-4f);
-    ImVec2 size = sizeIn;
-    if (size.x <= 0.0f) size.x = std::max(ImGui::GetContentRegionAvail().x, 50.0f);
-    if (size.y <= 0.0f) size.y = ImGui::GetFontSize() * 6.0f;
-
-    const ImVec2 p0 = ImGui::GetCursorScreenPos();
-    ImGui::InvisibleButton("##curve", size, ImGuiButtonFlags_MouseButtonLeft | ImGuiButtonFlags_MouseButtonRight);
-    const bool hovered = ImGui::IsItemHovered();
-    const ImVec2 p1(p0.x + size.x, p0.y + size.y);
-
-    // Value range: refit unless a drag is in progress (so the key doesn't run from the mouse).
-    float lo, hi;
-    if (st.Drag() == 0) {
-        FitRange(curve, o, lo, hi);
-        st.SetRange(lo, hi);
-    } else {
-        lo = st.Lo();
-        hi = st.Hi();
-    }
-    const float pad = ImGui::GetFontSize() * 0.4f;
-    const auto toScreen = [&](float t, float v) {
-        return ImVec2(p0.x + pad + (t - t0) / (t1 - t0) * (size.x - 2.0f * pad),
-                      p1.y - pad - (v - lo) / (hi - lo) * (size.y - 2.0f * pad));
-    };
-    const auto toCurve = [&](const ImVec2& s, float& t, float& v) {
-        t = t0 + (s.x - p0.x - pad) / (size.x - 2.0f * pad) * (t1 - t0);
-        v = lo + (p1.y - pad - s.y) / (size.y - 2.0f * pad) * (hi - lo);
-    };
-    // Slope in curve units -> a handle direction in screen space.
-    const float sx = (size.x - 2.0f * pad) / (t1 - t0);
-    const float sy = (size.y - 2.0f * pad) / (hi - lo);
-    const float handleLen = ImGui::GetFontSize() * 2.2f;
-    const auto handle = [&](const ImVec2& at, float slope, float dir) {
-        ImVec2 d(sx, -slope * sy);
-        const float len = std::sqrt(d.x * d.x + d.y * d.y);
-        return ImVec2(at.x + dir * d.x / len * handleLen, at.y + dir * d.y / len * handleLen);
-    };
-
-    ImDrawList* dl = ImGui::GetWindowDrawList();
-    const ImGuiStyle& style = ImGui::GetStyle();
-    const ImU32 bg = ImGui::GetColorU32(ImGuiCol_FrameBg);
-    const ImU32 grid = ImGui::GetColorU32(ImGuiCol_Border, 0.6f);
-    const ImU32 axis = ImGui::GetColorU32(ImGuiCol_TextDisabled, 0.8f);
-    const ImU32 line = o.Color ? o.Color : ImGui::GetColorU32(ImGuiCol_PlotLines);
-    const ImU32 keyCol = ImGui::GetColorU32(ImGuiCol_Text);
-    const ImU32 selCol = ImGui::GetColorU32(ImGuiCol_PlotHistogram);
-    dl->AddRectFilled(p0, p1, bg, style.FrameRounding);
-    dl->PushClipRect(p0, p1, true);
-    for (int i = 1; i < 4; ++i) {
-        const float x = toScreen(t0 + (t1 - t0) * (float)i / 4.0f, 0.0f).x;
-        dl->AddLine(ImVec2(x, p0.y), ImVec2(x, p1.y), grid);
-    }
-    if (lo < 0.0f && hi > 0.0f) {
-        const float y = toScreen(t0, 0.0f).y;
-        dl->AddLine(ImVec2(p0.x, y), ImVec2(p1.x, y), axis);
-    }
-    // Range labels.
-    char buf[64];
-    std::snprintf(buf, sizeof buf, o.ValueFormat, hi);
-    dl->AddText(ImVec2(p0.x + 3.0f, p0.y + 1.0f), axis, buf);
-    std::snprintf(buf, sizeof buf, o.ValueFormat, lo);
-    dl->AddText(ImVec2(p0.x + 3.0f, p1.y - ImGui::GetFontSize() - 1.0f), axis, buf);
-
-    // The curve.
-    constexpr int kSamples = 96;
-    ImVec2 pts[kSamples + 1];
-    for (int i = 0; i <= kSamples; ++i) {
-        const float t = t0 + (t1 - t0) * (float)i / kSamples;
-        pts[i] = toScreen(t, curve.Evaluate(t));
-    }
-    dl->AddPolyline(pts, kSamples + 1, line, 0, 2.0f);
-
-    // Keys and handles.
-    const ImVec2 mouse = ImGui::GetIO().MousePos;
-    const float grab = ImGui::GetFontSize() * 0.45f;
-    int sel = st.Selected();
-    if (sel >= (int)curve.Keys.size()) sel = -1;
-    int hoverKey = -1, hoverHandle = 0;
-    const auto near = [&](const ImVec2& a) { return std::fabs(a.x - mouse.x) <= grab && std::fabs(a.y - mouse.y) <= grab; };
-    if (sel >= 0) {
-        const CurveKey& k = curve.Keys[sel];
-        const ImVec2 at = toScreen(k.Time, k.Value);
-        const ImVec2 hin = handle(at, k.InTangent, -1.0f), hout = handle(at, k.OutTangent, 1.0f);
-        dl->AddLine(hin, at, selCol);
-        dl->AddLine(at, hout, selCol);
-        dl->AddCircleFilled(hin, 3.0f, selCol);
-        dl->AddCircleFilled(hout, 3.0f, selCol);
-        if (hovered && near(hin)) hoverHandle = 2;
-        else if (hovered && near(hout)) hoverHandle = 3;
-    }
-    for (int i = 0; i < (int)curve.Keys.size(); ++i) {
-        const ImVec2 at = toScreen(curve.Keys[i].Time, curve.Keys[i].Value);
-        if (hovered && hoverHandle == 0 && hoverKey < 0 && near(at)) hoverKey = i;
-        const float r = i == sel || i == hoverKey ? 5.0f : 4.0f;
-        dl->AddCircleFilled(at, r, i == sel ? selCol : keyCol);
-    }
-    dl->PopClipRect();
-
-    // Interaction.
-    ImGuiIO& io = ImGui::GetIO();
-    if (hovered && ImGui::IsMouseClicked(ImGuiMouseButton_Left)) {
-        if (hoverHandle) {
-            st.SetDrag(hoverHandle);
-        } else if (hoverKey >= 0) {
-            sel = hoverKey;
-            st.SetDrag(1);
-        } else {
-            sel = -1;
-        }
-    }
-    if (hovered && ImGui::IsMouseDoubleClicked(ImGuiMouseButton_Left) && hoverKey < 0 && hoverHandle == 0) {
-        float t, v;
-        toCurve(mouse, t, v);
-        t = std::clamp(t, t0, t1);
-        // Two keys at one time make a step; select the existing one instead.
-        int existing = -1;
-        for (int i = 0; i < (int)curve.Keys.size(); ++i)
-            if (std::fabs(curve.Keys[i].Time - t) < (t1 - t0) * 1e-3f) existing = i;
-        if (existing >= 0) {
-            sel = existing;
-        } else {
-            sel = curve.AddKey(t);
-            committed = true;
-        }
-        st.SetDrag(0);
-    }
-    if (st.Drag() != 0 && sel >= 0 && ImGui::IsMouseDown(ImGuiMouseButton_Left) &&
-        (io.MouseDelta.x != 0.0f || io.MouseDelta.y != 0.0f)) {
-        CurveKey& k = curve.Keys[sel];
-        float t, v;
-        toCurve(mouse, t, v);
-        if (st.Drag() == 1) {
-            const float minT = sel > 0 ? curve.Keys[sel - 1].Time + 1e-4f : t0;
-            const float maxT = sel + 1 < (int)curve.Keys.size() ? curve.Keys[sel + 1].Time - 1e-4f : t1;
-            k.Time = std::clamp(t, minT, std::max(minT, maxT));
-            k.Value = v;
-        } else {
-            const ImVec2 at = toScreen(k.Time, k.Value);
-            float dx = (mouse.x - at.x) / sx, dy = -(mouse.y - at.y) / sy;
-            if (st.Drag() == 2) { dx = -dx; dy = -dy; }
-            const float slope = std::fabs(dx) > 1e-6f ? dy / dx : (dy > 0.0f ? 1e4f : -1e4f);
-            // Linked handles: a smooth key, the usual case for procedural curves.
-            k.InTangent = k.OutTangent = std::clamp(slope, -1e4f, 1e4f);
-        }
-    }
-    if (st.Drag() != 0 && ImGui::IsMouseReleased(ImGuiMouseButton_Left)) {
-        st.SetDrag(0);
-        committed = true;
-    }
-    // Right-click a key for its menu (not an instant delete: there is no undo here).
-    const ImGuiID keyMenuKey = st.Id ^ 0x55u;
-    if (hovered && ImGui::IsMouseClicked(ImGuiMouseButton_Right)) {
-        if (hoverKey >= 0) {
-            sel = hoverKey;
-            ImGui::GetStateStorage()->SetInt(keyMenuKey, hoverKey);
-            ImGui::OpenPopup("##curvekey");
-        } else {
-            ImGui::OpenPopup("##curvepresets");
-        }
-    }
-    const auto deleteKey = [&](int i) {
-        if (i < 0 || i >= (int)curve.Keys.size() || curve.Keys.size() <= 1) return;
-        curve.Keys.erase(curve.Keys.begin() + i);
-        sel = -1;
-        committed = true;
-    };
-    if (hovered && sel >= 0 && st.Drag() == 0 &&
-        (ImGui::IsKeyPressed(ImGuiKey_Delete, false) || ImGui::IsKeyPressed(ImGuiKey_Backspace, false)))
-        deleteKey(sel);
-    if (ImGui::BeginPopup("##curvekey")) {
-        const int k = ImGui::GetStateStorage()->GetInt(keyMenuKey, -1);
-        if (k >= 0 && k < (int)curve.Keys.size()) {
-            CurveKey& key = curve.Keys[k];
-            ImGui::TextDisabled("Key %d", k + 1);
-            if (ImGui::MenuItem("Flat tangents")) {
-                key.InTangent = key.OutTangent = 0.0f;
-                committed = true;
-            }
-            if (ImGui::MenuItem("Smooth tangents")) {
-                Curve smooth = curve;
-                smooth.AutoTangents();
-                key.InTangent = smooth.Keys[k].InTangent;
-                key.OutTangent = smooth.Keys[k].OutTangent;
-                committed = true;
-            }
-            if (ImGui::MenuItem("Value to 0")) {
-                key.Value = 0.0f;
-                committed = true;
-            }
-            ImGui::Separator();
-            if (ImGui::MenuItem("Delete key", "Del", false, curve.Keys.size() > 1)) deleteKey(k);
-        } else {
-            ImGui::CloseCurrentPopup();
-        }
-        ImGui::EndPopup();
-    }
-    if (hovered && st.Drag() == 0) {
-        if (hoverKey >= 0) {
-            char tv[96], vv[48];
-            std::snprintf(vv, sizeof vv, o.ValueFormat, curve.Keys[hoverKey].Value);
-            std::snprintf(tv, sizeof tv, "Time %.3f   Value %s\nDrag to move, right-click for options", curve.Keys[hoverKey].Time, vv);
-            EditorUI::SetTooltip("%s", tv);
-        } else if (hoverHandle == 0) {
-            EditorUI::SetTooltip("Double-click: add a key   Right-click: presets\nSelect a key and press Delete to remove it");
-        }
-    }
-
-    if (ImGui::BeginPopup("##curvepresets")) {
-        const float amp = PeakOf(curve, o.PresetAmplitude);
-        const auto preset = [&](const char* label, Curve c) {
-            if (ImGui::MenuItem(label)) {
-                curve = std::move(c);
-                sel = -1;
-                committed = true;
-            }
+    auto* context=ImGui::GetCurrentContext();
+    if (contexts.insert(context).second) {
+        ImGuiContextHook hook{};
+        hook.Type=ImGuiContextHookType_Shutdown;
+        hook.Callback=[](ImGuiContext* destroyed,ImGuiContextHook*) {
+            for (auto it=sessions.begin();it!=sessions.end();)
+                if (it->first.first==destroyed) it=sessions.erase(it); else ++it;
+            contexts.erase(destroyed);
         };
-        preset("Flat (0)", Curve::Constant(0.0f));
-        preset("Line 0 -> peak", Curve::Line(t0, 0.0f, t1, amp));
-        {
-            Curve ease = Curve::EaseInOut();
-            for (auto& k : ease.Keys) { k.Time = t0 + k.Time * (t1 - t0); k.Value *= amp; }
-            preset("Ease In-Out", std::move(ease));
-        }
-        {
-            Curve kick = Curve::Kick(0.1f);
-            for (auto& k : kick.Keys) {
-                k.Time = t0 + k.Time * (t1 - t0);
-                k.Value *= amp;
-                k.InTangent *= amp / (t1 - t0);
-                k.OutTangent *= amp / (t1 - t0);
+        ImGui::AddContextHook(context,&hook);
+    }
+    const int frame=ImGui::GetFrameCount();
+    for (auto it=sessions.begin(); it!=sessions.end();) {
+        if (it->first.first==context && frame-it->second.LastFrame>600) it=sessions.erase(it);
+        else ++it;
+    }
+    auto& s=sessions[{ImGui::GetCurrentContext(),ImGui::GetID("##session")}];
+    s.LastFrame=frame;
+    auto incoming=ToImCurve(curve);
+    if (incoming!=s.Editor.GetCurve()) {
+        s.Editor.SetCurve(incoming); s.Editor.Fit(); s.Pending=false; s.NumericPending=false;
+    }
+    s.Editor.Color=o.Color; s.Editor.TimeMin=o.TimeMin;
+    s.Editor.TimeMax=std::max(o.TimeMax,o.TimeMin+0.0001f);
+    s.Editor.Normalize=Normalize; s.Editor.Insert=Insert;
+    s.Editor.KeyboardHistory=!o.ExternalHistory;
+    s.Editor.Snap=s.Snap;s.Editor.TimeSnap=s.TimeStep;s.Editor.ValueSnap=s.ValueStep;s.Editor.LinkTangents=s.Link;
+    bool committed=false;
+    auto selected=s.Editor.SelectedKeys();
+    const auto apply=[&](Curve c) {curve=std::move(c);s.Editor.UpdateCurve(ToImCurve(curve),true);committed=true;};
+    const bool keyboard=ImGui::IsWindowFocused(ImGuiFocusedFlags_RootAndChildWindows)&&!ImGui::GetIO().WantTextInput&&!ImGui::IsAnyItemActive();
+    const bool ctrl=ImGui::GetIO().KeyCtrl;
+    if (EditorUIPrimitives::SecondaryButton("Fit")) s.Editor.Fit();
+    ImGui::SameLine();
+    ImGui::BeginDisabled(selected.empty());
+    if(EditorUIPrimitives::SecondaryButton("Fit Selected")) {
+        const auto& k=curve.Keys[selected.front()];ImCurveRect<float> view{{k.Time,k.Value},{k.Time,k.Value}};
+        for(int i:selected)view.Expand({curve.Keys[i].Time,curve.Keys[i].Value});
+        const float px=std::max(.02f,view.GetWidth()*.15f),py=std::max(.0001f,view.GetHeight()*.2f);
+        view.Min.X-=px;view.Max.X+=px;view.Min.Y-=py;view.Max.Y+=py;s.Editor.SetViewport(view);
+    }
+    ImGui::EndDisabled();ImGui::SameLine();
+    if(EditorUIPrimitives::SecondaryButton("Select All")||(keyboard&&ctrl&&ImGui::IsKeyPressed(ImGuiKey_A))) {
+        selected.clear();for(int i=0;i<(int)curve.Keys.size();++i)selected.push_back(i);s.Editor.SelectKeys(selected);
+    }
+    ImGui::SameLine();if(EditorUIPrimitives::SecondaryButton("Deselect")){selected.clear();s.Editor.SelectKeys({});}
+    ImGui::SameLine();
+    // Toolbar history changes must reach the asset before preset handling.
+    if (committed) curve=FromImCurve(s.Editor.GetCurve());
+    if (EditorUIPrimitives::SecondaryButton("Presets")) ImGui::OpenPopup("##presets");
+    if (ImGui::BeginPopup("##presets")) {
+        float amplitude=0;
+        for (const auto& k:curve.Keys) if (std::abs(k.Value)>std::abs(amplitude)) amplitude=k.Value;
+        if (std::abs(amplitude)<0.000001f) amplitude=o.PresetAmplitude;
+        const float duration=s.Editor.TimeMax-o.TimeMin;
+        const auto preset=[&](const char* name,Curve c,bool normalized=false) {
+            if (!ImGui::MenuItem(name)) return;
+            if (normalized) for (auto& k:c.Keys) {
+                k.Time=o.TimeMin+k.Time*duration; k.Value*=amplitude;
+                k.InTangent*=amplitude/duration; k.OutTangent*=amplitude/duration;
             }
-            preset("Kick (rise + settle)", std::move(kick));
+            curve=std::move(c); committed=true;
+        };
+        preset("Flat (0)",Curve::Line(o.TimeMin,0,s.Editor.TimeMax,0));
+        preset("Linear",Curve::Line(o.TimeMin,0,s.Editor.TimeMax,amplitude));
+        preset("Ease in/out",Curve::EaseInOut(),true);
+        preset("Kick and settle",Curve::Kick(0.1f),true);
+        Curve sine; constexpr float pi2=6.28318530718f;
+        for (int i=0;i<=8;++i) {
+            float t=float(i)/8,slope=pi2*std::cos(pi2*t);
+            sine.Keys.push_back({t,i==0||i==8?0:std::sin(pi2*t),slope,slope});
         }
-        {
-            Curve sine;
-            for (int i = 0; i <= 8; ++i) {
-                const float p = (float)i / 8.0f;
-                const float w = glm::two_pi<float>() / (t1 - t0);
-                const float slope = amp * w * std::cos(glm::two_pi<float>() * p);
-                sine.Keys.push_back({t0 + p * (t1 - t0), amp * std::sin(glm::two_pi<float>() * p), slope, slope});
+        preset("Sine",sine,true);
+        if (ImGui::MenuItem("Smooth all tangents")) { curve.AutoTangents();for(auto& k:curve.Keys)k.Interpolation=CurveInterpolation::Cubic;committed=true; }
+        if (o.Default) { ImGui::Separator(); preset("Reset to default",*o.Default); }
+        ImGui::EndPopup();
+    }
+    if (committed) { s.Editor.UpdateCurve(ToImCurve(curve),true); s.Editor.SelectKeys({});selected.clear();s.Editor.Fit(); }
+    const auto copy=[&] {
+        Curve copied;for(int i:selected)copied.Keys.push_back(curve.Keys[i]);
+        ImGui::SetClipboardText(nlohmann::json{{"tartarusCurve",copied.ToJson(false)}}.dump().c_str());
+    };
+    ImGui::BeginDisabled(selected.empty());
+    if(EditorUIPrimitives::SecondaryButton("Copy")||(keyboard&&ctrl&&ImGui::IsKeyPressed(ImGuiKey_C)&&!selected.empty()))copy();
+    ImGui::SameLine();const bool cut=EditorUIPrimitives::SecondaryButton("Cut")||(keyboard&&ctrl&&ImGui::IsKeyPressed(ImGuiKey_X)&&!selected.empty());
+    ImGui::SameLine();const bool remove=EditorUIPrimitives::SecondaryButton("Delete Keys")||cut||(keyboard&&ImGui::IsKeyPressed(ImGuiKey_Delete)&&!selected.empty());
+    if(remove&&!selected.empty()) {
+        if(cut)copy();Curve c=curve;for(auto it=selected.rbegin();it!=selected.rend();++it)c.Keys.erase(c.Keys.begin()+*it);
+        apply(std::move(c));selected.clear();s.Editor.SelectKeys({});
+    }
+    ImGui::EndDisabled();ImGui::SameLine();
+    if(EditorUIPrimitives::SecondaryButton("Paste at Playhead")||(keyboard&&ctrl&&ImGui::IsKeyPressed(ImGuiKey_V))) {
+        const char* text=ImGui::GetClipboardText();const auto j=nlohmann::json::parse(text?text:"",nullptr,false);Curve pasted;
+        if(j.is_object()&&j.contains("tartarusCurve")&&Curve::FromJson(j["tartarusCurve"],pasted)&&!pasted.Empty()) {
+            Curve c=curve;const float origin=pasted.StartTime();std::vector<float> times;
+            for(auto k:pasted.Keys) {
+                k.Time+=s.Playhead-origin;if(k.Time<o.TimeMin||k.Time>s.Editor.TimeMax)continue;
+                const auto existing=std::find_if(c.Keys.begin(),c.Keys.end(),[&](const CurveKey& key){return std::abs(key.Time-k.Time)<.0001f;});
+                if(existing==c.Keys.end())c.Keys.push_back(k);else *existing=k;times.push_back(k.Time);
             }
-            preset("Sine (one cycle)", std::move(sine));
-        }
-        ImGui::Separator();
-        if (ImGui::MenuItem("Smooth all tangents")) {
-            curve.AutoTangents();
-            committed = true;
-        }
-        if (o.Default) {
-            ImGui::Separator();
-            preset("Reset to default", *o.Default);
+            c.Sort();apply(std::move(c));selected.clear();
+            for(int i=0;i<(int)curve.Keys.size();++i)if(std::find(times.begin(),times.end(),curve.Keys[i].Time)!=times.end())selected.push_back(i);
+            s.Editor.SelectKeys(selected);s.Error.clear();
+        }else s.Error="Clipboard does not contain curve keys.";
+    }
+    ImGui::SameLine();if(EditorUIPrimitives::SecondaryButton("Add Key")){s.InsertTime=s.Playhead;s.InsertValue=curve.Evaluate(s.Playhead);ImGui::OpenPopup("addKey");}
+    if(ImGui::BeginPopup("addKey")) {
+        ImGui::InputFloat("Time",&s.InsertTime,0,0,"%.5f");ImGui::InputFloat("Value",&s.InsertValue,0,0,o.ValueFormat);
+        if(EditorUIPrimitives::PrimaryButton("Insert")&&std::isfinite(s.InsertTime)&&std::isfinite(s.InsertValue)) {
+            Curve c=curve;const float time=std::clamp(s.InsertTime,o.TimeMin,s.Editor.TimeMax);
+            const auto existing=std::find_if(c.Keys.begin(),c.Keys.end(),[&](const CurveKey& k){return std::abs(k.Time-time)<.0001f;});
+            const int i=existing==c.Keys.end()?c.AddKey(time):int(existing-c.Keys.begin());c.Keys[i].Value=s.InsertValue;
+            if(o.LinearFallback)c.Keys[i].Interpolation=CurveInterpolation::Linear;
+            apply(std::move(c));selected={i};s.Editor.SelectKeys(selected);ImGui::CloseCurrentPopup();
         }
         ImGui::EndPopup();
     }
-
-    // The selected key, as numbers.
-    if (sel >= 0 && sel < (int)curve.Keys.size()) {
-        CurveKey& k = curve.Keys[sel];
-        float f[4] = {k.Time, k.Value, k.InTangent, k.OutTangent};
-        ImGui::SetNextItemWidth(-FLT_MIN);
-        if (ImGui::DragFloat4("##key", f, 0.001f, 0.0f, 0.0f, o.ValueFormat)) {
-            const float minT = sel > 0 ? curve.Keys[sel - 1].Time + 1e-4f : t0;
-            const float maxT = sel + 1 < (int)curve.Keys.size() ? curve.Keys[sel + 1].Time - 1e-4f : t1;
-            k.Time = std::clamp(f[0], minT, std::max(minT, maxT));
-            k.Value = f[1];
-            k.InTangent = f[2];
-            k.OutTangent = f[3];
+    ImGui::TextUnformatted("Interpolation / tangents");ImGui::SameLine();ImGui::BeginDisabled(selected.empty());
+    const char* modes[]={"Auto","Flat","Linear","Constant","Unify","Break"};
+    for(int mode=0;mode<6;++mode) {
+        if(mode)ImGui::SameLine();
+        if(EditorUIPrimitives::SecondaryButton(modes[mode])) {
+            Curve c=curve,smooth=curve;smooth.AutoTangents();
+            for(int i:selected) {
+                auto& k=c.Keys[i];k.Interpolation=mode==2?CurveInterpolation::Linear:mode==3?CurveInterpolation::Constant:CurveInterpolation::Cubic;
+                if(mode==0){k.InTangent=smooth.Keys[i].InTangent;k.OutTangent=smooth.Keys[i].OutTangent;}
+                if(mode==1)k.InTangent=k.OutTangent=0;
+                if(mode==4)k.InTangent=k.OutTangent=(k.InTangent+k.OutTangent)*.5f;
+            }
+            if(mode==4)s.Link=true;if(mode==5)s.Link=false;apply(std::move(c));
         }
-        if (ImGui::IsItemHovered()) EditorUI::SetTooltip("Selected key: time, value, in slope, out slope");
-        if (ImGui::IsItemDeactivatedAfterEdit()) committed = true;
     }
-    st.SetSelected(sel);
-    ImGui::PopID();
-    return committed;
+    ImGui::EndDisabled();ImGui::SameLine();ImGui::Checkbox("Link Handles",&s.Link);
+    ImGui::Checkbox("Snap",&s.Snap);ImGui::SameLine();ImGui::SetNextItemWidth(85);
+    ImGui::DragFloat("Time Step",&s.TimeStep,.001f,.0001f,100,"%.4f",ImGuiSliderFlags_AlwaysClamp);ImGui::SameLine();ImGui::SetNextItemWidth(85);
+    ImGui::DragFloat("Value Step",&s.ValueStep,.0001f,.000001f,100,"%.5f",ImGuiSliderFlags_AlwaysClamp);
+    ImGui::SameLine();ImGui::BeginDisabled(selected.empty());if(EditorUIPrimitives::SecondaryButton("Transform"))ImGui::OpenPopup("transform");
+    ImGui::SameLine();if(EditorUIPrimitives::SecondaryButton("Invert Values")){Curve c=curve;for(int i:selected){auto& k=c.Keys[i];k.Value=-k.Value;k.InTangent=-k.InTangent;k.OutTangent=-k.OutTangent;}apply(std::move(c));}
+    ImGui::EndDisabled();
+    if(ImGui::BeginPopup("transform")) {
+        ImGui::InputFloat("Time Offset",&s.TimeOffset);ImGui::InputFloat("Value Offset",&s.ValueOffset);
+        ImGui::InputFloat("Time Scale",&s.TimeScale);ImGui::InputFloat("Value Scale",&s.ValueScale);
+        ImGui::TextDisabled("Time scales around the first selected key; values scale around zero.");
+        if(EditorUIPrimitives::PrimaryButton("Apply")&&!selected.empty()) {
+            if(std::isfinite(s.TimeOffset)&&std::isfinite(s.ValueOffset)&&std::isfinite(s.TimeScale)&&std::isfinite(s.ValueScale)&&s.TimeScale>0) {
+                Curve c=curve;const float pivot=c.Keys[selected.front()].Time;bool valid=true;
+                for(int i:selected){auto& k=c.Keys[i];k.Time=pivot+(k.Time-pivot)*s.TimeScale+s.TimeOffset;k.Value=k.Value*s.ValueScale+s.ValueOffset;k.InTangent*=s.ValueScale/s.TimeScale;k.OutTangent*=s.ValueScale/s.TimeScale;valid&=k.Time>=o.TimeMin&&k.Time<=s.Editor.TimeMax&&std::isfinite(k.Value)&&std::isfinite(k.InTangent)&&std::isfinite(k.OutTangent);}
+                c.Sort();for(size_t i=1;i<c.Keys.size();++i)valid&=c.Keys[i].Time-c.Keys[i-1].Time>=.0001f;
+                if(valid){apply(std::move(c));s.Editor.SelectKeys({});selected.clear();s.Error.clear();ImGui::CloseCurrentPopup();}
+                else s.Error="Transform would overlap keys or leave the time range.";
+            }else s.Error="Use finite values and a positive time scale.";
+        }
+        ImGui::EndPopup();
+    }
+    if(EditorUIPrimitives::SecondaryButton(s.Playing?"Pause":"Play"))s.Playing=!s.Playing;ImGui::SameLine();
+    ImGui::SetNextItemWidth(std::max(140.0f,ImGui::GetContentRegionAvail().x-210));ImGui::SliderFloat("##playhead",&s.Playhead,o.TimeMin,s.Editor.TimeMax,"Time %.5f");
+    if(s.Playing)s.Playhead=o.TimeMin+std::fmod(std::max(0.0f,s.Playhead-o.TimeMin)+ImGui::GetIO().DeltaTime,s.Editor.TimeMax-o.TimeMin);
+    ImGui::SameLine();ImGui::Text("Value %.5g",curve.Evaluate(s.Playhead));ImGui::SameLine();ImGui::Checkbox("Key List",&s.KeyList);
+    if(!s.Error.empty())ImGui::TextWrapped("%s",s.Error.c_str());
+    ImVec2 size(requestedSize.x>0?requestedSize.x:ImGui::GetContentRegionAvail().x,
+                std::max(140.0f,std::min(requestedSize.y,ImGui::GetContentRegionAvail().y-ImGui::GetFontSize()*(s.KeyList?11:4))));
+    s.Editor.Draw("##graph",size,{s.Playhead});
+    const auto graphItem=ImGui::GetCurrentContext()->LastItemData;
+    s.Min=ImGui::GetWindowPos();s.Max=s.Min+ImGui::GetWindowSize();
+    s.RootWindow=ImGui::GetCurrentWindow()->RootWindow->ID;
+    if (ImGui::IsItemHovered()) EditorUI::SetTooltip("Double-click: add key   Ctrl-click: select multiple\nDrag empty space: select   Right-drag: pan   Wheel: zoom\nRight-click key: tangents   Delete: remove   Ctrl+Z / Ctrl+Y: undo / redo");
+    const auto edited=s.Editor.GetCurve();
+    if (edited!=incoming) s.Pending=true;
+    curve=FromImCurve(edited);
+    if (s.Pending && !s.Editor.IsDragging()) { committed=true; s.Pending=false; }
+    selected=s.Editor.SelectedKeys();
+    if(s.KeyList&&ImGui::BeginTable("##keys",4,ImGuiTableFlags_RowBg|ImGuiTableFlags_Borders|ImGuiTableFlags_ScrollY,{0,ImGui::GetFontSize()*6})) {
+        ImGui::TableSetupColumn("Key");ImGui::TableSetupColumn("Time");ImGui::TableSetupColumn("Value");ImGui::TableSetupColumn("Interpolation");ImGui::TableHeadersRow();
+        for(int i=0;i<(int)curve.Keys.size();++i) {
+            ImGui::PushID(i);ImGui::TableNextRow();ImGui::TableNextColumn();const bool has=std::find(selected.begin(),selected.end(),i)!=selected.end();
+            if(ImGui::Selectable(std::to_string(i+1).c_str(),has)){if(!ctrl)selected={i};else if(has)selected.erase(std::find(selected.begin(),selected.end(),i));else selected.push_back(i);s.Editor.SelectKeys(selected);}
+            const auto& k=curve.Keys[i];ImGui::TableNextColumn();ImGui::Text("%.5f",k.Time);ImGui::TableNextColumn();ImGui::Text(o.ValueFormat,k.Value);ImGui::TableNextColumn();
+            ImGui::TextUnformatted(k.Interpolation==CurveInterpolation::Linear?"Linear":k.Interpolation==CurveInterpolation::Constant?"Constant":"Cubic");ImGui::PopID();
+        }
+        ImGui::EndTable();
+    }
+    int primary=s.Editor.Selected();
+    if (primary>=0 && primary<int(curve.Keys.size())) {
+        auto& key=curve.Keys[primary];
+        float fields[4]={key.Time,key.Value,key.InTangent,key.OutTangent};
+        bool numeric=false;bool deactivated=false;const char* labels[]={"Time","Value","In Slope","Out Slope"};
+        for(int f=0;f<4;++f){if(f)ImGui::SameLine();ImGui::SetNextItemWidth(std::max(65.0f,(ImGui::GetContentRegionAvail().x-180)/(4-f)));
+            numeric|=ImGui::DragFloat(labels[f],&fields[f],f==0?.001f:.0001f,0,0,f==0?"%.5f":o.ValueFormat);deactivated|=ImGui::IsItemDeactivatedAfterEdit();}
+        if (numeric) {
+            float lo=primary>0?curve.Keys[primary-1].Time+0.0001f:o.TimeMin;
+            float hi=primary+1<int(curve.Keys.size())?curve.Keys[primary+1].Time-0.0001f:s.Editor.TimeMax;
+            if (std::all_of(std::begin(fields),std::end(fields),[](float v){return std::isfinite(v);})) {
+                const auto mode=key.Interpolation;
+                const bool tangentChanged=fields[2]!=key.InTangent||fields[3]!=key.OutTangent;
+                if(s.Link&&tangentChanged){const float slope=fields[2]!=key.InTangent?fields[2]:fields[3];fields[2]=fields[3]=slope;}
+                key={std::clamp(fields[0],lo,std::max(lo,hi)),fields[1],fields[2],fields[3],tangentChanged?CurveInterpolation::Cubic:mode};
+                s.Editor.UpdateCurve(ToImCurve(curve),!s.NumericPending);
+                s.NumericPending=true;
+            }
+        }
+        if (ImGui::IsItemHovered()) EditorUI::SetTooltip("Time | Value | Incoming slope | Outgoing slope");
+        if (deactivated) { committed=true; s.NumericPending=false; }
+    }
+    ImGui::TextDisabled("%zu keys | %zu selected | X: %s  Y: value",curve.Keys.size(),selected.size(),o.TimeInSeconds?"seconds":"normalized time");
+    ImGui::GetCurrentContext()->LastItemData=graphItem;
+    ImGui::PopID(); return committed;
 }
-
-} // namespace CurveEditor
+}

@@ -2,6 +2,7 @@
 // thumbnails, and asset delete/rename/duplicate. Split out of EditorLayer.cpp (#179).
 
 #include "EditorLayer.h"
+#include "Scripting/ScriptRuntime.h"
 #include "EditorTheme.h"
 #include "EditorUIPrimitives.h"
 #include "EditorLayerInternal.h"
@@ -917,6 +918,7 @@ void EditorLayer::DuplicateSelectedAsset(World& world, AssetLibrary& assets) {
         } while (std::filesystem::exists(candidate));
 
         std::error_code copyErr;
+        AtomicFile::NotifyWillChange(candidate);
         std::filesystem::copy_file(srcPath, candidate, copyErr);
         if (copyErr) {
             Log::Error("Failed to duplicate '" + key + "': " + copyErr.message());
@@ -931,7 +933,7 @@ void EditorLayer::DuplicateSelectedAsset(World& world, AssetLibrary& assets) {
         for (char& c : dupExt) c = (char)tolower((unsigned char)c);
         if (dupExt == ".json") InvalidateScenesListing();
         else if (dupExt == ".png" || dupExt == ".jpg" || dupExt == ".jpeg") InvalidateShotsListing();
-        else if (dupExt == ".controller" || dupExt == ".fpsanim") InvalidateAnimationListing();
+        else if (dupExt == ".controller" || dupExt == ".fpsanim" || dupExt == ".recoil" || dupExt==".camerashake") InvalidateAnimationListing();
 
         std::string newPath = candidate.generic_string();
         std::string folder = assets.AssetFolder(key);
@@ -1145,6 +1147,8 @@ const char* AssetKindLabel(Cell::Kind k) {
         case Cell::Kind::Shader:     return "Shader";
         case Cell::Kind::Animator:   return "Animator Controller";
         case Cell::Kind::Weapon:     return "Weapon Definition";
+        case Cell::Kind::Recoil:     return "Recoil Profile";
+        case Cell::Kind::CameraShake:return "Camera Shake";
         case Cell::Kind::Hdri:       return "HDRI";
         case Cell::Kind::Script:     return "Script";
     }
@@ -1253,7 +1257,7 @@ void EditorLayer::RefreshAnimationListingIfNeeded() {
             continue;
         }
         const auto ext = it->path().extension();
-        if (it->is_regular_file() && (ext == ".controller" || ext == ".fpsanim"))
+        if (it->is_regular_file() && (ext == ".controller" || ext == ".fpsanim" || ext == ".recoil" || ext==".camerashake"))
             m_AnimationListingCache.paths.push_back(it->path().generic_string());
     }
     std::sort(m_AnimationListingCache.paths.begin(), m_AnimationListingCache.paths.end());
@@ -1273,7 +1277,7 @@ std::vector<EditorLayer::ProjectAssetFile> EditorLayer::ScanProjectAssetFiles(co
         if (it->is_directory(entryEc)) {
             // Library/ is caches; screenshots/ has its own virtual folder; dot-folders are tooling.
             const std::string dir = it->path().filename().string();
-            if ((it.depth() == 0 && (dir == "Library" || dir == "screenshots")) || (!dir.empty() && dir[0] == '.'))
+            if (dir=="bin" || dir=="obj" || (it.depth() == 0 && (dir == "Library" || dir == "screenshots")) || (!dir.empty() && dir[0] == '.'))
                 it.disable_recursion_pending();
             continue;
         }
@@ -1288,6 +1292,8 @@ std::vector<EditorLayer::ProjectAssetFile> EditorLayer::ScanProjectAssetFiles(co
         else if (type == "prefab") f.Kind = Cell::Kind::Prefab;
         else if (type == "animatorcontroller") f.Kind = Cell::Kind::Animator;
         else if (type == "firstpersonanimationset") f.Kind = Cell::Kind::Weapon;
+        else if (type == "recoil") f.Kind = Cell::Kind::Recoil;
+        else if (type == "camerashake") f.Kind = Cell::Kind::CameraShake;
         else if (type == "hdri") f.Kind = Cell::Kind::Hdri;
         else if (type == "script") f.Kind = Cell::Kind::Script;
         else continue;
@@ -1581,20 +1587,16 @@ void EditorLayer::AssetGridFrameBegin(World& world, AssetLibrary& assets) {
         }
     }
 
-    // Animator Controllers (.controller) and weapon definitions (.fpsanim): double-click opens
-    // the Animator window / selects the weapon definition for the Inspector. Also listed in their
-    // folders on disk (m_ProjectAssetIndex below), which is what a search finds - except from in
-    // here, where this listing is the one shown.
-    static const std::string kAnimationFolder = "Animation";
-    assets.CreateFolder(kAnimationFolder);
-    const bool inAnimationFolder = m_CurrentAssetFolder == kAnimationFolder;
-    if (inAnimationFolder) {
-        RefreshAnimationListingIfNeeded();
-        for (const auto& path : m_AnimationListingCache.paths) {
-            const bool weapon = std::filesystem::path(path).extension() == ".fpsanim";
-            std::string name = std::filesystem::path(path).stem().string();
-            if (!MatchesAssetSearch(parsedSearch, name, weapon ? "weapon" : "animator", {})) continue;
-            cells.push_back({weapon ? Cell::Kind::Weapon : Cell::Kind::Animator, path, name, nullptr, nullptr});
+    // Animation assets use their real project folders, like prefabs and scripts.
+    // Retire the old all-project shortcut when it has no authored folder behind it.
+    // DeleteFolder only changes the browser folder list; it does not delete files.
+    std::error_code animationFolderEc;
+    if (!std::filesystem::is_directory(ProjectPaths::Resolve("Animation"), animationFolderEc)) {
+        const auto& folders = assets.Folders();
+        if (std::find(folders.begin(), folders.end(), "Animation") != folders.end() &&
+            assets.CanDeleteFolder("Animation")) {
+            assets.DeleteFolder("Animation");
+            if (m_CurrentAssetFolder == "Animation") NavigateAssetFolder("assets/Weapons");
         }
     }
 
@@ -1678,11 +1680,13 @@ void EditorLayer::AssetGridFrameBegin(World& world, AssetLibrary& assets) {
     for (const auto& f : m_ProjectAssetIndex.files) {
         if (m_ListedAssetKeys.count(f.Key)) continue;
         const bool fileOnly = f.Kind == Cell::Kind::Animator || f.Kind == Cell::Kind::Weapon ||
+                              f.Kind == Cell::Kind::Recoil || f.Kind == Cell::Kind::CameraShake ||
                               f.Kind == Cell::Kind::Hdri || f.Kind == Cell::Kind::Script;
-        if (inAnimationFolder && (f.Kind == Cell::Kind::Animator || f.Kind == Cell::Kind::Weapon)) continue; // listed above
         const char* kindName = f.Kind == Cell::Kind::Model ? "model" : f.Kind == Cell::Kind::Texture ? "texture"
                              : f.Kind == Cell::Kind::Material ? "material" : f.Kind == Cell::Kind::Sound ? "sound"
                              : f.Kind == Cell::Kind::Animator ? "animator" : f.Kind == Cell::Kind::Weapon ? "weapon"
+                             : f.Kind == Cell::Kind::Recoil ? "recoil"
+                             : f.Kind == Cell::Kind::CameraShake ? "camerashake"
                              : f.Kind == Cell::Kind::Script ? "script" : f.Kind == Cell::Kind::Hdri ? "hdri" : "prefab";
         // An HDRI is an image: both t:Hdri and t:Texture find it (like a screenshot).
         if (!MatchesAssetSearch(parsedSearch, f.Name, kindName, {}) &&
@@ -1721,6 +1725,8 @@ void EditorLayer::AssetGridFrameBegin(World& world, AssetLibrary& assets) {
                 case Cell::Kind::Shader:     return 8;
                 case Cell::Kind::Animator:   return 9;
                 case Cell::Kind::Weapon:     return 10;
+                case Cell::Kind::Recoil:     return 10;
+                case Cell::Kind::CameraShake:return 10;
                 case Cell::Kind::Hdri:       return 11;
                 case Cell::Kind::Script:     return 12;
             }
@@ -1830,6 +1836,8 @@ void EditorLayer::DrawAssetCell(World& world, AssetLibrary& assets, int index, f
             : cell.kind == Cell::Kind::Shader ? ICON_FA_FILE_CODE
             : cell.kind == Cell::Kind::Animator ? ICON_FA_DIAGRAM_PROJECT
             : cell.kind == Cell::Kind::Weapon ? ICON_FA_CROSSHAIRS
+            : cell.kind == Cell::Kind::Recoil ? ICON_FA_BURST
+            : cell.kind == Cell::Kind::CameraShake ? ICON_FA_VIDEO
             : cell.kind == Cell::Kind::Hdri ? ICON_FA_SUN
             : cell.kind == Cell::Kind::Script ? ICON_FA_SCROLL
             : (playing ? ICON_FA_STOP : ICON_FA_MUSIC);
@@ -1849,6 +1857,8 @@ void EditorLayer::DrawAssetCell(World& world, AssetLibrary& assets, int index, f
                 case Cell::Kind::Shader:     return EditorTheme::KindScript;
                 case Cell::Kind::Animator:   return EditorTheme::KindAnim;
                 case Cell::Kind::Weapon:     return EditorTheme::Warning;
+                case Cell::Kind::Recoil:     return EditorTheme::Warning;
+                case Cell::Kind::CameraShake:return EditorTheme::Warning;
                 case Cell::Kind::Screenshot: return EditorTheme::Info;
             }
             return EditorTheme::Secondary;
@@ -2083,7 +2093,7 @@ void EditorLayer::DrawAssetCell(World& world, AssetLibrary& assets, int index, f
         }
         if ((cell.kind == Cell::Kind::Shader || cell.kind == Cell::Kind::Script) &&
             ImGui::IsItemHovered() && ImGui::IsMouseDoubleClicked(ImGuiMouseButton_Left)) {
-            Screenshot::OpenFile(cell.key); // item 15: browsable + externally-openable, no in-editor text editor
+            if(cell.kind==Cell::Kind::Script)OpenScriptIDE(cell.key);else Screenshot::OpenFile(cell.key);
         }
         // #176 - double-click opens the prefab in Prefab Mode, like Unity (drag it into the scene,
         // or right-click > Place Instance, to place one).
@@ -2176,7 +2186,7 @@ void EditorLayer::DrawAssetCell(World& world, AssetLibrary& assets, int index, f
                     cell.display.c_str());
             } else if (cell.kind == Cell::Kind::Animator) {
                 EditorUI::SetTooltip("%s\n\nDouble-click to open in the Animator.", cell.display.c_str());
-            } else if (cell.kind == Cell::Kind::Weapon) {
+            } else if (cell.kind == Cell::Kind::Weapon || cell.kind == Cell::Kind::Recoil || cell.kind==Cell::Kind::CameraShake) {
                 EditorUI::SetTooltip("%s\n\nSelect to edit in the Inspector.", cell.display.c_str());
             } else if (cell.kind == Cell::Kind::Hdri) {
                 EditorUI::SetTooltip("%s\n\nDrag onto the sky's HDRI field (Environment) to light the scene with it.",
@@ -2276,6 +2286,7 @@ void EditorLayer::DrawAssetCell(World& world, AssetLibrary& assets, int index, f
                     m_SelectedAssetIsFolder = false;
                 }
                 if (ImGui::MenuItem(ICON_FA_UP_RIGHT_FROM_SQUARE "  Open Externally")) Screenshot::OpenFile(cell.key);
+                if(cell.kind==Cell::Kind::Script && ImGui::MenuItem("Open in Script IDE"))OpenScriptIDE(cell.key);
                 if (ImGui::MenuItem(ICON_FA_FOLDER_OPEN "  Show in folder")) Screenshot::ShowInFolder(cell.key);
                 if (m_ExtraAssetSelection.empty() && ImGui::MenuItem(ICON_FA_COPY "  Copy Path")) {
                     ImGui::SetClipboardText(cell.key.c_str());
@@ -2466,6 +2477,7 @@ void EditorLayer::DrawAssetCell(World& world, AssetLibrary& assets, int index, f
                 ImGui::Separator();
                 // Files that are never library entries have nothing to remove from it.
                 const bool fileOnly = cell.kind == Cell::Kind::Animator || cell.kind == Cell::Kind::Weapon ||
+                                      cell.kind == Cell::Kind::Recoil || cell.kind==Cell::Kind::CameraShake ||
                                       cell.kind == Cell::Kind::Hdri || cell.kind == Cell::Kind::Script;
                 ImGui::PushStyleColor(ImGuiCol_Text, EditorUIPrimitives::DangerColor());
                 if (!fileOnly && ImGui::MenuItem(removeLabel)) {
@@ -2522,6 +2534,33 @@ void EditorLayer::HandleAssetGridBackground(World& world, AssetLibrary& assets) 
     if (ImGui::BeginPopup("##BrowserBgContext")) {
         if (ImGui::MenuItem(ICON_FA_FOLDER_PLUS "  New Folder")) makeNewFolder();
         ImGui::Separator();
+        if (ImGui::MenuItem(ICON_FA_CODE "  Create C# Script")) {
+            const auto dir=std::filesystem::u8path(ProjectPaths::Resolve(NewAssetFolder("assets/Scripts")));
+            std::error_code ec; std::filesystem::create_directories(dir,ec);
+            std::string name="NewScript"; int index=1;
+            while(std::filesystem::exists(dir/(name+".cs"),ec)) name="NewScript"+std::to_string(index++);
+            const auto file=dir/(name+".cs");
+            const std::string source="using Tartarus;\nusing System.Numerics;\n\nnamespace Tartarus.Gameplay;\n\npublic sealed class "+name+" : MonoBehaviour\n{\n    public override void Awake() { }\n    public override void Start() { }\n    public override void Update() { }\n    public override void FixedUpdate() { }\n    public override void OnDestroy() { }\n}\n";
+            if(AtomicFile::WriteBytes(file,source)) {
+                AssetDatabase::EnsureGuid(file.string()); InvalidateProjectAssetIndex();
+                m_SelectedAssetKey=file.string(); m_SelectedAssetIsFolder=false; OpenScriptIDE(file.string());
+                Scripting::RequestBuild();
+                Log::Info("Created C# script "+ProjectPaths::Relativize(file.string())+". Save to compile; drag onto an object to attach.");
+            } else Log::Error("Could not create C# script.");
+        }
+        if (ImGui::MenuItem(ICON_FA_CODE "  Create C# Editor Script")) {
+            const auto dir=std::filesystem::u8path(ProjectPaths::Resolve("assets/Editor"));
+            std::error_code ec;std::filesystem::create_directories(dir,ec);
+            std::string name="NewEditorTool";int index=1;
+            while(std::filesystem::exists(dir/(name+".cs"),ec)) name="NewEditorTool"+std::to_string(index++);
+            const auto file=dir/(name+".cs");
+            const std::string source="using Tartarus;\nusing Tartarus.Editor;\n\nnamespace Tartarus.EditorTools;\n\npublic sealed class "+name+" : EditorWindow\n{\n    public override void OnGUI()\n    {\n        EditorGUILayout.Label(\"Hello from C# editor tools\");\n    }\n}\n";
+            if(!ec && AtomicFile::WriteBytes(file,source)) {
+                AssetDatabase::EnsureGuid(file.string());InvalidateProjectAssetIndex();
+                m_SelectedAssetKey=file.string();m_SelectedAssetIsFolder=false;OpenScriptIDE(file.string());
+                Scripting::RequestBuild();Log::Info("Created editor tool. Save to compile; open it from the C# Tools panel.");
+            } else Log::Error("Could not create C# editor script.");
+        }
         if (ImGui::MenuItem(ICON_FA_DROPLET "  Create Material")) {
             // #87 — the file used to be built from the VIRTUAL folder name with no root, so it
             // landed relative to the process CWD (usually build/Release/, wiped by a clean
@@ -2547,6 +2586,34 @@ void EditorLayer::HandleAssetGridBackground(World& world, AssetLibrary& assets) 
             }
         }
         if (ImGui::MenuItem(ICON_FA_GUN "  Create First-Person Weapon...")) m_OpenWeaponWizard = true;
+        if (ImGui::MenuItem(ICON_FA_VIDEO "  Create Camera Shake")) {
+            const auto base=std::filesystem::u8path(ProjectPaths::Resolve(NewAssetFolder("assets/CameraShake")+"/New Camera Shake.camerashake"));
+            auto target=base;
+            std::error_code ec;
+            for(int n=1;std::filesystem::exists(target,ec);++n)
+                target=base.parent_path()/(base.stem().u8string()+" "+std::to_string(n)+".camerashake");
+            if(CameraShakeAsset{}.SaveFile(target.u8string())) {
+                AssetDatabase::EnsureGuid(target.u8string());
+                m_SelectedAssetKey=target.u8string(); m_SelectedAssetIsFolder=false;
+                InvalidateAnimationListing();
+            } else Log::Error("Could not create camera shake asset.");
+        }
+        if (ImGui::MenuItem(ICON_FA_BURST "  Create Recoil Profile")) {
+            const std::string rel = NewAssetFolder("assets/Recoil") + "/New Recoil.recoil";
+            auto recoilPath = std::filesystem::u8path(ProjectPaths::Resolve(rel));
+            recoilPath.replace_extension(".recoil");
+            const auto base = recoilPath;
+            std::error_code recoilEc;
+            std::filesystem::create_directories(recoilPath.parent_path(), recoilEc);
+            for (int n = 1; std::filesystem::exists(recoilPath, recoilEc); ++n)
+                recoilPath = base.parent_path() / (base.stem().u8string() + " " + std::to_string(n) + ".recoil");
+            if (RecoilAsset{}.SaveFile(recoilPath.u8string())) {
+                AssetDatabase::EnsureGuid(recoilPath.u8string());
+                m_SelectedAssetKey = recoilPath.u8string();
+                m_SelectedAssetIsFolder = false;
+                InvalidateAnimationListing();
+            } else Log::Error("Could not create recoil profile.");
+        }
         if (ImGui::MenuItem(ICON_FA_PERSON_WALKING "  Create Body Locomotion Controller")) {
             // The standard first-person body graph (14 states, 63 tuned transitions), its clips found by name
             // among the project's animation files (the MC Core Motion pack's names: Loco_Walk_Fwd, ...).
@@ -2576,7 +2643,7 @@ void EditorLayer::HandleAssetGridBackground(World& world, AssetLibrary& assets) 
         }
         if (ImGui::MenuItem(ICON_FA_DIAGRAM_PROJECT "  Create Animator Controller")) {
             // In the folder being viewed, like Create Material (assets/Animations/Controllers otherwise);
-            // listed in the virtual Animation folder and opened straight into the Animator window.
+            // listed in that project folder and opened straight into the Animator window.
             std::error_code ec;
             const std::string dirRel = NewAssetFolder("assets/Animations/Controllers");
             std::filesystem::create_directories(std::filesystem::u8path(ProjectPaths::Resolve(dirRel)), ec);
@@ -2740,7 +2807,16 @@ void EditorLayer::HandleAssetGridBackground(World& world, AssetLibrary& assets) 
                 } else {
                     set.Controller = ctrlRel;
                     set.Clips.clear();
-                    if (set.SaveFile(ProjectPaths::Resolve(setRel))) {
+                    RecoilAsset recoil;
+                    set.Procedural.Recoil = recoil.Data;
+                    set.Procedural.Recoil.HipProcedural = true;
+                    set.RecoilProfile = dirRel + "/" + safe + ".recoil";
+                    const bool profileSaved = recoil.SaveFile(ProjectPaths::Resolve(set.RecoilProfile));
+                    if (profileSaved) {
+                        AssetDatabase::EnsureGuid(ProjectPaths::Resolve(set.RecoilProfile));
+                        set.RecoilProfileGuid = AssetDatabase::RefGuid(set.RecoilProfile);
+                    }
+                    if (profileSaved && set.SaveFile(ProjectPaths::Resolve(setRel))) {
                         InvalidateAnimationListing();
                         Log::Info("Created weapon " + setRel + " (controller " + ctrlRel + "). Select it in the Asset Browser to tune it.");
                         ImGui::CloseCurrentPopup();

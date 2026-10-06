@@ -162,8 +162,8 @@
               "blendParamY": "MoveY",
               "children": [
                 {
-                  "clip": "assets/Animations/Mocap/RootMotion/Idle/AM_Stand_Idle_01.fbx",
-                  "clipGuid": "cbec7c424d8c6f82",
+                  "clip": "assets/Animations/Mocap/RootMotion/Ready/AM_Ready_Idle_01.fbx",
+                  "clipGuid": "120c50e778307a32",
                   "threshold": 0.0,
                   "thresholdY": 0.0,
                   "speed": 1.0

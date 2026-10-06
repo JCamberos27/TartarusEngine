@@ -1,0 +1,91 @@
+{
+  "boxes": [],
+  "empties": [],
+  "formatVersion": 4,
+  "models": [
+    {
+      "Animator Controller": {
+        "Controller": {
+          "path": "assets/Weapons/AKS74U/AKS74U.controller",
+          "pathGuid": "75517f5b1fb22d6c"
+        },
+        "Speed": 1.0,
+        "Track": "weapon",
+        "rootMotion": "Off",
+        "rootMotionBone": "",
+        "rootMotionRotation": true,
+        "rootMotionVertical": false
+      },
+      "Weapon Definition": {
+        "Muzzle Enabled": true,
+        "Flash Time": 0.055,
+        "Light Intensity": 18,
+        "Player Flash Scale": 0.35,
+        "Light Range": 7,
+        "Light Color": [1,0.72,0.38],
+        "Flame Texture": "assets/Effects/Muzzle/T_MuzzleFlame.png",
+        "Flame Glow": 150,
+        "Flame Scale": 1.75,
+        "Flame Color": [1,0.147,0.0177],
+        "Flame Lifetime Min": 0.125,
+        "Flame Lifetime Max": 0.175,
+        "Flame Length Min": 0.16,
+        "Flame Length Max": 0.32,
+        "Flame Width Min": 0.04,
+        "Flame Width Max": 0.06,
+        "Muzzle Style": 1,
+        "Flash Sprite": "muzzle_star",
+        "Flash Lifetime": 0.065,
+        "Flash Size Min": 0.26,
+        "Flash Size Max": 0.34,
+        "Flash Intensity": 14,
+        "Side Jets": true,
+        "Core Glow": true,
+        "Spark Count": 9,
+        "Smoke": true,
+        "Afterfire Smoke": true,
+        "Smoke Scale": 1,
+        "Smoke Lifetime Min": 2,
+        "Smoke Lifetime Max": 3,
+        "Smoke Alpha": 0.18,
+        "Animation Set": {
+          "path": "assets/Weapons/AKS74U/AKS74U.fpsanim",
+          "pathGuid": "c0ff631aac421f76"
+        },
+        "Description": "5.45 mm rifle. 30-round magazine, selectable semi/full-auto, magazine reload."
+      },
+      "id": 0,
+      "materials": [
+        {
+          "guid": "43edbab5337788c2",
+          "path": "assets/Weapons/AKS74U/Materials/AKS74U.mat"
+        },
+        {
+          "guid": "97e35a4f8b04858c",
+          "path": "assets/Weapons/AKS74U/Materials/Cartridge_545x39mm.mat"
+        }
+      ],
+      "name": "AKS-74U",
+      "order": 0,
+      "parentId": -1,
+      "path": "assets/Weapons/AKS74U/Weapon/AKS-74U_A_W_ADS.fbx",
+      "pathGuid": "6f35fb7e3ac4ee7b",
+      "position": [
+        0.0,
+        0.0,
+        0.0
+      ],
+      "rotation": [
+        0.0,
+        0.0,
+        0.0,
+        1.0
+      ],
+      "scale": [
+        1.0,
+        1.0,
+        1.0
+      ]
+    }
+  ]
+}

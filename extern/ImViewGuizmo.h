@@ -1,4 +1,4 @@
-﻿#pragma once
+#pragma once
 
 /*===============================================
 ImViewGuizmo Single-Header Library by Marcel Kazemi
@@ -337,7 +337,7 @@ namespace ImViewGuizmo {
         const ImVec2 originScreenPos = worldToScreen(origin);
 
         // Hover detection 
-        const bool canInteract = !(io.ConfigFlags & ImGuiConfigFlags_NoMouse);
+        const bool canInteract = !(io.ConfigFlags & ImGuiConfigFlags_NoMouse) && (ImGui::IsWindowHovered(ImGuiHoveredFlags_RootAndChildWindows) || ctx.activeTool != TOOL_NONE);
         if (canInteract && ctx.activeTool == TOOL_NONE && !ctx.isAnimating) {
             ImVec2 mousePos = io.MousePos;
             float distToCenterSq = ImLengthSqr(ImVec2(mousePos.x - position.x, mousePos.y - position.y));
@@ -513,7 +513,7 @@ namespace ImViewGuizmo {
         const Style& style = GetStyle();
         bool wasModified = false;
         
-        const bool canInteract = !(io.ConfigFlags & ImGuiConfigFlags_NoMouse);
+        const bool canInteract = !(io.ConfigFlags & ImGuiConfigFlags_NoMouse) && (ImGui::IsWindowHovered(ImGuiHoveredFlags_RootAndChildWindows) || ctx.activeTool != TOOL_NONE);
         const float radius = style.toolButtonRadius * style.scale;
         const ImVec2 center = { position.x + radius, position.y + radius };
 
@@ -577,7 +577,7 @@ namespace ImViewGuizmo {
         const Style& style = GetStyle();
         bool wasModified = false;
 
-        const bool canInteract = !(io.ConfigFlags & ImGuiConfigFlags_NoMouse);
+        const bool canInteract = !(io.ConfigFlags & ImGuiConfigFlags_NoMouse) && (ImGui::IsWindowHovered(ImGuiHoveredFlags_RootAndChildWindows) || ctx.activeTool != TOOL_NONE);
         const float radius = style.toolButtonRadius * style.scale;
         const ImVec2 center = { position.x + radius, position.y + radius };
 

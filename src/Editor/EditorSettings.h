@@ -268,6 +268,7 @@ struct EditorSettings {
     // Missing or unparsable file silently keeps the compiled-in defaults above — first launch,
     // or a hand-deleted prefs file, is not an error.
     static void Load();
+    static void ReloadForUndo();
 
     // Marks preferences dirty. Cheap — call it freely whenever a preference changes (every
     // frame of a slider drag is fine). The actual atomic write is coalesced into Flush().

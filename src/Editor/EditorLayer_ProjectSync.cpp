@@ -24,6 +24,8 @@
 #include "ProjectPaths.h"
 #include "ProjectSettings.h"
 #include "ProjectWatcher.h"
+#include "Scripting/ScriptRuntime.h"
+#include "Scripting/ScriptComponent.h"
 #include "SceneSerializer.h"
 #include "World.h"
 
@@ -73,6 +75,13 @@ int RetargetSceneReferences(World& world, const std::string& oldPath, const std:
         }
     }
     // Placed models are per-entity instances that each carry the file path.
+    for(auto [e,s]:reg.view<CSharpScriptComponent>().each()) {
+        try {
+            auto slots=Scripting::GetSlots(s); bool changed=false;
+            for(auto& slot:slots) if(slot.Id!=0 && Retarget(slot.Source,oldPath,newPath)) { ++n; changed=true; }
+            if(changed) Scripting::SetSlots(s,slots);
+        } catch(const std::exception&) { }
+    }
     for (auto [e, rend] : reg.view<RenderableComponent>().each())
         if (rend.ModelRef && SameFile(AbsoluteOf(rend.ModelRef->Path()), oldPath)) { rend.ModelRef->SetPath(newPath); ++n; }
     for (auto [e, pi] : reg.view<PrefabInstanceComponent>().each()) n += Retarget(pi.SourcePath, oldPath, newPath) ? 1 : 0;
@@ -90,7 +99,7 @@ bool ChangesAssetIndex(const std::string& path) {
     if (rel == "library" || rel.rfind("library/", 0) == 0) return false;
     const std::string type = AssetDatabase::AssetType(path);
     if (type == "model" || type == "texture" || type == "material" || type == "audio" || type == "prefab" ||
-        type == "animatorcontroller" || type == "firstpersonanimationset" || type == "hdri" || type == "script")
+        type == "animatorcontroller" || type == "firstpersonanimationset" || type == "recoil" || type == "hdri" || type == "script")
         return true;
     return type.empty() && fs::path(path).extension().empty();
 }
@@ -107,9 +116,16 @@ void EditorLayer::SyncProjectChanges(World& world, AssetLibrary& assets) {
         AssetDatabase::ScanProject();
         InvalidateScenesListing();
         InvalidateProjectAssetIndex();
+        Scripting::RequestBuild();
     }
     for (const auto& c : changes) {
         using K = ProjectWatcher::Change::Kind;
+        auto source=[](const std::string& path) {
+            const auto p=fs::path(path);
+            for(const auto& part:p) if(part=="bin" || part=="obj") return false;
+            return p.extension()==".cs" || p.extension()==".csproj";
+        };
+        if(source(c.Path) || source(c.OldPath)) Scripting::RequestBuild();
         if (c.Type == K::Modified) m_AssetThumbs.Invalidate(fs::path(c.Path).lexically_normal().string());
         else if (ChangesAssetIndex(c.Path) || (c.Type == K::Renamed && ChangesAssetIndex(c.OldPath)))
             InvalidateProjectAssetIndex(); // the Asset Browser's list of files on disk
@@ -180,12 +196,14 @@ int EditorLayer::ApplyAssetMove(World& world, AssetLibrary& assets, const std::s
 
 // #129 - Rename in the Asset Browser renames the real file (and its .meta, keeping the GUID),
 // like Unity, instead of only setting a display name. Keys may be project-relative or absolute;
-// newKey is in the same style as oldKey. Not undoable (Unity's isn't either).
+// newKey is in the same style as oldKey. File paths and GUID sidecars join global history.
 bool EditorLayer::RenameAssetFile(World& world, AssetLibrary& assets, const std::string& oldKey,
                                   const std::string& newKey, std::string& error) {
     const std::string oldAbs = AbsoluteOf(oldKey), newAbs = AbsoluteOf(newKey);
     std::error_code ec;
     if (fs::exists(newAbs, ec) && !SameFile(oldAbs, newAbs)) { error = "a file with that name already exists"; return false; }
+    AtomicFile::NotifyWillChange(oldAbs);AtomicFile::NotifyWillChange(newAbs);
+    AtomicFile::NotifyWillChange(oldAbs+".meta");AtomicFile::NotifyWillChange(newAbs+".meta");
     fs::rename(oldAbs, newAbs, ec);
     if (ec) { error = ec.message(); return false; }
     if (AssetDatabase::GuidForPath(oldAbs).IsValid()) {
@@ -252,6 +270,7 @@ void EditorLayer::OnExternalRemove(World& /*world*/, AssetLibrary& assets, const
     AssetDatabase::ForgetPath(path);
     const int dropped = assets.ForgetRemoved(path); // a file, or everything under a deleted folder
     // Unity deletes the sidecar of an asset deleted outside it.
+    AtomicFile::NotifyWillChange(path + ".meta");
     if (fs::exists(path + ".meta", ec) && fs::remove(path + ".meta", ec))
         Log::Info("Removed '" + ProjectPaths::Relativize(path) + ".meta' (its asset was deleted).");
     if (type == "scene" || type.empty()) InvalidateScenesListing();

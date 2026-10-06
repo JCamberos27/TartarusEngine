@@ -112,7 +112,11 @@ void AimBone(Pose& pose, const std::vector<int>& parents, std::vector<glm::mat4>
 // `gripPose`, when given, is where limbs that keep their animated offset read that offset from
 // instead of `pose`: a crossfade blends two arm shapes joint by joint, and even when both hold
 // the gun the same way the blend doesn't, so the animator passes the pose it's fading into.
-void ApplyRig(const IKRigComponent& rig, const Model& model, Pose& pose, const Pose* gripPose = nullptr);
+// PreserveBaseGrip keeps that action reference before locomotion layers, including the held
+// grip of an ADS reload; the finished target still carries the hand through those layers.
+void ApplyHeldPose(Pose& pose,const Pose& held,const std::vector<float>& weights);
+void ApplyAdditivePose(Pose& pose,const Pose& layer,const Pose& reference,const std::vector<float>& mask,float weight);
+void ApplyRig(const IKRigComponent& rig, const Model& model, Pose& pose, const Pose* gripPose = nullptr,bool holdAlreadyApplied=false);
 
 // The bones an enabled limb or look-at names that `model` doesn't have (an empty name counts),
 // for the Inspector's warning. Empty when the rig can run as set up.
@@ -151,6 +155,8 @@ struct FootSlideOutput {
     float PelvisDrop = 0.0f;                                  // metres, >= 0
     float Scale = 1.0f;                                       // the stride scale applied
 };
+
+FootSlideOutput SmoothFootSlideOutput(const FootSlideOutput& current,const FootSlideOutput& target,float dt,float ease);
 // The planted feet's drift while they are planted, per plant (cm in the log): what the correction is judged by.
 struct FootSlideStats {
     int Plants = 0;

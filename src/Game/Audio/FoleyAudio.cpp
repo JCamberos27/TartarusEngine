@@ -32,13 +32,15 @@ int FootContactDetector::Update(const float height[2], float dt, float lift, flo
         if (!Primed) { // the first frame only learns where the feet are
             Floor[s] = Prev[s] = h;
             Lifted[s] = Falling[s] = false;
+            SinceContact[s]=1.0f;
             continue;
         }
         const float vy = dt > 1e-5f ? (h - Prev[s]) / dt : 0.0f;
         Prev[s] = h;
+        SinceContact[s]+=std::max(dt,0.0f);
         if (!Lifted[s]) {
             Floor[s] = std::min(Floor[s] + kRelax * std::max(dt, 0.0f), h);
-            if (h > Floor[s] + lift) {
+            if (SinceContact[s]>=kContactGuard && h > Floor[s] + lift) {
                 Lifted[s] = true;
                 Falling[s] = false;
                 Peak[s] = h;
@@ -48,10 +50,13 @@ int FootContactDetector::Update(const float height[2], float dt, float lift, flo
         Peak[s] = std::max(Peak[s], h);
         if (vy < -kFallSpeed) Falling[s] = true;
         const bool backDown = h <= Floor[s] + contact;
-        const bool stopped = Falling[s] && vy > -kStopSpeed && Peak[s] - h >= 0.5f * lift;
+        // An upward rebound is not a landing. Stairs can plant above the previous floor,
+        // but the foot must actually come to rest there, rather than reverse direction.
+        const bool stopped=Falling[s] && std::abs(vy)<kStopSpeed && Peak[s]-h>=0.5f*lift;
         if (backDown || stopped) {
             Lifted[s] = false;
             Floor[s] = h;
+            SinceContact[s]=0.0f;
             down |= 1 << s;
         }
     }

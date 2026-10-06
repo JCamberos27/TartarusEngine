@@ -347,8 +347,8 @@ void NpcBody::SyncLower() {
 }
 
 void NpcBody::LateUpdate(World& world, float dt, const Camera* weaponCam) {
-    (void)world;
     if (!IsActive() || m_PoseExternal || !m_DriverModel) return;
+    ApplySpineStability(world);
     FootPass(dt);
     const glm::mat4 rootW = RootWorld();
     {
@@ -481,6 +481,46 @@ void NpcBody::LateUpdate(World& world, float dt, const Camera* weaponCam) {
     // The head bone, where the weapon's camera goes (its arms rig is placed by the same bone).
     glm::mat4 head(1.0f);
     m_Eye = m_DriverModel->NodeTransform("head", head) ? glm::vec3(rootW * head[3]) : m_Feet + glm::vec3(0.0f, 1.62f, 0.0f);
+}
+
+void NpcBody::ApplySpineStability(const World& world) {
+    const auto* ac = world.Registry.try_get<AnimatorControllerComponent>(m_Driver);
+    if (!ac) return;
+    float crouch = m_In.Crouched ? 1.0f : 0.0f;
+    const float weight = std::clamp(m_Set.SpineStability, 0.0f, 1.0f) * FPBody::LocomotionSpineWeight(*ac, crouch);
+    if (weight <= 1e-5f) return;
+    const auto ctrl = GetAnimatorController(ac->Controller);
+    if (!ctrl || ctrl->Layers.empty()) return;
+    Model& m = *m_DriverModel;
+    const int track = ctrl->TrackIndex(ac->Track);
+    const char* states[2] = {FPBody::kStateLocomotion, FPBody::kStateCrouchLoco};
+    for (int s = 0; s < 2; ++s) {
+        const int state = ctrl->Layers[0].FindState(states[s]);
+        if (state < 0) continue;
+        const auto& motion = ctrl->Layers[0].States[state].MotionFor(track);
+        std::string idle = motion.Clip;
+        float nearest = 1e30f;
+        for (const auto& child : motion.Children) {
+            const float distance = child.Threshold * child.Threshold + child.ThresholdY * child.ThresholdY;
+            if (distance < nearest) { nearest = distance; idle = child.Clip; }
+        }
+        int clip = idle.empty() ? -1 : m.FindClipByRef(idle);
+        if (clip < 0 && !idle.empty()) clip = m.FindAnimation(idle);
+        if (m_SpineIdleClips[s] == clip) continue;
+        m_SpineIdleGlobals[s].clear();
+        if (clip >= 0) {
+            IK::Pose neutral;
+            m.SampleLocalPose(clip, 0.0f, AnimationWrapMode::ClampForever, neutral);
+            IK::ComputeGlobals(neutral, m_DriverParents, m_SpineIdleGlobals[s]);
+        }
+        m_SpineIdleClips[s] = clip;
+    }
+    std::array<int, 5> bones = {-1, -1, -1, -1, -1};
+    for (int k = 0; k < m_DriverSpineCount; ++k) bones[m_DriverSpineSlot[k]] = m_DriverSpine[k];
+    m_Pose = m.AppliedLocalPose();
+    FPBody::BlendLocomotionSpine(m_Pose, m_DriverParents, bones, m_SpineIdleGlobals[0], m_SpineIdleGlobals[1], crouch, weight);
+    m.ApplyLocalPose(m_Pose);
+    m_PiecesStale = true;
 }
 
 void NpcBody::OffsetSpine(const std::function<glm::quat(float)>& stepFor) {

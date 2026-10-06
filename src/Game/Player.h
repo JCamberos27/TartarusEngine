@@ -4,8 +4,9 @@
 
 class World;
 
-// Basic first-person playtest controller: WASD + mouse look, gravity/jump. Just a way to walk
-// around and check collision while testing a scene in Play mode — no gameplay of its own.
+// Native state and input adapter for project/assets/Scripts/PlayerController.cs.
+// The managed controller owns movement, look, gravity, jump, crouch and respawn decisions;
+// physics services own the capsule and the editor can continue inspecting these values.
 //
 // Since #185 PR 3 the body is a PxCapsuleController living in PhysicsWorld's PhysX scene (built
 // from the scene's colliders). Player::Update turns input into a displacement, sweeps the
@@ -43,6 +44,8 @@ public:
     // the turn beyond the limit is dropped.
     float MaxYawRate = 0.0f;
     float YawDropped = 0.0f; // out, per Update: the view turn (degrees) MaxYawRate dropped
+    glm::vec2 LookDeltaInput{0.0f}; // pitch/yaw degrees before camera clamps, mouse + stick
+    glm::vec2 MoveInput{0.0f}; // right/forward action axes, before speed, acceleration and collisions
     // Crouching (the Input Manager's "Crouch", held): the capsule shrinks to CrouchHeight metres and
     // the move slows to CrouchSpeedMultiplier of MoveSpeed (no sprint, no jump). 0 = no crouching -
     // set by whatever wants it (a first-person body). Standing up waits for headroom.
@@ -72,6 +75,8 @@ public:
     bool ScriptedMove = false;
     glm::vec2 ScriptMove{0.0f};
     bool ScriptSprint = false;
+    bool AimHeld = false; // weapon aim intent blocks sprint without consuming the held sprint input
+    bool SprintBlocked = false; // reload suspension; the held/scripted sprint intent remains available
     bool ScriptCrouch = false; // ... and Crouch
 
     // readInput == false keeps the body simulating (gravity, collision, resting on geometry)
@@ -84,3 +89,6 @@ public:
 // accelTime (speeding up) or decelTime (slowing down or turning away), so it is the same at any frame
 // rate. A time of 0 snaps to the target.
 glm::vec3 PlayerApproachVelocity(const glm::vec3& current, const glm::vec3& target, float dt, float accelTime, float decelTime);
+
+// Sprint travel follows input speed in every direction, independent of clip root distance.
+glm::vec3 PlayerMovementTarget(const glm::vec3& wish, const glm::vec3& rootVelocity, float rootWeight, bool sprint);

@@ -15,8 +15,10 @@ float Curve::Evaluate(float t) const {
     const CurveKey& a = Keys[i - 1];
     const CurveKey& b = Keys[i];
     const float dt = b.Time - a.Time;
-    if (!(dt > 1e-6f)) return b.Value;
+    if (!(dt > 1e-6f) || t == b.Time) return b.Value;
     const float s = (t - a.Time) / dt;
+    if (a.Interpolation == CurveInterpolation::Constant) return a.Value;
+    if (a.Interpolation == CurveInterpolation::Linear) return a.Value + (b.Value - a.Value) * s;
     const float s2 = s * s, s3 = s2 * s;
     const float h00 = 2.0f * s3 - 3.0f * s2 + 1.0f;
     const float h10 = s3 - 2.0f * s2 + s;
@@ -55,11 +57,13 @@ int Curve::AddKey(float t) {
     return (int)Keys.size() - 1;
 }
 
-json Curve::ToJson() const {
+json Curve::ToJson(bool roundValues) const {
     json arr = json::array();
     for (const CurveKey& k : Keys) {
         auto r = [](float v) { return std::round((double)v * 1e5) / 1e5; };
-        arr.push_back({r(k.Time), r(k.Value), r(k.InTangent), r(k.OutTangent)});
+        json key = roundValues?json{r(k.Time),r(k.Value),r(k.InTangent),r(k.OutTangent)}:json{k.Time,k.Value,k.InTangent,k.OutTangent};
+        if (k.Interpolation != CurveInterpolation::Cubic) key.push_back((int)k.Interpolation);
+        arr.push_back(std::move(key));
     }
     return arr;
 }
@@ -75,6 +79,12 @@ bool Curve::FromJson(const json& j, Curve& out) {
             if (!k[i].is_number()) return false;
             *fields[i] = k[i].get<float>();
             if (!std::isfinite(*fields[i])) return false;
+        }
+        if (k.size() > 4) {
+            if (!k[4].is_number_integer()) return false;
+            const int mode = k[4].get<int>();
+            if (mode < 0 || mode > 2) return false;
+            key.Interpolation = (CurveInterpolation)mode;
         }
         parsed.Keys.push_back(key);
     }

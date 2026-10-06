@@ -27,10 +27,12 @@ struct FoleyStepper {
 struct FootContactDetector {
     float Floor[2] = {0.0f, 0.0f}, Peak[2] = {0.0f, 0.0f}, Prev[2] = {0.0f, 0.0f};
     bool Lifted[2] = {false, false}, Falling[2] = {false, false};
+    float SinceContact[2] = {1.0f,1.0f};
     bool Primed = false;
     static constexpr float kRelax = 0.05f;    // m/s a planted foot's height creeps up toward where it stands
     static constexpr float kFallSpeed = 0.3f; // m/s down: the swing is coming down ...
     static constexpr float kStopSpeed = 0.1f; // ... and slower than this: it has landed (on higher ground)
+    static constexpr float kContactGuard = 0.15f; // the same foot cannot land again during a contact rebound
     // Returns the feet that touched down this update: bit 0 left, bit 1 right.
     int Update(const float height[2], float dt, float lift, float contact);
     void Reset() { Primed = false; }

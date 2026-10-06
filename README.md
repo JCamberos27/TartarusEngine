@@ -78,6 +78,10 @@ onto the new `main`, or recreate them.
 
 ## Build and run
 
+Install the .NET 10 SDK alongside Visual Studio's C++ toolchain. The editor and engine remain
+native; gameplay and editor C# tools build through the SDK. See the [scripting manual](docs/SCRIPTING_MANUAL.md)
+and [documentation index](docs/README.md) for the player/weapon scripts, in-editor IDE and curve tools.
+
     cmake --build build --config Release --target TartarusEngine
 
 `run-editor.cmd` rebuilds the checkout and launches the editor.
@@ -86,3 +90,6 @@ onto the new `main`, or recreate them.
 
     build\Release\TartarusEngine.exe --unit-tests
     build\Release\TartarusEngine.exe --smoke-test tests\smoke-scenes
+
+Before committing or pushing, run `python tools/assets/check_git_assets.py`. This checks the
+Git index, including force-added files, against the external asset ignore rules.

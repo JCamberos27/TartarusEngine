@@ -76,9 +76,11 @@ public:
     void LateUpdate(World& world, float dt, const PlayerSnapshot& player);
 
     // One of the player's rounds struck `entity` at `point` travelling `dir` from `origin`: true when
-    // that was a soldier (it takes the damage; no bullet hole). `killed` / `head` for the hitmarker.
+    // that was a soldier (living or dead; no bullet hole). `aliveWhenHit` gates hit feedback;
+    // `killed` is true only when this hit kills a living soldier, and `head` identifies its hit zone.
     bool OnPlayerHit(World& world, unsigned entity, const glm::vec3& point, const glm::vec3& origin, const glm::vec3& dir,
-                     const FirstPersonWeaponGameplay& weapon, bool* killed = nullptr, bool* head = nullptr);
+                     const FirstPersonWeaponGameplay& weapon, bool* killed = nullptr, bool* head = nullptr,
+                     bool* aliveWhenHit = nullptr);
     // Near misses: a round of the player's passed this close to soldiers' heads (suppression).
     void OnPlayerShotLine(const glm::vec3& origin, const glm::vec3& end);
     // The player respawned: the squad forgets them and resets.

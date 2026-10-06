@@ -45,7 +45,8 @@ public:
     // light softer and the flame rides the gun (FollowMuzzle), `tracer`: a streak along the line. `shooter`: any stable id of
     // who fired (e.g. the soldier's index + 1) so the report's tail knows the space per shooter; 0 = unnamed (the player's
     // gun, else told apart by position).
-    void Shot(World& world, Gun gun, const glm::vec3& origin, const glm::vec3& end, bool fromPlayer, bool tracer, std::uint32_t shooter = 0);
+    void Shot(World& world, Gun gun, const glm::vec3& origin, const glm::vec3& end, bool fromPlayer, bool tracer,
+              std::uint32_t shooter = 0, const MuzzleEffectSettings* muzzle = nullptr);
     // The player's gun this frame (FirstPersonPresentation::MuzzleFrames: the first-person gun's muzzle,
     // the world copy's, and the bore): the player's flames move with it.
     void FollowMuzzle(World& world, const glm::vec3& firstPerson, const glm::vec3& worldCopy, const glm::vec3& bore);
@@ -68,11 +69,12 @@ public:
 private:
     class FxSprites* m_Sprites = nullptr;
     int m_MuzzleSprites = 0;
-    void MuzzleSpritesFor(bool shotgun, bool fromPlayer, const glm::vec3& origin, const glm::vec3& dir);
+    void MuzzleSpritesFor(bool shotgun, bool fromPlayer, const glm::vec3& origin, const glm::vec3& dir, const MuzzleEffectSettings& settings);
     struct Flash {
         entt::entity Light = entt::null;
         float Left = 0.0f;
         float Peak = 0.0f;
+        float Duration = 0.055f, Range = 7.0f;
     };
     bool m_Active = false;
     glm::vec3 m_Listener{0.0f}, m_ListenerFwd{0.0f, 0.0f, -1.0f};
