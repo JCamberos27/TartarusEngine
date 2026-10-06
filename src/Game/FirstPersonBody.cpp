@@ -1,6 +1,7 @@
 #include "FirstPersonBody.h"
 #include "Profiler.h"
 #include "BodyDebugDraw.h"
+#include "AnimatorController.h"
 #include "FirstPersonBodyContract.h"
 
 #include "Camera.h"
@@ -479,6 +480,21 @@ bool FirstPersonBody::Start(World& world, Player& player) {
         m_RestHead = glm::vec3(model.SampleNodeModelSpace(-1, 0.0f, AnimationWrapMode::ClampForever, m_HeadNode)[3]);
 
     m_BoneMap = FPBody::ParseBoneMap(cfg.BoneMap);
+    if (const auto ctrl = GetAnimatorController(ac.Controller); ctrl && !ctrl->Layers.empty()) {
+        const int track = ctrl->TrackIndex(ac.Track);
+        const char* states[2] = {FPBody::kStateLocomotion, FPBody::kStateCrouchLoco};
+        for (int s = 0; s < 2; ++s) {
+            const int state = ctrl->Layers[0].FindState(states[s]);
+            if (state < 0) continue;
+            const auto& motion = ctrl->Layers[0].States[state].MotionFor(track);
+            m_SpineIdleClip[s] = motion.Clip;
+            float nearest = 1e30f;
+            for (const auto& child : motion.Children) {
+                const float distance = child.Threshold * child.Threshold + child.ThresholdY * child.ThresholdY;
+                if (distance < nearest) { nearest = distance; m_SpineIdleClip[s] = child.Clip; }
+            }
+        }
+    }
     m_ShoulderNode[0] = model.NodeIndex(Bone(FPBody::kBoneUpperArm[0]));
     m_ShoulderNode[1] = model.NodeIndex(Bone(FPBody::kBoneUpperArm[1]));
 
@@ -783,6 +799,9 @@ void FirstPersonBody::Tick(World& world, const Player& player, const Camera& cam
     auto& reg = world.Registry;
     if (!reg.valid(m_Body)) { m_Body = entt::null; return; }
     const auto& cfg = reg.get<FirstPersonBodyComponent>(m_Body);
+    m_SpineCrouch = std::clamp(player.CrouchBlend, 0.0f, 1.0f);
+    const float bodyScale = std::max(reg.get<TransformComponent>(m_Body).Scale.y, 1e-3f);
+    m_SpineCrouchDrop = cfg.CrouchHeight > 0.0f ? std::max(player.Size.y - cfg.CrouchHeight, 0.0f) / bodyScale : 0.0f;
     m_Responsiveness = cfg.Responsiveness;
     for (entt::entity e : m_Pieces)
         if (auto* tag = reg.valid(e) ? reg.try_get<PlayerBodyTag>(e) : nullptr) {
@@ -834,8 +853,10 @@ void FirstPersonBody::Tick(World& world, const Player& player, const Camera& cam
                                                    : asClip(player.WishVelocity);
     // The gait clips play faster when the player outruns them, so the feet keep up.
     const float movingSpeed = glm::length(moving);
+    // Sprint is input-driven even with a root-motion body; match its cadence to capsule travel.
+    const bool inputSprint=glm::length(glm::vec2(player.WishVelocity.x,player.WishVelocity.z))>m_PlayerRunSpeed*1.05f;
     const float playRate = FirstPersonBodyPlayRate(
-        movingSpeed, FirstPersonBodyClipSpeed(movingSpeed, m_PlayerRunSpeed, m_PlayerSprintSpeed, m_RunSpeed, clipSprint), responsiveness,
+        movingSpeed, FirstPersonBodyClipSpeed(movingSpeed, m_PlayerRunSpeed, m_PlayerSprintSpeed, m_RunSpeed, clipSprint), inputSprint?1.0f:responsiveness,
         cfg.MaxPlayRate);
     // Letting go at speed, the gait holds for the moment a stop clip is being picked (the blend would
     // otherwise slow the body on its own first, and the stop clip's own travel come on top of it).
@@ -1018,6 +1039,10 @@ void FirstPersonBody::LateUpdate(World& world, Camera& camera, float dt, entt::e
     const glm::vec3 d = ac.RootMotion.DeltaPosition;
     m_RootVelocity = dt > 0.0f && !m_Turning ? glm::vec3(d.x, 0.0f, d.z) / dt : glm::vec3(0.0f);
 
+    {
+    PROFILE_SCOPE("FPB spine stability");
+    ApplySpineStability(cfg.SpineStability, ac);
+    }
     {
     PROFILE_SCOPE("FPB foot IK");
     ApplyFootIK(world, cfg, dt); // the pelvis and legs first: everything after reads the final pose
@@ -1414,6 +1439,7 @@ void FirstPersonBody::ApplyFootIK(World& world, const FirstPersonBodyComponent& 
         m_FootPlanted[0] = m_FootPlanted[1] = false;
         m_FootLockWeight[0] = m_FootLockWeight[1] = 0.0f;
         m_Slide.Reset();
+        m_AppliedSlide={};
         return;
     }
     const auto* rc = reg.try_get<RenderableComponent>(m_Driver);
@@ -1436,8 +1462,16 @@ void FirstPersonBody::ApplyFootIK(World& world, const FirstPersonBodyComponent& 
     float animHeight[2];
     // Foot slide correction (stride warp, then pin) on the animated feet; off = the clips' own feet and the plain foot lock below.
     IK::FootSlideSettings slideSet = IK::FootSlideFrom(cfg);
+    const bool yawSteady = !m_Turning && std::abs(FirstPersonBodyWrapAngle(m_Yaw - m_FootYaw)) < glm::radians(2.0f);
+    m_FootYaw = m_Yaw;
+    const bool correctStride = yawSteady && glm::length(m_GroundVelocity)>0.1f;
+    if (!correctStride) {
+        m_Slide.Reset();
+        slideSet.PinEnabled=slideSet.StrideEnabled=false;
+        m_FootPlanted[0]=m_FootPlanted[1]=false;
+    }
     const int probe = IK::FootSlideProbeMode();
-    if (probe == 1) { slideSet = IK::FootSlideSettings{}; slideSet.PinEnabled = slideSet.StrideEnabled = true; }
+    if (probe == 1 && correctStride) { slideSet = IK::FootSlideSettings{}; slideSet.PinEnabled = slideSet.StrideEnabled = true; }
     const bool slideOn = slideSet.Active();
     IK::FootSlideOutput slide;
     glm::vec3 footAnim[2];
@@ -1458,16 +1492,16 @@ void FirstPersonBody::ApplyFootIK(World& world, const FirstPersonBodyComponent& 
         slide = m_Slide.Step(slideSet, in, !slideOn);
         if (probe >= 0) IK::FootSlideProbeLog("player", m_Slide.Stats, glm::length(m_GroundVelocity), m_Slide.ClipSpeed(), m_Slide.Scale());
     }
+    m_AppliedSlide=IK::SmoothFootSlideOutput(m_AppliedSlide,slide,dt,correctStride?0.03f:cfg.FootPinRelease);
+    slide=m_AppliedSlide;
     glm::vec3 lockShift[2] = {glm::vec3(0.0f), glm::vec3(0.0f)}; // world, horizontal: animated foot -> pinned foot
     // No pinning while the body turns on the spot (the feet must step) or the heading swings.
-    const bool yawSteady = !m_Turning && std::abs(FirstPersonBodyWrapAngle(m_Yaw - m_FootYaw)) < glm::radians(2.0f);
-    m_FootYaw = m_Yaw;
     for (int s = 0; s < 2; ++s) {
         const glm::vec3 footWorld = footAnim[s] + slide.Shift[s]; // the stride-warped foot (pinned, below, when the pin is on)
         animHeight[s] = footWorld.y - m_Feet.y;
         // Foot lock: a planted foot stays where it landed instead of sliding when the animation and the
         // capsule's travel disagree a little; it lets go when the foot lifts or the mismatch gets big.
-        const bool planted = animHeight[s] < cfg.FootPlantedHeight && yawSteady && !slideSet.PinEnabled; // the pin replaces the plain lock
+        const bool planted = animHeight[s] < cfg.FootPlantedHeight && correctStride && !slideSet.PinEnabled; // the pin replaces the plain lock
         if (planted) {
             if (!m_FootPlanted[s]) { m_FootPlanted[s] = true; m_FootLock[s] = footWorld; }
             const glm::vec3 drift(footWorld.x - m_FootLock[s].x, 0.0f, footWorld.z - m_FootLock[s].z);
@@ -1541,6 +1575,49 @@ void FirstPersonBody::ApplyFootIK(World& world, const FirstPersonBodyComponent& 
             if (glm::length(target - IK::Position(globals[foot])) < 5e-4f && angle < 1e-3f) continue;
             IK::SolveTwoBone(pose, parents, globals, thigh, calf, foot, target, &footRot, 1.0f);
         }
+        m.ApplyLocalPose(pose);
+    }
+}
+
+// Model-space masking cancels the gait's motion all the way up from the pelvis. A fixed idle
+// reference keeps the chest stable without filtering (and lagging) the player's view aim.
+void FirstPersonBody::ApplySpineStability(float weight, const AnimatorControllerComponent& animator) {
+    weight = std::clamp(weight, 0.0f, 1.0f);
+    if (weight <= 0.0f) return;
+    weight *= FPBody::LocomotionSpineWeight(animator, m_SpineCrouch);
+    if (weight <= 1e-5f) return;
+    for (size_t k = 0; k < m_Models.size(); ++k) {
+        if (!m_Models[k]) continue;
+        Model& m = *m_Models[k];
+        IK::Pose pose = m.AppliedLocalPose();
+        if (pose.empty() || (int)pose.size() != m.NodeCount()) continue;
+        auto& ref = m_SpineReferences[&m];
+        if (ref.Parents.size() != pose.size()) {
+            ref = SpineReference{};
+            ref.Parents.resize(pose.size());
+            for (int i = 0; i < m.NodeCount(); ++i) ref.Parents[i] = m.NodeParent(i);
+            for (size_t slot = 0; slot < ref.SpineNodes.size(); ++slot) {
+                const int i = m.NodeIndex(Bone(FPBody::kBoneSpine[slot]));
+                ref.SpineNodes[slot] = i;
+                if (i >= 0) ref.Bones.push_back(i);
+            }
+            std::sort(ref.Bones.begin(), ref.Bones.end()); // SetGlobals requires parents first
+        }
+        if (ref.Bones.empty()) continue;
+        if ((k >= m_Pieces.size() || m_Pieces[k] != m_Driver) && !SkinsUnder(m, ref.Bones, FPBody::kBoneSpine[0])) continue;
+        for (int s = 0; s < 2; ++s) {
+            int clip = m_SpineIdleClip[s].empty() ? -1 : m.FindClipByRef(m_SpineIdleClip[s]);
+            if (clip < 0 && !m_SpineIdleClip[s].empty()) clip = m.FindAnimation(m_SpineIdleClip[s]);
+            if (ref.Clips[s] == clip) continue;
+            IK::Pose idle;
+            m.SampleLocalPose(clip, 0.0f, AnimationWrapMode::ClampForever, idle);
+            IK::ComputeGlobals(idle, ref.Parents, ref.Globals[s]);
+            ref.Clips[s] = clip;
+        }
+        const std::vector<glm::mat4> noCrouch;
+        FPBody::BlendLocomotionSpine(pose, ref.Parents, ref.SpineNodes, ref.Globals[0],
+                                   ref.Clips[1] >= 0 ? ref.Globals[1] : noCrouch,
+                                   m_SpineCrouch, weight, m_SpineCrouchDrop);
         m.ApplyLocalPose(pose);
     }
 }

@@ -81,6 +81,16 @@ values and function signatures it declares come from the Khronos OpenGL Registry
 Branding assets under `extern/branding/` (the Tartarus Engine wordmark, monogram, and icons)
 are project assets and are **not** covered by the project's source-code license.
 
+## Embedded C# IDE
+
+The shared curve editor vendors ImCurve at commit `8cc8dc3a971593c6ce5aa8f418776545b2dbc3bb`
+under `extern/imcurve`. Its Unlicense text is retained in `extern/imcurve/LICENSE.txt`;
+integration changes are documented in `extern/imcurve/README.md`. Upstream: https://github.com/jsoulier/imcurve.
+
+ImGuiColorTextEdit, commit ca2f9f1462e3b60e56351bc466acda448c5ea50d, is vendored under `extern/ImGuiColorTextEdit` with local integration patches. Copyright (c) 2017 BalazsJako; MIT license, reproduced in `extern/ImGuiColorTextEdit/LICENSE` and staged as `assets/licenses/ImGuiColorTextEdit.txt`. Upstream: https://github.com/BalazsJako/ImGuiColorTextEdit.
+
+The editor-only Roslyn analysis helper references Microsoft.CodeAnalysis and Microsoft.CodeAnalysis.CSharp from the installed .NET SDK. These compiler components are distributed under the MIT license by the .NET Foundation and contributors; see https://github.com/dotnet/roslyn/blob/main/License.txt. They are staged under Managed/IDE and excluded from exported games.
+
 ---
 
 ## Third-party content NOT in this repository

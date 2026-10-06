@@ -5,6 +5,7 @@
 #include <functional>
 #include <string>
 #include <vector>
+#include <set>
 
 class Camera;
 class FirstPersonBody;
@@ -102,6 +103,8 @@ private:
     std::string m_Shot;
     bool m_Probe = false;
     bool m_ProbeAk = false;     // the probe holds the AKS-74U, not the Remington
+    bool m_SprintProbe = false;
+    std::set<std::string> m_SprintSamples;
     int m_PrintedGunSlot = -1;  // the slot the probe last printed its gun line (butt to muzzle) for
     struct Sample {
         bool Valid = false;
@@ -155,4 +158,5 @@ private:
     void PrintSample(const std::string& label) const;
     void BuildProbe();
     void BuildPoseProbe(); // STOCK_PROBE_POSE=1: the third-person body standing / crouched, at the hip and on the sights
+    void BuildSprintProbe(); // STOCK_PROBE_SPRINT=1: walk -> sprint -> walk, capturing entry/exit
 };

@@ -21,7 +21,10 @@ controllers, the `.meta` files of every asset, and procedural textures, meshes a
    powershell -ExecutionPolicy Bypass -File tools\assets\fetch-assets.ps1 -Source "G:\My Drive\Tartarus Assets"
    ```
    Use whatever path Drive for desktop shows for the folder. The script copies `Used\project\...`
-   over your checkout (about 10 GB). It then checks every file in `project/external_assets.csv` and
+   over your checkout (about 10 GB). This workstation's store is
+   `G:\Other computers\My Computer\Atrocity Exhibition Drive\Tartarus Assets`;
+   pass that folder to `-Source` here. Other team members can use their own Drive shortcut path.
+   It then checks every file in `project/external_assets.csv` and
    lists anything missing. Run it again with `-VerifyOnly` at any time, and after pulling, because
    the list can change.
 3. Build and run (below).
@@ -78,6 +81,10 @@ onto the new `main`, or recreate them.
 
 ## Build and run
 
+Install the .NET 10 SDK alongside Visual Studio's C++ toolchain. The editor and engine remain
+native; gameplay and editor C# tools build through the SDK. See the [scripting manual](docs/SCRIPTING_MANUAL.md)
+and [documentation index](docs/README.md) for the player/weapon scripts, in-editor IDE and curve tools.
+
     cmake --build build --config Release --target TartarusEngine
 
 `run-editor.cmd` rebuilds the checkout and launches the editor.
@@ -86,3 +93,6 @@ onto the new `main`, or recreate them.
 
     build\Release\TartarusEngine.exe --unit-tests
     build\Release\TartarusEngine.exe --smoke-test tests\smoke-scenes
+
+Before committing or pushing, run `python tools/assets/check_git_assets.py`. This checks the
+Git index, including force-added files, against the external asset ignore rules.

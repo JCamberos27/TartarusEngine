@@ -3,7 +3,7 @@
   "matVersion": 2,
   "name": "M_F_Vivian_Arms_Afro",
   "properties": {
-    "_AOMap": "assets/Characters/Quantum/Textures/Female/Afro/Arms/T_F_Vivian_Basemesh_Arms_Afro_Occlusion.1003.png",
+    "_AOMap": "assets/Characters/Quantum/Textures/Female/European/Arms/T_F_Vivian_Basemesh_Arms_Occlusion.1003.png",
     "_AlbedoMap": "assets/Characters/Quantum/Textures/Female/Afro/Arms/T_F_Vivian_Basemesh_Arms_Afro_BaseColor.1003.png",
     "_BaseColor": [
       1.0,
@@ -29,7 +29,7 @@
   },
   "shader": "engine://Standard.shader",
   "textureGuids": {
-    "_AOMap": "74dbb726373809aa",
+    "_AOMap": "2787b8f26372e3f5",
     "_AlbedoMap": "d73f865664869b30",
     "_NormalMap": "0343ea0642826404",
     "_RoughnessMap": "a2dc5484d39fff23"

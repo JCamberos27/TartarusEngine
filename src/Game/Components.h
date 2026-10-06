@@ -9,11 +9,14 @@
 #include "RotationMath.h"
 #include "Animation.h" // LocalTRS
 #include "IK.h"        // IK::SpineDistribution
+#include "SwayModifier.h"
+#include "MuzzleEffects.h"
 #include <entt/entt.hpp>
 
 class SkinHideBuffer; // OutfitHideTag, PlayerBodyTag
 class VisibleIndexBuffer; // OutfitHideTag
 class Model;
+struct ParticleCurveCache;
 struct MaterialAsset; // full definition in MaterialAsset.h; shared_ptr<MaterialAsset> is valid here
 
 // The ECS component set every placed entity (former level-geometry box, imported model, or
@@ -435,9 +438,37 @@ struct ParticleSystemComponent {
     float Intensity = 1.0f;       // HDR brightness multiplier (above 1 feeds Bloom)
     float GravityModifier = 0.0f; // x project gravity (1 = falls like a rigidbody)
     int   BlendMode = 1;          // 0 Alpha Blended, 1 Additive
-    // Runtime only (not serialized): a project-relative texture that turns particles with a Length
-    // into muzzle-flame tongues (see Particle.Length). Empty = the plain soft discs.
+    // Modules. Defaults preserve the original continuous point/cone emitter.
+    bool Looping = true;
+    float Duration = 5.0f, StartDelay = 0.0f;
+    int BurstCount = 0;
+    float BurstInterval = 0.0f; // zero: once at the start of each cycle
+    float RateOverDistance = 0.0f;
+    int Shape = 0; // point, cone volume, sphere, box, disc
+    float ShapeRadius = 0.5f, ShapeLength = 1.0f;
+    glm::vec3 ShapeBox{1.0f};
+    bool ShapeSurface = false, LocalSpace = false;
+    float LifetimeRandomness = 0.15f, SpeedRandomness = 0.0f, SizeRandomness = 0.0f;
+    glm::vec3 VelocityOverLife{0.0f}, Acceleration{0.0f};
+    float Drag = 0.0f;
+    float RotationMin = 0.0f, RotationMax = 0.0f;
+    float AngularVelocityMin = 0.0f, AngularVelocityMax = 0.0f;
+    int Alignment = 0; // billboard, velocity stretch, horizontal
+    float VelocityStretch = 0.1f;
+    // Project-relative sprite texture; empty uses the procedural soft disc.
     std::string Texture;
+    int SheetColumns = 1, SheetRows = 1;
+    float SheetFPS = 0.0f; // zero: traverse the sheet once over the particle's life
+    bool RandomStartFrame = false, BlendFrames = true;
+    int Collision = 0; // off, horizontal plane, PhysX world (Play)
+    float CollisionPlaneY = 0.0f, CollisionRadius = 0.01f;
+    float Bounce = 0.3f, CollisionFriction = 0.1f, CollisionLifeLoss = 0.0f;
+    int MaxBounces = 4;
+    // JSON curve keys are reflected for undo/prefabs. Their previews open the shared curve editor.
+    std::string SizeCurve = "[[0,1,0,0],[1,1,0,0]]";
+    std::string AlphaCurve = "[[0,1,0,0],[1,1,0,0]]";
+    std::string SpeedCurve = "[[0,1,0,0],[1,1,0,0]]";
+    std::string EmissionCurve = "[[0,1,0,0],[1,1,0,0]]";
 
     // The flame extras: a particle with Length > 0 (and a Texture set) is drawn as a tongue standing
     // on Pos and pointing along Axis, growing from nothing to Length x Width metres over its life
@@ -448,17 +479,48 @@ struct ParticleSystemComponent {
         float Age = 0.0f, Life = 1.0f;
         glm::vec3 Axis{0.0f, 0.0f, -1.0f};
         float Length = 0.0f, Width = 0.0f, Seed = 0.0f, Glow = 1.0f, Alpha = 1.0f;
+        float Rotation = 0.0f, Spin = 0.0f, SizeScale = 1.0f;
+        float IntensityScale = 1.0f;
+        glm::vec3 Tint{1.0f};
+        bool Local = false;
+        int FirstFrame = 0, Bounces = 0;
+        std::string TextureOverride; // shot-owned flame texture
     };
     std::vector<Particle> Live;
     float EmitAccumulator = 0.0f;
     std::uint32_t Rng = 0x9E3779B9u;
+    float Clock = 0.0f, DistanceAccumulator = 0.0f;
+    bool WasEmitting = false, HavePreviousPosition = false;
+    glm::vec3 PreviousPosition{0.0f};
+    std::string EditorCurveIdentity; // hidden, persisted identity for curve-window undo
+    std::shared_ptr<ParticleCurveCache> Curves;
 };
 
 // #165 - the built-in first-person player, as a component. In Play the player spawns at this
 // entity's position (feet) facing its forward (-Z), with these settings. Without one, Play
 // renders through the scene's Camera (a fixed/animated shot, no player); with neither, it falls
 // back to the old behaviour (a default player dropped in at the editor camera).
+// Fully qualified class and public field values are saved in scenes, prefabs and undo snapshots.
+struct CSharpScriptComponent {
+    std::string SourcePath;
+    std::string ClassName;
+    std::string Fields = "{}";
+    bool Enabled = true;
+    // Additional slots use stable IDs so removing one doesn't transfer its runtime state.
+    std::string Scripts = "[]";
+    int NextScriptId = 0;
+};
+
+// A reusable weapon bundle. The descriptor owns animator, rigs, recoil, shake, audio and ballistics.
+struct WeaponDefinitionComponent {
+    std::string Description;
+    std::string AnimationSet;
+    MuzzleEffectSettings Muzzle;
+};
+
 struct FirstPersonControllerComponent {
+    std::string PrimaryWeaponPrefab;
+    std::string SecondaryWeaponPrefab;
     float MoveSpeed = 6.0f;
     float SprintMultiplier = 1.6f;
     float JumpSpeed = 5.5f;
@@ -583,6 +645,12 @@ struct FirstPersonBodyComponent {
     // How much of the camera's pitch the spine takes (0 = the body stays upright, 1 = the chest
     // tilts as far as the view), so the shoulders follow the view and the hands stay in reach.
     float SpineAim = 0.0f;
+    // Model-space blend toward the standing/crouched idle spine. At full stability only
+    // spine_01 (10%) and spine_02 (5%) retain gait motion, including inherited pelvis sway.
+    // Pelvis and legs retain the full lower-body pose. Also copied to NPCs at Play.
+    // Applied before view aim and limb IK; 0 = authored gait, 1 = a stable upper spine.
+    // Crossfades out for crouch transitions, jumping and landing.
+    float SpineStability = 1.0f;
     // ---- lane A ----
     // How the spine's turns (view pitch, twist, shoulder line) are shared over spine_01..05, pelvis alpha:
     // the default is the even spread. Used by the player body and, copied at Play, by NPCs.
@@ -995,6 +1063,13 @@ struct IKRigComponent {
 
     // --- runtime (not serialized) ---
     std::vector<IKBoneOffset> Offsets;
+    // Runtime-only source sway job, inserted before the general procedural/ADS aim offset.
+    bool SwayEnabled = false;
+    SwayModifierSettings SwaySettings;
+    SwayModifierPose SwayPose;
+    int SwayBeforeOffset = 1;
+    glm::quat SwayModelToComponent{1,0,0,0}, SwayModelToWorld{1,0,0,0};
+    float SwayMetresPerUnit = 1;
     // Extra local rotations (pre-multiplied onto a bone's animated local rotation, scaled by
     // Weight), applied before everything else - e.g. twist bones the limbs don't solve.
     std::vector<std::pair<std::string, glm::quat>> LocalRotations;
@@ -1004,6 +1079,9 @@ struct IKRigComponent {
     // one that isn't keeps its animated grip, so it plays its motion relative to the target.
     std::vector<LocalTRS> HoldPose;
     std::vector<float> HoldWeights;
+    // Keep a contact action's authored hand-vs-target grip before upper layers add
+    // locomotion. The finished target still moves; the hand and held object move with it.
+    bool PreserveBaseGrip = false;
 };
 
 struct AnimatorComponent {

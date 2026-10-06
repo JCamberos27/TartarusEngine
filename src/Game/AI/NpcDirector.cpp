@@ -341,6 +341,7 @@ bool NpcDirector::Start(World& world, AssetLibrary& assets, const FirstPersonCon
         m_HoldSettings.ShoulderLineMatch = fpb.ShoulderLineMatch;
         m_HoldSettings.SpineAim = fpb.SpineAim;
         m_HoldSettings.SpineAimDown = fpb.SpineAimDown;
+        m_HoldSettings.SpineStability = fpb.SpineStability;
         m_HoldSettings.ArmedEyeOffset = fpb.ArmedEyeOffset;
         m_HoldSettings.HeadBob = fpb.HeadBob;
         m_HoldSettings.CameraSmoothing = fpb.CameraSmoothing;
@@ -551,6 +552,9 @@ int NpcDirector::Spawn(World& world, AssetLibrary& assets, int spawnIndex) {
     if (weapon == 2) weapon = (int)(m_Rng() % 2u);
     FirstPersonControllerComponent cfg = *m_ViewConfig;
     cfg.AnimationSet = weapon == 1 ? kRemingtonPath : kAkPath;
+    // A copied player configuration must not override the chosen NPC weapon with slot 0.
+    cfg.PrimaryWeaponPrefab = weapon == 1 ? "assets/Weapons/Remington870/Remington870.prefab" : "assets/Weapons/AKS74U/AKS74U.prefab";
+    cfg.SecondaryWeaponPrefab.clear();
     n->Class = weapon == 1 ? WeaponClass::Shotgun : WeaponClass::Rifle;
     n->Weapon = std::make_unique<FirstPersonPresentation>();
     FirstPersonPresentation::Options opt;
@@ -1485,7 +1489,7 @@ void NpcDirector::HandleShots(World& world, Npc& n, const PlayerSnapshot& p, con
         const bool shotgun = n.Class == WeaponClass::Shotgun;
         if (t.FirstPellet)
             Fx->Shot(world, shotgun ? CombatFx::Gun::Shotgun : CombatFx::Gun::Rifle, t.Origin + muzzleShift, t.End, false,
-                     !shotgun && (n.Tracer++ % 3) == 0, (std::uint32_t)n.Index + 1u); // the soldier's id: his tail's probe is cached per shooter
+                     !shotgun && (n.Tracer++ % 3) == 0, (std::uint32_t)n.Index + 1u, n.Weapon->MuzzleEffects());
         if (!p.Valid || p.Dead || (t.Hit && t.Entity == kPlayerEntity)) continue;
         const glm::vec3 seg = t.End - t.Origin;
         const float len2 = glm::dot(seg, seg);
@@ -1541,11 +1545,15 @@ void NpcDirector::HandleShots(World& world, Npc& n, const PlayerSnapshot& p, con
 }
 
 bool NpcDirector::OnPlayerHit(World& world, unsigned entity, const glm::vec3& point, const glm::vec3& origin, const glm::vec3& dir,
-                              const FirstPersonWeaponGameplay& weapon, bool* killed, bool* head) {
+                              const FirstPersonWeaponGameplay& weapon, bool* killed, bool* head, bool* aliveWhenHit) {
+    if (killed) *killed = false;
+    if (head) *head = false;
+    if (aliveWhenHit) *aliveWhenHit = false;
     if (!m_Active) return false;
     for (auto& up : m_Npcs) {
         if (!up || Id(up->Root) != entity) continue;
         Npc& n = *up;
+        if (aliveWhenHit) *aliveWhenHit = !n.Dead;
         // Which bone: a ray down the round's line, against the hitboxes (or, on a corpse, the ragdoll's parts).
         int part = -1;
         {

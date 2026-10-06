@@ -1,5 +1,6 @@
 #pragma once
 #include "UndoDeltaChain.h" // UndoEntry::Delta
+#include "EditorFileHistory.h"
 #include "AnimatorController.h" // #175 Part B - m_CtrlEdit
 #include <filesystem>
 #include <imgui.h> // ImGuiID (GetSceneGameDockNodeId)
@@ -35,6 +36,8 @@ struct ReverbBusComponent;
 struct GLFWwindow;
 struct RootMotionOptions;
 class World;
+class ScriptIDE;
+namespace Scripting { struct NativeRequest; }
 class Camera;
 class AssetLibrary;
 class ScreenBlur;
@@ -56,7 +59,7 @@ enum class ReflectAssetKind; // ComponentReflection.h
 struct ReflectField;        // ComponentReflection.h
 
 struct AssetGridCell {
-    enum class Kind { Folder, Model, Texture, Material, Sound, Scene, Prefab, Screenshot, Shader, Animator, Weapon, Hdri, Script } kind;
+    enum class Kind { Folder, Model, Texture, Material, Sound, Scene, Prefab, Screenshot, Shader, Animator, Weapon, Hdri, Script, Recoil, CameraShake } kind;
     std::string key;
     std::string display;
     std::shared_ptr<Model> model;
@@ -102,6 +105,11 @@ public:
     // Headless runs (--unit-tests, --smoke-test, etc.) should not persist editor_prefs.json.
     void SetHeadless(bool headless) { m_Headless = headless; }
     void Shutdown();
+    void OpenScriptIDE(const std::string& path="",int line=0,int column=1);
+    bool HasUnsavedScripts() const;
+    bool ScriptIDEHasKeyboardFocus() const;
+    bool SaveScripts();
+    void DiscardScripts();
 
     // Applies the editor's style — colours and metrics (rounding / padding / borders), DPI-scaled
     // once. Resets to the shared baseline first so calling it again never leaks or double-scales.
@@ -120,7 +128,7 @@ public:
     // editorModule.Draw() returns. Currently: dropping an abandoned staged-undo snapshot, and
     // folding this frame's selection into the back/forward history (and, per Q6, the scene undo
     // stack — see RecordSelectionHistory).
-    void PostModuleDraw(const World& world);
+    void PostModuleDraw(World& world);
 
     // Pull the editor camera back to fit the whole scene's bounds in view, keeping its current
     // aim. No-op on an empty scene. Called once on startup so the editor doesn't open staring
@@ -1047,6 +1055,11 @@ private:
     void DrawLightingPanel(World& world);
     void DrawAudioDebugPanel(World& world); // EditorLayer_AudioDebug.cpp
     void DrawAssetLibraryPanel(World& world, AssetLibrary& assets); // EditorLayer_AssetLibraryPanel.cpp
+    void DrawManagedEditorTools(World& world, AssetLibrary& assets, float dt);
+    bool DrawManagedInspector(World& world,AssetLibrary& assets,entt::entity entity,const std::string& type,
+                              std::string* fields=nullptr,const std::string& metadata="{}");
+    int ManagedEditorService(World& world,AssetLibrary& assets,int op,Scripting::NativeRequest& request,
+                             int& windows,int& widgets,int& groups,bool inlineInspector);
     void DrawEnvironmentSettings(World& world, float itemWidth);
     void DrawPhysicalSkySettings(World& world, float itemWidth); // EditorLayer_Sky.cpp
     void DrawPostProcessSettings(World& world, float itemWidth);
@@ -1238,7 +1251,8 @@ private:
         // An edit to a non-scene file (an Animator Controller): popping it only rewrites the file,
         // and never reloads the scene - so it also works in Play, where the scene must not be touched.
         bool AssetOnly = false;
-        bool CountsAsSceneEdit() const { return !SelectionOnly && AssetPath.empty(); }
+        std::vector<EditorFileHistory::State> Files;
+        bool CountsAsSceneEdit() const { return !SelectionOnly && !AssetOnly && AssetPath.empty(); }
     };
     std::vector<UndoEntry> m_UndoStack;
     std::vector<UndoEntry> m_RedoStack;
@@ -1246,6 +1260,14 @@ private:
     std::string m_UndoBaseJson;
     std::string m_RedoBaseJson;
     static constexpr size_t kMaxHistory = 100;
+    EditorFileHistory::Journal m_FileJournal;
+    bool m_GlobalUndoActive = false, m_GlobalUndoApplying = false;
+    bool m_RequestGlobalUndo = false, m_RequestGlobalRedo = false;
+    std::string m_GlobalUndoScene, m_GlobalUndoLabel;
+    std::vector<int> m_GlobalUndoSelection;
+    void BeginGlobalUndoFrame(const World& world);
+    void FinishGlobalUndo(const World& world, bool force = false);
+    void ReloadHistoryFiles(AssetLibrary& assets,const std::vector<EditorFileHistory::State>& files);
 
     // Delta-chain plumbing. `entry`'s own full state is `newFullJson`: it becomes the stack's
     // new top (held in full in `baseJson`), and the outgoing top is re-encoded as a patch off it.
@@ -1268,6 +1290,7 @@ private:
     // Also set at the top of every Draw() - lets deep Inspector code (e.g. the Camera section's
     // "Align to View") reach the editor camera without threading it through every draw helper.
     Camera* m_EditorCameraPtr = nullptr;
+    World* m_EditWorldPtr = nullptr;
 
     // selectionOnly (Q6/Phase 6 item 6): set true only by RecordSelectionHistory's own push, for
     // an entry that represents a pure selection change (scene content byte-identical to the entry
@@ -1351,6 +1374,7 @@ private:
     float m_MarkSpinAngle = 0.0f; // radians, advanced by dt * EngineMarkSpinSpeed each frame in DrawEngineMark()
     float m_MarkHue = 0.0f;        // 0..1, advanced each frame; drives the tint when EngineMarkRgb is on
     bool m_ShutdownDone = false;       // guards the clean-exit-only tail of Shutdown()
+    std::unique_ptr<ScriptIDE> m_ScriptIDE;
     bool m_GpuResourcesFreed = false;  // guards FreeGpuResources() (also reachable from ~EditorLayer)
     // Live Game-view rect + texture, pushed in each frame by main.cpp (zero size = none). Used by
     // DrawViewportActionBar to place the action bar over the game viewport.
@@ -1610,7 +1634,7 @@ private:
     // Same idea for project/shaders/ — Phase 6 item 15's "browsable" Shaders folder.
     AssetDirListingCache m_ShadersListingCache;
     // Animator Controllers (.controller) and weapon definitions (.fpsanim) anywhere under the
-    // project, listed in a virtual "Animation" folder.
+    // project, cached for the weapon Inspector's asset pickers.
     AssetDirListingCache m_AnimationListingCache;
     float m_AssetListingRefreshTimer = 0.0f;   // ticks up in DrawAssetBrowser; see kAssetListingRefreshInterval
     bool m_AssetBrowserFocusedLastFrame = false; // edge-detects m_AssetBrowserFocused for "just gained focus"
@@ -1794,6 +1818,7 @@ private:
     } m_PrePlayHistory;
     // #176 - Prefab Mode state: the scene to return to, its history and dirty flag.
     std::string m_PrefabModePath;
+    std::string m_InspectorRequestedPrefab;
     std::string m_PrefabModeSceneSnapshot;
     SavedHistory m_PrePrefabHistory;
     bool m_PrefabModeSceneDirty = false;
@@ -1975,6 +2000,8 @@ public:
     void OpenAnimatorWindow(const std::string& controllerRel, entt::entity entity = entt::null);
 private:
     void DrawAnimatorWindow(World& world);
+    void DrawRecoilAssetEditor(const std::string& path);
+    void DrawCameraShakeAssetEditor(const std::string& path);
     // Inspector panels for a selected .fpsanim (weapon definition) / .controller asset.
     void DrawWeaponDefinitionEditor(const std::string& path);
     void DrawControllerAssetInspector(const std::string& path);

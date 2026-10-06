@@ -4749,12 +4749,16 @@
           "path": "assets/Weapons/AKS74U/AKS74U.fpsanim",
           "pathGuid": "c0ff631aac421f76"
         },
+        "Assist Cone Deg": 7.0,
+        "Assist Range": 30.0,
         "Camera Bone": "head",
         "Capsule Height": 1.850000023841858,
         "Capsule Radius": 0.30000001192092896,
         "Coyote Time": 0.10000000149011612,
         "Eye Height": 1.7000000476837158,
+        "Eye Radius": 0.11999999731779099,
         "Field of View": 90.0,
+        "Grab Range": 100.0,
         "Gravity": 18.0,
         "Gravity Gun": true,
         "Ground Accel Time": 0.0,
@@ -4766,17 +4770,27 @@
         "Max Health": 100.0,
         "Max Throw Speed": 16.0,
         "Min Throw Speed": 3.5,
-        "Mouse Sensitivity": 0.05000000074505806,
+        "Mouse Sensitivity": 0.029999999329447746,
         "Move Speed": 4.0,
+        "Primary Weapon Prefab": {
+          "path": "assets/Weapons/AKS74U/AKS74U.prefab",
+          "pathGuid": "b19271e02ef840f1"
+        },
         "Regen Delay": 5.0,
         "Regen Rate": 30.0,
         "Respawn Delay": 3.0,
+        "Scroll Turn Deg": 15.0,
         "Secondary Animation Set": {
           "path": "assets/Weapons/Remington870/Remington870.fpsanim",
           "pathGuid": "4e3925bded078f9a"
         },
+        "Secondary Weapon Prefab": {
+          "path": "assets/Weapons/Remington870/Remington870.prefab",
+          "pathGuid": "cf1fec9edad348ec"
+        },
         "Spawn Protection": 2.0,
         "Sprint Multiplier": 1.600000023841858,
+        "Stick Look Deg/Sec": 180.0,
         "Throw Backspin": 2.0,
         "Throw Charge Time": 1.100000023841858,
         "View Model FOV": 50.0,
@@ -4852,6 +4866,8 @@
         "Crouch Height": 1.2000000476837158,
         "Crouch Speed": 0.41999998688697815,
         "Elbow Clearance": 0.05999999865889549,
+        "Elbow Ease": 0.05999999865889549,
+        "Elbow Max Rate": 540.0,
         "Eye Slack": 0.03500000014901161,
         "Foot IK": true,
         "Foot IK Fade": 0.10000000149011612,
@@ -4862,6 +4878,10 @@
         "Foot Max Raise": 0.25,
         "Foot Normal Ease": 0.07999999821186066,
         "Foot Offset Ease": 0.05999999865889549,
+        "Foot Pin Enabled": false,
+        "Foot Pin Max Drift": 0.25,
+        "Foot Pin Release": 0.05999999865889549,
+        "Foot Pin Weight": 1.0,
         "Foot Planted Height": 0.05000000074505806,
         "Foot Ray Length": 1.0,
         "Foot Ray Up": 0.5,
@@ -4874,8 +4894,26 @@
         "Look Down Start": 0.0,
         "Max Play Rate": 1.5,
         "Max Turn Rate": 0.0,
+        "NPC Aim Lean": 5.729578018188477,
+        "NPC Aim Lean Crouched": 12.605072021484375,
+        "NPC Cower Hunch": 20.05352210998535,
+        "NPC Face Ease": 0.09000000357627869,
+        "NPC Foot IK Fade": 0.15000000596046448,
+        "NPC Foot IK Max Drop": 0.3499999940395355,
+        "NPC Foot IK Max Raise": 0.3499999940395355,
+        "NPC Foot IK Pelvis Raise": 0.07999999821186066,
+        "NPC Foot IK Tilt Max": 28.647890090942383,
+        "NPC Foot Normal Ease": 0.07999999821186066,
+        "NPC Foot Offset Ease": 0.05000000074505806,
+        "NPC Head Max Pitch": 34.37746810913086,
+        "NPC Head Max Yaw": 68.75493621826172,
+        "NPC Max Twist": 68.75493621826172,
+        "NPC Move Ease": 0.10000000149011612,
+        "NPC Ready Lean Crouched": 22.918312072753906,
+        "NPC Turn Threshold": 65.89014434814453,
         "Near Hide": 0.10000000149011612,
         "Parameter Smoothing": 0.11999999731779099,
+        "Pelvis Alpha": 0.0,
         "Pelvis Max Raise": 0.0,
         "Player Run Speed": 0.0,
         "Player Sprint Speed": 0.0,
@@ -4889,7 +4927,18 @@
         "Shrug Start": 0.9800000190734863,
         "Spine Aim": 0.6000000238418579,
         "Spine Aim Down": 0.8999999761581421,
+        "Spine Max Angle 1": 0.0,
+        "Spine Max Angle 2": 0.0,
+        "Spine Max Angle 3": 0.0,
+        "Spine Max Angle 4": 0.0,
+        "Spine Max Angle 5": 0.0,
+        "Spine Stability": 1.0,
         "Spine Twist": 1.0,
+        "Spine Weight 1": 1.0,
+        "Spine Weight 2": 1.0,
+        "Spine Weight 3": 1.0,
+        "Spine Weight 4": 1.0,
+        "Spine Weight 5": 1.0,
         "Sprint Speed": 4.71999979019165,
         "Stair Ease": 0.09000000357627869,
         "Stair Pop Rate": 2.5,
@@ -4903,6 +4952,11 @@
         "Stop Min Speed": 1.2000000476837158,
         "Stop Min Speed (Crouched)": 0.6000000238418579,
         "Stop Run Forward": 0.699999988079071,
+        "Stride Pelvis Adjust": 1.0,
+        "Stride Scale Max": 1.350000023841858,
+        "Stride Scale Min": 0.75,
+        "Stride Warp Enabled": false,
+        "Stride Warp Weight": 1.0,
         "Turn End Angle": 8.0,
         "Turn Lag Floor": 45.0,
         "Turn Lag Margin": 5.0,
@@ -4934,6 +4988,7 @@
       ]
     },
     {
+      "active": false,
       "id": 96,
       "name": "Enemies",
       "order": 96,
@@ -4957,11 +5012,30 @@
     },
     {
       "Squad Settings": {
+        "Bleed-Out Time": 20.0,
+        "Corpse Time": 14.0,
+        "Cover Peek Step": 0.800000011920929,
+        "Cover Reach": 0.8500000238418579,
+        "Cover Sample Spacing": 0.8999999761581421,
+        "Crawl Speed": 0.6000000238418579,
         "Difficulty": 1.0,
+        "Fall Gravity": 18.0,
+        "Foot IK Range": 25.0,
+        "Heavy Hit Damage": 40.0,
+        "High Cover Height": 1.5499999523162842,
+        "Hitbox Range": 60.0,
+        "Limp Speed Scale": 0.6000000238418579,
+        "Limp Time": 6.0,
+        "Low Cover Height": 0.8500000238418579,
+        "Melee Damage": 25.0,
+        "Melee Hit Time": 0.2199999988079071,
+        "Melee Time": 0.550000011920929,
+        "Mesh Check Range": 12.0,
         "NPC Damage Scale": 0.44999998807907104,
         "Respawn": true,
         "Respawn Delay": 8.0,
-        "Squad Size": 4
+        "Squad Size": 4,
+        "Stagger Time": 0.4000000059604645
       },
       "id": 97,
       "name": "AI Director",
@@ -5160,109 +5234,790 @@
   "gradeTint": 0.0,
   "libraryMaterials": [
     {
-      "path": "assets/characters/Quantum/Materials/Characters/M_Quantum_Head.mat",
+      "path": "assets/Environments/Sandbox/Materials/court_floor.mat",
+      "pathGuid": "af2c57edb9eeead3"
+    },
+    {
+      "path": "assets/Environments/Sandbox/Materials/arena_glass.mat",
+      "pathGuid": "2b02bddbbc176106"
+    },
+    {
+      "path": "assets/Props/Basketball/Materials/backboard_glass.mat",
+      "pathGuid": "a00f0b02ee9bb028"
+    },
+    {
+      "path": "assets/Props/Basketball/Materials/rim.mat",
+      "pathGuid": "e62f07d31b9df2ce"
+    },
+    {
+      "path": "assets/Props/Basketball/Materials/net.mat",
+      "pathGuid": "9a60da12561af3f2"
+    },
+    {
+      "path": "assets/Props/Basketball/Materials/basketball.mat",
+      "pathGuid": "9ec0856b3181ad4f"
+    },
+    {
+      "path": "assets/Environments/Sandbox/Materials/water.mat",
+      "pathGuid": "7b94769ce0f84595"
+    },
+    {
+      "path": "assets/Environments/Sandbox/Materials/gallery_chrome.mat",
+      "pathGuid": "d43b10aee251de3c"
+    },
+    {
+      "path": "assets/Environments/Sandbox/Materials/gallery_gold.mat",
+      "pathGuid": "6cd312ca7538ce16"
+    },
+    {
+      "path": "assets/Environments/Sandbox/Materials/gallery_brushed.mat",
+      "pathGuid": "b30f3b5631a2c4d1"
+    },
+    {
+      "path": "assets/Environments/Sandbox/Materials/gallery_carpaint.mat",
+      "pathGuid": "5af22ea260759521"
+    },
+    {
+      "path": "assets/Environments/Sandbox/Materials/gallery_velvet.mat",
+      "pathGuid": "2c58a10670b0ee18"
+    },
+    {
+      "path": "assets/Environments/Sandbox/Materials/gallery_jade.mat",
+      "pathGuid": "79947b909dfe220a"
+    },
+    {
+      "path": "assets/Environments/Sandbox/Materials/gallery_glass.mat",
+      "pathGuid": "66f617b3879ddb59"
+    },
+    {
+      "path": "assets/Environments/Sandbox/Materials/gallery_neon.mat",
+      "pathGuid": "eb13ea79fff0ea7e"
+    },
+    {
+      "path": "assets/Weapons/AKS74U/Materials/AKS74U.mat",
+      "pathGuid": "43edbab5337788c2"
+    },
+    {
+      "path": "assets/Weapons/AKS74U/Materials/Cartridge_545x39mm.mat",
+      "pathGuid": "97e35a4f8b04858c"
+    },
+    {
+      "path": "assets/Weapons/Remington870/Materials/Remington870.mat",
+      "pathGuid": "79551bbef4999400"
+    },
+    {
+      "path": "assets/Characters/Quantum/Materials/Characters/M_Quantum_Head.mat",
       "pathGuid": "00f2f285376c0e56"
     },
     {
-      "path": "assets/characters/Quantum/Materials/Characters/M_Quantum_Arms.mat",
+      "path": "assets/Characters/Quantum/Materials/Characters/M_Quantum_Arms.mat",
       "pathGuid": "bdf55b314edda1f4"
     },
     {
-      "path": "assets/characters/Quantum/Materials/Characters/M_Quantum_Body.mat",
+      "path": "assets/Characters/Quantum/Materials/Characters/M_Quantum_Body.mat",
       "pathGuid": "ff2aca4c25ba4f89"
     },
     {
-      "path": "assets/characters/Quantum/Materials/Characters/M_Cartilage.mat",
+      "path": "assets/Characters/Quantum/Materials/Characters/M_Cartilage.mat",
       "pathGuid": "d71fa7c7cd81f033"
     },
     {
-      "path": "assets/characters/Quantum/Materials/Characters/M_Eye_Overlay.mat",
+      "path": "assets/Characters/Quantum/Materials/Characters/M_Eye_Overlay.mat",
       "pathGuid": "9b4dcbacd337e8a1"
     },
     {
-      "path": "assets/characters/Quantum/Materials/Characters/Eyes/M_Eye_Brown.mat",
-      "pathGuid": "b0cdff125ce5bc62"
+      "path": "assets/Characters/Quantum/Materials/Characters/Eyes/M_Eye_Hazel.mat",
+      "pathGuid": "2202606ba835e4b7"
     },
     {
-      "path": "assets/characters/Quantum/Materials/Characters/M_Brows_Lashes.mat",
+      "path": "assets/Characters/Quantum/Materials/Characters/M_Brows_Lashes.mat",
       "pathGuid": "7a80f13a6d4b5daf"
     },
     {
-      "path": "assets/characters/Quantum/Materials/Characters/M_Eye_Cornea.mat",
+      "path": "assets/Characters/Quantum/Materials/Characters/M_Eye_Cornea.mat",
       "pathGuid": "185fa1f3e55e68a5"
     },
     {
-      "path": "assets/characters/Quantum/Materials/Characters/M_Saliva.mat",
+      "path": "assets/Characters/Quantum/Materials/Characters/M_Saliva.mat",
       "pathGuid": "35c182a2d61a4dca"
     },
     {
-      "path": "assets/characters/Quantum/Materials/Characters/M_Teeth.mat",
+      "path": "assets/Characters/Quantum/Materials/Characters/M_Teeth.mat",
       "pathGuid": "0681796530e520b8"
     },
     {
-      "path": "assets/characters/Quantum/Materials/Characters/M_Quantum_Head_Young.mat",
+      "path": "assets/Characters/Quantum/Materials/Characters/Eyes/M_Eye_Brown.mat",
+      "pathGuid": "b0cdff125ce5bc62"
+    },
+    {
+      "path": "assets/Characters/Quantum/Materials/Characters/M_Quantum_Head_Young.mat",
       "pathGuid": "c1148bc46cc32021"
     },
     {
-      "path": "assets/characters/Quantum/Materials/Clothing/Balaclava/M_Balaclava_Crime_Print.mat",
-      "pathGuid": "4a97d2684b5706be"
+      "path": "assets/Characters/Quantum/Materials/Clothing/Balaclava/M_Balaclava_Crime_Black.mat",
+      "pathGuid": "58907c2c546715f2"
     },
     {
-      "path": "assets/characters/Quantum/Materials/Clothing/Tops/Hoodie_Hood_Up/M_Hoodie_Hood_Up_Black.mat",
-      "pathGuid": "02619ee0a88e6cae"
+      "path": "assets/Characters/Quantum/Materials/Clothing/Glasses/Glasses Aviator/M_Sunglasses_Brown.mat",
+      "pathGuid": "4cff1d1f9a8c50a6"
     },
     {
-      "path": "assets/characters/Quantum/Materials/Clothing/Pants/Pants_Sport/M_Sport_Pants_Black.mat",
-      "pathGuid": "4a4ac6fabe21f2c8"
+      "path": "assets/Characters/Quantum/Materials/Clothing/Pants/Pants_Cargo/M_Pants_Cargo_Black.mat",
+      "pathGuid": "80035c5ed784ac0d"
     },
     {
-      "path": "assets/characters/Quantum/Materials/Clothing/Shoes/Sneakers/Sneakers_Leather/M_F_Sneakers_Leather_Black.mat",
+      "path": "assets/Characters/Quantum/Materials/Clothing/Shoes/Sneakers/Sneakers_Leather/M_F_Sneakers_Leather_Black.mat",
       "pathGuid": "6ff7cafa7e9d186a"
     },
     {
-      "path": "assets/characters/Quantum/Materials/Clothing/Shoes/Socks/M_Socks.mat",
+      "path": "assets/Characters/Quantum/Materials/Clothing/Tops/TShirt/M_TShirt_Black.mat",
+      "pathGuid": "caad69132ec91232"
+    },
+    {
+      "path": "assets/Characters/Quantum/Materials/Clothing/Balaclava/M_Balaclava_Crime_Print.mat",
+      "pathGuid": "4a97d2684b5706be"
+    },
+    {
+      "path": "assets/Characters/Quantum/Materials/Clothing/Glasses/Glasses Aviator/M_Glasses_Aviator_Gold.mat",
+      "pathGuid": "935a4eb426ae6b4a"
+    },
+    {
+      "path": "assets/Characters/Quantum/Materials/Clothing/Pants/Pants_Cargo/M_Pants_Cargo_Blue.mat",
+      "pathGuid": "492a4132f3ecddcf"
+    },
+    {
+      "path": "assets/Characters/Quantum/Materials/Clothing/Shoes/Sneakers/Sneakers_Leather/M_F_Sneakers_Leather_White.mat",
+      "pathGuid": "467db3a57e411fb6"
+    },
+    {
+      "path": "assets/Characters/Quantum/Materials/Clothing/Tops/TShirt/M_TShirt_White.mat",
+      "pathGuid": "61f0057abef9a841"
+    },
+    {
+      "path": "assets/Characters/Quantum/Materials/Clothing/Balaclava/M_Balaclava_Crime_Green.mat",
+      "pathGuid": "d5c1b70809da40d7"
+    },
+    {
+      "path": "assets/Characters/Quantum/Materials/Clothing/Tops/Hoodie_Hood_Up/M_Hoodie_Hood_Up_Black.mat",
+      "pathGuid": "02619ee0a88e6cae"
+    },
+    {
+      "path": "assets/Characters/Quantum/Materials/Clothing/Pants/Pants_Sport/M_Sport_Pants_Black.mat",
+      "pathGuid": "4a4ac6fabe21f2c8"
+    },
+    {
+      "path": "assets/Characters/Quantum/Materials/Clothing/Shoes/Socks/M_Socks.mat",
       "pathGuid": "475670f667a70b3b"
     }
   ],
   "libraryModels": [
     {
-      "path": "assets/characters/Quantum/Models/European/Quantum_Torso.fbx",
+      "path": "assets/Props/Basketball/Models/rim.obj",
+      "pathGuid": "aa06bf914b4a03c0"
+    },
+    {
+      "path": "assets/Props/Basketball/Models/net.obj",
+      "pathGuid": "9f5eb74f6735cbca"
+    },
+    {
+      "path": "assets/Props/Basketball/Models/basketball.obj",
+      "pathGuid": "3e65fa8b4567e911"
+    },
+    {
+      "path": "assets/Weapons/AKS74U/FirstPerson/AKS-74U_A_FP_ADS.fbx",
+      "pathGuid": "101cd70269fca765"
+    },
+    {
+      "path": "assets/Weapons/AKS74U/Weapon/AKS-74U_A_W_ADS.fbx",
+      "pathGuid": "6f35fb7e3ac4ee7b"
+    },
+    {
+      "path": "assets/Weapons/AKS74U/FirstPerson/AKS-74U_A_FP_Idle.fbx",
+      "pathGuid": "4168495e7bad8625"
+    },
+    {
+      "path": "assets/Weapons/AKS74U/FirstPerson/AKS-74U_A_FP_Walk.fbx",
+      "pathGuid": "6e8123547b7ff1e4"
+    },
+    {
+      "path": "assets/Weapons/AKS74U/FirstPerson/AKS-74U_A_FP_IdleToSprint.fbx",
+      "pathGuid": "e9c31ac6116dfd06"
+    },
+    {
+      "path": "assets/Weapons/AKS74U/Weapon/AKS-74U_A_W_IdleToSprint.fbx",
+      "pathGuid": "971a40ef2e78a7a9"
+    },
+    {
+      "path": "assets/Weapons/AKS74U/FirstPerson/AKS-74U_A_FP_Sprint.fbx",
+      "pathGuid": "3862c30a005b6f45"
+    },
+    {
+      "path": "assets/Weapons/AKS74U/Weapon/AKS-74U_A_W_Sprint.fbx",
+      "pathGuid": "438b9b2758b79a49"
+    },
+    {
+      "path": "assets/Weapons/AKS74U/FirstPerson/AKS-74U_A_FP_SprintToIdle.fbx",
+      "pathGuid": "b1146b87d6885ed2"
+    },
+    {
+      "path": "assets/Weapons/AKS74U/Weapon/AKS-74U_A_W_SprintToIdle.fbx",
+      "pathGuid": "c5582401991a3963"
+    },
+    {
+      "path": "assets/Weapons/AKS74U/FirstPerson/AKS-74U_A_FP_Draw.fbx",
+      "pathGuid": "1938b9509f147780"
+    },
+    {
+      "path": "assets/Weapons/AKS74U/FirstPerson/AKS-74U_A_FP_Holster.fbx",
+      "pathGuid": "8d4c78b10f9caed1"
+    },
+    {
+      "path": "assets/Weapons/AKS74U/Weapon/AKS-74U_A_W_Holster.fbx",
+      "pathGuid": "2a62a06dbf117169"
+    },
+    {
+      "path": "assets/Weapons/AKS74U/FirstPerson/AKS-74U_A_FP_Fire.fbx",
+      "pathGuid": "818ad9a16cc62d87"
+    },
+    {
+      "path": "assets/Weapons/AKS74U/Weapon/AKS-74U_A_W_Fire.fbx",
+      "pathGuid": "77923d570c4ce1c5"
+    },
+    {
+      "path": "assets/Weapons/AKS74U/FirstPerson/AKS-74U_A_FP_Tac_Reload.fbx",
+      "pathGuid": "007cce9507dc0627"
+    },
+    {
+      "path": "assets/Weapons/AKS74U/Weapon/AKS-74U_A_W_Tac_Reload.fbx",
+      "pathGuid": "81b5689d2228d3a9"
+    },
+    {
+      "path": "assets/Weapons/AKS74U/FirstPerson/AKS-74U_A_FP_Empty_Reload.fbx",
+      "pathGuid": "3348386df4b6a44b"
+    },
+    {
+      "path": "assets/Weapons/AKS74U/Weapon/AKS-74U_A_W_Empty_Reload.fbx",
+      "pathGuid": "d0dfc9ab0c48a48d"
+    },
+    {
+      "path": "assets/Weapons/AKS74U/FirstPerson/AKS-74U_A_FP_Inspect.fbx",
+      "pathGuid": "19f07109f9ebb97d"
+    },
+    {
+      "path": "assets/Weapons/AKS74U/Weapon/AKS-74U_A_W_Inspect.fbx",
+      "pathGuid": "0b328cb32a01d270"
+    },
+    {
+      "path": "assets/Weapons/AKS74U/FirstPerson/AKS-74U_A_FP_Mag_Check.fbx",
+      "pathGuid": "58a7ef1b4bd1ae0e"
+    },
+    {
+      "path": "assets/Weapons/AKS74U/Weapon/AKS-74U_A_W_Mag_Check.fbx",
+      "pathGuid": "a01aa15f799151d3"
+    },
+    {
+      "path": "assets/Weapons/AKS74U/FirstPerson/AKS-74U_A_FP_Melee.fbx",
+      "pathGuid": "48e798f1913d3f54"
+    },
+    {
+      "path": "assets/Weapons/AKS74U/Weapon/AKS-74U_A_W_Melee.fbx",
+      "pathGuid": "6fb7b6fdfc2b4941"
+    },
+    {
+      "path": "assets/Weapons/AKS74U/FirstPerson/AKS-74U_A_FP_Regrip.fbx",
+      "pathGuid": "c10ae2c34481e1f7"
+    },
+    {
+      "path": "assets/Weapons/AKS74U/FirstPerson/AKS-74U_A_FP_Aim.fbx",
+      "pathGuid": "9004884db6cdfb0e"
+    },
+    {
+      "path": "assets/Weapons/Remington870/Weapon/Remington870_A_W_Idle.fbx",
+      "pathGuid": "abfe8981a8954dee"
+    },
+    {
+      "path": "assets/Weapons/Remington870/FirstPerson/Remington870_A_FP_Aim.fbx",
+      "pathGuid": "52de15e71a89b276"
+    },
+    {
+      "path": "assets/Weapons/Remington870/FirstPerson/Remington870_A_FP_Draw.fbx",
+      "pathGuid": "0ab534d75ac5b4b2"
+    },
+    {
+      "path": "assets/Weapons/Remington870/FirstPerson/Remington870_A_FP_Fire.fbx",
+      "pathGuid": "bfe7581f369eec20"
+    },
+    {
+      "path": "assets/Weapons/Remington870/FirstPerson/Remington870_A_FP_Holster.fbx",
+      "pathGuid": "3540eaf8772d8f2d"
+    },
+    {
+      "path": "assets/Weapons/Remington870/FirstPerson/Remington870_A_FP_Idle.fbx",
+      "pathGuid": "d568615aaab5910b"
+    },
+    {
+      "path": "assets/Weapons/Remington870/FirstPerson/Remington870_A_FP_IdleToSprint.fbx",
+      "pathGuid": "ec955e725647bbc5"
+    },
+    {
+      "path": "assets/Weapons/Remington870/FirstPerson/Remington870_A_FP_Inspect.fbx",
+      "pathGuid": "e6bf6388a2176467"
+    },
+    {
+      "path": "assets/Weapons/Remington870/FirstPerson/Remington870_A_FP_Mag_Check.fbx",
+      "pathGuid": "224b6e16aa983595"
+    },
+    {
+      "path": "assets/Weapons/Remington870/FirstPerson/Remington870_A_FP_Melee.fbx",
+      "pathGuid": "3602f7cb46301867"
+    },
+    {
+      "path": "assets/Weapons/Remington870/FirstPerson/Remington870_A_FP_Pump.fbx",
+      "pathGuid": "633d907c5142af8e"
+    },
+    {
+      "path": "assets/Weapons/Remington870/FirstPerson/Remington870_A_FP_Regrip.fbx",
+      "pathGuid": "ffa839d49c013802"
+    },
+    {
+      "path": "assets/Weapons/Remington870/FirstPerson/Remington870_A_FP_Reload_End.fbx",
+      "pathGuid": "5567b6b62a617120"
+    },
+    {
+      "path": "assets/Weapons/Remington870/FirstPerson/Remington870_A_FP_Reload_Loop.fbx",
+      "pathGuid": "39d7c92a7e788f28"
+    },
+    {
+      "path": "assets/Weapons/Remington870/FirstPerson/Remington870_A_FP_Reload_Loop_End.fbx",
+      "pathGuid": "eedb360ee929c541"
+    },
+    {
+      "path": "assets/Weapons/Remington870/FirstPerson/Remington870_A_FP_Reload_Start.fbx",
+      "pathGuid": "a2aef5ce7b1e915a"
+    },
+    {
+      "path": "assets/Weapons/Remington870/FirstPerson/Remington870_A_FP_Reload_Start_Empty.fbx",
+      "pathGuid": "69616d0572a4981b"
+    },
+    {
+      "path": "assets/Weapons/Remington870/FirstPerson/Remington870_A_FP_Sprint.fbx",
+      "pathGuid": "b548d762261e5f5f"
+    },
+    {
+      "path": "assets/Weapons/Remington870/FirstPerson/Remington870_A_FP_SprintToIdle.fbx",
+      "pathGuid": "18773d2bc32d2c08"
+    },
+    {
+      "path": "assets/Weapons/Remington870/FirstPerson/Remington870_A_FP_Walk.fbx",
+      "pathGuid": "804d61b2efd90493"
+    },
+    {
+      "path": "assets/Weapons/Remington870/Weapon/Remington870_A_W_Inspect.fbx",
+      "pathGuid": "66576fcdd35fc5ba"
+    },
+    {
+      "path": "assets/Weapons/Remington870/Weapon/Remington870_A_W_Mag_Check.fbx",
+      "pathGuid": "421117bd9c7c899f"
+    },
+    {
+      "path": "assets/Weapons/Remington870/Weapon/Remington870_A_W_Pump.fbx",
+      "pathGuid": "21361368df1fe439"
+    },
+    {
+      "path": "assets/Weapons/Remington870/Weapon/Remington870_A_W_Reload_End.fbx",
+      "pathGuid": "ca979c2223c6ddae"
+    },
+    {
+      "path": "assets/Weapons/Remington870/Weapon/Remington870_A_W_Reload_Loop.fbx",
+      "pathGuid": "848f46e7578d8189"
+    },
+    {
+      "path": "assets/Weapons/Remington870/Weapon/Remington870_A_W_Reload_Loop_End.fbx",
+      "pathGuid": "0c7074d53b52d312"
+    },
+    {
+      "path": "assets/Weapons/Remington870/Weapon/Remington870_A_W_Reload_Start.fbx",
+      "pathGuid": "fffbcc7419088411"
+    },
+    {
+      "path": "assets/Weapons/Remington870/Weapon/Remington870_A_W_Reload_Start_Empty.fbx",
+      "pathGuid": "f0216597d55e5ac4"
+    },
+    {
+      "path": "assets/Characters/Quantum/Models/European/Quantum_Body_Full.fbx",
+      "pathGuid": "5ec75801d215e72f"
+    },
+    {
+      "path": "assets/Characters/Quantum/Models/European/Quantum_Head.fbx",
+      "pathGuid": "372aa659f6e66c47"
+    },
+    {
+      "path": "assets/Characters/Quantum/Models/European/Quantum_Torso.fbx",
       "pathGuid": "34f0109f85dae259"
     },
     {
-      "path": "assets/characters/Quantum/Models/Clothing/Male/Shoes/Quantum_Feet_Shoes.fbx",
-      "pathGuid": "9223ed446c94346d"
+      "path": "assets/Characters/Quantum/Models/European/Quantum_UnderPants.fbx",
+      "pathGuid": "2aeb5f71b8365204"
     },
     {
-      "path": "assets/characters/Quantum/Models/Young/Quantum_Young_Head.fbx",
-      "pathGuid": "0ccde7cf189bfaba"
+      "path": "assets/Characters/Quantum/Models/European/Quantum_Legs.fbx",
+      "pathGuid": "c36e291cf458911c"
     },
     {
-      "path": "assets/characters/Quantum/FirstPerson/Quantum_Arms_FP.fbx",
+      "path": "assets/Characters/Quantum/Models/European/Quantum_Feet.fbx",
+      "pathGuid": "94a5ede2259c1ecf"
+    },
+    {
+      "path": "assets/Characters/Quantum/FirstPerson/Quantum_Arms_FP.fbx",
       "pathGuid": "19bbef7e387a5ef4"
     },
     {
-      "path": "assets/characters/Quantum/Models/Clothing/Male/Balaclava/SM_Balaclava_Crime.fbx",
+      "path": "assets/Characters/Quantum/Models/Clothing/Male/Balaclava/SM_Balaclava_Crime.fbx",
       "pathGuid": "18fe3d21a3cde1a0"
     },
     {
-      "path": "assets/characters/Quantum/Models/Clothing/Male/Tops/SKM_Hoodie_Hood_Up.fbx",
-      "pathGuid": "a93a8b58180d0f44"
+      "path": "assets/Characters/Quantum/Models/Clothing/Male/Shoes/Quantum_Feet_Shoes.fbx",
+      "pathGuid": "9223ed446c94346d"
     },
     {
-      "path": "assets/characters/Quantum/Models/Clothing/Male/Pants/SKM_Sport_Pants.fbx",
-      "pathGuid": "c28a0a40272cd541"
+      "path": "assets/Characters/Quantum/Models/Clothing/Male/Glasses/SKM_Glasses_Aviator.fbx",
+      "pathGuid": "4a3231bfa85872b3"
     },
     {
-      "path": "assets/characters/Quantum/Models/Clothing/Male/Shoes/SKM_Sneakers.fbx",
+      "path": "assets/Characters/Quantum/Models/Clothing/Male/Tops/SKM_Tshirt.fbx",
+      "pathGuid": "cbc683d30726b7fe"
+    },
+    {
+      "path": "assets/Characters/Quantum/Models/Clothing/Male/Pants/SKM_Pants_Cargo_Straight.fbx",
+      "pathGuid": "c9b2e6178519947c"
+    },
+    {
+      "path": "assets/Characters/Quantum/Models/Clothing/Male/Shoes/SKM_Sneakers.fbx",
       "pathGuid": "907719222c820ea8"
     },
     {
-      "path": "assets/characters/Quantum/Models/Clothing/Male/Shoes/SKM_Socks.fbx",
+      "path": "assets/Characters/Quantum/Models/Young/Quantum_Young_Head.fbx",
+      "pathGuid": "0ccde7cf189bfaba"
+    },
+    {
+      "path": "assets/Characters/Quantum/Models/Clothing/Male/Tops/SKM_Hoodie_Hood_Up.fbx",
+      "pathGuid": "a93a8b58180d0f44"
+    },
+    {
+      "path": "assets/Characters/Quantum/Models/Clothing/Male/Pants/SKM_Sport_Pants.fbx",
+      "pathGuid": "c28a0a40272cd541"
+    },
+    {
+      "path": "assets/Characters/Quantum/Models/Clothing/Male/Shoes/SKM_Socks.fbx",
       "pathGuid": "d2d9305f1b150870"
+    },
+    {
+      "path": "assets/Animations/Mocap/RootMotion/Ready/AM_Ready_Idle_01.fbx",
+      "pathGuid": "120c50e778307a32"
+    },
+    {
+      "path": "assets/Animations/Mocap/RootMotion/Locomotion_V2/AM_Walk/AM_Loco_Walk_Fwd.fbx",
+      "pathGuid": "2f725c6d0ecc731b"
+    },
+    {
+      "path": "assets/Animations/Mocap/RootMotion/Locomotion_V2/AM_Walk/AM_Loco_Walk_Fwd_Left.fbx",
+      "pathGuid": "52c90411529c91c3"
+    },
+    {
+      "path": "assets/Animations/Mocap/RootMotion/Locomotion_V2/AM_Walk/AM_Loco_Walk_Fwd_Right.fbx",
+      "pathGuid": "93bc5b9065345d9e"
+    },
+    {
+      "path": "assets/Animations/Mocap/RootMotion/Locomotion_V2/AM_Walk/AM_Loco_Walk_Left.fbx",
+      "pathGuid": "f39adef33b72b5e1"
+    },
+    {
+      "path": "assets/Animations/Mocap/RootMotion/Locomotion_V2/AM_Walk/AM_Loco_Walk_Right.fbx",
+      "pathGuid": "fa653474f4c4cc71"
+    },
+    {
+      "path": "assets/Animations/Mocap/RootMotion/Locomotion_V2/AM_Walk/AM_Loco_Walk_Bwd.fbx",
+      "pathGuid": "c0adf8ca675de297"
+    },
+    {
+      "path": "assets/Animations/Mocap/RootMotion/Locomotion_V2/AM_Walk/AM_Loco_Walk_Bwd_Left.fbx",
+      "pathGuid": "d9bba94a847fc1fe"
+    },
+    {
+      "path": "assets/Animations/Mocap/RootMotion/Locomotion_V2/AM_Walk/AM_Loco_Walk_Bwd_Right.fbx",
+      "pathGuid": "f9f0f26c140addb8"
+    },
+    {
+      "path": "assets/Animations/Mocap/RootMotion/Locomotion_V2/AM_Jog/AM_Loco_Jog_Fwd.fbx",
+      "pathGuid": "b34ad32375c7191b"
+    },
+    {
+      "path": "assets/Animations/Mocap/RootMotion/Locomotion_V2/AM_Jog/AM_Loco_Jog_Fwd_Left.fbx",
+      "pathGuid": "e0ed2f1bc132f6a8"
+    },
+    {
+      "path": "assets/Animations/Mocap/RootMotion/Locomotion_V2/AM_Jog/AM_Loco_Jog_Fwd_Right.fbx",
+      "pathGuid": "a2c0da63f8d8dbd7"
+    },
+    {
+      "path": "assets/Animations/Mocap/RootMotion/Locomotion_V2/AM_Jog/AM_Loco_Jog_Left.fbx",
+      "pathGuid": "a1c36c5b252282a4"
+    },
+    {
+      "path": "assets/Animations/Mocap/RootMotion/Locomotion_V2/AM_Jog/AM_Loco_Jog_Right.fbx",
+      "pathGuid": "40a6acc6bc0284b1"
+    },
+    {
+      "path": "assets/Animations/Mocap/RootMotion/Locomotion_V2/AM_Jog/AM_Loco_Jog_Bwd.fbx",
+      "pathGuid": "5ed68e19d0aa1f55"
+    },
+    {
+      "path": "assets/Animations/Mocap/RootMotion/Locomotion_V2/AM_Jog/AM_Loco_Jog_Bwd_Left.fbx",
+      "pathGuid": "8bebb836de70e21a"
+    },
+    {
+      "path": "assets/Animations/Mocap/RootMotion/Locomotion_V2/AM_Jog/AM_Loco_Jog_Bwd_Right.fbx",
+      "pathGuid": "7e9963070bcd70f7"
+    },
+    {
+      "path": "assets/Animations/Mocap/RootMotion/Locomotion_V2/AM_Run/AM_Loco_Run_Fwd.fbx",
+      "pathGuid": "6ffa5affd5def353"
+    },
+    {
+      "path": "assets/Animations/Mocap/RootMotion/Jump/AM_Jump.fbx",
+      "pathGuid": "d50e5115458fb134"
+    },
+    {
+      "path": "assets/Animations/Mocap/RootMotion/Jump/AM_Jump_Fall_Loop.fbx",
+      "pathGuid": "0cb61f754798296f"
+    },
+    {
+      "path": "assets/Animations/Mocap/RootMotion/Jump/AM_Jump_Land_Recovery.fbx",
+      "pathGuid": "149625c5c5d35512"
+    },
+    {
+      "path": "assets/Animations/Mocap/RootMotion/Turn/AM_Stand_Idle_Turn_R180.fbx",
+      "pathGuid": "4685634606e07d4e"
+    },
+    {
+      "path": "assets/Animations/Mocap/RootMotion/Turn/AM_Stand_Idle_Turn_R135.fbx",
+      "pathGuid": "aa3fbc64fad3f8b5"
+    },
+    {
+      "path": "assets/Animations/Mocap/RootMotion/Turn/AM_Stand_Idle_Turn_R090.fbx",
+      "pathGuid": "9cb7124f15924003"
+    },
+    {
+      "path": "assets/Animations/Mocap/RootMotion/Turn/AM_Stand_Idle_Turn_R045.fbx",
+      "pathGuid": "931eadf7c2b109a6"
+    },
+    {
+      "path": "assets/Animations/Mocap/RootMotion/Turn/AM_Stand_Idle_Turn_L045.fbx",
+      "pathGuid": "17e8a43d4fd11432"
+    },
+    {
+      "path": "assets/Animations/Mocap/RootMotion/Turn/AM_Stand_Idle_Turn_L090.fbx",
+      "pathGuid": "df03b6fd87d5fc7e"
+    },
+    {
+      "path": "assets/Animations/Mocap/RootMotion/Turn/AM_Stand_Idle_Turn_L135.fbx",
+      "pathGuid": "8a41eb401d24b425"
+    },
+    {
+      "path": "assets/Animations/Mocap/RootMotion/Turn/AM_Stand_Idle_Turn_L180.fbx",
+      "pathGuid": "c24904de04270a8f"
+    },
+    {
+      "path": "assets/Animations/Mocap/RootMotion/Locomotion_V2/AM_Jog/AM_Loco_Jog_Fwd_Start.fbx",
+      "pathGuid": "cc9447341944c738"
+    },
+    {
+      "path": "assets/Animations/Mocap/RootMotion/Locomotion_V2/AM_Jog/AM_Loco_Jog_Bwd_Start.fbx",
+      "pathGuid": "7aa3d42885420a73"
+    },
+    {
+      "path": "assets/Animations/Mocap/RootMotion/Locomotion_V2/AM_Jog/AM_Loco_Jog_Left_Start.fbx",
+      "pathGuid": "6f1d263d8c01c266"
+    },
+    {
+      "path": "assets/Animations/Mocap/RootMotion/Locomotion_V2/AM_Jog/AM_Loco_Jog_Right_Start.fbx",
+      "pathGuid": "fa7e16d0593addfe"
+    },
+    {
+      "path": "assets/Animations/Mocap/RootMotion/Locomotion_V2/AM_Jog/AM_Loco_Jog_Fwd_Stop.fbx",
+      "pathGuid": "2d98c50513c02b98"
+    },
+    {
+      "path": "assets/Animations/Mocap/RootMotion/Locomotion_V2/AM_Jog/AM_Loco_Jog_Bwd_Stop.fbx",
+      "pathGuid": "e185198b4cb3cd6d"
+    },
+    {
+      "path": "assets/Animations/Mocap/RootMotion/Locomotion_V2/AM_Jog/AM_Loco_Jog_Left_Stop.fbx",
+      "pathGuid": "c55e7fde8c4420cc"
+    },
+    {
+      "path": "assets/Animations/Mocap/RootMotion/Locomotion_V2/AM_Jog/AM_Loco_Jog_Right_Stop.fbx",
+      "pathGuid": "73d93f603830af9d"
+    },
+    {
+      "path": "assets/Animations/Mocap/RootMotion/Locomotion_V2/AM_Run/AM_Loco_Run_Fwd_Stop.fbx",
+      "pathGuid": "5d75ec66936312c5"
+    },
+    {
+      "path": "assets/Animations/Mocap/RootMotion/Crouch/AM_Crouch_Idle_01.fbx",
+      "pathGuid": "5bbbc16c5a7e53cb"
+    },
+    {
+      "path": "assets/Animations/Mocap/RootMotion/Locomotion_V2/AM_Crouch_Walk/AM_Crouch_Loco_Walk_Fwd.fbx",
+      "pathGuid": "15acb8dbcc868cd2"
+    },
+    {
+      "path": "assets/Animations/Mocap/RootMotion/Locomotion_V2/AM_Crouch_Walk/AM_Crouch_Loco_Walk_Fwd_Left.fbx",
+      "pathGuid": "263c5ce0379edfa8"
+    },
+    {
+      "path": "assets/Animations/Mocap/RootMotion/Locomotion_V2/AM_Crouch_Walk/AM_Crouch_Loco_Walk_Fwd_Right.fbx",
+      "pathGuid": "b667084faf565701"
+    },
+    {
+      "path": "assets/Animations/Mocap/RootMotion/Locomotion_V2/AM_Crouch_Walk/AM_Crouch_Loco_Walk_Left.fbx",
+      "pathGuid": "1a9d5c1c02701f5e"
+    },
+    {
+      "path": "assets/Animations/Mocap/RootMotion/Locomotion_V2/AM_Crouch_Walk/AM_Crouch_Loco_Walk_Right.fbx",
+      "pathGuid": "7e7b97b9e1892026"
+    },
+    {
+      "path": "assets/Animations/Mocap/RootMotion/Locomotion_V2/AM_Crouch_Walk/AM_Crouch_Loco_Walk_Bwd.fbx",
+      "pathGuid": "1b5d05a364c08afd"
+    },
+    {
+      "path": "assets/Animations/Mocap/RootMotion/Locomotion_V2/AM_Crouch_Walk/AM_Crouch_Loco_Walk_Bwd_Left.fbx",
+      "pathGuid": "64ef3a056ff93ce0"
+    },
+    {
+      "path": "assets/Animations/Mocap/RootMotion/Locomotion_V2/AM_Crouch_Walk/AM_Crouch_Loco_Walk_Bwd_Right.fbx",
+      "pathGuid": "4b6dc3b6f1e41038"
+    },
+    {
+      "path": "assets/Animations/Mocap/RootMotion/Crouch/AM_Crouch_Idle_Turn_R180.fbx",
+      "pathGuid": "52b24811ec0f0372"
+    },
+    {
+      "path": "assets/Animations/Mocap/RootMotion/Crouch/AM_Crouch_Idle_Turn_R135.fbx",
+      "pathGuid": "219732f3629879ea"
+    },
+    {
+      "path": "assets/Animations/Mocap/RootMotion/Crouch/AM_Crouch_Idle_Turn_R090.fbx",
+      "pathGuid": "f3f461f6ff4e9dfb"
+    },
+    {
+      "path": "assets/Animations/Mocap/RootMotion/Crouch/AM_Crouch_Idle_Turn_R045.fbx",
+      "pathGuid": "ef42cbd093a44da7"
+    },
+    {
+      "path": "assets/Animations/Mocap/RootMotion/Crouch/AM_Crouch_Idle_Turn_L045.fbx",
+      "pathGuid": "59c12678a0458cf5"
+    },
+    {
+      "path": "assets/Animations/Mocap/RootMotion/Crouch/AM_Crouch_Idle_Turn_L090.fbx",
+      "pathGuid": "1ba9e255270bd6ad"
+    },
+    {
+      "path": "assets/Animations/Mocap/RootMotion/Crouch/AM_Crouch_Idle_Turn_L135.fbx",
+      "pathGuid": "99bd3ca75283494a"
+    },
+    {
+      "path": "assets/Animations/Mocap/RootMotion/Crouch/AM_Crouch_Idle_Turn_L180.fbx",
+      "pathGuid": "85205c3b409224e3"
+    },
+    {
+      "path": "assets/Animations/Mocap/RootMotion/Crouch/AM_Stand_Idle_Trans_Crouch_02.fbx",
+      "pathGuid": "8c9fdfb2ae24e5ba"
+    },
+    {
+      "path": "assets/Animations/Mocap/RootMotion/Crouch/AM_Crouch_Idle_Trans_Stand_01.fbx",
+      "pathGuid": "6c94a5f0977ea438"
+    },
+    {
+      "path": "assets/Animations/Mocap/RootMotion/Locomotion_V2/AM_Crouch_Walk/AM_Crouch_Loco_Walk_Fwd_Start.fbx",
+      "pathGuid": "3c06fc15fecbb0a6"
+    },
+    {
+      "path": "assets/Animations/Mocap/RootMotion/Locomotion_V2/AM_Crouch_Walk/AM_Crouch_Loco_Walk_Bwd_Start.fbx",
+      "pathGuid": "783db248a2970435"
+    },
+    {
+      "path": "assets/Animations/Mocap/RootMotion/Locomotion_V2/AM_Crouch_Walk/AM_Crouch_Loco_Walk_Left_Start.fbx",
+      "pathGuid": "7b1209d617221eb0"
+    },
+    {
+      "path": "assets/Animations/Mocap/RootMotion/Locomotion_V2/AM_Crouch_Walk/AM_Crouch_Loco_Walk_Right_Start.fbx",
+      "pathGuid": "405245ef1bf03807"
+    },
+    {
+      "path": "assets/Animations/Mocap/RootMotion/Locomotion_V2/AM_Crouch_Walk/AM_Crouch_Loco_Walk_Fwd_Stop.fbx",
+      "pathGuid": "a01f53ceb2de0fd6"
+    },
+    {
+      "path": "assets/Animations/Mocap/RootMotion/Locomotion_V2/AM_Crouch_Walk/AM_Crouch_Loco_Walk_Bwd_Stop.fbx",
+      "pathGuid": "ff6a62f304227a31"
+    },
+    {
+      "path": "assets/Animations/Mocap/RootMotion/Locomotion_V2/AM_Crouch_Walk/AM_Crouch_Loco_Walk_Left_Stop.fbx",
+      "pathGuid": "9f701734f074f557"
+    },
+    {
+      "path": "assets/Animations/Mocap/RootMotion/Locomotion_V2/AM_Crouch_Walk/AM_Crouch_Loco_Walk_Right_Stop.fbx",
+      "pathGuid": "932102775d75aa9e"
+    },
+    {
+      "path": "assets/Animations/Mocap/RootMotion/React_Bump/AM_Stand_React_Bump_Light_Front.fbx",
+      "pathGuid": "393b3205c05192f0"
+    },
+    {
+      "path": "assets/Animations/Mocap/RootMotion/React_Bump/AM_Stand_React_Bump_Light_Back.fbx",
+      "pathGuid": "40de78d7fe0f3e61"
+    },
+    {
+      "path": "assets/Animations/Mocap/RootMotion/React_Bump/AM_Stand_React_Bump_Light_Front_Left.fbx",
+      "pathGuid": "b2f6eabe91bc0e81"
+    },
+    {
+      "path": "assets/Animations/Mocap/RootMotion/React_Bump/AM_Stand_React_Bump_Light_Front_Right.fbx",
+      "pathGuid": "64d3960ffdba6a55"
+    },
+    {
+      "path": "assets/Animations/Mocap/RootMotion/React_Bump/AM_Stand_React_Bump_Light_Back_Left.fbx",
+      "pathGuid": "eb3665bef780748b"
+    },
+    {
+      "path": "assets/Animations/Mocap/RootMotion/React_Bump/AM_Stand_React_Bump_Light_Back_Right.fbx",
+      "pathGuid": "4f552cc17a7ea031"
+    },
+    {
+      "path": "assets/Animations/Mocap/RootMotion/Locomotion_V2/AM_Walk/AM_Loco_Walk_Fwd_Start.fbx",
+      "pathGuid": "30f5c2cc48e2b44a"
+    },
+    {
+      "path": "assets/Animations/Mocap/RootMotion/Locomotion_V2/AM_Walk/AM_Loco_Walk_Fwd_Stop.fbx",
+      "pathGuid": "a8ea8223a81536da"
+    },
+    {
+      "path": "assets/Weapons/Remington870/Shell_12ga.fbx",
+      "pathGuid": "f037c3330b81b1e7"
+    },
+    {
+      "path": "assets/Weapons/AKS74U/Casing_545x39.fbx",
+      "pathGuid": "3400d0834ae58519"
     }
   ],
-  "libraryPrefabs": [],
+  "libraryPrefabs": [
+    {
+      "path": "assets/Weapons/AKS74U/AKS74U.prefab",
+      "pathGuid": "b19271e02ef840f1"
+    }
+  ],
   "librarySounds": [],
   "libraryTextures": [
     {
@@ -5278,153 +6033,207 @@
       "pathGuid": "c389fb6bc574bb89"
     },
     {
-      "path": "assets/characters/Quantum/Textures/European/Head/T_Quantum_Basemesh_Head_BaseColor.1001.png",
+      "path": "assets/Props/Basketball/Textures/court_floor.jpg",
+      "pathGuid": "fd3b90b6c8f0b253"
+    },
+    {
+      "path": "assets/Props/Basketball/Textures/wood_detail.png",
+      "pathGuid": "e5f0e29613cac82f"
+    },
+    {
+      "path": "assets/Props/Basketball/Textures/wood_seams_normal.png",
+      "pathGuid": "346137cb492678b5"
+    },
+    {
+      "path": "assets/Props/Basketball/Textures/backboard.png",
+      "pathGuid": "caf13370e27a0035"
+    },
+    {
+      "path": "assets/Props/Basketball/Textures/basketball_albedo.png",
+      "pathGuid": "3821385da1bbeb84"
+    },
+    {
+      "path": "assets/Props/Basketball/Textures/basketball_normal.png",
+      "pathGuid": "a631a899eff1effb"
+    },
+    {
+      "path": "assets/Weapons/AKS74U/Textures/AKS74U_Albedo_Transparency.png",
+      "pathGuid": "7b7ff3d89a801e9b"
+    },
+    {
+      "path": "assets/Weapons/AKS74U/Textures/AKS74U_Normal.png",
+      "pathGuid": "ddf9f803479dcf51"
+    },
+    {
+      "path": "assets/Weapons/AKS74U/Textures/AKS74U_Metallic.png",
+      "pathGuid": "fe12ee5959aa01e3"
+    },
+    {
+      "path": "assets/Weapons/AKS74U/Textures/AKS74U_Roughness.png",
+      "pathGuid": "3478f940ace06417"
+    },
+    {
+      "path": "assets/Weapons/AKS74U/Textures/AKS74U_Occlusion.png",
+      "pathGuid": "533e95bf9b3a528b"
+    },
+    {
+      "path": "assets/Weapons/AKS74U/Textures/Cartridge_545x39mm_Albedo_Transparency.png",
+      "pathGuid": "cf91557a2170ebb2"
+    },
+    {
+      "path": "assets/Weapons/AKS74U/Textures/Cartridge_545x39mm_Normal.png",
+      "pathGuid": "5f5e9c41e791adff"
+    },
+    {
+      "path": "assets/Weapons/AKS74U/Textures/Cartridge_545x39mm_Metallic.png",
+      "pathGuid": "47fe55433568f31a"
+    },
+    {
+      "path": "assets/Weapons/AKS74U/Textures/Cartridge_545x39mm_Roughness.png",
+      "pathGuid": "304561875618662e"
+    },
+    {
+      "path": "assets/Weapons/AKS74U/Textures/Cartridge_545x39mm_Occlusion.png",
+      "pathGuid": "2c708ddb3e919ee4"
+    },
+    {
+      "path": "assets/Weapons/Remington870/Textures/Remington870_BaseColor.png",
+      "pathGuid": "b122b6d22413e876"
+    },
+    {
+      "path": "assets/Weapons/Remington870/Textures/Remington870_Normal.png",
+      "pathGuid": "07f6d8765cae4d98"
+    },
+    {
+      "path": "assets/Weapons/Remington870/Textures/Remington870_Metallic.png",
+      "pathGuid": "e773732e2166cecf"
+    },
+    {
+      "path": "assets/Weapons/Remington870/Textures/Remington870_Roughness.png",
+      "pathGuid": "e5b357053798f8ec"
+    },
+    {
+      "path": "assets/Weapons/Remington870/Textures/Remington870_AO.png",
+      "pathGuid": "4294419ced9a748d"
+    },
+    {
+      "path": "assets/Characters/Quantum/Textures/European/Head/T_Quantum_Basemesh_Head_BaseColor.1001.png",
       "pathGuid": "53c56365fccaaaf6"
     },
     {
-      "path": "assets/characters/Quantum/Textures/European/Head/T_Quantum_Basemesh_Head_Unity_Normal.1001.png",
+      "path": "assets/Characters/Quantum/Textures/European/Head/T_Quantum_Basemesh_Head_Unity_Normal.1001.png",
       "pathGuid": "1ce8ae861ca44d77"
     },
     {
-      "path": "assets/characters/Quantum/Textures/European/Head/T_Quantum_Basemesh_Head_Roughness.1001.png",
+      "path": "assets/Characters/Quantum/Textures/European/Head/T_Quantum_Basemesh_Head_Roughness.1001.png",
       "pathGuid": "2c09c787a05ae64b"
     },
     {
-      "path": "assets/characters/Quantum/Textures/European/Head/T_Quantum_Basemesh_Head_Occlusion.1001.png",
+      "path": "assets/Characters/Quantum/Textures/European/Head/T_Quantum_Basemesh_Head_Occlusion.1001.png",
       "pathGuid": "4158845f83d91935"
     },
     {
-      "path": "assets/characters/Quantum/Textures/European/Arms/T_Quantum_Basemesh_Arms_BaseColor.1003.png",
+      "path": "assets/Characters/Quantum/Textures/European/Arms/T_Quantum_Basemesh_Arms_BaseColor.1003.png",
       "pathGuid": "41cb6d59333dff57"
     },
     {
-      "path": "assets/characters/Quantum/Textures/European/Arms/T_Quantum_Basemesh_Arms_Unity_Normal.1003.png",
+      "path": "assets/Characters/Quantum/Textures/European/Arms/T_Quantum_Basemesh_Arms_Unity_Normal.1003.png",
       "pathGuid": "29da77c277b4c368"
     },
     {
-      "path": "assets/characters/Quantum/Textures/European/Arms/T_Quantum_Basemesh_Arms_Roughness.1003.png",
+      "path": "assets/Characters/Quantum/Textures/European/Arms/T_Quantum_Basemesh_Arms_Roughness.1003.png",
       "pathGuid": "0f4f3be6435fb551"
     },
     {
-      "path": "assets/characters/Quantum/Textures/European/Arms/T_Quantum_Basemesh_Arms_Occlusion.1003.png",
+      "path": "assets/Characters/Quantum/Textures/European/Arms/T_Quantum_Basemesh_Arms_Occlusion.1003.png",
       "pathGuid": "a90075e269ca5791"
     },
     {
-      "path": "assets/characters/Quantum/Textures/European/Body/T_Quantum_Basemesh_Body_BaseColor.1002.png",
+      "path": "assets/Characters/Quantum/Textures/European/Body/T_Quantum_Basemesh_Body_BaseColor.1002.png",
       "pathGuid": "eaeb3aa5bb6fea12"
     },
     {
-      "path": "assets/characters/Quantum/Textures/European/Body/T_Quantum_Basemesh_Body_Unity_Normal.1002.png",
+      "path": "assets/Characters/Quantum/Textures/European/Body/T_Quantum_Basemesh_Body_Unity_Normal.1002.png",
       "pathGuid": "04da729f18d0764b"
     },
     {
-      "path": "assets/characters/Quantum/Textures/European/Body/T_Quantum_Basemesh_Body_Roughness.1002.png",
+      "path": "assets/Characters/Quantum/Textures/European/Body/T_Quantum_Basemesh_Body_Roughness.1002.png",
       "pathGuid": "31e1f9b82ac0d4d5"
     },
     {
-      "path": "assets/characters/Quantum/Textures/European/Body/T_Quantum_Basemesh_Body_Occlusion.1002.png",
+      "path": "assets/Characters/Quantum/Textures/European/Body/T_Quantum_Basemesh_Body_Occlusion.1002.png",
       "pathGuid": "d5ec3de7cc7c9073"
     },
     {
-      "path": "assets/characters/Quantum/Textures/Eyes/T_Eye_Brown.png",
-      "pathGuid": "291658f014c4553a"
+      "path": "assets/Characters/Quantum/Textures/Eyes/T_Eye_Hazel.png",
+      "pathGuid": "713300e6ba74de44"
     },
     {
-      "path": "assets/characters/Quantum/Textures/Eyes/T_Brows_Lashes.png",
+      "path": "assets/Characters/Quantum/Textures/Eyes/T_Brows_Lashes.png",
       "pathGuid": "7f7daa72f072efad"
     },
     {
-      "path": "assets/characters/Quantum/Textures/Young/Head/T_Quantum_Basemesh_Head_Young_BaseColor.1001.png",
+      "path": "assets/Characters/Quantum/Textures/Eyes/T_Eye_Brown.png",
+      "pathGuid": "291658f014c4553a"
+    },
+    {
+      "path": "assets/Characters/Quantum/Textures/Young/Head/T_Quantum_Basemesh_Head_Young_BaseColor.1001.png",
       "pathGuid": "7abfadd9b82d77d1"
     },
     {
-      "path": "assets/characters/Quantum/Textures/Young/Head/T_Quantum_Basemesh_Head_Young_Unity_Normal.1001.png",
+      "path": "assets/Characters/Quantum/Textures/Young/Head/T_Quantum_Basemesh_Head_Young_Unity_Normal.1001.png",
       "pathGuid": "435828b6af022794"
     },
     {
-      "path": "assets/characters/Quantum/Textures/Young/Head/T_Quantum_Basemesh_Head_Young_Roughness.1001.png",
+      "path": "assets/Characters/Quantum/Textures/Young/Head/T_Quantum_Basemesh_Head_Young_Roughness.1001.png",
       "pathGuid": "c450debfcebdf287"
     },
     {
-      "path": "assets/characters/Quantum/Textures/Young/Head/T_Quantum_Basemesh_Head_Young_Occlusion.1001.png",
+      "path": "assets/Characters/Quantum/Textures/Young/Head/T_Quantum_Basemesh_Head_Young_Occlusion.1001.png",
       "pathGuid": "55d925b21b2b6d41"
     },
-    {
-      "path": "assets/characters/Quantum/Textures/Clothing/Balaclava/T_Balaclava_Crime_Print_BaseColor.png",
-      "pathGuid": "7edf0f8ddb9b52e7"
-    },
-    {
-      "path": "assets/characters/Quantum/Textures/Clothing/Balaclava/T_Balaclava_Crime_Print_Normal.png",
-      "pathGuid": "5cd3393cf8ba4289"
-    },
-    {
-      "path": "assets/characters/Quantum/Textures/Clothing/Balaclava/T_Balaclava_Crime_Print_OcclusionRoughnessMetallic.png",
-      "pathGuid": "b273318edffb81cb"
-    },
-    {
-      "path": "assets/characters/Quantum/Textures/Clothing/Tops/Hoodie_Hood_Up/T_Hoodie_Hood_Up_Black_BaseColor.png",
-      "pathGuid": "102e34904a03fd80"
-    },
-    {
-      "path": "assets/characters/Quantum/Textures/Clothing/Tops/Hoodie_Hood_Up/T_Hoodie_Hood_Up_Unity_Normal.png",
-      "pathGuid": "75f7d3734bdcbffe"
-    },
-    {
-      "path": "assets/characters/Quantum/Textures/Clothing/Tops/Hoodie_Hood_Up/T_Hoodie_Hood_Up_Roughness.png",
-      "pathGuid": "6e90149c347bedc2"
-    },
-    {
-      "path": "assets/characters/Quantum/Textures/Clothing/Tops/Hoodie_Hood_Up/T_Hoodie_Hood_Up_Occlusion.png",
-      "pathGuid": "3d3479334266d781"
-    },
-    {
-      "path": "assets/characters/Quantum/Textures/Clothing/Pants/Pants_Sport/T_Sport_Pants_Black_BaseColor.png",
-      "pathGuid": "dcc7e35f9e93a284"
-    },
-    {
-      "path": "assets/characters/Quantum/Textures/Clothing/Pants/Pants_Sport/T_Sport_Pants_Unity_Normal.png",
-      "pathGuid": "490076b88517c219"
-    },
-    {
-      "path": "assets/characters/Quantum/Textures/Clothing/Pants/Pants_Sport/T_Sport_Pants_Roughness.png",
-      "pathGuid": "a344f2e9a18e398b"
-    },
-    {
-      "path": "assets/characters/Quantum/Textures/Clothing/Pants/Pants_Sport/T_Sport_Pants_Occlusion.png",
-      "pathGuid": "5ed366a42af67c36"
-    },
-    {
-      "path": "assets/characters/Quantum/Textures/Clothing/Shoes/Sneakers/Sneakers_Leather/T_F_Sneakers_Leather_Black_BaseColor.png",
-      "pathGuid": "8e3df431656c6989"
-    },
-    {
-      "path": "assets/characters/Quantum/Textures/Clothing/Shoes/Sneakers/Sneakers_Leather/T_F_Sneakers_Leather_Unity_Normal.png",
-      "pathGuid": "5346dc389402d8ba"
-    },
-    {
-      "path": "assets/characters/Quantum/Textures/Clothing/Shoes/Sneakers/Sneakers_Leather/T_F_Sneakers_Leather_Roughness.png",
-      "pathGuid": "9b18ad03ad5ec47b"
-    },
-    {
-      "path": "assets/characters/Quantum/Textures/Clothing/Shoes/Sneakers/Sneakers_Leather/T_F_Sneakers_Leather_Occlusion.png",
-      "pathGuid": "9c0d74e53b152f2c"
-    },
-    {
-      "path": "assets/characters/Quantum/Textures/Clothing/Shoes/Socks/T_Socks_BaseColor.png",
-      "pathGuid": "427d699fbc412c22"
-    },
-    {
-      "path": "assets/characters/Quantum/Textures/Clothing/Shoes/Socks/T_Socks_Unity_Normal.png",
-      "pathGuid": "91e0a7e4f759f6d4"
-    },
-    {
-      "path": "assets/characters/Quantum/Textures/Clothing/Shoes/Socks/T_Socks_Roughness.png",
-      "pathGuid": "b3b2b46e73b05bbc"
-    },
-    {
-      "path": "assets/characters/Quantum/Textures/Clothing/Shoes/Socks/T_Socks_Occlusion.png",
-      "pathGuid": "407594381188360c"
-    }
+    "assets/Characters/Quantum/Textures/Clothing/Balaclava/T_Balaclava_Crime_Black_BaseColor.png",
+    "assets/Characters/Quantum/Textures/Clothing/Balaclava/T_Balaclava_Crime_Normal.png",
+    "assets/Characters/Quantum/Textures/Clothing/Balaclava/T_Balaclava_Crime_OcclusionRoughnessMetallic.png",
+    "assets/Characters/Quantum/Textures/Clothing/Glasses/Glasses Aviator/T_Sunglasses_Brown_BaseColor.png",
+    "assets/Characters/Quantum/Textures/Clothing/Glasses/Glasses Aviator/T_Sunglasses_Camo_Unity_Normal.png",
+    "assets/Characters/Quantum/Textures/Clothing/Glasses/Glasses Aviator/T_Sunglasses_Camo_Roughness.png",
+    "assets/Characters/Quantum/Textures/Clothing/Glasses/Glasses Aviator/T_Sunglasses_Camo_Occlusion.png",
+    "assets/Characters/Quantum/Textures/Clothing/Pants/Pants_Cargo/T_Pants_Cargo_Black_BaseColor.png",
+    "assets/Characters/Quantum/Textures/Clothing/Pants/Pants_Cargo/T_Pants_Cargo_Unity_Normal.png",
+    "assets/Characters/Quantum/Textures/Clothing/Pants/Pants_Cargo/T_Pants_Cargo_Roughness.png",
+    "assets/Characters/Quantum/Textures/Clothing/Pants/Pants_Cargo/T_Pants_Cargo_Occlusion.png",
+    "assets/Characters/Quantum/Textures/Clothing/Shoes/Sneakers/Sneakers_Leather/T_F_Sneakers_Leather_Black_BaseColor.png",
+    "assets/Characters/Quantum/Textures/Clothing/Shoes/Sneakers/Sneakers_Leather/T_F_Sneakers_Leather_Unity_Normal.png",
+    "assets/Characters/Quantum/Textures/Clothing/Shoes/Sneakers/Sneakers_Leather/T_F_Sneakers_Leather_Roughness.png",
+    "assets/Characters/Quantum/Textures/Clothing/Shoes/Sneakers/Sneakers_Leather/T_F_Sneakers_Leather_Occlusion.png",
+    "assets/Characters/Quantum/Textures/Clothing/Tops/TShirt/T_TShirt_Black_BaseColor.png",
+    "assets/Characters/Quantum/Textures/Clothing/Tops/TShirt/T_TShirt_Unity_Normal.png",
+    "assets/Characters/Quantum/Textures/Clothing/Tops/TShirt/T_TShirt_Roughness.png",
+    "assets/Characters/Quantum/Textures/Clothing/Tops/TShirt/T_TShirt_Occlusion.png",
+    "assets/Characters/Quantum/Textures/Clothing/Balaclava/T_Balaclava_Crime_Print_BaseColor.png",
+    "assets/Characters/Quantum/Textures/Clothing/Balaclava/T_Balaclava_Crime_Print_Normal.png",
+    "assets/Characters/Quantum/Textures/Clothing/Balaclava/T_Balaclava_Crime_Print_OcclusionRoughnessMetallic.png",
+    "assets/Characters/Quantum/Textures/Clothing/Glasses/Glasses Aviator/T_Glasses_Aviator_Gold_BaseColor.png",
+    "assets/Characters/Quantum/Textures/Clothing/Glasses/Glasses Aviator/T_Glasses_Aviator_Gold_Unity_Normal.png",
+    "assets/Characters/Quantum/Textures/Clothing/Glasses/Glasses Aviator/T_Glasses_Aviator_Gold_Roughness.png",
+    "assets/Characters/Quantum/Textures/Clothing/Glasses/Glasses Aviator/T_Glasses_Aviator_Gold_Occlusion.png",
+    "assets/Characters/Quantum/Textures/Clothing/Pants/Pants_Cargo/T_Pants_Cargo_Blue_BaseColor.png",
+    "assets/Characters/Quantum/Textures/Clothing/Shoes/Sneakers/Sneakers_Leather/T_F_Sneakers_Leather_White_BaseColor.png",
+    "assets/Characters/Quantum/Textures/Clothing/Tops/TShirt/T_TShirt_White_BaseColor.png",
+    "assets/Characters/Quantum/Textures/Clothing/Balaclava/T_Balaclava_Crime_Green_BaseColor.png",
+    "assets/Characters/Quantum/Textures/Clothing/Tops/Hoodie_Hood_Up/T_Hoodie_Hood_Up_Black_BaseColor.png",
+    "assets/Characters/Quantum/Textures/Clothing/Tops/Hoodie_Hood_Up/T_Hoodie_Hood_Up_Unity_Normal.png",
+    "assets/Characters/Quantum/Textures/Clothing/Tops/Hoodie_Hood_Up/T_Hoodie_Hood_Up_Roughness.png",
+    "assets/Characters/Quantum/Textures/Clothing/Tops/Hoodie_Hood_Up/T_Hoodie_Hood_Up_Occlusion.png",
+    "assets/Characters/Quantum/Textures/Clothing/Pants/Pants_Sport/T_Sport_Pants_Black_BaseColor.png",
+    "assets/Characters/Quantum/Textures/Clothing/Pants/Pants_Sport/T_Sport_Pants_Unity_Normal.png",
+    "assets/Characters/Quantum/Textures/Clothing/Pants/Pants_Sport/T_Sport_Pants_Roughness.png",
+    "assets/Characters/Quantum/Textures/Clothing/Pants/Pants_Sport/T_Sport_Pants_Occlusion.png",
+    "assets/Characters/Quantum/Textures/Clothing/Shoes/Socks/T_Socks_BaseColor.png",
+    "assets/Characters/Quantum/Textures/Clothing/Shoes/Socks/T_Socks_Unity_Normal.png",
+    "assets/Characters/Quantum/Textures/Clothing/Shoes/Socks/T_Socks_Roughness.png",
+    "assets/Characters/Quantum/Textures/Clothing/Shoes/Socks/T_Socks_Occlusion.png"
   ],
   "maxPointShadows": 2,
   "maxSpotShadows": 4,
@@ -5454,21 +6263,21 @@
       "materials": [
         {
           "guid": "00f2f285376c0e56",
-          "path": "assets/characters/Quantum/Materials/Characters/M_Quantum_Head.mat"
+          "path": "assets/Characters/Quantum/Materials/Characters/M_Quantum_Head.mat"
         },
         {
           "guid": "bdf55b314edda1f4",
-          "path": "assets/characters/Quantum/Materials/Characters/M_Quantum_Arms.mat"
+          "path": "assets/Characters/Quantum/Materials/Characters/M_Quantum_Arms.mat"
         },
         {
           "guid": "ff2aca4c25ba4f89",
-          "path": "assets/characters/Quantum/Materials/Characters/M_Quantum_Body.mat"
+          "path": "assets/Characters/Quantum/Materials/Characters/M_Quantum_Body.mat"
         }
       ],
       "name": "Torso",
       "order": 87,
       "parentId": 95,
-      "path": "assets/characters/Quantum/Models/European/Quantum_Torso.fbx",
+      "path": "assets/Characters/Quantum/Models/European/Quantum_Torso.fbx",
       "pathGuid": "34f0109f85dae259",
       "position": [
         0.0,
@@ -5512,13 +6321,13 @@
       "materials": [
         {
           "guid": "ff2aca4c25ba4f89",
-          "path": "assets/characters/Quantum/Materials/Characters/M_Quantum_Body.mat"
+          "path": "assets/Characters/Quantum/Materials/Characters/M_Quantum_Body.mat"
         }
       ],
       "name": "Feet",
       "order": 88,
       "parentId": 95,
-      "path": "assets/characters/Quantum/Models/Clothing/Male/Shoes/Quantum_Feet_Shoes.fbx",
+      "path": "assets/Characters/Quantum/Models/Clothing/Male/Shoes/Quantum_Feet_Shoes.fbx",
       "pathGuid": "9223ed446c94346d",
       "position": [
         0.0,
@@ -5562,45 +6371,45 @@
       "materials": [
         {
           "guid": "d71fa7c7cd81f033",
-          "path": "assets/characters/Quantum/Materials/Characters/M_Cartilage.mat"
+          "path": "assets/Characters/Quantum/Materials/Characters/M_Cartilage.mat"
         },
         {
           "guid": "9b4dcbacd337e8a1",
-          "path": "assets/characters/Quantum/Materials/Characters/M_Eye_Overlay.mat"
+          "path": "assets/Characters/Quantum/Materials/Characters/M_Eye_Overlay.mat"
         },
         {
           "guid": "b0cdff125ce5bc62",
-          "path": "assets/characters/Quantum/Materials/Characters/Eyes/M_Eye_Brown.mat"
+          "path": "assets/Characters/Quantum/Materials/Characters/Eyes/M_Eye_Brown.mat"
         },
         {
           "guid": "7a80f13a6d4b5daf",
-          "path": "assets/characters/Quantum/Materials/Characters/M_Brows_Lashes.mat"
+          "path": "assets/Characters/Quantum/Materials/Characters/M_Brows_Lashes.mat"
         },
         {
           "guid": "b0cdff125ce5bc62",
-          "path": "assets/characters/Quantum/Materials/Characters/Eyes/M_Eye_Brown.mat"
+          "path": "assets/Characters/Quantum/Materials/Characters/Eyes/M_Eye_Brown.mat"
         },
         {
           "guid": "185fa1f3e55e68a5",
-          "path": "assets/characters/Quantum/Materials/Characters/M_Eye_Cornea.mat"
+          "path": "assets/Characters/Quantum/Materials/Characters/M_Eye_Cornea.mat"
         },
         {
           "guid": "35c182a2d61a4dca",
-          "path": "assets/characters/Quantum/Materials/Characters/M_Saliva.mat"
+          "path": "assets/Characters/Quantum/Materials/Characters/M_Saliva.mat"
         },
         {
           "guid": "0681796530e520b8",
-          "path": "assets/characters/Quantum/Materials/Characters/M_Teeth.mat"
+          "path": "assets/Characters/Quantum/Materials/Characters/M_Teeth.mat"
         },
         {
           "guid": "c1148bc46cc32021",
-          "path": "assets/characters/Quantum/Materials/Characters/M_Quantum_Head_Young.mat"
+          "path": "assets/Characters/Quantum/Materials/Characters/M_Quantum_Head_Young.mat"
         }
       ],
       "name": "Head",
       "order": 89,
       "parentId": 95,
-      "path": "assets/characters/Quantum/Models/Young/Quantum_Young_Head.fbx",
+      "path": "assets/Characters/Quantum/Models/Young/Quantum_Young_Head.fbx",
       "pathGuid": "0ccde7cf189bfaba",
       "position": [
         0.0,
@@ -5644,13 +6453,13 @@
       "materials": [
         {
           "guid": "bdf55b314edda1f4",
-          "path": "assets/characters/Quantum/Materials/Characters/M_Quantum_Arms.mat"
+          "path": "assets/Characters/Quantum/Materials/Characters/M_Quantum_Arms.mat"
         }
       ],
       "name": "Arms",
       "order": 90,
       "parentId": 95,
-      "path": "assets/characters/Quantum/FirstPerson/Quantum_Arms_FP.fbx",
+      "path": "assets/Characters/Quantum/FirstPerson/Quantum_Arms_FP.fbx",
       "pathGuid": "19bbef7e387a5ef4",
       "position": [
         0.0,
@@ -5694,13 +6503,13 @@
       "materials": [
         {
           "guid": "4a97d2684b5706be",
-          "path": "assets/characters/Quantum/Materials/Clothing/Balaclava/M_Balaclava_Crime_Print.mat"
+          "path": "assets/Characters/Quantum/Materials/Clothing/Balaclava/M_Balaclava_Crime_Print.mat"
         }
       ],
       "name": "Balaclava",
       "order": 91,
       "parentId": 95,
-      "path": "assets/characters/Quantum/Models/Clothing/Male/Balaclava/SM_Balaclava_Crime.fbx",
+      "path": "assets/Characters/Quantum/Models/Clothing/Male/Balaclava/SM_Balaclava_Crime.fbx",
       "pathGuid": "18fe3d21a3cde1a0",
       "position": [
         1.2546353218567674e-06,
@@ -5744,13 +6553,13 @@
       "materials": [
         {
           "guid": "02619ee0a88e6cae",
-          "path": "assets/characters/Quantum/Materials/Clothing/Tops/Hoodie_Hood_Up/M_Hoodie_Hood_Up_Black.mat"
+          "path": "assets/Characters/Quantum/Materials/Clothing/Tops/Hoodie_Hood_Up/M_Hoodie_Hood_Up_Black.mat"
         }
       ],
       "name": "Top",
       "order": 92,
       "parentId": 95,
-      "path": "assets/characters/Quantum/Models/Clothing/Male/Tops/SKM_Hoodie_Hood_Up.fbx",
+      "path": "assets/Characters/Quantum/Models/Clothing/Male/Tops/SKM_Hoodie_Hood_Up.fbx",
       "pathGuid": "a93a8b58180d0f44",
       "position": [
         0.0,
@@ -5794,13 +6603,13 @@
       "materials": [
         {
           "guid": "4a4ac6fabe21f2c8",
-          "path": "assets/characters/Quantum/Materials/Clothing/Pants/Pants_Sport/M_Sport_Pants_Black.mat"
+          "path": "assets/Characters/Quantum/Materials/Clothing/Pants/Pants_Sport/M_Sport_Pants_Black.mat"
         }
       ],
       "name": "Pants",
       "order": 93,
       "parentId": 95,
-      "path": "assets/characters/Quantum/Models/Clothing/Male/Pants/SKM_Sport_Pants.fbx",
+      "path": "assets/Characters/Quantum/Models/Clothing/Male/Pants/SKM_Sport_Pants.fbx",
       "pathGuid": "c28a0a40272cd541",
       "position": [
         0.0,
@@ -5844,13 +6653,13 @@
       "materials": [
         {
           "guid": "6ff7cafa7e9d186a",
-          "path": "assets/characters/Quantum/Materials/Clothing/Shoes/Sneakers/Sneakers_Leather/M_F_Sneakers_Leather_Black.mat"
+          "path": "assets/Characters/Quantum/Materials/Clothing/Shoes/Sneakers/Sneakers_Leather/M_F_Sneakers_Leather_Black.mat"
         }
       ],
       "name": "Shoes",
       "order": 94,
       "parentId": 95,
-      "path": "assets/characters/Quantum/Models/Clothing/Male/Shoes/SKM_Sneakers.fbx",
+      "path": "assets/Characters/Quantum/Models/Clothing/Male/Shoes/SKM_Sneakers.fbx",
       "pathGuid": "907719222c820ea8",
       "position": [
         0.0,
@@ -5894,13 +6703,13 @@
       "materials": [
         {
           "guid": "475670f667a70b3b",
-          "path": "assets/characters/Quantum/Materials/Clothing/Shoes/Socks/M_Socks.mat"
+          "path": "assets/Characters/Quantum/Materials/Clothing/Shoes/Socks/M_Socks.mat"
         }
       ],
       "name": "Socks",
       "order": 95,
       "parentId": 95,
-      "path": "assets/characters/Quantum/Models/Clothing/Male/Shoes/SKM_Socks.fbx",
+      "path": "assets/Characters/Quantum/Models/Clothing/Male/Shoes/SKM_Socks.fbx",
       "pathGuid": "d2d9305f1b150870",
       "position": [
         0.0,
@@ -5995,7 +6804,6 @@
     "timeOfDayHours": 16.0
   },
   "skyAmbientIntensity": 1.0,
-  "skyHdriGuid": "28043ea394433649",
   "skyHdriPath": "assets/sky/kloofendal_48d_partly_cloudy_puresky_4k.hdr",
   "skyHorizonColor": [
     0.699999988079071,

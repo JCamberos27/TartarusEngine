@@ -3,6 +3,7 @@
 // History panels. Split out of EditorLayer.cpp for build time (#179).
 
 #include "EditorLayer.h"
+#include "Scripting/ScriptRuntime.h"
 #include "EditorPanels.h"
 #include "EditorLayerInternal.h"
 #include "EditorIcons.h"
@@ -28,6 +29,7 @@
 #include "AssetImporterInspector.h"
 #include "Profiler.h"
 #include "ProjectPaths.h"
+#include "../Game/Scripting/ScriptRuntime.h"
 #include "LayerRegistry.h"
 #include "GLStateCache.h"
 #include "Framebuffer.h"
@@ -144,6 +146,8 @@ void EditorLayer::DrawViewportActionBar(World& world, AssetLibrary& assets,
     // middle of the window, and it's on the Scene view too when you tab there mid-play.
     const bool overGame  = m_GameViewImgSize.x > 1.0f && m_GameViewImgSize.y > 1.0f;
     const bool overScene = !overGame && m_ViewportSize.x > 1.0f && m_ViewportSize.y > 1.0f;
+    // Other tabs (such as Script IDE) have no viewport to anchor this bar to.
+    if (!overScene && !overGame && !maximized) return;
 
     if (overScene || overGame) {
         const ImVec2 imgPos  = overGame ? m_GameViewImgPos  : ImVec2(m_ViewportPos.x, m_ViewportPos.y);
@@ -670,6 +674,8 @@ void EditorLayer::DrawFileMenuBody(World& world, AssetLibrary& assets) {
                 ImGui::EndMenu();
             }
             ImGui::Separator();
+            if (ImGui::MenuItem(ICON_FA_CODE "  Build C# Gameplay & Editor", nullptr, false, !Scripting::Building()))
+                Scripting::Build();
             // Same path as the window's close button, so unsaved changes still prompt first.
             if (ImGui::MenuItem(ICON_FA_RIGHT_FROM_BRACKET "  Exit", "Alt+F4") && m_Window)
                 glfwSetWindowShouldClose(m_Window, GLFW_TRUE);
@@ -775,6 +781,9 @@ void EditorLayer::DrawWindowMenuBody() {
             if (ImGui::MenuItem(ICON_FA_CHART_SIMPLE "  Statistics", nullptr, &EditorSettings::Get().SceneShowStats))
                 EditorSettings::Save();
             ImGui::MenuItem(ICON_FA_CLOCK_ROTATE_LEFT "  History", nullptr, &m_ShowHistory);
+            if(ImGui::MenuItem("Script IDE"))OpenScriptIDE();
+            bool toolsVisible=Scripting::EditorToolsVisible();
+            if(ImGui::MenuItem("C# Tools",nullptr,&toolsVisible))Scripting::SetEditorToolsVisible(toolsVisible);
             ImGui::Separator();
             if (ImGui::MenuItem(ICON_FA_CUBES "  Physics Debug", nullptr, &EditorSettings::Get().ShowPhysicsPanel))
                 EditorSettings::Save();

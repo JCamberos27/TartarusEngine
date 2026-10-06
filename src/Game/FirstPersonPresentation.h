@@ -1,9 +1,11 @@
 #pragma once
 
 #include "FirstPersonAdsCarry.h"
+#include "Scripting/ScriptAbi.h"
 #include "FirstPersonAnimation.h"
 #include "FirstPersonBody.h" // FirstPersonStockLockInput
 #include "ShellCasings.h"      // CasingSpawn
+#include "MuzzleEffects.h"
 
 #include <entt/entt.hpp>
 #include <glm/glm.hpp>
@@ -27,8 +29,8 @@ struct FirstPersonControllerComponent;
 //
 // Animation is the weapon's Animator Controller: the arms entity runs it (track "arms") and the
 // weapon entity follows it in lockstep (track "weapon", Driver = arms). This class is the
-// gameplay on top - ammo, fire modes, the reload key, the idle fidget timer - and talks to the
-// controller only through FirstPersonAnimatorContract's parameters, tags and events.
+// native presentation adapter for C# gameplay. It exchanges ammo, fire-mode and timer state
+// with the script and talks to the animator through its parameters, tags and events.
 //
 // Procedural motion (recoil, sway, bob, breathing, aim, state offsets, lean) runs through
 // WeaponProceduralState and lands on the arms rig's gun bone as an IK Rig offset, with two-bone
@@ -68,7 +70,7 @@ public:
     void Update(World& world, Camera& camera);
     // Re-places the arms and weapon from this frame's finished pose (clips + IK). Call after
     // UpdateAnimatorControllers, so the gun sits in the hands the frame renders with.
-    void LateUpdate(World& world, const Camera& camera);
+    void LateUpdate(World& world, Camera& camera);
     // Takes the view punch / lean back off the camera. Call before anything reads or integrates
     // the camera as the player's own (Player::Update), and when Play stops.
     void RemoveViewKick(Camera& camera);
@@ -100,9 +102,11 @@ public:
     void UpdateTrigger(bool pressed, bool held);
     void ToggleFireMode(); // logs the new mode to the Console (there is no weapon HUD yet)
     bool IsFullAuto() const { return m_FullAuto; }
+    void SetPlayerLookInput(glm::vec2 pitchYaw) { m_RawLookInput=pitchYaw; m_HaveRawLookInput=true; }
+    void SetPlayerMoveInput(glm::vec2 rightForward) { m_SwayMoveInput=rightForward; m_HaveSwayMoveInput=true; }
     // The R key: tap = Reload, hold = MagCheck (see FirstPersonReloadButton).
     void UpdateReloadKey(bool down, float dt);
-    void ResetReloadKey() { m_ReloadKey = {}; m_ReloadKey.HoldSeconds = m_Set.Gameplay.ReloadHoldSeconds; }
+    void ResetReloadKey() { m_ManagedReloadSeconds=0; m_ManagedReloadDown=false; m_ManagedReloadFired=false; }
     // Sets the Reload trigger when the magazine isn't full and no reload is running; the
     // magazine refills on the controller's Refill event (so a reload cut short doesn't count).
     bool Reload();
@@ -127,6 +131,9 @@ public:
     void RefillAmmo();
     // In a reload state (the controller's Reload tag).
     bool IsReloading() const { return HasTag("Reload"); }
+    // Accepted reload input and every reload still in the base-layer fade suspend sprint.
+    // The caller keeps reading sprint intent, so it resumes when this becomes false.
+    bool ReloadBlocksSprint() const;
     // False while the action still has to be worked after a round (gameplay.cycle).
     bool Chambered() const { return m_Chambered; }
     int MagazineSize() const { return m_Set.Gameplay.Magazine; }
@@ -188,6 +195,10 @@ public:
     // The weapon definition this is running, and whether IK carries the procedural motion (the
     // arms rig has the gun bone and both arm chains) or the whole view model does.
     const FirstPersonAnimationSet& Set() const { return m_Set; }
+    const MuzzleEffectSettings* MuzzleEffects() const {
+        return m_Slot>=0 && m_Slot<(int)m_SlotPrefabs.size() && !m_SlotPrefabs[m_Slot].empty()
+            ? &m_SlotMuzzles[m_Slot] : nullptr;
+    }
     bool UsesIK() const { return m_UsesIK; }
     // What the ADS carry measured at Start (and on live edits): per carried state, the gun move
     // onto the sights and the arm matching - for the weapon Inspector.
@@ -228,14 +239,14 @@ private:
     void StopSet(World& world);
     void SwapToPendingSlot();
     // A round just left: a manual action now has to be worked before the next (gameplay.cycle).
-    void OnRoundSpent();
     bool AttachAndValidate(AssetLibrary& assets, const AnimatorController& ctrl);
     AnimatorControllerComponent* Animator() const;
     bool HasTag(const char* tag) const;
     void SetError(const std::string& message);
     bool SetupIK();
+    void SetupSway();
     void WriteIK();
-    void PlaceRigs(World& world, const Camera& camera);
+    void PlaceRigs(World& world, const Camera& camera,const Camera* placementCamera=nullptr);
     void ApplyHidden(World& world);
     void WriteAdsHold(IKRigComponent& rig, const AdsCarrySample& carry);
     void SetupBolt(AssetLibrary& assets, const AnimatorController& ctrl);
@@ -326,12 +337,18 @@ private:
     // Weapon slots (SelectSlot): the .fpsanim of each, the ammo each was left with (-1 = full),
     // the one in hand and the one to swap to once this one is holstered (-1 = none).
     std::vector<std::string> m_SlotSets;
+    std::vector<std::string> m_SlotPrefabs;
+    std::vector<MuzzleEffectSettings> m_SlotMuzzles;
+    std::vector<std::filesystem::file_time_type> m_SlotPrefabTimes;
     std::vector<int> m_SlotAmmo;
     int m_Slot = 0;
     int m_PendingSlot = -1;
     AssetLibrary* m_SlotAssets = nullptr;
     std::shared_ptr<FirstPersonControllerComponent> m_Config; // the controller's settings, for a swap
     bool m_FullAuto = false;
+    int m_BurstRemaining = 0;
+    bool m_WaitingAnimatedShot = false;
+    void CommitShot(bool ads, bool cycleBolt);
     float m_FireCooldown = 0.0f;  // full-auto: seconds until the next round may go
     float m_IdleTime = 0.0f;      // settled Idle, for the Fidget
 
@@ -394,8 +411,21 @@ private:
     // Live retuning: the .fpsanim is re-read when it changes on disk (the Inspector saves it).
     std::filesystem::path m_SetFile;
     std::filesystem::file_time_type m_SetFileTime{};
+    std::filesystem::file_time_type m_RecoilFileTime{};
+    std::filesystem::file_time_type m_ShakeFileTime{};
+    CameraShakeState m_CameraShake;
+    CameraEffectPose m_ShakePose;
+    glm::vec2 m_PlayerLookBaseline{0.0f}, m_PlayerLookDelta{0.0f}; // pitch, yaw
+    glm::vec2 m_RawLookInput{0.0f};
+    glm::vec2 m_SwayLookInput{0.0f}, m_SwayMoveInput{0.0f};
+    bool m_HaveSwayMoveInput=false;
+    SwayModifierState m_Sway;
+    bool m_HaveRawLookInput=false;
+    bool m_HavePlayerLookBaseline = false;
     float m_ReloadPoll = 0.0f;
     float m_RegripDelay = 15.0f;
-    FirstPersonReloadButton m_ReloadKey;
+    float m_ManagedReloadSeconds=0;
+    bool m_ManagedReloadDown=false, m_ManagedReloadFired=false;
+    Scripting::WeaponFrame RunGameplay(int operation,float dt=0.0f,bool pressed=false,bool held=false,int events=0);
     std::mt19937 m_Rng{std::random_device{}()};
 };

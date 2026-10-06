@@ -1,5 +1,7 @@
 #pragma once
+#include "Curve.h"
 #include <glm/glm.hpp>
+#include <glm/gtc/quaternion.hpp>
 
 #include <functional>
 #include <map>
@@ -14,6 +16,8 @@ struct AnimatorParam;
 struct LocalTRS;
 struct RootMotionSettings;
 struct AnimatorControllerComponent;
+struct ActionCameraSettings;
+struct CameraEffectPose;
 
 // #175 Part B / Animator v2 - Unity's Animator Controller: layered state machines of clips.
 //
@@ -76,10 +80,12 @@ struct AnimatorController {
     struct CurveKey {
         float Time = 0.0f;
         float Value = 1.0f;
+        float InTangent = 0.0f, OutTangent = 0.0f;
+        CurveInterpolation Interpolation = CurveInterpolation::Linear;
     };
     struct Curve {
         std::string Name;
-        std::vector<CurveKey> Keys; // sorted by Time; linear between keys, held outside them
+        std::vector<CurveKey> Keys; // sorted by Time; legacy keys are linear, held outside them
     };
     // Value of `keys` at normalized time `t` (`fallback` when there are no keys).
     static float EvaluateCurve(const std::vector<CurveKey>& keys, float t, float fallback = 1.0f);
@@ -128,6 +134,10 @@ struct AnimatorController {
         std::string Name = "Base Layer";
         float Weight = 1.0f;           // the base layer always plays at 1
         Blending Mode = Blending::Override;
+        std::string AdditiveReferenceState; // empty: each clip's frame zero; otherwise shared state at frame zero
+        // Optional weight curve sampled from another layer's live crossfade stack. Missing curves
+        // contribute zero; an empty source layer means this layer. Multiplies Weight and LayerWeight.
+        std::string WeightCurve, WeightCurveLayer;
         // Bone mask: a node is in the layer when it or an ancestor is listed in MaskInclude (an
         // empty list includes the whole rig) and no nearer ancestor/itself is in MaskExclude.
         std::vector<std::string> MaskInclude, MaskExclude;
@@ -226,6 +236,7 @@ std::vector<std::string> FindAnimatorControllers();
 // Pure data: no model or GPU. `ctrl` must be the controller `ac` plays.
 float AnimatorSampleCurve(const AnimatorController& ctrl, const AnimatorControllerComponent& ac, int layer,
                           const std::string& name, float fallback = 1.0f);
+float AnimatorLayerWeight(const AnimatorController& ctrl, const AnimatorControllerComponent& ac, int layer);
 
 // Advances one component's state machines by `dt` without touching any model: transitions,
 // crossfade stacks, phases, events and the base-layer state fields. `stateLength(layer, state)`
@@ -254,3 +265,8 @@ std::vector<std::string> AnimatorControllerClipFiles(const AnimatorController& c
 // Call once per frame from the editor loop, on the main thread, with AssetLibrary::PumpAsync running;
 // it does its work twice a second and only does anything for what is new. Never loads synchronously.
 void PrefetchAnimatorClips(World& world, AssetLibrary& assets);
+// Raw base-layer camera node, before ADS holds, additive locomotion and procedural IK.
+CameraEffectPose AnimatorActionCamera(Model& arms,Model* weapon,AssetLibrary& assets,
+    const AnimatorController& ctrl,const AnimatorControllerComponent& ac,
+    const ActionCameraSettings& settings,const std::string& fallbackNode,
+    const glm::quat& modelToView,float modelScale,float adsWeight);

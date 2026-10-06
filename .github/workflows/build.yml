@@ -53,6 +53,17 @@ jobs:
         config: [Debug, Release]
     steps:
       - uses: actions/checkout@v4
+      - uses: actions/setup-dotnet@v4
+        with:
+          dotnet-version: '10.0.x'
+
+      - name: Third-party asset policy
+        if: matrix.config == 'Debug'
+        run: python tools/assets/check_git_assets.py
+
+      - name: Asset export regression
+        if: matrix.config == 'Debug'
+        run: python -m unittest discover -s tools/assets -p 'test_*.py'
 
       # Structural guard for #302 / #184: every ECS component must be registered with
       # ComponentRegistry (auto-generates its serialization + Inspector + Add Component) or
@@ -292,6 +303,8 @@ jobs:
             "TartarusEngine.exe", "TartarusEditor.dll", "TartarusGame.dll",
             "PhysX.dll", "PhysXCommon.dll", "PhysXFoundation.dll", "PhysXCooking.dll",
             "LICENSE", "THIRD-PARTY-NOTICES.md", "README-FIRST-RUN.txt",
+            "Managed/Tartarus.Runtime.dll", "Managed/Tartarus.Gameplay.dll",
+            "Managed/Tartarus.Editor.dll", "Managed/IDE/Tartarus.CodeAnalysis.dll",
             "assets\shaders\ModelFragment.glsl", "assets\fonts\fa-solid-900.ttf",
             "assets\branding\tartarus_engine_mark.png", "project\scenes\Sandbox.json"
           )
@@ -312,7 +325,7 @@ jobs:
           # ZIP built from this config, and it is header-only. This is the durable guard: whoever
           # adds the next dependency finds out from a red build rather than from a user.
           $expected = @(
-            "assets", "project", "LICENSE", "README-FIRST-RUN.txt", "THIRD-PARTY-NOTICES.md",
+            "assets", "project", "Managed", "LICENSE", "README-FIRST-RUN.txt", "THIRD-PARTY-NOTICES.md",
             "TartarusEngine.exe", "TartarusEditor.dll", "TartarusGame.dll",
             "PhysX.dll", "PhysXCommon.dll", "PhysXCooking.dll", "PhysXFoundation.dll"
           )

@@ -4,16 +4,19 @@
 
 #include <vector>
 
-// A 1D animation curve: keys with cubic Hermite tangents, the same model as Unity's
+// A 1D animation curve: cubic Hermite tangents plus linear/constant segments, like Unity's
 // AnimationCurve. Used for procedural animation (recoil, bob, breathing, blend easing) and
-// edited in the Inspector with the curve editor (src/Editor/CurveEditor.h).
+// edited in dedicated curve windows (src/Editor/CurveEditor.h).
 //
 // Outside the key range the curve holds its first/last value. An empty curve evaluates to 0.
+enum class CurveInterpolation { Cubic = 0, Linear = 1, Constant = 2 };
+
 struct CurveKey {
     float Time = 0.0f;
     float Value = 0.0f;
     float InTangent = 0.0f;  // slope (value per unit time) arriving at the key
     float OutTangent = 0.0f; // slope leaving it
+    CurveInterpolation Interpolation = CurveInterpolation::Cubic; // segment leaving this key
 };
 
 struct Curve {
@@ -32,7 +35,7 @@ struct Curve {
     int AddKey(float t);
 
     // [[time, value, inTangent, outTangent], ...]
-    nlohmann::json ToJson() const;
+    nlohmann::json ToJson(bool roundValues = true) const;
     // Accepts that form. Malformed input leaves `out` unchanged and returns false.
     static bool FromJson(const nlohmann::json& j, Curve& out);
 

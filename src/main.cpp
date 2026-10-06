@@ -9,6 +9,7 @@
 #include "Camera.h"
 #include "Player.h"
 #include "FirstPersonPresentation.h"
+#include "Game/Scripting/ScriptRuntime.h"
 #include "FirstPersonWeaponTest.h" // --weapon-test
 #include "BodyDebugDraw.h"
 #include "FirstPersonBody.h"
@@ -131,6 +132,9 @@
 #include <glm/gtc/type_ptr.hpp> // #162 - motion blur matrices
 #include <cstring>
 #include <imgui_internal.h> // --editor-shot finds dock tabs by title
+#include "CurveEditor.h"
+#include "RecoilAssetEditor.h"
+#include "EditorPropertyRows.h"
 #include <cstdlib>
 #include <intrin.h>   // __cpuid — CPU brand string for the boot log
 #ifndef NOMINMAX
@@ -507,6 +511,8 @@ int main(int argc, char** argv) {
     // --editor-shot-scale <s> sets the UI scale (as Preferences > General > UI scale would).
     std::string editorShotDir, editorShotSelect = "Player Spawn";
     bool editorShotDefaultLayout = false;
+    bool editorShotCurves = false; // capture the real themed recoil curve widget in isolation
+    bool editorShotIDE = false; // one focused IDE capture; use --project with a small fixture
     float editorShotScale = 0.0f;
     std::vector<std::string> outfitCostScenes;
     std::string outfitAuditWardrobe = "assets/Characters/Quantum/Quantum.wardrobe", outfitAuditCsv;
@@ -536,6 +542,8 @@ int main(int argc, char** argv) {
         else if (a == "--editor-shot" && i + 1 < argc) { editorShotDir = argv[++i]; }
         else if (a == "--editor-shot-select" && i + 1 < argc) { editorShotSelect = argv[++i]; }
         else if (a == "--editor-shot-default-layout") { editorShotDefaultLayout = true; }
+        else if (a == "--editor-shot-curves") { editorShotCurves = true; }
+        else if (a == "--editor-shot-ide") { editorShotIDE = true; }
         else if (a == "--editor-shot-scale" && i + 1 < argc) { editorShotScale = (float)std::atof(argv[++i]); }
         else if (a == "--outfit-shots" && i + 1 < argc) {
             smokeTestMode = true;
@@ -575,12 +583,21 @@ int main(int argc, char** argv) {
                 std::cerr << "--project: '" << argv[i] << "' is not a folder; ignoring it." << std::endl;
         }
     }
+    // Explicit, headless upgrade through the same parser/serializer as the Inspector.
+    for (int i=1;i+1<argc;++i) if (std::string(argv[i])=="--migrate-recoil") {
+        RecoilAsset asset; std::string error;
+        if (!RecoilAsset::LoadFile(argv[i+1],asset,&error) || !asset.SaveFile(argv[i+1])) {
+            std::cerr << "[RecoilMigration] " << error << '\n'; return 1;
+        }
+        std::cout << "[RecoilMigration] " << argv[i+1] << " -> RecoilAnimData v2\n"; return 0;
+    }
     // #173 - `--unit-tests`: pure C++ tests, run before any window / GL / audio / PhysX exists
     // so they work on a GPU-less CI runner. Exit code = failed checks (0 = pass).
     for (int i = 1; i < argc; ++i) {
         if (std::string(argv[i]) != "--unit-tests") continue;
         CrashHandler::SetInteractive(false);
-        return RunUnitTests() == 0 ? 0 : 1;
+        const char* filter=i+1<argc && argv[i+1][0]!='-'?argv[i+1]:nullptr;
+        return RunUnitTests(filter) == 0 ? 0 : 1;
     }
     // `--import-blood-fx <VolumetricBloodFX package dir>`: converts the volumetric blood sims and
     // decals into project/assets/Effects/Blood (git-ignored). No GL needed.
@@ -1263,7 +1280,7 @@ int main(int argc, char** argv) {
         {
             const std::string& last = EditorSettings::Get().LastScenePath;
             std::error_code sceneEc;
-            if (!last.empty() && std::filesystem::exists(last, sceneEc) && !sceneEc)
+            if (!editorShotIDE && !last.empty() && std::filesystem::exists(last, sceneEc) && !sceneEc)
                 scenePath = last;
             if (playerMode && !playerCfg.Scenes.empty()) scenePath = ProjectPaths::Resolve(playerCfg.Scenes.front());
         }
@@ -1912,6 +1929,7 @@ int main(int argc, char** argv) {
         };
         auto stopPlay = [&]() {
             if (!playing) return;
+            Scripting::Stop(&world,&assets);
             // Runtime-only arms/weapon entities were created after the play snapshot. Remove
             // them before restoring the authored world so they can never be serialized or leak
             // into another scene after a stop.
@@ -1962,8 +1980,8 @@ int main(int argc, char** argv) {
         bool exitApproved = false;
 
         // --editor-shot: each view gets kEditorShotFrames frames - set up halfway, captured at the end.
-        constexpr int kEditorShotFrames = 150;
-        static const char* const kEditorShots[] = {"overview", "inspector", "console", "game", "settings", "settings-viewport",
+        const int kEditorShotFrames = editorShotIDE ? 450 : 150; // allow the async Roslyn result to reach the captured IDE frame
+        const std::vector<const char*> kEditorShots = editorShotIDE ? std::vector<const char*>{"script-ide"} : editorShotCurves ? std::vector<const char*>{"recoil-curves","recoil-targets","recoil-smoothing","recoil-layers","recoil-misc"} : std::vector<const char*>{"overview", "inspector", "console", "game", "settings", "settings-viewport",
                                                    "settings-performance", "project-settings", "project-tags", "project-build",
                                                    "lighting", "animator"};
         int editorShotFrame = 0;
@@ -2662,7 +2680,7 @@ int main(int argc, char** argv) {
                 if (editor.InPrefabMode()) editor.ExitPrefabMode(world, assets); // #176 - saves the prefab, back to the scene
                 // #88 — prompt for ANY unsaved scene, titled or not (Save on an untitled one
                 // routes through Save As).
-                if (exitApproved || !editor.IsDirty()) break;
+                if (exitApproved || (!editor.IsDirty() && !editor.HasUnsavedScripts())) break;
                 window.SetShouldClose(false);          // veto this close; ask first
                 if (!editor.ExitPromptActive()) editor.OpenExitPrompt();
                 // Closed from the taskbar while minimized: bring the window back so the prompt
@@ -2692,11 +2710,11 @@ int main(int argc, char** argv) {
             // #174 - a built game can't be stopped, paused or un-maximized; a Development Build
             // keeps the stats overlay and the physics debug keys.
             const bool devKeys = !playerMode || playerCfg.DevelopmentBuild;
-            if (!playerMode && Shortcuts::TriggeredGlfw("play.toggle")) togglePlay();
+            if (!playerMode && !editor.ScriptIDEHasKeyboardFocus() && Shortcuts::TriggeredGlfw("play.toggle")) togglePlay();
             // Pause (F2 / toolbar) and single-frame Step (F3 / toolbar). The toolbar requests are
             // raised during the previous frame's editor draw; consuming them here folds them into
             // the same state the keys drive, one frame later.
-            if (playing && !playerMode && (Shortcuts::TriggeredGlfw("play.pause") || editor.ConsumePauseToggleRequest()))
+            if (playing && !playerMode && ((!editor.ScriptIDEHasKeyboardFocus() && Shortcuts::TriggeredGlfw("play.pause")) || editor.ConsumePauseToggleRequest()))
                 paused = !paused;
             // #236 A5 — Error Pause: freeze the sim the frame a fresh error lands.
             if (playing && !paused && !playerMode && EditorModuleHost::ConsoleState().ErrorPause) {
@@ -2708,14 +2726,14 @@ int main(int argc, char** argv) {
             }
             errPauseSeen = Log::CountOf(LogLevel::Error);
             bool stepThisFrame = playing && paused &&
-                (Shortcuts::TriggeredGlfw("play.step") || editor.ConsumeStepRequest());
+                ((!editor.ScriptIDEHasKeyboardFocus() && Shortcuts::TriggeredGlfw("play.step")) || editor.ConsumeStepRequest());
             // Mirrors the toolbar's Fullscreen/Restore button — maximize the Game view over
             // the editor panels (only meaningful while playing; setMaximized no-ops otherwise).
-            if (playing && !playerMode && Shortcuts::TriggeredGlfw("play.maximize")) setMaximized(!playMaximized);
+            if (playing && !playerMode && !editor.ScriptIDEHasKeyboardFocus() && Shortcuts::TriggeredGlfw("play.maximize")) setMaximized(!playMaximized);
 
             // F6 toggles the Physics debug panel from anywhere — the Window menu that also does it
             // is hidden during maximized play (#185).
-            if (devKeys && Shortcuts::TriggeredGlfw("physics.panel")) {
+            if (devKeys && !editor.ScriptIDEHasKeyboardFocus() && Shortcuts::TriggeredGlfw("physics.panel")) {
                 EditorSettings::Get().ShowPhysicsPanel = !EditorSettings::Get().ShowPhysicsPanel;
                 EditorSettings::Save();
             }
@@ -2723,7 +2741,7 @@ int main(int argc, char** argv) {
             // where the Scene-viewport overlay isn't drawn). Turning it on with nothing selected
             // enables a sensible default set so there's immediately something to see (#185).
             // (F3 is Step One Frame; F6 is the Physics panel.)
-            if (devKeys && Shortcuts::TriggeredGlfw("physics.overlay")) {
+            if (devKeys && !editor.ScriptIDEHasKeyboardFocus() && Shortcuts::TriggeredGlfw("physics.overlay")) {
                 EditorSettings& es = EditorSettings::Get();
                 es.PlayDebugOverlay = !es.PlayDebugOverlay;
                 if (es.PlayDebugOverlay) {
@@ -2919,7 +2937,7 @@ int main(int argc, char** argv) {
                 {
                 PROFILE_SCOPE("Physics Step");
                 PhysicsWorld::Step(gameDt, world,
-                                   [&](float fixedDt) { gameModule.FixedTick(world, fixedDt); });
+                                   [&](float fixedDt) { gameModule.FixedTick(world, fixedDt); Scripting::Tick(world,assets,fixedDt,true); });
                 }
                 if (playUsesPlayer) {
                     PROFILE_SCOPE("Player + FP Update");
@@ -2942,6 +2960,9 @@ int main(int argc, char** argv) {
                         player.ScriptCrouch = weaponTest->Crouch();
                     }
                     if (npcTest) npcTest->Drive(player, firstPersonPresentation, npcDirector, playerVitals, gameDt);
+                    player.AimHeld=firstPersonPresentation.IsActive() && firstPersonPresentation.IsEquipped() && !playerVitals.IsDead() &&
+                        (weaponTest?weaponTest->Aim():((gameHasInput && InputMap::GetButton("Fire2")) || (npcTest && npcTest->Aiming())));
+                    player.SprintBlocked=firstPersonPresentation.ReloadBlocksSprint();
                     player.Update(gameDt, world, window.Handle(), gameHasInput && !playerVitals.IsDead());
                     // Before the body places itself: it is the controller's child, posed in world space.
                     if (playControllerEntity != entt::null && world.Registry.valid(playControllerEntity)) {
@@ -2955,6 +2976,8 @@ int main(int argc, char** argv) {
                     }
                     firstPersonBody.Tick(world, player, player.Cam, gameDt);
                     if (firstPersonPresentation.IsActive()) {
+                        if (!weaponTest && !npcTest) firstPersonPresentation.SetPlayerLookInput(player.LookDeltaInput);
+                        if (!weaponTest && !npcTest) firstPersonPresentation.SetPlayerMoveInput(player.MoveInput);
                         firstPersonPresentation.Update(world, player.Cam);
                         firstPersonPresentation.SetCrouch(player.CrouchBlend); // the crouched ADS pose eases in with the eye height
                         if (weaponTest) {
@@ -3103,12 +3126,14 @@ int main(int argc, char** argv) {
                     for (const FirstPersonPresentation::ShotHit& hit : firstPersonPresentation.TakeShotHits()) {
                         if (weaponTest) weaponTest->OnHit(hit.Point);
                         if (npcDirector.Active()) {
-                            bool killed = false, head = false;
+                            bool killed = false, head = false, aliveWhenHit = false;
                             if (npcDirector.OnPlayerHit(world, hit.Entity, hit.Point, hit.Origin, hit.Direction,
-                                                        firstPersonPresentation.Set().Gameplay, &killed, &head)) {
-                                playerVitals.MarkHit(killed, head);
+                                                        firstPersonPresentation.Set().Gameplay, &killed, &head, &aliveWhenHit)) {
+                                if (aliveWhenHit) {
+                                    playerVitals.MarkHit(killed, head);
+                                    combatFx.Play(killed ? CombatFx::Cue::HitmarkerKill : CombatFx::Cue::Hitmarker, hit.Point);
+                                }
                                 if (killed) combatHud.OnKill(npcDirector, hit.Entity, head);
-                                combatFx.Play(killed ? CombatFx::Cue::HitmarkerKill : CombatFx::Cue::Hitmarker, hit.Point);
                                 continue; // a soldier, not a wall: no hole
                             }
                         }
@@ -3120,7 +3145,7 @@ int main(int argc, char** argv) {
                         if (npcDirector.Active()) npcDirector.OnPlayerShotLine(t.Origin, t.End);
                         if (t.FirstPellet)
                             combatFx.Shot(world, firstPersonPresentation.Set().Gameplay.Pellets > 1 ? CombatFx::Gun::Shotgun : CombatFx::Gun::Rifle,
-                                          t.Origin, t.End, true, false);
+                                          t.Origin, t.End, true, false, 0, firstPersonPresentation.MuzzleEffects());
                     }
                     // The player's muzzle flames (this frame's too) ride the gun as it kicks and turns.
                     if (glm::vec3 fpMuzzle, worldMuzzle, bore; combatFx.Active() && firstPersonPresentation.IsActive() &&
@@ -3185,7 +3210,7 @@ int main(int argc, char** argv) {
                         fi.Feet = glm::vec3(foot[0], foot[1], foot[2]);
                     }
                     fi.Grounded = player.Grounded;
-                    fi.Sprinting = weaponTest ? weaponTest->Sprint() : (gameHasInput && InputMap::GetButton("Sprint"));
+                    fi.Sprinting = !player.AimHeld && !player.SprintBlocked && (weaponTest ? weaponTest->Sprint() : (gameHasInput && InputMap::GetButton("Sprint")));
                     fi.Crouched = player.Crouched;
                     fi.Jumped = player.Jumped;
                     fi.HaveFootHeights = firstPersonBody.FootHeights(world, fi.FootHeight); // steps on the body's touch-downs
@@ -3291,6 +3316,8 @@ int main(int argc, char** argv) {
             {
                 PROFILE_SCOPE("Game Module Tick");
                 gameModule.Tick(world, gameDt, simThisFrame);
+                if (simThisFrame) Scripting::Tick(world,assets,gameDt);
+                else Scripting::Poll();
             }
 
             // #177 - particles run while editing too (real time) so an emitter can be tuned live;
@@ -3510,8 +3537,30 @@ int main(int argc, char** argv) {
                     lightBuffer.AddPoint(pos, lc.Color, lc.Intensity, lc.Range, slot, ~(std::uint32_t)lc.CullingMask); // #203
                 }
             }
-            // No fallback light: a scene with no lights is intentionally unlit, so deleting a
-            // directional light persists and fresh scenes remain black until explicitly lit.
+            // Prefab Mode has a render-only sun when the prefab owns no directional light.
+            // There is no helper entity to select, parent or accidentally save into the asset.
+            // An authored directional (even disabled) takes precedence over the preview sun.
+            bool prefabOwnsSun = false;
+            if (editor.InPrefabMode()) {
+                for (auto [e, light] : world.Registry.view<const LightComponent>().each())
+                    if (light.Kind == LightComponent::Type::Directional) { prefabOwnsSun = true; break; }
+                if (!prefabOwnsSun && lightBuffer.Count() < LightBuffer::kMaxLights) {
+                    const glm::vec3 previewSunColor(1.0f, 0.96f, 0.9f);
+                    glm::vec3 radiance = previewSunColor * 5.0f;
+                    frameSunDir = glm::normalize(glm::vec3(-0.4f, -0.8f, -0.3f));
+                    if (physicalSky) {
+                        frameSky = skyAtmosphere.ResolveLighting(world.Sky, frameSunDir, radiance,
+                                                                 frameSunAngularDeg, skyCameraPos);
+                        frameSkyResolved = true;
+                        frameSunDir = -frameSky.LightDir;
+                        radiance = frameSky.LightRadiance;
+                    }
+                    lightBuffer.AddDirectional(frameSunDir, radiance, 1.0f, true);
+                    frameHaveDirectional = true;
+                    frameSunCastShadows = true;
+                }
+            }
+            // Ordinary scenes without lights remain intentionally unlit.
             lightBuffer.Upload();
             const int frameLightCount = lightBuffer.Count();
 
@@ -4469,6 +4518,7 @@ int main(int argc, char** argv) {
                     const int step = editorShotFrame++ / kEditorShotFrames;
                     if (editorShotFrame % kEditorShotFrames == kEditorShotFrames / 2 && step < (int)std::size(kEditorShots)) {
                         const std::string view = kEditorShots[step];
+                        if(view=="script-ide")editor.OpenScriptIDE(ProjectPaths::Resolve("assets/Scripts/Bob.cs"));
                         auto focus = [](const char* title) {
                             for (ImGuiWindow* w : ImGui::GetCurrentContext()->Windows)
                                 if (std::strstr(w->Name, title) && std::strncmp(w->Name, "##", 2) != 0 && !(w->Flags & ImGuiWindowFlags_ChildWindow)) ImGui::SetWindowFocus(w->Name);
@@ -4535,6 +4585,34 @@ int main(int argc, char** argv) {
                 // this frame's pointers first.
                 editorModule.SetFrameContext(&editor, &world, &assets, &editorCamera);
                 if (devKeys) editorModule.Draw(editorUIVisible, dt);
+                if (!editorShotDir.empty() && editorShotCurves) {
+                    static RecoilAsset curvePreview;
+                    static bool loaded = false;
+                    if (!loaded) {
+                        RecoilAsset::LoadFile(ProjectPaths::Resolve("assets/Weapons/AKS74U/AKS74U.recoil"), curvePreview);
+                        loaded = true;
+                    }
+                    ImGui::SetNextWindowPos(ImVec2(600, 120), ImGuiCond_Always);
+                    ImGui::SetNextWindowSize(ImVec2(500, 680), ImGuiCond_Always);
+                    ImGui::Begin("Recoil Curve Editor", nullptr, ImGuiWindowFlags_NoSavedSettings);
+                    ImGui::TextUnformatted("AKS-74U / PROCEDURAL RECOIL");
+                    const int recoilView=std::clamp((editorShotFrame-1)/kEditorShotFrames,0,4);
+                    if (recoilView==0) {
+                    ImGui::TextDisabled("Time in seconds / interpolation alpha");
+                    ImGui::Separator();
+                    ImGui::TextUnformatted("Pitch");
+                    CurveEditor::Options curveOptions; curveOptions.TimeMax=curvePreview.Data.Unity.SemiRotCurve.Length();
+                    CurveEditor::Draw("pitch", curvePreview.Data.Unity.SemiRotCurve.X, ImVec2(0, 150), curveOptions);
+                    ImGui::TextUnformatted("Yaw");
+                    CurveEditor::Draw("yaw", curvePreview.Data.Unity.SemiRotCurve.Y, ImVec2(0, 150), curveOptions);
+                    ImGui::TextUnformatted("Roll");
+                    CurveEditor::Draw("roll", curvePreview.Data.Unity.SemiRotCurve.Z, ImVec2(0, 150), curveOptions);
+                    } else {
+                        bool previewChanged=false; PropertyRows previewRows(150,previewChanged);
+                        RecoilAssetEditor::Draw(previewRows,curvePreview.Data,600,recoilView-1);
+                    }
+                    ImGui::End();
+                }
 
                 // Staged-undo cleanup + selection-history recording (#38/#236 R2): must run after
                 // every module panel (Inspector, Hierarchy, Asset Browser, Console) has had its
@@ -4989,12 +5067,13 @@ int main(int argc, char** argv) {
                     // #86 / #88 — only close once the save actually landed. A failed write (or a
                     // cancelled Save As for an untitled scene) keeps the editor open with the
                     // changes still dirty; the failure is logged and toasted by DoSave.
-                    if (editor.SaveScene(world, assets)) {
+                    if (editor.SaveScripts() && (!editor.IsDirty() || editor.SaveScene(world, assets))) {
                         exitApproved = true;
                         window.SetShouldClose(true);
                     }
                     break;
                 case EditorLayer::ExitDecision::DiscardAndExit:
+                    editor.DiscardScripts();
                     exitApproved = true;
                     window.SetShouldClose(true);
                     break;

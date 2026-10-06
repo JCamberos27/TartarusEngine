@@ -226,7 +226,7 @@ void GameViewPanel::RenderUI(const GameViewStats* stats, bool isOsFullscreen, bo
         // In-panel play: first click inside the running view captures mouse/keyboard for the
         // game; until then, a hint sits over the image. (Esc releases — handled in main.cpp.)
         if (playing && !inputEngaged) {
-            if (m_ViewHovered && ImGui::IsMouseClicked(ImGuiMouseButton_Left)) {
+            if (m_ViewHovered && (ImGui::IsMouseClicked(ImGuiMouseButton_Left) || ImGui::IsMouseClicked(ImGuiMouseButton_Right))) {
                 m_EngageClickPending = true;
             }
             const char* hint = "Click to control  \xE2\x80\xA2  Esc to release";

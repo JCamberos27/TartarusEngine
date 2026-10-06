@@ -55,6 +55,11 @@ std::string Key(const std::string& p) {
 // Paths the editor itself churns (caches, captures, layouts) and transient files are never news.
 bool Ignored(const fs::path& rel) {
     if (rel.empty()) return true;
+    for(const auto& part:rel) {
+        std::string segment=part.string();
+        std::transform(segment.begin(),segment.end(),segment.begin(),[](unsigned char c){ return (char)std::tolower(c); });
+        if(segment=="bin" || segment=="obj") return true;
+    }
     std::string first = rel.begin()->string();
     std::transform(first.begin(), first.end(), first.begin(), [](unsigned char c) { return (char)std::tolower(c); });
     if (first == "library" || first == "screenshots" || first == "layouts") return true;

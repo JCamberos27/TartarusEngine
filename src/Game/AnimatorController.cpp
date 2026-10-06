@@ -4,6 +4,7 @@
 #include "AssetDatabase.h" // #132 - clip GUIDs
 #include "AtomicFile.h"
 #include "Components.h"
+#include "CameraEffects.h"
 #include "IK.h"
 #include "Log.h"
 #include "Model.h"
@@ -293,7 +294,14 @@ bool AnimatorController::FromJsonString(const std::string& text, AnimatorControl
                 if (const auto ks = cj.find("keys"); ks != cj.end() && ks->is_array())
                     for (const auto& k : *ks)
                         if (k.is_array() && k.size() >= 2 && k[0].is_number() && k[1].is_number())
-                            cv.Keys.push_back({std::clamp((float)k[0].get<double>(), 0.0f, 1.0f), (float)k[1].get<double>()});
+                        {
+                            CurveKey key{std::clamp((float)k[0].get<double>(),0.0f,1.0f),(float)k[1].get<double>()};
+                            if(k.size()>=4&&k[2].is_number()&&k[3].is_number()) {
+                                key.InTangent=k[2].get<float>();key.OutTangent=k[3].get<float>();key.Interpolation=CurveInterpolation::Cubic;
+                            }
+                            if(k.size()>=5&&k[4].is_number_integer()&&k[4].get<int>()>=0&&k[4].get<int>()<=2)key.Interpolation=CurveInterpolation(k[4].get<int>());
+                            cv.Keys.push_back(key);
+                        }
                 std::stable_sort(cv.Keys.begin(), cv.Keys.end(),
                                  [](const CurveKey& a, const CurveKey& b) { return a.Time < b.Time; });
                 st.Curves.push_back(std::move(cv));
@@ -345,6 +353,9 @@ bool AnimatorController::FromJsonString(const std::string& text, AnimatorControl
             if (const std::string n = Str(lj, "name"); !n.empty()) L.Name = n;
             L.Weight = std::clamp(Num(lj, "weight", 1.0f), 0.0f, 1.0f);
             L.Mode = (Blending)IndexOf(kBlendingNames, Str(lj, "blending"), 0);
+            L.AdditiveReferenceState = Str(lj,"additiveReferenceState");
+            L.WeightCurve = Str(lj,"weightCurve");
+            L.WeightCurveLayer = Str(lj,"weightCurveLayer");
             L.MaskInclude = Strings(lj, "maskInclude");
             L.MaskExclude = Strings(lj, "maskExclude");
             L.EntryPosition = Vec2(lj, "entryPosition", L.EntryPosition);
@@ -381,6 +392,9 @@ std::string AnimatorController::ToJsonString() const {
                    {"anyPosition", {L.AnyPosition.x, L.AnyPosition.y}},
                    {"exitPosition", {L.ExitPosition.x, L.ExitPosition.y}}};
         if (!L.MaskInclude.empty()) lj["maskInclude"] = L.MaskInclude;
+        if (!L.AdditiveReferenceState.empty()) lj["additiveReferenceState"] = L.AdditiveReferenceState;
+        if (!L.WeightCurve.empty()) lj["weightCurve"] = L.WeightCurve;
+        if (!L.WeightCurveLayer.empty()) lj["weightCurveLayer"] = L.WeightCurveLayer;
         if (!L.MaskExclude.empty()) lj["maskExclude"] = L.MaskExclude;
         lj["states"] = json::array();
         for (const State& s : L.States) {
@@ -398,7 +412,10 @@ std::string AnimatorController::ToJsonString() const {
                 json cs = json::array();
                 for (const auto& c : s.Curves) {
                     json ks = json::array();
-                    for (const auto& k : c.Keys) ks.push_back({k.Time, k.Value});
+                    for (const auto& k : c.Keys) {
+                        if(k.Interpolation==CurveInterpolation::Linear&&k.InTangent==0&&k.OutTangent==0)ks.push_back({k.Time,k.Value});
+                        else ks.push_back({k.Time,k.Value,k.InTangent,k.OutTangent,int(k.Interpolation)});
+                    }
                     cs.push_back({{"name", c.Name}, {"keys", std::move(ks)}});
                 }
                 st["curves"] = std::move(cs);
@@ -743,7 +760,10 @@ void AdvanceAnimator(const AnimatorController& ctrl, AnimatorControllerComponent
             ac.History.push_back(std::move(log));
             if (ac.History.size() > 24) ac.History.erase(ac.History.begin());
         }
-        EnterState(L, rt, to, tr.Duration, tr.Offset, t, tr.Interruptible, ac.FiredEvents);
+        float duration=ParamValue(ac.Params,"TransitionDuration:"+tr.From,tr.Duration);
+        if(to>=0) duration=ParamValue(ac.Params,"TransitionDuration:"+L.States[to].Name,duration);
+        if(!std::isfinite(duration)) duration=tr.Duration;
+        EnterState(L, rt, to, std::clamp(duration,0.0f,5.0f), tr.Offset, t, tr.Interruptible, ac.FiredEvents);
     }
     SyncBaseLayerFields(ctrl, ac);
 }
@@ -778,7 +798,12 @@ float AnimatorController::EvaluateCurve(const std::vector<CurveKey>& keys, float
         if (t > keys[i].Time) continue;
         const float span = keys[i].Time - keys[i - 1].Time;
         const float u = span > 1e-6f ? (t - keys[i - 1].Time) / span : 1.0f;
-        return keys[i - 1].Value + (keys[i].Value - keys[i - 1].Value) * u;
+        const auto& a=keys[i-1];const auto& b=keys[i];
+        if(t==b.Time||span<=1e-6f)return b.Value;
+        if(a.Interpolation==CurveInterpolation::Constant)return a.Value;
+        if(a.Interpolation==CurveInterpolation::Linear)return a.Value+(b.Value-a.Value)*u;
+        const float u2=u*u,u3=u2*u;
+        return (2*u3-3*u2+1)*a.Value+(u3-2*u2+u)*span*a.OutTangent+(-2*u3+3*u2)*b.Value+(u3-u2)*span*b.InTangent;
     }
     return keys.back().Value;
 }
@@ -810,6 +835,23 @@ float AnimatorSampleCurve(const AnimatorController& ctrl, const AnimatorControll
 }
 
 // --- sampling --------------------------------------------------------------------------------
+
+float AnimatorLayerWeight(const AnimatorController& ctrl, const AnimatorControllerComponent& ac, int layer) {
+    if (layer < 0 || layer >= (int)ctrl.Layers.size()) return 0.0f;
+    if (layer == 0) return 1.0f;
+    const auto& l = ctrl.Layers[layer];
+    float weight = l.Weight * std::clamp(ParamValue(ac.Params, "LayerWeight:" + l.Name, 1.0f), 0.0f, 1.0f);
+    if (!l.WeightCurve.empty()) {
+        int source = layer;
+        if (!l.WeightCurveLayer.empty()) {
+            source = -1;
+            for (int i = 0; i < (int)ctrl.Layers.size(); ++i)
+                if (ctrl.Layers[i].Name == l.WeightCurveLayer) { source = i; break; }
+        }
+        weight *= std::clamp(AnimatorSampleCurve(ctrl, ac, source, l.WeightCurve, 0.0f), 0.0f, 1.0f);
+    }
+    return weight;
+}
 
 bool AnimatorSampleMotion(Model& M, AssetLibrary& assets, const AnimatorController::Motion& m,
                           const std::vector<float>& weights, bool loop, bool stripRoot, int rootNode,
@@ -986,18 +1028,6 @@ void SampleLayer(const AnimatorController::Layer& L, const AnimatorLayerRuntime&
     }
 }
 
-void ApplyAdditive(Pose& pose, const Pose& layer, const Pose& ref, const std::vector<float>& mask, float weight) {
-    for (size_t i = 0; i < pose.size() && i < layer.size() && i < ref.size(); ++i) {
-        const float w = weight * (i < mask.size() ? mask[i] : 1.0f);
-        if (w <= 0.0f) continue;
-        const glm::quat dR = layer[i].R * glm::inverse(ref[i].R);
-        pose[i].T += (layer[i].T - ref[i].T) * w;
-        pose[i].R = glm::normalize(glm::slerp(glm::quat(1.0f, 0.0f, 0.0f, 0.0f), dR, w) * pose[i].R);
-        const glm::vec3 dS = layer[i].S / glm::max(ref[i].S, glm::vec3(1e-6f));
-        pose[i].S *= glm::mix(glm::vec3(1.0f), dS, w);
-    }
-}
-
 // Whether every state a layer is in has no motion for `track`: sampled, it gives back the pose it was handed.
 bool LayerIsIdle(const AnimatorController::Layer& L, const AnimatorLayerRuntime& rt, int track) {
     for (const auto& it : rt.Stack) {
@@ -1049,6 +1079,9 @@ void PoseModel(const AnimatorController& ctrl, const AnimatorControllerComponent
     Pose bind, pose, layerPose, refPose, gripPose;
     model.BindLocalPose(bind);
     pose = bind;
+    const bool heldBeforeLayers=ikRig && ikRig->Enabled && ikRig->Weight>0 &&
+        ikRig->HoldPose.size()==bind.size() && ikRig->HoldWeights.size()==bind.size();
+    const bool preserveBaseGrip=ikRig && ikRig->PreserveBaseGrip;
     for (int li = 0; li < (int)ctrl.Layers.size() && li < (int)ac.Layers.size(); ++li) {
         const auto& L = ctrl.Layers[li];
         const auto& rt = ac.Layers[li];
@@ -1056,7 +1089,7 @@ void PoseModel(const AnimatorController& ctrl, const AnimatorControllerComponent
         if (li == 0) {
             // The grip the IK keeps comes from the state being faded into (see IK::ApplyRig).
             SampleLayer(L, rt, smp, ac.Params, stateLength, li, bind, false, pose,
-                        ikRig && rt.Stack.size() > 1 ? &gripPose : nullptr);
+                        ikRig && (rt.Stack.size() > 1 || preserveBaseGrip) ? &gripPose : nullptr);
             if (motion && rootNode >= 0) {
                 // Each entry's travel, weighted by how much of it shows in the blended pose.
                 std::vector<float> fades;
@@ -1072,33 +1105,95 @@ void PoseModel(const AnimatorController& ctrl, const AnimatorControllerComponent
                 }
                 *motion = mix.Result();
             }
+            if(heldBeforeLayers) {
+                // Preserve the reload hand's free grip, while holding the ADS gun BEFORE locomotion.
+                if(gripPose.empty()) gripPose=pose;
+                IK::ApplyHeldPose(pose,ikRig->HoldPose,ikRig->HoldWeights);
+            }
             // Later layers sample their own states whole: the base layer already owns the root.
             smp.RootNode = -1;
             continue;
         }
-        if (L.Weight <= 0.0f) continue;
+        const float layerWeight=AnimatorLayerWeight(ctrl,ac,li);
+        if (layerWeight <= 0.0f) continue;
         // A layer resting in an empty state (the hit reaction between hits) has nothing to add: no sampling at all.
         if (LayerIsIdle(L, rt, track)) continue;
         const std::vector<float>& mask = CachedLayerMask(L, model);
         if (L.Mode == AnimatorController::Blending::Override) {
             SampleLayer(L, rt, smp, ac.Params, stateLength, li, pose, false, layerPose);
             for (size_t i = 0; i < pose.size(); ++i) {
-                const float w = L.Weight * mask[i];
+                const float w = layerWeight * mask[i];
                 if (w > 0.0f) pose[i] = LocalTRS::Blend(pose[i], layerPose[i], std::min(w, 1.0f));
+                if(heldBeforeLayers && !preserveBaseGrip && w>0) gripPose[i]=LocalTRS::Blend(gripPose[i],layerPose[i],std::min(w,1.0f));
             }
         } else {
-            // Additive: the layer's motion relative to its own first frame, added on top.
-            SampleLayer(L, rt, smp, ac.Params, stateLength, li, bind, false, layerPose);
-            SampleLayer(L, rt, smp, ac.Params, stateLength, li, bind, true, refPose);
-            ApplyAdditive(pose, layerPose, refPose, mask, L.Weight);
+            const int reference=L.FindState(L.AdditiveReferenceState);
+            if(reference>=0) {
+                // A common resting pose preserves held sprint poses and coherent entry/exit offsets.
+                if(!smp.Sample(L.States[reference],0.0f,stateLength(li,reference),ac.Params,refPose)) refPose=bind;
+                SampleLayer(L,rt,smp,ac.Params,stateLength,li,refPose,false,layerPose);
+            } else {
+                SampleLayer(L, rt, smp, ac.Params, stateLength, li, bind, false, layerPose);
+                SampleLayer(L, rt, smp, ac.Params, stateLength, li, bind, true, refPose);
+            }
+            IK::ApplyAdditivePose(pose, layerPose, refPose, mask, layerWeight);
+            if(heldBeforeLayers && !preserveBaseGrip) IK::ApplyAdditivePose(gripPose,layerPose,refPose,mask,layerWeight);
         }
     }
     // Procedural offsets and IK run on the finished blend, so they see what the clips did.
-    if (ikRig) IK::ApplyRig(*ikRig, model, pose, gripPose.empty() ? nullptr : &gripPose);
+    if (ikRig) IK::ApplyRig(*ikRig, model, pose, gripPose.empty() ? nullptr : &gripPose,heldBeforeLayers);
     model.ApplyLocalPose(pose);
 }
 
 } // namespace
+
+CameraEffectPose AnimatorActionCamera(Model& arms,Model* weapon,AssetLibrary& assets,
+    const AnimatorController& ctrl,const AnimatorControllerComponent& ac,
+    const ActionCameraSettings& settings,const std::string& fallbackNode,
+    const glm::quat& modelToView,float modelScale,float adsWeight) {
+    CameraEffectPose result;
+    if(!settings.Enabled || ctrl.Layers.empty() || ac.Layers.empty()) return result;
+    const int node=arms.NodeIndex(settings.Node.empty()?fallbackNode:settings.Node);
+    const int track=ctrl.TrackIndex("arms");
+    if(node<0 || track<0) return result;
+    const auto& layer=ctrl.Layers[0];
+    const int reference=layer.FindState(settings.ReferenceState);
+    if(reference<0) return result;
+    Sampler sample{arms,assets,track,{},{}}, paired{weapon?*weapon:arms,assets,ctrl.TrackIndex("weapon"),{}, {}};
+    auto length=[&](int state) {
+        float len=sample.MotionLength(layer.States[state].MotionFor(track),ac.Params);
+        if(weapon) len=std::max(len,paired.MotionLength(layer.States[state].MotionFor(paired.Track),ac.Params));
+        return len>1e-4f?len:1.0f;
+    };
+    Pose neutral,animated;
+    if(!sample.Sample(layer.States[reference],0,length(reference),ac.Params,neutral)) return result;
+    std::vector<int> parents(arms.NodeCount());
+    for(int i=0;i<arms.NodeCount();++i) parents[i]=arms.NodeParent(i);
+    std::vector<glm::mat4> neutralGlobals,globals;
+    IK::ComputeGlobals(neutral,parents,neutralGlobals);
+    bool first=true;
+    for(const auto& item:ac.Layers[0].Stack) {
+        if(item.State<0 || item.State>=(int)layer.States.size()) continue;
+        const auto& state=layer.States[item.State];
+        bool eligible=std::find(settings.States.begin(),settings.States.end(),state.Name)!=settings.States.end();
+        for(const auto& tag:settings.Tags)
+            eligible=eligible || std::find(state.Tags.begin(),state.Tags.end(),tag)!=state.Tags.end();
+        CameraEffectPose delta;
+        if(eligible && sample.Sample(state,item.Phase,length(item.State),ac.Params,animated)) {
+            IK::ComputeGlobals(animated,parents,globals);
+            const float ads=glm::mix(1.0f,settings.AdsScale,std::clamp(adsWeight,0.0f,1.0f));
+            delta=ActionCameraDelta(neutralGlobals[node],globals[node],modelToView,modelScale,
+                settings.RotationScale*ads,settings.PositionScale*ads);
+        }
+        if(first) { result=delta; first=false; }
+        else {
+            const float weight=AnimatorCrossfadeWeight(item.Fade);
+            result.Position=glm::mix(result.Position,delta.Position,weight);
+            result.Rotation=glm::normalize(glm::slerp(result.Rotation,delta.Rotation,weight));
+        }
+    }
+    return result;
+}
 
 namespace {
 

@@ -26,6 +26,7 @@ std::string ImportKind(const std::string& path) {
     if (ext == ".png" || ext == ".jpg" || ext == ".jpeg" || ext == ".tga" || ext == ".bmp") return "texture";
     if (ext == ".wav" || ext == ".mp3" || ext == ".ogg" || ext == ".flac") return "sound";
     if (ext == ".prefab") return "prefab";
+    if (ext == ".cs") return "script";
     return {};
 }
 

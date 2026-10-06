@@ -16,11 +16,15 @@
 #include "AnimatorController.h"
 #include "AssetLibrary.h"
 #include "CurveEditor.h"
+#include "Camera.h"
+#include "RecoilAssetEditor.h"
 #include "FirstPersonAdsCarry.h"
 #include "FirstPersonAnimation.h"
 #include "Log.h"
 #include "Model.h"
 #include "ProjectPaths.h"
+#include "AssetDatabase.h"
+#include "AssetPathPicker.h"
 
 #include <imgui.h>
 #include <IconsFontAwesome6.h>
@@ -29,6 +33,8 @@
 #include <cmath>
 #include <cstdio>
 #include <filesystem>
+#include <fstream>
+#include <sstream>
 #include <string>
 #include <vector>
 
@@ -96,6 +102,32 @@ void SortUnique(std::vector<std::string>& v) {
 
 bool Has(const std::vector<std::string>& v, const std::string& s) { return std::find(v.begin(), v.end(), s) != v.end(); }
 
+template<class VectorCurve>
+void BindVectorCurve(CurveEditor::AssetScope& scope,const VectorCurve& c,const std::string& pointer,const std::string& title,bool seconds=false) {
+    CurveEditor::Options options;options.TimeInSeconds=seconds;
+    scope.Bind(c.X,pointer+"/x",title+" / X",options);scope.Bind(c.Y,pointer+"/y",title+" / Y",options);scope.Bind(c.Z,pointer+"/z",title+" / Z",options);
+}
+void BindRecoilData(CurveEditor::AssetScope& scope,const RecoilAnimData& d,const std::string& root) {
+    BindVectorCurve(scope,d.SemiRotCurve,root+"/recoilCurves/semiRotCurve","Semi rotation",true);
+    BindVectorCurve(scope,d.SemiLocCurve,root+"/recoilCurves/semiLocCurve","Semi position",true);
+    BindVectorCurve(scope,d.AutoRotCurve,root+"/recoilCurves/autoRotCurve","Auto rotation",true);
+    BindVectorCurve(scope,d.AutoLocCurve,root+"/recoilCurves/autoLocCurve","Auto position",true);
+}
+void BindProceduralCurves(CurveEditor::AssetScope& scope,const WeaponProceduralSettings& p) {
+    scope.Bind(p.Aim.Blend,"/procedural/aim/blend","Aim blend");
+    BindVectorCurve(scope,p.Recoil.Rotation,"/procedural/recoil/rotation","Recoil rotation");
+    BindVectorCurve(scope,p.Recoil.Position,"/procedural/recoil/position","Recoil position");
+    BindVectorCurve(scope,p.Recoil.SustainedRotation,"/procedural/recoil/sustainedRotation","Sustained rotation");
+    BindVectorCurve(scope,p.Recoil.SustainedPosition,"/procedural/recoil/sustainedPosition","Sustained position");
+    scope.Bind(p.Recoil.CameraPitch,"/procedural/recoil/cameraPitch","Camera pitch");
+    scope.Bind(p.Recoil.CameraYaw,"/procedural/recoil/cameraYaw","Camera yaw");
+    if(p.Recoil.UnityPort)BindRecoilData(scope,p.Recoil.Unity,"/procedural/recoil/recoilAnimData");
+    BindVectorCurve(scope,p.Bob.Walk,"/procedural/bob/walk","Walk bob");
+    BindVectorCurve(scope,p.Bob.Sprint,"/procedural/bob/sprint","Sprint bob");
+    BindVectorCurve(scope,p.Breath.Position,"/procedural/breath/position","Breathing position");
+    scope.Bind(p.Breath.Pitch,"/procedural/breath/pitch","Breathing pitch");
+}
+
 // A curve row: the label above a full-width curve editor.
 void CurveRow(PropertyRows& r, const char* label, const char* id, Curve& c, const Curve& def, const char* fmt,
               float presetAmp, const char* tip) {
@@ -105,6 +137,7 @@ void CurveRow(PropertyRows& r, const char* label, const char* id, Curve& c, cons
     o.ValueFormat = fmt;
     o.PresetAmplitude = presetAmp;
     o.Default = &def;
+    o.Title = label;
     if (CurveEditor::Draw(id, c, ImVec2(0.0f, ImGui::GetFontSize() * 5.0f), o)) r.MarkChanged();
 }
 
@@ -158,6 +191,11 @@ void DrawAds(PropertyRows& r, FirstPersonAnimationSet& s, const WeaponContext& c
     r.Float("Zoom Time", ads.ZoomTime, 0.01f, 0.0f, 2.0f, "%.2f s", "Roughly how long the zoom takes to settle in or out (eased at both ends).");
 
     auto& aim = s.Procedural.Aim;
+    r.Heading("View Placement");
+    r.Float("ADS Locomotion Scale",s.AdsLocomotionScale,0.01f,0,1,"%.2f","Scales the Weapon Locomotion additive layer while aiming. Zero removes it; one keeps hip strength.");
+    r.Vec3("View Position", s.ViewPosition, 0.0005f, "%.4f",
+           "Camera-space metres for the first-person arms and weapon in every animation, including ADS and reloads.\n"
+           "+X right, +Y up, +Z back. Applied after animation and IK; does not move the world-view weapon.");
     r.Heading("Hip Pose");
     r.Vec3("Hip Position", aim.HipPosition, 0.0005f, "%.4f", "Metres added to the gun with the sights down (camera frame: +X right, +Y up, +Z back).\n"
                                                            "Moves the arms and gun together, so the hands stay on it. Fades out as the sights come up.");
@@ -167,7 +205,7 @@ void DrawAds(PropertyRows& r, FirstPersonAnimationSet& s, const WeaponContext& c
     r.Vec3("Position", aim.Position, 0.0005f, "%.4f", "Metres added to the gun with the sights up, on top of the aim clip.\n"
                                                       "Zero keeps the clip's sight picture exactly.");
     r.Vec3("Rotation", aim.Rotation, 0.05f, "%.2f", "Degrees (pitch, yaw, roll) added with the sights up.", "PYR");
-    r.Float("Blend Time", aim.BlendTime, 0.005f, 0.0f, 2.0f, "%.3f s", "Seconds to blend that offset (and the ADS sway / bob / breathing scales) in and out.");
+    r.Float("Blend Time", aim.BlendTime, 0.005f, 0.0f, 2.0f, "%.3f s", "Seconds for the animated aiming pose, aiming offset and ADS locomotion strength to blend in and out. Zero changes immediately.");
     r.Float("Position Additive", aim.PositionAdditive, 0.01f, 0.0f, 1.0f, "%.2f",
             "1 lays the position offset on top of everything the stack has built (additive); 0 places the gun at the offset outright, "
             "the other layers' motion fading out as the sights come up.");
@@ -195,8 +233,6 @@ void DrawAds(PropertyRows& r, FirstPersonAnimationSet& s, const WeaponContext& c
            "States with this tag have their hip clip carried onto the sights while aiming.");
     r.Check("Match Elbows", ads.MatchElbows, "Swing the elbows so a carried action starts and ends exactly in the aim pose.");
     r.Check("Match Twist", ads.MatchTwist, "Also match the forearm / upper-arm twist bones, so the wrists don't re-roll after the action.");
-    r.Float("Aim Hold Time", ads.AimHoldTime, 0.005f, 0.0f, 2.0f, "%.2f s",
-            "Seconds for a carried action to rise onto (or drop off) the sights when aim is pressed or released partway through.");
     {
         // Typed as a comma-separated list.
         std::string list;
@@ -371,7 +407,8 @@ void DrawAds(PropertyRows& r, FirstPersonAnimationSet& s, const WeaponContext& c
 
 // --- Recoil ------------------------------------------------------------------------------------
 
-void DrawRecoil(PropertyRows& r, WeaponRecoilSettings& rc, float rpm) {
+void DrawRecoil(PropertyRows& r, WeaponRecoilSettings& rc, float rpm, bool profile = false) {
+    if (profile || rc.UnityPort) { RecoilAssetEditor::Draw(r,rc,rpm); return; }
     static const WeaponProceduralSettings kDefaults = WeaponProceduralSettings::Defaults();
     const WeaponRecoilSettings& def = kDefaults.Recoil;
     r.Check("Enabled", rc.Enabled, "Procedural recoil on every shot, hip and ADS.");
@@ -382,6 +419,9 @@ void DrawRecoil(PropertyRows& r, WeaponRecoilSettings& rc, float rpm) {
         r.Float("Duration", rc.Duration, 0.005f, 0.02f, 3.0f, "%.3f s", "Seconds one shot's curves span. The curves are keyed over 0..1 of it.");
         r.Vec3("Pivot", rc.Pivot, 0.001f, "%.3f", "Metres: the rotation centre relative to the gun bone, camera frame.\n"
                                                    "Push it back (+Z) to pivot nearer the shoulder.");
+        r.Vec3("ADS Pivot", rc.AdsPivot, 0.001f, "%.3f", "Rotation centre with sights raised, camera-space metres.");
+        r.Vec3("ADS Rotation", rc.AdsRotationScale, 0.01f, "%.2f", "Per-axis visual rotation multipliers.");
+        r.Vec3("ADS Position", rc.AdsPositionScale, 0.01f, "%.2f", "Per-axis visual translation multipliers.");
         r.Spring("Smoothing", rc.Smoothing.Frequency, rc.Smoothing.Damping,
                  "The spring the summed kicks run through. Higher frequency = snappier; damping 1 = no overshoot.");
         r.Heading("Per-shot random scale");
@@ -406,6 +446,37 @@ void DrawRecoil(PropertyRows& r, WeaponRecoilSettings& rc, float rpm) {
         ImGui::TreePop();
     }
 
+    if (Tree("Sustained Fire")) {
+        r.Check("Separate Curves", rc.SustainedCurves, "Use these curves after the first round of a burst. Every round remains shot-driven.");
+        r.Float("Duration", rc.SustainedDuration, 0.005f, 0.02f, 3.0f, "%.3f s", "Duration of each sustained-fire kick.");
+        Curve3Rows(r, "srot", rc.SustainedRotation, def.Rotation, "Pitch (deg)", "Yaw (deg)", "Roll (deg)", "%.2f", "%.2f", 1.0f, 1.0f, "Sustained shot response. End at zero.");
+        Curve3Rows(r, "spos", rc.SustainedPosition, def.Position, "Side (m)", "Up (m)", "Kickback (m)", "%.4f", "%.4f", 0.002f, 0.01f, "Sustained shot response. End at zero.");
+        ImGui::TreePop();
+    }
+    if (Tree("Recoil Layers")) {
+        r.Range("Noise Side", rc.NoiseSide, 0.001f, "%.4f m", "Random lateral impulse per shot.");
+        r.Range("Noise Up", rc.NoiseUp, 0.001f, "%.4f m", "Random vertical impulse per shot.");
+        r.Float("Noise Attack", rc.NoiseAcceleration, 0.1f, 0.0f, 100.0f, "%.1f /s", "Noise response speed.");
+        r.Float("Noise Decay", rc.NoiseDamping, 0.1f, 0.0f, 100.0f, "%.1f /s", "Noise return speed.");
+        r.Float("Noise ADS", rc.NoiseAdsScale, 0.01f, 0.0f, 2.0f, "x%.2f", "ADS noise multiplier.");
+        r.Float("Push", rc.PushAmount, 0.001f, 0.0f, 0.2f, "%.4f m", "Additional backward impulse per round.");
+        r.Float("Push Attack", rc.PushAcceleration, 0.1f, 0.0f, 100.0f, "%.1f /s", "Push response speed.");
+        r.Float("Push Decay", rc.PushDamping, 0.1f, 0.0f, 100.0f, "%.1f /s", "Push return speed.");
+        r.Range("Sway Pitch", rc.SwayPitch, 0.01f, "%.2f deg", "Accumulated sway impulse per round.");
+        r.Range("Sway Yaw", rc.SwayYaw, 0.01f, "%.2f deg", "Accumulated lateral sway per round.");
+        r.Float("Sway Roll", rc.SwayRoll, 0.01f, -5.0f, 5.0f, "%.2f", "Roll per degree of sway yaw.");
+        r.Vec3("Sway Pivot", rc.SwayPivot, 0.001f, "%.3f", "Sway rotation centre in camera-space metres.");
+        r.Float("Sway Attack", rc.SwayAcceleration, 0.1f, 0.0f, 100.0f, "%.1f /s", "Sway response speed.");
+        r.Float("Sway Decay", rc.SwayDamping, 0.1f, 0.0f, 100.0f, "%.1f /s", "Sway return speed.");
+        r.Float("Sway ADS", rc.SwayAdsScale, 0.01f, 0.0f, 2.0f, "x%.2f", "ADS sway multiplier.");
+        r.Float("Pitch Progression", rc.PitchProgression, 0.01f, 0.0f, 10.0f, "%.2f deg", "Additional visual muzzle climb per round.");
+        r.Float("Up Progression", rc.UpProgression, 0.001f, 0.0f, 0.2f, "%.4f m", "Additional upward translation per round.");
+        r.Float("Progression Attack", rc.ProgressionAcceleration, 0.1f, 0.0f, 100.0f, "%.1f /s", "Progression response speed.");
+        r.Float("Progression Decay", rc.ProgressionDamping, 0.1f, 0.0f, 100.0f, "%.1f /s", "Progression return speed.");
+        r.Float("Progression ADS", rc.ProgressionAdsScale, 0.01f, 0.0f, 2.0f, "x%.2f", "ADS progression multiplier.");
+        ImGui::TreePop();
+    }
+
     if (Tree("Variety")) {
         r.Note("Runtime randomness, so no two rounds - and no two bursts - leave the gun the same way.");
         r.Float("Kick Spread", rc.KickSpread, 0.1f, 0.0f, 90.0f, "%.1f deg", "Each round's muzzle rise leaves at its own angle off straight up (normal sigma).");
@@ -423,6 +494,10 @@ void DrawRecoil(PropertyRows& r, WeaponRecoilSettings& rc, float rpm) {
         r.Note("Moves where the player actually aims (the view punch below only moves what they see).");
         r.Range("Pitch", rc.AimPitch, 0.005f, "%.3f deg", "Degrees up per round, a random pick in this range.");
         r.Range("Yaw", rc.AimYaw, 0.005f, "%.3f deg", "Degrees right per round (negative = left), a random pick in this range.");
+        r.Float("Pitch Attack", rc.AimSmoothing.x, 0.1f, 0.0f, 200.0f, "%.1f /s", "Pitch attack rate. Zero applies immediately.");
+        r.Float("Yaw Attack", rc.AimSmoothing.y, 0.1f, 0.0f, 200.0f, "%.1f /s", "Yaw attack rate. Zero applies immediately.");
+        r.Check("Player Compensation", rc.AimCompensation, "Opposing player input reduces automatic recovery so the aim is not pulled down twice.");
+        r.Float("Controller ADS", rc.AimAdsScale, 0.01f, 0.0f, 2.0f, "x%.2f", "ADS controller recoil multiplier, independent of the visual kick.");
         r.Float("Recovery", rc.AimRecovery, 0.01f, 0.0f, 1.0f, "%.2f", "How much of the climb eases back once the trigger rests (the rest is the player's to pull down).");
         r.Float("Recovery Delay", rc.AimRecoveryDelay, 0.005f, 0.0f, 2.0f, "%.3f s", "Rest this long before it starts easing back.");
         r.Float("Recovery Speed", rc.AimRecoverySpeed, 0.1f, 0.0f, 100.0f, "%.1f deg/s", "How fast it eases back.");
@@ -454,10 +529,11 @@ void DrawRecoil(PropertyRows& r, WeaponRecoilSettings& rc, float rpm) {
         ImGui::TreePop();
     }
 
-    if (Tree("Bolt & Hip Fire")) {
+    if (!profile && Tree("Bolt & Hip Fire")) {
         r.Check("Hip Procedural", rc.HipProcedural, "Hip rounds kick procedurally too (wherever the gun is simply held) instead of replaying the Fire clip.");
         r.Float("Bolt Cycle", rc.BoltCycle, 0.001f, 0.0f, 1.0f, "%.3f s", "Seconds the bolt takes to slam back and return each round (0 = no procedural bolt).");
         r.Text("Bolt Bone", rc.BoltBone, "Bone on the weapon rig that cycles, along the travel its Fire clip authors.");
+        r.Vec3("Bolt Travel", rc.BoltTravel, 0.001f, "%.4f", "Explicit stroke in weapon model units. Zero optionally measures a Fire clip.");
         ImGui::TreePop();
     }
 
@@ -474,66 +550,90 @@ void DrawRecoil(PropertyRows& r, WeaponRecoilSettings& rc, float rpm) {
     WeaponProceduralState st;
     WeaponProceduralInput in;
     in.Dt = 1.0f / 120.0f;
+    static int previewMode = 2;
+    static bool previewAds = true;
+    ImGui::Combo("Preview", &previewMode, "Single shot\0Three-round burst\0Held auto (10 rounds)\0");
+    ImGui::Checkbox("Preview ADS", &previewAds);
     const float interval = rpm > 0.0f ? 60.0f / rpm : 0.1f;
-    float pitch[180];
+    float pitch[180], aimPitch[180], aimYaw[180], kickback[180];
+    glm::vec2 totalAim(0.0f);
+    float aimPeak = 0.01f, backPeak = 0.0001f;
+    const int count = previewMode == 0 ? 1 : previewMode == 1 ? 3 : 10;
     float next = 0.0f, peak = 0.01f;
     int shots = 0;
     for (int f = 0; f < 180; ++f) {
-        if (shots < 10 && f * in.Dt >= next) { st.OnShot(sim, true); next += interval; ++shots; }
-        pitch[f] = st.Update(sim, in).Rotation.x;
+        if (shots < count && f * in.Dt >= next) { st.OnShot(sim, previewAds); next += interval; ++shots; }
+        in.Ads = previewAds;
+        const auto& pose = st.Update(sim, in);
+        pitch[f] = pose.Rotation.x;
+        totalAim += pose.AimKick;
+        aimPitch[f] = totalAim.x;
+        aimYaw[f] = totalAim.y;
+        kickback[f] = pose.Position.z;
+        aimPeak = std::max(aimPeak, std::max(std::fabs(totalAim.x), std::fabs(totalAim.y)));
+        backPeak = std::max(backPeak, std::fabs(kickback[f]));
         peak = std::max(peak, std::fabs(pitch[f]));
     }
     char overlay[64];
-    std::snprintf(overlay, sizeof overlay, "10-round ADS burst: pitch peaks %.2f deg", peak);
+    std::snprintf(overlay, sizeof overlay, "%d rounds: gun pitch peaks %.2f deg", count, peak);
     ImGui::Spacing();
     ImGui::PlotLines("##burst", pitch, 180, 0, overlay, -peak * 0.25f, peak * 1.15f, ImVec2(-FLT_MIN, ImGui::GetFontSize() * 5.0f));
     if (ImGui::IsItemHovered())
         EditorUI::SetTooltip("The gun's pitch over 1.5 s of a 10-round burst at this weapon's rounds per minute,\n"
                              "with every random range at its middle. Updates as you edit.");
+    ImGui::PlotLines("##controllerpitch", aimPitch, 180, 0, "Controller pitch (deg)", -aimPeak, aimPeak, ImVec2(-FLT_MIN, ImGui::GetFontSize() * 4.0f));
+    ImGui::PlotLines("##controlleryaw", aimYaw, 180, 0, "Controller yaw (deg)", -aimPeak, aimPeak, ImVec2(-FLT_MIN, ImGui::GetFontSize() * 4.0f));
+    ImGui::PlotLines("##kickback", kickback, 180, 0, "Gun kickback (metres)", -backPeak, backPeak, ImVec2(-FLT_MIN, ImGui::GetFontSize() * 4.0f));
     r.ResetButton("Recoil", [&] { rc = def; });
 }
 
 // --- Movement ----------------------------------------------------------------------------------
 
+void DrawSourceSway(PropertyRows& r, WeaponSwaySettings& w, const WeaponContext& ctx) {
+    r.Check("Enabled", w.Enabled, "KINEMATION SwayModifierJob: movement springs, aim springs, then additive-bone animation.");
+    if (!w.UnityPort) { w.UnityPort=true; r.MarkChanged(); }
+    auto& s=w.Unity;
+    r.Heading("Bones");
+    r.Name("Weapon Bone",s.WeaponBone,ctx.Bones,ctx.Arms!=nullptr,"Bone moved before the arms solve their IK.","The arms rig has no bone named '%s'.");
+    r.Name("Weapon Additive Bone",s.WeaponAdditiveBone,ctx.Bones,false,
+           "Reads this bone's animated LOCAL position and rotation, as in Unity. Missing or empty skips curve animation only.");
+    const auto vectorSpring=[&](const char* label,SwayVectorSpring& v) {
+        if (!Tree(label)) return;
+        ImGui::PushID(label);
+        r.Vec3("Damping",v.Damping,0.01f,"%.3f","Per-axis critical damping in KSpringMath.");
+        r.Vec3("Stiffness",v.Stiffness,0.01f,"%.3f","Per-axis spring stiffness. Must be nonnegative.");
+        r.Vec3("Speed",v.Speed,0.1f,"%.3f","Per-axis speed. Each step uses min(deltaTime * speed, 1). Zero freezes that spring.");
+        r.Vec3("Scale",v.Scale,0.01f,"%.3f","Per-axis target multiplier; may be negative.");
+        r.Vec3("Clamp",v.Clamp,0.01f,"%.3f","Target clamp BEFORE Scale. Zero suppresses that axis; position targets are in metres, rotation in degrees.");
+        ImGui::PopID(); ImGui::TreePop();
+    };
+    const auto sway=[&](const char* label,SwaySpringSettings& v,bool aim) {
+        if (!Tree(label,true)) return;
+        ImGui::PushID(label);
+        vectorSpring("Position",v.Position); vectorSpring("Rotation",v.Rotation);
+        r.Float("Damping Factor",v.DampingFactor,0.1f,-FLT_MAX,FLT_MAX,"%.3f",
+                "Exponential target smoothing. Aim integrates look deltas, then decays; movement follows input axes. Zero keeps the target.");
+        r.Float("ADS Scale",v.AdsScale,0.01f,0,1,"%.3f","Applied to spring targets while the aiming input is true; independent of curve animation.");
+        r.Label("Space","Matches Unity ESpaceType, including its postmultiplication in Parent Bone and World space.");
+        int space=static_cast<int>(v.Space);
+        ImGui::SetNextItemWidth(-FLT_MIN);
+        if (ImGui::Combo("##space",&space,"Bone Space\0Parent Bone Space\0Component Space\0World Space\0")) {
+            v.Space=static_cast<SwaySpace>(space); r.MarkChanged();
+        }
+        if (ActionButton("Use Shooter Preset","Restore the exact preset from SwayModifierSettings.cs.")) {
+            v=aim?SwaySpringSettings::ShooterAimPreset():SwaySpringSettings::ShooterMovePreset(); r.MarkChanged();
+        }
+        ImGui::PopID(); ImGui::TreePop();
+    };
+    sway("Aiming Sway",s.AimingSway,true);
+    sway("Movement Sway",s.MovementSway,false);
+    r.ResetButton("Sway",[&] { w=WeaponSwaySettings{}; });
+}
+
 void DrawMovement(PropertyRows& r, WeaponProceduralSettings& p, const WeaponContext& ctx) {
     static const WeaponProceduralSettings kDefaults = WeaponProceduralSettings::Defaults();
     if (Tree("Sway", true)) {
-        auto& w = p.Sway;
-        r.Check("Enabled", w.Enabled, "The gun lags behind turns and trails against movement.");
-        r.Float("Look Rotation", w.LookRotation, 0.01f, 0.0f, 20.0f, "%.2f deg", "Rotation lag per 100 deg/s of turn.");
-        r.Float("Look Position", w.LookPosition, 0.0001f, 0.0f, 0.1f, "%.4f m", "Position lag per 100 deg/s of turn.");
-        r.Float("Max Rotation", w.MaxRotation, 0.05f, 0.0f, 45.0f, "%.1f deg", "Largest rotation sway, however fast the turn.");
-        r.Float("Max Position", w.MaxPosition, 0.0005f, 0.0f, 0.2f, "%.3f m", "Largest position sway, however fast the turn or move.");
-        r.Float("Move Position", w.MovePosition, 0.0001f, 0.0f, 0.05f, "%.4f m", "Trail per m/s of movement.");
-        r.Float("Move Roll", w.MoveRoll, 0.01f, 0.0f, 10.0f, "%.2f deg", "Tilt into a strafe, per m/s.");
-        r.Float("ADS Scale", w.AdsScale, 0.01f, 0.0f, 2.0f, "x%.2f", "Multiplier with the sights up (lower = steadier aim).");
-        r.Vec2("Free-Aim Zone", w.FreeAimZone, 0.05f, "%.2f deg", "Yaw, pitch: the view turns this far (degrees) inside a zone before the gun follows. 0 = off (the gun follows at once).");
-        r.Float("Free-Aim Return", w.FreeAimReturn, 0.5f, 0.0f, 360.0f, "%.1f deg/s", "How fast the gun comes back to centre once the view stops turning.");
-        r.Float("Free-Aim ADS Scale", w.FreeAimAdsScale, 0.01f, 0.0f, 1.0f, "x%.2f", "The zone with the sights up, as a fraction (0: the sights stay on the view).");
-        r.Spring("Spring", w.Spring.Frequency, w.Spring.Damping, "Damping under 1 overshoots, which reads as weight.");
-        r.Float("Look Smoothing", w.LookSmoothing, 0.1f, 0.0f, 60.0f, w.LookSmoothing > 0.0f ? "%.1f Hz" : "raw",
-                "Smooths the mouse's turn rate before it drives the sway, so the gun glides instead of buzzing. Lower = smoother, laggier.");
-        r.ResetButton("Sway", [&] { p.Sway = kDefaults.Sway; });
-        ImGui::TreePop();
-    }
-    if (Tree("Bob")) {
-        auto& b = p.Bob;
-        r.Check("Enabled", b.Enabled, "Walk and sprint bob, locked to the distance travelled.");
-        r.Float("Walk Stride", b.WalkStride, 0.05f, 0.1f, 10.0f, "%.2f m", "Distance per cycle (two steps) while walking.");
-        r.Float("Sprint Stride", b.SprintStride, 0.05f, 0.1f, 10.0f, "%.2f m", "Distance per cycle (two steps) while sprinting.");
-        r.Float("Full Speed", b.WalkFullSpeed, 0.05f, 0.1f, 30.0f, "%.2f m/s", "Speed at which the bob reaches full amplitude.");
-        r.Float("Hip Scale", b.HipScale, 0.01f, 0.0f, 5.0f, "x%.2f", "Multiplier at the hip (the walk and sprint clips already bob there).");
-        r.Float("ADS Scale", b.AdsScale, 0.01f, 0.0f, 5.0f, "x%.2f", "Multiplier with the sights up.");
-        r.Float("Ease", b.Ease, 0.1f, 0.1f, 50.0f, "%.1f /s", "How fast the bob fades in when you start moving and out when you stop.");
-        if (Tree("Cycle curves")) {
-            const char* cycleTip = "One stride (two steps), keyed over 0..1. Should start and end on the same value so it loops.";
-            EditorUIPrimitives::SectionHeader("Walk");
-            Curve3Rows(r, "walk", b.Walk, kDefaults.Bob.Walk, "Side (m)", "Up (m)", "Roll (deg)", "%.4f", "%.2f", 0.003f, 0.5f, cycleTip);
-            EditorUIPrimitives::SectionHeader("Sprint");
-            Curve3Rows(r, "sprint", b.Sprint, kDefaults.Bob.Sprint, "Side (m)", "Up (m)", "Roll (deg)", "%.4f", "%.2f", 0.008f, 1.0f, cycleTip);
-            ImGui::TreePop();
-        }
-        r.ResetButton("Bob", [&] { p.Bob = kDefaults.Bob; });
+        DrawSourceSway(r,p.Sway,ctx);
         ImGui::TreePop();
     }
     if (Tree("Breathing")) {
@@ -581,9 +681,7 @@ void DrawMovement(PropertyRows& r, WeaponProceduralSettings& p, const WeaponCont
     }
     if (Tree("Camera Motion")) {
         auto& c = p.CameraMotion;
-        r.Check("Enabled", c.Enabled, "The view itself moves with your steps, strafes and landings (never where you aim).");
-        r.Vec2("Walk Bob", c.WalkBob, 0.0005f, "%.4f", "Head bob at full walk: height (m, down on each footfall), roll (deg, once per stride).");
-        r.Vec2("Sprint Bob", c.SprintBob, 0.0005f, "%.4f", "Head bob at full sprint: height (m), roll (deg).");
+        r.Check("Enabled", c.Enabled, "Camera strafe roll and landing response.");
         r.Float("Strafe Roll", c.StrafeRoll, 0.01f, 0.0f, 5.0f, "%.2f deg", "Roll into a strafe, per m/s of sideways speed.");
         r.Float("Land Dip", c.LandDip, 0.0005f, 0.0f, 0.1f, "%.4f m", "How far a landing drops the view, per m/s of fall speed.");
         r.Float("Land Pitch", c.LandPitch, 0.01f, 0.0f, 5.0f, "%.2f deg", "Nod per m/s of fall speed.");
@@ -860,44 +958,208 @@ void DrawBarrel(PropertyRows& r, FirstPersonAnimationSet& s, const FirstPersonBa
 
 } // namespace
 
+void EditorLayer::DrawRecoilAssetEditor(const std::string& path) {
+    struct Cache {
+        std::string Path, Error, Saved;
+        fs::file_time_type Stamp{};
+        RecoilAsset Asset;
+    };
+    static Cache cache;
+    std::error_code ec;
+    const auto stamp = fs::last_write_time(fs::u8path(path), ec);
+    if (path != cache.Path || stamp != cache.Stamp) {
+        if (path != cache.Path) cache = {};
+        cache.Path = path;
+        cache.Stamp = stamp;
+        cache.Error.clear();
+        if (RecoilAsset::LoadFile(path, cache.Asset, &cache.Error)) cache.Saved = cache.Asset.ToJsonString();
+    }
+    ImGui::TextUnformatted(fs::u8path(path).filename().u8string().c_str());
+    if (!cache.Error.empty()) { ImGui::TextWrapped("%s", cache.Error.c_str()); return; }
+    ImGui::BeginDisabled(m_UndoStack.empty());
+    if (EditorUIPrimitives::SecondaryButton("Undo")) m_RequestGlobalUndo=true;
+    ImGui::EndDisabled();
+    ImGui::SameLine();
+    ImGui::BeginDisabled(m_RedoStack.empty());
+    if (EditorUIPrimitives::SecondaryButton("Redo")) m_RequestGlobalRedo=true;
+    ImGui::EndDisabled();
+    ImGui::SameLine();
+    if (EditorUIPrimitives::SecondaryButton("Duplicate")) {
+        const auto base = fs::u8path(path);
+        auto target = base.parent_path() / (base.stem().u8string() + " Copy.recoil");
+        for (int n = 1; fs::exists(target, ec); ++n)
+            target = base.parent_path() / (base.stem().u8string() + " Copy " + std::to_string(n) + ".recoil");
+        if (cache.Asset.SaveFile(target.u8string())) {
+            AssetDatabase::EnsureGuid(target.u8string());
+            InvalidateAnimationListing();
+        } else Log::Error("Could not duplicate recoil profile.");
+    }
+    bool changed = false;
+    PropertyRows rows(150.0f * m_UIScale, changed);
+    rows.Note("Shared recoil data. Changes save immediately and apply live to referencing weapons. Motion drives the gun bone before arm IK.");
+    static float rpm = 600.0f;
+    ImGui::DragFloat("Preview RPM", &rpm, 1.0f, 30.0f, 1800.0f);
+    CurveEditor::AssetScope curves(path,cache.Asset.ToJsonString(),[](const std::string& text,std::string& error){RecoilAsset a;return RecoilAsset::FromJsonString(text,a,&error);},
+        [this](const std::string& label){m_GlobalUndoLabel=label;});
+    BindRecoilData(curves,cache.Asset.Data.Unity,"/recoil");
+    DrawRecoil(rows, cache.Asset.Data, rpm, true);
+    if (changed) {
+        if (cache.Asset.SaveFile(path)) {
+            cache.Saved = cache.Asset.ToJsonString();
+            cache.Stamp = fs::last_write_time(fs::u8path(path), ec);
+        } else Log::Error("Recoil profile was not saved: check ranges, durations, and rates.");
+    }
+}
+
+void EditorLayer::DrawCameraShakeAssetEditor(const std::string& path) {
+    struct Cache {
+        std::string Path,Error,Saved;
+        fs::file_time_type Stamp{};
+        CameraShakeAsset Asset;
+    };
+    static Cache cache;
+    std::error_code ec;
+    const auto stamp=fs::last_write_time(fs::u8path(path),ec);
+    if(cache.Path!=path || cache.Stamp!=stamp) {
+        if(cache.Path!=path) cache={};
+        cache.Path=path; cache.Stamp=stamp;
+        if(CameraShakeAsset::LoadFile(path,cache.Asset,&cache.Error)) cache.Saved=cache.Asset.ToJsonString();
+    }
+    ImGui::TextUnformatted(fs::u8path(path).filename().u8string().c_str());
+    if(cache.Saved.empty()) { ImGui::TextWrapped("%s",cache.Error.c_str()); return; }
+    ImGui::BeginDisabled(m_UndoStack.empty()); if(EditorUIPrimitives::SecondaryButton("Undo")) m_RequestGlobalUndo=true; ImGui::EndDisabled();
+    ImGui::SameLine(); ImGui::BeginDisabled(m_RedoStack.empty()); if(EditorUIPrimitives::SecondaryButton("Redo")) m_RequestGlobalRedo=true; ImGui::EndDisabled();
+    ImGui::SameLine();
+    if(EditorUIPrimitives::SecondaryButton("Duplicate")) {
+        const auto base=fs::u8path(path);
+        auto target=base.parent_path()/(base.stem().u8string()+" Copy.camerashake");
+        for(int n=1;fs::exists(target,ec);++n) target=base.parent_path()/(base.stem().u8string()+" Copy "+std::to_string(n)+".camerashake");
+        if(cache.Asset.SaveFile(target.u8string())) { AssetDatabase::EnsureGuid(target.u8string()); InvalidateAnimationListing(); }
+    }
+    bool changed=false;
+    PropertyRows r(150*m_UIScale,changed);
+    auto& s=cache.Asset;
+    CurveEditor::AssetScope curves(path,s.ToJsonString(),[](const std::string& text,std::string& error){CameraShakeAsset a;return CameraShakeAsset::FromJsonString(text,a,&error);},
+        [this](const std::string& label){m_GlobalUndoLabel=label;});
+    const char* channelTitles[]={"Pitch (deg)","Yaw (deg)","Roll (deg)","Right (m)","Up (m)","Back (m)"};
+    for(int c=0;c<6;++c)curves.Bind(c<3?s.Rotation[c]:s.Position[c-3],std::string(c<3?"/rotationCurves/":"/positionCurves/")+std::to_string(c%3),channelTitles[c]);
+    r.Note("Authored firing camera motion. Each shot samples rotation and location scalars independently per axis and keeps them throughout playback. Overlapping shots add together.");
+    r.Float("Duration",s.Duration,.005f,.001f,10,"%.3f s","Seconds per shot, including fade-out.");
+    r.Float("ADS Scale",s.AdsScale,.01f,0,2,"x%.2f","Shake strength for shots fired while aiming.");
+    r.Heading("Rotation Scalars");
+    const char* rotationScalarTip="X = pitch, Y = yaw, Z = roll. Each axis samples its own multiplier per shot. Equal min/max fixes that axis; negative values reverse it.";
+    if(r.Vec3("Rotation Min",s.RotationScalarMin,.01f,"x%.2f",rotationScalarTip))
+        s.RotationScalarMax=glm::max(s.RotationScalarMin,s.RotationScalarMax);
+    if(r.Vec3("Rotation Max",s.RotationScalarMax,.01f,"x%.2f",rotationScalarTip))
+        s.RotationScalarMin=glm::min(s.RotationScalarMin,s.RotationScalarMax);
+    r.Heading("Location Scalars");
+    const char* locationScalarTip="X = right, Y = up, Z = back. Each axis samples its own multiplier per shot. Equal min/max fixes that axis; negative values reverse it.";
+    if(r.Vec3("Location Min",s.LocationScalarMin,.01f,"x%.2f",locationScalarTip))
+        s.LocationScalarMax=glm::max(s.LocationScalarMin,s.LocationScalarMax);
+    if(r.Vec3("Location Max",s.LocationScalarMax,.01f,"x%.2f",locationScalarTip))
+        s.LocationScalarMin=glm::min(s.LocationScalarMin,s.LocationScalarMax);
+    const CameraShakeAsset defaults;
+    const char* curveNames[]={"Pitch (deg)","Yaw (deg)","Roll (deg)","Right (m)","Up (m)","Back (m)"};
+    r.Heading("Camera Curves");
+    for(int c=0;c<6;++c) {
+        ImGui::PushID(c);
+        CurveRow(r,curveNames[c],"##cameraCurve",c<3?s.Rotation[c]:s.Position[c-3],
+            c<3?defaults.Rotation[c]:defaults.Position[c-3],c<3?"%.3f":"%.5f",c<3?.5f:.001f,
+            "Normalized time 0..1 across Duration. Values directly drive this axis; negative values move the opposite way. Start and end at zero.");
+        ImGui::PopID();
+    }
+    r.ResetButton("Camera Shake",[&]{s=CameraShakeAsset{};});
+    if(changed) {
+        CameraShakeAsset valid;
+        if(CameraShakeAsset::FromJsonString(s.ToJsonString(),valid,&cache.Error) && s.SaveFile(path)) {
+            cache.Saved=s.ToJsonString(); cache.Stamp=fs::last_write_time(fs::u8path(path),ec);
+        } else if(cache.Error.empty()) cache.Error="Could not save camera shake.";
+    }
+    if(!cache.Error.empty()) r.Note(cache.Error.c_str());
+    r.Heading("Runtime Preview");
+    static bool previewAds=false,previewBurst=false;
+    static float rpm=700;
+    static unsigned previewSeed=0x5eedu;
+    ImGui::Checkbox("ADS",&previewAds); ImGui::SameLine(); ImGui::Checkbox("10-shot burst",&previewBurst);
+    ImGui::SameLine();if(EditorUIPrimitives::SecondaryButton("Resample Scalars"))++previewSeed;
+    if(previewBurst) ImGui::DragFloat("Preview RPM",&rpm,1,60,2000,"%.0f");
+    rpm=std::clamp(rpm,60.0f,2000.0f);
+    constexpr int samples=240;
+    std::vector<float> channels[6]; for(auto& channel:channels) channel.resize(samples);
+    CameraShakeState state(previewSeed);
+    const int rounds=previewBurst?10:1;
+    const float spacing=60/rpm,span=s.Duration+(rounds-1)*spacing+.1f,dt=span/(samples-1);
+    int fired=0;
+    for(int i=0;i<samples;++i) {
+        const float time=i*dt;
+        while(fired<rounds && time+1e-6f>=fired*spacing) { state.Trigger(s,previewAds); ++fired; }
+        const auto pose=state.Update(i?dt:0);
+        Camera camera; ApplyCameraEffect(camera,pose);
+        const glm::vec3 angles(camera.Pitch,camera.Yaw+90,camera.Roll);
+        for(int c=0;c<3;++c) { channels[c][i]=angles[c]; channels[c+3][i]=pose.Position[c]; }
+    }
+    const char* names[]={"Pitch (deg)","Yaw (deg)","Roll (deg)","Right (m)","Up (m)","Back (m)"};
+    for(int c=0;c<6;++c) {
+        ImGui::PushID(c); ImGui::TextUnformatted(names[c]);
+        float range=0; for(float v:channels[c]) range=std::max(range,std::abs(v)); range=std::max(range,c<3?.01f:.00001f);
+        ImGui::PlotLines("##channel",channels[c].data(),samples,0,nullptr,-range,range,ImVec2(-FLT_MIN,45*m_UIScale));
+        ImGui::PopID();
+    }
+    ImGui::Text("0 - %.2f seconds; authored curve playback",span);
+}
+
 void EditorLayer::DrawWeaponDefinitionEditor(const std::string& path) {
     struct Cache {
         std::string Path;
         fs::file_time_type Stamp{};
         FirstPersonAnimationSet Set;
+        fs::file_time_type ProfileStamp{};
         std::string Error;
         std::string Saved;                    // the file's content as last loaded / saved
-        std::vector<std::string> Undo, Redo;  // earlier / undone contents
     };
     static Cache cache;
     std::error_code ec;
     const auto stamp = fs::last_write_time(fs::u8path(path), ec);
     if (cache.Path != path || cache.Stamp != stamp) {
-        if (cache.Path != path) cache.Undo.clear(), cache.Redo.clear();
         cache.Path = path;
         cache.Stamp = stamp;
         cache.Error.clear();
-        if (!FirstPersonAnimationSet::LoadFile(path, cache.Set, &cache.Error)) cache.Set = {};
-        cache.Saved = cache.Error.empty() ? cache.Set.ToJsonString() : std::string();
+        if (!FirstPersonAnimationSet::LoadFile(path, cache.Set, &cache.Error)) {
+            // Keep a broken profile reference editable so it can be cleared or replaced.
+            std::ifstream input(fs::u8path(path));
+            const std::string text(std::istreambuf_iterator<char>(input), {});
+            std::string parseError;
+            if (!FirstPersonAnimationSet::FromJsonString(text, cache.Set, &parseError)) cache.Set = {};
+        }
+        cache.Saved = cache.Set.Controller.empty() ? std::string() : cache.Set.ToJsonString();
     }
     auto save = [&](const FirstPersonAnimationSet& s) {
         if (s.SaveFile(path)) cache.Stamp = fs::last_write_time(fs::u8path(path), ec);
         else Log::Error("Couldn't save " + ProjectPaths::Relativize(path) + ".");
     };
-    auto step = [&](std::vector<std::string>& from, std::vector<std::string>& to) {
-        if (from.empty()) return;
-        FirstPersonAnimationSet restored;
-        std::string why;
-        if (!FirstPersonAnimationSet::FromJsonString(from.back(), restored, &why)) { from.pop_back(); return; }
-        to.push_back(cache.Saved);
-        cache.Saved = from.back();
-        from.pop_back();
-        cache.Set = restored;
-        save(cache.Set);
-    };
 
     FirstPersonAnimationSet& s = cache.Set;
+    if (!s.RecoilProfile.empty()) {
+        const auto profileStamp = fs::last_write_time(fs::u8path(ProjectPaths::Resolve(s.RecoilProfile)), ec);
+        if (!ec && profileStamp != cache.ProfileStamp) {
+            RecoilAsset profile;
+            std::string why;
+            if (RecoilAsset::LoadFile(ProjectPaths::Resolve(s.RecoilProfile), profile, &why)) {
+                const auto previous = s.Procedural.Recoil;
+                s.Procedural.Recoil = profile.Data;
+                s.Procedural.Recoil.BoltBone = previous.BoltBone;
+                s.Procedural.Recoil.BoltCycle = previous.BoltCycle;
+                s.Procedural.Recoil.BoltTravel = previous.BoltTravel;
+                s.Procedural.Recoil.HipProcedural = true;
+                cache.ProfileStamp = profileStamp;
+                cache.Error.clear();
+            }
+        }
+    }
     const std::string name = fs::u8path(path).stem().u8string();
+    CurveEditor::AssetScope curves(path,s.ToJsonString(),[](const std::string& text,std::string& error){FirstPersonAnimationSet a;return FirstPersonAnimationSet::FromJsonString(text,a,&error);},
+        [this](const std::string& label){m_GlobalUndoLabel=label;});
+    BindProceduralCurves(curves,s.Procedural);
 
     // --- overview card -------------------------------------------------------------------------
     EditorUIPrimitives::SectionHeader(ICON_FA_CROSSHAIRS "  Weapon Definition");
@@ -905,13 +1167,13 @@ void EditorLayer::DrawWeaponDefinitionEditor(const std::string& path) {
         const float buttonsW = 2.0f * (ImGui::GetFrameHeight() + ImGui::GetStyle().ItemSpacing.x);
         ImGui::TextUnformatted(name.c_str());
         ImGui::SameLine(std::max(ImGui::GetCursorPosX(), ImGui::GetContentRegionMax().x - buttonsW));
-        ImGui::BeginDisabled(cache.Undo.empty());
+        ImGui::BeginDisabled(m_UndoStack.empty());
         if (ActionButton(ICON_FA_ROTATE_LEFT, "Undo the last change to this weapon", false, ImVec2(ImGui::GetFrameHeight(), 0)))
-            step(cache.Undo, cache.Redo);
+            m_RequestGlobalUndo=true;
         ImGui::EndDisabled();
         ImGui::SameLine();
-        ImGui::BeginDisabled(cache.Redo.empty());
-        if (ActionButton(ICON_FA_ROTATE_RIGHT, "Redo", false, ImVec2(ImGui::GetFrameHeight(), 0))) step(cache.Redo, cache.Undo);
+        ImGui::BeginDisabled(m_RedoStack.empty());
+        if (ActionButton(ICON_FA_ROTATE_RIGHT, "Redo", false, ImVec2(ImGui::GetFrameHeight(), 0))) m_RequestGlobalRedo=true;
         ImGui::EndDisabled();
         ImGui::TextDisabled("%s", ProjectPaths::Relativize(path).c_str());
     }
@@ -952,6 +1214,10 @@ void EditorLayer::DrawWeaponDefinitionEditor(const std::string& path) {
                 merged = keep;
             }
             s.Procedural = merged;
+            if (s_copyRecoil) {
+                s.RecoilProfile = from.RecoilProfile;
+                s.RecoilProfileGuid = from.RecoilProfileGuid;
+            }
             copied = true;
             ImGui::CloseCurrentPopup();
         }
@@ -961,7 +1227,7 @@ void EditorLayer::DrawWeaponDefinitionEditor(const std::string& path) {
         ImGui::PushTextWrapPos(0.0f);
         ImGui::TextColored(EditorUIPrimitives::WarningColor(), ICON_FA_TRIANGLE_EXCLAMATION "  %s", cache.Error.c_str());
         ImGui::PopTextWrapPos();
-        return;
+        if (s.Controller.empty()) return;
     }
 
     // Choices and checks: the controller's states and tags, the arms rig's bones once it is
@@ -1054,6 +1320,7 @@ void EditorLayer::DrawWeaponDefinitionEditor(const std::string& path) {
 
     bool changed = false;
     PropertyRows r(150.0f * m_UIScale, changed);
+    std::string openProfile;
     FirstPersonWeaponGameplay& g = s.Gameplay;
 
     char summary[128];
@@ -1081,6 +1348,9 @@ void EditorLayer::DrawWeaponDefinitionEditor(const std::string& path) {
         r.Int("Magazine", g.Magazine, 1, 1000, "Rounds per magazine.");
         r.Float("Rounds / Minute", g.RoundsPerMinute, 5.0f, 60.0f, 2000.0f, "%.0f", "Full-auto cadence.");
         r.Check("Full-Auto", g.AllowFullAuto, "Off for a semi-only weapon: the fire-mode key then does nothing.");
+        float burstRounds = (float)g.BurstRounds;
+        if (r.Float("Burst Rounds", burstRounds, 1.0f, 0.0f, 32.0f, "%.0f", "0 or 1 = semi; higher values schedule a burst in semi mode. Release interrupts the burst."))
+            g.BurstRounds = (int)std::round(burstRounds);
         r.Float("Reload Hold", g.ReloadHoldSeconds, 0.01f, 0.05f, 2.0f, "%.2f s", "R held this long checks the magazine instead of reloading.");
         glm::vec2 fidget(g.RegripMin, g.RegripMax);
         if (r.Range("Fidget After", fidget, 0.1f, "%.1f s", "Seconds of settled idle before the fidget plays (random between min and max)."))
@@ -1176,9 +1446,122 @@ void EditorLayer::DrawWeaponDefinitionEditor(const std::string& path) {
 
     const auto& rc = s.Procedural.Recoil;
     std::snprintf(summary, sizeof summary, "%s", rc.Enabled ? (rc.ShakeAmount > 0.0f ? "kick, climb, shake" : "kick, climb") : "off");
-    if (r.Section(ICON_FA_BURST, "Recoil", summary)) DrawRecoil(r, s.Procedural.Recoil, g.RoundsPerMinute);
+    if (r.Section(ICON_FA_BURST, "Recoil", summary)) {
+        static const char* const extensions[] = {".recoil", nullptr};
+        AssetPathPickerOptions options;
+        options.Extensions = extensions;
+        options.DragPayload = "ASSET_FILE_PATH";
+        options.NoneLabel = "(embedded recoil)";
+        options.DialogFilter = "Recoil Profile\0*.recoil\0All Files\0*.*\0";
+        ImGui::TextUnformatted("Recoil Profile");
+        std::string selected = s.RecoilProfile;
+        if (AssetPathPicker("##recoilprofile", selected, options)) {
+            RecoilAsset loaded;
+            std::string why;
+            if (selected.empty() || RecoilAsset::LoadFile(ProjectPaths::Resolve(selected), loaded, &why)) {
+                s.RecoilProfile = selected;
+                s.RecoilProfileGuid = AssetDatabase::RefGuid(selected);
+                cache.Error.clear();
+                if (!selected.empty()) {
+                    auto& dst = s.Procedural.Recoil;
+                    const auto previous = dst;
+                    dst = loaded.Data;
+                    dst.BoltBone = previous.BoltBone;
+                    dst.BoltCycle = previous.BoltCycle;
+                    dst.BoltTravel = previous.BoltTravel;
+                    dst.HipProcedural = true;
+                }
+                changed = true;
+            } else Log::Error(why);
+        }
+        if (EditorUIPrimitives::SecondaryButton(s.RecoilProfile.empty() ? "Extract Recoil Asset" : "Duplicate Recoil Asset")) {
+            const auto base = fs::u8path(path).parent_path() / (fs::u8path(path).stem().u8string() + ".recoil");
+            auto target = base;
+            for (int n = 1; fs::exists(target, ec); ++n)
+                target = base.parent_path() / (base.stem().u8string() + " " + std::to_string(n) + ".recoil");
+            RecoilAsset asset;
+            asset.Data = s.Procedural.Recoil;
+            if (asset.SaveFile(target.u8string())) {
+                AssetDatabase::EnsureGuid(target.u8string());
+                s.RecoilProfile = ProjectPaths::Relativize(target.u8string());
+                s.RecoilProfileGuid = AssetDatabase::RefGuid(s.RecoilProfile);
+                s.Procedural.Recoil.HipProcedural = true;
+                changed = true;
+                InvalidateAnimationListing();
+            } else Log::Error("Could not save recoil profile.");
+        }
+        if (!s.RecoilProfile.empty()) {
+            ImGui::SameLine();
+            if (EditorUIPrimitives::SecondaryButton("Open Profile")) {
+                openProfile = ProjectPaths::Resolve(s.RecoilProfile);
+            }
+            r.Note("Shared recoil: edits affect every weapon referencing this asset. Bolt setup stays on this weapon.");
+            r.Text("Bolt Bone", s.Procedural.Recoil.BoltBone, "Bone on the weapon model.");
+            r.Float("Bolt Cycle", s.Procedural.Recoil.BoltCycle, 0.001f, 0.0f, 1.0f, "%.3f s", "Seconds for a full bolt cycle.");
+            r.Vec3("Bolt Travel", s.Procedural.Recoil.BoltTravel, 0.001f, "%.4f", "Weapon model units; explicit stroke avoids needing a Fire clip.");
+            const auto* report = FindBarrelReport(path);
+            ImGui::BeginDisabled(!report || glm::length(report->BoltTravel) < 1e-6f);
+            if (EditorUIPrimitives::SecondaryButton("Use Measured Bolt Travel")) {
+                s.Procedural.Recoil.BoltTravel = report->BoltTravel;
+                changed = true;
+            }
+            ImGui::EndDisabled();
+            r.Note("Play once with the optional Fire clip to capture its bolt stroke, or enter travel directly. Set Barrel & Laser > muzzle manually if the bolt does not follow the bore.");
+        } else DrawRecoil(r, s.Procedural.Recoil, g.RoundsPerMinute);
+    }
 
-    if (r.Section(ICON_FA_PERSON_RUNNING, "Movement", "sway, bob, breathing, jump, camera, walls")) DrawMovement(r, s.Procedural, ctx);
+    if(r.Section(ICON_FA_VIDEO,"Camera","action animation, firing shake")) {
+        auto& c=s.ActionCamera;
+        r.Check("Action Animation",c.Enabled,"Follow this animated rig node during actions, before ADS holds and IK.");
+        r.Name("Camera Node",c.Node,ctx.Bones,ctx.Arms!=nullptr && !c.Node.empty(),
+            "Animated bone on the arms rig; use head to attach the camera to the head. Empty uses the player's Camera Bone.","The arms rig has no node named '%s'.");
+        r.Name("Reference State",c.ReferenceState,ctx.States,ctx.Controller!=nullptr,
+            "The neutral camera pose, sampled at this state's first frame.","The controller has no reference state '%s'.");
+        auto list=[&](const char* label,std::vector<std::string>& values,const char* tip) {
+            std::string text;
+            for(const auto& value:values) text+=(text.empty()?"":", ")+value;
+            if(!r.Text(label,text,tip)) return;
+            values.clear();
+            std::stringstream input(text); std::string value;
+            while(std::getline(input,value,',')) {
+                const auto start=value.find_first_not_of(" \t");
+                if(start!=std::string::npos) values.push_back(value.substr(start,value.find_last_not_of(" \t")-start+1));
+            }
+        };
+        list("Action Tags",c.Tags,"Comma-separated tags whose states animate the camera. Reload, Busy and Cycling cover normal actions.");
+        list("Extra States",c.States,"Additional state names, e.g. Draw, Holster. Transitions blend to/from neutral automatically.");
+        r.Float("Rotation Scale",c.RotationScale,.01f,0,2,"x%.2f","One follows the bone's animated rotation. Zero disables it.");
+        r.Float("Position Scale",c.PositionScale,.01f,0,2,"x%.2f","One follows the bone's animated translation. Zero keeps the eye in place.");
+        r.Float("Action ADS Scale",c.AdsScale,.01f,0,2,"x%.2f","Action camera motion strength when aiming.");
+        r.Note("Use head to follow the existing head animation directly. Select any other animated node here if needed. The camera keeps mouse look and blends back to normal as the action ends.");
+        static const char* const extensions[]={".camerashake",nullptr};
+        AssetPathPickerOptions options;
+        options.Extensions=extensions; options.DragPayload="ASSET_FILE_PATH"; options.NoneLabel="(no firing shake)";
+        options.DialogFilter="Camera Shake\0*.camerashake\0All Files\0*.*\0";
+        std::string selected=s.CameraShakeProfile;
+        if(r.Path("Firing Shake",selected,options,"Reusable camera shake asset, triggered for every committed shot, including procedural fire.")) {
+            CameraShakeAsset loaded; std::string why;
+            if(selected.empty() || CameraShakeAsset::LoadFile(ProjectPaths::Resolve(selected),loaded,&why)) {
+                s.CameraShakeProfile=selected; s.CameraShakeProfileGuid=AssetDatabase::RefGuid(selected);
+                s.CameraShake=loaded; changed=true;
+            } else Log::Error(why);
+        }
+        if(EditorUIPrimitives::SecondaryButton("Create Firing Shake")) {
+            const auto base=fs::u8path(path).parent_path()/(fs::u8path(path).stem().u8string()+".camerashake");
+            auto target=base;
+            for(int n=1;fs::exists(target,ec);++n) target=base.parent_path()/(base.stem().u8string()+" "+std::to_string(n)+".camerashake");
+            if(CameraShakeAsset{}.SaveFile(target.u8string())) {
+                AssetDatabase::EnsureGuid(target.u8string());
+                s.CameraShakeProfile=ProjectPaths::Relativize(target.u8string());
+                s.CameraShakeProfileGuid=AssetDatabase::RefGuid(s.CameraShakeProfile);
+                s.CameraShake={}; changed=true; InvalidateAnimationListing(); openProfile=target.u8string();
+            } else Log::Error("Could not create camera shake asset.");
+        }
+        if(!s.CameraShakeProfile.empty()) {
+            ImGui::SameLine(); if(EditorUIPrimitives::SecondaryButton("Open Shake")) openProfile=ProjectPaths::Resolve(s.CameraShakeProfile);
+        }
+    }
+    if (r.Section(ICON_FA_PERSON_RUNNING, "Movement", "sway, breathing, jump, camera, walls")) DrawMovement(r, s.Procedural, ctx);
 
     std::snprintf(summary, sizeof summary, "%s", s.Procedural.IK.Enabled ? "hands on the gun" : "off");
     if (r.Section(ICON_FA_HAND, "IK", summary)) DrawIK(r, s.Procedural.IK, ctx);
@@ -1192,10 +1575,11 @@ void EditorLayer::DrawWeaponDefinitionEditor(const std::string& path) {
     r.Note("Edits save immediately. Numbers apply live in Play; the rigs and controller on the next Play.");
     if (copied) changed = true;
     if (changed) {
-        cache.Undo.push_back(cache.Saved);
-        if (cache.Undo.size() > 100) cache.Undo.erase(cache.Undo.begin());
-        cache.Redo.clear();
         save(s);
         cache.Saved = s.ToJsonString();
+    }
+    if (!openProfile.empty()) {
+        m_SelectedAssetKey = openProfile;
+        m_SelectedAssetIsFolder = false;
     }
 }

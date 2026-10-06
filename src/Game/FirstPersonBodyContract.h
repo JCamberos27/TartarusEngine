@@ -1,7 +1,9 @@
 #pragma once
 
 #include "AnimatorController.h"
+#include "IK.h"
 
+#include <array>
 #include <functional>
 #include <map>
 #include <string>
@@ -62,6 +64,15 @@ inline constexpr const char* kTagAirborne = "Airborne";
 // arms share).
 inline constexpr const char* kBonePelvis = "pelvis";
 inline constexpr const char* kBoneSpine[5] = {"spine_01", "spine_02", "spine_03", "spine_04", "spine_05"};
+
+// Crossfade weight of gait/turn/start/stop states; actions retain their authored motion.
+// Updates crouch to the gait's actual standing/crouched crossfade when available.
+float LocomotionSpineWeight(const AnimatorControllerComponent& animator, float& crouch);
+// Model-space lower-body retention: 10% at spine_01, 5% at spine_02, none above.
+// Pelvis and legs are never targeted. Stability 0 keeps the authored gait.
+void BlendLocomotionSpine(IK::Pose& pose, const std::vector<int>& parents, const std::array<int, 5>& bones,
+                         const std::vector<glm::mat4>& stand, const std::vector<glm::mat4>& crouch,
+                         float crouchWeight, float stability, float crouchDrop = 0.0f);
 inline constexpr const char* kBoneUpperArm[2] = {"upperarm_l", "upperarm_r"};
 inline constexpr const char* kBoneLowerArm[2] = {"lowerarm_l", "lowerarm_r"};
 inline constexpr const char* kBoneHand[2] = {"hand_l", "hand_r"};

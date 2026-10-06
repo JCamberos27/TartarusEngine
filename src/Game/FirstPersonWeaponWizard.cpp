@@ -81,6 +81,7 @@ std::string PickClip(const std::string& state, const std::vector<std::string>& f
 
 FirstPersonAnimationSet Build(const std::string& armsModel, const std::string& weaponModel, const std::vector<Pick>& picks) {
     FirstPersonAnimationSet set;
+    set.Procedural.Recoil.HipProcedural = true;
     set.ArmsModel = armsModel;
     set.WeaponModel = weaponModel;
     set.ViewRotation = {0.0f, 180.0f, 0.0f};

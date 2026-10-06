@@ -1,43 +1,34 @@
 #version 460 core
-// #177 - one camera-facing quad per particle instance. The quad's corners come from
-// gl_VertexID (two triangles, no vertex buffer); position/size/colour are per-instance.
-// A flame instance (aFlame.w > 0) is a tongue instead: a stretched billboard (Unity's, as the
-// muzzle flash was authored for) standing on the position, aFlame.w metres along the world axis
-// aFlame.xyz and turned about that axis to face the camera. Seen down its axis it foreshortens.
-layout(location = 0) in vec4 aPosSize; // xyz world position, w world-space diameter (flame: width)
-layout(location = 1) in vec4 aColor;   // rgb (already scaled by intensity), a alpha
-layout(location = 2) in vec4 aFlame;   // xyz axis, w length (0 = a plain disc)
-layout(location = 3) in float aSeed;   // flame variety, 0..1
-
-uniform mat4 uView;
-uniform mat4 uProj;
-
-out vec2 vCorner; // -1..1 across the quad
+layout(location=0) in vec4 aPosSize;
+layout(location=1) in vec4 aColor;
+layout(location=2) in vec4 aAxis;
+layout(location=3) in vec4 aParams; // rotation, frame blend, flame seed, alignment
+layout(location=4) in vec4 aAtlas;  // columns, rows, frame A, frame B
+uniform mat4 uView,uProj;
+out vec2 vCorner;
 out vec4 vColor;
-out float vSeed;
-flat out float vIsFlame;
-
-const vec2 kCorners[6] = vec2[6](
-    vec2(-1.0, -1.0), vec2( 1.0, -1.0), vec2( 1.0,  1.0),
-    vec2(-1.0, -1.0), vec2( 1.0,  1.0), vec2(-1.0,  1.0));
-
+flat out vec4 vAtlas;
+flat out vec4 vParams;
+const vec2 corners[6]=vec2[6](vec2(-1,-1),vec2(1,-1),vec2(1,1),vec2(-1,-1),vec2(1,1),vec2(-1,1));
+vec3 safeSide(vec3 axis,vec3 eye) {
+    vec3 side=cross(axis,eye);
+    if(dot(side,side)<1e-10)side=cross(axis,abs(axis.y)<.9?vec3(0,1,0):vec3(1,0,0));
+    return normalize(side);
+}
 void main() {
-    vec2 c = kCorners[gl_VertexID];
-    vec4 viewPos = uView * vec4(aPosSize.xyz, 1.0);
-    if (aFlame.w > 0.0) {
-        vec3 axis = normalize(mat3(uView) * aFlame.xyz);
-        vec3 side = cross(axis, -viewPos.xyz); // across the tongue, square to the eye
-        if (dot(side, side) < 1e-10) side = cross(axis, vec3(0.0, 0.0, 1.0));
-        side = normalize(side);
-        // The pivot (0.48 of the length) sets the base just behind the position.
-        float along = (c.y * 0.5 + 0.5 - 0.02) * aFlame.w;
-        viewPos.xyz += axis * along + side * (c.x * 0.5 * aPosSize.w);
+    vec2 c=corners[gl_VertexID];
+    vec4 pos=uView*vec4(aPosSize.xyz,1);
+    float mode=aParams.w;
+    if(mode==1.0 || mode==2.0) {
+        vec3 axis=normalize(mat3(uView)*aAxis.xyz);
+        vec3 side=safeSide(axis,-pos.xyz);
+        float along=mode==1.0?(c.y*.5+.48)*aAxis.w:c.y*.5*aAxis.w;
+        pos.xyz+=axis*along+side*c.x*.5*aPosSize.w;
     } else {
-        viewPos.xy += c * (aPosSize.w * 0.5); // expand in view space = always faces the camera
+        float angle=aParams.x;
+        vec2 rotated=mat2(cos(angle),sin(angle),-sin(angle),cos(angle))*c;
+        if(mode==3.0)pos+=uView*vec4(rotated.x*aPosSize.w*.5,0,rotated.y*aPosSize.w*.5,0);
+        else pos.xy+=rotated*aPosSize.w*.5;
     }
-    gl_Position = uProj * viewPos;
-    vCorner = c;
-    vColor = aColor;
-    vSeed = aSeed;
-    vIsFlame = aFlame.w > 0.0 ? 1.0 : 0.0;
+    gl_Position=uProj*pos;vCorner=c;vColor=aColor;vAtlas=aAtlas;vParams=aParams;
 }
