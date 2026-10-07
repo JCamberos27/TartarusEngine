@@ -1161,7 +1161,7 @@ private:
     void DrawAssetLibraryPanel(World& world, AssetLibrary& assets); // EditorLayer_AssetLibraryPanel.cpp
     void DrawManagedEditorTools(World& world, AssetLibrary& assets, float dt);
     bool DrawManagedInspector(World& world,AssetLibrary& assets,entt::entity entity,const std::string& type,
-                              std::string* fields=nullptr,const std::string& metadata="{}");
+                              std::string* fields=nullptr,const std::string& metadata="{}",std::uint32_t slot=0);
     int ManagedEditorService(World& world,AssetLibrary& assets,int op,Scripting::NativeRequest& request,
                              int& windows,int& widgets,int& groups,bool inlineInspector);
     void DrawEnvironmentSettings(World& world, float itemWidth);

@@ -1,3 +1,4 @@
+#include "EditorTestProbe.h" // --editor-tests widget names
 #include "EditorLayer.h"
 #include "ScriptIDE.h"
 #include "ProjectPaths.h"
@@ -52,9 +53,27 @@ int EditorLayer::ManagedEditorService(World& world,AssetLibrary& assets,int op,S
         if(open)++groups;return open?1:0;
     }
     if(op==118) {if(!groups)return 0;ImGui::TreePop();--groups;return 1;}
+    // vInspector: greyed-out ([ReadOnly] / [DisableIf]) fields and inline rows (variant chips).
+    if(op==130) {if(r.Result)ImGui::BeginDisabled(true);else ImGui::EndDisabled();return 1;}
+    if(op==131) {ImGui::SameLine();return 1;}
     if(op==122) {if(ImGui::IsItemHovered())EditorUI::SetTooltip("%s",text);return 1;}
     ImGui::PushID(++widgets);
     struct Pop {~Pop(){ImGui::PopID();}} pop;
+    // --editor-tests: name the widget a C# inspector draws after its label ("cs:Max Speed"), and a
+    // text field after its value too, so a read-out can be checked ("cs:Doubled##show=8").
+    struct Tag {
+        int op; const char* label; Scripting::NativeRequest& r;
+        ~Tag() {
+            if(!EditorTestProbeActive() || op<103 || op>121) return;
+            std::string name=label;
+            if(op==115) {
+                try { name=nlohmann::json::parse(label).value("label",std::string{})+"="+(r.Text?r.Text:""); } catch(...) {}
+            } else if(op==121) {
+                try { name=nlohmann::json::parse(label).value("label",std::string{}); } catch(...) {}
+            }
+            EditorTestTag(("cs:"+name).c_str());
+        }
+    } tag{op,text,r};
     switch(op) {
     case 102:ImGui::TextUnformatted(text);return 1;
     case 103:return ActionButton(text,"Run this C# editor command")?1:0;
@@ -114,8 +133,8 @@ void EditorLayer::DrawManagedEditorTools(World& world,AssetLibrary& assets,float
     while(windows>0){ImGui::End();--windows;}
 }
 bool EditorLayer::DrawManagedInspector(World& world,AssetLibrary& assets,entt::entity entity,const std::string& type,
-                                     std::string* fields,const std::string& metadata) {
-    auto data=nlohmann::json{{"type",type},{"native",fields==nullptr}};
+                                     std::string* fields,const std::string& metadata,std::uint32_t slot) {
+    auto data=nlohmann::json{{"type",type},{"native",fields==nullptr},{"slot",slot}};
     if(fields) {data["values"]=nlohmann::json::parse(*fields,nullptr,false);if(!data["values"].is_object())data["values"]=nlohmann::json::object();data["metadata"]=nlohmann::json::parse(metadata);}
     const std::string payload=data.dump();Scripting::NativeRequest request;request.Entity=entt::to_integral(entity);request.Text=payload.c_str();
     int windows=0,widgets=0,groups=0;
