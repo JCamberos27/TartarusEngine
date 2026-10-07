@@ -235,6 +235,12 @@ void BuildDefaultTable() {
     Register("hierarchy.hover.delete",      "Delete",                         Ctx_HierarchyHover, K(ImGuiKey_X));
     Register("hierarchy.hover.defaultParent","Toggle Default Parent",         Ctx_HierarchyHover, K(ImGuiKey_D));
 
+    // --- Editor Enhancers / vFolders hover keys (Ctx_ProjectHover) — the folder under the mouse
+    // in the tree or the grid.
+    Register("project.hover.expand",      "Expand / Collapse Folder",          Ctx_ProjectHover, K(ImGuiKey_E));
+    Register("project.hover.isolate",     "Isolate Folder (collapse others)",  Ctx_ProjectHover, Sk(ImGuiKey_E));
+    Register("project.hover.collapseAll", "Collapse All Folders",              Ctx_ProjectHover, CSk(ImGuiKey_E));
+
     // --- Asset Browser (Ctx_Project) — only while the panel has focus, so F / Ctrl+D don't
     // collide with the scene-selection bindings. ---
     Register("project.focusSearch",   "Focus Search",        Ctx_Project, Ck(ImGuiKey_F));

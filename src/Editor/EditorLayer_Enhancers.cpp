@@ -13,6 +13,7 @@
 #include "FileDialog.h"
 #include "Log.h"
 #include "Shortcuts.h"
+#include "EditorModuleAPI.h" // EditorFolderVisual, kFolderTree* (API v40)
 #include "World.h"
 #include "AssetDatabase.h"
 #include "AssetLibrary.h"
@@ -21,6 +22,7 @@
 
 #include "Enhancers/EnhancerCore.h"
 #include "Enhancers/EnhancerUserState.h"
+#include "Enhancers/FolderStyles.h"
 #include "Enhancers/Palette.h"
 #include "Enhancers/StyleWidgets.h"
 
@@ -77,6 +79,109 @@ void EditorLayer::DrawEnhancerPreferences() {
     ImGui::SameLine();
     EditorUI::HelpMarker("Scene selector, selection Back/Forward and bookmarked objects above the Hierarchy tree. "
                          "Drop rows on the bar to bookmark them.");
+
+    ImGui::Spacing();
+    EditorUIPrimitives::SectionHeader("Asset Browser folders");
+    if (SettingsCheckbox("Folder styles", &prefs.FolderStyles)) EditorSettings::Save();
+    ImGui::SameLine();
+    EditorUI::HelpMarker("Folder icons and colours (right-click a folder), folder rules below, and automatic icons. "
+                         "Off hides them; nothing is deleted.");
+    if (SettingsCheckbox("Colour the whole row", &prefs.FolderRowWash)) EditorSettings::Save();
+    if (SettingsCheckbox("Tree lines", &prefs.FolderTreeLines)) EditorSettings::Save();
+    if (SettingsCheckbox("Zebra striping", &prefs.FolderZebra)) EditorSettings::Save();
+    if (SettingsCheckbox("Minimal mode", &prefs.FolderMinimal)) EditorSettings::Save();
+    ImGui::SameLine();
+    EditorUI::HelpMarker("Hide the folder glyph unless the folder has its own icon.");
+    if (SettingsCheckbox("Content minimap", &prefs.FolderMinimap)) EditorSettings::Save();
+    ImGui::SameLine();
+    EditorUI::HelpMarker("Icons of what each folder holds (models, textures, sounds...), most numerous first.");
+    if (SettingsCheckbox("Bookmark bar", &prefs.FolderNavBar)) EditorSettings::Save();
+    ImGui::SameLine();
+    EditorUI::HelpMarker("Bookmarked folders as chips under the toolbar. Bookmark from a folder's right-click menu, "
+                         "or drop a folder on the bar.");
+
+    // Project data from here down: project/editor_folders.json, shared with the team.
+    auto& fs = Enhancers::FolderStyles::Get();
+    {
+        bool autoIcons = fs.AutoIcons;
+        if (SettingsCheckbox("Automatic icons", &autoIcons)) { fs.AutoIcons = autoIcons; fs.MarkDirty(); }
+        ImGui::SameLine();
+        EditorUI::HelpMarker("A folder mostly (60%+) of one kind of asset shows that kind's icon - a cube for models, "
+                             "an image for textures. Saved with the project.");
+    }
+
+    ImGui::Spacing();
+    EditorUIPrimitives::SectionHeader("Folder rules (this project)");
+    HintText("Style folders by name: the pattern is matched against the folder's name and its full path. "
+             "* matches anything, ? one character. The first matching rule wins; a folder's own style beats any rule.");
+    {
+        int removeAt = -1, moveFrom = -1, moveTo = -1;
+        const float sw = ImGui::GetFrameHeight();
+        if (ImGui::BeginTable("##folderRules", 4, ImGuiTableFlags_RowBg | ImGuiTableFlags_SizingStretchProp | ImGuiTableFlags_PadOuterX)) {
+            ImGui::TableSetupColumn("Pattern", ImGuiTableColumnFlags_WidthStretch);
+            ImGui::TableSetupColumn("Icon", ImGuiTableColumnFlags_WidthFixed, sw * 1.2f);
+            ImGui::TableSetupColumn("Colour", ImGuiTableColumnFlags_WidthFixed, sw * 1.2f);
+            ImGui::TableSetupColumn("##actions", ImGuiTableColumnFlags_WidthFixed, sw * 3.2f);
+            ImGui::TableHeadersRow();
+            for (int i = 0; i < (int)fs.Rules.size(); ++i) {
+                Enhancers::FolderRule& r = fs.Rules[(size_t)i];
+                ImGui::PushID(i);
+                ImGui::TableNextRow();
+                ImGui::TableSetColumnIndex(0);
+                char buf[128];
+                std::snprintf(buf, sizeof(buf), "%s", r.Pattern.c_str());
+                ImGui::SetNextItemWidth(-1.0f);
+                if (ImGui::InputText("##pattern", buf, sizeof(buf)) && buf[0]) { r.Pattern = buf; fs.MarkDirty(); }
+                ImGui::TableSetColumnIndex(1);
+                const char* g = r.Style.Icon.empty() ? nullptr : Enhancers::FAIconGlyph(r.Style.Icon.c_str());
+                if (EditorUIPrimitives::ActionButton(g ? g : ICON_FA_FOLDER, r.Style.Icon.empty() ? "Choose an icon" : r.Style.Icon.c_str(),
+                                                     &Tip, false, ImVec2(sw, sw)))
+                    ImGui::OpenPopup("##ruleIcon");
+                if (ImGui::BeginPopup("##ruleIcon")) {
+                    std::string icon = r.Style.Icon;
+                    if (Enhancers::IconPickerGrid("##ruleIconGrid", icon, m_FolderStyleIconSearch, sizeof(m_FolderStyleIconSearch), EditorTheme::Px(280.0f))) {
+                        r.Style.Icon = icon;
+                        fs.MarkDirty();
+                        ImGui::CloseCurrentPopup();
+                    }
+                    ImGui::EndPopup();
+                }
+                ImGui::TableSetColumnIndex(2);
+                {
+                    ImVec4 c = ImGui::ColorConvertU32ToFloat4(r.Style.Color ? r.Style.Color : IM_COL32(0x8A, 0x8F, 0x98, 255));
+                    if (ImGui::ColorEdit3("##ruleColor", &c.x, ImGuiColorEditFlags_NoInputs | ImGuiColorEditFlags_NoLabel)) {
+                        r.Style.Color = ImGui::ColorConvertFloat4ToU32(ImVec4(c.x, c.y, c.z, 1.0f));
+                        fs.MarkDirty();
+                    }
+                    if (r.Style.Color == 0 && ImGui::IsItemHovered()) Tip("No colour set - pick one, or leave it to keep the default");
+                }
+                ImGui::TableSetColumnIndex(3);
+                ImGui::BeginDisabled(i == 0);
+                if (EditorUIPrimitives::ActionButton(ICON_FA_ARROW_UP, "Move up (rules are tried top to bottom)", &Tip, false, ImVec2(sw, sw))) { moveFrom = i; moveTo = i - 1; }
+                ImGui::EndDisabled();
+                ImGui::SameLine(0.0f, 0.0f);
+                ImGui::BeginDisabled(i + 1 == (int)fs.Rules.size());
+                if (EditorUIPrimitives::ActionButton(ICON_FA_ARROW_DOWN, "Move down", &Tip, false, ImVec2(sw, sw))) { moveFrom = i; moveTo = i + 1; }
+                ImGui::EndDisabled();
+                ImGui::SameLine(0.0f, 0.0f);
+                if (EditorUIPrimitives::DangerIconButton(ICON_FA_TRASH, "Remove this rule", &Tip, ImVec2(sw, sw))) removeAt = i;
+                ImGui::PopID();
+            }
+            ImGui::EndTable();
+        }
+        if (moveFrom >= 0 && moveTo >= 0 && moveTo < (int)fs.Rules.size()) {
+            std::swap(fs.Rules[(size_t)moveFrom], fs.Rules[(size_t)moveTo]);
+            fs.MarkDirty();
+        }
+        if (removeAt >= 0) {
+            fs.Rules.erase(fs.Rules.begin() + removeAt);
+            fs.MarkDirty();
+        }
+        if (EditorUIPrimitives::SecondaryButton(ICON_FA_PLUS "  Add rule")) {
+            fs.Rules.push_back({"Materials", Enhancers::FolderStyle{"droplet", 0}});
+            fs.MarkDirty();
+        }
+    }
 
     ImGui::Spacing();
     EditorUIPrimitives::SectionHeader("Palette colours");
@@ -554,4 +659,279 @@ void EditorLayer::DrawPinnedComponentWindows(World& world, AssetLibrary& assets)
         if (!open) m_Pins.erase(m_Pins.begin() + (std::ptrdiff_t)i);
         else ++i;
     }
+}
+
+// ============================================================================================
+// vFolders
+// ============================================================================================
+
+namespace {
+Enhancers::FolderKind FolderKindOf(AssetGridCell::Kind k) {
+    using K = AssetGridCell::Kind;
+    using F = Enhancers::FolderKind;
+    switch (k) {
+        case K::Model:      return F::Model;
+        case K::Texture:
+        case K::Hdri:
+        case K::Screenshot: return F::Texture;
+        case K::Material:   return F::Material;
+        case K::Sound:      return F::Sound;
+        case K::Prefab:     return F::Prefab;
+        case K::Scene:      return F::Scene;
+        case K::Script:     return F::Script;
+        case K::Animator:   return F::Animation;
+        case K::Shader:     return F::Shader;
+        default:            return F::Other;
+    }
+}
+void CopyGlyph(char (&dst)[8], const char* glyph) {
+    std::snprintf(dst, sizeof(dst), "%s", glyph ? glyph : "");
+}
+} // namespace
+
+// Content counts per folder, from what the Asset Browser grid would list there: library assets
+// by their AssetFolder, plus the project index's not-yet-loaded files by theirs. One pass over
+// every asset - only when something changed, or once a second while the browser is open.
+void EditorLayer::RebuildFolderSummariesIfNeeded(AssetLibrary& assets) {
+    const size_t sig = m_ListedAssetSignature ^ (m_ProjectAssetIndex.files.size() * 0x9E3779B97F4A7C15ull) ^
+                       (assets.AssetFolders().size() << 20) ^ (assets.Folders().size() << 40);
+    m_FolderSummaryAge += ImGui::GetIO().DeltaTime;
+    if (sig == m_FolderSummarySig && m_FolderSummaryAge < 1.0f) return;
+    m_FolderSummarySig = sig;
+    m_FolderSummaryAge = 0.0f;
+    m_FolderSummaries.clear();
+    using F = Enhancers::FolderKind;
+    for (const auto& m : assets.Models())    m_FolderSummaries[assets.AssetFolder(m->Path())].Add(F::Model);
+    for (const auto& t : assets.Textures())  m_FolderSummaries[assets.AssetFolder(t->Path())].Add(F::Texture);
+    for (const auto& m : assets.Materials()) m_FolderSummaries[assets.AssetFolder(m->Path)].Add(F::Material);
+    for (const auto& s : assets.Sounds())    m_FolderSummaries[assets.AssetFolder(s)].Add(F::Sound);
+    for (const auto& p : assets.Prefabs())   m_FolderSummaries[assets.AssetFolder(p)].Add(F::Prefab);
+    for (const auto& f : m_ProjectAssetIndex.files) {
+        if (m_ListedAssetKeys.count(f.Key)) continue;
+        const std::string moved = assets.AssetFolder(f.Path);
+        m_FolderSummaries[moved.empty() ? f.Folder : moved].Add(FolderKindOf(f.Kind));
+    }
+}
+
+bool EditorLayer::GetFolderVisual(AssetLibrary& assets, const std::string& path, EditorFolderVisual& out) {
+    out = EditorFolderVisual{};
+    RebuildFolderSummariesIfNeeded(assets);
+    const auto it = m_FolderSummaries.find(path);
+    const Enhancers::FolderSummary* summary = it != m_FolderSummaries.end() ? &it->second : nullptr;
+    if (EditorSettings::Get().FolderStyles) {
+        const Enhancers::ResolvedFolderStyle r = Enhancers::FolderStyles::Get().Resolve(path, summary);
+        CopyGlyph(out.Icon, r.Icon.empty() ? nullptr : Enhancers::FAIconGlyph(r.Icon.c_str()));
+        out.Color = r.Color;
+    }
+    if (summary) {
+        out.Total = summary->Total;
+        Enhancers::FolderKind kinds[4];
+        const int n = Enhancers::TopKinds(*summary, kinds, 4);
+        for (int i = 0; i < n; ++i) {
+            const char* name = Enhancers::FolderKindIconName(kinds[i]);
+            if (!name) continue;
+            CopyGlyph(out.Mini[out.MiniCount++], Enhancers::FAIconGlyph(name));
+        }
+    }
+    return true;
+}
+
+unsigned EditorLayer::FolderTreeFlags() const {
+    const EditorSettings& s = EditorSettings::Get();
+    unsigned f = 0;
+    if (s.FolderTreeLines) f |= kFolderTreeLines;
+    if (s.FolderMinimap)   f |= kFolderTreeMinimap;
+    if (s.FolderStyles)    f |= kFolderTreeStyles;
+    if (s.FolderRowWash)   f |= kFolderTreeWash;
+    if (s.FolderZebra)     f |= kFolderTreeZebra;
+    if (s.FolderMinimal)   f |= kFolderTreeMinimal;
+    return f;
+}
+
+// AssetLibrary's rename / delete hook: folder styles (project file) and folder bookmarks
+// (per-user) follow the folder. Installed every frame the browser draws - cheap, and it keeps
+// the capture pointing at this EditorLayer whatever order things were constructed in.
+void EditorLayer::InstallFolderPathHook(AssetLibrary& assets) {
+    if (assets.OnFolderPathChanged) return;
+    assets.OnFolderPathChanged = [this](const std::string& oldPath, const std::string& newPath) {
+        Enhancers::FolderStyles::Get().OnFolderPathChanged(oldPath, newPath);
+        auto& us = Enhancers::EnhancerUserState::Get();
+        bool changed = false;
+        for (auto it = us.FolderBookmarks.begin(); it != us.FolderBookmarks.end();) {
+            if (it->Kind == Enhancers::RefKind::Folder && Enhancers::RemapFolderPath(it->Path, oldPath, newPath)) {
+                changed = true;
+                if (newPath.empty()) { it = us.FolderBookmarks.erase(it); continue; }
+                it->Label = it->Path.substr(it->Path.find_last_of('/') == std::string::npos ? 0 : it->Path.find_last_of('/') + 1);
+            }
+            ++it;
+        }
+        if (changed) us.MarkDirty();
+        if (Enhancers::RemapFolderPath(m_HoverAssetFolder, oldPath, newPath) && newPath.empty()) m_HoverAssetFolderSet = false;
+    };
+}
+
+// The folder tree's right-click menu (and the grid's folder-tile menu): style, bookmark, rule.
+// Edits go to project/editor_folders.json, which the global file undo journals like any project file.
+void EditorLayer::DrawFolderContextMenuBody(World& world, AssetLibrary& assets, const std::string& path) {
+    (void)world;
+    auto& fs = Enhancers::FolderStyles::Get();
+    const bool isRoot = path.empty();
+    const std::string leaf = path.substr(path.find_last_of('/') == std::string::npos ? 0 : path.find_last_of('/') + 1);
+    if (!isRoot) {
+        ImGui::TextDisabled("%s", leaf.c_str());
+        EditorUIPrimitives::SectionHeader("Folder colour");
+        const auto it = fs.Folders.find(path);
+        const Enhancers::FolderStyle own = it != fs.Folders.end() ? it->second : Enhancers::FolderStyle{};
+        auto setStyle = [&](const Enhancers::FolderStyle& s) {
+            if (s.IsEmpty()) fs.Folders.erase(path);
+            else fs.Folders[path] = s;
+            fs.MarkDirty();
+        };
+        std::uint32_t color = own.Color;
+        if (Enhancers::PaletteColorRow("##folderColor", color)) {
+            Enhancers::FolderStyle s = own;
+            s.Color = color;
+            setStyle(s);
+        }
+        EditorUIPrimitives::SectionHeader("Folder icon");
+        if (ImGui::BeginMenu(own.Icon.empty() ? ICON_FA_ICONS "  Choose icon..." : ICON_FA_ICONS "  Change icon...")) {
+            std::string icon = own.Icon;
+            if (Enhancers::IconPickerGrid("##folderIcon", icon, m_FolderStyleIconSearch, sizeof(m_FolderStyleIconSearch), EditorTheme::Px(280.0f))) {
+                Enhancers::FolderStyle s = own;
+                s.Icon = icon;
+                setStyle(s);
+                ImGui::CloseCurrentPopup();
+            }
+            ImGui::EndMenu();
+        }
+        if (ImGui::MenuItem(ICON_FA_ERASER "  Clear Folder Style", nullptr, false, !own.IsEmpty())) setStyle({});
+        // vFolders' rules: one click to give every folder with this name the same look.
+        const bool canRule = !own.IsEmpty() && !leaf.empty();
+        const std::string ruleLabel = std::string(ICON_FA_WAND_MAGIC_SPARKLES "  Style every folder named \"") + leaf + "\"";
+        if (ImGui::MenuItem(ruleLabel.c_str(), nullptr, false, canRule)) {
+            fs.Rules.push_back({leaf, own});
+            fs.MarkDirty();
+            Log::Info("Folder rule added: every folder named '" + leaf + "' gets this style (Settings > Editor Enhancers > Folder rules).");
+        }
+        if (ImGui::IsItemHovered(ImGuiHoveredFlags_AllowWhenDisabled))
+            EditorUI::SetTooltip(canRule ? "Adds a folder rule for this name - edit or remove it in Settings > Editor Enhancers."
+                                         : "Give this folder a colour or icon first.");
+        ImGui::Separator();
+    }
+
+    auto& us = Enhancers::EnhancerUserState::Get();
+    const Enhancers::EditorRef ref = Enhancers::EditorRef::MakeFolder(path, isRoot ? std::string("Assets") : leaf);
+    const bool marked = Enhancers::FindRef(us.FolderBookmarks, ref) >= 0;
+    if (ImGui::MenuItem(ICON_FA_BOOKMARK "  Bookmark Folder", nullptr, marked)) {
+        if (marked) Enhancers::RemoveRef(us.FolderBookmarks, ref);
+        else Enhancers::AddUnique(us.FolderBookmarks, ref, Enhancers::EnhancerUserState::kMaxBookmarks);
+        us.MarkDirty();
+    }
+    if (!isRoot) {
+        if (ImGui::MenuItem(ICON_FA_ANGLES_DOWN "  Expand All Inside"))  SetFolderExpandedRecursive(assets, path, true, true);
+        if (ImGui::MenuItem(ICON_FA_ANGLES_UP "  Collapse All Inside")) SetFolderExpandedRecursive(assets, path, false, true);
+    }
+}
+
+// vFolders hover keys, applied after the module drew the tree (it reported the hovered folder
+// through SetHoveredAssetFolder; grid folder tiles report theirs from DrawAssetCell).
+void EditorLayer::HandleFolderHoverKeys(AssetLibrary& assets) {
+    const bool hovered = m_HoverAssetFolderSet;
+    const std::string folder = m_HoverAssetFolder;
+    m_HoverAssetFolderSet = false;
+    m_HoverAssetFolder.clear();
+    if (!EditorSettings::Get().EnhancerHoverKeys) return;
+    if (Shortcuts::Triggered("project.hover.collapseAll")) {
+        m_ExpandedAssetFolders.clear();
+        return;
+    }
+    if (!hovered || folder.empty()) return;
+    if (Shortcuts::Triggered("project.hover.expand")) {
+        if (m_ExpandedAssetFolders.count(folder)) m_ExpandedAssetFolders.erase(folder);
+        else m_ExpandedAssetFolders.insert(folder);
+    } else if (Shortcuts::Triggered("project.hover.isolate")) {
+        m_ExpandedAssetFolders.clear();
+        for (size_t s = 0;;) { // every ancestor, then the folder itself
+            const size_t slash = folder.find('/', s);
+            m_ExpandedAssetFolders.insert(folder.substr(0, slash));
+            if (slash == std::string::npos) break;
+            s = slash + 1;
+        }
+        (void)assets;
+    }
+}
+
+// Folder bookmark chips under the Asset Browser toolbar: click to go there, right-click to
+// remove, drop a folder (tree row or grid tile) on the row to add one. Nothing is drawn when
+// there are no bookmarks, except while a folder is being dragged, so the drop target appears
+// exactly when it can be used.
+void EditorLayer::DrawFolderNavBar(World& world, AssetLibrary& assets) {
+    (void)world;
+    if (!EditorSettings::Get().FolderNavBar) return;
+    auto& us = Enhancers::EnhancerUserState::Get();
+    const ImGuiPayload* drag = ImGui::GetDragDropPayload();
+    const bool draggingFolder = drag && drag->IsDataType("ASSET_FOLDER_PATH");
+    bool any = false;
+    for (const auto& r : us.FolderBookmarks) if (r.Kind == Enhancers::RefKind::Folder) { any = true; break; }
+    if (!any && !draggingFolder) return;
+
+    const float h = ImGui::GetFrameHeight();
+    const ImVec2 barMin = ImGui::GetCursorScreenPos();
+    const float barW = ImGui::GetContentRegionAvail().x;
+    ImGui::PushID("##folderNav");
+    ImGui::PushStyleVar(ImGuiStyleVar_ItemSpacing, ImVec2(EditorTheme::Px(4.0f), ImGui::GetStyle().ItemSpacing.y));
+    EditorTheme::PushSmall();
+    ImGui::AlignTextToFramePadding();
+    ImGui::TextColored(EditorTheme::Dim, ICON_FA_BOOKMARK);
+    EditorTheme::PopFont();
+    if (!any) {
+        ImGui::SameLine();
+        ImGui::AlignTextToFramePadding();
+        ImGui::TextDisabled("Drop a folder here to bookmark it");
+    }
+    const auto& folders = assets.Folders();
+    int removeAt = -1;
+    for (int i = 0; i < (int)us.FolderBookmarks.size(); ++i) {
+        const Enhancers::EditorRef& r = us.FolderBookmarks[(size_t)i];
+        if (r.Kind != Enhancers::RefKind::Folder) continue;
+        const bool exists = r.Path.empty() || std::find(folders.begin(), folders.end(), r.Path) != folders.end();
+        EditorFolderVisual vis;
+        GetFolderVisual(assets, r.Path, vis);
+        const std::string label = r.Path.empty() ? std::string("Assets") : (r.Label.empty() ? r.Path : r.Label);
+        ImGui::SameLine();
+        const float avail = barMin.x + barW - ImGui::GetCursorScreenPos().x;
+        if (avail < EditorTheme::Px(48.0f)) break;
+        ImGui::PushID(i);
+        bool clicked = false, hov = false;
+        NavChip("##chip", vis.Icon[0] ? vis.Icon : ICON_FA_FOLDER, label.c_str(), !exists, std::min(avail, EditorTheme::Px(150.0f)), clicked, hov);
+        if (vis.Color) { // the folder's colour as a thin underline on its chip
+            const ImVec2 mn = ImGui::GetItemRectMin(), mx = ImGui::GetItemRectMax();
+            ImGui::GetWindowDrawList()->AddLine(ImVec2(mn.x + EditorTheme::Px(6.0f), mx.y - 1.0f), ImVec2(mx.x - EditorTheme::Px(6.0f), mx.y - 1.0f),
+                                                vis.Color | 0xFF000000u, EditorTheme::Px(2.0f));
+        }
+        if (clicked && exists) NavigateAssetFolder(r.Path);
+        if (hov) EditorUI::SetTooltip(exists ? "%s\nClick to open, right-click to remove." : "%s\nThis folder no longer exists - right-click to remove.",
+                                      r.Path.empty() ? "Assets" : r.Path.c_str());
+        if (ImGui::BeginPopupContextItem("##chipCtx")) {
+            if (ImGui::MenuItem(ICON_FA_TRASH "  Remove bookmark")) removeAt = i;
+            ImGui::EndPopup();
+        }
+        ImGui::PopID();
+    }
+    if (removeAt >= 0) {
+        us.FolderBookmarks.erase(us.FolderBookmarks.begin() + removeAt);
+        us.MarkDirty();
+    }
+    const ImRect barRect(barMin, ImVec2(barMin.x + barW, barMin.y + h));
+    if (ImGui::BeginDragDropTargetCustom(barRect, ImGui::GetID("##folderNavDrop"))) {
+        if (const ImGuiPayload* p = ImGui::AcceptDragDropPayload("ASSET_FOLDER_PATH")) {
+            const std::string path((const char*)p->Data);
+            const std::string leaf = path.substr(path.find_last_of('/') == std::string::npos ? 0 : path.find_last_of('/') + 1);
+            Enhancers::AddUnique(us.FolderBookmarks, Enhancers::EditorRef::MakeFolder(path, leaf), Enhancers::EnhancerUserState::kMaxBookmarks);
+            us.MarkDirty();
+        }
+        ImGui::EndDragDropTarget();
+    }
+    ImGui::PopStyleVar();
+    ImGui::PopID();
 }

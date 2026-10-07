@@ -19,6 +19,7 @@
 #include <algorithm>
 #include <chrono>
 #include <future>
+#include "Enhancers/FolderStyles.h" // Enhancers::FolderSummary (m_FolderSummaries)
 #include "Shortcuts.h" // Shortcuts::Chord - Preferences > Shortcuts capture state below
 #include "Texture.h" // TextureImportSettings - stored by value in the Import Settings panel state
 #include "Model.h"   // ModelImportSettings - same
@@ -55,6 +56,7 @@ enum class GizmoOp { Translate, Rotate, Scale, Rect, Universal }; // Universal (
 // DrawAssetCell(index) callback.
 struct MaterialAsset; // defined in MaterialAsset.h, included by AssetLibrary.h
 struct RegisteredComponent; // ComponentRegistry.h
+struct EditorFolderVisual;  // EditorModuleAPI.h
 enum class ReflectAssetKind; // ComponentReflection.h
 struct ReflectField;        // ComponentReflection.h
 
@@ -372,6 +374,12 @@ public:
     // floating editor per (entity, reflected component), drawn by the host each frame.
     void OpenPinnedComponent(World& world, entt::entity entity, const char* componentName);
     void DrawPinnedComponentWindows(World& world, AssetLibrary& assets);
+    // --- Editor Enhancers / vFolders (EditorLayer_Enhancers.cpp), the host half of API v40 ---
+    bool GetFolderVisual(AssetLibrary& assets, const std::string& path, EditorFolderVisual& out);
+    unsigned FolderTreeFlags() const;
+    void DrawFolderContextMenuBody(World& world, AssetLibrary& assets, const std::string& path);
+    void SetHoveredAssetFolder(const std::string& path) { m_HoverAssetFolder = path; m_HoverAssetFolderSet = true; }
+    void DrawFolderNavBar(World& world, AssetLibrary& assets);
 
     // --- Reloadable Inspector module bridge (issue #229, frame only) ----------------------
     // The module owns Begin("Inspector") + End + visibility; the body stays host-side.
@@ -1964,6 +1972,18 @@ private:
     entt::entity m_HierDefaultParentNow = entt::null; // ResolveDefaultParent(), once per Hierarchy frame
     struct PinnedComponent { int Order = -1; std::string Component; std::string SceneKey; ImVec2 SpawnPos{}; bool Placed = false; };
     std::vector<PinnedComponent> m_Pins;
+    // vFolders: per-folder content counts (auto icons, minimap), rebuilt when the asset lists or
+    // the project index change, or at most once a second while the browser is drawn (an asset
+    // moved between folders changes neither list size).
+    std::unordered_map<std::string, Enhancers::FolderSummary> m_FolderSummaries;
+    size_t m_FolderSummarySig = (size_t)-1;
+    float m_FolderSummaryAge = 0.0f;
+    void RebuildFolderSummariesIfNeeded(AssetLibrary& assets);
+    std::string m_HoverAssetFolder;       // the folder under the mouse this frame (tree or grid)
+    bool m_HoverAssetFolderSet = false;
+    void HandleFolderHoverKeys(AssetLibrary& assets); // PostModuleDraw, after the module drew the tree
+    void InstallFolderPathHook(AssetLibrary& assets);  // re-keys folder styles + bookmarks on rename/delete
+    char m_FolderStyleIconSearch[64] = {};
     // The generic reflected-component field body (groups, VisibleIf, managed inspector, extras) -
     // shared by the Inspector's section and the pinned windows.
     void DrawReflectedComponentFields(World& world, AssetLibrary& assets, const RegisteredComponent& rc, entt::entity entity);

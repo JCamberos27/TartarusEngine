@@ -271,6 +271,16 @@ struct EditorSettings {
     bool HierarchyMinimap    = true;
     int  HierarchyMinimapMax = 5;
     bool HierarchyNavBar     = true;
+    // vFolders. Styles: per-folder icons/colours, rules and automatic content icons. RowWash: a
+    // styled folder's colour also tints its tree row. Minimap: icons of what a folder holds.
+    // NavBar: folder bookmark chips under the Asset Browser toolbar.
+    bool FolderStyles      = true;
+    bool FolderTreeLines   = true;
+    bool FolderRowWash     = false;
+    bool FolderZebra       = false;
+    bool FolderMinimal     = false;
+    bool FolderMinimap     = true;
+    bool FolderNavBar      = true;
 
     bool WindowPlacementValid = false;
     int  WindowX = 0, WindowY = 0, WindowWidth = 0, WindowHeight = 0;

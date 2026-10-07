@@ -199,6 +199,13 @@ void EditorSettings::Load() {
     s.HierarchyMinimap = SafeValue(root, "hierarchyMinimap", s.HierarchyMinimap);
     s.HierarchyMinimapMax = std::clamp(SafeValue(root, "hierarchyMinimapMax", s.HierarchyMinimapMax), 1, 12);
     s.HierarchyNavBar = SafeValue(root, "hierarchyNavBar", s.HierarchyNavBar);
+    s.FolderStyles = SafeValue(root, "folderStyles", s.FolderStyles);
+    s.FolderTreeLines = SafeValue(root, "folderTreeLines", s.FolderTreeLines);
+    s.FolderRowWash = SafeValue(root, "folderRowWash", s.FolderRowWash);
+    s.FolderZebra = SafeValue(root, "folderZebra", s.FolderZebra);
+    s.FolderMinimal = SafeValue(root, "folderMinimal", s.FolderMinimal);
+    s.FolderMinimap = SafeValue(root, "folderMinimap", s.FolderMinimap);
+    s.FolderNavBar = SafeValue(root, "folderNavBar", s.FolderNavBar);
 
     // #126 — values that are the right type but nonsensical (0 / negative / NaN from a hand
     // edit or an older build) would otherwise produce NaN projections, a zero-size grid, a
@@ -366,6 +373,13 @@ void EditorSettings::Flush() {
     root["hierarchyMinimap"] = Get().HierarchyMinimap;
     root["hierarchyMinimapMax"] = Get().HierarchyMinimapMax;
     root["hierarchyNavBar"] = Get().HierarchyNavBar;
+    root["folderStyles"] = Get().FolderStyles;
+    root["folderTreeLines"] = Get().FolderTreeLines;
+    root["folderRowWash"] = Get().FolderRowWash;
+    root["folderZebra"] = Get().FolderZebra;
+    root["folderMinimal"] = Get().FolderMinimal;
+    root["folderMinimap"] = Get().FolderMinimap;
+    root["folderNavBar"] = Get().FolderNavBar;
 
     // Atomic: a crash mid-write (a toggle spree can still trigger one write) must leave the
     // previous editor_prefs.json intact, not truncated (audit CPP-206). Lives under UserPaths

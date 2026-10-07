@@ -7,6 +7,7 @@
 #include "Enhancers/EnhancerCore.h"
 #include "Enhancers/EnhancerUserState.h"
 #include "Enhancers/Palette.h"
+#include "Enhancers/FolderStyles.h"
 #include "Shortcuts.h"
 #include "World.h"
 #include "AssetLibrary.h"
@@ -289,6 +290,89 @@ void TestEnhancerHierStyleRoundTrip() {
     CHECK(!b.Registry.all_of<HierarchyStyleComponent>(byName("Plain")));
 }
 
+void TestEnhancerFolderKinds() {
+    FolderSummary s;
+    CHECK(DominantKind(s) == FolderKind::Count); // empty
+    s.Add(FolderKind::Texture);
+    CHECK(DominantKind(s) == FolderKind::Count); // one file is not "mostly textures"
+    s.Add(FolderKind::Texture); s.Add(FolderKind::Texture);
+    s.Add(FolderKind::Model);
+    CHECK(DominantKind(s) == FolderKind::Texture); // 3 of 4 = 75%
+    s.Add(FolderKind::Model); s.Add(FolderKind::Sound);
+    CHECK(DominantKind(s) == FolderKind::Count); // 3 of 6 = 50% < 60%
+    FolderSummary other;
+    other.Add(FolderKind::Other); other.Add(FolderKind::Other); other.Add(FolderKind::Other);
+    CHECK(DominantKind(other) == FolderKind::Count); // "Other" never names a folder
+
+    FolderKind top[4];
+    const int n = TopKinds(s, top, 4);
+    CHECK(n == 3 && top[0] == FolderKind::Texture && top[1] == FolderKind::Model && top[2] == FolderKind::Sound);
+    CHECK(TopKinds(s, top, 1) == 1 && top[0] == FolderKind::Texture);
+    for (int k = 0; k < kFolderKindCount; ++k) {
+        const char* name = FolderKindIconName((FolderKind)k);
+        if (name) CHECK(FAIconGlyph(name) != nullptr);
+    }
+}
+
+void TestEnhancerFolderStyleResolve() {
+    auto& fs = FolderStyles::Get();
+    const nlohmann::json saved = fs.ToJson(); // shared singleton - restore after
+    fs.Reset();
+    FolderSummary textures;
+    textures.Add(FolderKind::Texture); textures.Add(FolderKind::Texture);
+
+    // Default, then automatic icon from content.
+    CHECK(fs.Resolve("Art", nullptr).Icon.empty());
+    ResolvedFolderStyle r = fs.Resolve("Art/Tex", &textures);
+    CHECK(r.Icon == "image" && r.IconSource == FolderStyleSource::Auto && r.Color == 0);
+    fs.AutoIcons = false;
+    CHECK(fs.Resolve("Art/Tex", &textures).Icon.empty());
+    fs.AutoIcons = true;
+    // Built-in virtual folders.
+    CHECK(fs.Resolve("Scenes", nullptr).Icon == "map" && fs.Resolve("Scenes", nullptr).IconSource == FolderStyleSource::Builtin);
+
+    // A rule beats the automatic icon; matched on the leaf name or the full path.
+    fs.Rules.push_back({"Tex*", FolderStyle{"star", PackRGBA(1, 2, 3)}});
+    fs.Rules.push_back({"Art/*", FolderStyle{"tree", 0}});
+    r = fs.Resolve("Art/Tex", &textures);
+    CHECK(r.Icon == "star" && r.IconSource == FolderStyleSource::Rule && r.Color == PackRGBA(1, 2, 3)); // first match wins
+    CHECK(fs.Resolve("Art/Props", nullptr).Icon == "tree");
+    CHECK(fs.Resolve("Other/Textures", nullptr).Icon == "star"); // leaf-name match anywhere
+    CHECK(fs.Resolve("Artwork", nullptr).Icon.empty());
+
+    // The folder's own style beats rules, field by field.
+    fs.Folders["Art/Tex"] = FolderStyle{"", PackRGBA(9, 9, 9)};
+    r = fs.Resolve("Art/Tex", &textures);
+    CHECK(r.Icon == "star" && r.Color == PackRGBA(9, 9, 9)); // colour overridden, rule's icon kept
+    fs.Folders["Art/Tex"].Icon = "cube";
+    r = fs.Resolve("Art/Tex", &textures);
+    CHECK(r.Icon == "cube" && r.IconSource == FolderStyleSource::Explicit);
+    // An icon name that no longer exists falls back to the plain glyph.
+    fs.Folders["Broken"] = FolderStyle{"not-an-icon", 0};
+    CHECK(fs.Resolve("Broken", nullptr).Icon.empty());
+
+    // Rename / delete re-keys the folder and everything under it - and only that.
+    fs.Folders["Art/Tex/Old"] = FolderStyle{"music", 0};
+    fs.Folders["Artwork"] = FolderStyle{"ghost", 0};
+    CHECK(fs.OnFolderPathChanged("Art", "Graphics") == 2);
+    CHECK(fs.Folders.count("Graphics/Tex") && fs.Folders.count("Graphics/Tex/Old") && fs.Folders.count("Artwork"));
+    CHECK(fs.OnFolderPathChanged("Graphics/Tex", "") == 2);
+    CHECK(!fs.Folders.count("Graphics/Tex") && !fs.Folders.count("Graphics/Tex/Old"));
+
+    // JSON round trip, including rules and the auto-icon switch.
+    fs.AutoIcons = false;
+    const nlohmann::json j = fs.ToJson();
+    fs.FromJson(j);
+    CHECK(!fs.AutoIcons && fs.Rules.size() == 2 && fs.Rules[0].Pattern == "Tex*" && fs.Rules[0].Style.Color == PackRGBA(1, 2, 3));
+    CHECK(fs.Folders.count("Artwork") && fs.Folders["Artwork"].Icon == "ghost");
+    CHECK(fs.ToJson() == j);
+    // Garbage in, empty store out.
+    fs.FromJson(nlohmann::json::array());
+    CHECK(fs.Folders.empty() && fs.Rules.empty() && fs.AutoIcons);
+
+    fs.FromJson(saved);
+}
+
 } // namespace
 
 void RegisterEnhancerTests(UnitTestSupport::TestList& tests) {
@@ -305,4 +389,6 @@ void RegisterEnhancerTests(UnitTestSupport::TestList& tests) {
     tests.emplace_back("EnhancerShortcutTable", TestEnhancerShortcutTable);
     tests.emplace_back("EnhancerTreeLineMasks", TestEnhancerTreeLineMasks);
     tests.emplace_back("EnhancerHierStyleRoundTrip", TestEnhancerHierStyleRoundTrip);
+    tests.emplace_back("EnhancerFolderKinds", TestEnhancerFolderKinds);
+    tests.emplace_back("EnhancerFolderStyleResolve", TestEnhancerFolderStyleResolve);
 }
