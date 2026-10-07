@@ -22,6 +22,8 @@
 #include "SceneSerializer.h"
 #include "ProjectPaths.h"
 #include "UserPaths.h"
+#include "EditorTheme.h"
+#include "Enhancers/EnhancerCore.h"
 #include "Enhancers/EnhancerUserState.h"
 #include "Enhancers/TabState.h"
 #include "Scripting/ScriptRuntime.h"
@@ -234,12 +236,15 @@ struct Query {
     std::string Root;   // the item's root window name contains this ("" = any)
     std::function<bool(const UiItem&)> Pred;
     int Nth = 0;        // which match (top-to-bottom, left-to-right)
+    float AnchorX = -1.0f; // Click: where across the item (0 = left edge, 1 = right); < 0 = its centre
 };
 Query ByLabel(std::string label, std::string root = {}) { Query q; q.Label = std::move(label); q.Root = std::move(root); return q; }
 Query ByExact(std::string label, std::string root = {}, int nth = 0) {
     Query q; q.Exact = std::move(label); q.Root = std::move(root); q.Nth = nth; return q;
 }
 Query ByTag(std::string tag) { Query q; q.Tag = std::move(tag); return q; }
+// The same item, clicked near its right end (a row's x button).
+Query RightEnd(Query q) { q.AnchorX = 0.97f; return q; }
 Query ByTagPrefix(std::string prefix) { Query q; q.TagPrefix = std::move(prefix); return q; }
 
 std::vector<const UiItem*> FindAll(const Query& q) {
@@ -346,6 +351,7 @@ Step Click(Query q, int mods = 0, int button = 0, int clicks = 1) {
                 const UiItem* it = Find(q);
                 ImVec2 p;
                 if (!it || !ClickPoint(*it, p)) return false;
+                if (q.AnchorX >= 0.0f) p.x = it->Rect.Min.x + it->Rect.GetWidth() * q.AnchorX;
                 MouseTo(p);
                 Mods(mods, true);
                 *phase = 1;
@@ -448,6 +454,7 @@ std::string NameOf(World& w, entt::entity e) {
 Step FreshScene() {
     return Do("fresh scene", [](Ctx& c) {
         if (X::InPlay(c.E)) X::RequestPlayStop(c.E);
+        ImGui::ClosePopupsExceptModals(); // a menu or popover a previous test left open
         X::ResetScene(c.E, c.W, g_ScratchScene);
         Enhancers::EnhancerUserState::Get().Reset();
         Enhancers::TabState::Get().Reset();
@@ -662,35 +669,68 @@ void RegisterTests() {
         Do("restore the scene key", [](Ctx& c) { X::ScenePath(c.E) = g_ScratchScene; }),
     });
 
+    // ------------------------------------------------------------------ fonts
+    // Inter and JetBrains Mono carry their own private-use glyphs from U+E000; every icon a style can
+    // name must still be drawn by the merged Font Awesome source (index 1 in both faces).
+    Add("fonts: every Font Awesome icon draws from the icon font", {
+        ExpectTrue("no icon shadowed by the text faces", [](Ctx&) {
+            std::size_t n = 0;
+            const Enhancers::FAIcon* icons = Enhancers::FAIconTable(&n);
+            int bad = 0;
+            for (ImFont* font : {EditorTheme::UiFont(), EditorTheme::MonoFont()}) {
+                ImFontBaked* baked = font->GetFontBaked(EditorTheme::BodySize());
+                for (std::size_t i = 0; i < n; ++i) {
+                    unsigned int c = 0;
+                    ImTextCharFromUtf8(&c, icons[i].Glyph, nullptr);
+                    if (c < 0xE000 || c > 0xF8FF) continue; // digits / letters are text glyphs on purpose
+                    const ImFontGlyph* g = baked->FindGlyphNoFallback((ImWchar)c);
+                    if (!g || g->SourceIdx != 1) {
+                        if (bad++ < 5) std::printf("    icon '%s' (U+%04X) source %d\n", icons[i].Name, c, g ? (int)g->SourceIdx : -1);
+                    }
+                }
+            }
+            return bad == 0;
+        }),
+    });
+
     // ------------------------------------------------------------------ 2. Inspector nav bar
-    Add("nav bar: bookmark the object, chips select", {
+    // Bookmarks live behind one button per header (Bookmark chips off, the default): it opens a
+    // list whose first row bookmarks / un-bookmarks what the Inspector shows.
+    Add("nav bar: bookmark the object, the list selects", {
         FreshScene(), Wait(2),
         SelectByName("Alpha"), Wait(3),
-        Click(ByLabel(ICON_FA_BOOKMARK, kInspector)), Wait(2),
+        Click(ByLabel(ICON_FA_BOOKMARK, kInspector)), Wait(3),
+        Click(ByTag("bm:toggle")), Wait(3),
         ExpectTrue("Alpha bookmarked", [](Ctx&) {
             const auto& bm = Enhancers::EnhancerUserState::Get().InspectorBookmarks;
             return bm.size() == 1 && bm[0].Label == "Alpha";
         }),
         SelectByName("Gamma"), Wait(3),
-        Click(ByExact("##chip", kInspector)), Wait(3),
-        Expect("chip selected Alpha", [](Ctx& c) { return ExpectSelected(c, "Alpha"); }),
+        Click(ByLabel(ICON_FA_BOOKMARK, kInspector)), Wait(3),
+        Click(ByTag("bm:Alpha")), Wait(3),
+        Expect("list selected Alpha", [](Ctx& c) { return ExpectSelected(c, "Alpha"); }),
         SelectByName("Gamma"), Wait(3),
-        Click(ByExact("##chip", kInspector), ImGuiMod_Ctrl), Wait(3),
+        Click(ByLabel(ICON_FA_BOOKMARK, kInspector)), Wait(3),
+        Click(ByTag("bm:Alpha"), ImGuiMod_Ctrl), Wait(3),
         ExpectTrue("Ctrl+click adds", [](Ctx& c) { return X::Selection(c.E).size() == 2; }),
+        Key(ImGuiKey_Escape), Wait(2),
         SelectByName("Alpha"), Wait(3),
-        Click(ByLabel(ICON_FA_BOOKMARK, kInspector)), Wait(2),
+        Click(ByLabel(ICON_FA_BOOKMARK, kInspector)), Wait(3),
+        Click(ByTag("bm:toggle")), Wait(3),
         ExpectTrue("bookmark toggled off", [](Ctx&) { return Enhancers::EnhancerUserState::Get().InspectorBookmarks.empty(); }),
     });
     Add("nav bar: asset bookmark", {
         FreshScene(), Wait(2),
         Do("select an asset", [](Ctx& c) { X::SelectAsset(c.E, "assets/Scripts/Bob.cs"); }), Wait(3),
-        Click(ByLabel(ICON_FA_BOOKMARK, kInspector)), Wait(2),
+        Click(ByLabel(ICON_FA_BOOKMARK, kInspector)), Wait(3),
+        Click(ByTag("bm:toggle")), Wait(3),
         ExpectTrue("asset bookmarked", [](Ctx&) {
             const auto& bm = Enhancers::EnhancerUserState::Get().InspectorBookmarks;
             return bm.size() == 1 && bm[0].Kind == Enhancers::RefKind::Asset;
         }),
         SelectByName("Beta"), Wait(3),
-        Click(ByExact("##chip", kInspector)), Wait(3),
+        Click(ByLabel(ICON_FA_BOOKMARK, kInspector)), Wait(3),
+        Click(ByTag("bm:Bob.cs")), Wait(3),
         Expect("asset shown", [](Ctx& c) {
             if (X::Selected(c.E) != entt::null) return std::string("an object is still selected");
             return X::AssetKey(c.E) == "assets/Scripts/Bob.cs" ? std::string() : "asset is " + X::AssetKey(c.E);
@@ -699,11 +739,28 @@ void RegisterTests() {
     Add("nav bar: drop a Hierarchy row to bookmark it", {
         FreshScene(), Wait(2),
         SelectByName("Alpha"), Wait(3),
-        Drag(ByTag("row:Gamma"), AtItem(ByLabel(ICON_FA_BOOKMARK, kInspector), ImVec2(60, 0))), Wait(2),
+        Drag(ByTag("row:Gamma"), AtItem(ByLabel(ICON_FA_BOOKMARK, kInspector))), Wait(2),
         ExpectTrue("Gamma bookmarked by drop", [](Ctx&) {
             for (const auto& r : Enhancers::EnhancerUserState::Get().InspectorBookmarks) if (r.Label == "Gamma") return true;
             return false;
         }),
+    });
+    Add("nav bar: Hierarchy bookmarks, remove from the list", {
+        FreshScene(), Wait(2),
+        SelectByName("Beta"), Wait(3),
+        Click(ByLabel(ICON_FA_BOOKMARK, kHierarchy)), Wait(3),
+        Click(ByTag("bm:toggle")), Wait(3),
+        ExpectTrue("Beta bookmarked", [](Ctx&) {
+            const auto& bm = Enhancers::EnhancerUserState::Get().EntityBookmarks;
+            return bm.size() == 1 && bm[0].Label == "Beta";
+        }),
+        SelectByName("Alpha"), Wait(3),
+        Click(ByLabel(ICON_FA_BOOKMARK, kHierarchy)), Wait(3),
+        Click(ByTag("bm:Beta")), Wait(3),
+        Expect("list selected Beta", [](Ctx& c) { return ExpectSelected(c, "Beta"); }),
+        Click(ByLabel(ICON_FA_BOOKMARK, kHierarchy)), Wait(3),
+        Click(RightEnd(ByTag("bm:Beta"))), Wait(3),
+        ExpectTrue("removed with the x", [](Ctx&) { return Enhancers::EnhancerUserState::Get().EntityBookmarks.empty(); }),
     });
 
     // ------------------------------------------------------------------ 3/4. Component sections

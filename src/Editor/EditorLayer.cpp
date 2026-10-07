@@ -283,6 +283,11 @@ void EditorLayer::Init(GLFWwindow* window) {
     const float baseFontPx = EditorTheme::kBaseFontPx * m_UIScale;
     ImFontConfig baseFontConfig;
     baseFontConfig.SizePixels = baseFontPx;
+    // Inter (745 glyphs) and JetBrains Mono carry their own private-use glyphs from U+E000, where
+    // Font Awesome 6 puts its newer icons; as the first source they won, so e.g. "clapperboard"
+    // (U+E131) drew Inter's glyph. Leave the icon range to the merged Font Awesome face.
+    static const ImWchar kIconRangeExclude[] = {ICON_MIN_FA, ICON_MAX_16_FA, 0};
+    baseFontConfig.GlyphExcludeRanges = kIconRangeExclude;
     std::snprintf(baseFontConfig.Name, sizeof(baseFontConfig.Name), "%s", EditorTheme::kUiFontName);
     ImFont* uiFont = io.Fonts->AddFontFromFileTTF(
         EnginePaths::Resolve("assets/fonts/InterVariable.ttf").c_str(), baseFontPx, &baseFontConfig);
@@ -344,6 +349,9 @@ static void SetSharedMetrics(ImGuiStyle& style) {
     style.TabRounding       = 3.0f;
     style.ScrollbarRounding = 3.0f;
     style.GrabRounding      = 2.0f;
+    // Greyed-out controls (BeginDisabled): far enough down that "can't edit this" reads at a glance
+    // on the black panels, still legible (ImGui's default is 0.6).
+    style.DisabledAlpha     = 0.45f;
     style.WindowPadding     = ImVec2(10.0f, 8.0f);
     style.FramePadding      = ImVec2(8.0f, 4.0f);
     style.CellPadding       = ImVec2(6.0f, 3.0f);
@@ -423,7 +431,7 @@ static void ApplyTartarusPalette(ImGuiStyle& style) {
     c[ImGuiCol_TextSelectedBg]        = WithAlpha(Accent, 0.28f);
     c[ImGuiCol_WindowBg]              = Panel;
     c[ImGuiCol_ChildBg]               = ImVec4(0, 0, 0, 0);
-    c[ImGuiCol_PopupBg]               = Rgb(0x1A, 0x1A, 0x20, 0.98f);
+    c[ImGuiCol_PopupBg]               = Rgb(0x14, 0x14, 0x14, 1.00f); // opaque: nothing under a menu reads through it
     c[ImGuiCol_Border]                = Hairline;
     c[ImGuiCol_BorderShadow]          = ImVec4(0, 0, 0, 0);
     c[ImGuiCol_FrameBg]               = Field;

@@ -7,8 +7,12 @@
 #include "ComponentRegistry.h"
 #include "World.h"
 #include "Scripting/ScriptRuntime.h"
+#include "EditorTheme.h"
+#include "EditorUIPrimitives.h"
 #include <imgui.h>
+#include <imgui_internal.h> // DC.IsSameLine
 #include <json.hpp>
+#include <cstring>
 using namespace EditorInternal;
 void EditorLayer::OpenScriptIDE(const std::string& path,int line,int column) {
     if(!m_ScriptIDE)m_ScriptIDE=std::make_unique<ScriptIDE>();
@@ -49,7 +53,8 @@ int EditorLayer::ManagedEditorService(World& world,AssetLibrary& assets,int op,S
     if(op==129) {if(*text)OpenScriptIDE(ProjectPaths::Resolve(text),r.Result,static_cast<int>(r.Value));else OpenScriptIDE();return 1;}
     if(!windows && !inlineInspector)return 0;
     if(op==117) {
-        const bool open=ImGui::TreeNodeEx(text,ImGuiTreeNodeFlags_SpanAvailWidth|(r.Result?ImGuiTreeNodeFlags_DefaultOpen:0));
+        // A C# foldout: the framed raised strip every Inspector foldout uses.
+        const bool open=EditorUIPrimitives::FramedFoldout(text,r.Result?ImGuiTreeNodeFlags_DefaultOpen:0);
         if(open)++groups;return open?1:0;
     }
     if(op==118) {if(!groups)return 0;ImGui::TreePop();--groups;return 1;}
@@ -76,8 +81,15 @@ int EditorLayer::ManagedEditorService(World& world,AssetLibrary& assets,int op,S
     } tag{op,text,r};
     switch(op) {
     case 102:ImGui::TextUnformatted(text);return 1;
-    case 103:return ActionButton(text,"Run this C# editor command")?1:0;
-    case 104:{bool value=r.Result!=0;const bool changed=ImGui::Checkbox(text,&value);r.Result=value?1:0;return changed?1:0;}
+    case 103:{
+        // Buttons and variant chips: the raised secondary button, so neither reads as bare text.
+        const bool chip=ImGui::GetCurrentWindow()->DC.IsSameLine || std::strstr(text,"##")!=nullptr;
+        if(chip) EditorTheme::PushSmall();
+        const bool clicked=EditorUIPrimitives::SecondaryButton(text);
+        if(chip) EditorTheme::PopFont();
+        return clicked?1:0;
+    }
+    case 104:{bool value=r.Result!=0;const bool changed=EditorUIPrimitives::Checkbox(text,&value);r.Result=value?1:0;return changed?1:0;}
     case 105:return ImGui::DragFloat(text,&r.Value,.05f)?1:0;
     case 106:return ImGui::DragInt(text,&r.Result,1)?1:0;
     case 107:return ImGui::DragFloat3(text,&r.A.x,.05f)?1:0;
@@ -96,9 +108,13 @@ int EditorLayer::ManagedEditorService(World& world,AssetLibrary& assets,int op,S
               if(i && ImGui::GetItemRectMax().x+ImGui::GetStyle().ItemSpacing.x+width<=right)ImGui::SameLine();
               ImGui::PushID(static_cast<int>(i));
               const bool active=r.Result==static_cast<int>(i);
-              if(active)ImGui::PushStyleColor(ImGuiCol_Button,ImGui::GetStyleColorVec4(ImGuiCol_ButtonActive));
+              // A toolbar of choices: the segmented look (accent wash on the chosen one).
+              ImGui::PushStyleColor(ImGuiCol_Button,active?EditorTheme::AccentWash:EditorTheme::Raised);
+              ImGui::PushStyleColor(ImGuiCol_ButtonHovered,active?EditorTheme::WithAlpha(EditorTheme::Accent,0.20f):EditorTheme::Hover);
+              ImGui::PushStyleColor(ImGuiCol_ButtonActive,active?EditorTheme::WithAlpha(EditorTheme::Accent,0.28f):EditorTheme::Pressed);
+              ImGui::PushStyleColor(ImGuiCol_Text,active?EditorTheme::AccentBright:EditorTheme::Secondary);
               if(ImGui::Button(labels[i].c_str()))r.Result=static_cast<int>(i);
-              if(active)ImGui::PopStyleColor();
+              ImGui::PopStyleColor(4);
             ImGui::PopID();
         }
         return 1;

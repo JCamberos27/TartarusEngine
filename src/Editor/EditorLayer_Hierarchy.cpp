@@ -966,40 +966,44 @@ void EditorLayer::DrawHierarchyTreeBody(World& world, AssetLibrary& assets) {
                 rowDl->AddRectFilled(ImVec2(wp.x, rp.y), ImVec2(wp.x + ImGui::GetWindowWidth(), rp.y + rowH),
                                      EditorTheme::U32(EditorTheme::Stripe));
 
-            // vHierarchy row colour: a wash from the row's own indent to the panel edge, flat or
-            // fading out to the right. Painted before the row so the selection highlight sits on top.
-            const auto* style = es.HierarchyRowStyles ? world.Registry.try_get<HierarchyStyleComponent>(row.Entity) : nullptr;
-            if (style && style->Color != 0 && style->FillMode != HierarchyStyleComponent::None && !style->Separator) {
-                const float x0 = rp.x + row.Depth * indentW;
-                const float x1 = wp.x + ImGui::GetWindowWidth();
-                const ImU32 rgb = style->Color & 0x00FFFFFFu;
-                if (style->FillMode == HierarchyStyleComponent::Flat) {
-                    rowDl->AddRectFilled(ImVec2(x0, rp.y), ImVec2(x1, rp.y + rowH), rgb | 0x3A000000u, EditorTheme::Px(2.0f));
-                } else {
-                    const float mid = x0 + (x1 - x0) * 0.75f;
-                    rowDl->AddRectFilledMultiColor(ImVec2(x0, rp.y), ImVec2(mid, rp.y + rowH),
-                                                   rgb | 0x60000000u, rgb, rgb, rgb | 0x60000000u);
-                }
+            // The row's background, full width: the vHierarchy colour as a stripe at the row's indent
+            // plus a faint wash, then hover and selection over it (DrawStyledRowBackground), so a
+            // selected row reads as selected whatever its colour. Hover and selection ease in; the
+            // row body keeps ImGui's own header highlight transparent.
+            {
+                const auto* style = es.HierarchyRowStyles ? world.Registry.try_get<HierarchyStyleComponent>(row.Entity) : nullptr;
+                const bool styled = style && style->Color != 0 && !style->Separator;
+                const ImVec2 bgMin(wp.x, rp.y);
+                const ImVec2 bgMax(rp.x + ImGui::GetContentRegionAvail().x, rp.y + rowH);
+                const bool hov = ImGui::IsWindowHovered() && ImGui::IsMouseHoveringRect(bgMin, bgMax);
+                const float selT = EditorTheme::AnimT(ImGui::GetID("##rowSel"), IsSelected(row.Entity), EditorTheme::MotionNormal);
+                const float hovT = EditorTheme::AnimT(ImGui::GetID("##rowHov"), hov);
+                EditorUIPrimitives::DrawStyledRowBackground(rowDl, bgMin, bgMax, std::floor(rp.x + row.Depth * indentW),
+                                                            styled ? style->Color : 0u, styled ? (int)style->FillMode : 0,
+                                                            selT, hovT);
             }
 
             // Tree lines: one vertical guide per ancestor level that still has rows below, plus
-            // this row's own elbow. All from the ContinueMask FlattenHierarchyRows computed.
+            // this row's own elbow. All from the ContinueMask FlattenHierarchyRows computed. Solid
+            // pixel-aligned rects, so the elbow's corner meets cleanly at every scale.
             if (drawTreeLines && row.Depth > 0) {
                 const float chevC = ImGui::GetFontSize() * 0.55f; // centre of a row's chevron slot
-                const float yTop = rp.y - ImGui::GetStyle().ItemSpacing.y;
-                const float yMid = rp.y + rowH * 0.5f;
-                const float yBot = rp.y + rowH;
-                const ImU32 lc = EditorTheme::U32(EditorTheme::WithAlpha(EditorTheme::Dim, 0.55f));
+                const float lw = std::max(1.0f, std::floor(EditorTheme::Px(1.0f)));
+                const float yTop = std::floor(rp.y - ImGui::GetStyle().ItemSpacing.y);
+                const float yMid = std::floor(rp.y + rowH * 0.5f);
+                const float yBot = std::floor(rp.y + rowH);
+                const ImU32 lc = EditorTheme::U32(EditorTheme::Strong);
                 const int depth = std::min(row.Depth, 32);
                 for (int k = 0; k < depth - 1; ++k)
                     if (row.ContinueMask & (1u << k)) {
-                        const float x = std::floor(rp.x + k * indentW + chevC) + 0.5f;
-                        rowDl->AddLine(ImVec2(x, yTop), ImVec2(x, yBot), lc);
+                        const float x = std::floor(rp.x + k * indentW + chevC);
+                        rowDl->AddRectFilled(ImVec2(x, yTop), ImVec2(x + lw, yBot), lc);
                     }
-                const float x = std::floor(rp.x + (depth - 1) * indentW + chevC) + 0.5f;
+                const float x = std::floor(rp.x + (depth - 1) * indentW + chevC);
                 const bool more = (row.ContinueMask & (1u << (depth - 1))) != 0;
-                rowDl->AddLine(ImVec2(x, yTop), ImVec2(x, more ? yBot : yMid), lc);
-                rowDl->AddLine(ImVec2(x, std::floor(yMid) + 0.5f), ImVec2(rp.x + depth * indentW + ImGui::GetFontSize() * 0.2f, std::floor(yMid) + 0.5f), lc);
+                rowDl->AddRectFilled(ImVec2(x, yTop), ImVec2(x + lw, more ? yBot : yMid + lw), lc);
+                const float xEnd = std::floor(rp.x + depth * indentW + ImGui::GetFontSize() * 0.2f);
+                if (xEnd > x + lw) rowDl->AddRectFilled(ImVec2(x + lw, yMid), ImVec2(xEnd, yMid + lw), lc);
             }
 
             if (row.Depth > 0) ImGui::Indent(row.Depth * indentW);
@@ -1278,7 +1282,7 @@ void EditorLayer::DrawHierarchyRowBody(World& world, AssetLibrary& assets, entt:
     // Muted per-kind tint so kinds separate at a glance without the panel turning to confetti —
     // amber light, blue camera (the #234 accent roles); mesh/empty stay near the text colour
     // since they're the bulk of every scene. Overridden to the disabled grey on inactive rows.
-    const ImU32 kindCol = (rowStyle && rowStyle->Color != 0) ? (rowStyle->Color | 0xFF000000u) : EditorTheme::U32(
+    const ImU32 kindCol = (rowStyle && rowStyle->Color != 0) ? EditorTheme::U32(EditorTheme::UserGlyphColor(rowStyle->Color)) : EditorTheme::U32(
         hasLight  ? EditorTheme::KindLight :
         hasCamera ? EditorTheme::KindCamera :
         hasMesh   ? EditorTheme::KindMesh : EditorTheme::Secondary);
@@ -1325,7 +1329,11 @@ void EditorLayer::DrawHierarchyRowBody(World& world, AssetLibrary& assets, entt:
     // this list — without this flag, ImGui's own keyboard nav would also try to move focus between
     // rows on the same keypress once NavEnableKeyboard is on.
     ImGui::PushItemFlag(ImGuiItemFlags_NoNav, true);
+    ImGui::PushStyleColor(ImGuiCol_Header, ImVec4(0, 0, 0, 0));
+    ImGui::PushStyleColor(ImGuiCol_HeaderHovered, ImVec4(0, 0, 0, 0));
+    ImGui::PushStyleColor(ImGuiCol_HeaderActive, ImVec4(0, 0, 0, 0));
     ImGui::TreeNodeEx("##node", nodeFlags, "%s", "");
+    ImGui::PopStyleColor(3);
     ImGui::PopItemFlag();
     if (EditorTestProbeActive())
         if (const auto* tn = world.Registry.try_get<NameComponent>(entity)) EditorTestTag(("row:" + tn->Name).c_str());
@@ -1344,6 +1352,13 @@ void EditorLayer::DrawHierarchyRowBody(World& world, AssetLibrary& assets, entt:
     const bool rowHovered = ImGui::IsItemHovered();
     const bool clickOnArrow = hasChildren && rowHovered &&
         ImGui::GetIO().MousePos.x < rowMin.x + arrowSlotW;
+    // Minimap visibility (Preferences): on every row, or only on the hovered and selected rows,
+    // fading in and out so the column doesn't flicker as the cursor crosses the list.
+    float miniAlpha = 1.0f;
+    if (miniCount > 0 && es.HierarchyMinimapWhen == 1) {
+        miniAlpha = EditorTheme::AnimT(ImGui::GetID("##miniFade"), rowHovered || selected);
+        if (miniAlpha <= 0.0f) { miniCount = 0; miniExtra = 0; }
+    }
     // The row's right cluster — SceneVis eye + lock + the Active checkbox — is drawn below via
     // SetCursorScreenPos over the full-width node, so its InvisibleButtons and the node both see
     // the same click. Carve the cluster's whole X span out of the row's click / double-click
@@ -1441,7 +1456,7 @@ void EditorLayer::DrawHierarchyRowBody(World& world, AssetLibrary& assets, entt:
     // The hovered strip fills with a solid block so the whole reactive area is visible.
     if (const ImGuiPayload* drag = ImGui::GetDragDropPayload();
         drag && drag->IsDataType("HIERARCHY_ENTITY")) {
-        const float midY  = (rowMin.y + rowMax.y) * 0.5f;
+        const float midY  = rowMin.y + ImGui::GetFrameHeight() * 0.5f; // the drawn row's midline
         const float pitch = ImGui::GetFrameHeight() + ImGui::GetStyle().ItemSpacing.y;
         const float half  = pitch * 0.5f;
         const float pInset = pitch * 0.30f;          // parent zone = +/- this around the name
@@ -1539,12 +1554,14 @@ void EditorLayer::DrawHierarchyRowBody(World& world, AssetLibrary& assets, entt:
         ImU32 col = EditorTheme::U32((inactive || sceneHiddenRow) ? EditorTheme::Dim : EditorTheme::Text);
         if (prefabInst && !inactive && !sceneHiddenRow)
             col = EditorTheme::U32(prefabInst->Missing ? EditorTheme::KindPrefabBroken : EditorTheme::KindPrefab);
-        // The selected row: an accent bar at its left edge over the theme's accent selection wash.
-        if (selected)
-            dl->AddRectFilled(ImVec2(ImGui::GetWindowPos().x, rowMin.y), ImVec2(ImGui::GetWindowPos().x + EditorTheme::Px(2.0f), rowMax.y),
-                              EditorTheme::U32(EditorTheme::Accent));
-        // The name never runs under the minimap or the eye / lock / active column on the right.
-        dl->PushClipRect(ImVec2(rowMin.x, rowMin.y), ImVec2((miniCount > 0 ? miniLeft : rowMax.x - rowIconsBandW) - EditorTheme::Px(4.0f), rowMax.y), true);
+        // (The selection wash and its accent bar are the row background, painted by the tree body.)
+        // Everything is centred on the row's midline: the row is one frame tall from its top.
+        const float cy = std::floor(rowMin.y + ImGui::GetFrameHeight() * 0.5f);
+        const float textY = cy - std::floor(fontSize * 0.5f);
+        // The name never runs under the minimap or the eye / lock / active column on the right;
+        // it is cut with an ellipsis there.
+        const float clipRight = (miniCount > 0 ? miniLeft : rowMax.x - rowIconsBandW) - EditorTheme::Px(4.0f);
+        dl->PushClipRect(ImVec2(rowMin.x, rowMin.y), ImVec2(clipRight, rowMin.y + ImGui::GetFrameHeight()), true);
 
         // Disclosure chevron — a light Font Awesome ">" / "v" (0.66em) centred in the leading
         // slot, in the dim text colour, brightening on arrow-hover. Replaces ImGui's chunky
@@ -1555,66 +1572,73 @@ void EditorLayer::DrawHierarchyRowBody(World& world, AssetLibrary& assets, entt:
             const ImVec2 cm = ImGui::GetFont()->CalcTextSizeA(chSize, FLT_MAX, 0.0f, chev);
             const ImU32 chCol = EditorTheme::U32(clickOnArrow ? EditorTheme::Text : EditorTheme::Dim);
             dl->AddText(ImGui::GetFont(), chSize,
-                        ImVec2(rowMin.x + (fontSize * 1.1f - cm.x) * 0.5f,
-                               rowMin.y + (ImGui::GetFrameHeight() - cm.y) * 0.5f),
+                        ImVec2(std::floor(rowMin.x + (fontSize * 1.1f - cm.x) * 0.5f), std::floor(cy - cm.y * 0.5f)),
                         chCol, chev);
         }
-        // Editor Enhancers / vHierarchy separator: a section header - the name in small caps-
-        // tracked text centred between two hairlines, in the row colour when it has one.
+        // Editor Enhancers / vHierarchy separator: a section header in the SectionHeader voice -
+        // the row colour as a dot, the name in tracked mono capitals, then a hairline out to the
+        // right. Brightens under the cursor.
         const float nameX = drawGlyph ? labelX + slotW : labelX;
         if (isSeparator) {
-            const ImU32 sc = (rowStyle->Color != 0 && !inactive) ? (rowStyle->Color | 0xFF000000u) : EditorTheme::U32(EditorTheme::Secondary);
+            const float hovS = EditorTheme::AnimT(ImGui::GetID("##sepHov"), rowHovered);
             std::string caps = shownName;
             for (char& c : caps) c = (char)std::toupper((unsigned char)c);
-            EditorTheme::PushSmall();
-            const ImVec2 ts = ImGui::CalcTextSize(caps.c_str());
-            const float x0 = labelX, x1 = rowMax.x - EditorTheme::Px(6.0f);
-            const float cx = std::max(x0, (x0 + x1 - ts.x) * 0.5f);
-            const float cy = (rowMin.y + rowMax.y) * 0.5f;
-            const float pad = EditorTheme::Px(6.0f);
-            const ImU32 lineCol = (sc & 0x00FFFFFFu) | 0x70000000u;
-            if (cx - pad > x0) dl->AddLine(ImVec2(x0, std::floor(cy) + 0.5f), ImVec2(cx - pad, std::floor(cy) + 0.5f), lineCol);
-            if (cx + ts.x + pad < x1) dl->AddLine(ImVec2(cx + ts.x + pad, std::floor(cy) + 0.5f), ImVec2(x1, std::floor(cy) + 0.5f), lineCol);
-            dl->AddText(ImVec2(cx, cy - ts.y * 0.5f), sc, caps.c_str());
+            float x = labelX;
+            if (rowStyle->Color != 0) {
+                const float r = EditorTheme::Px(3.0f);
+                dl->AddCircleFilled(ImVec2(x + r, cy + 0.5f), r,
+                                    EditorTheme::U32(inactive ? EditorTheme::Dim : EditorTheme::UserGlyphColor(rowStyle->Color)), 12);
+                x += r * 2.0f + EditorTheme::Px(7.0f);
+            }
+            EditorTheme::PushHeading();
+            const float tracking = EditorTheme::HeadingTracking();
+            const ImVec2 ts = EditorTheme::CalcTrackedSize(caps.c_str(), tracking);
+            const ImU32 tc = EditorTheme::U32(inactive ? EditorTheme::Dim
+                                                       : EditorTheme::Mix(EditorTheme::Secondary, EditorTheme::Text, hovS));
+            EditorTheme::DrawTracked(dl, ImVec2(x, std::floor(cy - ImGui::GetFontSize() * 0.5f)), tc, caps.c_str(), tracking);
             EditorTheme::PopFont();
+            x += ts.x + EditorTheme::Px(10.0f);
+            const float x1 = rowMax.x - EditorTheme::Px(6.0f);
+            if (x1 > x)
+                dl->AddRectFilled(ImVec2(x, cy), ImVec2(x1, cy + std::max(1.0f, std::floor(EditorTheme::Px(1.0f)))),
+                                  EditorTheme::U32(EditorTheme::Mix(EditorTheme::Hairline, EditorTheme::Strong, hovS)));
         } else {
             if (drawGlyph) {
-                dl->AddText(ImVec2(labelX, rowMin.y), inactive ? col : kindCol, primaryGlyph);
+                dl->AddText(ImVec2(labelX, textY), inactive ? col : kindCol, primaryGlyph);
                 if (secondaryGlyph && !customGlyph) {
                     const float sub = fontSize * 0.68f;
                     const ImU32 secBase = inactive ? col
                                         : EditorTheme::U32((hasMesh && hasLight) ? EditorTheme::KindLight : EditorTheme::KindCamera);
                     dl->AddText(ImGui::GetFont(), sub,
-                                ImVec2(labelX + slotW - sub, rowMin.y + fontSize - sub),
+                                ImVec2(labelX + slotW - sub, textY + fontSize - sub),
                                 (secBase & 0x00FFFFFFu) | 0xB4000000u, secondaryGlyph);
                 }
             }
-            dl->AddText(ImVec2(nameX, rowMin.y), col, shownName.c_str());
-            // vHierarchy D: this row is the scene's default parent - new objects land under it.
-            if (entity == m_HierDefaultParentNow) {
-                const ImVec2 ns = ImGui::CalcTextSize(shownName.c_str());
-                const float bs = fontSize * 0.72f;
-                const ImVec2 bp(nameX + ns.x + fontSize * 0.35f, rowMin.y + (fontSize - bs) * 0.5f);
+            // Badges after the name: the default-parent mark (vHierarchy D) and the prefab badge
+            // (Phase 5 item 8 - a glyph, not just the name's tint, says "prefab instance"). The
+            // name gives up room for them before it is cut.
+            const float bs = fontSize * 0.72f, bGap = fontSize * 0.35f;
+            const bool defaultParent = entity == m_HierDefaultParentNow;
+            const bool prefabBadge = prefabInst && !inactive && !sceneHiddenRow;
+            const float badgesW = (defaultParent ? bs + bGap : 0.0f) + (prefabBadge ? bs + bGap : 0.0f);
+            const float nameMaxX = std::max(nameX + fontSize, clipRight - badgesW);
+            EditorUIPrimitives::TextEllipsis(dl, ImVec2(nameX, textY), nameMaxX, col, shownName.c_str());
+            float bx = std::min(nameX + ImGui::CalcTextSize(shownName.c_str()).x, nameMaxX) + bGap;
+            const float by = std::floor(cy - bs * 0.5f);
+            if (defaultParent) {
+                const ImVec2 bp(bx, by);
                 dl->AddText(ImGui::GetFont(), bs, bp, EditorTheme::U32(EditorTheme::Accent), ICON_FA_ARROW_RIGHT_TO_BRACKET);
                 if (ImGui::IsMouseHoveringRect(bp, ImVec2(bp.x + bs, bp.y + bs)))
                     EditorUI::SetTooltip("Default parent: new objects are created under this one (D over a row toggles it).");
+                bx += bs + bGap;
             }
-        }
-
-        // Phase 5 item 8 — a badge glyph beside the name, not just the blue/red colour tint
-        // above: on its own, that tint collides with the palette's blue=active role (the camera
-        // kind glyph and the selection accent are both blue-family too), so colour alone doesn't
-        // reliably say "this is a prefab instance."
-        if (prefabInst && !inactive && !sceneHiddenRow && !isSeparator) {
-            const ImVec2 nameSize = ImGui::CalcTextSize(shownName.c_str());
-            const float badgeSize = fontSize * 0.72f;
-            const ImVec2 badgePos(nameX + nameSize.x + fontSize * 0.35f,
-                                   rowMin.y + (fontSize - badgeSize) * 0.5f);
-            dl->AddText(ImGui::GetFont(), badgeSize, badgePos, col,
-                        prefabInst->Missing ? ICON_FA_LINK_SLASH : ICON_FA_BOX_ARCHIVE);
-            if (ImGui::IsMouseHoveringRect(badgePos, ImVec2(badgePos.x + badgeSize, badgePos.y + badgeSize)))
-                EditorUI::SetTooltip(prefabInst->Missing ? "Prefab instance - link to its source is broken"
-                                                          : "Prefab instance");
+            if (prefabBadge) {
+                const ImVec2 bp(bx, by);
+                dl->AddText(ImGui::GetFont(), bs, bp, col, prefabInst->Missing ? ICON_FA_LINK_SLASH : ICON_FA_BOX_ARCHIVE);
+                if (ImGui::IsMouseHoveringRect(bp, ImVec2(bp.x + bs, bp.y + bs)))
+                    EditorUI::SetTooltip(prefabInst->Missing ? "Prefab instance - link to its source is broken"
+                                                              : "Prefab instance");
+            }
         }
         dl->PopClipRect();
 
@@ -1624,30 +1648,44 @@ void EditorLayer::DrawHierarchyRowBody(World& world, AssetLibrary& assets, entt:
             EditorTheme::PushSmall();
             const auto& all = ComponentRegistry::All();
             float x = miniLeft + EditorTheme::Px(4.0f);
-            const float cy = (rowMin.y + rowMax.y) * 0.5f;
+            const float cellH = ImGui::GetFrameHeight() - EditorTheme::Px(6.0f);
+            const float rnd = EditorTheme::Px(3.0f);
+            const ImVec4 base = (inactive || sceneHiddenRow) ? EditorTheme::WithAlpha(EditorTheme::Dim, 0.6f) : EditorTheme::Dim;
+            auto cell = [&](int k, float w) {
+                const float h = EditorTheme::AnimT(ImGui::GetID(k + 1000), hoveredMini == k);
+                if (h > 0.0f)
+                    dl->AddRectFilled(ImVec2(x + 1.0f, cy - cellH * 0.5f), ImVec2(x + w - 1.0f, cy + cellH * 0.5f),
+                                      EditorTheme::U32(EditorTheme::WithAlpha(EditorTheme::Pressed, h * miniAlpha)), rnd);
+                ImVec4 c = EditorTheme::Mix(base, EditorTheme::Text, h);
+                c.w *= miniAlpha;
+                return EditorTheme::U32(c);
+            };
             for (int k = 0; k < miniCount; ++k) {
                 const char* ic = all[(size_t)miniIdx[k]].Meta.Icon;
                 if (!ic || !*ic) ic = ICON_FA_PUZZLE_PIECE;
                 const ImVec2 is = ImGui::CalcTextSize(ic);
-                const ImU32 c = EditorTheme::U32(hoveredMini == k ? EditorTheme::Text
-                                                 : (inactive || sceneHiddenRow) ? EditorTheme::WithAlpha(EditorTheme::Dim, 0.6f)
-                                                                                : EditorTheme::Dim);
-                dl->AddText(ImVec2(x + (miniCellW - is.x) * 0.5f, cy - is.y * 0.5f), c, ic);
+                const ImU32 c = cell(k, miniCellW);
+                dl->AddText(ImVec2(std::floor(x + (miniCellW - is.x) * 0.5f), std::floor(cy - is.y * 0.5f)), c, ic);
                 x += miniCellW;
             }
             if (miniExtra > 0) {
                 char plus[8];
                 std::snprintf(plus, sizeof(plus), "+%d", miniExtra);
                 const ImVec2 ps = ImGui::CalcTextSize(plus);
-                dl->AddText(ImVec2(x + (miniPlusW - ps.x) * 0.5f, cy - ps.y * 0.5f),
-                            EditorTheme::U32(hoveredMini == miniCount ? EditorTheme::Text : EditorTheme::Dim), plus);
+                const ImU32 c = cell(miniCount, miniPlusW);
+                dl->AddText(ImVec2(std::floor(x + (miniPlusW - ps.x) * 0.5f), std::floor(cy - ps.y * 0.5f)), c, plus);
             }
             EditorTheme::PopFont();
         }
     }
 
-    // A separator row is a header: no eye / lock / active column.
-    if (isSeparator) return;
+    // A separator row is a header: no eye / lock / active column. It still takes a full row's
+    // height, which the cluster's frame-tall buttons give every other row.
+    if (isSeparator) {
+        ImGui::SameLine(0.0f, 0.0f);
+        ImGui::Dummy(ImVec2(0.0f, ImGui::GetFrameHeight()));
+        return;
+    }
 
     // Active-state eye, pinned to a fixed right-hand column so every row's eye lines up no matter
     // how deep it sits. Drawn after the row so a click on it never also selects the row.

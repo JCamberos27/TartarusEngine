@@ -2007,7 +2007,7 @@ int main(int argc, char** argv) {
 
         // --editor-shot: each view gets kEditorShotFrames frames - set up halfway, captured at the end.
         const int kEditorShotFrames = editorShotIDE ? 450 : 150; // allow the async Roslyn result to reach the captured IDE frame
-        const std::vector<const char*> kEditorShots = editorShotIDE ? std::vector<const char*>{"script-ide"} : editorShotCurves ? std::vector<const char*>{"recoil-curves","recoil-targets","recoil-smoothing","recoil-layers","recoil-misc"} : std::vector<const char*>{"overview", "inspector", "console", "game", "settings", "settings-viewport",
+        const std::vector<const char*> kEditorShots = editorShotIDE ? std::vector<const char*>{"script-ide"} : editorShotCurves ? std::vector<const char*>{"recoil-curves","recoil-targets","recoil-smoothing","recoil-layers","recoil-misc"} : std::vector<const char*>{"overview", "inspector", "enhancers", "bookmarks", "favorites", "console", "game", "settings", "settings-viewport",
                                                    "settings-performance", "project-settings", "project-tags", "project-build",
                                                    "lighting", "animator"};
         int editorShotFrame = 0;
@@ -4553,7 +4553,11 @@ int main(int argc, char** argv) {
                         if(view=="script-ide")editor.OpenScriptIDE(ProjectPaths::Resolve("assets/Scripts/Bob.cs"));
                         auto focus = [](const char* title) {
                             for (ImGuiWindow* w : ImGui::GetCurrentContext()->Windows)
-                                if (std::strstr(w->Name, title) && std::strncmp(w->Name, "##", 2) != 0 && !(w->Flags & ImGuiWindowFlags_ChildWindow)) ImGui::SetWindowFocus(w->Name);
+                                if (std::strstr(w->Name, title) && std::strncmp(w->Name, "##", 2) != 0 && !(w->Flags & ImGuiWindowFlags_ChildWindow)) {
+                                    // A docked window: select its tab too (focus alone can lose to a tab that asks for focus).
+                                    if (w->DockNode && w->DockNode->TabBar) w->DockNode->TabBar->NextSelectedTabId = w->TabId;
+                                    ImGui::SetWindowFocus(w->Name);
+                                }
                         };
                         if (view == "overview") {
                             EditorModuleHost::ConsoleState().Visible = true; // a tab now, in front for "console"
@@ -4566,7 +4570,12 @@ int main(int argc, char** argv) {
                             focus("###Assets");
                         }
                         else if (view == "inspector") editor.SetExpandAllComponents(true);
-                        else if (view == "console") { editor.SetExpandAllComponents(false); focus("###Console"); }
+                        // Editor Enhancers: the Inspector and Asset Browser in front (their header rows,
+                        // tabs and trees), then the bookmarks list open, then the favorites overlay.
+                        else if (view == "enhancers") { editor.SetExpandAllComponents(false); EditorModuleHost::ConsoleState().Visible = false; focus("###Inspector"); focus("###Assets"); }
+                        else if (view == "bookmarks") editor.ShotOpenInspectorBookmarks();
+                        else if (view == "favorites") { ImGui::ClosePopupsExceptModals(); editor.ShotSetFavoritesLocked(true); }
+                        else if (view == "console") { editor.ShotSetFavoritesLocked(false); EditorModuleHost::ConsoleState().Visible = true; focus("###Console"); }
                         else if (view == "game") focus("###Game");
                         else if (view == "settings") editor.OpenPreferences();
                         else if (view == "settings-viewport") editor.OpenSettingsCategory(false, 1);

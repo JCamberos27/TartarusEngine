@@ -245,6 +245,9 @@ public:
     bool IsInPlayMode() const { return m_InPlayMode; }
     // --editor-shot: draw every Inspector component open, so a capture shows their contents.
     void SetExpandAllComponents(bool on) { m_ExpandAllComponents = on; }
+    // --editor-shot: open the Inspector's bookmarks list next frame; pin the favorites overlay.
+    void ShotOpenInspectorBookmarks() { m_ShotOpenBookmarks = true; }
+    void ShotSetFavoritesLocked(bool on) { m_FavLocked = on; }
     void SetShowLighting(bool on) { m_ShowLighting = on; }
     void SetShowAnimator(bool on) { m_ShowAnimator = on; }
     void CloseSettingsWindow() { m_ShowPreferences = false; }
@@ -384,6 +387,10 @@ public:
         std::string Asset;
     };
     void DrawInspectorNavBar(World& world, InspectorNavAction& act);
+    // The Inspector's one header row when bookmarks aren't chips: [<][>] | tabs or the inspected
+    // object's name | [bookmarks]. Drawn after the tab strip (which leaves room at both ends) and
+    // after the lock / tab swap, at `rowMin`.
+    void DrawInspectorHeaderNav(World& world, InspectorNavAction& act, ImVec2 rowMin, bool stripShown);
     void ApplyInspectorNavAction(World& world, const InspectorNavAction& act);
     // Pinned component windows (vHierarchy minimap Alt+click, vInspector "Open in Window"): one
     // floating editor per (entity, reflected component), drawn by the host each frame.
@@ -396,6 +403,7 @@ public:
     void SetHoveredAssetFolder(const std::string& path) { m_HoverAssetFolder = path; m_HoverAssetFolderSet = true; }
     void DrawFolderNavBar(World& world, AssetLibrary& assets);
     void DrawFolderBookmarkBar(AssetLibrary& assets);
+    void DrawFolderBookmarkButton(AssetLibrary& assets, ImVec2 at, ImVec2 dropMin, ImVec2 dropMax);
     // --- Editor Enhancers / vTabs (EditorLayer_Enhancers.cpp) ----------------------------------
     // Tab strips in the Inspector (DrawInspectorBody, host side) and the Asset Browser (drawn from
     // DrawFolderNavBar, so no module API change). The lists live in Enhancers::TabState.
@@ -415,11 +423,13 @@ public:
     // wheel scrolling, the per-tab menu and the drop target. Returns true when Active changed.
     bool DrawTabStrip(const char* id, Enhancers::TabStrip& strip, TabStripView& view, const std::vector<TabStripItem>& items,
                       const char* liveLabel, const char* liveIcon,
-                      const std::function<void()>& plusMenu, const std::function<void()>& acceptDrop, bool showDropHint);
-    void DrawInspectorTabStrip(World& world);
+                      const std::function<void()>& plusMenu, const std::function<void()>& acceptDrop, bool showDropHint,
+                      float leftInset = 0.0f, float rightInset = 0.0f);
+    // Both return whether a strip was drawn (a strip appears once there is a tab, or during a drag).
+    bool DrawInspectorTabStrip(World& world, float leftInset = 0.0f, float rightInset = 0.0f);
     // Drag payload of a component header (Inspector -> a tab strip): the object by order + name.
     struct InspectorComponentPayload { int Order = -1; char Component[64] = {}; };
-    void DrawAssetTabStrip(AssetLibrary& assets);
+    bool DrawAssetTabStrip(AssetLibrary& assets, float rightInset = 0.0f, bool alwaysShow = false);
     // The Inspector tab currently shown, resolved: an entity of the open scene, or an asset key.
     // False when the Selection tab is active.
     bool ResolveInspectorTab(const World& world, entt::entity& entity, std::string& asset, bool& missing) const;
@@ -437,6 +447,7 @@ public:
     bool FavoritesOverlayVisible() const { return m_FavVisible; }
     int    m_FavPage = 0;            // the shown page; also where stars and drops add
     bool   m_FavLocked = false;      // pinned open (Ctrl+Alt+F, or the overlay's pin)
+    bool   m_ShotOpenBookmarks = false; // --editor-shot: open the Inspector bookmarks list once
     bool   m_FavVisible = false;     // drawn this frame; next frame's shortcut gating reads it
     bool   m_FavWaitRelease = false; // after activating an item, ignore the held key until released
     double m_FavHoldStart = -1.0;
@@ -447,6 +458,9 @@ public:
     char   m_FavRenameBuf[64] = {};
     int    m_FavHighlight = -1;      // Up/Down keyboard highlight on the shown page
     float  m_FavWheel = 0.0f;
+    int    m_FavPrevPage = -1;       // the page sliding out during a switch
+    bool   m_FavKeyNav = false;      // the keyboard is driving the highlight (shows the focus ring)
+    float  m_FavPillX = 0.0f, m_FavPillW = 0.0f; // the page indicator, gliding to the shown page
     std::string m_FavPendingScene;   // an entity favorite in another scene: select it once that scene is open
     int    m_FavPendingOrder = -1;
     // The Asset Browser's favourite stars are now "is this asset on any favorites page":
@@ -1072,6 +1086,9 @@ private:
     int  m_RulerDepth = 0;                      // which object along the cursor ray is measured (wheel)
     float m_RulerWheel = 0.0f;
     entt::entity m_RulerHitEntity = entt::null; // that object, for the click (only while held)
+    double m_RulerHeldSince = -1.0;      // when this hold began (the hint shows for its first 2 s)
+    bool m_RulerOutlineValid = false;    // the eased outline of the measured object
+    glm::vec3 m_RulerOutlineMin{0.0f}, m_RulerOutlineMax{0.0f};
     entt::entity m_RulerBounds = entt::null;    // clicked: its bounds show until Shift+R is released
     int   m_ArrayDupCount[3] = { 3, 1, 1 };
     float m_ArrayDupStep[3]  = { 2.0f, 0.0f, 0.0f };
@@ -2059,7 +2076,7 @@ private:
     std::string m_InspectorFlashComponent;   // that section's header pulses briefly once reached
     double m_InspectorFlashUntil = 0.0;
     entt::entity m_HierDefaultParentNow = entt::null; // ResolveDefaultParent(), once per Hierarchy frame
-    struct PinnedComponent { int Order = -1; std::string Component; std::string SceneKey; ImVec2 SpawnPos{}; bool Placed = false; };
+    struct PinnedComponent { int Order = -1; std::string Component; std::string SceneKey; ImVec2 SpawnPos{}; bool Placed = false; double OpenedAt = 0.0; };
     std::vector<PinnedComponent> m_Pins;
     // vFolders: per-folder content counts (auto icons, minimap), rebuilt when the asset lists or
     // the project index change, or at most once a second while the browser is drawn (an asset
