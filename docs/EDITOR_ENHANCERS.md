@@ -485,11 +485,14 @@ Hold **Shift+R** with the mouse over the Scene view.
 
 | Action | Shows |
 | --- | --- |
-| Move the mouse | From the surface under the cursor, along its normal, to the next surface (cyan: floor to ceiling, wall to wall), and through that object to its far side (amber, dashed: its thickness there). "open" when nothing is in the way within 10 km. |
-| Mouse wheel | Steps to the next object behind along the cursor ray (and back); the measured object is outlined when there is more than one. The camera doesn't zoom while the ruler is held. |
-| Click | The object's size: its world bounds, with width, height and depth on the edges nearest the camera. Click again to hide; it clears when Shift+R is released. A ruler click never selects. |
+| Move the mouse | From the surface under the cursor, along its normal, to the next surface (blue: floor to ceiling, wall to wall), and through that object to its far side (orange, dashed: its thickness there). "open" when nothing is in the way within 10 km. |
+| Mouse wheel | Steps to the next object behind along the cursor ray (and back); the measured object is outlined when there is more than one, and the outline glides to the next. The camera doesn't zoom while the ruler is held. |
+| Click | The object's size: its world bounds, with width, height and depth on three different edges (the hidden back edges are dashed). Click again to hide; it clears when Shift+R is released. A ruler click never selects. |
 
-A read-out next to the cursor repeats the numbers and names the object. Lengths use the
+A card next to the cursor names the object, shows the distance large and the thickness below it;
+the usage hint shows for the first 2 s of a hold. Lines have a dark halo so they read on a bright
+sky; labels stay inside the view and step aside instead of overlapping. The Measure tool uses the
+same lines, points and labels. Lengths use the
 **Length units** setting (Preferences > Editor Enhancers > Ruler), which the Measure tool now
 shares: its m / ft button changes the same setting, and the choice is saved (it used to reset
 every session). Metric adapts mm / cm / m / km; imperial shows feet and inches.
