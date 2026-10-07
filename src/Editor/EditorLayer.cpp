@@ -38,6 +38,7 @@
 #include "Shortcuts.h"
 #include "Enhancers/EnhancerUserState.h"
 #include "Enhancers/Palette.h"
+#include "Enhancers/UiStyles.h"
 #include "Enhancers/StyleWidgets.h"
 #include "HotReloadEditorModule.h" // EditorModuleHost::ConsoleState() — console.toggle shortcut
 #include "EditorModuleAPI.h"       // EditorConsoleState's full definition (Visible)
@@ -133,6 +134,7 @@ void EditorLayer::Init(GLFWwindow* window) {
     MigrateAssetFavorites(); // vFavorites: the old asset_favorites.json stars become page 1, once
     Enhancers::Palette::Load();
     Enhancers::FolderStyles::Get().Load(); // project/editor_folders.json (vFolders)
+    Enhancers::UiStyles::Get().Load();     // project/editor_ui_styles.json (tab / header colours)
 
     // Authored content lives in the project folder, not the working directory (build/Release/)
     // — see ProjectPaths.h. Must match main.cpp's initial load: prefer the last-open scene if
@@ -246,6 +248,7 @@ void EditorLayer::Init(GLFWwindow* window) {
     // Light both use the rounded-card metrics (Phase 1 item 9). ApplyThemeStyle owns that and
     // the one-time ScaleAllSizes; re-run it live from Preferences on a theme change. (#92, #234)
     ApplyThemeStyle();
+    InstallPanelTabStyleHook(); // Tabs & Headers: docked tabs in their panel colours
 
     // ImGuizmo palette. Its stock plane-drag squares are the R/G/B axis colours at 38% alpha,
     // so PLANE_X reads as an off-palette pink/salmon over the dark viewport (audit #84). Give
@@ -263,6 +266,10 @@ void EditorLayer::Init(GLFWwindow* window) {
         gz.Colors[ImGuizmo::PLANE_Y] = ImVec4(0.95f, 0.78f, 0.25f, 0.00f);
         gz.Colors[ImGuizmo::PLANE_Z] = ImVec4(0.95f, 0.78f, 0.25f, 0.00f);
         gz.Colors[ImGuizmo::SELECTION] = EditorTheme::AccentBright; // a hovered / dragged handle
+        // The in-use rotation arc: the palette's orange (Palette::Defaults) rather than
+        // ImGuizmo's stock, so a live rotate reads as part of the same spectrum as the axes.
+        gz.Colors[ImGuizmo::ROTATION_USING_BORDER] = EditorTheme::Rgb(0xF2, 0x99, 0x4A);
+        gz.Colors[ImGuizmo::ROTATION_USING_FILL]   = EditorTheme::Rgb(0xF2, 0x99, 0x4A, 0.35f);
         // A compact, sturdy manipulator is easier to read against level geometry than
         // ImGuizmo's thin default strokes. These are screen-space values, so follow the UI DPI.
         gz.TranslationLineThickness = 7.0f * m_UIScale;
@@ -533,6 +540,7 @@ void EditorLayer::Shutdown() {
         Enhancers::TabState::Get().Flush();
         Enhancers::Palette::Flush();
         Enhancers::FolderStyles::Get().Flush();
+        Enhancers::UiStyles::Get().Flush();
     }
 
     ImGui_ImplOpenGL3_Shutdown();
@@ -3675,11 +3683,14 @@ void EditorLayer::PostModuleDraw(World& world) {
     if (m_AssetsPtr) HandleFolderHoverKeys(*m_AssetsPtr);
     // vFavorites: over the Asset Browser the module just drew (its window rect is current).
     if (m_AssetsPtr) DrawFavoritesOverlay(world, *m_AssetsPtr);
+    // Tabs & Headers: a docked panel tab's right-click colour menu (every panel has begun by now).
+    DrawPanelTabStyleMenu();
     EditorSettings::Flush();
     Enhancers::EnhancerUserState::Get().Flush();
     Enhancers::TabState::Get().Flush();
     Enhancers::Palette::Flush();
     Enhancers::FolderStyles::Get().Flush();
+    Enhancers::UiStyles::Get().Flush();
     FinishGlobalUndo(world);
     if(m_RequestGlobalUndo && m_AssetsPtr) Undo(world,*m_AssetsPtr);
     else if(m_RequestGlobalRedo && m_AssetsPtr) Redo(world,*m_AssetsPtr);

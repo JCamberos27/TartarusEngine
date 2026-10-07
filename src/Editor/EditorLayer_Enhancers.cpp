@@ -28,6 +28,7 @@
 #include "Enhancers/Palette.h"
 #include "Enhancers/StyleWidgets.h"
 #include "Enhancers/TabState.h"
+#include "Enhancers/UiStyles.h"
 
 #include <imgui.h>
 #include <imgui_internal.h>
@@ -265,6 +266,92 @@ void EditorLayer::DrawEnhancerPreferences() {
     EditorUI::HelpMarker("Folder tabs under the Asset Browser toolbar; the active tab follows where you navigate. "
                          "Ctrl+T new tab, Ctrl+W close, Ctrl+Shift+T reopen (mouse over the panel). Shift+wheel over a "
                          "strip switches tabs, Ctrl+Shift+wheel moves the tab, middle-click closes.");
+
+    ImGui::Spacing();
+    EditorUIPrimitives::SectionHeader("Tab & header colours");
+    if (SettingsCheckbox("Panel tab colours", &prefs.PanelTabColors)) EditorSettings::Save();
+    ImGui::SameLine();
+    EditorUI::HelpMarker("Each docked panel's tab in its own colour: a tinted tab with a coloured top line. Right-click "
+                         "a panel's tab to change it. Off shows plain tabs; nothing is deleted.");
+    if (SettingsCheckbox("Component header colours", &prefs.ComponentHeaderColors)) EditorSettings::Save();
+    ImGui::SameLine();
+    EditorUI::HelpMarker("Each Inspector component header (Transform, Mesh Renderer, Material...) in its own colour and, "
+                         "optionally, icon. Right-click a header > Header Style to change it.");
+    {
+        // Project data: project/editor_ui_styles.json, shared with the team like folder styles.
+        auto& ui = Enhancers::UiStyles::Get();
+        auto styleTable = [&](const char* id, const std::vector<std::string>& keys, bool panels) {
+            if (!ImGui::BeginTable(id, 2, ImGuiTableFlags_SizingStretchProp | ImGuiTableFlags_RowBg)) return;
+            ImGui::TableSetupColumn("name", ImGuiTableColumnFlags_WidthFixed, EditorTheme::Px(150.0f));
+            ImGui::TableSetupColumn("colour", ImGuiTableColumnFlags_WidthStretch);
+            for (const std::string& key : keys) {
+                ImGui::PushID(key.c_str());
+                ImGui::TableNextRow();
+                ImGui::TableNextColumn();
+                const Enhancers::UiStyle* cur = panels ? ui.Panel(key) : ui.Component(key);
+                Enhancers::UiStyle s = cur ? *cur : Enhancers::UiStyle();
+                ImGui::AlignTextToFramePadding();
+                ImGui::TextColored(s.Color ? EditorTheme::UserGlyphColor(s.Color) : EditorTheme::Secondary, "%s",
+                                   panels && key == "PhysicsDebug" ? "Physics Debug" : panels && key == "AssetLibrary" ? "Asset Library" : key.c_str());
+                ImGui::TableNextColumn();
+                if (Enhancers::PaletteColorRow("##c", s.Color)) {
+                    if (panels) ui.SetPanel(key, s); else ui.SetComponent(key, s);
+                }
+                ImGui::PopID();
+            }
+            ImGui::EndTable();
+        };
+        if (ImGui::TreeNodeEx("Panel tabs", ImGuiTreeNodeFlags_SpanAvailWidth)) {
+            std::vector<std::string> keys;
+            for (const auto& kv : Enhancers::UiStyles::Spectrum().Panels) keys.push_back(kv.first);
+            for (const auto& kv : ui.Panels)
+                if (std::find(keys.begin(), keys.end(), kv.first) == keys.end()) keys.push_back(kv.first);
+            styleTable("##panelStyles", keys, true);
+            ImGui::TreePop();
+        }
+        if (ImGui::TreeNodeEx("Component headers", ImGuiTreeNodeFlags_SpanAvailWidth)) {
+            std::vector<std::string> keys = {"Transform", "Mesh Renderer", "Material"};
+            for (const auto& rc : ComponentRegistry::All())
+                if (rc.Meta.Name && *rc.Meta.Name && std::find(keys.begin(), keys.end(), rc.Meta.Name) == keys.end())
+                    keys.push_back(rc.Meta.Name);
+            for (const auto& kv : ui.Components)
+                if (std::find(keys.begin(), keys.end(), kv.first) == keys.end()) keys.push_back(kv.first);
+            styleTable("##componentStyles", keys, false);
+            ImGui::TreePop();
+        }
+        if (EditorUIPrimitives::SecondaryButton(ICON_FA_RAINBOW "  Spectrum")) {
+            std::vector<std::string> names;
+            for (const auto& rc : ComponentRegistry::All())
+                if (rc.Meta.Name && *rc.Meta.Name) names.push_back(rc.Meta.Name);
+            const Enhancers::UiStyles spectrum = Enhancers::UiStyles::Spectrum(names);
+            ui.Panels = spectrum.Panels;
+            ui.Components = spectrum.Components;
+            ui.MarkDirty();
+        }
+        if (ImGui::IsItemHovered()) Tip("Colour every panel tab and component header around the palette's hue wheel");
+        ImGui::SameLine();
+        if (EditorUIPrimitives::SecondaryButton(ICON_FA_ERASER "  Clear all")) {
+            ui.Panels.clear();
+            ui.Components.clear();
+            ui.MarkDirty();
+        }
+        ImGui::SameLine();
+        if (EditorUIPrimitives::SecondaryButton(ICON_FA_FILE_EXPORT "  Export...##ui")) {
+            const std::string path = FileDialog::SaveFile("Tab & header styles (*.json)\0*.json\0", "json", m_Window);
+            if (!path.empty()) {
+                if (ui.ExportTo(path)) Log::Info("Editor Enhancers: tab & header styles exported to " + path);
+                else Log::Warn("Editor Enhancers: could not write " + path);
+            }
+        }
+        ImGui::SameLine();
+        if (EditorUIPrimitives::SecondaryButton(ICON_FA_FILE_IMPORT "  Import...##ui")) {
+            const std::string path = FileDialog::OpenFile("Tab & header styles (*.json)\0*.json\0All Files\0*.*\0", m_Window);
+            if (!path.empty()) {
+                if (ui.ImportFrom(path)) Log::Info("Editor Enhancers: tab & header styles imported from " + path);
+                else Log::Warn("Editor Enhancers: " + path + " is not a tab & header styles file.");
+            }
+        }
+    }
 
     ImGui::Spacing();
     EditorUIPrimitives::SectionHeader("Palette colours");
@@ -1649,12 +1736,22 @@ bool EditorLayer::DrawInspectorTabStrip(World& world, float leftInset, float rig
             const entt::entity e = r.Scene == sceneKey ? FindEntityByOrder(world, r.Order) : entt::null;
             if (e != entt::null) {
                 if (const auto* nm = world.Registry.try_get<NameComponent>(e); nm && !nm->Name.empty()) r.Label = nm->Name;
-                if (const auto* st = world.Registry.try_get<HierarchyStyleComponent>(e); st && !st->Icon.empty())
-                    if (const char* g = Enhancers::FAIconGlyph(st->Icon.c_str())) it.Icon = g;
+                if (const auto* st = world.Registry.try_get<HierarchyStyleComponent>(e)) {
+                    if (!st->Icon.empty())
+                        if (const char* g = Enhancers::FAIconGlyph(st->Icon.c_str())) it.Icon = g;
+                    it.Color = st->Color; // the row's colour, so a pinned object reads as it does in the Hierarchy
+                }
             }
-            if (!r.Sub.empty())
+            if (!r.Sub.empty()) {
                 for (const auto& rc : ComponentRegistry::All())
                     if (r.Sub == rc.Meta.Name) { it.Icon = rc.Meta.Icon; break; }
+                // A pinned component wears its header's style (Tabs & Headers).
+                if (EditorSettings::Get().ComponentHeaderColors)
+                    if (const Enhancers::UiStyle* cs = Enhancers::UiStyles::Get().Component(r.Sub)) {
+                        if (cs->Color) it.Color = cs->Color;
+                        if (const char* g = cs->Icon.empty() ? nullptr : Enhancers::FAIconGlyph(cs->Icon.c_str())) it.Icon = g;
+                    }
+            }
             if (it.Icon.empty()) it.Icon = ICON_FA_CUBE;
             const std::string name = r.Label.empty() ? std::string("(unnamed)") : r.Label;
             it.Label = r.Sub.empty() ? name : r.Sub + " (" + name + ")";
@@ -2848,4 +2945,85 @@ void EditorLayer::DrawFolderBookmarkBar(AssetLibrary& assets) {
     }
     ImGui::PopStyleVar();
     ImGui::PopID();
+}
+
+// ============================================================================================
+// Tabs & Headers: docked panel tabs
+// ============================================================================================
+
+namespace {
+// The stable id a panel is styled by: the part after "###" (EditorPanels.h), else the whole title
+// (the Script IDE, script-created windows).
+std::string PanelStyleId(const char* windowName) {
+    const char* hash = std::strstr(windowName, "###");
+    return hash ? std::string(hash + 3) : std::string(windowName);
+}
+
+// ImGui docking draws each tab with the colours its window captured at its last Begin()
+// (ImGuiWindowDockStyle), and the dock space draws the tab bar before the panels Begin again. So
+// overriding them at the end of every frame colours every docked tab - host panels and the
+// reloadable modules' alike - without touching a single Begin() call. A panel with no style (or
+// the setting off) is left alone, and its next Begin() restores the plain theme colours.
+void ApplyPanelTabStyles(ImGuiContext* ctx, ImGuiContextHook*) {
+    if (!EditorSettings::Get().PanelTabColors) return;
+    const auto& ui = Enhancers::UiStyles::Get();
+    if (ui.Panels.empty()) return;
+    using namespace EditorTheme;
+    for (ImGuiWindow* w : ctx->Windows) {
+        if (!w->DockNode || (w->Flags & (ImGuiWindowFlags_ChildWindow | ImGuiWindowFlags_Popup | ImGuiWindowFlags_Tooltip)))
+            continue;
+        const Enhancers::UiStyle* s = ui.Panel(PanelStyleId(w->Name));
+        if (!s || !s->Color) continue;
+        const ImVec4 g = UserGlyphColor(s->Color);
+        ImU32* c = w->DockStyle.Colors;
+        c[ImGuiWindowDockStyleCol_Text]                      = U32(Mix(Text, g, 0.30f));
+        c[ImGuiWindowDockStyleCol_TabFocused]                = U32(Mix(Base, g, 0.08f)); // ImGuiCol_Tab
+        c[ImGuiWindowDockStyleCol_TabDimmed]                 = U32(Mix(Base, g, 0.06f));
+        c[ImGuiWindowDockStyleCol_TabHovered]                = U32(Mix(Hover, g, 0.22f));
+        c[ImGuiWindowDockStyleCol_TabSelected]               = U32(Mix(Panel, g, 0.16f));
+        c[ImGuiWindowDockStyleCol_TabDimmedSelected]         = U32(Mix(Panel, g, 0.10f));
+        c[ImGuiWindowDockStyleCol_TabSelectedOverline]       = U32(g);
+        c[ImGuiWindowDockStyleCol_TabDimmedSelectedOverline] = U32(WithAlpha(g, 0.55f));
+    }
+}
+} // namespace
+
+void EditorLayer::InstallPanelTabStyleHook() {
+    ImGuiContextHook hook;
+    hook.Type = ImGuiContextHookType_EndFramePre;
+    hook.Callback = &ApplyPanelTabStyles;
+    ImGui::AddContextHook(ImGui::GetCurrentContext(), &hook);
+}
+
+void EditorLayer::DrawPanelTabStyleMenu() {
+    ImGuiContext& g = *GImGui;
+    constexpr const char* kPopup = "##PanelTabStyle";
+    // A right-click on a docked panel's tab (ImGui's dock tab bar has no context menu of its own).
+    if (ImGui::IsMouseClicked(ImGuiMouseButton_Right) && !ImGui::IsPopupOpen("", ImGuiPopupFlags_AnyPopupId)) {
+        const ImVec2 mouse = ImGui::GetMousePos();
+        for (ImGuiWindow* w : g.Windows) {
+            if (!w->DockIsActive || !w->DockTabIsVisible || !w->DockNode || !w->DockNode->HostWindow) continue;
+            if (w->LastFrameActive < g.FrameCount - 1) continue;
+            if (!w->DC.DockTabItemRect.Contains(mouse)) continue;
+            if (!g.HoveredWindow || g.HoveredWindow->RootWindow != w->DockNode->HostWindow->RootWindow) continue;
+            m_PanelTabStyleTarget = PanelStyleId(w->Name);
+            ImGui::OpenPopup(kPopup);
+            break;
+        }
+    }
+    if (!ImGui::BeginPopup(kPopup)) return;
+    auto& ui = Enhancers::UiStyles::Get();
+    const Enhancers::UiStyle* cur = ui.Panel(m_PanelTabStyleTarget);
+    Enhancers::UiStyle s = cur ? *cur : Enhancers::UiStyle();
+    EditorTheme::PushHeading();
+    EditorTheme::TrackedText("TAB COLOUR", EditorTheme::Secondary, EditorTheme::HeadingTracking());
+    EditorTheme::PopFont();
+    ImGui::TextUnformatted(m_PanelTabStyleTarget.c_str());
+    ImGui::SetNextItemWidth(EditorTheme::Px(260.0f));
+    if (Enhancers::PaletteColorRow("##tabColor", s.Color)) ui.SetPanel(m_PanelTabStyleTarget, s);
+    if (!EditorSettings::Get().PanelTabColors) {
+        ImGui::Spacing();
+        ImGui::TextDisabled("Panel tab colours are off (Preferences > Editor Enhancers).");
+    }
+    ImGui::EndPopup();
 }
