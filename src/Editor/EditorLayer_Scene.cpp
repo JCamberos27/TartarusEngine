@@ -68,6 +68,9 @@
 #include <functional>
 #include <cfloat>
 
+#include "UndoTrigger.h"
+#include <ImGuizmo.h>
+
 using namespace EditorInternal;
 
 namespace {
@@ -89,13 +92,31 @@ uint64_t HashSceneJson(const std::string& s) {
 void EditorLayer::BeginGlobalUndoFrame(const World& world) {
     auto start=[&] {
         if(m_GlobalUndoActive || m_GlobalUndoApplying) return;
+        PROFILE_SCOPE("Undo Snapshot");
         m_GlobalUndoScene=m_AssetsPtr?SceneSerializer::SaveToString(world,*m_AssetsPtr):SceneSerializer::SaveToString(world);
         m_GlobalUndoSelection=CaptureSelectedOrders(world);m_GlobalUndoLabel="Edit";m_GlobalUndoActive=true;
     };
-    bool input=ImGui::IsAnyItemActive();
-    for(int button=0;button<5;++button) input|=ImGui::IsMouseClicked(button);
-    for(int key=ImGuiKey_NamedKey_BEGIN;key<ImGuiKey_NamedKey_END;++key) input|=ImGui::IsKeyPressed(static_cast<ImGuiKey>(key),false);
-    if(input && !m_GameInputActive) start();
+    // Camera navigation opens no snapshot (UndoTrigger.h): a right/middle drag that starts over
+    // the Scene view is latched until both buttons are up, so the keys pressed while flying
+    // (WASDQE, Shift) don't either.
+    UndoTrigger::Frame frame;
+    frame.OverViewport=IsMouseOverSceneViewport();
+    frame.LeftClicked=ImGui::IsMouseClicked(ImGuiMouseButton_Left);
+    frame.RightClicked=ImGui::IsMouseClicked(ImGuiMouseButton_Right);
+    frame.MiddleClicked=ImGui::IsMouseClicked(ImGuiMouseButton_Middle);
+    frame.OtherClicked=ImGui::IsMouseClicked(3) || ImGui::IsMouseClicked(4);
+    if((frame.RightClicked || frame.MiddleClicked) && frame.OverViewport) m_ViewportNavDrag=true;
+    else if(!ImGui::IsMouseDown(ImGuiMouseButton_Right) && !ImGui::IsMouseDown(ImGuiMouseButton_Middle)) m_ViewportNavDrag=false;
+    frame.NavDragHeld=m_ViewportNavDrag;
+    frame.ItemActive=ImGui::IsAnyItemActive();
+    frame.AltDown=ImGui::GetIO().KeyAlt;
+    frame.GizmoHovered=ImGuizmo::IsOver();
+    for(int key=ImGuiKey_NamedKey_BEGIN;key<ImGuiKey_NamedKey_END && !frame.KeyPressed;++key) {
+        const ImGuiKey k=static_cast<ImGuiKey>(key);
+        if(ImGui::IsLRModKey(k) || (k>=ImGuiKey_ReservedForModCtrl && k<=ImGuiKey_ReservedForModSuper)) continue;
+        frame.KeyPressed=ImGui::IsKeyPressed(k,false);
+    }
+    if(UndoTrigger::OpensSnapshot(frame) && !m_GameInputActive) start();
     AtomicFile::SetChangeObserver([this,&world](const std::filesystem::path& path) {
         if(m_GlobalUndoApplying) return;
         std::error_code ec;
@@ -125,6 +146,7 @@ void EditorLayer::BeginGlobalUndoFrame(const World& world) {
 }
 void EditorLayer::FinishGlobalUndo(const World& world,bool force) {
     if(!m_GlobalUndoActive || (!force && (ImGui::IsAnyItemActive() || ImGui::IsMouseDown(ImGuiMouseButton_Left)))) return;
+    PROFILE_SCOPE("Undo Commit");
     EditorSettings::Flush();
     Enhancers::EnhancerUserState::Get().Flush();Enhancers::Palette::Flush();Enhancers::FolderStyles::Get().Flush();Enhancers::UiStyles::Get().Flush();
     const auto current=m_AssetsPtr?SceneSerializer::SaveToString(world,*m_AssetsPtr):SceneSerializer::SaveToString(world);

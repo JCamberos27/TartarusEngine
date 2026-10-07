@@ -2667,8 +2667,7 @@ int main(int argc, char** argv) {
             // VSync on: the frames are shown on the monitor's refresh, so the game steps in whole refreshes
             // (see Time::SetRefreshPeriod). Adaptive VSync tears late frames, so it is left as measured.
             {
-                static int refreshHz = 0, refreshCheck = 0;
-                if (refreshCheck-- <= 0) { refreshHz = window.RefreshRate(); refreshCheck = 60; } // the window can move monitors
+                const int refreshHz = window.RefreshRate(); // cached in Window: re-read only when the window moves or monitors change
                 Time::SetRefreshPeriod(!headless && appliedVSyncMode == 1 && refreshHz >= 30 ? 1.0 / refreshHz : 0.0);
             }
             Time::BeginFrame();
@@ -2676,10 +2675,11 @@ int main(int argc, char** argv) {
             // --weapon-test runs on a fixed step, so its timings don't depend on the machine.
             const float gameDt = weaponTestMode || npcTestMode ? (playing ? 1.0f / 60.0f : 0.0f) : Time::DeltaTime();
 
-            // #158 — shader hot reload (editor only; the scan itself runs at ~4 Hz). Engine
+            // #158 — shader hot reload (editor only; the scan itself runs at 1 Hz). Engine
             // programs and material shaders recompile when any file they were built from changes;
-            // a failed compile keeps the previous program and logs the error.
-            if (!headless) {
+            // a failed compile keeps the previous program and logs the error. Not while the Scene
+            // camera is being dragged: the folder walk would land in the middle of the motion.
+            if (!headless && !camDragActive) {
                 const std::vector<std::string> changedShaders =
                     ShaderLibrary::PollChangedFiles({ProjectPaths::Resolve("shaders")});
                 if (!changedShaders.empty()) {
