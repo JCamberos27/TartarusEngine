@@ -2,6 +2,7 @@
 // Add-entity menu body. Split out of EditorLayer.cpp for build time (#179).
 
 #include "EditorLayer.h"
+#include "EditorTestProbe.h" // --editor-tests widget names
 #include "EditorLayerInternal.h"
 #include "EditorTheme.h"
 #include "EditorModuleAPI.h" // kHierarchyFilter* bitmask constants, shared with EditorModuleHierarchy.cpp
@@ -1320,6 +1321,8 @@ void EditorLayer::DrawHierarchyRowBody(World& world, AssetLibrary& assets, entt:
     ImGui::PushItemFlag(ImGuiItemFlags_NoNav, true);
     ImGui::TreeNodeEx("##node", nodeFlags, "%s", "");
     ImGui::PopItemFlag();
+    if (EditorTestProbeActive())
+        if (const auto* tn = world.Registry.try_get<NameComponent>(entity)) EditorTestTag(("row:" + tn->Name).c_str());
     const ImVec2 rowMin = ImGui::GetItemRectMin();
     const ImVec2 rowMax = ImGui::GetItemRectMax();
 
