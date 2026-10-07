@@ -81,13 +81,18 @@ Rules:
 Right-click a row and choose **Row Style**. The menu applies to every selected row as one undo step.
 
 * **Colour**: any palette swatch, or the rainbow swatch for a custom colour.
-* **Fill**: how the colour is shown.
-  * *Gradient* (default): a wash from the row's indent that fades out to the right.
-  * *Flat*: an even wash.
-  * *Icon only*: just tints the row's icon.
+* **Fill**: how the colour is shown. The icon always takes the colour (dark picks are lifted so
+  they stay readable).
+  * *Gradient* (default): a 3px stripe at the row's indent and a faint wash fading out to the right.
+  * *Flat*: the stripe and an even, faint wash.
+  * *Icon only*: just the tinted icon.
+
+  Hover and selection are drawn over the colour, so a selected row always reads as selected: its
+  wash eases back and the stripe stays. The folder tree draws its rows the same way (Preferences >
+  vFolders > **Colour the row** off = icon only).
 * **Icon**: any Font Awesome icon. It replaces the row's kind glyph, and is tinted with the row colour.
-* **Separator Row**: draws the row as a section header, with the name in capitals between two
-  hairlines and no eye/lock/active toggles. A separator is an ordinary empty, so it can parent rows.
+* **Separator Row**: draws the row as a section header: the colour as a dot, the name in tracked
+  capitals and a hairline to the right, with no eye/lock/active toggles. A separator is an ordinary empty, so it can parent rows.
   **Create > Separator** makes a new one.
 * **Clear Style**: removes all of the above.
 
@@ -112,8 +117,9 @@ The component is editor-only: no runtime system reads it.
 
 ### Component minimap
 
-Each row shows the icons of its registered components (up to the preference's maximum, then
-"+N"), just left of the eye/lock/active column.
+Rows show the icons of their registered components (up to the preference's maximum, then
+"+N"), just left of the eye/lock/active column. Preferences > **Component minimap** sets when:
+*Hovered & selected rows* (the default, which keeps the list quiet), *Always*, or *Off*.
 
 * **Hover** an icon to see the component's name. Hovering "+N" lists the rest.
 * **Click** an icon to select the row. The Inspector opens that component's section, scrolls it

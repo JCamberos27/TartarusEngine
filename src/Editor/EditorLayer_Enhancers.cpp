@@ -81,9 +81,18 @@ void EditorLayer::DrawEnhancerPreferences() {
     if (SettingsCheckbox("Minimal mode", &prefs.HierarchyMinimal)) EditorSettings::Save();
     ImGui::SameLine();
     EditorUI::HelpMarker("Hide each row's kind icon unless you gave the row one.");
-    if (SettingsCheckbox("Component minimap", &prefs.HierarchyMinimap)) EditorSettings::Save();
+    SettingsLabel("Component minimap");
+    {
+        int when = prefs.HierarchyMinimap ? prefs.HierarchyMinimapWhen : 2;
+        const char* const whenNames[] = {"Always", "Hovered & selected rows", "Off"};
+        if (ImGui::Combo("##minimapWhen", &when, whenNames, 3)) {
+            prefs.HierarchyMinimap = when != 2;
+            if (when != 2) prefs.HierarchyMinimapWhen = when;
+            EditorSettings::Save();
+        }
+    }
     ImGui::SameLine();
-    EditorUI::HelpMarker("Each row shows its components' icons. Click one to jump to it in the Inspector; "
+    EditorUI::HelpMarker("Rows show their components' icons. Click one to jump to it in the Inspector; "
                          "Alt+click to open it in its own window.");
     if (prefs.HierarchyMinimap) {
         SettingsLabel("Minimap icons");
@@ -100,7 +109,9 @@ void EditorLayer::DrawEnhancerPreferences() {
     ImGui::SameLine();
     EditorUI::HelpMarker("Folder icons and colours (right-click a folder), folder rules below, and automatic icons. "
                          "Off hides them; nothing is deleted.");
-    if (SettingsCheckbox("Colour the whole row", &prefs.FolderRowWash)) EditorSettings::Save();
+    if (SettingsCheckbox("Colour the row", &prefs.FolderRowWash)) EditorSettings::Save();
+    ImGui::SameLine();
+    EditorUI::HelpMarker("A coloured folder's row gets a stripe and a faint wash. Off, only its icon is tinted.");
     if (SettingsCheckbox("Tree lines", &prefs.FolderTreeLines)) EditorSettings::Save();
     if (SettingsCheckbox("Zebra striping", &prefs.FolderZebra)) EditorSettings::Save();
     if (SettingsCheckbox("Minimal mode", &prefs.FolderMinimal)) EditorSettings::Save();

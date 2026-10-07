@@ -198,6 +198,7 @@ void EditorSettings::Load() {
     s.HierarchyZebra = SafeValue(root, "hierarchyZebra", s.HierarchyZebra);
     s.HierarchyMinimap = SafeValue(root, "hierarchyMinimap", s.HierarchyMinimap);
     s.HierarchyMinimapMax = std::clamp(SafeValue(root, "hierarchyMinimapMax", s.HierarchyMinimapMax), 1, 12);
+    s.HierarchyMinimapWhen = std::clamp(SafeValue(root, "hierarchyMinimapWhen", s.HierarchyMinimapWhen), 0, 1);
     s.HierarchyNavBar = SafeValue(root, "hierarchyNavBar", s.HierarchyNavBar);
     s.FolderStyles = SafeValue(root, "folderStyles", s.FolderStyles);
     s.FolderTreeLines = SafeValue(root, "folderTreeLines", s.FolderTreeLines);
@@ -382,6 +383,7 @@ void EditorSettings::Flush() {
     root["hierarchyZebra"] = Get().HierarchyZebra;
     root["hierarchyMinimap"] = Get().HierarchyMinimap;
     root["hierarchyMinimapMax"] = Get().HierarchyMinimapMax;
+    root["hierarchyMinimapWhen"] = Get().HierarchyMinimapWhen;
     root["hierarchyNavBar"] = Get().HierarchyNavBar;
     root["folderStyles"] = Get().FolderStyles;
     root["folderTreeLines"] = Get().FolderTreeLines;
