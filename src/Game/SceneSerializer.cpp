@@ -649,7 +649,7 @@ void WriteCommonComponents(json& j, const World& world, entt::entity entity) {
         void* comp = const_cast<void*>(rc.GetConst(world.Registry, entity));
         json cj;
         for (const auto& f : rc.Meta.Fields)
-            cj[ReflectFieldKey(f)] = ReflectFieldToJson(f, f.Address(comp));
+            if (!f.NonSerialized) cj[ReflectFieldKey(f)] = ReflectFieldToJson(f, f.Address(comp));
         j[rc.Meta.Name] = cj;
     }
 }
@@ -797,6 +797,7 @@ void ReadCommonComponents(const json& j, World& world, AssetLibrary& assets, ent
         void* comp = rc.Get(world.Registry, entity);
         const json& cj = j.at(rc.Meta.Name);
         for (const auto& f : rc.Meta.Fields) {
+            if (f.NonSerialized) continue; // vInspector display-only field
             // #43: key off ReflectFieldKey, with a LegacyNames fallback — so a scene saved under a
             // field's old key (before an Inspector-label rename) still loads instead of silently
             // keeping the component's default for that field.
@@ -882,7 +883,8 @@ void DiffPrefabEntity(const World& world, entt::entity live, const json& pristin
             outOverrides.push_back({{"e", localIndex}, {"op", "addComponent"}, {"c", rc.Meta.Name}});
             const void* comp = rc.GetConst(world.Registry, live);
             for (const auto& f : rc.Meta.Fields)
-                emit(rc.Meta.Name, ReflectFieldKey(f), ReflectFieldToJson(f, f.Address(const_cast<void*>(comp))));
+                if (!f.NonSerialized)
+                    emit(rc.Meta.Name, ReflectFieldKey(f), ReflectFieldToJson(f, f.Address(const_cast<void*>(comp))));
             continue;
         }
         if (!onLive && onPrefab) {
@@ -914,6 +916,7 @@ void DiffPrefabEntity(const World& world, entt::entity live, const json& pristin
             continue;
         }
         for (const auto& f : rc.Meta.Fields) {
+            if (f.NonSerialized) continue;
             const char* key = ReflectFieldKey(f);
             const json* pv = pc.contains(key) ? &pc.at(key) : nullptr;
             for (int i = 0; !pv && i < f.LegacyNameCount; ++i)
@@ -2455,7 +2458,8 @@ std::string SceneSerializer::ComponentToPresetJson(const World& world, entt::ent
     // const_cast is safe: the component is a live mutable object; this path only reads it.
     void* comp = const_cast<void*>(rc->GetConst(world.Registry, entity));
     json fields;
-    for (const auto& f : rc->Meta.Fields) fields[ReflectFieldKey(f)] = ReflectFieldToJson(f, f.Address(comp));
+    for (const auto& f : rc->Meta.Fields)
+        if (!f.NonSerialized) fields[ReflectFieldKey(f)] = ReflectFieldToJson(f, f.Address(comp));
     return json{{"preset", 1}, {"component", rc->Meta.Name}, {"fields", std::move(fields)}}.dump(2);
 }
 
@@ -2485,6 +2489,7 @@ bool SceneSerializer::ApplyComponentPresetJson(World& world, AssetLibrary& asset
     // component default, so a preset saved before a field existed stays usable. Same legacy-key
     // fallback the scene loader uses (#43).
     for (const auto& f : rc->Meta.Fields) {
+        if (f.NonSerialized) continue;
         const char* key = ReflectFieldKey(f);
         if (fit->contains(key)) { ReflectFieldFromJson(f, f.Address(comp), fit->at(key), assets); continue; }
         for (int i = 0; i < f.LegacyNameCount; ++i) {
@@ -2672,7 +2677,7 @@ bool SceneSerializer::ApplyPrefabComponent(World& world, entt::entity entity, co
     json cj;
     const void* comp = rcp->GetConst(world.Registry, entity);
     for (const auto& f : rcp->Meta.Fields)
-        cj[ReflectFieldKey(f)] = ReflectFieldToJson(f, f.Address(const_cast<void*>(comp)));
+        if (!f.NonSerialized) cj[ReflectFieldKey(f)] = ReflectFieldToJson(f, f.Address(const_cast<void*>(comp)));
     // ReflectComponentKey, not `component` (a display Name) directly — see IsPrefabComponentAdded's
     // comment above for why (Collider/Joint's legacy lowercase JSON key).
     (*pe)[ReflectComponentKey(rcp->Meta)] = std::move(cj);

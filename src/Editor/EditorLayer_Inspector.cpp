@@ -31,6 +31,7 @@
 #include "EditorUIHelpers.h"
 #include "AssetImporterInspector.h"
 #include "ComponentRegistry.h"
+#include "ReflectAttributes.h" // vInspector attributes: EvaluateFieldState
 #include "ParticleSystem.h"
 #include "CurveEditor.h"
 #include "Scripting/ScriptRuntime.h"
@@ -1774,12 +1775,57 @@ void EditorLayer::ToggleInspectorLock() {
 // selection modes silently drifted apart (Defect #26/#36's Mesh Renderer field-set inconsistency
 // traced back to exactly this). Body is the former multi-select switch, generalized over `sel`
 // rather than special-cased to it — the mixed-value reduction is a no-op for a one-element `sel`.
+namespace {
+// One reflected field's value, type-erased (vInspector OnChanged detection and variant chips).
+using ReflectValue = std::variant<bool, int, float, glm::vec3, std::string>;
+
+ReflectValue ReadReflectValue(const ReflectField& f, void* p) {
+    switch (f.Type) {
+        case ReflectFieldType::Bool:  return *static_cast<bool*>(p);
+        case ReflectFieldType::Int:
+        case ReflectFieldType::Enum:  return *static_cast<int*>(p);
+        case ReflectFieldType::Float: return *static_cast<float*>(p);
+        case ReflectFieldType::Vec3:
+        case ReflectFieldType::Color: return *static_cast<glm::vec3*>(p);
+        case ReflectFieldType::String:
+        case ReflectFieldType::AssetRef: return *static_cast<std::string*>(p);
+    }
+    return false;
+}
+
+// A variant chip's value for an Int / Enum / Float field.
+void WriteVariant(const ReflectField& f, void* p, float v) {
+    if (f.Type == ReflectFieldType::Float) *static_cast<float*>(p) = v;
+    else *static_cast<int*>(p) = (int)std::lround(v);
+}
+
+bool VariantMatches(const ReflectField& f, void* p, float v) {
+    if (f.Type == ReflectFieldType::Float) return std::fabs(*static_cast<float*>(p) - v) <= 1.0e-5f * std::max(1.0f, std::fabs(v));
+    return *static_cast<int*>(p) == (int)std::lround(v);
+}
+} // namespace
+
 void EditorLayer::DrawReflectedField(World& world, AssetLibrary& assets, const RegisteredComponent& rc,
                                       const ReflectField& f, const std::vector<entt::entity>& sel) {
     auto fieldPtr = [&](entt::entity e) -> void* { return f.Address(rc.Get(world.Registry, e)); };
     auto forEach = [&](const std::function<void(entt::entity)>& fn) { for (entt::entity e : sel) fn(e); };
+    // vInspector attributes: shown when any selected object shows it, editable only when every
+    // one allows it (ReadOnly / EnableIf / a disabling Condition).
+    bool visible = false, enabled = true;
+    for (entt::entity e : sel) {
+        const ReflectFieldState st = EvaluateFieldState(rc.Meta, f, rc.GetConst(world.Registry, e));
+        visible = visible || st.Visible;
+        enabled = enabled && st.Enabled;
+    }
+    if (!visible) return;
+    // OnChanged: snapshot the value per object only when someone listens.
+    std::vector<ReflectValue> before;
+    if (f.OnChanged) { before.reserve(sel.size()); for (entt::entity e : sel) before.push_back(ReadReflectValue(f, fieldPtr(e))); }
     PrefabMultiRef pf{this, &world, &sel, rc.Meta.Name, ReflectFieldKey(f)};
     ImGui::PushID(f.Name);
+    const ImVec2 rowMin = ImGui::GetCursorScreenPos();
+    const float rowRight = rowMin.x + ImGui::GetContentRegionAvail().x;
+    ImGui::BeginDisabled(!enabled);
     switch (f.Type) {
         case ReflectFieldType::Bool: {
             bool anyOn = false, mixed = false, first = true, firstVal = false;
@@ -2005,7 +2051,63 @@ void EditorLayer::DrawReflectedField(World& world, AssetLibrary& assets, const R
             break;
         }
     }
+    ImGui::EndDisabled();
+    const float rowMaxY = ImGui::GetItemRectMax().y;
+
+    // Variant chips: one-click values under the widget, the current one highlighted.
+    if (enabled && f.Variants && f.VariantCount > 0 &&
+        (f.Type == ReflectFieldType::Float || f.Type == ReflectFieldType::Int || f.Type == ReflectFieldType::Enum)) {
+        ImGui::SetCursorPosX(ImGui::GetCursorPosX() + EditorTheme::PropertyLabelWidth());
+        EditorTheme::PushSmall();
+        for (int i = 0; i < f.VariantCount; ++i) {
+            const float v = f.Variants[i];
+            char label[48];
+            if (f.VariantLabels && f.VariantLabels[i]) std::snprintf(label, sizeof(label), "%s", f.VariantLabels[i]);
+            else if (f.Type == ReflectFieldType::Enum) std::snprintf(label, sizeof(label), "%s", ReflectEnumLabel(f, (int)std::lround(v)));
+            else if (f.Type == ReflectFieldType::Int) std::snprintf(label, sizeof(label), "%d", (int)std::lround(v));
+            else std::snprintf(label, sizeof(label), f.Format ? f.Format : "%g", v);
+            bool current = true;
+            for (entt::entity e : sel) current = current && VariantMatches(f, fieldPtr(e), v);
+            if (i > 0) ImGui::SameLine(0.0f, EditorTheme::Px(3.0f));
+            ImGui::PushID(i);
+            if (ActionButton(label, "Set this value", current, ImVec2(0.0f, 0.0f)) && !current) {
+                StageUndo(world);
+                forEach([&](entt::entity e) { WriteVariant(f, fieldPtr(e), v); });
+                CommitStagedUndo(world, std::string("Edit ") + rc.Meta.Name);
+            }
+            ImGui::PopID();
+        }
+        EditorTheme::PopFont();
+    }
+
+    // Right-click anywhere on the row: Reset to Default (unless a label / widget opened its own
+    // menu for that click - the prefab override menu, the colour picker's options).
+    if (enabled && rc.DefaultInstance && ImGui::IsWindowHovered(ImGuiHoveredFlags_ChildWindows) &&
+        ImGui::IsMouseReleased(ImGuiMouseButton_Right) &&
+        ImGui::IsMouseHoveringRect(rowMin, ImVec2(rowRight, rowMaxY)) &&
+        !ImGui::IsPopupOpen("", ImGuiPopupFlags_AnyPopupId))
+        ImGui::OpenPopup("##fieldCtx");
+    if (ImGui::BeginPopup("##fieldCtx")) {
+        bool allDefault = true;
+        for (entt::entity e : sel) allDefault = allDefault && ReflectFieldIsDefault(rc, f, rc.GetConst(world.Registry, e));
+        ImGui::TextDisabled("%s", f.Name);
+        if (ImGui::MenuItem(ICON_FA_ROTATE_LEFT "  Reset to Default", nullptr, false, !allDefault)) {
+            StageUndo(world);
+            forEach([&](entt::entity e) { ResetReflectFieldToDefault(rc, f, rc.Get(world.Registry, e)); });
+            CommitStagedUndo(world, std::string("Reset ") + f.Name);
+        }
+        ImGui::EndPopup();
+    }
     ImGui::PopID();
+
+    if (f.OnChanged) {
+        for (std::size_t i = 0; i < sel.size() && i < before.size(); ++i) {
+            const entt::entity e = sel[i];
+            if (!world.Registry.valid(e) || !rc.Has(world.Registry, e)) continue;
+            void* comp = rc.Get(world.Registry, e);
+            if (ReadReflectValue(f, f.Address(comp)) != before[i]) f.OnChanged(world, e, comp);
+        }
+    }
 }
 
 void EditorLayer::DrawInspectorBody(World& world, AssetLibrary& assets) {
@@ -3103,47 +3205,97 @@ void EditorLayer::DrawInspectorBody(World& world, AssetLibrary& assets) {
 void EditorLayer::DrawReflectedComponentFields(World& world, AssetLibrary& assets, const RegisteredComponent& rc, entt::entity entity) {
     void* fbase = rc.Get(world.Registry, entity);
     if (!fbase) return;
-    // #302 Wave 2a: a field is hidden when its VisibleIf sibling (an Int/Enum field of the
-    // same component) doesn't match. Reads the sibling's int value directly.
-    auto fieldVisible = [&](const ReflectField& f) -> bool {
-        if (!f.VisibleIfField) return true;
-        for (const ReflectField& s : rc.Meta.Fields) {
-            if (std::strcmp(s.Name, f.VisibleIfField) != 0) continue;
-            const int sv = *reinterpret_cast<int*>(s.Address(fbase));
-            return f.VisibleIfNot ? (sv != f.VisibleIfValue) : (sv == f.VisibleIfValue);
-        }
-        return true;
-    };
     DrawReflectedComponentExtra(rc.Meta.Name, world, entity, ReflectExtraPhase::Top);
     if (DrawManagedInspector(world, assets, entity, rc.Meta.Name)) {
         DrawReflectedComponentExtra(rc.Meta.Name, world, entity, ReflectExtraPhase::Bottom);
         return;
     }
-    const char* openGroup = nullptr; // current TreeNode group, nullptr = none
-    bool groupNodeOpen = true;       // false = current group's node is collapsed
     // #6 Defect #44 — a one-element selection so the field switch below (shared with
-    // multi-select) takes its no-mixed-value path; see DrawReflectedField.
+    // multi-select) takes its no-mixed-value path; see DrawReflectedField. Visibility (VisibleIf,
+    // conditions) and greying out (ReadOnly, EnableIf) are resolved there too.
     const std::vector<entt::entity> selOne{entity};
-    for (const ReflectField& f : rc.Meta.Fields) {
-        // Group transitions: close the previous node, open the next.
-        if (f.Group != openGroup) {
-            if (openGroup && groupNodeOpen) ImGui::TreePop();
-            openGroup = f.Group;
-            if (openGroup) {
-                ImGui::Spacing();
-                // Separate groups can share a display label (e.g. several Arms groups).
-                // Use their first field's stable key for independent IDs and open state.
-                const std::string groupId=std::string("##group:")+(f.Key?f.Key:f.Name);
-                groupNodeOpen = ImGui::TreeNodeEx(groupId.c_str(), ImGuiTreeNodeFlags_SpanAvailWidth, "%s", openGroup);
+    // Draws the fields whose Tab equals `tab` (nullptr = untabbed), in order, grouping each run
+    // of consecutive fields with the same Group into one TreeNode.
+    auto drawFields = [&](const char* tab) {
+        const char* openGroup = nullptr; // current TreeNode group, nullptr = none
+        bool groupNodeOpen = true;       // false = current group's node is collapsed
+        for (const ReflectField& f : rc.Meta.Fields) {
+            const bool inTab = tab ? (f.Tab && std::strcmp(f.Tab, tab) == 0) : f.Tab == nullptr;
+            if (!inTab) continue;
+            // Group transitions: close the previous node, open the next.
+            if (f.Group != openGroup) {
+                if (openGroup && groupNodeOpen) ImGui::TreePop();
+                openGroup = f.Group;
+                if (openGroup) {
+                    ImGui::Spacing();
+                    // Separate groups can share a display label (e.g. several Arms groups).
+                    // Use their first field's stable key for independent IDs and open state.
+                    const std::string groupId=std::string("##group:")+(f.Key?f.Key:f.Name);
+                    groupNodeOpen = ImGui::TreeNodeEx(groupId.c_str(), ImGuiTreeNodeFlags_SpanAvailWidth, "%s", openGroup);
+                }
             }
+            if (openGroup && !groupNodeOpen) continue; // collapsed group — skip its fields
+            if (f.EditorHidden) continue;              // drawn by DrawReflectedComponentExtra
+            DrawReflectedField(world, assets, rc, f, selOne);
         }
-        if (openGroup && !groupNodeOpen) continue; // collapsed group — skip its fields
-        if (f.EditorHidden) continue;              // drawn by DrawReflectedComponentExtra
-        if (!fieldVisible(f)) continue;
+        if (openGroup && groupNodeOpen) ImGui::TreePop();
+    };
+    drawFields(nullptr);
 
-        DrawReflectedField(world, assets, rc, f, selOne);
+    // vInspector tabs: one tab per distinct Tab name, in first-use order.
+    const char* tabs[16];
+    int tabCount = 0;
+    for (const ReflectField& f : rc.Meta.Fields) {
+        if (!f.Tab || f.EditorHidden || tabCount == 16) continue;
+        bool seen = false;
+        for (int i = 0; i < tabCount && !seen; ++i) seen = std::strcmp(tabs[i], f.Tab) == 0;
+        if (!seen) tabs[tabCount++] = f.Tab;
     }
-    if (openGroup && groupNodeOpen) ImGui::TreePop();
+    if (tabCount > 0) {
+        ImGui::Spacing();
+        if (ImGui::BeginTabBar("##fieldTabs", ImGuiTabBarFlags_FittingPolicyScroll)) {
+            for (int i = 0; i < tabCount; ++i) {
+                if (ImGui::BeginTabItem(tabs[i])) {
+                    drawFields(tabs[i]);
+                    ImGui::EndTabItem();
+                }
+            }
+            ImGui::EndTabBar();
+        }
+    }
+
+    // vInspector computed lines (ShowInInspector for C++).
+    for (const ReflectStatic& st : rc.Meta.Statics) {
+        if (!st.Value) continue;
+        char buf[256];
+        buf[0] = '\0';
+        st.Value(world, entity, fbase, buf, sizeof(buf));
+        PropertyLabel(st.Label, st.Tooltip);
+        ImGui::TextDisabled("%s", buf);
+    }
+    // vInspector buttons: one undo step each.
+    if (!rc.Meta.Buttons.empty()) {
+        ImGui::Spacing();
+        for (std::size_t i = 0; i < rc.Meta.Buttons.size(); ++i) {
+            const ReflectButton& b = rc.Meta.Buttons[i];
+            if (!b.Invoke) continue;
+            char label[128];
+            std::snprintf(label, sizeof(label), "%s%s%s", b.Icon ? b.Icon : "", b.Icon ? "  " : "", b.Label);
+            ImGui::PushID((int)i);
+            if (b.Color) {
+                const ImVec4 c = ImGui::ColorConvertU32ToFloat4(b.Color);
+                ImGui::PushStyleColor(ImGuiCol_Text, c);
+            }
+            const bool clicked = EditorUIPrimitives::SecondaryButton(label, ImVec2(-FLT_MIN, 0.0f));
+            if (b.Color) ImGui::PopStyleColor();
+            if (b.Tooltip && ImGui::IsItemHovered()) EditorUI::SetTooltip("%s", b.Tooltip);
+            if (clicked && rc.Has(world.Registry, entity)) {
+                PushUndo(world, b.Label);
+                b.Invoke(world, entity, rc.Get(world.Registry, entity), b.Arg);
+            }
+            ImGui::PopID();
+        }
+    }
     DrawReflectedComponentExtra(rc.Meta.Name, world, entity, ReflectExtraPhase::Bottom);
 }
 
