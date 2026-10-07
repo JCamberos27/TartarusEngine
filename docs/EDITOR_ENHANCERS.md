@@ -18,6 +18,7 @@ Status by phase:
 | 4 | vTabs: tab strips in the Inspector and Asset Browser | Done |
 | 5 | vFavorites: hold-Alt favorites overlay with pages | Done |
 | 6 | vRuler: Shift+R surface, bounds and reference-object measuring | Done |
+| 7 | Visual polish: one header row per panel, bookmarks popover, unified rows, tabs, component sections, favorites card, ruler drawing (shared motion and primitives in `EditorTheme.h` / `EditorUIPrimitives.h`) | Done (awaiting visual review) |
 
 ## Where things live
 
