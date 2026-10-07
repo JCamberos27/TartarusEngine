@@ -2883,6 +2883,7 @@ int main(int argc, char** argv) {
                     window.SetCursorLocked(false);
                 }
 
+                if (editor.RulerHeld()) Input::ConsumeScroll(); // vRuler: the wheel picks the measured object
                 if (UpdateEditorCamera(editorCamera, dt, allowLook || camDragActive, gizmoDragging,
                         hasSelection ? &selectionCenter : nullptr, editor.ViewportSize().y))
                     editor.FlashFlySpeedHud(); // #236 R2 — show the transient "Fly speed: N" readout

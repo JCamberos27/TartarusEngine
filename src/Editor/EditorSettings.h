@@ -293,6 +293,10 @@ struct EditorSettings {
     // vFavorites: the favorites overlay, and whether holding Alt over the Asset Browser shows it.
     bool Favorites        = true;
     bool FavoritesHoldAlt = true;
+    // vRuler (hold Shift+R in the Scene view), and the length units it shares with the Measure
+    // tool: false = metric (mm / cm / m / km), true = feet and inches.
+    bool Ruler       = true;
+    bool MeasureFeet = false;
 
     bool WindowPlacementValid = false;
     int  WindowX = 0, WindowY = 0, WindowWidth = 0, WindowHeight = 0;

@@ -29,6 +29,8 @@ public:
     // "zoom in" direction by convention). X: horizontal wheel / trackpad, positive is right.
     static double GetScrollDeltaY();
     static double GetScrollDeltaX();
+    // Drops this frame's wheel movement (the editor's Shift+R ruler uses the wheel itself).
+    static void ConsumeScroll() { s_ScrollY = 0.0; s_ScrollX = 0.0; }
 
     // Gamepad (#145) - the first connected joystick with a standard (SDL_GameControllerDB)
     // mapping, polled once per Update(). Buttons / axes are GLFW_GAMEPAD_BUTTON_* / _AXIS_*.

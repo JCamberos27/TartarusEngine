@@ -263,6 +263,9 @@ void BuildDefaultTable() {
     Register("favorites.toggle",       "Favorites: Keep Open / Close",   Ctx_Global, CAk(ImGuiKey_F));
     Register("favorites.addSelection", "Favorites: Add the Selection",   Ctx_Global, CAk(ImGuiKey_B));
 
+    // --- Editor Enhancers / vRuler - a held binding (Shortcuts::Held), over the Scene view.
+    Register("viewport.ruler", "Ruler (hold)", Ctx_Viewport, Sk(ImGuiKey_R));
+
     // --- Asset Browser (Ctx_Project) — only while the panel has focus, so F / Ctrl+D don't
     // collide with the scene-selection bindings. ---
     Register("project.focusSearch",   "Focus Search",        Ctx_Project, Ck(ImGuiKey_F));
