@@ -332,7 +332,9 @@ void RegisterEngineComponents() {
         m.Name = "Animation"; m.Icon = ICON_FA_FILM; m.Category = "Rendering";
         m.Tooltip = "Plays one of this object's model animation clips in Play mode. Game code can switch the clip "
                     "(it crossfades) or stop / start it.";
-        m.Key = "animation";
+        // No Key: this component serializes generically under its Name ("Animation"). A Key of
+        // "animation" here made the prefab override helpers (which look components up by
+        // ReflectComponentKey) search for a block the serializer never writes.
         m.Fields = {
             { "Clip", T::String, TARTARUS_REFLECT_FIELD(SkeletalAnimationComponent, Clip), 0.0f,
               "Which clip to play (empty = the model's first clip)." },
