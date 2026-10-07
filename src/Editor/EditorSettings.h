@@ -281,6 +281,12 @@ struct EditorSettings {
     bool FolderMinimal     = false;
     bool FolderMinimap     = true;
     bool FolderNavBar      = true;
+    // vInspector. NavBar: selection Back/Forward + bookmarked objects/assets above the Inspector.
+    // Animations: component sections ease open/closed and fade out on removal. Minimal: a
+    // section's actions button shows only while its header is hovered.
+    bool InspectorNavBar     = true;
+    bool InspectorAnimations = true;
+    bool InspectorMinimal    = false;
 
     bool WindowPlacementValid = false;
     int  WindowX = 0, WindowY = 0, WindowWidth = 0, WindowHeight = 0;

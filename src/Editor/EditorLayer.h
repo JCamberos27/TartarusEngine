@@ -20,6 +20,8 @@
 #include <chrono>
 #include <future>
 #include "Enhancers/FolderStyles.h" // Enhancers::FolderSummary (m_FolderSummaries)
+#include "Enhancers/EnhancerCore.h" // Enhancers::SelectionHistoryEntry (m_SelHistory)
+#include "Enhancers/ComponentTransfer.h" // Enhancers::PlayKeep / PasteMode (vInspector)
 #include "Shortcuts.h" // Shortcuts::Chord - Preferences > Shortcuts capture state below
 #include "Texture.h" // TextureImportSettings - stored by value in the Import Settings panel state
 #include "Model.h"   // ModelImportSettings - same
@@ -370,6 +372,16 @@ public:
     // Editor Enhancers / vHierarchy: the scene selector + Back/Forward + entity bookmark chips
     // row the Hierarchy module draws between its toolbar and the tree (EditorLayer_Enhancers.cpp).
     void DrawHierarchyNavBar(World& world, AssetLibrary& assets);
+    // vInspector nav bar (Back/Forward + bookmark chips) at the top of DrawInspectorBody. Clicks
+    // come back as an action the body applies after its lock swap is undone.
+    struct InspectorNavAction {
+        enum Type { None, Back, Forward, SelectEntity, SelectAsset } Kind = None;
+        entt::entity Entity = entt::null;
+        bool Additive = false;
+        std::string Asset;
+    };
+    void DrawInspectorNavBar(World& world, InspectorNavAction& act);
+    void ApplyInspectorNavAction(World& world, const InspectorNavAction& act);
     // Pinned component windows (vHierarchy minimap Alt+click, vInspector "Open in Window"): one
     // floating editor per (entity, reflected component), drawn by the host each frame.
     void OpenPinnedComponent(World& world, entt::entity entity, const char* componentName);
@@ -906,12 +918,19 @@ private:
     void RecordSelectionHistory(const World& world);
     void SelectionHistoryBack(World& world);
     void SelectionHistoryForward(World& world);
-    bool CanSelectionHistoryBack() const    { return m_SelHistoryPos > 0; }
-    bool CanSelectionHistoryForward() const  { return m_SelHistoryPos + 1 < m_SelHistory.size(); }
-    void ApplySelectionSnapshot(World& world, const std::vector<entt::entity>& snap);
-    std::vector<std::vector<entt::entity>> m_SelHistory;
+    // vInspector: entries are named by scene key + OrderComponent values (or an asset key), not
+    // by entt handle, so they survive undo, Play/Stop and scene loads; Back/Forward skip entries
+    // from another scene (Enhancers::StepSelectionHistory). Cheap enough to poll every frame.
+    bool CanSelectionHistoryBack() const;
+    bool CanSelectionHistoryForward() const;
+    void ApplySelectionEntry(World& world, const Enhancers::SelectionHistoryEntry& entry);
+    std::vector<Enhancers::SelectionHistoryEntry> m_SelHistory;
     size_t m_SelHistoryPos = 0;
+    // Last polled live state: the raw entity vector is only a cheap per-frame change detector;
+    // m_SelEntryLast is the same selection by identity (what the history and undo record).
     std::vector<entt::entity> m_SelSnapshotLast;
+    std::string m_SelAssetLast;
+    Enhancers::SelectionHistoryEntry m_SelEntryLast;
     // Set by SelectionHistoryBack/Forward and by RestoreSelectionByOrder (Undo/Redo/JumpTo*) alike
     // — any selection change WE drove ourselves, so the next RecordSelectionHistory() poll swallows
     // it instead of recording a redundant Select* entry (into m_SelHistory, or, per Q6 below, into
@@ -2116,7 +2135,12 @@ private:
         // #178 Preset assets. savePresetOut: "Save Preset" was chosen. applyPresetOut: receives
         // the chosen .preset file's path. Both only appear when the caller passes them, i.e. for
         // generically-serialised components - a preset of a hand-coded component can't round-trip.
-        bool* savePresetOut = nullptr, std::string* applyPresetOut = nullptr);
+        bool* savePresetOut = nullptr, std::string* applyPresetOut = nullptr,
+        // vInspector: the inspected object, on the single-select path only. With it, a section
+        // naming a ComponentRegistry component gains Open in Window / Alt+drag out, Ctrl+click
+        // picking for the multi-component clipboard, Keep Changes After Play, and the A / X
+        // hover keys.
+        entt::entity entity = entt::null);
 
     // #178 - every .preset under the project whose "component" matches `component`, as
     // {display name, path}. Rescanned when the menu opens; presets are few and this is not a
@@ -2126,6 +2150,46 @@ private:
     // path written, or "" on failure (reported to the Console).
     std::string SaveComponentPreset(const World& world, entt::entity entity, const char* component);
     void EndComponentSection();
+
+    // --- vInspector section state (EditorLayer_Inspector.cpp) ---------------------------------
+    World* m_InspectorWorld = nullptr; // set at the top of DrawInspectorBody for BeginComponentSection
+    // Ctrl+click-picked component headers (ComponentRegistry names) on the object whose
+    // OrderComponent is m_InspectorPickedOrder; cleared when the Inspector moves to another object.
+    std::set<std::string> m_InspectorPickedComponents;
+    int m_InspectorPickedOrder = -1;
+    // Multi-component clipboard: preset JSON per component (SceneSerializer::ComponentToPresetJson).
+    std::vector<std::string> m_ComponentClipboard;
+    // Keep Changes After Play: captured off the Play world just before Stop reloads the snapshot.
+    std::vector<Enhancers::PlayKeep> m_PlayKeep;
+    bool IsKeptAfterPlay(int order, const char* component) const;
+    void ToggleKeepAfterPlay(int order, const char* component);
+    void PasteComponentClipboard(World& world, AssetLibrary& assets, const std::vector<entt::entity>& targets,
+                                 Enhancers::PasteMode mode);
+    // Hover keys: the section under the mouse, written while drawing and read next frame.
+    struct InspectorHoverSection {
+        std::string Label;
+        ImGuiID HeaderId = 0;
+        bool Removable = false;
+        entt::entity Entity = entt::null;
+    };
+    InspectorHoverSection m_HoverSection, m_HoverSectionNext, m_CurSection;
+    ImVec2 m_CurSectionMin{0.0f, 0.0f}; // the drawing section's header top-left (hover rect)
+    void HandleInspectorHoverKeys(World& world);
+    // Collapse All / Expand All / Isolate, applied by each BeginComponentSection on the frame it
+    // was issued (section open state lives in per-ID ImGui storage; only the header can set it).
+    enum class SectionCommand { None, CollapseAll, ExpandAll, Isolate };
+    SectionCommand m_SectionCmd = SectionCommand::None;
+    std::string m_SectionCmdTarget;
+    int m_SectionCmdFrame = -1;
+    int m_SectionsOpenThisFrame = 0, m_SectionsOpenLastFrame = 0;
+    // Animations: the section currently fading out before its removal is reported, and the
+    // per-section bookkeeping EndComponentSection needs (sections never nest).
+    ImGuiID m_RemovingSection = 0;
+    double m_RemovingStart = 0.0;
+    int m_RemovingSeenFrame = -1;
+    ImGuiID m_CurSectionId = 0;
+    bool m_CurSectionMeasure = false;  // fully open and still: record its body height
+    bool m_CurSectionAlpha = false;    // a fade alpha was pushed for the body
 
     // Single-slot component clipboard (#236): "Copy Component" on a header header snapshots the
     // component; "Paste Component Values" on a matching header (or the same kind on another

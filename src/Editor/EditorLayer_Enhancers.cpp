@@ -33,7 +33,9 @@
 #include <algorithm>
 #include <cctype>
 #include <cstdio>
+#include <cstring>
 #include <filesystem>
+#include <initializer_list>
 #include <set>
 
 using namespace EditorInternal;
@@ -54,7 +56,9 @@ void EditorLayer::DrawEnhancerPreferences() {
     ImGui::SameLine();
     EditorUI::HelpMarker("Single-letter keys act on the row, folder or component under the mouse, whichever panel has "
                          "focus: E expand, Shift+E isolate, Ctrl+Shift+E collapse all, A toggle active, X delete, F frame, "
-                         "D default parent. Rebind them under Shortcuts (the \"(hover)\" groups).");
+                         "D default parent. Over the Inspector: Shift+E isolate a component, Ctrl+Shift+E collapse / "
+                         "expand all, A toggle its Enabled field, X remove it. Rebind them under Shortcuts (the "
+                         "\"(hover)\" groups).");
 
     ImGui::Spacing();
     EditorUIPrimitives::SectionHeader("Hierarchy");
@@ -182,6 +186,19 @@ void EditorLayer::DrawEnhancerPreferences() {
             fs.MarkDirty();
         }
     }
+
+    ImGui::Spacing();
+    EditorUIPrimitives::SectionHeader("Inspector");
+    if (SettingsCheckbox("Navigation bar##insp", &prefs.InspectorNavBar)) EditorSettings::Save();
+    ImGui::SameLine();
+    EditorUI::HelpMarker("Selection Back/Forward and bookmarked objects and assets above the Inspector. "
+                         "Drop Hierarchy rows or assets on the bar to bookmark them.");
+    if (SettingsCheckbox("Animations##insp", &prefs.InspectorAnimations)) EditorSettings::Save();
+    ImGui::SameLine();
+    EditorUI::HelpMarker("Component sections slide open and closed, and fade out when removed.");
+    if (SettingsCheckbox("Minimal mode##insp", &prefs.InspectorMinimal)) EditorSettings::Save();
+    ImGui::SameLine();
+    EditorUI::HelpMarker("A component's actions button appears only while its header is hovered.");
 
     ImGui::Spacing();
     EditorUIPrimitives::SectionHeader("Palette colours");
@@ -588,6 +605,227 @@ void EditorLayer::DrawHierarchyNavBar(World& world, AssetLibrary& assets) {
 
     ImGui::PopStyleVar();
     ImGui::PopID();
+}
+
+// ============================================================================================
+// vInspector nav bar
+// ============================================================================================
+
+namespace {
+// Chip icon for an asset bookmark, from the key's extension alone (no disk access - this runs
+// every frame per chip). Mirrors the Asset Browser grid's kind glyphs for the common kinds.
+const char* AssetChipIcon(const std::string& key) {
+    const size_t dot = key.find_last_of('.');
+    if (dot == std::string::npos || key.find('/', dot) != std::string::npos) return ICON_FA_FILE;
+    char ext[16] = {};
+    for (size_t i = dot + 1, n = 0; i < key.size() && n + 1 < sizeof(ext); ++i, ++n)
+        ext[n] = (char)std::tolower((unsigned char)key[i]);
+    auto is = [&](std::initializer_list<const char*> l) {
+        for (const char* e : l) if (std::strcmp(ext, e) == 0) return true;
+        return false;
+    };
+    if (is({"glb", "gltf", "fbx", "obj", "dae", "blend"})) return ICON_FA_CUBE;
+    if (is({"png", "jpg", "jpeg", "tga", "bmp", "ktx", "ktx2", "dds", "psd"})) return ICON_FA_IMAGE;
+    if (is({"hdr", "exr"})) return ICON_FA_SUN;
+    if (is({"mat", "material"})) return ICON_FA_DROPLET;
+    if (is({"prefab"})) return ICON_FA_BOX_ARCHIVE;
+    if (is({"wav", "ogg", "mp3", "flac"})) return ICON_FA_MUSIC;
+    if (is({"cs"})) return ICON_FA_SCROLL;
+    if (is({"glsl", "vert", "frag", "comp", "hlsl", "shader"})) return ICON_FA_FILE_CODE;
+    if (is({"json"})) return ICON_FA_MAP;
+    return ICON_FA_FILE;
+}
+
+std::string AssetChipLabel(const std::string& key) {
+    const size_t slash = key.find_last_of("/\\");
+    return slash == std::string::npos ? key : key.substr(slash + 1);
+}
+} // namespace
+
+// [<] [>] [bookmark] [chips ... +N] above the Inspector body. Drawn inside DrawInspectorBody
+// AFTER the lock swap, so the bookmark toggle names what the Inspector shows (the locked object
+// while locked) - but selection changes come back through `act` and are applied by the caller
+// once the live selection is restored, or the swap-back would undo them.
+void EditorLayer::DrawInspectorNavBar(World& world, InspectorNavAction& act) {
+    if (!EditorSettings::Get().InspectorNavBar) return;
+    auto& us = Enhancers::EnhancerUserState::Get();
+    auto& bm = us.InspectorBookmarks;
+    const std::string sceneKey = CurrentSceneKey();
+    const float h = ImGui::GetFrameHeight();
+    const ImVec2 barMin = ImGui::GetCursorScreenPos();
+    const float barW = ImGui::GetContentRegionAvail().x;
+    ImGui::PushID("##inspNav");
+    ImGui::PushStyleVar(ImGuiStyleVar_ItemSpacing, ImVec2(EditorTheme::Px(4.0f), ImGui::GetStyle().ItemSpacing.y));
+
+    ImGui::BeginDisabled(!CanSelectionHistoryBack());
+    if (EditorUIPrimitives::ActionButton(ICON_FA_ARROW_LEFT, "Previous selection (Ctrl+[)", &Tip, false, ImVec2(h, h)))
+        act.Kind = InspectorNavAction::Back;
+    ImGui::EndDisabled();
+    ImGui::SameLine();
+    ImGui::BeginDisabled(!CanSelectionHistoryForward());
+    if (EditorUIPrimitives::ActionButton(ICON_FA_ARROW_RIGHT, "Next selection (Ctrl+])", &Tip, false, ImVec2(h, h)))
+        act.Kind = InspectorNavAction::Forward;
+    ImGui::EndDisabled();
+
+    // --- Bookmark what the Inspector shows ------------------------------------------------------
+    auto entityRef = [&](entt::entity e) {
+        const auto* o = world.Registry.try_get<OrderComponent>(e);
+        const auto* n = world.Registry.try_get<NameComponent>(e);
+        return Enhancers::EditorRef::MakeEntity(sceneKey, o ? o->Value : -1, n ? n->Name : std::string());
+    };
+    Enhancers::EditorRef current;
+    bool haveCurrent = false;
+    if (m_Selected != entt::null && world.Registry.valid(m_Selected) && world.Registry.all_of<OrderComponent>(m_Selected)) {
+        current = entityRef(m_Selected);
+        haveCurrent = true;
+    } else if (m_Selected == entt::null && !m_SelectedAssetKey.empty() && !m_SelectedAssetIsFolder) {
+        current = Enhancers::EditorRef::MakeAsset(m_SelectedAssetKey, AssetChipLabel(m_SelectedAssetKey));
+        haveCurrent = true;
+    }
+    const bool starred = haveCurrent && Enhancers::FindRef(bm, current) >= 0;
+    ImGui::SameLine();
+    ImGui::BeginDisabled(!haveCurrent);
+    if (EditorUIPrimitives::ActionButton(ICON_FA_BOOKMARK, starred ? "Remove the bookmark"
+                                                                  : "Bookmark what the Inspector shows (or drop objects / assets on this bar)",
+                                         &Tip, starred, ImVec2(h, h))) {
+        if (starred) Enhancers::RemoveRef(bm, current);
+        else Enhancers::AddUnique(bm, current, Enhancers::EnhancerUserState::kMaxBookmarks);
+        us.MarkDirty();
+    }
+    ImGui::EndDisabled();
+
+    // --- Chips: this scene's objects + every asset ------------------------------------------------
+    int removeAt = -1;
+    std::vector<int> overflow;
+    const float right = barMin.x + barW;
+    auto resolve = [&](Enhancers::EditorRef& r, entt::entity& e, const char*& icon) {
+        e = entt::null;
+        icon = nullptr;
+        if (r.Kind == Enhancers::RefKind::Asset) { icon = AssetChipIcon(r.Path); return true; }
+        e = FindEntityByOrder(world, r.Order);
+        if (e == entt::null) return false;
+        if (const auto* n = world.Registry.try_get<NameComponent>(e); n && !n->Name.empty())
+            r.Label = n->Name; // display refresh only - written with the next real change
+        if (const auto* st = world.Registry.try_get<HierarchyStyleComponent>(e); st && !st->Icon.empty())
+            icon = Enhancers::FAIconGlyph(st->Icon.c_str());
+        if (!icon) icon = ICON_FA_CUBE;
+        return true;
+    };
+    auto activate = [&](const Enhancers::EditorRef& r, entt::entity e) {
+        if (r.Kind == Enhancers::RefKind::Asset) { act.Kind = InspectorNavAction::SelectAsset; act.Asset = r.Path; }
+        else if (e != entt::null) { act.Kind = InspectorNavAction::SelectEntity; act.Entity = e; act.Additive = ImGui::GetIO().KeyCtrl; }
+    };
+    auto shown = [&](const Enhancers::EditorRef& r) {
+        return r.Kind == Enhancers::RefKind::Asset || (r.Kind == Enhancers::RefKind::Entity && r.Scene == sceneKey);
+    };
+    for (int i = 0; i < (int)bm.size(); ++i) {
+        Enhancers::EditorRef& r = bm[(size_t)i];
+        if (!shown(r)) continue;
+        ImGui::SameLine();
+        const float avail = right - ImGui::GetCursorScreenPos().x - h - EditorTheme::Px(4.0f);
+        if (avail < EditorTheme::Px(48.0f) || !overflow.empty()) { overflow.push_back(i); continue; }
+        entt::entity e;
+        const char* icon;
+        const bool found = resolve(r, e, icon);
+        const char* label = r.Label.empty() ? "(unnamed)" : r.Label.c_str();
+        ImGui::PushID(i);
+        bool clicked = false, hovered = false;
+        NavChip("##chip", icon, label, !found, std::min(avail, EditorTheme::Px(140.0f)), clicked, hovered);
+        if (clicked) activate(r, e);
+        if (hovered) {
+            if (r.Kind == Enhancers::RefKind::Asset)
+                EditorUI::SetTooltip("%s\nClick to inspect, right-click to remove.", r.Path.c_str());
+            else
+                EditorUI::SetTooltip(found ? "%s\nClick to select (Ctrl+click adds), right-click to remove."
+                                           : "%s\nNot found in this scene - right-click to remove.", label);
+        }
+        if (ImGui::BeginPopupContextItem("##chipCtx")) {
+            if (ImGui::MenuItem(ICON_FA_TRASH "  Remove bookmark")) removeAt = i;
+            ImGui::EndPopup();
+        }
+        ImGui::PopID();
+    }
+    if (!overflow.empty()) {
+        ImGui::SameLine();
+        char more[16];
+        std::snprintf(more, sizeof(more), "+%d", (int)overflow.size());
+        if (EditorUIPrimitives::ActionButton(more, "More bookmarks", &Tip, false, ImVec2(0, h))) ImGui::OpenPopup("##navMore");
+        if (ImGui::BeginPopup("##navMore")) {
+            for (int i : overflow) {
+                Enhancers::EditorRef& r = bm[(size_t)i];
+                entt::entity e;
+                const char* icon;
+                const bool found = resolve(r, e, icon);
+                char line[256];
+                std::snprintf(line, sizeof(line), "%s  %s", icon ? icon : ICON_FA_CUBE, r.Label.empty() ? "(unnamed)" : r.Label.c_str());
+                ImGui::PushID(i);
+                ImGui::BeginDisabled(!found);
+                if (ImGui::Selectable(line)) activate(r, e);
+                ImGui::EndDisabled();
+                if (ImGui::BeginPopupContextItem("##moreCtx")) {
+                    if (ImGui::MenuItem(ICON_FA_TRASH "  Remove bookmark")) removeAt = i;
+                    ImGui::EndPopup();
+                }
+                ImGui::PopID();
+            }
+            ImGui::EndPopup();
+        }
+    }
+    if (removeAt >= 0) {
+        bm.erase(bm.begin() + removeAt);
+        us.MarkDirty();
+    }
+
+    // --- Drop Hierarchy rows or assets anywhere on the bar to bookmark them -----------------------
+    const ImRect barRect(barMin, ImVec2(barMin.x + barW, barMin.y + h));
+    if (ImGui::BeginDragDropTargetCustom(barRect, ImGui::GetID("##navDrop"))) {
+        if (const ImGuiPayload* p = ImGui::AcceptDragDropPayload("HIERARCHY_ENTITY")) {
+            const entt::entity dragged = *(const entt::entity*)p->Data;
+            if (world.Registry.valid(dragged)) {
+                const std::vector<entt::entity> rows = IsSelected(dragged) ? GetSelectedItems() : std::vector<entt::entity>{dragged};
+                for (entt::entity e : rows)
+                    if (world.Registry.valid(e) && world.Registry.all_of<OrderComponent>(e))
+                        Enhancers::AddUnique(bm, entityRef(e), Enhancers::EnhancerUserState::kMaxBookmarks);
+                us.MarkDirty();
+            }
+        }
+        static const char* const kAssetPayloads[] = {"ASSET_MODEL_PATH", "ASSET_TEXTURE_PATH", "ASSET_MATERIAL_PATH",
+                                                     "ASSET_PREFAB_PATH", "ASSET_SOUND_PATH", "ASSET_FILE_PATH"};
+        for (const char* type : kAssetPayloads) {
+            if (const ImGuiPayload* p = ImGui::AcceptDragDropPayload(type)) {
+                const std::string key((const char*)p->Data);
+                if (!key.empty()) {
+                    Enhancers::AddUnique(bm, Enhancers::EditorRef::MakeAsset(key, AssetChipLabel(key)),
+                                         Enhancers::EnhancerUserState::kMaxBookmarks);
+                    us.MarkDirty();
+                }
+            }
+        }
+        ImGui::EndDragDropTarget();
+    }
+
+    ImGui::PopStyleVar();
+    ImGui::PopID();
+}
+
+void EditorLayer::ApplyInspectorNavAction(World& world, const InspectorNavAction& act) {
+    switch (act.Kind) {
+        case InspectorNavAction::Back:    SelectionHistoryBack(world); break;
+        case InspectorNavAction::Forward: SelectionHistoryForward(world); break;
+        case InspectorNavAction::SelectEntity:
+            if (act.Entity != entt::null && world.Registry.valid(act.Entity)) {
+                SelectItem(act.Entity, act.Additive);
+                m_HierarchyScrollToEntity = act.Entity;
+            }
+            break;
+        case InspectorNavAction::SelectAsset:
+            ClearSelection();
+            ClearAssetSelection();
+            m_SelectedAssetKey = act.Asset;
+            m_SelectedAssetIsFolder = false;
+            break;
+        case InspectorNavAction::None: break;
+    }
 }
 
 // ============================================================================================

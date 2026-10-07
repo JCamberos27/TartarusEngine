@@ -8,12 +8,14 @@
 #include "Enhancers/EnhancerUserState.h"
 #include "Enhancers/Palette.h"
 #include "Enhancers/FolderStyles.h"
+#include "Enhancers/ComponentTransfer.h"
 #include "Shortcuts.h"
 #include "World.h"
 #include "AssetLibrary.h"
 #include "SceneSerializer.h"
 #include "ComponentRegistry.h"
 
+#include <algorithm>
 #include <cstring>
 #include <limits>
 #include <map>
@@ -93,6 +95,149 @@ void TestEnhancerNavHistory() {
     CHECK(h.Size() == 4 && h.Entries().front() == 2 && *h.Current() == 12);
     h.Clear();
     CHECK(h.Size() == 0 && h.Cursor() == -1);
+}
+
+void TestEnhancerSelectionHistory() {
+    using E = SelectionHistoryEntry;
+    const E a1{"sceneA", {1}, {}};
+    const E a12{"sceneA", {1, 2}, {}};
+    const E b5{"sceneB", {5}, {}};
+    const E tex{{}, {}, "assets/tex/brick.png"};
+    const E emptyA{"sceneA", {}, {}};
+    std::vector<E> h{emptyA, a1, b5, tex, a12};
+
+    // Entity/empty entries only resolve in their own scene; asset entries everywhere.
+    CHECK(SelectionEntryReachable(a1, "sceneA") && !SelectionEntryReachable(a1, "sceneB"));
+    CHECK(SelectionEntryReachable(tex, "sceneB") && SelectionEntryReachable(tex, ""));
+    CHECK(!SelectionEntryReachable(emptyA, "sceneB"));
+
+    // Back from the end in sceneA skips nothing reachable: tex, then (skipping b5) a1, then emptyA.
+    CHECK(StepSelectionHistory(h, 4, -1, "sceneA") == 3);
+    CHECK(StepSelectionHistory(h, 3, -1, "sceneA") == 1);
+    CHECK(StepSelectionHistory(h, 1, -1, "sceneA") == 0);
+    CHECK(StepSelectionHistory(h, 0, -1, "sceneA") == -1);
+    CHECK(StepSelectionHistory(h, 1, +1, "sceneA") == 3);
+    CHECK(StepSelectionHistory(h, 3, +1, "sceneA") == 4);
+    CHECK(StepSelectionHistory(h, 4, +1, "sceneA") == -1);
+    // In sceneB only b5 and the asset are reachable.
+    CHECK(StepSelectionHistory(h, 4, -1, "sceneB") == 3);
+    CHECK(StepSelectionHistory(h, 3, -1, "sceneB") == 2);
+    CHECK(StepSelectionHistory(h, 2, -1, "sceneB") == -1);
+    // A step never lands on an entry equal to the one it starts from.
+    const std::vector<E> dup{a1, a1, tex};
+    CHECK(StepSelectionHistory(dup, 1, -1, "sceneA") == -1);
+
+    // Entries survive a scene reload: the orders recorded before resolve to the same objects in
+    // the reloaded registry, even though entt hands out different handles.
+    if (ComponentRegistry::All().empty()) ComponentRegistry::RegisterEngineComponents();
+    World w;
+    AssetLibrary assets;
+    const glm::vec3 zero(0.0f), one(1.0f);
+    w.CreateEmptyEntity(zero, zero, one, "Filler");
+    const entt::entity crate = w.CreateEmptyEntity(zero, zero, one, "Crate");
+    const int crateOrder = w.Registry.get<OrderComponent>(crate).Value;
+    const E rec{"sceneA", {crateOrder}, {}};
+    World reloaded;
+    CHECK(SceneSerializer::LoadFromString(reloaded, assets, SceneSerializer::SaveToString(w, assets)));
+    auto resolves = [](const std::vector<int>& orders, void* ctx) {
+        const World& world = *static_cast<const World*>(ctx);
+        for (auto [e, o] : world.Registry.view<const OrderComponent>().each())
+            if (std::find(orders.begin(), orders.end(), o.Value) != orders.end()) return true;
+        return false;
+    };
+    CHECK(SelectionEntryReachable(rec, "sceneA", resolves, &reloaded));
+    bool foundCrate = false;
+    for (auto [e, o, n] : reloaded.Registry.view<const OrderComponent, const NameComponent>().each())
+        if (o.Value == crateOrder) foundCrate = n.Name == "Crate";
+    CHECK(foundCrate);
+    // An order that no longer exists makes the entry unreachable (deleted since).
+    const E gone{"sceneA", {crateOrder + 1000}, {}};
+    CHECK(!SelectionEntryReachable(gone, "sceneA", resolves, &reloaded));
+    const std::vector<E> h2{rec, gone};
+    CHECK(StepSelectionHistory(h2, 1, -1, "sceneA", resolves, &reloaded) == 0);
+}
+
+// The ComponentRegistry name of component T on `e`, found by address so the test doesn't
+// hard-code display names.
+template <class T>
+const char* RegistryNameOf(World& w, entt::entity e) {
+    void* want = &w.Registry.get<T>(e);
+    for (const auto& rc : ComponentRegistry::All())
+        if (rc.Has(w.Registry, e) && rc.Get(w.Registry, e) == want) return rc.Meta.Name;
+    return nullptr;
+}
+
+void TestEnhancerComponentClipboard() {
+    if (ComponentRegistry::All().empty()) ComponentRegistry::RegisterEngineComponents();
+    World w;
+    AssetLibrary assets;
+    const glm::vec3 zero(0.0f), one(1.0f);
+    const entt::entity src = w.CreateEmptyEntity(zero, zero, one, "Source");
+    const entt::entity dst = w.CreateEmptyEntity(zero, zero, one, "Target");
+    auto& sa = w.Registry.emplace<AudioSourceComponent>(src);
+    sa.Volume = 0.3f;
+    w.Registry.emplace<LightComponent>(src).Intensity = 9.0f;
+    w.Registry.emplace<LightComponent>(dst).Intensity = 1.0f;
+    const char* audioName = RegistryNameOf<AudioSourceComponent>(w, src);
+    const char* lightName = RegistryNameOf<LightComponent>(w, src);
+    CHECK(audioName && lightName);
+
+    const std::vector<std::string> clip = CopyAllComponents(w, src);
+    auto inClip = [&](const char* n) {
+        for (const auto& j : clip) if (SceneSerializer::PresetComponentName(j) == n) return true;
+        return false;
+    };
+    CHECK(inClip(audioName) && inClip(lightName));
+
+    // As New: only what the target lacks (the Audio Source); its Light keeps its own values.
+    CHECK(CountPastable(w, dst, clip, PasteMode::AsNew) >= 1);
+    const PasteReport asNew = PasteComponents(w, assets, dst, clip, PasteMode::AsNew);
+    CHECK(asNew.Applied >= 1);
+    CHECK(w.Registry.all_of<AudioSourceComponent>(dst) && w.Registry.get<AudioSourceComponent>(dst).Volume == 0.3f);
+    CHECK(w.Registry.get<LightComponent>(dst).Intensity == 1.0f);
+    CHECK(std::find(asNew.Skipped.begin(), asNew.Skipped.end(), std::string(lightName)) != asNew.Skipped.end());
+
+    // Values: only what the target has - now overwrites the Light, adds nothing new.
+    const entt::entity bare = w.CreateEmptyEntity(zero, zero, one, "Bare");
+    w.Registry.emplace<LightComponent>(bare).Intensity = 2.0f;
+    const PasteReport vals = PasteComponents(w, assets, bare, clip, PasteMode::Values);
+    CHECK(vals.Applied >= 1);
+    CHECK(w.Registry.get<LightComponent>(bare).Intensity == 9.0f);
+    CHECK(!w.Registry.all_of<AudioSourceComponent>(bare));
+    CHECK(!CanPastePreset(w, bare, "not json", PasteMode::AsNew));
+}
+
+void TestEnhancerKeepPlayChanges() {
+    if (ComponentRegistry::All().empty()) ComponentRegistry::RegisterEngineComponents();
+    World w;
+    AssetLibrary assets;
+    const glm::vec3 zero(0.0f), one(1.0f);
+    const entt::entity e = w.CreateEmptyEntity(zero, zero, one, "Speaker");
+    w.Registry.emplace<AudioSourceComponent>(e).Volume = 0.3f;
+    const int order = w.Registry.get<OrderComponent>(e).Value;
+    const char* audioName = RegistryNameOf<AudioSourceComponent>(w, e);
+    CHECK(audioName != nullptr);
+    if (!audioName) return;
+    const std::string snapshot = SceneSerializer::SaveToString(w, assets); // "enter Play"
+
+    // Changes made during Play.
+    w.Registry.get<AudioSourceComponent>(e).Volume = 0.8f;
+    w.Registry.get<TransformComponent>(e).Position = glm::vec3(1.0f, 2.0f, 3.0f);
+    const std::vector<PlayKeep> keeps{{order, audioName}, {order, kKeepTransform},
+                                      {order + 999, kKeepTransform}, {order, "No Such Component"}};
+    const std::vector<KeptValue> kept = CaptureKept(w, keeps);
+    CHECK(kept.size() == 2); // the missing object and the unknown component are dropped
+
+    // "Stop": the snapshot comes back, then the kept values go on top by order.
+    CHECK(SceneSerializer::LoadFromString(w, assets, snapshot));
+    entt::entity back = entt::null;
+    for (auto [x, o] : w.Registry.view<const OrderComponent>().each()) if (o.Value == order) back = x;
+    CHECK(back != entt::null);
+    if (back == entt::null) return;
+    CHECK(w.Registry.get<AudioSourceComponent>(back).Volume == 0.3f);
+    CHECK(ApplyKept(w, assets, kept) == 2);
+    CHECK(w.Registry.get<AudioSourceComponent>(back).Volume == 0.8f);
+    CHECK(w.Registry.get<TransformComponent>(back).Position == glm::vec3(1.0f, 2.0f, 3.0f));
 }
 
 void TestEnhancerGlobMatch() {
@@ -379,6 +524,9 @@ void RegisterEnhancerTests(UnitTestSupport::TestList& tests) {
     tests.emplace_back("EnhancerRefsRoundTrip", TestEnhancerRefsRoundTrip);
     tests.emplace_back("EnhancerBookmarkList", TestEnhancerBookmarkList);
     tests.emplace_back("EnhancerNavHistory", TestEnhancerNavHistory);
+    tests.emplace_back("EnhancerSelectionHistory", TestEnhancerSelectionHistory);
+    tests.emplace_back("EnhancerComponentClipboard", TestEnhancerComponentClipboard);
+    tests.emplace_back("EnhancerKeepPlayChanges", TestEnhancerKeepPlayChanges);
     tests.emplace_back("EnhancerGlobMatch", TestEnhancerGlobMatch);
     tests.emplace_back("EnhancerFuzzyScore", TestEnhancerFuzzyScore);
     tests.emplace_back("EnhancerRemapFolderKeys", TestEnhancerRemapFolderKeys);
