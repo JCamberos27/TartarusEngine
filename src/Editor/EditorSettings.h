@@ -287,6 +287,9 @@ struct EditorSettings {
     bool InspectorNavBar     = true;
     bool InspectorAnimations = true;
     bool InspectorMinimal    = false;
+    // vTabs: the tab strips at the top of the Inspector and under the Asset Browser toolbar.
+    bool InspectorTabs = true;
+    bool AssetTabs     = true;
 
     bool WindowPlacementValid = false;
     int  WindowX = 0, WindowY = 0, WindowWidth = 0, WindowHeight = 0;

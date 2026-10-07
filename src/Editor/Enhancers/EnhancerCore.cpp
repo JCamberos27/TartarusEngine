@@ -26,10 +26,16 @@ EditorRef EditorRef::MakeScene(std::string guid, std::string path, std::string l
     return r;
 }
 
+EditorRef EditorRef::MakeComponent(std::string sceneGuid, int order, std::string component, std::string label) {
+    EditorRef r = MakeEntity(std::move(sceneGuid), order, std::move(label));
+    r.Sub = std::move(component);
+    return r;
+}
+
 bool EditorRef::SameTarget(const EditorRef& o) const {
     if (Kind != o.Kind) return false;
     switch (Kind) {
-        case RefKind::Entity: return Order == o.Order && Scene == o.Scene;
+        case RefKind::Entity: return Order == o.Order && Scene == o.Scene && Sub == o.Sub;
         // A scene is its GUID when both sides know it; a scene saved before it had a .meta (or
         // a ref written while the asset scan was still running) falls back to the path.
         case RefKind::Scene:  return (!Scene.empty() && !o.Scene.empty()) ? Scene == o.Scene : Path == o.Path;
@@ -69,6 +75,7 @@ nlohmann::json RefToJson(const EditorRef& r) {
     if (r.Kind == RefKind::Entity) j["order"] = r.Order;
     if (!r.Path.empty()) j["path"] = r.Path;
     if (!r.Label.empty()) j["label"] = r.Label;
+    if (!r.Sub.empty()) j["sub"] = r.Sub;
     return j;
 }
 
@@ -79,6 +86,7 @@ bool RefFromJson(const nlohmann::json& j, EditorRef& out) {
     r.Scene = StrOr(j, "scene");
     r.Path  = StrOr(j, "path");
     r.Label = StrOr(j, "label");
+    if (r.Kind == RefKind::Entity) r.Sub = StrOr(j, "sub");
     if (r.Kind == RefKind::Entity) {
         auto it = j.find("order");
         if (it == j.end() || !it->is_number_integer()) return false;

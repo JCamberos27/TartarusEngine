@@ -248,6 +248,15 @@ void BuildDefaultTable() {
     Register("inspector.hover.toggleEnabled", "Toggle Component Enabled",         Ctx_InspectorHover, K(ImGuiKey_A));
     Register("inspector.hover.remove",        "Remove Component",                 Ctx_InspectorHover, K(ImGuiKey_X));
 
+    // --- Editor Enhancers / vTabs — the strip of the panel under the mouse. Ctrl+Shift+T was
+    // freed for "reopen closed tab" by moving Toggle Statistics to Alt+Shift+T.
+    Register("inspector.tabs.new",    "Pin Inspector Tab",          Ctx_InspectorHover, Ck(ImGuiKey_T));
+    Register("inspector.tabs.close",  "Close Inspector Tab",        Ctx_InspectorHover, Ck(ImGuiKey_W));
+    Register("inspector.tabs.reopen", "Reopen Closed Inspector Tab", Ctx_InspectorHover, CSk(ImGuiKey_T));
+    Register("project.tabs.new",      "New Asset Browser Tab",      Ctx_ProjectHover, Ck(ImGuiKey_T));
+    Register("project.tabs.close",    "Close Asset Browser Tab",    Ctx_ProjectHover, Ck(ImGuiKey_W));
+    Register("project.tabs.reopen",   "Reopen Closed Asset Browser Tab", Ctx_ProjectHover, CSk(ImGuiKey_T));
+
     // --- Asset Browser (Ctx_Project) — only while the panel has focus, so F / Ctrl+D don't
     // collide with the scene-selection bindings. ---
     Register("project.focusSearch",   "Focus Search",        Ctx_Project, Ck(ImGuiKey_F));

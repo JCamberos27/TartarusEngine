@@ -2141,14 +2141,22 @@ void EditorLayer::DrawInspectorBody(World& world, AssetLibrary& assets) {
     const entt::entity     liveSelected = m_Selected;
     std::vector<entt::entity> liveExtra  = m_ExtraSelection;
     bool inspLockSwapped = false;
+    bool tabSwapped = false; // vTabs: a pinned tab's target replaced the selection (over the lock)
     // vInspector nav-bar clicks, applied on the way out. Declared before _restore so it is
     // destroyed after it: the live selection is back in place before the click changes it.
     InspectorNavAction navAct;
     struct NavScope { EditorLayer* self; World& w; InspectorNavAction& a; ~NavScope() { self->ApplyInspectorNavAction(w, a); } } _nav{this, world, navAct};
     auto restoreLiveSelection = [&] {
-        if (inspLockSwapped) { m_Selected = liveSelected; m_ExtraSelection = std::move(liveExtra); }
+        if (inspLockSwapped || tabSwapped) { m_Selected = liveSelected; m_ExtraSelection = std::move(liveExtra); }
     };
     struct RestoreScope { std::function<void()> f; ~RestoreScope() { if (f) f(); } } _restore{restoreLiveSelection};
+    // An asset tab swaps the Asset Browser selection too; put it back before any nav action runs.
+    std::string tabLiveAsset;
+    bool tabLiveAssetFolder = false, tabAssetSwapped = false;
+    struct AssetRestore {
+        std::string& key; bool& folder; std::string& liveKey; bool& liveFolder; bool& on;
+        ~AssetRestore() { if (on) { key = std::move(liveKey); folder = liveFolder; } }
+    } _assetRestore{m_SelectedAssetKey, m_SelectedAssetIsFolder, tabLiveAsset, tabLiveAssetFolder, tabAssetSwapped};
 
     // A live Asset Browser selection wins over the lock: locking is documented (and understood
     // by the padlock's own tooltip) as surviving the VIEWPORT/Hierarchy selection moving
@@ -2178,6 +2186,44 @@ void EditorLayer::DrawInspectorBody(World& world, AssetLibrary& assets) {
         }
     }
 
+    // vTabs: the strip, then the active pinned tab's target stands in for the selection for the
+    // rest of the body - like the lock, and over it. The Selection tab leaves things as they are.
+    DrawInspectorTabStrip(world);
+    {
+        entt::entity tabEntity = entt::null;
+        std::string tabAsset;
+        bool tabMissing = false;
+        const auto& tabs = Enhancers::TabState::Get().Inspector;
+        if (ResolveInspectorTab(world, tabEntity, tabAsset, tabMissing)) {
+            if (tabMissing) {
+                ImGui::Spacing();
+                ImGui::TextDisabled(ICON_FA_TRIANGLE_EXCLAMATION "  This tab's object isn't in the open scene.");
+                ImGui::TextDisabled("Open its scene, or close the tab.");
+                m_InspectorTabShown = tabs.Active;
+                InspectorEnd();
+                return;
+            }
+            m_ExtraSelection.clear();
+            tabSwapped = true;
+            if (!tabAsset.empty()) {
+                tabLiveAsset = m_SelectedAssetKey;
+                tabLiveAssetFolder = m_SelectedAssetIsFolder;
+                tabAssetSwapped = true;
+                m_SelectedAssetKey = tabAsset;
+                m_SelectedAssetIsFolder = false;
+                m_Selected = entt::null;
+            } else {
+                m_Selected = tabEntity;
+                // A component tab opens and scrolls to its component once, when it becomes active.
+                const std::string& sub = tabs.Tabs[(size_t)tabs.Active].Sub;
+                if (!sub.empty() && tabs.Active != m_InspectorTabShown) {
+                    m_InspectorScrollToComponent = sub;
+                    m_InspectorScrollToFrame = ImGui::GetFrameCount();
+                }
+            }
+        }
+        m_InspectorTabShown = tabs.Active;
+    }
     DrawInspectorNavBar(world, navAct);
 
     // The padlock lives in the panel's title bar now (drawn by the Inspector module, toggled
@@ -2185,7 +2231,7 @@ void EditorLayer::DrawInspectorBody(World& world, AssetLibrary& assets) {
     // and only while locked — the panel starts flush with the name row otherwise (#236 R2).
     // Gated on inspLockSwapped, not m_InspectorLocked directly, so this doesn't claim "Locked to
     // X" above an asset's Import Settings while an asset selection is temporarily overriding it.
-    if (inspLockSwapped) {
+    if (inspLockSwapped && !tabSwapped) {
         const auto* nm = world.Registry.try_get<NameComponent>(m_InspLockSelected);
         const int n = 1 + (int)m_InspLockExtra.size();
         ImGui::TextDisabled(ICON_FA_LOCK "  Locked to %s%s",
@@ -3582,9 +3628,20 @@ bool EditorLayer::BeginComponentSection(const char* icon,
     ImGui::SetNextItemAllowOverlap();
     const bool headerClicked = ImGui::InvisibleButton(header.c_str(), ImVec2(hw, hh));
     const bool headerActive = ImGui::IsItemActive();
+    // vTabs: drag a component header onto the Inspector's tab strip to pin it as a tab. (Alt+drag
+    // is the drag-out window below; a finished drag doesn't toggle the section.)
+    const ImGuiID dragKey = headerId ^ kSectionDragSalt;
+    if (pinnable && order >= 0 && !io.KeyAlt && ImGui::BeginDragDropSource()) {
+        InspectorComponentPayload payload;
+        payload.Order = order;
+        std::snprintf(payload.Component, sizeof(payload.Component), "%s", label);
+        ImGui::SetDragDropPayload("INSPECTOR_COMPONENT", &payload, sizeof(payload));
+        ImGui::Text("%s  %s", icon, label);
+        ImGui::EndDragDropSource();
+        storage->SetInt(dragKey, 1);
+    }
     // Alt+drag the header out: the pinned window follows the mouse while the drag lasts
     // (OpenPinnedComponent re-places an open pin under the cursor each call).
-    const ImGuiID dragKey = headerId ^ kSectionDragSalt;
     if (pinnable && headerActive && io.KeyAlt && ImGui::IsMouseDragging(ImGuiMouseButton_Left, EditorTheme::Px(6.0f))) {
         OpenPinnedComponent(*world, entity, label);
         storage->SetInt(dragKey, 1);

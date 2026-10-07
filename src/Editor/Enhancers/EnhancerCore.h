@@ -30,11 +30,15 @@ struct EditorRef {
     int         Order = -1; // Entity only: OrderComponent value
     std::string Path;       // Asset: asset key. Folder: virtual folder path. Scene: file path (fallback when the GUID is unknown).
     std::string Label;      // cached display name, refreshed whenever the ref resolves; shown when it doesn't
+    // Entity only, optional: a component on it (ComponentRegistry name) - a vTabs component tab.
+    // Part of the identity: the entity and one of its components are different targets.
+    std::string Sub;
 
     static EditorRef MakeEntity(std::string sceneGuid, int order, std::string label = {});
     static EditorRef MakeAsset(std::string key, std::string label = {});
     static EditorRef MakeFolder(std::string path, std::string label = {});
     static EditorRef MakeScene(std::string guid, std::string path, std::string label = {});
+    static EditorRef MakeComponent(std::string sceneGuid, int order, std::string component, std::string label = {});
 
     // Identity, not display: the cached Label never participates.
     bool SameTarget(const EditorRef& o) const;
