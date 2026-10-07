@@ -20,6 +20,7 @@
 #include "AABB.h"
 #include "Log.h"
 #include "EditorSettings.h"
+#include "Shortcuts.h" // vRuler: Shift+R is a held binding
 #include "EditorUIHelpers.h"
 #include "PhysicsWorld.h"   // #185 — mirror gizmo edits into the live actor while playing
 #include "AssetImporterInspector.h"
@@ -975,6 +976,11 @@ void EditorLayer::HandleViewportPicking(World& world, Camera& editorCamera) {
     // selecting — never falls through to picking / box-select below. Each left-click APPENDS a
     // point, chaining segments end to end (used to reset back to a single fresh segment after
     // the second click); right-click (or Esc, handled in the shortcut block) clears the chain.
+    // vRuler (hold Shift+R): a click shows the measured object's size instead of selecting.
+    if (RulerHeldNow() && !WantsCaptureMouse() && !m_ViewGizmoBlocking) {
+        if (leftPressed) m_RulerBounds = m_RulerBounds == m_RulerHitEntity ? entt::null : m_RulerHitEntity;
+        return;
+    }
     if (m_MeasureTool && !WantsCaptureMouse() && !m_ViewGizmoBlocking && !m_GizmoEngaged) {
         if (ImGui::IsMouseClicked(ImGuiMouseButton_Right)) { m_MeasurePoints.clear(); return; }
         if (leftPressed) {
@@ -2052,7 +2058,7 @@ bool EditorLayer::RaycastViewportSurface(World& world, Camera& cam, const glm::v
     return true;
 }
 
-// m_MeasureUnitFeet ? feet/inches : metric — the scene's native unit is always meters, so this
+// EditorSettings::MeasureFeet ? feet/inches : metric — the scene's native unit is always meters, so this
 // only affects display formatting, never the stored point data. Shared with vRuler through
 // Enhancers::FormatLength (adaptive mm/cm/m/km; ft' in" / mi).
 static void FormatMeasureLength(float meters, bool feet, char* buf, size_t n) {
@@ -2101,7 +2107,7 @@ void EditorLayer::DrawMeasurement(Camera& cam) {
             }
         }
         char segBuf[32];
-        FormatMeasureLength(segMeters, m_MeasureUnitFeet, segBuf, sizeof(segBuf));
+        FormatMeasureLength(segMeters, EditorSettings::Get().MeasureFeet, segBuf, sizeof(segBuf));
         ImVec2 mid((s0.x + s1.x) * 0.5f, (s0.y + s1.y) * 0.5f);
         ImVec2 ts = ImGui::CalcTextSize(segBuf);
         ImVec2 tp(mid.x - ts.x * 0.5f, mid.y - ts.y - 6.0f);
@@ -2129,7 +2135,7 @@ void EditorLayer::DrawMeasurement(Camera& cam) {
         ImGui::Begin("##MeasureHud", nullptr, flags);
 
         char totalBuf[48];
-        FormatMeasureLength(totalMeters, m_MeasureUnitFeet, totalBuf, sizeof(totalBuf));
+        FormatMeasureLength(totalMeters, EditorSettings::Get().MeasureFeet, totalBuf, sizeof(totalBuf));
         if (m_MeasurePoints.size() > 2) {
             ImGui::Text(ICON_FA_RULER "  Total: %s  (%d segments)", totalBuf, (int)m_MeasurePoints.size() - 1);
         } else {
@@ -2141,8 +2147,9 @@ void EditorLayer::DrawMeasurement(Camera& cam) {
             ImGui::SetClipboardText(totalBuf);
         }
         ImGui::SameLine();
-        if (ActionButton(m_MeasureUnitFeet ? "ft" : "m", "Toggle meters / feet")) {
-            m_MeasureUnitFeet = !m_MeasureUnitFeet;
+        if (ActionButton(EditorSettings::Get().MeasureFeet ? "ft" : "m", "Toggle meters / feet (the Shift+R ruler uses the same units)")) {
+            EditorSettings::Get().MeasureFeet = !EditorSettings::Get().MeasureFeet;
+            EditorSettings::Save();
         }
         ImGui::SameLine();
         if (ActionButton(ICON_FA_XMARK, "Clear (right-click in the viewport does the same)")) {
@@ -2153,6 +2160,197 @@ void EditorLayer::DrawMeasurement(Camera& cam) {
         ImGui::PopStyleVar(2);
         ImGui::PopStyleColor(2);
     }
+}
+
+// --- Editor Enhancers / vRuler ------------------------------------------------------------
+// Hold Shift+R over the Scene view. The surface under the cursor is measured along its normal to
+// the next surface (and through its own object to the far side); the wheel steps to the next
+// object behind along the ray; a click shows that object's bounds. Shares the Measure tool's
+// ray, surface query and units (EditorSettings::MeasureFeet, Enhancers::FormatLength).
+bool EditorLayer::RulerHeldNow() const {
+    return EditorSettings::Get().Ruler && Shortcuts::Held("viewport.ruler");
+}
+
+bool EditorLayer::ViewportRay(Camera& cam, const glm::vec2& screenPx, glm::vec3& origin, glm::vec3& dir) const {
+    const float w = m_ViewportSize.x, h = m_ViewportSize.y;
+    if (w <= 1.0f || h <= 1.0f) return false;
+    const glm::mat4 invVP = glm::inverse(cam.ProjectionMatrix(w / h) * cam.ViewMatrix());
+    const float ndcX = (2.0f * (screenPx.x - m_ViewportPos.x)) / w - 1.0f;
+    const float ndcY = 1.0f - (2.0f * (screenPx.y - m_ViewportPos.y)) / h;
+    glm::vec4 nearP = invVP * glm::vec4(ndcX, ndcY, -1.0f, 1.0f);
+    glm::vec4 farP  = invVP * glm::vec4(ndcX, ndcY,  1.0f, 1.0f);
+    nearP /= nearP.w; farP /= farP.w;
+    origin = glm::vec3(nearP);
+    dir = glm::normalize(glm::vec3(farP) - glm::vec3(nearP));
+    return true;
+}
+
+namespace {
+constexpr int kRulerMaxDepth = 8;      // objects collected along the cursor ray
+constexpr float kRulerReach = 10000.0f; // farthest surface the normal probe looks for
+
+// World-space bounds of a renderable (model bounds through its world transform); false if none.
+bool RenderableWorldBounds(const World& world, entt::entity e, AABB& out) {
+    const auto* r = world.Registry.valid(e) ? world.Registry.try_get<RenderableComponent>(e) : nullptr;
+    if (!r || !r->ModelRef || r->ModelRef->MeshCount() == 0) return false;
+    out = AABB{r->ModelRef->BoundsMin(), r->ModelRef->BoundsMax()}.Transformed(world.ComposeWorldTransform(e));
+    return true;
+}
+} // namespace
+
+void EditorLayer::DrawRuler(World& world, Camera& cam) {
+    const ImGuiIO& io = ImGui::GetIO();
+    const ImVec2 mouse = io.MousePos;
+    const bool overViewport = mouse.x >= m_ViewportPos.x && mouse.x < m_ViewportPos.x + m_ViewportSize.x &&
+                              mouse.y >= m_ViewportPos.y && mouse.y < m_ViewportPos.y + m_ViewportSize.y;
+    m_RulerHeld = overViewport && RulerHeldNow();
+    if (!m_RulerHeld) { m_RulerDepth = 0; m_RulerBounds = entt::null; m_RulerWheel = 0.0f; return; }
+    const bool feet = EditorSettings::Get().MeasureFeet;
+
+    glm::vec3 origin, dir;
+    if (!ViewportRay(cam, {mouse.x, mouse.y}, origin, dir)) return;
+    const float w = m_ViewportSize.x, h = m_ViewportSize.y;
+    const glm::mat4 vp = cam.ProjectionMatrix(w / h) * cam.ViewMatrix();
+    auto toScreen = [&](const glm::vec3& p, ImVec2& out) -> bool {
+        const glm::vec4 c = vp * glm::vec4(p, 1.0f);
+        if (c.w <= 1e-4f) return false;
+        const glm::vec3 ndc = glm::vec3(c) / c.w;
+        out = ImVec2(m_ViewportPos.x + (ndc.x * 0.5f + 0.5f) * w, m_ViewportPos.y + (1.0f - (ndc.y * 0.5f + 0.5f)) * h);
+        return true;
+    };
+    ImDrawList* dl = ImGui::GetForegroundDrawList();
+    dl->PushClipRect(ImVec2(m_ViewportPos.x, m_ViewportPos.y), ImVec2(m_ViewportPos.x + w, m_ViewportPos.y + h), true);
+    const ImU32 cyan = IM_COL32(120, 220, 255, 255), amber = IM_COL32(255, 196, 92, 255), faint = IM_COL32(120, 220, 255, 90);
+    auto label = [&](const ImVec2& at, const char* text, ImU32 col) {
+        const ImVec2 ts = ImGui::CalcTextSize(text);
+        const ImVec2 tp(at.x - ts.x * 0.5f, at.y - ts.y * 0.5f);
+        dl->AddRectFilled(ImVec2(tp.x - 5.0f, tp.y - 3.0f), ImVec2(tp.x + ts.x + 5.0f, tp.y + ts.y + 3.0f),
+                          EditorUIPrimitives::kHudPlateColor, 3.0f * m_UIScale);
+        dl->AddText(tp, col, text);
+    };
+    auto segment = [&](const glm::vec3& a, const glm::vec3& b, ImU32 col, bool dashed, const char* text) {
+        ImVec2 sa, sb;
+        if (!toScreen(a, sa) || !toScreen(b, sb)) return;
+        const ImVec2 d(sb.x - sa.x, sb.y - sa.y);
+        const float len = std::sqrt(d.x * d.x + d.y * d.y);
+        if (len < 1.0f) return;
+        const ImVec2 u(d.x / len, d.y / len), n(-u.y, u.x);
+        if (dashed) {
+            for (float t = 0.0f; t < len; t += 9.0f)
+                dl->AddLine(ImVec2(sa.x + u.x * t, sa.y + u.y * t), ImVec2(sa.x + u.x * std::min(t + 5.0f, len), sa.y + u.y * std::min(t + 5.0f, len)), col, 1.6f);
+        } else {
+            dl->AddLine(sa, sb, col, 1.8f);
+        }
+        const float tick = 5.0f * m_UIScale;
+        dl->AddLine(ImVec2(sa.x - n.x * tick, sa.y - n.y * tick), ImVec2(sa.x + n.x * tick, sa.y + n.y * tick), col, 1.6f);
+        dl->AddLine(ImVec2(sb.x - n.x * tick, sb.y - n.y * tick), ImVec2(sb.x + n.x * tick, sb.y + n.y * tick), col, 1.6f);
+        if (text) label(ImVec2((sa.x + sb.x) * 0.5f + n.x * 14.0f, (sa.y + sb.y) * 0.5f + n.y * 14.0f), text, col);
+    };
+
+    // Every object along the ray, nearest first.
+    SurfaceHit hits[kRulerMaxDepth];
+    int count = 0;
+    while (count < kRulerMaxDepth) {
+        const SurfaceHit hit = RaycastRenderables(world, origin, dir, [&](entt::entity e) {
+            for (int i = 0; i < count; ++i) if (hits[i].Entity == e) return true;
+            return false;
+        });
+        if (hit.Entity == entt::null) break;
+        hits[count++] = hit;
+    }
+
+    // The wheel picks which of them is measured (one notch, one object).
+    m_RulerWheel += io.MouseWheel;
+    if (count > 0) {
+        if (m_RulerWheel <= -1.0f) { m_RulerDepth = (m_RulerDepth + 1) % count; m_RulerWheel = 0.0f; }
+        else if (m_RulerWheel >= 1.0f) { m_RulerDepth = (m_RulerDepth + count - 1) % count; m_RulerWheel = 0.0f; }
+    }
+    m_RulerDepth = count > 0 ? std::clamp(m_RulerDepth, 0, count - 1) : 0;
+    char buf[48], buf2[48];
+    std::string hud;
+
+    if (count > 0) {
+        const SurfaceHit& hit = hits[m_RulerDepth];
+        const glm::vec3 p = origin + dir * hit.T;
+        glm::vec3 n = glm::length(hit.Normal) > 1e-6f ? glm::normalize(hit.Normal) : glm::vec3(0, 1, 0);
+        if (glm::dot(n, dir) > 0.0f) n = -n; // face the camera
+        const float eps = 1e-3f;
+        // Outward: this surface to the next one along its normal (floor -> ceiling, wall -> wall).
+        const SurfaceHit out = RaycastRenderables(world, p + n * eps, n, [](entt::entity) { return false; }, kRulerReach);
+        // Inward: through this object to its far side (its thickness here).
+        const SurfaceHit in = RaycastRenderables(world, p - n * eps, -n, [&](entt::entity e) { return e != hit.Entity; }, kRulerReach);
+        ImVec2 sp;
+        if (toScreen(p, sp)) dl->AddCircleFilled(sp, 4.0f * m_UIScale, cyan);
+        if (out.Entity != entt::null) {
+            Enhancers::FormatLength(out.T + eps, feet, buf, sizeof(buf));
+            segment(p, p + n * (out.T + eps), cyan, false, buf);
+            hud += std::string(ICON_FA_ARROWS_UP_DOWN "  ") + buf;
+        } else {
+            segment(p, p + n * 0.5f, faint, true, nullptr);
+            hud += ICON_FA_ARROWS_UP_DOWN "  open";
+        }
+        if (in.Entity != entt::null) {
+            Enhancers::FormatLength(in.T + eps, feet, buf2, sizeof(buf2));
+            segment(p, p - n * (in.T + eps), amber, true, buf2);
+            hud += std::string("    " ICON_FA_LAYER_GROUP "  thick ") + buf2;
+        }
+        // The measured object, outlined faintly when there is a choice (wheel to change it).
+        if (count > 1) {
+            AABB b;
+            if (RenderableWorldBounds(world, hit.Entity, b)) {
+                const glm::vec3 c[8] = {{b.Min.x, b.Min.y, b.Min.z}, {b.Max.x, b.Min.y, b.Min.z}, {b.Max.x, b.Max.y, b.Min.z}, {b.Min.x, b.Max.y, b.Min.z},
+                                        {b.Min.x, b.Min.y, b.Max.z}, {b.Max.x, b.Min.y, b.Max.z}, {b.Max.x, b.Max.y, b.Max.z}, {b.Min.x, b.Max.y, b.Max.z}};
+                static const int kEdges[12][2] = {{0,1},{1,2},{2,3},{3,0},{4,5},{5,6},{6,7},{7,4},{0,4},{1,5},{2,6},{3,7}};
+                for (const auto& e : kEdges) {
+                    ImVec2 a, bb;
+                    if (toScreen(c[e[0]], a) && toScreen(c[e[1]], bb)) dl->AddLine(a, bb, faint, 1.0f);
+                }
+            }
+        }
+        const auto* nm = world.Registry.try_get<NameComponent>(hit.Entity);
+        hud += "    " + std::string(nm && !nm->Name.empty() ? nm->Name : "object");
+        if (count > 1) hud += " (" + std::to_string(m_RulerDepth + 1) + "/" + std::to_string(count) + ", wheel for the next)";
+    } else {
+        hud = "No surface under the cursor";
+    }
+
+    // Clicked object's bounds: width / height / depth along the edges nearest the camera.
+    AABB b;
+    if (m_RulerBounds != entt::null && RenderableWorldBounds(world, m_RulerBounds, b)) {
+        const glm::vec3 size = b.Max - b.Min;
+        const glm::vec3 center = (b.Min + b.Max) * 0.5f;
+        const float x0 = cam.Position.x > center.x ? b.Max.x : b.Min.x;
+        const float z0 = cam.Position.z > center.z ? b.Max.z : b.Min.z;
+        const float x1 = x0 == b.Max.x ? b.Min.x : b.Max.x;
+        const float z1 = z0 == b.Max.z ? b.Min.z : b.Max.z;
+        const glm::vec3 c[8] = {{b.Min.x, b.Min.y, b.Min.z}, {b.Max.x, b.Min.y, b.Min.z}, {b.Max.x, b.Max.y, b.Min.z}, {b.Min.x, b.Max.y, b.Min.z},
+                                {b.Min.x, b.Min.y, b.Max.z}, {b.Max.x, b.Min.y, b.Max.z}, {b.Max.x, b.Max.y, b.Max.z}, {b.Min.x, b.Max.y, b.Max.z}};
+        static const int kEdges[12][2] = {{0,1},{1,2},{2,3},{3,0},{4,5},{5,6},{6,7},{7,4},{0,4},{1,5},{2,6},{3,7}};
+        for (const auto& e : kEdges) {
+            ImVec2 a, bb;
+            if (toScreen(c[e[0]], a) && toScreen(c[e[1]], bb)) dl->AddLine(a, bb, amber, 1.4f);
+        }
+        Enhancers::FormatLength(size.x, feet, buf, sizeof(buf));
+        segment(glm::vec3(x1, b.Min.y, z0), glm::vec3(x0, b.Min.y, z0), amber, false, buf);
+        Enhancers::FormatLength(size.y, feet, buf, sizeof(buf));
+        segment(glm::vec3(x0, b.Min.y, z0), glm::vec3(x0, b.Max.y, z0), amber, false, buf);
+        Enhancers::FormatLength(size.z, feet, buf, sizeof(buf));
+        segment(glm::vec3(x0, b.Min.y, z1), glm::vec3(x0, b.Min.y, z0), amber, false, buf);
+    } else {
+        m_RulerBounds = entt::null;
+    }
+    dl->PopClipRect();
+
+    // Read-out under the cursor.
+    hud += "\nClick: object size    " + std::string(feet ? "feet / inches" : "metric") + " (Preferences > Editor Enhancers)";
+    const ImVec2 ts = ImGui::CalcTextSize(hud.c_str());
+    ImVec2 tp(mouse.x + 18.0f * m_UIScale, mouse.y + 18.0f * m_UIScale);
+    tp.x = std::min(tp.x, m_ViewportPos.x + w - ts.x - 10.0f);
+    tp.y = std::min(tp.y, m_ViewportPos.y + h - ts.y - 10.0f);
+    dl->AddRectFilled(ImVec2(tp.x - 6.0f, tp.y - 4.0f), ImVec2(tp.x + ts.x + 6.0f, tp.y + ts.y + 4.0f), EditorUIPrimitives::kHudPlateColor, 4.0f * m_UIScale);
+    dl->AddText(tp, EditorUIPrimitives::kHudTextColor, hud.c_str());
+
+    m_RulerHitEntity = count > 0 ? hits[m_RulerDepth].Entity : entt::null;
 }
 
 void EditorLayer::ApplySurfaceSnap(World& world, Camera& editorCamera, entt::entity sel,

@@ -24,6 +24,23 @@
 // newer build (with sections this one doesn't know) isn't stripped by an older one.
 namespace Enhancers {
 
+// vFavorites: one named page of the favorites overlay.
+struct FavoritePage {
+    std::string Name;
+    std::vector<EditorRef> Items; // folders, assets and entities, in the user's order
+};
+
+// Page list helpers (pure; unit tested). Every page list keeps at least one page.
+void EnsureFavoritePage(std::vector<FavoritePage>& pages);
+// Adds `r` to page `page` (clamped) unless it is already there. True when added.
+bool AddFavorite(std::vector<FavoritePage>& pages, int page, const EditorRef& r);
+// Removes `r` from every page. True when anything was removed.
+bool RemoveFavorite(std::vector<FavoritePage>& pages, const EditorRef& r);
+// The first page holding `r`, or -1.
+int FindFavorite(const std::vector<FavoritePage>& pages, const EditorRef& r);
+// Moves page `from` to `to` (clamped).
+void MoveFavoritePage(std::vector<FavoritePage>& pages, int from, int to);
+
 class EnhancerUserState {
 public:
     static EnhancerUserState& Get();
@@ -32,13 +49,21 @@ public:
     std::vector<EditorRef> EntityBookmarks;    // vHierarchy nav-bar chips
     std::vector<EditorRef> FolderBookmarks;    // vFolders nav-bar chips
     std::vector<EditorRef> InspectorBookmarks; // vInspector nav-bar chips (entities or assets)
+    // vFavorites overlay pages (hold Alt over the Asset Browser). Kept here, in the journaled
+    // file, so adding / removing / renaming favorites is undoable like bookmarks.
+    std::vector<FavoritePage> FavoritePages;
+    // True once the pre-vFavorites asset_favorites.json star list was imported into page 1.
+    bool FavoritesMigrated = false;
+    // Bumped by every MarkDirty / Load, so caches derived from this state (the Asset Browser's
+    // favourite stars) can tell when to rebuild.
+    unsigned Revision() const { return m_Revision; }
     // Scene GUID -> OrderComponent value of that scene's "default parent" (vHierarchy D key):
     // new objects created with no explicit parent land under it.
     std::map<std::string, int> DefaultParents;
 
     void Load();                       // from Path(); a missing / bad file leaves defaults
     void Reset();                      // in-memory defaults (tests, project switch)
-    void MarkDirty() { m_Dirty = true; }
+    void MarkDirty() { m_Dirty = true; ++m_Revision; }
     void Flush();                      // atomic write if dirty (call once per frame)
     bool IsDirty() const { return m_Dirty; }
 
@@ -59,6 +84,7 @@ private:
     EnhancerUserState() = default;
     nlohmann::json m_Unknown = nlohmann::json::object(); // keys this build doesn't own
     bool m_Dirty = false;
+    unsigned m_Revision = 0;
 };
 
 } // namespace Enhancers

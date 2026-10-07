@@ -13,10 +13,11 @@ Status by phase:
 | 0 | Shared infrastructure | Done |
 | 1 | vHierarchy: row styles, separators, tree lines, component minimap, scene selector, nav bar, hover keys | Done |
 | 2 | vFolders: folder styles, rules, auto icons, content minimap, bookmarks | Done |
-| 3 | vInspector: nav bar, floating component windows, multi-component copy/paste, keep play-mode changes, attributes | Planned |
-| 4 | vTabs: tab strips in the Inspector and Asset Browser | Planned |
-| 5 | vFavorites: hold-Alt favorites overlay with pages | Planned |
-| 6 | vRuler: Shift+R surface, bounds and reference-object measuring | Planned |
+| 3a | vInspector: nav bar, identity-based selection history, floating component windows, multi-component copy/paste, keep play-mode changes, hover keys, animations | Done |
+| 3b | vInspector: field attributes (C++ and C#), Reset to Default, C# buttons / read-outs / dictionaries | Done |
+| 4 | vTabs: tab strips in the Inspector and Asset Browser | Done |
+| 5 | vFavorites: hold-Alt favorites overlay with pages | Done |
+| 6 | vRuler: Shift+R surface, bounds and reference-object measuring | Done |
 
 ## Where things live
 
@@ -24,6 +25,8 @@ Status by phase:
 | --- | --- | --- |
 | Pure logic | `src/Editor/Enhancers/EnhancerCore.h/.cpp` | `EditorRef`, bookmark lists, `NavHistory`, `GlobMatch`, `FuzzyScore`, `RemapFolderKeys`, `FormatLength`, the icon table. No ImGui or EnTT, so the unit tests link it directly. |
 | Per-user state | `src/Editor/Enhancers/EnhancerUserState.h/.cpp` | Bookmarks and per-scene default parents, saved to `%LOCALAPPDATA%\TartarusEngine\enhancers_<projectHash>.json`. |
+| Component transfer | `src/Editor/Enhancers/ComponentTransfer.h/.cpp` | vInspector's multi-component clipboard and Keep Changes After Play, on top of the preset JSON (`SceneSerializer::ComponentToPresetJson`). |
+| Tab strips | `src/Editor/Enhancers/TabState.h/.cpp` | vTabs' tab lists (open / close / reopen / move / step) and their per-user file. |
 | Folder styles | `src/Editor/Enhancers/FolderStyles.h/.cpp` | Per-folder icons/colours, rules, automatic content icons; `project/editor_folders.json`. |
 | Style palette | `src/Editor/Enhancers/Palette.h/.cpp` | Swatches and quick-pick icons offered by every Style menu, saved to `editor_palette.json` (per user), with export/import. |
 | Pickers | `src/Editor/Enhancers/StyleWidgets.h/.cpp` | `PaletteColorRow` and `IconPickerGrid`, a virtualized grid over all ~1400 Font Awesome icons. |
@@ -245,10 +248,227 @@ They work over the tree and over folder tiles in the grid.
 Two-line names in the grid and folder Back / Forward existed already (Phase 5 item 4 and the
 module's toolbar), so they were kept as they were.
 
+## vInspector
+
+### Selection history
+
+Back / Forward (Ctrl+[ / Ctrl+], the Edit menu, and both nav bars) now record selections by
+**scene key + `OrderComponent` values**, or by asset key when only a file was selected in the
+Asset Browser. Entries used to be raw `entt::entity` handles, which went stale after an undo,
+Play/Stop or scene load and could select an unrelated object. Now:
+
+* Entries from another scene are skipped, as are entries whose objects were all deleted.
+* Selecting an asset (with nothing selected in the scene) is a history step too, but not a scene
+  undo entry.
+* The step logic is `Enhancers::StepSelectionHistory` (`EnhancerCore`), unit tested.
+
+### Navigation bar
+
+The row at the top of the Inspector:
+
+| Control | Does |
+| --- | --- |
+| Back / Forward | The selection history above. |
+| Bookmark button | Bookmarks what the Inspector shows: the object (the locked one while the Inspector is locked) or the asset. |
+| Chips | This scene's bookmarked objects plus every bookmarked asset. Click selects or inspects (Ctrl+click adds an object to the selection), right-click removes. Overflow goes into "+N". |
+
+Drop Hierarchy rows or Asset Browser files on the bar to bookmark them. Object chips use their
+Row Style icon. Inspector bookmarks are separate from the Hierarchy's and are personal (per user,
+per project). Preferences > Editor Enhancers > Inspector > **Navigation bar** hides it.
+
+### Component sections
+
+On a single selected object, every registered component's header gains:
+
+| Action | How |
+| --- | --- |
+| Open in Window | The "..." menu, or **Alt+drag** the header out. The floating window follows the mouse until released. Same windows as the Hierarchy minimap's Alt+click. |
+| Pick for copying | **Ctrl+click** headers to pick them (accent outline), then "..." > **Copy N Selected Components**. |
+| Keep Changes After Play | In Play, "..." > **Keep Changes After Play** (also on Transform). Kept headers show a pin. |
+
+The object's "..." menu (next to its name) adds:
+
+* **Copy All Components**: every preset-capable component.
+* **Paste Components as New (N)**: adds only the copied components the object lacks.
+* **Paste Component Values (N)**: overwrites only the components it already has.
+* In Play, **Keep All Changes After Play**: the Transform and every preset-capable component.
+
+"Copy Component" on a single header also fills this clipboard. With several objects selected, the
+paste button in the footer applies to all of them. Each paste is one undo step. Hand-coded
+components (Mesh Renderer, Material, Collider, Joint) don't take part; Transform keeps its own
+Copy / Paste.
+
+Keep Changes After Play captures the kept components just before Stop restores the pre-Play
+scene, then writes them back as one undo step, "Keep Play Mode Changes". The scene is then dirty;
+save it to keep the values. Choices reset each time Play starts.
+
+A component whose `Enabled` field is off shows a dimmed header.
+
+### Hover keys
+
+Over the Inspector:
+
+| Key | Action |
+| --- | --- |
+| Ctrl+Shift+E | Collapse every section; if all are collapsed, expand all |
+| Shift+E | Isolate: open the section under the mouse, close the others |
+| A | Toggle the component's `Enabled` field (with undo) |
+| X | Remove the component under the mouse (removable sections only) |
+
+### Animations and minimal mode
+
+* **Animations** (on by default): sections ease open and closed over 120 ms, and fade and shrink
+  over 150 ms before a removal. A section's height is measured the first time it is shown fully
+  open, so the very first open isn't animated.
+* **Minimal mode**: a section's "..." button shows only while its header is hovered, like the x.
+
+### Field attributes (C++ components)
+
+Reflected components (`ComponentRegistry.cpp`) can set these on a `ReflectField`. Each is a member
+appended at the end of the struct, so existing brace-initialized registrations are unchanged.
+`src/Game/ReflectAttributes.h` has a fluent builder:
+
+```cpp
+m.Fields = {
+    Field("Speed", T::Float, TARTARUS_REFLECT_FIELD(Mover, Speed)).Range(0, 20).Tab("Motion"),
+    Field("Debug Id", T::Int, TARTARUS_REFLECT_FIELD(Mover, DebugId)).ReadOnly().NonSerialized(),
+};
+Attr(m, "Max Distance").EnableIf("3D Sound", 1); // a field already in the list
+```
+
+| Attribute | Effect |
+| --- | --- |
+| `ReadOnly` | Greyed out; still saved. |
+| `EnableIf(field, value, negate)` | Greyed out unless the sibling Bool / Int / Enum field matches. `VisibleIf` (existing) hides instead. |
+| `ShowIf(pred)` / `EnableWhen(pred)` | Hide / grey out on a `bool(*)(const void* component)` predicate. |
+| `Tab(name)` | Fields sharing a tab render under one tab, after the untabbed fields (single selection; multi-select is flat). |
+| `OnChanged(fn)` | `void(*)(World&, entt::entity, void* component)`, called after an Inspector edit changed the value. |
+| `Variants(values, count, labels)` | One-click chips under an Int / Float / Enum field. |
+| `NonSerialized` | Drawn, but never written to or read from scenes, prefabs or presets. |
+
+A component can also list `Buttons` (each runs after one undo step) and `Statics` (computed
+read-only lines). Every registered component records a default instance, so **right-clicking any
+field row offers Reset to Default**. `EvaluateFieldState` resolves visibility and greying, and is
+unit tested.
+
+Audio Source uses this: Volume Rolloff, Min / Max Distance and Doppler Level grey out unless
+3D Sound is on.
+
+### Field attributes (C# scripts)
+
+`[Foldout]`, `[Tab]`, `[ReadOnly]`, `[HideIf]`, `[DisableIf]`, `[Variants]`, `[OnValueChanged]`,
+`[Button]`, `[ShowInInspector]` and `Dictionary<string, scalar>` fields. See
+[SCRIPTING_API.md](SCRIPTING_API.md) for each. The Inspector reads them from the class
+description, which is now parsed once per class and dropped on every assembly reload, instead of
+every frame. Buttons and `[OnValueChanged]` use op 13 and the read-outs use op 14, through the
+existing JSON request, so the ABI version is unchanged.
+
+## vTabs
+
+Tab strips at the top of the Inspector and under the Asset Browser toolbar. A strip appears once
+it has a tab, or while something that can become a tab is being dragged.
+
+### Inspector tabs
+
+The first tab, **Selection**, shows the selection as usual. The other tabs pin a target:
+
+* an object (drop a Hierarchy row),
+* one component of an object (drag a component's header onto the strip; the tab opens the
+  object scrolled to that component),
+* an asset (drop a file from the Asset Browser).
+
+An active pinned tab shows its target whatever is selected, the same way the lock does, and
+takes priority over the lock. Selecting something, or using the nav bar's Back / Forward, brings
+the Inspector back to the Selection tab; use the lock to keep a view while selecting elsewhere.
+A tab whose object isn't in the open scene says so instead of showing something else.
+
+### Asset Browser tabs
+
+Each tab is a folder. The active tab follows wherever you navigate, like a browser tab, and
+clicking a tab goes to its folder. Dropping a folder opens it in a new tab; dropping a file opens
+its folder with the file selected. Tab icons and colour underlines come from vFolders styles.
+
+### Both strips
+
+| Action | How |
+| --- | --- |
+| Switch tab | Click, or **Shift+wheel** over the strip |
+| Move a tab | Drag it, or **Ctrl+Shift+wheel** moves the active one |
+| Scroll an overflowing strip | Mouse wheel (smoothed) |
+| Close | The x on the tab, middle-click, or **Ctrl+W** |
+| Reopen the last closed tab | **Ctrl+Shift+T** |
+| New tab | **Ctrl+T**: the Inspector pins what it shows; the Asset Browser opens the current folder again |
+| "+" menu | A search box (fuzzy matching over the scene's objects / the project's folders) and the starred tabs |
+| Star a tab | Right-click > Starred, so it is listed at the top of "+" |
+
+The keys act on the panel under the mouse (hover contexts) and can be rebound under Shortcuts.
+Tabs, the active tab, the closed-tab list and stars are per user and per project, in
+`%LOCALAPPDATA%\TartarusEngine\enhancer_tabs_<projectHash>.json`. That file is separate from
+`enhancers_<hash>.json` on purpose: switching tabs is navigation, so it never shows up in the
+History panel. Preferences > Editor Enhancers > Tabs turns each strip off.
+
+Code: `Enhancers::TabStrip` / `TabState` (`src/Editor/Enhancers/TabState.h`, unit tested) and
+`EditorLayer::DrawTabStrip` (`EditorLayer_Enhancers.cpp`). The Asset Browser strip is drawn
+through the existing `DrawFolderNavBar` callback, so the module API version is unchanged (40).
+
+## vFavorites
+
+Hold **Alt** with the mouse over the Asset Browser: after a moment, the favorites overlay covers
+the panel; release Alt to hide it. **Ctrl+Alt+F** (or the pin in its corner) keeps it open; Esc
+closes it. If the Asset Browser is closed, a locked overlay opens in the middle of the window.
+
+* **Pages.** Favorites live on named pages. Click a page chip to show it, double-click (or
+  right-click > Rename) to rename, right-click to move or delete it, "+" to add one. Pages slide
+  in when you switch.
+* **Navigation.** 1-9 pick a page, Left / Right step through pages, the mouse wheel moves one page
+  per notch, Up / Down highlight an item and Enter opens it.
+* **Items.** Folders, assets and Hierarchy objects, with their vFolders / vHierarchy icons and
+  colours. Clicking opens: a folder is navigated to, an asset is shown in the Asset Browser and
+  the Inspector, an object is selected (an object in another scene opens that scene first, then
+  selects it). Opening an item closes the overlay. Drag items to reorder them, or onto a page
+  chip to move them; right-click for Open / Move to Page / Remove.
+* **Adding.** Drop folders, assets or Hierarchy rows on the overlay (drag, then hold Alt over the
+  Asset Browser); **Ctrl+Alt+B** adds the selection; the Hierarchy row menu and the folder menu
+  have a **Favorite** toggle; the Asset Browser's existing star (Add to Favorites) adds to the
+  page you last showed.
+
+The Asset Browser's star badges and its "favorites only" filter now mean "on any favorites page".
+The old per-user star list (`asset_favorites.json`) is imported into the first page once, on the
+first launch after this update; the file is left in place but no longer read or written.
+
+Pages are stored in the per-user `enhancers_<hash>.json`, so adding, removing, reordering and
+renaming favorites can be undone. Which page is shown is not saved. Renaming or moving an asset
+in the Asset Browser updates its favorites, Inspector bookmarks and Inspector tabs.
+
+While the overlay is up it owns the keyboard: every other editor shortcut is suppressed (Alt+1..4
+would otherwise also focus panels). The two bindings are under Shortcuts; holding Alt is a
+setting (Preferences > Editor Enhancers > Favorites).
+
+## vRuler
+
+Hold **Shift+R** with the mouse over the Scene view.
+
+| Action | Shows |
+| --- | --- |
+| Move the mouse | From the surface under the cursor, along its normal, to the next surface (cyan: floor to ceiling, wall to wall), and through that object to its far side (amber, dashed: its thickness there). "open" when nothing is in the way within 10 km. |
+| Mouse wheel | Steps to the next object behind along the cursor ray (and back); the measured object is outlined when there is more than one. The camera doesn't zoom while the ruler is held. |
+| Click | The object's size: its world bounds, with width, height and depth on the edges nearest the camera. Click again to hide; it clears when Shift+R is released. A ruler click never selects. |
+
+A read-out next to the cursor repeats the numbers and names the object. Lengths use the
+**Length units** setting (Preferences > Editor Enhancers > Ruler), which the Measure tool now
+shares: its m / ft button changes the same setting, and the choice is saved (it used to reset
+every session). Metric adapts mm / cm / m / km; imperial shows feet and inches.
+
+Surfaces come from the same triangle-exact raycast the Measure tool and click-picking use
+(`RaycastRenderables`), so meshes are measured, not their bounding boxes. Object sizes are the
+model's bounds through its world transform (axis-aligned in world space).
+
+The binding is `viewport.ruler` (Shortcuts > "Ruler (hold)"); Preferences can turn it off.
+
 ## Shortcut changes
 
-* **Toggle Statistics** moved from Ctrl+Shift+T to **Alt+Shift+T**. Ctrl+Shift+T is reserved for
-  vTabs' "reopen closed tab". A saved override in `shortcuts.json` still wins.
+* **Toggle Statistics** moved from Ctrl+Shift+T to **Alt+Shift+T**. Ctrl+Shift+T is now vTabs'
+  "reopen closed tab". A saved override in `shortcuts.json` still wins.
 
 ## Measure tool units
 

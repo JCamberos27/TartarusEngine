@@ -30,11 +30,15 @@ struct EditorRef {
     int         Order = -1; // Entity only: OrderComponent value
     std::string Path;       // Asset: asset key. Folder: virtual folder path. Scene: file path (fallback when the GUID is unknown).
     std::string Label;      // cached display name, refreshed whenever the ref resolves; shown when it doesn't
+    // Entity only, optional: a component on it (ComponentRegistry name) - a vTabs component tab.
+    // Part of the identity: the entity and one of its components are different targets.
+    std::string Sub;
 
     static EditorRef MakeEntity(std::string sceneGuid, int order, std::string label = {});
     static EditorRef MakeAsset(std::string key, std::string label = {});
     static EditorRef MakeFolder(std::string path, std::string label = {});
     static EditorRef MakeScene(std::string guid, std::string path, std::string label = {});
+    static EditorRef MakeComponent(std::string sceneGuid, int order, std::string component, std::string label = {});
 
     // Identity, not display: the cached Label never participates.
     bool SameTarget(const EditorRef& o) const;
@@ -90,6 +94,33 @@ private:
     int            m_Cursor = -1;
     std::size_t    m_Cap;
 };
+
+// --- Selection history (vInspector Back/Forward) ---------------------------------------------
+// One past selection, named by identity rather than by entt handle so it survives undo,
+// Play/Stop and scene loads: the scene key plus each selected entity's OrderComponent value
+// (primary first), or an asset key when only an asset was selected (Scene left empty: an asset
+// selection belongs to no scene). An entry with neither is an empty selection in `Scene`.
+struct SelectionHistoryEntry {
+    std::string      Scene;
+    std::vector<int> Orders;
+    std::string      Asset;
+    bool operator==(const SelectionHistoryEntry& o) const {
+        return Orders == o.Orders && Asset == o.Asset && Scene == o.Scene;
+    }
+    bool operator!=(const SelectionHistoryEntry& o) const { return !(*this == o); }
+};
+
+// Whether Back/Forward may land on `e` while `currentScene` is open: an asset entry always can;
+// an entity or empty entry only within its own scene. `resolves` (optional) further rejects
+// entity entries none of whose orders exist any more.
+using OrdersResolveFn = bool (*)(const std::vector<int>& orders, void* ctx);
+bool SelectionEntryReachable(const SelectionHistoryEntry& e, const std::string& currentScene,
+                             OrdersResolveFn resolves = nullptr, void* ctx = nullptr);
+// Index of the nearest reachable entry from `pos` in direction `dir` (-1 / +1), skipping
+// unreachable ones and ones equal to entries[pos] (a no-op step); -1 when there is none.
+int StepSelectionHistory(const std::vector<SelectionHistoryEntry>& entries, int pos, int dir,
+                         const std::string& currentScene, OrdersResolveFn resolves = nullptr,
+                         void* ctx = nullptr);
 
 // --- Matching ---------------------------------------------------------------------------------
 // Case-insensitive glob: '*' any run (including empty, and including '/'), '?' one character.

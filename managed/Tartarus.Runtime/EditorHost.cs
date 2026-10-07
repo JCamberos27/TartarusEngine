@@ -95,6 +95,48 @@ internal static class EditorHost
         }
         previousSelection=selection;previousPlay=playing;
     }
+    // vInspector, for every custom inspector of a script: [OnValueChanged] methods for this draw's
+    // edits, then the [Button] methods and the [ShowInInspector] read-outs (refreshed 4x a second).
+    static readonly Dictionary<string,(long At,Dictionary<string,string> Values)> shows=new();
+    static void ScriptExtras(SerializedObject so,JsonElement data,uint entity)
+    {
+        string cls=so.TypeName;
+        uint slot=data.TryGetProperty("slot",out var s) && s.ValueKind==JsonValueKind.Number ? s.GetUInt32() : 0;
+        foreach(string method in so.PendingMethods.ToArray()) {
+            string? next=Entry.RunScriptMethod(cls,so.ToJson(),entity,slot,method,out bool ran);
+            if(ran && next!=null) so.ReplaceAll(next);
+        }
+        so.PendingMethods.Clear();
+        var meta=data.GetProperty("metadata");
+        if(meta.TryGetProperty("buttons",out var buttons) && buttons.GetArrayLength()>0) {
+            EditorGUILayout.Separator();
+            foreach(var b in buttons.EnumerateArray()) {
+                string method=b.GetProperty("method").GetString()!,label=b.TryGetProperty("label",out var l)?l.GetString()??method:method;
+                if(!EditorGUILayout.Button(label)) continue;
+                Undo.RecordScene(label);
+                string? next=Entry.RunScriptMethod(cls,so.ToJson(),entity,slot,method,out bool ran);
+                if(ran && next!=null) so.ReplaceAll(next);
+                else Engine.Log("C# error: "+cls+"."+method+"() could not run.");
+            }
+        }
+        if(meta.TryGetProperty("shows",out var showList) && showList.GetArrayLength()>0) {
+            string key=entity+"/"+slot+"/"+cls;
+            long now=Environment.TickCount64;
+            if(!shows.TryGetValue(key,out var cached) || now-cached.At>250) {
+                try { cached=(now,Entry.ScriptShowValues(cls,so.ToJson(),entity,slot)); } catch(Exception e) { cached=(now,new()); Report(e); }
+                shows[key]=cached;
+            }
+            EditorGUILayout.Separator();
+            EditorGUILayout.BeginDisabled(true);
+            try {
+                foreach(var item in showList.EnumerateArray()) {
+                    string name=item.GetProperty("name").GetString()!;
+                    string value=cached.Values.TryGetValue(name,out var v)?v:"";
+                    EditorGUILayout.TextField(name+"##show",ref value);
+                }
+            } finally { EditorGUILayout.BeginDisabled(false); }
+        }
+    }
     internal static void DrawInspector(ref NativeRequest frame)
     {
         frame.Result=0;
@@ -108,6 +150,7 @@ internal static class EditorHost
             editor.target=new(frame.Entity);
             editor.serializedObject=new(frame.Entity,data);
             editor.OnInspectorGUI();
+            if(!editor.serializedObject.IsNative) ScriptExtras(editor.serializedObject,data,frame.Entity);
             string values=editor.serializedObject.ToJson();
             Engine.TextCall(116,values,ref frame);frame.Result=1;
         } catch(Exception e) {faulted.Add(id);Report(e);}

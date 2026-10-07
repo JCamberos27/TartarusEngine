@@ -160,7 +160,6 @@ void EditorLayer::ReloadHistoryFiles(AssetLibrary& assets,const std::vector<Edit
             m_GizmoOp=static_cast<GizmoOp>(prefs.ActiveTool);m_ShadingMode=static_cast<ShadingMode>(prefs.ShadingMode);
         }
         if(file.Path==std::filesystem::path(UserPaths::Resolve("shortcuts.json")))Shortcuts::Load();
-        if(file.Path==std::filesystem::path(UserPaths::Resolve("asset_favorites.json")))LoadAssetFavorites();
         if(file.Path==std::filesystem::path(Enhancers::EnhancerUserState::Path()))Enhancers::EnhancerUserState::Get().Load();
         if(file.Path==std::filesystem::path(Enhancers::Palette::Path()))Enhancers::Palette::Load();
         if(file.Path==std::filesystem::path(Enhancers::FolderStyles::Path()))Enhancers::FolderStyles::Get().Load();
@@ -876,6 +875,7 @@ void EditorLayer::OnEnterPlayMode(const World& world) {
     // registry and entt recycles ids, so a retained handle can pass valid() yet denote a
     // different object afterward (#110).
     m_PlaySelectionOrders.clear();
+    m_PlayKeep.clear(); // vInspector Keep Changes After Play: chosen anew each session
     for (entt::entity e : GetSelectedItems()) {
         if (const auto* o = world.Registry.try_get<OrderComponent>(e))
             m_PlaySelectionOrders.push_back(o->Value);
@@ -955,6 +955,11 @@ void EditorLayer::OnExitPlayMode(World& world, AssetLibrary& assets) {
     // may have run regardless (#185). Destroy() is idempotent when nothing is active.
     PhysicsWorld::Destroy();
 
+    // vInspector Keep Changes After Play: read the kept values off the Play world now, before
+    // the snapshot reload below replaces it; written back (with undo) once it has.
+    const std::vector<Enhancers::KeptValue> kept = Enhancers::CaptureKept(world, m_PlayKeep);
+    m_PlayKeep.clear();
+
     if (m_PlayModeSnapshot.empty()) return;
 
     // Stop exactly the voices Play On Start began (not AudioEngine::StopAll(), which would also
@@ -999,6 +1004,12 @@ void EditorLayer::OnExitPlayMode(World& world, AssetLibrary& assets) {
     // there's nothing new to save — the same reason Unity doesn't dirty a scene on play/stop.
     // (Unless the Audio panel asked to keep its live mix: that is an edit, with its own undo entry.)
     ApplyKeptAudioMix(world);
+    if (!kept.empty()) {
+        PushUndo(world, "Keep Play Mode Changes");
+        const int n = Enhancers::ApplyKept(world, assets, kept);
+        Log::Info("Kept " + std::to_string(n) + (n == 1 ? " component" : " components") +
+                  " changed in Play; save the scene to keep them.");
+    }
     Log::Info("Exited play mode - scene state restored.");
 }
 void EditorLayer::NewScene(World& world, AssetLibrary& assets) {

@@ -1,8 +1,13 @@
 #pragma once
 
 #include <cstddef>
+#include <cstdint>
 #include <cstring>
 #include <vector>
+
+#include <entt/entity/fwd.hpp> // entt::entity (OnChanged / button callbacks)
+
+class World;
 
 // Minimal native reflection for gameplay components (#184, thin slice).
 //
@@ -109,6 +114,55 @@ struct ReflectField {
     // on load a path that no longer exists follows the GUID to the file's new location. A plain
     // string (older scenes, or a value that isn't a file, e.g. an own clip name) still loads.
     bool AssetPath = false;
+
+    // --- vInspector attributes (Editor Enhancers Phase 3b) ---------------------------------
+    // Appended last so every positional brace-init above keeps compiling. Set them at the
+    // registration site directly or through the fluent builder in ReflectAttributes.h. The
+    // Inspector resolves them through EvaluateFieldState (ReflectAttributes.h).
+    //
+    // Drawn greyed out and not editable; still serialized like any field.
+    bool ReadOnly = false;
+    // Like VisibleIf, but greys the field out instead of hiding it. The sibling may be a Bool,
+    // Int or Enum field (a Bool reads as 0 / 1).
+    const char* EnableIfField = nullptr;
+    int EnableIfValue = 0;
+    bool EnableIfNot = false;
+    // Arbitrary predicate over the component instance. False hides the field, or with
+    // ConditionDisables greys it out instead.
+    bool (*Condition)(const void* component) = nullptr;
+    bool ConditionDisables = false;
+    // Fields sharing a Tab render under one tab of a tab bar below the untabbed fields
+    // (single-select Inspector; multi-select renders flat, like Group).
+    const char* Tab = nullptr;
+    // Called after the Inspector changed this field on an entity (every frame of a drag).
+    void (*OnChanged)(World& world, entt::entity entity, void* component) = nullptr;
+    // Quick-pick values for an Int, Float or Enum field: a row of chips under the widget.
+    // VariantLabels (optional, VariantCount entries) names each chip; else the value is shown.
+    const float* Variants = nullptr;
+    const char* const* VariantLabels = nullptr;
+    int VariantCount = 0;
+    // Display-only: drawn by the Inspector, never written to or read from scene / prefab /
+    // preset JSON.
+    bool NonSerialized = false;
+};
+
+// A button row under a component's fields (vInspector). Invoke runs after the Inspector pushed
+// an undo step labelled Label, once per selected entity that has the component.
+struct ReflectButton {
+    const char* Label = "";
+    const char* Icon = nullptr;       // optional ICON_FA_* prefix
+    const char* Tooltip = nullptr;
+    std::uint32_t Color = 0;          // IM_COL32-packed accent; 0 = the default button look
+    void (*Invoke)(World& world, entt::entity entity, void* component, int arg) = nullptr;
+    int Arg = 0;                      // passed through, so one function can back several buttons
+};
+
+// A read-only line under a component's fields showing a value computed on the fly, not stored
+// (vInspector's ShowInInspector for C++). Value writes at most `cap` bytes, NUL-terminated.
+struct ReflectStatic {
+    const char* Label = "";
+    const char* Tooltip = nullptr;
+    void (*Value)(const World& world, entt::entity entity, const void* component, char* out, std::size_t cap) = nullptr;
 };
 
 // The field's stable JSON key — Key when set, else Name (see ReflectField::Key). Every
@@ -199,6 +253,11 @@ struct ReflectComponent {
     // (the file has "collider") and misreport every prefab instance's real, unmodified Collider as
     // user-added — including offering a "Revert to Prefab" that deletes it.
     const char* Key = nullptr;
+
+    // vInspector (Phase 3b): action buttons and computed read-only lines drawn after the fields
+    // in the single-select Inspector and pinned windows. Editor-only; never serialized.
+    std::vector<ReflectButton> Buttons;
+    std::vector<ReflectStatic> Statics;
 };
 
 // The component's stable JSON key — Key when set, else Name (see ReflectComponent::Key).

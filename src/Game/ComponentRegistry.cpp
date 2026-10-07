@@ -1,6 +1,7 @@
 #include "ComponentRegistry.h"
 
 #include "Components.h"
+#include "ReflectAttributes.h" // vInspector attributes (Attr)
 
 #include <IconsFontAwesome6.h>
 
@@ -1279,6 +1280,9 @@ void RegisterEngineComponents() {
         m.Fields[4].EnumCount = 5;
         m.Fields[6].EnumLabels = "Logarithmic\0Linear\0";
         m.Fields[6].EnumCount = 2;
+        // vInspector: the distance settings only matter for a 3D sound - greyed out otherwise.
+        for (const char* n : {"Volume Rolloff", "Min Distance", "Max Distance", "Doppler Level"})
+            Attr(m, n).EnableIf("3D Sound", 1);
         Register<AudioSourceComponent>(std::move(m));
     }
 
@@ -2420,3 +2424,38 @@ struct AutoRegister {
 } // namespace
 
 } // namespace ComponentRegistry
+
+// --- vInspector: per-field Reset to Default ----------------------------------------------------
+namespace {
+template <class V>
+bool CopyOrCompare(void* dst, const void* src, bool copy) {
+    if (copy) { *static_cast<V*>(dst) = *static_cast<const V*>(src); return true; }
+    return *static_cast<const V*>(dst) == *static_cast<const V*>(src);
+}
+
+bool FieldCopyOrCompare(const RegisteredComponent& rc, const ReflectField& f, void* comp, bool copy) {
+    if (!rc.DefaultInstance || !comp || !f.Address) return false;
+    // Address() only computes a member address; the default instance is never written through it.
+    void* def = f.Address(const_cast<void*>(rc.DefaultInstance()));
+    void* cur = f.Address(comp);
+    switch (f.Type) {
+        case ReflectFieldType::Bool:     return CopyOrCompare<bool>(cur, def, copy);
+        case ReflectFieldType::Int:
+        case ReflectFieldType::Enum:     return CopyOrCompare<int>(cur, def, copy);
+        case ReflectFieldType::Float:    return CopyOrCompare<float>(cur, def, copy);
+        case ReflectFieldType::Vec3:
+        case ReflectFieldType::Color:    return CopyOrCompare<glm::vec3>(cur, def, copy);
+        case ReflectFieldType::String:
+        case ReflectFieldType::AssetRef: return CopyOrCompare<std::string>(cur, def, copy);
+    }
+    return false;
+}
+} // namespace
+
+bool ResetReflectFieldToDefault(const RegisteredComponent& rc, const ReflectField& f, void* component) {
+    return FieldCopyOrCompare(rc, f, component, true);
+}
+
+bool ReflectFieldIsDefault(const RegisteredComponent& rc, const ReflectField& f, const void* component) {
+    return FieldCopyOrCompare(rc, f, const_cast<void*>(component), false);
+}

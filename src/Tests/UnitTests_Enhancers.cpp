@@ -8,12 +8,16 @@
 #include "Enhancers/EnhancerUserState.h"
 #include "Enhancers/Palette.h"
 #include "Enhancers/FolderStyles.h"
+#include "Enhancers/ComponentTransfer.h"
+#include "Enhancers/TabState.h"
 #include "Shortcuts.h"
 #include "World.h"
 #include "AssetLibrary.h"
 #include "SceneSerializer.h"
 #include "ComponentRegistry.h"
+#include "ReflectAttributes.h"
 
+#include <algorithm>
 #include <cstring>
 #include <limits>
 #include <map>
@@ -93,6 +97,435 @@ void TestEnhancerNavHistory() {
     CHECK(h.Size() == 4 && h.Entries().front() == 2 && *h.Current() == 12);
     h.Clear();
     CHECK(h.Size() == 0 && h.Cursor() == -1);
+}
+
+void TestEnhancerSelectionHistory() {
+    using E = SelectionHistoryEntry;
+    const E a1{"sceneA", {1}, {}};
+    const E a12{"sceneA", {1, 2}, {}};
+    const E b5{"sceneB", {5}, {}};
+    const E tex{{}, {}, "assets/tex/brick.png"};
+    const E emptyA{"sceneA", {}, {}};
+    std::vector<E> h{emptyA, a1, b5, tex, a12};
+
+    // Entity/empty entries only resolve in their own scene; asset entries everywhere.
+    CHECK(SelectionEntryReachable(a1, "sceneA") && !SelectionEntryReachable(a1, "sceneB"));
+    CHECK(SelectionEntryReachable(tex, "sceneB") && SelectionEntryReachable(tex, ""));
+    CHECK(!SelectionEntryReachable(emptyA, "sceneB"));
+
+    // Back from the end in sceneA skips nothing reachable: tex, then (skipping b5) a1, then emptyA.
+    CHECK(StepSelectionHistory(h, 4, -1, "sceneA") == 3);
+    CHECK(StepSelectionHistory(h, 3, -1, "sceneA") == 1);
+    CHECK(StepSelectionHistory(h, 1, -1, "sceneA") == 0);
+    CHECK(StepSelectionHistory(h, 0, -1, "sceneA") == -1);
+    CHECK(StepSelectionHistory(h, 1, +1, "sceneA") == 3);
+    CHECK(StepSelectionHistory(h, 3, +1, "sceneA") == 4);
+    CHECK(StepSelectionHistory(h, 4, +1, "sceneA") == -1);
+    // In sceneB only b5 and the asset are reachable.
+    CHECK(StepSelectionHistory(h, 4, -1, "sceneB") == 3);
+    CHECK(StepSelectionHistory(h, 3, -1, "sceneB") == 2);
+    CHECK(StepSelectionHistory(h, 2, -1, "sceneB") == -1);
+    // A step never lands on an entry equal to the one it starts from.
+    const std::vector<E> dup{a1, a1, tex};
+    CHECK(StepSelectionHistory(dup, 1, -1, "sceneA") == -1);
+
+    // Entries survive a scene reload: the orders recorded before resolve to the same objects in
+    // the reloaded registry, even though entt hands out different handles.
+    if (ComponentRegistry::All().empty()) ComponentRegistry::RegisterEngineComponents();
+    World w;
+    AssetLibrary assets;
+    const glm::vec3 zero(0.0f), one(1.0f);
+    w.CreateEmptyEntity(zero, zero, one, "Filler");
+    const entt::entity crate = w.CreateEmptyEntity(zero, zero, one, "Crate");
+    const int crateOrder = w.Registry.get<OrderComponent>(crate).Value;
+    const E rec{"sceneA", {crateOrder}, {}};
+    World reloaded;
+    CHECK(SceneSerializer::LoadFromString(reloaded, assets, SceneSerializer::SaveToString(w, assets)));
+    auto resolves = [](const std::vector<int>& orders, void* ctx) {
+        const World& world = *static_cast<const World*>(ctx);
+        for (auto [e, o] : world.Registry.view<const OrderComponent>().each())
+            if (std::find(orders.begin(), orders.end(), o.Value) != orders.end()) return true;
+        return false;
+    };
+    CHECK(SelectionEntryReachable(rec, "sceneA", resolves, &reloaded));
+    bool foundCrate = false;
+    for (auto [e, o, n] : reloaded.Registry.view<const OrderComponent, const NameComponent>().each())
+        if (o.Value == crateOrder) foundCrate = n.Name == "Crate";
+    CHECK(foundCrate);
+    // An order that no longer exists makes the entry unreachable (deleted since).
+    const E gone{"sceneA", {crateOrder + 1000}, {}};
+    CHECK(!SelectionEntryReachable(gone, "sceneA", resolves, &reloaded));
+    const std::vector<E> h2{rec, gone};
+    CHECK(StepSelectionHistory(h2, 1, -1, "sceneA", resolves, &reloaded) == 0);
+}
+
+// The ComponentRegistry name of component T on `e`, found by address so the test doesn't
+// hard-code display names.
+template <class T>
+const char* RegistryNameOf(World& w, entt::entity e) {
+    void* want = &w.Registry.get<T>(e);
+    for (const auto& rc : ComponentRegistry::All())
+        if (rc.Has(w.Registry, e) && rc.Get(w.Registry, e) == want) return rc.Meta.Name;
+    return nullptr;
+}
+
+void TestEnhancerComponentClipboard() {
+    if (ComponentRegistry::All().empty()) ComponentRegistry::RegisterEngineComponents();
+    World w;
+    AssetLibrary assets;
+    const glm::vec3 zero(0.0f), one(1.0f);
+    const entt::entity src = w.CreateEmptyEntity(zero, zero, one, "Source");
+    const entt::entity dst = w.CreateEmptyEntity(zero, zero, one, "Target");
+    auto& sa = w.Registry.emplace<AudioSourceComponent>(src);
+    sa.Volume = 0.3f;
+    w.Registry.emplace<LightComponent>(src).Intensity = 9.0f;
+    w.Registry.emplace<LightComponent>(dst).Intensity = 1.0f;
+    const char* audioName = RegistryNameOf<AudioSourceComponent>(w, src);
+    const char* lightName = RegistryNameOf<LightComponent>(w, src);
+    CHECK(audioName && lightName);
+
+    const std::vector<std::string> clip = CopyAllComponents(w, src);
+    auto inClip = [&](const char* n) {
+        for (const auto& j : clip) if (SceneSerializer::PresetComponentName(j) == n) return true;
+        return false;
+    };
+    CHECK(inClip(audioName) && inClip(lightName));
+
+    // As New: only what the target lacks (the Audio Source); its Light keeps its own values.
+    CHECK(CountPastable(w, dst, clip, PasteMode::AsNew) >= 1);
+    const PasteReport asNew = PasteComponents(w, assets, dst, clip, PasteMode::AsNew);
+    CHECK(asNew.Applied >= 1);
+    CHECK(w.Registry.all_of<AudioSourceComponent>(dst) && w.Registry.get<AudioSourceComponent>(dst).Volume == 0.3f);
+    CHECK(w.Registry.get<LightComponent>(dst).Intensity == 1.0f);
+    CHECK(std::find(asNew.Skipped.begin(), asNew.Skipped.end(), std::string(lightName)) != asNew.Skipped.end());
+
+    // Values: only what the target has - now overwrites the Light, adds nothing new.
+    const entt::entity bare = w.CreateEmptyEntity(zero, zero, one, "Bare");
+    w.Registry.emplace<LightComponent>(bare).Intensity = 2.0f;
+    const PasteReport vals = PasteComponents(w, assets, bare, clip, PasteMode::Values);
+    CHECK(vals.Applied >= 1);
+    CHECK(w.Registry.get<LightComponent>(bare).Intensity == 9.0f);
+    CHECK(!w.Registry.all_of<AudioSourceComponent>(bare));
+    CHECK(!CanPastePreset(w, bare, "not json", PasteMode::AsNew));
+}
+
+void TestEnhancerKeepPlayChanges() {
+    if (ComponentRegistry::All().empty()) ComponentRegistry::RegisterEngineComponents();
+    World w;
+    AssetLibrary assets;
+    const glm::vec3 zero(0.0f), one(1.0f);
+    const entt::entity e = w.CreateEmptyEntity(zero, zero, one, "Speaker");
+    w.Registry.emplace<AudioSourceComponent>(e).Volume = 0.3f;
+    const int order = w.Registry.get<OrderComponent>(e).Value;
+    const char* audioName = RegistryNameOf<AudioSourceComponent>(w, e);
+    CHECK(audioName != nullptr);
+    if (!audioName) return;
+    const std::string snapshot = SceneSerializer::SaveToString(w, assets); // "enter Play"
+
+    // Changes made during Play.
+    w.Registry.get<AudioSourceComponent>(e).Volume = 0.8f;
+    w.Registry.get<TransformComponent>(e).Position = glm::vec3(1.0f, 2.0f, 3.0f);
+    const std::vector<PlayKeep> keeps{{order, audioName}, {order, kKeepTransform},
+                                      {order + 999, kKeepTransform}, {order, "No Such Component"}};
+    const std::vector<KeptValue> kept = CaptureKept(w, keeps);
+    CHECK(kept.size() == 2); // the missing object and the unknown component are dropped
+
+    // "Stop": the snapshot comes back, then the kept values go on top by order.
+    CHECK(SceneSerializer::LoadFromString(w, assets, snapshot));
+    entt::entity back = entt::null;
+    for (auto [x, o] : w.Registry.view<const OrderComponent>().each()) if (o.Value == order) back = x;
+    CHECK(back != entt::null);
+    if (back == entt::null) return;
+    CHECK(w.Registry.get<AudioSourceComponent>(back).Volume == 0.3f);
+    CHECK(ApplyKept(w, assets, kept) == 2);
+    CHECK(w.Registry.get<AudioSourceComponent>(back).Volume == 0.8f);
+    CHECK(w.Registry.get<TransformComponent>(back).Position == glm::vec3(1.0f, 2.0f, 3.0f));
+}
+
+// --- vInspector attributes (Phase 3b) ------------------------------------------------------
+struct AttrTestComp {
+    bool On = true;
+    int Mode = 0;
+    float Speed = 2.5f;
+    glm::vec3 Offset{1.0f, 2.0f, 3.0f};
+    std::string Label = "default";
+};
+
+bool AttrSpeedPositive(const void* c) { return static_cast<const AttrTestComp*>(c)->Speed > 0.0f; }
+
+void TestEnhancerFieldState() {
+    using T = ReflectFieldType;
+    ReflectComponent meta;
+    meta.Name = "Attr Test";
+    meta.Fields = {
+        Field("On", T::Bool, TARTARUS_REFLECT_FIELD(AttrTestComp, On)),
+        Field("Mode", T::Enum, TARTARUS_REFLECT_FIELD(AttrTestComp, Mode)).Enum("A\0B\0C\0", 3),
+        Field("Speed", T::Float, TARTARUS_REFLECT_FIELD(AttrTestComp, Speed)).EnableIf("On", 1).Tab("Motion"),
+        Field("Offset", T::Vec3, TARTARUS_REFLECT_FIELD(AttrTestComp, Offset)).VisibleIf("Mode", 2, true),
+        Field("Label", T::String, TARTARUS_REFLECT_FIELD(AttrTestComp, Label)).ReadOnly().NonSerialized(),
+        Field("Gated", T::Float, TARTARUS_REFLECT_FIELD(AttrTestComp, Speed)).ShowIf(&AttrSpeedPositive),
+        Field("Greyed", T::Float, TARTARUS_REFLECT_FIELD(AttrTestComp, Speed)).EnableWhen(&AttrSpeedPositive),
+        Field("Ghost", T::Int, TARTARUS_REFLECT_FIELD(AttrTestComp, Mode)).EnableIf("No Such Field", 1),
+    };
+    // The builder set what it said it would.
+    CHECK(meta.Fields[2].Tab && std::strcmp(meta.Fields[2].Tab, "Motion") == 0);
+    CHECK(meta.Fields[4].ReadOnly && meta.Fields[4].NonSerialized);
+    CHECK(meta.Fields[1].EnumCount == 3);
+    Attr(meta, "Mode").Tab("Motion");
+    CHECK(meta.Fields[1].Tab != nullptr);
+    Attr(meta, "Typo").ReadOnly(); // unknown name: harmless
+    static const float kSpeeds[] = {1.0f, 5.0f, 10.0f};
+    Attr(meta, "Speed").Variants(kSpeeds, 3);
+    CHECK(meta.Fields[2].VariantCount == 3 && meta.Fields[2].Variants == kSpeeds);
+
+    AttrTestComp c;
+    auto st = [&](int i) { return EvaluateFieldState(meta, meta.Fields[(size_t)i], &c); };
+    // EnableIf over a Bool sibling.
+    CHECK(st(2).Visible && st(2).Enabled);
+    c.On = false;
+    CHECK(st(2).Visible && !st(2).Enabled);
+    // VisibleIf with negation over an Enum sibling.
+    CHECK(st(3).Visible);
+    c.Mode = 2;
+    CHECK(!st(3).Visible);
+    // ReadOnly greys out, never hides.
+    CHECK(st(4).Visible && !st(4).Enabled);
+    // Conditions: hide vs grey out.
+    CHECK(st(5).Visible && st(6).Enabled);
+    c.Speed = -1.0f;
+    CHECK(!st(5).Visible && st(5).Enabled);
+    CHECK(st(6).Visible && !st(6).Enabled);
+    // A sibling that doesn't exist changes nothing.
+    CHECK(st(7).Visible && st(7).Enabled);
+}
+
+void TestEnhancerFieldReset() {
+    using T = ReflectFieldType;
+    RegisteredComponent rc;
+    rc.Meta.Name = "Attr Test";
+    rc.Meta.Fields = {
+        Field("On", T::Bool, TARTARUS_REFLECT_FIELD(AttrTestComp, On)),
+        Field("Mode", T::Int, TARTARUS_REFLECT_FIELD(AttrTestComp, Mode)),
+        Field("Speed", T::Float, TARTARUS_REFLECT_FIELD(AttrTestComp, Speed)),
+        Field("Offset", T::Vec3, TARTARUS_REFLECT_FIELD(AttrTestComp, Offset)),
+        Field("Label", T::String, TARTARUS_REFLECT_FIELD(AttrTestComp, Label)),
+    };
+    AttrTestComp c;
+    c.On = false; c.Mode = 7; c.Speed = 9.0f; c.Offset = glm::vec3(0.0f); c.Label = "changed";
+    // No default instance: nothing to reset to.
+    CHECK(!ResetReflectFieldToDefault(rc, rc.Meta.Fields[0], &c) && !c.On);
+    rc.DefaultInstance = []() -> const void* { static const AttrTestComp k{}; return &k; };
+    const AttrTestComp def{};
+    for (const ReflectField& f : rc.Meta.Fields) {
+        CHECK(!ReflectFieldIsDefault(rc, f, &c));
+        CHECK(ResetReflectFieldToDefault(rc, f, &c));
+        CHECK(ReflectFieldIsDefault(rc, f, &c));
+    }
+    CHECK(c.On == def.On && c.Mode == def.Mode && c.Speed == def.Speed && c.Offset == def.Offset && c.Label == def.Label);
+
+    // Every registered engine component gets a default instance from Register<T>.
+    if (ComponentRegistry::All().empty()) ComponentRegistry::RegisterEngineComponents();
+    bool allHaveDefaults = true;
+    for (const auto& r : ComponentRegistry::All()) allHaveDefaults = allHaveDefaults && r.DefaultInstance != nullptr;
+    CHECK(allHaveDefaults);
+}
+
+void TestEnhancerNonSerializedField() {
+    if (ComponentRegistry::All().empty()) ComponentRegistry::RegisterEngineComponents();
+    World w;
+    AssetLibrary assets;
+    const glm::vec3 zero(0.0f), one(1.0f);
+    const entt::entity e = w.CreateEmptyEntity(zero, zero, one, "Speaker");
+    w.Registry.emplace<AudioSourceComponent>(e).Volume = 0.25f;
+    const char* audioName = RegistryNameOf<AudioSourceComponent>(w, e);
+    CHECK(audioName != nullptr);
+    if (!audioName) return;
+    // Flip one real field to NonSerialized for the duration of the test (restored below).
+    ReflectField* vol = nullptr;
+    for (const auto& rc : ComponentRegistry::All())
+        if (std::strcmp(rc.Meta.Name, audioName) == 0)
+            for (const ReflectField& f : rc.Meta.Fields)
+                if (std::strcmp(f.Name, "Volume") == 0) vol = const_cast<ReflectField*>(&f);
+    CHECK(vol != nullptr);
+    if (!vol) return;
+    vol->NonSerialized = true;
+    const std::string preset = SceneSerializer::ComponentToPresetJson(w, e, audioName);
+    World b;
+    const bool loaded = SceneSerializer::LoadFromString(b, assets, SceneSerializer::SaveToString(w, assets));
+    vol->NonSerialized = false;
+    CHECK(loaded);
+    CHECK(preset.find("\"Volume\"") == std::string::npos);
+    float loadedVolume = -1.0f;
+    for (auto [x, a] : b.Registry.view<const AudioSourceComponent>().each()) loadedVolume = a.Volume;
+    CHECK(loadedVolume == AudioSourceComponent{}.Volume); // not written, so the default came back
+    // The real registration: Audio Source's distance settings follow 3D Sound.
+    const RegisteredComponent* audio = nullptr;
+    for (const auto& rc : ComponentRegistry::All()) if (std::strcmp(rc.Meta.Name, audioName) == 0) audio = &rc;
+    const ReflectField* minDist = nullptr;
+    for (const ReflectField& f : audio->Meta.Fields) if (std::strcmp(f.Name, "Min Distance") == 0) minDist = &f;
+    CHECK(minDist != nullptr);
+    if (!minDist) return;
+    AudioSourceComponent src;
+    src.Spatial = false;
+    CHECK(!EvaluateFieldState(audio->Meta, *minDist, &src).Enabled);
+    src.Spatial = true;
+    CHECK(EvaluateFieldState(audio->Meta, *minDist, &src).Enabled);
+}
+
+// --- vTabs (Phase 4) ------------------------------------------------------------------------
+void TestEnhancerTabStrip() {
+    const EditorRef a = EditorRef::MakeFolder("Art"), b = EditorRef::MakeFolder("Audio"), c = EditorRef::MakeFolder("Code");
+    TabStrip s;
+    CHECK(s.Open(a) == 0 && s.Active == 0);
+    CHECK(s.Open(b) == 1 && s.Active == 1);
+    CHECK(s.Open(a) == 0 && s.Tabs.size() == 2 && s.Active == 0); // already open: reused, activated
+    CHECK(s.Open(c, false) == 1 && s.Active == 0);                  // inserted after the active tab
+    CHECK(s.Tabs[1] == c && s.Tabs[2] == b);
+    CHECK(s.Open(a, true, /*allowDuplicate=*/true) == 1 && s.Tabs.size() == 4 && s.Active == 1);
+    // Close: the active tab moves to the right neighbour, else the left one.
+    CHECK(s.Close(1) && s.Active == 1 && s.Tabs[1] == c);
+    CHECK(s.Close(2) && s.Active == 1);                              // closing after the active keeps it
+    CHECK(s.Close(1) && s.Active == 0 && s.Tabs.size() == 1);
+    CHECK(!s.Close(5));
+    // Reopen: most recent first, skipping targets that are open again.
+    CHECK(s.Reopen() == 1 && s.Tabs[1] == c && s.Active == 1);
+    CHECK(s.Reopen() == 2 && s.Tabs[2] == b);
+    CHECK(s.Reopen() == -1); // the remaining closed entry (the duplicate "Art") is open already
+    // Move keeps the same tab active.
+    s.Active = 0; // Art
+    s.Move(0, 2);
+    CHECK(s.Tabs[2] == a && s.Active == 2);
+    s.Move(1, 0); // Code <-> Audio: Art stays active at 2
+    CHECK(s.Tabs[0] == b && s.Active == 2);
+    s.Move(2, 99);
+    CHECK(s.Active == 2);
+    // Step wraps; with allowNone, -1 (the Inspector's Selection tab) is part of the cycle.
+    CHECK(s.Step(+1, false) == 0 && s.Step(-1, false) == 1);
+    CHECK(s.Step(+1, true) == -1);
+    s.Active = -1;
+    CHECK(s.Step(+1, true) == 0 && s.Step(-1, true) == 2);
+    // CloseOthers.
+    s.CloseOthers(1);
+    CHECK(s.Tabs.size() == 1 && s.Active == 0);
+    s.CloseOthers(-1);
+    CHECK(s.Tabs.empty() && s.Active == -1);
+    // The cap: never more than kMaxTabs, and the shown tab survives.
+    TabStrip big;
+    for (int i = 0; i < (int)TabStrip::kMaxTabs + 5; ++i) big.Open(EditorRef::MakeFolder("F" + std::to_string(i)));
+    CHECK(big.Tabs.size() == TabStrip::kMaxTabs);
+    CHECK(big.Tabs[(size_t)big.Active].Path == "F" + std::to_string(TabStrip::kMaxTabs + 4));
+    CHECK(big.Closed.size() <= TabStrip::kMaxClosed);
+}
+
+void TestEnhancerTabStateRoundTrip() {
+    // Component sub-targets are part of an entity ref's identity and survive JSON.
+    const EditorRef ent = EditorRef::MakeEntity("00112233aabbccdd", 4, "Player");
+    const EditorRef comp = EditorRef::MakeComponent("00112233aabbccdd", 4, "Light", "Player");
+    CHECK(ent != comp);
+    EditorRef back;
+    CHECK(RefFromJson(RefToJson(comp), back) && back == comp && back.Sub == "Light");
+    CHECK(RefFromJson(RefToJson(ent), back) && back == ent && back.Sub.empty());
+
+    TabState& ts = TabState::Get();
+    ts.Reset();
+    ts.Inspector.Open(ent);
+    ts.Inspector.Open(comp);
+    ts.Inspector.Open(EditorRef::MakeAsset("assets/tex/brick.png", "brick.png"));
+    ts.Inspector.Active = 1;
+    ts.Inspector.Close(2);
+    ts.Assets.Open(EditorRef::MakeFolder(""));
+    ts.Assets.Open(EditorRef::MakeFolder("Art/Props"));
+    ts.Starred.push_back(EditorRef::MakeFolder("Art"));
+    const nlohmann::json j = ts.ToJson();
+    ts.Reset();
+    CHECK(ts.Inspector.Tabs.empty());
+    ts.FromJson(j);
+    CHECK(ts.Inspector.Tabs.size() == 2 && ts.Inspector.Tabs[1] == comp && ts.Inspector.Active == 1);
+    CHECK(ts.Inspector.Closed.size() == 1 && ts.Inspector.Closed[0].Path == "assets/tex/brick.png");
+    CHECK(ts.Assets.Tabs.size() == 2 && ts.Assets.Tabs[0].Path.empty() && ts.Assets.Active == 1);
+    CHECK(ts.Starred.size() == 1 && ts.Starred[0].Path == "Art");
+    // A bad active index from a hand-edited file is repaired.
+    nlohmann::json bad = j;
+    bad["inspector"]["active"] = 42;
+    ts.FromJson(bad);
+    CHECK(ts.Inspector.Active == 0);
+    ts.Reset();
+}
+
+// --- vFavorites (Phase 5) -------------------------------------------------------------------
+void TestEnhancerFavoritePages() {
+    std::vector<FavoritePage> pages;
+    EnsureFavoritePage(pages);
+    CHECK(pages.size() == 1 && pages[0].Name == "Favorites" && pages[0].Items.empty());
+    EnsureFavoritePage(pages);
+    CHECK(pages.size() == 1);
+
+    const EditorRef tex = EditorRef::MakeAsset("assets/tex/brick.png", "brick.png");
+    const EditorRef art = EditorRef::MakeFolder("Art", "Art");
+    const EditorRef hero = EditorRef::MakeEntity("00112233aabbccdd", 9, "Hero");
+    CHECK(AddFavorite(pages, 0, tex));
+    CHECK(!AddFavorite(pages, 0, tex)); // already on the page
+    pages.push_back(FavoritePage{"Level", {}});
+    CHECK(AddFavorite(pages, 1, art) && AddFavorite(pages, 7, hero)); // a page index past the end clamps
+    CHECK(pages[1].Items.size() == 2 && pages[1].Items[1] == hero);
+    CHECK(FindFavorite(pages, tex) == 0 && FindFavorite(pages, hero) == 1);
+    CHECK(FindFavorite(pages, EditorRef::MakeFolder("Nope")) == -1);
+    // The same target may sit on two pages; removing takes it off all of them.
+    CHECK(AddFavorite(pages, 0, hero));
+    CHECK(RemoveFavorite(pages, hero) && FindFavorite(pages, hero) == -1);
+    CHECK(!RemoveFavorite(pages, hero));
+    MoveFavoritePage(pages, 1, 0);
+    CHECK(pages[0].Name == "Level" && pages[1].Name == "Favorites");
+    MoveFavoritePage(pages, 0, 99);
+    CHECK(pages[1].Name == "Level");
+
+    // Round trip through the per-user file, with the one-time migration flag.
+    auto& us = EnhancerUserState::Get();
+    const nlohmann::json saved = us.ToJson();
+    us.Reset();
+    const unsigned rev = us.Revision();
+    us.FavoritePages = pages;
+    us.FavoritesMigrated = true;
+    us.MarkDirty();
+    CHECK(us.Revision() != rev); // star caches key off this
+    const nlohmann::json j = us.ToJson();
+    us.Reset();
+    CHECK(us.FavoritePages.empty() && !us.FavoritesMigrated);
+    us.FromJson(j);
+    CHECK(us.FavoritesMigrated && us.FavoritePages.size() == 2);
+    CHECK(us.FavoritePages[1].Name == "Level" && us.FavoritePages[1].Items.size() == 1 && us.FavoritePages[1].Items[0] == art);
+    CHECK(us.FavoritePages[0].Items.size() == 1 && us.FavoritePages[0].Items[0].Path == "assets/tex/brick.png");
+    // A file from before vFavorites has no pages and isn't migrated yet.
+    nlohmann::json old = j;
+    old.erase("favoritePages");
+    old.erase("favoritesMigrated");
+    us.FromJson(old);
+    CHECK(us.FavoritePages.empty() && !us.FavoritesMigrated);
+    us.FromJson(saved); // restore the in-memory state (FromJson leaves it clean: nothing is written)
+}
+
+// --- vRuler / vFavorites / vTabs bindings (Phases 4-6) -------------------------------------
+void TestEnhancerLaterBindings() {
+    if (Shortcuts::All().empty()) Shortcuts::Init();
+    struct Want { const char* Id; ImGuiKey Key; bool Ctrl, Shift, Alt; std::uint32_t Ctx; };
+    const Want wants[] = {
+        {"viewport.ruler",         ImGuiKey_R, false, true,  false, Shortcuts::Ctx_Viewport},
+        {"favorites.toggle",       ImGuiKey_F, true,  false, true,  Shortcuts::Ctx_Global},
+        {"favorites.addSelection", ImGuiKey_B, true,  false, true,  Shortcuts::Ctx_Global},
+        {"inspector.tabs.reopen",  ImGuiKey_T, true,  true,  false, Shortcuts::Ctx_InspectorHover},
+        {"project.tabs.close",     ImGuiKey_W, true,  false, false, Shortcuts::Ctx_ProjectHover},
+    };
+    for (const Want& w : wants) {
+        const Shortcuts::Shortcut* s = Shortcuts::Find(w.Id);
+        CHECK(s != nullptr);
+        if (!s) continue;
+        CHECK(s->Default.Key == w.Key && s->Default.Ctrl == w.Ctrl && s->Default.Shift == w.Shift && s->Default.Alt == w.Alt);
+        CHECK(s->Ctx == w.Ctx);
+        CHECK(Shortcuts::Conflicts(w.Id, s->Default).empty());
+    }
+    // Shift+R must not also be the Scale tool (R): modifiers match exactly.
+    const Shortcuts::Shortcut* scale = Shortcuts::Find("tools.scale");
+    CHECK(scale && !(scale->Default == Shortcuts::Find("viewport.ruler")->Default));
 }
 
 void TestEnhancerGlobMatch() {
@@ -379,6 +812,16 @@ void RegisterEnhancerTests(UnitTestSupport::TestList& tests) {
     tests.emplace_back("EnhancerRefsRoundTrip", TestEnhancerRefsRoundTrip);
     tests.emplace_back("EnhancerBookmarkList", TestEnhancerBookmarkList);
     tests.emplace_back("EnhancerNavHistory", TestEnhancerNavHistory);
+    tests.emplace_back("EnhancerSelectionHistory", TestEnhancerSelectionHistory);
+    tests.emplace_back("EnhancerComponentClipboard", TestEnhancerComponentClipboard);
+    tests.emplace_back("EnhancerKeepPlayChanges", TestEnhancerKeepPlayChanges);
+    tests.emplace_back("EnhancerLaterBindings", TestEnhancerLaterBindings);
+    tests.emplace_back("EnhancerFavoritePages", TestEnhancerFavoritePages);
+    tests.emplace_back("EnhancerTabStrip", TestEnhancerTabStrip);
+    tests.emplace_back("EnhancerTabStateRoundTrip", TestEnhancerTabStateRoundTrip);
+    tests.emplace_back("EnhancerFieldState", TestEnhancerFieldState);
+    tests.emplace_back("EnhancerFieldReset", TestEnhancerFieldReset);
+    tests.emplace_back("EnhancerNonSerializedField", TestEnhancerNonSerializedField);
     tests.emplace_back("EnhancerGlobMatch", TestEnhancerGlobMatch);
     tests.emplace_back("EnhancerFuzzyScore", TestEnhancerFuzzyScore);
     tests.emplace_back("EnhancerRemapFolderKeys", TestEnhancerRemapFolderKeys);
