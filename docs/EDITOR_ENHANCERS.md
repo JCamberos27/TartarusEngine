@@ -18,6 +18,7 @@ Status by phase:
 | 4 | vTabs: tab strips in the Inspector and Asset Browser | Done |
 | 5 | vFavorites: hold-Alt favorites overlay with pages | Done |
 | 6 | vRuler: Shift+R surface, bounds and reference-object measuring | Done |
+| 7 | Visual polish: one header row per panel, bookmarks popover, unified rows, tabs, component sections, favorites card, ruler drawing (shared motion and primitives in `EditorTheme.h` / `EditorUIPrimitives.h`) | Done (awaiting visual review) |
 
 ## Where things live
 
@@ -81,13 +82,18 @@ Rules:
 Right-click a row and choose **Row Style**. The menu applies to every selected row as one undo step.
 
 * **Colour**: any palette swatch, or the rainbow swatch for a custom colour.
-* **Fill**: how the colour is shown.
-  * *Gradient* (default): a wash from the row's indent that fades out to the right.
-  * *Flat*: an even wash.
-  * *Icon only*: just tints the row's icon.
+* **Fill**: how the colour is shown. The icon always takes the colour (dark picks are lifted so
+  they stay readable).
+  * *Gradient* (default): a 3px stripe at the row's indent and a faint wash fading out to the right.
+  * *Flat*: the stripe and an even, faint wash.
+  * *Icon only*: just the tinted icon.
+
+  Hover and selection are drawn over the colour, so a selected row always reads as selected: its
+  wash eases back and the stripe stays. The folder tree draws its rows the same way (Preferences >
+  vFolders > **Colour the row** off = icon only).
 * **Icon**: any Font Awesome icon. It replaces the row's kind glyph, and is tinted with the row colour.
-* **Separator Row**: draws the row as a section header, with the name in capitals between two
-  hairlines and no eye/lock/active toggles. A separator is an ordinary empty, so it can parent rows.
+* **Separator Row**: draws the row as a section header: the colour as a dot, the name in tracked
+  capitals and a hairline to the right, with no eye/lock/active toggles. A separator is an ordinary empty, so it can parent rows.
   **Create > Separator** makes a new one.
 * **Clear Style**: removes all of the above.
 
@@ -112,8 +118,9 @@ The component is editor-only: no runtime system reads it.
 
 ### Component minimap
 
-Each row shows the icons of its registered components (up to the preference's maximum, then
-"+N"), just left of the eye/lock/active column.
+Rows show the icons of their registered components (up to the preference's maximum, then
+"+N"), just left of the eye/lock/active column. Preferences > **Component minimap** sets when:
+*Hovered & selected rows* (the default, which keeps the list quiet), *Always*, or *Off*.
 
 * **Hover** an icon to see the component's name. Hovering "+N" lists the rest.
 * **Click** an icon to select the row. The Inspector opens that component's section, scrolls it
@@ -131,12 +138,27 @@ The row between the Hierarchy toolbar and the tree:
 | --- | --- |
 | Scene selector | Lists bookmarked scenes, recent scenes and every scene in `project/scenes`. The star toggles a bookmark. Picking a scene opens it, with the usual unsaved-changes prompt. |
 | Back / Forward | The selection history (Ctrl+[ / Ctrl+]). |
-| Bookmark button | Bookmarks the selection, or removes it if already bookmarked. |
-| Chips | This scene's bookmarked objects. Click selects (Ctrl+click adds to the selection), right-click removes. Chips that don't fit go into a "+N" menu. |
+| Bookmark button | At the bar's right end. Opens the bookmarks list (below). Lit while the selection is bookmarked. |
 
 Drop Hierarchy rows anywhere on the bar to bookmark them. Bookmarks are personal (per user and
 per project) and resolve by scene GUID + `OrderComponent`, so they survive renames, reloads and
 Play/Stop. A bookmarked object that no longer exists shows dimmed until it is removed.
+
+#### The bookmarks list
+
+Each panel header (Hierarchy, Inspector, Asset Browser) has one bookmark button instead of a row
+of chips, so every panel keeps a single header row. The button opens a list:
+
+* The first row bookmarks what the panel shows (the selection, the inspected object or asset,
+  the current folder), or removes it.
+* Then the bookmarks, with their Row Style / folder icon and colour. Click one to select or open
+  it (Ctrl+click adds an object to the selection). The x on a hovered row removes it. Drag rows to
+  reorder them.
+* Dropping rows, files or folders on the button still bookmarks them; it lights up while a drop
+  would land.
+
+Preferences > Editor Enhancers > **Bookmark chips** brings the chips back (and the Asset Browser's
+separate bookmark bar), for those who prefer them.
 
 ### Hover keys
 
@@ -227,12 +249,13 @@ the browser is open, because moving an asset between folders changes neither lis
 Optional, off or on in Settings. Tree lines join each folder to its parent; zebra stripes
 alternate rows; minimal mode drops the folder glyph unless the folder has its own icon.
 
-### Bookmark bar
+### Folder bookmarks
 
-Bookmarked folders appear as chips under the Asset Browser toolbar: click to go there,
-right-click to remove. Drop any folder (tree row or grid tile) on the bar to bookmark it. The bar
-only appears once there is a bookmark, or while a folder is being dragged. Folder bookmarks are
-personal (per user, per project).
+Bookmarked folders sit behind the bookmark button at the right end of the Asset Browser's tab row
+(the bookmarks list, see vHierarchy). Click one to go there; drop any folder (tree row or grid
+tile) on the button to bookmark it. While there are bookmarks but no tabs, the row shows the
+current folder as a live tab. Folder bookmarks are personal (per user, per project). With
+**Bookmark chips** on, they appear as chips on their own bar under the toolbar instead.
 
 ### Hover keys
 
@@ -267,16 +290,16 @@ Play/Stop or scene load and could select an unrelated object. Now:
 
 ### Navigation bar
 
-The row at the top of the Inspector:
+The Inspector's one header row: Back / Forward, then the vTabs strip (or, with no tabs, the
+inspected object's icon and name), then the bookmark button.
 
 | Control | Does |
 | --- | --- |
 | Back / Forward | The selection history above. |
-| Bookmark button | Bookmarks what the Inspector shows: the object (the locked one while the Inspector is locked) or the asset. |
-| Chips | This scene's bookmarked objects plus every bookmarked asset. Click selects or inspects (Ctrl+click adds an object to the selection), right-click removes. Overflow goes into "+N". |
+| Bookmark button | Opens the bookmarks list (see vHierarchy). Its first row bookmarks what the Inspector shows: the object (the locked one while the Inspector is locked) or the asset. The list holds this scene's objects plus every bookmarked asset. |
 
-Drop Hierarchy rows or Asset Browser files on the bar to bookmark them. Object chips use their
-Row Style icon. Inspector bookmarks are separate from the Hierarchy's and are personal (per user,
+Drop Hierarchy rows or Asset Browser files on the bookmark button to bookmark them (dropped on
+the tabs they open a tab). Inspector bookmarks are separate from the Hierarchy's and are personal (per user,
 per project). Preferences > Editor Enhancers > Inspector > **Navigation bar** hides it.
 
 ### Component sections
@@ -286,8 +309,8 @@ On a single selected object, every registered component's header gains:
 | Action | How |
 | --- | --- |
 | Open in Window | The "..." menu, or **Alt+drag** the header out. The floating window follows the mouse until released. Same windows as the Hierarchy minimap's Alt+click. |
-| Pick for copying | **Ctrl+click** headers to pick them (accent outline), then "..." > **Copy N Selected Components**. |
-| Keep Changes After Play | In Play, "..." > **Keep Changes After Play** (also on Transform). Kept headers show a pin. |
+| Pick for copying | **Ctrl+click** headers to pick them (a fine accent outline and a check badge), then "..." > **Copy N Selected Components**. |
+| Keep Changes After Play | In Play, "..." > **Keep Changes After Play** (also on Transform). Kept headers show a **KEEP** pill. |
 
 The object's "..." menu (next to its name) adds:
 
@@ -305,7 +328,7 @@ Keep Changes After Play captures the kept components just before Stop restores t
 scene, then writes them back as one undo step, "Keep Play Mode Changes". The scene is then dirty;
 save it to keep the values. Choices reset each time Play starts.
 
-A component whose `Enabled` field is off shows a dimmed header.
+A component whose `Enabled` field is off shows an **OFF** pill on its header, and its body is dimmed.
 
 ### Hover keys
 
@@ -389,7 +412,7 @@ A tab whose object isn't in the open scene says so instead of showing something 
 
 Each tab is a folder. The active tab follows wherever you navigate, like a browser tab, and
 clicking a tab goes to its folder. Dropping a folder opens it in a new tab; dropping a file opens
-its folder with the file selected. Tab icons and colour underlines come from vFolders styles.
+its folder with the file selected. Tab icons and colours come from vFolders styles.
 
 ### Both strips
 
@@ -403,6 +426,11 @@ its folder with the file selected. Tab icons and colour underlines come from vFo
 | New tab | **Ctrl+T**: the Inspector pins what it shows; the Asset Browser opens the current folder again |
 | "+" menu | A search box (fuzzy matching over the scene's objects / the project's folders) and the starred tabs |
 | Star a tab | Right-click > Starred, so it is listed at the top of "+" |
+
+The active tab is raised and joins the panel below, with a thin top line in its colour (or white).
+A tab's colour also tints its icon. While something that can open as a tab is dragged, the strip
+gets a dashed outline; over it, a "Drop to open" pill shows. Dragged tabs float under the mouse and
+the others slide aside.
 
 The keys act on the panel under the mouse (hover contexts) and can be rebound under Shortcuts.
 Tabs, the active tab, the closed-tab list and stars are per user and per project, in
@@ -420,9 +448,14 @@ Hold **Alt** with the mouse over the Asset Browser: after a moment, the favorite
 the panel; release Alt to hide it. **Ctrl+Alt+F** (or the pin in its corner) keeps it open; Esc
 closes it. If the Asset Browser is closed, a locked overlay opens in the middle of the window.
 
+The overlay is a card over the dimmed Asset Browser: it fades, rises and scales in. The header
+shows the page pills (a sliding indicator marks the shown page) and the lock. Each item is a tile
+with an icon badge in its colour, its name and its path or kind; hovering lifts it, and a focus
+ring shows only while the keyboard drives the highlight. The footer lists the keys.
+
 * **Pages.** Favorites live on named pages. Click a page chip to show it, double-click (or
-  right-click > Rename) to rename, right-click to move or delete it, "+" to add one. Pages slide
-  in when you switch.
+  right-click > Rename) to rename, right-click to move or delete it, "+" to add one. The old page
+  slides and fades out while the new one slides in.
 * **Navigation.** 1-9 pick a page, Left / Right step through pages, the mouse wheel moves one page
   per notch, Up / Down highlight an item and Enter opens it.
 * **Items.** Folders, assets and Hierarchy objects, with their vFolders / vHierarchy icons and
@@ -453,11 +486,14 @@ Hold **Shift+R** with the mouse over the Scene view.
 
 | Action | Shows |
 | --- | --- |
-| Move the mouse | From the surface under the cursor, along its normal, to the next surface (cyan: floor to ceiling, wall to wall), and through that object to its far side (amber, dashed: its thickness there). "open" when nothing is in the way within 10 km. |
-| Mouse wheel | Steps to the next object behind along the cursor ray (and back); the measured object is outlined when there is more than one. The camera doesn't zoom while the ruler is held. |
-| Click | The object's size: its world bounds, with width, height and depth on the edges nearest the camera. Click again to hide; it clears when Shift+R is released. A ruler click never selects. |
+| Move the mouse | From the surface under the cursor, along its normal, to the next surface (blue: floor to ceiling, wall to wall), and through that object to its far side (orange, dashed: its thickness there). "open" when nothing is in the way within 10 km. |
+| Mouse wheel | Steps to the next object behind along the cursor ray (and back); the measured object is outlined when there is more than one, and the outline glides to the next. The camera doesn't zoom while the ruler is held. |
+| Click | The object's size: its world bounds, with width, height and depth on three different edges (the hidden back edges are dashed). Click again to hide; it clears when Shift+R is released. A ruler click never selects. |
 
-A read-out next to the cursor repeats the numbers and names the object. Lengths use the
+A card next to the cursor names the object, shows the distance large and the thickness below it;
+the usage hint shows for the first 2 s of a hold. Lines have a dark halo so they read on a bright
+sky; labels stay inside the view and step aside instead of overlapping. The Measure tool uses the
+same lines, points and labels. Lengths use the
 **Length units** setting (Preferences > Editor Enhancers > Ruler), which the Measure tool now
 shares: its m / ft button changes the same setting, and the choice is saved (it used to reset
 every session). Metric adapts mm / cm / m / km; imperial shows feet and inches.

@@ -190,4 +190,62 @@ inline bool PropertyLabelText(const char* label, float width, ImVec4 col = Secon
     return ts.x > maxW;
 }
 
+// --- Motion ---------------------------------------------------------------------------------------
+// One timing vocabulary for every hover, open/close and slide, so nothing in the editor moves at
+// its own speed. Fast: hover and press feedback. Normal: a section opening, a tab sliding. Slow: an
+// overlay or page arriving.
+constexpr float MotionFast   = 0.08f;
+constexpr float MotionNormal = 0.14f;
+constexpr float MotionSlow   = 0.20f;
+
+namespace Ease {
+inline float Clamp01(float t) { return t < 0.0f ? 0.0f : (t > 1.0f ? 1.0f : t); }
+// Starts quick, lands softly: things arriving.
+inline float OutCubic(float t) { t = Clamp01(t); const float u = 1.0f - t; return 1.0f - u * u * u; }
+// Gentle at both ends: things that open and close in place.
+inline float InOutCubic(float t) {
+    t = Clamp01(t);
+    return t < 0.5f ? 4.0f * t * t * t : 1.0f - (-2.0f * t + 2.0f) * (-2.0f * t + 2.0f) * (-2.0f * t + 2.0f) * 0.5f;
+}
+} // namespace Ease
+
+// A 0..1 value per ImGui id that walks toward `on` (1) or off (0) over `duration` seconds, in the
+// current window's state storage, and comes back eased. For hover and selection fades: a widget
+// shown for the first time starts at its target, so nothing animates in on panel open.
+inline float AnimT(ImGuiID id, bool on, float duration = MotionFast) {
+    ImGuiStorage* st = ImGui::GetStateStorage();
+    const float target = on ? 1.0f : 0.0f;
+    float v = st->GetFloat(id, -1.0f);
+    if (v < 0.0f) v = target;
+    const float step = duration > 0.0f ? ImGui::GetIO().DeltaTime / duration : 1.0f;
+    v = v < target ? std::min(target, v + step) : std::max(target, v - step);
+    st->SetFloat(id, v);
+    return Ease::OutCubic(v);
+}
+inline ImVec4 Mix(ImVec4 a, ImVec4 b, float t) {
+    return ImVec4(a.x + (b.x - a.x) * t, a.y + (b.y - a.y) * t, a.z + (b.z - a.z) * t, a.w + (b.w - a.w) * t);
+}
+
+// --- User colours (row styles, folder colours, tab and favourite tints) ---------------------------
+// The screen is monochrome; a colour the user picked is a signal, never a fill. It shows as a thin
+// stripe, a tinted glyph and a faint wash - and a selection or hover always reads over it.
+inline float UserStripeW()  { return Px(3.0f); }
+constexpr float UserWashAlpha = 0.10f; // gradient wash, at its strongest (left) end
+constexpr float UserFlatAlpha = 0.13f; // flat wash
+// An IM_COL32 user colour as a float colour, alpha forced opaque.
+inline ImVec4 UserColor(unsigned packed) {
+    ImVec4 c = ImGui::ColorConvertU32ToFloat4(packed);
+    c.w = 1.0f;
+    return c;
+}
+// The same colour lifted until it reads as a glyph on the near-black panels: a dark pick (navy,
+// maroon) is mixed toward the phosphor white until its luminance clears a floor.
+inline ImVec4 UserGlyphColor(unsigned packed) {
+    ImVec4 c = UserColor(packed);
+    const float lum = 0.2126f * c.x + 0.7152f * c.y + 0.0722f * c.z;
+    constexpr float kFloor = 0.42f;
+    if (lum < kFloor) c = Mix(c, Text, (kFloor - lum) / (1.0f - lum + 1e-4f));
+    return c;
+}
+
 } // namespace EditorTheme
