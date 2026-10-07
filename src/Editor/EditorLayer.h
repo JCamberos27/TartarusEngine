@@ -1086,6 +1086,9 @@ private:
     int  m_RulerDepth = 0;                      // which object along the cursor ray is measured (wheel)
     float m_RulerWheel = 0.0f;
     entt::entity m_RulerHitEntity = entt::null; // that object, for the click (only while held)
+    double m_RulerHeldSince = -1.0;      // when this hold began (the hint shows for its first 2 s)
+    bool m_RulerOutlineValid = false;    // the eased outline of the measured object
+    glm::vec3 m_RulerOutlineMin{0.0f}, m_RulerOutlineMax{0.0f};
     entt::entity m_RulerBounds = entt::null;    // clicked: its bounds show until Shift+R is released
     int   m_ArrayDupCount[3] = { 3, 1, 1 };
     float m_ArrayDupStep[3]  = { 2.0f, 0.0f, 0.0f };

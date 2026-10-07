@@ -2065,6 +2065,93 @@ static void FormatMeasureLength(float meters, bool feet, char* buf, size_t n) {
     Enhancers::FormatLength(meters, feet, buf, n);
 }
 
+namespace {
+// vRuler / Measure drawing: theme colours, Px-scaled lines over a dark halo so they read on a bright
+// sky, dashes anchored to the segment start (they don't crawl as it moves), points as a dot with a
+// ring, and labels on HUD plates that stay inside the viewport and step aside instead of overlapping.
+constexpr int kBoxEdges[12][2] = {{0,1},{1,2},{2,3},{3,0},{4,5},{5,6},{6,7},{7,4},{0,4},{1,5},{2,6},{3,7}};
+
+ImU32 RulerAlpha(ImU32 c, float a) {
+    const float ca = (float)((c >> IM_COL32_A_SHIFT) & 0xFF) * a;
+    return (c & ~IM_COL32_A_MASK) | ((ImU32)ca << IM_COL32_A_SHIFT);
+}
+ImU32 RulerHalo(ImU32 c) { return RulerAlpha(IM_COL32(0, 0, 0, 160), (float)((c >> IM_COL32_A_SHIFT) & 0xFF) / 255.0f); }
+
+void RulerLine(ImDrawList* dl, ImVec2 a, ImVec2 b, ImU32 col, float thick) {
+    dl->AddLine(a, b, RulerHalo(col), thick + EditorTheme::Px(2.5f));
+    dl->AddLine(a, b, col, thick);
+}
+
+void RulerDashes(ImDrawList* dl, ImVec2 a, ImVec2 b, ImU32 col, float thick) {
+    const ImVec2 d(b.x - a.x, b.y - a.y);
+    const float len = std::sqrt(d.x * d.x + d.y * d.y);
+    if (len < 1.0f) return;
+    const ImVec2 u(d.x / len, d.y / len);
+    const float dash = EditorTheme::Px(6.0f), step = dash + EditorTheme::Px(4.0f);
+    for (int pass = 0; pass < 2; ++pass) // every halo first, so no halo covers a dash
+        for (float t = 0.0f; t < len; t += step) {
+            const float t2 = std::min(t + dash, len);
+            dl->AddLine(ImVec2(a.x + u.x * t, a.y + u.y * t), ImVec2(a.x + u.x * t2, a.y + u.y * t2),
+                        pass == 0 ? RulerHalo(col) : col, pass == 0 ? thick + EditorTheme::Px(2.5f) : thick);
+        }
+}
+
+// A measured segment: a 2px line (or dashes), with end ticks when it is a real measurement.
+void RulerSegment(ImDrawList* dl, ImVec2 a, ImVec2 b, ImU32 col, bool dashed, bool ticks) {
+    const ImVec2 d(b.x - a.x, b.y - a.y);
+    const float len = std::sqrt(d.x * d.x + d.y * d.y);
+    if (len < 1.0f) return;
+    const float thick = EditorTheme::Px(2.0f);
+    if (dashed) RulerDashes(dl, a, b, col, thick); else RulerLine(dl, a, b, col, thick);
+    if (!ticks) return;
+    const ImVec2 n(-d.y / len * EditorTheme::Px(5.0f), d.x / len * EditorTheme::Px(5.0f));
+    RulerLine(dl, ImVec2(a.x - n.x, a.y - n.y), ImVec2(a.x + n.x, a.y + n.y), col, thick);
+    RulerLine(dl, ImVec2(b.x - n.x, b.y - n.y), ImVec2(b.x + n.x, b.y + n.y), col, thick);
+}
+
+void RulerPoint(ImDrawList* dl, ImVec2 p, ImU32 col) {
+    const float r = EditorTheme::Px(3.5f), ring = EditorTheme::Px(7.5f);
+    dl->AddCircle(p, ring, RulerHalo(col), 0, EditorTheme::Px(3.5f));
+    dl->AddCircle(p, ring, RulerAlpha(col, 0.7f), 0, EditorTheme::Px(1.5f));
+    dl->AddCircleFilled(p, r + EditorTheme::Px(1.5f), RulerHalo(col));
+    dl->AddCircleFilled(p, r, col);
+}
+
+// Labels placed one after another: each is clamped into the viewport and, when it would overlap
+// one already placed, steps along `push` (away from its line) until it is clear.
+struct RulerLabels {
+    ImVec2 ClipMin, ClipMax;
+    std::vector<std::pair<ImVec2, ImVec2>> Placed;
+    void Draw(ImDrawList* dl, ImVec2 at, ImVec2 push, const char* text, ImU32 col) {
+        EditorTheme::PushMonoSmall();
+        ImFont* font = ImGui::GetFont();
+        const float fs = ImGui::GetFontSize();
+        const ImVec2 ts = ImGui::CalcTextSize(text);
+        ImGui::PopFont();
+        const float px = EditorTheme::Px(6.0f), py = EditorTheme::Px(3.0f), margin = EditorTheme::Px(4.0f);
+        const ImVec2 half(std::floor(ts.x * 0.5f + px), std::floor(ts.y * 0.5f + py));
+        const float pl = std::sqrt(push.x * push.x + push.y * push.y);
+        push = pl < 1e-3f ? ImVec2(0.0f, 1.0f) : ImVec2(push.x / pl, push.y / pl);
+        const float stepLen = half.y * 2.0f + EditorTheme::Px(2.0f);
+        ImVec2 c = at;
+        for (int tries = 0; tries < 6; ++tries) {
+            c.x = std::max(ClipMin.x + half.x + margin, std::min(c.x, ClipMax.x - half.x - margin));
+            c.y = std::max(ClipMin.y + half.y + margin, std::min(c.y, ClipMax.y - half.y - margin));
+            bool overlaps = false;
+            for (const auto& r : Placed)
+                if (c.x - half.x < r.second.x && c.x + half.x > r.first.x && c.y - half.y < r.second.y && c.y + half.y > r.first.y) { overlaps = true; break; }
+            if (!overlaps) break;
+            c.x += push.x * stepLen; c.y += push.y * stepLen;
+        }
+        const ImVec2 mn(std::floor(c.x - half.x), std::floor(c.y - half.y)), mx(mn.x + half.x * 2.0f, mn.y + half.y * 2.0f);
+        Placed.push_back({mn, mx});
+        EditorUIPrimitives::DrawHudPlate(dl, mn, mx, EditorTheme::Px(4.0f));
+        dl->AddRect(mn, mx, RulerAlpha(col, 0.35f), EditorTheme::Px(4.0f), 0, EditorTheme::Px(1.0f));
+        dl->AddText(font, fs, ImVec2(mn.x + px, mn.y + py), col, text);
+    }
+};
+} // namespace
+
 void EditorLayer::DrawMeasurement(Camera& cam) {
     if (m_MeasurePoints.empty()) return;
     const float w = m_ViewportSize.x, h = m_ViewportSize.y;
@@ -2079,41 +2166,35 @@ void EditorLayer::DrawMeasurement(Camera& cam) {
         return true;
     };
     ImDrawList* dl = ImGui::GetForegroundDrawList();
-    const ImU32 col = IM_COL32(120, 220, 255, 255);
+    const ImU32 col = EditorTheme::U32(EditorTheme::Info);
+    RulerLabels labels{ImVec2(m_ViewportPos.x, m_ViewportPos.y), ImVec2(m_ViewportPos.x + w, m_ViewportPos.y + h), {}};
 
     // Phase 3 item 7 — chained segments: every consecutive pair of points is its own dashed leg
     // with its own length label, and the total across the whole chain feeds the HUD below.
     std::vector<ImVec2> screenPts(m_MeasurePoints.size());
     std::vector<bool> valid(m_MeasurePoints.size());
-    for (size_t i = 0; i < m_MeasurePoints.size(); ++i) {
-        valid[i] = toScreen(m_MeasurePoints[i], screenPts[i]);
-        if (valid[i]) dl->AddCircleFilled(screenPts[i], 4.0f, col);
-    }
+    for (size_t i = 0; i < m_MeasurePoints.size(); ++i) valid[i] = toScreen(m_MeasurePoints[i], screenPts[i]);
 
     float totalMeters = 0.0f;
     for (size_t i = 0; i + 1 < m_MeasurePoints.size(); ++i) {
-        const float segMeters = glm::length(m_MeasurePoints[i + 1] - m_MeasurePoints[i]);
-        totalMeters += segMeters;
+        totalMeters += glm::length(m_MeasurePoints[i + 1] - m_MeasurePoints[i]);
+        if (valid[i] && valid[i + 1]) RulerSegment(dl, screenPts[i], screenPts[i + 1], col, true, false);
+    }
+    for (size_t i = 0; i < m_MeasurePoints.size(); ++i)
+        if (valid[i]) RulerPoint(dl, screenPts[i], col);
+    // Labels last, over every line: above their leg, hidden on legs too short to carry one.
+    for (size_t i = 0; i + 1 < m_MeasurePoints.size(); ++i) {
         if (!valid[i] || !valid[i + 1]) continue;
         const ImVec2 s0 = screenPts[i], s1 = screenPts[i + 1];
         const ImVec2 d(s1.x - s0.x, s1.y - s0.y);
         const float len = std::sqrt(d.x * d.x + d.y * d.y);
-        if (len > 1.0f) {
-            const ImVec2 u(d.x / len, d.y / len);
-            for (float t = 0.0f; t < len; t += 10.0f) {
-                float t2 = std::min(t + 5.0f, len);
-                dl->AddLine(ImVec2(s0.x + u.x * t, s0.y + u.y * t),
-                            ImVec2(s0.x + u.x * t2, s0.y + u.y * t2), col, 1.6f);
-            }
-        }
+        if (len < EditorTheme::Px(24.0f)) continue;
+        ImVec2 n(-d.y / len, d.x / len);
+        if (n.y > 0.0f) n = ImVec2(-n.x, -n.y);
         char segBuf[32];
-        FormatMeasureLength(segMeters, EditorSettings::Get().MeasureFeet, segBuf, sizeof(segBuf));
-        ImVec2 mid((s0.x + s1.x) * 0.5f, (s0.y + s1.y) * 0.5f);
-        ImVec2 ts = ImGui::CalcTextSize(segBuf);
-        ImVec2 tp(mid.x - ts.x * 0.5f, mid.y - ts.y - 6.0f);
-        dl->AddRectFilled(ImVec2(tp.x - 5.0f, tp.y - 3.0f), ImVec2(tp.x + ts.x + 5.0f, tp.y + ts.y + 3.0f),
-                          EditorUIPrimitives::kHudPlateColor, 3.0f * m_UIScale);
-        dl->AddText(tp, EditorUIPrimitives::kHudTextColor, segBuf);
+        FormatMeasureLength(glm::length(m_MeasurePoints[i + 1] - m_MeasurePoints[i]), EditorSettings::Get().MeasureFeet, segBuf, sizeof(segBuf));
+        const ImVec2 mid((s0.x + s1.x) * 0.5f, (s0.y + s1.y) * 0.5f);
+        labels.Draw(dl, ImVec2(mid.x + n.x * EditorTheme::Px(16.0f), mid.y + n.y * EditorTheme::Px(16.0f)), n, segBuf, col);
     }
 
     // Persistent HUD (audit's "Clear/Copy/unit toggle") — a real ImGui window, not just draw-list
@@ -2136,11 +2217,13 @@ void EditorLayer::DrawMeasurement(Camera& cam) {
 
         char totalBuf[48];
         FormatMeasureLength(totalMeters, EditorSettings::Get().MeasureFeet, totalBuf, sizeof(totalBuf));
+        EditorTheme::PushMono();
         if (m_MeasurePoints.size() > 2) {
             ImGui::Text(ICON_FA_RULER "  Total: %s  (%d segments)", totalBuf, (int)m_MeasurePoints.size() - 1);
         } else {
             ImGui::Text(ICON_FA_RULER "  %s", totalBuf);
         }
+        ImGui::PopFont();
         ImGui::SameLine();
 
         if (ActionButton(ICON_FA_COPY, "Copy the total distance") && !m_MeasurePoints.empty()) {
@@ -2204,7 +2287,7 @@ void EditorLayer::DrawRuler(World& world, Camera& cam) {
     const bool overViewport = mouse.x >= m_ViewportPos.x && mouse.x < m_ViewportPos.x + m_ViewportSize.x &&
                               mouse.y >= m_ViewportPos.y && mouse.y < m_ViewportPos.y + m_ViewportSize.y;
     m_RulerHeld = overViewport && RulerHeldNow();
-    if (!m_RulerHeld) { m_RulerDepth = 0; m_RulerBounds = entt::null; m_RulerWheel = 0.0f; return; }
+    if (!m_RulerHeld) { m_RulerDepth = 0; m_RulerBounds = entt::null; m_RulerWheel = 0.0f; m_RulerHeldSince = -1.0; m_RulerOutlineValid = false; return; }
     const bool feet = EditorSettings::Get().MeasureFeet;
 
     glm::vec3 origin, dir;
@@ -2220,31 +2303,42 @@ void EditorLayer::DrawRuler(World& world, Camera& cam) {
     };
     ImDrawList* dl = ImGui::GetForegroundDrawList();
     dl->PushClipRect(ImVec2(m_ViewportPos.x, m_ViewportPos.y), ImVec2(m_ViewportPos.x + w, m_ViewportPos.y + h), true);
-    const ImU32 cyan = IM_COL32(120, 220, 255, 255), amber = IM_COL32(255, 196, 92, 255), faint = IM_COL32(120, 220, 255, 90);
-    auto label = [&](const ImVec2& at, const char* text, ImU32 col) {
-        const ImVec2 ts = ImGui::CalcTextSize(text);
-        const ImVec2 tp(at.x - ts.x * 0.5f, at.y - ts.y * 0.5f);
-        dl->AddRectFilled(ImVec2(tp.x - 5.0f, tp.y - 3.0f), ImVec2(tp.x + ts.x + 5.0f, tp.y + ts.y + 3.0f),
-                          EditorUIPrimitives::kHudPlateColor, 3.0f * m_UIScale);
-        dl->AddText(tp, col, text);
-    };
-    auto segment = [&](const glm::vec3& a, const glm::vec3& b, ImU32 col, bool dashed, const char* text) {
+    const ImU32 info = EditorTheme::U32(EditorTheme::Info), warn = EditorTheme::U32(EditorTheme::Warning);
+    RulerLabels labels{ImVec2(m_ViewportPos.x, m_ViewportPos.y), ImVec2(m_ViewportPos.x + w, m_ViewportPos.y + h), {}};
+    struct PendingLabel { ImVec2 At, Push; std::string Text; ImU32 Col; };
+    std::vector<PendingLabel> pending; // drawn last, over every line
+    // A measured segment; its label sits off to one side (away from `awayFrom` when given) and is
+    // hidden when the segment is too short on screen to carry one.
+    auto segment = [&](const glm::vec3& a, const glm::vec3& b, ImU32 col, bool dashed, bool ticks, const char* text, const ImVec2* awayFrom) {
         ImVec2 sa, sb;
         if (!toScreen(a, sa) || !toScreen(b, sb)) return;
+        RulerSegment(dl, sa, sb, col, dashed, ticks);
         const ImVec2 d(sb.x - sa.x, sb.y - sa.y);
         const float len = std::sqrt(d.x * d.x + d.y * d.y);
-        if (len < 1.0f) return;
-        const ImVec2 u(d.x / len, d.y / len), n(-u.y, u.x);
-        if (dashed) {
-            for (float t = 0.0f; t < len; t += 9.0f)
-                dl->AddLine(ImVec2(sa.x + u.x * t, sa.y + u.y * t), ImVec2(sa.x + u.x * std::min(t + 5.0f, len), sa.y + u.y * std::min(t + 5.0f, len)), col, 1.6f);
-        } else {
-            dl->AddLine(sa, sb, col, 1.8f);
+        if (!text || len < EditorTheme::Px(24.0f)) return;
+        ImVec2 n(-d.y / len, d.x / len);
+        const ImVec2 mid((sa.x + sb.x) * 0.5f, (sa.y + sb.y) * 0.5f);
+        if (awayFrom ? n.x * (mid.x - awayFrom->x) + n.y * (mid.y - awayFrom->y) < 0.0f : n.x < 0.0f) n = ImVec2(-n.x, -n.y);
+        pending.push_back({ImVec2(mid.x + n.x * EditorTheme::Px(16.0f), mid.y + n.y * EditorTheme::Px(16.0f)), n, text, col});
+    };
+    // A box: the three edges meeting at the corner farthest from the camera are behind it, so they
+    // are dashed and dim.
+    auto box = [&](const glm::vec3& mn, const glm::vec3& mx, ImU32 col, float thick) {
+        const glm::vec3 c[8] = {{mn.x, mn.y, mn.z}, {mx.x, mn.y, mn.z}, {mx.x, mx.y, mn.z}, {mn.x, mx.y, mn.z},
+                                {mn.x, mn.y, mx.z}, {mx.x, mn.y, mx.z}, {mx.x, mx.y, mx.z}, {mn.x, mx.y, mx.z}};
+        int farIdx = 0;
+        float farD = -1.0f;
+        for (int k = 0; k < 8; ++k) {
+            const glm::vec3 off = c[k] - cam.Position;
+            const float dd = glm::dot(off, off);
+            if (dd > farD) { farD = dd; farIdx = k; }
         }
-        const float tick = 5.0f * m_UIScale;
-        dl->AddLine(ImVec2(sa.x - n.x * tick, sa.y - n.y * tick), ImVec2(sa.x + n.x * tick, sa.y + n.y * tick), col, 1.6f);
-        dl->AddLine(ImVec2(sb.x - n.x * tick, sb.y - n.y * tick), ImVec2(sb.x + n.x * tick, sb.y + n.y * tick), col, 1.6f);
-        if (text) label(ImVec2((sa.x + sb.x) * 0.5f + n.x * 14.0f, (sa.y + sb.y) * 0.5f + n.y * 14.0f), text, col);
+        for (const auto& e : kBoxEdges) {
+            ImVec2 a, bb;
+            if (!toScreen(c[e[0]], a) || !toScreen(c[e[1]], bb)) continue;
+            if (e[0] == farIdx || e[1] == farIdx) RulerDashes(dl, a, bb, RulerAlpha(col, 0.4f), thick);
+            else RulerLine(dl, a, bb, col, thick);
+        }
     };
 
     // Every object along the ray, nearest first.
@@ -2267,7 +2361,8 @@ void EditorLayer::DrawRuler(World& world, Camera& cam) {
     }
     m_RulerDepth = count > 0 ? std::clamp(m_RulerDepth, 0, count - 1) : 0;
     char buf[48], buf2[48];
-    std::string hud;
+    std::string objName, primary, thick;
+    bool open = false;
 
     if (count > 0) {
         const SurfaceHit& hit = hits[m_RulerDepth];
@@ -2275,46 +2370,47 @@ void EditorLayer::DrawRuler(World& world, Camera& cam) {
         glm::vec3 n = glm::length(hit.Normal) > 1e-6f ? glm::normalize(hit.Normal) : glm::vec3(0, 1, 0);
         if (glm::dot(n, dir) > 0.0f) n = -n; // face the camera
         const float eps = 1e-3f;
+        // The measured object, outlined faintly when there is a choice (wheel to change it); the
+        // outline eases from the last object to the next.
+        AABB ob;
+        if (count > 1 && RenderableWorldBounds(world, hit.Entity, ob)) {
+            const float k = m_RulerOutlineValid ? 1.0f - std::exp(-io.DeltaTime * 18.0f) : 1.0f;
+            m_RulerOutlineMin = glm::mix(m_RulerOutlineMin, ob.Min, k);
+            m_RulerOutlineMax = glm::mix(m_RulerOutlineMax, ob.Max, k);
+            m_RulerOutlineValid = true;
+            box(m_RulerOutlineMin, m_RulerOutlineMax, RulerAlpha(info, 0.45f), EditorTheme::Px(1.0f));
+        } else {
+            m_RulerOutlineValid = false;
+        }
         // Outward: this surface to the next one along its normal (floor -> ceiling, wall -> wall).
         const SurfaceHit out = RaycastRenderables(world, p + n * eps, n, [](entt::entity) { return false; }, kRulerReach);
         // Inward: through this object to its far side (its thickness here).
         const SurfaceHit in = RaycastRenderables(world, p - n * eps, -n, [&](entt::entity e) { return e != hit.Entity; }, kRulerReach);
-        ImVec2 sp;
-        if (toScreen(p, sp)) dl->AddCircleFilled(sp, 4.0f * m_UIScale, cyan);
         if (out.Entity != entt::null) {
             Enhancers::FormatLength(out.T + eps, feet, buf, sizeof(buf));
-            segment(p, p + n * (out.T + eps), cyan, false, buf);
-            hud += std::string(ICON_FA_ARROWS_UP_DOWN "  ") + buf;
+            segment(p, p + n * (out.T + eps), info, false, true, buf, nullptr);
+            primary = buf;
         } else {
-            segment(p, p + n * 0.5f, faint, true, nullptr);
-            hud += ICON_FA_ARROWS_UP_DOWN "  open";
+            segment(p, p + n * 0.5f, RulerAlpha(info, 0.45f), true, false, nullptr, nullptr);
+            primary = "open";
+            open = true;
         }
         if (in.Entity != entt::null) {
             Enhancers::FormatLength(in.T + eps, feet, buf2, sizeof(buf2));
-            segment(p, p - n * (in.T + eps), amber, true, buf2);
-            hud += std::string("    " ICON_FA_LAYER_GROUP "  thick ") + buf2;
+            segment(p, p - n * (in.T + eps), warn, true, true, buf2, nullptr);
+            thick = buf2;
         }
-        // The measured object, outlined faintly when there is a choice (wheel to change it).
-        if (count > 1) {
-            AABB b;
-            if (RenderableWorldBounds(world, hit.Entity, b)) {
-                const glm::vec3 c[8] = {{b.Min.x, b.Min.y, b.Min.z}, {b.Max.x, b.Min.y, b.Min.z}, {b.Max.x, b.Max.y, b.Min.z}, {b.Min.x, b.Max.y, b.Min.z},
-                                        {b.Min.x, b.Min.y, b.Max.z}, {b.Max.x, b.Min.y, b.Max.z}, {b.Max.x, b.Max.y, b.Max.z}, {b.Min.x, b.Max.y, b.Max.z}};
-                static const int kEdges[12][2] = {{0,1},{1,2},{2,3},{3,0},{4,5},{5,6},{6,7},{7,4},{0,4},{1,5},{2,6},{3,7}};
-                for (const auto& e : kEdges) {
-                    ImVec2 a, bb;
-                    if (toScreen(c[e[0]], a) && toScreen(c[e[1]], bb)) dl->AddLine(a, bb, faint, 1.0f);
-                }
-            }
-        }
+        ImVec2 sp;
+        if (toScreen(p, sp)) RulerPoint(dl, sp, info);
         const auto* nm = world.Registry.try_get<NameComponent>(hit.Entity);
-        hud += "    " + std::string(nm && !nm->Name.empty() ? nm->Name : "object");
-        if (count > 1) hud += " (" + std::to_string(m_RulerDepth + 1) + "/" + std::to_string(count) + ", wheel for the next)";
+        objName = nm && !nm->Name.empty() ? nm->Name : "object";
     } else {
-        hud = "No surface under the cursor";
+        m_RulerOutlineValid = false;
     }
 
-    // Clicked object's bounds: width / height / depth along the edges nearest the camera.
+    // Clicked object's bounds: its three sizes on three different edges, so the labels don't pile
+    // onto one corner: width along the front bottom edge, height up its far end, depth back along
+    // the near side. Labels sit outside the box.
     AABB b;
     if (m_RulerBounds != entt::null && RenderableWorldBounds(world, m_RulerBounds, b)) {
         const glm::vec3 size = b.Max - b.Min;
@@ -2323,32 +2419,65 @@ void EditorLayer::DrawRuler(World& world, Camera& cam) {
         const float z0 = cam.Position.z > center.z ? b.Max.z : b.Min.z;
         const float x1 = x0 == b.Max.x ? b.Min.x : b.Max.x;
         const float z1 = z0 == b.Max.z ? b.Min.z : b.Max.z;
-        const glm::vec3 c[8] = {{b.Min.x, b.Min.y, b.Min.z}, {b.Max.x, b.Min.y, b.Min.z}, {b.Max.x, b.Max.y, b.Min.z}, {b.Min.x, b.Max.y, b.Min.z},
-                                {b.Min.x, b.Min.y, b.Max.z}, {b.Max.x, b.Min.y, b.Max.z}, {b.Max.x, b.Max.y, b.Max.z}, {b.Min.x, b.Max.y, b.Max.z}};
-        static const int kEdges[12][2] = {{0,1},{1,2},{2,3},{3,0},{4,5},{5,6},{6,7},{7,4},{0,4},{1,5},{2,6},{3,7}};
-        for (const auto& e : kEdges) {
-            ImVec2 a, bb;
-            if (toScreen(c[e[0]], a) && toScreen(c[e[1]], bb)) dl->AddLine(a, bb, amber, 1.4f);
-        }
+        box(b.Min, b.Max, warn, EditorTheme::Px(1.5f));
+        ImVec2 cs;
+        const ImVec2* away = toScreen(center, cs) ? &cs : nullptr;
         Enhancers::FormatLength(size.x, feet, buf, sizeof(buf));
-        segment(glm::vec3(x1, b.Min.y, z0), glm::vec3(x0, b.Min.y, z0), amber, false, buf);
+        segment(glm::vec3(x1, b.Min.y, z0), glm::vec3(x0, b.Min.y, z0), warn, false, true, buf, away);
         Enhancers::FormatLength(size.y, feet, buf, sizeof(buf));
-        segment(glm::vec3(x0, b.Min.y, z0), glm::vec3(x0, b.Max.y, z0), amber, false, buf);
+        segment(glm::vec3(x1, b.Min.y, z0), glm::vec3(x1, b.Max.y, z0), warn, false, true, buf, away);
         Enhancers::FormatLength(size.z, feet, buf, sizeof(buf));
-        segment(glm::vec3(x0, b.Min.y, z1), glm::vec3(x0, b.Min.y, z0), amber, false, buf);
+        segment(glm::vec3(x0, b.Min.y, z0), glm::vec3(x0, b.Min.y, z1), warn, false, true, buf, away);
     } else {
         m_RulerBounds = entt::null;
     }
+    for (const PendingLabel& l : pending) labels.Draw(dl, l.At, l.Push, l.Text.c_str(), l.Col);
     dl->PopClipRect();
 
-    // Read-out under the cursor.
-    hud += "\nClick: object size    " + std::string(feet ? "feet / inches" : "metric") + " (Preferences > Editor Enhancers)";
-    const ImVec2 ts = ImGui::CalcTextSize(hud.c_str());
-    ImVec2 tp(mouse.x + 18.0f * m_UIScale, mouse.y + 18.0f * m_UIScale);
-    tp.x = std::min(tp.x, m_ViewportPos.x + w - ts.x - 10.0f);
-    tp.y = std::min(tp.y, m_ViewportPos.y + h - ts.y - 10.0f);
-    dl->AddRectFilled(ImVec2(tp.x - 6.0f, tp.y - 4.0f), ImVec2(tp.x + ts.x + 6.0f, tp.y + ts.y + 4.0f), EditorUIPrimitives::kHudPlateColor, 4.0f * m_UIScale);
-    dl->AddText(tp, EditorUIPrimitives::kHudTextColor, hud.c_str());
+    // Read-out card by the cursor: the object, the main distance large and mono, one secondary
+    // line; the usage hint only for the first two seconds of a hold.
+    const double now = ImGui::GetTime();
+    if (m_RulerHeldSince < 0.0) m_RulerHeldSince = now;
+    const bool showHint = now - m_RulerHeldSince < 2.0;
+    std::string title = count > 0 ? objName : std::string("No surface under the cursor");
+    if (count > 1) title += "   " + std::to_string(m_RulerDepth + 1) + "/" + std::to_string(count);
+    std::string second = thick.empty() ? std::string() : "thick " + thick;
+    if (count > 1) second += std::string(second.empty() ? "" : "   ") + "wheel: next object";
+    const std::string hint = std::string("Click: object size   ") + (feet ? "feet / inches" : "metric");
+    const float pad = EditorTheme::Px(10.0f), gap = EditorTheme::Px(3.0f);
+    const ImVec2 titleSz = ImGui::CalcTextSize(title.c_str());
+    ImVec2 primSz(0.0f, 0.0f), secSz(0.0f, 0.0f), hintSz(0.0f, 0.0f);
+    if (count > 0) { ImGui::PushFont(EditorTheme::MonoFont(), EditorTheme::Px(20.0f)); primSz = ImGui::CalcTextSize(primary.c_str()); ImGui::PopFont(); }
+    if (!second.empty()) { EditorTheme::PushMonoSmall(); secSz = ImGui::CalcTextSize(second.c_str()); ImGui::PopFont(); }
+    if (showHint) hintSz = ImGui::CalcTextSize(hint.c_str());
+    const float cw = std::floor(std::max(std::max(titleSz.x, primSz.x), std::max(secSz.x, hintSz.x)) + pad * 2.0f);
+    const float ch = std::floor(pad * 2.0f + titleSz.y + (primSz.y > 0.0f ? gap + primSz.y : 0.0f) +
+                                (secSz.y > 0.0f ? gap + secSz.y : 0.0f) + (hintSz.y > 0.0f ? gap * 2.0f + hintSz.y : 0.0f));
+    ImVec2 cp(mouse.x + EditorTheme::Px(18.0f), mouse.y + EditorTheme::Px(18.0f));
+    cp.x = std::floor(std::max(m_ViewportPos.x + EditorTheme::Px(8.0f), std::min(cp.x, m_ViewportPos.x + w - cw - EditorTheme::Px(8.0f))));
+    cp.y = std::floor(std::max(m_ViewportPos.y + EditorTheme::Px(8.0f), std::min(cp.y, m_ViewportPos.y + h - ch - EditorTheme::Px(8.0f))));
+    const ImVec2 cmx(cp.x + cw, cp.y + ch);
+    EditorUIPrimitives::DrawSoftShadow(dl, cp, cmx, EditorTheme::Px(6.0f), EditorTheme::Px(8.0f), 0.5f);
+    EditorUIPrimitives::DrawHudPlate(dl, cp, cmx, EditorTheme::Px(6.0f));
+    dl->AddRect(cp, cmx, EditorTheme::U32(EditorTheme::Hairline), EditorTheme::Px(6.0f), 0, EditorTheme::Px(1.0f));
+    float y = cp.y + pad;
+    dl->AddText(ImVec2(cp.x + pad, y), EditorTheme::U32(EditorTheme::Secondary), title.c_str());
+    y += titleSz.y;
+    if (primSz.y > 0.0f) {
+        y += gap;
+        ImGui::PushFont(EditorTheme::MonoFont(), EditorTheme::Px(20.0f));
+        dl->AddText(ImGui::GetFont(), ImGui::GetFontSize(), ImVec2(cp.x + pad, y), open ? EditorTheme::U32(EditorTheme::Dim) : info, primary.c_str());
+        ImGui::PopFont();
+        y += primSz.y;
+    }
+    if (secSz.y > 0.0f) {
+        y += gap;
+        EditorTheme::PushMonoSmall();
+        dl->AddText(ImGui::GetFont(), ImGui::GetFontSize(), ImVec2(cp.x + pad, y), thick.empty() ? EditorTheme::U32(EditorTheme::Dim) : warn, second.c_str());
+        ImGui::PopFont();
+        y += secSz.y;
+    }
+    if (hintSz.y > 0.0f) dl->AddText(ImVec2(cp.x + pad, y + gap * 2.0f), EditorTheme::U32(EditorTheme::Dim), hint.c_str());
 
     m_RulerHitEntity = count > 0 ? hits[m_RulerDepth].Entity : entt::null;
 }
