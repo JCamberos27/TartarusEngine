@@ -1,6 +1,6 @@
 # Editor Enhancers: handoff for the next session
 
-Status as of 2026-10-07. Phases 0 to 2 are done, merged to `main` and tested by the user. Phase 3 (vInspector) was designed but **no Phase 3 code was written yet**. This file is the full context needed to continue. Read it before you touch anything.
+Status as of 2026-10-07. Phases 0 to 2 are done, merged to `main` and tested by the user. **Phase 3a (vInspector UI) is committed on branch `feature/vinspector` (88499426) and awaits the user's editor test**; items 1-8 of the 3a design below are implemented as written, with the multi-paste and keep-play logic in `src/Editor/Enhancers/ComponentTransfer.h/.cpp`. Phase 3b (attributes) has no code yet. This file is the full context needed to continue. Read it before you touch anything.
 
 The user-facing docs are in [EDITOR_ENHANCERS.md](EDITOR_ENHANCERS.md). This file covers the remaining work.
 
