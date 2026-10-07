@@ -2070,7 +2070,7 @@ private:
     std::string m_InspectorFlashComponent;   // that section's header pulses briefly once reached
     double m_InspectorFlashUntil = 0.0;
     entt::entity m_HierDefaultParentNow = entt::null; // ResolveDefaultParent(), once per Hierarchy frame
-    struct PinnedComponent { int Order = -1; std::string Component; std::string SceneKey; ImVec2 SpawnPos{}; bool Placed = false; };
+    struct PinnedComponent { int Order = -1; std::string Component; std::string SceneKey; ImVec2 SpawnPos{}; bool Placed = false; double OpenedAt = 0.0; };
     std::vector<PinnedComponent> m_Pins;
     // vFolders: per-folder content counts (auto icons, minimap), rebuilt when the asset lists or
     // the project index change, or at most once a second while the browser is drawn (an asset
