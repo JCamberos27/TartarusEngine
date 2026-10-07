@@ -218,7 +218,7 @@ public:
     // Phase 6 item 11 — Help > Shortcuts jumps straight to the existing press-to-bind editor
     // (Preferences category 5) instead of leaving it something you only find by browsing.
     void OpenShortcutsReference() { m_ShowPreferences = true; m_SettingsGroupIsProject = false; m_PrefsCategory = 5; }
-    void OpenAbout() { m_ShowPreferences = true; m_SettingsGroupIsProject = false; m_PrefsCategory = 6; } // #184
+    void OpenAbout() { m_ShowPreferences = true; m_SettingsGroupIsProject = false; m_PrefsCategory = 7; } // #184
 
     // Thin forwarders so the non-member host glue (HotReloadEditorModule.cpp) can invoke these;
     // the real methods stay private with their existing call sites. World/Assets/Camera are the
@@ -1097,6 +1097,7 @@ private:
     Shortcuts::Chord m_PrefsCapturePrefix;
 
     void DrawProjectSettingsBody(World& world); // "THIS PROJECT" group's body, called from DrawSettingsWindow
+    void DrawEnhancerPreferences();             // Preferences > Editor Enhancers (EditorLayer_Enhancers.cpp)
     int m_ProjSettingsCategory = 0;
     // #174 - Project Settings > Build (EditorLayer_Build.cpp).
     static constexpr int kBuildSettingsCategory = 2;

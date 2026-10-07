@@ -191,6 +191,7 @@ void EditorSettings::Load() {
     s.GizmoPivotCenter = SafeValue(root, "gizmoPivotCenter", s.GizmoPivotCenter);
     s.ActiveTool = SafeValue(root, "activeTool", s.ActiveTool);
     s.ShadingMode = SafeValue(root, "shadingMode", s.ShadingMode);
+    s.EnhancerHoverKeys = SafeValue(root, "enhancerHoverKeys", s.EnhancerHoverKeys);
 
     // #126 — values that are the right type but nonsensical (0 / negative / NaN from a hand
     // edit or an older build) would otherwise produce NaN projections, a zero-size grid, a
@@ -350,6 +351,7 @@ void EditorSettings::Flush() {
     root["gizmoPivotCenter"] = Get().GizmoPivotCenter;
     root["activeTool"] = Get().ActiveTool;
     root["shadingMode"] = Get().ShadingMode;
+    root["enhancerHoverKeys"] = Get().EnhancerHoverKeys;
 
     // Atomic: a crash mid-write (a toggle spree can still trigger one write) must leave the
     // previous editor_prefs.json intact, not truncated (audit CPP-206). Lives under UserPaths

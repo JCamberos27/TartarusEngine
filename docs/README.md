@@ -29,3 +29,5 @@ guide's boundaries before assuming Unity package or serialization compatibility.
   [weapon sway](WEAPON_SWAY.md), [curve editor](CURVE_EDITOR.md).
 * [Script IDE](SCRIPT_IDE.md), [editor history and inspectors](EDITOR_HISTORY_AND_INSPECTORS.md),
   [particle system](PARTICLE_SYSTEM.md).
+* [Editor Enhancers](EDITOR_ENHANCERS.md): hierarchy/folder styling, bookmarks, hover keys, tabs,
+  favorites and the ruler (vHierarchy / vFolders / vInspector / vTabs / vFavorites / vRuler).

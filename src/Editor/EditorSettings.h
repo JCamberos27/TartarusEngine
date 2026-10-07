@@ -255,6 +255,12 @@ struct EditorSettings {
     int  FullscreenMode = 0;
     int  FullscreenMonitor = -1;
 
+    // --- Editor Enhancers (docs/EDITOR_ENHANCERS.md): vHierarchy / vFolders / vInspector /
+    // vTabs / vFavorites / vRuler-style workflow features. Preferences > Editor Enhancers.
+    // EnhancerHoverKeys: the single-letter keys that act on whatever row/component is under the
+    // mouse (E expand, A active, X delete, ...). Off restores focus-only shortcut routing.
+    bool EnhancerHoverKeys = true;
+
     bool WindowPlacementValid = false;
     int  WindowX = 0, WindowY = 0, WindowWidth = 0, WindowHeight = 0;
     bool WindowMaximized = true;
