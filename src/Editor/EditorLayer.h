@@ -19,6 +19,7 @@
 #include <algorithm>
 #include <chrono>
 #include <future>
+#include "Enhancers/FolderStyles.h" // Enhancers::FolderSummary (m_FolderSummaries)
 #include "Shortcuts.h" // Shortcuts::Chord - Preferences > Shortcuts capture state below
 #include "Texture.h" // TextureImportSettings - stored by value in the Import Settings panel state
 #include "Model.h"   // ModelImportSettings - same
@@ -55,6 +56,7 @@ enum class GizmoOp { Translate, Rotate, Scale, Rect, Universal }; // Universal (
 // DrawAssetCell(index) callback.
 struct MaterialAsset; // defined in MaterialAsset.h, included by AssetLibrary.h
 struct RegisteredComponent; // ComponentRegistry.h
+struct EditorFolderVisual;  // EditorModuleAPI.h
 enum class ReflectAssetKind; // ComponentReflection.h
 struct ReflectField;        // ComponentReflection.h
 
@@ -218,7 +220,7 @@ public:
     // Phase 6 item 11 — Help > Shortcuts jumps straight to the existing press-to-bind editor
     // (Preferences category 5) instead of leaving it something you only find by browsing.
     void OpenShortcutsReference() { m_ShowPreferences = true; m_SettingsGroupIsProject = false; m_PrefsCategory = 5; }
-    void OpenAbout() { m_ShowPreferences = true; m_SettingsGroupIsProject = false; m_PrefsCategory = 6; } // #184
+    void OpenAbout() { m_ShowPreferences = true; m_SettingsGroupIsProject = false; m_PrefsCategory = 7; } // #184
 
     // Thin forwarders so the non-member host glue (HotReloadEditorModule.cpp) can invoke these;
     // the real methods stay private with their existing call sites. World/Assets/Camera are the
@@ -365,6 +367,19 @@ public:
     bool MatchesSceneSearch(const World& world, entt::entity entity) const { return MatchesHierarchyFilter(world, entity); }
     void HierarchyExpandAll(World& world, bool open);                            // EditorLayer_Hierarchy.cpp
     void DrawHierarchyTreeBody(World& world, AssetLibrary& assets);              // EditorLayer_Hierarchy.cpp
+    // Editor Enhancers / vHierarchy: the scene selector + Back/Forward + entity bookmark chips
+    // row the Hierarchy module draws between its toolbar and the tree (EditorLayer_Enhancers.cpp).
+    void DrawHierarchyNavBar(World& world, AssetLibrary& assets);
+    // Pinned component windows (vHierarchy minimap Alt+click, vInspector "Open in Window"): one
+    // floating editor per (entity, reflected component), drawn by the host each frame.
+    void OpenPinnedComponent(World& world, entt::entity entity, const char* componentName);
+    void DrawPinnedComponentWindows(World& world, AssetLibrary& assets);
+    // --- Editor Enhancers / vFolders (EditorLayer_Enhancers.cpp), the host half of API v40 ---
+    bool GetFolderVisual(AssetLibrary& assets, const std::string& path, EditorFolderVisual& out);
+    unsigned FolderTreeFlags() const;
+    void DrawFolderContextMenuBody(World& world, AssetLibrary& assets, const std::string& path);
+    void SetHoveredAssetFolder(const std::string& path) { m_HoverAssetFolder = path; m_HoverAssetFolderSet = true; }
+    void DrawFolderNavBar(World& world, AssetLibrary& assets);
 
     // --- Reloadable Inspector module bridge (issue #229, frame only) ----------------------
     // The module owns Begin("Inspector") + End + visibility; the body stays host-side.
@@ -1097,6 +1112,7 @@ private:
     Shortcuts::Chord m_PrefsCapturePrefix;
 
     void DrawProjectSettingsBody(World& world); // "THIS PROJECT" group's body, called from DrawSettingsWindow
+    void DrawEnhancerPreferences();             // Preferences > Editor Enhancers (EditorLayer_Enhancers.cpp)
     int m_ProjSettingsCategory = 0;
     // #174 - Project Settings > Build (EditorLayer_Build.cpp).
     static constexpr int kBuildSettingsCategory = 2;
@@ -1913,11 +1929,64 @@ private:
     // Defect #45 — one row, flattened out of the tree structure (Depth replaces the old nested
     // Indent()/recursion) so ImGuiListClipper can skip drawing rows scrolled off-screen. Populated
     // by FlattenHierarchyRows before the clipped draw loop runs.
-    struct HierarchyFlatRow { entt::entity Entity; int Depth; };
+    // ContinueMask (Editor Enhancers tree lines): bit k set = the vertical guide at nesting level k
+    // continues past this row (that level's ancestor - or, at k == Depth-1, this row itself - has
+    // a later sibling). Computed once while flattening, so drawing the lines costs no tree walks.
+    struct HierarchyFlatRow { entt::entity Entity; int Depth; std::uint32_t ContinueMask = 0; };
     // Depth-first walk of the currently-expanded, currently-filtered tree — no drawing, just the
     // row list. Reads each node's open/closed flag via the same PushID(entity)/"##node" nesting
     // DrawHierarchyRowBody uses when it actually draws that row, so both sides agree on IDs.
-    void FlattenHierarchyRows(World& world, entt::entity entity, int depth, std::vector<HierarchyFlatRow>& out);
+    void FlattenHierarchyRows(World& world, entt::entity entity, int depth, std::vector<HierarchyFlatRow>& out,
+                              std::uint32_t continueMask = 0);
+    // --- Editor Enhancers / vHierarchy state (EditorLayer_Hierarchy.cpp, EditorLayer_Enhancers.cpp)
+    // The flattened rows and the per-row ancestor chain used to be fresh vectors every frame
+    // (one heap allocation per visible row for the chain); both are reused now.
+    std::vector<HierarchyFlatRow> m_HierFlatRows;
+    std::vector<entt::entity> m_HierChainScratch;
+    // CreationOrdinal ("Object 7") was a full sort of every entity PER unnamed row (and per
+    // comparison in the Name sort). Built lazily once per frame instead.
+    std::unordered_map<entt::entity, int> m_HierOrdinals;
+    int m_HierOrdinalsFrame = -1;
+    int HierarchyCreationOrdinal(const World& world, entt::entity e);
+    // The row under the mouse this frame (hover keys act on it), the component the minimap icon
+    // under the mouse names, and whether a hover key acted (type-to-select skips that frame).
+    entt::entity m_HierarchyHoverEntity = entt::null;
+    bool m_HierarchyHoverKeyUsed = false;
+    char m_HierStyleIconSearch[64] = {};
+    void HandleHierarchyHoverKeys(World& world);
+    // Per-scene user-state key: the scene's GUID, else its path ("" for an untitled scene).
+    std::string CurrentSceneKey() const;
+    entt::entity FindEntityByOrder(const World& world, int order) const;
+    // vHierarchy D key: new objects created without an explicit parent land under it.
+    entt::entity ResolveDefaultParent(const World& world) const;
+    void ApplyDefaultParent(World& world, entt::entity created);
+    void ToggleDefaultParent(World& world, entt::entity entity);
+    // Context-menu "Style" submenu body; applies to every selected row under one undo step.
+    void DrawHierarchyStyleMenu(World& world);
+    // Minimap click -> the Inspector opens and scrolls to this component's section (consumed by
+    // BeginComponentSection).
+    std::string m_InspectorScrollToComponent;
+    int m_InspectorScrollToFrame = 0;        // a request older than a couple of frames is dropped
+    std::string m_InspectorFlashComponent;   // that section's header pulses briefly once reached
+    double m_InspectorFlashUntil = 0.0;
+    entt::entity m_HierDefaultParentNow = entt::null; // ResolveDefaultParent(), once per Hierarchy frame
+    struct PinnedComponent { int Order = -1; std::string Component; std::string SceneKey; ImVec2 SpawnPos{}; bool Placed = false; };
+    std::vector<PinnedComponent> m_Pins;
+    // vFolders: per-folder content counts (auto icons, minimap), rebuilt when the asset lists or
+    // the project index change, or at most once a second while the browser is drawn (an asset
+    // moved between folders changes neither list size).
+    std::unordered_map<std::string, Enhancers::FolderSummary> m_FolderSummaries;
+    size_t m_FolderSummarySig = (size_t)-1;
+    float m_FolderSummaryAge = 0.0f;
+    void RebuildFolderSummariesIfNeeded(AssetLibrary& assets);
+    std::string m_HoverAssetFolder;       // the folder under the mouse this frame (tree or grid)
+    bool m_HoverAssetFolderSet = false;
+    void HandleFolderHoverKeys(AssetLibrary& assets); // PostModuleDraw, after the module drew the tree
+    void InstallFolderPathHook(AssetLibrary& assets);  // re-keys folder styles + bookmarks on rename/delete
+    char m_FolderStyleIconSearch[64] = {};
+    // The generic reflected-component field body (groups, VisibleIf, managed inspector, extras) -
+    // shared by the Inspector's section and the pinned windows.
+    void DrawReflectedComponentFields(World& world, AssetLibrary& assets, const RegisteredComponent& rc, entt::entity entity);
     // One Hierarchy row's body — selection, rename, drag/drop, context menu. No recursion; the
     // caller (DrawHierarchyTreeBody) has already expanded this row's place in the flat list and
     // pushed its full ancestor-to-self ID chain, matching what the old recursive DrawHierarchyNode

@@ -5425,6 +5425,7 @@ int RunUnitTests(const char* filter) {
     RegisterRagdollTests(tests);
     RegisterAnimationTests(tests);
     RegisterEditorTests(tests);
+    RegisterEnhancerTests(tests);
     RegisterRecoilPortTests(tests);
     RegisterSwayPortTests(tests);
     RegisterEngineTests(tests);
