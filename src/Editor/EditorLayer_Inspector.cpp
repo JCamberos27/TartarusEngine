@@ -2056,28 +2056,32 @@ void EditorLayer::DrawReflectedField(World& world, AssetLibrary& assets, const R
     if (EditorTestProbeActive()) EditorTestTag((std::string("field:") + rc.Meta.Name + "/" + f.Name).c_str());
     const float rowMaxY = ImGui::GetItemRectMax().y;
 
-    // Variant chips: one-click values under the widget, the current one highlighted.
+    // Variant chips: one-click values under the widget as a segmented strip, the current value lit
+    // (none lit when the field holds something else).
     if (enabled && f.Variants && f.VariantCount > 0 &&
         (f.Type == ReflectFieldType::Float || f.Type == ReflectFieldType::Int || f.Type == ReflectFieldType::Enum)) {
         ImGui::SetCursorPosX(ImGui::GetCursorPosX() + EditorTheme::PropertyLabelWidth());
         EditorTheme::PushSmall();
-        for (int i = 0; i < f.VariantCount; ++i) {
+        const int count = std::min(f.VariantCount, 16);
+        char labels[16][48];
+        const char* ptrs[16];
+        int current = -1;
+        for (int i = 0; i < count; ++i) {
             const float v = f.Variants[i];
-            char label[48];
-            if (f.VariantLabels && f.VariantLabels[i]) std::snprintf(label, sizeof(label), "%s", f.VariantLabels[i]);
-            else if (f.Type == ReflectFieldType::Enum) std::snprintf(label, sizeof(label), "%s", ReflectEnumLabel(f, (int)std::lround(v)));
-            else if (f.Type == ReflectFieldType::Int) std::snprintf(label, sizeof(label), "%d", (int)std::lround(v));
-            else std::snprintf(label, sizeof(label), f.Format ? f.Format : "%g", v);
-            bool current = true;
-            for (entt::entity e : sel) current = current && VariantMatches(f, fieldPtr(e), v);
-            if (i > 0) ImGui::SameLine(0.0f, EditorTheme::Px(3.0f));
-            ImGui::PushID(i);
-            if (ActionButton(label, "Set this value", current, ImVec2(0.0f, 0.0f)) && !current) {
-                StageUndo(world);
-                forEach([&](entt::entity e) { WriteVariant(f, fieldPtr(e), v); });
-                CommitStagedUndo(world, std::string("Edit ") + rc.Meta.Name);
-            }
-            ImGui::PopID();
+            if (f.VariantLabels && f.VariantLabels[i]) std::snprintf(labels[i], sizeof(labels[i]), "%s", f.VariantLabels[i]);
+            else if (f.Type == ReflectFieldType::Enum) std::snprintf(labels[i], sizeof(labels[i]), "%s", ReflectEnumLabel(f, (int)std::lround(v)));
+            else if (f.Type == ReflectFieldType::Int) std::snprintf(labels[i], sizeof(labels[i]), "%d", (int)std::lround(v));
+            else std::snprintf(labels[i], sizeof(labels[i]), f.Format ? f.Format : "%g", v);
+            ptrs[i] = labels[i];
+            bool all = true;
+            for (entt::entity e : sel) all = all && VariantMatches(f, fieldPtr(e), v);
+            if (all && current < 0) current = i;
+        }
+        if (EditorUIPrimitives::Segmented("##variants", &current, ptrs, count) && current >= 0) {
+            const float v = f.Variants[current];
+            StageUndo(world);
+            forEach([&](entt::entity e) { WriteVariant(f, fieldPtr(e), v); });
+            CommitStagedUndo(world, std::string("Edit ") + rc.Meta.Name);
         }
         EditorTheme::PopFont();
     }
@@ -3425,8 +3429,12 @@ namespace {
 constexpr ImGuiID kSectionHeightSalt = 0x48E16E7Bu; // float: measured full body height
 constexpr ImGuiID kSectionAnimSalt   = 0x7A11A11Au; // float: open/close animation start time, -1 idle
 constexpr ImGuiID kSectionDragSalt   = 0x0D7A6D7Au; // int: an Alt+drag-out is in progress
-constexpr double  kSectionOpenSecs   = 0.12;
-constexpr double  kSectionRemoveSecs = 0.15;
+constexpr ImGuiID kSectionHoverSalt  = 0x40E5A17Bu; // float: header hover fade
+constexpr ImGuiID kSectionChevSalt   = 0xC4E7A0A1u; // float: chevron turn
+constexpr ImGuiID kSectionMenuSalt   = 0x3E2B0C11u; // float: "..." fade (minimal mode)
+constexpr ImGuiID kSectionCloseSalt  = 0x5C1053A7u; // float: x fade
+constexpr double  kSectionOpenSecs   = 0.16;
+constexpr double  kSectionRemoveSecs = 0.26;
 
 const RegisteredComponent* RegisteredByName(const char* name) {
     if (!name) return nullptr;
@@ -3617,18 +3625,27 @@ bool EditorLayer::BeginComponentSection(const char* icon,
         m_RemovingStart = now;
         m_RemovingSeenFrame = frame;
     };
-    float fade = 1.0f;
+    // The section fades and slides right over the first 60%, while (from 35%) the header and body
+    // fold away, so the sections below close the gap smoothly instead of jumping.
+    float fade = 1.0f, slide = 0.0f, fold = 1.0f;
     bool removing = false;
     if (m_RemovingSection == headerId) {
         m_RemovingSeenFrame = frame;
         const float t = animate ? (float)((now - m_RemovingStart) / kSectionRemoveSecs) : 1.0f;
         if (t >= 1.0f) { m_RemovingSection = 0; removedOut = true; }
-        else { removing = true; fade = 1.0f - EditorTheme::Ease::OutCubic(t); }
+        else {
+            removing = true;
+            const float ft = EditorTheme::Ease::OutCubic(std::min(1.0f, t / 0.6f));
+            fade = 1.0f - ft;
+            slide = EditorTheme::Px(16.0f) * ft;
+            fold = 1.0f - EditorTheme::Ease::InOutCubic((t - 0.35f) / 0.65f);
+        }
     }
 
     const ImVec2 hp = ImGui::GetCursorScreenPos();
     const float hw = ImGui::GetContentRegionAvail().x;
-    const float hh = ImGui::GetFrameHeight() + EditorTheme::Px(4.0f);
+    const float hhFull = ImGui::GetFrameHeight() + EditorTheme::Px(4.0f);
+    const float hh = removing ? std::max(1.0f, std::floor(hhFull * fold)) : hhFull;
     ImGui::SetNextItemAllowOverlap();
     const bool headerClicked = ImGui::InvisibleButton(header.c_str(), ImVec2(hw, hh));
     const bool headerActive = ImGui::IsItemActive();
@@ -3682,16 +3699,25 @@ bool EditorLayer::BeginComponentSection(const char* icon,
     const bool barHovered = ImGui::IsWindowHovered(ImGuiHoveredFlags_ChildWindows) &&
         ImGui::IsMouseHoveringRect(hp, ImVec2(hp.x + hw, hp.y + hh));
     {
+        namespace T = EditorTheme;
         ImDrawList* dl = ImGui::GetWindowDrawList();
         const bool hov = ImGui::IsItemHovered();
-        const float r = EditorTheme::Px(3.0f);
-        const ImVec2 hmax(hp.x + hw, hp.y + hh);
+        const float hovT = T::AnimT(headerId ^ kSectionHoverSalt, hov && !headerActive);
+        // The chevron turns with the section (an instant snap with animations off).
+        const float openT = T::AnimT(headerId ^ kSectionChevSalt, open, animate ? (float)kSectionOpenSecs : 0.0f);
+        const float r = T::Px(3.0f);
+        // Drawn at full height (folded away by the clip while being removed) and slid right.
+        const ImVec2 hs(hp.x + slide, hp.y);
+        const ImVec2 hmax(hs.x + hw, hs.y + hhFull);
+        dl->PushClipRect(hp, ImVec2(hp.x + hw + slide, hp.y + hh), true);
         const ImDrawFlags corners = bodyVisible ? ImDrawFlags_RoundCornersTop : ImDrawFlags_RoundCornersAll;
-        dl->AddRectFilled(hp, hmax, FadeU32(EditorTheme::U32(hov ? EditorTheme::Hover : EditorTheme::Raised), fade), r, corners);
-        // Ctrl+click-picked for the multi-component clipboard: an accent wash and edge.
+        const ImVec4 bg = headerActive ? T::Pressed : T::Mix(T::Raised, T::Hover, hovT);
+        dl->AddRectFilled(hs, hmax, FadeU32(T::U32(bg), fade), r, corners);
+        // Ctrl+click-picked for the multi-component clipboard: a faint accent wash, a fine accent
+        // edge and a check badge (drawn with the pills below).
         if (picked) {
-            dl->AddRectFilled(hp, hmax, FadeU32(EditorTheme::U32(EditorTheme::WithAlpha(EditorTheme::Accent, 0.16f)), fade), r, corners);
-            dl->AddRect(hp, hmax, FadeU32(EditorTheme::U32(EditorTheme::Accent), fade), r, corners, EditorTheme::Px(1.5f));
+            dl->AddRectFilled(hs, hmax, FadeU32(T::U32(T::WithAlpha(T::Accent, 0.06f)), fade), r, corners);
+            dl->AddRect(hs, hmax, FadeU32(T::U32(T::WithAlpha(T::Accent, 0.55f)), fade), r, corners, 1.0f);
         }
         // Just reached from a Hierarchy minimap click: an accent outline that fades out.
         if (!m_InspectorFlashComponent.empty() && m_InspectorFlashComponent == label) {
@@ -3703,33 +3729,42 @@ bool EditorLayer::BeginComponentSection(const char* icon,
                 m_InspectorFlashComponent.clear();
             }
         }
-        const float cy = hp.y + hh * 0.5f;
-        EditorTheme::PushSmall();
-        const char* chev = open ? ICON_FA_CHEVRON_DOWN : ICON_FA_CHEVRON_RIGHT;
-        const ImVec2 cs = ImGui::CalcTextSize(chev);
-        dl->AddText(ImVec2(hp.x + EditorTheme::Px(10.0f) - cs.x * 0.5f, cy - cs.y * 0.5f), FadeU32(EditorTheme::U32(EditorTheme::Dim), fade), chev);
-        EditorTheme::PopFont();
+        const float cy = std::floor(hs.y + hhFull * 0.5f);
+        EditorUIPrimitives::DrawChevron(dl, ImVec2(std::floor(hs.x + T::Px(10.0f)) + 0.5f, cy + 0.5f), T::Px(8.0f),
+                                        openT * 1.5707963f, FadeU32(T::U32(T::Mix(T::Dim, T::Secondary, hovT)), fade));
         const ImVec2 is = ImGui::CalcTextSize(icon);
-        const float ix = hp.x + EditorTheme::Px(22.0f);
-        dl->AddText(ImVec2(ix, cy - is.y * 0.5f),
-                    FadeU32(EditorTheme::U32(disabledComp ? EditorTheme::Dim : (open ? EditorTheme::Accent : EditorTheme::Secondary)), fade), icon);
-        // The name, cut with an ellipsis before the ... / x buttons at the bar's right end.
+        const float ix = hs.x + T::Px(22.0f);
+        dl->AddText(ImVec2(ix, std::floor(cy - is.y * 0.5f)),
+                    FadeU32(T::U32(disabledComp ? T::Dim : T::Mix(T::Secondary, T::Accent, openT)), fade), icon);
+        // The name, cut with an ellipsis before the status pills and the ... / x buttons.
         const ImVec2 ls = ImGui::CalcTextSize(label);
-        const float lx = ix + std::max(is.x, ImGui::GetFontSize()) + EditorTheme::Px(8.0f);
-        const float btnReserve = ImGui::GetFrameHeight() * ((removable ? 1.0f : 0.0f) + 1.0f) + EditorTheme::Px(8.0f);
-        float lmax = hp.x + hw - btnReserve;
-        // Kept after Play: a pin just left of the buttons.
-        if (kept) {
-            EditorTheme::PushSmall();
-            const ImVec2 ps = ImGui::CalcTextSize(ICON_FA_THUMBTACK);
-            lmax -= ps.x + EditorTheme::Px(6.0f);
-            dl->AddText(ImVec2(lmax + EditorTheme::Px(3.0f), cy - ps.y * 0.5f), FadeU32(EditorTheme::U32(EditorTheme::Accent), fade), ICON_FA_THUMBTACK);
-            EditorTheme::PopFont();
+        const float lx = ix + std::max(is.x, ImGui::GetFontSize()) + T::Px(8.0f);
+        const float btnReserve = ImGui::GetFrameHeight() * ((removable ? 1.0f : 0.0f) + 1.0f) + T::Px(8.0f);
+        float lmax = hs.x + hw - btnReserve;
+        // Status, right to left: KEEP (kept after Play), OFF (its Enabled field is off), and the
+        // picked check.
+        auto pill = [&](const char* text, ImVec4 col) {
+            const ImVec2 ps = EditorUIPrimitives::StatusPillSize(text);
+            lmax -= ps.x + T::Px(6.0f);
+            EditorUIPrimitives::DrawStatusPill(dl, ImVec2(std::floor(lmax + T::Px(3.0f)), std::floor(cy - ps.y * 0.5f)), text, col, fade);
+        };
+        if (kept) pill("KEEP", T::Accent);
+        if (disabledComp) pill("OFF", T::Secondary);
+        if (picked) {
+            const float rr = T::Px(7.0f);
+            lmax -= rr * 2.0f + T::Px(6.0f);
+            const ImVec2 cc(std::floor(lmax + T::Px(3.0f) + rr), cy);
+            dl->AddCircleFilled(cc, rr, FadeU32(T::U32(T::Accent), fade), 16);
+            T::PushSmall();
+            const ImVec2 cs = ImGui::CalcTextSize(ICON_FA_CHECK);
+            dl->AddText(ImGui::GetFont(), ImGui::GetFontSize() * 0.8f,
+                        ImVec2(std::floor(cc.x - cs.x * 0.4f), std::floor(cc.y - cs.y * 0.4f)), FadeU32(T::U32(T::OnAccent), fade), ICON_FA_CHECK);
+            T::PopFont();
         }
-        const ImVec4 nameCol = disabledComp ? EditorTheme::Dim : EditorTheme::Text;
-        ImGui::PushStyleColor(ImGuiCol_Text, EditorTheme::WithAlpha(nameCol, nameCol.w * fade));
-        ImGui::RenderTextEllipsis(dl, ImVec2(lx, cy - ls.y * 0.5f), ImVec2(lmax, cy + ls.y * 0.5f), lmax, label, nullptr, &ls);
-        ImGui::PopStyleColor();
+        const ImVec4 nameCol = disabledComp ? T::Secondary : T::Text;
+        EditorUIPrimitives::TextEllipsis(dl, ImVec2(lx, std::floor(cy - ls.y * 0.5f)), lmax,
+                                         T::U32(T::WithAlpha(nameCol, nameCol.w * fade)), label);
+        dl->PopClipRect();
     }
     const bool headerHovered = ImGui::IsItemHovered();
     // Defect #25/#35 — a plain near-cursor tooltip (EditorUI::SetTooltip's default position) can
@@ -3762,14 +3797,19 @@ bool EditorLayer::BeginComponentSection(const char* icon,
     const bool hasMenu = resetOut || copyOut || pasteOut || removable || prefabRevertOut || prefabApplyOut ||
                          pinnable || keepable;
     const float headerBtnY = hp.y + (hh - ImGui::GetFrameHeight()) * 0.5f; // centred on the taller bar
-    if (hasMenu && (!es.InspectorMinimal || barHovered || ImGui::IsPopupOpen(header.c_str()))) {
+    // Minimal mode (vInspector): the "..." fades in while the bar is hovered or its menu is open.
+    const float menuT = !es.InspectorMinimal ? 1.0f
+        : EditorTheme::AnimT(headerId ^ kSectionMenuSalt, barHovered || ImGui::IsPopupOpen(header.c_str()));
+    if (hasMenu && !removing && menuT > 0.0f) {
         const float bw = ImGui::GetFrameHeight();
         const float removeReserve = removable ? bw : 0.0f;
         ImGui::SameLine(ImGui::GetWindowContentRegionMax().x - removeReserve - bw - EditorTheme::Px(2.0f));
         ImGui::SetCursorScreenPos(ImVec2(ImGui::GetCursorScreenPos().x, headerBtnY));
         ImGui::PushID(label);
         ImGui::PushID("##moreActions");
+        if (menuT < 1.0f) ImGui::PushStyleVar(ImGuiStyleVar_Alpha, ImGui::GetStyle().Alpha * menuT);
         const bool moreClicked = ActionButton(ICON_FA_ELLIPSIS_VERTICAL, "More actions", false, ImVec2(bw, 0.0f));
+        if (menuT < 1.0f) ImGui::PopStyleVar();
         ImGui::PopID();
         ImGui::PopID();
         // OpenPopup must be called at the same ID-stack depth as OpenPopupOnItemClick/BeginPopup
@@ -3778,16 +3818,19 @@ bool EditorLayer::BeginComponentSection(const char* icon,
         if (moreClicked) ImGui::OpenPopup(header.c_str());
     }
 
-    if (removable && barHovered && !removing) {
-        // Right-aligned remove control on the header's line, shown only while the title bar is
-        // hovered (its slot stays reserved; the ... button beside it is always visible, and the
-        // right-click menu also offers Remove). Flat, red on hover (#156).
+    const float closeT = removable && !removing ? EditorTheme::AnimT(headerId ^ kSectionCloseSalt, barHovered) : 0.0f;
+    if (closeT > 0.0f) {
+        // Right-aligned remove control on the header's line, fading in while the title bar is
+        // hovered (its slot stays reserved; the right-click menu also offers Remove). A quiet
+        // glyph that turns red under the cursor (#156).
         const float bw = ImGui::GetFrameHeight();
         ImGui::SameLine(ImGui::GetWindowContentRegionMax().x - bw - EditorTheme::Px(2.0f));
         ImGui::SetCursorScreenPos(ImVec2(ImGui::GetCursorScreenPos().x, headerBtnY));
         ImGui::PushID(label);
+        if (closeT < 1.0f) ImGui::PushStyleVar(ImGuiStyleVar_Alpha, ImGui::GetStyle().Alpha * closeT);
         if (DangerIconButton(ICON_FA_XMARK, "Remove this component (X while hovered)", ImVec2(bw, 0.0f)))
             requestRemove();
+        if (closeT < 1.0f) ImGui::PopStyleVar();
         ImGui::PopID();
     }
 
@@ -3864,15 +3907,19 @@ bool EditorLayer::BeginComponentSection(const char* icon,
     if (showBody) {
         // Eased height while opening/closing, shrinking while fading out for removal; otherwise
         // the body sizes itself (and is measured for the next animation).
+        // Opening and closing ease in and out, and the content fades with the height.
+        const float openE = animating ? (open ? EditorTheme::Ease::InOutCubic(animT) : 1.0f - EditorTheme::Ease::InOutCubic(animT)) : 1.0f;
         float fixedH = 0.0f;
-        if (animating) fixedH = fullH * (open ? EditorTheme::Ease::OutCubic(animT) : 1.0f - EditorTheme::Ease::OutCubic(animT));
-        if (removing && fullH > 0.0f) fixedH = (animating ? fixedH : fullH) * fade;
+        if (animating) fixedH = fullH * openE;
+        if (removing && fullH > 0.0f) fixedH = (animating ? fixedH : fullH) * fold;
         const bool useFixed = animating || (removing && fullH > 0.0f);
         // The body hangs under its title bar as one card: the Card surface, a hairline edge, the
         // title bar's width, no gap between them.
-        ImGui::SetCursorScreenPos(ImVec2(hp.x, hp.y + hh));
-        m_CurSectionAlpha = fade < 1.0f;
-        if (m_CurSectionAlpha) ImGui::PushStyleVar(ImGuiStyleVar_Alpha, ImGui::GetStyle().Alpha * fade);
+        ImGui::SetCursorScreenPos(ImVec2(hp.x + slide, hp.y + hh));
+        // A component switched off (its Enabled field) dims its body as well as its header.
+        const float bodyAlpha = fade * openE * (disabledComp ? 0.55f : 1.0f);
+        m_CurSectionAlpha = bodyAlpha < 1.0f;
+        if (m_CurSectionAlpha) ImGui::PushStyleVar(ImGuiStyleVar_Alpha, ImGui::GetStyle().Alpha * std::max(bodyAlpha, 0.02f));
         ImGui::PushStyleColor(ImGuiCol_ChildBg, EditorTheme::Card);
         ImGui::PushStyleColor(ImGuiCol_Border,  EditorTheme::Hairline);
         ImGui::PushStyleVar(ImGuiStyleVar_WindowPadding, ImVec2(10.0f * m_UIScale, 8.0f * m_UIScale));
@@ -4074,8 +4121,10 @@ void EditorLayer::DrawReflectedComponentExtra(const char* componentName, World& 
                 auto& slot=slots[index]; ImGui::PushID(static_cast<int>(slot.Id));
                 const auto dot=slot.Class.find_last_of('.');
                 const std::string label=slot.Class.substr(dot==std::string::npos?0:dot+1);
-                const bool open=ImGui::TreeNodeEx("##behaviour",ImGuiTreeNodeFlags_DefaultOpen | ImGuiTreeNodeFlags_SpanAvailWidth,
-                                                "%s (Script)",label.empty()?"Choose a class":label.c_str());
+                // Each behaviour is a framed sub-header in the component header's voice: the
+                // raised strip, the code glyph and the class name.
+                const bool open=EditorUIPrimitives::FramedFoldout((std::string(ICON_FA_CODE "  ")+(label.empty()?std::string("Choose a class"):label)+"###behaviour").c_str(),
+                                                                ImGuiTreeNodeFlags_DefaultOpen);
                 if(open) {
                     PropertyLabel("Enabled"); persist(ImGui::Checkbox("##enabled",&slot.Enabled),true);
                     // The class picker and the source file. Once a class is set they move under
@@ -4263,7 +4312,7 @@ void EditorLayer::DrawReflectedComponentExtra(const char* componentName, World& 
                                 if(foldout!=openFoldout) {
                                     if(!openFoldout.empty() && foldoutOpen) ImGui::TreePop();
                                     openFoldout=foldout; foldoutOpen=true;
-                                    if(!openFoldout.empty()) foldoutOpen=ImGui::TreeNodeEx(("##foldout:"+openFoldout).c_str(),ImGuiTreeNodeFlags_SpanAvailWidth,"%s",openFoldout.c_str());
+                                    if(!openFoldout.empty()) foldoutOpen=EditorUIPrimitives::FramedFoldout((openFoldout+"###foldout:"+openFoldout).c_str());
                                 }
                                 if(!openFoldout.empty() && !foldoutOpen) continue;
                                 const std::string header=field.value("header",std::string{});
@@ -4292,9 +4341,15 @@ void EditorLayer::DrawReflectedComponentExtra(const char* componentName, World& 
                         };
                         if(!custom) for(const auto& field:fieldList) noteTab(field);
                         for(const auto& button:metadata.value("buttons",Json::array())) noteTab(button);
-                        if(!tabs.empty() && ImGui::BeginTabBar("##scriptTabs",ImGuiTabBarFlags_FittingPolicyScroll)) {
-                            for(const auto& t:tabs) if(ImGui::BeginTabItem(t.c_str())) { drawSet(t); ImGui::EndTabItem(); }
-                            ImGui::EndTabBar();
+                        if(!tabs.empty()) {
+                            // [Tab] groups: a segmented switch, the chosen tab remembered per behaviour.
+                            int& tabIndex=*ImGui::GetStateStorage()->GetIntRef(ImGui::GetID("##scriptTab"),0);
+                            tabIndex=std::clamp(tabIndex,0,(int)tabs.size()-1);
+                            std::vector<const char*> tabNames;
+                            for(const auto& t:tabs) tabNames.push_back(t.c_str());
+                            ImGui::Dummy(ImVec2(0.0f,EditorTheme::Px(2.0f)));
+                            EditorUIPrimitives::Segmented("##scriptTabs",&tabIndex,tabNames.data(),(int)tabNames.size());
+                            drawSet(tabs[(size_t)tabIndex]);
                         }
                         // [ShowInInspector] read-outs, refreshed at most four times a second.
                         const Json& shows=metadata.contains("shows") && metadata.at("shows").is_array()?metadata.at("shows"):noFields;
@@ -4307,22 +4362,34 @@ void EditorLayer::DrawReflectedComponentExtra(const char* componentName, World& 
                                 if(values.is_object()) for(auto it=values.begin();it!=values.end();++it)
                                     cache.Values.emplace_back(it.key(),it.value().is_string()?it.value().get<std::string>():it.value().dump());
                             }
-                            for(const auto& [showName,showText]:cache.Values) { PropertyLabel(showName.c_str()); ImGui::TextDisabled("%s",showText.c_str()); }
+                            for(const auto& [showName,showText]:cache.Values) {
+                                PropertyLabel(showName.c_str());
+                                ImGui::AlignTextToFramePadding();
+                                EditorTheme::PushSmall(); ImGui::TextColored(EditorTheme::Dim,ICON_FA_EYE); EditorTheme::PopFont();
+                                if(ImGui::IsItemHovered()) EditorUI::SetTooltip("Read-only: [ShowInInspector], refreshed while shown.");
+                                ImGui::SameLine();
+                                EditorTheme::PushMonoSmall(); ImGui::TextColored(EditorTheme::Secondary,"%s",showText.c_str()); EditorTheme::PopFont();
+                            }
                         }
                     }
-                    if(!slot.Source.empty() && ImGui::Button("Edit in Script IDE"))OpenScriptIDE(ProjectPaths::Resolve(slot.Source));
-                    if(!slot.Source.empty() && ActionButton(ICON_FA_PEN_TO_SQUARE " Open Script","Open the C# source in your code editor"))
-                        Screenshot::OpenFile(ProjectPaths::Resolve(slot.Source));
+                    if(!slot.Source.empty()) {
+                        ImGui::Dummy(ImVec2(0.0f,EditorTheme::Px(2.0f)));
+                        if(EditorUIPrimitives::SecondaryButton(ICON_FA_CODE "  Edit in Script IDE"))OpenScriptIDE(ProjectPaths::Resolve(slot.Source));
+                        ImGui::SameLine();
+                        if(EditorUIPrimitives::SecondaryButton(ICON_FA_PEN_TO_SQUARE "  Open Script"))
+                            Screenshot::OpenFile(ProjectPaths::Resolve(slot.Source));
+                        if(ImGui::IsItemHovered()) EditorUI::SetTooltip("Open the C# source in your code editor");
+                    }
                     if(ImGui::TreeNode("Advanced##script")) {
                         if(!slot.Class.empty()) drawClassAndSource();
                         PropertyLabel("Class"); ImGui::SetNextItemWidth(-FLT_MIN);
                         persist(InputTextString("##classname","Fully qualified class name",slot.Class));
-                        if(ActionButton(ICON_FA_ROTATE_LEFT " Reset Fields","Reset this script's Inspector fields to their C# defaults")) {
+                        if(EditorUIPrimitives::SecondaryButton(ICON_FA_ROTATE_LEFT "  Reset Fields")) {
                             slot.Fields="{}"; persist(true,true);
                         }
                         ImGui::TreePop();
                     }
-                    if(ActionButton(ICON_FA_XMARK " Remove Script","Remove this script from the object")) remove=static_cast<int>(index);
+                    if(DangerIconButton(ICON_FA_XMARK "  Remove Script","Remove this script from the object")) remove=static_cast<int>(index);
                     ImGui::TreePop();
                 }
                 ImGui::PopID();

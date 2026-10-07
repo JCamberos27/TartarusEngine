@@ -1385,25 +1385,86 @@ bool EditorLayer::DrawTabStrip(const char* id, Enhancers::TabStrip& strip, TabSt
     view.Scroll += (view.ScrollTarget - view.Scroll) * std::min(1.0f, io.DeltaTime * 16.0f);
     if (std::fabs(view.ScrollTarget - view.Scroll) < 0.5f) view.Scroll = view.ScrollTarget;
 
-    // Tabs.
+    // Tabs. Inactive tabs draw on channel 0, the overflow fades on 1, the active tab and a dragged
+    // tab's ghost on 2: a fade never dims the tab you are on, and the ghost floats over the rest.
     ImGui::PushClipRect(stripMin, stripMax, true);
+    dl->ChannelsSplit(3);
     int closeAt = -1, closeOthers = -2, moveFrom = -1, moveTo = -1;
     bool closeAll = false;
     std::map<std::string, int> seen;
+    ImGuiStorage* st = ImGui::GetStateStorage();
+    const float rnd = EditorTheme::Px(4.0f);
+    const float topY = stripMin.y + EditorTheme::Px(2.0f);
+    // One tab's look. Inactive: text only, a soft hover body. Active (or the dragged ghost): the
+    // raised surface, open at the bottom so it joins the panel, with a 2px top line in the tab's
+    // colour (or the accent). A tab's colour also tints its icon (a dot when it has none). The x
+    // shows on hover and on the active tab, with a round body under the cursor.
+    auto drawTab = [&](ImVec2 mn, ImVec2 mx, int i, const TabStripItem* item, bool active, float hovT,
+                       bool overClose, bool showClose, bool ghost) {
+        namespace T = EditorTheme;
+        const ImVec2 bmn(mn.x, topY);
+        if (ghost) EditorUIPrimitives::DrawSoftShadow(dl, bmn, mx, rnd, T::Px(6.0f), 0.6f);
+        const unsigned color = item ? item->Color : 0u;
+        if (active || ghost) {
+            dl->AddRectFilled(bmn, mx, T::U32(T::Raised), rnd, ImDrawFlags_RoundCornersTop);
+            dl->AddRectFilled(ImVec2(bmn.x, bmn.y + rnd), ImVec2(bmn.x + 1.0f, mx.y), T::U32(T::Hairline));
+            dl->AddRectFilled(ImVec2(mx.x - 1.0f, bmn.y + rnd), ImVec2(mx.x, mx.y), T::U32(T::Hairline));
+            dl->AddRectFilled(bmn, ImVec2(mx.x, bmn.y + T::Px(2.0f)), T::U32(color ? T::UserGlyphColor(color) : T::Accent),
+                              rnd, ImDrawFlags_RoundCornersTop);
+        } else if (hovT > 0.0f) {
+            dl->AddRectFilled(bmn, ImVec2(mx.x, mx.y - 1.0f), T::U32(T::WithAlpha(T::Hover, hovT)), rnd, ImDrawFlags_RoundCornersTop);
+        }
+        const bool dim = item && item->Missing;
+        const bool lit = active || ghost;
+        const ImVec4 tcol = dim ? T::Dim : (lit ? T::Text : T::Mix(T::Secondary, T::Text, hovT));
+        const char* icon = i < 0 ? liveIcon : (item && !item->Icon.empty() ? item->Icon.c_str() : nullptr);
+        const char* label = i < 0 ? liveLabel : (item ? item->Label.c_str() : "");
+        const float cy = std::floor((topY + mx.y) * 0.5f + T::Px(1.0f));
+        float tx = mn.x + padX;
+        if (icon) {
+            const ImVec2 is = ImGui::CalcTextSize(icon);
+            const ImVec4 ic = dim ? T::Dim : color ? T::UserGlyphColor(color) : (lit ? T::Text : T::Mix(T::Dim, T::Secondary, 0.5f + 0.5f * hovT));
+            dl->AddText(ImVec2(tx, std::floor(cy - is.y * 0.5f)), T::U32(ic), icon);
+            tx += is.x + gap;
+        } else if (color) {
+            const float r = T::Px(3.0f);
+            dl->AddCircleFilled(ImVec2(tx + r, cy), r, T::U32(dim ? T::Dim : T::UserGlyphColor(color)), 12);
+            tx += r * 2.0f + gap;
+        }
+        const float labelRight = mx.x - (i >= 0 ? closeW + T::Px(4.0f) : padX * 0.5f);
+        const ImVec2 ls = ImGui::CalcTextSize(label);
+        EditorUIPrimitives::TextEllipsis(dl, ImVec2(tx, std::floor(cy - ls.y * 0.5f)), labelRight, T::U32(tcol), label);
+        if (i >= 0 && showClose) {
+            const ImVec2 cc(mx.x - closeW * 0.5f - T::Px(3.0f), cy);
+            if (overClose) dl->AddCircleFilled(cc, T::Px(8.0f), T::U32(T::Pressed), 16);
+            const ImVec2 xs2 = ImGui::CalcTextSize(ICON_FA_XMARK);
+            dl->AddText(ImVec2(std::floor(cc.x - xs2.x * 0.5f), std::floor(cc.y - xs2.y * 0.5f)),
+                        T::U32(overClose ? T::Text : T::Dim), ICON_FA_XMARK);
+        }
+    };
     for (int i = first; i < n; ++i) {
         const size_t k = (size_t)(i - first);
-        const ImVec2 mn(stripMin.x + xs[k] - view.Scroll, stripMin.y);
-        const ImVec2 mx(mn.x + ws[k], stripMax.y);
         const TabStripItem* item = i >= 0 && i < (int)items.size() ? &items[(size_t)i] : nullptr;
         std::string key = i < 0 ? std::string("##live") : TabKey(strip.Tabs[(size_t)i]);
         key += "#" + std::to_string(seen[key]++);
         ImGui::PushID(key.c_str());
+        // Each tab eases toward its slot, so a reorder or a close slides the others along.
+        const ImGuiID slideId = ImGui::GetID("##slide");
+        float sx = st->GetFloat(slideId, -FLT_MAX);
+        if (sx == -FLT_MAX || std::fabs(xs[k] - sx) < 0.5f) sx = xs[k];
+        else sx += (xs[k] - sx) * std::min(1.0f, io.DeltaTime * 18.0f);
+        st->SetFloat(slideId, sx);
+        const ImVec2 mn(stripMin.x + sx - view.Scroll, stripMin.y);
+        const ImVec2 mx(mn.x + ws[k], stripMax.y);
         ImGui::SetCursorScreenPos(mn);
         const bool clicked = ImGui::InvisibleButton("##tab", ImVec2(ws[k], h));
         const bool hov = ImGui::IsItemHovered();
         const bool active = strip.Active == i;
+        const ImGuiID grabId = ImGui::GetID("##grab");
+        if (ImGui::IsItemActivated()) st->SetFloat(grabId, io.MousePos.x - mn.x);
         // Drag to reorder: past a few pixels, the tab trades places with whichever it is over.
-        if (i >= 0 && ImGui::IsItemActive() && ImGui::IsMouseDragging(ImGuiMouseButton_Left, EditorTheme::Px(4.0f))) {
+        const bool dragged = i >= 0 && ImGui::IsItemActive() && ImGui::IsMouseDragging(ImGuiMouseButton_Left, EditorTheme::Px(4.0f));
+        if (dragged) {
             const float mxPos = io.MousePos.x - stripMin.x + view.Scroll;
             for (int j = 0; j < n; ++j) {
                 const size_t kj = (size_t)(j - first);
@@ -1417,35 +1478,21 @@ bool EditorLayer::DrawTabStrip(const char* id, Enhancers::TabStrip& strip, TabSt
             else strip.Active = i;
         }
         if (i >= 0 && hov && ImGui::IsMouseClicked(ImGuiMouseButton_Middle)) closeAt = i;
-        // Look: the active tab is raised with an accent underline; others are flat.
-        const ImU32 bg = EditorTheme::U32(active ? EditorTheme::Raised : (hov ? EditorTheme::Hover : ImVec4(0, 0, 0, 0)));
-        dl->AddRectFilled(ImVec2(mn.x, mn.y + EditorTheme::Px(2.0f)), mx, bg, EditorTheme::Px(4.0f), ImDrawFlags_RoundCornersTop);
-        if (active) dl->AddLine(ImVec2(mn.x + EditorTheme::Px(3.0f), mx.y - 1.0f), ImVec2(mx.x - EditorTheme::Px(3.0f), mx.y - 1.0f),
-                                EditorTheme::U32(EditorTheme::Accent), EditorTheme::Px(2.0f));
-        else if (item && item->Color)
-            dl->AddLine(ImVec2(mn.x + EditorTheme::Px(6.0f), mx.y - 1.0f), ImVec2(mx.x - EditorTheme::Px(6.0f), mx.y - 1.0f),
-                        item->Color | 0xFF000000u, EditorTheme::Px(1.5f));
-        const bool dim = item && item->Missing;
-        const ImU32 tc = EditorTheme::U32(dim ? EditorTheme::Dim : (active || hov ? EditorTheme::Text : EditorTheme::Secondary));
-        const char* icon = i < 0 ? liveIcon : (item && !item->Icon.empty() ? item->Icon.c_str() : nullptr);
+        const float hovT = EditorTheme::AnimT(ImGui::GetID("##hov"), hov && !dragged);
+        if (dragged) {
+            // The dragged tab floats under the mouse; its slot stays as a faint outline.
+            dl->ChannelsSetCurrent(0);
+            dl->AddRect(ImVec2(mn.x + 0.5f, topY + 0.5f), ImVec2(mx.x - 0.5f, mx.y), EditorTheme::U32(EditorTheme::Strong),
+                        rnd, ImDrawFlags_RoundCornersTop, 1.0f);
+            dl->ChannelsSetCurrent(2);
+            const float gx = std::clamp(io.MousePos.x - st->GetFloat(grabId, 0.0f), stripMin.x, std::max(stripMin.x, stripMax.x - ws[k]));
+            drawTab(ImVec2(gx, mn.y), ImVec2(gx + ws[k], mx.y), i, item, active, 1.0f, false, true, true);
+        } else {
+            dl->ChannelsSetCurrent(active ? 2 : 0);
+            drawTab(mn, mx, i, item, active, hovT, overClose, hov || active, false);
+        }
+        dl->ChannelsSetCurrent(0);
         const char* label = i < 0 ? liveLabel : (item ? item->Label.c_str() : "");
-        const float cy = (mn.y + mx.y) * 0.5f + EditorTheme::Px(1.0f);
-        float tx = mn.x + padX;
-        if (icon) {
-            const ImVec2 is = ImGui::CalcTextSize(icon);
-            dl->AddText(ImVec2(tx, cy - is.y * 0.5f), EditorTheme::U32(active ? EditorTheme::Accent : (dim ? EditorTheme::Dim : EditorTheme::Secondary)), icon);
-            tx += is.x + gap;
-        }
-        const float labelRight = mx.x - (i >= 0 ? closeW + EditorTheme::Px(2.0f) : padX * 0.5f);
-        const ImVec2 ls = ImGui::CalcTextSize(label);
-        ImGui::PushStyleColor(ImGuiCol_Text, ImGui::ColorConvertU32ToFloat4(tc));
-        ImGui::RenderTextEllipsis(dl, ImVec2(tx, cy - ls.y * 0.5f), ImVec2(labelRight, cy + ls.y * 0.5f), labelRight, label, nullptr, &ls);
-        ImGui::PopStyleColor();
-        if (i >= 0 && (hov || active)) {
-            const ImVec2 xs2 = ImGui::CalcTextSize(ICON_FA_XMARK);
-            dl->AddText(ImVec2(closeMin.x + (closeW - xs2.x) * 0.5f, cy - xs2.y * 0.5f),
-                        EditorTheme::U32(overClose ? EditorTheme::Text : EditorTheme::Dim), ICON_FA_XMARK);
-        }
         if (hov && !ImGui::IsMouseDragging(ImGuiMouseButton_Left)) {
             const std::string& tip = item ? item->Tooltip : std::string();
             EditorUI::SetTooltip("%s%s", i < 0 ? "Follows the selection" : (tip.empty() ? label : tip.c_str()),
@@ -1468,21 +1515,17 @@ bool EditorLayer::DrawTabStrip(const char* id, Enhancers::TabStrip& strip, TabSt
         }
         ImGui::PopID();
     }
-    ImGui::PopClipRect();
     EditorTheme::PopFont();
-    // Overflow fades at the clipped edges.
+    // Overflow fades at the clipped edges (under the active tab, see above).
+    dl->ChannelsSetCurrent(1);
     if (view.Scroll > 0.5f)
         dl->AddRectFilledMultiColor(stripMin, ImVec2(stripMin.x + EditorTheme::Px(14.0f), stripMax.y),
                                     EditorTheme::U32(EditorTheme::Panel), 0, 0, EditorTheme::U32(EditorTheme::Panel));
     if (view.Scroll < maxScroll - 0.5f)
         dl->AddRectFilledMultiColor(ImVec2(stripMax.x - EditorTheme::Px(14.0f), stripMin.y), stripMax,
                                     0, EditorTheme::U32(EditorTheme::Panel), EditorTheme::U32(EditorTheme::Panel), 0);
-    if (showDropHint && n == 0) {
-        const char* hint = "Drop here to open a tab";
-        const ImVec2 hs = ImGui::CalcTextSize(hint);
-        const float hx = stripMin.x + (liveLabel ? xs[0] + ws[0] + EditorTheme::Px(8.0f) : EditorTheme::Px(8.0f));
-        if (hx + hs.x < stripMax.x) dl->AddText(ImVec2(hx, (stripMin.y + stripMax.y - hs.y) * 0.5f), EditorTheme::U32(EditorTheme::Dim), hint);
-    }
+    dl->ChannelsMerge();
+    ImGui::PopClipRect();
 
     // "+": the caller's menu (starred tabs and a fuzzy search).
     ImGui::SetCursorScreenPos(ImVec2(barMin.x + barW - plusW, barMin.y));
@@ -1493,10 +1536,41 @@ bool EditorLayer::DrawTabStrip(const char* id, Enhancers::TabStrip& strip, TabSt
         ImGui::EndPopup();
     }
 
-    // Drop anything openable anywhere on the bar.
+    // Drop anything openable anywhere on the bar. While something openable is dragged the bar
+    // gets a dashed outline; over it, the outline lights and a "Drop to open" pill says what a
+    // release does (ImGui's own target rectangle is hidden).
+    bool dropHover = false;
+    ImGui::PushStyleColor(ImGuiCol_DragDropTarget, ImVec4(0, 0, 0, 0));
+    ImGui::PushStyleColor(ImGuiCol_DragDropTargetBg, ImVec4(0, 0, 0, 0));
     if (ImGui::BeginDragDropTargetCustom(ImRect(barMin, ImVec2(barMin.x + barW, stripMax.y)), ImGui::GetID("##tabDrop"))) {
+        dropHover = true;
         acceptDrop();
         ImGui::EndDragDropTarget();
+    }
+    ImGui::PopStyleColor(2);
+    if (showDropHint) {
+        const ImVec2 dmn(barMin.x + 1.0f, barMin.y + EditorTheme::Px(1.0f)), dmx(barMin.x + barW - 1.0f, stripMax.y - 1.0f);
+        EditorUIPrimitives::DrawDashedRect(dl, dmn, dmx, EditorTheme::U32(dropHover ? EditorTheme::Accent : EditorTheme::Strong));
+        if (dropHover) {
+            EditorTheme::PushSmall();
+            const char* text = ICON_FA_ARROW_DOWN "  Drop to open";
+            const ImVec2 pts = ImGui::CalcTextSize(text);
+            const float ph = pts.y + EditorTheme::Px(6.0f), pw = pts.x + EditorTheme::Px(18.0f);
+            const ImVec2 pmn(std::floor((dmn.x + dmx.x - pw) * 0.5f), std::floor((dmn.y + dmx.y - ph) * 0.5f));
+            const ImVec2 pmx(pmn.x + pw, pmn.y + ph);
+            EditorUIPrimitives::DrawSoftShadow(dl, pmn, pmx, ph * 0.5f, EditorTheme::Px(5.0f), 0.6f);
+            dl->AddRectFilled(pmn, pmx, EditorTheme::U32(EditorTheme::Raised), ph * 0.5f);
+            dl->AddRect(pmn, pmx, EditorTheme::U32(EditorTheme::WithAlpha(EditorTheme::Accent, 0.6f)), ph * 0.5f, 0, 1.0f);
+            dl->AddText(ImVec2(pmn.x + EditorTheme::Px(9.0f), pmn.y + EditorTheme::Px(3.0f)), EditorTheme::U32(EditorTheme::Text), text);
+            EditorTheme::PopFont();
+        } else if (n == 0) {
+            EditorTheme::PushSmall();
+            const char* hint = "Drop here to open a tab";
+            const ImVec2 hs = ImGui::CalcTextSize(hint);
+            const float hx = stripMin.x + (liveLabel ? xs[0] + ws[0] + EditorTheme::Px(8.0f) : EditorTheme::Px(8.0f));
+            if (hx + hs.x < stripMax.x) dl->AddText(ImVec2(hx, std::floor((stripMin.y + stripMax.y - hs.y) * 0.5f)), EditorTheme::U32(EditorTheme::Dim), hint);
+            EditorTheme::PopFont();
+        }
     }
     ImGui::SetCursorScreenPos(ImVec2(rowMin.x, stripMax.y + EditorTheme::Px(2.0f)));
     ImGui::Dummy(ImVec2(0.0f, 0.0f));
@@ -1598,8 +1672,7 @@ bool EditorLayer::DrawInspectorTabStrip(World& world, float leftInset, float rig
     auto plusMenu = [&]() {
         char* q = m_TabSearch[0];
         if (ImGui::IsWindowAppearing()) { q[0] = '\0'; ImGui::SetKeyboardFocusHere(); }
-        ImGui::SetNextItemWidth(-FLT_MIN);
-        ImGui::InputTextWithHint("##q", ICON_FA_MAGNIFYING_GLASS "  Search objects", q, sizeof(m_TabSearch[0]));
+        EditorUIPrimitives::SearchField("##q", q, sizeof(m_TabSearch[0]), "Search objects");
         auto open = [&](const Enhancers::EditorRef& r) { strip.Open(r); ts.MarkDirty(); ImGui::CloseCurrentPopup(); };
         if (m_Selected != entt::null && world.Registry.valid(m_Selected) && world.Registry.all_of<OrderComponent>(m_Selected) &&
             ImGui::Selectable(ICON_FA_PLUS "  Pin the current selection", false))
@@ -1703,8 +1776,7 @@ bool EditorLayer::DrawAssetTabStrip(AssetLibrary& assets, float rightInset, bool
     auto plusMenu = [&]() {
         char* q = m_TabSearch[1];
         if (ImGui::IsWindowAppearing()) { q[0] = '\0'; ImGui::SetKeyboardFocusHere(); }
-        ImGui::SetNextItemWidth(-FLT_MIN);
-        ImGui::InputTextWithHint("##q", ICON_FA_MAGNIFYING_GLASS "  Search folders", q, sizeof(m_TabSearch[1]));
+        EditorUIPrimitives::SearchField("##q", q, sizeof(m_TabSearch[1]), "Search folders");
         auto open = [&](const std::string& p) { strip.Open(folderRef(p), true, /*allowDuplicate=*/true); ts.MarkDirty(); ImGui::CloseCurrentPopup(); };
         if (ImGui::Selectable(ICON_FA_PLUS "  New tab here (Ctrl+T)")) open(m_CurrentAssetFolder);
         bool header = false;
@@ -2243,16 +2315,27 @@ void EditorLayer::DrawPinnedComponentWindows(World& world, AssetLibrary& assets)
         std::string objName = "(missing)";
         if (e != entt::null)
             if (const auto* n = world.Registry.try_get<NameComponent>(e)) objName = n->Name.empty() ? std::string("(unnamed)") : n->Name;
+        // The title is the component (icon and name); the object is named inside, by its select button.
         const std::string title = std::string(rc && rc->Meta.Icon ? rc->Meta.Icon : ICON_FA_PUZZLE_PIECE) + "  " + p.Component +
-                                  "  -  " + objName + "###pin" + std::to_string(p.Order) + p.Component;
+                                  "###pin" + std::to_string(p.Order) + p.Component;
+        const double now = ImGui::GetTime();
         if (!p.Placed) {
             ImGui::SetNextWindowPos(p.SpawnPos, ImGuiCond_Always);
             ImGui::SetNextWindowSize(ImVec2(EditorTheme::Px(340.0f), EditorTheme::Px(280.0f)), ImGuiCond_Appearing);
             ImGui::SetNextWindowFocus();
             p.Placed = true;
+            p.OpenedAt = now;
         }
+        // Arrives with a short fade and a 6px rise.
+        const float t = EditorTheme::Ease::OutCubic((float)((now - p.OpenedAt) / EditorTheme::MotionSlow));
+        if (t < 1.0f) ImGui::SetNextWindowPos(ImVec2(p.SpawnPos.x, p.SpawnPos.y + EditorTheme::Px(6.0f) * (1.0f - t)), ImGuiCond_Always);
+        ImGui::PushStyleVar(ImGuiStyleVar_Alpha, ImGui::GetStyle().Alpha * std::max(0.05f, t));
+        ImGui::PushStyleColor(ImGuiCol_Border, EditorTheme::Strong);
         bool open = true;
-        if (ImGui::Begin(title.c_str(), &open, ImGuiWindowFlags_NoSavedSettings | ImGuiWindowFlags_NoCollapse)) {
+        const bool visible = ImGui::Begin(title.c_str(), &open, ImGuiWindowFlags_NoSavedSettings | ImGuiWindowFlags_NoCollapse);
+        ImGui::PopStyleColor();
+        ImGui::PopStyleVar();
+        if (visible) {
             if (e == entt::null) {
                 ImGui::TextDisabled("The object is no longer in this scene.");
             } else if (!rc || !rc->Has(world.Registry, e)) {
@@ -2261,8 +2344,13 @@ void EditorLayer::DrawPinnedComponentWindows(World& world, AssetLibrary& assets)
                 if (EditorUIPrimitives::ActionButton(ICON_FA_ARROW_POINTER, "Select this object", &Tip))
                     SelectItem(e, false);
                 ImGui::SameLine();
-                ImGui::TextDisabled("%s", objName.c_str());
-                ImGui::Separator();
+                ImGui::AlignTextToFramePadding();
+                ImGui::TextColored(EditorTheme::Secondary, "%s", objName.c_str());
+                const ImVec2 sp = ImGui::GetCursorScreenPos();
+                ImGui::GetWindowDrawList()->AddLine(ImVec2(ImGui::GetWindowPos().x, sp.y + 0.5f),
+                                                    ImVec2(ImGui::GetWindowPos().x + ImGui::GetWindowWidth(), sp.y + 0.5f),
+                                                    EditorTheme::U32(EditorTheme::Hairline));
+                ImGui::Dummy(ImVec2(0.0f, EditorTheme::Px(4.0f)));
                 ImGui::PushID((int)entt::to_integral(e));
                 DrawReflectedComponentFields(world, assets, *rc, e);
                 ImGui::PopID();

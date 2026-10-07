@@ -107,13 +107,22 @@ inline bool ActionButton(const char* icon, const char* tooltip, TooltipFn toolti
     return clicked;
 }
 
+// Quiet at rest (the dim glyph, no body); under the cursor the glyph turns red over a faint red
+// wash, so a destructive control never shouts until it is about to be used.
 inline bool DangerIconButton(const char* icon, const char* tooltip, TooltipFn tooltipFn,
                               ImVec2 size = ImVec2(0, 0)) {
     const ImVec4 danger = DangerColor();
-    ImGui::PushStyleColor(ImGuiCol_Text,          EditorTheme::Secondary);
+    const ImVec2 cursor = ImGui::GetCursorScreenPos();
+    const ImVec2 iconSize = ImGui::CalcTextSize(icon, nullptr, true);
+    const ImVec2 pad = ImGui::GetStyle().FramePadding;
+    const ImVec2 btnSize(size.x > 0.0f ? size.x : iconSize.x + pad.x * 2.0f,
+                          size.y > 0.0f ? size.y : iconSize.y + pad.y * 2.0f);
+    const bool willHover = ImGui::IsWindowHovered(ImGuiHoveredFlags_ChildWindows) &&
+        ImGui::IsMouseHoveringRect(cursor, ImVec2(cursor.x + btnSize.x, cursor.y + btnSize.y));
+    ImGui::PushStyleColor(ImGuiCol_Text,          willHover ? danger : EditorTheme::Dim);
     ImGui::PushStyleColor(ImGuiCol_Button,        ImVec4(0.0f, 0.0f, 0.0f, 0.0f));
-    ImGui::PushStyleColor(ImGuiCol_ButtonHovered, ImVec4(danger.x, danger.y, danger.z, 0.85f));
-    ImGui::PushStyleColor(ImGuiCol_ButtonActive,  ImVec4(danger.x, danger.y, danger.z, 1.00f));
+    ImGui::PushStyleColor(ImGuiCol_ButtonHovered, ImVec4(danger.x, danger.y, danger.z, 0.14f));
+    ImGui::PushStyleColor(ImGuiCol_ButtonActive,  ImVec4(danger.x, danger.y, danger.z, 0.26f));
     ImGui::PushStyleVar(ImGuiStyleVar_FrameBorderSize, 0.0f);
     ImGui::PushID(tooltip);
     const bool clicked = ImGui::Button(icon, size);
@@ -364,17 +373,6 @@ inline void EndPanelToolbar() {
     ImGui::Dummy(ImVec2(0.0f, EditorTheme::Px(6.0f)));
 }
 
-// A collapsible section inside a panel (ImGui::CollapsingHeader): the raised surface with a hairline
-// instead of the accent selection fill CollapsingHeader would otherwise borrow from ImGuiCol_Header.
-inline bool Foldout(const char* label, ImGuiTreeNodeFlags flags = 0) {
-    ImGui::PushStyleColor(ImGuiCol_Header,        EditorTheme::Raised);
-    ImGui::PushStyleColor(ImGuiCol_HeaderHovered, EditorTheme::Hover);
-    ImGui::PushStyleColor(ImGuiCol_HeaderActive,  EditorTheme::Pressed);
-    ImGui::PushStyleColor(ImGuiCol_Border,        EditorTheme::Hairline);
-    const bool open = ImGui::CollapsingHeader(label, flags);
-    ImGui::PopStyleColor(4);
-    return open;
-}
 
 // A row highlight for custom lists (Hierarchy, Console, Asset list): the selection is an accent wash
 // with a 2px accent bar at the left edge; hover is a faint white wash. Call before drawing the row's
@@ -450,6 +448,88 @@ inline void TextEllipsis(ImDrawList* dl, ImVec2 pos, float maxX, ImU32 col, cons
     ImGui::PushStyleColor(ImGuiCol_Text, ImGui::ColorConvertU32ToFloat4(col));
     ImGui::RenderTextEllipsis(dl, pos, ImVec2(maxX, pos.y + ts.y), maxX, text, nullptr, &ts);
     ImGui::PopStyleColor();
+}
+
+// A dashed rectangle outline (axis-aligned dashes, pixel-snapped): a drop target waiting for a drop.
+inline void DrawDashedRect(ImDrawList* dl, ImVec2 mn, ImVec2 mx, ImU32 col, float dash = 0.0f, float gap = 0.0f) {
+    dash = dash > 0.0f ? dash : EditorTheme::Px(5.0f);
+    gap = gap > 0.0f ? gap : EditorTheme::Px(3.0f);
+    const float t = std::max(1.0f, std::floor(EditorTheme::Px(1.0f)));
+    mn = ImVec2(std::floor(mn.x), std::floor(mn.y));
+    mx = ImVec2(std::floor(mx.x), std::floor(mx.y));
+    for (float x = mn.x; x < mx.x; x += dash + gap) {
+        const float x1 = std::min(x + dash, mx.x);
+        dl->AddRectFilled(ImVec2(x, mn.y), ImVec2(x1, mn.y + t), col);
+        dl->AddRectFilled(ImVec2(x, mx.y - t), ImVec2(x1, mx.y), col);
+    }
+    for (float y = mn.y; y < mx.y; y += dash + gap) {
+        const float y1 = std::min(y + dash, mx.y);
+        dl->AddRectFilled(ImVec2(mn.x, y), ImVec2(mn.x + t, y1), col);
+        dl->AddRectFilled(ImVec2(mx.x - t, y), ImVec2(mx.x, y1), col);
+    }
+}
+
+// A disclosure chevron drawn as a stroke so it can turn: `angle` 0 points right, pi/2 points down.
+// `size` is its height when pointing right.
+inline void DrawChevron(ImDrawList* dl, ImVec2 c, float size, float angle, ImU32 col, float thickness = 0.0f) {
+    const float s = size * 0.5f, cs = std::cos(angle), sn = std::sin(angle);
+    const ImVec2 base[3] = {ImVec2(-s * 0.5f, -s), ImVec2(s * 0.5f, 0.0f), ImVec2(-s * 0.5f, s)};
+    ImVec2 pts[3];
+    for (int i = 0; i < 3; ++i)
+        pts[i] = ImVec2(c.x + base[i].x * cs - base[i].y * sn, c.y + base[i].x * sn + base[i].y * cs);
+    dl->AddPolyline(pts, 3, col, ImDrawFlags_None, thickness > 0.0f ? thickness : EditorTheme::Px(1.5f));
+}
+
+// A framed foldout (a TreeNode that pushes, so the caller TreePops while it is open): the raised
+// strip with a hairline, a stroke chevron that turns as it opens, and the label. ImGui's own filled
+// triangle and label are hidden; the item keeps its label, so its ID and test lookups don't change.
+inline bool FramedFoldout(const char* label, ImGuiTreeNodeFlags flags = 0) {
+    const ImGuiStyle& style = ImGui::GetStyle();
+    const float x0 = ImGui::GetCursorScreenPos().x;
+    ImGui::PushStyleColor(ImGuiCol_Header,        EditorTheme::Raised);
+    ImGui::PushStyleColor(ImGuiCol_HeaderHovered, EditorTheme::Hover);
+    ImGui::PushStyleColor(ImGuiCol_HeaderActive,  EditorTheme::Pressed);
+    ImGui::PushStyleColor(ImGuiCol_Border,        EditorTheme::Hairline);
+    ImGui::PushStyleColor(ImGuiCol_Text,          ImVec4(0.0f, 0.0f, 0.0f, 0.0f));
+    const bool open = ImGui::TreeNodeEx(label, flags | ImGuiTreeNodeFlags_Framed | ImGuiTreeNodeFlags_SpanAvailWidth);
+    ImGui::PopStyleColor(5);
+    const ImVec2 mn = ImGui::GetItemRectMin(), mx = ImGui::GetItemRectMax();
+    ImDrawList* dl = ImGui::GetWindowDrawList();
+    const float fs = ImGui::GetFontSize();
+    const float cy = std::floor((mn.y + mx.y) * 0.5f);
+    const bool hov = ImGui::IsItemHovered();
+    const float t = EditorTheme::AnimT(ImGui::GetItemID() ^ 0x5F01D0E7u, open, EditorTheme::MotionNormal);
+    DrawChevron(dl, ImVec2(std::floor(x0 + style.FramePadding.x + fs * 0.5f) + 0.5f, cy + 0.5f), EditorTheme::Px(8.0f),
+                t * 1.5707963f, EditorTheme::U32(hov ? EditorTheme::Secondary : EditorTheme::Dim));
+    const char* end = ImGui::FindRenderedTextEnd(label);
+    const ImVec2 ts = ImGui::CalcTextSize(label, end);
+    dl->AddText(ImVec2(x0 + fs + style.FramePadding.x * 2.0f, std::floor(cy - ts.y * 0.5f)), EditorTheme::U32(EditorTheme::Text), label, end);
+    return open;
+}
+// A collapsible section inside a panel (ImGui::CollapsingHeader semantics: no TreePop) in the same look.
+inline bool Foldout(const char* label, ImGuiTreeNodeFlags flags = 0) {
+    return FramedFoldout(label, flags | ImGuiTreeNodeFlags_CollapsingHeader);
+}
+
+// A small status pill drawn at `mn` (top-left): mono capitals in `col` on a faint wash of it with
+// a soft edge ("KEEP", "OFF"). Returns its width.
+inline float DrawStatusPill(ImDrawList* dl, ImVec2 mn, const char* text, ImVec4 col, float alpha = 1.0f) {
+    EditorTheme::PushMonoSmall();
+    const ImVec2 ts = ImGui::CalcTextSize(text);
+    const ImVec2 pad(EditorTheme::Px(5.0f), EditorTheme::Px(1.5f));
+    const ImVec2 mx(mn.x + ts.x + pad.x * 2.0f, mn.y + ts.y + pad.y * 2.0f);
+    const float r = (mx.y - mn.y) * 0.5f;
+    dl->AddRectFilled(mn, mx, EditorTheme::U32(EditorTheme::WithAlpha(col, 0.14f * alpha)), r);
+    dl->AddRect(mn, mx, EditorTheme::U32(EditorTheme::WithAlpha(col, 0.45f * alpha)), r, 0, 1.0f);
+    dl->AddText(ImVec2(mn.x + pad.x, mn.y + pad.y), EditorTheme::U32(EditorTheme::WithAlpha(col, col.w * alpha)), text);
+    EditorTheme::PopFont();
+    return mx.x - mn.x;
+}
+inline ImVec2 StatusPillSize(const char* text) {
+    EditorTheme::PushMonoSmall();
+    const ImVec2 ts = ImGui::CalcTextSize(text);
+    EditorTheme::PopFont();
+    return ImVec2(ts.x + EditorTheme::Px(10.0f), ts.y + EditorTheme::Px(3.0f));
 }
 
 // A user colour's mark at a row's or tile's left edge: a slim rounded bar.

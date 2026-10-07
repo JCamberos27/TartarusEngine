@@ -308,8 +308,8 @@ On a single selected object, every registered component's header gains:
 | Action | How |
 | --- | --- |
 | Open in Window | The "..." menu, or **Alt+drag** the header out. The floating window follows the mouse until released. Same windows as the Hierarchy minimap's Alt+click. |
-| Pick for copying | **Ctrl+click** headers to pick them (accent outline), then "..." > **Copy N Selected Components**. |
-| Keep Changes After Play | In Play, "..." > **Keep Changes After Play** (also on Transform). Kept headers show a pin. |
+| Pick for copying | **Ctrl+click** headers to pick them (a fine accent outline and a check badge), then "..." > **Copy N Selected Components**. |
+| Keep Changes After Play | In Play, "..." > **Keep Changes After Play** (also on Transform). Kept headers show a **KEEP** pill. |
 
 The object's "..." menu (next to its name) adds:
 
@@ -327,7 +327,7 @@ Keep Changes After Play captures the kept components just before Stop restores t
 scene, then writes them back as one undo step, "Keep Play Mode Changes". The scene is then dirty;
 save it to keep the values. Choices reset each time Play starts.
 
-A component whose `Enabled` field is off shows a dimmed header.
+A component whose `Enabled` field is off shows an **OFF** pill on its header, and its body is dimmed.
 
 ### Hover keys
 
@@ -411,7 +411,7 @@ A tab whose object isn't in the open scene says so instead of showing something 
 
 Each tab is a folder. The active tab follows wherever you navigate, like a browser tab, and
 clicking a tab goes to its folder. Dropping a folder opens it in a new tab; dropping a file opens
-its folder with the file selected. Tab icons and colour underlines come from vFolders styles.
+its folder with the file selected. Tab icons and colours come from vFolders styles.
 
 ### Both strips
 
@@ -425,6 +425,11 @@ its folder with the file selected. Tab icons and colour underlines come from vFo
 | New tab | **Ctrl+T**: the Inspector pins what it shows; the Asset Browser opens the current folder again |
 | "+" menu | A search box (fuzzy matching over the scene's objects / the project's folders) and the starred tabs |
 | Star a tab | Right-click > Starred, so it is listed at the top of "+" |
+
+The active tab is raised and joins the panel below, with a thin top line in its colour (or white).
+A tab's colour also tints its icon. While something that can open as a tab is dragged, the strip
+gets a dashed outline; over it, a "Drop to open" pill shows. Dragged tabs float under the mouse and
+the others slide aside.
 
 The keys act on the panel under the mouse (hover contexts) and can be rebound under Shortcuts.
 Tabs, the active tab, the closed-tab list and stars are per user and per project, in
