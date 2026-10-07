@@ -29,6 +29,7 @@
 #include "EditorModuleAPI.h" // EditorConsoleState (Clear on Play / Error Pause — #236 A5)
 #include "EditorLayer.h"
 #include "EditorSettings.h"
+#include "EditorTheme.h"   // grid axis colours (GridColors)
 #include "Shortcuts.h" // play / window keys route through the Shortcuts Manager (#236 F)
 #include "Model.h"
 #include "SceneSerializer.h"
@@ -4505,9 +4506,15 @@ int main(int argc, char** argv) {
                     // it out far enough to never kick in.
                     const EditorSettings& gset = EditorSettings::Get();
                     float gridFade = editorCamera.Orthographic ? 100000.0f : gset.GridFadeDistance;
+                    auto toVec3 = [](ImVec4 c) { return glm::vec3(c.x, c.y, c.z); };
+                    GridColors gridColors;
+                    gridColors.AxisX = toVec3(EditorTheme::AxisX);
+                    gridColors.AxisY = toVec3(EditorTheme::AxisY);
+                    gridColors.AxisZ = toVec3(EditorTheme::AxisZ);
                     grid.Draw(sceneViewMat, sceneProjMat, editorCamera.Position,
                               gset.GridMinorSpacing, (float)gset.GridMajorEvery, gridFade,
-                              gset.GridOpacity, gset.GridShowAxisLines, gset.GridAxisThickness);
+                              gset.GridOpacity, gset.GridShowAxisLines, gset.GridAxisThickness,
+                              gridColors);
                 }
 
                 // Collider wireframe overlay (#185 PR 2) — depth-tested so scene geometry

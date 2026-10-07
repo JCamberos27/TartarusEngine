@@ -8,6 +8,9 @@
 #include "EditorTestProbe.h" // --editor-tests widget names
 #include "EditorLayerInternal.h"
 #include "EditorTheme.h"
+#include "Enhancers/EnhancerCore.h"  // FAIconGlyph (header icons)
+#include "Enhancers/StyleWidgets.h" // Header Style pickers
+#include "Enhancers/UiStyles.h"     // component header colours
 #include "AssetPathPicker.h"
 #include "FileDialog.h"
 #include "AssetLibrary.h"
@@ -451,11 +454,15 @@ struct PrefabMultiRef {
 // by DrawVec3Row (Transform) and MultiEditVec3Row (every other reflected Vec3 field).
 bool AxisButton(const char* name, ImVec4 tint, ImVec2 size) {
     // A slim tab in the axis colour (EditorTheme::AxisX/Y/Z), glued to its field like Unreal's.
-    const ImVec4 rest(tint.x * 0.78f, tint.y * 0.78f, tint.z * 0.78f, 1.0f);
-    ImGui::PushStyleColor(ImGuiCol_Button,        rest);
-    ImGui::PushStyleColor(ImGuiCol_ButtonHovered, tint);
-    ImGui::PushStyleColor(ImGuiCol_ButtonActive,  ImVec4(tint.x * 0.62f, tint.y * 0.62f, tint.z * 0.62f, 1.0f));
-    ImGui::PushStyleColor(ImGuiCol_Text,          EditorTheme::Rgb(0xF6, 0xF6, 0xF8));
+    // At rest it is the palette hue itself (not darkened, which washed it out); hover lifts it
+    // toward white, press sinks it.
+    tint.w = 1.0f;
+    ImGui::PushStyleColor(ImGuiCol_Button,        tint);
+    ImGui::PushStyleColor(ImGuiCol_ButtonHovered, EditorTheme::Mix(tint, EditorTheme::AccentBright, 0.18f));
+    ImGui::PushStyleColor(ImGuiCol_ButtonActive,  ImVec4(tint.x * 0.8f, tint.y * 0.8f, tint.z * 0.8f, 1.0f));
+    // Black or white label, whichever reads better on this hue.
+    const float lum = 0.2126f * tint.x + 0.7152f * tint.y + 0.0722f * tint.z;
+    ImGui::PushStyleColor(ImGuiCol_Text, lum > 0.5f ? EditorTheme::OnAccent : EditorTheme::Rgb(0xF6, 0xF6, 0xF8));
     ImGui::PushStyleVar(ImGuiStyleVar_FrameBorderSize, 0.0f);
     ImGui::PushStyleVar(ImGuiStyleVar_FramePadding, ImVec2(0.0f, ImGui::GetStyle().FramePadding.y));
     const bool clicked = ImGui::Button(name, size);
@@ -3578,6 +3585,13 @@ bool EditorLayer::BeginComponentSection(const char* icon,
             disabledComp = !*reinterpret_cast<const bool*>(ef->Address(rc->Get(world->Registry, entity)));
 
     std::string header = std::string(icon) + "  " + label;
+    // Tabs & Headers: this component type's colour / icon (Enhancers::UiStyles). Drawing only -
+    // the header's id stays keyed by the default icon, so restyling never resets its open state.
+    const Enhancers::UiStyle* headerStyle = es.ComponentHeaderColors ? Enhancers::UiStyles::Get().Component(label) : nullptr;
+    const unsigned headerColor = headerStyle ? headerStyle->Color : 0u;
+    const char* headerIcon = icon;
+    if (headerStyle && !headerStyle->Icon.empty())
+        if (const char* g = Enhancers::FAIconGlyph(headerStyle->Icon.c_str())) headerIcon = g;
     // The component's title bar: a raised strip with a chevron, the component's icon (the accent while
     // open) and its name, drawn by hand so it can sit flush with the card below it. Its open state
     // lives in the same ImGui storage slot CollapsingHeader used (keyed by the label), so every
@@ -3713,6 +3727,16 @@ bool EditorLayer::BeginComponentSection(const char* icon,
         const ImDrawFlags corners = bodyVisible ? ImDrawFlags_RoundCornersTop : ImDrawFlags_RoundCornersAll;
         const ImVec4 bg = headerActive ? T::Pressed : T::Mix(T::Raised, T::Hover, hovT);
         dl->AddRectFilled(hs, hmax, FadeU32(T::U32(bg), fade), r, corners);
+        // A styled component: its colour as a Hierarchy row wears it - a gradient wash fading out
+        // across the bar and a slim stripe at its left edge, under hover / press / picked.
+        if (headerColor) {
+            const ImU32 rgb = headerColor & 0x00FFFFFFu;
+            const float washA = (0.16f + 0.06f * openT) * (headerActive ? 0.6f : 1.0f) * fade;
+            const ImU32 a = rgb | ((ImU32)(washA * 255.0f) << 24);
+            dl->AddRectFilledMultiColor(hs, ImVec2(hs.x + hw * 0.7f, hmax.y), a, rgb, rgb, a);
+            EditorUIPrimitives::DrawColorStripe(dl, hs.x + T::Px(1.0f), hs.y + T::Px(3.0f), hmax.y - T::Px(3.0f),
+                                                FadeU32(headerColor | IM_COL32_A_MASK, fade));
+        }
         // Ctrl+click-picked for the multi-component clipboard: a faint accent wash, a fine accent
         // edge and a check badge (drawn with the pills below).
         if (picked) {
@@ -3732,10 +3756,14 @@ bool EditorLayer::BeginComponentSection(const char* icon,
         const float cy = std::floor(hs.y + hhFull * 0.5f);
         EditorUIPrimitives::DrawChevron(dl, ImVec2(std::floor(hs.x + T::Px(10.0f)) + 0.5f, cy + 0.5f), T::Px(8.0f),
                                         openT * 1.5707963f, FadeU32(T::U32(T::Mix(T::Dim, T::Secondary, hovT)), fade));
-        const ImVec2 is = ImGui::CalcTextSize(icon);
+        const ImVec2 is = ImGui::CalcTextSize(headerIcon);
         const float ix = hs.x + T::Px(22.0f);
-        dl->AddText(ImVec2(ix, std::floor(cy - is.y * 0.5f)),
-                    FadeU32(T::U32(disabledComp ? T::Dim : T::Mix(T::Secondary, T::Accent, openT)), fade), icon);
+        // The icon: the accent while open; a styled component's colour instead (a touch softer
+        // while closed), so the colour reads at a glance down the Inspector.
+        const ImVec4 iconCol = disabledComp ? T::Dim
+            : headerColor ? T::Mix(T::Mix(T::UserGlyphColor(headerColor), T::Secondary, 0.25f), T::UserGlyphColor(headerColor), openT)
+                          : T::Mix(T::Secondary, T::Accent, openT);
+        dl->AddText(ImVec2(ix, std::floor(cy - is.y * 0.5f)), FadeU32(T::U32(iconCol), fade), headerIcon);
         // The name, cut with an ellipsis before the status pills and the ... / x buttons.
         const ImVec2 ls = ImGui::CalcTextSize(label);
         const float lx = ix + std::max(is.x, ImGui::GetFontSize()) + T::Px(8.0f);
@@ -3893,7 +3921,28 @@ bool EditorLayer::BeginComponentSection(const char* icon,
             if (prefabApplyOut && ImGui::MenuItem(ICON_FA_BOX_ARCHIVE "  Apply to Prefab"))
                 *prefabApplyOut = true;
         }
-        if (!hasMenu) ImGui::TextDisabled("No actions");
+        // Tabs & Headers: this component type's header colour and icon, for every object.
+        if (hasMenu) ImGui::Separator();
+        if (ImGui::BeginMenu(ICON_FA_PALETTE "  Header Style")) {
+            auto& ui = Enhancers::UiStyles::Get();
+            const Enhancers::UiStyle* cur = ui.Component(label);
+            Enhancers::UiStyle s = cur ? *cur : Enhancers::UiStyle();
+            ImGui::SetNextItemWidth(EditorTheme::Px(260.0f));
+            if (Enhancers::PaletteColorRow("##headerColor", s.Color)) ui.SetComponent(label, s);
+            if (ImGui::BeginMenu(ICON_FA_ICONS "  Icon")) {
+                static char s_IconSearch[64] = {};
+                std::string pickedIcon = s.Icon;
+                ImGui::SetNextItemWidth(EditorTheme::Px(320.0f));
+                if (Enhancers::IconPickerGrid("##headerIcon", pickedIcon, s_IconSearch, sizeof(s_IconSearch), EditorTheme::Px(260.0f))) {
+                    s.Icon = pickedIcon;
+                    ui.SetComponent(label, s);
+                }
+                ImGui::EndMenu();
+            }
+            if (ImGui::MenuItem(ICON_FA_ERASER "  Clear Style", nullptr, false, cur != nullptr)) ui.SetComponent(label, Enhancers::UiStyle());
+            if (!es.ComponentHeaderColors) ImGui::TextDisabled("Component header colours are off (Preferences).");
+            ImGui::EndMenu();
+        }
         ImGui::EndPopup();
     }
 

@@ -295,6 +295,10 @@ struct EditorSettings {
     // vTabs: the tab strips at the top of the Inspector and under the Asset Browser toolbar.
     bool InspectorTabs = true;
     bool AssetTabs     = true;
+    // Tabs & Headers (Enhancers::UiStyles, project/editor_ui_styles.json): each docked panel's tab
+    // and each Inspector component header in its own colour, like a Hierarchy row or a folder.
+    bool PanelTabColors        = true;
+    bool ComponentHeaderColors = true;
     // vFavorites: the favorites overlay, and whether holding Alt over the Asset Browser shows it.
     bool Favorites        = true;
     bool FavoritesHoldAlt = true;

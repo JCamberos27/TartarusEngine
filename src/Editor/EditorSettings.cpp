@@ -213,6 +213,8 @@ void EditorSettings::Load() {
     s.InspectorMinimal = SafeValue(root, "inspectorMinimal", s.InspectorMinimal);
     s.InspectorTabs = SafeValue(root, "inspectorTabs", s.InspectorTabs);
     s.AssetTabs = SafeValue(root, "assetTabs", s.AssetTabs);
+    s.PanelTabColors = SafeValue(root, "panelTabColors", s.PanelTabColors);
+    s.ComponentHeaderColors = SafeValue(root, "componentHeaderColors", s.ComponentHeaderColors);
     s.Favorites = SafeValue(root, "favorites", s.Favorites);
     s.FavoritesHoldAlt = SafeValue(root, "favoritesHoldAlt", s.FavoritesHoldAlt);
     s.Ruler = SafeValue(root, "ruler", s.Ruler);
@@ -398,6 +400,8 @@ void EditorSettings::Flush() {
     root["inspectorMinimal"] = Get().InspectorMinimal;
     root["inspectorTabs"] = Get().InspectorTabs;
     root["assetTabs"] = Get().AssetTabs;
+    root["panelTabColors"] = Get().PanelTabColors;
+    root["componentHeaderColors"] = Get().ComponentHeaderColors;
     root["favorites"] = Get().Favorites;
     root["favoritesHoldAlt"] = Get().FavoritesHoldAlt;
     root["ruler"] = Get().Ruler;
