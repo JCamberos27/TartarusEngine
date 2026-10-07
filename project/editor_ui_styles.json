@@ -1,0 +1,178 @@
+{
+  "version": 1,
+  "panels": {
+    "Animator": {
+      "color": "#8BC34A"
+    },
+    "AssetLibrary": {
+      "color": "#4CC38A"
+    },
+    "Assets": {
+      "color": "#4C8DF6"
+    },
+    "Audio": {
+      "color": "#E5484D"
+    },
+    "Console": {
+      "color": "#6E6CF2"
+    },
+    "Game": {
+      "color": "#F2C94C"
+    },
+    "Hierarchy": {
+      "color": "#E5484D"
+    },
+    "History": {
+      "color": "#9B6CF2"
+    },
+    "Inspector": {
+      "color": "#4CC38A"
+    },
+    "Lighting": {
+      "color": "#E26CB2"
+    },
+    "PhysicsDebug": {
+      "color": "#F2C94C"
+    },
+    "Scene": {
+      "color": "#F2994A"
+    },
+    "Script IDE": {
+      "color": "#8BC34A"
+    },
+    "Settings": {
+      "color": "#F2994A"
+    },
+    "Statistics": {
+      "color": "#3FB8AF"
+    }
+  },
+  "components": {
+    "Animation": {
+      "color": "#3FB8AF"
+    },
+    "Animator": {
+      "color": "#6E6CF2"
+    },
+    "Animator Controller": {
+      "color": "#8BC34A"
+    },
+    "Audio Listener": {
+      "color": "#4C8DF6"
+    },
+    "Audio Mix": {
+      "color": "#E5484D"
+    },
+    "Audio Source": {
+      "color": "#4CC38A"
+    },
+    "Blood Settings": {
+      "color": "#F2C94C"
+    },
+    "C# Script": {
+      "color": "#3FB8AF"
+    },
+    "Camera": {
+      "color": "#9B6CF2"
+    },
+    "Character Outfit": {
+      "color": "#F2994A"
+    },
+    "Collider": {
+      "color": "#E26CB2"
+    },
+    "Dropped Weapon Settings": {
+      "color": "#4CC38A"
+    },
+    "FX & HUD Settings": {
+      "color": "#F2994A"
+    },
+    "First Person Body": {
+      "color": "#E5484D"
+    },
+    "First Person Controller": {
+      "color": "#E26CB2"
+    },
+    "Foley Audio": {
+      "color": "#4C8DF6"
+    },
+    "Goal Trigger": {
+      "color": "#6E6CF2"
+    },
+    "Health": {
+      "color": "#E5484D"
+    },
+    "IK Rig": {
+      "color": "#4C8DF6"
+    },
+    "Impact Audio": {
+      "color": "#F2994A"
+    },
+    "Impact Sound": {
+      "color": "#8BC34A"
+    },
+    "Joint": {
+      "color": "#E5484D"
+    },
+    "LOD Group": {
+      "color": "#3FB8AF"
+    },
+    "Light": {
+      "color": "#8BC34A"
+    },
+    "Material": {
+      "color": "#F2C94C"
+    },
+    "Mesh Renderer": {
+      "color": "#F2994A"
+    },
+    "NPC Spawn": {
+      "color": "#F2994A"
+    },
+    "Outfit Piece": {
+      "color": "#4CC38A"
+    },
+    "Particle System": {
+      "color": "#F2C94C"
+    },
+    "Ragdoll Settings": {
+      "color": "#8BC34A"
+    },
+    "Reflection Probe": {
+      "color": "#9B6CF2"
+    },
+    "Reverb Bus": {
+      "color": "#E26CB2"
+    },
+    "Reverb Portal": {
+      "color": "#9B6CF2"
+    },
+    "Reverb Zone": {
+      "color": "#6E6CF2"
+    },
+    "Rigidbody": {
+      "color": "#6E6CF2"
+    },
+    "Score Digit": {
+      "color": "#E26CB2"
+    },
+    "Scoreboard": {
+      "color": "#9B6CF2"
+    },
+    "Squad Settings": {
+      "color": "#F2C94C"
+    },
+    "Transform": {
+      "color": "#E5484D"
+    },
+    "Transform Controller": {
+      "color": "#4CC38A"
+    },
+    "Weapon Audio": {
+      "color": "#3FB8AF"
+    },
+    "Weapon Definition": {
+      "color": "#4C8DF6"
+    }
+  }
+}
