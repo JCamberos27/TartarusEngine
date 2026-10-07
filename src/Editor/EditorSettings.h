@@ -290,6 +290,9 @@ struct EditorSettings {
     // vTabs: the tab strips at the top of the Inspector and under the Asset Browser toolbar.
     bool InspectorTabs = true;
     bool AssetTabs     = true;
+    // vFavorites: the favorites overlay, and whether holding Alt over the Asset Browser shows it.
+    bool Favorites        = true;
+    bool FavoritesHoldAlt = true;
 
     bool WindowPlacementValid = false;
     int  WindowX = 0, WindowY = 0, WindowWidth = 0, WindowHeight = 0;

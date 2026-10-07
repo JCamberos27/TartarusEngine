@@ -8,6 +8,7 @@
 #include "ComponentRegistry.h" // vHierarchy component minimap
 #include "Enhancers/EnhancerCore.h" // FAIconGlyph (row style icons)
 #include "Enhancers/StyleWidgets.h" // the Row Style menu's colour + icon pickers
+#include "Enhancers/EnhancerUserState.h" // vFavorites (row menu)
 #include "FileDialog.h"
 #include "AssetLibrary.h"
 #include "World.h"
@@ -1824,6 +1825,20 @@ void EditorLayer::DrawHierarchyContextMenu(World& world, AssetLibrary& assets, e
             ToggleDefaultParent(world, entity);
         if (ImGui::IsItemHovered() && hasEntity)
             EditorUI::SetTooltip("New objects you create in this scene are placed under this one.");
+    }
+    // Editor Enhancers / vFavorites.
+    if (hasEntity) {
+        auto& us = Enhancers::EnhancerUserState::Get();
+        const auto* o = world.Registry.try_get<OrderComponent>(entity);
+        const auto* nm = world.Registry.try_get<NameComponent>(entity);
+        const Enhancers::EditorRef ref = Enhancers::EditorRef::MakeEntity(CurrentSceneKey(), o ? o->Value : -1, nm ? nm->Name : std::string());
+        const int favPage = o ? Enhancers::FindFavorite(us.FavoritePages, ref) : -1;
+        if (ImGui::MenuItem(ICON_FA_STAR "  Favorite", "Ctrl+Alt+B", favPage >= 0, o != nullptr)) {
+            if (favPage >= 0) Enhancers::RemoveFavorite(us.FavoritePages, ref);
+            else Enhancers::AddFavorite(us.FavoritePages, m_FavPage, ref);
+            us.MarkDirty();
+        }
+        if (ImGui::IsItemHovered()) EditorUI::SetTooltip("Hold Alt over the Asset Browser to see your favorites.");
     }
 
     EditorUIPrimitives::SectionHeader(ICON_FA_PALETTE "  Style");

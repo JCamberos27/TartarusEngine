@@ -452,6 +452,58 @@ void TestEnhancerTabStateRoundTrip() {
     ts.Reset();
 }
 
+// --- vFavorites (Phase 5) -------------------------------------------------------------------
+void TestEnhancerFavoritePages() {
+    std::vector<FavoritePage> pages;
+    EnsureFavoritePage(pages);
+    CHECK(pages.size() == 1 && pages[0].Name == "Favorites" && pages[0].Items.empty());
+    EnsureFavoritePage(pages);
+    CHECK(pages.size() == 1);
+
+    const EditorRef tex = EditorRef::MakeAsset("assets/tex/brick.png", "brick.png");
+    const EditorRef art = EditorRef::MakeFolder("Art", "Art");
+    const EditorRef hero = EditorRef::MakeEntity("00112233aabbccdd", 9, "Hero");
+    CHECK(AddFavorite(pages, 0, tex));
+    CHECK(!AddFavorite(pages, 0, tex)); // already on the page
+    pages.push_back(FavoritePage{"Level", {}});
+    CHECK(AddFavorite(pages, 1, art) && AddFavorite(pages, 7, hero)); // a page index past the end clamps
+    CHECK(pages[1].Items.size() == 2 && pages[1].Items[1] == hero);
+    CHECK(FindFavorite(pages, tex) == 0 && FindFavorite(pages, hero) == 1);
+    CHECK(FindFavorite(pages, EditorRef::MakeFolder("Nope")) == -1);
+    // The same target may sit on two pages; removing takes it off all of them.
+    CHECK(AddFavorite(pages, 0, hero));
+    CHECK(RemoveFavorite(pages, hero) && FindFavorite(pages, hero) == -1);
+    CHECK(!RemoveFavorite(pages, hero));
+    MoveFavoritePage(pages, 1, 0);
+    CHECK(pages[0].Name == "Level" && pages[1].Name == "Favorites");
+    MoveFavoritePage(pages, 0, 99);
+    CHECK(pages[1].Name == "Level");
+
+    // Round trip through the per-user file, with the one-time migration flag.
+    auto& us = EnhancerUserState::Get();
+    const nlohmann::json saved = us.ToJson();
+    us.Reset();
+    const unsigned rev = us.Revision();
+    us.FavoritePages = pages;
+    us.FavoritesMigrated = true;
+    us.MarkDirty();
+    CHECK(us.Revision() != rev); // star caches key off this
+    const nlohmann::json j = us.ToJson();
+    us.Reset();
+    CHECK(us.FavoritePages.empty() && !us.FavoritesMigrated);
+    us.FromJson(j);
+    CHECK(us.FavoritesMigrated && us.FavoritePages.size() == 2);
+    CHECK(us.FavoritePages[1].Name == "Level" && us.FavoritePages[1].Items.size() == 1 && us.FavoritePages[1].Items[0] == art);
+    CHECK(us.FavoritePages[0].Items.size() == 1 && us.FavoritePages[0].Items[0].Path == "assets/tex/brick.png");
+    // A file from before vFavorites has no pages and isn't migrated yet.
+    nlohmann::json old = j;
+    old.erase("favoritePages");
+    old.erase("favoritesMigrated");
+    us.FromJson(old);
+    CHECK(us.FavoritePages.empty() && !us.FavoritesMigrated);
+    us.FromJson(saved); // restore the in-memory state (FromJson leaves it clean: nothing is written)
+}
+
 void TestEnhancerGlobMatch() {
     CHECK(GlobMatch("*", ""));
     CHECK(GlobMatch("*", "anything/at/all"));
@@ -739,6 +791,7 @@ void RegisterEnhancerTests(UnitTestSupport::TestList& tests) {
     tests.emplace_back("EnhancerSelectionHistory", TestEnhancerSelectionHistory);
     tests.emplace_back("EnhancerComponentClipboard", TestEnhancerComponentClipboard);
     tests.emplace_back("EnhancerKeepPlayChanges", TestEnhancerKeepPlayChanges);
+    tests.emplace_back("EnhancerFavoritePages", TestEnhancerFavoritePages);
     tests.emplace_back("EnhancerTabStrip", TestEnhancerTabStrip);
     tests.emplace_back("EnhancerTabStateRoundTrip", TestEnhancerTabStateRoundTrip);
     tests.emplace_back("EnhancerFieldState", TestEnhancerFieldState);
