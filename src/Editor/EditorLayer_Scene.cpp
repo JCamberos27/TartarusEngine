@@ -160,7 +160,6 @@ void EditorLayer::ReloadHistoryFiles(AssetLibrary& assets,const std::vector<Edit
             m_GizmoOp=static_cast<GizmoOp>(prefs.ActiveTool);m_ShadingMode=static_cast<ShadingMode>(prefs.ShadingMode);
         }
         if(file.Path==std::filesystem::path(UserPaths::Resolve("shortcuts.json")))Shortcuts::Load();
-        if(file.Path==std::filesystem::path(UserPaths::Resolve("asset_favorites.json")))LoadAssetFavorites();
         if(file.Path==std::filesystem::path(Enhancers::EnhancerUserState::Path()))Enhancers::EnhancerUserState::Get().Load();
         if(file.Path==std::filesystem::path(Enhancers::Palette::Path()))Enhancers::Palette::Load();
         if(file.Path==std::filesystem::path(Enhancers::FolderStyles::Path()))Enhancers::FolderStyles::Get().Load();

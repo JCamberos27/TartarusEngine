@@ -126,10 +126,10 @@ void EditorLayer::Init(GLFWwindow* window) {
     // startup scene. #134 — they used to be re-loaded here too: wasted work, and it clobbered
     // anything changed in between (e.g. by that scene load).
     Shortcuts::Init(); // builtin key table + project/shortcuts.json overrides (#236 F)
-    LoadAssetFavorites(); // project/asset_favorites.json (#236 G)
     // Editor Enhancers: this project's bookmarks / default parents and the per-user style palette.
     Enhancers::EnhancerUserState::Get().Load();
     Enhancers::TabState::Get().Load(); // vTabs (not journaled: tab switches aren't edits)
+    MigrateAssetFavorites(); // vFavorites: the old asset_favorites.json stars become page 1, once
     Enhancers::Palette::Load();
     Enhancers::FolderStyles::Get().Load(); // project/editor_folders.json (vFolders)
 
@@ -3238,6 +3238,9 @@ void EditorLayer::Draw(World& world, AssetLibrary& assets, Camera& editorCamera,
                 if (hoverBit && !overViewport) sctx &= ~(std::uint32_t)Shortcuts::Ctx_Viewport;
             }
         }
+        // vFavorites: the overlay owns the keyboard while it is up (digits pick pages; Alt+1..4
+        // would otherwise also focus panels).
+        if (m_FavVisible) sctx = 0;
         Shortcuts::BeginFrame(sctx);
     }
     // Asset windows, custom C# editors and curves all share the chronological history.
@@ -3659,6 +3662,8 @@ void EditorLayer::PostModuleDraw(World& world) {
     RecordSelectionHistory(world);
     // vFolders hover keys: the module drew the folder tree (and reported the hovered folder) by now.
     if (m_AssetsPtr) HandleFolderHoverKeys(*m_AssetsPtr);
+    // vFavorites: over the Asset Browser the module just drew (its window rect is current).
+    if (m_AssetsPtr) DrawFavoritesOverlay(world, *m_AssetsPtr);
     EditorSettings::Flush();
     Enhancers::EnhancerUserState::Get().Flush();
     Enhancers::TabState::Get().Flush();

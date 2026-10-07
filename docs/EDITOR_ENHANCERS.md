@@ -16,7 +16,7 @@ Status by phase:
 | 3a | vInspector: nav bar, identity-based selection history, floating component windows, multi-component copy/paste, keep play-mode changes, hover keys, animations | Done |
 | 3b | vInspector: field attributes (C++ and C#), Reset to Default, C# buttons / read-outs / dictionaries | Done |
 | 4 | vTabs: tab strips in the Inspector and Asset Browser | Done |
-| 5 | vFavorites: hold-Alt favorites overlay with pages | Planned |
+| 5 | vFavorites: hold-Alt favorites overlay with pages | Done |
 | 6 | vRuler: Shift+R surface, bounds and reference-object measuring | Planned |
 
 ## Where things live
@@ -410,6 +410,39 @@ History panel. Preferences > Editor Enhancers > Tabs turns each strip off.
 Code: `Enhancers::TabStrip` / `TabState` (`src/Editor/Enhancers/TabState.h`, unit tested) and
 `EditorLayer::DrawTabStrip` (`EditorLayer_Enhancers.cpp`). The Asset Browser strip is drawn
 through the existing `DrawFolderNavBar` callback, so the module API version is unchanged (40).
+
+## vFavorites
+
+Hold **Alt** with the mouse over the Asset Browser: after a moment, the favorites overlay covers
+the panel; release Alt to hide it. **Ctrl+Alt+F** (or the pin in its corner) keeps it open; Esc
+closes it. If the Asset Browser is closed, a locked overlay opens in the middle of the window.
+
+* **Pages.** Favorites live on named pages. Click a page chip to show it, double-click (or
+  right-click > Rename) to rename, right-click to move or delete it, "+" to add one. Pages slide
+  in when you switch.
+* **Navigation.** 1-9 pick a page, Left / Right step through pages, the mouse wheel moves one page
+  per notch, Up / Down highlight an item and Enter opens it.
+* **Items.** Folders, assets and Hierarchy objects, with their vFolders / vHierarchy icons and
+  colours. Clicking opens: a folder is navigated to, an asset is shown in the Asset Browser and
+  the Inspector, an object is selected (an object in another scene opens that scene first, then
+  selects it). Opening an item closes the overlay. Drag items to reorder them, or onto a page
+  chip to move them; right-click for Open / Move to Page / Remove.
+* **Adding.** Drop folders, assets or Hierarchy rows on the overlay (drag, then hold Alt over the
+  Asset Browser); **Ctrl+Alt+B** adds the selection; the Hierarchy row menu and the folder menu
+  have a **Favorite** toggle; the Asset Browser's existing star (Add to Favorites) adds to the
+  page you last showed.
+
+The Asset Browser's star badges and its "favorites only" filter now mean "on any favorites page".
+The old per-user star list (`asset_favorites.json`) is imported into the first page once, on the
+first launch after this update; the file is left in place but no longer read or written.
+
+Pages are stored in the per-user `enhancers_<hash>.json`, so adding, removing, reordering and
+renaming favorites can be undone. Which page is shown is not saved. Renaming or moving an asset
+in the Asset Browser updates its favorites, Inspector bookmarks and Inspector tabs.
+
+While the overlay is up it owns the keyboard: every other editor shortcut is suppressed (Alt+1..4
+would otherwise also focus panels). The two bindings are under Shortcuts; holding Alt is a
+setting (Preferences > Editor Enhancers > Favorites).
 
 ## Shortcut changes
 

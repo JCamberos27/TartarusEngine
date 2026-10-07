@@ -211,6 +211,8 @@ void EditorSettings::Load() {
     s.InspectorMinimal = SafeValue(root, "inspectorMinimal", s.InspectorMinimal);
     s.InspectorTabs = SafeValue(root, "inspectorTabs", s.InspectorTabs);
     s.AssetTabs = SafeValue(root, "assetTabs", s.AssetTabs);
+    s.Favorites = SafeValue(root, "favorites", s.Favorites);
+    s.FavoritesHoldAlt = SafeValue(root, "favoritesHoldAlt", s.FavoritesHoldAlt);
 
     // #126 — values that are the right type but nonsensical (0 / negative / NaN from a hand
     // edit or an older build) would otherwise produce NaN projections, a zero-size grid, a
@@ -390,6 +392,8 @@ void EditorSettings::Flush() {
     root["inspectorMinimal"] = Get().InspectorMinimal;
     root["inspectorTabs"] = Get().InspectorTabs;
     root["assetTabs"] = Get().AssetTabs;
+    root["favorites"] = Get().Favorites;
+    root["favoritesHoldAlt"] = Get().FavoritesHoldAlt;
 
     // Atomic: a crash mid-write (a toggle spree can still trigger one write) must leave the
     // previous editor_prefs.json intact, not truncated (audit CPP-206). Lives under UserPaths

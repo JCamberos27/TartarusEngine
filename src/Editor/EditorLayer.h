@@ -425,6 +425,32 @@ public:
     TabStripView m_InspectorTabView, m_AssetTabView;
     int m_InspectorTabShown = -99;   // last active Inspector tab acted on (component tabs scroll once)
     char m_TabSearch[2][64] = {};    // the "+" menus' search text: [0] Inspector, [1] Asset Browser
+    // --- Editor Enhancers / vFavorites (EditorLayer_Enhancers.cpp) ------------------------------
+    // The favorites overlay: hold Alt over the Asset Browser (or lock it open). Pages live in
+    // EnhancerUserState::FavoritePages; everything below is session state.
+    void DrawFavoritesOverlay(World& world, AssetLibrary& assets); // PostModuleDraw
+    void ActivateFavorite(World& world, AssetLibrary& assets, const Enhancers::EditorRef& r);
+    void AddSelectionToFavorites(const World& world);
+    void MigrateAssetFavorites(); // one-time import of asset_favorites.json into page 1
+    bool FavoritesOverlayVisible() const { return m_FavVisible; }
+    int    m_FavPage = 0;            // the shown page; also where stars and drops add
+    bool   m_FavLocked = false;      // pinned open (Ctrl+Alt+F, or the overlay's pin)
+    bool   m_FavVisible = false;     // drawn this frame; next frame's shortcut gating reads it
+    bool   m_FavWaitRelease = false; // after activating an item, ignore the held key until released
+    double m_FavHoldStart = -1.0;
+    float  m_FavAlpha = 0.0f;
+    double m_FavAnimStart = -1.0;    // page switch slide
+    int    m_FavAnimDir = 0;
+    int    m_FavRenaming = -1;
+    char   m_FavRenameBuf[64] = {};
+    int    m_FavHighlight = -1;      // Up/Down keyboard highlight on the shown page
+    float  m_FavWheel = 0.0f;
+    std::string m_FavPendingScene;   // an entity favorite in another scene: select it once that scene is open
+    int    m_FavPendingOrder = -1;
+    // The Asset Browser's favourite stars are now "is this asset on any favorites page":
+    // rebuilt from the pages whenever EnhancerUserState's revision moves.
+    mutable unsigned m_FavCacheRevision = ~0u;
+    void RefreshFavoriteCache() const;
 
     // --- Reloadable Inspector module bridge (issue #229, frame only) ----------------------
     // The module owns Begin("Inspector") + End + visibility; the body stays host-side.
@@ -1672,14 +1698,13 @@ private:
     std::unordered_map<std::string, std::vector<float>> m_SoundWaveforms;
     const std::vector<float>& SoundWaveform(const std::string& path);
 
-    // Asset favourites (#236 G) — a starred subset, persisted to project/asset_favorites.json.
-    // The star toggle on the Asset Browser toolbar filters the grid to just these.
-    std::set<std::string> m_AssetFavorites;
+    // Asset favourites (#236 G) — a starred subset. Since vFavorites they are the assets on the
+    // favorites pages; the star toggle on the Asset Browser toolbar filters the grid to just these.
+    // vFavorites: a cache of the asset keys on any favorites page (RefreshFavoriteCache).
+    mutable std::set<std::string> m_AssetFavorites;
     bool m_AssetFavoritesOnly = false;
-    void LoadAssetFavorites();
-    void SaveAssetFavorites() const;
 public:
-    bool IsAssetFavorite(const std::string& key) const { return m_AssetFavorites.count(key) != 0; }
+    bool IsAssetFavorite(const std::string& key) const { RefreshFavoriteCache(); return m_AssetFavorites.count(key) != 0; }
     void ToggleAssetFavorite(const std::string& key);
     // Batch: set every key's favourite state to `on`, saving once. For multi-select.
     void SetAssetFavorites(const std::vector<std::string>& keys, bool on);
