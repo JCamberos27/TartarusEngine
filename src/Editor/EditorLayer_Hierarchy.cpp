@@ -295,9 +295,14 @@ void EditorLayer::RecordSelectionHistory(const World& world) {
     static const std::string kNoAsset;
     const std::string& assetNow = (cur.empty() && !m_SelectedAssetIsFolder) ? m_SelectedAssetKey : kNoAsset;
     const bool entitiesChanged = cur != m_SelSnapshotLast;
-    if (!entitiesChanged && assetNow == m_SelAssetLast) { m_EditPushedThisFrame = false; return; }
+    // A scene switch with nothing selected still counts: the new scene's empty selection is an
+    // entry Back can return to (the old scene's entries are unreachable from here).
+    const bool sceneChanged = m_CurrentScenePath != m_SelScenePathLast;
+    const bool selectionChanged = entitiesChanged || assetNow != m_SelAssetLast;
+    if (!selectionChanged && !sceneChanged) { m_EditPushedThisFrame = false; return; }
     m_SelSnapshotLast = cur;
     m_SelAssetLast = assetNow;
+    m_SelScenePathLast = m_CurrentScenePath;
 
     Enhancers::SelectionHistoryEntry entry;
     entry.Orders = CaptureSelectedOrders(world, cur);
@@ -312,8 +317,9 @@ void EditorLayer::RecordSelectionHistory(const World& world) {
     if (m_SelHistoryNavigating) { m_SelHistoryNavigating = false; m_EditPushedThisFrame = false; return; }
 
     // vTabs: selecting something brings the Inspector back to its Selection tab, so it shows what
-    // was just picked. (The Inspector lock is what keeps a view while selecting elsewhere.)
-    if (auto& tabs = Enhancers::TabState::Get().Inspector; tabs.Active >= 0) {
+    // was just picked. (The Inspector lock is what keeps a view while selecting elsewhere.) A scene
+    // switch alone isn't a pick.
+    if (auto& tabs = Enhancers::TabState::Get().Inspector; selectionChanged && tabs.Active >= 0) {
         tabs.Active = -1;
         Enhancers::TabState::Get().MarkDirty();
     }

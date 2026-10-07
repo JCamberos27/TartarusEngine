@@ -129,6 +129,7 @@ struct EditorUiTestAccess {
         e.m_SelHistoryPos = 0;
         e.m_SelSnapshotLast.clear();
         e.m_SelAssetLast.clear();
+        e.m_SelScenePathLast.clear();
         e.m_SelEntryLast = {};
         e.m_Pins.clear();
         e.m_InspectorPickedComponents.clear();
@@ -139,6 +140,7 @@ struct EditorUiTestAccess {
         e.m_Dirty = false;
     }
     static std::string& ScenePath(EditorLayer& e) { return e.m_CurrentScenePath; }
+    static void Deselect(EditorLayer& e) { e.ClearSelection(); e.ClearAssetSelection(); }
     static size_t UndoDepth(EditorLayer& e) { return e.m_UndoStack.size(); }
     static void PushUndo(EditorLayer& e, World& w, const char* label) { e.PushUndo(w, label); }
     static bool InPlay(EditorLayer& e) { return e.m_InPlayMode; }
@@ -200,17 +202,16 @@ std::string g_FailMessage;
 int g_Passed = 0, g_Failed = 0, g_Skipped = 0;
 std::vector<std::string> g_FailLines;
 bool g_Started = false, g_Done = false;
-// This frame's harness input events: their range in ImGui's input queue. Everything else queued
-// before ImGui::NewFrame (the OS cursor and keys the backend still reports) is dropped.
-int g_QueueStart = 0, g_QueueEnd = 0;
+// End of this frame's harness input events in ImGui's input queue. The queue's front holds events
+// ImGui's trickling deferred from last frame (harness events too, e.g. a Ctrl release queued with
+// a mouse-up), then this frame's harness events; everything after (the OS cursor and keys the
+// backend still reports before ImGui::NewFrame) is dropped.
+int g_QueueEnd = 0;
 void KeepOnlyHarnessInput() {
     ImGuiContext* ctx = ImGui::GetCurrentContext();
     if (!ctx || !g_Enabled) return;
     auto& q = ctx->InputEventsQueue;
-    const int start = std::min(g_QueueStart, q.Size), end = std::min(std::max(g_QueueEnd, start), q.Size);
-    ImVector<ImGuiInputEvent> kept;
-    for (int i = start; i < end; ++i) kept.push_back(q[i]);
-    q.swap(kept);
+    q.resize(std::min(g_QueueEnd, q.Size));
 }
 std::string g_ScratchScene;
 
@@ -506,6 +507,17 @@ Query Header(const char* component) {
     };
     return q;
 }
+// Clicks `q` unless `shown` is already on screen - e.g. a header an earlier test left open.
+Step ClickUnlessShown(Query q, Query shown) {
+    Step click = Click(std::move(q));
+    auto skip = std::make_shared<int>(-1);
+    click.Name += " (unless shown)";
+    click.Fn = [inner = click.Fn, shown, skip](Ctx& c) {
+        if (*skip < 0) *skip = Find(shown) ? 1 : 0;
+        return *skip == 1 || inner(c);
+    };
+    return click;
+}
 // The "..." button on a component's header row.
 Query MoreButton(const char* component) {
     Query q;
@@ -634,6 +646,19 @@ void RegisterTests() {
         Do("switch to another scene key", [](Ctx& c) { X::ScenePath(c.E) = g_ScratchScene + ".other.json"; }), Wait(2),
         Key(ImGuiKey_RightBracket, ImGuiMod_Ctrl), Wait(2),
         Expect("nothing from the old scene", [](Ctx& c) { return ExpectSelected(c, "Alpha"); }),
+        Do("restore the scene key", [](Ctx& c) { X::ScenePath(c.E) = g_ScratchScene; }),
+    });
+
+    Add("history: Back reaches the empty selection after a scene switch", {
+        FreshScene(), Wait(2),
+        SelectByName("Alpha"), Wait(2),
+        Do("deselect", [](Ctx& c) { X::Deselect(c.E); }), Wait(2),
+        Do("switch to another scene key", [](Ctx& c) { X::ScenePath(c.E) = g_ScratchScene + ".other.json"; }), Wait(2),
+        SelectByName("Beta"), Wait(2),
+        Key(ImGuiKey_LeftBracket, ImGuiMod_Ctrl), Wait(2),
+        ExpectTrue("back to nothing selected", [](Ctx& c) { return X::Selection(c.E).empty(); }),
+        Key(ImGuiKey_RightBracket, ImGuiMod_Ctrl), Wait(2),
+        Expect("forward to Beta", [](Ctx& c) { return ExpectSelected(c, "Beta"); }),
         Do("restore the scene key", [](Ctx& c) { X::ScenePath(c.E) = g_ScratchScene; }),
     });
 
@@ -846,6 +871,17 @@ void RegisterTests() {
         }),
     });
 
+    // Ctrl+click turns a drag into a text field; typing replaces the value. Regression: the
+    // harness used to drop the trickled Ctrl release, leaving Ctrl held so ImGui ignored the text.
+    Add("typing: Ctrl+click a native float and type a value", {
+        FreshScene(), Wait(2),
+        SelectByName("Beta"), Wait(3),
+        ClickUnlessShown(Header("Audio Source"), ByTag("field:Audio Source/Min Distance")), Wait(3),
+        Click(ByTag("field:Audio Source/Min Distance"), ImGuiMod_Ctrl), Wait(3),
+        TypeText("2"), Wait(2),
+        Key(ImGuiKey_Enter), Wait(3),
+        ExpectTrue("Min Distance = 2", [](Ctx& c) { return c.W.Registry.get<AudioSourceComponent>(ByName(c.W, "Beta")).MinDistance == 2.0f; }),
+    });
     // ------------------------------------------------------------------ 10. C# script attributes
     // The project's assets/Editor has a [CustomEditor("*")] for every script, so this exercises the
     // managed inspector path (SerializedProperty / PropertyField / EditorHost) - what the user sees.
@@ -1102,7 +1138,7 @@ bool BeforeFrame(EditorLayer& editor, World& world, AssetLibrary& assets, Camera
     ctx->TestEngineHookItems = true;
     g_Reg.NextFrame();
     EditorTestInputHook() = &KeepOnlyHarnessInput;
-    g_QueueStart = g_QueueEnd = ctx->InputEventsQueue.Size;
+    g_QueueEnd = ctx->InputEventsQueue.Size;
     struct QueueMark { ImGuiContext* c; ~QueueMark() { g_QueueEnd = c->InputEventsQueue.Size; } } mark{ctx};
 
     if (!g_Started) {

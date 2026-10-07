@@ -4362,6 +4362,7 @@
   "dofMaxBlur": 8.0,
   "empties": [
     {
+      "hierStyle": {"color": "#E5484D", "icon": "mountain-sun"},
       "id": 78,
       "name": "Environment",
       "order": 0,
@@ -4384,6 +4385,7 @@
       ]
     },
     {
+      "hierStyle": {"color": "#F2994A", "icon": "lightbulb"},
       "id": 79,
       "name": "Lighting",
       "order": 6,
@@ -4427,6 +4429,7 @@
         "Spot Angle": 35.0,
         "Type": "Directional"
       },
+      "hierStyle": {"color": "#F2994A", "fill": 0, "icon": "sun"},
       "id": 80,
       "name": "Sun",
       "order": 7,
@@ -4457,6 +4460,7 @@
           64.0
         ]
       },
+      "hierStyle": {"color": "#F2994A", "fill": 0, "icon": "circle-half-stroke"},
       "id": 81,
       "name": "Arena Reflection Probe",
       "order": 8,
@@ -4479,6 +4483,7 @@
       ]
     },
     {
+      "hierStyle": {"color": "#4CC38A", "icon": "shield"},
       "id": 82,
       "name": "Cover",
       "order": 9,
@@ -4501,6 +4506,7 @@
       ]
     },
     {
+      "hierStyle": {"color": "#4CC38A", "fill": 0, "icon": "house"},
       "id": 83,
       "name": "Building North",
       "order": 10,
@@ -4523,6 +4529,7 @@
       ]
     },
     {
+      "hierStyle": {"color": "#4CC38A", "fill": 0, "icon": "house"},
       "id": 84,
       "name": "Building South",
       "order": 22,
@@ -4545,6 +4552,7 @@
       ]
     },
     {
+      "hierStyle": {"color": "#4CC38A", "fill": 0, "icon": "road"},
       "id": 85,
       "name": "Corridor",
       "order": 34,
@@ -4567,6 +4575,7 @@
       ]
     },
     {
+      "hierStyle": {"color": "#4CC38A", "fill": 0, "icon": "bullseye"},
       "id": 86,
       "name": "Centre",
       "order": 40,
@@ -4589,6 +4598,7 @@
       ]
     },
     {
+      "hierStyle": {"color": "#4CC38A", "fill": 0, "icon": "box"},
       "id": 87,
       "name": "Crates West",
       "order": 44,
@@ -4611,6 +4621,7 @@
       ]
     },
     {
+      "hierStyle": {"color": "#4CC38A", "fill": 0, "icon": "box"},
       "id": 88,
       "name": "Crates East",
       "order": 48,
@@ -4633,6 +4644,7 @@
       ]
     },
     {
+      "hierStyle": {"color": "#4CC38A", "fill": 0, "icon": "box"},
       "id": 89,
       "name": "Crates South",
       "order": 52,
@@ -4655,6 +4667,7 @@
       ]
     },
     {
+      "hierStyle": {"color": "#4CC38A", "fill": 0, "icon": "box"},
       "id": 90,
       "name": "Crates North",
       "order": 55,
@@ -4677,6 +4690,7 @@
       ]
     },
     {
+      "hierStyle": {"color": "#4CC38A", "fill": 0, "icon": "person-digging"},
       "id": 91,
       "name": "Trench",
       "order": 69,
@@ -4699,6 +4713,7 @@
       ]
     },
     {
+      "hierStyle": {"color": "#4CC38A", "fill": 0, "icon": "tower-observation"},
       "id": 92,
       "name": "Tower North",
       "order": 79,
@@ -4721,6 +4736,7 @@
       ]
     },
     {
+      "hierStyle": {"color": "#4CC38A", "fill": 0, "icon": "tower-observation"},
       "id": 93,
       "name": "Tower South",
       "order": 82,
@@ -4806,6 +4822,7 @@
         ],
         "View Model Scale": 1.0
       },
+      "hierStyle": {"color": "#4C8DF6", "icon": "person"},
       "id": 94,
       "name": "Player Spawn",
       "order": 85,
@@ -4966,6 +4983,7 @@
         "Turn Timeout": 4.0,
         "Weapon Arms": true
       },
+      "hierStyle": {"color": "#4C8DF6", "fill": 0, "icon": "person-running"},
       "id": 95,
       "name": "Player Body",
       "order": 86,
@@ -4989,6 +5007,7 @@
     },
     {
       "active": false,
+      "hierStyle": {"color": "#9B6CF2", "icon": "skull"},
       "id": 96,
       "name": "Enemies",
       "order": 96,
@@ -5037,6 +5056,7 @@
         "Squad Size": 4,
         "Stagger Time": 0.4000000059604645
       },
+      "hierStyle": {"color": "#9B6CF2", "fill": 0, "icon": "brain"},
       "id": 97,
       "name": "AI Director",
       "order": 97,
@@ -5066,6 +5086,7 @@
         "Squad": 0,
         "Weapon": "AKS-74U"
       },
+      "hierStyle": {"color": "#9B6CF2", "fill": 0, "icon": "location-dot"},
       "id": 98,
       "name": "Enemy Spawn 1",
       "order": 98,
@@ -5095,6 +5116,7 @@
         "Squad": 0,
         "Weapon": "Remington 870"
       },
+      "hierStyle": {"color": "#9B6CF2", "fill": 0, "icon": "location-dot"},
       "id": 99,
       "name": "Enemy Spawn 2",
       "order": 99,
@@ -5124,6 +5146,7 @@
         "Squad": 0,
         "Weapon": "AKS-74U"
       },
+      "hierStyle": {"color": "#9B6CF2", "fill": 0, "icon": "location-dot"},
       "id": 100,
       "name": "Enemy Spawn 3",
       "order": 100,
@@ -5153,6 +5176,7 @@
         "Squad": 0,
         "Weapon": "AKS-74U"
       },
+      "hierStyle": {"color": "#9B6CF2", "fill": 0, "icon": "location-dot"},
       "id": 101,
       "name": "Enemy Spawn 4",
       "order": 101,
@@ -5182,6 +5206,7 @@
         "Squad": 0,
         "Weapon": "Remington 870"
       },
+      "hierStyle": {"color": "#9B6CF2", "fill": 0, "icon": "location-dot"},
       "id": 102,
       "name": "Enemy Spawn 5",
       "order": 102,
