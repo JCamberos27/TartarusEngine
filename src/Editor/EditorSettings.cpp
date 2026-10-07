@@ -207,6 +207,7 @@ void EditorSettings::Load() {
     s.FolderMinimap = SafeValue(root, "folderMinimap", s.FolderMinimap);
     s.FolderNavBar = SafeValue(root, "folderNavBar", s.FolderNavBar);
     s.InspectorNavBar = SafeValue(root, "inspectorNavBar", s.InspectorNavBar);
+    s.BookmarkChips = SafeValue(root, "bookmarkChips", s.BookmarkChips);
     s.InspectorAnimations = SafeValue(root, "inspectorAnimations", s.InspectorAnimations);
     s.InspectorMinimal = SafeValue(root, "inspectorMinimal", s.InspectorMinimal);
     s.InspectorTabs = SafeValue(root, "inspectorTabs", s.InspectorTabs);
@@ -390,6 +391,7 @@ void EditorSettings::Flush() {
     root["folderMinimap"] = Get().FolderMinimap;
     root["folderNavBar"] = Get().FolderNavBar;
     root["inspectorNavBar"] = Get().InspectorNavBar;
+    root["bookmarkChips"] = Get().BookmarkChips;
     root["inspectorAnimations"] = Get().InspectorAnimations;
     root["inspectorMinimal"] = Get().InspectorMinimal;
     root["inspectorTabs"] = Get().InspectorTabs;

@@ -2190,7 +2190,13 @@ void EditorLayer::DrawInspectorBody(World& world, AssetLibrary& assets) {
 
     // vTabs: the strip, then the active pinned tab's target stands in for the selection for the
     // rest of the body - like the lock, and over it. The Selection tab leaves things as they are.
-    DrawInspectorTabStrip(world);
+    // Unless bookmarks are chips, Back / Forward and the bookmark button share the strip's row
+    // (DrawInspectorHeaderNav, after the swap, so the bookmark toggle names what is shown).
+    const bool compactNav = EditorSettings::Get().InspectorNavBar && !EditorSettings::Get().BookmarkChips;
+    const ImVec2 headMin = ImGui::GetCursorScreenPos();
+    const float headH = ImGui::GetFrameHeight();
+    const bool stripShown = DrawInspectorTabStrip(world, compactNav ? 2.0f * headH + EditorTheme::Px(12.0f) : 0.0f,
+                                                  compactNav ? headH + EditorTheme::Px(6.0f) : 0.0f);
     {
         entt::entity tabEntity = entt::null;
         std::string tabAsset;
@@ -2198,6 +2204,7 @@ void EditorLayer::DrawInspectorBody(World& world, AssetLibrary& assets) {
         const auto& tabs = Enhancers::TabState::Get().Inspector;
         if (ResolveInspectorTab(world, tabEntity, tabAsset, tabMissing)) {
             if (tabMissing) {
+                if (compactNav) DrawInspectorHeaderNav(world, navAct, headMin, stripShown);
                 ImGui::Spacing();
                 ImGui::TextDisabled(ICON_FA_TRIANGLE_EXCLAMATION "  This tab's object isn't in the open scene.");
                 ImGui::TextDisabled("Open its scene, or close the tab.");
@@ -2226,7 +2233,8 @@ void EditorLayer::DrawInspectorBody(World& world, AssetLibrary& assets) {
         }
         m_InspectorTabShown = tabs.Active;
     }
-    DrawInspectorNavBar(world, navAct);
+    if (compactNav) DrawInspectorHeaderNav(world, navAct, headMin, stripShown);
+    else DrawInspectorNavBar(world, navAct);
 
     // The padlock lives in the panel's title bar now (drawn by the Inspector module, toggled
     // through EditorLayer::ToggleInspectorLock). Only a slim "locked to…" note remains here,
@@ -3435,12 +3443,6 @@ const ReflectField* FindEnabledField(const ReflectComponent& meta) {
     return nullptr;
 }
 
-float EaseOutCubic(float t) {
-    t = std::clamp(t, 0.0f, 1.0f);
-    const float u = 1.0f - t;
-    return 1.0f - u * u * u;
-}
-
 ImU32 FadeU32(ImU32 c, float a) {
     if (a >= 1.0f) return c;
     const ImU32 alpha = (ImU32)((float)((c >> IM_COL32_A_SHIFT) & 0xFF) * std::clamp(a, 0.0f, 1.0f));
@@ -3621,7 +3623,7 @@ bool EditorLayer::BeginComponentSection(const char* icon,
         m_RemovingSeenFrame = frame;
         const float t = animate ? (float)((now - m_RemovingStart) / kSectionRemoveSecs) : 1.0f;
         if (t >= 1.0f) { m_RemovingSection = 0; removedOut = true; }
-        else { removing = true; fade = 1.0f - EaseOutCubic(t); }
+        else { removing = true; fade = 1.0f - EditorTheme::Ease::OutCubic(t); }
     }
 
     const ImVec2 hp = ImGui::GetCursorScreenPos();
@@ -3863,7 +3865,7 @@ bool EditorLayer::BeginComponentSection(const char* icon,
         // Eased height while opening/closing, shrinking while fading out for removal; otherwise
         // the body sizes itself (and is measured for the next animation).
         float fixedH = 0.0f;
-        if (animating) fixedH = fullH * (open ? EaseOutCubic(animT) : 1.0f - EaseOutCubic(animT));
+        if (animating) fixedH = fullH * (open ? EditorTheme::Ease::OutCubic(animT) : 1.0f - EditorTheme::Ease::OutCubic(animT));
         if (removing && fullH > 0.0f) fixedH = (animating ? fixedH : fullH) * fade;
         const bool useFixed = animating || (removing && fullH > 0.0f);
         // The body hangs under its title bar as one card: the Card surface, a hairline edge, the

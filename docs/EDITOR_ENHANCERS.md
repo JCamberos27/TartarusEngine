@@ -131,12 +131,27 @@ The row between the Hierarchy toolbar and the tree:
 | --- | --- |
 | Scene selector | Lists bookmarked scenes, recent scenes and every scene in `project/scenes`. The star toggles a bookmark. Picking a scene opens it, with the usual unsaved-changes prompt. |
 | Back / Forward | The selection history (Ctrl+[ / Ctrl+]). |
-| Bookmark button | Bookmarks the selection, or removes it if already bookmarked. |
-| Chips | This scene's bookmarked objects. Click selects (Ctrl+click adds to the selection), right-click removes. Chips that don't fit go into a "+N" menu. |
+| Bookmark button | At the bar's right end. Opens the bookmarks list (below). Lit while the selection is bookmarked. |
 
 Drop Hierarchy rows anywhere on the bar to bookmark them. Bookmarks are personal (per user and
 per project) and resolve by scene GUID + `OrderComponent`, so they survive renames, reloads and
 Play/Stop. A bookmarked object that no longer exists shows dimmed until it is removed.
+
+#### The bookmarks list
+
+Each panel header (Hierarchy, Inspector, Asset Browser) has one bookmark button instead of a row
+of chips, so every panel keeps a single header row. The button opens a list:
+
+* The first row bookmarks what the panel shows (the selection, the inspected object or asset,
+  the current folder), or removes it.
+* Then the bookmarks, with their Row Style / folder icon and colour. Click one to select or open
+  it (Ctrl+click adds an object to the selection). The x on a hovered row removes it. Drag rows to
+  reorder them.
+* Dropping rows, files or folders on the button still bookmarks them; it lights up while a drop
+  would land.
+
+Preferences > Editor Enhancers > **Bookmark chips** brings the chips back (and the Asset Browser's
+separate bookmark bar), for those who prefer them.
 
 ### Hover keys
 
@@ -227,12 +242,13 @@ the browser is open, because moving an asset between folders changes neither lis
 Optional, off or on in Settings. Tree lines join each folder to its parent; zebra stripes
 alternate rows; minimal mode drops the folder glyph unless the folder has its own icon.
 
-### Bookmark bar
+### Folder bookmarks
 
-Bookmarked folders appear as chips under the Asset Browser toolbar: click to go there,
-right-click to remove. Drop any folder (tree row or grid tile) on the bar to bookmark it. The bar
-only appears once there is a bookmark, or while a folder is being dragged. Folder bookmarks are
-personal (per user, per project).
+Bookmarked folders sit behind the bookmark button at the right end of the Asset Browser's tab row
+(the bookmarks list, see vHierarchy). Click one to go there; drop any folder (tree row or grid
+tile) on the button to bookmark it. While there are bookmarks but no tabs, the row shows the
+current folder as a live tab. Folder bookmarks are personal (per user, per project). With
+**Bookmark chips** on, they appear as chips on their own bar under the toolbar instead.
 
 ### Hover keys
 
@@ -267,16 +283,16 @@ Play/Stop or scene load and could select an unrelated object. Now:
 
 ### Navigation bar
 
-The row at the top of the Inspector:
+The Inspector's one header row: Back / Forward, then the vTabs strip (or, with no tabs, the
+inspected object's icon and name), then the bookmark button.
 
 | Control | Does |
 | --- | --- |
 | Back / Forward | The selection history above. |
-| Bookmark button | Bookmarks what the Inspector shows: the object (the locked one while the Inspector is locked) or the asset. |
-| Chips | This scene's bookmarked objects plus every bookmarked asset. Click selects or inspects (Ctrl+click adds an object to the selection), right-click removes. Overflow goes into "+N". |
+| Bookmark button | Opens the bookmarks list (see vHierarchy). Its first row bookmarks what the Inspector shows: the object (the locked one while the Inspector is locked) or the asset. The list holds this scene's objects plus every bookmarked asset. |
 
-Drop Hierarchy rows or Asset Browser files on the bar to bookmark them. Object chips use their
-Row Style icon. Inspector bookmarks are separate from the Hierarchy's and are personal (per user,
+Drop Hierarchy rows or Asset Browser files on the bookmark button to bookmark them (dropped on
+the tabs they open a tab). Inspector bookmarks are separate from the Hierarchy's and are personal (per user,
 per project). Preferences > Editor Enhancers > Inspector > **Navigation bar** hides it.
 
 ### Component sections

@@ -285,6 +285,10 @@ struct EditorSettings {
     // Animations: component sections ease open/closed and fade out on removal. Minimal: a
     // section's actions button shows only while its header is hovered.
     bool InspectorNavBar     = true;
+    // Bookmarks show as chips on the Hierarchy / Inspector nav bars and a bar under the Asset
+    // Browser toolbar. Off (the default): one bookmark button per panel opens them as a list, so
+    // each panel keeps a single header row.
+    bool BookmarkChips       = false;
     bool InspectorAnimations = true;
     bool InspectorMinimal    = false;
     // vTabs: the tab strips at the top of the Inspector and under the Asset Browser toolbar.
