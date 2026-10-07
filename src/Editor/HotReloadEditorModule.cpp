@@ -426,6 +426,16 @@ void  HierDrawTreeBody() {
 void  HierDrawNavBar() { // API v39 - Editor Enhancers / vHierarchy
     if (g_Editor && g_World && g_Assets) g_Editor->DrawHierarchyNavBar(*g_World, *g_Assets);
 }
+// API v40 - Editor Enhancers / vFolders
+bool  AbGetFolderVisual(const char* p, EditorFolderVisual* o) {
+    return g_Editor && g_Assets && p && o && g_Editor->GetFolderVisual(*g_Assets, p, *o);
+}
+unsigned AbGetFolderTreeFlags() { return g_Editor ? g_Editor->FolderTreeFlags() : 0u; }
+void  AbDrawFolderContextMenuBody(const char* p) {
+    if (g_Editor && g_World && g_Assets && p) g_Editor->DrawFolderContextMenuBody(*g_World, *g_Assets, p);
+}
+void  AbSetHoveredAssetFolder(const char* p) { if (g_Editor) g_Editor->SetHoveredAssetFolder(p ? p : ""); }
+void  AbDrawFolderNavBar() { if (g_Editor && g_World && g_Assets) g_Editor->DrawFolderNavBar(*g_World, *g_Assets); }
 
 // --- Inspector, frame only (API v8) --------------------------------------------------------
 bool  InspGetShow() { return g_Editor && g_Editor->GetShowInspector(); }
@@ -582,6 +592,11 @@ EditorModuleHostAPI MakeHostAPI() {
     api.HierarchyExpandAll = &HierExpandAll;
     api.DrawHierarchyTreeBody = &HierDrawTreeBody;
     api.DrawHierarchyNavBar = &HierDrawNavBar;
+    api.GetFolderVisual = &AbGetFolderVisual;
+    api.GetFolderTreeFlags = &AbGetFolderTreeFlags;
+    api.DrawFolderContextMenuBody = &AbDrawFolderContextMenuBody;
+    api.SetHoveredAssetFolder = &AbSetHoveredAssetFolder;
+    api.DrawFolderNavBar = &AbDrawFolderNavBar;
     api.GetShowInspector = &InspGetShow;
     api.SetShowInspector = &InspSetShow;
     api.DrawInspectorBody = &InspDrawBody;

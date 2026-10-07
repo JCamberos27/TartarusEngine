@@ -38,6 +38,7 @@
 
 #include "Enhancers/EnhancerUserState.h"
 #include "Enhancers/Palette.h"
+#include "Enhancers/FolderStyles.h"
 #include "UndoDeltaChain.h" // undo history stores JSON-Patch deltas, not full snapshots (#174)
 
 #include <imgui.h>
@@ -110,7 +111,9 @@ void EditorLayer::BeginGlobalUndoFrame(const World& world) {
         if(!m_GlobalUndoActive) {
             m_GlobalUndoScene=m_AssetsPtr?SceneSerializer::SaveToString(world,*m_AssetsPtr):SceneSerializer::SaveToString(world);
             m_GlobalUndoSelection=CaptureSelectedOrders(world);
-            m_GlobalUndoLabel=enhancers ? std::string(absolute==std::filesystem::path(Enhancers::Palette::Path()) ? "Edit Style Palette" : "Edit Bookmarks")
+            const bool folderStyles=absolute==std::filesystem::path(Enhancers::FolderStyles::Path());
+            m_GlobalUndoLabel=folderStyles ? std::string("Edit Folder Style")
+                            : enhancers ? std::string(absolute==std::filesystem::path(Enhancers::Palette::Path()) ? "Edit Style Palette" : "Edit Bookmarks")
                                         : "Edit " + path.filename().string();
             m_GlobalUndoActive=true;
         }
@@ -120,7 +123,7 @@ void EditorLayer::BeginGlobalUndoFrame(const World& world) {
 void EditorLayer::FinishGlobalUndo(const World& world,bool force) {
     if(!m_GlobalUndoActive || (!force && (ImGui::IsAnyItemActive() || ImGui::IsMouseDown(ImGuiMouseButton_Left)))) return;
     EditorSettings::Flush();
-    Enhancers::EnhancerUserState::Get().Flush();Enhancers::Palette::Flush();
+    Enhancers::EnhancerUserState::Get().Flush();Enhancers::Palette::Flush();Enhancers::FolderStyles::Get().Flush();
     const auto current=m_AssetsPtr?SceneSerializer::SaveToString(world,*m_AssetsPtr):SceneSerializer::SaveToString(world);
     auto files=m_FileJournal.Changes();
     const auto selection=CaptureSelectedOrders(world);
@@ -160,6 +163,7 @@ void EditorLayer::ReloadHistoryFiles(AssetLibrary& assets,const std::vector<Edit
         if(file.Path==std::filesystem::path(UserPaths::Resolve("asset_favorites.json")))LoadAssetFavorites();
         if(file.Path==std::filesystem::path(Enhancers::EnhancerUserState::Path()))Enhancers::EnhancerUserState::Get().Load();
         if(file.Path==std::filesystem::path(Enhancers::Palette::Path()))Enhancers::Palette::Load();
+        if(file.Path==std::filesystem::path(Enhancers::FolderStyles::Path()))Enhancers::FolderStyles::Get().Load();
         if(file.Path.extension()==".cs" || file.Path.extension()==".csproj")Scripting::RequestBuild();
     }
     if(assetIdentity)AssetDatabase::ScanProject();

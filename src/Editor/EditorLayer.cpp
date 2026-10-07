@@ -130,6 +130,7 @@ void EditorLayer::Init(GLFWwindow* window) {
     // Editor Enhancers: this project's bookmarks / default parents and the per-user style palette.
     Enhancers::EnhancerUserState::Get().Load();
     Enhancers::Palette::Load();
+    Enhancers::FolderStyles::Get().Load(); // project/editor_folders.json (vFolders)
 
     // Authored content lives in the project folder, not the working directory (build/Release/)
     // — see ProjectPaths.h. Must match main.cpp's initial load: prefer the last-open scene if
@@ -520,6 +521,7 @@ void EditorLayer::Shutdown() {
         EditorSettings::Flush();
         Enhancers::EnhancerUserState::Get().Flush();
         Enhancers::Palette::Flush();
+        Enhancers::FolderStyles::Get().Flush();
     }
 
     ImGui_ImplOpenGL3_Shutdown();
@@ -3653,9 +3655,12 @@ void EditorLayer::PostModuleDraw(World& world) {
     // and shortcut that ran this frame (a Hierarchy click lives in the module, past Draw()'s
     // return).
     RecordSelectionHistory(world);
+    // vFolders hover keys: the module drew the folder tree (and reported the hovered folder) by now.
+    if (m_AssetsPtr) HandleFolderHoverKeys(*m_AssetsPtr);
     EditorSettings::Flush();
     Enhancers::EnhancerUserState::Get().Flush();
     Enhancers::Palette::Flush();
+    Enhancers::FolderStyles::Get().Flush();
     FinishGlobalUndo(world);
     if(m_RequestGlobalUndo && m_AssetsPtr) Undo(world,*m_AssetsPtr);
     else if(m_RequestGlobalRedo && m_AssetsPtr) Redo(world,*m_AssetsPtr);

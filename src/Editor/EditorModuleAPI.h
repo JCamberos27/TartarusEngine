@@ -136,7 +136,27 @@
 //        title bar).
 //   39 - Editor Enhancers / vHierarchy: DrawHierarchyNavBar, the host-drawn scene selector +
 //        selection Back/Forward + entity bookmark row between the Hierarchy toolbar and tree.
-constexpr std::uint32_t kEditorModuleAPIVersion = 39;
+//   40 - Editor Enhancers / vFolders: GetFolderVisual (icon / colour / content minimap per folder),
+//        GetFolderTreeFlags, DrawFolderContextMenuBody, SetHoveredAssetFolder (hover keys),
+//        DrawFolderNavBar (folder bookmark chips).
+constexpr std::uint32_t kEditorModuleAPIVersion = 40;
+
+// Editor Enhancers / vFolders (API v40): how one Asset Browser folder looks. POD - crosses the
+// module boundary. Glyphs are UTF-8 Font Awesome characters (at most 4 bytes + NUL).
+struct EditorFolderVisual {
+    char     Icon[8] = {};      // "" = the plain folder glyph
+    unsigned Color = 0;         // IM_COL32-packed; 0 = no colour
+    char     Mini[4][8] = {};   // content minimap: the most numerous kinds' glyphs
+    int      MiniCount = 0;
+    int      Total = 0;         // assets directly inside
+};
+// GetFolderTreeFlags bits.
+constexpr unsigned kFolderTreeLines   = 1u << 0;
+constexpr unsigned kFolderTreeMinimap = 1u << 1;
+constexpr unsigned kFolderTreeStyles  = 1u << 2; // icons + colours
+constexpr unsigned kFolderTreeWash    = 1u << 3; // colour also washes the row background
+constexpr unsigned kFolderTreeZebra   = 1u << 4;
+constexpr unsigned kFolderTreeMinimal = 1u << 5; // no glyph unless the folder has a custom icon
 
 // Asset Browser Details-view column widths (API v26), in unscaled px (the caller applies UI
 // scale). Name gets whatever's left of the row after these three.
@@ -512,6 +532,18 @@ struct EditorModuleHostAPI {
     // Draws the nav row (scene selector, Back/Forward, bookmark chips) into the current window at
     // the cursor; host-side because the chips resolve entities by scene GUID + Order.
     void (*DrawHierarchyNavBar)() = nullptr;
+
+    // --- Editor Enhancers / vFolders (API v40) ---
+    bool (*GetFolderVisual)(const char* path, EditorFolderVisual* out) = nullptr;
+    unsigned (*GetFolderTreeFlags)() = nullptr;
+    // The folder tree's right-click menu body (style, bookmark, rule), drawn inside the module's popup.
+    void (*DrawFolderContextMenuBody)(const char* path) = nullptr;
+    // The tree reports the folder under the mouse each frame ("" = none) for the E / Shift+E /
+    // Ctrl+Shift+E hover keys, which the host applies after the module has drawn.
+    void (*SetHoveredAssetFolder)(const char* path) = nullptr;
+    // Folder bookmark chips, under the toolbar. Draws nothing when there are none and nothing is
+    // being dragged.
+    void (*DrawFolderNavBar)() = nullptr;
 };
 
 struct EditorModuleAPI {
