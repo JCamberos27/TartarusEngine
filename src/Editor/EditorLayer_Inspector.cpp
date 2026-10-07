@@ -36,6 +36,8 @@
 #include "Scripting/ScriptRuntime.h"
 #include "Scripting/ScriptComponent.h"
 #include <json.hpp>
+#include "Shortcuts.h" // vInspector hover keys
+#include <cstring>
 #include "ProjectSettings.h" // project-defined tag vocabulary for the Tag dropdown (#236 A4)
 #include "LayerRegistry.h"
 #include "Profiler.h"
@@ -2017,6 +2019,8 @@ void EditorLayer::DrawInspectorBody(World& world, AssetLibrary& assets) {
     ImGui::PushStyleColor(ImGuiCol_ButtonHovered, EditorUIPrimitives::FlatHover());
     ImGui::PushStyleColor(ImGuiCol_ButtonActive,  EditorUIPrimitives::FlatPressed());
     auto InspectorEnd = []() { ImGui::PopStyleColor(3); };
+    m_InspectorWorld = &world;
+    HandleInspectorHoverKeys(world); // vInspector: acts on last frame's hovered section
 
     // Prune handles for objects deleted since the selection was made, so the multi/single
     // Inspector split below (and everything downstream) sees an accurate count.
@@ -2035,6 +2039,10 @@ void EditorLayer::DrawInspectorBody(World& world, AssetLibrary& assets) {
     const entt::entity     liveSelected = m_Selected;
     std::vector<entt::entity> liveExtra  = m_ExtraSelection;
     bool inspLockSwapped = false;
+    // vInspector nav-bar clicks, applied on the way out. Declared before _restore so it is
+    // destroyed after it: the live selection is back in place before the click changes it.
+    InspectorNavAction navAct;
+    struct NavScope { EditorLayer* self; World& w; InspectorNavAction& a; ~NavScope() { self->ApplyInspectorNavAction(w, a); } } _nav{this, world, navAct};
     auto restoreLiveSelection = [&] {
         if (inspLockSwapped) { m_Selected = liveSelected; m_ExtraSelection = std::move(liveExtra); }
     };
@@ -2067,6 +2075,8 @@ void EditorLayer::DrawInspectorBody(World& world, AssetLibrary& assets) {
             inspLockSwapped = true;
         }
     }
+
+    DrawInspectorNavBar(world, navAct);
 
     // The padlock lives in the panel's title bar now (drawn by the Inspector module, toggled
     // through EditorLayer::ToggleInspectorLock). Only a slim "locked to…" note remains here,
@@ -2359,7 +2369,20 @@ void EditorLayer::DrawInspectorBody(World& world, AssetLibrary& assets) {
         ImGui::PushStyleVar(ImGuiStyleVar_FramePadding, ImVec2(6.0f * m_UIScale, 2.0f * m_UIScale)); // #37
         {
             const float bw = ImGui::GetFrameHeight() + 8.0f;
-            ImGui::SameLine(ImGui::GetContentRegionMax().x - bw * 2.0f - ImGui::GetStyle().ItemSpacing.x);
+            ImGui::SameLine(ImGui::GetContentRegionMax().x - bw * 3.0f - ImGui::GetStyle().ItemSpacing.x * 2.0f);
+            // vInspector: paste the multi-component clipboard onto every selected object.
+            ImGui::BeginDisabled(m_ComponentClipboard.empty());
+            if (ActionButton(ICON_FA_PASTE, "Paste copied components onto every selected object", false, ImVec2(bw, 0.0f)))
+                ImGui::OpenPopup("##multiPaste");
+            ImGui::EndDisabled();
+            if (ImGui::BeginPopup("##multiPaste")) {
+                if (ImGui::MenuItem(ICON_FA_PASTE "  Paste Components as New"))
+                    PasteComponentClipboard(world, assets, sel, Enhancers::PasteMode::AsNew);
+                if (ImGui::MenuItem(ICON_FA_PASTE "  Paste Component Values"))
+                    PasteComponentClipboard(world, assets, sel, Enhancers::PasteMode::Values);
+                ImGui::EndPopup();
+            }
+            ImGui::SameLine();
             if (ActionButton(ICON_FA_CLONE, "Duplicate every selected object (Ctrl+D)", false, ImVec2(bw, 0.0f)))
                 DuplicateSelection(world, assets);
             ImGui::SameLine();
@@ -2522,6 +2545,35 @@ void EditorLayer::DrawInspectorBody(World& world, AssetLibrary& assets) {
                 std::string path = FileDialog::SaveFile("Prefab Files\0*.prefab\0All Files\0*.*\0", "prefab", m_Window);
                 if (!path.empty() && SceneSerializer::SavePrefab(world, entity, path)) assets.RegisterPrefab(path);
             }
+            // vInspector multi-component clipboard.
+            ImGui::Separator();
+            if (ImGui::MenuItem(ICON_FA_COPY "  Copy All Components")) {
+                m_ComponentClipboard = Enhancers::CopyAllComponents(world, entity);
+                Log::Info("Copied " + std::to_string(m_ComponentClipboard.size()) + " components.");
+            }
+            {
+                char buf[96];
+                const int asNew = Enhancers::CountPastable(world, entity, m_ComponentClipboard, Enhancers::PasteMode::AsNew);
+                const int vals = Enhancers::CountPastable(world, entity, m_ComponentClipboard, Enhancers::PasteMode::Values);
+                std::snprintf(buf, sizeof(buf), ICON_FA_PASTE "  Paste Components as New (%d)", asNew);
+                if (ImGui::MenuItem(buf, nullptr, false, asNew > 0))
+                    PasteComponentClipboard(world, assets, GetSelectedItems(), Enhancers::PasteMode::AsNew);
+                std::snprintf(buf, sizeof(buf), ICON_FA_PASTE "  Paste Component Values (%d)", vals);
+                if (ImGui::MenuItem(buf, nullptr, false, vals > 0))
+                    PasteComponentClipboard(world, assets, GetSelectedItems(), Enhancers::PasteMode::Values);
+            }
+            // Keep Changes After Play for the Transform and every preset-capable component.
+            if (m_InPlayMode) {
+                if (const auto* oc = registry.try_get<OrderComponent>(entity)) {
+                    if (ImGui::MenuItem(ICON_FA_THUMBTACK "  Keep All Changes After Play")) {
+                        if (!IsKeptAfterPlay(oc->Value, Enhancers::kKeepTransform))
+                            ToggleKeepAfterPlay(oc->Value, Enhancers::kKeepTransform);
+                        for (const auto& c : ComponentRegistry::All())
+                            if (c.Meta.GenericSerialize && c.Has(registry, entity) && !IsKeptAfterPlay(oc->Value, c.Meta.Name))
+                                ToggleKeepAfterPlay(oc->Value, c.Meta.Name);
+                    }
+                }
+            }
             ImGui::Separator();
             if (ImGui::MenuItem(ICON_FA_TRASH "  Delete", "Del"))
                 DeleteSelection(world);
@@ -2664,7 +2716,7 @@ void EditorLayer::DrawInspectorBody(World& world, AssetLibrary& assets) {
     bool removed = false, tfReset = false, tfCopy = false, tfPaste = false;
     if (BeginComponentSection(ICON_FA_UP_DOWN_LEFT_RIGHT, "Transform", false, removed,
             "Position, rotation, and scale in the world. Every object has one.",
-            &tfReset, &tfCopy, &tfPaste)) {
+            &tfReset, &tfCopy, &tfPaste, nullptr, nullptr, nullptr, nullptr, entity)) {
 
         // Stage on first touch, commit on release — one History entry per edit, and a
         // rejected (non-finite) or no-op edit records nothing (its snapshot dedupes away).
@@ -2716,7 +2768,8 @@ void EditorLayer::DrawInspectorBody(World& world, AssetLibrary& assets) {
         // Not removable on level geometry: a box IS its cube mesh, and removing it would leave
         // an invisible collider that the Hierarchy still lists under "Level Geometry".
         if (BeginComponentSection(ICON_FA_DRAW_POLYGON, "Mesh Renderer", !isLevelGeometry, removed,
-                "The mesh this object draws, and its material color/texture options.")) {
+                "The mesh this object draws, and its material color/texture options.",
+                nullptr, nullptr, nullptr, nullptr, nullptr, nullptr, nullptr, entity)) {
             const std::string& modelPath = renderable->ModelRef->Path();
             std::string meshName;
             // Defect #5 — a procedural primitive's Path() is "primitive://<kind>#<counter>": the
@@ -2892,7 +2945,8 @@ void EditorLayer::DrawInspectorBody(World& world, AssetLibrary& assets) {
     if (registry.all_of<RenderableComponent>(entity)) {
         bool matRemoved = false;
         if (BeginComponentSection(ICON_FA_PALETTE, "Material", false, matRemoved,
-                "Surface appearance: color, metallic/roughness, emissive glow, and texture maps.")) {
+                "Surface appearance: color, metallic/roughness, emissive glow, and texture maps.",
+                nullptr, nullptr, nullptr, nullptr, nullptr, nullptr, nullptr, entity)) {
             DrawMaterialEditor(world, assets, {m_Selected});
             EndComponentSection();
         }
@@ -2943,7 +2997,7 @@ void EditorLayer::DrawInspectorBody(World& world, AssetLibrary& assets) {
             compAdded ? &reflPfRevert : nullptr, compAdded ? &reflPfApply : nullptr,
             // #178 - every generically-inspected component is also generically serialised, so
             // all of them can round-trip through a preset.
-            &reflSavePreset, &reflApplyPreset);
+            &reflSavePreset, &reflApplyPreset, entity);
         if (compAdded) DrawOverrideGutterBar();
         // "Revert to Prefab" on an added component == remove it; route through the same
         // end-of-loop removal path (below) so nothing touches a component mid-teardown.
@@ -2982,6 +3036,12 @@ void EditorLayer::DrawInspectorBody(World& world, AssetLibrary& assets) {
                 }
             }
             m_ComponentClipKind = rc.Meta.Name;
+            // vInspector: a single copy also fills the multi-component clipboard (Paste
+            // Components as New / Paste Component Values in the object's actions menu).
+            if (rc.Meta.GenericSerialize) {
+                std::string j = SceneSerializer::ComponentToPresetJson(world, entity, rc.Meta.Name);
+                if (!j.empty()) m_ComponentClipboard = {std::move(j)};
+            }
             const RegisteredComponent* rcp = &rc; // ComponentRegistry::All() entries are stable for the run
             std::string compName = rc.Meta.Name;
             m_ComponentClipApply = [rcp, vals, compName](EditorLayer& self, World& w, entt::entity e) {
@@ -3151,10 +3211,125 @@ std::string EditorLayer::SaveComponentPreset(const World& world, entt::entity en
     return path.string();
 }
 
+// --- vInspector helpers ---------------------------------------------------------------------
+namespace {
+// Salts for a section's extra per-ID storage slots, next to its open/closed int at headerId.
+constexpr ImGuiID kSectionHeightSalt = 0x48E16E7Bu; // float: measured full body height
+constexpr ImGuiID kSectionAnimSalt   = 0x7A11A11Au; // float: open/close animation start time, -1 idle
+constexpr ImGuiID kSectionDragSalt   = 0x0D7A6D7Au; // int: an Alt+drag-out is in progress
+constexpr double  kSectionOpenSecs   = 0.12;
+constexpr double  kSectionRemoveSecs = 0.15;
+
+const RegisteredComponent* RegisteredByName(const char* name) {
+    if (!name) return nullptr;
+    for (const auto& rc : ComponentRegistry::All())
+        if (std::strcmp(rc.Meta.Name, name) == 0) return &rc;
+    return nullptr;
+}
+
+// The Bool field named exactly "Enabled" many components carry (C# Script, Transform Controller,
+// IK Rig, Audio Listener, ...): what the A hover key flips and what dims a header when off.
+const ReflectField* FindEnabledField(const ReflectComponent& meta) {
+    for (const ReflectField& f : meta.Fields)
+        if (f.Type == ReflectFieldType::Bool && f.Name && std::strcmp(f.Name, "Enabled") == 0) return &f;
+    return nullptr;
+}
+
+float EaseOutCubic(float t) {
+    t = std::clamp(t, 0.0f, 1.0f);
+    const float u = 1.0f - t;
+    return 1.0f - u * u * u;
+}
+
+ImU32 FadeU32(ImU32 c, float a) {
+    if (a >= 1.0f) return c;
+    const ImU32 alpha = (ImU32)((float)((c >> IM_COL32_A_SHIFT) & 0xFF) * std::clamp(a, 0.0f, 1.0f));
+    return (c & ~IM_COL32_A_MASK) | (alpha << IM_COL32_A_SHIFT);
+}
+} // namespace
+
+bool EditorLayer::IsKeptAfterPlay(int order, const char* component) const {
+    for (const auto& k : m_PlayKeep)
+        if (k.Order == order && k.Component == component) return true;
+    return false;
+}
+
+void EditorLayer::ToggleKeepAfterPlay(int order, const char* component) {
+    const Enhancers::PlayKeep k{order, component};
+    const auto it = std::find(m_PlayKeep.begin(), m_PlayKeep.end(), k);
+    if (it != m_PlayKeep.end()) m_PlayKeep.erase(it);
+    else m_PlayKeep.push_back(k);
+}
+
+void EditorLayer::PasteComponentClipboard(World& world, AssetLibrary& assets, const std::vector<entt::entity>& targets,
+                                          Enhancers::PasteMode mode) {
+    if (m_ComponentClipboard.empty()) return;
+    bool any = false;
+    for (entt::entity e : targets) any = any || Enhancers::CountPastable(world, e, m_ComponentClipboard, mode) > 0;
+    if (!any) {
+        Log::Warn(mode == Enhancers::PasteMode::AsNew ? "Paste Components: every copied component is already on the target."
+                                                      : "Paste Component Values: the target has none of the copied components.");
+        return;
+    }
+    PushUndo(world, mode == Enhancers::PasteMode::AsNew ? "Paste Components as New" : "Paste Component Values");
+    int applied = 0;
+    std::set<std::string> skipped;
+    for (entt::entity e : targets) {
+        if (!world.Registry.valid(e)) continue;
+        const auto r = Enhancers::PasteComponents(world, assets, e, m_ComponentClipboard, mode);
+        applied += r.Applied;
+        skipped.insert(r.Skipped.begin(), r.Skipped.end());
+    }
+    std::string msg = "Pasted " + std::to_string(applied) + (applied == 1 ? " component" : " components");
+    if (!skipped.empty()) {
+        msg += mode == Enhancers::PasteMode::AsNew ? "; skipped (already present): " : "; skipped (not on the target): ";
+        bool first = true;
+        for (const auto& s : skipped) { msg += (first ? "" : ", ") + s; first = false; }
+    }
+    Log::Info(msg + ".");
+}
+
+void EditorLayer::HandleInspectorHoverKeys(World& world) {
+    // Last frame's hover + open count become this frame's inputs.
+    m_HoverSection = std::move(m_HoverSectionNext);
+    m_HoverSectionNext = InspectorHoverSection{};
+    m_SectionsOpenLastFrame = m_SectionsOpenThisFrame;
+    m_SectionsOpenThisFrame = 0;
+    const int frame = ImGui::GetFrameCount();
+    if (m_RemovingSection != 0 && frame - m_RemovingSeenFrame > 2) m_RemovingSection = 0; // its section is gone
+    if (!EditorSettings::Get().EnhancerHoverKeys) return;
+
+    if (Shortcuts::Triggered("inspector.hover.collapseAll")) {
+        m_SectionCmd = m_SectionsOpenLastFrame > 0 ? SectionCommand::CollapseAll : SectionCommand::ExpandAll;
+        m_SectionCmdFrame = frame;
+        return;
+    }
+    const InspectorHoverSection& hs = m_HoverSection;
+    if (hs.Label.empty()) return;
+    if (Shortcuts::Triggered("inspector.hover.isolate")) {
+        m_SectionCmd = SectionCommand::Isolate;
+        m_SectionCmdTarget = hs.Label;
+        m_SectionCmdFrame = frame;
+    } else if (Shortcuts::Triggered("inspector.hover.toggleEnabled")) {
+        if (hs.Entity == entt::null || !world.Registry.valid(hs.Entity)) return;
+        const RegisteredComponent* rc = RegisteredByName(hs.Label.c_str());
+        const ReflectField* f = rc ? FindEnabledField(rc->Meta) : nullptr;
+        if (!f || !rc->Has(world.Registry, hs.Entity)) return;
+        PushUndo(world, "Toggle " + hs.Label);
+        bool& on = *reinterpret_cast<bool*>(f->Address(rc->Get(world.Registry, hs.Entity)));
+        on = !on;
+    } else if (Shortcuts::Triggered("inspector.hover.remove")) {
+        if (!hs.Removable || m_RemovingSection != 0) return;
+        m_RemovingSection = hs.HeaderId; // BeginComponentSection reports the removal once faded
+        m_RemovingStart = ImGui::GetTime();
+        m_RemovingSeenFrame = frame;
+    }
+}
+
 bool EditorLayer::BeginComponentSection(const char* icon,
     const char* label, bool removable, bool& removedOut, const char* tooltip,
     bool* resetOut, bool* copyOut, bool* pasteOut, bool* prefabRevertOut, bool* prefabApplyOut,
-    bool* savePresetOut, std::string* applyPresetOut) {
+    bool* savePresetOut, std::string* applyPresetOut, entt::entity entity) {
     removedOut = false;
     if (resetOut) *resetOut = false;
     if (copyOut)  *copyOut = false;
@@ -3163,6 +3338,34 @@ bool EditorLayer::BeginComponentSection(const char* icon,
     if (applyPresetOut) applyPresetOut->clear();
     if (prefabRevertOut) *prefabRevertOut = false;
     if (prefabApplyOut)  *prefabApplyOut = false;
+
+    const EditorSettings& es = EditorSettings::Get();
+    const ImGuiIO& io = ImGui::GetIO();
+    const double now = ImGui::GetTime();
+    const int frame = ImGui::GetFrameCount();
+    const bool animate = es.InspectorAnimations;
+
+    // vInspector context: only on the single-select path, and only for registry components
+    // (plus Transform, for Keep Changes After Play).
+    World* world = m_InspectorWorld;
+    const bool objectCtx = entity != entt::null && world && world->Registry.valid(entity);
+    const RegisteredComponent* rc = objectCtx ? RegisteredByName(label) : nullptr;
+    const bool isTransform = objectCtx && std::strcmp(label, Enhancers::kKeepTransform) == 0;
+    const bool pinnable = rc && rc->Meta.GenericInspector;
+    const bool pickable = rc && rc->Meta.GenericSerialize;
+    const auto* orderComp = objectCtx ? world->Registry.try_get<OrderComponent>(entity) : nullptr;
+    const int order = orderComp ? orderComp->Value : -1;
+    if (order >= 0 && order != m_InspectorPickedOrder) {
+        m_InspectorPickedComponents.clear();
+        m_InspectorPickedOrder = order;
+    }
+    const bool picked = pickable && order >= 0 && m_InspectorPickedComponents.count(label) != 0;
+    const bool keepable = m_InPlayMode && order >= 0 && (pickable || isTransform);
+    const bool kept = keepable && IsKeptAfterPlay(order, label);
+    bool disabledComp = false; // an "Enabled" field that is off dims the header
+    if (rc && rc->Has(world->Registry, entity))
+        if (const ReflectField* ef = FindEnabledField(rc->Meta))
+            disabledComp = !*reinterpret_cast<const bool*>(ef->Address(rc->Get(world->Registry, entity)));
 
     std::string header = std::string(icon) + "  " + label;
     // The component's title bar: a raised strip with a chevron, the component's icon (the accent while
@@ -3173,43 +3376,115 @@ bool EditorLayer::BeginComponentSection(const char* icon,
     const ImGuiID headerId = ImGui::GetID(header.c_str());
     ImGuiStorage* storage = ImGui::GetStateStorage();
     bool open = storage->GetInt(headerId, 0) != 0 || m_ExpandAllComponents;
+    const float fullH = storage->GetFloat(headerId ^ kSectionHeightSalt, 0.0f);
+    // Starts the open/close ease; skipped when the body's height isn't known yet (never shown).
+    auto setOpen = [&](bool v) {
+        if (v == open) return;
+        open = v;
+        storage->SetInt(headerId, open ? 1 : 0);
+        if (animate && fullH > 0.0f) storage->SetFloat(headerId ^ kSectionAnimSalt, (float)now);
+    };
     // Editor Enhancers / vHierarchy minimap click: open this section and scroll it to the top.
     // A request that found no matching header within a couple of frames (a locked Inspector,
     // a hand-coded section) is dropped rather than firing later by surprise.
     if (!m_InspectorScrollToComponent.empty()) {
-        if (ImGui::GetFrameCount() - m_InspectorScrollToFrame > 2) {
+        if (frame - m_InspectorScrollToFrame > 2) {
             m_InspectorScrollToComponent.clear();
         } else if (m_InspectorScrollToComponent == label) {
             open = true;
             storage->SetInt(headerId, 1);
             ImGui::SetScrollHereY(0.0f);
             m_InspectorFlashComponent = label;
-            m_InspectorFlashUntil = ImGui::GetTime() + 0.9;
+            m_InspectorFlashUntil = now + 0.9;
             m_InspectorScrollToComponent.clear();
         }
     }
+    // Collapse All / Expand All / Isolate from the hover keys, issued this frame.
+    if (m_SectionCmd != SectionCommand::None && m_SectionCmdFrame == frame) {
+        if (m_SectionCmd == SectionCommand::CollapseAll) setOpen(false);
+        else if (m_SectionCmd == SectionCommand::ExpandAll) setOpen(true);
+        else setOpen(m_SectionCmdTarget == label);
+    }
+
+    // Removal fade: the x, the menu's Remove and the X hover key all start it; the removal is
+    // reported to the caller once it has run (immediately with animations off).
+    auto requestRemove = [&]() {
+        if (!animate) { removedOut = true; return; }
+        if (m_RemovingSection == headerId) return;
+        m_RemovingSection = headerId;
+        m_RemovingStart = now;
+        m_RemovingSeenFrame = frame;
+    };
+    float fade = 1.0f;
+    bool removing = false;
+    if (m_RemovingSection == headerId) {
+        m_RemovingSeenFrame = frame;
+        const float t = animate ? (float)((now - m_RemovingStart) / kSectionRemoveSecs) : 1.0f;
+        if (t >= 1.0f) { m_RemovingSection = 0; removedOut = true; }
+        else { removing = true; fade = 1.0f - EaseOutCubic(t); }
+    }
+
     const ImVec2 hp = ImGui::GetCursorScreenPos();
     const float hw = ImGui::GetContentRegionAvail().x;
     const float hh = ImGui::GetFrameHeight() + EditorTheme::Px(4.0f);
     ImGui::SetNextItemAllowOverlap();
-    if (ImGui::InvisibleButton(header.c_str(), ImVec2(hw, hh))) {
-        open = !open;
-        storage->SetInt(headerId, open ? 1 : 0);
+    const bool headerClicked = ImGui::InvisibleButton(header.c_str(), ImVec2(hw, hh));
+    const bool headerActive = ImGui::IsItemActive();
+    // Alt+drag the header out: the pinned window follows the mouse while the drag lasts
+    // (OpenPinnedComponent re-places an open pin under the cursor each call).
+    const ImGuiID dragKey = headerId ^ kSectionDragSalt;
+    if (pinnable && headerActive && io.KeyAlt && ImGui::IsMouseDragging(ImGuiMouseButton_Left, EditorTheme::Px(6.0f))) {
+        OpenPinnedComponent(*world, entity, label);
+        storage->SetInt(dragKey, 1);
     }
+    if (headerClicked) {
+        if (storage->GetInt(dragKey, 0) != 0) {
+            storage->SetInt(dragKey, 0); // the drag-out ended back on the header: not a toggle
+        } else if (io.KeyCtrl && pickable && order >= 0) {
+            if (picked) m_InspectorPickedComponents.erase(label);
+            else m_InspectorPickedComponents.insert(label);
+        } else {
+            setOpen(!open);
+        }
+    } else if (!headerActive && storage->GetInt(dragKey, 0) != 0) {
+        storage->SetInt(dragKey, 0);
+    }
+    if (open) ++m_SectionsOpenThisFrame;
+
+    // Open/close ease in progress?
+    float animT = 1.0f;
+    {
+        const float start = storage->GetFloat(headerId ^ kSectionAnimSalt, -1.0f);
+        if (start >= 0.0f) {
+            animT = animate ? (float)((now - start) / kSectionOpenSecs) : 1.0f;
+            if (animT >= 1.0f) { animT = 1.0f; storage->SetFloat(headerId ^ kSectionAnimSalt, -1.0f); }
+        }
+    }
+    const bool animating = animT < 1.0f && fullH > 0.0f;
+    const bool bodyVisible = (open || animating) && !removedOut;
+
     // Right-click anywhere on the header row -> the actions menu (#236). Registered here while
     // the header is the last item; the popup body is drawn a few lines down.
     ImGui::OpenPopupOnItemClick(header.c_str(), ImGuiPopupFlags_MouseButtonRight);
+    const bool barHovered = ImGui::IsWindowHovered(ImGuiHoveredFlags_ChildWindows) &&
+        ImGui::IsMouseHoveringRect(hp, ImVec2(hp.x + hw, hp.y + hh));
     {
         ImDrawList* dl = ImGui::GetWindowDrawList();
         const bool hov = ImGui::IsItemHovered();
         const float r = EditorTheme::Px(3.0f);
-        dl->AddRectFilled(hp, ImVec2(hp.x + hw, hp.y + hh), EditorTheme::U32(hov ? EditorTheme::Hover : EditorTheme::Raised), r,
-                          open ? ImDrawFlags_RoundCornersTop : ImDrawFlags_RoundCornersAll);
+        const ImVec2 hmax(hp.x + hw, hp.y + hh);
+        const ImDrawFlags corners = bodyVisible ? ImDrawFlags_RoundCornersTop : ImDrawFlags_RoundCornersAll;
+        dl->AddRectFilled(hp, hmax, FadeU32(EditorTheme::U32(hov ? EditorTheme::Hover : EditorTheme::Raised), fade), r, corners);
+        // Ctrl+click-picked for the multi-component clipboard: an accent wash and edge.
+        if (picked) {
+            dl->AddRectFilled(hp, hmax, FadeU32(EditorTheme::U32(EditorTheme::WithAlpha(EditorTheme::Accent, 0.16f)), fade), r, corners);
+            dl->AddRect(hp, hmax, FadeU32(EditorTheme::U32(EditorTheme::Accent), fade), r, corners, EditorTheme::Px(1.5f));
+        }
         // Just reached from a Hierarchy minimap click: an accent outline that fades out.
         if (!m_InspectorFlashComponent.empty() && m_InspectorFlashComponent == label) {
-            const double left = m_InspectorFlashUntil - ImGui::GetTime();
+            const double left = m_InspectorFlashUntil - now;
             if (left > 0.0) {
-                dl->AddRect(hp, ImVec2(hp.x + hw, hp.y + hh),
+                dl->AddRect(hp, hmax,
                             EditorTheme::U32(EditorTheme::WithAlpha(EditorTheme::Accent, (float)std::min(1.0, left / 0.9))), r, 0, EditorTheme::Px(2.0f));
             } else {
                 m_InspectorFlashComponent.clear();
@@ -3219,17 +3494,27 @@ bool EditorLayer::BeginComponentSection(const char* icon,
         EditorTheme::PushSmall();
         const char* chev = open ? ICON_FA_CHEVRON_DOWN : ICON_FA_CHEVRON_RIGHT;
         const ImVec2 cs = ImGui::CalcTextSize(chev);
-        dl->AddText(ImVec2(hp.x + EditorTheme::Px(10.0f) - cs.x * 0.5f, cy - cs.y * 0.5f), EditorTheme::U32(EditorTheme::Dim), chev);
+        dl->AddText(ImVec2(hp.x + EditorTheme::Px(10.0f) - cs.x * 0.5f, cy - cs.y * 0.5f), FadeU32(EditorTheme::U32(EditorTheme::Dim), fade), chev);
         EditorTheme::PopFont();
         const ImVec2 is = ImGui::CalcTextSize(icon);
         const float ix = hp.x + EditorTheme::Px(22.0f);
-        dl->AddText(ImVec2(ix, cy - is.y * 0.5f), EditorTheme::U32(open ? EditorTheme::Accent : EditorTheme::Secondary), icon);
+        dl->AddText(ImVec2(ix, cy - is.y * 0.5f),
+                    FadeU32(EditorTheme::U32(disabledComp ? EditorTheme::Dim : (open ? EditorTheme::Accent : EditorTheme::Secondary)), fade), icon);
         // The name, cut with an ellipsis before the ... / x buttons at the bar's right end.
         const ImVec2 ls = ImGui::CalcTextSize(label);
         const float lx = ix + std::max(is.x, ImGui::GetFontSize()) + EditorTheme::Px(8.0f);
         const float btnReserve = ImGui::GetFrameHeight() * ((removable ? 1.0f : 0.0f) + 1.0f) + EditorTheme::Px(8.0f);
-        const float lmax = hp.x + hw - btnReserve;
-        ImGui::PushStyleColor(ImGuiCol_Text, EditorTheme::Text);
+        float lmax = hp.x + hw - btnReserve;
+        // Kept after Play: a pin just left of the buttons.
+        if (kept) {
+            EditorTheme::PushSmall();
+            const ImVec2 ps = ImGui::CalcTextSize(ICON_FA_THUMBTACK);
+            lmax -= ps.x + EditorTheme::Px(6.0f);
+            dl->AddText(ImVec2(lmax + EditorTheme::Px(3.0f), cy - ps.y * 0.5f), FadeU32(EditorTheme::U32(EditorTheme::Accent), fade), ICON_FA_THUMBTACK);
+            EditorTheme::PopFont();
+        }
+        const ImVec4 nameCol = disabledComp ? EditorTheme::Dim : EditorTheme::Text;
+        ImGui::PushStyleColor(ImGuiCol_Text, EditorTheme::WithAlpha(nameCol, nameCol.w * fade));
         ImGui::RenderTextEllipsis(dl, ImVec2(lx, cy - ls.y * 0.5f), ImVec2(lmax, cy + ls.y * 0.5f), lmax, label, nullptr, &ls);
         ImGui::PopStyleColor();
     }
@@ -3240,7 +3525,7 @@ bool EditorLayer::BeginComponentSection(const char* icon,
     // user is trying to click (first reported against Material's Slot 0 row, but the mechanism is
     // generic to every section here). Anchored explicitly above the header instead — its bottom-
     // left pinned to the header's top-left — so it can never overlap what follows below.
-    if (tooltip && headerHovered && EditorSettings::Get().ShowTooltips) {
+    if (tooltip && headerHovered && es.ShowTooltips) {
         const ImVec2 headerMin = ImGui::GetItemRectMin();
         if (headerMin.y > 60.0f * m_UIScale) {
             // Forcing an exact position (ImGuiCond_Always) bypasses ImGui's own clamp-to-viewport
@@ -3250,6 +3535,7 @@ bool EditorLayer::BeginComponentSection(const char* icon,
             ImGui::SetNextWindowPos(headerMin, ImGuiCond_Always, ImVec2(0.0f, 1.0f));
             ImGui::BeginTooltip();
             ImGui::TextUnformatted(tooltip);
+            if (pickable) ImGui::TextDisabled("Ctrl+click to pick for Copy Selected Components%s", pinnable ? "; Alt+drag to open in a window" : "");
             ImGui::EndTooltip();
         } else {
             EditorUI::SetTooltip("%s", tooltip);
@@ -3259,9 +3545,11 @@ bool EditorLayer::BeginComponentSection(const char* icon,
     // #6 item 5 — everything the popup below offers (Reset/Copy/Paste/Remove/Revert/Apply) was
     // reachable only by right-clicking the header, which the Phase 4 exit criterion rules out
     // ("nothing reachable only by right-click"). A visible "..." button opens the identical popup.
-    const bool hasMenu = resetOut || copyOut || pasteOut || removable || prefabRevertOut || prefabApplyOut;
+    // Minimal mode (vInspector) shows it only while the bar is hovered, like the x.
+    const bool hasMenu = resetOut || copyOut || pasteOut || removable || prefabRevertOut || prefabApplyOut ||
+                         pinnable || keepable;
     const float headerBtnY = hp.y + (hh - ImGui::GetFrameHeight()) * 0.5f; // centred on the taller bar
-    if (hasMenu) {
+    if (hasMenu && (!es.InspectorMinimal || barHovered || ImGui::IsPopupOpen(header.c_str()))) {
         const float bw = ImGui::GetFrameHeight();
         const float removeReserve = removable ? bw : 0.0f;
         ImGui::SameLine(ImGui::GetWindowContentRegionMax().x - removeReserve - bw - EditorTheme::Px(2.0f));
@@ -3277,21 +3565,17 @@ bool EditorLayer::BeginComponentSection(const char* icon,
         if (moreClicked) ImGui::OpenPopup(header.c_str());
     }
 
-    if (removable) {
+    if (removable && barHovered && !removing) {
         // Right-aligned remove control on the header's line, shown only while the title bar is
         // hovered (its slot stays reserved; the ... button beside it is always visible, and the
         // right-click menu also offers Remove). Flat, red on hover (#156).
         const float bw = ImGui::GetFrameHeight();
-        const bool barHovered = ImGui::IsWindowHovered(ImGuiHoveredFlags_ChildWindows) &&
-            ImGui::IsMouseHoveringRect(hp, ImVec2(hp.x + hw, hp.y + hh));
-        if (barHovered) {
-            ImGui::SameLine(ImGui::GetWindowContentRegionMax().x - bw - EditorTheme::Px(2.0f));
-            ImGui::SetCursorScreenPos(ImVec2(ImGui::GetCursorScreenPos().x, headerBtnY));
-            ImGui::PushID(label);
-            if (DangerIconButton(ICON_FA_XMARK, "Remove this component", ImVec2(bw, 0.0f)))
-                removedOut = true;
-            ImGui::PopID();
-        }
+        ImGui::SameLine(ImGui::GetWindowContentRegionMax().x - bw - EditorTheme::Px(2.0f));
+        ImGui::SetCursorScreenPos(ImVec2(ImGui::GetCursorScreenPos().x, headerBtnY));
+        ImGui::PushID(label);
+        if (DangerIconButton(ICON_FA_XMARK, "Remove this component (X while hovered)", ImVec2(bw, 0.0f)))
+            requestRemove();
+        ImGui::PopID();
     }
 
     // Actions menu opened by the right-click registered just after the header above (#236).
@@ -3300,11 +3584,32 @@ bool EditorLayer::BeginComponentSection(const char* icon,
     if (ImGui::BeginPopup(header.c_str())) {
         if (resetOut && ImGui::MenuItem(ICON_FA_ROTATE_LEFT "  Reset")) *resetOut = true;
         if (copyOut && ImGui::MenuItem(ICON_FA_COPY "  Copy Component")) *copyOut = true;
+        // vInspector multi-component clipboard: the Ctrl+click-picked headers, in registry order.
+        if (pickable && !m_InspectorPickedComponents.empty()) {
+            char buf[64];
+            const int n = (int)m_InspectorPickedComponents.size();
+            std::snprintf(buf, sizeof(buf), ICON_FA_LAYER_GROUP "  Copy %d Selected Component%s", n, n == 1 ? "" : "s");
+            if (ImGui::MenuItem(buf)) {
+                m_ComponentClipboard.clear();
+                for (const auto& c : ComponentRegistry::All()) {
+                    if (!m_InspectorPickedComponents.count(c.Meta.Name)) continue;
+                    std::string j = SceneSerializer::ComponentToPresetJson(*world, entity, c.Meta.Name);
+                    if (!j.empty()) m_ComponentClipboard.push_back(std::move(j));
+                }
+                Log::Info("Copied " + std::to_string(m_ComponentClipboard.size()) +
+                          " components - paste them from another object's actions menu.");
+                m_InspectorPickedComponents.clear();
+            }
+        }
         if (pasteOut) {
             const bool canPaste = m_ComponentClipKind == label;
             if (ImGui::MenuItem(ICON_FA_PASTE "  Paste Component Values", nullptr, false, canPaste))
                 *pasteOut = true;
         }
+        if (pinnable && ImGui::MenuItem(ICON_FA_UP_RIGHT_FROM_SQUARE "  Open in Window"))
+            OpenPinnedComponent(*world, entity, label);
+        if (keepable && ImGui::MenuItem(ICON_FA_THUMBTACK "  Keep Changes After Play", nullptr, kept))
+            ToggleKeepAfterPlay(order, label);
         // #178 - Preset assets: save this component's current values, or stamp a saved set back
         // on. Only offered for generically-serialised components (the caller decides by passing
         // these), since a preset is the scene's own field encoding.
@@ -3322,8 +3627,8 @@ bool EditorLayer::BeginComponentSection(const char* icon,
                     EditorUI::SetTooltip("No saved presets for this component yet - use Save Preset first.");
             }
         }
-        if ((resetOut || copyOut || pasteOut || savePresetOut) && removable) ImGui::Separator();
-        if (removable && ImGui::MenuItem(ICON_FA_XMARK "  Remove Component")) removedOut = true;
+        if ((resetOut || copyOut || pasteOut || savePresetOut || pinnable || keepable) && removable) ImGui::Separator();
+        if (removable && ImGui::MenuItem(ICON_FA_XMARK "  Remove Component", "X")) requestRemove();
         if (prefabRevertOut || prefabApplyOut) {
             ImGui::Separator();
             ImGui::TextDisabled("Added on top of the prefab");
@@ -3332,21 +3637,42 @@ bool EditorLayer::BeginComponentSection(const char* icon,
             if (prefabApplyOut && ImGui::MenuItem(ICON_FA_BOX_ARCHIVE "  Apply to Prefab"))
                 *prefabApplyOut = true;
         }
-        if (!resetOut && !copyOut && !pasteOut && !removable && !prefabRevertOut) ImGui::TextDisabled("No actions");
+        if (!hasMenu) ImGui::TextDisabled("No actions");
         ImGui::EndPopup();
     }
 
-    bool showBody = open && !removedOut;
+    // Hover-key target: the header now; EndComponentSection widens it to the body.
+    m_CurSection = InspectorHoverSection{label, headerId, removable, objectCtx ? entity : entt::null};
+    m_CurSectionMin = hp;
+    if (barHovered) m_HoverSectionNext = m_CurSection;
+
+    const bool showBody = bodyVisible && (open || animating);
     m_ComponentSectionIsCard = false;
     if (showBody) {
+        // Eased height while opening/closing, shrinking while fading out for removal; otherwise
+        // the body sizes itself (and is measured for the next animation).
+        float fixedH = 0.0f;
+        if (animating) fixedH = fullH * (open ? EaseOutCubic(animT) : 1.0f - EaseOutCubic(animT));
+        if (removing && fullH > 0.0f) fixedH = (animating ? fixedH : fullH) * fade;
+        const bool useFixed = animating || (removing && fullH > 0.0f);
         // The body hangs under its title bar as one card: the Card surface, a hairline edge, the
         // title bar's width, no gap between them.
         ImGui::SetCursorScreenPos(ImVec2(hp.x, hp.y + hh));
+        m_CurSectionAlpha = fade < 1.0f;
+        if (m_CurSectionAlpha) ImGui::PushStyleVar(ImGuiStyleVar_Alpha, ImGui::GetStyle().Alpha * fade);
         ImGui::PushStyleColor(ImGuiCol_ChildBg, EditorTheme::Card);
         ImGui::PushStyleColor(ImGuiCol_Border,  EditorTheme::Hairline);
         ImGui::PushStyleVar(ImGuiStyleVar_WindowPadding, ImVec2(10.0f * m_UIScale, 8.0f * m_UIScale));
-        ImGui::BeginChild(label, ImVec2(0.0f, 0.0f),
-                          ImGuiChildFlags_Borders | ImGuiChildFlags_AutoResizeY | ImGuiChildFlags_AlwaysUseWindowPadding);
+        if (useFixed) {
+            ImGui::BeginChild(label, ImVec2(0.0f, std::max(fixedH, 1.0f)),
+                              ImGuiChildFlags_Borders | ImGuiChildFlags_AlwaysUseWindowPadding,
+                              ImGuiWindowFlags_NoScrollbar | ImGuiWindowFlags_NoScrollWithMouse);
+        } else {
+            ImGui::BeginChild(label, ImVec2(0.0f, 0.0f),
+                              ImGuiChildFlags_Borders | ImGuiChildFlags_AutoResizeY | ImGuiChildFlags_AlwaysUseWindowPadding);
+        }
+        m_CurSectionId = headerId;
+        m_CurSectionMeasure = open && !useFixed;
         m_ComponentSectionIsCard = true;
     } else {
         ImGui::Dummy(ImVec2(0.0f, EditorTheme::Px(1.0f)));
@@ -3356,9 +3682,19 @@ bool EditorLayer::BeginComponentSection(const char* icon,
 
 void EditorLayer::EndComponentSection() {
     ImGui::EndChild();
+    const ImVec2 bodyMax = ImGui::GetItemRectMax();
+    if (m_CurSectionMeasure) {
+        const float h = ImGui::GetItemRectSize().y;
+        if (h > 0.0f) ImGui::GetStateStorage()->SetFloat(m_CurSectionId ^ kSectionHeightSalt, h);
+    }
     ImGui::PopStyleVar();
     ImGui::PopStyleColor(2);
+    if (m_CurSectionAlpha) ImGui::PopStyleVar();
+    m_CurSectionAlpha = false;
+    m_CurSectionMeasure = false;
     m_ComponentSectionIsCard = false;
+    if (ImGui::IsWindowHovered(ImGuiHoveredFlags_ChildWindows) && ImGui::IsMouseHoveringRect(m_CurSectionMin, bodyMax))
+        m_HoverSectionNext = m_CurSection;
     ImGui::Dummy(ImVec2(0.0f, EditorTheme::Px(4.0f)));
 }
 

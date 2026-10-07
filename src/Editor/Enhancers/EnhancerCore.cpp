@@ -145,6 +145,27 @@ void MoveRef(std::vector<EditorRef>& list, int from, int to) {
     list.insert(list.begin() + to, std::move(v));
 }
 
+// --- Selection history ------------------------------------------------------------------------
+bool SelectionEntryReachable(const SelectionHistoryEntry& e, const std::string& currentScene,
+                             OrdersResolveFn resolves, void* ctx) {
+    if (e.Orders.empty() && !e.Asset.empty()) return true;
+    if (e.Scene != currentScene) return false;
+    return e.Orders.empty() || !resolves || resolves(e.Orders, ctx);
+}
+
+int StepSelectionHistory(const std::vector<SelectionHistoryEntry>& entries, int pos, int dir,
+                         const std::string& currentScene, OrdersResolveFn resolves, void* ctx) {
+    if (dir == 0 || entries.empty()) return -1;
+    const int n = (int)entries.size();
+    const SelectionHistoryEntry* from = (pos >= 0 && pos < n) ? &entries[(std::size_t)pos] : nullptr;
+    for (int i = pos + (dir > 0 ? 1 : -1); i >= 0 && i < n; i += (dir > 0 ? 1 : -1)) {
+        const SelectionHistoryEntry& e = entries[(std::size_t)i];
+        if (from && e == *from) continue;
+        if (SelectionEntryReachable(e, currentScene, resolves, ctx)) return i;
+    }
+    return -1;
+}
+
 // --- Matching ---------------------------------------------------------------------------------
 namespace {
 inline char Lower(char c) { return (char)std::tolower((unsigned char)c); }

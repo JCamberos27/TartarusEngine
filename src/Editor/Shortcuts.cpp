@@ -241,6 +241,13 @@ void BuildDefaultTable() {
     Register("project.hover.isolate",     "Isolate Folder (collapse others)",  Ctx_ProjectHover, Sk(ImGuiKey_E));
     Register("project.hover.collapseAll", "Collapse All Folders",              Ctx_ProjectHover, CSk(ImGuiKey_E));
 
+    // --- Editor Enhancers / vInspector hover keys (Ctx_InspectorHover) — the component section
+    // under the mouse.
+    Register("inspector.hover.collapseAll",   "Collapse / Expand All Components", Ctx_InspectorHover, CSk(ImGuiKey_E));
+    Register("inspector.hover.isolate",       "Isolate Component (collapse others)", Ctx_InspectorHover, Sk(ImGuiKey_E));
+    Register("inspector.hover.toggleEnabled", "Toggle Component Enabled",         Ctx_InspectorHover, K(ImGuiKey_A));
+    Register("inspector.hover.remove",        "Remove Component",                 Ctx_InspectorHover, K(ImGuiKey_X));
+
     // --- Asset Browser (Ctx_Project) — only while the panel has focus, so F / Ctrl+D don't
     // collide with the scene-selection bindings. ---
     Register("project.focusSearch",   "Focus Search",        Ctx_Project, Ck(ImGuiKey_F));

@@ -13,7 +13,8 @@ Status by phase:
 | 0 | Shared infrastructure | Done |
 | 1 | vHierarchy: row styles, separators, tree lines, component minimap, scene selector, nav bar, hover keys | Done |
 | 2 | vFolders: folder styles, rules, auto icons, content minimap, bookmarks | Done |
-| 3 | vInspector: nav bar, floating component windows, multi-component copy/paste, keep play-mode changes, attributes | Planned |
+| 3a | vInspector: nav bar, identity-based selection history, floating component windows, multi-component copy/paste, keep play-mode changes, hover keys, animations | Done |
+| 3b | vInspector: field attributes (C++ and C#) | Planned |
 | 4 | vTabs: tab strips in the Inspector and Asset Browser | Planned |
 | 5 | vFavorites: hold-Alt favorites overlay with pages | Planned |
 | 6 | vRuler: Shift+R surface, bounds and reference-object measuring | Planned |
@@ -24,6 +25,7 @@ Status by phase:
 | --- | --- | --- |
 | Pure logic | `src/Editor/Enhancers/EnhancerCore.h/.cpp` | `EditorRef`, bookmark lists, `NavHistory`, `GlobMatch`, `FuzzyScore`, `RemapFolderKeys`, `FormatLength`, the icon table. No ImGui or EnTT, so the unit tests link it directly. |
 | Per-user state | `src/Editor/Enhancers/EnhancerUserState.h/.cpp` | Bookmarks and per-scene default parents, saved to `%LOCALAPPDATA%\TartarusEngine\enhancers_<projectHash>.json`. |
+| Component transfer | `src/Editor/Enhancers/ComponentTransfer.h/.cpp` | vInspector's multi-component clipboard and Keep Changes After Play, on top of the preset JSON (`SceneSerializer::ComponentToPresetJson`). |
 | Folder styles | `src/Editor/Enhancers/FolderStyles.h/.cpp` | Per-folder icons/colours, rules, automatic content icons; `project/editor_folders.json`. |
 | Style palette | `src/Editor/Enhancers/Palette.h/.cpp` | Swatches and quick-pick icons offered by every Style menu, saved to `editor_palette.json` (per user), with export/import. |
 | Pickers | `src/Editor/Enhancers/StyleWidgets.h/.cpp` | `PaletteColorRow` and `IconPickerGrid`, a virtualized grid over all ~1400 Font Awesome icons. |
@@ -244,6 +246,80 @@ They work over the tree and over folder tiles in the grid.
 
 Two-line names in the grid and folder Back / Forward existed already (Phase 5 item 4 and the
 module's toolbar), so they were kept as they were.
+
+## vInspector
+
+### Selection history
+
+Back / Forward (Ctrl+[ / Ctrl+], the Edit menu, and both nav bars) now record selections by
+**scene key + `OrderComponent` values**, or by asset key when only a file was selected in the
+Asset Browser. Entries used to be raw `entt::entity` handles, which went stale after an undo,
+Play/Stop or scene load and could select an unrelated object. Now:
+
+* Entries from another scene are skipped, as are entries whose objects were all deleted.
+* Selecting an asset (with nothing selected in the scene) is a history step too, but not a scene
+  undo entry.
+* The step logic is `Enhancers::StepSelectionHistory` (`EnhancerCore`), unit tested.
+
+### Navigation bar
+
+The row at the top of the Inspector:
+
+| Control | Does |
+| --- | --- |
+| Back / Forward | The selection history above. |
+| Bookmark button | Bookmarks what the Inspector shows: the object (the locked one while the Inspector is locked) or the asset. |
+| Chips | This scene's bookmarked objects plus every bookmarked asset. Click selects or inspects (Ctrl+click adds an object to the selection), right-click removes. Overflow goes into "+N". |
+
+Drop Hierarchy rows or Asset Browser files on the bar to bookmark them. Object chips use their
+Row Style icon. Inspector bookmarks are separate from the Hierarchy's and are personal (per user,
+per project). Preferences > Editor Enhancers > Inspector > **Navigation bar** hides it.
+
+### Component sections
+
+On a single selected object, every registered component's header gains:
+
+| Action | How |
+| --- | --- |
+| Open in Window | The "..." menu, or **Alt+drag** the header out. The floating window follows the mouse until released. Same windows as the Hierarchy minimap's Alt+click. |
+| Pick for copying | **Ctrl+click** headers to pick them (accent outline), then "..." > **Copy N Selected Components**. |
+| Keep Changes After Play | In Play, "..." > **Keep Changes After Play** (also on Transform). Kept headers show a pin. |
+
+The object's "..." menu (next to its name) adds:
+
+* **Copy All Components**: every preset-capable component.
+* **Paste Components as New (N)**: adds only the copied components the object lacks.
+* **Paste Component Values (N)**: overwrites only the components it already has.
+* In Play, **Keep All Changes After Play**: the Transform and every preset-capable component.
+
+"Copy Component" on a single header also fills this clipboard. With several objects selected, the
+paste button in the footer applies to all of them. Each paste is one undo step. Hand-coded
+components (Mesh Renderer, Material, Collider, Joint) don't take part; Transform keeps its own
+Copy / Paste.
+
+Keep Changes After Play captures the kept components just before Stop restores the pre-Play
+scene, then writes them back as one undo step, "Keep Play Mode Changes". The scene is then dirty;
+save it to keep the values. Choices reset each time Play starts.
+
+A component whose `Enabled` field is off shows a dimmed header.
+
+### Hover keys
+
+Over the Inspector:
+
+| Key | Action |
+| --- | --- |
+| Ctrl+Shift+E | Collapse every section; if all are collapsed, expand all |
+| Shift+E | Isolate: open the section under the mouse, close the others |
+| A | Toggle the component's `Enabled` field (with undo) |
+| X | Remove the component under the mouse (removable sections only) |
+
+### Animations and minimal mode
+
+* **Animations** (on by default): sections ease open and closed over 120 ms, and fade and shrink
+  over 150 ms before a removal. A section's height is measured the first time it is shown fully
+  open, so the very first open isn't animated.
+* **Minimal mode**: a section's "..." button shows only while its header is hovered, like the x.
 
 ## Shortcut changes
 

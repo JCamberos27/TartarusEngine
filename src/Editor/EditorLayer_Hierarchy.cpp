@@ -268,7 +268,7 @@ void EditorLayer::SelectAllEntities(World& world) {
     if (m_Selected != entt::null) m_SelectionAnchor = m_Selected;
 }
 
-// --- Selection history (#236 R2) -----------------------------------------------------------
+// --- Selection history (#236 R2; by identity since vInspector) ------------------------------
 namespace {
 std::vector<entt::entity> SnapshotSelection(entt::entity primary, const std::vector<entt::entity>& extra) {
     std::vector<entt::entity> s;
@@ -276,13 +276,34 @@ std::vector<entt::entity> SnapshotSelection(entt::entity primary, const std::vec
     s.insert(s.end(), extra.begin(), extra.end());
     return s;
 }
+
+// Enhancers::OrdersResolveFn over a World: true when any of the orders still names an entity.
+bool AnyOrderResolves(const std::vector<int>& orders, void* ctx) {
+    const World& world = *static_cast<const World*>(ctx);
+    for (auto [e, o] : world.Registry.view<const OrderComponent>().each())
+        if (std::find(orders.begin(), orders.end(), o.Value) != orders.end()) return true;
+    return false;
+}
 } // namespace
 
 void EditorLayer::RecordSelectionHistory(const World& world) {
     auto cur = SnapshotSelection(m_Selected, m_ExtraSelection);
-    if (cur == m_SelSnapshotLast) { m_EditPushedThisFrame = false; return; }
-    auto prev = std::move(m_SelSnapshotLast);
+    // Only a lone file selection (nothing in the scene, not a folder) is what the Inspector shows,
+    // so that's the only asset state the history follows.
+    static const std::string kNoAsset;
+    const std::string& assetNow = (cur.empty() && !m_SelectedAssetIsFolder) ? m_SelectedAssetKey : kNoAsset;
+    const bool entitiesChanged = cur != m_SelSnapshotLast;
+    if (!entitiesChanged && assetNow == m_SelAssetLast) { m_EditPushedThisFrame = false; return; }
     m_SelSnapshotLast = cur;
+    m_SelAssetLast = assetNow;
+
+    Enhancers::SelectionHistoryEntry entry;
+    entry.Orders = CaptureSelectedOrders(world, cur);
+    if (entry.Orders.empty() && !assetNow.empty()) entry.Asset = assetNow;
+    else entry.Scene = CurrentSceneKey();
+    Enhancers::SelectionHistoryEntry prev = std::move(m_SelEntryLast);
+    if (prev.Scene.empty() && prev.Orders.empty() && prev.Asset.empty()) prev.Scene = entry.Scene.empty() ? CurrentSceneKey() : entry.Scene; // never polled yet: the empty start state
+    m_SelEntryLast = entry;
 
     // Our own back/forward (or Undo/Redo/JumpTo*) change — advance the "last seen" marker, don't
     // append to either history.
@@ -298,9 +319,11 @@ void EditorLayer::RecordSelectionHistory(const World& world) {
     // The entry must hold the PRE-change selection (`prev`), not the current one — same "snapshot
     // taken before the thing this entry undoes" contract every other UndoEntry follows. Passed as
     // an override since CaptureSelectedOrders(world) alone would only ever see the live (already
-    // new) selection by the time this runs.
-    if (!m_EditPushedThisFrame) {
-        const std::vector<int> prevOrders = CaptureSelectedOrders(world, prev);
+    // new) selection by the time this runs. Taken from the identity entry recorded last frame
+    // (the raw handles may already be stale), and only for the scene that is open now. An
+    // asset-only change records history but is not a scene edit, so it pushes no undo entry.
+    if (entitiesChanged && !m_EditPushedThisFrame) {
+        const std::vector<int> prevOrders = prev.Scene == entry.Scene ? prev.Orders : std::vector<int>();
         PushUndo(world, SelectionUndoLabel(world), /*selectionOnly=*/true, &prevOrders);
     }
     m_EditPushedThisFrame = false;
@@ -311,7 +334,7 @@ void EditorLayer::RecordSelectionHistory(const World& world) {
     } else if (m_SelHistoryPos + 1 < m_SelHistory.size()) {
         m_SelHistory.resize(m_SelHistoryPos + 1); // drop the forward branch
     }
-    m_SelHistory.push_back(std::move(cur));
+    if (m_SelHistory.back() != entry) m_SelHistory.push_back(std::move(entry));
 
     constexpr size_t kCap = 64;
     if (m_SelHistory.size() > kCap)
@@ -319,28 +342,44 @@ void EditorLayer::RecordSelectionHistory(const World& world) {
     m_SelHistoryPos = m_SelHistory.size() - 1;
 }
 
-void EditorLayer::ApplySelectionSnapshot(World& world, const std::vector<entt::entity>& snap) {
-    m_Selected = entt::null;
-    m_ExtraSelection.clear();
-    m_RenamingEntity = entt::null;
-    for (entt::entity e : snap) {
-        if (!world.Registry.valid(e)) continue; // entity deleted since it was recorded
-        if (m_Selected == entt::null) m_Selected = e;
-        else if (std::find(m_ExtraSelection.begin(), m_ExtraSelection.end(), e) == m_ExtraSelection.end())
-            m_ExtraSelection.push_back(e);
+void EditorLayer::ApplySelectionEntry(World& world, const Enhancers::SelectionHistoryEntry& entry) {
+    if (!entry.Orders.empty()) {
+        RestoreSelectionByOrder(world, entry.Orders); // sets m_SelHistoryNavigating
+        return;
     }
-    if (m_Selected != entt::null) m_SelectionAnchor = m_Selected;
+    ClearSelection();
+    if (!entry.Asset.empty()) {
+        ClearAssetSelection();
+        m_SelectedAssetKey = entry.Asset;
+        m_SelectedAssetIsFolder = false;
+    } else if (!m_SelectedAssetIsFolder) {
+        ClearAssetSelection(); // an empty selection: nothing in the Inspector
+    }
     m_SelHistoryNavigating = true; // next RecordSelectionHistory() poll swallows this change
 }
 
+bool EditorLayer::CanSelectionHistoryBack() const {
+    return Enhancers::StepSelectionHistory(m_SelHistory, (int)m_SelHistoryPos, -1, CurrentSceneKey()) >= 0;
+}
+
+bool EditorLayer::CanSelectionHistoryForward() const {
+    return Enhancers::StepSelectionHistory(m_SelHistory, (int)m_SelHistoryPos, +1, CurrentSceneKey()) >= 0;
+}
+
 void EditorLayer::SelectionHistoryBack(World& world) {
-    if (m_SelHistoryPos == 0 || m_SelHistory.empty()) return;
-    ApplySelectionSnapshot(world, m_SelHistory[--m_SelHistoryPos]);
+    const int i = Enhancers::StepSelectionHistory(m_SelHistory, (int)m_SelHistoryPos, -1, CurrentSceneKey(),
+                                                  &AnyOrderResolves, &world);
+    if (i < 0) return;
+    m_SelHistoryPos = (size_t)i;
+    ApplySelectionEntry(world, m_SelHistory[m_SelHistoryPos]);
 }
 
 void EditorLayer::SelectionHistoryForward(World& world) {
-    if (m_SelHistoryPos + 1 >= m_SelHistory.size()) return;
-    ApplySelectionSnapshot(world, m_SelHistory[++m_SelHistoryPos]);
+    const int i = Enhancers::StepSelectionHistory(m_SelHistory, (int)m_SelHistoryPos, +1, CurrentSceneKey(),
+                                                  &AnyOrderResolves, &world);
+    if (i < 0) return;
+    m_SelHistoryPos = (size_t)i;
+    ApplySelectionEntry(world, m_SelHistory[m_SelHistoryPos]);
 }
 
 void EditorLayer::InvertSelection(World& world) {
