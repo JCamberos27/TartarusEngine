@@ -17,7 +17,7 @@ Status by phase:
 | 3b | vInspector: field attributes (C++ and C#), Reset to Default, C# buttons / read-outs / dictionaries | Done |
 | 4 | vTabs: tab strips in the Inspector and Asset Browser | Done |
 | 5 | vFavorites: hold-Alt favorites overlay with pages | Done |
-| 6 | vRuler: Shift+R surface, bounds and reference-object measuring | Planned |
+| 6 | vRuler: Shift+R surface, bounds and reference-object measuring | Done |
 
 ## Where things live
 
@@ -443,6 +443,27 @@ in the Asset Browser updates its favorites, Inspector bookmarks and Inspector ta
 While the overlay is up it owns the keyboard: every other editor shortcut is suppressed (Alt+1..4
 would otherwise also focus panels). The two bindings are under Shortcuts; holding Alt is a
 setting (Preferences > Editor Enhancers > Favorites).
+
+## vRuler
+
+Hold **Shift+R** with the mouse over the Scene view.
+
+| Action | Shows |
+| --- | --- |
+| Move the mouse | From the surface under the cursor, along its normal, to the next surface (cyan: floor to ceiling, wall to wall), and through that object to its far side (amber, dashed: its thickness there). "open" when nothing is in the way within 10 km. |
+| Mouse wheel | Steps to the next object behind along the cursor ray (and back); the measured object is outlined when there is more than one. The camera doesn't zoom while the ruler is held. |
+| Click | The object's size: its world bounds, with width, height and depth on the edges nearest the camera. Click again to hide; it clears when Shift+R is released. A ruler click never selects. |
+
+A read-out next to the cursor repeats the numbers and names the object. Lengths use the
+**Length units** setting (Preferences > Editor Enhancers > Ruler), which the Measure tool now
+shares: its m / ft button changes the same setting, and the choice is saved (it used to reset
+every session). Metric adapts mm / cm / m / km; imperial shows feet and inches.
+
+Surfaces come from the same triangle-exact raycast the Measure tool and click-picking use
+(`RaycastRenderables`), so meshes are measured, not their bounding boxes. Object sizes are the
+model's bounds through its world transform (axis-aligned in world space).
+
+The binding is `viewport.ruler` (Shortcuts > "Ruler (hold)"); Preferences can turn it off.
 
 ## Shortcut changes
 

@@ -171,6 +171,7 @@ public:
     // Viewport tools (#236 E) — Hand tool (Q) and Lock View to Selected (Shift+F).
     void SetHandToolActive(bool on) { m_HandTool = on; }
     bool MeasureToolActive() const { return m_MeasureTool; }
+    bool RulerHeld() const { return m_RulerHeld; } // vRuler owns the mouse wheel while held
     void SetMeasureToolActive(bool on) { m_MeasureTool = on; m_MeasurePoints.clear(); if (on) m_HandTool = false; }
     // main.cpp pokes this whenever the fly speed changes via scroll (RMB-drag or Ctrl+scroll);
     // Draw() fades out the transient "Fly speed: N" viewport readout (#236 R2).
@@ -1058,9 +1059,18 @@ private:
     // tool is the active one — with a Clear/Copy/unit-toggle HUD.
     bool  m_MeasureTool = false;
     std::vector<glm::vec3> m_MeasurePoints;
-    bool  m_MeasureUnitFeet = false;     // false = meters, true = feet — HUD toggle, not persisted
+    // (Units: EditorSettings::MeasureFeet, persisted and shared with vRuler.)
     bool RaycastViewportSurface(World& world, Camera& cam, const glm::vec2& screenPx, glm::vec3& outHit) const;
     void DrawMeasurement(Camera& cam);
+    // Editor Enhancers / vRuler (EditorLayer_Gizmos.cpp): hold Shift+R over the Scene view.
+    bool ViewportRay(Camera& cam, const glm::vec2& screenPx, glm::vec3& origin, glm::vec3& dir) const;
+    bool RulerHeldNow() const;
+    void DrawRuler(World& world, Camera& cam);
+    bool m_RulerHeld = false;                   // held over the viewport this frame (main.cpp: no wheel zoom)
+    int  m_RulerDepth = 0;                      // which object along the cursor ray is measured (wheel)
+    float m_RulerWheel = 0.0f;
+    entt::entity m_RulerHitEntity = entt::null; // that object, for the click (only while held)
+    entt::entity m_RulerBounds = entt::null;    // clicked: its bounds show until Shift+R is released
     int   m_ArrayDupCount[3] = { 3, 1, 1 };
     float m_ArrayDupStep[3]  = { 2.0f, 0.0f, 0.0f };
     void DrawGroupGizmo(World& world, Camera& editorCamera);

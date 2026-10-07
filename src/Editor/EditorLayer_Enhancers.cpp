@@ -219,6 +219,24 @@ void EditorLayer::DrawEnhancerPreferences() {
     }
 
     ImGui::Spacing();
+    EditorUIPrimitives::SectionHeader("Ruler");
+    if (SettingsCheckbox("Ruler (hold Shift+R)", &prefs.Ruler)) EditorSettings::Save();
+    ImGui::SameLine();
+    EditorUI::HelpMarker("Hold Shift+R over the Scene view: the distance from the surface under the cursor to the next "
+                         "surface along its normal, and the object's thickness there. The wheel steps to objects behind; "
+                         "a click shows the object's size.");
+    {
+        int units = prefs.MeasureFeet ? 1 : 0;
+        SettingsLabel("Length units");
+        if (ImGui::Combo("##lengthUnits", &units, "Metric (mm / cm / m / km)\0Feet and inches\0")) {
+            prefs.MeasureFeet = units == 1;
+            EditorSettings::Save();
+        }
+        ImGui::SameLine();
+        EditorUI::HelpMarker("Used by the ruler and the Measure tool.");
+    }
+
+    ImGui::Spacing();
     EditorUIPrimitives::SectionHeader("Tabs");
     if (SettingsCheckbox("Inspector tabs", &prefs.InspectorTabs)) EditorSettings::Save();
     ImGui::SameLine();

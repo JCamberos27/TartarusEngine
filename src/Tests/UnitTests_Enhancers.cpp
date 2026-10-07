@@ -504,6 +504,30 @@ void TestEnhancerFavoritePages() {
     us.FromJson(saved); // restore the in-memory state (FromJson leaves it clean: nothing is written)
 }
 
+// --- vRuler / vFavorites / vTabs bindings (Phases 4-6) -------------------------------------
+void TestEnhancerLaterBindings() {
+    if (Shortcuts::All().empty()) Shortcuts::Init();
+    struct Want { const char* Id; ImGuiKey Key; bool Ctrl, Shift, Alt; std::uint32_t Ctx; };
+    const Want wants[] = {
+        {"viewport.ruler",         ImGuiKey_R, false, true,  false, Shortcuts::Ctx_Viewport},
+        {"favorites.toggle",       ImGuiKey_F, true,  false, true,  Shortcuts::Ctx_Global},
+        {"favorites.addSelection", ImGuiKey_B, true,  false, true,  Shortcuts::Ctx_Global},
+        {"inspector.tabs.reopen",  ImGuiKey_T, true,  true,  false, Shortcuts::Ctx_InspectorHover},
+        {"project.tabs.close",     ImGuiKey_W, true,  false, false, Shortcuts::Ctx_ProjectHover},
+    };
+    for (const Want& w : wants) {
+        const Shortcuts::Shortcut* s = Shortcuts::Find(w.Id);
+        CHECK(s != nullptr);
+        if (!s) continue;
+        CHECK(s->Default.Key == w.Key && s->Default.Ctrl == w.Ctrl && s->Default.Shift == w.Shift && s->Default.Alt == w.Alt);
+        CHECK(s->Ctx == w.Ctx);
+        CHECK(Shortcuts::Conflicts(w.Id, s->Default).empty());
+    }
+    // Shift+R must not also be the Scale tool (R): modifiers match exactly.
+    const Shortcuts::Shortcut* scale = Shortcuts::Find("tools.scale");
+    CHECK(scale && !(scale->Default == Shortcuts::Find("viewport.ruler")->Default));
+}
+
 void TestEnhancerGlobMatch() {
     CHECK(GlobMatch("*", ""));
     CHECK(GlobMatch("*", "anything/at/all"));
@@ -791,6 +815,7 @@ void RegisterEnhancerTests(UnitTestSupport::TestList& tests) {
     tests.emplace_back("EnhancerSelectionHistory", TestEnhancerSelectionHistory);
     tests.emplace_back("EnhancerComponentClipboard", TestEnhancerComponentClipboard);
     tests.emplace_back("EnhancerKeepPlayChanges", TestEnhancerKeepPlayChanges);
+    tests.emplace_back("EnhancerLaterBindings", TestEnhancerLaterBindings);
     tests.emplace_back("EnhancerFavoritePages", TestEnhancerFavoritePages);
     tests.emplace_back("EnhancerTabStrip", TestEnhancerTabStrip);
     tests.emplace_back("EnhancerTabStateRoundTrip", TestEnhancerTabStateRoundTrip);
