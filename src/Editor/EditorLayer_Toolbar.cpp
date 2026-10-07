@@ -371,7 +371,11 @@ void EditorLayer::DrawStatusBar(World& world, Camera& editorCamera) {
             // A hitch (one frame over 33 ms) stays visible while it's in the recent history; the
             // smoothed figure hides it.
             snprintf(b, sizeof(b), "hitch %.0f ms", worst);
-            segs.push_back({b, EditorTheme::Warning, "The slowest recent frame. Open the Statistics panel", 1});
+            static std::string s_HitchTip;
+            s_HitchTip = "The slowest recent frame";
+            s_HitchTip += m_HitchBreakdown.empty() ? "." : ", its slowest parts:" + m_HitchBreakdown;
+            s_HitchTip += "\n\nClick to open the Statistics panel.";
+            segs.push_back({b, EditorTheme::Warning, s_HitchTip.c_str(), 1});
         }
     }
     {

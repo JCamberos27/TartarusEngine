@@ -3056,6 +3056,24 @@ void EditorLayer::Draw(World& world, AssetLibrary& assets, Camera& editorCamera,
         m_FrameTimeHistoryHead = (m_FrameTimeHistoryHead + 1) % kFrameTimeHistoryCount;
         if (m_FrameTimeHistoryFilled < kFrameTimeHistoryCount) ++m_FrameTimeHistoryFilled;
 
+        // The status bar's "hitch" names its slowest frame: dt is the frame that just finished,
+        // and so is Profiler::GetLastFrame(), so its scopes are that frame's breakdown.
+        if (frameMs > 33.0f) {
+            float worst = 0.0f;
+            for (int i = 0; i < m_FrameTimeHistoryFilled; ++i) worst = std::max(worst, m_FrameTimeHistory[i]);
+            if (frameMs >= worst) {
+                std::vector<Profiler::Entry> scopes = Profiler::GetLastFrame();
+                std::sort(scopes.begin(), scopes.end(),
+                          [](const Profiler::Entry& a, const Profiler::Entry& b) { return a.Milliseconds > b.Milliseconds; });
+                m_HitchBreakdown.clear();
+                for (size_t i = 0; i < scopes.size() && i < 5; ++i) {
+                    char line[96];
+                    snprintf(line, sizeof(line), "\n  %-24s %6.1f ms", scopes[i].Name.c_str(), scopes[i].Milliseconds);
+                    m_HitchBreakdown += line;
+                }
+            }
+        }
+
         // The Undo History HUD moved into TartarusEditor.dll (EditorModuleHistory.cpp, #229);
         // the module gates its own draw through EditorModuleHostAPI::GetHistoryHudFrame, which
         // re-checks m_HideOverlaysThisFrame so a clean capture still suppresses it.
