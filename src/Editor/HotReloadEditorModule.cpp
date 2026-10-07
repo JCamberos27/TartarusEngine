@@ -423,6 +423,9 @@ void  HierExpandAll(bool open) { if (g_Editor && g_World) g_Editor->HierarchyExp
 void  HierDrawTreeBody() {
     if (g_Editor && g_World && g_Assets) g_Editor->DrawHierarchyTreeBody(*g_World, *g_Assets);
 }
+void  HierDrawNavBar() { // API v39 - Editor Enhancers / vHierarchy
+    if (g_Editor && g_World && g_Assets) g_Editor->DrawHierarchyNavBar(*g_World, *g_Assets);
+}
 
 // --- Inspector, frame only (API v8) --------------------------------------------------------
 bool  InspGetShow() { return g_Editor && g_Editor->GetShowInspector(); }
@@ -578,6 +581,7 @@ EditorModuleHostAPI MakeHostAPI() {
     api.SetHierarchyFilter = &HierSetFilter;
     api.HierarchyExpandAll = &HierExpandAll;
     api.DrawHierarchyTreeBody = &HierDrawTreeBody;
+    api.DrawHierarchyNavBar = &HierDrawNavBar;
     api.GetShowInspector = &InspGetShow;
     api.SetShowInspector = &InspSetShow;
     api.DrawInspectorBody = &InspDrawBody;

@@ -134,7 +134,9 @@
 //   38 - Editor UI pass: DrawEditMenuBody (an Edit menu), GetEngineMarkTexture (the monogram beside
 //        the menus) and GetSceneTitle (the open scene's name, dirty and play state, centred in the
 //        title bar).
-constexpr std::uint32_t kEditorModuleAPIVersion = 38;
+//   39 - Editor Enhancers / vHierarchy: DrawHierarchyNavBar, the host-drawn scene selector +
+//        selection Back/Forward + entity bookmark row between the Hierarchy toolbar and tree.
+constexpr std::uint32_t kEditorModuleAPIVersion = 39;
 
 // Asset Browser Details-view column widths (API v26), in unscaled px (the caller applies UI
 // scale). Name gets whatever's left of the row after these three.
@@ -505,6 +507,11 @@ struct EditorModuleHostAPI {
     // The open scene's name (no extension) into `out`, and whether it has unsaved changes / the
     // editor is in Play.
     void (*GetSceneTitle)(char* out, int n, bool* outDirty, bool* outPlaying) = nullptr;
+
+    // --- Editor Enhancers / vHierarchy (API v39) ---
+    // Draws the nav row (scene selector, Back/Forward, bookmark chips) into the current window at
+    // the cursor; host-side because the chips resolve entities by scene GUID + Order.
+    void (*DrawHierarchyNavBar)() = nullptr;
 };
 
 struct EditorModuleAPI {

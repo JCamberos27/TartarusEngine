@@ -11,7 +11,7 @@ Status by phase:
 | Phase | Feature set | Status |
 | --- | --- | --- |
 | 0 | Shared infrastructure | Done |
-| 1 | vHierarchy: row styles, separators, tree lines, component minimap, scene selector, nav bar, hover keys | Planned |
+| 1 | vHierarchy: row styles, separators, tree lines, component minimap, scene selector, nav bar, hover keys | Done |
 | 2 | vFolders: folder styles, rules, auto icons, content minimap, bookmarks | Planned |
 | 3 | vInspector: nav bar, floating component windows, multi-component copy/paste, keep play-mode changes, attributes | Planned |
 | 4 | vTabs: tab strips in the Inspector and Asset Browser | Planned |
@@ -68,6 +68,100 @@ Rules:
   can be set in the same frame, so the same chord in both would double-fire.
 * The bindings appear under the "(hover)" groups in Preferences > Shortcuts and can be rebound.
 * Preferences > Editor Enhancers > **Hover keys** turns the whole mechanism off.
+
+## vHierarchy
+
+### Row styles
+
+Right-click a row and choose **Row Style**. The menu applies to every selected row as one undo step.
+
+* **Colour**: any palette swatch, or the rainbow swatch for a custom colour.
+* **Fill**: how the colour is shown.
+  * *Gradient* (default): a wash from the row's indent that fades out to the right.
+  * *Flat*: an even wash.
+  * *Icon only*: just tints the row's icon.
+* **Icon**: any Font Awesome icon. It replaces the row's kind glyph, and is tinted with the row colour.
+* **Separator Row**: draws the row as a section header, with the name in capitals between two
+  hairlines and no eye/lock/active toggles. A separator is an ordinary empty, so it can parent rows.
+  **Create > Separator** makes a new one.
+* **Clear Style**: removes all of the above.
+
+Styles are stored per entity as `HierarchyStyleComponent` and saved in the scene as `"hierStyle"`,
+so the whole team sees the same organisation:
+
+```json
+"hierStyle": { "icon": "lightbulb", "color": "#F2C94C80", "fill": 1, "separator": true }
+```
+
+Every key is optional, and an unstyled row writes nothing. Prefab files carry styles through the
+normal entity writer, and a styled prefab-instance root keeps its style through the instance stub.
+The component is editor-only: no runtime system reads it.
+
+### Tree lines, zebra, minimal mode
+
+* **Tree lines** join each row to its parent. They are worked out once per frame while the tree is
+  flattened (`Enhancers::TreeLineChildMask`), so drawing them needs no extra tree walks. They are
+  hidden while a search or type filter shows rows flat.
+* **Zebra striping** is the alternate-row stripe that used to be always on.
+* **Minimal mode** hides each row's kind glyph unless the row has a custom icon.
+
+### Component minimap
+
+Each row shows the icons of its registered components (up to the preference's maximum, then
+"+N"), just left of the eye/lock/active column.
+
+* **Hover** an icon to see the component's name. Hovering "+N" lists the rest.
+* **Click** an icon to select the row. The Inspector opens that component's section, scrolls it
+  to the top and briefly outlines it.
+* **Alt+click** an icon to open a **pinned component window**: a small floating editor for that
+  one component. It uses the Inspector's own field drawing, so undo, prefab override tints and C#
+  managed inspectors behave the same. Pins last for the session. A pin for another scene is
+  hidden until that scene is open again.
+
+### Navigation bar
+
+The row between the Hierarchy toolbar and the tree:
+
+| Control | Does |
+| --- | --- |
+| Scene selector | Lists bookmarked scenes, recent scenes and every scene in `project/scenes`. The star toggles a bookmark. Picking a scene opens it, with the usual unsaved-changes prompt. |
+| Back / Forward | The selection history (Ctrl+[ / Ctrl+]). |
+| Bookmark button | Bookmarks the selection, or removes it if already bookmarked. |
+| Chips | This scene's bookmarked objects. Click selects (Ctrl+click adds to the selection), right-click removes. Chips that don't fit go into a "+N" menu. |
+
+Drop Hierarchy rows anywhere on the bar to bookmark them. Bookmarks are personal (per user and
+per project) and resolve by scene GUID + `OrderComponent`, so they survive renames, reloads and
+Play/Stop. A bookmarked object that no longer exists shows dimmed until it is removed.
+
+### Hover keys
+
+These act on the row under the mouse, or on the whole selection when that row is part of it:
+
+| Key | Action |
+| --- | --- |
+| E | Expand / collapse the row |
+| Shift+E | Isolate: collapse everything, then open the path to this row |
+| Ctrl+Shift+E | Collapse everything (anywhere over the panel) |
+| A | Toggle active |
+| F | Frame in the Scene view |
+| X | Delete |
+| D | Toggle this row as the scene's **default parent** |
+
+When a scene has a default parent, objects created from the Create menu or Shift+A are placed
+under it, keeping the world position they spawned at. The row shows a marker after its name, and
+the right-click menu has a **Default Parent** toggle. The setting is stored per scene in the
+per-user state file. It isn't erased when the object is deleted, so an undo restores it.
+
+If a hover key acted in a frame, the Hierarchy's type-to-select ignores that keystroke.
+
+### Performance
+
+* Rows stay virtualized (`ImGuiListClipper`), and every per-row cost covers visible rows only.
+* The flattened row list and the per-row ancestor chain are reused member buffers. Each visible row
+  used to allocate a fresh chain vector every frame.
+* The "Object 7" fallback name used to re-sort the whole scene for every unnamed visible row (and
+  for every comparison under Sort by Name). Ordinals are now built once per frame.
+* The minimap costs one `Has()` per registered component type per visible row.
 
 ## Shortcut changes
 

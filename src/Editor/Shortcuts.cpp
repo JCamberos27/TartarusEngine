@@ -223,6 +223,18 @@ void BuildDefaultTable() {
     // has to work even with editor UI hidden / no panel focused). ---
     Register("capture.now",      "Capture Screenshot",     Ctx_App, K(ImGuiKey_PrintScreen));
 
+    // --- Editor Enhancers / vHierarchy hover keys (Ctx_HierarchyHover) — act on the row under the
+    // mouse, or on the whole selection when that row is part of it. Bare letters are safe here:
+    // the dispatcher withholds Ctx_Viewport while the mouse is over the Hierarchy, and the panel's
+    // type-to-select skips a frame in which one of these acted.
+    Register("hierarchy.hover.expand",      "Expand / Collapse Row",          Ctx_HierarchyHover, K(ImGuiKey_E));
+    Register("hierarchy.hover.isolate",     "Isolate Row (collapse others)",  Ctx_HierarchyHover, Sk(ImGuiKey_E));
+    Register("hierarchy.hover.collapseAll", "Collapse Everything",            Ctx_HierarchyHover, CSk(ImGuiKey_E));
+    Register("hierarchy.hover.toggleActive","Toggle Active",                  Ctx_HierarchyHover, K(ImGuiKey_A));
+    Register("hierarchy.hover.focus",       "Frame in Scene View",            Ctx_HierarchyHover, K(ImGuiKey_F));
+    Register("hierarchy.hover.delete",      "Delete",                         Ctx_HierarchyHover, K(ImGuiKey_X));
+    Register("hierarchy.hover.defaultParent","Toggle Default Parent",         Ctx_HierarchyHover, K(ImGuiKey_D));
+
     // --- Asset Browser (Ctx_Project) — only while the panel has focus, so F / Ctrl+D don't
     // collide with the scene-selection bindings. ---
     Register("project.focusSearch",   "Focus Search",        Ctx_Project, Ck(ImGuiKey_F));

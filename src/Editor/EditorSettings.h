@@ -260,6 +260,17 @@ struct EditorSettings {
     // EnhancerHoverKeys: the single-letter keys that act on whatever row/component is under the
     // mouse (E expand, A active, X delete, ...). Off restores focus-only shortcut routing.
     bool EnhancerHoverKeys = true;
+    // vHierarchy. RowStyles: draw per-entity icons/colours/separators (HierarchyStyleComponent).
+    // TreeLines: guide lines joining children to parents. Minimal: hide the kind glyph unless a
+    // custom icon is set. Zebra: alternate-row stripe. Minimap: up to MinimapMax component icons
+    // on each row. NavBar: scene selector + Back/Forward + bookmark chips above the tree.
+    bool HierarchyRowStyles  = true;
+    bool HierarchyTreeLines  = true;
+    bool HierarchyMinimal    = false;
+    bool HierarchyZebra      = true;
+    bool HierarchyMinimap    = true;
+    int  HierarchyMinimapMax = 5;
+    bool HierarchyNavBar     = true;
 
     bool WindowPlacementValid = false;
     int  WindowX = 0, WindowY = 0, WindowWidth = 0, WindowHeight = 0;
