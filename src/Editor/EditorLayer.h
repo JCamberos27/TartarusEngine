@@ -991,6 +991,7 @@ private:
     // m_SelEntryLast is the same selection by identity (what the history and undo record).
     std::vector<entt::entity> m_SelSnapshotLast;
     std::string m_SelAssetLast;
+    std::string m_SelScenePathLast; // the path, not CurrentSceneKey(): no asset lookup per frame
     Enhancers::SelectionHistoryEntry m_SelEntryLast;
     // Set by SelectionHistoryBack/Forward and by RestoreSelectionByOrder (Undo/Redo/JumpTo*) alike
     // — any selection change WE drove ourselves, so the next RecordSelectionHistory() poll swallows
