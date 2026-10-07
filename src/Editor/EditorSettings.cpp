@@ -206,6 +206,15 @@ void EditorSettings::Load() {
     s.FolderMinimal = SafeValue(root, "folderMinimal", s.FolderMinimal);
     s.FolderMinimap = SafeValue(root, "folderMinimap", s.FolderMinimap);
     s.FolderNavBar = SafeValue(root, "folderNavBar", s.FolderNavBar);
+    s.InspectorNavBar = SafeValue(root, "inspectorNavBar", s.InspectorNavBar);
+    s.InspectorAnimations = SafeValue(root, "inspectorAnimations", s.InspectorAnimations);
+    s.InspectorMinimal = SafeValue(root, "inspectorMinimal", s.InspectorMinimal);
+    s.InspectorTabs = SafeValue(root, "inspectorTabs", s.InspectorTabs);
+    s.AssetTabs = SafeValue(root, "assetTabs", s.AssetTabs);
+    s.Favorites = SafeValue(root, "favorites", s.Favorites);
+    s.FavoritesHoldAlt = SafeValue(root, "favoritesHoldAlt", s.FavoritesHoldAlt);
+    s.Ruler = SafeValue(root, "ruler", s.Ruler);
+    s.MeasureFeet = SafeValue(root, "measureFeet", s.MeasureFeet);
 
     // #126 — values that are the right type but nonsensical (0 / negative / NaN from a hand
     // edit or an older build) would otherwise produce NaN projections, a zero-size grid, a
@@ -380,6 +389,15 @@ void EditorSettings::Flush() {
     root["folderMinimal"] = Get().FolderMinimal;
     root["folderMinimap"] = Get().FolderMinimap;
     root["folderNavBar"] = Get().FolderNavBar;
+    root["inspectorNavBar"] = Get().InspectorNavBar;
+    root["inspectorAnimations"] = Get().InspectorAnimations;
+    root["inspectorMinimal"] = Get().InspectorMinimal;
+    root["inspectorTabs"] = Get().InspectorTabs;
+    root["assetTabs"] = Get().AssetTabs;
+    root["favorites"] = Get().Favorites;
+    root["favoritesHoldAlt"] = Get().FavoritesHoldAlt;
+    root["ruler"] = Get().Ruler;
+    root["measureFeet"] = Get().MeasureFeet;
 
     // Atomic: a crash mid-write (a toggle spree can still trigger one write) must leave the
     // previous editor_prefs.json intact, not truncated (audit CPP-206). Lives under UserPaths

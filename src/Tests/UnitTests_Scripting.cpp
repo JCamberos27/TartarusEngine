@@ -14,6 +14,7 @@
 #include "GameModuleAPI.h"
 #include <chrono>
 #include <thread>
+#include <set>
 #include <cmath>
 #define WIN32_LEAN_AND_MEAN
 #define NOMINMAX
@@ -217,6 +218,52 @@ void TestManagedUnityWorkflow() {
     const auto gameplay=(executableDir/"Managed/Tartarus.Gameplay.dll").u8string();
     CHECK(Invoke(0,const_cast<char*>(gameplay.c_str()),kVersion));
 }
+// vInspector (Phase 3b): the C# attributes come through Describe, and the edit-mode button /
+// ShowInInspector calls run on a temporary instance holding the saved fields.
+void TestManagedInspectorAttributes() {
+    using namespace Scripting;
+    using Json=nlohmann::json;
+    wchar_t executable[32768]{};
+    CHECK(GetModuleFileNameW(nullptr,executable,32768)!=0);
+    const auto fixture=(std::filesystem::path(executable).parent_path()/"ScriptTests/Tartarus.Gameplay.Tests.dll").u8string();
+    if(!std::filesystem::exists(std::filesystem::u8path(fixture))) {
+        std::cout<<"[UnitTest] SKIP managed attribute fixture (not shipped in exported games)\n"; return;
+    }
+    CHECK(Invoke(0,const_cast<char*>(fixture.c_str()),kVersion));
+    const Json& meta=DescribeJson("Tartarus.Tests.AttributeProbe");
+    CHECK(&meta==&DescribeJson("Tartarus.Tests.AttributeProbe")); // parsed once, then cached
+    CHECK(meta.contains("fields") && meta.contains("buttons") && meta.contains("shows"));
+    auto field=[&](const char* name)->Json {
+        for(const auto& f:meta.value("fields",Json::array())) if(f.value("name",std::string{})==name) return f;
+        return Json();
+    };
+    const Json speed=field("Speed");
+    CHECK(speed.value("foldout",std::string{})=="Motion" && speed.value("tab",std::string{})=="Tuning");
+    CHECK(speed.value("variants",Json::array())==Json::array({1.0,5.0,10.0}));
+    CHECK(field("MaxSpeed").value("onChanged",std::string{})=="ClampSpeed");
+    CHECK(field("Hits").value("readOnly",false));
+    CHECK(field("Note").at("hideIf")==Json({{"field","Advanced"},{"value",false}}));
+    CHECK(field("Boost").at("disableIf")==Json({{"field","Mode"},{"value",0}}));
+    CHECK(field("Weights").value("kind",std::string{})=="dict" && field("Weights").value("valueKind",std::string{})=="float");
+    CHECK(field("Weights").value("default",Json())==Json({{"head",2.0}}));
+    CHECK(field("Transient").is_null()); // NonSerialized: not an editable field...
+    std::set<std::string> shows, buttons;
+    for(const auto& s:meta.at("shows")) shows.insert(s.value("name",std::string{}));
+    for(const auto& b:meta.at("buttons")) buttons.insert(b.value("label",std::string{})+"|"+b.value("tab",std::string{}));
+    CHECK(shows.count("Doubled") && shows.count("Transient")); // ...but shown read-only
+    CHECK(buttons.count("Reset Hits|") && buttons.count("DoubleSpeed|Tuning"));
+
+    World world; AssetLibrary assets;
+    std::string after;
+    CHECK(InvokeEditorMethod(world,assets,"Tartarus.Tests.AttributeProbe",0,0,"{\"Hits\":9,\"Speed\":3}","ResetHits",after));
+    Json saved=Json::parse(after);
+    CHECK(saved.value("Hits",-1)==0 && saved.value("Speed",0.0)==3.0); // other saved values kept
+    CHECK(InvokeEditorMethod(world,assets,"Tartarus.Tests.AttributeProbe",0,0,"{\"Speed\":20,\"MaxSpeed\":8}","ClampSpeed",after));
+    CHECK(Json::parse(after).value("Speed",0.0)==8.0);
+    CHECK(!InvokeEditorMethod(world,assets,"Tartarus.Tests.AttributeProbe",0,0,"{}","NoSuchMethod",after));
+    const Json values=Json::parse(ShowValues(world,assets,"Tartarus.Tests.AttributeProbe",0,0,"{\"Speed\":4}"));
+    CHECK(values.value("Doubled",std::string{})=="8" && values.value("Transient",std::string{})=="7");
+}
 void TestManagedApiAndEditor() {
     using namespace Scripting;
     wchar_t executable[32768]{};CHECK(GetModuleFileNameW(nullptr,executable,32768)!=0);
@@ -298,4 +345,5 @@ void RegisterScriptingTests(UnitTestSupport::TestList& tests) {
     tests.emplace_back("Managed editor background build and reload",TestManagedEditorBuild);
     tests.emplace_back("Managed Unity workflow, multiple scripts and component access",TestManagedUnityWorkflow);
     tests.emplace_back("Managed scene API, native fields and C# editor tools",TestManagedApiAndEditor);
+    tests.emplace_back("Managed vInspector attributes, buttons and read-outs",TestManagedInspectorAttributes);
 }

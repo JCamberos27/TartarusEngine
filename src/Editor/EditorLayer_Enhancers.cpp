@@ -14,6 +14,7 @@
 #include "Log.h"
 #include "Shortcuts.h"
 #include "EditorModuleAPI.h" // EditorFolderVisual, kFolderTree* (API v40)
+#include "EditorPanels.h"   // vFavorites: the Asset Browser window it overlays
 #include "World.h"
 #include "AssetDatabase.h"
 #include "AssetLibrary.h"
@@ -25,6 +26,7 @@
 #include "Enhancers/FolderStyles.h"
 #include "Enhancers/Palette.h"
 #include "Enhancers/StyleWidgets.h"
+#include "Enhancers/TabState.h"
 
 #include <imgui.h>
 #include <imgui_internal.h>
@@ -33,7 +35,11 @@
 #include <algorithm>
 #include <cctype>
 #include <cstdio>
+#include <cstring>
 #include <filesystem>
+#include <functional>
+#include <initializer_list>
+#include <map>
 #include <set>
 
 using namespace EditorInternal;
@@ -54,7 +60,9 @@ void EditorLayer::DrawEnhancerPreferences() {
     ImGui::SameLine();
     EditorUI::HelpMarker("Single-letter keys act on the row, folder or component under the mouse, whichever panel has "
                          "focus: E expand, Shift+E isolate, Ctrl+Shift+E collapse all, A toggle active, X delete, F frame, "
-                         "D default parent. Rebind them under Shortcuts (the \"(hover)\" groups).");
+                         "D default parent. Over the Inspector: Shift+E isolate a component, Ctrl+Shift+E collapse / "
+                         "expand all, A toggle its Enabled field, X remove it. Rebind them under Shortcuts (the "
+                         "\"(hover)\" groups).");
 
     ImGui::Spacing();
     EditorUIPrimitives::SectionHeader("Hierarchy");
@@ -182,6 +190,64 @@ void EditorLayer::DrawEnhancerPreferences() {
             fs.MarkDirty();
         }
     }
+
+    ImGui::Spacing();
+    EditorUIPrimitives::SectionHeader("Inspector");
+    if (SettingsCheckbox("Navigation bar##insp", &prefs.InspectorNavBar)) EditorSettings::Save();
+    ImGui::SameLine();
+    EditorUI::HelpMarker("Selection Back/Forward and bookmarked objects and assets above the Inspector. "
+                         "Drop Hierarchy rows or assets on the bar to bookmark them.");
+    if (SettingsCheckbox("Animations##insp", &prefs.InspectorAnimations)) EditorSettings::Save();
+    ImGui::SameLine();
+    EditorUI::HelpMarker("Component sections slide open and closed, and fade out when removed.");
+    if (SettingsCheckbox("Minimal mode##insp", &prefs.InspectorMinimal)) EditorSettings::Save();
+    ImGui::SameLine();
+    EditorUI::HelpMarker("A component's actions button appears only while its header is hovered.");
+
+    ImGui::Spacing();
+    EditorUIPrimitives::SectionHeader("Favorites");
+    if (SettingsCheckbox("Favorites overlay", &prefs.Favorites)) EditorSettings::Save();
+    ImGui::SameLine();
+    EditorUI::HelpMarker("Pages of favorite folders, assets and objects, shown over the Asset Browser. Ctrl+Alt+F keeps it "
+                         "open, Ctrl+Alt+B adds the selection. Inside: 1-9 / arrows / wheel switch pages, Up/Down + Enter "
+                         "open, Esc closes.");
+    if (prefs.Favorites) {
+        if (SettingsCheckbox("Show while Alt is held", &prefs.FavoritesHoldAlt)) EditorSettings::Save();
+        ImGui::SameLine();
+        EditorUI::HelpMarker("Hold Alt with the mouse over the Asset Browser to show the overlay; release to hide it. "
+                             "Off: only Ctrl+Alt+F (or the pin) shows it.");
+    }
+
+    ImGui::Spacing();
+    EditorUIPrimitives::SectionHeader("Ruler");
+    if (SettingsCheckbox("Ruler (hold Shift+R)", &prefs.Ruler)) EditorSettings::Save();
+    ImGui::SameLine();
+    EditorUI::HelpMarker("Hold Shift+R over the Scene view: the distance from the surface under the cursor to the next "
+                         "surface along its normal, and the object's thickness there. The wheel steps to objects behind; "
+                         "a click shows the object's size.");
+    {
+        int units = prefs.MeasureFeet ? 1 : 0;
+        SettingsLabel("Length units");
+        if (ImGui::Combo("##lengthUnits", &units, "Metric (mm / cm / m / km)\0Feet and inches\0")) {
+            prefs.MeasureFeet = units == 1;
+            EditorSettings::Save();
+        }
+        ImGui::SameLine();
+        EditorUI::HelpMarker("Used by the ruler and the Measure tool.");
+    }
+
+    ImGui::Spacing();
+    EditorUIPrimitives::SectionHeader("Tabs");
+    if (SettingsCheckbox("Inspector tabs", &prefs.InspectorTabs)) EditorSettings::Save();
+    ImGui::SameLine();
+    EditorUI::HelpMarker("Pin objects, components and assets as tabs at the top of the Inspector: drop them on the "
+                         "strip, or press Ctrl+T over the Inspector. A tab keeps showing its target while you select "
+                         "other things; the Selection tab follows the selection.");
+    if (SettingsCheckbox("Asset Browser tabs", &prefs.AssetTabs)) EditorSettings::Save();
+    ImGui::SameLine();
+    EditorUI::HelpMarker("Folder tabs under the Asset Browser toolbar; the active tab follows where you navigate. "
+                         "Ctrl+T new tab, Ctrl+W close, Ctrl+Shift+T reopen (mouse over the panel). Shift+wheel over a "
+                         "strip switches tabs, Ctrl+Shift+wheel moves the tab, middle-click closes.");
 
     ImGui::Spacing();
     EditorUIPrimitives::SectionHeader("Palette colours");
@@ -591,6 +657,1143 @@ void EditorLayer::DrawHierarchyNavBar(World& world, AssetLibrary& assets) {
 }
 
 // ============================================================================================
+// vInspector nav bar
+// ============================================================================================
+
+namespace {
+// Chip icon for an asset bookmark, from the key's extension alone (no disk access - this runs
+// every frame per chip). Mirrors the Asset Browser grid's kind glyphs for the common kinds.
+const char* AssetChipIcon(const std::string& key) {
+    const size_t dot = key.find_last_of('.');
+    if (dot == std::string::npos || key.find('/', dot) != std::string::npos) return ICON_FA_FILE;
+    char ext[16] = {};
+    for (size_t i = dot + 1, n = 0; i < key.size() && n + 1 < sizeof(ext); ++i, ++n)
+        ext[n] = (char)std::tolower((unsigned char)key[i]);
+    auto is = [&](std::initializer_list<const char*> l) {
+        for (const char* e : l) if (std::strcmp(ext, e) == 0) return true;
+        return false;
+    };
+    if (is({"glb", "gltf", "fbx", "obj", "dae", "blend"})) return ICON_FA_CUBE;
+    if (is({"png", "jpg", "jpeg", "tga", "bmp", "ktx", "ktx2", "dds", "psd"})) return ICON_FA_IMAGE;
+    if (is({"hdr", "exr"})) return ICON_FA_SUN;
+    if (is({"mat", "material"})) return ICON_FA_DROPLET;
+    if (is({"prefab"})) return ICON_FA_BOX_ARCHIVE;
+    if (is({"wav", "ogg", "mp3", "flac"})) return ICON_FA_MUSIC;
+    if (is({"cs"})) return ICON_FA_SCROLL;
+    if (is({"glsl", "vert", "frag", "comp", "hlsl", "shader"})) return ICON_FA_FILE_CODE;
+    if (is({"json"})) return ICON_FA_MAP;
+    return ICON_FA_FILE;
+}
+
+std::string AssetChipLabel(const std::string& key) {
+    const size_t slash = key.find_last_of("/\\");
+    return slash == std::string::npos ? key : key.substr(slash + 1);
+}
+} // namespace
+
+// [<] [>] [bookmark] [chips ... +N] above the Inspector body. Drawn inside DrawInspectorBody
+// AFTER the lock swap, so the bookmark toggle names what the Inspector shows (the locked object
+// while locked) - but selection changes come back through `act` and are applied by the caller
+// once the live selection is restored, or the swap-back would undo them.
+void EditorLayer::DrawInspectorNavBar(World& world, InspectorNavAction& act) {
+    if (!EditorSettings::Get().InspectorNavBar) return;
+    auto& us = Enhancers::EnhancerUserState::Get();
+    auto& bm = us.InspectorBookmarks;
+    const std::string sceneKey = CurrentSceneKey();
+    const float h = ImGui::GetFrameHeight();
+    const ImVec2 barMin = ImGui::GetCursorScreenPos();
+    const float barW = ImGui::GetContentRegionAvail().x;
+    ImGui::PushID("##inspNav");
+    ImGui::PushStyleVar(ImGuiStyleVar_ItemSpacing, ImVec2(EditorTheme::Px(4.0f), ImGui::GetStyle().ItemSpacing.y));
+
+    ImGui::BeginDisabled(!CanSelectionHistoryBack());
+    if (EditorUIPrimitives::ActionButton(ICON_FA_ARROW_LEFT, "Previous selection (Ctrl+[)", &Tip, false, ImVec2(h, h)))
+        act.Kind = InspectorNavAction::Back;
+    ImGui::EndDisabled();
+    ImGui::SameLine();
+    ImGui::BeginDisabled(!CanSelectionHistoryForward());
+    if (EditorUIPrimitives::ActionButton(ICON_FA_ARROW_RIGHT, "Next selection (Ctrl+])", &Tip, false, ImVec2(h, h)))
+        act.Kind = InspectorNavAction::Forward;
+    ImGui::EndDisabled();
+
+    // --- Bookmark what the Inspector shows ------------------------------------------------------
+    auto entityRef = [&](entt::entity e) {
+        const auto* o = world.Registry.try_get<OrderComponent>(e);
+        const auto* n = world.Registry.try_get<NameComponent>(e);
+        return Enhancers::EditorRef::MakeEntity(sceneKey, o ? o->Value : -1, n ? n->Name : std::string());
+    };
+    Enhancers::EditorRef current;
+    bool haveCurrent = false;
+    if (m_Selected != entt::null && world.Registry.valid(m_Selected) && world.Registry.all_of<OrderComponent>(m_Selected)) {
+        current = entityRef(m_Selected);
+        haveCurrent = true;
+    } else if (m_Selected == entt::null && !m_SelectedAssetKey.empty() && !m_SelectedAssetIsFolder) {
+        current = Enhancers::EditorRef::MakeAsset(m_SelectedAssetKey, AssetChipLabel(m_SelectedAssetKey));
+        haveCurrent = true;
+    }
+    const bool starred = haveCurrent && Enhancers::FindRef(bm, current) >= 0;
+    ImGui::SameLine();
+    ImGui::BeginDisabled(!haveCurrent);
+    if (EditorUIPrimitives::ActionButton(ICON_FA_BOOKMARK, starred ? "Remove the bookmark"
+                                                                  : "Bookmark what the Inspector shows (or drop objects / assets on this bar)",
+                                         &Tip, starred, ImVec2(h, h))) {
+        if (starred) Enhancers::RemoveRef(bm, current);
+        else Enhancers::AddUnique(bm, current, Enhancers::EnhancerUserState::kMaxBookmarks);
+        us.MarkDirty();
+    }
+    ImGui::EndDisabled();
+
+    // --- Chips: this scene's objects + every asset ------------------------------------------------
+    int removeAt = -1;
+    std::vector<int> overflow;
+    const float right = barMin.x + barW;
+    auto resolve = [&](Enhancers::EditorRef& r, entt::entity& e, const char*& icon) {
+        e = entt::null;
+        icon = nullptr;
+        if (r.Kind == Enhancers::RefKind::Asset) { icon = AssetChipIcon(r.Path); return true; }
+        e = FindEntityByOrder(world, r.Order);
+        if (e == entt::null) return false;
+        if (const auto* n = world.Registry.try_get<NameComponent>(e); n && !n->Name.empty())
+            r.Label = n->Name; // display refresh only - written with the next real change
+        if (const auto* st = world.Registry.try_get<HierarchyStyleComponent>(e); st && !st->Icon.empty())
+            icon = Enhancers::FAIconGlyph(st->Icon.c_str());
+        if (!icon) icon = ICON_FA_CUBE;
+        return true;
+    };
+    auto activate = [&](const Enhancers::EditorRef& r, entt::entity e) {
+        if (r.Kind == Enhancers::RefKind::Asset) { act.Kind = InspectorNavAction::SelectAsset; act.Asset = r.Path; }
+        else if (e != entt::null) { act.Kind = InspectorNavAction::SelectEntity; act.Entity = e; act.Additive = ImGui::GetIO().KeyCtrl; }
+    };
+    auto shown = [&](const Enhancers::EditorRef& r) {
+        return r.Kind == Enhancers::RefKind::Asset || (r.Kind == Enhancers::RefKind::Entity && r.Scene == sceneKey);
+    };
+    for (int i = 0; i < (int)bm.size(); ++i) {
+        Enhancers::EditorRef& r = bm[(size_t)i];
+        if (!shown(r)) continue;
+        ImGui::SameLine();
+        const float avail = right - ImGui::GetCursorScreenPos().x - h - EditorTheme::Px(4.0f);
+        if (avail < EditorTheme::Px(48.0f) || !overflow.empty()) { overflow.push_back(i); continue; }
+        entt::entity e;
+        const char* icon;
+        const bool found = resolve(r, e, icon);
+        const char* label = r.Label.empty() ? "(unnamed)" : r.Label.c_str();
+        ImGui::PushID(i);
+        bool clicked = false, hovered = false;
+        NavChip("##chip", icon, label, !found, std::min(avail, EditorTheme::Px(140.0f)), clicked, hovered);
+        if (clicked) activate(r, e);
+        if (hovered) {
+            if (r.Kind == Enhancers::RefKind::Asset)
+                EditorUI::SetTooltip("%s\nClick to inspect, right-click to remove.", r.Path.c_str());
+            else
+                EditorUI::SetTooltip(found ? "%s\nClick to select (Ctrl+click adds), right-click to remove."
+                                           : "%s\nNot found in this scene - right-click to remove.", label);
+        }
+        if (ImGui::BeginPopupContextItem("##chipCtx")) {
+            if (ImGui::MenuItem(ICON_FA_TRASH "  Remove bookmark")) removeAt = i;
+            ImGui::EndPopup();
+        }
+        ImGui::PopID();
+    }
+    if (!overflow.empty()) {
+        ImGui::SameLine();
+        char more[16];
+        std::snprintf(more, sizeof(more), "+%d", (int)overflow.size());
+        if (EditorUIPrimitives::ActionButton(more, "More bookmarks", &Tip, false, ImVec2(0, h))) ImGui::OpenPopup("##navMore");
+        if (ImGui::BeginPopup("##navMore")) {
+            for (int i : overflow) {
+                Enhancers::EditorRef& r = bm[(size_t)i];
+                entt::entity e;
+                const char* icon;
+                const bool found = resolve(r, e, icon);
+                char line[256];
+                std::snprintf(line, sizeof(line), "%s  %s", icon ? icon : ICON_FA_CUBE, r.Label.empty() ? "(unnamed)" : r.Label.c_str());
+                ImGui::PushID(i);
+                ImGui::BeginDisabled(!found);
+                if (ImGui::Selectable(line)) activate(r, e);
+                ImGui::EndDisabled();
+                if (ImGui::BeginPopupContextItem("##moreCtx")) {
+                    if (ImGui::MenuItem(ICON_FA_TRASH "  Remove bookmark")) removeAt = i;
+                    ImGui::EndPopup();
+                }
+                ImGui::PopID();
+            }
+            ImGui::EndPopup();
+        }
+    }
+    if (removeAt >= 0) {
+        bm.erase(bm.begin() + removeAt);
+        us.MarkDirty();
+    }
+
+    // --- Drop Hierarchy rows or assets anywhere on the bar to bookmark them -----------------------
+    const ImRect barRect(barMin, ImVec2(barMin.x + barW, barMin.y + h));
+    if (ImGui::BeginDragDropTargetCustom(barRect, ImGui::GetID("##navDrop"))) {
+        if (const ImGuiPayload* p = ImGui::AcceptDragDropPayload("HIERARCHY_ENTITY")) {
+            const entt::entity dragged = *(const entt::entity*)p->Data;
+            if (world.Registry.valid(dragged)) {
+                const std::vector<entt::entity> rows = IsSelected(dragged) ? GetSelectedItems() : std::vector<entt::entity>{dragged};
+                for (entt::entity e : rows)
+                    if (world.Registry.valid(e) && world.Registry.all_of<OrderComponent>(e))
+                        Enhancers::AddUnique(bm, entityRef(e), Enhancers::EnhancerUserState::kMaxBookmarks);
+                us.MarkDirty();
+            }
+        }
+        static const char* const kAssetPayloads[] = {"ASSET_MODEL_PATH", "ASSET_TEXTURE_PATH", "ASSET_MATERIAL_PATH",
+                                                     "ASSET_PREFAB_PATH", "ASSET_SOUND_PATH", "ASSET_FILE_PATH"};
+        for (const char* type : kAssetPayloads) {
+            if (const ImGuiPayload* p = ImGui::AcceptDragDropPayload(type)) {
+                const std::string key((const char*)p->Data);
+                if (!key.empty()) {
+                    Enhancers::AddUnique(bm, Enhancers::EditorRef::MakeAsset(key, AssetChipLabel(key)),
+                                         Enhancers::EnhancerUserState::kMaxBookmarks);
+                    us.MarkDirty();
+                }
+            }
+        }
+        ImGui::EndDragDropTarget();
+    }
+
+    ImGui::PopStyleVar();
+    ImGui::PopID();
+}
+
+void EditorLayer::ApplyInspectorNavAction(World& world, const InspectorNavAction& act) {
+    // Every nav-bar action is about the selection: show it (the Selection tab).
+    if (auto& tabs = Enhancers::TabState::Get().Inspector; act.Kind != InspectorNavAction::None && tabs.Active >= 0) {
+        tabs.Active = -1;
+        Enhancers::TabState::Get().MarkDirty();
+    }
+    switch (act.Kind) {
+        case InspectorNavAction::Back:    SelectionHistoryBack(world); break;
+        case InspectorNavAction::Forward: SelectionHistoryForward(world); break;
+        case InspectorNavAction::SelectEntity:
+            if (act.Entity != entt::null && world.Registry.valid(act.Entity)) {
+                SelectItem(act.Entity, act.Additive);
+                m_HierarchyScrollToEntity = act.Entity;
+            }
+            break;
+        case InspectorNavAction::SelectAsset:
+            ClearSelection();
+            ClearAssetSelection();
+            m_SelectedAssetKey = act.Asset;
+            m_SelectedAssetIsFolder = false;
+            break;
+        case InspectorNavAction::None: break;
+    }
+}
+
+// ============================================================================================
+// vTabs
+// ============================================================================================
+
+namespace {
+// A stable ImGui ID per tab target (so an active drag follows the tab as it moves), with an
+// occurrence count for the Asset Browser's duplicate folder tabs.
+std::string TabKey(const Enhancers::EditorRef& r) {
+    return std::to_string((int)r.Kind) + "|" + r.Scene + "|" + std::to_string(r.Order) + "|" + r.Path + "|" + r.Sub;
+}
+
+std::string FolderLeaf(const std::string& path) {
+    if (path.empty()) return "Assets";
+    const size_t slash = path.find_last_of('/');
+    return slash == std::string::npos ? path : path.substr(slash + 1);
+}
+
+bool IsStarred(const Enhancers::EditorRef& r) {
+    return Enhancers::FindRef(Enhancers::TabState::Get().Starred, r) >= 0;
+}
+
+// Top-scoring fuzzy matches of `query` over `count` candidates (index -> text), best first.
+template <class TextFn>
+std::vector<int> FuzzyTop(const char* query, int count, TextFn text, int limit) {
+    std::vector<std::pair<int, int>> scored; // (score, index)
+    for (int i = 0; i < count; ++i) {
+        const int s = Enhancers::FuzzyScore(query, text(i));
+        if (s >= 0) scored.emplace_back(s, i);
+    }
+    std::stable_sort(scored.begin(), scored.end(), [](const auto& a, const auto& b) { return a.first > b.first; });
+    std::vector<int> out;
+    for (size_t i = 0; i < scored.size() && (int)i < limit; ++i) out.push_back(scored[i].second);
+    return out;
+}
+} // namespace
+
+bool EditorLayer::DrawTabStrip(const char* id, Enhancers::TabStrip& strip, TabStripView& view,
+                               const std::vector<TabStripItem>& items, const char* liveLabel, const char* liveIcon,
+                               const std::function<void()>& plusMenu, const std::function<void()>& acceptDrop,
+                               bool showDropHint) {
+    auto& ts = Enhancers::TabState::Get();
+    ImGuiIO& io = ImGui::GetIO();
+    const int before = strip.Active;
+    const float h = ImGui::GetFrameHeight();
+    const ImVec2 barMin = ImGui::GetCursorScreenPos();
+    const float barW = ImGui::GetContentRegionAvail().x;
+    const float plusW = h;
+    const ImVec2 stripMin = barMin;
+    const ImVec2 stripMax(barMin.x + std::max(barW - plusW - EditorTheme::Px(4.0f), 1.0f), barMin.y + h);
+    ImGui::PushID(id);
+    ImDrawList* dl = ImGui::GetWindowDrawList();
+    dl->AddLine(ImVec2(barMin.x, stripMax.y - 0.5f), ImVec2(barMin.x + barW, stripMax.y - 0.5f), EditorTheme::U32(EditorTheme::Hairline));
+
+    // Layout: the live tab (index -1) then the strip's tabs.
+    EditorTheme::PushSmall();
+    const float padX = EditorTheme::Px(8.0f), gap = EditorTheme::Px(5.0f), closeW = EditorTheme::Px(14.0f);
+    const int first = liveLabel ? -1 : 0;
+    const int n = (int)strip.Tabs.size();
+    std::vector<float> xs, ws;
+    xs.reserve((size_t)(n + 1)); ws.reserve((size_t)(n + 1));
+    float x = 0.0f;
+    for (int i = first; i < n; ++i) {
+        const char* icon = i < 0 ? liveIcon : (i < (int)items.size() && !items[(size_t)i].Icon.empty() ? items[(size_t)i].Icon.c_str() : nullptr);
+        const char* label = i < 0 ? liveLabel : (i < (int)items.size() ? items[(size_t)i].Label.c_str() : "");
+        float w = padX * 2.0f + (icon ? ImGui::CalcTextSize(icon).x + gap : 0.0f) + ImGui::CalcTextSize(label).x + (i >= 0 ? closeW : 0.0f);
+        w = std::clamp(w, EditorTheme::Px(56.0f), EditorTheme::Px(170.0f));
+        xs.push_back(x); ws.push_back(w);
+        x += w + EditorTheme::Px(2.0f);
+    }
+    const float contentW = x;
+    const float visibleW = stripMax.x - stripMin.x;
+    const float maxScroll = std::max(0.0f, contentW - visibleW);
+
+    // Keep a newly active tab in view.
+    if (strip.Active != view.SeenActive) {
+        view.SeenActive = strip.Active;
+        const size_t k = (size_t)(strip.Active - first);
+        if (k < xs.size()) {
+            if (xs[k] < view.ScrollTarget) view.ScrollTarget = xs[k];
+            else if (xs[k] + ws[k] > view.ScrollTarget + visibleW) view.ScrollTarget = xs[k] + ws[k] - visibleW;
+        }
+    }
+
+    // Wheel over the strip: scroll; Shift switches tabs; Ctrl+Shift moves the active one.
+    const bool overStrip = ImGui::IsWindowHovered(ImGuiHoveredFlags_ChildWindows) && ImGui::IsMouseHoveringRect(barMin, ImVec2(barMin.x + barW, stripMax.y));
+    const ImGuiID wheelOwner = ImGui::GetID("##wheel");
+    if (overStrip) {
+        ImGui::SetKeyOwner(ImGuiKey_MouseWheelY, wheelOwner);
+        ImGui::SetKeyOwner(ImGuiKey_MouseWheelX, wheelOwner);
+        const float wheel = io.MouseWheel != 0.0f ? io.MouseWheel : io.MouseWheelH;
+        if (wheel != 0.0f) {
+            const int dir = wheel > 0.0f ? -1 : 1;
+            if (io.KeyCtrl && io.KeyShift) {
+                if (strip.Active >= 0) { strip.Move(strip.Active, strip.Active + dir); ts.MarkDirty(); }
+            } else if (io.KeyShift) {
+                strip.Active = strip.Step(dir, liveLabel != nullptr);
+            } else {
+                view.ScrollTarget += dir * EditorTheme::Px(60.0f);
+            }
+        }
+    }
+    view.ScrollTarget = std::clamp(view.ScrollTarget, 0.0f, maxScroll);
+    view.Scroll += (view.ScrollTarget - view.Scroll) * std::min(1.0f, io.DeltaTime * 16.0f);
+    if (std::fabs(view.ScrollTarget - view.Scroll) < 0.5f) view.Scroll = view.ScrollTarget;
+
+    // Tabs.
+    ImGui::PushClipRect(stripMin, stripMax, true);
+    int closeAt = -1, closeOthers = -2, moveFrom = -1, moveTo = -1;
+    bool closeAll = false;
+    std::map<std::string, int> seen;
+    for (int i = first; i < n; ++i) {
+        const size_t k = (size_t)(i - first);
+        const ImVec2 mn(stripMin.x + xs[k] - view.Scroll, stripMin.y);
+        const ImVec2 mx(mn.x + ws[k], stripMax.y);
+        const TabStripItem* item = i >= 0 && i < (int)items.size() ? &items[(size_t)i] : nullptr;
+        std::string key = i < 0 ? std::string("##live") : TabKey(strip.Tabs[(size_t)i]);
+        key += "#" + std::to_string(seen[key]++);
+        ImGui::PushID(key.c_str());
+        ImGui::SetCursorScreenPos(mn);
+        const bool clicked = ImGui::InvisibleButton("##tab", ImVec2(ws[k], h));
+        const bool hov = ImGui::IsItemHovered();
+        const bool active = strip.Active == i;
+        // Drag to reorder: past a few pixels, the tab trades places with whichever it is over.
+        if (i >= 0 && ImGui::IsItemActive() && ImGui::IsMouseDragging(ImGuiMouseButton_Left, EditorTheme::Px(4.0f))) {
+            const float mxPos = io.MousePos.x - stripMin.x + view.Scroll;
+            for (int j = 0; j < n; ++j) {
+                const size_t kj = (size_t)(j - first);
+                if (j != i && mxPos >= xs[kj] && mxPos < xs[kj] + ws[kj]) { moveFrom = i; moveTo = j; break; }
+            }
+        }
+        const ImVec2 closeMin(mx.x - closeW - EditorTheme::Px(3.0f), mn.y);
+        const bool overClose = i >= 0 && hov && ImGui::IsMouseHoveringRect(closeMin, mx);
+        if (clicked) {
+            if (overClose) closeAt = i;
+            else strip.Active = i;
+        }
+        if (i >= 0 && hov && ImGui::IsMouseClicked(ImGuiMouseButton_Middle)) closeAt = i;
+        // Look: the active tab is raised with an accent underline; others are flat.
+        const ImU32 bg = EditorTheme::U32(active ? EditorTheme::Raised : (hov ? EditorTheme::Hover : ImVec4(0, 0, 0, 0)));
+        dl->AddRectFilled(ImVec2(mn.x, mn.y + EditorTheme::Px(2.0f)), mx, bg, EditorTheme::Px(4.0f), ImDrawFlags_RoundCornersTop);
+        if (active) dl->AddLine(ImVec2(mn.x + EditorTheme::Px(3.0f), mx.y - 1.0f), ImVec2(mx.x - EditorTheme::Px(3.0f), mx.y - 1.0f),
+                                EditorTheme::U32(EditorTheme::Accent), EditorTheme::Px(2.0f));
+        else if (item && item->Color)
+            dl->AddLine(ImVec2(mn.x + EditorTheme::Px(6.0f), mx.y - 1.0f), ImVec2(mx.x - EditorTheme::Px(6.0f), mx.y - 1.0f),
+                        item->Color | 0xFF000000u, EditorTheme::Px(1.5f));
+        const bool dim = item && item->Missing;
+        const ImU32 tc = EditorTheme::U32(dim ? EditorTheme::Dim : (active || hov ? EditorTheme::Text : EditorTheme::Secondary));
+        const char* icon = i < 0 ? liveIcon : (item && !item->Icon.empty() ? item->Icon.c_str() : nullptr);
+        const char* label = i < 0 ? liveLabel : (item ? item->Label.c_str() : "");
+        const float cy = (mn.y + mx.y) * 0.5f + EditorTheme::Px(1.0f);
+        float tx = mn.x + padX;
+        if (icon) {
+            const ImVec2 is = ImGui::CalcTextSize(icon);
+            dl->AddText(ImVec2(tx, cy - is.y * 0.5f), EditorTheme::U32(active ? EditorTheme::Accent : (dim ? EditorTheme::Dim : EditorTheme::Secondary)), icon);
+            tx += is.x + gap;
+        }
+        const float labelRight = mx.x - (i >= 0 ? closeW + EditorTheme::Px(2.0f) : padX * 0.5f);
+        const ImVec2 ls = ImGui::CalcTextSize(label);
+        ImGui::PushStyleColor(ImGuiCol_Text, ImGui::ColorConvertU32ToFloat4(tc));
+        ImGui::RenderTextEllipsis(dl, ImVec2(tx, cy - ls.y * 0.5f), ImVec2(labelRight, cy + ls.y * 0.5f), labelRight, label, nullptr, &ls);
+        ImGui::PopStyleColor();
+        if (i >= 0 && (hov || active)) {
+            const ImVec2 xs2 = ImGui::CalcTextSize(ICON_FA_XMARK);
+            dl->AddText(ImVec2(closeMin.x + (closeW - xs2.x) * 0.5f, cy - xs2.y * 0.5f),
+                        EditorTheme::U32(overClose ? EditorTheme::Text : EditorTheme::Dim), ICON_FA_XMARK);
+        }
+        if (hov && !ImGui::IsMouseDragging(ImGuiMouseButton_Left)) {
+            const std::string& tip = item ? item->Tooltip : std::string();
+            EditorUI::SetTooltip("%s%s", i < 0 ? "Follows the selection" : (tip.empty() ? label : tip.c_str()),
+                                 i < 0 ? "" : "\nMiddle-click or x closes. Drag to reorder. Shift+wheel switches tabs.");
+        }
+        if (ImGui::BeginPopupContextItem("##tabCtx")) {
+            if (i >= 0) {
+                const bool starred = IsStarred(strip.Tabs[(size_t)i]);
+                if (ImGui::MenuItem(ICON_FA_STAR "  Starred", nullptr, starred)) {
+                    if (starred) Enhancers::RemoveRef(ts.Starred, strip.Tabs[(size_t)i]);
+                    else Enhancers::AddUnique(ts.Starred, strip.Tabs[(size_t)i]);
+                    ts.MarkDirty();
+                }
+                ImGui::Separator();
+                if (ImGui::MenuItem(ICON_FA_XMARK "  Close Tab", "Ctrl+W")) closeAt = i;
+            }
+            if (ImGui::MenuItem("Close Other Tabs", nullptr, false, n > (i >= 0 ? 1 : 0))) closeOthers = i;
+            if (ImGui::MenuItem("Close All Tabs", nullptr, false, n > 0)) closeAll = true;
+            ImGui::EndPopup();
+        }
+        ImGui::PopID();
+    }
+    ImGui::PopClipRect();
+    EditorTheme::PopFont();
+    // Overflow fades at the clipped edges.
+    if (view.Scroll > 0.5f)
+        dl->AddRectFilledMultiColor(stripMin, ImVec2(stripMin.x + EditorTheme::Px(14.0f), stripMax.y),
+                                    EditorTheme::U32(EditorTheme::Panel), 0, 0, EditorTheme::U32(EditorTheme::Panel));
+    if (view.Scroll < maxScroll - 0.5f)
+        dl->AddRectFilledMultiColor(ImVec2(stripMax.x - EditorTheme::Px(14.0f), stripMin.y), stripMax,
+                                    0, EditorTheme::U32(EditorTheme::Panel), EditorTheme::U32(EditorTheme::Panel), 0);
+    if (showDropHint && n == 0) {
+        const char* hint = "Drop here to open a tab";
+        const ImVec2 hs = ImGui::CalcTextSize(hint);
+        const float hx = stripMin.x + (liveLabel ? xs[0] + ws[0] + EditorTheme::Px(8.0f) : EditorTheme::Px(8.0f));
+        if (hx + hs.x < stripMax.x) dl->AddText(ImVec2(hx, (stripMin.y + stripMax.y - hs.y) * 0.5f), EditorTheme::U32(EditorTheme::Dim), hint);
+    }
+
+    // "+": the caller's menu (starred tabs and a fuzzy search).
+    ImGui::SetCursorScreenPos(ImVec2(barMin.x + barW - plusW, barMin.y));
+    if (EditorUIPrimitives::ActionButton(ICON_FA_PLUS, "Open a tab (Ctrl+T)", &Tip, false, ImVec2(plusW, h))) ImGui::OpenPopup("##tabPlus");
+    ImGui::SetNextWindowSizeConstraints(ImVec2(EditorTheme::Px(240.0f), 0.0f), ImVec2(EditorTheme::Px(420.0f), EditorTheme::Px(420.0f)));
+    if (ImGui::BeginPopup("##tabPlus")) {
+        plusMenu();
+        ImGui::EndPopup();
+    }
+
+    // Drop anything openable anywhere on the bar.
+    if (ImGui::BeginDragDropTargetCustom(ImRect(barMin, ImVec2(barMin.x + barW, stripMax.y)), ImGui::GetID("##tabDrop"))) {
+        acceptDrop();
+        ImGui::EndDragDropTarget();
+    }
+    ImGui::SetCursorScreenPos(ImVec2(barMin.x, stripMax.y + EditorTheme::Px(2.0f)));
+    ImGui::Dummy(ImVec2(0.0f, 0.0f));
+    ImGui::PopID();
+
+    if (moveFrom >= 0) strip.Move(moveFrom, moveTo);
+    if (closeAt >= 0) strip.Close(closeAt);
+    if (closeOthers != -2) strip.CloseOthers(closeOthers);
+    if (closeAll) { while (!strip.Tabs.empty()) strip.Close((int)strip.Tabs.size() - 1); strip.Active = -1; }
+    if (!liveLabel && strip.Active < 0 && !strip.Tabs.empty()) strip.Active = 0;
+    if (moveFrom >= 0 || closeAt >= 0 || closeOthers != -2 || closeAll || strip.Active != before) ts.MarkDirty();
+    return strip.Active != before;
+}
+
+// --- Inspector tabs ---------------------------------------------------------------------------
+
+bool EditorLayer::ResolveInspectorTab(const World& world, entt::entity& entity, std::string& asset, bool& missing) const {
+    const auto& strip = Enhancers::TabState::Get().Inspector;
+    entity = entt::null;
+    asset.clear();
+    missing = false;
+    if (strip.Active < 0 || strip.Active >= (int)strip.Tabs.size()) return false;
+    const Enhancers::EditorRef& r = strip.Tabs[(size_t)strip.Active];
+    if (r.Kind == Enhancers::RefKind::Asset) { asset = r.Path; return true; }
+    if (r.Kind == Enhancers::RefKind::Entity && r.Scene == CurrentSceneKey()) entity = FindEntityByOrder(world, r.Order);
+    missing = entity == entt::null;
+    return true;
+}
+
+void EditorLayer::OpenInspectorTabForCurrent(World& world) {
+    auto& ts = Enhancers::TabState::Get();
+    entt::entity e = m_Selected;
+    std::string assetKey;
+    bool missing = false;
+    if (ResolveInspectorTab(world, e, assetKey, missing)) return; // a tab is already showing it
+    if (m_Selected != entt::null && world.Registry.valid(m_Selected)) {
+        const auto* o = world.Registry.try_get<OrderComponent>(m_Selected);
+        const auto* nm = world.Registry.try_get<NameComponent>(m_Selected);
+        if (!o) return;
+        ts.Inspector.Open(Enhancers::EditorRef::MakeEntity(CurrentSceneKey(), o->Value, nm ? nm->Name : std::string()));
+    } else if (!m_SelectedAssetKey.empty() && !m_SelectedAssetIsFolder) {
+        ts.Inspector.Open(Enhancers::EditorRef::MakeAsset(m_SelectedAssetKey, AssetChipLabel(m_SelectedAssetKey)));
+    } else {
+        return;
+    }
+    ts.MarkDirty();
+}
+
+void EditorLayer::DrawInspectorTabStrip(World& world) {
+    if (!EditorSettings::Get().InspectorTabs) return;
+    auto& ts = Enhancers::TabState::Get();
+    auto& strip = ts.Inspector;
+    const std::string sceneKey = CurrentSceneKey();
+
+    // Keyboard (mouse over the Inspector).
+    if (Shortcuts::Triggered("inspector.tabs.new")) OpenInspectorTabForCurrent(world);
+    if (Shortcuts::Triggered("inspector.tabs.close") && strip.Active >= 0) { strip.Close(strip.Active); ts.MarkDirty(); }
+    if (Shortcuts::Triggered("inspector.tabs.reopen") && strip.Reopen() >= 0) ts.MarkDirty();
+
+    const ImGuiPayload* drag = ImGui::GetDragDropPayload();
+    const bool dragging = drag && (drag->IsDataType("HIERARCHY_ENTITY") || drag->IsDataType("INSPECTOR_COMPONENT") ||
+                                   drag->IsDataType("ASSET_MODEL_PATH") || drag->IsDataType("ASSET_TEXTURE_PATH") ||
+                                   drag->IsDataType("ASSET_MATERIAL_PATH") || drag->IsDataType("ASSET_PREFAB_PATH") ||
+                                   drag->IsDataType("ASSET_SOUND_PATH") || drag->IsDataType("ASSET_FILE_PATH"));
+    if (strip.Tabs.empty() && !dragging) return; // nothing to show: no strip until there is a tab
+
+    std::vector<TabStripItem> items;
+    items.reserve(strip.Tabs.size());
+    for (Enhancers::EditorRef& r : strip.Tabs) {
+        TabStripItem it;
+        if (r.Kind == Enhancers::RefKind::Asset) {
+            it.Icon = AssetChipIcon(r.Path);
+            it.Label = r.Label.empty() ? AssetChipLabel(r.Path) : r.Label;
+            it.Tooltip = r.Path;
+        } else {
+            const entt::entity e = r.Scene == sceneKey ? FindEntityByOrder(world, r.Order) : entt::null;
+            if (e != entt::null) {
+                if (const auto* nm = world.Registry.try_get<NameComponent>(e); nm && !nm->Name.empty()) r.Label = nm->Name;
+                if (const auto* st = world.Registry.try_get<HierarchyStyleComponent>(e); st && !st->Icon.empty())
+                    if (const char* g = Enhancers::FAIconGlyph(st->Icon.c_str())) it.Icon = g;
+            }
+            if (!r.Sub.empty())
+                for (const auto& rc : ComponentRegistry::All())
+                    if (r.Sub == rc.Meta.Name) { it.Icon = rc.Meta.Icon; break; }
+            if (it.Icon.empty()) it.Icon = ICON_FA_CUBE;
+            const std::string name = r.Label.empty() ? std::string("(unnamed)") : r.Label;
+            it.Label = r.Sub.empty() ? name : r.Sub + " (" + name + ")";
+            it.Missing = e == entt::null;
+            it.Tooltip = it.Missing ? it.Label + "\nNot in the open scene." : it.Label;
+        }
+        items.push_back(std::move(it));
+    }
+
+    auto entityRef = [&](entt::entity e) {
+        const auto* o = world.Registry.try_get<OrderComponent>(e);
+        const auto* nm = world.Registry.try_get<NameComponent>(e);
+        return Enhancers::EditorRef::MakeEntity(sceneKey, o ? o->Value : -1, nm ? nm->Name : std::string());
+    };
+    auto plusMenu = [&]() {
+        char* q = m_TabSearch[0];
+        if (ImGui::IsWindowAppearing()) { q[0] = '\0'; ImGui::SetKeyboardFocusHere(); }
+        ImGui::SetNextItemWidth(-FLT_MIN);
+        ImGui::InputTextWithHint("##q", ICON_FA_MAGNIFYING_GLASS "  Search objects", q, sizeof(m_TabSearch[0]));
+        auto open = [&](const Enhancers::EditorRef& r) { strip.Open(r); ts.MarkDirty(); ImGui::CloseCurrentPopup(); };
+        if (m_Selected != entt::null && world.Registry.valid(m_Selected) && world.Registry.all_of<OrderComponent>(m_Selected) &&
+            ImGui::Selectable(ICON_FA_PLUS "  Pin the current selection", false))
+            open(entityRef(m_Selected));
+        bool header = false;
+        for (const auto& r : ts.Starred) {
+            if (r.Kind == Enhancers::RefKind::Folder || (r.Kind == Enhancers::RefKind::Entity && r.Scene != sceneKey)) continue;
+            if (!header) { EditorUIPrimitives::SectionHeader("STARRED"); header = true; }
+            const std::string label = r.Kind == Enhancers::RefKind::Asset ? AssetChipLabel(r.Path)
+                                    : (r.Sub.empty() ? r.Label : r.Sub + " (" + r.Label + ")");
+            ImGui::PushID(&r);
+            if (ImGui::Selectable((std::string(ICON_FA_STAR "  ") + label).c_str())) open(r);
+            ImGui::PopID();
+        }
+        std::vector<entt::entity> ents;
+        for (auto [e, o, nm] : world.Registry.view<const OrderComponent, const NameComponent>().each()) ents.push_back(e);
+        const auto hits = FuzzyTop(q, (int)ents.size(), [&](int i) { return world.Registry.get<NameComponent>(ents[(size_t)i]).Name.c_str(); }, 30);
+        EditorUIPrimitives::SectionHeader("OBJECTS");
+        if (hits.empty()) ImGui::TextDisabled("No matching objects");
+        for (int i : hits) {
+            const entt::entity e = ents[(size_t)i];
+            const char* icon = ICON_FA_CUBE;
+            if (const auto* st = world.Registry.try_get<HierarchyStyleComponent>(e); st && !st->Icon.empty())
+                if (const char* g = Enhancers::FAIconGlyph(st->Icon.c_str())) icon = g;
+            ImGui::PushID((int)entt::to_integral(e));
+            if (ImGui::Selectable((std::string(icon) + "  " + world.Registry.get<NameComponent>(e).Name).c_str())) open(entityRef(e));
+            ImGui::PopID();
+        }
+    };
+    auto acceptDrop = [&]() {
+        if (const ImGuiPayload* p = ImGui::AcceptDragDropPayload("HIERARCHY_ENTITY")) {
+            const entt::entity e = *(const entt::entity*)p->Data;
+            if (world.Registry.valid(e) && world.Registry.all_of<OrderComponent>(e)) { strip.Open(entityRef(e)); ts.MarkDirty(); }
+        }
+        if (const ImGuiPayload* p = ImGui::AcceptDragDropPayload("INSPECTOR_COMPONENT")) {
+            const auto* c = (const InspectorComponentPayload*)p->Data;
+            const entt::entity e = FindEntityByOrder(world, c->Order);
+            const auto* nm = e != entt::null ? world.Registry.try_get<NameComponent>(e) : nullptr;
+            strip.Open(Enhancers::EditorRef::MakeComponent(sceneKey, c->Order, c->Component, nm ? nm->Name : std::string()));
+            ts.MarkDirty();
+        }
+        static const char* const kAssetPayloads[] = {"ASSET_MODEL_PATH", "ASSET_TEXTURE_PATH", "ASSET_MATERIAL_PATH",
+                                                     "ASSET_PREFAB_PATH", "ASSET_SOUND_PATH", "ASSET_FILE_PATH"};
+        for (const char* type : kAssetPayloads)
+            if (const ImGuiPayload* p = ImGui::AcceptDragDropPayload(type)) {
+                const std::string key((const char*)p->Data);
+                if (!key.empty()) { strip.Open(Enhancers::EditorRef::MakeAsset(key, AssetChipLabel(key))); ts.MarkDirty(); }
+            }
+    };
+    DrawTabStrip("##inspTabs", strip, m_InspectorTabView, items, "Selection", ICON_FA_ARROW_POINTER, plusMenu, acceptDrop, dragging);
+}
+
+// --- Asset Browser tabs -----------------------------------------------------------------------
+
+void EditorLayer::DrawAssetTabStrip(AssetLibrary& assets) {
+    if (!EditorSettings::Get().AssetTabs) return;
+    auto& ts = Enhancers::TabState::Get();
+    auto& strip = ts.Assets;
+    const auto& folders = assets.Folders();
+    auto folderExists = [&](const std::string& p) { return p.empty() || std::find(folders.begin(), folders.end(), p) != folders.end(); };
+    auto folderRef = [&](const std::string& p) { return Enhancers::EditorRef::MakeFolder(p, FolderLeaf(p)); };
+
+    // Keyboard (mouse over the Asset Browser). A new tab starts on the current folder.
+    if (Shortcuts::Triggered("project.tabs.new")) {
+        if (strip.Tabs.empty()) strip.Open(folderRef(m_CurrentAssetFolder)); // first press: the current view becomes tab 1 too
+        strip.Open(folderRef(m_CurrentAssetFolder), true, /*allowDuplicate=*/true);
+        ts.MarkDirty();
+    }
+    if (Shortcuts::Triggered("project.tabs.close") && strip.Active >= 0) { strip.Close(strip.Active); ts.MarkDirty(); }
+    if (Shortcuts::Triggered("project.tabs.reopen") && strip.Reopen() >= 0) ts.MarkDirty();
+
+    const ImGuiPayload* drag = ImGui::GetDragDropPayload();
+    const bool dragging = drag && (drag->IsDataType("ASSET_FOLDER_PATH") || drag->IsDataType("ASSET_MODEL_PATH") ||
+                                   drag->IsDataType("ASSET_TEXTURE_PATH") || drag->IsDataType("ASSET_MATERIAL_PATH") ||
+                                   drag->IsDataType("ASSET_PREFAB_PATH") || drag->IsDataType("ASSET_SOUND_PATH") ||
+                                   drag->IsDataType("ASSET_FILE_PATH"));
+    if (strip.Tabs.empty() && !dragging) return;
+
+    // The active tab follows navigation: it is the browser's current place.
+    if (strip.Active >= 0 && strip.Active < (int)strip.Tabs.size()) {
+        Enhancers::EditorRef& cur = strip.Tabs[(size_t)strip.Active];
+        if (cur.Path != m_CurrentAssetFolder) { cur.Path = m_CurrentAssetFolder; cur.Label = FolderLeaf(cur.Path); ts.MarkDirty(); }
+    }
+
+    std::vector<TabStripItem> items;
+    items.reserve(strip.Tabs.size());
+    for (const auto& r : strip.Tabs) {
+        TabStripItem it;
+        EditorFolderVisual vis;
+        GetFolderVisual(assets, r.Path, vis);
+        it.Icon = vis.Icon[0] ? std::string(vis.Icon) : std::string(r.Path.empty() ? ICON_FA_HOUSE : ICON_FA_FOLDER);
+        it.Color = vis.Color;
+        it.Label = FolderLeaf(r.Path);
+        it.Missing = !folderExists(r.Path);
+        it.Tooltip = (r.Path.empty() ? std::string("Assets") : r.Path) + (it.Missing ? "\nThis folder no longer exists." : "");
+        items.push_back(std::move(it));
+    }
+
+    auto plusMenu = [&]() {
+        char* q = m_TabSearch[1];
+        if (ImGui::IsWindowAppearing()) { q[0] = '\0'; ImGui::SetKeyboardFocusHere(); }
+        ImGui::SetNextItemWidth(-FLT_MIN);
+        ImGui::InputTextWithHint("##q", ICON_FA_MAGNIFYING_GLASS "  Search folders", q, sizeof(m_TabSearch[1]));
+        auto open = [&](const std::string& p) { strip.Open(folderRef(p), true, /*allowDuplicate=*/true); ts.MarkDirty(); ImGui::CloseCurrentPopup(); };
+        if (ImGui::Selectable(ICON_FA_PLUS "  New tab here (Ctrl+T)")) open(m_CurrentAssetFolder);
+        bool header = false;
+        for (const auto& r : ts.Starred) {
+            if (r.Kind != Enhancers::RefKind::Folder) continue;
+            if (!header) { EditorUIPrimitives::SectionHeader("STARRED"); header = true; }
+            ImGui::PushID(&r);
+            if (ImGui::Selectable((std::string(ICON_FA_STAR "  ") + (r.Path.empty() ? "Assets" : r.Path)).c_str())) open(r.Path);
+            ImGui::PopID();
+        }
+        EditorUIPrimitives::SectionHeader("FOLDERS");
+        std::vector<std::string> all;
+        all.reserve(folders.size() + 1);
+        all.emplace_back();
+        all.insert(all.end(), folders.begin(), folders.end());
+        const auto hits = FuzzyTop(q, (int)all.size(), [&](int i) { return all[(size_t)i].empty() ? "Assets" : all[(size_t)i].c_str(); }, 30);
+        if (hits.empty()) ImGui::TextDisabled("No matching folders");
+        for (int i : hits) {
+            ImGui::PushID(i);
+            if (ImGui::Selectable((std::string(ICON_FA_FOLDER "  ") + (all[(size_t)i].empty() ? "Assets" : all[(size_t)i])).c_str())) open(all[(size_t)i]);
+            ImGui::PopID();
+        }
+    };
+    auto acceptDrop = [&]() {
+        if (const ImGuiPayload* p = ImGui::AcceptDragDropPayload("ASSET_FOLDER_PATH")) {
+            strip.Open(folderRef((const char*)p->Data), true, true);
+            ts.MarkDirty();
+        }
+        static const char* const kAssetPayloads[] = {"ASSET_MODEL_PATH", "ASSET_TEXTURE_PATH", "ASSET_MATERIAL_PATH",
+                                                     "ASSET_PREFAB_PATH", "ASSET_SOUND_PATH", "ASSET_FILE_PATH"};
+        for (const char* type : kAssetPayloads)
+            if (const ImGuiPayload* p = ImGui::AcceptDragDropPayload(type)) {
+                // A file opens its folder in a new tab, with the file selected.
+                const std::string key((const char*)p->Data);
+                strip.Open(folderRef(assets.AssetFolder(key)), true, true);
+                ts.MarkDirty();
+                ClearAssetSelection();
+                m_SelectedAssetKey = key;
+                m_SelectedAssetIsFolder = false;
+            }
+    };
+    // Switching tabs navigates; navigation (above) never switches tabs.
+    const int before = strip.Active;
+    DrawTabStrip("##assetTabs", strip, m_AssetTabView, items, nullptr, nullptr, plusMenu, acceptDrop, dragging);
+    if ((strip.Active != before || (strip.Active >= 0 && strip.Tabs[(size_t)strip.Active].Path != m_CurrentAssetFolder)) &&
+        strip.Active >= 0 && strip.Active < (int)strip.Tabs.size()) {
+        const std::string& p = strip.Tabs[(size_t)strip.Active].Path;
+        if (folderExists(p)) NavigateAssetFolder(p);
+    }
+}
+
+// ============================================================================================
+// vFavorites
+// ============================================================================================
+
+namespace {
+// The binding's chord pressed this frame, ignoring contexts: the overlay suppresses every editor
+// shortcut while it is up (Alt+1..4 would otherwise also focus panels), so it checks its own.
+bool ChordPressedNow(const char* id) {
+    const Shortcuts::Shortcut* s = Shortcuts::Find(id);
+    if (!s || !s->Current.IsBound() || s->Current.HasPrefix()) return false;
+    const ImGuiIO& io = ImGui::GetIO();
+    const Shortcuts::Chord& c = s->Current;
+    return ImGui::IsKeyPressed(c.Key, false) && io.KeyCtrl == c.Ctrl && io.KeyShift == c.Shift && io.KeyAlt == c.Alt;
+}
+
+struct FavoriteDisplay {
+    std::string Icon;
+    std::string Label;
+    std::string Tooltip;
+    unsigned Color = 0;
+    bool Missing = false;
+};
+
+float EaseOut(float t) { t = std::clamp(t, 0.0f, 1.0f); const float u = 1.0f - t; return 1.0f - u * u * u; }
+} // namespace
+
+void EditorLayer::AddSelectionToFavorites(const World& world) {
+    auto& us = Enhancers::EnhancerUserState::Get();
+    const std::string sceneKey = CurrentSceneKey();
+    bool changed = false;
+    for (entt::entity e : GetSelectedItems()) {
+        const auto* o = world.Registry.valid(e) ? world.Registry.try_get<OrderComponent>(e) : nullptr;
+        if (!o) continue;
+        const auto* nm = world.Registry.try_get<NameComponent>(e);
+        changed |= Enhancers::AddFavorite(us.FavoritePages, m_FavPage, Enhancers::EditorRef::MakeEntity(sceneKey, o->Value, nm ? nm->Name : std::string()));
+    }
+    if (!changed && !m_SelectedAssetKey.empty()) {
+        const Enhancers::EditorRef r = m_SelectedAssetIsFolder
+            ? Enhancers::EditorRef::MakeFolder(m_SelectedAssetKey, FolderLeaf(m_SelectedAssetKey))
+            : Enhancers::EditorRef::MakeAsset(m_SelectedAssetKey, AssetChipLabel(m_SelectedAssetKey));
+        changed = Enhancers::AddFavorite(us.FavoritePages, m_FavPage, r);
+    }
+    if (changed) {
+        us.MarkDirty();
+        Log::Info("Favorites: added to \"" + us.FavoritePages[(size_t)std::clamp(m_FavPage, 0, (int)us.FavoritePages.size() - 1)].Name + "\".");
+    }
+}
+
+void EditorLayer::ActivateFavorite(World& world, AssetLibrary& assets, const Enhancers::EditorRef& r) {
+    switch (r.Kind) {
+        case Enhancers::RefKind::Folder:
+            NavigateAssetFolder(r.Path);
+            break;
+        case Enhancers::RefKind::Asset:
+            NavigateAssetFolder(assets.AssetFolder(r.Path));
+            ClearSelection();
+            ClearAssetSelection();
+            m_SelectedAssetKey = r.Path;
+            m_SelectedAssetIsFolder = false;
+            break;
+        case Enhancers::RefKind::Entity: {
+            if (r.Scene != CurrentSceneKey()) {
+                // Another scene: open it (with the usual unsaved-changes prompt), then select.
+                const std::string path = ResolveScenePath(Enhancers::EditorRef::MakeScene(r.Scene, ""));
+                if (path.empty()) { Log::Warn("Favorites: the scene holding \"" + r.Label + "\" can't be found."); return; }
+                m_FavPendingScene = r.Scene;
+                m_FavPendingOrder = r.Order;
+                RequestOpenScene(world, assets, path);
+                break;
+            }
+            const entt::entity e = FindEntityByOrder(world, r.Order);
+            if (e == entt::null) { Log::Warn("Favorites: \"" + r.Label + "\" is no longer in this scene."); return; }
+            SelectItem(e, false);
+            m_HierarchyScrollToEntity = e;
+            break;
+        }
+        case Enhancers::RefKind::Scene:
+            break;
+    }
+    // Opening something closes the overlay; holding the key again re-opens it.
+    m_FavLocked = false;
+    m_FavWaitRelease = true;
+}
+
+void EditorLayer::DrawFavoritesOverlay(World& world, AssetLibrary& assets) {
+    const EditorSettings& es = EditorSettings::Get();
+    auto& us = Enhancers::EnhancerUserState::Get();
+    ImGuiIO& io = ImGui::GetIO();
+    const double now = ImGui::GetTime();
+    const bool wasVisible = m_FavVisible;
+    m_FavVisible = false;
+
+    // A favorite in another scene: select it once that scene has opened.
+    if (!m_FavPendingScene.empty() && m_FavPendingScene == CurrentSceneKey()) {
+        const entt::entity e = FindEntityByOrder(world, m_FavPendingOrder);
+        if (e != entt::null) { SelectItem(e, false); m_HierarchyScrollToEntity = e; }
+        m_FavPendingScene.clear();
+    }
+    if (!es.Favorites) { m_FavLocked = false; m_FavAlpha = 0.0f; return; }
+
+    // Lock / add-selection shortcuts (Triggered while hidden; checked directly while shown,
+    // since every editor shortcut is suppressed then).
+    if (wasVisible ? ChordPressedNow("favorites.toggle") : Shortcuts::Triggered("favorites.toggle")) { m_FavLocked = !m_FavLocked; m_FavWaitRelease = false; }
+    if (!wasVisible && Shortcuts::Triggered("favorites.addSelection")) AddSelectionToFavorites(world);
+
+    // Where: over the Asset Browser's content (centred in the main viewport if it is closed).
+    ImGuiWindow* panel = ImGui::FindWindowByName(EditorPanels::Assets);
+    const bool panelShown = panel && panel->WasActive && !panel->Hidden && panel->InnerRect.GetWidth() > 80.0f;
+    ImRect area;
+    if (panelShown) {
+        area = panel->InnerRect;
+    } else {
+        const ImGuiViewport* vp = ImGui::GetMainViewport();
+        const ImVec2 size(std::min(vp->WorkSize.x * 0.6f, EditorTheme::Px(720.0f)), std::min(vp->WorkSize.y * 0.6f, EditorTheme::Px(460.0f)));
+        const ImVec2 c(vp->WorkPos.x + vp->WorkSize.x * 0.5f, vp->WorkPos.y + vp->WorkSize.y * 0.5f);
+        area = ImRect(ImVec2(c.x - size.x * 0.5f, c.y - size.y * 0.5f), ImVec2(c.x + size.x * 0.5f, c.y + size.y * 0.5f));
+    }
+
+    // When: hold the key (Alt, nothing else) over the panel for a moment, or locked open.
+    const bool holdDown = es.FavoritesHoldAlt && io.KeyAlt && !io.KeyCtrl && !io.KeyShift;
+    if (!holdDown) { m_FavHoldStart = -1.0; m_FavWaitRelease = false; }
+    ImGuiWindow* hoveredRoot = GImGui->HoveredWindow ? GImGui->HoveredWindow->RootWindow : nullptr;
+    const bool overPanel = panelShown && ImGui::IsMouseHoveringRect(area.Min, area.Max, false) &&
+                           (hoveredRoot == panel->RootWindow || (hoveredRoot && std::strcmp(hoveredRoot->Name, "##vFavorites") == 0));
+    if (holdDown && !m_FavWaitRelease && m_FavHoldStart < 0.0 && overPanel) m_FavHoldStart = now;
+    const bool want = m_FavLocked || (holdDown && !m_FavWaitRelease && m_FavHoldStart >= 0.0 && now - m_FavHoldStart >= 0.12 && (overPanel || wasVisible));
+    m_FavAlpha = std::clamp(m_FavAlpha + (want ? 1.0f : -1.0f) * io.DeltaTime * 9.0f, 0.0f, 1.0f);
+    if (!want) m_FavRenaming = -1; // a rename left open must not grab the keys when it reopens
+    if (m_FavAlpha <= 0.01f) return;
+    m_FavVisible = true;
+
+    Enhancers::EnsureFavoritePage(us.FavoritePages);
+    const int pageCount = (int)us.FavoritePages.size();
+    m_FavPage = std::clamp(m_FavPage, 0, pageCount - 1);
+    auto switchPage = [&](int p) {
+        p = ((p % pageCount) + pageCount) % pageCount;
+        if (p == m_FavPage) return;
+        m_FavAnimDir = p > m_FavPage ? 1 : -1;
+        m_FavAnimStart = now;
+        m_FavPage = p;
+        m_FavHighlight = -1;
+        m_FavRenaming = -1;
+    };
+
+    const float pad = EditorTheme::Px(6.0f);
+    ImGui::SetNextWindowPos(ImVec2(area.Min.x + pad, area.Min.y + pad));
+    ImGui::SetNextWindowSize(ImVec2(area.GetWidth() - pad * 2.0f, area.GetHeight() - pad * 2.0f));
+    ImGui::SetNextWindowBgAlpha(0.97f);
+    ImGui::PushStyleVar(ImGuiStyleVar_Alpha, m_FavAlpha);
+    ImGui::PushStyleVar(ImGuiStyleVar_WindowRounding, EditorTheme::Px(6.0f));
+    ImGui::PushStyleVar(ImGuiStyleVar_WindowBorderSize, 1.0f);
+    ImGui::PushStyleColor(ImGuiCol_WindowBg, EditorTheme::Raised);
+    ImGui::PushStyleColor(ImGuiCol_Border, EditorTheme::Strong);
+    const ImGuiWindowFlags flags = ImGuiWindowFlags_NoDecoration | ImGuiWindowFlags_NoSavedSettings | ImGuiWindowFlags_NoDocking |
+                                   ImGuiWindowFlags_NoFocusOnAppearing | ImGuiWindowFlags_NoMove;
+    if (ImGui::Begin("##vFavorites", nullptr, flags)) {
+        ImGui::BringWindowToDisplayFront(ImGui::GetCurrentWindow());
+        const bool hovered = ImGui::IsWindowHovered(ImGuiHoveredFlags_ChildWindows | ImGuiHoveredFlags_AllowWhenBlockedByActiveItem);
+        const bool typing = ImGui::GetIO().WantTextInput;
+        auto& pages = us.FavoritePages;
+
+        // --- Keyboard: 1-9 pick a page, Left / Right step, Up / Down + Enter pick an item, Esc closes.
+        if (!typing) {
+            for (int k = 0; k < 9 && k < pageCount; ++k)
+                if (ImGui::IsKeyPressed((ImGuiKey)(ImGuiKey_1 + k), false) || ImGui::IsKeyPressed((ImGuiKey)(ImGuiKey_Keypad1 + k), false)) switchPage(k);
+            if (ImGui::IsKeyPressed(ImGuiKey_RightArrow)) switchPage(m_FavPage + 1);
+            if (ImGui::IsKeyPressed(ImGuiKey_LeftArrow))  switchPage(m_FavPage - 1);
+            if (ImGui::IsKeyPressed(ImGuiKey_Escape, false)) { m_FavLocked = false; m_FavWaitRelease = true; }
+        }
+        // Wheel over the overlay: one notch, one page.
+        if (hovered && !typing) {
+            ImGui::SetKeyOwner(ImGuiKey_MouseWheelY, ImGui::GetID("##favWheel"));
+            m_FavWheel += io.MouseWheel;
+            if (m_FavWheel <= -1.0f) { switchPage(m_FavPage + 1); m_FavWheel = 0.0f; }
+            else if (m_FavWheel >= 1.0f) { switchPage(m_FavPage - 1); m_FavWheel = 0.0f; }
+        } else {
+            m_FavWheel = 0.0f;
+        }
+
+        // --- Header: page chips (double-click renames), "+" page, pin.
+        const float h = ImGui::GetFrameHeight();
+        int deletePage = -1, movePageFrom = -1, movePageTo = -1;
+        EditorTheme::PushSmall();
+        ImGui::AlignTextToFramePadding();
+        ImGui::TextColored(EditorTheme::Accent, ICON_FA_STAR);
+        EditorTheme::PopFont();
+        for (int p = 0; p < pageCount; ++p) {
+            ImGui::SameLine();
+            ImGui::PushID(p);
+            if (m_FavRenaming == p) {
+                ImGui::SetNextItemWidth(EditorTheme::Px(120.0f));
+                if (ImGui::IsWindowAppearing() || !ImGui::IsAnyItemActive()) ImGui::SetKeyboardFocusHere();
+                const bool done = ImGui::InputText("##rename", m_FavRenameBuf, sizeof(m_FavRenameBuf),
+                                                   ImGuiInputTextFlags_EnterReturnsTrue | ImGuiInputTextFlags_AutoSelectAll);
+                if (done || ImGui::IsItemDeactivated()) {
+                    if (m_FavRenameBuf[0] && pages[(size_t)p].Name != m_FavRenameBuf) { pages[(size_t)p].Name = m_FavRenameBuf; us.MarkDirty(); }
+                    m_FavRenaming = -1;
+                }
+            } else {
+                char label[96];
+                std::snprintf(label, sizeof(label), "%s%s", p < 9 ? std::to_string(p + 1).append("  ").c_str() : "", pages[(size_t)p].Name.c_str());
+                if (EditorUIPrimitives::ActionButton(label, "Click to show, double-click to rename. Drop favorites here to move them.",
+                                                     &Tip, p == m_FavPage, ImVec2(0.0f, h)))
+                    switchPage(p);
+                if (ImGui::IsItemHovered() && ImGui::IsMouseDoubleClicked(ImGuiMouseButton_Left)) {
+                    m_FavRenaming = p;
+                    std::snprintf(m_FavRenameBuf, sizeof(m_FavRenameBuf), "%s", pages[(size_t)p].Name.c_str());
+                }
+                // Drop an item on a page chip to move it there.
+                if (ImGui::BeginDragDropTarget()) {
+                    if (const ImGuiPayload* pl = ImGui::AcceptDragDropPayload("FAVORITE_ITEM")) {
+                        const int from = *(const int*)pl->Data;
+                        auto& src = pages[(size_t)m_FavPage].Items;
+                        if (p != m_FavPage && from >= 0 && from < (int)src.size()) {
+                            const Enhancers::EditorRef moved = src[(size_t)from];
+                            src.erase(src.begin() + from);
+                            Enhancers::AddFavorite(pages, p, moved);
+                            us.MarkDirty();
+                        }
+                    }
+                    ImGui::EndDragDropTarget();
+                }
+                if (ImGui::BeginPopupContextItem("##pageCtx")) {
+                    if (ImGui::MenuItem(ICON_FA_PEN "  Rename")) {
+                        m_FavRenaming = p;
+                        std::snprintf(m_FavRenameBuf, sizeof(m_FavRenameBuf), "%s", pages[(size_t)p].Name.c_str());
+                    }
+                    if (ImGui::MenuItem(ICON_FA_ARROW_LEFT "  Move Left", nullptr, false, p > 0)) { movePageFrom = p; movePageTo = p - 1; }
+                    if (ImGui::MenuItem(ICON_FA_ARROW_RIGHT "  Move Right", nullptr, false, p + 1 < pageCount)) { movePageFrom = p; movePageTo = p + 1; }
+                    ImGui::Separator();
+                    if (ImGui::MenuItem(ICON_FA_TRASH "  Delete Page", nullptr, false, pageCount > 1)) deletePage = p;
+                    ImGui::EndPopup();
+                }
+            }
+            ImGui::PopID();
+        }
+        ImGui::SameLine();
+        if (EditorUIPrimitives::ActionButton(ICON_FA_PLUS, "New page", &Tip, false, ImVec2(h, h))) {
+            pages.push_back(Enhancers::FavoritePage{"Page " + std::to_string(pageCount + 1), {}});
+            us.MarkDirty();
+            // Straight to the new page (switchPage wraps by the page count from before the add).
+            m_FavAnimDir = 1;
+            m_FavAnimStart = now;
+            m_FavPage = pageCount;
+            m_FavHighlight = -1;
+            m_FavRenaming = pageCount;
+            std::snprintf(m_FavRenameBuf, sizeof(m_FavRenameBuf), "%s", pages.back().Name.c_str());
+        }
+        ImGui::SameLine(ImGui::GetWindowContentRegionMax().x - h);
+        if (EditorUIPrimitives::ActionButton(m_FavLocked ? ICON_FA_LOCK : ICON_FA_LOCK_OPEN,
+                                             m_FavLocked ? "Unpin (Esc)" : "Keep open (Ctrl+Alt+F)", &Tip, m_FavLocked, ImVec2(h, h)))
+            m_FavLocked = !m_FavLocked;
+        if (deletePage >= 0) {
+            pages.erase(pages.begin() + deletePage);
+            us.MarkDirty();
+            m_FavPage = std::clamp(m_FavPage > deletePage ? m_FavPage - 1 : m_FavPage, 0, (int)pages.size() - 1);
+        }
+        if (movePageFrom >= 0) {
+            Enhancers::MoveFavoritePage(pages, movePageFrom, movePageTo);
+            if (m_FavPage == movePageFrom) m_FavPage = std::clamp(movePageTo, 0, (int)pages.size() - 1);
+            us.MarkDirty();
+        }
+        ImGui::Separator();
+
+        // --- Items of the shown page, sliding in on a page switch.
+        const float t = m_FavAnimStart < 0.0 ? 1.0f : EaseOut((float)((now - m_FavAnimStart) / 0.16));
+        if (t >= 1.0f) m_FavAnimStart = -1.0;
+        const float slide = (1.0f - t) * m_FavAnimDir * EditorTheme::Px(48.0f);
+        ImGui::PushStyleVar(ImGuiStyleVar_Alpha, ImGui::GetStyle().Alpha * (0.35f + 0.65f * t));
+        ImGui::BeginChild("##favItems", ImVec2(0.0f, -ImGui::GetTextLineHeightWithSpacing()), ImGuiChildFlags_None);
+        auto& items = pages[(size_t)std::clamp(m_FavPage, 0, (int)pages.size() - 1)].Items;
+        const std::string sceneKey = CurrentSceneKey();
+        const auto& folders = assets.Folders();
+
+        std::vector<FavoriteDisplay> shown(items.size());
+        for (size_t i = 0; i < items.size(); ++i) {
+            Enhancers::EditorRef& r = items[i];
+            FavoriteDisplay& d = shown[i];
+            if (r.Kind == Enhancers::RefKind::Folder) {
+                EditorFolderVisual vis;
+                GetFolderVisual(assets, r.Path, vis);
+                d.Icon = vis.Icon[0] ? std::string(vis.Icon) : std::string(r.Path.empty() ? ICON_FA_HOUSE : ICON_FA_FOLDER);
+                d.Color = vis.Color;
+                d.Label = FolderLeaf(r.Path);
+                d.Missing = !r.Path.empty() && std::find(folders.begin(), folders.end(), r.Path) == folders.end();
+                d.Tooltip = (r.Path.empty() ? std::string("Assets") : r.Path) + " (folder)";
+            } else if (r.Kind == Enhancers::RefKind::Asset) {
+                d.Icon = AssetChipIcon(r.Path);
+                d.Label = r.Label.empty() ? AssetChipLabel(r.Path) : r.Label;
+                d.Tooltip = r.Path;
+            } else {
+                const bool here = r.Scene == sceneKey;
+                const entt::entity e = here ? FindEntityByOrder(world, r.Order) : entt::null;
+                d.Icon = ICON_FA_CUBE;
+                if (e != entt::null) {
+                    if (const auto* nm = world.Registry.try_get<NameComponent>(e); nm && !nm->Name.empty()) r.Label = nm->Name;
+                    if (const auto* st = world.Registry.try_get<HierarchyStyleComponent>(e); st && !st->Icon.empty())
+                        if (const char* g = Enhancers::FAIconGlyph(st->Icon.c_str())) d.Icon = g;
+                    if (const auto* st = world.Registry.try_get<HierarchyStyleComponent>(e); st && st->Color) d.Color = st->Color;
+                }
+                d.Label = r.Label.empty() ? std::string("(unnamed)") : r.Label;
+                d.Missing = here && e == entt::null;
+                d.Tooltip = d.Label + (here ? (d.Missing ? "\nNo longer in this scene." : "") : "\nIn another scene - click to open it.");
+            }
+        }
+
+        // Keyboard highlight.
+        if (!typing && !items.empty()) {
+            if (ImGui::IsKeyPressed(ImGuiKey_DownArrow)) m_FavHighlight = std::min(m_FavHighlight + 1, (int)items.size() - 1);
+            if (ImGui::IsKeyPressed(ImGuiKey_UpArrow))   m_FavHighlight = std::max(m_FavHighlight - 1, 0);
+        }
+        int activate = -1, removeAt = -1, moveFrom = -1, moveTo = -1, moveToPage = -1;
+        if (!typing && m_FavHighlight >= 0 && m_FavHighlight < (int)items.size() &&
+            (ImGui::IsKeyPressed(ImGuiKey_Enter, false) || ImGui::IsKeyPressed(ImGuiKey_KeypadEnter, false)))
+            activate = m_FavHighlight;
+
+        // Tiles flow left to right.
+        const float tileW = EditorTheme::Px(170.0f), tileH = ImGui::GetFrameHeight() + EditorTheme::Px(8.0f);
+        const float gap = EditorTheme::Px(6.0f);
+        const float availW = ImGui::GetContentRegionAvail().x;
+        const int cols = std::max(1, (int)((availW + gap) / (tileW + gap)));
+        const float realW = (availW - gap * (cols - 1)) / cols;
+        const ImVec2 origin = ImGui::GetCursorScreenPos();
+        ImDrawList* dl = ImGui::GetWindowDrawList();
+        for (int i = 0; i < (int)items.size(); ++i) {
+            const FavoriteDisplay& d = shown[(size_t)i];
+            const ImVec2 mn(origin.x + (i % cols) * (realW + gap) + slide, origin.y + (i / cols) * (tileH + gap));
+            const ImVec2 mx(mn.x + realW, mn.y + tileH);
+            ImGui::PushID(i);
+            ImGui::SetCursorScreenPos(mn);
+            if (ImGui::InvisibleButton("##fav", ImVec2(realW, tileH))) activate = i;
+            const bool hov = ImGui::IsItemHovered();
+            if (hov) m_FavHighlight = i;
+            if (ImGui::BeginDragDropSource()) {
+                ImGui::SetDragDropPayload("FAVORITE_ITEM", &i, sizeof(int));
+                ImGui::Text("%s  %s", d.Icon.c_str(), d.Label.c_str());
+                ImGui::EndDragDropSource();
+            }
+            if (ImGui::BeginDragDropTarget()) {
+                if (const ImGuiPayload* pl = ImGui::AcceptDragDropPayload("FAVORITE_ITEM")) { moveFrom = *(const int*)pl->Data; moveTo = i; }
+                ImGui::EndDragDropTarget();
+            }
+            if (ImGui::BeginPopupContextItem("##favCtx")) {
+                if (ImGui::MenuItem(ICON_FA_ARROW_UP_RIGHT_FROM_SQUARE "  Open")) activate = i;
+                if (pageCount > 1 && ImGui::BeginMenu(ICON_FA_ARROW_RIGHT "  Move to Page")) {
+                    for (int p = 0; p < pageCount; ++p)
+                        if (p != m_FavPage && ImGui::MenuItem(pages[(size_t)p].Name.c_str())) { moveFrom = i; moveToPage = p; }
+                    ImGui::EndMenu();
+                }
+                ImGui::Separator();
+                if (ImGui::MenuItem(ICON_FA_TRASH "  Remove from Favorites")) removeAt = i;
+                ImGui::EndPopup();
+            }
+            const bool lit = hov || m_FavHighlight == i;
+            dl->AddRectFilled(mn, mx, EditorTheme::U32(lit ? EditorTheme::Hover : EditorTheme::Card), EditorTheme::Px(4.0f));
+            if (d.Color) dl->AddRectFilled(mn, ImVec2(mn.x + EditorTheme::Px(3.0f), mx.y), d.Color | 0xFF000000u, EditorTheme::Px(4.0f), ImDrawFlags_RoundCornersLeft);
+            const float cy = (mn.y + mx.y) * 0.5f;
+            const ImU32 tc = EditorTheme::U32(d.Missing ? EditorTheme::Dim : EditorTheme::Text);
+            const ImVec2 is = ImGui::CalcTextSize(d.Icon.c_str());
+            float tx = mn.x + EditorTheme::Px(10.0f);
+            dl->AddText(ImVec2(tx, cy - is.y * 0.5f), EditorTheme::U32(d.Missing ? EditorTheme::Dim : EditorTheme::Secondary), d.Icon.c_str());
+            tx += std::max(is.x, ImGui::GetFontSize()) + EditorTheme::Px(8.0f);
+            // The number key hint for the first nine items of a page isn't used (digits pick pages).
+            const ImVec2 ls = ImGui::CalcTextSize(d.Label.c_str());
+            ImGui::PushStyleColor(ImGuiCol_Text, ImGui::ColorConvertU32ToFloat4(tc));
+            ImGui::RenderTextEllipsis(dl, ImVec2(tx, cy - ls.y * 0.5f), ImVec2(mx.x - EditorTheme::Px(6.0f), cy + ls.y * 0.5f),
+                                      mx.x - EditorTheme::Px(6.0f), d.Label.c_str(), nullptr, &ls);
+            ImGui::PopStyleColor();
+            if (hov && !ImGui::IsMouseDragging(ImGuiMouseButton_Left)) EditorUI::SetTooltip("%s", d.Tooltip.c_str());
+            ImGui::PopID();
+        }
+        const int rows = ((int)items.size() + cols - 1) / cols;
+        ImGui::SetCursorScreenPos(ImVec2(origin.x, origin.y + rows * (tileH + gap)));
+        if (items.empty()) {
+            ImGui::Spacing();
+            ImGui::TextDisabled("Drop folders, assets or Hierarchy objects here, star assets in the Asset Browser,");
+            ImGui::TextDisabled("or press Ctrl+Alt+B to add the selection.");
+        }
+        ImGui::Dummy(ImVec2(0.0f, 0.0f));
+        ImGui::EndChild();
+        ImGui::PopStyleVar();
+
+        // Drop anything favoritable anywhere on the overlay: the shown page gets it.
+        if (ImGui::BeginDragDropTargetCustom(ImGui::GetCurrentWindow()->InnerRect, ImGui::GetID("##favDrop"))) {
+            bool added = false;
+            if (const ImGuiPayload* p = ImGui::AcceptDragDropPayload("HIERARCHY_ENTITY")) {
+                const entt::entity dragged = *(const entt::entity*)p->Data;
+                const std::vector<entt::entity> dropped = IsSelected(dragged) ? GetSelectedItems() : std::vector<entt::entity>{dragged};
+                for (entt::entity e : dropped) {
+                    const auto* o = world.Registry.valid(e) ? world.Registry.try_get<OrderComponent>(e) : nullptr;
+                    const auto* nm = o ? world.Registry.try_get<NameComponent>(e) : nullptr;
+                    if (o) added |= Enhancers::AddFavorite(pages, m_FavPage, Enhancers::EditorRef::MakeEntity(sceneKey, o->Value, nm ? nm->Name : std::string()));
+                }
+            }
+            if (const ImGuiPayload* p = ImGui::AcceptDragDropPayload("ASSET_FOLDER_PATH")) {
+                const std::string path((const char*)p->Data);
+                added |= Enhancers::AddFavorite(pages, m_FavPage, Enhancers::EditorRef::MakeFolder(path, FolderLeaf(path)));
+            }
+            static const char* const kAssetPayloads[] = {"ASSET_MODEL_PATH", "ASSET_TEXTURE_PATH", "ASSET_MATERIAL_PATH",
+                                                         "ASSET_PREFAB_PATH", "ASSET_SOUND_PATH", "ASSET_FILE_PATH"};
+            for (const char* type : kAssetPayloads)
+                if (const ImGuiPayload* p = ImGui::AcceptDragDropPayload(type)) {
+                    const std::string key((const char*)p->Data);
+                    added |= Enhancers::AddFavorite(pages, m_FavPage, Enhancers::EditorRef::MakeAsset(key, AssetChipLabel(key)));
+                }
+            if (added) us.MarkDirty();
+            ImGui::EndDragDropTarget();
+        }
+
+        EditorTheme::PushSmall();
+        ImGui::TextDisabled("1-9 / arrows / wheel: pages    Up/Down + Enter: open    double-click a page to rename    Esc: close");
+        EditorTheme::PopFont();
+
+        // Apply list edits after drawing.
+        if (moveFrom >= 0 && moveToPage >= 0 && moveFrom < (int)items.size()) {
+            const Enhancers::EditorRef moved = items[(size_t)moveFrom];
+            items.erase(items.begin() + moveFrom);
+            Enhancers::AddFavorite(pages, moveToPage, moved);
+            us.MarkDirty();
+        } else if (moveFrom >= 0 && moveTo >= 0 && moveFrom != moveTo) {
+            Enhancers::MoveRef(items, moveFrom, moveTo);
+            us.MarkDirty();
+        }
+        if (removeAt >= 0 && removeAt < (int)items.size()) {
+            items.erase(items.begin() + removeAt);
+            us.MarkDirty();
+        }
+        if (activate >= 0 && activate < (int)items.size()) {
+            const Enhancers::EditorRef r = items[(size_t)activate];
+            ActivateFavorite(world, assets, r);
+        }
+    }
+    ImGui::End();
+    ImGui::PopStyleColor(2);
+    ImGui::PopStyleVar(3);
+}
+
+// ============================================================================================
 // Pinned component windows (vHierarchy minimap Alt+click; vInspector "Open in Window")
 // ============================================================================================
 
@@ -827,6 +2030,15 @@ void EditorLayer::DrawFolderContextMenuBody(World& world, AssetLibrary& assets, 
         else Enhancers::AddUnique(us.FolderBookmarks, ref, Enhancers::EnhancerUserState::kMaxBookmarks);
         us.MarkDirty();
     }
+    {
+        const int favPage = Enhancers::FindFavorite(us.FavoritePages, ref);
+        if (ImGui::MenuItem(ICON_FA_STAR "  Favorite", nullptr, favPage >= 0)) {
+            if (favPage >= 0) Enhancers::RemoveFavorite(us.FavoritePages, ref);
+            else Enhancers::AddFavorite(us.FavoritePages, m_FavPage, ref);
+            us.MarkDirty();
+        }
+        if (ImGui::IsItemHovered()) EditorUI::SetTooltip("Hold Alt over the Asset Browser to see your favorites.");
+    }
     if (!isRoot) {
         if (ImGui::MenuItem(ICON_FA_ANGLES_DOWN "  Expand All Inside"))  SetFolderExpandedRecursive(assets, path, true, true);
         if (ImGui::MenuItem(ICON_FA_ANGLES_UP "  Collapse All Inside")) SetFolderExpandedRecursive(assets, path, false, true);
@@ -865,8 +2077,15 @@ void EditorLayer::HandleFolderHoverKeys(AssetLibrary& assets) {
 // remove, drop a folder (tree row or grid tile) on the row to add one. Nothing is drawn when
 // there are no bookmarks, except while a folder is being dragged, so the drop target appears
 // exactly when it can be used.
+// Everything the Asset Browser module draws between its toolbar and the content (API v40):
+// vTabs' tab strip, then vFolders' bookmark chips.
 void EditorLayer::DrawFolderNavBar(World& world, AssetLibrary& assets) {
     (void)world;
+    DrawAssetTabStrip(assets);
+    DrawFolderBookmarkBar(assets);
+}
+
+void EditorLayer::DrawFolderBookmarkBar(AssetLibrary& assets) {
     if (!EditorSettings::Get().FolderNavBar) return;
     auto& us = Enhancers::EnhancerUserState::Get();
     const ImGuiPayload* drag = ImGui::GetDragDropPayload();

@@ -48,6 +48,7 @@
 #include "Upscaler.h"
 #include "GameModuleAPI.h" // #170 smoke: QueryFilter / RaycastHit
 #include "Tests/UnitTests.h" // #173
+#include "Tests/EditorUiTests.h" // --editor-tests
 #include "OutfitAudit.h"
 #include "OutfitTestScene.h"
 #include "SkinHideBuffer.h"             // --outfit-audit
@@ -509,6 +510,11 @@ int main(int argc, char** argv) {
     // real ones. --editor-shot-select <name> picks the selected entity (default: Player Spawn);
     // --editor-shot-default-layout starts from the default dock layout instead of the user's;
     // --editor-shot-scale <s> sets the UI scale (as Preferences > General > UI scale would).
+    // --editor-tests [filter]: end-to-end tests of the editor UI (Tests/EditorUiTests.cpp) in the
+    // real editor: a hidden 1920x1080 window, a fresh scratch user folder
+    // (%LOCALAPPDATA%\TartarusEngine-Test), an empty in-memory scene. Exit code 0 = all passed.
+    bool editorTestsMode = false;
+    std::string editorTestsFilter;
     std::string editorShotDir, editorShotSelect = "Player Spawn";
     bool editorShotDefaultLayout = false;
     bool editorShotCurves = false; // capture the real themed recoil curve widget in isolation
@@ -540,6 +546,10 @@ int main(int argc, char** argv) {
         }
         else if (a == "--smoke-shots" && i + 1 < argc) { smokeShotsDir = argv[++i]; }
         else if (a == "--editor-shot" && i + 1 < argc) { editorShotDir = argv[++i]; }
+        else if (a == "--editor-tests") {
+            editorTestsMode = true;
+            if (i + 1 < argc && argv[i + 1][0] != '-') editorTestsFilter = argv[++i];
+        }
         else if (a == "--editor-shot-select" && i + 1 < argc) { editorShotSelect = argv[++i]; }
         else if (a == "--editor-shot-default-layout") { editorShotDefaultLayout = true; }
         else if (a == "--editor-shot-curves") { editorShotCurves = true; }
@@ -620,7 +630,21 @@ int main(int argc, char** argv) {
     // --smoke-test and --resave are non-interactive: no splash, and fatal errors go to stderr +
     // a nonzero exit instead of a modal MessageBox that a headless/CI desktop never dismisses
     // (audit BUG-102).
-    const bool headless = smokeTestMode || resaveMode || undoBenchMode || assetLoadBenchMode || outfitAuditMode || outfitScenesMode || outfitCostMode || outfitSelfTestMode;
+    const bool headless = smokeTestMode || resaveMode || undoBenchMode || assetLoadBenchMode || outfitAuditMode || outfitScenesMode || outfitCostMode || outfitSelfTestMode || editorTestsMode;
+    if (editorTestsMode) {
+        // A fresh scratch user folder every run: default prefs and layout, no bookmarks, tabs or
+        // favorites - the tests start from a known state and never touch the user's own files.
+        namespace fs = std::filesystem;
+        UserPaths::SetAppName("TartarusEngine-Test");
+        const fs::path scratch = UserPaths::Root();
+        if (scratch.filename() != "TartarusEngine-Test") {
+            std::cerr << "--editor-tests: could not set up a scratch user folder; refusing to run." << std::endl;
+            return 1;
+        }
+        std::error_code ec;
+        for (const auto& entry : fs::directory_iterator(scratch, ec)) fs::remove_all(entry.path(), ec);
+        EditorUiTests::Configure(editorTestsFilter);
+    }
     CrashHandler::SetInteractive(!headless && editorShotDir.empty()); // #148: no crash dialog on an unattended run
     if (!editorShotDir.empty()) {
         // The prefs and layout the user sees, copied into a scratch user folder that this run may
@@ -1266,10 +1290,12 @@ int main(int argc, char** argv) {
             if (perfBenchMode && perfResW > 0) {
                 glfwRestoreWindow(window.Handle());
                 glfwSetWindowSize(window.Handle(), perfResW, perfResH);
-            } else if (!editorShotDir.empty()) {
+            } else if (!editorShotDir.empty() || editorTestsMode) {
                 glfwRestoreWindow(window.Handle());
                 glfwSetWindowSize(window.Handle(), perfResW > 0 ? perfResW : 1920, perfResW > 0 ? perfResH : 1080);
             }
+            // --editor-tests: hidden, so the desktop's real mouse and keyboard never reach it.
+            if (editorTestsMode) glfwHideWindow(window.Handle());
         }
         LayerRegistry::Load(); // LayerComponent slot names (#236 A1)
         ProjectSettings::Load(); // physics + tags (#236 A4); project/settings.json
@@ -1417,7 +1443,7 @@ int main(int argc, char** argv) {
         // The smoke harness (and --weapon-test / --npc-test / --perf-bench, built on it) loads its own
         // scenes in the loop below, so the startup scene would be loaded only to be thrown away - for
         // the Sandbox, 666 objects and every model it uses, before the first test scene.
-        const bool loadStartupScene = !smokeTestMode;
+        const bool loadStartupScene = !smokeTestMode && !editorTestsMode;
         // persistMigration is false for every headless mode: the harness must never rewrite a scene
         // just from opening it for a read-only check (audit #77). Ordinary interactive startup keeps
         // the existing "upgrade once" behavior.
@@ -2805,6 +2831,11 @@ int main(int argc, char** argv) {
                 else               imguiIO.ConfigFlags &= ~ImGuiConfigFlags_NoMouse;
             }
 
+            // --editor-tests: this frame's synthetic input and checks, before ImGui reads input.
+            if (editorTestsMode && EditorUiTests::BeforeFrame(editor, world, assets, editorCamera)) {
+                exitApproved = true;
+                window.SetShouldClose(true);
+            }
             editor.BeginFrame();
 
             // Cleared once, up front, regardless of mode — Scene/Game now render into their own
@@ -2883,6 +2914,7 @@ int main(int argc, char** argv) {
                     window.SetCursorLocked(false);
                 }
 
+                if (editor.RulerHeld()) Input::ConsumeScroll(); // vRuler: the wheel picks the measured object
                 if (UpdateEditorCamera(editorCamera, dt, allowLook || camDragActive, gizmoDragging,
                         hasSelection ? &selectionCenter : nullptr, editor.ViewportSize().y))
                     editor.FlashFlySpeedHud(); // #236 R2 — show the transient "Fly speed: N" readout
@@ -5456,6 +5488,15 @@ int main(int argc, char** argv) {
             throw;
         }
 
+        if (editorTestsMode) {
+            // Like the smoke test: nothing from this run is saved back (the scene is in memory only).
+            const int code = EditorUiTests::ExitCode();
+            editor.Shutdown();
+            editorModule.Shutdown();
+            AudioEngine::Shutdown();
+            PhysicsWorld::Shutdown();
+            return code;
+        }
         if (smokeTestMode) {
             // Deliberately skip the normal exit path entirely (no play-mode revert, no
             // save-on-exit) — smoke-tested scenes were never really "open" from the user's

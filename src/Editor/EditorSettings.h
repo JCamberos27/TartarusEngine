@@ -281,6 +281,22 @@ struct EditorSettings {
     bool FolderMinimal     = false;
     bool FolderMinimap     = true;
     bool FolderNavBar      = true;
+    // vInspector. NavBar: selection Back/Forward + bookmarked objects/assets above the Inspector.
+    // Animations: component sections ease open/closed and fade out on removal. Minimal: a
+    // section's actions button shows only while its header is hovered.
+    bool InspectorNavBar     = true;
+    bool InspectorAnimations = true;
+    bool InspectorMinimal    = false;
+    // vTabs: the tab strips at the top of the Inspector and under the Asset Browser toolbar.
+    bool InspectorTabs = true;
+    bool AssetTabs     = true;
+    // vFavorites: the favorites overlay, and whether holding Alt over the Asset Browser shows it.
+    bool Favorites        = true;
+    bool FavoritesHoldAlt = true;
+    // vRuler (hold Shift+R in the Scene view), and the length units it shares with the Measure
+    // tool: false = metric (mm / cm / m / km), true = feet and inches.
+    bool Ruler       = true;
+    bool MeasureFeet = false;
 
     bool WindowPlacementValid = false;
     int  WindowX = 0, WindowY = 0, WindowWidth = 0, WindowHeight = 0;

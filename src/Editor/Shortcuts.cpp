@@ -136,6 +136,7 @@ Chord CSk(ImGuiKey k)                          { Chord c; c.Key = k; c.Ctrl = tr
 Chord Sk(ImGuiKey k)                           { Chord c; c.Key = k; c.Shift = true; return c; }
 Chord Ak(ImGuiKey k)                           { Chord c; c.Key = k; c.Alt = true; return c; }
 Chord ASk(ImGuiKey k)                          { Chord c; c.Key = k; c.Alt = true; c.Shift = true; return c; }
+Chord CAk(ImGuiKey k)                          { Chord c; c.Key = k; c.Ctrl = true; c.Alt = true; return c; }
 
 void BuildDefaultTable() {
     g_Table.clear();
@@ -240,6 +241,30 @@ void BuildDefaultTable() {
     Register("project.hover.expand",      "Expand / Collapse Folder",          Ctx_ProjectHover, K(ImGuiKey_E));
     Register("project.hover.isolate",     "Isolate Folder (collapse others)",  Ctx_ProjectHover, Sk(ImGuiKey_E));
     Register("project.hover.collapseAll", "Collapse All Folders",              Ctx_ProjectHover, CSk(ImGuiKey_E));
+
+    // --- Editor Enhancers / vInspector hover keys (Ctx_InspectorHover) — the component section
+    // under the mouse.
+    Register("inspector.hover.collapseAll",   "Collapse / Expand All Components", Ctx_InspectorHover, CSk(ImGuiKey_E));
+    Register("inspector.hover.isolate",       "Isolate Component (collapse others)", Ctx_InspectorHover, Sk(ImGuiKey_E));
+    Register("inspector.hover.toggleEnabled", "Toggle Component Enabled",         Ctx_InspectorHover, K(ImGuiKey_A));
+    Register("inspector.hover.remove",        "Remove Component",                 Ctx_InspectorHover, K(ImGuiKey_X));
+
+    // --- Editor Enhancers / vTabs — the strip of the panel under the mouse. Ctrl+Shift+T was
+    // freed for "reopen closed tab" by moving Toggle Statistics to Alt+Shift+T.
+    Register("inspector.tabs.new",    "Pin Inspector Tab",          Ctx_InspectorHover, Ck(ImGuiKey_T));
+    Register("inspector.tabs.close",  "Close Inspector Tab",        Ctx_InspectorHover, Ck(ImGuiKey_W));
+    Register("inspector.tabs.reopen", "Reopen Closed Inspector Tab", Ctx_InspectorHover, CSk(ImGuiKey_T));
+    Register("project.tabs.new",      "New Asset Browser Tab",      Ctx_ProjectHover, Ck(ImGuiKey_T));
+    Register("project.tabs.close",    "Close Asset Browser Tab",    Ctx_ProjectHover, Ck(ImGuiKey_W));
+    Register("project.tabs.reopen",   "Reopen Closed Asset Browser Tab", Ctx_ProjectHover, CSk(ImGuiKey_T));
+
+    // --- Editor Enhancers / vFavorites. Holding Alt over the Asset Browser also shows the
+    // overlay (a setting, not a binding); while it is up, every other shortcut is suppressed.
+    Register("favorites.toggle",       "Favorites: Keep Open / Close",   Ctx_Global, CAk(ImGuiKey_F));
+    Register("favorites.addSelection", "Favorites: Add the Selection",   Ctx_Global, CAk(ImGuiKey_B));
+
+    // --- Editor Enhancers / vRuler - a held binding (Shortcuts::Held), over the Scene view.
+    Register("viewport.ruler", "Ruler (hold)", Ctx_Viewport, Sk(ImGuiKey_R));
 
     // --- Asset Browser (Ctx_Project) — only while the panel has focus, so F / Ctrl+D don't
     // collide with the scene-selection bindings. ---

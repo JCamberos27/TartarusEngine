@@ -571,6 +571,9 @@ target_compile_definitions(TartarusEngine PRIVATE $<$<CONFIG:Debug>:TARTARUS_PHY
 add_dependencies(TartarusEngine physx_external)
 
 target_compile_definitions(TartarusEngine PRIVATE GLM_ENABLE_EXPERIMENTAL GLFW_INCLUDE_NONE IMGUI_DEFINE_MATH_OPERATORS)
+# --editor-tests: ImGui's test-engine item hooks (id, rect, label per widget) in the host executable
+# only. They cost one bool test per item while no test runs (ImGuiContext::TestEngineHookItems).
+target_compile_definitions(TartarusEngine PRIVATE IMGUI_ENABLE_TEST_ENGINE)
 
 # Warning flags (#180) — the build previously set none, so it ran at MSVC's default /W1 and hid
 # most latent problems (unused results, signed/unsigned mismatch, uninitialized reads, shadowed

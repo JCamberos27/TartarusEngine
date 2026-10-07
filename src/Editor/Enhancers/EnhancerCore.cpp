@@ -26,10 +26,16 @@ EditorRef EditorRef::MakeScene(std::string guid, std::string path, std::string l
     return r;
 }
 
+EditorRef EditorRef::MakeComponent(std::string sceneGuid, int order, std::string component, std::string label) {
+    EditorRef r = MakeEntity(std::move(sceneGuid), order, std::move(label));
+    r.Sub = std::move(component);
+    return r;
+}
+
 bool EditorRef::SameTarget(const EditorRef& o) const {
     if (Kind != o.Kind) return false;
     switch (Kind) {
-        case RefKind::Entity: return Order == o.Order && Scene == o.Scene;
+        case RefKind::Entity: return Order == o.Order && Scene == o.Scene && Sub == o.Sub;
         // A scene is its GUID when both sides know it; a scene saved before it had a .meta (or
         // a ref written while the asset scan was still running) falls back to the path.
         case RefKind::Scene:  return (!Scene.empty() && !o.Scene.empty()) ? Scene == o.Scene : Path == o.Path;
@@ -69,6 +75,7 @@ nlohmann::json RefToJson(const EditorRef& r) {
     if (r.Kind == RefKind::Entity) j["order"] = r.Order;
     if (!r.Path.empty()) j["path"] = r.Path;
     if (!r.Label.empty()) j["label"] = r.Label;
+    if (!r.Sub.empty()) j["sub"] = r.Sub;
     return j;
 }
 
@@ -79,6 +86,7 @@ bool RefFromJson(const nlohmann::json& j, EditorRef& out) {
     r.Scene = StrOr(j, "scene");
     r.Path  = StrOr(j, "path");
     r.Label = StrOr(j, "label");
+    if (r.Kind == RefKind::Entity) r.Sub = StrOr(j, "sub");
     if (r.Kind == RefKind::Entity) {
         auto it = j.find("order");
         if (it == j.end() || !it->is_number_integer()) return false;
@@ -143,6 +151,27 @@ void MoveRef(std::vector<EditorRef>& list, int from, int to) {
     EditorRef v = std::move(list[(std::size_t)from]);
     list.erase(list.begin() + from);
     list.insert(list.begin() + to, std::move(v));
+}
+
+// --- Selection history ------------------------------------------------------------------------
+bool SelectionEntryReachable(const SelectionHistoryEntry& e, const std::string& currentScene,
+                             OrdersResolveFn resolves, void* ctx) {
+    if (e.Orders.empty() && !e.Asset.empty()) return true;
+    if (e.Scene != currentScene) return false;
+    return e.Orders.empty() || !resolves || resolves(e.Orders, ctx);
+}
+
+int StepSelectionHistory(const std::vector<SelectionHistoryEntry>& entries, int pos, int dir,
+                         const std::string& currentScene, OrdersResolveFn resolves, void* ctx) {
+    if (dir == 0 || entries.empty()) return -1;
+    const int n = (int)entries.size();
+    const SelectionHistoryEntry* from = (pos >= 0 && pos < n) ? &entries[(std::size_t)pos] : nullptr;
+    for (int i = pos + (dir > 0 ? 1 : -1); i >= 0 && i < n; i += (dir > 0 ? 1 : -1)) {
+        const SelectionHistoryEntry& e = entries[(std::size_t)i];
+        if (from && e == *from) continue;
+        if (SelectionEntryReachable(e, currentScene, resolves, ctx)) return i;
+    }
+    return -1;
 }
 
 // --- Matching ---------------------------------------------------------------------------------

@@ -39,6 +39,9 @@ bool buildPending=false;
 std::chrono::steady_clock::time_point buildAfter;
 std::string description;
 std::map<std::string,std::string> descriptionCache;
+// vInspector: the same descriptions parsed once (the Inspector used to parse them every frame).
+std::map<std::string,nlohmann::json> describedCache;
+void ClearDescriptions() { descriptionCache.clear(); describedCache.clear(); }
 const std::function<int(int,NativeRequest&)>* editorServices=nullptr;
 std::filesystem::file_time_type editorAssemblyTime{};
 bool editorAttempted=false;
@@ -234,7 +237,7 @@ bool EnsureLoaded() {
 bool Invoke(int op, void* frame, int size) {
     if(!EnsureLoaded()) return false;
     const bool ok=dispatch(op,frame,size,reinterpret_cast<void*>(&Native))==0;
-    if(ok && (op==0 || op==5)) { descriptionCache.clear(); rejectedScripts.clear(); }
+    if(ok && (op==0 || op==5)) { ClearDescriptions(); rejectedScripts.clear(); }
     return ok;
 }
 bool InvokeShot(World& world, ShotFrame& frame, const std::function<void(const NativeRequest&)>& trace) {
@@ -305,6 +308,38 @@ std::string Describe(const std::string& className) {
     if(!Invoke(7,&request,sizeof request)) description=nlohmann::json{{"error","Script type unavailable. Save the source to compile it, or use File > Build C# Gameplay."}}.dump();
     descriptionCache[className]=description; return description;
 }
+const nlohmann::json& DescribeJson(const std::string& className) {
+    if(auto it=describedCache.find(className); it!=describedCache.end()) return it->second;
+    nlohmann::json parsed=nlohmann::json::parse(Describe(className),nullptr,false);
+    if(parsed.is_discarded() || !parsed.is_object()) parsed=nlohmann::json{{"error","Unreadable script description."}};
+    return describedCache.emplace(className,std::move(parsed)).first->second;
+}
+namespace {
+// Ops 13 / 14 take {"class","fields","method"} as text; the reply arrives through op 30.
+bool EditorRequest(int op,World* world,AssetLibrary* assets,const std::string& className,std::uint32_t entity,
+                   std::uint32_t slot,const std::string& fields,const std::string& method,std::string& reply,int* result) {
+    const std::string text=nlohmann::json{{"class",className},{"fields",fields},{"method",method}}.dump();
+    NativeRequest request; request.Text=text.c_str(); request.Entity=entity; request.Script=slot;
+    World* previousWorld=activeWorld; AssetLibrary* previousAssets=activeAssets;
+    if(world) { activeWorld=world; activeAssets=assets; }
+    description.clear();
+    const bool ok=Invoke(op,&request,sizeof request);
+    activeWorld=previousWorld; activeAssets=previousAssets;
+    if(ok) reply=description;
+    if(result) *result=request.Result;
+    return ok;
+}
+}
+bool InvokeEditorMethod(World& world,AssetLibrary& assets,const std::string& className,std::uint32_t entity,std::uint32_t slot,
+                        const std::string& fields,const std::string& method,std::string& outFields) {
+    int ran=0;
+    return EditorRequest(13,&world,&assets,className,entity,slot,fields,method,outFields,&ran) && ran!=0;
+}
+std::string ShowValues(World& world,AssetLibrary& assets,const std::string& className,std::uint32_t entity,std::uint32_t slot,
+                       const std::string& fields) {
+    std::string reply;
+    return EditorRequest(14,&world,&assets,className,entity,slot,fields,"",reply,nullptr) ? reply : std::string();
+}
 bool Build() {
     if(buildProcess) return false;
     buildPending=false;
@@ -360,7 +395,7 @@ void Poll() {
             Fail("Build failed; running assembly retained.\n"+content); return;
         }
         Log::Info("C# build succeeded.");
-        descriptionCache.clear();
+        ClearDescriptions();
         if(!dispatch) { attemptedLoad=false; EnsureLoaded(); }
         if(!editorBuild && editorBuildNext) {
             editorBuildNext=false;
@@ -383,7 +418,7 @@ void Poll() {
     std::error_code ec; auto now=std::filesystem::last_write_time(GameplayPath(),ec);
     if(!ec && now!=assemblyTime) {
         const auto path=GameplayPath().u8string();
-        if(dispatch(0,const_cast<char*>(path.c_str()),kVersion,reinterpret_cast<void*>(&Native))==0) { error.clear(); rejectedScripts.clear(); descriptionCache.clear(); }
+        if(dispatch(0,const_cast<char*>(path.c_str()),kVersion,reinterpret_cast<void*>(&Native))==0) { error.clear(); rejectedScripts.clear(); ClearDescriptions(); }
         else Fail("Reload rejected; previous C# assembly retained.");
         assemblyTime=now;
     }

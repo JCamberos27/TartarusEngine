@@ -20,6 +20,9 @@
 #include <chrono>
 #include <future>
 #include "Enhancers/FolderStyles.h" // Enhancers::FolderSummary (m_FolderSummaries)
+#include "Enhancers/EnhancerCore.h" // Enhancers::SelectionHistoryEntry (m_SelHistory)
+#include "Enhancers/ComponentTransfer.h" // Enhancers::PlayKeep / PasteMode (vInspector)
+#include "Enhancers/TabState.h" // Enhancers::TabStrip (vTabs)
 #include "Shortcuts.h" // Shortcuts::Chord - Preferences > Shortcuts capture state below
 #include "Texture.h" // TextureImportSettings - stored by value in the Import Settings panel state
 #include "Model.h"   // ModelImportSettings - same
@@ -80,6 +83,7 @@ struct AssetGridCell {
 struct AnimatorWindowState; // the Animator window's state (EditorLayer_Animator*.cpp)
 
 class EditorLayer {
+    friend struct EditorUiTestAccess; // --editor-tests (src/Tests/EditorUiTests.cpp)
 public:
     // Declared (rather than left implicit) and defined in the .cpp — a stylistic match for the
     // other Init/Shutdown-style lifecycle methods below, not a forward-declaration requirement
@@ -168,6 +172,7 @@ public:
     // Viewport tools (#236 E) — Hand tool (Q) and Lock View to Selected (Shift+F).
     void SetHandToolActive(bool on) { m_HandTool = on; }
     bool MeasureToolActive() const { return m_MeasureTool; }
+    bool RulerHeld() const { return m_RulerHeld; } // vRuler owns the mouse wheel while held
     void SetMeasureToolActive(bool on) { m_MeasureTool = on; m_MeasurePoints.clear(); if (on) m_HandTool = false; }
     // main.cpp pokes this whenever the fly speed changes via scroll (RMB-drag or Ctrl+scroll);
     // Draw() fades out the transient "Fly speed: N" viewport readout (#236 R2).
@@ -370,6 +375,16 @@ public:
     // Editor Enhancers / vHierarchy: the scene selector + Back/Forward + entity bookmark chips
     // row the Hierarchy module draws between its toolbar and the tree (EditorLayer_Enhancers.cpp).
     void DrawHierarchyNavBar(World& world, AssetLibrary& assets);
+    // vInspector nav bar (Back/Forward + bookmark chips) at the top of DrawInspectorBody. Clicks
+    // come back as an action the body applies after its lock swap is undone.
+    struct InspectorNavAction {
+        enum Type { None, Back, Forward, SelectEntity, SelectAsset } Kind = None;
+        entt::entity Entity = entt::null;
+        bool Additive = false;
+        std::string Asset;
+    };
+    void DrawInspectorNavBar(World& world, InspectorNavAction& act);
+    void ApplyInspectorNavAction(World& world, const InspectorNavAction& act);
     // Pinned component windows (vHierarchy minimap Alt+click, vInspector "Open in Window"): one
     // floating editor per (entity, reflected component), drawn by the host each frame.
     void OpenPinnedComponent(World& world, entt::entity entity, const char* componentName);
@@ -380,6 +395,64 @@ public:
     void DrawFolderContextMenuBody(World& world, AssetLibrary& assets, const std::string& path);
     void SetHoveredAssetFolder(const std::string& path) { m_HoverAssetFolder = path; m_HoverAssetFolderSet = true; }
     void DrawFolderNavBar(World& world, AssetLibrary& assets);
+    void DrawFolderBookmarkBar(AssetLibrary& assets);
+    // --- Editor Enhancers / vTabs (EditorLayer_Enhancers.cpp) ----------------------------------
+    // Tab strips in the Inspector (DrawInspectorBody, host side) and the Asset Browser (drawn from
+    // DrawFolderNavBar, so no module API change). The lists live in Enhancers::TabState.
+    struct TabStripView {
+        float Scroll = 0.0f, ScrollTarget = 0.0f; // smoothed horizontal scroll of an overflowing strip
+        int   SeenActive = -99;                   // last Active scrolled into view
+    };
+    struct TabStripItem {
+        std::string Icon;     // glyph; "" = none
+        std::string Label;
+        std::string Tooltip;
+        bool Missing = false; // target doesn't resolve: drawn dimmed
+        unsigned Color = 0;   // IM_COL32 underline (a styled folder's colour), 0 = none
+    };
+    // Draws one strip (an optional live tab first, then `strip`'s tabs, then "+"). Handles click,
+    // close (x / middle-click), drag-reorder, Shift+wheel switch, Ctrl+Shift+wheel move, smooth
+    // wheel scrolling, the per-tab menu and the drop target. Returns true when Active changed.
+    bool DrawTabStrip(const char* id, Enhancers::TabStrip& strip, TabStripView& view, const std::vector<TabStripItem>& items,
+                      const char* liveLabel, const char* liveIcon,
+                      const std::function<void()>& plusMenu, const std::function<void()>& acceptDrop, bool showDropHint);
+    void DrawInspectorTabStrip(World& world);
+    // Drag payload of a component header (Inspector -> a tab strip): the object by order + name.
+    struct InspectorComponentPayload { int Order = -1; char Component[64] = {}; };
+    void DrawAssetTabStrip(AssetLibrary& assets);
+    // The Inspector tab currently shown, resolved: an entity of the open scene, or an asset key.
+    // False when the Selection tab is active.
+    bool ResolveInspectorTab(const World& world, entt::entity& entity, std::string& asset, bool& missing) const;
+    void OpenInspectorTabForCurrent(World& world);
+    TabStripView m_InspectorTabView, m_AssetTabView;
+    int m_InspectorTabShown = -99;   // last active Inspector tab acted on (component tabs scroll once)
+    char m_TabSearch[2][64] = {};    // the "+" menus' search text: [0] Inspector, [1] Asset Browser
+    // --- Editor Enhancers / vFavorites (EditorLayer_Enhancers.cpp) ------------------------------
+    // The favorites overlay: hold Alt over the Asset Browser (or lock it open). Pages live in
+    // EnhancerUserState::FavoritePages; everything below is session state.
+    void DrawFavoritesOverlay(World& world, AssetLibrary& assets); // PostModuleDraw
+    void ActivateFavorite(World& world, AssetLibrary& assets, const Enhancers::EditorRef& r);
+    void AddSelectionToFavorites(const World& world);
+    void MigrateAssetFavorites(); // one-time import of asset_favorites.json into page 1
+    bool FavoritesOverlayVisible() const { return m_FavVisible; }
+    int    m_FavPage = 0;            // the shown page; also where stars and drops add
+    bool   m_FavLocked = false;      // pinned open (Ctrl+Alt+F, or the overlay's pin)
+    bool   m_FavVisible = false;     // drawn this frame; next frame's shortcut gating reads it
+    bool   m_FavWaitRelease = false; // after activating an item, ignore the held key until released
+    double m_FavHoldStart = -1.0;
+    float  m_FavAlpha = 0.0f;
+    double m_FavAnimStart = -1.0;    // page switch slide
+    int    m_FavAnimDir = 0;
+    int    m_FavRenaming = -1;
+    char   m_FavRenameBuf[64] = {};
+    int    m_FavHighlight = -1;      // Up/Down keyboard highlight on the shown page
+    float  m_FavWheel = 0.0f;
+    std::string m_FavPendingScene;   // an entity favorite in another scene: select it once that scene is open
+    int    m_FavPendingOrder = -1;
+    // The Asset Browser's favourite stars are now "is this asset on any favorites page":
+    // rebuilt from the pages whenever EnhancerUserState's revision moves.
+    mutable unsigned m_FavCacheRevision = ~0u;
+    void RefreshFavoriteCache() const;
 
     // --- Reloadable Inspector module bridge (issue #229, frame only) ----------------------
     // The module owns Begin("Inspector") + End + visibility; the body stays host-side.
@@ -906,12 +979,19 @@ private:
     void RecordSelectionHistory(const World& world);
     void SelectionHistoryBack(World& world);
     void SelectionHistoryForward(World& world);
-    bool CanSelectionHistoryBack() const    { return m_SelHistoryPos > 0; }
-    bool CanSelectionHistoryForward() const  { return m_SelHistoryPos + 1 < m_SelHistory.size(); }
-    void ApplySelectionSnapshot(World& world, const std::vector<entt::entity>& snap);
-    std::vector<std::vector<entt::entity>> m_SelHistory;
+    // vInspector: entries are named by scene key + OrderComponent values (or an asset key), not
+    // by entt handle, so they survive undo, Play/Stop and scene loads; Back/Forward skip entries
+    // from another scene (Enhancers::StepSelectionHistory). Cheap enough to poll every frame.
+    bool CanSelectionHistoryBack() const;
+    bool CanSelectionHistoryForward() const;
+    void ApplySelectionEntry(World& world, const Enhancers::SelectionHistoryEntry& entry);
+    std::vector<Enhancers::SelectionHistoryEntry> m_SelHistory;
     size_t m_SelHistoryPos = 0;
+    // Last polled live state: the raw entity vector is only a cheap per-frame change detector;
+    // m_SelEntryLast is the same selection by identity (what the history and undo record).
     std::vector<entt::entity> m_SelSnapshotLast;
+    std::string m_SelAssetLast;
+    Enhancers::SelectionHistoryEntry m_SelEntryLast;
     // Set by SelectionHistoryBack/Forward and by RestoreSelectionByOrder (Undo/Redo/JumpTo*) alike
     // — any selection change WE drove ourselves, so the next RecordSelectionHistory() poll swallows
     // it instead of recording a redundant Select* entry (into m_SelHistory, or, per Q6 below, into
@@ -980,9 +1060,18 @@ private:
     // tool is the active one — with a Clear/Copy/unit-toggle HUD.
     bool  m_MeasureTool = false;
     std::vector<glm::vec3> m_MeasurePoints;
-    bool  m_MeasureUnitFeet = false;     // false = meters, true = feet — HUD toggle, not persisted
+    // (Units: EditorSettings::MeasureFeet, persisted and shared with vRuler.)
     bool RaycastViewportSurface(World& world, Camera& cam, const glm::vec2& screenPx, glm::vec3& outHit) const;
     void DrawMeasurement(Camera& cam);
+    // Editor Enhancers / vRuler (EditorLayer_Gizmos.cpp): hold Shift+R over the Scene view.
+    bool ViewportRay(Camera& cam, const glm::vec2& screenPx, glm::vec3& origin, glm::vec3& dir) const;
+    bool RulerHeldNow() const;
+    void DrawRuler(World& world, Camera& cam);
+    bool m_RulerHeld = false;                   // held over the viewport this frame (main.cpp: no wheel zoom)
+    int  m_RulerDepth = 0;                      // which object along the cursor ray is measured (wheel)
+    float m_RulerWheel = 0.0f;
+    entt::entity m_RulerHitEntity = entt::null; // that object, for the click (only while held)
+    entt::entity m_RulerBounds = entt::null;    // clicked: its bounds show until Shift+R is released
     int   m_ArrayDupCount[3] = { 3, 1, 1 };
     float m_ArrayDupStep[3]  = { 2.0f, 0.0f, 0.0f };
     void DrawGroupGizmo(World& world, Camera& editorCamera);
@@ -1072,7 +1161,7 @@ private:
     void DrawAssetLibraryPanel(World& world, AssetLibrary& assets); // EditorLayer_AssetLibraryPanel.cpp
     void DrawManagedEditorTools(World& world, AssetLibrary& assets, float dt);
     bool DrawManagedInspector(World& world,AssetLibrary& assets,entt::entity entity,const std::string& type,
-                              std::string* fields=nullptr,const std::string& metadata="{}");
+                              std::string* fields=nullptr,const std::string& metadata="{}",std::uint32_t slot=0);
     int ManagedEditorService(World& world,AssetLibrary& assets,int op,Scripting::NativeRequest& request,
                              int& windows,int& widgets,int& groups,bool inlineInspector);
     void DrawEnvironmentSettings(World& world, float itemWidth);
@@ -1620,14 +1709,13 @@ private:
     std::unordered_map<std::string, std::vector<float>> m_SoundWaveforms;
     const std::vector<float>& SoundWaveform(const std::string& path);
 
-    // Asset favourites (#236 G) — a starred subset, persisted to project/asset_favorites.json.
-    // The star toggle on the Asset Browser toolbar filters the grid to just these.
-    std::set<std::string> m_AssetFavorites;
+    // Asset favourites (#236 G) — a starred subset. Since vFavorites they are the assets on the
+    // favorites pages; the star toggle on the Asset Browser toolbar filters the grid to just these.
+    // vFavorites: a cache of the asset keys on any favorites page (RefreshFavoriteCache).
+    mutable std::set<std::string> m_AssetFavorites;
     bool m_AssetFavoritesOnly = false;
-    void LoadAssetFavorites();
-    void SaveAssetFavorites() const;
 public:
-    bool IsAssetFavorite(const std::string& key) const { return m_AssetFavorites.count(key) != 0; }
+    bool IsAssetFavorite(const std::string& key) const { RefreshFavoriteCache(); return m_AssetFavorites.count(key) != 0; }
     void ToggleAssetFavorite(const std::string& key);
     // Batch: set every key's favourite state to `on`, saving once. For multi-select.
     void SetAssetFavorites(const std::vector<std::string>& keys, bool on);
@@ -2116,7 +2204,12 @@ private:
         // #178 Preset assets. savePresetOut: "Save Preset" was chosen. applyPresetOut: receives
         // the chosen .preset file's path. Both only appear when the caller passes them, i.e. for
         // generically-serialised components - a preset of a hand-coded component can't round-trip.
-        bool* savePresetOut = nullptr, std::string* applyPresetOut = nullptr);
+        bool* savePresetOut = nullptr, std::string* applyPresetOut = nullptr,
+        // vInspector: the inspected object, on the single-select path only. With it, a section
+        // naming a ComponentRegistry component gains Open in Window / Alt+drag out, Ctrl+click
+        // picking for the multi-component clipboard, Keep Changes After Play, and the A / X
+        // hover keys.
+        entt::entity entity = entt::null);
 
     // #178 - every .preset under the project whose "component" matches `component`, as
     // {display name, path}. Rescanned when the menu opens; presets are few and this is not a
@@ -2126,6 +2219,55 @@ private:
     // path written, or "" on failure (reported to the Console).
     std::string SaveComponentPreset(const World& world, entt::entity entity, const char* component);
     void EndComponentSection();
+
+    // --- vInspector section state (EditorLayer_Inspector.cpp) ---------------------------------
+    World* m_InspectorWorld = nullptr; // set at the top of DrawInspectorBody for BeginComponentSection
+    // Ctrl+click-picked component headers (ComponentRegistry names) on the object whose
+    // OrderComponent is m_InspectorPickedOrder; cleared when the Inspector moves to another object.
+    std::set<std::string> m_InspectorPickedComponents;
+    int m_InspectorPickedOrder = -1;
+    // Multi-component clipboard: preset JSON per component (SceneSerializer::ComponentToPresetJson).
+    std::vector<std::string> m_ComponentClipboard;
+    // Keep Changes After Play: captured off the Play world just before Stop reloads the snapshot.
+    std::vector<Enhancers::PlayKeep> m_PlayKeep;
+    bool IsKeptAfterPlay(int order, const char* component) const;
+    void ToggleKeepAfterPlay(int order, const char* component);
+    void PasteComponentClipboard(World& world, AssetLibrary& assets, const std::vector<entt::entity>& targets,
+                                 Enhancers::PasteMode mode);
+    // Hover keys: the section under the mouse, written while drawing and read next frame.
+    struct InspectorHoverSection {
+        std::string Label;
+        ImGuiID HeaderId = 0;
+        bool Removable = false;
+        entt::entity Entity = entt::null;
+    };
+    InspectorHoverSection m_HoverSection, m_HoverSectionNext, m_CurSection;
+    ImVec2 m_CurSectionMin{0.0f, 0.0f}; // the drawing section's header top-left (hover rect)
+    void HandleInspectorHoverKeys(World& world);
+    // Collapse All / Expand All / Isolate, applied by each BeginComponentSection on the frame it
+    // was issued (section open state lives in per-ID ImGui storage; only the header can set it).
+    enum class SectionCommand { None, CollapseAll, ExpandAll, Isolate };
+    SectionCommand m_SectionCmd = SectionCommand::None;
+    std::string m_SectionCmdTarget;
+    int m_SectionCmdFrame = -1;
+    int m_SectionsOpenThisFrame = 0, m_SectionsOpenLastFrame = 0;
+    // Animations: the section currently fading out before its removal is reported, and the
+    // per-section bookkeeping EndComponentSection needs (sections never nest).
+    ImGuiID m_RemovingSection = 0;
+    double m_RemovingStart = 0.0;
+    int m_RemovingSeenFrame = -1;
+    ImGuiID m_CurSectionId = 0;
+    bool m_CurSectionMeasure = false;  // fully open and still: record its body height
+    bool m_CurSectionAlpha = false;    // a fade alpha was pushed for the body
+    // vInspector C# attributes: the "New key" text of each Dictionary field's add row (by ImGui ID),
+    // and each script slot's [ShowInInspector] read-outs, refreshed at most four times a second.
+    std::unordered_map<ImGuiID, std::string> m_ScriptDictNewKey;
+    struct ScriptShowCache {
+        double Time = -1.0;
+        std::string Class;
+        std::vector<std::pair<std::string, std::string>> Values;
+    };
+    std::unordered_map<std::uint64_t, ScriptShowCache> m_ScriptShowCache;
 
     // Single-slot component clipboard (#236): "Copy Component" on a header header snapshots the
     // component; "Paste Component Values" on a matching header (or the same kind on another
