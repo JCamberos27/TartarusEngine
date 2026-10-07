@@ -1,0 +1,131 @@
+{
+  "autoIcons": true,
+  "folders": {
+    "Scenes": {
+      "color": "#F2994A",
+      "icon": "clapperboard"
+    },
+    "Screenshots": {
+      "color": "#8BC34A",
+      "icon": "camera"
+    },
+    "Shaders": {
+      "color": "#3FB8AF"
+    },
+    "assets": {
+      "color": "#E5484D",
+      "icon": "folder-tree"
+    },
+    "assets/AI": {
+      "color": "#EB5252",
+      "icon": "brain"
+    },
+    "assets/Animations": {
+      "color": "#EB8D52",
+      "icon": "person-running"
+    },
+    "assets/Audio": {
+      "color": "#EBC752",
+      "icon": "volume-high"
+    },
+    "assets/Characters": {
+      "color": "#D3EB52",
+      "icon": "person"
+    },
+    "assets/Editor": {
+      "color": "#98EB52",
+      "icon": "screwdriver-wrench"
+    },
+    "assets/Effects": {
+      "color": "#5EEB52",
+      "icon": "wand-magic-sparkles"
+    },
+    "assets/Environments": {
+      "color": "#52EB81",
+      "icon": "mountain-sun"
+    },
+    "assets/Materials": {
+      "color": "#52EBBC",
+      "icon": "droplet"
+    },
+    "assets/Props": {
+      "color": "#52DFEB",
+      "icon": "box"
+    },
+    "assets/Scripts": {
+      "color": "#52A4EB",
+      "icon": "code"
+    },
+    "assets/Test": {
+      "color": "#7552EB",
+      "icon": "flask"
+    },
+    "assets/Weapons": {
+      "color": "#B052EB",
+      "icon": "crosshairs"
+    },
+    "assets/sky": {
+      "color": "#526AEB",
+      "icon": "cloud-sun"
+    },
+    "scripts": {
+      "color": "#9B6CF2",
+      "icon": "code"
+    }
+  },
+  "rules": [
+    {
+      "color": "#D96262C0",
+      "pattern": "assets/AI/*"
+    },
+    {
+      "color": "#D98F62C0",
+      "pattern": "assets/Animations/*"
+    },
+    {
+      "color": "#D9BD62C0",
+      "pattern": "assets/Audio/*"
+    },
+    {
+      "color": "#C6D962C0",
+      "pattern": "assets/Characters/*"
+    },
+    {
+      "color": "#99D962C0",
+      "pattern": "assets/Editor/*"
+    },
+    {
+      "color": "#6BD962C0",
+      "pattern": "assets/Effects/*"
+    },
+    {
+      "color": "#62D986C0",
+      "pattern": "assets/Environments/*"
+    },
+    {
+      "color": "#62D9B4C0",
+      "pattern": "assets/Materials/*"
+    },
+    {
+      "color": "#62D0D9C0",
+      "pattern": "assets/Props/*"
+    },
+    {
+      "color": "#62A2D9C0",
+      "pattern": "assets/Scripts/*"
+    },
+    {
+      "color": "#6274D9C0",
+      "pattern": "assets/sky/*"
+    },
+    {
+      "color": "#7D62D9C0",
+      "pattern": "assets/Test/*"
+    },
+    {
+      "color": "#AB62D9C0",
+      "pattern": "assets/Weapons/*"
+    }
+  ],
+  "version": 1
+}
