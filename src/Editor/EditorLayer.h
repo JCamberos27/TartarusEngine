@@ -245,6 +245,9 @@ public:
     bool IsInPlayMode() const { return m_InPlayMode; }
     // --editor-shot: draw every Inspector component open, so a capture shows their contents.
     void SetExpandAllComponents(bool on) { m_ExpandAllComponents = on; }
+    // --editor-shot: open the Inspector's bookmarks list next frame; pin the favorites overlay.
+    void ShotOpenInspectorBookmarks() { m_ShotOpenBookmarks = true; }
+    void ShotSetFavoritesLocked(bool on) { m_FavLocked = on; }
     void SetShowLighting(bool on) { m_ShowLighting = on; }
     void SetShowAnimator(bool on) { m_ShowAnimator = on; }
     void CloseSettingsWindow() { m_ShowPreferences = false; }
@@ -384,6 +387,10 @@ public:
         std::string Asset;
     };
     void DrawInspectorNavBar(World& world, InspectorNavAction& act);
+    // The Inspector's one header row when bookmarks aren't chips: [<][>] | tabs or the inspected
+    // object's name | [bookmarks]. Drawn after the tab strip (which leaves room at both ends) and
+    // after the lock / tab swap, at `rowMin`.
+    void DrawInspectorHeaderNav(World& world, InspectorNavAction& act, ImVec2 rowMin, bool stripShown);
     void ApplyInspectorNavAction(World& world, const InspectorNavAction& act);
     // Pinned component windows (vHierarchy minimap Alt+click, vInspector "Open in Window"): one
     // floating editor per (entity, reflected component), drawn by the host each frame.
@@ -396,6 +403,7 @@ public:
     void SetHoveredAssetFolder(const std::string& path) { m_HoverAssetFolder = path; m_HoverAssetFolderSet = true; }
     void DrawFolderNavBar(World& world, AssetLibrary& assets);
     void DrawFolderBookmarkBar(AssetLibrary& assets);
+    void DrawFolderBookmarkButton(AssetLibrary& assets, ImVec2 at, ImVec2 dropMin, ImVec2 dropMax);
     // --- Editor Enhancers / vTabs (EditorLayer_Enhancers.cpp) ----------------------------------
     // Tab strips in the Inspector (DrawInspectorBody, host side) and the Asset Browser (drawn from
     // DrawFolderNavBar, so no module API change). The lists live in Enhancers::TabState.
@@ -415,11 +423,13 @@ public:
     // wheel scrolling, the per-tab menu and the drop target. Returns true when Active changed.
     bool DrawTabStrip(const char* id, Enhancers::TabStrip& strip, TabStripView& view, const std::vector<TabStripItem>& items,
                       const char* liveLabel, const char* liveIcon,
-                      const std::function<void()>& plusMenu, const std::function<void()>& acceptDrop, bool showDropHint);
-    void DrawInspectorTabStrip(World& world);
+                      const std::function<void()>& plusMenu, const std::function<void()>& acceptDrop, bool showDropHint,
+                      float leftInset = 0.0f, float rightInset = 0.0f);
+    // Both return whether a strip was drawn (a strip appears once there is a tab, or during a drag).
+    bool DrawInspectorTabStrip(World& world, float leftInset = 0.0f, float rightInset = 0.0f);
     // Drag payload of a component header (Inspector -> a tab strip): the object by order + name.
     struct InspectorComponentPayload { int Order = -1; char Component[64] = {}; };
-    void DrawAssetTabStrip(AssetLibrary& assets);
+    bool DrawAssetTabStrip(AssetLibrary& assets, float rightInset = 0.0f, bool alwaysShow = false);
     // The Inspector tab currently shown, resolved: an entity of the open scene, or an asset key.
     // False when the Selection tab is active.
     bool ResolveInspectorTab(const World& world, entt::entity& entity, std::string& asset, bool& missing) const;
@@ -437,6 +447,7 @@ public:
     bool FavoritesOverlayVisible() const { return m_FavVisible; }
     int    m_FavPage = 0;            // the shown page; also where stars and drops add
     bool   m_FavLocked = false;      // pinned open (Ctrl+Alt+F, or the overlay's pin)
+    bool   m_ShotOpenBookmarks = false; // --editor-shot: open the Inspector bookmarks list once
     bool   m_FavVisible = false;     // drawn this frame; next frame's shortcut gating reads it
     bool   m_FavWaitRelease = false; // after activating an item, ignore the held key until released
     double m_FavHoldStart = -1.0;
