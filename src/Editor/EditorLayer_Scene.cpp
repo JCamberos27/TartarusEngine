@@ -36,6 +36,8 @@
 #include "Framebuffer.h"
 #include "gl.h"
 
+#include "Enhancers/EnhancerUserState.h"
+#include "Enhancers/Palette.h"
 #include "UndoDeltaChain.h" // undo history stores JSON-Patch deltas, not full snapshots (#174)
 
 #include <imgui.h>
@@ -97,13 +99,20 @@ void EditorLayer::BeginGlobalUndoFrame(const World& world) {
         std::error_code ec;
         const auto absolute=std::filesystem::absolute(path,ec).lexically_normal();
         const auto relative=absolute.lexically_relative(std::filesystem::absolute(ProjectPaths::Root()).lexically_normal());
-        const bool preferences=absolute==std::filesystem::path(EditorSettings::PrefsFilePath()) ||
+        // Editor Enhancers' per-user files (bookmarks / default parents, the style palette) are
+        // journaled like the other per-user prefs, so bookmarking or editing the palette undoes.
+        const bool enhancers=absolute==std::filesystem::path(Enhancers::EnhancerUserState::Path()) ||
+            absolute==std::filesystem::path(Enhancers::Palette::Path());
+        const bool preferences=enhancers || absolute==std::filesystem::path(EditorSettings::PrefsFilePath()) ||
             absolute==std::filesystem::path(UserPaths::Resolve("shortcuts.json")) || absolute==std::filesystem::path(UserPaths::Resolve("asset_favorites.json"));
         if(ec || relative.empty() || (*relative.begin()==".." && !preferences)) return;
         for(const auto& part:relative) if(part=="Library" || part=="bin" || part=="obj") return;
         if(!m_GlobalUndoActive) {
             m_GlobalUndoScene=m_AssetsPtr?SceneSerializer::SaveToString(world,*m_AssetsPtr):SceneSerializer::SaveToString(world);
-            m_GlobalUndoSelection=CaptureSelectedOrders(world);m_GlobalUndoLabel="Edit " + path.filename().string();m_GlobalUndoActive=true;
+            m_GlobalUndoSelection=CaptureSelectedOrders(world);
+            m_GlobalUndoLabel=enhancers ? std::string(absolute==std::filesystem::path(Enhancers::Palette::Path()) ? "Edit Style Palette" : "Edit Bookmarks")
+                                        : "Edit " + path.filename().string();
+            m_GlobalUndoActive=true;
         }
         m_FileJournal.Record(absolute);
     });
@@ -111,6 +120,7 @@ void EditorLayer::BeginGlobalUndoFrame(const World& world) {
 void EditorLayer::FinishGlobalUndo(const World& world,bool force) {
     if(!m_GlobalUndoActive || (!force && (ImGui::IsAnyItemActive() || ImGui::IsMouseDown(ImGuiMouseButton_Left)))) return;
     EditorSettings::Flush();
+    Enhancers::EnhancerUserState::Get().Flush();Enhancers::Palette::Flush();
     const auto current=m_AssetsPtr?SceneSerializer::SaveToString(world,*m_AssetsPtr):SceneSerializer::SaveToString(world);
     auto files=m_FileJournal.Changes();
     const auto selection=CaptureSelectedOrders(world);
@@ -148,6 +158,8 @@ void EditorLayer::ReloadHistoryFiles(AssetLibrary& assets,const std::vector<Edit
         }
         if(file.Path==std::filesystem::path(UserPaths::Resolve("shortcuts.json")))Shortcuts::Load();
         if(file.Path==std::filesystem::path(UserPaths::Resolve("asset_favorites.json")))LoadAssetFavorites();
+        if(file.Path==std::filesystem::path(Enhancers::EnhancerUserState::Path()))Enhancers::EnhancerUserState::Get().Load();
+        if(file.Path==std::filesystem::path(Enhancers::Palette::Path()))Enhancers::Palette::Load();
         if(file.Path.extension()==".cs" || file.Path.extension()==".csproj")Scripting::RequestBuild();
     }
     if(assetIdentity)AssetDatabase::ScanProject();

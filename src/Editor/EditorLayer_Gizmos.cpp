@@ -3,6 +3,7 @@
 // framing / look-through navigation they share. Split out of EditorLayer.cpp (#179).
 
 #include "EditorLayer.h"
+#include "Enhancers/EnhancerCore.h"
 #include "EditorPanels.h"
 #include "EditorLayerInternal.h"
 #include "EditorTheme.h"
@@ -2051,11 +2052,11 @@ bool EditorLayer::RaycastViewportSurface(World& world, Camera& cam, const glm::v
     return true;
 }
 
-// m_MeasureUnitFeet ? feet : meters — the scene's native unit is always meters, so this only
-// affects display formatting, never the stored point data.
+// m_MeasureUnitFeet ? feet/inches : metric — the scene's native unit is always meters, so this
+// only affects display formatting, never the stored point data. Shared with vRuler through
+// Enhancers::FormatLength (adaptive mm/cm/m/km; ft' in" / mi).
 static void FormatMeasureLength(float meters, bool feet, char* buf, size_t n) {
-    if (feet) std::snprintf(buf, n, "%.3f ft", meters * 3.28084f);
-    else      std::snprintf(buf, n, "%.3f m", meters);
+    Enhancers::FormatLength(meters, feet, buf, n);
 }
 
 void EditorLayer::DrawMeasurement(Camera& cam) {

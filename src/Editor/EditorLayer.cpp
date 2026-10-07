@@ -35,6 +35,9 @@
 #include <GLFW/glfw3.h>
 #include "BuildPipeline.h" // #174 - m_LastBuildReport
 #include "Shortcuts.h"
+#include "Enhancers/EnhancerUserState.h"
+#include "Enhancers/Palette.h"
+#include "Enhancers/StyleWidgets.h"
 #include "HotReloadEditorModule.h" // EditorModuleHost::ConsoleState() — console.toggle shortcut
 #include "EditorModuleAPI.h"       // EditorConsoleState's full definition (Visible)
 #include "GLStateCache.h"
@@ -124,6 +127,9 @@ void EditorLayer::Init(GLFWwindow* window) {
     // anything changed in between (e.g. by that scene load).
     Shortcuts::Init(); // builtin key table + project/shortcuts.json overrides (#236 F)
     LoadAssetFavorites(); // project/asset_favorites.json (#236 G)
+    // Editor Enhancers: this project's bookmarks / default parents and the per-user style palette.
+    Enhancers::EnhancerUserState::Get().Load();
+    Enhancers::Palette::Load();
 
     // Authored content lives in the project folder, not the working directory (build/Release/)
     // — see ProjectPaths.h. Must match main.cpp's initial load: prefer the last-open scene if
@@ -512,6 +518,8 @@ void EditorLayer::Shutdown() {
     if (!m_Headless) {
         EditorSettings::Save();
         EditorSettings::Flush();
+        Enhancers::EnhancerUserState::Get().Flush();
+        Enhancers::Palette::Flush();
     }
 
     ImGui_ImplOpenGL3_Shutdown();
@@ -1099,6 +1107,7 @@ void EditorLayer::DrawSettingsWindow(World& world) {
         ICON_FA_CLOCK "  Auto-Save",
         ICON_FA_GAUGE_HIGH "  Performance",
         ICON_FA_KEYBOARD "  Shortcuts",
+        ICON_FA_WAND_MAGIC_SPARKLES "  Editor Enhancers",
         ICON_FA_CIRCLE_INFO "  About",
     };
     const int kEditorCatCount = (int)(sizeof(kEditorCats) / sizeof(kEditorCats[0]));
@@ -1127,6 +1136,8 @@ void EditorLayer::DrawSettingsWindow(World& world) {
         "exposure tone mapping tonemap tonemapper bloom ssao ambient occlusion msaa anti-aliasing "
         "antialiasing shadows cascades texture cache clear cache",
         "keyboard hotkeys key bindings keybindings shortcuts rebind",
+        "enhancers hover keys palette colours colors icons bookmarks hierarchy folders inspector tabs "
+        "favorites ruler row style export import",
         "about version system report gpu driver opengl built with copy report",
     };
     static const char* kProjectCatKeywords[] = {
@@ -1633,6 +1644,9 @@ void EditorLayer::DrawSettingsWindow(World& world) {
                 case Shortcuts::Ctx_Hierarchy: return "Hierarchy";
                 case Shortcuts::Ctx_Project:   return "Project";
                 case Shortcuts::Ctx_Inspector: return "Inspector";
+                case Shortcuts::Ctx_HierarchyHover: return "Hierarchy (hover)";
+                case Shortcuts::Ctx_ProjectHover:   return "Project (hover)";
+                case Shortcuts::Ctx_InspectorHover: return "Inspector (hover)";
                 case Shortcuts::Ctx_App:       return "App";
                 default:                       return "Global";
             }
@@ -1716,8 +1730,9 @@ void EditorLayer::DrawSettingsWindow(World& world) {
             ImGui::TableSetupColumn("##rst",  ImGuiTableColumnFlags_WidthFixed, 20.0f * m_UIScale);
 
             const std::uint32_t order[] = { Shortcuts::Ctx_Global, Shortcuts::Ctx_App,
-                Shortcuts::Ctx_Viewport, Shortcuts::Ctx_Hierarchy, Shortcuts::Ctx_Project,
-                Shortcuts::Ctx_Inspector };
+                Shortcuts::Ctx_Viewport, Shortcuts::Ctx_Hierarchy, Shortcuts::Ctx_HierarchyHover,
+                Shortcuts::Ctx_Project, Shortcuts::Ctx_ProjectHover, Shortcuts::Ctx_Inspector,
+                Shortcuts::Ctx_InspectorHover };
 
             for (std::uint32_t gctx : order) {
                 bool wroteHeader = false;
@@ -1834,7 +1849,11 @@ void EditorLayer::DrawSettingsWindow(World& world) {
         break;
     }
 
-    case 6: { // About
+    case 6: // Editor Enhancers (EditorLayer_Enhancers.cpp)
+        DrawEnhancerPreferences();
+        break;
+
+    case 7: { // About
         EditorUIPrimitives::SectionHeader("About");
         ImGui::TextUnformatted("Tartarus Engine " TARTARUS_VERSION);
         ImGui::TextDisabled("Hand-rolled C++17 / OpenGL 4.6 editor.");
@@ -3196,6 +3215,24 @@ void EditorLayer::Draw(World& world, AssetLibrary& assets, Camera& editorCamera,
                 ImGui::GetIO().MousePos.y >= m_ViewportPos.y &&
                 ImGui::GetIO().MousePos.y <  m_ViewportPos.y + m_ViewportSize.y;
             if (overViewport && !ImGui::IsMouseDown(ImGuiMouseButton_Right)) sctx |= Shortcuts::Ctx_Viewport;
+
+            // Editor Enhancers hover keys: the panel under the mouse gets its hover context
+            // whatever holds focus (vHierarchy's "hover a row and press E"). HoveredWindow is
+            // last frame's hit-test, the same source ImGui's own hover queries use. Withheld
+            // mid-drag/mid-edit (an active item owns the input) and during Right-drag fly. When a
+            // hover context is granted away from the viewport, Ctx_Viewport is dropped: before
+            // this, E over the Hierarchy (focus still on the Scene) switched the gizmo to Rotate.
+            if (EditorSettings::Get().EnhancerHoverKeys && !ImGui::IsAnyItemActive() &&
+                !ImGui::IsMouseDown(ImGuiMouseButton_Right)) {
+                ImGuiWindow* hr = GImGui->HoveredWindow ? GImGui->HoveredWindow->RootWindow : nullptr;
+                auto hovIs = [&](const char* n) { return hr && hr == ImGui::FindWindowByName(n); };
+                std::uint32_t hoverBit = 0;
+                if (hovIs(EditorPanels::Hierarchy))      hoverBit = Shortcuts::Ctx_HierarchyHover;
+                else if (hovIs(EditorPanels::Assets))    hoverBit = Shortcuts::Ctx_ProjectHover;
+                else if (hovIs(EditorPanels::Inspector)) hoverBit = Shortcuts::Ctx_InspectorHover;
+                sctx |= hoverBit;
+                if (hoverBit && !overViewport) sctx &= ~(std::uint32_t)Shortcuts::Ctx_Viewport;
+            }
         }
         Shortcuts::BeginFrame(sctx);
     }
@@ -3616,6 +3653,8 @@ void EditorLayer::PostModuleDraw(World& world) {
     // return).
     RecordSelectionHistory(world);
     EditorSettings::Flush();
+    Enhancers::EnhancerUserState::Get().Flush();
+    Enhancers::Palette::Flush();
     FinishGlobalUndo(world);
     if(m_RequestGlobalUndo && m_AssetsPtr) Undo(world,*m_AssetsPtr);
     else if(m_RequestGlobalRedo && m_AssetsPtr) Redo(world,*m_AssetsPtr);

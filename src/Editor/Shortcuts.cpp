@@ -107,8 +107,14 @@ bool ChordFires(const Chord& c, const ImGuiIO& io) {
 // scope: both Global, or the same panel context. A Global binding paired with a panel-scoped
 // one on the same key is the intended "panel wins while focused" override (Ctrl+D = duplicate
 // entity globally / duplicate asset in the Project panel), not a conflict.
+//
+// A panel's hover context and its focus context DO overlap: with the Hierarchy focused and the
+// mouse over it, both bits are set in the same frame, so the same chord in both would double-fire.
 bool SameConflictScope(std::uint32_t a, std::uint32_t b) {
-    return a == b;
+    if (a == b) return true;
+    auto pair = [&](std::uint32_t x, std::uint32_t y) { return (a == x && b == y) || (a == y && b == x); };
+    return pair(Ctx_Hierarchy, Ctx_HierarchyHover) || pair(Ctx_Project, Ctx_ProjectHover) ||
+           pair(Ctx_Inspector, Ctx_InspectorHover);
 }
 
 Shortcut* FindMut(const std::string& id) {
@@ -204,7 +210,9 @@ void BuildDefaultTable() {
     // --- Panel toggles beyond the existing focus row (Global) — Console/Statistics/History,
     // the Lighting panel, and Project Settings were all reachable only by mouse. ---
     Register("console.toggle",   "Toggle Console",         Ctx_Global, CSk(ImGuiKey_C));
-    Register("stats.toggle",     "Toggle Statistics",      Ctx_Global, CSk(ImGuiKey_T));
+    // Alt+Shift+T, not Ctrl+Shift+T: that one is "reopen closed tab" (vTabs), the chord every
+    // browser and IDE trains. An existing shortcuts.json override of stats.toggle still wins.
+    Register("stats.toggle",     "Toggle Statistics",      Ctx_Global, ASk(ImGuiKey_T));
     Register("history.toggle",   "Toggle History",         Ctx_Global, CSk(ImGuiKey_H));
     Register("lighting.toggle",  "Toggle Lighting Panel",  Ctx_Global, CSk(ImGuiKey_L));
     Register("project.settings", "Open Project Settings",  Ctx_Global, CSk(ImGuiKey_P));
