@@ -609,6 +609,48 @@ void WriteCommonComponents(json& j, const World& world, entt::entity entity) {
     }
 }
 
+// The hand-written "collider" / "joint" blocks <-> components. Shared by the scene loader and the
+// prefab override diff, which has to decode a prefab's pristine block to compare it field by field.
+ColliderComponent ColliderFromJson(const json& c) {
+    ColliderComponent collider;
+    collider.IsTrigger = c.value("isTrigger", false);
+    int shape = c.value("shape", 0); // absent => Box (0), the pre-#185 shape
+    collider.Kind = (shape >= 0 && shape <= 4) ? (ColliderComponent::Shape)shape
+                                               : ColliderComponent::Shape::Box;
+    if (c.contains("halfExtents"))
+        collider.HalfExtents = JsonToVec3(c["halfExtents"], glm::vec3(0.0f));
+    if (c.contains("center"))
+        collider.Center = JsonToVec3(c["center"], glm::vec3(0.0f));
+    collider.Bounciness = c.value("bounciness", 0.0f); // #185 PR 7
+    collider.Friction   = c.value("friction", 0.6f);
+    // Absent (every scene before #170's physics materials) = the same as Friction.
+    collider.StaticFriction = c.contains("staticFriction") && c["staticFriction"].is_number()
+                                  ? c["staticFriction"].get<float>() : collider.Friction;
+    auto combine = [&c](const char* key) {
+        const int v = (c.contains(key) && c[key].is_number_integer()) ? c[key].get<int>() : 0;
+        return (v >= 0 && v <= 3) ? v : 0;
+    };
+    collider.FrictionCombine = combine("frictionCombine");
+    collider.BounceCombine   = combine("bounceCombine");
+    if (c.contains("material") && c["material"].is_string()) collider.Material = c["material"].get<std::string>();
+    return collider;
+}
+
+JointComponent JointFromJson(const json& jc) {
+    JointComponent joint;
+    int ty = jc.value("type", 0);
+    joint.Kind = (ty >= 0 && ty <= 4) ? (JointComponent::Type)ty : JointComponent::Type::Fixed;
+    joint.ConnectedOrder = jc.value("connectedOrder", -1);
+    if (jc.contains("anchor")) joint.Anchor = JsonToVec3(jc["anchor"], glm::vec3(0.0f));
+    if (jc.contains("axis"))   joint.Axis   = JsonToVec3(jc["axis"], glm::vec3(1.0f, 0.0f, 0.0f));
+    joint.BreakForce  = jc.value("breakForce", 0.0f);
+    joint.BreakTorque = jc.value("breakTorque", 0.0f);
+    joint.UseLimit    = jc.value("useLimit", false);
+    joint.LimitLower  = jc.value("limitLower", -45.0f);
+    joint.LimitUpper  = jc.value("limitUpper", 45.0f);
+    return joint;
+}
+
 void ReadCommonComponents(const json& j, World& world, AssetLibrary& assets, entt::entity entity) {
     if (j.contains("tag")) world.Registry.emplace_or_replace<TagComponent>(entity, j["tag"].get<std::string>());
     if (!j.value("active", true)) world.Registry.emplace_or_replace<DeactivatedTag>(entity);
@@ -655,46 +697,10 @@ void ReadCommonComponents(const json& j, World& world, AssetLibrary& assets, ent
         }
         world.Registry.emplace_or_replace<LightComponent>(entity, light);
     }
-    if (j.contains("collider")) {
-        const json& c = j["collider"];
-        ColliderComponent collider;
-        collider.IsTrigger = c.value("isTrigger", false);
-        int shape = c.value("shape", 0); // absent => Box (0), the pre-#185 shape
-        collider.Kind = (shape >= 0 && shape <= 4) ? (ColliderComponent::Shape)shape
-                                                   : ColliderComponent::Shape::Box;
-        if (c.contains("halfExtents"))
-            collider.HalfExtents = JsonToVec3(c["halfExtents"], glm::vec3(0.0f));
-        if (c.contains("center"))
-            collider.Center = JsonToVec3(c["center"], glm::vec3(0.0f));
-        collider.Bounciness = c.value("bounciness", 0.0f); // #185 PR 7
-        collider.Friction   = c.value("friction", 0.6f);
-        // Absent (every scene before #170's physics materials) = the same as Friction.
-        collider.StaticFriction = c.contains("staticFriction") && c["staticFriction"].is_number()
-                                      ? c["staticFriction"].get<float>() : collider.Friction;
-        auto combine = [&c](const char* key) {
-            const int v = (c.contains(key) && c[key].is_number_integer()) ? c[key].get<int>() : 0;
-            return (v >= 0 && v <= 3) ? v : 0;
-        };
-        collider.FrictionCombine = combine("frictionCombine");
-        collider.BounceCombine   = combine("bounceCombine");
-        if (c.contains("material") && c["material"].is_string()) collider.Material = c["material"].get<std::string>();
-        world.Registry.emplace_or_replace<ColliderComponent>(entity, collider);
-    }
-    if (j.contains("joint")) { // #185 PR 11
-        const json& jc = j["joint"];
-        JointComponent joint;
-        int ty = jc.value("type", 0);
-        joint.Kind = (ty >= 0 && ty <= 4) ? (JointComponent::Type)ty : JointComponent::Type::Fixed;
-        joint.ConnectedOrder = jc.value("connectedOrder", -1);
-        if (jc.contains("anchor")) joint.Anchor = JsonToVec3(jc["anchor"], glm::vec3(0.0f));
-        if (jc.contains("axis"))   joint.Axis   = JsonToVec3(jc["axis"], glm::vec3(1.0f, 0.0f, 0.0f));
-        joint.BreakForce  = jc.value("breakForce", 0.0f);
-        joint.BreakTorque = jc.value("breakTorque", 0.0f);
-        joint.UseLimit    = jc.value("useLimit", false);
-        joint.LimitLower  = jc.value("limitLower", -45.0f);
-        joint.LimitUpper  = jc.value("limitUpper", 45.0f);
-        world.Registry.emplace_or_replace<JointComponent>(entity, joint);
-    }
+    if (j.contains("collider"))
+        world.Registry.emplace_or_replace<ColliderComponent>(entity, ColliderFromJson(j["collider"]));
+    if (j.contains("joint")) // #185 PR 11
+        world.Registry.emplace_or_replace<JointComponent>(entity, JointFromJson(j["joint"]));
     // Legacy pre-#302 format: CameraComponent moved onto reflection (keyed "Camera" below), but
     // scenes authored before the migration carry the old flat "camera" object — read it only
     // when the new key is absent, so a re-saved file goes through the generic path instead.
@@ -812,8 +818,16 @@ void DiffPrefabEntity(const World& world, entt::entity live, const json& pristin
 
     // Reflected components — presence diff + field diff.
     for (const auto& rc : ComponentRegistry::All()) {
+        // Mesh Renderer has no JSON block of its own: whether an entity has one is structural (it
+        // sits in the prefab's "boxes" / "models" array), so there is nothing to diff.
+        if (!rc.Meta.GenericSerialize && !rc.Meta.GenericInspector) continue;
+        // The component's JSON key, not its display Name: a hand-written block predating reflection
+        // lives under a different key ("collider" / "joint", see ReflectComponent::Key). Looking up
+        // the Name found nothing, so a live Collider read as "added" with every field overridden,
+        // and one the instance had removed was never recorded.
+        const char* jsonKey = ReflectComponentKey(rc.Meta);
         const bool onLive = rc.Has(world.Registry, live);
-        const bool onPrefab = pristine.contains(rc.Meta.Name);
+        const bool onPrefab = pristine.contains(jsonKey);
         if (!onLive && !onPrefab) continue;
 
         if (onLive && !onPrefab) {
@@ -831,8 +845,28 @@ void DiffPrefabEntity(const World& world, entt::entity live, const json& pristin
         }
 
         // On both — diff each field.
-        const json& pc = pristine.at(rc.Meta.Name);
+        const json& pc = pristine.at(jsonKey);
         const void* comp = rc.GetConst(world.Registry, live);
+        if (!rc.Meta.GenericSerialize) {
+            // A hand-written block uses its own key names, so the reflected keys below would find
+            // nothing in it. Decode it into a scratch component the way a load would and compare the
+            // reflected fields' values instead.
+            ColliderComponent pristineCollider;
+            JointComponent pristineJoint;
+            const void* was = nullptr;
+            if (std::strcmp(jsonKey, "collider") == 0) { pristineCollider = ColliderFromJson(pc); was = &pristineCollider; }
+            else if (std::strcmp(jsonKey, "joint") == 0) { pristineJoint = JointFromJson(pc); was = &pristineJoint; }
+            if (!was) continue;
+            for (const auto& f : rc.Meta.Fields) {
+                // A joint's partner is an OrderComponent value, repointed at the partner's copy when
+                // the prefab is instantiated (#119), so it can never equal the file's value.
+                if (std::strcmp(f.Name, "ConnectedOrder") == 0) continue;
+                json now = ReflectFieldToJson(f, f.Address(const_cast<void*>(comp)));
+                json then = ReflectFieldToJson(f, f.Address(const_cast<void*>(was)));
+                if (!ReflectJsonNearlyEqual(f.Type, now, then)) emit(rc.Meta.Name, ReflectFieldKey(f), std::move(now));
+            }
+            continue;
+        }
         for (const auto& f : rc.Meta.Fields) {
             const char* key = ReflectFieldKey(f);
             const json* pv = pc.contains(key) ? &pc.at(key) : nullptr;
@@ -2250,10 +2284,13 @@ bool SceneSerializer::LoadFromString(World& world, AssetLibrary& assets, const s
         // rename / delete still works. A snapshot WITHOUT the key is not "no folders": keep what
         // the library has rather than deleting every folder in the project.
         std::set<std::string> keepFolders;
-        if (auto it = root.find("assetFolders"); it != root.end() && it->is_array())
+        if (auto it = root.find("assetFolders"); it != root.end() && it->is_array()) {
             for (const auto& f : *it) if (f.is_string()) keepFolders.insert(f.get<std::string>());
-        else
+        } else {
+            // Braced on purpose: unbraced, this else bound to the inner `if (f.is_string())`, so a
+            // snapshot with no folder list kept nothing and PruneToKeepSet dropped every folder.
             keepFolders.insert(assets.Folders().begin(), assets.Folders().end());
+        }
         assets.PruneToKeepSet(keepModels, keepTextures, keepSounds, keepPrefabs, keepFolders, keepMaterials);
         try { ApplyAssetLibraryJson(assets, root, /*fromUndoSnapshot=*/true); }
         catch (const std::exception& e) {
