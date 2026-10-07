@@ -1220,6 +1220,12 @@ private:
 
     void DrawProjectSettingsBody(World& world); // "THIS PROJECT" group's body, called from DrawSettingsWindow
     void DrawEnhancerPreferences();             // Preferences > Editor Enhancers (EditorLayer_Enhancers.cpp)
+    // Tabs & Headers (Enhancers::UiStyles): docked panel tabs in their own colours. The hook
+    // recolours each styled window's dock tab once per frame; the menu is the tabs' right-click
+    // "Tab Colour" picker. Both in EditorLayer_Enhancers.cpp.
+    void InstallPanelTabStyleHook();
+    void DrawPanelTabStyleMenu();
+    std::string m_PanelTabStyleTarget; // panel id whose tab was right-clicked
     int m_ProjSettingsCategory = 0;
     // #174 - Project Settings > Build (EditorLayer_Build.cpp).
     static constexpr int kBuildSettingsCategory = 2;

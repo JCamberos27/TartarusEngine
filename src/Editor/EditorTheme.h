@@ -58,11 +58,12 @@ constexpr ImVec4 Success = Rgb(0x7C, 0xD8, 0x8C);
 constexpr ImVec4 Info    = Rgb(0x96, 0xB8, 0xE6);
 
 // --- Axes (gizmos, vector fields, the orientation gizmo) ------------------------------------------
-// Muted, like the status colours: still red / green / blue at a glance, without shouting off the
-// black-and-white screen.
-constexpr ImVec4 AxisX = Rgb(0xB8, 0x5E, 0x5E);
-constexpr ImVec4 AxisY = Rgb(0x7E, 0xA8, 0x6C);
-constexpr ImVec4 AxisZ = Rgb(0x66, 0x86, 0xB8);
+// The Enhancers palette's red / green / blue (Palette::Defaults), so the gizmos, the vector fields,
+// the orientation gizmo and the viewport grid's axis lines carry the same spectrum as the
+// Hierarchy and folder colours: clear hues, neither washed out nor pure primaries.
+constexpr ImVec4 AxisX = Rgb(0xE5, 0x48, 0x4D);
+constexpr ImVec4 AxisY = Rgb(0x4C, 0xC3, 0x8A);
+constexpr ImVec4 AxisZ = Rgb(0x4C, 0x8D, 0xF6);
 
 // --- Entity / asset kinds (hierarchy icons, asset tile stripes) ------------------------------------
 // Tinted greys: a hint of hue so kinds stay tellable apart, without breaking the monochrome screen.

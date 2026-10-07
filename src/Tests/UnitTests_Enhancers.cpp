@@ -8,6 +8,7 @@
 #include "Enhancers/EnhancerUserState.h"
 #include "Enhancers/Palette.h"
 #include "Enhancers/FolderStyles.h"
+#include "Enhancers/UiStyles.h"
 #include "Enhancers/ComponentTransfer.h"
 #include "Enhancers/TabState.h"
 #include "Shortcuts.h"
@@ -806,6 +807,41 @@ void TestEnhancerFolderStyleResolve() {
     fs.FromJson(saved);
 }
 
+void TestEnhancerUiStyles() {
+    auto& ui = UiStyles::Get();
+    const nlohmann::json saved = ui.ToJson(); // shared singleton - restore after
+    ui.Reset();
+    CHECK(!ui.Panel("Hierarchy") && !ui.Component("Transform"));
+
+    // Set / clear: an empty style removes the entry rather than storing a blank.
+    ui.SetPanel("Hierarchy", UiStyle{"", PackRGBA(229, 72, 77)});
+    ui.SetComponent("Mesh Renderer", UiStyle{"cube", PackRGBA(242, 153, 74)});
+    CHECK(ui.Panel("Hierarchy") && ui.Panel("Hierarchy")->Color == PackRGBA(229, 72, 77));
+    CHECK(ui.Component("Mesh Renderer") && ui.Component("Mesh Renderer")->Icon == "cube");
+    ui.SetPanel("Hierarchy", UiStyle{});
+    CHECK(!ui.Panel("Hierarchy") && ui.Panels.empty());
+
+    // JSON round trip; garbage in, empty store out.
+    ui.SetPanel("Scene", UiStyle{"", PackRGBA(1, 2, 3)});
+    const nlohmann::json j = ui.ToJson();
+    ui.FromJson(j);
+    CHECK(ui.ToJson() == j && ui.Panel("Scene")->Color == PackRGBA(1, 2, 3));
+    ui.FromJson(nlohmann::json::array());
+    CHECK(ui.Panels.empty() && ui.Components.empty());
+
+    // Spectrum: consecutive palette hues in order, extra components continuing around the wheel
+    // without duplicating the built-in ones.
+    const Palette pal = Palette::Defaults();
+    const UiStyles sp = UiStyles::Spectrum({"Mesh Renderer", "Light"});
+    CHECK(sp.Panels.at("Hierarchy").Color == pal.Colors[0] && sp.Panels.at("Scene").Color == pal.Colors[1]);
+    CHECK(sp.Components.at("Transform").Color == pal.Colors[0]);
+    CHECK(sp.Components.at("Mesh Renderer").Color == pal.Colors[1]);
+    CHECK(sp.Components.at("Light").Color == pal.Colors[5]);
+    CHECK(sp.Components.size() == 6);
+
+    ui.FromJson(saved);
+}
+
 } // namespace
 
 void RegisterEnhancerTests(UnitTestSupport::TestList& tests) {
@@ -834,4 +870,5 @@ void RegisterEnhancerTests(UnitTestSupport::TestList& tests) {
     tests.emplace_back("EnhancerHierStyleRoundTrip", TestEnhancerHierStyleRoundTrip);
     tests.emplace_back("EnhancerFolderKinds", TestEnhancerFolderKinds);
     tests.emplace_back("EnhancerFolderStyleResolve", TestEnhancerFolderStyleResolve);
+    tests.emplace_back("EnhancerUiStyles", TestEnhancerUiStyles);
 }

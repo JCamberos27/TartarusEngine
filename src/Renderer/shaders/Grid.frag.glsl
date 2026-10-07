@@ -10,6 +10,13 @@ uniform float uFadeDistance;
 uniform float uOpacity;   // 0..1 master multiplier on grid-line alpha
 uniform int   uShowAxes;
 uniform float uAxisThickness; // screen-pixel width of the coloured axis lines
+// Colours from the editor (Grid::Draw / GridColors): the palette's red / green / blue, so the axis
+// rules match the gizmo and the Inspector XYZ tints, and the grey of the grid lines.
+uniform vec3  uAxisColorX;
+uniform vec3  uAxisColorY;
+uniform vec3  uAxisColorZ;
+uniform vec3  uGridColor;
+uniform float uAxisAlpha;   // peak opacity of the axis rules
 
 float GridLine(vec2 coord, float scale) {
     vec2 c = coord / scale;
@@ -58,8 +65,8 @@ void main() {
 
         // Coloured axis rules through the origin: the line running along X (world Z = 0) is red,
         // the line running along Z (world X = 0) is blue — matching the gizmo and the Inspector
-        // XYZ tints. Thin (~1.3 px, anti-aliased) and saturated so they read as axes, not as a
-        // faded grey bar. Cleared in a small patch at the origin (that's the gizmo's, #42) and
+        // XYZ tints. Thin (~1.3 px, anti-aliased) and held at uAxisAlpha so they read as
+        // axes without lasering over the scene. Cleared in a small patch at the origin (that's the gizmo's, #42) and
         // faded past a long radius so an empty Front view isn't lasered edge to edge (#86).
         if (uShowAxes == 1) {
             float deriv = fwidth(worldPos.x);
@@ -67,8 +74,8 @@ void main() {
             float envelope = smoothstep(0.10, 0.6, r) * (1.0 - smoothstep(40.0, 75.0, r)) * distFade;
             float xLine = AxisLine(worldPos.z, deriv, uAxisThickness) * envelope; // X axis (red)
             float zLine = AxisLine(worldPos.x, deriv, uAxisThickness) * envelope; // Z axis (blue)
-            if (xLine >= zLine && xLine > 0.001) { axisColor = vec3(1.0, 0.0, 0.0); axisAlpha = xLine; }
-            else if (zLine > 0.001)              { axisColor = vec3(0.0, 0.0, 1.0); axisAlpha = zLine; }
+            if (xLine >= zLine && xLine > 0.001) { axisColor = uAxisColorX; axisAlpha = xLine * uAxisAlpha; }
+            else if (zLine > 0.001)              { axisColor = uAxisColorZ; axisAlpha = zLine * uAxisAlpha; }
         }
     }
 
@@ -100,16 +107,16 @@ void main() {
                 float originClear = smoothstep(0.05, 0.35, abs(yc));   // tiny gap at the exact origin
                 float heightFade = 1.0 - smoothstep(uFadeDistance * 0.3, uFadeDistance * 0.65, abs(yc));
                 float camFade = clamp(1.0 - camDist / uFadeDistance, 0.0, 1.0);
-                yAlpha = core * originClear * heightFade * camFade * camFade;
+                yAlpha = core * originClear * heightFade * camFade * camFade * uAxisAlpha;
             }
         }
     }
 
     // Composite: grid, then the X/Z axis over it, then the Y axis on top.
     float outAlpha = gridAlpha;
-    vec3  outColor = vec3(0.55);
+    vec3  outColor = uGridColor;
     if (axisAlpha > 0.0) { outColor = axisColor; outAlpha = max(outAlpha, axisAlpha); }
-    if (yAlpha > outAlpha) { outColor = vec3(0.0, 1.0, 0.0); outAlpha = yAlpha; } // Y axis (green)
+    if (yAlpha > outAlpha) { outColor = uAxisColorY; outAlpha = yAlpha; } // Y axis (green)
 
     if (outAlpha <= 0.003) discard;
     FragColor = vec4(outColor, outAlpha);
