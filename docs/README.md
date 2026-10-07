@@ -30,4 +30,5 @@ guide's boundaries before assuming Unity package or serialization compatibility.
 * [Script IDE](SCRIPT_IDE.md), [editor history and inspectors](EDITOR_HISTORY_AND_INSPECTORS.md),
   [particle system](PARTICLE_SYSTEM.md).
 * [Editor Enhancers](EDITOR_ENHANCERS.md): hierarchy/folder styling, bookmarks, hover keys, tabs,
+- [Editor Enhancers handoff](EDITOR_ENHANCERS_HANDOFF.md) - remaining phases (vInspector, vTabs, vFavorites, vRuler) and the code map to continue them.
   favorites and the ruler (vHierarchy / vFolders / vInspector / vTabs / vFavorites / vRuler).
