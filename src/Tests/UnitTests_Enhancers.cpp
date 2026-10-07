@@ -14,6 +14,7 @@
 #include "AssetLibrary.h"
 #include "SceneSerializer.h"
 #include "ComponentRegistry.h"
+#include "ReflectAttributes.h"
 
 #include <algorithm>
 #include <cstring>
@@ -238,6 +239,136 @@ void TestEnhancerKeepPlayChanges() {
     CHECK(ApplyKept(w, assets, kept) == 2);
     CHECK(w.Registry.get<AudioSourceComponent>(back).Volume == 0.8f);
     CHECK(w.Registry.get<TransformComponent>(back).Position == glm::vec3(1.0f, 2.0f, 3.0f));
+}
+
+// --- vInspector attributes (Phase 3b) ------------------------------------------------------
+struct AttrTestComp {
+    bool On = true;
+    int Mode = 0;
+    float Speed = 2.5f;
+    glm::vec3 Offset{1.0f, 2.0f, 3.0f};
+    std::string Label = "default";
+};
+
+bool AttrSpeedPositive(const void* c) { return static_cast<const AttrTestComp*>(c)->Speed > 0.0f; }
+
+void TestEnhancerFieldState() {
+    using T = ReflectFieldType;
+    ReflectComponent meta;
+    meta.Name = "Attr Test";
+    meta.Fields = {
+        Field("On", T::Bool, TARTARUS_REFLECT_FIELD(AttrTestComp, On)),
+        Field("Mode", T::Enum, TARTARUS_REFLECT_FIELD(AttrTestComp, Mode)).Enum("A\0B\0C\0", 3),
+        Field("Speed", T::Float, TARTARUS_REFLECT_FIELD(AttrTestComp, Speed)).EnableIf("On", 1).Tab("Motion"),
+        Field("Offset", T::Vec3, TARTARUS_REFLECT_FIELD(AttrTestComp, Offset)).VisibleIf("Mode", 2, true),
+        Field("Label", T::String, TARTARUS_REFLECT_FIELD(AttrTestComp, Label)).ReadOnly().NonSerialized(),
+        Field("Gated", T::Float, TARTARUS_REFLECT_FIELD(AttrTestComp, Speed)).ShowIf(&AttrSpeedPositive),
+        Field("Greyed", T::Float, TARTARUS_REFLECT_FIELD(AttrTestComp, Speed)).EnableWhen(&AttrSpeedPositive),
+        Field("Ghost", T::Int, TARTARUS_REFLECT_FIELD(AttrTestComp, Mode)).EnableIf("No Such Field", 1),
+    };
+    // The builder set what it said it would.
+    CHECK(meta.Fields[2].Tab && std::strcmp(meta.Fields[2].Tab, "Motion") == 0);
+    CHECK(meta.Fields[4].ReadOnly && meta.Fields[4].NonSerialized);
+    CHECK(meta.Fields[1].EnumCount == 3);
+    Attr(meta, "Mode").Tab("Motion");
+    CHECK(meta.Fields[1].Tab != nullptr);
+    Attr(meta, "Typo").ReadOnly(); // unknown name: harmless
+    static const float kSpeeds[] = {1.0f, 5.0f, 10.0f};
+    Attr(meta, "Speed").Variants(kSpeeds, 3);
+    CHECK(meta.Fields[2].VariantCount == 3 && meta.Fields[2].Variants == kSpeeds);
+
+    AttrTestComp c;
+    auto st = [&](int i) { return EvaluateFieldState(meta, meta.Fields[(size_t)i], &c); };
+    // EnableIf over a Bool sibling.
+    CHECK(st(2).Visible && st(2).Enabled);
+    c.On = false;
+    CHECK(st(2).Visible && !st(2).Enabled);
+    // VisibleIf with negation over an Enum sibling.
+    CHECK(st(3).Visible);
+    c.Mode = 2;
+    CHECK(!st(3).Visible);
+    // ReadOnly greys out, never hides.
+    CHECK(st(4).Visible && !st(4).Enabled);
+    // Conditions: hide vs grey out.
+    CHECK(st(5).Visible && st(6).Enabled);
+    c.Speed = -1.0f;
+    CHECK(!st(5).Visible && st(5).Enabled);
+    CHECK(st(6).Visible && !st(6).Enabled);
+    // A sibling that doesn't exist changes nothing.
+    CHECK(st(7).Visible && st(7).Enabled);
+}
+
+void TestEnhancerFieldReset() {
+    using T = ReflectFieldType;
+    RegisteredComponent rc;
+    rc.Meta.Name = "Attr Test";
+    rc.Meta.Fields = {
+        Field("On", T::Bool, TARTARUS_REFLECT_FIELD(AttrTestComp, On)),
+        Field("Mode", T::Int, TARTARUS_REFLECT_FIELD(AttrTestComp, Mode)),
+        Field("Speed", T::Float, TARTARUS_REFLECT_FIELD(AttrTestComp, Speed)),
+        Field("Offset", T::Vec3, TARTARUS_REFLECT_FIELD(AttrTestComp, Offset)),
+        Field("Label", T::String, TARTARUS_REFLECT_FIELD(AttrTestComp, Label)),
+    };
+    AttrTestComp c;
+    c.On = false; c.Mode = 7; c.Speed = 9.0f; c.Offset = glm::vec3(0.0f); c.Label = "changed";
+    // No default instance: nothing to reset to.
+    CHECK(!ResetReflectFieldToDefault(rc, rc.Meta.Fields[0], &c) && !c.On);
+    rc.DefaultInstance = []() -> const void* { static const AttrTestComp k{}; return &k; };
+    const AttrTestComp def{};
+    for (const ReflectField& f : rc.Meta.Fields) {
+        CHECK(!ReflectFieldIsDefault(rc, f, &c));
+        CHECK(ResetReflectFieldToDefault(rc, f, &c));
+        CHECK(ReflectFieldIsDefault(rc, f, &c));
+    }
+    CHECK(c.On == def.On && c.Mode == def.Mode && c.Speed == def.Speed && c.Offset == def.Offset && c.Label == def.Label);
+
+    // Every registered engine component gets a default instance from Register<T>.
+    if (ComponentRegistry::All().empty()) ComponentRegistry::RegisterEngineComponents();
+    bool allHaveDefaults = true;
+    for (const auto& r : ComponentRegistry::All()) allHaveDefaults = allHaveDefaults && r.DefaultInstance != nullptr;
+    CHECK(allHaveDefaults);
+}
+
+void TestEnhancerNonSerializedField() {
+    if (ComponentRegistry::All().empty()) ComponentRegistry::RegisterEngineComponents();
+    World w;
+    AssetLibrary assets;
+    const glm::vec3 zero(0.0f), one(1.0f);
+    const entt::entity e = w.CreateEmptyEntity(zero, zero, one, "Speaker");
+    w.Registry.emplace<AudioSourceComponent>(e).Volume = 0.25f;
+    const char* audioName = RegistryNameOf<AudioSourceComponent>(w, e);
+    CHECK(audioName != nullptr);
+    if (!audioName) return;
+    // Flip one real field to NonSerialized for the duration of the test (restored below).
+    ReflectField* vol = nullptr;
+    for (const auto& rc : ComponentRegistry::All())
+        if (std::strcmp(rc.Meta.Name, audioName) == 0)
+            for (const ReflectField& f : rc.Meta.Fields)
+                if (std::strcmp(f.Name, "Volume") == 0) vol = const_cast<ReflectField*>(&f);
+    CHECK(vol != nullptr);
+    if (!vol) return;
+    vol->NonSerialized = true;
+    const std::string preset = SceneSerializer::ComponentToPresetJson(w, e, audioName);
+    World b;
+    const bool loaded = SceneSerializer::LoadFromString(b, assets, SceneSerializer::SaveToString(w, assets));
+    vol->NonSerialized = false;
+    CHECK(loaded);
+    CHECK(preset.find("\"Volume\"") == std::string::npos);
+    float loadedVolume = -1.0f;
+    for (auto [x, a] : b.Registry.view<const AudioSourceComponent>().each()) loadedVolume = a.Volume;
+    CHECK(loadedVolume == AudioSourceComponent{}.Volume); // not written, so the default came back
+    // The real registration: Audio Source's distance settings follow 3D Sound.
+    const RegisteredComponent* audio = nullptr;
+    for (const auto& rc : ComponentRegistry::All()) if (std::strcmp(rc.Meta.Name, audioName) == 0) audio = &rc;
+    const ReflectField* minDist = nullptr;
+    for (const ReflectField& f : audio->Meta.Fields) if (std::strcmp(f.Name, "Min Distance") == 0) minDist = &f;
+    CHECK(minDist != nullptr);
+    if (!minDist) return;
+    AudioSourceComponent src;
+    src.Spatial = false;
+    CHECK(!EvaluateFieldState(audio->Meta, *minDist, &src).Enabled);
+    src.Spatial = true;
+    CHECK(EvaluateFieldState(audio->Meta, *minDist, &src).Enabled);
 }
 
 void TestEnhancerGlobMatch() {
@@ -527,6 +658,9 @@ void RegisterEnhancerTests(UnitTestSupport::TestList& tests) {
     tests.emplace_back("EnhancerSelectionHistory", TestEnhancerSelectionHistory);
     tests.emplace_back("EnhancerComponentClipboard", TestEnhancerComponentClipboard);
     tests.emplace_back("EnhancerKeepPlayChanges", TestEnhancerKeepPlayChanges);
+    tests.emplace_back("EnhancerFieldState", TestEnhancerFieldState);
+    tests.emplace_back("EnhancerFieldReset", TestEnhancerFieldReset);
+    tests.emplace_back("EnhancerNonSerializedField", TestEnhancerNonSerializedField);
     tests.emplace_back("EnhancerGlobMatch", TestEnhancerGlobMatch);
     tests.emplace_back("EnhancerFuzzyScore", TestEnhancerFuzzyScore);
     tests.emplace_back("EnhancerRemapFolderKeys", TestEnhancerRemapFolderKeys);
