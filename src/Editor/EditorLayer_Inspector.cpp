@@ -5,6 +5,7 @@
 #include "PhysicMaterialAsset.h" // #170
 #include "EditorUIPrimitives.h"
 #include "EditorLayer.h"
+#include "EditorTestProbe.h" // --editor-tests widget names
 #include "EditorLayerInternal.h"
 #include "EditorTheme.h"
 #include "AssetPathPicker.h"
@@ -2052,6 +2053,7 @@ void EditorLayer::DrawReflectedField(World& world, AssetLibrary& assets, const R
         }
     }
     ImGui::EndDisabled();
+    if (EditorTestProbeActive()) EditorTestTag((std::string("field:") + rc.Meta.Name + "/" + f.Name).c_str());
     const float rowMaxY = ImGui::GetItemRectMax().y;
 
     // Variant chips: one-click values under the widget, the current one highlighted.
@@ -4223,6 +4225,7 @@ void EditorLayer::DrawReflectedComponentExtra(const char* componentName, World& 
                                     }
                                 } else ImGui::TextDisabled("Type not supported by the field Inspector");
                                 } catch(const std::exception&) { ImGui::TextDisabled("Saved value has the wrong type; reset this script's fields"); }
+                                if(EditorTestProbeActive()) EditorTestTag(("cs:"+name).c_str());
                                 commit(changed,immediate);
                             }
                             // [Variants]: quick-pick chips under the field.
@@ -4241,6 +4244,7 @@ void EditorLayer::DrawReflectedComponentExtra(const char* componentName, World& 
                                     if(i>0) ImGui::SameLine(0.0f,EditorTheme::Px(3.0f));
                                     ImGui::PushID(static_cast<int>(i));
                                     if(ActionButton(label.c_str(),"Set this value",current) && !current) { fields[name]=v; commit(true,true); }
+                                    if(EditorTestProbeActive()) EditorTestTag(("cs:"+name+"="+label).c_str());
                                     ImGui::PopID();
                                 }
                                 EditorTheme::PopFont();

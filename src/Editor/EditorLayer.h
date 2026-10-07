@@ -83,6 +83,7 @@ struct AssetGridCell {
 struct AnimatorWindowState; // the Animator window's state (EditorLayer_Animator*.cpp)
 
 class EditorLayer {
+    friend struct EditorUiTestAccess; // --editor-tests (src/Tests/EditorUiTests.cpp)
 public:
     // Declared (rather than left implicit) and defined in the .cpp — a stylistic match for the
     // other Init/Shutdown-style lifecycle methods below, not a forward-declaration requirement
