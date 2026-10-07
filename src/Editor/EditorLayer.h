@@ -1391,6 +1391,7 @@ private:
     static constexpr size_t kMaxHistory = 100;
     EditorFileHistory::Journal m_FileJournal;
     bool m_GlobalUndoActive = false, m_GlobalUndoApplying = false;
+    bool m_ViewportNavDrag = false; // a right/middle drag that began over the Scene view is held (UndoTrigger.h)
     bool m_RequestGlobalUndo = false, m_RequestGlobalRedo = false;
     std::string m_GlobalUndoScene, m_GlobalUndoLabel;
     std::vector<int> m_GlobalUndoSelection;
@@ -2018,6 +2019,7 @@ private:
     float m_FrameTimeHistory[kFrameTimeHistoryCount] = {};
     int m_FrameTimeHistoryHead = 0;   // next slot to write
     int m_FrameTimeHistoryFilled = 0; // caps at kFrameTimeHistoryCount
+    std::string m_HitchBreakdown;     // the slowest recent frame's top profiler scopes, for the status bar's "hitch" tooltip
 
     // --- Clipboard (Ctrl+C / Ctrl+X / Ctrl+V) ---------------------------------------------
     // Copied entities as a scene-fragment JSON string, so a paste rebuilds them through the
