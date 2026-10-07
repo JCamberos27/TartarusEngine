@@ -9,6 +9,7 @@
 #include "Enhancers/Palette.h"
 #include "Enhancers/FolderStyles.h"
 #include "Enhancers/ComponentTransfer.h"
+#include "Enhancers/TabState.h"
 #include "Shortcuts.h"
 #include "World.h"
 #include "AssetLibrary.h"
@@ -371,6 +372,86 @@ void TestEnhancerNonSerializedField() {
     CHECK(EvaluateFieldState(audio->Meta, *minDist, &src).Enabled);
 }
 
+// --- vTabs (Phase 4) ------------------------------------------------------------------------
+void TestEnhancerTabStrip() {
+    const EditorRef a = EditorRef::MakeFolder("Art"), b = EditorRef::MakeFolder("Audio"), c = EditorRef::MakeFolder("Code");
+    TabStrip s;
+    CHECK(s.Open(a) == 0 && s.Active == 0);
+    CHECK(s.Open(b) == 1 && s.Active == 1);
+    CHECK(s.Open(a) == 0 && s.Tabs.size() == 2 && s.Active == 0); // already open: reused, activated
+    CHECK(s.Open(c, false) == 1 && s.Active == 0);                  // inserted after the active tab
+    CHECK(s.Tabs[1] == c && s.Tabs[2] == b);
+    CHECK(s.Open(a, true, /*allowDuplicate=*/true) == 1 && s.Tabs.size() == 4 && s.Active == 1);
+    // Close: the active tab moves to the right neighbour, else the left one.
+    CHECK(s.Close(1) && s.Active == 1 && s.Tabs[1] == c);
+    CHECK(s.Close(2) && s.Active == 1);                              // closing after the active keeps it
+    CHECK(s.Close(1) && s.Active == 0 && s.Tabs.size() == 1);
+    CHECK(!s.Close(5));
+    // Reopen: most recent first, skipping targets that are open again.
+    CHECK(s.Reopen() == 1 && s.Tabs[1] == c && s.Active == 1);
+    CHECK(s.Reopen() == 2 && s.Tabs[2] == b);
+    CHECK(s.Reopen() == -1); // the remaining closed entry (the duplicate "Art") is open already
+    // Move keeps the same tab active.
+    s.Active = 0; // Art
+    s.Move(0, 2);
+    CHECK(s.Tabs[2] == a && s.Active == 2);
+    s.Move(1, 0); // Code <-> Audio: Art stays active at 2
+    CHECK(s.Tabs[0] == b && s.Active == 2);
+    s.Move(2, 99);
+    CHECK(s.Active == 2);
+    // Step wraps; with allowNone, -1 (the Inspector's Selection tab) is part of the cycle.
+    CHECK(s.Step(+1, false) == 0 && s.Step(-1, false) == 1);
+    CHECK(s.Step(+1, true) == -1);
+    s.Active = -1;
+    CHECK(s.Step(+1, true) == 0 && s.Step(-1, true) == 2);
+    // CloseOthers.
+    s.CloseOthers(1);
+    CHECK(s.Tabs.size() == 1 && s.Active == 0);
+    s.CloseOthers(-1);
+    CHECK(s.Tabs.empty() && s.Active == -1);
+    // The cap: never more than kMaxTabs, and the shown tab survives.
+    TabStrip big;
+    for (int i = 0; i < (int)TabStrip::kMaxTabs + 5; ++i) big.Open(EditorRef::MakeFolder("F" + std::to_string(i)));
+    CHECK(big.Tabs.size() == TabStrip::kMaxTabs);
+    CHECK(big.Tabs[(size_t)big.Active].Path == "F" + std::to_string(TabStrip::kMaxTabs + 4));
+    CHECK(big.Closed.size() <= TabStrip::kMaxClosed);
+}
+
+void TestEnhancerTabStateRoundTrip() {
+    // Component sub-targets are part of an entity ref's identity and survive JSON.
+    const EditorRef ent = EditorRef::MakeEntity("00112233aabbccdd", 4, "Player");
+    const EditorRef comp = EditorRef::MakeComponent("00112233aabbccdd", 4, "Light", "Player");
+    CHECK(ent != comp);
+    EditorRef back;
+    CHECK(RefFromJson(RefToJson(comp), back) && back == comp && back.Sub == "Light");
+    CHECK(RefFromJson(RefToJson(ent), back) && back == ent && back.Sub.empty());
+
+    TabState& ts = TabState::Get();
+    ts.Reset();
+    ts.Inspector.Open(ent);
+    ts.Inspector.Open(comp);
+    ts.Inspector.Open(EditorRef::MakeAsset("assets/tex/brick.png", "brick.png"));
+    ts.Inspector.Active = 1;
+    ts.Inspector.Close(2);
+    ts.Assets.Open(EditorRef::MakeFolder(""));
+    ts.Assets.Open(EditorRef::MakeFolder("Art/Props"));
+    ts.Starred.push_back(EditorRef::MakeFolder("Art"));
+    const nlohmann::json j = ts.ToJson();
+    ts.Reset();
+    CHECK(ts.Inspector.Tabs.empty());
+    ts.FromJson(j);
+    CHECK(ts.Inspector.Tabs.size() == 2 && ts.Inspector.Tabs[1] == comp && ts.Inspector.Active == 1);
+    CHECK(ts.Inspector.Closed.size() == 1 && ts.Inspector.Closed[0].Path == "assets/tex/brick.png");
+    CHECK(ts.Assets.Tabs.size() == 2 && ts.Assets.Tabs[0].Path.empty() && ts.Assets.Active == 1);
+    CHECK(ts.Starred.size() == 1 && ts.Starred[0].Path == "Art");
+    // A bad active index from a hand-edited file is repaired.
+    nlohmann::json bad = j;
+    bad["inspector"]["active"] = 42;
+    ts.FromJson(bad);
+    CHECK(ts.Inspector.Active == 0);
+    ts.Reset();
+}
+
 void TestEnhancerGlobMatch() {
     CHECK(GlobMatch("*", ""));
     CHECK(GlobMatch("*", "anything/at/all"));
@@ -658,6 +739,8 @@ void RegisterEnhancerTests(UnitTestSupport::TestList& tests) {
     tests.emplace_back("EnhancerSelectionHistory", TestEnhancerSelectionHistory);
     tests.emplace_back("EnhancerComponentClipboard", TestEnhancerComponentClipboard);
     tests.emplace_back("EnhancerKeepPlayChanges", TestEnhancerKeepPlayChanges);
+    tests.emplace_back("EnhancerTabStrip", TestEnhancerTabStrip);
+    tests.emplace_back("EnhancerTabStateRoundTrip", TestEnhancerTabStateRoundTrip);
     tests.emplace_back("EnhancerFieldState", TestEnhancerFieldState);
     tests.emplace_back("EnhancerFieldReset", TestEnhancerFieldReset);
     tests.emplace_back("EnhancerNonSerializedField", TestEnhancerNonSerializedField);

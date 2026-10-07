@@ -22,6 +22,7 @@
 #include "Enhancers/FolderStyles.h" // Enhancers::FolderSummary (m_FolderSummaries)
 #include "Enhancers/EnhancerCore.h" // Enhancers::SelectionHistoryEntry (m_SelHistory)
 #include "Enhancers/ComponentTransfer.h" // Enhancers::PlayKeep / PasteMode (vInspector)
+#include "Enhancers/TabState.h" // Enhancers::TabStrip (vTabs)
 #include "Shortcuts.h" // Shortcuts::Chord - Preferences > Shortcuts capture state below
 #include "Texture.h" // TextureImportSettings - stored by value in the Import Settings panel state
 #include "Model.h"   // ModelImportSettings - same
@@ -392,6 +393,38 @@ public:
     void DrawFolderContextMenuBody(World& world, AssetLibrary& assets, const std::string& path);
     void SetHoveredAssetFolder(const std::string& path) { m_HoverAssetFolder = path; m_HoverAssetFolderSet = true; }
     void DrawFolderNavBar(World& world, AssetLibrary& assets);
+    void DrawFolderBookmarkBar(AssetLibrary& assets);
+    // --- Editor Enhancers / vTabs (EditorLayer_Enhancers.cpp) ----------------------------------
+    // Tab strips in the Inspector (DrawInspectorBody, host side) and the Asset Browser (drawn from
+    // DrawFolderNavBar, so no module API change). The lists live in Enhancers::TabState.
+    struct TabStripView {
+        float Scroll = 0.0f, ScrollTarget = 0.0f; // smoothed horizontal scroll of an overflowing strip
+        int   SeenActive = -99;                   // last Active scrolled into view
+    };
+    struct TabStripItem {
+        std::string Icon;     // glyph; "" = none
+        std::string Label;
+        std::string Tooltip;
+        bool Missing = false; // target doesn't resolve: drawn dimmed
+        unsigned Color = 0;   // IM_COL32 underline (a styled folder's colour), 0 = none
+    };
+    // Draws one strip (an optional live tab first, then `strip`'s tabs, then "+"). Handles click,
+    // close (x / middle-click), drag-reorder, Shift+wheel switch, Ctrl+Shift+wheel move, smooth
+    // wheel scrolling, the per-tab menu and the drop target. Returns true when Active changed.
+    bool DrawTabStrip(const char* id, Enhancers::TabStrip& strip, TabStripView& view, const std::vector<TabStripItem>& items,
+                      const char* liveLabel, const char* liveIcon,
+                      const std::function<void()>& plusMenu, const std::function<void()>& acceptDrop, bool showDropHint);
+    void DrawInspectorTabStrip(World& world);
+    // Drag payload of a component header (Inspector -> a tab strip): the object by order + name.
+    struct InspectorComponentPayload { int Order = -1; char Component[64] = {}; };
+    void DrawAssetTabStrip(AssetLibrary& assets);
+    // The Inspector tab currently shown, resolved: an entity of the open scene, or an asset key.
+    // False when the Selection tab is active.
+    bool ResolveInspectorTab(const World& world, entt::entity& entity, std::string& asset, bool& missing) const;
+    void OpenInspectorTabForCurrent(World& world);
+    TabStripView m_InspectorTabView, m_AssetTabView;
+    int m_InspectorTabShown = -99;   // last active Inspector tab acted on (component tabs scroll once)
+    char m_TabSearch[2][64] = {};    // the "+" menus' search text: [0] Inspector, [1] Asset Browser
 
     // --- Reloadable Inspector module bridge (issue #229, frame only) ----------------------
     // The module owns Begin("Inspector") + End + visibility; the body stays host-side.

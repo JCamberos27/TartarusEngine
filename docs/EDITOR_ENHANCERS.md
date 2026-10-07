@@ -15,7 +15,7 @@ Status by phase:
 | 2 | vFolders: folder styles, rules, auto icons, content minimap, bookmarks | Done |
 | 3a | vInspector: nav bar, identity-based selection history, floating component windows, multi-component copy/paste, keep play-mode changes, hover keys, animations | Done |
 | 3b | vInspector: field attributes (C++ and C#), Reset to Default, C# buttons / read-outs / dictionaries | Done |
-| 4 | vTabs: tab strips in the Inspector and Asset Browser | Planned |
+| 4 | vTabs: tab strips in the Inspector and Asset Browser | Done |
 | 5 | vFavorites: hold-Alt favorites overlay with pages | Planned |
 | 6 | vRuler: Shift+R surface, bounds and reference-object measuring | Planned |
 
@@ -26,6 +26,7 @@ Status by phase:
 | Pure logic | `src/Editor/Enhancers/EnhancerCore.h/.cpp` | `EditorRef`, bookmark lists, `NavHistory`, `GlobMatch`, `FuzzyScore`, `RemapFolderKeys`, `FormatLength`, the icon table. No ImGui or EnTT, so the unit tests link it directly. |
 | Per-user state | `src/Editor/Enhancers/EnhancerUserState.h/.cpp` | Bookmarks and per-scene default parents, saved to `%LOCALAPPDATA%\TartarusEngine\enhancers_<projectHash>.json`. |
 | Component transfer | `src/Editor/Enhancers/ComponentTransfer.h/.cpp` | vInspector's multi-component clipboard and Keep Changes After Play, on top of the preset JSON (`SceneSerializer::ComponentToPresetJson`). |
+| Tab strips | `src/Editor/Enhancers/TabState.h/.cpp` | vTabs' tab lists (open / close / reopen / move / step) and their per-user file. |
 | Folder styles | `src/Editor/Enhancers/FolderStyles.h/.cpp` | Per-folder icons/colours, rules, automatic content icons; `project/editor_folders.json`. |
 | Style palette | `src/Editor/Enhancers/Palette.h/.cpp` | Swatches and quick-pick icons offered by every Style menu, saved to `editor_palette.json` (per user), with export/import. |
 | Pickers | `src/Editor/Enhancers/StyleWidgets.h/.cpp` | `PaletteColorRow` and `IconPickerGrid`, a virtualized grid over all ~1400 Font Awesome icons. |
@@ -362,10 +363,58 @@ description, which is now parsed once per class and dropped on every assembly re
 every frame. Buttons and `[OnValueChanged]` use op 13 and the read-outs use op 14, through the
 existing JSON request, so the ABI version is unchanged.
 
+## vTabs
+
+Tab strips at the top of the Inspector and under the Asset Browser toolbar. A strip appears once
+it has a tab, or while something that can become a tab is being dragged.
+
+### Inspector tabs
+
+The first tab, **Selection**, shows the selection as usual. The other tabs pin a target:
+
+* an object (drop a Hierarchy row),
+* one component of an object (drag a component's header onto the strip; the tab opens the
+  object scrolled to that component),
+* an asset (drop a file from the Asset Browser).
+
+An active pinned tab shows its target whatever is selected, the same way the lock does, and
+takes priority over the lock. Selecting something, or using the nav bar's Back / Forward, brings
+the Inspector back to the Selection tab; use the lock to keep a view while selecting elsewhere.
+A tab whose object isn't in the open scene says so instead of showing something else.
+
+### Asset Browser tabs
+
+Each tab is a folder. The active tab follows wherever you navigate, like a browser tab, and
+clicking a tab goes to its folder. Dropping a folder opens it in a new tab; dropping a file opens
+its folder with the file selected. Tab icons and colour underlines come from vFolders styles.
+
+### Both strips
+
+| Action | How |
+| --- | --- |
+| Switch tab | Click, or **Shift+wheel** over the strip |
+| Move a tab | Drag it, or **Ctrl+Shift+wheel** moves the active one |
+| Scroll an overflowing strip | Mouse wheel (smoothed) |
+| Close | The x on the tab, middle-click, or **Ctrl+W** |
+| Reopen the last closed tab | **Ctrl+Shift+T** |
+| New tab | **Ctrl+T**: the Inspector pins what it shows; the Asset Browser opens the current folder again |
+| "+" menu | A search box (fuzzy matching over the scene's objects / the project's folders) and the starred tabs |
+| Star a tab | Right-click > Starred, so it is listed at the top of "+" |
+
+The keys act on the panel under the mouse (hover contexts) and can be rebound under Shortcuts.
+Tabs, the active tab, the closed-tab list and stars are per user and per project, in
+`%LOCALAPPDATA%\TartarusEngine\enhancer_tabs_<projectHash>.json`. That file is separate from
+`enhancers_<hash>.json` on purpose: switching tabs is navigation, so it never shows up in the
+History panel. Preferences > Editor Enhancers > Tabs turns each strip off.
+
+Code: `Enhancers::TabStrip` / `TabState` (`src/Editor/Enhancers/TabState.h`, unit tested) and
+`EditorLayer::DrawTabStrip` (`EditorLayer_Enhancers.cpp`). The Asset Browser strip is drawn
+through the existing `DrawFolderNavBar` callback, so the module API version is unchanged (40).
+
 ## Shortcut changes
 
-* **Toggle Statistics** moved from Ctrl+Shift+T to **Alt+Shift+T**. Ctrl+Shift+T is reserved for
-  vTabs' "reopen closed tab". A saved override in `shortcuts.json` still wins.
+* **Toggle Statistics** moved from Ctrl+Shift+T to **Alt+Shift+T**. Ctrl+Shift+T is now vTabs'
+  "reopen closed tab". A saved override in `shortcuts.json` still wins.
 
 ## Measure tool units
 

@@ -129,6 +129,7 @@ void EditorLayer::Init(GLFWwindow* window) {
     LoadAssetFavorites(); // project/asset_favorites.json (#236 G)
     // Editor Enhancers: this project's bookmarks / default parents and the per-user style palette.
     Enhancers::EnhancerUserState::Get().Load();
+    Enhancers::TabState::Get().Load(); // vTabs (not journaled: tab switches aren't edits)
     Enhancers::Palette::Load();
     Enhancers::FolderStyles::Get().Load(); // project/editor_folders.json (vFolders)
 
@@ -520,6 +521,7 @@ void EditorLayer::Shutdown() {
         EditorSettings::Save();
         EditorSettings::Flush();
         Enhancers::EnhancerUserState::Get().Flush();
+        Enhancers::TabState::Get().Flush();
         Enhancers::Palette::Flush();
         Enhancers::FolderStyles::Get().Flush();
     }
@@ -3659,6 +3661,7 @@ void EditorLayer::PostModuleDraw(World& world) {
     if (m_AssetsPtr) HandleFolderHoverKeys(*m_AssetsPtr);
     EditorSettings::Flush();
     Enhancers::EnhancerUserState::Get().Flush();
+    Enhancers::TabState::Get().Flush();
     Enhancers::Palette::Flush();
     Enhancers::FolderStyles::Get().Flush();
     FinishGlobalUndo(world);

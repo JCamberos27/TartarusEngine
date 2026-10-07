@@ -309,6 +309,13 @@ void EditorLayer::RecordSelectionHistory(const World& world) {
     // append to either history.
     if (m_SelHistoryNavigating) { m_SelHistoryNavigating = false; m_EditPushedThisFrame = false; return; }
 
+    // vTabs: selecting something brings the Inspector back to its Selection tab, so it shows what
+    // was just picked. (The Inspector lock is what keeps a view while selecting elsewhere.)
+    if (auto& tabs = Enhancers::TabState::Get().Inspector; tabs.Active >= 0) {
+        tabs.Active = -1;
+        Enhancers::TabState::Get().MarkDirty();
+    }
+
     // Phase 6 item 6 / Q6 — a genuine user selection change becomes its own m_UndoStack entry,
     // UNLESS an edit already pushed one this frame (Duplicate/Paste/Add Cube/... all change
     // selection as a side effect of their own PushUndo/CommitStagedUndo; that's not a second,
