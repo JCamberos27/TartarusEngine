@@ -129,6 +129,17 @@ int RemapFolderKeys(std::map<std::string, V>& m, const std::string& oldPath, con
 // Same rule for a plain list of folder paths (bookmark chips, expanded-state sets).
 int RemapFolderPath(std::string& path, const std::string& oldPath, const std::string& newPath);
 
+// --- Tree lines -------------------------------------------------------------------------------
+// vHierarchy/vFolders tree guides. A row's mask has bit k set when the vertical guide at nesting
+// level k continues past it (bit Depth-1 = the row itself has a later sibling; lower bits = an
+// ancestor at that level does). A child of a row at `parentDepth` inherits the parent's bits for
+// the levels above it and sets bit `parentDepth` unless it is its parent's last child.
+inline std::uint32_t TreeLineChildMask(std::uint32_t parentMask, int parentDepth, bool isLastChild) {
+    if (parentDepth < 0) parentDepth = 0;
+    const std::uint32_t inherited = parentDepth > 0 ? (parentMask & ((1u << (parentDepth > 31 ? 31 : parentDepth)) - 1u)) : 0u;
+    return (!isLastChild && parentDepth < 32) ? (inherited | (1u << parentDepth)) : inherited;
+}
+
 // --- Units ------------------------------------------------------------------------------------
 // Distance readout shared by the Measure tool and vRuler. Scene units are metres.
 //   metric:   adapts the unit - "4.2 mm", "37.5 cm", "1.84 m", "2.31 km"

@@ -3007,49 +3007,10 @@ void EditorLayer::DrawInspectorBody(World& world, AssetLibrary& assets) {
         }
         if (reflPaste) PasteComponentFromClip(world, entity);
         if (reflOpen) {
-            void* fbase = rc.Get(registry, entity);
-            // #302 Wave 2a: a field is hidden when its VisibleIf sibling (an Int/Enum field of the
-            // same component) doesn't match. Reads the sibling's int value directly.
-            auto fieldVisible = [&](const ReflectField& f) -> bool {
-                if (!f.VisibleIfField) return true;
-                for (const ReflectField& s : rc.Meta.Fields) {
-                    if (std::strcmp(s.Name, f.VisibleIfField) != 0) continue;
-                    const int sv = *reinterpret_cast<int*>(s.Address(fbase));
-                    return f.VisibleIfNot ? (sv != f.VisibleIfValue) : (sv == f.VisibleIfValue);
-                }
-                return true;
-            };
-            DrawReflectedComponentExtra(rc.Meta.Name, world, entity, ReflectExtraPhase::Top);
-            if(DrawManagedInspector(world,assets,entity,rc.Meta.Name)) {
-                DrawReflectedComponentExtra(rc.Meta.Name,world,entity,ReflectExtraPhase::Bottom);
-                EndComponentSection();continue;
-            }
-            const char* openGroup = nullptr; // current TreeNode group, nullptr = none
-            bool groupNodeOpen = true;       // false = current group's node is collapsed
-            // #6 Defect #44 — a one-element selection so the field switch below (shared with
-            // multi-select) takes its no-mixed-value path; see DrawReflectedField.
-            const std::vector<entt::entity> selOne{entity};
-            for (const ReflectField& f : rc.Meta.Fields) {
-                // Group transitions: close the previous node, open the next.
-                if (f.Group != openGroup) {
-                    if (openGroup && groupNodeOpen) ImGui::TreePop();
-                    openGroup = f.Group;
-                    if (openGroup) {
-                        ImGui::Spacing();
-                        // Separate groups can share a display label (e.g. several Arms groups).
-                        // Use their first field's stable key for independent IDs and open state.
-                        const std::string groupId=std::string("##group:")+(f.Key?f.Key:f.Name);
-                        groupNodeOpen = ImGui::TreeNodeEx(groupId.c_str(), ImGuiTreeNodeFlags_SpanAvailWidth, "%s", openGroup);
-                    }
-                }
-                if (openGroup && !groupNodeOpen) continue; // collapsed group — skip its fields
-                if (f.EditorHidden) continue;              // drawn by DrawReflectedComponentExtra
-                if (!fieldVisible(f)) continue;
-
-                DrawReflectedField(world, assets, rc, f, selOne);
-            }
-            if (openGroup && groupNodeOpen) ImGui::TreePop();
-            DrawReflectedComponentExtra(rc.Meta.Name, world, entity, ReflectExtraPhase::Bottom);
+            // Shared with the Editor Enhancers pinned component windows. (This used to `continue`
+            // straight past the removal below after a managed inspector drew, so the header's x
+            // did nothing on an open C# script section.)
+            DrawReflectedComponentFields(world, assets, rc, entity);
             EndComponentSection();
         }
         if (reflRemoved) {
@@ -3073,6 +3034,57 @@ void EditorLayer::DrawInspectorBody(World& world, AssetLibrary& assets) {
 
     ImGui::PopID();
     InspectorEnd();
+}
+
+// The body of one reflected component for one entity: the Top extras, a C# managed inspector
+// when the component has one, else every visible field (grouped into TreeNodes, VisibleIf
+// honoured), then the Bottom extras. No header - the caller owns that (the Inspector's
+// BeginComponentSection, or a pinned component window's title bar).
+void EditorLayer::DrawReflectedComponentFields(World& world, AssetLibrary& assets, const RegisteredComponent& rc, entt::entity entity) {
+    void* fbase = rc.Get(world.Registry, entity);
+    if (!fbase) return;
+    // #302 Wave 2a: a field is hidden when its VisibleIf sibling (an Int/Enum field of the
+    // same component) doesn't match. Reads the sibling's int value directly.
+    auto fieldVisible = [&](const ReflectField& f) -> bool {
+        if (!f.VisibleIfField) return true;
+        for (const ReflectField& s : rc.Meta.Fields) {
+            if (std::strcmp(s.Name, f.VisibleIfField) != 0) continue;
+            const int sv = *reinterpret_cast<int*>(s.Address(fbase));
+            return f.VisibleIfNot ? (sv != f.VisibleIfValue) : (sv == f.VisibleIfValue);
+        }
+        return true;
+    };
+    DrawReflectedComponentExtra(rc.Meta.Name, world, entity, ReflectExtraPhase::Top);
+    if (DrawManagedInspector(world, assets, entity, rc.Meta.Name)) {
+        DrawReflectedComponentExtra(rc.Meta.Name, world, entity, ReflectExtraPhase::Bottom);
+        return;
+    }
+    const char* openGroup = nullptr; // current TreeNode group, nullptr = none
+    bool groupNodeOpen = true;       // false = current group's node is collapsed
+    // #6 Defect #44 — a one-element selection so the field switch below (shared with
+    // multi-select) takes its no-mixed-value path; see DrawReflectedField.
+    const std::vector<entt::entity> selOne{entity};
+    for (const ReflectField& f : rc.Meta.Fields) {
+        // Group transitions: close the previous node, open the next.
+        if (f.Group != openGroup) {
+            if (openGroup && groupNodeOpen) ImGui::TreePop();
+            openGroup = f.Group;
+            if (openGroup) {
+                ImGui::Spacing();
+                // Separate groups can share a display label (e.g. several Arms groups).
+                // Use their first field's stable key for independent IDs and open state.
+                const std::string groupId=std::string("##group:")+(f.Key?f.Key:f.Name);
+                groupNodeOpen = ImGui::TreeNodeEx(groupId.c_str(), ImGuiTreeNodeFlags_SpanAvailWidth, "%s", openGroup);
+            }
+        }
+        if (openGroup && !groupNodeOpen) continue; // collapsed group — skip its fields
+        if (f.EditorHidden) continue;              // drawn by DrawReflectedComponentExtra
+        if (!fieldVisible(f)) continue;
+
+        DrawReflectedField(world, assets, rc, f, selOne);
+    }
+    if (openGroup && groupNodeOpen) ImGui::TreePop();
+    DrawReflectedComponentExtra(rc.Meta.Name, world, entity, ReflectExtraPhase::Bottom);
 }
 
 void EditorLayer::PasteComponentFromClip(World& world, entt::entity entity) {
@@ -3161,6 +3173,21 @@ bool EditorLayer::BeginComponentSection(const char* icon,
     const ImGuiID headerId = ImGui::GetID(header.c_str());
     ImGuiStorage* storage = ImGui::GetStateStorage();
     bool open = storage->GetInt(headerId, 0) != 0 || m_ExpandAllComponents;
+    // Editor Enhancers / vHierarchy minimap click: open this section and scroll it to the top.
+    // A request that found no matching header within a couple of frames (a locked Inspector,
+    // a hand-coded section) is dropped rather than firing later by surprise.
+    if (!m_InspectorScrollToComponent.empty()) {
+        if (ImGui::GetFrameCount() - m_InspectorScrollToFrame > 2) {
+            m_InspectorScrollToComponent.clear();
+        } else if (m_InspectorScrollToComponent == label) {
+            open = true;
+            storage->SetInt(headerId, 1);
+            ImGui::SetScrollHereY(0.0f);
+            m_InspectorFlashComponent = label;
+            m_InspectorFlashUntil = ImGui::GetTime() + 0.9;
+            m_InspectorScrollToComponent.clear();
+        }
+    }
     const ImVec2 hp = ImGui::GetCursorScreenPos();
     const float hw = ImGui::GetContentRegionAvail().x;
     const float hh = ImGui::GetFrameHeight() + EditorTheme::Px(4.0f);
@@ -3178,6 +3205,16 @@ bool EditorLayer::BeginComponentSection(const char* icon,
         const float r = EditorTheme::Px(3.0f);
         dl->AddRectFilled(hp, ImVec2(hp.x + hw, hp.y + hh), EditorTheme::U32(hov ? EditorTheme::Hover : EditorTheme::Raised), r,
                           open ? ImDrawFlags_RoundCornersTop : ImDrawFlags_RoundCornersAll);
+        // Just reached from a Hierarchy minimap click: an accent outline that fades out.
+        if (!m_InspectorFlashComponent.empty() && m_InspectorFlashComponent == label) {
+            const double left = m_InspectorFlashUntil - ImGui::GetTime();
+            if (left > 0.0) {
+                dl->AddRect(hp, ImVec2(hp.x + hw, hp.y + hh),
+                            EditorTheme::U32(EditorTheme::WithAlpha(EditorTheme::Accent, (float)std::min(1.0, left / 0.9))), r, 0, EditorTheme::Px(2.0f));
+            } else {
+                m_InspectorFlashComponent.clear();
+            }
+        }
         const float cy = hp.y + hh * 0.5f;
         EditorTheme::PushSmall();
         const char* chev = open ? ICON_FA_CHEVRON_DOWN : ICON_FA_CHEVRON_RIGHT;

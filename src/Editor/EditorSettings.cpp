@@ -192,6 +192,13 @@ void EditorSettings::Load() {
     s.ActiveTool = SafeValue(root, "activeTool", s.ActiveTool);
     s.ShadingMode = SafeValue(root, "shadingMode", s.ShadingMode);
     s.EnhancerHoverKeys = SafeValue(root, "enhancerHoverKeys", s.EnhancerHoverKeys);
+    s.HierarchyRowStyles = SafeValue(root, "hierarchyRowStyles", s.HierarchyRowStyles);
+    s.HierarchyTreeLines = SafeValue(root, "hierarchyTreeLines", s.HierarchyTreeLines);
+    s.HierarchyMinimal = SafeValue(root, "hierarchyMinimal", s.HierarchyMinimal);
+    s.HierarchyZebra = SafeValue(root, "hierarchyZebra", s.HierarchyZebra);
+    s.HierarchyMinimap = SafeValue(root, "hierarchyMinimap", s.HierarchyMinimap);
+    s.HierarchyMinimapMax = std::clamp(SafeValue(root, "hierarchyMinimapMax", s.HierarchyMinimapMax), 1, 12);
+    s.HierarchyNavBar = SafeValue(root, "hierarchyNavBar", s.HierarchyNavBar);
 
     // #126 — values that are the right type but nonsensical (0 / negative / NaN from a hand
     // edit or an older build) would otherwise produce NaN projections, a zero-size grid, a
@@ -352,6 +359,13 @@ void EditorSettings::Flush() {
     root["activeTool"] = Get().ActiveTool;
     root["shadingMode"] = Get().ShadingMode;
     root["enhancerHoverKeys"] = Get().EnhancerHoverKeys;
+    root["hierarchyRowStyles"] = Get().HierarchyRowStyles;
+    root["hierarchyTreeLines"] = Get().HierarchyTreeLines;
+    root["hierarchyMinimal"] = Get().HierarchyMinimal;
+    root["hierarchyZebra"] = Get().HierarchyZebra;
+    root["hierarchyMinimap"] = Get().HierarchyMinimap;
+    root["hierarchyMinimapMax"] = Get().HierarchyMinimapMax;
+    root["hierarchyNavBar"] = Get().HierarchyNavBar;
 
     // Atomic: a crash mid-write (a toggle spree can still trigger one write) must leave the
     // previous editor_prefs.json intact, not truncated (audit CPP-206). Lives under UserPaths

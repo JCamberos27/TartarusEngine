@@ -21,6 +21,7 @@ DeactivatedTag          = The "active" checkbox in the Inspector header / Hierar
 StaticTag               = The "Static" checkbox in the Inspector header.
 HiddenInSceneTag        = Editor Scene-view "hidden" column in the Hierarchy (#236 B). No runtime effect.
 SceneLockedTag          = Editor Scene-view "locked" column in the Hierarchy (#236 B). No runtime effect.
+HierarchyStyleComponent = Editor-only Hierarchy row style / separator (Editor Enhancers, vHierarchy), saved as "hierStyle" by SceneSerializer's common block. No runtime effect.
 LodCulledTag            = Runtime-only (#163): set per view by World::ApplyLod on renderers of LOD levels the view isn't using. Never saved, no Inspector.
 ViewModelTag            = Runtime-only: FirstPersonPresentation::Start sets it on the spawned arms + weapon so SceneRenderer draws them in the view-model sub-pass. Those entities only exist during Play; never saved, no Inspector.
 PlayerBodyTag           = Runtime-only: FirstPersonBody::Start sets it on the player's body pieces (Stop removes it) so the camera's world pass skips what of them is within Near Hide of the eye. The entities are scene objects but the tag only exists during Play; never saved, no Inspector.

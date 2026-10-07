@@ -3588,6 +3588,7 @@ void EditorLayer::Draw(World& world, AssetLibrary& assets, Camera& editorCamera,
     }
 
     DrawArrayDuplicateModal(world, assets); // #236 R2
+    DrawPinnedComponentWindows(world, assets); // Editor Enhancers: floating component editors
 
     // Save-layout-preset name prompt (#236 R2).
     if (m_ShowSaveLayout) {

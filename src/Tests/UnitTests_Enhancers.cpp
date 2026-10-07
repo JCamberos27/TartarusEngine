@@ -8,6 +8,10 @@
 #include "Enhancers/EnhancerUserState.h"
 #include "Enhancers/Palette.h"
 #include "Shortcuts.h"
+#include "World.h"
+#include "AssetLibrary.h"
+#include "SceneSerializer.h"
+#include "ComponentRegistry.h"
 
 #include <cstring>
 #include <limits>
@@ -230,6 +234,61 @@ void TestEnhancerShortcutTable() {
     CHECK(stats && stats->Default.Alt && stats->Default.Shift && !stats->Default.Ctrl && stats->Default.Key == ImGuiKey_T);
 }
 
+void TestEnhancerTreeLineMasks() {
+    // root
+    //  |- A        (has a later sibling)
+    //  |   |- A1   (has a later sibling)
+    //  |   '- A2   (last)
+    //  '- B        (last)
+    //      '- B1   (last)
+    const std::uint32_t a  = TreeLineChildMask(0, 0, false);
+    const std::uint32_t b  = TreeLineChildMask(0, 0, true);
+    const std::uint32_t a1 = TreeLineChildMask(a, 1, false);
+    const std::uint32_t a2 = TreeLineChildMask(a, 1, true);
+    const std::uint32_t b1 = TreeLineChildMask(b, 1, true);
+    CHECK(a == 0x1u && b == 0x0u);
+    CHECK(a1 == 0x3u); // level 0 continues (B follows A), level 1 continues (A2 follows A1)
+    CHECK(a2 == 0x1u); // level 0 still continues past A2, its own elbow ends
+    CHECK(b1 == 0x0u); // nothing continues under the last branch
+    // Deep trees saturate instead of shifting past the word.
+    CHECK(TreeLineChildMask(0xFFFFFFFFu, 40, false) == 0x7FFFFFFFu);
+}
+
+void TestEnhancerHierStyleRoundTrip() {
+    if (ComponentRegistry::All().empty()) ComponentRegistry::RegisterEngineComponents();
+    World a;
+    AssetLibrary assets;
+    const glm::vec3 zero(0.0f), one(1.0f);
+    const entt::entity sep = a.CreateEmptyEntity(zero, zero, one, "Lighting");
+    const entt::entity tinted = a.CreateEmptyEntity(zero, zero, one, "Tinted");
+    const entt::entity plain = a.CreateEmptyEntity(zero, zero, one, "Plain");
+    (void)plain;
+    HierarchyStyleComponent s1;
+    s1.Icon = "lightbulb"; s1.Color = PackRGBA(0xF2, 0xC9, 0x4C, 0x80);
+    s1.FillMode = HierarchyStyleComponent::Flat; s1.Separator = true;
+    a.Registry.emplace<HierarchyStyleComponent>(sep, s1);
+    HierarchyStyleComponent s2;
+    s2.Color = PackRGBA(0x4C, 0x8D, 0xF6);
+    a.Registry.emplace<HierarchyStyleComponent>(tinted, s2);
+
+    const std::string text = SceneSerializer::SaveToString(a, assets);
+    std::size_t keys = 0;
+    for (std::size_t at = text.find("hierStyle"); at != std::string::npos; at = text.find("hierStyle", at + 1)) ++keys;
+    CHECK(keys == 2); // the unstyled row writes nothing
+
+    World b;
+    CHECK(SceneSerializer::LoadFromString(b, assets, text));
+    auto byName = [&](const char* n) {
+        for (auto [e, nm] : b.Registry.view<const NameComponent>().each()) if (nm.Name == n) return e;
+        return (entt::entity)entt::null;
+    };
+    const auto* r1 = b.Registry.try_get<HierarchyStyleComponent>(byName("Lighting"));
+    const auto* r2 = b.Registry.try_get<HierarchyStyleComponent>(byName("Tinted"));
+    CHECK(r1 && r1->Icon == "lightbulb" && r1->Color == s1.Color && r1->FillMode == HierarchyStyleComponent::Flat && r1->Separator);
+    CHECK(r2 && r2->Icon.empty() && r2->Color == s2.Color && r2->FillMode == HierarchyStyleComponent::Gradient && !r2->Separator);
+    CHECK(!b.Registry.all_of<HierarchyStyleComponent>(byName("Plain")));
+}
+
 } // namespace
 
 void RegisterEnhancerTests(UnitTestSupport::TestList& tests) {
@@ -244,4 +303,6 @@ void RegisterEnhancerTests(UnitTestSupport::TestList& tests) {
     tests.emplace_back("EnhancerPalette", TestEnhancerPalette);
     tests.emplace_back("EnhancerUserStateRoundTrip", TestEnhancerUserStateRoundTrip);
     tests.emplace_back("EnhancerShortcutTable", TestEnhancerShortcutTable);
+    tests.emplace_back("EnhancerTreeLineMasks", TestEnhancerTreeLineMasks);
+    tests.emplace_back("EnhancerHierStyleRoundTrip", TestEnhancerHierStyleRoundTrip);
 }

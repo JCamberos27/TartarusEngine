@@ -27,6 +27,8 @@
 #include <functional>
 #include <algorithm>
 #include <cstring>
+#include <cstdio>
+#include <cstdlib>
 #include <filesystem>
 #include <vector>
 #include <cctype>
@@ -529,6 +531,47 @@ bool ReflectJsonNearlyEqual(ReflectFieldType t, const json& a, const json& b) {
     }
 }
 
+// Editor Enhancers / vHierarchy row style ("hierStyle"). Colour as "#RRGGBB[AA]" so a scene
+// diff reads; every key optional, and the whole object omitted for an unstyled row.
+json HierStyleToJson(const HierarchyStyleComponent& st) {
+    json h = json::object();
+    if (!st.Icon.empty()) h["icon"] = st.Icon;
+    if (st.Color != 0) {
+        const unsigned r = st.Color & 255, g = (st.Color >> 8) & 255, b = (st.Color >> 16) & 255, a = (st.Color >> 24) & 255;
+        char buf[10];
+        if (a == 255) std::snprintf(buf, sizeof(buf), "#%02X%02X%02X", r, g, b);
+        else          std::snprintf(buf, sizeof(buf), "#%02X%02X%02X%02X", r, g, b, a);
+        h["color"] = buf;
+    }
+    if (st.FillMode != HierarchyStyleComponent::Gradient) h["fill"] = (int)st.FillMode;
+    if (st.Separator) h["separator"] = true;
+    return h;
+}
+
+void ReadHierStyle(const json& j, World& world, entt::entity entity) {
+    const auto it = j.find("hierStyle");
+    if (it == j.end() || !it->is_object()) return;
+    HierarchyStyleComponent st;
+    if (auto ic = it->find("icon"); ic != it->end() && ic->is_string()) st.Icon = ic->get<std::string>();
+    if (auto c = it->find("color"); c != it->end() && c->is_string()) {
+        std::string hex = c->get<std::string>();
+        if (!hex.empty() && hex[0] == '#') hex.erase(0, 1);
+        unsigned v[4] = {0, 0, 0, 255};
+        bool ok = hex.size() == 6 || hex.size() == 8;
+        for (size_t k = 0; ok && k < hex.size() / 2; ++k) {
+            char* end = nullptr;
+            const std::string byte = hex.substr(k * 2, 2);
+            v[k] = (unsigned)std::strtoul(byte.c_str(), &end, 16);
+            ok = end && *end == '\0';
+        }
+        if (ok) st.Color = v[0] | (v[1] << 8) | (v[2] << 16) | (v[3] << 24);
+    }
+    if (auto f = it->find("fill"); f != it->end() && f->is_number_integer())
+        st.FillMode = (std::uint8_t)std::clamp(f->get<int>(), 0, 2);
+    if (auto sp = it->find("separator"); sp != it->end() && sp->is_boolean()) st.Separator = sp->get<bool>();
+    if (!st.IsEmpty()) world.Registry.emplace_or_replace<HierarchyStyleComponent>(entity, std::move(st));
+}
+
 // Components that any entity kind can carry, written/read as one shared block so a box, a
 // placed model, and a bare (Renderable-less) entity all round-trip them identically. Each is
 // omitted entirely when absent, keeping saves of simple scenes as small as they were before
@@ -545,6 +588,8 @@ void WriteCommonComponents(json& j, const World& world, entt::entity entity) {
         j["layer"] = layer->Layer;
     if (world.Registry.all_of<HiddenInSceneTag>(entity)) j["sceneHidden"] = true; // #236 B — editor SceneVis
     if (world.Registry.all_of<SceneLockedTag>(entity)) j["sceneLocked"] = true;
+    if (const auto* hs = world.Registry.try_get<HierarchyStyleComponent>(entity); hs && !hs->IsEmpty())
+        j["hierStyle"] = HierStyleToJson(*hs); // Editor Enhancers / vHierarchy
 
     // LightComponent moved onto reflection (#302 Wave 2b) — it round-trips through the generic
     // "Light" block below. The old flat "light" object (incl. the legacy "castShadows" bool and
@@ -659,6 +704,7 @@ void ReadCommonComponents(const json& j, World& world, AssetLibrary& assets, ent
         world.Registry.emplace_or_replace<LayerComponent>(entity, LayerComponent{layer});
     if (j.value("sceneHidden", false)) world.Registry.emplace_or_replace<HiddenInSceneTag>(entity); // #236 B
     if (j.value("sceneLocked", false)) world.Registry.emplace_or_replace<SceneLockedTag>(entity);
+    ReadHierStyle(j, world, entity); // Editor Enhancers / vHierarchy
 
     // Legacy pre-#302 format: LightComponent moved onto reflection (keyed "Light" below), but
     // scenes authored before the migration carry the old flat "light" object with its own key
@@ -1325,6 +1371,8 @@ json BuildSceneJson(const World& world, const std::set<entt::entity>* only = nul
             // WriteCommonComponents).
             if (world.Registry.all_of<HiddenInSceneTag>(e)) s["sceneHidden"] = true;
             if (world.Registry.all_of<SceneLockedTag>(e)) s["sceneLocked"] = true;
+            if (const auto* hs = world.Registry.try_get<HierarchyStyleComponent>(e); hs && !hs->IsEmpty())
+                s["hierStyle"] = HierStyleToJson(*hs); // a styled prefab-instance root keeps its row style
 
             // #302 Part B — per-field overrides: diff each live instance entity against its
             // pristine counterpart in the .prefab file, by prefab-local index.
@@ -1670,6 +1718,7 @@ bool ApplySceneJsonImpl(World& world, AssetLibrary& assets, const json& root,
                 world.Registry.emplace_or_replace<TagComponent>(rootE, s["tag"].get<std::string>());
             if (s.value("sceneHidden", false)) world.Registry.emplace_or_replace<HiddenInSceneTag>(rootE); // #122
             if (s.value("sceneLocked", false)) world.Registry.emplace_or_replace<SceneLockedTag>(rootE);
+            ReadHierStyle(s, world, rootE);
 
             // #302 Part B — overrides: replay onto the freshly rebuilt subtree, by prefab-local
             // index into instCreated (== the .prefab file's entity order). Two passes so a field
