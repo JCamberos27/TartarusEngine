@@ -1483,6 +1483,7 @@ void EditorLayer::DrawFavoritesOverlay(World& world, AssetLibrary& assets) {
     if (holdDown && !m_FavWaitRelease && m_FavHoldStart < 0.0 && overPanel) m_FavHoldStart = now;
     const bool want = m_FavLocked || (holdDown && !m_FavWaitRelease && m_FavHoldStart >= 0.0 && now - m_FavHoldStart >= 0.12 && (overPanel || wasVisible));
     m_FavAlpha = std::clamp(m_FavAlpha + (want ? 1.0f : -1.0f) * io.DeltaTime * 9.0f, 0.0f, 1.0f);
+    if (!want) m_FavRenaming = -1; // a rename left open must not grab the keys when it reopens
     if (m_FavAlpha <= 0.01f) return;
     m_FavVisible = true;
 
@@ -1595,7 +1596,11 @@ void EditorLayer::DrawFavoritesOverlay(World& world, AssetLibrary& assets) {
         if (EditorUIPrimitives::ActionButton(ICON_FA_PLUS, "New page", &Tip, false, ImVec2(h, h))) {
             pages.push_back(Enhancers::FavoritePage{"Page " + std::to_string(pageCount + 1), {}});
             us.MarkDirty();
-            switchPage(pageCount);
+            // Straight to the new page (switchPage wraps by the page count from before the add).
+            m_FavAnimDir = 1;
+            m_FavAnimStart = now;
+            m_FavPage = pageCount;
+            m_FavHighlight = -1;
             m_FavRenaming = pageCount;
             std::snprintf(m_FavRenameBuf, sizeof(m_FavRenameBuf), "%s", pages.back().Name.c_str());
         }

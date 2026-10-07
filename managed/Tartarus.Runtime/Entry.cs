@@ -174,6 +174,23 @@ public static unsafe class Entry
         if (instances.TryGetValue(Key(entity, slot), out var live) && live.Class == name) return live.Script;
         return Make(assembly!, entity, slot, name, root.TryGetProperty("fields", out var f) ? f.GetString() ?? "{}" : "{}");
     }
+    // For EditorHost (custom inspectors): the same as ops 13 / 14, from managed code.
+    internal static string? RunScriptMethod(string className, string fields, uint entity, uint slot, string method, out bool ran)
+    {
+        ran = false;
+        if (assembly == null) return null;
+        Script s = instances.TryGetValue(Key(entity, slot), out var live) && live.Class == className ? live.Script
+                 : Make(assembly, entity, slot, className, fields);
+        ran = ScriptFields.Invoke(s, method);
+        return ScriptFields.Save(s);
+    }
+    internal static Dictionary<string, string> ScriptShowValues(string className, string fields, uint entity, uint slot)
+    {
+        if (assembly == null) return new();
+        Script s = instances.TryGetValue(Key(entity, slot), out var live) && live.Class == className ? live.Script
+                 : Make(assembly, entity, slot, className, fields);
+        return System.Text.Json.JsonSerializer.Deserialize<Dictionary<string, string>>(ScriptFields.ShowValues(s)) ?? new();
+    }
     static void InvokeEditorMethod(ref NativeRequest request)
     {
         using var doc = System.Text.Json.JsonDocument.Parse(Utf8(request.Text));

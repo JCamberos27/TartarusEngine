@@ -147,6 +147,8 @@ struct EditorUiTestAccess {
     static const std::set<std::string>& Picked(EditorLayer& e) { return e.m_InspectorPickedComponents; }
     static const std::vector<std::string>& Clipboard(EditorLayer& e) { return e.m_ComponentClipboard; }
     static const std::vector<Enhancers::PlayKeep>& Keeps(EditorLayer& e) { return e.m_PlayKeep; }
+    static ImGuiID Removing(EditorLayer& e) { return e.m_RemovingSection; }
+    static std::string HoverSection(EditorLayer& e) { return e.m_HoverSection.Label; }
     static bool RulerHeld(EditorLayer& e) { return e.m_RulerHeld; }
     static entt::entity RulerHit(EditorLayer& e) { return e.m_RulerHitEntity; }
     static entt::entity RulerBounds(EditorLayer& e) { return e.m_RulerBounds; }
@@ -227,6 +229,7 @@ struct Query {
     std::string Label;  // matched against the visible label (contains)
     std::string Exact;  // the whole raw label must equal this
     std::string Tag;    // EditorTestTag name (equal)
+    std::string TagPrefix; // EditorTestTag name starts with this (text fields add "=<value>")
     std::string Root;   // the item's root window name contains this ("" = any)
     std::function<bool(const UiItem&)> Pred;
     int Nth = 0;        // which match (top-to-bottom, left-to-right)
@@ -236,11 +239,13 @@ Query ByExact(std::string label, std::string root = {}, int nth = 0) {
     Query q; q.Exact = std::move(label); q.Root = std::move(root); q.Nth = nth; return q;
 }
 Query ByTag(std::string tag) { Query q; q.Tag = std::move(tag); return q; }
+Query ByTagPrefix(std::string prefix) { Query q; q.TagPrefix = std::move(prefix); return q; }
 
 std::vector<const UiItem*> FindAll(const Query& q) {
     std::vector<const UiItem*> out;
     for (const UiItem& it : g_Reg.Last) {
         if (!q.Tag.empty() && it.Tag != q.Tag) continue;
+        if (!q.TagPrefix.empty() && it.Tag.compare(0, q.TagPrefix.size(), q.TagPrefix) != 0) continue;
         if (!q.Exact.empty() && it.Label != q.Exact) continue;
         if (!q.Label.empty() && !Contains(Visible(it.Label), q.Label)) continue;
         if (!q.Root.empty() && !Contains(it.Root, q.Root)) continue;
@@ -284,6 +289,16 @@ Step Wait(int frames) {
     auto n = std::make_shared<int>(0);
     return {"wait " + std::to_string(frames), [n, frames](Ctx&) { return ++*n >= frames; }, frames + 5};
 }
+// Real time, not frames: a hidden test window runs far faster than 60 Hz, so fades and hold
+// delays need seconds.
+Step WaitSeconds(double seconds) {
+    auto until = std::make_shared<double>(-1.0);
+    return {"wait " + std::to_string(seconds) + "s", [until, seconds](Ctx&) {
+        const double now = ImGui::GetTime();
+        if (*until < 0.0) *until = now + seconds;
+        return now >= *until;
+    }, 100000};
+}
 Step Until(std::string name, std::function<bool(Ctx&)> pred, int timeout = 120) {
     return {std::move(name), std::move(pred), timeout};
 }
@@ -314,8 +329,6 @@ Step MoveToItem(Query q) {
         const UiItem* it = Find(q);
         ImVec2 p;
         if (!it || !ClickPoint(*it, p)) return false;
-        std::printf("    [move] '%s' win='%s' (%.0f,%.0f)-(%.0f,%.0f) -> (%.0f,%.0f)\n", it->Label.c_str(), it->Window.c_str(),
-                    it->Rect.Min.x, it->Rect.Min.y, it->Rect.Max.x, it->Rect.Max.y, p.x, p.y);
         MouseTo(p);
         return true;
     }, 90};
@@ -468,7 +481,7 @@ const char* kScene = "###Scene";
 // The centre of a docked panel's window, or false if it isn't shown.
 bool PanelCentre(const char* name, ImVec2& out) {
     for (ImGuiWindow* w : ImGui::GetCurrentContext()->Windows)
-        if (w->WasActive && !w->Hidden && Contains(w->Name, name) && !(w->Flags & ImGuiWindowFlags_ChildWindow)) {
+        if (w->WasActive && !w->Hidden && Contains(w->Name, name) && !Contains(w->Name, "/")) {
             out = w->InnerRect.GetCenter();
             return true;
         }
@@ -732,20 +745,20 @@ void RegisterTests() {
         FreshScene(), Wait(2),
         SelectByName("Beta"), Wait(3),
         MoveToItem(Header("Light")), Wait(2),
-        Key(ImGuiKey_E, ImGuiMod_Shift), Wait(3),
+        Key(ImGuiKey_E, ImGuiMod_Shift), WaitSeconds(0.3),
         Expect("isolated Light", [](Ctx&) {
             const int l = SectionOpen("Light"), a = SectionOpen("Audio Source"), t = SectionOpen("Transform");
             return l == 1 && a == 0 && t == 0 ? std::string()
                 : "Light=" + std::to_string(l) + " Audio=" + std::to_string(a) + " Transform=" + std::to_string(t);
         }),
         MoveToItem(Header("Light")), Wait(2),
-        Key(ImGuiKey_E, ImGuiMod_Ctrl | ImGuiMod_Shift), Wait(4),
+        Key(ImGuiKey_E, ImGuiMod_Ctrl | ImGuiMod_Shift), WaitSeconds(0.3),
         ExpectTrue("all collapsed", [](Ctx&) { return SectionOpen("Light") == 0 && SectionOpen("Transform") == 0; }),
-        Key(ImGuiKey_E, ImGuiMod_Ctrl | ImGuiMod_Shift), Wait(4),
+        Key(ImGuiKey_E, ImGuiMod_Ctrl | ImGuiMod_Shift), WaitSeconds(0.3),
         ExpectTrue("all expanded", [](Ctx&) { return SectionOpen("Light") == 1 && SectionOpen("Audio Source") == 1; }),
-        Key(ImGuiKey_E, ImGuiMod_Ctrl | ImGuiMod_Shift), Wait(4), // collapse again so the header stays put
+        Key(ImGuiKey_E, ImGuiMod_Ctrl | ImGuiMod_Shift), WaitSeconds(0.3), // collapse again so the header stays put
         MoveToItem(Header("Audio Source")), Wait(2),
-        Key(ImGuiKey_X), Wait(20),
+        Key(ImGuiKey_X), WaitSeconds(0.4),
         ExpectTrue("Audio Source removed after the fade", [](Ctx& c) { return !c.W.Registry.all_of<AudioSourceComponent>(ByName(c.W, "Beta")); }),
         Key(ImGuiKey_Z, ImGuiMod_Ctrl), Wait(3),
         ExpectTrue("undo restores it", [](Ctx& c) { return c.W.Registry.all_of<AudioSourceComponent>(ByName(c.W, "Beta")); }),
@@ -834,6 +847,8 @@ void RegisterTests() {
     });
 
     // ------------------------------------------------------------------ 10. C# script attributes
+    // The project's assets/Editor has a [CustomEditor("*")] for every script, so this exercises the
+    // managed inspector path (SerializedProperty / PropertyField / EditorHost) - what the user sees.
     Add("attributes: C# script attributes, buttons, OnValueChanged, dictionary, read-outs", {
         FreshScene(),
         Do("load the test assembly and attach AttributeProbe", [](Ctx& c) {
@@ -848,37 +863,37 @@ void RegisterTests() {
         SelectByName("Alpha"), Wait(3),
         Click(Header("C# Script")), Wait(4),
         ExpectTrue("Hits is read-only", [](Ctx&) { const UiItem* f = Find(ByTag("cs:Hits")); return f && (f->ItemFlags & ImGuiItemFlags_Disabled); }),
-        ExpectTrue("Note hidden while Advanced is off", [](Ctx&) { return Find(ByTag("cs:Note")) == nullptr; }),
+        ExpectTrue("Note hidden while Advanced is off", [](Ctx&) { return Find(ByTagPrefix("cs:Note=")) == nullptr; }),
         ExpectTrue("Boost enabled (Mode = Slow)", [](Ctx&) { const UiItem* f = Find(ByTag("cs:Boost")); return f && !(f->ItemFlags & ImGuiItemFlags_Disabled); }),
         ExpectTrue("Script / Source rows moved under Advanced", [](Ctx&) { return Find(ByExact("##class", kInspector)) == nullptr; }),
         Click(ByTag("cs:Advanced")), Wait(3),
-        ExpectTrue("Note shown once Advanced is on", [](Ctx&) { return Find(ByTag("cs:Note")) != nullptr; }),
-        Click(ByLabel("Tuning", kInspector)), Wait(3),
-        Click(ByLabel("Motion", kInspector)), Wait(3),
-        Click(ByTag("cs:Speed=5")), Wait(3),
+        ExpectTrue("Note shown once Advanced is on", [](Ctx&) { return Find(ByTagPrefix("cs:Note=")) != nullptr; }),
+        Do("Mode = Off", [](Ctx& c) {
+            auto& comp = c.W.Registry.get<CSharpScriptComponent>(ByName(c.W, "Alpha"));
+            auto slots = Scripting::GetSlots(comp);
+            nlohmann::json f = nlohmann::json::parse(slots[0].Fields, nullptr, false);
+            if (!f.is_object()) f = nlohmann::json::object();
+            f["Mode"] = 0;
+            slots[0].Fields = f.dump();
+            Scripting::SetSlots(comp, slots);
+        }), Wait(3),
+        ExpectTrue("Boost greyed out while Mode = Off", [](Ctx&) { const UiItem* f = Find(ByTag("cs:Boost")); return f && (f->ItemFlags & ImGuiItemFlags_Disabled); }),
+        Click(ByExact("5##Speed", kInspector)), Wait(3),
         ExpectTrue("variant chip set Speed = 5", [](Ctx& c) { return ScriptField(c, "Speed") == nlohmann::json(5.0); }),
         Click(ByLabel("DoubleSpeed", kInspector)), Wait(3),
         ExpectTrue("DoubleSpeed button ran (10)", [](Ctx& c) { return ScriptField(c, "Speed") == nlohmann::json(10.0); }),
-        Click(ByTag("cs:MaxSpeed"), ImGuiMod_Ctrl), Wait(3), // Ctrl+click: type a value
-        TypeText("4"), Key(ImGuiKey_Enter), Wait(3),
+        Click(ByTag("cs:Max Speed"), ImGuiMod_Ctrl), Wait(3), // Ctrl+click: type a value
+        TypeText("4"), Key(ImGuiKey_Enter), Wait(4),
         ExpectTrue("OnValueChanged clamped Speed to MaxSpeed", [](Ctx& c) { return ScriptField(c, "Speed") == nlohmann::json(4.0); }),
         Click(ByLabel("Reset Hits", kInspector)), Wait(3),
         ExpectTrue("Reset Hits ran", [](Ctx& c) { return ScriptField(c, "Hits") == nlohmann::json(0); }),
         Key(ImGuiKey_Z, ImGuiMod_Ctrl), Wait(3),
         ExpectTrue("undo brings Hits back", [](Ctx& c) { const auto v = ScriptField(c, "Hits"); return v.is_null() || v == nlohmann::json(3); }),
-        Click(ByExact("##newkey", kInspector)), Wait(2),
+        Click(ByTagPrefix("cs:New key##Weights=")), Wait(2),
         TypeText("legs"), Wait(2),
-        Click(PlusBesideNewKey()), Wait(3),
+        Click(ByExact("Add##Weights", kInspector)), Wait(3),
         ExpectTrue("dictionary key added", [](Ctx& c) { const auto w = ScriptField(c, "Weights"); return w.is_object() && w.contains("legs") && w.contains("head"); }),
-        Until("read-out shows Doubled", [](Ctx& c) {
-            const auto* comp = c.W.Registry.try_get<CSharpScriptComponent>(ByName(c.W, "Alpha"));
-            if (!comp) return false;
-            const auto slots = Scripting::GetSlots(*comp);
-            if (slots.empty()) return false;
-            for (const auto& [k, v] : X::ShowValues(c.E, slots[0].Id, (std::uint32_t)entt::to_integral(ByName(c.W, "Alpha"))))
-                if (k == "Doubled" && v == "8") return true;
-            return false;
-        }, 90),
+        Until("read-out shows Doubled = 8", [](Ctx&) { return Find(ByTag("cs:Doubled##show=8")) != nullptr; }, 5000),
     });
 
     // ------------------------------------------------------------------ 11. Inspector tabs
@@ -891,10 +906,13 @@ void RegisterTests() {
             if (s.Tabs.size() != 1 || s.Active != 0) return "tabs=" + std::to_string(s.Tabs.size()) + " active=" + std::to_string(s.Active);
             return s.Tabs[0].Label == "Gamma" ? std::string() : "tab is " + s.Tabs[0].Label;
         }),
-        Expect("selection unchanged", [](Ctx& c) { return ExpectSelected(c, "Alpha"); }),
-        ExpectTrue("Inspector shows Gamma (its Light section)", [](Ctx&) { return Find(Header("Light")) != nullptr; }),
-        SelectByName("Beta"), Wait(3),
-        ExpectTrue("back on Selection", [](Ctx&) { return Enhancers::TabState::Get().Inspector.Active == -1; }),
+        SelectByName("Alpha"), Wait(3),
+        ExpectTrue("selecting returned to Selection", [](Ctx&) { return Enhancers::TabState::Get().Inspector.Active == -1; }),
+        ExpectTrue("Selection shows Alpha (no Light)", [](Ctx&) { return Find(Header("Light")) == nullptr; }),
+        Click(ByExact("##tab", kInspector, 1)), Wait(3),
+        ExpectTrue("the Gamma tab is active again", [](Ctx&) { return Enhancers::TabState::Get().Inspector.Active == 0; }),
+        Expect("selection still Alpha", [](Ctx& c) { return ExpectSelected(c, "Alpha"); }),
+        ExpectTrue("the tab shows Gamma (its Light section)", [](Ctx&) { return Find(Header("Light")) != nullptr; }),
     });
     Add("tabs: Ctrl+T pins, Ctrl+W closes, Ctrl+Shift+T reopens (over the Inspector)", {
         FreshScene(), Wait(2),
@@ -965,12 +983,12 @@ void RegisterTests() {
     Add("favorites: hold Alt over the Asset Browser shows the overlay", {
         FreshScene(), Wait(2),
         HoverPanel(kAssets), Wait(2),
-        KeyDown(ImGuiKey_None, ImGuiMod_Alt), Wait(20),
+        KeyDown(ImGuiKey_None, ImGuiMod_Alt), WaitSeconds(0.5),
         ExpectTrue("visible while held", [](Ctx& c) { return X::FavVisible(c.E); }),
-        KeyUp(ImGuiKey_None, ImGuiMod_Alt), Wait(20),
+        KeyUp(ImGuiKey_None, ImGuiMod_Alt), WaitSeconds(0.5),
         ExpectTrue("hidden after release", [](Ctx& c) { return !X::FavVisible(c.E); }),
         HoverPanel(kHierarchy), Wait(2),
-        KeyDown(ImGuiKey_None, ImGuiMod_Alt), Wait(20),
+        KeyDown(ImGuiKey_None, ImGuiMod_Alt), WaitSeconds(0.5),
         ExpectTrue("Alt elsewhere does nothing", [](Ctx& c) { return !X::FavVisible(c.E); }),
         KeyUp(ImGuiKey_None, ImGuiMod_Alt), Wait(2),
     });
@@ -984,27 +1002,28 @@ void RegisterTests() {
         }),
         SelectByName("Alpha"), Wait(2),
         HoverPanel(kAssets), Wait(2),
-        Key(ImGuiKey_F, ImGuiMod_Ctrl | ImGuiMod_Alt), Wait(15),
+        Key(ImGuiKey_F, ImGuiMod_Ctrl | ImGuiMod_Alt), WaitSeconds(0.4),
         ExpectTrue("locked open", [](Ctx& c) { return X::FavVisible(c.E) && X::FavLocked(c.E); }),
         Click(ByExact("##fav", "##vFavorites")), Wait(3),
         Expect("opened Gamma", [](Ctx& c) { return ExpectSelected(c, "Gamma"); }),
-        Wait(15),
+        WaitSeconds(0.4),
         ExpectTrue("overlay closed", [](Ctx& c) { return !X::FavVisible(c.E); }),
     });
     Add("favorites: pages, number keys, and no Alt shortcuts while open", {
         FreshScene(), Wait(2),
         HoverPanel(kAssets), Wait(2),
-        Key(ImGuiKey_F, ImGuiMod_Ctrl | ImGuiMod_Alt), Wait(15),
+        Key(ImGuiKey_F, ImGuiMod_Ctrl | ImGuiMod_Alt), WaitSeconds(0.4),
         Click(ByExact("+", "##vFavorites")), Wait(3),
         ExpectTrue("a second page", [](Ctx& c) { return Enhancers::EnhancerUserState::Get().FavoritePages.size() == 2 && X::FavPage(c.E) == 1; }),
-        Key(ImGuiKey_Escape), Wait(2), // ends the page rename, keeps the overlay (still locked? Esc closes it)
-        Key(ImGuiKey_F, ImGuiMod_Ctrl | ImGuiMod_Alt), Wait(15),
+        TypeText("Level"), Key(ImGuiKey_Enter), Wait(3), // the new page starts in rename
+        ExpectTrue("renamed", [](Ctx&) { return Enhancers::EnhancerUserState::Get().FavoritePages[1].Name == "Level"; }),
+        ExpectTrue("still open", [](Ctx& c) { return X::FavVisible(c.E); }),
         Key(ImGuiKey_1, ImGuiMod_Alt), Wait(2),
         ExpectTrue("Alt+1 picked page 1", [](Ctx& c) { return X::FavPage(c.E) == 0; }),
         ExpectTrue("and did not focus the Hierarchy", [](Ctx&) { return !Shortcuts::Triggered("panel.focus.hierarchy"); }),
         Key(ImGuiKey_RightArrow), Wait(2),
         ExpectTrue("Right arrow -> page 2", [](Ctx& c) { return X::FavPage(c.E) == 1; }),
-        Key(ImGuiKey_Escape), Wait(15),
+        Key(ImGuiKey_Escape), WaitSeconds(0.4),
         ExpectTrue("Esc closed it", [](Ctx& c) { return !X::FavVisible(c.E); }),
     });
     Add("favorites: the asset star is a favorite and undoes", {

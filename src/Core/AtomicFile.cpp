@@ -146,6 +146,12 @@ bool WriteBytes(const std::filesystem::path& path, std::string_view bytes, bool 
         if (MoveFileExW(temp.c_str(), path.c_str(), MOVEFILE_REPLACE_EXISTING | MOVEFILE_WRITE_THROUGH))
             return true;
         err = GetLastError();
+        // An EFS-encrypted folder (new folders under an encrypted %LOCALAPPDATA% inherit it) refuses
+        // the plain rename with ERROR_NOT_SAME_DEVICE even within one directory. Letting Windows copy
+        // then delete still replaces the destination in one call and never deletes it first.
+        if (err == ERROR_NOT_SAME_DEVICE &&
+            MoveFileExW(temp.c_str(), path.c_str(), MOVEFILE_REPLACE_EXISTING | MOVEFILE_WRITE_THROUGH | MOVEFILE_COPY_ALLOWED))
+            return true;
         if (err != ERROR_SHARING_VIOLATION && err != ERROR_ACCESS_DENIED && err != ERROR_LOCK_VIOLATION)
             break;
         std::this_thread::sleep_for(std::chrono::milliseconds(25 * (attempt + 1)));

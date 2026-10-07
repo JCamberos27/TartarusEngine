@@ -4108,7 +4108,7 @@ void EditorLayer::DrawReflectedComponentExtra(const char* componentName, World& 
                         Json fields=Json::parse(slot.Fields,nullptr,false);
                         if(!fields.is_object()) { ImGui::TextWrapped("Saved fields are invalid. Editing a field below will repair them."); fields=Json::object(); }
                         const auto beforeCustom=slot.Fields;
-                        const bool custom=metadata.contains("fields") && DrawManagedInspector(world,scriptAssets,entity,slot.Class,&slot.Fields,metadata.dump());
+                        const bool custom=metadata.contains("fields") && DrawManagedInspector(world,scriptAssets,entity,slot.Class,&slot.Fields,metadata.dump(),slot.Id);
                         if(custom && slot.Fields!=beforeCustom) Scripting::SetSlots(*component,slots);
                         const Json noFields=Json::array();
                         const Json& fieldList=metadata.contains("fields")?metadata.at("fields"):noFields;
