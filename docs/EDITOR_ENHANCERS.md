@@ -447,9 +447,14 @@ Hold **Alt** with the mouse over the Asset Browser: after a moment, the favorite
 the panel; release Alt to hide it. **Ctrl+Alt+F** (or the pin in its corner) keeps it open; Esc
 closes it. If the Asset Browser is closed, a locked overlay opens in the middle of the window.
 
+The overlay is a card over the dimmed Asset Browser: it fades, rises and scales in. The header
+shows the page pills (a sliding indicator marks the shown page) and the lock. Each item is a tile
+with an icon badge in its colour, its name and its path or kind; hovering lifts it, and a focus
+ring shows only while the keyboard drives the highlight. The footer lists the keys.
+
 * **Pages.** Favorites live on named pages. Click a page chip to show it, double-click (or
-  right-click > Rename) to rename, right-click to move or delete it, "+" to add one. Pages slide
-  in when you switch.
+  right-click > Rename) to rename, right-click to move or delete it, "+" to add one. The old page
+  slides and fades out while the new one slides in.
 * **Navigation.** 1-9 pick a page, Left / Right step through pages, the mouse wheel moves one page
   per notch, Up / Down highlight an item and Enter opens it.
 * **Items.** Folders, assets and Hierarchy objects, with their vFolders / vHierarchy icons and

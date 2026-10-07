@@ -458,6 +458,9 @@ public:
     char   m_FavRenameBuf[64] = {};
     int    m_FavHighlight = -1;      // Up/Down keyboard highlight on the shown page
     float  m_FavWheel = 0.0f;
+    int    m_FavPrevPage = -1;       // the page sliding out during a switch
+    bool   m_FavKeyNav = false;      // the keyboard is driving the highlight (shows the focus ring)
+    float  m_FavPillX = 0.0f, m_FavPillW = 0.0f; // the page indicator, gliding to the shown page
     std::string m_FavPendingScene;   // an entity favorite in another scene: select it once that scene is open
     int    m_FavPendingOrder = -1;
     // The Asset Browser's favourite stars are now "is this asset on any favorites page":
