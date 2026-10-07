@@ -270,6 +270,7 @@ struct EditorSettings {
     bool HierarchyZebra      = true;
     bool HierarchyMinimap    = true;
     int  HierarchyMinimapMax = 5;
+    int  HierarchyMinimapWhen = 1;  // 0 = every row, 1 = hovered and selected rows only
     bool HierarchyNavBar     = true;
     // vFolders. Styles: per-folder icons/colours, rules and automatic content icons. RowWash: a
     // styled folder's colour also tints its tree row. Minimap: icons of what a folder holds.
