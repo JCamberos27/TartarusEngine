@@ -14,7 +14,7 @@ Status by phase:
 | 1 | vHierarchy: row styles, separators, tree lines, component minimap, scene selector, nav bar, hover keys | Done |
 | 2 | vFolders: folder styles, rules, auto icons, content minimap, bookmarks | Done |
 | 3a | vInspector: nav bar, identity-based selection history, floating component windows, multi-component copy/paste, keep play-mode changes, hover keys, animations | Done |
-| 3b | vInspector: field attributes (C++ and C#) | Planned |
+| 3b | vInspector: field attributes (C++ and C#), Reset to Default, C# buttons / read-outs / dictionaries | Done |
 | 4 | vTabs: tab strips in the Inspector and Asset Browser | Planned |
 | 5 | vFavorites: hold-Alt favorites overlay with pages | Planned |
 | 6 | vRuler: Shift+R surface, bounds and reference-object measuring | Planned |
@@ -320,6 +320,47 @@ Over the Inspector:
   over 150 ms before a removal. A section's height is measured the first time it is shown fully
   open, so the very first open isn't animated.
 * **Minimal mode**: a section's "..." button shows only while its header is hovered, like the x.
+
+### Field attributes (C++ components)
+
+Reflected components (`ComponentRegistry.cpp`) can set these on a `ReflectField`. Each is a member
+appended at the end of the struct, so existing brace-initialized registrations are unchanged.
+`src/Game/ReflectAttributes.h` has a fluent builder:
+
+```cpp
+m.Fields = {
+    Field("Speed", T::Float, TARTARUS_REFLECT_FIELD(Mover, Speed)).Range(0, 20).Tab("Motion"),
+    Field("Debug Id", T::Int, TARTARUS_REFLECT_FIELD(Mover, DebugId)).ReadOnly().NonSerialized(),
+};
+Attr(m, "Max Distance").EnableIf("3D Sound", 1); // a field already in the list
+```
+
+| Attribute | Effect |
+| --- | --- |
+| `ReadOnly` | Greyed out; still saved. |
+| `EnableIf(field, value, negate)` | Greyed out unless the sibling Bool / Int / Enum field matches. `VisibleIf` (existing) hides instead. |
+| `ShowIf(pred)` / `EnableWhen(pred)` | Hide / grey out on a `bool(*)(const void* component)` predicate. |
+| `Tab(name)` | Fields sharing a tab render under one tab, after the untabbed fields (single selection; multi-select is flat). |
+| `OnChanged(fn)` | `void(*)(World&, entt::entity, void* component)`, called after an Inspector edit changed the value. |
+| `Variants(values, count, labels)` | One-click chips under an Int / Float / Enum field. |
+| `NonSerialized` | Drawn, but never written to or read from scenes, prefabs or presets. |
+
+A component can also list `Buttons` (each runs after one undo step) and `Statics` (computed
+read-only lines). Every registered component records a default instance, so **right-clicking any
+field row offers Reset to Default**. `EvaluateFieldState` resolves visibility and greying, and is
+unit tested.
+
+Audio Source uses this: Volume Rolloff, Min / Max Distance and Doppler Level grey out unless
+3D Sound is on.
+
+### Field attributes (C# scripts)
+
+`[Foldout]`, `[Tab]`, `[ReadOnly]`, `[HideIf]`, `[DisableIf]`, `[Variants]`, `[OnValueChanged]`,
+`[Button]`, `[ShowInInspector]` and `Dictionary<string, scalar>` fields. See
+[SCRIPTING_API.md](SCRIPTING_API.md) for each. The Inspector reads them from the class
+description, which is now parsed once per class and dropped on every assembly reload, instead of
+every frame. Buttons and `[OnValueChanged]` use op 13 and the read-outs use op 14, through the
+existing JSON request, so the ABI version is unchanged.
 
 ## Shortcut changes
 
