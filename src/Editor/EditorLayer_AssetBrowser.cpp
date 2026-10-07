@@ -1513,6 +1513,7 @@ std::string EditorLayer::AssetBrowserTreeFrameSetup(AssetLibrary& assets) {
     assets.CreateFolder("Scenes");
     assets.CreateFolder("Screenshots");
     RefreshProjectAssetIndexIfNeeded(assets); // registers the folders of files nothing has loaded yet
+    InstallFolderPathHook(assets); // vFolders: styles + bookmarks follow a renamed / deleted folder
 
     std::string reveal;
     if (m_CurrentAssetFolder != m_AssetFolderTreeRevealed) {
@@ -1842,6 +1843,14 @@ void EditorLayer::DrawAssetCell(World& world, AssetLibrary& assets, int index, f
             : cell.kind == Cell::Kind::Script ? ICON_FA_SCROLL
             : (playing ? ICON_FA_STOP : ICON_FA_MUSIC);
 
+        // Editor Enhancers / vFolders: a folder tile shows its resolved icon, colour and content.
+        EditorFolderVisual folderVis;
+        if (isFolder) {
+            GetFolderVisual(assets, cell.key, folderVis);
+            if (folderVis.Icon[0]) icon = folderVis.Icon;
+        }
+        const ImU32 folderTint = (isFolder && folderVis.Color) ? (folderVis.Color | 0xFF000000u) : 0u;
+
         // The asset-type colour: the tile's bottom stripe in Grid view.
         auto kindColor = [&]() -> ImVec4 {
             switch (cell.kind) {
@@ -1934,7 +1943,15 @@ void EditorLayer::DrawAssetCell(World& world, AssetLibrary& assets, int index, f
                 ImFont* font = ImGui::GetFont();
                 ImVec2 glyphSize = font->CalcTextSizeA(m_AssetIconSize, FLT_MAX, 0.0f, icon);
                 ImVec2 glyphPos(tileMin.x + (cellWidth - glyphSize.x) * 0.5f, tileMin.y + cellPadding * 0.5f + (m_AssetIconSize - glyphSize.y) * 0.5f);
-                dl->AddText(font, m_AssetIconSize, glyphPos, textColor, icon);
+                dl->AddText(font, m_AssetIconSize, glyphPos, folderTint ? folderTint : textColor, icon);
+                // vFolders content minimap: what a plain folder holds, stamped small along its glyph's foot.
+                if (isFolder && !folderVis.Icon[0] && folderVis.MiniCount > 0 && EditorSettings::Get().FolderMinimap) {
+                    const float ms = std::max(9.0f, m_AssetIconSize * 0.22f);
+                    float mx = tileMin.x + (cellWidth - folderVis.MiniCount * ms * 1.25f) * 0.5f;
+                    const float my = tileMin.y + cellPadding * 0.5f + m_AssetIconSize - ms * 0.9f;
+                    for (int k = 0; k < folderVis.MiniCount; ++k, mx += ms * 1.25f)
+                        dl->AddText(font, ms, ImVec2(mx, my), EditorTheme::U32(EditorTheme::Base), folderVis.Mini[k]);
+                }
             }
 
             // Favourite star badge, top-right of the tile (#236 G).
@@ -2012,6 +2029,8 @@ void EditorLayer::DrawAssetCell(World& world, AssetLibrary& assets, int index, f
                 ImGui::Image((ImTextureID)(intptr_t)cell.texture->GLHandle(), ImVec2(rowIconSize, rowIconSize));
             } else if (rowModelThumb) {
                 ImGui::Image((ImTextureID)(intptr_t)rowModelThumb, ImVec2(rowIconSize, rowIconSize), ImVec2(0, 1), ImVec2(1, 0));
+            } else if (folderTint) {
+                ImGui::TextColored(ImGui::ColorConvertU32ToFloat4(folderTint), "%s", icon);
             } else {
                 ImGui::TextUnformatted(icon);
             }
@@ -2157,6 +2176,7 @@ void EditorLayer::DrawAssetCell(World& world, AssetLibrary& assets, int index, f
             }
         }
 
+        if (isFolder && ImGui::IsItemHovered()) SetHoveredAssetFolder(cell.key); // vFolders hover keys
         if (!isRenaming && ImGui::IsItemHovered()) {
             if (cell.kind == Cell::Kind::Model) {
                 EditorUI::SetTooltip("%s\n\nDrag into the viewport to place\n\n%s",
@@ -2313,6 +2333,10 @@ void EditorLayer::DrawAssetCell(World& world, AssetLibrary& assets, int index, f
                 ClearAssetSelection();
                 m_SelectedAssetKey = cell.key;
                 m_SelectedAssetIsFolder = isFolder;
+            }
+            if (isFolder && ImGui::BeginMenu(ICON_FA_PALETTE "  Folder Style & Bookmark")) { // vFolders
+                DrawFolderContextMenuBody(world, assets, cell.key);
+                ImGui::EndMenu();
             }
             EditorUIPrimitives::SectionHeader(ICON_FA_PEN "  Edit");
             if (ImGui::MenuItem(ICON_FA_PEN "  Rename (F2)", nullptr, false, m_ExtraAssetSelection.empty())) {

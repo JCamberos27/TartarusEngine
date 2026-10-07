@@ -24,6 +24,7 @@
 #include <IconsFontAwesome6.h>
 
 #include <algorithm>
+#include <cmath>
 #include <cctype>
 #include <cstdio>
 #include <cstring>
@@ -154,12 +155,22 @@ std::string UniqueNewFolder(const std::vector<std::string>& folders, const std::
     return candidate;
 }
 
+// What a drawn folder row tells its parent, so the parent can draw the tree lines joining them.
+struct FolderRowGeom { float MidY = 0.0f; float LeftX = 0.0f; };
+
 // Ported from EditorLayer::DrawFolderTreeNode. `folders` is this frame's snapshot; `curFolder`
 // and `reveal` come from the host. Selection / expansion / drag-drop all route through host
 // callbacks — nothing is mutated locally.
-void DrawFolderNode(const EditorModuleHostAPI& host, const std::vector<std::string>& folders,
-                    const std::string& folderPath, bool isRoot,
-                    const std::string& curFolder, const std::string& reveal) {
+//
+// Editor Enhancers / vFolders (API v40): the row is a label-less TreeNode (it keeps the arrow,
+// hit box, selection and drag/drop); the icon, name and content minimap are painted over it at
+// GetTreeNodeToLabelSpacing() - the same approach as the Hierarchy's rows - so the icon can take
+// the folder's colour without tinting the name. A colour wash / zebra stripe goes on a draw-list
+// channel underneath the node's own selection highlight.
+FolderRowGeom DrawFolderNode(const EditorModuleHostAPI& host, const std::vector<std::string>& folders,
+                             const std::string& folderPath, bool isRoot,
+                             const std::string& curFolder, const std::string& reveal,
+                             unsigned flags, int& rowIndex) {
     std::vector<std::string> children;
     for (const auto& f : folders)
         if (ParentFolderOf(f) == folderPath) children.push_back(f);
@@ -180,17 +191,69 @@ void DrawFolderNode(const EditorModuleHostAPI& host, const std::vector<std::stri
     if (!hasChildren) nodeFlags |= ImGuiTreeNodeFlags_Leaf | ImGuiTreeNodeFlags_NoTreePushOnOpen;
     if (isRoot) nodeFlags |= ImGuiTreeNodeFlags_DefaultOpen;
 
-    const std::string label = std::string(isRoot ? ICON_FA_FOLDER_TREE : ICON_FA_FOLDER) + "  " +
-                              (isRoot ? "Assets" : LeafNameOf(folderPath));
+    EditorFolderVisual vis;
+    if (!isRoot && host.GetFolderVisual) host.GetFolderVisual(folderPath.c_str(), &vis);
+    const bool styled = (flags & kFolderTreeStyles) != 0;
+    const char* glyph = isRoot ? ICON_FA_FOLDER_TREE
+                      : (styled && vis.Icon[0]) ? vis.Icon
+                      : (flags & kFolderTreeMinimal) ? nullptr
+                      : (wasExpanded && hasChildren) ? ICON_FA_FOLDER_OPEN : ICON_FA_FOLDER;
+    const std::string name = isRoot ? std::string("Assets") : LeafNameOf(folderPath);
+    const int myRow = rowIndex++;
 
     ImGui::PushID(folderPath.c_str());
+    ImDrawList* dl = ImGui::GetWindowDrawList();
+    dl->ChannelsSplit(2);
+    dl->ChannelsSetCurrent(1);
     // NoNav (Defect #43): the host's own Enter/Backspace/Left/Right folder-traversal block
     // (EditorLayer.cpp) already drives m_CurrentAssetFolder/m_ExpandedAssetFolders off these same
     // keys — without this flag, ImGui's keyboard nav would also toggle whichever row last got
     // mouse focus, independently of m_CurrentAssetFolder, once NavEnableKeyboard is on.
     ImGui::PushItemFlag(ImGuiItemFlags_NoNav, true);
-    const bool open = ImGui::TreeNodeEx("##node", nodeFlags, "%s", label.c_str());
+    const bool open = ImGui::TreeNodeEx("##node", nodeFlags);
     ImGui::PopItemFlag();
+    const ImVec2 rmin = ImGui::GetItemRectMin(), rmax = ImGui::GetItemRectMax();
+    const bool rowHovered = ImGui::IsItemHovered();
+
+    // Underneath the node (channel 0): zebra stripe, then the folder colour as a wash.
+    dl->ChannelsSetCurrent(0);
+    const float wx0 = ImGui::GetWindowPos().x, wx1 = wx0 + ImGui::GetWindowWidth();
+    if ((flags & kFolderTreeZebra) && (myRow % 2) == 1)
+        dl->AddRectFilled(ImVec2(wx0, rmin.y), ImVec2(wx1, rmax.y), EditorTheme::U32(EditorTheme::Stripe));
+    if (styled && (flags & kFolderTreeWash) && vis.Color)
+        dl->AddRectFilledMultiColor(ImVec2(rmin.x, rmin.y), ImVec2(wx1, rmax.y),
+                                    (vis.Color & 0x00FFFFFFu) | 0x50000000u, vis.Color & 0x00FFFFFFu,
+                                    vis.Color & 0x00FFFFFFu, (vis.Color & 0x00FFFFFFu) | 0x50000000u);
+    dl->ChannelsMerge();
+
+    // Icon + name over the node, then the content minimap right-aligned in the small font.
+    {
+        const float x0 = rmin.x + ImGui::GetTreeNodeToLabelSpacing();
+        const float cy = (rmin.y + rmax.y) * 0.5f;
+        float right = rmax.x - EditorTheme::Px(4.0f);
+        if ((flags & kFolderTreeMinimap) && vis.MiniCount > 0 && !isRoot) {
+            EditorTheme::PushSmall();
+            const float cell = ImGui::GetFontSize() * 1.15f;
+            float mx = right - vis.MiniCount * cell;
+            right = mx - EditorTheme::Px(4.0f);
+            for (int k = 0; k < vis.MiniCount; ++k, mx += cell) {
+                const ImVec2 gs = ImGui::CalcTextSize(vis.Mini[k]);
+                dl->AddText(ImVec2(mx + (cell - gs.x) * 0.5f, cy - gs.y * 0.5f), EditorTheme::U32(EditorTheme::Dim), vis.Mini[k]);
+            }
+            EditorTheme::PopFont();
+        }
+        float x = x0;
+        if (glyph) {
+            const ImVec2 gs = ImGui::CalcTextSize(glyph);
+            const ImU32 gc = (styled && vis.Color) ? (vis.Color | 0xFF000000u) : EditorTheme::U32(EditorTheme::Secondary);
+            dl->AddText(ImVec2(x, cy - gs.y * 0.5f), gc, glyph);
+            x += std::max(gs.x, ImGui::GetFontSize()) + EditorTheme::Px(6.0f);
+        }
+        const ImVec2 ns = ImGui::CalcTextSize(name.c_str());
+        dl->PushClipRect(ImVec2(x, rmin.y), ImVec2(std::max(x, right), rmax.y), true);
+        dl->AddText(ImVec2(x, cy - ns.y * 0.5f), EditorTheme::U32(EditorTheme::Text), name.c_str());
+        dl->PopClipRect();
+    }
 
     if (!isRoot && !reveal.empty() && folderPath == reveal) ImGui::SetScrollHereY(0.5f);
 
@@ -203,6 +266,7 @@ void DrawFolderNode(const EditorModuleHostAPI& host, const std::vector<std::stri
         host.SetCurrentAssetFolder) {
         host.SetCurrentAssetFolder(folderPath.c_str());
     }
+    if (rowHovered && host.SetHoveredAssetFolder) host.SetHoveredAssetFolder(folderPath.c_str()); // vFolders hover keys
 
     if (!isRoot && ImGui::BeginDragDropSource()) {
         ImGui::SetDragDropPayload("ASSET_FOLDER_PATH", folderPath.c_str(), folderPath.size() + 1);
@@ -228,20 +292,45 @@ void DrawFolderNode(const EditorModuleHostAPI& host, const std::vector<std::stri
         }
         ImGui::EndDragDropTarget();
     }
-    if (ImGui::IsItemHovered() && !ImGui::IsItemToggledOpen()) {
-        Tooltip(host, isRoot
-            ? "The root of every asset the editor knows about.\nAlt+click a folder's arrow to expand/collapse it and everything under it."
-            : "Click to browse. Drag assets or other folders onto it to file them here.");
+    if (rowHovered && !ImGui::IsItemToggledOpen()) {
+        if (isRoot) {
+            Tooltip(host, "The root of every asset the editor knows about.\nAlt+click a folder's arrow to expand/collapse it and everything under it.");
+        } else {
+            std::string tip = "Click to browse. Drag assets or other folders onto it to file them here.";
+            if (vis.Total > 0) tip += "\n" + std::to_string(vis.Total) + (vis.Total == 1 ? " asset" : " assets") + " directly inside.";
+            tip += "\nE expand  /  Shift+E isolate  /  right-click for colour, icon and bookmark.";
+            Tooltip(host, tip.c_str());
+        }
+    }
+    // vFolders: colour, icon, bookmark, rule (host-drawn menu body).
+    if (host.DrawFolderContextMenuBody && ImGui::BeginPopupContextItem("##folderCtx")) {
+        host.DrawFolderContextMenuBody(folderPath.c_str());
+        ImGui::EndPopup();
     }
     ImGui::PopID();
 
+    FolderRowGeom me;
+    me.MidY = (rmin.y + rmax.y) * 0.5f;
+    me.LeftX = rmin.x;
     if (open) {
+        std::vector<FolderRowGeom> kids;
+        kids.reserve(children.size());
         for (const auto& child : children)
-            DrawFolderNode(host, folders, child, false, curFolder, reveal);
+            kids.push_back(DrawFolderNode(host, folders, child, false, curFolder, reveal, flags, rowIndex));
+        // Tree lines: one vertical from under this row's arrow down to its last child, and a stub
+        // into each child. The root's children start at the left edge, so it draws none.
+        if ((flags & kFolderTreeLines) && !kids.empty() && !isRoot) {
+            const float x = std::floor(rmin.x + ImGui::GetFontSize() * 0.5f + ImGui::GetStyle().FramePadding.x) + 0.5f;
+            const ImU32 lc = EditorTheme::U32(EditorTheme::WithAlpha(EditorTheme::Dim, 0.55f));
+            for (const auto& k : kids)
+                dl->AddLine(ImVec2(x, std::floor(k.MidY) + 0.5f), ImVec2(k.LeftX + EditorTheme::Px(2.0f), std::floor(k.MidY) + 0.5f), lc);
+            dl->AddLine(ImVec2(x, rmax.y), ImVec2(x, std::floor(kids.back().MidY) + 0.5f), lc);
+        }
         // NoTreePushOnOpen is set whenever !hasChildren (root or not), so TreePop is gated on
         // hasChildren alone — see the host history at DrawFolderTreeNode.
         if (hasChildren) ImGui::TreePop();
     }
+    return me;
 }
 
 // Details view: a real ImGui table (resizable, sortable, header frozen). The host's DrawAssetCell
@@ -734,6 +823,9 @@ void Draw(const EditorModuleHostAPI& host) {
     ImGui::PopStyleVar(); // the icon cluster's tight spacing
     EditorUIPrimitives::EndPanelToolbar();
 
+    // Editor Enhancers / vFolders: folder bookmark chips (API v40; draws nothing when unused).
+    if (host.DrawFolderNavBar) host.DrawFolderNavBar();
+
     if (search != searchBefore && host.SetAssetSearch) host.SetAssetSearch(search.c_str());
 
     // --- tree | splitter | grid --------------------------------------------------------
@@ -742,7 +834,11 @@ void Draw(const EditorModuleHostAPI& host) {
     const float treeWidth = host.GetAssetTreeWidth ? host.GetAssetTreeWidth() : 180.0f;
 
     ImGui::BeginChild("##AssetTree", ImVec2(treeWidth, contentHeight), ImGuiChildFlags_None);
-    DrawFolderNode(host, folders, "", true, curFolder, reveal);
+    {
+        const unsigned treeFlags = host.GetFolderTreeFlags ? host.GetFolderTreeFlags() : 0u; // vFolders (API v40)
+        int rowIndex = 0;
+        DrawFolderNode(host, folders, "", true, curFolder, reveal, treeFlags, rowIndex);
+    }
     ImGui::EndChild();
 
     ImGui::SameLine();
