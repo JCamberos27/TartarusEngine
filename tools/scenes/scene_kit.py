@@ -35,13 +35,28 @@ def model_index(repo, exe=None):
                 with open(full + '.meta', encoding='utf-8') as f:
                     g = json.load(f)['guid']
                 rel = os.path.relpath(full, project).replace(os.sep, '/')
-                index[os.path.splitext(name)[0]] = {'path': rel, 'guid': g, 'min': r['min'], 'max': r['max']}
+                index[os.path.splitext(name)[0]] = {'path': rel, 'guid': g, 'min': r['min'], 'max': r['max'],
+                                                    'meshes': r['meshes']}
     return index
 
 
 def yaw_quat(deg):
     h = math.radians(deg) / 2
     return [0.0, round(math.sin(h), 6), 0.0, round(math.cos(h), 6)]
+
+
+def euler_quat(yaw=0.0, pitch=0.0, roll=0.0):
+    """[x, y, z, w] for yaw about Y, then pitch about X, then roll about Z (degrees; each in the frame left by the
+    one before, so yaw turns the piece and pitch / roll tip it about its own axes)."""
+    def mul(a, b):
+        ax, ay, az, aw = a
+        bx, by, bz, bw = b
+        return [aw * bx + ax * bw + ay * bz - az * by, aw * by - ax * bz + ay * bw + az * bx,
+                aw * bz + ax * by - ay * bx + az * bw, aw * bw - ax * bx - ay * by - az * bz]
+    hy, hp, hr = (math.radians(v) / 2 for v in (yaw, pitch, roll))
+    q = mul(mul([0.0, math.sin(hy), 0.0, math.cos(hy)], [math.sin(hp), 0.0, 0.0, math.cos(hp)]),
+            [0.0, 0.0, math.sin(hr), math.cos(hr)])
+    return [round(v, 6) for v in q]
 
 
 class Scene:
@@ -57,20 +72,20 @@ class Scene:
         self._id += 1
         return self._id
 
-    def _common(self, name, parent, pos, yaw, scale=(1.0, 1.0, 1.0)):
+    def _common(self, name, parent, pos, yaw, scale=(1.0, 1.0, 1.0), pitch=0.0, roll=0.0):
         i = self._next()
         return {'id': i, 'name': name, 'order': i, 'parentId': parent, 'position': [round(v, 4) for v in pos],
-                'rotation': yaw_quat(yaw), 'scale': list(scale)}
+                'rotation': euler_quat(yaw, pitch, roll), 'scale': list(scale)}
 
-    def empty(self, name, parent=-1, pos=(0, 0, 0), yaw=0.0, **components):
-        e = self._common(name, parent, pos, yaw)
+    def empty(self, name, parent=-1, pos=(0, 0, 0), yaw=0.0, pitch=0.0, **components):
+        e = self._common(name, parent, pos, yaw, pitch=pitch)
         e.update(components)
         self.empties.append(e)
         return e['id']
 
-    def model(self, index, stem, parent, pos, yaw=0.0, name=None, **extra):
+    def model(self, index, stem, parent, pos, yaw=0.0, name=None, scale=1.0, pitch=0.0, roll=0.0, **extra):
         m = index[stem]
-        e = self._common(name or stem, parent, pos, yaw)
+        e = self._common(name or stem, parent, pos, yaw, (scale, scale, scale), pitch, roll)
         e.update({'path': m['path'], 'pathGuid': m['guid']})
         e.update(extra)
         self.models.append(e)
@@ -85,16 +100,47 @@ class Scene:
         self.boxes.append(e)
         return e
 
-    def light(self, name, parent, pos, intensity=2.2, rng=4.5, color=(1.0, 0.86, 0.7), shadows=False, kelvin=3000.0):
-        return self.empty(name, parent, pos, Light={
+    def light(self, name, parent, pos, intensity=2.2, rng=4.5, color=(1.0, 0.86, 0.7), shadows=False, kelvin=0.0,
+              spot=None, pitch=-90.0, yaw=0.0, softness=1.0, **extra):
+        """A point light, or with spot=<half-angle degrees> a spot aimed along local -Z: the default pitch -90 aims
+        it straight down. kelvin > 0 drives the colour from a temperature instead of `color`."""
+        return self.empty(name, parent, pos, yaw=yaw if spot else 0.0, pitch=pitch if spot else 0.0, Light={
             'Angular Size': 0.53, 'Cast Shadows': shadows, 'Color': list(color), 'ColorTempK': kelvin, 'Culling Mask': -1,
             'Intensity': intensity, 'Range': rng, 'Shadow Bias': 1.0, 'Shadow Near Plane': 0.05, 'Shadow Normal Bias': 1.0,
-            'Shadow Resolution': 'Follow global', 'Shadow Softness': 1.0, 'Shadow Update Mode': 'Dynamic',
-            'Spot Angle': 30.0, 'Type': 'Point'})
+            'Shadow Resolution': 'Follow global', 'Shadow Softness': softness, 'Shadow Update Mode': 'Dynamic',
+            'Spot Angle': spot or 30.0, 'Type': 'Spot' if spot else 'Point'}, **extra)
 
     def write(self, path):
         self.data.update({'boxes': self.boxes, 'empties': self.empties, 'models': self.models})
         write_json(path, self.data)
+
+
+def script(cls, source, **fields):
+    """The "C# Script" component for a gameplay script class (fields in its Fields JSON)."""
+    return {'C# Script': {'Class': cls, 'Source': source, 'Fields JSON': json.dumps(fields), 'Enabled': True,
+                          'Scripts': '[]', 'Next Script ID': 1}}
+
+
+def from_mat(repo, mat_path, **overrides):
+    """An embedded material copied from a .mat asset's properties (e.g. a lamp shade's, with its glow switched
+    off: emissive_strength=0)."""
+    with open(os.path.join(repo, 'project', mat_path), encoding='utf-8') as f:
+        p = json.load(f)['properties']
+
+    def ref(path):
+        if not path:
+            return ''
+        with open(os.path.join(repo, 'project', path + '.meta'), encoding='utf-8') as f:
+            return {'path': path, 'pathGuid': json.load(f)['guid']}
+    m = {'albedoMap': ref(p.get('_AlbedoMap')), 'aoMap': ref(p.get('_AOMap')), 'baseColor': p.get('_BaseColor', [1, 1, 1]),
+         'emissiveColor': p.get('_EmissiveColor', [0, 0, 0]), 'emissiveMap': ref(p.get('_EmissiveMap')),
+         'emissiveStrength': p.get('_EmissiveStrength', 0.0), 'factorsScaleMaps': True, 'metallic': p.get('_Metallic', 0.0),
+         'metallicMap': ref(p.get('_MetallicMap')), 'metallicRoughnessMap': ref(p.get('_MetallicRoughnessMap')),
+         'normalMap': ref(p.get('_NormalMap')), 'roughness': p.get('_Roughness', 0.6),
+         'roughnessMap': ref(p.get('_RoughnessMap')), 'triplanar': False, 'triplanarScale': 1.0}
+    for key, value in overrides.items():
+        m[{'emissive_strength': 'emissiveStrength'}.get(key, key)] = value
+    return m
 
 
 def textured(repo, albedo=None, normal=None, rough=None, ao=None, base=(1.0, 1.0, 1.0), roughness=0.8, metallic=0.0,
