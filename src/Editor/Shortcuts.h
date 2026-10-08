@@ -33,6 +33,13 @@ enum Context : std::uint32_t {
     // fullscreen) via TriggeredGlfw() — before an ImGui frame exists. BeginFrame() never sets
     // this bit, so the editor-side Triggered() never fires them.
     Ctx_App       = 1u << 5,
+    // Editor Enhancers hover keys (vHierarchy / vFolders / vInspector): set while the mouse is
+    // over that panel, whichever window holds keyboard focus - the "hover a row, press E" model.
+    // While one is set and the mouse is NOT over the Scene viewport, Ctx_Viewport is withheld,
+    // so a bare E over the Hierarchy expands the row instead of also switching to Rotate.
+    Ctx_HierarchyHover = 1u << 6,
+    Ctx_ProjectHover   = 1u << 7,
+    Ctx_InspectorHover = 1u << 8,
 };
 
 // One key + modifiers, optionally preceded by a prefix key to form a two-key sequence

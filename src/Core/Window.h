@@ -64,6 +64,9 @@ public:
     void SetVSync(int mode);
     int VSyncMode() const { return m_VSyncMode; }
     // The refresh rate (Hz) of the monitor the window is on (fullscreen: its monitor); 0 = unknown.
+    // Cached: the monitor's video mode is only re-read when the window moves or resizes, goes
+    // fullscreen on another monitor, or a monitor is plugged in / removed (on Windows each read is
+    // an EnumDisplaySettings call, slow enough to drop a frame).
     int RefreshRate() const;
 
     // The window is created hidden and stays hidden until this is called — see the constructor.
@@ -115,6 +118,9 @@ private:
     Placement m_PreFullscreen;           // borderless: restored on exit (includes maximized)
 
     std::function<void(const std::vector<std::string>&)> m_DropCallback;
+
+    struct RefreshCache { int X = 0, Y = 0, W = 0, H = 0; void* Monitor = nullptr; unsigned Generation = 0; int Hz = -1; };
+    mutable RefreshCache m_RefreshCache;
 
     static void FramebufferSizeCallback(GLFWwindow* window, int width, int height);
     static void DropCallbackTrampoline(GLFWwindow* window, int pathCount, const char* paths[]);

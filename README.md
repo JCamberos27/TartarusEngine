@@ -21,10 +21,7 @@ controllers, the `.meta` files of every asset, and procedural textures, meshes a
    powershell -ExecutionPolicy Bypass -File tools\assets\fetch-assets.ps1 -Source "G:\My Drive\Tartarus Assets"
    ```
    Use whatever path Drive for desktop shows for the folder. The script copies `Used\project\...`
-   over your checkout (about 10 GB). This workstation's store is
-   `G:\Other computers\My Computer\Atrocity Exhibition Drive\Tartarus Assets`;
-   pass that folder to `-Source` here. Other team members can use their own Drive shortcut path.
-   It then checks every file in `project/external_assets.csv` and
+   over your checkout (about 10 GB). It then checks every file in `project/external_assets.csv` and
    lists anything missing. Run it again with `-VerifyOnly` at any time, and after pulling, because
    the list can change.
 3. Build and run (below).

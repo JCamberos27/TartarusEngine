@@ -2,7 +2,7 @@
 #pragma once
 #include <cstdint>
 namespace Scripting {
-constexpr int kVersion = 2;
+constexpr int kVersion = 3;
 struct Vec3 { float x=0, y=0, z=0; };
 struct ProjectCall {
     const char* Operation{};

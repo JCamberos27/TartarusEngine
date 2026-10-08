@@ -123,9 +123,10 @@ static caches: those keep collectible assemblies alive.
 ### Inspector fields
 
 Public writable instance fields and private `[SerializeField]` fields are saved. Supported
-types: `float`, `int`, `bool`, `string`, `Vector3`, `AssetReference`, and enums whose underlying type is `int`.
-Static, readonly and `[NonSerialized]` fields are excluded. Properties, arrays, object
-references, arbitrary structs and collections are not currently Inspector field types.
+types: `float`, `int`, `bool`, `string`, `Vector3`, `AssetReference`, enums whose underlying type is `int`, and
+`Dictionary<string, T>` with `T` one of `float`, `int`, `bool`, `string` (edited as a key/value
+list). Static, readonly and `[NonSerialized]` fields are excluded. Properties, arrays, object
+references, arbitrary structs and other collections are not Inspector field types.
 Unsupported types are visibly labeled; they remain usable as ordinary runtime C# state.
 
 * `[Range(min,max)]` renders an integer/float slider.
@@ -139,9 +140,23 @@ Unsupported types are visibly labeled; they remain usable as ordinary runtime C#
   selection to the owner's subtree. Renaming/reparenting targets can invalidate these paths.
 * On strings, `[SoundReferences]` provides audio asset slots serialized as semicolon-separated
   project paths; `[InspectorChoices("", "ak", "870")]` provides a fixed string dropdown.
+* `[Foldout("Name")]` puts consecutive fields with the same name in one collapsible section.
+* `[Tab("Name")]` puts fields (and `[Button]` methods) under one tab of a tab bar.
+* `[ReadOnly]` shows the field greyed out; it is still saved.
+* `[HideIf(nameof(Other), value)]` / `[DisableIf(nameof(Other), value)]` hide or grey out the
+  field while `Other` equals `value` (default `true`).
+* `[Variants(1f, 5f, 10f)]` adds one-click value chips under the field.
+* `[OnValueChanged(nameof(Method))]` calls a parameterless method after the field is edited in
+  the Inspector; anything the method changes in saved fields is kept.
+* `[Button]` / `[Button("Label")]` on a parameterless method adds an Inspector button (one undo
+  step). Outside Play it runs on a temporary instance holding the saved field values, and the
+  changed values are saved back; in Play it runs on the live instance.
+* `[ShowInInspector]` on a property or a non-saved field shows its current value read-only,
+  refreshed a few times a second.
 * Deleted/renamed fields are discarded; new fields use constructor/initializer defaults.
 * Editing one field during Play updates only changed overrides, preserving unrelated state.
 * Advanced > Reset Fields removes authored overrides. Class accepts a qualified type name.
+  Once a class is chosen, the Script and Source rows also move under Advanced.
 
 Fields, enabled flags and script slots participate in scenes, undo, clipboard, prefabs and
 prefab overrides. Field names form the serialization contract: renaming is a schema change.

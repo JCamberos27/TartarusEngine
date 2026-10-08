@@ -74,4 +74,3 @@ public static unsafe class Engine
     public static bool DynamicBodyMass(uint entity, out float mass) { NativeRequest r = new() { Entity = entity }; bool ok = Call(27, ref r) != 0; mass = r.Value; return ok; }
     public static bool ApplyImpulse(uint entity, Vector3 impulse, Vector3 point) { NativeRequest r = new() { Entity = entity, A = impulse, B = point }; return Call(28, ref r) != 0; }
 }
-

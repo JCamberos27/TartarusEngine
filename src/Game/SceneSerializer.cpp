@@ -31,6 +31,8 @@
 #include <functional>
 #include <algorithm>
 #include <cstring>
+#include <cstdio>
+#include <cstdlib>
 #include <filesystem>
 #include <vector>
 #include <cctype>
@@ -533,6 +535,47 @@ bool ReflectJsonNearlyEqual(ReflectFieldType t, const json& a, const json& b) {
     }
 }
 
+// Editor Enhancers / vHierarchy row style ("hierStyle"). Colour as "#RRGGBB[AA]" so a scene
+// diff reads; every key optional, and the whole object omitted for an unstyled row.
+json HierStyleToJson(const HierarchyStyleComponent& st) {
+    json h = json::object();
+    if (!st.Icon.empty()) h["icon"] = st.Icon;
+    if (st.Color != 0) {
+        const unsigned r = st.Color & 255, g = (st.Color >> 8) & 255, b = (st.Color >> 16) & 255, a = (st.Color >> 24) & 255;
+        char buf[10];
+        if (a == 255) std::snprintf(buf, sizeof(buf), "#%02X%02X%02X", r, g, b);
+        else          std::snprintf(buf, sizeof(buf), "#%02X%02X%02X%02X", r, g, b, a);
+        h["color"] = buf;
+    }
+    if (st.FillMode != HierarchyStyleComponent::Gradient) h["fill"] = (int)st.FillMode;
+    if (st.Separator) h["separator"] = true;
+    return h;
+}
+
+void ReadHierStyle(const json& j, World& world, entt::entity entity) {
+    const auto it = j.find("hierStyle");
+    if (it == j.end() || !it->is_object()) return;
+    HierarchyStyleComponent st;
+    if (auto ic = it->find("icon"); ic != it->end() && ic->is_string()) st.Icon = ic->get<std::string>();
+    if (auto c = it->find("color"); c != it->end() && c->is_string()) {
+        std::string hex = c->get<std::string>();
+        if (!hex.empty() && hex[0] == '#') hex.erase(0, 1);
+        unsigned v[4] = {0, 0, 0, 255};
+        bool ok = hex.size() == 6 || hex.size() == 8;
+        for (size_t k = 0; ok && k < hex.size() / 2; ++k) {
+            char* end = nullptr;
+            const std::string byte = hex.substr(k * 2, 2);
+            v[k] = (unsigned)std::strtoul(byte.c_str(), &end, 16);
+            ok = end && *end == '\0';
+        }
+        if (ok) st.Color = v[0] | (v[1] << 8) | (v[2] << 16) | (v[3] << 24);
+    }
+    if (auto f = it->find("fill"); f != it->end() && f->is_number_integer())
+        st.FillMode = (std::uint8_t)std::clamp(f->get<int>(), 0, 2);
+    if (auto sp = it->find("separator"); sp != it->end() && sp->is_boolean()) st.Separator = sp->get<bool>();
+    if (!st.IsEmpty()) world.Registry.emplace_or_replace<HierarchyStyleComponent>(entity, std::move(st));
+}
+
 // Components that any entity kind can carry, written/read as one shared block so a box, a
 // placed model, and a bare (Renderable-less) entity all round-trip them identically. Each is
 // omitted entirely when absent, keeping saves of simple scenes as small as they were before
@@ -549,6 +592,8 @@ void WriteCommonComponents(json& j, const World& world, entt::entity entity) {
         j["layer"] = layer->Layer;
     if (world.Registry.all_of<HiddenInSceneTag>(entity)) j["sceneHidden"] = true; // #236 B — editor SceneVis
     if (world.Registry.all_of<SceneLockedTag>(entity)) j["sceneLocked"] = true;
+    if (const auto* hs = world.Registry.try_get<HierarchyStyleComponent>(entity); hs && !hs->IsEmpty())
+        j["hierStyle"] = HierStyleToJson(*hs); // Editor Enhancers / vHierarchy
 
     // LightComponent moved onto reflection (#302 Wave 2b) — it round-trips through the generic
     // "Light" block below. The old flat "light" object (incl. the legacy "castShadows" bool and
@@ -608,9 +653,51 @@ void WriteCommonComponents(json& j, const World& world, entt::entity entity) {
         void* comp = const_cast<void*>(rc.GetConst(world.Registry, entity));
         json cj;
         for (const auto& f : rc.Meta.Fields)
-            cj[ReflectFieldKey(f)] = ReflectFieldToJson(f, f.Address(comp));
+            if (!f.NonSerialized) cj[ReflectFieldKey(f)] = ReflectFieldToJson(f, f.Address(comp));
         j[rc.Meta.Name] = cj;
     }
+}
+
+// The hand-written "collider" / "joint" blocks <-> components. Shared by the scene loader and the
+// prefab override diff, which has to decode a prefab's pristine block to compare it field by field.
+ColliderComponent ColliderFromJson(const json& c) {
+    ColliderComponent collider;
+    collider.IsTrigger = c.value("isTrigger", false);
+    int shape = c.value("shape", 0); // absent => Box (0), the pre-#185 shape
+    collider.Kind = (shape >= 0 && shape <= 4) ? (ColliderComponent::Shape)shape
+                                               : ColliderComponent::Shape::Box;
+    if (c.contains("halfExtents"))
+        collider.HalfExtents = JsonToVec3(c["halfExtents"], glm::vec3(0.0f));
+    if (c.contains("center"))
+        collider.Center = JsonToVec3(c["center"], glm::vec3(0.0f));
+    collider.Bounciness = c.value("bounciness", 0.0f); // #185 PR 7
+    collider.Friction   = c.value("friction", 0.6f);
+    // Absent (every scene before #170's physics materials) = the same as Friction.
+    collider.StaticFriction = c.contains("staticFriction") && c["staticFriction"].is_number()
+                                  ? c["staticFriction"].get<float>() : collider.Friction;
+    auto combine = [&c](const char* key) {
+        const int v = (c.contains(key) && c[key].is_number_integer()) ? c[key].get<int>() : 0;
+        return (v >= 0 && v <= 3) ? v : 0;
+    };
+    collider.FrictionCombine = combine("frictionCombine");
+    collider.BounceCombine   = combine("bounceCombine");
+    if (c.contains("material") && c["material"].is_string()) collider.Material = c["material"].get<std::string>();
+    return collider;
+}
+
+JointComponent JointFromJson(const json& jc) {
+    JointComponent joint;
+    int ty = jc.value("type", 0);
+    joint.Kind = (ty >= 0 && ty <= 4) ? (JointComponent::Type)ty : JointComponent::Type::Fixed;
+    joint.ConnectedOrder = jc.value("connectedOrder", -1);
+    if (jc.contains("anchor")) joint.Anchor = JsonToVec3(jc["anchor"], glm::vec3(0.0f));
+    if (jc.contains("axis"))   joint.Axis   = JsonToVec3(jc["axis"], glm::vec3(1.0f, 0.0f, 0.0f));
+    joint.BreakForce  = jc.value("breakForce", 0.0f);
+    joint.BreakTorque = jc.value("breakTorque", 0.0f);
+    joint.UseLimit    = jc.value("useLimit", false);
+    joint.LimitLower  = jc.value("limitLower", -45.0f);
+    joint.LimitUpper  = jc.value("limitUpper", 45.0f);
+    return joint;
 }
 
 void ReadCommonComponents(const json& j, World& world, AssetLibrary& assets, entt::entity entity) {
@@ -628,6 +715,7 @@ void ReadCommonComponents(const json& j, World& world, AssetLibrary& assets, ent
         world.Registry.emplace_or_replace<LayerComponent>(entity, LayerComponent{layer});
     if (j.value("sceneHidden", false)) world.Registry.emplace_or_replace<HiddenInSceneTag>(entity); // #236 B
     if (j.value("sceneLocked", false)) world.Registry.emplace_or_replace<SceneLockedTag>(entity);
+    ReadHierStyle(j, world, entity); // Editor Enhancers / vHierarchy
 
     // Legacy pre-#302 format: LightComponent moved onto reflection (keyed "Light" below), but
     // scenes authored before the migration carry the old flat "light" object with its own key
@@ -666,46 +754,10 @@ void ReadCommonComponents(const json& j, World& world, AssetLibrary& assets, ent
         }
         world.Registry.emplace_or_replace<LightComponent>(entity, light);
     }
-    if (j.contains("collider")) {
-        const json& c = j["collider"];
-        ColliderComponent collider;
-        collider.IsTrigger = c.value("isTrigger", false);
-        int shape = c.value("shape", 0); // absent => Box (0), the pre-#185 shape
-        collider.Kind = (shape >= 0 && shape <= 4) ? (ColliderComponent::Shape)shape
-                                                   : ColliderComponent::Shape::Box;
-        if (c.contains("halfExtents"))
-            collider.HalfExtents = JsonToVec3(c["halfExtents"], glm::vec3(0.0f));
-        if (c.contains("center"))
-            collider.Center = JsonToVec3(c["center"], glm::vec3(0.0f));
-        collider.Bounciness = c.value("bounciness", 0.0f); // #185 PR 7
-        collider.Friction   = c.value("friction", 0.6f);
-        // Absent (every scene before #170's physics materials) = the same as Friction.
-        collider.StaticFriction = c.contains("staticFriction") && c["staticFriction"].is_number()
-                                      ? c["staticFriction"].get<float>() : collider.Friction;
-        auto combine = [&c](const char* key) {
-            const int v = (c.contains(key) && c[key].is_number_integer()) ? c[key].get<int>() : 0;
-            return (v >= 0 && v <= 3) ? v : 0;
-        };
-        collider.FrictionCombine = combine("frictionCombine");
-        collider.BounceCombine   = combine("bounceCombine");
-        if (c.contains("material") && c["material"].is_string()) collider.Material = c["material"].get<std::string>();
-        world.Registry.emplace_or_replace<ColliderComponent>(entity, collider);
-    }
-    if (j.contains("joint")) { // #185 PR 11
-        const json& jc = j["joint"];
-        JointComponent joint;
-        int ty = jc.value("type", 0);
-        joint.Kind = (ty >= 0 && ty <= 4) ? (JointComponent::Type)ty : JointComponent::Type::Fixed;
-        joint.ConnectedOrder = jc.value("connectedOrder", -1);
-        if (jc.contains("anchor")) joint.Anchor = JsonToVec3(jc["anchor"], glm::vec3(0.0f));
-        if (jc.contains("axis"))   joint.Axis   = JsonToVec3(jc["axis"], glm::vec3(1.0f, 0.0f, 0.0f));
-        joint.BreakForce  = jc.value("breakForce", 0.0f);
-        joint.BreakTorque = jc.value("breakTorque", 0.0f);
-        joint.UseLimit    = jc.value("useLimit", false);
-        joint.LimitLower  = jc.value("limitLower", -45.0f);
-        joint.LimitUpper  = jc.value("limitUpper", 45.0f);
-        world.Registry.emplace_or_replace<JointComponent>(entity, joint);
-    }
+    if (j.contains("collider"))
+        world.Registry.emplace_or_replace<ColliderComponent>(entity, ColliderFromJson(j["collider"]));
+    if (j.contains("joint")) // #185 PR 11
+        world.Registry.emplace_or_replace<JointComponent>(entity, JointFromJson(j["joint"]));
     // Legacy pre-#302 format: CameraComponent moved onto reflection (keyed "Camera" below), but
     // scenes authored before the migration carry the old flat "camera" object — read it only
     // when the new key is absent, so a re-saved file goes through the generic path instead.
@@ -756,6 +808,7 @@ void ReadCommonComponents(const json& j, World& world, AssetLibrary& assets, ent
         void* comp = rc.Get(world.Registry, entity);
         const json& cj = j.at(rc.Meta.Name);
         for (const auto& f : rc.Meta.Fields) {
+            if (f.NonSerialized) continue; // vInspector display-only field
             // #43: key off ReflectFieldKey, with a LegacyNames fallback — so a scene saved under a
             // field's old key (before an Inspector-label rename) still loads instead of silently
             // keeping the component's default for that field.
@@ -824,8 +877,16 @@ void DiffPrefabEntity(const World& world, entt::entity live, const json& pristin
 
     // Reflected components — presence diff + field diff.
     for (const auto& rc : ComponentRegistry::All()) {
+        // Mesh Renderer has no JSON block of its own: whether an entity has one is structural (it
+        // sits in the prefab's "boxes" / "models" array), so there is nothing to diff.
+        if (!rc.Meta.GenericSerialize && !rc.Meta.GenericInspector) continue;
+        // The component's JSON key, not its display Name: a hand-written block predating reflection
+        // lives under a different key ("collider" / "joint", see ReflectComponent::Key). Looking up
+        // the Name found nothing, so a live Collider read as "added" with every field overridden,
+        // and one the instance had removed was never recorded.
+        const char* jsonKey = ReflectComponentKey(rc.Meta);
         const bool onLive = rc.Has(world.Registry, live);
-        const bool onPrefab = pristine.contains(rc.Meta.Name);
+        const bool onPrefab = pristine.contains(jsonKey);
         if (!onLive && !onPrefab) continue;
 
         if (onLive && !onPrefab) {
@@ -834,7 +895,8 @@ void DiffPrefabEntity(const World& world, entt::entity live, const json& pristin
             outOverrides.push_back({{"e", localIndex}, {"op", "addComponent"}, {"c", rc.Meta.Name}});
             const void* comp = rc.GetConst(world.Registry, live);
             for (const auto& f : rc.Meta.Fields)
-                emit(rc.Meta.Name, ReflectFieldKey(f), ReflectFieldToJson(f, f.Address(const_cast<void*>(comp))));
+                if (!f.NonSerialized)
+                    emit(rc.Meta.Name, ReflectFieldKey(f), ReflectFieldToJson(f, f.Address(const_cast<void*>(comp))));
             continue;
         }
         if (!onLive && onPrefab) {
@@ -843,9 +905,30 @@ void DiffPrefabEntity(const World& world, entt::entity live, const json& pristin
         }
 
         // On both — diff each field.
-        const json& pc = pristine.at(rc.Meta.Name);
+        const json& pc = pristine.at(jsonKey);
         const void* comp = rc.GetConst(world.Registry, live);
+        if (!rc.Meta.GenericSerialize) {
+            // A hand-written block uses its own key names, so the reflected keys below would find
+            // nothing in it. Decode it into a scratch component the way a load would and compare the
+            // reflected fields' values instead.
+            ColliderComponent pristineCollider;
+            JointComponent pristineJoint;
+            const void* was = nullptr;
+            if (std::strcmp(jsonKey, "collider") == 0) { pristineCollider = ColliderFromJson(pc); was = &pristineCollider; }
+            else if (std::strcmp(jsonKey, "joint") == 0) { pristineJoint = JointFromJson(pc); was = &pristineJoint; }
+            if (!was) continue;
+            for (const auto& f : rc.Meta.Fields) {
+                // A joint's partner is an OrderComponent value, repointed at the partner's copy when
+                // the prefab is instantiated (#119), so it can never equal the file's value.
+                if (std::strcmp(f.Name, "ConnectedOrder") == 0) continue;
+                json now = ReflectFieldToJson(f, f.Address(const_cast<void*>(comp)));
+                json then = ReflectFieldToJson(f, f.Address(const_cast<void*>(was)));
+                if (!ReflectJsonNearlyEqual(f.Type, now, then)) emit(rc.Meta.Name, ReflectFieldKey(f), std::move(now));
+            }
+            continue;
+        }
         for (const auto& f : rc.Meta.Fields) {
+            if (f.NonSerialized) continue;
             const char* key = ReflectFieldKey(f);
             const json* pv = pc.contains(key) ? &pc.at(key) : nullptr;
             for (int i = 0; !pv && i < f.LegacyNameCount; ++i)
@@ -1303,6 +1386,8 @@ json BuildSceneJson(const World& world, const std::set<entt::entity>* only = nul
             // WriteCommonComponents).
             if (world.Registry.all_of<HiddenInSceneTag>(e)) s["sceneHidden"] = true;
             if (world.Registry.all_of<SceneLockedTag>(e)) s["sceneLocked"] = true;
+            if (const auto* hs = world.Registry.try_get<HierarchyStyleComponent>(e); hs && !hs->IsEmpty())
+                s["hierStyle"] = HierStyleToJson(*hs); // a styled prefab-instance root keeps its row style
 
             // #302 Part B — per-field overrides: diff each live instance entity against its
             // pristine counterpart in the .prefab file, by prefab-local index.
@@ -1648,6 +1733,7 @@ bool ApplySceneJsonImpl(World& world, AssetLibrary& assets, const json& root,
                 world.Registry.emplace_or_replace<TagComponent>(rootE, s["tag"].get<std::string>());
             if (s.value("sceneHidden", false)) world.Registry.emplace_or_replace<HiddenInSceneTag>(rootE); // #122
             if (s.value("sceneLocked", false)) world.Registry.emplace_or_replace<SceneLockedTag>(rootE);
+            ReadHierStyle(s, world, rootE);
 
             // #302 Part B — overrides: replay onto the freshly rebuilt subtree, by prefab-local
             // index into instCreated (== the .prefab file's entity order). Two passes so a field
@@ -2262,10 +2348,13 @@ bool SceneSerializer::LoadFromString(World& world, AssetLibrary& assets, const s
         // rename / delete still works. A snapshot WITHOUT the key is not "no folders": keep what
         // the library has rather than deleting every folder in the project.
         std::set<std::string> keepFolders;
-        if (auto it = root.find("assetFolders"); it != root.end() && it->is_array())
+        if (auto it = root.find("assetFolders"); it != root.end() && it->is_array()) {
             for (const auto& f : *it) if (f.is_string()) keepFolders.insert(f.get<std::string>());
-        else
+        } else {
+            // Braced on purpose: unbraced, this else bound to the inner `if (f.is_string())`, so a
+            // snapshot with no folder list kept nothing and PruneToKeepSet dropped every folder.
             keepFolders.insert(assets.Folders().begin(), assets.Folders().end());
+        }
         assets.PruneToKeepSet(keepModels, keepTextures, keepSounds, keepPrefabs, keepFolders, keepMaterials);
         try { ApplyAssetLibraryJson(assets, root, /*fromUndoSnapshot=*/true); }
         catch (const std::exception& e) {
@@ -2381,7 +2470,8 @@ std::string SceneSerializer::ComponentToPresetJson(const World& world, entt::ent
     // const_cast is safe: the component is a live mutable object; this path only reads it.
     void* comp = const_cast<void*>(rc->GetConst(world.Registry, entity));
     json fields;
-    for (const auto& f : rc->Meta.Fields) fields[ReflectFieldKey(f)] = ReflectFieldToJson(f, f.Address(comp));
+    for (const auto& f : rc->Meta.Fields)
+        if (!f.NonSerialized) fields[ReflectFieldKey(f)] = ReflectFieldToJson(f, f.Address(comp));
     return json{{"preset", 1}, {"component", rc->Meta.Name}, {"fields", std::move(fields)}}.dump(2);
 }
 
@@ -2411,6 +2501,7 @@ bool SceneSerializer::ApplyComponentPresetJson(World& world, AssetLibrary& asset
     // component default, so a preset saved before a field existed stays usable. Same legacy-key
     // fallback the scene loader uses (#43).
     for (const auto& f : rc->Meta.Fields) {
+        if (f.NonSerialized) continue;
         const char* key = ReflectFieldKey(f);
         if (fit->contains(key)) { ReflectFieldFromJson(f, f.Address(comp), fit->at(key), assets); continue; }
         for (int i = 0; i < f.LegacyNameCount; ++i) {
@@ -2598,7 +2689,7 @@ bool SceneSerializer::ApplyPrefabComponent(World& world, entt::entity entity, co
     json cj;
     const void* comp = rcp->GetConst(world.Registry, entity);
     for (const auto& f : rcp->Meta.Fields)
-        cj[ReflectFieldKey(f)] = ReflectFieldToJson(f, f.Address(const_cast<void*>(comp)));
+        if (!f.NonSerialized) cj[ReflectFieldKey(f)] = ReflectFieldToJson(f, f.Address(const_cast<void*>(comp)));
     // ReflectComponentKey, not `component` (a display Name) directly — see IsPrefabComponentAdded's
     // comment above for why (Collider/Joint's legacy lowercase JSON key).
     (*pe)[ReflectComponentKey(rcp->Meta)] = std::move(cj);

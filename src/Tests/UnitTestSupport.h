@@ -32,6 +32,7 @@ using TestList = std::vector<std::pair<const char*, std::function<void()>>>;
 void RegisterRagdollTests(UnitTestSupport::TestList& tests);   // UnitTests_Ragdoll.cpp
 void RegisterAnimationTests(UnitTestSupport::TestList& tests); // UnitTests_Animation.cpp
 void RegisterEditorTests(UnitTestSupport::TestList& tests);    // UnitTests_Editor.cpp
+void RegisterEnhancerTests(UnitTestSupport::TestList& tests);  // UnitTests_Enhancers.cpp
 void RegisterRecoilPortTests(UnitTestSupport::TestList& tests);
 void RegisterSwayPortTests(UnitTestSupport::TestList& tests);
 void RegisterEngineTests(UnitTestSupport::TestList& tests);    // UnitTests_Engine.cpp

@@ -5,6 +5,7 @@
 #include "../Game/Scripting/PlayerDefinition.h"
 #include "../Game/Scripting/ScriptComponent.h"
 #include "../Game/GravityGun.h"
+#include "../Game/Scripting/ScriptRuntime.h"
 #include "../Game/CombatHud.h"
 #include "../Game/Combat/CombatFx.h"
 #include "../Renderer/WeaponFxRenderer.h"
@@ -14,6 +15,8 @@
 #include "../Renderer/Animation.h"
 #include "../Renderer/SceneRenderer.h"
 #include "../Renderer/MaterialAsset.h"
+#include <filesystem>
+#include <json.hpp>
 #include <random>
 #include <glm/gtc/quaternion.hpp>
 #include <glm/gtc/matrix_transform.hpp>
@@ -98,6 +101,9 @@ static void Test_BloodSettings_RoundTrip() {
 
 static void Test_GravityGun_AssistReach() {
     GravityGunSettings s;
+    std::string defaults;
+    CHECK(Scripting::ResolveScriptFields("Tartarus.Gameplay.PlayerDefinition", "{}", defaults));
+    s.AssistRange = nlohmann::json::parse(defaults).at("AssistRange").get<float>();
     CHECK(GravityGun::AssistReach(s, -1.0f) == 30.0f);   // nothing under the crosshair: the full assist range
     CHECK(GravityGun::AssistReach(s, 10.0f) == 10.5f);   // a wall at 10 m cuts the search short
     s.AssistRange = 5.0f;
@@ -159,7 +165,108 @@ void Test_SceneRenderer_WarmShaderVariantsSkipsShaderless() {
     CHECK(SceneRenderer::WarmShaderVariants(world) == 0);
 }
 
+// The entity-ray test falls back to a unit box when a collider's renderer has no model, instead of
+// dereferencing it.
+static void Test_World_RaycastToleratesRenderableWithoutModel() {
+    World world;
+    const glm::vec3 zero(0.0f), one(1.0f);
+    const entt::entity e = world.CreateEmptyEntity(zero, zero, one, "NoModel");
+    world.Registry.emplace<ColliderComponent>(e);
+    world.Registry.emplace<RenderableComponent>(e); // ModelRef stays null
+    float dist = 0.0f;
+    const entt::entity hit = world.Raycast(glm::vec3(0.0f, 5.0f, 0.0f), glm::vec3(0.0f, -1.0f, 0.0f), 100.0f, dist);
+    CHECK(hit == e);
+    CHECK(std::abs(dist - 4.5f) < 1e-3f); // the top of a unit box centred on the origin
+}
+
+// The prefab override diff: components with a hand-written JSON block (Collider, Joint) and the
+// Animation component are looked up by their JSON key. An untouched instance has no overrides,
+// an edited field is one entry, and a component the instance removed is recorded and survives a
+// reload.
+static nlohmann::json PrefabOverrides(const std::string& scene) {
+    const nlohmann::json j = nlohmann::json::parse(scene);
+    if (!j.contains("prefabInstances") || j["prefabInstances"].empty()) return nullptr;
+    const nlohmann::json& stub = j["prefabInstances"][0];
+    return stub.contains("overrides") ? stub["overrides"] : nlohmann::json::array();
+}
+
+static entt::entity PrefabRootOf(World& world) {
+    const auto view = world.Registry.view<PrefabInstanceComponent>();
+    return view.begin() == view.end() ? entt::entity(entt::null) : *view.begin();
+}
+
+static void Test_PrefabInstance_HandWrittenComponentsDiffByJsonKey() {
+    if (ComponentRegistry::All().empty()) ComponentRegistry::RegisterEngineComponents();
+    namespace fs = std::filesystem;
+    std::error_code ec;
+    const fs::path dir = fs::temp_directory_path(ec) / "TartarusUnitTest_PrefabDiff";
+    fs::create_directories(dir, ec);
+    const std::string prefabPath = (dir / "thing.prefab").string();
+    AssetLibrary assets;
+    {
+        World source; // a prefab whose one entity has a Collider, a Joint and an Animation
+        const glm::vec3 zero(0.0f), one(1.0f);
+        const entt::entity e = source.CreateEmptyEntity(zero, zero, one, "Thing");
+        source.Registry.emplace<ColliderComponent>(e);
+        source.Registry.emplace<JointComponent>(e);
+        source.Registry.emplace<SkeletalAnimationComponent>(e);
+        CHECK(SceneSerializer::SavePrefab(source, e, prefabPath));
+    }
+
+    World world;
+    const entt::entity root = SceneSerializer::InstantiatePrefab(world, assets, prefabPath);
+    CHECK(root != entt::null);
+    if (root == entt::null) { fs::remove_all(dir, ec); return; }
+
+    // Untouched: nothing is an override, and no helper sees an added component.
+    nlohmann::json ov = PrefabOverrides(SceneSerializer::SaveToString(world));
+    CHECK(ov.is_array() && ov.empty());
+    for (const char* component : {"Collider", "Joint", "Animation"})
+        CHECK(!SceneSerializer::IsPrefabComponentAdded(world, root, component));
+
+    // One edited Collider field is one override entry and survives a reload.
+    world.Registry.get<ColliderComponent>(root).IsTrigger = true;
+    std::string saved = SceneSerializer::SaveToString(world);
+    ov = PrefabOverrides(saved);
+    int colliderEntries = 0;
+    bool triggerSet = false, anyOp = false;
+    for (const nlohmann::json& o : ov) {
+        if (o.contains("op")) anyOp = true;
+        if (o.value("c", "") == "Collider") {
+            ++colliderEntries;
+            if (o.value("f", "") == "Is Trigger" && o.contains("v") && o["v"] == true) triggerSet = true;
+        }
+    }
+    CHECK(ov.is_array() && colliderEntries == 1 && triggerSet && !anyOp);
+    {
+        World reloaded;
+        CHECK(SceneSerializer::LoadFromString(reloaded, assets, saved));
+        const entt::entity r = PrefabRootOf(reloaded);
+        CHECK(r != entt::null && reloaded.Registry.all_of<ColliderComponent>(r));
+        if (r != entt::null && reloaded.Registry.all_of<ColliderComponent>(r))
+            CHECK(reloaded.Registry.get<ColliderComponent>(r).IsTrigger);
+    }
+
+    // A removed Collider is recorded as removeComponent and is still gone after a reload.
+    world.Registry.remove<ColliderComponent>(root);
+    saved = SceneSerializer::SaveToString(world);
+    ov = PrefabOverrides(saved);
+    bool removedRecorded = false;
+    for (const nlohmann::json& o : ov)
+        if (o.value("op", "") == "removeComponent" && o.value("c", "") == "Collider") removedRecorded = true;
+    CHECK(removedRecorded);
+    {
+        World reloaded;
+        CHECK(SceneSerializer::LoadFromString(reloaded, assets, saved));
+        const entt::entity r = PrefabRootOf(reloaded);
+        CHECK(r != entt::null && !reloaded.Registry.all_of<ColliderComponent>(r));
+    }
+    fs::remove_all(dir, ec);
+}
+
 void RegisterEngineTests(UnitTestSupport::TestList& tests) {
+    tests.push_back({"World::RaycastToleratesRenderableWithoutModel", Test_World_RaycastToleratesRenderableWithoutModel});
+    tests.push_back({"PrefabInstance::HandWrittenComponentsDiffByJsonKey", Test_PrefabInstance_HandWrittenComponentsDiffByJsonKey});
     tests.push_back({"FirstPersonController::NewFieldsRoundTrip", Test_FirstPersonController_NewFieldsRoundTrip});
     tests.push_back({"FxHudSettings::RoundTrip", Test_FxHudSettings_RoundTrip});
     tests.push_back({"BloodSettings::RoundTrip", Test_BloodSettings_RoundTrip});

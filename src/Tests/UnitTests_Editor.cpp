@@ -11,6 +11,7 @@
 #include "ProjectPaths.h"
 #include <filesystem>
 #include <fstream>
+#include "UndoTrigger.h"
 #include "../../extern/ImGuiColorTextEdit/TextEditor.h"
 #include "../../extern/imcurve/imcurve_editor.hpp"
 #include <imgui_internal.h>
@@ -418,6 +419,23 @@ void TestCurveWheelCapture() {
     CHECK(scroll>inspectorBefore); CHECK(editor.GetViewport().GetWidth()==before.GetWidth());
     ImGui::DestroyContext(context); ImGui::SetCurrentContext(previous);
 }
+void TestUndoTriggerSkipsNavigation() {
+    using UndoTrigger::Frame; using UndoTrigger::OpensSnapshot;
+    Frame none; CHECK(!OpensSnapshot(none));
+    // Navigation: no snapshot.
+    Frame rmb; rmb.RightClicked=true; rmb.OverViewport=true; CHECK(!OpensSnapshot(rmb));
+    Frame mmb; mmb.MiddleClicked=true; mmb.OverViewport=true; CHECK(!OpensSnapshot(mmb));
+    Frame fly; fly.KeyPressed=true; fly.NavDragHeld=true; CHECK(!OpensSnapshot(fly));
+    Frame orbit; orbit.LeftClicked=true; orbit.OverViewport=true; orbit.AltDown=true; CHECK(!OpensSnapshot(orbit));
+    // Edits: still a snapshot.
+    Frame click; click.LeftClicked=true; click.OverViewport=true; CHECK(OpensSnapshot(click));
+    Frame handle=orbit; handle.GizmoHovered=true; CHECK(OpensSnapshot(handle));
+    Frame altPanel; altPanel.LeftClicked=true; altPanel.AltDown=true; CHECK(OpensSnapshot(altPanel));
+    Frame key; key.KeyPressed=true; CHECK(OpensSnapshot(key));
+    Frame menu; menu.RightClicked=true; CHECK(OpensSnapshot(menu)); // a right-click on a panel
+    Frame item; item.ItemActive=true; item.NavDragHeld=true; CHECK(OpensSnapshot(item));
+    Frame side; side.OtherClicked=true; side.OverViewport=true; CHECK(OpensSnapshot(side));
+}
 }
 
 // Unit tests for the editor UI. Add a function per test and list it below.
@@ -431,4 +449,5 @@ void RegisterEditorTests(UnitTestSupport::TestList& tests) {
     tests.emplace_back("ImCurveAdapter",TestCurveAdapter);
     tests.emplace_back("ImCurveEditorInteractions",TestCurveEditorInteractions);
     tests.emplace_back("CurveWheelCapture",TestCurveWheelCapture);
+    tests.emplace_back("UndoTriggerSkipsNavigation",TestUndoTriggerSkipsNavigation);
 }

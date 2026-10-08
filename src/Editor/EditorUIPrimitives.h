@@ -107,13 +107,22 @@ inline bool ActionButton(const char* icon, const char* tooltip, TooltipFn toolti
     return clicked;
 }
 
+// Quiet at rest (the dim glyph, no body); under the cursor the glyph turns red over a faint red
+// wash, so a destructive control never shouts until it is about to be used.
 inline bool DangerIconButton(const char* icon, const char* tooltip, TooltipFn tooltipFn,
                               ImVec2 size = ImVec2(0, 0)) {
     const ImVec4 danger = DangerColor();
-    ImGui::PushStyleColor(ImGuiCol_Text,          EditorTheme::Secondary);
+    const ImVec2 cursor = ImGui::GetCursorScreenPos();
+    const ImVec2 iconSize = ImGui::CalcTextSize(icon, nullptr, true);
+    const ImVec2 pad = ImGui::GetStyle().FramePadding;
+    const ImVec2 btnSize(size.x > 0.0f ? size.x : iconSize.x + pad.x * 2.0f,
+                          size.y > 0.0f ? size.y : iconSize.y + pad.y * 2.0f);
+    const bool willHover = ImGui::IsWindowHovered(ImGuiHoveredFlags_ChildWindows) &&
+        ImGui::IsMouseHoveringRect(cursor, ImVec2(cursor.x + btnSize.x, cursor.y + btnSize.y));
+    ImGui::PushStyleColor(ImGuiCol_Text,          willHover ? danger : EditorTheme::Dim);
     ImGui::PushStyleColor(ImGuiCol_Button,        ImVec4(0.0f, 0.0f, 0.0f, 0.0f));
-    ImGui::PushStyleColor(ImGuiCol_ButtonHovered, ImVec4(danger.x, danger.y, danger.z, 0.85f));
-    ImGui::PushStyleColor(ImGuiCol_ButtonActive,  ImVec4(danger.x, danger.y, danger.z, 1.00f));
+    ImGui::PushStyleColor(ImGuiCol_ButtonHovered, ImVec4(danger.x, danger.y, danger.z, 0.14f));
+    ImGui::PushStyleColor(ImGuiCol_ButtonActive,  ImVec4(danger.x, danger.y, danger.z, 0.26f));
     ImGui::PushStyleVar(ImGuiStyleVar_FrameBorderSize, 0.0f);
     ImGui::PushID(tooltip);
     const bool clicked = ImGui::Button(icon, size);
@@ -173,8 +182,8 @@ inline bool Segmented(const char* id, int* current, const char* const* labels, i
         if (i > 0) ImGui::SameLine();
         const bool on = *current == i;
         ImGui::PushStyleColor(ImGuiCol_Button,        on ? EditorTheme::AccentWash : EditorTheme::Field);
-        ImGui::PushStyleColor(ImGuiCol_ButtonHovered, on ? ImVec4(0.894f, 0.722f, 0.408f, 0.24f) : EditorTheme::Hover);
-        ImGui::PushStyleColor(ImGuiCol_ButtonActive,  on ? ImVec4(0.894f, 0.722f, 0.408f, 0.32f) : EditorTheme::Pressed);
+        ImGui::PushStyleColor(ImGuiCol_ButtonHovered, on ? EditorTheme::WithAlpha(EditorTheme::Accent, 0.20f) : EditorTheme::Hover);
+        ImGui::PushStyleColor(ImGuiCol_ButtonActive,  on ? EditorTheme::WithAlpha(EditorTheme::Accent, 0.28f) : EditorTheme::Pressed);
         ImGui::PushStyleColor(ImGuiCol_Text,          on ? EditorTheme::AccentBright : EditorTheme::Secondary);
         ImGui::PushStyleVar(ImGuiStyleVar_FrameBorderSize, 0.0f);
         ImGui::PushID(i);
@@ -364,17 +373,6 @@ inline void EndPanelToolbar() {
     ImGui::Dummy(ImVec2(0.0f, EditorTheme::Px(6.0f)));
 }
 
-// A collapsible section inside a panel (ImGui::CollapsingHeader): the raised surface with a hairline
-// instead of the accent selection fill CollapsingHeader would otherwise borrow from ImGuiCol_Header.
-inline bool Foldout(const char* label, ImGuiTreeNodeFlags flags = 0) {
-    ImGui::PushStyleColor(ImGuiCol_Header,        EditorTheme::Raised);
-    ImGui::PushStyleColor(ImGuiCol_HeaderHovered, EditorTheme::Hover);
-    ImGui::PushStyleColor(ImGuiCol_HeaderActive,  EditorTheme::Pressed);
-    ImGui::PushStyleColor(ImGuiCol_Border,        EditorTheme::Hairline);
-    const bool open = ImGui::CollapsingHeader(label, flags);
-    ImGui::PopStyleColor(4);
-    return open;
-}
 
 // A row highlight for custom lists (Hierarchy, Console, Asset list): the selection is an accent wash
 // with a 2px accent bar at the left edge; hover is a faint white wash. Call before drawing the row's
@@ -415,9 +413,9 @@ inline void SceneDataBadge(TooltipFn tooltipFn) {
 // fixed opaque-ish dark plate is legible by construction, with zero runtime GPU cost and zero
 // "wrong colour this frame" flicker while a readback catches up. Use these two together: draw
 // the plate first, then the text in kHudTextColor on top.
-inline constexpr ImU32 kHudTextColor         = IM_COL32(0xEC, 0xEC, 0xF0, 255); // EditorTheme::Text
-inline constexpr ImU32 kHudTextDisabledColor = IM_COL32(0xEC, 0xEC, 0xF0, 150);
-inline constexpr ImU32 kHudPlateColor        = IM_COL32(0x0E, 0x0E, 0x11, 219); // EditorTheme::HudPlate
+inline constexpr ImU32 kHudTextColor         = IM_COL32(0xE6, 0xE8, 0xE6, 255); // EditorTheme::Text
+inline constexpr ImU32 kHudTextDisabledColor = IM_COL32(0xE6, 0xE8, 0xE6, 150);
+inline constexpr ImU32 kHudPlateColor        = IM_COL32(0x00, 0x00, 0x00, 219); // EditorTheme::HudPlate
 
 // Fills `mn`..`mx` with the standard HUD plate colour. Pass the tight bounding box of the
 // content that sits on top (e.g. from ImGui::CalcTextSize / ImFont::CalcTextSizeA), already
@@ -426,6 +424,207 @@ inline constexpr ImU32 kHudPlateColor        = IM_COL32(0x0E, 0x0E, 0x11, 219); 
 inline void DrawHudPlate(ImDrawList* dl, ImVec2 mn, ImVec2 mx, float rounding = 4.0f) {
     dl->AddRectFilled(mn, mx, kHudPlateColor, rounding);
     dl->AddRect(mn, mx, EditorTheme::U32(EditorTheme::Hairline), rounding, 0, 1.0f);
+}
+
+// --- Depth, chips and rows (Editor Enhancers polish pass) ------------------------------------
+// A soft drop shadow under a floating card or popover: rounded rings, fading out over `spread`,
+// nudged down a little as if lit from above. Draw it before the card.
+inline void DrawSoftShadow(ImDrawList* dl, ImVec2 mn, ImVec2 mx, float rounding, float spread, float alpha = 0.55f) {
+    constexpr int kSteps = 6;
+    const float drop = spread * 0.3f;
+    for (int i = kSteps; i >= 1; --i) {
+        const float t = (float)i / (float)kSteps; // outermost ring first
+        const float grow = spread * t;
+        const float a = alpha * (1.0f - t) * (1.0f - t) * (2.0f / kSteps) + alpha * 0.02f;
+        dl->AddRectFilled(ImVec2(mn.x - grow, mn.y - grow + drop), ImVec2(mx.x + grow, mx.y + grow + drop),
+                          IM_COL32(0, 0, 0, (int)(std::min(1.0f, a) * 255.0f)), rounding + grow);
+    }
+}
+
+// Text cut with an ellipsis at `maxX`; `pos` is its top-left.
+inline void TextEllipsis(ImDrawList* dl, ImVec2 pos, float maxX, ImU32 col, const char* text) {
+    const ImVec2 ts = ImGui::CalcTextSize(text, nullptr, true);
+    if (pos.x + ts.x <= maxX) { dl->AddText(pos, col, text, ImGui::FindRenderedTextEnd(text)); return; }
+    ImGui::PushStyleColor(ImGuiCol_Text, ImGui::ColorConvertU32ToFloat4(col));
+    ImGui::RenderTextEllipsis(dl, pos, ImVec2(maxX, pos.y + ts.y), maxX, text, nullptr, &ts);
+    ImGui::PopStyleColor();
+}
+
+// A dashed rectangle outline (axis-aligned dashes, pixel-snapped): a drop target waiting for a drop.
+inline void DrawDashedRect(ImDrawList* dl, ImVec2 mn, ImVec2 mx, ImU32 col, float dash = 0.0f, float gap = 0.0f) {
+    dash = dash > 0.0f ? dash : EditorTheme::Px(5.0f);
+    gap = gap > 0.0f ? gap : EditorTheme::Px(3.0f);
+    const float t = std::max(1.0f, std::floor(EditorTheme::Px(1.0f)));
+    mn = ImVec2(std::floor(mn.x), std::floor(mn.y));
+    mx = ImVec2(std::floor(mx.x), std::floor(mx.y));
+    for (float x = mn.x; x < mx.x; x += dash + gap) {
+        const float x1 = std::min(x + dash, mx.x);
+        dl->AddRectFilled(ImVec2(x, mn.y), ImVec2(x1, mn.y + t), col);
+        dl->AddRectFilled(ImVec2(x, mx.y - t), ImVec2(x1, mx.y), col);
+    }
+    for (float y = mn.y; y < mx.y; y += dash + gap) {
+        const float y1 = std::min(y + dash, mx.y);
+        dl->AddRectFilled(ImVec2(mn.x, y), ImVec2(mn.x + t, y1), col);
+        dl->AddRectFilled(ImVec2(mx.x - t, y), ImVec2(mx.x, y1), col);
+    }
+}
+
+// A disclosure chevron drawn as a stroke so it can turn: `angle` 0 points right, pi/2 points down.
+// `size` is its height when pointing right.
+inline void DrawChevron(ImDrawList* dl, ImVec2 c, float size, float angle, ImU32 col, float thickness = 0.0f) {
+    const float s = size * 0.5f, cs = std::cos(angle), sn = std::sin(angle);
+    const ImVec2 base[3] = {ImVec2(-s * 0.5f, -s), ImVec2(s * 0.5f, 0.0f), ImVec2(-s * 0.5f, s)};
+    ImVec2 pts[3];
+    for (int i = 0; i < 3; ++i)
+        pts[i] = ImVec2(c.x + base[i].x * cs - base[i].y * sn, c.y + base[i].x * sn + base[i].y * cs);
+    dl->AddPolyline(pts, 3, col, ImDrawFlags_None, thickness > 0.0f ? thickness : EditorTheme::Px(1.5f));
+}
+
+// A framed foldout (a TreeNode that pushes, so the caller TreePops while it is open): the raised
+// strip with a hairline, a stroke chevron that turns as it opens, and the label. ImGui's own filled
+// triangle and label are hidden; the item keeps its label, so its ID and test lookups don't change.
+inline bool FramedFoldout(const char* label, ImGuiTreeNodeFlags flags = 0) {
+    const ImGuiStyle& style = ImGui::GetStyle();
+    const float x0 = ImGui::GetCursorScreenPos().x;
+    ImGui::PushStyleColor(ImGuiCol_Header,        EditorTheme::Raised);
+    ImGui::PushStyleColor(ImGuiCol_HeaderHovered, EditorTheme::Hover);
+    ImGui::PushStyleColor(ImGuiCol_HeaderActive,  EditorTheme::Pressed);
+    ImGui::PushStyleColor(ImGuiCol_Border,        EditorTheme::Hairline);
+    ImGui::PushStyleColor(ImGuiCol_Text,          ImVec4(0.0f, 0.0f, 0.0f, 0.0f));
+    const bool open = ImGui::TreeNodeEx(label, flags | ImGuiTreeNodeFlags_Framed | ImGuiTreeNodeFlags_SpanAvailWidth);
+    ImGui::PopStyleColor(5);
+    const ImVec2 mn = ImGui::GetItemRectMin(), mx = ImGui::GetItemRectMax();
+    ImDrawList* dl = ImGui::GetWindowDrawList();
+    const float fs = ImGui::GetFontSize();
+    const float cy = std::floor((mn.y + mx.y) * 0.5f);
+    const bool hov = ImGui::IsItemHovered();
+    const float t = EditorTheme::AnimT(ImGui::GetItemID() ^ 0x5F01D0E7u, open, EditorTheme::MotionNormal);
+    DrawChevron(dl, ImVec2(std::floor(x0 + style.FramePadding.x + fs * 0.5f) + 0.5f, cy + 0.5f), EditorTheme::Px(8.0f),
+                t * 1.5707963f, EditorTheme::U32(hov ? EditorTheme::Secondary : EditorTheme::Dim));
+    const char* end = ImGui::FindRenderedTextEnd(label);
+    const ImVec2 ts = ImGui::CalcTextSize(label, end);
+    dl->AddText(ImVec2(x0 + fs + style.FramePadding.x * 2.0f, std::floor(cy - ts.y * 0.5f)), EditorTheme::U32(EditorTheme::Text), label, end);
+    return open;
+}
+// A collapsible section inside a panel (ImGui::CollapsingHeader semantics: no TreePop) in the same look.
+inline bool Foldout(const char* label, ImGuiTreeNodeFlags flags = 0) {
+    return FramedFoldout(label, flags | ImGuiTreeNodeFlags_CollapsingHeader);
+}
+
+// A small status pill drawn at `mn` (top-left): mono capitals in `col` on a faint wash of it with
+// a soft edge ("KEEP", "OFF"). Returns its width.
+inline float DrawStatusPill(ImDrawList* dl, ImVec2 mn, const char* text, ImVec4 col, float alpha = 1.0f) {
+    EditorTheme::PushMonoSmall();
+    const ImVec2 ts = ImGui::CalcTextSize(text);
+    const ImVec2 pad(EditorTheme::Px(5.0f), EditorTheme::Px(1.5f));
+    const ImVec2 mx(mn.x + ts.x + pad.x * 2.0f, mn.y + ts.y + pad.y * 2.0f);
+    const float r = (mx.y - mn.y) * 0.5f;
+    dl->AddRectFilled(mn, mx, EditorTheme::U32(EditorTheme::WithAlpha(col, 0.14f * alpha)), r);
+    dl->AddRect(mn, mx, EditorTheme::U32(EditorTheme::WithAlpha(col, 0.45f * alpha)), r, 0, 1.0f);
+    dl->AddText(ImVec2(mn.x + pad.x, mn.y + pad.y), EditorTheme::U32(EditorTheme::WithAlpha(col, col.w * alpha)), text);
+    EditorTheme::PopFont();
+    return mx.x - mn.x;
+}
+inline ImVec2 StatusPillSize(const char* text) {
+    EditorTheme::PushMonoSmall();
+    const ImVec2 ts = ImGui::CalcTextSize(text);
+    EditorTheme::PopFont();
+    return ImVec2(ts.x + EditorTheme::Px(10.0f), ts.y + EditorTheme::Px(3.0f));
+}
+
+// A user colour's mark at a row's or tile's left edge: a slim rounded bar.
+inline void DrawColorStripe(ImDrawList* dl, float x, float y0, float y1, ImU32 col) {
+    const float w = EditorTheme::UserStripeW();
+    dl->AddRectFilled(ImVec2(x, y0), ImVec2(x + w, y1), col | IM_COL32_A_MASK, w * 0.5f);
+}
+
+// A clickable pill: page chips, variant chips, "+N". `selected` reads as an accent wash with bright
+// text; hover eases in. `tint` (a packed user colour, or 0) adds a small dot before the label.
+// The label is cut with an ellipsis past `maxW` (0 = no limit). Returns true when clicked.
+inline bool Pill(const char* id, const char* icon, const char* label, bool selected, float maxW = 0.0f,
+                 unsigned tint = 0, bool dim = false, bool* hoveredOut = nullptr) {
+    EditorTheme::PushSmall();
+    const float padX = EditorTheme::Px(9.0f);
+    const float dot = tint ? EditorTheme::Px(12.0f) : 0.0f;
+    const ImVec2 is = icon ? ImGui::CalcTextSize(icon) : ImVec2(0, 0);
+    const float iconGap = icon ? EditorTheme::Px(6.0f) : 0.0f;
+    const ImVec2 ls = ImGui::CalcTextSize(label, nullptr, true);
+    const float h = ImGui::GetFrameHeight() - EditorTheme::Px(4.0f);
+    float w = padX * 2.0f + dot + is.x + iconGap + ls.x;
+    if (maxW > 0.0f && w > maxW) w = maxW;
+    const ImVec2 p = ImGui::GetCursorScreenPos();
+    const ImVec2 mn(p.x, p.y + EditorTheme::Px(2.0f));
+    ImGui::SetCursorScreenPos(mn);
+    const bool clicked = ImGui::InvisibleButton(id, ImVec2(w, h));
+    const bool hov = ImGui::IsItemHovered();
+    const bool held = ImGui::IsItemActive();
+    if (hoveredOut) *hoveredOut = hov;
+    const float ht = EditorTheme::AnimT(ImGui::GetItemID(), hov || held);
+    ImDrawList* dl = ImGui::GetWindowDrawList();
+    const ImVec2 mx(mn.x + w, mn.y + h);
+    ImVec4 bg = selected ? EditorTheme::AccentWash : EditorTheme::Raised;
+    bg = EditorTheme::Mix(bg, selected ? EditorTheme::WithAlpha(EditorTheme::Accent, 0.20f) : EditorTheme::Hover, ht);
+    if (held) bg = selected ? EditorTheme::WithAlpha(EditorTheme::Accent, 0.28f) : EditorTheme::Pressed;
+    dl->AddRectFilled(mn, mx, EditorTheme::U32(bg), h * 0.5f);
+    if (selected) dl->AddRect(mn, mx, EditorTheme::U32(EditorTheme::WithAlpha(EditorTheme::Accent, 0.35f)), h * 0.5f, 0, 1.0f);
+    const ImVec4 tc = dim ? EditorTheme::Dim
+                    : selected ? EditorTheme::AccentBright : EditorTheme::Mix(EditorTheme::Secondary, EditorTheme::Text, ht);
+    float x = mn.x + padX;
+    const float cy = (mn.y + mx.y) * 0.5f;
+    if (tint) {
+        const float r = EditorTheme::Px(3.0f);
+        dl->AddCircleFilled(ImVec2(x + r, cy), r, EditorTheme::U32(EditorTheme::UserGlyphColor(tint)), 12);
+        x += dot;
+    }
+    if (icon) { dl->AddText(ImVec2(x, cy - is.y * 0.5f), EditorTheme::U32(tc), icon); x += is.x + iconGap; }
+    TextEllipsis(dl, ImVec2(x, cy - ls.y * 0.5f), mx.x - padX * 0.6f, EditorTheme::U32(tc), label);
+    EditorTheme::PopFont();
+    return clicked;
+}
+
+// A keyboard hint drawn as a key: a small raised cap with a hairline edge and the key's name in the
+// mono face. An item, so it lays out with SameLine like text.
+inline void KeyCap(const char* key) {
+    EditorTheme::PushMonoSmall();
+    const ImVec2 ts = ImGui::CalcTextSize(key);
+    const ImVec2 pad(EditorTheme::Px(5.0f), EditorTheme::Px(1.5f));
+    const ImVec2 p = ImGui::GetCursorScreenPos();
+    const ImVec2 mx(p.x + ts.x + pad.x * 2.0f, p.y + ts.y + pad.y * 2.0f);
+    ImDrawList* dl = ImGui::GetWindowDrawList();
+    const float r = EditorTheme::Px(3.0f);
+    dl->AddRectFilled(p, mx, EditorTheme::U32(EditorTheme::Raised), r);
+    dl->AddRect(p, mx, EditorTheme::U32(EditorTheme::Hairline), r, 0, 1.0f);
+    dl->AddLine(ImVec2(p.x + r, mx.y - 0.5f), ImVec2(mx.x - r, mx.y - 0.5f), EditorTheme::U32(EditorTheme::Strong), 1.0f);
+    dl->AddText(ImVec2(p.x + pad.x, p.y + pad.y), EditorTheme::U32(EditorTheme::Secondary), key);
+    ImGui::Dummy(ImVec2(mx.x - p.x, mx.y - p.y));
+    EditorTheme::PopFont();
+}
+
+// The background of a styled tree row (Hierarchy, folder tree): the user colour as a stripe at the
+// row's indent and a faint wash, then hover and selection over it, so a selected row always reads
+// as selected whatever its colour. `fill`: 0 = icon only (no stripe, no wash), 1 = flat, 2 = gradient.
+// `selT` / `hovT` are 0..1 fades (EditorTheme::AnimT); the wash eases back as the row is selected.
+inline void DrawStyledRowBackground(ImDrawList* dl, ImVec2 rowMin, ImVec2 rowMax, float colorX, unsigned color,
+                                    int fill, float selT, float hovT) {
+    if (color && fill != 0) {
+        const ImU32 rgb = color & 0x00FFFFFFu;
+        const float washK = 1.0f - 0.65f * selT;
+        if (fill == 1) {
+            dl->AddRectFilled(ImVec2(colorX, rowMin.y), rowMax, rgb | ((ImU32)(EditorTheme::UserFlatAlpha * washK * 255.0f) << 24));
+        } else {
+            const float x1 = colorX + (rowMax.x - colorX) * 0.6f;
+            const ImU32 a = rgb | ((ImU32)(EditorTheme::UserWashAlpha * washK * 255.0f) << 24);
+            dl->AddRectFilledMultiColor(ImVec2(colorX, rowMin.y), ImVec2(x1, rowMax.y), a, rgb, rgb, a);
+        }
+        DrawColorStripe(dl, colorX, rowMin.y + EditorTheme::Px(3.0f), rowMax.y - EditorTheme::Px(3.0f), color);
+    }
+    if (hovT > 0.0f && selT < 1.0f)
+        dl->AddRectFilled(rowMin, rowMax, EditorTheme::U32(EditorTheme::WithAlpha(EditorTheme::Hover, hovT * (1.0f - selT) * 0.9f)));
+    if (selT > 0.0f) {
+        dl->AddRectFilled(rowMin, rowMax, EditorTheme::U32(EditorTheme::WithAlpha(EditorTheme::Accent, 0.14f * selT)));
+        dl->AddRectFilled(rowMin, ImVec2(rowMin.x + EditorTheme::Px(2.0f), rowMax.y),
+                          EditorTheme::U32(EditorTheme::WithAlpha(EditorTheme::Accent, selT)));
+    }
 }
 
 // --- Startup contrast assert (Phase 1 item 1) -----------------------------------------------

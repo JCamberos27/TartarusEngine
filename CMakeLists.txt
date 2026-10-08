@@ -570,6 +570,9 @@ target_compile_definitions(TartarusEngine PRIVATE $<$<CONFIG:Debug>:TARTARUS_PHY
 add_dependencies(TartarusEngine physx_external)
 
 target_compile_definitions(TartarusEngine PRIVATE GLM_ENABLE_EXPERIMENTAL GLFW_INCLUDE_NONE IMGUI_DEFINE_MATH_OPERATORS)
+# --editor-tests: ImGui's test-engine item hooks (id, rect, label per widget) in the host executable
+# only. They cost one bool test per item while no test runs (ImGuiContext::TestEngineHookItems).
+target_compile_definitions(TartarusEngine PRIVATE IMGUI_ENABLE_TEST_ENGINE)
 
 # Warning flags (#180) — the build previously set none, so it ran at MSVC's default /W1 and hid
 # most latent problems (unused results, signed/unsigned mismatch, uninitialized reads, shadowed
@@ -683,7 +686,13 @@ endforeach()
 # library on Windows, which skips the .lib/.exp import pair an end user has no use for.
 install(TARGETS TartarusEngine RUNTIME DESTINATION ".")
 install(DIRECTORY "${CMAKE_BINARY_DIR}/$<CONFIG>/Managed/" DESTINATION "Managed"
-  PATTERN "obj" EXCLUDE PATTERN "bin" EXCLUDE)
+  PATTERN "obj" EXCLUDE PATTERN "bin" EXCLUDE
+  PATTERN "Tartarus.Gameplay*" EXCLUDE PATTERN "Tartarus.Editor*" EXCLUDE)
+if(TARTARUS_BUILD_SAMPLE_GAME)
+  install(DIRECTORY "${CMAKE_SOURCE_DIR}/project/Scripts/bin/" DESTINATION "project/Scripts/bin"
+    FILES_MATCHING PATTERN "Tartarus.Gameplay.dll" PATTERN "Tartarus.Gameplay.deps.json"
+    PATTERN "Tartarus.Editor.dll" PATTERN "Tartarus.Editor.deps.json")
+endif()
 install(FILES
   $<TARGET_FILE:TartarusGame>
   $<TARGET_FILE:TartarusEditor>

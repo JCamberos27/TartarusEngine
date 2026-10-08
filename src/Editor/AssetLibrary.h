@@ -1,6 +1,7 @@
 #pragma once
 #include <filesystem>
 #include <string>
+#include <functional>
 #include <vector>
 #include <memory>
 #include <map>
@@ -176,6 +177,10 @@ public:
     // the Asset Browser only offers this behind a confirmation dialog.
     void DeleteFolderRecursive(const std::string& folderPath);
     const std::vector<std::string>& Folders() const { return m_Folders; }
+    // Fired after a folder is renamed / moved (newPath = where it went) or deleted (newPath "") -
+    // for data keyed by folder path elsewhere (Editor Enhancers folder styles and bookmarks).
+    // Every rename/delete call site goes through these three functions, so one hook covers them.
+    std::function<void(const std::string& oldPath, const std::string& newPath)> OnFolderPathChanged;
 
     // Writes m_Folders back to project/settings.json (#121).
     void PersistFolders();

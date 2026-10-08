@@ -298,6 +298,20 @@ struct LayerComponent {
 struct HiddenInSceneTag {};
 struct SceneLockedTag {};
 
+// Editor Enhancers / vHierarchy (docs/EDITOR_ENHANCERS.md): a Hierarchy row's custom look -
+// a Font Awesome icon (by name, e.g. "cube"; "" keeps the kind glyph), a colour washed across the
+// row, and the separator/header flag. Editor-only like the two tags above: no runtime system
+// reads it. It is scene data on purpose (saved per entity as "hierStyle"), so a team sees the
+// same organisation, it travels with prefabs, and undo covers it via the scene snapshot.
+struct HierarchyStyleComponent {
+    enum Fill : std::uint8_t { None = 0, Flat = 1, Gradient = 2 };
+    std::string   Icon;              // FA name; "" = the row's normal kind glyph
+    std::uint32_t Color = 0;         // IM_COL32-packed RGBA; 0 = no colour
+    std::uint8_t  FillMode = Gradient;
+    bool          Separator = false; // draw as a section header: hairline + centred caps name, no toggles
+    bool IsEmpty() const { return Icon.empty() && Color == 0 && !Separator; }
+};
+
 // Runtime only, never saved: set by FirstPersonPresentation on the arms and weapon entities it
 // creates for Play, and read by the renderer's view-model sub-pass. Tagged entities are drawn
 // last, after a depth clear, projected with FirstPersonControllerComponent::ViewModelFov instead

@@ -1,3 +1,4 @@
+#include "EditorUIPrimitives.h"
 #include "ScriptIDE.h"
 #include "../../extern/ImGuiColorTextEdit/TextEditor.h"
 #include "AtomicFile.h"
@@ -315,11 +316,11 @@ void ScriptIDE::Impl::Draw() {
     ImGui::SameLine(0,0);ImGui::BeginChild("EditorArea",ImVec2(0,0));
     if(Active && Active->Conflict) {
         ImGui::TextColored(ImVec4(1,.7f,.2f,1),"File changed on disk. Your buffer has been kept.");
-        if(ImGui::Button("Reload disk version"))ClosePath="reload:"+Active->Path;ImGui::SameLine();if(ImGui::Button("Overwrite disk with buffer"))Save(*Active,true);
+        if(EditorUIPrimitives::SecondaryButton("Reload disk version"))ClosePath="reload:"+Active->Path;ImGui::SameLine();if(EditorUIPrimitives::SecondaryButton("Overwrite disk with buffer"))Save(*Active,true);
     }
     if(FindVisible) {
-        Field("Find",Find,180);ImGui::SameLine();if(ImGui::Button("Previous"))FindNext(true);ImGui::SameLine();if(ImGui::Button("Next"))FindNext();ImGui::SameLine();ImGui::Checkbox("Replace",&ReplaceVisible);ImGui::SameLine();if(ImGui::SmallButton("Close find"))FindVisible=false;
-        if(ReplaceVisible && Active && !Active->Editor.IsReadOnly()){Field("With",Replace,180);ImGui::SameLine();if(ImGui::Button("Replace match") && Active->Editor.GetSelectedText()==Find){Active->Editor.ReplaceSelection(Replace);Queue();Persist();}ImGui::SameLine();if(ImGui::Button("Replace all") && !Find.empty()){auto text=Active->Editor.GetText();size_t p=0;while((p=text.find(Find,p))!=std::string::npos){text.replace(p,Find.size(),Replace);p+=Replace.size();}Active->Editor.SelectAll();Active->Editor.ReplaceSelection(text);Queue();Persist();}}
+        Field("Find",Find,180);ImGui::SameLine();if(EditorUIPrimitives::SecondaryButton("Previous"))FindNext(true);ImGui::SameLine();if(EditorUIPrimitives::SecondaryButton("Next"))FindNext();ImGui::SameLine();ImGui::Checkbox("Replace",&ReplaceVisible);ImGui::SameLine();if(EditorUIPrimitives::SecondaryButton("Close find"))FindVisible=false;
+        if(ReplaceVisible && Active && !Active->Editor.IsReadOnly()){Field("With",Replace,180);ImGui::SameLine();if(EditorUIPrimitives::SecondaryButton("Replace match") && Active->Editor.GetSelectedText()==Find){Active->Editor.ReplaceSelection(Replace);Queue();Persist();}ImGui::SameLine();if(EditorUIPrimitives::SecondaryButton("Replace all") && !Find.empty()){auto text=Active->Editor.GetText();size_t p=0;while((p=text.find(Find,p))!=std::string::npos){text.replace(p,Find.size(),Replace);p+=Replace.size();}Active->Editor.SelectAll();Active->Editor.ReplaceSelection(text);Queue();Persist();}}
     }
     const float paneHeight=std::max(1.0f,ImGui::GetContentRegionAvail().y);
     const float infoMin=std::min(64.0f*scale,paneHeight*.3f);
@@ -390,22 +391,22 @@ void ScriptIDE::Impl::Draw() {
         for(const auto& item:Result.value("completions",Json::array())){const auto name=item["name"].get<std::string>();if(!CompletionFilter.empty() && name.find(CompletionFilter)==std::string::npos)continue;ImGui::PushID(++id);if(ImGui::Selectable((name+"   "+item["kind"].get<std::string>()).c_str())){ApplyCompletion(name);CompletionFilter.clear();ImGui::CloseCurrentPopup();}if(ImGui::IsItemHovered())ImGui::SetTooltip("%s",item["detail"].get<std::string>().c_str());ImGui::PopID();}ImGui::EndChild();ImGui::EndPopup();
     }
     if(GoTo){ImGui::OpenPopup("Go to line");GoTo=false;}
-    if(ImGui::BeginPopup("Go to line")){ImGui::InputInt("Line",&GoLine);if(ImGui::Button("Go") && Active){Jump(*Active,GoLine,1);ImGui::CloseCurrentPopup();}ImGui::EndPopup();}
+    if(ImGui::BeginPopup("Go to line")){ImGui::InputInt("Line",&GoLine);if(EditorUIPrimitives::SecondaryButton("Go") && Active){Jump(*Active,GoLine,1);ImGui::CloseCurrentPopup();}ImGui::EndPopup();}
     if(RenamePrompt){ImGui::OpenPopup("Rename symbol");RenamePrompt=false;}
-    if(ImGui::BeginPopup("Rename symbol")){Field("New name",NewName,220);if(ImGui::Button("Preview rename")){Queue("rename");ImGui::CloseCurrentPopup();}ImGui::EndPopup();}
+    if(ImGui::BeginPopup("Rename symbol")){Field("New name",NewName,220);if(EditorUIPrimitives::SecondaryButton("Preview rename")){Queue("rename");ImGui::CloseCurrentPopup();}ImGui::EndPopup();}
     if(RenamePreview){ImGui::OpenPopup("Rename preview");RenamePreview=false;}
-    if(ImGui::BeginPopupModal("Rename preview",nullptr,ImGuiWindowFlags_AlwaysAutoResize)){ImGui::TextUnformatted("Review references; Apply changes buffers until you Save All.");Locations(Result.value("references",Json::array()));if(ImGui::Button("Apply",ImVec2(100,0))){ApplyRename();ImGui::CloseCurrentPopup();}ImGui::SameLine();if(ImGui::Button("Cancel",ImVec2(100,0)))ImGui::CloseCurrentPopup();ImGui::EndPopup();}
+    if(ImGui::BeginPopupModal("Rename preview",nullptr,ImGuiWindowFlags_AlwaysAutoResize)){ImGui::TextUnformatted("Review references; Apply changes buffers until you Save All.");Locations(Result.value("references",Json::array()));if(EditorUIPrimitives::SecondaryButton("Apply",ImVec2(100,0))){ApplyRename();ImGui::CloseCurrentPopup();}ImGui::SameLine();if(EditorUIPrimitives::SecondaryButton("Cancel",ImVec2(100,0)))ImGui::CloseCurrentPopup();ImGui::EndPopup();}
     if(ProjectFind){ImGui::OpenPopup("Find in project");ProjectFind=false;}
-    if(ImGui::BeginPopup("Find in project")){Field("Text",ProjectSearch,300);ImGui::SameLine();if(ImGui::Button("Search"))SearchProject();ImGui::BeginChild("ProjectMatches",ImVec2(560,280));Locations(SearchResults);ImGui::EndChild();ImGui::EndPopup();}
+    if(ImGui::BeginPopup("Find in project")){Field("Text",ProjectSearch,300);ImGui::SameLine();if(EditorUIPrimitives::SecondaryButton("Search"))SearchProject();ImGui::BeginChild("ProjectMatches",ImVec2(560,280));Locations(SearchResults);ImGui::EndChild();ImGui::EndPopup();}
     if(!ClosePath.empty()) {
         bool reload=ClosePath.rfind("reload:",0)==0;auto path=reload?ClosePath.substr(7):ClosePath;Document* closing=nullptr;for(auto& d:Documents)if(Same(d->Path,path))closing=d.get();
         if(closing && closing->Dirty())ImGui::OpenPopup("Unsaved script");else {if(closing){if(reload)Reload(*closing);else Close(path);}ClosePath.clear();}
     }
     if(ImGui::BeginPopupModal("Unsaved script",nullptr,ImGuiWindowFlags_AlwaysAutoResize)) {
         ImGui::TextWrapped("Save changes before closing or reloading this script?");
-        if(ImGui::Button("Save")){auto path=ClosePath.rfind("reload:",0)==0?ClosePath.substr(7):ClosePath;for(auto& d:Documents)if(Same(d->Path,path) && Save(*d)){if(ClosePath.rfind("reload:",0)!=0)Close(path);ClosePath.clear();ImGui::CloseCurrentPopup();break;}}
-        ImGui::SameLine();if(ImGui::Button("Discard")){if(ClosePath.rfind("reload:",0)==0){auto path=ClosePath.substr(7);for(auto& d:Documents)if(Same(d->Path,path))Reload(*d);}else Close(ClosePath);ClosePath.clear();ImGui::CloseCurrentPopup();}
-        ImGui::SameLine();if(ImGui::Button("Cancel")){ClosePath.clear();ImGui::CloseCurrentPopup();}ImGui::EndPopup();
+        if(EditorUIPrimitives::SecondaryButton("Save")){auto path=ClosePath.rfind("reload:",0)==0?ClosePath.substr(7):ClosePath;for(auto& d:Documents)if(Same(d->Path,path) && Save(*d)){if(ClosePath.rfind("reload:",0)!=0)Close(path);ClosePath.clear();ImGui::CloseCurrentPopup();break;}}
+        ImGui::SameLine();if(EditorUIPrimitives::SecondaryButton("Discard")){if(ClosePath.rfind("reload:",0)==0){auto path=ClosePath.substr(7);for(auto& d:Documents)if(Same(d->Path,path))Reload(*d);}else Close(ClosePath);ClosePath.clear();ImGui::CloseCurrentPopup();}
+        ImGui::SameLine();if(EditorUIPrimitives::SecondaryButton("Cancel")){ClosePath.clear();ImGui::CloseCurrentPopup();}ImGui::EndPopup();
     }
     ImGui::End();
 }

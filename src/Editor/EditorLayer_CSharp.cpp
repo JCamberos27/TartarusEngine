@@ -1,3 +1,4 @@
+#include "EditorTestProbe.h" // --editor-tests widget names
 #include "EditorLayer.h"
 #include "ScriptIDE.h"
 #include "ProjectPaths.h"
@@ -10,9 +11,13 @@
 #include "ScriptReferenceWidgets.h"
 #include "AssetPathPicker.h"
 #include "AssetDatabase.h"
+#include "EditorTheme.h"
+#include "EditorUIPrimitives.h"
 #include <imgui.h>
+#include <imgui_internal.h> // DC.IsSameLine
 #include <json.hpp>
 #include <cfloat>
+#include <cstring>
 using namespace EditorInternal;
 bool DrawScriptReferenceField(World& world, entt::entity owner, const nlohmann::json& metadata,
                               nlohmann::json& value, GLFWwindow* window) {
@@ -154,17 +159,43 @@ int EditorLayer::ManagedEditorService(World& world,AssetLibrary& assets,int op,S
     if(op==129) {if(*text)OpenScriptIDE(ProjectPaths::Resolve(text),r.Result,static_cast<int>(r.Value));else OpenScriptIDE();return 1;}
     if(!windows && !inlineInspector)return 0;
     if(op==117) {
-        const bool open=ImGui::TreeNodeEx(text,ImGuiTreeNodeFlags_SpanAvailWidth|(r.Result?ImGuiTreeNodeFlags_DefaultOpen:0));
+        // A C# foldout: the framed raised strip every Inspector foldout uses.
+        const bool open=EditorUIPrimitives::FramedFoldout(text,r.Result?ImGuiTreeNodeFlags_DefaultOpen:0);
         if(open)++groups;return open?1:0;
     }
     if(op==118) {if(!groups)return 0;ImGui::TreePop();--groups;return 1;}
+    // vInspector: greyed-out ([ReadOnly] / [DisableIf]) fields and inline rows (variant chips).
+    if(op==130) {if(r.Result)ImGui::BeginDisabled(true);else ImGui::EndDisabled();return 1;}
+    if(op==131) {ImGui::SameLine();return 1;}
     if(op==122) {if(ImGui::IsItemHovered())EditorUI::SetTooltip("%s",text);return 1;}
     ImGui::PushID(++widgets);
     struct Pop {~Pop(){ImGui::PopID();}} pop;
+    // --editor-tests: name the widget a C# inspector draws after its label ("cs:Max Speed"), and a
+    // text field after its value too, so a read-out can be checked ("cs:Doubled##show=8").
+    struct Tag {
+        int op; const char* label; Scripting::NativeRequest& r;
+        ~Tag() {
+            if(!EditorTestProbeActive() || op<103 || op>121) return;
+            std::string name=label;
+            if(op==115) {
+                try { name=nlohmann::json::parse(label).value("label",std::string{})+"="+(r.Text?r.Text:""); } catch(...) {}
+            } else if(op==121) {
+                try { name=nlohmann::json::parse(label).value("label",std::string{}); } catch(...) {}
+            }
+            EditorTestTag(("cs:"+name).c_str());
+        }
+    } tag{op,text,r};
     switch(op) {
     case 102:ImGui::TextUnformatted(text);return 1;
-    case 103:return ActionButton(text,"Run this C# editor command")?1:0;
-    case 104:{bool value=r.Result!=0;const bool changed=ImGui::Checkbox(text,&value);r.Result=value?1:0;return changed?1:0;}
+    case 103:{
+        // Buttons and variant chips: the raised secondary button, so neither reads as bare text.
+        const bool chip=ImGui::GetCurrentWindow()->DC.IsSameLine || std::strstr(text,"##")!=nullptr;
+        if(chip) EditorTheme::PushSmall();
+        const bool clicked=EditorUIPrimitives::SecondaryButton(text);
+        if(chip) EditorTheme::PopFont();
+        return clicked?1:0;
+    }
+    case 104:{bool value=r.Result!=0;const bool changed=EditorUIPrimitives::Checkbox(text,&value);r.Result=value?1:0;return changed?1:0;}
     case 105:return ImGui::DragFloat(text,&r.Value,.05f)?1:0;
     case 106:return ImGui::DragInt(text,&r.Result,1)?1:0;
     case 107:return ImGui::DragFloat3(text,&r.A.x,.05f)?1:0;
@@ -183,9 +214,13 @@ int EditorLayer::ManagedEditorService(World& world,AssetLibrary& assets,int op,S
               if(i && ImGui::GetItemRectMax().x+ImGui::GetStyle().ItemSpacing.x+width<=right)ImGui::SameLine();
               ImGui::PushID(static_cast<int>(i));
               const bool active=r.Result==static_cast<int>(i);
-              if(active)ImGui::PushStyleColor(ImGuiCol_Button,ImGui::GetStyleColorVec4(ImGuiCol_ButtonActive));
+              // A toolbar of choices: the segmented look (accent wash on the chosen one).
+              ImGui::PushStyleColor(ImGuiCol_Button,active?EditorTheme::AccentWash:EditorTheme::Raised);
+              ImGui::PushStyleColor(ImGuiCol_ButtonHovered,active?EditorTheme::WithAlpha(EditorTheme::Accent,0.20f):EditorTheme::Hover);
+              ImGui::PushStyleColor(ImGuiCol_ButtonActive,active?EditorTheme::WithAlpha(EditorTheme::Accent,0.28f):EditorTheme::Pressed);
+              ImGui::PushStyleColor(ImGuiCol_Text,active?EditorTheme::AccentBright:EditorTheme::Secondary);
               if(ImGui::Button(labels[i].c_str()))r.Result=static_cast<int>(i);
-              if(active)ImGui::PopStyleColor();
+              ImGui::PopStyleColor(4);
             ImGui::PopID();
         }
         return 1;
@@ -208,7 +243,7 @@ int EditorLayer::ManagedEditorService(World& world,AssetLibrary& assets,int op,S
             for(const auto& f:rc.Meta.Fields)if(field==ReflectFieldKey(f)) {DrawReflectedField(world,assets,rc,f,{entity});return 1;}
         return 0;
     }
-    case 130:{
+    case 132:{
         const auto data=nlohmann::json::parse(text);static thread_local std::string result;
         const auto label=data.at("label").get<std::string>();auto value=data.at("value");
         ImGui::TextUnformatted(label.c_str());ImGui::SetNextItemWidth(-FLT_MIN);
@@ -216,7 +251,7 @@ int EditorLayer::ManagedEditorService(World& world,AssetLibrary& assets,int op,S
         if(changed) {PushUndo(world,"Set " + label);m_Dirty=true;}
         result=data.at("metadata").at("kind")=="asset-ref"?value.dump():value.get<std::string>();r.Text=result.c_str();return changed?1:0;
     }
-    case 131:return EditorUI::ColorEditLinear(text,&r.A.x,ImGuiColorEditFlags_DisplayHex)?1:0;
+    case 133:return EditorUI::ColorEditLinear(text,&r.A.x,ImGuiColorEditFlags_DisplayHex)?1:0;
     }
     return 0;
 }
@@ -229,8 +264,8 @@ void EditorLayer::DrawManagedEditorTools(World& world,AssetLibrary& assets,float
     while(windows>0){ImGui::End();--windows;}
 }
 bool EditorLayer::DrawManagedInspector(World& world,AssetLibrary& assets,entt::entity entity,const std::string& type,
-                                     std::string* fields,const std::string& metadata) {
-    auto data=nlohmann::json{{"type",type},{"native",fields==nullptr}};
+                                     std::string* fields,const std::string& metadata,std::uint32_t slot) {
+    auto data=nlohmann::json{{"type",type},{"native",fields==nullptr},{"slot",slot}};
     if(fields) {data["values"]=nlohmann::json::parse(*fields,nullptr,false);if(!data["values"].is_object())data["values"]=nlohmann::json::object();data["metadata"]=nlohmann::json::parse(metadata);}
     const std::string payload=data.dump();Scripting::NativeRequest request;request.Entity=entt::to_integral(entity);request.Text=payload.c_str();
     int windows=0,widgets=0,groups=0;
@@ -241,6 +276,15 @@ bool EditorLayer::DrawManagedInspector(World& world,AssetLibrary& assets,entt::e
     while(groups>0){ImGui::TreePop();--groups;}
     while(windows>0){ImGui::End();--windows;}
     ImGui::PopID();
-    if(handled && fields && request.Text)*fields=request.Text;
+    if(handled && fields && request.Text) {
+        const auto before=nlohmann::json::parse(*fields,nullptr,false);
+        const auto after=nlohmann::json::parse(request.Text);
+        if(before!=after) {
+            // The result is still a detached slot copy: capture its authored state before SetSlots.
+            // Explicit C# Undo.RecordScene labels win; ordinary custom fields get automatic history.
+            BeginSceneUndo(world,m_GlobalUndoActive?m_GlobalUndoLabel:"Edit C# Script");
+            *fields=after.dump();
+        }
+    }
     return handled;
 }

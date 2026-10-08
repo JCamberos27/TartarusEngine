@@ -911,7 +911,7 @@ void DrawBarrel(PropertyRows& r, FirstPersonAnimationSet& s, const FirstPersonBa
             r.Value("Sight Line", "not measured",
                     "In Play, aim and hold still for about two seconds without firing: the sight line is measured, and Save appears here.");
         }
-    
+
     } else {
         ImGui::TextWrapped("Edit zero distance and the sight line on the weapon prefab's WeaponDefinition.");
         if(report && report->SightMeasured) {
@@ -986,14 +986,14 @@ void EditorLayer::DrawRecoilAssetEditor(const std::string& path) {
     ImGui::TextUnformatted(fs::u8path(path).filename().u8string().c_str());
     if (!cache.Error.empty()) { ImGui::TextWrapped("%s", cache.Error.c_str()); return; }
     ImGui::BeginDisabled(m_UndoStack.empty());
-    if (ImGui::Button("Undo")) m_RequestGlobalUndo=true;
+    if (EditorUIPrimitives::SecondaryButton("Undo")) m_RequestGlobalUndo=true;
     ImGui::EndDisabled();
     ImGui::SameLine();
     ImGui::BeginDisabled(m_RedoStack.empty());
-    if (ImGui::Button("Redo")) m_RequestGlobalRedo=true;
+    if (EditorUIPrimitives::SecondaryButton("Redo")) m_RequestGlobalRedo=true;
     ImGui::EndDisabled();
     ImGui::SameLine();
-    if (ImGui::Button("Duplicate")) {
+    if (EditorUIPrimitives::SecondaryButton("Duplicate")) {
         const auto base = fs::u8path(path);
         auto target = base.parent_path() / (base.stem().u8string() + " Copy.recoil");
         for (int n = 1; fs::exists(target, ec); ++n)
@@ -1036,10 +1036,10 @@ void EditorLayer::DrawCameraShakeAssetEditor(const std::string& path) {
     }
     ImGui::TextUnformatted(fs::u8path(path).filename().u8string().c_str());
     if(cache.Saved.empty()) { ImGui::TextWrapped("%s",cache.Error.c_str()); return; }
-    ImGui::BeginDisabled(m_UndoStack.empty()); if(ImGui::Button("Undo")) m_RequestGlobalUndo=true; ImGui::EndDisabled();
-    ImGui::SameLine(); ImGui::BeginDisabled(m_RedoStack.empty()); if(ImGui::Button("Redo")) m_RequestGlobalRedo=true; ImGui::EndDisabled();
+    ImGui::BeginDisabled(m_UndoStack.empty()); if(EditorUIPrimitives::SecondaryButton("Undo")) m_RequestGlobalUndo=true; ImGui::EndDisabled();
+    ImGui::SameLine(); ImGui::BeginDisabled(m_RedoStack.empty()); if(EditorUIPrimitives::SecondaryButton("Redo")) m_RequestGlobalRedo=true; ImGui::EndDisabled();
     ImGui::SameLine();
-    if(ImGui::Button("Duplicate")) {
+    if(EditorUIPrimitives::SecondaryButton("Duplicate")) {
         const auto base=fs::u8path(path);
         auto target=base.parent_path()/(base.stem().u8string()+" Copy.camerashake");
         for(int n=1;fs::exists(target,ec);++n) target=base.parent_path()/(base.stem().u8string()+" Copy "+std::to_string(n)+".camerashake");
@@ -1090,7 +1090,7 @@ void EditorLayer::DrawCameraShakeAssetEditor(const std::string& path) {
     static float rpm=700;
     static unsigned previewSeed=0x5eedu;
     ImGui::Checkbox("ADS",&previewAds); ImGui::SameLine(); ImGui::Checkbox("10-shot burst",&previewBurst);
-    ImGui::SameLine();if(ImGui::Button("Resample Scalars"))++previewSeed;
+    ImGui::SameLine();if(EditorUIPrimitives::SecondaryButton("Resample Scalars"))++previewSeed;
     if(previewBurst) ImGui::DragFloat("Preview RPM",&rpm,1,60,2000,"%.0f");
     rpm=std::clamp(rpm,60.0f,2000.0f);
     constexpr int samples=240;
@@ -1484,7 +1484,7 @@ void EditorLayer::DrawWeaponDefinitionEditor(const std::string& path) {
                 changed = true;
             } else Log::Error(why);
         }
-        if (ImGui::Button(s.RecoilProfile.empty() ? "Extract Recoil Asset" : "Duplicate Recoil Asset")) {
+        if (EditorUIPrimitives::SecondaryButton(s.RecoilProfile.empty() ? "Extract Recoil Asset" : "Duplicate Recoil Asset")) {
             const auto base = fs::u8path(path).parent_path() / (fs::u8path(path).stem().u8string() + ".recoil");
             auto target = base;
             for (int n = 1; fs::exists(target, ec); ++n)
@@ -1502,7 +1502,7 @@ void EditorLayer::DrawWeaponDefinitionEditor(const std::string& path) {
         }
         if (!s.RecoilProfile.empty()) {
             ImGui::SameLine();
-            if (ImGui::Button("Open Profile")) {
+            if (EditorUIPrimitives::SecondaryButton("Open Profile")) {
                 openProfile = ProjectPaths::Resolve(s.RecoilProfile);
             }
             r.Note("Shared recoil: edits affect every weapon referencing this asset. Bolt setup stays on this weapon.");
@@ -1511,7 +1511,7 @@ void EditorLayer::DrawWeaponDefinitionEditor(const std::string& path) {
             r.Vec3("Bolt Travel", s.Procedural.Recoil.BoltTravel, 0.001f, "%.4f", "Weapon model units; explicit stroke avoids needing a Fire clip.");
             const auto* report = FindBarrelReport(path);
             ImGui::BeginDisabled(!report || glm::length(report->BoltTravel) < 1e-6f);
-            if (ImGui::Button("Use Measured Bolt Travel")) {
+            if (EditorUIPrimitives::SecondaryButton("Use Measured Bolt Travel")) {
                 s.Procedural.Recoil.BoltTravel = report->BoltTravel;
                 changed = true;
             }
@@ -1556,7 +1556,7 @@ void EditorLayer::DrawWeaponDefinitionEditor(const std::string& path) {
                 s.CameraShake=loaded; changed=true;
             } else Log::Error(why);
         }
-        if(ImGui::Button("Create Firing Shake")) {
+        if(EditorUIPrimitives::SecondaryButton("Create Firing Shake")) {
             const auto base=fs::u8path(path).parent_path()/(fs::u8path(path).stem().u8string()+".camerashake");
             auto target=base;
             for(int n=1;fs::exists(target,ec);++n) target=base.parent_path()/(base.stem().u8string()+" "+std::to_string(n)+".camerashake");
@@ -1568,7 +1568,7 @@ void EditorLayer::DrawWeaponDefinitionEditor(const std::string& path) {
             } else Log::Error("Could not create camera shake asset.");
         }
         if(!s.CameraShakeProfile.empty()) {
-            ImGui::SameLine(); if(ImGui::Button("Open Shake")) openProfile=ProjectPaths::Resolve(s.CameraShakeProfile);
+            ImGui::SameLine(); if(EditorUIPrimitives::SecondaryButton("Open Shake")) openProfile=ProjectPaths::Resolve(s.CameraShakeProfile);
         }
     }
     if (r.Section(ICON_FA_PERSON_RUNNING, "Movement", "sway, breathing, jump, camera, walls")) DrawMovement(r, s.Procedural, ctx);

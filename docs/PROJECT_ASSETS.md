@@ -5,6 +5,12 @@ materials, controllers and authored settings. Follow the root [README](../README
 the payloads and maintain `project/external_assets.csv`; never commit the models, textures,
 animation files or recordings themselves.
 
+The 2026-10-07 integration adds manifest entries for 20 local payloads accompanying new
+optic/model, muzzle-effect and texture sidecars. Their presence on this workstation is
+verified; their availability in the team's private `Used` library has not been verified.
+Sync them through that private asset workflow before expecting another clone to reproduce
+these visuals. The Git branch contains sidecars and settings only.
+
 The Asset Browser's `Assets` root represents `project/`. The lowercase `assets`
 folder contains the authored content. Each asset is listed in its own folder;
 the old virtual `Animation` collection has been retired because it displayed

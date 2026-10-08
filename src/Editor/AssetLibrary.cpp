@@ -615,6 +615,7 @@ void AssetLibrary::RenameFolder(const std::string& oldPath, const std::string& n
     for (auto& f : m_Folders) remap(f);
     for (auto& [assetKey, folder] : m_AssetFolder) remap(folder);
     PersistFolders();
+    if (OnFolderPathChanged) OnFolderPathChanged(oldPath, newPath);
 }
 
 bool AssetLibrary::CanDeleteFolder(const std::string& folderPath) const {
@@ -631,6 +632,7 @@ void AssetLibrary::DeleteFolder(const std::string& folderPath) {
     if (!CanDeleteFolder(folderPath)) return;
     m_Folders.erase(std::remove(m_Folders.begin(), m_Folders.end(), folderPath), m_Folders.end());
     PersistFolders();
+    if (OnFolderPathChanged) OnFolderPathChanged(folderPath, std::string());
 }
 
 void AssetLibrary::DeleteFolderRecursive(const std::string& folderPath) {
@@ -664,6 +666,7 @@ void AssetLibrary::DeleteFolderRecursive(const std::string& folderPath) {
         return f == folderPath || f.rfind(folderPath + "/", 0) == 0;
     }), m_Folders.end());
     PersistFolders();
+    if (OnFolderPathChanged) OnFolderPathChanged(folderPath, std::string());
 }
 
 TextureImportSettings AssetLibrary::GetTextureSettings(const std::string& path) const {

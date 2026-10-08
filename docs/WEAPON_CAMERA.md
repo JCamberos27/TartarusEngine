@@ -53,4 +53,3 @@ variation is the authored per-axis, per-shot scalar ranges. Player look recoil r
 Profiles save as version 2. Version 1 profiles load by baking their envelope times each axis's
 amplitude into the six curves, preserving authored keys and tangents and discarding frequency.
 New profiles start with six flat zero curves ready to author.
-
