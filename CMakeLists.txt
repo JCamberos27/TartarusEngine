@@ -579,8 +579,9 @@ target_compile_definitions(TartarusEngine PRIVATE IMGUI_ENABLE_TEST_ENGINE)
 # variables, truncating conversions). /MP is unrelated to warnings but cheap to add here too —
 # parallel compilation noticeably cuts build times.
 # #173 - warnings are errors (MSVC /WX) for all three engine targets: the tree builds clean at /W4.
+# /bigobj: main.cpp's unoptimized Debug object outgrows the default COFF section limit (C1128).
 target_compile_options(TartarusEngine PRIVATE
-  $<$<CXX_COMPILER_ID:MSVC>:/W4 /WX /MP>
+  $<$<CXX_COMPILER_ID:MSVC>:/W4 /WX /MP /bigobj>
   $<$<NOT:$<CXX_COMPILER_ID:MSVC>>:-Wall -Wextra>
 )
 tartarus_enable_release_debug_info(TartarusEngine)
