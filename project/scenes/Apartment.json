@@ -1,1160 +1,2103 @@
 {
- "autoExposure": false,
- "autoExposureMaxEV": 4.0,
- "autoExposureMinEV": -4.0,
- "autoExposureSpeedDown": 1.0,
- "autoExposureSpeedUp": 2.0,
- "bloomEnabled": true,
- "bloomIntensity": 0.07999999821186066,
- "bloomKnee": 0.5,
- "bloomThreshold": 1.2999999523162842,
- "boxes": [],
- "chromaticAberration": 0.0,
- "depthOfField": false,
- "dofMaxBlur": 8.0,
- "empties": [
-  {
-   "id": 12,
-   "name": "Apartment",
-   "order": 1,
-   "parentId": -1,
-   "position": [
-    0.0,
-    0.0,
-    0.0
-   ],
-   "rotation": [
-    0.0,
-    0.0,
-    0.0
-   ],
-   "scale": [
-    1.0,
-    1.0,
-    1.0
-   ]
-  },
-  {
-   "id": 13,
-   "name": "Shell",
-   "order": 2,
-   "parentId": 12,
-   "position": [
-    0.0,
-    0.0,
-    0.0
-   ],
-   "rotation": [
-    0.0,
-    0.0,
-    0.0
-   ],
-   "scale": [
-    1.0,
-    1.0,
-    1.0
-   ]
-  },
-  {
-   "id": 14,
-   "name": "Doors",
-   "order": 9,
-   "parentId": 12,
-   "position": [
-    0.0,
-    0.0,
-    0.0
-   ],
-   "rotation": [
-    0.0,
-    0.0,
-    0.0
-   ],
-   "scale": [
-    1.0,
-    1.0,
-    1.0
-   ]
-  },
-  {
-   "id": 15,
-   "name": "Lighting",
-   "order": 16,
-   "parentId": -1,
-   "position": [
-    0.0,
-    0.0,
-    0.0
-   ],
-   "rotation": [
-    0.0,
-    0.0,
-    0.0
-   ],
-   "scale": [
-    1.0,
-    1.0,
-    1.0
-   ]
-  },
-  {
-   "Light": {
-    "Angular Size": 0.5299999713897705,
-    "Cast Shadows": false,
-    "Color": [
-     1.0,
-     0.9399999976158142,
-     0.8700000047683716
-    ],
-    "ColorTempK": 3000.0,
-    "Culling Mask": -1,
-    "Intensity": 2.200000047683716,
-    "Range": 4.5,
-    "Shadow Bias": 1.0,
-    "Shadow Near Plane": 0.05000000074505806,
-    "Shadow Normal Bias": 1.0,
-    "Shadow Resolution": "Follow global",
-    "Shadow Softness": 1.0,
-    "Shadow Update Mode": "Dynamic",
-    "Spot Angle": 30.0,
-    "Type": "Point"
-   },
-   "id": 16,
-   "name": "Can Light 00",
-   "order": 18,
-   "parentId": 15,
-   "position": [
-    -3.1700000762939453,
-    2.640000104904175,
-    0.9350000023841858
-   ],
-   "rotation": [
-    0.0,
-    0.0,
-    0.0
-   ],
-   "scale": [
-    1.0,
-    1.0,
-    1.0
-   ]
-  },
-  {
-   "Light": {
-    "Angular Size": 0.5299999713897705,
-    "Cast Shadows": false,
-    "Color": [
-     1.0,
-     0.9399999976158142,
-     0.8700000047683716
-    ],
-    "ColorTempK": 3000.0,
-    "Culling Mask": -1,
-    "Intensity": 2.200000047683716,
-    "Range": 4.5,
-    "Shadow Bias": 1.0,
-    "Shadow Near Plane": 0.05000000074505806,
-    "Shadow Normal Bias": 1.0,
-    "Shadow Resolution": "Follow global",
-    "Shadow Softness": 1.0,
-    "Shadow Update Mode": "Dynamic",
-    "Spot Angle": 30.0,
-    "Type": "Point"
-   },
-   "id": 17,
-   "name": "Can Light 01",
-   "order": 19,
-   "parentId": 15,
-   "position": [
-    -3.1700000762939453,
-    2.640000104904175,
-    -1.1649999618530273
-   ],
-   "rotation": [
-    0.0,
-    0.0,
-    0.0
-   ],
-   "scale": [
-    1.0,
-    1.0,
-    1.0
-   ]
-  },
-  {
-   "Light": {
-    "Angular Size": 0.5299999713897705,
-    "Cast Shadows": false,
-    "Color": [
-     1.0,
-     0.9399999976158142,
-     0.8700000047683716
-    ],
-    "ColorTempK": 3000.0,
-    "Culling Mask": -1,
-    "Intensity": 2.200000047683716,
-    "Range": 4.5,
-    "Shadow Bias": 1.0,
-    "Shadow Near Plane": 0.05000000074505806,
-    "Shadow Normal Bias": 1.0,
-    "Shadow Resolution": "Follow global",
-    "Shadow Softness": 1.0,
-    "Shadow Update Mode": "Dynamic",
-    "Spot Angle": 30.0,
-    "Type": "Point"
-   },
-   "id": 18,
-   "name": "Can Light 02",
-   "order": 20,
-   "parentId": 15,
-   "position": [
-    -1.3700000047683716,
-    2.640000104904175,
-    0.9350000023841858
-   ],
-   "rotation": [
-    0.0,
-    0.0,
-    0.0
-   ],
-   "scale": [
-    1.0,
-    1.0,
-    1.0
-   ]
-  },
-  {
-   "Light": {
-    "Angular Size": 0.5299999713897705,
-    "Cast Shadows": false,
-    "Color": [
-     1.0,
-     0.9399999976158142,
-     0.8700000047683716
-    ],
-    "ColorTempK": 3000.0,
-    "Culling Mask": -1,
-    "Intensity": 2.200000047683716,
-    "Range": 4.5,
-    "Shadow Bias": 1.0,
-    "Shadow Near Plane": 0.05000000074505806,
-    "Shadow Normal Bias": 1.0,
-    "Shadow Resolution": "Follow global",
-    "Shadow Softness": 1.0,
-    "Shadow Update Mode": "Dynamic",
-    "Spot Angle": 30.0,
-    "Type": "Point"
-   },
-   "id": 19,
-   "name": "Can Light 03",
-   "order": 21,
-   "parentId": 15,
-   "position": [
-    -1.3700000047683716,
-    2.640000104904175,
-    -1.1649999618530273
-   ],
-   "rotation": [
-    0.0,
-    0.0,
-    0.0
-   ],
-   "scale": [
-    1.0,
-    1.0,
-    1.0
-   ]
-  },
-  {
-   "Light": {
-    "Angular Size": 0.5299999713897705,
-    "Cast Shadows": false,
-    "Color": [
-     1.0,
-     0.9399999976158142,
-     0.8700000047683716
-    ],
-    "ColorTempK": 3000.0,
-    "Culling Mask": -1,
-    "Intensity": 2.200000047683716,
-    "Range": 4.5,
-    "Shadow Bias": 1.0,
-    "Shadow Near Plane": 0.05000000074505806,
-    "Shadow Normal Bias": 1.0,
-    "Shadow Resolution": "Follow global",
-    "Shadow Softness": 1.0,
-    "Shadow Update Mode": "Dynamic",
-    "Spot Angle": 30.0,
-    "Type": "Point"
-   },
-   "id": 20,
-   "name": "Can Light 06",
-   "order": 24,
-   "parentId": 15,
-   "position": [
-    1.9299999475479126,
-    2.640000104904175,
-    -0.36500000953674316
-   ],
-   "rotation": [
-    0.0,
-    0.0,
-    0.0
-   ],
-   "scale": [
-    1.0,
-    1.0,
-    1.0
-   ]
-  },
-  {
-   "Light": {
-    "Angular Size": 0.5299999713897705,
-    "Cast Shadows": false,
-    "Color": [
-     1.0,
-     0.9399999976158142,
-     0.8700000047683716
-    ],
-    "ColorTempK": 3000.0,
-    "Culling Mask": -1,
-    "Intensity": 2.200000047683716,
-    "Range": 4.5,
-    "Shadow Bias": 1.0,
-    "Shadow Near Plane": 0.05000000074505806,
-    "Shadow Normal Bias": 1.0,
-    "Shadow Resolution": "Follow global",
-    "Shadow Softness": 1.0,
-    "Shadow Update Mode": "Dynamic",
-    "Spot Angle": 30.0,
-    "Type": "Point"
-   },
-   "id": 21,
-   "name": "Can Light 07",
-   "order": 25,
-   "parentId": 15,
-   "position": [
-    3.430000066757202,
-    2.640000104904175,
-    -0.36500000953674316
-   ],
-   "rotation": [
-    0.0,
-    0.0,
-    0.0
-   ],
-   "scale": [
-    1.0,
-    1.0,
-    1.0
-   ]
-  },
-  {
-   "Light": {
-    "Angular Size": 0.5299999713897705,
-    "Cast Shadows": false,
-    "Color": [
-     1.0,
-     0.9399999976158142,
-     0.8700000047683716
-    ],
-    "ColorTempK": 3000.0,
-    "Culling Mask": -1,
-    "Intensity": 2.200000047683716,
-    "Range": 4.5,
-    "Shadow Bias": 1.0,
-    "Shadow Near Plane": 0.05000000074505806,
-    "Shadow Normal Bias": 1.0,
-    "Shadow Resolution": "Follow global",
-    "Shadow Softness": 1.0,
-    "Shadow Update Mode": "Dynamic",
-    "Spot Angle": 30.0,
-    "Type": "Point"
-   },
-   "id": 22,
-   "name": "Can Light 08",
-   "order": 26,
-   "parentId": 15,
-   "position": [
-    2.2300000190734863,
-    2.640000104904175,
-    1.3350000381469727
-   ],
-   "rotation": [
-    0.0,
-    0.0,
-    0.0
-   ],
-   "scale": [
-    1.0,
-    1.0,
-    1.0
-   ]
-  },
-  {
-   "Light": {
-    "Angular Size": 0.5299999713897705,
-    "Cast Shadows": false,
-    "Color": [
-     1.0,
-     0.9399999976158142,
-     0.8700000047683716
-    ],
-    "ColorTempK": 3000.0,
-    "Culling Mask": -1,
-    "Intensity": 2.200000047683716,
-    "Range": 4.5,
-    "Shadow Bias": 1.0,
-    "Shadow Near Plane": 0.05000000074505806,
-    "Shadow Normal Bias": 1.0,
-    "Shadow Resolution": "Follow global",
-    "Shadow Softness": 1.0,
-    "Shadow Update Mode": "Dynamic",
-    "Spot Angle": 30.0,
-    "Type": "Point"
-   },
-   "id": 23,
-   "name": "Can Light 09",
-   "order": 27,
-   "parentId": 15,
-   "position": [
-    3.7300000190734863,
-    2.640000104904175,
-    1.3350000381469727
-   ],
-   "rotation": [
-    0.0,
-    0.0,
-    0.0
-   ],
-   "scale": [
-    1.0,
-    1.0,
-    1.0
-   ]
-  },
-  {
-   "name": "Player Start",
-   "id": 24,
-   "parentId": -1,
-   "order": 28,
-   "position": [
-    3.7,
-    0.05,
-    -0.35
-   ],
-   "rotation": [
-    0.0,
-    90.0,
-    0.0
-   ],
-   "scale": [
-    1,
-    1,
-    1
-   ],
-   "C# Script": {
-    "Class": "Tartarus.Gameplay.PlayerDefinition",
-    "Source": "assets/Scripts/PlayerDefinition.cs",
-    "Fields JSON": "{\"CapsuleHeight\":1.76,\"CapsuleRadius\":0.34,\"EyeHeight\":1.64,\"MoveSpeed\":1.6,\"SprintMultiplier\":2.2,\"JumpSpeed\":5.5,\"Gravity\":18.0,\"MouseSensitivity\":0.1,\"InvertY\":false,\"KillY\":-20.0,\"GravityGun\":true,\"MinThrowSpeed\":4.0,\"MaxThrowSpeed\":18.0,\"ThrowChargeTime\":1.0,\"ThrowBackspin\":2.0,\"FieldOfView\":90.0}",
-    "Enabled": true,
-    "Scripts": "[]",
-    "Next Script ID": 1
-   }
-  }
- ],
- "exposureEV": 0.0,
- "filmGrain": 0.0,
- "filmGrainResponse": 0.800000011920929,
- "focusDistance": 10.0,
- "focusRange": 3.0,
- "fogBaseHeight": 0.0,
- "fogColor": [
-  0.699999988079071,
-  0.75,
-  0.800000011920929
- ],
- "fogDensity": 0.0020000000949949026,
- "fogEnabled": false,
- "fogEnd": 120.0,
- "fogHeightFalloff": 0.05999999865889549,
- "fogMode": 2,
- "fogStart": 10.0,
- "formatVersion": 3,
- "fxaa": false,
- "gradeColorFilter": [
-  1.0,
-  1.0,
-  1.0
- ],
- "gradeContrast": 4.0,
- "gradeSaturation": 2.0,
- "gradeTemperature": 6.0,
- "gradeTint": 0.0,
- "libraryMaterials": [
-  {
-   "path": "assets/Environments/Sandbox/Materials/court_floor.mat",
-   "pathGuid": "af2c57edb9eeead3"
-  },
-  {
-   "path": "assets/Environments/Sandbox/Materials/arena_glass.mat",
-   "pathGuid": "2b02bddbbc176106"
-  },
-  {
-   "path": "assets/Props/Basketball/Materials/backboard_glass.mat",
-   "pathGuid": "a00f0b02ee9bb028"
-  },
-  {
-   "path": "assets/Props/Basketball/Materials/rim.mat",
-   "pathGuid": "e62f07d31b9df2ce"
-  },
-  {
-   "path": "assets/Props/Basketball/Materials/net.mat",
-   "pathGuid": "9a60da12561af3f2"
-  },
-  {
-   "path": "assets/Props/Basketball/Materials/basketball.mat",
-   "pathGuid": "9ec0856b3181ad4f"
-  },
-  {
-   "path": "assets/Environments/Sandbox/Materials/water.mat",
-   "pathGuid": "7b94769ce0f84595"
-  },
-  {
-   "path": "assets/Environments/Sandbox/Materials/gallery_chrome.mat",
-   "pathGuid": "d43b10aee251de3c"
-  },
-  {
-   "path": "assets/Environments/Sandbox/Materials/gallery_gold.mat",
-   "pathGuid": "6cd312ca7538ce16"
-  },
-  {
-   "path": "assets/Environments/Sandbox/Materials/gallery_brushed.mat",
-   "pathGuid": "b30f3b5631a2c4d1"
-  },
-  {
-   "path": "assets/Environments/Sandbox/Materials/gallery_carpaint.mat",
-   "pathGuid": "5af22ea260759521"
-  },
-  {
-   "path": "assets/Environments/Sandbox/Materials/gallery_velvet.mat",
-   "pathGuid": "2c58a10670b0ee18"
-  },
-  {
-   "path": "assets/Environments/Sandbox/Materials/gallery_jade.mat",
-   "pathGuid": "79947b909dfe220a"
-  },
-  {
-   "path": "assets/Environments/Sandbox/Materials/gallery_glass.mat",
-   "pathGuid": "66f617b3879ddb59"
-  },
-  {
-   "path": "assets/Environments/Sandbox/Materials/gallery_neon.mat",
-   "pathGuid": "eb13ea79fff0ea7e"
-  }
- ],
- "libraryModels": [
-  {
-   "path": "assets/Props/Basketball/Models/rim.obj",
-   "pathGuid": "aa06bf914b4a03c0"
-  },
-  {
-   "path": "assets/Props/Basketball/Models/net.obj",
-   "pathGuid": "9f5eb74f6735cbca"
-  },
-  {
-   "path": "assets/Props/Basketball/Models/basketball.obj",
-   "pathGuid": "3e65fa8b4567e911"
-  },
-  {
-   "path": "assets/Environments/Apartment/Models/closet_panel_l.gltf",
-   "pathGuid": "e68647094c5d45d1"
-  },
-  {
-   "path": "assets/Environments/Apartment/Models/closet_panel_r.gltf",
-   "pathGuid": "ff9588b8180ea86b"
-  },
-  {
-   "path": "assets/Environments/Apartment/Models/ceiling.gltf",
-   "pathGuid": "fde4415934272c05"
-  },
-  {
-   "path": "assets/Environments/Apartment/Models/floor.gltf",
-   "pathGuid": "87bf86c89d7687ae"
-  },
-  {
-   "path": "assets/Environments/Apartment/Models/glass.gltf",
-   "pathGuid": "6ae49f9e6b2e1da0"
-  },
-  {
-   "path": "assets/Environments/Apartment/Models/walls.gltf",
-   "pathGuid": "ada7d8a3ca2eb9bf"
-  },
-  {
-   "path": "assets/Environments/Apartment/Models/baseboard.gltf",
-   "pathGuid": "f19d5babe8c1798a"
-  },
-  {
-   "path": "assets/Environments/Apartment/Models/door_bath_leaf.gltf",
-   "pathGuid": "dee8840ba25217cd"
-  },
-  {
-   "path": "assets/Environments/Apartment/Models/window_frames.gltf",
-   "pathGuid": "2efa0131754d69f7"
-  },
-  {
-   "path": "assets/Environments/Apartment/Models/door_entry_frame.gltf",
-   "pathGuid": "e140a880a3e51fa4"
-  },
-  {
-   "path": "assets/Environments/Apartment/Models/door_bath_frame.gltf",
-   "pathGuid": "18288dc16c39846f"
-  },
-  {
-   "path": "assets/Environments/Apartment/Models/door_entry_leaf.gltf",
-   "pathGuid": "71da43ca47d7dad3"
-  }
- ],
- "libraryPrefabs": [],
- "librarySounds": [],
- "libraryTextures": [
-  {
-   "path": "assets/Materials/Prototype/proto_grid_light.png",
-   "pathGuid": "c90849c8fc6c88b0"
-  },
-  {
-   "path": "assets/Materials/Prototype/proto_grid_dark.png",
-   "pathGuid": "2b60657ce9aa4555"
-  },
-  {
-   "path": "assets/Materials/Prototype/proto_grid_orange.png",
-   "pathGuid": "c389fb6bc574bb89"
-  },
-  {
-   "path": "assets/Props/Basketball/Textures/court_floor.jpg",
-   "pathGuid": "fd3b90b6c8f0b253"
-  },
-  {
-   "path": "assets/Props/Basketball/Textures/wood_detail.png",
-   "pathGuid": "e5f0e29613cac82f"
-  },
-  {
-   "path": "assets/Props/Basketball/Textures/wood_seams_normal.png",
-   "pathGuid": "346137cb492678b5"
-  },
-  {
-   "path": "assets/Props/Basketball/Textures/backboard.png",
-   "pathGuid": "caf13370e27a0035"
-  },
-  {
-   "path": "assets/Props/Basketball/Textures/basketball_albedo.png",
-   "pathGuid": "3821385da1bbeb84"
-  },
-  {
-   "path": "assets/Props/Basketball/Textures/basketball_normal.png",
-   "pathGuid": "a631a899eff1effb"
-  },
-  {
-   "path": "assets/Environments/Apartment/Textures/apt_floor_albedo.png",
-   "pathGuid": "288670b76ceda1cf"
-  },
-  {
-   "path": "assets/Environments/Apartment/Textures/apt_floor_normal.png",
-   "pathGuid": "19e290809aabc316"
-  },
-  {
-   "path": "assets/Environments/Apartment/Textures/apt_floor_roughness.png",
-   "pathGuid": "a08baba2ccf8fe83"
-  }
- ],
- "maxPointShadows": 2,
- "maxSpotShadows": 11,
- "models": [
-  {
-   "collider": {
-    "friction": 0.800000011920929,
-    "isTrigger": false,
-    "shape": 4
-   },
-   "id": 0,
-   "materials": [
+  "autoExposure": false,
+  "autoExposureMaxEV": 4.0,
+  "autoExposureMinEV": -4.0,
+  "autoExposureSpeedDown": 1.0,
+  "autoExposureSpeedUp": 2.0,
+  "bloomEnabled": true,
+  "bloomIntensity": 0.07999999821186066,
+  "bloomKnee": 0.5,
+  "bloomThreshold": 1.2999999523162842,
+  "boxes": [],
+  "chromaticAberration": 0.0,
+  "depthOfField": false,
+  "dofMaxBlur": 8.0,
+  "empties": [
     {
-     "embedded": {
-      "albedoMap": "",
-      "aoMap": "",
-      "baseColor": [
-       1.0,
-       1.0,
-       1.0
+      "id": 12,
+      "name": "Apartment",
+      "order": 1,
+      "parentId": -1,
+      "position": [
+        0.0,
+        0.0,
+        0.0
       ],
-      "emissiveColor": [
-       0.0,
-       0.0,
-       0.0
+      "rotation": [
+        0.0,
+        0.0,
+        0.0,
+        1.0
       ],
-      "emissiveMap": "",
-      "emissiveStrength": 0.0,
-      "factorsScaleMaps": true,
-      "metallic": 0.0,
-      "metallicMap": "",
-      "metallicRoughnessMap": "",
-      "normalMap": "",
-      "roughness": 1.0,
-      "roughnessMap": "",
-      "triplanar": false,
-      "triplanarScale": 1.0
-     }
-    }
-   ],
-   "name": "Walls",
-   "order": 3,
-   "parentId": 13,
-   "path": "assets/Environments/Apartment/Models/walls.gltf",
-   "pathGuid": "ada7d8a3ca2eb9bf",
-   "position": [
-    0.0,
-    0.0,
-    0.0
-   ],
-   "rotation": [
-    0.0,
-    0.0,
-    0.0
-   ],
-   "scale": [
-    1.0,
-    1.0,
-    1.0
-   ],
-   "static": true
-  },
-  {
-   "collider": {
-    "friction": 0.800000011920929,
-    "isTrigger": false,
-    "shape": 4
-   },
-   "id": 1,
-   "materials": [
+      "scale": [
+        1.0,
+        1.0,
+        1.0
+      ]
+    },
     {
-     "embedded": {
-      "albedoMap": "",
-      "aoMap": "",
-      "baseColor": [
-       1.0,
-       1.0,
-       1.0
+      "id": 13,
+      "name": "Shell",
+      "order": 2,
+      "parentId": 12,
+      "position": [
+        0.0,
+        0.0,
+        0.0
       ],
-      "emissiveColor": [
-       0.0,
-       0.0,
-       0.0
+      "rotation": [
+        0.0,
+        0.0,
+        0.0,
+        1.0
       ],
-      "emissiveMap": "",
-      "emissiveStrength": 0.0,
-      "factorsScaleMaps": true,
-      "metallic": 0.0,
-      "metallicMap": "",
-      "metallicRoughnessMap": "",
-      "normalMap": "",
-      "roughness": 1.0,
-      "roughnessMap": "",
-      "triplanar": false,
-      "triplanarScale": 1.0
-     }
-    }
-   ],
-   "name": "Floor",
-   "order": 4,
-   "parentId": 13,
-   "path": "assets/Environments/Apartment/Models/floor.gltf",
-   "pathGuid": "87bf86c89d7687ae",
-   "position": [
-    0.0,
-    0.0,
-    0.0
-   ],
-   "rotation": [
-    0.0,
-    0.0,
-    0.0
-   ],
-   "scale": [
-    1.0,
-    1.0,
-    1.0
-   ],
-   "static": true
-  },
-  {
-   "collider": {
-    "friction": 0.800000011920929,
-    "isTrigger": false,
-    "shape": 4
-   },
-   "id": 2,
-   "materials": [
+      "scale": [
+        1.0,
+        1.0,
+        1.0
+      ]
+    },
     {
-     "embedded": {
-      "albedoMap": "",
-      "aoMap": "",
-      "baseColor": [
-       1.0,
-       1.0,
-       1.0
+      "id": 14,
+      "name": "Doors",
+      "order": 9,
+      "parentId": 12,
+      "position": [
+        0.0,
+        0.0,
+        0.0
       ],
-      "emissiveColor": [
-       0.0,
-       0.0,
-       0.0
+      "rotation": [
+        0.0,
+        0.0,
+        0.0,
+        1.0
       ],
-      "emissiveMap": "",
-      "emissiveStrength": 0.0,
-      "factorsScaleMaps": true,
-      "metallic": 0.0,
-      "metallicMap": "",
-      "metallicRoughnessMap": "",
-      "normalMap": "",
-      "roughness": 1.0,
-      "roughnessMap": "",
-      "triplanar": false,
-      "triplanarScale": 1.0
-     }
-    }
-   ],
-   "name": "Ceiling",
-   "order": 5,
-   "parentId": 13,
-   "path": "assets/Environments/Apartment/Models/ceiling.gltf",
-   "pathGuid": "fde4415934272c05",
-   "position": [
-    0.0,
-    0.0,
-    0.0
-   ],
-   "rotation": [
-    0.0,
-    0.0,
-    0.0
-   ],
-   "scale": [
-    1.0,
-    1.0,
-    1.0
-   ],
-   "static": true
-  },
-  {
-   "id": 3,
-   "materials": [
+      "scale": [
+        1.0,
+        1.0,
+        1.0
+      ]
+    },
     {
-     "embedded": {
-      "albedoMap": "",
-      "aoMap": "",
-      "baseColor": [
-       1.0,
-       1.0,
-       1.0
+      "id": 15,
+      "name": "Lighting",
+      "order": 16,
+      "parentId": -1,
+      "position": [
+        0.0,
+        0.0,
+        0.0
       ],
-      "emissiveColor": [
-       0.0,
-       0.0,
-       0.0
+      "rotation": [
+        0.0,
+        0.0,
+        0.0,
+        1.0
       ],
-      "emissiveMap": "",
-      "emissiveStrength": 0.0,
-      "factorsScaleMaps": true,
-      "metallic": 0.0,
-      "metallicMap": "",
-      "metallicRoughnessMap": "",
-      "normalMap": "",
-      "roughness": 1.0,
-      "roughnessMap": "",
-      "triplanar": false,
-      "triplanarScale": 1.0
-     }
-    }
-   ],
-   "name": "Baseboard",
-   "order": 6,
-   "parentId": 13,
-   "path": "assets/Environments/Apartment/Models/baseboard.gltf",
-   "pathGuid": "f19d5babe8c1798a",
-   "position": [
-    0.0,
-    0.0,
-    0.0
-   ],
-   "rotation": [
-    0.0,
-    0.0,
-    0.0
-   ],
-   "scale": [
-    1.0,
-    1.0,
-    1.0
-   ],
-   "static": true
-  },
-  {
-   "id": 4,
-   "materials": [
+      "scale": [
+        1.0,
+        1.0,
+        1.0
+      ]
+    },
     {
-     "embedded": {
-      "albedoMap": "",
-      "aoMap": "",
-      "baseColor": [
-       1.0,
-       1.0,
-       1.0
+      "Light": {
+        "Angular Size": 0.5299999713897705,
+        "Cast Shadows": false,
+        "Color": [
+          1.0,
+          0.9399999976158142,
+          0.8700000047683716
+        ],
+        "ColorTempK": 3000.0,
+        "Culling Mask": -1,
+        "Intensity": 2.200000047683716,
+        "Range": 4.5,
+        "Shadow Bias": 1.0,
+        "Shadow Near Plane": 0.05000000074505806,
+        "Shadow Normal Bias": 1.0,
+        "Shadow Resolution": "Follow global",
+        "Shadow Softness": 1.0,
+        "Shadow Update Mode": "Dynamic",
+        "Spot Angle": 30.0,
+        "Type": "Point"
+      },
+      "id": 16,
+      "name": "Can Light 00",
+      "order": 18,
+      "parentId": 15,
+      "position": [
+        -3.1700000762939453,
+        2.640000104904175,
+        0.9350000023841858
       ],
-      "emissiveColor": [
-       0.0,
-       0.0,
-       0.0
+      "rotation": [
+        0.0,
+        0.0,
+        0.0,
+        1.0
       ],
-      "emissiveMap": "",
-      "emissiveStrength": 0.0,
-      "factorsScaleMaps": true,
-      "metallic": 0.0,
-      "metallicMap": "",
-      "metallicRoughnessMap": "",
-      "normalMap": "",
-      "roughness": 1.0,
-      "roughnessMap": "",
-      "triplanar": false,
-      "triplanarScale": 1.0
-     }
+      "scale": [
+        1.0,
+        1.0,
+        1.0
+      ]
+    },
+    {
+      "Light": {
+        "Angular Size": 0.5299999713897705,
+        "Cast Shadows": false,
+        "Color": [
+          1.0,
+          0.9399999976158142,
+          0.8700000047683716
+        ],
+        "ColorTempK": 3000.0,
+        "Culling Mask": -1,
+        "Intensity": 2.200000047683716,
+        "Range": 4.5,
+        "Shadow Bias": 1.0,
+        "Shadow Near Plane": 0.05000000074505806,
+        "Shadow Normal Bias": 1.0,
+        "Shadow Resolution": "Follow global",
+        "Shadow Softness": 1.0,
+        "Shadow Update Mode": "Dynamic",
+        "Spot Angle": 30.0,
+        "Type": "Point"
+      },
+      "id": 17,
+      "name": "Can Light 01",
+      "order": 19,
+      "parentId": 15,
+      "position": [
+        -3.1700000762939453,
+        2.640000104904175,
+        -1.1649999618530273
+      ],
+      "rotation": [
+        0.0,
+        0.0,
+        0.0,
+        1.0
+      ],
+      "scale": [
+        1.0,
+        1.0,
+        1.0
+      ]
+    },
+    {
+      "Light": {
+        "Angular Size": 0.5299999713897705,
+        "Cast Shadows": false,
+        "Color": [
+          1.0,
+          0.9399999976158142,
+          0.8700000047683716
+        ],
+        "ColorTempK": 3000.0,
+        "Culling Mask": -1,
+        "Intensity": 2.200000047683716,
+        "Range": 4.5,
+        "Shadow Bias": 1.0,
+        "Shadow Near Plane": 0.05000000074505806,
+        "Shadow Normal Bias": 1.0,
+        "Shadow Resolution": "Follow global",
+        "Shadow Softness": 1.0,
+        "Shadow Update Mode": "Dynamic",
+        "Spot Angle": 30.0,
+        "Type": "Point"
+      },
+      "id": 18,
+      "name": "Can Light 02",
+      "order": 20,
+      "parentId": 15,
+      "position": [
+        -1.3700000047683716,
+        2.640000104904175,
+        0.9350000023841858
+      ],
+      "rotation": [
+        0.0,
+        0.0,
+        0.0,
+        1.0
+      ],
+      "scale": [
+        1.0,
+        1.0,
+        1.0
+      ]
+    },
+    {
+      "Light": {
+        "Angular Size": 0.5299999713897705,
+        "Cast Shadows": false,
+        "Color": [
+          1.0,
+          0.9399999976158142,
+          0.8700000047683716
+        ],
+        "ColorTempK": 3000.0,
+        "Culling Mask": -1,
+        "Intensity": 2.200000047683716,
+        "Range": 4.5,
+        "Shadow Bias": 1.0,
+        "Shadow Near Plane": 0.05000000074505806,
+        "Shadow Normal Bias": 1.0,
+        "Shadow Resolution": "Follow global",
+        "Shadow Softness": 1.0,
+        "Shadow Update Mode": "Dynamic",
+        "Spot Angle": 30.0,
+        "Type": "Point"
+      },
+      "id": 19,
+      "name": "Can Light 03",
+      "order": 21,
+      "parentId": 15,
+      "position": [
+        -1.3700000047683716,
+        2.640000104904175,
+        -1.1649999618530273
+      ],
+      "rotation": [
+        0.0,
+        0.0,
+        0.0,
+        1.0
+      ],
+      "scale": [
+        1.0,
+        1.0,
+        1.0
+      ]
+    },
+    {
+      "Light": {
+        "Angular Size": 0.5299999713897705,
+        "Cast Shadows": false,
+        "Color": [
+          1.0,
+          0.9399999976158142,
+          0.8700000047683716
+        ],
+        "ColorTempK": 3000.0,
+        "Culling Mask": -1,
+        "Intensity": 2.200000047683716,
+        "Range": 4.5,
+        "Shadow Bias": 1.0,
+        "Shadow Near Plane": 0.05000000074505806,
+        "Shadow Normal Bias": 1.0,
+        "Shadow Resolution": "Follow global",
+        "Shadow Softness": 1.0,
+        "Shadow Update Mode": "Dynamic",
+        "Spot Angle": 30.0,
+        "Type": "Point"
+      },
+      "id": 20,
+      "name": "Can Light 06",
+      "order": 24,
+      "parentId": 15,
+      "position": [
+        1.9299999475479126,
+        2.640000104904175,
+        -0.36500000953674316
+      ],
+      "rotation": [
+        0.0,
+        0.0,
+        0.0,
+        1.0
+      ],
+      "scale": [
+        1.0,
+        1.0,
+        1.0
+      ]
+    },
+    {
+      "Light": {
+        "Angular Size": 0.5299999713897705,
+        "Cast Shadows": false,
+        "Color": [
+          1.0,
+          0.9399999976158142,
+          0.8700000047683716
+        ],
+        "ColorTempK": 3000.0,
+        "Culling Mask": -1,
+        "Intensity": 2.200000047683716,
+        "Range": 4.5,
+        "Shadow Bias": 1.0,
+        "Shadow Near Plane": 0.05000000074505806,
+        "Shadow Normal Bias": 1.0,
+        "Shadow Resolution": "Follow global",
+        "Shadow Softness": 1.0,
+        "Shadow Update Mode": "Dynamic",
+        "Spot Angle": 30.0,
+        "Type": "Point"
+      },
+      "id": 21,
+      "name": "Can Light 07",
+      "order": 25,
+      "parentId": 15,
+      "position": [
+        3.430000066757202,
+        2.640000104904175,
+        -0.36500000953674316
+      ],
+      "rotation": [
+        0.0,
+        0.0,
+        0.0,
+        1.0
+      ],
+      "scale": [
+        1.0,
+        1.0,
+        1.0
+      ]
+    },
+    {
+      "Light": {
+        "Angular Size": 0.5299999713897705,
+        "Cast Shadows": false,
+        "Color": [
+          1.0,
+          0.9399999976158142,
+          0.8700000047683716
+        ],
+        "ColorTempK": 3000.0,
+        "Culling Mask": -1,
+        "Intensity": 2.200000047683716,
+        "Range": 4.5,
+        "Shadow Bias": 1.0,
+        "Shadow Near Plane": 0.05000000074505806,
+        "Shadow Normal Bias": 1.0,
+        "Shadow Resolution": "Follow global",
+        "Shadow Softness": 1.0,
+        "Shadow Update Mode": "Dynamic",
+        "Spot Angle": 30.0,
+        "Type": "Point"
+      },
+      "id": 22,
+      "name": "Can Light 08",
+      "order": 26,
+      "parentId": 15,
+      "position": [
+        2.2300000190734863,
+        2.640000104904175,
+        1.3350000381469727
+      ],
+      "rotation": [
+        0.0,
+        0.0,
+        0.0,
+        1.0
+      ],
+      "scale": [
+        1.0,
+        1.0,
+        1.0
+      ]
+    },
+    {
+      "Light": {
+        "Angular Size": 0.5299999713897705,
+        "Cast Shadows": false,
+        "Color": [
+          1.0,
+          0.9399999976158142,
+          0.8700000047683716
+        ],
+        "ColorTempK": 3000.0,
+        "Culling Mask": -1,
+        "Intensity": 2.200000047683716,
+        "Range": 4.5,
+        "Shadow Bias": 1.0,
+        "Shadow Near Plane": 0.05000000074505806,
+        "Shadow Normal Bias": 1.0,
+        "Shadow Resolution": "Follow global",
+        "Shadow Softness": 1.0,
+        "Shadow Update Mode": "Dynamic",
+        "Spot Angle": 30.0,
+        "Type": "Point"
+      },
+      "id": 23,
+      "name": "Can Light 09",
+      "order": 27,
+      "parentId": 15,
+      "position": [
+        3.7300000190734863,
+        2.640000104904175,
+        1.3350000381469727
+      ],
+      "rotation": [
+        0.0,
+        0.0,
+        0.0,
+        1.0
+      ],
+      "scale": [
+        1.0,
+        1.0,
+        1.0
+      ]
+    },
+    {
+      "First Person Controller": {
+        "Animation Set": "",
+        "Camera Bone": "head",
+        "Capsule Height": 1.7599999904632568,
+        "Capsule Radius": 0.3400000035762787,
+        "Coyote Time": 0.10000000149011612,
+        "Eye Height": 1.6399999856948853,
+        "Field of View": 90.0,
+        "Gravity": 18.0,
+        "Gravity Gun": true,
+        "Invert Y": false,
+        "Jump Buffer Time": 0.11999999731779099,
+        "Jump Speed": 5.5,
+        "Kill Height": -20.0,
+        "Max Throw Speed": 18.0,
+        "Min Throw Speed": 4.0,
+        "Mouse Sensitivity": 0.10000000149011612,
+        "Move Speed": 1.600000023841858,
+        "Secondary Animation Set": "",
+        "Sprint Multiplier": 2.200000047683716,
+        "Throw Backspin": 2.0,
+        "Throw Charge Time": 1.0,
+        "View Model FOV": 60.0,
+        "View Model Offset": [
+          0.0,
+          0.0,
+          0.0
+        ],
+        "View Model Rotation": [
+          0.0,
+          0.0,
+          0.0
+        ],
+        "View Model Scale": 1.0
+      },
+      "id": 24,
+      "name": "Player Start",
+      "order": 28,
+      "parentId": -1,
+      "position": [
+        3.700000047683716,
+        0.05000000074505806,
+        -0.3499999940395355
+      ],
+      "rotation": [
+        0.0,
+        0.7071067690849304,
+        0.0,
+        0.7071067690849304
+      ],
+      "scale": [
+        1.0,
+        1.0,
+        1.0
+      ]
     }
-   ],
-   "name": "Window Frames",
-   "order": 7,
-   "parentId": 13,
-   "path": "assets/Environments/Apartment/Models/window_frames.gltf",
-   "pathGuid": "2efa0131754d69f7",
-   "position": [
-    0.0,
-    0.0,
-    0.0
-   ],
-   "rotation": [
-    0.0,
-    0.0,
-    0.0
-   ],
-   "scale": [
+  ],
+  "exposureEV": 0.0,
+  "filmGrain": 0.0,
+  "filmGrainResponse": 0.800000011920929,
+  "focusDistance": 10.0,
+  "focusRange": 3.0,
+  "fogBaseHeight": 0.0,
+  "fogColor": [
+    0.699999988079071,
+    0.75,
+    0.800000011920929
+  ],
+  "fogDensity": 0.0020000000949949026,
+  "fogEnabled": false,
+  "fogEnd": 120.0,
+  "fogHeightFalloff": 0.05999999865889549,
+  "fogMode": 2,
+  "fogStart": 10.0,
+  "formatVersion": 4,
+  "fxaa": false,
+  "gradeColorFilter": [
     1.0,
     1.0,
     1.0
-   ],
-   "static": true
-  },
-  {
-   "id": 5,
-   "name": "Glass",
-   "order": 8,
-   "parentId": 13,
-   "path": "assets/Environments/Apartment/Models/glass.gltf",
-   "pathGuid": "6ae49f9e6b2e1da0",
-   "position": [
-    0.0,
-    0.0,
-    0.0
-   ],
-   "rotation": [
-    0.0,
-    0.0,
-    0.0
-   ],
-   "scale": [
-    1.0,
-    1.0,
-    1.0
-   ],
-   "static": true
-  },
-  {
-   "id": 6,
-   "name": "Door Frame - Entry",
-   "order": 10,
-   "parentId": 14,
-   "path": "assets/Environments/Apartment/Models/door_entry_frame.gltf",
-   "pathGuid": "e140a880a3e51fa4",
-   "position": [
-    0.0,
-    0.0,
-    0.0
-   ],
-   "rotation": [
-    0.0,
-    0.0,
-    0.0
-   ],
-   "scale": [
-    1.0,
-    1.0,
-    1.0
-   ],
-   "static": true
-  },
-  {
-   "id": 7,
-   "name": "Door Frame - Bathroom",
-   "order": 11,
-   "parentId": 14,
-   "path": "assets/Environments/Apartment/Models/door_bath_frame.gltf",
-   "pathGuid": "18288dc16c39846f",
-   "position": [
-    0.0,
-    0.0,
-    0.0
-   ],
-   "rotation": [
-    0.0,
-    0.0,
-    0.0
-   ],
-   "scale": [
-    1.0,
-    1.0,
-    1.0
-   ],
-   "static": true
-  },
-  {
-   "collider": {
-    "isTrigger": false
-   },
-   "id": 8,
-   "name": "Door Leaf - Entry",
-   "order": 12,
-   "parentId": 14,
-   "path": "assets/Environments/Apartment/Models/door_entry_leaf.gltf",
-   "pathGuid": "71da43ca47d7dad3",
-   "position": [
-    4.394999980926514,
-    0.0,
-    0.03500000014901161
-   ],
-   "rotation": [
-    0.0,
-    0.0,
-    0.0
-   ],
-   "scale": [
-    1.0,
-    1.0,
-    1.0
-   ]
-  },
-  {
-   "collider": {
-    "isTrigger": false
-   },
-   "id": 9,
-   "name": "Door Leaf - Bathroom",
-   "order": 13,
-   "parentId": 14,
-   "path": "assets/Environments/Apartment/Models/door_bath_leaf.gltf",
-   "pathGuid": "dee8840ba25217cd",
-   "position": [
-    1.9299999475479126,
-    0.0,
-    0.47850000858306885
-   ],
-   "rotation": [
-    0.0,
-    0.0,
-    0.0
-   ],
-   "scale": [
-    1.0,
-    1.0,
-    1.0
-   ]
-  },
-  {
-   "collider": {
-    "isTrigger": false
-   },
-   "id": 10,
-   "name": "Closet Panel L",
-   "order": 14,
-   "parentId": 14,
-   "path": "assets/Environments/Apartment/Models/closet_panel_l.gltf",
-   "pathGuid": "e68647094c5d45d1",
-   "position": [
-    2.240000009536743,
-    1.031000018119812,
-    -1.1277999877929688
-   ],
-   "rotation": [
-    0.0,
-    0.0,
-    0.0
-   ],
-   "scale": [
-    1.0,
-    1.0,
-    1.0
-   ]
-  },
-  {
-   "collider": {
-    "isTrigger": false
-   },
-   "id": 11,
-   "name": "Closet Panel R",
-   "order": 15,
-   "parentId": 14,
-   "path": "assets/Environments/Apartment/Models/closet_panel_r.gltf",
-   "pathGuid": "ff9588b8180ea86b",
-   "position": [
-    3.369999885559082,
-    1.031000018119812,
-    -1.169800043106079
-   ],
-   "rotation": [
-    0.0,
-    0.0,
-    0.0
-   ],
-   "scale": [
-    1.0,
-    1.0,
-    1.0
-   ]
-  }
- ],
- "motionBlur": false,
- "motionBlurIntensity": 0.5,
- "motionBlurSamples": 12,
- "msaaSamples": 4,
- "shadowCascades": 4,
- "shadowDistance": 500.0,
- "shadowResolution": 4096,
- "shadowsEnabled": true,
- "skyAmbientIntensity": 0.550000011920929,
- "skyHdriGuid": "28043ea394433649",
- "skyHdriPath": "assets/sky/kloofendal_48d_partly_cloudy_puresky_4k.hdr",
- "skyHorizonColor": [
-  0.699999988079071,
-  0.7599999904632568,
-  0.8399999737739563
- ],
- "skyRotationDegrees": 268.0,
- "skySource": 1,
- "skyZenithColor": [
-  0.2199999988079071,
-  0.41999998688697815,
-  0.7400000095367432
- ],
- "ssaoBias": 0.019999999552965164,
- "ssaoEnabled": true,
- "ssaoIntensity": 0.8999999761581421,
- "ssaoRadius": 0.3499999940395355,
- "tonemapOperator": 1,
- "vignetteIntensity": 0.11999999731779099,
- "vignetteSmoothness": 0.5
+  ],
+  "gradeContrast": 4.0,
+  "gradeSaturation": 2.0,
+  "gradeTemperature": 6.0,
+  "gradeTint": 0.0,
+  "libraryMaterials": [
+    {
+      "path": "assets/Environments/Sandbox/Materials/court_floor.mat",
+      "pathGuid": "af2c57edb9eeead3"
+    },
+    {
+      "path": "assets/Environments/Sandbox/Materials/arena_glass.mat",
+      "pathGuid": "2b02bddbbc176106"
+    },
+    {
+      "path": "assets/Props/Basketball/Materials/backboard_glass.mat",
+      "pathGuid": "a00f0b02ee9bb028"
+    },
+    {
+      "path": "assets/Props/Basketball/Materials/rim.mat",
+      "pathGuid": "e62f07d31b9df2ce"
+    },
+    {
+      "path": "assets/Props/Basketball/Materials/net.mat",
+      "pathGuid": "9a60da12561af3f2"
+    },
+    {
+      "path": "assets/Props/Basketball/Materials/basketball.mat",
+      "pathGuid": "9ec0856b3181ad4f"
+    },
+    {
+      "path": "assets/Environments/Sandbox/Materials/water.mat",
+      "pathGuid": "7b94769ce0f84595"
+    },
+    {
+      "path": "assets/Environments/Sandbox/Materials/gallery_chrome.mat",
+      "pathGuid": "d43b10aee251de3c"
+    },
+    {
+      "path": "assets/Environments/Sandbox/Materials/gallery_gold.mat",
+      "pathGuid": "6cd312ca7538ce16"
+    },
+    {
+      "path": "assets/Environments/Sandbox/Materials/gallery_brushed.mat",
+      "pathGuid": "b30f3b5631a2c4d1"
+    },
+    {
+      "path": "assets/Environments/Sandbox/Materials/gallery_carpaint.mat",
+      "pathGuid": "5af22ea260759521"
+    },
+    {
+      "path": "assets/Environments/Sandbox/Materials/gallery_velvet.mat",
+      "pathGuid": "2c58a10670b0ee18"
+    },
+    {
+      "path": "assets/Environments/Sandbox/Materials/gallery_jade.mat",
+      "pathGuid": "79947b909dfe220a"
+    },
+    {
+      "path": "assets/Environments/Sandbox/Materials/gallery_glass.mat",
+      "pathGuid": "66f617b3879ddb59"
+    },
+    {
+      "path": "assets/Environments/Sandbox/Materials/gallery_neon.mat",
+      "pathGuid": "eb13ea79fff0ea7e"
+    },
+    {
+      "path": "assets/Weapons/AKS74U/Materials/AKS74U.mat",
+      "pathGuid": "43edbab5337788c2"
+    },
+    {
+      "path": "assets/Weapons/AKS74U/Materials/Cartridge_545x39mm.mat",
+      "pathGuid": "97e35a4f8b04858c"
+    },
+    {
+      "path": "assets/characters/Quantum/Materials/Characters/M_Quantum_Arms.mat",
+      "pathGuid": "bdf55b314edda1f4"
+    },
+    "materials/sandbox/court_floor.mat",
+    "materials/sandbox/arena_glass.mat",
+    "materials/sandbox/backboard_glass.mat",
+    "materials/sandbox/rim.mat",
+    "materials/sandbox/net.mat",
+    "materials/sandbox/basketball.mat",
+    "materials/sandbox/water.mat",
+    "materials/sandbox/gallery_chrome.mat",
+    "materials/sandbox/gallery_gold.mat",
+    "materials/sandbox/gallery_brushed.mat",
+    "materials/sandbox/gallery_carpaint.mat",
+    "materials/sandbox/gallery_velvet.mat",
+    "materials/sandbox/gallery_jade.mat",
+    "materials/sandbox/gallery_glass.mat",
+    "materials/sandbox/gallery_neon.mat",
+    {
+      "path": "assets/characters/Quantum/Materials/Characters/M_Quantum_Head.mat",
+      "pathGuid": "00f2f285376c0e56"
+    },
+    {
+      "path": "assets/characters/Quantum/Materials/Characters/M_Quantum_Body.mat",
+      "pathGuid": "ff2aca4c25ba4f89"
+    },
+    {
+      "path": "assets/characters/Quantum/Materials/Characters/M_Cartilage.mat",
+      "pathGuid": "d71fa7c7cd81f033"
+    },
+    {
+      "path": "assets/characters/Quantum/Materials/Characters/M_Eye_Overlay.mat",
+      "pathGuid": "9b4dcbacd337e8a1"
+    },
+    {
+      "path": "assets/characters/Quantum/Materials/Characters/Eyes/M_Eye_Hazel.mat",
+      "pathGuid": "2202606ba835e4b7"
+    },
+    {
+      "path": "assets/characters/Quantum/Materials/Characters/M_Brows_Lashes.mat",
+      "pathGuid": "7a80f13a6d4b5daf"
+    },
+    {
+      "path": "assets/characters/Quantum/Materials/Characters/M_Eye_Cornea.mat",
+      "pathGuid": "185fa1f3e55e68a5"
+    },
+    {
+      "path": "assets/characters/Quantum/Materials/Characters/M_Saliva.mat",
+      "pathGuid": "35c182a2d61a4dca"
+    },
+    {
+      "path": "assets/characters/Quantum/Materials/Characters/M_Teeth.mat",
+      "pathGuid": "0681796530e520b8"
+    },
+    {
+      "path": "assets/Weapons/Remington870/Materials/Remington870.mat",
+      "pathGuid": "79551bbef4999400"
+    },
+    {
+      "path": "assets/characters/Quantum/Materials/Characters/Eyes/M_Eye_Brown.mat",
+      "pathGuid": "b0cdff125ce5bc62"
+    },
+    {
+      "path": "assets/characters/Quantum/Materials/Characters/M_Quantum_Head_Young.mat",
+      "pathGuid": "c1148bc46cc32021"
+    },
+    {
+      "path": "assets/characters/Quantum/Materials/Clothing/Balaclava/M_Balaclava_Crime_Black.mat",
+      "pathGuid": "58907c2c546715f2"
+    },
+    {
+      "path": "assets/characters/Quantum/Materials/Clothing/Glasses/Glasses Aviator/M_Sunglasses_Brown.mat",
+      "pathGuid": "4cff1d1f9a8c50a6"
+    },
+    {
+      "path": "assets/characters/Quantum/Materials/Clothing/Pants/Pants_Cargo/M_Pants_Cargo_Black.mat",
+      "pathGuid": "80035c5ed784ac0d"
+    },
+    {
+      "path": "assets/characters/Quantum/Materials/Clothing/Shoes/Sneakers/Sneakers_Leather/M_F_Sneakers_Leather_Black.mat",
+      "pathGuid": "6ff7cafa7e9d186a"
+    },
+    {
+      "path": "assets/characters/Quantum/Materials/Clothing/Tops/TShirt/M_TShirt_Black.mat",
+      "pathGuid": "caad69132ec91232"
+    },
+    {
+      "path": "assets/characters/Quantum/Materials/Clothing/Balaclava/M_Balaclava_Crime_Print.mat",
+      "pathGuid": "4a97d2684b5706be"
+    },
+    {
+      "path": "assets/characters/Quantum/Materials/Clothing/Glasses/Glasses Aviator/M_Glasses_Aviator_Gold.mat",
+      "pathGuid": "935a4eb426ae6b4a"
+    },
+    {
+      "path": "assets/characters/Quantum/Materials/Clothing/Pants/Pants_Cargo/M_Pants_Cargo_Blue.mat",
+      "pathGuid": "492a4132f3ecddcf"
+    },
+    {
+      "path": "assets/characters/Quantum/Materials/Clothing/Shoes/Sneakers/Sneakers_Leather/M_F_Sneakers_Leather_White.mat",
+      "pathGuid": "467db3a57e411fb6"
+    },
+    {
+      "path": "assets/characters/Quantum/Materials/Clothing/Tops/TShirt/M_TShirt_White.mat",
+      "pathGuid": "61f0057abef9a841"
+    },
+    {
+      "path": "assets/characters/Quantum/Materials/Clothing/Balaclava/M_Balaclava_Crime_Green.mat",
+      "pathGuid": "d5c1b70809da40d7"
+    },
+    {
+      "path": "assets/characters/Quantum/Materials/Clothing/Tops/Hoodie_Hood_Up/M_Hoodie_Hood_Up_Black.mat",
+      "pathGuid": "02619ee0a88e6cae"
+    },
+    {
+      "path": "assets/characters/Quantum/Materials/Clothing/Pants/Pants_Sport/M_Sport_Pants_Black.mat",
+      "pathGuid": "4a4ac6fabe21f2c8"
+    },
+    {
+      "path": "assets/characters/Quantum/Materials/Clothing/Shoes/Socks/M_Socks.mat",
+      "pathGuid": "475670f667a70b3b"
+    }
+  ],
+  "libraryModels": [
+    {
+      "path": "assets/characters/ybot/Y Bot.fbx",
+      "pathGuid": "d52a89e336a9220a"
+    },
+    {
+      "path": "assets/Props/Basketball/Models/rim.obj",
+      "pathGuid": "aa06bf914b4a03c0"
+    },
+    {
+      "path": "assets/Props/Basketball/Models/net.obj",
+      "pathGuid": "9f5eb74f6735cbca"
+    },
+    {
+      "path": "assets/Props/Basketball/Models/basketball.obj",
+      "pathGuid": "3e65fa8b4567e911"
+    },
+    {
+      "path": "assets/Weapons/AKS74U/FirstPerson/AKS-74U_A_FP_ADS.fbx",
+      "pathGuid": "101cd70269fca765"
+    },
+    {
+      "path": "assets/Weapons/AKS74U/Weapon/AKS-74U_A_W_ADS.fbx",
+      "pathGuid": "6f35fb7e3ac4ee7b"
+    },
+    {
+      "path": "assets/Weapons/AKS74U/FirstPerson/AKS-74U_A_FP_Idle.fbx",
+      "pathGuid": "4168495e7bad8625"
+    },
+    {
+      "path": "assets/Weapons/AKS74U/FirstPerson/AKS-74U_A_FP_Walk.fbx",
+      "pathGuid": "6e8123547b7ff1e4"
+    },
+    {
+      "path": "assets/Weapons/AKS74U/FirstPerson/AKS-74U_A_FP_IdleToSprint.fbx",
+      "pathGuid": "e9c31ac6116dfd06"
+    },
+    {
+      "path": "assets/Weapons/AKS74U/Weapon/AKS-74U_A_W_IdleToSprint.fbx",
+      "pathGuid": "971a40ef2e78a7a9"
+    },
+    {
+      "path": "assets/Weapons/AKS74U/FirstPerson/AKS-74U_A_FP_Sprint.fbx",
+      "pathGuid": "3862c30a005b6f45"
+    },
+    {
+      "path": "assets/Weapons/AKS74U/Weapon/AKS-74U_A_W_Sprint.fbx",
+      "pathGuid": "438b9b2758b79a49"
+    },
+    {
+      "path": "assets/Weapons/AKS74U/FirstPerson/AKS-74U_A_FP_SprintToIdle.fbx",
+      "pathGuid": "b1146b87d6885ed2"
+    },
+    {
+      "path": "assets/Weapons/AKS74U/Weapon/AKS-74U_A_W_SprintToIdle.fbx",
+      "pathGuid": "c5582401991a3963"
+    },
+    {
+      "path": "assets/Weapons/AKS74U/FirstPerson/AKS-74U_A_FP_Draw.fbx",
+      "pathGuid": "1938b9509f147780"
+    },
+    {
+      "path": "assets/Weapons/AKS74U/FirstPerson/AKS-74U_A_FP_Holster.fbx",
+      "pathGuid": "8d4c78b10f9caed1"
+    },
+    {
+      "path": "assets/Weapons/AKS74U/Weapon/AKS-74U_A_W_Holster.fbx",
+      "pathGuid": "2a62a06dbf117169"
+    },
+    {
+      "path": "assets/Weapons/AKS74U/FirstPerson/AKS-74U_A_FP_Fire.fbx",
+      "pathGuid": "818ad9a16cc62d87"
+    },
+    {
+      "path": "assets/Weapons/AKS74U/Weapon/AKS-74U_A_W_Fire.fbx",
+      "pathGuid": "77923d570c4ce1c5"
+    },
+    {
+      "path": "assets/Weapons/AKS74U/FirstPerson/AKS-74U_A_FP_Tac_Reload.fbx",
+      "pathGuid": "007cce9507dc0627"
+    },
+    {
+      "path": "assets/Weapons/AKS74U/Weapon/AKS-74U_A_W_Tac_Reload.fbx",
+      "pathGuid": "81b5689d2228d3a9"
+    },
+    {
+      "path": "assets/Weapons/AKS74U/FirstPerson/AKS-74U_A_FP_Empty_Reload.fbx",
+      "pathGuid": "3348386df4b6a44b"
+    },
+    {
+      "path": "assets/Weapons/AKS74U/Weapon/AKS-74U_A_W_Empty_Reload.fbx",
+      "pathGuid": "d0dfc9ab0c48a48d"
+    },
+    {
+      "path": "assets/Weapons/AKS74U/FirstPerson/AKS-74U_A_FP_Inspect.fbx",
+      "pathGuid": "19f07109f9ebb97d"
+    },
+    {
+      "path": "assets/Weapons/AKS74U/Weapon/AKS-74U_A_W_Inspect.fbx",
+      "pathGuid": "0b328cb32a01d270"
+    },
+    {
+      "path": "assets/Weapons/AKS74U/FirstPerson/AKS-74U_A_FP_Mag_Check.fbx",
+      "pathGuid": "58a7ef1b4bd1ae0e"
+    },
+    {
+      "path": "assets/Weapons/AKS74U/Weapon/AKS-74U_A_W_Mag_Check.fbx",
+      "pathGuid": "a01aa15f799151d3"
+    },
+    {
+      "path": "assets/Weapons/AKS74U/FirstPerson/AKS-74U_A_FP_Melee.fbx",
+      "pathGuid": "48e798f1913d3f54"
+    },
+    {
+      "path": "assets/Weapons/AKS74U/Weapon/AKS-74U_A_W_Melee.fbx",
+      "pathGuid": "6fb7b6fdfc2b4941"
+    },
+    {
+      "path": "assets/Weapons/AKS74U/FirstPerson/AKS-74U_A_FP_Regrip.fbx",
+      "pathGuid": "c10ae2c34481e1f7"
+    },
+    {
+      "path": "assets/Weapons/AKS74U/FirstPerson/AKS-74U_A_FP_Aim.fbx",
+      "pathGuid": "9004884db6cdfb0e"
+    },
+    {
+      "path": "assets/characters/ybot/jump.fbx",
+      "pathGuid": "47989bc921f5169a"
+    },
+    {
+      "path": "assets/characters/ybot/left strafe walking.fbx",
+      "pathGuid": "0680ed3abdd0e509"
+    },
+    {
+      "path": "assets/characters/ybot/standard run.fbx",
+      "pathGuid": "eb6288377db03bdb"
+    },
+    {
+      "path": "assets/characters/ybot/walking.fbx",
+      "pathGuid": "b47100444710726a"
+    },
+    {
+      "path": "assets/characters/ybot/idle.fbx",
+      "pathGuid": "ffab44c3075cc1c3"
+    },
+    {
+      "path": "assets/characters/Quantum/Models/European/Quantum_Body_Full.fbx",
+      "pathGuid": "5ec75801d215e72f"
+    },
+    {
+      "path": "assets/characters/Quantum/Models/European/Quantum_Head.fbx",
+      "pathGuid": "372aa659f6e66c47"
+    },
+    {
+      "path": "assets/characters/Quantum/Models/European/Quantum_Torso.fbx",
+      "pathGuid": "34f0109f85dae259"
+    },
+    {
+      "path": "assets/characters/Quantum/Models/European/Quantum_UnderPants.fbx",
+      "pathGuid": "2aeb5f71b8365204"
+    },
+    {
+      "path": "assets/characters/Quantum/Models/European/Quantum_Legs.fbx",
+      "pathGuid": "c36e291cf458911c"
+    },
+    {
+      "path": "assets/characters/Quantum/Models/European/Quantum_Feet.fbx",
+      "pathGuid": "94a5ede2259c1ecf"
+    },
+    {
+      "path": "assets/characters/Quantum/FirstPerson/Quantum_Arms_FP.fbx",
+      "pathGuid": "19bbef7e387a5ef4"
+    },
+    {
+      "path": "assets/Animations/Mocap/Idle/AM_Stand_Idle_01.fbx",
+      "pathGuid": "cbec7c424d8c6f82"
+    },
+    {
+      "path": "assets/Animations/Mocap/Turn/AM_Stand_Idle_Turn_L045.fbx",
+      "pathGuid": "17e8a43d4fd11432"
+    },
+    {
+      "path": "assets/Animations/Mocap/Turn/AM_Stand_Idle_Turn_L090.fbx",
+      "pathGuid": "df03b6fd87d5fc7e"
+    },
+    {
+      "path": "assets/Animations/Mocap/Locomotion_V2/AM_Walk/AM_Loco_Walk_Fwd.fbx",
+      "pathGuid": "2f725c6d0ecc731b"
+    },
+    {
+      "path": "assets/Animations/Mocap/Locomotion_V2/AM_Walk/AM_Loco_Walk_Fwd_Left.fbx",
+      "pathGuid": "52c90411529c91c3"
+    },
+    {
+      "path": "assets/Animations/Mocap/Locomotion_V2/AM_Walk/AM_Loco_Walk_Left.fbx",
+      "pathGuid": "f39adef33b72b5e1"
+    },
+    {
+      "path": "assets/Animations/Mocap/Locomotion_V2/AM_Walk/AM_Loco_Walk_Bwd_Left.fbx",
+      "pathGuid": "d9bba94a847fc1fe"
+    },
+    {
+      "path": "assets/Animations/Mocap/Locomotion_V2/AM_Jog/AM_Loco_Jog_Fwd_Left.fbx",
+      "pathGuid": "e0ed2f1bc132f6a8"
+    },
+    {
+      "path": "assets/Animations/Mocap/Locomotion_V2/AM_Jog/AM_Loco_Jog_Left.fbx",
+      "pathGuid": "a1c36c5b252282a4"
+    },
+    {
+      "path": "assets/Animations/Mocap/Locomotion_V2/AM_Jog/AM_Loco_Jog_Fwd.fbx",
+      "pathGuid": "b34ad32375c7191b"
+    },
+    {
+      "path": "assets/Animations/Mocap/Locomotion_V2/AM_Walk/AM_Loco_Walk_Fwd_Start.fbx",
+      "pathGuid": "30f5c2cc48e2b44a"
+    },
+    {
+      "path": "assets/Animations/Mocap/Locomotion_V2/AM_Jog/AM_Loco_Jog_Fwd_Stop.fbx",
+      "pathGuid": "2d98c50513c02b98"
+    },
+    {
+      "path": "assets/Animations/Mocap/Locomotion_V2/AM_Jog/AM_Loco_Jog_Left_Stop.fbx",
+      "pathGuid": "c55e7fde8c4420cc"
+    },
+    {
+      "path": "assets/Animations/Mocap/Locomotion_V2/AM_Walk/AM_Loco_Walk_Fwd_Right.fbx",
+      "pathGuid": "93bc5b9065345d9e"
+    },
+    {
+      "path": "assets/Animations/Mocap/Locomotion_V2/AM_Walk/AM_Loco_Walk_Fwd_Stop.fbx",
+      "pathGuid": "a8ea8223a81536da"
+    },
+    {
+      "path": "assets/Animations/Mocap/Locomotion_V2/AM_Walk/AM_Loco_Walk_Right.fbx",
+      "pathGuid": "fa653474f4c4cc71"
+    },
+    {
+      "path": "assets/Animations/Mocap/Locomotion_V2/AM_Walk/AM_Loco_Walk_Bwd_Right.fbx",
+      "pathGuid": "f9f0f26c140addb8"
+    },
+    {
+      "path": "assets/Animations/Mocap/Locomotion_V2/AM_Jog/AM_Loco_Jog_Right.fbx",
+      "pathGuid": "40a6acc6bc0284b1"
+    },
+    {
+      "path": "assets/Animations/Mocap/Locomotion_V2/AM_Jog/AM_Loco_Jog_Bwd_Right.fbx",
+      "pathGuid": "7e9963070bcd70f7"
+    },
+    {
+      "path": "assets/Animations/Mocap/Turn/AM_Stand_Idle_Turn_R180.fbx",
+      "pathGuid": "4685634606e07d4e"
+    },
+    {
+      "path": "assets/Animations/Mocap/Locomotion_V2/AM_Jog/AM_Loco_Jog_Bwd.fbx",
+      "pathGuid": "5ed68e19d0aa1f55"
+    },
+    {
+      "path": "assets/Animations/Mocap/Locomotion_V2/AM_Walk/AM_Loco_Walk_Bwd.fbx",
+      "pathGuid": "c0adf8ca675de297"
+    },
+    {
+      "path": "assets/Animations/Mocap/Locomotion_V2/AM_Jog/AM_Loco_Jog_Bwd_Left.fbx",
+      "pathGuid": "8bebb836de70e21a"
+    },
+    {
+      "path": "assets/Animations/Mocap/Locomotion_V2/AM_Jog/AM_Loco_Jog_Bwd_Start.fbx",
+      "pathGuid": "7aa3d42885420a73"
+    },
+    {
+      "path": "assets/Animations/Mocap/Locomotion_V2/AM_Jog/AM_Loco_Jog_Left_Start.fbx",
+      "pathGuid": "6f1d263d8c01c266"
+    },
+    {
+      "path": "assets/Animations/Mocap/Locomotion_V2/AM_Jog/AM_Loco_Jog_Fwd_Right.fbx",
+      "pathGuid": "a2c0da63f8d8dbd7"
+    },
+    {
+      "path": "assets/Animations/Mocap/Locomotion_V2/AM_Run/AM_Loco_Run_Fwd.fbx",
+      "pathGuid": "6ffa5affd5def353"
+    },
+    {
+      "path": "assets/Animations/Mocap/Locomotion_V2/AM_Run/AM_Loco_Run_Fwd_Stop.fbx",
+      "pathGuid": "5d75ec66936312c5"
+    },
+    {
+      "path": "assets/Animations/Mocap/Jump/AM_Jump.fbx",
+      "pathGuid": "d50e5115458fb134"
+    },
+    {
+      "path": "assets/Animations/Mocap/Jump/AM_Jump_Land_Recovery.fbx",
+      "pathGuid": "149625c5c5d35512"
+    },
+    {
+      "path": "assets/Animations/Mocap/Locomotion_V2/AM_Jog/AM_Loco_Jog_Bwd_Stop.fbx",
+      "pathGuid": "e185198b4cb3cd6d"
+    },
+    {
+      "path": "assets/Animations/Mocap/Locomotion_V2/AM_Jog/AM_Loco_Jog_Fwd_Start.fbx",
+      "pathGuid": "cc9447341944c738"
+    },
+    {
+      "path": "assets/Animations/Mocap/Locomotion_V2/AM_Jog/AM_Loco_Jog_Right_Start.fbx",
+      "pathGuid": "fa7e16d0593addfe"
+    },
+    {
+      "path": "assets/Animations/Mocap/Locomotion_V2/AM_Jog/AM_Loco_Jog_Right_Stop.fbx",
+      "pathGuid": "73d93f603830af9d"
+    },
+    {
+      "path": "assets/Animations/Mocap/Turn/AM_Stand_Idle_Turn_R090.fbx",
+      "pathGuid": "9cb7124f15924003"
+    },
+    {
+      "path": "assets/Animations/Mocap/Turn/AM_Stand_Idle_Turn_R045.fbx",
+      "pathGuid": "931eadf7c2b109a6"
+    },
+    {
+      "path": "assets/Weapons/Remington870/Weapon/Remington870_A_W_Idle.fbx",
+      "pathGuid": "abfe8981a8954dee"
+    },
+    {
+      "path": "assets/Weapons/Remington870/FirstPerson/Remington870_A_FP_Aim.fbx",
+      "pathGuid": "52de15e71a89b276"
+    },
+    {
+      "path": "assets/Weapons/Remington870/FirstPerson/Remington870_A_FP_Draw.fbx",
+      "pathGuid": "0ab534d75ac5b4b2"
+    },
+    {
+      "path": "assets/Weapons/Remington870/FirstPerson/Remington870_A_FP_Fire.fbx",
+      "pathGuid": "bfe7581f369eec20"
+    },
+    {
+      "path": "assets/Weapons/Remington870/FirstPerson/Remington870_A_FP_Holster.fbx",
+      "pathGuid": "3540eaf8772d8f2d"
+    },
+    {
+      "path": "assets/Weapons/Remington870/FirstPerson/Remington870_A_FP_Idle.fbx",
+      "pathGuid": "d568615aaab5910b"
+    },
+    {
+      "path": "assets/Weapons/Remington870/FirstPerson/Remington870_A_FP_IdleToSprint.fbx",
+      "pathGuid": "ec955e725647bbc5"
+    },
+    {
+      "path": "assets/Weapons/Remington870/FirstPerson/Remington870_A_FP_Inspect.fbx",
+      "pathGuid": "e6bf6388a2176467"
+    },
+    {
+      "path": "assets/Weapons/Remington870/FirstPerson/Remington870_A_FP_Mag_Check.fbx",
+      "pathGuid": "224b6e16aa983595"
+    },
+    {
+      "path": "assets/Weapons/Remington870/FirstPerson/Remington870_A_FP_Melee.fbx",
+      "pathGuid": "3602f7cb46301867"
+    },
+    {
+      "path": "assets/Weapons/Remington870/FirstPerson/Remington870_A_FP_Pump.fbx",
+      "pathGuid": "633d907c5142af8e"
+    },
+    {
+      "path": "assets/Weapons/Remington870/FirstPerson/Remington870_A_FP_Regrip.fbx",
+      "pathGuid": "ffa839d49c013802"
+    },
+    {
+      "path": "assets/Weapons/Remington870/FirstPerson/Remington870_A_FP_Reload_End.fbx",
+      "pathGuid": "5567b6b62a617120"
+    },
+    {
+      "path": "assets/Weapons/Remington870/FirstPerson/Remington870_A_FP_Reload_Loop.fbx",
+      "pathGuid": "39d7c92a7e788f28"
+    },
+    {
+      "path": "assets/Weapons/Remington870/FirstPerson/Remington870_A_FP_Reload_Loop_End.fbx",
+      "pathGuid": "eedb360ee929c541"
+    },
+    {
+      "path": "assets/Weapons/Remington870/FirstPerson/Remington870_A_FP_Reload_Start.fbx",
+      "pathGuid": "a2aef5ce7b1e915a"
+    },
+    {
+      "path": "assets/Weapons/Remington870/FirstPerson/Remington870_A_FP_Reload_Start_Empty.fbx",
+      "pathGuid": "69616d0572a4981b"
+    },
+    {
+      "path": "assets/Weapons/Remington870/FirstPerson/Remington870_A_FP_Sprint.fbx",
+      "pathGuid": "b548d762261e5f5f"
+    },
+    {
+      "path": "assets/Weapons/Remington870/FirstPerson/Remington870_A_FP_SprintToIdle.fbx",
+      "pathGuid": "18773d2bc32d2c08"
+    },
+    {
+      "path": "assets/Weapons/Remington870/FirstPerson/Remington870_A_FP_Walk.fbx",
+      "pathGuid": "804d61b2efd90493"
+    },
+    {
+      "path": "assets/Weapons/Remington870/Weapon/Remington870_A_W_Inspect.fbx",
+      "pathGuid": "66576fcdd35fc5ba"
+    },
+    {
+      "path": "assets/Weapons/Remington870/Weapon/Remington870_A_W_Mag_Check.fbx",
+      "pathGuid": "421117bd9c7c899f"
+    },
+    {
+      "path": "assets/Weapons/Remington870/Weapon/Remington870_A_W_Pump.fbx",
+      "pathGuid": "21361368df1fe439"
+    },
+    {
+      "path": "assets/Weapons/Remington870/Weapon/Remington870_A_W_Reload_End.fbx",
+      "pathGuid": "ca979c2223c6ddae"
+    },
+    {
+      "path": "assets/Weapons/Remington870/Weapon/Remington870_A_W_Reload_Loop.fbx",
+      "pathGuid": "848f46e7578d8189"
+    },
+    {
+      "path": "assets/Weapons/Remington870/Weapon/Remington870_A_W_Reload_Loop_End.fbx",
+      "pathGuid": "0c7074d53b52d312"
+    },
+    {
+      "path": "assets/Weapons/Remington870/Weapon/Remington870_A_W_Reload_Start.fbx",
+      "pathGuid": "fffbcc7419088411"
+    },
+    {
+      "path": "assets/Weapons/Remington870/Weapon/Remington870_A_W_Reload_Start_Empty.fbx",
+      "pathGuid": "f0216597d55e5ac4"
+    },
+    {
+      "path": "assets/characters/Quantum/Models/Clothing/Male/Balaclava/SM_Balaclava_Crime.fbx",
+      "pathGuid": "18fe3d21a3cde1a0"
+    },
+    {
+      "path": "assets/characters/Quantum/Models/Clothing/Male/Shoes/Quantum_Feet_Shoes.fbx",
+      "pathGuid": "9223ed446c94346d"
+    },
+    {
+      "path": "assets/characters/Quantum/Models/Clothing/Male/Glasses/SKM_Glasses_Aviator.fbx",
+      "pathGuid": "4a3231bfa85872b3"
+    },
+    {
+      "path": "assets/characters/Quantum/Models/Clothing/Male/Tops/SKM_Tshirt.fbx",
+      "pathGuid": "cbc683d30726b7fe"
+    },
+    {
+      "path": "assets/characters/Quantum/Models/Clothing/Male/Pants/SKM_Pants_Cargo_Straight.fbx",
+      "pathGuid": "c9b2e6178519947c"
+    },
+    {
+      "path": "assets/characters/Quantum/Models/Clothing/Male/Shoes/SKM_Sneakers.fbx",
+      "pathGuid": "907719222c820ea8"
+    },
+    {
+      "path": "assets/characters/Quantum/Models/Young/Quantum_Young_Head.fbx",
+      "pathGuid": "0ccde7cf189bfaba"
+    },
+    {
+      "path": "assets/characters/Quantum/Models/Clothing/Male/Tops/SKM_Hoodie_Hood_Up.fbx",
+      "pathGuid": "a93a8b58180d0f44"
+    },
+    {
+      "path": "assets/characters/Quantum/Models/Clothing/Male/Pants/SKM_Sport_Pants.fbx",
+      "pathGuid": "c28a0a40272cd541"
+    },
+    {
+      "path": "assets/characters/Quantum/Models/Clothing/Male/Shoes/SKM_Socks.fbx",
+      "pathGuid": "d2d9305f1b150870"
+    },
+    {
+      "path": "assets/Environments/Apartment/Models/closet_panel_l.gltf",
+      "pathGuid": "e68647094c5d45d1"
+    },
+    {
+      "path": "assets/Environments/Apartment/Models/closet_panel_r.gltf",
+      "pathGuid": "ff9588b8180ea86b"
+    },
+    {
+      "path": "assets/Environments/Apartment/Models/ceiling.gltf",
+      "pathGuid": "fde4415934272c05"
+    },
+    {
+      "path": "assets/Environments/Apartment/Models/floor.gltf",
+      "pathGuid": "87bf86c89d7687ae"
+    },
+    {
+      "path": "assets/Environments/Apartment/Models/glass.gltf",
+      "pathGuid": "6ae49f9e6b2e1da0"
+    },
+    {
+      "path": "assets/Environments/Apartment/Models/walls.gltf",
+      "pathGuid": "ada7d8a3ca2eb9bf"
+    },
+    {
+      "path": "assets/Environments/Apartment/Models/baseboard.gltf",
+      "pathGuid": "f19d5babe8c1798a"
+    },
+    {
+      "path": "assets/Environments/Apartment/Models/door_bath_leaf.gltf",
+      "pathGuid": "dee8840ba25217cd"
+    },
+    {
+      "path": "assets/Environments/Apartment/Models/window_frames.gltf",
+      "pathGuid": "2efa0131754d69f7"
+    },
+    {
+      "path": "assets/Environments/Apartment/Models/door_entry_frame.gltf",
+      "pathGuid": "e140a880a3e51fa4"
+    },
+    {
+      "path": "assets/Environments/Apartment/Models/door_bath_frame.gltf",
+      "pathGuid": "18288dc16c39846f"
+    },
+    {
+      "path": "assets/Environments/Apartment/Models/door_entry_leaf.gltf",
+      "pathGuid": "71da43ca47d7dad3"
+    }
+  ],
+  "libraryPrefabs": [],
+  "librarySounds": [],
+  "libraryTextures": [
+    {
+      "path": "assets/Materials/Prototype/proto_grid_light.png",
+      "pathGuid": "c90849c8fc6c88b0"
+    },
+    {
+      "path": "assets/Materials/Prototype/proto_grid_dark.png",
+      "pathGuid": "2b60657ce9aa4555"
+    },
+    {
+      "path": "assets/Materials/Prototype/proto_grid_orange.png",
+      "pathGuid": "c389fb6bc574bb89"
+    },
+    {
+      "path": "assets/Props/Basketball/Textures/court_floor.jpg",
+      "pathGuid": "fd3b90b6c8f0b253"
+    },
+    {
+      "path": "assets/Props/Basketball/Textures/wood_detail.png",
+      "pathGuid": "e5f0e29613cac82f"
+    },
+    {
+      "path": "assets/Props/Basketball/Textures/wood_seams_normal.png",
+      "pathGuid": "346137cb492678b5"
+    },
+    {
+      "path": "assets/Props/Basketball/Textures/backboard.png",
+      "pathGuid": "caf13370e27a0035"
+    },
+    {
+      "path": "assets/Props/Basketball/Textures/basketball_albedo.png",
+      "pathGuid": "3821385da1bbeb84"
+    },
+    {
+      "path": "assets/Props/Basketball/Textures/basketball_normal.png",
+      "pathGuid": "a631a899eff1effb"
+    },
+    {
+      "path": "assets/Weapons/AKS74U/Textures/AKS74U_Albedo_Transparency.png",
+      "pathGuid": "7b7ff3d89a801e9b"
+    },
+    {
+      "path": "assets/Weapons/AKS74U/Textures/AKS74U_Normal.png",
+      "pathGuid": "ddf9f803479dcf51"
+    },
+    {
+      "path": "assets/Weapons/AKS74U/Textures/AKS74U_Metallic.png",
+      "pathGuid": "fe12ee5959aa01e3"
+    },
+    {
+      "path": "assets/Weapons/AKS74U/Textures/AKS74U_Roughness.png",
+      "pathGuid": "3478f940ace06417"
+    },
+    {
+      "path": "assets/Weapons/AKS74U/Textures/AKS74U_Occlusion.png",
+      "pathGuid": "533e95bf9b3a528b"
+    },
+    {
+      "path": "assets/Weapons/AKS74U/Textures/Cartridge_545x39mm_Albedo_Transparency.png",
+      "pathGuid": "cf91557a2170ebb2"
+    },
+    {
+      "path": "assets/Weapons/AKS74U/Textures/Cartridge_545x39mm_Normal.png",
+      "pathGuid": "5f5e9c41e791adff"
+    },
+    {
+      "path": "assets/Weapons/AKS74U/Textures/Cartridge_545x39mm_Metallic.png",
+      "pathGuid": "47fe55433568f31a"
+    },
+    {
+      "path": "assets/Weapons/AKS74U/Textures/Cartridge_545x39mm_Roughness.png",
+      "pathGuid": "304561875618662e"
+    },
+    {
+      "path": "assets/Weapons/AKS74U/Textures/Cartridge_545x39mm_Occlusion.png",
+      "pathGuid": "2c708ddb3e919ee4"
+    },
+    {
+      "path": "assets/characters/Quantum/Textures/European/Arms/T_Quantum_Basemesh_Arms_BaseColor.1003.png",
+      "pathGuid": "41cb6d59333dff57"
+    },
+    {
+      "path": "assets/characters/Quantum/Textures/European/Arms/T_Quantum_Basemesh_Arms_Unity_Normal.1003.png",
+      "pathGuid": "29da77c277b4c368"
+    },
+    {
+      "path": "assets/characters/Quantum/Textures/European/Arms/T_Quantum_Basemesh_Arms_Roughness.1003.png",
+      "pathGuid": "0f4f3be6435fb551"
+    },
+    {
+      "path": "assets/characters/Quantum/Textures/European/Arms/T_Quantum_Basemesh_Arms_Occlusion.1003.png",
+      "pathGuid": "a90075e269ca5791"
+    },
+    {
+      "path": "assets/characters/Quantum/Textures/European/Head/T_Quantum_Basemesh_Head_BaseColor.1001.png",
+      "pathGuid": "53c56365fccaaaf6"
+    },
+    {
+      "path": "assets/characters/Quantum/Textures/European/Head/T_Quantum_Basemesh_Head_Unity_Normal.1001.png",
+      "pathGuid": "1ce8ae861ca44d77"
+    },
+    {
+      "path": "assets/characters/Quantum/Textures/European/Head/T_Quantum_Basemesh_Head_Roughness.1001.png",
+      "pathGuid": "2c09c787a05ae64b"
+    },
+    {
+      "path": "assets/characters/Quantum/Textures/European/Head/T_Quantum_Basemesh_Head_Occlusion.1001.png",
+      "pathGuid": "4158845f83d91935"
+    },
+    {
+      "path": "assets/characters/Quantum/Textures/European/Body/T_Quantum_Basemesh_Body_BaseColor.1002.png",
+      "pathGuid": "eaeb3aa5bb6fea12"
+    },
+    {
+      "path": "assets/characters/Quantum/Textures/European/Body/T_Quantum_Basemesh_Body_Unity_Normal.1002.png",
+      "pathGuid": "04da729f18d0764b"
+    },
+    {
+      "path": "assets/characters/Quantum/Textures/European/Body/T_Quantum_Basemesh_Body_Roughness.1002.png",
+      "pathGuid": "31e1f9b82ac0d4d5"
+    },
+    {
+      "path": "assets/characters/Quantum/Textures/European/Body/T_Quantum_Basemesh_Body_Occlusion.1002.png",
+      "pathGuid": "d5ec3de7cc7c9073"
+    },
+    {
+      "path": "assets/characters/Quantum/Textures/Eyes/T_Eye_Hazel.png",
+      "pathGuid": "713300e6ba74de44"
+    },
+    {
+      "path": "assets/characters/Quantum/Textures/Eyes/T_Brows_Lashes.png",
+      "pathGuid": "7f7daa72f072efad"
+    },
+    {
+      "path": "assets/Weapons/Remington870/Textures/Remington870_BaseColor.png",
+      "pathGuid": "b122b6d22413e876"
+    },
+    {
+      "path": "assets/Weapons/Remington870/Textures/Remington870_Normal.png",
+      "pathGuid": "07f6d8765cae4d98"
+    },
+    {
+      "path": "assets/Weapons/Remington870/Textures/Remington870_Metallic.png",
+      "pathGuid": "e773732e2166cecf"
+    },
+    {
+      "path": "assets/Weapons/Remington870/Textures/Remington870_Roughness.png",
+      "pathGuid": "e5b357053798f8ec"
+    },
+    {
+      "path": "assets/Weapons/Remington870/Textures/Remington870_AO.png",
+      "pathGuid": "4294419ced9a748d"
+    },
+    {
+      "path": "assets/characters/Quantum/Textures/Eyes/T_Eye_Brown.png",
+      "pathGuid": "291658f014c4553a"
+    },
+    {
+      "path": "assets/characters/Quantum/Textures/Young/Head/T_Quantum_Basemesh_Head_Young_BaseColor.1001.png",
+      "pathGuid": "7abfadd9b82d77d1"
+    },
+    {
+      "path": "assets/characters/Quantum/Textures/Young/Head/T_Quantum_Basemesh_Head_Young_Unity_Normal.1001.png",
+      "pathGuid": "435828b6af022794"
+    },
+    {
+      "path": "assets/characters/Quantum/Textures/Young/Head/T_Quantum_Basemesh_Head_Young_Roughness.1001.png",
+      "pathGuid": "c450debfcebdf287"
+    },
+    {
+      "path": "assets/characters/Quantum/Textures/Young/Head/T_Quantum_Basemesh_Head_Young_Occlusion.1001.png",
+      "pathGuid": "55d925b21b2b6d41"
+    },
+    {
+      "path": "assets/characters/Quantum/Textures/Clothing/Balaclava/T_Balaclava_Crime_Black_BaseColor.png",
+      "pathGuid": "4b8aefef8d854415"
+    },
+    {
+      "path": "assets/characters/Quantum/Textures/Clothing/Balaclava/T_Balaclava_Crime_Normal.png",
+      "pathGuid": "1b3f1ea1f85181ca"
+    },
+    {
+      "path": "assets/characters/Quantum/Textures/Clothing/Balaclava/T_Balaclava_Crime_OcclusionRoughnessMetallic.png",
+      "pathGuid": "dac06e0953d0f1a5"
+    },
+    {
+      "path": "assets/characters/Quantum/Textures/Clothing/Glasses/Glasses Aviator/T_Sunglasses_Brown_BaseColor.png",
+      "pathGuid": "c6a8af0d16bc8ecf"
+    },
+    {
+      "path": "assets/characters/Quantum/Textures/Clothing/Glasses/Glasses Aviator/T_Sunglasses_Camo_Unity_Normal.png",
+      "pathGuid": "9f4421afee71ea4a"
+    },
+    {
+      "path": "assets/characters/Quantum/Textures/Clothing/Glasses/Glasses Aviator/T_Sunglasses_Camo_Roughness.png",
+      "pathGuid": "a0da97fbf52d24ad"
+    },
+    {
+      "path": "assets/characters/Quantum/Textures/Clothing/Glasses/Glasses Aviator/T_Sunglasses_Camo_Occlusion.png",
+      "pathGuid": "52cb6702c8f831e9"
+    },
+    {
+      "path": "assets/characters/Quantum/Textures/Clothing/Pants/Pants_Cargo/T_Pants_Cargo_Black_BaseColor.png",
+      "pathGuid": "36fc41cbd4c5c281"
+    },
+    {
+      "path": "assets/characters/Quantum/Textures/Clothing/Pants/Pants_Cargo/T_Pants_Cargo_Unity_Normal.png",
+      "pathGuid": "6640e70ecc7a215b"
+    },
+    {
+      "path": "assets/characters/Quantum/Textures/Clothing/Pants/Pants_Cargo/T_Pants_Cargo_Roughness.png",
+      "pathGuid": "171417cd52427cf3"
+    },
+    {
+      "path": "assets/characters/Quantum/Textures/Clothing/Pants/Pants_Cargo/T_Pants_Cargo_Occlusion.png",
+      "pathGuid": "1aa6a68120e52f02"
+    },
+    {
+      "path": "assets/characters/Quantum/Textures/Clothing/Shoes/Sneakers/Sneakers_Leather/T_F_Sneakers_Leather_Black_BaseColor.png",
+      "pathGuid": "8e3df431656c6989"
+    },
+    {
+      "path": "assets/characters/Quantum/Textures/Clothing/Shoes/Sneakers/Sneakers_Leather/T_F_Sneakers_Leather_Unity_Normal.png",
+      "pathGuid": "5346dc389402d8ba"
+    },
+    {
+      "path": "assets/characters/Quantum/Textures/Clothing/Shoes/Sneakers/Sneakers_Leather/T_F_Sneakers_Leather_Roughness.png",
+      "pathGuid": "9b18ad03ad5ec47b"
+    },
+    {
+      "path": "assets/characters/Quantum/Textures/Clothing/Shoes/Sneakers/Sneakers_Leather/T_F_Sneakers_Leather_Occlusion.png",
+      "pathGuid": "9c0d74e53b152f2c"
+    },
+    {
+      "path": "assets/characters/Quantum/Textures/Clothing/Tops/TShirt/T_TShirt_Black_BaseColor.png",
+      "pathGuid": "f3f5b81961e09ab7"
+    },
+    {
+      "path": "assets/characters/Quantum/Textures/Clothing/Tops/TShirt/T_TShirt_Unity_Normal.png",
+      "pathGuid": "7b0cc2301d351e56"
+    },
+    {
+      "path": "assets/characters/Quantum/Textures/Clothing/Tops/TShirt/T_TShirt_Roughness.png",
+      "pathGuid": "ead0d73fa935a8e0"
+    },
+    {
+      "path": "assets/characters/Quantum/Textures/Clothing/Tops/TShirt/T_TShirt_Occlusion.png",
+      "pathGuid": "805f678756395cf6"
+    },
+    {
+      "path": "assets/characters/Quantum/Textures/Clothing/Balaclava/T_Balaclava_Crime_Print_BaseColor.png",
+      "pathGuid": "7edf0f8ddb9b52e7"
+    },
+    {
+      "path": "assets/characters/Quantum/Textures/Clothing/Balaclava/T_Balaclava_Crime_Print_Normal.png",
+      "pathGuid": "5cd3393cf8ba4289"
+    },
+    {
+      "path": "assets/characters/Quantum/Textures/Clothing/Balaclava/T_Balaclava_Crime_Print_OcclusionRoughnessMetallic.png",
+      "pathGuid": "b273318edffb81cb"
+    },
+    {
+      "path": "assets/characters/Quantum/Textures/Clothing/Glasses/Glasses Aviator/T_Glasses_Aviator_Gold_BaseColor.png",
+      "pathGuid": "d9d6c15b94fd107c"
+    },
+    {
+      "path": "assets/characters/Quantum/Textures/Clothing/Glasses/Glasses Aviator/T_Glasses_Aviator_Gold_Unity_Normal.png",
+      "pathGuid": "d95925de22104abf"
+    },
+    {
+      "path": "assets/characters/Quantum/Textures/Clothing/Glasses/Glasses Aviator/T_Glasses_Aviator_Gold_Roughness.png",
+      "pathGuid": "c4091c06d0d19acd"
+    },
+    {
+      "path": "assets/characters/Quantum/Textures/Clothing/Glasses/Glasses Aviator/T_Glasses_Aviator_Gold_Occlusion.png",
+      "pathGuid": "ed4eecf9d5033f2c"
+    },
+    {
+      "path": "assets/characters/Quantum/Textures/Clothing/Pants/Pants_Cargo/T_Pants_Cargo_Blue_BaseColor.png",
+      "pathGuid": "3889487dfd0b78ea"
+    },
+    {
+      "path": "assets/characters/Quantum/Textures/Clothing/Shoes/Sneakers/Sneakers_Leather/T_F_Sneakers_Leather_White_BaseColor.png",
+      "pathGuid": "8a2010d0c6a5ecff"
+    },
+    {
+      "path": "assets/characters/Quantum/Textures/Clothing/Tops/TShirt/T_TShirt_White_BaseColor.png",
+      "pathGuid": "cf192a9cf6c428ce"
+    },
+    {
+      "path": "assets/characters/Quantum/Textures/Clothing/Balaclava/T_Balaclava_Crime_Green_BaseColor.png",
+      "pathGuid": "49c1f5a5b7028511"
+    },
+    {
+      "path": "assets/characters/Quantum/Textures/Clothing/Tops/Hoodie_Hood_Up/T_Hoodie_Hood_Up_Black_BaseColor.png",
+      "pathGuid": "102e34904a03fd80"
+    },
+    {
+      "path": "assets/characters/Quantum/Textures/Clothing/Tops/Hoodie_Hood_Up/T_Hoodie_Hood_Up_Unity_Normal.png",
+      "pathGuid": "75f7d3734bdcbffe"
+    },
+    {
+      "path": "assets/characters/Quantum/Textures/Clothing/Tops/Hoodie_Hood_Up/T_Hoodie_Hood_Up_Roughness.png",
+      "pathGuid": "6e90149c347bedc2"
+    },
+    {
+      "path": "assets/characters/Quantum/Textures/Clothing/Tops/Hoodie_Hood_Up/T_Hoodie_Hood_Up_Occlusion.png",
+      "pathGuid": "3d3479334266d781"
+    },
+    {
+      "path": "assets/characters/Quantum/Textures/Clothing/Pants/Pants_Sport/T_Sport_Pants_Black_BaseColor.png",
+      "pathGuid": "dcc7e35f9e93a284"
+    },
+    {
+      "path": "assets/characters/Quantum/Textures/Clothing/Pants/Pants_Sport/T_Sport_Pants_Unity_Normal.png",
+      "pathGuid": "490076b88517c219"
+    },
+    {
+      "path": "assets/characters/Quantum/Textures/Clothing/Pants/Pants_Sport/T_Sport_Pants_Roughness.png",
+      "pathGuid": "a344f2e9a18e398b"
+    },
+    {
+      "path": "assets/characters/Quantum/Textures/Clothing/Pants/Pants_Sport/T_Sport_Pants_Occlusion.png",
+      "pathGuid": "5ed366a42af67c36"
+    },
+    {
+      "path": "assets/characters/Quantum/Textures/Clothing/Shoes/Socks/T_Socks_BaseColor.png",
+      "pathGuid": "427d699fbc412c22"
+    },
+    {
+      "path": "assets/characters/Quantum/Textures/Clothing/Shoes/Socks/T_Socks_Unity_Normal.png",
+      "pathGuid": "91e0a7e4f759f6d4"
+    },
+    {
+      "path": "assets/characters/Quantum/Textures/Clothing/Shoes/Socks/T_Socks_Roughness.png",
+      "pathGuid": "b3b2b46e73b05bbc"
+    },
+    {
+      "path": "assets/characters/Quantum/Textures/Clothing/Shoes/Socks/T_Socks_Occlusion.png",
+      "pathGuid": "407594381188360c"
+    },
+    {
+      "path": "assets/Environments/Apartment/Textures/apt_floor_albedo.png",
+      "pathGuid": "288670b76ceda1cf"
+    },
+    {
+      "path": "assets/Environments/Apartment/Textures/apt_floor_normal.png",
+      "pathGuid": "19e290809aabc316"
+    },
+    {
+      "path": "assets/Environments/Apartment/Textures/apt_floor_roughness.png",
+      "pathGuid": "a08baba2ccf8fe83"
+    }
+  ],
+  "maxPointShadows": 2,
+  "maxSpotShadows": 11,
+  "models": [
+    {
+      "collider": {
+        "friction": 0.800000011920929,
+        "isTrigger": false,
+        "shape": 4
+      },
+      "id": 0,
+      "materials": [
+        {
+          "embedded": {
+            "albedoMap": "",
+            "aoMap": "",
+            "baseColor": [
+              1.0,
+              1.0,
+              1.0
+            ],
+            "emissiveColor": [
+              0.0,
+              0.0,
+              0.0
+            ],
+            "emissiveMap": "",
+            "emissiveStrength": 0.0,
+            "factorsScaleMaps": true,
+            "metallic": 0.0,
+            "metallicMap": "",
+            "metallicRoughnessMap": "",
+            "normalMap": "",
+            "roughness": 1.0,
+            "roughnessMap": "",
+            "triplanar": false,
+            "triplanarScale": 1.0
+          }
+        }
+      ],
+      "name": "Walls",
+      "order": 3,
+      "parentId": 13,
+      "path": "assets/Environments/Apartment/Models/walls.gltf",
+      "pathGuid": "ada7d8a3ca2eb9bf",
+      "position": [
+        0.0,
+        0.0,
+        0.0
+      ],
+      "rotation": [
+        0.0,
+        0.0,
+        0.0,
+        1.0
+      ],
+      "scale": [
+        1.0,
+        1.0,
+        1.0
+      ],
+      "static": true
+    },
+    {
+      "collider": {
+        "friction": 0.800000011920929,
+        "isTrigger": false,
+        "shape": 4
+      },
+      "id": 1,
+      "materials": [
+        {
+          "embedded": {
+            "albedoMap": "",
+            "aoMap": "",
+            "baseColor": [
+              1.0,
+              1.0,
+              1.0
+            ],
+            "emissiveColor": [
+              0.0,
+              0.0,
+              0.0
+            ],
+            "emissiveMap": "",
+            "emissiveStrength": 0.0,
+            "factorsScaleMaps": true,
+            "metallic": 0.0,
+            "metallicMap": "",
+            "metallicRoughnessMap": "",
+            "normalMap": "",
+            "roughness": 1.0,
+            "roughnessMap": "",
+            "triplanar": false,
+            "triplanarScale": 1.0
+          }
+        }
+      ],
+      "name": "Floor",
+      "order": 4,
+      "parentId": 13,
+      "path": "assets/Environments/Apartment/Models/floor.gltf",
+      "pathGuid": "87bf86c89d7687ae",
+      "position": [
+        0.0,
+        0.0,
+        0.0
+      ],
+      "rotation": [
+        0.0,
+        0.0,
+        0.0,
+        1.0
+      ],
+      "scale": [
+        1.0,
+        1.0,
+        1.0
+      ],
+      "static": true
+    },
+    {
+      "collider": {
+        "friction": 0.800000011920929,
+        "isTrigger": false,
+        "shape": 4
+      },
+      "id": 2,
+      "materials": [
+        {
+          "embedded": {
+            "albedoMap": "",
+            "aoMap": "",
+            "baseColor": [
+              1.0,
+              1.0,
+              1.0
+            ],
+            "emissiveColor": [
+              0.0,
+              0.0,
+              0.0
+            ],
+            "emissiveMap": "",
+            "emissiveStrength": 0.0,
+            "factorsScaleMaps": true,
+            "metallic": 0.0,
+            "metallicMap": "",
+            "metallicRoughnessMap": "",
+            "normalMap": "",
+            "roughness": 1.0,
+            "roughnessMap": "",
+            "triplanar": false,
+            "triplanarScale": 1.0
+          }
+        }
+      ],
+      "name": "Ceiling",
+      "order": 5,
+      "parentId": 13,
+      "path": "assets/Environments/Apartment/Models/ceiling.gltf",
+      "pathGuid": "fde4415934272c05",
+      "position": [
+        0.0,
+        0.0,
+        0.0
+      ],
+      "rotation": [
+        0.0,
+        0.0,
+        0.0,
+        1.0
+      ],
+      "scale": [
+        1.0,
+        1.0,
+        1.0
+      ],
+      "static": true
+    },
+    {
+      "id": 3,
+      "materials": [
+        {
+          "embedded": {
+            "albedoMap": "",
+            "aoMap": "",
+            "baseColor": [
+              1.0,
+              1.0,
+              1.0
+            ],
+            "emissiveColor": [
+              0.0,
+              0.0,
+              0.0
+            ],
+            "emissiveMap": "",
+            "emissiveStrength": 0.0,
+            "factorsScaleMaps": true,
+            "metallic": 0.0,
+            "metallicMap": "",
+            "metallicRoughnessMap": "",
+            "normalMap": "",
+            "roughness": 1.0,
+            "roughnessMap": "",
+            "triplanar": false,
+            "triplanarScale": 1.0
+          }
+        }
+      ],
+      "name": "Baseboard",
+      "order": 6,
+      "parentId": 13,
+      "path": "assets/Environments/Apartment/Models/baseboard.gltf",
+      "pathGuid": "f19d5babe8c1798a",
+      "position": [
+        0.0,
+        0.0,
+        0.0
+      ],
+      "rotation": [
+        0.0,
+        0.0,
+        0.0,
+        1.0
+      ],
+      "scale": [
+        1.0,
+        1.0,
+        1.0
+      ],
+      "static": true
+    },
+    {
+      "id": 4,
+      "materials": [
+        {
+          "embedded": {
+            "albedoMap": "",
+            "aoMap": "",
+            "baseColor": [
+              1.0,
+              1.0,
+              1.0
+            ],
+            "emissiveColor": [
+              0.0,
+              0.0,
+              0.0
+            ],
+            "emissiveMap": "",
+            "emissiveStrength": 0.0,
+            "factorsScaleMaps": true,
+            "metallic": 0.0,
+            "metallicMap": "",
+            "metallicRoughnessMap": "",
+            "normalMap": "",
+            "roughness": 1.0,
+            "roughnessMap": "",
+            "triplanar": false,
+            "triplanarScale": 1.0
+          }
+        }
+      ],
+      "name": "Window Frames",
+      "order": 7,
+      "parentId": 13,
+      "path": "assets/Environments/Apartment/Models/window_frames.gltf",
+      "pathGuid": "2efa0131754d69f7",
+      "position": [
+        0.0,
+        0.0,
+        0.0
+      ],
+      "rotation": [
+        0.0,
+        0.0,
+        0.0,
+        1.0
+      ],
+      "scale": [
+        1.0,
+        1.0,
+        1.0
+      ],
+      "static": true
+    },
+    {
+      "id": 5,
+      "name": "Glass",
+      "order": 8,
+      "parentId": 13,
+      "path": "assets/Environments/Apartment/Models/glass.gltf",
+      "pathGuid": "6ae49f9e6b2e1da0",
+      "position": [
+        0.0,
+        0.0,
+        0.0
+      ],
+      "rotation": [
+        0.0,
+        0.0,
+        0.0,
+        1.0
+      ],
+      "scale": [
+        1.0,
+        1.0,
+        1.0
+      ],
+      "static": true
+    },
+    {
+      "id": 6,
+      "name": "Door Frame - Entry",
+      "order": 10,
+      "parentId": 14,
+      "path": "assets/Environments/Apartment/Models/door_entry_frame.gltf",
+      "pathGuid": "e140a880a3e51fa4",
+      "position": [
+        0.0,
+        0.0,
+        0.0
+      ],
+      "rotation": [
+        0.0,
+        0.0,
+        0.0,
+        1.0
+      ],
+      "scale": [
+        1.0,
+        1.0,
+        1.0
+      ],
+      "static": true
+    },
+    {
+      "id": 7,
+      "name": "Door Frame - Bathroom",
+      "order": 11,
+      "parentId": 14,
+      "path": "assets/Environments/Apartment/Models/door_bath_frame.gltf",
+      "pathGuid": "18288dc16c39846f",
+      "position": [
+        0.0,
+        0.0,
+        0.0
+      ],
+      "rotation": [
+        0.0,
+        0.0,
+        0.0,
+        1.0
+      ],
+      "scale": [
+        1.0,
+        1.0,
+        1.0
+      ],
+      "static": true
+    },
+    {
+      "collider": {
+        "isTrigger": false
+      },
+      "id": 8,
+      "name": "Door Leaf - Entry",
+      "order": 12,
+      "parentId": 14,
+      "path": "assets/Environments/Apartment/Models/door_entry_leaf.gltf",
+      "pathGuid": "71da43ca47d7dad3",
+      "position": [
+        4.394999980926514,
+        0.0,
+        0.03500000014901161
+      ],
+      "rotation": [
+        0.0,
+        0.0,
+        0.0,
+        1.0
+      ],
+      "scale": [
+        1.0,
+        1.0,
+        1.0
+      ]
+    },
+    {
+      "collider": {
+        "isTrigger": false
+      },
+      "id": 9,
+      "name": "Door Leaf - Bathroom",
+      "order": 13,
+      "parentId": 14,
+      "path": "assets/Environments/Apartment/Models/door_bath_leaf.gltf",
+      "pathGuid": "dee8840ba25217cd",
+      "position": [
+        1.9299999475479126,
+        0.0,
+        0.47850000858306885
+      ],
+      "rotation": [
+        0.0,
+        0.0,
+        0.0,
+        1.0
+      ],
+      "scale": [
+        1.0,
+        1.0,
+        1.0
+      ]
+    },
+    {
+      "collider": {
+        "isTrigger": false
+      },
+      "id": 10,
+      "name": "Closet Panel L",
+      "order": 14,
+      "parentId": 14,
+      "path": "assets/Environments/Apartment/Models/closet_panel_l.gltf",
+      "pathGuid": "e68647094c5d45d1",
+      "position": [
+        2.240000009536743,
+        1.031000018119812,
+        -1.1277999877929688
+      ],
+      "rotation": [
+        0.0,
+        0.0,
+        0.0,
+        1.0
+      ],
+      "scale": [
+        1.0,
+        1.0,
+        1.0
+      ]
+    },
+    {
+      "collider": {
+        "isTrigger": false
+      },
+      "id": 11,
+      "name": "Closet Panel R",
+      "order": 15,
+      "parentId": 14,
+      "path": "assets/Environments/Apartment/Models/closet_panel_r.gltf",
+      "pathGuid": "ff9588b8180ea86b",
+      "position": [
+        3.369999885559082,
+        1.031000018119812,
+        -1.169800043106079
+      ],
+      "rotation": [
+        0.0,
+        0.0,
+        0.0,
+        1.0
+      ],
+      "scale": [
+        1.0,
+        1.0,
+        1.0
+      ]
+    }
+  ],
+  "motionBlur": false,
+  "motionBlurIntensity": 0.5,
+  "motionBlurSamples": 12,
+  "msaaSamples": 4,
+  "shadowCascades": 4,
+  "shadowDistance": 500.0,
+  "shadowResolution": 4096,
+  "shadowsEnabled": true,
+  "skyAmbientIntensity": 0.550000011920929,
+  "skyHdriGuid": "28043ea394433649",
+  "skyHdriPath": "assets/sky/kloofendal_48d_partly_cloudy_puresky_4k.hdr",
+  "skyHorizonColor": [
+    0.699999988079071,
+    0.7599999904632568,
+    0.8399999737739563
+  ],
+  "skyRotationDegrees": 268.0,
+  "skySource": 1,
+  "skyZenithColor": [
+    0.2199999988079071,
+    0.41999998688697815,
+    0.7400000095367432
+  ],
+  "ssaoBias": 0.019999999552965164,
+  "ssaoEnabled": true,
+  "ssaoIntensity": 0.8999999761581421,
+  "ssaoRadius": 0.3499999940395355,
+  "tonemapOperator": 1,
+  "vignetteIntensity": 0.11999999731779099,
+  "vignetteSmoothness": 0.5
 }
