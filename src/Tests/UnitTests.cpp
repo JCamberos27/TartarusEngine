@@ -3416,6 +3416,11 @@ void TestFirstPersonAnimationSet() {
 // The shotgun options (Remington 870): pellets and spread, a per-round reload, a pump worked after every
 // round, and a mount with a translation - parsed, written back, and defaulting to the plain rifle's.
 void TestAKAdditiveWalking() {
+    // The distributable sample omits Weapons. Source checkouts still gate the authored graph.
+    if (!std::filesystem::exists(ProjectPaths::Resolve("assets/Weapons"))) {
+        Log::Info("AK additive walking: no weapon project data - skipped.");
+        return;
+    }
     AnimatorController c;
     std::string error;
     CHECK(AnimatorController::LoadFile(ProjectPaths::Resolve("assets/Weapons/AKS74U/AKS74U.controller"),c,&error));
@@ -3487,6 +3492,10 @@ void TestAKAdditiveWalking() {
     CHECK(ac.StateName=="Idle" && ac.Layers[0].Stack.back().FadeDuration==0.8f);
 }
 void TestSprintTransitionWalk() {
+    if (!std::filesystem::exists(ProjectPaths::Resolve("assets/Weapons"))) {
+        Log::Info("Sprint transition walk: no weapon project data - skipped.");
+        return;
+    }
     for (const char* path : {"assets/Weapons/AKS74U/AKS74U.controller", "assets/Weapons/Remington870/Remington870.controller"}) {
         AnimatorController c;
         std::string error;
