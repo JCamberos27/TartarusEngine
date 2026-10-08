@@ -895,24 +895,18 @@ class Builder:
             self.s.empties.append(e)
 
     def audio(self):
-        # A furnished flat is dry: soft furnishings, beds and curtains swallow the tail (RT60 ~0.35-0.5 s), so each room is
-        # its own zone with a recorded small-room IR (a furnished hotel room, a book-lined room, a house) well under the
-        # Indoor Small class level (concrete stairwells, ~2.5 s). The tiled wet rooms ring a little more; the gun tails are
-        # turned down with them. (Indoor Small's calibrated wet / dry is -10 dB: the trims below put the rooms at -15..-19.)
-        acoustics = {  # room: (IR, Wet dB trim, HF damping dB, tail gain)
-            'Master Bedroom': ('apartment_1', -9.0, 6.0, 0.45), 'Bedroom 2': ('apartment_1', -9.0, 6.0, 0.45),
-            'Kids Bedroom': ('apartment_1', -9.0, 6.0, 0.45), 'Living Room': ('apartment_1', -8.0, 5.0, 0.5),
-            'Hall': ('apartment_2', -7.0, 4.0, 0.5), 'Kitchen': ('apartment_3', -6.5, 3.0, 0.55),
-            'Ensuite': ('apartment_3', -5.0, 1.5, 0.6), 'Bathroom': ('apartment_3', -5.0, 1.5, 0.6),
-            'Laundry': ('apartment_3', -5.5, 2.0, 0.6)}
-        for room, (ir, wet, damp, tail) in acoustics.items():
-            x0, z0, x1, z1 = ROOMS[room]
-            half = [(x1 - x0) / 2, H / 2, (z1 - z0) / 2]
-            self.s.empty(f'Reverb {room}', self.root, ((x0 + x1) / 2, H / 2, (z0 + z1) / 2), **{'Reverb Zone': {
-                'Ambience': 'snd.amb.indoor_small', 'Ambience Volume': 0.35, 'Enabled': True, 'Extents': half,
-                'Fade Distance': 0.25, 'Priority': 1, 'Radius': 3.0, 'Reverb Mode': 'Custom', 'Shape': 'Box',
-                'Tail Class': 'Indoor Small', 'Tail Gain': tail, 'IR': f'assets/Audio/IR/{ir}.wav', 'Wet dB': wet,
-                'Pre-Delay ms': 2.0, 'HF Damping dB': damp, 'Low Cut (Hz)': 120.0}})
+        # One space for the whole flat, so it sounds the same in every room: a furnished hotel room's recorded IR (RT60
+        # ~0.35 s - soft furnishings swallow the tail), well under the Indoor Small class (concrete stairwells, ~2.5 s).
+        # The box overhangs the outer walls by more than its fade, so the reverb is at full weight everywhere inside.
+        x0 = min(r[0] for r in ROOMS.values()); z0 = min(r[1] for r in ROOMS.values())
+        x1 = max(r[2] for r in ROOMS.values()); z1 = max(r[3] for r in ROOMS.values())
+        pad = 0.6
+        self.s.empty('Reverb', self.root, ((x0 + x1) / 2, H / 2, (z0 + z1) / 2), **{'Reverb Zone': {
+            'Ambience': 'snd.amb.indoor_small', 'Ambience Volume': 0.35, 'Enabled': True,
+            'Extents': [(x1 - x0) / 2 + pad, H / 2 + pad, (z1 - z0) / 2 + pad], 'Fade Distance': 0.4, 'Priority': 1,
+            'Radius': 8.0, 'Reverb Mode': 'Custom', 'Shape': 'Box', 'Tail Class': 'Indoor Small', 'Tail Gain': 0.35,
+            'IR': 'assets/Audio/IR/apartment_1.wav', 'Wet dB': -8.0, 'Pre-Delay ms': 2.0, 'HF Damping dB': 2.0,
+            'Low Cut (Hz)': 100.0}})
 
     def build(self):
         # Night with most lights off: almost no sky fill, a neutral dim sky for the mirrors to reflect, shadows on

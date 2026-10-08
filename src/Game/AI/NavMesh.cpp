@@ -298,7 +298,7 @@ void NavMesh::BoundaryEdges(std::vector<Edge>& out) const {
         if (!tile || !tile->header) continue;
         for (int i = 0; i < tile->header->polyCount; ++i) {
             const dtPoly& p = tile->polys[i];
-            if (p.getType() != DT_POLYTYPE_GROUND) continue;
+            if (p.getType() != DT_POLYTYPE_GROUND || !(p.flags & kWalkFlag)) continue;
             glm::vec3 centre(0.0f);
             for (int j = 0; j < p.vertCount; ++j) centre += V(&tile->verts[p.verts[j] * 3]);
             centre /= (float)std::max<int>(1, p.vertCount);
@@ -391,7 +391,7 @@ void NavMesh::DebugTriangles(std::vector<float>& out) const {
         if (!tile || !tile->header) continue;
         for (int i = 0; i < tile->header->polyCount; ++i) {
             const dtPoly& p = tile->polys[i];
-            if (p.getType() != DT_POLYTYPE_GROUND) continue;
+            if (p.getType() != DT_POLYTYPE_GROUND || !(p.flags & kWalkFlag)) continue;
             for (int j = 2; j < p.vertCount; ++j)
                 for (int k : {0, j - 1, j}) {
                     const float* v = &tile->verts[p.verts[k] * 3];
@@ -408,6 +408,43 @@ int NavMesh::PolyCount() const {
     for (int t = 0; t < nm->getMaxTiles(); ++t)
         if (const dtMeshTile* tile = nm->getTile(t); tile && tile->header) n += tile->header->polyCount;
     return n;
+}
+
+int NavMesh::KeepReachable(const std::vector<glm::vec3>& seeds, const glm::vec3& extents) {
+    if (!m_Mesh || !m_Query) return 0;
+    std::set<dtPolyRef> reached;
+    std::vector<dtPolyRef> open;
+    for (const glm::vec3& s : seeds) {
+        dtPolyRef ref = 0;
+        float nearest[3];
+        if (dtStatusSucceed(m_Query->findNearestPoly(&s.x, &extents.x, m_Filter.get(), &ref, nearest)) && ref && reached.insert(ref).second)
+            open.push_back(ref);
+    }
+    if (open.empty()) return 0;
+    while (!open.empty()) {
+        const dtPolyRef ref = open.back();
+        open.pop_back();
+        const dtMeshTile* tile = nullptr;
+        const dtPoly* poly = nullptr;
+        m_Mesh->getTileAndPolyByRefUnsafe(ref, &tile, &poly);
+        for (unsigned int l = poly->firstLink; l != DT_NULL_LINK; l = tile->links[l].next) {
+            const dtPolyRef next = tile->links[l].ref;
+            if (next && reached.insert(next).second) open.push_back(next);
+        }
+    }
+    int cut = 0;
+    const dtNavMesh* nm = m_Mesh;
+    for (int t = 0; t < nm->getMaxTiles(); ++t) {
+        const dtMeshTile* tile = nm->getTile(t);
+        if (!tile || !tile->header) continue;
+        const dtPolyRef base = nm->getPolyRefBase(tile);
+        for (int i = 0; i < tile->header->polyCount; ++i)
+            if (!reached.count(base | (dtPolyRef)i) && (tile->polys[i].flags & kWalkFlag)) {
+                m_Mesh->setPolyFlags(base | (dtPolyRef)i, 0);
+                ++cut;
+            }
+    }
+    return cut;
 }
 
 // --- NavCrowd ------------------------------------------------------------------------------------

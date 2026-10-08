@@ -3506,6 +3506,7 @@ int main(int argc, char** argv) {
             float spotShadowFar[SpotShadowMap::kMaxSpots];
             float spotShadowHalfTan[SpotShadowMap::kMaxSpots]; // tan(half-FOV) of the map — sizes the shader's texel estimate to the real cone, not an assumed 90° (#134)
             int spotShadowCount = 0; // shadow-casting spots that got a slot this frame (#119)
+            int torchShadowSlot = -1; // the player's flashlight's slot (its casters leave out the player)
             glm::vec3 pointShadowPos[PointShadowMap::kMaxPoints];
             float pointShadowFar[PointShadowMap::kMaxPoints];
             int pointShadowCount = 0; // shadow-casting point lights that got a cube this frame (#119)
@@ -3579,7 +3580,7 @@ int main(int argc, char** argv) {
                 const glm::vec3 pos = flashlight.Position, aim = flashlight.Aim;
                 int slot = -1;
                 if (world.ShadowsEnabled && spotShadowBudget > 0) {
-                    slot = spotShadowCount++;
+                    slot = torchShadowSlot = spotShadowCount++;
                     const glm::vec3 up = std::abs(aim.y) > 0.99f ? glm::vec3(1, 0, 0) : glm::vec3(0, 1, 0);
                     const float fov = glm::radians(flashlight.SpillOuterDeg * 2.0f + 4.0f);
                     spotShadowFar[slot] = flashlight.HotRange;
@@ -3884,6 +3885,7 @@ int main(int argc, char** argv) {
                 std::uint32_t id;
                 bool bounded, twoSided, animated;
                 bool moving; // moved within the last kMovingFrames (a rolling ball, a door)
+                bool player; // the player's own body and gun (world copies): no shadow in their own flashlight
             };
             // Per caster, its transform and when it last changed; drives LocalCaster::moving.
             struct CasterMotion { glm::mat4 xform; std::uint64_t moved; };
@@ -3905,6 +3907,7 @@ int main(int argc, char** argv) {
                     lc.xform = world.GetCachedWorldTransform(entity);
                     lc.id = static_cast<std::uint32_t>(entity);
                     lc.twoSided = r.CastShadows == RenderableComponent::ShadowCasting::TwoSided;
+                    lc.player = world.Registry.any_of<HiddenFromOwnerTag, PlayerBodyTag>(entity);
                     lc.animated = lc.model->HasAnimations();
                     // First seen counts as settled (unsigned wrap keeps that true on early frames).
                     const std::uint64_t now = (std::uint64_t)frameIndex;
@@ -3983,6 +3986,7 @@ int main(int argc, char** argv) {
                     sig = hashBytes(sig, &spotShadowFar[s], sizeof spotShadowFar[s]);
                     for (const LocalCaster& c : localCasters) {
                         if (c.bounded && !lf.Intersects(c.bounds)) continue;
+                        if (c.player && s == torchShadowSlot) continue; // the torch is in the player's hand
                         visible.push_back(&c);
                         // Animated or recently moved casters are drawn over the cached static depth
                         // every frame; the rest are the static signature.
