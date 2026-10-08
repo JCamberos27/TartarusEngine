@@ -1,0 +1,22 @@
+{
+  "folder": "assets/Furniture/Decor/Models",
+  "guid": "05225c6b89777558",
+  "importer": {
+    "globalScale": 1.0,
+    "importAnimations": false,
+    "importNormals": true,
+    "importSkeleton": false,
+    "materialImportMode": 1,
+    "optimizeGraph": true,
+    "pivotOffset": [
+      1.6230000257492065,
+      0.0,
+      -0.17249999940395355
+    ]
+  },
+  "materialRemap": {
+    "Carpets": "assets/Furniture/Decor/Materials/M_Carpets.mat"
+  },
+  "metaVersion": 1,
+  "type": "model"
+}

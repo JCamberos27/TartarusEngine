@@ -1,0 +1,23 @@
+{
+  "folder": "assets/Furniture/Decor/Models",
+  "guid": "708e7f016402e977",
+  "importer": {
+    "globalScale": 1.0,
+    "importAnimations": false,
+    "importNormals": true,
+    "importSkeleton": false,
+    "materialImportMode": 1,
+    "optimizeGraph": true,
+    "pivotOffset": [
+      -0.6679999828338623,
+      0.0,
+      -0.013500000350177288
+    ]
+  },
+  "materialRemap": {
+    "Plants_leaves": "assets/Furniture/Decor/Materials/M_Plants_Leaves.mat",
+    "Plants_pots": "assets/Furniture/Decor/Materials/M_Plants_Pots.mat"
+  },
+  "metaVersion": 1,
+  "type": "model"
+}

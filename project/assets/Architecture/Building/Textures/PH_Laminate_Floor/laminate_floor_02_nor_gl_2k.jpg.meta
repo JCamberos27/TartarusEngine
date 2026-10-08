@@ -1,0 +1,16 @@
+{
+  "folder": "assets/Architecture/Building/Textures/PH_Laminate_Floor",
+  "guid": "d893a18dc6fbf1b7",
+  "importer": {
+    "anisoLevel": 8,
+    "compression": 1,
+    "filterMode": 2,
+    "generateMipmaps": true,
+    "isSRGB": false,
+    "maxTextureSize": 2048,
+    "textureType": 1,
+    "wrapMode": 0
+  },
+  "metaVersion": 1,
+  "type": "texture"
+}

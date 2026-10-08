@@ -1,0 +1,22 @@
+{
+  "folder": "assets/Furniture/Garage/Models",
+  "guid": "932866f8bfad6844",
+  "importer": {
+    "globalScale": 1.0,
+    "importAnimations": false,
+    "importNormals": true,
+    "importSkeleton": false,
+    "materialImportMode": 1,
+    "optimizeGraph": true,
+    "pivotOffset": [
+      -4.745500087738037,
+      -1.0880000591278076,
+      -0.16300000250339508
+    ]
+  },
+  "materialRemap": {
+    "Garage_shelves": "assets/Furniture/Garage/Materials/M_Garage_Shelves.mat"
+  },
+  "metaVersion": 1,
+  "type": "model"
+}

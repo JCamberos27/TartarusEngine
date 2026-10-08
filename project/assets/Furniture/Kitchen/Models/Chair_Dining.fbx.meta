@@ -1,0 +1,22 @@
+{
+  "folder": "assets/Furniture/Kitchen/Models",
+  "guid": "722481aae39e602b",
+  "importer": {
+    "globalScale": 1.0,
+    "importAnimations": false,
+    "importNormals": true,
+    "importSkeleton": false,
+    "materialImportMode": 1,
+    "optimizeGraph": true,
+    "pivotOffset": [
+      1.718999981880188,
+      -0.0010000000474974513,
+      0.029500000178813934
+    ]
+  },
+  "materialRemap": {
+    "Table_chair_dining": "assets/Furniture/Kitchen/Materials/M_Table_Chair_Dining.mat"
+  },
+  "metaVersion": 1,
+  "type": "model"
+}

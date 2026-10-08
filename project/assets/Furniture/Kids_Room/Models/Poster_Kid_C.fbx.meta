@@ -1,0 +1,22 @@
+{
+  "folder": "assets/Furniture/Kids_Room/Models",
+  "guid": "aa71e355261c6c96",
+  "importer": {
+    "globalScale": 1.0,
+    "importAnimations": false,
+    "importNormals": true,
+    "importSkeleton": false,
+    "materialImportMode": 1,
+    "optimizeGraph": true,
+    "pivotOffset": [
+      0.6875,
+      0.7900000214576721,
+      -0.007000000216066837
+    ]
+  },
+  "materialRemap": {
+    "Posters_kid": "assets/Furniture/Kids_Room/Materials/M_Posters_Kid.mat"
+  },
+  "metaVersion": 1,
+  "type": "model"
+}

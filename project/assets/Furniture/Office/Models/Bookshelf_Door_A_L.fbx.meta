@@ -1,0 +1,23 @@
+{
+  "folder": "assets/Furniture/Office/Models",
+  "guid": "bc1ead4e04a8002e",
+  "importer": {
+    "globalScale": 1.0,
+    "importAnimations": false,
+    "importNormals": true,
+    "importSkeleton": false,
+    "materialImportMode": 1,
+    "optimizeGraph": true,
+    "pivotOffset": [
+      -3.734999895095825,
+      -0.0010000000474974513,
+      0.04149999842047691
+    ]
+  },
+  "materialRemap": {
+    "Cabinets": "assets/Furniture/Decor/Materials/M_Cabinets.mat",
+    "Cabinets_glass": "assets/Furniture/Bedroom/Materials/M_Glass_Clear.mat"
+  },
+  "metaVersion": 1,
+  "type": "model"
+}

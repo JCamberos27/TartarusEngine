@@ -1,0 +1,23 @@
+{
+  "folder": "assets/Architecture/Building/Models",
+  "guid": "a5b321abf11f6039",
+  "importer": {
+    "globalScale": 1.0,
+    "importAnimations": false,
+    "importNormals": true,
+    "importSkeleton": false,
+    "materialImportMode": 1,
+    "optimizeGraph": true,
+    "pivotOffset": [
+      -2.4000000953674316,
+      -1.0670000314712524,
+      -0.012500000186264515
+    ]
+  },
+  "materialRemap": {
+    "Emissive": "assets/Architecture/Building/Materials/M_Window_Light.mat",
+    "Plastic": "assets/Architecture/Building/Materials/M_Plastic_White.mat"
+  },
+  "metaVersion": 1,
+  "type": "model"
+}

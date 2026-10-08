@@ -1,0 +1,31 @@
+{
+  "factorsScaleMaps": true,
+  "matVersion": 2,
+  "name": "M_Window_Light",
+  "properties": {
+    "_AOMap": "",
+    "_AlbedoMap": "",
+    "_BaseColor": [
+      0.0,
+      0.0,
+      0.0
+    ],
+    "_DoubleSided": false,
+    "_EmissiveColor": [
+      0.85,
+      0.92,
+      1.0
+    ],
+    "_EmissiveMap": "",
+    "_EmissiveStrength": 2.5,
+    "_Metallic": 0.0,
+    "_MetallicMap": "",
+    "_MetallicRoughnessMap": "",
+    "_NormalMap": "",
+    "_Roughness": 0.6,
+    "_RoughnessMap": "",
+    "_Triplanar": false,
+    "_TriplanarScale": 1.0
+  },
+  "shader": "engine://Standard.shader"
+}

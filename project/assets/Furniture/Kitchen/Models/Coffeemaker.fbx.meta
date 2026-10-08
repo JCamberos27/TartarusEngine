@@ -1,0 +1,23 @@
+{
+  "folder": "assets/Furniture/Kitchen/Models",
+  "guid": "736083c7f5724cc9",
+  "importer": {
+    "globalScale": 1.0,
+    "importAnimations": false,
+    "importNormals": true,
+    "importSkeleton": false,
+    "materialImportMode": 1,
+    "optimizeGraph": true,
+    "pivotOffset": [
+      -0.0,
+      -0.0010000000474974513,
+      -0.12200000137090683
+    ]
+  },
+  "materialRemap": {
+    "Coffeemaker": "assets/Furniture/Kitchen/Materials/M_Coffeemaker.mat",
+    "Coffeemaker_glass": "assets/Furniture/Kitchen/Materials/M_Coffeemaker_Glass.mat"
+  },
+  "metaVersion": 1,
+  "type": "model"
+}
