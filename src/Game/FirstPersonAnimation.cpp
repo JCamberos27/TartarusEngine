@@ -3,6 +3,9 @@
 #include "AtomicFile.h"
 #include "AssetDatabase.h"
 #include "ProjectPaths.h"
+#include "Scripting/ScriptRuntime.h"
+#include "Scripting/WeaponPrefab.h"
+#include <stdexcept>
 
 #include <json.hpp>
 
@@ -151,68 +154,20 @@ bool FirstPersonAnimationSet::FromJsonString(const std::string& text, FirstPerso
         }
     }
 
+    parsed.HasLegacyGameplay=root.contains("gameplay");
+    {
+        std::string defaults;
+        if(!Scripting::RequestProject("weapon.import","{}",defaults))return Fail(error,"Project weapon defaults unavailable");
+        Scripting::ReadProjectWeaponGameplay(parsed.Gameplay,json::parse(defaults));
+    }
     if (const auto g = root.find("gameplay"); g != root.end() && g->is_object()) {
-        FirstPersonWeaponGameplay& gp = parsed.Gameplay;
-        gp.Magazine = std::max(1, (int)Number(*g, "magazine", (float)gp.Magazine));
-        gp.RoundsPerMinute = Number(*g, "rpm", gp.RoundsPerMinute);
-        gp.AllowFullAuto = Bool(*g, "allowFullAuto", gp.AllowFullAuto);
-        const float burstRounds = Number(*g, "burstRounds", 0.0f);
-        if (!std::isfinite(burstRounds) || burstRounds < 0.0f || burstRounds > 32.0f || burstRounds != std::floor(burstRounds))
-            return Fail(error, "gameplay.burstRounds must be an integer from 0 to 32");
-        gp.BurstRounds = (int)burstRounds;
-        gp.ReloadHoldSeconds = Number(*g, "reloadHoldSeconds", gp.ReloadHoldSeconds);
-        gp.RegripMin = Number(*g, "regripMin", gp.RegripMin);
-        gp.RegripMax = Number(*g, "regripMax", gp.RegripMax);
-        // Before the "ads" block, the zoom lived here.
-        parsed.Ads.Zoom = Number(*g, "adsZoom", parsed.Ads.Zoom);
-        parsed.Ads.ViewModelZoom = Number(*g, "adsViewModelZoom", parsed.Ads.ViewModelZoom);
-        parsed.Ads.ZoomTime = Number(*g, "adsZoomTime", parsed.Ads.ZoomTime);
-        gp.ImpactImpulse = std::max(0.0f, Number(*g, "impactImpulse", gp.ImpactImpulse));
-        gp.ImpactMaxSpeed = std::max(0.0f, Number(*g, "impactMaxSpeed", gp.ImpactMaxSpeed));
-        gp.ZeroDistance = std::max(0.0f, Number(*g, "zeroDistance", gp.ZeroDistance));
-        gp.BulletHoleRadius = Number(*g, "bulletHoleRadius", gp.BulletHoleRadius);
-        gp.BulletHoleRadius = std::clamp(std::isfinite(gp.BulletHoleRadius) ? gp.BulletHoleRadius : 0.004f, 0.0f, 0.1f);
-        if (const auto sl = g->find("sightLine"); sl != g->end() && sl->is_object()) {
-            const glm::vec3 o = Vec3(*sl, "origin", glm::vec3(0.0f)), d = Vec3(*sl, "direction", glm::vec3(0.0f));
-            if (Finite(o) && Finite(d) && glm::length(d) > 1e-6f) {
-                gp.HasSightLine = true;
-                gp.SightOrigin = o;
-                gp.SightDirection = glm::normalize(d);
-            }
-        }
-        gp.Pellets = std::clamp((int)Number(*g, "pellets", (float)gp.Pellets), 1, 64);
-        if (const auto dm = g->find("damage"); dm != g->end() && dm->is_object()) {
-            auto num = [&](const char* key, float fallback, float lo, float hi) {
-                const float v = Number(*dm, key, fallback);
-                return std::clamp(std::isfinite(v) ? v : fallback, lo, hi);
-            };
-            gp.Damage = num("base", gp.Damage, 0.0f, 10000.0f);
-            gp.HeadMultiplier = num("head", gp.HeadMultiplier, 0.0f, 100.0f);
-            gp.LimbMultiplier = num("limb", gp.LimbMultiplier, 0.0f, 100.0f);
-            gp.FalloffStart = num("falloffStart", gp.FalloffStart, 0.0f, 10000.0f);
-            gp.FalloffEnd = std::max(gp.FalloffStart, num("falloffEnd", gp.FalloffEnd, 0.0f, 10000.0f));
-            gp.FalloffMin = num("falloffMin", gp.FalloffMin, 0.0f, 1.0f);
-        }
-        if (const auto sp = g->find("spread"); sp != g->end() && sp->is_object()) {
-            gp.SpreadHip = Number(*sp, "hip", gp.SpreadHip);
-            gp.SpreadAds = Number(*sp, "ads", gp.SpreadAds);
-        }
-        gp.SpreadHip = std::clamp(std::isfinite(gp.SpreadHip) ? gp.SpreadHip : 0.0f, 0.0f, 45.0f);
-        gp.SpreadAds = std::clamp(std::isfinite(gp.SpreadAds) ? gp.SpreadAds : 0.0f, 0.0f, 45.0f);
-        if (const std::string mode = String(*g, "reload"); !mode.empty()) {
-            if (mode == "magazine") gp.Reload = FirstPersonWeaponGameplay::ReloadMode::Magazine;
-            else if (mode == "perRound") gp.Reload = FirstPersonWeaponGameplay::ReloadMode::PerRound;
-            else return Fail(error, "'gameplay.reload' must be \"magazine\" or \"perRound\"");
-        }
-        if (const auto cy = g->find("cycle"); cy != g->end() && cy->is_object()) {
-            gp.CycleAfterShot = Bool(*cy, "enabled", gp.CycleAfterShot);
-            gp.CycleDelay = Number(*cy, "delay", gp.CycleDelay);
-        }
-        gp.CycleDelay = std::clamp(std::isfinite(gp.CycleDelay) ? gp.CycleDelay : 0.1f, 0.0f, 2.0f);
-        if (!(gp.RoundsPerMinute > 0.0f) || !std::isfinite(gp.RoundsPerMinute))
-            return Fail(error, "'gameplay.rpm' must be a positive number");
-        if (!(gp.ReloadHoldSeconds > 0.0f)) return Fail(error, "'gameplay.reloadHoldSeconds' must be positive");
-        if (gp.RegripMax < gp.RegripMin) std::swap(gp.RegripMin, gp.RegripMax);
+        std::string resolved;
+        if(!Scripting::RequestProject("weapon.import",g->dump(),resolved))return Fail(error,"Project weapon data validation failed");
+        Scripting::ReadProjectWeaponGameplay(parsed.Gameplay,json::parse(resolved));
+        // Older presentation-only ADS fields remain a read compatibility path.
+        parsed.Ads.Zoom=Number(*g,"adsZoom",parsed.Ads.Zoom);
+        parsed.Ads.ViewModelZoom=Number(*g,"adsViewModelZoom",parsed.Ads.ViewModelZoom);
+        parsed.Ads.ZoomTime=Number(*g,"adsZoomTime",parsed.Ads.ZoomTime);
 
         // Before the procedural block existed, ADS recoil was one pitch + offset kick (linear
         // rise, exponential settle) and the ADS bob a sine figure-eight. Carried over as curves
@@ -463,6 +418,7 @@ std::string FirstPersonAnimationSet::ToJsonString() const {
                                {"falloffMin", gp.FalloffMin}};
     if (gp.HasSightLine)
         j["gameplay"]["sightLine"] = {{"origin", vec3(gp.SightOrigin)}, {"direction", vec3(gp.SightDirection)}};
+    if(!HasLegacyGameplay)j.erase("gameplay");
     j["ads"] = {
         {"zoom", Ads.Zoom},
         {"viewModelZoom", Ads.ViewModelZoom},
@@ -876,3 +832,5 @@ std::vector<FPBody::Check> FirstPersonWeaponValidate(const FirstPersonWeaponChec
     std::stable_sort(out.begin(), out.end(), [](const FPBody::Check& a, const FPBody::Check& b) { return (int)a.Level > (int)b.Level; });
     return out;
 }
+
+FirstPersonWeaponGameplay::FirstPersonWeaponGameplay() = default;

@@ -58,6 +58,7 @@ public sealed class SerializedProperty
     internal SerializedObject Owner { get; }
     internal NativeFieldInfo? Native { get; }
     internal JsonNode? DefaultValue { get; }
+    internal string FieldMetadata { get; } = "{}";
     public string Name { get; }
     public string DisplayName { get; }
     public string Group { get; }
@@ -78,6 +79,7 @@ public sealed class SerializedProperty
         Owner=owner;Native=field;Name=field.Key;DisplayName=field.Label;Group=field.Group;Tooltip=field.Tooltip;Kind="native";
     }
     internal SerializedProperty(SerializedObject owner,JsonElement field,string group) {
+        FieldMetadata=field.GetRawText();
         Owner=owner;Name=field.GetProperty("name").GetString()!;DisplayName=Nicify(Name);
         Group=group;
         Tooltip=field.TryGetProperty("tooltip",out var tip)?tip.GetString()??"":"";
@@ -120,6 +122,25 @@ public static partial class EditorGUILayout
         }
         bool changed=false;string label=property.DisplayName;
         switch(property.Kind) {
+        case "asset-ref": {
+            NativeRequest r=new() {Entity=property.Owner.Target.Id};
+            var value=property.GetValue<AssetReference>();
+            if(Engine.TextCall(130,JsonSerializer.Serialize(new {label,value,metadata=JsonSerializer.Deserialize<JsonElement>(property.FieldMetadata)}),ref r)!=0)
+                property.SetValue(JsonSerializer.Deserialize<AssetReference>(System.Runtime.InteropServices.Marshal.PtrToStringUTF8(r.Text)!));
+            break;
+        }
+        case "color": {
+            NativeRequest r=new() {A=property.GetValue<Vector3>()};
+            if(Engine.TextCall(131,label,ref r)!=0)property.SetValue(r.A);
+            break;
+        }
+        case "scene-ref": case "sound-refs": case "choice": {
+            NativeRequest r=new() {Entity=property.Owner.Target.Id};
+            string value=property.GetValue<string>();
+            if(Engine.TextCall(130,JsonSerializer.Serialize(new {label,value,metadata=JsonSerializer.Deserialize<JsonElement>(property.FieldMetadata)}),ref r)!=0)
+                property.SetValue(System.Runtime.InteropServices.Marshal.PtrToStringUTF8(r.Text) ?? "");
+            break;
+        }
         case "float": {float value=property.GetValue<float>();changed=property.Min is float min && property.Max is float max ? Slider(label,ref value,min,max):FloatField(label,ref value);if(changed) property.SetValue(value);break;}
         case "int": {int value=property.GetValue<int>();changed=IntField(label,ref value);if(changed){if(property.Min is float min && property.Max is float max)value=Math.Clamp(value,(int)min,(int)max);property.SetValue(value);}break;}
         case "bool": {bool value=property.GetValue<bool>();if(Toggle(label,ref value)) property.SetValue(value);break;}

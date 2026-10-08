@@ -16,21 +16,30 @@ rules also run in the C# weapon controller, with native physics and effect servi
 presentation adapter; it sends animator tags/events and descriptor values to the C# weapon
 controller and executes its animation/audio/recoil commands.
 
+Project C# also owns health/damage, scoring, gravity, enemy AI/spawning/squads, HUD/developer
+content, sound policy, locomotion actions, outfit choices and content-pack catalogs. Native
+adapters execute geometric, animation, audio and rendering work. See
+[ENGINE_GAME_BOUNDARY.md](ENGINE_GAME_BOUNDARY.md) for the implemented owners and remaining
+public engine API limitations.
+
 ## Build and edit
 
 Install the **x64 .NET 10 SDK** to build or edit scripts. A game requires the x64 .NET 10
 runtime. This is a framework-dependent native host; the runtime isn't bundled into the game.
 
 `cmake --build build --config Release --target TartarusEngine` builds both native and managed
-code. `--target TartarusScripts` builds only C#. Managed artifacts and the scripting SDK are
-staged in `build/Release/Managed` (or the selected configuration).
+code. `--target TartarusRuntime` builds the engine C# SDK/host; `--target TartarusScripts` builds
+the sample C# projects and fixtures. SDK output is staged in `build/Release/Managed`; project
+assemblies live in `project/Scripts/bin`. Configure `TARTARUS_BUILD_SAMPLE_GAME=OFF` to build
+the engine without building the sample.
 
 In the Asset Browser, right-click and choose **Create C# Script**. Scripts are ordinary `.cs`
-files under project assets. Double-click to open them externally. Drag an attachable script
+files under project assets. Double-click to open the embedded [Script IDE](SCRIPT_IDE.md), or
+choose **Open Externally** from the context menu. Drag an attachable script
 onto an entity, or use **Add Component > Scripts > C# Script** and **Add Script** in its card.
 The same object can have several behaviours, including several instances of one class.
 Each has its own Enabled checkbox and editable fields. Choose its compiled type from the
-Script dropdown. Source links to the `.cs` file; **Open Script** opens your code editor.
+Script dropdown. Source links to the `.cs` file; **Edit in Script IDE** opens its source.
 For an unusual namespace, use the Script dropdown or Advanced > Class.
 
 Save your `.cs` source to compile automatically. The project watcher coalesces saves before
@@ -40,8 +49,8 @@ Compiler errors appear in the console and keep the running assembly. You can als
 `project/Scripts/Tartarus.Gameplay.csproj` with `dotnet build`; the packaged editor command
 supplies the relocated runtime SDK project reference automatically.
 **File > Build C# Gameplay & Editor** is available for a manual rebuild.
-On a project without a gameplay `.csproj`, the editor creates it and copies the default
-player/weapon controllers from its SDK templates, preserving existing source files.
+On a project without a gameplay `.csproj`, the editor creates generic build files and an
+empty source folder, preserving existing sources. It does not install FPS gameplay.
 
 ## Scripts and lifecycle
 
@@ -63,7 +72,9 @@ restores the authored scene snapshot, so Play edits aren't saved into the scene.
 Public writable fields appear as ordinary Inspector controls. Private fields marked
 `[SerializeField]` appear too; `[HideInInspector]` hides a field while retaining serialized
 state. `[Range(min,max)]` gives a slider and `[Tooltip("text")]` adds help text. Supported types
-are float, int, bool, string, Vector3 and enums backed by int. Static/readonly fields and
+are float, int, bool, string, Vector3, AssetReference and enums backed by int. `[AssetPath(".fpsanim")]`
+gives an AssetReference a filtered asset picker; its path and GUID survive serialization.
+`[Color]` gives a Vector3 a linear RGB color picker. Static/readonly fields and
 `[NonSerialized]` fields are excluded. Unsupported types are labeled in the Inspector.
 Values are stored as JSON internally; you edit them through controls. Removed/renamed fields
 are discarded and new fields use their C# defaults. Source, Class, Fields, Enabled and the
@@ -71,6 +82,12 @@ additional script slots serialize through reflection, including undo, clipboard,
 snapshots, prefabs and prefab overrides. Slot IDs never get reused on the same component.
 A script throwing during a lifecycle callback is logged and stops receiving callbacks until
 rebuilt or its component changes. The Inspector's Advanced menu can reset its fields.
+
+String fields also support `[SceneReference]`, `[SoundReferences]` and `[InspectorChoices]`
+authoring widgets. Scene references store relative hierarchy paths, not permanent object IDs;
+sound slots store project paths in one string. See [SCRIPTING_API.md](SCRIPTING_API.md) for
+their arguments and limitations, and [EDITOR_HISTORY_AND_INSPECTORS.md](EDITOR_HISTORY_AND_INSPECTORS.md)
+for custom Inspectors.
 
 ```csharp
 using Tartarus;
@@ -103,7 +120,7 @@ to lifecycle callbacks (plus native gameplay adapters' physics services). Backgr
 calls are rejected by the managed bridge.
 
 `GetComponent<T>()` returns an attached script or a native wrapper (Transform, Rigidbody,
-Animator, Camera, Light, Collider, AudioSource, WeaponDefinition or FirstPersonController), or null if
+Animator, Camera, Light, Collider or AudioSource), or null if
 missing. `GetComponents<T>()` returns all matching behaviours, including disabled ones.
 `gameObject` wraps the current entity; it supports GetComponent/GetComponents, SetActive,
 Instantiate and Destroy. `transform.position` is world-space, `localPosition`, `localScale`
@@ -121,8 +138,9 @@ fields are validated before swapping assemblies. The native Player/Weapon frame 
 in the host, so ammunition, pump state, cooldowns and movement survive C# rebuilds. Bob
 demonstrates private-state restoration. Reload does not repeat OnCreate or OnDestroy; a
 replacement receives its saved state directly. Stop still calls OnDestroy on the current
-instance. There must be exactly one concrete `IGameplay` implementation per gameplay assembly;
-the supplied `Gameplay` forwards player and weapon frames to their controllers. These built-in
+instance. A script assembly may have zero or one concrete `IProjectIntegration` entry point;
+the sample `Gameplay` handles project-owned player/weapon/shot operations. Ordinary script
+assemblies need no FPS root. Project-wide state can use the integration SaveState/LoadState hooks. These built-in
 player/weapon controllers are driven through native gameplay adapters; ordinary behaviours
 you create use the attachable MonoBehaviour workflow above.
 
@@ -136,10 +154,10 @@ The two supplied prefabs are:
 Each has a placed weapon model, an Animator Controller on its weapon track, and a Weapon
 Definition with a description and GUID-tracked `.fpsanim` reference. That descriptor bundles
 the arms/weapon rigs, materials, controller, recoil, camera shake, muzzle, ejection, audio
-identity and gameplay values. Drop a prefab into a scene or double-click for Prefab Mode;
+identity and presentation values. WeaponDefinition owns gameplay values. Drop a prefab into a scene or double-click for Prefab Mode;
 the existing linked-instance overrides and Apply/Revert controls work on these components.
 
-On a First Person Controller, **Primary Weapon Prefab** and **Secondary Weapon Prefab** choose
+On the project PlayerDefinition, **Primary Weapon Prefab** and **Secondary Weapon Prefab** choose
 the player's two slots. A supplied prefab takes priority over that slot's legacy Animation
 Set field. Existing scenes using AK/870 descriptors now reference their corresponding
 prefabs. Legacy `.fpsanim` slot references remain readable. The runtime resolves the bundle
@@ -160,7 +178,7 @@ entry points validate the ABI version and frame byte size before dereferencing t
 both ABI definitions with `tools/generate_script_abi.py` after changing its schema.
 
 Game exports include Managed and the project's script sources/artifacts. The engine prefers
-the newest gameplay assembly from the project build or engine staging folder. CI explicitly
+the current project's gameplay assembly in Scripts/bin; bundled sample output is never a fallback. CI explicitly
 installs .NET 10. The unit suite covers the real managed/native boundary, player movement,
 fire modes, cooldowns, shotgun cycling, shell loading, tap/hold reload, script state across
 reloads, failed-reload rollback, pellet spread/capped impulse, background editor builds and

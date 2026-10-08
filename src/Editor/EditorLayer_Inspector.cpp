@@ -35,11 +35,13 @@
 #include "CurveEditor.h"
 #include "Scripting/ScriptRuntime.h"
 #include "Scripting/ScriptComponent.h"
+#include "ScriptReferenceWidgets.h"
 #include <json.hpp>
 #include "ProjectSettings.h" // project-defined tag vocabulary for the Tag dropdown (#236 A4)
 #include "LayerRegistry.h"
 #include "Profiler.h"
 #include "ProjectPaths.h"
+#include "ShaderLibrary.h"
 #include "AtomicFile.h"   // #178 preset write
 #include "AssetDatabase.h" // #178 preset .meta
 #include "GLStateCache.h"
@@ -77,6 +79,27 @@ using namespace EditorInternal;
 
 
 namespace {
+
+std::string ScriptComponentTitle(const CSharpScriptComponent& component) {
+    std::string title;
+    try {
+        for (const auto& slot : Scripting::GetSlots(component)) {
+            std::string name = slot.Class;
+            if (!name.empty()) {
+                const auto separator = name.find_last_of(".+");
+                if (separator != std::string::npos) name.erase(0, separator + 1);
+            } else if (!slot.Source.empty()) {
+                name = std::filesystem::path(slot.Source).stem().string();
+            }
+            if (name.empty()) continue;
+            if (!title.empty()) title += ", ";
+            title += name;
+        }
+    } catch (const std::exception&) {
+        // Keep malformed script data inspectable so it can be repaired.
+    }
+    return title.empty() ? "Script" : title;
+}
 
 // Approximate blackbody colour (linear RGB, normalised so the brightest channel is 1) for a
 // colour temperature in Kelvin. Cheap piecewise fit — good enough for authoring a warm lamp vs
@@ -183,7 +206,7 @@ AssetPathPickerOptions AssetPathFieldOptions(const char* component, const char* 
         o.Extensions = kScript; o.DragPayload = "ASSET_FILE_PATH"; o.DialogFilter = "Scripts\0*.tescript\0All Files\0*.*\0";
     } else if (is("First Person Controller", "Primary Weapon Prefab") || is("First Person Controller", "Secondary Weapon Prefab")) {
         o.Extensions = kPrefab; o.DragPayload = "ASSET_PREFAB_PATH"; o.DialogFilter = "Weapon Prefab\0*.prefab\0All Files\0*.*\0";
-    } else if (!std::strcmp(component, "First Person Controller") || is("Weapon Definition", "Animation Set")) {
+    } else if (!std::strcmp(component, "First Person Controller")) {
         o.Extensions = kWeapon; o.DragPayload = "ASSET_FILE_PATH"; o.DialogFilter = "Weapon Animation Set\0*.fpsanim\0All Files\0*.*\0";
     } else if (is("Character Outfit", "Wardrobe")) {
         o.Extensions = kWardrobe; o.DragPayload = "ASSET_FILE_PATH"; o.DialogFilter = "Wardrobe\0*.wardrobe\0All Files\0*.*\0";
@@ -1447,6 +1470,43 @@ static void DrawHiddenLobesNote(const Material& m, const ShaderAsset& sa) {
     ImGui::PopStyleColor();
 }
 
+static std::string MaterialShaderLabel(const std::string& reference) {
+    const std::string name = std::filesystem::path(reference).stem().string();
+    if (reference.empty() || name == "Standard") return "Default Lit";
+    if (name == "RedDot") return "Red Dot Sight";
+    return name;
+}
+
+// Selection only: the caller stages its own scene/asset undo before applying the result.
+static bool MaterialShaderDropdown(const MaterialAsset& material, std::string& selected, bool mixed = false) {
+    PropertyLabel("Shader");
+    ImGui::SetNextItemWidth(-FLT_MIN);
+    bool changed = false;
+    if (ImGui::BeginCombo("##materialShader", mixed ? "(mixed)" : MaterialShaderLabel(material.ShaderPath).c_str())) {
+        std::vector<std::string> shaders{"engine://Standard.shader"};
+        for (const std::string dir : {ShaderLibrary::Dir(), ProjectPaths::Resolve("shaders"), ProjectPaths::Resolve("assets")}) {
+            std::error_code ec;
+            for (std::filesystem::recursive_directory_iterator it(std::filesystem::u8path(dir), std::filesystem::directory_options::skip_permission_denied, ec), end;
+                 !ec && it != end; it.increment(ec)) {
+                if (!it->is_regular_file(ec) || it->path().extension() != ".shader") continue;
+                const auto ref = dir == ShaderLibrary::Dir() ? "engine://" + std::filesystem::relative(it->path(), dir).generic_string()
+                                                             : ProjectPaths::Relativize(it->path().string());
+                if (std::find(shaders.begin(), shaders.end(), ref) == shaders.end()) shaders.push_back(ref);
+            }
+        }
+        if (!material.ShaderPath.empty() && std::find(shaders.begin(), shaders.end(), material.ShaderPath) == shaders.end())
+            shaders.push_back(material.ShaderPath);
+        for (const auto& ref : shaders) {
+            ImGui::PushID(ref.c_str());
+            const bool active = material.ShaderPath == ref || (material.ShaderPath.empty() && ref == "engine://Standard.shader");
+            if (ImGui::Selectable(MaterialShaderLabel(ref).c_str(), active)) { selected = ref; changed = true; }
+            ImGui::PopID();
+        }
+        ImGui::EndCombo();
+    }
+    return changed;
+}
+
 void EditorLayer::DrawMaterialAssetFields(World& world, AssetLibrary& assets, const std::shared_ptr<MaterialAsset>& ma,
                                           const std::string& matPath) {
     Material& mat = ma->Mat;
@@ -1463,6 +1523,9 @@ void EditorLayer::DrawMaterialAssetFields(World& world, AssetLibrary& assets, co
         if (ReadTextFile(matPath) != before)
             PushAssetUndo(world, matPath, std::move(before), "Edit " + std::filesystem::path(matPath).stem().string());
     };
+
+    std::string shaderSelection;
+    if (MaterialShaderDropdown(*ma, shaderSelection) && ma->SetShader(shaderSelection, assets)) save();
 
     auto colorRow = [&](const char* label, glm::vec3 Material::* field, const char* tip) {
         PropertyLabel(label, tip);
@@ -2311,8 +2374,18 @@ void EditorLayer::DrawInspectorBody(World& world, AssetLibrary& assets) {
             const RegisteredComponent& rc = registeredComponents[ci];
             if (!rc.Meta.GenericInspector) continue; // Mesh Renderer: hand-coded, no multi-select section
 
+            std::string displayTitle;
+            if (std::strcmp(rc.Meta.Name, "C# Script") == 0) {
+                for (const auto e : sel) {
+                    const std::string title = ScriptComponentTitle(world.Registry.get<CSharpScriptComponent>(e));
+                    if (displayTitle.empty()) displayTitle = title;
+                    else if (displayTitle != title) { displayTitle = "Scripts (Mixed)"; break; }
+                }
+            }
             ImGui::Spacing();
-            if (BeginComponentSection(rc.Meta.Icon, rc.Meta.Name, false, mrm, rc.Meta.Tooltip)) {
+            if (BeginComponentSection(rc.Meta.Icon, rc.Meta.Name, false, mrm, rc.Meta.Tooltip,
+                    nullptr, nullptr, nullptr, nullptr, nullptr, nullptr, nullptr,
+                    displayTitle.empty() ? nullptr : displayTitle.c_str())) {
                 auto fieldPtr = [&](entt::entity e, const ReflectField& f) -> void* {
                     return f.Address(rc.Get(world.Registry, e));
                 };
@@ -2938,12 +3011,14 @@ void EditorLayer::DrawInspectorBody(World& world, AssetLibrary& assets) {
         // Key) themselves; see their comments.
         const bool compAdded = SceneSerializer::IsPrefabComponentAdded(world, entity, rc.Meta.Name);
         bool reflPfRevert = false, reflPfApply = false;
+        const std::string displayTitle = std::strcmp(rc.Meta.Name, "C# Script") == 0
+            ? ScriptComponentTitle(registry.get<CSharpScriptComponent>(entity)) : std::string{};
         const bool reflOpen = BeginComponentSection(rc.Meta.Icon, rc.Meta.Name, true, reflRemoved,
             rc.Meta.Tooltip, &reflReset, &reflCopy, &reflPaste,
             compAdded ? &reflPfRevert : nullptr, compAdded ? &reflPfApply : nullptr,
             // #178 - every generically-inspected component is also generically serialised, so
             // all of them can round-trip through a preset.
-            &reflSavePreset, &reflApplyPreset);
+            &reflSavePreset, &reflApplyPreset, displayTitle.empty() ? nullptr : displayTitle.c_str());
         if (compAdded) DrawOverrideGutterBar();
         // "Revert to Prefab" on an added component == remove it; route through the same
         // end-of-loop removal path (below) so nothing touches a component mid-teardown.
@@ -3142,7 +3217,7 @@ std::string EditorLayer::SaveComponentPreset(const World& world, entt::entity en
 bool EditorLayer::BeginComponentSection(const char* icon,
     const char* label, bool removable, bool& removedOut, const char* tooltip,
     bool* resetOut, bool* copyOut, bool* pasteOut, bool* prefabRevertOut, bool* prefabApplyOut,
-    bool* savePresetOut, std::string* applyPresetOut) {
+    bool* savePresetOut, std::string* applyPresetOut, const char* displayLabel) {
     removedOut = false;
     if (resetOut) *resetOut = false;
     if (copyOut)  *copyOut = false;
@@ -3188,12 +3263,13 @@ bool EditorLayer::BeginComponentSection(const char* icon,
         const float ix = hp.x + EditorTheme::Px(22.0f);
         dl->AddText(ImVec2(ix, cy - is.y * 0.5f), EditorTheme::U32(open ? EditorTheme::Accent : EditorTheme::Secondary), icon);
         // The name, cut with an ellipsis before the ... / x buttons at the bar's right end.
-        const ImVec2 ls = ImGui::CalcTextSize(label);
+        const char* visibleLabel = displayLabel ? displayLabel : label;
+        const ImVec2 ls = ImGui::CalcTextSize(visibleLabel);
         const float lx = ix + std::max(is.x, ImGui::GetFontSize()) + EditorTheme::Px(8.0f);
         const float btnReserve = ImGui::GetFrameHeight() * ((removable ? 1.0f : 0.0f) + 1.0f) + EditorTheme::Px(8.0f);
         const float lmax = hp.x + hw - btnReserve;
         ImGui::PushStyleColor(ImGuiCol_Text, EditorTheme::Text);
-        ImGui::RenderTextEllipsis(dl, ImVec2(lx, cy - ls.y * 0.5f), ImVec2(lmax, cy + ls.y * 0.5f), lmax, label, nullptr, &ls);
+        ImGui::RenderTextEllipsis(dl, ImVec2(lx, cy - ls.y * 0.5f), ImVec2(lmax, cy + ls.y * 0.5f), lmax, visibleLabel, nullptr, &ls);
         ImGui::PopStyleColor();
     }
     const bool headerHovered = ImGui::IsItemHovered();
@@ -3521,7 +3597,10 @@ void EditorLayer::DrawReflectedComponentExtra(const char* componentName, World& 
                         if(!fields.is_object()) { ImGui::TextWrapped("Saved fields are invalid. Editing a field below will repair them."); fields=Json::object(); }
                         const auto beforeCustom=slot.Fields;
                         const bool custom=m_AssetsPtr && metadata.contains("fields") && DrawManagedInspector(world,*m_AssetsPtr,entity,slot.Class,&slot.Fields,metadata.dump());
-                        if(custom && slot.Fields!=beforeCustom) Scripting::SetSlots(*component,slots);
+                          if(custom && slot.Fields!=beforeCustom) {
+                              PushUndo(world,"Edit " + slot.Class);
+                              Scripting::SetSlots(*component,slots);
+                          }
                         if(!custom && metadata.contains("fields")) for(const auto& field:metadata.at("fields")) {
                             const std::string name=field.at("name"), kind=field.at("kind"), tip=field.value("tooltip",std::string{});
                             const Json value=fields.contains(name)?fields.at(name):field.at("default");
@@ -3529,7 +3608,11 @@ void EditorLayer::DrawReflectedComponentExtra(const char* componentName, World& 
                             ImGui::SetNextItemWidth(-FLT_MIN); bool changed=false, immediate=false;
                             try {
                             const bool range=field.contains("min") && !field.at("min").is_null() && !field.at("max").is_null();
-                            if(kind=="float") {
+                            if(kind=="scene-ref" || kind=="sound-refs" || kind=="choice" || kind=="asset-ref") {
+                                auto reference=value;
+                                changed=DrawScriptReferenceField(world,entity,field,reference,m_Window);immediate=true;
+                                if(changed) fields[name]=reference;
+                            } else if(kind=="float") {
                                 float number=value.get<float>();
                                 changed=range?ImGui::SliderFloat("##value",&number,field.at("min").get<float>(),field.at("max").get<float>())
                                     :ImGui::DragFloat("##value",&number,.05f);
@@ -3544,9 +3627,9 @@ void EditorLayer::DrawReflectedComponentExtra(const char* componentName, World& 
                             } else if(kind=="string") {
                                 std::string text=value.is_null()?std::string{}:value.get<std::string>();
                                 changed=InputTextString("##value","",text); if(changed) fields[name]=text;
-                            } else if(kind=="vec3") {
+                            } else if(kind=="vec3" || kind=="color") {
                                 float vector[3]={value.value("X",0.f),value.value("Y",0.f),value.value("Z",0.f)};
-                                changed=ImGui::DragFloat3("##value",vector,.05f);
+                                changed=kind=="color"?EditorUI::ColorEditLinear("##value",vector):ImGui::DragFloat3("##value",vector,.05f);
                                 if(changed) fields[name]={{"X",vector[0]},{"Y",vector[1]},{"Z",vector[2]}};
                             } else if(kind=="enum") {
                                 const auto labels=field.at("labels").get<std::vector<std::string>>();
@@ -3694,7 +3777,7 @@ void EditorLayer::DrawReflectedComponentExtra(const char* componentName, World& 
 
     // First Person Body: check the setup against what the body needs (the controller's parameters and
     // states, bones, piece names) so a missing piece is said out loud instead of a feature silently
-    // doing nothing.
+    // doing nothing. FPBody::Validate is the same table the docs (docs/BODY_SETUP.md) are written from.
     if (std::strcmp(componentName, "Character Outfit") == 0 && phase == ReflectExtraPhase::Bottom) {
         DrawCharacterOutfitEditor(world, entity);
         return;
@@ -4947,6 +5030,11 @@ void EditorLayer::DrawMaterialEditor(World& world, AssetLibrary& assets,
             mats.clear();
             mats.push_back(&slot->Mat);
             matAssets.assign(1, slot.get());
+            std::string shaderSelection;
+            if (MaterialShaderDropdown(*slot, shaderSelection)) {
+                PushUndo(world, "Change Material Shader");
+                slot->SetShader(shaderSelection, assets);
+            }
             if (slot->Shader) {
                 // Data-driven inspector: iterate ShaderAsset::Properties(), skip Hidden.
                 DrawShaderPropertyRow(*slot->Shader);
@@ -5091,5 +5179,15 @@ void EditorLayer::DrawMaterialEditor(World& world, AssetLibrary& assets,
         mats.push_back(&rc->Materials[0]->Mat);
         matAssets.push_back(rc->Materials[0].get());
     }
-    DrawPbrFields();
+    bool mixedShaders = false;
+    for (const auto* material : matAssets)
+        if (material->ShaderPath != matAssets.front()->ShaderPath) mixedShaders = true;
+    std::string shaderSelection;
+    if (MaterialShaderDropdown(*matAssets.front(), shaderSelection, mixedShaders)) {
+        PushUndo(world, "Change Material Shader");
+        for (auto* material : matAssets) material->SetShader(shaderSelection, assets);
+        mixedShaders = false;
+    }
+    if (!mixedShaders && matAssets.front()->Shader) DrawShaderPropertyRow(*matAssets.front()->Shader);
+    else DrawPbrFields();
 }

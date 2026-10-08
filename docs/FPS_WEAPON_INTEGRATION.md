@@ -11,6 +11,13 @@ for a weapon that behaves like a normal firearm. The whole setup happens in the 
 
 Use the checklist at the bottom as the PR checklist.
 
+**Current setup (2026-10-07).** Prefer a weapon `.prefab` assigned to the player's
+**Primary/Secondary Weapon Prefab** slot; Animation Set fields remain the legacy fallback.
+See [CSHARP_SCRIPTING.md](CSHARP_SCRIPTING.md) for prefab ownership and gameplay scripting,
+[WEAPON_REIMPORT.md](WEAPON_REIMPORT.md) for the current authored exports, and the recoil,
+sway and camera guides for the active solvers. Older embedded tuning examples below explain
+compatibility setups and the original measured import workflow.
+
 **Fastest path:** in the Asset Browser, right-click > **Create First-Person Weapon...** Pick the arms and weapon
 models and the folders holding their animation files; the wizard matches clips to states by file name, then
 writes the `.fpsanim`, `.recoil` and the standard controller. Then finish in the Weapon Inspector: its **Setup** box lists
@@ -92,7 +99,7 @@ generates for it.
 
 The fastest start is to **copy the AK's graph** and re-point its clips:
 
-1. Duplicate `AKS74U.controller` (Asset Browser → Animation → right-click → Duplicate), and rename it `<Weapon>.controller`.
+1. Duplicate `AKS74U.controller` (Asset Browser → assets/Weapons/AKS74U → right-click → Duplicate), and rename it `<Weapon>.controller`.
 2. Double-click it to open the **Animator** window.
 3. Click each state. In the right panel, set **Motion: arms** and **Motion: weapon** to the new weapon's clips. Pick them from the list, or drag the FBX from the Asset Browser onto the slot.
 4. Leave **Motion: weapon** empty for states where the gun doesn't move by itself. The gun then holds its bind pose.
@@ -143,7 +150,7 @@ Alternatively, if you have a flat list of 15 AK-style clips:
    - **Aim-Down-Sights**: view and gun zoom, sight alignment, and how actions play while aiming (see [Aim-down-sights animations](#aim-down-sights-animations)).
    - **Barrel & Laser**: where rounds leave the gun, the zero, the laser and the bullet holes (see [Barrel, zeroing and laser](#barrel-zeroing-and-laser)).
    - **Procedural**: recoil curves, sway, bob, breathing, ADS aim offset, per-state offsets, lean and the IK bone names. See [PROCEDURAL_ANIMATION.md](PROCEDURAL_ANIMATION.md). For a Manny-rig weapon the IK defaults already fit. In the controller, give Walk/Sprint the `WalkRate` / `SprintRate` speed parameters, and tag states that must play untouched (Draw, Holster) `IKOff`.
-3. The arms and weapon model paths are shown read-only in the Inspector. Edit them in the file.
+3. Use the **Rigs & Mount** model pickers to assign the arms and weapon models.
 
 Every field is validated on load. A bad value shows its error in the Inspector, and Play refuses to start the weapon.
 
@@ -211,6 +218,18 @@ The **Aim-Down-Sights** table shows each action's mode (Aim pose / ADS clip / Ca
 hip), what was measured, and warnings (missing clip, no reference, no IK).
 
 ### Barrel, zeroing and laser
+
+Author the muzzle flash in the weapon prefab: add an empty child named **Muzzle Flash**,
+place its Transform at the barrel tip, and add the ordinary **Particle System** component.
+Use **Shape: Point**, **Local Space: on**, **Start Speed: 0**, **Rate: 0**, **Emitting: off**,
+and a **Burst Count** of one (or the number of particles per shot). Particles spawn at the
+emitter's local `(0, 0, 0)` and follow the weapon's animation and recoil. **Alignment: Billboard**
+keeps their quads parallel to the camera plane. Texture, size, color, lifetime and curves are
+edited on the Particle System; **Texture Channels** can read a channel as an opacity mask.
+**Pivot X/Y** anchor an off-centre texture to the emitter without moving its particle origin.
+Every committed shot bursts the prefab's child particle systems in the owner's view and on
+the world weapon. Prefab edits reload during Play. The project C# `Tartarus.Gameplay.WeaponDefinition` retains the light and
+smoke settings; its legacy flash layers are suppressed when the prefab supplies particles.
 
 Rounds are raycasts from the **muzzle** down the bore; each leaves a bullet hole where it lands,
 and the laser draws the same line. The **Barrel & Laser** section sets it all up:
@@ -318,7 +337,8 @@ Run the build, unit tests and smoke test as in SYSTEM §10. Then:
   - I (inspect) and Q (melee), and aim with a canopy post just ahead at the Shooting Range to corner-peek
   - the laser leaves the muzzle, and at 25 m the dot, the rounds and the front post agree (the Shooting Range's zero target, lane 2)
   - bullet holes are black and about the calibre; walk up to a wall and the gun tucks in
-  - 1, 2 and scroll, including mid-reload
+  - scroll down for the next weapon, scroll up for the previous weapon, including mid-reload
+  - 1 cycles muzzle attachments, 2 cycles grips, and 3 cycles optics; while aiming, the sight transitions to the selected optic's aim point
 - If the weapon has a spare magazine, check it's visible during both reloads. If it's missing, see SYSTEM §8.6.
 
 ---
@@ -419,12 +439,10 @@ animations' pose and every other view shows a corrected world copy.
 
 Open items:
 
-- **Case sounds:** weapons play no audio yet, and there is no case-drop sound. A tink on a case's first hard
-  bounce belongs in `ShellCasings::Step`.
-- **Weapon effects in other views:** there is no muzzle flash or tracer yet; the laser and bullet holes
-  draw only in the owner's Game view (`weaponOverlay`). When a flash or tracer is added, or other
-  players see the laser, start it at the world gun's muzzle (the first-person muzzle plus
-  `WorldGunShift`). Rounds keep firing from the camera.
+- **Audio and muzzle effects are implemented.** Weapon actions, layered shots and case bounces
+  are covered by [AUDIO.md](AUDIO.md). Player/NPC muzzle effects and prefab particle authoring
+  are covered by [PARTICLE_SYSTEM.md](PARTICLE_SYSTEM.md). Use the existing world-muzzle
+  placement path when extending effects to other views.
 - **`--stock-probe` Scene capture is stale:** in the headless run the Scene tab doesn't render during
   Play, so the capture's left half is from before Play (the numbers are fine). Check the Scene window's
   dock ID in the loaded `imgui.ini` and `m_SceneViewportVisible` during Play.
@@ -438,7 +456,7 @@ Open items:
 | The input → parameter mapping | `FirstPersonPresentation` (`FirstPersonAnimatorContract`) | New inputs, e.g. a fire-mode selector animation, need a new parameter name there |
 | ADS fire and walk bob are procedural | `FirstPersonPresentation::Fire` / `Tick` / `Update` | If a weapon ships real ADS fire/walk clips, drop the `ADS` tag from its aim state and build the logic in the graph |
 | Hitscan only | `FirstPersonPresentation::FireShot` | A projectile needs ballistics. Pellets, per-round reloads and pump / bolt actions are data now (see [A shotgun](#a-shotgun-the-remington-870)) |
-| No HUD | `Ammo()`, `IsFullAuto()` exist | A HUD overlay that reads them |
+| Additional HUD features | `src/Game/CombatHud.*` | Extend the existing ammo/kill-feed/awareness HUD |
 
 If you add a new `*Tag` or `*Component` to `Components.h`, register it or allow-list it in
 `tools/component_registration_allowlist.txt`, or CI's Debug job fails. A new input action goes

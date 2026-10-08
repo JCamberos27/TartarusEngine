@@ -37,10 +37,8 @@ public:
     // Scene tuning (feed life, streak window); the defaults are the old fixed values.
     FxHudSettingsComponent Settings;
     // The kill streak after a kill `sinceLastKill` seconds after the previous one.
-    static int NextStreak(const FxHudSettingsComponent& s, int streak, float sinceLastKill) {
-        return sinceLastKill <= s.StreakWindow ? streak + 1 : 1;
-    }
-    static bool FeedExpired(const FxHudSettingsComponent& s, float age) { return age > s.FeedLife; }
+    static int NextStreak(const FxHudSettingsComponent& s,int streak,float sinceLastKill);
+    static bool FeedExpired(const FxHudSettingsComponent& s,float age);
     // Forgets the feed and the streak (a new Play).
     void Reset();
     // The player's round killed `entity` (a soldier of `npcs`).
@@ -49,20 +47,10 @@ public:
     void Draw(const CombatHudInput& in, NpcDirector& npcs);
 
     int Kills() const { return m_Kills; }
-    int FeedRows() const { return (int)m_Feed.size(); }
+    int FeedRows() const { return m_FeedRows; }
 
 private:
-    struct FeedRow { std::string Name; bool Head = false; float At = 0.0f; };
-
-    void DrawAmmo(const CombatHudInput& in);
-    void DrawFeed(const CombatHudInput& in, float now);
-    void DrawAwareness(const CombatHudInput& in, const NpcDirector& npcs);
-    void DrawDebug(const CombatHudInput& in, const NpcDirector& npcs);
-    bool Project(const CombatHudInput& in, const glm::vec3& p, glm::vec2& out) const;
-
     HudText m_Text;
-    std::vector<FeedRow> m_Feed;
-    std::vector<float> m_Lines; // scratch for the director's debug lines
-    int m_Kills = 0, m_Streak = 0;
-    float m_LastKillAt = -1e9f, m_StreakAt = -1e9f;
+    std::vector<float> m_Lines;
+    int m_Kills=0,m_FeedRows=0;
 };

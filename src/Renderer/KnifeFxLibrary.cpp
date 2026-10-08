@@ -1,3 +1,5 @@
+#include "Scripting/ScriptRuntime.h"
+#include <json.hpp>
 #include "KnifeFxLibrary.h"
 
 #include "Log.h"
@@ -58,7 +60,9 @@ bool KnifeFxLibrary::Load() {
     if (m_LoadTried) return m_Loaded;
     m_LoadTried = true;
     namespace fs = std::filesystem;
-    const fs::path dir = fs::u8path(ProjectPaths::Resolve("assets/Effects/Knife"));
+    std::string location;if(!Scripting::RequestProject("content.path",nlohmann::json("knife").dump(),location))return false;
+    const auto libraryRoot=nlohmann::json::parse(location).get<std::string>();if(libraryRoot.empty())return false;
+    const fs::path dir=fs::u8path(ProjectPaths::Resolve(libraryRoot));
     size_t bytes = 0;
     for (int l = 0; l < (int)KnifeFxImport::Library::Count; ++l) {
         const auto lib = (KnifeFxImport::Library)l;

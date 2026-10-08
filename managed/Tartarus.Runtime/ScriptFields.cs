@@ -11,13 +11,26 @@ namespace Tartarus;
 { public float Min { get; } = min; public float Max { get; } = max; }
 [AttributeUsage(AttributeTargets.Field)] public sealed class TooltipAttribute(string text) : Attribute
 { public string Text { get; } = text; }
+/// <summary>A draggable hierarchy reference, serialized relative to the script's object for prefab instances.</summary>
+[AttributeUsage(AttributeTargets.Field)] public sealed class SceneReferenceAttribute(string component = "Transform", bool childrenOnly = false) : Attribute
+{ public string Component { get; } = component; public bool ChildrenOnly { get; } = childrenOnly; }
+/// <summary>A list of draggable audio assets, stored as semicolon-separated project paths.</summary>
+[AttributeUsage(AttributeTargets.Field)] public sealed class SoundReferencesAttribute : Attribute { }
+[AttributeUsage(AttributeTargets.Field)] public sealed class InspectorChoicesAttribute(params string[] choices) : Attribute
+{ public string[] Choices { get; } = choices; }
 
 internal static class ScriptFields
 {
     static readonly JsonSerializerOptions options = new() { IncludeFields = true };
     static string Kind(Type type) => type == typeof(float) ? "float" : type == typeof(int) ? "int" :
         type == typeof(bool) ? "bool" : type == typeof(string) ? "string" : type == typeof(Vector3) ? "vec3" :
+        type == typeof(AssetReference) ? "asset-ref" :
         type.IsEnum && Enum.GetUnderlyingType(type) == typeof(int) ? "enum" : "unsupported";
+    static string InspectorKind(FieldInfo field) => field.FieldType == typeof(Vector3) && field.IsDefined(typeof(ColorAttribute)) ? "color" :
+        field.FieldType != typeof(string) ? Kind(field.FieldType) :
+        field.IsDefined(typeof(SceneReferenceAttribute)) ? "scene-ref" :
+        field.IsDefined(typeof(SoundReferencesAttribute)) ? "sound-refs" :
+        field.IsDefined(typeof(InspectorChoicesAttribute)) ? "choice" : "string";
     static IEnumerable<FieldInfo> Fields(Type type)
     {
         for (Type? t = type; t != null && t != typeof(Script) && t != typeof(Component); t = t.BaseType)
@@ -56,7 +69,11 @@ internal static class ScriptFields
     {
         var defaults = (Script)Activator.CreateInstance(type)!;
         return new { @class = type.FullName, fields = Fields(type).Where(f => !f.IsDefined(typeof(HideInInspectorAttribute))).Select(f => new {
-            name = f.Name, kind = Kind(f.FieldType), @default = Kind(f.FieldType) == "unsupported" ? null : f.GetValue(defaults),
+            name = f.Name, kind = InspectorKind(f), @default = Kind(f.FieldType) == "unsupported" ? null : f.GetValue(defaults),
+            component = f.GetCustomAttribute<SceneReferenceAttribute>()?.Component ?? "",
+            childrenOnly = f.GetCustomAttribute<SceneReferenceAttribute>()?.ChildrenOnly ?? false,
+            choices = f.GetCustomAttribute<InspectorChoicesAttribute>()?.Choices ?? [],
+            extensions = f.GetCustomAttribute<AssetPathAttribute>()?.Extensions ?? [],
             labels = Kind(f.FieldType) == "enum" ? Enum.GetNames(f.FieldType) : [],
             values = Kind(f.FieldType) == "enum" ? Enum.GetValues(f.FieldType).Cast<object>().Select(Convert.ToInt32).ToArray() : [],
             min = f.GetCustomAttribute<RangeAttribute>()?.Min, max = f.GetCustomAttribute<RangeAttribute>()?.Max,

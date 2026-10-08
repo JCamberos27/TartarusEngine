@@ -139,6 +139,11 @@ A 2D blend tree blends clips over two Float parameters, e.g. a directional walk 
 
 ### Checking and debugging
 
+- **Edit-mode Preview** (state properties, with a selected rig): enable Preview to pose the
+  rig in the selected state's motion, scrub normalized time or play it, and adjust blend-tree
+  parameters. A state-to-state transition also has a crossfade preview slider. Disabling
+  Preview restores the bind pose. These controls pose the selected scene rig; they do not
+  create an isolated weapon assembly preview or run gameplay/audio events.
 - **Lint** tab: unreachable states, states with no way out, missing / duplicate / wrongly typed parameters, blend children stacked on one point, events outside 0..1, transitions that never fire or point at deleted states. Click an issue to select the state or transition. The dropdown can also check the controller against the first-person **body** or **weapon** contract.
 - **History** tab (Play): every transition the rig's controller took, how long ago, and the conditions with the parameter values at that moment. Click one to select the transition.
 - **Analyse** (state panel, under Root Motion): per clip, the travel, ground speed, turn, a ground-speed plot, when each foot plants, the stride and the loop seam (how far the last frame is from the first, relative to the root - a visible pop when it loops). Use the plant times for Stop transition offsets and Start exit times, and the speeds for blend thresholds.
@@ -271,7 +276,7 @@ if (anim.EventFired("Refill")) ammo = magazine;
 
 ## 5. Not supported yet
 
-- Sub-state machines, animation curves, and 2D blend types other than freeform cartesian (simple / freeform directional).
+- Sub-state machines, imported FBX custom-property animation curves, and 2D blend types other than freeform cartesian (simple / freeform directional). Named state weight curves are supported as described above.
 - Per-transition interruption source (Unity's *Current / Next / ordered* settings). This system has only *Interruptible* on/off plus priorities.
-- A preview of motions in the window while in Edit mode (Play shows the live state; the blend-space plot shows the weights).
+- An isolated preview world for a complete weapon/body assembly, with procedural layers and event audition. Selected-rig state and transition previews are supported.
 - Root motion on higher layers, and extracting a curve (e.g. a speed parameter) from it.

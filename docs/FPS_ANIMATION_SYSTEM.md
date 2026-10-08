@@ -11,6 +11,15 @@ from breaking again. Companion documents:
 | **`FPS_ANIMATION_INVESTIGATION.md`** (archived: `git show 763b8187:FPS_ANIMATION_INVESTIGATION.md`) | You're about to form a new hypothesis about skinning or import. It lists everything already measured and ruled out, with numbers. The bug it chased is fixed, so it's no longer in the tree |
 | `tools/assimp_patches/README.md` | You're bumping assimp, or a weapon's spare magazine vanished on import |
 
+**Current implementation note (2026-10-07).** This reference retains measurements and older
+asset examples that explain the import/placement invariants. Player movement and weapon
+gameplay decisions now run in C# through native frame adapters; see [CSHARP_SCRIPTING.md](CSHARP_SCRIPTING.md).
+Player weapon prefab slots take precedence over legacy Animation Set fields. Shipped recoil,
+sway, firing camera and locomotion behavior is documented in [PROCEDURAL_RECOIL.md](PROCEDURAL_RECOIL.md),
+[WEAPON_SWAY.md](WEAPON_SWAY.md) and [WEAPON_CAMERA.md](WEAPON_CAMERA.md); current reimport details
+are in [WEAPON_REIMPORT.md](WEAPON_REIMPORT.md). The older embedded recoil/bob examples and
+original AK graph below are historical, not a description of the current authored controllers.
+
 ---
 
 ## 1. Overview
@@ -118,7 +127,7 @@ a frame never mixes two placements.
 ## 2. The weapon definition (`.fpsanim`)
 
 The shipped definition is `project/assets/Weapons/AKS74U/AKS74U.fpsanim`. Select it in the
-Asset Browser's **Animation** folder to edit it in the Inspector.
+Asset Browser under **assets/Weapons/AKS74U** to edit it in the Inspector.
 
 ```jsonc
 {
@@ -610,8 +619,7 @@ at and set aside - see issue #424 for why.
 4. **View-model fields are captured at `Start()`**, not live-tunable — Stop/Play.
 5. **The camera sits on the `head` bone origin** (skull base, 1.557 m) rather than the
    eyes; the ADS offset absorbs it. There is no eye bone on this rig.
-6. **No HUD** — ammo and fire mode are Console-only (`Ammo()`, `IsFullAuto()` are there
-   for one).
+6. **HUD exists.** The combat HUD shows ammo, kill feed and awareness; see [ENEMY_AI.md](ENEMY_AI.md).
 7. **The FPS scene is not in CI.** CI's smoke test runs `tests/smoke-scenes/`; the Sandbox
    lives in `project/scenes/` and is smoke- and `--weapon-test`-ed only locally. Adding an FPS
    smoke scene would gate `.fpsanim` loading and clip attachment on every push.
@@ -725,7 +733,8 @@ placement, which is exactly where the original bug was.
 - **Parameters the driver sets every frame** (Speed, Aim, …) overwrite whatever you type
   into the Animator's live Parameters panel.
 - **Input defaults vs `settings.json`.** The saved list wins per action.
-- **View-model fields don't hot-reload** — Stop/Play.
+- **Scene view-model fields don't hot-reload** — Stop/Play. Persistent weapon **View Position**
+  is a separate live-tunable asset setting; see [PROCEDURAL_RECOIL.md](PROCEDURAL_RECOIL.md).
 - **Don't re-check what `FPS_ANIMATION_INVESTIGATION.md` ruled out** without new evidence
   (archived; see the companion table at the top).
 - **Never touch the `.blend` without asking.**

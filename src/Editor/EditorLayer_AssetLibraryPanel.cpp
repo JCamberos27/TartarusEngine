@@ -310,7 +310,8 @@ void EditorLayer::DrawAssetLibraryPanel(World& world, AssetLibrary& assets) {
             ImGui::TextDisabled("%s on disk%s", FormatBytes(s.Bytes).c_str(),
                                 s.Skipped ? (", " + std::to_string(s.Skipped) + " source file(s) not imported").c_str() : "");
 
-            const fs::path inProject = fs::path(ProjectPaths::Resolve("assets")) / name;
+            const fs::path inProject = fs::path(AssetImport::ProjectImportDirectory(ProjectPaths::Root(), s.Path,
+                                                                                  prefs.AssetLibraryPath)) / name;
             const bool alreadyIn = fs::exists(inProject, ec);
             if (alreadyIn) {
                 ImGui::TextColored(ImGui::GetStyleColorVec4(ImGuiCol_CheckMark), ICON_FA_CHECK "  In the project as %s",
@@ -326,7 +327,8 @@ void EditorLayer::DrawAssetLibraryPanel(World& world, AssetLibrary& assets) {
             ImGui::EndDisabled();
             if (ImGui::IsItemHovered(ImGuiHoveredFlags_AllowWhenDisabled))
                 EditorUI::SetTooltip(importable
-                    ? "Copies the whole folder into the project's assets folder, keeping its layout,\n"
+                    ? "Copies the whole folder into assets/External, keeping its layout.\n"
+                      "Local library imports are excluded from Git.\n"
                       "then imports its models, textures and sounds. Models get their textures\n"
                       "matched and editable materials created."
                     : "This folder has no models, textures or sounds of its own.\nPick an asset inside it.");

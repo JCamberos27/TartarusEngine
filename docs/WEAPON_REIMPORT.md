@@ -1,11 +1,5 @@
 # AKS74U and Remington 870 authored-export reimport
 
-The private asset store now retains the supplied inputs under
-`Tartarus Assets/Raw/Weapons/AE_Exports`. Set `TARTARUS_WEAPON_EXPORTS` to that
-folder before repeating the import. The derived FBXs live in `Tartarus Assets/Used`,
-at the paths recorded in `project/external_assets.csv`; they are never committed to Git.
-The import report and backups remain local build artifacts.
-
 The October 2026 reimport uses `Desktop/AE_Exports/AKS74U` and
 `Desktop/AE_Exports/Remington 870`. The original export folders are read-only
 inputs. Existing project paths and `.fbx.meta` GUIDs are retained, including the

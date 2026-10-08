@@ -2,8 +2,9 @@
 
 Open a weapon prefab by double-clicking `AKS74U.prefab` or `Remington870.prefab`, or use
 **Edit Primary/Secondary Weapon Definition** under the player's First Person Controller.
-Select the prefab root and expand **Weapon Definition**. Its tabs are **Overview**, **Muzzle Light**,
-**Flame**, **Flash**, and **Smoke**. Save the prefab before leaving Prefab Mode.
+Select the prefab root and expand its **C# Script / WeaponDefinition**. The project C# Inspector
+has **Overview**, **Muzzle Light** and **Smoke** tabs; child Particle Systems author the flash.
+Legacy flame/flash values remain serialized but hidden. Save the prefab before leaving Prefab Mode.
 
 Each shot uses that weapon's settings, including NPC shots. Changing a prefab on disk while
 the player's presentation runs refreshes muzzle values on its normal quarter-second poll.

@@ -1,0 +1,16 @@
+{
+  "folder": "assets/Models/1a1.fbx#1a1.fbm",
+  "guid": "38562ecf52d7f624",
+  "importer": {
+    "anisoLevel": 8,
+    "compression": 0,
+    "filterMode": 1,
+    "generateMipmaps": true,
+    "isSRGB": false,
+    "maxTextureSize": 2048,
+    "textureType": 1,
+    "wrapMode": 0
+  },
+  "metaVersion": 1,
+  "type": "texture"
+}

@@ -1,4 +1,3 @@
-#include "EditorUIPrimitives.h"
 #include "CurveEditor.h"
 #include "AtomicFile.h"
 #include <filesystem>
@@ -134,7 +133,7 @@ bool Draw(const char* id,Curve& curve,const ImVec2& size,const Options& o) {
     if(found!=windows.end()&&!bound.Source&&found->second.Pending){curve=found->second.Working;found->second.Pending=false;committed=true;}
     const float width=size.x>0?size.x:ImGui::GetContentRegionAvail().x;
     const bool clicked=Preview(id,curve,{std::max(40.0f,width-ImGui::CalcTextSize("Edit Curve").x-30),std::min(size.y,ImGui::GetFontSize()*3.5f)},o);
-    ImGui::SameLine();ImGui::PushID(id);const bool button=EditorUIPrimitives::SecondaryButton("Edit Curve");ImGui::PopID();
+    ImGui::SameLine();ImGui::PushID(id);const bool button=ImGui::SmallButton("Edit Curve");ImGui::PopID();
     if(clicked||button) {
         auto& w=windows[{ImGui::GetCurrentContext(),key}];
         if(w.Key.empty()){w.Key=key;w.Working=curve;OptionsFor(w,o);}
@@ -174,11 +173,11 @@ void DrawWindows(const std::function<void()>& undo,const std::function<void()>& 
                     if(!ec&&stamp!=w.Stamp&&!w.Dirty&&Read(w))w.Stamp=stamp;
                 }
             }
-            ImGui::BeginDisabled(!canUndo);if(EditorUIPrimitives::SecondaryButton("Undo")&&undo)undo();ImGui::EndDisabled();ImGui::SameLine();
-            ImGui::BeginDisabled(!canRedo);if(EditorUIPrimitives::SecondaryButton("Redo")&&redo)redo();ImGui::EndDisabled();
-            if(w.Bound.Source){ImGui::SameLine();if(EditorUIPrimitives::SecondaryButton("Reload"))Read(w);ImGui::SameLine();ImGui::TextDisabled("%s",fs::u8path(w.Bound.Source->Path).filename().u8string().c_str());}
+            ImGui::BeginDisabled(!canUndo);if(ImGui::Button("Undo")&&undo)undo();ImGui::EndDisabled();ImGui::SameLine();
+            ImGui::BeginDisabled(!canRedo);if(ImGui::Button("Redo")&&redo)redo();ImGui::EndDisabled();
+            if(w.Bound.Source){ImGui::SameLine();if(ImGui::Button("Reload"))Read(w);ImGui::SameLine();ImGui::TextDisabled("%s",fs::u8path(w.Bound.Source->Path).filename().u8string().c_str());}
             if(w.Opt.TimeInSeconds){ImGui::SetNextItemWidth(120);ImGui::DragFloat("Edit end (s)",&w.Opt.TimeMax,.01f,std::max(.01f,w.Working.EndTime()),600,"%.3f",ImGuiSliderFlags_AlwaysClamp);}
-            if(!w.Error.empty()){ImGui::TextWrapped("%s",w.Error.c_str());if(w.Dirty&&EditorUIPrimitives::PrimaryButton("Save Curve"))Save(w);}
+            if(!w.Error.empty()){ImGui::TextWrapped("%s",w.Error.c_str());if(w.Dirty&&ImGui::Button("Save Curve"))Save(w);}
             if(w.Bound.Source) {
                 ImGui::BeginChild("channels",{180,0},ImGuiChildFlags_Borders);ImGui::TextUnformatted("Curves");
                 for(const auto& b:bindings)if(b.first.first==ctx&&b.second.Source->Path==w.Bound.Source->Path) {

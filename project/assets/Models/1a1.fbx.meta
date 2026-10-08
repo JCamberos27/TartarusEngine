@@ -1,0 +1,9 @@
+{
+  "folder": "assets/Weapons/AKS74U/Attachments",
+  "guid": "cf459acb698eb28a",
+  "materialRemap": {
+    "Material.001": "assets/Materials/Material_001.mat"
+  },
+  "metaVersion": 1,
+  "type": "model"
+}

@@ -33,7 +33,7 @@ public:
     // Gain of a casing contact: CasingGainMin at the minimum speed up to 1 at CasingFullSpeed, times CasingVolume.
     static float CasingGain(const ImpactAudioComponent& t, float speed);
     // Whether a shell is a shotgun shell (wider than ShellRadius) rather than a rifle case.
-    static bool IsShell(const ImpactAudioComponent& t, float caseRadius) { return caseRadius > t.ShellRadius; }
+    static bool IsShell(const ImpactAudioComponent& t,float caseRadius);
     // A surface name for the table of sets that have files: `surface` itself when `available` lists it, else the default's.
     static std::string ResolveSurface(const std::string& surface, const std::vector<std::string>& available, const std::string& fallback);
     // A round passing the listener `miss` metres away: gain 1 at 0 falling to FlybyFarGain at FlybyRadius, 0 beyond.

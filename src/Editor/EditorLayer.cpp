@@ -131,8 +131,8 @@ void EditorLayer::Init(GLFWwindow* window) {
     {
         std::error_code ec;
         const std::string& last = EditorSettings::Get().LastScenePath;
-        m_CurrentScenePath = (!last.empty() && std::filesystem::exists(last, ec) && !ec)
-            ? last : ProjectPaths::Resolve("scenes/Sandbox.json");
+        m_CurrentScenePath = (!last.empty() && !std::filesystem::path(ProjectPaths::Relativize(last)).is_absolute() && std::filesystem::exists(last, ec) && !ec)
+            ? last : (ProjectSettings::StartupScene().empty()?std::string{}:ProjectPaths::Resolve(ProjectSettings::StartupScene()));
     }
 
     // So Import / Open / Save dialogs start in the project folder instead of build/Release/,
@@ -3503,8 +3503,6 @@ void EditorLayer::Draw(World& world, AssetLibrary& assets, Camera& editorCamera,
     // Play-mode tint (#236 R2): a warm border around the WHOLE editor window (not just the
     // Scene rect — that hides behind the Game tab) + a centred tag, so it's unmistakable that
     // edits now revert on Stop.
-    DrawPrefabModeBar(world, assets); // #176
-
     if (m_InPlayMode) {
         const ImGuiViewport* vp = ImGui::GetMainViewport();
         ImDrawList* dl = ImGui::GetForegroundDrawList();

@@ -57,27 +57,28 @@ public sealed class FpsBodyInspector : GameplayInspector
     }
 }
 
-[CustomEditor("First Person Controller")]
+[CustomEditor("Tartarus.Gameplay.PlayerDefinition")]
 public sealed class PlayerInspector : GameplayInspector
 {
-    protected override string[] Pages => ["Overview", "Movement", "Jump & Crouch", "View & Input", "Weapons", "Gravity Gun", "Advanced"];
-    protected override string Summary => "C# PlayerController consumes these authored movement settings. Weapons use the AK and 870 prefab slots; view and input tuning are separate from locomotion.";
+    protected override string[] Pages => ["Overview", "Movement", "Jump & Crouch", "View & Input", "Weapons", "Gravity Gun", "Health"];
+    protected override string Summary => "Project player settings for movement, view, health, weapon slots and the gravity ability.";
     protected override string PageFor(SerializedProperty p)
     {
-        if (Has(p, "Grab", "Assist", "Scroll Turn", "Held", "Throw", "Gravity Gun")) return "Gravity Gun";
-        if (Has(p, "Weapon", "Animation Set", "View Model", "Camera Bone")) return "Weapons";
+        if (Has(p, "Grab", "Assist", "ScrollTurn", "Held", "Throw", "GravityGun")) return "Gravity Gun";
+        if (Has(p, "Weapon", "Animation", "ViewModel", "CameraBone")) return "Weapons";
+        if (Has(p, "Health", "Regen", "Respawn", "Protection")) return "Health";
         if (Has(p, "Jump", "Coyote", "Crouch", "Ground Snap")) return "Jump & Crouch";
         if (Has(p, "Look", "Yaw", "Pitch", "Input", "Sensitivity", "Eye", "FOV", "Field of View", "Invert")) return "View & Input";
-        if (Has(p, "Speed", "Sprint", "Gravity", "Accel", "Decel", "Air", "Ground", "Root Motion")) return "Movement";
-        return p.Group.Length == 0 ? "Overview" : "Advanced";
+        if (Has(p, "Speed", "Sprint", "Gravity", "Accel", "Decel", "Air", "Ground", "Root Motion", "Capsule", "Kill")) return "Movement";
+        return "Overview";
     }
 }
 
-[CustomEditor("Weapon Definition")]
+[CustomEditor("Tartarus.Gameplay.WeaponDefinition")]
 public sealed class WeaponInspector : GameplayInspector
 {
-    protected override string[] Pages => ["Overview", "Muzzle Light", "Flame", "Flash", "Smoke"];
-    protected override string Summary => "This weapon owns its muzzle effects. Animation Set supplies animation, gameplay, recoil and camera profiles. Save prefab changes before starting Play.";
+    protected override string[] Pages => ["Overview", "Gameplay", "Damage", "Muzzle Light", "Smoke"];
+    protected override string Summary => "This project script owns weapon stats, damage and muzzle effects. Animation Set supplies rigs, animation, recoil and camera profiles. Save prefab changes before starting Play.";
     protected override string PageFor(SerializedProperty property) => property.Group.Length > 0 ? property.Group : "Overview";
 }
 

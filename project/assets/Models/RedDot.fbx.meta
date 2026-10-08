@@ -1,0 +1,14 @@
+{
+  "folder": "assets/Weapons/AKS74U/Attachments",
+  "guid": "bd44cb2692700cc6",
+  "importer": {
+    "globalScale": 0.017999999225139618,
+    "importAnimations": true,
+    "importNormals": true,
+    "importSkeleton": true,
+    "materialImportMode": 0,
+    "optimizeGraph": true
+  },
+  "metaVersion": 1,
+  "type": "model"
+}

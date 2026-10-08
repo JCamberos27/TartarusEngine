@@ -7,14 +7,13 @@ import argparse
 import concurrent.futures
 import hashlib
 import json
-import os
 from pathlib import Path
 import shutil
 import subprocess
 from fbx_export_edit import load, set_duration, write, zero_translation
 
 ROOT = Path(__file__).resolve().parents[2]
-EXPORTS = Path(os.environ.get('TARTARUS_WEAPON_EXPORTS', str(Path.home() / 'Desktop/AE_Exports')))
+EXPORTS = Path.home() / 'Desktop/AE_Exports'
 WORK = ROOT / 'build/weapon-reimport'
 
 

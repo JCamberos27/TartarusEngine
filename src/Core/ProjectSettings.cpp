@@ -21,6 +21,7 @@ PhysicsSettings g_Physics;
 TimeSettings g_Time;
 AudioSettings g_Audio; // #171
 BuildSettings g_Build; // #174
+std::string g_StartupScene;
 std::vector<std::string> g_Tags;
 std::vector<std::string> g_AssetFolders; // #121
 
@@ -75,9 +76,13 @@ void RemoveTag(const std::string& name) {
     g_Tags.erase(std::remove(g_Tags.begin(), g_Tags.end(), name), g_Tags.end());
 }
 
+const std::string& StartupScene(){return g_StartupScene;}
+void SetStartupScene(std::string scene){g_StartupScene=std::move(scene);}
+
 void Load() {
     g_Physics = PhysicsSettings{};
     g_Build = BuildSettings{};
+    g_StartupScene.clear();
     g_Tags.clear();
     g_AssetFolders.clear();
 
@@ -90,6 +95,11 @@ void Load() {
     } catch (const std::exception& e) {
         Log::Warn(std::string("ProjectSettings: failed to parse '") + SettingsPath() + "': " + e.what());
         return;
+    }
+
+    if(auto scene=root.find("startupScene");scene!=root.end() && scene->is_string()) {
+        const auto guid=root.find("startupSceneGuid");
+        g_StartupScene=AssetDatabase::FollowRef(scene->get<std::string>(),guid!=root.end() && guid->is_string()?guid->get<std::string>():std::string{});
     }
 
     if (const auto it = root.find("physics"); it != root.end() && it->is_object()) {
@@ -224,6 +234,9 @@ void Load() {
 
 void Save() {
     json root;
+    root["startupScene"]=g_StartupScene;
+    const auto startupGuid=AssetDatabase::GuidForPath(ProjectPaths::Resolve(g_StartupScene));
+    root["startupSceneGuid"]=startupGuid.IsValid()?startupGuid.ToString():std::string{};
     root["physics"] = {
         {"gravity", json::array({g_Physics.Gravity.x, g_Physics.Gravity.y, g_Physics.Gravity.z})},
         {"fixedTimestep", g_Physics.FixedTimestep},

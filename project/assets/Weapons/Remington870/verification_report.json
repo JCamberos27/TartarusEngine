@@ -1,0 +1,434 @@
+{
+  "method": "Assimp static import/pose/skin audit; gameplay tests left to user",
+  "rootTranslation": "Zero on every reimported weapon take (AK epsilon < 1e-6 m).",
+  "identities": "Existing paths and GUIDs preserved.",
+  "offsets": "Main gun geometry in root space unchanged; existing mount, sight, muzzle and ejection values preserved. Spare magazine uses supplied neutral pose.",
+  "retainedArms": [
+    "FirstPerson/Remington870_A_FP_Aim.fbx"
+  ],
+  "reimported": [
+    {
+      "file": "FirstPerson/Remington870_A_FP_Draw.fbx",
+      "source": "C:\\Users\\nickr\\Desktop\\AE_Exports\\Remington 870\\A_FP_870_Draw.fbx",
+      "action": "A_FP_Draw",
+      "frameStart": 0,
+      "frameEnd": 46.0,
+      "fps": 60.0,
+      "bytes": 3452012,
+      "sha256": "9d10880a0887b58ed74284f8c845d70821ee50a219d1909cc48742d1fb70cf12",
+      "guid": "0ab534d75ac5b4b2",
+      "meshes": [
+        "Mesh.005",
+        "Mesh.006"
+      ],
+      "note": "Supplied authored FBX; existing asset identity preserved."
+    },
+    {
+      "file": "FirstPerson/Remington870_A_FP_Fire.fbx",
+      "source": "C:\\Users\\nickr\\Desktop\\AE_Exports\\Remington 870\\A_FP_870_Fire.fbx",
+      "action": "A_FP_Fire",
+      "frameStart": 0,
+      "frameEnd": 41.99999999870091,
+      "fps": 60.0,
+      "bytes": 3428236,
+      "sha256": "7680ef00d028ba7196f999b36d8e47c5ece5e9631ebd636b24735e8ff50062a8",
+      "guid": "bfe7581f369eec20",
+      "meshes": [
+        "Mesh.005",
+        "Mesh.006"
+      ],
+      "note": "Supplied authored FBX; existing asset identity preserved."
+    },
+    {
+      "file": "FirstPerson/Remington870_A_FP_Holster.fbx",
+      "source": "C:\\Users\\nickr\\Desktop\\AE_Exports\\Remington 870\\A_FP_870_Holster.fbx",
+      "action": "A_FP_Holster",
+      "frameStart": 0,
+      "frameEnd": 28.0,
+      "fps": 60.0,
+      "bytes": 3405484,
+      "sha256": "b29d449e110359322f52569fd980f57bb30c46d7d406cad1d45883aa5c2cff7f",
+      "guid": "3540eaf8772d8f2d",
+      "meshes": [
+        "Mesh.005",
+        "Mesh.006"
+      ],
+      "note": "Supplied authored FBX; existing asset identity preserved."
+    },
+    {
+      "file": "FirstPerson/Remington870_A_FP_Idle.fbx",
+      "source": "C:\\Users\\nickr\\Desktop\\AE_Exports\\Remington 870\\A_FP_870_Idle.fbx",
+      "action": "A_FP_Idle",
+      "frameStart": 0,
+      "frameEnd": 118.0,
+      "fps": 60.0,
+      "bytes": 3786204,
+      "sha256": "970428aaa1e2e9b34482d5058710c8b1f7b1a05458a740bc48e98b1acea45ba2",
+      "guid": "d568615aaab5910b",
+      "meshes": [
+        "Mesh.005",
+        "Mesh.006"
+      ],
+      "note": "Supplied authored FBX; existing asset identity preserved."
+    },
+    {
+      "file": "FirstPerson/Remington870_A_FP_Inspect.fbx",
+      "source": "C:\\Users\\nickr\\Desktop\\AE_Exports\\Remington 870\\A_FP_870_Inspect.fbx",
+      "action": "A_FP_Inspect",
+      "frameStart": 0,
+      "frameEnd": 300.0,
+      "fps": 60.0,
+      "bytes": 4661004,
+      "sha256": "db853da0d397abe337ceb4c1ef04afef54c50f292a226f6f629427f717908dda",
+      "guid": "e6bf6388a2176467",
+      "meshes": [
+        "Mesh.005",
+        "Mesh.006"
+      ],
+      "note": "Supplied authored FBX; existing asset identity preserved."
+    },
+    {
+      "file": "FirstPerson/Remington870_A_FP_Mag_Check.fbx",
+      "source": "C:\\Users\\nickr\\Desktop\\AE_Exports\\Remington 870\\A_FP_870_MagCheck.fbx",
+      "action": "A_FP_Mag_Check",
+      "frameStart": 0,
+      "frameEnd": 144.0,
+      "fps": 60.0,
+      "bytes": 3922572,
+      "sha256": "a602584d85eadfbce33582ec31a447e53e710372d51f86baafe20feebcac157b",
+      "guid": "224b6e16aa983595",
+      "meshes": [
+        "Mesh.005",
+        "Mesh.006"
+      ],
+      "note": "Supplied authored FBX; existing asset identity preserved."
+    },
+    {
+      "file": "FirstPerson/Remington870_A_FP_Melee.fbx",
+      "source": "C:\\Users\\nickr\\Desktop\\AE_Exports\\Remington 870\\A_FP_870_Melee.fbx",
+      "action": "A_FP_Melee",
+      "frameStart": 0,
+      "frameEnd": 67.0,
+      "fps": 60.0,
+      "bytes": 3561436,
+      "sha256": "ebc9d1d9fe3d11bcad29cabe5eae5f886f51c765ba8047dbb5b91100f5b34582",
+      "guid": "3602f7cb46301867",
+      "meshes": [
+        "Mesh.005",
+        "Mesh.006"
+      ],
+      "note": "Supplied authored FBX; existing asset identity preserved."
+    },
+    {
+      "file": "FirstPerson/Remington870_A_FP_Pump.fbx",
+      "source": "C:\\Users\\nickr\\Desktop\\AE_Exports\\Remington 870\\A_FP_870_Pump.fbx",
+      "action": "A_FP_Pump",
+      "frameStart": 0,
+      "frameEnd": 43.99999999870091,
+      "fps": 60.0,
+      "bytes": 3439356,
+      "sha256": "7d0e98785b0424291e0092719010eb2e8bfd7575f27e64d1bd89797148c18ea9",
+      "guid": "633d907c5142af8e",
+      "meshes": [
+        "Mesh.005",
+        "Mesh.006"
+      ],
+      "note": "Supplied authored FBX; existing asset identity preserved."
+    },
+    {
+      "file": "FirstPerson/Remington870_A_FP_Regrip.fbx",
+      "source": "C:\\Users\\nickr\\Desktop\\AE_Exports\\Remington 870\\A_FP_870_Regrip.fbx",
+      "action": "A_FP_Regrip",
+      "frameStart": 0,
+      "frameEnd": 38.0,
+      "fps": 60.0,
+      "bytes": 3406668,
+      "sha256": "c41213ddf139469619d6b2cac95bbf1ba948deaabca39bd1e8118ecc1b0fdf78",
+      "guid": "ffa839d49c013802",
+      "meshes": [
+        "Mesh.005",
+        "Mesh.006"
+      ],
+      "note": "Supplied authored FBX; existing asset identity preserved."
+    },
+    {
+      "file": "FirstPerson/Remington870_A_FP_Reload_End.fbx",
+      "source": "C:\\Users\\nickr\\Desktop\\AE_Exports\\Remington 870\\A_FP_870_Reload_End.fbx",
+      "action": "A_FP_Reload_end",
+      "frameStart": 0,
+      "frameEnd": 50.0,
+      "fps": 60.0,
+      "bytes": 3478604,
+      "sha256": "5419c9ba4b1db9caddbf79772e043fcbb4c8cdfd58e1703d54b4873cb56db3d3",
+      "guid": "5567b6b62a617120",
+      "meshes": [
+        "Mesh.005",
+        "Mesh.006"
+      ],
+      "note": "Supplied authored FBX; existing asset identity preserved."
+    },
+    {
+      "file": "FirstPerson/Remington870_A_FP_Reload_Loop.fbx",
+      "source": "C:\\Users\\nickr\\Desktop\\AE_Exports\\Remington 870\\A_FP_870_Reload_Loop.fbx",
+      "action": "A_FP_Reload_loop",
+      "frameStart": 0,
+      "frameEnd": 70.0,
+      "fps": 60.0,
+      "bytes": 3572540,
+      "sha256": "9ac3e50b81f0b6a16f58eeb392a8a93cacb271dda71d4832f2e5e429290f049e",
+      "guid": "39d7c92a7e788f28",
+      "meshes": [
+        "Mesh.005",
+        "Mesh.006"
+      ],
+      "note": "Supplied authored FBX; existing asset identity preserved."
+    },
+    {
+      "file": "FirstPerson/Remington870_A_FP_Reload_Loop_End.fbx",
+      "source": "C:\\Users\\nickr\\Desktop\\AE_Exports\\Remington 870\\A_FP_870_Reload_Loop_End.fbx",
+      "action": "A_FP_Reload_loop_end",
+      "frameStart": 0,
+      "frameEnd": 98.0,
+      "fps": 60.0,
+      "bytes": 3718828,
+      "sha256": "65b14baa713f8c7d3968ba18c271a9284c73d882421c1530ac1e268d3b72bfcf",
+      "guid": "eedb360ee929c541",
+      "meshes": [
+        "Mesh.005",
+        "Mesh.006"
+      ],
+      "note": "Supplied authored FBX; existing asset identity preserved."
+    },
+    {
+      "file": "FirstPerson/Remington870_A_FP_Reload_Start.fbx",
+      "source": "C:\\Users\\nickr\\Desktop\\AE_Exports\\Remington 870\\A_FP_870_Reload_Start.fbx",
+      "action": "A_FP_reload_start",
+      "frameStart": 0,
+      "frameEnd": 30.0,
+      "fps": 60.0,
+      "bytes": 3420732,
+      "sha256": "2306f80e7a602eb6f42fadb8b4a5287558379cd4ee0198f4aba1bb237b5da34f",
+      "guid": "a2aef5ce7b1e915a",
+      "meshes": [
+        "Mesh.005",
+        "Mesh.006"
+      ],
+      "note": "Supplied authored FBX; existing asset identity preserved."
+    },
+    {
+      "file": "FirstPerson/Remington870_A_FP_Reload_Start_Empty.fbx",
+      "source": "C:\\Users\\nickr\\Desktop\\AE_Exports\\Remington 870\\A_FP_870_Reload_Start_Empty.fbx",
+      "action": "A_FP_Reload_start_empty",
+      "frameStart": 0,
+      "frameEnd": 160.0,
+      "fps": 60.0,
+      "bytes": 4022556,
+      "sha256": "d2088a3448d67cdc49639392edac9439c47d672f1ccd0be509ac7917008037e1",
+      "guid": "69616d0572a4981b",
+      "meshes": [
+        "Mesh.005",
+        "Mesh.006"
+      ],
+      "note": "Supplied authored FBX; existing asset identity preserved."
+    },
+    {
+      "file": "FirstPerson/Remington870_A_FP_Sprint.fbx",
+      "source": "C:\\Users\\nickr\\Desktop\\AE_Exports\\Remington 870\\A_FP_870_Sprint.fbx",
+      "action": "A_FP_Sprint",
+      "frameStart": 0,
+      "frameEnd": 43.99999999870091,
+      "fps": 60.0,
+      "bytes": 3438972,
+      "sha256": "271355cbfca960547e8c5400b61471e987899a94a839fce5a18ebcc154757b0e",
+      "guid": "b548d762261e5f5f",
+      "meshes": [
+        "Mesh.005",
+        "Mesh.006"
+      ],
+      "note": "Supplied authored FBX; existing asset identity preserved."
+    },
+    {
+      "file": "FirstPerson/Remington870_A_FP_SprintToIdle.fbx",
+      "source": "C:\\Users\\nickr\\Desktop\\AE_Exports\\Remington 870\\A_FP_870_Sprint_End.fbx",
+      "action": "A_FP_Sprint_end",
+      "frameStart": 0,
+      "frameEnd": 34.0,
+      "fps": 60.0,
+      "bytes": 3384476,
+      "sha256": "52c017b2b310e3308319bb9a8b76e41ef3007296e1f0aa70d314a46e346f15ff",
+      "guid": "18773d2bc32d2c08",
+      "meshes": [
+        "Mesh.005",
+        "Mesh.006"
+      ],
+      "note": "Supplied authored FBX; existing asset identity preserved."
+    },
+    {
+      "file": "FirstPerson/Remington870_A_FP_IdleToSprint.fbx",
+      "source": "C:\\Users\\nickr\\Desktop\\AE_Exports\\Remington 870\\A_FP_870_Sprint_Start.fbx",
+      "action": "A_FP_Sprint_start",
+      "frameStart": 0,
+      "frameEnd": 18.0,
+      "fps": 60.0,
+      "bytes": 3324604,
+      "sha256": "af9ad2f9c08f63e38e3a07027a84de45194f5a2afcc48997acfa766a0fb23a54",
+      "guid": "ec955e725647bbc5",
+      "meshes": [
+        "Mesh.005",
+        "Mesh.006"
+      ],
+      "note": "Supplied authored FBX; existing asset identity preserved."
+    },
+    {
+      "file": "FirstPerson/Remington870_A_FP_Walk.fbx",
+      "source": "C:\\Users\\nickr\\Desktop\\AE_Exports\\Remington 870\\A_FP_870_Walk.fbx",
+      "action": "A_FP_Walk",
+      "frameStart": 0,
+      "frameEnd": 43.99999999870091,
+      "fps": 60.0,
+      "bytes": 3438060,
+      "sha256": "f66ce5cd2002b9a3a7ea49e36c033db0242734784070a29e8a71c9b5b96cf9c0",
+      "guid": "804d61b2efd90493",
+      "meshes": [
+        "Mesh.005",
+        "Mesh.006"
+      ],
+      "note": "Supplied authored FBX; existing asset identity preserved."
+    },
+    {
+      "file": "Weapon/Remington870_A_W_Idle.fbx",
+      "source": "C:\\Users\\nickr\\Desktop\\AE_Exports\\Remington 870\\A_W_870_Idle.fbx",
+      "action": "A_W_Idle",
+      "frameStart": 0,
+      "frameEnd": 30.0,
+      "fps": 60.0,
+      "bytes": 461804,
+      "sha256": "dfcdad3a73f3511088db353eae1ba222d060f52bf3ae6402645f188fc9934fac",
+      "guid": "abfe8981a8954dee",
+      "meshes": [
+        "Mesh.005"
+      ],
+      "note": "Main translation zeroed; child motion/skin retained. Take range matched to arms (end holds or trim only)."
+    },
+    {
+      "file": "Weapon/Remington870_A_W_Inspect.fbx",
+      "source": "C:\\Users\\nickr\\Desktop\\AE_Exports\\Remington 870\\A_W_870_Inspect.fbx",
+      "action": "A_W_Inspect",
+      "frameStart": 0,
+      "frameEnd": 300.0,
+      "fps": 60.0,
+      "bytes": 512748,
+      "sha256": "32f3132146d38b33fd48e018b06c2f4007d746104f3879e8e673ea2b0a71480a",
+      "guid": "66576fcdd35fc5ba",
+      "meshes": [
+        "Mesh.005"
+      ],
+      "note": "Main translation zeroed; child motion/skin retained. Take range matched to arms (end holds or trim only)."
+    },
+    {
+      "file": "Weapon/Remington870_A_W_Mag_Check.fbx",
+      "source": "C:\\Users\\nickr\\Desktop\\AE_Exports\\Remington 870\\A_W_870_Mag_Check.fbx",
+      "action": "A_W_Mag_Check",
+      "frameStart": 0,
+      "frameEnd": 144.0,
+      "fps": 60.0,
+      "bytes": 470988,
+      "sha256": "083681de0650c81f8bf8f9efe9d41d732fdea734d79d7446a1903ea5cc86cbd7",
+      "guid": "421117bd9c7c899f",
+      "meshes": [
+        "Mesh.005"
+      ],
+      "note": "Main translation zeroed; child motion/skin retained. Take range matched to arms (end holds or trim only)."
+    },
+    {
+      "file": "Weapon/Remington870_A_W_Pump.fbx",
+      "source": "C:\\Users\\nickr\\Desktop\\AE_Exports\\Remington 870\\A_W_870_Pump.fbx",
+      "action": "A_W_Pump",
+      "frameStart": 0,
+      "frameEnd": 43.99999999870091,
+      "fps": 60.0,
+      "bytes": 455324,
+      "sha256": "7f1cb40ff6538c95acffecaabfc79c9fac5f6949d24310e596570261a0a46f06",
+      "guid": "21361368df1fe439",
+      "meshes": [
+        "Mesh.005"
+      ],
+      "note": "Main translation zeroed; child motion/skin retained. Take range matched to arms (end holds or trim only)."
+    },
+    {
+      "file": "Weapon/Remington870_A_W_Reload_End.fbx",
+      "source": "C:\\Users\\nickr\\Desktop\\AE_Exports\\Remington 870\\A_W_870_Reload_End.fbx",
+      "action": "A_W_Reload_end",
+      "frameStart": 0,
+      "frameEnd": 50.0,
+      "fps": 60.0,
+      "bytes": 462124,
+      "sha256": "167e85ed1cbb829e389db166bd911fbd5c6b16848a46b8f28563af27f77f71ce",
+      "guid": "ca979c2223c6ddae",
+      "meshes": [
+        "Mesh.005"
+      ],
+      "note": "Main translation zeroed; child motion/skin retained. Take range matched to arms (end holds or trim only)."
+    },
+    {
+      "file": "Weapon/Remington870_A_W_Reload_Loop.fbx",
+      "source": "C:\\Users\\nickr\\Desktop\\AE_Exports\\Remington 870\\A_W_870_Reload_Loop.fbx",
+      "action": "A_W_Reload_loop",
+      "frameStart": 0,
+      "frameEnd": 70.0,
+      "fps": 60.0,
+      "bytes": 469052,
+      "sha256": "1a2178029b0aca7a248bbc2e2d2eeccd9c6e93331197e7aca4f1e1c4a7f28b5f",
+      "guid": "848f46e7578d8189",
+      "meshes": [
+        "Mesh.005"
+      ],
+      "note": "Main translation zeroed; child motion/skin retained. Take range matched to arms (end holds or trim only)."
+    },
+    {
+      "file": "Weapon/Remington870_A_W_Reload_Loop_End.fbx",
+      "source": "C:\\Users\\nickr\\Desktop\\AE_Exports\\Remington 870\\A_W_870_Reload_Loop_End.fbx",
+      "action": "A_W_Reload_loop_end",
+      "frameStart": 0,
+      "frameEnd": 98.0,
+      "fps": 60.0,
+      "bytes": 482572,
+      "sha256": "cf2c042e808cb2b64ac633675aefa4bda76af125d6389c2e9c4b6e0959d5e6dd",
+      "guid": "0c7074d53b52d312",
+      "meshes": [
+        "Mesh.005"
+      ],
+      "note": "Main translation zeroed; child motion/skin retained. Take range matched to arms (end holds or trim only)."
+    },
+    {
+      "file": "Weapon/Remington870_A_W_Reload_Start.fbx",
+      "source": "C:\\Users\\nickr\\Desktop\\AE_Exports\\Remington 870\\A_W_870_Reload_Start.fbx",
+      "action": "A_W_Reload_start",
+      "frameStart": 0,
+      "frameEnd": 30.0,
+      "fps": 60.0,
+      "bytes": 461372,
+      "sha256": "c53853e426ffecee9545297bdb7146d0383f3f2bf2c1a831b5b22d162b3309f1",
+      "guid": "fffbcc7419088411",
+      "meshes": [
+        "Mesh.005"
+      ],
+      "note": "Main translation zeroed; child motion/skin retained. Take range matched to arms (end holds or trim only)."
+    },
+    {
+      "file": "Weapon/Remington870_A_W_Reload_Start_Empty.fbx",
+      "source": "C:\\Users\\nickr\\Desktop\\AE_Exports\\Remington 870\\A_W_870_Reload_Start_Empty.fbx",
+      "action": "A_W_Reload_start_empty",
+      "frameStart": 0,
+      "frameEnd": 160.0,
+      "fps": 60.0,
+      "bytes": 495532,
+      "sha256": "7616e3b304957831bd5522dbc4b5f44d4ded2c15ee735a2882b19f8e9af40859",
+      "guid": "f0216597d55e5ac4",
+      "meshes": [
+        "Mesh.005"
+      ],
+      "note": "Main translation zeroed; child motion/skin retained. Take range matched to arms (end holds or trim only)."
+    }
+  ]
+}

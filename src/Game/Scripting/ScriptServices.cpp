@@ -7,6 +7,7 @@
 #include "GameModuleAPI.h"
 #include "TimeService.h"
 #include "AudioEngine.h"
+#include "MaterialAsset.h"
 #include <set>
 #include <json.hpp>
 #include <algorithm>
@@ -52,27 +53,8 @@ void Write(const ReflectField& f,void* p,const Json& v) {
     }
 }
 }
-int ScriptServices(World& world,AssetLibrary*,int op,NativeRequest& r) {
-    auto& registry=world.Registry;const auto e=static_cast<entt::entity>(r.Entity);
+int PhysicsServices(int op,NativeRequest& r) {
     const std::string text=r.Text?r.Text:"";
-    if(op==93) return Reply(r,{{"time",Time::TimeSinceStartup()},{"unscaledTime",Time::UnscaledTimeSinceStartup()},
-        {"realtime",Time::RealtimeSinceStartup()},{"frameCount",Time::FrameCount()},
-        {"unscaledDeltaTime",Time::UnscaledDeltaTime()},{"timeScale",Time::TimeScale()}});
-    if(op==94) {
-        const auto input=Json::parse(text);AudioEngine::VoiceFx fx;
-        fx.Spatial=input.at("spatial").get<bool>();
-        fx.Position={input.at("x").get<float>(),input.at("y").get<float>(),input.at("z").get<float>()};
-        fx.MinDistance=input.at("minDistance").get<float>();fx.MaxDistance=input.at("maxDistance").get<float>();
-        const int bus=input.at("bus").get<int>();if(bus<0 || bus>4) return 0;
-        const auto id=AudioEngine::Play(ProjectPaths::Resolve(input.at("path").get<std::string>()),input.at("volume").get<float>(),input.at("loop").get<bool>(),static_cast<AudioEngine::Bus>(bus),0,&fx);
-        // Retain only live handles; loops are explicitly stopped on Play exit.
-        for(auto it=sounds.begin();it!=sounds.end();) if(!AudioEngine::IsPlaying(*it)) it=sounds.erase(it);else ++it;
-        if(id) sounds.insert(id);r.Entity=id;return id?1:0;
-    }
-    if(op==95) {AudioEngine::Stop(r.Entity);sounds.erase(r.Entity);return 1;}
-    if(op==96) return AudioEngine::IsPlaying(r.Entity);
-    if(op==97) {AudioEngine::SetVolume(r.Entity,r.Value);return 1;}
-    if(op==98) {AudioEngine::SetPosition(r.Entity,{r.A.x,r.A.y,r.A.z});return 1;}
     if(op==90 || op==91) {
         QueryFilter filter;filter.LayerMask=r.Script;filter.HitTriggers=r.Result?1:0;
         RaycastHit hit;
@@ -90,6 +72,52 @@ int ScriptServices(World& world,AssetLibrary*,int op,NativeRequest& r) {
         std::vector<unsigned> ids(static_cast<size_t>(count));const int found=PhysicsWorld::OverlapSphereFiltered(center,radius,filter,ids.data(),count);
         ids.resize(static_cast<size_t>(std::max(0,found)));return Reply(r,ids);
     }
+    if(op!=58)return 0;
+    static unsigned generation=0,owner=0xFFFFFFFFu;
+    static std::uint64_t simulation=0;
+    if(r.Result>=5 && r.Result<=7 && simulation!=PhysicsWorld::SimulationGeneration())return 0;
+    switch(r.Result) {
+    case 1: return PhysicsWorld::GetActorPosition(r.Entity,&r.A.x);
+    case 2: { BodyState state;if(!PhysicsWorld::GetBodyState(r.Entity,state))return 0;r.Value=state.Kinematic?1.0f:0.0f;r.A={state.Velocity[0],state.Velocity[1],state.Velocity[2]};return state.Valid; }
+    case 3: {float q[4];if(!PhysicsWorld::GetActorRotation(r.Entity,q))return 0;r.A={q[0],q[1],q[2]};r.Value=q[3];return 1;}
+    case 4:
+        if(PhysicsWorld::IsGrabbing())return 0;
+        PhysicsWorld::GrabBody(r.Entity);if(PhysicsWorld::GrabbedEntity()!=r.Entity)return 0;
+        owner=r.Entity;simulation=PhysicsWorld::SimulationGeneration();if(++generation==0)++generation;r.Script=generation;return 1;
+    case 5: {
+        if(r.Script!=generation || r.Entity!=owner || PhysicsWorld::GrabbedEntity()!=owner)return 0;
+        const float q[4]={r.C.x,r.C.y,r.C.z,r.Value};PhysicsWorld::UpdateGrab(&r.A.x,&r.B.x,q);return 1;
+    }
+    case 6:
+        if(r.Script!=generation || r.Entity!=owner || PhysicsWorld::GrabbedEntity()!=owner)return 0;
+        PhysicsWorld::ReleaseBody(r.C.x!=0,&r.A.x,r.Value);owner=0xFFFFFFFFu;return 1;
+    case 7:return r.Script==generation && r.Entity==owner && PhysicsWorld::GrabbedEntity()==owner;
+    case 8: PhysicsWorld::AddForceAtPosition(r.Entity,&r.A.x,&r.B.x,ForceMode::Impulse);return 1;
+    default:return 0;
+    }
+}
+int ScriptServices(World& world,AssetLibrary*,int op,NativeRequest& r) {
+    auto& registry=world.Registry;const auto e=static_cast<entt::entity>(r.Entity);
+    const std::string text=r.Text?r.Text:"";
+    if(op==93) return Reply(r,{{"time",Time::TimeSinceStartup()},{"unscaledTime",Time::UnscaledTimeSinceStartup()},
+        {"realtime",Time::RealtimeSinceStartup()},{"frameCount",Time::FrameCount()},
+        {"unscaledDeltaTime",Time::UnscaledDeltaTime()},{"timeScale",Time::TimeScale()}});
+    if(op==94) {
+        const auto input=Json::parse(text);AudioEngine::VoiceFx fx;
+        fx.Spatial=input.at("spatial").get<bool>();
+        fx.Position={input.at("x").get<float>(),input.at("y").get<float>(),input.at("z").get<float>()};
+        fx.MinDistance=input.at("minDistance").get<float>();fx.MaxDistance=input.at("maxDistance").get<float>();
+        const int bus=input.at("bus").get<int>();if(bus<0 || bus>4) return 0;
+        const auto id=AudioEngine::Play(ProjectPaths::Resolve(input.at("path").get<std::string>()),input.at("volume").get<float>(),input.at("loop").get<bool>(),static_cast<AudioEngine::Bus>(bus),0,&fx);
+        if(id) AudioEngine::SetPitch(id,input.value("pitch",1.0f));
+        // Retain only live handles; loops are explicitly stopped on Play exit.
+        for(auto it=sounds.begin();it!=sounds.end();) if(!AudioEngine::IsPlaying(*it)) it=sounds.erase(it);else ++it;
+        if(id) sounds.insert(id);r.Entity=id;return id?1:0;
+    }
+    if(op==95) {AudioEngine::Stop(r.Entity);sounds.erase(r.Entity);return 1;}
+    if(op==96) return AudioEngine::IsPlaying(r.Entity);
+    if(op==97) {AudioEngine::SetVolume(r.Entity,r.Value);return 1;}
+    if(op==98) {AudioEngine::SetPosition(r.Entity,{r.A.x,r.A.y,r.A.z});return 1;}
     if(op==60) return registry.valid(e);
     if(op==61) {
         for(auto [id,n]:registry.view<NameComponent>().each()) if(n.Name==text) {r.Entity=entt::to_integral(id);return 1;}
@@ -115,7 +143,18 @@ int ScriptServices(World& world,AssetLibrary*,int op,NativeRequest& r) {
     }
     if(op==77) return Reply(r,ProjectPaths::Resolve(text));
     if(op==78) return PhysicsWorld::IsActive();
+    if(op==99 && r.Result==4) {r.Entity=PhysicsWorld::GrabbedEntity();return 1;}
+    if(op==99 && r.Result==5) return Reply(r,PhysicsWorld::EventSequence());
     if(!registry.valid(e)) return 0;
+    if(op==99) {
+        if(r.Result==1) {const auto* tag=registry.try_get<TagComponent>(e);return Reply(r,tag?tag->Tag:"");}
+        if(r.Result==2) {
+            auto* render=registry.try_get<RenderableComponent>(e);
+            if(!render || r.Script>=render->Materials.size() || !render->Materials[r.Script] || !std::isfinite(r.Value)) return 0;
+            render->Materials[r.Script]->Mat.EmissiveStrength=std::max(0.0f,r.Value);return 1;
+        }
+        if(r.Result==3) return PhysicsWorld::GetActorPosition(r.Entity,&r.A.x);
+    }
     if(op>=81 && op<=84) {
         const auto* a=registry.try_get<AnimatorControllerComponent>(e);if(!a) return 0;
         if(op==81) return Reply(r,a->CurrentState());

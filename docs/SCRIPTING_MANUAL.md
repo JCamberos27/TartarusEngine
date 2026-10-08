@@ -5,7 +5,8 @@
 
 This manual explains how to author, attach, debug and ship C# gameplay and editor tools in
 Tartarus. It describes the implemented behavior, including places where native systems still
-own simulation or presentation. Examples are ordinary C# source files; there is no in-engine IDE.
+own simulation or presentation. Examples are ordinary C# source files, editable in the
+[embedded Script IDE](SCRIPT_IDE.md) or an external editor.
 
 ## Contents
 
@@ -44,15 +45,15 @@ flowchart TD
 | Add behavior to a placed object | A `MonoBehaviour` under `project/assets/Scripts` or another non-Editor asset folder. |
 | Change default player movement | `project/assets/Scripts/PlayerController.cs`. |
 | Change AK/870 fire, reload, chamber or pellet rules | `project/assets/Scripts/WeaponController.cs`. |
-| Route the built-in gameplay callbacks | `project/assets/Scripts/Gameplay.cs`, the project's `IGameplay` implementation. |
+| Route the built-in gameplay callbacks | `project/assets/Scripts/Gameplay.cs`, the project's `IProjectIntegration` implementation. |
 | Add an editor window or command | A C# source below an assets folder named `Editor`. |
 | Change an animator graph or recoil curve | The corresponding native controller/descriptor/recoil asset and existing editor UI. |
 | Add a native engine binding | Runtime SDK plus C++ service bridge; rebuild and restart. |
 
 A `MonoBehaviour` is an attached object behavior. The supplied player and weapon controllers
-are invoked through `IGameplay` frames because the camera, player capsule and equipped weapon
+are invoked through `IProjectIntegration` frames because the camera, player capsule and equipped weapon
 rigs have existing native lifetimes. Do not attach another player movement controller merely
-to enable the default player. `IGameplay` already invokes it.
+to enable the default player. `IProjectIntegration` already invokes it.
 
 Use `using Tartarus;` and `using System.Numerics;`. For editor code, also import
 `Tartarus.Editor`. A Tartarus class named `MonoBehaviour` supplies familiar lifecycle methods;
@@ -74,7 +75,8 @@ dotnet --list-runtimes
 cmake --build build --config Release --target TartarusScripts
 ```
 
-`TartarusEngine` also depends on the scripting target. If changing native bindings, build it
+The sample workspace builds its scripts with `TartarusEngine`;
+`TARTARUS_BUILD_SAMPLE_GAME=OFF` makes the engine depend only on `TartarusRuntime`. If changing native bindings, build it
 instead and restart the editor. If only editing a project script, use the save/build workflow.
 
 ### Make an object rotate
@@ -110,7 +112,9 @@ choose the intended compiled type in the Script dropdown.
 
 Saving `.cs` or `.csproj` source schedules compilation after a 600 ms debounce. Saves during
 a build schedule another build. You can force it through **File > Build C# Gameplay & Editor**.
-The editor opens scripts externally rather than providing an embedded source editor.
+New scripts and double-clicked `.cs` assets open in the embedded Script IDE. **Open Externally**
+is available in the Asset Browser context menu. The IDE also provides live Problems, semantic
+completion/navigation, rename previews and source recovery; see [SCRIPT_IDE.md](SCRIPT_IDE.md).
 
 ### What to expect while editing
 
@@ -157,8 +161,14 @@ the script configuration. Field names are the schema: changing `OpenSpeed` to `S
 the previous override and uses the new field's default. There is no automatic rename-migration
 attribute. Avoid duplicate serialized field names in an inheritance hierarchy.
 
-Collections, entity references and custom structs are not Inspector field types yet. Keep
-those as runtime C# state, or use supported identifiers/strings and resolve them in Start.
+Collections, typed object-reference fields and custom structs are not Inspector field types yet.
+String fields can use `[SceneReference("Transform", true)]` or
+`[SceneReference("Particle System", true)]` for hierarchy pickers and drag/drop. These store
+paths relative to the script's object; the second argument restricts selection to its subtree.
+`[SoundReferences]` supplies audio asset slots stored as semicolon-separated project paths,
+and `[InspectorChoices("", "ak", "870")]` supplies a string dropdown. Relative scene paths
+survive prefab instantiation but depend on hierarchy names and placement; they are not stable
+object GUIDs. Keep other unsupported values as runtime C# state.
 For custom hot-reload state, override SaveState and LoadState as explained later.
 
 ## Multiple behaviours and object lifetime
@@ -297,7 +307,10 @@ The default weapon prefabs are:
 * `assets/Weapons/Remington870/Remington870.prefab`
 
 Weapon assets may be licensed/local project content rather than part of a distributable
-sample. A Weapon Definition stores a description and `.fpsanim` animation-set reference.
+sample. The project-owned `Tartarus.Gameplay.WeaponDefinition` C# script in
+`assets/Scripts/WeaponDefinition.cs` stores a description, `.fpsanim` asset reference and muzzle
+settings. It replaces the former native Weapon Definition component; older prefab/scene data
+converts on read and saves as an ordinary C# script without discarding other script slots.
 That set bundles rigs, animator/controller settings, recoil, shake, sound identity and
 gameplay values. The native presentation path constructs the camera-bound first-person rigs.
 
@@ -329,13 +342,14 @@ See [weapon integration](FPS_WEAPON_INTEGRATION.md), [first-person animation](FP
 
 ## Customizing player and weapon gameplay
 
-`Gameplay.cs` implements IGameplay and delegates to the supplied controllers. The assembly
-must contain exactly one concrete IGameplay implementation. Adding a second implementation
+`Gameplay.cs` implements IProjectIntegration and delegates to the supplied controllers. The assembly
+may contain zero or one concrete IProjectIntegration implementation. Ordinary object scripts
+do not need a dispatcher. Adding a second implementation
 causes load/reload validation to fail. Modify the existing implementation when changing routing.
 
 ### Player configuration versus behavior
 
-Use First Person Controller fields for authored movement speed, gravity, capsule size, sprint,
+Use project PlayerDefinition fields for authored movement speed, gravity, capsule size, sprint,
 crouch and jump tuning. Use PlayerController.cs when changing the algorithm itself. Its
 PlayerFrame is a per-call data contract: configuration comes in, motion state comes back out.
 Some configuration fields are copied when the native player is initialized; editing authored
@@ -376,8 +390,9 @@ See [the complete field reference](SCRIPTING_FRAMES.md) before modifying ABI sta
 ### Changing the native/managed contract
 
 Changing only algorithm code does not require an ABI edit. Adding/reordering frame fields
-does: edit `tools/generate_script_abi.py`, regenerate both language definitions, bump the
-version, rebuild native plus managed code and restart. Do not edit ScriptAbi.cs or ScriptAbi.h
+does: edit `tools/generate_game_frames.py` for private FPS frames and regenerate both
+language definitions, then rebuild native plus managed code and restart. Engine lifecycle/service
+ABI changes use `tools/generate_script_abi.py` and its version. Do not edit generated layouts
 independently. Native dispatch checks frame byte sizes/version before reading memory.
 
 ## Native component data
@@ -551,7 +566,7 @@ do not require rebuilding or running the full gameplay suite.
 | Undo does not restore tool changes | Record the scene before mutation; ensure the command is an authored scene edit. |
 | Tool's private state resets on rebuild | EditorWindow defaults to empty reload state; implement SaveState/LoadState. |
 | Engine service called from worker thread | Compute plain data off-thread and consume it in a main-thread callback. |
-| Two concrete IGameplay implementations | Retain one dispatcher implementation; use separate ordinary helper classes. |
+| Two concrete IProjectIntegration implementations | Retain one dispatcher implementation; use separate ordinary helper classes. |
 | New native binding unavailable after source rebuild | Rebuild engine/SDK and restart; Tartarus.Runtime is pinned. |
 | Exported game runs older code | Complete the script build and export again; inspect selected gameplay DLL output. |
 

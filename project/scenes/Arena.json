@@ -4743,69 +4743,6 @@
       ]
     },
     {
-      "First Person Controller": {
-        "Air Accel Time": 0.0,
-        "Animation Set": {
-          "path": "assets/Weapons/AKS74U/AKS74U.fpsanim",
-          "pathGuid": "c0ff631aac421f76"
-        },
-        "Assist Cone Deg": 7.0,
-        "Assist Range": 30.0,
-        "Camera Bone": "head",
-        "Capsule Height": 1.850000023841858,
-        "Capsule Radius": 0.30000001192092896,
-        "Coyote Time": 0.10000000149011612,
-        "Eye Height": 1.7000000476837158,
-        "Eye Radius": 0.11999999731779099,
-        "Field of View": 90.0,
-        "Grab Range": 100.0,
-        "Gravity": 18.0,
-        "Gravity Gun": true,
-        "Ground Accel Time": 0.0,
-        "Ground Decel Time": 0.0,
-        "Invert Y": false,
-        "Jump Buffer Time": 0.11999999731779099,
-        "Jump Speed": 5.5,
-        "Kill Height": -20.0,
-        "Max Health": 100.0,
-        "Max Throw Speed": 16.0,
-        "Min Throw Speed": 3.5,
-        "Mouse Sensitivity": 0.029999999329447746,
-        "Move Speed": 4.0,
-        "Primary Weapon Prefab": {
-          "path": "assets/Weapons/AKS74U/AKS74U.prefab",
-          "pathGuid": "b19271e02ef840f1"
-        },
-        "Regen Delay": 5.0,
-        "Regen Rate": 30.0,
-        "Respawn Delay": 3.0,
-        "Scroll Turn Deg": 15.0,
-        "Secondary Animation Set": {
-          "path": "assets/Weapons/Remington870/Remington870.fpsanim",
-          "pathGuid": "4e3925bded078f9a"
-        },
-        "Secondary Weapon Prefab": {
-          "path": "assets/Weapons/Remington870/Remington870.prefab",
-          "pathGuid": "cf1fec9edad348ec"
-        },
-        "Spawn Protection": 2.0,
-        "Sprint Multiplier": 1.600000023841858,
-        "Stick Look Deg/Sec": 180.0,
-        "Throw Backspin": 2.0,
-        "Throw Charge Time": 1.100000023841858,
-        "View Model FOV": 50.0,
-        "View Model Offset": [
-          0.05620000138878822,
-          -0.03200000151991844,
-          0.0
-        ],
-        "View Model Rotation": [
-          -0.23999999463558197,
-          0.38999998569488525,
-          0.0
-        ],
-        "View Model Scale": 1.0
-      },
       "id": 94,
       "name": "Player Spawn",
       "order": 85,
@@ -4825,7 +4762,15 @@
         1.0,
         1.0,
         1.0
-      ]
+      ],
+      "C# Script": {
+        "Class": "Tartarus.Gameplay.PlayerDefinition",
+        "Source": "assets/Scripts/PlayerDefinition.cs",
+        "Fields JSON": "{\"AirAccelTime\":0.0,\"AnimationSet\":{\"path\":\"assets/Weapons/AKS74U/AKS74U.fpsanim\",\"pathGuid\":\"c0ff631aac421f76\"},\"AssistConeDeg\":7.0,\"AssistRange\":30.0,\"CameraBone\":\"head\",\"CapsuleHeight\":1.850000023841858,\"CapsuleRadius\":0.30000001192092896,\"CoyoteTime\":0.10000000149011612,\"EyeHeight\":1.7000000476837158,\"EyeRadius\":0.11999999731779099,\"GrabRange\":100.0,\"Gravity\":18.0,\"GravityGun\":true,\"GroundAccelTime\":0.0,\"GroundDecelTime\":0.0,\"InvertY\":false,\"JumpBufferTime\":0.11999999731779099,\"JumpSpeed\":5.5,\"KillY\":-20.0,\"MaxHealth\":100.0,\"MaxThrowSpeed\":16.0,\"MinThrowSpeed\":3.5,\"MouseSensitivity\":0.029999999329447746,\"MoveSpeed\":4.0,\"PrimaryWeaponPrefab\":{\"path\":\"assets/Weapons/AKS74U/AKS74U.prefab\",\"pathGuid\":\"b19271e02ef840f1\"},\"RegenDelay\":5.0,\"RegenRate\":30.0,\"RespawnDelay\":3.0,\"ScrollTurnDeg\":15.0,\"SecondaryAnimationSet\":{\"path\":\"assets/Weapons/Remington870/Remington870.fpsanim\",\"pathGuid\":\"4e3925bded078f9a\"},\"SecondaryWeaponPrefab\":{\"path\":\"assets/Weapons/Remington870/Remington870.prefab\",\"pathGuid\":\"cf1fec9edad348ec\"},\"SpawnProtection\":2.0,\"SprintMultiplier\":1.600000023841858,\"StickLookDegPerSec\":180.0,\"ThrowBackspin\":2.0,\"ThrowChargeTime\":1.100000023841858,\"ViewModelFov\":50.0,\"ViewModelOffset\":{\"X\":0.05620000138878822,\"Y\":-0.03200000151991844,\"Z\":0.0},\"ViewModelRotation\":{\"X\":-0.23999999463558197,\"Y\":0.38999998569488525,\"Z\":0.0},\"ViewModelScale\":1.0,\"FieldOfView\":90.0}",
+        "Enabled": true,
+        "Scripts": "[]",
+        "Next Script ID": 1
+      }
     },
     {
       "Character Outfit": {
@@ -5011,32 +4956,6 @@
       ]
     },
     {
-      "Squad Settings": {
-        "Bleed-Out Time": 20.0,
-        "Corpse Time": 14.0,
-        "Cover Peek Step": 0.800000011920929,
-        "Cover Reach": 0.8500000238418579,
-        "Cover Sample Spacing": 0.8999999761581421,
-        "Crawl Speed": 0.6000000238418579,
-        "Difficulty": 1.0,
-        "Fall Gravity": 18.0,
-        "Foot IK Range": 25.0,
-        "Heavy Hit Damage": 40.0,
-        "High Cover Height": 1.5499999523162842,
-        "Hitbox Range": 60.0,
-        "Limp Speed Scale": 0.6000000238418579,
-        "Limp Time": 6.0,
-        "Low Cover Height": 0.8500000238418579,
-        "Melee Damage": 25.0,
-        "Melee Hit Time": 0.2199999988079071,
-        "Melee Time": 0.550000011920929,
-        "Mesh Check Range": 12.0,
-        "NPC Damage Scale": 0.44999998807907104,
-        "Respawn": true,
-        "Respawn Delay": 8.0,
-        "Squad Size": 4,
-        "Stagger Time": 0.4000000059604645
-      },
       "id": 97,
       "name": "AI Director",
       "order": 97,
@@ -5056,16 +4975,17 @@
         1.0,
         1.0,
         1.0
-      ]
+      ],
+      "C# Script": {
+        "Class": "Tartarus.Gameplay.SquadDefinition",
+        "Source": "assets/Scripts/SquadDefinition.cs",
+        "Fields JSON": "{\"Bleed-OutTime\":20.0,\"CorpseTime\":14.0,\"CoverStep\":0.800000011920929,\"CoverReach\":0.8500000238418579,\"CoverSpacing\":0.8999999761581421,\"CrawlSpeed\":0.6000000238418579,\"Difficulty\":1.0,\"FallGravity\":18.0,\"FootIKRange\":25.0,\"HeavyHitDamage\":40.0,\"CoverHeadHeight\":1.5499999523162842,\"HitboxRange\":60.0,\"LimpSpeedScale\":0.6000000238418579,\"LimpTime\":6.0,\"CoverKneeHeight\":0.8500000238418579,\"MeleeDamage\":25.0,\"MeleeHitTime\":0.2199999988079071,\"MeleeTime\":0.550000011920929,\"MeshCheckRange\":12.0,\"NpcDamageScale\":0.44999998807907104,\"Respawn\":true,\"RespawnDelay\":8.0,\"SquadSize\":4,\"StaggerTime\":0.4000000059604645}",
+        "Enabled": true,
+        "Scripts": "[]",
+        "Next Script ID": 1
+      }
     },
     {
-      "NPC Spawn": {
-        "Brain": "Squad AI",
-        "Outfit Seed": 0,
-        "Skill": 0.6000000238418579,
-        "Squad": 0,
-        "Weapon": "AKS-74U"
-      },
       "id": 98,
       "name": "Enemy Spawn 1",
       "order": 98,
@@ -5085,16 +5005,17 @@
         1.0,
         1.0,
         1.0
-      ]
+      ],
+      "C# Script": {
+        "Class": "Tartarus.Gameplay.NpcDefinition",
+        "Source": "assets/Scripts/NpcDefinition.cs",
+        "Fields JSON": "{\"Brain\":0,\"OutfitSeed\":0,\"Skill\":0.6000000238418579,\"Squad\":0,\"Weapon\":0}",
+        "Enabled": true,
+        "Scripts": "[]",
+        "Next Script ID": 1
+      }
     },
     {
-      "NPC Spawn": {
-        "Brain": "Squad AI",
-        "Outfit Seed": 0,
-        "Skill": 0.550000011920929,
-        "Squad": 0,
-        "Weapon": "Remington 870"
-      },
       "id": 99,
       "name": "Enemy Spawn 2",
       "order": 99,
@@ -5114,16 +5035,17 @@
         1.0,
         1.0,
         1.0
-      ]
+      ],
+      "C# Script": {
+        "Class": "Tartarus.Gameplay.NpcDefinition",
+        "Source": "assets/Scripts/NpcDefinition.cs",
+        "Fields JSON": "{\"Brain\":0,\"OutfitSeed\":0,\"Skill\":0.550000011920929,\"Squad\":0,\"Weapon\":1}",
+        "Enabled": true,
+        "Scripts": "[]",
+        "Next Script ID": 1
+      }
     },
     {
-      "NPC Spawn": {
-        "Brain": "Squad AI",
-        "Outfit Seed": 0,
-        "Skill": 0.699999988079071,
-        "Squad": 0,
-        "Weapon": "AKS-74U"
-      },
       "id": 100,
       "name": "Enemy Spawn 3",
       "order": 100,
@@ -5143,16 +5065,17 @@
         1.0,
         1.0,
         1.0
-      ]
+      ],
+      "C# Script": {
+        "Class": "Tartarus.Gameplay.NpcDefinition",
+        "Source": "assets/Scripts/NpcDefinition.cs",
+        "Fields JSON": "{\"Brain\":0,\"OutfitSeed\":0,\"Skill\":0.699999988079071,\"Squad\":0,\"Weapon\":0}",
+        "Enabled": true,
+        "Scripts": "[]",
+        "Next Script ID": 1
+      }
     },
     {
-      "NPC Spawn": {
-        "Brain": "Squad AI",
-        "Outfit Seed": 0,
-        "Skill": 0.6000000238418579,
-        "Squad": 0,
-        "Weapon": "AKS-74U"
-      },
       "id": 101,
       "name": "Enemy Spawn 4",
       "order": 101,
@@ -5172,16 +5095,17 @@
         1.0,
         1.0,
         1.0
-      ]
+      ],
+      "C# Script": {
+        "Class": "Tartarus.Gameplay.NpcDefinition",
+        "Source": "assets/Scripts/NpcDefinition.cs",
+        "Fields JSON": "{\"Brain\":0,\"OutfitSeed\":0,\"Skill\":0.6000000238418579,\"Squad\":0,\"Weapon\":0}",
+        "Enabled": true,
+        "Scripts": "[]",
+        "Next Script ID": 1
+      }
     },
     {
-      "NPC Spawn": {
-        "Brain": "Squad AI",
-        "Outfit Seed": 0,
-        "Skill": 0.550000011920929,
-        "Squad": 0,
-        "Weapon": "Remington 870"
-      },
       "id": 102,
       "name": "Enemy Spawn 5",
       "order": 102,
@@ -5201,7 +5125,15 @@
         1.0,
         1.0,
         1.0
-      ]
+      ],
+      "C# Script": {
+        "Class": "Tartarus.Gameplay.NpcDefinition",
+        "Source": "assets/Scripts/NpcDefinition.cs",
+        "Fields JSON": "{\"Brain\":0,\"OutfitSeed\":0,\"Skill\":0.550000011920929,\"Squad\":0,\"Weapon\":1}",
+        "Enabled": true,
+        "Scripts": "[]",
+        "Next Script ID": 1
+      }
     }
   ],
   "exposureEV": 0.0,
@@ -5408,6 +5340,18 @@
     {
       "path": "assets/Characters/Quantum/Materials/Clothing/Shoes/Socks/M_Socks.mat",
       "pathGuid": "475670f667a70b3b"
+    },
+    {
+      "path": "assets/Materials/Material_001.mat",
+      "pathGuid": "9c2c1c17eafcedff"
+    },
+    {
+      "path": "assets/Materials/Optic_RedDot.mat",
+      "pathGuid": "56808c6d3bc35b5a"
+    },
+    {
+      "path": "assets/Materials/RedDot.mat",
+      "pathGuid": "c3b7a89aa76c6d7c"
     }
   ],
   "libraryModels": [
@@ -6010,6 +5954,34 @@
     {
       "path": "assets/Weapons/AKS74U/Casing_545x39.fbx",
       "pathGuid": "3400d0834ae58519"
+    },
+    {
+      "path": "assets/Models/AK_Rail.fbx",
+      "pathGuid": "5e3b15cadc086347"
+    },
+    {
+      "path": "assets/Models/EOTECH.fbx",
+      "pathGuid": "d4ad0fc1cbcad025"
+    },
+    {
+      "path": "assets/Models/pbs_lowuv_final.fbx",
+      "pathGuid": "80458162dffed86c"
+    },
+    {
+      "path": "assets/Models/RedDot.fbx",
+      "pathGuid": "bd44cb2692700cc6"
+    },
+    {
+      "path": "assets/Models/1a1.fbx",
+      "pathGuid": "cf459acb698eb28a"
+    },
+    {
+      "path": "assets/Models/ACOG.fbx",
+      "pathGuid": "2e0a28fa59cfdc75"
+    },
+    {
+      "path": "assets/Models/AK_OpticMount.fbx",
+      "pathGuid": "00d0cf8817dd6b58"
     }
   ],
   "libraryPrefabs": [
@@ -6192,48 +6164,206 @@
       "path": "assets/Characters/Quantum/Textures/Young/Head/T_Quantum_Basemesh_Head_Young_Occlusion.1001.png",
       "pathGuid": "55d925b21b2b6d41"
     },
-    "assets/Characters/Quantum/Textures/Clothing/Balaclava/T_Balaclava_Crime_Black_BaseColor.png",
-    "assets/Characters/Quantum/Textures/Clothing/Balaclava/T_Balaclava_Crime_Normal.png",
-    "assets/Characters/Quantum/Textures/Clothing/Balaclava/T_Balaclava_Crime_OcclusionRoughnessMetallic.png",
-    "assets/Characters/Quantum/Textures/Clothing/Glasses/Glasses Aviator/T_Sunglasses_Brown_BaseColor.png",
-    "assets/Characters/Quantum/Textures/Clothing/Glasses/Glasses Aviator/T_Sunglasses_Camo_Unity_Normal.png",
-    "assets/Characters/Quantum/Textures/Clothing/Glasses/Glasses Aviator/T_Sunglasses_Camo_Roughness.png",
-    "assets/Characters/Quantum/Textures/Clothing/Glasses/Glasses Aviator/T_Sunglasses_Camo_Occlusion.png",
-    "assets/Characters/Quantum/Textures/Clothing/Pants/Pants_Cargo/T_Pants_Cargo_Black_BaseColor.png",
-    "assets/Characters/Quantum/Textures/Clothing/Pants/Pants_Cargo/T_Pants_Cargo_Unity_Normal.png",
-    "assets/Characters/Quantum/Textures/Clothing/Pants/Pants_Cargo/T_Pants_Cargo_Roughness.png",
-    "assets/Characters/Quantum/Textures/Clothing/Pants/Pants_Cargo/T_Pants_Cargo_Occlusion.png",
-    "assets/Characters/Quantum/Textures/Clothing/Shoes/Sneakers/Sneakers_Leather/T_F_Sneakers_Leather_Black_BaseColor.png",
-    "assets/Characters/Quantum/Textures/Clothing/Shoes/Sneakers/Sneakers_Leather/T_F_Sneakers_Leather_Unity_Normal.png",
-    "assets/Characters/Quantum/Textures/Clothing/Shoes/Sneakers/Sneakers_Leather/T_F_Sneakers_Leather_Roughness.png",
-    "assets/Characters/Quantum/Textures/Clothing/Shoes/Sneakers/Sneakers_Leather/T_F_Sneakers_Leather_Occlusion.png",
-    "assets/Characters/Quantum/Textures/Clothing/Tops/TShirt/T_TShirt_Black_BaseColor.png",
-    "assets/Characters/Quantum/Textures/Clothing/Tops/TShirt/T_TShirt_Unity_Normal.png",
-    "assets/Characters/Quantum/Textures/Clothing/Tops/TShirt/T_TShirt_Roughness.png",
-    "assets/Characters/Quantum/Textures/Clothing/Tops/TShirt/T_TShirt_Occlusion.png",
-    "assets/Characters/Quantum/Textures/Clothing/Balaclava/T_Balaclava_Crime_Print_BaseColor.png",
-    "assets/Characters/Quantum/Textures/Clothing/Balaclava/T_Balaclava_Crime_Print_Normal.png",
-    "assets/Characters/Quantum/Textures/Clothing/Balaclava/T_Balaclava_Crime_Print_OcclusionRoughnessMetallic.png",
-    "assets/Characters/Quantum/Textures/Clothing/Glasses/Glasses Aviator/T_Glasses_Aviator_Gold_BaseColor.png",
-    "assets/Characters/Quantum/Textures/Clothing/Glasses/Glasses Aviator/T_Glasses_Aviator_Gold_Unity_Normal.png",
-    "assets/Characters/Quantum/Textures/Clothing/Glasses/Glasses Aviator/T_Glasses_Aviator_Gold_Roughness.png",
-    "assets/Characters/Quantum/Textures/Clothing/Glasses/Glasses Aviator/T_Glasses_Aviator_Gold_Occlusion.png",
-    "assets/Characters/Quantum/Textures/Clothing/Pants/Pants_Cargo/T_Pants_Cargo_Blue_BaseColor.png",
-    "assets/Characters/Quantum/Textures/Clothing/Shoes/Sneakers/Sneakers_Leather/T_F_Sneakers_Leather_White_BaseColor.png",
-    "assets/Characters/Quantum/Textures/Clothing/Tops/TShirt/T_TShirt_White_BaseColor.png",
-    "assets/Characters/Quantum/Textures/Clothing/Balaclava/T_Balaclava_Crime_Green_BaseColor.png",
-    "assets/Characters/Quantum/Textures/Clothing/Tops/Hoodie_Hood_Up/T_Hoodie_Hood_Up_Black_BaseColor.png",
-    "assets/Characters/Quantum/Textures/Clothing/Tops/Hoodie_Hood_Up/T_Hoodie_Hood_Up_Unity_Normal.png",
-    "assets/Characters/Quantum/Textures/Clothing/Tops/Hoodie_Hood_Up/T_Hoodie_Hood_Up_Roughness.png",
-    "assets/Characters/Quantum/Textures/Clothing/Tops/Hoodie_Hood_Up/T_Hoodie_Hood_Up_Occlusion.png",
-    "assets/Characters/Quantum/Textures/Clothing/Pants/Pants_Sport/T_Sport_Pants_Black_BaseColor.png",
-    "assets/Characters/Quantum/Textures/Clothing/Pants/Pants_Sport/T_Sport_Pants_Unity_Normal.png",
-    "assets/Characters/Quantum/Textures/Clothing/Pants/Pants_Sport/T_Sport_Pants_Roughness.png",
-    "assets/Characters/Quantum/Textures/Clothing/Pants/Pants_Sport/T_Sport_Pants_Occlusion.png",
-    "assets/Characters/Quantum/Textures/Clothing/Shoes/Socks/T_Socks_BaseColor.png",
-    "assets/Characters/Quantum/Textures/Clothing/Shoes/Socks/T_Socks_Unity_Normal.png",
-    "assets/Characters/Quantum/Textures/Clothing/Shoes/Socks/T_Socks_Roughness.png",
-    "assets/Characters/Quantum/Textures/Clothing/Shoes/Socks/T_Socks_Occlusion.png"
+    {
+      "path": "assets/Characters/Quantum/Textures/Clothing/Balaclava/T_Balaclava_Crime_Black_BaseColor.png",
+      "pathGuid": "4b8aefef8d854415"
+    },
+    {
+      "path": "assets/Characters/Quantum/Textures/Clothing/Balaclava/T_Balaclava_Crime_Normal.png",
+      "pathGuid": "1b3f1ea1f85181ca"
+    },
+    {
+      "path": "assets/Characters/Quantum/Textures/Clothing/Balaclava/T_Balaclava_Crime_OcclusionRoughnessMetallic.png",
+      "pathGuid": "dac06e0953d0f1a5"
+    },
+    {
+      "path": "assets/Characters/Quantum/Textures/Clothing/Glasses/Glasses Aviator/T_Sunglasses_Brown_BaseColor.png",
+      "pathGuid": "c6a8af0d16bc8ecf"
+    },
+    {
+      "path": "assets/Characters/Quantum/Textures/Clothing/Glasses/Glasses Aviator/T_Sunglasses_Camo_Unity_Normal.png",
+      "pathGuid": "9f4421afee71ea4a"
+    },
+    {
+      "path": "assets/Characters/Quantum/Textures/Clothing/Glasses/Glasses Aviator/T_Sunglasses_Camo_Roughness.png",
+      "pathGuid": "a0da97fbf52d24ad"
+    },
+    {
+      "path": "assets/Characters/Quantum/Textures/Clothing/Glasses/Glasses Aviator/T_Sunglasses_Camo_Occlusion.png",
+      "pathGuid": "52cb6702c8f831e9"
+    },
+    {
+      "path": "assets/Characters/Quantum/Textures/Clothing/Pants/Pants_Cargo/T_Pants_Cargo_Black_BaseColor.png",
+      "pathGuid": "36fc41cbd4c5c281"
+    },
+    {
+      "path": "assets/Characters/Quantum/Textures/Clothing/Pants/Pants_Cargo/T_Pants_Cargo_Unity_Normal.png",
+      "pathGuid": "6640e70ecc7a215b"
+    },
+    {
+      "path": "assets/Characters/Quantum/Textures/Clothing/Pants/Pants_Cargo/T_Pants_Cargo_Roughness.png",
+      "pathGuid": "171417cd52427cf3"
+    },
+    {
+      "path": "assets/Characters/Quantum/Textures/Clothing/Pants/Pants_Cargo/T_Pants_Cargo_Occlusion.png",
+      "pathGuid": "1aa6a68120e52f02"
+    },
+    {
+      "path": "assets/Characters/Quantum/Textures/Clothing/Shoes/Sneakers/Sneakers_Leather/T_F_Sneakers_Leather_Black_BaseColor.png",
+      "pathGuid": "8e3df431656c6989"
+    },
+    {
+      "path": "assets/Characters/Quantum/Textures/Clothing/Shoes/Sneakers/Sneakers_Leather/T_F_Sneakers_Leather_Unity_Normal.png",
+      "pathGuid": "5346dc389402d8ba"
+    },
+    {
+      "path": "assets/Characters/Quantum/Textures/Clothing/Shoes/Sneakers/Sneakers_Leather/T_F_Sneakers_Leather_Roughness.png",
+      "pathGuid": "9b18ad03ad5ec47b"
+    },
+    {
+      "path": "assets/Characters/Quantum/Textures/Clothing/Shoes/Sneakers/Sneakers_Leather/T_F_Sneakers_Leather_Occlusion.png",
+      "pathGuid": "9c0d74e53b152f2c"
+    },
+    {
+      "path": "assets/Characters/Quantum/Textures/Clothing/Tops/TShirt/T_TShirt_Black_BaseColor.png",
+      "pathGuid": "f3f5b81961e09ab7"
+    },
+    {
+      "path": "assets/Characters/Quantum/Textures/Clothing/Tops/TShirt/T_TShirt_Unity_Normal.png",
+      "pathGuid": "7b0cc2301d351e56"
+    },
+    {
+      "path": "assets/Characters/Quantum/Textures/Clothing/Tops/TShirt/T_TShirt_Roughness.png",
+      "pathGuid": "ead0d73fa935a8e0"
+    },
+    {
+      "path": "assets/Characters/Quantum/Textures/Clothing/Tops/TShirt/T_TShirt_Occlusion.png",
+      "pathGuid": "805f678756395cf6"
+    },
+    {
+      "path": "assets/Characters/Quantum/Textures/Clothing/Balaclava/T_Balaclava_Crime_Print_BaseColor.png",
+      "pathGuid": "7edf0f8ddb9b52e7"
+    },
+    {
+      "path": "assets/Characters/Quantum/Textures/Clothing/Balaclava/T_Balaclava_Crime_Print_Normal.png",
+      "pathGuid": "5cd3393cf8ba4289"
+    },
+    {
+      "path": "assets/Characters/Quantum/Textures/Clothing/Balaclava/T_Balaclava_Crime_Print_OcclusionRoughnessMetallic.png",
+      "pathGuid": "b273318edffb81cb"
+    },
+    {
+      "path": "assets/Characters/Quantum/Textures/Clothing/Glasses/Glasses Aviator/T_Glasses_Aviator_Gold_BaseColor.png",
+      "pathGuid": "d9d6c15b94fd107c"
+    },
+    {
+      "path": "assets/Characters/Quantum/Textures/Clothing/Glasses/Glasses Aviator/T_Glasses_Aviator_Gold_Unity_Normal.png",
+      "pathGuid": "d95925de22104abf"
+    },
+    {
+      "path": "assets/Characters/Quantum/Textures/Clothing/Glasses/Glasses Aviator/T_Glasses_Aviator_Gold_Roughness.png",
+      "pathGuid": "c4091c06d0d19acd"
+    },
+    {
+      "path": "assets/Characters/Quantum/Textures/Clothing/Glasses/Glasses Aviator/T_Glasses_Aviator_Gold_Occlusion.png",
+      "pathGuid": "ed4eecf9d5033f2c"
+    },
+    {
+      "path": "assets/Characters/Quantum/Textures/Clothing/Pants/Pants_Cargo/T_Pants_Cargo_Blue_BaseColor.png",
+      "pathGuid": "3889487dfd0b78ea"
+    },
+    {
+      "path": "assets/Characters/Quantum/Textures/Clothing/Shoes/Sneakers/Sneakers_Leather/T_F_Sneakers_Leather_White_BaseColor.png",
+      "pathGuid": "8a2010d0c6a5ecff"
+    },
+    {
+      "path": "assets/Characters/Quantum/Textures/Clothing/Tops/TShirt/T_TShirt_White_BaseColor.png",
+      "pathGuid": "cf192a9cf6c428ce"
+    },
+    {
+      "path": "assets/Characters/Quantum/Textures/Clothing/Balaclava/T_Balaclava_Crime_Green_BaseColor.png",
+      "pathGuid": "49c1f5a5b7028511"
+    },
+    {
+      "path": "assets/Characters/Quantum/Textures/Clothing/Tops/Hoodie_Hood_Up/T_Hoodie_Hood_Up_Black_BaseColor.png",
+      "pathGuid": "102e34904a03fd80"
+    },
+    {
+      "path": "assets/Characters/Quantum/Textures/Clothing/Tops/Hoodie_Hood_Up/T_Hoodie_Hood_Up_Unity_Normal.png",
+      "pathGuid": "75f7d3734bdcbffe"
+    },
+    {
+      "path": "assets/Characters/Quantum/Textures/Clothing/Tops/Hoodie_Hood_Up/T_Hoodie_Hood_Up_Roughness.png",
+      "pathGuid": "6e90149c347bedc2"
+    },
+    {
+      "path": "assets/Characters/Quantum/Textures/Clothing/Tops/Hoodie_Hood_Up/T_Hoodie_Hood_Up_Occlusion.png",
+      "pathGuid": "3d3479334266d781"
+    },
+    {
+      "path": "assets/Characters/Quantum/Textures/Clothing/Pants/Pants_Sport/T_Sport_Pants_Black_BaseColor.png",
+      "pathGuid": "dcc7e35f9e93a284"
+    },
+    {
+      "path": "assets/Characters/Quantum/Textures/Clothing/Pants/Pants_Sport/T_Sport_Pants_Unity_Normal.png",
+      "pathGuid": "490076b88517c219"
+    },
+    {
+      "path": "assets/Characters/Quantum/Textures/Clothing/Pants/Pants_Sport/T_Sport_Pants_Roughness.png",
+      "pathGuid": "a344f2e9a18e398b"
+    },
+    {
+      "path": "assets/Characters/Quantum/Textures/Clothing/Pants/Pants_Sport/T_Sport_Pants_Occlusion.png",
+      "pathGuid": "5ed366a42af67c36"
+    },
+    {
+      "path": "assets/Characters/Quantum/Textures/Clothing/Shoes/Socks/T_Socks_BaseColor.png",
+      "pathGuid": "427d699fbc412c22"
+    },
+    {
+      "path": "assets/Characters/Quantum/Textures/Clothing/Shoes/Socks/T_Socks_Unity_Normal.png",
+      "pathGuid": "91e0a7e4f759f6d4"
+    },
+    {
+      "path": "assets/Characters/Quantum/Textures/Clothing/Shoes/Socks/T_Socks_Roughness.png",
+      "pathGuid": "b3b2b46e73b05bbc"
+    },
+    {
+      "path": "assets/Characters/Quantum/Textures/Clothing/Shoes/Socks/T_Socks_Occlusion.png",
+      "pathGuid": "407594381188360c"
+    },
+    {
+      "path": "assets/Models/1a1.fbx#1a1.fbm/1a_DefaultMaterial_BaseColor.png",
+      "pathGuid": "3278666717e45c17"
+    },
+    {
+      "path": "assets/Models/1a1.fbx#1a1.fbm/1a_DefaultMaterial_Normal.png",
+      "pathGuid": "38562ecf52d7f624"
+    },
+    {
+      "path": "assets/Models/1a1.fbx#1a1.fbm/1a_DefaultMaterial_Metallic.png",
+      "pathGuid": "b13a865705f9a729"
+    },
+    {
+      "path": "assets/Effects/Optics/RedDotReticle.png",
+      "pathGuid": "659275da42243734"
+    },
+    {
+      "path": "assets/Textures/p3dm_ru_CZ-32H_1P_Diff.png",
+      "pathGuid": "8a0bfdecdf6d3b4f"
+    },
+    {
+      "path": "assets/Textures/7.png",
+      "pathGuid": "b20104dfa670b695"
+    },
+    {
+      "path": "assets/Textures/8.png",
+      "pathGuid": "6408da5021e60cad"
+    },
+    {
+      "path": "assets/Textures/blurred circle.png",
+      "pathGuid": "3fdc8f5ddd249df7"
+    }
   ],
   "maxPointShadows": 2,
   "maxSpotShadows": 4,
@@ -6804,6 +6934,7 @@
     "timeOfDayHours": 16.0
   },
   "skyAmbientIntensity": 1.0,
+  "skyHdriGuid": "3c228060f37a0b69",
   "skyHdriPath": "assets/sky/kloofendal_48d_partly_cloudy_puresky_4k.hdr",
   "skyHorizonColor": [
     0.699999988079071,

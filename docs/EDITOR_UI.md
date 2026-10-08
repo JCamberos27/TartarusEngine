@@ -1,5 +1,8 @@
 # Editor UI
 
+See [Editor upgrade recommendations](EDITOR_UPGRADES.md) for the five proposed authoring
+upgrades and the existing features they extend.
+
 The editor looks like an old white-phosphor terminal. It uses:
 - pitch-black surfaces;
 - phosphor-white text and neutral greys;

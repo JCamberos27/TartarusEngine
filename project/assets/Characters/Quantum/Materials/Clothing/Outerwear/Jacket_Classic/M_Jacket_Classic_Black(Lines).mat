@@ -29,9 +29,9 @@
   },
   "shader": "engine://Standard.shader",
   "textureGuids": {
-    "_AOMap": "bf3fe8e46e26cc04",
-    "_AlbedoMap": "6e36f23b36c1b04b",
-    "_NormalMap": "421c59e011f16f97",
-    "_RoughnessMap": "e0f9e34d33566495"
+    "_AOMap": "b0e2a6d915300960",
+    "_AlbedoMap": "e5bf91ce79aa719c",
+    "_NormalMap": "09b5c44707de814a",
+    "_RoughnessMap": "f28e37709147c480"
   }
 }

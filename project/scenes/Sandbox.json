@@ -21613,69 +21613,6 @@
   "dofMaxBlur": 8.0,
   "empties": [
     {
-      "First Person Controller": {
-        "Air Accel Time": 0.0,
-        "Animation Set": {
-          "path": "assets/Weapons/AKS74U/AKS74U.fpsanim",
-          "pathGuid": "c0ff631aac421f76"
-        },
-        "Assist Cone Deg": 7.0,
-        "Assist Range": 30.0,
-        "Camera Bone": "head",
-        "Capsule Height": 1.850000023841858,
-        "Capsule Radius": 0.30000001192092896,
-        "Coyote Time": 0.10000000149011612,
-        "Eye Height": 1.7000000476837158,
-        "Eye Radius": 0.11999999731779099,
-        "Field of View": 90.0,
-        "Grab Range": 100.0,
-        "Gravity": 18.0,
-        "Gravity Gun": true,
-        "Ground Accel Time": 0.0,
-        "Ground Decel Time": 0.0,
-        "Invert Y": false,
-        "Jump Buffer Time": 0.11999999731779099,
-        "Jump Speed": 5.5,
-        "Kill Height": -20.0,
-        "Max Health": 100.0,
-        "Max Throw Speed": 16.0,
-        "Min Throw Speed": 3.5,
-        "Mouse Sensitivity": 0.05000000074505806,
-        "Move Speed": 4.0,
-        "Regen Delay": 5.0,
-        "Regen Rate": 30.0,
-        "Respawn Delay": 3.0,
-        "Scroll Turn Deg": 15.0,
-        "Secondary Animation Set": {
-          "path": "assets/Weapons/Remington870/Remington870.fpsanim",
-          "pathGuid": "4e3925bded078f9a"
-        },
-        "Spawn Protection": 2.0,
-        "Sprint Multiplier": 1.600000023841858,
-        "Stick Look Deg/Sec": 180.0,
-        "Throw Backspin": 2.0,
-        "Throw Charge Time": 1.100000023841858,
-        "View Model FOV": 50.0,
-        "View Model Offset": [
-          0.05620000138878822,
-          -0.03200000151991844,
-          0.0
-        ],
-        "View Model Rotation": [
-          -0.23999999463558197,
-          0.38999998569488525,
-          0.0
-        ],
-        "View Model Scale": 1.0,
-        "Primary Weapon Prefab": {
-          "path": "assets/Weapons/AKS74U/AKS74U.prefab",
-          "pathGuid": "b19271e02ef840f1"
-        },
-        "Secondary Weapon Prefab": {
-          "path": "assets/Weapons/Remington870/Remington870.prefab",
-          "pathGuid": "cf1fec9edad348ec"
-        }
-      },
       "id": 597,
       "name": "Player Spawn",
       "order": 0,
@@ -21695,7 +21632,15 @@
         1.0,
         1.0,
         1.0
-      ]
+      ],
+      "C# Script": {
+        "Class": "Tartarus.Gameplay.PlayerDefinition",
+        "Source": "assets/Scripts/PlayerDefinition.cs",
+        "Fields JSON": "{\"AirAccelTime\":0.0,\"AnimationSet\":{\"path\":\"assets/Weapons/AKS74U/AKS74U.fpsanim\",\"pathGuid\":\"c0ff631aac421f76\"},\"AssistConeDeg\":7.0,\"AssistRange\":30.0,\"CameraBone\":\"head\",\"CapsuleHeight\":1.850000023841858,\"CapsuleRadius\":0.30000001192092896,\"CoyoteTime\":0.10000000149011612,\"EyeHeight\":1.7000000476837158,\"EyeRadius\":0.11999999731779099,\"GrabRange\":100.0,\"Gravity\":18.0,\"GravityGun\":true,\"GroundAccelTime\":0.0,\"GroundDecelTime\":0.0,\"InvertY\":false,\"JumpBufferTime\":0.11999999731779099,\"JumpSpeed\":5.5,\"KillY\":-20.0,\"MaxHealth\":100.0,\"MaxThrowSpeed\":16.0,\"MinThrowSpeed\":3.5,\"MouseSensitivity\":0.05000000074505806,\"MoveSpeed\":4.0,\"RegenDelay\":5.0,\"RegenRate\":30.0,\"RespawnDelay\":3.0,\"ScrollTurnDeg\":15.0,\"SecondaryAnimationSet\":{\"path\":\"assets/Weapons/Remington870/Remington870.fpsanim\",\"pathGuid\":\"4e3925bded078f9a\"},\"SpawnProtection\":2.0,\"SprintMultiplier\":1.600000023841858,\"StickLookDegPerSec\":180.0,\"ThrowBackspin\":2.0,\"ThrowChargeTime\":1.100000023841858,\"ViewModelFov\":50.0,\"ViewModelOffset\":{\"X\":0.05620000138878822,\"Y\":-0.03200000151991844,\"Z\":0.0},\"ViewModelRotation\":{\"X\":-0.23999999463558197,\"Y\":0.38999998569488525,\"Z\":0.0},\"ViewModelScale\":1.0,\"PrimaryWeaponPrefab\":{\"path\":\"assets/Weapons/AKS74U/AKS74U.prefab\",\"pathGuid\":\"b19271e02ef840f1\"},\"SecondaryWeaponPrefab\":{\"path\":\"assets/Weapons/Remington870/Remington870.prefab\",\"pathGuid\":\"cf1fec9edad348ec\"},\"FieldOfView\":90.0}",
+        "Enabled": true,
+        "Scripts": "[]",
+        "Next Script ID": 1
+      }
     },
     {
       "id": 598,
@@ -22171,16 +22116,6 @@
       ]
     },
     {
-      "Goal Trigger": {
-        "Flash Intensity": 45.0,
-        "Points": 2,
-        "Require Downward": true,
-        "Score Sound": "",
-        "Tag": "Basketball",
-        "Team": "Home",
-        "Three Point Distance": 10.350000381469727,
-        "Three Points": 3
-      },
       "collider": {
         "halfExtents": [
           0.23999999463558197,
@@ -22208,7 +22143,15 @@
         1.0,
         1.0,
         1.0
-      ]
+      ],
+      "C# Script": {
+        "Class": "Tartarus.Gameplay.BasketGoal",
+        "Source": "assets/Scripts/BasketGoal.cs",
+        "Fields JSON": "{\"FlashIntensity\":45.0,\"Points\":2,\"RequireDownward\":true,\"ScoreSound\":{\"path\":\"\",\"pathGuid\":\"\"},\"Tag\":\"Basketball\",\"Team\":0,\"ThreePointDistance\":10.350000381469727,\"ThreePoints\":3}",
+        "Enabled": true,
+        "Scripts": "[]",
+        "Next Script ID": 1
+      }
     },
     {
       "Particle System": {
@@ -22370,16 +22313,6 @@
       ]
     },
     {
-      "Goal Trigger": {
-        "Flash Intensity": 45.0,
-        "Points": 2,
-        "Require Downward": true,
-        "Score Sound": "",
-        "Tag": "Basketball",
-        "Team": "Away",
-        "Three Point Distance": 10.350000381469727,
-        "Three Points": 3
-      },
       "collider": {
         "halfExtents": [
           0.23999999463558197,
@@ -22407,7 +22340,15 @@
         1.0,
         1.0,
         1.0
-      ]
+      ],
+      "C# Script": {
+        "Class": "Tartarus.Gameplay.BasketGoal",
+        "Source": "assets/Scripts/BasketGoal.cs",
+        "Fields JSON": "{\"FlashIntensity\":45.0,\"Points\":2,\"RequireDownward\":true,\"ScoreSound\":{\"path\":\"\",\"pathGuid\":\"\"},\"Tag\":\"Basketball\",\"Team\":1,\"ThreePointDistance\":10.350000381469727,\"ThreePoints\":3}",
+        "Enabled": true,
+        "Scripts": "[]",
+        "Next Script ID": 1
+      }
     },
     {
       "Particle System": {
@@ -22569,10 +22510,6 @@
       ]
     },
     {
-      "Scoreboard": {
-        "Away": 0,
-        "Home": 0
-      },
       "id": 624,
       "name": "Score",
       "order": 384,
@@ -22592,15 +22529,17 @@
         1.0,
         1.0,
         1.0
-      ]
+      ],
+      "C# Script": {
+        "Class": "Tartarus.Gameplay.Scoreboard",
+        "Source": "assets/Scripts/Scoreboard.cs",
+        "Fields JSON": "{\"Away\":0,\"Home\":0}",
+        "Enabled": true,
+        "Scripts": "[]",
+        "Next Script ID": 1
+      }
     },
     {
-      "Score Digit": {
-        "Off Strength": 0.05000000074505806,
-        "On Strength": 7.0,
-        "Place": "Tens",
-        "Team": "Home"
-      },
       "id": 625,
       "name": "Score Digit Home Tens N",
       "order": 392,
@@ -22620,15 +22559,17 @@
         1.0,
         1.0,
         1.0
-      ]
+      ],
+      "C# Script": {
+        "Class": "Tartarus.Gameplay.ScoreDigit",
+        "Source": "assets/Scripts/ScoreDigit.cs",
+        "Fields JSON": "{\"OffStrength\":0.05000000074505806,\"OnStrength\":7.0,\"Place\":1,\"Team\":0}",
+        "Enabled": true,
+        "Scripts": "[]",
+        "Next Script ID": 1
+      }
     },
     {
-      "Score Digit": {
-        "Off Strength": 0.05000000074505806,
-        "On Strength": 7.0,
-        "Place": "Ones",
-        "Team": "Home"
-      },
       "id": 626,
       "name": "Score Digit Home Ones N",
       "order": 400,
@@ -22648,15 +22589,17 @@
         1.0,
         1.0,
         1.0
-      ]
+      ],
+      "C# Script": {
+        "Class": "Tartarus.Gameplay.ScoreDigit",
+        "Source": "assets/Scripts/ScoreDigit.cs",
+        "Fields JSON": "{\"OffStrength\":0.05000000074505806,\"OnStrength\":7.0,\"Place\":0,\"Team\":0}",
+        "Enabled": true,
+        "Scripts": "[]",
+        "Next Script ID": 1
+      }
     },
     {
-      "Score Digit": {
-        "Off Strength": 0.05000000074505806,
-        "On Strength": 7.0,
-        "Place": "Tens",
-        "Team": "Away"
-      },
       "id": 627,
       "name": "Score Digit Away Tens N",
       "order": 409,
@@ -22676,15 +22619,17 @@
         1.0,
         1.0,
         1.0
-      ]
+      ],
+      "C# Script": {
+        "Class": "Tartarus.Gameplay.ScoreDigit",
+        "Source": "assets/Scripts/ScoreDigit.cs",
+        "Fields JSON": "{\"OffStrength\":0.05000000074505806,\"OnStrength\":7.0,\"Place\":1,\"Team\":1}",
+        "Enabled": true,
+        "Scripts": "[]",
+        "Next Script ID": 1
+      }
     },
     {
-      "Score Digit": {
-        "Off Strength": 0.05000000074505806,
-        "On Strength": 7.0,
-        "Place": "Ones",
-        "Team": "Away"
-      },
       "id": 628,
       "name": "Score Digit Away Ones N",
       "order": 417,
@@ -22704,15 +22649,17 @@
         1.0,
         1.0,
         1.0
-      ]
+      ],
+      "C# Script": {
+        "Class": "Tartarus.Gameplay.ScoreDigit",
+        "Source": "assets/Scripts/ScoreDigit.cs",
+        "Fields JSON": "{\"OffStrength\":0.05000000074505806,\"OnStrength\":7.0,\"Place\":0,\"Team\":1}",
+        "Enabled": true,
+        "Scripts": "[]",
+        "Next Script ID": 1
+      }
     },
     {
-      "Score Digit": {
-        "Off Strength": 0.05000000074505806,
-        "On Strength": 7.0,
-        "Place": "Tens",
-        "Team": "Home"
-      },
       "id": 629,
       "name": "Score Digit Home Tens S",
       "order": 426,
@@ -22732,15 +22679,17 @@
         1.0,
         1.0,
         1.0
-      ]
+      ],
+      "C# Script": {
+        "Class": "Tartarus.Gameplay.ScoreDigit",
+        "Source": "assets/Scripts/ScoreDigit.cs",
+        "Fields JSON": "{\"OffStrength\":0.05000000074505806,\"OnStrength\":7.0,\"Place\":1,\"Team\":0}",
+        "Enabled": true,
+        "Scripts": "[]",
+        "Next Script ID": 1
+      }
     },
     {
-      "Score Digit": {
-        "Off Strength": 0.05000000074505806,
-        "On Strength": 7.0,
-        "Place": "Ones",
-        "Team": "Home"
-      },
       "id": 630,
       "name": "Score Digit Home Ones S",
       "order": 434,
@@ -22760,15 +22709,17 @@
         1.0,
         1.0,
         1.0
-      ]
+      ],
+      "C# Script": {
+        "Class": "Tartarus.Gameplay.ScoreDigit",
+        "Source": "assets/Scripts/ScoreDigit.cs",
+        "Fields JSON": "{\"OffStrength\":0.05000000074505806,\"OnStrength\":7.0,\"Place\":0,\"Team\":0}",
+        "Enabled": true,
+        "Scripts": "[]",
+        "Next Script ID": 1
+      }
     },
     {
-      "Score Digit": {
-        "Off Strength": 0.05000000074505806,
-        "On Strength": 7.0,
-        "Place": "Tens",
-        "Team": "Away"
-      },
       "id": 631,
       "name": "Score Digit Away Tens S",
       "order": 443,
@@ -22788,15 +22739,17 @@
         1.0,
         1.0,
         1.0
-      ]
+      ],
+      "C# Script": {
+        "Class": "Tartarus.Gameplay.ScoreDigit",
+        "Source": "assets/Scripts/ScoreDigit.cs",
+        "Fields JSON": "{\"OffStrength\":0.05000000074505806,\"OnStrength\":7.0,\"Place\":1,\"Team\":1}",
+        "Enabled": true,
+        "Scripts": "[]",
+        "Next Script ID": 1
+      }
     },
     {
-      "Score Digit": {
-        "Off Strength": 0.05000000074505806,
-        "On Strength": 7.0,
-        "Place": "Ones",
-        "Team": "Away"
-      },
       "id": 632,
       "name": "Score Digit Away Ones S",
       "order": 451,
@@ -22816,7 +22769,15 @@
         1.0,
         1.0,
         1.0
-      ]
+      ],
+      "C# Script": {
+        "Class": "Tartarus.Gameplay.ScoreDigit",
+        "Source": "assets/Scripts/ScoreDigit.cs",
+        "Fields JSON": "{\"OffStrength\":0.05000000074505806,\"OnStrength\":7.0,\"Place\":0,\"Team\":1}",
+        "Enabled": true,
+        "Scripts": "[]",
+        "Next Script ID": 1
+      }
     },
     {
       "id": 633,
@@ -23631,32 +23592,6 @@
       ]
     },
     {
-      "Squad Settings": {
-        "Bleed-Out Time": 20.0,
-        "Corpse Time": 14.0,
-        "Cover Peek Step": 0.800000011920929,
-        "Cover Reach": 0.8500000238418579,
-        "Cover Sample Spacing": 0.8999999761581421,
-        "Crawl Speed": 0.6000000238418579,
-        "Difficulty": 1.0,
-        "Fall Gravity": 18.0,
-        "Foot IK Range": 25.0,
-        "Heavy Hit Damage": 40.0,
-        "High Cover Height": 1.5499999523162842,
-        "Hitbox Range": 60.0,
-        "Limp Speed Scale": 0.6000000238418579,
-        "Limp Time": 6.0,
-        "Low Cover Height": 0.8500000238418579,
-        "Melee Damage": 25.0,
-        "Melee Hit Time": 0.2199999988079071,
-        "Melee Time": 0.550000011920929,
-        "Mesh Check Range": 12.0,
-        "NPC Damage Scale": 0.44999998807907104,
-        "Respawn": true,
-        "Respawn Delay": 8.0,
-        "Squad Size": 4,
-        "Stagger Time": 0.4000000059604645
-      },
       "id": 656,
       "name": "AI Director",
       "order": 701,
@@ -23676,16 +23611,17 @@
         1.0,
         1.0,
         1.0
-      ]
+      ],
+      "C# Script": {
+        "Class": "Tartarus.Gameplay.SquadDefinition",
+        "Source": "assets/Scripts/SquadDefinition.cs",
+        "Fields JSON": "{\"Bleed-OutTime\":20.0,\"CorpseTime\":14.0,\"CoverStep\":0.800000011920929,\"CoverReach\":0.8500000238418579,\"CoverSpacing\":0.8999999761581421,\"CrawlSpeed\":0.6000000238418579,\"Difficulty\":1.0,\"FallGravity\":18.0,\"FootIKRange\":25.0,\"HeavyHitDamage\":40.0,\"CoverHeadHeight\":1.5499999523162842,\"HitboxRange\":60.0,\"LimpSpeedScale\":0.6000000238418579,\"LimpTime\":6.0,\"CoverKneeHeight\":0.8500000238418579,\"MeleeDamage\":25.0,\"MeleeHitTime\":0.2199999988079071,\"MeleeTime\":0.550000011920929,\"MeshCheckRange\":12.0,\"NpcDamageScale\":0.44999998807907104,\"Respawn\":true,\"RespawnDelay\":8.0,\"SquadSize\":4,\"StaggerTime\":0.4000000059604645}",
+        "Enabled": true,
+        "Scripts": "[]",
+        "Next Script ID": 1
+      }
     },
     {
-      "NPC Spawn": {
-        "Brain": "Squad AI",
-        "Outfit Seed": 0,
-        "Skill": 0.6000000238418579,
-        "Squad": 0,
-        "Weapon": "AKS-74U"
-      },
       "id": 657,
       "name": "Enemy Spawn 1",
       "order": 702,
@@ -23705,16 +23641,17 @@
         1.0,
         1.0,
         1.0
-      ]
+      ],
+      "C# Script": {
+        "Class": "Tartarus.Gameplay.NpcDefinition",
+        "Source": "assets/Scripts/NpcDefinition.cs",
+        "Fields JSON": "{\"Brain\":0,\"OutfitSeed\":0,\"Skill\":0.6000000238418579,\"Squad\":0,\"Weapon\":0}",
+        "Enabled": true,
+        "Scripts": "[]",
+        "Next Script ID": 1
+      }
     },
     {
-      "NPC Spawn": {
-        "Brain": "Squad AI",
-        "Outfit Seed": 0,
-        "Skill": 0.6499999761581421,
-        "Squad": 0,
-        "Weapon": "AKS-74U"
-      },
       "id": 658,
       "name": "Enemy Spawn 2",
       "order": 703,
@@ -23734,16 +23671,17 @@
         1.0,
         1.0,
         1.0
-      ]
+      ],
+      "C# Script": {
+        "Class": "Tartarus.Gameplay.NpcDefinition",
+        "Source": "assets/Scripts/NpcDefinition.cs",
+        "Fields JSON": "{\"Brain\":0,\"OutfitSeed\":0,\"Skill\":0.6499999761581421,\"Squad\":0,\"Weapon\":0}",
+        "Enabled": true,
+        "Scripts": "[]",
+        "Next Script ID": 1
+      }
     },
     {
-      "NPC Spawn": {
-        "Brain": "Squad AI",
-        "Outfit Seed": 0,
-        "Skill": 0.550000011920929,
-        "Squad": 0,
-        "Weapon": "Remington 870"
-      },
       "id": 659,
       "name": "Enemy Spawn 3",
       "order": 704,
@@ -23763,16 +23701,17 @@
         1.0,
         1.0,
         1.0
-      ]
+      ],
+      "C# Script": {
+        "Class": "Tartarus.Gameplay.NpcDefinition",
+        "Source": "assets/Scripts/NpcDefinition.cs",
+        "Fields JSON": "{\"Brain\":0,\"OutfitSeed\":0,\"Skill\":0.550000011920929,\"Squad\":0,\"Weapon\":1}",
+        "Enabled": true,
+        "Scripts": "[]",
+        "Next Script ID": 1
+      }
     },
     {
-      "NPC Spawn": {
-        "Brain": "Squad AI",
-        "Outfit Seed": 0,
-        "Skill": 0.6000000238418579,
-        "Squad": 0,
-        "Weapon": "AKS-74U"
-      },
       "id": 660,
       "name": "Enemy Spawn 4",
       "order": 705,
@@ -23792,7 +23731,15 @@
         1.0,
         1.0,
         1.0
-      ]
+      ],
+      "C# Script": {
+        "Class": "Tartarus.Gameplay.NpcDefinition",
+        "Source": "assets/Scripts/NpcDefinition.cs",
+        "Fields JSON": "{\"Brain\":0,\"OutfitSeed\":0,\"Skill\":0.6000000238418579,\"Squad\":0,\"Weapon\":0}",
+        "Enabled": true,
+        "Scripts": "[]",
+        "Next Script ID": 1
+      }
     },
     {
       "id": 661,

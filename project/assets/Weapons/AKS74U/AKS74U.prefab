@@ -1,6 +1,597 @@
 {
   "boxes": [],
-  "empties": [],
+  "empties": [
+    {
+      "Particle System": {
+        "Acceleration": [
+          0.0,
+          0.0,
+          0.0
+        ],
+        "Alignment": "Billboard",
+        "Alpha Curve": "[[0,1,0,0],[0.2,0.9,0,0],[0.55,0.4,0,0],[1,0,0,0]]",
+        "Angular Velocity Max": 0.0,
+        "Angular Velocity Min": 0.0,
+        "Blend Frames": false,
+        "Blend Mode": "Additive",
+        "Bounce": 0.30000001192092896,
+        "Burst Count": 1,
+        "Burst Interval": 0.0,
+        "Collision": "Off",
+        "Collision Friction": 0.10000000149011612,
+        "Collision Life Loss": 0.0,
+        "Collision Plane Y": 0.0,
+        "Collision Radius": 0.009999999776482582,
+        "Curve Editor ID": "f2c158e9f66475fd",
+        "Drag": 0.0,
+        "Duration": 0.10000000149011612,
+        "Emission Curve": "[[0,1,0,0],[1,1,0,0]]",
+        "Emitting": false,
+        "End Alpha": 1.0,
+        "End Color": [
+          1.0,
+          0.23999999463558197,
+          0.02500000037252903
+        ],
+        "End Size": 0.11500000208616257,
+        "Gravity Modifier": 0.0,
+        "Intensity": 4.5,
+        "Lifetime": 0.054999999701976776,
+        "Lifetime Randomness": 0.11999999731779099,
+        "Local Space": true,
+        "Looping": false,
+        "Max Bounces": 4,
+        "Max Particles": 8,
+        "Pivot X": 0.0,
+        "Pivot Y": 0.0,
+        "Random Start Frame": false,
+        "Rate": 0.0,
+        "Rate Over Distance": 0.0,
+        "Rotation Max": 360.0,
+        "Rotation Min": 0.0,
+        "Shader": "Default",
+        "Shape": "Point",
+        "Shape Box": [
+          1.0,
+          1.0,
+          1.0
+        ],
+        "Shape Length": 1.0,
+        "Shape Radius": 0.5,
+        "Shape Surface": false,
+        "Sheet Columns": 1,
+        "Sheet FPS": 0.0,
+        "Sheet Rows": 1,
+        "Size Curve": "[[0,1,0,0],[1,1,0,0]]",
+        "Size Randomness": 0.2199999988079071,
+        "Smoke Density": 1.7999999523162842,
+        "Smoke Evolution": 0.6499999761581421,
+        "Smoke Noise Scale": 3.0,
+        "Smoke Softness": 0.6499999761581421,
+        "Smoke Turbulence": 0.3499999940395355,
+        "Speed Curve": "[[0,1,0,0],[1,1,0,0]]",
+        "Speed Randomness": 0.0,
+        "Spread": 0.0,
+        "Start Alpha": 1.0,
+        "Start Color": [
+          1.0,
+          0.699999988079071,
+          0.2199999988079071
+        ],
+        "Start Delay": 0.0,
+        "Start Size": 0.07500000298023224,
+        "Start Speed": 0.0,
+        "Texture": {
+          "path": "assets/Textures/7.png",
+          "pathGuid": "b20104dfa670b695"
+        },
+        "Texture Channels": "Red Mask",
+        "Velocity Over Life": [
+          0.0,
+          0.0,
+          0.0
+        ],
+        "Velocity Stretch": 0.10000000149011612
+      },
+      "id": 2,
+      "name": "Muzzle Flash",
+      "order": 2,
+      "parentId": 5,
+      "position": [
+        -2.3139210725275916e-07,
+        -2.3479826268157922e-05,
+        0.36284923553466797
+      ],
+      "rotation": [
+        0.0,
+        1.0,
+        0.0,
+        0.0
+      ],
+      "scale": [
+        1.0,
+        1.0,
+        1.0
+      ]
+    },
+    {
+      "id": 3,
+      "name": "AimPoint_RedDot",
+      "order": 3,
+      "parentId": 1,
+      "position": [
+        -0.07292354851961136,
+        0.03799999877810478,
+        -2.4148203436880067e-08
+      ],
+      "rotation": [
+        0.0,
+        0.7071066498756409,
+        0.0,
+        0.70710688829422
+      ],
+      "scale": [
+        1.0,
+        1.0,
+        1.0
+      ]
+    },
+    {
+      "id": 4,
+      "name": "AimPoint_Default",
+      "order": 4,
+      "parentId": 7,
+      "position": [
+        0.0,
+        0.05062843859195709,
+        -0.1486339271068573
+      ],
+      "rotation": [
+        0.0,
+        0.0,
+        0.0,
+        1.0
+      ],
+      "scale": [
+        1.0,
+        1.0,
+        1.0
+      ]
+    },
+    {
+      "C# Script": {
+        "Class": "Tartarus.Gameplay.MuzzleAttachment",
+        "Enabled": true,
+        "Fields JSON": "{\"FiringSoundProfile\":\"ak\",\"FiringSounds\":\"\",\"MuzzleFlash\":\"Muzzle Flash\",\"MuzzleTransform\":\"Muzzle Flash\"}",
+        "Next Script ID": 1,
+        "Scripts": "[]",
+        "Source": {
+          "path": "assets/Scripts/MuzzleAttachment.cs",
+          "pathGuid": "18ba5f59bdab989a"
+        }
+      },
+      "id": 5,
+      "name": "Default Muzzle",
+      "order": 5,
+      "parentId": 0,
+      "position": [
+        0.0,
+        0.0,
+        0.0
+      ],
+      "rotation": [
+        0.0,
+        0.0,
+        0.0,
+        1.0
+      ],
+      "scale": [
+        1.0,
+        1.0,
+        1.0
+      ]
+    },
+    {
+      "C# Script": {
+        "Class": "Tartarus.Gameplay.GripAttachment",
+        "Enabled": true,
+        "Fields JSON": "{}",
+        "Next Script ID": 1,
+        "Scripts": "[]",
+        "Source": {
+          "path": "assets/Scripts/GripAttachment.cs",
+          "pathGuid": "4324a234ac1feab5"
+        }
+      },
+      "id": 6,
+      "name": "Default Grip",
+      "order": 6,
+      "parentId": 0,
+      "position": [
+        0.0,
+        0.0,
+        0.0
+      ],
+      "rotation": [
+        0.0,
+        0.0,
+        0.0,
+        1.0
+      ],
+      "scale": [
+        1.0,
+        1.0,
+        1.0
+      ]
+    },
+    {
+      "C# Script": {
+        "Class": "Tartarus.Gameplay.OpticAttachment",
+        "Enabled": true,
+        "Fields JSON": "{\"AimPoint\":\"AimPoint_Default\",\"AimBlendTime\":0.2,\"DefaultOptic\":true}",
+        "Next Script ID": 1,
+        "Scripts": "[]",
+        "Source": {
+          "path": "assets/Scripts/OpticAttachment.cs",
+          "pathGuid": "190ce9c4c235c4fd"
+        }
+      },
+      "active": false,
+      "id": 7,
+      "name": "Iron Sights",
+      "order": 7,
+      "parentId": 0,
+      "position": [
+        0.0,
+        0.0,
+        0.0
+      ],
+      "rotation": [
+        0.0,
+        0.0,
+        0.0,
+        1.0
+      ],
+      "scale": [
+        1.0,
+        1.0,
+        1.0
+      ]
+    },
+    {
+      "Particle System": {
+        "Acceleration": [
+          0.0,
+          0.0,
+          0.0
+        ],
+        "Alignment": "Billboard",
+        "Alpha Curve": "[[0,1,0,0],[0.35,0.75,0,0],[1,0,0,0]]",
+        "Angular Velocity Max": 0.0,
+        "Angular Velocity Min": 0.0,
+        "Blend Frames": false,
+        "Blend Mode": "Additive",
+        "Bounce": 0.30000001192092896,
+        "Burst Count": 1,
+        "Burst Interval": 0.0,
+        "Collision": "Off",
+        "Collision Friction": 0.10000000149011612,
+        "Collision Life Loss": 0.0,
+        "Collision Plane Y": 0.0,
+        "Collision Radius": 0.009999999776482582,
+        "Curve Editor ID": "",
+        "Drag": 0.0,
+        "Duration": 0.10000000149011612,
+        "Emission Curve": "[[0,1,0,0],[1,1,0,0]]",
+        "Emitting": false,
+        "End Alpha": 1.0,
+        "End Color": [
+          1.0,
+          0.6600000262260437,
+          0.2199999988079071
+        ],
+        "End Size": 0.04179999977350235,
+        "Gravity Modifier": 0.0,
+        "Intensity": 18.0,
+        "Lifetime": 0.03799999877810478,
+        "Lifetime Randomness": 0.07999999821186066,
+        "Local Space": true,
+        "Looping": false,
+        "Max Bounces": 4,
+        "Max Particles": 8,
+        "Pivot X": 0.0,
+        "Pivot Y": 0.0,
+        "Random Start Frame": false,
+        "Rate": 0.0,
+        "Rate Over Distance": 0.0,
+        "Rotation Max": 360.0,
+        "Rotation Min": 0.0,
+        "Shader": "Default",
+        "Shape": "Point",
+        "Shape Box": [
+          1.0,
+          1.0,
+          1.0
+        ],
+        "Shape Length": 1.0,
+        "Shape Radius": 0.5,
+        "Shape Surface": false,
+        "Sheet Columns": 1,
+        "Sheet FPS": 0.0,
+        "Sheet Rows": 1,
+        "Size Curve": "[[0,1,0,0],[1,1,0,0]]",
+        "Size Randomness": 0.11999999731779099,
+        "Smoke Density": 1.7999999523162842,
+        "Smoke Evolution": 0.6499999761581421,
+        "Smoke Noise Scale": 3.0,
+        "Smoke Softness": 0.6499999761581421,
+        "Smoke Turbulence": 0.3499999940395355,
+        "Speed Curve": "[[0,1,0,0],[1,1,0,0]]",
+        "Speed Randomness": 0.0,
+        "Spread": 0.0,
+        "Start Alpha": 1.0,
+        "Start Color": [
+          1.0,
+          1.0,
+          0.9399999976158142
+        ],
+        "Start Delay": 0.0,
+        "Start Size": 0.07599999755620956,
+        "Start Speed": 0.0,
+        "Texture": {
+          "path": "assets/Effects/Muzzle/T_MuzzleCore.png",
+          "pathGuid": "f32ddcde71af4a8c"
+        },
+        "Texture Channels": "Red Mask",
+        "Velocity Over Life": [
+          0.0,
+          0.0,
+          0.0
+        ],
+        "Velocity Stretch": 0.10000000149011612
+      },
+      "id": 8,
+      "name": "Muzzle Core",
+      "order": 8,
+      "parentId": 2,
+      "position": [
+        0.0,
+        0.0,
+        0.0
+      ],
+      "rotation": [
+        0.0,
+        0.0,
+        0.0,
+        1.0
+      ],
+      "scale": [
+        1.0,
+        1.0,
+        1.0
+      ]
+    },
+    {
+      "Particle System": {
+        "Acceleration": [
+          0.0,
+          0.05999999865889549,
+          0.0
+        ],
+        "Alignment": "Billboard",
+        "Alpha Curve": "[[0,0,0,0],[0.08,1,0,0],[0.45,0.8,0,0],[1,0,0,0]]",
+        "Angular Velocity Max": 20.0,
+        "Angular Velocity Min": -20.0,
+        "Blend Frames": true,
+        "Blend Mode": "Alpha Blended",
+        "Bounce": 0.30000001192092896,
+        "Burst Count": 1,
+        "Burst Interval": 0.0,
+        "Collision": "Off",
+        "Collision Friction": 0.10000000149011612,
+        "Collision Life Loss": 0.0,
+        "Collision Plane Y": 0.0,
+        "Collision Radius": 0.009999999776482582,
+        "Curve Editor ID": "",
+        "Drag": 2.4000000953674316,
+        "Duration": 1.0,
+        "Emission Curve": "[[0,1,0,0],[1,1,0,0]]",
+        "Emitting": false,
+        "End Alpha": 0.0,
+        "End Color": [
+          0.550000011920929,
+          0.550000011920929,
+          0.550000011920929
+        ],
+        "End Size": 0.2800000011920929,
+        "Gravity Modifier": 0.0,
+        "Intensity": 1.0,
+        "Lifetime": 1.0,
+        "Lifetime Randomness": 0.18000000715255737,
+        "Local Space": false,
+        "Looping": false,
+        "Max Bounces": 4,
+        "Max Particles": 32,
+        "Pivot X": 0.0,
+        "Pivot Y": 0.0,
+        "Random Start Frame": false,
+        "Rate": 0.0,
+        "Rate Over Distance": 0.0,
+        "Rotation Max": 360.0,
+        "Rotation Min": 0.0,
+        "Shader": "Procedural Smoke",
+        "Shape": "Point",
+        "Shape Box": [
+          1.0,
+          1.0,
+          1.0
+        ],
+        "Shape Length": 1.0,
+        "Shape Radius": 0.5,
+        "Shape Surface": false,
+        "Sheet Columns": 1,
+        "Sheet FPS": 0.0,
+        "Sheet Rows": 1,
+        "Size Curve": "[[0,1,0,0],[1,1,0,0]]",
+        "Size Randomness": 0.18000000715255737,
+        "Smoke Density": 0.9700000286102295,
+        "Smoke Evolution": 0.6499999761581421,
+        "Smoke Noise Scale": 3.0,
+        "Smoke Softness": 0.6499999761581421,
+        "Smoke Turbulence": 0.550000011920929,
+        "Speed Curve": "[[0,1,0,0],[1,1,0,0]]",
+        "Speed Randomness": 0.25,
+        "Spread": 12.0,
+        "Start Alpha": 0.05999999865889549,
+        "Start Color": [
+          0.6200000047683716,
+          0.6000000238418579,
+          0.5799999833106995
+        ],
+        "Start Delay": 0.0,
+        "Start Size": 0.07000000029802322,
+        "Start Speed": 0.8500000238418579,
+        "Texture": "",
+        "Texture Channels": "RGBA",
+        "Velocity Over Life": [
+          0.0,
+          0.07999999821186066,
+          0.0
+        ],
+        "Velocity Stretch": 0.10000000149011612
+      },
+      "id": 9,
+      "name": "Muzzle Smoke",
+      "order": 9,
+      "parentId": 2,
+      "position": [
+        0.0,
+        0.0,
+        0.0
+      ],
+      "rotation": [
+        -0.7071067690849304,
+        0.0,
+        0.0,
+        0.7071067690849304
+      ],
+      "scale": [
+        1.0,
+        1.0,
+        1.0
+      ]
+    },
+    {
+      "Particle System": {
+        "Acceleration": [
+          0.0,
+          0.05999999865889549,
+          0.0
+        ],
+        "Alignment": "Billboard",
+        "Alpha Curve": "[[0,0,0,0],[0.08,1,0,0],[0.45,0.8,0,0],[1,0,0,0]]",
+        "Angular Velocity Max": 20.0,
+        "Angular Velocity Min": -20.0,
+        "Blend Frames": true,
+        "Blend Mode": "Alpha Blended",
+        "Bounce": 0.30000001192092896,
+        "Burst Count": 1,
+        "Burst Interval": 0.0,
+        "Collision": "Off",
+        "Collision Friction": 0.10000000149011612,
+        "Collision Life Loss": 0.0,
+        "Collision Plane Y": 0.0,
+        "Collision Radius": 0.009999999776482582,
+        "Curve Editor ID": "",
+        "Drag": 2.4000000953674316,
+        "Duration": 1.0,
+        "Emission Curve": "[[0,1,0,0],[1,1,0,0]]",
+        "Emitting": false,
+        "End Alpha": 0.0,
+        "End Color": [
+          0.550000011920929,
+          0.550000011920929,
+          0.550000011920929
+        ],
+        "End Size": 0.2800000011920929,
+        "Gravity Modifier": 0.0,
+        "Intensity": 1.0,
+        "Lifetime": 1.0,
+        "Lifetime Randomness": 0.18000000715255737,
+        "Local Space": false,
+        "Looping": false,
+        "Max Bounces": 4,
+        "Max Particles": 32,
+        "Pivot X": 0.0,
+        "Pivot Y": 0.0,
+        "Random Start Frame": false,
+        "Rate": 0.0,
+        "Rate Over Distance": 0.0,
+        "Rotation Max": 360.0,
+        "Rotation Min": 0.0,
+        "Shader": "Procedural Smoke",
+        "Shape": "Point",
+        "Shape Box": [
+          1.0,
+          1.0,
+          1.0
+        ],
+        "Shape Length": 1.0,
+        "Shape Radius": 0.5,
+        "Shape Surface": false,
+        "Sheet Columns": 1,
+        "Sheet FPS": 0.0,
+        "Sheet Rows": 1,
+        "Size Curve": "[[0,1,0,0],[1,1,0,0]]",
+        "Size Randomness": 0.18000000715255737,
+        "Smoke Density": 0.9700000286102295,
+        "Smoke Evolution": 0.6499999761581421,
+        "Smoke Noise Scale": 3.0,
+        "Smoke Softness": 0.6499999761581421,
+        "Smoke Turbulence": 0.550000011920929,
+        "Speed Curve": "[[0,1,0,0],[1,1,0,0]]",
+        "Speed Randomness": 0.25,
+        "Spread": 12.0,
+        "Start Alpha": 0.05999999865889549,
+        "Start Color": [
+          0.6200000047683716,
+          0.6000000238418579,
+          0.5799999833106995
+        ],
+        "Start Delay": 0.0,
+        "Start Size": 0.07000000029802322,
+        "Start Speed": 0.8500000238418579,
+        "Texture": "",
+        "Texture Channels": "RGBA",
+        "Velocity Over Life": [
+          0.0,
+          0.07999999821186066,
+          0.0
+        ],
+        "Velocity Stretch": 0.10000000149011612
+      },
+      "id": 10,
+      "name": "Chamber Smoke",
+      "order": 10,
+      "parentId": 0,
+      "position": [
+        0.0,
+        0.014835676178336143,
+        0.08379893004894257
+      ],
+      "rotation": [
+        -0.4488673806190491,
+        0.5486397743225098,
+        0.4462863504886627,
+        0.5462059378623962
+      ],
+      "scale": [
+        1.0,
+        0.9999999403953552,
+        0.9999999403953552
+      ]
+    }
+  ],
   "formatVersion": 4,
   "models": [
     {
@@ -15,44 +606,6 @@
         "rootMotionBone": "",
         "rootMotionRotation": true,
         "rootMotionVertical": false
-      },
-      "Weapon Definition": {
-        "Muzzle Enabled": true,
-        "Flash Time": 0.055,
-        "Light Intensity": 18,
-        "Player Flash Scale": 0.35,
-        "Light Range": 7,
-        "Light Color": [1,0.72,0.38],
-        "Flame Texture": "assets/Effects/Muzzle/T_MuzzleFlame.png",
-        "Flame Glow": 150,
-        "Flame Scale": 1.75,
-        "Flame Color": [1,0.147,0.0177],
-        "Flame Lifetime Min": 0.125,
-        "Flame Lifetime Max": 0.175,
-        "Flame Length Min": 0.16,
-        "Flame Length Max": 0.32,
-        "Flame Width Min": 0.04,
-        "Flame Width Max": 0.06,
-        "Muzzle Style": 1,
-        "Flash Sprite": "muzzle_star",
-        "Flash Lifetime": 0.065,
-        "Flash Size Min": 0.26,
-        "Flash Size Max": 0.34,
-        "Flash Intensity": 14,
-        "Side Jets": true,
-        "Core Glow": true,
-        "Spark Count": 9,
-        "Smoke": true,
-        "Afterfire Smoke": true,
-        "Smoke Scale": 1,
-        "Smoke Lifetime Min": 2,
-        "Smoke Lifetime Max": 3,
-        "Smoke Alpha": 0.18,
-        "Animation Set": {
-          "path": "assets/Weapons/AKS74U/AKS74U.fpsanim",
-          "pathGuid": "c0ff631aac421f76"
-        },
-        "Description": "5.45 mm rifle. 30-round magazine, selectable semi/full-auto, magazine reload."
       },
       "id": 0,
       "materials": [
@@ -80,6 +633,62 @@
         0.0,
         0.0,
         1.0
+      ],
+      "scale": [
+        1.0,
+        1.0,
+        1.0
+      ],
+      "C# Script": {
+        "Source": {
+          "path": "assets/Scripts/WeaponDefinition.cs",
+          "pathGuid": "b72f5e84c34b4013"
+        },
+        "Class": "Tartarus.Gameplay.WeaponDefinition",
+        "Fields JSON": "{\"AfterfireSmoke\":false,\"AnimationSet\":{\"path\":\"assets/Weapons/AKS74U/AKS74U.fpsanim\",\"pathGuid\":\"c0ff631aac421f76\"},\"CoreGlow\":true,\"Description\":\"5.45 mm rifle. 30-round magazine, selectable semi/full-auto, magazine reload.\",\"FlameColor\":{\"X\":1.0,\"Y\":0.1469999998807907,\"Z\":0.01769999973475933},\"FlameGlow\":150.0,\"FlameLengthMax\":0.3199999928474426,\"FlameLengthMin\":0.1599999964237213,\"FlameLifetimeMax\":0.17499999701976776,\"FlameLifetimeMin\":0.125,\"FlameScale\":1.75,\"FlameTexture\":{\"path\":\"assets/Effects/Muzzle/T_MuzzleFlame.png\",\"pathGuid\":\"80898ac73b45551f\"},\"FlameWidthMax\":0.05999999865889549,\"FlameWidthMin\":0.03999999910593033,\"FlashIntensity\":14.0,\"FlashLifetime\":0.06499999761581421,\"FlashSizeMax\":0.3400000035762787,\"FlashSizeMin\":0.25999999046325684,\"FlashSprite\":\"muzzle_star\",\"FlashTime\":0.054999999701976776,\"LightColor\":{\"X\":1.0,\"Y\":0.7200000286102295,\"Z\":0.3799999952316284},\"LightIntensity\":18.0,\"LightRange\":7.0,\"MuzzleEnabled\":true,\"MuzzleStyle\":1,\"PlayerFlashScale\":0.3499999940395355,\"SideJets\":true,\"Smoke\":false,\"SmokeAlpha\":0.18000000715255737,\"SmokeLifetimeMax\":3.0,\"SmokeLifetimeMin\":2.0,\"SmokeScale\":1.0,\"SparkCount\":9,\"Magazine\":30,\"RoundsPerMinute\":700.0,\"AllowFullAuto\":true,\"BurstRounds\":0,\"ReloadHoldSeconds\":0.35,\"RegripMin\":10.0,\"RegripMax\":20.0,\"ImpactImpulse\":5.0,\"ImpactMaxSpeed\":7.0,\"ZeroDistance\":25.0,\"BulletHoleRadius\":0.0027,\"Damage\":34.0,\"HeadMultiplier\":3.0,\"LimbMultiplier\":0.75,\"FalloffStart\":25.0,\"FalloffEnd\":60.0,\"FalloffMin\":0.6,\"HasSightLine\":true,\"SightOrigin\":{\"X\":0.28145,\"Y\":0.05775,\"Z\":0.00013},\"SightDirection\":{\"X\":-0.999992,\"Y\":-0.00393,\"Z\":-0.000798}}",
+        "Enabled": true,
+        "Scripts": "[]",
+        "Next Script ID": 1
+      }
+    },
+    {
+      "C# Script": {
+        "Class": "Tartarus.Gameplay.OpticAttachment",
+        "Enabled": true,
+        "Fields JSON": "{\"AimPoint\":\"AimPoint_RedDot\",\"AimBlendTime\":0.2,\"DefaultOptic\":false}",
+        "Next Script ID": 1,
+        "Scripts": "[]",
+        "Source": {
+          "path": "assets/Scripts/OpticAttachment.cs",
+          "pathGuid": "190ce9c4c235c4fd"
+        }
+      },
+      "id": 1,
+      "materials": [
+        {
+          "guid": "56808c6d3bc35b5a",
+          "path": "assets/Materials/Optic_RedDot.mat"
+        },
+        {
+          "guid": "c3b7a89aa76c6d7c",
+          "path": "assets/Materials/RedDot.mat"
+        }
+      ],
+      "name": "RedDot",
+      "order": 1,
+      "parentId": 0,
+      "path": "assets/Models/RedDot.fbx",
+      "pathGuid": "bd44cb2692700cc6",
+      "position": [
+        0.0,
+        0.04012729600071907,
+        -0.07090123742818832
+      ],
+      "rotation": [
+        0.0,
+        -0.7071066498756409,
+        0.0,
+        0.70710688829422
       ],
       "scale": [
         1.0,

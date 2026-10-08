@@ -1,4 +1,5 @@
 using System.Reflection;
+using System.Text.Json;
 using System.Runtime.CompilerServices;
 using System.Runtime.InteropServices;
 using System.Runtime.Loader;
@@ -19,13 +20,21 @@ public static unsafe class Entry
         }
     }
     sealed record Instance(Script Script, string Class, string Fields, bool Faulted = false,
-        bool Awoken = false, bool Enabled = false, bool Started = false);
+        bool Awoken = false, bool Enabled = false, bool Started = false, bool PendingReload=false);
     static Context? context;
     static Assembly? assembly;
-    static IGameplay? gameplay;
+    static IProjectIntegration? integration;
     static readonly Dictionary<ulong, Instance> instances = new();
     static readonly Dictionary<string, string> descriptions = new();
     static string assemblyPath = "";
+    static readonly Dictionary<string,string> operationNames=new(StringComparer.Ordinal);
+    static string OperationName(nint address){
+        if(address==0)return "";byte* bytes=(byte*)address;int count=0;while(count<256 && bytes[count]!=0)count++;
+        if(count==256)return Utf8(address);
+        Span<char> chars=stackalloc char[256];int length=System.Text.Encoding.UTF8.GetChars(new ReadOnlySpan<byte>(bytes,count),chars);var name=chars[..length];
+        if(operationNames.GetAlternateLookup<ReadOnlySpan<char>>().TryGetValue(name,out var existing))return existing;
+        string value=new(name);if(operationNames.Count<256)operationNames[value]=value;return value;
+    }
     static string Utf8(nint text) => Marshal.PtrToStringUTF8(text) ?? "";
     static void Report(Exception e) { try { Engine.Log("C# error: " + (e.InnerException ?? e)); } catch { } }
     static ulong Key(uint entity, uint slot) => ((ulong)slot << 32) | entity;
@@ -43,29 +52,31 @@ public static unsafe class Entry
     }
     static void Reload(string path)
     {
-        var nextContext = new Context(path);
+        Context? nextContext=string.IsNullOrEmpty(path)?null:new Context(path);
         try
         {
-            Assembly next = nextContext.LoadFromStream(new MemoryStream(File.ReadAllBytes(path)));
-            IGameplay nextGameplay = (IGameplay)Activator.CreateInstance(next.GetTypes().Single(t => !t.IsAbstract && typeof(IGameplay).IsAssignableFrom(t)))!;
+            Assembly next=nextContext==null?typeof(Script).Assembly:nextContext.LoadFromStream(new MemoryStream(File.ReadAllBytes(path)));
+            Type? rootType=next.GetTypes().SingleOrDefault(t=>!t.IsAbstract && typeof(IProjectIntegration).IsAssignableFrom(t));
+            IProjectIntegration? nextIntegration=rootType==null?null:(IProjectIntegration)Activator.CreateInstance(rootType)!;
+            if(integration!=null && nextIntegration!=null)nextIntegration.LoadState(integration.SaveState());
             // Construct and validate replacements before touching the running assembly.
             var replacements = new Dictionary<ulong, Instance>();
             foreach (var (entity, item) in instances)
             {
                 Script script = Make(next, (uint)entity, (uint)(entity >> 32), item.Class, item.Fields);
                 script.IsEnabled = item.Script.IsEnabled;
-                replacements.Add(entity, item with { Script = script, Faulted = false });
+                replacements.Add(entity, item with { Script = script, Faulted = false, PendingReload=item.Awoken });
             }
             var states = instances.ToDictionary(x => x.Key, x => x.Value.Script.SaveState());
             foreach (var (entity, item) in replacements) item.Script.LoadState(states[entity]);
             Context? previous = context;
-            context = nextContext; assembly = next; gameplay = nextGameplay; assemblyPath = path;
+            context = nextContext; assembly = next; integration = nextIntegration; assemblyPath = path;
             instances.Clear(); foreach (var pair in replacements) instances.Add(pair.Key, pair.Value);
             descriptions.Clear();
             previous?.Unload();
-            Engine.Log("C# gameplay loaded: " + Path.GetFileName(path));
+            Engine.Log(string.IsNullOrEmpty(path)?"C# host ready (no project assembly)":"C# gameplay loaded: "+Path.GetFileName(path));
         }
-        catch { nextContext.Unload(); throw; }
+        catch { nextContext?.Unload(); throw; }
     }
     [UnmanagedCallersOnly(CallConvs = [typeof(CallConvCdecl)])]
     public static int Dispatch(int op, void* data, int size, void* callback)
@@ -79,12 +90,6 @@ public static unsafe class Entry
                 case 0:
                     if (size != ScriptAbi.Version) return -2;
                     Reload(Utf8((nint)data)); return 0;
-                case 1:
-                    if (size != sizeof(PlayerFrame) || gameplay == null) return -2;
-                    gameplay.Player(ref *(PlayerFrame*)data); return 0;
-                case 2:
-                    if (size != sizeof(WeaponFrame) || gameplay == null) return -2;
-                    gameplay.Weapon(ref *(WeaponFrame*)data); return 0;
                 case 3:
                     if (size != sizeof(EntityFrame) || assembly == null) return -2;
                     Entity(ref *(EntityFrame*)data); return 0;
@@ -92,9 +97,6 @@ public static unsafe class Entry
                     foreach (var item in instances.Values.ToArray()) Destroy(item);
                     instances.Clear(); return 0;
                 case 5: Reload(assemblyPath); return 0;
-                case 6:
-                    if (size != sizeof(ShotFrame) || gameplay == null) return -2;
-                    gameplay.Shot(ref *(ShotFrame*)data); return 0;
                 case 7:
                     if (size != sizeof(NativeRequest) || assembly == null) return -2;
                     Describe(ref *(NativeRequest*)data); return 0;
@@ -112,10 +114,61 @@ public static unsafe class Entry
                     if(size!=sizeof(NativeRequest))return -2;
                     if(((NativeRequest*)data)->Entity!=0)Editor.EditorHost.ToolsVisible=((NativeRequest*)data)->Result!=0;
                     ((NativeRequest*)data)->Result=Editor.EditorHost.ToolsVisible?1:0;return 0;
+                case 13:
+                    if(size!=sizeof(NativeRequest) || assembly==null)return -2;
+                    // Resolve defaults and serialized overrides without constructing a live scene instance.
+                    var request=(NativeRequest*)data;
+                    using(var fields=System.Text.Json.JsonDocument.Parse(Utf8(request->Text))) {
+                        var root=fields.RootElement;
+                        var script=Make(assembly,uint.MaxValue,0,root.GetProperty("class").GetString()!,root.GetProperty("fields").GetRawText());
+                        Engine.TextCall(30,ScriptFields.Save(script),ref *request);
+                    }
+                    return 0;
+                case 14:
+                    if(size!=sizeof(ProjectCall) || integration == null)return -2;
+                    var call=(ProjectCall*)data;
+                    return integration.Invoke(OperationName(call->Operation),call->Data,call->Size)?0:-2;
+                case 15:
+                    if(size!=sizeof(NativeRequest) || integration == null)return -2;
+                    var jsonRequest=(NativeRequest*)data;
+                    using(var document=System.Text.Json.JsonDocument.Parse(Utf8(jsonRequest->Text))) {
+                        var root=document.RootElement;
+                        Engine.TextCall(30,integration.Request(root.GetProperty("operation").GetString()!,root.GetProperty("data").GetRawText()),ref *jsonRequest);
+                    }
+                    return 0;
+                case 16:
+                    if(size!=sizeof(NativeRequest))return -2;
+                    DeliverPhysics(Utf8(((NativeRequest*)data)->Text));return 0;
                 default: return -2;
             }
         }
         catch (Exception e) { Report(e); return -1; }
+    }
+    static void DeliverPhysics(string json)
+    {
+        using var document=System.Text.Json.JsonDocument.Parse(json);
+        var receivers=instances.ToArray().ToLookup(pair=>(uint)pair.Key);
+        foreach(var e in document.RootElement.EnumerateArray()) {
+            uint target=e.GetProperty("target").GetUInt32(),other=e.GetProperty("other").GetUInt32();
+            int phase=e.GetProperty("phase").GetInt32();bool trigger=e.GetProperty("trigger").GetBoolean();
+            foreach(var pair in receivers[target]) {
+                var item=pair.Value;
+                if((uint)pair.Key!=target || !item.Enabled || item.Faulted || !item.Script.IsEnabled)continue;
+                if(!item.Script.gameObject.IsValid || !item.Script.gameObject.activeInHierarchy)continue;
+                try {
+                    if(trigger) {
+                        if(phase==0)item.Script.OnTriggerEnter(new(other));
+                        else if(phase==1)item.Script.OnTriggerStay(new(other));else item.Script.OnTriggerExit(new(other));
+                    } else {
+                        var point=e.GetProperty("point").Deserialize<System.Numerics.Vector3>(NativeServices.Json);
+                        var normal=e.GetProperty("normal").Deserialize<System.Numerics.Vector3>(NativeServices.Json);
+                        var collision=new Collision(new(other),point,normal,e.GetProperty("impulse").GetSingle(),e.GetProperty("speed").GetSingle());
+                        if(phase==0)item.Script.OnCollisionEnter(collision);
+                        else if(phase==1)item.Script.OnCollisionStay(collision);else item.Script.OnCollisionExit(collision);
+                    }
+                } catch(Exception error) {instances[pair.Key]=item with {Faulted=true};Report(error);}
+            }
+        }
     }
     static void Entity(ref EntityFrame frame)
     {
@@ -146,6 +199,7 @@ public static unsafe class Entry
             }
             if (!item.Awoken) { item = item with { Awoken = true }; instances[entity] = item; item.Script.Awake(); }
             if (!item.Enabled) { item = item with { Enabled = true }; instances[entity] = item; item.Script.OnEnable(); }
+            if(item.PendingReload) {item=item with {PendingReload=false};instances[entity]=item;item.Script.OnReload();}
             if (frame.Phase == 0) return;
             if (!item.Started) { item = item with { Started = true }; instances[entity] = item; item.Script.Start(); }
             if (frame.Phase == 2) item.Script.FixedUpdate(frame.Dt);
