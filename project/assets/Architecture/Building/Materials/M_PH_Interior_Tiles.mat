@@ -1,0 +1,31 @@
+{
+  "factorsScaleMaps": true,
+  "matVersion": 2,
+  "name": "M_PH_Interior_Tiles",
+  "properties": {
+    "_AOMap": "assets/Architecture/Building/Textures/PH_Interior_Tiles/interior_tiles_ao_2k.jpg",
+    "_AlbedoMap": "assets/Architecture/Building/Textures/PH_Interior_Tiles/interior_tiles_diff_2k.jpg",
+    "_BaseColor": [
+      1.0,
+      1.0,
+      1.0
+    ],
+    "_DoubleSided": false,
+    "_EmissiveColor": [
+      0.0,
+      0.0,
+      0.0
+    ],
+    "_EmissiveMap": "",
+    "_EmissiveStrength": 1.0,
+    "_Metallic": 0.0,
+    "_MetallicMap": "",
+    "_MetallicRoughnessMap": "",
+    "_NormalMap": "assets/Architecture/Building/Textures/PH_Interior_Tiles/interior_tiles_nor_gl_2k.jpg",
+    "_Roughness": 1.0,
+    "_RoughnessMap": "assets/Architecture/Building/Textures/PH_Interior_Tiles/interior_tiles_rough_2k.jpg",
+    "_Triplanar": false,
+    "_TriplanarScale": 1.0
+  },
+  "shader": "engine://Standard.shader"
+}

@@ -350,12 +350,16 @@ void NpcDirector::BuildNav(World& world) {
         std::filesystem::create_directories(std::filesystem::u8path(cache).parent_path(), ec);
         m_Nav.Save(cache, hash);
     }
+    // Only what the soldiers can walk to from their spawns: a building's roof is walkable to Recast too.
+    std::vector<glm::vec3> seeds;
+    for (const SpawnPoint& sp : m_Spawns) seeds.push_back(sp.Pos);
+    const int unreachable = m_Nav.KeepReachable(seeds, glm::vec3(2.0f, 0.6f, 2.0f));
     const int cover = m_Cover.Build(m_Nav, CoverTuning{m_Cfg.CoverSpacing, m_Cfg.CoverReach, m_Cfg.CoverKneeHeight, m_Cfg.CoverHeadHeight, m_Cfg.CoverStep});
     m_Crowd.Init(m_Nav, 16, 0.6f);
     const float ms = std::chrono::duration<float, std::milli>(std::chrono::steady_clock::now() - t0).count();
-    char msg[200];
-    std::snprintf(msg, sizeof msg, "Enemy AI: navigation mesh %s (%d polygons from %d triangles), %d cover points, %.0f ms.",
-                  loaded ? "loaded" : "built", m_Nav.PolyCount(), (int)tris.size() / 3, cover, ms);
+    char msg[256];
+    std::snprintf(msg, sizeof msg, "Enemy AI: navigation mesh %s (%d polygons from %d triangles, %d out of the spawns' reach), %d cover points, %.0f ms.",
+                  loaded ? "loaded" : "built", m_Nav.PolyCount(), (int)tris.size() / 3, unreachable, cover, ms);
     Log::Info(msg);
 }
 
@@ -442,6 +446,8 @@ int NpcDirector::Spawn(World& world, AssetLibrary& assets, int spawnIndex) {
     Scripting::NpcSpawnFrame spawn;spawn.Position=Pack(sp.Pos);spawn.Yaw=sp.Yaw;spawn.Now=m_Now;spawn.Index=n->Index;spawn.Weapon=sp.Weapon;
     if(sp.Weapon==2)spawn.Random=(int)m_Rng();spawn.Count=(int)members.size();spawn.Members=reinterpret_cast<std::uintptr_t>(members.data());Project("npc.spawn",spawn);
     glm::vec3 feet=Unpack(spawn.Feet);
+    // Stepped aside from a squadmate on the spawn: only to somewhere walkable from it (not through the wall into the next room).
+    if (feet != sp.Pos && !m_Nav.Walkable(sp.Pos, feet)) feet = sp.Pos;
     glm::vec3 snapped;
     if (m_Nav.Closest(feet, snapped, glm::vec3(2.0f, 3.0f, 2.0f))) feet = snapped;
     spawn.Position=Pack(feet);spawn.Count=0;Project("npc.spawn",spawn);
@@ -494,8 +500,9 @@ int NpcDirector::Spawn(World& world, AssetLibrary& assets, int spawnIndex) {
     n->Morale = 1.0f;
     n->SpawnedAt = m_Now;
     {
-        char msg[160];
-        std::snprintf(msg, sizeof msg, "Enemy AI: %s spawned in %.1f ms (entities %.1f%s, body %.1f, weapon %.1f ms).", n->Name.c_str(),
+        char msg[256];
+        std::snprintf(msg, sizeof msg, "Enemy AI: %s spawned at (%.2f, %.2f, %.2f) from spawn %d (%.2f, %.2f, %.2f) in %.1f ms (entities %.1f%s, body %.1f, weapon %.1f ms).",
+                      n->Name.c_str(), feet.x, feet.y, feet.z, spawnIndex, sp.Pos.x, sp.Pos.y, sp.Pos.z,
                       since(), entitiesMs, reused ? " reused" : "", bodyMs - entitiesMs, weaponMs);
         Log::Info(msg);
     }

@@ -1,0 +1,22 @@
+{
+  "folder": "assets/Furniture/Bathroom/Models",
+  "guid": "4631d9d5b3a43956",
+  "importer": {
+    "globalScale": 1.0,
+    "importAnimations": false,
+    "importNormals": true,
+    "importSkeleton": false,
+    "materialImportMode": 1,
+    "optimizeGraph": true,
+    "pivotOffset": [
+      -0.0,
+      0.007000000216066837,
+      0.026499999687075615
+    ]
+  },
+  "materialRemap": {
+    "Toilet": "assets/Furniture/Bathroom/Materials/M_Toilet.mat"
+  },
+  "metaVersion": 1,
+  "type": "model"
+}

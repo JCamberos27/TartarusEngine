@@ -1,0 +1,22 @@
+{
+  "folder": "assets/Furniture/Lighting/Models",
+  "guid": "5a576eecc3f92368",
+  "importer": {
+    "globalScale": 1.0,
+    "importAnimations": false,
+    "importNormals": true,
+    "importSkeleton": false,
+    "materialImportMode": 1,
+    "optimizeGraph": true,
+    "pivotOffset": [
+      -2.8415000438690186,
+      -0.006000000052154064,
+      0.0010000000474974513
+    ]
+  },
+  "materialRemap": {
+    "Lamps_C_on": "assets/Furniture/Lighting/Materials/M_Lamps_C.mat"
+  },
+  "metaVersion": 1,
+  "type": "model"
+}

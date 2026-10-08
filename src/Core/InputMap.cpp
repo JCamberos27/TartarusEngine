@@ -91,10 +91,12 @@ std::vector<Action> Defaults() {
         act("Inspect",  GLFW_KEY_I, kNone, kNone, kNone, kNone, kNone, false),
         act("Melee",    GLFW_KEY_Q, kNone, kNone, kNone, kNone, kNone, false),
         act("Holster",  GLFW_KEY_H, kNone, kNone, kNone, kNone, kNone, false),
-        // Attachments: muzzle, grip and optic. The scroll wheel steps through weapon slots.
-        act("MuzzleAttachment", GLFW_KEY_1, kNone, kNone, kNone, kNone, kNone, false),
-        act("GripAttachment", GLFW_KEY_2, kNone, kNone, kNone, kNone, kNone, false),
-        act("OpticAttachment", GLFW_KEY_3, kNone, kNone, kNone, kNone, kNone, false),
+        // Weapon slots: 1 = the controller's Animation Set (the AK), 2 = its Secondary Animation Set (the
+        // Remington 870), 3 = unarmed. The scroll wheel steps through the weapons too.
+        act("Weapon1",  GLFW_KEY_1, kNone, kNone, kNone, kNone, kNone, false),
+        act("Weapon2",  GLFW_KEY_2, kNone, kNone, kNone, kNone, kNone, false),
+        act("Weapon3",  GLFW_KEY_3, kNone, kNone, kNone, kNone, kNone, false),
+        act("Flashlight", GLFW_KEY_F, kNone, kNone, kNone, kNone, kNone, false),
     };
 }
 
@@ -231,10 +233,10 @@ std::vector<Action> FromJson(const nlohmann::json& j) {
         if (n == o.end() || !n->is_string() || n->get<std::string>().empty()) continue;
         Action a;
         a.Name = n->get<std::string>();
-        // Preserve authored key/gamepad bindings when upgrading the old weapon number keys.
-        if (a.Name == "Weapon1") a.Name = "MuzzleAttachment";
-        if (a.Name == "Weapon2") a.Name = "GripAttachment";
-        if (a.Name == "Weapon3") a.Name = "OpticAttachment";
+        // A settings file written while 1/2/3 cycled attachments: those keys are weapon slots again.
+        if (a.Name == "MuzzleAttachment") a.Name = "Weapon1";
+        if (a.Name == "GripAttachment") a.Name = "Weapon2";
+        if (a.Name == "OpticAttachment") a.Name = "Weapon3";
         a.Positive    = code(o, "positive", 0, kMouseBase + kMouseButtons - 1);
         a.Negative    = code(o, "negative", 0, kMouseBase + kMouseButtons - 1);
         a.AltPositive = code(o, "altPositive", 0, kMouseBase + kMouseButtons - 1);

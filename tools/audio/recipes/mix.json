@@ -69,7 +69,9 @@
       "ads_out": -22.0,
       "equip": -20.0,
       "unequip": -20.0,
-      "firemode": -20.0
+      "firemode": -20.0,
+      "flashlight_on": -21.0,
+      "flashlight_off": -21.0
     },
     "step": {
       "walk": -22.0,
