@@ -1,5 +1,6 @@
 #include "Player.h"
 #include "Scripting/ScriptRuntime.h"
+#include "Scripting/GameFrames.h"
 #include "Input.h"
 #include "InputMap.h"
 #include "PhysicsWorld.h"
@@ -61,7 +62,7 @@ void Player::Update(float dt, World& world, GLFWwindow* window, bool readInput) 
     f.WishVelocity={WishVelocity.x,WishVelocity.y,WishVelocity.z};
     f.SinceGrounded=m_SinceGrounded; f.JumpBuffer=m_JumpBuffer;
     f.Grounded=Grounded; f.Crouched=Crouched; f.Jumped=Jumped;
-    if(!Scripting::Invoke(1,&f,sizeof f)) return;
+    if(!Scripting::InvokeProject("player",&f,sizeof f)) return;
     Cam.Yaw=f.Yaw; Cam.Pitch=f.Pitch; MoveInput={f.MoveX,f.MoveY};
     m_SinceGrounded=f.SinceGrounded; m_JumpBuffer=f.JumpBuffer;
     Grounded=f.Grounded!=0; Crouched=f.Crouched!=0; Jumped=f.Jumped!=0;

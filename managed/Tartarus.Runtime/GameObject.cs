@@ -7,6 +7,7 @@ public readonly partial record struct GameObject
 {
     public static GameObject Invalid => new(uint.MaxValue);
     public bool IsValid { get { NativeRequest r = new() { Entity = Id }; return Engine.Call(60, ref r) != 0; } }
+    public bool activeInHierarchy { get { NativeRequest r = new() { Entity = Id }; return Engine.Call(59, ref r) != 0; } }
     public string name { get => NativeServices.Read<string>(63, Id); set => NativeServices.Write(64, Id, value); }
     public GameObject? parent {
         get { NativeRequest r = new() { Entity = Id }; if (Engine.Call(65, ref r) == 0) throw new InvalidOperationException("Invalid object"); return r.Entity == uint.MaxValue ? null : new(r.Entity); }

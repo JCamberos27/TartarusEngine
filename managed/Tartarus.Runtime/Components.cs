@@ -88,6 +88,7 @@ public sealed class Animator : Component
 }
 public static class Input
 {
+    public static bool GetKeyDown(int key) {if(key<0 || key>348)throw new ArgumentOutOfRangeException(nameof(key));NativeRequest r=new(){Result=9,Script=(uint)key};return Engine.Call(99,ref r)!=0;}
     public static float GetAxis(string action) => Engine.Axis(action);
     public static bool GetButton(string action) => Engine.Button(action);
     public static bool GetButtonDown(string action) => Engine.Button(action, pressed: true);

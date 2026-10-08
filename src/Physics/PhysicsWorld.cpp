@@ -253,6 +253,7 @@ struct PhysicsState {
 // Whole world lives or dies as one unit between Create()/Destroy(), so a single owning pointer
 // (not a pile of file-scope globals) keeps the lifetime obvious and the teardown ordered.
 PhysicsState* g_State = nullptr;
+std::uint64_t g_SimulationGeneration=0;
 
 constexpr float kDefaultFixedStep = 1.0f / 60.0f;
 constexpr int   kMaxSubSteps      = 4;
@@ -1044,6 +1045,7 @@ void Create(const World& world) {
     s->controllerMgr = PxCreateControllerManager(*s->scene);
 
     g_State = s;
+    ++g_SimulationGeneration;
     Log::Info("PhysX world created (" + std::to_string(g_Core->workers) + " worker threads).");
 
     BuildActors(*s, world);
@@ -1054,6 +1056,7 @@ void Destroy() {
     if (!g_State) return;
     PhysicsState* s = g_State;
     g_State = nullptr; // clear first so a re-entrant Step() during teardown is a no-op
+    ++g_SimulationGeneration;
 
     // Reverse construction order. scene->release() drops every actor/shape it owns. The core
     // (physics, dispatcher, materials, cooked meshes) stays up for the next Play (#167).
@@ -1194,7 +1197,11 @@ bool PoseIsFinite(const PxTransform& p) {
            ok(p.q.x) && ok(p.q.y) && ok(p.q.z) && ok(p.q.w);
 }
 
+namespace {std::uint64_t g_EventSequence=0;}
+std::uint64_t EventSequence() {return g_EventSequence;}
+std::uint64_t SimulationGeneration() {return g_SimulationGeneration;}
 void Step(float dt, World& world, const std::function<void(float fixedDt)>& onFixedStep) {
+    ++g_EventSequence;
     if (!g_State || !g_State->scene) return;
     // dt arrives time-scaled (Time::DeltaTime); the debug-draw history fades in real time.
     const float rawDt = Time::UnscaledDeltaTime();
@@ -2651,6 +2658,7 @@ int CopyDebugLines(float* out, int maxLines) {
 
 void StepOneSubstep(World& world) {
     if (!g_State || !g_State->scene) return;
+    ++g_EventSequence;
     g_State->triggerEvents.clear();
     g_State->enteredThisFrame.clear();
     g_State->contactEvents.clear();

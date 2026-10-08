@@ -20,6 +20,8 @@
 // script paths), .mat textures and shaders, .controller clips, the Build Settings scene list and
 // the editor's last-opened scene - so a rename or move outside the editor keeps every link.
 namespace AssetDatabase {
+// Changes whenever the identity maps change; used to invalidate resolved-reference caches.
+std::uint64_t Revision();
 
 // Walks ProjectPaths::Root() and calls EnsureGuid on every file with a known asset extension,
 // creating missing .meta files. Safe to call multiple times (idempotent per path).

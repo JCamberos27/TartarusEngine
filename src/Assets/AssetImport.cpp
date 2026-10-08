@@ -95,6 +95,27 @@ bool SameContents(const std::string& a, const std::string& b) {
     return true;
 }
 
+std::string ProjectImportDirectory(const std::string& projectRoot, const std::string& source,
+                                   const std::string& libraryRoot, const std::string& subfolder) {
+    auto key = [](const std::string& path) {
+        std::error_code ec;
+        std::string result = fs::absolute(fs::u8path(path), ec).lexically_normal().generic_string();
+        if (ec) return std::string{};
+        while (result.size() > 1 && result.back() == '/') result.pop_back();
+#ifdef _WIN32
+        for (char& c : result) c = (char)std::tolower((unsigned char)c);
+#endif
+        return result;
+    };
+    const std::string library = libraryRoot.empty() ? std::string{} : key(libraryRoot);
+    const std::string file = key(source);
+    const bool externalLibrary = !library.empty() && (file == library || file.rfind(library + "/", 0) == 0);
+    fs::path directory = fs::u8path(projectRoot) / "assets";
+    if (externalLibrary) directory /= "External";
+    if (!subfolder.empty()) directory /= fs::u8path(subfolder);
+    return directory.lexically_normal().generic_string();
+}
+
 FolderCopy CopyFolderInto(const std::string& sourceDir, const std::string& destParent) {
     FolderCopy out;
     std::error_code ec;

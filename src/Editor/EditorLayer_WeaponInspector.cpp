@@ -886,29 +886,38 @@ void DrawBarrel(PropertyRows& r, FirstPersonAnimationSet& s, const FirstPersonBa
         }
     }
 
-    r.Heading("Zeroing");
-    r.Float("Zero Distance", g.ZeroDistance, 0.5f, 0.0f, 500.0f, "%.0f m",
-            "Rounds and the laser cross the sight line this far out: dead on the front post there, a little low closer, a little high past it. 0 = straight down the bore.");
-    if (g.HasSightLine) {
-        r.Value("Sight Line", "saved", ("Origin " + vec(g.SightOrigin, 4) + "\nDirection " + vec(g.SightDirection, 5)).c_str());
-        if (ActionButton(ICON_FA_ROTATE "  Re-measure Sight Line",
-                         "Forget the saved sight line: Play measures it again the next time the sights settle (aim, stand still, don't fire)",
-                         false, ImVec2(-FLT_MIN, 0.0f))) {
-            g.HasSightLine = false;
-            r.MarkChanged();
+    if(s.HasLegacyGameplay) {
+        r.Heading("Zeroing");
+        r.Float("Zero Distance", g.ZeroDistance, 0.5f, 0.0f, 500.0f, "%.0f m",
+                "Rounds and the laser cross the sight line this far out: dead on the front post there, a little low closer, a little high past it. 0 = straight down the bore.");
+        if (g.HasSightLine) {
+            r.Value("Sight Line", "saved", ("Origin " + vec(g.SightOrigin, 4) + "\nDirection " + vec(g.SightDirection, 5)).c_str());
+            if (ActionButton(ICON_FA_ROTATE "  Re-measure Sight Line",
+                             "Forget the saved sight line: Play measures it again the next time the sights settle (aim, stand still, don't fire)",
+                             false, ImVec2(-FLT_MIN, 0.0f))) {
+                g.HasSightLine = false;
+                r.MarkChanged();
+            }
+        } else if (report && report->SightMeasured) {
+            r.Value("Sight Line", "measured, not saved", ("Origin " + vec(report->SightOrigin, 4) + "\nDirection " + vec(report->SightDirection, 5)).c_str());
+            if (ActionButton(ICON_FA_FLOPPY_DISK "  Save Measured Sight Line", "Keep what Play measured, so the zero is right from the first shot",
+                             false, ImVec2(-FLT_MIN, 0.0f))) {
+                g.HasSightLine = true;
+                g.SightOrigin = report->SightOrigin;
+                g.SightDirection = report->SightDirection;
+                r.MarkChanged();
+            }
+        } else {
+            r.Value("Sight Line", "not measured",
+                    "In Play, aim and hold still for about two seconds without firing: the sight line is measured, and Save appears here.");
         }
-    } else if (report && report->SightMeasured) {
-        r.Value("Sight Line", "measured, not saved", ("Origin " + vec(report->SightOrigin, 4) + "\nDirection " + vec(report->SightDirection, 5)).c_str());
-        if (ActionButton(ICON_FA_FLOPPY_DISK "  Save Measured Sight Line", "Keep what Play measured, so the zero is right from the first shot",
-                         false, ImVec2(-FLT_MIN, 0.0f))) {
-            g.HasSightLine = true;
-            g.SightOrigin = report->SightOrigin;
-            g.SightDirection = report->SightDirection;
-            r.MarkChanged();
-        }
+
     } else {
-        r.Value("Sight Line", "not measured",
-                "In Play, aim and hold still for about two seconds without firing: the sight line is measured, and Save appears here.");
+        ImGui::TextWrapped("Edit zero distance and the sight line on the weapon prefab's WeaponDefinition.");
+        if(report && report->SightMeasured) {
+            r.Value("Measured Sight Origin",vec(report->SightOrigin,4).c_str());
+            r.Value("Measured Sight Direction",vec(report->SightDirection,5).c_str());
+        }
     }
 
     r.Heading("Ejected Cases");
@@ -916,7 +925,7 @@ void DrawBarrel(PropertyRows& r, FirstPersonAnimationSet& s, const FirstPersonBa
     r.Check("Eject Cases", ej.Enabled, "Throw a spent case out of the ejection port. They lie where they land until the player is\n"
                                    "well away and can't see them.");
     if (ej.Enabled) {
-        r.Path("Case Model", ej.Model, {AssetExts::Models, false, "ASSET_MODEL_PATH", true, "(none)", "Models\0*.fbx;*.gltf;*.glb;*.obj;*.dae\0All Files\0*.*\0", false, nullptr}, "The case mesh (.fbx).");
+        r.Path("Case Model", ej.Model, {AssetExts::Models, false, "ASSET_MODEL_PATH", true, "(none)", "Models\0*.fbx;*.gltf;*.glb;*.obj;*.dae\0All Files\0*.*\0", false, nullptr}, "The case mesh (.fbx). tools/weapons/extract_casings.py makes them from the weapon FBXs.");
         r.Path("Case Material", ej.Material, {AssetExts::Materials, false, "ASSET_MATERIAL_PATH", true, "(keep import)", "Materials\0*.mat\0All Files\0*.*\0", false, nullptr}, "A .mat for every submesh of the case; empty keeps the import.");
         bool onEvent = ej.When == FirstPersonEjectSettings::Trigger::Event;
         if (r.Check("On Eject Event", onEvent,
@@ -1184,7 +1193,7 @@ void EditorLayer::DrawWeaponDefinitionEditor(const std::string& path) {
         ImGui::OpenPopup("##copyfrom");
     if (ImGui::BeginPopup("##copyfrom")) {
         ImGui::TextDisabled("Sections to copy");
-        ImGui::Checkbox("Gameplay (magazine, fire rate, impacts)", &s_copyGameplay);
+        if(s.HasLegacyGameplay) ImGui::Checkbox("Legacy gameplay (magazine, fire rate, impacts)", &s_copyGameplay);
         ImGui::Checkbox("Aim-down-sights", &s_copyAds);
         ImGui::Checkbox("Barrel and laser", &s_copyBarrel);
         ImGui::Checkbox("Recoil", &s_copyRecoil);
@@ -1201,7 +1210,7 @@ void EditorLayer::DrawWeaponDefinitionEditor(const std::string& path) {
                 Log::Warn("Copy Settings: couldn't read '" + other + "': " + err);
                 continue;
             }
-            if (s_copyGameplay) s.Gameplay = from.Gameplay;
+            if (s.HasLegacyGameplay && from.HasLegacyGameplay && s_copyGameplay) s.Gameplay = from.Gameplay;
             if (s_copyAds) s.Ads = from.Ads;
             if (s_copyBarrel) { s.Muzzle = from.Muzzle; s.Laser = from.Laser; }
             WeaponProceduralSettings merged = from.Procedural;
@@ -1344,7 +1353,7 @@ void EditorLayer::DrawWeaponDefinitionEditor(const std::string& path) {
     if (r.Section(ICON_FA_BULLSEYE, "Aim-Down-Sights", summary, true)) DrawAds(r, s, ctx, path);
 
     std::snprintf(summary, sizeof summary, "%d rounds, %.0f rpm", g.Magazine, g.RoundsPerMinute);
-    if (r.Section(ICON_FA_GUN, "Gameplay", summary, true)) {
+    if (s.HasLegacyGameplay && r.Section(ICON_FA_GUN, "Legacy Gameplay", summary, false)) {
         r.Int("Magazine", g.Magazine, 1, 1000, "Rounds per magazine.");
         r.Float("Rounds / Minute", g.RoundsPerMinute, 5.0f, 60.0f, 2000.0f, "%.0f", "Full-auto cadence.");
         r.Check("Full-Auto", g.AllowFullAuto, "Off for a semi-only weapon: the fire-mode key then does nothing.");
@@ -1374,6 +1383,7 @@ void EditorLayer::DrawWeaponDefinitionEditor(const std::string& path) {
         r.Float("Max Speed", g.ImpactMaxSpeed, 0.1f, 0.0f, 50.0f, "%.1f m/s", "Caps the velocity one round can add, so light props fly without rocketing off.");
     }
 
+    if(!s.HasLegacyGameplay) ImGui::TextWrapped("Weapon stats and damage are authored on the prefab root C# WeaponDefinition script.");
     const FirstPersonBarrelReport* barrel = FindBarrelReport(path);
     std::snprintf(summary, sizeof summary, "%s, %s", s.Muzzle.Auto ? "auto muzzle" : "set muzzle", s.Laser.Enabled ? "laser" : "no laser");
     if (r.Section(ICON_FA_LOCATION_CROSSHAIRS, "Barrel & Laser", summary, true)) DrawBarrel(r, s, barrel);

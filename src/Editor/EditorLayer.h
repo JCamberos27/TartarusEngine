@@ -83,6 +83,7 @@ struct AssetGridCell {
 struct AnimatorWindowState; // the Animator window's state (EditorLayer_Animator*.cpp)
 
 class EditorLayer {
+    friend struct EditorHistoryTestAccess;
     friend struct EditorUiTestAccess; // --editor-tests (src/Tests/EditorUiTests.cpp)
 public:
     // Declared (rather than left implicit) and defined in the .cpp — a stylistic match for the
@@ -1118,9 +1119,9 @@ private:
     bool CanSnapSelectionToGround(World& world) const;
     void SnapSelectionToGround(World& world);
 
-    // Set in Init() to ProjectPaths::Resolve("scenes/Sandbox.json") — the project folder, not the
+    // Set in Init() from the project startup scene — the project folder, not the
     // working directory. Left as a bare filename here only as a harmless pre-Init default.
-    std::string m_CurrentScenePath = "scenes/Sandbox.json";
+    std::string m_CurrentScenePath;
     bool m_Dirty = false;
     // Count of real-edit (non-SelectionOnly) entries currently on m_UndoStack — NOT the same as
     // m_UndoStack.size() since Phase 6 item 6 / Q6, which also pushes a SelectionOnly entry for
@@ -1391,11 +1392,17 @@ private:
     static constexpr size_t kMaxHistory = 100;
     EditorFileHistory::Journal m_FileJournal;
     bool m_GlobalUndoActive = false, m_GlobalUndoApplying = false;
+    bool m_GlobalUndoHasScene = false;
+    // Last committed authored state. Navigation must never serialize the scene; controls
+    // that report a change after updating their value still need this pre-edit state.
+    std::string m_CurrentUndoScene;
     bool m_ViewportNavDrag = false; // a right/middle drag that began over the Scene view is held (UndoTrigger.h)
     bool m_RequestGlobalUndo = false, m_RequestGlobalRedo = false;
     std::string m_GlobalUndoScene, m_GlobalUndoLabel;
     std::vector<int> m_GlobalUndoSelection;
     void BeginGlobalUndoFrame(const World& world);
+    void EnsureUndoScene(const World& world);
+    void BeginSceneUndo(const World& world, const std::string& label);
     void FinishGlobalUndo(const World& world, bool force = false);
     void ReloadHistoryFiles(AssetLibrary& assets,const std::vector<EditorFileHistory::State>& files);
 
@@ -2235,7 +2242,9 @@ private:
         // naming a ComponentRegistry component gains Open in Window / Alt+drag out, Ctrl+click
         // picking for the multi-component clipboard, Keep Changes After Play, and the A / X
         // hover keys.
-        entt::entity entity = entt::null);
+        entt::entity entity = entt::null,
+        // Optional visible title; label remains the stable component identity.
+        const char* displayLabel = nullptr);
 
     // #178 - every .preset under the project whose "component" matches `component`, as
     // {display name, path}. Rescanned when the menu opens; presets are few and this is not a

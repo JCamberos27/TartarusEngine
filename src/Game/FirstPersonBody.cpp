@@ -1,3 +1,6 @@
+#include "Scripting/GameFrames.h"
+#include "Scripting/ScriptRuntime.h"
+#include <stdexcept>
 #include "FirstPersonBody.h"
 #include "Profiler.h"
 #include "BodyDebugDraw.h"
@@ -836,154 +839,77 @@ void FirstPersonBody::Tick(World& world, const Player& player, const Camera& cam
     world.SetWorldPose(m_Body, m_Feet, YawRotation(m_Yaw));
     auto fireTrigger = [&](AnimatorControllerComponent& a, const char* name) { a.SetTrigger(name); m_LastTrigger = name; m_SinceTrigger = 0.0f; };
 
-    // The movement, in the body's frame, eased so the gait changes smoothly - as the blend tree's
-    // speeds (a player faster than the clips asks for the clip that matches its gait). Toward
-    // Responsiveness 1 it is how the capsule really moves (its acceleration, a wall stopping it)
-    // rather than what the input asks.
-    const float responsiveness = std::clamp(cfg.Responsiveness, 0.0f, 1.0f);
-    const float clipSprint = std::max(cfg.SprintSpeed, 0.01f);
-    auto asClip = [&](const glm::vec3& v) {
-        const glm::vec2 local = FirstPersonBodyLocalMove(v, m_Yaw);
-        const float s = glm::length(local);
-        return s > 1e-4f ? local * (FirstPersonBodyClipSpeed(s, m_PlayerRunSpeed, m_PlayerSprintSpeed, m_RunSpeed, clipSprint) / s)
-                         : glm::vec2(0.0f);
-    };
-    const glm::vec3 moving(player.Velocity.x, 0.0f, player.Velocity.z);
-    const glm::vec2 target = responsiveness > 0.0f ? glm::mix(asClip(player.WishVelocity), asClip(moving), responsiveness)
-                                                   : asClip(player.WishVelocity);
-    // The gait clips play faster when the player outruns them, so the feet keep up.
-    const float movingSpeed = glm::length(moving);
-    // Sprint is input-driven even with a root-motion body; match its cadence to capsule travel.
-    const bool inputSprint=glm::length(glm::vec2(player.WishVelocity.x,player.WishVelocity.z))>m_PlayerRunSpeed*1.05f;
-    const float playRate = FirstPersonBodyPlayRate(
-        movingSpeed, FirstPersonBodyClipSpeed(movingSpeed, m_PlayerRunSpeed, m_PlayerSprintSpeed, m_RunSpeed, clipSprint), inputSprint?1.0f:responsiveness,
-        cfg.MaxPlayRate);
-    // Letting go at speed, the gait holds for the moment a stop clip is being picked (the blend would
-    // otherwise slow the body on its own first, and the stop clip's own travel come on top of it).
-    const bool holdForStop = cfg.StartStopClips && glm::length(target) < 0.01f && m_IdleTime < cfg.StopDebounce &&
-                         glm::length(m_Move) > (player.Crouched ? cfg.StopMinSpeedCrouched : cfg.StopMinSpeed);
-    if (!holdForStop) m_Move += (target - m_Move) * Follow(dt, cfg.ParamSmoothing);
-    m_AirTime = player.Grounded ? 0.0f : m_AirTime + dt;
-    m_Grounded = player.Grounded;
-    m_InLand = reg.valid(m_Driver) && reg.get<AnimatorControllerComponent>(m_Driver).InState(FPBody::kStateLand);
-
-    if (!reg.valid(m_Driver)) { m_Body = entt::null; return; }
-    auto& ac = reg.get<AnimatorControllerComponent>(m_Driver);
-    ac.SetFloat(FPBody::kPlayRate, playRate);
-
-    // The heading. Moving, the body faces the view (a quick ease, no pop). Standing still with a
-    // Turn Threshold, it keeps its heading until the view is that far off, then a turn clip carries
-    // it round (the clip's own yaw turns it, so the feet plant).
-    const bool still = player.Grounded && glm::length(glm::vec2(player.WishVelocity.x, player.WishVelocity.z)) < 0.1f &&
-                       glm::length(m_Move) < 0.2f;
-    m_Still = still && cfg.TurnThreshold > 0.0f;
-    m_MaxTurnRate = cfg.MaxTurnRate;
-    m_TurnThreshold = cfg.TurnThreshold;
-    float offset = FirstPersonBodyWrapAngle(m_ViewYaw - m_Yaw);
-    if (cfg.TurnThreshold <= 0.0f) {
-        m_Yaw = m_ViewYaw;
-        m_Turning = false;
-    } else if (m_Turning) {
-        m_TurnTime += dt;
-        if (ac.InState(FPBody::kStateTurn) || ac.InState(FPBody::kStateCrouchTurn)) {
-            const float step = glm::radians(ac.RootMotion.DeltaYaw);
-            m_Yaw += step;
-            m_TurnDone += step;
-        }
-        offset = FirstPersonBodyWrapAngle(m_ViewYaw - m_Yaw);
-        // Done when the clip has played out (a 180 takes longer than a 90), the view is reached, or
-        // the player moves off; the timeout is only a guard.
-        const bool clipDone = m_TurnTime > cfg.TurnMinTime && (!ac.InState(FPBody::kStateTurn) || ac.StateTime >= 0.97f);
-        if (!still || std::abs(offset) < glm::radians(cfg.TurnEndAngle) || clipDone || m_TurnTime > cfg.TurnTimeout) {
-            Log::Info("First Person Body: turned " + std::to_string(glm::degrees(m_TurnDone)).substr(0, 6) + " deg in " +
-                      std::to_string(m_TurnTime).substr(0, 4) + " s, " + std::to_string(glm::degrees(offset)).substr(0, 6) + " deg off the view.");
-            m_Turning = false;
-        }
-    } else if (still) {
-        if (FirstPersonBodyShouldTurn(offset, cfg.TurnThreshold)) {
-            m_Turning = true;
-            m_TurnTime = 0.0f;
-            m_TurnDone = 0.0f;
-            ac.SetFloat(FPBody::kTurnAngle, std::clamp(glm::degrees(offset), -180.0f, 180.0f));
-        }
-    } else {
-        m_Yaw += offset * Follow(dt, cfg.TurnMoveEase);
-    }
-    // The view can outrun a turn clip: the body never lags it by more than this (a bounded slide of
-    // the feet beats a chest twisted right round). Keep Mouse Sensitivity low enough that the turn clips keep up.
-    if (cfg.TurnThreshold > 0.0f) {
-        const float lag = FirstPersonBodyWrapAngle(m_ViewYaw - m_Yaw), maxLag = glm::radians(std::max(cfg.TurnThreshold + cfg.TurnLagMargin, cfg.TurnLagFloor));
-        if (std::abs(lag) > maxLag) m_Yaw = m_ViewYaw - std::copysign(maxLag, lag);
-    }
-    m_Yaw = FirstPersonBodyWrapAngle(m_Yaw);
-    m_Twist = FirstPersonBodyWrapAngle(m_ViewYaw - m_Yaw);
-    world.SetWorldPose(m_Body, m_Feet, YawRotation(m_Yaw));
-    ac.SetBool(FPBody::kTurning, m_Turning);
-
-    // Starting and stopping: a clip for each, picked by the direction, only from plain locomotion (a
-    // trigger fired elsewhere would wait and go off later). A stop needs a moment of no input
-    // (tapping between keys isn't one: 50 ms) and some speed to shed.
-    {
-        const glm::vec2 wishLocal = FirstPersonBodyLocalMove(player.WishVelocity, m_Yaw);
-        const float wishLen = glm::length(wishLocal);
-        const bool wantsMove = wishLen > 0.1f;
-        const bool plain = cfg.StartStopClips && player.Grounded && (ac.InState(FPBody::kStateLocomotion) || ac.InState(FPBody::kStateCrouchLoco)) && !m_Turning;
-        ac.SetBool(FPBody::kMoving, wantsMove);
-        // Standing still, dropping into or rising out of a crouch plays its transition clip; on the
-        // move it is just the crossfade between the gaits.
-        if (cfg.StartStopClips && player.Grounded && !wantsMove && glm::length(m_Move) < 0.4f && player.Crouched != m_WasCrouched) {
-            if (player.Crouched && ac.InState(FPBody::kStateLocomotion)) fireTrigger(ac, FPBody::kCrouchDown);
-            if (!player.Crouched && ac.InState(FPBody::kStateCrouchLoco)) fireTrigger(ac, FPBody::kCrouchUp);
-        }
-        m_WasCrouched = player.Crouched;
-        // How far the clips carry the body: logged, to tune them against the feel.
-        const bool inStop = ac.InState(FPBody::kStateStop) || ac.InState(FPBody::kStateStopRun), inStart = ac.InState(FPBody::kStateStart);
-        const float travel = glm::length(glm::vec2(ac.RootMotion.DeltaPosition.x, ac.RootMotion.DeltaPosition.z));
-        if (inStop) m_StopDistance += travel;
-        else if (m_StopDistance > 0.0f) {
-            Log::Info("First Person Body: the stop clip carried the body " + std::to_string(m_StopDistance).substr(0, 4) + " m.");
-            m_StopDistance = 0.0f;
-        }
-        if (inStart) m_StartDistance += travel;
-        else if (m_StartDistance > 0.0f) {
-            Log::Info("First Person Body: the start clip carried the body " + std::to_string(m_StartDistance).substr(0, 4) + " m.");
-            m_StartDistance = 0.0f;
-        }
-        if (wantsMove) {
-            const glm::vec2 dir = wishLocal / wishLen;
-            if (plain && m_IdleTime >= cfg.StartIdleTime && glm::length(m_Move) < cfg.StartMaxMove) {
-                ac.SetFloat(FPBody::kStartX, dir.x);
-                ac.SetFloat(FPBody::kStartY, dir.y);
-                fireTrigger(ac, FPBody::kStart);
-            }
-            m_LastDir = dir;
-            m_LastSprint = glm::length(glm::vec2(player.WishVelocity.x, player.WishVelocity.z)) > m_PlayerRunSpeed * 1.05f;
-            m_IdleTime = 0.0f;
-            m_MoveTime += dt;
-        } else {
-            const float before = m_IdleTime;
-            m_IdleTime += dt;
-            // A stop needs a run to stop from: a tap of the keys (or a step or two) just eases to a halt.
-            const bool ranEnough = m_MoveTime >= (player.Crouched ? cfg.StopMinRunTimeCrouched : cfg.StopMinRunTime);
-            if (before < cfg.StopDebounce && m_IdleTime >= cfg.StopDebounce) m_MoveTime = 0.0f;
-            if (plain && ranEnough && before < cfg.StopDebounce && m_IdleTime >= cfg.StopDebounce &&
-                glm::length(m_Move) > (player.Crouched ? cfg.StopMinSpeedCrouched : cfg.StopMinSpeed)) {
-                ac.SetFloat(FPBody::kStopX, m_LastDir.x);
-                ac.SetFloat(FPBody::kStopY, m_LastDir.y);
-                fireTrigger(ac, m_LastSprint && m_LastDir.y > cfg.StopRunForward ? FPBody::kStopRun : FPBody::kStop);
-            }
-        }
-    }
-
-    ac.SetFloat(FPBody::kMoveX, m_Move.x);
-    ac.SetFloat(FPBody::kMoveY, m_Move.y);
-    ac.SetFloat(FPBody::kSpeed, glm::length(m_Move));
-    ac.SetBool(FPBody::kSprint, glm::length(glm::vec2(player.WishVelocity.x, player.WishVelocity.z)) > m_PlayerRunSpeed * 1.05f);
-    ac.SetBool(FPBody::kGrounded, player.Grounded);
-    ac.SetBool(FPBody::kCrouched, player.Crouched);
-    // Off the ground for a moment (not a step down a stair): falling.
-    ac.SetBool(FPBody::kAirborne, m_AirTime > cfg.AirborneDelay);
-    if (player.Jumped) fireTrigger(ac, FPBody::kJump);
+    if(!reg.valid(m_Driver)){m_Body=entt::null;return;}
+    auto& ac=reg.get<AnimatorControllerComponent>(m_Driver);
+    Scripting::BodyMotionFrame f;
+    f.Velocity={player.Velocity.x,player.Velocity.y,player.Velocity.z};
+    f.WishVelocity={player.WishVelocity.x,player.WishVelocity.y,player.WishVelocity.z};
+    f.Move={m_Move.x,m_Move.y,0};
+    f.LastDir={m_LastDir.x,m_LastDir.y,0};
+    f.Dt=dt;
+    f.ViewYaw=m_ViewYaw;
+    f.Yaw=m_Yaw;
+    f.Twist=m_Twist;
+    f.AirTime=m_AirTime;
+    f.IdleTime=m_IdleTime;
+    f.MoveTime=m_MoveTime;
+    f.TurnTime=m_TurnTime;
+    f.TurnDone=m_TurnDone;
+    f.RootYaw=ac.RootMotion.DeltaYaw;
+    f.StateTime=ac.StateTime;
+    f.PlayerRunSpeed=m_PlayerRunSpeed;
+    f.PlayerSprintSpeed=m_PlayerSprintSpeed;
+    f.RunSpeed=m_RunSpeed;
+    f.ClipSprint=std::max(cfg.SprintSpeed,.01f);
+    f.Grounded=player.Grounded;
+    f.Crouched=player.Crouched;
+    f.WasCrouched=m_WasCrouched;
+    f.Turning=m_Turning;
+    f.Jumped=player.Jumped;
+    f.LastSprint=m_LastSprint;
+    f.Responsiveness=cfg.Responsiveness;
+    f.MaxPlayRate=cfg.MaxPlayRate;
+    f.ParamSmoothing=cfg.ParamSmoothing;
+    f.TurnThreshold=cfg.TurnThreshold;
+    f.TurnMinTime=cfg.TurnMinTime;
+    f.TurnEndAngle=cfg.TurnEndAngle;
+    f.TurnTimeout=cfg.TurnTimeout;
+    f.TurnMoveEase=cfg.TurnMoveEase;
+    f.TurnLagMargin=cfg.TurnLagMargin;
+    f.TurnLagFloor=cfg.TurnLagFloor;
+    f.StopDebounce=cfg.StopDebounce;
+    f.StartIdleTime=cfg.StartIdleTime;
+    f.StartMaxMove=cfg.StartMaxMove;
+    f.StopMinRunTimeCrouched=cfg.StopMinRunTimeCrouched;
+    f.StopMinRunTime=cfg.StopMinRunTime;
+    f.StopMinSpeedCrouched=cfg.StopMinSpeedCrouched;
+    f.StopMinSpeed=cfg.StopMinSpeed;
+    f.StopRunForward=cfg.StopRunForward;
+    f.AirborneDelay=cfg.AirborneDelay;
+    f.StartStopClips=cfg.StartStopClips;
+    f.IsTurn=ac.InState(FPBody::kStateTurn);
+    f.IsCrouchTurn=ac.InState(FPBody::kStateCrouchTurn);
+    f.IsLocomotion=ac.InState(FPBody::kStateLocomotion);
+    f.IsCrouchLoco=ac.InState(FPBody::kStateCrouchLoco);
+    if(!Scripting::InvokeProject("body.motion",&f,sizeof f))throw std::runtime_error("Project locomotion unavailable");
+    m_Yaw=f.Yaw;
+    m_Twist=f.Twist;
+    m_AirTime=f.AirTime;
+    m_IdleTime=f.IdleTime;
+    m_MoveTime=f.MoveTime;
+    m_TurnTime=f.TurnTime;
+    m_TurnDone=f.TurnDone;
+    m_WasCrouched=f.WasCrouched;
+    m_Turning=f.Turning;
+    m_LastSprint=f.LastSprint;
+    m_Still=f.Still;
+    m_Move={f.Move.x,f.Move.y};m_LastDir={f.LastDir.x,f.LastDir.y};m_Grounded=player.Grounded;m_InLand=ac.InState(FPBody::kStateLand);m_MaxTurnRate=cfg.MaxTurnRate;m_TurnThreshold=cfg.TurnThreshold;
+    world.SetWorldPose(m_Body,m_Feet,YawRotation(m_Yaw));
+    ac.SetFloat(FPBody::kPlayRate,f.PlayRate);if(f.SetTurnAngle)ac.SetFloat(FPBody::kTurnAngle,f.TurnAngle);ac.SetBool(FPBody::kTurning,f.Turning!=0);ac.SetBool(FPBody::kMoving,f.Moving!=0);
+    if(f.Triggers&4){ac.SetFloat(FPBody::kStartX,f.StartDir.x);ac.SetFloat(FPBody::kStartY,f.StartDir.y);}if(f.Triggers&24){ac.SetFloat(FPBody::kStopX,f.StopDir.x);ac.SetFloat(FPBody::kStopY,f.StopDir.y);}
+    const char* triggers[]{FPBody::kCrouchDown,FPBody::kCrouchUp,FPBody::kStart,FPBody::kStop,FPBody::kStopRun,FPBody::kJump};for(int i=0;i<6;++i)if(f.Triggers&(1<<i))fireTrigger(ac,triggers[i]);
+    ac.SetFloat(FPBody::kMoveX,m_Move.x);ac.SetFloat(FPBody::kMoveY,m_Move.y);ac.SetFloat(FPBody::kSpeed,glm::length(m_Move));ac.SetBool(FPBody::kSprint,f.Sprint!=0);ac.SetBool(FPBody::kGrounded,player.Grounded);ac.SetBool(FPBody::kCrouched,player.Crouched);ac.SetBool(FPBody::kAirborne,f.Airborne!=0);
+    const float travel=glm::length(glm::vec2(ac.RootMotion.DeltaPosition.x,ac.RootMotion.DeltaPosition.z));m_StopDistance=(ac.InState(FPBody::kStateStop)||ac.InState(FPBody::kStateStopRun))?m_StopDistance+travel:0;m_StartDistance=ac.InState(FPBody::kStateStart)?m_StartDistance+travel:0;
 
     // What the body is doing, for the Inspector's live readout and the Scene viewport's overlay.
     {

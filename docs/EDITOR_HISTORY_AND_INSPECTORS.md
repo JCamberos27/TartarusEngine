@@ -4,6 +4,8 @@ Ctrl+Z and Ctrl+Y use one chronological editor history; Ctrl+Shift+Z also redoes
 
 File history records the original bytes before the first write in an action, including binary files and GUID sidecars. Undoing creation removes the exact file; undoing deletion restores it. Rename restores both original and destination paths. Redo restores the final bytes. File restoration rolls back if a write fails. Imported/model-derived caches and compiler outputs are regenerated rather than journaled.
 
+History caches the last committed authored scene. Camera movement, scrolling, docking, search and ordinary selection do not serialize it. Scene controls request a transaction through PushUndo/StageUndo (managed commands use Undo.RecordScene/RecordObject); commits refresh the cache, and scene replacement, history restoration and external asset changes refresh its context. File-only actions reuse the history anchor. The profiler's **Undo Scene Snapshot** scope identifies initialization and scene-edit commit costs. See [PERFORMANCE.md](PERFORMANCE.md) for the interaction regression check.
+
 Text fields retain their normal character undo while typing; committed authored values join global history. Gameplay owns its input while the game viewport has captured the mouse. Release capture to use editor shortcuts. Asset undo remains available during Play, and its history survives Stop. Scene undo requires stopping Play because restoring the registry beneath live physics actors is unsafe. Runtime simulation is not an authored edit. Loading another scene or entering/exiting prefab editing creates a new scene history context. External IDE/Explorer changes and operating-system actions are outside this history.
 
 ## Recoil editing
@@ -15,6 +17,11 @@ Select a `.recoil` asset to tune its scalar settings and view read-only X/Y/Z cu
 `project/assets/Editor/GameplayInspectors.cs` supplies custom C# Inspectors for First Person Body, First Person Controller, Weapon Definition and Bob. Every other attachable C# script gets the shared searchable fallback. The FPS body has Overview, Rig & Camera, Arms & Aim, Locomotion, Turning & Transitions, Foot IK, NPC and Advanced pages. Search includes all pages, labels, groups and tooltips. Native fields retain their C++ asset pickers, bounds, conditional visibility and authoring helpers.
 
 These editors compile into `Tartarus.Editor.dll`, independently of gameplay, and are excluded from game exports. The native editor, world and ImGui ownership remain C++. Source-save compilation/reload is the same workflow used by editor windows.
+
+Weapon Definition targets `Tartarus.Gameplay.WeaponDefinition`, an ordinary project script in
+`assets/Scripts/WeaponDefinition.cs`. Its schema/defaults and Inspector belong to C#; it has no
+native component registration. Animation Set uses an `AssetReference` with a GUID-preserving
+picker, and light tint uses `[Color]`. Older native data migrates to a C# slot on read.
 
 ## Writing a custom Inspector
 

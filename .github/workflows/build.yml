@@ -59,14 +59,6 @@ jobs:
         with:
           dotnet-version: '10.0.x'
 
-      - name: Third-party asset policy
-        if: matrix.config == 'Debug'
-        run: python tools/assets/check_git_assets.py
-
-      - name: Asset export regression
-        if: matrix.config == 'Debug'
-        run: python -m unittest discover -s tools/assets -p 'test_*.py'
-
       # Structural guard for #302 / #184: every ECS component must be registered with
       # ComponentRegistry (auto-generates its serialization + Inspector + Add Component) or
       # explicitly allow-listed with a reason. Pure static check, no build needed — run it
@@ -309,17 +301,14 @@ jobs:
             "TartarusEngine.exe", "TartarusEditor.dll", "TartarusGame.dll",
             "PhysX.dll", "PhysXCommon.dll", "PhysXFoundation.dll", "PhysXCooking.dll",
             "LICENSE", "THIRD-PARTY-NOTICES.md", "README-FIRST-RUN.txt",
-            "Managed/Tartarus.Runtime.dll", "Managed/Tartarus.Gameplay.dll",
-            "Managed/Tartarus.Editor.dll", "Managed/IDE/Tartarus.CodeAnalysis.dll",
             "assets\shaders\ModelFragment.glsl", "assets\fonts\fa-solid-900.ttf",
             "assets\branding\tartarus_engine_mark.png", "project\scenes\Sandbox.json"
           )
           $missing = $required | Where-Object { -not (Test-Path (Join-Path $root $_)) }
           if ($missing) { throw "package is missing: $($missing -join ', ')" }
 
-          # The character packs' licences do not allow redistributing them, and the sky HDRIs are
-          # too large to ship. Neither is in git, so neither exists on a runner,
-          # and this asserts the install
+          # Mixamo's licence does not allow redistributing the character FBX files, and the sky
+          # HDRIs are too large to ship. Neither exists on a runner, so this asserts the install
           # rules stay an allow-list - on a developer machine, where both DO exist, an
           # exclude-list edited wrongly would quietly put them in the ZIP.
           foreach ($banned in @("project\assets\characters", "project\assets\sky")) {

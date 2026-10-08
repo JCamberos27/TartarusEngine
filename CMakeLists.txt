@@ -284,7 +284,6 @@ file(GLOB_RECURSE ENGINE_SOURCES CONFIGURE_DEPENDS
 list(REMOVE_ITEM ENGINE_SOURCES
   ${CMAKE_SOURCE_DIR}/src/Game/GameModule.cpp
   ${CMAKE_SOURCE_DIR}/src/Game/TransformControllerSystem.cpp
-  ${CMAKE_SOURCE_DIR}/src/Game/ScoringSystem.cpp
   ${CMAKE_SOURCE_DIR}/src/Editor/EditorModule.cpp
   ${CMAKE_SOURCE_DIR}/src/Editor/EditorModuleToolbar.cpp
   ${CMAKE_SOURCE_DIR}/src/Editor/EditorModuleAssetBrowser.cpp
@@ -397,41 +396,41 @@ endif()
 
 add_executable(TartarusEngine ${ENGINE_SOURCES} ${IMGUI_SOURCES} ${MESHOPT_SOURCES} ${RECAST_SOURCES})
 
-# The editor remains native. SDK builds and publishes the managed runtime and project gameplay.
+# The managed host/SDK is engine infrastructure; building the sample is an explicit option.
 find_program(TARTARUS_DOTNET dotnet REQUIRED)
 set(TARTARUS_MANAGED_DIR "${CMAKE_BINARY_DIR}/$<CONFIG>/Managed")
 file(GLOB TARTARUS_SDK_SOURCE CONFIGURE_DEPENDS "${CMAKE_SOURCE_DIR}/managed/Tartarus.Runtime/*.cs" "${CMAKE_SOURCE_DIR}/managed/Tartarus.Runtime/*.csproj")
-add_custom_target(TartarusScripts
+add_custom_target(TartarusRuntime
   COMMAND ${TARTARUS_DOTNET} build "${CMAKE_SOURCE_DIR}/managed/Tartarus.CodeAnalysis/Tartarus.CodeAnalysis.csproj"
     --configuration $<IF:$<CONFIG:Debug>,Debug,Release> --output "${TARTARUS_MANAGED_DIR}/IDE" --configfile "${CMAKE_SOURCE_DIR}/NuGet.Config" --nologo
   COMMAND ${TARTARUS_DOTNET} build "${CMAKE_SOURCE_DIR}/managed/Tartarus.Runtime/Tartarus.Runtime.csproj"
     --configuration $<IF:$<CONFIG:Debug>,Debug,Release> --output "${TARTARUS_MANAGED_DIR}" --configfile "${CMAKE_SOURCE_DIR}/NuGet.Config" --nologo
-  COMMAND ${TARTARUS_DOTNET} build "${CMAKE_SOURCE_DIR}/project/Scripts/Tartarus.Gameplay.csproj"
-    --configuration $<IF:$<CONFIG:Debug>,Debug,Release> --output "${TARTARUS_MANAGED_DIR}" --configfile "${CMAKE_SOURCE_DIR}/NuGet.Config" --nologo
-  COMMAND ${TARTARUS_DOTNET} build "${CMAKE_SOURCE_DIR}/project/Scripts/Tartarus.Editor.csproj"
-    --configuration $<IF:$<CONFIG:Debug>,Debug,Release> --output "${TARTARUS_MANAGED_DIR}" --configfile "${CMAKE_SOURCE_DIR}/NuGet.Config" --nologo
   COMMAND ${CMAKE_COMMAND} -E make_directory "${TARTARUS_MANAGED_DIR}/SDK"
+  COMMAND ${CMAKE_COMMAND} -E rm -f "${TARTARUS_MANAGED_DIR}/SDK/GameplayContracts.cs"
   COMMAND ${CMAKE_COMMAND} -E copy_if_different ${TARTARUS_SDK_SOURCE} "${CMAKE_SOURCE_DIR}/NuGet.Config" "${TARTARUS_MANAGED_DIR}/SDK"
   COMMAND ${CMAKE_COMMAND} -E make_directory "${TARTARUS_MANAGED_DIR}/SDK/Templates"
-  COMMAND ${CMAKE_COMMAND} -E copy_if_different
-    "${CMAKE_SOURCE_DIR}/project/Scripts/Tartarus.Gameplay.csproj"
-    "${CMAKE_SOURCE_DIR}/project/Scripts/Tartarus.Editor.csproj"
-    "${CMAKE_SOURCE_DIR}/project/Scripts/Directory.Build.props" "${TARTARUS_MANAGED_DIR}/SDK/Templates"
-  COMMAND ${CMAKE_COMMAND} -E copy_if_different
-    "${CMAKE_SOURCE_DIR}/project/assets/Scripts/Gameplay.cs"
-    "${CMAKE_SOURCE_DIR}/project/assets/Scripts/PlayerController.cs"
-    "${CMAKE_SOURCE_DIR}/project/assets/Scripts/WeaponController.cs" "${TARTARUS_MANAGED_DIR}/SDK/Templates"
-  COMMAND ${TARTARUS_DOTNET} build "${CMAKE_SOURCE_DIR}/tests/managed/Tartarus.Gameplay.Tests.csproj"
-    --configuration $<IF:$<CONFIG:Debug>,Debug,Release> --output "${CMAKE_BINARY_DIR}/$<CONFIG>/ScriptTests"
-    --configfile "${CMAKE_SOURCE_DIR}/NuGet.Config" --nologo
+  COMMAND ${CMAKE_COMMAND} -E copy_if_different "${CMAKE_SOURCE_DIR}/project/Scripts/Tartarus.Gameplay.csproj" "${CMAKE_SOURCE_DIR}/project/Scripts/Tartarus.Editor.csproj" "${CMAKE_SOURCE_DIR}/project/Scripts/Directory.Build.props" "${TARTARUS_MANAGED_DIR}/SDK/Templates"
   VERBATIM
 )
-add_dependencies(TartarusEngine TartarusScripts)
+option(TARTARUS_BUILD_SAMPLE_GAME "Build the workspace's sample gameplay/editor scripts" ON)
+add_custom_target(TartarusScripts
+  COMMAND ${TARTARUS_DOTNET} build "${CMAKE_SOURCE_DIR}/project/Scripts/Tartarus.Gameplay.csproj"
+    --configuration $<IF:$<CONFIG:Debug>,Debug,Release> --output "${CMAKE_SOURCE_DIR}/project/Scripts/bin" --configfile "${CMAKE_SOURCE_DIR}/NuGet.Config" --nologo
+  COMMAND ${TARTARUS_DOTNET} build "${CMAKE_SOURCE_DIR}/project/Scripts/Tartarus.Editor.csproj"
+    --configuration $<IF:$<CONFIG:Debug>,Debug,Release> --output "${CMAKE_SOURCE_DIR}/project/Scripts/bin" --configfile "${CMAKE_SOURCE_DIR}/NuGet.Config" --nologo
+  COMMAND ${TARTARUS_DOTNET} build "${CMAKE_SOURCE_DIR}/tests/managed/Tartarus.Gameplay.Tests.csproj"
+    --configuration $<IF:$<CONFIG:Debug>,Debug,Release> --output "${CMAKE_BINARY_DIR}/$<CONFIG>/ScriptTests" --configfile "${CMAKE_SOURCE_DIR}/NuGet.Config" --nologo
+  VERBATIM
+)
+add_dependencies(TartarusScripts TartarusRuntime)
+add_dependencies(TartarusEngine TartarusRuntime)
+if(TARTARUS_BUILD_SAMPLE_GAME)
+  add_dependencies(TartarusEngine TartarusScripts)
+endif()
 
 add_library(TartarusGame SHARED
   ${CMAKE_SOURCE_DIR}/src/Game/GameModule.cpp
   ${CMAKE_SOURCE_DIR}/src/Game/TransformControllerSystem.cpp
-  ${CMAKE_SOURCE_DIR}/src/Game/ScoringSystem.cpp
 )
 
 # Reloadable editor tools intentionally use a narrow host callback table rather than sharing
@@ -580,8 +579,9 @@ target_compile_definitions(TartarusEngine PRIVATE IMGUI_ENABLE_TEST_ENGINE)
 # variables, truncating conversions). /MP is unrelated to warnings but cheap to add here too —
 # parallel compilation noticeably cuts build times.
 # #173 - warnings are errors (MSVC /WX) for all three engine targets: the tree builds clean at /W4.
+# /bigobj: main.cpp's unoptimized Debug object outgrows the default COFF section limit (C1128).
 target_compile_options(TartarusEngine PRIVATE
-  $<$<CXX_COMPILER_ID:MSVC>:/W4 /WX /MP>
+  $<$<CXX_COMPILER_ID:MSVC>:/W4 /WX /MP /bigobj>
   $<$<NOT:$<CXX_COMPILER_ID:MSVC>>:-Wall -Wextra>
 )
 tartarus_enable_release_debug_info(TartarusEngine)
@@ -644,7 +644,6 @@ add_custom_command(TARGET TartarusEngine POST_BUILD
     "$<TARGET_FILE_DIR:TartarusEngine>/assets/licenses/ImGuiColorTextEdit.txt"
 )
 install(FILES "${CMAKE_SOURCE_DIR}/extern/ImGuiColorTextEdit/LICENSE" DESTINATION "assets/licenses" RENAME "ImGuiColorTextEdit.txt")
-install(FILES "${CMAKE_SOURCE_DIR}/extern/imcurve/LICENSE.txt" DESTINATION "assets/licenses" RENAME "ImCurve.txt")
 
 # Engine-owned smoke/regression scenes (audit TEST-101) — staged next to the exe as
 # assets/test-scenes/ so `--smoke-test` has meaningful, version-controlled coverage that does
@@ -688,7 +687,13 @@ endforeach()
 # library on Windows, which skips the .lib/.exp import pair an end user has no use for.
 install(TARGETS TartarusEngine RUNTIME DESTINATION ".")
 install(DIRECTORY "${CMAKE_BINARY_DIR}/$<CONFIG>/Managed/" DESTINATION "Managed"
-  PATTERN "obj" EXCLUDE PATTERN "bin" EXCLUDE)
+  PATTERN "obj" EXCLUDE PATTERN "bin" EXCLUDE
+  PATTERN "Tartarus.Gameplay*" EXCLUDE PATTERN "Tartarus.Editor*" EXCLUDE)
+if(TARTARUS_BUILD_SAMPLE_GAME)
+  install(DIRECTORY "${CMAKE_SOURCE_DIR}/project/Scripts/bin/" DESTINATION "project/Scripts/bin"
+    FILES_MATCHING PATTERN "Tartarus.Gameplay.dll" PATTERN "Tartarus.Gameplay.deps.json"
+    PATTERN "Tartarus.Editor.dll" PATTERN "Tartarus.Editor.deps.json")
+endif()
 install(FILES
   $<TARGET_FILE:TartarusGame>
   $<TARGET_FILE:TartarusEditor>
@@ -719,20 +724,14 @@ install(FILES
 #
 # That choice is load-bearing. project/assets/sky/ (Poly Haven HDRIs) is gitignored and absent
 # on CI, but it DOES exist in a developer's working tree; and the third-party packs under
-# assets/Characters/, assets/Weapons/, assets/Animations/Mocap/ and assets/Effects/ were never part
-# of the sample (their licences don't allow redistributing them; they aren't even in git).
-# An exclude-list that someone
+# assets/Characters/, assets/Weapons/ and assets/Animations/Mocap/ were never part of the sample
+# (Mixamo-style licences don't allow redistributing such files). An exclude-list that someone
 # later edits wrongly ships them; an allow-list
 # that someone later forgets to extend merely omits a folder from the sample. Wrong in the safe
 # direction.
 #
 # Library/ and screenshots/ are per-user output, not content. .shutter.wav is the exception -
 # the Screenshots folder's own sound, which is tracked and has to come along.
-#
-# The allowed folders also hold third-party files a developer fetched from the shared Drive:
-# the recorded sounds under assets/Audio/<category>/ and the Apartment's baked
-# textures. Absent on CI, present locally - so they are excluded here too. What remains is what
-# git tracks (the generated basketball sounds, the Apartment meshes, ...).
 foreach(_projdir scenes scripts assets/Scripts assets/Audio assets/Environments assets/Props assets/Materials assets/Test
                  assets/Animations/Controllers)
   if(EXISTS "${CMAKE_SOURCE_DIR}/project/${_projdir}")
@@ -741,9 +740,7 @@ foreach(_projdir scenes scripts assets/Scripts assets/Audio assets/Environments 
             PATTERN "*.recovery.json" EXCLUDE
             PATTERN "obj" EXCLUDE
             PATTERN "bin" EXCLUDE
-            PATTERN "*.json.bak"      EXCLUDE
-            REGEX "/assets/Audio/[^/]+/.*\\.wav$" EXCLUDE
-            REGEX "/assets/Environments/Apartment/Textures/.*\\.png$" EXCLUDE)
+            PATTERN "*.json.bak"      EXCLUDE)
   endif()
 endforeach()
 install(FILES

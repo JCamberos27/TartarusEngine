@@ -32,6 +32,7 @@ private:
     Texture* ParticleTexture(const std::string& path, bool flame);
     std::unordered_map<std::string, std::shared_ptr<Texture>> m_Textures;
     Shader* m_Shader = nullptr;
+    Shader* m_SmokeShader = nullptr;
     unsigned int m_Vao = 0;
     unsigned int m_Vbo = 0;
     size_t m_Capacity = 0; // instances the VBO can hold

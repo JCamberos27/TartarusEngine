@@ -83,24 +83,6 @@ are project assets and are **not** covered by the project's source-code license.
 
 ## Embedded C# IDE
 
-The shared curve editor vendors ImCurve at commit `8cc8dc3a971593c6ce5aa8f418776545b2dbc3bb`
-under `extern/imcurve`. Its Unlicense text is retained in `extern/imcurve/LICENSE.txt`;
-integration changes are documented in `extern/imcurve/README.md`. Upstream: https://github.com/jsoulier/imcurve.
-
 ImGuiColorTextEdit, commit ca2f9f1462e3b60e56351bc466acda448c5ea50d, is vendored under `extern/ImGuiColorTextEdit` with local integration patches. Copyright (c) 2017 BalazsJako; MIT license, reproduced in `extern/ImGuiColorTextEdit/LICENSE` and staged as `assets/licenses/ImGuiColorTextEdit.txt`. Upstream: https://github.com/BalazsJako/ImGuiColorTextEdit.
 
 The editor-only Roslyn analysis helper references Microsoft.CodeAnalysis and Microsoft.CodeAnalysis.CSharp from the installed .NET SDK. These compiler components are distributed under the MIT license by the .NET Foundation and contributors; see https://github.com/dotnet/roslyn/blob/main/License.txt. They are staged under Managed/IDE and excluded from exported games.
-
----
-
-## Third-party content NOT in this repository
-
-The game content under `project/assets` comes largely from licensed packs that may not be
-redistributed. Those files are deliberately **not** in this repository or its history: they are
-listed in `.gitignore` and `project/external_assets.csv` and shared privately with the team.
-Only their `.meta` sidecars, materials and other project data are tracked. The packs
-include the Quantum Characters modular pack, the MC Core Motion animation pack, the AKS-74U and
-Remington 870 models, Kinemation's FPS Animation Pack and Tactical Shooter Pack, KriptoFX Volumetric Blood
-Fluids, Knife Real Blood and PRO Effects, Sonniss GDC bundle recordings, the OpenAIR impulse responses
-(CC BY 4.0, University of York, openairlib.net), the EchoThief impulse responses (Dr. Chris Warren, SDSU)
-and Poly Haven HDRIs (CC0).

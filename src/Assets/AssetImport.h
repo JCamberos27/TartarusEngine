@@ -26,6 +26,11 @@ TextureKind GuessTextureKind(const std::string& path);
 // True when both files exist and hold the same bytes (size first, then contents).
 bool SameContents(const std::string& a, const std::string& b);
 
+// Imports from the user's external asset library belong in the Git-ignored External
+// directory. Other imports keep their normal project location. Does not copy files.
+std::string ProjectImportDirectory(const std::string& projectRoot, const std::string& source,
+                                   const std::string& libraryRoot, const std::string& subfolder = {});
+
 struct FolderCopy {
     std::string Folder;             // the new folder in the project; empty on failure
     std::vector<std::string> Files; // every file copied, absolute

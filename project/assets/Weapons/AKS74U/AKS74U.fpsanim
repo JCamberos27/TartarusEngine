@@ -80,39 +80,6 @@
     "spread": 10.0,
     "trigger": "shot"
   },
-  "gameplay": {
-    "allowFullAuto": true,
-    "bulletHoleRadius": 0.0027,
-    "burstRounds": 0,
-    "damage": {
-      "base": 34.0,
-      "falloffEnd": 60.0,
-      "falloffMin": 0.6,
-      "falloffStart": 25.0,
-      "head": 3.0,
-      "limb": 0.75
-    },
-    "impactImpulse": 5.0,
-    "impactMaxSpeed": 7.0,
-    "magazine": 30,
-    "regripMax": 20.0,
-    "regripMin": 10.0,
-    "reloadHoldSeconds": 0.35,
-    "rpm": 700.0,
-    "sightLine": {
-      "direction": [
-        -0.999992,
-        -0.00393,
-        -0.000798
-      ],
-      "origin": [
-        0.28145,
-        0.05775,
-        0.00013
-      ]
-    },
-    "zeroDistance": 25.0
-  },
   "laser": {
     "beamBrightness": 1.1,
     "color": [

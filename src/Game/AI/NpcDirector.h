@@ -278,6 +278,7 @@ private:
         CallChannel() { for (float& t : LastEvent) t = -1e9f; }
     };
     CallChannel& CallChan(int squad);
+    void ProjectCallouts(int operation,int caller,int kind,const PlayerSnapshot& player);
     std::vector<CallChannel> m_CallChannels;
     std::uint32_t m_CallRng = 0xBA4Cu;
     bool m_PlayerWasDead = false;
@@ -287,8 +288,6 @@ private:
     glm::vec3 m_DeathPos[kDeathMemory]{};
     float m_DeathTime[kDeathMemory]{};
     int m_DeathCount = 0, m_DeathNext = 0;
-    void UpdateCoverFire(Squad& s);
-    void UpdateMelee(Npc& n, const PlayerSnapshot& p);
     // Cost accounting (see Sub).
     struct SubTimer;
     float m_SubFrame[SubCount] = {};

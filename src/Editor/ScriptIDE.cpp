@@ -391,11 +391,11 @@ void ScriptIDE::Impl::Draw() {
         for(const auto& item:Result.value("completions",Json::array())){const auto name=item["name"].get<std::string>();if(!CompletionFilter.empty() && name.find(CompletionFilter)==std::string::npos)continue;ImGui::PushID(++id);if(ImGui::Selectable((name+"   "+item["kind"].get<std::string>()).c_str())){ApplyCompletion(name);CompletionFilter.clear();ImGui::CloseCurrentPopup();}if(ImGui::IsItemHovered())ImGui::SetTooltip("%s",item["detail"].get<std::string>().c_str());ImGui::PopID();}ImGui::EndChild();ImGui::EndPopup();
     }
     if(GoTo){ImGui::OpenPopup("Go to line");GoTo=false;}
-    if(ImGui::BeginPopup("Go to line")){ImGui::InputInt("Line",&GoLine);if(EditorUIPrimitives::PrimaryButton("Go") && Active){Jump(*Active,GoLine,1);ImGui::CloseCurrentPopup();}ImGui::EndPopup();}
+    if(ImGui::BeginPopup("Go to line")){ImGui::InputInt("Line",&GoLine);if(EditorUIPrimitives::SecondaryButton("Go") && Active){Jump(*Active,GoLine,1);ImGui::CloseCurrentPopup();}ImGui::EndPopup();}
     if(RenamePrompt){ImGui::OpenPopup("Rename symbol");RenamePrompt=false;}
-    if(ImGui::BeginPopup("Rename symbol")){Field("New name",NewName,220);if(EditorUIPrimitives::PrimaryButton("Preview rename")){Queue("rename");ImGui::CloseCurrentPopup();}ImGui::EndPopup();}
+    if(ImGui::BeginPopup("Rename symbol")){Field("New name",NewName,220);if(EditorUIPrimitives::SecondaryButton("Preview rename")){Queue("rename");ImGui::CloseCurrentPopup();}ImGui::EndPopup();}
     if(RenamePreview){ImGui::OpenPopup("Rename preview");RenamePreview=false;}
-    if(ImGui::BeginPopupModal("Rename preview",nullptr,ImGuiWindowFlags_AlwaysAutoResize)){ImGui::TextUnformatted("Review references; Apply changes buffers until you Save All.");Locations(Result.value("references",Json::array()));if(EditorUIPrimitives::PrimaryButton("Apply",ImVec2(100,0))){ApplyRename();ImGui::CloseCurrentPopup();}ImGui::SameLine();if(EditorUIPrimitives::SecondaryButton("Cancel",ImVec2(100,0)))ImGui::CloseCurrentPopup();ImGui::EndPopup();}
+    if(ImGui::BeginPopupModal("Rename preview",nullptr,ImGuiWindowFlags_AlwaysAutoResize)){ImGui::TextUnformatted("Review references; Apply changes buffers until you Save All.");Locations(Result.value("references",Json::array()));if(EditorUIPrimitives::SecondaryButton("Apply",ImVec2(100,0))){ApplyRename();ImGui::CloseCurrentPopup();}ImGui::SameLine();if(EditorUIPrimitives::SecondaryButton("Cancel",ImVec2(100,0)))ImGui::CloseCurrentPopup();ImGui::EndPopup();}
     if(ProjectFind){ImGui::OpenPopup("Find in project");ProjectFind=false;}
     if(ImGui::BeginPopup("Find in project")){Field("Text",ProjectSearch,300);ImGui::SameLine();if(EditorUIPrimitives::SecondaryButton("Search"))SearchProject();ImGui::BeginChild("ProjectMatches",ImVec2(560,280));Locations(SearchResults);ImGui::EndChild();ImGui::EndPopup();}
     if(!ClosePath.empty()) {
@@ -404,7 +404,7 @@ void ScriptIDE::Impl::Draw() {
     }
     if(ImGui::BeginPopupModal("Unsaved script",nullptr,ImGuiWindowFlags_AlwaysAutoResize)) {
         ImGui::TextWrapped("Save changes before closing or reloading this script?");
-        if(EditorUIPrimitives::PrimaryButton("Save")){auto path=ClosePath.rfind("reload:",0)==0?ClosePath.substr(7):ClosePath;for(auto& d:Documents)if(Same(d->Path,path) && Save(*d)){if(ClosePath.rfind("reload:",0)!=0)Close(path);ClosePath.clear();ImGui::CloseCurrentPopup();break;}}
+        if(EditorUIPrimitives::SecondaryButton("Save")){auto path=ClosePath.rfind("reload:",0)==0?ClosePath.substr(7):ClosePath;for(auto& d:Documents)if(Same(d->Path,path) && Save(*d)){if(ClosePath.rfind("reload:",0)!=0)Close(path);ClosePath.clear();ImGui::CloseCurrentPopup();break;}}
         ImGui::SameLine();if(EditorUIPrimitives::SecondaryButton("Discard")){if(ClosePath.rfind("reload:",0)==0){auto path=ClosePath.substr(7);for(auto& d:Documents)if(Same(d->Path,path))Reload(*d);}else Close(ClosePath);ClosePath.clear();ImGui::CloseCurrentPopup();}
         ImGui::SameLine();if(EditorUIPrimitives::SecondaryButton("Cancel")){ClosePath.clear();ImGui::CloseCurrentPopup();}ImGui::EndPopup();
     }

@@ -22,6 +22,7 @@ public:
     static int FindCover(NpcDirector& d, Npc& n, CoverGoal goal, const glm::vec3& threat);
 
 private:
+    static int Execute(NpcDirector& d,Npc& n,const PlayerSnapshot& p,int operation,int target,const glm::vec3* threat=nullptr);
     static void Choose(NpcDirector& d, Npc& n, const PlayerSnapshot& p);
     static void Enter(NpcDirector& d, Npc& n, int behaviour, const PlayerSnapshot& p);
     static void Run(NpcDirector& d, World& world, Npc& n, const PlayerSnapshot& p, float dt);

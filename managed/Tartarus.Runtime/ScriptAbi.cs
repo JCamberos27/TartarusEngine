@@ -2,98 +2,12 @@
 using System.Numerics;
 using System.Runtime.InteropServices;
 namespace Tartarus;
-public static class ScriptAbi { public const int Version = 2; }
+public static class ScriptAbi { public const int Version = 3; }
 [StructLayout(LayoutKind.Sequential)]
-public struct PlayerFrame {
-    public float Dt;
-    public float Yaw;
-    public float Pitch;
-    public float MoveX;
-    public float MoveY;
-    public float LookPitch;
-    public float LookYaw;
-    public float SizeX;
-    public float SizeY;
-    public float EyeHeight;
-    public float MoveSpeed;
-    public float SprintMultiplier;
-    public float JumpSpeed;
-    public float Gravity;
-    public float MouseSensitivity;
-    public float StickLookDegPerSec;
-    public float KillY;
-    public float RootMotionWeight;
-    public float MaxYawRate;
-    public float YawFreeCenter;
-    public float YawFreeRange;
-    public float CrouchHeight;
-    public float CrouchSpeedMultiplier;
-    public float JumpBufferTime;
-    public float CoyoteTime;
-    public float GroundAccelTime;
-    public float GroundDecelTime;
-    public float AirAccelTime;
-    public float SinceGrounded;
-    public float JumpBuffer;
-    public float CrouchBlend;
-    public float YawDropped;
-    public Vector3 Position;
-    public Vector3 Velocity;
-    public Vector3 RespawnFeet;
-    public Vector3 RootMotionVelocity;
-    public Vector3 WishVelocity;
-    public int ReadInput;
-    public int Sprint;
-    public int JumpDown;
-    public int Crouch;
-    public int AimHeld;
-    public int Grounded;
-    public int Crouched;
-    public int Jumped;
-}
-[StructLayout(LayoutKind.Sequential)]
-public struct WeaponFrame {
-    public float Dt;
-    public float Rpm;
-    public float CycleDelay;
-    public float HoldSeconds;
-    public float RegripMin;
-    public float RegripMax;
-    public float Cooldown;
-    public float CycleWait;
-    public float IdleTime;
-    public float RegripDelay;
-    public float SinceShot;
-    public float SinceUnhidden;
-    public float ReloadHeldSeconds;
-    public float Random;
-    public int Operation;
-    public int Ammo;
-    public int Magazine;
-    public int BurstRounds;
-    public int AllowFullAuto;
-    public int PerRound;
-    public int CycleAfterShot;
-    public int HipProcedural;
-    public int RecoilProfile;
-    public int UnityRecoil;
-    public int Equipped;
-    public int Chambered;
-    public int CycleSeen;
-    public int StopReload;
-    public int FullAuto;
-    public int BurstRemaining;
-    public int WaitingShot;
-    public int Tags;
-    public int InTransition;
-    public int WallBlocked;
-    public int Pressed;
-    public int Held;
-    public int ReloadWasDown;
-    public int ReloadHoldFired;
-    public int Events;
-    public int Commands;
-    public int Result;
+public struct ProjectCall {
+    public nint Operation;
+    public nint Data;
+    public int Size;
 }
 [StructLayout(LayoutKind.Sequential)]
 public struct EntityFrame {
@@ -104,18 +18,6 @@ public struct EntityFrame {
     public int Enabled;
     public nint ClassName;
     public nint Fields;
-}
-[StructLayout(LayoutKind.Sequential)]
-public struct ShotFrame {
-    public Vector3 Origin;
-    public Vector3 Direction;
-    public float Spread;
-    public float ImpactImpulse;
-    public float ImpactMaxSpeed;
-    public float BulletHoleRadius;
-    public float Range;
-    public int Pellets;
-    public int RandomSeed;
 }
 [StructLayout(LayoutKind.Sequential)]
 public struct NativeRequest {

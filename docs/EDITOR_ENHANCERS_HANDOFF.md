@@ -1,8 +1,8 @@
 # Editor Enhancers: handoff for the next session
 
-Status as of 2026-10-07. Phases 0 to 2 are done, merged to `main` and tested by the user. **Phase 3a (vInspector UI) is committed on branch `feature/vinspector` (88499426) and awaits the user's editor test**; items 1-8 of the 3a design below are implemented as written, with the multi-paste and keep-play logic in `src/Editor/Enhancers/ComponentTransfer.h/.cpp`. Phase 3b (attributes) is committed on the same branch too: C++ attributes in `36acde21`, C# attributes in the commit after it. Neither phase has been tested in the editor yet; the user's checklist is `docs/VINSPECTOR_TEST_SHEET.md` (untracked). Phase 4 (vTabs) is committed on the same branch after them, also untested in the editor (test sheet sections 11-12). Phase 5 (vFavorites) follows it on the branch, also untested in the editor (test sheet section 13). Phase 6 (vRuler) completes the set (test sheet section 14). All six tools are implemented on `feature/vinspector`; what remains is the user's editor testing of Phases 3a-6 and fixing what it finds, then merging to `main`. This file is the full context needed to continue. Read it before you touch anything.
+Status as of 2026-10-07: all six tools and the C++/C# Inspector attributes are integrated in upstream `main`. The historical phase design and branch references below remain an implementation map. Automated native and editor UI checks are available with `--unit-tests` and `--editor-tests`; manual testing of real authoring workflows remains useful. The previously untracked `VINSPECTOR_TEST_SHEET.md` is not part of this checkout.
 
-The user-facing docs are in [EDITOR_ENHANCERS.md](EDITOR_ENHANCERS.md). This file covers the remaining work.
+The user-facing docs are in [EDITOR_ENHANCERS.md](EDITOR_ENHANCERS.md). This file preserves the implementation design and follow-up context.
 
 ## 1. The goal
 

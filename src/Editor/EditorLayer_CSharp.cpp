@@ -7,13 +7,119 @@
 #include "ComponentRegistry.h"
 #include "World.h"
 #include "Scripting/ScriptRuntime.h"
+#include "Scripting/ScriptReferences.h"
+#include "ScriptReferenceWidgets.h"
+#include "AssetPathPicker.h"
+#include "AssetDatabase.h"
 #include "EditorTheme.h"
 #include "EditorUIPrimitives.h"
 #include <imgui.h>
 #include <imgui_internal.h> // DC.IsSameLine
 #include <json.hpp>
+#include <cfloat>
 #include <cstring>
 using namespace EditorInternal;
+bool DrawScriptReferenceField(World& world, entt::entity owner, const nlohmann::json& metadata,
+                              nlohmann::json& value, GLFWwindow* window) {
+    const std::string kind = metadata.at("kind");
+    const bool asset=kind=="asset-ref";
+    std::string reference=asset && value.is_object()?
+        AssetDatabase::FollowRef(value.value("path",std::string{}),value.value("pathGuid",std::string{})):
+        value.is_null()?std::string{}:value.get<std::string>();
+    bool changed = false;
+    if (asset) {
+        const auto extensions=metadata.value("extensions",std::vector<std::string>{});
+        std::vector<const char*> extensionPointers;
+        for(const auto& extension:extensions)extensionPointers.push_back(extension.c_str());
+        extensionPointers.push_back(nullptr);
+        AssetPathPickerOptions options;options.Extensions=extensions.empty()?nullptr:extensionPointers.data();
+        options.DragPayload="ASSET_FILE_PATH";options.Owner=window;
+        changed=AssetPathPicker("##asset",reference,options);
+    } else if (kind == "scene-ref") {
+        const std::string component = metadata.value("component", std::string("Transform"));
+        const bool childrenOnly = metadata.value("childrenOnly", false);
+        const auto target = Scripting::ResolveSceneReference(world, owner, reference);
+        const bool valid = Scripting::AcceptsSceneReference(world, owner, target, component, childrenOnly);
+        const auto* name = valid ? world.Registry.try_get<NameComponent>(target) : nullptr;
+        const std::string preview = reference.empty() ? "None (" + component + ")" :
+            valid ? (name ? name->Name : reference) + " (" + component + ")" : "Missing: " + reference;
+        const bool open = ImGui::BeginCombo("##reference", preview.c_str(), ImGuiComboFlags_HeightLarge);
+        if (ImGui::IsItemHovered()) EditorUI::SetTooltip("%s\nDrag a %s from the Hierarchy.", reference.c_str(), component.c_str());
+        if (ImGui::BeginDragDropTarget()) {
+            if (const auto* payload = ImGui::AcceptDragDropPayload("HIERARCHY_ENTITY")) {
+                if (payload->DataSize == sizeof(entt::entity)) {
+                    const auto dropped = *static_cast<const entt::entity*>(payload->Data);
+                    if (Scripting::AcceptsSceneReference(world, owner, dropped, component, childrenOnly)) {
+                        reference = *Scripting::SceneReferencePath(world, owner, dropped); changed = true;
+                    }
+                }
+            }
+            ImGui::EndDragDropTarget();
+        }
+        if (open) {
+            if (ImGui::Selectable(("None (" + component + ")").c_str(), reference.empty())) { reference.clear(); changed = true; }
+            static char filter[128] = {};
+            if (ImGui::IsWindowAppearing()) filter[0] = '\0';
+            ImGui::InputTextWithHint("##filter", "Find object", filter, sizeof(filter));
+            std::vector<std::pair<std::string, std::string>> choices;
+            for (auto e : world.Registry.view<TransformComponent>()) {
+                if (!Scripting::AcceptsSceneReference(world, owner, e, component, childrenOnly)) continue;
+                const auto path = *Scripting::SceneReferencePath(world, owner, e);
+                if (*filter && path.find(filter) == std::string::npos) continue;
+                const auto* objectName = world.Registry.try_get<NameComponent>(e);
+                choices.emplace_back(path, path == "." && objectName ? objectName->Name + " (self)" : path);
+            }
+            std::sort(choices.begin(), choices.end());
+            for (const auto& choice : choices) if (ImGui::Selectable(choice.second.c_str(), choice.first == reference)) {
+                reference = choice.first; changed = true;
+            }
+            ImGui::EndCombo();
+        }
+    } else if (kind == "sound-refs") {
+        std::vector<std::string> clips;
+        size_t begin = 0;
+        while (begin < reference.size()) {
+            const auto end = reference.find(';', begin);
+            auto clip = reference.substr(begin, end == std::string::npos ? end : end - begin);
+            if (!clip.empty()) clips.push_back(std::move(clip));
+            if (end == std::string::npos) break;
+            begin = end + 1;
+        }
+        // A trailing empty slot accepts the next asset without requiring text or separators.
+        clips.emplace_back();
+        AssetPathPickerOptions options;
+        options.Extensions = AssetExts::Sounds; options.DragPayload = "ASSET_SOUND_PATH";
+        options.DialogFilter = "Audio\0*.wav;*.mp3;*.ogg;*.flac\0"; options.Owner = window;
+        for (size_t i = 0; i < clips.size(); ++i) {
+            ImGui::PushID(static_cast<int>(i)); ImGui::SetNextItemWidth(-FLT_MIN);
+            options.NoneLabel = i + 1 == clips.size() ? "Add firing sound (Audio Clip)" : "None (remove clip)";
+            changed |= AssetPathPicker("##sound", clips[i], options);
+            ImGui::PopID();
+        }
+        if (changed) {
+            reference.clear();
+            for (const auto& clip : clips) if (!clip.empty()) {
+                if (!reference.empty()) reference += ';';
+                reference += clip;
+            }
+        }
+    } else if (kind == "choice") {
+        if (ImGui::BeginCombo("##choice", reference.empty() ? "(weapon default)" : reference.c_str())) {
+            for (const auto& choice : metadata.at("choices")) {
+                const std::string entry = choice;
+                if (ImGui::Selectable(entry.empty() ? "(weapon default)" : entry.c_str(), reference == entry)) {
+                    reference = entry; changed = true;
+                }
+            }
+            ImGui::EndCombo();
+        }
+    }
+    if (changed) {
+        if(asset)value={{"path",reference},{"pathGuid",reference.empty()?std::string{}:AssetDatabase::GuidForPath(ProjectPaths::Resolve(reference)).ToString()}};
+        else value=reference;
+    }
+    return changed;
+}
 void EditorLayer::OpenScriptIDE(const std::string& path,int line,int column) {
     if(!m_ScriptIDE)m_ScriptIDE=std::make_unique<ScriptIDE>();
     if(path.empty())m_ScriptIDE->Show();else m_ScriptIDE->Open(path,line,column);
@@ -137,6 +243,15 @@ int EditorLayer::ManagedEditorService(World& world,AssetLibrary& assets,int op,S
             for(const auto& f:rc.Meta.Fields)if(field==ReflectFieldKey(f)) {DrawReflectedField(world,assets,rc,f,{entity});return 1;}
         return 0;
     }
+    case 132:{
+        const auto data=nlohmann::json::parse(text);static thread_local std::string result;
+        const auto label=data.at("label").get<std::string>();auto value=data.at("value");
+        ImGui::TextUnformatted(label.c_str());ImGui::SetNextItemWidth(-FLT_MIN);
+        const bool changed=DrawScriptReferenceField(world,static_cast<entt::entity>(r.Entity),data.at("metadata"),value,m_Window);
+        if(changed) {PushUndo(world,"Set " + label);m_Dirty=true;}
+        result=data.at("metadata").at("kind")=="asset-ref"?value.dump():value.get<std::string>();r.Text=result.c_str();return changed?1:0;
+    }
+    case 133:return EditorUI::ColorEditLinear(text,&r.A.x,ImGuiColorEditFlags_DisplayHex)?1:0;
     }
     return 0;
 }
@@ -161,6 +276,15 @@ bool EditorLayer::DrawManagedInspector(World& world,AssetLibrary& assets,entt::e
     while(groups>0){ImGui::TreePop();--groups;}
     while(windows>0){ImGui::End();--windows;}
     ImGui::PopID();
-    if(handled && fields && request.Text)*fields=request.Text;
+    if(handled && fields && request.Text) {
+        const auto before=nlohmann::json::parse(*fields,nullptr,false);
+        const auto after=nlohmann::json::parse(request.Text);
+        if(before!=after) {
+            // The result is still a detached slot copy: capture its authored state before SetSlots.
+            // Explicit C# Undo.RecordScene labels win; ordinary custom fields get automatic history.
+            BeginSceneUndo(world,m_GlobalUndoActive?m_GlobalUndoLabel:"Edit C# Script");
+            *fields=after.dump();
+        }
+    }
     return handled;
 }

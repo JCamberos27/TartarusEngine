@@ -8,8 +8,9 @@ class World;
 class AssetLibrary;
 namespace Scripting {
 bool EnsureLoaded();
+std::uint64_t CodeGeneration();
 bool Invoke(int operation, void* frame, int size);
-bool InvokeShot(World& world, ShotFrame& frame, const std::function<void(const NativeRequest&)>& trace);
+bool InvokeProjectWithTrace(World& world,const char* operation,void* data,int size, const std::function<void(const NativeRequest&)>& trace);
 const std::string& LastError();
 void Tick(World& world, AssetLibrary& assets, float dt, bool fixed = false);
 void Stop(World* world = nullptr, AssetLibrary* assets = nullptr);
@@ -19,6 +20,9 @@ bool Building();
 void RequestBuild();
 bool BuildPending();
 std::string Describe(const std::string& className = "");
+bool ResolveScriptFields(const std::string& className,const std::string& fields,std::string& resolved);
+bool InvokeProject(const char* operation,void* data,int size);
+bool RequestProject(const std::string& operation,const std::string& data,std::string& result);
 // vInspector: Describe() parsed once per class (cleared with it on every assembly reload).
 const nlohmann::json& DescribeJson(const std::string& className = "");
 // Runs a [Button] / [OnValueChanged] method on the live instance (entity, slot) while Playing, else

@@ -108,6 +108,10 @@ void RemoveTag(const std::string& name);
 const std::vector<std::string>& AssetFolders();
 void SetAssetFolders(std::vector<std::string> folders);
 
+// Project-relative editor startup scene; empty opens a blank scene. Build scenes take precedence.
+const std::string& StartupScene();
+void SetStartupScene(std::string scene);
+
 // project/settings.json. A missing or unparseable file leaves the defaults in place and is not
 // treated as an error (same policy as LayerRegistry / EditorSettings).
 void Load();

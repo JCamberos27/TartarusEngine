@@ -12,6 +12,8 @@
 #include "Components.h"
 #include "Scripting/ScriptComponent.h"
 #include "Scripting/ScriptRuntime.h"
+#include "Scripting/PlayerDefinition.h"
+#include <json.hpp>
 #include "ProjectPaths.h"
 #include "Log.h"
 
@@ -159,13 +161,17 @@ bool EditorLayer::ApplyAssetDrop(World& world, AssetLibrary& assets, entt::entit
             return true;
         }
         if (ext == ".fpsanim") {
-            auto* fpc = world.Registry.try_get<FirstPersonControllerComponent>(target);
-            if (!fpc) {
+            auto* scripts = world.Registry.try_get<CSharpScriptComponent>(target);
+            if (!scripts || !Scripting::HasPlayerDefinition(*scripts)) {
                 Log::Warn("'" + FileName(path) + "' goes on an object with a First Person Controller.");
                 return false;
             }
             PushUndo(world, "Set Weapon Definition");
-            fpc->AnimationSet = rel;
+            auto slots=Scripting::GetSlots(*scripts);
+            for(auto& scriptSlot:slots)if(scriptSlot.Class=="Tartarus.Gameplay.PlayerDefinition") {
+                auto fields=nlohmann::json::parse(scriptSlot.Fields);fields["AnimationSet"]={{"path",rel},{"pathGuid",""}};scriptSlot.Fields=fields.dump();break;
+            }
+            Scripting::SetSlots(*scripts,slots);Scripting::SyncPlayerDefinition(world,target);
             return true;
         }
         if (ext == ".cs") {
