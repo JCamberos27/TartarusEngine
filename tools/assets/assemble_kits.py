@@ -239,6 +239,30 @@ def shower(objs, door_left):
                            slo.z + 0.1 - lo.z)))
 
 
+def chandelier(objs):
+    """The ring of candle shades is exported standing on edge beside the chandelier: lay it flat, centre it on the
+    body's axis and sit the shades on the arms' cups (the top of the widest band of the body), wide end down."""
+    body = next(o for n, o in objs.items() if n.endswith('_body'))
+    shades = next(o for n, o in objs.items() if n.endswith('_shades'))
+    lo, hi = bounds(shades)
+    rotate_about(shades, 'X', 90, (lo + hi) / 2)
+    blo, bhi = bounds(body)
+    c = (blo + bhi) / 2
+    verts = world_verts(body)
+    # the arms: the horizontal slices where the body spreads widest from its axis
+    n = 24
+    step = (bhi.z - blo.z) / n
+    spread = []
+    for b in range(n):
+        z0 = blo.z + b * step
+        r = [((p.x - c.x) ** 2 + (p.y - c.y) ** 2) ** 0.5 for p in verts if z0 <= p.z < z0 + step]
+        spread.append(max(r) if r else 0.0)
+    widest = max(spread)
+    arms_top = blo.z + (max(b for b in range(n) if spread[b] > 0.85 * widest) + 1) * step
+    lo, hi = bounds(shades)
+    move(shades, Vector((c.x - (lo.x + hi.x) / 2, c.y - (lo.y + hi.y) / 2, arms_top - 0.01 - lo.z)))
+
+
 def bunk(objs):
     """Both blankets hang off the frame in the source and one pillow sits under the floor: drop the blankets and
     put that pillow on the lower bunk, matching the upper one."""
@@ -268,6 +292,8 @@ KITS = {
     'Furniture/Bathroom/Models/Washingmachine.fbx': washer,
     'Furniture/Bathroom/Models/Toilet.fbx': toilet,
     'Furniture/Bedroom/Models/Bed_Bunk.fbx': bunk,
+    'Furniture/Lighting/Models/Lamp_Chandelier_A.fbx': chandelier,
+    'Furniture/Lighting/Models/Lamp_Chandelier_B.fbx': chandelier,
     'Furniture/Bathroom/Models/Shower_Stall_190cm_L.fbx': (lambda o: shower(o, True), ['Shower_Stall_Door', 'Shower_Stall_Glass']),
     'Furniture/Bathroom/Models/Shower_Stall_190cm_R.fbx': (lambda o: shower(o, False), ['Shower_Stall_Door', 'Shower_Stall_Glass']),
 }
@@ -351,7 +377,9 @@ def main():
             meta = json.load(f)
         old = meta['importer'].get('pivotOffset', [0.0, 0.0, 0.0])
         lo, hi = r['min'], r['max']
-        meta['importer']['pivotOffset'] = [round(old[0] - (lo[0] + hi[0]) / 2, 4), round(old[1] - lo[1], 4),
+        # hanging fixtures hang from their top; everything else stands on its bottom centre
+        meta['importer']['pivotOffset'] = [round(old[0] - (lo[0] + hi[0]) / 2, 4),
+                                           round(old[1] - (hi[1] if 'Chandelier' in rel else lo[1]), 4),
                                            round(old[2] - (lo[2] + hi[2]) / 2, 4)]
         write_json(rel + '.meta', meta)
         print('assemble_kits:', rel)

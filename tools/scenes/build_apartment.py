@@ -149,8 +149,8 @@ class Builder:
         M['ceiling'] = k.textured(self.repo, **tex('Ceiling_Default', 'Ceiling_Default'), triplanar_scale=0.33)
         M['trim'] = k.textured(self.repo, base=(0.82, 0.81, 0.78), roughness=0.45)
         M['exterior'] = k.textured(self.repo, base=(0.5, 0.5, 0.5), roughness=1.0)
-        M['screen'] = k.textured(self.repo, base=(0.02, 0.02, 0.03), roughness=0.15, emissive=(0.62, 0.74, 1.0),
-                                 strength=2.2)
+        M['screen'] = k.textured(self.repo, base=(0.02, 0.02, 0.03), roughness=0.15, emissive=(0.42, 0.56, 0.86),
+                                 strength=0.75)
         return M
 
     WALL_PAINT = {'Master Bedroom': 'wall_beige', 'Bedroom 2': 'wall_sage', 'Kids Bedroom': 'wall_blue',
@@ -389,10 +389,10 @@ class Builder:
             self.s.light(f'{room} - {name} (bounce)', self.group('Lighting'), (fx, 1.3, fz), intensity * fill,
                          rng * 1.8, color, False)
 
-    def ceiling_fixture(self, room, stem, x, z, on=False, **light):
+    def ceiling_fixture(self, room, stem, x, z, on=False, glow=0.6, **light):
         x0, x1, y0, y1, z0, z1 = self.wbox(stem, 0.0)
         drop = y1 - y0
-        self.put(room, stem, x, z, 0.0, H - drop, **(self.lamp_glow(stem, 1.0) if on else self.lamp_off(stem)))
+        self.put(room, stem, x, z, 0.0, H - drop, **(self.lamp_glow(stem, glow) if on else self.lamp_off(stem)))
         if on:
             self.light(room, light.pop('name', 'Ceiling'), (x, H - drop - 0.05, z), **light)
 
@@ -448,7 +448,7 @@ class Builder:
                 if overlap(zone, p):
                     out.append(f"{p['room']}: {p['stem']} is in the swing of the {name}")
             for p in self.placed:
-                if overlap(gap, p, 0.005):
+                if overlap(gap, p, 0.005) and not p['stem'].startswith('Carpet'):  # rugs pass under a door
                     out.append(f"{p['room']}: {p['stem']} is in the {name}'s doorway / trim")
         # small props: something must be right under them; and two props mustn't sink into each other
         under = self.placed + self.supports
@@ -487,7 +487,7 @@ class Builder:
         self.light(r, 'TV', (tx + 0.35, tv['y0'] + 0.3, tz), 0.9, 5.0, TV, spot=75.0, pitch=0.0, yaw=-90.0,
                    flicker={'Mode': MODES['Tv'], 'MinInterval': 0.12, 'MaxInterval': 1.4, 'Depth': 0.55, 'Seed': 7},
                    fill=0.12)
-        self.shelf_row(r, tvs, 0, [('Books_E', 90.0), ('Books_F', 90.0), ('', 0.0), ('Decorative_Bowl', 0.0)], dz=0.0)
+        self.shelf_row(r, tvs, 0, [('Books_E', 0.0), ('Books_F', 0.0), ('', 0.0), ('Decorative_Bowl', 0.0)], dz=0.0)
         self.hang(r, 'W', cz, 'Painting_Large_B', 1.75)
         self.put(r, 'Carpet_C', 2.25, cz, 90.0)
         couch = self.put(r, 'Couch', 3.45, cz, -90.0, collide=True)
@@ -514,12 +514,12 @@ class Builder:
         self.put(r, 'Toy_Block_A', 1.75, 7.95, 20.0)
         self.put(r, 'Toy_Block_C', 1.9, 8.05, -35.0)
         bs = self.wall(r, 'S', 3.15, 'Bookshelf', collide=True)
-        self.shelf_row(r, bs, 0, [('Cardboard_Box_A', 90.0), ('Book_Pile_A', 90.0), ('Books_A', 180.0)], dz=0.0)
-        self.shelf_row(r, bs, 1, [('Books_B', 180.0), ('Books_C', 180.0), ('Painting_Table_B', 180.0),
+        self.shelf_row(r, bs, 0, [('Cardboard_Box_A', 90.0), ('Book_Pile_A', 90.0), ('Books_A', 0.0)], dz=0.0)
+        self.shelf_row(r, bs, 1, [('Books_B', 0.0), ('Books_C', 0.0), ('Painting_Table_B', 0.0),
                                    ('Vase_A', 0.0)], dz=0.02)
-        self.shelf_row(r, bs, 2, [('Candle_Holder_B', 0.0), ('Books_D', 180.0), ('Books_E', 180.0), ('Books_F', 180.0)],
+        self.shelf_row(r, bs, 2, [('Candle_Holder_B', 0.0), ('Books_D', 0.0), ('Books_E', 0.0), ('Books_F', 0.0)],
                        dz=0.02)
-        self.shelf_row(r, bs, 3, [('Books_A', 180.0), ('Painting_Table_E', 180.0), ('Decorative_Plate', 180.0)],
+        self.shelf_row(r, bs, 3, [('Books_A', 0.0), ('Painting_Table_E', 0.0), ('Decorative_Plate', 0.0)],
                        dz=0.02)
         # a small shrine on the south wall: a half-moon table, the statue, candles, the crucifix above
         shrine = self.wall(r, 'S', 5.0, 'Sidetable_B', collide=True)
@@ -528,7 +528,12 @@ class Builder:
         self.on(r, shrine, 'Candle_B', dx=0.3, dz=0.02)
         self.hang(r, 'S', 5.0, 'Cross', 1.55)
         self.wall(r, 'S', 0.45, 'Plant_A', gap=0.15, collide=True)
-        self.wall(r, 'W', 5.0, 'Cabinet_A_Assembled', collide=True)
+        sb = self.wall(r, 'W', 5.25, 'Dresser_B_Assembled', collide=True)
+        self.on(r, sb, 'Painting_Table_B', dx=-0.28, dz=-0.06)
+        self.on(r, sb, 'Painting_Table_D', dx=-0.05, dz=-0.1, yaw=10.0)
+        self.on(r, sb, 'Candle_Holder_A', dx=0.15, dz=-0.05)
+        self.on(r, sb, 'Plant_B', dx=0.3)
+        self.hang(r, 'W', 5.25, 'Painting_Medium_H', 1.55)
         self.put(r, 'Plant_B', 0.35, 9.55)
         self.hang(r, 'N', 1.2, 'Painting_Large_A', 1.5)
         self.hang(r, 'N', 5.2, 'Clock_Wall_Analog', 2.0)
@@ -590,16 +595,16 @@ class Builder:
         # the table: breakfast never cleared - two cereal bowls, a glass, the mail
         tx, tz = 8.15, 7.95
         tb = self.put(r, 'Table_Dining', tx, tz, 0.0, collide=True)
-        for yaw, dx, dz in ((180.0, 0.0, -0.78), (8.0, 0.05, 0.92), (90.0, -0.78, 0.0), (-115.0, 0.82, 0.12)):
+        for yaw, dx, dz in ((0.0, 0.0, -0.78), (172.0, 0.05, 0.92), (90.0, -0.78, 0.0), (-115.0, 0.82, 0.12)):
             self.put(r, 'Chair_Dining', tx + dx, tz + dz, yaw, collide=True)
         self.on(r, tb, 'Bowl_Cereal', 0.0, -0.42)
         self.on(r, tb, 'Bowl_Cereal', -0.42, 0.05)
         self.on(r, tb, 'Glass_Drinking', -0.2, -0.38)
         self.on(r, tb, 'Papers_Pile_A', 0.35, 0.25, yaw=25.0)
         self.on(r, tb, 'Decorative_Bowl', 0.05, 0.08)
-        chand = self.wbox('Lamp_Chandelier_A', 0.0)
-        self.put(r, 'Lamp_Chandelier_A', tx, tz, 0.0, H - (chand[3] - chand[2]),
-                 **self.lamp_glow('Lamp_Chandelier_A', 0.7))
+        chand = self.wbox('Lamp_Chandelier_A_Assembled', 0.0)
+        self.put(r, 'Lamp_Chandelier_A_Assembled', tx, tz, 0.0, H - (chand[3] - chand[2]),
+                 **self.lamp_glow('Lamp_Chandelier_A_Assembled', 0.45))
         self.light(r, 'Table', (tx, H - (chand[3] - chand[2]) + 0.25, tz), 0.55, 3.2, WARM, spot=58.0, fill=0.15)
         self.ceiling_fixture(r, 'Lamp_Ceiling_A', 8.2, 6.3)
         self.hang(r, 'S', 9.3, 'Painting_Medium_E', 1.5)
@@ -632,6 +637,8 @@ class Builder:
         self.on(r, dr, 'Candle_Holder_B', dx=0.65, dz=-0.05)
         self.hang(r, 'N', 3.2, 'Painting_Large_C', 1.55)
         self.wall(r, 'E', 1.35, 'Mirror_Body', gap=0.06, collide=True)
+        self.put(r, 'Chair_Arm', 3.84, 2.42, -90.0, collide=True)
+        self.put(r, 'Lamp_Floor_A_Assembled', 4.05, 1.86, 0.0, **self.lamp_off('Lamp_Floor_A_Assembled'))
         self.put(r, 'Laundrybasket', 1.95, z0 + 0.3, 12.0)
         self.put(r, 'Towel_Pile', 1.95, z0 + 0.3, 12.0, y=0.716)
         self.hang(r, 'S', 1.3, 'Painting_Medium_B', 1.5)
@@ -660,7 +667,7 @@ class Builder:
         self.on(r, vn, 'Syringe_Variation_01', dx=-0.55, dz=0.12, yaw=60.0)
         self.on(r, vn, 'Vial_Insulin_01', dx=-0.48, dz=0.0)
         # the room's own ceiling light is the one on: a downlight from the middle of the ceiling, kept off the walls
-        self.ceiling_fixture(r, 'Lamp_Ceiling_A', 5.5, 2.2, on=True, name='Ceiling', intensity=1.0, rng=4.0,
+        self.ceiling_fixture(r, 'Lamp_Ceiling_A', 5.5, 2.2, on=True, glow=0.45, name='Ceiling', intensity=1.0, rng=4.0,
                              color=(1.0, 0.86, 0.68), spot=55.0, fill=0.12)
         self.wall(r, 'E', 3.4, 'Toilet_Assembled', collide=True)
         self.wall(r, 'E', 2.95, 'Toiletpaper_Single', y=0.7)
@@ -716,13 +723,16 @@ class Builder:
         r = 'Kids Bedroom'
         x0, z0, x1, z1 = inner(r)
         bunk = self.wall(r, 'N', x1 - 0.76, 'Bed_Bunk_Assembled', collide=True)
+        mattress = dict(bunk, y1=0.438)  # the lower bunk's mattress top (measured on the model)
+        self.supports.append(mattress)
+        self.put(r, 'Bed_Pillow_A', (bunk['x0'] + bunk['x1']) / 2 + 0.05, bunk['z0'] + 0.3, 0.0, y=0.438, scale=0.7)
+        self.put(r, 'Toy_Teddy', (bunk['x0'] + bunk['x1']) / 2 + 0.05, bunk['z0'] + 0.75, 160.0, y=0.438, scale=0.8)
         dr = self.wall(r, 'W', 1.05, 'Dresser_D_Assembled', collide=True)
         self.table_lamp(r, dr, 'Lamp_Table_Rocket_Assembled', True, dx=0.15, intensity=0.28, rng=3.0, glow=0.35)
         self.on(r, dr, 'Toy_Dinosaur', dx=-0.18, yaw=60.0)
         self.put(r, 'Carpet_Kid', 11.45, 2.35, 0.0)
         tb = self.wall(r, 'S', 12.35, 'Toy_Box_A', collide=True)
         self.put(r, 'Toy_Box_A_Lid', tb['x0'] - 0.3, tb['z0'] + 0.12, 70.0)
-        self.put(r, 'Toy_Teddy', bunk['x0'] - 0.35, bunk['z1'] - 0.25, 200.0)
         self.put(r, 'Toy_Racetrack', 11.2, 2.55, 20.0)
         self.put(r, 'Toy_Car_A', 11.0, 2.25, 75.0)
         self.put(r, 'Toy_Car_B', 11.6, 3.0, -30.0)
@@ -731,12 +741,12 @@ class Builder:
         self.put(r, 'Toy_Block_B', 12.25, 2.75, 40.0)
         self.put(r, 'Toy_Muscleman', 10.9, 1.75, -60.0)
         self.put(r, 'Paper_Kid', 11.85, 1.95, 25.0)
-        self.put(r, 'Book_Drawing_Kid', 10.55, 2.95, -40.0)
-        st = self.wall(r, 'W', 2.65, 'Sidetable_B', collide=True)
-        self.on(r, st, 'Paper_Kid', dx=-0.15, yaw=8.0)
-        self.on(r, st, 'Pen_Set_A_Kid', dx=0.18)
-        self.on(r, st, 'Jar_Kid', dx=0.3, dz=-0.05)
-        self.on(r, st, 'Notebook_Kid', dx=-0.32, yaw=-12.0)
+        self.put(r, 'Book_Drawing_Kid', 10.95, 3.25, -40.0)
+        self.put(r, 'Notebook_Kid', 11.3, 1.55, 22.0)
+        st = self.put(r, 'Sidetable_C', 10.55, 2.75, 90.0, collide=True)
+        self.on(r, st, 'Paper_Kid', dx=-0.08, dz=0.05, yaw=8.0)
+        self.on(r, st, 'Pen_Set_A_Kid', dx=0.14, dz=-0.12)
+        self.on(r, st, 'Jar_Kid', dx=0.15, dz=0.14)
         self.hang(r, 'W', 2.65, 'Poster_Kid_A', 1.5)
         self.hang(r, 'E', 3.2, 'Poster_Kid_C', 1.45)
         self.hang(r, 'S', 11.85, 'Poster_Kid_E', 1.55)
@@ -807,6 +817,8 @@ class Builder:
         self.on(r, sh, 'Papers_Pile_A', dx=0.02, yaw=88.0)
         self.on(r, sh, 'Painting_Table_E', dx=0.28, dz=-0.02)
         self.hang(r, 'E', 4.8, 'Cross', 2.25)
+        self.put(r, 'Carpet_B', 8.1, 4.8, 90.0, scale=0.8)
+        self.put(r, 'Carpet_B', 10.9, 4.8, 90.0, scale=0.8)
         # gallery on the kitchen wall: one centre line at 1.5 m, mixed sizes
         for t, stem in ((6.55, 'Painting_Small_D'), (7.25, 'Painting_Small_A'), (8.05, 'Painting_Medium_G'),
                         (8.85, 'Painting_Small_B'), (9.55, 'Painting_Small_C'), (10.05, 'Painting_Small_E')):
