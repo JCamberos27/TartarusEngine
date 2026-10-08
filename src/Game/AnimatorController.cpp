@@ -1431,7 +1431,9 @@ void PrefetchAnimatorClips(World& world, AssetLibrary& assets) {
     if (!world.Registry.view<NpcSpawnComponent>().empty()) {
         static std::vector<std::string> s_SoldierControllers;
         static std::string s_Path;auto path=Scripting::DefaultSquadDefinition().BodyPrefab;
-        for(auto e:world.Registry.view<SquadSettingsComponent>(entt::exclude<InactiveTag>)){path=world.Registry.get<SquadSettingsComponent>(e).BodyPrefab;break;}
+        // The first active squad's body prefab (a loop that always breaks is C4702 in Debug).
+        const auto squads = world.Registry.view<SquadSettingsComponent>(entt::exclude<InactiveTag>);
+        if (squads.begin() != squads.end()) path = world.Registry.get<SquadSettingsComponent>(*squads.begin()).BodyPrefab;
         if(s_Path!=path){
             s_Path=path;s_SoldierControllers.clear();
             std::ifstream in(fs::u8path(ProjectPaths::Resolve(path)),std::ios::binary);
