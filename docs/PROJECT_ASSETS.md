@@ -5,12 +5,6 @@ materials, controllers and authored settings. Follow the root [README](../README
 the payloads and maintain `project/external_assets.csv`; never commit the models, textures,
 animation files or recordings themselves.
 
-The 2026-10-07 integration adds manifest entries for 20 local payloads accompanying new
-optic/model, muzzle-effect and texture sidecars. Their presence on this workstation is
-verified; their availability in the team's private `Used` library has not been verified.
-Sync them through that private asset workflow before expecting another clone to reproduce
-these visuals. The Git branch contains sidecars and settings only.
-
 The Asset Browser's `Assets` root represents `project/`. The lowercase `assets`
 folder contains the authored content. Each asset is listed in its own folder;
 the old virtual `Animation` collection has been retired because it displayed
@@ -48,7 +42,7 @@ remain under `project/scenes`, `project/screenshots`, and `project/shaders`.
 The Asset Browser already offers **Find References in Scene** and **Find References in Project**.
 Project lookup scans supported files for the asset GUID or path and lists matching files in
 Console; deletion from disk also shows reference warnings. This is not a complete typed
-dependency graph. An indexed dependency browser is proposed in [EDITOR_UPGRADES.md](EDITOR_UPGRADES.md).
+dependency graph.
 
 The cleanup compared SHA-256 content hashes throughout `project`, excluding
 generated `Library`, `bin`, `obj`, and asset metadata. No weapon asset duplicates

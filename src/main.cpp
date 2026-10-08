@@ -762,7 +762,7 @@ int main(int argc, char** argv) {
         EditorSettings::Load();
         if (!editorShotDir.empty() && editorShotScale > 0.0f) EditorSettings::Get().UiScaleOverride = editorShotScale;
         // A benchmark measures native resolution unless it asks for a render height, so its
-        // numbers stay comparable with the ones in docs/PERFORMANCE.md.
+        // numbers stay comparable from run to run and machine to machine.
         if (renderHeightArg >= 0) EditorSettings::Get().RenderHeight = renderHeightArg;
         else if (perfBenchMode) EditorSettings::Get().RenderHeight = 0;
         // The editor starts with no splash: the console shows the load log until the main window

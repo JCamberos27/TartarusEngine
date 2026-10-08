@@ -12,8 +12,6 @@ units, transform rotations use radians internally and `Transform.Rotate` takes d
 
 Project C# owns player/weapon rules and definitions, vitals/damage, scoring, gravity, NPC
 AI/spawning/squads, HUD/developer content, sound policy, locomotion actions and outfit choices.
-The [engine/game ownership guide](ENGINE_GAME_BOUNDARY.md) lists their owners and the native
-execution services that remain.
 
 Physics events call `Script.OnTriggerEnter/Stay/Exit(GameObject)` and
 `OnCollisionEnter/Stay/Exit(Collision)` once per completed physics batch, after Start and
