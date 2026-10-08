@@ -1,3 +1,5 @@
+#include "Scripting/ScriptRuntime.h"
+#include <json.hpp>
 #include "BloodFxImport.h"
 
 #include "Log.h"
@@ -443,7 +445,9 @@ bool BuildVat(const ExrImage& pos, const ExrImage& nrm, const std::vector<float>
 
 bool ImportPackage(const std::string& packageDir, const std::string& outDir) {
     namespace fs = std::filesystem;
-    const fs::path src = fs::u8path(packageDir) / "BloodResources";
+    std::string manifestText;if(!Scripting::RequestProject("content.blood","{}",manifestText))return false;
+    const auto manifest=nlohmann::json::parse(manifestText);
+    const fs::path src=fs::u8path(packageDir)/manifest.at("Root").get<std::string>();
     const fs::path dst = fs::u8path(outDir);
     std::error_code ec;
     fs::create_directories(dst / "decals", ec);
@@ -451,23 +455,11 @@ bool ImportPackage(const std::string& packageDir, const std::string& outDir) {
         Log::Error("BloodFx import: '" + packageDir + "' has no BloodResources folder - pass the VolumetricBloodFX package folder");
         return false;
     }
-    struct Sim { const char* Name; const char* Dir; const char* Mesh; const char* Pos; const char* Nrm; const char* Mat; };
-    static const Sim kSims[] = {
-        {"blood1", "Blood1", "blood_mesh.fbx", "blood_pos.exr", "blood_norm.exr", "Blood.mat"},
-        {"blood2_left", "Blood2/Left", "blood_mesh.fbx", "blood_pos.exr", "blood_norm.exr", "blood.mat"},
-        {"blood2_right", "Blood2/Right", "blood.fbx", "blood5_pos.exr", "blood.exr", "blood.mat"},
-        {"blood2_vertical", "Blood2/Vertical", "blood_mesh.fbx", "blood_pos.exr", "blood_norm.exr", "Blood.mat"},
-        {"blood3", "blood3", "blood_mesh.fbx", "blood_pos.exr", "blood_norm.exr", "blood.mat"},
-        {"blood4", "blood4", "blood_mesh.fbx", "blood_pos.exr", "blood_norm.exr", "blood.mat"},
-        {"blood5", "blood5", "blood_mesh.fbx", "blood_pos.exr", "blood_norm.exr", "blood.mat"},
-        {"blood6", "blood6", "blood_mesh.fbx", "blood_pos.exr", "blood_norm.exr", "blood.mat"},
-        {"blood7", "blood7", "blood_mesh.fbx", "blood_pos.exr", "blood_norm.exr", "blood.mat"},
-        {"blood8", "blood8", "blood_mesh.fbx", "blood_pos.exr", "blood_norm.exr", "blood.mat"},
-        {"blood9", "blood9", "blood_mesh.fbx", "blood_pos.exr", "blood_norm.exr", "blood.mat"},
-    };
+    struct Sim {std::string Name,Dir,Mesh,Pos,Nrm,Mat;};std::vector<Sim> sims;
+    for(const auto& x:manifest.at("Sims"))sims.push_back({x.at("Name"),x.at("Dir"),x.at("Mesh"),x.at("Pos"),x.at("Nrm"),x.at("Mat")});
     bool ok = true;
     size_t totalBytes = 0;
-    for (const Sim& s : kSims) {
+    for (const Sim& s : sims) {
         const fs::path dir = src / s.Dir;
         std::string err, matText, fbxText;
         std::vector<std::uint8_t> posBytes, nrmBytes;
@@ -509,22 +501,9 @@ bool ImportPackage(const std::string& packageDir, const std::string& outDir) {
         Log::Info(m.str());
     }
 
-    struct DecalSet { const char* Name; const char* Dir; const char* Norm; const char* Mask; };
-    static const DecalSet kDecals[] = {
-        {"blood1", "Blood1", "Decal_norm.png", "Decal_mask.png"},
-        {"blood2_left", "Blood2/Left", "Blood_normal.png", "Blood_Mask.png"},
-        {"blood2_right", "Blood2/Right", "decal.png", "decal_mask.png"},
-        {"blood2_vertical", "Blood2/Vertical", "Decal_norm.png", "Decal_mask.png"},
-        {"char", "Blood2/Vertical", "char_decal_norm.png", "char_decal_mask.png"},
-        {"blood3", "blood3", "decal_norm.png", "decal_mask.png"},
-        {"blood4", "blood4", "decal_norm.png", "decal_mask.png"},
-        {"blood6", "blood6", "decal_norm.png", "decal_mask.png"},
-        {"blood7", "blood7", "decal_norm.png", "decal_mask.png"},
-        {"blood8", "blood8", "decal_normal.png", "decal_mask.png"},
-        {"blood9", "blood9", "decal_norm.png", "decal_mask.png"},
-        {"attached", "AttachedBlood", "Decal_norm.png", "Decal_mask.png"},
-    };
-    for (const DecalSet& d : kDecals) {
+    struct DecalSet {std::string Name,Dir,Norm,Mask;};std::vector<DecalSet> decals;
+    for(const auto& x:manifest.at("Decals"))decals.push_back({x.at("Name"),x.at("Dir"),x.at("Norm"),x.at("Mask")});
+    for (const DecalSet& d : decals) {
         const fs::path dir = src / d.Dir;
         fs::copy_file(dir / d.Norm, dst / "decals" / (std::string(d.Name) + "_norm.png"), fs::copy_options::overwrite_existing, ec);
         if (!ec) fs::copy_file(dir / d.Mask, dst / "decals" / (std::string(d.Name) + "_mask.png"), fs::copy_options::overwrite_existing, ec);
@@ -533,7 +512,7 @@ bool ImportPackage(const std::string& packageDir, const std::string& outDir) {
             ok = false;
         }
     }
-    fs::copy_file(src / "AttachedBlood" / "DecalLookup.png", dst / "decals" / "lookup.png", fs::copy_options::overwrite_existing, ec);
+    fs::copy_file(src / manifest.at("Lookup").get<std::string>(), dst / "decals" / "lookup.png", fs::copy_options::overwrite_existing, ec);
     if (ec) { Log::Error("BloodFx import: DecalLookup.png: " + ec.message()); ok = false; }
 
     std::ofstream readme(dst / "README.md", std::ios::trunc);

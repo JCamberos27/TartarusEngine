@@ -1,4 +1,7 @@
+#include "Scripting/ScriptRuntime.h"
+#include <json.hpp>
 #include "CombatFx.h"
+#include <sstream>
 
 #include "AudioEngine.h"
 #include "Audio/FoleyAudio.h"
@@ -10,6 +13,7 @@
 #include "World.h"
 
 #include <algorithm>
+#include <map>
 #include <cmath>
 #include <utility>
 
@@ -20,24 +24,6 @@ constexpr float kFlameAhead = 0.01f;   // the flame's seat ahead of the muzzle f
 
 // The recorded one-shots CombatFx plays itself (manifest keys, tools/audio build_ui.py): the hitmarker ticks and a body falling.
 // Each is a keyed set of WeaponAudio, so the manifest's mix_db is its level; nothing here scales it.
-SoundSet* UiSet(const char* key) {
-    return WeaponAudio::Get().KeySet(key, [](SoundSet& s) {
-        s.MaxVoices = 4;
-        s.StealFadeTime = 0.01f;
-        s.ReverbSend = 0.0f; // a HUD tick is not in the room
-        s.Occlusion = 0;
-    });
-}
-SoundSet* BodyFallSet() {
-    return WeaponAudio::Get().KeySet("snd.body_fall", [](SoundSet& s) {
-        s.MinDistance = 2.0f;
-        s.MaxDistance = 30.0f;
-        s.MaxVoices = 4;
-        s.PitchMin = 0.95f;
-        s.PitchMax = 1.05f;
-        s.VolumeJitterDb = 1.0f;
-    });
-}
 void PlaySet(SoundSet* set, const glm::vec3& pos, bool at2D, float volume) {
     if (set && !set->Files.empty()) WeaponAudio::Get().PlayKeyed(*set, pos, at2D, volume);
 }
@@ -148,7 +134,17 @@ void CombatFx::Shot(World& world, Gun gun, const glm::vec3& origin, const glm::v
     const bool shotgun = gun == Gun::Shotgun;
     // The report: every layer of this gun's audio (close, mech, sub, tail, far), weighted by distance for the squad's guns.
     WeaponAudio::Get().SetListener(m_Listener);
-    WeaponAudio::Get().Shot(shotgun ? "870" : "ak", origin, fromPlayer, shooter);
+    auto& audio = WeaponAudio::Get();
+    if (muzzle && !muzzle->FiringSounds.empty()) {
+        SoundSet set;
+        set.Key = "attachment." + muzzle->FiringSounds;
+        set.FilesExplicit = true;
+        std::istringstream files(muzzle->FiringSounds);
+        std::string file;
+        while (std::getline(files, file, ';')) if (!file.empty()) set.Files.push_back(file);
+        SoundPlayer::Request request; request.Position = origin; request.At2D = fromPlayer;
+        audio.Player().Play(set, request);
+    } else audio.Shot(muzzle && !muzzle->FiringSoundProfile.empty() ? muzzle->FiringSoundProfile : shotgun ? "870" : "ak", origin, fromPlayer, shooter);
     MuzzleEffectSettings fallback;
     fallback.FlashTime=Settings.FlashTime;fallback.PlayerFlashScale=Settings.PlayerFlashScale;
     fallback.FlameGlow=Settings.FlameGlow*(shotgun?0.5f:1.0f);fallback.FlameScale=Settings.FlameScale;
@@ -181,7 +177,7 @@ void CombatFx::Shot(World& world, Gun gun, const glm::vec3& origin, const glm::v
     }
     // The flash: a hot core plus a fan of sparks along the bore, then a puff of smoke drifting up.
     const glm::vec3 side = AnyPerpendicular(dir), up = glm::cross(side, dir);
-    if (auto* ps = world.Registry.try_get<ParticleSystemComponent>(m_Sparks); ps && !fromPlayer && fx.Enabled) {
+    if (auto* ps = world.Registry.try_get<ParticleSystemComponent>(m_Sparks); ps && !fromPlayer && fx.Enabled && !fx.PrefabParticles) {
         const int n = std::clamp(fx.SparkCount,0,128);
         for (int i = 0; i < n; ++i) {
             ParticleSystemComponent::Particle p;
@@ -193,7 +189,7 @@ void CombatFx::Shot(World& world, Gun gun, const glm::vec3& origin, const glm::v
             ps->Live.push_back(p);
         }
     }
-    if(fx.Enabled && fx.FlameScale>0.0f && !fx.FlameTexture.empty()) {
+    if(fx.Enabled && !fx.PrefabParticles && fx.FlameScale>0.0f && !fx.FlameTexture.empty()) {
         // The flame's one particle, on the muzzle's face (kFlameAhead), 0.04-0.06 m
         // wide when grown (start size 0.5-0.75, times 0.08 over its life). The AK's (P_AK105) is
         // 0.16-0.32 m long and lives 0.125-0.175 s; the shotgun's (P_SRM12's forward flame - not its
@@ -263,7 +259,7 @@ void CombatFx::MuzzleSpritesFor(bool shotgun, bool fromPlayer, const glm::vec3& 
     // view: the player's own is a third of the size and a fraction of the light of what a soldier's reads as across a room.
     const float k = settings.FlameScale / 1.75f * (fromPlayer ? 0.5f : 1.0f);
     const float heat = fromPlayer ? 0.4f : 1.0f;
-    if (const int flash = fx.Entry(settings.FlashSprite); flash >= 0 && !settings.FlashSprite.empty()) {
+    if (const int flash = fx.Entry(settings.FlashSprite); flash >= 0 && !settings.FlashSprite.empty() && !settings.PrefabParticles) {
         FxSprites::Emit e;
         e.Entry = flash;
         e.Mode = FxSprites::Shade::Additive;
@@ -278,7 +274,7 @@ void CombatFx::MuzzleSpritesFor(bool shotgun, bool fromPlayer, const glm::vec3& 
         e.FadeOut = 0.6f;
         add(e);
     }
-    if (const int jets = fx.Entry("muzzle_side"); jets >= 0 && settings.SideJets) {
+    if (const int jets = fx.Entry("muzzle_side"); jets >= 0 && settings.SideJets && !settings.PrefabParticles) {
         FxSprites::Emit e;
         e.Entry = jets;
         e.Mode = FxSprites::Shade::Additive;
@@ -292,7 +288,7 @@ void CombatFx::MuzzleSpritesFor(bool shotgun, bool fromPlayer, const glm::vec3& 
         e.FadeOut = 0.7f;
         add(e);
     }
-    if (const int glow = fx.Entry("glow"); glow >= 0 && settings.CoreGlow) {
+    if (const int glow = fx.Entry("glow"); glow >= 0 && settings.CoreGlow && !settings.PrefabParticles) {
         FxSprites::Emit e;
         e.Entry = glow;
         e.Mode = FxSprites::Shade::Additive;
@@ -372,17 +368,13 @@ void CombatFx::Whizz(const glm::vec3& point, float miss) {
 
 void CombatFx::Play(Cue cue, const glm::vec3& pos, bool at2D, float volume) {
     if (!m_Active) return;
-    switch (cue) {
-    // The pump, the reload and the dry fire are the weapons' own: an animator's snd.* event plays the recorded take
-    // (snd.<gun>.pump_back, mag_out, dry_fire ...), so these cues make no sound of their own.
-    case Cue::Pump:
-    case Cue::Reload:
-    case Cue::DryFire: break;
-    case Cue::BodyFall: PlaySet(BodyFallSet(), pos, at2D, volume); break;
-    case Cue::FleshHit: ImpactAudio::Get().Flesh(pos, at2D, volume); break; // the recorded flesh impact (snd.impact.flesh)
-    case Cue::Hitmarker: PlaySet(UiSet("snd.ui.hitmarker"), pos, true, volume); break;
-    case Cue::HitmarkerKill: PlaySet(UiSet("snd.ui.hitmarker_kill"), pos, true, volume); break;
-    }
+    static std::map<int,nlohmann::json> policies;static std::uint64_t generation=~std::uint64_t{};
+    if(generation!=Scripting::CodeGeneration()){policies.clear();generation=Scripting::CodeGeneration();}
+    auto found=policies.find((int)cue);if(found==policies.end()){std::string text;if(!Scripting::RequestProject("audio.cue",nlohmann::json((int)cue).dump(),text))return;found=policies.emplace((int)cue,nlohmann::json::parse(text)).first;}
+    const auto& policy=found->second;const int kind=policy.at("kind").get<int>();
+    if(kind==1){ImpactAudio::Get().Flesh(pos,at2D,volume);return;}
+    if(kind==2){const auto key=policy.at("key").get<std::string>();auto* set=WeaponAudio::Get().KeySet(key,[&](SoundSet& value){value=SoundSet::FromJson(key,policy.at("set").dump(),value);});PlaySet(set,pos,policy.value("at2d",false)||at2D,volume);}
+
 }
 
 void CombatFx::Update(World& world, float dt) {

@@ -14,11 +14,19 @@ public abstract class Script : Component
     public bool enabled { get => IsEnabled; set { NativeRequest r = new() { Entity = Entity, Script = SlotId, Result = value ? 1 : 0 }; if (Engine.Call(51, ref r) != 0) IsEnabled = value; } }
     public virtual void Awake() => OnCreate();
     public virtual void Start() { }
+    /// <summary>Called with scene services after managed code is replaced and saved state is restored.</summary>
+    public virtual void OnReload() { }
     public virtual void OnEnable() { }
     public virtual void OnDisable() { }
     public virtual void Update() { }
     public virtual void FixedUpdate() { }
     public virtual void LateUpdate() { }
+    public virtual void OnTriggerEnter(GameObject other) { }
+    public virtual void OnTriggerStay(GameObject other) { }
+    public virtual void OnTriggerExit(GameObject other) { }
+    public virtual void OnCollisionEnter(Collision collision) { }
+    public virtual void OnCollisionStay(Collision collision) { }
+    public virtual void OnCollisionExit(Collision collision) { }
     public virtual void OnCreate() { }
     public virtual void Update(float dt) => Update();
     public virtual void FixedUpdate(float dt) => FixedUpdate();
@@ -29,14 +37,6 @@ public abstract class Script : Component
 
 public abstract class MonoBehaviour : Script { }
 
-public interface IGameplay
-{
-    void Player(ref PlayerFrame frame);
-    void Weapon(ref WeaponFrame frame);
-    void Shot(ref ShotFrame frame);
-}
-
-/// <summary>Main-thread services; entity IDs include EnTT generation bits.</summary>
 public static unsafe class Engine
 {
     internal static delegate* unmanaged[Cdecl]<int, NativeRequest*, int> Callback;
@@ -53,8 +53,14 @@ public static unsafe class Engine
     }
     public static int TextCall(int op, string text, ref NativeRequest request)
     {
-        byte[] utf8 = System.Text.Encoding.UTF8.GetBytes(text + '\0');
-        fixed (byte* p = utf8) { request.Text = (nint)p; return Call(op, ref request); }
+        int count=System.Text.Encoding.UTF8.GetByteCount(text);
+        if(count<1024){
+            Span<byte> utf8=stackalloc byte[count+1];System.Text.Encoding.UTF8.GetBytes(text.AsSpan(),utf8);utf8[count]=0;
+            fixed(byte* p=utf8){request.Text=(nint)p;return Call(op,ref request);}
+        }
+        byte[] buffer=System.Buffers.ArrayPool<byte>.Shared.Rent(count+1);
+        try{System.Text.Encoding.UTF8.GetBytes(text.AsSpan(),buffer.AsSpan());buffer[count]=0;fixed(byte* p=buffer){request.Text=(nint)p;return Call(op,ref request);}}
+        finally{System.Buffers.ArrayPool<byte>.Shared.Return(buffer);}
     }
     public static void Log(string message) { NativeRequest r = default; TextCall(0, message, ref r); }
     public static float Axis(string action) { NativeRequest r = default; TextCall(10, action, ref r); return r.Value; }

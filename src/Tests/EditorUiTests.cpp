@@ -847,7 +847,10 @@ void RegisterTests() {
     });
     Add("sections: A toggles the Enabled field with undo; disabled header", {
         FreshScene(),
-        Do("add an Audio Listener", [](Ctx& c) { c.W.Registry.emplace<AudioListenerComponent>(ByName(c.W, "Beta")); }), Wait(2),
+        Do("add an Audio Listener", [](Ctx& c) {
+            X::PushUndo(c.E, c.W, "Add Audio Listener");
+            c.W.Registry.emplace<AudioListenerComponent>(ByName(c.W, "Beta"));
+        }), Wait(2),
         SelectByName("Beta"), Wait(3),
         MoveToItem(Header("Audio Listener")), Wait(2),
         Key(ImGuiKey_A), Wait(3),
@@ -916,7 +919,10 @@ void RegisterTests() {
             const UiItem* f = Find(ByTag("field:Audio Source/Min Distance"));
             return f && (f->ItemFlags & ImGuiItemFlags_Disabled);
         }),
-        Do("change the volume", [](Ctx& c) { c.W.Registry.get<AudioSourceComponent>(ByName(c.W, "Beta")).Volume = 0.77f; }), Wait(2),
+        Do("change the volume", [](Ctx& c) {
+            X::PushUndo(c.E, c.W, "Change Volume");
+            c.W.Registry.get<AudioSourceComponent>(ByName(c.W, "Beta")).Volume = 0.77f;
+        }), Wait(2),
         RightClick(ByTag("field:Audio Source/Volume")), Wait(2),
         Click(MenuItem("Reset to Default")), Wait(3),
         ExpectTrue("volume back to default", [](Ctx& c) {
@@ -950,6 +956,7 @@ void RegisterTests() {
             const std::string fixture = (std::filesystem::path(exe).parent_path() / "ScriptTests/Tartarus.Gameplay.Tests.dll").u8string();
             if (!std::filesystem::exists(std::filesystem::u8path(fixture))) { Fail("test assembly not built: " + fixture); return; }
             if (!Scripting::Invoke(0, const_cast<char*>(fixture.c_str()), Scripting::kVersion)) { Fail("couldn't load the test assembly"); return; }
+            X::PushUndo(c.E, c.W, "Attach AttributeProbe");
             auto& comp = c.W.Registry.emplace<CSharpScriptComponent>(ByName(c.W, "Alpha"));
             Scripting::Attach(comp, "", "Tartarus.Tests.AttributeProbe");
         }), Wait(2),
@@ -962,6 +969,7 @@ void RegisterTests() {
         Click(ByTag("cs:Advanced")), Wait(3),
         ExpectTrue("Note shown once Advanced is on", [](Ctx&) { return Find(ByTagPrefix("cs:Note=")) != nullptr; }),
         Do("Mode = Off", [](Ctx& c) {
+            X::PushUndo(c.E, c.W, "Change Mode");
             auto& comp = c.W.Registry.get<CSharpScriptComponent>(ByName(c.W, "Alpha"));
             auto slots = Scripting::GetSlots(comp);
             nlohmann::json f = nlohmann::json::parse(slots[0].Fields, nullptr, false);
@@ -981,7 +989,10 @@ void RegisterTests() {
         Click(ByLabel("Reset Hits", kInspector)), Wait(3),
         ExpectTrue("Reset Hits ran", [](Ctx& c) { return ScriptField(c, "Hits") == nlohmann::json(0); }),
         Key(ImGuiKey_Z, ImGuiMod_Ctrl), Wait(3),
-        ExpectTrue("undo brings Hits back", [](Ctx& c) { const auto v = ScriptField(c, "Hits"); return v.is_null() || v == nlohmann::json(3); }),
+        Expect("undo brings Hits back", [](Ctx& c) {
+            const auto v=ScriptField(c,"Hits");
+            return v.is_null() || v==nlohmann::json(3) ? std::string() : "Hits="+v.dump()+", Speed="+ScriptField(c,"Speed").dump();
+        }),
         Click(ByTagPrefix("cs:New key##Weights=")), Wait(2),
         TypeText("legs"), Wait(2),
         Click(ByExact("Add##Weights", kInspector)), Wait(3),

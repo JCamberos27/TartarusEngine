@@ -2827,8 +2827,6 @@
       ]
     },
     {
-      "Foley Audio": {},
-      "Impact Audio": {},
       "Reverb Bus": {},
       "id": 58,
       "name": "Audio / Settings",
@@ -2849,58 +2847,17 @@
         1.0,
         1.0,
         1.0
-      ]
+      ],
+      "C# Script": {
+        "Class": "Tartarus.Gameplay.FoleyDefinition",
+        "Source": "assets/Scripts/FoleyDefinition.cs",
+        "Fields JSON": "{}",
+        "Enabled": true,
+        "Scripts": "[{\"id\":1,\"source\":\"assets/Scripts/ImpactAudioDefinition.cs\",\"class\":\"Tartarus.Gameplay.ImpactAudioDefinition\",\"fields\":{},\"enabled\":true}]",
+        "Next Script ID": 2
+      }
     },
     {
-      "First Person Controller": {
-        "Animation Set": {
-          "path": "assets/Weapons/AKS74U/AKS74U.fpsanim",
-          "pathGuid": "c0ff631aac421f76"
-        },
-        "Camera Bone": "head",
-        "Capsule Height": 1.850000023841858,
-        "Capsule Radius": 0.30000001192092896,
-        "Coyote Time": 0.10000000149011612,
-        "Eye Height": 1.7000000476837158,
-        "Field of View": 90.0,
-        "Gravity": 18.0,
-        "Gravity Gun": true,
-        "Invert Y": false,
-        "Jump Buffer Time": 0.11999999731779099,
-        "Jump Speed": 5.5,
-        "Kill Height": -20.0,
-        "Max Throw Speed": 16.0,
-        "Min Throw Speed": 3.5,
-        "Mouse Sensitivity": 0.05000000074505806,
-        "Move Speed": 4.0,
-        "Secondary Animation Set": {
-          "path": "assets/Weapons/Remington870/Remington870.fpsanim",
-          "pathGuid": "4e3925bded078f9a"
-        },
-        "Sprint Multiplier": 1.600000023841858,
-        "Throw Backspin": 2.0,
-        "Throw Charge Time": 1.100000023841858,
-        "View Model FOV": 50.0,
-        "View Model Offset": [
-          0.05620000138878822,
-          -0.03200000151991844,
-          0.0
-        ],
-        "View Model Rotation": [
-          -0.23999999463558197,
-          0.38999998569488525,
-          0.0
-        ],
-        "View Model Scale": 1.0,
-        "Primary Weapon Prefab": {
-          "path": "assets/Weapons/AKS74U/AKS74U.prefab",
-          "pathGuid": "b19271e02ef840f1"
-        },
-        "Secondary Weapon Prefab": {
-          "path": "assets/Weapons/Remington870/Remington870.prefab",
-          "pathGuid": "cf1fec9edad348ec"
-        }
-      },
       "id": 59,
       "name": "Player Spawn",
       "order": 58,
@@ -2920,7 +2877,15 @@
         1.0,
         1.0,
         1.0
-      ]
+      ],
+      "C# Script": {
+        "Class": "Tartarus.Gameplay.PlayerDefinition",
+        "Source": "assets/Scripts/PlayerDefinition.cs",
+        "Fields JSON": "{\"AnimationSet\":{\"path\":\"assets/Weapons/AKS74U/AKS74U.fpsanim\",\"pathGuid\":\"c0ff631aac421f76\"},\"CameraBone\":\"head\",\"CapsuleHeight\":1.850000023841858,\"CapsuleRadius\":0.30000001192092896,\"CoyoteTime\":0.10000000149011612,\"EyeHeight\":1.7000000476837158,\"Gravity\":18.0,\"GravityGun\":true,\"InvertY\":false,\"JumpBufferTime\":0.11999999731779099,\"JumpSpeed\":5.5,\"KillY\":-20.0,\"MaxThrowSpeed\":16.0,\"MinThrowSpeed\":3.5,\"MouseSensitivity\":0.05000000074505806,\"MoveSpeed\":4.0,\"SecondaryAnimationSet\":{\"path\":\"assets/Weapons/Remington870/Remington870.fpsanim\",\"pathGuid\":\"4e3925bded078f9a\"},\"SprintMultiplier\":1.600000023841858,\"ThrowBackspin\":2.0,\"ThrowChargeTime\":1.100000023841858,\"ViewModelFov\":50.0,\"ViewModelOffset\":{\"X\":0.05620000138878822,\"Y\":-0.03200000151991844,\"Z\":0.0},\"ViewModelRotation\":{\"X\":-0.23999999463558197,\"Y\":0.38999998569488525,\"Z\":0.0},\"ViewModelScale\":1.0,\"PrimaryWeaponPrefab\":{\"path\":\"assets/Weapons/AKS74U/AKS74U.prefab\",\"pathGuid\":\"b19271e02ef840f1\"},\"SecondaryWeaponPrefab\":{\"path\":\"assets/Weapons/Remington870/Remington870.prefab\",\"pathGuid\":\"cf1fec9edad348ec\"},\"FieldOfView\":90.0}",
+        "Enabled": true,
+        "Scripts": "[]",
+        "Next Script ID": 1
+      }
     },
     {
       "Character Outfit": {
@@ -3039,13 +3004,6 @@
       ]
     },
     {
-      "Squad Settings": {
-        "Difficulty": 1.0,
-        "NPC Damage Scale": 0.44999998807907104,
-        "Respawn": false,
-        "Respawn Delay": 8.0,
-        "Squad Size": 2
-      },
       "id": 61,
       "name": "AI Director",
       "order": 60,
@@ -3065,16 +3023,17 @@
         1.0,
         1.0,
         1.0
-      ]
+      ],
+      "C# Script": {
+        "Class": "Tartarus.Gameplay.SquadDefinition",
+        "Source": "assets/Scripts/SquadDefinition.cs",
+        "Fields JSON": "{\"Difficulty\":1.0,\"NpcDamageScale\":0.44999998807907104,\"Respawn\":false,\"RespawnDelay\":8.0,\"SquadSize\":2}",
+        "Enabled": true,
+        "Scripts": "[]",
+        "Next Script ID": 1
+      }
     },
     {
-      "NPC Spawn": {
-        "Brain": "Squad AI",
-        "Outfit Seed": 0,
-        "Skill": 0.6,
-        "Squad": 0,
-        "Weapon": "AKS-74U"
-      },
       "active": false,
       "id": 62,
       "name": "NPC Room 1",
@@ -3095,16 +3054,17 @@
         1.0,
         1.0,
         1.0
-      ]
+      ],
+      "C# Script": {
+        "Class": "Tartarus.Gameplay.NpcDefinition",
+        "Source": "assets/Scripts/NpcDefinition.cs",
+        "Fields JSON": "{\"Brain\":0,\"OutfitSeed\":0,\"Skill\":0.6,\"Squad\":0,\"Weapon\":0}",
+        "Enabled": true,
+        "Scripts": "[]",
+        "Next Script ID": 1
+      }
     },
     {
-      "NPC Spawn": {
-        "Brain": "Squad AI",
-        "Outfit Seed": 0,
-        "Skill": 0.6,
-        "Squad": 0,
-        "Weapon": "AKS-74U"
-      },
       "active": false,
       "id": 63,
       "name": "NPC Room 2",
@@ -3125,16 +3085,17 @@
         1.0,
         1.0,
         1.0
-      ]
+      ],
+      "C# Script": {
+        "Class": "Tartarus.Gameplay.NpcDefinition",
+        "Source": "assets/Scripts/NpcDefinition.cs",
+        "Fields JSON": "{\"Brain\":0,\"OutfitSeed\":0,\"Skill\":0.6,\"Squad\":0,\"Weapon\":0}",
+        "Enabled": true,
+        "Scripts": "[]",
+        "Next Script ID": 1
+      }
     },
     {
-      "NPC Spawn": {
-        "Brain": "Squad AI",
-        "Outfit Seed": 0,
-        "Skill": 0.6,
-        "Squad": 1,
-        "Weapon": "AKS-74U"
-      },
       "active": false,
       "id": 64,
       "name": "NPC Field 1",
@@ -3155,16 +3116,17 @@
         1.0,
         1.0,
         1.0
-      ]
+      ],
+      "C# Script": {
+        "Class": "Tartarus.Gameplay.NpcDefinition",
+        "Source": "assets/Scripts/NpcDefinition.cs",
+        "Fields JSON": "{\"Brain\":0,\"OutfitSeed\":0,\"Skill\":0.6,\"Squad\":1,\"Weapon\":0}",
+        "Enabled": true,
+        "Scripts": "[]",
+        "Next Script ID": 1
+      }
     },
     {
-      "NPC Spawn": {
-        "Brain": "Squad AI",
-        "Outfit Seed": 0,
-        "Skill": 0.6,
-        "Squad": 1,
-        "Weapon": "AKS-74U"
-      },
       "active": false,
       "id": 65,
       "name": "NPC Field 2",
@@ -3185,7 +3147,15 @@
         1.0,
         1.0,
         1.0
-      ]
+      ],
+      "C# Script": {
+        "Class": "Tartarus.Gameplay.NpcDefinition",
+        "Source": "assets/Scripts/NpcDefinition.cs",
+        "Fields JSON": "{\"Brain\":0,\"OutfitSeed\":0,\"Skill\":0.6,\"Squad\":1,\"Weapon\":0}",
+        "Enabled": true,
+        "Scripts": "[]",
+        "Next Script ID": 1
+      }
     },
     {
       "Light": {

@@ -111,6 +111,13 @@ void EditorLayer::SyncProjectChanges(World& world, AssetLibrary& assets) {
     if (!ProjectWatcher::IsRunning()) return;
     bool overflowed = false;
     const std::vector<ProjectWatcher::Change> changes = ProjectWatcher::Drain(300, overflowed);
+    const bool external=overflowed || std::any_of(changes.begin(),changes.end(),[this](const auto& c) {
+        if (AtomicFile::WrittenBySelfRecently(c.Path)) return false;
+        for (const auto& move:m_SelfMoves)
+            if (SameFile(move.first,c.OldPath) && SameFile(move.second,c.Path)) return false;
+        return true;
+    });
+    if (external) FinishGlobalUndo(world,true);
     if (overflowed) {
         // Too many changes at once for the OS journal (a branch switch, a huge copy): rescan.
         Log::Info("Project watcher: many files changed at once - rescanning the project.");
@@ -137,6 +144,7 @@ void EditorLayer::SyncProjectChanges(World& world, AssetLibrary& assets) {
             case K::Modified: OnExternalModify(world, assets, c.Path); break;
         }
     }
+    if (external) m_CurrentUndoScene.clear(); // refresh after external library/reference mutations
 }
 
 void EditorLayer::OnExternalMove(World& world, AssetLibrary& assets, const std::string& oldPath, const std::string& newPath) {
@@ -203,6 +211,7 @@ bool EditorLayer::RenameAssetFile(World& world, AssetLibrary& assets, const std:
     const std::string oldAbs = AbsoluteOf(oldKey), newAbs = AbsoluteOf(newKey);
     std::error_code ec;
     if (fs::exists(newAbs, ec) && !SameFile(oldAbs, newAbs)) { error = "a file with that name already exists"; return false; }
+    PushUndo(world,"Rename Asset"); // path fixups/library keys are authored scene changes as well
     AtomicFile::NotifyWillChange(oldAbs);AtomicFile::NotifyWillChange(newAbs);
     AtomicFile::NotifyWillChange(oldAbs+".meta");AtomicFile::NotifyWillChange(newAbs+".meta");
     fs::rename(oldAbs, newAbs, ec);

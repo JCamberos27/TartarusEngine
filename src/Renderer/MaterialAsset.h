@@ -87,6 +87,9 @@ struct MaterialAsset {
 
     // Saves Mat and the texture path strings to the .mat file. Returns false on I/O error.
     bool Save() const;
+    // Select a shader without losing shared PBR values or authored custom properties.
+    // Missing custom values receive the descriptor's defaults; its queue becomes the surface default.
+    bool SetShader(const std::string& reference, AssetLibrary& assets);
 
     // Property access by shader property name (e.g. "_BaseColor"). Used by the data-driven
     // inspector and BindMaterial to map ShaderProperty names to Material field values.

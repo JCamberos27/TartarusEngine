@@ -221,17 +221,14 @@ Report Build(const ProjectSettings::BuildSettings& s, Progress* progress) {
         if (!fs::is_directory(managed, ec)) { copy.Error="C# runtime is missing. Build TartarusScripts first."; return false; }
         if (!copy.Tree(managed, out / "Managed", "C# runtime", [](const fs::directory_entry& e) {
                 const auto name=e.path().filename().string();
-                return name=="obj" || name=="bin" || name=="IDE" || name.rfind("Tartarus.Editor.",0)==0;
+                return name=="obj" || name=="bin" || name=="IDE" || name=="SDK" || name.rfind("Tartarus.Editor.",0)==0 || name.rfind("Tartarus.Gameplay.",0)==0;
             })) return false;
-        // Background script builds are newer than CMake staging. Export the same gameplay
-        // assembly the editor runs, while excluding separately compiled editor tools.
+        // Export exactly the project's assembly, even when absent or older than the sample's staged build.
         const fs::path scriptsBin=projectRoot/"Scripts/bin";
-        const fs::path projectGameplay=scriptsBin/"Tartarus.Gameplay.dll";
-        const fs::path stagedGameplay=managed/"Tartarus.Gameplay.dll";
-        if(fs::exists(projectGameplay,ec) && (!fs::exists(stagedGameplay,ec) || fs::last_write_time(projectGameplay,ec)>fs::last_write_time(stagedGameplay,ec))) {
-            if(!copy.Tree(scriptsBin,out/"Managed","C# gameplay",[](const fs::directory_entry& e) {
-                return e.path().filename().string().rfind("Tartarus.Editor.",0)==0;
-            })) return false;
+        if(fs::is_directory(scriptsBin,ec)) {
+            if(!copy.Tree(scriptsBin,out/"project/Scripts/bin","C# gameplay",[](const fs::directory_entry& e) {
+                const auto name=e.path().filename().string();return name.rfind("Tartarus.Editor.",0)==0 || name=="obj";
+            }))return false;
         }
         const fs::path engineAssets = exeDir / "assets";
         if (fs::is_directory(engineAssets, ec) &&

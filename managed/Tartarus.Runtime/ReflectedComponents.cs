@@ -37,13 +37,3 @@ public sealed class Collider : ReflectedComponent
     public override string NativeType => "Collider";
     public Vector3 halfExtents { get => data.Get<Vector3>("HalfExtents"); set => data.Set("HalfExtents", value); }
 }
-public sealed class WeaponDefinition : ReflectedComponent
-{
-    public override string NativeType => "Weapon Definition";
-    public string description { get => data.Get<string>("Description"); set => data.Set("Description", value); }
-    public string animationSet { get => data.Get<string>("Animation Set"); set => data.Set("Animation Set", value); }
-}
-public sealed class FirstPersonController : ReflectedComponent
-{
-    public override string NativeType => "First Person Controller";
-}

@@ -1,12 +1,17 @@
 # Tartarus documentation
 
-## External assets
+## Editor authoring
 
 The repository [README](../README.md) is authoritative for asset setup and Git policy.
 Licensed third-party models, animations, textures and audio stay in the private asset library;
 only their `.meta` sidecars, authored settings and `project/external_assets.csv` belong in Git.
 This also applies to re-exported weapon FBXs and sounds derived from third-party recordings.
 Run `python tools/assets/check_git_assets.py` before committing or pushing.
+
+* [Editor Enhancers](EDITOR_ENHANCERS.md): hierarchy and folder styles, Inspector attributes, tabs, favorites and ruler.
+* [History and custom Inspectors](EDITOR_HISTORY_AND_INSPECTORS.md): global undo and C# Inspector authoring.
+* [Script IDE](SCRIPT_IDE.md): embedded C# editing, semantic navigation, compilation and recovery.
+* [Curve editor](CURVE_EDITOR.md): shared curve authoring tools.
 
 ## C# gameplay and editor scripting
 
@@ -31,5 +36,4 @@ guide's boundaries before assuming Unity package or serialization compatibility.
   [particle system](PARTICLE_SYSTEM.md).
 * [Editor Enhancers](EDITOR_ENHANCERS.md): hierarchy/folder styling, bookmarks, hover keys, tabs,
   favorites and the ruler (vHierarchy / vFolders / vInspector / vTabs / vFavorites / vRuler).
-* [Editor Enhancers handoff](EDITOR_ENHANCERS_HANDOFF.md): remaining phases (vInspector, vTabs,
-  vFavorites, vRuler) and the code map to continue them.
+* [Editor Enhancers handoff](EDITOR_ENHANCERS_HANDOFF.md): implementation design and code map for the integrated tools.

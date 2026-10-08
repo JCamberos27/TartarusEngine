@@ -11,6 +11,7 @@ TransformComponent      = Identity. Every entity has one; the Inspector's Transf
 NameComponent           = Identity. Edited via the Inspector name row, not an Add-Component section.
 OrderComponent          = Serializer-internal stable ordering (see the comment on the struct). No user-facing control.
 HierarchyComponent      = Parent/children graph. Surfaced by the Scene Hierarchy panel's drag-reparent, not an Inspector section.
+FirstPersonControllerComponent = Temporary native runtime view resolved from project PlayerDefinition; never authored or serialized as a native component.
 DetachedMeshComponent   = Editor-only, never serialized. Holds the mesh removed via "Mesh Renderer" so re-adding restores it.
 PrefabInstanceComponent = #236 A2 prefab-instance stub. Its scene representation is a one-line stub written by a dedicated serializer path, not a generic component block.
 LevelGeometryTag        = Structural: selects the Hierarchy section and the "boxes" vs "models" JSON array an entity round-trips through.
@@ -30,3 +31,13 @@ OutfitHideTag           = Runtime-only: OutfitSystem::UpdateHiding sets it on ou
 OutfitLayerTag          = Runtime-only: OutfitSystem::UpdateHiding sets it on outfit pieces worn under other layers (how much nearer the camera ModelVertex.glsl draws them). Rebuilt from the outfit whenever its pieces change; never saved, no Inspector.
 OwnerViewOnlyTag        = Runtime-only (split poses): FirstPersonPresentation::PlaceWorldWeapon sets it on the first-person gun so only the player's own camera draws it (no other view, no shadow). The entity only exists during Play; never saved, no Inspector.
 HiddenFromOwnerTag      = Runtime-only (split poses): set on the world copies of the gun and the body (FirstPersonBody::MakeTwins, PlaceWorldWeapon) so every view but the player's camera draws them, and they cast the shadows. They only exist during Play; never saved, no Inspector.
+
+NpcSpawnComponent = Runtime-only cached view of project NpcDefinition; authored/serialized as C# scripts.
+
+SquadSettingsComponent = Runtime-only cached view of project SquadDefinition; authored/serialized as C# scripts.
+
+WeaponAudioComponent = Cached runtime projection of project C# WeaponAudioDefinition; not authored or serialized.
+FoleyAudioComponent = Cached runtime projection of project C# FoleyDefinition; not authored or serialized.
+FxHudSettingsComponent = Cached runtime projection of project C# EffectsDefinition; not authored or serialized.
+
+ImpactAudioComponent = Cached runtime projection of project C# ImpactAudioDefinition; not authored or serialized.

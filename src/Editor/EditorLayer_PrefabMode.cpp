@@ -10,6 +10,7 @@
 #include "EditorLayerInternal.h"
 #include "EditorUIHelpers.h"
 #include "EditorUIPrimitives.h"
+#include "EditorPanels.h"
 #include "AssetLibrary.h"
 #include "Camera.h"
 #include "Components.h"
@@ -19,6 +20,7 @@
 #include "World.h"
 
 #include <imgui.h>
+#include <imgui_internal.h>
 #include <IconsFontAwesome6.h>
 
 #include <climits>
@@ -54,12 +56,14 @@ void EditorLayer::EnterPrefabMode(World& world, AssetLibrary& assets, const std:
     if (InPrefabMode()) {
         if (m_PrefabModePath == path) return;
         ExitPrefabMode(world, assets);
+        if (InPrefabMode()) return; // a failed save keeps the authored world open
     }
     std::error_code ec;
     if (!std::filesystem::is_regular_file(std::filesystem::u8path(path), ec)) {
         Log::Error("Prefab '" + path + "' doesn't exist.");
         return;
     }
+    FinishGlobalUndo(world,true);
     CancelEyedropper();
     m_PrefabModeSceneSnapshot = SceneSerializer::SaveToString(world);
     m_PrePrefabHistory = { m_UndoStack, m_RedoStack, m_UndoBaseJson, m_RedoBaseJson,
@@ -76,6 +80,7 @@ void EditorLayer::EnterPrefabMode(World& world, AssetLibrary& assets, const std:
         // Put the scene back exactly as it was.
         SceneSerializer::LoadFromString(world, assets, m_PrefabModeSceneSnapshot);
         RestorePrePrefabHistory();
+        EnsureUndoScene(world);
         m_PrefabModeSceneSnapshot.clear();
         Log::Error("Couldn't open prefab '" + path + "'.");
         return;
@@ -96,6 +101,7 @@ void EditorLayer::EnterPrefabMode(World& world, AssetLibrary& assets, const std:
     m_Dirty = false;
     m_SavedUndoDepth = m_ContentDepth;
     SelectItem(root, false);
+    EnsureUndoScene(world);
     if (m_EditorCameraPtr) FrameSceneBounds(world, *m_EditorCameraPtr);
     Log::Info("Opened prefab " + ProjectPaths::Relativize(path) + " - Back to Scene saves it.");
 }
@@ -108,9 +114,20 @@ bool EditorLayer::SavePrefabMode(World& world) {
         Log::Error("Prefab Mode: nothing to save - the prefab needs a root object.");
         return false;
     }
-    if (roots > 1)
-        Log::Warn("Prefab Mode: only the first root object and its children are saved; move the other " +
-                  std::to_string(roots - 1) + " top-level object(s) under it.");
+    if (roots > 1) {
+        // Asset drops create scene roots. In this isolated world they belong to the prefab,
+        // and must not disappear when SavePrefab serializes only the root's descendants.
+        std::vector<entt::entity> addedRoots;
+        for (auto e : world.Registry.view<TransformComponent>()) {
+            const auto* h = world.Registry.try_get<HierarchyComponent>(e);
+            if (e != root && (!h || h->Parent == entt::null)) addedRoots.push_back(e);
+        }
+        if (!addedRoots.empty()) PushUndo(world,"Parent prefab additions");
+        for (auto e : addedRoots) if (!world.SetParent(e, root)) {
+            Log::Error("Prefab Mode: couldn't parent an added object. Your edits remain open; move it under the prefab root and save again.");
+            return false;
+        }
+    }
     if (!SceneSerializer::SavePrefab(world, root, m_PrefabModePath)) return false;
     SceneSerializer::ClearPrefabPristineCache(); // instances diff their overrides against the new file
     m_Dirty = false;
@@ -119,6 +136,7 @@ bool EditorLayer::SavePrefabMode(World& world) {
 }
 
 void EditorLayer::RestorePrePrefabHistory() {
+    m_CurrentUndoScene.clear();
     if (!m_PrePrefabHistory.Valid) return;
     m_UndoStack = std::move(m_PrePrefabHistory.Undo);
     m_RedoStack = std::move(m_PrePrefabHistory.Redo);
@@ -136,9 +154,11 @@ void EditorLayer::RestorePrePrefabHistory() {
 void EditorLayer::ExitPrefabMode(World& world, AssetLibrary& assets, bool save) {
     if (!InPrefabMode()) return;
     CancelEyedropper();
-    if (save && m_Dirty && !SavePrefabMode(world)) {
-        Log::Error("Prefab Mode: the prefab couldn't be saved; your prefab edits are lost, the scene is unchanged.");
+    if (save && !SavePrefabMode(world)) {
+        Log::Error("Prefab Mode: couldn't save the prefab. Your edits remain open.");
+        return;
     }
+    FinishGlobalUndo(world,true); // close the isolated world's transaction before restoring the scene
     SceneSerializer::ClearPrefabPristineCache();
     ClearSelection();
     m_HierarchyVisibleOrder.clear();
@@ -146,6 +166,7 @@ void EditorLayer::ExitPrefabMode(World& world, AssetLibrary& assets, bool save) 
     SceneSerializer::LoadFromString(world, assets, m_PrefabModeSceneSnapshot);
     m_PrefabModeSceneSnapshot.clear();
     RestorePrePrefabHistory();
+    EnsureUndoScene(world);
     const std::string was = m_PrefabModePath;
     m_PrefabModePath.clear();
     Log::Info("Back to the scene from prefab " + ProjectPaths::Relativize(was) + ".");
@@ -165,15 +186,24 @@ void EditorLayer::DrawPrefabModeBar(World& world, AssetLibrary& assets) {
                                             ImVec2(vp->Pos.x + vp->Size.x - t * 0.5f, vp->Pos.y + vp->Size.y - t * 0.5f),
                                             col, 0.0f, 0, t);
 
-    const bool haveViewport = m_ViewportSize.x > 50.0f;
+    ImGuiWindow* sceneWindow = ImGui::FindWindowByName(EditorPanels::Scene);
+    const bool haveViewport = m_ViewportSize.x > 50.0f && m_ViewportSize.y > 1.0f &&
+                              sceneWindow && sceneWindow->Active && !sceneWindow->Hidden && !sceneWindow->SkipItems;
     const ImVec2 anchor = haveViewport ? ImVec2(m_ViewportPos.x + m_ViewportSize.x * 0.5f, m_ViewportPos.y + 8.0f * m_UIScale)
-                                       : ImVec2(vp->Pos.x + vp->Size.x * 0.5f, vp->Pos.y + 40.0f * m_UIScale);
+                                       : ImVec2(vp->Pos.x + vp->Size.x * 0.5f, vp->Pos.y + ToolbarHeightPx() + 8.0f * m_UIScale);
     ImGui::SetNextWindowPos(anchor, ImGuiCond_Always, ImVec2(0.5f, 0.0f));
+    ImGui::SetNextWindowViewport(vp->ID);
     ImGui::SetNextWindowBgAlpha(0.92f);
     const ImGuiWindowFlags flags = ImGuiWindowFlags_NoDecoration | ImGuiWindowFlags_AlwaysAutoResize |
                                    ImGuiWindowFlags_NoSavedSettings | ImGuiWindowFlags_NoFocusOnAppearing |
                                    ImGuiWindowFlags_NoNav | ImGuiWindowFlags_NoDocking;
     if (ImGui::Begin("##PrefabModeBar", nullptr, flags)) {
+        // Dock rebuilds or tab changes can otherwise leave this undocked window
+        // behind the panel. Keep it above the editor surface, below unrelated dialogs.
+        ImGuiWindow* self = ImGui::GetCurrentWindow();
+        ImGuiWindow* surface = haveViewport ? sceneWindow : ImGui::FindWindowByName("##DockHost");
+        if (surface && ImGui::FindWindowDisplayIndex(self) < ImGui::FindWindowDisplayIndex(surface->RootWindow))
+            ImGui::BringWindowToDisplayFront(self);
         const std::string name = std::filesystem::u8path(m_PrefabModePath).stem().u8string();
         if (ActionButton(ICON_FA_ARROW_LEFT " Scene", "Back to the scene (saves the prefab)")) {
             ExitPrefabMode(world, assets);
@@ -185,9 +215,7 @@ void EditorLayer::DrawPrefabModeBar(World& world, AssetLibrary& assets) {
         ImGui::TextColored(EditorTheme::KindPrefab, ICON_FA_BOX_ARCHIVE "  %s%s", name.c_str(), m_Dirty ? "*" : "");
         if (ImGui::IsItemHovered()) EditorUI::SetTooltip("%s", ProjectPaths::Relativize(m_PrefabModePath).c_str());
         ImGui::SameLine();
-        ImGui::BeginDisabled(!m_Dirty);
         if (ActionButton(ICON_FA_FLOPPY_DISK " Save", "Save the prefab (Ctrl+S)")) SavePrefabMode(world);
-        ImGui::EndDisabled();
     }
     ImGui::End();
 }

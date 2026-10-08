@@ -130,6 +130,12 @@ void EditorLayer::DrawPlayTransportButtons(bool playing, bool maximized, bool pa
 // toolbar's Zone B instead. Now there's only one path, used unconditionally.
 void EditorLayer::DrawViewportActionBar(World& world, AssetLibrary& assets,
                                          bool playing, bool maximized, bool paused) {
+    // Both modes own the same overlay position. Draw only one, after every panel
+    // has had a chance to open a prefab, including the Inspector and Asset Browser.
+    if (InPrefabMode() || !m_InspectorRequestedPrefab.empty()) {
+        DrawPrefabModeBar(world, assets);
+        return; // also on the frame Back to Scene is clicked
+    }
     int ww, wh;
     glfwGetWindowSize(m_Window, &ww, &wh);
     float w = (float)ww;

@@ -17,8 +17,8 @@ each contain the complete weapon setup:
 
 | Extension / folder | Purpose |
 |---|---|
-| `.prefab` | Instantiable weapon model with Weapon Definition and Animator Controller components |
-| `.fpsanim` | Gameplay and first-person presentation settings, animation clips, sound references, recoil/shake references |
+| `.prefab` | Instantiable weapon model with the project C# WeaponDefinition script and native Animator Controller |
+| `.fpsanim` | First-person presentation settings, animation clips and recoil/shake references; gameplay data lives in the prefab's C# WeaponDefinition |
 | `.controller` | Animator state graph and transitions |
 | `.recoil` | Recoil profile |
 | `.camerashake` | Camera shake profile |
@@ -38,6 +38,11 @@ editor implementation is under `src/`. Scenes, screenshots, and custom shaders
 remain under `project/scenes`, `project/screenshots`, and `project/shaders`.
 
 ## Duplicate audit and consolidation
+
+The Asset Browser already offers **Find References in Scene** and **Find References in Project**.
+Project lookup scans supported files for the asset GUID or path and lists matching files in
+Console; deletion from disk also shows reference warnings. This is not a complete typed
+dependency graph.
 
 The cleanup compared SHA-256 content hashes throughout `project`, excluding
 generated `Library`, `bin`, `obj`, and asset metadata. No weapon asset duplicates

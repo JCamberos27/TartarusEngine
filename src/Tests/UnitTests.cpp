@@ -28,6 +28,8 @@
 #include "FirstPersonWeaponWizard.h"
 #include "ClipAnalysis.h"
 #include "FirstPersonAnimation.h"
+#include "Scripting/WeaponPrefab.h"
+#include "Scripting/ScriptRuntime.h"
 #include "FirstPersonAdsCarry.h"
 #include "AudioEngine.h"
 #include "AI/AiMath.h"
@@ -176,6 +178,10 @@ void TestRecoilProfile() {
     weapon.Procedural.Recoil.BoltBone = "action";
     weapon.Procedural.Recoil.BoltTravel = {0.0f, 0.0f, 0.02f};
     weapon.Procedural.Recoil.BoltCycle = 0.08f;
+    std::string defaults;
+    CHECK(Scripting::RequestProject("weapon.import", "{}", defaults));
+    Scripting::ReadProjectWeaponGameplay(weapon.Gameplay, json::parse(defaults));
+    weapon.HasLegacyGameplay = true; // explicitly exercise old descriptor compatibility
     weapon.Gameplay.BurstRounds = 3;
     const auto definition = TempDir() / "profile-weapon.fpsanim";
     CHECK(weapon.SaveFile(definition.u8string()));
@@ -361,6 +367,12 @@ void TestInputMap() {
         CHECK(back[1].Name == "Bad" && back[1].Positive == InputMap::kNone);
     }
     CHECK(InputMap::FromJson(nlohmann::json::object()).empty());
+    const auto migrated = InputMap::FromJson(nlohmann::json::array({
+        {{"name", "Weapon1"}, {"positive", 71}}, {{"name", "Weapon2"}, {"positive", 72}}, {{"name", "Weapon3"}, {"positive", 73}}}));
+    CHECK(migrated.size() == 3);
+    CHECK(migrated[0].Name == "MuzzleAttachment" && migrated[0].Positive == 71);
+    CHECK(migrated[1].Name == "GripAttachment" && migrated[1].Positive == 72);
+    CHECK(migrated[2].Name == "OpticAttachment" && migrated[2].Positive == 73);
     CHECK(InputMap::BindingName(InputMap::kMouseBase + 1) == "Mouse 1" && InputMap::BindingName(87) == "W");
 
     // A saved action list must not be able to LOSE a default. project/settings.json only holds
@@ -382,7 +394,7 @@ void TestInputMap() {
         CHECK(saved.size() == InputMap::Defaults().size()); // each default present exactly once
         CHECK(count("Reload") == 1);
         CHECK(saved[0].Positive == 71);      // the file's own binding survives the merge
-        CHECK(count("Weapon1") == 1);        // the default the file predates comes back
+        CHECK(count("MuzzleAttachment") == 1); // the default the file predates comes back
     }
 
     // Disabled (no game input): everything reads zero, including unknown names (no crash).
@@ -3734,6 +3746,7 @@ void TestRemingtonController() {
     FirstPersonAnimationSet set;
     std::string error;
     CHECK(FirstPersonAnimationSet::LoadFile(ProjectPaths::Resolve("assets/Weapons/Remington870/Remington870.fpsanim"), set, &error));
+    CHECK(Scripting::ResolveWeaponGameplay("assets/Weapons/Remington870/Remington870.prefab", set.Gameplay, error));
 
     // Every state's clips attach to the rigs they play on - what Play checks before the weapon may
     // start (a one-frame export, say, carries no take and wouldn't). Needs the arms (Quantum pack).
@@ -3779,6 +3792,9 @@ void TestRemingtonController() {
 void TestFirstPersonAnimationFSM() {
     namespace K = FirstPersonAnimatorContract;
     FirstPersonAnimationSet set;
+    std::string defaults;
+    CHECK(Scripting::RequestProject("weapon.import", "{}", defaults));
+    Scripting::ReadProjectWeaponGameplay(set.Gameplay, json::parse(defaults));
     set.ArmsModel = "arms.fbx";
     set.WeaponModel = "weapon.fbx";
     const char* withWeapon[] = {"IdleToSprint", "Sprint", "SprintToIdle", "Holster", "Fire", "TacReload",
@@ -4168,12 +4184,6 @@ void TestAssetIdentity() {
     CHECK(AssetDatabase::AssetType(ProjectPaths::Resolve("scenes/Level.json")) == "scene");
     CHECK(AssetDatabase::AssetType(ProjectPaths::Resolve("scenes/Level.recovery.json")).empty());
     CHECK(AssetDatabase::AssetType(ProjectPaths::Resolve("settings.json")).empty());
-
-    // external_assets.csv: first column only; header, comments, blanks and CRLF handled; quoted paths.
-    const std::vector<std::string> ext = AssetDatabase::ParseExternalAssetList(
-        "path,size,sha256\r\n# comment\r\n\r\nassets/A/b.fbx,12,ab\r\n\"assets/C, D/e.png\",3,cd\r\nassets/f.wav\n");
-    CHECK(ext.size() == 3);
-    CHECK(ext.size() == 3 && ext[0] == "assets/A/b.fbx" && ext[1] == "assets/C, D/e.png" && ext[2] == "assets/f.wav");
 
     // A reference ("file#clip") follows its file to a new name by GUID; the suffix survives.
     const std::string model = (dir / "Hero.fbx").string(), moved = (dir / "Sub" / "HeroRig.fbx").string();
@@ -4793,6 +4803,7 @@ void TestWeaponZero() {
     CHECK(FirstPersonAnimationSet::FromJsonString(
         R"({"armsModel":"a.fbx","weaponModel":"w.fbx","controller":"w.controller"})", set, &error));
     set.Gameplay.ZeroDistance = 50.0f;
+    set.HasLegacyGameplay = true; // old descriptor write/read compatibility; current prefabs own these stats
     set.Gameplay.HasSightLine = true;
     set.Gameplay.SightOrigin = glm::vec3(0.28f, 0.058f, 0.0f);
     set.Gameplay.SightDirection = glm::normalize(glm::vec3(-1.0f, -0.004f, 0.0f));
@@ -5214,6 +5225,21 @@ void TestAssetPackImport() {
 
     // A dropped folder is copied whole, layout kept, source files left behind.
     const fs::path assets = base / "project" / "assets";
+    const fs::path project = base / "project", library = base / "library";
+    const fs::path privateAssets = assets / "External";
+    auto importDir = [&](const fs::path& source, const std::string& selectedLibrary, const std::string& kind = "") {
+        return fs::path(AssetImport::ProjectImportDirectory(project.string(), source.string(), selectedLibrary, kind)).lexically_normal();
+    };
+    // Destination selection works before the target directories have been created.
+    CHECK(importDir(library / "Gun", library.string()) == privateAssets.lexically_normal());
+    CHECK(importDir(library / "Gun" / "a.fbx", library.string(), "Models") == (privateAssets / "Models").lexically_normal());
+    CHECK(importDir(library, library.string()) == privateAssets.lexically_normal());
+    CHECK(importDir(base / "library-other" / "a.fbx", library.string(), "Models") == (assets / "Models").lexically_normal());
+    CHECK(importDir(library / ".." / "outside" / "a.png", library.string(), "Textures") == (assets / "Textures").lexically_normal());
+    CHECK(importDir(pack, "", "Models") == (assets / "Models").lexically_normal());
+    const AssetImport::FolderCopy privateCopy = AssetImport::CopyFolderInto(pack.string(), privateAssets.string());
+    CHECK(privateCopy.Error.empty() && same(privateCopy.Folder, privateAssets / "Gun"));
+    CHECK(fs::exists(privateAssets / "Gun" / "Textures" / "Gun_Textures" / "Gun_Albedo_Transparency.png", ec));
     const AssetImport::FolderCopy first = AssetImport::CopyFolderInto(pack.string(), assets.string());
     CHECK(first.Error.empty());
     CHECK(same(first.Folder, assets / "Gun"));

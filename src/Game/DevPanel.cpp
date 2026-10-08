@@ -1,83 +1,30 @@
 #include "DevPanel.h"
-
 #include "AI/NpcDirector.h"
 #include "Combat/PlayerVitals.h"
-#include "FirstPersonPresentation.h"
+#include "Scripting/GameFrames.h"
+#include "Scripting/ScriptRuntime.h"
+#include "Scripting/RuntimeGui.h"
 #include "TimeService.h"
-#include "imgui.h"
-
-#include <algorithm>
-
-void DevPanel::Reset(PlayerVitals& vitals, NpcDirector& npcs) {
-    Open = false;
-    InfiniteAmmo = false;
-    Invisible = false;
-    AiOverlay = false;
-    vitals.GodMode = false;
-    npcs.Frozen = false;
-    npcs.HoldFire = false;
+namespace {
+int Run(DevPanel& panel,PlayerVitals& vitals,NpcDirector& npcs,int operation,World* world=nullptr,AssetLibrary* assets=nullptr,bool* blood=nullptr){
+    Scripting::DevFrame f;f.Operation=operation;f.Open=panel.Open;f.InfiniteAmmo=panel.InfiniteAmmo;f.Invisible=panel.Invisible;f.AiOverlay=panel.AiOverlay;f.God=vitals.GodMode;f.Frozen=npcs.Frozen;f.HoldFire=npcs.HoldFire;f.Difficulty=npcs.Difficulty();f.TimeScale=Time::TimeScale();f.HaveBloodLab=blood!=nullptr;f.BloodLab=blood && *blood;f.Wanted=npcs.SquadSize();f.Spawns=(int)npcs.SpawnPoints().size();
+    std::vector<Scripting::NpcMateFrame> members;
+    for(const auto& n:npcs.Npcs())if(n){Scripting::NpcMateFrame m;m.Index=n->Index;m.Feet={n->Feet.x,n->Feet.y,n->Feet.z};m.Dead=n->Dead;members.push_back(m);if(!n->Dead){++f.Alive;if(n->Mem.Known)++f.Known;}}
+    f.Count=(int)members.size();f.Members=reinterpret_cast<std::uintptr_t>(members.data());
+    struct Scope {NpcDirector& Npcs;World* WorldPtr;AssetLibrary* Assets;} scope{npcs,world,assets};f.Context=reinterpret_cast<std::uintptr_t>(&scope);
+    f.Services=reinterpret_cast<std::uintptr_t>(+[](std::uintptr_t ptr,Scripting::NpcServiceFrame* request)->int {
+        if(!ptr || !request)return 0;auto& c=*reinterpret_cast<Scope*>(ptr);if(!c.WorldPtr)return 0;
+        if(request->Operation==0){auto* n=c.Npcs.Find(request->Index);if(!n || n->Dead)return 0;c.Npcs.Kill(*c.WorldPtr,*n,{request->A.x,request->A.y,request->A.z},{request->B.x,request->B.y,request->B.z},request->Value);return 1;}
+        if(request->Operation==1 && c.Assets)return c.Npcs.Spawn(*c.WorldPtr,*c.Assets,request->Index)>=0;return 0;
+    });
+    if(!Scripting::InvokeProject("dev",&f,sizeof f))return 0;
+    panel.Open=f.Open!=0;panel.InfiniteAmmo=f.InfiniteAmmo!=0;panel.Invisible=f.Invisible!=0;panel.AiOverlay=f.AiOverlay!=0;vitals.GodMode=f.God!=0;npcs.Frozen=f.Frozen!=0;npcs.HoldFire=f.HoldFire!=0;
+    if(operation==2){npcs.SetDifficulty(f.Difficulty);Time::SetTimeScale(f.TimeScale);if(blood)*blood=f.BloodLab!=0;}
+    return f.Result;
 }
-
-int DevPanel::KillAll(World& world, NpcDirector& npcs) {
-    int killed = 0;
-    for (const auto& up : npcs.Npcs()) {
-        if (!up || up->Dead) continue;
-        npcs.Kill(world, *up, glm::vec3(0.0f, 0.2f, -1.0f), up->Feet + glm::vec3(0.0f, 1.2f, 0.0f), 20.0f);
-        ++killed;
-    }
-    return killed;
 }
-
-int DevPanel::RespawnSquad(World& world, AssetLibrary& assets, NpcDirector& npcs) {
-    int alive = 0;
-    for (const auto& up : npcs.Npcs()) if (up && !up->Dead) ++alive;
-    const int spawns = (int)npcs.SpawnPoints().size();
-    if (spawns <= 0) return 0;
-    int made = 0;
-    for (int i = 0; alive + made < npcs.SquadSize() && i < npcs.SquadSize() * 2; ++i)
-        if (npcs.Spawn(world, assets, i % spawns) >= 0) ++made;
-    return made;
-}
-
-void DevPanel::Draw(const Context& c) {
-    if (!Open || !c.Npcs || !c.Vitals) return;
-    ImGui::SetNextWindowPos(ImVec2(24.0f, 80.0f), ImGuiCond_FirstUseEver);
-    ImGui::SetNextWindowSize(ImVec2(320.0f, 0.0f), ImGuiCond_FirstUseEver);
-    ImGui::SetNextWindowBgAlpha(0.92f);
-    if (!ImGui::Begin("Dev (F7)", &Open, ImGuiWindowFlags_NoCollapse | ImGuiWindowFlags_AlwaysAutoResize)) {
-        ImGui::End();
-        return;
-    }
-    NpcDirector& d = *c.Npcs;
-    ImGui::SeparatorText("Player");
-    ImGui::Checkbox("God mode (F8)", &c.Vitals->GodMode);
-    ImGui::Checkbox("Infinite ammo", &InfiniteAmmo);
-    ImGui::Checkbox("Invisible to AI", &Invisible);
-    ImGui::SeparatorText("Squad");
-    ImGui::Checkbox("Freeze AI", &d.Frozen);
-    ImGui::Checkbox("AI holds fire", &d.HoldFire);
-    float difficulty = d.Difficulty();
-    if (ImGui::SliderFloat("Difficulty", &difficulty, 0.25f, 3.0f, "%.2f")) d.SetDifficulty(difficulty);
-    if (ImGui::Button("Kill all") && c.WorldPtr) KillAll(*c.WorldPtr, d);
-    ImGui::SameLine();
-    if (ImGui::Button("Respawn squad") && c.WorldPtr && c.Assets) {
-        KillAll(*c.WorldPtr, d);
-        RespawnSquad(*c.WorldPtr, *c.Assets, d);
-    }
-    int alive = 0, known = 0;
-    for (const auto& up : d.Npcs()) {
-        if (!up || up->Dead) continue;
-        ++alive;
-        if (up->Mem.Known) ++known;
-    }
-    ImGui::Text("%d alive, %d in combat", alive, known);
-    ImGui::SeparatorText("World");
-    float scale = Time::TimeScale();
-    if (ImGui::SliderFloat("Time scale", &scale, 0.05f, 2.0f, "%.2f")) Time::SetTimeScale(scale);
-    ImGui::SameLine();
-    if (ImGui::SmallButton("1x")) Time::SetTimeScale(1.0f);
-    ImGui::Checkbox("AI debug overlay (F9)", &AiOverlay);
-    if (c.BloodLab) ImGui::Checkbox("Blood Lab", c.BloodLab);
-    ImGui::TextDisabled("F7 panel   F8 god mode   F9 AI overlay");
-    ImGui::End();
-}
+void DevPanel::Reset(PlayerVitals& vitals,NpcDirector& npcs){Run(*this,vitals,npcs,0);}
+void DevPanel::Keys(PlayerVitals& vitals,NpcDirector& npcs){Run(*this,vitals,npcs,1);}
+int DevPanel::KillAll(World& world,NpcDirector& npcs){DevPanel panel;PlayerVitals vitals;return Run(panel,vitals,npcs,3,&world);}
+int DevPanel::RespawnSquad(World& world,AssetLibrary& assets,NpcDirector& npcs){DevPanel panel;PlayerVitals vitals;return Run(panel,vitals,npcs,4,&world,&assets);}
+void DevPanel::Draw(const Context& c){if(!Open || !c.Npcs || !c.Vitals)return;Scripting::ScopedRuntimeGui gui;Run(*this,*c.Vitals,*c.Npcs,2,c.WorldPtr,c.Assets,c.BloodLab);}

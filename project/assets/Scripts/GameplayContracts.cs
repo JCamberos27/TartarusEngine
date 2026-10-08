@@ -1,6 +1,6 @@
-namespace Tartarus;
+namespace Tartarus.Gameplay;
 
-/// <summary>Requests sent by the native presentation adapter to IGameplay. Gameplay decides results and commands.</summary>
+/// <summary>Requests sent by the native presentation adapter to the project gameplay integration. Gameplay decides results and commands.</summary>
 public enum WeaponOperation
 {
     RequestFire = 1, CommitShot, CheckTrigger, TriggerResult, RequestReload,

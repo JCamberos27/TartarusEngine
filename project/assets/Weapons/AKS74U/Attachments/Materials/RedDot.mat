@@ -1,0 +1,33 @@
+{
+  "factorsScaleMaps": true,
+  "matVersion": 2,
+  "name": "New Material",
+  "properties": {
+    "_AOMap": "",
+    "_AlbedoMap": "assets/Weapons/AKS74U/Attachments/Textures/p3dm_ru_CZ-32H_1P_Diff.png",
+    "_BaseColor": [
+      1.0,
+      1.0,
+      1.0
+    ],
+    "_EmissiveColor": [
+      0.0,
+      0.0,
+      0.0
+    ],
+    "_EmissiveMap": "",
+    "_EmissiveStrength": 1.0,
+    "_Metallic": 1.0,
+    "_MetallicMap": "",
+    "_MetallicRoughnessMap": "",
+    "_NormalMap": "",
+    "_Roughness": 0.5060000419616699,
+    "_RoughnessMap": "",
+    "_Triplanar": false,
+    "_TriplanarScale": 1.0
+  },
+  "shader": "engine://Standard.shader",
+  "textureGuids": {
+    "_AlbedoMap": "8a0bfdecdf6d3b4f"
+  }
+}

@@ -1,105 +1,43 @@
 #include "PlayerVitals.h"
-
 #include "Damage.h"
-
+#include "Scripting/ScriptRuntime.h"
 #include <algorithm>
-#include <cmath>
+#include <stdexcept>
 
-void PlayerVitals::Reset(const PlayerVitalsSettings& settings) {
-    const bool god = GodMode;
-    *this = PlayerVitals{};
-    GodMode = god;
-    m_Settings = settings;
-    m_Settings.MaxHealth = std::max(1.0f, m_Settings.MaxHealth);
-    m_Health = m_Settings.MaxHealth;
-}
-
-float PlayerVitals::ApplyDamage(float amount, const glm::vec3& source) {
-    if (m_Dead || !(amount > 0.0f)) return 0.0f;
-    // Where it came from shows even when it costs nothing, so the player can find the shooter.
-    // Hits from about the same direction share one arc, refreshed.
-    bool merged = false;
-    for (Indicator& ind : m_Indicators) {
-        if (glm::length(ind.Source - source) < 2.0f) {
-            ind.Source = source; ind.Age = 0.0f; ind.Strength = std::min(1.0f, ind.Strength + 0.35f);
-            merged = true;
-            break;
-        }
-    }
-    if (!merged) {
-        if ((int)m_Indicators.size() >= kMaxIndicators)
-            m_Indicators.erase(std::max_element(m_Indicators.begin(), m_Indicators.end(),
-                                                [](const Indicator& a, const Indicator& b) { return a.Age < b.Age; }));
-        m_Indicators.push_back({source, 0.0f, 0.6f});
-    }
-    if (GodMode || m_Protection > 0.0f) return 0.0f;
-    const float taken = std::min(amount, m_Health);
-    m_Health -= taken;
-    m_DamageTaken += taken;
-    m_SinceHit = 0.0f;
-    m_HurtFlash = std::min(1.0f, m_HurtFlash + 0.35f + 0.65f * taken / m_Settings.MaxHealth * 3.0f);
-    if (m_Health <= 0.0f) {
-        m_Health = 0.0f;
-        m_Dead = true;
-        m_DiedThisTick = true;
-        m_DeadTime = 0.0f;
-        ++m_Deaths;
-    }
-    return taken;
-}
-
-void PlayerVitals::Tick(float dt) {
-    dt = std::max(0.0f, dt);
-    m_JustDied = m_DiedThisTick;
-    m_DiedThisTick = false;
-    m_SinceHit += dt;
-    m_Protection = std::max(0.0f, m_Protection - dt);
-    if (m_Dead) m_DeadTime += dt;
-    else if (m_SinceHit >= m_Settings.RegenDelay && m_Settings.RegenRate > 0.0f)
-        m_Health = std::min(m_Settings.MaxHealth, m_Health + m_Settings.RegenRate * dt);
-    for (Indicator& ind : m_Indicators) ind.Age += dt;
-    m_Indicators.erase(std::remove_if(m_Indicators.begin(), m_Indicators.end(),
-                                      [](const Indicator& i) { return i.Age >= kIndicatorLife; }),
-                       m_Indicators.end());
-    m_HurtFlash = std::max(0.0f, m_HurtFlash - dt * 1.6f);
-    m_Hitmarker = std::max(0.0f, m_Hitmarker - dt * 4.0f);
-}
-
-void PlayerVitals::Respawned() {
-    m_Dead = false;
-    m_DeadTime = 0.0f;
-    m_Health = m_Settings.MaxHealth;
-    m_SinceHit = 1e9f;
-    m_Protection = m_Settings.SpawnProtection;
+// Native presentation view of state transformed exclusively by project C#.
+PlayerVitals::PlayerVitals() = default;
+void PlayerVitals::Run(int operation) {
+    m_Frame.Operation=operation;m_Frame.GodMode=GodMode;
+    if(!Scripting::InvokeProject("vitals",&m_Frame,sizeof m_Frame))throw std::runtime_error("Project vitals implementation unavailable");
     m_Indicators.clear();
-    m_HurtFlash = 0.0f;
+    for(int i=0;i<m_Frame.Indicators;i++)m_Indicators.push_back({{m_Frame.SourceX[i],m_Frame.SourceY[i],m_Frame.SourceZ[i]},m_Frame.Age[i],m_Frame.Strength[i]});
 }
-
-float PlayerVitals::RespawnProgress() const {
-    if (!m_Dead) return 0.0f;
-    return m_Settings.RespawnDelay > 0.0f ? std::clamp(m_DeadTime / m_Settings.RespawnDelay, 0.0f, 1.0f) : 1.0f;
+void PlayerVitals::Reset(const PlayerVitalsSettings& settings) {
+    m_Frame.MaxHealth=settings.MaxHealth;m_Frame.RegenDelay=settings.RegenDelay;m_Frame.RegenRate=settings.RegenRate;
+    m_Frame.RespawnDelay=settings.RespawnDelay;m_Frame.SpawnProtection=settings.SpawnProtection;Run(0);
 }
-
-void PlayerVitals::MarkHit(bool kill, bool head) {
-    m_Hitmarker = 1.0f;
-    m_HitmarkerKill = kill;
-    m_HitmarkerHead = head;
+float PlayerVitals::ApplyDamage(float amount,const glm::vec3& source) {
+    m_Frame.Amount=amount;m_Frame.Source={source.x,source.y,source.z};Run(1);return m_Frame.Taken;
 }
+void PlayerVitals::Tick(float dt) {m_Frame.Dt=dt;Run(2);}
+void PlayerVitals::Respawned() {Run(3);}
+float PlayerVitals::RespawnProgress() const {return m_Frame.RespawnProgress;}
+void PlayerVitals::MarkHit(bool kill,bool head) {m_Frame.HitmarkerKill=kill;m_Frame.HitmarkerHead=head;Run(4);}
 
 PlayerHudState MakePlayerHudState(const PlayerVitals& v, const glm::vec3& cameraPos, float cameraYawDeg) {
+    auto frame=v.Snapshot();frame.Operation=5;frame.Source={cameraPos.x,cameraPos.y,cameraPos.z};frame.CameraYaw=cameraYawDeg;
+    if(!Scripting::InvokeProject("vitals",&frame,sizeof frame))throw std::runtime_error("Project vitals HUD state unavailable");
     PlayerHudState s;
     s.Visible = true;
     s.Health01 = v.Health01();
     s.HurtFlash = v.HurtFlash();
     s.Dead = v.IsDead();
-    s.DeathFade = v.IsDead() ? std::clamp(v.DeadTime() / 1.2f, 0.0f, 1.0f) : 0.0f;
+    s.DeathFade = frame.DeathFade;
     s.RespawnProgress = v.RespawnProgress();
     s.Protected = v.Protected();
-    for (const PlayerVitals::Indicator& ind : v.Indicators()) {
-        if (s.Arcs >= PlayerVitals::kMaxIndicators) break;
-        const float life = 1.0f - ind.Age / PlayerVitals::kIndicatorLife;
-        s.ArcAngle[s.Arcs] = DamageIndicatorAngle(cameraPos, cameraYawDeg, ind.Source);
-        s.ArcAlpha[s.Arcs] = std::clamp(life * life * (0.5f + 0.5f * ind.Strength), 0.0f, 1.0f);
+    for(int i=0;i<frame.Indicators;i++) {
+        s.ArcAngle[s.Arcs] = frame.ArcAngle[i];
+        s.ArcAlpha[s.Arcs] = frame.ArcAlpha[i];
         ++s.Arcs;
     }
     s.Hitmarker = v.Hitmarker();

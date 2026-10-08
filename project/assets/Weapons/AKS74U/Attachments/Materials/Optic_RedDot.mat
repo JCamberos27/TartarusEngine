@@ -1,0 +1,75 @@
+{
+  "factorsScaleMaps": true,
+  "matVersion": 2,
+  "name": "Red Dot Sight",
+  "properties": {
+    "_AOMap": "",
+    "_AlbedoMap": "",
+    "_BaseColor": [
+      1.0,
+      1.0,
+      1.0
+    ],
+    "_BlurDistance": 0.28999999165534973,
+    "_BlurRange": 1.2480000257492065,
+    "_BlurReticle": true,
+    "_BlurSamples": 8,
+    "_EmissiveColor": [
+      0.0,
+      0.0,
+      0.0
+    ],
+    "_EmissiveMap": "",
+    "_EmissiveStrength": 1.0,
+    "_FlatProjection": true,
+    "_GlassOpacity": 0.009999999776482582,
+    "_GlassTint": [
+      0.07774536311626434,
+      0.032692477107048035,
+      0.013515563681721687,
+      1.0
+    ],
+    "_Metallic": 0.0,
+    "_MetallicMap": "",
+    "_MetallicRoughnessMap": "",
+    "_NormalMap": "",
+    "_ProjectionNormal": [
+      -1.0,
+      0.0,
+      0.0
+    ],
+    "_ProjectionUp": [
+      0.0,
+      1.0,
+      0.0
+    ],
+    "_ReticleBrightness": 5.0,
+    "_ReticleColor": [
+      0.4643688499927521,
+      0.0,
+      0.0,
+      1.0
+    ],
+    "_ReticleMap": "assets/Weapons/AKS74U/Attachments/Textures/RedDotReticle.png",
+    "_ReticleOffset": [
+      0.0,
+      0.0
+    ],
+    "_ReticleSize": 0.014999999664723873,
+    "_ReticleTiling": [
+      1.0,
+      1.0
+    ],
+    "_Roughness": 0.5,
+    "_RoughnessMap": "",
+    "_Triplanar": false,
+    "_TriplanarScale": 1.0,
+    "_UseTextureColor": false
+  },
+  "queueIndex": 3000,
+  "renderQueue": 2,
+  "shader": "engine://RedDot.shader",
+  "textureGuids": {
+    "_ReticleMap": "659275da42243734"
+  }
+}

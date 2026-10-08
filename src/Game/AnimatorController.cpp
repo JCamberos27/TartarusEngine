@@ -1,3 +1,5 @@
+#include "Scripting/NpcDefinitions.h"
+#include "Scripting/ScriptRuntime.h"
 #include "AnimatorController.h"
 #include "AnimationSystem.h"
 #include "AssetLibrary.h"
@@ -1428,10 +1430,13 @@ void PrefetchAnimatorClips(World& world, AssetLibrary& assets) {
     // first soldier spawned stalls its frame on them.
     if (!world.Registry.view<NpcSpawnComponent>().empty()) {
         static std::vector<std::string> s_SoldierControllers;
-        static bool s_Read = false;
-        if (!s_Read) {
-            s_Read = true;
-            std::ifstream in(fs::u8path(ProjectPaths::Resolve("assets/AI/Soldier.json")), std::ios::binary);
+        static std::string s_Path;auto path=Scripting::DefaultSquadDefinition().BodyPrefab;
+        // The first active squad's body prefab (a loop that always breaks is C4702 in Debug).
+        const auto squads = world.Registry.view<SquadSettingsComponent>(entt::exclude<InactiveTag>);
+        if (squads.begin() != squads.end()) path = world.Registry.get<SquadSettingsComponent>(*squads.begin()).BodyPrefab;
+        if(s_Path!=path){
+            s_Path=path;s_SoldierControllers.clear();
+            std::ifstream in(fs::u8path(ProjectPaths::Resolve(path)),std::ios::binary);
             const json doc = json::parse(in, nullptr, /*allow_exceptions=*/false);
             // Every "Controller" string anywhere in the prefab: the soldier's pieces each carry one.
             const std::function<void(const json&)> collect = [&](const json& j) {

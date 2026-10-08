@@ -1,6 +1,319 @@
 {
   "boxes": [],
-  "empties": [],
+  "empties": [
+    {
+      "id": 1,
+      "order": 1,
+      "parentId": 2,
+      "name": "Muzzle Flash",
+      "position": [
+        2.456815218252473e-07,
+        0.03630014609097473,
+        0.6308999139726101
+      ],
+      "rotation": [
+        0,
+        1,
+        0,
+        0
+      ],
+      "scale": [
+        1,
+        1,
+        1
+      ],
+      "Particle System": {
+        "Emitting": false,
+        "Rate": 0,
+        "Rate Over Distance": 0,
+        "Max Particles": 8,
+        "Looping": false,
+        "Duration": 0.1,
+        "Start Delay": 0.0,
+        "Burst Count": 1,
+        "Burst Interval": 0.0,
+        "Shape": "Point",
+        "Local Space": true,
+        "Lifetime": 0.07,
+        "Lifetime Randomness": 0.12,
+        "Start Speed": 0,
+        "Spread": 0.0,
+        "Gravity Modifier": 0,
+        "Start Size": 0.22,
+        "End Size": 0.264,
+        "Size Randomness": 0.22,
+        "Start Color": [
+          1,
+          0.7,
+          0.22
+        ],
+        "End Color": [
+          1,
+          0.24,
+          0.025
+        ],
+        "Start Alpha": 1,
+        "End Alpha": 1,
+        "Intensity": 4.5,
+        "Blend Mode": "Additive",
+        "Alignment": "Billboard",
+        "Texture": {
+          "path": "assets/Effects/Muzzle/T_MuzzleBurst.png",
+          "pathGuid": "e49ed56e4bc64b31"
+        },
+        "Texture Channels": "Red Mask",
+        "Pivot X": 0,
+        "Pivot Y": 0,
+        "Sheet Columns": 1,
+        "Sheet Rows": 1,
+        "Sheet FPS": 0,
+        "Random Start Frame": false,
+        "Blend Frames": false,
+        "Rotation Min": 0,
+        "Rotation Max": 360,
+        "Alpha Curve": "[[0,1,0,0],[0.2,0.9,0,0],[0.55,0.4,0,0],[1,0,0,0]]",
+        "Size Curve": "[[0,1,0,0],[1,1,0,0]]",
+        "Angular Velocity Min": 0,
+        "Angular Velocity Max": 0
+      }
+    },
+    {
+      "id": 2,
+      "order": 2,
+      "parentId": 0,
+      "name": "Default Muzzle",
+      "position": [
+        0,
+        0,
+        0
+      ],
+      "rotation": [
+        0,
+        0,
+        0,
+        1
+      ],
+      "scale": [
+        1,
+        1,
+        1
+      ],
+      "C# Script": {
+        "Source": {
+          "path": "assets/Scripts/MuzzleAttachment.cs"
+        },
+        "Class": "Tartarus.Gameplay.MuzzleAttachment",
+        "Enabled": true,
+        "Scripts": "[]",
+        "Next Script ID": 1,
+        "Fields JSON": "{\"MuzzleTransform\":\"Muzzle Flash\",\"MuzzleFlash\":\"Muzzle Flash\",\"FiringSounds\":\"\",\"FiringSoundProfile\":\"870\"}"
+      }
+    },
+    {
+      "id": 3,
+      "order": 3,
+      "parentId": 0,
+      "name": "Default Grip",
+      "position": [
+        0,
+        0,
+        0
+      ],
+      "rotation": [
+        0,
+        0,
+        0,
+        1
+      ],
+      "scale": [
+        1,
+        1,
+        1
+      ],
+      "C# Script": {
+        "Source": {
+          "path": "assets/Scripts/GripAttachment.cs"
+        },
+        "Class": "Tartarus.Gameplay.GripAttachment",
+        "Enabled": true,
+        "Scripts": "[]",
+        "Next Script ID": 1,
+        "Fields JSON": "{}"
+      }
+    },
+    {
+      "id": 4,
+      "order": 4,
+      "parentId": 1,
+      "name": "Muzzle Core",
+      "position": [
+        0,
+        0,
+        0
+      ],
+      "rotation": [
+        0,
+        0,
+        0,
+        1
+      ],
+      "scale": [
+        1,
+        1,
+        1
+      ],
+      "Particle System": {
+        "Emitting": false,
+        "Rate": 0,
+        "Rate Over Distance": 0,
+        "Max Particles": 8,
+        "Looping": false,
+        "Duration": 0.1,
+        "Start Delay": 0.0,
+        "Burst Count": 1,
+        "Burst Interval": 0.0,
+        "Shape": "Point",
+        "Local Space": true,
+        "Lifetime": 0.045,
+        "Lifetime Randomness": 0.08,
+        "Start Speed": 0,
+        "Spread": 0.0,
+        "Gravity Modifier": 0,
+        "Start Size": 0.10800000000000001,
+        "End Size": 0.0594,
+        "Size Randomness": 0.12,
+        "Start Color": [
+          1,
+          1,
+          0.94
+        ],
+        "End Color": [
+          1,
+          0.66,
+          0.22
+        ],
+        "Start Alpha": 1,
+        "End Alpha": 1,
+        "Intensity": 18,
+        "Blend Mode": "Additive",
+        "Alignment": "Billboard",
+        "Texture": {
+          "path": "assets/Effects/Muzzle/T_MuzzleCore.png",
+          "pathGuid": "f32ddcde71af4a8c"
+        },
+        "Texture Channels": "Red Mask",
+        "Pivot X": 0,
+        "Pivot Y": 0,
+        "Sheet Columns": 1,
+        "Sheet Rows": 1,
+        "Sheet FPS": 0,
+        "Random Start Frame": false,
+        "Blend Frames": false,
+        "Rotation Min": 0,
+        "Rotation Max": 360,
+        "Alpha Curve": "[[0,1,0,0],[0.35,0.75,0,0],[1,0,0,0]]",
+        "Size Curve": "[[0,1,0,0],[1,1,0,0]]",
+        "Angular Velocity Min": 0,
+        "Angular Velocity Max": 0
+      }
+    },
+    {
+      "id": 5,
+      "order": 5,
+      "parentId": 1,
+      "name": "Muzzle Smoke",
+      "position": [
+        0,
+        0,
+        0
+      ],
+      "rotation": [
+        -0.7071067811865476,
+        0,
+        0,
+        0.7071067811865476
+      ],
+      "scale": [
+        1,
+        1,
+        1
+      ],
+      "Particle System": {
+        "Emitting": false,
+        "Rate": 0,
+        "Rate Over Distance": 0,
+        "Max Particles": 32,
+        "Looping": false,
+        "Duration": 1,
+        "Start Delay": 0,
+        "Burst Count": 2,
+        "Burst Interval": 0,
+        "Shape": "Point",
+        "Local Space": false,
+        "Lifetime": 0.95,
+        "Lifetime Randomness": 0.18,
+        "Start Speed": 0.85,
+        "Spread": 12,
+        "Gravity Modifier": 0,
+        "Start Size": 0.09,
+        "End Size": 0.4,
+        "Size Randomness": 0.18,
+        "Start Color": [
+          0.62,
+          0.6,
+          0.58
+        ],
+        "End Color": [
+          0.55,
+          0.55,
+          0.55
+        ],
+        "Start Alpha": 0.26,
+        "End Alpha": 0.26,
+        "Intensity": 1,
+        "Blend Mode": "Alpha Blended",
+        "Alignment": "Billboard",
+        "Texture": {
+          "path": ""
+        },
+        "Texture Channels": "RGBA",
+        "Pivot X": 0,
+        "Pivot Y": 0,
+        "Sheet Columns": 1,
+        "Sheet Rows": 1,
+        "Sheet FPS": 0,
+        "Random Start Frame": false,
+        "Blend Frames": true,
+        "Rotation Min": 0,
+        "Rotation Max": 360,
+        "Alpha Curve": "[[0,0,0,0],[0.08,1,0,0],[0.45,0.8,0,0],[1,0,0,0]]",
+        "Size Curve": "[[0,1,0,0],[1,1,0,0]]",
+        "Angular Velocity Min": -20,
+        "Angular Velocity Max": 20,
+        "Speed Randomness": 0.25,
+        "Speed Curve": "[[0,1,0,0],[1,1,0,0]]",
+        "Drag": 2.4,
+        "Acceleration": [
+          0,
+          0.06,
+          0
+        ],
+        "Velocity Over Life": [
+          0,
+          0.08,
+          0
+        ],
+        "Collision": "Off",
+        "Curve Editor ID": "",
+        "Shader": "Procedural Smoke",
+        "Smoke Density": 1.8,
+        "Smoke Noise Scale": 3.0,
+        "Smoke Turbulence": 0.55,
+        "Smoke Softness": 0.65,
+        "Smoke Evolution": 0.65
+      }
+    }
+  ],
   "models": [
     {
       "id": 0,
@@ -25,44 +338,6 @@
       ],
       "path": "assets/Weapons/Remington870/Weapon/Remington870_A_W_Idle.fbx",
       "pathGuid": "abfe8981a8954dee",
-      "Weapon Definition": {
-        "Muzzle Enabled": true,
-        "Flash Time": 0.055,
-        "Light Intensity": 26,
-        "Player Flash Scale": 0.35,
-        "Light Range": 7,
-        "Light Color": [1,0.72,0.38],
-        "Flame Texture": "assets/Effects/Muzzle/T_MuzzleFlame.png",
-        "Flame Glow": 75,
-        "Flame Scale": 1.75,
-        "Flame Color": [1,0.147,0.0177],
-        "Flame Lifetime Min": 0.175,
-        "Flame Lifetime Max": 0.275,
-        "Flame Length Min": 0.2,
-        "Flame Length Max": 0.28,
-        "Flame Width Min": 0.04,
-        "Flame Width Max": 0.06,
-        "Muzzle Style": 1,
-        "Flash Sprite": "muzzle_burst",
-        "Flash Lifetime": 0.11,
-        "Flash Size Min": 0.38,
-        "Flash Size Max": 0.38,
-        "Flash Intensity": 14,
-        "Side Jets": false,
-        "Core Glow": true,
-        "Spark Count": 14,
-        "Smoke": true,
-        "Afterfire Smoke": true,
-        "Smoke Scale": 1,
-        "Smoke Lifetime Min": 2,
-        "Smoke Lifetime Max": 3,
-        "Smoke Alpha": 0.35,
-        "Description": "12-gauge pump shotgun. 6 shells, 8 pellets per shot, per-shell reload and manual pump cycle.",
-        "Animation Set": {
-          "path": "assets/Weapons/Remington870/Remington870.fpsanim",
-          "pathGuid": "4e3925bded078f9a"
-        }
-      },
       "Animator Controller": {
         "Controller": {
           "path": "assets/Weapons/Remington870/Remington870.controller",
@@ -71,7 +346,19 @@
         "Speed": 1,
         "Track": "weapon",
         "rootMotion": "Off"
+      },
+      "C# Script": {
+        "Source": {
+          "path": "assets/Scripts/WeaponDefinition.cs",
+          "pathGuid": "b72f5e84c34b4013"
+        },
+        "Class": "Tartarus.Gameplay.WeaponDefinition",
+        "Fields JSON": "{\"MuzzleEnabled\":true,\"FlashTime\":0.055,\"LightIntensity\":26,\"PlayerFlashScale\":0.35,\"LightRange\":7,\"LightColor\":{\"X\":1,\"Y\":0.72,\"Z\":0.38},\"Smoke\":false,\"AfterfireSmoke\":false,\"SmokeScale\":1,\"SmokeLifetimeMin\":2,\"SmokeLifetimeMax\":3,\"SmokeAlpha\":0.35,\"Description\":\"12-gauge pump shotgun. 6 shells, 8 pellets per shot, per-shell reload and manual pump cycle.\",\"AnimationSet\":{\"path\":\"assets/Weapons/Remington870/Remington870.fpsanim\",\"pathGuid\":\"4e3925bded078f9a\"},\"Magazine\":6,\"RoundsPerMinute\":70.0,\"AllowFullAuto\":false,\"BurstRounds\":0,\"ReloadHoldSeconds\":0.35,\"RegripMin\":10.0,\"RegripMax\":20.0,\"ImpactImpulse\":14.0,\"ImpactMaxSpeed\":9.0,\"ZeroDistance\":15.0,\"BulletHoleRadius\":0.0042,\"Pellets\":8,\"Damage\":14.0,\"HeadMultiplier\":2.0,\"LimbMultiplier\":0.75,\"FalloffStart\":8.0,\"FalloffEnd\":25.0,\"FalloffMin\":0.2,\"SpreadHip\":3.5,\"SpreadAds\":2.2,\"CycleAfterShot\":true,\"CycleDelay\":0.12,\"Reload\":1}",
+        "Enabled": true,
+        "Scripts": "[]",
+        "Next Script ID": 1
       }
     }
-  ]
+  ],
+  "formatVersion": 4
 }

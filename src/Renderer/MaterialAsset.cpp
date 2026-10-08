@@ -390,6 +390,27 @@ std::shared_ptr<MaterialAsset> LoadMaterialFromJson(const json& j, const std::st
     return ma;
 }
 
+bool MaterialAsset::SetShader(const std::string& reference, AssetLibrary& assets) {
+    const std::string ref = reference.empty() ? "engine://Standard.shader" : reference;
+    auto shader = assets.LoadShader(ResolveShaderPath(ref));
+    if (!shader) return false;
+    Shader = std::move(shader); ShaderPath = ref;
+    for (const auto& p : Shader->Properties()) {
+        if (IsBuiltinProp(p.Name)) continue;
+        const auto existing = Mat.ExtraProps.find(p.Name);
+        if (existing != Mat.ExtraProps.end() && existing->second.Type == p.Type) continue;
+        MaterialProp value; value.Type = p.Type;
+        value.F = p.DefaultFloat; value.I = (int)p.DefaultFloat;
+        value.B = p.DefaultBool; value.V = p.DefaultVec;
+        Mat.ExtraProps[p.Name] = std::move(value);
+    }
+    const auto& state = Shader->RenderState();
+    RenderQueue = state.Queue >= 0 ? (Queue)state.Queue : Queue::Opaque;
+    QueueIndex = state.Queue >= 0 ? state.QueueIndex : 2000;
+    Mat.AlphaClip = RenderQueue == Queue::AlphaTest;
+    return true;
+}
+
 bool MaterialAsset::Save() const {
     const auto& m = Mat;
     json j;

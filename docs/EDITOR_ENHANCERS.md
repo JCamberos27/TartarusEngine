@@ -389,7 +389,8 @@ Audio Source uses this: Volume Rolloff, Min / Max Distance and Doppler Level gre
 [SCRIPTING_API.md](SCRIPTING_API.md) for each. The Inspector reads them from the class
 description, which is now parsed once per class and dropped on every assembly reload, instead of
 every frame. Buttons and `[OnValueChanged]` use op 13 and the read-outs use op 14, through the
-existing JSON request, so the ABI version is unchanged.
+existing JSON request. The combined engine uses scripting ABI version 3, with editor method
+and read-out operations separated from project integration operations.
 
 ## vTabs
 

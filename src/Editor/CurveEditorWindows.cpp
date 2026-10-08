@@ -178,7 +178,7 @@ void DrawWindows(const std::function<void()>& undo,const std::function<void()>& 
             ImGui::BeginDisabled(!canRedo);if(EditorUIPrimitives::SecondaryButton("Redo")&&redo)redo();ImGui::EndDisabled();
             if(w.Bound.Source){ImGui::SameLine();if(EditorUIPrimitives::SecondaryButton("Reload"))Read(w);ImGui::SameLine();ImGui::TextDisabled("%s",fs::u8path(w.Bound.Source->Path).filename().u8string().c_str());}
             if(w.Opt.TimeInSeconds){ImGui::SetNextItemWidth(120);ImGui::DragFloat("Edit end (s)",&w.Opt.TimeMax,.01f,std::max(.01f,w.Working.EndTime()),600,"%.3f",ImGuiSliderFlags_AlwaysClamp);}
-            if(!w.Error.empty()){ImGui::TextWrapped("%s",w.Error.c_str());if(w.Dirty&&EditorUIPrimitives::PrimaryButton("Save Curve"))Save(w);}
+            if(!w.Error.empty()){ImGui::TextWrapped("%s",w.Error.c_str());if(w.Dirty&&EditorUIPrimitives::SecondaryButton("Save Curve"))Save(w);}
             if(w.Bound.Source) {
                 ImGui::BeginChild("channels",{180,0},ImGuiChildFlags_Borders);ImGui::TextUnformatted("Curves");
                 for(const auto& b:bindings)if(b.first.first==ctx&&b.second.Source->Path==w.Bound.Source->Path) {

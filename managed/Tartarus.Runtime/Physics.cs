@@ -3,7 +3,8 @@ using System.Numerics;
 namespace Tartarus;
 
 public readonly record struct RaycastHit(GameObject Object, Vector3 Point, Vector3 Normal, float Distance);
-public static class Physics
+public readonly record struct Collision(GameObject Other,Vector3 Point,Vector3 Normal,float Impulse,float NormalSpeed);
+public static partial class Physics
 {
     public static bool IsActive { get { NativeRequest r = default; return Engine.Call(1, ref r) != 0; } }
     public static bool Raycast(Vector3 origin, Vector3 direction, out RaycastHit hit, float distance = 1000, uint layerMask = uint.MaxValue, bool hitTriggers = false)

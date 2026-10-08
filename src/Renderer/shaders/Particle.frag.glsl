@@ -27,7 +27,9 @@ void main() {
     if(uTextured!=0) {
         vec2 q=vCorner*.5+.5;
         vec4 a=texture(uParticleTex,cellUV(q,vAtlas.z)),b=texture(uParticleTex,cellUV(q,vAtlas.w));
-        FragColor=mix(a,b,vParams.y)*vColor;
+        vec4 texel=mix(a,b,vParams.y);
+        if(vParams.z>=1.0)texel=vec4(vec3(1),texel[int(vParams.z)-1]);
+        FragColor=texel*vColor;
         if(FragColor.a<.001)discard;
     } else {
         float r2=dot(vCorner,vCorner);if(r2>=1)discard;

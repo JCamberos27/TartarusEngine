@@ -453,23 +453,13 @@
     1,
     1
    ],
-   "First Person Controller": {
-    "Capsule Height": 1.76,
-    "Capsule Radius": 0.34,
-    "Eye Height": 1.64,
-    "Field of View": 90.0,
-    "Move Speed": 1.6,
-    "Sprint Multiplier": 2.2,
-    "Jump Speed": 5.5,
-    "Gravity": 18.0,
-    "Mouse Sensitivity": 0.1,
-    "Invert Y": false,
-    "Kill Height": -20.0,
-    "Gravity Gun": true,
-    "Min Throw Speed": 4.0,
-    "Max Throw Speed": 18.0,
-    "Throw Charge Time": 1.0,
-    "Throw Backspin": 2.0
+   "C# Script": {
+    "Class": "Tartarus.Gameplay.PlayerDefinition",
+    "Source": "assets/Scripts/PlayerDefinition.cs",
+    "Fields JSON": "{\"CapsuleHeight\":1.76,\"CapsuleRadius\":0.34,\"EyeHeight\":1.64,\"MoveSpeed\":1.6,\"SprintMultiplier\":2.2,\"JumpSpeed\":5.5,\"Gravity\":18.0,\"MouseSensitivity\":0.1,\"InvertY\":false,\"KillY\":-20.0,\"GravityGun\":true,\"MinThrowSpeed\":4.0,\"MaxThrowSpeed\":18.0,\"ThrowChargeTime\":1.0,\"ThrowBackspin\":2.0,\"FieldOfView\":90.0}",
+    "Enabled": true,
+    "Scripts": "[]",
+    "Next Script ID": 1
    }
   }
  ],

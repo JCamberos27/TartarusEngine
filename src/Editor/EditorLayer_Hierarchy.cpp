@@ -21,6 +21,8 @@
 #include "AudioEngine.h"
 #include "Screenshot.h"
 #include "SceneSerializer.h"
+#include "Scripting/ScriptComponent.h"
+#include "Scripting/PlayerDefinition.h"
 #include "AABB.h"
 #include "Log.h"
 #include "EditorSettings.h"
@@ -793,7 +795,8 @@ void EditorLayer::DrawAddEntityItems(World& world, AssetLibrary& assets, Camera&
         // rigged body pieces as its children and an Animator Controller on one of them (Asset Browser > Create >
         // Create Body Locomotion Controller); the body's Setup box lists what is still missing.
         entt::entity e = CreateEmptyAt(world, &editorCamera, "Player Spawn", false);
-        world.Registry.emplace_or_replace<FirstPersonControllerComponent>(e);
+        Scripting::Attach(world.Registry.get_or_emplace<CSharpScriptComponent>(e),"assets/Scripts/PlayerDefinition.cs","Tartarus.Gameplay.PlayerDefinition");
+        Scripting::SyncPlayerDefinition(world,e);
         world.Registry.emplace_or_replace<FirstPersonBodyComponent>(e);
         SelectItem(e, false);
         Log::Info("Added a Player Spawn with a First Person Controller and Body. Next: add the body pieces as children and a locomotion controller; the Body's Setup box lists what is missing.");

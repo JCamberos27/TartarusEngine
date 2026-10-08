@@ -152,7 +152,7 @@ bool DrawCanvas(const char* id,Curve& curve,const ImVec2& requestedSize,const Op
     ImGui::SameLine();if(EditorUIPrimitives::SecondaryButton("Add Key")){s.InsertTime=s.Playhead;s.InsertValue=curve.Evaluate(s.Playhead);ImGui::OpenPopup("addKey");}
     if(ImGui::BeginPopup("addKey")) {
         ImGui::InputFloat("Time",&s.InsertTime,0,0,"%.5f");ImGui::InputFloat("Value",&s.InsertValue,0,0,o.ValueFormat);
-        if(EditorUIPrimitives::PrimaryButton("Insert")&&std::isfinite(s.InsertTime)&&std::isfinite(s.InsertValue)) {
+        if(EditorUIPrimitives::SecondaryButton("Insert")&&std::isfinite(s.InsertTime)&&std::isfinite(s.InsertValue)) {
             Curve c=curve;const float time=std::clamp(s.InsertTime,o.TimeMin,s.Editor.TimeMax);
             const auto existing=std::find_if(c.Keys.begin(),c.Keys.end(),[&](const CurveKey& k){return std::abs(k.Time-time)<.0001f;});
             const int i=existing==c.Keys.end()?c.AddKey(time):int(existing-c.Keys.begin());c.Keys[i].Value=s.InsertValue;
@@ -187,7 +187,7 @@ bool DrawCanvas(const char* id,Curve& curve,const ImVec2& requestedSize,const Op
         ImGui::InputFloat("Time Offset",&s.TimeOffset);ImGui::InputFloat("Value Offset",&s.ValueOffset);
         ImGui::InputFloat("Time Scale",&s.TimeScale);ImGui::InputFloat("Value Scale",&s.ValueScale);
         ImGui::TextDisabled("Time scales around the first selected key; values scale around zero.");
-        if(EditorUIPrimitives::PrimaryButton("Apply")&&!selected.empty()) {
+        if(EditorUIPrimitives::SecondaryButton("Apply")&&!selected.empty()) {
             if(std::isfinite(s.TimeOffset)&&std::isfinite(s.ValueOffset)&&std::isfinite(s.TimeScale)&&std::isfinite(s.ValueScale)&&s.TimeScale>0) {
                 Curve c=curve;const float pivot=c.Keys[selected.front()].Time;bool valid=true;
                 for(int i:selected){auto& k=c.Keys[i];k.Time=pivot+(k.Time-pivot)*s.TimeScale+s.TimeOffset;k.Value=k.Value*s.ValueScale+s.ValueOffset;k.InTangent*=s.ValueScale/s.TimeScale;k.OutTangent*=s.ValueScale/s.TimeScale;valid&=k.Time>=o.TimeMin&&k.Time<=s.Editor.TimeMax&&std::isfinite(k.Value)&&std::isfinite(k.InTangent)&&std::isfinite(k.OutTangent);}

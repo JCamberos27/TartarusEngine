@@ -1,4 +1,7 @@
 #include "Wardrobe.h"
+#include "Scripting/ScriptRuntime.h"
+#include "Scripting/GameFrames.h"
+#include <unordered_map>
 
 #include <json.hpp>
 
@@ -12,6 +15,16 @@ using json = nlohmann::json;
 
 namespace Wardrobe {
 namespace {
+
+// Project pack conventions are optional; authored catalog rules remain engine data.
+json Policy(const char* operation,const std::string& value) {
+    static std::unordered_map<std::string,json> cache;static std::uint64_t generation=~std::uint64_t{};
+    if(generation!=Scripting::CodeGeneration()){cache.clear();generation=Scripting::CodeGeneration();}
+    const auto key=std::string(operation)+":"+value;if(auto it=cache.find(key);it!=cache.end())return it->second;
+    std::string result;json answer;
+    if(Scripting::RequestProject(operation,json(value).dump(),result))answer=json::parse(result);
+    cache[key]=answer;return answer;
+}
 
 std::string Lower(std::string s) {
     for (char& c : s) c = (char)std::tolower((unsigned char)c);
@@ -78,9 +91,7 @@ std::vector<std::string> Folders(const std::string& path) {
 
 // A hat's name as a haircut suffix: "SKM_F_Hat_Warm" -> "Hat_Warm".
 std::string HatToken(const std::string& stem) {
-    for (const char* p : {"SKM_F_", "SKM_", "SM_"})
-        if (StartsWithI(stem, p)) return stem.substr(std::string(p).size());
-    return stem;
+    auto result=Policy("wardrobe.hat-name",stem);return result.is_string()?result.get<std::string>():stem;
 }
 
 } // namespace
@@ -105,18 +116,7 @@ std::string Stem(const std::string& path) {
 }
 
 std::string PrettyName(const std::string& stem) {
-    std::string s = stem;
-    for (const char* p : {"SKM_F_", "SKM_", "SM_", "Quantum_"})
-        if (StartsWithI(s, p)) { s = s.substr(std::string(p).size()); break; }
-    std::string out;
-    std::stringstream ss(s);
-    for (std::string word; std::getline(ss, word, '_');) {
-        if (word.empty()) continue;
-        if (IEquals(word, "Tshirt")) word = "T-Shirt";
-        if (!out.empty()) out += ' ';
-        out += word;
-    }
-    return out.empty() ? stem : out;
+    auto result=Policy("wardrobe.name",stem);return result.is_string()?result.get<std::string>():stem;
 }
 
 std::string SkinBase(const Wardrobe& w, const std::string& matPath) {
@@ -307,8 +307,7 @@ bool Classify(const Wardrobe& w, const std::string& path, const std::vector<std:
         }
     if (item.Slot.empty() || !w.Slot(item.Slot)) return false;
 
-    const bool femaleFolder = std::any_of(folders.begin(), folders.end(), [](const std::string& f) { return IEquals(f, "Female"); });
-    item.Sex = (femaleFolder || StartsWithI(item.Stem, "SKM_F_")) ? Gender::Female : Gender::Male;
+    auto sex=Policy("wardrobe.gender",item.Path);item.Sex=sex.is_number_integer()?(Gender)sex.get<int>():Gender::Male;
     if (ov && ov->Gender >= 0) item.Sex = (Gender)ov->Gender;
     item.Name = ov && !ov->Name.empty() ? ov->Name : PrettyName(item.Stem);
     item.Skin = std::any_of(materials.begin(), materials.end(), [&](const std::string& m) { return !SkinBase(w, m).empty(); });
@@ -527,79 +526,40 @@ const Style* FindStyle(const Wardrobe& w, const std::string& name) {
 
 Request Randomize(const Wardrobe& w, const std::vector<Item>& catalog, const Request& base, unsigned seed,
                   const std::vector<std::string>& keep, const std::string& style, std::string* styleOut) {
-    std::mt19937 rng(seed);
-    auto chance = [&](float p) { return std::uniform_real_distribution<float>(0.0f, 1.0f)(rng) < p; };
-    auto kept = [&](const std::string& s) { return std::any_of(keep.begin(), keep.end(), [&](const std::string& k) { return IEquals(k, s); }); };
-    Request req = base;
-
-    const auto& races = w.Body(req.Sex).Races;
-    if (!kept("Race") && !races.empty()) req.Race = races[rng() % races.size()].Name;
-
-    // The style: the one asked for, else one for this gender by weight.
-    const Style* st = style.empty() ? nullptr : FindStyle(w, style);
-    if (!st) {
-        std::vector<const Style*> pool;
-        float total = 0.0f;
-        for (const auto& s : w.Styles)
-            if (s.Gender < 0 || s.Gender == (int)req.Sex) { pool.push_back(&s); total += std::max(s.Weight, 0.0f); }
-        float pick = std::uniform_real_distribution<float>(0.0f, total)(rng);
-        for (const Style* s : pool) {
-            st = s;
-            if ((pick -= std::max(s->Weight, 0.0f)) <= 0.0f) break;
-        }
+    json input={{"Sex",(int)base.Sex},{"Race",base.Race},{"Items",base.Items},{"Keep",keep},{"Style",style},{"Order",w.RandomOrder},
+                {"Races",json::array()},{"Slots",json::array()},{"Catalog",json::array()},{"Styles",json::array()}};
+    for(const auto& race:w.Body(base.Sex).Races)input["Races"].push_back(race.Name);
+    for(const auto& slot:w.Slots)input["Slots"].push_back(slot.Id);
+    for(const auto& item:catalog)input["Catalog"].push_back({{"Path",item.Path},{"Slot",item.Slot},{"Sex",(int)item.Sex},{"Variant",item.Variant}});
+    for(const auto& st:w.Styles)input["Styles"].push_back({{"Name",st.Name},{"Weight",st.Weight},{"Gender",st.Gender},{"Fill",st.Fill},{"DefaultFill",st.DefaultFill}});
+    struct Scope {std::mt19937 Random;const Wardrobe& Rules;const std::vector<Item>& Catalog;std::string Output;} scope{std::mt19937(seed),w,catalog,{}};
+    auto text=input.dump();Scripting::WardrobeRandomFrame frame;frame.Input=reinterpret_cast<std::uintptr_t>(text.c_str());frame.Context=reinterpret_cast<std::uintptr_t>(&scope);
+    frame.Services=reinterpret_cast<std::uintptr_t>(+[](std::uintptr_t ptr,int operation,Scripting::NativeRequest* request)->int {
+        if(!ptr || !request)return 0;auto& ctx=*reinterpret_cast<Scope*>(ptr);
+        switch(operation){
+            case 0:request->Entity=ctx.Random();return 1;
+            case 1:request->Value=std::uniform_real_distribution<float>(0,request->Value)(ctx.Random);return 1;
+            case 2:if(request->Entity>=ctx.Catalog.size() || request->Script>=ctx.Catalog.size())return 0;
+                return Conflicts(ctx.Rules,ctx.Catalog[request->Entity],ctx.Catalog[request->Script]);
+            case 3:if(request->Entity>=ctx.Catalog.size() || request->Script>=ctx.Rules.Styles.size())return 0;
+                return InStyle(ctx.Rules,ctx.Catalog[request->Entity],ctx.Rules.Styles[request->Script]);
+            case 4:if(request->Text){ctx.Output=request->Text;return 1;}return 0;
+        }return 0;
+    });
+    Request result=base;if(styleOut)styleOut->clear();
+    if(Scripting::InvokeProject("wardrobe.random",&frame,sizeof frame) && !scope.Output.empty()){
+        auto output=json::parse(scope.Output);result.Race=output.at("Race").get<std::string>();result.Items=output.at("Items").get<std::map<std::string,std::string>>();
+        if(styleOut)*styleOut=output.at("Style").get<std::string>();
     }
-    if (styleOut) *styleOut = st ? st->Name : std::string();
-
-    std::vector<std::string> order = w.RandomOrder;
-    for (const auto& s : w.Slots)
-        if (std::none_of(order.begin(), order.end(), [&](const std::string& o) { return IEquals(o, s.Id); })) order.push_back(s.Id);
-
-    // What's on so far (kept slots first), to check each new pick against.
-    std::vector<const Item*> worn;
-    auto item = [&](const std::string& path) -> const Item* {
-        for (const auto& it : catalog) if (it.Sex == req.Sex && IEquals(it.Path, Normalize(path))) return &it;
-        return nullptr;
-    };
-    for (const auto& [slot, path] : req.Items)
-        if (kept(slot))
-            if (const Item* it = item(path)) worn.push_back(it);
-
-    for (const auto& slot : order) {
-        if (!w.Slot(slot) || kept(slot)) continue;
-        req.Items.erase(slot);
-        float p = 0.3f;
-        if (st) {
-            const auto f = st->Fill.find(slot);
-            p = f != st->Fill.end() ? f->second : st->DefaultFill;
-        }
-        if (!chance(p)) continue;
-        std::vector<const Item*> options;
-        for (const auto& it : catalog) {
-            if (it.Sex != req.Sex || it.Slot != slot || it.Variant || (st && !InStyle(w, it, *st))) continue;
-            if (std::any_of(worn.begin(), worn.end(), [&](const Item* o) { return Conflicts(w, it, *o); })) continue;
-            options.push_back(&it);
-        }
-        if (options.empty()) continue;
-        const Item* pick = options[rng() % options.size()];
-        req.Items[slot] = pick->Path;
-        worn.push_back(pick);
-    }
-    return req;
+    return result;
 }
 
 int DefaultLayer(const std::string& slot) {
-    static const std::pair<const char*, int> layers[] = {
-        {"Shoes", 2}, {"Pants", 3}, {"Top", 4}, {"Outerwear", 6}, {"Collar", 7}, {"Bag", 8}, {"Wrist L", 8},
-        {"Wrist R", 8}, {"Hair", 9}, {"Beard", 9}, {"Glasses", 9}, {"Hat", 10},
-    };
-    for (const auto& [name, layer] : layers)
-        if (IEquals(slot, name)) return layer;
-    return 5;
+    auto result=Policy("wardrobe.layer",slot);return result.is_number_integer()?result.get<int>():0;
 }
 
 bool DefaultHides(const std::string& slot) {
-    return !IEquals(slot, "Hair") && !IEquals(slot, "Beard") && !IEquals(slot, "Glasses") && !IEquals(slot, "Wrist L") &&
-           !IEquals(slot, "Wrist R");
+    auto result=Policy("wardrobe.hides",slot);return result.is_boolean()?result.get<bool>():false;
 }
 
 Layering LayerOf(const Wardrobe& w, const std::string& slot, const std::string& itemPath, bool bodyPart) {

@@ -89,34 +89,28 @@ uint64_t HashSceneJson(const std::string& s) {
 }
 } // namespace
 
-void EditorLayer::BeginGlobalUndoFrame(const World& world) {
-    auto start=[&] {
-        if(m_GlobalUndoActive || m_GlobalUndoApplying) return;
-        PROFILE_SCOPE("Undo Snapshot");
-        m_GlobalUndoScene=m_AssetsPtr?SceneSerializer::SaveToString(world,*m_AssetsPtr):SceneSerializer::SaveToString(world);
-        m_GlobalUndoSelection=CaptureSelectedOrders(world);m_GlobalUndoLabel="Edit";m_GlobalUndoActive=true;
-    };
-    // Camera navigation opens no snapshot (UndoTrigger.h): a right/middle drag that starts over
-    // the Scene view is latched until both buttons are up, so the keys pressed while flying
-    // (WASDQE, Shift) don't either.
-    UndoTrigger::Frame frame;
-    frame.OverViewport=IsMouseOverSceneViewport();
-    frame.LeftClicked=ImGui::IsMouseClicked(ImGuiMouseButton_Left);
-    frame.RightClicked=ImGui::IsMouseClicked(ImGuiMouseButton_Right);
-    frame.MiddleClicked=ImGui::IsMouseClicked(ImGuiMouseButton_Middle);
-    frame.OtherClicked=ImGui::IsMouseClicked(3) || ImGui::IsMouseClicked(4);
-    if((frame.RightClicked || frame.MiddleClicked) && frame.OverViewport) m_ViewportNavDrag=true;
-    else if(!ImGui::IsMouseDown(ImGuiMouseButton_Right) && !ImGui::IsMouseDown(ImGuiMouseButton_Middle)) m_ViewportNavDrag=false;
-    frame.NavDragHeld=m_ViewportNavDrag;
-    frame.ItemActive=ImGui::IsAnyItemActive();
-    frame.AltDown=ImGui::GetIO().KeyAlt;
-    frame.GizmoHovered=ImGuizmo::IsOver();
-    for(int key=ImGuiKey_NamedKey_BEGIN;key<ImGuiKey_NamedKey_END && !frame.KeyPressed;++key) {
-        const ImGuiKey k=static_cast<ImGuiKey>(key);
-        if(ImGui::IsLRModKey(k) || (k>=ImGuiKey_ReservedForModCtrl && k<=ImGuiKey_ReservedForModSuper)) continue;
-        frame.KeyPressed=ImGui::IsKeyPressed(k,false);
+void EditorLayer::EnsureUndoScene(const World& world) {
+    if (!m_CurrentUndoScene.empty() || m_InPlayMode || !m_AssetsPtr) return;
+    PROFILE_SCOPE("Undo Scene Snapshot");
+    m_CurrentUndoScene=SceneSerializer::SaveToString(world,*m_AssetsPtr);
+}
+
+void EditorLayer::BeginSceneUndo(const World& world, const std::string& label) {
+    if (m_GlobalUndoApplying || m_InPlayMode) return;
+    EnsureUndoScene(world);
+    if (!m_GlobalUndoActive) m_GlobalUndoSelection=CaptureSelectedOrders(world);
+    if (!m_GlobalUndoHasScene) {
+        m_GlobalUndoScene=m_CurrentUndoScene;
+        m_GlobalUndoHasScene=true;
     }
-    if(UndoTrigger::OpensSnapshot(frame) && !m_GameInputActive) start();
+    m_GlobalUndoLabel=label;
+    m_GlobalUndoActive=true;
+}
+
+void EditorLayer::BeginGlobalUndoFrame(const World& world) {
+    // Initialize once per scene/history context, before any controls mutate it. Mouse/key
+    // activity alone is not an authored edit (camera fly, scrollbars, search, docking, etc.).
+    EnsureUndoScene(world);
     AtomicFile::SetChangeObserver([this,&world](const std::filesystem::path& path) {
         if(m_GlobalUndoApplying) return;
         std::error_code ec;
@@ -125,13 +119,16 @@ void EditorLayer::BeginGlobalUndoFrame(const World& world) {
         // Editor Enhancers' per-user files (bookmarks / default parents, the style palette) are
         // journaled like the other per-user prefs, so bookmarking or editing the palette undoes.
         const bool enhancers=absolute==std::filesystem::path(Enhancers::EnhancerUserState::Path()) ||
-            absolute==std::filesystem::path(Enhancers::Palette::Path());
+            absolute==std::filesystem::path(Enhancers::Palette::Path()) ||
+            absolute==std::filesystem::path(Enhancers::FolderStyles::Path()) ||
+            absolute==std::filesystem::path(Enhancers::UiStyles::Path());
         const bool preferences=enhancers || absolute==std::filesystem::path(EditorSettings::PrefsFilePath()) ||
             absolute==std::filesystem::path(UserPaths::Resolve("shortcuts.json")) || absolute==std::filesystem::path(UserPaths::Resolve("asset_favorites.json"));
         if(ec || relative.empty() || (*relative.begin()==".." && !preferences)) return;
         for(const auto& part:relative) if(part=="Library" || part=="bin" || part=="obj") return;
         if(!m_GlobalUndoActive) {
-            m_GlobalUndoScene=m_AssetsPtr?SceneSerializer::SaveToString(world,*m_AssetsPtr):SceneSerializer::SaveToString(world);
+            m_GlobalUndoHasScene=false;
+            m_GlobalUndoScene.clear();
             m_GlobalUndoSelection=CaptureSelectedOrders(world);
             const bool folderStyles=absolute==std::filesystem::path(Enhancers::FolderStyles::Path());
             const bool uiStyles=absolute==std::filesystem::path(Enhancers::UiStyles::Path());
@@ -149,24 +146,34 @@ void EditorLayer::FinishGlobalUndo(const World& world,bool force) {
     PROFILE_SCOPE("Undo Commit");
     EditorSettings::Flush();
     Enhancers::EnhancerUserState::Get().Flush();Enhancers::Palette::Flush();Enhancers::FolderStyles::Get().Flush();Enhancers::UiStyles::Get().Flush();
-    const auto current=m_AssetsPtr?SceneSerializer::SaveToString(world,*m_AssetsPtr):SceneSerializer::SaveToString(world);
+    std::string current;
+    if (m_GlobalUndoHasScene && !m_InPlayMode) {
+        PROFILE_SCOPE("Undo Scene Snapshot");
+        current=m_AssetsPtr?SceneSerializer::SaveToString(world,*m_AssetsPtr):SceneSerializer::SaveToString(world);
+    }
     auto files=m_FileJournal.Changes();
     const auto selection=CaptureSelectedOrders(world);
-    const bool sceneChanged=!m_InPlayMode && current!=m_GlobalUndoScene;
+    const bool sceneChanged=m_GlobalUndoHasScene && !m_InPlayMode && current!=m_GlobalUndoScene;
     if(sceneChanged || !files.empty() || selection!=m_GlobalUndoSelection) {
-        UndoEntry entry;entry.Hash=HashSceneJson(m_GlobalUndoScene);entry.SelectedOrders=m_GlobalUndoSelection;
+        // File/selection-only entries never restore scene content. Reuse the chain's anchor
+        // (or valid empty JSON for the first entry), avoiding a whole-scene save and diff.
+        static const std::string emptyScene="{}";
+        const std::string& before=m_GlobalUndoHasScene?m_GlobalUndoScene:
+            m_UndoBaseJson.empty()?emptyScene:m_UndoBaseJson;
+        UndoEntry entry;entry.Hash=HashSceneJson(before);entry.SelectedOrders=m_GlobalUndoSelection;
         entry.Label=m_GlobalUndoLabel;entry.Files=std::move(files);
         entry.AssetOnly=!sceneChanged && !entry.Files.empty();entry.SelectionOnly=!sceneChanged && entry.Files.empty();
         if(entry.CountsAsSceneEdit() && m_SavedUndoDepth>=0 && !m_RedoStack.empty()) m_SavedUndoDepth=-1;
         if(entry.CountsAsSceneEdit()) ++m_ContentDepth;
-        PushHistoryEntry(m_UndoStack,m_UndoBaseJson,std::move(entry),m_GlobalUndoScene);
+        PushHistoryEntry(m_UndoStack,m_UndoBaseJson,std::move(entry),before);
         if(m_UndoStack.size()>kMaxHistory) {
             if(m_UndoStack.front().CountsAsSceneEdit()) {--m_ContentDepth;if(m_SavedUndoDepth>0)--m_SavedUndoDepth;}
             m_UndoStack.erase(m_UndoStack.begin());
         }
         ClearRedoHistory();RefreshDirtyFromHistory();m_EditPushedThisFrame=true;
     }
-    m_FileJournal.Clear();m_GlobalUndoActive=false;m_GlobalUndoScene.clear();m_GlobalUndoSelection.clear();
+    if (m_GlobalUndoHasScene && !m_InPlayMode) m_CurrentUndoScene=std::move(current);
+    m_FileJournal.Clear();m_GlobalUndoActive=false;m_GlobalUndoHasScene=false;m_GlobalUndoScene.clear();m_GlobalUndoSelection.clear();
 }
 void EditorLayer::ReloadHistoryFiles(AssetLibrary& assets,const std::vector<EditorFileHistory::State>& files) {
     bool assetIdentity=false;
@@ -218,6 +225,7 @@ void EditorLayer::ClearRedoHistory() {
 
 void EditorLayer::ClearUndoHistory() {
     m_GlobalUndoActive=false;m_FileJournal.Clear();m_GlobalUndoScene.clear();m_GlobalUndoSelection.clear();
+    m_GlobalUndoHasScene=false;m_CurrentUndoScene.clear();
     m_UndoStack.clear();
     m_UndoBaseJson.clear();
     m_UndoBaseJson.shrink_to_fit();
@@ -359,6 +367,7 @@ void EditorLayer::DrawRecoveryPrompt(World& world, AssetLibrary& assets) {
                 CheckSceneVersionWarning();
                 ClearSelection();
                 ClearUndoHistory();
+                EnsureUndoScene(world);
                 m_Dirty = true; // recovered content isn't in the real scene file yet
                 m_LoadFailedScenePath.clear(); // #84 — the user chose this content for the path
                 m_SavedUndoDepth = -1;
@@ -443,6 +452,7 @@ void EditorLayer::DrawExitPrompt() {
 
 void EditorLayer::RequestNewScene(World& world, AssetLibrary& assets) {
     if (InPrefabMode()) ExitPrefabMode(world, assets); // #176
+    if (InPrefabMode()) return;
     // #85 — no scene switching while Playing: Stop would restore the pre-Play snapshot of the
     // OLD scene under the NEW scene's path (and PhysicsWorld still holds actors keyed by the old
     // scene's recycled entity ids), so the next save wrote scene A's content into B's file.
@@ -461,6 +471,7 @@ void EditorLayer::RequestNewScene(World& world, AssetLibrary& assets) {
 
 void EditorLayer::RequestOpenScene(World& world, AssetLibrary& assets, const std::string& path) {
     if (InPrefabMode() && !path.empty()) ExitPrefabMode(world, assets); // #176
+    if (InPrefabMode()) return;
     // #85 — no scene switching while Playing: Stop would restore the pre-Play snapshot of the
     // OLD scene under the NEW scene's path (and PhysicsWorld still holds actors keyed by the old
     // scene's recycled entity ids), so the next save wrote scene A's content into B's file.
@@ -487,6 +498,7 @@ void EditorLayer::FrameOpenedScene(World& world, const std::string& path) {
 
 void EditorLayer::RequestRevertScene(World& world, AssetLibrary& assets) {
     if (InPrefabMode()) ExitPrefabMode(world, assets); // #176
+    if (InPrefabMode()) return;
     // #85 — no scene switching while Playing: Stop would restore the pre-Play snapshot of the
     // OLD scene under the NEW scene's path (and PhysicsWorld still holds actors keyed by the old
     // scene's recycled entity ids), so the next save wrote scene A's content into B's file.
@@ -624,11 +636,9 @@ void EditorLayer::RestoreSelectionByOrder(World& world, const std::vector<int>& 
 void EditorLayer::PushUndo(const World& world, const std::string& label, bool selectionOnly,
                            const std::vector<int>* selectedOrdersOverride) {
     PROFILE_SCOPE("PushUndo");
-    if(m_GlobalUndoActive && !m_GlobalUndoApplying) {if(!selectionOnly)m_GlobalUndoLabel=label;return;}
+    if(m_GlobalUndoActive && !m_GlobalUndoApplying && selectionOnly) return;
     if(!selectionOnly && !m_GlobalUndoApplying && m_AssetsPtr) {
-        m_GlobalUndoScene=SceneSerializer::SaveToString(world,*m_AssetsPtr);
-        m_GlobalUndoSelection=CaptureSelectedOrders(world);
-        m_GlobalUndoLabel=label;m_GlobalUndoActive=true;return;
+        BeginSceneUndo(world,label);return;
     }
     CancelEyedropper(); // #93
     // #138 - a selection-only entry never has its scene restored (Undo/Redo skip the reload for
@@ -637,7 +647,7 @@ void EditorLayer::PushUndo(const World& world, const std::string& label, bool se
     // viewport click used to cost a full save + diff. It records the top entry's state instead,
     // which keeps the delta chain intact (an empty patch) at the cost of a string copy.
     const bool reuseTop = selectionOnly && !m_UndoStack.empty() && !m_UndoBaseJson.empty();
-    const std::string sceneJson = reuseTop ? m_UndoBaseJson
+    const std::string sceneJson = selectionOnly ? (reuseTop ? m_UndoBaseJson : "{}")
                                 : m_AssetsPtr ? SceneSerializer::SaveToString(world, *m_AssetsPtr)
                                               : SceneSerializer::SaveToString(world);
     UndoEntry entry;
@@ -738,6 +748,7 @@ std::string EditorLayer::SelectionUndoLabel(const World& world) const {
 }
 
 void EditorLayer::StageUndo(const World& world) {
+    if (m_AssetsPtr && !m_GlobalUndoApplying) {BeginSceneUndo(world,"Edit");return;}
     if(m_GlobalUndoActive) return;
     CancelEyedropper(); // #93
     if (m_HasStagedUndo) return; // keep the FIRST (true pre-edit) snapshot of this interaction
@@ -835,6 +846,7 @@ void EditorLayer::Undo(World& world, AssetLibrary& assets) {
     InvalidateModelThumbnail(); // LoadFromString may rebuild the asset library
     RefreshAssetBrowser();
     RefreshDirtyFromHistory(); // "*" clears when history returns to the last-saved point (#22 P22)
+    m_CurrentUndoScene.clear();EnsureUndoScene(world);
 }
 
 void EditorLayer::Redo(World& world, AssetLibrary& assets) {
@@ -873,6 +885,7 @@ void EditorLayer::Redo(World& world, AssetLibrary& assets) {
     InvalidateModelThumbnail(); // LoadFromString may rebuild the asset library
     RefreshAssetBrowser();
     RefreshDirtyFromHistory(); // "*" clears when history returns to the last-saved point (#22 P22)
+    m_CurrentUndoScene.clear();EnsureUndoScene(world);
 }
 
 void EditorLayer::JumpToUndoEntry(World& world, AssetLibrary& assets, size_t undoStackIndex) {
@@ -976,6 +989,7 @@ void EditorLayer::OnExitPlayMode(World& world, AssetLibrary& assets) {
     struct Applying {bool& Flag;Applying(bool& flag):Flag(flag){Flag=true;}~Applying(){Flag=false;}} applying(m_GlobalUndoApplying);
     CancelEyedropper(); // #93
     m_InPlayMode = false;
+    m_CurrentUndoScene.clear();
 
     // Always tear the PhysX world down, even on the snapshot-empty early-out below — Create()
     // may have run regardless (#185). Destroy() is idempotent when nothing is active.
@@ -1092,6 +1106,7 @@ void EditorLayer::NewScene(World& world, AssetLibrary& assets) {
         m_Dirty = true;
         m_SavedUndoDepth = -1;
     }
+    EnsureUndoScene(world);
 }
 
 void EditorLayer::OpenScene(World& world, AssetLibrary& assets, const std::string& path) {
@@ -1122,6 +1137,7 @@ void EditorLayer::OpenScene(World& world, AssetLibrary& assets, const std::strin
     m_SavedUndoDepth = 0; // freshly loaded — empty history == on disk
     m_AutoSaveTimer = 0.0f;
     Log::Info("Opened scene '" + path + "'.");
+    EnsureUndoScene(world);
 }
 
 // Imports one file (never a directory) into `targetFolder` - the virtual Asset Browser folder
@@ -1141,7 +1157,8 @@ std::string EditorLayer::CopyAssetIntoProject(const std::string& sourcePath, con
     const std::string absStr = abs.lexically_normal().generic_string();
     if (absStr == root || absStr.rfind(root + "/", 0) == 0) return sourcePath;
 
-    const std::string destDir = ProjectPaths::Resolve("assets/" + subfolder);
+    const std::string destDir = AssetImport::ProjectImportDirectory(ProjectPaths::Root(), sourcePath,
+                                                                   EditorSettings::Get().AssetLibraryPath, subfolder);
     fs::create_directories(destDir, ec);
     if (ec) {
         Log::Error("Couldn't create '" + destDir + "' (" + ec.message() + ") - importing '" +
@@ -1395,7 +1412,9 @@ void EditorLayer::HandleDroppedFiles(World& world, AssetLibrary& assets, Camera&
         const std::string rootAbs = std::filesystem::absolute(root, rootErr).lexically_normal().generic_string();
         auto lower = [](std::string v) { for (char& c : v) c = (char)std::tolower((unsigned char)c); return v; };
         if (lower(rootAbs).rfind(lower(projectRoot) + "/", 0) != 0) {
-            const AssetImport::FolderCopy copy = AssetImport::CopyFolderInto(path, ProjectPaths::Resolve("assets"));
+            const std::string destination = AssetImport::ProjectImportDirectory(ProjectPaths::Root(), path,
+                                                                                 EditorSettings::Get().AssetLibraryPath);
+            const AssetImport::FolderCopy copy = AssetImport::CopyFolderInto(path, destination);
             if (copy.Folder.empty()) {
                 Log::Error("Couldn't copy the folder '" + path + "' into the project (" + copy.Error + ").");
                 continue;
