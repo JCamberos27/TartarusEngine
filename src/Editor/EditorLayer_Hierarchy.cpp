@@ -2,9 +2,14 @@
 // Add-entity menu body. Split out of EditorLayer.cpp for build time (#179).
 
 #include "EditorLayer.h"
+#include "EditorTestProbe.h" // --editor-tests widget names
 #include "EditorLayerInternal.h"
 #include "EditorTheme.h"
 #include "EditorModuleAPI.h" // kHierarchyFilter* bitmask constants, shared with EditorModuleHierarchy.cpp
+#include "ComponentRegistry.h" // vHierarchy component minimap
+#include "Enhancers/EnhancerCore.h" // FAIconGlyph (row style icons)
+#include "Enhancers/StyleWidgets.h" // the Row Style menu's colour + icon pickers
+#include "Enhancers/EnhancerUserState.h" // vFavorites (row menu)
 #include "FileDialog.h"
 #include "AssetLibrary.h"
 #include "World.h"
@@ -99,15 +104,6 @@ std::vector<entt::entity> ViewInCreationOrder(const entt::registry& reg, View vi
     return entities;
 }
 
-// 1-based position of `entity` within its kind's creation-ordered list — the number behind the
-// "Box 3" / "Object 7" fallback shown for entities the user never named (#21 P10).
-int CreationOrdinal(const entt::registry& reg, entt::entity entity) {
-    auto list = ViewInCreationOrder(reg, reg.view<const NameComponent>());
-    for (size_t i = 0; i < list.size(); ++i)
-        if (list[i] == entity) return static_cast<int>(i) + 1;
-    return 0;
-}
-
 // Phase 5 item 6 — the type-filter chips' bitmask, and the tiebreak key the Type sort mode uses.
 // Independent of the per-row kind BADGE (DrawHierarchyRowBody's own hasMesh/hasLight/hasCamera),
 // which picks one primary glyph by priority — this instead sets every bit an entity qualifies
@@ -121,15 +117,40 @@ int HierarchyKindMask(const entt::registry& reg, entt::entity e) {
     return mask;
 }
 
-// Same "(unnamed)" fallback DrawHierarchyRowBody shows, so the Name sort mode orders rows exactly
-// the way they read on screen instead of putting every unnamed entity first as an empty string.
-std::string HierarchyDisplayName(const entt::registry& reg, entt::entity e) {
-    const auto* name = reg.try_get<NameComponent>(e);
-    if (name && !name->Name.empty()) return name->Name;
-    return "Object " + std::to_string(CreationOrdinal(reg, e));
+// The open/closed flag of `e`'s row lives in the Hierarchy window's storage under "##node",
+// hashed inside the row's ancestor-to-self PushID chain (DrawHierarchyTreeBody pushes it before
+// each row). Rebuilds that chain into `scratch` (reused, no allocation once warm). Must be called
+// with the Hierarchy window current and no extra IDs pushed - the same contract as
+// SetHierarchyExpandedRecursive.
+ImGuiID HierarchyNodeStateId(const World& world, entt::entity e, std::vector<entt::entity>& scratch) {
+    scratch.clear();
+    for (entt::entity w = e; w != entt::null && world.Registry.valid(w);) {
+        scratch.push_back(w);
+        const auto* h = world.Registry.try_get<HierarchyComponent>(w);
+        w = h ? h->Parent : entt::null;
+    }
+    for (auto it = scratch.rbegin(); it != scratch.rend(); ++it) ImGui::PushID((int)entt::to_integral(*it));
+    const ImGuiID id = ImGui::GetID("##node");
+    for (size_t i = 0; i < scratch.size(); ++i) ImGui::PopID();
+    return id;
 }
 
 } // namespace
+
+// "Object 7" for an entity the user never named (#21 P10): its 1-based position in creation
+// order. This used to re-sort every entity per call - once per unnamed visible row per frame -
+// so the ordinals are now built once per frame instead.
+int EditorLayer::HierarchyCreationOrdinal(const World& world, entt::entity e) {
+    const int frame = ImGui::GetCurrentContext() ? ImGui::GetFrameCount() : -2;
+    if (frame != m_HierOrdinalsFrame) {
+        m_HierOrdinalsFrame = frame;
+        m_HierOrdinals.clear();
+        const auto list = ViewInCreationOrder(world.Registry, world.Registry.view<const NameComponent>());
+        for (size_t i = 0; i < list.size(); ++i) m_HierOrdinals[list[i]] = (int)i + 1;
+    }
+    const auto it = m_HierOrdinals.find(e);
+    return it != m_HierOrdinals.end() ? it->second : 0;
+}
 
 
 void EditorLayer::CopySelection(World& world) {
@@ -251,7 +272,7 @@ void EditorLayer::SelectAllEntities(World& world) {
     if (m_Selected != entt::null) m_SelectionAnchor = m_Selected;
 }
 
-// --- Selection history (#236 R2) -----------------------------------------------------------
+// --- Selection history (#236 R2; by identity since vInspector) ------------------------------
 namespace {
 std::vector<entt::entity> SnapshotSelection(entt::entity primary, const std::vector<entt::entity>& extra) {
     std::vector<entt::entity> s;
@@ -259,17 +280,51 @@ std::vector<entt::entity> SnapshotSelection(entt::entity primary, const std::vec
     s.insert(s.end(), extra.begin(), extra.end());
     return s;
 }
+
+// Enhancers::OrdersResolveFn over a World: true when any of the orders still names an entity.
+bool AnyOrderResolves(const std::vector<int>& orders, void* ctx) {
+    const World& world = *static_cast<const World*>(ctx);
+    for (auto [e, o] : world.Registry.view<const OrderComponent>().each())
+        if (std::find(orders.begin(), orders.end(), o.Value) != orders.end()) return true;
+    return false;
+}
 } // namespace
 
 void EditorLayer::RecordSelectionHistory(const World& world) {
     auto cur = SnapshotSelection(m_Selected, m_ExtraSelection);
-    if (cur == m_SelSnapshotLast) { m_EditPushedThisFrame = false; return; }
-    auto prev = std::move(m_SelSnapshotLast);
+    // Only a lone file selection (nothing in the scene, not a folder) is what the Inspector shows,
+    // so that's the only asset state the history follows.
+    static const std::string kNoAsset;
+    const std::string& assetNow = (cur.empty() && !m_SelectedAssetIsFolder) ? m_SelectedAssetKey : kNoAsset;
+    const bool entitiesChanged = cur != m_SelSnapshotLast;
+    // A scene switch with nothing selected still counts: the new scene's empty selection is an
+    // entry Back can return to (the old scene's entries are unreachable from here).
+    const bool sceneChanged = m_CurrentScenePath != m_SelScenePathLast;
+    const bool selectionChanged = entitiesChanged || assetNow != m_SelAssetLast;
+    if (!selectionChanged && !sceneChanged) { m_EditPushedThisFrame = false; return; }
     m_SelSnapshotLast = cur;
+    m_SelAssetLast = assetNow;
+    m_SelScenePathLast = m_CurrentScenePath;
+
+    Enhancers::SelectionHistoryEntry entry;
+    entry.Orders = CaptureSelectedOrders(world, cur);
+    if (entry.Orders.empty() && !assetNow.empty()) entry.Asset = assetNow;
+    else entry.Scene = CurrentSceneKey();
+    Enhancers::SelectionHistoryEntry prev = std::move(m_SelEntryLast);
+    if (prev.Scene.empty() && prev.Orders.empty() && prev.Asset.empty()) prev.Scene = entry.Scene.empty() ? CurrentSceneKey() : entry.Scene; // never polled yet: the empty start state
+    m_SelEntryLast = entry;
 
     // Our own back/forward (or Undo/Redo/JumpTo*) change — advance the "last seen" marker, don't
     // append to either history.
     if (m_SelHistoryNavigating) { m_SelHistoryNavigating = false; m_EditPushedThisFrame = false; return; }
+
+    // vTabs: selecting something brings the Inspector back to its Selection tab, so it shows what
+    // was just picked. (The Inspector lock is what keeps a view while selecting elsewhere.) A scene
+    // switch alone isn't a pick.
+    if (auto& tabs = Enhancers::TabState::Get().Inspector; selectionChanged && tabs.Active >= 0) {
+        tabs.Active = -1;
+        Enhancers::TabState::Get().MarkDirty();
+    }
 
     // Phase 6 item 6 / Q6 — a genuine user selection change becomes its own m_UndoStack entry,
     // UNLESS an edit already pushed one this frame (Duplicate/Paste/Add Cube/... all change
@@ -281,9 +336,11 @@ void EditorLayer::RecordSelectionHistory(const World& world) {
     // The entry must hold the PRE-change selection (`prev`), not the current one — same "snapshot
     // taken before the thing this entry undoes" contract every other UndoEntry follows. Passed as
     // an override since CaptureSelectedOrders(world) alone would only ever see the live (already
-    // new) selection by the time this runs.
-    if (!m_EditPushedThisFrame) {
-        const std::vector<int> prevOrders = CaptureSelectedOrders(world, prev);
+    // new) selection by the time this runs. Taken from the identity entry recorded last frame
+    // (the raw handles may already be stale), and only for the scene that is open now. An
+    // asset-only change records history but is not a scene edit, so it pushes no undo entry.
+    if (entitiesChanged && !m_EditPushedThisFrame) {
+        const std::vector<int> prevOrders = prev.Scene == entry.Scene ? prev.Orders : std::vector<int>();
         PushUndo(world, SelectionUndoLabel(world), /*selectionOnly=*/true, &prevOrders);
     }
     m_EditPushedThisFrame = false;
@@ -294,7 +351,7 @@ void EditorLayer::RecordSelectionHistory(const World& world) {
     } else if (m_SelHistoryPos + 1 < m_SelHistory.size()) {
         m_SelHistory.resize(m_SelHistoryPos + 1); // drop the forward branch
     }
-    m_SelHistory.push_back(std::move(cur));
+    if (m_SelHistory.back() != entry) m_SelHistory.push_back(std::move(entry));
 
     constexpr size_t kCap = 64;
     if (m_SelHistory.size() > kCap)
@@ -302,28 +359,44 @@ void EditorLayer::RecordSelectionHistory(const World& world) {
     m_SelHistoryPos = m_SelHistory.size() - 1;
 }
 
-void EditorLayer::ApplySelectionSnapshot(World& world, const std::vector<entt::entity>& snap) {
-    m_Selected = entt::null;
-    m_ExtraSelection.clear();
-    m_RenamingEntity = entt::null;
-    for (entt::entity e : snap) {
-        if (!world.Registry.valid(e)) continue; // entity deleted since it was recorded
-        if (m_Selected == entt::null) m_Selected = e;
-        else if (std::find(m_ExtraSelection.begin(), m_ExtraSelection.end(), e) == m_ExtraSelection.end())
-            m_ExtraSelection.push_back(e);
+void EditorLayer::ApplySelectionEntry(World& world, const Enhancers::SelectionHistoryEntry& entry) {
+    if (!entry.Orders.empty()) {
+        RestoreSelectionByOrder(world, entry.Orders); // sets m_SelHistoryNavigating
+        return;
     }
-    if (m_Selected != entt::null) m_SelectionAnchor = m_Selected;
+    ClearSelection();
+    if (!entry.Asset.empty()) {
+        ClearAssetSelection();
+        m_SelectedAssetKey = entry.Asset;
+        m_SelectedAssetIsFolder = false;
+    } else if (!m_SelectedAssetIsFolder) {
+        ClearAssetSelection(); // an empty selection: nothing in the Inspector
+    }
     m_SelHistoryNavigating = true; // next RecordSelectionHistory() poll swallows this change
 }
 
+bool EditorLayer::CanSelectionHistoryBack() const {
+    return Enhancers::StepSelectionHistory(m_SelHistory, (int)m_SelHistoryPos, -1, CurrentSceneKey()) >= 0;
+}
+
+bool EditorLayer::CanSelectionHistoryForward() const {
+    return Enhancers::StepSelectionHistory(m_SelHistory, (int)m_SelHistoryPos, +1, CurrentSceneKey()) >= 0;
+}
+
 void EditorLayer::SelectionHistoryBack(World& world) {
-    if (m_SelHistoryPos == 0 || m_SelHistory.empty()) return;
-    ApplySelectionSnapshot(world, m_SelHistory[--m_SelHistoryPos]);
+    const int i = Enhancers::StepSelectionHistory(m_SelHistory, (int)m_SelHistoryPos, -1, CurrentSceneKey(),
+                                                  &AnyOrderResolves, &world);
+    if (i < 0) return;
+    m_SelHistoryPos = (size_t)i;
+    ApplySelectionEntry(world, m_SelHistory[m_SelHistoryPos]);
 }
 
 void EditorLayer::SelectionHistoryForward(World& world) {
-    if (m_SelHistoryPos + 1 >= m_SelHistory.size()) return;
-    ApplySelectionSnapshot(world, m_SelHistory[++m_SelHistoryPos]);
+    const int i = Enhancers::StepSelectionHistory(m_SelHistory, (int)m_SelHistoryPos, +1, CurrentSceneKey(),
+                                                  &AnyOrderResolves, &world);
+    if (i < 0) return;
+    m_SelHistoryPos = (size_t)i;
+    ApplySelectionEntry(world, m_SelHistory[m_SelHistoryPos]);
 }
 
 void EditorLayer::InvertSelection(World& world) {
@@ -350,19 +423,7 @@ void EditorLayer::HandleHierarchyKeyboardNav(World& world) {
     // PushID(entity), one per ancestor, before drawing each row). Rebuild the whole chain here or
     // the id won't match for any row below the top level (which is why Left/Right did nothing on
     // nested rows).
-    auto nodeId = [&](entt::entity e) {
-        std::vector<entt::entity> chain;
-        for (entt::entity w = e; w != entt::null; ) {
-            chain.push_back(w);
-            const auto* h = world.Registry.try_get<HierarchyComponent>(w);
-            w = h ? h->Parent : entt::null;
-        }
-        for (auto it = chain.rbegin(); it != chain.rend(); ++it)
-            ImGui::PushID((int)entt::to_integral(*it));
-        ImGuiID id = ImGui::GetID("##node");
-        for (size_t i = 0; i < chain.size(); ++i) ImGui::PopID();
-        return id;
-    };
+    auto nodeId = [&](entt::entity e) { return HierarchyNodeStateId(world, e, m_HierChainScratch); };
     auto nodeOpen    = [&](entt::entity e) { return ImGui::GetStateStorage()->GetInt(nodeId(e), 0) != 0; };
     auto setNodeOpen = [&](entt::entity e, bool open) { ImGui::GetStateStorage()->SetInt(nodeId(e), open ? 1 : 0); };
 
@@ -404,7 +465,9 @@ void EditorLayer::HandleHierarchyKeyboardNav(World& world) {
 
     // Type-to-select: printable keystrokes (no Ctrl/Alt) build a prefix that resets after a short
     // idle, then jump to the next visible row whose name starts with it, wrapping past the end.
-    if (!io.KeyCtrl && !io.KeyAlt && io.InputQueueCharacters.Size > 0) {
+    // Skipped on a frame where an Editor Enhancers hover key (E, A, X, ...) acted on the row
+    // under the mouse - that letter was a command, not the start of a name.
+    if (!io.KeyCtrl && !io.KeyAlt && !m_HierarchyHoverKeyUsed && io.InputQueueCharacters.Size > 0) {
         const double now = ImGui::GetTime();
         const size_t before = m_HierarchyTypeAhead.size();
         for (ImWchar c : io.InputQueueCharacters) {
@@ -690,6 +753,7 @@ void EditorLayer::DrawAddEntityItems(World& world, AssetLibrary& assets, Camera&
             col.Kind == ColliderComponent::Shape::Mesh)
             col.Center = glm::vec3(0.0f); // auto-fit / mesh shapes place themselves
         world.Registry.emplace<ColliderComponent>(e, col);
+        ApplyDefaultParent(world, e); // vHierarchy D: lands under the scene's default parent, if any
         SelectItem(e, false);
         Log::Info(std::string("Added ") + displayName + ".");
     };
@@ -706,6 +770,16 @@ void EditorLayer::DrawAddEntityItems(World& world, AssetLibrary& assets, Camera&
     if (ImGui::MenuItem(ICON_FA_DIAGRAM_PROJECT "  Empty")) {
         CreateEmptyAt(world, &editorCamera, "Empty", false);
     }
+    // Editor Enhancers / vHierarchy: an empty drawn as a section header in the Hierarchy. It can
+    // parent rows like any empty, so it doubles as a folder.
+    if (ImGui::MenuItem(ICON_FA_GRIP_LINES "  Separator")) {
+        entt::entity e = CreateEmptyAt(world, &editorCamera, "Separator", false);
+        HierarchyStyleComponent st;
+        st.Separator = true;
+        world.Registry.emplace_or_replace<HierarchyStyleComponent>(e, st);
+    }
+    if (ImGui::IsItemHovered())
+        EditorUI::SetTooltip("A section header row for organising the Hierarchy. Drag objects onto it to group them.");
     if (ImGui::MenuItem(ICON_FA_LIGHTBULB "  Point Light")) {
         CreateEmptyAt(world, &editorCamera, "Point Light", true);
     }
@@ -821,7 +895,9 @@ void EditorLayer::DrawHierarchyTreeBody(World& world, AssetLibrary& assets) {
     // ImGuiListClipper decide which rows are actually worth drawing this frame. Before this, every
     // entity's row was walked and measured every frame regardless of scroll position: invisible at
     // 61 objects, ~4,000 text measurements/frame at 1,000+.
-    std::vector<HierarchyFlatRow> flatRows;
+    // Reused member buffer (Editor Enhancers perf pass): clear() keeps its capacity.
+    std::vector<HierarchyFlatRow>& flatRows = m_HierFlatRows;
+    flatRows.clear();
     std::vector<entt::entity> rootEntities =
         ViewInCreationOrder(world.Registry, world.Registry.view<const NameComponent>());
     ApplyHierarchyDisplaySort(world, rootEntities); // Phase 5 item 6 — display-only, doesn't touch OrderComponent
@@ -835,6 +911,12 @@ void EditorLayer::DrawHierarchyTreeBody(World& world, AssetLibrary& assets) {
         }
         FlattenHierarchyRows(world, entity, /*depth=*/0, flatRows);
     }
+
+    // Editor Enhancers / vHierarchy per-frame state, read by every row below.
+    const EditorSettings& es = EditorSettings::Get();
+    m_HierarchyHoverEntity = entt::null;
+    m_HierDefaultParentNow = ResolveDefaultParent(world);
+    const bool drawTreeLines = es.HierarchyTreeLines && !filtering;
 
     // The full list, independent of clipping — Ctrl+A, Shift+Click and keyboard nav all key off
     // this, not off which rows happen to be on-screen this frame.
@@ -862,8 +944,10 @@ void EditorLayer::DrawHierarchyTreeBody(World& world, AssetLibrary& assets) {
 
             // Push this row's full ancestor-to-self ID chain so every ID (rename buffer, drag
             // payload, popups, the "##node" open/closed flag) lands exactly where the old
-            // recursive walk would have left it at the equivalent nesting depth.
-            std::vector<entt::entity> chain;
+            // recursive walk would have left it at the equivalent nesting depth. The chain lives
+            // in a reused member buffer (it was a fresh vector per visible row per frame).
+            std::vector<entt::entity>& chain = m_HierChainScratch;
+            chain.clear();
             for (entt::entity w = row.Entity; w != entt::null; ) {
                 chain.push_back(w);
                 const auto* h = world.Registry.try_get<HierarchyComponent>(w);
@@ -871,19 +955,65 @@ void EditorLayer::DrawHierarchyTreeBody(World& world, AssetLibrary& assets) {
             }
             for (auto it = chain.rbegin(); it != chain.rend(); ++it)
                 ImGui::PushID((int)entt::to_integral(*it));
+            const size_t pushed = chain.size(); // the row body may reuse m_HierChainScratch
 
-            // Alternate rows carry a faint stripe, full width, so a long list is easy to follow.
-            if (i % 2 == 1) {
-                const ImVec2 rp = ImGui::GetCursorScreenPos();
-                const ImVec2 wp = ImGui::GetWindowPos();
-                ImGui::GetWindowDrawList()->AddRectFilled(ImVec2(wp.x, rp.y), ImVec2(wp.x + ImGui::GetWindowWidth(), rp.y + ImGui::GetFrameHeight()),
-                                                          EditorTheme::U32(EditorTheme::Stripe));
+            const ImVec2 rp = ImGui::GetCursorScreenPos();
+            const ImVec2 wp = ImGui::GetWindowPos();
+            const float rowH = ImGui::GetFrameHeight();
+            const float indentW = ImGui::GetStyle().IndentSpacing;
+            ImDrawList* rowDl = ImGui::GetWindowDrawList();
+
+            // Alternate rows carry a faint stripe, full width, so a long list is easy to follow
+            // (Editor Enhancers: "zebra", now a preference).
+            if (es.HierarchyZebra && i % 2 == 1)
+                rowDl->AddRectFilled(ImVec2(wp.x, rp.y), ImVec2(wp.x + ImGui::GetWindowWidth(), rp.y + rowH),
+                                     EditorTheme::U32(EditorTheme::Stripe));
+
+            // The row's background, full width: the vHierarchy colour as a stripe at the row's indent
+            // plus a faint wash, then hover and selection over it (DrawStyledRowBackground), so a
+            // selected row reads as selected whatever its colour. Hover and selection ease in; the
+            // row body keeps ImGui's own header highlight transparent.
+            {
+                const auto* style = es.HierarchyRowStyles ? world.Registry.try_get<HierarchyStyleComponent>(row.Entity) : nullptr;
+                const bool styled = style && style->Color != 0 && !style->Separator;
+                const ImVec2 bgMin(wp.x, rp.y);
+                const ImVec2 bgMax(rp.x + ImGui::GetContentRegionAvail().x, rp.y + rowH);
+                const bool hov = ImGui::IsWindowHovered() && ImGui::IsMouseHoveringRect(bgMin, bgMax);
+                const float selT = EditorTheme::AnimT(ImGui::GetID("##rowSel"), IsSelected(row.Entity), EditorTheme::MotionNormal);
+                const float hovT = EditorTheme::AnimT(ImGui::GetID("##rowHov"), hov);
+                EditorUIPrimitives::DrawStyledRowBackground(rowDl, bgMin, bgMax, std::floor(rp.x + row.Depth * indentW),
+                                                            styled ? style->Color : 0u, styled ? (int)style->FillMode : 0,
+                                                            selT, hovT);
             }
-            if (row.Depth > 0) ImGui::Indent(row.Depth * ImGui::GetStyle().IndentSpacing);
-            DrawHierarchyRowBody(world, assets, row.Entity, /*isFirstRow=*/i == 0);
-            if (row.Depth > 0) ImGui::Unindent(row.Depth * ImGui::GetStyle().IndentSpacing);
 
-            for (size_t p = 0; p < chain.size(); ++p) ImGui::PopID();
+            // Tree lines: one vertical guide per ancestor level that still has rows below, plus
+            // this row's own elbow. All from the ContinueMask FlattenHierarchyRows computed. Solid
+            // pixel-aligned rects, so the elbow's corner meets cleanly at every scale.
+            if (drawTreeLines && row.Depth > 0) {
+                const float chevC = ImGui::GetFontSize() * 0.55f; // centre of a row's chevron slot
+                const float lw = std::max(1.0f, std::floor(EditorTheme::Px(1.0f)));
+                const float yTop = std::floor(rp.y - ImGui::GetStyle().ItemSpacing.y);
+                const float yMid = std::floor(rp.y + rowH * 0.5f);
+                const float yBot = std::floor(rp.y + rowH);
+                const ImU32 lc = EditorTheme::U32(EditorTheme::Strong);
+                const int depth = std::min(row.Depth, 32);
+                for (int k = 0; k < depth - 1; ++k)
+                    if (row.ContinueMask & (1u << k)) {
+                        const float x = std::floor(rp.x + k * indentW + chevC);
+                        rowDl->AddRectFilled(ImVec2(x, yTop), ImVec2(x + lw, yBot), lc);
+                    }
+                const float x = std::floor(rp.x + (depth - 1) * indentW + chevC);
+                const bool more = (row.ContinueMask & (1u << (depth - 1))) != 0;
+                rowDl->AddRectFilled(ImVec2(x, yTop), ImVec2(x + lw, more ? yBot : yMid + lw), lc);
+                const float xEnd = std::floor(rp.x + depth * indentW + ImGui::GetFontSize() * 0.2f);
+                if (xEnd > x + lw) rowDl->AddRectFilled(ImVec2(x + lw, yMid), ImVec2(xEnd, yMid + lw), lc);
+            }
+
+            if (row.Depth > 0) ImGui::Indent(row.Depth * indentW);
+            DrawHierarchyRowBody(world, assets, row.Entity, /*isFirstRow=*/i == 0);
+            if (row.Depth > 0) ImGui::Unindent(row.Depth * indentW);
+
+            for (size_t p = 0; p < pushed; ++p) ImGui::PopID();
         }
     }
     ImGui::PopStyleVar(); // ItemSpacing
@@ -974,6 +1104,9 @@ void EditorLayer::DrawHierarchyTreeBody(World& world, AssetLibrary& assets) {
         ImGui::IsKeyChordPressed(ImGuiMod_Ctrl | ImGuiKey_A)) {
         SelectAllVisibleInHierarchy();
     }
+    // Editor Enhancers / vHierarchy hover keys (E, Shift+E, Ctrl+Shift+E, A, F, X, D) on the row
+    // under the mouse - before type-to-select, which skips the frame when one of them acted.
+    HandleHierarchyHoverKeys(world);
     // Arrow / Home / End / type-to-select nav over the same visible-row list.
     HandleHierarchyKeyboardNav(world);
     // ImGui::End() for the "Scene Hierarchy" window is the module's — it owns Begin() now.
@@ -1004,9 +1137,9 @@ bool EditorLayer::MatchesHierarchyFilter(const World& world, entt::entity entity
 }
 
 void EditorLayer::FlattenHierarchyRows(World& world, entt::entity entity, int depth,
-                                        std::vector<HierarchyFlatRow>& out) {
+                                        std::vector<HierarchyFlatRow>& out, std::uint32_t continueMask) {
     if (!world.Registry.valid(entity)) return;
-    out.push_back({entity, depth});
+    out.push_back({entity, depth, continueMask});
 
     // Mirrors the pre-Defect-#45 recursive walk's one deliberate quirk: don't descend into a
     // row's children while it's being renamed, keeping the inline edit field stable for the one
@@ -1029,8 +1162,15 @@ void EditorLayer::FlattenHierarchyRows(World& world, entt::entity entity, int de
         // Phase 5 item 6 — display-only re-sort; HierarchySiblingsInOrder's own OrderComponent
         // order is left untouched, since ReorderHierarchySiblings and drag-drop key off it.
         ApplyHierarchyDisplaySort(world, children);
-        for (entt::entity child : children) {
-            if (world.Registry.valid(child)) FlattenHierarchyRows(world, child, depth + 1, out);
+        // Tree-line mask for each child (Enhancers::TreeLineChildMask): the last child drawn ends
+        // this level's guide.
+        size_t lastValid = children.size();
+        for (size_t c = children.size(); c-- > 0;)
+            if (world.Registry.valid(children[c])) { lastValid = c; break; }
+        for (size_t c = 0; c < children.size(); ++c) {
+            if (!world.Registry.valid(children[c])) continue;
+            FlattenHierarchyRows(world, children[c], depth + 1, out,
+                                 Enhancers::TreeLineChildMask(continueMask, depth, c == lastValid));
         }
     }
     ImGui::PopID();
@@ -1123,11 +1263,21 @@ void EditorLayer::DrawHierarchyRowBody(World& world, AssetLibrary& assets, entt:
     // Solid, literal glyphs beat the old abstract ones: a filled cube for a mesh (not a wireframe
     // polygon), a stacked layer-group for an empty that parents other rows (it's acting as a
     // folder), a plain bounding-box locator for a childless empty (not the org-chart node).
+    const EditorSettings& es = EditorSettings::Get();
+    // Editor Enhancers / vHierarchy row style: a custom icon replaces the kind glyph, a colour
+    // tints it (the row wash itself was painted by DrawHierarchyTreeBody), and a separator row is
+    // drawn as a section header with no glyph, minimap or toggles.
+    const auto* rowStyle = es.HierarchyRowStyles ? world.Registry.try_get<HierarchyStyleComponent>(entity) : nullptr;
+    const bool isSeparator = rowStyle && rowStyle->Separator;
+    const char* customGlyph = (rowStyle && !rowStyle->Icon.empty()) ? Enhancers::FAIconGlyph(rowStyle->Icon.c_str()) : nullptr;
     const char* primaryGlyph =
+        customGlyph ? customGlyph :
         hasMesh     ? ICON_FA_CUBE          :
         hasLight    ? ICON_FA_LIGHTBULB     :
         hasCamera   ? ICON_FA_VIDEO         :
         hasChildren ? ICON_FA_LAYER_GROUP   : ICON_FA_VECTOR_SQUARE;
+    // Minimal mode: no glyph unless the user gave the row one.
+    const bool drawGlyph = !isSeparator && (customGlyph || !es.HierarchyMinimal);
     const char* secondaryGlyph =
         (hasMesh && hasLight)   ? ICON_FA_LIGHTBULB :
         (hasMesh && hasCamera)  ? ICON_FA_VIDEO     :
@@ -1135,7 +1285,7 @@ void EditorLayer::DrawHierarchyRowBody(World& world, AssetLibrary& assets, entt:
     // Muted per-kind tint so kinds separate at a glance without the panel turning to confetti —
     // amber light, blue camera (the #234 accent roles); mesh/empty stay near the text colour
     // since they're the bulk of every scene. Overridden to the disabled grey on inactive rows.
-    const ImU32 kindCol = EditorTheme::U32(
+    const ImU32 kindCol = (rowStyle && rowStyle->Color != 0) ? EditorTheme::U32(EditorTheme::UserGlyphColor(rowStyle->Color)) : EditorTheme::U32(
         hasLight  ? EditorTheme::KindLight :
         hasCamera ? EditorTheme::KindCamera :
         hasMesh   ? EditorTheme::KindMesh : EditorTheme::Secondary);
@@ -1144,7 +1294,22 @@ void EditorLayer::DrawHierarchyRowBody(World& world, AssetLibrary& assets, entt:
     // "(unnamed)" rows (#21 P10).
     std::string shownName = name.Name;
     if (shownName.empty())
-        shownName = "Object " + std::to_string(CreationOrdinal(world.Registry, entity));
+        shownName = "Object " + std::to_string(HierarchyCreationOrdinal(world, entity));
+
+    // vHierarchy component minimap: the icons of this row's reflected components (up to the
+    // preference's max, then "+N"), right-aligned just left of the eye/lock/active column. One
+    // Has() per registered type for visible rows only - the clipper keeps that to ~50 rows.
+    int miniIdx[12];
+    int miniCount = 0, miniExtra = 0;
+    if (es.HierarchyMinimap && !isSeparator) {
+        const int maxIcons = std::clamp(es.HierarchyMinimapMax, 1, 12);
+        const auto& all = ComponentRegistry::All();
+        for (int ci = 0; ci < (int)all.size(); ++ci) {
+            if (!all[(size_t)ci].Has(world.Registry, entity)) continue;
+            if (miniCount < maxIcons) miniIdx[miniCount++] = ci;
+            else ++miniExtra;
+        }
+    }
 
     // Only feeds the drag preview below — the row paints its own glyph + name after the node.
     std::string label = std::string(primaryGlyph) + "  " + shownName;
@@ -1167,8 +1332,14 @@ void EditorLayer::DrawHierarchyRowBody(World& world, AssetLibrary& assets, entt:
     // this list — without this flag, ImGui's own keyboard nav would also try to move focus between
     // rows on the same keypress once NavEnableKeyboard is on.
     ImGui::PushItemFlag(ImGuiItemFlags_NoNav, true);
+    ImGui::PushStyleColor(ImGuiCol_Header, ImVec4(0, 0, 0, 0));
+    ImGui::PushStyleColor(ImGuiCol_HeaderHovered, ImVec4(0, 0, 0, 0));
+    ImGui::PushStyleColor(ImGuiCol_HeaderActive, ImVec4(0, 0, 0, 0));
     ImGui::TreeNodeEx("##node", nodeFlags, "%s", "");
+    ImGui::PopStyleColor(3);
     ImGui::PopItemFlag();
+    if (EditorTestProbeActive())
+        if (const auto* tn = world.Registry.try_get<NameComponent>(entity)) EditorTestTag(("row:" + tn->Name).c_str());
     const ImVec2 rowMin = ImGui::GetItemRectMin();
     const ImVec2 rowMax = ImGui::GetItemRectMax();
 
@@ -1184,18 +1355,50 @@ void EditorLayer::DrawHierarchyRowBody(World& world, AssetLibrary& assets, entt:
     const bool rowHovered = ImGui::IsItemHovered();
     const bool clickOnArrow = hasChildren && rowHovered &&
         ImGui::GetIO().MousePos.x < rowMin.x + arrowSlotW;
+    // Minimap visibility (Preferences): on every row, or only on the hovered and selected rows,
+    // fading in and out so the column doesn't flicker as the cursor crosses the list.
+    float miniAlpha = 1.0f;
+    if (miniCount > 0 && es.HierarchyMinimapWhen == 1) {
+        miniAlpha = EditorTheme::AnimT(ImGui::GetID("##miniFade"), rowHovered || selected);
+        if (miniAlpha <= 0.0f) { miniCount = 0; miniExtra = 0; }
+    }
     // The row's right cluster — SceneVis eye + lock + the Active checkbox — is drawn below via
     // SetCursorScreenPos over the full-width node, so its InvisibleButtons and the node both see
     // the same click. Carve the cluster's whole X span out of the row's click / double-click
     // handling so a click anywhere on an icon is that icon's alone and never also selects (#236 B).
-    const float rowIconsBandW = ImGui::GetFontSize() * 3.4f + 20.0f * m_UIScale;
-    const bool overRowIcons = rowHovered && ImGui::GetIO().MousePos.x > rowMax.x - rowIconsBandW;
+    const float rowIconsBandW = isSeparator ? 0.0f : ImGui::GetFontSize() * 3.4f + 20.0f * m_UIScale;
+    // The minimap sits immediately left of that band; its icons take their own clicks too.
+    const float miniCellW = ImGui::GetFontSize() * 1.05f;
+    const float miniPlusW = miniExtra > 0 ? ImGui::GetFontSize() * 1.6f : 0.0f;
+    const float miniW = miniCount > 0 ? miniCount * miniCellW + miniPlusW + EditorTheme::Px(4.0f) : 0.0f;
+    const float miniRight = rowMax.x - rowIconsBandW - EditorTheme::Px(2.0f);
+    const float miniLeft = miniRight - miniW;
+    const float mouseX = ImGui::GetIO().MousePos.x;
+    const bool overMinimap = rowHovered && miniCount > 0 && mouseX >= miniLeft && mouseX < miniRight;
+    const bool overRowIcons = rowHovered && (mouseX > rowMax.x - rowIconsBandW || overMinimap);
+    int hoveredMini = -1; // index into miniIdx, or miniCount for the "+N" chip
+    if (overMinimap) {
+        const float rel = mouseX - (miniLeft + EditorTheme::Px(4.0f));
+        hoveredMini = rel < 0.0f ? -1 : std::min((int)(rel / miniCellW), miniCount);
+    }
+    if (rowHovered) m_HierarchyHoverEntity = entity; // hover keys act on this row
 
     if (ImGui::IsItemClicked() && clickOnArrow) {
         open = !open;
         ImGui::GetStateStorage()->SetInt(nodeStateId, open ? 1 : 0);
         if (ImGui::GetIO().KeyAlt) {
             for (entt::entity child : hier->Children) SetHierarchyExpandedRecursive(world, child, open);
+        }
+    } else if (ImGui::IsItemClicked() && overMinimap && hoveredMini >= 0 && hoveredMini < miniCount) {
+        // Minimap icon: select the row and bring that component's Inspector section up; Alt
+        // opens it in its own floating window instead (vHierarchy's mini inspector).
+        const RegisteredComponent& rc = ComponentRegistry::All()[(size_t)miniIdx[hoveredMini]];
+        if (ImGui::GetIO().KeyAlt) {
+            OpenPinnedComponent(world, entity, rc.Meta.Name);
+        } else {
+            if (!IsSelected(entity) || HasGroupSelection()) SelectItem(entity, false);
+            m_InspectorScrollToComponent = rc.Meta.Name;
+            m_InspectorScrollToFrame = ImGui::GetFrameCount();
         }
     } else if (ImGui::IsItemClicked() && !overRowIcons) {
         const ImGuiIO& io = ImGui::GetIO();
@@ -1210,7 +1413,22 @@ void EditorLayer::DrawHierarchyRowBody(World& world, AssetLibrary& assets, entt:
     if (ImGui::IsItemHovered() && !clickOnArrow && !overRowIcons && ImGui::IsMouseDoubleClicked(ImGuiMouseButton_Left)) {
         BeginRenameEntity(entity);
     }
-    if (!m_HierarchyRowHintDone && ImGui::IsItemHovered() && !ImGui::IsMouseDragging(ImGuiMouseButton_Left)) {
+    if (overMinimap && hoveredMini >= 0) {
+        if (hoveredMini < miniCount) {
+            EditorUI::SetTooltip("%s\nClick: show in the Inspector.  Alt+click: open in its own window.",
+                                 ComponentRegistry::All()[(size_t)miniIdx[hoveredMini]].Meta.Name);
+        } else {
+            std::string rest;
+            int skipped = 0;
+            for (const auto& rc : ComponentRegistry::All()) {
+                if (!rc.Has(world.Registry, entity)) continue;
+                if (skipped++ < miniCount) continue;
+                rest += rest.empty() ? "" : "\n";
+                rest += rc.Meta.Name;
+            }
+            EditorUI::SetTooltip("%s", rest.c_str());
+        }
+    } else if (!m_HierarchyRowHintDone && ImGui::IsItemHovered() && !ImGui::IsMouseDragging(ImGuiMouseButton_Left)) {
         EditorUI::SetTooltip("Click to select (Ctrl+Click to add/remove, Shift+Click for a range, Ctrl+A for all).\nDouble-click or F2 to rename. Drag onto a row to parent it, or between rows to reorder.\nRight-click for more options.");
     }
 
@@ -1241,7 +1459,7 @@ void EditorLayer::DrawHierarchyRowBody(World& world, AssetLibrary& assets, entt:
     // The hovered strip fills with a solid block so the whole reactive area is visible.
     if (const ImGuiPayload* drag = ImGui::GetDragDropPayload();
         drag && drag->IsDataType("HIERARCHY_ENTITY")) {
-        const float midY  = (rowMin.y + rowMax.y) * 0.5f;
+        const float midY  = rowMin.y + ImGui::GetFrameHeight() * 0.5f; // the drawn row's midline
         const float pitch = ImGui::GetFrameHeight() + ImGui::GetStyle().ItemSpacing.y;
         const float half  = pitch * 0.5f;
         const float pInset = pitch * 0.30f;          // parent zone = +/- this around the name
@@ -1339,12 +1557,14 @@ void EditorLayer::DrawHierarchyRowBody(World& world, AssetLibrary& assets, entt:
         ImU32 col = EditorTheme::U32((inactive || sceneHiddenRow) ? EditorTheme::Dim : EditorTheme::Text);
         if (prefabInst && !inactive && !sceneHiddenRow)
             col = EditorTheme::U32(prefabInst->Missing ? EditorTheme::KindPrefabBroken : EditorTheme::KindPrefab);
-        // The selected row: an accent bar at its left edge over the theme's accent selection wash.
-        if (selected)
-            dl->AddRectFilled(ImVec2(ImGui::GetWindowPos().x, rowMin.y), ImVec2(ImGui::GetWindowPos().x + EditorTheme::Px(2.0f), rowMax.y),
-                              EditorTheme::U32(EditorTheme::Accent));
-        // The name never runs under the eye / lock / active column on the right.
-        dl->PushClipRect(ImVec2(rowMin.x, rowMin.y), ImVec2(rowMax.x - rowIconsBandW - EditorTheme::Px(4.0f), rowMax.y), true);
+        // (The selection wash and its accent bar are the row background, painted by the tree body.)
+        // Everything is centred on the row's midline: the row is one frame tall from its top.
+        const float cy = std::floor(rowMin.y + ImGui::GetFrameHeight() * 0.5f);
+        const float textY = cy - std::floor(fontSize * 0.5f);
+        // The name never runs under the minimap or the eye / lock / active column on the right;
+        // it is cut with an ellipsis there.
+        const float clipRight = (miniCount > 0 ? miniLeft : rowMax.x - rowIconsBandW) - EditorTheme::Px(4.0f);
+        dl->PushClipRect(ImVec2(rowMin.x, rowMin.y), ImVec2(clipRight, rowMin.y + ImGui::GetFrameHeight()), true);
 
         // Disclosure chevron — a light Font Awesome ">" / "v" (0.66em) centred in the leading
         // slot, in the dim text colour, brightening on arrow-hover. Replaces ImGui's chunky
@@ -1355,37 +1575,119 @@ void EditorLayer::DrawHierarchyRowBody(World& world, AssetLibrary& assets, entt:
             const ImVec2 cm = ImGui::GetFont()->CalcTextSizeA(chSize, FLT_MAX, 0.0f, chev);
             const ImU32 chCol = EditorTheme::U32(clickOnArrow ? EditorTheme::Text : EditorTheme::Dim);
             dl->AddText(ImGui::GetFont(), chSize,
-                        ImVec2(rowMin.x + (fontSize * 1.1f - cm.x) * 0.5f,
-                               rowMin.y + (ImGui::GetFrameHeight() - cm.y) * 0.5f),
+                        ImVec2(std::floor(rowMin.x + (fontSize * 1.1f - cm.x) * 0.5f), std::floor(cy - cm.y * 0.5f)),
                         chCol, chev);
         }
-        dl->AddText(ImVec2(labelX, rowMin.y), inactive ? col : kindCol, primaryGlyph);
-        if (secondaryGlyph) {
-            const float sub = fontSize * 0.68f;
-            const ImU32 secBase = inactive ? col
-                                : EditorTheme::U32((hasMesh && hasLight) ? EditorTheme::KindLight : EditorTheme::KindCamera);
-            dl->AddText(ImGui::GetFont(), sub,
-                        ImVec2(labelX + slotW - sub, rowMin.y + fontSize - sub),
-                        (secBase & 0x00FFFFFFu) | 0xB4000000u, secondaryGlyph);
-        }
-        dl->AddText(ImVec2(labelX + slotW, rowMin.y), col, shownName.c_str());
-
-        // Phase 5 item 8 — a badge glyph beside the name, not just the blue/red colour tint
-        // above: on its own, that tint collides with the palette's blue=active role (the camera
-        // kind glyph and the selection accent are both blue-family too), so colour alone doesn't
-        // reliably say "this is a prefab instance."
-        if (prefabInst && !inactive && !sceneHiddenRow) {
-            const ImVec2 nameSize = ImGui::CalcTextSize(shownName.c_str());
-            const float badgeSize = fontSize * 0.72f;
-            const ImVec2 badgePos(labelX + slotW + nameSize.x + fontSize * 0.35f,
-                                   rowMin.y + (fontSize - badgeSize) * 0.5f);
-            dl->AddText(ImGui::GetFont(), badgeSize, badgePos, col,
-                        prefabInst->Missing ? ICON_FA_LINK_SLASH : ICON_FA_BOX_ARCHIVE);
-            if (ImGui::IsMouseHoveringRect(badgePos, ImVec2(badgePos.x + badgeSize, badgePos.y + badgeSize)))
-                EditorUI::SetTooltip(prefabInst->Missing ? "Prefab instance - link to its source is broken"
-                                                          : "Prefab instance");
+        // Editor Enhancers / vHierarchy separator: a section header in the SectionHeader voice -
+        // the row colour as a dot, the name in tracked mono capitals, then a hairline out to the
+        // right. Brightens under the cursor.
+        const float nameX = drawGlyph ? labelX + slotW : labelX;
+        if (isSeparator) {
+            const float hovS = EditorTheme::AnimT(ImGui::GetID("##sepHov"), rowHovered);
+            std::string caps = shownName;
+            for (char& c : caps) c = (char)std::toupper((unsigned char)c);
+            float x = labelX;
+            if (rowStyle->Color != 0) {
+                const float r = EditorTheme::Px(3.0f);
+                dl->AddCircleFilled(ImVec2(x + r, cy + 0.5f), r,
+                                    EditorTheme::U32(inactive ? EditorTheme::Dim : EditorTheme::UserGlyphColor(rowStyle->Color)), 12);
+                x += r * 2.0f + EditorTheme::Px(7.0f);
+            }
+            EditorTheme::PushHeading();
+            const float tracking = EditorTheme::HeadingTracking();
+            const ImVec2 ts = EditorTheme::CalcTrackedSize(caps.c_str(), tracking);
+            const ImU32 tc = EditorTheme::U32(inactive ? EditorTheme::Dim
+                                                       : EditorTheme::Mix(EditorTheme::Secondary, EditorTheme::Text, hovS));
+            EditorTheme::DrawTracked(dl, ImVec2(x, std::floor(cy - ImGui::GetFontSize() * 0.5f)), tc, caps.c_str(), tracking);
+            EditorTheme::PopFont();
+            x += ts.x + EditorTheme::Px(10.0f);
+            const float x1 = rowMax.x - EditorTheme::Px(6.0f);
+            if (x1 > x)
+                dl->AddRectFilled(ImVec2(x, cy), ImVec2(x1, cy + std::max(1.0f, std::floor(EditorTheme::Px(1.0f)))),
+                                  EditorTheme::U32(EditorTheme::Mix(EditorTheme::Hairline, EditorTheme::Strong, hovS)));
+        } else {
+            if (drawGlyph) {
+                dl->AddText(ImVec2(labelX, textY), inactive ? col : kindCol, primaryGlyph);
+                if (secondaryGlyph && !customGlyph) {
+                    const float sub = fontSize * 0.68f;
+                    const ImU32 secBase = inactive ? col
+                                        : EditorTheme::U32((hasMesh && hasLight) ? EditorTheme::KindLight : EditorTheme::KindCamera);
+                    dl->AddText(ImGui::GetFont(), sub,
+                                ImVec2(labelX + slotW - sub, textY + fontSize - sub),
+                                (secBase & 0x00FFFFFFu) | 0xB4000000u, secondaryGlyph);
+                }
+            }
+            // Badges after the name: the default-parent mark (vHierarchy D) and the prefab badge
+            // (Phase 5 item 8 - a glyph, not just the name's tint, says "prefab instance"). The
+            // name gives up room for them before it is cut.
+            const float bs = fontSize * 0.72f, bGap = fontSize * 0.35f;
+            const bool defaultParent = entity == m_HierDefaultParentNow;
+            const bool prefabBadge = prefabInst && !inactive && !sceneHiddenRow;
+            const float badgesW = (defaultParent ? bs + bGap : 0.0f) + (prefabBadge ? bs + bGap : 0.0f);
+            const float nameMaxX = std::max(nameX + fontSize, clipRight - badgesW);
+            EditorUIPrimitives::TextEllipsis(dl, ImVec2(nameX, textY), nameMaxX, col, shownName.c_str());
+            float bx = std::min(nameX + ImGui::CalcTextSize(shownName.c_str()).x, nameMaxX) + bGap;
+            const float by = std::floor(cy - bs * 0.5f);
+            if (defaultParent) {
+                const ImVec2 bp(bx, by);
+                dl->AddText(ImGui::GetFont(), bs, bp, EditorTheme::U32(EditorTheme::Accent), ICON_FA_ARROW_RIGHT_TO_BRACKET);
+                if (ImGui::IsMouseHoveringRect(bp, ImVec2(bp.x + bs, bp.y + bs)))
+                    EditorUI::SetTooltip("Default parent: new objects are created under this one (D over a row toggles it).");
+                bx += bs + bGap;
+            }
+            if (prefabBadge) {
+                const ImVec2 bp(bx, by);
+                dl->AddText(ImGui::GetFont(), bs, bp, col, prefabInst->Missing ? ICON_FA_LINK_SLASH : ICON_FA_BOX_ARCHIVE);
+                if (ImGui::IsMouseHoveringRect(bp, ImVec2(bp.x + bs, bp.y + bs)))
+                    EditorUI::SetTooltip(prefabInst->Missing ? "Prefab instance - link to its source is broken"
+                                                              : "Prefab instance");
+            }
         }
         dl->PopClipRect();
+
+        // vHierarchy component minimap, in the small font and the dim colour (brightening under
+        // the cursor), so a row's makeup reads at a glance without competing with its name.
+        if (miniCount > 0) {
+            EditorTheme::PushSmall();
+            const auto& all = ComponentRegistry::All();
+            float x = miniLeft + EditorTheme::Px(4.0f);
+            const float cellH = ImGui::GetFrameHeight() - EditorTheme::Px(6.0f);
+            const float rnd = EditorTheme::Px(3.0f);
+            const ImVec4 base = (inactive || sceneHiddenRow) ? EditorTheme::WithAlpha(EditorTheme::Dim, 0.6f) : EditorTheme::Dim;
+            auto cell = [&](int k, float w) {
+                const float h = EditorTheme::AnimT(ImGui::GetID(k + 1000), hoveredMini == k);
+                if (h > 0.0f)
+                    dl->AddRectFilled(ImVec2(x + 1.0f, cy - cellH * 0.5f), ImVec2(x + w - 1.0f, cy + cellH * 0.5f),
+                                      EditorTheme::U32(EditorTheme::WithAlpha(EditorTheme::Pressed, h * miniAlpha)), rnd);
+                ImVec4 c = EditorTheme::Mix(base, EditorTheme::Text, h);
+                c.w *= miniAlpha;
+                return EditorTheme::U32(c);
+            };
+            for (int k = 0; k < miniCount; ++k) {
+                const char* ic = all[(size_t)miniIdx[k]].Meta.Icon;
+                if (!ic || !*ic) ic = ICON_FA_PUZZLE_PIECE;
+                const ImVec2 is = ImGui::CalcTextSize(ic);
+                const ImU32 c = cell(k, miniCellW);
+                dl->AddText(ImVec2(std::floor(x + (miniCellW - is.x) * 0.5f), std::floor(cy - is.y * 0.5f)), c, ic);
+                x += miniCellW;
+            }
+            if (miniExtra > 0) {
+                char plus[8];
+                std::snprintf(plus, sizeof(plus), "+%d", miniExtra);
+                const ImVec2 ps = ImGui::CalcTextSize(plus);
+                const ImU32 c = cell(miniCount, miniPlusW);
+                dl->AddText(ImVec2(std::floor(x + (miniPlusW - ps.x) * 0.5f), std::floor(cy - ps.y * 0.5f)), c, plus);
+            }
+            EditorTheme::PopFont();
+        }
+    }
+
+    // A separator row is a header: no eye / lock / active column. It still takes a full row's
+    // height, which the cluster's frame-tall buttons give every other row.
+    if (isSeparator) {
+        ImGui::SameLine(0.0f, 0.0f);
+        ImGui::Dummy(ImVec2(0.0f, ImGui::GetFrameHeight()));
+        return;
     }
 
     // Active-state eye, pinned to a fixed right-hand column so every row's eye lines up no matter
@@ -1566,6 +1868,34 @@ void EditorLayer::DrawHierarchyContextMenu(World& world, AssetLibrary& assets, e
         SetHierarchySiblingExtreme(world, entity, /*first=*/true);
     if (ImGui::MenuItem(ICON_FA_ANGLES_DOWN "  Set as Last Sibling", nullptr, false, hasEntity))
         SetHierarchySiblingExtreme(world, entity, /*first=*/false);
+    // Editor Enhancers / vHierarchy: the scene's default parent (also D over a row).
+    {
+        const bool isDefault = hasEntity && entity == ResolveDefaultParent(world);
+        if (ImGui::MenuItem(ICON_FA_ARROW_RIGHT_TO_BRACKET "  Default Parent", "D", isDefault, hasEntity))
+            ToggleDefaultParent(world, entity);
+        if (ImGui::IsItemHovered() && hasEntity)
+            EditorUI::SetTooltip("New objects you create in this scene are placed under this one.");
+    }
+    // Editor Enhancers / vFavorites.
+    if (hasEntity) {
+        auto& us = Enhancers::EnhancerUserState::Get();
+        const auto* o = world.Registry.try_get<OrderComponent>(entity);
+        const auto* nm = world.Registry.try_get<NameComponent>(entity);
+        const Enhancers::EditorRef ref = Enhancers::EditorRef::MakeEntity(CurrentSceneKey(), o ? o->Value : -1, nm ? nm->Name : std::string());
+        const int favPage = o ? Enhancers::FindFavorite(us.FavoritePages, ref) : -1;
+        if (ImGui::MenuItem(ICON_FA_STAR "  Favorite", "Ctrl+Alt+B", favPage >= 0, o != nullptr)) {
+            if (favPage >= 0) Enhancers::RemoveFavorite(us.FavoritePages, ref);
+            else Enhancers::AddFavorite(us.FavoritePages, m_FavPage, ref);
+            us.MarkDirty();
+        }
+        if (ImGui::IsItemHovered()) EditorUI::SetTooltip("Hold Alt over the Asset Browser to see your favorites.");
+    }
+
+    EditorUIPrimitives::SectionHeader(ICON_FA_PALETTE "  Style");
+    if (ImGui::BeginMenu(ICON_FA_PALETTE "  Row Style", hasEntity)) {
+        DrawHierarchyStyleMenu(world);
+        ImGui::EndMenu();
+    }
 
     EditorUIPrimitives::SectionHeader(ICON_FA_ARROWS_UP_DOWN_LEFT_RIGHT "  Transform");
     if (ImGui::MenuItem(ICON_FA_EYE "  Toggle Active State", "Alt+Shift+A", false, HasAnySelection()))
@@ -1719,13 +2049,31 @@ void EditorLayer::ApplyHierarchyDisplaySort(const World& world, std::vector<entt
     const int mode = EditorSettings::Get().HierarchySortMode;
     if (mode == 0 || rows.size() < 2) return;
     const bool desc = EditorSettings::Get().HierarchySortDesc;
-    auto less = [&](entt::entity a, entt::entity b) {
-        if (mode == 1) return HierarchyDisplayName(world.Registry, a) < HierarchyDisplayName(world.Registry, b);
-        return HierarchyKindMask(world.Registry, a) < HierarchyKindMask(world.Registry, b);
-    };
-    std::stable_sort(rows.begin(), rows.end(), [&](entt::entity a, entt::entity b) {
+    // Sort keys are computed once per row, not per comparison: the Name key for an unnamed row
+    // ("Object 7") used to cost a full creation-order sort of the scene on every compare.
+    std::unordered_map<entt::entity, int> ordinals;
+    if (mode == 1) {
+        const auto list = ViewInCreationOrder(world.Registry, world.Registry.view<const NameComponent>());
+        for (size_t i = 0; i < list.size(); ++i) ordinals[list[i]] = (int)i + 1;
+    }
+    struct Keyed { entt::entity E; std::string Name; int Kind; };
+    std::vector<Keyed> keyed;
+    keyed.reserve(rows.size());
+    for (entt::entity e : rows) {
+        Keyed k{e, {}, 0};
+        if (mode == 1) {
+            const auto* nm = world.Registry.try_get<NameComponent>(e);
+            k.Name = (nm && !nm->Name.empty()) ? nm->Name : "Object " + std::to_string(ordinals[e]);
+        } else {
+            k.Kind = HierarchyKindMask(world.Registry, e);
+        }
+        keyed.push_back(std::move(k));
+    }
+    auto less = [&](const Keyed& a, const Keyed& b) { return mode == 1 ? a.Name < b.Name : a.Kind < b.Kind; };
+    std::stable_sort(keyed.begin(), keyed.end(), [&](const Keyed& a, const Keyed& b) {
         return desc ? less(b, a) : less(a, b);
     });
+    for (size_t i = 0; i < rows.size(); ++i) rows[i] = keyed[i].E;
 }
 
 void EditorLayer::ReorderHierarchySiblings(World& world, const std::vector<entt::entity>& movingIn,
@@ -1892,7 +2240,126 @@ entt::entity EditorLayer::CreateEmptyAt(World& world, Camera* editorCamera, cons
     glm::vec3 position = editorCamera ? SafeSpawnInFrontOf(*editorCamera) : glm::vec3(0.0f);
     entt::entity e = world.CreateEmptyEntity(position, glm::vec3(0.0f), glm::vec3(1.0f), UniqueNameFor(world, name));
     if (asLight) world.Registry.emplace<LightComponent>(e);
+    ApplyDefaultParent(world, e); // vHierarchy D: world pose kept, so it still spawns in front of the camera
     SelectItem(e, false);
     Log::Info(std::string("Added ") + name + ".");
     return e;
+}
+
+// --- Editor Enhancers / vHierarchy: hover keys --------------------------------------------------
+// Each acts on the selection when the row under the mouse is part of it, otherwise on that row
+// alone (vHierarchy's rule). Runs at the end of DrawHierarchyTreeBody, inside the Hierarchy window
+// with no extra IDs pushed, so node-state IDs line up with the rows just drawn. Ctrl+Shift+E works
+// anywhere over the panel; the rest need a row under the mouse.
+void EditorLayer::HandleHierarchyHoverKeys(World& world) {
+    m_HierarchyHoverKeyUsed = false;
+    if (!EditorSettings::Get().EnhancerHoverKeys) return;
+
+    if (Shortcuts::Triggered("hierarchy.hover.collapseAll")) {
+        HierarchyExpandAll(world, false);
+        m_HierarchyHoverKeyUsed = true;
+        return;
+    }
+    const entt::entity hov = m_HierarchyHoverEntity;
+    if (hov == entt::null || !world.Registry.valid(hov)) return;
+    const bool onSelection = IsSelected(hov);
+    auto targets = [&]() { return onSelection ? GetSelectedItems() : std::vector<entt::entity>{hov}; };
+    auto hasKids = [&](entt::entity e) {
+        const auto* h = world.Registry.try_get<HierarchyComponent>(e);
+        return h && !h->Children.empty();
+    };
+    ImGuiStorage* st = ImGui::GetStateStorage();
+
+    if (Shortcuts::Triggered("hierarchy.hover.expand")) {
+        // Every target follows the hovered row's new state, so a mixed selection converges.
+        const bool open = st->GetInt(HierarchyNodeStateId(world, hov, m_HierChainScratch), 0) == 0;
+        for (entt::entity e : targets())
+            if (world.Registry.valid(e) && hasKids(e)) st->SetInt(HierarchyNodeStateId(world, e, m_HierChainScratch), open ? 1 : 0);
+        m_HierarchyHoverKeyUsed = true;
+    } else if (Shortcuts::Triggered("hierarchy.hover.isolate")) {
+        // Collapse everything, then reopen just the path down to the hovered row (and the row).
+        HierarchyExpandAll(world, false);
+        for (entt::entity w = hov; w != entt::null && world.Registry.valid(w);) {
+            if (w != hov || hasKids(w)) st->SetInt(HierarchyNodeStateId(world, w, m_HierChainScratch), 1);
+            const auto* h = world.Registry.try_get<HierarchyComponent>(w);
+            w = h ? h->Parent : entt::null;
+        }
+        m_HierarchyScrollToEntity = hov;
+        m_HierarchyHoverKeyUsed = true;
+    } else if (Shortcuts::Triggered("hierarchy.hover.toggleActive")) {
+        if (onSelection) {
+            ToggleSelectionActive(world);
+        } else {
+            PushUndo(world, "Toggle Active");
+            if (world.Registry.all_of<DeactivatedTag>(hov)) world.Registry.remove<DeactivatedTag>(hov);
+            else world.Registry.emplace<DeactivatedTag>(hov);
+        }
+        m_HierarchyHoverKeyUsed = true;
+    } else if (Shortcuts::Triggered("hierarchy.hover.focus")) {
+        if (!onSelection) SelectItem(hov, false);
+        if (m_EditorCameraPtr) FocusOnSelection(world, *m_EditorCameraPtr);
+        m_HierarchyHoverKeyUsed = true;
+    } else if (Shortcuts::Triggered("hierarchy.hover.delete")) {
+        if (!onSelection) SelectItem(hov, false);
+        DeleteSelection(world); // pushes its own undo
+        m_HierarchyHoverEntity = entt::null;
+        m_HierarchyHoverKeyUsed = true;
+    } else if (Shortcuts::Triggered("hierarchy.hover.defaultParent")) {
+        ToggleDefaultParent(world, hov);
+        m_HierarchyHoverKeyUsed = true;
+    }
+}
+
+// --- Editor Enhancers / vHierarchy: the row context menu's "Row Style" submenu ----------------
+// Applies to every selected row (the context menu selected the right-clicked one first) as one
+// undo step. A style that ends up empty removes the component, so unstyled rows cost nothing.
+void EditorLayer::DrawHierarchyStyleMenu(World& world) {
+    std::vector<entt::entity> targets = GetSelectedItems();
+    targets.erase(std::remove_if(targets.begin(), targets.end(), [&](entt::entity e) { return !world.Registry.valid(e); }),
+                  targets.end());
+    if (targets.empty()) return;
+    const HierarchyStyleComponent* cur = world.Registry.try_get<HierarchyStyleComponent>(targets.front());
+    const HierarchyStyleComponent shown = cur ? *cur : HierarchyStyleComponent{};
+
+    auto apply = [&](const char* label, auto&& mutate) {
+        PushUndo(world, label);
+        for (entt::entity e : targets) {
+            auto& s = world.Registry.get_or_emplace<HierarchyStyleComponent>(e);
+            mutate(s);
+            if (s.IsEmpty()) world.Registry.remove<HierarchyStyleComponent>(e);
+        }
+    };
+
+    if (targets.size() > 1) ImGui::TextDisabled("%d objects", (int)targets.size());
+    if (!EditorSettings::Get().HierarchyRowStyles)
+        ImGui::TextDisabled("Row styles are turned off in Settings > Editor Enhancers.");
+
+    EditorUIPrimitives::SectionHeader("Colour");
+    std::uint32_t color = shown.Color;
+    if (Enhancers::PaletteColorRow("##hierRowColor", color))
+        apply("Set Row Colour", [&](HierarchyStyleComponent& s) { s.Color = color; });
+    {
+        int fill = (int)shown.FillMode;
+        static const char* kFills[] = {"Icon only", "Flat", "Gradient"};
+        ImGui::SetNextItemWidth(EditorTheme::Px(200.0f));
+        if (EditorUIPrimitives::Segmented("##hierFill", &fill, kFills, 3))
+            apply("Set Row Fill", [&](HierarchyStyleComponent& s) { s.FillMode = (std::uint8_t)fill; });
+    }
+
+    EditorUIPrimitives::SectionHeader("Icon");
+    if (ImGui::BeginMenu(shown.Icon.empty() ? ICON_FA_ICONS "  Choose icon..." : ICON_FA_ICONS "  Change icon...")) {
+        std::string icon = shown.Icon;
+        if (Enhancers::IconPickerGrid("##hierIcon", icon, m_HierStyleIconSearch, sizeof(m_HierStyleIconSearch), EditorTheme::Px(280.0f))) {
+            apply("Set Row Icon", [&](HierarchyStyleComponent& s) { s.Icon = icon; });
+            ImGui::CloseCurrentPopup();
+        }
+        ImGui::EndMenu();
+    }
+
+    ImGui::Separator();
+    bool sep = shown.Separator;
+    if (ImGui::MenuItem(ICON_FA_GRIP_LINES "  Separator Row", nullptr, &sep))
+        apply(sep ? "Make Separator" : "Unmake Separator", [&](HierarchyStyleComponent& s) { s.Separator = sep; });
+    if (ImGui::MenuItem(ICON_FA_ERASER "  Clear Style", nullptr, false, cur != nullptr))
+        apply("Clear Row Style", [&](HierarchyStyleComponent& s) { s = HierarchyStyleComponent{}; });
 }

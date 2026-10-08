@@ -139,6 +139,12 @@ public static unsafe class Entry
                 case 16:
                     if(size!=sizeof(NativeRequest))return -2;
                     DeliverPhysics(Utf8(((NativeRequest*)data)->Text));return 0;
+                case 17:
+                    if (size != sizeof(NativeRequest) || assembly == null) return -2;
+                    InvokeEditorMethod(ref *(NativeRequest*)data); return 0;
+                case 18:
+                    if (size != sizeof(NativeRequest) || assembly == null) return -2;
+                    ShowValues(ref *(NativeRequest*)data); return 0;
                 default: return -2;
             }
         }
@@ -212,6 +218,45 @@ public static unsafe class Entry
     {
         if (item.Enabled) { item.Script.IsEnabled = false; try { item.Script.OnDisable(); } catch (Exception e) { Report(e); } }
         if (item.Awoken) { try { item.Script.OnDestroy(); } catch (Exception e) { Report(e); } }
+    }
+    // vInspector (ops 13 / 14). The request text is {"class","fields","method"}; Entity / Script
+    // name the live instance, used while Playing. Otherwise a temporary instance holds the saved
+    // fields, so edit-mode buttons and read-outs never touch a running behaviour.
+    static Script Target(System.Text.Json.JsonElement root, uint entity, uint slot)
+    {
+        string name = root.GetProperty("class").GetString() ?? "";
+        if (instances.TryGetValue(Key(entity, slot), out var live) && live.Class == name) return live.Script;
+        return Make(assembly!, entity, slot, name, root.TryGetProperty("fields", out var f) ? f.GetString() ?? "{}" : "{}");
+    }
+    // For EditorHost (custom inspectors): the same as ops 13 / 14, from managed code.
+    internal static string? RunScriptMethod(string className, string fields, uint entity, uint slot, string method, out bool ran)
+    {
+        ran = false;
+        if (assembly == null) return null;
+        Script s = instances.TryGetValue(Key(entity, slot), out var live) && live.Class == className ? live.Script
+                 : Make(assembly, entity, slot, className, fields);
+        ran = ScriptFields.Invoke(s, method);
+        return ScriptFields.Save(s);
+    }
+    internal static Dictionary<string, string> ScriptShowValues(string className, string fields, uint entity, uint slot)
+    {
+        if (assembly == null) return new();
+        Script s = instances.TryGetValue(Key(entity, slot), out var live) && live.Class == className ? live.Script
+                 : Make(assembly, entity, slot, className, fields);
+        return System.Text.Json.JsonSerializer.Deserialize<Dictionary<string, string>>(ScriptFields.ShowValues(s)) ?? new();
+    }
+    static void InvokeEditorMethod(ref NativeRequest request)
+    {
+        using var doc = System.Text.Json.JsonDocument.Parse(Utf8(request.Text));
+        Script script = Target(doc.RootElement, request.Entity, request.Script);
+        bool ran = ScriptFields.Invoke(script, doc.RootElement.GetProperty("method").GetString() ?? "");
+        request.Result = ran ? 1 : 0;
+        Engine.TextCall(30, ScriptFields.Save(script), ref request);
+    }
+    static void ShowValues(ref NativeRequest request)
+    {
+        using var doc = System.Text.Json.JsonDocument.Parse(Utf8(request.Text));
+        Engine.TextCall(30, ScriptFields.ShowValues(Target(doc.RootElement, request.Entity, request.Script)), ref request);
     }
     static void Describe(ref NativeRequest request)
     {

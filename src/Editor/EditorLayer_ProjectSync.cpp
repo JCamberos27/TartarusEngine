@@ -17,6 +17,7 @@
 #include "AssetLibrary.h"
 #include "AtomicFile.h"
 #include "ComponentRegistry.h"
+#include "Enhancers/EnhancerUserState.h" // renamed assets keep their favorites / bookmarks
 #include "Components.h"
 #include "EditorSettings.h"
 #include "Log.h"
@@ -228,7 +229,22 @@ bool EditorLayer::RenameAssetFile(World& world, AssetLibrary& assets, const std:
     assets.RenamePath(oldKey, newKey);
     bool listed = false;
     const int refs = ApplyAssetMove(world, assets, oldAbs, newAbs, listed);
-    if (m_AssetFavorites.erase(oldKey)) { m_AssetFavorites.insert(newKey); SaveAssetFavorites(); }
+    // Editor Enhancers: favorites, Inspector bookmarks and Inspector tabs follow the file.
+    {
+        auto& us = Enhancers::EnhancerUserState::Get();
+        bool changed = false;
+        auto rekey = [&](std::vector<Enhancers::EditorRef>& refs) {
+            bool any = false;
+            for (auto& r : refs)
+                if (r.Kind == Enhancers::RefKind::Asset && r.Path == oldKey) { r.Path = newKey; r.Label = fs::path(newKey).filename().string(); any = true; }
+            return any;
+        };
+        for (auto& page : us.FavoritePages) changed |= rekey(page.Items);
+        changed |= rekey(us.InspectorBookmarks);
+        if (changed) us.MarkDirty();
+        auto& ts = Enhancers::TabState::Get();
+        if (rekey(ts.Inspector.Tabs) | rekey(ts.Inspector.Closed) | rekey(ts.Starred)) ts.MarkDirty();
+    }
     m_ShotThumbs.erase(oldKey);
     m_AssetThumbs.Invalidate(oldKey);
     InvalidateProjectAssetIndex();

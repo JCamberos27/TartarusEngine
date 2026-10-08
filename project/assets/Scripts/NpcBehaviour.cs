@@ -45,7 +45,7 @@ internal static unsafe partial class NpcBehaviour
     // False while it waits.
     bool bound(float maxWait) {
         if (n.BoundWaitFrom < 0.0f || n.Squad >= (int)n.SquadCount) return true;
-        
+
         bool exposed = n.Visible || now - n.LastOwnSight < 0.5f;
         bool covered = now < n.SquadCoverFireUntil;
         if ((!exposed || covered || now-n.BoundWaitFrom>=maxWait)) {
@@ -210,7 +210,7 @@ internal static unsafe partial class NpcBehaviour
         moveTo(c.Pos, Gait.Run);
         if (Flat(n.Feet, c.Pos) < arriveDist) {
             if (n.Squad < (int)n.SquadCount) {
-                
+
                 if (n.SquadPushHolder == n.Index) n.SquadPushHolder = -1;
             }
             n.HasPushToken = false;

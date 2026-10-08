@@ -13,7 +13,9 @@ import subprocess
 from fbx_export_edit import load, set_duration, write, zero_translation
 
 ROOT = Path(__file__).resolve().parents[2]
-EXPORTS = Path.home() / 'Desktop/AE_Exports'
+# The supplied exports live on the shared Drive under
+# "Tartarus Assets\Raw\Weapons\AE_Exports" - point TARTARUS_WEAPON_EXPORTS at it.
+EXPORTS = Path(os.environ.get('TARTARUS_WEAPON_EXPORTS', ''))
 WORK = ROOT / 'build/weapon-reimport'
 
 
@@ -80,6 +82,8 @@ def main():
     args = parser.parse_args()
     if args.audit == args.apply:
         parser.error('Choose --audit or --apply')
+    if not os.environ.get('TARTARUS_WEAPON_EXPORTS') or not EXPORTS.is_dir():
+        parser.error('Set TARTARUS_WEAPON_EXPORTS to <Drive>\\Tartarus Assets\\Raw\\Weapons\\AE_Exports')
     WORK.joinpath('audit').mkdir(parents=True, exist_ok=True)
     pairs = mapping()
     paths = list(dict.fromkeys([p for pair in pairs for p in pair]))

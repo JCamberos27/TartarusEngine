@@ -1,9 +1,16 @@
 {
-  "guid": "e5bf91ce79aa719c",
-  "metaVersion": 1,
-  "type": "texture",
+  "folder": "assets/Characters/Quantum/Textures/Clothing/Outerwear/Jacket_Classic",
+  "guid": "6e36f23b36c1b04b",
   "importer": {
+    "anisoLevel": 16,
+    "compression": 2,
+    "filterMode": 2,
+    "generateMipmaps": true,
     "isSRGB": true,
-    "textureType": 0
-  }
+    "maxTextureSize": 2048,
+    "textureType": 0,
+    "wrapMode": 0
+  },
+  "metaVersion": 1,
+  "type": "texture"
 }

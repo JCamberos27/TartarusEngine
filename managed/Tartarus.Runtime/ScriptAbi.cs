@@ -2,7 +2,7 @@
 using System.Numerics;
 using System.Runtime.InteropServices;
 namespace Tartarus;
-public static class ScriptAbi { public const int Version = 2; }
+public static class ScriptAbi { public const int Version = 3; }
 [StructLayout(LayoutKind.Sequential)]
 public struct ProjectCall {
     public nint Operation;

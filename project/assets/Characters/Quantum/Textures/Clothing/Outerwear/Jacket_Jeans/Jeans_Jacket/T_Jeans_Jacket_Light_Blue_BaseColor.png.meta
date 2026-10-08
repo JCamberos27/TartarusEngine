@@ -1,9 +1,16 @@
 {
-  "guid": "36de0150c22ba9dd",
-  "metaVersion": 1,
-  "type": "texture",
+  "folder": "assets/Characters/Quantum/Textures/Clothing/Outerwear/Jacket_Jeans/Jeans_Jacket",
+  "guid": "38d210b1e538c8a4",
   "importer": {
+    "anisoLevel": 16,
+    "compression": 2,
+    "filterMode": 2,
+    "generateMipmaps": true,
     "isSRGB": true,
-    "textureType": 0
-  }
+    "maxTextureSize": 2048,
+    "textureType": 0,
+    "wrapMode": 0
+  },
+  "metaVersion": 1,
+  "type": "texture"
 }

@@ -221,7 +221,7 @@ std::vector<std::string> PollChangedFiles(const std::vector<std::string>& extraR
     static std::unordered_map<std::string, std::filesystem::file_time_type> s_MTimes;
     std::vector<std::string> changed;
 
-    constexpr auto kInterval = std::chrono::milliseconds(250); // ~4 Hz
+    constexpr auto kInterval = std::chrono::milliseconds(1000); // 1 Hz: a directory walk, kept off most frames
     const auto now = Clock::now();
     if (now - s_LastPoll < kInterval) return changed;
     s_LastPoll = now;

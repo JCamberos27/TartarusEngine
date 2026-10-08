@@ -1,9 +1,16 @@
 {
-  "guid": "6553aa7b981dbca8",
-  "metaVersion": 1,
-  "type": "texture",
+  "folder": "assets/Characters/Quantum/Textures/Clothing/Glasses/Glasses_Classic",
+  "guid": "ccad9480d81bfc21",
   "importer": {
+    "anisoLevel": 16,
+    "compression": 2,
+    "filterMode": 2,
+    "generateMipmaps": true,
     "isSRGB": false,
-    "textureType": 0
-  }
+    "maxTextureSize": 2048,
+    "textureType": 0,
+    "wrapMode": 0
+  },
+  "metaVersion": 1,
+  "type": "texture"
 }

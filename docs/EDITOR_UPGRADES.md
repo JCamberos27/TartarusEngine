@@ -1,9 +1,15 @@
 # Editor upgrade recommendations
 
-Reviewed 2026-10-07 against the current working tree. These are proposed upgrades;
+Reviewed 2026-10-07 before the upstream editor integration. These are proposed upgrades;
 the initial review changed documentation only. Ranking weighs everyday authoring benefit,
 existing infrastructure, implementation complexity and the risk of losing authored work.
 Effort is relative: medium extends an existing subsystem; large crosses several systems.
+
+Upstream integration now supplies per-component Keep Changes After Play, Inspector attributes,
+tabs, favorites, hierarchy/folder styling and a ruler. Candidate 3 is consequently a refinement
+of the shipped component-level feature: review individual properties and distinguish editor
+edits from simulation changes. The ranking and review inventory below preserve the original
+audit; some manuals in that inventory were subsequently retired by upstream.
 
 **Interaction-hitch follow-up:** responsiveness is the immediate maintenance priority before
 feature expansion. The input-driven undo snapshot stall has been fixed and regression-tested
@@ -26,8 +32,8 @@ authoring-benefit ranking from the initial review.
 
 **Current evidence:** body and weapon Inspectors already have Setup checks; Animator has
 structural/contract lint; Script IDE has Problems; audio, outfit and import audits have
-separate command-line tools. See [BODY_SETUP.md](BODY_SETUP.md), [ANIMATOR.md](ANIMATOR.md),
-[SCRIPT_IDE.md](SCRIPT_IDE.md), [OUTFIT_TODO.md](OUTFIT_TODO.md) and [AUDIO.md](AUDIO.md).
+separate command-line tools. See [SCRIPT_IDE.md](SCRIPT_IDE.md),
+[PROJECT_ASSETS.md](PROJECT_ASSETS.md) and [ENGINE_GAME_BOUNDARY.md](ENGINE_GAME_BOUNDARY.md).
 [SetupChecksUI](../src/Editor/SetupChecksUI.h) displays local checks, but the reviewed
 editor has no unified project report covering unopened scenes and dependent assets.
 
@@ -55,8 +61,8 @@ exist in [EditorLayer_AnimatorSelection.cpp](../src/Editor/EditorLayer_AnimatorS
 They sample a motion and apply a pose to the selected scene model. Recoil and camera-shake
 Inspectors have solver plots; outfits have an item model preview. These do not provide one
 isolated preview of the complete weapon/body assembly, procedural layers and event timing.
-See [ANIMATOR.md](ANIMATOR.md), [PROCEDURAL_RECOIL.md](PROCEDURAL_RECOIL.md),
-[WEAPON_CAMERA.md](WEAPON_CAMERA.md) and [CHARACTER_OUTFITS.md](CHARACTER_OUTFITS.md).
+See [PROCEDURAL_RECOIL.md](PROCEDURAL_RECOIL.md), [WEAPON_CAMERA.md](WEAPON_CAMERA.md)
+and [ENGINE_GAME_BOUNDARY.md](ENGINE_GAME_BOUNDARY.md).
 
 **First deliverable:** a dedicated preview world and model instances, sharing runtime
 sampling/pose code. Show both weapon tracks with a timeline, frame stepping, speed and
@@ -75,12 +81,13 @@ the value comes from integrating the existing tools, rather than adding basic cl
 ### 3. Selective Keep after Play
 
 **Current evidence:** [OnExitPlayMode](../src/Editor/EditorLayer_Scene.cpp) restores the
-pre-Play scene snapshot; Save is disabled during Play. The Audio panel already implements
-**Keep after Play** for mix/reverb values. Asset edits are different: controller/recoil/weapon
-file commits can already persist during Play with global history. See
-[EDITOR_HISTORY_AND_INSPECTORS.md](EDITOR_HISTORY_AND_INSPECTORS.md) and [AUDIO.md](AUDIO.md).
+pre-Play scene snapshot; Save is disabled during Play. The integrated Inspector now keeps
+opted-in Transform and preset-capable components as one undo step, alongside the Audio
+panel's mix/reverb retention. Controller/recoil/weapon file commits also persist during Play
+with global history. See [EDITOR_ENHANCERS.md](EDITOR_ENHANCERS.md) and
+[EDITOR_HISTORY_AND_INSPECTORS.md](EDITOR_HISTORY_AND_INSPECTORS.md).
 
-**First deliverable:** extend the Audio precedent to deliberate Inspector edits on existing
+**First deliverable:** refine component-level retention to deliberate Inspector edits on existing
 authored objects. Track editor-origin property changes, show before/after values, and let
 the user select what to retain. Restore the scene first, then apply approved values as one
 global undo action. Start with reflected scalar/vector tuning; identify fields that require

@@ -1,9 +1,16 @@
 {
-  "guid": "9c34f0ccb0aa60f9",
-  "metaVersion": 1,
-  "type": "texture",
+  "folder": "assets/Characters/Quantum/Textures/Clothing/Outerwear/Vest_Jeans/Jeans_Vest_Print",
+  "guid": "538d44dcc12329cb",
   "importer": {
+    "anisoLevel": 16,
+    "compression": 2,
+    "filterMode": 2,
+    "generateMipmaps": true,
     "isSRGB": false,
-    "textureType": 0
-  }
+    "maxTextureSize": 2048,
+    "textureType": 0,
+    "wrapMode": 0
+  },
+  "metaVersion": 1,
+  "type": "texture"
 }

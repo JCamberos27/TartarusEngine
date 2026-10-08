@@ -145,4 +145,3 @@ public static class CrtLaunchGit {
         } catch { return ""; }
     }
 }
-

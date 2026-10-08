@@ -19,10 +19,39 @@ namespace Tartarus;
 [AttributeUsage(AttributeTargets.Field)] public sealed class InspectorChoicesAttribute(params string[] choices) : Attribute
 { public string[] Choices { get; } = choices; }
 
+// --- vInspector attributes (Editor Enhancers Phase 3b) -------------------------------------------
+/// <summary>A button in the Inspector that calls this parameterless instance method. Outside Play
+/// it runs on a temporary instance holding the saved field values, and whatever the method changes
+/// in serialized fields is saved back (one undo step).</summary>
+[AttributeUsage(AttributeTargets.Method)] public sealed class ButtonAttribute(string? label = null) : Attribute
+{ public string? Label { get; } = label; }
+/// <summary>Consecutive fields with the same foldout name draw inside one collapsible section.</summary>
+[AttributeUsage(AttributeTargets.Field)] public sealed class FoldoutAttribute(string name) : Attribute
+{ public string Name { get; } = name; }
+/// <summary>Fields (and buttons) sharing a tab name draw under one tab of a tab bar.</summary>
+[AttributeUsage(AttributeTargets.Field | AttributeTargets.Method)] public sealed class TabAttribute(string name) : Attribute
+{ public string Name { get; } = name; }
+/// <summary>Shows a property or non-serialized field's current value, read-only.</summary>
+[AttributeUsage(AttributeTargets.Field | AttributeTargets.Property)] public sealed class ShowInInspectorAttribute : Attribute { }
+/// <summary>Calls the named parameterless method after the field is edited in the Inspector.</summary>
+[AttributeUsage(AttributeTargets.Field)] public sealed class OnValueChangedAttribute(string method) : Attribute
+{ public string Method { get; } = method; }
+/// <summary>Shown greyed out; still saved.</summary>
+[AttributeUsage(AttributeTargets.Field)] public sealed class ReadOnlyAttribute : Attribute { }
+/// <summary>Quick-pick values shown as chips under the field.</summary>
+[AttributeUsage(AttributeTargets.Field)] public sealed class VariantsAttribute(params object[] values) : Attribute
+{ public object[] Values { get; } = values; }
+/// <summary>Hides the field while the named field equals `value` (default true).</summary>
+[AttributeUsage(AttributeTargets.Field)] public sealed class HideIfAttribute(string field, object? value = null) : Attribute
+{ public string Field { get; } = field; public object Value { get; } = value ?? true; }
+/// <summary>Greys the field out while the named field equals `value` (default true).</summary>
+[AttributeUsage(AttributeTargets.Field)] public sealed class DisableIfAttribute(string field, object? value = null) : Attribute
+{ public string Field { get; } = field; public object Value { get; } = value ?? true; }
+
 internal static class ScriptFields
 {
     static readonly JsonSerializerOptions options = new() { IncludeFields = true };
-    static string Kind(Type type) => type == typeof(float) ? "float" : type == typeof(int) ? "int" :
+    static string Scalar(Type type) => type == typeof(float) ? "float" : type == typeof(int) ? "int" :
         type == typeof(bool) ? "bool" : type == typeof(string) ? "string" : type == typeof(Vector3) ? "vec3" :
         type == typeof(AssetReference) ? "asset-ref" :
         type.IsEnum && Enum.GetUnderlyingType(type) == typeof(int) ? "enum" : "unsupported";
@@ -31,6 +60,11 @@ internal static class ScriptFields
         field.IsDefined(typeof(SceneReferenceAttribute)) ? "scene-ref" :
         field.IsDefined(typeof(SoundReferencesAttribute)) ? "sound-refs" :
         field.IsDefined(typeof(InspectorChoicesAttribute)) ? "choice" : "string";
+    // Dictionary<string, float|int|bool|string> edits as a key/value list ("dict").
+    static Type? DictValue(Type type) =>
+        type.IsGenericType && type.GetGenericTypeDefinition() == typeof(Dictionary<,>) && type.GetGenericArguments()[0] == typeof(string) &&
+        Scalar(type.GetGenericArguments()[1]) is "float" or "int" or "bool" or "string" ? type.GetGenericArguments()[1] : null;
+    static string Kind(Type type) => DictValue(type) != null ? "dict" : Scalar(type);
     static IEnumerable<FieldInfo> Fields(Type type)
     {
         for (Type? t = type; t != null && t != typeof(Script) && t != typeof(Component); t = t.BaseType)
@@ -38,6 +72,12 @@ internal static class ScriptFields
                 if (!f.IsInitOnly && !f.IsStatic && !f.IsDefined(typeof(NonSerializedAttribute)) &&
                     (f.IsPublic || f.IsDefined(typeof(SerializeFieldAttribute)))) yield return f;
     }
+    const BindingFlags Members = BindingFlags.Instance | BindingFlags.Public | BindingFlags.NonPublic;
+    static IEnumerable<MethodInfo> Buttons(Type type) => type.GetMethods(Members)
+        .Where(m => m.IsDefined(typeof(ButtonAttribute)) && m.GetParameters().Length == 0 && !m.IsGenericMethodDefinition);
+    static IEnumerable<MemberInfo> Shows(Type type) => type.GetMembers(Members)
+        .Where(m => m.IsDefined(typeof(ShowInInspectorAttribute)) &&
+                    (m is FieldInfo || m is PropertyInfo { CanRead: true } p && p.GetIndexParameters().Length == 0));
     public static void Apply(Script script, string json)
     {
         using var doc = JsonDocument.Parse(json);
@@ -65,21 +105,65 @@ internal static class ScriptFields
         var defaults = (Script)Activator.CreateInstance(script.GetType())!;
         foreach (var field in Fields(script.GetType())) if (removed.Contains(field.Name)) field.SetValue(script, field.GetValue(defaults));
     }
+    static object? Condition(string? field, object? value) => field == null ? null : new { field, value = value is Enum ? Convert.ToInt32(value) : value };
     public static object Describe(Type type)
     {
         var defaults = (Script)Activator.CreateInstance(type)!;
-        return new { @class = type.FullName, fields = Fields(type).Where(f => !f.IsDefined(typeof(HideInInspectorAttribute))).Select(f => new {
-            name = f.Name, kind = InspectorKind(f), @default = Kind(f.FieldType) == "unsupported" ? null : f.GetValue(defaults),
-            component = f.GetCustomAttribute<SceneReferenceAttribute>()?.Component ?? "",
-            childrenOnly = f.GetCustomAttribute<SceneReferenceAttribute>()?.ChildrenOnly ?? false,
-            choices = f.GetCustomAttribute<InspectorChoicesAttribute>()?.Choices ?? [],
-            extensions = f.GetCustomAttribute<AssetPathAttribute>()?.Extensions ?? [],
-            labels = Kind(f.FieldType) == "enum" ? Enum.GetNames(f.FieldType) : [],
-            values = Kind(f.FieldType) == "enum" ? Enum.GetValues(f.FieldType).Cast<object>().Select(Convert.ToInt32).ToArray() : [],
-            min = f.GetCustomAttribute<RangeAttribute>()?.Min, max = f.GetCustomAttribute<RangeAttribute>()?.Max,
-            tooltip = f.GetCustomAttribute<TooltipAttribute>()?.Text ?? "",
-            header = f.GetCustomAttribute<HeaderAttribute>()?.Text ?? ""
-        }).ToArray() };
+        return new {
+            @class = type.FullName,
+            fields = Fields(type).Where(f => !f.IsDefined(typeof(HideInInspectorAttribute))).Select(f => new {
+                name = f.Name, kind = InspectorKind(f), @default = Kind(f.FieldType) == "unsupported" ? null : f.GetValue(defaults),
+                component = f.GetCustomAttribute<SceneReferenceAttribute>()?.Component ?? "",
+                childrenOnly = f.GetCustomAttribute<SceneReferenceAttribute>()?.ChildrenOnly ?? false,
+                choices = f.GetCustomAttribute<InspectorChoicesAttribute>()?.Choices ?? [],
+                extensions = f.GetCustomAttribute<AssetPathAttribute>()?.Extensions ?? [],
+                labels = Kind(f.FieldType) == "enum" ? Enum.GetNames(f.FieldType) : [],
+                values = Kind(f.FieldType) == "enum" ? Enum.GetValues(f.FieldType).Cast<object>().Select(Convert.ToInt32).ToArray() : [],
+                min = f.GetCustomAttribute<RangeAttribute>()?.Min, max = f.GetCustomAttribute<RangeAttribute>()?.Max,
+                tooltip = f.GetCustomAttribute<TooltipAttribute>()?.Text ?? "",
+                header = f.GetCustomAttribute<HeaderAttribute>()?.Text ?? "",
+                valueKind = DictValue(f.FieldType) is { } v ? Scalar(v) : "",
+                foldout = f.GetCustomAttribute<FoldoutAttribute>()?.Name ?? "",
+                tab = f.GetCustomAttribute<TabAttribute>()?.Name ?? "",
+                readOnly = f.IsDefined(typeof(ReadOnlyAttribute)),
+                onChanged = f.GetCustomAttribute<OnValueChangedAttribute>()?.Method ?? "",
+                variants = f.GetCustomAttribute<VariantsAttribute>()?.Values.Select(x => x is Enum ? Convert.ToInt32(x) : x).ToArray() ?? [],
+                hideIf = Condition(f.GetCustomAttribute<HideIfAttribute>()?.Field, f.GetCustomAttribute<HideIfAttribute>()?.Value),
+                disableIf = Condition(f.GetCustomAttribute<DisableIfAttribute>()?.Field, f.GetCustomAttribute<DisableIfAttribute>()?.Value),
+            }).ToArray(),
+            buttons = Buttons(type).Select(m => new {
+                method = m.Name, label = m.GetCustomAttribute<ButtonAttribute>()!.Label ?? m.Name,
+                tab = m.GetCustomAttribute<TabAttribute>()?.Name ?? ""
+            }).ToArray(),
+            shows = Shows(type).Select(m => new { name = m.Name }).ToArray(),
+        };
     }
     public static string DescribeJson(Type type) => JsonSerializer.Serialize(Describe(type), options);
+
+    /// <summary>Calls a [Button] / [OnValueChanged] method; true when it ran.</summary>
+    public static bool Invoke(Script script, string method)
+    {
+        var m = script.GetType().GetMethod(method, Members, Type.EmptyTypes);
+        if (m == null) return false;
+        m.Invoke(script, null);
+        return true;
+    }
+    /// <summary>The [ShowInInspector] members' current values as display text.</summary>
+    public static string ShowValues(Script script)
+    {
+        var values = new Dictionary<string, string>();
+        foreach (var m in Shows(script.GetType()))
+        {
+            object? v;
+            try { v = m is FieldInfo f ? f.GetValue(script) : ((PropertyInfo)m).GetValue(script); }
+            catch (TargetInvocationException e) { v = "(" + (e.InnerException?.GetType().Name ?? "error") + ")"; }
+            values[m.Name] = v switch {
+                null => "null",
+                float x => x.ToString("0.###", System.Globalization.CultureInfo.InvariantCulture),
+                Vector3 x => string.Create(System.Globalization.CultureInfo.InvariantCulture, $"({x.X:0.###}, {x.Y:0.###}, {x.Z:0.###})"),
+                _ => v.ToString() ?? ""
+            };
+        }
+        return JsonSerializer.Serialize(values);
+    }
 }

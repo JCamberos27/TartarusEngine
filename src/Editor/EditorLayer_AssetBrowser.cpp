@@ -29,6 +29,7 @@
 #include "ProjectPaths.h"
 #include "AssetDatabase.h"
 #include "UserPaths.h"
+#include "Enhancers/EnhancerUserState.h" // vFavorites pages back the favourite stars
 #include "AtomicFile.h"
 #include "ThumbnailCache.h"
 #include "ComponentReflection.h" // ReflectAssetKind - AssetRefChoices
@@ -223,42 +224,66 @@ bool SearchHasToken(const std::string& filter, const std::string& token) {
 
 
 // --- Asset favourites (#236 G) --------------------------------------------------------------
-// #129 - per-user, so they live in UserPaths (%LOCALAPPDATA%), not the version-controlled
-// project folder; an older project/asset_favorites.json is still read until the first save.
-void EditorLayer::LoadAssetFavorites() {
+// Since vFavorites, a favourite asset is one on any favorites page (EnhancerUserState, journaled
+// so starring is undoable). The old per-user asset_favorites.json is imported into page 1 once
+// (MigrateAssetFavorites) and no longer written.
+namespace {
+std::string AssetLeafName(const std::string& key) {
+    const size_t slash = key.find_last_of("/\\");
+    return slash == std::string::npos ? key : key.substr(slash + 1);
+}
+} // namespace
+
+void EditorLayer::RefreshFavoriteCache() const {
+    const auto& us = Enhancers::EnhancerUserState::Get();
+    if (m_FavCacheRevision == us.Revision()) return;
+    m_FavCacheRevision = us.Revision();
     m_AssetFavorites.clear();
-    std::ifstream in(UserPaths::Resolve("asset_favorites.json"));
-    if (!in.is_open()) in.open(ProjectPaths::Resolve("asset_favorites.json"));
-    if (!in.is_open()) return;
-    try {
-        nlohmann::json root; in >> root;
-        if (root.is_array())
-            for (const auto& v : root) if (v.is_string()) m_AssetFavorites.insert(v.get<std::string>());
-    } catch (const std::exception& e) {
-        Log::Warn(std::string("Asset favorites: failed to parse: ") + e.what()); // #19
-    }
+    for (const auto& page : us.FavoritePages)
+        for (const auto& r : page.Items)
+            if (r.Kind == Enhancers::RefKind::Asset) m_AssetFavorites.insert(r.Path);
 }
 
-void EditorLayer::SaveAssetFavorites() const {
-    nlohmann::json root = nlohmann::json::array();
-    for (const auto& k : m_AssetFavorites) root.push_back(k);
-    // Atomic: a crash mid-write must not truncate the favourites list (audit CPP-206).
-    AtomicFile::WriteJson(UserPaths::Resolve("asset_favorites.json"), root);
+void EditorLayer::MigrateAssetFavorites() {
+    auto& us = Enhancers::EnhancerUserState::Get();
+    if (us.FavoritesMigrated) return;
+    std::set<std::string> old;
+    std::ifstream in(UserPaths::Resolve("asset_favorites.json"));
+    if (!in.is_open()) in.open(ProjectPaths::Resolve("asset_favorites.json"));
+    if (in.is_open()) {
+        try {
+            nlohmann::json root; in >> root;
+            if (root.is_array())
+                for (const auto& v : root) if (v.is_string()) old.insert(v.get<std::string>());
+        } catch (const std::exception& e) {
+            Log::Warn(std::string("Asset favorites: failed to parse: ") + e.what()); // #19
+        }
+    }
+    Enhancers::EnsureFavoritePage(us.FavoritePages);
+    for (const auto& k : old)
+        if (!k.empty()) Enhancers::AddFavorite(us.FavoritePages, 0, Enhancers::EditorRef::MakeAsset(k, AssetLeafName(k)));
+    us.FavoritesMigrated = true;
+    us.MarkDirty();
+    if (!old.empty()) Log::Info("Favorites: moved " + std::to_string(old.size()) + " starred assets to the first favorites page (hold Alt over the Asset Browser).");
+    // Written now, at startup, so the import isn't recorded as a first undo step.
+    if (!m_Headless) us.Flush();
 }
 
 void EditorLayer::ToggleAssetFavorite(const std::string& key) {
     if (key.empty()) return;
-    if (!m_AssetFavorites.insert(key).second) m_AssetFavorites.erase(key);
-    SaveAssetFavorites();
+    SetAssetFavorites({key}, !IsAssetFavorite(key));
 }
 
 void EditorLayer::SetAssetFavorites(const std::vector<std::string>& keys, bool on) {
+    auto& us = Enhancers::EnhancerUserState::Get();
     bool changed = false;
     for (const std::string& k : keys) {
         if (k.empty()) continue;
-        changed |= on ? m_AssetFavorites.insert(k).second : (m_AssetFavorites.erase(k) > 0);
+        const Enhancers::EditorRef r = Enhancers::EditorRef::MakeAsset(k, AssetLeafName(k));
+        if (on) { if (Enhancers::FindFavorite(us.FavoritePages, r) < 0) changed |= Enhancers::AddFavorite(us.FavoritePages, m_FavPage, r); }
+        else changed |= Enhancers::RemoveFavorite(us.FavoritePages, r);
     }
-    if (changed) SaveAssetFavorites();
+    if (changed) us.MarkDirty();
 }
 
 // Decoded once per sound path (#236 G). An empty vector means "not decodable / not audio" and
@@ -1513,6 +1538,7 @@ std::string EditorLayer::AssetBrowserTreeFrameSetup(AssetLibrary& assets) {
     assets.CreateFolder("Scenes");
     assets.CreateFolder("Screenshots");
     RefreshProjectAssetIndexIfNeeded(assets); // registers the folders of files nothing has loaded yet
+    InstallFolderPathHook(assets); // vFolders: styles + bookmarks follow a renamed / deleted folder
 
     std::string reveal;
     if (m_CurrentAssetFolder != m_AssetFolderTreeRevealed) {
@@ -1842,6 +1868,14 @@ void EditorLayer::DrawAssetCell(World& world, AssetLibrary& assets, int index, f
             : cell.kind == Cell::Kind::Script ? ICON_FA_SCROLL
             : (playing ? ICON_FA_STOP : ICON_FA_MUSIC);
 
+        // Editor Enhancers / vFolders: a folder tile shows its resolved icon, colour and content.
+        EditorFolderVisual folderVis;
+        if (isFolder) {
+            GetFolderVisual(assets, cell.key, folderVis);
+            if (folderVis.Icon[0]) icon = folderVis.Icon;
+        }
+        const ImU32 folderTint = (isFolder && folderVis.Color) ? (folderVis.Color | 0xFF000000u) : 0u;
+
         // The asset-type colour: the tile's bottom stripe in Grid view.
         auto kindColor = [&]() -> ImVec4 {
             switch (cell.kind) {
@@ -1934,7 +1968,15 @@ void EditorLayer::DrawAssetCell(World& world, AssetLibrary& assets, int index, f
                 ImFont* font = ImGui::GetFont();
                 ImVec2 glyphSize = font->CalcTextSizeA(m_AssetIconSize, FLT_MAX, 0.0f, icon);
                 ImVec2 glyphPos(tileMin.x + (cellWidth - glyphSize.x) * 0.5f, tileMin.y + cellPadding * 0.5f + (m_AssetIconSize - glyphSize.y) * 0.5f);
-                dl->AddText(font, m_AssetIconSize, glyphPos, textColor, icon);
+                dl->AddText(font, m_AssetIconSize, glyphPos, folderTint ? folderTint : textColor, icon);
+                // vFolders content minimap: what a plain folder holds, stamped small along its glyph's foot.
+                if (isFolder && !folderVis.Icon[0] && folderVis.MiniCount > 0 && EditorSettings::Get().FolderMinimap) {
+                    const float ms = std::max(9.0f, m_AssetIconSize * 0.22f);
+                    float mx = tileMin.x + (cellWidth - folderVis.MiniCount * ms * 1.25f) * 0.5f;
+                    const float my = tileMin.y + cellPadding * 0.5f + m_AssetIconSize - ms * 0.9f;
+                    for (int k = 0; k < folderVis.MiniCount; ++k, mx += ms * 1.25f)
+                        dl->AddText(font, ms, ImVec2(mx, my), EditorTheme::U32(EditorTheme::Base), folderVis.Mini[k]);
+                }
             }
 
             // Favourite star badge, top-right of the tile (#236 G).
@@ -2012,6 +2054,8 @@ void EditorLayer::DrawAssetCell(World& world, AssetLibrary& assets, int index, f
                 ImGui::Image((ImTextureID)(intptr_t)cell.texture->GLHandle(), ImVec2(rowIconSize, rowIconSize));
             } else if (rowModelThumb) {
                 ImGui::Image((ImTextureID)(intptr_t)rowModelThumb, ImVec2(rowIconSize, rowIconSize), ImVec2(0, 1), ImVec2(1, 0));
+            } else if (folderTint) {
+                ImGui::TextColored(ImGui::ColorConvertU32ToFloat4(folderTint), "%s", icon);
             } else {
                 ImGui::TextUnformatted(icon);
             }
@@ -2157,6 +2201,7 @@ void EditorLayer::DrawAssetCell(World& world, AssetLibrary& assets, int index, f
             }
         }
 
+        if (isFolder && ImGui::IsItemHovered()) SetHoveredAssetFolder(cell.key); // vFolders hover keys
         if (!isRenaming && ImGui::IsItemHovered()) {
             if (cell.kind == Cell::Kind::Model) {
                 EditorUI::SetTooltip("%s\n\nDrag into the viewport to place\n\n%s",
@@ -2313,6 +2358,10 @@ void EditorLayer::DrawAssetCell(World& world, AssetLibrary& assets, int index, f
                 ClearAssetSelection();
                 m_SelectedAssetKey = cell.key;
                 m_SelectedAssetIsFolder = isFolder;
+            }
+            if (isFolder && ImGui::BeginMenu(ICON_FA_PALETTE "  Folder Style & Bookmark")) { // vFolders
+                DrawFolderContextMenuBody(world, assets, cell.key);
+                ImGui::EndMenu();
             }
             EditorUIPrimitives::SectionHeader(ICON_FA_PEN "  Edit");
             if (ImGui::MenuItem(ICON_FA_PEN "  Rename (F2)", nullptr, false, m_ExtraAssetSelection.empty())) {

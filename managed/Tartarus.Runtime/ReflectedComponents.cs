@@ -37,4 +37,3 @@ public sealed class Collider : ReflectedComponent
     public override string NativeType => "Collider";
     public Vector3 halfExtents { get => data.Get<Vector3>("HalfExtents"); set => data.Set("HalfExtents", value); }
 }
-

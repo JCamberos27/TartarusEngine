@@ -4381,7 +4381,11 @@
         1.0,
         1.0,
         1.0
-      ]
+      ],
+      "hierStyle": {
+        "color": "#E5484D",
+        "icon": "mountain-sun"
+      }
     },
     {
       "id": 79,
@@ -4403,7 +4407,11 @@
         1.0,
         1.0,
         1.0
-      ]
+      ],
+      "hierStyle": {
+        "color": "#F2994A",
+        "icon": "lightbulb"
+      }
     },
     {
       "Light": {
@@ -4446,7 +4454,12 @@
         1.0,
         1.0,
         1.0
-      ]
+      ],
+      "hierStyle": {
+        "color": "#F2994A",
+        "fill": 0,
+        "icon": "sun"
+      }
     },
     {
       "Reflection Probe": {
@@ -4476,7 +4489,12 @@
         1.0,
         1.0,
         1.0
-      ]
+      ],
+      "hierStyle": {
+        "color": "#F2994A",
+        "fill": 0,
+        "icon": "circle-half-stroke"
+      }
     },
     {
       "id": 82,
@@ -4498,7 +4516,11 @@
         1.0,
         1.0,
         1.0
-      ]
+      ],
+      "hierStyle": {
+        "color": "#4CC38A",
+        "icon": "shield"
+      }
     },
     {
       "id": 83,
@@ -4520,7 +4542,12 @@
         1.0,
         1.0,
         1.0
-      ]
+      ],
+      "hierStyle": {
+        "color": "#4CC38A",
+        "fill": 0,
+        "icon": "house"
+      }
     },
     {
       "id": 84,
@@ -4542,7 +4569,12 @@
         1.0,
         1.0,
         1.0
-      ]
+      ],
+      "hierStyle": {
+        "color": "#4CC38A",
+        "fill": 0,
+        "icon": "house"
+      }
     },
     {
       "id": 85,
@@ -4564,7 +4596,12 @@
         1.0,
         1.0,
         1.0
-      ]
+      ],
+      "hierStyle": {
+        "color": "#4CC38A",
+        "fill": 0,
+        "icon": "road"
+      }
     },
     {
       "id": 86,
@@ -4586,7 +4623,12 @@
         1.0,
         1.0,
         1.0
-      ]
+      ],
+      "hierStyle": {
+        "color": "#4CC38A",
+        "fill": 0,
+        "icon": "bullseye"
+      }
     },
     {
       "id": 87,
@@ -4608,7 +4650,12 @@
         1.0,
         1.0,
         1.0
-      ]
+      ],
+      "hierStyle": {
+        "color": "#4CC38A",
+        "fill": 0,
+        "icon": "box"
+      }
     },
     {
       "id": 88,
@@ -4630,7 +4677,12 @@
         1.0,
         1.0,
         1.0
-      ]
+      ],
+      "hierStyle": {
+        "color": "#4CC38A",
+        "fill": 0,
+        "icon": "box"
+      }
     },
     {
       "id": 89,
@@ -4652,7 +4704,12 @@
         1.0,
         1.0,
         1.0
-      ]
+      ],
+      "hierStyle": {
+        "color": "#4CC38A",
+        "fill": 0,
+        "icon": "box"
+      }
     },
     {
       "id": 90,
@@ -4674,7 +4731,12 @@
         1.0,
         1.0,
         1.0
-      ]
+      ],
+      "hierStyle": {
+        "color": "#4CC38A",
+        "fill": 0,
+        "icon": "box"
+      }
     },
     {
       "id": 91,
@@ -4696,7 +4758,12 @@
         1.0,
         1.0,
         1.0
-      ]
+      ],
+      "hierStyle": {
+        "color": "#4CC38A",
+        "fill": 0,
+        "icon": "person-digging"
+      }
     },
     {
       "id": 92,
@@ -4718,7 +4785,12 @@
         1.0,
         1.0,
         1.0
-      ]
+      ],
+      "hierStyle": {
+        "color": "#4CC38A",
+        "fill": 0,
+        "icon": "tower-observation"
+      }
     },
     {
       "id": 93,
@@ -4740,7 +4812,12 @@
         1.0,
         1.0,
         1.0
-      ]
+      ],
+      "hierStyle": {
+        "color": "#4CC38A",
+        "fill": 0,
+        "icon": "tower-observation"
+      }
     },
     {
       "id": 94,
@@ -4770,6 +4847,10 @@
         "Enabled": true,
         "Scripts": "[]",
         "Next Script ID": 1
+      },
+      "hierStyle": {
+        "color": "#4C8DF6",
+        "icon": "person"
       }
     },
     {
@@ -4930,7 +5011,12 @@
         1.0,
         1.0,
         1.0
-      ]
+      ],
+      "hierStyle": {
+        "color": "#4C8DF6",
+        "fill": 0,
+        "icon": "person-running"
+      }
     },
     {
       "active": false,
@@ -4953,7 +5039,11 @@
         1.0,
         1.0,
         1.0
-      ]
+      ],
+      "hierStyle": {
+        "color": "#9B6CF2",
+        "icon": "skull"
+      }
     },
     {
       "id": 97,
@@ -4983,6 +5073,11 @@
         "Enabled": true,
         "Scripts": "[]",
         "Next Script ID": 1
+      },
+      "hierStyle": {
+        "color": "#9B6CF2",
+        "fill": 0,
+        "icon": "brain"
       }
     },
     {
@@ -5013,6 +5108,11 @@
         "Enabled": true,
         "Scripts": "[]",
         "Next Script ID": 1
+      },
+      "hierStyle": {
+        "color": "#9B6CF2",
+        "fill": 0,
+        "icon": "location-dot"
       }
     },
     {
@@ -5043,6 +5143,11 @@
         "Enabled": true,
         "Scripts": "[]",
         "Next Script ID": 1
+      },
+      "hierStyle": {
+        "color": "#9B6CF2",
+        "fill": 0,
+        "icon": "location-dot"
       }
     },
     {
@@ -5073,6 +5178,11 @@
         "Enabled": true,
         "Scripts": "[]",
         "Next Script ID": 1
+      },
+      "hierStyle": {
+        "color": "#9B6CF2",
+        "fill": 0,
+        "icon": "location-dot"
       }
     },
     {
@@ -5103,6 +5213,11 @@
         "Enabled": true,
         "Scripts": "[]",
         "Next Script ID": 1
+      },
+      "hierStyle": {
+        "color": "#9B6CF2",
+        "fill": 0,
+        "icon": "location-dot"
       }
     },
     {
@@ -5133,6 +5248,11 @@
         "Enabled": true,
         "Scripts": "[]",
         "Next Script ID": 1
+      },
+      "hierStyle": {
+        "color": "#9B6CF2",
+        "fill": 0,
+        "icon": "location-dot"
       }
     }
   ],

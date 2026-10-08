@@ -31,6 +31,7 @@
 #include "EditorModuleAPI.h" // EditorConsoleState (Clear on Play / Error Pause — #236 A5)
 #include "EditorLayer.h"
 #include "EditorSettings.h"
+#include "EditorTheme.h"   // grid axis colours (GridColors)
 #include "Shortcuts.h" // play / window keys route through the Shortcuts Manager (#236 F)
 #include "Model.h"
 #include "SceneSerializer.h"
@@ -50,6 +51,7 @@
 #include "Upscaler.h"
 #include "GameModuleAPI.h" // #170 smoke: QueryFilter / RaycastHit
 #include "Tests/UnitTests.h" // #173
+#include "Tests/EditorUiTests.h" // --editor-tests
 #include "OutfitAudit.h"
 #include "OutfitTestScene.h"
 #include "SkinHideBuffer.h"             // --outfit-audit
@@ -512,6 +514,11 @@ int main(int argc, char** argv) {
     // real ones. --editor-shot-select <name> picks the selected entity (default: Player Spawn);
     // --editor-shot-default-layout starts from the default dock layout instead of the user's;
     // --editor-shot-scale <s> sets the UI scale (as Preferences > General > UI scale would).
+    // --editor-tests [filter]: end-to-end tests of the editor UI (Tests/EditorUiTests.cpp) in the
+    // real editor: a hidden 1920x1080 window, a fresh scratch user folder
+    // (%LOCALAPPDATA%\TartarusEngine-Test), an empty in-memory scene. Exit code 0 = all passed.
+    bool editorTestsMode = false;
+    std::string editorTestsFilter;
     std::string editorShotDir, editorShotSelect = "Player Spawn";
     bool editorShotDefaultLayout = false;
     bool editorShotCurves = false; // capture the real themed recoil curve widget in isolation
@@ -543,6 +550,10 @@ int main(int argc, char** argv) {
         }
         else if (a == "--smoke-shots" && i + 1 < argc) { smokeShotsDir = argv[++i]; }
         else if (a == "--editor-shot" && i + 1 < argc) { editorShotDir = argv[++i]; }
+        else if (a == "--editor-tests") {
+            editorTestsMode = true;
+            if (i + 1 < argc && argv[i + 1][0] != '-') editorTestsFilter = argv[++i];
+        }
         else if (a == "--editor-shot-select" && i + 1 < argc) { editorShotSelect = argv[++i]; }
         else if (a == "--editor-shot-default-layout") { editorShotDefaultLayout = true; }
         else if (a == "--editor-shot-curves") { editorShotCurves = true; }
@@ -625,7 +636,21 @@ int main(int argc, char** argv) {
     // --smoke-test and --resave are non-interactive: no splash, and fatal errors go to stderr +
     // a nonzero exit instead of a modal MessageBox that a headless/CI desktop never dismisses
     // (audit BUG-102).
-    const bool headless = smokeTestMode || resaveMode || undoBenchMode || assetLoadBenchMode || outfitAuditMode || outfitScenesMode || outfitCostMode || outfitSelfTestMode;
+    const bool headless = smokeTestMode || resaveMode || undoBenchMode || assetLoadBenchMode || outfitAuditMode || outfitScenesMode || outfitCostMode || outfitSelfTestMode || editorTestsMode;
+    if (editorTestsMode) {
+        // A fresh scratch user folder every run: default prefs and layout, no bookmarks, tabs or
+        // favorites - the tests start from a known state and never touch the user's own files.
+        namespace fs = std::filesystem;
+        UserPaths::SetAppName("TartarusEngine-Test");
+        const fs::path scratch = UserPaths::Root();
+        if (scratch.filename() != "TartarusEngine-Test") {
+            std::cerr << "--editor-tests: could not set up a scratch user folder; refusing to run." << std::endl;
+            return 1;
+        }
+        std::error_code ec;
+        for (const auto& entry : fs::directory_iterator(scratch, ec)) fs::remove_all(entry.path(), ec);
+        EditorUiTests::Configure(editorTestsFilter);
+    }
     CrashHandler::SetInteractive(!headless && editorShotDir.empty()); // #148: no crash dialog on an unattended run
     if (!editorShotDir.empty()) {
         // The prefs and layout the user sees, copied into a scratch user folder that this run may
@@ -1272,10 +1297,12 @@ int main(int argc, char** argv) {
             if (perfBenchMode && perfResW > 0) {
                 glfwRestoreWindow(window.Handle());
                 glfwSetWindowSize(window.Handle(), perfResW, perfResH);
-            } else if (!editorShotDir.empty()) {
+            } else if (!editorShotDir.empty() || editorTestsMode) {
                 glfwRestoreWindow(window.Handle());
                 glfwSetWindowSize(window.Handle(), perfResW > 0 ? perfResW : 1920, perfResW > 0 ? perfResH : 1080);
             }
+            // --editor-tests: hidden, so the desktop's real mouse and keyboard never reach it.
+            if (editorTestsMode) glfwHideWindow(window.Handle());
         }
         LayerRegistry::Load(); // LayerComponent slot names (#236 A1)
         ProjectSettings::Load(); // physics + tags (#236 A4); project/settings.json
@@ -1421,12 +1448,15 @@ int main(int argc, char** argv) {
             return 0;
         }
 
-        // persistMigration is false for every headless mode that reaches this line (currently
-        // just --smoke-test; --resave/--undo-bench/--asset-load-bench already returned above):
-        // the harness must never rewrite the startup scene just from opening it for a read-only
-        // regression check (audit #77). Ordinary interactive startup keeps the existing
-        // "upgrade once" behavior.
-        bool sceneLoaded = !scenePath.empty() && SceneSerializer::Load(world, assets, scenePath, /*persistMigration=*/!headless && !playerMode);
+        // The smoke harness (and --weapon-test / --npc-test / --perf-bench, built on it) loads its own
+        // scenes in the loop below, so the startup scene would be loaded only to be thrown away - for
+        // the Sandbox, 666 objects and every model it uses, before the first test scene.
+        const bool loadStartupScene = !smokeTestMode && !editorTestsMode;
+        // persistMigration is false for every headless mode: the harness must never rewrite a scene
+        // just from opening it for a read-only check (audit #77). Ordinary interactive startup keeps
+        // the existing "upgrade once" behavior.
+        bool sceneLoaded = loadStartupScene && !scenePath.empty() &&
+                           SceneSerializer::Load(world, assets, scenePath, /*persistMigration=*/!headless && !playerMode);
         if (sceneLoaded) {
             std::cout << "Loaded scene from " << scenePath << std::endl;
         }
@@ -1471,7 +1501,7 @@ int main(int argc, char** argv) {
         } emergencySaveGuard;
         {
             std::error_code existsEc;
-            if (!sceneLoaded && std::filesystem::exists(scenePath, existsEc))
+            if (loadStartupScene && !sceneLoaded && std::filesystem::exists(scenePath, existsEc))
                 editor.OnStartupSceneLoadFailed(scenePath); // #84
         }
         // Headless runs (--smoke-test / --resave / the benches) must not write imgui.ini either
@@ -1984,7 +2014,7 @@ int main(int argc, char** argv) {
 
         // --editor-shot: each view gets kEditorShotFrames frames - set up halfway, captured at the end.
         const int kEditorShotFrames = editorShotIDE ? 450 : 150; // allow the async Roslyn result to reach the captured IDE frame
-        const std::vector<const char*> kEditorShots = editorShotIDE ? std::vector<const char*>{"script-ide"} : editorShotCurves ? std::vector<const char*>{"recoil-curves","recoil-targets","recoil-smoothing","recoil-layers","recoil-misc"} : std::vector<const char*>{"overview", "inspector", "console", "game", "settings", "settings-viewport",
+        const std::vector<const char*> kEditorShots = editorShotIDE ? std::vector<const char*>{"script-ide"} : editorShotCurves ? std::vector<const char*>{"recoil-curves","recoil-targets","recoil-smoothing","recoil-layers","recoil-misc"} : std::vector<const char*>{"overview", "inspector", "enhancers", "bookmarks", "favorites", "console", "game", "settings", "settings-viewport",
                                                    "settings-performance", "project-settings", "project-tags", "project-build",
                                                    "lighting", "animator"};
         int editorShotFrame = 0;
@@ -2650,8 +2680,7 @@ int main(int argc, char** argv) {
             // VSync on: the frames are shown on the monitor's refresh, so the game steps in whole refreshes
             // (see Time::SetRefreshPeriod). Adaptive VSync tears late frames, so it is left as measured.
             {
-                static int refreshHz = 0, refreshCheck = 0;
-                if (refreshCheck-- <= 0) { refreshHz = window.RefreshRate(); refreshCheck = 60; } // the window can move monitors
+                const int refreshHz = window.RefreshRate(); // cached in Window: re-read only when the window moves or monitors change
                 Time::SetRefreshPeriod(!headless && appliedVSyncMode == 1 && refreshHz >= 30 ? 1.0 / refreshHz : 0.0);
             }
             Time::BeginFrame();
@@ -2659,10 +2688,11 @@ int main(int argc, char** argv) {
             // --weapon-test runs on a fixed step, so its timings don't depend on the machine.
             const float gameDt = weaponTestMode || npcTestMode ? (playing ? 1.0f / 60.0f : 0.0f) : Time::DeltaTime();
 
-            // #158 — shader hot reload (editor only; the scan itself runs at ~4 Hz). Engine
+            // #158 — shader hot reload (editor only; the scan itself runs at 1 Hz). Engine
             // programs and material shaders recompile when any file they were built from changes;
-            // a failed compile keeps the previous program and logs the error.
-            if (!headless) {
+            // a failed compile keeps the previous program and logs the error. Not while the Scene
+            // camera is being dragged: the folder walk would land in the middle of the motion.
+            if (!headless && !camDragActive) {
                 const std::vector<std::string> changedShaders =
                     ShaderLibrary::PollChangedFiles({ProjectPaths::Resolve("shaders")});
                 if (!changedShaders.empty()) {
@@ -2811,6 +2841,11 @@ int main(int argc, char** argv) {
                 else               imguiIO.ConfigFlags &= ~ImGuiConfigFlags_NoMouse;
             }
 
+            // --editor-tests: this frame's synthetic input and checks, before ImGui reads input.
+            if (editorTestsMode && EditorUiTests::BeforeFrame(editor, world, assets, editorCamera)) {
+                exitApproved = true;
+                window.SetShouldClose(true);
+            }
             editor.BeginFrame();
 
             // Cleared once, up front, regardless of mode — Scene/Game now render into their own
@@ -2889,6 +2924,7 @@ int main(int argc, char** argv) {
                     window.SetCursorLocked(false);
                 }
 
+                if (editor.RulerHeld()) Input::ConsumeScroll(); // vRuler: the wheel picks the measured object
                 if (UpdateEditorCamera(editorCamera, dt, allowLook || camDragActive, gizmoDragging,
                         hasSelection ? &selectionCenter : nullptr, editor.ViewportSize().y))
                     editor.FlashFlySpeedHud(); // #236 R2 — show the transient "Fly speed: N" readout
@@ -4461,9 +4497,15 @@ int main(int argc, char** argv) {
                     // it out far enough to never kick in.
                     const EditorSettings& gset = EditorSettings::Get();
                     float gridFade = editorCamera.Orthographic ? 100000.0f : gset.GridFadeDistance;
+                    auto toVec3 = [](ImVec4 c) { return glm::vec3(c.x, c.y, c.z); };
+                    GridColors gridColors;
+                    gridColors.AxisX = toVec3(EditorTheme::AxisX);
+                    gridColors.AxisY = toVec3(EditorTheme::AxisY);
+                    gridColors.AxisZ = toVec3(EditorTheme::AxisZ);
                     grid.Draw(sceneViewMat, sceneProjMat, editorCamera.Position,
                               gset.GridMinorSpacing, (float)gset.GridMajorEvery, gridFade,
-                              gset.GridOpacity, gset.GridShowAxisLines, gset.GridAxisThickness);
+                              gset.GridOpacity, gset.GridShowAxisLines, gset.GridAxisThickness,
+                              gridColors);
                 }
 
                 // Collider wireframe overlay (#185 PR 2) — depth-tested so scene geometry
@@ -4509,7 +4551,11 @@ int main(int argc, char** argv) {
                         if(view=="script-ide")editor.OpenScriptIDE(ProjectPaths::Resolve("assets/Scripts/Bob.cs"));
                         auto focus = [](const char* title) {
                             for (ImGuiWindow* w : ImGui::GetCurrentContext()->Windows)
-                                if (std::strstr(w->Name, title) && std::strncmp(w->Name, "##", 2) != 0 && !(w->Flags & ImGuiWindowFlags_ChildWindow)) ImGui::SetWindowFocus(w->Name);
+                                if (std::strstr(w->Name, title) && std::strncmp(w->Name, "##", 2) != 0 && !(w->Flags & ImGuiWindowFlags_ChildWindow)) {
+                                    // A docked window: select its tab too (focus alone can lose to a tab that asks for focus).
+                                    if (w->DockNode && w->DockNode->TabBar) w->DockNode->TabBar->NextSelectedTabId = w->TabId;
+                                    ImGui::SetWindowFocus(w->Name);
+                                }
                         };
                         if (view == "overview") {
                             EditorModuleHost::ConsoleState().Visible = true; // a tab now, in front for "console"
@@ -4522,7 +4568,12 @@ int main(int argc, char** argv) {
                             focus("###Assets");
                         }
                         else if (view == "inspector") editor.SetExpandAllComponents(true);
-                        else if (view == "console") { editor.SetExpandAllComponents(false); focus("###Console"); }
+                        // Editor Enhancers: the Inspector and Asset Browser in front (their header rows,
+                        // tabs and trees), then the bookmarks list open, then the favorites overlay.
+                        else if (view == "enhancers") { editor.SetExpandAllComponents(false); EditorModuleHost::ConsoleState().Visible = false; focus("###Inspector"); focus("###Assets"); }
+                        else if (view == "bookmarks") editor.ShotOpenInspectorBookmarks();
+                        else if (view == "favorites") { ImGui::ClosePopupsExceptModals(); editor.ShotSetFavoritesLocked(true); }
+                        else if (view == "console") { editor.ShotSetFavoritesLocked(false); EditorModuleHost::ConsoleState().Visible = true; focus("###Console"); }
                         else if (view == "game") focus("###Game");
                         else if (view == "settings") editor.OpenPreferences();
                         else if (view == "settings-viewport") editor.OpenSettingsCategory(false, 1);
@@ -5444,6 +5495,15 @@ int main(int argc, char** argv) {
             throw;
         }
 
+        if (editorTestsMode) {
+            // Like the smoke test: nothing from this run is saved back (the scene is in memory only).
+            const int code = EditorUiTests::ExitCode();
+            editor.Shutdown();
+            editorModule.Shutdown();
+            AudioEngine::Shutdown();
+            PhysicsWorld::Shutdown();
+            return code;
+        }
         if (smokeTestMode) {
             // Deliberately skip the normal exit path entirely (no play-mode revert, no
             // save-on-exit) — smoke-tested scenes were never really "open" from the user's

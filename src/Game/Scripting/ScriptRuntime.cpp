@@ -49,6 +49,9 @@ std::chrono::steady_clock::time_point buildAfter;
 thread_local std::string description;
 std::recursive_mutex managedCalls;
 std::map<std::string,std::string> descriptionCache;
+// vInspector: the same descriptions parsed once (the Inspector used to parse them every frame).
+std::map<std::string,nlohmann::json> describedCache;
+void ClearDescriptions() { descriptionCache.clear(); describedCache.clear(); }
 const std::function<int(int,NativeRequest&)>* editorServices=nullptr;
 std::filesystem::file_time_type editorAssemblyTime{};
 bool editorAttempted=false;
@@ -75,7 +78,10 @@ int NativeImpl(int op, NativeRequest* r) {
     // Physics services retain ownership of PhysX objects; no native pointer escapes into a script.
     switch(op) {
     case 0:
-        if(r->Text && std::string(r->Text).rfind("C# error:",0)==0) Log::Error(r->Text);
+        if(r->Text && std::string(r->Text).rfind("C# error:",0)==0) {
+            error=r->Text;
+            Log::Error(r->Text);
+        }
         else Log::Info(r->Text ? r->Text : "");
         return 1;
     case 30: description=r->Text?r->Text:"{}"; return 1;
@@ -248,8 +254,7 @@ bool Invoke(int op, void* frame, int size) {
     std::lock_guard<std::recursive_mutex> lock(managedCalls);
     if(!EnsureLoaded()) return false;
     const bool ok=dispatch(op,frame,size,reinterpret_cast<void*>(&Native))==0;
-    if(ok && (op==0 || op==5))++codeGeneration;
-    if(ok && (op==0 || op==5)) { descriptionCache.clear(); rejectedScripts.clear(); }
+    if(ok && (op==0 || op==5)) { ++codeGeneration; ClearDescriptions(); rejectedScripts.clear(); error.clear(); }
     return ok;
 }
 bool InvokeProjectWithTrace(World& world,const char* operation,void* data,int size, const std::function<void(const NativeRequest&)>& trace) {
@@ -354,6 +359,39 @@ bool RequestProject(const std::string& operation,const std::string& data,std::st
     if(!Invoke(15,&request,sizeof request))return false;
     result=description;return true;
 }
+const nlohmann::json& DescribeJson(const std::string& className) {
+    if(auto it=describedCache.find(className); it!=describedCache.end()) return it->second;
+    nlohmann::json parsed=nlohmann::json::parse(Describe(className),nullptr,false);
+    if(parsed.is_discarded() || !parsed.is_object()) parsed=nlohmann::json{{"error","Unreadable script description."}};
+    return describedCache.emplace(className,std::move(parsed)).first->second;
+}
+namespace {
+// Ops 17 / 18 take {"class","fields","method"} as text; the reply arrives through op 30.
+bool EditorRequest(int op,World* world,AssetLibrary* assets,const std::string& className,std::uint32_t entity,
+                   std::uint32_t slot,const std::string& fields,const std::string& method,std::string& reply,int* result) {
+    const std::string text=nlohmann::json{{"class",className},{"fields",fields},{"method",method}}.dump();
+    std::lock_guard<std::recursive_mutex> callLock(managedCalls);
+    NativeRequest request; request.Text=text.c_str(); request.Entity=entity; request.Script=slot;
+    World* previousWorld=activeWorld; AssetLibrary* previousAssets=activeAssets;
+    if(world) { activeWorld=world; activeAssets=assets; }
+    description.clear();
+    const bool ok=Invoke(op,&request,sizeof request);
+    activeWorld=previousWorld; activeAssets=previousAssets;
+    if(ok) reply=description;
+    if(result) *result=request.Result;
+    return ok;
+}
+}
+bool InvokeEditorMethod(World& world,AssetLibrary& assets,const std::string& className,std::uint32_t entity,std::uint32_t slot,
+                        const std::string& fields,const std::string& method,std::string& outFields) {
+    int ran=0;
+    return EditorRequest(17,&world,&assets,className,entity,slot,fields,method,outFields,&ran) && ran!=0;
+}
+std::string ShowValues(World& world,AssetLibrary& assets,const std::string& className,std::uint32_t entity,std::uint32_t slot,
+                       const std::string& fields) {
+    std::string reply;
+    return EditorRequest(18,&world,&assets,className,entity,slot,fields,"",reply,nullptr) ? reply : std::string();
+}
 bool Build() {
     if(buildProcess) return false;
     buildPending=false;
@@ -406,7 +444,8 @@ void Poll() {
             Fail("Build failed; running assembly retained.\n"+content); return;
         }
         Log::Info("C# build succeeded.");
-        descriptionCache.clear();
+        error.clear();
+        ClearDescriptions();
         if(!dispatch) { attemptedLoad=false; EnsureLoaded(); }
         if(!editorBuild && editorBuildNext) {
             editorBuildNext=false;
@@ -429,7 +468,7 @@ void Poll() {
     std::error_code ec; auto now=std::filesystem::last_write_time(GameplayPath(),ec);
     if(!ec && now!=assemblyTime) {
         const auto path=GameplayPath().u8string();
-        if(dispatch(0,const_cast<char*>(path.c_str()),kVersion,reinterpret_cast<void*>(&Native))==0) { error.clear(); rejectedScripts.clear(); descriptionCache.clear(); }
+        if(dispatch(0,const_cast<char*>(path.c_str()),kVersion,reinterpret_cast<void*>(&Native))==0) { error.clear(); rejectedScripts.clear(); ClearDescriptions(); }
         else Fail("Reload rejected; previous C# assembly retained.");
         assemblyTime=now;
     }

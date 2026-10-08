@@ -191,6 +191,34 @@ void EditorSettings::Load() {
     s.GizmoPivotCenter = SafeValue(root, "gizmoPivotCenter", s.GizmoPivotCenter);
     s.ActiveTool = SafeValue(root, "activeTool", s.ActiveTool);
     s.ShadingMode = SafeValue(root, "shadingMode", s.ShadingMode);
+    s.EnhancerHoverKeys = SafeValue(root, "enhancerHoverKeys", s.EnhancerHoverKeys);
+    s.HierarchyRowStyles = SafeValue(root, "hierarchyRowStyles", s.HierarchyRowStyles);
+    s.HierarchyTreeLines = SafeValue(root, "hierarchyTreeLines", s.HierarchyTreeLines);
+    s.HierarchyMinimal = SafeValue(root, "hierarchyMinimal", s.HierarchyMinimal);
+    s.HierarchyZebra = SafeValue(root, "hierarchyZebra", s.HierarchyZebra);
+    s.HierarchyMinimap = SafeValue(root, "hierarchyMinimap", s.HierarchyMinimap);
+    s.HierarchyMinimapMax = std::clamp(SafeValue(root, "hierarchyMinimapMax", s.HierarchyMinimapMax), 1, 12);
+    s.HierarchyMinimapWhen = std::clamp(SafeValue(root, "hierarchyMinimapWhen", s.HierarchyMinimapWhen), 0, 1);
+    s.HierarchyNavBar = SafeValue(root, "hierarchyNavBar", s.HierarchyNavBar);
+    s.FolderStyles = SafeValue(root, "folderStyles", s.FolderStyles);
+    s.FolderTreeLines = SafeValue(root, "folderTreeLines", s.FolderTreeLines);
+    s.FolderRowWash = SafeValue(root, "folderRowWash", s.FolderRowWash);
+    s.FolderZebra = SafeValue(root, "folderZebra", s.FolderZebra);
+    s.FolderMinimal = SafeValue(root, "folderMinimal", s.FolderMinimal);
+    s.FolderMinimap = SafeValue(root, "folderMinimap", s.FolderMinimap);
+    s.FolderNavBar = SafeValue(root, "folderNavBar", s.FolderNavBar);
+    s.InspectorNavBar = SafeValue(root, "inspectorNavBar", s.InspectorNavBar);
+    s.BookmarkChips = SafeValue(root, "bookmarkChips", s.BookmarkChips);
+    s.InspectorAnimations = SafeValue(root, "inspectorAnimations", s.InspectorAnimations);
+    s.InspectorMinimal = SafeValue(root, "inspectorMinimal", s.InspectorMinimal);
+    s.InspectorTabs = SafeValue(root, "inspectorTabs", s.InspectorTabs);
+    s.AssetTabs = SafeValue(root, "assetTabs", s.AssetTabs);
+    s.PanelTabColors = SafeValue(root, "panelTabColors", s.PanelTabColors);
+    s.ComponentHeaderColors = SafeValue(root, "componentHeaderColors", s.ComponentHeaderColors);
+    s.Favorites = SafeValue(root, "favorites", s.Favorites);
+    s.FavoritesHoldAlt = SafeValue(root, "favoritesHoldAlt", s.FavoritesHoldAlt);
+    s.Ruler = SafeValue(root, "ruler", s.Ruler);
+    s.MeasureFeet = SafeValue(root, "measureFeet", s.MeasureFeet);
 
     // #126 — values that are the right type but nonsensical (0 / negative / NaN from a hand
     // edit or an older build) would otherwise produce NaN projections, a zero-size grid, a
@@ -350,6 +378,34 @@ void EditorSettings::Flush() {
     root["gizmoPivotCenter"] = Get().GizmoPivotCenter;
     root["activeTool"] = Get().ActiveTool;
     root["shadingMode"] = Get().ShadingMode;
+    root["enhancerHoverKeys"] = Get().EnhancerHoverKeys;
+    root["hierarchyRowStyles"] = Get().HierarchyRowStyles;
+    root["hierarchyTreeLines"] = Get().HierarchyTreeLines;
+    root["hierarchyMinimal"] = Get().HierarchyMinimal;
+    root["hierarchyZebra"] = Get().HierarchyZebra;
+    root["hierarchyMinimap"] = Get().HierarchyMinimap;
+    root["hierarchyMinimapMax"] = Get().HierarchyMinimapMax;
+    root["hierarchyMinimapWhen"] = Get().HierarchyMinimapWhen;
+    root["hierarchyNavBar"] = Get().HierarchyNavBar;
+    root["folderStyles"] = Get().FolderStyles;
+    root["folderTreeLines"] = Get().FolderTreeLines;
+    root["folderRowWash"] = Get().FolderRowWash;
+    root["folderZebra"] = Get().FolderZebra;
+    root["folderMinimal"] = Get().FolderMinimal;
+    root["folderMinimap"] = Get().FolderMinimap;
+    root["folderNavBar"] = Get().FolderNavBar;
+    root["inspectorNavBar"] = Get().InspectorNavBar;
+    root["bookmarkChips"] = Get().BookmarkChips;
+    root["inspectorAnimations"] = Get().InspectorAnimations;
+    root["inspectorMinimal"] = Get().InspectorMinimal;
+    root["inspectorTabs"] = Get().InspectorTabs;
+    root["assetTabs"] = Get().AssetTabs;
+    root["panelTabColors"] = Get().PanelTabColors;
+    root["componentHeaderColors"] = Get().ComponentHeaderColors;
+    root["favorites"] = Get().Favorites;
+    root["favoritesHoldAlt"] = Get().FavoritesHoldAlt;
+    root["ruler"] = Get().Ruler;
+    root["measureFeet"] = Get().MeasureFeet;
 
     // Atomic: a crash mid-write (a toggle spree can still trigger one write) must leave the
     // previous editor_prefs.json intact, not truncated (audit CPP-206). Lives under UserPaths

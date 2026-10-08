@@ -255,6 +255,58 @@ struct EditorSettings {
     int  FullscreenMode = 0;
     int  FullscreenMonitor = -1;
 
+    // --- Editor Enhancers (docs/EDITOR_ENHANCERS.md): vHierarchy / vFolders / vInspector /
+    // vTabs / vFavorites / vRuler-style workflow features. Preferences > Editor Enhancers.
+    // EnhancerHoverKeys: the single-letter keys that act on whatever row/component is under the
+    // mouse (E expand, A active, X delete, ...). Off restores focus-only shortcut routing.
+    bool EnhancerHoverKeys = true;
+    // vHierarchy. RowStyles: draw per-entity icons/colours/separators (HierarchyStyleComponent).
+    // TreeLines: guide lines joining children to parents. Minimal: hide the kind glyph unless a
+    // custom icon is set. Zebra: alternate-row stripe. Minimap: up to MinimapMax component icons
+    // on each row. NavBar: scene selector + Back/Forward + bookmark chips above the tree.
+    bool HierarchyRowStyles  = true;
+    bool HierarchyTreeLines  = true;
+    bool HierarchyMinimal    = false;
+    bool HierarchyZebra      = true;
+    bool HierarchyMinimap    = true;
+    int  HierarchyMinimapMax = 5;
+    int  HierarchyMinimapWhen = 1;  // 0 = every row, 1 = hovered and selected rows only
+    bool HierarchyNavBar     = true;
+    // vFolders. Styles: per-folder icons/colours, rules and automatic content icons. RowWash: a
+    // styled folder's colour also tints its tree row. Minimap: icons of what a folder holds.
+    // NavBar: folder bookmark chips under the Asset Browser toolbar.
+    bool FolderStyles      = true;
+    bool FolderTreeLines   = true;
+    bool FolderRowWash     = false;
+    bool FolderZebra       = false;
+    bool FolderMinimal     = false;
+    bool FolderMinimap     = true;
+    bool FolderNavBar      = true;
+    // vInspector. NavBar: selection Back/Forward + bookmarked objects/assets above the Inspector.
+    // Animations: component sections ease open/closed and fade out on removal. Minimal: a
+    // section's actions button shows only while its header is hovered.
+    bool InspectorNavBar     = true;
+    // Bookmarks show as chips on the Hierarchy / Inspector nav bars and a bar under the Asset
+    // Browser toolbar. Off (the default): one bookmark button per panel opens them as a list, so
+    // each panel keeps a single header row.
+    bool BookmarkChips       = false;
+    bool InspectorAnimations = true;
+    bool InspectorMinimal    = false;
+    // vTabs: the tab strips at the top of the Inspector and under the Asset Browser toolbar.
+    bool InspectorTabs = true;
+    bool AssetTabs     = true;
+    // Tabs & Headers (Enhancers::UiStyles, project/editor_ui_styles.json): each docked panel's tab
+    // and each Inspector component header in its own colour, like a Hierarchy row or a folder.
+    bool PanelTabColors        = true;
+    bool ComponentHeaderColors = true;
+    // vFavorites: the favorites overlay, and whether holding Alt over the Asset Browser shows it.
+    bool Favorites        = true;
+    bool FavoritesHoldAlt = true;
+    // vRuler (hold Shift+R in the Scene view), and the length units it shares with the Measure
+    // tool: false = metric (mm / cm / m / km), true = feet and inches.
+    bool Ruler       = true;
+    bool MeasureFeet = false;
+
     bool WindowPlacementValid = false;
     int  WindowX = 0, WindowY = 0, WindowWidth = 0, WindowHeight = 0;
     bool WindowMaximized = true;

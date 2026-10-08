@@ -7,13 +7,13 @@ namespace Tartarus.Gameplay;
 public sealed class WeaponController
 {
     public const int Hidden = 1, Reloading = 2, Busy = 4, Cycling = 8, Ads = 16, Idle = 32, Ready = 64, IkOff = 128;
-    
+
     public const int Dry = 1, Commit = 2, FireTrigger = 4, EndBurst = 8, Cycle = 16, Fidget = 32, ReloadTrigger = 64, MagCheck = 128;
-    
+
     static bool Tag(in WeaponFrame w, int tag) => (w.Tags & tag) != 0;
-    
+
     static void ResetBurst(ref WeaponFrame w) { w.BurstRemaining = 0; w.Commands |= EndBurst; }
-    
+
     public static Vector3 PelletDirection(Vector3 direction, float spread, float u1, float u2)
     {
         if (!(spread > 0)) return direction;
@@ -23,7 +23,7 @@ public sealed class WeaponController
         float angle = 2 * MathF.PI * u2;
         return Vector3.Normalize(direction + side * (radius * MathF.Cos(angle)) + up * (radius * MathF.Sin(angle)));
     }
-    
+
     public void FireShot(ref ShotFrame shot)
     {
         int pellets = Math.Max(1, shot.Pellets);
@@ -45,7 +45,7 @@ public sealed class WeaponController
             Engine.ApplyImpulse(hit.Entity, direction * (impulse / pellets), hit.A);
         }
     }
-    
+
     public void Update(ref WeaponFrame w)
     {
         w.Commands = 0; w.Result = 0;

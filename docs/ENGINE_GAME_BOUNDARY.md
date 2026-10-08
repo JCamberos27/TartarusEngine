@@ -110,7 +110,7 @@ not alternate native gameplay owners.
 
 ## Validation
 
-Verified 2026-10-07:
+Migration checkpoint before upstream integration, verified 2026-10-07:
 
 * Release builds passed, including `TartarusEngine` with `TARTARUS_BUILD_SAMPLE_GAME=OFF`.
   The workspace setting was restored to ON afterward.
@@ -133,4 +133,38 @@ Verified 2026-10-07:
   these existing presentation failures remain unresolved.
 
 Generated native/managed game frames match their generator. Component registration passed
-with 28 registered components and 29 explicitly allow-listed runtime views/tags.
+with 28 registered components. Upstream integration adds HierarchyStyleComponent to the
+explicit allow-list, bringing runtime views/tags to 30.
+
+### Integration with upstream main
+
+The merge includes upstream `eed924a6` and its editor Enhancers, Inspector attributes,
+asset policy and navigation fixes. The generic scripting ABI is now version 3; rebuild
+the native host and managed SDK together. Project operations retain dispatch 13–16;
+Inspector method/read-out dispatch uses 17–18. Editor reference/color widgets use services
+132–133, preserving upstream BeginDisabled/SameLine at 130–131.
+
+The combined Release build and full native/managed unit suite pass: 41,510 checks,
+zero failures. Fixtures restore the current project's assembly after Inspector attribute
+tests and obtain game defaults from C#. New presentation descriptors omit legacy gameplay
+unless explicitly imported. Managed validation errors reach the native caller and successful
+builds/reloads clear stale errors.
+
+Custom C# Inspector field results also enter the scene undo transaction before their slot
+copy is applied. Explicit `Undo.RecordScene` labels are retained. Semantic JSON comparison
+excludes formatting-only changes from history. Editor UI fixtures use the same history API
+for their setup edits, rather than mutating the cached authored state
+without notifying history.
+
+All 30 rendered editor UI tests pass, including C# Inspector edits/callbacks/read-outs,
+undo, Keep Changes After Play, tabs, favorites and ruler. All 19 committed rendering smoke
+scenes pass with zero new GL/log errors. The merged host also passes the empty-project
+bootstrap (15 checks), isolated exported ordinary-script host (9 checks), and active NPC
+watch (11 checks, 45 simulated seconds, 21,600 rendered frames; zero new GL/log errors).
+The authored Arena Enemies group remains inactive; NPC testing uses an ignored enabled copy.
+
+The component and button-style structural checks pass. External asset verification covers
+1,880 manifest entries with no missing or differing local files; payloads remain outside Git.
+187 regenerated texture GUIDs/import settings and 107 corresponding material-only changes
+were restored to upstream identities. Availability of the 20 newly listed payloads in the
+team's private library still needs verification, as noted in [PROJECT_ASSETS.md](PROJECT_ASSETS.md).

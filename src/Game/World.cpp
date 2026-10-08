@@ -29,7 +29,7 @@ constexpr size_t kMaxHierarchyDepth = 1024;
 // bounds to derive from. Still axis-aligned/rotation-ignoring, matching the physics's existing,
 // deliberate "simple gameplay collision" simplification (see ColliderComponent).
 AABB ColliderWorldBounds(const entt::registry& registry, entt::entity entity, const TransformComponent& transform) {
-    if (const auto* renderable = registry.try_get<RenderableComponent>(entity)) {
+    if (const auto* renderable = registry.try_get<RenderableComponent>(entity); renderable && renderable->ModelRef) {
         glm::vec3 worldMin = transform.Position + renderable->ModelRef->BoundsMin() * transform.Scale;
         glm::vec3 worldMax = transform.Position + renderable->ModelRef->BoundsMax() * transform.Scale;
         return AABB{glm::min(worldMin, worldMax), glm::max(worldMin, worldMax)}; // guards a negative Scale flipping min/max

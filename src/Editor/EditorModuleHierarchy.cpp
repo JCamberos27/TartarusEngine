@@ -106,6 +106,9 @@ void Draw(const EditorModuleHostAPI& host) {
     ImGui::PopStyleVar();
     EditorUIPrimitives::EndPanelToolbar();
 
+    // Editor Enhancers / vHierarchy: scene selector, Back/Forward, bookmark chips (API v39).
+    if (host.DrawHierarchyNavBar) host.DrawHierarchyNavBar();
+
     if (host.DrawHierarchyTreeBody) host.DrawHierarchyTreeBody();
 
     ImGui::End();

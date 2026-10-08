@@ -162,7 +162,7 @@ bool FirstPersonAnimationSet::FromJsonString(const std::string& text, FirstPerso
     }
     if (const auto g = root.find("gameplay"); g != root.end() && g->is_object()) {
         std::string resolved;
-        if(!Scripting::RequestProject("weapon.import",g->dump(),resolved))return Fail(error,"Project weapon data validation failed");
+        if(!Scripting::RequestProject("weapon.import",g->dump(),resolved))return Fail(error,"Project weapon data validation failed: " + Scripting::LastError());
         Scripting::ReadProjectWeaponGameplay(parsed.Gameplay,json::parse(resolved));
         // Older presentation-only ADS fields remain a read compatibility path.
         parsed.Ads.Zoom=Number(*g,"adsZoom",parsed.Ads.Zoom);

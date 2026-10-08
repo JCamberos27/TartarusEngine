@@ -15,7 +15,8 @@ Grid::~Grid() {
 
 void Grid::Draw(const glm::mat4& view, const glm::mat4& proj, const glm::vec3& cameraPos,
                  float minorSpacing, float majorEvery, float fadeDistance,
-                 float opacity, bool showAxisLines, float axisThickness) {
+                 float opacity, bool showAxisLines, float axisThickness,
+                 const GridColors& colors) {
     glm::mat4 invViewProj = glm::inverse(proj * view);
 
     // Save exactly what this pass mutates and restore it — the fixed drawScene call order is
@@ -37,6 +38,11 @@ void Grid::Draw(const glm::mat4& view, const glm::mat4& proj, const glm::vec3& c
     m_Shader->SetFloat("uOpacity", opacity);
     m_Shader->SetInt("uShowAxes", showAxisLines ? 1 : 0);
     m_Shader->SetFloat("uAxisThickness", axisThickness);
+    m_Shader->SetVec3("uAxisColorX", colors.AxisX);
+    m_Shader->SetVec3("uAxisColorY", colors.AxisY);
+    m_Shader->SetVec3("uAxisColorZ", colors.AxisZ);
+    m_Shader->SetVec3("uGridColor", colors.Lines);
+    m_Shader->SetFloat("uAxisAlpha", colors.AxisAlpha);
 
     glBindVertexArray(m_VAO);
     glDrawArrays(GL_TRIANGLES, 0, 6);

@@ -269,7 +269,7 @@ struct FirstPersonAnimationSet {
     std::vector<std::pair<std::string, std::string>> ArmsMaterials;
     std::vector<std::pair<std::string, std::string>> WeaponMaterials;
     FirstPersonWeaponGameplay Gameplay;
-    bool HasLegacyGameplay = true; // write compatibility only; migrated assets omit the gameplay block
+    bool HasLegacyGameplay = false; // set only when importing an old descriptor with game data
     FirstPersonAdsSettings Ads;
     FirstPersonMuzzleSettings Muzzle;
     FirstPersonEjectSettings Eject;

@@ -16,7 +16,16 @@ struct RegisteredComponent {
     const void* (*GetConst)(const entt::registry&, entt::entity) = nullptr;
     void  (*Add)(entt::registry&, entt::entity) = nullptr;
     void  (*Remove)(entt::registry&, entt::entity) = nullptr;
+    // A default-constructed instance of the component (one static per type), for vInspector's
+    // per-field "Reset to Default". Null only for hand-built entries that never set it.
+    const void* (*DefaultInstance)() = nullptr;
 };
+
+// vInspector field reset: copy field `f`'s value from the component's DefaultInstance into
+// `component`. False when the component has no default instance.
+bool ResetReflectFieldToDefault(const RegisteredComponent& rc, const ReflectField& f, void* component);
+// Whether field `f` of `component` already holds its default value.
+bool ReflectFieldIsDefault(const RegisteredComponent& rc, const ReflectField& f, const void* component);
 
 namespace ComponentRegistry {
 
@@ -38,6 +47,7 @@ void Register(ReflectComponent meta) {
         [](const entt::registry& r, entt::entity e) -> const void* { return r.try_get<T>(e); },
         [](entt::registry& r, entt::entity e) { r.emplace_or_replace<T>(e); },
         [](entt::registry& r, entt::entity e) { r.remove<T>(e); },
+        []() -> const void* { static const T kDefault{}; return &kDefault; },
     });
 }
 

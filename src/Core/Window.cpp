@@ -415,6 +415,16 @@ std::vector<std::string> Window::MonitorNames() {
 }
 
 namespace {
+// Bumped by GLFW's monitor callback whenever a display is connected or disconnected, so
+// Window::RefreshRate knows its cached answer may be stale.
+// Chains to whatever was installed first (the ImGui GLFW backend tracks monitors too).
+unsigned g_MonitorGeneration = 0;
+GLFWmonitorfun g_PrevMonitorCallback = nullptr;
+void MonitorCallback(GLFWmonitor* monitor, int event) {
+    ++g_MonitorGeneration;
+    if (g_PrevMonitorCallback) g_PrevMonitorCallback(monitor, event);
+}
+
 // The chosen monitor, or (index -1 / out of range) the one containing the window's centre.
 GLFWmonitor* PickMonitor(GLFWwindow* window, int index) {
     int count = 0;
@@ -437,10 +447,24 @@ GLFWmonitor* PickMonitor(GLFWwindow* window, int index) {
 
 int Window::RefreshRate() const {
     if (!m_Handle) return 0;
-    GLFWmonitor* monitor = glfwGetWindowMonitor(m_Handle);
-    if (!monitor) monitor = PickMonitor(m_Handle, -1);
+    static const bool s_CallbackInstalled = (g_PrevMonitorCallback = glfwSetMonitorCallback(MonitorCallback), true);
+    (void)s_CallbackInstalled;
+    RefreshCache key;
+    glfwGetWindowPos(m_Handle, &key.X, &key.Y);
+    glfwGetWindowSize(m_Handle, &key.W, &key.H);
+    GLFWmonitor* fsMonitor = glfwGetWindowMonitor(m_Handle);
+    key.Monitor = fsMonitor;
+    key.Generation = g_MonitorGeneration;
+    RefreshCache& c = m_RefreshCache;
+    if (c.Hz >= 0 && c.X == key.X && c.Y == key.Y && c.W == key.W && c.H == key.H &&
+        c.Monitor == key.Monitor && c.Generation == key.Generation)
+        return c.Hz;
+
+    GLFWmonitor* monitor = fsMonitor ? fsMonitor : PickMonitor(m_Handle, -1);
     const GLFWvidmode* mode = monitor ? glfwGetVideoMode(monitor) : nullptr;
-    return mode && mode->refreshRate > 0 ? mode->refreshRate : 0;
+    key.Hz = mode && mode->refreshRate > 0 ? mode->refreshRate : 0;
+    c = key;
+    return c.Hz;
 }
 
 void Window::SetFullscreen(bool fullscreen) {

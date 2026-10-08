@@ -36,6 +36,10 @@
 #include "Framebuffer.h"
 #include "gl.h"
 
+#include "Enhancers/EnhancerUserState.h"
+#include "Enhancers/Palette.h"
+#include "Enhancers/FolderStyles.h"
+#include "Enhancers/UiStyles.h"
 #include "UndoDeltaChain.h" // undo history stores JSON-Patch deltas, not full snapshots (#174)
 
 #include <imgui.h>
@@ -63,6 +67,9 @@
 #include <cstring>
 #include <functional>
 #include <cfloat>
+
+#include "UndoTrigger.h"
+#include <ImGuizmo.h>
 
 using namespace EditorInternal;
 
@@ -109,21 +116,36 @@ void EditorLayer::BeginGlobalUndoFrame(const World& world) {
         std::error_code ec;
         const auto absolute=std::filesystem::absolute(path,ec).lexically_normal();
         const auto relative=absolute.lexically_relative(std::filesystem::absolute(ProjectPaths::Root()).lexically_normal());
-        const bool preferences=absolute==std::filesystem::path(EditorSettings::PrefsFilePath()) ||
+        // Editor Enhancers' per-user files (bookmarks / default parents, the style palette) are
+        // journaled like the other per-user prefs, so bookmarking or editing the palette undoes.
+        const bool enhancers=absolute==std::filesystem::path(Enhancers::EnhancerUserState::Path()) ||
+            absolute==std::filesystem::path(Enhancers::Palette::Path()) ||
+            absolute==std::filesystem::path(Enhancers::FolderStyles::Path()) ||
+            absolute==std::filesystem::path(Enhancers::UiStyles::Path());
+        const bool preferences=enhancers || absolute==std::filesystem::path(EditorSettings::PrefsFilePath()) ||
             absolute==std::filesystem::path(UserPaths::Resolve("shortcuts.json")) || absolute==std::filesystem::path(UserPaths::Resolve("asset_favorites.json"));
         if(ec || relative.empty() || (*relative.begin()==".." && !preferences)) return;
         for(const auto& part:relative) if(part=="Library" || part=="bin" || part=="obj") return;
         if(!m_GlobalUndoActive) {
             m_GlobalUndoHasScene=false;
             m_GlobalUndoScene.clear();
-            m_GlobalUndoSelection=CaptureSelectedOrders(world);m_GlobalUndoLabel="Edit " + path.filename().string();m_GlobalUndoActive=true;
+            m_GlobalUndoSelection=CaptureSelectedOrders(world);
+            const bool folderStyles=absolute==std::filesystem::path(Enhancers::FolderStyles::Path());
+            const bool uiStyles=absolute==std::filesystem::path(Enhancers::UiStyles::Path());
+            m_GlobalUndoLabel=folderStyles ? std::string("Edit Folder Style")
+                            : uiStyles ? std::string("Edit Tab / Header Colour")
+                            : enhancers ? std::string(absolute==std::filesystem::path(Enhancers::Palette::Path()) ? "Edit Style Palette" : "Edit Bookmarks")
+                                        : "Edit " + path.filename().string();
+            m_GlobalUndoActive=true;
         }
         m_FileJournal.Record(absolute);
     });
 }
 void EditorLayer::FinishGlobalUndo(const World& world,bool force) {
     if(!m_GlobalUndoActive || (!force && (ImGui::IsAnyItemActive() || ImGui::IsMouseDown(ImGuiMouseButton_Left)))) return;
+    PROFILE_SCOPE("Undo Commit");
     EditorSettings::Flush();
+    Enhancers::EnhancerUserState::Get().Flush();Enhancers::Palette::Flush();Enhancers::FolderStyles::Get().Flush();Enhancers::UiStyles::Get().Flush();
     std::string current;
     if (m_GlobalUndoHasScene && !m_InPlayMode) {
         PROFILE_SCOPE("Undo Scene Snapshot");
@@ -170,7 +192,10 @@ void EditorLayer::ReloadHistoryFiles(AssetLibrary& assets,const std::vector<Edit
             m_GizmoOp=static_cast<GizmoOp>(prefs.ActiveTool);m_ShadingMode=static_cast<ShadingMode>(prefs.ShadingMode);
         }
         if(file.Path==std::filesystem::path(UserPaths::Resolve("shortcuts.json")))Shortcuts::Load();
-        if(file.Path==std::filesystem::path(UserPaths::Resolve("asset_favorites.json")))LoadAssetFavorites();
+        if(file.Path==std::filesystem::path(Enhancers::EnhancerUserState::Path()))Enhancers::EnhancerUserState::Get().Load();
+        if(file.Path==std::filesystem::path(Enhancers::Palette::Path()))Enhancers::Palette::Load();
+        if(file.Path==std::filesystem::path(Enhancers::FolderStyles::Path()))Enhancers::FolderStyles::Get().Load();
+        if(file.Path==std::filesystem::path(Enhancers::UiStyles::Path()))Enhancers::UiStyles::Get().Load();
         if(file.Path.extension()==".cs" || file.Path.extension()==".csproj")Scripting::RequestBuild();
     }
     if(assetIdentity)AssetDatabase::ScanProject();
@@ -889,6 +914,7 @@ void EditorLayer::OnEnterPlayMode(const World& world) {
     // registry and entt recycles ids, so a retained handle can pass valid() yet denote a
     // different object afterward (#110).
     m_PlaySelectionOrders.clear();
+    m_PlayKeep.clear(); // vInspector Keep Changes After Play: chosen anew each session
     for (entt::entity e : GetSelectedItems()) {
         if (const auto* o = world.Registry.try_get<OrderComponent>(e))
             m_PlaySelectionOrders.push_back(o->Value);
@@ -969,6 +995,11 @@ void EditorLayer::OnExitPlayMode(World& world, AssetLibrary& assets) {
     // may have run regardless (#185). Destroy() is idempotent when nothing is active.
     PhysicsWorld::Destroy();
 
+    // vInspector Keep Changes After Play: read the kept values off the Play world now, before
+    // the snapshot reload below replaces it; written back (with undo) once it has.
+    const std::vector<Enhancers::KeptValue> kept = Enhancers::CaptureKept(world, m_PlayKeep);
+    m_PlayKeep.clear();
+
     if (m_PlayModeSnapshot.empty()) return;
 
     // Stop exactly the voices Play On Start began (not AudioEngine::StopAll(), which would also
@@ -1013,6 +1044,12 @@ void EditorLayer::OnExitPlayMode(World& world, AssetLibrary& assets) {
     // there's nothing new to save — the same reason Unity doesn't dirty a scene on play/stop.
     // (Unless the Audio panel asked to keep its live mix: that is an edit, with its own undo entry.)
     ApplyKeptAudioMix(world);
+    if (!kept.empty()) {
+        PushUndo(world, "Keep Play Mode Changes");
+        const int n = Enhancers::ApplyKept(world, assets, kept);
+        Log::Info("Kept " + std::to_string(n) + (n == 1 ? " component" : " components") +
+                  " changed in Play; save the scene to keep them.");
+    }
     Log::Info("Exited play mode - scene state restored.");
 }
 void EditorLayer::NewScene(World& world, AssetLibrary& assets) {
