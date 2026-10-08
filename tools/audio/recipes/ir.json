@@ -7,6 +7,11 @@
       {"name": "CCRMA Stairwell", "license": "echothief", "src": ["CCRMAStairwell"]},
       {"name": "Stairway, University of York", "license": "openair", "src": ["stairway-university-york/stairway-university-york/stereo/stairwell_ortf.wav"]}
     ]},
+    "apartment": {"max_s": 1.2, "irs": [
+      {"name": "Four Points Room 270 (furnished hotel room)", "license": "echothief", "src": ["FourPointsRoom270"]},
+      {"name": "Wangenheim Rare Books Room", "license": "echothief", "src": ["WangenheimRareBooksRoom"]},
+      {"name": "Hawxhurst", "license": "echothief", "src": ["Hawxhurst"]}
+    ]},
     "indoor_large": {"max_s": 2.5, "irs": [
       {"name": "Terry's Factory Warehouse, York", "license": "openair", "src": ["terrys-factory-warehouse/terrys-factory-warehouse/stereo/terrys_warehouse_stereo.wav"]},
       {"name": "R1 Nuclear Reactor Hall, Dunfermline", "license": "openair", "src": ["r1-nuclear-reactor-hall/r1-nuclear-reactor-hall/stereo/r1_ortf-48k.wav"]},

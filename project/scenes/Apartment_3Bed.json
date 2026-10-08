@@ -15268,31 +15268,538 @@
       ]
     },
     {
-      "Reverb Zone": {
-        "Ambience": "snd.amb.indoor_small",
-        "Ambience Volume": 0.6,
+      "C# Script": {
+        "Class": "Tartarus.Gameplay.SquadDefinition",
         "Enabled": true,
-        "Extents": [
-          6.5,
-          1.3,
-          5.0
-        ],
-        "Fade Distance": 0.5,
-        "Priority": 0,
-        "Radius": 6.0,
-        "Reverb Mode": "Class Default",
-        "Shape": "Box",
-        "Tail Class": "Indoor Small",
-        "Tail Gain": 1.0
+        "Fields JSON": "{\"Bleed-OutTime\":20.0,\"CorpseTime\":14.0,\"CoverStep\":0.800000011920929,\"CoverReach\":0.8500000238418579,\"CoverSpacing\":0.8999999761581421,\"CrawlSpeed\":0.6000000238418579,\"Difficulty\":1.0,\"FallGravity\":18.0,\"FootIKRange\":25.0,\"HeavyHitDamage\":40.0,\"CoverHeadHeight\":1.5499999523162842,\"HitboxRange\":60.0,\"LimpSpeedScale\":0.6000000238418579,\"LimpTime\":6.0,\"CoverKneeHeight\":0.8500000238418579,\"MeleeDamage\":25.0,\"MeleeHitTime\":0.2199999988079071,\"MeleeTime\":0.550000011920929,\"MeshCheckRange\":12.0,\"NpcDamageScale\":0.44999998807907104,\"Respawn\":true,\"RespawnDelay\":8.0,\"SquadSize\":4,\"StaggerTime\":0.4000000059604645}",
+        "Next Script ID": 1,
+        "Scripts": "[]",
+        "Source": "assets/Scripts/SquadDefinition.cs"
       },
       "id": 571,
-      "name": "Reverb",
+      "name": "AI Director",
       "order": 571,
-      "parentId": 1,
+      "parentId": -1,
       "position": [
         6.5,
+        0.0,
+        7.0
+      ],
+      "rotation": [
+        0.0,
+        0.0,
+        0.0,
+        1.0
+      ],
+      "scale": [
+        1.0,
+        1.0,
+        1.0
+      ]
+    },
+    {
+      "C# Script": {
+        "Class": "Tartarus.Gameplay.NpcDefinition",
+        "Enabled": true,
+        "Fields JSON": "{\"Brain\":0,\"OutfitSeed\":1,\"Skill\":0.6,\"Squad\":0,\"Weapon\":0}",
+        "Next Script ID": 1,
+        "Scripts": "[]",
+        "Source": "assets/Scripts/NpcDefinition.cs"
+      },
+      "id": 572,
+      "name": "Enemy Spawn 1 (Living Room)",
+      "order": 572,
+      "parentId": 1,
+      "position": [
+        4.76,
+        0.1,
+        5.36
+      ],
+      "rotation": [
+        0.0,
+        0.732993,
+        0.0,
+        0.680236
+      ],
+      "scale": [
+        1.0,
+        1.0,
+        1.0
+      ]
+    },
+    {
+      "C# Script": {
+        "Class": "Tartarus.Gameplay.NpcDefinition",
+        "Enabled": true,
+        "Fields JSON": "{\"Brain\":0,\"OutfitSeed\":2,\"Skill\":0.55,\"Squad\":0,\"Weapon\":1}",
+        "Next Script ID": 1,
+        "Scripts": "[]",
+        "Source": "assets/Scripts/NpcDefinition.cs"
+      },
+      "id": 573,
+      "name": "Enemy Spawn 2 (Kitchen)",
+      "order": 573,
+      "parentId": 1,
+      "position": [
+        9.56,
+        0.1,
+        9.16
+      ],
+      "rotation": [
+        0.0,
+        0.962043,
+        0.0,
+        0.272897
+      ],
+      "scale": [
+        1.0,
+        1.0,
+        1.0
+      ]
+    },
+    {
+      "C# Script": {
+        "Class": "Tartarus.Gameplay.NpcDefinition",
+        "Enabled": true,
+        "Fields JSON": "{\"Brain\":0,\"OutfitSeed\":3,\"Skill\":0.65,\"Squad\":0,\"Weapon\":0}",
+        "Next Script ID": 1,
+        "Scripts": "[]",
+        "Source": "assets/Scripts/NpcDefinition.cs"
+      },
+      "id": 574,
+      "name": "Enemy Spawn 3 (Master Bedroom)",
+      "order": 574,
+      "parentId": 1,
+      "position": [
+        3.16,
+        0.1,
+        1.26
+      ],
+      "rotation": [
+        0.0,
+        0.564406,
+        0.0,
+        0.825497
+      ],
+      "scale": [
+        1.0,
+        1.0,
+        1.0
+      ]
+    },
+    {
+      "C# Script": {
+        "Class": "Tartarus.Gameplay.NpcDefinition",
+        "Enabled": true,
+        "Fields JSON": "{\"Brain\":0,\"OutfitSeed\":4,\"Skill\":0.6,\"Squad\":0,\"Weapon\":0}",
+        "Next Script ID": 1,
+        "Scripts": "[]",
+        "Source": "assets/Scripts/NpcDefinition.cs"
+      },
+      "id": 575,
+      "name": "Enemy Spawn 4 (Bedroom 2)",
+      "order": 575,
+      "parentId": 1,
+      "position": [
+        7.96,
+        0.1,
+        3.16
+      ],
+      "rotation": [
+        0.0,
+        0.566974,
+        0.0,
+        0.823736
+      ],
+      "scale": [
+        1.0,
+        1.0,
+        1.0
+      ]
+    },
+    {
+      "Reverb Zone": {
+        "Ambience": "snd.amb.indoor_small",
+        "Ambience Volume": 0.35,
+        "Enabled": true,
+        "Extents": [
+          2.2,
+          1.3,
+          2.1
+        ],
+        "Fade Distance": 0.25,
+        "HF Damping dB": 6.0,
+        "IR": "assets/Audio/IR/apartment_1.wav",
+        "Low Cut (Hz)": 120.0,
+        "Pre-Delay ms": 2.0,
+        "Priority": 1,
+        "Radius": 3.0,
+        "Reverb Mode": "Custom",
+        "Shape": "Box",
+        "Tail Class": "Indoor Small",
+        "Tail Gain": 0.45,
+        "Wet dB": -9.0
+      },
+      "id": 576,
+      "name": "Reverb Master Bedroom",
+      "order": 576,
+      "parentId": 1,
+      "position": [
+        2.2,
         1.3,
-        5.0
+        2.1
+      ],
+      "rotation": [
+        0.0,
+        0.0,
+        0.0,
+        1.0
+      ],
+      "scale": [
+        1.0,
+        1.0,
+        1.0
+      ]
+    },
+    {
+      "Reverb Zone": {
+        "Ambience": "snd.amb.indoor_small",
+        "Ambience Volume": 0.35,
+        "Enabled": true,
+        "Extents": [
+          1.7000000000000002,
+          1.3,
+          2.1
+        ],
+        "Fade Distance": 0.25,
+        "HF Damping dB": 6.0,
+        "IR": "assets/Audio/IR/apartment_1.wav",
+        "Low Cut (Hz)": 120.0,
+        "Pre-Delay ms": 2.0,
+        "Priority": 1,
+        "Radius": 3.0,
+        "Reverb Mode": "Custom",
+        "Shape": "Box",
+        "Tail Class": "Indoor Small",
+        "Tail Gain": 0.45,
+        "Wet dB": -9.0
+      },
+      "id": 577,
+      "name": "Reverb Bedroom 2",
+      "order": 577,
+      "parentId": 1,
+      "position": [
+        8.3,
+        1.3,
+        2.1
+      ],
+      "rotation": [
+        0.0,
+        0.0,
+        0.0,
+        1.0
+      ],
+      "scale": [
+        1.0,
+        1.0,
+        1.0
+      ]
+    },
+    {
+      "Reverb Zone": {
+        "Ambience": "snd.amb.indoor_small",
+        "Ambience Volume": 0.35,
+        "Enabled": true,
+        "Extents": [
+          1.5,
+          1.3,
+          2.1
+        ],
+        "Fade Distance": 0.25,
+        "HF Damping dB": 6.0,
+        "IR": "assets/Audio/IR/apartment_1.wav",
+        "Low Cut (Hz)": 120.0,
+        "Pre-Delay ms": 2.0,
+        "Priority": 1,
+        "Radius": 3.0,
+        "Reverb Mode": "Custom",
+        "Shape": "Box",
+        "Tail Class": "Indoor Small",
+        "Tail Gain": 0.45,
+        "Wet dB": -9.0
+      },
+      "id": 578,
+      "name": "Reverb Kids Bedroom",
+      "order": 578,
+      "parentId": 1,
+      "position": [
+        11.5,
+        1.3,
+        2.1
+      ],
+      "rotation": [
+        0.0,
+        0.0,
+        0.0,
+        1.0
+      ],
+      "scale": [
+        1.0,
+        1.0,
+        1.0
+      ]
+    },
+    {
+      "Reverb Zone": {
+        "Ambience": "snd.amb.indoor_small",
+        "Ambience Volume": 0.35,
+        "Enabled": true,
+        "Extents": [
+          3.0,
+          1.3,
+          2.9
+        ],
+        "Fade Distance": 0.25,
+        "HF Damping dB": 5.0,
+        "IR": "assets/Audio/IR/apartment_1.wav",
+        "Low Cut (Hz)": 120.0,
+        "Pre-Delay ms": 2.0,
+        "Priority": 1,
+        "Radius": 3.0,
+        "Reverb Mode": "Custom",
+        "Shape": "Box",
+        "Tail Class": "Indoor Small",
+        "Tail Gain": 0.5,
+        "Wet dB": -8.0
+      },
+      "id": 579,
+      "name": "Reverb Living Room",
+      "order": 579,
+      "parentId": 1,
+      "position": [
+        3.0,
+        1.3,
+        7.1
+      ],
+      "rotation": [
+        0.0,
+        0.0,
+        0.0,
+        1.0
+      ],
+      "scale": [
+        1.0,
+        1.0,
+        1.0
+      ]
+    },
+    {
+      "Reverb Zone": {
+        "Ambience": "snd.amb.indoor_small",
+        "Ambience Volume": 0.35,
+        "Enabled": true,
+        "Extents": [
+          3.5,
+          1.3,
+          0.6000000000000001
+        ],
+        "Fade Distance": 0.25,
+        "HF Damping dB": 4.0,
+        "IR": "assets/Audio/IR/apartment_2.wav",
+        "Low Cut (Hz)": 120.0,
+        "Pre-Delay ms": 2.0,
+        "Priority": 1,
+        "Radius": 3.0,
+        "Reverb Mode": "Custom",
+        "Shape": "Box",
+        "Tail Class": "Indoor Small",
+        "Tail Gain": 0.5,
+        "Wet dB": -7.0
+      },
+      "id": 580,
+      "name": "Reverb Hall",
+      "order": 580,
+      "parentId": 1,
+      "position": [
+        9.5,
+        1.3,
+        4.8
+      ],
+      "rotation": [
+        0.0,
+        0.0,
+        0.0,
+        1.0
+      ],
+      "scale": [
+        1.0,
+        1.0,
+        1.0
+      ]
+    },
+    {
+      "Reverb Zone": {
+        "Ambience": "snd.amb.indoor_small",
+        "Ambience Volume": 0.35,
+        "Enabled": true,
+        "Extents": [
+          2.2,
+          1.3,
+          2.3
+        ],
+        "Fade Distance": 0.25,
+        "HF Damping dB": 3.0,
+        "IR": "assets/Audio/IR/apartment_3.wav",
+        "Low Cut (Hz)": 120.0,
+        "Pre-Delay ms": 2.0,
+        "Priority": 1,
+        "Radius": 3.0,
+        "Reverb Mode": "Custom",
+        "Shape": "Box",
+        "Tail Class": "Indoor Small",
+        "Tail Gain": 0.55,
+        "Wet dB": -6.5
+      },
+      "id": 581,
+      "name": "Reverb Kitchen",
+      "order": 581,
+      "parentId": 1,
+      "position": [
+        8.2,
+        1.3,
+        7.7
+      ],
+      "rotation": [
+        0.0,
+        0.0,
+        0.0,
+        1.0
+      ],
+      "scale": [
+        1.0,
+        1.0,
+        1.0
+      ]
+    },
+    {
+      "Reverb Zone": {
+        "Ambience": "snd.amb.indoor_small",
+        "Ambience Volume": 0.35,
+        "Enabled": true,
+        "Extents": [
+          1.0999999999999996,
+          1.3,
+          2.1
+        ],
+        "Fade Distance": 0.25,
+        "HF Damping dB": 1.5,
+        "IR": "assets/Audio/IR/apartment_3.wav",
+        "Low Cut (Hz)": 120.0,
+        "Pre-Delay ms": 2.0,
+        "Priority": 1,
+        "Radius": 3.0,
+        "Reverb Mode": "Custom",
+        "Shape": "Box",
+        "Tail Class": "Indoor Small",
+        "Tail Gain": 0.6,
+        "Wet dB": -5.0
+      },
+      "id": 582,
+      "name": "Reverb Ensuite",
+      "order": 582,
+      "parentId": 1,
+      "position": [
+        5.5,
+        1.3,
+        2.1
+      ],
+      "rotation": [
+        0.0,
+        0.0,
+        0.0,
+        1.0
+      ],
+      "scale": [
+        1.0,
+        1.0,
+        1.0
+      ]
+    },
+    {
+      "Reverb Zone": {
+        "Ambience": "snd.amb.indoor_small",
+        "Ambience Volume": 0.35,
+        "Enabled": true,
+        "Extents": [
+          1.2999999999999998,
+          1.3,
+          1.4500000000000002
+        ],
+        "Fade Distance": 0.25,
+        "HF Damping dB": 1.5,
+        "IR": "assets/Audio/IR/apartment_3.wav",
+        "Low Cut (Hz)": 120.0,
+        "Pre-Delay ms": 2.0,
+        "Priority": 1,
+        "Radius": 3.0,
+        "Reverb Mode": "Custom",
+        "Shape": "Box",
+        "Tail Class": "Indoor Small",
+        "Tail Gain": 0.6,
+        "Wet dB": -5.0
+      },
+      "id": 583,
+      "name": "Reverb Bathroom",
+      "order": 583,
+      "parentId": 1,
+      "position": [
+        11.7,
+        1.3,
+        6.85
+      ],
+      "rotation": [
+        0.0,
+        0.0,
+        0.0,
+        1.0
+      ],
+      "scale": [
+        1.0,
+        1.0,
+        1.0
+      ]
+    },
+    {
+      "Reverb Zone": {
+        "Ambience": "snd.amb.indoor_small",
+        "Ambience Volume": 0.35,
+        "Enabled": true,
+        "Extents": [
+          1.2999999999999998,
+          1.3,
+          0.8499999999999996
+        ],
+        "Fade Distance": 0.25,
+        "HF Damping dB": 2.0,
+        "IR": "assets/Audio/IR/apartment_3.wav",
+        "Low Cut (Hz)": 120.0,
+        "Pre-Delay ms": 2.0,
+        "Priority": 1,
+        "Radius": 3.0,
+        "Reverb Mode": "Custom",
+        "Shape": "Box",
+        "Tail Class": "Indoor Small",
+        "Tail Gain": 0.6,
+        "Wet dB": -5.5
+      },
+      "id": 584,
+      "name": "Reverb Laundry",
+      "order": 584,
+      "parentId": 1,
+      "position": [
+        11.7,
+        1.3,
+        9.15
       ],
       "rotation": [
         0.0,
