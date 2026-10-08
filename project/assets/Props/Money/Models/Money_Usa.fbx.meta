@@ -1,0 +1,23 @@
+{
+  "folder": "assets/Props/Money/Models",
+  "guid": "f15dd2c910d8b322",
+  "importer": {
+    "globalScale": 1.0,
+    "importAnimations": false,
+    "importNormals": true,
+    "importSkeleton": false,
+    "materialImportMode": 1,
+    "optimizeGraph": true,
+    "pivotOffset": [
+      -0.09950000047683716,
+      0.0020000000949949026,
+      -0.33000001311302185
+    ]
+  },
+  "materialRemap": {
+    "Money_1_2_5_10": "assets/Props/Money/Materials/M_Money_Small_Bills.mat",
+    "Money_20_50_100": "assets/Props/Money/Materials/M_Money_Large_Bills.mat"
+  },
+  "metaVersion": 1,
+  "type": "model"
+}

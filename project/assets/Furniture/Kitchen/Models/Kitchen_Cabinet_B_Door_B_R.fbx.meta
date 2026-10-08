@@ -1,0 +1,23 @@
+{
+  "folder": "assets/Furniture/Kitchen/Models",
+  "guid": "70de779a49623d1e",
+  "importer": {
+    "globalScale": 1.0,
+    "importAnimations": false,
+    "importNormals": true,
+    "importSkeleton": false,
+    "materialImportMode": 1,
+    "optimizeGraph": true,
+    "pivotOffset": [
+      -1.7000000476837158,
+      -1.6829999685287476,
+      -0.20749999582767487
+    ]
+  },
+  "materialRemap": {
+    "Cabinets_glass": "assets/Furniture/Bedroom/Materials/M_Glass_Clear.mat",
+    "Cabinets_kitchen": "assets/Furniture/Kitchen/Materials/M_Cabinets_Kitchen.mat"
+  },
+  "metaVersion": 1,
+  "type": "model"
+}

@@ -1,0 +1,22 @@
+{
+  "folder": "assets/Architecture/Building/Models",
+  "guid": "819e18e37ee49163",
+  "importer": {
+    "globalScale": 1.0,
+    "importAnimations": false,
+    "importNormals": true,
+    "importSkeleton": false,
+    "materialImportMode": 1,
+    "optimizeGraph": true,
+    "pivotOffset": [
+      -4.0,
+      -0.10000000149011612,
+      -0.10000000149011612
+    ]
+  },
+  "materialRemap": {
+    "Wall_default": "assets/Architecture/Building/Materials/M_Wall_Default.mat"
+  },
+  "metaVersion": 1,
+  "type": "model"
+}

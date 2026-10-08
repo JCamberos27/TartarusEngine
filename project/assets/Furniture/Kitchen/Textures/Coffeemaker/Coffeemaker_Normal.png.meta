@@ -1,0 +1,16 @@
+{
+  "folder": "assets/Furniture/Kitchen/Textures/Coffeemaker",
+  "guid": "288b41b59af2ed3b",
+  "importer": {
+    "anisoLevel": 8,
+    "compression": 1,
+    "filterMode": 2,
+    "generateMipmaps": true,
+    "isSRGB": false,
+    "maxTextureSize": 2048,
+    "textureType": 1,
+    "wrapMode": 0
+  },
+  "metaVersion": 1,
+  "type": "texture"
+}

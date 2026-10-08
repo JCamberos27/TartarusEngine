@@ -1,0 +1,16 @@
+{
+  "folder": "assets/Furniture/Kitchen/Textures/Coffeemaker_Glass",
+  "guid": "d56ef0f6670429f8",
+  "importer": {
+    "anisoLevel": 8,
+    "compression": 1,
+    "filterMode": 2,
+    "generateMipmaps": true,
+    "isSRGB": false,
+    "maxTextureSize": 2048,
+    "textureType": 0,
+    "wrapMode": 0
+  },
+  "metaVersion": 1,
+  "type": "texture"
+}

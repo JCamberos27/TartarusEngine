@@ -1,0 +1,22 @@
+{
+  "folder": "assets/Furniture/Decor/Models",
+  "guid": "3c0811d43bd57860",
+  "importer": {
+    "globalScale": 1.0,
+    "importAnimations": false,
+    "importNormals": true,
+    "importSkeleton": false,
+    "materialImportMode": 1,
+    "optimizeGraph": true,
+    "pivotOffset": [
+      -1.0219999551773071,
+      0.0,
+      0.006000000052154064
+    ]
+  },
+  "materialRemap": {
+    "Sidetables": "assets/Furniture/Bedroom/Materials/M_Sidetables.mat"
+  },
+  "metaVersion": 1,
+  "type": "model"
+}

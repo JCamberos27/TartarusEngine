@@ -1,0 +1,31 @@
+{
+  "factorsScaleMaps": true,
+  "matVersion": 2,
+  "name": "M_PH_Laminate_Floor",
+  "properties": {
+    "_AOMap": "assets/Architecture/Building/Textures/PH_Laminate_Floor/laminate_floor_02_AO_2k.jpg",
+    "_AlbedoMap": "assets/Architecture/Building/Textures/PH_Laminate_Floor/laminate_floor_02_Diffuse_2k.jpg",
+    "_BaseColor": [
+      1.0,
+      1.0,
+      1.0
+    ],
+    "_DoubleSided": false,
+    "_EmissiveColor": [
+      0.0,
+      0.0,
+      0.0
+    ],
+    "_EmissiveMap": "",
+    "_EmissiveStrength": 1.0,
+    "_Metallic": 0.0,
+    "_MetallicMap": "",
+    "_MetallicRoughnessMap": "",
+    "_NormalMap": "assets/Architecture/Building/Textures/PH_Laminate_Floor/laminate_floor_02_nor_gl_2k.jpg",
+    "_Roughness": 1.0,
+    "_RoughnessMap": "assets/Architecture/Building/Textures/PH_Laminate_Floor/laminate_floor_02_Rough_2k.jpg",
+    "_Triplanar": false,
+    "_TriplanarScale": 1.0
+  },
+  "shader": "engine://Standard.shader"
+}

@@ -1,0 +1,22 @@
+{
+  "folder": "assets/Props/Cross/Models",
+  "guid": "f77922a90676bafd",
+  "importer": {
+    "globalScale": 1.0,
+    "importAnimations": false,
+    "importNormals": true,
+    "importSkeleton": false,
+    "materialImportMode": 1,
+    "optimizeGraph": true,
+    "pivotOffset": [
+      -0.0,
+      0.08699999749660492,
+      -0.0
+    ]
+  },
+  "materialRemap": {
+    "lambert1": "assets/Props/Cross/Materials/M_Cross.mat"
+  },
+  "metaVersion": 1,
+  "type": "model"
+}

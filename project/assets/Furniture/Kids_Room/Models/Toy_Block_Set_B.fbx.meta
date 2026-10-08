@@ -1,0 +1,22 @@
+{
+  "folder": "assets/Furniture/Kids_Room/Models",
+  "guid": "c4941380abe07abd",
+  "importer": {
+    "globalScale": 1.0,
+    "importAnimations": false,
+    "importNormals": true,
+    "importSkeleton": false,
+    "materialImportMode": 1,
+    "optimizeGraph": true,
+    "pivotOffset": [
+      -4.257999897003174,
+      0.0,
+      -0.9430000185966492
+    ]
+  },
+  "materialRemap": {
+    "Toys": "assets/Furniture/Kids_Room/Materials/M_Toys.mat"
+  },
+  "metaVersion": 1,
+  "type": "model"
+}

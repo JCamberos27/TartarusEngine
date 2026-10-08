@@ -1,0 +1,22 @@
+{
+  "folder": "assets/Furniture/Bathroom/Models",
+  "guid": "aee95053c97168e7",
+  "importer": {
+    "globalScale": 1.0,
+    "importAnimations": false,
+    "importNormals": true,
+    "importSkeleton": false,
+    "materialImportMode": 1,
+    "optimizeGraph": true,
+    "pivotOffset": [
+      -3.0420000553131104,
+      -0.03799999877810478,
+      -0.22100000083446503
+    ]
+  },
+  "materialRemap": {
+    "Bathroom_props": "assets/Furniture/Bathroom/Materials/M_Bathroom_Props.mat"
+  },
+  "metaVersion": 1,
+  "type": "model"
+}
