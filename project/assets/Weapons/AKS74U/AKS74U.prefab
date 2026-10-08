@@ -82,7 +82,7 @@
         "Start Size": 0.07500000298023224,
         "Start Speed": 0.0,
         "Texture": {
-          "path": "assets/Effects/Muzzle/7.png",
+          "path": "assets/Textures/7.png",
           "pathGuid": "b20104dfa670b695"
         },
         "Texture Channels": "Red Mask",
@@ -166,7 +166,7 @@
         "Next Script ID": 1,
         "Scripts": "[]",
         "Source": {
-          "path": "assets/Scripts/MuzzleAttachment.cs",
+          "path": "assets/Scripts/Weapons/Attachments/MuzzleAttachment.cs",
           "pathGuid": "18ba5f59bdab989a"
         }
       },
@@ -199,7 +199,7 @@
         "Next Script ID": 1,
         "Scripts": "[]",
         "Source": {
-          "path": "assets/Scripts/GripAttachment.cs",
+          "path": "assets/Scripts/Weapons/Attachments/GripAttachment.cs",
           "pathGuid": "4324a234ac1feab5"
         }
       },
@@ -232,7 +232,7 @@
         "Next Script ID": 1,
         "Scripts": "[]",
         "Source": {
-          "path": "assets/Scripts/OpticAttachment.cs",
+          "path": "assets/Scripts/Weapons/Attachments/OpticAttachment.cs",
           "pathGuid": "190ce9c4c235c4fd"
         }
       },
@@ -641,7 +641,7 @@
       ],
       "C# Script": {
         "Source": {
-          "path": "assets/Scripts/WeaponDefinition.cs",
+          "path": "assets/Scripts/Weapons/WeaponDefinition.cs",
           "pathGuid": "b72f5e84c34b4013"
         },
         "Class": "Tartarus.Gameplay.WeaponDefinition",
@@ -659,7 +659,7 @@
         "Next Script ID": 1,
         "Scripts": "[]",
         "Source": {
-          "path": "assets/Scripts/OpticAttachment.cs",
+          "path": "assets/Scripts/Weapons/Attachments/OpticAttachment.cs",
           "pathGuid": "190ce9c4c235c4fd"
         }
       },
@@ -667,17 +667,17 @@
       "materials": [
         {
           "guid": "56808c6d3bc35b5a",
-          "path": "assets/Weapons/AKS74U/Attachments/Materials/Optic_RedDot.mat"
+          "path": "assets/Materials/Optic_RedDot.mat"
         },
         {
           "guid": "c3b7a89aa76c6d7c",
-          "path": "assets/Weapons/AKS74U/Attachments/Materials/RedDot.mat"
+          "path": "assets/Materials/RedDot.mat"
         }
       ],
       "name": "RedDot",
       "order": 1,
       "parentId": 0,
-      "path": "assets/Weapons/AKS74U/Attachments/Models/RedDot.fbx",
+      "path": "assets/Models/RedDot.fbx",
       "pathGuid": "bd44cb2692700cc6",
       "position": [
         0.0,
