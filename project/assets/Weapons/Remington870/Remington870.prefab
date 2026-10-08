@@ -100,7 +100,7 @@
       ],
       "C# Script": {
         "Source": {
-          "path": "assets/Scripts/MuzzleAttachment.cs"
+          "path": "assets/Scripts/Weapons/Attachments/MuzzleAttachment.cs"
         },
         "Class": "Tartarus.Gameplay.MuzzleAttachment",
         "Enabled": true,
@@ -132,7 +132,7 @@
       ],
       "C# Script": {
         "Source": {
-          "path": "assets/Scripts/GripAttachment.cs"
+          "path": "assets/Scripts/Weapons/Attachments/GripAttachment.cs"
         },
         "Class": "Tartarus.Gameplay.GripAttachment",
         "Enabled": true,
@@ -349,7 +349,7 @@
       },
       "C# Script": {
         "Source": {
-          "path": "assets/Scripts/WeaponDefinition.cs",
+          "path": "assets/Scripts/Weapons/WeaponDefinition.cs",
           "pathGuid": "b72f5e84c34b4013"
         },
         "Class": "Tartarus.Gameplay.WeaponDefinition",
