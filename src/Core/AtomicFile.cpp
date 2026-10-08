@@ -191,7 +191,10 @@ bool WriteBytes(const std::filesystem::path& path, std::string_view bytes, bool 
 }
 
 bool WriteJson(const std::filesystem::path& path, const nlohmann::json& j, int indent) {
-    return WriteBytes(path, j.dump(indent) + "\n", /*binary=*/false);
+    // .meta sidecars are LF in the working tree too (.gitattributes: *.meta eol=lf); writing them CRLF
+    // left every one the editor touched showing as modified in git.
+    const bool lf = path.extension() == ".meta";
+    return WriteBytes(path, j.dump(indent) + "\n", /*binary=*/lf);
 }
 
 } // namespace AtomicFile
