@@ -4,7 +4,7 @@
   "name": "New Material",
   "properties": {
     "_AOMap": "",
-    "_AlbedoMap": "assets/Textures/p3dm_ru_CZ-32H_1P_Diff.png",
+    "_AlbedoMap": "assets/Weapons/AKS74U/Attachments/Textures/p3dm_ru_CZ-32H_1P_Diff.png",
     "_BaseColor": [
       1.0,
       1.0,
