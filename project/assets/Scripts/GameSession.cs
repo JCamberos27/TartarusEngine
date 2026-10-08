@@ -10,7 +10,8 @@ internal static class GameSession
             // Compute weapon ownership before equip changes, preserving the existing frame order.
             bool weaponInput=f.HasInput && !f.GravityLive && !f.Dead;f.AimHeld=weaponInput && Input.GetButton("Fire2");f.SprintHeld=f.HasInput && Input.GetButton("Sprint");
             if(f.HasInput && !f.Dead){
-                if(Input.GetButtonDown("MuzzleAttachment"))f.Commands|=1;if(Input.GetButtonDown("GripAttachment"))f.Commands|=2;if(Input.GetButtonDown("OpticAttachment"))f.Commands|=4;
+                if(Input.GetButtonDown("Weapon1"))f.Commands|=1;if(Input.GetButtonDown("Weapon2"))f.Commands|=2;if(Input.GetButtonDown("Weapon3"))f.Commands|=4;
+                if(Input.GetButtonDown("Flashlight"))f.Commands|=131072;
                 if(f.Scroll!=0){f.Commands|=8;f.SlotDirection=f.Scroll<0?1:-1;}
                 if(Input.GetButtonDown("Holster")){f.Commands|=16;f.Equipped=!f.Equipped;}
             }

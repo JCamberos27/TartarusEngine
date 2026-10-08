@@ -25,7 +25,7 @@ MIN_VARIANTS = {"close": 4, "sub": 4, "mech": 4, "tail": 4, "far": 4, "action": 
                 "ui": 3, "bodyfall": 3, "ambience": 1, "ir": 1}
 # every folder of recorded game audio: a wav there that the manifest does not list fails (Combat/ is here on purpose: the synthesised
 # placeholders are gone and must not come back). Root-level project wavs (basketball, voice) are not part of this pipeline.
-AUDIO_FOLDERS = ("Weapons", "Foley", "Impacts", "Casings", "Combat", "UI", "Body", "Ambience", "IR")
+AUDIO_FOLDERS = ("Weapons", "Foley", "Impacts", "Casings", "Combat", "UI", "Body", "Ambience", "IR", "Gear")
 NO_LOUDNESS_WINDOW = ("ir",)      # an impulse response has no meaningful programme loudness (its rt60 / trim are checked in phase 2)
 MAX_PITCH_ST = 2.0       # no pitch / varispeed shift of a source cut beyond this (it sounds bad); variety comes from takes, cuts, EQ
 MONO_FOLD_MAX_DB = 4.0   # a fully decorrelated stereo pair loses 3 dB on a mono fold; a little more is tolerated

@@ -158,12 +158,12 @@ void TestManagedComponentsAndPrefabs() {
         glm::mat4 attachmentPose(1);
         CHECK(attachments.Pose(world,particleRoot,Scripting::AttachmentKind::Muzzle,attachmentPose));
         if(std::string(name)=="AKS74U") {
-            CHECK(attachments.Count(Scripting::AttachmentKind::Optic)==2);
+            // Iron sights only (the red dot came off): the selected optic is the reference one.
+            CHECK(attachments.Count(Scripting::AttachmentKind::Optic)==1);
             CHECK(attachments.Pose(world,particleRoot,Scripting::AttachmentKind::Optic,attachmentPose));
-            CHECK(glm::length(glm::vec3(attachmentPose[3]))>.08f);
             const glm::vec3 selectedAim(attachmentPose[3]);
             CHECK(attachments.ReferenceOpticPose(world,particleRoot,attachmentPose));
-            CHECK(glm::length(glm::vec3(attachmentPose[3])-selectedAim)>.01f);
+            CHECK(glm::length(glm::vec3(attachmentPose[3])-selectedAim)<.01f);
         }
         for (auto emitter : emitters) {
             auto& ps = world.Registry.get<ParticleSystemComponent>(emitter);

@@ -74,6 +74,7 @@
 #include "Frustum.h"
 #include "PhysicsWorld.h" // #185 — PhysX world stepped during Play
 #include "GravityGun.h" // the player's always-on grab/throw ability
+#include "Flashlight.h" // F: the player's torch
 #include "TrajectoryRibbon.h" // the gravity gun's predicted throw arc
 #include "CrosshairOverlay.h"
 #include "WeaponFxRenderer.h" // the weapon's laser and bullet holes
@@ -982,6 +983,7 @@ int main(int argc, char** argv) {
         if (npcTest) npcTest->BloodStats = &npcTestBlood;
         FirstPersonBody firstPersonBody; // #405 - true first person: the player's own body
         GravityGun gravityGun;
+        Flashlight flashlight;
         CrosshairOverlay crosshair; // Play-mode crosshair + gravity gun hold / throw-charge indicator
         TrajectoryRibbon throwArc;  // red predicted path while the gravity gun charges a throw
         WeaponFxRenderer weaponFx;  // the weapon's laser beam / spot and the bullet holes
@@ -1886,6 +1888,7 @@ int main(int argc, char** argv) {
             // dropped in at the editor camera so Play inspects what you were just working on.
             // The editor camera is left where it is — the Scene tab stays usable during play.
             player = Player{};
+            flashlight = Flashlight{};
             // The player's fall is its own game-feel value (the First Person Controller's Gravity,
             // 18 m/s^2 when there's none), not the physics world's Earth gravity.
             playUsesPlayer = false;
@@ -3110,13 +3113,14 @@ int main(int argc, char** argv) {
                         // The weapon owns Fire1/Fire2/FireMode/Reload/Inspect/Melee while it's in
                         // hand. With the gravity gun on the controller, holstering hands the mouse
                         // to it instead (gravityGunLive), so the two never read the same frame.
-                        // The wheel swaps weapons; 1/2/3 cycle muzzle/grip/optic attachments.
+                        // 1 = the AK, 2 = the Remington, 3 = unarmed; the wheel steps through them too. F = the flashlight.
                         Scripting::GameSessionFrame session;session.HasInput=gameHasInput;session.GravityLive=gravityGunLive();session.Dead=playerVitals.IsDead();session.Equipped=firstPersonPresentation.IsEquipped();session.Scroll=(float)Input::GetScrollDeltaY();
                         if(!Scripting::InvokeProject("session",&session,sizeof session))throw std::runtime_error("Project session input unavailable");
                         const bool wasEquipped=firstPersonPresentation.IsEquipped();
-                        if(session.Commands&1)firstPersonPresentation.CycleAttachment(Scripting::AttachmentKind::Muzzle);
-                        if(session.Commands&2)firstPersonPresentation.CycleAttachment(Scripting::AttachmentKind::Grip);
-                        if(session.Commands&4)firstPersonPresentation.CycleAttachment(Scripting::AttachmentKind::Optic);
+                        if(session.Commands&1)firstPersonPresentation.SelectSlot(0);
+                        if(session.Commands&2)firstPersonPresentation.SelectSlot(1);
+                        if(session.Commands&4)firstPersonPresentation.SetEquipped(false);
+                        if(session.Commands&131072)flashlight.Toggle(player.Cam.Position);
                         if(session.Commands&8)firstPersonPresentation.CycleSlot(session.SlotDirection);
                         if(session.Commands&16){Scripting::GameSessionFrame equip;equip.Operation=4;equip.Equipped=firstPersonPresentation.IsEquipped();Scripting::InvokeProject("session",&equip,sizeof equip);firstPersonPresentation.SetEquipped(equip.Equipped!=0);}
                         if(playGravityGun && !wasEquipped && firstPersonPresentation.IsEquipped()){
@@ -3526,6 +3530,10 @@ int main(int argc, char** argv) {
             std::set<entt::entity> frameShadowed;
             // Per-scene budgets (Lighting > Shadows), clamped to the shader's array ceilings.
             const int spotShadowBudget = std::clamp(world.MaxSpotShadows, 0, SpotShadowMap::kMaxSpots);
+            // The player's flashlight: in Play with a player, it's lit and takes the first spot shadow (the scene's spots share the rest).
+            const bool torchLit = playing && playUsesPlayer && flashlight.On;
+            if (playing && playUsesPlayer) flashlight.Update(player.Cam, gameDt);
+            const int sceneSpotShadowBudget = std::max(spotShadowBudget - (torchLit ? 1 : 0), 0);
             const int pointShadowBudget = std::clamp(world.MaxPointShadows, 0, PointShadowMap::kMaxPoints);
             {
                 const glm::vec3 viewPos = (playing ? *gameCam : editorCamera).Position;
@@ -3547,7 +3555,7 @@ int main(int argc, char** argv) {
                     std::stable_sort(v.begin(), v.end(), [](const auto& a, const auto& b) { return a.first > b.first; });
                     for (size_t i = 0; i < v.size() && i < n; ++i) frameShadowed.insert(v[i].second);
                 };
-                take(spots, (size_t)spotShadowBudget);
+                take(spots, (size_t)sceneSpotShadowBudget);
                 take(points, (size_t)pointShadowBudget);
                 s_PrevShadowed = frameShadowed;
                 // Candidates that didn't get a slot, for the Inspector's over-budget warning.
@@ -3567,6 +3575,29 @@ int main(int argc, char** argv) {
             SkyLighting frameSky;
             bool frameSkyResolved = false;
 
+            if (torchLit && lightBuffer.Count() + 2 <= LightBuffer::kMaxLights) {
+                const glm::vec3 pos = flashlight.Position, aim = flashlight.Aim;
+                int slot = -1;
+                if (world.ShadowsEnabled && spotShadowBudget > 0) {
+                    slot = spotShadowCount++;
+                    const glm::vec3 up = std::abs(aim.y) > 0.99f ? glm::vec3(1, 0, 0) : glm::vec3(0, 1, 0);
+                    const float fov = glm::radians(flashlight.SpillOuterDeg * 2.0f + 4.0f);
+                    spotShadowFar[slot] = flashlight.HotRange;
+                    spotShadowPos[slot] = pos;
+                    spotShadowHalfTan[slot] = std::tan(0.5f * fov);
+                    spotShadowNear[slot] = flashlight.ShadowNear;
+                    spotShadowBias[slot] = 1.0f;
+                    spotShadowNormalBias[slot] = 1.0f;
+                    spotShadowSoftness[slot] = 1.5f;
+                    spotShadowVP[slot] = MakePerspective(glm::degrees(fov), 1.0f, flashlight.ShadowNear, spotShadowFar[slot]) *
+                                         glm::lookAt(pos, pos + aim, up);
+                }
+                // Both cones share the one shadow map (it spans the spill), so the spill's shadows match the hotspot's.
+                lightBuffer.AddSpot(pos, aim, flashlight.Color, flashlight.HotIntensity, flashlight.HotRange,
+                                    std::cos(glm::radians(flashlight.HotOuterDeg)), std::cos(glm::radians(flashlight.HotInnerDeg)), slot, 0u);
+                lightBuffer.AddSpot(pos, aim, flashlight.Color, flashlight.SpillIntensity, flashlight.SpillRange,
+                                    std::cos(glm::radians(flashlight.SpillOuterDeg)), std::cos(glm::radians(flashlight.SpillInnerDeg)), slot, 0u);
+            }
             for (auto e : world.Registry.view<TransformComponent, LightComponent>()) {
                 if (lightBuffer.Count() >= LightBuffer::kMaxLights) { lightBuffer.MarkOverflowed(); break; }
                 if (world.Registry.all_of<InactiveTag>(e)) continue;

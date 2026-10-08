@@ -368,11 +368,11 @@ void TestInputMap() {
     }
     CHECK(InputMap::FromJson(nlohmann::json::object()).empty());
     const auto migrated = InputMap::FromJson(nlohmann::json::array({
-        {{"name", "Weapon1"}, {"positive", 71}}, {{"name", "Weapon2"}, {"positive", 72}}, {{"name", "Weapon3"}, {"positive", 73}}}));
+        {{"name", "MuzzleAttachment"}, {"positive", 71}}, {{"name", "GripAttachment"}, {"positive", 72}}, {{"name", "OpticAttachment"}, {"positive", 73}}}));
     CHECK(migrated.size() == 3);
-    CHECK(migrated[0].Name == "MuzzleAttachment" && migrated[0].Positive == 71);
-    CHECK(migrated[1].Name == "GripAttachment" && migrated[1].Positive == 72);
-    CHECK(migrated[2].Name == "OpticAttachment" && migrated[2].Positive == 73);
+    CHECK(migrated[0].Name == "Weapon1" && migrated[0].Positive == 71);
+    CHECK(migrated[1].Name == "Weapon2" && migrated[1].Positive == 72);
+    CHECK(migrated[2].Name == "Weapon3" && migrated[2].Positive == 73);
     CHECK(InputMap::BindingName(InputMap::kMouseBase + 1) == "Mouse 1" && InputMap::BindingName(87) == "W");
 
     // A saved action list must not be able to LOSE a default. project/settings.json only holds
@@ -394,7 +394,7 @@ void TestInputMap() {
         CHECK(saved.size() == InputMap::Defaults().size()); // each default present exactly once
         CHECK(count("Reload") == 1);
         CHECK(saved[0].Positive == 71);      // the file's own binding survives the merge
-        CHECK(count("MuzzleAttachment") == 1); // the default the file predates comes back
+        CHECK(count("Flashlight") == 1); // the default the file predates comes back
     }
 
     // Disabled (no game input): everything reads zero, including unknown names (no crash).

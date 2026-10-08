@@ -833,17 +833,15 @@ class Builder:
                                       'Seed': 11})
         self.ceiling_fixture(r, 'Lamp_Ceiling_B', 11.5, 4.8)
 
-    def player(self):
-        sandbox = json.load(open(os.path.join(self.repo, 'project', 'scenes', 'Sandbox.json'), encoding='utf-8'))
-        # the spawn and everything under it (the Player Body: outfit + first-person body), with fresh ids
-        spawn = next(e for e in sandbox['empties'] if e['name'] == 'Player Spawn')
-        lists = {key: sandbox.get(key, []) for key in ('empties', 'models', 'boxes')}
-        new_id = {}
+    def from_sandbox(self, name):
+        """A copy of the Sandbox entity `name` and everything under it, with fresh ids (a root of this scene)."""
+        if not hasattr(self, '_sandbox'):
+            self._sandbox = json.load(open(os.path.join(self.repo, 'project', 'scenes', 'Sandbox.json'), encoding='utf-8'))
+        lists = {key: self._sandbox.get(key, []) for key in ('empties', 'models', 'boxes')}
 
         def copy(src, key, parent):
             e = json.loads(json.dumps(src))
             i = self.s._next()
-            new_id[src['id']] = i
             e.update({'id': i, 'order': i, 'parentId': parent})
             getattr(self.s, key).append(e)
             for ck, items in lists.items():
@@ -851,14 +849,70 @@ class Builder:
                     if c.get('parentId') == src['id']:
                         copy(c, ck, i)
             return e
-        root = copy(spawn, 'empties', -1)
+        return copy(next(e for e in self._sandbox['empties'] if e['name'] == name), 'empties', -1)
+
+    def player(self):
+        # the spawn and the Player Body under it (outfit + first-person body)
+        root = self.from_sandbox('Player Spawn')
         root.update({'position': [12.25, 0.1, 4.8], 'rotation': k.yaw_quat(90.0)})
 
+    def clear_spot(self, room, margin=0.45):
+        """The floor point of `room` furthest from walls and furniture (a 10 cm grid), and its clearance."""
+        x0, z0, x1, z1 = inner(room)
+        solid = [p for p in self.placed if p['collide'] and p['room'] == room and p['y0'] < 1.0]
+        best = (-1.0, None)
+        for i in range(int((x1 - x0) / 0.1) + 1):
+            for j in range(int((z1 - z0) / 0.1) + 1):
+                x, z = x0 + i * 0.1, z0 + j * 0.1
+                d = min(x - x0, x1 - x, z - z0, z1 - z)
+                for p in solid:
+                    dx = max(p['x0'] - x, 0.0, x - p['x1'])
+                    dz = max(p['z0'] - z, 0.0, z - p['z1'])
+                    d = min(d, math.hypot(dx, dz))
+                if d > best[0]:
+                    best = (d, (x, z))
+        if best[0] < margin:
+            raise RuntimeError(f'{room}: no clear floor for an NPC ({best[0]:.2f} m)')
+        return best[1], best[0]
+
+    def npcs(self):
+        # The Sandbox's Combine squad, moved in: the director (squad rules) and four soldiers in the rooms off the hall, each on
+        # the clearest patch of floor in its room and facing the front door. Respawn stays on, so the flat refills.
+        self.from_sandbox('AI Director')['position'] = [6.5, 0.0, 7.0]
+        spawn = next(e for e in self._sandbox['empties'] if e['name'] == 'Enemy Spawn 1')
+        door = (12.25, 4.8)
+        for n, (room, weapon, skill) in enumerate((('Living Room', 0, 0.6), ('Kitchen', 1, 0.55),
+                                                    ('Master Bedroom', 0, 0.65), ('Bedroom 2', 0, 0.6)), 1):
+            (x, z), _ = self.clear_spot(room)
+            e = json.loads(json.dumps(spawn))
+            i = self.s._next()
+            fields = json.loads(e['C# Script']['Fields JSON'])
+            fields.update({'Weapon': weapon, 'Skill': skill, 'OutfitSeed': n})
+            e['C# Script']['Fields JSON'] = json.dumps(fields, separators=(',', ':'))
+            yaw = math.degrees(math.atan2(door[0] - x, door[1] - z))
+            e.update({'id': i, 'order': i, 'parentId': self.root, 'name': f'Enemy Spawn {n} ({room})',
+                      'position': [round(x, 3), 0.1, round(z, 3)], 'rotation': k.yaw_quat(yaw)})
+            self.s.empties.append(e)
+
     def audio(self):
-        self.s.empty('Reverb', self.root, (6.5, 1.3, 5.0), **{'Reverb Zone': {
-            'Ambience': 'snd.amb.indoor_small', 'Ambience Volume': 0.6, 'Enabled': True, 'Extents': [6.5, 1.3, 5.0],
-            'Fade Distance': 0.5, 'Priority': 0, 'Radius': 6.0, 'Reverb Mode': 'Class Default', 'Shape': 'Box',
-            'Tail Class': 'Indoor Small', 'Tail Gain': 1.0}})
+        # A furnished flat is dry: soft furnishings, beds and curtains swallow the tail (RT60 ~0.35-0.5 s), so each room is
+        # its own zone with a recorded small-room IR (a furnished hotel room, a book-lined room, a house) well under the
+        # Indoor Small class level (concrete stairwells, ~2.5 s). The tiled wet rooms ring a little more; the gun tails are
+        # turned down with them. (Indoor Small's calibrated wet / dry is -10 dB: the trims below put the rooms at -15..-19.)
+        acoustics = {  # room: (IR, Wet dB trim, HF damping dB, tail gain)
+            'Master Bedroom': ('apartment_1', -9.0, 6.0, 0.45), 'Bedroom 2': ('apartment_1', -9.0, 6.0, 0.45),
+            'Kids Bedroom': ('apartment_1', -9.0, 6.0, 0.45), 'Living Room': ('apartment_1', -8.0, 5.0, 0.5),
+            'Hall': ('apartment_2', -7.0, 4.0, 0.5), 'Kitchen': ('apartment_3', -6.5, 3.0, 0.55),
+            'Ensuite': ('apartment_3', -5.0, 1.5, 0.6), 'Bathroom': ('apartment_3', -5.0, 1.5, 0.6),
+            'Laundry': ('apartment_3', -5.5, 2.0, 0.6)}
+        for room, (ir, wet, damp, tail) in acoustics.items():
+            x0, z0, x1, z1 = ROOMS[room]
+            half = [(x1 - x0) / 2, H / 2, (z1 - z0) / 2]
+            self.s.empty(f'Reverb {room}', self.root, ((x0 + x1) / 2, H / 2, (z0 + z1) / 2), **{'Reverb Zone': {
+                'Ambience': 'snd.amb.indoor_small', 'Ambience Volume': 0.35, 'Enabled': True, 'Extents': half,
+                'Fade Distance': 0.25, 'Priority': 1, 'Radius': 3.0, 'Reverb Mode': 'Custom', 'Shape': 'Box',
+                'Tail Class': 'Indoor Small', 'Tail Gain': tail, 'IR': f'assets/Audio/IR/{ir}.wav', 'Wet dB': wet,
+                'Pre-Delay ms': 2.0, 'HF Damping dB': damp, 'Low Cut (Hz)': 120.0}})
 
     def build(self):
         # Night with most lights off: almost no sky fill, a neutral dim sky for the mirrors to reflect, shadows on
@@ -877,6 +931,7 @@ class Builder:
                   self.laundry, self.hall):
             f()
         self.player()
+        self.npcs()
         self.audio()
 
 
