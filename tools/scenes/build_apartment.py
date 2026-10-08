@@ -26,8 +26,8 @@ ROOMS = {  # centre-line rectangles (x0, z0, x1, z1)
     'Bedroom 2': (6.6, 0.0, 10.0, 4.2),
     'Kids Bedroom': (10.0, 0.0, 13.0, 4.2),
     'Hall': (6.0, 4.2, 13.0, 5.4),
-    'Bathroom': (10.4, 5.4, 13.0, 8.0),
-    'Laundry': (10.4, 8.0, 13.0, 10.0),
+    'Bathroom': (10.4, 5.4, 13.0, 8.3),
+    'Laundry': (10.4, 8.3, 13.0, 10.0),
     'Kitchen': (6.0, 5.4, 10.4, 10.0),
     'Living Room': (0.0, 4.2, 6.0, 10.0),
 }
@@ -39,28 +39,28 @@ WALLS = [
     ('x', 0.0, 0.0, 4.4, []), ('x', 0.0, 4.4, 6.6, []), ('x', 0.0, 6.6, 10.0, []), ('x', 0.0, 10.0, 13.0, []),
     ('x', 10.0, 0.0, 6.0, []), ('x', 10.0, 6.0, 10.4, []), ('x', 10.0, 10.4, 13.0, []),
     ('z', 0.0, 0.0, 4.2, []), ('z', 0.0, 4.2, 10.0, []),
-    ('z', 13.0, 0.0, 4.2, []), ('z', 13.0, 4.2, 5.4, [(4.8,) + DOOR]), ('z', 13.0, 5.4, 8.0, []),
-    ('z', 13.0, 8.0, 10.0, []),
+    ('z', 13.0, 0.0, 4.2, []), ('z', 13.0, 4.2, 5.4, [(4.8,) + DOOR]), ('z', 13.0, 5.4, 8.3, []),
+    ('z', 13.0, 8.3, 10.0, []),
     # bedrooms / hall line
-    ('x', 4.2, 0.0, 4.4, [(3.6,) + DOOR]), ('x', 4.2, 4.4, 6.0, []), ('x', 4.2, 6.0, 6.6, []),
+    ('x', 4.2, 0.0, 4.4, [(2.9,) + DOOR]), ('x', 4.2, 4.4, 6.0, []), ('x', 4.2, 6.0, 6.6, []),
     ('x', 4.2, 6.6, 10.0, [(7.3,) + DOOR]), ('x', 4.2, 10.0, 13.0, [(10.7,) + DOOR]),
     ('z', 4.4, 0.0, 4.2, [(3.5,) + DOOR]), ('z', 6.6, 0.0, 4.2, []), ('z', 10.0, 0.0, 4.2, []),
     # hall / kitchen / bathroom line
     ('x', 5.4, 6.0, 10.4, []), ('x', 5.4, 10.4, 13.0, [(11.1,) + DOOR]),
     ('z', 6.0, 5.4, 10.0, [(7.5, 2.4, 2.2)]),
-    ('z', 10.4, 5.4, 8.0, []), ('z', 10.4, 8.0, 10.0, [(9.1,) + DOOR]),
-    ('x', 8.0, 10.4, 13.0, []),
+    ('z', 10.4, 5.4, 8.3, []), ('z', 10.4, 8.3, 10.0, [(9.15,) + DOOR]),
+    ('x', 8.3, 10.4, 13.0, []),
 ]
 
 # Doors: (name, wall axis, fixed, centre, which side it swings into: +1 / -1 along the wall's normal, exterior?)
 DOORS = [
     ('Front Door', 'z', 13.0, 4.8, -1, True),
-    ('Master Door', 'x', 4.2, 3.6, -1, False),
+    ('Master Door', 'x', 4.2, 2.9, -1, False),
     ('Ensuite Door', 'z', 4.4, 3.5, +1, False),
     ('Bedroom 2 Door', 'x', 4.2, 7.3, -1, False),
     ('Kids Bedroom Door', 'x', 4.2, 10.7, -1, False),
     ('Bathroom Door', 'x', 5.4, 11.1, +1, False),
-    ('Laundry Door', 'z', 10.4, 9.1, +1, False),
+    ('Laundry Door', 'z', 10.4, 9.15, +1, False),
 ]
 
 
@@ -87,6 +87,7 @@ class Builder:
         self.mats = self._materials()
         self.root = self.s.empty('Apartment')
         self.groups = {}
+        self.placed = []
         self.cams = []
 
     # --- materials -------------------------------------------------------------------------------------------
@@ -101,20 +102,28 @@ class Builder:
             base = f'assets/Architecture/Building/Textures/{folder}/{stem}_'
             return {'albedo': base + 'Diffuse_2k.jpg', 'normal': base + 'nor_gl_2k.jpg', 'rough': base + 'Rough_2k.jpg',
                     'ao': base + 'AO_2k.jpg'}
-        wall = tex('Wall_Default', 'Wall_Default')
-        M = {}
-        M['wall_white'] = k.textured(self.repo, **wall, triplanar_scale=0.4, roughness=1.0)
-        M['wall_beige'] = k.textured(self.repo, **ph('PH_Beige_Wall', 'beige_wall_001'), triplanar_scale=0.5)
-        M['wall_sage'] = k.textured(self.repo, **wall, base=(0.78, 0.86, 0.76), triplanar_scale=0.4, roughness=1.0)
-        for c in ('Blue',):
-            M['wall_' + c.lower()] = k.textured(self.repo, albedo=f'assets/Architecture/Building/Textures/Wall_{c}/Wall_{c}_Base_Color.png',
-                                                normal=wall['normal'], rough=wall['rough'], ao=wall['ao'], triplanar_scale=0.4)
-        M['tile_wall'] = k.textured(self.repo, **wall, base=(0.93, 0.95, 0.97), triplanar_scale=0.4, roughness=0.6)
+        # Paint: the plaster's normal / roughness under a flat colour. (The Wall_* sets are UV atlases with a
+        # baseboard strip in them - tiled triplanar they smear trim bands across the wall.)
+        plaster = ph('PH_Beige_Wall', 'beige_wall_001')
+
+        def paint(rgb, rough=0.9):
+            return k.textured(self.repo, normal=plaster['normal'], rough=plaster['rough'], base=rgb, roughness=rough,
+                              triplanar_scale=0.5)
+        M = {'wall_white': paint((0.86, 0.85, 0.82)), 'wall_sage': paint((0.66, 0.72, 0.62)),
+             'wall_blue': paint((0.32, 0.42, 0.56)), 'tile_wall': paint((0.9, 0.91, 0.92), 0.45),
+             'wall_beige': k.textured(self.repo, **plaster, triplanar_scale=0.5)}
+        # Floor scales from the boards in each texture (triplanar scale = tiles per metre): the plank set has ~9
+        # boards a tile -> 0.9 gives 12 cm boards; the laminate ~8 -> 0.8 gives 16 cm; the strip floor ~13 -> 0.45.
         M['hardwood'] = k.textured(self.repo, **ph('PH_Dark_Wooden_Planks', 'dark_wooden_planks'), base=(1.25, 1.2, 1.15),
-                                   triplanar_scale=0.5)
-        M['laminate'] = k.textured(self.repo, **ph('PH_Laminate_Floor', 'laminate_floor_02'), triplanar_scale=0.5)
-        M['concrete'] = k.textured(self.repo, **tex('Floor_Concrete', 'Floor_Concrete'), base=(0.9, 0.88, 0.85),
-                                   triplanar_scale=0.33)
+                                   triplanar_scale=0.9)
+        M['laminate'] = k.textured(self.repo, **ph('PH_Laminate_Floor', 'laminate_floor_02'), triplanar_scale=0.8)
+        M['strip'] = k.textured(self.repo, **tex('Floor_Hardwood', 'Floor_Hardwood'), base=(1.3, 1.25, 1.2),
+                                triplanar_scale=0.45)
+        # wet rooms: Poly Haven's Interior Tiles (CC0), a 1.9 m sample -> one repeat every 1.9 m keeps the tiles their
+        # real size
+        tiles = 'assets/Architecture/Building/Textures/PH_Interior_Tiles/interior_tiles_'
+        M['tile'] = k.textured(self.repo, albedo=tiles + 'diff_2k.jpg', normal=tiles + 'nor_gl_2k.jpg',
+                               rough=tiles + 'rough_2k.jpg', ao=tiles + 'ao_2k.jpg', roughness=1.0, triplanar_scale=1 / 1.9)
         M['ceiling'] = k.textured(self.repo, **tex('Ceiling_Default', 'Ceiling_Default'), triplanar_scale=0.33)
         M['trim'] = k.textured(self.repo, base=(0.9, 0.9, 0.88), roughness=0.45)
         M['exterior'] = k.textured(self.repo, base=(0.5, 0.5, 0.5), roughness=1.0)
@@ -122,8 +131,8 @@ class Builder:
 
     WALL_PAINT = {'Master Bedroom': 'wall_beige', 'Bedroom 2': 'wall_sage', 'Kids Bedroom': 'wall_blue',
                   'Ensuite': 'tile_wall', 'Bathroom': 'tile_wall', 'Laundry': 'wall_white'}
-    FLOORS = {'Master Bedroom': 'laminate', 'Bedroom 2': 'laminate', 'Kids Bedroom': 'laminate', 'Ensuite': 'concrete', 'Bathroom': 'concrete', 'Laundry': 'concrete',
-              'Kitchen': 'concrete'}
+    FLOORS = {'Master Bedroom': 'laminate', 'Bedroom 2': 'laminate', 'Kids Bedroom': 'laminate', 'Ensuite': 'tile',
+              'Bathroom': 'tile', 'Laundry': 'tile', 'Kitchen': 'strip'}
 
     def group(self, name, parent=None):
         if name not in self.groups:
@@ -223,8 +232,10 @@ class Builder:
                 zs.append(-x * math.sin(a) + z * math.cos(a))
         return min(xs), max(xs), lo[1], hi[1], min(zs), max(zs)
 
-    def put(self, room, stem, x, z, yaw=0.0, y=0.0, collide=False, name=None, parts=()):
-        """Footprint centre at (x, z), bottom at y. Returns the placed piece's world box."""
+    def put(self, room, stem, x, z, yaw=0.0, y=0.0, collide=False, name=None):
+        """Footprint centre at (x, z), bottom at y. Returns the placed piece's world box.
+        (The library's loose doors / drawers are laid out beside their bodies, not in place: use the
+        *_Assembled bodies from tools/assets/assemble_kits.py instead.)"""
         x0, x1, y0, y1, z0, z1 = self.wbox(stem, yaw)
         px, py, pz = x - (x0 + x1) / 2, y - y0, z - (z0 + z1) / 2
         parent = self.group(room, self.group('Furniture'))
@@ -232,14 +243,54 @@ class Builder:
         if collide:
             extra['collider'] = {'friction': 0.8, 'isTrigger': False, 'shape': 4}
         self.s.model(self.idx, stem, parent, (px, py, pz), yaw, name=name, **extra)
-        for p in parts:  # doors / drawers modelled around their body's pivot
-            self.s.model(self.idx, p, parent, (px, py, pz), yaw, static=True)
-        return {'x0': px + x0, 'x1': px + x1, 'y0': y, 'y1': py + y1, 'z0': pz + z0, 'z1': pz + z1,
-                'x': x, 'z': z, 'yaw': yaw}
+        box = {'x0': px + x0, 'x1': px + x1, 'y0': y, 'y1': py + y1, 'z0': pz + z0, 'z1': pz + z1,
+               'x': x, 'z': z, 'yaw': yaw}
+        self.placed.append({'room': room, 'stem': stem, 'collide': collide, **box})
+        return box
+
+    def validate(self):
+        """Layout checks on the placed boxes: anything poking out of its room, solid furniture overlapping solid
+        furniture, and solid furniture in a door's swing (0.9 m either side of the opening). Returns the problems."""
+        out = []
+        for p in self.placed:
+            x0, z0, x1, z1 = inner(p['room'])
+            if p['x0'] < x0 - 0.02 or p['x1'] > x1 + 0.02 or p['z0'] < z0 - 0.02 or p['z1'] > z1 + 0.02:
+                out.append(f"{p['room']}: {p['stem']} pokes out of the room ({p['x0']:.2f}..{p['x1']:.2f}, "
+                           f"{p['z0']:.2f}..{p['z1']:.2f})")
+            if p['y1'] > H - 0.02 and 'Lamp' not in p['stem']:
+                out.append(f"{p['room']}: {p['stem']} goes through the ceiling (top {p['y1']:.2f})")
+        solid = [p for p in self.placed if p['collide']]
+
+        def overlap(a, b, m=0.02):
+            return (min(a['x1'], b['x1']) - max(a['x0'], b['x0']) > m and min(a['z1'], b['z1']) - max(a['z0'], b['z0']) > m
+                    and min(a['y1'], b['y1']) - max(a['y0'], b['y0']) > m)
+        tucks = ({'Table_Dining', 'Chair_Dining'}, {'Workdesk_Assembled', 'Chair_Office'})
+        for i, a in enumerate(solid):
+            for b in solid[i + 1:]:
+                if overlap(a, b) and {a['stem'], b['stem']} not in tucks:
+                    out.append(f"{a['room']}: {a['stem']} overlaps {b['stem']}")
+        for name, axis, c, along, _, _ in DOORS:
+            if axis == 'x':
+                zone = {'x0': along - DOOR_W / 2, 'x1': along + DOOR_W / 2, 'z0': c - 0.95, 'z1': c + 0.95}
+            else:
+                zone = {'x0': c - 0.95, 'x1': c + 0.95, 'z0': along - DOOR_W / 2, 'z1': along + DOOR_W / 2}
+            zone.update({'y0': 0.0, 'y1': 2.0})
+            for p in solid:
+                if overlap(zone, p):
+                    out.append(f"{p['room']}: {p['stem']} is in the swing of the {name}")
+            if axis == 'x':
+                gap = {'x0': along - DOOR_W / 2 - 0.08, 'x1': along + DOOR_W / 2 + 0.08, 'z0': c - 0.2, 'z1': c + 0.2}
+            else:
+                gap = {'x0': c - 0.2, 'x1': c + 0.2, 'z0': along - DOOR_W / 2 - 0.08, 'z1': along + DOOR_W / 2 + 0.08}
+            gap.update({'y0': 0.0, 'y1': DOOR_H + 0.05})
+            for p in self.placed:
+                if overlap(gap, p, 0.005):
+                    out.append(f"{p['room']}: {p['stem']} is in the {name}'s doorway / trim")
+        return out
 
     SIDE_YAW = {'N': 0.0, 'S': 180.0, 'W': 90.0, 'E': -90.0}  # the front (local +Z) faces into the room
 
-    def wall(self, room, side, t, stem, y=0.0, gap=0.005, collide=False, extra_yaw=0.0, parts=(), name=None):
+    def wall(self, room, side, t, stem, y=0.0, gap=0.005, collide=False, extra_yaw=0.0, name=None):
         """Back against a wall of the room: side N/S/W/E, t = position along the wall (x for N/S, z for W/E)."""
         rx0, rz0, rx1, rz1 = inner(room)
         yaw = self.SIDE_YAW[side] + extra_yaw
@@ -253,7 +304,7 @@ class Builder:
             x, z = rx0 + gap + w / 2, t
         else:
             x, z = rx1 - gap - w / 2, t
-        return self.put(room, stem, x, z, yaw, y, collide, name, parts)
+        return self.put(room, stem, x, z, yaw, y, collide, name)
 
     def on(self, room, base, stem, dx=0.0, dz=0.0, yaw=None, name=None):
         """On top of a placed piece, offset in its own frame (dx right, dz toward its front)."""
@@ -290,36 +341,38 @@ class Builder:
     def living(self):
         r = 'Living Room'
         x0, z0, x1, z1 = inner(r)
-        tvs = self.wall(r, 'W', 7.4, 'Tv_Stand', collide=True, parts=('Tv_Stand_Door_L', 'Tv_Stand_Door_R'))
+        tvs = self.wall(r, 'W', 7.1, 'Tv_Stand_Assembled', collide=True)
         self.on(r, tvs, 'Tv', dz=-0.05)
         self.on(r, tvs, 'Tv_Remote', dx=0.65, dz=0.1, yaw=110.0)
-        self.put(r, 'Carpet_C', 2.3, 7.4, 90.0)
-        couch = self.put(r, 'Couch', 3.75, 7.4, -90.0, collide=True)
-        st1 = self.put(r, 'Sidetable_A', 3.85, 8.85, -90.0, collide=True)
-        st2 = self.put(r, 'Sidetable_A', 3.85, 5.95, -90.0, collide=True)
+        self.put(r, 'Carpet_C', 2.3, 7.1, 90.0)
+        couch = self.put(r, 'Couch', 3.75, 7.1, -90.0, collide=True)
+        sw = self.wbox('Sidetable_A', -90.0)
+        half = (sw[5] - sw[4]) / 2 + 0.05
+        st1 = self.put(r, 'Sidetable_A', couch['x'] + 0.1, couch['z1'] + half, -90.0, collide=True)
+        st2 = self.put(r, 'Sidetable_A', couch['x'] + 0.1, couch['z0'] - half, -90.0, collide=True)
         lamp = self.on(r, st1, 'Lamp_Table_A_Assembled')
         self.lamp_light(r, lamp)
         self.on(r, st2, 'Vase_A', dx=0.1)
         self.on(r, st2, 'Candle_Holder_A', dx=-0.2)
-        self.put(r, 'Chair_Arm', 1.9, 9.25, 160.0, collide=True)
-        self.put(r, 'Arm_Chair_01', 1.9, 5.45, 20.0, collide=True)
+        self.put(r, 'Chair_Arm', 2.1, 9.15, 170.0, collide=True)
+        self.put(r, 'Arm_Chair_01', 1.85, 5.65, 10.0, collide=True)
         self.put(r, 'Pillow', 3.6, 6.95, -90.0, y=0.48)
-        bs = self.wall(r, 'S', 3.0, 'Bookshelf', collide=True)
+        bs = self.wall(r, 'S', 3.55, 'Bookshelf', collide=True)
         for i, (stem, dy) in enumerate((('Books_A', 0.42), ('Books_C', 0.88), ('Books_E', 1.33), ('Books_B', 1.78))):
             self.put(r, stem, bs['x0'] + 0.4 + 0.2 * (i % 2), bs['z1'] - 0.3, 180.0, dy)
         self.put(r, 'Decorative_Bowl', bs['x1'] - 0.35, bs['z1'] - 0.3, 0.0, 1.33)
-        fl = self.wall(r, 'S', 4.9, 'Lamp_Floor_A_Assembled', gap=0.15)
+        fl = self.wall(r, 'S', 5.45, 'Lamp_Floor_A_Assembled', gap=0.15)
         self.lamp_light(r, fl, 0.9, 3.0)
         self.wall(r, 'S', 1.1, 'Plant_A', gap=0.2, collide=True)
         self.put(r, 'Plant_B', x0 + 0.35, z0 + 0.35)
-        self.wall(r, 'W', 5.3, 'Cabinet_A', collide=True, parts=('Cabinet_A_Door_A_L', 'Cabinet_A_Door_A_R'))
+        self.wall(r, 'W', 5.3, 'Cabinet_A_Assembled', collide=True)
         self.wall(r, 'W', 9.0, 'Painting_Medium_C', y=1.25)
         self.wall(r, 'N', 1.6, 'Painting_Large_A', y=1.1)
-        self.wall(r, 'S', 4.9, 'Clock_Wall_Analog', y=1.9)
-        self.switch(r, 'N', 2.95)
+        self.wall(r, 'S', 1.9, 'Clock_Wall_Analog', y=1.9)
+        self.switch(r, 'N', 2.15)
         self.outlet(r, 'W', 6.4)
-        self.outlet(r, 'S', 1.9)
-        self.ceiling_light(r, 'Lamp_Ceiling_B', 2.5, 7.3, 2.6, 6.0, shadows=True)
+        self.outlet(r, 'S', 4.6)
+        self.ceiling_light(r, 'Lamp_Ceiling_B', 2.5, 7.1, 2.6, 6.0, shadows=True)
         self.ceiling_light(r, 'Lamp_Ceiling_B', 5.0, 4.9, 1.6, 4.0)
         self.cam('living_1', 5.6, 9.6, 1.0, 6.0, -12)
         self.cam('living_2', 4.9, 4.6, 0.5, 9.0, -12)
@@ -332,17 +385,12 @@ class Builder:
             w = self.idx[stem]['max'][0] - self.idx[stem]['min'][0]
             return self.wall(r, 'N', x + w / 2, stem, **kw)
         fr = run_n('Fridge_Assembled', x0 + 0.02, collide=True)
-        c1 = run_n('Kitchen_Counter_A', fr['x1'] + 0.02, collide=True,
-                   parts=('Kitchen_Counter_Door_L', 'Kitchen_Counter_Door_R'))
+        c1 = run_n('Kitchen_Counter_A_Assembled', fr['x1'] + 0.02, collide=True)
         st = run_n('Stove', c1['x1'], collide=True)
-        c2 = run_n('Kitchen_Counter_A', st['x1'], collide=True,
-                   parts=('Kitchen_Counter_Door_L', 'Kitchen_Counter_Door_R'))
-        self.put(r, 'Garbage_Bag_A', (c2['x1'] + x1) / 2, z0 + 0.3, 30.0)
+        c2 = run_n('Kitchen_Counter_A_Assembled', st['x1'], collide=True)
         self.wall(r, 'N', (st['x0'] + st['x1']) / 2, 'Stove_Cooker_Hood', y=1.72)
-        self.wall(r, 'N', (c1['x0'] + c1['x1']) / 2, 'Kitchen_Cabinet_B', y=1.52, collide=True,
-                       parts=('Kitchen_Cabinet_B_Door_A_L', 'Kitchen_Cabinet_B_Door_A_R'))
-        self.wall(r, 'N', (c2['x0'] + c2['x1']) / 2, 'Kitchen_Cabinet_B', y=1.52, collide=True,
-                       parts=('Kitchen_Cabinet_B_Door_A_L', 'Kitchen_Cabinet_B_Door_A_R'))
+        for base in (c1, c2):
+            self.wall(r, 'N', (base['x0'] + base['x1']) / 2, 'Kitchen_Cabinet_B_Assembled', y=1.52, collide=True)
         self.on(r, c1, 'Coffeemaker', dx=-0.25, dz=-0.1)
         self.on(r, c1, 'Coffee_Mug', dx=0.05, dz=0.05)
         self.on(r, c1, 'Utensil_Holder_Full', dx=0.3, dz=-0.12)
@@ -354,22 +402,17 @@ class Builder:
         self.on(r, c2, 'Pepper_Mill', dx=0.2, dz=-0.1)
         self.on(r, c2, 'Teapot', dx=0.3, dz=0.1)
         # east run: sink then counter
-        sk = self.wall(r, 'E', z0 + 0.62 + 0.5, 'Kitchen_Counter_Sink', collide=True,
-                       parts=('Kitchen_Counter_Door_L', 'Kitchen_Counter_Door_R'))
-        c3 = self.wall(r, 'E', sk['z1'] + 0.5, 'Kitchen_Counter_A', collide=True,
-                       parts=('Kitchen_Counter_Drawer',))
+        sk = self.wall(r, 'E', z0 + 0.62 + 0.5, 'Kitchen_Counter_Sink_Assembled', collide=True)
+        c3 = self.wall(r, 'E', sk['z1'] + 0.5, 'Kitchen_Counter_A_Assembled', collide=True)
         self.on(r, sk, 'Handsoap', dx=-0.38, dz=-0.15)
         self.on(r, c3, 'Plate_Pile', dx=-0.2, dz=-0.05)
         self.on(r, c3, 'Bowl_Pile', dx=0.15, dz=-0.1)
         self.on(r, c3, 'Glass_Drinking_Pile', dx=0.35, dz=0.1)
         self.on(r, c3, 'Macaroni_Package', dx=-0.38, dz=-0.15, yaw=-70.0)
-        self.wall(r, 'E', (sk['z0'] + sk['z1']) / 2, 'Kitchen_Cabinet_B', y=1.52, collide=True,
-                  parts=('Kitchen_Cabinet_B_Door_A_L', 'Kitchen_Cabinet_B_Door_A_R'))
-        self.wall(r, 'E', (c3['z0'] + c3['z1']) / 2, 'Kitchen_Cabinet_B', y=1.52, collide=True,
-                  parts=('Kitchen_Cabinet_B_Door_A_L', 'Kitchen_Cabinet_B_Door_A_R'))
+        for base in (sk, c3):
+            self.wall(r, 'E', (base['z0'] + base['z1']) / 2, 'Kitchen_Cabinet_B_Assembled', y=1.52, collide=True)
         # pantry and dining
-        self.wall(r, 'S', x0 + 0.85, 'Kitchen_Cabinet_Large', collide=True,
-                  parts=('Kitchen_Cabinet_Large_Door_A', 'Kitchen_Cabinet_Large_Door_B', 'Kitchen_Cabinet_Large_Door_C'))
+        self.wall(r, 'S', x0 + 0.85, 'Kitchen_Cabinet_Large_Assembled', collide=True)
         tx, tz = 8.15, 8.05
         tb = self.put(r, 'Table_Dining', tx, tz, 0.0, collide=True)
         for yaw, dx, dz in ((180.0, 0.0, -0.75), (0.0, 0.0, 0.75), (90.0, -0.75, 0.0), (-90.0, 0.75, 0.0)):
@@ -391,24 +434,22 @@ class Builder:
     def master(self):
         r = 'Master Bedroom'
         x0, z0, x1, z1 = inner(r)
-        bed = self.wall(r, 'W', 2.0, 'Bed', collide=True, parts=())
+        bed = self.wall(r, 'W', 2.0, 'Bed', collide=True)
         self.put(r, 'Carpet_A', bed['x1'] - 0.3, 2.0, 90.0, y=0.0)
         for zz in (bed['z0'] - 0.34, bed['z1'] + 0.34):
-            ns = self.wall(r, 'W', zz, 'Nightstand_A', collide=True,
-                           parts=('Nightstand_A_Drawer_A', 'Nightstand_A_Drawer_B'))
+            ns = self.wall(r, 'W', zz, 'Nightstand_B_Assembled', collide=True)
             lamp = self.on(r, ns, 'Lamp_Table_B_Assembled', dx=0.0, dz=-0.05)
             self.lamp_light(r, lamp, 0.45, 2.0)
         self.on(r, ns, 'Clock_Table_Digital', dx=0.18, dz=0.1)
         self.on(r, ns, 'Book_Single_A', dx=-0.15, dz=0.12, yaw=110.0)
-        dr = self.wall(r, 'N', 3.2, 'Dresser_Large_A', collide=True,
-                       parts=('Dresser_Large_A_Drawer_A', 'Dresser_Large_A_Drawer_B'))
+        dr = self.wall(r, 'N', 3.2, 'Dresser_C_Assembled', collide=True)
         self.on(r, dr, 'Candle_Holder_B', dx=-0.5)
         self.on(r, dr, 'Vase_B', dx=0.45)
         self.wall(r, 'E', 1.4, 'Mirror_Body', gap=0.05, collide=True)
-        self.put(r, 'Laundrybasket', x1 - 0.35, z1 - 1.1)
+        self.put(r, 'Laundrybasket', 2.0, z0 + 0.3)
         self.wall(r, 'W', 2.0, 'Painting_Large_C', y=1.45)
         self.wall(r, 'S', 1.3, 'Painting_Medium_B', y=1.35)
-        self.switch(r, 'S', 3.0)
+        self.switch(r, 'S', 3.62)
         self.outlet(r, 'W', bed['z0'] - 0.7)
         self.ceiling_light(r, 'Lamp_Ceilingfan', 2.4, 2.1, 2.2, 5.0, shadows=True)
         self.cam('master_1', 4.0, 3.8, 0.5, 1.0, -14)
@@ -417,12 +458,12 @@ class Builder:
     def ensuite(self):
         r = 'Ensuite'
         x0, z0, x1, z1 = inner(r)
-        sh = self.wall(r, 'N', (x0 + x1) / 2, 'Shower_Stall_190cm_L', collide=True)
+        sh = self.wall(r, 'N', (x0 + x1) / 2, 'Shower_Stall_190cm_L_Assembled', collide=True)
         self.wall(r, 'N', (x0 + x1) / 2 + 0.55, 'Shower', y=0.35)
         self.wall(r, 'N', (x0 + x1) / 2 - 0.4, 'Shower_Soap_Holder', y=1.1)
         self.put(r, 'Shampoo_Bottle_A', (x0 + x1) / 2 - 0.5, z0 + 0.15, 0.0, 0.05)
-        vn = self.wall(r, 'W', 2.05, 'Bathroom_Sink_Body', collide=True)
-        self.wall(r, 'W', 2.05, 'Mirror_Bathroom', y=1.15)
+        vn = self.wall(r, 'W', 2.02, 'Bathroom_Sink_Body', collide=True)
+        self.wall(r, 'W', 2.02, 'Mirror_Bathroom', y=1.15)
         self.on(r, vn, 'Toothbrush_Mug', dx=-0.15, dz=-0.15)
         self.on(r, vn, 'Toothpaste', dx=0.0, dz=-0.18, yaw=0.0)
         self.on(r, vn, 'Handsoap', dx=0.2, dz=-0.18)
@@ -431,8 +472,7 @@ class Builder:
         self.wall(r, 'E', 2.75, 'Toiletpaper_Single', y=0.7)
         self.wall(r, 'E', 1.9, 'Towel_Holder', y=1.25)
         self.wall(r, 'E', 1.9, 'Towel_Hanging_Large', y=0.75, gap=0.04)
-        self.put(r, 'Towel_Pile', x1 - 0.3, sh['z1'] + 0.3)
-        self.switch(r, 'W', 2.95)
+        self.switch(r, 'W', 2.6)
         self.ceiling_light(r, 'Lamp_Ceiling_A', 5.5, 2.4, 1.8, 4.0, color=(1.0, 0.95, 0.88))
         self.cam('ensuite_1', 6.3, 4.0, 4.8, 0.5, -18)
 
@@ -440,17 +480,16 @@ class Builder:
         r = 'Bedroom 2'
         x0, z0, x1, z1 = inner(r)
         bed = self.wall(r, 'N', x1 - 0.75, 'Bed_Single_Person', collide=True)
-        ns = self.wall(r, 'N', bed['x0'] - 0.3, 'Nightstand_B', collide=True,
-                       parts=('Nightstand_B_Drawer_A', 'Nightstand_B_Drawer_B'))
+        ns = self.wall(r, 'N', bed['x0'] - 0.3, 'Nightstand_B_Assembled', collide=True)
         lamp = self.on(r, ns, 'Lamp_Table_A_Assembled')
         self.lamp_light(r, lamp, 0.45, 2.0)
-        desk = self.wall(r, 'W', 1.5, 'Workdesk', collide=True, parts=('Workdesk_Drawer_A',))
+        desk = self.wall(r, 'W', 1.5, 'Workdesk_Assembled', collide=True)
         self.put(r, 'Chair_Office', desk['x1'] + 0.35, 1.5, -100.0, collide=True)
         self.on(r, desk, 'Papers_Pile_A', dx=-0.4, dz=0.0)
         self.on(r, desk, 'Pen_Holder_With_Pens', dx=0.55, dz=-0.15)
         self.on(r, desk, 'Folders_Set_A', dx=0.3, dz=-0.2)
         self.on(r, desk, 'Book_Pile_A', dx=-0.6, dz=-0.15)
-        dr = self.wall(r, 'E', 3.05, 'Dresser_C', collide=True, parts=('Dresser_C_Drawer_A', 'Dresser_C_Drawer_B'))
+        dr = self.wall(r, 'E', 3.05, 'Dresser_B_Assembled', collide=True)
         self.on(r, dr, 'Plant_B', dx=0.5)
         self.on(r, dr, 'Books_D', dx=-0.4)
         self.put(r, 'Carpet_B', 8.1, 2.6, 0.0)
@@ -464,14 +503,13 @@ class Builder:
     def kids(self):
         r = 'Kids Bedroom'
         x0, z0, x1, z1 = inner(r)
-        self.wall(r, 'N', x1 - 0.76, 'Bed_Bunk', collide=True)
-        dr = self.wall(r, 'W', 1.1, 'Dresser_D', collide=True,
-                       parts=('Dresser_D_Drawer_A', 'Dresser_D_Drawer_B', 'Dresser_D_Drawer_C'))
+        self.wall(r, 'N', x1 - 0.76, 'Bed_Bunk_Assembled', collide=True)
+        dr = self.wall(r, 'W', 1.1, 'Dresser_D_Assembled', collide=True)
         self.on(r, dr, 'Lamp_Table_Rocket_Assembled', dx=0.2)
         self.on(r, dr, 'Toy_Dinosaur', dx=-0.2, yaw=60.0)
         self.put(r, 'Carpet_Kid', 11.5, 2.4, 0.0)
         tb = self.wall(r, 'S', 12.3, 'Toy_Box_A', collide=True)
-        self.on(r, tb, 'Toy_Teddy', yaw=200.0)
+        self.put(r, 'Toy_Teddy', 11.2, 3.55, 200.0)
         self.put(r, 'Toy_Box_A_Lid', tb['x1'] - 0.2, tb['z0'] - 0.35, 15.0)
         self.put(r, 'Toy_Racetrack', 11.2, 2.6, 20.0)
         self.put(r, 'Toy_Car_A', 11.0, 2.3, 75.0)
@@ -494,47 +532,49 @@ class Builder:
     def bathroom(self):
         r = 'Bathroom'
         x0, z0, x1, z1 = inner(r)
-        sh = self.wall(r, 'E', (z0 + z1) / 2, 'Shower_Stall_190cm_R', collide=True)
-        self.wall(r, 'E', (z0 + z1) / 2 + 0.55, 'Shower', y=0.35)
-        vn = self.wall(r, 'W', z1 - 0.95, 'Bathroom_Sink_Body', collide=True)
-        self.wall(r, 'W', z1 - 0.95, 'Mirror_Bathroom', y=1.15)
+        sw = self.wbox('Shower_Stall_190cm_R_Assembled', -90.0)
+        sh = self.wall(r, 'E', z0 + (sw[5] - sw[4]) / 2 + 0.01, 'Shower_Stall_190cm_R_Assembled', collide=True)
+        self.wall(r, 'E', sh['z0'] + 0.5, 'Shower', y=0.35)
+        vn = self.wall(r, 'S', x0 + 0.95, 'Bathroom_Sink_Body', collide=True)
+        self.wall(r, 'S', x0 + 0.95, 'Mirror_Bathroom', y=1.15)
         self.on(r, vn, 'Toothbrush_A', dx=-0.3, dz=-0.15, yaw=80.0)
         self.on(r, vn, 'Handsoap', dx=0.1, dz=-0.18)
         self.on(r, vn, 'Shampoo_Bottle_B', dx=0.5, dz=-0.15)
-        self.wall(r, 'S', (vn['x1'] + sh['x0']) / 2, 'Toilet_Assembled', collide=True)
-        self.wall(r, 'S', sh['x0'] - 0.12, 'Toiletpaper_Set', y=0.0, gap=0.03)
-        self.wall(r, 'N', 12.2, 'Towel_Holder', y=1.3)
-        self.wall(r, 'N', 12.2, 'Towel_Hanging_Small', y=0.85, gap=0.04)
-        self.switch(r, 'N', 11.75)
-        self.ceiling_light(r, 'Lamp_Ceiling_A', 11.7, 6.7, 1.8, 4.0, color=(1.0, 0.95, 0.88))
+        self.wall(r, 'W', 6.95, 'Toilet_Assembled', collide=True)
+        self.wall(r, 'W', 6.45, 'Toiletpaper_Single', y=0.7)
+        self.wall(r, 'W', 7.6, 'Towel_Holder', y=1.3)
+        self.wall(r, 'W', 7.6, 'Towel_Hanging_Small', y=0.85, gap=0.04)
+        self.switch(r, 'N', 11.85)
+        self.ceiling_light(r, 'Lamp_Ceiling_A', 11.4, 6.85, 1.8, 4.0, color=(1.0, 0.95, 0.88))
         self.cam('bathroom_1', 10.7, 5.7, 12.6, 7.9, -20)
 
     def laundry(self):
         r = 'Laundry'
         x0, z0, x1, z1 = inner(r)
-        wm = self.wall(r, 'S', x1 - 0.45, 'Washingmachine_Assembled', collide=True)
+        # the washer is modelled with its front at local -X (control panel along +X): a quarter turn puts the
+        # panel against the wall
+        wm = self.wall(r, 'S', x1 - 1.0, 'Washingmachine_Assembled', collide=True, extra_yaw=90.0)
         self.on(r, wm, 'Towel_Roll_Set', dx=-0.1)
         self.wall(r, 'E', z0 + 0.6, 'Garage_Shelf_A', collide=True)
         self.put(r, 'Storage_Box_A', x1 - 0.3, z0 + 0.45, -90.0, 0.03)
         self.put(r, 'Cardboard_Box_B', x1 - 0.3, z0 + 0.75, -80.0, 0.03)
-        self.wall(r, 'N', 11.3, 'Electricbox_Main', y=1.35, parts=('Electricbox_Door',))
-        self.put(r, 'Laundrybasket', x1 - 1.2, z1 - 0.35, 10.0)
-        self.put(r, 'Paintbucket_Set_A', x0 + 0.5, z0 + 0.35, 0.0)
-        self.switch(r, 'W', 8.5)
-        self.outlet(r, 'S', x1 - 1.0, y=0.9, gfi=True)
-        self.ceiling_light(r, 'Lamp_Fluorescent_A', 11.7, 9.0, 1.6, 4.0, color=(0.92, 0.97, 1.0))
+        self.wall(r, 'N', 11.3, 'Electricbox_Main', y=1.35)
+        self.put(r, 'Laundrybasket', x0 + 0.95, z1 - 0.3, 10.0)
+        self.put(r, 'Paintbucket_Set_A', x0 + 1.2, z0 + 0.2, 0.0)
+        self.switch(r, 'W', 9.85)
+        self.outlet(r, 'S', x1 - 0.5, y=0.9, gfi=True)
+        self.ceiling_light(r, 'Lamp_Fluorescent_A', 11.7, 9.15, 1.6, 4.0, color=(0.92, 0.97, 1.0))
         self.cam('laundry_1', 10.7, 8.3, 12.8, 9.9, -20)
 
     def hall(self):
         r = 'Hall'
         x0, z0, x1, z1 = inner(r)
-        self.put(r, 'Carpet_D', 9.0, 4.8, 90.0)
         sh = self.wall(r, 'S', 8.6, 'Shelf', y=1.1)
         self.on(r, sh, 'Candle_Holder_A', dx=-0.3)
         self.on(r, sh, 'Vase_A', dx=0.25)
         self.wall(r, 'S', 7.2, 'Painting_Medium_A', y=1.25)
         self.wall(r, 'N', 12.2, 'Clock_Wall_Analog', y=1.85)
-        self.switch(r, 'E', 4.37)
+        self.switch(r, 'N', 12.55)
         self.ceiling_light(r, 'Lamp_Ceiling_B', 8.0, 4.8, 1.4, 4.0)
         self.ceiling_light(r, 'Lamp_Ceiling_B', 11.5, 4.8, 1.4, 4.0)
         self.cam('hall_1', 12.5, 4.8, 6.0, 4.8, -6)
@@ -580,6 +620,9 @@ def main():
     repo = os.path.abspath(args.repo)
     b = Builder(repo)
     b.build()
+    problems = b.validate()
+    for line in problems:
+        print('build_apartment: check:', line)
     out = args.out or os.path.join(repo, 'project', 'scenes', 'Apartment_3Bed.json')
     b.s.write(out)
     if args.shots:
