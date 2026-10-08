@@ -17,10 +17,10 @@ class dtQueryFilter;
 // nearest walkable point, straight-line walkability, and the mesh's open edges (where walls and
 // cover stand, for CoverSystem). No PhysX or GL in here, so it builds and runs in unit tests.
 struct NavBuildSettings {
-    float CellSize = 0.15f;      // metres, horizontal voxel size
+    float CellSize = 0.1f;       // metres, horizontal voxel size
     float CellHeight = 0.1f;     // metres, vertical
     float AgentHeight = 1.85f;
-    float AgentRadius = 0.35f;
+    float AgentRadius = 0.3f;    // the soldiers' capsule: any wider and a furnished room's gaps and doorways close
     float AgentClimb = 0.32f;    // a step the agent walks up (the capsule's step offset)
     float AgentMaxSlope = 48.0f; // degrees
     float RegionMinSize = 8.0f;  // cells^(1/2): smaller islands are dropped
@@ -69,6 +69,9 @@ public:
     // The mesh's polygons as triangles (world xyz, 9 floats each), for the debug view.
     void DebugTriangles(std::vector<float>& out) const;
     int PolyCount() const;
+    // Switch off every polygon no walker can reach from `seeds` (each snapped within `extents`): a roof, the top of a
+    // wardrobe - walkable surfaces nobody gets onto. Nothing is cut when no seed lands on the mesh. Returns the count cut.
+    int KeepReachable(const std::vector<glm::vec3>& seeds, const glm::vec3& extents);
     glm::vec3 BoundsMin() const { return m_BMin; }
     glm::vec3 BoundsMax() const { return m_BMax; }
 
