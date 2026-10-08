@@ -1,0 +1,22 @@
+{
+  "folder": "assets/Furniture/Bathroom/Models",
+  "guid": "168c33aa2243ffbd",
+  "importer": {
+    "globalScale": 1.0,
+    "importAnimations": false,
+    "importNormals": true,
+    "importSkeleton": false,
+    "materialImportMode": 1,
+    "optimizeGraph": true,
+    "pivotOffset": [
+      -1.7955000400543213,
+      -0.0,
+      -0.02500000037252903
+    ]
+  },
+  "materialRemap": {
+    "Mirrors": "assets/Furniture/Bathroom/Materials/M_Mirrors.mat"
+  },
+  "metaVersion": 1,
+  "type": "model"
+}

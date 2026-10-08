@@ -48,6 +48,18 @@ struct ModelImportSettings {
     bool ImportAnimations = true;
     bool ImportSkeleton = true;  // false imports every mesh as static (no bone weights)
     bool OptimizeGraph = true;   // aiProcess_JoinIdenticalVertices + OptimizeMeshes
+    // The up axis the geometry was modelled in. Z stands a Z-up export upright (rotates the root
+    // into the engine's Y-up frame: up +Z, front -Y); NegZ is the opposite turn (up -Z, front +Y),
+    // for a piece exported lying on its face. Explicit rather than read from the FBX's own UpAxis:
+    // exporters often record Z-up for geometry that is already Y-up (the UE5 mocap clips).
+    enum class UpAxis { Y, Z, NegZ };
+    UpAxis SourceUpAxis = UpAxis::Y;
+    // Moves the whole model (meters, after scale and up axis) so its pivot sits where it is useful -
+    // packs exported from a level often keep each prop's position in that level.
+    glm::vec3 PivotOffset{0.0f};
+    // Nodes left out of the import, with everything under them: kit files that ship every variant
+    // stacked in one place (a door with ten handles, ten lock sets and every house number).
+    std::vector<std::string> ExcludeNodes;
     MaterialMode MaterialImportMode = MaterialMode::ImportEmbedded;
     // Clips cut to a range of the source (seconds): the take is longer than the motion you want, or holds
     // two motions. Only the range plays, and it is the clip's length everywhere (looping, blend trees,
@@ -113,6 +125,14 @@ public:
     // The texture-path resolver behind every import (see Model.cpp for the full order). Public
     // so the unit tests can drive it against a scratch folder layout.
     static std::string ResolveTexturePathIn(const std::string& modelDir, const std::string& raw);
+
+    // The rotation from an FBX axis system (axis 0/1/2 = X/Y/Z, sign +1/-1) into the engine's
+    // Y-up frame: up -> +Y, front -> +Z. Always a pure rotation (the right axis is derived from up
+    // and front), so a mirrored file never flips its winding. Identity for invalid input.
+    static glm::mat4 AxisCorrection(int upAxis, int upSign, int frontAxis, int frontSign);
+    // ModelImportSettings::UpAxis <-> its .meta spelling ("Y", "Z", "-Z"); anything else reads as Y.
+    static ModelImportSettings::UpAxis ParseUpAxis(const std::string& s);
+    static const char* UpAxisName(ModelImportSettings::UpAxis a);
 
     // Asset packs are often re-exported with their textures renamed to <Set>_<MapType>
     // ("Garage_Props_Base_Color.png") while the model still names the originals. This finds the

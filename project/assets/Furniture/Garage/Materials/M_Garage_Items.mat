@@ -1,0 +1,31 @@
+{
+  "factorsScaleMaps": true,
+  "matVersion": 2,
+  "name": "M_Garage_Items",
+  "properties": {
+    "_AOMap": "assets/Furniture/Garage/Textures/Garage_Items/Garage_Items_AO.png",
+    "_AlbedoMap": "assets/Furniture/Garage/Textures/Garage_Items/Garage_Items_Base_Color.png",
+    "_BaseColor": [
+      1.0,
+      1.0,
+      1.0
+    ],
+    "_DoubleSided": false,
+    "_EmissiveColor": [
+      0.0,
+      0.0,
+      0.0
+    ],
+    "_EmissiveMap": "",
+    "_EmissiveStrength": 1.0,
+    "_Metallic": 1.0,
+    "_MetallicMap": "assets/Furniture/Garage/Textures/Garage_Items/Garage_Items_Metallic.png",
+    "_MetallicRoughnessMap": "",
+    "_NormalMap": "assets/Furniture/Garage/Textures/Garage_Items/Garage_Items_Normal.png",
+    "_Roughness": 1.0,
+    "_RoughnessMap": "assets/Furniture/Garage/Textures/Garage_Items/Garage_Items_Roughness.png",
+    "_Triplanar": false,
+    "_TriplanarScale": 1.0
+  },
+  "shader": "engine://Standard.shader"
+}

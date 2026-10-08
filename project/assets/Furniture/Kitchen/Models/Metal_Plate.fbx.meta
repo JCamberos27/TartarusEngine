@@ -1,0 +1,22 @@
+{
+  "folder": "assets/Furniture/Kitchen/Models",
+  "guid": "72f085f37b8afb85",
+  "importer": {
+    "globalScale": 1.0,
+    "importAnimations": false,
+    "importNormals": true,
+    "importSkeleton": false,
+    "materialImportMode": 1,
+    "optimizeGraph": true,
+    "pivotOffset": [
+      -3.125999927520752,
+      -0.0,
+      -0.12300000339746475
+    ]
+  },
+  "materialRemap": {
+    "Garage_items": "assets/Furniture/Garage/Materials/M_Garage_Items.mat"
+  },
+  "metaVersion": 1,
+  "type": "model"
+}

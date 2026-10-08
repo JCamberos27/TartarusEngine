@@ -1,0 +1,22 @@
+{
+  "folder": "assets/Furniture/Garage/Models",
+  "guid": "804063517536dd5c",
+  "importer": {
+    "globalScale": 1.0,
+    "importAnimations": false,
+    "importNormals": true,
+    "importSkeleton": false,
+    "materialImportMode": 1,
+    "optimizeGraph": true,
+    "pivotOffset": [
+      -0.39750000834465027,
+      -0.14900000393390656,
+      -0.08349999785423279
+    ]
+  },
+  "materialRemap": {
+    "Electricbox": "assets/Furniture/Garage/Materials/M_Electricbox.mat"
+  },
+  "metaVersion": 1,
+  "type": "model"
+}

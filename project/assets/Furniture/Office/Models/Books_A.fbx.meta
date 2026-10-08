@@ -1,0 +1,22 @@
+{
+  "folder": "assets/Furniture/Office/Models",
+  "guid": "6e3845aec5125d9a",
+  "importer": {
+    "globalScale": 1.0,
+    "importAnimations": false,
+    "importNormals": true,
+    "importSkeleton": false,
+    "materialImportMode": 1,
+    "optimizeGraph": true,
+    "pivotOffset": [
+      -4.1554999351501465,
+      -0.0020000000949949026,
+      0.10499999672174454
+    ]
+  },
+  "materialRemap": {
+    "Books": "assets/Furniture/Office/Materials/M_Books.mat"
+  },
+  "metaVersion": 1,
+  "type": "model"
+}

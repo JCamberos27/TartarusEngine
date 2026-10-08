@@ -1,0 +1,22 @@
+{
+  "folder": "assets/Props/Holy_Bible/Models",
+  "guid": "bd97e3400738a081",
+  "importer": {
+    "globalScale": 1.0,
+    "importAnimations": false,
+    "importNormals": true,
+    "importSkeleton": false,
+    "materialImportMode": 1,
+    "optimizeGraph": true,
+    "pivotOffset": [
+      -0.0,
+      0.023000000044703484,
+      0.0044999998062849045
+    ]
+  },
+  "materialRemap": {
+    "lambert1": "assets/Props/Holy_Bible/Materials/M_Holy_Bible.mat"
+  },
+  "metaVersion": 1,
+  "type": "model"
+}

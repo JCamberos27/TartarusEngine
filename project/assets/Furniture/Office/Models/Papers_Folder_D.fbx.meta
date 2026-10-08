@@ -1,0 +1,22 @@
+{
+  "folder": "assets/Furniture/Office/Models",
+  "guid": "a2d124ff4e83bb55",
+  "importer": {
+    "globalScale": 1.0,
+    "importAnimations": false,
+    "importNormals": true,
+    "importSkeleton": false,
+    "materialImportMode": 1,
+    "optimizeGraph": true,
+    "pivotOffset": [
+      -0.22450000047683716,
+      0.0,
+      -0.03849999979138374
+    ]
+  },
+  "materialRemap": {
+    "Office_props": "assets/Furniture/Office/Materials/M_Office_Props.mat"
+  },
+  "metaVersion": 1,
+  "type": "model"
+}

@@ -1,0 +1,22 @@
+{
+  "folder": "assets/Furniture/Bedroom/Models",
+  "guid": "cba787e8daba93e6",
+  "importer": {
+    "globalScale": 1.0,
+    "importAnimations": false,
+    "importNormals": true,
+    "importSkeleton": false,
+    "materialImportMode": 1,
+    "optimizeGraph": true,
+    "pivotOffset": [
+      1.4759999513626099,
+      -0.0,
+      -0.12049999833106995
+    ]
+  },
+  "materialRemap": {
+    "Workdesk": "assets/Furniture/Office/Materials/M_Workdesk.mat"
+  },
+  "metaVersion": 1,
+  "type": "model"
+}

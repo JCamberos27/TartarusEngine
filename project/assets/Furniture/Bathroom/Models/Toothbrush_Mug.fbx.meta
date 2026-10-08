@@ -1,0 +1,22 @@
+{
+  "folder": "assets/Furniture/Bathroom/Models",
+  "guid": "a4c7e1ae1d60c558",
+  "importer": {
+    "globalScale": 1.0,
+    "importAnimations": false,
+    "importNormals": true,
+    "importSkeleton": false,
+    "materialImportMode": 1,
+    "optimizeGraph": true,
+    "pivotOffset": [
+      0.875,
+      0.0,
+      -0.027000000700354576
+    ]
+  },
+  "materialRemap": {
+    "Bathroom_sink": "assets/Furniture/Bathroom/Materials/M_Bathroom_Sink.mat"
+  },
+  "metaVersion": 1,
+  "type": "model"
+}

@@ -1,0 +1,16 @@
+{
+  "folder": "assets/Props/Money/Textures/Money_Small_Bills",
+  "guid": "d0f686403e04c03f",
+  "importer": {
+    "anisoLevel": 8,
+    "compression": 1,
+    "filterMode": 2,
+    "generateMipmaps": true,
+    "isSRGB": true,
+    "maxTextureSize": 2048,
+    "textureType": 0,
+    "wrapMode": 0
+  },
+  "metaVersion": 1,
+  "type": "texture"
+}
