@@ -5462,15 +5462,15 @@
       "pathGuid": "475670f667a70b3b"
     },
     {
-      "path": "assets/Materials/Material_001.mat",
+      "path": "assets/Weapons/AKS74U/Attachments/Materials/M_1a1.mat",
       "pathGuid": "9c2c1c17eafcedff"
     },
     {
-      "path": "assets/Materials/Optic_RedDot.mat",
+      "path": "assets/Weapons/AKS74U/Attachments/Materials/Optic_RedDot.mat",
       "pathGuid": "56808c6d3bc35b5a"
     },
     {
-      "path": "assets/Materials/RedDot.mat",
+      "path": "assets/Weapons/AKS74U/Attachments/Materials/RedDot.mat",
       "pathGuid": "c3b7a89aa76c6d7c"
     }
   ],
@@ -6076,31 +6076,31 @@
       "pathGuid": "3400d0834ae58519"
     },
     {
-      "path": "assets/Models/AK_Rail.fbx",
+      "path": "assets/Weapons/AKS74U/Attachments/Models/AK_Rail.fbx",
       "pathGuid": "5e3b15cadc086347"
     },
     {
-      "path": "assets/Models/EOTECH.fbx",
+      "path": "assets/Weapons/AKS74U/Attachments/Models/EOTECH.fbx",
       "pathGuid": "d4ad0fc1cbcad025"
     },
     {
-      "path": "assets/Models/pbs_lowuv_final.fbx",
+      "path": "assets/Weapons/AKS74U/Attachments/Models/pbs_lowuv_final.fbx",
       "pathGuid": "80458162dffed86c"
     },
     {
-      "path": "assets/Models/RedDot.fbx",
+      "path": "assets/Weapons/AKS74U/Attachments/Models/RedDot.fbx",
       "pathGuid": "bd44cb2692700cc6"
     },
     {
-      "path": "assets/Models/1a1.fbx",
+      "path": "assets/Weapons/AKS74U/Attachments/Models/1a1.fbx",
       "pathGuid": "cf459acb698eb28a"
     },
     {
-      "path": "assets/Models/ACOG.fbx",
+      "path": "assets/Weapons/AKS74U/Attachments/Models/ACOG.fbx",
       "pathGuid": "2e0a28fa59cfdc75"
     },
     {
-      "path": "assets/Models/AK_OpticMount.fbx",
+      "path": "assets/Weapons/AKS74U/Attachments/Models/AK_OpticMount.fbx",
       "pathGuid": "00d0cf8817dd6b58"
     }
   ],
@@ -6453,35 +6453,35 @@
       "pathGuid": "407594381188360c"
     },
     {
-      "path": "assets/Models/1a1.fbx#1a1.fbm/1a_DefaultMaterial_BaseColor.png",
+      "path": "assets/Weapons/AKS74U/Attachments/Textures/1a1/1a_DefaultMaterial_BaseColor.png",
       "pathGuid": "3278666717e45c17"
     },
     {
-      "path": "assets/Models/1a1.fbx#1a1.fbm/1a_DefaultMaterial_Normal.png",
+      "path": "assets/Weapons/AKS74U/Attachments/Textures/1a1/1a_DefaultMaterial_Normal.png",
       "pathGuid": "38562ecf52d7f624"
     },
     {
-      "path": "assets/Models/1a1.fbx#1a1.fbm/1a_DefaultMaterial_Metallic.png",
+      "path": "assets/Weapons/AKS74U/Attachments/Textures/1a1/1a_DefaultMaterial_Metallic.png",
       "pathGuid": "b13a865705f9a729"
     },
     {
-      "path": "assets/Effects/Optics/RedDotReticle.png",
+      "path": "assets/Weapons/AKS74U/Attachments/Textures/RedDotReticle.png",
       "pathGuid": "659275da42243734"
     },
     {
-      "path": "assets/Textures/p3dm_ru_CZ-32H_1P_Diff.png",
+      "path": "assets/Weapons/AKS74U/Attachments/Textures/p3dm_ru_CZ-32H_1P_Diff.png",
       "pathGuid": "8a0bfdecdf6d3b4f"
     },
     {
-      "path": "assets/Textures/7.png",
+      "path": "assets/Effects/Muzzle/7.png",
       "pathGuid": "b20104dfa670b695"
     },
     {
-      "path": "assets/Textures/8.png",
+      "path": "assets/Effects/Muzzle/8.png",
       "pathGuid": "6408da5021e60cad"
     },
     {
-      "path": "assets/Textures/blurred circle.png",
+      "path": "assets/Effects/Muzzle/blurred circle.png",
       "pathGuid": "3fdc8f5ddd249df7"
     }
   ],
@@ -7054,7 +7054,7 @@
     "timeOfDayHours": 16.0
   },
   "skyAmbientIntensity": 1.0,
-  "skyHdriGuid": "3c228060f37a0b69",
+  "skyHdriGuid": "28043ea394433649",
   "skyHdriPath": "assets/sky/kloofendal_48d_partly_cloudy_puresky_4k.hdr",
   "skyHorizonColor": [
     0.699999988079071,

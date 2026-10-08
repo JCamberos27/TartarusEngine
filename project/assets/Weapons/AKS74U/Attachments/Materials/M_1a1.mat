@@ -4,7 +4,7 @@
   "name": "Material.001",
   "properties": {
     "_AOMap": "",
-    "_AlbedoMap": "assets/Models/1a1.fbx#1a1.fbm/1a_DefaultMaterial_BaseColor.png",
+    "_AlbedoMap": "assets/Weapons/AKS74U/Attachments/Textures/1a1/1a_DefaultMaterial_BaseColor.png",
     "_BaseColor": [
       0.800000011920929,
       0.800000011920929,
@@ -18,9 +18,9 @@
     "_EmissiveMap": "",
     "_EmissiveStrength": 1.0,
     "_Metallic": 1.0,
-    "_MetallicMap": "assets/Models/1a1.fbx#1a1.fbm/1a_DefaultMaterial_Metallic.png",
+    "_MetallicMap": "assets/Weapons/AKS74U/Attachments/Textures/1a1/1a_DefaultMaterial_Metallic.png",
     "_MetallicRoughnessMap": "",
-    "_NormalMap": "assets/Models/1a1.fbx#1a1.fbm/1a_DefaultMaterial_Normal.png",
+    "_NormalMap": "assets/Weapons/AKS74U/Attachments/Textures/1a1/1a_DefaultMaterial_Normal.png",
     "_Roughness": 0.5,
     "_RoughnessMap": "",
     "_Triplanar": false,

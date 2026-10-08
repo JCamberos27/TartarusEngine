@@ -82,7 +82,7 @@
         "Start Size": 0.07500000298023224,
         "Start Speed": 0.0,
         "Texture": {
-          "path": "assets/Textures/7.png",
+          "path": "assets/Effects/Muzzle/7.png",
           "pathGuid": "b20104dfa670b695"
         },
         "Texture Channels": "Red Mask",
@@ -667,17 +667,17 @@
       "materials": [
         {
           "guid": "56808c6d3bc35b5a",
-          "path": "assets/Materials/Optic_RedDot.mat"
+          "path": "assets/Weapons/AKS74U/Attachments/Materials/Optic_RedDot.mat"
         },
         {
           "guid": "c3b7a89aa76c6d7c",
-          "path": "assets/Materials/RedDot.mat"
+          "path": "assets/Weapons/AKS74U/Attachments/Materials/RedDot.mat"
         }
       ],
       "name": "RedDot",
       "order": 1,
       "parentId": 0,
-      "path": "assets/Models/RedDot.fbx",
+      "path": "assets/Weapons/AKS74U/Attachments/Models/RedDot.fbx",
       "pathGuid": "bd44cb2692700cc6",
       "position": [
         0.0,
