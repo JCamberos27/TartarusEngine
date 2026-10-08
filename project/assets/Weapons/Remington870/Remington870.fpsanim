@@ -93,37 +93,6 @@
     "spin": 15.0,
     "trigger": "event"
   },
-  "gameplay": {
-    "damage": {
-      "base": 14.0,
-      "head": 2.0,
-      "limb": 0.75,
-      "falloffStart": 8.0,
-      "falloffEnd": 25.0,
-      "falloffMin": 0.2
-    },
-    "allowFullAuto": false,
-    "impactImpulse": 14.0,
-    "impactMaxSpeed": 9.0,
-    "magazine": 6,
-    "regripMax": 20.0,
-    "regripMin": 10.0,
-    "reloadHoldSeconds": 0.35,
-    "rpm": 70.0,
-    "zeroDistance": 15.0,
-    "pellets": 8,
-    "spread": {
-      "hip": 3.5,
-      "ads": 2.2
-    },
-    "reload": "perRound",
-    "cycle": {
-      "enabled": true,
-      "delay": 0.12
-    },
-    "bulletHoleRadius": 0.0042,
-    "burstRounds": 0
-  },
   "recoilProfile": "assets/Weapons/Remington870/Remington870.recoil",
   "recoilProfileGuid": "805d73c7082b4107",
   "procedural": {

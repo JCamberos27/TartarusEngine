@@ -2,6 +2,7 @@
 #include <algorithm>
 #include <cmath>
 #include <vector>
+#include "Scripting/GameFrames.h"
 #include <glm/glm.hpp>
 #include <glm/gtc/quaternion.hpp>
 
@@ -20,15 +21,15 @@ struct ThrowPrediction {
 // How the gravity gun grabs and throws. Filled from the scene's First Person Controller when there is one.
 struct GravityGunSettings {
     // Grab parameters
-    float GrabRange = 100.0f;     // metres; aiming distance for the primary pick-up ray
-    float AssistRange = 30.0f;    // metres; search radius when no object is under the exact crosshair
-    float AssistConeDeg = 7.0f;   // degrees; within this many degrees of the crosshair
-    float ScrollTurnDeg = 15.0f;  // degrees per scroll notch while holding an object
+    float GrabRange = 0.0f;     // metres; aiming distance for the primary pick-up ray
+    float AssistRange = 0.0f;    // metres; search radius when no object is under the exact crosshair
+    float AssistConeDeg = 0.0f;   // degrees; within this many degrees of the crosshair
+    float ScrollTurnDeg = 0.0f;  // degrees per scroll notch while holding an object
     // Throw parameters
-    float MinThrowSpeed = 4.0f;   // m/s for a quick click
-    float MaxThrowSpeed = 18.0f;  // m/s fully charged
-    float ChargeTime = 1.0f;      // seconds of holding left mouse to reach MaxThrowSpeed
-    float BackspinRevPerSec = 2.0f; // spin given to a thrown round body (a basketball shot's backspin)
+    float MinThrowSpeed = 0.0f;   // m/s for a quick click
+    float MaxThrowSpeed = 0.0f;  // m/s fully charged
+    float ChargeTime = 0.0f;      // seconds of holding left mouse to reach MaxThrowSpeed
+    float BackspinRevPerSec = 0.0f; // spin given to a thrown round body (a basketball shot's backspin)
 };
 
 // The player's default physics-interaction tool while in Play mode — a Half-Life-2-style gravity
@@ -50,6 +51,7 @@ struct GravityGunSettings {
 // debug toggle in main.cpp — a separate test tool, not part of the gravity gun.)
 class GravityGun {
 public:
+    GravityGun() = default;
     GravityGunSettings Settings;
 
     // Call once per simulated Play frame while the game has input focus. Reads mouse buttons and
@@ -60,8 +62,8 @@ public:
     void Reset();
 
     bool IsHolding() const;
-    bool IsCharging() const { return m_Charging; }
-    float Charge() const { return m_Charge; } // 0..1 while charging
+    bool IsCharging() const { return m_Frame.Charging!=0; }
+    float Charge() const { return m_Frame.Charge; } // 0..1 while charging
 
     // While a throw charges: where the held body would go if released now (world space), else
     // empty. The held body's own shape is swept along the arc, and each bounce uses the combined
@@ -70,27 +72,12 @@ public:
 
     // How far the assist search reaches: AssistRange, cut short just past a solid the crosshair ray hit
     // at `rayHitDist` (negative: the ray hit nothing).
-    static float AssistReach(const GravityGunSettings& s, float rayHitDist) {
-        return rayHitDist < 0.0f ? s.AssistRange : std::min(s.AssistRange, rayHitDist + 0.5f);
-    }
+    static float AssistReach(const GravityGunSettings& settings,float hitDistance);
 
 private:
-    unsigned FindGrabTarget(const glm::vec3& eye, const glm::vec3& fwd) const;
-    void PredictThrow(const glm::vec3& fwd, float speed);
-
-    float m_HoldDistance = 3.0f; // world units from the eye to the carried body; scroll-adjustable
-    bool m_LmbPrev = false;
-    bool m_RmbPrev = false;
-    bool m_Charging = false;
-    float m_Charge = 0.0f;
-
-    // Hold state: the hold point last frame (for its velocity), the orientation the body is held
-    // at, and the view yaw it was last turned with.
-    bool m_HaveHoldPoint = false;
-    glm::vec3 m_PrevHoldPoint{0.0f};
-    glm::vec3 m_HoldVelocity{0.0f}; // smoothed: raw per-frame mouse-look deltas are spiky
-    glm::quat m_HoldRotation{1.0f, 0.0f, 0.0f, 0.0f};
-    float m_HoldYaw = 0.0f;
+    void Run(int operation);
+    void PredictThrow(const glm::vec3& forward,float speed);
+    Scripting::GravityFrame m_Frame;
 
     ThrowPrediction m_Prediction;
 };

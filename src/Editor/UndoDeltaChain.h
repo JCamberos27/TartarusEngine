@@ -114,7 +114,8 @@ void Push(std::vector<Entry>& stack, std::string& baseJson, Entry&& entry,
     if (!stack.empty()) {
         // The outgoing top's full state is `baseJson`; from here on it's reachable only as a
         // patch applied to the incoming top, which is the one now held in full.
-        stack.back().Delta.Start(newFullJson, baseJson);
+        if (newFullJson == baseJson) stack.back().Delta = Patch("[]");
+        else stack.back().Delta.Start(newFullJson, baseJson);
     }
     entry.Delta.clear(); // the top entry is always the one held in full
     stack.push_back(std::move(entry));

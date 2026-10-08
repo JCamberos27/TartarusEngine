@@ -1,16 +1,9 @@
 {
-  "folder": "assets/Characters/Quantum/Textures/Clothing/Accessories/Watches_Military",
-  "guid": "835e04384d79f4b2",
-  "importer": {
-    "anisoLevel": 16,
-    "compression": 2,
-    "filterMode": 2,
-    "generateMipmaps": true,
-    "isSRGB": true,
-    "maxTextureSize": 2048,
-    "textureType": 0,
-    "wrapMode": 0
-  },
+  "guid": "7934cc0c8a083e5c",
   "metaVersion": 1,
-  "type": "texture"
+  "type": "texture",
+  "importer": {
+    "isSRGB": true,
+    "textureType": 0
+  }
 }

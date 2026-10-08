@@ -361,6 +361,12 @@ void TestInputMap() {
         CHECK(back[1].Name == "Bad" && back[1].Positive == InputMap::kNone);
     }
     CHECK(InputMap::FromJson(nlohmann::json::object()).empty());
+    const auto migrated = InputMap::FromJson(nlohmann::json::array({
+        {{"name", "Weapon1"}, {"positive", 71}}, {{"name", "Weapon2"}, {"positive", 72}}, {{"name", "Weapon3"}, {"positive", 73}}}));
+    CHECK(migrated.size() == 3);
+    CHECK(migrated[0].Name == "MuzzleAttachment" && migrated[0].Positive == 71);
+    CHECK(migrated[1].Name == "GripAttachment" && migrated[1].Positive == 72);
+    CHECK(migrated[2].Name == "OpticAttachment" && migrated[2].Positive == 73);
     CHECK(InputMap::BindingName(InputMap::kMouseBase + 1) == "Mouse 1" && InputMap::BindingName(87) == "W");
 
     // A saved action list must not be able to LOSE a default. project/settings.json only holds
@@ -382,7 +388,7 @@ void TestInputMap() {
         CHECK(saved.size() == InputMap::Defaults().size()); // each default present exactly once
         CHECK(count("Reload") == 1);
         CHECK(saved[0].Positive == 71);      // the file's own binding survives the merge
-        CHECK(count("Weapon1") == 1);        // the default the file predates comes back
+        CHECK(count("MuzzleAttachment") == 1); // the default the file predates comes back
     }
 
     // Disabled (no game input): everything reads zero, including unknown names (no crash).
@@ -2651,10 +2657,8 @@ void TestOutfitCoverage() {
 // on the real meshes needs them loaded - GL - so it's checked in the editor, not here.)
 void TestWardrobeQuantum() {
     // The Quantum pack is project content, not engine data: a packaged engine (CI's standalone check)
-    // runs without it, and then there's nothing to test. Its models are on the shared Drive, not in
-    // git, so a clone has the wardrobe file but no meshes until they're fetched.
-    if (!std::filesystem::exists(ProjectPaths::Resolve("assets/Characters/Quantum/Quantum.wardrobe")) ||
-        !std::filesystem::exists(ProjectPaths::Resolve("assets/Characters/Quantum/Models/European/Quantum_Torso.fbx"))) {
+    // runs without it, and then there's nothing to test.
+    if (!std::filesystem::exists(ProjectPaths::Resolve("assets/Characters/Quantum/Quantum.wardrobe"))) {
         Log::Info("WardrobeQuantum: no Quantum pack in this project - skipped.");
         return;
     }
@@ -2804,10 +2808,8 @@ void TestAsyncImportCpu() {
     auto deferred = [](const std::string& rel) {
         return Model::ImportDeferred(ProjectPaths::Resolve(rel), ModelImportSettings{});
     };
-    // The model half needs the Quantum pack's meshes (project content from the shared Drive, absent
-    // from a packaged engine and from a clone that hasn't fetched them).
-    const bool quantum = std::filesystem::exists(
-        ProjectPaths::Resolve("assets/Characters/Quantum/Models/Female/Body/Heads/SKM_F_Vivian_Head.fbx"));
+    // The model half needs the Quantum pack (project content, absent from a packaged engine).
+    const bool quantum = std::filesystem::exists(ProjectPaths::Resolve("assets/Characters/Quantum"));
     if (quantum) {
         const auto head = deferred("assets/Characters/Quantum/Models/Female/Body/Heads/SKM_F_Vivian_Head.fbx");
         CHECK(head && head->NeedsGpuUpload());
@@ -3404,11 +3406,6 @@ void TestFirstPersonAnimationSet() {
 // The shotgun options (Remington 870): pellets and spread, a per-round reload, a pump worked after every
 // round, and a mount with a translation - parsed, written back, and defaulting to the plain rifle's.
 void TestAKAdditiveWalking() {
-    // The distributable sample omits Weapons. Source checkouts still gate the authored graph.
-    if (!std::filesystem::exists(ProjectPaths::Resolve("assets/Weapons"))) {
-        Log::Info("AK additive walking: no weapon project data - skipped.");
-        return;
-    }
     AnimatorController c;
     std::string error;
     CHECK(AnimatorController::LoadFile(ProjectPaths::Resolve("assets/Weapons/AKS74U/AKS74U.controller"),c,&error));
@@ -3480,10 +3477,6 @@ void TestAKAdditiveWalking() {
     CHECK(ac.StateName=="Idle" && ac.Layers[0].Stack.back().FadeDuration==0.8f);
 }
 void TestSprintTransitionWalk() {
-    if (!std::filesystem::exists(ProjectPaths::Resolve("assets/Weapons"))) {
-        Log::Info("Sprint transition walk: no weapon project data - skipped.");
-        return;
-    }
     for (const char* path : {"assets/Weapons/AKS74U/AKS74U.controller", "assets/Weapons/Remington870/Remington870.controller"}) {
         AnimatorController c;
         std::string error;
@@ -4169,12 +4162,6 @@ void TestAssetIdentity() {
     CHECK(AssetDatabase::AssetType(ProjectPaths::Resolve("scenes/Level.recovery.json")).empty());
     CHECK(AssetDatabase::AssetType(ProjectPaths::Resolve("settings.json")).empty());
 
-    // external_assets.csv: first column only; header, comments, blanks and CRLF handled; quoted paths.
-    const std::vector<std::string> ext = AssetDatabase::ParseExternalAssetList(
-        "path,size,sha256\r\n# comment\r\n\r\nassets/A/b.fbx,12,ab\r\n\"assets/C, D/e.png\",3,cd\r\nassets/f.wav\n");
-    CHECK(ext.size() == 3);
-    CHECK(ext.size() == 3 && ext[0] == "assets/A/b.fbx" && ext[1] == "assets/C, D/e.png" && ext[2] == "assets/f.wav");
-
     // A reference ("file#clip") follows its file to a new name by GUID; the suffix survives.
     const std::string model = (dir / "Hero.fbx").string(), moved = (dir / "Sub" / "HeroRig.fbx").string();
     CHECK(AtomicFile::WriteBytes(model, "not really an fbx", true));
@@ -4793,6 +4780,7 @@ void TestWeaponZero() {
     CHECK(FirstPersonAnimationSet::FromJsonString(
         R"({"armsModel":"a.fbx","weaponModel":"w.fbx","controller":"w.controller"})", set, &error));
     set.Gameplay.ZeroDistance = 50.0f;
+    set.HasLegacyGameplay = true; // old descriptor write/read compatibility; current prefabs own these stats
     set.Gameplay.HasSightLine = true;
     set.Gameplay.SightOrigin = glm::vec3(0.28f, 0.058f, 0.0f);
     set.Gameplay.SightDirection = glm::normalize(glm::vec3(-1.0f, -0.004f, 0.0f));
@@ -5214,6 +5202,21 @@ void TestAssetPackImport() {
 
     // A dropped folder is copied whole, layout kept, source files left behind.
     const fs::path assets = base / "project" / "assets";
+    const fs::path project = base / "project", library = base / "library";
+    const fs::path privateAssets = assets / "External";
+    auto importDir = [&](const fs::path& source, const std::string& selectedLibrary, const std::string& kind = "") {
+        return fs::path(AssetImport::ProjectImportDirectory(project.string(), source.string(), selectedLibrary, kind)).lexically_normal();
+    };
+    // Destination selection works before the target directories have been created.
+    CHECK(importDir(library / "Gun", library.string()) == privateAssets.lexically_normal());
+    CHECK(importDir(library / "Gun" / "a.fbx", library.string(), "Models") == (privateAssets / "Models").lexically_normal());
+    CHECK(importDir(library, library.string()) == privateAssets.lexically_normal());
+    CHECK(importDir(base / "library-other" / "a.fbx", library.string(), "Models") == (assets / "Models").lexically_normal());
+    CHECK(importDir(library / ".." / "outside" / "a.png", library.string(), "Textures") == (assets / "Textures").lexically_normal());
+    CHECK(importDir(pack, "", "Models") == (assets / "Models").lexically_normal());
+    const AssetImport::FolderCopy privateCopy = AssetImport::CopyFolderInto(pack.string(), privateAssets.string());
+    CHECK(privateCopy.Error.empty() && same(privateCopy.Folder, privateAssets / "Gun"));
+    CHECK(fs::exists(privateAssets / "Gun" / "Textures" / "Gun_Textures" / "Gun_Albedo_Transparency.png", ec));
     const AssetImport::FolderCopy first = AssetImport::CopyFolderInto(pack.string(), assets.string());
     CHECK(first.Error.empty());
     CHECK(same(first.Folder, assets / "Gun"));

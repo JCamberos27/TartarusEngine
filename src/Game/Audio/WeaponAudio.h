@@ -299,7 +299,7 @@ private:
 // One gun's audio: the shot layers, the gear sets keyed by element, and the blend that moves the report
 // from crack to distant thump.
 struct WeaponAudioProfile {
-    std::string Gun = "ak";                // key prefix, snd.<Gun>.<element>
+    std::string Gun;                // key prefix, snd.<Gun>.<element>
     bool Enabled = true;
     float Volume = 1.0f;                   // master gain for this gun
     float PlayerGain = 0.75f;              // the 2D (first-person) report's gain: the rifle is in your hands, not across a field

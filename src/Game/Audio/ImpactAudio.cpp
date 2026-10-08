@@ -1,3 +1,8 @@
+#include "../Scripting/NpcDefinitions.h"
+#include "../Scripting/GameFrames.h"
+#include "../Scripting/ScriptRuntime.h"
+#include <json.hpp>
+#include <stdexcept>
 #include "ImpactAudio.h"
 
 #include "FoleyAudio.h"
@@ -6,6 +11,14 @@
 #include <algorithm>
 #include <cmath>
 
+namespace {
+Scripting::ImpactFrame Rule(int operation,const ImpactAudioComponent& t,float value=0){
+    Scripting::ImpactFrame f;f.Operation=operation;f.Enabled=t.Enabled;f.CasingsEnabled=t.CasingsEnabled;f.MaxContacts=t.CasingMaxContacts;f.Speed=value;f.MinSpeed=t.CasingMinSpeed;f.FullSpeed=t.CasingFullSpeed;f.Volume=t.CasingVolume;f.GainMin=t.CasingGainMin;f.Radius=value;f.ShellRadius=t.ShellRadius;f.Miss=value;f.FlybyRadius=t.FlybyRadius;f.FlybyVolume=t.FlybyVolume;f.FarGain=t.FlybyFarGain;return f;
+}
+void Resolve(Scripting::ImpactFrame& f){if(!Scripting::InvokeProject("audio.impact",&f,sizeof f))throw std::runtime_error("Project impact policy unavailable");}
+nlohmann::json SetPolicy(const char* kind,const std::string& surface,bool shell,float min,float max,int voices){std::string result;if(!Scripting::RequestProject("audio.impact-set",nlohmann::json{{"kind",kind},{"surface",surface},{"shell",shell},{"min",min},{"max",max},{"voices",voices}}.dump(),result))throw std::runtime_error("Project sound set unavailable");return nlohmann::json::parse(result);}
+}
+
 ImpactAudio& ImpactAudio::Get() {
     static ImpactAudio instance;
     return instance;
@@ -13,7 +26,7 @@ ImpactAudio& ImpactAudio::Get() {
 
 void ImpactAudio::Start(World& world) {
     Stop();
-    m_T = ImpactAudioComponent{};
+    Scripting::SyncNpcDefinitions(world);m_T=Scripting::DefaultImpactAudioDefinition();
     if (const auto first = world.Registry.view<ImpactAudioComponent>(); first.begin() != first.end()) { // the first one counts
         const entt::entity e = *first.begin();
         m_T = world.Registry.get<ImpactAudioComponent>(e);
@@ -29,24 +42,22 @@ void ImpactAudio::Stop() {
 }
 
 bool ImpactAudio::CasingContactAudible(const ImpactAudioComponent& t, int contactIndex, float speed) {
-    return t.Enabled && t.CasingsEnabled && contactIndex >= 0 && contactIndex < t.CasingMaxContacts && speed >= t.CasingMinSpeed;
+    auto f=Rule(0,t,speed);f.Contact=contactIndex;Resolve(f);return f.Result!=0;
 }
 
 float ImpactAudio::CasingGain(const ImpactAudioComponent& t, float speed) {
-    const float k = std::clamp((speed - t.CasingMinSpeed) / std::max(t.CasingFullSpeed - t.CasingMinSpeed, 1e-3f), 0.0f, 1.0f);
-    return t.CasingVolume * (t.CasingGainMin + (1.0f - t.CasingGainMin) * k);
+    auto f=Rule(1,t,speed);Resolve(f);return f.Gain;
 }
 
 std::string ImpactAudio::ResolveSurface(const std::string& surface, const std::vector<std::string>& available, const std::string& fallback) {
-    if (std::find(available.begin(), available.end(), surface) != available.end()) return surface;
-    return fallback;
+    std::string result;if(!Scripting::RequestProject("audio.impact-surface",nlohmann::json{{"surface",surface},{"available",available},{"fallback",fallback}}.dump(),result))throw std::runtime_error("Project impact surface unavailable");return nlohmann::json::parse(result).get<std::string>();
 }
 
 float ImpactAudio::FlybyGain(const ImpactAudioComponent& t, float miss) {
-    if (miss > t.FlybyRadius || t.FlybyRadius <= 1e-4f) return 0.0f;
-    const float k = std::clamp(miss / t.FlybyRadius, 0.0f, 1.0f);
-    return t.FlybyVolume * (1.0f + (t.FlybyFarGain - 1.0f) * k);
+    auto f=Rule(3,t,miss);Resolve(f);return f.Gain;
 }
+
+bool ImpactAudio::IsShell(const ImpactAudioComponent& t,float radius){auto f=Rule(2,t,radius);Resolve(f);return f.Result!=0;}
 
 std::string ImpactAudio::SurfaceOf(const World& world, std::uint32_t entity) const {
     const auto e = static_cast<entt::entity>(entity);
@@ -59,29 +70,13 @@ std::string ImpactAudio::SurfaceOf(const World& world, std::uint32_t entity) con
 }
 
 SoundSet* ImpactAudio::ImpactSet(const std::string& surface) {
-    WeaponAudio& wa = WeaponAudio::Get();
-    return wa.KeySet("snd.impact." + surface, [&](SoundSet& s) {
-        s.MinDistance = m_T.ImpactMinDistance;
-        s.MaxDistance = m_T.ImpactMaxDistance;
-        s.MaxVoices = std::max(1, m_T.ImpactMaxVoices);
-        s.StealFadeTime = 0.03f;
-        s.PitchMin = 0.97f;
-        s.PitchMax = 1.03f;
-        s.VolumeJitterDb = 1.0f;
-    });
+    auto policy=SetPolicy("impact",surface,false,m_T.ImpactMinDistance,m_T.ImpactMaxDistance,m_T.ImpactMaxVoices);const auto key=policy.at("key").get<std::string>();
+    return WeaponAudio::Get().KeySet(key,[&](SoundSet& set){set=SoundSet::FromJson(key,policy.at("set").dump(),set);});
 }
 
 SoundSet* ImpactAudio::CasingSet(bool shell, const std::string& surface) {
-    WeaponAudio& wa = WeaponAudio::Get();
-    return wa.KeySet(std::string("snd.casing.") + (shell ? "shell." : "rifle.") + surface, [&](SoundSet& s) {
-        s.MinDistance = m_T.CasingMinDistance;
-        s.MaxDistance = m_T.CasingMaxDistance;
-        s.MaxVoices = std::max(1, m_T.CasingMaxVoices);
-        s.StealFadeTime = 0.05f;
-        s.PitchMin = 0.96f;
-        s.PitchMax = 1.04f;
-        s.VolumeJitterDb = 1.0f;
-    });
+    auto policy=SetPolicy("casing",surface,shell,m_T.CasingMinDistance,m_T.CasingMaxDistance,m_T.CasingMaxVoices);const auto key=policy.at("key").get<std::string>();
+    return WeaponAudio::Get().KeySet(key,[&](SoundSet& set){set=SoundSet::FromJson(key,policy.at("set").dump(),set);});
 }
 
 bool ImpactAudio::CasingContact(const World& world, const glm::vec3& pos, float speed, std::uint32_t groundEntity, bool shell, int contactIndex) {
@@ -110,8 +105,7 @@ bool ImpactAudio::Impact(const World& world, std::uint32_t entity, const glm::ve
     if (set->Files.empty()) return false;
     const double now = wa.Player().Now();
     double& last = m_LastImpact.try_emplace(used, -1e9).first->second;
-    if (now - last < m_T.ImpactMinInterval) return false;
-    last = now;
+    auto cadence=Rule(4,m_T);cadence.Now=now;cadence.Last=last;cadence.Interval=m_T.ImpactMinInterval;Resolve(cadence);if(!cadence.Result)return false;last=cadence.Last;
     wa.PlayKeyed(*set, pos, false, m_T.ImpactVolume);
     ++m_Played.Impacts;
     return true;
@@ -143,21 +137,14 @@ bool ImpactAudio::Flyby(const glm::vec3& point, float miss) {
     if (!m_Active || !m_T.Enabled || !m_T.FlybyEnabled) return false;
     WeaponAudio& wa = WeaponAudio::Get();
     if (!wa.Active()) return false;
-    SoundSet* set = wa.KeySet("snd.flyby", [&](SoundSet& s) {
-        s.MinDistance = m_T.FlybyMinDistance;
-        s.MaxDistance = m_T.FlybyMaxDistance;
-        s.MaxVoices = 4;
-        s.StealFadeTime = 0.03f;
-        s.PitchMin = 0.95f;
-        s.PitchMax = 1.05f;
-        s.VolumeJitterDb = 1.0f;
-    });
+    auto policy=SetPolicy("flyby","",false,m_T.FlybyMinDistance,m_T.FlybyMaxDistance,4);const auto key=policy.at("key").get<std::string>();
+    SoundSet* set=wa.KeySet(key,[&](SoundSet& value){value=SoundSet::FromJson(key,policy.at("set").dump(),value);});
     if (set->Files.empty()) return false;
     const float g = FlybyGain(m_T, miss);
     const double now = wa.Player().Now();
     if (g <= 0.0f) return false;
-    if (now - m_LastFlyby < m_T.FlybyMinInterval) return true; // a burst reads as a few cracks: this one is swallowed, not replaced by the placeholder
-    m_LastFlyby = now;
+    auto cadence=Rule(4,m_T);cadence.Now=now;cadence.Last=m_LastFlyby;cadence.Interval=m_T.FlybyMinInterval;Resolve(cadence);if(!cadence.Result)return true; // a burst reads as a few cracks: this one is swallowed, not replaced by the placeholder
+    m_LastFlyby=cadence.Last;
     wa.PlayKeyed(*set, point, false, g);
     ++m_Played.Flybys;
     return true;

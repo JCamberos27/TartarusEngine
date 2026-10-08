@@ -1,8 +1,14 @@
 #include "ScriptRuntime.h"
+#include "RuntimeCanvas.h"
+#include "RuntimeGui.h"
+#include "Input.h"
 #include "ScriptComponent.h"
+#include "PlayerDefinition.h"
+#include "NpcDefinitions.h"
 #include "ScriptServices.h"
 #include "World.h"
 #include "AssetLibrary.h"
+#include "AssetDatabase.h"
 #include "SceneSerializer.h"
 #include "PhysicsWorld.h"
 #include "InputMap.h"
@@ -17,6 +23,7 @@
 #include <algorithm>
 #include <chrono>
 #include <map>
+#include <mutex>
 #include <json.hpp>
 #define WIN32_LEAN_AND_MEAN
 #define NOMINMAX
@@ -27,17 +34,20 @@ namespace {
 using Dispatch = int (__cdecl*)(int, void*, int, void*);
 Dispatch dispatch = nullptr;
 bool attemptedLoad = false;
+std::uint64_t codeGeneration=0;
 std::string error;
 World* activeWorld = nullptr;
 AssetLibrary* activeAssets = nullptr;
 const std::function<void(const NativeRequest&)>* shotTrace = nullptr;
 std::set<std::uint64_t> live;
+std::uint64_t physicsSequence=~std::uint64_t{};
 std::set<std::string> rejectedScripts;
 HANDLE buildProcess = nullptr;
 std::filesystem::file_time_type assemblyTime{};
 bool buildPending=false;
 std::chrono::steady_clock::time_point buildAfter;
-std::string description;
+thread_local std::string description;
+std::recursive_mutex managedCalls;
 std::map<std::string,std::string> descriptionCache;
 const std::function<int(int,NativeRequest&)>* editorServices=nullptr;
 std::filesystem::file_time_type editorAssemblyTime{};
@@ -49,18 +59,18 @@ std::filesystem::path ModuleDir() {
     return std::filesystem::path(file).parent_path() / "Managed";
 }
 std::filesystem::path GameplayPath() {
-    auto project = std::filesystem::u8path(ProjectPaths::Resolve("Scripts/bin/Tartarus.Gameplay.dll"));
-    auto engine=ModuleDir()/"Tartarus.Gameplay.dll";
-    std::error_code ec;
-    if(!std::filesystem::exists(project,ec)) return engine;
-    const auto projectTime=std::filesystem::last_write_time(project,ec);
-    const auto engineTime=std::filesystem::last_write_time(engine,ec);
-    return ec || projectTime>engineTime ? project : engine;
+    auto project=std::filesystem::u8path(ProjectPaths::Resolve("Scripts/bin/Tartarus.Gameplay.dll"));
+    std::error_code ec;return std::filesystem::exists(project,ec)?project:std::filesystem::path{};
 }
 Vec3 Pack(const glm::vec3& v) { return {v.x,v.y,v.z}; }
 glm::vec3 Unpack(const Vec3& v) { return {v.x,v.y,v.z}; }
 int NativeImpl(int op, NativeRequest* r) {
     if (!r) return 0;
+    if(op==99 && r->Result==8)return RuntimeGuiService(*r);
+    if(op==99 && r->Result==9)return r->Script<=348 && Input::IsKeyPressed((int)r->Script);
+    if(op==99 && r->Result==7)return RuntimeCanvasService(*r);
+    if(op==99 && r->Result==6) {const auto asset=nlohmann::json::parse(r->Text?r->Text:"{}");const auto followed=AssetDatabase::FollowRef(asset.value("path",std::string{}),asset.value("pathGuid",std::string{}));description=nlohmann::json(followed.empty()?followed:ProjectPaths::Resolve(followed)).dump();r->Text=description.c_str();return 1;}
+    if(op==58 || (op>=90 && op<=92))return PhysicsServices(op,*r);
     if(op>=100) return editorServices?(*editorServices)(op,*r):0;
     // Physics services retain ownership of PhysX objects; no native pointer escapes into a script.
     switch(op) {
@@ -152,6 +162,7 @@ int NativeImpl(int op, NativeRequest* r) {
         return 1;
     }
     if(op==49) return !registry.all_of<DeactivatedTag>(e);
+    if(op==59) return !registry.all_of<InactiveTag>(e);
     if(op==50) {
         if(r->Result) registry.remove<DeactivatedTag>(e); else registry.get_or_emplace<DeactivatedTag>(e);
         activeWorld->SyncActiveInHierarchy(); return 1;
@@ -203,7 +214,9 @@ std::filesystem::path FindHostFxr() {
 }
 }
 const std::string& LastError() { return error; }
+std::uint64_t CodeGeneration() {return codeGeneration;}
 bool EnsureLoaded() {
+    std::lock_guard<std::recursive_mutex> lock(managedCalls);
     if(dispatch) return true;
     if(attemptedLoad) return false;
     attemptedLoad=true;
@@ -229,24 +242,27 @@ bool EnsureLoaded() {
     auto candidate=reinterpret_cast<Dispatch>(entry);
     const auto path=GameplayPath(); const std::string utf8=path.u8string();
     if(candidate(0,const_cast<char*>(utf8.c_str()),kVersion,reinterpret_cast<void*>(&Native))!=0) return Fail("Gameplay assembly initialization failed");
-    dispatch=candidate; std::error_code ec; assemblyTime=std::filesystem::last_write_time(path,ec); error.clear(); return true;
+    dispatch=candidate;++codeGeneration; std::error_code ec; assemblyTime=std::filesystem::last_write_time(path,ec); error.clear(); return true;
 }
 bool Invoke(int op, void* frame, int size) {
+    std::lock_guard<std::recursive_mutex> lock(managedCalls);
     if(!EnsureLoaded()) return false;
     const bool ok=dispatch(op,frame,size,reinterpret_cast<void*>(&Native))==0;
+    if(ok && (op==0 || op==5))++codeGeneration;
     if(ok && (op==0 || op==5)) { descriptionCache.clear(); rejectedScripts.clear(); }
     return ok;
 }
-bool InvokeShot(World& world, ShotFrame& frame, const std::function<void(const NativeRequest&)>& trace) {
+bool InvokeProjectWithTrace(World& world,const char* operation,void* data,int size, const std::function<void(const NativeRequest&)>& trace) {
     World* previousWorld=activeWorld;
     const auto* previousTrace=shotTrace;
     activeWorld=&world; shotTrace=&trace;
-    const bool ok=Invoke(6,&frame,sizeof frame);
+    const bool ok=InvokeProject(operation,data,size);
     activeWorld=previousWorld; shotTrace=previousTrace;
     return ok;
 }
 void Tick(World& world, AssetLibrary& assets, float dt, bool fixed) {
     activeWorld=&world; activeAssets=&assets;
+    SyncPlayerDefinitions(world);SyncNpcDefinitions(world);
     Poll();
     std::set<std::uint64_t> current;
     struct Binding { entt::entity Entity; ScriptSlot Slot; };
@@ -285,6 +301,22 @@ void Tick(World& world, AssetLibrary& assets, float dt, bool fixed) {
     }
     for(const auto& b:bindings) send(b,5); // construct all scripts before Awake/OnEnable
     for(const auto& b:bindings) send(b,active(b)?0:4);
+    for(const auto& b:bindings) if(active(b)) send(b,7); // Start before physics callbacks, without running Update
+    if(!fixed && PhysicsWorld::IsActive() && physicsSequence!=PhysicsWorld::EventSequence()) {
+        physicsSequence=PhysicsWorld::EventSequence();
+        auto events=nlohmann::json::array();
+        std::vector<TriggerEvent> triggers(static_cast<size_t>(PhysicsWorld::GetTriggerEvents(nullptr,0)));
+        PhysicsWorld::GetTriggerEvents(triggers.data(),static_cast<int>(triggers.size()));
+        for(const auto& e:triggers)events.push_back({{"target",e.Trigger},{"other",e.Other},{"phase",e.Kind},{"trigger",true}});
+        std::vector<ContactEvent> contacts(static_cast<size_t>(PhysicsWorld::GetContactEvents(nullptr,0)));
+        PhysicsWorld::GetContactEvents(contacts.data(),static_cast<int>(contacts.size()));
+        for(const auto& e:contacts)for(int side=0;side<2;side++) {
+            auto vector=[](const float* v,float sign=1.0f){return nlohmann::json{{"X",sign*v[0]},{"Y",sign*v[1]},{"Z",sign*v[2]}};};
+            events.push_back({{"target",side?e.B:e.A},{"other",side?e.A:e.B},{"phase",e.Kind},{"trigger",false},
+                {"point",vector(e.Point)},{"normal",vector(e.Normal,side?-1.0f:1.0f)},{"impulse",e.Impulse},{"speed",e.NormalSpeed}});
+        }
+        if(!events.empty()) {const auto json=events.dump();NativeRequest request;request.Text=json.c_str();Invoke(16,&request,sizeof request);}
+    }
     for(const auto& b:bindings) if(active(b)) send(b,fixed?2:1);
     if(!fixed) for(const auto& b:bindings) if(active(b)) send(b,6);
     live=std::move(current); activeWorld=nullptr; activeAssets=nullptr;
@@ -295,6 +327,7 @@ void Stop(World* world, AssetLibrary* assets) {
     if(dispatch) Invoke(4,nullptr,0);
     StopScriptSounds();
     live.clear(); rejectedScripts.clear(); activeWorld=nullptr; activeAssets=nullptr;
+    physicsSequence=~std::uint64_t{};
 }
 bool Building() { return buildProcess!=nullptr; }
 bool BuildPending() { return buildPending; }
@@ -304,6 +337,22 @@ std::string Describe(const std::string& className) {
     NativeRequest request; request.Text=className.c_str(); description.clear();
     if(!Invoke(7,&request,sizeof request)) description=nlohmann::json{{"error","Script type unavailable. Save the source to compile it, or use File > Build C# Gameplay."}}.dump();
     descriptionCache[className]=description; return description;
+}
+bool ResolveScriptFields(const std::string& className,const std::string& fields,std::string& resolved) {
+    const auto payload=nlohmann::json{{"class",className},{"fields",nlohmann::json::parse(fields)}}.dump();
+    NativeRequest request;request.Text=payload.c_str();description.clear();
+    if(!Invoke(13,&request,sizeof request)) return false;
+    resolved=description;return true;
+}
+bool InvokeProject(const char* operation,void* data,int size) {
+    ProjectCall call;call.Operation=operation;call.Data=data;call.Size=size;
+    return Invoke(14,&call,sizeof call);
+}
+bool RequestProject(const std::string& operation,const std::string& data,std::string& result) {
+    const auto payload=nlohmann::json{{"operation",operation},{"data",nlohmann::json::parse(data)}}.dump();
+    NativeRequest request;request.Text=payload.c_str();description.clear();
+    if(!Invoke(15,&request,sizeof request))return false;
+    result=description;return true;
 }
 bool Build() {
     if(buildProcess) return false;
@@ -316,10 +365,7 @@ bool Build() {
         std::filesystem::create_directories(project.parent_path(),ec);
         if(!ec) std::filesystem::create_directories(sources,ec);
         const auto templates=ModuleDir()/"SDK/Templates";
-        for(const char* name:{"Gameplay.cs","PlayerController.cs","WeaponController.cs"}) {
-            if(ec) break;
-            std::filesystem::copy_file(templates/name,sources/name,std::filesystem::copy_options::skip_existing,ec);
-        }
+        // An ordinary project starts without sample gameplay. FPS templates are optional project content.
         if(!ec) std::filesystem::copy_file(templates/"Tartarus.Gameplay.csproj",project,std::filesystem::copy_options::skip_existing,ec);
         if(ec) return Fail("Cannot create C# gameplay project: "+ec.message());
     }
@@ -393,9 +439,7 @@ void DrawEditorScripts(World& world,AssetLibrary& assets,float dt,const std::fun
     activeWorld=&world;activeAssets=&assets;editorServices=&services;
     Poll();
     auto project=std::filesystem::u8path(ProjectPaths::Resolve("Scripts/bin/Tartarus.Editor.dll"));
-    const auto staged=ModuleDir()/"Tartarus.Editor.dll";
     std::error_code ec;
-    if(!std::filesystem::exists(project,ec) || (std::filesystem::exists(staged,ec) && std::filesystem::last_write_time(staged,ec)>std::filesystem::last_write_time(project,ec))) project=staged;
     if(std::filesystem::exists(project,ec) && !buildProcess) {
         const auto stamp=std::filesystem::last_write_time(project,ec);
         if(!ec && (!editorAttempted || stamp!=editorAssemblyTime)) {

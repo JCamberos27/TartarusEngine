@@ -1,6 +1,9 @@
+#include "../Game/Scripting/NpcDefinitions.h"
 #include "UnitTestSupport.h"
 #include "../Game/Components.h"
 #include "../Game/ComponentRegistry.h"
+#include "../Game/Scripting/PlayerDefinition.h"
+#include "../Game/Scripting/ScriptComponent.h"
 #include "../Game/GravityGun.h"
 #include "../Game/CombatHud.h"
 #include "../Game/Combat/CombatFx.h"
@@ -34,39 +37,39 @@ static bool RoundTrip(World& world, AssetLibrary& assets, const char* name, cons
 static void Test_FirstPersonController_NewFieldsRoundTrip() {
     World world;
     AssetLibrary assets;
-    FirstPersonControllerComponent in;
-    in.StickLookDegPerSec = 222.0f;
-    in.EyeRadius = 0.2f;
-    in.GrabRange = 55.0f;
-    in.AssistRange = 12.0f;
-    in.AssistConeDeg = 11.0f;
-    in.ScrollTurnDeg = 33.0f;
-    FirstPersonControllerComponent out;
-    CHECK(RoundTrip(world, assets, "First Person Controller", in, out));
-    CHECK(out.StickLookDegPerSec == 222.0f && out.EyeRadius == 0.2f);
-    CHECK(out.GrabRange == 55.0f && out.AssistRange == 12.0f);
-    CHECK(out.AssistConeDeg == 11.0f && out.ScrollTurnDeg == 33.0f);
+    const auto entity=world.CreateEmptyEntity({0,0,0},{0,0,0},{1,1,1},"Player");
+    auto& script=world.Registry.emplace<CSharpScriptComponent>(entity);
+    Scripting::Attach(script,"assets/Scripts/PlayerDefinition.cs","Tartarus.Gameplay.PlayerDefinition");
+    script.Fields=R"({"StickLookDegPerSec":222,"EyeRadius":0.2,"GrabRange":55,"AssistRange":12,"AssistConeDeg":11,"ScrollTurnDeg":33})";
+    Scripting::SyncPlayerDefinition(world,entity);
+    const auto snapshot=SceneSerializer::SaveToString(world);
+    CHECK(snapshot.find("First Person Controller")==std::string::npos);
+    CHECK(snapshot.find("Tartarus.Gameplay.PlayerDefinition")!=std::string::npos);
+    World restored;CHECK(SceneSerializer::LoadFromString(restored,assets,snapshot));
+    const auto controllers=restored.Registry.view<FirstPersonControllerComponent>();CHECK(!controllers.empty());
+    if(controllers.empty())return;
+    const auto& out=controllers.get<FirstPersonControllerComponent>(controllers.front());
+    CHECK(out.StickLookDegPerSec==222 && out.EyeRadius==.2f);
+    CHECK(out.GrabRange==55 && out.AssistRange==12);
+    CHECK(out.AssistConeDeg==11 && out.ScrollTurnDeg==33);
+    restored.Registry.get<CSharpScriptComponent>(controllers.front()).Enabled=false;
+    Scripting::SyncPlayerDefinitions(restored);CHECK(restored.Registry.view<FirstPersonControllerComponent>().empty());
+    script.Fields=R"({"MoveSpeed":9})";Scripting::SyncPlayerDefinitions(world);
+    CHECK(world.Registry.get<FirstPersonControllerComponent>(entity).MoveSpeed==9);
+    world.Registry.remove<CSharpScriptComponent>(entity);Scripting::SyncPlayerDefinitions(world);
+    CHECK(!world.Registry.all_of<FirstPersonControllerComponent>(entity));
 }
 
 static void Test_FxHudSettings_RoundTrip() {
-    World world;
-    AssetLibrary assets;
-    FxHudSettingsComponent in;
-    in.FlashTime = 0.1f;
-    in.PlayerFlashScale = 0.5f;
-    in.FlameGlow = 90.0f;
-    in.FlameScale = 2.5f;
-    in.BeamRange = 60.0f;
-    in.BeamHalfWidth = 0.003f;
-    in.BeamFalloff = 5.0f;
-    in.BeamBend = 8.0f;
-    in.FeedLife = 9.0f;
-    in.StreakWindow = 2.0f;
-    FxHudSettingsComponent out;
-    CHECK(RoundTrip(world, assets, "FX & HUD Settings", in, out));
-    CHECK(out.FlashTime == 0.1f && out.PlayerFlashScale == 0.5f && out.FlameGlow == 90.0f && out.FlameScale == 2.5f);
-    CHECK(out.BeamRange == 60.0f && out.BeamHalfWidth == 0.003f && out.BeamFalloff == 5.0f && out.BeamBend == 8.0f);
-    CHECK(out.FeedLife == 9.0f && out.StreakWindow == 2.0f);
+    World world;AssetLibrary assets;
+    CHECK(SceneSerializer::LoadFromString(world,assets,R"({"empties":[{"id":1,"name":"Effects","transform":{"position":[0,0,0],"rotation":[0,0,0],"scale":[1,1,1]},"FX & HUD Settings":{"Flash Time":0.1,"Player Flash Scale":0.5,"Flame Glow":90,"Flame Scale":2.5,"Beam Range":60,"Beam Half Width":0.003,"Beam Falloff":5,"Beam Bend":8,"Feed Life":9,"Streak Window":2}}]})"));
+    auto views=world.Registry.view<FxHudSettingsComponent>();CHECK(!views.empty());if(views.empty())return;
+    const auto& out=views.get<FxHudSettingsComponent>(views.front());
+    CHECK(out.FlashTime==.1f && out.PlayerFlashScale==.5f && out.FlameGlow==90 && out.FlameScale==2.5f);
+    CHECK(out.BeamRange==60 && out.BeamHalfWidth==.003f && out.BeamFalloff==5 && out.BeamBend==8);
+    CHECK(out.FeedLife==9 && out.StreakWindow==2);
+    const auto saved=SceneSerializer::SaveToString(world);CHECK(saved.find("FX & HUD Settings")==std::string::npos);CHECK(saved.find("Tartarus.Gameplay.EffectsDefinition")!=std::string::npos);
+    World restored;CHECK(SceneSerializer::LoadFromString(restored,assets,saved));auto again=restored.Registry.view<FxHudSettingsComponent>();CHECK(!again.empty());if(!again.empty())CHECK(again.get<FxHudSettingsComponent>(again.front()).FeedLife==9);
 }
 
 static void Test_BloodSettings_RoundTrip() {
@@ -103,7 +106,7 @@ static void Test_GravityGun_AssistReach() {
 }
 
 static void Test_FxHud_SettingsDrivePureHelpers() {
-    FxHudSettingsComponent s;
+    FxHudSettingsComponent s=Scripting::DefaultEffectsDefinition();
     // Defaults are the old fixed values.
     CHECK(CombatFx::FlashPeak(s, false, false) == 18.0f);
     CHECK(CombatFx::FlashPeak(s, true, false) == 26.0f);

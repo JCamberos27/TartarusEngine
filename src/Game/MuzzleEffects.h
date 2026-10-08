@@ -5,6 +5,8 @@
 // Authored on the weapon prefab. Each shot snapshots these values so a weapon switch
 // cannot change a flash that is already alive.
 struct MuzzleEffectSettings {
+    bool PrefabParticles = false; // runtime: the prefab's generic systems own the flash
+    std::string FiringSounds, FiringSoundProfile; // runtime: selected muzzle attachment
     bool Enabled = true;
     float FlashTime = 0.055f;
     float LightIntensity = 18.0f;

@@ -1,4 +1,8 @@
 #include "WeaponAudio.h"
+#include "../Scripting/GameFrames.h"
+#include "../Scripting/ScriptRuntime.h"
+#include "../Scripting/NpcDefinitions.h"
+#include <stdexcept>
 
 #include "Components.h"
 #include "GameModuleAPI.h"
@@ -224,33 +228,17 @@ std::vector<std::string> SoundManifest::Keys() const {
     return {k.begin(), k.end()};
 }
 
-std::string WeaponAudioGunFolder(const std::string& gunId) {
-    if (gunId == "ak") return "AKS74U";
-    if (gunId == "870") return "Remington870";
-    return gunId;
+namespace {
+json ProjectAudio(const char* operation,const std::string& value="") {
+    static std::unordered_map<std::string,json> cache;static std::uint64_t generation=~std::uint64_t{};
+    if(generation!=Scripting::CodeGeneration()){cache.clear();generation=Scripting::CodeGeneration();}
+    const auto key=std::string(operation)+":"+value;if(auto it=cache.find(key);it!=cache.end())return it->second;
+    std::string result;if(!Scripting::RequestProject(operation,json(value).dump(),result))throw std::runtime_error("Project sound policy unavailable");auto data=json::parse(result);cache[key]=data;return data;
 }
-
-std::string WeaponAudioGunId(const std::string& weaponPath) {
-    const std::string lower = Lower(weaponPath);
-    if (lower.find("aks74u") != std::string::npos) return "ak";
-    if (lower.find("remington870") != std::string::npos) return "870";
-    std::string stem = std::filesystem::path(weaponPath).stem().string();
-    return Lower(stem);
 }
-
-std::string SoundKeyFilePrefix(const std::string& key) {
-    if (key.rfind("snd.", 0) != 0) return {};
-    const std::string rest = key.substr(4);
-    if (rest.rfind("foley.", 0) == 0) {
-        const std::string r2 = rest.substr(6);
-        const size_t dot = r2.find('.');
-        if (dot == std::string::npos || dot == 0 || dot + 1 >= r2.size()) return {};
-        return "assets/Audio/Foley/" + r2.substr(0, dot) + "/" + r2.substr(dot + 1) + "_";
-    }
-    const size_t dot = rest.find('.');
-    if (dot == std::string::npos || dot == 0 || dot + 1 >= rest.size()) return {};
-    return "assets/Audio/Weapons/" + WeaponAudioGunFolder(rest.substr(0, dot)) + "/" + rest.substr(dot + 1) + "_";
-}
+std::string WeaponAudioGunFolder(const std::string& gunId) {return ProjectAudio("audio.folder",gunId).get<std::string>();}
+std::string WeaponAudioGunId(const std::string& path) {return ProjectAudio("audio.gun",path).get<std::string>();}
+std::string SoundKeyFilePrefix(const std::string& key) {return ProjectAudio("audio.prefix",key).get<std::string>();}
 
 std::vector<std::string> SoundFilesByLayout(const std::string& root, const std::string& key) {
     std::vector<std::string> out;
@@ -661,33 +649,10 @@ WeaponAudioProfile::Layer* WeaponAudioProfile::LayerByName(const std::string& na
 }
 
 WeaponAudioProfile WeaponAudioProfile::Default(const std::string& gun) {
-    WeaponAudioProfile p;
-    p.Gun = gun;
-    const std::string k = "snd." + gun + ".fire_";
-    auto layer = [&](Layer& l, const char* name, float full, float zero, float nearW, float farW, float minD, float maxD, int voices, float fade) {
-        l.Set.Key = k + name;
-        l.Set.MinDistance = minD;
-        l.Set.MaxDistance = maxD;
-        l.Set.MaxVoices = voices;
-        l.Set.StealFadeTime = fade;
-        l.Set.PitchMin = l.Set.PitchMax = 1.0f;
-        l.Set.VolumeJitterDb = 0.5f;
-        l.Curve = {full, zero, nearW, farW};
-    };
-    layer(p.Close, "close", 18.0f, 43.0f, 1.0f, 0.0f, 3.0f, 90.0f, 6, 0.03f);
-    layer(p.Mech, "mech", 10.0f, 30.0f, 1.0f, 0.0f, 3.0f, 45.0f, 6, 0.03f);
-    layer(p.Sub, "sub", 25.0f, 70.0f, 1.0f, 0.0f, 6.0f, 120.0f, 6, 0.05f);
-    layer(p.Tail, "tail", 30.0f, 120.0f, 1.0f, 0.7f, 6.0f, 140.0f, 3, 0.25f);
-    layer(p.Far, "far", 18.0f, 43.0f, 0.1f, 1.0f, 6.0f, 160.0f, 6, 0.1f);
-    p.Far.Player2D = false;
-    p.Tail.Every = 2; // full auto: close / sub / mech every shot, tail every 2nd, far every 3rd (S1's mix policy)
-    p.Far.Every = 3;
-    for (int c = 0; c < kSpaceClassCount; ++c) { // the tail by space: the same set of rules, its own files
-        p.TailClass[c] = p.Tail;
-        p.TailClass[c].Set.Key = k + "tail_" + SpaceClassName((SpaceClass)c);
-    }
-    for (const char* e : {"ads_in", "ads_out", "equip", "unequip"}) p.Aliases[e] = std::string("snd.foley.weapon.") + e;
-    return p;
+    WeaponAudioProfile p;p.Gun=gun;p.ApplyComponent(Scripting::DefaultWeaponAudioDefinition());
+    const auto data=ProjectAudio("audio.default-profile",gun);
+    for(auto it=data.at("layers").begin();it!=data.at("layers").end();++it)if(auto* layer=p.LayerByName(it.key()))layer->Set.Key=it.value().at("key").get<std::string>();
+    p.ApplyJson(data.dump());return p;
 }
 
 void WeaponAudioProfile::ApplyComponent(const WeaponAudioComponent& c) {
@@ -748,6 +713,7 @@ void WeaponAudioProfile::ApplyComponent(const WeaponAudioComponent& c) {
 void WeaponAudioProfile::ApplyJson(const std::string& text) {
     const json j = json::parse(text, nullptr, false);
     if (!j.is_object()) return;
+    if(j.contains("aliases") && j["aliases"].is_object())for(auto it=j["aliases"].begin();it!=j["aliases"].end();++it)if(it.value().is_string())Aliases[it.key()]=it.value().get<std::string>();
     TailMinInterval = Num(j, "tailMinInterval", TailMinInterval);
     TailDuckPerVoice = Num(j, "tailDuckPerVoice", TailDuckPerVoice);
     BurstGap = Num(j, "burstGap", BurstGap);
@@ -791,6 +757,7 @@ void WeaponAudioProfile::ApplyJson(const std::string& text) {
 std::string WeaponAudioProfile::ToJson() const {
     json j;
     j["gun"] = Gun;
+    j["aliases"] = Aliases;
     j["tailMinInterval"] = TailMinInterval;
     j["tailDuckPerVoice"] = TailDuckPerVoice;
     j["burstGap"] = BurstGap;
@@ -899,7 +866,7 @@ void WeaponAudio::StartForTest(const std::string& projectRoot, SoundBackend* bac
     m_RemoteActive = false;
     m_PathCalls = m_Refreshes = 0;
     m_PathMicros = m_RefreshMicros = 0.0;
-    for (const char* g : {"ak", "870"}) m_Profiles[g] = WeaponAudioProfile::Default(g);
+    for (const auto& value : ProjectAudio("audio.profiles")) {const auto gun=value.get<std::string>();m_Profiles[gun]=WeaponAudioProfile::Default(gun);}
     InstallLog();
     InstallRouting();
     m_Active = true;
@@ -919,7 +886,8 @@ void WeaponAudio::Start(World& world, const std::string& projectRoot) {
             SoundManifest::FromJson(ss.str(), m_Manifest);
         }
     }
-    for (const char* g : {"ak", "870"}) m_Profiles[g] = WeaponAudioProfile::Default(g);
+    for (const auto& value : ProjectAudio("audio.profiles")) {const auto gun=value.get<std::string>();m_Profiles[gun]=WeaponAudioProfile::Default(gun);}
+    Scripting::SyncNpcDefinitions(world);
     for (const entt::entity e : world.Registry.view<WeaponAudioComponent>()) {
         const WeaponAudioComponent& c = world.Registry.get<WeaponAudioComponent>(e);
         if (c.Gun.empty()) continue;
@@ -1274,7 +1242,7 @@ AudioEngine::ReverbSpec WeaponAudio::ReverbAt(const glm::vec3& pos) {
     if (z.ProbeShare > 1e-3f) {
         constexpr std::uint32_t kListenerProbe = 0xFFFFFFFDu;
         EnvironmentSettings env;
-        if (const auto it = m_Profiles.find("ak"); it != m_Profiles.end()) env = it->second.Env;
+        if (const auto it = m_Profiles.find(ProjectAudio("audio.environment-profile").get<std::string>()); it != m_Profiles.end()) env = it->second.Env;
         else if (!m_Profiles.empty()) env = m_Profiles.begin()->second.Env;
         const EnvironmentReading& r = m_ListenerProbe.Query(kListenerProbe, pos, m_Player.Now(), env);
         for (int i = 0; i < kSpaceClassCount; ++i) add(ReverbPresetFor(i), z.ProbeShare * r.Weights[i]);
@@ -1424,34 +1392,17 @@ int WeaponAudio::Shot(const std::string& gun, const glm::vec3& pos, bool at2D, s
     if (!m_Active) return 0;
     WeaponAudioProfile* p = Profile(gun);
     if (!p || !p->Enabled) return 0;
-    const float pitch = p->ShotPitchMin + (p->ShotPitchMax - p->ShotPitchMin) * m_Player.Rand01();
-    const float d = at2D ? 0.0f : glm::length(pos - m_Listener);
-    int started = 0;
-    // Full auto: which shot of the burst this is decides which layers sound (close / sub / mech every shot, the long tails and
-    // the distant report on every Nth), so a burst doesn't stack a tail per round.
-    Burst& burst = m_Bursts[gun + (at2D ? "/2d" : "/3d")];
-    if (m_Player.Now() - burst.Last > p->BurstGap) burst.Count = 0;
-    const int shotNumber = burst.Count++;
-    burst.Last = m_Player.Now();
-    for (WeaponAudioProfile::Layer* l : {&p->Close, &p->Mech, &p->Sub, &p->Far, &p->Tail}) {
-        if (at2D && !l->Player2D) continue;
-        if (l->Every > 1 && shotNumber % l->Every != 0) continue;
-        const float w = at2D ? 1.0f : l->Curve.Weight(d);
-        if (w < 0.01f) continue;
-        SoundPlayer::Request r;
-        r.Position = pos;
-        r.At2D = at2D;
-        r.PitchScale = pitch;
-        r.Gain = p->Volume * w * (at2D ? p->PlayerGain : 1.0f);
-        if (l == &p->Tail) { // the tail follows the space the shooter is in (Reverb Zone, else the probe)
-            if (m_Player.Now() - m_LastTail < p->TailMinInterval) continue;
-            r.Gain /= 1.0f + p->TailDuckPerVoice * (float)TailVoices(*p);
-            m_LastTail = m_Player.Now();
-            started += PlayTail(*p, r, shooter, pos, at2D);
-            continue;
-        }
-        Note(l->Set.Key, at2D);
-        if (m_Player.Play(l->Set, r).Started) ++started;
+    Scripting::AudioShotFrame f;f.PitchMin=p->ShotPitchMin;f.PitchMax=p->ShotPitchMax;f.Random=m_Player.Rand01();f.Distance=at2D?0:glm::length(pos-m_Listener);f.At2D=at2D;
+    f.Volume=p->Volume;f.PlayerGain=p->PlayerGain;f.Now=m_Player.Now();f.LastTail=m_LastTail;f.TailMinInterval=p->TailMinInterval;f.TailDuckPerVoice=p->TailDuckPerVoice;f.TailVoices=TailVoices(*p);f.BurstGap=p->BurstGap;
+    Burst& burst=m_Bursts[gun+(at2D?"/2d":"/3d")];f.Count=burst.Count;f.LastShot=burst.Last;
+    WeaponAudioProfile::Layer* layers[]{&p->Close,&p->Mech,&p->Sub,&p->Far,&p->Tail};
+    for(int i=0;i<5;++i){const auto& l=*layers[i];f.Player2D[i]=l.Player2D;f.Every[i]=l.Every;f.Near[i]=l.Curve.NearDistance;f.Far[i]=l.Curve.FarDistance;f.NearWeight[i]=l.Curve.NearWeight;f.FarWeight[i]=l.Curve.FarWeight;}
+    if(!Scripting::InvokeProject("audio.shot",&f,sizeof f))throw std::runtime_error("Project shot sound policy unavailable");
+    burst.Count=f.Count;burst.Last=f.LastShot;m_LastTail=f.LastTail;int started=0;
+    for(int i=0;i<5;++i)if(f.Play[i]) {
+        SoundPlayer::Request request;request.Position=pos;request.At2D=at2D;request.PitchScale=f.Pitch;request.Gain=f.Gain[i];
+        if(i==4){started+=PlayTail(*p,request,shooter,pos,at2D);continue;}
+        Note(layers[i]->Set.Key,at2D);if(m_Player.Play(layers[i]->Set,request).Started)++started;
     }
     m_ShotVoices += started;
     return started;
@@ -1566,19 +1517,9 @@ void WeaponAudio::EnvironmentDebugLines(std::vector<float>& out, bool withZones)
     m_ListenerProbe.DebugLines(out);
 }
 
-bool WeaponAudio::ParseKey(const std::string& name, std::string& gun, std::string& element, float* leadMs) {
-    if (name.rfind("snd.", 0) != 0) return false;
-    std::string rest = name.substr(4);
-    if (leadMs) *leadMs = -1.0f;
-    if (const size_t at = rest.find('@'); at != std::string::npos) {
-        if (leadMs) *leadMs = (float)std::atof(rest.c_str() + at + 1);
-        rest.resize(at);
-    }
-    const size_t dot = rest.find('.');
-    if (dot == std::string::npos || dot == 0 || dot + 1 >= rest.size()) return false;
-    gun = rest.substr(0, dot);
-    element = rest.substr(dot + 1);
-    return true;
+bool WeaponAudio::ParseKey(const std::string& name,std::string& gun,std::string& element,float* leadMs) {
+    const auto data=ProjectAudio("audio.parse",name);if(!data.value("valid",false))return false;
+    gun=data.at("gun").get<std::string>();element=data.at("element").get<std::string>();if(leadMs)*leadMs=data.at("lead").get<float>();return true;
 }
 
 bool WeaponAudio::HasEventFiles(const std::string& gun, const std::string& element) {
@@ -1613,7 +1554,7 @@ SoundSet* WeaponAudio::FoleySet(const std::string& category, const std::string& 
     if (it == m_Foley.end()) {
         SoundSet s;
         s.Key = key;
-        const auto gun = m_Profiles.find("ak") != m_Profiles.end() ? m_Profiles.find("ak") : m_Profiles.begin();
+        const auto gun = m_Profiles.find(ProjectAudio("audio.environment-profile").get<std::string>()) != m_Profiles.end() ? m_Profiles.find(ProjectAudio("audio.environment-profile").get<std::string>()) : m_Profiles.begin();
         s.MinDistance = gun != m_Profiles.end() ? gun->second.EventMinDistance : 1.5f; // gear sounds: the gun events' reach
         s.MaxDistance = gun != m_Profiles.end() ? gun->second.EventMaxDistance : 25.0f;
         s.MaxVoices = 4;

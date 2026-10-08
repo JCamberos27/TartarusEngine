@@ -126,6 +126,13 @@ FirstPersonWeaponTest::FirstPersonWeaponTest(bool stockProbe, bool probeAk) : m_
          }},
         {"AK ADS round", [](C& c) { c.Aim = true; }, [](C& c) { return c.State() == "Aim" && c.Time > 0.6f; }, 3.0f,
          [=](C& c) { mem->Ammo = c.P->Ammo(); }},
+        {"AK ADS optic to iron sights", [](C& c) { c.P->CycleAttachment(Scripting::AttachmentKind::Optic); },
+         [](C& c) { if(c.Time > .3f) c.Shot="optic_iron_ads"; return c.Time > .35f; }, 2.0f,
+         [=](C& c) { check(c,c.P->AttachmentCount(Scripting::AttachmentKind::Optic)==2,"both authored optic choices loaded");
+                      check(c,c.State()=="Aim","optic change keeps ADS active"); }},
+        {"AK ADS optic to red dot", [](C& c) { c.P->CycleAttachment(Scripting::AttachmentKind::Optic); },
+         [](C& c) { if(c.Time > .3f) c.Shot="optic_red_dot_ads"; return c.Time > .35f; }, 2.0f,
+         [=](C& c) { check(c,c.State()=="Aim","red dot change keeps ADS active"); }},
         {"AK ADS round fires", fire, [=](C& c) { flashShots(c, "muzzle_ak_ads"); return c.Time > 0.4f; }, 2.0f,
          [=](C& c) {
              ammoIs(c, mem->Ammo - 1);
@@ -159,7 +166,7 @@ FirstPersonWeaponTest::FirstPersonWeaponTest(bool stockProbe, bool probeAk) : m_
              check(c, c.CasingsAsleep == c.Casings, std::to_string(c.CasingsAsleep) + " of them at rest");
          }},
 
-        {"2: switch to the Remington", [](C& c) { c.P->SelectSlot(1); },
+        {"Scroll down: switch to the Remington", [](C& c) { c.P->CycleSlot(1); },
          [](C& c) { return c.P->Slot() == 1 && c.State() == "Idle"; }, 180.0f,
          [=](C& c) {
              check(c, c.Saw("Holster"), "AK holstered first");

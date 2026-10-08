@@ -1,16 +1,9 @@
 {
-  "folder": "assets/Characters/Quantum/Textures/Clothing/Accessories/Tie",
-  "guid": "35039109a034999b",
-  "importer": {
-    "anisoLevel": 16,
-    "compression": 2,
-    "filterMode": 2,
-    "generateMipmaps": true,
-    "isSRGB": false,
-    "maxTextureSize": 2048,
-    "textureType": 1,
-    "wrapMode": 0
-  },
+  "guid": "be960c9f16ac0b7d",
   "metaVersion": 1,
-  "type": "texture"
+  "type": "texture",
+  "importer": {
+    "isSRGB": false,
+    "textureType": 1
+  }
 }

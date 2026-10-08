@@ -1,16 +1,9 @@
 {
-  "folder": "assets/Characters/Quantum/Textures/Clothing/Outerwear/Puffer_Jacket",
-  "guid": "9c4ed11ebaee1486",
-  "importer": {
-    "anisoLevel": 16,
-    "compression": 2,
-    "filterMode": 2,
-    "generateMipmaps": true,
-    "isSRGB": true,
-    "maxTextureSize": 2048,
-    "textureType": 0,
-    "wrapMode": 0
-  },
+  "guid": "a4404bc7e44eb3cf",
   "metaVersion": 1,
-  "type": "texture"
+  "type": "texture",
+  "importer": {
+    "isSRGB": true,
+    "textureType": 0
+  }
 }

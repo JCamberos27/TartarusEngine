@@ -1,7 +1,8 @@
 #pragma once
 
 #include "FirstPersonAdsCarry.h"
-#include "Scripting/ScriptAbi.h"
+#include "Scripting/GameFrames.h"
+#include "Scripting/WeaponAttachments.h"
 #include "FirstPersonAnimation.h"
 #include "FirstPersonBody.h" // FirstPersonStockLockInput
 #include "ShellCasings.h"      // CasingSpawn
@@ -122,8 +123,10 @@ public:
     int SlotCount() const { return (int)m_SlotSets.size(); }
     int Slot() const { return m_Slot; }
     void SelectSlot(int slot);
-    // The scroll wheel: through the slots, then unarmed, and round again (`step` +1 / -1).
+    // The scroll wheel wraps through weapon slots (`step` +1 / -1).
     void CycleSlot(int step);
+    void CycleAttachment(Scripting::AttachmentKind kind);
+    int AttachmentCount(Scripting::AttachmentKind kind) const { return m_Attachments.Count(kind); }
 
     int Ammo() const { return m_Ammo; }
     void SetAmmo(int rounds) { m_Ammo = rounds < 0 ? 0 : rounds; } // tests: a part-empty magazine to reload
@@ -292,6 +295,18 @@ private:
     IKCurveWeights m_IKCurves;                // the clip weight curves this frame (1 = none)
     entt::entity m_Arms = entt::null;
     entt::entity m_Weapon = entt::null;
+    entt::entity m_WeaponParticles = entt::null, m_WorldWeaponParticles = entt::null;
+    std::vector<entt::entity> m_WeaponEmitters, m_WorldWeaponEmitters;
+    std::vector<entt::entity> m_WeaponAttachmentEntities;
+    glm::mat4 m_ParticleBindInverse{1.0f};
+    Scripting::WeaponAttachments m_Attachments, m_WorldAttachments;
+    std::vector<std::array<int, 3>> m_SlotAttachmentSelections;
+    glm::vec3 m_OpticOffset{0.0f}, m_OpticFromOffset{0.0f};
+    glm::quat m_OpticRotation{1, 0, 0, 0}, m_OpticFromRotation{1, 0, 0, 0};
+    float m_OpticBlendElapsed = 1.0f, m_OpticBlendTime = .2f;
+    void ApplyMuzzleAttachment();
+    void SetupWeaponParticles();
+    void SetupWorldWeaponParticles();
     std::shared_ptr<Model> m_ArmsModel;
     std::shared_ptr<Model> m_WeaponModel;
     glm::vec3 m_Offset{0.0f};
@@ -426,6 +441,7 @@ private:
     float m_RegripDelay = 15.0f;
     float m_ManagedReloadSeconds=0;
     bool m_ManagedReloadDown=false, m_ManagedReloadFired=false;
+    Scripting::WeaponLoadoutFrame RunLoadout(int operation,int value=0);
     Scripting::WeaponFrame RunGameplay(int operation,float dt=0.0f,bool pressed=false,bool held=false,int events=0);
     std::mt19937 m_Rng{std::random_device{}()};
 };

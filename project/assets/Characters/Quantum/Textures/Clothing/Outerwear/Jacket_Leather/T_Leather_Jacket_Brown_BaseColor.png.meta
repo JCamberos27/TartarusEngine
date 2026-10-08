@@ -1,16 +1,9 @@
 {
-  "folder": "assets/Characters/Quantum/Textures/Clothing/Outerwear/Jacket_Leather",
-  "guid": "d76bf276e74810e9",
-  "importer": {
-    "anisoLevel": 16,
-    "compression": 2,
-    "filterMode": 2,
-    "generateMipmaps": true,
-    "isSRGB": true,
-    "maxTextureSize": 2048,
-    "textureType": 0,
-    "wrapMode": 0
-  },
+  "guid": "14a611b6f8a91ffd",
   "metaVersion": 1,
-  "type": "texture"
+  "type": "texture",
+  "importer": {
+    "isSRGB": true,
+    "textureType": 0
+  }
 }

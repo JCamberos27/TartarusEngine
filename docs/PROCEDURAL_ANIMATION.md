@@ -8,12 +8,18 @@ see `BODY_SETUP.md` and `FPS_ANIMATION_SYSTEM.md` §8b. Their tuning fields are 
 Everything is tuned per weapon in the weapon definition (`.fpsanim`). To open it, either:
 
 - select the player object and press **Edit Weapon Definition** at the bottom of its First Person Controller, or
-- select the file in the Asset Browser's **Animation** folder.
+- select the `.fpsanim` in its **assets/Weapons/<Weapon>** folder in the Asset Browser.
 
 Then open the **Recoil**, **Movement** and **IK** sections in the Inspector. Edits save immediately and apply **live in Play**: the running game re-reads the file within a quarter second, and that includes changes to the IK bone names.
 
 Every field explains itself when you hover its label. Each section has a **Reset to Defaults** button, which asks before it resets anything. The header's **Undo** button steps back through every change to the weapon,
 including a reset.
+
+The shipped AKS74U and Remington870 use shared version 2 recoil profiles, the source sway
+modifier, additive Animator locomotion and firing-shake assets. Their current contracts are
+in [PROCEDURAL_RECOIL.md](PROCEDURAL_RECOIL.md), [WEAPON_SWAY.md](WEAPON_SWAY.md) and
+[WEAPON_CAMERA.md](WEAPON_CAMERA.md). The older embedded recoil/bob/sway settings remain
+compatibility paths; they do not describe the shipped weapons' active solvers.
 
 ## Axes and units
 
@@ -25,17 +31,18 @@ The layers work in **camera space**:
 | +Y | up |
 | +Z | back toward the eye |
 
-Positions are in metres and rotations in degrees, written as (pitch, yaw, roll). Positive pitch lifts the muzzle. Curves are keyed over 0..1 of their span, which is a shot's duration, a stride or a breath.
+Positions are in metres and rotations in degrees, written as (pitch, yaw, roll). Positive pitch lifts the muzzle in the legacy camera-space layers. Their curves use normalized time 0..1. Version 2 recoil profiles instead use Unity axes (+Z forward, negative pitch raises the muzzle) and interpolation-alpha curves keyed in seconds; the host converts their output into the engine frame.
 
 ## Layers
 
-All layers are summed:
+The runtime composes procedural offsets, quaternion rotations, Animator layers and IK in their
+defined order. Referenced recoil and firing-shake assets replace their older embedded channels:
 
 | Layer | What it does |
 |---|---|
-| **Recoil** | Each shot starts its own curves: pitch, yaw, roll, side, up and kickback. Each channel is scaled by a random pick from its min/max range; a negative min kicks either way. Full-auto overlaps shots into a climb. A spring (frequency, damping) smooths the sum. Separate **Hip** and **ADS** scales apply; hip fire also plays the Fire clip. A **camera punch** (pitch/yaw curves) moves the view, not the aim. The Inspector plots a 10-round burst at the weapon's rpm. A shot curve that doesn't end at 0 gets a warning, because the gun would snap back when each shot expires. Each round also snaps the view's **roll** a random way and pulses the **FOV** (sprung, so they settle on their own), and adds camera-shake trauma. |
-| **Sway** | Look sway: the gun lags behind turns (per 100 deg/s). Move sway: it trails movement and tilts into strafes (per m/s). Both run through a spring (damping under 1 overshoots) and are scaled down in ADS. The look rate is low-passed first (**Look Smoothing**) so ragged mouse input doesn't make the gun buzz, and the max limits are soft: the sway eases into them instead of stopping dead. |
-| **Bob** | Walk and sprint cycles (side, up, roll) are phase-locked to distance travelled and blended by speed and sprint. Separate hip and ADS scales. |
+| **Recoil** | The shipped weapons use the version 2 `.recoil` solver: semi/auto transitions, randomized targets, per-axis smoothing, noise/pushback/progression layers and compensated controller look recoil. It does not sum shot instances or use spring overshoot. The separate `.camerashake` asset supplies visual firing shake. See the recoil and camera guides. |
+| **Sway** | The shipped weapons use `procedural.sway` source modifier settings: movement and raw look input feed independent position/rotation springs, with ADS scales, clamps, spaces and an additive-bone channel. Older embedded definitions can retain their legacy look-rate/velocity sway. See the sway guide. |
+| **Bob** | Shipped weapon locomotion comes from additive Animator layers; legacy procedural bob is disabled in their playback. See the recoil guide's locomotion section. |
 | **Breathing** | A slow idle loop (side, up, forward, pitch), calmer in ADS, with never-repeating noise **drift** on top. Sprinting winds the player: the breath and drift grow and quicken (**Exertion**), then recover. |
 | **Jump & Land** | In the air the gun lags against vertical speed (rising pulls it down, falling floats it up). Landing kicks it down, dips the muzzle and rolls it a random way, sized by the fall speed; soft touchdowns under **Min Impact** don't kick. A spring brings it back. |
 | **Camera Motion** | The view itself (never the aim): a head bob locked to the gun bob's stride (down on each footfall, a roll once per stride), a roll into strafes, and a dip and nod on landing. |

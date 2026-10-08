@@ -15,23 +15,25 @@
 
 ParticleRenderer::~ParticleRenderer() {
     delete m_Shader;
+    delete m_SmokeShader;
     if(m_Vbo)glDeleteBuffers(1,&m_Vbo);
     if(m_Vao)glDeleteVertexArrays(1,&m_Vao);
 }
 namespace {
 struct Instance {
-    float Pos[3],Size,Color[4],Axis[4],Params[4],Atlas[4];
+    float Pos[3],Size,Color[4],Axis[4],Params[4],Atlas[4],Pivot[4],Smoke[4],SmokeMotion[4];
 };
-struct Item {Instance Data;Texture* Tex=nullptr;int Blend=0;float Depth=0;};
-struct Batch {Texture* Tex;int Blend;GLuint First;GLsizei Count;};
-static_assert(sizeof(Instance)==80);
+struct Item {Instance Data;Texture* Tex=nullptr;int Blend=0;float Depth=0;bool Smoke=false;};
+struct Batch {Texture* Tex;int Blend;GLuint First;GLsizei Count;bool Smoke;};
+static_assert(sizeof(Instance)==128);
 }
 void ParticleRenderer::EnsureCreated() {
     if(m_Shader)return;
     m_Shader=new Shader(ShaderLibrary::ReadFile("Particle.vert.glsl"),ShaderLibrary::ReadFile("Particle.frag.glsl"));
+    m_SmokeShader=new Shader(ShaderLibrary::ReadFile("Particle.vert.glsl"),ShaderLibrary::ReadFile("ProceduralSmoke.frag.glsl"));
     glCreateVertexArrays(1,&m_Vao);glCreateBuffers(1,&m_Vbo);
     glVertexArrayVertexBuffer(m_Vao,0,m_Vbo,0,sizeof(Instance));glVertexArrayBindingDivisor(m_Vao,0,1);
-    for(unsigned i=0;i<5;++i) {
+    for(unsigned i=0;i<8;++i) {
         glEnableVertexArrayAttrib(m_Vao,i);glVertexArrayAttribFormat(m_Vao,i,4,GL_FLOAT,GL_FALSE,sizeof(float)*4*i);
         glVertexArrayAttribBinding(m_Vao,i,0);
     }
@@ -63,7 +65,8 @@ int ParticleRenderer::Draw(const World& world,const RenderFrameContext& ctx,bool
             const glm::vec3 vel=p.Local?glm::mat3(transform)*p.Vel:p.Vel;
             const std::string& path=p.TextureOverride.empty()?ps.Texture:p.TextureOverride;
             const bool flame=p.Length>0 && !path.empty();
-            Texture* tex=path.empty()?nullptr:ParticleTexture(path,flame);
+            const bool smoke=ps.ShaderMode==1 && !flame;
+            Texture* tex=(smoke||path.empty())?nullptr:ParticleTexture(path,flame || ps.TextureChannels>0);
             Instance in{};in.Pos[0]=pos.x;in.Pos[1]=pos.y;in.Pos[2]=pos.z;
             int blend=ps.BlendMode==1?1:0;
             if(flame&&tex) {
@@ -84,6 +87,16 @@ int ParticleRenderer::Draw(const World& world,const RenderFrameContext& ctx,bool
                 if(a<=0||in.Size<=0)continue;
                 in.Color[0]=c.r;in.Color[1]=c.g;in.Color[2]=c.b;in.Color[3]=a;
                 in.Params[0]=p.Rotation;
+                if(smoke) {
+                    in.Smoke[0]=std::clamp(ps.SmokeDensity,0.0f,10.0f);
+                    in.Smoke[1]=std::clamp(ps.SmokeNoiseScale,0.5f,12.0f);
+                    in.Smoke[2]=std::clamp(ps.SmokeTurbulence,0.0f,1.0f);
+                    in.Smoke[3]=std::clamp(ps.SmokeSoftness,0.05f,1.0f);
+                    in.SmokeMotion[0]=p.Age;in.SmokeMotion[1]=p.Seed;
+                    in.SmokeMotion[2]=std::clamp(ps.SmokeEvolution,0.0f,4.0f);
+                }
+                in.Params[2]=float(std::clamp(ps.TextureChannels,0,4));
+                in.Pivot[0]=ps.PivotX;in.Pivot[1]=ps.PivotY;
                 const float frame=std::max(0.0f,ps.SheetFPS>0?p.Age*ps.SheetFPS:t*float(cells-1));
                 const int step=int(std::floor(frame));
                 const int aFrame=(p.FirstFrame+step)%cells;
@@ -98,7 +111,7 @@ int ParticleRenderer::Draw(const World& world,const RenderFrameContext& ctx,bool
                 }
             }
             const float depth=-(ctx.View*glm::vec4(pos,1)).z;
-            items.push_back({in,tex,blend,depth});
+            items.push_back({in,tex,blend,depth,smoke});
         }
     }
     if(items.empty())return 0;
@@ -109,12 +122,13 @@ int ParticleRenderer::Draw(const World& world,const RenderFrameContext& ctx,bool
         const bool aa=a.Blend==1,bb=b.Blend==1;
         if(aa!=bb)return !aa;
         if(!aa)return a.Depth>b.Depth;
+        if(a.Smoke!=b.Smoke)return a.Smoke<b.Smoke;
         return std::less<Texture*>{}(a.Tex,b.Tex);
     });
     upload.reserve(items.size());
     for(const auto& item:items) {
-        if(batches.empty()||batches.back().Tex!=item.Tex||batches.back().Blend!=item.Blend)
-            batches.push_back({item.Tex,item.Blend,GLuint(upload.size()),0});
+        if(batches.empty()||batches.back().Tex!=item.Tex||batches.back().Blend!=item.Blend||batches.back().Smoke!=item.Smoke)
+            batches.push_back({item.Tex,item.Blend,GLuint(upload.size()),0,item.Smoke});
         ++batches.back().Count;upload.push_back(item.Data);
     }
     if(upload.size()>m_Capacity) {
@@ -125,13 +139,20 @@ int ParticleRenderer::Draw(const World& world,const RenderFrameContext& ctx,bool
     const GLboolean prevBlend=glIsEnabled(GL_BLEND),prevCull=glIsEnabled(GL_CULL_FACE),prevDepth=glIsEnabled(GL_DEPTH_TEST);
     GLboolean prevMask;glGetBooleanv(GL_DEPTH_WRITEMASK,&prevMask);
     glEnable(GL_DEPTH_TEST);glDepthMask(GL_FALSE);glDisable(GL_CULL_FACE);glEnable(GL_BLEND);
-    m_Shader->Bind();m_Shader->SetMat4("uView",ctx.View);m_Shader->SetMat4("uProj",ctx.Proj);
-    m_Shader->SetInt("uParticleTex",0);glBindVertexArray(m_Vao);
+    glBindVertexArray(m_Vao);
+    Shader* activeShader=nullptr;
     for(const auto& batch:batches) {
+        Shader* shader=batch.Smoke?m_SmokeShader:m_Shader;
+        if(shader!=activeShader) {
+            shader->Bind();shader->SetMat4("uView",ctx.View);shader->SetMat4("uProj",ctx.Proj);
+            if(!batch.Smoke)shader->SetInt("uParticleTex",0);
+            activeShader=shader;
+        }
         if(batch.Blend==2)glBlendFuncSeparate(GL_ONE,GL_ONE_MINUS_SRC_ALPHA,GL_ONE,GL_ONE_MINUS_SRC_ALPHA);
         else if(batch.Blend==1)glBlendFuncSeparate(GL_SRC_ALPHA,GL_ONE,GL_ZERO,GL_ONE);
         else glBlendFuncSeparate(GL_SRC_ALPHA,GL_ONE_MINUS_SRC_ALPHA,GL_ONE,GL_ONE_MINUS_SRC_ALPHA);
-        m_Shader->SetInt("uTextured",batch.Tex?1:0);if(batch.Tex)batch.Tex->Bind(0);
+        if(!batch.Smoke)m_Shader->SetInt("uTextured",batch.Tex?1:0);
+        if(batch.Tex)batch.Tex->Bind(0);
         glDrawArraysInstancedBaseInstance(GL_TRIANGLES,0,6,batch.Count,batch.First);
     }
     glBindVertexArray(0);glDepthMask(prevMask);

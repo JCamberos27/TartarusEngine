@@ -2,13 +2,210 @@
 #include "ImCurveAdapter.h"
 #include "CurveEditor.h"
 #include "EditorFileHistory.h"
+#include "EditorLayer.h"
+#include "ScriptReferenceWidgets.h"
+#include "World.h"
+#include "AssetLibrary.h"
+#include "SceneSerializer.h"
+#include "Profiler.h"
+#include "ProjectPaths.h"
+#include <filesystem>
+#include <fstream>
 #include "../../extern/ImGuiColorTextEdit/TextEditor.h"
 #include "../../extern/imcurve/imcurve_editor.hpp"
 #include <imgui_internal.h>
 #include <cmath>
 #include <chrono>
+#include <cstring>
+
+// Exercise the real transaction code without starting the renderer or writing user preferences.
+struct EditorHistoryTestAccess {
+    static void Begin(EditorLayer& e,World& w,AssetLibrary& a) {e.m_AssetsPtr=&a;e.BeginGlobalUndoFrame(w);}
+    static void Finish(EditorLayer& e,World& w) {e.FinishGlobalUndo(w,true);AtomicFile::SetChangeObserver({});}
+    static void Edit(EditorLayer& e,World& w) {e.PushUndo(w,"Test edit");}
+    static void Stage(EditorLayer& e,World& w) {e.StageUndo(w);}
+    static void Commit(EditorLayer& e,World& w) {e.CommitStagedUndo(w,"Test drag");}
+    static bool Active(const EditorLayer& e) {return e.m_GlobalUndoActive;}
+    static size_t Count(const EditorLayer& e) {return e.m_UndoStack.size();}
+    static const std::string& Before(const EditorLayer& e) {return e.m_UndoBaseJson;}
+    static const std::string& Current(const EditorLayer& e) {return e.m_CurrentUndoScene;}
+    static void Clear(EditorLayer& e) {e.ClearUndoHistory();}
+    static void Undo(EditorLayer& e,World& w,AssetLibrary& a) {e.Undo(w,a);}
+    static void Redo(EditorLayer& e,World& w,AssetLibrary& a) {e.Redo(w,a);}
+    static void Select(EditorLayer& e,World& w,entt::entity entity) {
+        e.m_EditPushedThisFrame=false;e.m_SelHistoryNavigating=false;
+        e.m_Selected=entity;e.RecordSelectionHistory(w);
+    }
+};
 
 namespace {
+void TestEditorNavigationUndo() {
+    auto* previous=ImGui::GetCurrentContext();auto* context=ImGui::CreateContext();
+    auto& io=ImGui::GetIO();io.DisplaySize={800,600};io.DeltaTime=1.0f/60;io.IniFilename=nullptr;
+    unsigned char* pixels;int width,height;io.Fonts->GetTexDataAsRGBA32(&pixels,&width,&height);
+    World world;AssetLibrary assets;
+    for(int i=0;i<1500;++i)world.CreateEmptyEntity({}, {}, {1,1,1},"Navigation fixture "+std::to_string(i));
+    const auto start=std::chrono::steady_clock::now();
+    const auto expected=SceneSerializer::SaveToString(world,assets);
+    const auto second=SceneSerializer::SaveToString(world,assets);
+    const auto oldMs=std::chrono::duration<double,std::milli>(std::chrono::steady_clock::now()-start).count();
+    {
+        EditorLayer editor;
+        ImGui::NewFrame();EditorHistoryTestAccess::Begin(editor,world,assets);EditorHistoryTestAccess::Finish(editor,world);ImGui::Render();
+        CHECK(EditorHistoryTestAccess::Current(editor)==expected);
+        Profiler::BeginFrame();
+        const auto navStart=std::chrono::steady_clock::now();
+        for(int frame=0;frame<120;++frame) {
+            io.AddMousePosEvent(100.0f+static_cast<float>(frame),100);io.AddMouseButtonEvent(1,frame%2==0);
+            io.AddKeyEvent(ImGuiKey_W,frame%2==0);io.AddMouseWheelEvent(0,1);
+            ImGui::NewFrame();EditorHistoryTestAccess::Begin(editor,world,assets);
+            CHECK(!EditorHistoryTestAccess::Active(editor));
+            EditorHistoryTestAccess::Finish(editor,world);ImGui::Render();
+        }
+        const auto navMs=std::chrono::duration<double,std::milli>(std::chrono::steady_clock::now()-navStart).count()/120;
+        Profiler::BeginFrame();
+        for(const auto& sample:Profiler::GetLastFrame())CHECK(sample.Name!="Undo Scene Snapshot");
+        CHECK(EditorHistoryTestAccess::Count(editor)==0);
+        std::cout<<"[EditorHitch] 1500 entities: old input snapshot pair="<<oldMs<<"ms, navigation frame="<<navMs<<"ms (120 frames, zero scene snapshots)\n";
+
+        // A checkbox-style control requests undo AFTER changing its value.
+        ImGui::NewFrame();EditorHistoryTestAccess::Begin(editor,world,assets);
+        world.ExposureEV+=1;EditorHistoryTestAccess::Edit(editor,world);EditorHistoryTestAccess::Finish(editor,world);ImGui::Render();
+        CHECK(EditorHistoryTestAccess::Count(editor)==1);CHECK(EditorHistoryTestAccess::Before(editor)==expected);
+        const auto changed=SceneSerializer::SaveToString(world,assets);CHECK(EditorHistoryTestAccess::Current(editor)==changed);
+        EditorHistoryTestAccess::Undo(editor,world,assets);CHECK(SceneSerializer::SaveToString(world,assets)==expected);
+        EditorHistoryTestAccess::Redo(editor,world,assets);CHECK(SceneSerializer::SaveToString(world,assets)==changed);
+        CHECK(EditorHistoryTestAccess::Current(editor)==changed);
+
+        // A drag across frames coalesces to one entry, and an unchanged activation keeps redo.
+        const auto count=EditorHistoryTestAccess::Count(editor);
+        ImGui::NewFrame();EditorHistoryTestAccess::Begin(editor,world,assets);EditorHistoryTestAccess::Stage(editor,world);
+        world.ExposureEV+=.25f;AtomicFile::SetChangeObserver({});ImGui::Render();
+        ImGui::NewFrame();EditorHistoryTestAccess::Begin(editor,world,assets);world.ExposureEV+=.25f;
+        EditorHistoryTestAccess::Commit(editor,world);EditorHistoryTestAccess::Finish(editor,world);ImGui::Render();
+        CHECK(EditorHistoryTestAccess::Count(editor)==count+1);CHECK(EditorHistoryTestAccess::Before(editor)==changed);
+        EditorHistoryTestAccess::Undo(editor,world,assets);
+        ImGui::NewFrame();EditorHistoryTestAccess::Begin(editor,world,assets);EditorHistoryTestAccess::Stage(editor,world);
+        EditorHistoryTestAccess::Finish(editor,world);ImGui::Render();CHECK(EditorHistoryTestAccess::Count(editor)==count);
+        EditorHistoryTestAccess::Redo(editor,world,assets);CHECK(world.ExposureEV>nlohmann::json::parse(changed).value("exposureEV",0.0f));
+
+        // The first selection entry needs no serialized scene anchor, but real edits after it do.
+        EditorHistoryTestAccess::Clear(editor);
+        auto entity=*world.Registry.view<OrderComponent>().begin();EditorHistoryTestAccess::Select(editor,world,entity);
+        CHECK(EditorHistoryTestAccess::Before(editor)=="{}");
+        ImGui::NewFrame();EditorHistoryTestAccess::Begin(editor,world,assets);
+        const auto preEdit=SceneSerializer::SaveToString(world,assets);world.ExposureEV+=1;
+        EditorHistoryTestAccess::Edit(editor,world);EditorHistoryTestAccess::Finish(editor,world);ImGui::Render();
+        EditorHistoryTestAccess::Undo(editor,world,assets);CHECK(SceneSerializer::SaveToString(world,assets)==preEdit);
+        EditorHistoryTestAccess::Undo(editor,world,assets);CHECK(SceneSerializer::SaveToString(world,assets)==preEdit);
+
+        // A file-only transaction, followed by a mixed file/scene transaction.
+        const auto path=std::filesystem::path(ProjectPaths::Resolve("undo-hitch-test-"+std::to_string(std::chrono::steady_clock::now().time_since_epoch().count())+".txt"));
+        CHECK(AtomicFile::WriteBytes(path,"before",true));
+        ImGui::NewFrame();EditorHistoryTestAccess::Begin(editor,world,assets);Profiler::BeginFrame();
+        CHECK(AtomicFile::WriteBytes(path,"after",true));EditorHistoryTestAccess::Finish(editor,world);ImGui::Render();Profiler::BeginFrame();
+        for(const auto& sample:Profiler::GetLastFrame())CHECK(sample.Name!="Undo Scene Snapshot");
+        EditorHistoryTestAccess::Undo(editor,world,assets);CHECK(*EditorFileHistory::Capture(path).Bytes=="before");
+        EditorHistoryTestAccess::Redo(editor,world,assets);CHECK(*EditorFileHistory::Capture(path).Bytes=="after");
+        ImGui::NewFrame();EditorHistoryTestAccess::Begin(editor,world,assets);
+        CHECK(AtomicFile::WriteBytes(path,"mixed",true));world.ExposureEV+=1;EditorHistoryTestAccess::Edit(editor,world);
+        EditorHistoryTestAccess::Finish(editor,world);ImGui::Render();EditorHistoryTestAccess::Undo(editor,world,assets);
+        CHECK(*EditorFileHistory::Capture(path).Bytes=="after");CHECK(SceneSerializer::SaveToString(world,assets)==preEdit);
+        std::filesystem::remove(path);
+    }
+    AtomicFile::SetChangeObserver({});ImGui::DestroyContext(context);ImGui::SetCurrentContext(previous);
+}
+void TestScriptReferenceDrop() {
+    auto* previous=ImGui::GetCurrentContext();auto* context=ImGui::CreateContext();
+    auto& io=ImGui::GetIO();io.DisplaySize={800,600};io.DeltaTime=1.0f/60;io.IniFilename=nullptr;
+    unsigned char* pixels=nullptr;int width=0,height=0;io.Fonts->GetTexDataAsRGBA32(&pixels,&width,&height);
+    World world;
+    const auto owner=world.CreateEmptyEntity({}, {}, {1,1,1}, "Muzzle Attachment");
+    const auto child=world.CreateEmptyEntity({}, {}, {1,1,1}, "Muzzle Flash");
+    const auto wrong=world.CreateEmptyEntity({}, {}, {1,1,1}, "Wrong type");
+    world.AttachChildRaw(child,owner);world.AttachChildRaw(wrong,owner);
+    world.Registry.emplace<ParticleSystemComponent>(child);
+    nlohmann::json metadata={{"kind","scene-ref"},{"component","Particle System"},{"childrenOnly",true}};
+    nlohmann::json value="";ImVec2 targetPosition;bool changed=false;
+    auto frame=[&](entt::entity dropped,const char* sound=nullptr,int soundSlot=0) {
+        ImGui::NewFrame();ImGui::SetNextWindowPos({10,10},ImGuiCond_Always);ImGui::SetNextWindowSize({500,300},ImGuiCond_Always);
+        ImGui::Begin("References",nullptr,ImGuiWindowFlags_NoSavedSettings);
+        if((dropped!=entt::null || sound) && ImGui::BeginDragDropSource(ImGuiDragDropFlags_SourceExtern|ImGuiDragDropFlags_SourceNoPreviewTooltip)) {
+            if(sound)ImGui::SetDragDropPayload("ASSET_SOUND_PATH",sound,std::strlen(sound)+1);
+            else ImGui::SetDragDropPayload("HIERARCHY_ENTITY",&dropped,sizeof(dropped));
+            ImGui::EndDragDropSource();
+        }
+        const auto start=ImGui::GetCursorScreenPos();
+        ImGui::SetNextItemWidth(350);
+        changed=DrawScriptReferenceField(world,owner,metadata,value,nullptr);
+        targetPosition={start.x+40,start.y+ImGui::GetFrameHeight()*.5f+soundSlot*(ImGui::GetFrameHeight()+ImGui::GetStyle().ItemSpacing.y)};
+        ImGui::End();ImGui::Render();
+    };
+    frame(entt::null);frame(entt::null);
+    auto drop=[&](entt::entity e) {
+        io.AddMousePosEvent(targetPosition.x,targetPosition.y);io.AddMouseButtonEvent(0,true);
+        frame(e);frame(e);io.AddMouseButtonEvent(0,false);frame(e);
+    };
+    drop(wrong);CHECK(!changed && value=="");frame(entt::null);
+    drop(child);CHECK(changed);CHECK(value=="Muzzle Flash");
+    metadata={{"kind","sound-refs"}};value="";frame(entt::null);
+    auto dropSound=[&](const char* path,int slot) {
+        frame(entt::null,nullptr,slot);
+        io.AddMousePosEvent(targetPosition.x,targetPosition.y);io.AddMouseButtonEvent(0,true);
+        frame(entt::null,path,slot);frame(entt::null,path,slot);
+        io.AddMouseButtonEvent(0,false);frame(entt::null,path,slot);
+    };
+    dropSound("assets/invalid.txt",0);CHECK(!changed && value=="");frame(entt::null);
+    dropSound("assets/shot1.wav",0);CHECK(changed && value=="assets/shot1.wav");frame(entt::null);
+    dropSound("assets/shot2.ogg",1);CHECK(changed && value=="assets/shot1.wav;assets/shot2.ogg");
+    ImGui::DestroyContext(context);ImGui::SetCurrentContext(previous);
+}
+void TestPrefabToolbarReturn() {
+    auto* previous=ImGui::GetCurrentContext(); auto* context=ImGui::CreateContext();
+    auto& io=ImGui::GetIO(); io.DisplaySize={800,600}; io.DeltaTime=1.0f/60;
+    io.IniFilename=nullptr;
+    unsigned char* pixels=nullptr; int width=0,height=0;
+    io.Fonts->GetTexDataAsRGBA32(&pixels,&width,&height);
+    const auto path=std::filesystem::temp_directory_path()/"tartarus-prefab-toolbar-test.prefab";
+    { std::ofstream file(path); file << R"({"formatVersion":4,"models":[],"boxes":[],"empties":[{"id":0,"name":"Prefab","position":[0,0,0]}]})"; }
+    {
+        World world; AssetLibrary assets; EditorLayer editor;
+        world.CreateEmptyEntity({1,2,3},{0,0,0},{1,1,1},"Scene sentinel");
+        auto frame=[&](bool scene) {
+            ImGui::NewFrame();
+            ImGui::SetNextWindowPos({0,30},ImGuiCond_Always);
+            ImGui::SetNextWindowSize({800,570},ImGuiCond_Always);
+            ImGui::Begin("##DockHost",nullptr,ImGuiWindowFlags_NoSavedSettings);
+            ImGui::BeginChild(scene?"Scene":"Script IDE");
+            ImGui::Dummy({600,400}); ImGui::EndChild(); ImGui::End();
+            editor.DrawViewportActionBar(world,assets,false,false,false);
+            ImGui::Render();
+        };
+        // A previously shown Play toolbar must become inactive as soon as a prefab opens.
+        ImGui::NewFrame(); ImGui::Begin("##ViewportActionBar"); ImGui::End(); ImGui::Render();
+        editor.EnterPrefabMode(world,assets,path.u8string()); CHECK(editor.InPrefabMode());
+        frame(true); frame(true);
+        auto* prefabBar=ImGui::FindWindowByName("##PrefabModeBar");
+        CHECK(prefabBar && prefabBar->Active && !prefabBar->Hidden);
+        CHECK(!ImGui::FindWindowByName("##ViewportActionBar")->Active);
+        // Returning must remain possible when neither Scene nor Game is visible.
+        frame(false); frame(false);
+        CHECK(prefabBar->Active && !prefabBar->Hidden && prefabBar->Pos.y>=editor.ToolbarHeightPx());
+        const ImVec2 backButton(prefabBar->Pos.x+20,prefabBar->Pos.y+ImGui::GetStyle().WindowPadding.y+ImGui::GetFrameHeight()*.5f);
+        io.AddMousePosEvent(backButton.x,backButton.y); frame(false);
+        io.AddMouseButtonEvent(0,true); frame(false);
+        io.AddMouseButtonEvent(0,false); frame(false);
+        CHECK(!editor.InPrefabMode());
+        CHECK(!ImGui::FindWindowByName("##ViewportActionBar")->Active); // no overlapping bar on exit
+        bool restored=false;
+        for(auto [e,name]:world.Registry.view<NameComponent>().each()) restored=restored || name.Name=="Scene sentinel";
+        CHECK(restored);
+        if(editor.InPrefabMode()) editor.ExitPrefabMode(world,assets,false);
+    }
+    std::filesystem::remove(path);
+    ImGui::DestroyContext(context); ImGui::SetCurrentContext(previous);
+}
+
 void TestScriptIDETextEditing() {
     auto* previous=ImGui::GetCurrentContext();auto* context=ImGui::CreateContext();
     TextEditor editor;
@@ -226,6 +423,9 @@ void TestCurveWheelCapture() {
 // Unit tests for the editor UI. Add a function per test and list it below.
 
 void RegisterEditorTests(UnitTestSupport::TestList& tests) {
+    tests.emplace_back("Editor navigation undo avoids scene snapshots and preserves transactions",TestEditorNavigationUndo);
+    tests.emplace_back("Prefab toolbar replaces Play and returns from hidden Scene tab",TestPrefabToolbarReturn);
+    tests.emplace_back("Script reference hierarchy drops validate component types",TestScriptReferenceDrop);
     tests.emplace_back("Script IDE text editing, completion undo and source preservation",TestScriptIDETextEditing);
     tests.emplace_back("Global file undo, coalescing, creation, deletion and rename",TestGlobalFileUndo);
     tests.emplace_back("ImCurveAdapter",TestCurveAdapter);

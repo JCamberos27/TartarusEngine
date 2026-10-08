@@ -2,13 +2,18 @@
 layout(location=0) in vec4 aPosSize;
 layout(location=1) in vec4 aColor;
 layout(location=2) in vec4 aAxis;
-layout(location=3) in vec4 aParams; // rotation, frame blend, flame seed, alignment
+layout(location=3) in vec4 aParams; // rotation, frame blend, mask channel / flame seed, alignment
 layout(location=4) in vec4 aAtlas;  // columns, rows, frame A, frame B
+layout(location=5) in vec4 aPivot;
+layout(location=6) in vec4 aSmoke; // density, noise scale, turbulence, softness
+layout(location=7) in vec4 aSmokeMotion; // particle age, stable seed, evolution speed
 uniform mat4 uView,uProj;
 out vec2 vCorner;
 out vec4 vColor;
 flat out vec4 vAtlas;
 flat out vec4 vParams;
+flat out vec4 vSmoke;
+flat out vec4 vSmokeMotion;
 const vec2 corners[6]=vec2[6](vec2(-1,-1),vec2(1,-1),vec2(1,1),vec2(-1,-1),vec2(1,1),vec2(-1,1));
 vec3 safeSide(vec3 axis,vec3 eye) {
     vec3 side=cross(axis,eye);
@@ -16,7 +21,7 @@ vec3 safeSide(vec3 axis,vec3 eye) {
     return normalize(side);
 }
 void main() {
-    vec2 c=corners[gl_VertexID];
+    vec2 corner=corners[gl_VertexID],c=corner-aPivot.xy;
     vec4 pos=uView*vec4(aPosSize.xyz,1);
     float mode=aParams.w;
     if(mode==1.0 || mode==2.0) {
@@ -30,5 +35,6 @@ void main() {
         if(mode==3.0)pos+=uView*vec4(rotated.x*aPosSize.w*.5,0,rotated.y*aPosSize.w*.5,0);
         else pos.xy+=rotated*aPosSize.w*.5;
     }
-    gl_Position=uProj*pos;vCorner=c;vColor=aColor;vAtlas=aAtlas;vParams=aParams;
+    gl_Position=uProj*pos;vCorner=corner;vColor=aColor;vAtlas=aAtlas;vParams=aParams;
+    vSmoke=aSmoke;vSmokeMotion=aSmokeMotion;
 }

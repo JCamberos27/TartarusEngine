@@ -40,6 +40,15 @@ Our side: `IK.cpp` (`SolveTwoBone`, `AimBone`, `ApplyRig`), `IKRigComponent` (`C
 `FirstPersonBody.cpp`, `Npc/NpcBody.cpp`, `AnimatorController.cpp`; docs `PROCEDURAL_ANIMATION.md`, `FPS_ANIMATION_SYSTEM.md`, `BODY_SETUP.md`.
 Line numbers are from commit 32d7e727 and drift; search by symbol.
 
+**Historical audit, with later progress notes.** The matrix below records that commit's
+comparison, not a fresh inventory of missing editor features. Current code supports named
+state curves and their shared [curve editor](CURVE_EDITOR.md), per-bone spine weights/limits,
+NPC body tuning, hand offsets, and opt-in stride warping/foot pinning; see [BODY_SETUP.md](BODY_SETUP.md)
+and [PROCEDURAL_ANIMATION.md](PROCEDURAL_ANIMATION.md). Shipped recoil and sway now use the
+source ports described in [PROCEDURAL_RECOIL.md](PROCEDURAL_RECOIL.md) and [WEAPON_SWAY.md](WEAPON_SWAY.md).
+The legacy matrix's recoil/sway descriptions and free-aim claims do not define those new solvers.
+Use [EDITOR_UPGRADES.md](EDITOR_UPGRADES.md) for the current editor shortlist.
+
 ## Matrix
 
 Parity: full / partial / missing. "Hardcoded" = a constant in code a designer cannot reach from the Inspector.
@@ -86,7 +95,7 @@ Impact on visible realism, then effort (S under a day, M a few days, L a week or
 4. **DONE (round 3) - ADS pieces (S).** Separate position/rotation absolute-vs-additive blend, crouch pose, camera blend. `WeaponAimSettings::PositionAdditive/RotationAdditive` (1 = old), `CrouchPosition/Rotation/BlendTime` (fed by `FirstPersonPresentation::SetCrouch`), `CameraShare`.
 5. **DONE (round 2) - Hand-vs-gun offsets (S).** Right/left hand offset fields on `WeaponIKSettings`.
 6. **DONE (round 3) - Free-aim dead zone (S).** Sway option: the view turns inside a zone before the gun follows. `WeaponSwaySettings::FreeAimZone` (yaw, pitch degrees; 0 = off), `FreeAimReturn`, `FreeAimAdsScale`.
-7. **DONE (round 3) - Per-clip weight curves (M, high value).** Named float curves authored on Animator Controller states (`State::Curves`, JSON `curves`, keys over normalized state time) are sampled by `AnimatorSampleCurve` (crossfade-blended; none = 1) and scale the weapon IK: `IK` (all), `IK_RightHand`, `IK_LeftHand`, `Look` (names in `WeaponIKSettings`, `UseClipCurves`). `IKOff` still works and multiplies in. Not done: curve import from FBX custom properties (Model importer is outside lane A) and a `FootIK` consumer (NPC/body feet); the curve editor UI.
+7. **DONE (round 3) - Per-clip weight curves (M, high value).** Named float curves authored on Animator Controller states (`State::Curves`, JSON `curves`, keys over normalized state time) are sampled by `AnimatorSampleCurve` (crossfade-blended; none = 1) and scale the weapon IK: `IK` (all), `IK_RightHand`, `IK_LeftHand`, `Look` (names in `WeaponIKSettings`, `UseClipCurves`). `IKOff` still works and multiplies in. The shared curve editor UI is now implemented. Not done in this audit: curve import from FBX custom properties (Model importer is outside lane A) and a `FootIK` consumer (NPC/body feet).
 
 ### Big items
 

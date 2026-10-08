@@ -71,6 +71,7 @@ namespace AssetDatabase {
 namespace {
 
 std::mutex g_Mutex;
+std::atomic<std::uint64_t> g_Revision{0};
 std::unordered_map<std::string, AssetGuid> g_PathToGuid;
 std::unordered_map<AssetGuid, std::string> g_GuidToPath;
 
@@ -208,6 +209,7 @@ std::string Key(const std::string& path) {
 void Register(const std::string& path, AssetGuid guid) {
     g_PathToGuid[Key(path)] = guid;
     g_GuidToPath[guid] = path;
+    ++g_Revision;
 }
 
 // File creation time as a comparable tick count, or 0 if unknown. A copy made in Explorer
@@ -628,7 +630,10 @@ void ForgetPath(const std::string& path) {
     auto back = g_GuidToPath.find(it->second);
     if (back != g_GuidToPath.end() && Key(back->second) == Key(path)) g_GuidToPath.erase(back);
     g_PathToGuid.erase(it);
+    ++g_Revision;
 }
+
+std::uint64_t Revision() {WaitIfScanning();return g_Revision.load();}
 
 std::string ReadMetaFields(const std::string& path) {
     if (IsSynthetic(path)) return "{}";

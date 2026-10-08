@@ -86,212 +86,6 @@ void RegisterEngineComponents() {
         f.EditorHidden=true;
         if(std::strcmp(f.Name,"Source")==0) f.AssetKind=ReflectAssetKind::Script;
     }
-    Register<WeaponDefinitionComponent>({
-        "Weapon Definition", ICON_FA_CROSSHAIRS, "Weapon animation setup and per-weapon muzzle light, flame, flash and smoke.", "Gameplay",
-        {
-            {"Description", T::String, TARTARUS_REFLECT_FIELD(WeaponDefinitionComponent, Description)},
-            {"Animation Set", T::String, TARTARUS_REFLECT_FIELD(WeaponDefinitionComponent, AnimationSet)},
-        }
-    });
-        { ReflectField f{"Muzzle Enabled",T::Bool,[](void* p)->void* { return &static_cast<WeaponDefinitionComponent*>(p)->Muzzle.Enabled; },0.0f,"Enable this weapon's visual muzzle effects.",0.0f,0.0f}; f.Group="Overview"; Storage().back().Meta.Fields.push_back(f); }
-        { ReflectField f{"Flash Time",T::Float,[](void* p)->void* { return &static_cast<WeaponDefinitionComponent*>(p)->Muzzle.FlashTime; },0.001f,"Light duration in seconds.",0.001f,1.0f}; f.Group="Muzzle Light"; Storage().back().Meta.Fields.push_back(f); }
-        { ReflectField f{"Light Intensity",T::Float,[](void* p)->void* { return &static_cast<WeaponDefinitionComponent*>(p)->Muzzle.LightIntensity; },0.1f,"Peak intensity before the player's scale.",0.0f,1000.0f}; f.Group="Muzzle Light"; Storage().back().Meta.Fields.push_back(f); }
-        { ReflectField f{"Player Flash Scale",T::Float,[](void* p)->void* { return &static_cast<WeaponDefinitionComponent*>(p)->Muzzle.PlayerFlashScale; },0.01f,"Light multiplier for the player's own weapon.",0.0f,2.0f}; f.Group="Muzzle Light"; Storage().back().Meta.Fields.push_back(f); }
-        { ReflectField f{"Light Range",T::Float,[](void* p)->void* { return &static_cast<WeaponDefinitionComponent*>(p)->Muzzle.LightRange; },0.1f,"Metres illuminated by the flash.",0.0f,100.0f}; f.Group="Muzzle Light"; Storage().back().Meta.Fields.push_back(f); }
-        { ReflectField f{"Light Color",T::Color,[](void* p)->void* { return &static_cast<WeaponDefinitionComponent*>(p)->Muzzle.LightColor; },0.0f,"Flash light tint.",0.0f,0.0f}; f.Group="Muzzle Light"; Storage().back().Meta.Fields.push_back(f); }
-        { ReflectField f{"Flame Texture",T::AssetRef,[](void* p)->void* { return &static_cast<WeaponDefinitionComponent*>(p)->Muzzle.FlameTexture; },0.0f,"Packed muzzle-flame mask texture.",0.0f,0.0f}; f.Group="Flame"; f.AssetKind=ReflectAssetKind::Texture; Storage().back().Meta.Fields.push_back(f); }
-        { ReflectField f{"Flame Glow",T::Float,[](void* p)->void* { return &static_cast<WeaponDefinitionComponent*>(p)->Muzzle.FlameGlow; },1.0f,"HDR flame emission.",0.0f,1000.0f}; f.Group="Flame"; Storage().back().Meta.Fields.push_back(f); }
-        { ReflectField f{"Flame Scale",T::Float,[](void* p)->void* { return &static_cast<WeaponDefinitionComponent*>(p)->Muzzle.FlameScale; },0.01f,"Flame length and width multiplier.",0.0f,10.0f}; f.Group="Flame"; Storage().back().Meta.Fields.push_back(f); }
-        { ReflectField f{"Flame Color",T::Color,[](void* p)->void* { return &static_cast<WeaponDefinitionComponent*>(p)->Muzzle.FlameColor; },0.0f,"Flame emission tint.",0.0f,0.0f}; f.Group="Flame"; Storage().back().Meta.Fields.push_back(f); }
-        { ReflectField f{"Flame Lifetime Min",T::Float,[](void* p)->void* { return &static_cast<WeaponDefinitionComponent*>(p)->Muzzle.FlameLifetimeMin; },0.001f,"Seconds, sampled per shot.",0.0f,5.0f}; f.Group="Flame"; Storage().back().Meta.Fields.push_back(f); }
-        { ReflectField f{"Flame Lifetime Max",T::Float,[](void* p)->void* { return &static_cast<WeaponDefinitionComponent*>(p)->Muzzle.FlameLifetimeMax; },0.001f,"Seconds, sampled per shot.",0.0f,5.0f}; f.Group="Flame"; Storage().back().Meta.Fields.push_back(f); }
-        { ReflectField f{"Flame Length Min",T::Float,[](void* p)->void* { return &static_cast<WeaponDefinitionComponent*>(p)->Muzzle.FlameLengthMin; },0.001f,"Metres before Flame Scale.",0.0f,10.0f}; f.Group="Flame"; Storage().back().Meta.Fields.push_back(f); }
-        { ReflectField f{"Flame Length Max",T::Float,[](void* p)->void* { return &static_cast<WeaponDefinitionComponent*>(p)->Muzzle.FlameLengthMax; },0.001f,"Metres before Flame Scale.",0.0f,10.0f}; f.Group="Flame"; Storage().back().Meta.Fields.push_back(f); }
-        { ReflectField f{"Flame Width Min",T::Float,[](void* p)->void* { return &static_cast<WeaponDefinitionComponent*>(p)->Muzzle.FlameWidthMin; },0.001f,"Metres before Flame Scale.",0.0f,10.0f}; f.Group="Flame"; Storage().back().Meta.Fields.push_back(f); }
-        { ReflectField f{"Flame Width Max",T::Float,[](void* p)->void* { return &static_cast<WeaponDefinitionComponent*>(p)->Muzzle.FlameWidthMax; },0.001f,"Metres before Flame Scale.",0.0f,10.0f}; f.Group="Flame"; Storage().back().Meta.Fields.push_back(f); }
-        { ReflectField f{"Muzzle Style",T::Int,[](void* p)->void* { return &static_cast<WeaponDefinitionComponent*>(p)->Muzzle.MuzzleStyle; },1.0f,"0: flame only. 1: layered flash, glow and smoke.",0.0f,1.0f}; f.Group="Flash"; Storage().back().Meta.Fields.push_back(f); }
-        { ReflectField f{"Flash Sprite",T::String,[](void* p)->void* { return &static_cast<WeaponDefinitionComponent*>(p)->Muzzle.FlashSprite; },0.0f,"Imported FX entry name, e.g. muzzle_star or muzzle_burst.",0.0f,0.0f}; f.Group="Flash"; Storage().back().Meta.Fields.push_back(f); }
-        { ReflectField f{"Flash Lifetime",T::Float,[](void* p)->void* { return &static_cast<WeaponDefinitionComponent*>(p)->Muzzle.FlashLifetime; },0.001f,"Flash sprite lifetime in seconds.",0.001f,5.0f}; f.Group="Flash"; Storage().back().Meta.Fields.push_back(f); }
-        { ReflectField f{"Flash Size Min",T::Float,[](void* p)->void* { return &static_cast<WeaponDefinitionComponent*>(p)->Muzzle.FlashSizeMin; },0.01f,"Minimum flash diameter in metres.",0.0f,10.0f}; f.Group="Flash"; Storage().back().Meta.Fields.push_back(f); }
-        { ReflectField f{"Flash Size Max",T::Float,[](void* p)->void* { return &static_cast<WeaponDefinitionComponent*>(p)->Muzzle.FlashSizeMax; },0.01f,"Maximum flash diameter in metres.",0.0f,10.0f}; f.Group="Flash"; Storage().back().Meta.Fields.push_back(f); }
-        { ReflectField f{"Flash Intensity",T::Float,[](void* p)->void* { return &static_cast<WeaponDefinitionComponent*>(p)->Muzzle.FlashIntensity; },0.1f,"HDR flash sprite brightness.",0.0f,1000.0f}; f.Group="Flash"; Storage().back().Meta.Fields.push_back(f); }
-        { ReflectField f{"Side Jets",T::Bool,[](void* p)->void* { return &static_cast<WeaponDefinitionComponent*>(p)->Muzzle.SideJets; },0.0f,"Emit the barrel's side jets.",0.0f,0.0f}; f.Group="Flash"; Storage().back().Meta.Fields.push_back(f); }
-        { ReflectField f{"Core Glow",T::Bool,[](void* p)->void* { return &static_cast<WeaponDefinitionComponent*>(p)->Muzzle.CoreGlow; },0.0f,"Emit the muzzle core glow.",0.0f,0.0f}; f.Group="Flash"; Storage().back().Meta.Fields.push_back(f); }
-        { ReflectField f{"Spark Count",T::Int,[](void* p)->void* { return &static_cast<WeaponDefinitionComponent*>(p)->Muzzle.SparkCount; },1.0f,"World-view sparks per shot.",0.0f,128.0f}; f.Group="Flash"; Storage().back().Meta.Fields.push_back(f); }
-        { ReflectField f{"Smoke",T::Bool,[](void* p)->void* { return &static_cast<WeaponDefinitionComponent*>(p)->Muzzle.Smoke; },0.0f,"Emit smoke and gas puffs.",0.0f,0.0f}; f.Group="Smoke"; Storage().back().Meta.Fields.push_back(f); }
-        { ReflectField f{"Afterfire Smoke",T::Bool,[](void* p)->void* { return &static_cast<WeaponDefinitionComponent*>(p)->Muzzle.AfterfireSmoke; },0.0f,"Emit the lingering barrel wisp.",0.0f,0.0f}; f.Group="Smoke"; Storage().back().Meta.Fields.push_back(f); }
-        { ReflectField f{"Smoke Scale",T::Float,[](void* p)->void* { return &static_cast<WeaponDefinitionComponent*>(p)->Muzzle.SmokeScale; },0.01f,"Smoke size multiplier.",0.0f,10.0f}; f.Group="Smoke"; Storage().back().Meta.Fields.push_back(f); }
-        { ReflectField f{"Smoke Lifetime Min",T::Float,[](void* p)->void* { return &static_cast<WeaponDefinitionComponent*>(p)->Muzzle.SmokeLifetimeMin; },0.01f,"Minimum smoke lifetime in seconds.",0.01f,30.0f}; f.Group="Smoke"; Storage().back().Meta.Fields.push_back(f); }
-        { ReflectField f{"Smoke Lifetime Max",T::Float,[](void* p)->void* { return &static_cast<WeaponDefinitionComponent*>(p)->Muzzle.SmokeLifetimeMax; },0.01f,"Maximum smoke lifetime in seconds.",0.01f,30.0f}; f.Group="Smoke"; Storage().back().Meta.Fields.push_back(f); }
-        { ReflectField f{"Smoke Alpha",T::Float,[](void* p)->void* { return &static_cast<WeaponDefinitionComponent*>(p)->Muzzle.SmokeAlpha; },0.01f,"Gas puff opacity.",0.0f,1.0f}; f.Group="Smoke"; Storage().back().Meta.Fields.push_back(f); }
-
-    {
-        ReflectComponent m;
-        m.Name = "Goal Trigger"; m.Icon = ICON_FA_BULLSEYE; m.Category = "Gameplay";
-        m.Tooltip = "Scores when an object with the Tag drops into this trigger collider (Is Trigger on).\n"
-                    "Adds points to the scene's Scoreboard, bursts child Particle Systems, flashes child\n"
-                    "Lights and plays the Score Sound.";
-        m.Fields = {
-            { "Tag", T::String, TARTARUS_REFLECT_FIELD(GoalTriggerComponent, Tag), 0.0f,
-              "Only objects with this Tag score." },
-            { "Team", T::Enum, TARTARUS_REFLECT_FIELD(GoalTriggerComponent, Team), 0.0f,
-              "Whose score a goal here adds to." },
-            { "Points", T::Int, TARTARUS_REFLECT_FIELD(GoalTriggerComponent, Points), 1.0f,
-              "Points per goal.", 0.0f, 100.0f },
-            { "Three Points", T::Int, TARTARUS_REFLECT_FIELD(GoalTriggerComponent, ThreePoints), 1.0f,
-              "Points for a long shot (see Three Point Distance).", 0.0f, 100.0f },
-            { "Three Point Distance", T::Float, TARTARUS_REFLECT_FIELD(GoalTriggerComponent, ThreePointDistance), 0.05f,
-              "A goal thrown from at least this far away (flat distance from where the gravity gun\n"
-              "released it) scores Three Points. 0 = off.", 0.0f, 1000.0f },
-            { "Require Downward", T::Bool, TARTARUS_REFLECT_FIELD(GoalTriggerComponent, RequireDownward), 0.0f,
-              "Only count objects moving down (through a hoop from above)." },
-            { "Score Sound", T::AssetRef, TARTARUS_REFLECT_FIELD(GoalTriggerComponent, ScoreSound), 0.0f,
-              "Played at the goal when it scores." },
-            { "Flash Intensity", T::Float, TARTARUS_REFLECT_FIELD(GoalTriggerComponent, FlashIntensity), 0.5f,
-              "Child Lights jump to this intensity on a goal and fade back.", 0.0f, 1000.0f },
-        };
-        m.Fields[1].EnumLabels = "Home\0Away\0"; m.Fields[1].EnumCount = 2;
-        m.Fields[6].AssetKind = ReflectAssetKind::Sound;
-        Register<GoalTriggerComponent>(std::move(m));
-    }
-    Register<ScoreboardComponent>({
-        "Scoreboard", ICON_FA_TABLE_LIST,
-        "Holds the Home and Away score that Goal Triggers add to (the first Scoreboard in the scene).\n"
-        "Score Digit objects show it. Play -> Stop puts it back to the values here.",
-        "Gameplay",
-        {
-            { "Home", T::Int, TARTARUS_REFLECT_FIELD(ScoreboardComponent, Home), 1.0f, "Home score.", 0.0f, 999.0f },
-            { "Away", T::Int, TARTARUS_REFLECT_FIELD(ScoreboardComponent, Away), 1.0f, "Away score.", 0.0f, 999.0f },
-        },
-    });
-    {
-        ReflectComponent m;
-        m.Name = "Score Digit"; m.Icon = ICON_FA_HASHTAG; m.Category = "Gameplay";
-        m.Tooltip = "A seven-segment digit of a team's score. Lights its children named \"Seg A\" .. \"Seg G\"\n"
-                    "(A top, B top right, C bottom right, D bottom, E bottom left, F top left, G middle)\n"
-                    "by raising their material's emission.";
-        m.Fields = {
-            { "Team", T::Enum, TARTARUS_REFLECT_FIELD(ScoreDigitComponent, Team), 0.0f, "Whose score it shows." },
-            { "Place", T::Enum, TARTARUS_REFLECT_FIELD(ScoreDigitComponent, Place), 0.0f,
-              "Which digit: ones, or tens (blank below 10)." },
-            { "On Strength", T::Float, TARTARUS_REFLECT_FIELD(ScoreDigitComponent, OnStrength), 0.05f,
-              "Emissive strength of a lit segment.", 0.0f, 100.0f },
-            { "Off Strength", T::Float, TARTARUS_REFLECT_FIELD(ScoreDigitComponent, OffStrength), 0.005f,
-              "Emissive strength of an unlit segment.", 0.0f, 100.0f },
-        };
-        m.Fields[0].EnumLabels = "Home\0Away\0"; m.Fields[0].EnumCount = 2;
-        m.Fields[1].EnumLabels = "Ones\0Tens\0"; m.Fields[1].EnumCount = 2;
-        Register<ScoreDigitComponent>(std::move(m));
-    }
-    Register<HealthComponent>({
-        "Health", ICON_FA_HEART,
-        "Hit points: rounds that hit this object take them away, and at 0 it is dead.\n"
-        "Starts full every Play.",
-        "Gameplay",
-        {
-            { "Max", T::Float, TARTARUS_REFLECT_FIELD(HealthComponent, Max), 1.0f, "Full health.", 1.0f, 100000.0f },
-            { "Invulnerable", T::Bool, TARTARUS_REFLECT_FIELD(HealthComponent, Invulnerable), 0.0f,
-              "Hits register but take nothing." },
-        },
-    });
-    {
-        ReflectComponent m;
-        m.Name = "NPC Spawn"; m.Icon = ICON_FA_PERSON_RIFLE; m.Category = "AI";
-        m.Tooltip = "An enemy soldier appears here in Play, facing this object's forward. The squad is built\n"
-                    "from these spawns (see Squad Settings); replacements come back at the one farthest\n"
-                    "out of the player's sight.";
-        m.Fields = {
-            { "Weapon", T::Enum, TARTARUS_REFLECT_FIELD(NpcSpawnComponent, Weapon), 0.0f, "What the soldier carries." },
-            { "Squad", T::Int, TARTARUS_REFLECT_FIELD(NpcSpawnComponent, Squad), 1.0f,
-              "Soldiers with the same Squad share what they know and fight together.", 0.0f, 16.0f },
-            { "Skill", T::Float, TARTARUS_REFLECT_FIELD(NpcSpawnComponent, Skill), 0.01f,
-              "0 = green (slow, inaccurate, timid) .. 1 = veteran.", 0.0f, 1.0f },
-            { "Outfit Seed", T::Int, TARTARUS_REFLECT_FIELD(NpcSpawnComponent, OutfitSeed), 1.0f,
-              "Which random outfit. 0 = a different one every Play.", 0.0f, 100000.0f },
-            { "Brain", T::Enum, TARTARUS_REFLECT_FIELD(NpcSpawnComponent, Brain), 0.0f,
-              "Squad AI, or a Training Dummy that just stands there and takes hits." },
-        };
-        m.Fields[0].EnumLabels = "AKS-74U\0Remington 870\0Random\0"; m.Fields[0].EnumCount = 3;
-        m.Fields[2].Slider = true; m.Fields[2].Format = "%.2f";
-        m.Fields[4].EnumLabels = "Squad AI\0Training Dummy\0"; m.Fields[4].EnumCount = 2;
-        Register<NpcSpawnComponent>(std::move(m));
-    }
-    Register<SquadSettingsComponent>({
-        "Squad Settings", ICON_FA_USERS,
-        "The enemy squad's rules for this scene (the first Squad Settings counts).",
-        "AI",
-        {
-            { "Squad Size", T::Int, TARTARUS_REFLECT_FIELD(SquadSettingsComponent, SquadSize), 1.0f,
-              "Enemies alive at once.", 0.0f, 8.0f },
-            { "Respawn", T::Bool, TARTARUS_REFLECT_FIELD(SquadSettingsComponent, Respawn), 0.0f,
-              "Replace enemies that die." },
-            { "Respawn Delay", T::Float, TARTARUS_REFLECT_FIELD(SquadSettingsComponent, RespawnDelay), 0.1f,
-              "Seconds before a dead enemy's replacement appears.", 0.0f, 120.0f },
-            { "Difficulty", T::Float, TARTARUS_REFLECT_FIELD(SquadSettingsComponent, Difficulty), 0.01f,
-              "Scales the enemies' accuracy and reaction speed.", 0.25f, 2.0f },
-            { "NPC Damage Scale", T::Float, TARTARUS_REFLECT_FIELD(SquadSettingsComponent, NpcDamageScale), 0.01f,
-              "Enemy rounds do this much of their weapon's damage to the player.", 0.0f, 4.0f },
-            { "Heavy Hit Damage", T::Float, TARTARUS_REFLECT_FIELD(SquadSettingsComponent, HeavyHitDamage), 0.5f,
-              "A single hit of at least this much damage (from the player) staggers the enemy.", 0.0f, 500.0f },
-            { "Stagger Time", T::Float, TARTARUS_REFLECT_FIELD(SquadSettingsComponent, StaggerTime), 0.01f,
-              "Seconds an enemy's aim is paused after a heavy hit.", 0.0f, 5.0f },
-            { "Bleed-Out Time", T::Float, TARTARUS_REFLECT_FIELD(SquadSettingsComponent, BleedOutTime), 0.5f,
-              "A wounded (downed) enemy dies this many seconds after going down.", 0.0f, 300.0f },
-            { "Crawl Speed", T::Float, TARTARUS_REFLECT_FIELD(SquadSettingsComponent, CrawlSpeed), 0.01f,
-              "A wounded enemy crawls at this speed (m/s).", 0.0f, 5.0f },
-            { "Limp Speed Scale", T::Float, TARTARUS_REFLECT_FIELD(SquadSettingsComponent, LimpSpeedScale), 0.01f,
-              "A leg-shot enemy moves at this fraction of its normal speed.", 0.05f, 1.0f },
-            { "Limp Time", T::Float, TARTARUS_REFLECT_FIELD(SquadSettingsComponent, LimpTime), 0.1f,
-              "Seconds a leg wound slows an enemy.", 0.0f, 120.0f },
-            { "Corpse Time", T::Float, TARTARUS_REFLECT_FIELD(SquadSettingsComponent, CorpseTime), 0.5f,
-              "Seconds a dead enemy's body stays before it is removed.", 0.0f, 600.0f },
-            { "Fall Gravity", T::Float, TARTARUS_REFLECT_FIELD(SquadSettingsComponent, FallGravity), 0.1f,
-              "Gravity (m/s^2) on an enemy that steps off a ledge. Ragdolls use the physics world's gravity.", 0.0f, 60.0f },
-            { "Melee Damage", T::Float, TARTARUS_REFLECT_FIELD(SquadSettingsComponent, MeleeDamage), 0.5f,
-              "Damage of a rifle-butt strike at the player (scaled by Difficulty, 0.5 to 1.5).", 0.0f, 500.0f },
-            { "Melee Time", T::Float, TARTARUS_REFLECT_FIELD(SquadSettingsComponent, MeleeTime), 0.01f,
-              "A strike's length, wind-up to recovery (seconds).", 0.1f, 3.0f },
-            { "Melee Hit Time", T::Float, TARTARUS_REFLECT_FIELD(SquadSettingsComponent, MeleeHitTime), 0.01f,
-              "The blow lands this many seconds into the strike.", 0.0f, 3.0f },
-            { "Hitbox Range", T::Float, TARTARUS_REFLECT_FIELD(SquadSettingsComponent, HitboxRange), 1.0f,
-              "Enemies further than this from the player (m) keep only their movement capsule, no per-bone hitboxes.", 5.0f, 500.0f },
-            { "Foot IK Range", T::Float, TARTARUS_REFLECT_FIELD(SquadSettingsComponent, FootIKRange), 0.5f,
-              "Enemies this close (m) and in view put their feet on uneven ground.", 0.0f, 200.0f },
-            { "Mesh Check Range", T::Float, TARTARUS_REFLECT_FIELD(SquadSettingsComponent, MeshCheckRange), 0.5f,
-              "Within this distance (m) the weapon hold checks the gun and elbows against the drawn body.", 0.0f, 100.0f },
-            { "Cover Sample Spacing", T::Float, TARTARUS_REFLECT_FIELD(SquadSettingsComponent, CoverSpacing), 0.05f,
-              "Metres between cover samples along a navigation-mesh edge.", 0.3f, 4.0f },
-            { "Cover Reach", T::Float, TARTARUS_REFLECT_FIELD(SquadSettingsComponent, CoverReach), 0.05f,
-              "How far beyond the edge something must stand to count as cover (m).", 0.2f, 3.0f },
-            { "Low Cover Height", T::Float, TARTARUS_REFLECT_FIELD(SquadSettingsComponent, CoverKneeHeight), 0.05f,
-              "Probe height for low cover (m): something solid here means crouch-behind cover.", 0.2f, 1.5f },
-            { "High Cover Height", T::Float, TARTARUS_REFLECT_FIELD(SquadSettingsComponent, CoverHeadHeight), 0.05f,
-              "Probe height for high cover (m): solid here too means stand-behind cover.", 0.8f, 2.5f },
-            { "Cover Peek Step", T::Float, TARTARUS_REFLECT_FIELD(SquadSettingsComponent, CoverStep), 0.05f,
-              "High cover: how far along the wall an enemy steps to peek round the end (m).", 0.2f, 3.0f },
-        },
-    });
-    {
-        ReflectComponent m;
-        m.Name = "Impact Sound"; m.Icon = ICON_FA_VOLUME_HIGH; m.Category = "Audio";
-        m.Tooltip = "Plays a sound where this object hits something, louder the harder the hit.\n"
-                    "Needs a Collider. Both objects in a hit play their own Impact Sound.";
-        m.Fields = {
-            { "Clip", T::AssetRef, TARTARUS_REFLECT_FIELD(ImpactSoundComponent, Clip), 0.0f, "The sound." },
-            { "Volume", T::Float, TARTARUS_REFLECT_FIELD(ImpactSoundComponent, Volume), 0.01f,
-              "Volume of the hardest hit.", 0.0f, 1.0f },
-            { "Min Speed", T::Float, TARTARUS_REFLECT_FIELD(ImpactSoundComponent, MinSpeed), 0.05f,
-              "Hits slower than this (m/s) are silent.", 0.0f, 100.0f },
-            { "Max Speed", T::Float, TARTARUS_REFLECT_FIELD(ImpactSoundComponent, MaxSpeed), 0.1f,
-              "Hits at this speed (m/s) or faster play at full Volume.", 0.01f, 200.0f },
-            { "Pitch Variation", T::Float, TARTARUS_REFLECT_FIELD(ImpactSoundComponent, PitchVariation), 0.005f,
-              "Random pitch change per hit, +/- this fraction.", 0.0f, 0.5f },
-        };
-        m.Fields[0].AssetKind = ReflectAssetKind::Sound;
-        m.Fields[1].Slider = true; m.Fields[1].Format = "%.2f";
-        Register<ImpactSoundComponent>(std::move(m));
-    }
-
     // Migrated from hand-coded serialization/Inspector code onto reflection (#184). Previously
     // this component had runtime behaviour (TransformControllerSystem, in TartarusGame.dll) but
     // no Inspector section or Add Component entry at all — a violation of rule 2 at the top of
@@ -521,111 +315,6 @@ void RegisterEngineComponents() {
               "Closest distance the camera renders.", 0.001f, 100.0f },
             { "Far", T::Float, TARTARUS_REFLECT_FIELD(CameraComponent, FarPlane), 1.0f,
               "Farthest distance the camera renders.", 0.1f, 100000.0f },
-        },
-    });
-
-    // #165 - the Play-mode player, configurable per scene instead of hard-wired in main.cpp.
-    Register<FirstPersonControllerComponent>({
-        "First Person Controller", ICON_FA_PERSON_WALKING,
-        "Play spawns the first-person player here (feet at this position, facing this object's "
-        "forward) with the settings below. WASD to move, Shift to sprint, Space to jump.",
-        "Gameplay",
-        {
-            { "Primary Weapon Prefab", T::String, TARTARUS_REFLECT_FIELD(FirstPersonControllerComponent, PrimaryWeaponPrefab), 0.0f,
-              "Weapon prefab for slot 0. Its Weapon Definition supplies the animation set; takes priority over Animation Set." },
-            { "Secondary Weapon Prefab", T::String, TARTARUS_REFLECT_FIELD(FirstPersonControllerComponent, SecondaryWeaponPrefab), 0.0f,
-              "Weapon prefab for slot 1. Its Weapon Definition supplies the animation set." },
-            { "Move Speed", T::Float, TARTARUS_REFLECT_FIELD(FirstPersonControllerComponent, MoveSpeed), 0.05f,
-              "Walking speed, metres per second.", 0.0f, 100.0f },
-            { "Sprint Multiplier", T::Float, TARTARUS_REFLECT_FIELD(FirstPersonControllerComponent, SprintMultiplier), 0.01f,
-              "Speed multiplier while Shift is held.", 1.0f, 10.0f },
-            { "Jump Speed", T::Float, TARTARUS_REFLECT_FIELD(FirstPersonControllerComponent, JumpSpeed), 0.05f,
-              "Upward launch speed. Jump height is about Jump Speed^2 / (2 x Gravity).", 0.0f, 50.0f },
-            { "Jump Buffer Time", T::Float, TARTARUS_REFLECT_FIELD(FirstPersonControllerComponent, JumpBufferTime), 0.005f,
-              "A jump pressed this many seconds before landing still happens the moment you land.", 0.0f, 0.5f },
-            { "Coyote Time", T::Float, TARTARUS_REFLECT_FIELD(FirstPersonControllerComponent, CoyoteTime), 0.005f,
-              "A jump pressed this many seconds after stepping off an edge still counts.", 0.0f, 0.5f },
-            { "Ground Accel Time", T::Float, TARTARUS_REFLECT_FIELD(FirstPersonControllerComponent, GroundAccelTime), 0.005f,
-              "How quickly the player gets up to speed on the ground: the time constant, in seconds (about 2.3x\n"
-              "this reaches 90% of full speed). 0 = instantly.", 0.0f, 1.0f },
-            { "Ground Decel Time", T::Float, TARTARUS_REFLECT_FIELD(FirstPersonControllerComponent, GroundDecelTime), 0.005f,
-              "... and slows down on letting go. 0 = stops dead.", 0.0f, 1.0f },
-            { "Air Accel Time", T::Float, TARTARUS_REFLECT_FIELD(FirstPersonControllerComponent, AirAccelTime), 0.005f,
-              "How quickly the input steers the player in the air. Higher keeps more of the jump's momentum.\n"
-              "0 = full air control.", 0.0f, 5.0f },
-            { "Eye Height", T::Float, TARTARUS_REFLECT_FIELD(FirstPersonControllerComponent, EyeHeight), 0.01f,
-              "Camera height above the feet.", 0.1f, 10.0f },
-            { "Capsule Radius", T::Float, TARTARUS_REFLECT_FIELD(FirstPersonControllerComponent, CapsuleRadius), 0.01f,
-              "Collision capsule radius.", 0.05f, 5.0f },
-            { "Capsule Height", T::Float, TARTARUS_REFLECT_FIELD(FirstPersonControllerComponent, CapsuleHeight), 0.01f,
-              "Total collision capsule height, feet to head.", 0.2f, 10.0f },
-            { "Mouse Sensitivity", T::Float, TARTARUS_REFLECT_FIELD(FirstPersonControllerComponent, MouseSensitivity), 0.005f,
-              "Degrees of turn per pixel of mouse movement.", 0.01f, 1.0f },
-            { "Invert Y", T::Bool, TARTARUS_REFLECT_FIELD(FirstPersonControllerComponent, InvertY), 0.0f,
-              "Moving the mouse up looks down." },
-            { "Stick Look Deg/Sec", T::Float, TARTARUS_REFLECT_FIELD(FirstPersonControllerComponent, StickLookDegPerSec), 5.0f,
-              "Gamepad right stick: turn rate in degrees per second (not a delta).", 1.0f, 720.0f },
-            { "Eye Radius", T::Float, TARTARUS_REFLECT_FIELD(FirstPersonControllerComponent, EyeRadius), 0.001f,
-              "Camera lean collision: sphere radius used for wall detection, metres (keeps the near plane off the wall).", 0.01f, 1.0f },
-            { "Field of View", T::Float, TARTARUS_REFLECT_FIELD(FirstPersonControllerComponent, FieldOfView), 0.25f,
-              "Horizontal field of view in degrees, measured on a 16:9 screen (90 = the usual shooter FOV). "
-              "Wider screens see more at the sides.", 30.0f, 150.0f },
-            { "Kill Height", T::Float, TARTARUS_REFLECT_FIELD(FirstPersonControllerComponent, KillY), 0.5f,
-              "Falling below this world height respawns the player at this object.", -100000.0f, 100000.0f },
-            { "Gravity", T::Float, TARTARUS_REFLECT_FIELD(FirstPersonControllerComponent, Gravity), 0.1f,
-              "How hard the player falls, m/s\xC2\xB2. Separate from the physics world's gravity (Project\n"
-              "Settings > Physics, Earth's 9.81 by default): most games give the player a heavier,\n"
-              "snappier fall than real life. Jump height is about Jump Speed\xC2\xB2 / (2 x Gravity).", 0.0f, 200.0f },
-            { "Gravity Gun", T::Bool, TARTARUS_REFLECT_FIELD(FirstPersonControllerComponent, GravityGun), 0.0f,
-              "The built-in tool: right mouse picks up a rigidbody, left mouse throws it." },
-            { "Min Throw Speed", T::Float, TARTARUS_REFLECT_FIELD(FirstPersonControllerComponent, MinThrowSpeed), 0.1f,
-              "Gravity gun: launch speed (m/s) of a quick click. Hold left mouse to charge up.", 0.0f, 200.0f },
-            { "Max Throw Speed", T::Float, TARTARUS_REFLECT_FIELD(FirstPersonControllerComponent, MaxThrowSpeed), 0.1f,
-              "Gravity gun: launch speed (m/s) when fully charged.", 0.0f, 200.0f },
-            { "Throw Charge Time", T::Float, TARTARUS_REFLECT_FIELD(FirstPersonControllerComponent, ThrowChargeTime), 0.01f,
-              "Gravity gun: seconds of holding left mouse to reach Max Throw Speed.", 0.05f, 10.0f },
-            { "Throw Backspin", T::Float, TARTARUS_REFLECT_FIELD(FirstPersonControllerComponent, ThrowBackspin), 0.05f,
-              "Gravity gun: backspin (revolutions per second) put on a thrown ball, like a real shot.\n"
-              "Only round (sphere collider) bodies get it.", 0.0f, 20.0f },
-            { "Grab Range", T::Float, TARTARUS_REFLECT_FIELD(FirstPersonControllerComponent, GrabRange), 1.0f,
-              "Gravity gun: aiming distance for the primary pick-up ray, metres.", 10.0f, 1000.0f },
-            { "Assist Range", T::Float, TARTARUS_REFLECT_FIELD(FirstPersonControllerComponent, AssistRange), 1.0f,
-              "Gravity gun: search radius when no object is under the exact crosshair, metres.", 1.0f, 500.0f },
-            { "Assist Cone Deg", T::Float, TARTARUS_REFLECT_FIELD(FirstPersonControllerComponent, AssistConeDeg), 0.5f,
-              "Gravity gun: within this many degrees of the crosshair during aim assist, degrees.", 1.0f, 45.0f },
-            { "Scroll Turn Deg", T::Float, TARTARUS_REFLECT_FIELD(FirstPersonControllerComponent, ScrollTurnDeg), 0.5f,
-              "Gravity gun: rotation applied per scroll notch while holding an object, degrees.", 1.0f, 90.0f },
-            { "Animation Set", T::String, TARTARUS_REFLECT_FIELD(FirstPersonControllerComponent, AnimationSet), 0.0f,
-              "Optional .fpsanim asset for a camera-bound first-person arms and weapon presentation." },
-            { "Secondary Animation Set", T::String, TARTARUS_REFLECT_FIELD(FirstPersonControllerComponent, SecondaryAnimationSet), 0.0f,
-              "Optional second weapon (.fpsanim). In Play, 1 draws the Animation Set, 3 this one and 2 goes\n"
-              "unarmed; switching holsters the weapon in hand first, and each weapon keeps its own ammo." },
-            { "View Model Offset", T::Vec3, TARTARUS_REFLECT_FIELD(FirstPersonControllerComponent, ViewModelOffset), 0.01f,
-              "Residual nudge, in the play camera's frame, applied on top of the Camera Bone\n"
-              "anchor. Leave at zero unless you are deliberately nudging the view model." },
-            { "Camera Bone", T::String, TARTARUS_REFLECT_FIELD(FirstPersonControllerComponent, CameraBone), 0.0f,
-              "Rig bone the play camera sits on (\"head\" by default). The view model is placed so\n"
-              "this bone lands exactly on the camera. Empty puts the model's root there instead." },
-            { "View Model Rotation", T::Vec3, TARTARUS_REFLECT_FIELD(FirstPersonControllerComponent, ViewModelRotation), 0.5f,
-              "Euler rotation offset, in degrees, applied after the play camera orientation." },
-            { "View Model Scale", T::Float, TARTARUS_REFLECT_FIELD(FirstPersonControllerComponent, ViewModelScale), 0.01f,
-              "Scale of the first-person arms and weapon presentation.", 0.01f, 100.0f },
-            { "View Model FOV", T::Float, TARTARUS_REFLECT_FIELD(FirstPersonControllerComponent, ViewModelFov), 0.25f,
-              "Vertical FOV, in degrees, the first-person arms and weapon are projected with in the\n"
-              "renderer's view-model pass (drawn after a depth clear, so the world can't clip them).\n"
-              "Independent of the world camera's FOV: this changes how the held weapon is framed,\n"
-              "never the scene behind it. Narrower than the world FOV by default, which is what\n"
-              "keeps the weapon reading as held instead of stretched.", 20.0f, 150.0f },
-            { "Max Health", T::Float, TARTARUS_REFLECT_FIELD(FirstPersonControllerComponent, MaxHealth), 1.0f,
-              "The player's health. Enemy rounds take it; at 0 the player dies and respawns here.", 1.0f, 100000.0f },
-            { "Regen Delay", T::Float, TARTARUS_REFLECT_FIELD(FirstPersonControllerComponent, RegenDelay), 0.05f,
-              "Seconds without being hit before health starts coming back.", 0.0f, 120.0f },
-            { "Regen Rate", T::Float, TARTARUS_REFLECT_FIELD(FirstPersonControllerComponent, RegenRate), 0.5f,
-              "Health per second coming back after Regen Delay. 0 = no regeneration.", 0.0f, 10000.0f },
-            { "Respawn Delay", T::Float, TARTARUS_REFLECT_FIELD(FirstPersonControllerComponent, RespawnDelay), 0.05f,
-              "Seconds from death to respawning here.", 0.0f, 60.0f },
-            { "Spawn Protection", T::Float, TARTARUS_REFLECT_FIELD(FirstPersonControllerComponent, SpawnProtection), 0.05f,
-              "Seconds after a respawn when nothing can hurt the player.", 0.0f, 60.0f },
         },
     });
 
@@ -1020,7 +709,7 @@ void RegisterEngineComponents() {
         Register<FirstPersonBodyComponent>(std::move(m));
     }
 
-    // Character outfits: the Inspector's outfit editor draws the choices.
+    // Character outfits (docs/CHARACTER_OUTFITS.md): the Inspector's outfit editor draws the choices.
     {
         ReflectComponent m;
         m.Name = "Character Outfit"; m.Icon = ICON_FA_PERSON_DRESS; m.Category = "Gameplay";
@@ -1066,7 +755,7 @@ void RegisterEngineComponents() {
         static const char* kBlendLabels = "Alpha Blended\0Additive\0";
         ReflectComponent m;
         m.Name = "Particle System"; m.Icon = ICON_FA_FIRE; m.Category = "Effects";
-        m.Tooltip = "Modular CPU particles: emission cycles, bursts, shapes, forces, lifetime curves, collision and textured flipbooks.";
+        m.Tooltip = "Modular CPU particles: emission cycles, bursts, shapes, forces, lifetime curves, collision, textured flipbooks and procedural smoke.";
         m.Fields = {
             { "Emitting", T::Bool, TARTARUS_REFLECT_FIELD(ParticleSystemComponent, Emitting), 0.0f,
               "Spawn new particles. Turning it off lets the live ones finish." },
@@ -1109,6 +798,12 @@ void RegisterEngineComponents() {
                 (name=="Blend Mode" || name=="Intensity")?"Rendering":
                 (name=="Lifetime" || name=="Start Speed" || name.find("Size")!=std::string::npos || name.find("Color")!=std::string::npos || name.find("Alpha")!=std::string::npos)?"Lifetime":"Emission";
         }
+        { ReflectField f{"Shader",T::Enum,TARTARUS_REFLECT_FIELD(ParticleSystemComponent, ShaderMode),0.0f,"Default draws a sprite or soft disc. Procedural Smoke generates animated clouds without a texture.",0.0f,0.0f}; f.Group="Rendering"; f.EnumLabels="Default\0Procedural Smoke\0"; f.EnumCount=2; m.Fields.insert(m.Fields.begin()+12,f); }
+        { ReflectField f{"Smoke Density",T::Float,TARTARUS_REFLECT_FIELD(ParticleSystemComponent, SmokeDensity),0.01f,"Optical density of the procedural puff; particle Alpha still controls its final opacity.",0.0f,10.0f}; f.Group="Rendering"; f.VisibleIfField="Shader"; f.VisibleIfValue=1; m.Fields.push_back(f); }
+        { ReflectField f{"Smoke Noise Scale",T::Float,TARTARUS_REFLECT_FIELD(ParticleSystemComponent, SmokeNoiseScale),0.01f,"Detail frequency across each puff. Lower values create broader curls.",0.5f,12.0f}; f.Group="Rendering"; f.VisibleIfField="Shader"; f.VisibleIfValue=1; m.Fields.push_back(f); }
+        { ReflectField f{"Smoke Turbulence",T::Float,TARTARUS_REFLECT_FIELD(ParticleSystemComponent, SmokeTurbulence),0.01f,"Distorts the cloud body and silhouette into irregular curls.",0.0f,1.0f}; f.Group="Rendering"; f.VisibleIfField="Shader"; f.VisibleIfValue=1; m.Fields.push_back(f); }
+        { ReflectField f{"Smoke Softness",T::Float,TARTARUS_REFLECT_FIELD(ParticleSystemComponent, SmokeSoftness),0.01f,"Width of the puff's soft edge.",0.05f,1.0f}; f.Group="Rendering"; f.VisibleIfField="Shader"; f.VisibleIfValue=1; m.Fields.push_back(f); }
+        { ReflectField f{"Smoke Evolution",T::Float,TARTARUS_REFLECT_FIELD(ParticleSystemComponent, SmokeEvolution),0.01f,"Speed at which the smoke curls change. Zero freezes each particle's noise shape.",0.0f,4.0f}; f.Group="Rendering"; f.VisibleIfField="Shader"; f.VisibleIfValue=1; m.Fields.push_back(f); }
         { ReflectField f{"Looping",T::Bool,TARTARUS_REFLECT_FIELD(ParticleSystemComponent, Looping),0.0f,"Repeat the emission cycle.",0.0f,0.0f}; f.Group="Emission"; m.Fields.push_back(f); }
         { ReflectField f{"Duration",T::Float,TARTARUS_REFLECT_FIELD(ParticleSystemComponent, Duration),0.01f,"Emission cycle duration in seconds.",0.01f,600.0f}; f.Group="Emission"; m.Fields.push_back(f); }
         { ReflectField f{"Start Delay",T::Float,TARTARUS_REFLECT_FIELD(ParticleSystemComponent, StartDelay),0.01f,"Delay before emission starts.",0.0f,60.0f}; f.Group="Emission"; m.Fields.push_back(f); }
@@ -1138,14 +833,23 @@ void RegisterEngineComponents() {
         { ReflectField f{"Collision Friction",T::Float,TARTARUS_REFLECT_FIELD(ParticleSystemComponent, CollisionFriction),0.01f,"Fraction of tangential velocity lost on contact.",0.0f,1.0f}; f.Group="Collision"; m.Fields.push_back(f); }
         { ReflectField f{"Collision Life Loss",T::Float,TARTARUS_REFLECT_FIELD(ParticleSystemComponent, CollisionLifeLoss),0.01f,"Fraction of particle lifetime consumed by each collision.",0.0f,1.0f}; f.Group="Collision"; m.Fields.push_back(f); }
         { ReflectField f{"Max Bounces",T::Int,TARTARUS_REFLECT_FIELD(ParticleSystemComponent, MaxBounces),1.0f,"Retire after this many collisions; zero retires at the first hit.",0.0f,100.0f}; f.Group="Collision"; m.Fields.push_back(f); }
-        { ReflectField f{"Texture",T::AssetRef,TARTARUS_REFLECT_FIELD(ParticleSystemComponent, Texture),0.0f,"Sprite or flipbook texture; empty draws a soft disc.",0.0f,0.0f}; f.Group="Rendering"; f.AssetKind=ReflectAssetKind::Texture; m.Fields.push_back(f); }
-        { ReflectField f{"Alignment",T::Enum,TARTARUS_REFLECT_FIELD(ParticleSystemComponent, Alignment),0.0f,"Billboard faces the camera; stretched follows velocity; horizontal lies in world XZ.",0.0f,0.0f}; f.Group="Rendering"; f.EnumLabels="Billboard\0Velocity\0Horizontal\0"; f.EnumCount=3; m.Fields.push_back(f); }
+        { ReflectField f{"Texture",T::AssetRef,TARTARUS_REFLECT_FIELD(ParticleSystemComponent, Texture),0.0f,"Default shader's sprite or flipbook texture; empty draws a soft disc.",0.0f,0.0f}; f.Group="Rendering"; f.AssetKind=ReflectAssetKind::Texture; m.Fields.push_back(f); }
+        { ReflectField f{"Texture Channels",T::Enum,TARTARUS_REFLECT_FIELD(ParticleSystemComponent, TextureChannels),0.0f,"RGBA uses the texture's color and alpha. Mask modes use one channel as opacity with the particle color.",0.0f,0.0f}; f.Group="Rendering"; f.EnumLabels="RGBA\0Red Mask\0Green Mask\0Blue Mask\0Alpha Mask\0"; f.EnumCount=5; m.Fields.push_back(f); }
+        { ReflectField f{"Pivot X",T::Float,TARTARUS_REFLECT_FIELD(ParticleSystemComponent, PivotX),0.01f,"Sprite anchor: -1 is the left edge, 0 the centre, 1 the right edge.",-1.0f,1.0f}; f.Group="Rendering"; m.Fields.push_back(f); }
+        { ReflectField f{"Pivot Y",T::Float,TARTARUS_REFLECT_FIELD(ParticleSystemComponent, PivotY),0.01f,"Sprite anchor: -1 is the bottom edge, 0 the centre, 1 the top edge.",-1.0f,1.0f}; f.Group="Rendering"; m.Fields.push_back(f); }
+        { ReflectField f{"Alignment",T::Enum,TARTARUS_REFLECT_FIELD(ParticleSystemComponent, Alignment),0.0f,"Billboard stays parallel to the camera plane; stretched follows velocity; horizontal lies in world XZ.",0.0f,0.0f}; f.Group="Rendering"; f.EnumLabels="Billboard\0Velocity\0Horizontal\0"; f.EnumCount=3; m.Fields.push_back(f); }
         { ReflectField f{"Velocity Stretch",T::Float,TARTARUS_REFLECT_FIELD(ParticleSystemComponent, VelocityStretch),0.01f,"Extra length per metre per second.",0.0f,10.0f}; f.Group="Rendering"; m.Fields.push_back(f); }
         { ReflectField f{"Sheet Columns",T::Int,TARTARUS_REFLECT_FIELD(ParticleSystemComponent, SheetColumns),1.0f,"Columns in the sprite sheet.",1.0f,256.0f}; f.Group="Rendering"; m.Fields.push_back(f); }
         { ReflectField f{"Sheet Rows",T::Int,TARTARUS_REFLECT_FIELD(ParticleSystemComponent, SheetRows),1.0f,"Rows in the sprite sheet.",1.0f,256.0f}; f.Group="Rendering"; m.Fields.push_back(f); }
         { ReflectField f{"Sheet FPS",T::Float,TARTARUS_REFLECT_FIELD(ParticleSystemComponent, SheetFPS),0.1f,"Animation speed; zero traverses the sheet once over lifetime.",0.0f,240.0f}; f.Group="Rendering"; m.Fields.push_back(f); }
         { ReflectField f{"Random Start Frame",T::Bool,TARTARUS_REFLECT_FIELD(ParticleSystemComponent, RandomStartFrame),0.0f,"Start each particle at a random sheet cell.",0.0f,0.0f}; f.Group="Rendering"; m.Fields.push_back(f); }
         { ReflectField f{"Blend Frames",T::Bool,TARTARUS_REFLECT_FIELD(ParticleSystemComponent, BlendFrames),0.0f,"Cross-fade neighbouring sprite sheet frames.",0.0f,0.0f}; f.Group="Rendering"; m.Fields.push_back(f); }
+        for(auto& f:m.Fields) {
+            const std::string name=f.Name;
+            if(name=="Texture" || name=="Texture Channels" || name=="Sheet Columns" || name=="Sheet Rows" || name=="Sheet FPS" || name=="Random Start Frame" || name=="Blend Frames") {
+                f.VisibleIfField="Shader";f.VisibleIfValue=0;
+            }
+        }
         { ReflectField f{"Size Curve",T::String,TARTARUS_REFLECT_FIELD(ParticleSystemComponent, SizeCurve),0.0f,"Edited in its separate curve window.",0.0f,0.0f}; f.Group="Lifetime"; f.EditorHidden=true; m.Fields.push_back(f); }
         { ReflectField f{"Alpha Curve",T::String,TARTARUS_REFLECT_FIELD(ParticleSystemComponent, AlphaCurve),0.0f,"Edited in its separate curve window.",0.0f,0.0f}; f.Group="Lifetime"; f.EditorHidden=true; m.Fields.push_back(f); }
         { ReflectField f{"Speed Curve",T::String,TARTARUS_REFLECT_FIELD(ParticleSystemComponent, SpeedCurve),0.0f,"Edited in its separate curve window.",0.0f,0.0f}; f.Group="Lifetime"; f.EditorHidden=true; m.Fields.push_back(f); }
@@ -1550,41 +1254,10 @@ void RegisterEngineComponents() {
     }
 
     // Lane P: scene-level visual effects and HUD settings
-    Register<FxHudSettingsComponent>({
-        "FX & HUD Settings", ICON_FA_SLIDERS,
-        "Scene-level laser and HUD display parameters. Weapons own their muzzle effects;\n"
-        "legacy muzzle values remain saved for older scenes.",
-        "Gameplay",
-        {
-            { "Flash Time", T::Float, TARTARUS_REFLECT_FIELD(FxHudSettingsComponent, FlashTime), 0.001f,
-              "Seconds the muzzle flash light stays on.", 0.001f, 1.0f },
-            { "Player Flash Scale", T::Float, TARTARUS_REFLECT_FIELD(FxHudSettingsComponent, PlayerFlashScale), 0.01f,
-              "Player's flash light scale relative to soldier's.", 0.01f, 2.0f },
-            { "Flame Glow", T::Float, TARTARUS_REFLECT_FIELD(FxHudSettingsComponent, FlameGlow), 5.0f,
-              "Flame peak emission intensity (red channel).", 0.0f, 1000.0f },
-            { "Muzzle Style", T::Int, TARTARUS_REFLECT_FIELD(FxHudSettingsComponent, MuzzleStyle), 1.0f,
-              "0: the Tactical Shooter flame alone. 1: plus PRO Effects' flash (star / burst), side jets, core glow, gas puff and barrel smoke "
-              "(needs --import-knife-fx).", 0.0f, 1.0f },
-            { "Flame Scale", T::Float, TARTARUS_REFLECT_FIELD(FxHudSettingsComponent, FlameScale), 0.05f,
-              "Flame tongue length/width scale vs. tactical shooter pack.", 0.1f, 5.0f },
-            { "Beam Range", T::Float, TARTARUS_REFLECT_FIELD(FxHudSettingsComponent, BeamRange), 1.0f,
-              "Laser beam metres drawn before fading in the haze.", 1.0f, 500.0f },
-            { "Beam Half Width", T::Float, TARTARUS_REFLECT_FIELD(FxHudSettingsComponent, BeamHalfWidth), 0.0001f,
-              "Laser beam width in metres.", 0.0001f, 0.1f },
-            { "Beam Falloff", T::Float, TARTARUS_REFLECT_FIELD(FxHudSettingsComponent, BeamFalloff), 0.1f,
-              "Laser beam glow falloff distance in metres near the emitter.", 0.1f, 50.0f },
-            { "Beam Bend", T::Float, TARTARUS_REFLECT_FIELD(FxHudSettingsComponent, BeamBend), 0.1f,
-              "Laser beam easing distance over which view-model emitter eases onto the true path (metres).", 0.1f, 20.0f },
-            { "Feed Life", T::Float, TARTARUS_REFLECT_FIELD(FxHudSettingsComponent, FeedLife), 0.1f,
-              "Seconds a kill feed line stays on screen.", 0.1f, 60.0f },
-            { "Streak Window", T::Float, TARTARUS_REFLECT_FIELD(FxHudSettingsComponent, StreakWindow), 0.1f,
-              "Seconds to count consecutive kills for streak display.", 0.1f, 60.0f },
-        },
-    });
-    for(size_t i=0;i<5;++i)Storage().back().Meta.Fields[i].EditorHidden=true;
+
     Register<BloodSettingsComponent>({
         "Blood Settings", ICON_FA_DROPLET,
-        "The volumetric blood (the first Blood Settings in the scene counts): how big the sprays are,\n"
+        "The volumetric blood (the first Blood Settings in the scene counts; docs/BLOOD_FX.md): how big the sprays are,\n"
         "how many stains stay and for how long, and what blood lands on.",
         "Gameplay",
         {
@@ -2044,125 +1717,8 @@ void RegisterEngineComponents() {
     }
     // ---- end lane R-gear ----
     // ---- lane S ----
-    {
-        ReflectComponent m;
-        m.Name = "Weapon Audio"; m.Icon = ICON_FA_VOLUME_HIGH; m.Category = "Audio";
-        m.Tooltip = "One gun's report and gear sounds (add one per gun; Gun is its key prefix, e.g. ak or 870).\n"
-                    "A gun with none uses the built-in defaults. Animator events named snd.<gun>.<element> play the set of that key.";
-        using W = WeaponAudioComponent;
-        m.Fields = {
-            { "Gun", T::String, TARTARUS_REFLECT_FIELD(W, Gun), 0.0f, "Key prefix: events snd.<Gun>.<element>, files Audio/Weapons/<folder>/. ak = AKS74U, 870 = Remington870." },
-            { "Enabled", T::Bool, TARTARUS_REFLECT_FIELD(W, Enabled), 0.0f, "Off: this gun is silent." },
-            { "Volume", T::Float, TARTARUS_REFLECT_FIELD(W, Volume), 0.01f, "Master gain for everything this gun plays.", 0.0f, 2.0f },
-            { "Player Gain", T::Float, TARTARUS_REFLECT_FIELD(W, PlayerGain), 0.01f, "Gain of the report when it is the first-person player's (2D).", 0.0f, 2.0f },
-            { "Shot Pitch Min", T::Float, TARTARUS_REFLECT_FIELD(W, ShotPitchMin), 0.005f, "Random playback rate per shot (shared by the layers so they stay coherent).", 0.5f, 2.0f },
-            { "Shot Pitch Max", T::Float, TARTARUS_REFLECT_FIELD(W, ShotPitchMax), 0.005f, "Upper end of the per-shot playback rate.", 0.5f, 2.0f },
-            { "Volume Jitter dB", T::Float, TARTARUS_REFLECT_FIELD(W, VolumeJitterDb), 0.1f, "+- dB of random gain per layer per shot.", 0.0f, 12.0f },
-            { "Close Full Distance", T::Float, TARTARUS_REFLECT_FIELD(W, CloseFullDistance), 0.5f, "Metres inside which the close crack plays at full gain (3D shots).", 0.0f, 300.0f },
-            { "Close Zero Distance", T::Float, TARTARUS_REFLECT_FIELD(W, CloseZeroDistance), 0.5f, "Metres from which the close crack is gone and the distant report is full.", 0.0f, 600.0f },
-            { "Far Min Weight", T::Float, TARTARUS_REFLECT_FIELD(W, FarMinWeight), 0.01f, "Gain of the distant report up close.", 0.0f, 1.0f },
-            { "Far Max Weight", T::Float, TARTARUS_REFLECT_FIELD(W, FarMaxWeight), 0.01f, "Gain of the distant report past Close Zero Distance.", 0.0f, 1.0f },
-            { "Max Distance", T::Float, TARTARUS_REFLECT_FIELD(W, MaxDistance), 1.0f, "Metres the close, mech and sub layers carry.", 1.0f, 1000.0f },
-            { "Far Max Distance", T::Float, TARTARUS_REFLECT_FIELD(W, FarMaxDistance), 1.0f, "Metres the distant report carries.", 1.0f, 2000.0f },
-            { "Shot Min Distance", T::Float, TARTARUS_REFLECT_FIELD(W, ShotMinDistance), 0.1f, "3D rolloff (logarithmic, -6 dB per doubling): metres inside which the close and mech layers are full volume.", 0.1f, 100.0f },
-            { "Bass Min Distance", T::Float, TARTARUS_REFLECT_FIELD(W, BassMinDistance), 0.1f, "The same for the sub, tail and distant layers (low end carries).", 0.1f, 100.0f },
-            { "Event Min Distance", T::Float, TARTARUS_REFLECT_FIELD(W, EventMinDistance), 0.1f, "The same for the gun's gear and foley sounds in the world (reloads, ADS, equip).", 0.1f, 100.0f },
-            { "Event Max Distance", T::Float, TARTARUS_REFLECT_FIELD(W, EventMaxDistance), 0.5f, "Metres past which a gear sound stops getting quieter.", 1.0f, 500.0f },
-            { "Shot Max Voices", T::Int, TARTARUS_REFLECT_FIELD(W, ShotMaxVoices), 1.0f, "Close / mech / sub voices at once, per layer; past it the oldest is stolen.", 1.0f, 32.0f },
-            { "Tail Max Voices", T::Int, TARTARUS_REFLECT_FIELD(W, TailMaxVoices), 1.0f, "Full auto: tails ringing at once; past it the oldest fades out.", 1.0f, 16.0f },
-            { "Tail Fade Time", T::Float, TARTARUS_REFLECT_FIELD(W, TailFadeTime), 0.01f, "Seconds a stolen tail fades out over.", 0.0f, 2.0f },
-            { "Tail Min Interval", T::Float, TARTARUS_REFLECT_FIELD(W, TailMinInterval), 0.005f, "Seconds between tails (0 = one per shot, capped by Tail Max Voices).", 0.0f, 1.0f },
-            { "Tail Duck Per Voice", T::Float, TARTARUS_REFLECT_FIELD(W, TailDuckPerVoice), 0.01f, "Each tail still ringing quietens a new one by this share, so a long burst doesn't clip.", 0.0f, 1.0f },
-            { "Tail Every", T::Int, TARTARUS_REFLECT_FIELD(W, TailEvery), 1.0f, "Full auto: the tail layer plays on every Nth shot of a burst (1 = every shot; S1's mix policy is 2).", 1.0f, 16.0f },
-            { "Far Every", T::Int, TARTARUS_REFLECT_FIELD(W, FarEvery), 1.0f, "Full auto: the distant report plays on every Nth shot of a burst (S1's mix policy is 3).", 1.0f, 16.0f },
-            { "Burst Gap", T::Float, TARTARUS_REFLECT_FIELD(W, BurstGap), 0.01f, "Seconds without a shot that end a burst; the next shot plays every layer.", 0.05f, 5.0f },
-            { "Data File", T::String, TARTARUS_REFLECT_FIELD(W, DataFile), 0.0f, "Optional json of SoundSet overrides by element (files, volume, jitter, pitch, bus, range, voices). Relative to the project." },
-            { "Env Enabled", T::Bool, TARTARUS_REFLECT_FIELD(W, EnvEnabled), 0.0f, "The shot's tail follows the space the shooter is in: a Reverb Zone volume first, else a raycast probe around the shooter. Off: always the generic tail (fire_tail). A space with no recorded tail files also plays the generic one." },
-            { "Env Ray Count", T::Int, TARTARUS_REFLECT_FIELD(W, EnvRayCount), 1.0f, "Rays per probe (1 up, a diagonal ring and a horizontal ring). More = a finer read of the space, a little more cost per refresh.", 6.0f, 64.0f },
-            { "Env Max Distance", T::Float, TARTARUS_REFLECT_FIELD(W, EnvMaxDistance), 0.5f, "Metres each ray looks; a miss counts as this far.", 5.0f, 200.0f },
-            { "Env Indoor Cover", T::Float, TARTARUS_REFLECT_FIELD(W, EnvIndoorCover), 0.01f, "Overhead cover (half the up ray, half the share of upward diagonals that hit) at which a space turns indoor. The centre of the crossfade.", 0.0f, 1.0f },
-            { "Env Urban Wall", T::Float, TARTARUS_REFLECT_FIELD(W, EnvUrbanWall), 0.01f, "Share of the horizon with a wall within Urban Distance at which open air turns urban (building slaps).", 0.0f, 1.0f },
-            { "Env Urban Distance", T::Float, TARTARUS_REFLECT_FIELD(W, EnvUrbanDistance), 0.5f, "Metres: a wall farther than this is not a building slap.", 1.0f, 200.0f },
-            { "Env Large Room Distance", T::Float, TARTARUS_REFLECT_FIELD(W, EnvLargeRoomDistance), 0.1f, "Mean wall distance (m) at which an indoor space turns from small to large.", 1.0f, 100.0f },
-            { "Env Blend Fraction", T::Float, TARTARUS_REFLECT_FIELD(W, EnvBlendFraction), 0.005f, "Half-width of the crossfade around the cover and wall thresholds (0 = a hard switch).", 0.0f, 0.5f },
-            { "Env Blend Distance", T::Float, TARTARUS_REFLECT_FIELD(W, EnvBlendDistance), 0.005f, "Half-width of the small/large crossfade, as a share of Env Large Room Distance.", 0.0f, 0.9f },
-            { "Env Refresh Interval", T::Float, TARTARUS_REFLECT_FIELD(W, EnvRefreshInterval), 0.01f, "Seconds between probes of one shooter (cached in between, never per shot).", 0.0f, 10.0f },
-            { "Env Refresh Move Distance", T::Float, TARTARUS_REFLECT_FIELD(W, EnvRefreshMoveDistance), 0.05f, "Metres a shooter moves that probe it again at once.", 0.0f, 50.0f },
-            { "Env Match Radius", T::Float, TARTARUS_REFLECT_FIELD(W, EnvMatchRadius), 0.1f, "Shots from a shooter the game does not name are told apart by position: shots this close are one shooter.", 0.1f, 20.0f },
-            { "Env Gain Outdoor Open", T::Float, TARTARUS_REFLECT_FIELD(W, EnvTailGainOutdoorOpen), 0.01f, "Gain of the tail in open ground, on top of the tail layer's.", 0.0f, 4.0f },
-            { "Env Gain Outdoor Urban", T::Float, TARTARUS_REFLECT_FIELD(W, EnvTailGainOutdoorUrban), 0.01f, "Gain of the tail among buildings.", 0.0f, 4.0f },
-            { "Env Gain Indoor Small", T::Float, TARTARUS_REFLECT_FIELD(W, EnvTailGainIndoorSmall), 0.01f, "Gain of the tail in a small room.", 0.0f, 4.0f },
-            { "Env Gain Indoor Large", T::Float, TARTARUS_REFLECT_FIELD(W, EnvTailGainIndoorLarge), 0.01f, "Gain of the tail in a hall / warehouse.", 0.0f, 4.0f },
-            { "Env Debug Draw", T::Bool, TARTARUS_REFLECT_FIELD(W, EnvDebugDraw), 0.0f, "Keep each shooter's probe rays for the overlay (WeaponAudio::EnvironmentDebugLines)." },
-        };
-        const std::pair<const char*, const char*> groups[] = {
-            {"Shot Pitch Min", "Shot"}, {"Shot Pitch Max", "Shot"}, {"Volume Jitter dB", "Shot"},
-            {"Close Full Distance", "Distance Blend"}, {"Close Zero Distance", "Distance Blend"}, {"Far Min Weight", "Distance Blend"},
-            {"Far Max Weight", "Distance Blend"}, {"Max Distance", "Distance Blend"}, {"Far Max Distance", "Distance Blend"},
-            {"Shot Min Distance", "Distance Blend"}, {"Bass Min Distance", "Distance Blend"}, {"Event Min Distance", "Distance Blend"}, {"Event Max Distance", "Distance Blend"},
-            {"Tail Max Voices", "Full Auto"}, {"Tail Every", "Full Auto"}, {"Far Every", "Full Auto"}, {"Burst Gap", "Full Auto"},
-            {"Tail Fade Time", "Full Auto"}, {"Tail Min Interval", "Full Auto"}, {"Tail Duck Per Voice", "Full Auto"},
-            {"Env Enabled", "Environment"}, {"Env Ray Count", "Environment"}, {"Env Max Distance", "Environment"}, {"Env Indoor Cover", "Environment"},
-            {"Env Urban Wall", "Environment"}, {"Env Urban Distance", "Environment"}, {"Env Large Room Distance", "Environment"},
-            {"Env Blend Fraction", "Environment"}, {"Env Blend Distance", "Environment"}, {"Env Refresh Interval", "Environment"},
-            {"Env Refresh Move Distance", "Environment"}, {"Env Match Radius", "Environment"}, {"Env Gain Outdoor Open", "Environment"},
-            {"Env Gain Outdoor Urban", "Environment"}, {"Env Gain Indoor Small", "Environment"}, {"Env Gain Indoor Large", "Environment"},
-            {"Env Debug Draw", "Environment"}};
-        for (ReflectField& f : m.Fields) {
-            for (const auto& [n, g] : groups)
-                if (std::strcmp(f.Name, n) == 0) f.Group = g;
-            if (MixOwnsDistanceField(f.Name)) f.EditorHidden = true; // the mix spec's distance models own it (manifest mix.distance)
-        }
-        Register<WeaponAudioComponent>(std::move(m));
-    }
-    {
-        ReflectComponent m;
-        m.Name = "Foley Audio"; m.Icon = ICON_FA_SHOE_PRINTS; m.Category = "Audio";
-        m.Tooltip = "Footsteps (on the view bob's stride), jumps, landings and the sprint cloth loop; soldiers' footsteps. The first one in the scene counts.";
-        using Fo = FoleyAudioComponent;
-        m.Fields = {
-            { "Enabled", T::Bool, TARTARUS_REFLECT_FIELD(Fo, Enabled), 0.0f, "Off: no foley." },
-            { "Volume", T::Float, TARTARUS_REFLECT_FIELD(Fo, Volume), 0.01f, "Master gain for all foley.", 0.0f, 2.0f },
-            { "Walk Volume", T::Float, TARTARUS_REFLECT_FIELD(Fo, WalkVolume), 0.01f, "Footstep gain walking.", 0.0f, 2.0f },
-            { "Run Volume", T::Float, TARTARUS_REFLECT_FIELD(Fo, RunVolume), 0.01f, "Footstep gain running.", 0.0f, 2.0f },
-            { "Crouch Volume", T::Float, TARTARUS_REFLECT_FIELD(Fo, CrouchVolume), 0.01f, "Footstep gain crouched.", 0.0f, 2.0f },
-            { "Volume Jitter dB", T::Float, TARTARUS_REFLECT_FIELD(Fo, VolumeJitterDb), 0.1f, "+- dB of random gain per step.", 0.0f, 12.0f },
-            { "Pitch Min", T::Float, TARTARUS_REFLECT_FIELD(Fo, PitchMin), 0.005f, "Random playback rate per step.", 0.5f, 2.0f },
-            { "Pitch Max", T::Float, TARTARUS_REFLECT_FIELD(Fo, PitchMax), 0.005f, "Upper end of the per-step playback rate.", 0.5f, 2.0f },
-            { "Step Stride Scale", T::Float, TARTARUS_REFLECT_FIELD(Fo, StepStrideScale), 0.01f, "Footfall spacing against the view bob's stride (two footfalls per stride): above 1 = slower steps.", 0.25f, 4.0f },
-            { "Crouch Stride Scale", T::Float, TARTARUS_REFLECT_FIELD(Fo, CrouchStrideScale), 0.01f, "Footfall spacing when crouched, on top of Step Stride Scale.", 0.25f, 4.0f },
-            { "Min Step Speed", T::Float, TARTARUS_REFLECT_FIELD(Fo, MinStepSpeed), 0.05f, "m/s of planar speed below which there are no footsteps.", 0.0f, 10.0f },
-            { "Run Speed", T::Float, TARTARUS_REFLECT_FIELD(Fo, RunSpeed), 0.05f, "m/s from which the run set plays.", 0.5f, 20.0f },
-            { "Steps From Feet", T::Bool, TARTARUS_REFLECT_FIELD(Fo, StepsFromFeet), 0.0f, "A footstep when an animated foot (the player's body, a soldier's) touches down. Off, or with no body: one every half stride of travel." },
-            { "Foot Lift Height", T::Float, TARTARUS_REFLECT_FIELD(Fo, FootLiftHeight), 0.005f, "Standing (below Min Step Speed): m a foot must rise above its planted height before its next touch-down counts. Weight shifts below this are silent.", 0.01f, 0.3f },
-            { "Foot Lift Moving", T::Float, TARTARUS_REFLECT_FIELD(Fo, FootLiftMoving), 0.005f, "The same while moving: lower, so a walk's first, shuffling stride still steps.", 0.005f, 0.3f },
-            { "Foot Contact Height", T::Float, TARTARUS_REFLECT_FIELD(Fo, FootContactHeight), 0.005f, "m above its planted height at which a lowering foot counts as down: higher = the step a little earlier.", 0.0f, 0.2f },
-            { "Jump Volume", T::Float, TARTARUS_REFLECT_FIELD(Fo, JumpVolume), 0.01f, "Gain of the jump.", 0.0f, 2.0f },
-            { "Land Volume", T::Float, TARTARUS_REFLECT_FIELD(Fo, LandVolume), 0.01f, "Gain of a landing at Land Full Speed.", 0.0f, 2.0f },
-            { "Land Min Speed", T::Float, TARTARUS_REFLECT_FIELD(Fo, LandMinSpeed), 0.05f, "m/s of fall below which a landing is silent.", 0.0f, 30.0f },
-            { "Land Full Speed", T::Float, TARTARUS_REFLECT_FIELD(Fo, LandFullSpeed), 0.05f, "m/s of fall at which a landing is at Land Volume.", 0.1f, 40.0f },
-            { "Land Heavy Speed", T::Float, TARTARUS_REFLECT_FIELD(Fo, LandHeavySpeed), 0.05f, "m/s of fall from which the heavy landing plays (the light one below).", 0.0f, 40.0f },
-            { "NPC Step Volume", T::Float, TARTARUS_REFLECT_FIELD(Fo, NpcStepVolume), 0.01f, "Gain of soldiers' footsteps.", 0.0f, 2.0f },
-            { "NPC Step Min Distance", T::Float, TARTARUS_REFLECT_FIELD(Fo, NpcStepMinDistance), 0.1f, "Metres inside which a soldier's step is full volume.", 0.1f, 50.0f },
-            { "NPC Step Max Distance", T::Float, TARTARUS_REFLECT_FIELD(Fo, NpcStepMaxDistance), 0.5f, "Metres a soldier's step carries.", 1.0f, 200.0f },
-            { "Default Surface", T::String, TARTARUS_REFLECT_FIELD(Fo, DefaultSurface), 0.0f, "Surface when the ground matches nothing in the table." },
-            { "Surface Table", T::String, TARTARUS_REFLECT_FIELD(Fo, SurfaceTable), 0.0f, "surface=word,word;surface=word. The first surface with a word in the ground's physics material, tag or name. Surfaces are foley categories (Audio/Foley/<surface>/)." },
-        };
-        const std::pair<const char*, const char*> groups[] = {
-            {"Walk Volume", "Footsteps"}, {"Run Volume", "Footsteps"}, {"Crouch Volume", "Footsteps"}, {"Volume Jitter dB", "Footsteps"},
-            {"Pitch Min", "Footsteps"}, {"Pitch Max", "Footsteps"}, {"Step Stride Scale", "Footsteps"}, {"Crouch Stride Scale", "Footsteps"},
-            {"Min Step Speed", "Footsteps"}, {"Run Speed", "Footsteps"}, {"Steps From Feet", "Footsteps"}, {"Foot Lift Height", "Footsteps"}, {"Foot Lift Moving", "Footsteps"},
-            {"Foot Contact Height", "Footsteps"},
-            {"Jump Volume", "Jump / Land"}, {"Land Volume", "Jump / Land"}, {"Land Min Speed", "Jump / Land"}, {"Land Heavy Speed", "Jump / Land"}, {"Land Full Speed", "Jump / Land"},
-            
-            {"NPC Step Volume", "NPC Footsteps"}, {"NPC Step Min Distance", "NPC Footsteps"}, {"NPC Step Max Distance", "NPC Footsteps"}};
-        for (ReflectField& f : m.Fields) {
-            for (const auto& [n, g] : groups)
-                if (std::strcmp(f.Name, n) == 0) f.Group = g;
-            if (MixOwnsDistanceField(f.Name)) f.EditorHidden = true; // the mix spec's distance models own it (manifest mix.distance)
-        }
-        Register<FoleyAudioComponent>(std::move(m));
-    }
+
+
     {
         ReflectComponent m;
         m.Name = "Reverb Zone"; m.Icon = ICON_FA_VOLUME_HIGH; m.Category = "Audio";
@@ -2336,57 +1892,6 @@ void RegisterEngineComponents() {
         }
         Register<AudioMixComponent>(std::move(m));
     }
-    {
-        ReflectComponent m;
-        m.Name = "Impact Audio"; m.Icon = ICON_FA_VOLUME_HIGH; m.Category = "Audio";
-        m.Tooltip = "Bullet impacts at the hit point, shell casings on their first ground contacts and rounds whipping past the listener.\n"
-                    "The surface is the struck collider's physics material / tag / name against the Surface Table. One per scene (the first counts).";
-        using I = ImpactAudioComponent;
-        m.Fields = {
-            { "Enabled", T::Bool, TARTARUS_REFLECT_FIELD(I, Enabled), 0.0f, "Off: no impact, casing or flyby sounds from here." },
-            { "Surface Table", T::String, TARTARUS_REFLECT_FIELD(I, SurfaceTable), 0.0f, "surface=word,word;surface=word. The first surface with a word in the collider's material, tag or name." },
-            { "Default Surface", T::String, TARTARUS_REFLECT_FIELD(I, DefaultSurface), 0.0f, "Surface when nothing matches, and for a surface with no recorded takes." },
-            { "Casings Enabled", T::Bool, TARTARUS_REFLECT_FIELD(I, CasingsEnabled), 0.0f, "Spent cases sound when they land." },
-            { "Casing Max Contacts", T::Int, TARTARUS_REFLECT_FIELD(I, CasingMaxContacts), 1.0f, "Ground contacts of one case that sound (the first N).", 0.0f, 8.0f },
-            { "Casing Min Speed", T::Float, TARTARUS_REFLECT_FIELD(I, CasingMinSpeed), 0.05f, "m/s into the surface below which a contact is silent.", 0.0f, 20.0f },
-            { "Casing Full Speed", T::Float, TARTARUS_REFLECT_FIELD(I, CasingFullSpeed), 0.05f, "m/s at which a contact plays at full gain.", 0.1f, 30.0f },
-            { "Casing Gain Min", T::Float, TARTARUS_REFLECT_FIELD(I, CasingGainMin), 0.01f, "Gain just above the minimum speed.", 0.0f, 1.0f },
-            { "Casing Volume", T::Float, TARTARUS_REFLECT_FIELD(I, CasingVolume), 0.01f, "Master gain of the casing sounds.", 0.0f, 2.0f },
-            { "Casing Min Distance", T::Float, TARTARUS_REFLECT_FIELD(I, CasingMinDistance), 0.1f, "Metres inside which a casing is full volume.", 0.1f, 50.0f },
-            { "Casing Max Distance", T::Float, TARTARUS_REFLECT_FIELD(I, CasingMaxDistance), 0.5f, "Metres a casing carries.", 1.0f, 200.0f },
-            { "Casing Max Voices", T::Int, TARTARUS_REFLECT_FIELD(I, CasingMaxVoices), 1.0f, "Casing voices at once; the oldest is stolen.", 1.0f, 32.0f },
-            { "Shell Radius", T::Float, TARTARUS_REFLECT_FIELD(I, ShellRadius), 0.0005f, "Metres: a case wider than this is a shotgun shell (snd.casing.shell), else a rifle case.", 0.001f, 0.05f },
-            { "Impacts Enabled", T::Bool, TARTARUS_REFLECT_FIELD(I, ImpactsEnabled), 0.0f, "Bullet impacts at the hit point." },
-            { "Impact Volume", T::Float, TARTARUS_REFLECT_FIELD(I, ImpactVolume), 0.01f, "Master gain of the impact sounds.", 0.0f, 2.0f },
-            { "Impact Min Distance", T::Float, TARTARUS_REFLECT_FIELD(I, ImpactMinDistance), 0.1f, "Metres inside which an impact is full volume.", 0.1f, 50.0f },
-            { "Impact Max Distance", T::Float, TARTARUS_REFLECT_FIELD(I, ImpactMaxDistance), 0.5f, "Metres an impact carries.", 1.0f, 500.0f },
-            { "Impact Max Voices", T::Int, TARTARUS_REFLECT_FIELD(I, ImpactMaxVoices), 1.0f, "Impact voices at once per surface; the oldest is stolen.", 1.0f, 32.0f },
-            { "Impact Min Interval", T::Float, TARTARUS_REFLECT_FIELD(I, ImpactMinInterval), 0.005f, "Seconds between impacts of one surface (a shotgun's pellets are not nine voices).", 0.0f, 1.0f },
-            { "Flesh Uses Recordings", T::Bool, TARTARUS_REFLECT_FIELD(I, FleshUsesRecordings), 0.0f, "The flesh-hit cue plays the recorded snd.impact.flesh instead of the placeholder wav (never both)." },
-            { "Flesh Volume", T::Float, TARTARUS_REFLECT_FIELD(I, FleshVolume), 0.01f, "Gain of the flesh impact.", 0.0f, 2.0f },
-            { "Flyby Enabled", T::Bool, TARTARUS_REFLECT_FIELD(I, FlybyEnabled), 0.0f, "Soldiers' rounds passing the listener whip by (the recorded flyby replaces the placeholder whizz)." },
-            { "Flyby Radius", T::Float, TARTARUS_REFLECT_FIELD(I, FlybyRadius), 0.1f, "Metres: a round that passes closer than this to the listener is heard.", 0.2f, 30.0f },
-            { "Flyby Volume", T::Float, TARTARUS_REFLECT_FIELD(I, FlybyVolume), 0.01f, "Master gain of the flyby.", 0.0f, 2.0f },
-            { "Flyby Min Interval", T::Float, TARTARUS_REFLECT_FIELD(I, FlybyMinInterval), 0.005f, "Seconds between flybys (a burst reads as a few cracks).", 0.0f, 2.0f },
-            { "Flyby Min Distance", T::Float, TARTARUS_REFLECT_FIELD(I, FlybyMinDistance), 0.1f, "Metres inside which a flyby is full volume.", 0.1f, 20.0f },
-            { "Flyby Max Distance", T::Float, TARTARUS_REFLECT_FIELD(I, FlybyMaxDistance), 0.5f, "Metres a flyby carries.", 1.0f, 100.0f },
-            { "Flyby Far Gain", T::Float, TARTARUS_REFLECT_FIELD(I, FlybyFarGain), 0.01f, "Gain of a round at the edge of the radius (1 at zero miss).", 0.0f, 1.0f },
-        };
-        const std::pair<const char*, const char*> groups[] = {
-            {"Casings Enabled", "Casings"}, {"Casing Max Contacts", "Casings"}, {"Casing Min Speed", "Casings"}, {"Casing Full Speed", "Casings"},
-            {"Casing Gain Min", "Casings"}, {"Casing Volume", "Casings"}, {"Casing Min Distance", "Casings"}, {"Casing Max Distance", "Casings"},
-            {"Casing Max Voices", "Casings"}, {"Shell Radius", "Casings"},
-            {"Impacts Enabled", "Impacts"}, {"Impact Volume", "Impacts"}, {"Impact Min Distance", "Impacts"}, {"Impact Max Distance", "Impacts"},
-            {"Impact Max Voices", "Impacts"}, {"Impact Min Interval", "Impacts"}, {"Flesh Uses Recordings", "Impacts"}, {"Flesh Volume", "Impacts"},
-            {"Flyby Enabled", "Flyby"}, {"Flyby Radius", "Flyby"}, {"Flyby Volume", "Flyby"}, {"Flyby Min Interval", "Flyby"},
-            {"Flyby Min Distance", "Flyby"}, {"Flyby Max Distance", "Flyby"}, {"Flyby Far Gain", "Flyby"}};
-        for (ReflectField& f : m.Fields) {
-            for (const auto& [n, g] : groups)
-                if (std::strcmp(f.Name, n) == 0) f.Group = g;
-            if (MixOwnsDistanceField(f.Name)) f.EditorHidden = true; // the mix spec's distance models own it (manifest mix.distance)
-        }
-        Register<ImpactAudioComponent>(std::move(m));
-    }
     // ---- end lane S ----
 
     // #132 - String fields that hold asset paths: tracked by GUID so renaming or moving the file
@@ -2395,11 +1900,6 @@ void RegisterEngineComponents() {
         {"Animation", "Clip"},
         {"Animator Controller", "Controller"},
         {"Transform Controller", "Script Path"},
-        {"First Person Controller", "Animation Set"},
-        {"First Person Controller", "Secondary Animation Set"},
-        {"First Person Controller", "Primary Weapon Prefab"},
-        {"First Person Controller", "Secondary Weapon Prefab"},
-        {"Weapon Definition", "Animation Set"},
         {"C# Script", "Source"},
     };
     for (const auto& [component, field] : kAssetPathFields)

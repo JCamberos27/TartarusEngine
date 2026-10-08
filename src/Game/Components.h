@@ -453,10 +453,15 @@ struct ParticleSystemComponent {
     float Drag = 0.0f;
     float RotationMin = 0.0f, RotationMax = 0.0f;
     float AngularVelocityMin = 0.0f, AngularVelocityMax = 0.0f;
-    int Alignment = 0; // billboard, velocity stretch, horizontal
+    int Alignment = 0; // camera plane, velocity stretch, horizontal
     float VelocityStretch = 0.1f;
-    // Project-relative sprite texture; empty uses the procedural soft disc.
+    int ShaderMode = 0; // default sprite/soft disc, procedural smoke
+    float SmokeDensity = 1.8f, SmokeNoiseScale = 3.0f;
+    float SmokeTurbulence = 0.35f, SmokeSoftness = 0.65f, SmokeEvolution = 0.65f;
+    // Project-relative sprite texture; used only by the default shader.
     std::string Texture;
+    int TextureChannels = 0; // RGBA, red/green/blue/alpha as opacity mask
+    float PivotX = 0.0f, PivotY = 0.0f; // normalized sprite anchor; zero is the centre
     int SheetColumns = 1, SheetRows = 1;
     float SheetFPS = 0.0f; // zero: traverse the sheet once over the particle's life
     bool RandomStartFrame = false, BlendFrames = true;
@@ -511,58 +516,55 @@ struct CSharpScriptComponent {
     int NextScriptId = 0;
 };
 
-// A reusable weapon bundle. The descriptor owns animator, rigs, recoil, shake, audio and ballistics.
-struct WeaponDefinitionComponent {
-    std::string Description;
-    std::string AnimationSet;
-    MuzzleEffectSettings Muzzle;
-};
-
 struct FirstPersonControllerComponent {
+    FirstPersonControllerComponent();
+    std::string ResolvedScriptFields;
+    std::uint64_t ResolvedCodeGeneration=0;
+    std::uint64_t ResolvedAssetRevision=0;
     std::string PrimaryWeaponPrefab;
     std::string SecondaryWeaponPrefab;
-    float MoveSpeed = 6.0f;
-    float SprintMultiplier = 1.6f;
-    float JumpSpeed = 5.5f;
-    float JumpBufferTime = 0.12f; // a jump pressed this long (seconds) before landing still happens on landing
-    float CoyoteTime = 0.10f;     // a jump pressed this long after stepping off an edge still counts
+    float MoveSpeed{};
+    float SprintMultiplier{};
+    float JumpSpeed{};
+    float JumpBufferTime{}; // a jump pressed this long (seconds) before landing still happens on landing
+    float CoyoteTime{};     // a jump pressed this long after stepping off an edge still counts
     // Seconds (time constants) the move takes to reach the input's speed on the ground, to slow down,
     // and to steer in the air. 0 = instant.
-    float GroundAccelTime = 0.0f;
-    float GroundDecelTime = 0.0f;
-    float AirAccelTime = 0.0f;
-    float EyeHeight = 1.6f;
-    float CapsuleRadius = 0.3f;
-    float CapsuleHeight = 1.8f;
-    float MouseSensitivity = 0.1f;  // degrees per pixel
-    bool  InvertY = false;
+    float GroundAccelTime{};
+    float GroundDecelTime{};
+    float AirAccelTime{};
+    float EyeHeight{};
+    float CapsuleRadius{};
+    float CapsuleHeight{};
+    float MouseSensitivity{};  // degrees per pixel
+    bool  InvertY{};
     // HORIZONTAL degrees on a 16:9 screen - the "FOV 90" of a shooter's settings menu. The
     // camera itself is vertical (VerticalFov); a wider screen sees more at the sides (Hor+).
-    float FieldOfView = 90.0f;
+    float FieldOfView{};
     float VerticalFov() const {
         const float h = glm::radians(std::clamp(FieldOfView, 1.0f, 179.0f));
         return glm::degrees(2.0f * std::atan(std::tan(0.5f * h) * (9.0f / 16.0f)));
     }
     // Gamepad right stick look speed (turn rate, not a delta)
-    float StickLookDegPerSec = 180.0f;  // degrees per second; Gamepad Input group
+    float StickLookDegPerSec{};  // degrees per second; Gamepad Input group
     // Camera lean collision: the sphere radius used for wall-detection during camera lean
-    float EyeRadius = 0.12f;            // metres; keeps the near plane off the wall; Camera group
-    float KillY = -20.0f;           // falling below this respawns at the spawn point
-    bool  GravityGun = true;        // the built-in pick-up/throw tool (right/left mouse)
-    float Gravity = 18.0f;          // m/s^2 pulling the player down - game feel, separate from the physics world's
+    float EyeRadius{};            // metres; keeps the near plane off the wall; Camera group
+    float KillY{};           // falling below this respawns at the spawn point
+    bool  GravityGun{};        // the built-in pick-up/throw tool (right/left mouse)
+    float Gravity{};          // m/s^2 pulling the player down - game feel, separate from the physics world's
     // Gravity gun throw: hold left mouse to charge from Min to Max Throw Speed over Charge Time.
-    float MinThrowSpeed = 4.0f;     // m/s, a tap
-    float MaxThrowSpeed = 18.0f;    // m/s, fully charged
-    float ThrowChargeTime = 1.0f;   // seconds to full power
-    float ThrowBackspin = 2.0f;     // revolutions per second given to a thrown ball (round bodies only)
+    float MinThrowSpeed{};     // m/s, a tap
+    float MaxThrowSpeed{};    // m/s, fully charged
+    float ThrowChargeTime{};   // seconds to full power
+    float ThrowBackspin{};     // revolutions per second given to a thrown ball (round bodies only)
     // Gravity gun grab: aiming distance for the primary pick-up ray
-    float GrabRange = 100.0f;       // metres; Gravity Gun group
+    float GrabRange{};       // metres; Gravity Gun group
     // Gravity gun aim assist: search radius when no object is under the exact crosshair
-    float AssistRange = 30.0f;      // metres; Gravity Gun group
+    float AssistRange{};      // metres; Gravity Gun group
     // Gravity gun assist cone: within this many degrees of the crosshair
-    float AssistConeDeg = 7.0f;     // degrees; Gravity Gun group
+    float AssistConeDeg{};     // degrees; Gravity Gun group
     // Gravity gun scroll-wheel tuning: rotation applied per scroll notch while holding an object
-    float ScrollTurnDeg = 15.0f;    // degrees per notch; Gravity Gun group
+    float ScrollTurnDeg{};    // degrees per notch; Gravity Gun group
 
     // Optional camera-bound arms + weapon presentation. The .fpsanim asset defines paired clips;
     // leaving this empty preserves the existing controller exactly (including Sandbox gravity gun
@@ -576,19 +578,19 @@ struct FirstPersonControllerComponent {
     // rigs are authored standing in their own scene (feet at y=0, head near y=1.56): without a
     // bone anchor the model's root goes where the camera is and the whole rig floats ~1 m above
     // the view. Leave empty to fall back to positioning the model's root directly on the camera.
-    std::string CameraBone = "head";
-    glm::vec3 ViewModelOffset{0.0f};
-    glm::vec3 ViewModelRotation{0.0f};
-    float ViewModelScale = 1.0f;
-    float ViewModelFov = 60.0f;
+    std::string CameraBone{};
+    glm::vec3 ViewModelOffset{};
+    glm::vec3 ViewModelRotation{};
+    float ViewModelScale{};
+    float ViewModelFov{};
     // The player's health (Combat/PlayerVitals.h): enemies' rounds take it, it comes back
     // RegenRate per second after RegenDelay seconds unhurt, and at 0 the player dies and respawns
     // here RespawnDelay seconds later, untouchable for SpawnProtection seconds.
-    float MaxHealth = 100.0f;
-    float RegenDelay = 5.0f;
-    float RegenRate = 30.0f;
-    float RespawnDelay = 3.0f;
-    float SpawnProtection = 2.0f;
+    float MaxHealth{};
+    float RegenDelay{};
+    float RegenRate{};
+    float RespawnDelay{};
+    float SpawnProtection{};
 };
 
 // True first person (FirstPersonBody.h): the player's own full body, drawn in the world under the
@@ -791,7 +793,7 @@ struct FirstPersonBodyComponent {
     float NpcFootNormalEase = 0.08f; // NPC Foot Normal Ease (seconds; ground normal easing)
     float NpcFootIKFade = 0.15f; // NPC Foot IK Fade (seconds; foot IK enable/disable easing)
     // ---- lane A ----
-    // Foot slide correction; both layers off by default, NPCs use the same numbers
+    // Foot slide correction (docs/CAS_PARITY.md #8); both layers off by default, NPCs use the same numbers
     bool FootPinEnabled = false; // Foot Pin Enabled
     float FootPinWeight = 1.0f; // Foot Pin Weight
     float FootPinRelease = 0.06f; // Foot Pin Release (seconds)
@@ -804,7 +806,7 @@ struct FirstPersonBodyComponent {
     // ---- end lane A ----
 };
 
-// A character dressed from a wardrobe: put it on the body's root. Its children
+// A character dressed from a wardrobe (docs/CHARACTER_OUTFITS.md): put it on the body's root. Its children
 // tagged with an Outfit Piece are the outfit - body parts (torso, arms, legs, feet, head) and items
 // (hair, tops, pants, shoes, hats ...) - and the Inspector's outfit editor builds and swaps them from
 // the wardrobe's catalog. The children are the record of what is worn (each piece's model and its
@@ -1129,98 +1131,52 @@ struct TransformControllerComponent {
     float Elapsed = 0.0f;
 };
 
-// --- Scoring and impact sounds (Sandbox basketball court). Plain data, run by ScoringSystem /
-// ImpactSoundSystem in TartarusGame.dll; generic enough for any "ball through a hoop / into a
-// goal" game.
-
-// A trigger volume that scores when an object with `Tag` enters it (moving downward, if
-// RequireDownward - a ball dropping through a rim, not one pushed up from below). Adds Points
-// (ThreePoints when the ball was thrown from ThreePointDistance or further, measured flat from
-// where the gravity gun let go of it) to Team on the scene's Scoreboard, bursts every Particle
-// System among this object's children, flashes their Lights and plays ScoreSound.
-struct GoalTriggerComponent {
-    std::string Tag = "Ball";
-    int Team = 0;                    // 0 = Home, 1 = Away
-    int Points = 2;
-    int ThreePoints = 3;
-    float ThreePointDistance = 0.0f; // 0 = every basket is worth Points
-    bool RequireDownward = true;
-    std::string ScoreSound;          // played at the trigger when it scores (optional)
-    float FlashIntensity = 40.0f;    // child Lights jump to this, then fade back
-};
-
-// The running score. The first one in the scene is the one goals add to; Play -> Stop resets it.
-struct ScoreboardComponent {
-    int Home = 0;
-    int Away = 0;
-};
-
-// A seven-segment digit showing one place of a team's score. Its children named "Seg A" .. "Seg G"
-// (the standard segment letters: A top, B top right, C bottom right, D bottom, E bottom left,
-// F top left, G middle) light up by raising their material's emission.
-// Hit points. Rounds that hit an entity with one take Current down (Combat/Damage.h); at 0 it
-// is dead. Current is runtime-only: it starts at Max each Play.
-struct HealthComponent {
-    float Max = 100.0f;
-    bool Invulnerable = false;
-    // --- runtime (not serialized)
-    float Current = -1.0f; // < 0 = not started yet (reads as Max)
-};
-
 // Where an enemy soldier appears in Play (Npc/NpcSpawner.h). The enemy squad is built from these.
 struct NpcSpawnComponent {
-    int Weapon = 0;        // 0 = AKS-74U, 1 = Remington 870, 2 = either, picked at random
-    int Squad = 0;         // NPCs with the same Squad fight together
-    float Skill = 0.5f;    // 0 (green) .. 1 (veteran): reaction, accuracy, aggression
-    int OutfitSeed = 0;    // 0 = a random outfit each Play
-    int Brain = 0;         // 0 = the squad AI, 1 = a training dummy (stands still, takes hits)
+    std::string ResolvedScriptFields;
+    std::uint64_t ResolvedCodeGeneration=0;
+    std::uint64_t ResolvedAssetRevision=0;
+    int Weapon {};
+    int Squad {};
+    float Skill {};
+    int OutfitSeed {};
+    int Brain {};
 };
 
 // The fight's rules, on any object in the scene (the first one counts).
 struct SquadSettingsComponent {
-    int SquadSize = 4;            // NPCs alive at once, refilled from the spawns
-    float RespawnDelay = 8.0f;    // seconds before a dead NPC's replacement appears
-    float Difficulty = 1.0f;      // scales the NPCs' accuracy and reaction
-    float NpcDamageScale = 0.45f; // NPC rounds do this much of the weapon's damage to the player
-    bool Respawn = true;          // false: dead NPCs stay dead
-    // Combat / AI tunables (Npc/NpcDirector, CoverSystem). Defaults are the values these were hard-coded to.
-    float HeavyHitDamage = 40.0f;
-    float StaggerTime = 0.4f;
-    float BleedOutTime = 20.0f;
-    float CrawlSpeed = 0.6f;
-    float LimpSpeedScale = 0.6f;
-    float LimpTime = 6.0f;
-    float CorpseTime = 14.0f;
-    float FallGravity = 18.0f;
-    float MeleeDamage = 25.0f;
-    float MeleeTime = 0.55f;
-    float MeleeHitTime = 0.22f;
-    float HitboxRange = 60.0f;
-    float FootIKRange = 25.0f;
-    float MeshCheckRange = 12.0f;
-    float CoverSpacing = 0.9f;
-    float CoverReach = 0.85f;
-    float CoverKneeHeight = 0.85f;
-    float CoverHeadHeight = 1.55f;
-    float CoverStep = 0.8f;
-};
-
-struct ScoreDigitComponent {
-    int Team = 0;             // 0 = Home, 1 = Away
-    int Place = 0;            // 0 = ones, 1 = tens (blank while the score is under 10)
-    float OnStrength = 6.0f;  // emissive strength of a lit segment
-    float OffStrength = 0.04f;
-};
-
-// Plays a sound where this object hits something, louder the harder the hit (the contact's
-// closing speed between MinSpeed and MaxSpeed), with a little random pitch so repeats don't sound
-// identical. Both objects in a contact play their own sound (a ball's bounce + a rim's clang).
-struct ImpactSoundComponent {
-    std::string Clip;
-    float Volume = 1.0f;
-    float MinSpeed = 0.6f;        // m/s; softer contacts are silent
-    float MaxSpeed = 8.0f;        // m/s; full volume from here
-    float PitchVariation = 0.08f; // +/- fraction
+    std::string ResolvedScriptFields;
+    std::uint64_t ResolvedCodeGeneration=0;
+    std::uint64_t ResolvedAssetRevision=0;
+    int SquadSize {};
+    float RespawnDelay {};
+    float Difficulty {};
+    float NpcDamageScale {};
+    bool Respawn {};
+    float HeavyHitDamage {};
+    float StaggerTime {};
+    float BleedOutTime {};
+    float CrawlSpeed {};
+    float LimpSpeedScale {};
+    float LimpTime {};
+    float CorpseTime {};
+    float FallGravity {};
+    float MeleeDamage {};
+    float MeleeTime {};
+    float MeleeHitTime {};
+    float HitboxRange {};
+    float FootIKRange {};
+    float MeshCheckRange {};
+    float CoverSpacing {};
+    float CoverReach {};
+    float CoverKneeHeight {};
+    float CoverHeadHeight {};
+    float CoverStep {};
+    std::string BodyPrefab;
+    std::string RiflePrefab;
+    std::string ShotgunPrefab;
+    std::string RifleAnimationSet;
+    std::string ShotgunAnimationSet;
 };
 
 // Present only on entities that are parented, or that have at least one child — an entity with
@@ -1269,26 +1225,25 @@ struct ReflectionProbeComponent {
 // Scene-level visual effects and HUD settings (Lane P quality pass).
 // Add one to the scene to tune muzzle flash, laser beam and HUD display parameters.
 // Defaults match the values these effects had before they were tunable; read once when Play starts.
+// Unregistered cached projection of project C# fields; never authored or saved.
 struct FxHudSettingsComponent {
-    // Muzzle flash parameters (Combat/CombatFx.cpp)
-    float FlashTime = 0.055f;               // seconds the muzzle flash light stays on; Muzzle Flash group
-    float PlayerFlashScale = 0.35f;         // player's flash light scale relative to soldier's; Muzzle Flash group
-    float FlameGlow = 150.0f;               // flame peak emission intensity (red channel); Muzzle Flash group
-    float FlameScale = 1.75f;               // flame tongue length/width scale vs. tactical shooter pack; Muzzle Flash group
-    int MuzzleStyle = 1;                    // 0 the Tactical Shooter flame alone, 1 + PRO Effects' flash, jets and smoke; Muzzle Flash group
-
-    // Laser beam parameters (src/Renderer/WeaponFxRenderer.cpp)
-    float BeamRange = 150.0f;               // metres drawn; past that it's gone in the haze; Laser Beam group
-    float BeamHalfWidth = 0.0015f;          // beam width in metres (3 mm); Laser Beam group
-    float BeamFalloff = 2.5f;               // glow falloff distance in metres near the emitter; Laser Beam group
-    float BeamBend = 4.0f;                  // metres over which a view-model emitter eases onto the true path; Laser Beam group
-
-    // HUD display parameters (Combat/CombatHud.cpp)
-    float FeedLife = 4.5f;                  // seconds a kill feed line stays on screen; HUD group
-    float StreakWindow = 4.0f;               // seconds to count consecutive kills for streak display; HUD group
+    float FlashTime{};
+    float PlayerFlashScale{};
+    float FlameGlow{};
+    float FlameScale{};
+    int MuzzleStyle{};
+    float BeamRange{};
+    float BeamHalfWidth{};
+    float BeamFalloff{};
+    float BeamBend{};
+    float FeedLife{};
+    float StreakWindow{};
+    std::string ResolvedScriptFields;
+    unsigned long long ResolvedCodeGeneration{};
+    unsigned long long ResolvedAssetRevision{};
 };
 
-// The volumetric blood (Game/Combat/BloodFx): on any object in the scene (the first one counts);
+// The volumetric blood (docs/BLOOD_FX.md, Game/Combat/BloodFx): on any object in the scene (the first one counts);
 // without one Play uses these same defaults. Copied into BloodFx::Settings when Play starts.
 struct BloodSettingsComponent {
     bool Enabled = true;
@@ -1525,85 +1480,87 @@ struct DroppedWeaponSettingsComponent {
 // One gun's audio tuning (Game/Audio/WeaponAudio): add one per gun, Gun naming it ("ak", "870"); a gun with none uses these
 // defaults. The per-event sets (reloads, ADS, equip ...) live in the Data File, a json of SoundSets by element; sets with no
 // entry there are filled from the audio manifest by key (snd.<Gun>.<element>).
+// Unregistered cached projection of project C# fields; never authored or saved.
 struct WeaponAudioComponent {
-    std::string Gun = "ak";
-    bool Enabled = true;
-    float Volume = 1.0f;
-    float PlayerGain = 0.75f;
-    float ShotPitchMin = 0.96f;
-    float ShotPitchMax = 1.04f;
-    float VolumeJitterDb = 0.5f;       // +- dB per layer per shot (small: the layers are balanced, a big swing changes the tone)
-    // Shot layers by distance from the listener (3D shots: soldiers' guns).
-    float CloseFullDistance = 18.0f;   // the crack is full within this ...
-    float CloseZeroDistance = 43.0f;   // ... and gone by this
-    float FarMinWeight = 0.1f;         // the distant report's gain up close ...
-    float FarMaxWeight = 1.0f;         // ... and past CloseZeroDistance
-    float MaxDistance = 90.0f;         // close / mech / sub layers' audible range
-    float FarMaxDistance = 160.0f;
-    // 3D rolloff: every 3D sound is logarithmic - full volume inside Min, -6 dB per doubling past it, held
-    // at Min / Max past Max. These are the guns' Min distances and the reach of the gear sounds (reloads, ADS, equip ...).
-    float ShotMinDistance = 3.0f;      // close / mech layers
-    float BassMinDistance = 6.0f;      // sub / tail / far layers (low end carries)
-    float EventMinDistance = 1.5f;     // the gun's gear / foley sounds in the world
-    float EventMaxDistance = 25.0f;
-    int ShotMaxVoices = 6;             // per layer; the oldest is stolen
-    int TailMaxVoices = 3;             // full auto: tails ringing at once
-    float TailFadeTime = 0.25f;        // seconds a stolen tail fades out over
-    float TailMinInterval = 0.0f;      // seconds between tails (0 = one per shot, the cap still applies)
-    float TailDuckPerVoice = 0.3f;     // each tail still ringing ducks a new one by this share
-    int TailEvery = 2;                 // full auto: the tail layer plays on every Nth shot of a burst (1 = every shot)
-    int FarEvery = 3;                  // ... and the distant report on every Nth
-    float BurstGap = 0.4f;             // seconds without a shot that end a burst (the next shot plays every layer)
-    std::string DataFile;              // json of SoundSet overrides by element (empty = none)
-    // Environment tails: the shot's tail follows the space the shooter is in (a Reverb Zone volume first, else a few raycasts
-    // around the shooter; see Game/Audio/EnvironmentProbe.h). A class with no recorded files plays the generic fire_tail.
-    bool EnvEnabled = true;            // off: every shot plays the generic tail
-    int EnvRayCount = 12;
-    float EnvMaxDistance = 40.0f;
-    float EnvIndoorCover = 0.7f;
-    float EnvUrbanWall = 0.35f;
-    float EnvUrbanDistance = 25.0f;
-    float EnvLargeRoomDistance = 8.0f;
-    float EnvBlendFraction = 0.15f;
-    float EnvBlendDistance = 0.3f;
-    float EnvRefreshInterval = 0.25f;
-    float EnvRefreshMoveDistance = 1.0f;
-    float EnvMatchRadius = 2.0f;
-    float EnvTailGainOutdoorOpen = 1.0f;
-    float EnvTailGainOutdoorUrban = 1.0f;
-    float EnvTailGainIndoorSmall = 1.0f;
-    float EnvTailGainIndoorLarge = 1.0f;
-    bool EnvDebugDraw = false;
+    std::string Gun{};
+    bool Enabled{};
+    float Volume{};
+    float PlayerGain{};
+    float ShotPitchMin{};
+    float ShotPitchMax{};
+    float VolumeJitterDb{};
+    float CloseFullDistance{};
+    float CloseZeroDistance{};
+    float FarMinWeight{};
+    float FarMaxWeight{};
+    float MaxDistance{};
+    float FarMaxDistance{};
+    float ShotMinDistance{};
+    float BassMinDistance{};
+    float EventMinDistance{};
+    float EventMaxDistance{};
+    int ShotMaxVoices{};
+    int TailMaxVoices{};
+    float TailFadeTime{};
+    float TailMinInterval{};
+    float TailDuckPerVoice{};
+    int TailEvery{};
+    int FarEvery{};
+    float BurstGap{};
+    std::string DataFile{};
+    bool EnvEnabled{};
+    int EnvRayCount{};
+    float EnvMaxDistance{};
+    float EnvIndoorCover{};
+    float EnvUrbanWall{};
+    float EnvUrbanDistance{};
+    float EnvLargeRoomDistance{};
+    float EnvBlendFraction{};
+    float EnvBlendDistance{};
+    float EnvRefreshInterval{};
+    float EnvRefreshMoveDistance{};
+    float EnvMatchRadius{};
+    float EnvTailGainOutdoorOpen{};
+    float EnvTailGainOutdoorUrban{};
+    float EnvTailGainIndoorSmall{};
+    float EnvTailGainIndoorLarge{};
+    bool EnvDebugDraw{};
+    std::string ResolvedScriptFields;
+    unsigned long long ResolvedCodeGeneration{};
+    unsigned long long ResolvedAssetRevision{};
 };
 // Footsteps, jumps, landings and the sprint cloth loop (Game/Audio/FoleyAudio). One per scene (the first counts).
+// Unregistered cached projection of project C# fields; never authored or saved.
 struct FoleyAudioComponent {
-    bool Enabled = true;
-    float Volume = 1.0f;
-    float WalkVolume = 1.0f;           // (the static level of every sound is its manifest mix_db; these only scale)
-    float RunVolume = 1.0f;
-    float CrouchVolume = 0.55f;        // crouch plays the walk takes, quieter
-    float VolumeJitterDb = 1.0f;
-    float PitchMin = 0.94f;
-    float PitchMax = 1.06f;
-    float StepStrideScale = 1.0f;      // footfall spacing against the view bob's stride (2 per stride): above 1 = slower
-    float CrouchStrideScale = 0.8f;
-    float MinStepSpeed = 0.6f;         // m/s below which there are no footsteps
-    float RunSpeed = 4.5f;             // m/s from which the run set plays
-    bool StepsFromFeet = true;         // a footfall when an animated foot touches down (no body: by distance, the stride rule above)
-    float FootLiftHeight = 0.05f;      // m a foot must rise above its planted height before its next touch-down counts (standing)
-    float FootLiftMoving = 0.025f;     // ... while moving (above Min Step Speed): a walk's first stride barely lifts the ankle
-    float FootContactHeight = 0.02f;   // m above its planted height at which a lowering foot has touched down
-    float JumpVolume = 1.0f;
-    float LandVolume = 1.0f;
-    float LandMinSpeed = 2.5f;         // m/s of fall below which landing is silent
-    float LandFullSpeed = 9.0f;        // m/s at which it is at LandVolume (a hard landing)
-    float LandHeavySpeed = 6.0f;       // m/s of fall from which the heavy landing plays (light below)
-    float NpcStepVolume = 1.0f;
-    float NpcStepMaxDistance = 28.0f;
-    float NpcStepMinDistance = 2.5f;
-    std::string DefaultSurface = "concrete";
-    // surface=word,word;surface=word  - the first surface with a word in the ground's physics material, tag or name.
-    std::string SurfaceTable = "wood=wood,plank,floor,parquet;metal=metal,steel,iron,grate;glass=glass;carpet=carpet,rug;water=water,puddle;concrete=concrete,asphalt,tile,stone,gravel,dirt,soil,sand,grass";
+    bool Enabled{};
+    float Volume{};
+    float WalkVolume{};
+    float RunVolume{};
+    float CrouchVolume{};
+    float VolumeJitterDb{};
+    float PitchMin{};
+    float PitchMax{};
+    float StepStrideScale{};
+    float CrouchStrideScale{};
+    float MinStepSpeed{};
+    float RunSpeed{};
+    bool StepsFromFeet{};
+    float FootLiftHeight{};
+    float FootLiftMoving{};
+    float FootContactHeight{};
+    float JumpVolume{};
+    float LandVolume{};
+    float LandMinSpeed{};
+    float LandFullSpeed{};
+    float LandHeavySpeed{};
+    float NpcStepVolume{};
+    float NpcStepMaxDistance{};
+    float NpcStepMinDistance{};
+    std::string DefaultSurface{};
+    std::string SurfaceTable{};
+    std::string ResolvedScriptFields;
+    unsigned long long ResolvedCodeGeneration{};
+    unsigned long long ResolvedAssetRevision{};
 };
 // A designer-placed space for sound: inside the volume the shots' tail is the Tail Class's, the runtime reverb convolves with the
 // zone's impulse response and the zone's ambience bed fades in; all crossfaded over Fade Distance at the edge. A shot in no zone falls
@@ -1768,38 +1725,37 @@ struct AudioMixComponent {
                                        // (AAA practice: fights -18..-20, a whole session about -24), the limiter all but idle
 };
 // Bullet impacts, shell casings and rounds passing the listener (Game/Audio/ImpactAudio). One per scene (the first counts).
+// Runtime projection of project ImpactAudioDefinition; not authored or serialized.
 struct ImpactAudioComponent {
-    bool Enabled = true;
-    // Surface from the struck / landed-on collider: its physics material, tag and name against this table (like footsteps).
-    std::string SurfaceTable = "metal=metal,steel,iron,grate;wood=wood,plank,floor,parquet;tile=tile;carpet=carpet,rug;glass=glass;ice=ice,snow;dirt=dirt,soil,sand,grass,gravel,mud;concrete=concrete,asphalt,stone,brick";
-    std::string DefaultSurface = "concrete";
-    // Shell casings: the first contacts with the ground.
-    bool CasingsEnabled = true;
-    int CasingMaxContacts = 2;         // contacts of one case that sound
-    float CasingMinSpeed = 0.9f;       // m/s into the surface below which a contact is silent
-    float CasingFullSpeed = 4.0f;      // m/s at which it plays at full gain
-    float CasingGainMin = 0.25f;       // gain just above the minimum speed
-    float CasingVolume = 1.0f;
-    float CasingMinDistance = 1.5f;
-    float CasingMaxDistance = 25.0f;
-    int CasingMaxVoices = 6;           // the oldest is stolen
-    float ShellRadius = 0.0075f;       // metres: a case wider than this is a shotgun shell (snd.casing.shell), else a rifle case
-    // Bullet impacts at the hit point (3D).
-    bool ImpactsEnabled = true;
-    float ImpactVolume = 1.0f;
-    float ImpactMinDistance = 2.0f;
-    float ImpactMaxDistance = 60.0f;
-    int ImpactMaxVoices = 8;
-    float ImpactMinInterval = 0.03f;   // seconds between impacts of one surface (a shotgun's nine pellets are not nine voices)
-    bool FleshUsesRecordings = true;   // the flesh-hit cue plays snd.impact.flesh instead of the placeholder wav (no doubling)
-    float FleshVolume = 1.0f;
-    // Rounds passing the listener.
-    bool FlybyEnabled = true;
-    float FlybyRadius = 5.0f;          // metres: a soldier's round that passes closer than this to the listener whips by
-    float FlybyVolume = 1.0f;
-    float FlybyMinInterval = 0.07f;    // seconds: a burst reads as a few cracks, not a smear
-    float FlybyMinDistance = 0.5f;
-    float FlybyMaxDistance = 14.0f;
-    float FlybyFarGain = 0.35f;        // gain of a round at the edge of FlybyRadius (1 for a hit-close miss)
+    bool Enabled{};
+    std::string SurfaceTable{};
+    std::string DefaultSurface{};
+    bool CasingsEnabled{};
+    int CasingMaxContacts{};
+    float CasingMinSpeed{};
+    float CasingFullSpeed{};
+    float CasingGainMin{};
+    float CasingVolume{};
+    float CasingMinDistance{};
+    float CasingMaxDistance{};
+    int CasingMaxVoices{};
+    float ShellRadius{};
+    bool ImpactsEnabled{};
+    float ImpactVolume{};
+    float ImpactMinDistance{};
+    float ImpactMaxDistance{};
+    int ImpactMaxVoices{};
+    float ImpactMinInterval{};
+    bool FleshUsesRecordings{};
+    float FleshVolume{};
+    bool FlybyEnabled{};
+    float FlybyRadius{};
+    float FlybyVolume{};
+    float FlybyMinInterval{};
+    float FlybyMinDistance{};
+    float FlybyMaxDistance{};
+    float FlybyFarGain{};
+    std::string ResolvedScriptFields;
+    std::uint64_t ResolvedCodeGeneration=0,ResolvedAssetRevision=0;
 };
 // ---- end lane S ----

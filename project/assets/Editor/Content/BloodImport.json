@@ -1,0 +1,168 @@
+{
+  "Root": "BloodResources",
+  "Sims": [
+    {
+      "Name": "blood1",
+      "Dir": "Blood1",
+      "Mesh": "blood_mesh.fbx",
+      "Pos": "blood_pos.exr",
+      "Nrm": "blood_norm.exr",
+      "Mat": "Blood.mat"
+    },
+    {
+      "Name": "blood2_left",
+      "Dir": "Blood2/Left",
+      "Mesh": "blood_mesh.fbx",
+      "Pos": "blood_pos.exr",
+      "Nrm": "blood_norm.exr",
+      "Mat": "blood.mat"
+    },
+    {
+      "Name": "blood2_right",
+      "Dir": "Blood2/Right",
+      "Mesh": "blood.fbx",
+      "Pos": "blood5_pos.exr",
+      "Nrm": "blood.exr",
+      "Mat": "blood.mat"
+    },
+    {
+      "Name": "blood2_vertical",
+      "Dir": "Blood2/Vertical",
+      "Mesh": "blood_mesh.fbx",
+      "Pos": "blood_pos.exr",
+      "Nrm": "blood_norm.exr",
+      "Mat": "Blood.mat"
+    },
+    {
+      "Name": "blood3",
+      "Dir": "blood3",
+      "Mesh": "blood_mesh.fbx",
+      "Pos": "blood_pos.exr",
+      "Nrm": "blood_norm.exr",
+      "Mat": "blood.mat"
+    },
+    {
+      "Name": "blood4",
+      "Dir": "blood4",
+      "Mesh": "blood_mesh.fbx",
+      "Pos": "blood_pos.exr",
+      "Nrm": "blood_norm.exr",
+      "Mat": "blood.mat"
+    },
+    {
+      "Name": "blood5",
+      "Dir": "blood5",
+      "Mesh": "blood_mesh.fbx",
+      "Pos": "blood_pos.exr",
+      "Nrm": "blood_norm.exr",
+      "Mat": "blood.mat"
+    },
+    {
+      "Name": "blood6",
+      "Dir": "blood6",
+      "Mesh": "blood_mesh.fbx",
+      "Pos": "blood_pos.exr",
+      "Nrm": "blood_norm.exr",
+      "Mat": "blood.mat"
+    },
+    {
+      "Name": "blood7",
+      "Dir": "blood7",
+      "Mesh": "blood_mesh.fbx",
+      "Pos": "blood_pos.exr",
+      "Nrm": "blood_norm.exr",
+      "Mat": "blood.mat"
+    },
+    {
+      "Name": "blood8",
+      "Dir": "blood8",
+      "Mesh": "blood_mesh.fbx",
+      "Pos": "blood_pos.exr",
+      "Nrm": "blood_norm.exr",
+      "Mat": "blood.mat"
+    },
+    {
+      "Name": "blood9",
+      "Dir": "blood9",
+      "Mesh": "blood_mesh.fbx",
+      "Pos": "blood_pos.exr",
+      "Nrm": "blood_norm.exr",
+      "Mat": "blood.mat"
+    }
+  ],
+  "Decals": [
+    {
+      "Name": "blood1",
+      "Dir": "Blood1",
+      "Norm": "Decal_norm.png",
+      "Mask": "Decal_mask.png"
+    },
+    {
+      "Name": "blood2_left",
+      "Dir": "Blood2/Left",
+      "Norm": "Blood_normal.png",
+      "Mask": "Blood_Mask.png"
+    },
+    {
+      "Name": "blood2_right",
+      "Dir": "Blood2/Right",
+      "Norm": "decal.png",
+      "Mask": "decal_mask.png"
+    },
+    {
+      "Name": "blood2_vertical",
+      "Dir": "Blood2/Vertical",
+      "Norm": "Decal_norm.png",
+      "Mask": "Decal_mask.png"
+    },
+    {
+      "Name": "char",
+      "Dir": "Blood2/Vertical",
+      "Norm": "char_decal_norm.png",
+      "Mask": "char_decal_mask.png"
+    },
+    {
+      "Name": "blood3",
+      "Dir": "blood3",
+      "Norm": "decal_norm.png",
+      "Mask": "decal_mask.png"
+    },
+    {
+      "Name": "blood4",
+      "Dir": "blood4",
+      "Norm": "decal_norm.png",
+      "Mask": "decal_mask.png"
+    },
+    {
+      "Name": "blood6",
+      "Dir": "blood6",
+      "Norm": "decal_norm.png",
+      "Mask": "decal_mask.png"
+    },
+    {
+      "Name": "blood7",
+      "Dir": "blood7",
+      "Norm": "decal_norm.png",
+      "Mask": "decal_mask.png"
+    },
+    {
+      "Name": "blood8",
+      "Dir": "blood8",
+      "Norm": "decal_normal.png",
+      "Mask": "decal_mask.png"
+    },
+    {
+      "Name": "blood9",
+      "Dir": "blood9",
+      "Norm": "decal_norm.png",
+      "Mask": "decal_mask.png"
+    },
+    {
+      "Name": "attached",
+      "Dir": "AttachedBlood",
+      "Norm": "Decal_norm.png",
+      "Mask": "Decal_mask.png"
+    }
+  ],
+  "Lookup": "AttachedBlood/DecalLookup.png"
+}

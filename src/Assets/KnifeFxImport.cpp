@@ -1,3 +1,5 @@
+#include "Scripting/ScriptRuntime.h"
+#include <json.hpp>
 #include "KnifeFxImport.h"
 
 #include "Log.h"
@@ -156,9 +158,6 @@ void CompressBC5(const Image& img, std::vector<std::uint8_t>& out) {
 namespace {
 
 // --- the catalogue -------------------------------------------------------------------------------------------------
-constexpr const char* kRealBlood = "Knife Real Blood/Knife/Real Blood/";
-constexpr const char* kProFx = "Knife PRO Effects FPS Muzzle Flashes Impacts/Knife/PRO Effects FPS Muzzle flashes & Impacts/";
-
 enum class Mode { Albedo, MaskR, MaskA, Channel };
 
 struct Source {
@@ -177,76 +176,7 @@ struct Source {
 
 // What the game uses of the two packs. Cells are read in reading order (channel-packed smoke: the
 // red channel's 16 frames, then green's, ...), so a thinned flipbook keeps its whole timeline.
-const Source kSources[] = {
-    // Pools (Real Blood "Puddles/Smooth"; "BigPuddle" has baked highlights and holes that don't match the rest).
-    {"pool_smooth", Library::DecalLarge, kRealBlood, "Textures/Puddles/Smooth/decal_meash_decal_AlbedoTransparency (3).tga", Mode::Albedo,
-     "Textures/Puddles/Smooth/decal_meash_decal_Normal (1) fixed.tga", 2, 2, 2, 2, 1, 0, 0.92f},
-    // Splatter (Real Blood "SmallPuddles", "Puddles/medium", "Damage"): more shapes for the thrown blood, drawn in the
-    // palette's colour like every stain. In the 2048 library: they're drawn up to ~1.5 m.
-    {"splat_small", Library::DecalLarge, kRealBlood, "Textures/SmallPuddles/Puddle_small_size_AlbedoTransparency.tga", Mode::Albedo,
-     "Textures/SmallPuddles/Puddle_small_size_Normal fixed.tga", 2, 2, 2, 2, 1, 0, 0.9f},
-    {"splat_wide", Library::DecalLarge, kRealBlood, "Textures/SmallPuddles/low1_blood_puddles_AlbedoTransparency 1.png", Mode::Albedo,
-     "Textures/SmallPuddles/low1_blood_puddles_Normal 1.png", 2, 2, 2, 2, 1, 0, 0.9f},
-    {"splat_medium", Library::DecalLarge, kRealBlood, "Textures/Puddles/medium/Puddle_medium_size_1_AlbedoTransparency.tga", Mode::Albedo,
-     "Textures/Puddles/medium/Puddle_medium_size_1_Normal fixed.tga", 2, 2, 2, 2, 1, 0, 0.9f},
-    {"drops", Library::DecalLarge, kRealBlood, "Textures/Damage/decal_meash_decal_AlbedoTransparency (2).tga", Mode::Albedo,
-     "Textures/Damage/decal_meash_decal_Normal (1).tga", 4, 4, 4, 4, 1, 0, 0.9f},
-    // Prints (Real Blood).
-    {"footprint", Library::DecalSmall, kRealBlood, "Textures/Decals/FootPrint Albedo.tga", Mode::Albedo, "Textures/Decals/FootPrint Normal.tga",
-     4, 2, 4, 2, 1, 0, 0.8f},
-    // Wall drips running down: 8 x 4 reveal flipbooks, the shape in the red channel.
-    {"leak1", Library::DecalSmall, kRealBlood, "Textures/Leaks/Blood_drop_1-1.png", Mode::MaskR, "Textures/Leaks/Blood_drop_1-1 normal.png", 8, 4, 8, 4,
-     1, 0, 0.92f},
-    {"leak2", Library::DecalSmall, kRealBlood, "Textures/Leaks/Blood_drop_1-2.png", Mode::MaskR, "Textures/Leaks/Blood_drop_1-2 normal.png", 8, 4, 8, 4,
-     1, 0, 0.92f},
-    {"leak3", Library::DecalSmall, kRealBlood, "Textures/Leaks/Blood_drop_1-3.png", Mode::MaskR, "Textures/Leaks/Blood_drop_1-3 normal.png", 8, 4, 8, 4,
-     1, 0, 0.92f},
-    // Bullet holes per surface (PRO Effects "Decals"), 4 variants each.
-    {"hole_asphalt", Library::DecalSmall, kProFx, "Decals/Textures/Asphalt/|Albedo", Mode::Albedo, "Decals/Textures/Asphalt/|Normal", 2, 2, 2, 2, 1, 0, 0.2f},
-    {"hole_brick", Library::DecalSmall, kProFx, "Decals/Textures/Bricks/|Albedo", Mode::Albedo, "Decals/Textures/Bricks/|Normal", 2, 2, 2, 2, 1, 0, 0.2f},
-    {"hole_concrete", Library::DecalSmall, kProFx, "Decals/Textures/Concrete 1/|Albedo", Mode::Albedo, "Decals/Textures/Concrete 1/|Normal", 2, 2, 2, 2,
-     1, 0, 0.25f},
-    {"hole_glass", Library::DecalSmall, kProFx, "Decals/Textures/Glass/|Albedo", Mode::Albedo, "Decals/Textures/Glass/|Normal", 2, 2, 2, 2, 1, 0, 0.9f},
-    {"hole_rock", Library::DecalSmall, kProFx, "Decals/Textures/Rock/|Albedo", Mode::Albedo, "Decals/Textures/Rock/|Normal", 2, 2, 2, 2, 1, 0, 0.25f},
-    {"hole_wood", Library::DecalSmall, kProFx, "Decals/Textures/Wood 1/|Albedo", Mode::Albedo, "Decals/Textures/Wood 1/|Normal", 2, 2, 2, 2, 1, 0, 0.3f},
-    {"hole_metal", Library::DecalSmall, kProFx, "Decals/Textures/metal 1/|Albedo", Mode::Albedo, "Decals/Textures/metal 1/|Normal", 2, 2, 2, 2, 1, 0, 0.6f},
-    {"hole_metal_thin", Library::DecalSmall, kProFx, "Decals/Textures/metal 2/|Albedo", Mode::Albedo, "Decals/Textures/metal 2/|Normal", 2, 2, 2, 2, 1, 0,
-     0.6f},
-    {"hole_mud", Library::DecalSmall, kProFx, "Decals/Textures/mud 1/|Albedo", Mode::Albedo, "Decals/Textures/mud 1/|Normal", 2, 2, 2, 2, 1, 0, 0.35f},
-    {"hole_sand", Library::DecalSmall, kProFx, "Decals/Textures/sand/|Albedo", Mode::Albedo, "Decals/Textures/sand/|Normal", 2, 2, 2, 2, 1, 0, 0.15f},
-    {"hole_tile", Library::DecalSmall, kProFx, "Decals/Textures/tile/|Albedo", Mode::Albedo, "Decals/Textures/tile/|Normal", 2, 2, 2, 2, 1, 0, 0.7f},
-    // Blood particles (Real Blood "Common"): white shapes, eroded and tinted at runtime.
-    {"blood_hit", Library::Sprite, kRealBlood, "Textures/Common/Sheets/Blood_1-2.png", Mode::MaskR, "Textures/Common/Sheets/Blood_1-2_n.png", 4, 4, 4, 4,
-     1, 0, 0.95f},
-    {"blood_burst", Library::Sprite, kRealBlood, "Textures/Common/Sheets/Blood_Albedo 2.png", Mode::MaskR, "Textures/Common/Sheets/Blood_Albedo 2_n.png",
-     8, 8, 4, 4, 4, 16, 0.95f},
-    {"blood_jet", Library::Sprite, kRealBlood, "Textures/Common/Sheets/blood_jet_1.png", Mode::MaskR, "Textures/Common/Sheets/blood_jet_1_n.png", 4, 8, 4,
-     4, 2, 16, 0.95f},
-    {"blood_fan", Library::Sprite, kRealBlood, "Textures/Common/Sheets/Blood_1-5.png", Mode::MaskR, "Textures/Common/Sheets/Blood_1-5_n.png", 4, 4, 4, 4,
-     1, 0, 0.95f},
-    {"blood_drop", Library::Sprite, kRealBlood, "Textures/Common/Particles/blood particle 2.png", Mode::MaskR,
-     "Textures/Common/Particles/blood particle 2 normal.png", 1, 1, 1, 1, 1, 0, 0.95f},
-    {"blood_cloud", Library::Sprite, kRealBlood, "Textures/Common/ParticleCloudWhite.png", Mode::MaskA, nullptr, 1, 1, 1, 1, 1, 0, 0.3f},
-    // Impact smoke (PRO Effects channel-packed sheets: 4 x 4 frames in each of r, g, b, a), every 4th frame.
-    {"smoke_impact", Library::Sprite, kProFx, "Particles/Textures/Sheets/Smoke chanel sheet 5-2.tga", Mode::Channel, nullptr, 4, 4, 4, 4, 4, 16, 0.1f},
-    {"smoke_muzzle", Library::Sprite, kProFx, "Particles/Textures/Sheets/Smoke chanel sheet 1.tga", Mode::Channel, nullptr, 4, 4, 4, 4, 4, 16, 0.1f},
-    {"smoke_gun", Library::Sprite, kProFx, "Particles/Textures/Sheets/Smoke chanel sheet 4.tga", Mode::Channel, nullptr, 4, 4, 4, 4, 4, 16, 0.1f},
-    // Debris (PRO Effects impact pieces), 4 variants each.
-    {"debris_rock", Library::Sprite, kProFx, "Particles/Textures/Rocks/Rocks 1/Plane 1-1_Decals_AlbedoTransparency.tga", Mode::Albedo,
-     "Particles/Textures/Rocks/Rocks 1/Plane 1-1_Decals_Normal.tga", 2, 2, 2, 2, 1, 0, 0.25f},
-    {"debris_concrete", Library::Sprite, kProFx, "Particles/Textures/Rocks/Rocks 2/Plane_1-1_Material_27_AlbedoTransparency.tga", Mode::Albedo,
-     "Particles/Textures/Rocks/Rocks 2/Plane_1-1_Material_27_Normal.tga", 2, 2, 2, 2, 1, 0, 0.25f},
-    {"debris_wood", Library::Sprite, kProFx, "Particles/Textures/Wood/Plane 1-1_Decals_AlbedoTransparency.tga", Mode::Albedo,
-     "Particles/Textures/Wood/Plane 1-1_Decals_Normal.tga", 2, 2, 2, 2, 1, 0, 0.3f},
-    {"debris_glass", Library::Sprite, kProFx, "Particles/Textures/Glass/GlassPieces_Albedo.tga", Mode::MaskA, nullptr, 2, 2, 2, 2, 1, 0, 0.95f},
-    // Muzzle flashes (PRO Effects "Shoot FX"): white shapes in red, coloured at runtime.
-    {"muzzle_star", Library::Sprite, kProFx, "Shoot FX/Textures/muzzleflash_1_blurred.png", Mode::MaskR, nullptr, 1, 1, 1, 1, 1, 0, 0.0f},
-    {"muzzle_star_sharp", Library::Sprite, kProFx, "Shoot FX/Textures/muzzleflash_1.png", Mode::MaskR, nullptr, 1, 1, 1, 1, 1, 0, 0.0f},
-    {"muzzle_burst", Library::Sprite, kProFx, "Shoot FX/Textures/8.png", Mode::MaskR, nullptr, 1, 1, 1, 1, 1, 0, 0.0f},
-    {"muzzle_side", Library::Sprite, kProFx, "Shoot FX/Textures/10.png", Mode::MaskR, nullptr, 1, 1, 1, 1, 1, 0, 0.0f},
-    {"muzzle_front", Library::Sprite, kProFx, "Shoot FX/Textures/7.png", Mode::MaskR, nullptr, 1, 1, 1, 1, 1, 0, 0.0f},
-    {"glow", Library::Sprite, kProFx, "Shoot FX/Textures/blurred circle.png", Mode::MaskR, nullptr, 1, 1, 1, 1, 1, 0, 0.0f},
-};
+
 
 std::string Resolve(const std::string& root, const char* rel) {
     const std::string r(rel);
@@ -374,22 +304,21 @@ void BuildSource(const std::string& assetsDir, const Source& s, Built& out) {
 } // namespace
 
 bool ImportPacks(const std::string& assetsDir, const std::string& outDir) {
-    for (const char* pack : {kRealBlood, kProFx})
-        if (!fs::is_directory(fs::u8path(assetsDir + "/" + pack))) {
-            Log::Error("KnifeFx import: '" + assetsDir + "' has no " + pack + " - pass the folder holding both extracted packs");
-            return false;
-        }
+    std::string manifestText;if(!Scripting::RequestProject("content.knife","{}",manifestText))return false;
+    const auto manifest=nlohmann::json::parse(manifestText);std::vector<Source> sources;
+    for(const auto& x:manifest.at("Sources"))sources.push_back({x.at("Name").get_ref<const std::string&>().c_str(),(Library)x.at("Lib").get<int>(),x.at("Pack").get_ref<const std::string&>().c_str(),x.at("Color").get_ref<const std::string&>().c_str(),(Mode)x.at("ColorMode").get<int>(),x.at("Normal").get<std::string>().empty()?nullptr:x.at("Normal").get_ref<const std::string&>().c_str(),x.at("SrcCols"),x.at("SrcRows"),x.at("DstCols"),x.at("DstRows"),x.at("Stride"),x.at("Count"),x.at("Smoothness")});
+    for(const auto& pack:manifest.at("Packs"))if(!fs::is_directory(fs::u8path(assetsDir)/pack.get<std::string>())){Log::Error("Texture import: required project pack not found: "+pack.get<std::string>());return false;}
     std::error_code ec;
     fs::create_directories(fs::u8path(outDir), ec);
 
-    constexpr size_t n = sizeof(kSources) / sizeof(kSources[0]);
+    const size_t n=sources.size();
     std::vector<Built> built(n);
     std::atomic<size_t> next{0};
     std::vector<std::thread> workers;
     const unsigned threads = std::max(1u, std::min(8u, std::thread::hardware_concurrency()));
     for (unsigned t = 0; t < threads; ++t)
         workers.emplace_back([&] {
-            for (size_t i = next++; i < n; i = next++) BuildSource(assetsDir, kSources[i], built[i]);
+            for (size_t i = next++; i < n; i = next++) BuildSource(assetsDir, sources[i], built[i]);
         });
     for (auto& w : workers) w.join();
 
@@ -402,10 +331,10 @@ bool ImportPacks(const std::string& assetsDir, const std::string& outDir) {
         data.Header.Mips = (std::uint32_t)MipCount(LibraryLayerSize(lib));
         std::string names;
         for (size_t i = 0; i < n; ++i) {
-            if (kSources[i].Lib != lib) continue;
+            if (sources[i].Lib != lib) continue;
             Built& b = built[i];
             if (!b.Error.empty()) {
-                Log::Error(std::string("KnifeFx import: ") + kSources[i].Name + ": " + b.Error);
+                Log::Error(std::string("KnifeFx import: ") + sources[i].Name + ": " + b.Error);
                 ok = false;
                 continue;
             }

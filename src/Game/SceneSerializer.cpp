@@ -12,6 +12,10 @@
 #include "AssetGuid.h"
 #include "ProjectPaths.h"
 #include "EditorSettings.h"
+#include "Scripting/WeaponPrefab.h"
+#include "Scripting/ProjectComponentMigration.h"
+#include "Scripting/PlayerDefinition.h"
+#include "Scripting/NpcDefinitions.h"
 
 #include "Log.h"
 #include "SpotShadowMap.h"
@@ -610,6 +614,13 @@ void WriteCommonComponents(json& j, const World& world, entt::entity entity) {
 }
 
 void ReadCommonComponents(const json& j, World& world, AssetLibrary& assets, entt::entity entity) {
+    if(j.contains("Impact Audio") || j.contains("Weapon Audio") || j.contains("Foley Audio") || j.contains("FX & HUD Settings") || j.contains("Weapon Definition") || j.contains("Goal Trigger") || j.contains("Scoreboard") || j.contains("Score Digit") || j.contains("Impact Sound") || j.contains("First Person Controller") || j.contains("Health") || j.contains("NPC Spawn") || j.contains("Squad Settings")) {
+        auto migrated=j;
+        Scripting::MigrateLegacyWeaponDefinition(migrated);
+        Scripting::MigrateLegacyProjectComponents(migrated);
+        ReadCommonComponents(migrated,world,assets,entity);
+        return;
+    }
     if (j.contains("tag")) world.Registry.emplace_or_replace<TagComponent>(entity, j["tag"].get<std::string>());
     if (!j.value("active", true)) world.Registry.emplace_or_replace<DeactivatedTag>(entity);
     if (j.value("static", false)) world.Registry.emplace_or_replace<StaticTag>(entity);
@@ -758,6 +769,7 @@ void ReadCommonComponents(const json& j, World& world, AssetLibrary& assets, ent
             }
         }
     }
+    Scripting::SyncPlayerDefinition(world,entity);Scripting::SyncNpcDefinition(world,entity);
 }
 
 // --- Prefab per-field overrides (#236 A2 stage 3 / #302 Part B) --------------------------

@@ -411,7 +411,7 @@ Without these files the game logs one warning, and the effects that need them ar
   - **Burst:** chips (concrete, rock, wood, glass). The PRO dust puff and streak were dropped (2026-10-04): they
     read badly.
   - **Metal** adds sparks and a flash.
-- **Muzzle flash** (`CombatFx::MuzzleSpritesFor`, weapon prefab's `Weapon Definition` tabs).
+- **Muzzle flash** (`CombatFx::MuzzleSpritesFor`, weapon prefab's project C# `WeaponDefinition` data).
   - Style 1, the default, layers PRO Effects' Shoot FX over the Tactical Shooter flame:
     - the star (rifle) or burst (shotgun);
     - side jets;
@@ -422,7 +422,9 @@ Without these files the game logs one warning, and the effects that need them ar
     and 0.4x the sprite emission. `Player Flash Scale` independently controls the point light.
   - Style 0 uses the basic flame and smoke, without the extra PRO Effects layers.
   - Per-weapon light, flame texture/tint/ranges, flash entry, jets, glow and smoke controls are
-    saved on `Weapon Definition`. Player and NPC shots use the same prefab. Older scene FX/HUD
+    saved on `Tartarus.Gameplay.WeaponDefinition`; legacy flash fields remain serialized but hidden
+    in its Inspector, where current prefab flashes are authored with child Particle Systems.
+    Player and NPC shots use the same prefab. Older scene FX/HUD
     muzzle values are retained as a fallback for presentations using only an Animation Set.
 - **Performance.**
   - Culling (`BloodRenderer::WorthDrawing`): sprays past 80 m, decals past 120 m, sprites past 150 m, and

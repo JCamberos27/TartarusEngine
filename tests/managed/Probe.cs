@@ -2,12 +2,6 @@ using System.Numerics;
 using Tartarus;
 namespace Tartarus.Tests;
 
-public sealed class Gameplay : IGameplay
-{
-    public void Player(ref PlayerFrame frame) { }
-    public void Weapon(ref WeaponFrame frame) { }
-    public void Shot(ref ShotFrame frame) { }
-}
 public enum ProbeMode { Idle = 0, Moving = 7 }
 public sealed class Probe : MonoBehaviour
 {

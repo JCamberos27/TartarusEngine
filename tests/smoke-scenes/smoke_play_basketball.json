@@ -168,12 +168,13 @@
     "Continuous Collision": true,
     "Interpolate": "Interpolate"
    },
-   "Impact Sound": {
-    "Clip": "assets/Audio/basketball_bounce.wav",
-    "Volume": 0.9,
-    "Min Speed": 0.5,
-    "Max Speed": 7.0,
-    "Pitch Variation": 0.06
+   "C# Script": {
+    "Class": "Tartarus.Gameplay.ImpactSound",
+    "Source": "assets/Scripts/ImpactSound.cs",
+    "Fields JSON": "{\"Clip\":{\"path\":\"assets/Audio/basketball_bounce.wav\",\"pathGuid\":\"\"},\"Volume\":0.9,\"MinSpeed\":0.5,\"MaxSpeed\":7.0,\"PitchVariation\":0.06}",
+    "Enabled": true,
+    "Scripts": "[]",
+    "Next Script ID": 1
    }
   }
  ],
@@ -207,15 +208,13 @@
     ],
     "friction": 0.6
    },
-   "Goal Trigger": {
-    "Tag": "Basketball",
-    "Team": "Home",
-    "Points": 2,
-    "Three Points": 3,
-    "Three Point Distance": 6.9,
-    "Require Downward": true,
-    "Score Sound": "assets/Audio/basket_score.wav",
-    "Flash Intensity": 40.0
+   "C# Script": {
+    "Class": "Tartarus.Gameplay.BasketGoal",
+    "Source": "assets/Scripts/BasketGoal.cs",
+    "Fields JSON": "{\"Tag\":\"Basketball\",\"Team\":0,\"Points\":2,\"ThreePoints\":3,\"ThreePointDistance\":6.9,\"RequireDownward\":true,\"ScoreSound\":{\"path\":\"assets/Audio/basket_score.wav\",\"pathGuid\":\"\"},\"FlashIntensity\":40.0}",
+    "Enabled": true,
+    "Scripts": "[]",
+    "Next Script ID": 1
    }
   },
   {
@@ -238,9 +237,13 @@
     1,
     1
    ],
-   "Scoreboard": {
-    "Home": 0,
-    "Away": 0
+   "C# Script": {
+    "Class": "Tartarus.Gameplay.Scoreboard",
+    "Source": "assets/Scripts/Scoreboard.cs",
+    "Fields JSON": "{\"Home\":0,\"Away\":0}",
+    "Enabled": true,
+    "Scripts": "[]",
+    "Next Script ID": 1
    }
   },
   {

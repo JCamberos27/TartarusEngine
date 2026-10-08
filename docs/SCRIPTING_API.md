@@ -10,6 +10,28 @@ PhysX remain C++. Use `Tartarus` for gameplay, `Tartarus.Editor` for editor exte
 `UnityEngine` compatibility layer. Engine forward is **-Z**, up is +Y, distances are world
 units, transform rotations use radians internally and `Transform.Rotate` takes degrees.
 
+Project C# owns player/weapon rules and definitions, vitals/damage, scoring, gravity, NPC
+AI/spawning/squads, HUD/developer content, sound policy, locomotion actions and outfit choices.
+The [engine/game ownership guide](ENGINE_GAME_BOUNDARY.md) lists their owners and the native
+execution services that remain.
+
+Physics events call `Script.OnTriggerEnter/Stay/Exit(GameObject)` and
+`OnCollisionEnter/Stay/Exit(Collision)` once per completed physics batch, after Start and
+before Update. Collision data includes Other, Point, Normal, Impulse and NormalSpeed.
+Disabled, inactive and faulted scripts receive no callbacks. Callbacks may mutate the scene;
+the receiver snapshot is revalidated before delivery. Render-only ticks do not repeat events.
+
+`GameObject.activeInHierarchy`, `tag` and `SetMaterialEmission(strength, materialSlot)`
+provide activation/tag queries and emission on assigned material slots (shared materials
+remain shared). `Physics.TryGetBodyState`, `TryGetBodyRotation`, `TryGetActorPosition`
+and `AddImpulseAtPosition` expose native body operations. `CarryConstraint.TryCreate`
+returns a validated handle with `IsValid`, `SetTarget` and `Release`; stale handles cannot
+operate on a subsequent constraint. The current backend supports one simultaneous carry
+constraint. `Audio.PlayAtPosition` accepts an optional `pitch`.
+
+`Script.OnReload` is called with scene services after state restoration when managed code
+is replaced. Rebuild runtime reference caches there; Awake and Start are not repeated.
+
 ## Projects, source folders and compilation
 
 * Gameplay source lives below `project/assets`, excluding folders named `Editor`.
@@ -20,7 +42,8 @@ units, transform rotations use radians internally and `Transform.Rotate` takes d
 * `managed/Tartarus.Runtime` contains the stable scripting SDK and managed host.
 
 Use **Create C# Script** or **Create C# Editor Script** in the Asset Browser. Files open in
-your external editor. Saves queue a background build after a 600 ms debounce. Gameplay builds
+the [embedded Script IDE](SCRIPT_IDE.md); **Open Externally** remains available in the context
+menu. Saves queue a background build after a 600 ms debounce. Gameplay builds
 first, editor tools second. A save arriving during compilation queues another build. Output
 is in `project/Scripts/bin`, diagnostics in `build.log` and `editor-build.log` in that same
 Scripts directory. **File > Build C# Gameplay & Editor** forces a build.
@@ -32,9 +55,10 @@ retain existing tools. A runtime SDK change requires restarting the engine becau
 assembly is pinned by the native .NET host; ordinary project source edits reload live.
 
 Install the x64 .NET 10 SDK to compile and the x64 .NET 10 runtime to run exported games.
-CMake's `TartarusScripts` target builds all three assemblies and the small integration
-fixture. `TartarusEngine` depends on that target. Exported games exclude editor source and
-the editor DLL. Export selects newer project gameplay output over older CMake staging.
+`TartarusRuntime` builds the engine SDK/host; `TartarusScripts` builds the sample and fixture.
+`TARTARUS_BUILD_SAMPLE_GAME=OFF` removes the sample dependency from `TartarusEngine`.
+Exports exclude editor source/DLLs and copy the current project's gameplay output into
+its Scripts/bin. Gameplay and editor loading never fall back to bundled sample assemblies.
 
 ## Attached behaviours
 
@@ -99,14 +123,22 @@ static caches: those keep collectible assemblies alive.
 ### Inspector fields
 
 Public writable instance fields and private `[SerializeField]` fields are saved. Supported
-types: `float`, `int`, `bool`, `string`, `Vector3`, and enums whose underlying type is `int`.
+types: `float`, `int`, `bool`, `string`, `Vector3`, `AssetReference`, and enums whose underlying type is `int`.
 Static, readonly and `[NonSerialized]` fields are excluded. Properties, arrays, object
 references, arbitrary structs and collections are not currently Inspector field types.
 Unsupported types are visibly labeled; they remain usable as ordinary runtime C# state.
 
 * `[Range(min,max)]` renders an integer/float slider.
+* `[AssetPath(".fpsanim")]` gives an `AssetReference` a filtered picker with asset drops; it stores `path` and `pathGuid`.
+* `[Color]` renders a `Vector3` as a linear RGB color picker.
 * `[Tooltip("text")]` supplies Inspector help.
 * `[HideInInspector]` retains serialized data without showing a widget.
+* `[Header("Movement")]` groups that field and subsequent fields in the Inspector.
+* On strings, `[SceneReference("Transform", true)]` and `[SceneReference("Particle System", true)]`
+  provide hierarchy pickers/drag targets. Values are relative hierarchy paths; `true` restricts
+  selection to the owner's subtree. Renaming/reparenting targets can invalidate these paths.
+* On strings, `[SoundReferences]` provides audio asset slots serialized as semicolon-separated
+  project paths; `[InspectorChoices("", "ak", "870")]` provides a fixed string dropdown.
 * Deleted/renamed fields are discarded; new fields use constructor/initializer defaults.
 * Editing one field during Play updates only changed overrides, preserving unrelated state.
 * Advanced > Reset Fields removes authored overrides. Class accepts a qualified type name.
@@ -124,7 +156,7 @@ native pointers; they resolve the object's ID on each operation.
 `GetComponent<T>` returns the first matching component or null. `GetComponents<T>` returns
 all matches, including disabled scripts. Missing native components return an empty array.
 Native wrappers currently include `Transform`, `Rigidbody`, `Animator`, `Camera`, `Light`,
-`Collider`, `AudioSource`, `WeaponDefinition` and `FirstPersonController`. Other native data
+`Collider` and `AudioSource`. Other native data
 is exposed through the catalog and `NativeComponent` API below.
 
 ### GameObject
@@ -197,8 +229,9 @@ and cleared by the next animation update. Native parameters store integer values
 * `Light`: `type` (`Point`, `Spot`, `Directional`), `color` (Vector3 RGB), `intensity`, `range`.
 * `Collider`: `halfExtents` and its complete reflected `data` view.
 * `AudioSource`: `clip`, `volume`, `loop`, `playOnStart` and `data`. Use Audio for explicit voices.
-* `WeaponDefinition`: `description`, `animationSet` and `data`.
-* `FirstPersonController`: `data` exposing the registered player, camera and weapon settings.
+* Project `Tartarus.Gameplay.PlayerDefinition` is a script with authored movement, view,
+  health, ability and weapon-slot fields. It replaces the native First Person Controller
+  component and its former SDK wrapper.
 
 Camera, Light and other ReflectedComponents all expose `NativeType` and `data`. These modify
 native **authored data**, not every subsystem's already-created resources. Changing a body
@@ -209,7 +242,7 @@ rendered color independently of the RGB field. Read tooltips in the catalog for 
 ## Complete native data catalog
 
 `ComponentCatalog.GetAll()` returns every registered native component and its field metadata.
-This includes player tuning, weapon definitions, render/lighting settings, colliders and
+This includes player tuning, render/lighting settings, colliders and
 joints, animation, particles, audio, reverb, foley, ragdoll settings and gameplay components.
 It automatically expands when native components are registered; it is not a manually maintained
 list of C# aliases. Mesh Renderer exposes no pointer-backed Model through this API.
@@ -220,13 +253,19 @@ Label, Kind, Min, Max, Tooltip and EnumLabels. Kind values follow the native ref
 Native enum data is an **integer index**, not a C# enum name. Prefer stable Key over display Label.
 
 ```csharp
-var definition = gameObject.GetNativeComponent("Weapon Definition");
-Debug.Log(definition.Get<string>("Description"));
+var definition = gameObject.GetComponent<Tartarus.Gameplay.WeaponDefinition>();
+if (definition != null) Debug.Log(definition.Description);
 
 foreach (var component in ComponentCatalog.GetAll())
     foreach (var field in component.Fields)
         Debug.Log($"{component.Name}.{field.Key}: {field.Tooltip}");
 ```
+
+`Tartarus.Gameplay.WeaponDefinition` is a project C# script in `assets/Scripts/WeaponDefinition.cs`,
+not a native component or Runtime SDK wrapper. Its `Description`, `AnimationSet` and muzzle
+settings use ordinary script serialization and the project's custom Inspector. Native weapon
+presentation resolves its C# defaults/overrides and consumes an effect snapshot. Older native
+Weapon Definition data converts to a script on load; saving writes the C# representation.
 
 `Get<T>(field)` deserializes the native value; use the exact corresponding type.
 `Set<T>(field,value)` validates type, finite numeric data, enum index and native field bounds.
@@ -301,22 +340,22 @@ global random state. Prefer System.Numerics for vector/quaternion arithmetic.
 
 ## Player and weapon gameplay contracts
 
-`project/assets/Scripts/Gameplay.cs` implements `IGameplay` and delegates to
+`project/assets/Scripts/Gameplay.cs` implements the optional generic `IProjectIntegration` and delegates to
 `PlayerController.cs` and `WeaponController.cs`. This is the active first-person gameplay
 path. Those controllers are invoked through data frames rather than scene MonoBehaviours:
 the player camera/capsule and equipped view models have existing native lifetimes.
 Attaching a second movement behaviour is not required to activate the supplied player.
 
-`IGameplay.Player(ref PlayerFrame)` owns movement, acceleration, sprint/crouch, jump buffer,
+Project `Gameplay.Player(ref PlayerFrame)` owns movement, acceleration, sprint/crouch, jump buffer,
 coyote time, gravity, root-motion blending and respawn logic. The native adapter collects
 input/camera deltas and writes resulting position/velocity/camera values back.
 
-`IGameplay.Weapon(ref WeaponFrame)` owns fire eligibility, ammunition/chamber state, fire
+Project `Gameplay.Weapon(ref WeaponFrame)` owns fire eligibility, ammunition/chamber state, fire
 modes, burst scheduling, cooldown, pump timing, reload interruption, shell/magazine events,
 reload tap/hold and idle fidget decisions. Native presentation submits animator tags/events
 and descriptor values, then executes returned commands for recoil, audio and animation.
 
-`IGameplay.Shot(ref ShotFrame)` owns pellet distribution, ray queries and capped impact
+Project `Gameplay.Shot(ref ShotFrame)` owns pellet distribution, ray queries and capped impact
 impulse rules. Native services draw decals/traces, run physics, and present impact audio.
 AK and 870 share this implementation with different prefab/descriptor settings and clips.
 
@@ -329,8 +368,8 @@ MagazineLoaded and ShellLoaded animation events. Flags in the ABI use 32-bit int
 PlayerFrame contains dt, look/input, configuration and mutable movement state. WeaponFrame
 contains the request operation, descriptor tuning, animator tags/events and mutable weapon
 state; Commands/Result are outputs. ShotFrame contains origin/direction, spread, range,
-pellet count, random seed and impact/decal values. See the generated ScriptAbi.cs for exact
-member names. Add new layout fields to `tools/generate_script_abi.py`, regenerate both
+pellet count, random seed and impact/decal values. These FPS types are project contracts, outside the engine SDK. See project GameFrames.cs for exact
+member names. Add project layout fields to `tools/generate_game_frames.py`, regenerate both
 languages, bump the ABI version and rebuild native plus managed code together.
 
 ## C# editor scripts
@@ -405,12 +444,15 @@ native replies are copied immediately and must not be retained as unmanaged poin
 Native exceptions are caught before returning across the ABI. A GameObject/Component wrapper
 is a value/ID view, not an ownership guarantee.
 
-This API does not currently implement Unity packages, coroutines, custom Inspector classes,
-scriptable assets, serialized entity references, collision callbacks on behaviours, runtime
+This API does not currently implement Unity packages, coroutines,
+scriptable assets, typed serialized entity-reference fields, collision callbacks on behaviours, runtime
 native-actor creation, or a managed debugger. The native systems can continue performing
 those responsibilities through their existing editor/runtime interfaces. The implemented
 catalog gives access to registered authored data without claiming every native subsystem has
 a corresponding managed lifecycle.
+
+Custom Inspector classes are implemented; see the section below. String-backed scene-reference
+pickers are implemented, with the hierarchy-path limitations described above.
 
 ## Focused verification
 
@@ -426,3 +468,17 @@ session. The long animated weapon playtest is separate and is not required on ev
 See [EDITOR_HISTORY_AND_INSPECTORS.md](EDITOR_HISTORY_AND_INSPECTORS.md) for CustomEditor, Editor, SerializedObject, SerializedProperty, Header, the additional EditorGUILayout widgets, and Undo.RecordObject / RecordAsset / PerformUndo / PerformRedo.
 
 EditorUtility.OpenScript(path, line, column) opens the native Script IDE at a one-based source position. An empty path shows the window. See [SCRIPT_IDE.md](SCRIPT_IDE.md).
+
+## Scoped runtime overlays
+
+`RuntimeCanvas.current` is available during a supplied drawing scope. It provides Width,
+Height, Scale, Measure, LineHeight, Text, Rect and Line with System.Numerics colors/vectors.
+`RuntimeGui.current` is available during a supplied immediate UI scope: BeginWindow/EndWindow,
+Separator, Checkbox, Slider, Button, SameLine and Label. Widgets return their edited values;
+EndWindow is required even when BeginWindow returns false. Native scopes close remaining
+windows on failure. Handles expire when the callback returns and reject later use. These APIs
+are separate from Tartarus.Editor; project content chooses labels, layout and actions.
+
+`Input.GetKeyDown(int key)` reads a raw GLFW key transition (0..348); named Input actions
+remain the normal gameplay interface. AssetReference.ResolvePath follows a GUID and returns
+an absolute path in the current project.

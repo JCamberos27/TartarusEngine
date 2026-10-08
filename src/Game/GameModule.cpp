@@ -1,6 +1,5 @@
 #include "GameModuleAPI.h"
 #include "TransformControllerSystem.h"
-#include "ScoringSystem.h"
 
 namespace {
 
@@ -12,10 +11,8 @@ void OnUnload() {}
 // The Transform Controller is the first gameplay system hosted in the reloadable module. Edit
 // this DLL (or add future gameplay systems here), build TartarusGame, and the open editor will
 // pick up the new code without restarting.
-void Update(const GameModuleHostAPI& host, World& world, float deltaTime) {
+void Update(const GameModuleHostAPI&, World& world, float deltaTime) {
     UpdateTransformControllers(world, deltaTime);
-    UpdateScoring(host, world, deltaTime);      // Goal Trigger / Scoreboard / Score Digit
-    UpdateImpactSounds(host, world, deltaTime); // Impact Sound
 }
 
 const GameModuleAPI kAPI{

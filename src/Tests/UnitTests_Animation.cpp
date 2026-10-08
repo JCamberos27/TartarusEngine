@@ -13,7 +13,6 @@
 #include "Model.h"
 #include <cmath>
 #include <cstdio>
-#include <filesystem>
 
 // Unit tests for animation poses and IK. Add a function per test and list it below.
 
@@ -704,11 +703,8 @@ void TestCameraEffects() {
     CHECK(FirstPersonAnimationSet::FromJsonString(set.ToJsonString(),read,&error));
     CHECK(read.ActionCamera.Enabled && read.ActionCamera.Node=="camera_anim" && read.ActionCamera.States==set.ActionCamera.States);
     CHECK(read.ActionCamera.PositionScale==1 && read.CameraShakeProfile==set.CameraShakeProfile);
-    // The sample package omits Weapons; solver/schema checks above always run.
-    if (std::filesystem::exists(ProjectPaths::Resolve("assets/Weapons"))) {
-        CHECK(CameraShakeAsset::LoadFile(ProjectPaths::Resolve("assets/Weapons/AKS74U/AKS74U.camerashake"),parsed,&error));
-        CHECK(CameraShakeAsset::LoadFile(ProjectPaths::Resolve("assets/Weapons/Remington870/Remington870.camerashake"),parsed,&error));
-    }
+    CHECK(CameraShakeAsset::LoadFile(ProjectPaths::Resolve("assets/Weapons/AKS74U/AKS74U.camerashake"),parsed,&error));
+    CHECK(CameraShakeAsset::LoadFile(ProjectPaths::Resolve("assets/Weapons/Remington870/Remington870.camerashake"),parsed,&error));
 }
 
 void RegisterAnimationTests(UnitTestSupport::TestList& tests) {

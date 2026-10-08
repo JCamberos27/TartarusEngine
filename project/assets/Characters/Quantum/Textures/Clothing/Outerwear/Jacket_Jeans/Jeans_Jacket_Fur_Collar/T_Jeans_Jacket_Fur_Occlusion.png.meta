@@ -1,16 +1,9 @@
 {
-  "folder": "assets/Characters/Quantum/Textures/Clothing/Outerwear/Jacket_Jeans/Jeans_Jacket_Fur_Collar",
-  "guid": "5b09cc89ecd31ff7",
-  "importer": {
-    "anisoLevel": 16,
-    "compression": 2,
-    "filterMode": 2,
-    "generateMipmaps": true,
-    "isSRGB": false,
-    "maxTextureSize": 2048,
-    "textureType": 0,
-    "wrapMode": 0
-  },
+  "guid": "bfd9c920f22dc963",
   "metaVersion": 1,
-  "type": "texture"
+  "type": "texture",
+  "importer": {
+    "isSRGB": false,
+    "textureType": 0
+  }
 }

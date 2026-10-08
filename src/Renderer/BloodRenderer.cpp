@@ -1,3 +1,5 @@
+#include "Scripting/ScriptRuntime.h"
+#include <json.hpp>
 #include "BloodRenderer.h"
 
 #include "Frustum.h"
@@ -74,7 +76,9 @@ bool BloodRenderer::Load() {
     if (m_LoadTried) return m_Loaded;
     m_LoadTried = true;
     namespace fs = std::filesystem;
-    const fs::path dir = fs::u8path(ProjectPaths::Resolve("assets/Effects/Blood"));
+    std::string location;if(!Scripting::RequestProject("content.path",nlohmann::json("blood").dump(),location))return false;
+    const auto path=nlohmann::json::parse(location).get<std::string>();if(path.empty())return false;
+    const fs::path dir=fs::u8path(ProjectPaths::Resolve(path));
     std::error_code ec;
     std::vector<std::string> files;
     for (const auto& e : fs::directory_iterator(dir, ec))
@@ -333,7 +337,8 @@ int BloodRenderer::DecalSet(const std::string& name) const {
 
 bool BloodRenderer::BuildAtlas() {
     namespace fs = std::filesystem;
-    const fs::path dir = fs::u8path(ProjectPaths::Resolve("assets/Effects/Blood/decals"));
+    std::string location;if(!Scripting::RequestProject("content.path",nlohmann::json("blood").dump(),location))return false;
+    const fs::path dir=fs::u8path(ProjectPaths::Resolve(nlohmann::json::parse(location).get<std::string>()))/"decals";
     struct Img { std::string Name; int W, H; std::vector<unsigned char> Norm, Mask; int X = 0, Y = 0; };
     std::vector<Img> imgs;
     std::error_code ec;

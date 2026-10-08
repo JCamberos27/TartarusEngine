@@ -15,12 +15,12 @@ public static class Audio
 {
     public static AudioVoice Play(string path, float volume = 1, bool loop = false, AudioBus bus = AudioBus.SFX)
         => PlayInternal(path, volume, loop, bus, false, default, 1, 40);
-    public static AudioVoice PlayAtPosition(string path, Vector3 position, float volume = 1, bool loop = false, AudioBus bus = AudioBus.SFX, float minDistance = 1, float maxDistance = 40)
-        => PlayInternal(path, volume, loop, bus, true, position, minDistance, maxDistance);
-    static AudioVoice PlayInternal(string path, float volume, bool loop, AudioBus bus, bool spatial, Vector3 position, float minDistance, float maxDistance)
+    public static AudioVoice PlayAtPosition(string path, Vector3 position, float volume = 1, bool loop = false, AudioBus bus = AudioBus.SFX, float minDistance = 1, float maxDistance = 40, float pitch = 1)
+        => PlayInternal(path, volume, loop, bus, true, position, minDistance, maxDistance,pitch);
+    static AudioVoice PlayInternal(string path, float volume, bool loop, AudioBus bus, bool spatial, Vector3 position, float minDistance, float maxDistance,float pitch=1)
     {
         NativeRequest r = default;
-        var payload = new { path, volume, loop, bus = (int)bus, spatial, x = position.X, y = position.Y, z = position.Z, minDistance, maxDistance };
+        var payload = new { path, volume, loop, bus = (int)bus, spatial, x = position.X, y = position.Y, z = position.Z, minDistance, maxDistance,pitch };
         if (Engine.TextCall(94, System.Text.Json.JsonSerializer.Serialize(payload), ref r) == 0) throw new InvalidOperationException("Audio playback failed: " + path);
         return new(r.Entity);
     }
