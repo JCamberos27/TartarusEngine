@@ -1,0 +1,61 @@
+{
+  "folder": "assets/Architecture/Doors/Models",
+  "guid": "f1030a550d066c93",
+  "importer": {
+    "excludeNodes": [
+      "Lock_2",
+      "Lock_3",
+      "Lock_4",
+      "Lock_5",
+      "Lock_6",
+      "Lock_7",
+      "Lock_8",
+      "Lock_9",
+      "Lock_10",
+      "Lock_12",
+      "Lock_13",
+      "Lock_14",
+      "Strike_plate_2",
+      "Strike_plate_3",
+      "Strike_plate_4",
+      "Strike_plate_5",
+      "Strike_plate_6",
+      "Strike_plate_7",
+      "Strike_plate_8",
+      "Strike_plate_9",
+      "Strike_plate_10",
+      "Strike_plate_12",
+      "Strike_plate_13",
+      "Strike_plate_14",
+      "Chain_closed",
+      "Number_0",
+      "Number_1",
+      "Number_2",
+      "Number_3",
+      "Number_4",
+      "Number_5",
+      "Number_6",
+      "Number_8",
+      "Number_9",
+      "Door_group"
+    ],
+    "globalScale": 0.10000000149011612,
+    "importAnimations": false,
+    "importNormals": true,
+    "importSkeleton": false,
+    "materialImportMode": 1,
+    "optimizeGraph": true,
+    "pivotOffset": [
+      -0.0,
+      -9.999999747378752e-05,
+      0.0272000003606081
+    ]
+  },
+  "materialRemap": {
+    "Door_Mat": "assets/Architecture/Doors/Materials/M_Door_White.mat",
+    "Hardware_Mat": "assets/Architecture/Doors/Materials/M_Door_Hardware_Brass.mat",
+    "Numbers_Mat": "assets/Architecture/Doors/Materials/M_Door_Numbers_A.mat"
+  },
+  "metaVersion": 1,
+  "type": "model"
+}

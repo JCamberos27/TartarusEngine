@@ -146,6 +146,14 @@ SCALE = {'Door_Op_1': 0.1, 'Door_Op_2': 0.1, 'David': 0.01, 'Knife': 0.01}
 DOOR_EXCLUDE = ([f'Lock_{i}' for i in range(2, 15) if i != 11] + [f'Strike_plate_{i}' for i in range(2, 15) if i != 11]
                 + ['Chain_closed'] + [f'Number_{i}' for i in range(10) if i != 7])
 EXCLUDE = {'Door_Op_1': DOOR_EXCLUDE, 'Door_Op_2': DOOR_EXCLUDE}
+# Extra copies of a file, each leaving out more nodes: the door kit's leaf (to hinge) and frame (to fix in the wall).
+# They share the whole door's pivot, so both dropped at one spot make the closed door.
+# Interior: no peephole, house number, chain or deadbolt.
+DOOR_INTERIOR = {'Leaf_Interior': ['Frame_group', 'Peephole', 'Numbers', 'Lock_11', 'Door_catch'],
+                 'Frame_Interior': ['Door_group', 'Chain_open', 'Frame_catch', 'Strike_plate_11']}
+SPLITS = {'Door_Op_1': {'Leaf': ['Frame_group'], 'Frame': ['Door_group'], **DOOR_INTERIOR},  # Door_Op_2's nodes are named otherwise
+          # the switch kit is four switches side by side: one flat single rocker
+          'Light_Switches': {'Single': ['Switch_Double_Classic', 'Switch_Double_Flat', 'Switch_Single_Classic']}}
 # Files that lie on their side as exported: importer upAxis "Z" (up +Z, front -Y) or "-Z" (up -Z, front +Y).
 UP_AXIS = [(re.compile(r'^Curtains_'), '-Z'), (re.compile(r'^Lamp_Ceilingfan$'), 'Z')]
 
@@ -265,6 +273,10 @@ def main():
             lo, hi = [lo[0], -hi[2], lo[1]], [hi[0], -lo[2], hi[1]]
         m['min'], m['max'] = lo, hi
         m['materials'] = r['materials']
+    for m in list(models):
+        for suffix, extra in SPLITS.get(m['stem'], {}).items():
+            models.append(dict(m, stem=f'{m["stem"]}_{suffix}', split_of=m['stem'],
+                               exclude=EXCLUDE.get(m['stem'], []) + extra))
 
     # 3. Material assignment.
     by_norm = {norm(n): n for n in sets if n not in NOT_A_MATERIAL}
@@ -392,6 +404,8 @@ def main():
     by_pack_stem = {(m['pack'], m['stem']): m for m in models}
 
     def body_of(m):
+        if m.get('split_of'):
+            return by_pack_stem[(m['pack'], m['split_of'])]
         tokens = m['stem'].split('_')
         for n in range(len(tokens) - 1, 0, -1):
             rest = tokens[n:]
@@ -419,7 +433,7 @@ def main():
     # 6. Models + metas.
     for m in models:
         folder = os.path.join(assets, *m['pack'].split('/'), 'Models')
-        dst = os.path.join(folder, os.path.basename(m['src']))
+        dst = os.path.join(folder, m['stem'] + os.path.splitext(m['src'])[1])
         os.makedirs(folder, exist_ok=True)
         if not os.path.exists(dst) or os.path.getsize(dst) != os.path.getsize(m['src']):
             shutil.copy2(m['src'], dst)
@@ -429,8 +443,8 @@ def main():
             importer['pivotOffset'] = m['offset']
         if m['up'] != 'Y':
             importer['upAxis'] = m['up']
-        if m['stem'] in EXCLUDE:
-            importer['excludeNodes'] = EXCLUDE[m['stem']]
+        if m.get('exclude') or m['stem'] in EXCLUDE:
+            importer['excludeNodes'] = m.get('exclude') or EXCLUDE[m['stem']]
         remap = {mat: mat_paths[name] for mat, (_, name) in m['remap'].items()}
         m['guid'] = write_meta(dst, rel(folder), 'model', {'importer': importer, 'materialRemap': remap})
         m['path'] = rel(dst)
