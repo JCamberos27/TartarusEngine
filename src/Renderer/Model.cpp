@@ -141,6 +141,22 @@ void Model::ImportFromFile(const ModelImportSettings& settings) {
 
     const aiScene* scene = importer.ReadFile(m_Path, flags);
 
+    // Up axis and pivot: folded into the root node, so static meshes bake them into their vertices. A clip source is
+    // left alone so its keys stay exactly the full import's.
+    if (scene && scene->mRootNode && !settings.AnimationOnly) {
+        glm::mat4 fix = glm::translate(glm::mat4(1.0f), settings.PivotOffset);
+        if (settings.SourceUpAxis == ModelImportSettings::UpAxis::Z) fix = fix * AxisCorrection(2, 1, 1, -1);
+        else if (settings.SourceUpAxis == ModelImportSettings::UpAxis::NegZ) fix = fix * AxisCorrection(2, -1, 1, 1);
+        if (fix != glm::mat4(1.0f)) {
+            const glm::mat4 root = fix * AiToGlm(scene->mRootNode->mTransformation);
+            aiMatrix4x4& m = scene->mRootNode->mTransformation;
+            m.a1 = root[0][0]; m.a2 = root[1][0]; m.a3 = root[2][0]; m.a4 = root[3][0];
+            m.b1 = root[0][1]; m.b2 = root[1][1]; m.b3 = root[2][1]; m.b4 = root[3][1];
+            m.c1 = root[0][2]; m.c2 = root[1][2]; m.c3 = root[2][2]; m.c4 = root[3][2];
+            m.d1 = root[0][3]; m.d2 = root[1][3]; m.d3 = root[2][3]; m.d4 = root[3][3];
+        }
+    }
+
     // #175 — an animation-only file (Mixamo "without skin", a clip library) has no meshes, which
     // Assimp flags INCOMPLETE; that's a valid clip asset, not a failed import.
     const bool animationOnly = scene && scene->mRootNode && scene->mNumMeshes == 0 && scene->mNumAnimations > 0;
@@ -186,6 +202,24 @@ void Model::ImportFromFile(const ModelImportSettings& settings) {
     m_FadeDuration = m_FadeElapsed = 0.0f;
     m_FinalBoneMatrices.assign(MAX_BONES, glm::mat4(1.0f));
     ++m_PoseVersion;
+}
+
+ModelImportSettings::UpAxis Model::ParseUpAxis(const std::string& s) {
+    return s == "Z" ? ModelImportSettings::UpAxis::Z : s == "-Z" ? ModelImportSettings::UpAxis::NegZ : ModelImportSettings::UpAxis::Y;
+}
+
+const char* Model::UpAxisName(ModelImportSettings::UpAxis a) {
+    return a == ModelImportSettings::UpAxis::Z ? "Z" : a == ModelImportSettings::UpAxis::NegZ ? "-Z" : "Y";
+}
+
+glm::mat4 Model::AxisCorrection(int upAxis, int upSign, int frontAxis, int frontSign) {
+    if (upAxis < 0 || upAxis > 2 || frontAxis < 0 || frontAxis > 2 || upAxis == frontAxis) return glm::mat4(1.0f);
+    glm::vec3 u(0.0f), f(0.0f);
+    u[upAxis] = upSign < 0 ? -1.0f : 1.0f;
+    f[frontAxis] = frontSign < 0 ? -1.0f : 1.0f;
+    const glm::vec3 r = glm::cross(u, f);
+    // Rows r, u, f: a source vector's components along right / up / front become engine X / Y / Z.
+    return glm::mat4(glm::transpose(glm::mat3(r, u, f)));
 }
 
 void Model::CollectNodeGlobals(const aiNode* node, const glm::mat4& parentTransform) {
@@ -318,6 +352,8 @@ std::shared_ptr<Model> Model::CreatePrimitive(const std::string& kind, const std
 }
 
 void Model::ProcessNode(aiNode* node, const aiScene* scene, const glm::mat4& parentTransform) {
+    const auto& excluded = m_D->Settings.ExcludeNodes;
+    if (!excluded.empty() && std::find(excluded.begin(), excluded.end(), node->mName.C_Str()) != excluded.end()) return;
     // Assimp's mesh vertex data is expressed in the local space of whatever node the mesh
     // is attached to, NOT world/model space — each node in the FBX/glTF hierarchy can carry
     // its own offset/rotation (e.g. a shotgun's barrel, stock, and trigger guard are commonly
@@ -491,6 +527,11 @@ std::unique_ptr<ModelMesh> Model::ProcessMesh(aiMesh* mesh, const aiScene* scene
         gpuMesh->Mat.BaseColor = glm::vec3(0.75f);
     }
     // MaterialMode::None: leave gpuMesh->Mat at Material{}'s bare defaults, untouched.
+    // Every mode keeps the file's material name: the model's materialRemap matches on it, so a model whose .mat files
+    // replace its own materials can skip loading the file's textures.
+    if (m_D->Settings.MaterialImportMode != ModelImportSettings::MaterialMode::ImportEmbedded &&
+        mesh->mMaterialIndex < scene->mNumMaterials)
+        gpuMesh->Mat.Name = scene->mMaterials[mesh->mMaterialIndex]->GetName().C_Str();
     return gpuMesh;
 }
 

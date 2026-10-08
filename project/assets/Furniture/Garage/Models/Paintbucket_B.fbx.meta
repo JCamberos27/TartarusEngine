@@ -1,0 +1,22 @@
+{
+  "folder": "assets/Furniture/Garage/Models",
+  "guid": "6945911ae8456370",
+  "importer": {
+    "globalScale": 1.0,
+    "importAnimations": false,
+    "importNormals": true,
+    "importSkeleton": false,
+    "materialImportMode": 1,
+    "optimizeGraph": true,
+    "pivotOffset": [
+      3.6524999141693115,
+      -0.0010000000474974513,
+      0.012500000186264515
+    ]
+  },
+  "materialRemap": {
+    "Garage_props": "assets/Furniture/Garage/Materials/M_Garage_Props.mat"
+  },
+  "metaVersion": 1,
+  "type": "model"
+}

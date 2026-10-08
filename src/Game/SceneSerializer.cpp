@@ -1884,11 +1884,15 @@ void AppendAssetLibraryJson(json& root, const AssetLibrary& assets, bool include
         };
     }
     for (const auto& [key, m] : assets.ModelSettingsMap()) {
-        findOrCreate(key)["modelImport"] = {
+        json& mi = findOrCreate(key)["modelImport"];
+        mi = {
             {"globalScale", m.GlobalScale}, {"importNormals", m.ImportNormals},
             {"importAnimations", m.ImportAnimations}, {"importSkeleton", m.ImportSkeleton},
             {"optimizeGraph", m.OptimizeGraph}, {"materialImportMode", (int)m.MaterialImportMode},
         };
+        if (m.SourceUpAxis != ModelImportSettings::UpAxis::Y) mi["upAxis"] = Model::UpAxisName(m.SourceUpAxis);
+        if (m.PivotOffset != glm::vec3(0.0f)) mi["pivotOffset"] = {m.PivotOffset.x, m.PivotOffset.y, m.PivotOffset.z};
+        if (!m.ExcludeNodes.empty()) mi["excludeNodes"] = m.ExcludeNodes;
     }
     root["assetMeta"] = meta;
 }
@@ -1960,6 +1964,12 @@ void ApplyAssetLibraryJson(AssetLibrary& assets, const json& root, bool fromUndo
                 sm.ImportSkeleton = m.value("importSkeleton", true);
                 sm.OptimizeGraph = m.value("optimizeGraph", true);
                 sm.MaterialImportMode = (ModelImportSettings::MaterialMode)std::clamp(m.value("materialImportMode", 0), 0, 2); // #122
+                sm.SourceUpAxis = Model::ParseUpAxis(m.value("upAxis", std::string("Y")));
+                if (m.contains("pivotOffset") && m["pivotOffset"].is_array() && m["pivotOffset"].size() == 3)
+                    sm.PivotOffset = {m["pivotOffset"][0].get<float>(), m["pivotOffset"][1].get<float>(), m["pivotOffset"][2].get<float>()};
+                if (m.contains("excludeNodes") && m["excludeNodes"].is_array())
+                    for (const auto& n : m["excludeNodes"])
+                        if (n.is_string()) sm.ExcludeNodes.push_back(n.get<std::string>());
                 assets.SetModelSettings(path, sm);
             }
         }

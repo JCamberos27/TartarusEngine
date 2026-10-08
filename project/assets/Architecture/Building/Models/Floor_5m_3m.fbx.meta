@@ -1,0 +1,22 @@
+{
+  "folder": "assets/Architecture/Building/Models",
+  "guid": "d999ad31df8cd529",
+  "importer": {
+    "globalScale": 1.0,
+    "importAnimations": false,
+    "importNormals": true,
+    "importSkeleton": false,
+    "materialImportMode": 1,
+    "optimizeGraph": true,
+    "pivotOffset": [
+      -1.0,
+      0.0,
+      -4.0
+    ]
+  },
+  "materialRemap": {
+    "Floor_hardwood": "assets/Architecture/Building/Materials/M_Floor_Hardwood.mat"
+  },
+  "metaVersion": 1,
+  "type": "model"
+}

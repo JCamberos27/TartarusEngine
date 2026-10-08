@@ -1,0 +1,23 @@
+{
+  "folder": "assets/Furniture/Kitchen/Models",
+  "guid": "9afdd79f17872b80",
+  "importer": {
+    "globalScale": 1.0,
+    "importAnimations": false,
+    "importNormals": true,
+    "importSkeleton": false,
+    "materialImportMode": 1,
+    "optimizeGraph": true,
+    "pivotOffset": [
+      -0.5,
+      0.0,
+      -0.2919999957084656
+    ]
+  },
+  "materialRemap": {
+    "Cabinets_kitchen": "assets/Furniture/Kitchen/Materials/M_Cabinets_Kitchen.mat",
+    "Cabinets_kitchen_worktop": "assets/Furniture/Kitchen/Materials/M_Cabinets_Kitchen_Worktop.mat"
+  },
+  "metaVersion": 1,
+  "type": "model"
+}

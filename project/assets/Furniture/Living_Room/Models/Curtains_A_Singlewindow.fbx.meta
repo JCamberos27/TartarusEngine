@@ -1,0 +1,24 @@
+{
+  "folder": "assets/Furniture/Living_Room/Models",
+  "guid": "5f4eb6030e858423",
+  "importer": {
+    "globalScale": 1.0,
+    "importAnimations": false,
+    "importNormals": true,
+    "importSkeleton": false,
+    "materialImportMode": 1,
+    "optimizeGraph": true,
+    "pivotOffset": [
+      -12.25,
+      2.2360000610351563,
+      -1.340999960899353
+    ],
+    "upAxis": "-Z"
+  },
+  "materialRemap": {
+    "Curtains_AB": "assets/Furniture/Decor/Materials/M_Curtains_Ab.mat",
+    "Curtains_AB_rod": "assets/Furniture/Decor/Materials/M_Curtains_Ab.mat"
+  },
+  "metaVersion": 1,
+  "type": "model"
+}

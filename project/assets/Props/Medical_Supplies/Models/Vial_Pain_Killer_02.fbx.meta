@@ -1,0 +1,22 @@
+{
+  "folder": "assets/Props/Medical_Supplies/Models",
+  "guid": "1cf8f0b274dd8847",
+  "importer": {
+    "globalScale": 1.0,
+    "importAnimations": false,
+    "importNormals": true,
+    "importSkeleton": false,
+    "materialImportMode": 1,
+    "optimizeGraph": true,
+    "pivotOffset": [
+      -0.0,
+      0.023000000044703484,
+      -0.0
+    ]
+  },
+  "materialRemap": {
+    "TexSheet3": "assets/Props/Medical_Supplies/Materials/M_Medical_Supplies.mat"
+  },
+  "metaVersion": 1,
+  "type": "model"
+}

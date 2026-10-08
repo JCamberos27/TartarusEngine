@@ -1,0 +1,16 @@
+{
+  "folder": "assets/Furniture/Office/Textures/Desk_Office",
+  "guid": "929a7fd97524c2ec",
+  "importer": {
+    "anisoLevel": 8,
+    "compression": 1,
+    "filterMode": 2,
+    "generateMipmaps": true,
+    "isSRGB": false,
+    "maxTextureSize": 2048,
+    "textureType": 0,
+    "wrapMode": 0
+  },
+  "metaVersion": 1,
+  "type": "texture"
+}
