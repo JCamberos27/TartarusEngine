@@ -1097,7 +1097,35 @@
    "short": false,
    "proxy": true,
    "source": "Bullet_Drop_Leaves_03.wav {\"pitch\": 0.0}",
-   "mix_db": -17.24
+   "mix_db": -17.25
+  },
+  {
+   "file": "Casings/rifle/dirt_1.wav",
+   "key": "snd.casing.shell.dirt",
+   "layer": "casing",
+   "channels": 1,
+   "sample_rate": 48000,
+   "lufs_i": -28.82,
+   "lufs_m_max": -26.0,
+   "true_peak_dbtp": -6.31,
+   "length_s": 0.648,
+   "peak_ms": 78.5,
+   "sources": [
+    {
+     "file": "sonniss/Stuart Duffield - Bullet SFX/Bullet_Drop_Leaves_03.wav",
+     "start": 0.0,
+     "end": 0.648,
+     "pitch_st": 0.0
+    }
+   ],
+   "anchor_ms": 0.0,
+   "kind": "shell",
+   "material": "dirt",
+   "variant": 6,
+   "short": false,
+   "proxy": true,
+   "source": "Bullet_Drop_Leaves_03.wav {\"pitch\": 0.0, \"gain_db\": -2.0}",
+   "mix_db": -17.25
   },
   {
    "file": "Casings/rifle/dirt_2.wav",
@@ -2218,34 +2246,6 @@
    "proxy": true,
    "source": "Bullet_Drop_Leaves_03.wav {\"pitch\": -1.0, \"lp\": 4500}",
    "mix_db": -17.16
-  },
-  {
-   "file": "Casings/rifle/dirt_1.wav",
-   "key": "snd.casing.shell.dirt",
-   "layer": "casing",
-   "channels": 1,
-   "sample_rate": 48000,
-   "lufs_i": -28.82,
-   "lufs_m_max": -26.0,
-   "true_peak_dbtp": -6.31,
-   "length_s": 0.648,
-   "peak_ms": 78.5,
-   "sources": [
-    {
-     "file": "sonniss/Stuart Duffield - Bullet SFX/Bullet_Drop_Leaves_03.wav",
-     "start": 0.0,
-     "end": 0.648,
-     "pitch_st": 0.0
-    }
-   ],
-   "anchor_ms": 0.0,
-   "kind": "shell",
-   "material": "dirt",
-   "variant": 6,
-   "short": false,
-   "proxy": true,
-   "source": "Bullet_Drop_Leaves_03.wav {\"pitch\": 0.0, \"gain_db\": -2.0}",
-   "mix_db": -17.25
   },
   {
    "file": "Casings/shell/metal_1.wav",
@@ -7565,6 +7565,186 @@
    "variant": 4,
    "source": "S_UnEquip_Pistol.WAV@0.2",
    "mix_db": -11.18
+  },
+  {
+   "file": "Gear/flashlight_off_1.wav",
+   "key": "snd.foley.weapon.flashlight_off",
+   "layer": "foley",
+   "channels": 2,
+   "sample_rate": 48000,
+   "lufs_i": -26.18,
+   "lufs_m_max": -26.14,
+   "true_peak_dbtp": -1.0,
+   "length_s": 0.124,
+   "peak_ms": 3.6,
+   "sources": [
+    {
+     "file": "flashlight/Dipswitch_on_off.wav",
+     "start": 2.068,
+     "end": 2.192,
+     "pitch_st": 0.0
+    }
+   ],
+   "anchor_ms": 3.5,
+   "variant": 1,
+   "license": "Public domain (released by its author 'stephan', pdsounds.org; Wikimedia Commons File:Dipswitch_on_off.ogg)",
+   "mix_db": -10.09
+  },
+  {
+   "file": "Gear/flashlight_off_2.wav",
+   "key": "snd.foley.weapon.flashlight_off",
+   "layer": "foley",
+   "channels": 2,
+   "sample_rate": 48000,
+   "lufs_i": -27.51,
+   "lufs_m_max": -27.46,
+   "true_peak_dbtp": -1.0,
+   "length_s": 0.124,
+   "peak_ms": 3.7,
+   "sources": [
+    {
+     "file": "flashlight/Dipswitch_on_off.wav",
+     "start": 2.335,
+     "end": 2.459,
+     "pitch_st": 0.0
+    }
+   ],
+   "anchor_ms": 3.7,
+   "variant": 2,
+   "license": "Public domain (released by its author 'stephan', pdsounds.org; Wikimedia Commons File:Dipswitch_on_off.ogg)",
+   "mix_db": -8.77
+  },
+  {
+   "file": "Gear/flashlight_on_1.wav",
+   "key": "snd.foley.weapon.flashlight_on",
+   "layer": "foley",
+   "channels": 2,
+   "sample_rate": 48000,
+   "lufs_i": -25.52,
+   "lufs_m_max": -25.48,
+   "true_peak_dbtp": -1.0,
+   "length_s": 0.124,
+   "peak_ms": 3.6,
+   "sources": [
+    {
+     "file": "flashlight/Dipswitch_on_off.wav",
+     "start": 0.163,
+     "end": 0.286,
+     "pitch_st": 0.0
+    }
+   ],
+   "anchor_ms": 3.6,
+   "variant": 1,
+   "license": "Public domain (released by its author 'stephan', pdsounds.org; Wikimedia Commons File:Dipswitch_on_off.ogg)",
+   "mix_db": -10.75
+  },
+  {
+   "file": "Gear/flashlight_on_2.wav",
+   "key": "snd.foley.weapon.flashlight_on",
+   "layer": "foley",
+   "channels": 2,
+   "sample_rate": 48000,
+   "lufs_i": -24.65,
+   "lufs_m_max": -24.6,
+   "true_peak_dbtp": -1.0,
+   "length_s": 0.124,
+   "peak_ms": 3.6,
+   "sources": [
+    {
+     "file": "flashlight/Dipswitch_on_off.wav",
+     "start": 0.368,
+     "end": 0.492,
+     "pitch_st": 0.0
+    }
+   ],
+   "anchor_ms": 3.6,
+   "variant": 2,
+   "license": "Public domain (released by its author 'stephan', pdsounds.org; Wikimedia Commons File:Dipswitch_on_off.ogg)",
+   "mix_db": -11.63
+  },
+  {
+   "file": "IR/apartment_1.wav",
+   "key": "ir.apartment",
+   "layer": "ir",
+   "channels": 2,
+   "sample_rate": 48000,
+   "lufs_i": -24.9,
+   "lufs_m_max": -24.85,
+   "true_peak_dbtp": -2.99,
+   "length_s": 0.37,
+   "peak_ms": 4.6,
+   "sources": [
+    {
+     "file": "ir/EchoThiefImpulseResponseLibrary/EchoThiefImpulseResponseLibrary/Miscellaneous/FourPointsRoom270.wav",
+     "start": 0.02,
+     "end": 0.39,
+     "pitch_st": 0.0
+    }
+   ],
+   "anchor_ms": 1.3,
+   "variant": 1,
+   "site": "Four Points Room 270 (furnished hotel room)",
+   "rt60_s": 0.35,
+   "predelay_ms": 3.0,
+   "truncated": false,
+   "license": "EchoThief Impulse Response Library (c) Dr. Chris Warren, SDSU: free to use for derivative artistic work such as convolution reverb; any other use needs permission (cwarren@sdsu.edu); not authorized for AI training",
+   "mix_db": 0.0
+  },
+  {
+   "file": "IR/apartment_2.wav",
+   "key": "ir.apartment",
+   "layer": "ir",
+   "channels": 2,
+   "sample_rate": 48000,
+   "lufs_i": -28.53,
+   "lufs_m_max": -28.49,
+   "true_peak_dbtp": -1.75,
+   "length_s": 0.74,
+   "peak_ms": 2.7,
+   "sources": [
+    {
+     "file": "ir/EchoThiefImpulseResponseLibrary/EchoThiefImpulseResponseLibrary/Miscellaneous/WangenheimRareBooksRoom.wav",
+     "start": 0.003,
+     "end": 0.744,
+     "pitch_st": 0.0
+    }
+   ],
+   "anchor_ms": 0.7,
+   "variant": 2,
+   "site": "Wangenheim Rare Books Room",
+   "rt60_s": 0.43,
+   "predelay_ms": 3.0,
+   "truncated": false,
+   "license": "EchoThief Impulse Response Library (c) Dr. Chris Warren, SDSU: free to use for derivative artistic work such as convolution reverb; any other use needs permission (cwarren@sdsu.edu); not authorized for AI training",
+   "mix_db": 0.0
+  },
+  {
+   "file": "IR/apartment_3.wav",
+   "key": "ir.apartment",
+   "layer": "ir",
+   "channels": 2,
+   "sample_rate": 48000,
+   "lufs_i": -18.75,
+   "lufs_m_max": -18.71,
+   "true_peak_dbtp": -2.99,
+   "length_s": 0.514,
+   "peak_ms": 3.4,
+   "sources": [
+    {
+     "file": "ir/EchoThiefImpulseResponseLibrary/EchoThiefImpulseResponseLibrary/Miscellaneous/Hawxhurst.wav",
+     "start": 0.015,
+     "end": 0.529,
+     "pitch_st": 0.0
+    }
+   ],
+   "anchor_ms": 1.0,
+   "variant": 3,
+   "site": "Hawxhurst",
+   "rt60_s": 0.47,
+   "predelay_ms": 3.0,
+   "truncated": false,
+   "license": "EchoThief Impulse Response Library (c) Dr. Chris Warren, SDSU: free to use for derivative artistic work such as convolution reverb; any other use needs permission (cwarren@sdsu.edu); not authorized for AI training",
+   "mix_db": 0.0
   },
   {
    "file": "IR/indoor_large_1.wav",

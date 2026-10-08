@@ -1,0 +1,27 @@
+{
+  "folder": "assets/Props/Electrical/Models",
+  "guid": "1bc8df9f46b85c77",
+  "importer": {
+    "excludeNodes": [
+      "Switch_Double_Classic",
+      "Switch_Double_Flat",
+      "Switch_Single_Classic"
+    ],
+    "globalScale": 1.0,
+    "importAnimations": false,
+    "importNormals": true,
+    "importSkeleton": false,
+    "materialImportMode": 1,
+    "optimizeGraph": true,
+    "pivotOffset": [
+      -0.0,
+      0.13300000131130219,
+      -0.0
+    ]
+  },
+  "materialRemap": {
+    "lambert1": "assets/Props/Electrical/Materials/M_Light_Switch_White.mat"
+  },
+  "metaVersion": 1,
+  "type": "model"
+}

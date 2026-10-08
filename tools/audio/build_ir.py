@@ -1,6 +1,6 @@
 """Build the room impulse responses from recipes/ir.json (real measurements only: EchoThief, OpenAIR).
 
-  uv run --with numpy --with scipy --with soundfile --with pedalboard --with pyloudnorm python tools/audio/build_ir.py
+  uv run --with numpy --with scipy --with soundfile --with pedalboard --with pyloudnorm python tools/audio/build_ir.py [--only <class> ...]
 
   project/assets/Audio/IR/<class>_<n>.wav     key ir.<class>, layer ir; manifest extras: rt60_s, predelay_ms, truncated, site, license
 Sources live in C:\\tb\\audio-src\\ir (never committed).
@@ -9,6 +9,7 @@ import glob
 import json
 import math
 import os
+import sys
 
 import numpy as np
 import soundfile as sf
@@ -90,8 +91,12 @@ def build_one(spec, max_s, direct_ms):
 
 def main():
     cfg = json.load(open(os.path.join(abuild.HERE, "recipes", "ir.json")))
+    # --only <class> [<class> ...]: rebuild just those classes and leave the other IRs (and their manifest rows) alone.
+    only = sys.argv[sys.argv.index("--only") + 1:] if "--only" in sys.argv else list(cfg["classes"])
     entries = []
     for cls, c in cfg["classes"].items():
+        if cls not in only:
+            continue
         for n, spec in enumerate(c["irs"], 1):
             y, rt, pre, trunc, uses = build_one(spec, c["max_s"], cfg["direct_ms"])
             rel = f"IR/{cls}_{n}.wav"
@@ -100,7 +105,7 @@ def main():
                              "license": cfg["licenses"][spec["license"]]}, sources=uses)
             entries.append(e)
             print(f"{rel:24s} {e['length_s']:.2f}s  rt60 {rt:5.2f}s  predelay {pre:6.1f} ms  {'(cut at max)' if trunc else ''}  {spec['name']}")
-    print("manifest files:", abuild.update_manifest(entries, ["IR/"]))
+    print("manifest files:", abuild.update_manifest(entries, [f"IR/{cls}_" for cls in only]))
 
 
 if __name__ == "__main__":
