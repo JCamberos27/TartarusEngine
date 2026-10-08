@@ -1,0 +1,23 @@
+{
+  "folder": "assets/Furniture/Bathroom/Models",
+  "guid": "14023d93f76e4043",
+  "importer": {
+    "globalScale": 1.0,
+    "importAnimations": false,
+    "importNormals": true,
+    "importSkeleton": false,
+    "materialImportMode": 1,
+    "optimizeGraph": true,
+    "pivotOffset": [
+      4.932000160217285,
+      0.0,
+      -0.49950000643730164
+    ]
+  },
+  "materialRemap": {
+    "Shower": "assets/Furniture/Bathroom/Materials/M_Shower.mat",
+    "Shower_glass": "assets/Furniture/Bathroom/Materials/M_Shower_Glass.mat"
+  },
+  "metaVersion": 1,
+  "type": "model"
+}

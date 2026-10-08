@@ -1,0 +1,22 @@
+{
+  "folder": "assets/Furniture/Living_Room/Models",
+  "guid": "1af7a268246b8912",
+  "importer": {
+    "globalScale": 1.0,
+    "importAnimations": false,
+    "importNormals": true,
+    "importSkeleton": false,
+    "materialImportMode": 1,
+    "optimizeGraph": true,
+    "pivotOffset": [
+      1.8079999685287476,
+      -0.0010000000474974513,
+      0.04100000113248825
+    ]
+  },
+  "materialRemap": {
+    "Cabinets": "assets/Furniture/Decor/Materials/M_Cabinets.mat"
+  },
+  "metaVersion": 1,
+  "type": "model"
+}
