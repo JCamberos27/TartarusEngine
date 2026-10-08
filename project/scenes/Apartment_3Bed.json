@@ -15109,6 +15109,165 @@
       ]
     },
     {
+      "Character Outfit": {
+        "Auto Hide Skin": true,
+        "Gender": "Male",
+        "Locks": "",
+        "Race": "Young",
+        "Randomize On Play": false,
+        "Wardrobe": {
+          "path": "assets/Characters/Quantum/Quantum.wardrobe",
+          "pathGuid": "ae5365d372fb447c"
+        }
+      },
+      "First Person Body": {
+        "Airborne Delay": 0.15000000596046448,
+        "Arm Steadiness": 1.0,
+        "Arm Steady Max": 0.03999999910593033,
+        "Arm Steady Time": 0.5,
+        "Armed Eye Offset": [
+          0.0,
+          0.10000000149011612,
+          0.03999999910593033
+        ],
+        "Arms Ease Out": 0.10000000149011612,
+        "Arms Piece": "Arms",
+        "Bone Map": "",
+        "Camera Hidden Bones": "clavicle_l, clavicle_r, upperarm_l, upperarm_r",
+        "Camera Offset": [
+          0.0,
+          0.07999999821186066,
+          0.10000000149011612
+        ],
+        "Camera Smoothing": 0.125,
+        "Clavicle Follow": 0.3499999940395355,
+        "Clothing Near Hide": 0.20000000298023224,
+        "Clothing Near Hide Width": 0.2800000011920929,
+        "Collar Hide Drop": 0.019999999552965164,
+        "Crouch Height": 1.2000000476837158,
+        "Crouch Speed": 0.41999998688697815,
+        "Elbow Clearance": 0.05999999865889549,
+        "Elbow Ease": 0.05999999865889549,
+        "Elbow Max Rate": 540.0,
+        "Eye Slack": 0.03500000014901161,
+        "Foot IK": true,
+        "Foot IK Fade": 0.10000000149011612,
+        "Foot IK Max Drop": 0.3499999940395355,
+        "Foot Lock Drift": 0.11999999731779099,
+        "Foot Lock Ease In": 0.03999999910593033,
+        "Foot Lock Ease Out": 0.07999999821186066,
+        "Foot Max Raise": 0.25,
+        "Foot Normal Ease": 0.07999999821186066,
+        "Foot Offset Ease": 0.05999999865889549,
+        "Foot Pin Enabled": true,
+        "Foot Pin Max Drift": 0.25,
+        "Foot Pin Release": 0.05999999865889549,
+        "Foot Pin Weight": 1.0,
+        "Foot Planted Height": 0.05000000074505806,
+        "Foot Ray Length": 1.0,
+        "Foot Ray Up": 0.5,
+        "Foot Tilt Max": 25.0,
+        "Head Bob": 0.5,
+        "Head Bone": "head",
+        "Hidden Bones": "",
+        "Hidden Parts": "Head",
+        "Look Down Push": 0.05999999865889549,
+        "Look Down Start": 0.0,
+        "Max Play Rate": 1.5,
+        "Max Turn Rate": 0.0,
+        "NPC Aim Lean": 5.729578018188477,
+        "NPC Aim Lean Crouched": 12.605072021484375,
+        "NPC Cower Hunch": 20.05352210998535,
+        "NPC Face Ease": 0.09000000357627869,
+        "NPC Foot IK Fade": 0.15000000596046448,
+        "NPC Foot IK Max Drop": 0.3499999940395355,
+        "NPC Foot IK Max Raise": 0.3499999940395355,
+        "NPC Foot IK Pelvis Raise": 0.07999999821186066,
+        "NPC Foot IK Tilt Max": 28.647890090942383,
+        "NPC Foot Normal Ease": 0.07999999821186066,
+        "NPC Foot Offset Ease": 0.05000000074505806,
+        "NPC Head Max Pitch": 34.37746810913086,
+        "NPC Head Max Yaw": 68.75493621826172,
+        "NPC Max Twist": 68.75493621826172,
+        "NPC Move Ease": 0.10000000149011612,
+        "NPC Ready Lean Crouched": 22.918312072753906,
+        "NPC Turn Threshold": 65.89014434814453,
+        "Near Hide": 0.10000000149011612,
+        "Parameter Smoothing": 0.11999999731779099,
+        "Pelvis Alpha": 0.0,
+        "Pelvis Max Raise": 0.0,
+        "Player Run Speed": 0.0,
+        "Player Sprint Speed": 0.0,
+        "Reach Lean Max": 15.0,
+        "Reach Slack": 0.03999999910593033,
+        "Responsiveness": 0.0,
+        "Run Speed": 3.259999990463257,
+        "Shoulder Line Match": 1.0,
+        "Shoulder Max Angle": 25.0,
+        "Shrug Max": 0.11999999731779099,
+        "Shrug Start": 0.9800000190734863,
+        "Spine Aim": 0.6000000238418579,
+        "Spine Aim Down": 0.8999999761581421,
+        "Spine Max Angle 1": 0.0,
+        "Spine Max Angle 2": 0.0,
+        "Spine Max Angle 3": 0.0,
+        "Spine Max Angle 4": 0.0,
+        "Spine Max Angle 5": 0.0,
+        "Spine Twist": 1.0,
+        "Spine Weight 1": 0.0,
+        "Spine Weight 2": 0.30000001192092896,
+        "Spine Weight 3": 0.44999998807907104,
+        "Spine Weight 4": 0.6499999761581421,
+        "Spine Weight 5": 1.0,
+        "Sprint Speed": 4.71999979019165,
+        "Stair Ease": 0.09000000357627869,
+        "Stair Pop Rate": 2.5,
+        "Stair Pop Rise": 0.029999999329447746,
+        "Start Idle Time": 0.25,
+        "Start Max Move": 0.6000000238418579,
+        "Start Stop Clips": false,
+        "Stop Debounce": 0.05000000074505806,
+        "Stop Min Run Time": 0.6000000238418579,
+        "Stop Min Run Time (Crouched)": 0.699999988079071,
+        "Stop Min Speed": 1.2000000476837158,
+        "Stop Min Speed (Crouched)": 0.6000000238418579,
+        "Stop Run Forward": 0.699999988079071,
+        "Stride Pelvis Adjust": 1.0,
+        "Stride Scale Max": 1.350000023841858,
+        "Stride Scale Min": 0.75,
+        "Stride Warp Enabled": true,
+        "Stride Warp Weight": 1.0,
+        "Turn End Angle": 8.0,
+        "Turn Lag Floor": 45.0,
+        "Turn Lag Margin": 5.0,
+        "Turn Min Time": 0.30000001192092896,
+        "Turn Move Ease": 0.07999999821186066,
+        "Turn Threshold": 30.0,
+        "Turn Timeout": 4.0,
+        "Weapon Arms": true
+      },
+      "id": 561,
+      "name": "Player Body",
+      "order": 561,
+      "parentId": 560,
+      "position": [
+        0.0,
+        0.0,
+        0.0
+      ],
+      "rotation": [
+        0.0,
+        0.0,
+        0.0,
+        1.0
+      ],
+      "scale": [
+        1.0,
+        1.0,
+        1.0
+      ]
+    },
+    {
       "Reverb Zone": {
         "Ambience": "snd.amb.indoor_small",
         "Ambience Volume": 0.6,
@@ -15126,9 +15285,9 @@
         "Tail Class": "Indoor Small",
         "Tail Gain": 1.0
       },
-      "id": 561,
+      "id": 571,
       "name": "Reverb",
-      "order": 561,
+      "order": 571,
       "parentId": 1,
       "position": [
         6.5,
@@ -24432,6 +24591,496 @@
         1.0
       ],
       "static": true
+    },
+    {
+      "Animator Controller": {
+        "Controller": {
+          "path": "assets/Animations/Controllers/fps_body_locomotion.controller",
+          "pathGuid": "f00ced2b8e9ec387"
+        },
+        "Speed": 1.0,
+        "Track": "",
+        "rootMotion": "In Place",
+        "rootMotionBone": "",
+        "rootMotionRotation": false,
+        "rootMotionVertical": false
+      },
+      "Outfit Piece": {
+        "Flags": 1,
+        "Item": {
+          "path": "assets/Characters/Quantum/Models/European/Quantum_Torso.fbx",
+          "pathGuid": "34f0109f85dae259"
+        },
+        "Slot": "Torso"
+      },
+      "id": 562,
+      "materials": [
+        {
+          "guid": "00f2f285376c0e56",
+          "path": "assets/Characters/Quantum/Materials/Characters/M_Quantum_Head.mat"
+        },
+        {
+          "guid": "bdf55b314edda1f4",
+          "path": "assets/Characters/Quantum/Materials/Characters/M_Quantum_Arms.mat"
+        },
+        {
+          "guid": "ff2aca4c25ba4f89",
+          "path": "assets/Characters/Quantum/Materials/Characters/M_Quantum_Body.mat"
+        }
+      ],
+      "name": "Torso",
+      "order": 562,
+      "parentId": 561,
+      "path": "assets/Characters/Quantum/Models/European/Quantum_Torso.fbx",
+      "pathGuid": "34f0109f85dae259",
+      "position": [
+        0.0,
+        0.0,
+        0.0
+      ],
+      "rotation": [
+        0.0,
+        0.0,
+        0.0,
+        1.0
+      ],
+      "scale": [
+        1.0,
+        1.0,
+        1.0
+      ]
+    },
+    {
+      "Animator Controller": {
+        "Controller": {
+          "path": "assets/Animations/Controllers/fps_body_locomotion.controller",
+          "pathGuid": "f00ced2b8e9ec387"
+        },
+        "Speed": 1.0,
+        "Track": "",
+        "rootMotion": "In Place",
+        "rootMotionBone": "",
+        "rootMotionRotation": false,
+        "rootMotionVertical": false
+      },
+      "Outfit Piece": {
+        "Flags": 1,
+        "Item": {
+          "path": "assets/Characters/Quantum/Models/Clothing/Male/Shoes/Quantum_Feet_Shoes.fbx",
+          "pathGuid": "9223ed446c94346d"
+        },
+        "Slot": "Feet"
+      },
+      "id": 563,
+      "materials": [
+        {
+          "guid": "ff2aca4c25ba4f89",
+          "path": "assets/Characters/Quantum/Materials/Characters/M_Quantum_Body.mat"
+        }
+      ],
+      "name": "Feet",
+      "order": 563,
+      "parentId": 561,
+      "path": "assets/Characters/Quantum/Models/Clothing/Male/Shoes/Quantum_Feet_Shoes.fbx",
+      "pathGuid": "9223ed446c94346d",
+      "position": [
+        0.0,
+        0.0,
+        0.0
+      ],
+      "rotation": [
+        0.0,
+        0.0,
+        0.0,
+        1.0
+      ],
+      "scale": [
+        1.0,
+        1.0,
+        1.0
+      ]
+    },
+    {
+      "Animator Controller": {
+        "Controller": {
+          "path": "assets/Animations/Controllers/fps_body_locomotion.controller",
+          "pathGuid": "f00ced2b8e9ec387"
+        },
+        "Speed": 1.0,
+        "Track": "",
+        "rootMotion": "In Place",
+        "rootMotionBone": "",
+        "rootMotionRotation": false,
+        "rootMotionVertical": false
+      },
+      "Outfit Piece": {
+        "Flags": 3,
+        "Item": {
+          "path": "assets/Characters/Quantum/Models/Young/Quantum_Young_Head.fbx",
+          "pathGuid": "0ccde7cf189bfaba"
+        },
+        "Slot": "Head"
+      },
+      "id": 564,
+      "materials": [
+        {
+          "guid": "d71fa7c7cd81f033",
+          "path": "assets/Characters/Quantum/Materials/Characters/M_Cartilage.mat"
+        },
+        {
+          "guid": "9b4dcbacd337e8a1",
+          "path": "assets/Characters/Quantum/Materials/Characters/M_Eye_Overlay.mat"
+        },
+        {
+          "guid": "b0cdff125ce5bc62",
+          "path": "assets/Characters/Quantum/Materials/Characters/Eyes/M_Eye_Brown.mat"
+        },
+        {
+          "guid": "7a80f13a6d4b5daf",
+          "path": "assets/Characters/Quantum/Materials/Characters/M_Brows_Lashes.mat"
+        },
+        {
+          "guid": "b0cdff125ce5bc62",
+          "path": "assets/Characters/Quantum/Materials/Characters/Eyes/M_Eye_Brown.mat"
+        },
+        {
+          "guid": "185fa1f3e55e68a5",
+          "path": "assets/Characters/Quantum/Materials/Characters/M_Eye_Cornea.mat"
+        },
+        {
+          "guid": "35c182a2d61a4dca",
+          "path": "assets/Characters/Quantum/Materials/Characters/M_Saliva.mat"
+        },
+        {
+          "guid": "0681796530e520b8",
+          "path": "assets/Characters/Quantum/Materials/Characters/M_Teeth.mat"
+        },
+        {
+          "guid": "c1148bc46cc32021",
+          "path": "assets/Characters/Quantum/Materials/Characters/M_Quantum_Head_Young.mat"
+        }
+      ],
+      "name": "Head",
+      "order": 564,
+      "parentId": 561,
+      "path": "assets/Characters/Quantum/Models/Young/Quantum_Young_Head.fbx",
+      "pathGuid": "0ccde7cf189bfaba",
+      "position": [
+        0.0,
+        0.0,
+        0.0
+      ],
+      "rotation": [
+        0.0,
+        0.0,
+        0.0,
+        1.0
+      ],
+      "scale": [
+        1.0,
+        1.0,
+        1.0
+      ]
+    },
+    {
+      "Animator Controller": {
+        "Controller": {
+          "path": "assets/Animations/Controllers/fps_body_locomotion.controller",
+          "pathGuid": "f00ced2b8e9ec387"
+        },
+        "Speed": 1.0,
+        "Track": "",
+        "rootMotion": "In Place",
+        "rootMotionBone": "",
+        "rootMotionRotation": false,
+        "rootMotionVertical": false
+      },
+      "Outfit Piece": {
+        "Flags": 1,
+        "Item": {
+          "path": "assets/Characters/Quantum/FirstPerson/Quantum_Arms_FP.fbx",
+          "pathGuid": "19bbef7e387a5ef4"
+        },
+        "Slot": "Arms"
+      },
+      "id": 565,
+      "materials": [
+        {
+          "guid": "bdf55b314edda1f4",
+          "path": "assets/Characters/Quantum/Materials/Characters/M_Quantum_Arms.mat"
+        }
+      ],
+      "name": "Arms",
+      "order": 565,
+      "parentId": 561,
+      "path": "assets/Characters/Quantum/FirstPerson/Quantum_Arms_FP.fbx",
+      "pathGuid": "19bbef7e387a5ef4",
+      "position": [
+        0.0,
+        0.0,
+        0.0
+      ],
+      "rotation": [
+        0.0,
+        0.0,
+        0.0,
+        1.0
+      ],
+      "scale": [
+        1.0,
+        1.0,
+        1.0
+      ]
+    },
+    {
+      "Animator Controller": {
+        "Controller": {
+          "path": "assets/Animations/Controllers/fps_body_locomotion.controller",
+          "pathGuid": "f00ced2b8e9ec387"
+        },
+        "Speed": 1.0,
+        "Track": "",
+        "rootMotion": "In Place",
+        "rootMotionBone": "",
+        "rootMotionRotation": false,
+        "rootMotionVertical": false
+      },
+      "Outfit Piece": {
+        "Flags": 2,
+        "Item": {
+          "path": "assets/Characters/Quantum/Models/Clothing/Male/Balaclava/SM_Balaclava_Crime.fbx",
+          "pathGuid": "18fe3d21a3cde1a0"
+        },
+        "Slot": "Balaclava"
+      },
+      "id": 566,
+      "materials": [
+        {
+          "guid": "4a97d2684b5706be",
+          "path": "assets/Characters/Quantum/Materials/Clothing/Balaclava/M_Balaclava_Crime_Print.mat"
+        }
+      ],
+      "name": "Balaclava",
+      "order": 566,
+      "parentId": 561,
+      "path": "assets/Characters/Quantum/Models/Clothing/Male/Balaclava/SM_Balaclava_Crime.fbx",
+      "pathGuid": "18fe3d21a3cde1a0",
+      "position": [
+        1.2546353218567674e-06,
+        4.76837158203125e-07,
+        1.28941610455513e-06
+      ],
+      "rotation": [
+        -3.650785629361053e-07,
+        1.6864706964270226e-08,
+        3.987132686233963e-07,
+        1.0
+      ],
+      "scale": [
+        1.0,
+        0.9999997019767761,
+        0.9999997019767761
+      ]
+    },
+    {
+      "Animator Controller": {
+        "Controller": {
+          "path": "assets/Animations/Controllers/fps_body_locomotion.controller",
+          "pathGuid": "f00ced2b8e9ec387"
+        },
+        "Speed": 1.0,
+        "Track": "",
+        "rootMotion": "In Place",
+        "rootMotionBone": "",
+        "rootMotionRotation": false,
+        "rootMotionVertical": false
+      },
+      "Outfit Piece": {
+        "Flags": 0,
+        "Item": {
+          "path": "assets/Characters/Quantum/Models/Clothing/Male/Tops/SKM_Hoodie_Hood_Up.fbx",
+          "pathGuid": "a93a8b58180d0f44"
+        },
+        "Slot": "Top"
+      },
+      "id": 567,
+      "materials": [
+        {
+          "guid": "02619ee0a88e6cae",
+          "path": "assets/Characters/Quantum/Materials/Clothing/Tops/Hoodie_Hood_Up/M_Hoodie_Hood_Up_Black.mat"
+        }
+      ],
+      "name": "Top",
+      "order": 567,
+      "parentId": 561,
+      "path": "assets/Characters/Quantum/Models/Clothing/Male/Tops/SKM_Hoodie_Hood_Up.fbx",
+      "pathGuid": "a93a8b58180d0f44",
+      "position": [
+        0.0,
+        0.0,
+        0.0
+      ],
+      "rotation": [
+        0.0,
+        0.0,
+        0.0,
+        1.0
+      ],
+      "scale": [
+        1.0,
+        1.0,
+        1.0
+      ]
+    },
+    {
+      "Animator Controller": {
+        "Controller": {
+          "path": "assets/Animations/Controllers/fps_body_locomotion.controller",
+          "pathGuid": "f00ced2b8e9ec387"
+        },
+        "Speed": 1.0,
+        "Track": "",
+        "rootMotion": "In Place",
+        "rootMotionBone": "",
+        "rootMotionRotation": false,
+        "rootMotionVertical": false
+      },
+      "Outfit Piece": {
+        "Flags": 0,
+        "Item": {
+          "path": "assets/Characters/Quantum/Models/Clothing/Male/Pants/SKM_Sport_Pants.fbx",
+          "pathGuid": "c28a0a40272cd541"
+        },
+        "Slot": "Pants"
+      },
+      "id": 568,
+      "materials": [
+        {
+          "guid": "4a4ac6fabe21f2c8",
+          "path": "assets/Characters/Quantum/Materials/Clothing/Pants/Pants_Sport/M_Sport_Pants_Black.mat"
+        }
+      ],
+      "name": "Pants",
+      "order": 568,
+      "parentId": 561,
+      "path": "assets/Characters/Quantum/Models/Clothing/Male/Pants/SKM_Sport_Pants.fbx",
+      "pathGuid": "c28a0a40272cd541",
+      "position": [
+        0.0,
+        0.0,
+        0.0
+      ],
+      "rotation": [
+        0.0,
+        0.0,
+        0.0,
+        1.0
+      ],
+      "scale": [
+        1.0,
+        1.0,
+        1.0
+      ]
+    },
+    {
+      "Animator Controller": {
+        "Controller": {
+          "path": "assets/Animations/Controllers/fps_body_locomotion.controller",
+          "pathGuid": "f00ced2b8e9ec387"
+        },
+        "Speed": 1.0,
+        "Track": "",
+        "rootMotion": "In Place",
+        "rootMotionBone": "",
+        "rootMotionRotation": false,
+        "rootMotionVertical": false
+      },
+      "Outfit Piece": {
+        "Flags": 0,
+        "Item": {
+          "path": "assets/Characters/Quantum/Models/Clothing/Male/Shoes/SKM_Sneakers.fbx",
+          "pathGuid": "907719222c820ea8"
+        },
+        "Slot": "Shoes"
+      },
+      "id": 569,
+      "materials": [
+        {
+          "guid": "6ff7cafa7e9d186a",
+          "path": "assets/Characters/Quantum/Materials/Clothing/Shoes/Sneakers/Sneakers_Leather/M_F_Sneakers_Leather_Black.mat"
+        }
+      ],
+      "name": "Shoes",
+      "order": 569,
+      "parentId": 561,
+      "path": "assets/Characters/Quantum/Models/Clothing/Male/Shoes/SKM_Sneakers.fbx",
+      "pathGuid": "907719222c820ea8",
+      "position": [
+        0.0,
+        0.0,
+        0.0
+      ],
+      "rotation": [
+        0.0,
+        0.0,
+        0.0,
+        1.0
+      ],
+      "scale": [
+        1.0,
+        1.0,
+        1.0
+      ]
+    },
+    {
+      "Animator Controller": {
+        "Controller": {
+          "path": "assets/Animations/Controllers/fps_body_locomotion.controller",
+          "pathGuid": "f00ced2b8e9ec387"
+        },
+        "Speed": 1.0,
+        "Track": "",
+        "rootMotion": "In Place",
+        "rootMotionBone": "",
+        "rootMotionRotation": false,
+        "rootMotionVertical": false
+      },
+      "Outfit Piece": {
+        "Flags": 0,
+        "Item": {
+          "path": "assets/Characters/Quantum/Models/Clothing/Male/Shoes/SKM_Socks.fbx",
+          "pathGuid": "d2d9305f1b150870"
+        },
+        "Slot": "Socks"
+      },
+      "id": 570,
+      "materials": [
+        {
+          "guid": "475670f667a70b3b",
+          "path": "assets/Characters/Quantum/Materials/Clothing/Shoes/Socks/M_Socks.mat"
+        }
+      ],
+      "name": "Socks",
+      "order": 570,
+      "parentId": 561,
+      "path": "assets/Characters/Quantum/Models/Clothing/Male/Shoes/SKM_Socks.fbx",
+      "pathGuid": "d2d9305f1b150870",
+      "position": [
+        0.0,
+        0.0,
+        0.0
+      ],
+      "rotation": [
+        0.0,
+        0.0,
+        0.0,
+        1.0
+      ],
+      "scale": [
+        1.0,
+        1.0,
+        1.0
+      ]
     }
   ],
   "motionBlur": false,

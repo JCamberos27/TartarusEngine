@@ -835,11 +835,24 @@ class Builder:
 
     def player(self):
         sandbox = json.load(open(os.path.join(self.repo, 'project', 'scenes', 'Sandbox.json'), encoding='utf-8'))
+        # the spawn and everything under it (the Player Body: outfit + first-person body), with fresh ids
         spawn = next(e for e in sandbox['empties'] if e['name'] == 'Player Spawn')
-        e = json.loads(json.dumps(spawn))
-        i = self.s._next()
-        e.update({'id': i, 'order': i, 'parentId': -1, 'position': [12.25, 0.1, 4.8], 'rotation': k.yaw_quat(90.0)})
-        self.s.empties.append(e)
+        lists = {key: sandbox.get(key, []) for key in ('empties', 'models', 'boxes')}
+        new_id = {}
+
+        def copy(src, key, parent):
+            e = json.loads(json.dumps(src))
+            i = self.s._next()
+            new_id[src['id']] = i
+            e.update({'id': i, 'order': i, 'parentId': parent})
+            getattr(self.s, key).append(e)
+            for ck, items in lists.items():
+                for c in items:
+                    if c.get('parentId') == src['id']:
+                        copy(c, ck, i)
+            return e
+        root = copy(spawn, 'empties', -1)
+        root.update({'position': [12.25, 0.1, 4.8], 'rotation': k.yaw_quat(90.0)})
 
     def audio(self):
         self.s.empty('Reverb', self.root, (6.5, 1.3, 5.0), **{'Reverb Zone': {
