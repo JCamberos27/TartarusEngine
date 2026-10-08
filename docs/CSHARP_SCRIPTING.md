@@ -18,9 +18,7 @@ controller and executes its animation/audio/recoil commands.
 
 Project C# also owns health/damage, scoring, gravity, enemy AI/spawning/squads, HUD/developer
 content, sound policy, locomotion actions, outfit choices and content-pack catalogs. Native
-adapters execute geometric, animation, audio and rendering work. See
-[ENGINE_GAME_BOUNDARY.md](ENGINE_GAME_BOUNDARY.md) for the implemented owners and remaining
-public engine API limitations.
+adapters execute geometric, animation, audio and rendering work.
 
 ## Build and edit
 
