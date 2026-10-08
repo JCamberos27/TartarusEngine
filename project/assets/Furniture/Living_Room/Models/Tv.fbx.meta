@@ -1,0 +1,22 @@
+{
+  "folder": "assets/Furniture/Living_Room/Models",
+  "guid": "90d873c5c266a92a",
+  "importer": {
+    "globalScale": 1.0,
+    "importAnimations": false,
+    "importNormals": true,
+    "importSkeleton": false,
+    "materialImportMode": 1,
+    "optimizeGraph": true,
+    "pivotOffset": [
+      -0.0,
+      -0.0,
+      -0.0005000000237487257
+    ]
+  },
+  "materialRemap": {
+    "TV": "assets/Furniture/Living_Room/Materials/M_Tv.mat"
+  },
+  "metaVersion": 1,
+  "type": "model"
+}

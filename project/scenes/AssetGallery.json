@@ -1,0 +1,9811 @@
+{
+  "autoExposure": false,
+  "autoExposureMaxEV": 4.0,
+  "autoExposureMinEV": -4.0,
+  "autoExposureSpeedDown": 1.0,
+  "autoExposureSpeedUp": 2.0,
+  "bloomEnabled": true,
+  "bloomIntensity": 0.11999999731779099,
+  "bloomKnee": 0.5,
+  "bloomThreshold": 1.2000000476837158,
+  "boxes": [
+    {
+      "collider": {
+        "friction": 0.8,
+        "isTrigger": false
+      },
+      "color": [
+        1.0,
+        1.0,
+        1.0
+      ],
+      "id": 402,
+      "materials": [
+        {
+          "embedded": {
+            "albedoMap": {
+              "path": "assets/Materials/Prototype/proto_grid_light.png",
+              "pathGuid": "c90849c8fc6c88b0"
+            },
+            "aoMap": "",
+            "baseColor": [
+              1,
+              1,
+              1
+            ],
+            "emissiveColor": [
+              0,
+              0,
+              0
+            ],
+            "emissiveMap": "",
+            "emissiveStrength": 1.0,
+            "factorsScaleMaps": true,
+            "metallic": 0.0,
+            "metallicMap": "",
+            "metallicRoughnessMap": "",
+            "normalMap": "",
+            "roughness": 0.9,
+            "roughnessMap": "",
+            "triplanar": true,
+            "triplanarScale": 1.0
+          }
+        }
+      ],
+      "name": "Floor",
+      "order": 401,
+      "parentId": -1,
+      "position": [
+        42.069,
+        -0.05,
+        -71.334
+      ],
+      "rotation": [
+        0.0,
+        0.0,
+        0.0,
+        1.0
+      ],
+      "scale": [
+        88.138,
+        0.1,
+        146.668
+      ]
+    }
+  ],
+  "chromaticAberration": 0.0,
+  "depthOfField": false,
+  "dofMaxBlur": 8.0,
+  "empties": [
+    {
+      "id": 1,
+      "name": "Lighting",
+      "order": 0,
+      "parentId": -1,
+      "position": [
+        0,
+        0,
+        0
+      ],
+      "rotation": [
+        0.0,
+        0.0,
+        0.0,
+        1.0
+      ],
+      "scale": [
+        1.0,
+        1.0,
+        1.0
+      ]
+    },
+    {
+      "Light": {
+        "Angular Size": 1.2000000476837158,
+        "Cast Shadows": true,
+        "Color": [
+          1.0,
+          1.0,
+          1.0
+        ],
+        "ColorTempK": 0.0,
+        "Culling Mask": -1,
+        "Intensity": 3.0,
+        "Range": 200.0,
+        "Shadow Bias": 1.0,
+        "Shadow Near Plane": 0.05000000074505806,
+        "Shadow Normal Bias": 1.0,
+        "Shadow Resolution": "Follow global",
+        "Shadow Softness": 0.3499999940395355,
+        "Shadow Update Mode": "Dynamic",
+        "Spot Angle": 35.0,
+        "Type": "Directional"
+      },
+      "id": 2,
+      "name": "Sun",
+      "order": 1,
+      "parentId": 1,
+      "position": [
+        0.0,
+        30.0,
+        0.0
+      ],
+      "rotation": [
+        -0.38715118169784546,
+        -0.27481505274772644,
+        -0.12206829339265823,
+        0.8716019988059998
+      ],
+      "scale": [
+        1.0,
+        1.0,
+        1.0
+      ]
+    },
+    {
+      "id": 3,
+      "name": "Architecture / Building",
+      "order": 2,
+      "parentId": -1,
+      "position": [
+        0.0,
+        0.0,
+        0.0
+      ],
+      "rotation": [
+        0.0,
+        0.0,
+        0.0,
+        1.0
+      ],
+      "scale": [
+        1.0,
+        1.0,
+        1.0
+      ]
+    },
+    {
+      "id": 13,
+      "name": "Architecture / Doors",
+      "order": 12,
+      "parentId": -1,
+      "position": [
+        0.0,
+        0.0,
+        -9.0
+      ],
+      "rotation": [
+        0.0,
+        0.0,
+        0.0,
+        1.0
+      ],
+      "scale": [
+        1.0,
+        1.0,
+        1.0
+      ]
+    },
+    {
+      "id": 16,
+      "name": "Furniture / Bathroom",
+      "order": 15,
+      "parentId": -1,
+      "position": [
+        0.0,
+        0.0,
+        -16.0
+      ],
+      "rotation": [
+        0.0,
+        0.0,
+        0.0,
+        1.0
+      ],
+      "scale": [
+        1.0,
+        1.0,
+        1.0
+      ]
+    },
+    {
+      "id": 54,
+      "name": "Furniture / Bedroom",
+      "order": 53,
+      "parentId": -1,
+      "position": [
+        0.0,
+        0.0,
+        -23.264
+      ],
+      "rotation": [
+        0.0,
+        0.0,
+        0.0,
+        1.0
+      ],
+      "scale": [
+        1.0,
+        1.0,
+        1.0
+      ]
+    },
+    {
+      "id": 81,
+      "name": "Furniture / Decor",
+      "order": 80,
+      "parentId": -1,
+      "position": [
+        0.0,
+        0.0,
+        -31.604
+      ],
+      "rotation": [
+        0.0,
+        0.0,
+        0.0,
+        1.0
+      ],
+      "scale": [
+        1.0,
+        1.0,
+        1.0
+      ]
+    },
+    {
+      "id": 111,
+      "name": "Furniture / Garage",
+      "order": 110,
+      "parentId": -1,
+      "position": [
+        0.0,
+        0.0,
+        -40.638999999999996
+      ],
+      "rotation": [
+        0.0,
+        0.0,
+        0.0,
+        1.0
+      ],
+      "scale": [
+        1.0,
+        1.0,
+        1.0
+      ]
+    },
+    {
+      "id": 192,
+      "name": "Furniture / Kids_Room",
+      "order": 191,
+      "parentId": -1,
+      "position": [
+        0.0,
+        0.0,
+        -47.684
+      ],
+      "rotation": [
+        0.0,
+        0.0,
+        0.0,
+        1.0
+      ],
+      "scale": [
+        1.0,
+        1.0,
+        1.0
+      ]
+    },
+    {
+      "id": 236,
+      "name": "Furniture / Kitchen",
+      "order": 235,
+      "parentId": -1,
+      "position": [
+        0.0,
+        0.0,
+        -56.483999999999995
+      ],
+      "rotation": [
+        0.0,
+        0.0,
+        0.0,
+        1.0
+      ],
+      "scale": [
+        1.0,
+        1.0,
+        1.0
+      ]
+    },
+    {
+      "id": 297,
+      "name": "Furniture / Lighting",
+      "order": 296,
+      "parentId": -1,
+      "position": [
+        0.0,
+        0.0,
+        -64.746
+      ],
+      "rotation": [
+        0.0,
+        0.0,
+        0.0,
+        1.0
+      ],
+      "scale": [
+        1.0,
+        1.0,
+        1.0
+      ]
+    },
+    {
+      "id": 310,
+      "name": "Furniture / Living_Room",
+      "order": 309,
+      "parentId": -1,
+      "position": [
+        0.0,
+        0.0,
+        -72.404
+      ],
+      "rotation": [
+        0.0,
+        0.0,
+        0.0,
+        1.0
+      ],
+      "scale": [
+        1.0,
+        1.0,
+        1.0
+      ]
+    },
+    {
+      "id": 326,
+      "name": "Furniture / Office",
+      "order": 325,
+      "parentId": -1,
+      "position": [
+        0.0,
+        0.0,
+        -79.45
+      ],
+      "rotation": [
+        0.0,
+        0.0,
+        0.0,
+        1.0
+      ],
+      "scale": [
+        1.0,
+        1.0,
+        1.0
+      ]
+    },
+    {
+      "id": 374,
+      "name": "Furniture / Seating",
+      "order": 373,
+      "parentId": -1,
+      "position": [
+        0.0,
+        0.0,
+        -86.45
+      ],
+      "rotation": [
+        0.0,
+        0.0,
+        0.0,
+        1.0
+      ],
+      "scale": [
+        1.0,
+        1.0,
+        1.0
+      ]
+    },
+    {
+      "id": 382,
+      "name": "Props / Cross",
+      "order": 381,
+      "parentId": -1,
+      "position": [
+        0.0,
+        0.0,
+        -93.668
+      ],
+      "rotation": [
+        0.0,
+        0.0,
+        0.0,
+        1.0
+      ],
+      "scale": [
+        1.0,
+        1.0,
+        1.0
+      ]
+    },
+    {
+      "id": 384,
+      "name": "Props / David",
+      "order": 383,
+      "parentId": -1,
+      "position": [
+        0.0,
+        0.0,
+        -100.668
+      ],
+      "rotation": [
+        0.0,
+        0.0,
+        0.0,
+        1.0
+      ],
+      "scale": [
+        1.0,
+        1.0,
+        1.0
+      ]
+    },
+    {
+      "id": 386,
+      "name": "Props / Electrical",
+      "order": 385,
+      "parentId": -1,
+      "position": [
+        0.0,
+        0.0,
+        -107.668
+      ],
+      "rotation": [
+        0.0,
+        0.0,
+        0.0,
+        1.0
+      ],
+      "scale": [
+        1.0,
+        1.0,
+        1.0
+      ]
+    },
+    {
+      "id": 390,
+      "name": "Props / Holy_Bible",
+      "order": 389,
+      "parentId": -1,
+      "position": [
+        0.0,
+        0.0,
+        -114.668
+      ],
+      "rotation": [
+        0.0,
+        0.0,
+        0.0,
+        1.0
+      ],
+      "scale": [
+        1.0,
+        1.0,
+        1.0
+      ]
+    },
+    {
+      "id": 392,
+      "name": "Props / Knife",
+      "order": 391,
+      "parentId": -1,
+      "position": [
+        0.0,
+        0.0,
+        -121.668
+      ],
+      "rotation": [
+        0.0,
+        0.0,
+        0.0,
+        1.0
+      ],
+      "scale": [
+        1.0,
+        1.0,
+        1.0
+      ]
+    },
+    {
+      "id": 394,
+      "name": "Props / Medical_Supplies",
+      "order": 393,
+      "parentId": -1,
+      "position": [
+        0.0,
+        0.0,
+        -128.668
+      ],
+      "rotation": [
+        0.0,
+        0.0,
+        0.0,
+        1.0
+      ],
+      "scale": [
+        1.0,
+        1.0,
+        1.0
+      ]
+    },
+    {
+      "id": 400,
+      "name": "Props / Money",
+      "order": 399,
+      "parentId": -1,
+      "position": [
+        0.0,
+        0.0,
+        -135.668
+      ],
+      "rotation": [
+        0.0,
+        0.0,
+        0.0,
+        1.0
+      ],
+      "scale": [
+        1.0,
+        1.0,
+        1.0
+      ]
+    }
+  ],
+  "exposureEV": 0.0,
+  "filmGrain": 0.0,
+  "filmGrainResponse": 0.800000011920929,
+  "focusDistance": 10.0,
+  "focusRange": 3.0,
+  "fogBaseHeight": 0.0,
+  "fogColor": [
+    0.6600000262260437,
+    0.7300000190734863,
+    0.8199999928474426
+  ],
+  "fogDensity": 0.0044999998062849045,
+  "fogEnabled": false,
+  "fogEnd": 300.0,
+  "fogHeightFalloff": 0.05999999865889549,
+  "fogMode": 2,
+  "fogStart": 10.0,
+  "formatVersion": 4,
+  "fxaa": false,
+  "gradeColorFilter": [
+    1.0,
+    1.0,
+    1.0
+  ],
+  "gradeContrast": 8.0,
+  "gradeSaturation": 6.0,
+  "gradeTemperature": -6.0,
+  "gradeTint": 0.0,
+  "maxPointShadows": 2,
+  "maxSpotShadows": 4,
+  "models": [
+    {
+      "id": 4,
+      "name": "Ceiling_3m_3m",
+      "order": 3,
+      "parentId": 3,
+      "path": "assets/Architecture/Building/Models/Ceiling_3m_3m.fbx",
+      "pathGuid": "e961324548a13f6c",
+      "position": [
+        0.0,
+        0.0,
+        0.0
+      ],
+      "rotation": [
+        0.0,
+        0.0,
+        0.0,
+        1.0
+      ],
+      "scale": [
+        1.0,
+        1.0,
+        1.0
+      ]
+    },
+    {
+      "id": 5,
+      "name": "Ceiling_5m_3m",
+      "order": 4,
+      "parentId": 3,
+      "path": "assets/Architecture/Building/Models/Ceiling_5m_3m.fbx",
+      "pathGuid": "11a634e9dabe6c61",
+      "position": [
+        3.6,
+        0.0,
+        0.0
+      ],
+      "rotation": [
+        0.0,
+        0.0,
+        0.0,
+        1.0
+      ],
+      "scale": [
+        1.0,
+        1.0,
+        1.0
+      ]
+    },
+    {
+      "id": 6,
+      "name": "Floor_3m_3m",
+      "order": 5,
+      "parentId": 3,
+      "path": "assets/Architecture/Building/Models/Floor_3m_3m.fbx",
+      "pathGuid": "c63f99765f86d76c",
+      "position": [
+        9.2,
+        0.0,
+        0.0
+      ],
+      "rotation": [
+        0.0,
+        0.0,
+        0.0,
+        1.0
+      ],
+      "scale": [
+        1.0,
+        1.0,
+        1.0
+      ]
+    },
+    {
+      "id": 7,
+      "name": "Floor_5m_3m",
+      "order": 6,
+      "parentId": 3,
+      "path": "assets/Architecture/Building/Models/Floor_5m_3m.fbx",
+      "pathGuid": "d999ad31df8cd529",
+      "position": [
+        12.8,
+        0.0,
+        0.0
+      ],
+      "rotation": [
+        0.0,
+        0.0,
+        0.0,
+        1.0
+      ],
+      "scale": [
+        1.0,
+        1.0,
+        1.0
+      ]
+    },
+    {
+      "id": 8,
+      "name": "Wall_3m",
+      "order": 7,
+      "parentId": 3,
+      "path": "assets/Architecture/Building/Models/Wall_3m.fbx",
+      "pathGuid": "6308a13ecb03a9e7",
+      "position": [
+        24.9,
+        0.0,
+        0.0
+      ],
+      "rotation": [
+        0.0,
+        0.0,
+        0.0,
+        1.0
+      ],
+      "scale": [
+        1.0,
+        1.0,
+        1.0
+      ]
+    },
+    {
+      "id": 9,
+      "name": "Wall_3m_Door",
+      "order": 8,
+      "parentId": 3,
+      "path": "assets/Architecture/Building/Models/Wall_3m_Door.fbx",
+      "pathGuid": "efb92cececd0db48",
+      "position": [
+        24.9,
+        0.0,
+        0.0
+      ],
+      "rotation": [
+        0.0,
+        0.0,
+        0.0,
+        1.0
+      ],
+      "scale": [
+        1.0,
+        1.0,
+        1.0
+      ]
+    },
+    {
+      "id": 10,
+      "name": "Wall_5m",
+      "order": 9,
+      "parentId": 3,
+      "path": "assets/Architecture/Building/Models/Wall_5m.fbx",
+      "pathGuid": "819e18e37ee49163",
+      "position": [
+        28.5,
+        0.0,
+        0.0
+      ],
+      "rotation": [
+        0.0,
+        0.0,
+        0.0,
+        1.0
+      ],
+      "scale": [
+        1.0,
+        1.0,
+        1.0
+      ]
+    },
+    {
+      "id": 11,
+      "name": "Window_Fake",
+      "order": 10,
+      "parentId": 3,
+      "path": "assets/Architecture/Building/Models/Window_Fake.fbx",
+      "pathGuid": "a5b321abf11f6039",
+      "position": [
+        34.533,
+        0.0,
+        0.0
+      ],
+      "rotation": [
+        0.0,
+        0.0,
+        0.0,
+        1.0
+      ],
+      "scale": [
+        1.0,
+        1.0,
+        1.0
+      ]
+    },
+    {
+      "id": 12,
+      "name": "Window_Tall_Fake",
+      "order": 11,
+      "parentId": 3,
+      "path": "assets/Architecture/Building/Models/Window_Tall_Fake.fbx",
+      "pathGuid": "9be2e083c7adad76",
+      "position": [
+        35.999,
+        0.0,
+        0.0
+      ],
+      "rotation": [
+        0.0,
+        0.0,
+        0.0,
+        1.0
+      ],
+      "scale": [
+        1.0,
+        1.0,
+        1.0
+      ]
+    },
+    {
+      "id": 14,
+      "name": "Door_Op_1",
+      "order": 13,
+      "parentId": 13,
+      "path": "assets/Architecture/Doors/Models/Door_Op_1.fbx",
+      "pathGuid": "0c6b3a504fc7bbea",
+      "position": [
+        0.489,
+        0.0,
+        0.0
+      ],
+      "rotation": [
+        0.0,
+        0.0,
+        0.0,
+        1.0
+      ],
+      "scale": [
+        1.0,
+        1.0,
+        1.0
+      ]
+    },
+    {
+      "id": 15,
+      "name": "Door_Op_2",
+      "order": 14,
+      "parentId": 13,
+      "path": "assets/Architecture/Doors/Models/Door_Op_2.fbx",
+      "pathGuid": "404c466259d1d89f",
+      "position": [
+        2.067,
+        0.0,
+        0.0
+      ],
+      "rotation": [
+        0.0,
+        0.0,
+        0.0,
+        1.0
+      ],
+      "scale": [
+        1.0,
+        1.0,
+        1.0
+      ]
+    },
+    {
+      "id": 17,
+      "name": "Bathroom_Box_A",
+      "order": 16,
+      "parentId": 16,
+      "path": "assets/Furniture/Bathroom/Models/Bathroom_Box_A.fbx",
+      "pathGuid": "36cbb4d1c69b81fa",
+      "position": [
+        0.17,
+        0.0,
+        0.0
+      ],
+      "rotation": [
+        0.0,
+        0.0,
+        0.0,
+        1.0
+      ],
+      "scale": [
+        1.0,
+        1.0,
+        1.0
+      ]
+    },
+    {
+      "id": 18,
+      "name": "Bathroom_Box_A_Lid",
+      "order": 17,
+      "parentId": 16,
+      "path": "assets/Furniture/Bathroom/Models/Bathroom_Box_A_Lid.fbx",
+      "pathGuid": "cacfc4143f11f252",
+      "position": [
+        0.17,
+        0.0,
+        0.0
+      ],
+      "rotation": [
+        0.0,
+        0.0,
+        0.0,
+        1.0
+      ],
+      "scale": [
+        1.0,
+        1.0,
+        1.0
+      ]
+    },
+    {
+      "id": 19,
+      "name": "Bathroom_Box_B",
+      "order": 18,
+      "parentId": 16,
+      "path": "assets/Furniture/Bathroom/Models/Bathroom_Box_B.fbx",
+      "pathGuid": "cc32957b89374f9e",
+      "position": [
+        1.073,
+        0.0,
+        0.0
+      ],
+      "rotation": [
+        0.0,
+        0.0,
+        0.0,
+        1.0
+      ],
+      "scale": [
+        1.0,
+        1.0,
+        1.0
+      ]
+    },
+    {
+      "id": 20,
+      "name": "Bathroom_Shelf_Unit_A",
+      "order": 19,
+      "parentId": 16,
+      "path": "assets/Furniture/Bathroom/Models/Bathroom_Shelf_Unit_A.fbx",
+      "pathGuid": "8ce937528dcd4a3d",
+      "position": [
+        2.144,
+        0.0,
+        0.0
+      ],
+      "rotation": [
+        0.0,
+        0.0,
+        0.0,
+        1.0
+      ],
+      "scale": [
+        1.0,
+        1.0,
+        1.0
+      ]
+    },
+    {
+      "id": 21,
+      "name": "Bathroom_Shelf_Unit_B",
+      "order": 20,
+      "parentId": 16,
+      "path": "assets/Furniture/Bathroom/Models/Bathroom_Shelf_Unit_B.fbx",
+      "pathGuid": "e1200e126beca661",
+      "position": [
+        3.299,
+        0.0,
+        0.0
+      ],
+      "rotation": [
+        0.0,
+        0.0,
+        0.0,
+        1.0
+      ],
+      "scale": [
+        1.0,
+        1.0,
+        1.0
+      ]
+    },
+    {
+      "id": 22,
+      "name": "Bathroom_Sink_Body",
+      "order": 21,
+      "parentId": 16,
+      "path": "assets/Furniture/Bathroom/Models/Bathroom_Sink_Body.fbx",
+      "pathGuid": "0dcadb569cb09833",
+      "position": [
+        5.051,
+        0.0,
+        0.0
+      ],
+      "rotation": [
+        0.0,
+        0.0,
+        0.0,
+        1.0
+      ],
+      "scale": [
+        1.0,
+        1.0,
+        1.0
+      ]
+    },
+    {
+      "id": 23,
+      "name": "Bathroom_Sink_Cabinet",
+      "order": 22,
+      "parentId": 16,
+      "path": "assets/Furniture/Bathroom/Models/Bathroom_Sink_Cabinet.fbx",
+      "pathGuid": "0404c04f2734a239",
+      "position": [
+        7.522,
+        0.0,
+        0.0
+      ],
+      "rotation": [
+        0.0,
+        0.0,
+        0.0,
+        1.0
+      ],
+      "scale": [
+        1.0,
+        1.0,
+        1.0
+      ]
+    },
+    {
+      "id": 24,
+      "name": "Bathroom_Sink_Door_L",
+      "order": 23,
+      "parentId": 16,
+      "path": "assets/Furniture/Bathroom/Models/Bathroom_Sink_Door_L.fbx",
+      "pathGuid": "27e7d17dad83da5c",
+      "position": [
+        9.283,
+        0.0,
+        0.0
+      ],
+      "rotation": [
+        0.0,
+        0.0,
+        0.0,
+        1.0
+      ],
+      "scale": [
+        1.0,
+        1.0,
+        1.0
+      ]
+    },
+    {
+      "id": 25,
+      "name": "Bathroom_Sink_Door_R",
+      "order": 24,
+      "parentId": 16,
+      "path": "assets/Furniture/Bathroom/Models/Bathroom_Sink_Door_R.fbx",
+      "pathGuid": "f469592b15fc0e0a",
+      "position": [
+        10.333,
+        0.0,
+        0.0
+      ],
+      "rotation": [
+        0.0,
+        0.0,
+        0.0,
+        1.0
+      ],
+      "scale": [
+        1.0,
+        1.0,
+        1.0
+      ]
+    },
+    {
+      "id": 26,
+      "name": "Bathroom_Toilet_Cabinet",
+      "order": 25,
+      "parentId": 16,
+      "path": "assets/Furniture/Bathroom/Models/Bathroom_Toilet_Cabinet.fbx",
+      "pathGuid": "ba05f4648b298020",
+      "position": [
+        11.516,
+        0.0,
+        0.0
+      ],
+      "rotation": [
+        0.0,
+        0.0,
+        0.0,
+        1.0
+      ],
+      "scale": [
+        1.0,
+        1.0,
+        1.0
+      ]
+    },
+    {
+      "id": 27,
+      "name": "Handsoap",
+      "order": 26,
+      "parentId": 16,
+      "path": "assets/Furniture/Bathroom/Models/Handsoap.fbx",
+      "pathGuid": "3a647383b7da6496",
+      "position": [
+        12.51,
+        0.0,
+        0.0
+      ],
+      "rotation": [
+        0.0,
+        0.0,
+        0.0,
+        1.0
+      ],
+      "scale": [
+        1.0,
+        1.0,
+        1.0
+      ]
+    },
+    {
+      "id": 28,
+      "name": "Laundrybasket",
+      "order": 27,
+      "parentId": 16,
+      "path": "assets/Furniture/Bathroom/Models/Laundrybasket.fbx",
+      "pathGuid": "2da5898070a4a60d",
+      "position": [
+        13.381,
+        0.0,
+        0.0
+      ],
+      "rotation": [
+        0.0,
+        0.0,
+        0.0,
+        1.0
+      ],
+      "scale": [
+        1.0,
+        1.0,
+        1.0
+      ]
+    },
+    {
+      "id": 29,
+      "name": "Lotiontube",
+      "order": 28,
+      "parentId": 16,
+      "path": "assets/Furniture/Bathroom/Models/Lotiontube.fbx",
+      "pathGuid": "717fb209adf3b788",
+      "position": [
+        14.245,
+        0.0,
+        0.0
+      ],
+      "rotation": [
+        0.0,
+        0.0,
+        0.0,
+        1.0
+      ],
+      "scale": [
+        1.0,
+        1.0,
+        1.0
+      ]
+    },
+    {
+      "id": 30,
+      "name": "Mirror_Bathroom",
+      "order": 29,
+      "parentId": 16,
+      "path": "assets/Furniture/Bathroom/Models/Mirror_Bathroom.fbx",
+      "pathGuid": "c6f872d20a6df2cb",
+      "position": [
+        15.804,
+        0.0,
+        0.0
+      ],
+      "rotation": [
+        0.0,
+        0.0,
+        0.0,
+        1.0
+      ],
+      "scale": [
+        1.0,
+        1.0,
+        1.0
+      ]
+    },
+    {
+      "id": 31,
+      "name": "Mirror_Body",
+      "order": 30,
+      "parentId": 16,
+      "path": "assets/Furniture/Bathroom/Models/Mirror_Body.fbx",
+      "pathGuid": "168c33aa2243ffbd",
+      "position": [
+        17.599,
+        0.0,
+        0.0
+      ],
+      "rotation": [
+        0.0,
+        0.0,
+        0.0,
+        1.0
+      ],
+      "scale": [
+        1.0,
+        1.0,
+        1.0
+      ]
+    },
+    {
+      "id": 32,
+      "name": "Shampoo_Bottle_A",
+      "order": 31,
+      "parentId": 16,
+      "path": "assets/Furniture/Bathroom/Models/Shampoo_Bottle_A.fbx",
+      "pathGuid": "6258831fab3255a6",
+      "position": [
+        18.486,
+        0.0,
+        0.0
+      ],
+      "rotation": [
+        0.0,
+        0.0,
+        0.0,
+        1.0
+      ],
+      "scale": [
+        1.0,
+        1.0,
+        1.0
+      ]
+    },
+    {
+      "id": 33,
+      "name": "Shampoo_Bottle_B",
+      "order": 32,
+      "parentId": 16,
+      "path": "assets/Furniture/Bathroom/Models/Shampoo_Bottle_B.fbx",
+      "pathGuid": "2f8cd6ecb892761c",
+      "position": [
+        19.132,
+        0.0,
+        0.0
+      ],
+      "rotation": [
+        0.0,
+        0.0,
+        0.0,
+        1.0
+      ],
+      "scale": [
+        1.0,
+        1.0,
+        1.0
+      ]
+    },
+    {
+      "id": 34,
+      "name": "Shower",
+      "order": 33,
+      "parentId": 16,
+      "path": "assets/Furniture/Bathroom/Models/Shower.fbx",
+      "pathGuid": "61d75751e639c313",
+      "position": [
+        19.878,
+        0.0,
+        0.0
+      ],
+      "rotation": [
+        0.0,
+        0.0,
+        0.0,
+        1.0
+      ],
+      "scale": [
+        1.0,
+        1.0,
+        1.0
+      ]
+    },
+    {
+      "id": 35,
+      "name": "Shower_Soap_Holder",
+      "order": 34,
+      "parentId": 16,
+      "path": "assets/Furniture/Bathroom/Models/Shower_Soap_Holder.fbx",
+      "pathGuid": "f3ce455b9bc21812",
+      "position": [
+        20.713,
+        0.0,
+        0.0
+      ],
+      "rotation": [
+        0.0,
+        0.0,
+        0.0,
+        1.0
+      ],
+      "scale": [
+        1.0,
+        1.0,
+        1.0
+      ]
+    },
+    {
+      "id": 36,
+      "name": "Shower_Stall_190cm_L",
+      "order": 35,
+      "parentId": 16,
+      "path": "assets/Furniture/Bathroom/Models/Shower_Stall_190cm_L.fbx",
+      "pathGuid": "69cf5453fb9eafcf",
+      "position": [
+        22.402,
+        0.0,
+        0.0
+      ],
+      "rotation": [
+        0.0,
+        0.0,
+        0.0,
+        1.0
+      ],
+      "scale": [
+        1.0,
+        1.0,
+        1.0
+      ]
+    },
+    {
+      "id": 37,
+      "name": "Shower_Stall_190cm_R",
+      "order": 36,
+      "parentId": 16,
+      "path": "assets/Furniture/Bathroom/Models/Shower_Stall_190cm_R.fbx",
+      "pathGuid": "90559d5303208221",
+      "position": [
+        24.956,
+        0.0,
+        0.0
+      ],
+      "rotation": [
+        0.0,
+        0.0,
+        0.0,
+        1.0
+      ],
+      "scale": [
+        1.0,
+        1.0,
+        1.0
+      ]
+    },
+    {
+      "id": 38,
+      "name": "Shower_Stall_Door",
+      "order": 37,
+      "parentId": 16,
+      "path": "assets/Furniture/Bathroom/Models/Shower_Stall_Door.fbx",
+      "pathGuid": "3131c5214d271f67",
+      "position": [
+        27.013,
+        0.0,
+        0.0
+      ],
+      "rotation": [
+        0.0,
+        0.0,
+        0.0,
+        1.0
+      ],
+      "scale": [
+        1.0,
+        1.0,
+        1.0
+      ]
+    },
+    {
+      "id": 39,
+      "name": "Shower_Stall_Glass",
+      "order": 38,
+      "parentId": 16,
+      "path": "assets/Furniture/Bathroom/Models/Shower_Stall_Glass.fbx",
+      "pathGuid": "eca9ab81c7b6668b",
+      "position": [
+        28.533,
+        0.0,
+        0.0
+      ],
+      "rotation": [
+        0.0,
+        0.0,
+        0.0,
+        1.0
+      ],
+      "scale": [
+        1.0,
+        1.0,
+        1.0
+      ]
+    },
+    {
+      "id": 40,
+      "name": "Toilet",
+      "order": 39,
+      "parentId": 16,
+      "path": "assets/Furniture/Bathroom/Models/Toilet.fbx",
+      "pathGuid": "ef003c4db64d73a7",
+      "position": [
+        29.81,
+        0.0,
+        0.0
+      ],
+      "rotation": [
+        0.0,
+        0.0,
+        0.0,
+        1.0
+      ],
+      "scale": [
+        1.0,
+        1.0,
+        1.0
+      ]
+    },
+    {
+      "id": 41,
+      "name": "Toiletpaper_Set",
+      "order": 40,
+      "parentId": 16,
+      "path": "assets/Furniture/Bathroom/Models/Toiletpaper_Set.fbx",
+      "pathGuid": "33034f4772572e50",
+      "position": [
+        30.788,
+        0.0,
+        0.0
+      ],
+      "rotation": [
+        0.0,
+        0.0,
+        0.0,
+        1.0
+      ],
+      "scale": [
+        1.0,
+        1.0,
+        1.0
+      ]
+    },
+    {
+      "id": 42,
+      "name": "Toiletpaper_Single",
+      "order": 41,
+      "parentId": 16,
+      "path": "assets/Furniture/Bathroom/Models/Toiletpaper_Single.fbx",
+      "pathGuid": "2ef68ece0a75e0a0",
+      "position": [
+        31.584,
+        0.0,
+        0.0
+      ],
+      "rotation": [
+        0.0,
+        0.0,
+        0.0,
+        1.0
+      ],
+      "scale": [
+        1.0,
+        1.0,
+        1.0
+      ]
+    },
+    {
+      "id": 43,
+      "name": "Toothbrush_A",
+      "order": 42,
+      "parentId": 16,
+      "path": "assets/Furniture/Bathroom/Models/Toothbrush_A.fbx",
+      "pathGuid": "685d7b56e6fda26a",
+      "position": [
+        32.245,
+        0.0,
+        0.0
+      ],
+      "rotation": [
+        0.0,
+        0.0,
+        0.0,
+        1.0
+      ],
+      "scale": [
+        1.0,
+        1.0,
+        1.0
+      ]
+    },
+    {
+      "id": 44,
+      "name": "Toothbrush_B",
+      "order": 43,
+      "parentId": 16,
+      "path": "assets/Furniture/Bathroom/Models/Toothbrush_B.fbx",
+      "pathGuid": "3a0c0c361decba5e",
+      "position": [
+        32.861,
+        0.0,
+        0.0
+      ],
+      "rotation": [
+        0.0,
+        0.0,
+        0.0,
+        1.0
+      ],
+      "scale": [
+        1.0,
+        1.0,
+        1.0
+      ]
+    },
+    {
+      "id": 45,
+      "name": "Toothbrush_Mug",
+      "order": 44,
+      "parentId": 16,
+      "path": "assets/Furniture/Bathroom/Models/Toothbrush_Mug.fbx",
+      "pathGuid": "a4c7e1ae1d60c558",
+      "position": [
+        33.532,
+        0.0,
+        0.0
+      ],
+      "rotation": [
+        0.0,
+        0.0,
+        0.0,
+        1.0
+      ],
+      "scale": [
+        1.0,
+        1.0,
+        1.0
+      ]
+    },
+    {
+      "id": 46,
+      "name": "Toothpaste",
+      "order": 45,
+      "parentId": 16,
+      "path": "assets/Furniture/Bathroom/Models/Toothpaste.fbx",
+      "pathGuid": "93d868708251399d",
+      "position": [
+        34.224,
+        0.0,
+        0.0
+      ],
+      "rotation": [
+        0.0,
+        0.0,
+        0.0,
+        1.0
+      ],
+      "scale": [
+        1.0,
+        1.0,
+        1.0
+      ]
+    },
+    {
+      "id": 47,
+      "name": "Towel_Hanging_Large",
+      "order": 46,
+      "parentId": 16,
+      "path": "assets/Furniture/Bathroom/Models/Towel_Hanging_Large.fbx",
+      "pathGuid": "83f31fce00407644",
+      "position": [
+        35.114,
+        0.0,
+        0.0
+      ],
+      "rotation": [
+        0.0,
+        0.0,
+        0.0,
+        1.0
+      ],
+      "scale": [
+        1.0,
+        1.0,
+        1.0
+      ]
+    },
+    {
+      "id": 48,
+      "name": "Towel_Hanging_Small",
+      "order": 47,
+      "parentId": 16,
+      "path": "assets/Furniture/Bathroom/Models/Towel_Hanging_Small.fbx",
+      "pathGuid": "1f73bbd41bdd18cd",
+      "position": [
+        36.216,
+        0.0,
+        0.0
+      ],
+      "rotation": [
+        0.0,
+        0.0,
+        0.0,
+        1.0
+      ],
+      "scale": [
+        1.0,
+        1.0,
+        1.0
+      ]
+    },
+    {
+      "id": 49,
+      "name": "Towel_Holder",
+      "order": 48,
+      "parentId": 16,
+      "path": "assets/Furniture/Bathroom/Models/Towel_Holder.fbx",
+      "pathGuid": "fc794d07342064a6",
+      "position": [
+        37.387,
+        0.0,
+        0.0
+      ],
+      "rotation": [
+        0.0,
+        0.0,
+        0.0,
+        1.0
+      ],
+      "scale": [
+        1.0,
+        1.0,
+        1.0
+      ]
+    },
+    {
+      "id": 50,
+      "name": "Towel_Pile",
+      "order": 49,
+      "parentId": 16,
+      "path": "assets/Furniture/Bathroom/Models/Towel_Pile.fbx",
+      "pathGuid": "cf7a943e1c58e6a1",
+      "position": [
+        38.494,
+        0.0,
+        0.0
+      ],
+      "rotation": [
+        0.0,
+        0.0,
+        0.0,
+        1.0
+      ],
+      "scale": [
+        1.0,
+        1.0,
+        1.0
+      ]
+    },
+    {
+      "id": 51,
+      "name": "Towel_Roll_Set",
+      "order": 50,
+      "parentId": 16,
+      "path": "assets/Furniture/Bathroom/Models/Towel_Roll_Set.fbx",
+      "pathGuid": "71c431c5573da2b7",
+      "position": [
+        39.377,
+        0.0,
+        0.0
+      ],
+      "rotation": [
+        0.0,
+        0.0,
+        0.0,
+        1.0
+      ],
+      "scale": [
+        1.0,
+        1.0,
+        1.0
+      ]
+    },
+    {
+      "id": 52,
+      "name": "Towel_Roll_Single",
+      "order": 51,
+      "parentId": 16,
+      "path": "assets/Furniture/Bathroom/Models/Towel_Roll_Single.fbx",
+      "pathGuid": "aee95053c97168e7",
+      "position": [
+        40.13,
+        0.0,
+        0.0
+      ],
+      "rotation": [
+        0.0,
+        0.0,
+        0.0,
+        1.0
+      ],
+      "scale": [
+        1.0,
+        1.0,
+        1.0
+      ]
+    },
+    {
+      "id": 53,
+      "name": "Washingmachine",
+      "order": 52,
+      "parentId": 16,
+      "path": "assets/Furniture/Bathroom/Models/Washingmachine.fbx",
+      "pathGuid": "847d52d57107d7a9",
+      "position": [
+        41.115,
+        0.0,
+        0.0
+      ],
+      "rotation": [
+        0.0,
+        0.0,
+        0.0,
+        1.0
+      ],
+      "scale": [
+        1.0,
+        1.0,
+        1.0
+      ]
+    },
+    {
+      "id": 55,
+      "name": "Bed",
+      "order": 54,
+      "parentId": 54,
+      "path": "assets/Furniture/Bedroom/Models/Bed.fbx",
+      "pathGuid": "286027d64d9c509b",
+      "position": [
+        1.151,
+        0.0,
+        0.0
+      ],
+      "rotation": [
+        0.0,
+        0.0,
+        0.0,
+        1.0
+      ],
+      "scale": [
+        1.0,
+        1.0,
+        1.0
+      ]
+    },
+    {
+      "id": 56,
+      "name": "Bed_Bunk",
+      "order": 55,
+      "parentId": 54,
+      "path": "assets/Furniture/Bedroom/Models/Bed_Bunk.fbx",
+      "pathGuid": "963e3f975676655f",
+      "position": [
+        3.647,
+        0.0,
+        0.0
+      ],
+      "rotation": [
+        0.0,
+        0.0,
+        0.0,
+        1.0
+      ],
+      "scale": [
+        1.0,
+        1.0,
+        1.0
+      ]
+    },
+    {
+      "id": 57,
+      "name": "Bed_Pillow_A",
+      "order": 56,
+      "parentId": 54,
+      "path": "assets/Furniture/Bedroom/Models/Bed_Pillow_A.fbx",
+      "pathGuid": "1f5c031d19fb8759",
+      "position": [
+        1.151,
+        0.0,
+        0.0
+      ],
+      "rotation": [
+        0.0,
+        0.0,
+        0.0,
+        1.0
+      ],
+      "scale": [
+        1.0,
+        1.0,
+        1.0
+      ]
+    },
+    {
+      "id": 58,
+      "name": "Bed_Pillow_B",
+      "order": 57,
+      "parentId": 54,
+      "path": "assets/Furniture/Bedroom/Models/Bed_Pillow_B.fbx",
+      "pathGuid": "da3dfea6ed3b7a88",
+      "position": [
+        1.151,
+        0.0,
+        0.0
+      ],
+      "rotation": [
+        0.0,
+        0.0,
+        0.0,
+        1.0
+      ],
+      "scale": [
+        1.0,
+        1.0,
+        1.0
+      ]
+    },
+    {
+      "id": 59,
+      "name": "Bed_Single_Person",
+      "order": 58,
+      "parentId": 54,
+      "path": "assets/Furniture/Bedroom/Models/Bed_Single_Person.fbx",
+      "pathGuid": "c88fe82e93701bb3",
+      "position": [
+        5.603,
+        0.0,
+        0.0
+      ],
+      "rotation": [
+        0.0,
+        0.0,
+        0.0,
+        1.0
+      ],
+      "scale": [
+        1.0,
+        1.0,
+        1.0
+      ]
+    },
+    {
+      "id": 60,
+      "name": "Dresser_B",
+      "order": 59,
+      "parentId": 54,
+      "path": "assets/Furniture/Bedroom/Models/Dresser_B.fbx",
+      "pathGuid": "c0ffd6c276e96ee6",
+      "position": [
+        7.224,
+        0.0,
+        0.0
+      ],
+      "rotation": [
+        0.0,
+        0.0,
+        0.0,
+        1.0
+      ],
+      "scale": [
+        1.0,
+        1.0,
+        1.0
+      ]
+    },
+    {
+      "id": 61,
+      "name": "Dresser_B_Drawer_A",
+      "order": 60,
+      "parentId": 54,
+      "path": "assets/Furniture/Bedroom/Models/Dresser_B_Drawer_A.fbx",
+      "pathGuid": "1f8ec66121ba83f2",
+      "position": [
+        7.224,
+        0.0,
+        0.0
+      ],
+      "rotation": [
+        0.0,
+        0.0,
+        0.0,
+        1.0
+      ],
+      "scale": [
+        1.0,
+        1.0,
+        1.0
+      ]
+    },
+    {
+      "id": 62,
+      "name": "Dresser_C",
+      "order": 61,
+      "parentId": 54,
+      "path": "assets/Furniture/Bedroom/Models/Dresser_C.fbx",
+      "pathGuid": "a7e87d79809a119e",
+      "position": [
+        11.276,
+        0.0,
+        0.0
+      ],
+      "rotation": [
+        0.0,
+        0.0,
+        0.0,
+        1.0
+      ],
+      "scale": [
+        1.0,
+        1.0,
+        1.0
+      ]
+    },
+    {
+      "id": 63,
+      "name": "Dresser_C_Drawer_A",
+      "order": 62,
+      "parentId": 54,
+      "path": "assets/Furniture/Bedroom/Models/Dresser_C_Drawer_A.fbx",
+      "pathGuid": "4b9f5fe61b377b92",
+      "position": [
+        11.276,
+        0.0,
+        0.0
+      ],
+      "rotation": [
+        0.0,
+        0.0,
+        0.0,
+        1.0
+      ],
+      "scale": [
+        1.0,
+        1.0,
+        1.0
+      ]
+    },
+    {
+      "id": 64,
+      "name": "Dresser_C_Drawer_B",
+      "order": 63,
+      "parentId": 54,
+      "path": "assets/Furniture/Bedroom/Models/Dresser_C_Drawer_B.fbx",
+      "pathGuid": "56a9e413db55c547",
+      "position": [
+        11.276,
+        0.0,
+        0.0
+      ],
+      "rotation": [
+        0.0,
+        0.0,
+        0.0,
+        1.0
+      ],
+      "scale": [
+        1.0,
+        1.0,
+        1.0
+      ]
+    },
+    {
+      "id": 65,
+      "name": "Dresser_D",
+      "order": 64,
+      "parentId": 54,
+      "path": "assets/Furniture/Bedroom/Models/Dresser_D.fbx",
+      "pathGuid": "8351de4986079a6a",
+      "position": [
+        13.111,
+        0.0,
+        0.0
+      ],
+      "rotation": [
+        0.0,
+        0.0,
+        0.0,
+        1.0
+      ],
+      "scale": [
+        1.0,
+        1.0,
+        1.0
+      ]
+    },
+    {
+      "id": 66,
+      "name": "Dresser_D_Drawer_A",
+      "order": 65,
+      "parentId": 54,
+      "path": "assets/Furniture/Bedroom/Models/Dresser_D_Drawer_A.fbx",
+      "pathGuid": "bf92928987a569ad",
+      "position": [
+        13.111,
+        0.0,
+        0.0
+      ],
+      "rotation": [
+        0.0,
+        0.0,
+        0.0,
+        1.0
+      ],
+      "scale": [
+        1.0,
+        1.0,
+        1.0
+      ]
+    },
+    {
+      "id": 67,
+      "name": "Dresser_D_Drawer_B",
+      "order": 66,
+      "parentId": 54,
+      "path": "assets/Furniture/Bedroom/Models/Dresser_D_Drawer_B.fbx",
+      "pathGuid": "fe3ba5169a93c3f5",
+      "position": [
+        13.111,
+        0.0,
+        0.0
+      ],
+      "rotation": [
+        0.0,
+        0.0,
+        0.0,
+        1.0
+      ],
+      "scale": [
+        1.0,
+        1.0,
+        1.0
+      ]
+    },
+    {
+      "id": 68,
+      "name": "Dresser_D_Drawer_C",
+      "order": 67,
+      "parentId": 54,
+      "path": "assets/Furniture/Bedroom/Models/Dresser_D_Drawer_C.fbx",
+      "pathGuid": "c27d50fd5c7a37f3",
+      "position": [
+        13.111,
+        0.0,
+        0.0
+      ],
+      "rotation": [
+        0.0,
+        0.0,
+        0.0,
+        1.0
+      ],
+      "scale": [
+        1.0,
+        1.0,
+        1.0
+      ]
+    },
+    {
+      "id": 69,
+      "name": "Dresser_Large_A",
+      "order": 68,
+      "parentId": 54,
+      "path": "assets/Furniture/Bedroom/Models/Dresser_Large_A.fbx",
+      "pathGuid": "47676cf58049fae9",
+      "position": [
+        19.335,
+        0.0,
+        0.0
+      ],
+      "rotation": [
+        0.0,
+        0.0,
+        0.0,
+        1.0
+      ],
+      "scale": [
+        1.0,
+        1.0,
+        1.0
+      ]
+    },
+    {
+      "id": 70,
+      "name": "Dresser_Large_A_Drawer_A",
+      "order": 69,
+      "parentId": 54,
+      "path": "assets/Furniture/Bedroom/Models/Dresser_Large_A_Drawer_A.fbx",
+      "pathGuid": "eb5d266d1c0a5c99",
+      "position": [
+        19.335,
+        0.0,
+        0.0
+      ],
+      "rotation": [
+        0.0,
+        0.0,
+        0.0,
+        1.0
+      ],
+      "scale": [
+        1.0,
+        1.0,
+        1.0
+      ]
+    },
+    {
+      "id": 71,
+      "name": "Dresser_Large_A_Drawer_B",
+      "order": 70,
+      "parentId": 54,
+      "path": "assets/Furniture/Bedroom/Models/Dresser_Large_A_Drawer_B.fbx",
+      "pathGuid": "8244923f06ef5c3d",
+      "position": [
+        19.335,
+        0.0,
+        0.0
+      ],
+      "rotation": [
+        0.0,
+        0.0,
+        0.0,
+        1.0
+      ],
+      "scale": [
+        1.0,
+        1.0,
+        1.0
+      ]
+    },
+    {
+      "id": 72,
+      "name": "Dresser_Large_A_Extension",
+      "order": 71,
+      "parentId": 54,
+      "path": "assets/Furniture/Bedroom/Models/Dresser_Large_A_Extension.fbx",
+      "pathGuid": "80f744480e4c7c4d",
+      "position": [
+        19.335,
+        0.0,
+        0.0
+      ],
+      "rotation": [
+        0.0,
+        0.0,
+        0.0,
+        1.0
+      ],
+      "scale": [
+        1.0,
+        1.0,
+        1.0
+      ]
+    },
+    {
+      "id": 73,
+      "name": "Dresser_Large_A_Extension_Door_L",
+      "order": 72,
+      "parentId": 54,
+      "path": "assets/Furniture/Bedroom/Models/Dresser_Large_A_Extension_Door_L.fbx",
+      "pathGuid": "f8ed748e5d633898",
+      "position": [
+        19.335,
+        0.0,
+        0.0
+      ],
+      "rotation": [
+        0.0,
+        0.0,
+        0.0,
+        1.0
+      ],
+      "scale": [
+        1.0,
+        1.0,
+        1.0
+      ]
+    },
+    {
+      "id": 74,
+      "name": "Dresser_Large_A_Extension_Door_R",
+      "order": 73,
+      "parentId": 54,
+      "path": "assets/Furniture/Bedroom/Models/Dresser_Large_A_Extension_Door_R.fbx",
+      "pathGuid": "7f293dcd911592a8",
+      "position": [
+        19.335,
+        0.0,
+        0.0
+      ],
+      "rotation": [
+        0.0,
+        0.0,
+        0.0,
+        1.0
+      ],
+      "scale": [
+        1.0,
+        1.0,
+        1.0
+      ]
+    },
+    {
+      "id": 75,
+      "name": "Nightstand_A",
+      "order": 74,
+      "parentId": 54,
+      "path": "assets/Furniture/Bedroom/Models/Nightstand_A.fbx",
+      "pathGuid": "9d28e1a072e0d014",
+      "position": [
+        21.27,
+        0.0,
+        0.0
+      ],
+      "rotation": [
+        0.0,
+        0.0,
+        0.0,
+        1.0
+      ],
+      "scale": [
+        1.0,
+        1.0,
+        1.0
+      ]
+    },
+    {
+      "id": 76,
+      "name": "Nightstand_A_Drawer_A",
+      "order": 75,
+      "parentId": 54,
+      "path": "assets/Furniture/Bedroom/Models/Nightstand_A_Drawer_A.fbx",
+      "pathGuid": "90f1cb361805bb09",
+      "position": [
+        21.27,
+        0.0,
+        0.0
+      ],
+      "rotation": [
+        0.0,
+        0.0,
+        0.0,
+        1.0
+      ],
+      "scale": [
+        1.0,
+        1.0,
+        1.0
+      ]
+    },
+    {
+      "id": 77,
+      "name": "Nightstand_A_Drawer_B",
+      "order": 76,
+      "parentId": 54,
+      "path": "assets/Furniture/Bedroom/Models/Nightstand_A_Drawer_B.fbx",
+      "pathGuid": "a70b02491ca397c8",
+      "position": [
+        21.27,
+        0.0,
+        0.0
+      ],
+      "rotation": [
+        0.0,
+        0.0,
+        0.0,
+        1.0
+      ],
+      "scale": [
+        1.0,
+        1.0,
+        1.0
+      ]
+    },
+    {
+      "id": 78,
+      "name": "Nightstand_B",
+      "order": 77,
+      "parentId": 54,
+      "path": "assets/Furniture/Bedroom/Models/Nightstand_B.fbx",
+      "pathGuid": "6a7abbab59c4ddaa",
+      "position": [
+        22.393,
+        0.0,
+        0.0
+      ],
+      "rotation": [
+        0.0,
+        0.0,
+        0.0,
+        1.0
+      ],
+      "scale": [
+        1.0,
+        1.0,
+        1.0
+      ]
+    },
+    {
+      "id": 79,
+      "name": "Nightstand_B_Drawer_A",
+      "order": 78,
+      "parentId": 54,
+      "path": "assets/Furniture/Bedroom/Models/Nightstand_B_Drawer_A.fbx",
+      "pathGuid": "93882034deb8c8a7",
+      "position": [
+        22.393,
+        0.0,
+        0.0
+      ],
+      "rotation": [
+        0.0,
+        0.0,
+        0.0,
+        1.0
+      ],
+      "scale": [
+        1.0,
+        1.0,
+        1.0
+      ]
+    },
+    {
+      "id": 80,
+      "name": "Nightstand_B_Drawer_B",
+      "order": 79,
+      "parentId": 54,
+      "path": "assets/Furniture/Bedroom/Models/Nightstand_B_Drawer_B.fbx",
+      "pathGuid": "cba787e8daba93e6",
+      "position": [
+        22.393,
+        0.0,
+        0.0
+      ],
+      "rotation": [
+        0.0,
+        0.0,
+        0.0,
+        1.0
+      ],
+      "scale": [
+        1.0,
+        1.0,
+        1.0
+      ]
+    },
+    {
+      "id": 82,
+      "name": "Cabinet_A",
+      "order": 81,
+      "parentId": 81,
+      "path": "assets/Furniture/Decor/Models/Cabinet_A.fbx",
+      "pathGuid": "8a3237327dcb992d",
+      "position": [
+        3.919,
+        0.0,
+        0.0
+      ],
+      "rotation": [
+        0.0,
+        0.0,
+        0.0,
+        1.0
+      ],
+      "scale": [
+        1.0,
+        1.0,
+        1.0
+      ]
+    },
+    {
+      "id": 83,
+      "name": "Cabinet_A_Door_A_L",
+      "order": 82,
+      "parentId": 81,
+      "path": "assets/Furniture/Decor/Models/Cabinet_A_Door_A_L.fbx",
+      "pathGuid": "967210ea7c8e2ffb",
+      "position": [
+        3.919,
+        0.0,
+        0.0
+      ],
+      "rotation": [
+        0.0,
+        0.0,
+        0.0,
+        1.0
+      ],
+      "scale": [
+        1.0,
+        1.0,
+        1.0
+      ]
+    },
+    {
+      "id": 84,
+      "name": "Cabinet_A_Door_A_R",
+      "order": 83,
+      "parentId": 81,
+      "path": "assets/Furniture/Decor/Models/Cabinet_A_Door_A_R.fbx",
+      "pathGuid": "be471dbf5c6e2101",
+      "position": [
+        3.919,
+        0.0,
+        0.0
+      ],
+      "rotation": [
+        0.0,
+        0.0,
+        0.0,
+        1.0
+      ],
+      "scale": [
+        1.0,
+        1.0,
+        1.0
+      ]
+    },
+    {
+      "id": 85,
+      "name": "Cabinet_A_Door_B_L",
+      "order": 84,
+      "parentId": 81,
+      "path": "assets/Furniture/Decor/Models/Cabinet_A_Door_B_L.fbx",
+      "pathGuid": "7b7efe6890feecdf",
+      "position": [
+        3.919,
+        0.0,
+        0.0
+      ],
+      "rotation": [
+        0.0,
+        0.0,
+        0.0,
+        1.0
+      ],
+      "scale": [
+        1.0,
+        1.0,
+        1.0
+      ]
+    },
+    {
+      "id": 86,
+      "name": "Cabinet_A_Door_B_R",
+      "order": 85,
+      "parentId": 81,
+      "path": "assets/Furniture/Decor/Models/Cabinet_A_Door_B_R.fbx",
+      "pathGuid": "dd5b429b4cab6afc",
+      "position": [
+        3.919,
+        0.0,
+        0.0
+      ],
+      "rotation": [
+        0.0,
+        0.0,
+        0.0,
+        1.0
+      ],
+      "scale": [
+        1.0,
+        1.0,
+        1.0
+      ]
+    },
+    {
+      "id": 87,
+      "name": "Candle_A",
+      "order": 86,
+      "parentId": 81,
+      "path": "assets/Furniture/Decor/Models/Candle_A.fbx",
+      "pathGuid": "d08f9089bd22a398",
+      "position": [
+        5.143,
+        0.0,
+        0.0
+      ],
+      "rotation": [
+        0.0,
+        0.0,
+        0.0,
+        1.0
+      ],
+      "scale": [
+        1.0,
+        1.0,
+        1.0
+      ]
+    },
+    {
+      "id": 88,
+      "name": "Candle_B",
+      "order": 87,
+      "parentId": 81,
+      "path": "assets/Furniture/Decor/Models/Candle_B.fbx",
+      "pathGuid": "130bb77fe11fd6c6",
+      "position": [
+        5.769,
+        0.0,
+        0.0
+      ],
+      "rotation": [
+        0.0,
+        0.0,
+        0.0,
+        1.0
+      ],
+      "scale": [
+        1.0,
+        1.0,
+        1.0
+      ]
+    },
+    {
+      "id": 89,
+      "name": "Candle_Holder_A",
+      "order": 88,
+      "parentId": 81,
+      "path": "assets/Furniture/Decor/Models/Candle_Holder_A.fbx",
+      "pathGuid": "95231b42384a6df7",
+      "position": [
+        6.442,
+        0.0,
+        0.0
+      ],
+      "rotation": [
+        0.0,
+        0.0,
+        0.0,
+        1.0
+      ],
+      "scale": [
+        1.0,
+        1.0,
+        1.0
+      ]
+    },
+    {
+      "id": 90,
+      "name": "Candle_Holder_B",
+      "order": 89,
+      "parentId": 81,
+      "path": "assets/Furniture/Decor/Models/Candle_Holder_B.fbx",
+      "pathGuid": "289dd362ea24bb46",
+      "position": [
+        7.159,
+        0.0,
+        0.0
+      ],
+      "rotation": [
+        0.0,
+        0.0,
+        0.0,
+        1.0
+      ],
+      "scale": [
+        1.0,
+        1.0,
+        1.0
+      ]
+    },
+    {
+      "id": 91,
+      "name": "Carpet_A",
+      "order": 90,
+      "parentId": 81,
+      "path": "assets/Furniture/Decor/Models/Carpet_A.fbx",
+      "pathGuid": "dc5eb0c9998a0b53",
+      "position": [
+        8.614,
+        0.0,
+        0.0
+      ],
+      "rotation": [
+        0.0,
+        0.0,
+        0.0,
+        1.0
+      ],
+      "scale": [
+        1.0,
+        1.0,
+        1.0
+      ]
+    },
+    {
+      "id": 92,
+      "name": "Carpet_B",
+      "order": 91,
+      "parentId": 81,
+      "path": "assets/Furniture/Decor/Models/Carpet_B.fbx",
+      "pathGuid": "dac0c95d6c93ab07",
+      "position": [
+        10.634,
+        0.0,
+        0.0
+      ],
+      "rotation": [
+        0.0,
+        0.0,
+        0.0,
+        1.0
+      ],
+      "scale": [
+        1.0,
+        1.0,
+        1.0
+      ]
+    },
+    {
+      "id": 93,
+      "name": "Carpet_C",
+      "order": 92,
+      "parentId": 81,
+      "path": "assets/Furniture/Decor/Models/Carpet_C.fbx",
+      "pathGuid": "0e73967994459e85",
+      "position": [
+        13.056,
+        0.0,
+        0.0
+      ],
+      "rotation": [
+        0.0,
+        0.0,
+        0.0,
+        1.0
+      ],
+      "scale": [
+        1.0,
+        1.0,
+        1.0
+      ]
+    },
+    {
+      "id": 94,
+      "name": "Carpet_D",
+      "order": 93,
+      "parentId": 81,
+      "path": "assets/Furniture/Decor/Models/Carpet_D.fbx",
+      "pathGuid": "05225c6b89777558",
+      "position": [
+        15.417,
+        0.0,
+        0.0
+      ],
+      "rotation": [
+        0.0,
+        0.0,
+        0.0,
+        1.0
+      ],
+      "scale": [
+        1.0,
+        1.0,
+        1.0
+      ]
+    },
+    {
+      "id": 95,
+      "name": "Clock_Table_Digital",
+      "order": 94,
+      "parentId": 81,
+      "path": "assets/Furniture/Decor/Models/Clock_Table_Digital.fbx",
+      "pathGuid": "264efa6849156c9d",
+      "position": [
+        16.654,
+        0.0,
+        0.0
+      ],
+      "rotation": [
+        0.0,
+        0.0,
+        0.0,
+        1.0
+      ],
+      "scale": [
+        1.0,
+        1.0,
+        1.0
+      ]
+    },
+    {
+      "id": 96,
+      "name": "Clock_Wall_Analog",
+      "order": 95,
+      "parentId": 81,
+      "path": "assets/Furniture/Decor/Models/Clock_Wall_Analog.fbx",
+      "pathGuid": "84bfba0ee9654549",
+      "position": [
+        17.485,
+        0.0,
+        0.0
+      ],
+      "rotation": [
+        0.0,
+        0.0,
+        0.0,
+        1.0
+      ],
+      "scale": [
+        1.0,
+        1.0,
+        1.0
+      ]
+    },
+    {
+      "id": 97,
+      "name": "Decorative_Bowl",
+      "order": 96,
+      "parentId": 81,
+      "path": "assets/Furniture/Decor/Models/Decorative_Bowl.fbx",
+      "pathGuid": "aef78d59cd9c3094",
+      "position": [
+        18.344,
+        0.0,
+        0.0
+      ],
+      "rotation": [
+        0.0,
+        0.0,
+        0.0,
+        1.0
+      ],
+      "scale": [
+        1.0,
+        1.0,
+        1.0
+      ]
+    },
+    {
+      "id": 98,
+      "name": "Decorative_Plate",
+      "order": 97,
+      "parentId": 81,
+      "path": "assets/Furniture/Decor/Models/Decorative_Plate.fbx",
+      "pathGuid": "f51e76be1bd10e6e",
+      "position": [
+        19.175,
+        0.0,
+        0.0
+      ],
+      "rotation": [
+        0.0,
+        0.0,
+        0.0,
+        1.0
+      ],
+      "scale": [
+        1.0,
+        1.0,
+        1.0
+      ]
+    },
+    {
+      "id": 99,
+      "name": "Plant_A",
+      "order": 98,
+      "parentId": 81,
+      "path": "assets/Furniture/Decor/Models/Plant_A.fbx",
+      "pathGuid": "ff79d561e4def3b9",
+      "position": [
+        20.125,
+        0.0,
+        0.0
+      ],
+      "rotation": [
+        0.0,
+        0.0,
+        0.0,
+        1.0
+      ],
+      "scale": [
+        1.0,
+        1.0,
+        1.0
+      ]
+    },
+    {
+      "id": 100,
+      "name": "Plant_B",
+      "order": 99,
+      "parentId": 81,
+      "path": "assets/Furniture/Decor/Models/Plant_B.fbx",
+      "pathGuid": "708e7f016402e977",
+      "position": [
+        21.071,
+        0.0,
+        0.0
+      ],
+      "rotation": [
+        0.0,
+        0.0,
+        0.0,
+        1.0
+      ],
+      "scale": [
+        1.0,
+        1.0,
+        1.0
+      ]
+    },
+    {
+      "id": 101,
+      "name": "Shelf",
+      "order": 100,
+      "parentId": 81,
+      "path": "assets/Furniture/Decor/Models/Shelf.fbx",
+      "pathGuid": "4a52b2ed3b47d9c2",
+      "position": [
+        22.324,
+        0.0,
+        0.0
+      ],
+      "rotation": [
+        0.0,
+        0.0,
+        0.0,
+        1.0
+      ],
+      "scale": [
+        1.0,
+        1.0,
+        1.0
+      ]
+    },
+    {
+      "id": 102,
+      "name": "Sidetable_A",
+      "order": 101,
+      "parentId": 81,
+      "path": "assets/Furniture/Decor/Models/Sidetable_A.fbx",
+      "pathGuid": "3c0811d43bd57860",
+      "position": [
+        23.984,
+        0.0,
+        0.0
+      ],
+      "rotation": [
+        0.0,
+        0.0,
+        0.0,
+        1.0
+      ],
+      "scale": [
+        1.0,
+        1.0,
+        1.0
+      ]
+    },
+    {
+      "id": 103,
+      "name": "Sidetable_B",
+      "order": 102,
+      "parentId": 81,
+      "path": "assets/Furniture/Decor/Models/Sidetable_B.fbx",
+      "pathGuid": "658f420ed40d2391",
+      "position": [
+        25.573,
+        0.0,
+        0.0
+      ],
+      "rotation": [
+        0.0,
+        0.0,
+        0.0,
+        1.0
+      ],
+      "scale": [
+        1.0,
+        1.0,
+        1.0
+      ]
+    },
+    {
+      "id": 104,
+      "name": "Sidetable_C",
+      "order": 103,
+      "parentId": 81,
+      "path": "assets/Furniture/Decor/Models/Sidetable_C.fbx",
+      "pathGuid": "6f95bb55c8162cd8",
+      "position": [
+        26.888,
+        0.0,
+        0.0
+      ],
+      "rotation": [
+        0.0,
+        0.0,
+        0.0,
+        1.0
+      ],
+      "scale": [
+        1.0,
+        1.0,
+        1.0
+      ]
+    },
+    {
+      "id": 105,
+      "name": "Tulips_A",
+      "order": 104,
+      "parentId": 81,
+      "path": "assets/Furniture/Decor/Models/Tulips_A.fbx",
+      "pathGuid": "580b7f739a578526",
+      "position": [
+        27.814,
+        0.0,
+        0.0
+      ],
+      "rotation": [
+        0.0,
+        0.0,
+        0.0,
+        1.0
+      ],
+      "scale": [
+        1.0,
+        1.0,
+        1.0
+      ]
+    },
+    {
+      "id": 106,
+      "name": "Tulips_B",
+      "order": 105,
+      "parentId": 81,
+      "path": "assets/Furniture/Decor/Models/Tulips_B.fbx",
+      "pathGuid": "04b83949324c2615",
+      "position": [
+        28.536,
+        0.0,
+        0.0
+      ],
+      "rotation": [
+        0.0,
+        0.0,
+        0.0,
+        1.0
+      ],
+      "scale": [
+        1.0,
+        1.0,
+        1.0
+      ]
+    },
+    {
+      "id": 107,
+      "name": "Vase_A",
+      "order": 106,
+      "parentId": 81,
+      "path": "assets/Furniture/Decor/Models/Vase_A.fbx",
+      "pathGuid": "fe2841f87d4e871a",
+      "position": [
+        29.252,
+        0.0,
+        0.0
+      ],
+      "rotation": [
+        0.0,
+        0.0,
+        0.0,
+        1.0
+      ],
+      "scale": [
+        1.0,
+        1.0,
+        1.0
+      ]
+    },
+    {
+      "id": 108,
+      "name": "Vase_B",
+      "order": 107,
+      "parentId": 81,
+      "path": "assets/Furniture/Decor/Models/Vase_B.fbx",
+      "pathGuid": "a2d8b5dafa88d17a",
+      "position": [
+        29.976,
+        0.0,
+        0.0
+      ],
+      "rotation": [
+        0.0,
+        0.0,
+        0.0,
+        1.0
+      ],
+      "scale": [
+        1.0,
+        1.0,
+        1.0
+      ]
+    },
+    {
+      "id": 109,
+      "name": "Vase_B_Sticks",
+      "order": 108,
+      "parentId": 81,
+      "path": "assets/Furniture/Decor/Models/Vase_B_Sticks.fbx",
+      "pathGuid": "f1367e274ebd2328",
+      "position": [
+        30.697,
+        0.0,
+        0.0
+      ],
+      "rotation": [
+        0.0,
+        0.0,
+        0.0,
+        1.0
+      ],
+      "scale": [
+        1.0,
+        1.0,
+        1.0
+      ]
+    },
+    {
+      "id": 110,
+      "name": "Woodplank",
+      "order": 109,
+      "parentId": 81,
+      "path": "assets/Furniture/Decor/Models/Woodplank.fbx",
+      "pathGuid": "60a5521eb166b356",
+      "position": [
+        31.405,
+        0.0,
+        0.0
+      ],
+      "rotation": [
+        0.0,
+        0.0,
+        0.0,
+        1.0
+      ],
+      "scale": [
+        1.0,
+        1.0,
+        1.0
+      ]
+    },
+    {
+      "id": 112,
+      "name": "Car_Tire_Pile",
+      "order": 111,
+      "parentId": 111,
+      "path": "assets/Furniture/Garage/Models/Car_Tire_Pile.fbx",
+      "pathGuid": "4169ebf5536bf123",
+      "position": [
+        0.336,
+        0.0,
+        0.0
+      ],
+      "rotation": [
+        0.0,
+        0.0,
+        0.0,
+        1.0
+      ],
+      "scale": [
+        1.0,
+        1.0,
+        1.0
+      ]
+    },
+    {
+      "id": 113,
+      "name": "Car_Tire_Solo",
+      "order": 112,
+      "parentId": 111,
+      "path": "assets/Furniture/Garage/Models/Car_Tire_Solo.fbx",
+      "pathGuid": "d370855dcba00a45",
+      "position": [
+        1.603,
+        0.0,
+        0.0
+      ],
+      "rotation": [
+        0.0,
+        0.0,
+        0.0,
+        1.0
+      ],
+      "scale": [
+        1.0,
+        1.0,
+        1.0
+      ]
+    },
+    {
+      "id": 114,
+      "name": "Cardboard_Box_A",
+      "order": 113,
+      "parentId": 111,
+      "path": "assets/Furniture/Garage/Models/Cardboard_Box_A.fbx",
+      "pathGuid": "c7511261a5d0717b",
+      "position": [
+        2.683,
+        0.0,
+        0.0
+      ],
+      "rotation": [
+        0.0,
+        0.0,
+        0.0,
+        1.0
+      ],
+      "scale": [
+        1.0,
+        1.0,
+        1.0
+      ]
+    },
+    {
+      "id": 115,
+      "name": "Cardboard_Box_A_Lid",
+      "order": 114,
+      "parentId": 111,
+      "path": "assets/Furniture/Garage/Models/Cardboard_Box_A_Lid.fbx",
+      "pathGuid": "385f3581d7e83e64",
+      "position": [
+        2.683,
+        0.0,
+        0.0
+      ],
+      "rotation": [
+        0.0,
+        0.0,
+        0.0,
+        1.0
+      ],
+      "scale": [
+        1.0,
+        1.0,
+        1.0
+      ]
+    },
+    {
+      "id": 116,
+      "name": "Cardboard_Box_B",
+      "order": 115,
+      "parentId": 111,
+      "path": "assets/Furniture/Garage/Models/Cardboard_Box_B.fbx",
+      "pathGuid": "5f8ff53a10dcb5a2",
+      "position": [
+        3.62,
+        0.0,
+        0.0
+      ],
+      "rotation": [
+        0.0,
+        0.0,
+        0.0,
+        1.0
+      ],
+      "scale": [
+        1.0,
+        1.0,
+        1.0
+      ]
+    },
+    {
+      "id": 117,
+      "name": "Cardboard_Box_C",
+      "order": 116,
+      "parentId": 111,
+      "path": "assets/Furniture/Garage/Models/Cardboard_Box_C.fbx",
+      "pathGuid": "c13746aaa059bed1",
+      "position": [
+        4.598,
+        0.0,
+        0.0
+      ],
+      "rotation": [
+        0.0,
+        0.0,
+        0.0,
+        1.0
+      ],
+      "scale": [
+        1.0,
+        1.0,
+        1.0
+      ]
+    },
+    {
+      "id": 118,
+      "name": "Cardboard_Box_Covered",
+      "order": 117,
+      "parentId": 111,
+      "path": "assets/Furniture/Garage/Models/Cardboard_Box_Covered.fbx",
+      "pathGuid": "5c67c7f6a5e6ca80",
+      "position": [
+        5.863,
+        0.0,
+        0.0
+      ],
+      "rotation": [
+        0.0,
+        0.0,
+        0.0,
+        1.0
+      ],
+      "scale": [
+        1.0,
+        1.0,
+        1.0
+      ]
+    },
+    {
+      "id": 119,
+      "name": "Cardboard_Box_D",
+      "order": 118,
+      "parentId": 111,
+      "path": "assets/Furniture/Garage/Models/Cardboard_Box_D.fbx",
+      "pathGuid": "a82553bd1cb72152",
+      "position": [
+        7.119,
+        0.0,
+        0.0
+      ],
+      "rotation": [
+        0.0,
+        0.0,
+        0.0,
+        1.0
+      ],
+      "scale": [
+        1.0,
+        1.0,
+        1.0
+      ]
+    },
+    {
+      "id": 120,
+      "name": "Cardboard_Box_E",
+      "order": 119,
+      "parentId": 111,
+      "path": "assets/Furniture/Garage/Models/Cardboard_Box_E.fbx",
+      "pathGuid": "abd0523a668fb7e6",
+      "position": [
+        8.093,
+        0.0,
+        0.0
+      ],
+      "rotation": [
+        0.0,
+        0.0,
+        0.0,
+        1.0
+      ],
+      "scale": [
+        1.0,
+        1.0,
+        1.0
+      ]
+    },
+    {
+      "id": 121,
+      "name": "Cardboardbox_Squeezed",
+      "order": 120,
+      "parentId": 111,
+      "path": "assets/Furniture/Garage/Models/Cardboardbox_Squeezed.fbx",
+      "pathGuid": "c34d464ecd27a011",
+      "position": [
+        9.41,
+        0.0,
+        0.0
+      ],
+      "rotation": [
+        0.0,
+        0.0,
+        0.0,
+        1.0
+      ],
+      "scale": [
+        1.0,
+        1.0,
+        1.0
+      ]
+    },
+    {
+      "id": 122,
+      "name": "Cooler_Box",
+      "order": 121,
+      "parentId": 111,
+      "path": "assets/Furniture/Garage/Models/Cooler_Box.fbx",
+      "pathGuid": "7d0ced85ec1941fc",
+      "position": [
+        10.811,
+        0.0,
+        0.0
+      ],
+      "rotation": [
+        0.0,
+        0.0,
+        0.0,
+        1.0
+      ],
+      "scale": [
+        1.0,
+        1.0,
+        1.0
+      ]
+    },
+    {
+      "id": 123,
+      "name": "Cord_On_Floor_A",
+      "order": 122,
+      "parentId": 111,
+      "path": "assets/Furniture/Garage/Models/Cord_On_Floor_A.fbx",
+      "pathGuid": "a2ac0fb98c181977",
+      "position": [
+        11.747,
+        0.0,
+        0.0
+      ],
+      "rotation": [
+        0.0,
+        0.0,
+        0.0,
+        1.0
+      ],
+      "scale": [
+        1.0,
+        1.0,
+        1.0
+      ]
+    },
+    {
+      "id": 124,
+      "name": "Cord_On_Floor_B",
+      "order": 123,
+      "parentId": 111,
+      "path": "assets/Furniture/Garage/Models/Cord_On_Floor_B.fbx",
+      "pathGuid": "32616d66836a7ecb",
+      "position": [
+        12.599,
+        0.0,
+        0.0
+      ],
+      "rotation": [
+        0.0,
+        0.0,
+        0.0,
+        1.0
+      ],
+      "scale": [
+        1.0,
+        1.0,
+        1.0
+      ]
+    },
+    {
+      "id": 125,
+      "name": "Electricbox_Door",
+      "order": 124,
+      "parentId": 111,
+      "path": "assets/Furniture/Garage/Models/Electricbox_Door.fbx",
+      "pathGuid": "6269d97d71a5dfe0",
+      "position": [
+        13.547,
+        0.0,
+        0.0
+      ],
+      "rotation": [
+        0.0,
+        0.0,
+        0.0,
+        1.0
+      ],
+      "scale": [
+        1.0,
+        1.0,
+        1.0
+      ]
+    },
+    {
+      "id": 126,
+      "name": "Electricbox_Fuse",
+      "order": 125,
+      "parentId": 111,
+      "path": "assets/Furniture/Garage/Models/Electricbox_Fuse.fbx",
+      "pathGuid": "6c603978ea1e5a47",
+      "position": [
+        14.319,
+        0.0,
+        0.0
+      ],
+      "rotation": [
+        0.0,
+        0.0,
+        0.0,
+        1.0
+      ],
+      "scale": [
+        1.0,
+        1.0,
+        1.0
+      ]
+    },
+    {
+      "id": 127,
+      "name": "Electricbox_Fuse_Holder",
+      "order": 126,
+      "parentId": 111,
+      "path": "assets/Furniture/Garage/Models/Electricbox_Fuse_Holder.fbx",
+      "pathGuid": "804063517536dd5c",
+      "position": [
+        14.951,
+        0.0,
+        0.0
+      ],
+      "rotation": [
+        0.0,
+        0.0,
+        0.0,
+        1.0
+      ],
+      "scale": [
+        1.0,
+        1.0,
+        1.0
+      ]
+    },
+    {
+      "id": 128,
+      "name": "Electricbox_Main",
+      "order": 127,
+      "parentId": 111,
+      "path": "assets/Furniture/Garage/Models/Electricbox_Main.fbx",
+      "pathGuid": "9c9949119ad37900",
+      "position": [
+        15.778,
+        0.0,
+        0.0
+      ],
+      "rotation": [
+        0.0,
+        0.0,
+        0.0,
+        1.0
+      ],
+      "scale": [
+        1.0,
+        1.0,
+        1.0
+      ]
+    },
+    {
+      "id": 129,
+      "name": "Garage_Shelf_A",
+      "order": 128,
+      "parentId": 111,
+      "path": "assets/Furniture/Garage/Models/Garage_Shelf_A.fbx",
+      "pathGuid": "79319ff527972078",
+      "position": [
+        17.185,
+        0.0,
+        0.0
+      ],
+      "rotation": [
+        0.0,
+        0.0,
+        0.0,
+        1.0
+      ],
+      "scale": [
+        1.0,
+        1.0,
+        1.0
+      ]
+    },
+    {
+      "id": 130,
+      "name": "Garage_Shelf_B",
+      "order": 129,
+      "parentId": 111,
+      "path": "assets/Furniture/Garage/Models/Garage_Shelf_B.fbx",
+      "pathGuid": "595c8af53acfa095",
+      "position": [
+        19.322,
+        0.0,
+        0.0
+      ],
+      "rotation": [
+        0.0,
+        0.0,
+        0.0,
+        1.0
+      ],
+      "scale": [
+        1.0,
+        1.0,
+        1.0
+      ]
+    },
+    {
+      "id": 131,
+      "name": "Garage_Shelf_C",
+      "order": 130,
+      "parentId": 111,
+      "path": "assets/Furniture/Garage/Models/Garage_Shelf_C.fbx",
+      "pathGuid": "932866f8bfad6844",
+      "position": [
+        21.265,
+        0.0,
+        0.0
+      ],
+      "rotation": [
+        0.0,
+        0.0,
+        0.0,
+        1.0
+      ],
+      "scale": [
+        1.0,
+        1.0,
+        1.0
+      ]
+    },
+    {
+      "id": 132,
+      "name": "Garage_Table",
+      "order": 131,
+      "parentId": 111,
+      "path": "assets/Furniture/Garage/Models/Garage_Table.fbx",
+      "pathGuid": "bce4da42283eccd4",
+      "position": [
+        22.82,
+        0.0,
+        0.0
+      ],
+      "rotation": [
+        0.0,
+        0.0,
+        0.0,
+        1.0
+      ],
+      "scale": [
+        1.0,
+        1.0,
+        1.0
+      ]
+    },
+    {
+      "id": 133,
+      "name": "Garage_Trolley",
+      "order": 132,
+      "parentId": 111,
+      "path": "assets/Furniture/Garage/Models/Garage_Trolley.fbx",
+      "pathGuid": "e5902991f0888455",
+      "position": [
+        24.307,
+        0.0,
+        0.0
+      ],
+      "rotation": [
+        0.0,
+        0.0,
+        0.0,
+        1.0
+      ],
+      "scale": [
+        1.0,
+        1.0,
+        1.0
+      ]
+    },
+    {
+      "id": 134,
+      "name": "Garbage_Bag_A",
+      "order": 133,
+      "parentId": 111,
+      "path": "assets/Furniture/Garage/Models/Garbage_Bag_A.fbx",
+      "pathGuid": "faef9e729044e348",
+      "position": [
+        25.503,
+        0.0,
+        0.0
+      ],
+      "rotation": [
+        0.0,
+        0.0,
+        0.0,
+        1.0
+      ],
+      "scale": [
+        1.0,
+        1.0,
+        1.0
+      ]
+    },
+    {
+      "id": 135,
+      "name": "Garbage_Bag_B",
+      "order": 134,
+      "parentId": 111,
+      "path": "assets/Furniture/Garage/Models/Garbage_Bag_B.fbx",
+      "pathGuid": "21c61ed0aa278b0e",
+      "position": [
+        26.61,
+        0.0,
+        0.0
+      ],
+      "rotation": [
+        0.0,
+        0.0,
+        0.0,
+        1.0
+      ],
+      "scale": [
+        1.0,
+        1.0,
+        1.0
+      ]
+    },
+    {
+      "id": 136,
+      "name": "Jerrycan",
+      "order": 135,
+      "parentId": 111,
+      "path": "assets/Furniture/Garage/Models/Jerrycan.fbx",
+      "pathGuid": "d47d0be7937d6ffa",
+      "position": [
+        27.534,
+        0.0,
+        0.0
+      ],
+      "rotation": [
+        0.0,
+        0.0,
+        0.0,
+        1.0
+      ],
+      "scale": [
+        1.0,
+        1.0,
+        1.0
+      ]
+    },
+    {
+      "id": 137,
+      "name": "Milk_Crate",
+      "order": 136,
+      "parentId": 111,
+      "path": "assets/Furniture/Garage/Models/Milk_Crate.fbx",
+      "pathGuid": "5b75a6c5c55c9f26",
+      "position": [
+        28.408,
+        0.0,
+        0.0
+      ],
+      "rotation": [
+        0.0,
+        0.0,
+        0.0,
+        1.0
+      ],
+      "scale": [
+        1.0,
+        1.0,
+        1.0
+      ]
+    },
+    {
+      "id": 138,
+      "name": "Paint_Thinner",
+      "order": 137,
+      "parentId": 111,
+      "path": "assets/Furniture/Garage/Models/Paint_Thinner.fbx",
+      "pathGuid": "c9e428407b7ca820",
+      "position": [
+        29.252,
+        0.0,
+        0.0
+      ],
+      "rotation": [
+        0.0,
+        0.0,
+        0.0,
+        1.0
+      ],
+      "scale": [
+        1.0,
+        1.0,
+        1.0
+      ]
+    },
+    {
+      "id": 139,
+      "name": "Paintbrush_A",
+      "order": 138,
+      "parentId": 111,
+      "path": "assets/Furniture/Garage/Models/Paintbrush_A.fbx",
+      "pathGuid": "776423dbb832bc5b",
+      "position": [
+        29.944,
+        0.0,
+        0.0
+      ],
+      "rotation": [
+        0.0,
+        0.0,
+        0.0,
+        1.0
+      ],
+      "scale": [
+        1.0,
+        1.0,
+        1.0
+      ]
+    },
+    {
+      "id": 140,
+      "name": "Paintbrush_B",
+      "order": 139,
+      "parentId": 111,
+      "path": "assets/Furniture/Garage/Models/Paintbrush_B.fbx",
+      "pathGuid": "97cdf902099ee5e5",
+      "position": [
+        30.624,
+        0.0,
+        0.0
+      ],
+      "rotation": [
+        0.0,
+        0.0,
+        0.0,
+        1.0
+      ],
+      "scale": [
+        1.0,
+        1.0,
+        1.0
+      ]
+    },
+    {
+      "id": 141,
+      "name": "Paintbrush_C",
+      "order": 140,
+      "parentId": 111,
+      "path": "assets/Furniture/Garage/Models/Paintbrush_C.fbx",
+      "pathGuid": "66494cbfd59022d0",
+      "position": [
+        31.29,
+        0.0,
+        0.0
+      ],
+      "rotation": [
+        0.0,
+        0.0,
+        0.0,
+        1.0
+      ],
+      "scale": [
+        1.0,
+        1.0,
+        1.0
+      ]
+    },
+    {
+      "id": 142,
+      "name": "Paintbrush_Holder",
+      "order": 141,
+      "parentId": 111,
+      "path": "assets/Furniture/Garage/Models/Paintbrush_Holder.fbx",
+      "pathGuid": "2d0456ea646fd14a",
+      "position": [
+        32.195,
+        0.0,
+        0.0
+      ],
+      "rotation": [
+        0.0,
+        0.0,
+        0.0,
+        1.0
+      ],
+      "scale": [
+        1.0,
+        1.0,
+        1.0
+      ]
+    },
+    {
+      "id": 143,
+      "name": "Paintbucket_A",
+      "order": 142,
+      "parentId": 111,
+      "path": "assets/Furniture/Garage/Models/Paintbucket_A.fbx",
+      "pathGuid": "0aac45bd2c3482c1",
+      "position": [
+        33.224,
+        0.0,
+        0.0
+      ],
+      "rotation": [
+        0.0,
+        0.0,
+        0.0,
+        1.0
+      ],
+      "scale": [
+        1.0,
+        1.0,
+        1.0
+      ]
+    },
+    {
+      "id": 144,
+      "name": "Paintbucket_B",
+      "order": 143,
+      "parentId": 111,
+      "path": "assets/Furniture/Garage/Models/Paintbucket_B.fbx",
+      "pathGuid": "6945911ae8456370",
+      "position": [
+        34.058,
+        0.0,
+        0.0
+      ],
+      "rotation": [
+        0.0,
+        0.0,
+        0.0,
+        1.0
+      ],
+      "scale": [
+        1.0,
+        1.0,
+        1.0
+      ]
+    },
+    {
+      "id": 145,
+      "name": "Paintbucket_C",
+      "order": 144,
+      "parentId": 111,
+      "path": "assets/Furniture/Garage/Models/Paintbucket_C.fbx",
+      "pathGuid": "8b1eeea2343c577b",
+      "position": [
+        34.815,
+        0.0,
+        0.0
+      ],
+      "rotation": [
+        0.0,
+        0.0,
+        0.0,
+        1.0
+      ],
+      "scale": [
+        1.0,
+        1.0,
+        1.0
+      ]
+    },
+    {
+      "id": 146,
+      "name": "Paintbucket_Set_A",
+      "order": 145,
+      "parentId": 111,
+      "path": "assets/Furniture/Garage/Models/Paintbucket_Set_A.fbx",
+      "pathGuid": "4944291ee5f1a174",
+      "position": [
+        35.894,
+        0.0,
+        0.0
+      ],
+      "rotation": [
+        0.0,
+        0.0,
+        0.0,
+        1.0
+      ],
+      "scale": [
+        1.0,
+        1.0,
+        1.0
+      ]
+    },
+    {
+      "id": 147,
+      "name": "Paintbucket_Set_B",
+      "order": 146,
+      "parentId": 111,
+      "path": "assets/Furniture/Garage/Models/Paintbucket_Set_B.fbx",
+      "pathGuid": "8b0e741f393862d3",
+      "position": [
+        37.176,
+        0.0,
+        0.0
+      ],
+      "rotation": [
+        0.0,
+        0.0,
+        0.0,
+        1.0
+      ],
+      "scale": [
+        1.0,
+        1.0,
+        1.0
+      ]
+    },
+    {
+      "id": 148,
+      "name": "Painting_Large_A",
+      "order": 147,
+      "parentId": 111,
+      "path": "assets/Furniture/Garage/Models/Painting_Large_A.fbx",
+      "pathGuid": "9410e7657db3ae7d",
+      "position": [
+        38.595,
+        0.0,
+        0.0
+      ],
+      "rotation": [
+        0.0,
+        0.0,
+        0.0,
+        1.0
+      ],
+      "scale": [
+        1.0,
+        1.0,
+        1.0
+      ]
+    },
+    {
+      "id": 149,
+      "name": "Painting_Large_B",
+      "order": 148,
+      "parentId": 111,
+      "path": "assets/Furniture/Garage/Models/Painting_Large_B.fbx",
+      "pathGuid": "c084ff1fa448630f",
+      "position": [
+        40.273,
+        0.0,
+        0.0
+      ],
+      "rotation": [
+        0.0,
+        0.0,
+        0.0,
+        1.0
+      ],
+      "scale": [
+        1.0,
+        1.0,
+        1.0
+      ]
+    },
+    {
+      "id": 150,
+      "name": "Painting_Large_C",
+      "order": 149,
+      "parentId": 111,
+      "path": "assets/Furniture/Garage/Models/Painting_Large_C.fbx",
+      "pathGuid": "7e087db6567b8f84",
+      "position": [
+        41.951,
+        0.0,
+        0.0
+      ],
+      "rotation": [
+        0.0,
+        0.0,
+        0.0,
+        1.0
+      ],
+      "scale": [
+        1.0,
+        1.0,
+        1.0
+      ]
+    },
+    {
+      "id": 151,
+      "name": "Painting_Medium_A",
+      "order": 150,
+      "parentId": 111,
+      "path": "assets/Furniture/Garage/Models/Painting_Medium_A.fbx",
+      "pathGuid": "5c7e2361ac06f6b5",
+      "position": [
+        43.588,
+        0.0,
+        0.0
+      ],
+      "rotation": [
+        0.0,
+        0.0,
+        0.0,
+        1.0
+      ],
+      "scale": [
+        1.0,
+        1.0,
+        1.0
+      ]
+    },
+    {
+      "id": 152,
+      "name": "Painting_Medium_B",
+      "order": 151,
+      "parentId": 111,
+      "path": "assets/Furniture/Garage/Models/Painting_Medium_B.fbx",
+      "pathGuid": "c340f859eef5aab7",
+      "position": [
+        45.184,
+        0.0,
+        0.0
+      ],
+      "rotation": [
+        0.0,
+        0.0,
+        0.0,
+        1.0
+      ],
+      "scale": [
+        1.0,
+        1.0,
+        1.0
+      ]
+    },
+    {
+      "id": 153,
+      "name": "Painting_Medium_C",
+      "order": 152,
+      "parentId": 111,
+      "path": "assets/Furniture/Garage/Models/Painting_Medium_C.fbx",
+      "pathGuid": "3833a967f8b51d21",
+      "position": [
+        46.66,
+        0.0,
+        0.0
+      ],
+      "rotation": [
+        0.0,
+        0.0,
+        0.0,
+        1.0
+      ],
+      "scale": [
+        1.0,
+        1.0,
+        1.0
+      ]
+    },
+    {
+      "id": 154,
+      "name": "Painting_Medium_D",
+      "order": 153,
+      "parentId": 111,
+      "path": "assets/Furniture/Garage/Models/Painting_Medium_D.fbx",
+      "pathGuid": "309489814324557d",
+      "position": [
+        48.016,
+        0.0,
+        0.0
+      ],
+      "rotation": [
+        0.0,
+        0.0,
+        0.0,
+        1.0
+      ],
+      "scale": [
+        1.0,
+        1.0,
+        1.0
+      ]
+    },
+    {
+      "id": 155,
+      "name": "Painting_Medium_E",
+      "order": 154,
+      "parentId": 111,
+      "path": "assets/Furniture/Garage/Models/Painting_Medium_E.fbx",
+      "pathGuid": "e42b9221572bf84d",
+      "position": [
+        49.372,
+        0.0,
+        0.0
+      ],
+      "rotation": [
+        0.0,
+        0.0,
+        0.0,
+        1.0
+      ],
+      "scale": [
+        1.0,
+        1.0,
+        1.0
+      ]
+    },
+    {
+      "id": 156,
+      "name": "Painting_Medium_F",
+      "order": 155,
+      "parentId": 111,
+      "path": "assets/Furniture/Garage/Models/Painting_Medium_F.fbx",
+      "pathGuid": "858363cb4db2f9b8",
+      "position": [
+        50.759,
+        0.0,
+        0.0
+      ],
+      "rotation": [
+        0.0,
+        0.0,
+        0.0,
+        1.0
+      ],
+      "scale": [
+        1.0,
+        1.0,
+        1.0
+      ]
+    },
+    {
+      "id": 157,
+      "name": "Painting_Medium_G",
+      "order": 156,
+      "parentId": 111,
+      "path": "assets/Furniture/Garage/Models/Painting_Medium_G.fbx",
+      "pathGuid": "f93d5d0759b9a8b4",
+      "position": [
+        52.177,
+        0.0,
+        0.0
+      ],
+      "rotation": [
+        0.0,
+        0.0,
+        0.0,
+        1.0
+      ],
+      "scale": [
+        1.0,
+        1.0,
+        1.0
+      ]
+    },
+    {
+      "id": 158,
+      "name": "Painting_Medium_H",
+      "order": 157,
+      "parentId": 111,
+      "path": "assets/Furniture/Garage/Models/Painting_Medium_H.fbx",
+      "pathGuid": "d293ea46f05b426a",
+      "position": [
+        53.595,
+        0.0,
+        0.0
+      ],
+      "rotation": [
+        0.0,
+        0.0,
+        0.0,
+        1.0
+      ],
+      "scale": [
+        1.0,
+        1.0,
+        1.0
+      ]
+    },
+    {
+      "id": 159,
+      "name": "Painting_Medium_I",
+      "order": 158,
+      "parentId": 111,
+      "path": "assets/Furniture/Garage/Models/Painting_Medium_I.fbx",
+      "pathGuid": "84b6280f5f97ba1f",
+      "position": [
+        54.93,
+        0.0,
+        0.0
+      ],
+      "rotation": [
+        0.0,
+        0.0,
+        0.0,
+        1.0
+      ],
+      "scale": [
+        1.0,
+        1.0,
+        1.0
+      ]
+    },
+    {
+      "id": 160,
+      "name": "Painting_Medium_J",
+      "order": 159,
+      "parentId": 111,
+      "path": "assets/Furniture/Garage/Models/Painting_Medium_J.fbx",
+      "pathGuid": "a48ecfcf285cbe3a",
+      "position": [
+        56.265,
+        0.0,
+        0.0
+      ],
+      "rotation": [
+        0.0,
+        0.0,
+        0.0,
+        1.0
+      ],
+      "scale": [
+        1.0,
+        1.0,
+        1.0
+      ]
+    },
+    {
+      "id": 161,
+      "name": "Painting_Small_A",
+      "order": 160,
+      "parentId": 111,
+      "path": "assets/Furniture/Garage/Models/Painting_Small_A.fbx",
+      "pathGuid": "94ca2105ec9aa300",
+      "position": [
+        57.542,
+        0.0,
+        0.0
+      ],
+      "rotation": [
+        0.0,
+        0.0,
+        0.0,
+        1.0
+      ],
+      "scale": [
+        1.0,
+        1.0,
+        1.0
+      ]
+    },
+    {
+      "id": 162,
+      "name": "Painting_Small_B",
+      "order": 161,
+      "parentId": 111,
+      "path": "assets/Furniture/Garage/Models/Painting_Small_B.fbx",
+      "pathGuid": "0c0e2e218123a050",
+      "position": [
+        58.678,
+        0.0,
+        0.0
+      ],
+      "rotation": [
+        0.0,
+        0.0,
+        0.0,
+        1.0
+      ],
+      "scale": [
+        1.0,
+        1.0,
+        1.0
+      ]
+    },
+    {
+      "id": 163,
+      "name": "Painting_Small_C",
+      "order": 162,
+      "parentId": 111,
+      "path": "assets/Furniture/Garage/Models/Painting_Small_C.fbx",
+      "pathGuid": "a35f9ac066582f00",
+      "position": [
+        59.775,
+        0.0,
+        0.0
+      ],
+      "rotation": [
+        0.0,
+        0.0,
+        0.0,
+        1.0
+      ],
+      "scale": [
+        1.0,
+        1.0,
+        1.0
+      ]
+    },
+    {
+      "id": 164,
+      "name": "Painting_Small_D",
+      "order": 163,
+      "parentId": 111,
+      "path": "assets/Furniture/Garage/Models/Painting_Small_D.fbx",
+      "pathGuid": "e3228558a20d00d9",
+      "position": [
+        60.833,
+        0.0,
+        0.0
+      ],
+      "rotation": [
+        0.0,
+        0.0,
+        0.0,
+        1.0
+      ],
+      "scale": [
+        1.0,
+        1.0,
+        1.0
+      ]
+    },
+    {
+      "id": 165,
+      "name": "Painting_Small_E",
+      "order": 164,
+      "parentId": 111,
+      "path": "assets/Furniture/Garage/Models/Painting_Small_E.fbx",
+      "pathGuid": "e59d795ae8413f21",
+      "position": [
+        61.93,
+        0.0,
+        0.0
+      ],
+      "rotation": [
+        0.0,
+        0.0,
+        0.0,
+        1.0
+      ],
+      "scale": [
+        1.0,
+        1.0,
+        1.0
+      ]
+    },
+    {
+      "id": 166,
+      "name": "Painting_Table_A",
+      "order": 165,
+      "parentId": 111,
+      "path": "assets/Furniture/Garage/Models/Painting_Table_A.fbx",
+      "pathGuid": "60557c5249a6286c",
+      "position": [
+        62.918,
+        0.0,
+        0.0
+      ],
+      "rotation": [
+        0.0,
+        0.0,
+        0.0,
+        1.0
+      ],
+      "scale": [
+        1.0,
+        1.0,
+        1.0
+      ]
+    },
+    {
+      "id": 167,
+      "name": "Painting_Table_B",
+      "order": 166,
+      "parentId": 111,
+      "path": "assets/Furniture/Garage/Models/Painting_Table_B.fbx",
+      "pathGuid": "7a55c560778c1f8c",
+      "position": [
+        63.753,
+        0.0,
+        0.0
+      ],
+      "rotation": [
+        0.0,
+        0.0,
+        0.0,
+        1.0
+      ],
+      "scale": [
+        1.0,
+        1.0,
+        1.0
+      ]
+    },
+    {
+      "id": 168,
+      "name": "Painting_Table_C",
+      "order": 167,
+      "parentId": 111,
+      "path": "assets/Furniture/Garage/Models/Painting_Table_C.fbx",
+      "pathGuid": "51738ce6db3936a9",
+      "position": [
+        64.588,
+        0.0,
+        0.0
+      ],
+      "rotation": [
+        0.0,
+        0.0,
+        0.0,
+        1.0
+      ],
+      "scale": [
+        1.0,
+        1.0,
+        1.0
+      ]
+    },
+    {
+      "id": 169,
+      "name": "Painting_Table_D",
+      "order": 168,
+      "parentId": 111,
+      "path": "assets/Furniture/Garage/Models/Painting_Table_D.fbx",
+      "pathGuid": "c34a57cf81074cba",
+      "position": [
+        65.422,
+        0.0,
+        0.0
+      ],
+      "rotation": [
+        0.0,
+        0.0,
+        0.0,
+        1.0
+      ],
+      "scale": [
+        1.0,
+        1.0,
+        1.0
+      ]
+    },
+    {
+      "id": 170,
+      "name": "Painting_Table_E",
+      "order": 169,
+      "parentId": 111,
+      "path": "assets/Furniture/Garage/Models/Painting_Table_E.fbx",
+      "pathGuid": "c632d33fc47ec7fd",
+      "position": [
+        66.237,
+        0.0,
+        0.0
+      ],
+      "rotation": [
+        0.0,
+        0.0,
+        0.0,
+        1.0
+      ],
+      "scale": [
+        1.0,
+        1.0,
+        1.0
+      ]
+    },
+    {
+      "id": 171,
+      "name": "Painting_Table_F",
+      "order": 170,
+      "parentId": 111,
+      "path": "assets/Furniture/Garage/Models/Painting_Table_F.fbx",
+      "pathGuid": "044ab3ba6767859f",
+      "position": [
+        67.036,
+        0.0,
+        0.0
+      ],
+      "rotation": [
+        0.0,
+        0.0,
+        0.0,
+        1.0
+      ],
+      "scale": [
+        1.0,
+        1.0,
+        1.0
+      ]
+    },
+    {
+      "id": 172,
+      "name": "Painting_Table_G",
+      "order": 171,
+      "parentId": 111,
+      "path": "assets/Furniture/Garage/Models/Painting_Table_G.fbx",
+      "pathGuid": "9e95a46b0f652abe",
+      "position": [
+        67.835,
+        0.0,
+        0.0
+      ],
+      "rotation": [
+        0.0,
+        0.0,
+        0.0,
+        1.0
+      ],
+      "scale": [
+        1.0,
+        1.0,
+        1.0
+      ]
+    },
+    {
+      "id": 173,
+      "name": "Painting_Table_H",
+      "order": 172,
+      "parentId": 111,
+      "path": "assets/Furniture/Garage/Models/Painting_Table_H.fbx",
+      "pathGuid": "bb6f2cd76d815faf",
+      "position": [
+        68.651,
+        0.0,
+        0.0
+      ],
+      "rotation": [
+        0.0,
+        0.0,
+        0.0,
+        1.0
+      ],
+      "scale": [
+        1.0,
+        1.0,
+        1.0
+      ]
+    },
+    {
+      "id": 174,
+      "name": "Painting_Table_I",
+      "order": 173,
+      "parentId": 111,
+      "path": "assets/Furniture/Garage/Models/Painting_Table_I.fbx",
+      "pathGuid": "1a4abfdf852ee210",
+      "position": [
+        69.486,
+        0.0,
+        0.0
+      ],
+      "rotation": [
+        0.0,
+        0.0,
+        0.0,
+        1.0
+      ],
+      "scale": [
+        1.0,
+        1.0,
+        1.0
+      ]
+    },
+    {
+      "id": 175,
+      "name": "Painting_Table_J",
+      "order": 174,
+      "parentId": 111,
+      "path": "assets/Furniture/Garage/Models/Painting_Table_J.fbx",
+      "pathGuid": "20f6a0a2196019f6",
+      "position": [
+        70.32,
+        0.0,
+        0.0
+      ],
+      "rotation": [
+        0.0,
+        0.0,
+        0.0,
+        1.0
+      ],
+      "scale": [
+        1.0,
+        1.0,
+        1.0
+      ]
+    },
+    {
+      "id": 176,
+      "name": "Picking_Bin",
+      "order": 175,
+      "parentId": 111,
+      "path": "assets/Furniture/Garage/Models/Picking_Bin.fbx",
+      "pathGuid": "28ed623942aaa90f",
+      "position": [
+        71.149,
+        0.0,
+        0.0
+      ],
+      "rotation": [
+        0.0,
+        0.0,
+        0.0,
+        1.0
+      ],
+      "scale": [
+        1.0,
+        1.0,
+        1.0
+      ]
+    },
+    {
+      "id": 177,
+      "name": "Screwdriver",
+      "order": 176,
+      "parentId": 111,
+      "path": "assets/Furniture/Garage/Models/Screwdriver.fbx",
+      "pathGuid": "c4d70b743deca65f",
+      "position": [
+        71.882,
+        0.0,
+        0.0
+      ],
+      "rotation": [
+        0.0,
+        0.0,
+        0.0,
+        1.0
+      ],
+      "scale": [
+        1.0,
+        1.0,
+        1.0
+      ]
+    },
+    {
+      "id": 178,
+      "name": "Shelf_Standing_A",
+      "order": 177,
+      "parentId": 111,
+      "path": "assets/Furniture/Garage/Models/Shelf_Standing_A.fbx",
+      "pathGuid": "11ded7e6955b440e",
+      "position": [
+        72.962,
+        0.0,
+        0.0
+      ],
+      "rotation": [
+        0.0,
+        0.0,
+        0.0,
+        1.0
+      ],
+      "scale": [
+        1.0,
+        1.0,
+        1.0
+      ]
+    },
+    {
+      "id": 179,
+      "name": "Shovel",
+      "order": 178,
+      "parentId": 111,
+      "path": "assets/Furniture/Garage/Models/Shovel.fbx",
+      "pathGuid": "11201cbaf8656678",
+      "position": [
+        74.138,
+        0.0,
+        0.0
+      ],
+      "rotation": [
+        0.0,
+        0.0,
+        0.0,
+        1.0
+      ],
+      "scale": [
+        1.0,
+        1.0,
+        1.0
+      ]
+    },
+    {
+      "id": 180,
+      "name": "Spray_Can_A",
+      "order": 179,
+      "parentId": 111,
+      "path": "assets/Furniture/Garage/Models/Spray_Can_A.fbx",
+      "pathGuid": "d7d31786f2072f5f",
+      "position": [
+        74.887,
+        0.0,
+        0.0
+      ],
+      "rotation": [
+        0.0,
+        0.0,
+        0.0,
+        1.0
+      ],
+      "scale": [
+        1.0,
+        1.0,
+        1.0
+      ]
+    },
+    {
+      "id": 181,
+      "name": "Spray_Can_B",
+      "order": 180,
+      "parentId": 111,
+      "path": "assets/Furniture/Garage/Models/Spray_Can_B.fbx",
+      "pathGuid": "dc84f7fe9fde7bef",
+      "position": [
+        75.556,
+        0.0,
+        0.0
+      ],
+      "rotation": [
+        0.0,
+        0.0,
+        0.0,
+        1.0
+      ],
+      "scale": [
+        1.0,
+        1.0,
+        1.0
+      ]
+    },
+    {
+      "id": 182,
+      "name": "Spray_Can_C",
+      "order": 181,
+      "parentId": 111,
+      "path": "assets/Furniture/Garage/Models/Spray_Can_C.fbx",
+      "pathGuid": "f051be5af81b1844",
+      "position": [
+        76.225,
+        0.0,
+        0.0
+      ],
+      "rotation": [
+        0.0,
+        0.0,
+        0.0,
+        1.0
+      ],
+      "scale": [
+        1.0,
+        1.0,
+        1.0
+      ]
+    },
+    {
+      "id": 183,
+      "name": "Spray_Can_D",
+      "order": 182,
+      "parentId": 111,
+      "path": "assets/Furniture/Garage/Models/Spray_Can_D.fbx",
+      "pathGuid": "76d77d9e14a79cba",
+      "position": [
+        76.894,
+        0.0,
+        0.0
+      ],
+      "rotation": [
+        0.0,
+        0.0,
+        0.0,
+        1.0
+      ],
+      "scale": [
+        1.0,
+        1.0,
+        1.0
+      ]
+    },
+    {
+      "id": 184,
+      "name": "Spray_Can_E",
+      "order": 183,
+      "parentId": 111,
+      "path": "assets/Furniture/Garage/Models/Spray_Can_E.fbx",
+      "pathGuid": "d80ff44fe4e89eac",
+      "position": [
+        77.563,
+        0.0,
+        0.0
+      ],
+      "rotation": [
+        0.0,
+        0.0,
+        0.0,
+        1.0
+      ],
+      "scale": [
+        1.0,
+        1.0,
+        1.0
+      ]
+    },
+    {
+      "id": 185,
+      "name": "Spray_Can_F",
+      "order": 184,
+      "parentId": 111,
+      "path": "assets/Furniture/Garage/Models/Spray_Can_F.fbx",
+      "pathGuid": "20999e80b9079c21",
+      "position": [
+        78.232,
+        0.0,
+        0.0
+      ],
+      "rotation": [
+        0.0,
+        0.0,
+        0.0,
+        1.0
+      ],
+      "scale": [
+        1.0,
+        1.0,
+        1.0
+      ]
+    },
+    {
+      "id": 186,
+      "name": "Spray_Can_Set_A",
+      "order": 185,
+      "parentId": 111,
+      "path": "assets/Furniture/Garage/Models/Spray_Can_Set_A.fbx",
+      "pathGuid": "ce99beb4e9b3a315",
+      "position": [
+        79.061,
+        0.0,
+        0.0
+      ],
+      "rotation": [
+        0.0,
+        0.0,
+        0.0,
+        1.0
+      ],
+      "scale": [
+        1.0,
+        1.0,
+        1.0
+      ]
+    },
+    {
+      "id": 187,
+      "name": "Storage_Box_A",
+      "order": 186,
+      "parentId": 111,
+      "path": "assets/Furniture/Garage/Models/Storage_Box_A.fbx",
+      "pathGuid": "2f5c9ce2b6ea38d3",
+      "position": [
+        80.049,
+        0.0,
+        0.0
+      ],
+      "rotation": [
+        0.0,
+        0.0,
+        0.0,
+        1.0
+      ],
+      "scale": [
+        1.0,
+        1.0,
+        1.0
+      ]
+    },
+    {
+      "id": 188,
+      "name": "Storage_Box_B",
+      "order": 187,
+      "parentId": 111,
+      "path": "assets/Furniture/Garage/Models/Storage_Box_B.fbx",
+      "pathGuid": "3155d6022e355908",
+      "position": [
+        81.006,
+        0.0,
+        0.0
+      ],
+      "rotation": [
+        0.0,
+        0.0,
+        0.0,
+        1.0
+      ],
+      "scale": [
+        1.0,
+        1.0,
+        1.0
+      ]
+    },
+    {
+      "id": 189,
+      "name": "Storage_Box_C",
+      "order": 188,
+      "parentId": 111,
+      "path": "assets/Furniture/Garage/Models/Storage_Box_C.fbx",
+      "pathGuid": "55d8540786dcae1a",
+      "position": [
+        81.956,
+        0.0,
+        0.0
+      ],
+      "rotation": [
+        0.0,
+        0.0,
+        0.0,
+        1.0
+      ],
+      "scale": [
+        1.0,
+        1.0,
+        1.0
+      ]
+    },
+    {
+      "id": 190,
+      "name": "Storage_Box_Cylindrical",
+      "order": 189,
+      "parentId": 111,
+      "path": "assets/Furniture/Garage/Models/Storage_Box_Cylindrical.fbx",
+      "pathGuid": "4615901cd57330bd",
+      "position": [
+        82.819,
+        0.0,
+        0.0
+      ],
+      "rotation": [
+        0.0,
+        0.0,
+        0.0,
+        1.0
+      ],
+      "scale": [
+        1.0,
+        1.0,
+        1.0
+      ]
+    },
+    {
+      "id": 191,
+      "name": "Wrench",
+      "order": 190,
+      "parentId": 111,
+      "path": "assets/Furniture/Garage/Models/Wrench.fbx",
+      "pathGuid": "c86faad44c88579d",
+      "position": [
+        83.516,
+        0.0,
+        0.0
+      ],
+      "rotation": [
+        0.0,
+        0.0,
+        0.0,
+        1.0
+      ],
+      "scale": [
+        1.0,
+        1.0,
+        1.0
+      ]
+    },
+    {
+      "id": 193,
+      "name": "Book_Drawing_Kid",
+      "order": 192,
+      "parentId": 192,
+      "path": "assets/Furniture/Kids_Room/Models/Book_Drawing_Kid.fbx",
+      "pathGuid": "443b68a45f6c48ba",
+      "position": [
+        0.203,
+        0.0,
+        0.0
+      ],
+      "rotation": [
+        0.0,
+        0.0,
+        0.0,
+        1.0
+      ],
+      "scale": [
+        1.0,
+        1.0,
+        1.0
+      ]
+    },
+    {
+      "id": 194,
+      "name": "Book_Math_Kid",
+      "order": 193,
+      "parentId": 192,
+      "path": "assets/Furniture/Kids_Room/Models/Book_Math_Kid.fbx",
+      "pathGuid": "bd1e4bdf2bde925c",
+      "position": [
+        1.101,
+        0.0,
+        0.0
+      ],
+      "rotation": [
+        0.0,
+        0.0,
+        0.0,
+        1.0
+      ],
+      "scale": [
+        1.0,
+        1.0,
+        1.0
+      ]
+    },
+    {
+      "id": 195,
+      "name": "Carpet_Kid",
+      "order": 194,
+      "parentId": 192,
+      "path": "assets/Furniture/Kids_Room/Models/Carpet_Kid.fbx",
+      "pathGuid": "1cb1aeb90eb072ae",
+      "position": [
+        2.996,
+        0.0,
+        0.0
+      ],
+      "rotation": [
+        0.0,
+        0.0,
+        0.0,
+        1.0
+      ],
+      "scale": [
+        1.0,
+        1.0,
+        1.0
+      ]
+    },
+    {
+      "id": 196,
+      "name": "Folder_A_Kid",
+      "order": 195,
+      "parentId": 192,
+      "path": "assets/Furniture/Kids_Room/Models/Folder_A_Kid.fbx",
+      "pathGuid": "b1be00298f872cf2",
+      "position": [
+        4.837,
+        0.0,
+        0.0
+      ],
+      "rotation": [
+        0.0,
+        0.0,
+        0.0,
+        1.0
+      ],
+      "scale": [
+        1.0,
+        1.0,
+        1.0
+      ]
+    },
+    {
+      "id": 197,
+      "name": "Folder_B_Kid",
+      "order": 196,
+      "parentId": 192,
+      "path": "assets/Furniture/Kids_Room/Models/Folder_B_Kid.fbx",
+      "pathGuid": "5c9062ee65603a0c",
+      "position": [
+        5.519,
+        0.0,
+        0.0
+      ],
+      "rotation": [
+        0.0,
+        0.0,
+        0.0,
+        1.0
+      ],
+      "scale": [
+        1.0,
+        1.0,
+        1.0
+      ]
+    },
+    {
+      "id": 198,
+      "name": "Jar_Kid",
+      "order": 197,
+      "parentId": 192,
+      "path": "assets/Furniture/Kids_Room/Models/Jar_Kid.fbx",
+      "pathGuid": "67cf8b5ac99fbab1",
+      "position": [
+        6.222,
+        0.0,
+        0.0
+      ],
+      "rotation": [
+        0.0,
+        0.0,
+        0.0,
+        1.0
+      ],
+      "scale": [
+        1.0,
+        1.0,
+        1.0
+      ]
+    },
+    {
+      "id": 199,
+      "name": "Magazine_Comic_Kid",
+      "order": 198,
+      "parentId": 192,
+      "path": "assets/Furniture/Kids_Room/Models/Magazine_Comic_Kid.fbx",
+      "pathGuid": "20728aa1faa4bfbf",
+      "position": [
+        6.994,
+        0.0,
+        0.0
+      ],
+      "rotation": [
+        0.0,
+        0.0,
+        0.0,
+        1.0
+      ],
+      "scale": [
+        1.0,
+        1.0,
+        1.0
+      ]
+    },
+    {
+      "id": 200,
+      "name": "Notebook_Kid",
+      "order": 199,
+      "parentId": 192,
+      "path": "assets/Furniture/Kids_Room/Models/Notebook_Kid.fbx",
+      "pathGuid": "d18d5bf3e46bf302",
+      "position": [
+        7.8,
+        0.0,
+        0.0
+      ],
+      "rotation": [
+        0.0,
+        0.0,
+        0.0,
+        1.0
+      ],
+      "scale": [
+        1.0,
+        1.0,
+        1.0
+      ]
+    },
+    {
+      "id": 201,
+      "name": "Paper_Box_Kid",
+      "order": 200,
+      "parentId": 192,
+      "path": "assets/Furniture/Kids_Room/Models/Paper_Box_Kid.fbx",
+      "pathGuid": "3e97361710a9b1b2",
+      "position": [
+        8.639,
+        0.0,
+        0.0
+      ],
+      "rotation": [
+        0.0,
+        0.0,
+        0.0,
+        1.0
+      ],
+      "scale": [
+        1.0,
+        1.0,
+        1.0
+      ]
+    },
+    {
+      "id": 202,
+      "name": "Paper_Kid",
+      "order": 201,
+      "parentId": 192,
+      "path": "assets/Furniture/Kids_Room/Models/Paper_Kid.fbx",
+      "pathGuid": "8f8c8a3ec893e8fc",
+      "position": [
+        9.488,
+        0.0,
+        0.0
+      ],
+      "rotation": [
+        0.0,
+        0.0,
+        0.0,
+        1.0
+      ],
+      "scale": [
+        1.0,
+        1.0,
+        1.0
+      ]
+    },
+    {
+      "id": 203,
+      "name": "Pen_Holder_Kid",
+      "order": 202,
+      "parentId": 192,
+      "path": "assets/Furniture/Kids_Room/Models/Pen_Holder_Kid.fbx",
+      "pathGuid": "87276e8b56b27675",
+      "position": [
+        10.229,
+        0.0,
+        0.0
+      ],
+      "rotation": [
+        0.0,
+        0.0,
+        0.0,
+        1.0
+      ],
+      "scale": [
+        1.0,
+        1.0,
+        1.0
+      ]
+    },
+    {
+      "id": 204,
+      "name": "Pen_Marker_A_Kid",
+      "order": 203,
+      "parentId": 192,
+      "path": "assets/Furniture/Kids_Room/Models/Pen_Marker_A_Kid.fbx",
+      "pathGuid": "fcd134eb435ca317",
+      "position": [
+        10.875,
+        0.0,
+        0.0
+      ],
+      "rotation": [
+        0.0,
+        0.0,
+        0.0,
+        1.0
+      ],
+      "scale": [
+        1.0,
+        1.0,
+        1.0
+      ]
+    },
+    {
+      "id": 205,
+      "name": "Pen_Marker_B_Kid",
+      "order": 204,
+      "parentId": 192,
+      "path": "assets/Furniture/Kids_Room/Models/Pen_Marker_B_Kid.fbx",
+      "pathGuid": "7504f168eb74f69d",
+      "position": [
+        11.494,
+        0.0,
+        0.0
+      ],
+      "rotation": [
+        0.0,
+        0.0,
+        0.0,
+        1.0
+      ],
+      "scale": [
+        1.0,
+        1.0,
+        1.0
+      ]
+    },
+    {
+      "id": 206,
+      "name": "Pen_Marker_C_Kid",
+      "order": 205,
+      "parentId": 192,
+      "path": "assets/Furniture/Kids_Room/Models/Pen_Marker_C_Kid.fbx",
+      "pathGuid": "bc93573e3bfe4c6c",
+      "position": [
+        12.114,
+        0.0,
+        0.0
+      ],
+      "rotation": [
+        0.0,
+        0.0,
+        0.0,
+        1.0
+      ],
+      "scale": [
+        1.0,
+        1.0,
+        1.0
+      ]
+    },
+    {
+      "id": 207,
+      "name": "Pen_Set_A_Kid",
+      "order": 206,
+      "parentId": 192,
+      "path": "assets/Furniture/Kids_Room/Models/Pen_Set_A_Kid.fbx",
+      "pathGuid": "681fae4535cb3242",
+      "position": [
+        12.767,
+        0.0,
+        0.0
+      ],
+      "rotation": [
+        0.0,
+        0.0,
+        0.0,
+        1.0
+      ],
+      "scale": [
+        1.0,
+        1.0,
+        1.0
+      ]
+    },
+    {
+      "id": 208,
+      "name": "Pen_Set_B_Kid",
+      "order": 207,
+      "parentId": 192,
+      "path": "assets/Furniture/Kids_Room/Models/Pen_Set_B_Kid.fbx",
+      "pathGuid": "db2a75532bd665cb",
+      "position": [
+        13.55,
+        0.0,
+        0.0
+      ],
+      "rotation": [
+        0.0,
+        0.0,
+        0.0,
+        1.0
+      ],
+      "scale": [
+        1.0,
+        1.0,
+        1.0
+      ]
+    },
+    {
+      "id": 209,
+      "name": "Pencil_A_Kid",
+      "order": 208,
+      "parentId": 192,
+      "path": "assets/Furniture/Kids_Room/Models/Pencil_A_Kid.fbx",
+      "pathGuid": "b0fd6bb153a39ab1",
+      "position": [
+        14.296,
+        0.0,
+        0.0
+      ],
+      "rotation": [
+        0.0,
+        0.0,
+        0.0,
+        1.0
+      ],
+      "scale": [
+        1.0,
+        1.0,
+        1.0
+      ]
+    },
+    {
+      "id": 210,
+      "name": "Pencil_B_Kid",
+      "order": 209,
+      "parentId": 192,
+      "path": "assets/Furniture/Kids_Room/Models/Pencil_B_Kid.fbx",
+      "pathGuid": "81e04a7226104465",
+      "position": [
+        14.905,
+        0.0,
+        0.0
+      ],
+      "rotation": [
+        0.0,
+        0.0,
+        0.0,
+        1.0
+      ],
+      "scale": [
+        1.0,
+        1.0,
+        1.0
+      ]
+    },
+    {
+      "id": 211,
+      "name": "Poster_Kid_A",
+      "order": 210,
+      "parentId": 192,
+      "path": "assets/Furniture/Kids_Room/Models/Poster_Kid_A.fbx",
+      "pathGuid": "d7baca1606dd8396",
+      "position": [
+        15.786,
+        0.0,
+        0.0
+      ],
+      "rotation": [
+        0.0,
+        0.0,
+        0.0,
+        1.0
+      ],
+      "scale": [
+        1.0,
+        1.0,
+        1.0
+      ]
+    },
+    {
+      "id": 212,
+      "name": "Poster_Kid_B",
+      "order": 211,
+      "parentId": 192,
+      "path": "assets/Furniture/Kids_Room/Models/Poster_Kid_B.fbx",
+      "pathGuid": "d9f764ad37dfa514",
+      "position": [
+        16.934,
+        0.0,
+        0.0
+      ],
+      "rotation": [
+        0.0,
+        0.0,
+        0.0,
+        1.0
+      ],
+      "scale": [
+        1.0,
+        1.0,
+        1.0
+      ]
+    },
+    {
+      "id": 213,
+      "name": "Poster_Kid_C",
+      "order": 212,
+      "parentId": 192,
+      "path": "assets/Furniture/Kids_Room/Models/Poster_Kid_C.fbx",
+      "pathGuid": "aa71e355261c6c96",
+      "position": [
+        18.082,
+        0.0,
+        0.0
+      ],
+      "rotation": [
+        0.0,
+        0.0,
+        0.0,
+        1.0
+      ],
+      "scale": [
+        1.0,
+        1.0,
+        1.0
+      ]
+    },
+    {
+      "id": 214,
+      "name": "Poster_Kid_D",
+      "order": 213,
+      "parentId": 192,
+      "path": "assets/Furniture/Kids_Room/Models/Poster_Kid_D.fbx",
+      "pathGuid": "6c94d1ccf5c98468",
+      "position": [
+        19.335,
+        0.0,
+        0.0
+      ],
+      "rotation": [
+        0.0,
+        0.0,
+        0.0,
+        1.0
+      ],
+      "scale": [
+        1.0,
+        1.0,
+        1.0
+      ]
+    },
+    {
+      "id": 215,
+      "name": "Poster_Kid_E",
+      "order": 214,
+      "parentId": 192,
+      "path": "assets/Furniture/Kids_Room/Models/Poster_Kid_E.fbx",
+      "pathGuid": "38ae9fef68865286",
+      "position": [
+        20.55,
+        0.0,
+        0.0
+      ],
+      "rotation": [
+        0.0,
+        0.0,
+        0.0,
+        1.0
+      ],
+      "scale": [
+        1.0,
+        1.0,
+        1.0
+      ]
+    },
+    {
+      "id": 216,
+      "name": "Poster_Kid_F",
+      "order": 215,
+      "parentId": 192,
+      "path": "assets/Furniture/Kids_Room/Models/Poster_Kid_F.fbx",
+      "pathGuid": "8045dc764d09bd01",
+      "position": [
+        21.576,
+        0.0,
+        0.0
+      ],
+      "rotation": [
+        0.0,
+        0.0,
+        0.0,
+        1.0
+      ],
+      "scale": [
+        1.0,
+        1.0,
+        1.0
+      ]
+    },
+    {
+      "id": 217,
+      "name": "Poster_Kid_G",
+      "order": 216,
+      "parentId": 192,
+      "path": "assets/Furniture/Kids_Room/Models/Poster_Kid_G.fbx",
+      "pathGuid": "3920a497117bc91c",
+      "position": [
+        22.55,
+        0.0,
+        0.0
+      ],
+      "rotation": [
+        0.0,
+        0.0,
+        0.0,
+        1.0
+      ],
+      "scale": [
+        1.0,
+        1.0,
+        1.0
+      ]
+    },
+    {
+      "id": 218,
+      "name": "Toy_Block_A",
+      "order": 217,
+      "parentId": 192,
+      "path": "assets/Furniture/Kids_Room/Models/Toy_Block_A.fbx",
+      "pathGuid": "a6d730eafd858b0f",
+      "position": [
+        23.36,
+        0.0,
+        0.0
+      ],
+      "rotation": [
+        0.0,
+        0.0,
+        0.0,
+        1.0
+      ],
+      "scale": [
+        1.0,
+        1.0,
+        1.0
+      ]
+    },
+    {
+      "id": 219,
+      "name": "Toy_Block_B",
+      "order": 218,
+      "parentId": 192,
+      "path": "assets/Furniture/Kids_Room/Models/Toy_Block_B.fbx",
+      "pathGuid": "06665f6fecaeaa78",
+      "position": [
+        24.007,
+        0.0,
+        0.0
+      ],
+      "rotation": [
+        0.0,
+        0.0,
+        0.0,
+        1.0
+      ],
+      "scale": [
+        1.0,
+        1.0,
+        1.0
+      ]
+    },
+    {
+      "id": 220,
+      "name": "Toy_Block_C",
+      "order": 219,
+      "parentId": 192,
+      "path": "assets/Furniture/Kids_Room/Models/Toy_Block_C.fbx",
+      "pathGuid": "58d57c7d252c642c",
+      "position": [
+        24.654,
+        0.0,
+        0.0
+      ],
+      "rotation": [
+        0.0,
+        0.0,
+        0.0,
+        1.0
+      ],
+      "scale": [
+        1.0,
+        1.0,
+        1.0
+      ]
+    },
+    {
+      "id": 221,
+      "name": "Toy_Block_D",
+      "order": 220,
+      "parentId": 192,
+      "path": "assets/Furniture/Kids_Room/Models/Toy_Block_D.fbx",
+      "pathGuid": "93df4855b6efff3a",
+      "position": [
+        25.301,
+        0.0,
+        0.0
+      ],
+      "rotation": [
+        0.0,
+        0.0,
+        0.0,
+        1.0
+      ],
+      "scale": [
+        1.0,
+        1.0,
+        1.0
+      ]
+    },
+    {
+      "id": 222,
+      "name": "Toy_Block_Set_A",
+      "order": 221,
+      "parentId": 192,
+      "path": "assets/Furniture/Kids_Room/Models/Toy_Block_Set_A.fbx",
+      "pathGuid": "e126e35507863d97",
+      "position": [
+        26.169,
+        0.0,
+        0.0
+      ],
+      "rotation": [
+        0.0,
+        0.0,
+        0.0,
+        1.0
+      ],
+      "scale": [
+        1.0,
+        1.0,
+        1.0
+      ]
+    },
+    {
+      "id": 223,
+      "name": "Toy_Block_Set_B",
+      "order": 222,
+      "parentId": 192,
+      "path": "assets/Furniture/Kids_Room/Models/Toy_Block_Set_B.fbx",
+      "pathGuid": "c4941380abe07abd",
+      "position": [
+        27.2,
+        0.0,
+        0.0
+      ],
+      "rotation": [
+        0.0,
+        0.0,
+        0.0,
+        1.0
+      ],
+      "scale": [
+        1.0,
+        1.0,
+        1.0
+      ]
+    },
+    {
+      "id": 224,
+      "name": "Toy_Box_A",
+      "order": 223,
+      "parentId": 192,
+      "path": "assets/Furniture/Kids_Room/Models/Toy_Box_A.fbx",
+      "pathGuid": "4be0b9164b3eb84d",
+      "position": [
+        28.16,
+        0.0,
+        0.0
+      ],
+      "rotation": [
+        0.0,
+        0.0,
+        0.0,
+        1.0
+      ],
+      "scale": [
+        1.0,
+        1.0,
+        1.0
+      ]
+    },
+    {
+      "id": 225,
+      "name": "Toy_Box_A_Lid",
+      "order": 224,
+      "parentId": 192,
+      "path": "assets/Furniture/Kids_Room/Models/Toy_Box_A_Lid.fbx",
+      "pathGuid": "d245764e08b96bcb",
+      "position": [
+        28.16,
+        0.0,
+        0.0
+      ],
+      "rotation": [
+        0.0,
+        0.0,
+        0.0,
+        1.0
+      ],
+      "scale": [
+        1.0,
+        1.0,
+        1.0
+      ]
+    },
+    {
+      "id": 226,
+      "name": "Toy_Box_B",
+      "order": 225,
+      "parentId": 192,
+      "path": "assets/Furniture/Kids_Room/Models/Toy_Box_B.fbx",
+      "pathGuid": "b54f5ea3d6146ae1",
+      "position": [
+        29.062,
+        0.0,
+        0.0
+      ],
+      "rotation": [
+        0.0,
+        0.0,
+        0.0,
+        1.0
+      ],
+      "scale": [
+        1.0,
+        1.0,
+        1.0
+      ]
+    },
+    {
+      "id": 227,
+      "name": "Toy_Car_A",
+      "order": 226,
+      "parentId": 192,
+      "path": "assets/Furniture/Kids_Room/Models/Toy_Car_A.fbx",
+      "pathGuid": "7f97330fc78c8ace",
+      "position": [
+        29.818,
+        0.0,
+        0.0
+      ],
+      "rotation": [
+        0.0,
+        0.0,
+        0.0,
+        1.0
+      ],
+      "scale": [
+        1.0,
+        1.0,
+        1.0
+      ]
+    },
+    {
+      "id": 228,
+      "name": "Toy_Car_B",
+      "order": 227,
+      "parentId": 192,
+      "path": "assets/Furniture/Kids_Room/Models/Toy_Car_B.fbx",
+      "pathGuid": "589303715bbd334a",
+      "position": [
+        30.476,
+        0.0,
+        0.0
+      ],
+      "rotation": [
+        0.0,
+        0.0,
+        0.0,
+        1.0
+      ],
+      "scale": [
+        1.0,
+        1.0,
+        1.0
+      ]
+    },
+    {
+      "id": 229,
+      "name": "Toy_Car_C",
+      "order": 228,
+      "parentId": 192,
+      "path": "assets/Furniture/Kids_Room/Models/Toy_Car_C.fbx",
+      "pathGuid": "075d8dc5d3da5bdc",
+      "position": [
+        31.134,
+        0.0,
+        0.0
+      ],
+      "rotation": [
+        0.0,
+        0.0,
+        0.0,
+        1.0
+      ],
+      "scale": [
+        1.0,
+        1.0,
+        1.0
+      ]
+    },
+    {
+      "id": 230,
+      "name": "Toy_Dinosaur",
+      "order": 229,
+      "parentId": 192,
+      "path": "assets/Furniture/Kids_Room/Models/Toy_Dinosaur.fbx",
+      "pathGuid": "6e03e29468055efb",
+      "position": [
+        31.803,
+        0.0,
+        0.0
+      ],
+      "rotation": [
+        0.0,
+        0.0,
+        0.0,
+        1.0
+      ],
+      "scale": [
+        1.0,
+        1.0,
+        1.0
+      ]
+    },
+    {
+      "id": 231,
+      "name": "Toy_Muscleman",
+      "order": 230,
+      "parentId": 192,
+      "path": "assets/Furniture/Kids_Room/Models/Toy_Muscleman.fbx",
+      "pathGuid": "4a1fef60fbf1bdcf",
+      "position": [
+        32.515,
+        0.0,
+        0.0
+      ],
+      "rotation": [
+        0.0,
+        0.0,
+        0.0,
+        1.0
+      ],
+      "scale": [
+        1.0,
+        1.0,
+        1.0
+      ]
+    },
+    {
+      "id": 232,
+      "name": "Toy_Racetrack",
+      "order": 231,
+      "parentId": 192,
+      "path": "assets/Furniture/Kids_Room/Models/Toy_Racetrack.fbx",
+      "pathGuid": "5f44adb80ebd0e5d",
+      "position": [
+        33.594,
+        0.0,
+        0.0
+      ],
+      "rotation": [
+        0.0,
+        0.0,
+        0.0,
+        1.0
+      ],
+      "scale": [
+        1.0,
+        1.0,
+        1.0
+      ]
+    },
+    {
+      "id": 233,
+      "name": "Toy_Set_A",
+      "order": 232,
+      "parentId": 192,
+      "path": "assets/Furniture/Kids_Room/Models/Toy_Set_A.fbx",
+      "pathGuid": "68b7e1746b431166",
+      "position": [
+        35.082,
+        0.0,
+        0.0
+      ],
+      "rotation": [
+        0.0,
+        0.0,
+        0.0,
+        1.0
+      ],
+      "scale": [
+        1.0,
+        1.0,
+        1.0
+      ]
+    },
+    {
+      "id": 234,
+      "name": "Toy_Teddy",
+      "order": 233,
+      "parentId": 192,
+      "path": "assets/Furniture/Kids_Room/Models/Toy_Teddy.fbx",
+      "pathGuid": "5baae2448481124f",
+      "position": [
+        36.446,
+        0.0,
+        0.0
+      ],
+      "rotation": [
+        0.0,
+        0.0,
+        0.0,
+        1.0
+      ],
+      "scale": [
+        1.0,
+        1.0,
+        1.0
+      ]
+    },
+    {
+      "id": 235,
+      "name": "Toy_Truck",
+      "order": 234,
+      "parentId": 192,
+      "path": "assets/Furniture/Kids_Room/Models/Toy_Truck.fbx",
+      "pathGuid": "9a74e1bdc2fc0ebd",
+      "position": [
+        37.434,
+        0.0,
+        0.0
+      ],
+      "rotation": [
+        0.0,
+        0.0,
+        0.0,
+        1.0
+      ],
+      "scale": [
+        1.0,
+        1.0,
+        1.0
+      ]
+    },
+    {
+      "id": 237,
+      "name": "Bottle_A",
+      "order": 236,
+      "parentId": 236,
+      "path": "assets/Furniture/Kitchen/Models/Bottle_A.fbx",
+      "pathGuid": "20d0ed8a1d23db20",
+      "position": [
+        0.04,
+        0.0,
+        0.0
+      ],
+      "rotation": [
+        0.0,
+        0.0,
+        0.0,
+        1.0
+      ],
+      "scale": [
+        1.0,
+        1.0,
+        1.0
+      ]
+    },
+    {
+      "id": 238,
+      "name": "Bowl",
+      "order": 237,
+      "parentId": 236,
+      "path": "assets/Furniture/Kitchen/Models/Bowl.fbx",
+      "pathGuid": "7f8aeb6f4696fd6e",
+      "position": [
+        0.801,
+        0.0,
+        0.0
+      ],
+      "rotation": [
+        0.0,
+        0.0,
+        0.0,
+        1.0
+      ],
+      "scale": [
+        1.0,
+        1.0,
+        1.0
+      ]
+    },
+    {
+      "id": 239,
+      "name": "Bowl_Cereal",
+      "order": 238,
+      "parentId": 236,
+      "path": "assets/Furniture/Kitchen/Models/Bowl_Cereal.fbx",
+      "pathGuid": "2dfe0c078bab7ccf",
+      "position": [
+        1.61,
+        0.0,
+        0.0
+      ],
+      "rotation": [
+        0.0,
+        0.0,
+        0.0,
+        1.0
+      ],
+      "scale": [
+        1.0,
+        1.0,
+        1.0
+      ]
+    },
+    {
+      "id": 240,
+      "name": "Bowl_Cereal_Pile",
+      "order": 239,
+      "parentId": 236,
+      "path": "assets/Furniture/Kitchen/Models/Bowl_Cereal_Pile.fbx",
+      "pathGuid": "198e86de2613b345",
+      "position": [
+        2.389,
+        0.0,
+        0.0
+      ],
+      "rotation": [
+        0.0,
+        0.0,
+        0.0,
+        1.0
+      ],
+      "scale": [
+        1.0,
+        1.0,
+        1.0
+      ]
+    },
+    {
+      "id": 241,
+      "name": "Bowl_Pile",
+      "order": 240,
+      "parentId": 236,
+      "path": "assets/Furniture/Kitchen/Models/Bowl_Pile.fbx",
+      "pathGuid": "af303821139894f0",
+      "position": [
+        3.199,
+        0.0,
+        0.0
+      ],
+      "rotation": [
+        0.0,
+        0.0,
+        0.0,
+        1.0
+      ],
+      "scale": [
+        1.0,
+        1.0,
+        1.0
+      ]
+    },
+    {
+      "id": 242,
+      "name": "Can",
+      "order": 241,
+      "parentId": 236,
+      "path": "assets/Furniture/Kitchen/Models/Can.fbx",
+      "pathGuid": "1f5e84c2fa90cb3b",
+      "position": [
+        3.958,
+        0.0,
+        0.0
+      ],
+      "rotation": [
+        0.0,
+        0.0,
+        0.0,
+        1.0
+      ],
+      "scale": [
+        1.0,
+        1.0,
+        1.0
+      ]
+    },
+    {
+      "id": 243,
+      "name": "Chair_Dining",
+      "order": 242,
+      "parentId": 236,
+      "path": "assets/Furniture/Kitchen/Models/Chair_Dining.fbx",
+      "pathGuid": "722481aae39e602b",
+      "position": [
+        4.827,
+        0.0,
+        0.0
+      ],
+      "rotation": [
+        0.0,
+        0.0,
+        0.0,
+        1.0
+      ],
+      "scale": [
+        1.0,
+        1.0,
+        1.0
+      ]
+    },
+    {
+      "id": 244,
+      "name": "Coffee_Mug",
+      "order": 243,
+      "parentId": 236,
+      "path": "assets/Furniture/Kitchen/Models/Coffee_Mug.fbx",
+      "pathGuid": "73b3ce9fdd0cc324",
+      "position": [
+        5.72,
+        0.0,
+        0.0
+      ],
+      "rotation": [
+        0.0,
+        0.0,
+        0.0,
+        1.0
+      ],
+      "scale": [
+        1.0,
+        1.0,
+        1.0
+      ]
+    },
+    {
+      "id": 245,
+      "name": "Coffeemaker",
+      "order": 244,
+      "parentId": 236,
+      "path": "assets/Furniture/Kitchen/Models/Coffeemaker.fbx",
+      "pathGuid": "736083c7f5724cc9",
+      "position": [
+        6.481,
+        0.0,
+        0.0
+      ],
+      "rotation": [
+        0.0,
+        0.0,
+        0.0,
+        1.0
+      ],
+      "scale": [
+        1.0,
+        1.0,
+        1.0
+      ]
+    },
+    {
+      "id": 246,
+      "name": "Cooking_Pot",
+      "order": 245,
+      "parentId": 236,
+      "path": "assets/Furniture/Kitchen/Models/Cooking_Pot.fbx",
+      "pathGuid": "bf82ba759f51beac",
+      "position": [
+        7.33,
+        0.0,
+        0.0
+      ],
+      "rotation": [
+        0.0,
+        0.0,
+        0.0,
+        1.0
+      ],
+      "scale": [
+        1.0,
+        1.0,
+        1.0
+      ]
+    },
+    {
+      "id": 247,
+      "name": "Cooking_Spatula",
+      "order": 246,
+      "parentId": 236,
+      "path": "assets/Furniture/Kitchen/Models/Cooking_Spatula.fbx",
+      "pathGuid": "5a35ac41103da774",
+      "position": [
+        8.123,
+        0.0,
+        0.0
+      ],
+      "rotation": [
+        0.0,
+        0.0,
+        0.0,
+        1.0
+      ],
+      "scale": [
+        1.0,
+        1.0,
+        1.0
+      ]
+    },
+    {
+      "id": 248,
+      "name": "Cooking_Spoon",
+      "order": 247,
+      "parentId": 236,
+      "path": "assets/Furniture/Kitchen/Models/Cooking_Spoon.fbx",
+      "pathGuid": "60a219006b77b91f",
+      "position": [
+        8.803,
+        0.0,
+        0.0
+      ],
+      "rotation": [
+        0.0,
+        0.0,
+        0.0,
+        1.0
+      ],
+      "scale": [
+        1.0,
+        1.0,
+        1.0
+      ]
+    },
+    {
+      "id": 249,
+      "name": "Cooking_Whisk",
+      "order": 248,
+      "parentId": 236,
+      "path": "assets/Furniture/Kitchen/Models/Cooking_Whisk.fbx",
+      "pathGuid": "466f5989bf377a60",
+      "position": [
+        9.482,
+        0.0,
+        0.0
+      ],
+      "rotation": [
+        0.0,
+        0.0,
+        0.0,
+        1.0
+      ],
+      "scale": [
+        1.0,
+        1.0,
+        1.0
+      ]
+    },
+    {
+      "id": 250,
+      "name": "Fridge",
+      "order": 249,
+      "parentId": 236,
+      "path": "assets/Furniture/Kitchen/Models/Fridge.fbx",
+      "pathGuid": "eac63d7375a497fe",
+      "position": [
+        10.523,
+        0.0,
+        0.0
+      ],
+      "rotation": [
+        0.0,
+        0.0,
+        0.0,
+        1.0
+      ],
+      "scale": [
+        1.0,
+        1.0,
+        1.0
+      ]
+    },
+    {
+      "id": 251,
+      "name": "Frying_Pan",
+      "order": 250,
+      "parentId": 236,
+      "path": "assets/Furniture/Kitchen/Models/Frying_Pan.fbx",
+      "pathGuid": "53e47891afbb4225",
+      "position": [
+        11.671,
+        0.0,
+        0.0
+      ],
+      "rotation": [
+        0.0,
+        0.0,
+        0.0,
+        1.0
+      ],
+      "scale": [
+        1.0,
+        1.0,
+        1.0
+      ]
+    },
+    {
+      "id": 252,
+      "name": "Glass_Drinking",
+      "order": 251,
+      "parentId": 236,
+      "path": "assets/Furniture/Kitchen/Models/Glass_Drinking.fbx",
+      "pathGuid": "f71d2d7a4e56ccec",
+      "position": [
+        12.46,
+        0.0,
+        0.0
+      ],
+      "rotation": [
+        0.0,
+        0.0,
+        0.0,
+        1.0
+      ],
+      "scale": [
+        1.0,
+        1.0,
+        1.0
+      ]
+    },
+    {
+      "id": 253,
+      "name": "Glass_Drinking_Pile",
+      "order": 252,
+      "parentId": 236,
+      "path": "assets/Furniture/Kitchen/Models/Glass_Drinking_Pile.fbx",
+      "pathGuid": "02847d41fd930db0",
+      "position": [
+        13.136,
+        0.0,
+        0.0
+      ],
+      "rotation": [
+        0.0,
+        0.0,
+        0.0,
+        1.0
+      ],
+      "scale": [
+        1.0,
+        1.0,
+        1.0
+      ]
+    },
+    {
+      "id": 254,
+      "name": "Glass_Wine",
+      "order": 253,
+      "parentId": 236,
+      "path": "assets/Furniture/Kitchen/Models/Glass_Wine.fbx",
+      "pathGuid": "8889b2355b5b941e",
+      "position": [
+        13.817,
+        0.0,
+        0.0
+      ],
+      "rotation": [
+        0.0,
+        0.0,
+        0.0,
+        1.0
+      ],
+      "scale": [
+        1.0,
+        1.0,
+        1.0
+      ]
+    },
+    {
+      "id": 255,
+      "name": "Jar_A",
+      "order": 254,
+      "parentId": 236,
+      "path": "assets/Furniture/Kitchen/Models/Jar_A.fbx",
+      "pathGuid": "92084bc24f2f984f",
+      "position": [
+        14.541,
+        0.0,
+        0.0
+      ],
+      "rotation": [
+        0.0,
+        0.0,
+        0.0,
+        1.0
+      ],
+      "scale": [
+        1.0,
+        1.0,
+        1.0
+      ]
+    },
+    {
+      "id": 256,
+      "name": "Jar_B",
+      "order": 255,
+      "parentId": 236,
+      "path": "assets/Furniture/Kitchen/Models/Jar_B.fbx",
+      "pathGuid": "b6821c4d2c944add",
+      "position": [
+        15.288,
+        0.0,
+        0.0
+      ],
+      "rotation": [
+        0.0,
+        0.0,
+        0.0,
+        1.0
+      ],
+      "scale": [
+        1.0,
+        1.0,
+        1.0
+      ]
+    },
+    {
+      "id": 257,
+      "name": "Jar_C",
+      "order": 256,
+      "parentId": 236,
+      "path": "assets/Furniture/Kitchen/Models/Jar_C.fbx",
+      "pathGuid": "2eaa33c4db95049f",
+      "position": [
+        16.02,
+        0.0,
+        0.0
+      ],
+      "rotation": [
+        0.0,
+        0.0,
+        0.0,
+        1.0
+      ],
+      "scale": [
+        1.0,
+        1.0,
+        1.0
+      ]
+    },
+    {
+      "id": 258,
+      "name": "Kitchen_Cabinet_A",
+      "order": 257,
+      "parentId": 236,
+      "path": "assets/Furniture/Kitchen/Models/Kitchen_Cabinet_A.fbx",
+      "pathGuid": "a9f9850f8b119a21",
+      "position": [
+        17.187,
+        0.0,
+        0.0
+      ],
+      "rotation": [
+        0.0,
+        0.0,
+        0.0,
+        1.0
+      ],
+      "scale": [
+        1.0,
+        1.0,
+        1.0
+      ]
+    },
+    {
+      "id": 259,
+      "name": "Kitchen_Cabinet_A_Door_A_L",
+      "order": 258,
+      "parentId": 236,
+      "path": "assets/Furniture/Kitchen/Models/Kitchen_Cabinet_A_Door_A_L.fbx",
+      "pathGuid": "cf30ba7d348b90e1",
+      "position": [
+        17.187,
+        0.0,
+        0.0
+      ],
+      "rotation": [
+        0.0,
+        0.0,
+        0.0,
+        1.0
+      ],
+      "scale": [
+        1.0,
+        1.0,
+        1.0
+      ]
+    },
+    {
+      "id": 260,
+      "name": "Kitchen_Cabinet_A_Door_A_R",
+      "order": 259,
+      "parentId": 236,
+      "path": "assets/Furniture/Kitchen/Models/Kitchen_Cabinet_A_Door_A_R.fbx",
+      "pathGuid": "92fed0f2519274cc",
+      "position": [
+        17.187,
+        0.0,
+        0.0
+      ],
+      "rotation": [
+        0.0,
+        0.0,
+        0.0,
+        1.0
+      ],
+      "scale": [
+        1.0,
+        1.0,
+        1.0
+      ]
+    },
+    {
+      "id": 261,
+      "name": "Kitchen_Cabinet_A_Door_B_L",
+      "order": 260,
+      "parentId": 236,
+      "path": "assets/Furniture/Kitchen/Models/Kitchen_Cabinet_A_Door_B_L.fbx",
+      "pathGuid": "5be7545e50ebcaaa",
+      "position": [
+        17.187,
+        0.0,
+        0.0
+      ],
+      "rotation": [
+        0.0,
+        0.0,
+        0.0,
+        1.0
+      ],
+      "scale": [
+        1.0,
+        1.0,
+        1.0
+      ]
+    },
+    {
+      "id": 262,
+      "name": "Kitchen_Cabinet_A_Door_B_R",
+      "order": 261,
+      "parentId": 236,
+      "path": "assets/Furniture/Kitchen/Models/Kitchen_Cabinet_A_Door_B_R.fbx",
+      "pathGuid": "b2e44e2ccc4dc1d0",
+      "position": [
+        17.187,
+        0.0,
+        0.0
+      ],
+      "rotation": [
+        0.0,
+        0.0,
+        0.0,
+        1.0
+      ],
+      "scale": [
+        1.0,
+        1.0,
+        1.0
+      ]
+    },
+    {
+      "id": 263,
+      "name": "Kitchen_Cabinet_B",
+      "order": 262,
+      "parentId": 236,
+      "path": "assets/Furniture/Kitchen/Models/Kitchen_Cabinet_B.fbx",
+      "pathGuid": "3676fac43762fba6",
+      "position": [
+        19.209,
+        0.0,
+        0.0
+      ],
+      "rotation": [
+        0.0,
+        0.0,
+        0.0,
+        1.0
+      ],
+      "scale": [
+        1.0,
+        1.0,
+        1.0
+      ]
+    },
+    {
+      "id": 264,
+      "name": "Kitchen_Cabinet_B_Door_A_L",
+      "order": 263,
+      "parentId": 236,
+      "path": "assets/Furniture/Kitchen/Models/Kitchen_Cabinet_B_Door_A_L.fbx",
+      "pathGuid": "2abba83c1089ba9b",
+      "position": [
+        19.209,
+        0.0,
+        0.0
+      ],
+      "rotation": [
+        0.0,
+        0.0,
+        0.0,
+        1.0
+      ],
+      "scale": [
+        1.0,
+        1.0,
+        1.0
+      ]
+    },
+    {
+      "id": 265,
+      "name": "Kitchen_Cabinet_B_Door_A_R",
+      "order": 264,
+      "parentId": 236,
+      "path": "assets/Furniture/Kitchen/Models/Kitchen_Cabinet_B_Door_A_R.fbx",
+      "pathGuid": "a39a72d208e43d60",
+      "position": [
+        19.209,
+        0.0,
+        0.0
+      ],
+      "rotation": [
+        0.0,
+        0.0,
+        0.0,
+        1.0
+      ],
+      "scale": [
+        1.0,
+        1.0,
+        1.0
+      ]
+    },
+    {
+      "id": 266,
+      "name": "Kitchen_Cabinet_B_Door_B_L",
+      "order": 265,
+      "parentId": 236,
+      "path": "assets/Furniture/Kitchen/Models/Kitchen_Cabinet_B_Door_B_L.fbx",
+      "pathGuid": "4780dd1b7a6a370b",
+      "position": [
+        19.209,
+        0.0,
+        0.0
+      ],
+      "rotation": [
+        0.0,
+        0.0,
+        0.0,
+        1.0
+      ],
+      "scale": [
+        1.0,
+        1.0,
+        1.0
+      ]
+    },
+    {
+      "id": 267,
+      "name": "Kitchen_Cabinet_B_Door_B_R",
+      "order": 266,
+      "parentId": 236,
+      "path": "assets/Furniture/Kitchen/Models/Kitchen_Cabinet_B_Door_B_R.fbx",
+      "pathGuid": "70de779a49623d1e",
+      "position": [
+        19.209,
+        0.0,
+        0.0
+      ],
+      "rotation": [
+        0.0,
+        0.0,
+        0.0,
+        1.0
+      ],
+      "scale": [
+        1.0,
+        1.0,
+        1.0
+      ]
+    },
+    {
+      "id": 268,
+      "name": "Kitchen_Cabinet_Corner",
+      "order": 267,
+      "parentId": 236,
+      "path": "assets/Furniture/Kitchen/Models/Kitchen_Cabinet_Corner.fbx",
+      "pathGuid": "914cf383028c8ec4",
+      "position": [
+        21.47,
+        0.0,
+        0.0
+      ],
+      "rotation": [
+        0.0,
+        0.0,
+        0.0,
+        1.0
+      ],
+      "scale": [
+        1.0,
+        1.0,
+        1.0
+      ]
+    },
+    {
+      "id": 269,
+      "name": "Kitchen_Cabinet_Corner_Door_A",
+      "order": 268,
+      "parentId": 236,
+      "path": "assets/Furniture/Kitchen/Models/Kitchen_Cabinet_Corner_Door_A.fbx",
+      "pathGuid": "e4bba05c7670d3e8",
+      "position": [
+        21.47,
+        0.0,
+        0.0
+      ],
+      "rotation": [
+        0.0,
+        0.0,
+        0.0,
+        1.0
+      ],
+      "scale": [
+        1.0,
+        1.0,
+        1.0
+      ]
+    },
+    {
+      "id": 270,
+      "name": "Kitchen_Cabinet_Corner_Door_B",
+      "order": 269,
+      "parentId": 236,
+      "path": "assets/Furniture/Kitchen/Models/Kitchen_Cabinet_Corner_Door_B.fbx",
+      "pathGuid": "e8fa8ab308c91273",
+      "position": [
+        21.47,
+        0.0,
+        0.0
+      ],
+      "rotation": [
+        0.0,
+        0.0,
+        0.0,
+        1.0
+      ],
+      "scale": [
+        1.0,
+        1.0,
+        1.0
+      ]
+    },
+    {
+      "id": 271,
+      "name": "Kitchen_Cabinet_End_L",
+      "order": 270,
+      "parentId": 236,
+      "path": "assets/Furniture/Kitchen/Models/Kitchen_Cabinet_End_L.fbx",
+      "pathGuid": "b8aecd7b3223084f",
+      "position": [
+        22.538,
+        0.0,
+        0.0
+      ],
+      "rotation": [
+        0.0,
+        0.0,
+        0.0,
+        1.0
+      ],
+      "scale": [
+        1.0,
+        1.0,
+        1.0
+      ]
+    },
+    {
+      "id": 272,
+      "name": "Kitchen_Cabinet_End_R",
+      "order": 271,
+      "parentId": 236,
+      "path": "assets/Furniture/Kitchen/Models/Kitchen_Cabinet_End_R.fbx",
+      "pathGuid": "c69e88e3d415fcf0",
+      "position": [
+        23.173,
+        0.0,
+        0.0
+      ],
+      "rotation": [
+        0.0,
+        0.0,
+        0.0,
+        1.0
+      ],
+      "scale": [
+        1.0,
+        1.0,
+        1.0
+      ]
+    },
+    {
+      "id": 273,
+      "name": "Kitchen_Cabinet_Large",
+      "order": 272,
+      "parentId": 236,
+      "path": "assets/Furniture/Kitchen/Models/Kitchen_Cabinet_Large.fbx",
+      "pathGuid": "9b72496d52efa862",
+      "position": [
+        24.576,
+        0.0,
+        0.0
+      ],
+      "rotation": [
+        0.0,
+        0.0,
+        0.0,
+        1.0
+      ],
+      "scale": [
+        1.0,
+        1.0,
+        1.0
+      ]
+    },
+    {
+      "id": 274,
+      "name": "Kitchen_Cabinet_Large_Door_A",
+      "order": 273,
+      "parentId": 236,
+      "path": "assets/Furniture/Kitchen/Models/Kitchen_Cabinet_Large_Door_A.fbx",
+      "pathGuid": "5d60d93dff6bbf9a",
+      "position": [
+        24.576,
+        0.0,
+        0.0
+      ],
+      "rotation": [
+        0.0,
+        0.0,
+        0.0,
+        1.0
+      ],
+      "scale": [
+        1.0,
+        1.0,
+        1.0
+      ]
+    },
+    {
+      "id": 275,
+      "name": "Kitchen_Cabinet_Large_Door_B",
+      "order": 274,
+      "parentId": 236,
+      "path": "assets/Furniture/Kitchen/Models/Kitchen_Cabinet_Large_Door_B.fbx",
+      "pathGuid": "27c21aea54de5251",
+      "position": [
+        24.576,
+        0.0,
+        0.0
+      ],
+      "rotation": [
+        0.0,
+        0.0,
+        0.0,
+        1.0
+      ],
+      "scale": [
+        1.0,
+        1.0,
+        1.0
+      ]
+    },
+    {
+      "id": 276,
+      "name": "Kitchen_Cabinet_Large_Door_C",
+      "order": 275,
+      "parentId": 236,
+      "path": "assets/Furniture/Kitchen/Models/Kitchen_Cabinet_Large_Door_C.fbx",
+      "pathGuid": "aca4acdf5045b10b",
+      "position": [
+        24.576,
+        0.0,
+        0.0
+      ],
+      "rotation": [
+        0.0,
+        0.0,
+        0.0,
+        1.0
+      ],
+      "scale": [
+        1.0,
+        1.0,
+        1.0
+      ]
+    },
+    {
+      "id": 277,
+      "name": "Kitchen_Counter_A",
+      "order": 276,
+      "parentId": 236,
+      "path": "assets/Furniture/Kitchen/Models/Kitchen_Counter_A.fbx",
+      "pathGuid": "9afdd79f17872b80",
+      "position": [
+        26.461,
+        0.0,
+        0.0
+      ],
+      "rotation": [
+        0.0,
+        0.0,
+        0.0,
+        1.0
+      ],
+      "scale": [
+        1.0,
+        1.0,
+        1.0
+      ]
+    },
+    {
+      "id": 278,
+      "name": "Kitchen_Counter_Corner",
+      "order": 277,
+      "parentId": 236,
+      "path": "assets/Furniture/Kitchen/Models/Kitchen_Counter_Corner.fbx",
+      "pathGuid": "315b484393773c73",
+      "position": [
+        28.011,
+        0.0,
+        0.0
+      ],
+      "rotation": [
+        0.0,
+        0.0,
+        0.0,
+        1.0
+      ],
+      "scale": [
+        1.0,
+        1.0,
+        1.0
+      ]
+    },
+    {
+      "id": 279,
+      "name": "Kitchen_Counter_Door_L",
+      "order": 278,
+      "parentId": 236,
+      "path": "assets/Furniture/Kitchen/Models/Kitchen_Counter_Door_L.fbx",
+      "pathGuid": "9d5cd40c751ee19d",
+      "position": [
+        29.305,
+        0.0,
+        0.0
+      ],
+      "rotation": [
+        0.0,
+        0.0,
+        0.0,
+        1.0
+      ],
+      "scale": [
+        1.0,
+        1.0,
+        1.0
+      ]
+    },
+    {
+      "id": 280,
+      "name": "Kitchen_Counter_Door_R",
+      "order": 279,
+      "parentId": 236,
+      "path": "assets/Furniture/Kitchen/Models/Kitchen_Counter_Door_R.fbx",
+      "pathGuid": "7e849afdd0a6e9ed",
+      "position": [
+        30.392,
+        0.0,
+        0.0
+      ],
+      "rotation": [
+        0.0,
+        0.0,
+        0.0,
+        1.0
+      ],
+      "scale": [
+        1.0,
+        1.0,
+        1.0
+      ]
+    },
+    {
+      "id": 281,
+      "name": "Kitchen_Counter_Drawer",
+      "order": 280,
+      "parentId": 236,
+      "path": "assets/Furniture/Kitchen/Models/Kitchen_Counter_Drawer.fbx",
+      "pathGuid": "01f9f6b8839e3002",
+      "position": [
+        31.466,
+        0.0,
+        0.0
+      ],
+      "rotation": [
+        0.0,
+        0.0,
+        0.0,
+        1.0
+      ],
+      "scale": [
+        1.0,
+        1.0,
+        1.0
+      ]
+    },
+    {
+      "id": 282,
+      "name": "Kitchen_Counter_Island",
+      "order": 281,
+      "parentId": 236,
+      "path": "assets/Furniture/Kitchen/Models/Kitchen_Counter_Island.fbx",
+      "pathGuid": "b1c4a02a17802d0b",
+      "position": [
+        33.083,
+        0.0,
+        0.0
+      ],
+      "rotation": [
+        0.0,
+        0.0,
+        0.0,
+        1.0
+      ],
+      "scale": [
+        1.0,
+        1.0,
+        1.0
+      ]
+    },
+    {
+      "id": 283,
+      "name": "Kitchen_Counter_Sink",
+      "order": 282,
+      "parentId": 236,
+      "path": "assets/Furniture/Kitchen/Models/Kitchen_Counter_Sink.fbx",
+      "pathGuid": "552dd0c590863a8b",
+      "position": [
+        34.968,
+        0.0,
+        0.0
+      ],
+      "rotation": [
+        0.0,
+        0.0,
+        0.0,
+        1.0
+      ],
+      "scale": [
+        1.0,
+        1.0,
+        1.0
+      ]
+    },
+    {
+      "id": 284,
+      "name": "Kitchen_Items_Set_A",
+      "order": 283,
+      "parentId": 236,
+      "path": "assets/Furniture/Kitchen/Models/Kitchen_Items_Set_A.fbx",
+      "pathGuid": "dcbbd1b8c7027f41",
+      "position": [
+        36.466,
+        0.0,
+        0.0
+      ],
+      "rotation": [
+        0.0,
+        0.0,
+        0.0,
+        1.0
+      ],
+      "scale": [
+        1.0,
+        1.0,
+        1.0
+      ]
+    },
+    {
+      "id": 285,
+      "name": "Macaroni_Package",
+      "order": 284,
+      "parentId": 236,
+      "path": "assets/Furniture/Kitchen/Models/Macaroni_Package.fbx",
+      "pathGuid": "253b0f377c1bcc38",
+      "position": [
+        37.543,
+        0.0,
+        0.0
+      ],
+      "rotation": [
+        0.0,
+        0.0,
+        0.0,
+        1.0
+      ],
+      "scale": [
+        1.0,
+        1.0,
+        1.0
+      ]
+    },
+    {
+      "id": 286,
+      "name": "Metal_Plate",
+      "order": 285,
+      "parentId": 236,
+      "path": "assets/Furniture/Kitchen/Models/Metal_Plate.fbx",
+      "pathGuid": "72f085f37b8afb85",
+      "position": [
+        38.568,
+        0.0,
+        0.0
+      ],
+      "rotation": [
+        0.0,
+        0.0,
+        0.0,
+        1.0
+      ],
+      "scale": [
+        1.0,
+        1.0,
+        1.0
+      ]
+    },
+    {
+      "id": 287,
+      "name": "Pepper_Mill",
+      "order": 286,
+      "parentId": 236,
+      "path": "assets/Furniture/Kitchen/Models/Pepper_Mill.fbx",
+      "pathGuid": "0233e62e1ebae0eb",
+      "position": [
+        39.54,
+        0.0,
+        0.0
+      ],
+      "rotation": [
+        0.0,
+        0.0,
+        0.0,
+        1.0
+      ],
+      "scale": [
+        1.0,
+        1.0,
+        1.0
+      ]
+    },
+    {
+      "id": 288,
+      "name": "Plate_Pile",
+      "order": 287,
+      "parentId": 236,
+      "path": "assets/Furniture/Kitchen/Models/Plate_Pile.fbx",
+      "pathGuid": "3e08896d4d77788d",
+      "position": [
+        40.32,
+        0.0,
+        0.0
+      ],
+      "rotation": [
+        0.0,
+        0.0,
+        0.0,
+        1.0
+      ],
+      "scale": [
+        1.0,
+        1.0,
+        1.0
+      ]
+    },
+    {
+      "id": 289,
+      "name": "Plate_Single",
+      "order": 288,
+      "parentId": 236,
+      "path": "assets/Furniture/Kitchen/Models/Plate_Single.fbx",
+      "pathGuid": "252448c5ad5ada1b",
+      "position": [
+        41.23,
+        0.0,
+        0.0
+      ],
+      "rotation": [
+        0.0,
+        0.0,
+        0.0,
+        1.0
+      ],
+      "scale": [
+        1.0,
+        1.0,
+        1.0
+      ]
+    },
+    {
+      "id": 290,
+      "name": "Pot_Kitchen",
+      "order": 289,
+      "parentId": 236,
+      "path": "assets/Furniture/Kitchen/Models/Pot_Kitchen.fbx",
+      "pathGuid": "9e5fdd907ad2806c",
+      "position": [
+        42.154,
+        0.0,
+        0.0
+      ],
+      "rotation": [
+        0.0,
+        0.0,
+        0.0,
+        1.0
+      ],
+      "scale": [
+        1.0,
+        1.0,
+        1.0
+      ]
+    },
+    {
+      "id": 291,
+      "name": "Stove",
+      "order": 290,
+      "parentId": 236,
+      "path": "assets/Furniture/Kitchen/Models/Stove.fbx",
+      "pathGuid": "173ad39c7f0b4b53",
+      "position": [
+        43.413,
+        0.0,
+        0.0
+      ],
+      "rotation": [
+        0.0,
+        0.0,
+        0.0,
+        1.0
+      ],
+      "scale": [
+        1.0,
+        1.0,
+        1.0
+      ]
+    },
+    {
+      "id": 292,
+      "name": "Stove_Cooker_Hood",
+      "order": 291,
+      "parentId": 236,
+      "path": "assets/Furniture/Kitchen/Models/Stove_Cooker_Hood.fbx",
+      "pathGuid": "b0dc5bcbaa44f92a",
+      "position": [
+        45.003,
+        0.0,
+        0.0
+      ],
+      "rotation": [
+        0.0,
+        0.0,
+        0.0,
+        1.0
+      ],
+      "scale": [
+        1.0,
+        1.0,
+        1.0
+      ]
+    },
+    {
+      "id": 293,
+      "name": "Table_Dining",
+      "order": 292,
+      "parentId": 236,
+      "path": "assets/Furniture/Kitchen/Models/Table_Dining.fbx",
+      "pathGuid": "76b8558edcd72ebf",
+      "position": [
+        46.9,
+        0.0,
+        0.0
+      ],
+      "rotation": [
+        0.0,
+        0.0,
+        0.0,
+        1.0
+      ],
+      "scale": [
+        1.0,
+        1.0,
+        1.0
+      ]
+    },
+    {
+      "id": 294,
+      "name": "Teapot",
+      "order": 293,
+      "parentId": 236,
+      "path": "assets/Furniture/Kitchen/Models/Teapot.fbx",
+      "pathGuid": "0397a543f7d2bc2d",
+      "position": [
+        48.444,
+        0.0,
+        0.0
+      ],
+      "rotation": [
+        0.0,
+        0.0,
+        0.0,
+        1.0
+      ],
+      "scale": [
+        1.0,
+        1.0,
+        1.0
+      ]
+    },
+    {
+      "id": 295,
+      "name": "Utensil_Holder",
+      "order": 294,
+      "parentId": 236,
+      "path": "assets/Furniture/Kitchen/Models/Utensil_Holder.fbx",
+      "pathGuid": "ad0cc5d7f52f8c58",
+      "position": [
+        49.305,
+        0.0,
+        0.0
+      ],
+      "rotation": [
+        0.0,
+        0.0,
+        0.0,
+        1.0
+      ],
+      "scale": [
+        1.0,
+        1.0,
+        1.0
+      ]
+    },
+    {
+      "id": 296,
+      "name": "Utensil_Holder_Full",
+      "order": 295,
+      "parentId": 236,
+      "path": "assets/Furniture/Kitchen/Models/Utensil_Holder_Full.fbx",
+      "pathGuid": "5dd6947bd3750f0a",
+      "position": [
+        50.142,
+        0.0,
+        0.0
+      ],
+      "rotation": [
+        0.0,
+        0.0,
+        0.0,
+        1.0
+      ],
+      "scale": [
+        1.0,
+        1.0,
+        1.0
+      ]
+    },
+    {
+      "id": 298,
+      "name": "Lamp_Ceiling_A",
+      "order": 297,
+      "parentId": 297,
+      "path": "assets/Furniture/Lighting/Models/Lamp_Ceiling_A.fbx",
+      "pathGuid": "dbafb75fbe889dec",
+      "position": [
+        0.15,
+        0.148,
+        0.0
+      ],
+      "rotation": [
+        0.0,
+        0.0,
+        0.0,
+        1.0
+      ],
+      "scale": [
+        1.0,
+        1.0,
+        1.0
+      ]
+    },
+    {
+      "id": 299,
+      "name": "Lamp_Ceiling_B",
+      "order": 298,
+      "parentId": 297,
+      "path": "assets/Furniture/Lighting/Models/Lamp_Ceiling_B.fbx",
+      "pathGuid": "8e3514f80a8657d2",
+      "position": [
+        1.032,
+        0.034,
+        0.0
+      ],
+      "rotation": [
+        0.0,
+        0.0,
+        0.0,
+        1.0
+      ],
+      "scale": [
+        1.0,
+        1.0,
+        1.0
+      ]
+    },
+    {
+      "id": 300,
+      "name": "Lamp_Ceilingfan",
+      "order": 299,
+      "parentId": 297,
+      "path": "assets/Furniture/Lighting/Models/Lamp_Ceilingfan.fbx",
+      "pathGuid": "89471ac8ed7a3386",
+      "position": [
+        2.44,
+        0.273,
+        0.0
+      ],
+      "rotation": [
+        0.0,
+        0.0,
+        0.0,
+        1.0
+      ],
+      "scale": [
+        1.0,
+        1.0,
+        1.0
+      ]
+    },
+    {
+      "id": 301,
+      "name": "Lamp_Chandelier_A",
+      "order": 300,
+      "parentId": 297,
+      "path": "assets/Furniture/Lighting/Models/Lamp_Chandelier_A.fbx",
+      "pathGuid": "c404c72c9f14db2c",
+      "position": [
+        4.101,
+        1.316,
+        0.0
+      ],
+      "rotation": [
+        0.0,
+        0.0,
+        0.0,
+        1.0
+      ],
+      "scale": [
+        1.0,
+        1.0,
+        1.0
+      ]
+    },
+    {
+      "id": 302,
+      "name": "Lamp_Chandelier_B",
+      "order": 301,
+      "parentId": 297,
+      "path": "assets/Furniture/Lighting/Models/Lamp_Chandelier_B.fbx",
+      "pathGuid": "11be3309749053ea",
+      "position": [
+        5.397,
+        0.913,
+        0.0
+      ],
+      "rotation": [
+        0.0,
+        0.0,
+        0.0,
+        1.0
+      ],
+      "scale": [
+        1.0,
+        1.0,
+        1.0
+      ]
+    },
+    {
+      "id": 303,
+      "name": "Lamp_Floor_A",
+      "order": 302,
+      "parentId": 297,
+      "path": "assets/Furniture/Lighting/Models/Lamp_Floor_A.fbx",
+      "pathGuid": "a0b6ab1a13e85910",
+      "position": [
+        6.534,
+        0.0,
+        0.0
+      ],
+      "rotation": [
+        0.0,
+        0.0,
+        0.0,
+        1.0
+      ],
+      "scale": [
+        1.0,
+        1.0,
+        1.0
+      ]
+    },
+    {
+      "id": 304,
+      "name": "Lamp_Fluorescent_A",
+      "order": 303,
+      "parentId": 297,
+      "path": "assets/Furniture/Lighting/Models/Lamp_Fluorescent_A.fbx",
+      "pathGuid": "531a461150b6ba41",
+      "position": [
+        7.463,
+        0.05,
+        0.0
+      ],
+      "rotation": [
+        0.0,
+        0.0,
+        0.0,
+        1.0
+      ],
+      "scale": [
+        1.0,
+        1.0,
+        1.0
+      ]
+    },
+    {
+      "id": 305,
+      "name": "Lamp_Fluorescent_B",
+      "order": 304,
+      "parentId": 297,
+      "path": "assets/Furniture/Lighting/Models/Lamp_Fluorescent_B.fbx",
+      "pathGuid": "02e6f5aa934062a9",
+      "position": [
+        8.578,
+        0.059,
+        0.0
+      ],
+      "rotation": [
+        0.0,
+        0.0,
+        0.0,
+        1.0
+      ],
+      "scale": [
+        1.0,
+        1.0,
+        1.0
+      ]
+    },
+    {
+      "id": 306,
+      "name": "Lamp_Table_A",
+      "order": 305,
+      "parentId": 297,
+      "path": "assets/Furniture/Lighting/Models/Lamp_Table_A.fbx",
+      "pathGuid": "aa6ae4aff455baca",
+      "position": [
+        9.745,
+        0.0,
+        0.0
+      ],
+      "rotation": [
+        0.0,
+        0.0,
+        0.0,
+        1.0
+      ],
+      "scale": [
+        1.0,
+        1.0,
+        1.0
+      ]
+    },
+    {
+      "id": 307,
+      "name": "Lamp_Table_B",
+      "order": 306,
+      "parentId": 297,
+      "path": "assets/Furniture/Lighting/Models/Lamp_Table_B.fbx",
+      "pathGuid": "36e2ecfeb372dc73",
+      "position": [
+        10.65,
+        0.0,
+        0.0
+      ],
+      "rotation": [
+        0.0,
+        0.0,
+        0.0,
+        1.0
+      ],
+      "scale": [
+        1.0,
+        1.0,
+        1.0
+      ]
+    },
+    {
+      "id": 308,
+      "name": "Lamp_Table_Rocket",
+      "order": 307,
+      "parentId": 297,
+      "path": "assets/Furniture/Lighting/Models/Lamp_Table_Rocket.fbx",
+      "pathGuid": "3e679f710edef6a3",
+      "position": [
+        11.538,
+        0.0,
+        0.0
+      ],
+      "rotation": [
+        0.0,
+        0.0,
+        0.0,
+        1.0
+      ],
+      "scale": [
+        1.0,
+        1.0,
+        1.0
+      ]
+    },
+    {
+      "id": 309,
+      "name": "Lamp_Wall",
+      "order": 308,
+      "parentId": 297,
+      "path": "assets/Furniture/Lighting/Models/Lamp_Wall.fbx",
+      "pathGuid": "305be377060396b3",
+      "position": [
+        12.349,
+        0.0,
+        0.0
+      ],
+      "rotation": [
+        0.0,
+        0.0,
+        0.0,
+        1.0
+      ],
+      "scale": [
+        1.0,
+        1.0,
+        1.0
+      ]
+    },
+    {
+      "id": 311,
+      "name": "Chair_Arm",
+      "order": 310,
+      "parentId": 310,
+      "path": "assets/Furniture/Living_Room/Models/Chair_Arm.fbx",
+      "pathGuid": "9e2e994b56c8219b",
+      "position": [
+        0.44,
+        0.0,
+        0.0
+      ],
+      "rotation": [
+        0.0,
+        0.0,
+        0.0,
+        1.0
+      ],
+      "scale": [
+        1.0,
+        1.0,
+        1.0
+      ]
+    },
+    {
+      "id": 312,
+      "name": "Couch",
+      "order": 311,
+      "parentId": 310,
+      "path": "assets/Furniture/Living_Room/Models/Couch.fbx",
+      "pathGuid": "757dc0256bf521c4",
+      "position": [
+        2.448,
+        0.0,
+        0.0
+      ],
+      "rotation": [
+        0.0,
+        0.0,
+        0.0,
+        1.0
+      ],
+      "scale": [
+        1.0,
+        1.0,
+        1.0
+      ]
+    },
+    {
+      "id": 313,
+      "name": "Curtains_A_Doublewindow",
+      "order": 312,
+      "parentId": 310,
+      "path": "assets/Furniture/Living_Room/Models/Curtains_A_Doublewindow.fbx",
+      "pathGuid": "7d7e1695539712d1",
+      "position": [
+        5.324,
+        0.0,
+        0.0
+      ],
+      "rotation": [
+        0.0,
+        0.0,
+        0.0,
+        1.0
+      ],
+      "scale": [
+        1.0,
+        1.0,
+        1.0
+      ]
+    },
+    {
+      "id": 314,
+      "name": "Curtains_A_Singlewindow",
+      "order": 313,
+      "parentId": 310,
+      "path": "assets/Furniture/Living_Room/Models/Curtains_A_Singlewindow.fbx",
+      "pathGuid": "5f4eb6030e858423",
+      "position": [
+        8.012,
+        0.0,
+        0.0
+      ],
+      "rotation": [
+        0.0,
+        0.0,
+        0.0,
+        1.0
+      ],
+      "scale": [
+        1.0,
+        1.0,
+        1.0
+      ]
+    },
+    {
+      "id": 315,
+      "name": "Curtains_B_Doublewindow",
+      "order": 314,
+      "parentId": 310,
+      "path": "assets/Furniture/Living_Room/Models/Curtains_B_Doublewindow.fbx",
+      "pathGuid": "cb8329b2b3f528bb",
+      "position": [
+        10.7,
+        0.0,
+        0.0
+      ],
+      "rotation": [
+        0.0,
+        0.0,
+        0.0,
+        1.0
+      ],
+      "scale": [
+        1.0,
+        1.0,
+        1.0
+      ]
+    },
+    {
+      "id": 316,
+      "name": "Curtains_B_Singlewindow",
+      "order": 315,
+      "parentId": 310,
+      "path": "assets/Furniture/Living_Room/Models/Curtains_B_Singlewindow.fbx",
+      "pathGuid": "331dbdafcfc17cd4",
+      "position": [
+        13.388,
+        0.0,
+        0.0
+      ],
+      "rotation": [
+        0.0,
+        0.0,
+        0.0,
+        1.0
+      ],
+      "scale": [
+        1.0,
+        1.0,
+        1.0
+      ]
+    },
+    {
+      "id": 317,
+      "name": "Curtains_C_Doublewindow",
+      "order": 316,
+      "parentId": 310,
+      "path": "assets/Furniture/Living_Room/Models/Curtains_C_Doublewindow.fbx",
+      "pathGuid": "77a8a11ed3f0422b",
+      "position": [
+        16.002,
+        0.0,
+        0.0
+      ],
+      "rotation": [
+        0.0,
+        0.0,
+        0.0,
+        1.0
+      ],
+      "scale": [
+        1.0,
+        1.0,
+        1.0
+      ]
+    },
+    {
+      "id": 318,
+      "name": "Curtains_C_Singlewindow",
+      "order": 317,
+      "parentId": 310,
+      "path": "assets/Furniture/Living_Room/Models/Curtains_C_Singlewindow.fbx",
+      "pathGuid": "7d29ef0ef3e579c1",
+      "position": [
+        18.542,
+        0.0,
+        0.0
+      ],
+      "rotation": [
+        0.0,
+        0.0,
+        0.0,
+        1.0
+      ],
+      "scale": [
+        1.0,
+        1.0,
+        1.0
+      ]
+    },
+    {
+      "id": 319,
+      "name": "Curtains_D_Doublewindow",
+      "order": 318,
+      "parentId": 310,
+      "path": "assets/Furniture/Living_Room/Models/Curtains_D_Doublewindow.fbx",
+      "pathGuid": "b33918a3db7a9c1c",
+      "position": [
+        21.082,
+        0.0,
+        0.0
+      ],
+      "rotation": [
+        0.0,
+        0.0,
+        0.0,
+        1.0
+      ],
+      "scale": [
+        1.0,
+        1.0,
+        1.0
+      ]
+    },
+    {
+      "id": 320,
+      "name": "Curtains_D_Singlewindow",
+      "order": 319,
+      "parentId": 310,
+      "path": "assets/Furniture/Living_Room/Models/Curtains_D_Singlewindow.fbx",
+      "pathGuid": "5f96b87da14da9c3",
+      "position": [
+        23.622,
+        0.0,
+        0.0
+      ],
+      "rotation": [
+        0.0,
+        0.0,
+        0.0,
+        1.0
+      ],
+      "scale": [
+        1.0,
+        1.0,
+        1.0
+      ]
+    },
+    {
+      "id": 321,
+      "name": "Tv",
+      "order": 320,
+      "parentId": 310,
+      "path": "assets/Furniture/Living_Room/Models/Tv.fbx",
+      "pathGuid": "90d873c5c266a92a",
+      "position": [
+        25.398,
+        0.0,
+        0.0
+      ],
+      "rotation": [
+        0.0,
+        0.0,
+        0.0,
+        1.0
+      ],
+      "scale": [
+        1.0,
+        1.0,
+        1.0
+      ]
+    },
+    {
+      "id": 322,
+      "name": "Tv_Remote",
+      "order": 321,
+      "parentId": 310,
+      "path": "assets/Furniture/Living_Room/Models/Tv_Remote.fbx",
+      "pathGuid": "fbde8513c152323a",
+      "position": [
+        26.495,
+        0.0,
+        0.0
+      ],
+      "rotation": [
+        0.0,
+        0.0,
+        0.0,
+        1.0
+      ],
+      "scale": [
+        1.0,
+        1.0,
+        1.0
+      ]
+    },
+    {
+      "id": 323,
+      "name": "Tv_Stand",
+      "order": 322,
+      "parentId": 310,
+      "path": "assets/Furniture/Living_Room/Models/Tv_Stand.fbx",
+      "pathGuid": "1be1e4c902c0ff30",
+      "position": [
+        30.383,
+        0.0,
+        0.0
+      ],
+      "rotation": [
+        0.0,
+        0.0,
+        0.0,
+        1.0
+      ],
+      "scale": [
+        1.0,
+        1.0,
+        1.0
+      ]
+    },
+    {
+      "id": 324,
+      "name": "Tv_Stand_Door_L",
+      "order": 323,
+      "parentId": 310,
+      "path": "assets/Furniture/Living_Room/Models/Tv_Stand_Door_L.fbx",
+      "pathGuid": "c9faf7e45408d714",
+      "position": [
+        30.383,
+        0.0,
+        0.0
+      ],
+      "rotation": [
+        0.0,
+        0.0,
+        0.0,
+        1.0
+      ],
+      "scale": [
+        1.0,
+        1.0,
+        1.0
+      ]
+    },
+    {
+      "id": 325,
+      "name": "Tv_Stand_Door_R",
+      "order": 324,
+      "parentId": 310,
+      "path": "assets/Furniture/Living_Room/Models/Tv_Stand_Door_R.fbx",
+      "pathGuid": "809fb01fe7237ce7",
+      "position": [
+        30.383,
+        0.0,
+        0.0
+      ],
+      "rotation": [
+        0.0,
+        0.0,
+        0.0,
+        1.0
+      ],
+      "scale": [
+        1.0,
+        1.0,
+        1.0
+      ]
+    },
+    {
+      "id": 327,
+      "name": "Book_Pile_A",
+      "order": 326,
+      "parentId": 326,
+      "path": "assets/Furniture/Office/Models/Book_Pile_A.fbx",
+      "pathGuid": "a8e8f08c4b63d7c8",
+      "position": [
+        0.126,
+        0.0,
+        0.0
+      ],
+      "rotation": [
+        0.0,
+        0.0,
+        0.0,
+        1.0
+      ],
+      "scale": [
+        1.0,
+        1.0,
+        1.0
+      ]
+    },
+    {
+      "id": 328,
+      "name": "Book_Single_A",
+      "order": 327,
+      "parentId": 326,
+      "path": "assets/Furniture/Office/Models/Book_Single_A.fbx",
+      "pathGuid": "89b97b4363c67cfd",
+      "position": [
+        0.956,
+        0.0,
+        0.0
+      ],
+      "rotation": [
+        0.0,
+        0.0,
+        0.0,
+        1.0
+      ],
+      "scale": [
+        1.0,
+        1.0,
+        1.0
+      ]
+    },
+    {
+      "id": 329,
+      "name": "Book_Single_B",
+      "order": 328,
+      "parentId": 326,
+      "path": "assets/Furniture/Office/Models/Book_Single_B.fbx",
+      "pathGuid": "f58a3603c52c2939",
+      "position": [
+        1.764,
+        0.0,
+        0.0
+      ],
+      "rotation": [
+        0.0,
+        0.0,
+        0.0,
+        1.0
+      ],
+      "scale": [
+        1.0,
+        1.0,
+        1.0
+      ]
+    },
+    {
+      "id": 330,
+      "name": "Books_A",
+      "order": 329,
+      "parentId": 326,
+      "path": "assets/Furniture/Office/Models/Books_A.fbx",
+      "pathGuid": "6e3845aec5125d9a",
+      "position": [
+        2.598,
+        0.0,
+        0.0
+      ],
+      "rotation": [
+        0.0,
+        0.0,
+        0.0,
+        1.0
+      ],
+      "scale": [
+        1.0,
+        1.0,
+        1.0
+      ]
+    },
+    {
+      "id": 331,
+      "name": "Books_B",
+      "order": 330,
+      "parentId": 326,
+      "path": "assets/Furniture/Office/Models/Books_B.fbx",
+      "pathGuid": "c5792f7ab1d853e1",
+      "position": [
+        3.463,
+        0.0,
+        0.0
+      ],
+      "rotation": [
+        0.0,
+        0.0,
+        0.0,
+        1.0
+      ],
+      "scale": [
+        1.0,
+        1.0,
+        1.0
+      ]
+    },
+    {
+      "id": 332,
+      "name": "Books_C",
+      "order": 331,
+      "parentId": 326,
+      "path": "assets/Furniture/Office/Models/Books_C.fbx",
+      "pathGuid": "806f7f892facd52e",
+      "position": [
+        4.338,
+        0.0,
+        0.0
+      ],
+      "rotation": [
+        0.0,
+        0.0,
+        0.0,
+        1.0
+      ],
+      "scale": [
+        1.0,
+        1.0,
+        1.0
+      ]
+    },
+    {
+      "id": 333,
+      "name": "Books_D",
+      "order": 332,
+      "parentId": 326,
+      "path": "assets/Furniture/Office/Models/Books_D.fbx",
+      "pathGuid": "0cee5f23c95a4260",
+      "position": [
+        5.254,
+        0.0,
+        0.0
+      ],
+      "rotation": [
+        0.0,
+        0.0,
+        0.0,
+        1.0
+      ],
+      "scale": [
+        1.0,
+        1.0,
+        1.0
+      ]
+    },
+    {
+      "id": 334,
+      "name": "Books_E",
+      "order": 333,
+      "parentId": 326,
+      "path": "assets/Furniture/Office/Models/Books_E.fbx",
+      "pathGuid": "9b1fde4c9110b241",
+      "position": [
+        6.118,
+        0.0,
+        0.0
+      ],
+      "rotation": [
+        0.0,
+        0.0,
+        0.0,
+        1.0
+      ],
+      "scale": [
+        1.0,
+        1.0,
+        1.0
+      ]
+    },
+    {
+      "id": 335,
+      "name": "Books_F",
+      "order": 334,
+      "parentId": 326,
+      "path": "assets/Furniture/Office/Models/Books_F.fbx",
+      "pathGuid": "3b51e754963e6820",
+      "position": [
+        6.894,
+        0.0,
+        0.0
+      ],
+      "rotation": [
+        0.0,
+        0.0,
+        0.0,
+        1.0
+      ],
+      "scale": [
+        1.0,
+        1.0,
+        1.0
+      ]
+    },
+    {
+      "id": 336,
+      "name": "Bookshelf",
+      "order": 335,
+      "parentId": 326,
+      "path": "assets/Furniture/Office/Models/Bookshelf.fbx",
+      "pathGuid": "27a04e3442b60502",
+      "position": [
+        16.625,
+        0.0,
+        0.0
+      ],
+      "rotation": [
+        0.0,
+        0.0,
+        0.0,
+        1.0
+      ],
+      "scale": [
+        1.0,
+        1.0,
+        1.0
+      ]
+    },
+    {
+      "id": 337,
+      "name": "Bookshelf_Door_A_L",
+      "order": 336,
+      "parentId": 326,
+      "path": "assets/Furniture/Office/Models/Bookshelf_Door_A_L.fbx",
+      "pathGuid": "bc1ead4e04a8002e",
+      "position": [
+        16.625,
+        0.0,
+        0.0
+      ],
+      "rotation": [
+        0.0,
+        0.0,
+        0.0,
+        1.0
+      ],
+      "scale": [
+        1.0,
+        1.0,
+        1.0
+      ]
+    },
+    {
+      "id": 338,
+      "name": "Bookshelf_Door_A_R",
+      "order": 337,
+      "parentId": 326,
+      "path": "assets/Furniture/Office/Models/Bookshelf_Door_A_R.fbx",
+      "pathGuid": "60f43f9a4e83f7b2",
+      "position": [
+        16.625,
+        0.0,
+        0.0
+      ],
+      "rotation": [
+        0.0,
+        0.0,
+        0.0,
+        1.0
+      ],
+      "scale": [
+        1.0,
+        1.0,
+        1.0
+      ]
+    },
+    {
+      "id": 339,
+      "name": "Chair_Office",
+      "order": 338,
+      "parentId": 326,
+      "path": "assets/Furniture/Office/Models/Chair_Office.fbx",
+      "pathGuid": "e5c21477b1193ce5",
+      "position": [
+        18.191,
+        0.0,
+        0.0
+      ],
+      "rotation": [
+        0.0,
+        0.0,
+        0.0,
+        1.0
+      ],
+      "scale": [
+        1.0,
+        1.0,
+        1.0
+      ]
+    },
+    {
+      "id": 340,
+      "name": "Chair_Workdesk",
+      "order": 339,
+      "parentId": 326,
+      "path": "assets/Furniture/Office/Models/Chair_Workdesk.fbx",
+      "pathGuid": "0bcc5f3c07e5cace",
+      "position": [
+        19.343,
+        0.0,
+        0.0
+      ],
+      "rotation": [
+        0.0,
+        0.0,
+        0.0,
+        1.0
+      ],
+      "scale": [
+        1.0,
+        1.0,
+        1.0
+      ]
+    },
+    {
+      "id": 341,
+      "name": "Desk_Office",
+      "order": 340,
+      "parentId": 326,
+      "path": "assets/Furniture/Office/Models/Desk_Office.fbx",
+      "pathGuid": "c41e126b219fb32e",
+      "position": [
+        22.249,
+        0.0,
+        0.0
+      ],
+      "rotation": [
+        0.0,
+        0.0,
+        0.0,
+        1.0
+      ],
+      "scale": [
+        1.0,
+        1.0,
+        1.0
+      ]
+    },
+    {
+      "id": 342,
+      "name": "Desk_Office_Drawer",
+      "order": 341,
+      "parentId": 326,
+      "path": "assets/Furniture/Office/Models/Desk_Office_Drawer.fbx",
+      "pathGuid": "d0f6ff621030388b",
+      "position": [
+        22.249,
+        0.0,
+        0.0
+      ],
+      "rotation": [
+        0.0,
+        0.0,
+        0.0,
+        1.0
+      ],
+      "scale": [
+        1.0,
+        1.0,
+        1.0
+      ]
+    },
+    {
+      "id": 343,
+      "name": "Folders_Pile_A",
+      "order": 342,
+      "parentId": 326,
+      "path": "assets/Furniture/Office/Models/Folders_Pile_A.fbx",
+      "pathGuid": "70235c0c93c060b9",
+      "position": [
+        23.859,
+        0.0,
+        0.0
+      ],
+      "rotation": [
+        0.0,
+        0.0,
+        0.0,
+        1.0
+      ],
+      "scale": [
+        1.0,
+        1.0,
+        1.0
+      ]
+    },
+    {
+      "id": 344,
+      "name": "Folders_Set_A",
+      "order": 343,
+      "parentId": 326,
+      "path": "assets/Furniture/Office/Models/Folders_Set_A.fbx",
+      "pathGuid": "54968db6c296bc57",
+      "position": [
+        24.69,
+        0.0,
+        0.0
+      ],
+      "rotation": [
+        0.0,
+        0.0,
+        0.0,
+        1.0
+      ],
+      "scale": [
+        1.0,
+        1.0,
+        1.0
+      ]
+    },
+    {
+      "id": 345,
+      "name": "Folders_Set_B",
+      "order": 344,
+      "parentId": 326,
+      "path": "assets/Furniture/Office/Models/Folders_Set_B.fbx",
+      "pathGuid": "a72382f481bdb5be",
+      "position": [
+        25.54,
+        0.0,
+        0.0
+      ],
+      "rotation": [
+        0.0,
+        0.0,
+        0.0,
+        1.0
+      ],
+      "scale": [
+        1.0,
+        1.0,
+        1.0
+      ]
+    },
+    {
+      "id": 346,
+      "name": "Folders_Set_C",
+      "order": 345,
+      "parentId": 326,
+      "path": "assets/Furniture/Office/Models/Folders_Set_C.fbx",
+      "pathGuid": "5e31d17a6fcb78ab",
+      "position": [
+        26.392,
+        0.0,
+        0.0
+      ],
+      "rotation": [
+        0.0,
+        0.0,
+        0.0,
+        1.0
+      ],
+      "scale": [
+        1.0,
+        1.0,
+        1.0
+      ]
+    },
+    {
+      "id": 347,
+      "name": "Papers_Box_C",
+      "order": 346,
+      "parentId": 326,
+      "path": "assets/Furniture/Office/Models/Papers_Box_C.fbx",
+      "pathGuid": "fa94f9b58dd4d1cf",
+      "position": [
+        27.257,
+        0.0,
+        0.0
+      ],
+      "rotation": [
+        0.0,
+        0.0,
+        0.0,
+        1.0
+      ],
+      "scale": [
+        1.0,
+        1.0,
+        1.0
+      ]
+    },
+    {
+      "id": 348,
+      "name": "Papers_Box_Lid_A",
+      "order": 347,
+      "parentId": 326,
+      "path": "assets/Furniture/Office/Models/Papers_Box_Lid_A.fbx",
+      "pathGuid": "0efb4cf852073fc3",
+      "position": [
+        28.127,
+        0.0,
+        0.0
+      ],
+      "rotation": [
+        0.0,
+        0.0,
+        0.0,
+        1.0
+      ],
+      "scale": [
+        1.0,
+        1.0,
+        1.0
+      ]
+    },
+    {
+      "id": 349,
+      "name": "Papers_Box_Lid_B",
+      "order": 348,
+      "parentId": 326,
+      "path": "assets/Furniture/Office/Models/Papers_Box_Lid_B.fbx",
+      "pathGuid": "ce1e1c260e446cf3",
+      "position": [
+        28.977,
+        0.0,
+        0.0
+      ],
+      "rotation": [
+        0.0,
+        0.0,
+        0.0,
+        1.0
+      ],
+      "scale": [
+        1.0,
+        1.0,
+        1.0
+      ]
+    },
+    {
+      "id": 350,
+      "name": "Papers_Box_Open_A",
+      "order": 349,
+      "parentId": 326,
+      "path": "assets/Furniture/Office/Models/Papers_Box_Open_A.fbx",
+      "pathGuid": "72b60246a0119e9a",
+      "position": [
+        29.825,
+        0.0,
+        0.0
+      ],
+      "rotation": [
+        0.0,
+        0.0,
+        0.0,
+        1.0
+      ],
+      "scale": [
+        1.0,
+        1.0,
+        1.0
+      ]
+    },
+    {
+      "id": 351,
+      "name": "Papers_Box_Open_B",
+      "order": 350,
+      "parentId": 326,
+      "path": "assets/Furniture/Office/Models/Papers_Box_Open_B.fbx",
+      "pathGuid": "4aed38293a2c95cd",
+      "position": [
+        30.669,
+        0.0,
+        0.0
+      ],
+      "rotation": [
+        0.0,
+        0.0,
+        0.0,
+        1.0
+      ],
+      "scale": [
+        1.0,
+        1.0,
+        1.0
+      ]
+    },
+    {
+      "id": 352,
+      "name": "Papers_Folder_A",
+      "order": 351,
+      "parentId": 326,
+      "path": "assets/Furniture/Office/Models/Papers_Folder_A.fbx",
+      "pathGuid": "2f0ed60dbbfff130",
+      "position": [
+        31.504,
+        0.0,
+        0.0
+      ],
+      "rotation": [
+        0.0,
+        0.0,
+        0.0,
+        1.0
+      ],
+      "scale": [
+        1.0,
+        1.0,
+        1.0
+      ]
+    },
+    {
+      "id": 353,
+      "name": "Papers_Folder_B",
+      "order": 352,
+      "parentId": 326,
+      "path": "assets/Furniture/Office/Models/Papers_Folder_B.fbx",
+      "pathGuid": "4fd182fb333c1137",
+      "position": [
+        32.328,
+        0.0,
+        0.0
+      ],
+      "rotation": [
+        0.0,
+        0.0,
+        0.0,
+        1.0
+      ],
+      "scale": [
+        1.0,
+        1.0,
+        1.0
+      ]
+    },
+    {
+      "id": 354,
+      "name": "Papers_Folder_C",
+      "order": 353,
+      "parentId": 326,
+      "path": "assets/Furniture/Office/Models/Papers_Folder_C.fbx",
+      "pathGuid": "4c3d9b6e42849e7a",
+      "position": [
+        33.153,
+        0.0,
+        0.0
+      ],
+      "rotation": [
+        0.0,
+        0.0,
+        0.0,
+        1.0
+      ],
+      "scale": [
+        1.0,
+        1.0,
+        1.0
+      ]
+    },
+    {
+      "id": 355,
+      "name": "Papers_Folder_D",
+      "order": 354,
+      "parentId": 326,
+      "path": "assets/Furniture/Office/Models/Papers_Folder_D.fbx",
+      "pathGuid": "a2d124ff4e83bb55",
+      "position": [
+        33.986,
+        0.0,
+        0.0
+      ],
+      "rotation": [
+        0.0,
+        0.0,
+        0.0,
+        1.0
+      ],
+      "scale": [
+        1.0,
+        1.0,
+        1.0
+      ]
+    },
+    {
+      "id": 356,
+      "name": "Papers_Folder_E",
+      "order": 355,
+      "parentId": 326,
+      "path": "assets/Furniture/Office/Models/Papers_Folder_E.fbx",
+      "pathGuid": "71c210c0027d4690",
+      "position": [
+        34.734,
+        0.0,
+        0.0
+      ],
+      "rotation": [
+        0.0,
+        0.0,
+        0.0,
+        1.0
+      ],
+      "scale": [
+        1.0,
+        1.0,
+        1.0
+      ]
+    },
+    {
+      "id": 357,
+      "name": "Papers_Folder_F",
+      "order": 356,
+      "parentId": 326,
+      "path": "assets/Furniture/Office/Models/Papers_Folder_F.fbx",
+      "pathGuid": "72758da91777bd86",
+      "position": [
+        35.379,
+        0.0,
+        0.0
+      ],
+      "rotation": [
+        0.0,
+        0.0,
+        0.0,
+        1.0
+      ],
+      "scale": [
+        1.0,
+        1.0,
+        1.0
+      ]
+    },
+    {
+      "id": 358,
+      "name": "Papers_Holder_A",
+      "order": 357,
+      "parentId": 326,
+      "path": "assets/Furniture/Office/Models/Papers_Holder_A.fbx",
+      "pathGuid": "68d64120b0592188",
+      "position": [
+        36.077,
+        0.0,
+        0.0
+      ],
+      "rotation": [
+        0.0,
+        0.0,
+        0.0,
+        1.0
+      ],
+      "scale": [
+        1.0,
+        1.0,
+        1.0
+      ]
+    },
+    {
+      "id": 359,
+      "name": "Papers_Holder_B",
+      "order": 358,
+      "parentId": 326,
+      "path": "assets/Furniture/Office/Models/Papers_Holder_B.fbx",
+      "pathGuid": "df7d408e05ba4623",
+      "position": [
+        36.787,
+        0.0,
+        0.0
+      ],
+      "rotation": [
+        0.0,
+        0.0,
+        0.0,
+        1.0
+      ],
+      "scale": [
+        1.0,
+        1.0,
+        1.0
+      ]
+    },
+    {
+      "id": 360,
+      "name": "Papers_Holder_C",
+      "order": 359,
+      "parentId": 326,
+      "path": "assets/Furniture/Office/Models/Papers_Holder_C.fbx",
+      "pathGuid": "d636aadc54767481",
+      "position": [
+        37.538,
+        0.0,
+        0.0
+      ],
+      "rotation": [
+        0.0,
+        0.0,
+        0.0,
+        1.0
+      ],
+      "scale": [
+        1.0,
+        1.0,
+        1.0
+      ]
+    },
+    {
+      "id": 361,
+      "name": "Papers_Pile_A",
+      "order": 360,
+      "parentId": 326,
+      "path": "assets/Furniture/Office/Models/Papers_Pile_A.fbx",
+      "pathGuid": "2222c1b3197d892f",
+      "position": [
+        38.371,
+        0.0,
+        0.0
+      ],
+      "rotation": [
+        0.0,
+        0.0,
+        0.0,
+        1.0
+      ],
+      "scale": [
+        1.0,
+        1.0,
+        1.0
+      ]
+    },
+    {
+      "id": 362,
+      "name": "Papers_Pile_B",
+      "order": 361,
+      "parentId": 326,
+      "path": "assets/Furniture/Office/Models/Papers_Pile_B.fbx",
+      "pathGuid": "051be085d5740aab",
+      "position": [
+        39.186,
+        0.0,
+        0.0
+      ],
+      "rotation": [
+        0.0,
+        0.0,
+        0.0,
+        1.0
+      ],
+      "scale": [
+        1.0,
+        1.0,
+        1.0
+      ]
+    },
+    {
+      "id": 363,
+      "name": "Papers_Pile_C",
+      "order": 362,
+      "parentId": 326,
+      "path": "assets/Furniture/Office/Models/Papers_Pile_C.fbx",
+      "pathGuid": "61f7325b403fafcc",
+      "position": [
+        40.001,
+        0.0,
+        0.0
+      ],
+      "rotation": [
+        0.0,
+        0.0,
+        0.0,
+        1.0
+      ],
+      "scale": [
+        1.0,
+        1.0,
+        1.0
+      ]
+    },
+    {
+      "id": 364,
+      "name": "Papers_Pile_D",
+      "order": 363,
+      "parentId": 326,
+      "path": "assets/Furniture/Office/Models/Papers_Pile_D.fbx",
+      "pathGuid": "4bc8853ce98228d2",
+      "position": [
+        40.739,
+        0.0,
+        0.0
+      ],
+      "rotation": [
+        0.0,
+        0.0,
+        0.0,
+        1.0
+      ],
+      "scale": [
+        1.0,
+        1.0,
+        1.0
+      ]
+    },
+    {
+      "id": 365,
+      "name": "Pen_A",
+      "order": 364,
+      "parentId": 326,
+      "path": "assets/Furniture/Office/Models/Pen_A.fbx",
+      "pathGuid": "73380066670dd959",
+      "position": [
+        41.373,
+        0.0,
+        0.0
+      ],
+      "rotation": [
+        0.0,
+        0.0,
+        0.0,
+        1.0
+      ],
+      "scale": [
+        1.0,
+        1.0,
+        1.0
+      ]
+    },
+    {
+      "id": 366,
+      "name": "Pen_Holder",
+      "order": 365,
+      "parentId": 326,
+      "path": "assets/Furniture/Office/Models/Pen_Holder.fbx",
+      "pathGuid": "5da57dc309f90bb7",
+      "position": [
+        42.066,
+        0.0,
+        0.0
+      ],
+      "rotation": [
+        0.0,
+        0.0,
+        0.0,
+        1.0
+      ],
+      "scale": [
+        1.0,
+        1.0,
+        1.0
+      ]
+    },
+    {
+      "id": 367,
+      "name": "Pen_Holder_With_Pens",
+      "order": 366,
+      "parentId": 326,
+      "path": "assets/Furniture/Office/Models/Pen_Holder_With_Pens.fbx",
+      "pathGuid": "68150f6e4e93615b",
+      "position": [
+        42.841,
+        0.0,
+        0.0
+      ],
+      "rotation": [
+        0.0,
+        0.0,
+        0.0,
+        1.0
+      ],
+      "scale": [
+        1.0,
+        1.0,
+        1.0
+      ]
+    },
+    {
+      "id": 368,
+      "name": "Pen_Marker_A",
+      "order": 367,
+      "parentId": 326,
+      "path": "assets/Furniture/Office/Models/Pen_Marker_A.fbx",
+      "pathGuid": "b79c97db17bc2d94",
+      "position": [
+        43.539,
+        0.0,
+        0.0
+      ],
+      "rotation": [
+        0.0,
+        0.0,
+        0.0,
+        1.0
+      ],
+      "scale": [
+        1.0,
+        1.0,
+        1.0
+      ]
+    },
+    {
+      "id": 369,
+      "name": "Pencil_A",
+      "order": 368,
+      "parentId": 326,
+      "path": "assets/Furniture/Office/Models/Pencil_A.fbx",
+      "pathGuid": "c1b722ca8c0c5c85",
+      "position": [
+        44.153,
+        0.0,
+        0.0
+      ],
+      "rotation": [
+        0.0,
+        0.0,
+        0.0,
+        1.0
+      ],
+      "scale": [
+        1.0,
+        1.0,
+        1.0
+      ]
+    },
+    {
+      "id": 370,
+      "name": "Pencil_B",
+      "order": 369,
+      "parentId": 326,
+      "path": "assets/Furniture/Office/Models/Pencil_B.fbx",
+      "pathGuid": "6c82840fca4de6dc",
+      "position": [
+        44.762,
+        0.0,
+        0.0
+      ],
+      "rotation": [
+        0.0,
+        0.0,
+        0.0,
+        1.0
+      ],
+      "scale": [
+        1.0,
+        1.0,
+        1.0
+      ]
+    },
+    {
+      "id": 371,
+      "name": "Scissors",
+      "order": 370,
+      "parentId": 326,
+      "path": "assets/Furniture/Office/Models/Scissors.fbx",
+      "pathGuid": "d5c3cc5a340e179a",
+      "position": [
+        45.408,
+        0.0,
+        0.0
+      ],
+      "rotation": [
+        0.0,
+        0.0,
+        0.0,
+        1.0
+      ],
+      "scale": [
+        1.0,
+        1.0,
+        1.0
+      ]
+    },
+    {
+      "id": 372,
+      "name": "Workdesk",
+      "order": 371,
+      "parentId": 326,
+      "path": "assets/Furniture/Office/Models/Workdesk.fbx",
+      "pathGuid": "25a701fd15e56db2",
+      "position": [
+        46.872,
+        0.0,
+        0.0
+      ],
+      "rotation": [
+        0.0,
+        0.0,
+        0.0,
+        1.0
+      ],
+      "scale": [
+        1.0,
+        1.0,
+        1.0
+      ]
+    },
+    {
+      "id": 373,
+      "name": "Workdesk_Drawer_A",
+      "order": 372,
+      "parentId": 326,
+      "path": "assets/Furniture/Office/Models/Workdesk_Drawer_A.fbx",
+      "pathGuid": "3cba4b5958b78a4d",
+      "position": [
+        46.872,
+        0.0,
+        0.0
+      ],
+      "rotation": [
+        0.0,
+        0.0,
+        0.0,
+        1.0
+      ],
+      "scale": [
+        1.0,
+        1.0,
+        1.0
+      ]
+    },
+    {
+      "id": 375,
+      "name": "Arm_Chair_01",
+      "order": 374,
+      "parentId": 374,
+      "path": "assets/Furniture/Seating/Models/Arm_Chair_01.fbx",
+      "pathGuid": "125066820e099ff2",
+      "position": [
+        0.424,
+        0.0,
+        0.0
+      ],
+      "rotation": [
+        0.0,
+        0.0,
+        0.0,
+        1.0
+      ],
+      "scale": [
+        1.0,
+        1.0,
+        1.0
+      ]
+    },
+    {
+      "id": 376,
+      "name": "Chesterfield_Sofa",
+      "order": 375,
+      "parentId": 374,
+      "path": "assets/Furniture/Seating/Models/Chesterfield_Sofa.fbx",
+      "pathGuid": "aa22a82bd2418573",
+      "position": [
+        2.521,
+        0.0,
+        0.0
+      ],
+      "rotation": [
+        0.0,
+        0.0,
+        0.0,
+        1.0
+      ],
+      "scale": [
+        1.0,
+        1.0,
+        1.0
+      ]
+    },
+    {
+      "id": 377,
+      "name": "Pillow",
+      "order": 376,
+      "parentId": 374,
+      "path": "assets/Furniture/Seating/Models/Pillow.fbx",
+      "pathGuid": "f977140535931cc9",
+      "position": [
+        4.464,
+        0.0,
+        0.0
+      ],
+      "rotation": [
+        0.0,
+        0.0,
+        0.0,
+        1.0
+      ],
+      "scale": [
+        1.0,
+        1.0,
+        1.0
+      ]
+    },
+    {
+      "id": 378,
+      "name": "Sofa_01",
+      "order": 377,
+      "parentId": 374,
+      "path": "assets/Furniture/Seating/Models/Sofa_01.fbx",
+      "pathGuid": "bcb9d5fd66c733dc",
+      "position": [
+        6.119,
+        0.0,
+        0.0
+      ],
+      "rotation": [
+        0.0,
+        0.0,
+        0.0,
+        1.0
+      ],
+      "scale": [
+        1.0,
+        1.0,
+        1.0
+      ]
+    },
+    {
+      "id": 379,
+      "name": "Sofa_02",
+      "order": 378,
+      "parentId": 374,
+      "path": "assets/Furniture/Seating/Models/Sofa_02.fbx",
+      "pathGuid": "f4ad292c27bfc292",
+      "position": [
+        8.408,
+        0.0,
+        0.0
+      ],
+      "rotation": [
+        0.0,
+        0.0,
+        0.0,
+        1.0
+      ],
+      "scale": [
+        1.0,
+        1.0,
+        1.0
+      ]
+    },
+    {
+      "id": 380,
+      "name": "Sofa_03",
+      "order": 379,
+      "parentId": 374,
+      "path": "assets/Furniture/Seating/Models/Sofa_03.fbx",
+      "pathGuid": "1db466dd6460ab75",
+      "position": [
+        11.277,
+        0.0,
+        0.0
+      ],
+      "rotation": [
+        0.0,
+        0.0,
+        0.0,
+        1.0
+      ],
+      "scale": [
+        1.0,
+        1.0,
+        1.0
+      ]
+    },
+    {
+      "id": 381,
+      "name": "Sofa_04",
+      "order": 380,
+      "parentId": 374,
+      "path": "assets/Furniture/Seating/Models/Sofa_04.fbx",
+      "pathGuid": "b36a181acef25948",
+      "position": [
+        14.138,
+        0.0,
+        0.0
+      ],
+      "rotation": [
+        0.0,
+        0.0,
+        0.0,
+        1.0
+      ],
+      "scale": [
+        1.0,
+        1.0,
+        1.0
+      ]
+    },
+    {
+      "id": 383,
+      "name": "Cross",
+      "order": 382,
+      "parentId": 382,
+      "path": "assets/Props/Cross/Models/Cross.fbx",
+      "pathGuid": "f77922a90676bafd",
+      "position": [
+        0.054,
+        0.0,
+        0.0
+      ],
+      "rotation": [
+        0.0,
+        0.0,
+        0.0,
+        1.0
+      ],
+      "scale": [
+        1.0,
+        1.0,
+        1.0
+      ]
+    },
+    {
+      "id": 385,
+      "name": "David",
+      "order": 384,
+      "parentId": 384,
+      "path": "assets/Props/David/Models/David.fbx",
+      "pathGuid": "c431445fe85d98c4",
+      "position": [
+        0.636,
+        0.0,
+        0.0
+      ],
+      "rotation": [
+        0.0,
+        0.0,
+        0.0,
+        1.0
+      ],
+      "scale": [
+        1.0,
+        1.0,
+        1.0
+      ]
+    },
+    {
+      "id": 387,
+      "name": "Light_Switches",
+      "order": 386,
+      "parentId": 386,
+      "path": "assets/Props/Electrical/Models/Light_Switches.fbx",
+      "pathGuid": "356a52d9789b4a42",
+      "position": [
+        0.017,
+        0.0,
+        0.0
+      ],
+      "rotation": [
+        0.0,
+        0.0,
+        0.0,
+        1.0
+      ],
+      "scale": [
+        1.0,
+        1.0,
+        1.0
+      ]
+    },
+    {
+      "id": 388,
+      "name": "Outlet_Electrical",
+      "order": 387,
+      "parentId": 386,
+      "path": "assets/Props/Electrical/Models/Outlet_Electrical.fbx",
+      "pathGuid": "52873273065c1a1e",
+      "position": [
+        0.639,
+        0.0,
+        0.0
+      ],
+      "rotation": [
+        0.0,
+        0.0,
+        0.0,
+        1.0
+      ],
+      "scale": [
+        1.0,
+        1.0,
+        1.0
+      ]
+    },
+    {
+      "id": 389,
+      "name": "Outlet_Gfi",
+      "order": 388,
+      "parentId": 386,
+      "path": "assets/Props/Electrical/Models/Outlet_Gfi.fbx",
+      "pathGuid": "fee0f3f3a354839a",
+      "position": [
+        1.249,
+        0.0,
+        0.0
+      ],
+      "rotation": [
+        0.0,
+        0.0,
+        0.0,
+        1.0
+      ],
+      "scale": [
+        1.0,
+        1.0,
+        1.0
+      ]
+    },
+    {
+      "id": 391,
+      "name": "Holy_Bible",
+      "order": 390,
+      "parentId": 390,
+      "path": "assets/Props/Holy_Bible/Models/Holy_Bible.fbx",
+      "pathGuid": "bd97e3400738a081",
+      "position": [
+        0.11,
+        0.0,
+        0.0
+      ],
+      "rotation": [
+        0.0,
+        0.0,
+        0.0,
+        1.0
+      ],
+      "scale": [
+        1.0,
+        1.0,
+        1.0
+      ]
+    },
+    {
+      "id": 393,
+      "name": "Knife",
+      "order": 392,
+      "parentId": 392,
+      "path": "assets/Props/Knife/Models/Knife.fbx",
+      "pathGuid": "ad714ceca9a1c16e",
+      "position": [
+        0.082,
+        0.0,
+        0.0
+      ],
+      "rotation": [
+        0.0,
+        0.0,
+        0.0,
+        1.0
+      ],
+      "scale": [
+        1.0,
+        1.0,
+        1.0
+      ]
+    },
+    {
+      "id": 395,
+      "name": "Syringe_Variation_01",
+      "order": 394,
+      "parentId": 394,
+      "path": "assets/Props/Medical_Supplies/Models/Syringe_Variation_01.fbx",
+      "pathGuid": "857388caba3a155c",
+      "position": [
+        0.016,
+        0.0,
+        0.0
+      ],
+      "rotation": [
+        0.0,
+        0.0,
+        0.0,
+        1.0
+      ],
+      "scale": [
+        1.0,
+        1.0,
+        1.0
+      ]
+    },
+    {
+      "id": 396,
+      "name": "Syringe_Variation_02",
+      "order": 395,
+      "parentId": 394,
+      "path": "assets/Props/Medical_Supplies/Models/Syringe_Variation_02.fbx",
+      "pathGuid": "1f23e1d9c17777a6",
+      "position": [
+        0.648,
+        0.0,
+        0.0
+      ],
+      "rotation": [
+        0.0,
+        0.0,
+        0.0,
+        1.0
+      ],
+      "scale": [
+        1.0,
+        1.0,
+        1.0
+      ]
+    },
+    {
+      "id": 397,
+      "name": "Vial_Anti_Venom_03",
+      "order": 396,
+      "parentId": 394,
+      "path": "assets/Props/Medical_Supplies/Models/Vial_Anti_Venom_03.fbx",
+      "pathGuid": "3830a7782c162c35",
+      "position": [
+        1.275,
+        0.0,
+        0.0
+      ],
+      "rotation": [
+        0.0,
+        0.0,
+        0.0,
+        1.0
+      ],
+      "scale": [
+        1.0,
+        1.0,
+        1.0
+      ]
+    },
+    {
+      "id": 398,
+      "name": "Vial_Insulin_01",
+      "order": 397,
+      "parentId": 394,
+      "path": "assets/Props/Medical_Supplies/Models/Vial_Insulin_01.fbx",
+      "pathGuid": "50dc578f7adb55a5",
+      "position": [
+        1.897,
+        0.0,
+        0.0
+      ],
+      "rotation": [
+        0.0,
+        0.0,
+        0.0,
+        1.0
+      ],
+      "scale": [
+        1.0,
+        1.0,
+        1.0
+      ]
+    },
+    {
+      "id": 399,
+      "name": "Vial_Pain_Killer_02",
+      "order": 398,
+      "parentId": 394,
+      "path": "assets/Props/Medical_Supplies/Models/Vial_Pain_Killer_02.fbx",
+      "pathGuid": "1cf8f0b274dd8847",
+      "position": [
+        2.519,
+        0.0,
+        0.0
+      ],
+      "rotation": [
+        0.0,
+        0.0,
+        0.0,
+        1.0
+      ],
+      "scale": [
+        1.0,
+        1.0,
+        1.0
+      ]
+    },
+    {
+      "id": 401,
+      "name": "Money_Usa",
+      "order": 400,
+      "parentId": 400,
+      "path": "assets/Props/Money/Models/Money_Usa.fbx",
+      "pathGuid": "f15dd2c910d8b322",
+      "position": [
+        0.177,
+        0.0,
+        0.0
+      ],
+      "rotation": [
+        0.0,
+        0.0,
+        0.0,
+        1.0
+      ],
+      "scale": [
+        1.0,
+        1.0,
+        1.0
+      ]
+    }
+  ],
+  "motionBlur": false,
+  "motionBlurIntensity": 0.5,
+  "motionBlurSamples": 12,
+  "msaaSamples": 4,
+  "shadowCascades": 4,
+  "shadowDistance": 150.0,
+  "shadowResolution": 4096,
+  "shadowsEnabled": true,
+  "sky": {
+    "aerialPerspectiveScale": 6.0,
+    "altitudeOffsetMeters": 0.0,
+    "animateInEditor": false,
+    "atmosphereHeightKm": 100.0,
+    "atmosphereTintsSun": true,
+    "cirrusAltitudeMeters": 9000.0,
+    "cirrusCoverage": 0.3499999940395355,
+    "cirrusScale": 1.0,
+    "cloudAmbient": 1.0,
+    "cloudBaseMeters": 1500.0,
+    "cloudCoverage": 0.3799999952316284,
+    "cloudDensity": 1.0,
+    "cloudDetail": 0.44999998807907104,
+    "cloudForwardScattering": 0.800000011920929,
+    "cloudHorizonHaze": 0.019999999552965164,
+    "cloudMultiScattering": 1.0,
+    "cloudPowder": 0.3499999940395355,
+    "cloudQuality": 1,
+    "cloudScale": 1.0,
+    "cloudSeed": 0.0,
+    "cloudShadowStrength": 0.6000000238418579,
+    "cloudShadows": true,
+    "cloudThicknessMeters": 3000.0,
+    "cloudType": 0.44999998807907104,
+    "cloudWindDirection": 45.0,
+    "cloudWindShear": 0.6000000238418579,
+    "cloudWindSpeed": 8.0,
+    "clouds": true,
+    "dayLengthMinutes": 0.0,
+    "dayOfYear": 200.0,
+    "groundAlbedo": [
+      0.30000001192092896,
+      0.30000001192092896,
+      0.30000001192092896
+    ],
+    "latitude": 38.0,
+    "mieAbsorption": 1.0,
+    "mieAnisotropy": 0.800000011920929,
+    "mieHeightKm": 1.2000000476837158,
+    "mieScale": 1.0,
+    "moon": true,
+    "moonBrightness": 0.004000000189989805,
+    "moonDiscScale": 1.7999999523162842,
+    "moonPhaseOffset": 0.0,
+    "multipleScattering": 1.0,
+    "nightBrightness": 5.0,
+    "nightGlow": 0.019999999552965164,
+    "northOffset": 0.0,
+    "ozoneScale": 1.0,
+    "planetRadiusKm": 6360.0,
+    "rayleighHeightKm": 8.0,
+    "rayleighScale": 1.0,
+    "rayleighTint": [
+      1.0,
+      1.0,
+      1.0
+    ],
+    "seaLevel": 0.0,
+    "skyIntensity": 1.0,
+    "starsBrightness": 1.0,
+    "sunDiscBrightness": 1.0,
+    "sunDiscScale": 0.44999998807907104,
+    "timeOfDay": true,
+    "timeOfDayHours": 16.0
+  },
+  "skyAmbientIntensity": 1.0,
+  "skyHdriPath": "assets/sky/kloofendal_48d_partly_cloudy_puresky_4k.hdr",
+  "skyHorizonColor": [
+    0.699999988079071,
+    0.7599999904632568,
+    0.8399999737739563
+  ],
+  "skyRotationDegrees": 90.69999694824219,
+  "skySource": 2,
+  "skyZenithColor": [
+    0.2199999988079071,
+    0.41999998688697815,
+    0.7400000095367432
+  ],
+  "ssaoBias": 0.02500000037252903,
+  "ssaoEnabled": true,
+  "ssaoIntensity": 1.0,
+  "ssaoRadius": 0.5,
+  "tonemapOperator": 1,
+  "vignetteIntensity": 0.18000000715255737,
+  "vignetteSmoothness": 0.44999998807907104
+}

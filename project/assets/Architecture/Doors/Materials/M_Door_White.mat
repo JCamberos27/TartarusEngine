@@ -1,0 +1,31 @@
+{
+  "factorsScaleMaps": true,
+  "matVersion": 2,
+  "name": "M_Door_White",
+  "properties": {
+    "_AOMap": "assets/Architecture/Doors/Textures/Door_White/Door_1_W_4_K_Ao.tga",
+    "_AlbedoMap": "assets/Architecture/Doors/Textures/Door_White/Door_1_W_4_K_Dm.tga",
+    "_BaseColor": [
+      1.0,
+      1.0,
+      1.0
+    ],
+    "_DoubleSided": false,
+    "_EmissiveColor": [
+      0.0,
+      0.0,
+      0.0
+    ],
+    "_EmissiveMap": "",
+    "_EmissiveStrength": 1.0,
+    "_Metallic": 1.0,
+    "_MetallicMap": "assets/Architecture/Doors/Textures/Door_White/Door_1_W_4_K_Mm.tga",
+    "_MetallicRoughnessMap": "",
+    "_NormalMap": "assets/Architecture/Doors/Textures/Door_White/Door_1_W_4_K_Nm.tga",
+    "_Roughness": 1.0,
+    "_RoughnessMap": "assets/Architecture/Doors/Textures/Door_White/Door_1_W_4_K_Rm.tga",
+    "_Triplanar": false,
+    "_TriplanarScale": 1.0
+  },
+  "shader": "engine://Standard.shader"
+}

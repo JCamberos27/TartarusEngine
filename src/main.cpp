@@ -132,6 +132,8 @@
 #include <chrono>
 #include <future>
 #pragma warning(disable: 4996) // stb_image_write.h's own sprintf() use, not this file's
+#include <json.hpp>         // --model-report reads each model's .meta
+#include <cstdio>
 #include <stb_image_write.h> // --asset-load-bench: synthesize PNGs to load (ARCH-201 / #375)
 #include <glm/gtc/type_ptr.hpp> // #162 - motion blur matrices
 #include <cstring>
@@ -628,6 +630,65 @@ int main(int argc, char** argv) {
         CrashHandler::SetInteractive(false);
         std::string output;if(!Scripting::RequestProject("content.path",nlohmann::json("knife").dump(),output)){Log::Error("This project has no content import configuration.");return 1;}
         return KnifeFxImport::ImportPacks(argv[i+1],ProjectPaths::Resolve(nlohmann::json::parse(output).get<std::string>()))?0:1;
+    }
+    // `--model-report <folder or model> [more ...]`: imports each .fbx/.obj/.gltf/.glb with its .meta's import settings
+    // (materials skipped) and prints its size in meters, its bounds and its mesh count, one line per model - checks
+    // scale and up-axis after an asset import. No GL needed. Exit 1 if any model fails to import.
+    for (int i = 1; i < argc; ++i) {
+        if (std::string(argv[i]) != "--model-report") continue;
+        CrashHandler::SetInteractive(false);
+        namespace fs = std::filesystem;
+        std::vector<fs::path> files;
+        const auto isModel = [](const fs::path& p) {
+            std::string e = p.extension().string();
+            for (char& c : e) c = (char)std::tolower((unsigned char)c);
+            return e == ".fbx" || e == ".obj" || e == ".gltf" || e == ".glb";
+        };
+        for (int j = i + 1; j < argc && argv[j][0] != '-'; ++j) {
+            std::error_code ec;
+            if (fs::is_directory(argv[j], ec)) {
+                for (const auto& f : fs::recursive_directory_iterator(argv[j], ec))
+                    if (f.is_regular_file() && isModel(f.path())) files.push_back(f.path());
+            } else if (isModel(argv[j])) files.push_back(argv[j]);
+        }
+        std::sort(files.begin(), files.end());
+        int failed = 0;
+        for (const auto& f : files) {
+            ModelImportSettings s;
+            s.MaterialImportMode = ModelImportSettings::MaterialMode::None;
+            s.ImportAnimations = false;
+            if (std::ifstream in(f.string() + ".meta"); in) {
+                const nlohmann::json j = nlohmann::json::parse(in, nullptr, false);
+                if (j.is_object() && j.contains("importer") && j["importer"].is_object()) {
+                    const auto& imp = j["importer"];
+                    s.GlobalScale = imp.value("globalScale", 1.0f);
+                    s.ImportSkeleton = imp.value("importSkeleton", true);
+                    s.SourceUpAxis = Model::ParseUpAxis(imp.value("upAxis", std::string("Y")));
+                    if (imp.contains("pivotOffset") && imp["pivotOffset"].is_array() && imp["pivotOffset"].size() == 3)
+                        s.PivotOffset = {imp["pivotOffset"][0].get<float>(), imp["pivotOffset"][1].get<float>(), imp["pivotOffset"][2].get<float>()};
+                    if (imp.contains("excludeNodes") && imp["excludeNodes"].is_array())
+                        for (const auto& n : imp["excludeNodes"])
+                            if (n.is_string()) s.ExcludeNodes.push_back(n.get<std::string>());
+                }
+            }
+            const auto model = Model::ImportDeferred(f.string(), s);
+            if (!model || model->MeshCount() == 0) {
+                ++failed;
+                std::cout << "[ModelReport] FAILED " << f.generic_string() << "\n";
+                continue;
+            }
+            const glm::vec3 lo = model->BoundsMin(), hi = model->BoundsMax(), size = hi - lo;
+            std::string mats;
+            for (int m = 0; m < model->MeshCount(); ++m) {
+                const std::string& name = model->MeshMaterial(m).Name;
+                if (("|" + mats + "|").find("|" + name + "|") == std::string::npos) mats += (mats.empty() ? "" : "|") + name;
+            }
+            std::printf("[ModelReport] %s size %.3f %.3f %.3f min %.3f %.3f %.3f max %.3f %.3f %.3f meshes %d materials %s\n",
+                        f.generic_string().c_str(), size.x, size.y, size.z, lo.x, lo.y, lo.z, hi.x, hi.y, hi.z,
+                        model->MeshCount(), mats.c_str());
+        }
+        std::cout << "[ModelReport] " << files.size() << " models, " << failed << " failed" << std::endl;
+        return failed ? 1 : 0;
     }
     // `--audio-test [scene]`: the audio engine's own test, offline (no window, no audio device): a scripted tour of a scene's reverb zones.
     for (int i = 1; i < argc; ++i)
@@ -2043,8 +2104,26 @@ int main(int argc, char** argv) {
         // --weapon-test ends its scene itself when the script is done; this is only its safety cap (6 min at 60 Hz).
         // --outfit-shots: kOutfitShotSettle frames on each pose before it's captured (temporal effects converge).
         constexpr int kOutfitShotStart = 60, kOutfitShotSettle = 20, kOutfitShotMax = 24;
+        // --smoke-shots with TARTARUS_SHOT_CAMERAS="name:x,y,z,yaw,pitch;...": those Scene-view poses instead of the
+        // three fixed ones, each saved as <scene>_<name>.png after 30 frames on it (an asset gallery, a set dressing).
+        struct ShotCamera { std::string Name; glm::vec3 Position; float Yaw, Pitch; };
+        std::vector<ShotCamera> shotCameras;
+        if (const char* cams = std::getenv("TARTARUS_SHOT_CAMERAS"); cams && !smokeShotsDir.empty()) {
+            std::stringstream all(cams);
+            std::string item;
+            while (std::getline(all, item, ';')) {
+                const size_t colon = item.find(':');
+                if (colon == std::string::npos) continue;
+                ShotCamera c{item.substr(0, colon), glm::vec3(0.0f), 0.0f, 0.0f};
+                if (std::sscanf(item.c_str() + colon + 1, "%f,%f,%f,%f,%f", &c.Position.x, &c.Position.y, &c.Position.z,
+                                &c.Yaw, &c.Pitch) == 5)
+                    shotCameras.push_back(c);
+            }
+        }
+        constexpr int kShotCameraStart = 40, kShotCameraSettle = 30;
         const int kSmokeTestFrames = weaponTestMode || npcTestMode ? 60 * 60 * 6 : perfBenchMode ? 3 * kPerfPhaseFrames
-                                   : !outfitShotsDir.empty() ? kOutfitShotStart + kOutfitShotSettle * kOutfitShotMax + 1 : 100;
+                                   : !outfitShotsDir.empty() ? kOutfitShotStart + kOutfitShotSettle * kOutfitShotMax + 1
+                                   : !shotCameras.empty() ? kShotCameraStart + kShotCameraSettle * (int)shotCameras.size() + 1 : 100;
         struct OutfitShot { std::string Name; glm::vec3 Position; float Yaw, Pitch; };
         std::vector<OutfitShot> outfitShots;
         struct PerfAccum { double Sum = 0.0; double Max = 0.0; int N = 0; };
@@ -5350,6 +5429,30 @@ int main(int argc, char** argv) {
                     } else if (smokeFramesRendered > kOutfitShotStart) {
                         smokeFramesRendered = std::max(smokeFramesRendered, kSmokeTestFrames - 1); // all taken
                     }
+                } else if (!smokeShotsDir.empty() && !perfBenchMode && !shotCameras.empty()) {
+                    const int shot = (smokeFramesRendered - kShotCameraStart) / kShotCameraSettle;
+                    if (smokeFramesRendered >= kShotCameraStart && (smokeFramesRendered - kShotCameraStart) % kShotCameraSettle == 0 &&
+                        shot < (int)shotCameras.size() && sceneFramebuffer.IsValid()) {
+                        const int w = sceneFramebuffer.Width(), h = sceneFramebuffer.Height();
+                        glBindFramebuffer(GL_READ_FRAMEBUFFER, sceneFramebuffer.Handle());
+                        std::vector<unsigned char> px = Screenshot::GrabRegion(0, 0, w, h);
+                        glBindFramebuffer(GL_READ_FRAMEBUFFER, 0);
+                        std::vector<unsigned char> flipped(px.size());
+                        for (int y = 0; y < h; ++y)
+                            std::memcpy(&flipped[(size_t)y * w * 4], &px[(size_t)(h - 1 - y) * w * 4], (size_t)w * 4);
+                        std::error_code ec;
+                        std::filesystem::create_directories(smokeShotsDir, ec);
+                        const std::string stem = std::filesystem::path(smokeScenePaths[smokeSceneIndex]).stem().string();
+                        const std::string out = (std::filesystem::path(smokeShotsDir) / (stem + "_" + shotCameras[shot].Name + ".png")).string();
+                        stbi_write_png(out.c_str(), w, h, 4, flipped.data(), w * 4);
+                    }
+                    // The pose for the NEXT frame: each camera holds from the previous capture up to its own.
+                    const int next = smokeFramesRendered + 1;
+                    const int pose = std::clamp((next - 1 - kShotCameraStart) / kShotCameraSettle + (next > kShotCameraStart ? 1 : 0), 0,
+                                                (int)shotCameras.size() - 1);
+                    editorCamera.Position = shotCameras[pose].Position;
+                    editorCamera.Yaw = shotCameras[pose].Yaw;
+                    editorCamera.Pitch = shotCameras[pose].Pitch;
                 } else if (!smokeShotsDir.empty() && !perfBenchMode) {
                     // Frames 40 / 70 / 100 are captured after 30+ frames at each pose, so
                     // temporally accumulated effects have converged; the pose for the NEXT frame

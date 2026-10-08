@@ -1,0 +1,23 @@
+{
+  "folder": "assets/Furniture/Decor/Models",
+  "guid": "84bfba0ee9654549",
+  "importer": {
+    "globalScale": 1.0,
+    "importAnimations": false,
+    "importNormals": true,
+    "importSkeleton": false,
+    "materialImportMode": 1,
+    "optimizeGraph": true,
+    "pivotOffset": [
+      -0.3125,
+      0.06700000166893005,
+      0.0005000000237487257
+    ]
+  },
+  "materialRemap": {
+    "Clocks": "assets/Furniture/Decor/Materials/M_Clocks.mat",
+    "Clocks_glass": "assets/Furniture/Bedroom/Materials/M_Glass_Clear.mat"
+  },
+  "metaVersion": 1,
+  "type": "model"
+}

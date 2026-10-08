@@ -1,0 +1,22 @@
+{
+  "folder": "assets/Furniture/Kids_Room/Models",
+  "guid": "1cb1aeb90eb072ae",
+  "importer": {
+    "globalScale": 1.0,
+    "importAnimations": false,
+    "importNormals": true,
+    "importSkeleton": false,
+    "materialImportMode": 1,
+    "optimizeGraph": true,
+    "pivotOffset": [
+      0.20000000298023224,
+      0.0,
+      -0.10000000149011612
+    ]
+  },
+  "materialRemap": {
+    "Carpet_kid": "assets/Furniture/Kids_Room/Materials/M_Carpet_Kid.mat"
+  },
+  "metaVersion": 1,
+  "type": "model"
+}

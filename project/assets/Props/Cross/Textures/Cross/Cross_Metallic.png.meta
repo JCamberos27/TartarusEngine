@@ -1,0 +1,16 @@
+{
+  "folder": "assets/Props/Cross/Textures/Cross",
+  "guid": "ca3ad96d8e868341",
+  "importer": {
+    "anisoLevel": 8,
+    "compression": 1,
+    "filterMode": 2,
+    "generateMipmaps": true,
+    "isSRGB": false,
+    "maxTextureSize": 2048,
+    "textureType": 0,
+    "wrapMode": 0
+  },
+  "metaVersion": 1,
+  "type": "texture"
+}

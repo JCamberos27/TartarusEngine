@@ -1,0 +1,22 @@
+{
+  "folder": "assets/Furniture/Kitchen/Models",
+  "guid": "9b72496d52efa862",
+  "importer": {
+    "globalScale": 1.0,
+    "importAnimations": false,
+    "importNormals": true,
+    "importSkeleton": false,
+    "materialImportMode": 1,
+    "optimizeGraph": true,
+    "pivotOffset": [
+      1.25,
+      0.0,
+      -0.265500009059906
+    ]
+  },
+  "materialRemap": {
+    "Cabinets_kitchen": "assets/Furniture/Kitchen/Materials/M_Cabinets_Kitchen.mat"
+  },
+  "metaVersion": 1,
+  "type": "model"
+}

@@ -1,0 +1,22 @@
+{
+  "folder": "assets/Furniture/Office/Models",
+  "guid": "e5c21477b1193ce5",
+  "importer": {
+    "globalScale": 1.0,
+    "importAnimations": false,
+    "importNormals": true,
+    "importSkeleton": false,
+    "materialImportMode": 1,
+    "optimizeGraph": true,
+    "pivotOffset": [
+      -0.0005000000237487257,
+      0.0,
+      -0.02199999988079071
+    ]
+  },
+  "materialRemap": {
+    "Chair_office": "assets/Furniture/Office/Materials/M_Chair_Office.mat"
+  },
+  "metaVersion": 1,
+  "type": "model"
+}

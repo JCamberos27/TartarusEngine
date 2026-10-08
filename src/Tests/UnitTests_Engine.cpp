@@ -153,6 +153,27 @@ static void Test_Model_AffinePaletteMatchesGeneric() {
     CHECK(worst < 1e-5f);
 }
 
+// FBX axis systems: Y-up is untouched, a 3ds Max / Maya Z-up file (up +Z, front -Y) stands upright.
+static void Test_Model_AxisCorrection() {
+    const auto apply = [](const glm::mat4& m, glm::vec3 v) { return glm::vec3(m * glm::vec4(v, 0.0f)); };
+    const auto near = [](glm::vec3 a, glm::vec3 b) { return glm::length(a - b) < 1e-5f; };
+    CHECK(Model::AxisCorrection(1, 1, 2, 1) == glm::mat4(1.0f));
+    const glm::mat4 z = Model::AxisCorrection(2, 1, 1, -1);
+    CHECK(near(apply(z, {0, 0, 1}), {0, 1, 0}));   // up -> +Y
+    CHECK(near(apply(z, {0, -1, 0}), {0, 0, 1}));  // front -> +Z
+    CHECK(near(apply(z, {1, 0, 0}), {1, 0, 0}));   // right stays +X
+    CHECK(std::abs(glm::determinant(z) - 1.0f) < 1e-5f);
+    // A mirrored system (right derived as up x front) is still a pure rotation; bad input is identity.
+    CHECK(std::abs(glm::determinant(Model::AxisCorrection(1, -1, 0, 1)) - 1.0f) < 1e-5f);
+    CHECK(Model::AxisCorrection(1, 1, 1, 1) == glm::mat4(1.0f));
+    const glm::mat4 nz = Model::AxisCorrection(2, -1, 1, 1);  // the opposite turn: -Z up, +Y front
+    CHECK(near(apply(nz, {0, 0, -1}), {0, 1, 0}));
+    CHECK(near(apply(nz, {0, 1, 0}), {0, 0, 1}));
+    CHECK(Model::ParseUpAxis("-Z") == ModelImportSettings::UpAxis::NegZ && Model::ParseUpAxis("x") == ModelImportSettings::UpAxis::Y);
+    CHECK(std::string(Model::UpAxisName(ModelImportSettings::UpAxis::NegZ)) == "-Z");
+    CHECK(Model::AxisCorrection(5, 1, 2, 1) == glm::mat4(1.0f));
+}
+
 // Load-time shader-variant warm-up: materials without a ShaderAsset draw through the model shader
 // (already built), so there is nothing to compile - and no GL context is touched.
 void Test_SceneRenderer_WarmShaderVariantsSkipsShaderless() {
@@ -272,6 +293,7 @@ void RegisterEngineTests(UnitTestSupport::TestList& tests) {
     tests.push_back({"BloodSettings::RoundTrip", Test_BloodSettings_RoundTrip});
     tests.push_back({"GravityGun::AssistReach", Test_GravityGun_AssistReach});
     tests.push_back({"Model::AffinePaletteMatchesGeneric", Test_Model_AffinePaletteMatchesGeneric});
+    tests.push_back({"Model::AxisCorrection", Test_Model_AxisCorrection});
     tests.push_back({"SceneRenderer::WarmShaderVariantsSkipsShaderless", Test_SceneRenderer_WarmShaderVariantsSkipsShaderless});
     tests.push_back({"FxHud::SettingsDrivePureHelpers", Test_FxHud_SettingsDrivePureHelpers});
 }

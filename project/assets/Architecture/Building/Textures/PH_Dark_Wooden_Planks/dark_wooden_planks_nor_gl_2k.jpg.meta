@@ -1,0 +1,16 @@
+{
+  "folder": "assets/Architecture/Building/Textures/PH_Dark_Wooden_Planks",
+  "guid": "5a86a82ac3551dc9",
+  "importer": {
+    "anisoLevel": 8,
+    "compression": 1,
+    "filterMode": 2,
+    "generateMipmaps": true,
+    "isSRGB": false,
+    "maxTextureSize": 2048,
+    "textureType": 1,
+    "wrapMode": 0
+  },
+  "metaVersion": 1,
+  "type": "texture"
+}

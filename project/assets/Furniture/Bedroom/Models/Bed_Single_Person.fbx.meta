@@ -1,0 +1,23 @@
+{
+  "folder": "assets/Furniture/Bedroom/Models",
+  "guid": "c88fe82e93701bb3",
+  "importer": {
+    "globalScale": 1.0,
+    "importAnimations": false,
+    "importNormals": true,
+    "importSkeleton": false,
+    "materialImportMode": 1,
+    "optimizeGraph": true,
+    "pivotOffset": [
+      1.7170000076293945,
+      0.0,
+      -0.13449999690055847
+    ]
+  },
+  "materialRemap": {
+    "Bed_small_blanket_pillow": "assets/Furniture/Bedroom/Materials/M_Bed_Small_Blanket_Pillow.mat",
+    "Bed_small_frames_mattress": "assets/Furniture/Bedroom/Materials/M_Bed_Small_Frames_Mattress.mat"
+  },
+  "metaVersion": 1,
+  "type": "model"
+}

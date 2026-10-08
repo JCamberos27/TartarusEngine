@@ -1,0 +1,22 @@
+{
+  "folder": "assets/Furniture/Living_Room/Models",
+  "guid": "9e2e994b56c8219b",
+  "importer": {
+    "globalScale": 1.0,
+    "importAnimations": false,
+    "importNormals": true,
+    "importSkeleton": false,
+    "materialImportMode": 1,
+    "optimizeGraph": true,
+    "pivotOffset": [
+      -0.0,
+      -0.0020000000949949026,
+      0.050999999046325684
+    ]
+  },
+  "materialRemap": {
+    "Chair_arm": "assets/Furniture/Living_Room/Materials/M_Chair_Arm.mat"
+  },
+  "metaVersion": 1,
+  "type": "model"
+}
