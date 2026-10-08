@@ -1,0 +1,22 @@
+{
+  "folder": "assets/Props/Electrical/Models",
+  "guid": "52873273065c1a1e",
+  "importer": {
+    "globalScale": 1.0,
+    "importAnimations": false,
+    "importNormals": true,
+    "importSkeleton": false,
+    "materialImportMode": 1,
+    "optimizeGraph": true,
+    "pivotOffset": [
+      -0.0,
+      0.05700000002980232,
+      -0.0
+    ]
+  },
+  "materialRemap": {
+    "lambert1": "assets/Props/Electrical/Materials/M_Outlet_White.mat"
+  },
+  "metaVersion": 1,
+  "type": "model"
+}

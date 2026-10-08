@@ -1,0 +1,22 @@
+{
+  "folder": "assets/Furniture/Seating/Models",
+  "guid": "125066820e099ff2",
+  "importer": {
+    "globalScale": 1.0,
+    "importAnimations": false,
+    "importNormals": true,
+    "importSkeleton": false,
+    "materialImportMode": 1,
+    "optimizeGraph": true,
+    "pivotOffset": [
+      -0.0,
+      0.0,
+      0.03449999913573265
+    ]
+  },
+  "materialRemap": {
+    "Armchair_01": "assets/Furniture/Seating/Materials/M_Arm_Chair_01.mat"
+  },
+  "metaVersion": 1,
+  "type": "model"
+}

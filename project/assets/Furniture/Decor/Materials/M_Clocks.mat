@@ -1,0 +1,31 @@
+{
+  "factorsScaleMaps": true,
+  "matVersion": 2,
+  "name": "M_Clocks",
+  "properties": {
+    "_AOMap": "assets/Furniture/Decor/Textures/Clocks/Clocks_AO.png",
+    "_AlbedoMap": "assets/Furniture/Decor/Textures/Clocks/Clocks_Base_Color.png",
+    "_BaseColor": [
+      1.0,
+      1.0,
+      1.0
+    ],
+    "_DoubleSided": false,
+    "_EmissiveColor": [
+      1.0,
+      1.0,
+      1.0
+    ],
+    "_EmissiveMap": "assets/Furniture/Decor/Textures/Clocks/Clocks_Emissive.png",
+    "_EmissiveStrength": 1.0,
+    "_Metallic": 1.0,
+    "_MetallicMap": "assets/Furniture/Decor/Textures/Clocks/Clocks_Metallic.png",
+    "_MetallicRoughnessMap": "",
+    "_NormalMap": "assets/Furniture/Decor/Textures/Clocks/Clocks_Normal.png",
+    "_Roughness": 1.0,
+    "_RoughnessMap": "assets/Furniture/Decor/Textures/Clocks/Clocks_Roughness.png",
+    "_Triplanar": false,
+    "_TriplanarScale": 1.0
+  },
+  "shader": "engine://Standard.shader"
+}

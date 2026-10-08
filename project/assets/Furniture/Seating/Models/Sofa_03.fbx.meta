@@ -1,0 +1,23 @@
+{
+  "folder": "assets/Furniture/Seating/Models",
+  "guid": "1db466dd6460ab75",
+  "importer": {
+    "globalScale": 1.0,
+    "importAnimations": false,
+    "importNormals": true,
+    "importSkeleton": false,
+    "materialImportMode": 1,
+    "optimizeGraph": true,
+    "pivotOffset": [
+      -0.0,
+      -0.0010000000474974513,
+      0.001500000013038516
+    ]
+  },
+  "materialRemap": {
+    "sofa_03": "assets/Furniture/Seating/Materials/M_Sofa_03.mat",
+    "sofa_03_fringe": "assets/Furniture/Seating/Materials/M_Sofa_03.mat"
+  },
+  "metaVersion": 1,
+  "type": "model"
+}

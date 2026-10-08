@@ -1,0 +1,16 @@
+{
+  "folder": "assets/Furniture/Seating/Textures/Sofa_03",
+  "guid": "55de12a5b056212b",
+  "importer": {
+    "anisoLevel": 8,
+    "compression": 1,
+    "filterMode": 2,
+    "generateMipmaps": true,
+    "isSRGB": true,
+    "maxTextureSize": 2048,
+    "textureType": 0,
+    "wrapMode": 0
+  },
+  "metaVersion": 1,
+  "type": "texture"
+}

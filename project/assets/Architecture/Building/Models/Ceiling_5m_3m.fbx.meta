@@ -1,0 +1,22 @@
+{
+  "folder": "assets/Architecture/Building/Models",
+  "guid": "11a634e9dabe6c61",
+  "importer": {
+    "globalScale": 1.0,
+    "importAnimations": false,
+    "importNormals": true,
+    "importSkeleton": false,
+    "materialImportMode": 1,
+    "optimizeGraph": true,
+    "pivotOffset": [
+      4.800000190734863,
+      -0.10000000149011612,
+      -4.0
+    ]
+  },
+  "materialRemap": {
+    "Ceiling_default": "assets/Architecture/Building/Materials/M_Ceiling_Default.mat"
+  },
+  "metaVersion": 1,
+  "type": "model"
+}

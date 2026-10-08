@@ -1,0 +1,22 @@
+{
+  "folder": "assets/Props/Knife/Models",
+  "guid": "ad714ceca9a1c16e",
+  "importer": {
+    "globalScale": 0.009999999776482582,
+    "importAnimations": false,
+    "importNormals": true,
+    "importSkeleton": false,
+    "materialImportMode": 1,
+    "optimizeGraph": true,
+    "pivotOffset": [
+      -0.09969999641180038,
+      -0.20829999446868896,
+      -0.4993000030517578
+    ]
+  },
+  "materialRemap": {
+    "DefaultMaterial": "assets/Props/Knife/Materials/M_Steel_Blade.mat"
+  },
+  "metaVersion": 1,
+  "type": "model"
+}

@@ -1,0 +1,22 @@
+{
+  "folder": "assets/Furniture/Seating/Models",
+  "guid": "f4ad292c27bfc292",
+  "importer": {
+    "globalScale": 1.0,
+    "importAnimations": false,
+    "importNormals": true,
+    "importSkeleton": false,
+    "materialImportMode": 1,
+    "optimizeGraph": true,
+    "pivotOffset": [
+      -0.0005000000237487257,
+      -0.0,
+      0.0689999982714653
+    ]
+  },
+  "materialRemap": {
+    "sofa_02": "assets/Furniture/Seating/Materials/M_Sofa_02.mat"
+  },
+  "metaVersion": 1,
+  "type": "model"
+}

@@ -1,0 +1,31 @@
+{
+  "factorsScaleMaps": true,
+  "matVersion": 2,
+  "name": "M_Wall_Green",
+  "properties": {
+    "_AOMap": "assets/Architecture/Building/Textures/Wall_Default/Wall_Default_AO.png",
+    "_AlbedoMap": "assets/Architecture/Building/Textures/Wall_Green/Wall_Green_Base_Color.png",
+    "_BaseColor": [
+      1.0,
+      1.0,
+      1.0
+    ],
+    "_DoubleSided": false,
+    "_EmissiveColor": [
+      0.0,
+      0.0,
+      0.0
+    ],
+    "_EmissiveMap": "",
+    "_EmissiveStrength": 1.0,
+    "_Metallic": 1.0,
+    "_MetallicMap": "assets/Architecture/Building/Textures/Wall_Default/Wall_Default_Metallic.png",
+    "_MetallicRoughnessMap": "",
+    "_NormalMap": "assets/Architecture/Building/Textures/Wall_Default/Wall_Default_Normal.png",
+    "_Roughness": 1.0,
+    "_RoughnessMap": "assets/Architecture/Building/Textures/Wall_Default/Wall_Default_Roughness.png",
+    "_Triplanar": false,
+    "_TriplanarScale": 1.0
+  },
+  "shader": "engine://Standard.shader"
+}

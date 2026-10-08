@@ -1,0 +1,22 @@
+{
+  "folder": "assets/Furniture/Decor/Models",
+  "guid": "130bb77fe11fd6c6",
+  "importer": {
+    "globalScale": 1.0,
+    "importAnimations": false,
+    "importNormals": true,
+    "importSkeleton": false,
+    "materialImportMode": 1,
+    "optimizeGraph": true,
+    "pivotOffset": [
+      -0.1420000046491623,
+      -0.27000001072883606,
+      -0.0
+    ]
+  },
+  "materialRemap": {
+    "Decorative_props": "assets/Furniture/Decor/Materials/M_Decorative_Props.mat"
+  },
+  "metaVersion": 1,
+  "type": "model"
+}

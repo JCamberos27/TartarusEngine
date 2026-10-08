@@ -1,0 +1,22 @@
+{
+  "folder": "assets/Furniture/Bedroom/Models",
+  "guid": "1f5c031d19fb8759",
+  "importer": {
+    "globalScale": 1.0,
+    "importAnimations": false,
+    "importNormals": true,
+    "importSkeleton": false,
+    "materialImportMode": 1,
+    "optimizeGraph": true,
+    "pivotOffset": [
+      -0.019500000402331352,
+      0.004000000189989805,
+      0.017999999225139618
+    ]
+  },
+  "materialRemap": {
+    "Bed_pillows_mattress": "assets/Furniture/Bedroom/Materials/M_Bed_Pillows_Mattress_Clean.mat"
+  },
+  "metaVersion": 1,
+  "type": "model"
+}

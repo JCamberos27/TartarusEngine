@@ -127,6 +127,42 @@ void AssetImporterInspector::DrawModelSettings(ModelImportSettings& settings, bo
     Row("Import Scale", "Multiplies whatever unit-scale correction Assimp already derives\nfrom the file's own metadata (FBX/glTF commonly embed one; plain .obj\nusually doesn't). 1.0 = no extra correction.");
     isDirty |= ImGui::DragFloat("##Scale", &settings.GlobalScale, 0.01f, 0.001f, 1000.0f, "%.3f");
 
+    Row("Source Up Axis", "The axis the model was built standing on. Z stands a Z-up export\nupright in the engine's Y-up frame; -Z turns the other way (a piece\nexported lying on its face). Set by hand: exporters often\nrecord Z-up for geometry that is already Y-up.");
+    {
+        const char* kUp[] = {"Y", "Z", "-Z"};
+        int up = (int)settings.SourceUpAxis;
+        if (ImGui::Combo("##UpAxis", &up, kUp, IM_ARRAYSIZE(kUp))) {
+            settings.SourceUpAxis = (ModelImportSettings::UpAxis)up;
+            isDirty = true;
+        }
+    }
+
+    Row("Pivot Offset", "Moves the whole model (meters, after scale and up axis) so its pivot\nsits where it is useful. Packs exported from a level often keep each\nprop's position in that level.");
+    isDirty |= ImGui::DragFloat3("##PivotOffset", &settings.PivotOffset.x, 0.01f, -1000.0f, 1000.0f, "%.3f");
+
+    Row("Exclude Nodes", "Nodes left out of the import (one name per line), with everything\nunder them - for kit files that stack every variant in one place.\nApply to reimport.");
+    {
+        std::string text;
+        for (const auto& n : settings.ExcludeNodes) text += n + "\n";
+        char buf[4096];
+        std::snprintf(buf, sizeof buf, "%s", text.c_str());
+        if (ImGui::InputTextMultiline("##ExcludeNodes", buf, sizeof buf, ImVec2(-1.0f, ImGui::GetTextLineHeight() * 6.0f))) {
+            settings.ExcludeNodes.clear();
+            std::string line;
+            for (const char* c = buf;; ++c) {
+                if (*c == '\n' || *c == '\0') {
+                    while (!line.empty() && (line.back() == ' ' || line.back() == '\r')) line.pop_back();
+                    if (!line.empty()) settings.ExcludeNodes.push_back(line);
+                    line.clear();
+                    if (*c == '\0') break;
+                } else {
+                    line += *c;
+                }
+            }
+            isDirty = true;
+        }
+    }
+
     Row("Generate Normals/Tangents", "Computes smooth normals and tangent-space basis\nvectors for normal mapping. Leave on unless the source file already\nauthors its own normals you specifically want preserved as-is.");
     isDirty |= EditorUIPrimitives::Checkbox("##Normals", &settings.ImportNormals);
 

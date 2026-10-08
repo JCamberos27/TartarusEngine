@@ -47,6 +47,14 @@ bool ParseModelImporter(const json& j, ModelImportSettings& s) {
     s.OptimizeGraph      = imp.value("optimizeGraph",     true);
     s.MaterialImportMode = (ModelImportSettings::MaterialMode)imp.value("materialImportMode",
                                (int)ModelImportSettings::MaterialMode::ImportEmbedded);
+    s.SourceUpAxis       = Model::ParseUpAxis(imp.value("upAxis", std::string("Y")));
+    s.PivotOffset        = glm::vec3(0.0f);
+    if (imp.contains("pivotOffset") && imp["pivotOffset"].is_array() && imp["pivotOffset"].size() == 3)
+        s.PivotOffset = {imp["pivotOffset"][0].get<float>(), imp["pivotOffset"][1].get<float>(), imp["pivotOffset"][2].get<float>()};
+    s.ExcludeNodes.clear();
+    if (imp.contains("excludeNodes") && imp["excludeNodes"].is_array())
+        for (const auto& n : imp["excludeNodes"])
+            if (n.is_string() && !n.get<std::string>().empty()) s.ExcludeNodes.push_back(n.get<std::string>());
     s.ClipTrims.clear();
     if (imp.contains("clipTrims") && imp["clipTrims"].is_array())
         for (const auto& t : imp["clipTrims"])
@@ -702,6 +710,10 @@ void AssetLibrary::SetModelSettings(const std::string& path, const ModelImportSe
     imp["importSkeleton"]    = settings.ImportSkeleton;
     imp["optimizeGraph"]     = settings.OptimizeGraph;
     imp["materialImportMode"]= (int)settings.MaterialImportMode;
+    if (settings.SourceUpAxis != ModelImportSettings::UpAxis::Y) imp["upAxis"] = Model::UpAxisName(settings.SourceUpAxis);
+    if (settings.PivotOffset != glm::vec3(0.0f))
+        imp["pivotOffset"] = {settings.PivotOffset.x, settings.PivotOffset.y, settings.PivotOffset.z};
+    if (!settings.ExcludeNodes.empty()) imp["excludeNodes"] = settings.ExcludeNodes;
     if (!settings.ClipTrims.empty()) {
         json trims = json::array();
         for (const auto& t : settings.ClipTrims) trims.push_back({{"clip", t.Clip}, {"start", t.StartSeconds}, {"end", t.EndSeconds}});

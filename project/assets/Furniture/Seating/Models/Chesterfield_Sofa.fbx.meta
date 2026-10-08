@@ -1,0 +1,22 @@
+{
+  "folder": "assets/Furniture/Seating/Models",
+  "guid": "aa22a82bd2418573",
+  "importer": {
+    "globalScale": 1.0,
+    "importAnimations": false,
+    "importNormals": true,
+    "importSkeleton": false,
+    "materialImportMode": 1,
+    "optimizeGraph": true,
+    "pivotOffset": [
+      0.001500000013038516,
+      0.0010000000474974513,
+      -0.0005000000237487257
+    ]
+  },
+  "materialRemap": {
+    "mat_sofa_vintage_03": "assets/Furniture/Seating/Materials/M_Chesterfield.mat"
+  },
+  "metaVersion": 1,
+  "type": "model"
+}
