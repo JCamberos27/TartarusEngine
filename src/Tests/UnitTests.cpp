@@ -1911,29 +1911,53 @@ void TestFirstPersonWeaponWizard() {
     CHECK(BuildFirstPersonController(set).Layers[0].FindState("Fire") >= 0);
 }
 
-// The standard body locomotion graph: the builder gives the tuned reference (14 states, 21 parameters,
-// 63 transitions), passes the lint and the body contract, and its clips are filled by role.
+// The standard body locomotion graph (tools/gen_body_locomotion.py): the builder gives the reference (28 states,
+// 38 parameters, 211 transitions), passes the lint and the body contract, and its clips are filled by role.
 void TestFirstPersonBodyController() {
     const std::vector<std::string> roles = FPBody::LocomotionRoles();
     CHECK(roles.size() > 40 && std::find(roles.begin(), roles.end(), std::string("Loco_Walk_Fwd")) != roles.end());
     AnimatorController c = FPBody::BuildLocomotionController([](const std::string& r) { return "clips/AM_" + r + ".fbx"; });
-    CHECK(c.Layers[0].States.size() == 14 && c.Parameters.size() == 21 && c.Layers[0].Transitions.size() == 63);
+    CHECK(c.Layers[0].States.size() == 28 && c.Parameters.size() == 38 && c.Layers[0].Transitions.size() == 211);
     // The gait plays at PlayRate (the body's, so the feet keep up with a player faster than the clips).
     CHECK(c.Layers[0].States[c.Layers[0].FindState("Locomotion")].SpeedParam == "PlayRate" &&
           c.Layers[0].States[c.Layers[0].FindState("CrouchLoco")].SpeedParam.empty());
     CHECK(c.Layers[0].DefaultState == "Locomotion" && c.Layers[0].FindState("CrouchStop") >= 0);
-    // The tuned numbers survived: Stop leaves Locomotion at 0.36, the jog forward child sits at 3.264 m/s.
-    bool stop = false;
-    for (const auto& t : c.Layers[0].Transitions)
-        if (t.From == "Locomotion" && t.To == "Stop") stop = std::abs(t.Offset - 0.36f) < 1e-5f;
-    CHECK(stop);
+    // The starts, stops and pivots are distance matched to the capsule's travel; the loops aren't.
+    using DM = AnimatorController::State::DistanceMode;
+    const auto& states = c.Layers[0].States;
+    auto matched = [&](const char* name, const char* param, DM mode) {
+        const int i = c.Layers[0].FindState(name);
+        return i >= 0 && states[i].DistanceParam == param && states[i].Distance == mode && !states[i].Loop;
+    };
+    CHECK(matched("Start", "StartDistance", DM::Traveled) && matched("StartTurnL", "StartDistance", DM::Traveled) &&
+          matched("Stop", "StopDistance", DM::Remaining) && matched("StopWalk", "StopDistance", DM::Remaining) &&
+          matched("PivotJog", "PivotDistance", DM::Pivot) && matched("CrouchPivot", "PivotDistance", DM::Pivot));
+    CHECK(states[c.Layers[0].FindState("Locomotion")].DistanceParam.empty());
+    // A turning start's tree holds one side's clips only (each leads with that side's foot), so the sides never
+    // blend into each other; nor do the turns on the spot, whose angle the body keeps at 45 or more.
+    for (const char* side : {"L", "R"})
+        for (const char* name : {"StartTurn", "CrouchStartTurn"}) {
+            const auto& m = states[c.Layers[0].FindState(std::string(name) + side)].Motions[0];
+            bool own = m.Children.size() >= 4;
+            for (const auto& ch : m.Children) own = own && ch.Clip.find(std::string("_Start_Turn_") + side) != std::string::npos;
+            CHECK(own);
+        }
+    // Fidgets: one clip per whole index (the gun's ready stance at 0 and 1).
+    const auto& fidget = states[c.Layers[0].FindState("Fidget")].Motions[0];
+    for (int i = 0; i < (int)fidget.Children.size(); ++i) {
+        AnimatorParam p{"FidgetIndex", (int)AnimatorController::ParamType::Float, (float)i};
+        const auto w = AnimatorMotionWeights(fidget, {p});
+        CHECK(std::abs(w[i] - 1.0f) < 1e-5f);
+    }
+    CHECK(fidget.Children[0].Clip.find("Ready_Idle_02") != std::string::npos);
     const auto& loco = c.Layers[0].States[c.Layers[0].FindState("Locomotion")].Motions[0];
     CHECK(loco.Is2D() && loco.Children.size() == 18 && loco.Children[9].Clip == "clips/AM_Loco_Jog_Fwd.fbx" &&
           std::abs(loco.Children[9].ThresholdY - 3.264f) < 1e-4f);
     // Round trip through the file format, then the checks: nothing to report.
     AnimatorController back;
     CHECK(AnimatorController::FromJsonString(c.ToJsonString(), back));
-    CHECK(back.Layers[0].Transitions.size() == 63);
+    CHECK(back.Layers[0].Transitions.size() == 211 &&
+          back.Layers[0].States[back.Layers[0].FindState("Stop")].Distance == DM::Remaining);
     int problems = 0;
     for (const auto& i : AnimatorLint::Check(c)) problems += i.Severity != AnimatorLint::Level::Info;
     CHECK(problems == 0);

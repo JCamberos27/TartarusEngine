@@ -4,6 +4,7 @@
 
 #include <algorithm>
 #include <cmath>
+#include <cstdio>
 
 namespace ClipAnalysis {
 
@@ -117,6 +118,41 @@ Result Analyze(const Model& model, int clip, int rootNode, const RootMotionSetti
         }
     }
     return r;
+}
+
+void PrintReport(const Model& model, int clip, int rootNode, const std::string& name) {
+    const float len = model.AnimationLength(clip);
+    if (clip < 0 || rootNode < 0 || !(len > 0.0f)) { std::printf("[ClipReport] %s: no clip\n", name.c_str()); return; }
+    RootMotionSettings rm;
+    rm.Rotation = true;
+    rm.Vertical = false;
+    constexpr int n = 40;
+    std::vector<glm::vec2> path(n + 1);
+    std::vector<float> yaw(n + 1), dist(n + 1, 0.0f);
+    for (int i = 0; i <= n; ++i) {
+        const RootMotionDelta d = model.ClipRootMotion(clip, 0.0f, len * i / n, AnimationWrapMode::ClampForever, rootNode, rm);
+        path[i] = glm::vec2(d.Translation.x, d.Translation.z);
+        yaw[i] = glm::degrees(d.Yaw);
+        if (i) dist[i] = dist[i - 1] + glm::length(path[i] - path[i - 1]);
+    }
+    // Direction of travel over a stretch, degrees off the start facing (+Z forward, -X right: atan2(-x, z)).
+    auto heading = [&](int a, int b) {
+        const glm::vec2 v = path[b] - path[a];
+        return glm::length(v) < 0.01f ? 0.0f : glm::degrees(std::atan2(-v.x, v.y));
+    };
+    const int e = n / 5;
+    const float dt = len / n;
+    const float inSpeed = glm::length(path[2] - path[0]) / (2 * dt), outSpeed = glm::length(path[n] - path[n - 2]) / (2 * dt);
+    const glm::vec2 entry = glm::length(path[e] - path[0]) > 0.01f ? glm::normalize(path[e] - path[0]) : glm::vec2(0.0f);
+    float far = 0.0f, farAt = 0.0f;
+    for (int i = 0; i <= n; ++i)
+        if (const float a = glm::dot(path[i], entry); a > far) { far = a; farAt = (float)i / n; }
+    std::printf("[ClipReport] %-44s len %.2f s dist %.2f m net %.2f m yaw %+6.1f in %+6.1f out %+6.1f deg  v in %.2f out %.2f m/s  plant %.2f m @%.2f  d:",
+                name.c_str(), len, dist[n], glm::length(path[n]), yaw[n], heading(0, e), heading(n - e, n), inSpeed, outSpeed, far, farAt);
+    for (int i = 0; i <= n; i += n / 10) std::printf(" %.2f", dist[i]);
+    std::printf("  yaw:");
+    for (int i = 0; i <= n; i += n / 10) std::printf(" %.0f", yaw[i]);
+    std::printf("\n");
 }
 
 } // namespace ClipAnalysis

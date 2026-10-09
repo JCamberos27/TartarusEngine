@@ -741,6 +741,25 @@ void TestProjectLocomotionAndCallouts() {
     body.RootYaw=30;CHECK(InvokeProject("body.motion",&body,sizeof body));CHECK(!body.Turning && std::abs(body.TurnDone-glm::radians(90.0f))<.001f);
     body={};body.Dt=.01f;body.Grounded=1;body.IsLocomotion=1;body.StartStopClips=1;body.IdleTime=2;body.StartIdleTime=.5f;body.StartMaxMove=.7f;body.ParamSmoothing=.2f;body.PlayerRunSpeed=4;body.PlayerSprintSpeed=6;body.RunSpeed=3.264f;body.ClipSprint=4.736f;body.WishVelocity={0,0,4};body.MaxPlayRate=2;
     CHECK(InvokeProject("body.motion",&body,sizeof body));CHECK((body.Triggers&4) && body.StartDir.y==1 && body.Moving);
+    CHECK(body.StartTurn==0 && body.StartGait==1);
+    // Moving off toward a view the body lags by ~90 degrees: a start that turns it, to the left, ~2 steps of 45.
+    body.Triggers=0;body.IdleTime=2;body.Move={};body.TurnThreshold=30;body.TurnLagFloor=90;body.TurnMoveEase=.08f;body.ViewYaw=glm::radians(100.0f);
+    body.WishVelocity={4*std::sin(glm::radians(100.0f)),0,4*std::cos(glm::radians(100.0f))};
+    CHECK(InvokeProject("body.motion",&body,sizeof body));CHECK((body.Triggers&4) && body.StartTurn>1.8f && body.StartTurn<2.3f && body.StartTurnAmount==body.StartTurn);
+    // Jogging forward, the input reverses: a pivot from the forward travel (the jog's).
+    body={};body.Dt=.01f;body.Grounded=1;body.IsLocomotion=1;body.StartStopClips=1;body.PlayerRunSpeed=4;body.RunSpeed=3.264f;body.ParamSmoothing=.2f;body.Move={0,3,0};body.WishVelocity={0,0,-4};
+    CHECK(InvokeProject("body.motion",&body,sizeof body));CHECK((body.Triggers&64) && body.PivotDir.y>.99f && body.PivotGait==1);
+    // In the pivot, still going the old way at 2 m/s toward 3 the other way (accel 0.1 s): 4.7 cm to the turnaround.
+    body.Triggers=0;body.IsPivot=1;body.IsLocomotion=0;body.Velocity={0,0,2};body.WishVelocity={0,0,-3};body.AccelTime=.1f;
+    CHECK(InvokeProject("body.motion",&body,sizeof body));CHECK(std::abs(body.PivotDistance+(.2f-.3f*std::log(1+2.0f/3)))<1e-4f && !body.PivotReversed);
+    body.Velocity={0,0,-1};CHECK(InvokeProject("body.motion",&body,sizeof body));CHECK(body.PivotReversed && std::abs(body.PivotDistance-.01f)<1e-4f);
+    // A tap: let go 0.2 s into a start - one step its way.
+    body={};body.Dt=.06f;body.Grounded=1;body.IsStart=1;body.StartStopClips=1;body.StopDebounce=.05f;body.MoveTime=.2f;body.LastDir={1,0,0};
+    CHECK(InvokeProject("body.motion",&body,sizeof body));CHECK((body.Triggers&128) && !(body.Triggers&8) && body.StepDir.x==1);
+    // Stood still long enough with a gun: one of the ready stance's fidgets; busy with the gun, none.
+    body={};body.Dt=.01f;body.Grounded=1;body.IsLocomotion=1;body.Armed=1;body.Random=.5f;body.FidgetNext=1;body.FidgetTime=.995f;
+    CHECK(InvokeProject("body.motion",&body,sizeof body));CHECK((body.Triggers&256) && body.FidgetIndex>=0 && body.FidgetIndex<=1 && body.FidgetTime==0);
+    body.Triggers=0;body.Busy=1;body.FidgetNext=1;body.FidgetTime=.995f;CHECK(InvokeProject("body.motion",&body,sizeof body));CHECK(!(body.Triggers&256) && body.FidgetTime==0);
     body={};body.Grounded=1;body.IsLocomotion=1;body.StartStopClips=1;body.Crouched=1;CHECK(InvokeProject("body.motion",&body,sizeof body));CHECK(body.Triggers==1 && body.WasCrouched);
     NpcCallMemberFrame members[2];NpcCallChannelFrame channel;std::fill_n(channel.LastEvent,20,-1e9f);
     for(int i=0;i<2;++i){members[i].Exists=1;members[i].Index=i;members[i].Feet={float(i),0,0};members[i].LastCallout=-1e9f;}

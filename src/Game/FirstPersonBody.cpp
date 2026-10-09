@@ -907,7 +907,29 @@ void FirstPersonBody::Tick(World& world, const Player& player, const Camera& cam
     f.IsCrouchTurn=ac.InState(FPBody::kStateCrouchTurn);
     f.IsLocomotion=ac.InState(FPBody::kStateLocomotion);
     f.IsCrouchLoco=ac.InState(FPBody::kStateCrouchLoco);
+    f.IsStart=ac.HasTag(FPBody::kTagStart);
+    f.IsStartTurn=ac.HasTag(FPBody::kTagStartTurn);
+    f.IsStop=ac.HasTag(FPBody::kTagStop);
+    f.IsPivot=ac.HasTag(FPBody::kTagPivot);
+    f.IsStep=ac.HasTag(FPBody::kTagStep);
+    f.IsFidget=ac.HasTag(FPBody::kTagFidget);
+    f.IsSprint=ac.InState(FPBody::kStateSprint);
+    f.AccelTime=player.GroundAccelTime;
+    f.DecelTime=player.GroundDecelTime;
+    f.SprintClip=FPBody::kSprintClipSpeed;
+    f.Armed=m_Armed;
+    f.Busy=m_Busy;
+    m_Random^=m_Random<<13;m_Random^=m_Random>>17;m_Random^=m_Random<<5;
+    f.Random=(float)(m_Random>>8)/16777216.0f;
+    f.StartDistance=m_Loco.StartDistance;f.PivotDistance=m_Loco.PivotDistance;f.PivotTravel=m_Loco.PivotTravel;f.MoveDistance=m_Loco.MoveDistance;
+    f.FidgetTime=m_Loco.FidgetTime;f.FidgetNext=m_Loco.FidgetNext;f.FidgetIndex=m_Loco.FidgetIndex;
+    f.StartGait=m_Loco.StartGait;f.StopGait=m_Loco.StopGait;f.PivotGait=m_Loco.PivotGait;f.StartTurn=m_Loco.StartTurn;f.StartTurnAmount=m_Loco.StartTurnAmount;
+    f.PivotDir={m_Loco.PivotDir.x,m_Loco.PivotDir.y,0};f.StepDir={m_Loco.StepDir.x,m_Loco.StepDir.y,0};f.PivotReversed=m_Loco.PivotReversed;
     if(!Scripting::InvokeProject("body.motion",&f,sizeof f))throw std::runtime_error("Project locomotion unavailable");
+    m_Loco.StartDistance=f.StartDistance;m_Loco.PivotDistance=f.PivotDistance;m_Loco.PivotTravel=f.PivotTravel;m_Loco.MoveDistance=f.MoveDistance;
+    m_Loco.FidgetTime=f.FidgetTime;m_Loco.FidgetNext=f.FidgetNext;m_Loco.FidgetIndex=f.FidgetIndex;
+    m_Loco.StartGait=f.StartGait;m_Loco.StopGait=f.StopGait;m_Loco.PivotGait=f.PivotGait;m_Loco.StartTurn=f.StartTurn;m_Loco.StartTurnAmount=f.StartTurnAmount;
+    m_Loco.PivotDir={f.PivotDir.x,f.PivotDir.y};m_Loco.StepDir={f.StepDir.x,f.StepDir.y};m_Loco.PivotReversed=f.PivotReversed;
     m_Yaw=f.Yaw;
     m_Twist=f.Twist;
     m_AirTime=f.AirTime;
@@ -922,10 +944,14 @@ void FirstPersonBody::Tick(World& world, const Player& player, const Camera& cam
     m_Move={f.Move.x,f.Move.y};m_LastDir={f.LastDir.x,f.LastDir.y};m_Grounded=player.Grounded;m_InLand=ac.InState(FPBody::kStateLand);m_MaxTurnRate=cfg.MaxTurnRate;m_TurnThreshold=cfg.TurnThreshold;
     world.SetWorldPose(m_Body,m_Feet,YawRotation(m_Yaw));
     ac.SetFloat(FPBody::kPlayRate,f.PlayRate);if(f.SetTurnAngle)ac.SetFloat(FPBody::kTurnAngle,f.TurnAngle);ac.SetBool(FPBody::kTurning,f.Turning!=0);ac.SetBool(FPBody::kMoving,f.Moving!=0);
-    if(f.Triggers&4){ac.SetFloat(FPBody::kStartX,f.StartDir.x);ac.SetFloat(FPBody::kStartY,f.StartDir.y);}if(f.Triggers&24){ac.SetFloat(FPBody::kStopX,f.StopDir.x);ac.SetFloat(FPBody::kStopY,f.StopDir.y);}
-    const char* triggers[]{FPBody::kCrouchDown,FPBody::kCrouchUp,FPBody::kStart,FPBody::kStop,FPBody::kStopRun,FPBody::kJump};for(int i=0;i<6;++i)if(f.Triggers&(1<<i))fireTrigger(ac,triggers[i]);
+    if(f.Triggers&4){ac.SetFloat(FPBody::kStartX,f.StartDir.x);ac.SetFloat(FPBody::kStartY,f.StartDir.y);ac.SetFloat(FPBody::kStartGait,f.StartGait);ac.SetFloat(FPBody::kStartTurn,f.StartTurn);ac.SetFloat(FPBody::kStartTurnAmount,f.StartTurnAmount);}
+    if(f.Triggers&24){ac.SetFloat(FPBody::kStopX,f.StopDir.x);ac.SetFloat(FPBody::kStopY,f.StopDir.y);ac.SetFloat(FPBody::kStopGait,f.StopGait);}
+    if(f.Triggers&64){ac.SetFloat(FPBody::kPivotX,f.PivotDir.x);ac.SetFloat(FPBody::kPivotY,f.PivotDir.y);ac.SetFloat(FPBody::kPivotGait,f.PivotGait);}
+    if(f.Triggers&128){ac.SetFloat(FPBody::kStepX,f.StepDir.x);ac.SetFloat(FPBody::kStepY,f.StepDir.y);}
+    if(f.Triggers&256)ac.SetFloat(FPBody::kFidgetIndex,f.FidgetIndex);
+    ac.SetFloat(FPBody::kStartDistance,f.StartDistance);ac.SetFloat(FPBody::kStopDistance,f.StopDistance);ac.SetFloat(FPBody::kPivotDistance,f.PivotDistance);ac.SetFloat(FPBody::kSprintRate,f.SprintRate);
+    const char* triggers[]{FPBody::kCrouchDown,FPBody::kCrouchUp,FPBody::kStart,FPBody::kStop,FPBody::kStopRun,FPBody::kJump,FPBody::kPivot,FPBody::kStep,FPBody::kFidget};for(int i=0;i<9;++i)if(f.Triggers&(1<<i))fireTrigger(ac,triggers[i]);
     ac.SetFloat(FPBody::kMoveX,m_Move.x);ac.SetFloat(FPBody::kMoveY,m_Move.y);ac.SetFloat(FPBody::kSpeed,glm::length(m_Move));ac.SetBool(FPBody::kSprint,f.Sprint!=0);ac.SetBool(FPBody::kGrounded,player.Grounded);ac.SetBool(FPBody::kCrouched,player.Crouched);ac.SetBool(FPBody::kAirborne,f.Airborne!=0);
-    const float travel=glm::length(glm::vec2(ac.RootMotion.DeltaPosition.x,ac.RootMotion.DeltaPosition.z));m_StopDistance=(ac.InState(FPBody::kStateStop)||ac.InState(FPBody::kStateStopRun))?m_StopDistance+travel:0;m_StartDistance=ac.InState(FPBody::kStateStart)?m_StartDistance+travel:0;
 
     // What the body is doing, for the Inspector's live readout and the Scene viewport's overlay.
     {

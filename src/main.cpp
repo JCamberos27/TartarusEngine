@@ -53,6 +53,7 @@
 #include "Tests/UnitTests.h" // #173
 #include "Tests/EditorUiTests.h" // --editor-tests
 #include "OutfitAudit.h"
+#include "ClipAnalysis.h"
 #include "OutfitTestScene.h"
 #include "SkinHideBuffer.h"             // --outfit-audit
 #include "LightBuffer.h"
@@ -510,6 +511,10 @@ int main(int argc, char** argv) {
     bool outfitCostMode = false;
     // --outfit-selftest: the OutfitSystem API end to end on the real wardrobe (OutfitAudit::RunSelfTest).
     bool outfitSelfTestMode = false;
+    // --clip-report <rig> <clip or folder ...>: each animation clip attached to the rig (as the animator does) and
+    // measured - travel, heading change, entry / exit direction and speed, a pivot's plant (ClipAnalysis::PrintReport).
+    bool clipReportMode = false;
+    std::vector<std::string> clipReportArgs;
     // --editor-shot <dir>: the interactive editor at 1920x1080 (or --perf-res), stepped through a few
     // fixed views (an entity selected, the Console, the Game view, Settings), each saved as a PNG of the
     // whole window, then closed - for reviewing editor UI changes without driving the desktop. It runs
@@ -579,6 +584,10 @@ int main(int argc, char** argv) {
             if (i + 1 < argc && argv[i + 1][0] != '-') outfitAuditCsv = argv[++i];
         }
         else if (a == "--outfit-selftest") { outfitSelfTestMode = true; }
+        else if (a == "--clip-report") {
+            clipReportMode = true;
+            while (i + 1 < argc && argv[i + 1][0] != '-') clipReportArgs.push_back(argv[++i]);
+        }
         else if (a == "--outfit-cost") {
             outfitCostMode = true;
             while (i + 1 < argc && argv[i + 1][0] != '-') outfitCostScenes.push_back(argv[++i]);
@@ -698,7 +707,7 @@ int main(int argc, char** argv) {
     // --smoke-test and --resave are non-interactive: no splash, and fatal errors go to stderr +
     // a nonzero exit instead of a modal MessageBox that a headless/CI desktop never dismisses
     // (audit BUG-102).
-    const bool headless = smokeTestMode || resaveMode || undoBenchMode || assetLoadBenchMode || outfitAuditMode || outfitScenesMode || outfitCostMode || outfitSelfTestMode || editorTestsMode;
+    const bool headless = smokeTestMode || resaveMode || undoBenchMode || assetLoadBenchMode || outfitAuditMode || outfitScenesMode || outfitCostMode || outfitSelfTestMode || clipReportMode || editorTestsMode;
     if (editorTestsMode) {
         // A fresh scratch user folder every run: default prefs and layout, no bookmarks, tabs or
         // favorites - the tests start from a known state and never touch the user's own files.
@@ -1399,6 +1408,30 @@ int main(int argc, char** argv) {
         }
 
         if (outfitScenesMode) return OutfitTestScene::Generate(assets);
+
+        if (clipReportMode) {
+            namespace fs = std::filesystem;
+            if (clipReportArgs.size() < 2) { std::cout << "[ClipReport] usage: --clip-report <rig> <clip or folder ...>\n"; return 2; }
+            auto rig = assets.LoadModel(ProjectPaths::Resolve(clipReportArgs[0]));
+            if (!rig) { std::cout << "[ClipReport] no rig " << clipReportArgs[0] << "\n"; return 2; }
+            std::vector<std::string> refs;
+            for (size_t k = 1; k < clipReportArgs.size(); ++k) {
+                std::error_code ec;
+                const fs::path full = ProjectPaths::Resolve(clipReportArgs[k]);
+                if (fs::is_directory(full, ec)) {
+                    std::vector<std::string> found;
+                    for (const auto& f : fs::directory_iterator(full, ec))
+                        if (f.is_regular_file() && f.path().extension() == ".fbx")
+                            found.push_back((fs::path(clipReportArgs[k]) / f.path().filename()).generic_string());
+                    std::sort(found.begin(), found.end());
+                    refs.insert(refs.end(), found.begin(), found.end());
+                } else refs.push_back(clipReportArgs[k]);
+            }
+            const int root = rig->FindRootMotionNode();
+            for (const std::string& ref : refs)
+                ClipAnalysis::PrintReport(*rig, ResolveAnimationClip(*rig, ref, assets), root, fs::path(ref).stem().string());
+            return 0;
+        }
 
         if (outfitSelfTestMode) {
             const int failures = OutfitAudit::RunSelfTest(assets, outfitAuditWardrobe);
@@ -3132,6 +3165,8 @@ int main(int argc, char** argv) {
                         firstPersonBody.Stop(world);
                                 firstPersonBody.Start(world, player);
                     }
+                    firstPersonBody.SetHands(firstPersonPresentation.IsActive() && firstPersonPresentation.IsEquipped(),
+                                             firstPersonPresentation.IsActive() && firstPersonPresentation.HandsBusy());
                     firstPersonBody.Tick(world, player, player.Cam, gameDt);
                     if (firstPersonPresentation.IsActive()) {
                         if (!weaponTest && !npcTest) firstPersonPresentation.SetPlayerLookInput(player.LookDeltaInput);

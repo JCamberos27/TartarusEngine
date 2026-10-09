@@ -149,6 +149,8 @@ public:
     // Mid-swap counts as equipped: the weapon is only being traded for another, so e.g. the gravity
     // gun mustn't take the mouse in between.
     bool IsEquipped() const { return m_Equipped || m_PendingSlot >= 0; }
+    // The gun is being used - aimed, fired in the last few seconds, reloaded: the body doesn't fidget.
+    bool HandsBusy() const { return m_Zoom > 0.02f || m_SinceShot < 4.0f || IsReloading(); }
     // The speeds (m/s) the walk and sprint clips play at: the controller's Move Speed / Sprint Multiplier, or - with a
     // First Person Body - the body's Run / Sprint Speed (what the player really moves at). Call after Start.
     void SetLocomotionSpeeds(float walk, float sprint) { m_WalkSpeed = walk; m_SprintSpeed = sprint; }

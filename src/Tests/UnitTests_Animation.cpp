@@ -819,8 +819,68 @@ static void TestRetargetUe4ToUe5() {
     CHECK(std::abs(lifted - 0.10f * 1.1f) < 0.003f);
 }
 
+// Distance matching: a clip's time follows the character's travel. A path that covers 2 m evenly over the first
+// half and then stands (a stop's settle) - Traveled, Remaining and Pivot read it as the states use them, and the
+// pacing never runs backwards, freezes, or races ahead.
+static void TestDistanceMatching() {
+    using DM = AnimatorController::State::DistanceMode;
+    std::vector<float> curve;
+    for (int i = 0; i <= 10; ++i) curve.push_back(std::min(i, 5) * 0.4f); // 0 .. 2 m by phase 0.5, then still
+    CHECK(std::abs(AnimatorDistanceToPhase(curve, 0.0f, DM::Traveled, 1.0f) - 0.25f) < 1e-5f);
+    CHECK(std::abs(AnimatorDistanceToPhase(curve, 0.0f, DM::Remaining, 0.4f) - 0.4f) < 1e-5f);
+    // Nothing left to travel: where the clip stops moving (its settle then plays on the clock), not its end.
+    CHECK(std::abs(AnimatorDistanceToPhase(curve, 0.0f, DM::Remaining, 0.0f) - 0.5f) < 1e-5f);
+    CHECK(AnimatorDistanceToPhase(curve, 0.0f, DM::Traveled, -1.0f) == 0.0f);
+    // A pivot turning round 1.2 m along: 0.4 m short of it, and 0.2 m past it.
+    CHECK(std::abs(AnimatorDistanceToPhase(curve, 1.2f, DM::Pivot, -0.4f) - 0.2f) < 1e-5f);
+    CHECK(std::abs(AnimatorDistanceToPhase(curve, 1.2f, DM::Pivot, 0.2f) - 0.35f) < 1e-5f);
+    CHECK(AnimatorDistanceToPhase({}, 0.0f, DM::Traveled, 1.0f) < 0.0f);
+    // Monotonic in the distance.
+    float last = -1.0f;
+    bool rising = true;
+    for (float d = 0.0f; d <= 2.0f; d += 0.05f) {
+        const float ph = AnimatorDistanceToPhase(curve, 0.0f, DM::Traveled, d);
+        rising = rising && ph >= last;
+        last = ph;
+    }
+    CHECK(rising);
+    // Pacing: entering jumps straight there; after, 0.35x..3x the clock; with nothing ahead, the clock.
+    CHECK(AnimatorDistanceStep(0.0f, 0.4f, 0.01f, true) == 0.4f);
+    CHECK(std::abs(AnimatorDistanceStep(0.2f, 0.9f, 0.01f, false) - 0.23f) < 1e-6f);
+    CHECK(std::abs(AnimatorDistanceStep(0.2f, 0.201f, 0.01f, false) - 0.2035f) < 1e-6f);
+    CHECK(std::abs(AnimatorDistanceStep(0.5f, 0.5f, 0.01f, false) - 0.51f) < 1e-6f);
+    CHECK(std::abs(AnimatorDistanceStep(0.5f, 0.1f, 0.01f, false) - 0.51f) < 1e-6f);
+    // Through the animator: a one-shot state with a distance parameter follows it, a looping one ignores it.
+    AnimatorController c;
+    c.Parameters = {{"Dist", AnimatorController::ParamType::Float, 0.0f}};
+    AnimatorController::State st;
+    st.Name = "Start";
+    st.Loop = false;
+    st.DistanceParam = "Dist";
+    st.Motions.assign(1, AnimatorController::Motion{});
+    c.Layers[0].States = {st};
+    AnimatorControllerComponent ac;
+    const auto len = [](int, int) { return 2.0f; };
+    const auto phaseAt = [&](int, int, DM mode, float m) { return AnimatorDistanceToPhase(curve, 0.0f, mode, m); };
+    ac.SetFloat("Dist", 0.8f);
+    AdvanceAnimator(c, ac, 0.1f, len, phaseAt); // enters, placed straight at 0.8 m
+    CHECK(std::abs(ac.Layers[0].Stack.back().Phase - 0.2f) < 1e-5f);
+    ac.SetFloat("Dist", 0.9f);
+    AdvanceAnimator(c, ac, 0.1f, len, phaseAt); // clock step 0.05; the travel asks for +0.025
+    CHECK(std::abs(ac.Layers[0].Stack.back().Phase - 0.225f) < 1e-5f);
+    c.Layers[0].States[0].Loop = true;
+    AdvanceAnimator(c, ac, 0.1f, len, phaseAt);
+    CHECK(std::abs(ac.Layers[0].Stack.back().Phase - 0.275f) < 1e-5f);
+    // Saved and loaded.
+    c.Layers[0].States[0].Distance = DM::Pivot;
+    AnimatorController back;
+    CHECK(AnimatorController::FromJsonString(c.ToJsonString(), back) && back.Layers[0].States[0].DistanceParam == "Dist" &&
+          back.Layers[0].States[0].Distance == DM::Pivot);
+}
+
 void RegisterAnimationTests(UnitTestSupport::TestList& tests) {
     tests.push_back({"Retarget: UE4 mannequin clip baked onto a UE5 rig", TestRetargetUe4ToUe5});
+    tests.push_back({"Distance matching: phase from travel, paced", TestDistanceMatching});
 
     tests.push_back({"Action camera and firing shake",TestCameraEffects});
     tests.push_back({"ADS reload preserves additive locomotion",TestAdsReloadPreservesAdditiveLocomotion});
