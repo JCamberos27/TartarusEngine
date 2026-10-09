@@ -425,9 +425,9 @@ void FirstPersonWeaponTest::BuildBodyProbe() {
                              float mean = 0.0f, worst = 0.0f;
                              for (float s : b.Slides) { mean += s; worst = std::max(worst, s); }
                              if (!b.Slides.empty()) mean /= (float)b.Slides.size();
-                             std::printf("[Body] %-22s %-60s plants %2d slide mean %.1f max %.1f cm  hands %.1f / world %.1f cm  bodies %.1f cm\n",
+                             std::printf("[Body] %-22s %-60s plants %2d slide mean %.1f max %.1f cm  hands %.1f / world %.1f cm  bodies %.1f cm  eye bump %.1f m/s2\n",
                                          sg.Name.c_str(), seq.c_str(), (int)b.Slides.size(), mean * 100.0f, worst * 100.0f, b.HandGap * 100.0f,
-                                         b.TwinHandGap * 100.0f, b.BodyDiff * 100.0f);
+                                         b.TwinHandGap * 100.0f, b.BodyDiff * 100.0f, b.EyeJerk);
                              if (!b.PlantLog.empty()) std::printf("[Body]   plants:%s\n", b.PlantLog.c_str());
                              for (const std::string& want : sg.Expect) {
                                  bool seen = false;
@@ -440,6 +440,10 @@ void FirstPersonWeaponTest::BuildBodyProbe() {
                                  // The MC clips' own feet drift 0.5-3 cm a plant by this measure (--clip-report): within ~2 cm of that.
                                  c.Check(mean < 0.04f && worst < 0.07f, buf);
                              }
+                             // The view: no bump harder than a smooth 0.3 s crouch takes (the eye drops ~30 cm).
+                             std::snprintf(buf, sizeof buf, "%s: the view moves smoothly (%.1f m/s2)", sg.Name.c_str(), b.EyeJerk);
+                             if (b.FeetHigh - b.FeetLow < 0.05f) c.Check(b.EyeJerk < 35.0f, buf);
+                             else std::printf("[Body]   (crossed %.0f cm of steps: the view's bump is the stairs')\n", (b.FeetHigh - b.FeetLow) * 100.0f);
                              std::snprintf(buf, sizeof buf, "%s: the world body's hands on the gun (%.1f cm)", sg.Name.c_str(), b.TwinHandGap * 100.0f);
                              c.Check(b.TwinHandGap < 0.02f, buf);
                              c.View = 0;
@@ -478,6 +482,11 @@ void FirstPersonWeaponTest::BuildBodyProbe() {
     add({"crouch_pivot", move({0, -1}, false, true), 1.4f, {"CrouchPivot"}, {{0.3f, 1}}});
     add({"crouch_stop", move({}, false, true), 2.0f, {"CrouchStop"}, {{0.3f, 1}}});
     add({"stand_up", move({}), 1.5f, {"Locomotion"}, {}});
+    // Crouching and standing on the move: no transition clip, a crossfade the camera rides.
+    add({"jog_to_crouch_run", move({0, 1}), 1.2f, {"Locomotion"}, {}});
+    add({"crouch_on_the_move", move({0, 1}, false, true), 1.5f, {"CrouchLoco"}, {{0.15f, 1}}});
+    add({"stand_on_the_move", move({0, 1}), 1.5f, {"Locomotion"}, {{0.15f, 1}}});
+    add({"on_the_move_stop", move({}), 1.6f, {"Stop"}, {}});
     if (!m_BodyOnly.empty()) {
         m_Steps = std::move(steps);
         return;
@@ -983,6 +992,24 @@ void FirstPersonWeaponTest::AfterPose(const World& world, const FirstPersonBody&
         m_EyeAccelMax = std::max(m_EyeAccelMax, glm::length(cam.Position - 2.0f * m_EyePrev[0] + m_EyePrev[1]) / (m_Ctx.Dt * m_Ctx.Dt));
     m_EyePrev[1] = m_EyePrev[0];
     m_EyePrev[0] = cam.Position;
+    if (m_BodyProbe && m_BodyMeasure && m_Ctx.Dt > 0.0f) {
+        // The eye against where the body stands: the body's own motion in the view (a stair the capsule climbs is the
+        // terrain's, and its own easing - not the animation's).
+        BodyStats& b = m_Body;
+        const float y = cam.Position.y - body.Feet().y;
+        b.FeetLow = std::min(b.FeetLow, body.Feet().y);
+        b.FeetHigh = std::max(b.FeetHigh, body.Feet().y);
+        if (b.EyeFrames >= 2) b.EyeJerk = std::max(b.EyeJerk, std::abs(y - 2.0f * b.EyeY[0] + b.EyeY[1]) / (m_Ctx.Dt * m_Ctx.Dt));
+        b.EyeY[1] = b.EyeY[0];
+        b.EyeY[0] = y;
+        b.EyeFrames = std::min(b.EyeFrames + 1, 2);
+        // STOCK_PROBE_EYE=1: the camera's height (over the feet, and in the world) each frame of a segment, and the body's state.
+#pragma warning(suppress : 4996)
+        static const bool eyeLog = std::getenv("STOCK_PROBE_EYE") != nullptr;
+        if (eyeLog)
+            std::printf("[Eye] t %.3f y %.4f world %.4f at %.2f %.2f state %s\n", m_Ctx.Time, y, cam.Position.y, cam.Position.x, cam.Position.z,
+                        BodyDebug::Info().AnimatorState.c_str());
+    }
     m_EyeFrames = std::min(m_EyeFrames + 1, 2);
     s.EyeAccel = m_EyeAccelMax;
     s.Eye = cam.Position;

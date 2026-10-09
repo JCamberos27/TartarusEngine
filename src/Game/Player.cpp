@@ -54,6 +54,7 @@ void Player::Update(float dt, World& world, GLFWwindow* window, bool readInput) 
     f.GroundDecelTime=GroundDecelTime;
     f.AirAccelTime=AirAccelTime;
     f.CrouchBlend=CrouchBlend;
+    f.CrouchBlendRate=CrouchBlendRate;
     f.YawDropped=YawDropped;
     f.Position={Cam.Position.x,Cam.Position.y,Cam.Position.z};
     f.Velocity={Velocity.x,Velocity.y,Velocity.z};
@@ -66,7 +67,7 @@ void Player::Update(float dt, World& world, GLFWwindow* window, bool readInput) 
     Cam.Yaw=f.Yaw; Cam.Pitch=f.Pitch; MoveInput={f.MoveX,f.MoveY};
     m_SinceGrounded=f.SinceGrounded; m_JumpBuffer=f.JumpBuffer;
     Grounded=f.Grounded!=0; Crouched=f.Crouched!=0; Jumped=f.Jumped!=0;
-    CrouchBlend=f.CrouchBlend; YawDropped=f.YawDropped;
+    CrouchBlend=f.CrouchBlend; CrouchBlendRate=f.CrouchBlendRate; YawDropped=f.YawDropped;
     Cam.Position={f.Position.x,f.Position.y,f.Position.z};
     Velocity={f.Velocity.x,f.Velocity.y,f.Velocity.z};
     WishVelocity={f.WishVelocity.x,f.WishVelocity.y,f.WishVelocity.z};

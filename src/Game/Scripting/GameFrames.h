@@ -34,6 +34,7 @@ struct PlayerFrame {
     float SinceGrounded{};
     float JumpBuffer{};
     float CrouchBlend{};
+    float CrouchBlendRate{};
     float YawDropped{};
     Vec3 Position{};
     Vec3 Velocity{};

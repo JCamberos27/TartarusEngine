@@ -2344,9 +2344,23 @@
           "offset": 0.3
         },
         {
+          "from": "CrouchLoco",
+          "to": "CrouchUp",
+          "duration": 0.2,
+          "conditions": [
+            {
+              "mode": "if",
+              "param": "CrouchUp",
+              "threshold": 0.0
+            }
+          ],
+          "hasExitTime": false,
+          "exitTime": 1.0
+        },
+        {
           "from": "Locomotion",
           "to": "CrouchLoco",
-          "duration": 0.25,
+          "duration": 0.3,
           "conditions": [
             {
               "mode": "if",
@@ -2360,7 +2374,7 @@
         {
           "from": "StartWalk",
           "to": "CrouchLoco",
-          "duration": 0.25,
+          "duration": 0.3,
           "conditions": [
             {
               "mode": "if",
@@ -2374,7 +2388,7 @@
         {
           "from": "Start",
           "to": "CrouchLoco",
-          "duration": 0.25,
+          "duration": 0.3,
           "conditions": [
             {
               "mode": "if",
@@ -2388,7 +2402,7 @@
         {
           "from": "StartRun",
           "to": "CrouchLoco",
-          "duration": 0.25,
+          "duration": 0.3,
           "conditions": [
             {
               "mode": "if",
@@ -2402,7 +2416,7 @@
         {
           "from": "StartTurnL",
           "to": "CrouchLoco",
-          "duration": 0.25,
+          "duration": 0.3,
           "conditions": [
             {
               "mode": "if",
@@ -2416,7 +2430,7 @@
         {
           "from": "StartTurnR",
           "to": "CrouchLoco",
-          "duration": 0.25,
+          "duration": 0.3,
           "conditions": [
             {
               "mode": "if",
@@ -2430,7 +2444,7 @@
         {
           "from": "StopWalk",
           "to": "CrouchLoco",
-          "duration": 0.25,
+          "duration": 0.3,
           "conditions": [
             {
               "mode": "if",
@@ -2444,7 +2458,7 @@
         {
           "from": "Stop",
           "to": "CrouchLoco",
-          "duration": 0.25,
+          "duration": 0.3,
           "conditions": [
             {
               "mode": "if",
@@ -2458,7 +2472,7 @@
         {
           "from": "StopRun",
           "to": "CrouchLoco",
-          "duration": 0.25,
+          "duration": 0.3,
           "conditions": [
             {
               "mode": "if",
@@ -2472,7 +2486,7 @@
         {
           "from": "PivotWalk",
           "to": "CrouchLoco",
-          "duration": 0.25,
+          "duration": 0.3,
           "conditions": [
             {
               "mode": "if",
@@ -2486,7 +2500,7 @@
         {
           "from": "PivotJog",
           "to": "CrouchLoco",
-          "duration": 0.25,
+          "duration": 0.3,
           "conditions": [
             {
               "mode": "if",
@@ -2500,7 +2514,7 @@
         {
           "from": "IdleStep",
           "to": "CrouchLoco",
-          "duration": 0.25,
+          "duration": 0.3,
           "conditions": [
             {
               "mode": "if",
@@ -2514,7 +2528,7 @@
         {
           "from": "Fidget",
           "to": "CrouchLoco",
-          "duration": 0.25,
+          "duration": 0.3,
           "conditions": [
             {
               "mode": "if",
@@ -2528,7 +2542,7 @@
         {
           "from": "Turn",
           "to": "CrouchLoco",
-          "duration": 0.25,
+          "duration": 0.3,
           "conditions": [
             {
               "mode": "if",
@@ -2542,7 +2556,7 @@
         {
           "from": "Sprint",
           "to": "CrouchLoco",
-          "duration": 0.25,
+          "duration": 0.3,
           "conditions": [
             {
               "mode": "if",
@@ -2556,7 +2570,7 @@
         {
           "from": "CrouchLoco",
           "to": "Locomotion",
-          "duration": 0.25,
+          "duration": 0.3,
           "conditions": [
             {
               "mode": "ifNot",
@@ -2570,7 +2584,7 @@
         {
           "from": "CrouchStart",
           "to": "Locomotion",
-          "duration": 0.25,
+          "duration": 0.3,
           "conditions": [
             {
               "mode": "ifNot",
@@ -2584,7 +2598,7 @@
         {
           "from": "CrouchStartTurnL",
           "to": "Locomotion",
-          "duration": 0.25,
+          "duration": 0.3,
           "conditions": [
             {
               "mode": "ifNot",
@@ -2598,7 +2612,7 @@
         {
           "from": "CrouchStartTurnR",
           "to": "Locomotion",
-          "duration": 0.25,
+          "duration": 0.3,
           "conditions": [
             {
               "mode": "ifNot",
@@ -2612,7 +2626,7 @@
         {
           "from": "CrouchStop",
           "to": "Locomotion",
-          "duration": 0.25,
+          "duration": 0.3,
           "conditions": [
             {
               "mode": "ifNot",
@@ -2626,7 +2640,7 @@
         {
           "from": "CrouchPivot",
           "to": "Locomotion",
-          "duration": 0.25,
+          "duration": 0.3,
           "conditions": [
             {
               "mode": "ifNot",
@@ -2640,7 +2654,7 @@
         {
           "from": "CrouchFidget",
           "to": "Locomotion",
-          "duration": 0.25,
+          "duration": 0.3,
           "conditions": [
             {
               "mode": "ifNot",
@@ -2654,25 +2668,11 @@
         {
           "from": "CrouchTurn",
           "to": "Locomotion",
-          "duration": 0.25,
+          "duration": 0.3,
           "conditions": [
             {
               "mode": "ifNot",
               "param": "Crouched",
-              "threshold": 0.0
-            }
-          ],
-          "hasExitTime": false,
-          "exitTime": 1.0
-        },
-        {
-          "from": "CrouchLoco",
-          "to": "CrouchUp",
-          "duration": 0.2,
-          "conditions": [
-            {
-              "mode": "if",
-              "param": "CrouchUp",
               "threshold": 0.0
             }
           ],

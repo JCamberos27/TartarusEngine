@@ -64,6 +64,7 @@ public:
     float AirAccelTime = 0.0f;
     float m_SinceGrounded = 0.0f, m_JumpBuffer = 0.0f;
     float CrouchBlend = 0.0f; // 0 standing .. 1 crouched: eases the eye height
+    float CrouchBlendRate = 0.0f; // ... its rate (per second): the ease is a spring, so the view starts and stops moving smoothly
     float YawFreeCenter = 0.0f;
     float YawFreeRange = 0.0f;
     // Out, per Update: the input as a horizontal velocity (m/s, world - what the player asked

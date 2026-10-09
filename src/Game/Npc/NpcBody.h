@@ -190,6 +190,17 @@ private:
     bool m_Turning = false;
     float m_TurnTime = 0.0f;
     float m_StillTime = 0.0f;
+    // Starts, stops, fidgets and the gait's rate trim (Tick).
+    float m_RateTrim = 1.0f, m_StartDistance = 0.0f, m_MoveFor = 0.0f, m_FidgetNext = 0.0f;
+    glm::vec2 m_LastDir{0.0f, 1.0f};
+    bool m_WasMoving = false, m_LastSprint = false;
+    std::uint32_t m_Random = 0;
+    float NextRandom() {
+        if (!m_Random) m_Random = (std::uint32_t)(reinterpret_cast<std::uintptr_t>(this) >> 4) | 1u; // each soldier its own
+        m_Random ^= m_Random << 13; m_Random ^= m_Random >> 17; m_Random ^= m_Random << 5;
+        return (float)(m_Random >> 8) / 16777216.0f;
+    }
+    FirstPersonArmTwist m_ArmTwist;
     bool m_WasCrouched = false;
     // Aim, sprung: the spine's pitch and twist (radians) with their rates, and the lean (eased).
     float m_AimPitch = 0.0f, m_AimTwist = 0.0f, m_Lean = 0.0f, m_AimWeight = 0.0f;
