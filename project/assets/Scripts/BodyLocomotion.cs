@@ -93,8 +93,9 @@ internal static class BodyLocomotion
         else {
             float before=f.IdleTime;f.IdleTime+=f.Dt;bool enough=f.MoveTime>=(f.Crouched?f.StopMinRunTimeCrouched:f.StopMinRunTime);
             bool released=before<f.StopDebounce && f.IdleTime>=f.StopDebounce;
-            // A tap: one small step its way instead of a start cut short.
-            if(released && f.IsStart && !f.Crouched && f.MoveTime<StepMaxTime){f.StepDir=f.LastDir;f.Triggers|=128;}
+            // A tap: one small step its way instead of a start cut short (the start has already given way to the idle
+            // when the key lifts).
+            if(released && (f.IsStart || f.IsLocomotion) && !f.Crouched && f.MoveTime<StepMaxTime && f.MoveDistance>.03f){f.StepDir=f.LastDir;f.Triggers|=128;}
             else if(going && enough && released && moveClip>(f.Crouched?f.StopMinSpeedCrouched:f.StopMinSpeed)){
                 f.StopDir=f.LastDir;f.StopGait=Gait(moveClip,false);f.Triggers|=f.LastSprint && f.LastDir.Y>f.StopRunForward?16:8;
             }

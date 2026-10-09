@@ -1169,7 +1169,8 @@
               ],
               "blendParamY": "MoveY"
             }
-          }
+          },
+          "speedParam": "PlayRate"
         },
         {
           "name": "CrouchTurn",

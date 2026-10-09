@@ -218,6 +218,11 @@ public:
     // "is a clip still driving the pose", and a held pose still is.
     bool AnimationFinished() const;
     int  BoneCount() const { return m_D->BoneCounter; }
+    // Skinning as imported (--model-report): skinned vertices, how many had more than MAX_BONE_INFLUENCE influences,
+    // the most any had, and the largest weight share one lost to the cap.
+    void SkinStats(int& vertices, int& overflow, int& maxInfluences, float& maxDropped) const {
+        vertices = m_D->SkinVertices; overflow = m_D->SkinOverflow; maxInfluences = m_D->SkinMaxInfluences; maxDropped = m_D->SkinMaxDropped;
+    }
     // The current skinning matrix of bone `i` (bind pose when nothing plays). For tests / tools.
     glm::mat4 FinalBoneMatrix(int i) const {
         if (i < 0 || i >= m_D->BoneCounter) return glm::mat4(1.0f);
@@ -388,6 +393,10 @@ private:
         std::map<std::string, std::shared_ptr<Texture>> TextureCache;
         std::map<std::string, BoneInfo> BoneInfoMap;
         int BoneCounter = 0;
+        // Skinning as imported: vertices with more influences than MAX_BONE_INFLUENCE (their smallest dropped, the
+        // rest renormalized), the most any vertex had, and the largest weight share a vertex lost.
+        int SkinVertices = 0, SkinOverflow = 0, SkinMaxInfluences = 0;
+        float SkinMaxDropped = 0.0f;
         glm::mat4 GlobalInverseTransform{1.0f};
         std::vector<AnimNode> Nodes; // flattened hierarchy, parents first (#113)
         std::vector<unsigned char> SkinPath; // Model::SkinPath, worked out on first use

@@ -2,6 +2,7 @@
 
 #include "AnimatorController.h"
 #include "AssetLibrary.h"
+#include "BodyDebugDraw.h"
 #include "Model.h"
 #include "Audio/WeaponAudio.h"
 #include "Camera.h"
@@ -299,9 +300,11 @@ FirstPersonWeaponTest::FirstPersonWeaponTest(bool stockProbe, bool probeAk) : m_
         const char* gait = std::getenv("STOCK_PROBE_GAIT");
         m_GaitProbe = gait && *gait && *gait != '0';
 #pragma warning(suppress : 4996)
-        const char* hold = std::getenv("STOCK_PROBE_3P");
-        m_HoldProbe = hold && *hold && *hold != '0';
-        if (m_HoldProbe) BuildHoldProbe();
+        const char* bodyProbe = std::getenv("STOCK_PROBE_BODY");
+        m_BodyProbe = bodyProbe && *bodyProbe && *bodyProbe != '0';
+        // STOCK_PROBE_BODY=<text> (not 1): only the locomotion segments whose names contain it, no gun section.
+        if (m_BodyProbe && std::string(bodyProbe) != "1") m_BodyOnly = bodyProbe;
+        if (m_BodyProbe) BuildBodyProbe();
         else if (m_GaitProbe) BuildGaitProbe();
         else if (m_SprintProbe) BuildSprintProbe();
         else if (pose && *pose && *pose != '0') BuildPoseProbe();
@@ -376,54 +379,200 @@ void FirstPersonWeaponTest::BuildSprintProbe() {
     m_Steps = std::move(steps);
 }
 
-void FirstPersonWeaponTest::BuildHoldProbe() {
+void FirstPersonWeaponTest::BuildBodyProbe() {
     using C = Ctx;
     auto hold = [](float s) { return [s](C& c) { return c.Time >= s; }; };
+    static const char* kViews[10] = {"stock", "right", "front_r", "front_l", "left", "back_r", "back_l", "arm_r", "arm_l", "legs"};
     std::vector<Step> steps = {{"AK in hand", nullptr, [](C& c) { return c.State() == "Idle"; }, 30, nullptr}};
     if (!m_ProbeAk)
         steps.push_back({"switch to the Remington", [](C& c) { c.P->SelectSlot(1); },
                          [](C& c) { return c.P->Slot() == 1 && c.State() == "Idle"; }, 30, nullptr});
-    steps.push_back({"settle", nullptr, hold(1.5f), 5, nullptr});
-    auto report = [this](const std::string& name) {
-        return [this, name](C&) {
-            std::printf("[Hold] %-14s hand gap L %.1f R %.1f cm  bore off aim %.1f deg\n", name.c_str(), m_HoldGap[0] * 100.0f,
-                        m_HoldGap[1] * 100.0f, m_HoldBore);
-        };
+    steps.push_back({"settle", nullptr, hold(2.0f), 5, nullptr});
+    const std::string gun = m_ProbeAk ? "ak" : "rem";
+
+    // --- Locomotion: one segment per move, the body's states and its planted feet measured throughout. -----------
+    struct Shot { float At; int View; };
+    struct Seg {
+        std::string Name;
+        std::function<void(C&)> Begin;
+        float Hold;
+        std::vector<std::string> Expect; // each must play during the segment (a prefix: "StartTurn" matches L and R)
+        std::vector<Shot> Shots;
+        bool Slide = true;               // check the planted feet hold
     };
-    auto views = [&](const std::string& stem, std::initializer_list<int> which) {
-        static const char* kNames[7] = {"stock", "right", "front_r", "front_l", "left", "back_r", "back_l"};
-        for (int v : which)
-            steps.push_back({stem + " view " + kNames[v], [v](C& c) { c.View = v; }, hold(0.1f), 2,
-                             [stem, v](C& c) { c.Shot = ShotStem("hold_" + stem + "_" + kNames[v]); }});
+    auto add = [&](const Seg& sg) {
+        if (!m_BodyOnly.empty() && sg.Name.find(m_BodyOnly) == std::string::npos) return;
+        steps.push_back({"body " + sg.Name,
+                         [this, sg](C& c) {
+                             m_Body = BodyStats{};
+                             m_BodyMeasure = true;
+                             c.View = sg.Shots.empty() ? 0 : sg.Shots.front().View;
+                             if (sg.Begin) sg.Begin(c);
+                         },
+                         [sg, gun](C& c) {
+                             for (const Shot& s : sg.Shots) {
+                                 if (c.Time >= s.At - 0.15f && c.Time < s.At) c.View = s.View; // the camera there first
+                                 if (c.Time >= s.At && c.Time < s.At + c.Dt) c.Shot = ShotStem("body_" + gun + "_" + sg.Name + "_" + kViews[s.View]);
+                             }
+                             return c.Time >= sg.Hold;
+                         },
+                         sg.Hold + 5.0f,
+                         [this, sg](C& c) {
+                             m_BodyMeasure = false;
+                             const BodyStats& b = m_Body;
+                             std::string seq;
+                             for (const std::string& s : b.States) seq += (seq.empty() ? "" : ">") + s;
+                             float mean = 0.0f, worst = 0.0f;
+                             for (float s : b.Slides) { mean += s; worst = std::max(worst, s); }
+                             if (!b.Slides.empty()) mean /= (float)b.Slides.size();
+                             std::printf("[Body] %-22s %-60s plants %2d slide mean %.1f max %.1f cm  hands %.1f / world %.1f cm  bodies %.1f cm\n",
+                                         sg.Name.c_str(), seq.c_str(), (int)b.Slides.size(), mean * 100.0f, worst * 100.0f, b.HandGap * 100.0f,
+                                         b.TwinHandGap * 100.0f, b.BodyDiff * 100.0f);
+                             if (!b.PlantLog.empty()) std::printf("[Body]   plants:%s\n", b.PlantLog.c_str());
+                             for (const std::string& want : sg.Expect) {
+                                 bool seen = false;
+                                 for (const std::string& s : b.States) seen = seen || s.rfind(want, 0) == 0;
+                                 c.Check(seen, sg.Name + ": plays " + want + " (" + seq + ")");
+                             }
+                             char buf[160];
+                             if (sg.Slide && !b.Slides.empty()) {
+                                 std::snprintf(buf, sizeof buf, "%s: planted feet hold (mean %.1f cm, worst %.1f cm)", sg.Name.c_str(), mean * 100.0f, worst * 100.0f);
+                                 // The MC clips' own feet drift 0.5-3 cm a plant by this measure (--clip-report): within ~2 cm of that.
+                                 c.Check(mean < 0.04f && worst < 0.07f, buf);
+                             }
+                             std::snprintf(buf, sizeof buf, "%s: the world body's hands on the gun (%.1f cm)", sg.Name.c_str(), b.TwinHandGap * 100.0f);
+                             c.Check(b.TwinHandGap < 0.02f, buf);
+                             c.View = 0;
+                         }});
     };
-    struct Pose { const char* Name; bool Crouch, Aim, Sprint; float Pitch; glm::vec2 Move; };
-    for (const Pose& ps : {Pose{"idle", false, false, false, 0.0f, {}}, Pose{"aim", false, true, false, 0.0f, {}},
-                           Pose{"aim_up", false, true, false, 35.0f, {}}, Pose{"aim_down", false, true, false, -35.0f, {}},
-                           Pose{"crouch", true, false, false, 0.0f, {}}, Pose{"crouch_aim", true, true, false, 0.0f, {}},
-                           Pose{"jog", false, false, false, 0.0f, {0.0f, 1.0f}}, Pose{"sprint", false, false, true, 0.0f, {0.0f, 1.0f}}}) {
-        const std::string name = ps.Name;
-        steps.push_back({name, [ps](C& c) { c.View = 0; c.Crouch = ps.Crouch; c.Aim = ps.Aim; c.Sprint = ps.Sprint; c.Cam->Pitch = ps.Pitch; c.Move = ps.Move; },
-                         hold(ps.Move.y != 0.0f ? 1.2f : 1.5f), 6, report(name)});
-        views(name, {1, 2, 3, 4, 5, 6});
-        steps.push_back({name + " done", [](C& c) { c.View = 0; c.Move = glm::vec2(0.0f); c.Sprint = false; c.Aim = false; c.Crouch = false; },
-                         hold(0.6f), 3, nullptr});
+    auto move = [](glm::vec2 m, bool sprint = false, bool crouch = false) {
+        return [m, sprint, crouch](C& c) { c.Move = m; c.Sprint = sprint; c.Crouch = crouch; c.Cam->Pitch = 0.0f; };
+    };
+    add({"idle", move({}), 1.5f, {"Locomotion"}, {{1.2f, 2}}});
+    add({"jog_start", move({0, 1}), 0.7f, {"Start"}, {{0.25f, 1}, {0.5f, 2}}});
+    add({"jog", move({0, 1}), 1.4f, {"Locomotion"}, {{0.8f, 1}, {1.1f, 9}}});
+    add({"jog_stop", move({}), 1.6f, {"Stop"}, {{0.15f, 1}, {0.4f, 2}}});
+    add({"walk_start", move({0, 0.45f}), 0.9f, {"StartWalk"}, {{0.4f, 1}}});
+    add({"walk", move({0, 0.45f}), 1.4f, {"Locomotion"}, {{0.9f, 9}}});
+    add({"walk_stop", move({}), 1.8f, {"StopWalk"}, {{0.3f, 1}}});
+    add({"strafe_left_start", move({-1, 0}), 0.7f, {"Start"}, {{0.3f, 2}}});
+    add({"strafe_left", move({-1, 0}), 1.0f, {"Locomotion"}, {{0.6f, 2}}});
+    add({"strafe_left_stop", move({}), 1.6f, {"Stop"}, {{0.2f, 2}}});
+    add({"back_start", move({0, -1}), 0.7f, {"Start"}, {}});
+    add({"back", move({0, -1}), 1.0f, {"Locomotion"}, {{0.6f, 1}}});
+    add({"pivot_to_fwd", move({0, 1}), 1.2f, {"PivotJog"}, {{0.1f, 1}, {0.25f, 1}, {0.4f, 1}}});
+    add({"pivot_stop", move({}), 1.6f, {"Stop"}, {}});
+    add({"tap_right", move({1, 0}), 0.15f, {"Start"}, {}, false});
+    add({"tap_right_release", move({}), 1.4f, {"IdleStep"}, {{0.3f, 2}}});
+    add({"sprint_start", move({0, 1}, true), 1.0f, {"StartRun"}, {{0.4f, 1}}});
+    add({"sprint", move({0, 1}, true), 1.6f, {"Sprint"}, {{0.6f, 1}, {1.0f, 2}, {1.3f, 9}}});
+    add({"sprint_diagonal", move({-0.7071f, 0.7071f}, true), 1.6f, {"Sprint"}, {{0.8f, 2}, {1.2f, 4}}});
+    add({"sprint_stop", move({}), 2.0f, {"StopRun"}, {{0.2f, 1}, {0.5f, 1}}});
+    add({"turn_on_spot", [](C& c) { c.Move = {}; c.Cam->Yaw += 90.0f; }, 2.2f, {"Turn"}, {{0.5f, 2}, {1.0f, 2}}, false});
+    add({"turning_start", [](C& c) { c.Cam->Yaw -= 110.0f; c.Move = {0, 1}; }, 1.2f, {"StartTurn"}, {{0.3f, 2}, {0.7f, 2}}, false});
+    add({"turning_start_jog", move({0, 1}), 1.0f, {"Locomotion"}, {}});
+    add({"turning_start_stop", move({}), 1.6f, {"Stop"}, {}});
+    add({"crouch", move({}, false, true), 1.6f, {"CrouchLoco"}, {{1.2f, 2}}});
+    add({"crouch_start", move({0, 1}, false, true), 0.9f, {"CrouchStart"}, {{0.4f, 1}}});
+    add({"crouch_walk", move({0, 1}, false, true), 1.4f, {"CrouchLoco"}, {{0.8f, 1}, {1.1f, 9}}});
+    add({"crouch_pivot", move({0, -1}, false, true), 1.4f, {"CrouchPivot"}, {{0.3f, 1}}});
+    add({"crouch_stop", move({}, false, true), 2.0f, {"CrouchStop"}, {{0.3f, 1}}});
+    add({"stand_up", move({}), 1.5f, {"Locomotion"}, {}});
+    if (!m_BodyOnly.empty()) {
+        m_Steps = std::move(steps);
+        return;
     }
-    steps.push_back({"settle 2", [](C& c) { c.Cam->Pitch = 0.0f; }, [](C& c) { return c.State() == "Idle" && c.Time > 0.5f; }, 5, nullptr});
-    steps.push_back({"fire", [](C& c) { c.Trigger = true; }, hold(0.25f), 3, report("fire")});
-    views("fire", {2, 4, 5});
-    steps.push_back({"fire done", [](C& c) { c.Trigger = false; }, [](C& c) { return c.State() == "Idle" && c.Time > 0.8f; }, 5, nullptr});
-    steps.push_back({"reload", [](C& c) { c.P->SetAmmo(3); c.P->Reload(); }, [](C& c) { return c.P->IsReloading(); }, 3, nullptr});
-    for (int i = 0; i < 6; ++i) {
-        const std::string name = "reload_" + std::to_string(i);
-        steps.push_back({name, [](C& c) { c.View = 2; }, hold(0.35f), 2, [name, report](C& c) {
-            report(name)(c);
-            c.Shot = ShotStem("hold_" + name + "_front_r");
-        }});
+    // An idle fidget comes 10-20 s into standing still with the gun lowered.
+    steps.push_back({"body fidget", [this](C& c) { m_Body = BodyStats{}; m_BodyMeasure = true; c.Move = {}; c.View = 2; m_FidgetSince = -1.0f; },
+                     [this, gun](C& c) {
+                         bool fidget = false;
+                         for (const std::string& s : m_Body.States) fidget = fidget || s == "Fidget";
+                         if (fidget && m_FidgetSince < 0.0f) m_FidgetSince = c.Time;
+                         if (m_FidgetSince >= 0.0f && c.Time - m_FidgetSince >= 1.2f && c.Time - m_FidgetSince < 1.2f + c.Dt)
+                             c.Shot = ShotStem("body_" + gun + "_fidget_front_r");
+                         return m_FidgetSince >= 0.0f && c.Time - m_FidgetSince >= 1.6f;
+                     },
+                     26.0f, [this](C& c) {
+                         m_BodyMeasure = false;
+                         std::string seq;
+                         for (const std::string& s : m_Body.States) seq += (seq.empty() ? "" : ">") + s;
+                         std::printf("[Body] %-22s %s\n", "fidget", seq.c_str());
+                         c.View = 0;
+                     }});
+    steps.push_back({"after the fidget", nullptr, [](C& c) { return c.Time > 4.0f; }, 6, nullptr});
+
+    // --- The gun: held still in each pose, both bodies' hands on it, from all round and close. -----------------
+    auto pose = [&](const std::string& name, bool crouch, bool aim, float pitch, glm::vec2 mv, std::vector<int> views) {
+        steps.push_back({"hold " + name,
+                         [crouch, aim, pitch, mv](C& c) { c.View = 0; c.Crouch = crouch; c.Aim = aim; c.Cam->Pitch = pitch; c.Move = mv; c.Sprint = false; },
+                         [aim](C& c) { return c.Time >= 1.4f && (!aim || c.State() == "Aim"); }, 6,
+                         [this, name](C& c) {
+                             PrintSample("hold " + name);
+                             std::printf("[Hold] %-16s hand gap own L %.1f R %.1f  world L %.1f R %.1f cm  wrist roll L %.0f R %.0f, at the wrist L %.0f R %.0f deg\n",
+                                         name.c_str(), BodyDebug::Info().HandGap[0] * 100.0f, BodyDebug::Info().HandGap[1] * 100.0f, m_HoldGap[0] * 100.0f,
+                                         m_HoldGap[1] * 100.0f, m_Wrist[0], m_Wrist[1], m_WristLeft[0], m_WristLeft[1]);
+                             c.Check(m_HoldGap[0] < 0.02f && m_HoldGap[1] < 0.02f, name + ": world hands on the gun");
+                         }});
+        for (int v : views)
+            steps.push_back({name + " view " + kViews[v], [v](C& c) { c.View = v; }, hold(0.12f), 2,
+                             [name, v, gun](C& c) { c.Shot = ShotStem("hold_" + gun + "_" + name + "_" + kViews[v]); }});
+    };
+    pose("idle", false, false, 0.0f, {}, {1, 2, 3, 4, 5, 6, 7, 8});
+    pose("aim", false, true, 0.0f, {}, {1, 2, 3, 4, 5, 6, 7, 8});
+    pose("aim_up", false, true, 50.0f, {}, {1, 2, 7, 8});
+    pose("aim_down", false, true, -55.0f, {}, {1, 2, 7, 8});
+    pose("hip_up", false, false, 60.0f, {}, {1, 2});
+    pose("hip_down", false, false, -60.0f, {}, {1, 2});
+    pose("crouch", true, false, 0.0f, {}, {1, 2, 5});
+    pose("crouch_aim", true, true, 0.0f, {}, {1, 2, 7, 8, 9});
+    pose("crouch_aim_up", true, true, 45.0f, {}, {1, 2, 7});
+    pose("crouch_aim_down", true, true, -55.0f, {}, {1, 2, 7});
+    pose("aim_strafe", false, true, 0.0f, {1, 0}, {2, 7});
+    steps.push_back({"guns down", [](C& c) { c.Aim = false; c.Crouch = false; c.Move = {}; c.Cam->Pitch = 0.0f; },
+                     [](C& c) { return c.State() == "Idle" && c.Time > 1.0f; }, 5, nullptr});
+    // Moving with the gun: the jog and the sprint, filmed close.
+    steps.push_back({"jog with gun", [](C& c) { c.Move = {0, 1}; c.View = 7; },
+                     [gun](C& c) {
+                         if (std::abs(c.Time - 1.0f) < c.Dt * 0.5f) c.Shot = ShotStem("hold_" + gun + "_jog_arm_r");
+                         return c.Time > 1.3f;
+                     }, 4, nullptr});
+    steps.push_back({"sprint with gun", [](C& c) { c.Sprint = true; c.View = 7; },
+                     [gun](C& c) {
+                         if (std::abs(c.Time - 1.2f) < c.Dt * 0.5f) c.Shot = ShotStem("hold_" + gun + "_sprint_arm_r");
+                         if (c.Time > 1.3f) c.View = 8;
+                         if (std::abs(c.Time - 1.6f) < c.Dt * 0.5f) c.Shot = ShotStem("hold_" + gun + "_sprint_arm_l");
+                         return c.Time > 1.7f;
+                     }, 4, [](C& c) { c.Sprint = false; c.Move = {}; c.View = 0; }});
+    steps.push_back({"settle 2", nullptr, [](C& c) { return c.State() == "Idle" && c.Time > 1.0f; }, 6, nullptr});
+    // Firing, the actions, the reloads: filmed through, the world hands' worst gap to the gun noted.
+    auto action = [&](const std::string& name, std::function<void(C&)> begin, std::function<bool(C&)> done, float seconds) {
+        steps.push_back({"act " + name, [this, begin](C& c) { c.View = 2; m_ActGap = 0.0f; begin(c); },
+                         [this, name, done, gun](C& c) {
+                             const int frame = (int)std::lround(c.Time / std::max(c.Dt, 1e-4f));
+                             if (frame > 0 && frame % 9 == 0 && frame <= 99) c.Shot = ShotStem("act_" + gun + "_" + name + "_" + std::to_string(frame));
+                             if (frame % 9 == 6) c.View = (frame / 9) % 2 ? 8 : 2; // alternate front right and the left arm close
+                             m_ActGap = std::max(m_ActGap, std::max(m_HoldGap[0], m_HoldGap[1]));
+                             return done(c);
+                         }, seconds,
+                         [this, name](C& c) {
+                             std::printf("[Hold] act %-12s worst world hand gap %.1f cm\n", name.c_str(), m_ActGap * 100.0f);
+                             c.View = 0;
+                             c.Trigger = false;
+                         }});
+    };
+    action("fire", [](C& c) { c.Trigger = true; }, [](C& c) { return c.Time > 0.8f; }, 3);
+    steps.push_back({"after fire", [](C& c) { c.Trigger = false; }, [](C& c) { return c.State() == "Idle" && c.Time > 0.6f; }, 6, nullptr});
+    if (m_ProbeAk) {
+        action("tac_reload", [](C& c) { c.P->SetAmmo(3); c.P->Reload(); }, [](C& c) { return c.Time > 0.5f && !c.P->IsReloading(); }, 10);
+        action("empty_reload", [](C& c) { c.P->SetAmmo(0); c.P->Reload(); }, [](C& c) { return c.Time > 0.5f && !c.P->IsReloading(); }, 10);
+    } else {
+        action("reload", [](C& c) { c.P->SetAmmo(4); c.P->Reload(); }, [](C& c) { return c.Time > 0.5f && !c.P->IsReloading(); }, 15);
     }
-    steps.push_back({"reload done", [](C& c) { c.View = 0; }, [](C& c) { return !c.P->IsReloading() && c.Time > 0.5f; }, 8, nullptr});
-    steps.push_back({"holster", [](C& c) { c.P->SetEquipped(false); c.View = 2; }, hold(0.3f), 3, [](C& c) { c.Shot = ShotStem("hold_holster_front_r"); }});
-    steps.push_back({"draw", [](C& c) { c.P->SetEquipped(true); c.View = 2; }, hold(0.35f), 3, [](C& c) { c.Shot = ShotStem("hold_draw_front_r"); }});
-    steps.push_back({"drawn", [](C& c) { c.View = 0; }, [](C& c) { return c.State() == "Idle" && c.Time > 0.5f; }, 6, nullptr});
+    action("inspect", [](C& c) { c.P->TriggerAction("Inspect"); }, [](C& c) { return c.Saw("Inspect") && c.State() == "Idle"; }, 12);
+    action("mag_check", [](C& c) { c.P->TriggerAction("MagCheck"); }, [](C& c) { return c.Saw("MagCheck") && c.State() == "Idle"; }, 10);
+    action("melee", [](C& c) { c.P->TriggerAction("Melee"); }, [](C& c) { return c.Saw("Melee") && c.State() == "Idle"; }, 8);
+    action("holster", [](C& c) { c.P->SetEquipped(false); }, [](C& c) { return c.Time > 1.2f; }, 4);
+    action("draw", [](C& c) { c.P->SetEquipped(true); }, [](C& c) { return c.State() == "Idle" && c.Time > 1.0f; }, 6);
     m_Steps = std::move(steps);
 }
 
@@ -674,10 +823,52 @@ void FirstPersonWeaponTest::BuildProbe() {
 }
 
 void FirstPersonWeaponTest::AfterPose(const World& world, const FirstPersonBody& body, const FirstPersonPresentation& p) {
-    if (m_HoldProbe) {
+    if (m_BodyProbe) {
         m_HoldGap[0] = body.TwinHandGap(0);
         m_HoldGap[1] = body.TwinHandGap(1);
-        m_HoldBore = 0.0f;
+        for (int s = 0; s < 2; ++s) { m_Wrist[s] = body.WristRoll(s); m_WristLeft[s] = body.WristResidual(s); }
+    }
+    // Body probe: the body's states, its planted feet (the world body's, as every other view sees them), and both
+    // bodies' hands.
+    if (m_BodyProbe && m_BodyMeasure) {
+        BodyStats& b = m_Body;
+        const std::string& state = BodyDebug::Info().AnimatorState;
+        if (!state.empty() && (b.States.empty() || b.States.back() != state)) b.States.push_back(state);
+        // The ball of each foot: what stays put on the ground from the foot landing flat until it pushes off (the
+        // ankle rolls forward over it, which is no slide).
+        static const char* kFeet[2] = {"ball_l", "ball_r"};
+        glm::vec3 foot[2];
+        if (body.BoneWorld(world, kFeet[0], foot[0]) && body.BoneWorld(world, kFeet[1], foot[1])) {
+            const float ground = std::min(foot[0].y, foot[1].y);
+            for (int f = 0; f < 2; ++f) {
+                const glm::vec2 xz(foot[f].x, foot[f].z);
+                const float speed = b.Have && m_Ctx.Dt > 0.0f ? glm::length(xz - glm::vec2(b.LastFoot[f].x, b.LastFoot[f].z)) / m_Ctx.Dt : 1e9f;
+                const bool planted = foot[f].y < ground + 0.02f && speed < 0.5f;
+                if (planted) {
+                    if (b.PlantFrames[f] == 0) {
+                        b.PlantStart[f] = foot[f];
+                        b.PlantSlide[f] = 0.0f;
+                    }
+                    ++b.PlantFrames[f];
+                    b.PlantSlide[f] = std::max(b.PlantSlide[f], glm::length(xz - glm::vec2(b.PlantStart[f].x, b.PlantStart[f].z)));
+                } else {
+                    if (b.PlantFrames[f] >= 5) {
+                        b.Slides.push_back(b.PlantSlide[f]);
+                        char one[96];
+                        std::snprintf(one, sizeof one, " %s%.1f@%s", f ? "R" : "L", b.PlantSlide[f] * 100.0f, state.c_str());
+                        b.PlantLog += one;
+                    }
+                    b.PlantFrames[f] = 0;
+                }
+                b.LastFoot[f] = foot[f];
+            }
+            b.Have = true;
+        }
+        b.HandGap = std::max(b.HandGap, std::max(BodyDebug::Info().HandGap[0], BodyDebug::Info().HandGap[1]));
+        b.TwinHandGap = std::max(b.TwinHandGap, std::max(m_HoldGap[0], m_HoldGap[1]));
+        if (glm::vec3 own, out; body.BoneWorld(world, "hand_r", own, false) && body.BoneWorld(world, "hand_r", out, true))
+            b.BodyDiff = std::max(b.BodyDiff, glm::length(own - out));
+        ++b.Frames;
     }
     // Gait probe: past the segment's first second (the gait settled), the torso against the hips, both bodies.
     if (m_GaitProbe && !m_GaitSegment.empty() && m_Ctx.Time > 1.0f && m_Ctx.Cam) {
@@ -812,7 +1003,7 @@ void FirstPersonWeaponTest::AfterPose(const World& world, const FirstPersonBody&
         }
     }
     // The world gun (split poses): the first-person one moved by the body's world gun delta.
-    const glm::mat4 gunDelta(1.0f);
+    const glm::mat4& gunDelta = body.WorldGunDelta();
     if (p.StockWorld(butt, fwd) && ((butt = glm::vec3(gunDelta * glm::vec4(butt, 1.0f)), fwd = glm::normalize(glm::mat3(gunDelta) * fwd)), true) && body.BoneWorld(world, "upperarm_r", upper) && body.BoneWorld(world, "clavicle_r", clav) &&
         body.BoneWorld(world, "neck_01", neck) && body.BoneWorld(world, "head", head)) {
         const glm::vec3 up(0.0f, 1.0f, 0.0f);
@@ -867,6 +1058,18 @@ void FirstPersonWeaponTest::AfterPose(const World& world, const FirstPersonBody&
             default: break;
             }
             m_SceneCamPos = target + dir * 2.4f + up * 0.15f;
+            // Close: an arm (shoulder to hand) from in front and to its side, or the legs from the right.
+            glm::vec3 a, b;
+            const bool arm = m_Ctx.View == 7 || m_Ctx.View == 8;
+            const std::string side = m_Ctx.View == 7 ? "_r" : "_l";
+            if (arm && body.BoneWorld(world, "upperarm" + side, a) && body.BoneWorld(world, "hand" + side, b)) {
+                target = 0.5f * (a + b);
+                dir = glm::normalize(front * 0.8f + (m_Ctx.View == 7 ? right : -right) * 0.6f + up * 0.15f);
+                m_SceneCamPos = target + dir * 0.85f;
+            } else if (m_Ctx.View == 9 && body.BoneWorld(world, "calf_l", a) && body.BoneWorld(world, "calf_r", b)) {
+                target = 0.5f * (a + b);
+                m_SceneCamPos = target + glm::normalize(right * 0.9f + front * 0.4f) * 1.5f + up * 0.1f;
+            }
         }
         const glm::vec3 look = glm::normalize(target - m_SceneCamPos);
         m_SceneCamYaw = glm::degrees(std::atan2(look.z, look.x));

@@ -240,7 +240,7 @@ private:
     ArmBones m_DriverArm;
     std::vector<int> m_PieceParents; // scratch: a piece other than the driver's parents
     enum class Region { Head, Torso };
-    struct RegionPoint { glm::vec3 Pos; int Count; std::uint16_t Bone[4]; float Weight[4]; };
+    struct RegionPoint { glm::vec3 Pos; int Count; std::uint16_t Bone[MAX_BONE_INFLUENCE]; float Weight[MAX_BONE_INFLUENCE]; };
     struct RegionSkin { std::vector<int> Bones; std::vector<RegionPoint> Points; };
     struct SkinTables { RegionSkin Head, Torso; };
     // Per piece. The tables depend only on the mesh data, which every soldier wearing the piece shares: built once.

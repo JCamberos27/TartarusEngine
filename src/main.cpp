@@ -696,6 +696,12 @@ int main(int argc, char** argv) {
             std::printf("[ModelReport] %s size %.3f %.3f %.3f min %.3f %.3f %.3f max %.3f %.3f %.3f meshes %d materials %s\n",
                         f.generic_string().c_str(), size.x, size.y, size.z, lo.x, lo.y, lo.z, hi.x, hi.y, hi.z,
                         model->MeshCount(), mats.c_str());
+            int skinned = 0, overflow = 0, most = 0;
+            float lost = 0.0f;
+            model->SkinStats(skinned, overflow, most, lost);
+            if (skinned)
+                std::printf("[ModelReport]   skin: %d vertices, %d over %d influences (most %d), largest weight lost %.1f%%\n", skinned,
+                            overflow, MAX_BONE_INFLUENCE, most, lost * 100.0f);
         }
         std::cout << "[ModelReport] " << files.size() << " models, " << failed << " failed" << std::endl;
         return failed ? 1 : 0;
@@ -3293,11 +3299,11 @@ int main(int argc, char** argv) {
                     }
                     PROFILE_SCOPE("FP Arms + World Gun");
                     // The body's hands onto the arms rig's, now that the rig is seated.
-                    // Split poses: the body's world twins hold the world gun, which is where the first-person one is.
+                    // Split poses: the body's world twins hold the world gun, the first-person one carried by their chest.
                     firstPersonBody.ArmsLateUpdate(world, firstPersonPresentation.ArmsEntity(),
                                                    firstPersonPresentation.ViewModelFov(), gameDt, &player.Cam);
                     if (firstPersonPresentation.IsActive())
-                        firstPersonPresentation.PlaceWorldWeapon(world, firstPersonBody.SplitPoses(), glm::mat4(1.0f));
+                        firstPersonPresentation.PlaceWorldWeapon(world, firstPersonBody.SplitPoses(), firstPersonBody.WorldGunDelta());
                     if (weaponTest) weaponTest->AfterPose(world, firstPersonBody, firstPersonPresentation);
                     // This frame's rounds, down the bore from the muzzle: a hole where each struck.
                     for (const FirstPersonPresentation::ShotHit& hit : firstPersonPresentation.TakeShotHits()) {

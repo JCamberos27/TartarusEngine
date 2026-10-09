@@ -5,6 +5,8 @@ layout (location = 2) in vec2 aUV;
 layout (location = 3) in vec3 aTangent;
 layout (location = 4) in ivec4 aBoneIDs;
 layout (location = 5) in vec4 aWeights;
+layout (location = 8) in ivec4 aBoneIDs2; // influences 5-8 (MAX_BONE_INFLUENCE 8)
+layout (location = 9) in vec4 aWeights2;
 layout (location = 6) in float aTangentSign;
 layout (location = 7) in vec4 aColor; // #113 vertex colour (white when the mesh has none)
 
@@ -67,23 +69,25 @@ void main() {
         if (((word >> uint(id & 31)) & 1u) != 0u) vHidden = 1.0;
     }
     if (uUseSkinning == 1) {
-        for (int i = 0; i < 4; ++i)
+        int boneIds[8] = int[8](aBoneIDs.x, aBoneIDs.y, aBoneIDs.z, aBoneIDs.w, aBoneIDs2.x, aBoneIDs2.y, aBoneIDs2.z, aBoneIDs2.w);
+        float boneWeights[8] = float[8](aWeights.x, aWeights.y, aWeights.z, aWeights.w, aWeights2.x, aWeights2.y, aWeights2.z, aWeights2.w);
+        for (int i = 0; i < 8; ++i)
             for (int k = 0; k < uHideBoneCount; ++k)
-                if (aBoneIDs[i] >= 0 && aBoneIDs[i] == uHideBones[k]) vHidden += aWeights[i];
+                if (boneIds[i] >= 0 && boneIds[i] == uHideBones[k]) vHidden += boneWeights[i];
         if (uBoneMaskMode != 0) {
             float masked = 0.0;
-            for (int i = 0; i < 4; ++i) {
-                int b = aBoneIDs[i];
-                if (b >= 0 && b < 512 && ((uint(uBoneMask[b >> 5]) >> uint(b & 31)) & 1u) != 0u) masked += aWeights[i];
+            for (int i = 0; i < 8; ++i) {
+                int b = boneIds[i];
+                if (b >= 0 && b < 512 && ((uint(uBoneMask[b >> 5]) >> uint(b & 31)) & 1u) != 0u) masked += boneWeights[i];
             }
             vHidden += uBoneMaskMode == 1 ? masked : 1.0 - masked;
         }
         mat4 skinMat = mat4(0.0);
         float totalWeight = 0.0;
-        for (int i = 0; i < 4; ++i) {
-            if (aBoneIDs[i] >= 0) {
-                skinMat += uBones[clamp(aBoneIDs[i], 0, uBones.length() - 1)] * aWeights[i]; // never OOB (#98)
-                totalWeight += aWeights[i];
+        for (int i = 0; i < 8; ++i) {
+            if (boneIds[i] >= 0) {
+                skinMat += uBones[clamp(boneIds[i], 0, uBones.length() - 1)] * boneWeights[i]; // never OOB (#98)
+                totalWeight += boneWeights[i];
             }
         }
         if (totalWeight <= 0.0001) {

@@ -157,7 +157,7 @@ state('CrouchLoco', tree('MoveX', 'MoveY', [
     ('Crouch_Loco_Walk_Fwd', 0, 1.355), ('Crouch_Loco_Walk_Fwd_Left', -0.957, 0.957), ('Crouch_Loco_Walk_Fwd_Right', 0.957, 0.957),
     ('Crouch_Loco_Walk_Left', -1.155, 0), ('Crouch_Loco_Walk_Right', 1.133, 0), ('Crouch_Loco_Walk_Bwd', 0, -1.123),
     ('Crouch_Loco_Walk_Bwd_Left', -0.794, -0.794), ('Crouch_Loco_Walk_Bwd_Right', 0.794, -0.794)]),
-    True, ['Crouch'], (0, 480), speed=1.5)
+    True, ['Crouch'], (0, 480), speed=1.5, speed_param='PlayRate')
 CTURN = [(r.replace('Stand_Idle', 'Crouch_Idle'), a) for r, a in TURN]
 state('CrouchTurn', tree('TurnAngle', None, CTURN), False, ['Crouch', 'Turn'], (0, 640))
 state('CrouchDown', clip('Stand_Idle_Trans_Crouch_02'), False, ['Crouch'], (260, 400), speed=1.5)

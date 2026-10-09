@@ -754,7 +754,7 @@ void TestProjectLocomotionAndCallouts() {
     CHECK(InvokeProject("body.motion",&body,sizeof body));CHECK(std::abs(body.PivotDistance+(.2f-.3f*std::log(1+2.0f/3)))<1e-4f && !body.PivotReversed);
     body.Velocity={0,0,-1};CHECK(InvokeProject("body.motion",&body,sizeof body));CHECK(body.PivotReversed && std::abs(body.PivotDistance-.01f)<1e-4f);
     // A tap: let go 0.2 s into a start - one step its way.
-    body={};body.Dt=.06f;body.Grounded=1;body.IsStart=1;body.StartStopClips=1;body.StopDebounce=.05f;body.MoveTime=.2f;body.LastDir={1,0,0};
+    body={};body.Dt=.06f;body.Grounded=1;body.IsStart=1;body.StartStopClips=1;body.StopDebounce=.05f;body.MoveTime=.2f;body.MoveDistance=.3f;body.LastDir={1,0,0};
     CHECK(InvokeProject("body.motion",&body,sizeof body));CHECK((body.Triggers&128) && !(body.Triggers&8) && body.StepDir.x==1);
     // Stood still long enough with a gun: one of the ready stance's fidgets; busy with the gun, none.
     body={};body.Dt=.01f;body.Grounded=1;body.IsLocomotion=1;body.Armed=1;body.Random=.5f;body.FidgetNext=1;body.FidgetTime=.995f;

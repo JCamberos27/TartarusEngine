@@ -55,7 +55,9 @@ public:
         glm::vec2 Move{0.0f};              // the move keys (x right, y forward, -1..1), held until changed
         bool Sprint = false;               // ... and Sprint
         bool Crouch = false;               // ... and Crouch
-        int View = 0;                      // stock probe's Scene camera: 0 on the stock, 1 right side, 2 front right, 3 front left (whole body)
+        int View = 0;                      // stock probe's Scene camera: 0 on the stock, 1 right side, 2 front right, 3 front left,
+                                           // 4 left, 5 back right, 6 back left (whole body); 7 / 8 the right / left arm close,
+                                           // 9 the legs close from the side
         bool Trigger = false;              // the trigger held down (full auto), until changed
         bool Saw(const std::string& state) const;
         const std::string& State() const;
@@ -88,7 +90,7 @@ public:
     // The gait probe (STOCK_PROBE_GAIT): starts on the scene's most open floor, the player's body unclothed.
     bool GaitProbe() const { return m_GaitProbe; }
     // The gait and hold probes start on the open floor (room to walk every way, nothing in the shots).
-    bool OpenFloor() const { return m_GaitProbe || m_HoldProbe; }
+    bool OpenFloor() const { return m_GaitProbe || m_BodyProbe; }
     int Failures() const { return m_Failures; }
     int Checks() const { return m_Checks; }
     // With --smoke-shots: a name when the Game view should be saved this frame (every 10th frame
@@ -166,12 +168,32 @@ private:
     // STOCK_PROBE_GAIT=1: walk, jog and sprint every way and a crouch walk, the torso measured against the hips on the
     // world body (what every other view shows) and on the player's own (Spine Stability steadies it) - [Gait] lines.
     void BuildGaitProbe();
-    // STOCK_PROBE_3P=1: the third-person hold (ThirdPersonWeapon) - idle, aim up and down, crouched, jogging, sprinting,
-    // firing, a reload, a holster and draw - the whole world body from three sides, and [Hold] lines: each hand's gap to
-    // its place on the gun and the bore off the aim.
-    void BuildHoldProbe();
-    bool m_HoldProbe = false;
-    float m_HoldGap[2] = {0.0f, 0.0f}, m_HoldBore = 0.0f;
+    // STOCK_PROBE_BODY=1: the one animation set, inside and out. Locomotion - jog / walk / crouch / sprint starts and
+    // stops, a pivot, a tap's step, turns on the spot and a turning start, a jump, an idle fidget - each segment's
+    // body states checked against what should play and its planted feet's slide measured ([Body] lines). The gun -
+    // idle, the sights up and down, crouched, sprinting, firing, reloads, the actions, holster and draw - with both
+    // bodies' hands on it ([Hold] lines). Captures of the world body from all round and of the arms and legs close up.
+    void BuildBodyProbe();
+    bool m_BodyProbe = false;
+    std::string m_BodyOnly; // STOCK_PROBE_BODY=<text>: just the locomotion segments named with it
+    struct BodyStats {
+        std::vector<std::string> States;      // the body's states this segment, in order
+        glm::vec3 PlantStart[2] = {glm::vec3(0.0f), glm::vec3(0.0f)};
+        glm::vec3 LastFoot[2] = {glm::vec3(0.0f), glm::vec3(0.0f)};
+        int PlantFrames[2] = {0, 0};
+        float PlantSlide[2] = {0.0f, 0.0f};    // this plant's farthest drift so far
+        std::vector<float> Slides;            // each finished plant's (m)
+        std::string PlantLog;                 // each plant's slide (cm) and the state it ended in
+        float HandGap = 0.0f, TwinHandGap = 0.0f, BodyDiff = 0.0f; // the worst this segment (m)
+        int Frames = 0;
+        bool Have = false;
+    };
+    BodyStats m_Body;
+    bool m_BodyMeasure = false;
+    float m_FidgetSince = -1.0f;              // the fidget step: when the body's fidget began
+    float m_ActGap = 0.0f;                    // an action step's worst world hand gap
+    float m_HoldGap[2] = {0.0f, 0.0f};        // the world body's hands' gaps this frame
+    float m_Wrist[2] = {0.0f, 0.0f}, m_WristLeft[2] = {0.0f, 0.0f}; // ... each hand's roll about its forearm, and what's left at the wrist (deg)
     bool m_GaitProbe = false;
     struct GaitStats {
         int Frames = 0;
