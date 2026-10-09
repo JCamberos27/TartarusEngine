@@ -8,7 +8,7 @@ schema={'PlayerFrame': {'float': 'Dt Yaw Pitch MoveX MoveY LookPitch LookYaw Siz
                           'MaxYawRate YawFreeCenter YawFreeRange CrouchHeight '
                           'CrouchSpeedMultiplier JumpBufferTime CoyoteTime '
                           'GroundAccelTime GroundDecelTime AirAccelTime '
-                          'SinceGrounded JumpBuffer CrouchBlend YawDropped',
+                          'SinceGrounded JumpBuffer CrouchBlend CrouchBlendRate YawDropped',
                  'Vec3': 'Position Velocity RespawnFeet RootMotionVelocity '
                          'WishVelocity',
                  'int': 'ReadInput Sprint JumpDown Crouch AimHeld Grounded '

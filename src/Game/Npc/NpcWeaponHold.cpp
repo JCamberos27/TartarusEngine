@@ -676,6 +676,9 @@ glm::vec3 NpcBody::HoldWeapon(World& world, entt::entity armsRig, entt::entity w
         }
     }
 
+    // 3c. The arms' twist bones carry the solve's roll along the limbs (the player body's pass).
+    if (m_DriverModel) m_ArmTwist.Apply(*m_DriverModel);
+
     // 4. On the sights the head comes down onto the stock: the neck tilts it toward the eye (the camera,
     // moved with the gun), by the cheek weld and at most Head Tilt.
     const float lockWant = std::clamp(gun->CheekWeld, 0.0f, 1.0f) * w;

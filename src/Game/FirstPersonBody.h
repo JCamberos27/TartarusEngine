@@ -62,6 +62,23 @@ struct FirstPersonWorldGunInput {
 //   Player::Update    look, capsule sweep
 //   Tick              body to the feet / view yaw, controller parameters     (before the animators)
 //   LateUpdate        this step's root motion, camera into the head          (after the animators)
+// The arms' twist bones after an arm solve (the player's body, its world twins, the soldiers): IK re-rolls a hand and
+// the twist bones spread that roll along the forearm, and undo the upper arm's own toward the shoulder (IK::SpreadTwist).
+class FirstPersonArmTwist {
+public:
+    // On `m`'s applied pose. `roll` / `residual` (optional, [2]): each hand's roll about its forearm and what is left at
+    // the wrist, degrees. False when `m` has no arms with twist bones.
+    bool Apply(Model& m, float* roll = nullptr, float* residual = nullptr);
+private:
+    struct Rig {
+        int Nodes = 0;
+        IK::Pose Bind;
+        int Upper[2] = {-1, -1}, Lower[2] = {-1, -1}, Hand[2] = {-1, -1};
+        std::vector<IK::TwistBone> UpperTwist[2], LowerTwist[2];
+    };
+    std::map<const Model*, Rig> m_Rigs;
+};
+
 class FirstPersonBody {
 public:
     // Finds the scene's First Person Body and takes it over. False (and every call below a
@@ -102,6 +119,8 @@ public:
     // (aiming, or just fired: no fidget). Set each frame before Tick.
     void SetHands(bool armed, bool busy) { m_Armed = armed; m_Busy = busy; }
     // Diagnostics (--stock-probe): how far each world twin hand ended from the rig's ([0] left, [1] right), m.
+    // Diagnostics: where the body stands (world; the capsule's feet with a stair step eased in).
+    const glm::vec3& Feet() const { return m_Feet; }
     float TwinHandGap(int side) const { return m_TwinHandGap[side & 1]; }
     // ... and how far each world hand is rolled about its forearm (degrees), and what of that the forearm's twist
     // bones leave at the wrist.
@@ -283,13 +302,7 @@ private:
     void SkinnedPoints(const World& world, BodyRegion region, std::vector<glm::vec3>& points, std::vector<int>* pieceOf = nullptr) const;
     std::vector<glm::vec3> m_TorsoPointBuffer; // ArmsLateUpdate's, kept so the frame doesn't allocate
     float m_TwinHandGap[2] = {0.0f, 0.0f};
-    // The arms' twist bones (ArmTwist), per model: the bind pose, the arm bones and each segment's twist bones.
-    struct TwistRig {
-        IK::Pose Bind;
-        int Upper[2] = {-1, -1}, Lower[2] = {-1, -1}, Hand[2] = {-1, -1};
-        std::vector<IK::TwistBone> UpperTwist[2], LowerTwist[2];
-    };
-    std::map<const Model*, TwistRig> m_TwistRigs;
+    FirstPersonArmTwist m_ArmTwist;
     float m_WristRoll[2] = {0.0f, 0.0f}, m_WristResidual[2] = {0.0f, 0.0f}; // the world body's, degrees (diagnostics)
     void ArmTwist(const std::vector<std::shared_ptr<Model>>& models, bool twins);
     glm::mat4 m_WorldGunDelta{1.0f};

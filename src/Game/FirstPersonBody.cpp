@@ -930,6 +930,10 @@ void FirstPersonBody::Tick(World& world, const Player& player, const Camera& cam
     f.StartGait=m_Loco.StartGait;f.StopGait=m_Loco.StopGait;f.PivotGait=m_Loco.PivotGait;f.StartTurn=m_Loco.StartTurn;f.StartTurnAmount=m_Loco.StartTurnAmount;
     f.PivotDir={m_Loco.PivotDir.x,m_Loco.PivotDir.y,0};f.StepDir={m_Loco.StepDir.x,m_Loco.StepDir.y,0};f.PivotReversed=m_Loco.PivotReversed;
     if(!Scripting::InvokeProject("body.motion",&f,sizeof f))throw std::runtime_error("Project locomotion unavailable");
+    // Mid-crossfade (crouching on the move, a stop easing out) nothing new starts on top, nor does one still pending from
+    // the frame the fade began: the fade would be cut short and the view jolt with it (a crouch into a crouched start
+    // dropped the eye 33 cm in 0.08 s). The loop picks up the move.
+    if(ac.InTransition){f.Triggers&=~(4|64|256);for(const char* t:{FPBody::kStart,FPBody::kPivot,FPBody::kFidget})ac.ResetTrigger(t);}
     m_Loco.StartDistance=f.StartDistance;m_Loco.PivotDistance=f.PivotDistance;m_Loco.PivotTravel=f.PivotTravel;m_Loco.MoveDistance=f.MoveDistance;
     m_Loco.FidgetTime=f.FidgetTime;m_Loco.FidgetNext=f.FidgetNext;m_Loco.FidgetIndex=f.FidgetIndex;
     m_Loco.StartGait=f.StartGait;m_Loco.StopGait=f.StopGait;m_Loco.PivotGait=f.PivotGait;m_Loco.StartTurn=f.StartTurn;m_Loco.StartTurnAmount=f.StartTurnAmount;
@@ -1192,9 +1196,12 @@ void FirstPersonBody::LateUpdate(World& world, Camera& camera, float dt, entt::e
             // The eye may trail or under-follow the shoulders by only this much: a clip that throws the
             // shoulders about (a stop pulling the body back) would otherwise carry them out of the
             // arms' reach and a hand would come off the gun. Bigger motions move the camera with them.
+            // Past the slack the eye is pulled back in fast (40 ms) rather than snapped to it: snapped, its speed jumped
+            // in one frame - a kink felt as a jolt when the body crouched or stood on the move.
             const float kEyeSlack = cfg.EyeSlack;
             const glm::vec3 gap = shouldersAnimated - m_Shoulders;
-            if (const float gapLen = glm::length(gap); gapLen > kEyeSlack) m_Shoulders = shouldersAnimated - gap / gapLen * kEyeSlack;
+            if (const float gapLen = glm::length(gap); gapLen > kEyeSlack)
+                m_Shoulders += (shouldersAnimated - gap / gapLen * kEyeSlack - m_Shoulders) * Follow(dt, 0.04f);
             BodyDebug::Info().EyeSlack = glm::length(shouldersAnimated - m_Shoulders);
             // A little slack: the shoulders sit this much further toward the gun than the rig's, so the
             // support arm is never at full stretch (a straight arm jumps at every small motion).
@@ -1724,52 +1731,56 @@ bool FirstPersonBody::SkinsUpperBody(const Model& m) {
     return skins;
 }
 
-// The arms' twist bones after the arm solve: each forearm's twist bones carry the hand's roll by how far down the
-// forearm they sit, each upper arm's undo its roll toward the shoulder (IK::SpreadTwist). Their skin then turns along
-// the limb instead of wringing at the wrist and the shoulder.
+// The arms' twist bones after an arm solve: each forearm's twist bones carry the hand's roll by how far down the forearm
+// they sit, each upper arm's undo its roll toward the shoulder (IK::SpreadTwist). Their skin then turns along the limb
+// instead of wringing at the wrist and the shoulder.
+bool FirstPersonArmTwist::Apply(Model& m, float* roll, float* residual) {
+    auto it = m_Rigs.find(&m);
+    if (it == m_Rigs.end() || it->second.Nodes != m.NodeCount()) {
+        Rig r;
+        r.Nodes = m.NodeCount();
+        m.BindLocalPose(r.Bind);
+        std::vector<int> parents(m.NodeCount());
+        std::vector<std::string> names(m.NodeCount());
+        for (int i = 0; i < m.NodeCount(); ++i) { parents[i] = m.NodeParent(i); names[i] = m.NodeName(i); }
+        for (int s = 0; s < 2; ++s) {
+            r.Upper[s] = m.NodeIndex(FPBody::kBoneUpperArm[s]);
+            r.Lower[s] = m.NodeIndex(FPBody::kBoneLowerArm[s]);
+            r.Hand[s] = m.NodeIndex(FPBody::kBoneHand[s]);
+            if (r.Upper[s] < 0 || r.Lower[s] < 0 || r.Hand[s] < 0) continue;
+            r.UpperTwist[s] = IK::FindTwistBones(r.Bind, parents, names, r.Upper[s], r.Lower[s]);
+            r.LowerTwist[s] = IK::FindTwistBones(r.Bind, parents, names, r.Lower[s], r.Hand[s]);
+        }
+        it = m_Rigs.insert_or_assign(&m, std::move(r)).first;
+    }
+    const Rig& r = it->second;
+    IK::Pose pose = m.AppliedLocalPose();
+    if ((int)pose.size() != m.NodeCount() || pose.size() != r.Bind.size()) return false;
+    bool any = false;
+    for (int s = 0; s < 2; ++s) {
+        if (r.Upper[s] < 0 || r.Lower[s] < 0 || r.Hand[s] < 0) continue;
+        if (!r.LowerTwist[s].empty()) {
+            const float turn = IK::EndRoll(pose, r.Bind, r.Lower[s], r.Hand[s]);
+            IK::SpreadTwist(pose, r.Bind, r.Lower[s], r.Hand[s], r.LowerTwist[s], turn, true);
+            float most = 0.0f;
+            for (const IK::TwistBone& t : r.LowerTwist[s]) most = std::max(most, t.Share);
+            if (roll) roll[s] = glm::degrees(turn);
+            if (residual) residual[s] = glm::degrees(turn * (1.0f - most));
+            any = true;
+        }
+        if (!r.UpperTwist[s].empty()) {
+            IK::SpreadTwist(pose, r.Bind, r.Upper[s], r.Lower[s], r.UpperTwist[s], IK::SegmentRoll(pose, r.Bind, r.Upper[s], r.Lower[s]), false);
+            any = true;
+        }
+    }
+    if (any) m.ApplyLocalPose(pose);
+    return any;
+}
+
 void FirstPersonBody::ArmTwist(const std::vector<std::shared_ptr<Model>>& models, bool twins) {
     PROFILE_SCOPE("FPB arm twist");
-    for (const auto& mp : models) {
-        if (!mp) continue;
-        Model& m = *mp;
-        auto it = m_TwistRigs.find(&m);
-        if (it == m_TwistRigs.end()) {
-            TwistRig r;
-            m.BindLocalPose(r.Bind);
-            std::vector<int> parents(m.NodeCount());
-            std::vector<std::string> names(m.NodeCount());
-            for (int i = 0; i < m.NodeCount(); ++i) { parents[i] = m.NodeParent(i); names[i] = m.NodeName(i); }
-            for (int s = 0; s < 2; ++s) {
-                r.Upper[s] = m.NodeIndex(Bone(FPBody::kBoneUpperArm[s]));
-                r.Lower[s] = m.NodeIndex(Bone(FPBody::kBoneLowerArm[s]));
-                r.Hand[s] = m.NodeIndex(Bone(FPBody::kBoneHand[s]));
-                if (r.Upper[s] < 0 || r.Lower[s] < 0 || r.Hand[s] < 0) continue;
-                r.UpperTwist[s] = IK::FindTwistBones(r.Bind, parents, names, r.Upper[s], r.Lower[s]);
-                r.LowerTwist[s] = IK::FindTwistBones(r.Bind, parents, names, r.Lower[s], r.Hand[s]);
-            }
-            it = m_TwistRigs.emplace(&m, std::move(r)).first;
-        }
-        const TwistRig& r = it->second;
-        IK::Pose pose = m.AppliedLocalPose();
-        if ((int)pose.size() != m.NodeCount() || pose.size() != r.Bind.size()) continue;
-        bool any = false;
-        for (int s = 0; s < 2; ++s) {
-            if (r.Upper[s] < 0 || r.Lower[s] < 0 || r.Hand[s] < 0) continue;
-            if (!r.LowerTwist[s].empty()) {
-                const float roll = IK::EndRoll(pose, r.Bind, r.Lower[s], r.Hand[s]);
-                IK::SpreadTwist(pose, r.Bind, r.Lower[s], r.Hand[s], r.LowerTwist[s], roll, true);
-                float most = 0.0f;
-                for (const IK::TwistBone& t : r.LowerTwist[s]) most = std::max(most, t.Share);
-                if (twins) { m_WristRoll[s] = glm::degrees(roll); m_WristResidual[s] = glm::degrees(roll * (1.0f - most)); }
-                any = true;
-            }
-            if (!r.UpperTwist[s].empty()) {
-                IK::SpreadTwist(pose, r.Bind, r.Upper[s], r.Lower[s], r.UpperTwist[s], IK::SegmentRoll(pose, r.Bind, r.Upper[s], r.Lower[s]), false);
-                any = true;
-            }
-        }
-        if (any) m.ApplyLocalPose(pose);
-    }
+    for (const auto& mp : models)
+        if (mp) m_ArmTwist.Apply(*mp, twins ? m_WristRoll : nullptr, twins ? m_WristResidual : nullptr);
 }
 
 namespace {

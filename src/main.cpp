@@ -2059,7 +2059,9 @@ int main(int argc, char** argv) {
                 playerVitals.Reset(vitals);
                 // The enemy squad, when the scene has NPC Spawns - not under --weapon-test / --stock-probe, which put the
                 // player's gun through its paces alone (a squad would shoot the player or step into the muzzle's line).
-                if (!weaponTest && npcDirector.Start(world, assets, &fp)) {
+                const bool squadStarted = !weaponTest && npcDirector.Start(world, assets, &fp);
+                if (npcTest) std::printf("[NpcTest] squad %s (%zu spawn points)\n", squadStarted ? "started" : "not started", npcDirector.SpawnPoints().size());
+                if (squadStarted) {
                     devPanel.Reset(playerVitals, npcDirector);
                     combatHud.Reset();
                     combatFx.Start(world);

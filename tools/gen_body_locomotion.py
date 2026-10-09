@@ -195,12 +195,15 @@ go('Land', 'Locomotion', 0.3, exit_time=0.5)
 
 # Standing <-> crouched, from any standing state.
 go('Locomotion', 'CrouchDown', 0.2, [cond('CrouchDown', IF)], offset=0.3)
+# Crouching or standing still: the transition clip, tested before the plain fades below so its trigger is always used
+# (left pending, a stand's trigger fired the next time the body crouched).
+go('CrouchLoco', 'CrouchUp', 0.2, [cond('CrouchUp', IF)])
+# 0.3 s: the eye rides the body's head down and up, so the fade is the view's crouch.
 for s in ['Locomotion'] + STAND_ONESHOTS:
-    go(s, 'CrouchLoco', 0.25, [cond('Crouched', IF)])
+    go(s, 'CrouchLoco', 0.3, [cond('Crouched', IF)])
 for s in ['CrouchLoco'] + CROUCH_ONESHOTS:
     if s not in ('CrouchDown', 'CrouchUp'):
-        go(s, 'Locomotion', 0.25, [cond('Crouched', NOT)])
-go('CrouchLoco', 'CrouchUp', 0.2, [cond('CrouchUp', IF)])
+        go(s, 'Locomotion', 0.3, [cond('Crouched', NOT)])
 go('CrouchDown', 'Locomotion', 0.2, [cond('Crouched', NOT)])
 go('CrouchDown', 'CrouchLoco', 0.2, [cond('Moving', IF)])
 go('CrouchDown', 'CrouchLoco', 0.25, exit_time=0.92)

@@ -35,6 +35,7 @@ public unsafe struct PlayerFrame {
     public float SinceGrounded;
     public float JumpBuffer;
     public float CrouchBlend;
+    public float CrouchBlendRate;
     public float YawDropped;
     public Vector3 Position;
     public Vector3 Velocity;

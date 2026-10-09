@@ -184,6 +184,10 @@ private:
         float PlantSlide[2] = {0.0f, 0.0f};    // this plant's farthest drift so far
         std::vector<float> Slides;            // each finished plant's (m)
         std::string PlantLog;                 // each plant's slide (cm) and the state it ended in
+        float EyeY[2] = {0.0f, 0.0f};         // the camera's height, last two frames
+        int EyeFrames = 0;
+        float EyeJerk = 0.0f;                 // the camera's largest vertical acceleration (m/s^2): a bump in the view
+        float FeetLow = 1e9f, FeetHigh = -1e9f; // the ground it crossed (a climb = stairs: the view's bump is the terrain's)
         float HandGap = 0.0f, TwinHandGap = 0.0f, BodyDiff = 0.0f; // the worst this segment (m)
         int Frames = 0;
         bool Have = false;
