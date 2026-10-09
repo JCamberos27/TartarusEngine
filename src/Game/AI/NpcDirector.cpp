@@ -262,7 +262,6 @@ bool NpcDirector::Start(World& world, AssetLibrary& assets, const FirstPersonCon
         m_HoldSettings.ShoulderLineMatch = fpb.ShoulderLineMatch;
         m_HoldSettings.SpineAim = fpb.SpineAim;
         m_HoldSettings.SpineAimDown = fpb.SpineAimDown;
-        m_HoldSettings.SpineStability = fpb.SpineStability;
         m_HoldSettings.ArmedEyeOffset = fpb.ArmedEyeOffset;
         m_HoldSettings.HeadBob = fpb.HeadBob;
         m_HoldSettings.CameraSmoothing = fpb.CameraSmoothing;

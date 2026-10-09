@@ -832,6 +832,7 @@ struct CharacterOutfitComponent {
     std::string Locks;               // slots Randomize leaves alone, comma separated
     bool AutoHide = true;            // skin (and under-layers) covered by clothing isn't drawn
     bool RandomizeOnPlay = false;    // Play starts in a fresh random outfit (reverted on Stop, like any Play change)
+    bool BareBody = false;           // debug: in Play the character drops its clothing (its own body parts only)
     int Version = 0;                 // runtime: bumped on every change (FirstPersonBody re-reads its pieces)
     std::uint64_t HideSignature = 0; // runtime: the pieces the hiding was last worked out for
     int LinkedVersion = -1;          // runtime: the Version whose pieces were last linked to the driving animator

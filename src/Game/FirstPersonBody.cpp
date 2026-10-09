@@ -729,7 +729,18 @@ void FirstPersonBody::SyncTwins(World& world) {
             else reg.remove<InactiveTag>(m_Twins[k]);
         }
         const IK::Pose& pose = m_Models[k]->AppliedLocalPose();
-        if (!pose.empty()) m_TwinModels[k]->ApplyLocalPose(pose);
+        if (!pose.empty()) {
+            // Spine Stability is for the player's own camera: the twins get the clips' spine back, with what the
+            // passes after it (spine aim, twist, shoulder line) added kept on top.
+            if (k < m_StabilizedSpine.size() && !m_StabilizedSpine[k].Bones.empty()) {
+                IK::Pose twin = pose;
+                const auto& s = m_StabilizedSpine[k];
+                FPBody::RestoreAuthoredSpine(twin, s.Bones, s.Authored, s.Stabilized);
+                m_TwinModels[k]->ApplyLocalPose(twin);
+            } else {
+                m_TwinModels[k]->ApplyLocalPose(pose);
+            }
+        }
         // The piece's look can change without its outfit's version: the hiding lands when its coverage has
         // been worked out (often after Start), and a colourway step after the pieces.
         const auto& src = reg.get<RenderableComponent>(m_Pieces[k]);
@@ -1192,7 +1203,7 @@ bool FirstPersonBody::FootHeights(const World& world, float (&out)[2]) const {
     return true;
 }
 
-bool FirstPersonBody::BoneWorld(const World& world, const std::string& standard, glm::vec3& out) const {
+bool FirstPersonBody::BoneWorld(const World& world, const std::string& standard, glm::vec3& out, bool worldTwins) const {
     if (!IsActive() || !world.Registry.valid(m_Body)) return false;
     const auto& reg = world.Registry;
     std::string want = reg.get<FirstPersonBodyComponent>(m_Body).ArmsPiece;
@@ -1204,7 +1215,7 @@ bool FirstPersonBody::BoneWorld(const World& world, const std::string& standard,
         return name.find(want) != std::string::npos;
     };
     // The world twins when poses are split (what every view but the player's camera shows), else the pieces.
-    const bool twins = !m_Twins.empty();
+    const bool twins = worldTwins && !m_Twins.empty();
     const auto& ents = twins ? m_Twins : m_Pieces;
     const auto& models = twins ? m_TwinModels : m_Models;
     for (int pass = 0; pass < 2; ++pass)
@@ -1508,6 +1519,8 @@ void FirstPersonBody::ApplyFootIK(World& world, const FirstPersonBodyComponent& 
 // Model-space masking cancels the gait's motion all the way up from the pelvis. A fixed idle
 // reference keeps the chest stable without filtering (and lagging) the player's view aim.
 void FirstPersonBody::ApplySpineStability(float weight, const AnimatorControllerComponent& animator) {
+    m_StabilizedSpine.resize(m_Models.size());
+    for (auto& s : m_StabilizedSpine) s.Bones.clear();
     weight = std::clamp(weight, 0.0f, 1.0f);
     if (weight <= 0.0f) return;
     weight *= FPBody::LocomotionSpineWeight(animator, m_SpineCrouch);
@@ -1540,10 +1553,16 @@ void FirstPersonBody::ApplySpineStability(float weight, const AnimatorController
             IK::ComputeGlobals(idle, ref.Parents, ref.Globals[s]);
             ref.Clips[s] = clip;
         }
+        auto& saved = m_StabilizedSpine[k];
+        saved.Bones = ref.Bones;
+        saved.Authored.clear();
+        saved.Stabilized.clear();
+        for (int i : ref.Bones) saved.Authored.push_back(pose[i]);
         const std::vector<glm::mat4> noCrouch;
         FPBody::BlendLocomotionSpine(pose, ref.Parents, ref.SpineNodes, ref.Globals[0],
                                    ref.Clips[1] >= 0 ? ref.Globals[1] : noCrouch,
                                    m_SpineCrouch, weight, m_SpineCrouchDrop);
+        for (int i : ref.Bones) saved.Stabilized.push_back(pose[i]);
         m.ApplyLocalPose(pose);
     }
 }
