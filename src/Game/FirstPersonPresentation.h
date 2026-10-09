@@ -5,7 +5,6 @@
 #include "Scripting/WeaponAttachments.h"
 #include "FirstPersonAnimation.h"
 #include "FirstPersonBody.h" // FirstPersonStockLockInput
-#include "ThirdPersonWeapon.h"
 #include "ShellCasings.h"      // CasingSpawn
 #include "MuzzleEffects.h"
 
@@ -218,9 +217,6 @@ public:
     // Split poses: this frame's first-person gun and how the world copy is placed off it, for
     // FirstPersonBody::ArmsLateUpdate. False with no gun in hand.
     bool WorldGunInput(FirstPersonWorldGunInput& out) const;
-    // The first-person gun, rig hands and camera this frame, and what the gun is doing, for the third-person hold
-    // (ThirdPersonWeapon). False with no gun in hand.
-    bool ThirdPersonFrame(ThirdPersonWeaponFrame& out) const;
     // Split poses: the world copy of the gun (every view but the player's camera, and the shadow) at the
     // first-person gun moved by `worldFromFirstPerson` (rigid, world); the first-person gun is then the player's
     // camera's only. Off (no body to split for): the one gun shows everywhere, as before.
@@ -276,7 +272,6 @@ private:
     void Eject();
     int m_PendingEjects = 0;
     int m_EjectedTotal = 0;
-    int m_ShotsTotal = 0; // rounds fired this Play (ThirdPersonFrame)
     glm::vec3 m_LastEjectPoint{0.0f}, m_LastEjectThrow{0.0f};
     std::vector<CasingSpawn> m_Ejections;
     // The weapon root as SEEN this frame (world space, through the view-model FOV stretch): where

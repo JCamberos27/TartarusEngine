@@ -6,8 +6,6 @@
 
 #include "FirstPersonBodyContract.h"
 #include "IK.h" // IK::SpineDistribution
-#include "ThirdPersonLocomotion.h"
-#include "ThirdPersonWeapon.h"
 
 #include <cstdint>
 #include <functional>
@@ -90,20 +88,14 @@ public:
     // FOV in degrees. The arms rig stops being drawn while this holds; the gun still is.
     // `camera` (optional) is the view it's drawn from: the Scene overlay's frustum and the eye distances.
     //
-    // Split poses (Weapon Arms): the body's pieces are what the player's own camera shows, posed onto the
-    // rig's hands (first person, exactly as the animations have it). Each piece has a world twin - the same
-    // model, its own pose - which every other view and every shadow shows: the third-person hold
-    // (ThirdPersonWeapon) - a rifle stance over the locomotion, the world gun in its right hand, both hands on
-    // it as the rig's are on the first-person gun (`gun`: this frame's first-person gun, rig and state).
-    void ArmsLateUpdate(World& world, entt::entity weaponArms, float viewModelFov, float dt, const Camera* camera = nullptr,
-                        const ThirdPersonWeaponFrame* gun = nullptr);
-    // Where the world gun is placed off the first-person one this frame (world, rigid); identity with no split.
-    const glm::mat4& WorldGunDelta() const { return m_WorldGunDelta; }
-    const ThirdPersonWeapon& ThirdPerson() const { return m_ThirdPerson; }
-    const ThirdPersonLocomotion& ThirdPersonLegs() const { return m_ThirdLoco; }
-    // The assets the third-person clips load through (set before Start).
-    void SetAssets(AssetLibrary* assets) { m_Assets = assets; }
+    // Split poses (Weapon Arms): the body's pieces are what the player's own camera shows. Each piece has a world
+    // twin - the same model, its own pose - which every other view and every shadow shows. Both play the same
+    // animations (the locomotion clips, the weapon's arm clips through the rig's hands); the twins only skip Spine
+    // Stability, which steadies the player's own camera.
+    void ArmsLateUpdate(World& world, entt::entity weaponArms, float viewModelFov, float dt, const Camera* camera = nullptr);
     bool SplitPoses() const { return !m_Twins.empty(); }
+    // Diagnostics (--stock-probe): how far each world twin hand ended from the rig's ([0] left, [1] right), m.
+    float TwinHandGap(int side) const { return m_TwinHandGap[side & 1]; }
 
     // Diagnostics (--stock-probe): a standard bone's world position as last posed - from the arms
     // piece when it has the bone (the arms after ArmsLateUpdate), else the driver. The world twins' (what every
@@ -120,9 +112,6 @@ public:
     // ... the same against the drawn torso (vertices skinned mostly to the pelvis or spine; thinned).
     float TorsoMeshGap(const World& world, const glm::vec3& a, const glm::vec3& b, std::string* piece = nullptr,
                        float* along = nullptr) const { return MeshGap(world, BodyRegion::Torso, a, b, piece, along); }
-    // The world head's cheek-weld tilt this frame (degrees) and the weight it was applied at (0..1).
-    float WorldHeadTilt() const { return m_WorldHeadTiltDeg; }
-    float WorldHeadTiltWeight() const { return m_WorldHeadTiltWeight; }
     // Diagnostics (--stock-probe): how close each world elbow (the arm from half-way down the upper arm, through
     // the elbow, to half-way down the forearm) comes to the drawn torso - vertices skinned mostly to the pelvis or
     // spine. -1 when there's no body or no such vertices. [0] left, [1] right.
@@ -250,7 +239,6 @@ private:
     // vertex) pairs found once; SkinnedPoints skins them to world space as posed now, with each one's piece.
     enum class BodyRegion { Head, Torso };
     float MeshGap(const World& world, BodyRegion region, const glm::vec3& a, const glm::vec3& b, std::string* piece, float* along) const;
-    float m_WorldHeadTiltDeg = 0.0f, m_WorldHeadTiltWeight = 0.0f; // the cheek weld as last applied (diagnostics)
     // Each chosen vertex as SkinnedPoints needs it every frame: bind position and its influences with
     // weights already normalized, bones as indices into the few this region uses (Bones).
     struct RegionSkinPoint { glm::vec3 Pos; int Count; std::uint16_t Bone[4]; float Weight[4]; };
@@ -270,17 +258,8 @@ private:
     std::map<std::pair<const Model*, std::string>, bool> m_SkinsUnder;
     bool SkinsUnder(const Model& m, const std::vector<int>& roots, const std::string& key);
     void SkinnedPoints(const World& world, BodyRegion region, std::vector<glm::vec3>& points, std::vector<int>* pieceOf = nullptr) const;
-    std::vector<glm::vec3> m_HeadPointBuffer, m_TorsoPointBuffer;
-    std::vector<glm::vec3> m_HeadScratch; // the head turned by the cheek weld, checked against the gun // ArmsLateUpdate's, kept so the frame doesn't allocate
-    glm::mat4 m_WorldGunDelta{1.0f};   // the world gun off the first-person one (world, rigid)
-    ThirdPersonWeapon m_ThirdPerson;   // the world twins' hold
-    ThirdPersonLocomotion m_ThirdLoco; // ... and their legs
-    float m_LocoYaw = 0.0f;            // the body's heading at the last update (the twins' turn rate)
-    bool m_HaveLocoYaw = false;
-    void ThirdPersonLocomotionUpdate(World& world, float dt);
-    AssetLibrary* m_Assets = nullptr;
-    float m_HoldTime = 0.0f;           // seconds of Play, for the hold's idle loops
-    std::map<std::pair<const Model*, const Model*>, std::vector<std::pair<int, int>>> m_TwinLinks; // driver twin -> twin node pairs
+    std::vector<glm::vec3> m_TorsoPointBuffer; // ArmsLateUpdate's, kept so the frame doesn't allocate
+    float m_TwinHandGap[2] = {0.0f, 0.0f};
     // The twins' own Arm Steadiness / elbow state (the pieces' is m_ShoulderAnchor ... m_ElbowAim).
     glm::vec3 m_WorldShoulderAnchor[2] = {glm::vec3(0.0f), glm::vec3(0.0f)};
     bool m_WorldHaveShoulderAnchor[2] = {false, false};

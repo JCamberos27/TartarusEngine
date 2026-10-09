@@ -439,9 +439,7 @@ void FirstPersonBody::Fail(const std::string& message) {
 }
 
 bool FirstPersonBody::Start(World& world, Player& player) {
-    AssetLibrary* assets = m_Assets; // set once by the caller, kept across Plays
     *this = FirstPersonBody{};
-    m_Assets = assets;
     BodyDebug::Info() = BodyDebug::Snapshot{};
     auto& reg = world.Registry;
     auto bodies = reg.view<FirstPersonBodyComponent>(entt::exclude<InactiveTag>);
@@ -1681,69 +1679,19 @@ bool FirstPersonBody::SkinsUpperBody(const Model& m) {
     return skins;
 }
 
-// The world twins' legs and hips: their own locomotion (ThirdPersonLocomotion) from the body's movement, worked out on the
-// driver's twin and given to every twin (one skeleton). The pieces - the player's own view - keep the controller's clips.
-void FirstPersonBody::ThirdPersonLocomotionUpdate(World& world, float dt) {
-    auto& reg = world.Registry;
-    if (m_Twins.empty() || !m_Assets) return;
-    PROFILE_SCOPE("FPB third-person locomotion");
-    int src = -1;
-    for (size_t k = 0; k < m_Pieces.size() && k < m_TwinModels.size(); ++k)
-        if (m_Pieces[k] == m_Driver) src = (int)k;
-    Model* tm = src >= 0 && m_TwinModels[src] && reg.valid(m_Twins[src]) ? m_TwinModels[src].get() : nullptr;
-    if (!tm || !m_ThirdLoco.Bind(*tm, *m_Assets)) return;
-    ThirdPersonMove move;
-    move.Velocity = FirstPersonBodyLocalMove(m_GroundVelocity, m_Yaw);
-    move.Crouch = m_SpineCrouch;
-    move.Grounded = m_Grounded;
-    float turn = 0.0f;
-    if (m_HaveLocoYaw && dt > 1e-5f) turn = FirstPersonBodyWrapAngle(m_Yaw - m_LocoYaw) / dt;
-    m_LocoYaw = m_Yaw;
-    m_HaveLocoYaw = true;
-    move.TurnRate = turn;
-    const glm::mat4 tw = world.ComposeWorldTransform(m_Twins[src]);
-    move.ModelScale = glm::length(glm::vec3(tw[0]));
-    IK::Pose pose = tm->AppliedLocalPose();
-    if (!m_ThirdLoco.Apply(*tm, pose, move, dt)) return;
-    tm->ApplyLocalPose(pose);
-    for (size_t k = 0; k < m_TwinModels.size(); ++k) {
-        if ((int)k == src || !m_TwinModels[k]) continue;
-        Model& other = *m_TwinModels[k];
-        IK::Pose op = other.AppliedLocalPose();
-        if ((int)op.size() != other.NodeCount()) continue;
-        auto& links = m_TwinLinks[{nullptr, &other}];
-        // The skeleton from the pelvis down only: each piece's own root and armature nodes (their import's scale and
-        // axis) stay its own.
-        if (links.empty()) {
-            const int pelvis = tm->NodeIndex(Bone(FPBody::kBonePelvis));
-            for (int i = 0; i < tm->NodeCount(); ++i) {
-                bool under = false;
-                for (int p = i; p >= 0 && !under; p = tm->NodeParent(p)) under = p == pelvis;
-                if (!under) continue;
-                if (const int j = other.NodeIndex(tm->NodeName(i)); j >= 0) links.push_back({i, j});
-            }
-        }
-        for (const auto& [i, j] : links) op[j] = pose[i];
-        other.ApplyLocalPose(op);
-    }
-}
-
-void FirstPersonBody::ArmsLateUpdate(World& world, entt::entity weaponArms, float viewModelFov, float dt, const Camera* camera,
-                                     const ThirdPersonWeaponFrame* gun) {
+void FirstPersonBody::ArmsLateUpdate(World& world, entt::entity weaponArms, float viewModelFov, float dt, const Camera* camera) {
     if (!IsActive()) return;
     auto& reg = world.Registry;
     if (!reg.valid(m_Body)) return;
     const FirstPersonBodyComponent& cfg = reg.get<FirstPersonBodyComponent>(m_Body);
     m_Spine = cfg.Spine;
-    m_HoldTime += dt;
-    // The world twins start from the pieces' pose as it stands now (the clips, the feet): from here the pieces'
-    // arms go to the rig's hands, the twins take the third-person hold. Holding a gun, the twins keep the clips'
-    // own spine (the hold layers its stance and aim on it).
+    // The world twins start from the pieces' pose as it stands now: the same clips, feet, spine aim and twist (only
+    // Spine Stability, which steadies the player's own camera, is taken back off). From here both get their arms onto
+    // the rig's hands - one animation set, seen from inside and out.
     {
     PROFILE_SCOPE("FPB sync twins");
-    SyncTwins(world, gun && gun->Valid);
+    SyncTwins(world);
     }
-    ThirdPersonLocomotionUpdate(world, dt);
     const bool enabled = cfg.WeaponArms;
     const bool haveRig = enabled && weaponArms != entt::null && reg.valid(weaponArms) &&
                          reg.all_of<RenderableComponent>(weaponArms) && viewModelFov > 0.0f;
@@ -1802,8 +1750,6 @@ void FirstPersonBody::ArmsLateUpdate(World& world, entt::entity weaponArms, floa
         m_WorldHaveShoulderAnchor[0] = m_WorldHaveShoulderAnchor[1] = false;
         m_WorldHaveElbowAim[0] = m_WorldHaveElbowAim[1] = false;
         m_WorldElbowClear[0] = m_WorldElbowClear[1] = 0.0f;
-        m_WorldGunDelta = glm::mat4(1.0f);
-        m_ThirdPerson.Reset();
         if (!m_Twins.empty()) PlaceHeadAttachedTwins(world);
         return;
     }
@@ -2101,7 +2047,11 @@ void FirstPersonBody::ArmsLateUpdate(World& world, entt::entity weaponArms, floa
             if (isSource)
                 for (int s = 0; s < 2; ++s)
                     if (const int hand = m.NodeIndex(Bone(kSides[s].Hand)); haveHand[s] && hand >= 0)
-                        if (debug) BodyDebug::Info().HandGap[s] = glm::length(glm::vec3(pieceWorld * glm::vec4(IK::Position(globals[hand]), 1.0f)) - handPos[s]);
+                    {
+                        const float gap = glm::length(glm::vec3(pieceWorld * glm::vec4(IK::Position(globals[hand]), 1.0f)) - handPos[s]);
+                        if (debug) BodyDebug::Info().HandGap[s] = gap;
+                        else m_TwinHandGap[s] = gap;
+                    }
             m.ApplyLocalPose(pose);
         }
     };
@@ -2110,59 +2060,12 @@ void FirstPersonBody::ArmsLateUpdate(World& world, entt::entity weaponArms, floa
     solveArms(m_Models, m_Pieces, m_ShoulderAnchor, m_HaveShoulderAnchor, m_ElbowAim, m_HaveElbowAim, true);
     }
 
-    // The world twins (every view but the player's own, and the shadows): the third-person hold, worked out on the
-    // driver's twin and given to the rest (one skeleton).
-    m_WorldGunDelta = glm::mat4(1.0f);
+    // The world twins (every view but the player's own, and the shadows): the same arm solve onto the same rig hands, so
+    // the world gun is the first-person one and both hands are on it.
     if (!m_Twins.empty()) {
-        PROFILE_SCOPE("FPB third-person hold");
-        int src = -1;
-        for (size_t k = 0; k < m_Pieces.size() && k < m_TwinModels.size(); ++k)
-            if (m_Pieces[k] == m_Driver) src = (int)k;
-        Model* tm = src >= 0 && m_TwinModels[src] && reg.valid(m_Twins[src]) ? m_TwinModels[src].get() : nullptr;
-        if (cfg.ThirdPersonFirstPersonArms) {
-            // The first-person clips 1:1: the chest pitched with the view as the player's own is, the rig's arm shapes, the
-            // hands on the rig's hands - the gun stays where the first-person one is.
-            if (camera) {
-                const float pitch = std::asin(std::clamp(camera->Front().y, -1.0f, 1.0f));
-                const float share = FirstPersonBodySpineAim(pitch, cfg.SpineAim, cfg.SpineAimDown);
-                const char* const* kSpine = FPBody::kBoneSpine;
-                RotateChain({kSpine[0], kSpine[1], kSpine[2], kSpine[3], kSpine[4]},
-                            [&](float n) { return glm::angleAxis(-pitch * share / n, glm::vec3(1.0f, 0.0f, 0.0f)); }, &m_TwinModels, &m_Spine);
-            }
-            m_TorsoPointBuffer.clear();
-            solveArms(m_TwinModels, m_Twins, m_WorldShoulderAnchor, m_WorldHaveShoulderAnchor, m_WorldElbowAim, m_WorldHaveElbowAim, false);
-        } else if (tm && gun && gun->Valid && m_Assets && m_ThirdPerson.Bind(*tm, *m_Assets, ThirdPersonLocomotion::StandIdle(), ThirdPersonLocomotion::CrouchIdle())) {
-            IK::Pose pose = tm->AppliedLocalPose();
-            ThirdPersonWeaponAim aim;
-            if (camera) {
-                aim.Pitch = std::asin(std::clamp(camera->Front().y, -1.0f, 1.0f));
-                aim.Target = camera->Position + camera->Front() * 50.0f;
-                aim.HaveTarget = true;
-            }
-            aim.Yaw = m_Twist;
-            aim.Crouch = m_SpineCrouch;
-            aim.Weight = m_ArmsWeight;
-            glm::mat4 gunWorld(1.0f);
-            if (m_ThirdPerson.Apply(*tm, world.ComposeWorldTransform(m_Twins[src]), pose, *gun, aim, m_HoldTime, dt, gunWorld)) {
-                tm->ApplyLocalPose(pose);
-                m_WorldGunDelta = gunWorld * glm::inverse(gun->Gun);
-                if (const std::vector<int>* posed = m_ThirdPerson.PosedNodes(*tm))
-                    for (size_t k = 0; k < m_TwinModels.size(); ++k) {
-                        if ((int)k == src || !m_TwinModels[k]) continue;
-                        Model& other = *m_TwinModels[k];
-                        IK::Pose op = other.AppliedLocalPose();
-                        if ((int)op.size() != other.NodeCount()) continue;
-                        auto& links = m_TwinLinks[{tm, &other}];
-                        if (links.empty())
-                            for (int i : *posed)
-                                if (const int j = other.NodeIndex(tm->NodeName(i)); j >= 0) links.push_back({i, j});
-                        if (links.empty()) continue;
-                        for (const auto& [i, j] : links) op[j] = pose[i];
-                        other.ApplyLocalPose(op);
-                    }
-            }
-        }
-        BodyDebug::Info().WorldGunShift = glm::length(glm::vec3(m_WorldGunDelta[3]));
+        PROFILE_SCOPE("FPB arms: twins");
+        m_TorsoPointBuffer.clear();
+        solveArms(m_TwinModels, m_Twins, m_WorldShoulderAnchor, m_WorldHaveShoulderAnchor, m_WorldElbowAim, m_WorldHaveElbowAim, false);
         PlaceHeadAttachedTwins(world);
     }
 

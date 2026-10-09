@@ -675,9 +675,9 @@ void FirstPersonWeaponTest::BuildProbe() {
 
 void FirstPersonWeaponTest::AfterPose(const World& world, const FirstPersonBody& body, const FirstPersonPresentation& p) {
     if (m_HoldProbe) {
-        m_HoldGap[0] = body.ThirdPerson().HandGap(0);
-        m_HoldGap[1] = body.ThirdPerson().HandGap(1);
-        m_HoldBore = body.ThirdPerson().BoreError();
+        m_HoldGap[0] = body.TwinHandGap(0);
+        m_HoldGap[1] = body.TwinHandGap(1);
+        m_HoldBore = 0.0f;
     }
     // Gait probe: past the segment's first second (the gait settled), the torso against the hips, both bodies.
     if (m_GaitProbe && !m_GaitSegment.empty() && m_Ctx.Time > 1.0f && m_Ctx.Cam) {
@@ -812,7 +812,7 @@ void FirstPersonWeaponTest::AfterPose(const World& world, const FirstPersonBody&
         }
     }
     // The world gun (split poses): the first-person one moved by the body's world gun delta.
-    const glm::mat4& gunDelta = body.WorldGunDelta();
+    const glm::mat4 gunDelta(1.0f);
     if (p.StockWorld(butt, fwd) && ((butt = glm::vec3(gunDelta * glm::vec4(butt, 1.0f)), fwd = glm::normalize(glm::mat3(gunDelta) * fwd)), true) && body.BoneWorld(world, "upperarm_r", upper) && body.BoneWorld(world, "clavicle_r", clav) &&
         body.BoneWorld(world, "neck_01", neck) && body.BoneWorld(world, "head", head)) {
         const glm::vec3 up(0.0f, 1.0f, 0.0f);
@@ -843,12 +843,10 @@ void FirstPersonWeaponTest::AfterPose(const World& world, const FirstPersonBody&
         float torsoAlong = 0.0f;
         s.TorsoGap = body.TorsoMeshGap(world, butt, butt + fwd * 0.45f, nullptr, &torsoAlong);
         s.TorsoAlong = torsoAlong * 0.45f;
-        s.HeadTilt = body.WorldHeadTilt();
-        s.HeadTiltWeight = body.WorldHeadTiltWeight();
         if (glm::vec3 chest; body.BoneWorld(world, "spine_05", chest) && glm::length(neck - chest) > 1e-4f && glm::length(head - neck) > 1e-4f)
             s.HeadBend = glm::degrees(std::acos(std::clamp(glm::dot(glm::normalize(neck - chest), glm::normalize(head - neck)), -1.0f, 1.0f)));
         // The world hands against where the hold put them on the world gun.
-        for (int h = 0; h < 2; ++h) s.HandGap[h] = body.ThirdPerson().HandGap(h);
+        for (int h = 0; h < 2; ++h) s.HandGap[h] = body.TwinHandGap(h);
         s.GunShift = glm::length(glm::vec3(gunDelta[3]));
         s.Valid = true;
         // The Scene camera: in front of the body and to its right, on the gun's rear and the shoulder - or (pose probe)
