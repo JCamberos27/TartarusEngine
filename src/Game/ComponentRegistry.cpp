@@ -731,6 +731,9 @@ void RegisterEngineComponents() {
               "through as the body moves. Worked out from the models once per outfit change." },
             { "Randomize On Play", T::Bool, TARTARUS_REFLECT_FIELD(CharacterOutfitComponent, RandomizeOnPlay), 0.0f,
               "Every Play starts in a new random outfit (Locks kept). Stop puts the edited one back." },
+            { "Bare Body (debug)", T::Bool, TARTARUS_REFLECT_FIELD(CharacterOutfitComponent, BareBody), 0.0f,
+              "Debug: Play leaves the clothing off - only the character's own body parts are drawn - so the\n"
+              "animation and skinning can be seen. Stop restores it." },
         };
         m.Fields[0].AssetPath = true;
         m.Fields[1].EnumLabels = "Male\0Female\0"; m.Fields[1].EnumCount = 2;

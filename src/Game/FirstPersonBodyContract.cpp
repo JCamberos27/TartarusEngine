@@ -72,6 +72,21 @@ void BlendLocomotionSpine(IK::Pose& pose, const std::vector<int>& parents, const
     IK::SetGlobals(pose, parents, globals, targets);
 }
 
+void RestoreAuthoredSpine(IK::Pose& pose, const std::vector<int>& bones, const std::vector<LocalTRS>& authored,
+                          const std::vector<LocalTRS>& stabilized) {
+    if (authored.size() != bones.size() || stabilized.size() != bones.size()) return;
+    for (size_t j = 0; j < bones.size(); ++j) {
+        const int i = bones[j];
+        if (i < 0 || i >= (int)pose.size()) continue;
+        LocalTRS& now = pose[i];
+        // The later passes turn a bone about axes in its parent's frame (IK::OffsetBone: now = added * stabilized);
+        // the same turn goes on the clips' bone.
+        const glm::quat added = now.R * glm::inverse(stabilized[j].R);
+        now.T = authored[j].T + (now.T - stabilized[j].T);
+        now.R = glm::normalize(added * authored[j].R);
+    }
+}
+
 std::map<std::string, std::string> ParseBoneMap(const std::string& text) {
     std::map<std::string, std::string> out;
     auto trim = [](std::string v) {

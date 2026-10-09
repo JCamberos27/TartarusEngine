@@ -1987,6 +1987,26 @@ void TestFirstPersonBodySpineBlend() {
     IK::Pose unmasked = gait;
     FPBody::BlendLocomotionSpine(unmasked, parents, bones, stand, {}, 0.0f, 0.0f);
     CHECK(glm::length(unmasked[2].T - gait[2].T) < 1e-6f && std::abs(glm::dot(unmasked[2].R, gait[2].R)) > 1.0f - 1e-6f);
+    // The world body (RestoreAuthoredSpine): the clips' spine back, with a turn added after stabilizing kept on top.
+    {
+        const std::vector<int> spine(bones.begin(), bones.end());
+        IK::Pose posed = gait;
+        for (int i : spine) posed[i].R = glm::angleAxis(0.15f * (float)i, glm::vec3(0, 1, 0)); // a gait's spine sway
+        const IK::Pose authoredPose = posed;
+        FPBody::BlendLocomotionSpine(posed, parents, bones, stand, {}, 0.0f, 1.0f);
+        std::vector<LocalTRS> authored, stabilized;
+        for (int i : spine) { authored.push_back(authoredPose[i]); stabilized.push_back(posed[i]); }
+        const glm::quat aim = glm::angleAxis(0.3f, glm::vec3(1, 0, 0)); // spine aim on spine_03, about its parent's axes
+        posed[4].R = glm::normalize(aim * posed[4].R);
+        posed[1].T.y -= 0.05f; // foot IK's pelvis drop (not a spine bone: untouched)
+        FPBody::RestoreAuthoredSpine(posed, spine, authored, stabilized);
+        for (int i : spine) {
+            const glm::quat want = i == 4 ? glm::normalize(aim * authoredPose[i].R) : authoredPose[i].R;
+            CHECK(std::abs(glm::dot(posed[i].R, want)) > 1.0f - 1e-5f);
+            CHECK(glm::length(posed[i].T - authoredPose[i].T) < 1e-5f);
+        }
+        CHECK(std::abs(posed[1].T.y - (authoredPose[1].T.y - 0.05f)) < 1e-6f);
+    }
     // Missing spine_01 must not turn spine_02's retention into the first bone's 10%.
     masked = gait;
     FPBody::BlendLocomotionSpine(masked, parents, {-1, 3, 4, 5, 6}, stand, {}, 0.0f, 1.0f);

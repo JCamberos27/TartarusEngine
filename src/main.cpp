@@ -1875,6 +1875,17 @@ int main(int argc, char** argv) {
                                                            (std::uint32_t)entt::to_integral(e));
                 if (!r.Ok) Log::Warn("Character Outfit: Randomize On Play - " + r.Error);
             }
+            // Bare Body (debug; the gait probe's player body): every item off, so the wardrobe dresses the character in its
+            // own body parts - the animation and skinning seen without clothing. Undone by Stop like the above.
+            for (auto [e, outfit] : world.Registry.view<CharacterOutfitComponent>(entt::exclude<InactiveTag>).each()) {
+                const bool probeBody = weaponTest && weaponTest->GaitProbe() && world.Registry.all_of<FirstPersonBodyComponent>(e);
+                if (!outfit.BareBody && !probeBody) continue;
+                if (OutfitSystem::Pieces(world, e).empty()) OutfitSystem::AdoptExisting(world, assets, e);
+                Wardrobe::Request bare = OutfitSystem::CurrentRequest(world, e);
+                bare.Items.clear();
+                const auto r = OutfitSystem::Submit(world, assets, e, bare);
+                if (!r.Ok) Log::Warn("Character Outfit: Bare Body - " + r.Error);
+            }
             Time::SetTimeScale(ProjectSettings::Time().TimeScale); // #144 - each run starts from the project's scale
             errPauseSeen = Log::CountOf(LogLevel::Error); // ignore errors that predate this run
             playing = true;
@@ -1968,6 +1979,29 @@ int main(int argc, char** argv) {
                 // Sandbox's shooting range lane), wherever the scene's spawn is, so runs stay comparable.
                 if (stockProbeMode) {
                     player.RespawnFeet = glm::vec3(45.0f, 0.1f, -2.5f);
+                    // The gait probe walks, jogs and sprints metres every way and films the whole body: the open floor
+                    // with the most room round it - rays out at knee and chest height in 16 directions, over ground at about 0.
+                    if (weaponTest && weaponTest->GaitProbe()) {
+                        QueryFilter f;
+                        f.HitTriggers = 0;
+                        float best = -1.0f;
+                        for (float gx = -54.0f; gx <= 54.0f; gx += 3.0f)
+                            for (float gz = -54.0f; gz <= 54.0f; gz += 3.0f) {
+                                RaycastHit h;
+                                const float top[3] = {gx, 3.0f, gz}, down[3] = {0.0f, -1.0f, 0.0f};
+                                if (!PhysicsWorld::RaycastSolid(top, down, 4.0f, f, h) || !h.Hit || std::abs(h.Point[1]) > 0.15f) continue;
+                                float room = 14.0f;
+                                for (int a = 0; a < 16 && room > best; ++a)
+                                    for (float y : {0.4f, 1.3f}) {
+                                        const float o[3] = {gx, h.Point[1] + y, gz};
+                                        const float d[3] = {std::cos((float)a * 0.3927f), 0.0f, std::sin((float)a * 0.3927f)};
+                                        RaycastHit side;
+                                        if (PhysicsWorld::RaycastSolid(o, d, room, f, side) && side.Hit) room = std::min(room, side.Distance);
+                                    }
+                                if (room > best) { best = room; player.RespawnFeet = glm::vec3(gx, h.Point[1] + 0.1f, gz); }
+                            }
+                        std::printf("[Gait] start at (%.0f, %.0f), %.1f m clear all round\n", player.RespawnFeet.x, player.RespawnFeet.z, best);
+                    }
                     player.Cam.Position = player.RespawnFeet + glm::vec3(0.0f, player.EyeHeight, 0.0f);
                 }
                 // FPS presentation is opt-in on the controller (its Animation Set). With the
