@@ -54,7 +54,6 @@ struct NpcHoldSettings {
     float ReachSlack = 0.04f;        // m: the shoulders a little nearer the gun than the rig's
     float ShoulderLineMatch = 1.0f;  // the chest takes the rig's bladed stance
     float SpineAim = 0.6f, SpineAimDown = 0.9f; // the share of the aim's pitch the chest takes (up / down)
-    float SpineStability = 1.0f; // player's lower-body/spine blend, copied at Play
     // The weapon's eye off the shoulders, as the player's camera is (FirstPersonBody::LateUpdate).
     glm::vec3 ArmedEyeOffset{0.0f, 0.10f, 0.04f}; // the eye lifted off the rig's (model: right, up, forward), looking level
     float HeadBob = 0.5f;            // the share of the shoulders' motion about their slow average the eye follows
@@ -212,9 +211,6 @@ private:
     void SyncPieces();
     // `stepFor(divisor)` = the turn one spine bone takes (the whole turn / divisor); see IK::ChainDivisors.
     void OffsetSpine(const std::function<glm::quat(float)>& stepFor); // m_Pose / m_Globals already hold the driver's pose and its globals
-    void ApplySpineStability(const World& world);
-    int m_SpineIdleClips[2] = {-2, -2};
-    std::vector<glm::mat4> m_SpineIdleGlobals[2];
     // Feet onto uneven ground (LateUpdate, first): the pelvis drops to the lower foot's ground, the legs reach theirs.
     void FootPass(float dt);
     void SyncLower(); // the driver's pelvis and legs onto every other piece

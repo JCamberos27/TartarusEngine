@@ -295,7 +295,11 @@ FirstPersonWeaponTest::FirstPersonWeaponTest(bool stockProbe, bool probeAk) : m_
 #pragma warning(suppress : 4996)
         const char* sprint = std::getenv("STOCK_PROBE_SPRINT");
         m_SprintProbe = sprint && *sprint && *sprint != '0';
-        if (m_SprintProbe) BuildSprintProbe();
+#pragma warning(suppress : 4996)
+        const char* gait = std::getenv("STOCK_PROBE_GAIT");
+        m_GaitProbe = gait && *gait && *gait != '0';
+        if (m_GaitProbe) BuildGaitProbe();
+        else if (m_SprintProbe) BuildSprintProbe();
         else if (pose && *pose && *pose != '0') BuildPoseProbe();
         else BuildProbe();
     }
@@ -365,6 +369,70 @@ void FirstPersonWeaponTest::BuildSprintProbe() {
             for (const char* state : {"IdleToSprint", "SprintToIdle"})
                 c.Check(m_SprintSamples.count(std::string(state) + "_1") > 0, std::string("captured moving ") + state);
         }});
+    m_Steps = std::move(steps);
+}
+
+void FirstPersonWeaponTest::BuildGaitProbe() {
+    using C = Ctx;
+    std::vector<Step> steps = {{"AK in hand", nullptr, [](C& c) { return c.State() == "Idle"; }, 30, nullptr}};
+    struct Seg { std::string Name; glm::vec2 Move; bool Sprint, Crouch; };
+    std::vector<Seg> segs = {{"stand", {0, 0}, false, false}};
+    const struct { const char* Name; glm::vec2 Dir; } dirs[] = {
+        {"fwd", {0, 1}}, {"bwd", {0, -1}}, {"left", {-1, 0}}, {"right", {1, 0}},
+        {"fwd_left", {-0.7071f, 0.7071f}}, {"bwd_right", {0.7071f, -0.7071f}}, {"fwd_right", {0.7071f, 0.7071f}}, {"bwd_left", {-0.7071f, -0.7071f}}};
+    for (const auto& gait : {std::pair<const char*, float>{"walk", 0.45f}, {"jog", 1.0f}})
+        for (const auto& d : dirs) segs.push_back({std::string(gait.first) + "_" + d.Name, d.Dir * gait.second, false, false});
+    for (const auto& d : dirs) segs.push_back({std::string("crouch_") + d.Name, d.Dir, false, true});
+    segs.push_back({"sprint_fwd", {0, 1}, true, false});
+    segs.push_back({"sprint_fwd_left", {-0.7071f, 0.7071f}, true, false});
+    segs.push_back({"sprint_fwd_right", {0.7071f, 0.7071f}, true, false});
+    // With --smoke-shots: a few frames of these, the whole body from the Scene camera (1 right side, 2 front right).
+    const std::map<std::string, int> shotViews = {{"walk_fwd", 2}, {"jog_fwd", 1}, {"sprint_fwd", 1},
+                                                  {"jog_fwd_left", 2}, {"jog_bwd", 2}, {"crouch_fwd", 1}};
+    for (const Seg& s : segs) {
+        const std::string name = s.Name;
+        const auto shot = shotViews.find(name);
+        const int view = shot == shotViews.end() ? 0 : shot->second;
+        steps.push_back({name, [this, s, name, view](C& c) {
+                             c.Move = s.Move; c.Sprint = s.Sprint; c.Crouch = s.Crouch; c.Cam->Pitch = 0.0f; c.View = view;
+                             m_Gait[0] = m_Gait[1] = GaitStats{};
+                             m_GaitSegment = name;
+                             m_GaitTravel = s.Move;
+                         },
+                         [name, view](C& c) {
+                             const int f = (int)std::lround(c.Time / std::max(c.Dt, 1e-4f));
+                             if (view && f >= 90 && f <= 120 && f % 10 == 0) c.Shot = ShotStem("gait_" + name + "_" + std::to_string(f));
+                             return c.Time >= 2.4f;
+                         }, 5.0f,
+                         [this, name, s](C& c) {
+                             m_GaitSegment.clear();
+                             c.View = 0;
+                             auto mean = [](const GaitStats& g, float v) { return g.Frames ? v / (float)g.Frames : 0.0f; };
+                             for (int v = 0; v < 2; ++v) {
+                                 const GaitStats& g = m_Gait[v];
+                                 std::printf("[Gait] %-17s %-5s lean %5.1f (%5.1f..%5.1f) side %5.1f, chest on hips %5.1f (%5.1f..%5.1f) deg, pelvis %.3f m, %d frames\n",
+                                             name.c_str(), v ? "world" : "own", mean(g, g.Lean), g.LeanMin, g.LeanMax, mean(g, g.Side),
+                                             mean(g, g.Twist), g.TwistMin, g.TwistMax, mean(g, g.Pelvis), g.Frames);
+                             }
+                             const GaitStats &own = m_Gait[0], &w = m_Gait[1];
+                             c.Check(own.Frames > 30 && w.Frames > 30, name + ": measured");
+                             if (glm::length(s.Move) < 0.01f) {
+                                 // Standing, nothing to steady: both views the same body.
+                                 const float d = std::fabs(mean(own, own.Lean) - mean(w, w.Lean));
+                                 c.Check(d < 1.0f, name + ": the world body stands as the player's own (" + std::to_string(d) + " deg apart)");
+                             } else {
+                                 // Moving, the world body carries the gait's own torso: its lean swings over the stride.
+                                 c.Check(w.LeanMax - w.LeanMin > 0.5f, name + ": the world torso moves with the gait (" +
+                                                                           std::to_string(w.LeanMax - w.LeanMin) + " deg of lean swing)");
+                             }
+                             c.Move = {}; c.Sprint = false; c.Crouch = false;
+                         }});
+        // Back where it started (unmeasured), so the run stays on the open floor.
+        if (glm::length(s.Move) > 0.01f)
+            steps.push_back({name + " back", [s](C& c) { c.Move = -s.Move; c.Sprint = false; c.Crouch = s.Crouch; },
+                             [s](C& c) { return c.Time >= (s.Sprint ? 3.4f : 2.4f); }, 6.0f,
+                             [](C& c) { c.Move = {}; c.Crouch = false; }});
+    }
     m_Steps = std::move(steps);
 }
 
@@ -551,6 +619,39 @@ void FirstPersonWeaponTest::BuildProbe() {
 }
 
 void FirstPersonWeaponTest::AfterPose(const World& world, const FirstPersonBody& body, const FirstPersonPresentation& p) {
+    // Gait probe: past the segment's first second (the gait settled), the torso against the hips, both bodies.
+    if (m_GaitProbe && !m_GaitSegment.empty() && m_Ctx.Time > 1.0f && m_Ctx.Cam) {
+        const glm::vec3 front = m_Ctx.Cam->Front();
+        const glm::vec3 fwd = glm::normalize(glm::vec3(front.x, 0.0f, front.z) + glm::vec3(1e-6f, 0.0f, 0.0f));
+        const glm::vec3 right = glm::normalize(glm::cross(fwd, glm::vec3(0.0f, 1.0f, 0.0f)));
+        // The travel's direction (the view's frame), else the view's forward standing.
+        const glm::vec3 travel = glm::length(m_GaitTravel) > 0.01f ? glm::normalize(right * m_GaitTravel.x + fwd * m_GaitTravel.y) : fwd;
+        const glm::vec3 across = glm::cross(travel, glm::vec3(0.0f, 1.0f, 0.0f));
+        auto heading = [](const glm::vec3& v) { return glm::degrees(std::atan2(v.x, v.z)); };
+        for (int v = 0; v < 2; ++v) {
+            glm::vec3 pelvis, neck, thigh[2], arm[2], foot[2];
+            auto bone = [&](const char* name, glm::vec3& out) { return body.BoneWorld(world, name, out, v == 1); };
+            if (!bone("pelvis", pelvis) || !bone("neck_01", neck) || !bone("thigh_l", thigh[0]) || !bone("thigh_r", thigh[1]) ||
+                !bone("upperarm_l", arm[0]) || !bone("upperarm_r", arm[1]) || !bone("foot_l", foot[0]) || !bone("foot_r", foot[1]))
+                continue;
+            const glm::vec3 up = neck - pelvis;
+            const float lean = glm::degrees(std::atan2(glm::dot(up, travel), std::max(up.y, 1e-3f)));
+            const float side = glm::degrees(std::atan2(glm::dot(up, -across), std::max(up.y, 1e-3f)));
+            float twist = heading(arm[0] - arm[1]) - heading(thigh[0] - thigh[1]);
+            while (twist > 180.0f) twist -= 360.0f;
+            while (twist <= -180.0f) twist += 360.0f;
+            GaitStats& g = m_Gait[v];
+            ++g.Frames;
+            g.Lean += lean;
+            g.Side += side;
+            g.Twist += twist;
+            g.Pelvis += pelvis.y - std::min(foot[0].y, foot[1].y);
+            g.LeanMin = std::min(g.LeanMin, lean);
+            g.LeanMax = std::max(g.LeanMax, lean);
+            g.TwistMin = std::min(g.TwistMin, twist);
+            g.TwistMax = std::max(g.TwistMax, twist);
+        }
+    }
     if (m_SprintProbe) {
         const auto* animator = world.Registry.try_get<AnimatorControllerComponent>(p.ArmsEntity());
         const auto controller = GetAnimatorController(p.Set().Controller);
