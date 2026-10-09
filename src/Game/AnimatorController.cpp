@@ -25,6 +25,8 @@
 #include <filesystem>
 #include <functional>
 #include <fstream>
+#include <map>
+#include <memory>
 #include <cstdint>
 #include <sstream>
 #include <unordered_map>
@@ -275,6 +277,13 @@ bool AnimatorController::FromJsonString(const std::string& text, AnimatorControl
         st.Name = Str(s, "name");
         st.Speed = Num(s, "speed", 1.0f);
         st.SpeedParam = Str(s, "speedParam");
+        st.DistanceParam = Str(s, "distanceParam");
+        {
+            const std::string mode = Str(s, "distanceMode");
+            st.Distance = mode == "remaining" ? State::DistanceMode::Remaining
+                        : mode == "pivot"     ? State::DistanceMode::Pivot
+                                              : State::DistanceMode::Traveled;
+        }
         st.Loop = Flag(s, "loop", true);
         st.RootMotion = Flag(s, "rootMotion", true);
         st.Priority = (int)Num(s, "priority", 0.0f);
@@ -403,6 +412,11 @@ std::string AnimatorController::ToJsonString() const {
             json st = {{"name", s.Name}, {"speed", s.Speed}, {"loop", s.Loop},
                        {"position", {s.Position.x, s.Position.y}}};
             if (!s.SpeedParam.empty()) st["speedParam"] = s.SpeedParam;
+            if (!s.DistanceParam.empty()) {
+                static const char* kModes[] = {"traveled", "remaining", "pivot"};
+                st["distanceParam"] = s.DistanceParam;
+                st["distanceMode"] = kModes[(int)s.Distance];
+            }
             if (s.Priority != 0) st["priority"] = s.Priority;
             if (!s.RootMotion) st["rootMotion"] = false;
             if (!s.Tags.empty()) st["tags"] = s.Tags;
@@ -669,8 +683,36 @@ void SyncBaseLayerFields(const AnimatorController& ctrl, AnimatorControllerCompo
 
 } // namespace
 
+float AnimatorDistanceToPhase(const std::vector<float>& curve, float turnaround, AnimatorController::State::DistanceMode mode,
+                              float metres) {
+    using M = AnimatorController::State::DistanceMode;
+    if (curve.size() < 2) return -1.0f;
+    const float total = curve.back();
+    const float d = mode == M::Remaining ? total - metres : mode == M::Pivot ? turnaround + metres : metres;
+    if (d <= curve.front()) return 0.0f;
+    const int n = (int)curve.size() - 1;
+    if (d >= total - 1e-3f) { // the travel is over: where the clip stops moving (a stop's settle plays on the clock)
+        for (int i = 0; i <= n; ++i)
+            if (curve[i] >= total - 1e-3f) return (float)i / (float)n;
+        return 1.0f;
+    }
+    for (int i = 1; i <= n; ++i)
+        if (curve[i] >= d) {
+            const float span = curve[i] - curve[i - 1];
+            const float f = span > 1e-6f ? (d - curve[i - 1]) / span : 0.0f;
+            return ((float)(i - 1) + f) / (float)n;
+        }
+    return 1.0f;
+}
+
+float AnimatorDistanceStep(float before, float want, float natural, bool first) {
+    if (first) return std::max(before, want);
+    if (want <= before) return before + natural; // the travel says nothing new (stopped, or done): the clock plays on
+    return std::clamp(want, before + natural * 0.35f, before + natural * 3.0f);
+}
+
 void AdvanceAnimator(const AnimatorController& ctrl, AnimatorControllerComponent& ac, float dt,
-                     const std::function<float(int, int)>& stateLength) {
+                     const std::function<float(int, int)>& stateLength, const AnimatorDistancePhase& distancePhase) {
     ac.FiredEvents.clear();
     ac.Clock += dt;
     if (!ac.Started) {
@@ -724,7 +766,15 @@ void AdvanceAnimator(const AnimatorController& ctrl, AnimatorControllerComponent
             if (!(len > 1e-4f)) len = 1.0f;
             const float before = it.Phase;
             it.PrevPhase = before;
-            it.Phase += dt * std::abs(speed) / len;
+            const float natural = dt * std::abs(speed) / len;
+            it.Phase += natural;
+            if (!s.DistanceParam.empty() && distancePhase && !s.Loop) {
+                const float want = distancePhase(li, it.State, s.Distance, ParamValue(ac.Params, s.DistanceParam, 0.0f));
+                if (want >= 0.0f) {
+                    it.Phase = AnimatorDistanceStep(before, want, natural, !it.Matched);
+                    it.Matched = true;
+                }
+            }
             if (k + 1 == rt.Stack.size()) CrossEvents(s, before, it.Phase, ac.FiredEvents);
             if (it.Fade < 1.0f)
                 it.Fade = it.FadeDuration > 0.0f ? std::min(1.0f, it.Fade + dt / it.FadeDuration) : 1.0f;
@@ -1250,6 +1300,49 @@ bool CopyDriverPose(const Model& driver, Model& follower) {
 
 } // namespace
 
+namespace {
+// A clip's root path for distance matching: cumulative ground travel at evenly spaced times, and the travel at
+// its turnaround (the farthest it gets along the direction it starts in - a pivot's plant).
+struct AnimatorClipPath {
+    static constexpr int kSamples = 48;
+    float Distance[kSamples + 1] = {};
+    float Turnaround = 0.0f;
+    float Length = 0.0f; // the clip it was measured on (a model freed and another allocated at its address re-measures)
+};
+
+const AnimatorClipPath* ClipPath(const Model& m, int clip) {
+    if (clip < 0) return nullptr;
+    static std::map<std::pair<const Model*, int>, std::unique_ptr<AnimatorClipPath>> s_Paths;
+    auto& slot = s_Paths[{&m, clip}];
+    const float len = m.AnimationLength(clip);
+    if (slot && slot->Length == len) return slot.get();
+    const int root = m.FindRootMotionNode();
+    if (root < 0 || !(len > 0.0f)) return nullptr;
+    RootMotionSettings rm;
+    rm.Rotation = true;
+    rm.Vertical = false;
+    auto path = std::make_unique<AnimatorClipPath>();
+    path->Length = len;
+    constexpr int n = AnimatorClipPath::kSamples;
+    glm::vec2 at[n + 1];
+    for (int i = 0; i <= n; ++i) {
+        const RootMotionDelta d = m.ClipRootMotion(clip, 0.0f, len * i / n, AnimationWrapMode::ClampForever, root, rm);
+        at[i] = glm::vec2(d.Translation.x, d.Translation.z);
+        path->Distance[i] = i ? path->Distance[i - 1] + glm::length(at[i] - at[i - 1]) : 0.0f;
+    }
+    glm::vec2 entry(0.0f);
+    for (int i = 1; i <= n && glm::length(entry) < 0.05f; ++i) entry = at[i] - at[0];
+    if (glm::length(entry) > 1e-4f) {
+        entry = glm::normalize(entry);
+        float far = -1.0f;
+        for (int i = 0; i <= n; ++i)
+            if (const float a = glm::dot(at[i] - at[0], entry); a > far) { far = a; path->Turnaround = path->Distance[i]; }
+    }
+    slot = std::move(path);
+    return slot.get();
+}
+} // namespace
+
 void UpdateAnimatorControllers(World& world, AssetLibrary& assets, float dt) {
     struct Rig {
         entt::entity E;
@@ -1320,7 +1413,35 @@ void UpdateAnimatorControllers(World& world, AssetLibrary& assets, float dt) {
 
         const float stepDt = dt + dac.SkippedTime; // plus whatever frames the LOD held
         dac.SkippedTime = 0.0f;
-        AdvanceAnimator(*ctrl, dac, stepDt, stateLength);
+        // Distance matching: each clip's path (cumulative root travel over its length, and where it turns around),
+        // measured once per rig and clip; a blend tree's is its children's at the current weights.
+        const auto distancePhase = [&](int li, int si, AnimatorController::State::DistanceMode mode, float metres) {
+            if (samplers.empty() || li < 0 || li >= (int)ctrl->Layers.size() || si < 0 || si >= (int)ctrl->Layers[li].States.size())
+                return -1.0f;
+            Sampler* smp = &samplers.front();
+            for (size_t k = 0; k < group.size() && k < samplers.size(); ++k)
+                if (group[k].AC == &dac) smp = &samplers[k];
+            const auto& m = ctrl->Layers[li].States[si].MotionFor(smp->Track);
+            if (m.Empty()) return -1.0f;
+            std::vector<float> curve(AnimatorClipPath::kSamples + 1, 0.0f);
+            float turn = 0.0f, weight = 0.0f;
+            const auto add = [&](const std::string& ref, float w) {
+                const AnimatorClipPath* path = ClipPath(smp->M, smp->Clip(ref));
+                if (!path || w <= 0.0f) return;
+                for (size_t i = 0; i < curve.size(); ++i) curve[i] += w * path->Distance[i];
+                turn += w * path->Turnaround;
+                weight += w;
+            };
+            if (!m.IsBlendTree()) add(m.Clip, 1.0f);
+            else {
+                const auto w = AnimatorMotionWeights(m, dac.Params);
+                for (size_t i = 0; i < m.Children.size(); ++i) add(m.Children[i].Clip, w[i]);
+            }
+            if (weight <= 0.0f) return -1.0f;
+            for (float& d : curve) d /= weight;
+            return AnimatorDistanceToPhase(curve, turn / weight, mode, metres);
+        };
+        AdvanceAnimator(*ctrl, dac, stepDt, stateLength, distancePhase);
         lengths.resize(ctrl->Layers.size());
         for (size_t li = 0; li < ctrl->Layers.size(); ++li) lengths[li].assign(ctrl->Layers[li].States.size(), -1.0f);
         memo = true;

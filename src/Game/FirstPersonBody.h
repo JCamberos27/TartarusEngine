@@ -94,6 +94,9 @@ public:
     // Stability, which steadies the player's own camera.
     void ArmsLateUpdate(World& world, entt::entity weaponArms, float viewModelFov, float dt, const Camera* camera = nullptr);
     bool SplitPoses() const { return !m_Twins.empty(); }
+    // What the hands are doing, for the idle fidgets: a gun held (the ready stance's own fidgets) and busy with it
+    // (aiming, or just fired: no fidget). Set each frame before Tick.
+    void SetHands(bool armed, bool busy) { m_Armed = armed; m_Busy = busy; }
     // Diagnostics (--stock-probe): how far each world twin hand ended from the rig's ([0] left, [1] right), m.
     float TwinHandGap(int side) const { return m_TwinHandGap[side & 1]; }
 
@@ -218,7 +221,17 @@ private:
     glm::vec3 m_FootNormal[2] = {glm::vec3(0, 1, 0), glm::vec3(0, 1, 0)};
     float m_MoveTime = 0.0f;       // seconds of move input in a row (a tap is not a run to stop from)
     bool m_WasCrouched = false;    // for the stand<->crouch edge
-    float m_StopDistance = 0.0f, m_StartDistance = 0.0f; // metres the start / stop clip has carried the body
+    // What the locomotion script keeps between frames beyond the above: distance matching, the pivot under way,
+    // the fidget timer, and the picks it last made.
+    struct LocoMemory {
+        float StartDistance = 0.0f, PivotDistance = 0.0f, PivotTravel = 0.0f, MoveDistance = 0.0f;
+        float FidgetTime = 0.0f, FidgetNext = 0.0f, FidgetIndex = 0.0f;
+        float StartGait = 1.0f, StopGait = 1.0f, PivotGait = 1.0f, StartTurn = 0.0f, StartTurnAmount = 1.0f;
+        glm::vec2 PivotDir{0.0f, 1.0f}, StepDir{0.0f, 1.0f};
+        bool PivotReversed = false;
+    } m_Loco;
+    bool m_Armed = false, m_Busy = false; // a gun in hand; aiming or just fired (SetHands)
+    std::uint32_t m_Random = 0x9E3779B9u;
     bool m_Still = false;          // standing still at the last Tick (the view's turn is then limited)
     float m_MaxTurnRate = 0.0f;    // the component's, from the last Tick
     float m_TurnThreshold = 0.0f;
