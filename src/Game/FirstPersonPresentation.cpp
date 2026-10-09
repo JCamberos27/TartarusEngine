@@ -394,7 +394,7 @@ bool FirstPersonPresentation::StartSet(World& world, AssetLibrary& assets, int s
 void FirstPersonPresentation::StopSet(World& world) {
     if (m_WorldWeapon != entt::null && world.Registry.valid(m_WorldWeapon)) world.DestroyEntityAndChildren(m_WorldWeapon);
     m_WorldWeapon = entt::null;
-    m_WorldWeaponShift = glm::vec3(0.0f);
+    m_WorldWeaponDelta = glm::mat4(1.0f);
     if (m_Arms != entt::null && world.Registry.valid(m_Arms)) world.DestroyEntityAndChildren(m_Arms);
     if (m_Weapon != entt::null && world.Registry.valid(m_Weapon)) world.DestroyEntityAndChildren(m_Weapon);
     m_WeaponParticles = m_WorldWeaponParticles = entt::null;
@@ -1060,7 +1060,43 @@ bool FirstPersonPresentation::WorldGunInput(FirstPersonWorldGunInput& out) const
     return true;
 }
 
-void FirstPersonPresentation::PlaceWorldWeapon(World& world, bool split, const glm::vec3& shift) {
+bool FirstPersonPresentation::ThirdPersonFrame(ThirdPersonWeaponFrame& out) const {
+    out = ThirdPersonWeaponFrame{};
+    if (!m_Equipped || !m_World || m_Arms == entt::null || !m_World->Registry.valid(m_Arms)) return false;
+    const auto* rc = m_World->Registry.try_get<RenderableComponent>(m_Arms);
+    const Model* rig = rc ? rc->ModelRef.get() : nullptr;
+    if (!rig) return false;
+    auto rigid = [](const glm::mat4& m) {
+        glm::mat4 r(1.0f);
+        for (int c = 0; c < 3; ++c) r[c] = glm::vec4(glm::normalize(glm::vec3(m[c])), 0.0f);
+        r[3] = m[3];
+        return r;
+    };
+    const glm::mat4 rigWorld = m_World->ComposeWorldTransform(m_Arms);
+    static const char* const kHands[2] = {"hand_l", "hand_r"};
+    for (int s = 0; s < 2; ++s) {
+        glm::mat4 h(1.0f);
+        if (!rig->NodeTransform(kHands[s], h)) return false;
+        out.Hand[s] = rigid(rigWorld * h);
+    }
+    out.Gun = rigid(m_WeaponWorld);
+    out.Camera = rigid(glm::inverse(m_View));
+    glm::vec3 butt, forward;
+    if (StockWorld(butt, forward)) out.Bore = forward;
+    else out.Bore = -glm::vec3(out.Camera[2]);
+    out.Rig = rig;
+    const std::string& state = CurrentState();
+    auto named = [&](const char* part) { return state.find(part) != std::string::npos; };
+    out.Sprint = named("Sprint");
+    out.Action = HasTag(K::kTagReload) || HasTag(K::kTagBusy) || HasTag(K::kTagCycling) || named("Draw") || named("Holster") ||
+                 named("Equip") || named("Melee") || named("Inspect");
+    out.Ready = (HasTag(K::kTagIdle) || HasTag(K::kTagReady)) && m_Zoom < 0.05f && !out.Sprint;
+    out.Shots = m_ShotsTotal;
+    out.Valid = true;
+    return true;
+}
+
+void FirstPersonPresentation::PlaceWorldWeapon(World& world, bool split, const glm::mat4& worldFromFirstPerson) {
     auto& reg = world.Registry;
     const bool haveWeapon = m_Weapon != entt::null && reg.valid(m_Weapon);
     if (!split || !haveWeapon) {
@@ -1069,7 +1105,7 @@ void FirstPersonPresentation::PlaceWorldWeapon(World& world, bool split, const g
         m_WorldWeaponParticles = entt::null; m_WorldWeaponEmitters.clear();
         for (auto e : m_WeaponAttachmentEntities) if (reg.valid(e)) reg.remove<OwnerViewOnlyTag>(e);
         if (haveWeapon) reg.remove<OwnerViewOnlyTag>(m_Weapon);
-        m_WorldWeaponShift = glm::vec3(0.0f);
+        m_WorldWeaponDelta = glm::mat4(1.0f);
         return;
     }
     if (m_WorldWeapon == entt::null || !reg.valid(m_WorldWeapon)) {
@@ -1086,12 +1122,12 @@ void FirstPersonPresentation::PlaceWorldWeapon(World& world, bool split, const g
         for (auto e : m_WeaponAttachmentEntities) if (reg.valid(e)) reg.emplace_or_replace<OwnerViewOnlyTag>(e);
         SetupWorldWeaponParticles();
     }
-    const glm::vec3 scale(glm::length(glm::vec3(m_WeaponWorld[0])), glm::length(glm::vec3(m_WeaponWorld[1])),
-                          glm::length(glm::vec3(m_WeaponWorld[2])));
-    const glm::mat3 r(glm::vec3(m_WeaponWorld[0]) / std::max(scale.x, 1e-6f), glm::vec3(m_WeaponWorld[1]) / std::max(scale.y, 1e-6f),
-                      glm::vec3(m_WeaponWorld[2]) / std::max(scale.z, 1e-6f));
-    world.SetWorldPose(m_WorldWeapon, glm::vec3(m_WeaponWorld[3]) + shift, glm::normalize(glm::quat_cast(r)));
-    m_WorldWeaponShift = shift;
+    const glm::mat4 placed = worldFromFirstPerson * m_WeaponWorld;
+    const glm::vec3 scale(glm::length(glm::vec3(placed[0])), glm::length(glm::vec3(placed[1])), glm::length(glm::vec3(placed[2])));
+    const glm::mat3 r(glm::vec3(placed[0]) / std::max(scale.x, 1e-6f), glm::vec3(placed[1]) / std::max(scale.y, 1e-6f),
+                      glm::vec3(placed[2]) / std::max(scale.z, 1e-6f));
+    world.SetWorldPose(m_WorldWeapon, glm::vec3(placed[3]), glm::normalize(glm::quat_cast(r)));
+    m_WorldWeaponDelta = worldFromFirstPerson;
     reg.get<TransformComponent>(m_WorldWeapon).Scale = scale;
     if (reg.valid(m_WeaponParticles) && reg.valid(m_WorldWeaponParticles))
         reg.get<TransformComponent>(m_WorldWeaponParticles) = reg.get<TransformComponent>(m_WeaponParticles);
@@ -1110,7 +1146,7 @@ void FirstPersonPresentation::PlaceWorldWeapon(World& world, bool split, const g
 bool FirstPersonPresentation::MuzzleFrames(glm::vec3& firstPerson, glm::vec3& worldCopy, glm::vec3& bore) const {
     if (!m_HaveMuzzle || !m_RootSeenValid) return false;
     firstPerson = glm::vec3(m_RootWorld * glm::vec4(m_MuzzleLocal, 1.0f));
-    worldCopy = firstPerson + m_WorldWeaponShift;
+    worldCopy = glm::vec3(m_WorldWeaponDelta * glm::vec4(firstPerson, 1.0f));
     const glm::vec3 b = glm::mat3(m_RootWorld) * m_BoreLocal;
     if (glm::dot(b, b) < 1e-12f) return false;
     bore = glm::normalize(b);
@@ -1530,6 +1566,7 @@ bool FirstPersonPresentation::Fire() {
 }
 
 void FirstPersonPresentation::CommitShot(bool ads, bool cycleBolt) {
+    ++m_ShotsTotal;
     const auto mode = m_FullAuto ? RecoilFireMode::Auto :
         m_Set.Gameplay.BurstRounds > 1 ? RecoilFireMode::Burst : RecoilFireMode::Semi;
     m_Procedural.OnShot(m_Set.Procedural, ads, cycleBolt, m_Set.Gameplay.RoundsPerMinute, mode,

@@ -1981,7 +1981,7 @@ int main(int argc, char** argv) {
                     player.RespawnFeet = glm::vec3(45.0f, 0.1f, -2.5f);
                     // The gait probe walks, jogs and sprints metres every way and films the whole body: the open floor
                     // with the most room round it - rays out at knee and chest height in 16 directions, over ground at about 0.
-                    if (weaponTest && weaponTest->GaitProbe()) {
+                    if (weaponTest && weaponTest->OpenFloor()) {
                         QueryFilter f;
                         f.HitTriggers = 0;
                         float best = -1.0f;
@@ -2007,6 +2007,7 @@ int main(int argc, char** argv) {
                 // FPS presentation is opt-in on the controller (its Animation Set). With the
                 // gravity gun also on, that becomes the unarmed slot - see gravityGunLive.
                 firstPersonPresentation.Start(world, assets, fp);
+                firstPersonBody.SetAssets(&assets);
                 firstPersonBody.Start(world, player); // a First Person Body in the scene: root-motion movement
                 // The weapon's walk / sprint clip rates follow what the player really moves at (the body's speeds).
                 if (firstPersonBody.IsActive() && firstPersonPresentation.IsActive())
@@ -3130,6 +3131,7 @@ int main(int argc, char** argv) {
                     }
                     if (firstPersonBody.OutfitChanged(world)) { // an outfit piece changed in Play: take the new pieces
                         firstPersonBody.Stop(world);
+                        firstPersonBody.SetAssets(&assets);
                         firstPersonBody.Start(world, player);
                     }
                     firstPersonBody.Tick(world, player, player.Cam, gameDt);
@@ -3259,12 +3261,12 @@ int main(int argc, char** argv) {
                     PROFILE_SCOPE("FP Arms + World Gun");
                     // The body's hands onto the arms rig's, now that the rig is seated.
                     // Split poses: the body's world twins reach the world gun, placed off the first-person one.
-                    FirstPersonWorldGunInput worldGun;
-                    const bool haveGun = firstPersonPresentation.IsActive() && firstPersonPresentation.WorldGunInput(worldGun);
+                    ThirdPersonWeaponFrame worldGun;
+                    const bool haveGun = firstPersonPresentation.IsActive() && firstPersonPresentation.ThirdPersonFrame(worldGun);
                     firstPersonBody.ArmsLateUpdate(world, firstPersonPresentation.ArmsEntity(),
                                                    firstPersonPresentation.ViewModelFov(), gameDt, &player.Cam, haveGun ? &worldGun : nullptr);
                     if (firstPersonPresentation.IsActive())
-                        firstPersonPresentation.PlaceWorldWeapon(world, firstPersonBody.SplitPoses(), firstPersonBody.WorldGunShift());
+                        firstPersonPresentation.PlaceWorldWeapon(world, firstPersonBody.SplitPoses(), firstPersonBody.WorldGunDelta());
                     if (weaponTest) weaponTest->AfterPose(world, firstPersonBody, firstPersonPresentation);
                     // This frame's rounds, down the bore from the muzzle: a hole where each struck.
                     for (const FirstPersonPresentation::ShotHit& hit : firstPersonPresentation.TakeShotHits()) {

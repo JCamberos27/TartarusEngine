@@ -87,6 +87,8 @@ public:
     bool Done() const { return m_Step >= m_Steps.size(); }
     // The gait probe (STOCK_PROBE_GAIT): starts on the scene's most open floor, the player's body unclothed.
     bool GaitProbe() const { return m_GaitProbe; }
+    // The gait and hold probes start on the open floor (room to walk every way, nothing in the shots).
+    bool OpenFloor() const { return m_GaitProbe || m_HoldProbe; }
     int Failures() const { return m_Failures; }
     int Checks() const { return m_Checks; }
     // With --smoke-shots: a name when the Game view should be saved this frame (every 10th frame
@@ -164,6 +166,12 @@ private:
     // STOCK_PROBE_GAIT=1: walk, jog and sprint every way and a crouch walk, the torso measured against the hips on the
     // world body (what every other view shows) and on the player's own (Spine Stability steadies it) - [Gait] lines.
     void BuildGaitProbe();
+    // STOCK_PROBE_3P=1: the third-person hold (ThirdPersonWeapon) - idle, aim up and down, crouched, jogging, sprinting,
+    // firing, a reload, a holster and draw - the whole world body from three sides, and [Hold] lines: each hand's gap to
+    // its place on the gun and the bore off the aim.
+    void BuildHoldProbe();
+    bool m_HoldProbe = false;
+    float m_HoldGap[2] = {0.0f, 0.0f}, m_HoldBore = 0.0f;
     bool m_GaitProbe = false;
     struct GaitStats {
         int Frames = 0;
