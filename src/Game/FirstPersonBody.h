@@ -99,8 +99,9 @@ public:
     bool SplitPoses() const { return !m_Twins.empty(); }
 
     // Diagnostics (--stock-probe): a standard bone's world position as last posed - from the arms
-    // piece when it has the bone (the arms after ArmsLateUpdate), else the driver.
-    bool BoneWorld(const World& world, const std::string& standard, glm::vec3& out) const;
+    // piece when it has the bone (the arms after ArmsLateUpdate), else the driver. The world twins' (what every
+    // other view shows) when poses are split, unless `worldTwins` is false: then the pieces' (the player's own view).
+    bool BoneWorld(const World& world, const std::string& standard, glm::vec3& out, bool worldTwins = true) const;
     // Each foot's height above the body's feet as last posed (m; [0] left, [1] right), for the footsteps
     // (FoleyAudio). False with no body or no foot bones.
     bool FootHeights(const World& world, float (&out)[2]) const;
@@ -140,6 +141,14 @@ private:
         int Clips[2] = {-2, -2}; // rebuilt if an idle clip becomes available after startup
     };
     std::map<const Model*, SpineReference> m_SpineReferences;
+    // Spine Stability steadies the player's own view only. Per piece, this frame's spine locals as the clips had them
+    // (Authored) and as stabilized (Stabilized); SyncTwins gives the world twins the authored spine plus whatever the
+    // later passes (spine aim, twist, shoulder line) added, so every other view sees the whole gait.
+    struct StabilizedSpine {
+        std::vector<int> Bones;
+        std::vector<LocalTRS> Authored, Stabilized;
+    };
+    std::vector<StabilizedSpine> m_StabilizedSpine; // in step with m_Models; empty Bones = not stabilized this frame
     void ApplySpineAim(const Camera& camera, float amount, float twist);
     // Turns the chest by `modelDelta` (model space), spread evenly down the spine bones, on every piece.
     void ApplySpineRotation(const glm::quat& modelDelta);

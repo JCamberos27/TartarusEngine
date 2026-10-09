@@ -85,6 +85,8 @@ public:
     // Once per Play frame after the cases have moved: notes this frame's ejections and the pile.
     void OnCasings(const ShellCasings& casings);
     bool Done() const { return m_Step >= m_Steps.size(); }
+    // The gait probe (STOCK_PROBE_GAIT): starts on the scene's most open floor, the player's body unclothed.
+    bool GaitProbe() const { return m_GaitProbe; }
     int Failures() const { return m_Failures; }
     int Checks() const { return m_Checks; }
     // With --smoke-shots: a name when the Game view should be saved this frame (every 10th frame
@@ -159,4 +161,16 @@ private:
     void BuildProbe();
     void BuildPoseProbe(); // STOCK_PROBE_POSE=1: the third-person body standing / crouched, at the hip and on the sights
     void BuildSprintProbe(); // STOCK_PROBE_SPRINT=1: walk -> sprint -> walk, capturing entry/exit
+    // STOCK_PROBE_GAIT=1: walk, jog and sprint every way and a crouch walk, the torso measured against the hips on the
+    // world body (what every other view shows) and on the player's own (Spine Stability steadies it) - [Gait] lines.
+    void BuildGaitProbe();
+    bool m_GaitProbe = false;
+    struct GaitStats {
+        int Frames = 0;
+        float Lean = 0.0f, Side = 0.0f, Twist = 0.0f, Pelvis = 0.0f; // sums: trunk lean along / across the travel, chest-on-hips yaw, pelvis height (deg, m)
+        float LeanMin = 1e9f, LeanMax = -1e9f, TwistMin = 1e9f, TwistMax = -1e9f;
+    };
+    GaitStats m_Gait[2]; // the player's own view (pieces), the world twins
+    std::string m_GaitSegment; // measured while set (after the segment settles)
+    glm::vec2 m_GaitTravel{0.0f};
 };

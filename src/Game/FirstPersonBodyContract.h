@@ -73,6 +73,10 @@ float LocomotionSpineWeight(const AnimatorControllerComponent& animator, float& 
 void BlendLocomotionSpine(IK::Pose& pose, const std::vector<int>& parents, const std::array<int, 5>& bones,
                          const std::vector<glm::mat4>& stand, const std::vector<glm::mat4>& crouch,
                          float crouchWeight, float stability, float crouchDrop = 0.0f);
+// Undoes BlendLocomotionSpine on `bones` of a pose posed further since: each bone's local is the clips' own
+// (`authored`) with whatever was added after stabilizing (`stabilized` to the pose's current) kept on top.
+void RestoreAuthoredSpine(IK::Pose& pose, const std::vector<int>& bones, const std::vector<LocalTRS>& authored,
+                          const std::vector<LocalTRS>& stabilized);
 inline constexpr const char* kBoneUpperArm[2] = {"upperarm_l", "upperarm_r"};
 inline constexpr const char* kBoneLowerArm[2] = {"lowerarm_l", "lowerarm_r"};
 inline constexpr const char* kBoneHand[2] = {"hand_l", "hand_r"};
