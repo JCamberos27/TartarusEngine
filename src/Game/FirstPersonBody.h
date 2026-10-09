@@ -6,6 +6,7 @@
 
 #include "FirstPersonBodyContract.h"
 #include "IK.h" // IK::SpineDistribution
+#include "ThirdPersonLocomotion.h"
 #include "ThirdPersonWeapon.h"
 
 #include <cstdint>
@@ -99,6 +100,7 @@ public:
     // Where the world gun is placed off the first-person one this frame (world, rigid); identity with no split.
     const glm::mat4& WorldGunDelta() const { return m_WorldGunDelta; }
     const ThirdPersonWeapon& ThirdPerson() const { return m_ThirdPerson; }
+    const ThirdPersonLocomotion& ThirdPersonLegs() const { return m_ThirdLoco; }
     // The assets the third-person clips load through (set before Start).
     void SetAssets(AssetLibrary* assets) { m_Assets = assets; }
     bool SplitPoses() const { return !m_Twins.empty(); }
@@ -272,6 +274,10 @@ private:
     std::vector<glm::vec3> m_HeadScratch; // the head turned by the cheek weld, checked against the gun // ArmsLateUpdate's, kept so the frame doesn't allocate
     glm::mat4 m_WorldGunDelta{1.0f};   // the world gun off the first-person one (world, rigid)
     ThirdPersonWeapon m_ThirdPerson;   // the world twins' hold
+    ThirdPersonLocomotion m_ThirdLoco; // ... and their legs
+    float m_LocoYaw = 0.0f;            // the body's heading at the last update (the twins' turn rate)
+    bool m_HaveLocoYaw = false;
+    void ThirdPersonLocomotionUpdate(World& world, float dt);
     AssetLibrary* m_Assets = nullptr;
     float m_HoldTime = 0.0f;           // seconds of Play, for the hold's idle loops
     std::map<std::pair<const Model*, const Model*>, std::vector<std::pair<int, int>>> m_TwinLinks; // driver twin -> twin node pairs
