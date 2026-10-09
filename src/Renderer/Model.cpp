@@ -1,4 +1,5 @@
 #include "Model.h"
+#include "AnimRetarget.h"
 #include "SkinHideBuffer.h"
 #include "MaterialAsset.h"
 #include "ShaderAsset.h"
@@ -1284,7 +1285,7 @@ const AnimationClip* Model::ClipAt(int i, const std::vector<int>** nodeChannel) 
     const AnimationClip& clip = x.Source->Animations[x.SourceIndex];
     if (clip.Channels.size() != x.SourceChannels) return nullptr;    // the source was reimported since
     *nodeChannel = &x.NodeChannel;
-    return &clip;
+    return x.Baked ? x.Baked.get() : &clip;
 }
 
 LocalTRS Model::SampleClipNode(int clipIndex, const AnimationClip& clip, int channel, int node, float ticks) const {
@@ -1346,6 +1347,7 @@ int Model::AttachClip(const Model& source, int sourceIndex, const std::string& r
         std::weak_ptr<SharedData> Target, Source; // a freed model's address can be reused: these say it's still the same
         std::vector<int> NodeChannel;
         std::vector<glm::quat> Correction;
+        std::shared_ptr<const AnimationClip> Baked;
         int Matched = 0;
     };
     static std::mutex s_MatchMutex;
@@ -1361,12 +1363,39 @@ int Model::AttachClip(const Model& source, int sourceIndex, const std::string& r
             }
             x.NodeChannel = it->second.NodeChannel;
             x.Correction = it->second.Correction;
+            x.Baked = it->second.Baked;
+            m_ExternalClips.push_back(std::move(x));
+            return (int)m_D->Animations.size() + (int)m_ExternalClips.size() - 1;
+        }
+    }
+    int matched = 0;
+    auto remember = [&]() {
+        std::lock_guard<std::mutex> lock(s_MatchMutex);
+        if (s_Matches.size() > 4096) s_Matches.clear();
+        Match& mt = s_Matches[mkey];
+        mt.Target = m_D;
+        mt.Source = source.m_D;
+        mt.NodeChannel = x.NodeChannel;
+        mt.Correction = x.Correction;
+        mt.Baked = x.Baked;
+        mt.Matched = matched;
+    };
+    // A UE4 mannequin pack on a UE5 rig: different spine counts, rest poses and proportions - baked onto this
+    // skeleton (AnimRetarget) rather than copying locals by name.
+    if (RetargetIsUe4ToUe5(source.m_D->Nodes, m_D->Nodes)) {
+        auto baked = std::make_shared<AnimationClip>();
+        if (RetargetBakeClip(source.m_D->Nodes, clip, m_D->Nodes, *baked, x.NodeChannel)) {
+            matched = (int)baked->Channels.size();
+            x.Baked = std::move(baked);
+            Log::Info("Animation: '" + ref + "' retargeted from a UE4 mannequin onto '" +
+                      std::filesystem::u8path(m_Path).filename().u8string() + "' (" + std::to_string(matched) + " bones baked).",
+                      LogContext::Asset(m_Path));
+            remember();
             m_ExternalClips.push_back(std::move(x));
             return (int)m_D->Animations.size() + (int)m_ExternalClips.size() - 1;
         }
     }
     x.NodeChannel.assign(m_D->Nodes.size(), -1);
-    int matched = 0;
     {
         std::unordered_map<std::string, int> byName;
         byName.reserve(m_D->Nodes.size());
@@ -1377,16 +1406,6 @@ int Model::AttachClip(const Model& source, int sourceIndex, const std::string& r
                 ++matched;
             }
     }
-    auto remember = [&]() {
-        std::lock_guard<std::mutex> lock(s_MatchMutex);
-        if (s_Matches.size() > 4096) s_Matches.clear();
-        Match& mt = s_Matches[mkey];
-        mt.Target = m_D;
-        mt.Source = source.m_D;
-        mt.NodeChannel = x.NodeChannel;
-        mt.Correction = x.Correction;
-        mt.Matched = matched;
-    };
     if (matched == 0) {
         remember();
         // A bare "-1" at the call site made mixed FBX exports nearly impossible to diagnose.
