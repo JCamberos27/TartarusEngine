@@ -5,6 +5,7 @@
 #include "Scripting/WeaponAttachments.h"
 #include "FirstPersonAnimation.h"
 #include "FirstPersonBody.h" // FirstPersonStockLockInput
+#include "ThirdPersonWeapon.h"
 #include "ShellCasings.h"      // CasingSpawn
 #include "MuzzleEffects.h"
 
@@ -217,10 +218,13 @@ public:
     // Split poses: this frame's first-person gun and how the world copy is placed off it, for
     // FirstPersonBody::ArmsLateUpdate. False with no gun in hand.
     bool WorldGunInput(FirstPersonWorldGunInput& out) const;
+    // The first-person gun, rig hands and camera this frame, and what the gun is doing, for the third-person hold
+    // (ThirdPersonWeapon). False with no gun in hand.
+    bool ThirdPersonFrame(ThirdPersonWeaponFrame& out) const;
     // Split poses: the world copy of the gun (every view but the player's camera, and the shadow) at the
-    // first-person gun moved by `shift`; the first-person gun is then the player's camera's only. Off
-    // (no body to split for): the one gun shows everywhere, as before.
-    void PlaceWorldWeapon(World& world, bool split, const glm::vec3& shift);
+    // first-person gun moved by `worldFromFirstPerson` (rigid, world); the first-person gun is then the player's
+    // camera's only. Off (no body to split for): the one gun shows everywhere, as before.
+    void PlaceWorldWeapon(World& world, bool split, const glm::mat4& worldFromFirstPerson);
     // The barrel and sight line found this Play (the muzzle, and the sights' measurement while aiming).
     const FirstPersonBarrelReport& BarrelReport() const { return m_Barrel; }
     // Where rounds leave from this frame, world space: the muzzle and the (zeroed) bore.
@@ -272,6 +276,7 @@ private:
     void Eject();
     int m_PendingEjects = 0;
     int m_EjectedTotal = 0;
+    int m_ShotsTotal = 0; // rounds fired this Play (ThirdPersonFrame)
     glm::vec3 m_LastEjectPoint{0.0f}, m_LastEjectThrow{0.0f};
     std::vector<CasingSpawn> m_Ejections;
     // The weapon root as SEEN this frame (world space, through the view-model FOV stretch): where
@@ -402,7 +407,7 @@ private:
     float m_AnchorWeight = 0.0f; // this frame's (for the weapon test)
     glm::mat4 m_ArmsWorld{1.0f}, m_WeaponWorld{1.0f}, m_View{1.0f}; // PlaceRigs': the arms entity's pose and the camera's view
     entt::entity m_WorldWeapon = entt::null; // split poses: the gun every other view sees
-    glm::vec3 m_WorldWeaponShift{0.0f};      // ... placed this far off the first-person one
+    glm::mat4 m_WorldWeaponDelta{1.0f};      // ... placed this far off the first-person one
     mutable std::vector<std::pair<int, int>> m_StockVerts; // StockWorld's butt vertices (mesh, vertex), found once per model
     mutable const Model* m_StockModel = nullptr;
     mutable glm::vec3 m_StockBore{0.0f};                     // ... along this bore (root space)

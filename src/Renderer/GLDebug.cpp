@@ -1,3 +1,4 @@
+#include <unordered_map>
 #include "GLDebug.h"
 #include "Log.h"
 #include "gl.h" // glEnable (core; already in the loader) — the debug enums below are passed as plain GLenums
@@ -58,6 +59,14 @@ void __stdcall OnGlMessage(GLenum /*source*/, GLenum type, GLuint id, GLenum sev
 
     if (type == kTypeError || severity == kSeverityHigh) gErrorCount.fetch_add(1, std::memory_order_relaxed);
 
+    // The same message every draw (an unbound sampler unit) flooded the log with hundreds of thousands of lines and
+    // slowed the smoke runs to a crawl: each id is logged its first few times, then once more to say it's being muted.
+    static std::unordered_map<GLuint, int> s_Seen;
+    const int seen = ++s_Seen[id];
+    if (severity != kSeverityHigh && type != kTypeError && seen > 3) {
+        if (seen == 4) Log::Warn("GL (" + std::to_string(id) + ") repeats - muted for the rest of the run.");
+        return;
+    }
     std::string line = "GL[" + std::string(SeverityText(severity)) + "] (" + std::to_string(id) + ") " +
                        (message ? message : "(no message)");
     if (severity == kSeverityHigh) Log::Error(line);

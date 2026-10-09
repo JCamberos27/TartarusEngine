@@ -6,6 +6,7 @@
 
 #include "FirstPersonBodyContract.h"
 #include "IK.h" // IK::SpineDistribution
+#include "ThirdPersonWeapon.h"
 
 #include <cstdint>
 #include <functional>
@@ -14,6 +15,7 @@
 #include <string>
 #include <vector>
 
+class AssetLibrary;
 class Camera;
 class Model;
 class Player;
@@ -89,13 +91,16 @@ public:
     //
     // Split poses (Weapon Arms): the body's pieces are what the player's own camera shows, posed onto the
     // rig's hands (first person, exactly as the animations have it). Each piece has a world twin - the same
-    // model, its own pose - which every other view and every shadow shows: the same animations, the arms
-    // reaching the world gun (`gun`: the first-person gun moved by WorldGunShift) instead. Works for any
-    // body and outfit: the twins are made from whatever pieces the body has at Start.
+    // model, its own pose - which every other view and every shadow shows: the third-person hold
+    // (ThirdPersonWeapon) - a rifle stance over the locomotion, the world gun in its right hand, both hands on
+    // it as the rig's are on the first-person gun (`gun`: this frame's first-person gun, rig and state).
     void ArmsLateUpdate(World& world, entt::entity weaponArms, float viewModelFov, float dt, const Camera* camera = nullptr,
-                        const FirstPersonWorldGunInput* gun = nullptr);
-    // How far the world gun sits off the first-person one this frame (world, m); zero with no split.
-    glm::vec3 WorldGunShift() const { return m_WorldGunShift; }
+                        const ThirdPersonWeaponFrame* gun = nullptr);
+    // Where the world gun is placed off the first-person one this frame (world, rigid); identity with no split.
+    const glm::mat4& WorldGunDelta() const { return m_WorldGunDelta; }
+    const ThirdPersonWeapon& ThirdPerson() const { return m_ThirdPerson; }
+    // The assets the third-person clips load through (set before Start).
+    void SetAssets(AssetLibrary* assets) { m_Assets = assets; }
     bool SplitPoses() const { return !m_Twins.empty(); }
 
     // Diagnostics (--stock-probe): a standard bone's world position as last posed - from the arms
@@ -161,7 +166,9 @@ private:
                      const std::vector<std::shared_ptr<Model>>* models = nullptr, const IK::SpineDistribution* dist = nullptr);
     IK::SpineDistribution m_Spine; // the body component's Spine fields, as of the last update
     void MakeTwins(World& world);
-    void SyncTwins(World& world); // each twin onto its piece: transform, and the pose as posed so far
+    // Each twin onto its piece: transform, and the pose as posed so far. `authoredSpine`: the clips' own spine
+    // (the third-person hold layers its stance and aim on it), else theirs plus what the passes after added.
+    void SyncTwins(World& world, bool authoredSpine = false);
     // Rigid head wear's twins (a balaclava, glasses) onto the head twin's head bone, once the twins are posed.
     void PlaceHeadAttachedTwins(World& world);
     void ApplyFootIK(World& world, const FirstPersonBodyComponent& cfg, float dt);
@@ -263,7 +270,11 @@ private:
     void SkinnedPoints(const World& world, BodyRegion region, std::vector<glm::vec3>& points, std::vector<int>* pieceOf = nullptr) const;
     std::vector<glm::vec3> m_HeadPointBuffer, m_TorsoPointBuffer;
     std::vector<glm::vec3> m_HeadScratch; // the head turned by the cheek weld, checked against the gun // ArmsLateUpdate's, kept so the frame doesn't allocate
-    glm::vec3 m_WorldGunShift{0.0f};   // the world gun off the first-person one (world, eased)
+    glm::mat4 m_WorldGunDelta{1.0f};   // the world gun off the first-person one (world, rigid)
+    ThirdPersonWeapon m_ThirdPerson;   // the world twins' hold
+    AssetLibrary* m_Assets = nullptr;
+    float m_HoldTime = 0.0f;           // seconds of Play, for the hold's idle loops
+    std::map<std::pair<const Model*, const Model*>, std::vector<std::pair<int, int>>> m_TwinLinks; // driver twin -> twin node pairs
     // The twins' own Arm Steadiness / elbow state (the pieces' is m_ShoulderAnchor ... m_ElbowAim).
     glm::vec3 m_WorldShoulderAnchor[2] = {glm::vec3(0.0f), glm::vec3(0.0f)};
     bool m_WorldHaveShoulderAnchor[2] = {false, false};
