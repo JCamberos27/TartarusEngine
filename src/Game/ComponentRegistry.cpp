@@ -616,10 +616,6 @@ void RegisterEngineComponents() {
         m.Fields.push_back({ "Elbow Max Rate", T::Float, TARTARUS_REFLECT_FIELD(FirstPersonBodyComponent, ElbowMaxRate), 10.0f,
               "The fastest (degrees per second) a player-body elbow may swing toward its target.", 30.0f, 3600.0f });
         m.Fields.back().Group = "Arms";
-        m.Fields.push_back({ "3P Upper Body From 1P", T::Bool, TARTARUS_REFLECT_FIELD(FirstPersonBodyComponent, ThirdPersonFirstPersonArms), 0.0f,
-              "What every other view sees the arms do: on, the first-person weapon clips 1:1 (the rig's arm shapes, the hands on\n"
-              "its hands, the gun where the first-person one is); off, the third-person rifle clips' stance and aim." });
-        m.Fields.back().Group = "Arms";
         m.Fields.push_back({ "NPC Turn Threshold", T::Float, TARTARUS_REFLECT_FIELD(FirstPersonBodyComponent, NpcTurnThreshold), 1.0f,
               "NPCs: a still body this many degrees off its aim turns on the spot. NPCs copy this from the scene's player body when Play starts.", 0.0f, 180.0f });
         m.Fields.back().Group = "NPC Body";

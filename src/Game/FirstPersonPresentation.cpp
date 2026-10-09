@@ -1060,42 +1060,6 @@ bool FirstPersonPresentation::WorldGunInput(FirstPersonWorldGunInput& out) const
     return true;
 }
 
-bool FirstPersonPresentation::ThirdPersonFrame(ThirdPersonWeaponFrame& out) const {
-    out = ThirdPersonWeaponFrame{};
-    if (!m_Equipped || !m_World || m_Arms == entt::null || !m_World->Registry.valid(m_Arms)) return false;
-    const auto* rc = m_World->Registry.try_get<RenderableComponent>(m_Arms);
-    const Model* rig = rc ? rc->ModelRef.get() : nullptr;
-    if (!rig) return false;
-    auto rigid = [](const glm::mat4& m) {
-        glm::mat4 r(1.0f);
-        for (int c = 0; c < 3; ++c) r[c] = glm::vec4(glm::normalize(glm::vec3(m[c])), 0.0f);
-        r[3] = m[3];
-        return r;
-    };
-    const glm::mat4 rigWorld = m_World->ComposeWorldTransform(m_Arms);
-    static const char* const kHands[2] = {"hand_l", "hand_r"};
-    for (int s = 0; s < 2; ++s) {
-        glm::mat4 h(1.0f);
-        if (!rig->NodeTransform(kHands[s], h)) return false;
-        out.Hand[s] = rigid(rigWorld * h);
-    }
-    out.Gun = rigid(m_WeaponWorld);
-    out.Camera = rigid(glm::inverse(m_View));
-    glm::vec3 butt, forward;
-    if (StockWorld(butt, forward)) out.Bore = forward;
-    else out.Bore = -glm::vec3(out.Camera[2]);
-    out.Rig = rig;
-    const std::string& state = CurrentState();
-    auto named = [&](const char* part) { return state.find(part) != std::string::npos; };
-    out.Sprint = named("Sprint");
-    out.Action = HasTag(K::kTagReload) || HasTag(K::kTagBusy) || HasTag(K::kTagCycling) || named("Draw") || named("Holster") ||
-                 named("Equip") || named("Melee") || named("Inspect");
-    out.Ready = (HasTag(K::kTagIdle) || HasTag(K::kTagReady)) && m_Zoom < 0.05f && !out.Sprint;
-    out.Shots = m_ShotsTotal;
-    out.Valid = true;
-    return true;
-}
-
 void FirstPersonPresentation::PlaceWorldWeapon(World& world, bool split, const glm::mat4& worldFromFirstPerson) {
     auto& reg = world.Registry;
     const bool haveWeapon = m_Weapon != entt::null && reg.valid(m_Weapon);
@@ -1566,7 +1530,6 @@ bool FirstPersonPresentation::Fire() {
 }
 
 void FirstPersonPresentation::CommitShot(bool ads, bool cycleBolt) {
-    ++m_ShotsTotal;
     const auto mode = m_FullAuto ? RecoilFireMode::Auto :
         m_Set.Gameplay.BurstRounds > 1 ? RecoilFireMode::Burst : RecoilFireMode::Semi;
     m_Procedural.OnShot(m_Set.Procedural, ads, cycleBolt, m_Set.Gameplay.RoundsPerMinute, mode,
