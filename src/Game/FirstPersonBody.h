@@ -6,6 +6,7 @@
 
 #include "FirstPersonBodyContract.h"
 #include "IK.h" // IK::SpineDistribution
+#include "ModelVertex.h" // MAX_BONE_INFLUENCE
 
 #include <cstdint>
 #include <functional>
@@ -94,11 +95,18 @@ public:
     // Stability, which steadies the player's own camera.
     void ArmsLateUpdate(World& world, entt::entity weaponArms, float viewModelFov, float dt, const Camera* camera = nullptr);
     bool SplitPoses() const { return !m_Twins.empty(); }
+    // Where the world gun is off the first-person one this frame (rigid, world): the world body's chest from the
+    // player's own (Spine Stability steadies only the latter). Identity with no split.
+    const glm::mat4& WorldGunDelta() const { return m_WorldGunDelta; }
     // What the hands are doing, for the idle fidgets: a gun held (the ready stance's own fidgets) and busy with it
     // (aiming, or just fired: no fidget). Set each frame before Tick.
     void SetHands(bool armed, bool busy) { m_Armed = armed; m_Busy = busy; }
     // Diagnostics (--stock-probe): how far each world twin hand ended from the rig's ([0] left, [1] right), m.
     float TwinHandGap(int side) const { return m_TwinHandGap[side & 1]; }
+    // ... and how far each world hand is rolled about its forearm (degrees), and what of that the forearm's twist
+    // bones leave at the wrist.
+    float WristRoll(int side) const { return m_WristRoll[side & 1]; }
+    float WristResidual(int side) const { return m_WristResidual[side & 1]; }
 
     // Diagnostics (--stock-probe): a standard bone's world position as last posed - from the arms
     // piece when it has the bone (the arms after ArmsLateUpdate), else the driver. The world twins' (what every
@@ -230,6 +238,8 @@ private:
         glm::vec2 PivotDir{0.0f, 1.0f}, StepDir{0.0f, 1.0f};
         bool PivotReversed = false;
     } m_Loco;
+    float m_RateTrim = 1.0f;       // the gait loop's play rate trim (its clips' travel onto the capsule's)
+    float m_GaitClipSpeed = -1.0f; // the gait loop's own travel (m/s) for stride warp; < 0 = not in a settled loop
     bool m_Armed = false, m_Busy = false; // a gun in hand; aiming or just fired (SetHands)
     std::uint32_t m_Random = 0x9E3779B9u;
     bool m_Still = false;          // standing still at the last Tick (the view's turn is then limited)
@@ -254,7 +264,7 @@ private:
     float MeshGap(const World& world, BodyRegion region, const glm::vec3& a, const glm::vec3& b, std::string* piece, float* along) const;
     // Each chosen vertex as SkinnedPoints needs it every frame: bind position and its influences with
     // weights already normalized, bones as indices into the few this region uses (Bones).
-    struct RegionSkinPoint { glm::vec3 Pos; int Count; std::uint16_t Bone[4]; float Weight[4]; };
+    struct RegionSkinPoint { glm::vec3 Pos; int Count; std::uint16_t Bone[MAX_BONE_INFLUENCE]; float Weight[MAX_BONE_INFLUENCE]; };
     struct RegionSkin { std::vector<int> Bones; std::vector<RegionSkinPoint> Points; };
     mutable std::map<const Model*, RegionSkin> m_HeadVerts, m_TorsoVerts;
     // Per model: does it skin anything the arms' solve moves (under its top spine bone or the clavicles)?
@@ -273,6 +283,16 @@ private:
     void SkinnedPoints(const World& world, BodyRegion region, std::vector<glm::vec3>& points, std::vector<int>* pieceOf = nullptr) const;
     std::vector<glm::vec3> m_TorsoPointBuffer; // ArmsLateUpdate's, kept so the frame doesn't allocate
     float m_TwinHandGap[2] = {0.0f, 0.0f};
+    // The arms' twist bones (ArmTwist), per model: the bind pose, the arm bones and each segment's twist bones.
+    struct TwistRig {
+        IK::Pose Bind;
+        int Upper[2] = {-1, -1}, Lower[2] = {-1, -1}, Hand[2] = {-1, -1};
+        std::vector<IK::TwistBone> UpperTwist[2], LowerTwist[2];
+    };
+    std::map<const Model*, TwistRig> m_TwistRigs;
+    float m_WristRoll[2] = {0.0f, 0.0f}, m_WristResidual[2] = {0.0f, 0.0f}; // the world body's, degrees (diagnostics)
+    void ArmTwist(const std::vector<std::shared_ptr<Model>>& models, bool twins);
+    glm::mat4 m_WorldGunDelta{1.0f};
     // The twins' own Arm Steadiness / elbow state (the pieces' is m_ShoulderAnchor ... m_ElbowAim).
     glm::vec3 m_WorldShoulderAnchor[2] = {glm::vec3(0.0f), glm::vec3(0.0f)};
     bool m_WorldHaveShoulderAnchor[2] = {false, false};

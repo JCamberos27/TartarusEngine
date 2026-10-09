@@ -1920,7 +1920,7 @@ void TestFirstPersonBodyController() {
     CHECK(c.Layers[0].States.size() == 28 && c.Parameters.size() == 38 && c.Layers[0].Transitions.size() == 211);
     // The gait plays at PlayRate (the body's, so the feet keep up with a player faster than the clips).
     CHECK(c.Layers[0].States[c.Layers[0].FindState("Locomotion")].SpeedParam == "PlayRate" &&
-          c.Layers[0].States[c.Layers[0].FindState("CrouchLoco")].SpeedParam.empty());
+          c.Layers[0].States[c.Layers[0].FindState("CrouchLoco")].SpeedParam == "PlayRate");
     CHECK(c.Layers[0].DefaultState == "Locomotion" && c.Layers[0].FindState("CrouchStop") >= 0);
     // The starts, stops and pivots are distance matched to the capsule's travel; the loops aren't.
     using DM = AnimatorController::State::DistanceMode;

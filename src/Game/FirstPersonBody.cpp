@@ -792,6 +792,10 @@ void FirstPersonBody::PlaceHeadAttachedTwins(World& world) {
     }
 }
 
+namespace {
+constexpr float kRateTrimMin = 0.8f, kRateTrimMax = 1.5f; // the gait loop's rate trim (Tick): never further off the clips' own
+} // namespace
+
 void FirstPersonBody::BeforePlayerMove(Player& player, Camera& camera) {
     camera.Position -= m_CameraApplied;
     m_CameraApplied = glm::vec3(0.0f);
@@ -943,12 +947,27 @@ void FirstPersonBody::Tick(World& world, const Player& player, const Camera& cam
     m_Still=f.Still;
     m_Move={f.Move.x,f.Move.y};m_LastDir={f.LastDir.x,f.LastDir.y};m_Grounded=player.Grounded;m_InLand=ac.InState(FPBody::kStateLand);m_MaxTurnRate=cfg.MaxTurnRate;m_TurnThreshold=cfg.TurnThreshold;
     world.SetWorldPose(m_Body,m_Feet,YawRotation(m_Yaw));
-    ac.SetFloat(FPBody::kPlayRate,f.PlayRate);if(f.SetTurnAngle)ac.SetFloat(FPBody::kTurnAngle,f.TurnAngle);ac.SetBool(FPBody::kTurning,f.Turning!=0);ac.SetBool(FPBody::kMoving,f.Moving!=0);
+    if(f.SetTurnAngle)ac.SetFloat(FPBody::kTurnAngle,f.TurnAngle);ac.SetBool(FPBody::kTurning,f.Turning!=0);ac.SetBool(FPBody::kMoving,f.Moving!=0);
     if(f.Triggers&4){ac.SetFloat(FPBody::kStartX,f.StartDir.x);ac.SetFloat(FPBody::kStartY,f.StartDir.y);ac.SetFloat(FPBody::kStartGait,f.StartGait);ac.SetFloat(FPBody::kStartTurn,f.StartTurn);ac.SetFloat(FPBody::kStartTurnAmount,f.StartTurnAmount);}
     if(f.Triggers&24){ac.SetFloat(FPBody::kStopX,f.StopDir.x);ac.SetFloat(FPBody::kStopY,f.StopDir.y);ac.SetFloat(FPBody::kStopGait,f.StopGait);}
     if(f.Triggers&64){ac.SetFloat(FPBody::kPivotX,f.PivotDir.x);ac.SetFloat(FPBody::kPivotY,f.PivotDir.y);ac.SetFloat(FPBody::kPivotGait,f.PivotGait);}
     if(f.Triggers&128){ac.SetFloat(FPBody::kStepX,f.StepDir.x);ac.SetFloat(FPBody::kStepY,f.StepDir.y);}
     if(f.Triggers&256)ac.SetFloat(FPBody::kFidgetIndex,f.FidgetIndex);
+    // The gait loop's own ground speed (stride warp's reference): what the animator's clips travelled last frame, exactly as
+    // played (blend, play rate, length). Only in a settled loop; a start, stop or fade is left to the feet's estimate.
+    // Rate trim: a blend's clips share one cycle, so a walk blended with the idle's long loop plays slow and its feet fall
+    // behind the capsule. The loop's rate is eased until what its clips travel is what the capsule travels.
+    {
+        const bool loop = !ac.InTransition && (ac.InState(FPBody::kStateLocomotion) || ac.InState(FPBody::kStateCrouchLoco));
+        const float travel = dt > 1e-5f ? glm::length(glm::vec2(ac.RootMotion.DeltaPosition.x, ac.RootMotion.DeltaPosition.z)) / dt : 0.0f;
+        const float capsule = glm::length(glm::vec2(m_GroundVelocity.x, m_GroundVelocity.z));
+        const bool sprinting = ac.InState(FPBody::kStateSprint) && !ac.InTransition;
+        m_GaitClipSpeed = (loop || sprinting) && travel > 0.1f ? travel : -1.0f;
+        float trim = 1.0f;
+        if (loop && travel > 0.3f && capsule > 0.3f && m_Grounded) trim = std::clamp(m_RateTrim * capsule / travel, kRateTrimMin, kRateTrimMax);
+        m_RateTrim += (trim - m_RateTrim) * Follow(dt, 0.15f);
+        ac.SetFloat(FPBody::kPlayRate, f.PlayRate * m_RateTrim);
+    }
     ac.SetFloat(FPBody::kStartDistance,f.StartDistance);ac.SetFloat(FPBody::kStopDistance,f.StopDistance);ac.SetFloat(FPBody::kPivotDistance,f.PivotDistance);ac.SetFloat(FPBody::kSprintRate,f.SprintRate);
     const char* triggers[]{FPBody::kCrouchDown,FPBody::kCrouchUp,FPBody::kStart,FPBody::kStop,FPBody::kStopRun,FPBody::kJump,FPBody::kPivot,FPBody::kStep,FPBody::kFidget};for(int i=0;i<9;++i)if(f.Triggers&(1<<i))fireTrigger(ac,triggers[i]);
     ac.SetFloat(FPBody::kMoveX,m_Move.x);ac.SetFloat(FPBody::kMoveY,m_Move.y);ac.SetFloat(FPBody::kSpeed,glm::length(m_Move));ac.SetBool(FPBody::kSprint,f.Sprint!=0);ac.SetBool(FPBody::kGrounded,player.Grounded);ac.SetBool(FPBody::kCrouched,player.Crouched);ac.SetBool(FPBody::kAirborne,f.Airborne!=0);
@@ -1318,7 +1337,6 @@ void FirstPersonBody::SkinnedPoints(const World& world, BodyRegion region, std::
                 verts.resize(n);
             }
             // Packed for the per-frame skin below: weights normalized, bones remapped to the ones used.
-            static_assert(MAX_BONE_INFLUENCE == 4, "RegionSkinPoint holds four influences");
             RegionSkin skin;
             std::unordered_map<int, int> slot;
             skin.Points.reserve(verts.size());
@@ -1450,6 +1468,7 @@ void FirstPersonBody::ApplyFootIK(World& world, const FirstPersonBodyComponent& 
         in.Velocity = m_GroundVelocity;
         in.PlantHeight = cfg.FootPlantedHeight;
         in.Dt = dt;
+        in.ClipSpeed = m_GaitClipSpeed;
         for (int s = 0; s < 2; ++s) { in.Foot[s] = footAnim[s]; in.Height[s] = footAnim[s].y - m_Feet.y; }
         const int pelvisNode = drv.NodeIndex(Bone(FPBody::kBonePelvis));
         const int thighNode = drv.NodeIndex(Bone(FPBody::kBoneThigh[0])), calfNode = drv.NodeIndex(Bone(FPBody::kBoneCalf[0]));
@@ -1705,6 +1724,58 @@ bool FirstPersonBody::SkinsUpperBody(const Model& m) {
     return skins;
 }
 
+// The arms' twist bones after the arm solve: each forearm's twist bones carry the hand's roll by how far down the
+// forearm they sit, each upper arm's undo its roll toward the shoulder (IK::SpreadTwist). Their skin then turns along
+// the limb instead of wringing at the wrist and the shoulder.
+void FirstPersonBody::ArmTwist(const std::vector<std::shared_ptr<Model>>& models, bool twins) {
+    PROFILE_SCOPE("FPB arm twist");
+    for (const auto& mp : models) {
+        if (!mp) continue;
+        Model& m = *mp;
+        auto it = m_TwistRigs.find(&m);
+        if (it == m_TwistRigs.end()) {
+            TwistRig r;
+            m.BindLocalPose(r.Bind);
+            std::vector<int> parents(m.NodeCount());
+            std::vector<std::string> names(m.NodeCount());
+            for (int i = 0; i < m.NodeCount(); ++i) { parents[i] = m.NodeParent(i); names[i] = m.NodeName(i); }
+            for (int s = 0; s < 2; ++s) {
+                r.Upper[s] = m.NodeIndex(Bone(FPBody::kBoneUpperArm[s]));
+                r.Lower[s] = m.NodeIndex(Bone(FPBody::kBoneLowerArm[s]));
+                r.Hand[s] = m.NodeIndex(Bone(FPBody::kBoneHand[s]));
+                if (r.Upper[s] < 0 || r.Lower[s] < 0 || r.Hand[s] < 0) continue;
+                r.UpperTwist[s] = IK::FindTwistBones(r.Bind, parents, names, r.Upper[s], r.Lower[s]);
+                r.LowerTwist[s] = IK::FindTwistBones(r.Bind, parents, names, r.Lower[s], r.Hand[s]);
+            }
+            it = m_TwistRigs.emplace(&m, std::move(r)).first;
+        }
+        const TwistRig& r = it->second;
+        IK::Pose pose = m.AppliedLocalPose();
+        if ((int)pose.size() != m.NodeCount() || pose.size() != r.Bind.size()) continue;
+        bool any = false;
+        for (int s = 0; s < 2; ++s) {
+            if (r.Upper[s] < 0 || r.Lower[s] < 0 || r.Hand[s] < 0) continue;
+            if (!r.LowerTwist[s].empty()) {
+                const float roll = IK::EndRoll(pose, r.Bind, r.Lower[s], r.Hand[s]);
+                IK::SpreadTwist(pose, r.Bind, r.Lower[s], r.Hand[s], r.LowerTwist[s], roll, true);
+                float most = 0.0f;
+                for (const IK::TwistBone& t : r.LowerTwist[s]) most = std::max(most, t.Share);
+                if (twins) { m_WristRoll[s] = glm::degrees(roll); m_WristResidual[s] = glm::degrees(roll * (1.0f - most)); }
+                any = true;
+            }
+            if (!r.UpperTwist[s].empty()) {
+                IK::SpreadTwist(pose, r.Bind, r.Upper[s], r.Lower[s], r.UpperTwist[s], IK::SegmentRoll(pose, r.Bind, r.Upper[s], r.Lower[s]), false);
+                any = true;
+            }
+        }
+        if (any) m.ApplyLocalPose(pose);
+    }
+}
+
+namespace {
+constexpr float kWorldGunChestTurn = 0.3f; // how much of the world body's chest turn (off the player's own) the world gun takes
+} // namespace
+
 void FirstPersonBody::ArmsLateUpdate(World& world, entt::entity weaponArms, float viewModelFov, float dt, const Camera* camera) {
     if (!IsActive()) return;
     auto& reg = world.Registry;
@@ -1776,6 +1847,7 @@ void FirstPersonBody::ArmsLateUpdate(World& world, entt::entity weaponArms, floa
         m_WorldHaveShoulderAnchor[0] = m_WorldHaveShoulderAnchor[1] = false;
         m_WorldHaveElbowAim[0] = m_WorldHaveElbowAim[1] = false;
         m_WorldElbowClear[0] = m_WorldElbowClear[1] = 0.0f;
+        m_WorldGunDelta = glm::mat4(1.0f);
         if (!m_Twins.empty()) PlaceHeadAttachedTwins(world);
         return;
     }
@@ -1786,8 +1858,8 @@ void FirstPersonBody::ArmsLateUpdate(World& world, entt::entity weaponArms, floa
     if ((int)rigPose.size() != rig->NodeCount()) return;
     const glm::mat4 rigWorld = world.ComposeWorldTransform(weaponArms);
     // The frame the shoulders are held in: the chest's view (LateUpdate), else the rig's.
-    const glm::mat4 anchorFrame = m_HaveChestView ? m_ChestView : rigWorld;
-    const glm::mat4 anchorInverse = glm::inverse(anchorFrame);
+    glm::mat4 anchorFrame = m_HaveChestView ? m_ChestView : rigWorld;
+    glm::mat4 anchorInverse = glm::inverse(anchorFrame);
     // Arm Steadiness: the rig's arms are fixed to the view, but the body's shoulders and chest sway with
     // the gait. With the hands pinned to the rig's, that sway came out at the elbows (the support arm,
     // nearly straight, most of all). Steady, each shoulder is held at a slow average of where it sits
@@ -2084,14 +2156,47 @@ void FirstPersonBody::ArmsLateUpdate(World& world, entt::entity weaponArms, floa
     {
     PROFILE_SCOPE("FPB arms: pieces");
     solveArms(m_Models, m_Pieces, m_ShoulderAnchor, m_HaveShoulderAnchor, m_ElbowAim, m_HaveElbowAim, true);
+    ArmTwist(m_Models, false);
     }
 
-    // The world twins (every view but the player's own, and the shadows): the same arm solve onto the same rig hands, so
-    // the world gun is the first-person one and both hands are on it.
+    // The world twins (every view but the player's own, and the shadows): the same arm solve. Their chest is the clips'
+    // own (no Spine Stability) - it leans into a stop, bobs with the stride - so the gun rides on it: the rig's hands,
+    // and the world gun, go wherever the twin's chest has gone from the pieces' (rigid). Held to the steadied camera
+    // instead, a stop's lean back left the hands 16 cm short of the gun.
+    m_WorldGunDelta = glm::mat4(1.0f);
     if (!m_Twins.empty()) {
         PROFILE_SCOPE("FPB arms: twins");
+        for (size_t k = 0; k < m_Pieces.size() && k < m_TwinModels.size(); ++k) {
+            if (m_Pieces[k] != m_Driver || !m_Models[k] || !m_TwinModels[k] || !reg.valid(m_Twins[k])) continue;
+            glm::mat4 own(1.0f), out(1.0f);
+            const std::string chest = Bone(FPBody::kBoneSpine[4]);
+            if (m_Models[k]->NodeTransform(chest, own) && m_TwinModels[k]->NodeTransform(chest, out)) {
+                const glm::mat4 a = world.ComposeWorldTransform(m_Pieces[k]) * own, b = world.ComposeWorldTransform(m_Twins[k]) * out;
+                auto rigid = [](const glm::mat4& m) {
+                    glm::mat4 r(1.0f);
+                    for (int c = 0; c < 3; ++c) r[c] = glm::vec4(glm::normalize(glm::vec3(m[c])), 0.0f);
+                    r[3] = m[3];
+                    return r;
+                };
+                // The chest's travel all the way, its turn a third: arms carry a gun up against a lean (into a stop,
+                // a sprint's dip), so it keeps near the aim instead of pitching with the torso.
+                const glm::quat turn = glm::slerp(glm::quat(1.0f, 0.0f, 0.0f, 0.0f), IK::Rotation(rigid(b) * glm::inverse(rigid(a))), kWorldGunChestTurn);
+                const glm::vec3 from(a[3]), to(b[3]);
+                m_WorldGunDelta = glm::translate(glm::mat4(1.0f), to) * glm::mat4_cast(turn) * glm::translate(glm::mat4(1.0f), -from);
+            }
+        }
+        const glm::quat turn = IK::Rotation(m_WorldGunDelta);
+        for (int s = 0; s < 2; ++s) {
+            handPos[s] = glm::vec3(m_WorldGunDelta * glm::vec4(handPos[s], 1.0f));
+            handRot[s] = glm::normalize(turn * handRot[s]);
+            rigShoulder[s] = glm::vec3(m_WorldGunDelta * glm::vec4(rigShoulder[s], 1.0f));
+            rigElbow[s] = glm::vec3(m_WorldGunDelta * glm::vec4(rigElbow[s], 1.0f));
+        }
+        anchorFrame = m_WorldGunDelta * anchorFrame;
+        anchorInverse = glm::inverse(anchorFrame);
         m_TorsoPointBuffer.clear();
         solveArms(m_TwinModels, m_Twins, m_WorldShoulderAnchor, m_WorldHaveShoulderAnchor, m_WorldElbowAim, m_WorldHaveElbowAim, false);
+        ArmTwist(m_TwinModels, true);
         PlaceHeadAttachedTwins(world);
     }
 

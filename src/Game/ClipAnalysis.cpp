@@ -152,6 +152,39 @@ void PrintReport(const Model& model, int clip, int rootNode, const std::string& 
     for (int i = 0; i <= n; i += n / 10) std::printf(" %.2f", dist[i]);
     std::printf("  yaw:");
     for (int i = 0; i <= n; i += n / 10) std::printf(" %.0f", yaw[i]);
+    // The clip's own foot slide, as the body probe measures it in game: each ball of the foot (root travel included)
+    // while it is down - the baseline the game's feet are judged against.
+    for (const char* ball : {"ball_l", "ball_r"}) {
+        const int node = model.NodeIndex(ball);
+        if (node < 0) continue;
+        constexpr int m = 120;
+        std::vector<glm::vec3> p(m + 1);
+        float lo = 1e9f;
+        for (int i = 0; i <= m; ++i) {
+            p[i] = glm::vec3(model.SampleNodeModelSpace(clip, len * i / m, AnimationWrapMode::ClampForever, node)[3]);
+            lo = std::min(lo, p[i].y);
+        }
+        float worst = 0.0f, sum = 0.0f, slide = 0.0f;
+        int plants = 0, run = 0;
+        glm::vec2 start(0.0f);
+        for (int i = 0; i <= m + 1; ++i) {
+            const float speed = i > 0 && i <= m ? glm::length(glm::vec2(p[i].x - p[i - 1].x, p[i].z - p[i - 1].z)) / (len / m) : 1e9f;
+            if (i <= m && p[i].y < lo + 0.02f && speed < 0.5f) {
+                if (!run) { start = glm::vec2(p[i].x, p[i].z); slide = 0.0f; }
+                ++run;
+                slide = std::max(slide, glm::length(glm::vec2(p[i].x, p[i].z) - start));
+            } else {
+                if (run * (len / m) >= 5.0f / 30.0f) { ++plants; sum += slide; worst = std::max(worst, slide); }
+                run = 0;
+            }
+        }
+        // ... and its loop seam: the ball against the root, last frame from the first (a pop when the clip loops).
+        const glm::mat4 r0 = model.SampleNodeModelSpace(clip, 0.0f, AnimationWrapMode::ClampForever, rootNode);
+        const glm::mat4 r1 = model.SampleNodeModelSpace(clip, len, AnimationWrapMode::ClampForever, rootNode);
+        const glm::vec3 a(glm::inverse(r0) * glm::vec4(p[0], 1.0f)), b(glm::inverse(r1) * glm::vec4(p[m], 1.0f));
+        std::printf("  %s %d plants %.1f/%.1f cm seam %.1f cm", ball, plants, plants ? sum / plants * 100.0f : 0.0f, worst * 100.0f,
+                    glm::length(a - b) * 100.0f);
+    }
     std::printf("\n");
 }
 

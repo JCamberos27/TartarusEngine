@@ -7,6 +7,8 @@ layout (location = 0) in vec3 aPos;
 layout (location = 2) in vec2 aUV;
 layout (location = 4) in ivec4 aBoneIDs;
 layout (location = 5) in vec4 aWeights;
+layout (location = 8) in ivec4 aBoneIDs2; // influences 5-8 (MAX_BONE_INFLUENCE 8)
+layout (location = 9) in vec4 aWeights2;
 uniform mat4 uModel;
 uniform mat4 uLightViewProj;
 // 1 = sun cascades in one pass: instance i renders into layer uCascadeFirst + i with that
@@ -21,10 +23,12 @@ out vec3 vWorldPos; // used by the local-light (spot/point) depth FS; the sun FS
 void main() {
     vec4 localPos = vec4(aPos, 1.0);
     if (uUseSkinning == 1) {
+        int boneIds[8] = int[8](aBoneIDs.x, aBoneIDs.y, aBoneIDs.z, aBoneIDs.w, aBoneIDs2.x, aBoneIDs2.y, aBoneIDs2.z, aBoneIDs2.w);
+        float boneWeights[8] = float[8](aWeights.x, aWeights.y, aWeights.z, aWeights.w, aWeights2.x, aWeights2.y, aWeights2.z, aWeights2.w);
         mat4 skinMat = mat4(0.0);
         float tw = 0.0;
-        for (int i = 0; i < 4; ++i) {
-            if (aBoneIDs[i] >= 0) { skinMat += uBones[clamp(aBoneIDs[i], 0, uBones.length() - 1)] * aWeights[i]; tw += aWeights[i]; }
+        for (int i = 0; i < 8; ++i) {
+            if (boneIds[i] >= 0) { skinMat += uBones[clamp(boneIds[i], 0, uBones.length() - 1)] * boneWeights[i]; tw += boneWeights[i]; }
         }
         if (tw <= 0.0001) skinMat = mat4(1.0);
         localPos = skinMat * localPos;

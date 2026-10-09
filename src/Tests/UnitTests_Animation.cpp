@@ -12,6 +12,7 @@
 #include "ProjectPaths.h"
 #include "Model.h"
 #include "AnimRetarget.h"
+#include "../Game/IK.h"
 #include <cmath>
 #include <cstdio>
 #include <filesystem>
@@ -878,9 +879,51 @@ static void TestDistanceMatching() {
           back.Layers[0].States[0].Distance == DM::Pivot);
 }
 
+// Twist bones: a hand turned about its forearm spreads that roll down the forearm's twist bones by where they sit
+// (exact at 0, 90 and 180 degrees); an upper arm's own roll is undone toward the shoulder.
+static void TestTwistBones() {
+    // root -> upper (along +X) -> lower (along +X) -> hand; upper has a twist bone a quarter down it, lower one at half
+    // and one at three quarters.
+    IK::Pose bind(7);
+    std::vector<int> parents = {-1, 0, 1, 2, 1, 2, 2};
+    std::vector<std::string> names = {"root", "upperarm_l", "lowerarm_l", "hand_l", "upperarm_twist_01_l", "lowerarm_twist_02_l", "lowerarm_twist_01_l"};
+    bind[2].T = glm::vec3(0.3f, 0.0f, 0.0f);
+    bind[3].T = glm::vec3(0.28f, 0.0f, 0.0f);
+    bind[4].T = glm::vec3(0.075f, 0.0f, 0.0f);
+    bind[5].T = glm::vec3(0.14f, 0.0f, 0.0f);
+    bind[6].T = glm::vec3(0.21f, 0.0f, 0.0f);
+    const auto upperTwist = IK::FindTwistBones(bind, parents, names, 1, 2);
+    const auto lowerTwist = IK::FindTwistBones(bind, parents, names, 2, 3);
+    CHECK(upperTwist.size() == 1 && std::abs(upperTwist[0].Share - 0.25f) < 1e-5f);
+    CHECK(lowerTwist.size() == 2 && std::abs(lowerTwist[0].Share - 0.5f) < 1e-5f && std::abs(lowerTwist[1].Share - 0.75f) < 1e-5f);
+    const glm::vec3 x(1.0f, 0.0f, 0.0f);
+    auto rollOf = [&](const IK::Pose& p, int node) { // a twist bone's turn about +X off its bind
+        const glm::quat d = glm::normalize(p[node].R * glm::inverse(bind[node].R));
+        return glm::degrees(2.0f * std::atan2(glm::dot(glm::vec3(d.x, d.y, d.z), x), d.w));
+    };
+    for (float deg : {0.0f, 90.0f, 180.0f, -120.0f}) {
+        IK::Pose pose = bind;
+        // The hand rolled, and bent a little (a swing, which the twist bones must not take).
+        pose[3].R = glm::angleAxis(glm::radians(deg), x) * glm::angleAxis(glm::radians(20.0f), glm::vec3(0, 0, 1));
+        const float roll = IK::EndRoll(pose, bind, 2, 3);
+        IK::SpreadTwist(pose, bind, 2, 3, lowerTwist, roll, true);
+        const float want = deg == 180.0f ? std::abs(glm::degrees(roll)) : deg;
+        CHECK(std::abs(std::abs(glm::degrees(roll)) - std::abs(want)) < 0.05f);
+        CHECK(std::abs(std::abs(rollOf(pose, 5)) - std::abs(want) * 0.5f) < 0.05f && std::abs(std::abs(rollOf(pose, 6)) - std::abs(want) * 0.75f) < 0.05f);
+    }
+    // The upper arm rolled 60 degrees in the shoulder: its twist bone near the shoulder turns 45 back.
+    IK::Pose pose = bind;
+    pose[1].R = glm::angleAxis(glm::radians(60.0f), x);
+    const float roll = IK::SegmentRoll(pose, bind, 1, 2);
+    CHECK(std::abs(glm::degrees(roll) - 60.0f) < 0.05f);
+    IK::SpreadTwist(pose, bind, 1, 2, upperTwist, roll, false);
+    CHECK(std::abs(rollOf(pose, 4) + 45.0f) < 0.05f);
+}
+
 void RegisterAnimationTests(UnitTestSupport::TestList& tests) {
     tests.push_back({"Retarget: UE4 mannequin clip baked onto a UE5 rig", TestRetargetUe4ToUe5});
     tests.push_back({"Distance matching: phase from travel, paced", TestDistanceMatching});
+    tests.push_back({"Twist bones spread a limb's roll", TestTwistBones});
 
     tests.push_back({"Action camera and firing shake",TestCameraEffects});
     tests.push_back({"ADS reload preserves additive locomotion",TestAdsReloadPreservesAdditiveLocomotion});
