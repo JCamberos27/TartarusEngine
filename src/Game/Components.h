@@ -784,6 +784,9 @@ struct FirstPersonBodyComponent {
     // --- Arm IK (Player body: elbow tracking and clearance) ---
     float ElbowEase = 0.06f; // Elbow Ease
     float ElbowMaxRate = 540.0f; // Elbow Max Rate (degrees/s)
+    // 3P Upper Body From 1P: the third-person body's arms are the first-person clips' 1:1 (the rig's arm shapes, hands on the
+    // rig's hands, the gun where the first-person one is); off, the third-person rifle clips' hold (ThirdPersonWeapon).
+    bool ThirdPersonFirstPersonArms = true;
     // --- NPC body tuning (copied to NPC soldiers from the scene's player body) ---
     // NPC body heading and turns
     float NpcTurnThreshold = glm::degrees(1.15f); // NPC Turn Threshold (degrees; ~66 deg body can lag before turning on the spot)

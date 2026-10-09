@@ -2119,7 +2119,19 @@ void FirstPersonBody::ArmsLateUpdate(World& world, entt::entity weaponArms, floa
         for (size_t k = 0; k < m_Pieces.size() && k < m_TwinModels.size(); ++k)
             if (m_Pieces[k] == m_Driver) src = (int)k;
         Model* tm = src >= 0 && m_TwinModels[src] && reg.valid(m_Twins[src]) ? m_TwinModels[src].get() : nullptr;
-        if (tm && gun && gun->Valid && m_Assets && m_ThirdPerson.Bind(*tm, *m_Assets, ThirdPersonLocomotion::StandIdle(), ThirdPersonLocomotion::CrouchIdle())) {
+        if (cfg.ThirdPersonFirstPersonArms) {
+            // The first-person clips 1:1: the chest pitched with the view as the player's own is, the rig's arm shapes, the
+            // hands on the rig's hands - the gun stays where the first-person one is.
+            if (camera) {
+                const float pitch = std::asin(std::clamp(camera->Front().y, -1.0f, 1.0f));
+                const float share = FirstPersonBodySpineAim(pitch, cfg.SpineAim, cfg.SpineAimDown);
+                const char* const* kSpine = FPBody::kBoneSpine;
+                RotateChain({kSpine[0], kSpine[1], kSpine[2], kSpine[3], kSpine[4]},
+                            [&](float n) { return glm::angleAxis(-pitch * share / n, glm::vec3(1.0f, 0.0f, 0.0f)); }, &m_TwinModels, &m_Spine);
+            }
+            m_TorsoPointBuffer.clear();
+            solveArms(m_TwinModels, m_Twins, m_WorldShoulderAnchor, m_WorldHaveShoulderAnchor, m_WorldElbowAim, m_WorldHaveElbowAim, false);
+        } else if (tm && gun && gun->Valid && m_Assets && m_ThirdPerson.Bind(*tm, *m_Assets, ThirdPersonLocomotion::StandIdle(), ThirdPersonLocomotion::CrouchIdle())) {
             IK::Pose pose = tm->AppliedLocalPose();
             ThirdPersonWeaponAim aim;
             if (camera) {
