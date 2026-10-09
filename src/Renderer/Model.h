@@ -456,6 +456,9 @@ private:
         // animation pack on a Y-up rig whose root carries the axis conversion as a pre-rotation.
         // Empty when no bone needs one.
         std::vector<glm::quat> Correction;
+        // A clip from a differently proportioned skeleton (a UE4 pack on a UE5 rig) baked onto this one
+        // (AnimRetarget): played in place of the source clip, NodeChannel indexing its channels. Null otherwise.
+        std::shared_ptr<const AnimationClip> Baked;
         std::string Ref, DisplayName;
     };
     std::vector<ExternalClip> m_ExternalClips;
