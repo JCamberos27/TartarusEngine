@@ -820,7 +820,7 @@ void AdvanceAnimator(const AnimatorController& ctrl, AnimatorControllerComponent
     SyncBaseLayerFields(ctrl, ac);
 }
 
-bool AnimatorStartInState(const AnimatorController& ctrl, AnimatorControllerComponent& ac, const std::string& state) {
+bool AnimatorStartInState(const AnimatorController& ctrl, AnimatorControllerComponent& ac, const std::string& state, float phase) {
     if (ctrl.Layers.empty()) return false;
     const int s = ctrl.Layers[0].FindState(state);
     if (s < 0) return false;
@@ -835,7 +835,7 @@ bool AnimatorStartInState(const AnimatorController& ctrl, AnimatorControllerComp
     ac.Layers.assign(ctrl.Layers.size(), AnimatorLayerRuntime{});
     AnimatorLayerRuntime::Item item;
     item.State = s;
-    item.Phase = 1.0f; // its end: a holstered state holds the holster's last frame
+    item.Phase = phase; // by default its end: a holstered state holds the holster's last frame
     ac.Layers[0].Stack.push_back(item);
     SyncBaseLayerFields(ctrl, ac);
     return true;

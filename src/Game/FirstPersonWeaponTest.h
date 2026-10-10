@@ -7,6 +7,8 @@
 #include <vector>
 #include <set>
 
+#include "WeaponJankMeter.h"
+
 class Camera;
 class FirstPersonBody;
 class FirstPersonPresentation;
@@ -57,7 +59,7 @@ public:
         bool Crouch = false;               // ... and Crouch
         int View = 0;                      // stock probe's Scene camera: 0 on the stock, 1 right side, 2 front right, 3 front left,
                                            // 4 left, 5 back right, 6 back left (whole body); 7 / 8 the right / left arm close,
-                                           // 9 the legs close from the side
+                                           // 9 the legs close from the side; 10 circling the whole body (the jank sweep's video)
         bool Trigger = false;              // the trigger held down (full auto), until changed
         bool Saw(const std::string& state) const;
         const std::string& State() const;
@@ -89,13 +91,15 @@ public:
     bool Done() const { return m_Step >= m_Steps.size(); }
     // The gait probe (STOCK_PROBE_GAIT): starts on the scene's most open floor, the player's body unclothed.
     bool GaitProbe() const { return m_GaitProbe; }
-    // The gait and hold probes start on the open floor (room to walk every way, nothing in the shots).
-    bool OpenFloor() const { return m_GaitProbe || m_BodyProbe; }
+    // The gait, hold and pose probes start on the open floor (room to walk every way, nothing in the shots).
+    bool OpenFloor() const { return m_GaitProbe || m_BodyProbe || m_PoseProbe; }
     int Failures() const { return m_Failures; }
     int Checks() const { return m_Checks; }
     // With --smoke-shots: a name when the Game view should be saved this frame (every 10th frame
     // of the reload steps), else empty.
     const std::string& ShotName() const { return m_Shot; }
+    // The step running now (the jank sweep's video index: which frames are which action).
+    std::string StepName() const { return m_Step < m_Steps.size() ? m_Steps[m_Step].Name : std::string(); }
 
 private:
     std::vector<Step> m_Steps;
@@ -132,6 +136,11 @@ private:
         float TorsoGap = -1.0f, TorsoAlong = 0.0f; // the gun's rear GunLength to the drawn torso, m (and where, m from the butt)
         float HeadTilt = 0.0f, HeadTiltWeight = 0.0f; // the cheek weld: degrees, and its weight
         float HeadBend = 0.0f;                // the world head's bend off the chest line (spine_05 -> neck vs neck -> head), degrees
+        float Lean = 0.0f;                    // the world torso's lean off upright (pelvis -> neck), degrees
+        float PocketGap = -1.0f, Shouldered = 0.0f; // the world gun's butt to the shoulder pocket (m), and the lock's weight
+        float SupportBend = 0.0f;           // the world left elbow's bend (degrees off straight)
+        glm::vec3 HandFromShoulder{0.0f};   // the world left hand - upperarm_r, the body's flat frame (right, up, forward), m
+        float BorePitch = 0.0f;               // the world gun's bore above level, degrees
         // The camera's smoothness: the most its position accelerated (m/s^2, frame to frame) since the last
         // printed sample - a hitch in the eye shows as a spike.
         float EyeAccel = 0.0f;
@@ -162,7 +171,18 @@ private:
     void RecordAudioFrame(const World& world, const FirstPersonPresentation& p);
     void CheckAudio();
     void PrintSample(const std::string& label) const;
+    // The world gun held on the body (the shoulder lock): the butt in the pocket while shouldered, and out of the head.
+    void CheckHold(Ctx& c, const std::string& label) const;
     void BuildProbe();
+    // STOCK_PROBE_POSE=jank: every weapon action on the world body, entered and left from the hip, the sights, walking and
+    // crouched, with both guns and the switches between; WeaponJankMeter flags the pops, settles and lost grips ([Jank] table).
+    void BuildJankProbe();
+    bool m_JankTrack = false;
+    std::string m_JankSegment;
+    WeaponJankMeter m_Jank;
+    float m_OrbitDeg = 0.0f; // View 10's place round the body
+    float m_SinceShot = 1e3f;
+    void PrintJank(Ctx& c);
     void BuildPoseProbe(); // STOCK_PROBE_POSE=1: the third-person body standing / crouched, at the hip and on the sights
     void BuildSprintProbe(); // STOCK_PROBE_SPRINT=1: walk -> sprint -> walk, capturing entry/exit
     // STOCK_PROBE_GAIT=1: walk, jog and sprint every way and a crouch walk, the torso measured against the hips on the
@@ -189,16 +209,42 @@ private:
         float EyeJerk = 0.0f;                 // the camera's largest vertical acceleration (m/s^2): a bump in the view
         float FeetLow = 1e9f, FeetHigh = -1e9f; // the ground it crossed (a climb = stairs: the view's bump is the terrain's)
         float HandGap = 0.0f, TwinHandGap = 0.0f, BodyDiff = 0.0f; // the worst this segment (m)
+        float PocketGap = 0.0f;               // the world butt's worst distance from the pocket while shouldered (m)
+        float HeadMeshGap = 1e9f;             // the world gun's nearest to the drawn head / neck / hood (m)
         int Frames = 0;
         bool Have = false;
     };
     BodyStats m_Body;
+    // The pose probe's reloads (at the hip and on the sights; looking level, up and down), each frame from the press back
+    // to idle: the world left hand off the chest (spine_05: right, up the chest, forward; m), its distance to the nearest bone the
+    // hand anchor carries (the magazine, the shell; m), the world bore's pitch (degrees) and the twin's anchor share.
+    struct ReloadRun {
+        std::string Name;
+        std::vector<glm::vec3> Hand;
+        std::vector<float> MagGap, Bore, Anchor;
+        std::vector<float> Spare; // the spare magazine / shell: its gap to the left hand while shown, -1 hidden
+        // The part in the free hand (FirstPersonPresentation::CarriedHeld, past 0.95): its world centre's distance from the
+        // world hand against the first-person clips' (m, -1 = none held).
+        std::vector<float> GripErr;
+    };
+    float m_ActSpeed = 0.0f, m_SprintSeen = 0.0f; // the sprint-into-action steps: the top speed through the action, and sprinting
+    std::vector<ReloadRun> m_ReloadRuns;
+    int m_ReloadRun = -1; // the run being recorded, -1 = none
+    void CheckReloadRuns(Ctx& c) const;
     bool m_BodyMeasure = false;
     float m_FidgetSince = -1.0f;              // the fidget step: when the body's fidget began
     float m_ActGap = 0.0f;                    // an action step's worst world hand gap
     float m_HoldGap[2] = {0.0f, 0.0f};        // the world body's hands' gaps this frame
     float m_Wrist[2] = {0.0f, 0.0f}, m_WristLeft[2] = {0.0f, 0.0f}; // ... each hand's roll about its forearm, and what's left at the wrist (deg)
     bool m_GaitProbe = false;
+    bool m_PoseProbe = false; // STOCK_PROBE_POSE
+    bool m_RegripLog = false; // the pose probe's regrip: the world gun against the first-person one, each frame
+    glm::vec3 m_RegripMin{1e9f}, m_RegripMax{-1e9f}; // the world butt against the shoulder through the regrip (m)
+    // The reload's end into Idle, each frame: the first-person butt in the view, the world butt against the shoulder, the
+    // world bore's pitch (deg) - once the clip has its gun back at the hold the world one stays put.
+    struct SettleSample { glm::vec3 View, World; float Pitch; };
+    std::vector<SettleSample> m_Settle;
+    bool m_SettleTrack = false;
     struct GaitStats {
         int Frames = 0;
         float Lean = 0.0f, Side = 0.0f, Twist = 0.0f, Pelvis = 0.0f; // sums: trunk lean along / across the travel, chest-on-hips yaw, pelvis height (deg, m)

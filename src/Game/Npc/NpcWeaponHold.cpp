@@ -260,7 +260,7 @@ glm::vec3 NpcBody::WeaponEye(const World& world, entt::entity armsRig, const std
 }
 
 glm::vec3 NpcBody::HoldWeapon(World& world, entt::entity armsRig, entt::entity weapon, const FirstPersonWorldGunInput* gun, const Camera& cam,
-                              float dt, bool meshChecks) {
+                              float dt, bool meshChecks, const Model* thirdPersonRig, const std::string& gunSocket) {
     if (!IsActive() || m_PoseExternal || m_WeaponReleased) return glm::vec3(0.0f);
     auto& reg = world.Registry;
     if (weapon != entt::null && reg.valid(weapon)) TrackGun(world.WorldSpaceTransform(weapon).Position, dt);
@@ -270,6 +270,7 @@ glm::vec3 NpcBody::HoldWeapon(World& world, entt::entity armsRig, entt::entity w
     if (haveRig) m_ArmsWeight = 1.0f;
     else m_ArmsWeight -= m_ArmsWeight * Follow(dt, 0.1f);
     m_Hold = NpcHoldReport{};
+    m_HaveHandTarget[0] = m_HaveHandTarget[1] = false;
     if (!haveRig || m_ArmsWeight < 1e-3f) {
         if (m_PiecesStale) SyncPieces();
         m_GunShift = glm::vec3(0.0f);
@@ -316,56 +317,15 @@ glm::vec3 NpcBody::HoldWeapon(World& world, entt::entity armsRig, entt::entity w
     else if (!meshChecks) m_TorsoPoints.clear();
     if (!meshChecks) { m_MeshPush = glm::vec3(0.0f); m_WeldShare = 1.0f; }
     {
-        glm::vec3 ul(0.0f), ur(0.0f), neck(0.0f), head(0.0f);
-        if (BoneWorld(FPBody::kBoneUpperArm[0], ul) && BoneWorld(FPBody::kBoneUpperArm[1], ur) && BoneWorld("neck_01", neck) &&
-            BoneWorld("head", head)) {
-            glm::vec3 across = ur - ul;
-            across.y = 0.0f;
-            const glm::vec3 right = glm::length(across) > 1e-4f ? glm::normalize(across) : glm::vec3(1.0f, 0.0f, 0.0f);
-            const glm::vec3 front = glm::normalize(glm::cross(up, right));
-            const glm::vec3 pocket = ur + right * gun->Pocket.x + up * gun->Pocket.y + front * gun->Pocket.z;
-            glm::vec3 shift = (pocket - gun->ButtWorld) * std::clamp(gun->Shouldered, 0.0f, 1.0f);
-            const glm::vec3 fwd = glm::length(gun->ForwardWorld) > 1e-4f ? glm::normalize(gun->ForwardWorld) : front;
-            const struct { glm::vec3 Centre; float Radius; } keepOut[2] = {{neck, gun->NeckRadius}, {head + up * 0.07f, gun->HeadRadius}};
-            for (int pass = 0; pass < 4; ++pass)
-                for (const auto& k : keepOut) {
-                    const glm::vec3 a = gun->ButtWorld + shift, b = a + fwd * gun->GunLength;
-                    const glm::vec3 ab = b - a;
-                    const float t = std::clamp(glm::dot(k.Centre - a, ab) / std::max(glm::dot(ab, ab), 1e-9f), 0.0f, 1.0f);
-                    glm::vec3 away = a + ab * t - k.Centre;
-                    const float d = glm::length(away);
-                    if (d >= k.Radius) continue;
-                    away = d > 1e-4f ? away / d : right;
-                    shift += away * (k.Radius - d);
-                }
-            // The drawn head, neck and hood: straight out of them from the hood sphere's centre, as far as it takes.
-            const glm::vec3 beforeMesh = shift;
-            if (meshNow && gun->MeshClearance > 0.0f) {
-                SkinnedRegion(world, Region::Head, m_HeadPoints);
-                const glm::vec3 a = gun->ButtWorld + shift, b = a + fwd * gun->GunLength;
-                const glm::vec3 centre = keepOut[1].Centre;
-                const glm::vec3 ab = b - a;
-                const float t = std::clamp(glm::dot(centre - a, ab) / std::max(glm::dot(ab, ab), 1e-9f), 0.0f, 1.0f);
-                glm::vec3 away = a + ab * t - centre;
-                away = glm::length(away) > 1e-4f ? glm::normalize(away) : right;
-                const float room = std::max(0.0f, gun->MaxShift - glm::length(shift));
-                shift += away * FirstPersonBodyClearPush(m_HeadPoints, a, b, away, gun->MeshClearance, room, 0.01f);
-            }
-            // ... and the drawn torso whenever the butt isn't in the pocket, straight out from the chest, by that weight.
+        FirstPersonGunSeatBody body;
+        if (BoneWorld(FPBody::kBoneUpperArm[0], body.UpperL) && BoneWorld(FPBody::kBoneUpperArm[1], body.UpperR) &&
+            BoneWorld("neck_01", body.Neck) && BoneWorld("head", body.Head)) {
             glm::vec3 chest(0.0f);
-            if (torsoPoints && gun->MeshClearance > 0.0f && gun->TorsoKeepOut > 1e-3f && BoneWorld("spine_05", chest)) {
-                const glm::vec3 a = gun->ButtWorld + shift, b = a + fwd * gun->GunLength;
-                const glm::vec3 ab = b - a;
-                const float t = std::clamp(glm::dot(chest - a, ab) / std::max(glm::dot(ab, ab), 1e-9f), 0.0f, 1.0f);
-                glm::vec3 away = a + ab * t - chest;
-                away = glm::length(away) > 1e-4f ? glm::normalize(away) : front;
-                const float room = std::max(0.0f, gun->MaxShift - glm::length(shift));
-                shift += away * FirstPersonBodyClearPush(m_TorsoPoints, a, b, away, gun->MeshClearance, room, 0.01f) *
-                         std::clamp(gun->TorsoKeepOut, 0.0f, 1.0f);
-            }
-            if (meshNow) m_MeshPush = shift - beforeMesh;
-            else if (meshChecks) shift += m_MeshPush;
-            if (const float len = glm::length(shift); len > gun->MaxShift && len > 1e-6f) shift *= gun->MaxShift / len;
+            if (BoneWorld("spine_05", chest)) body.Chest = &chest;
+            if (meshNow && gun->MeshClearance > 0.0f) SkinnedRegion(world, Region::Head, m_HeadPoints);
+            if (meshNow) body.HeadPoints = &m_HeadPoints;
+            if (torsoPoints) body.TorsoPoints = &m_TorsoPoints;
+            const glm::vec3 shift = FirstPersonGunSeat(*gun, body, meshNow ? &m_MeshPush : nullptr, meshChecks ? &m_MeshPush : nullptr);
             shiftTarget = shift * m_ArmsWeight;
         }
     }
@@ -376,6 +336,18 @@ glm::vec3 NpcBody::HoldWeapon(World& world, entt::entity armsRig, entt::entity w
 
     // 2. The rig's hands (and its arms, for the elbows' bend plane), with the gun where it now is.
     const glm::mat4 rigWorld = world.ComposeWorldTransform(armsRig); // (moved with the gun just above)
+    // Whose grip the arms take: the 3P clips' (their hands, elbows and fingers where they hold their gun, put on this rig's
+    // gun), else the rig's. One skeleton, so the same node indices.
+    const Model* gripRig = &rig;
+    glm::mat4 gripWorld = rigWorld;
+    if (thirdPersonRig && !gunSocket.empty() && thirdPersonRig->NodeCount() == rig.NodeCount() &&
+        (int)thirdPersonRig->AppliedLocalPose().size() == thirdPersonRig->NodeCount()) {
+        glm::mat4 first(1.0f), third(1.0f);
+        if (rig.NodeTransform(gunSocket, first) && thirdPersonRig->NodeTransform(gunSocket, third)) {
+            gripRig = thirdPersonRig;
+            gripWorld = rigWorld * first * glm::inverse(third);
+        }
+    }
     glm::vec3 handPos[2]{};
     glm::quat handRot[2]{};
     bool haveHand[2] = {false, false};
@@ -416,20 +388,22 @@ glm::vec3 NpcBody::HoldWeapon(World& world, entt::entity armsRig, entt::entity w
     fingers.clear();
     for (int s = 0; s < 2; ++s) {
         glm::mat4 h(1.0f), u(1.0f), l(1.0f);
-        if (!rig.NodeTransform(FPBody::kBoneHand[s], h)) continue;
-        const glm::mat4 w = rigWorld * h;
+        if (!gripRig->NodeTransform(FPBody::kBoneHand[s], h)) continue;
+        const glm::mat4 w = gripWorld * h;
         handPos[s] = glm::vec3(w[3]);
         handRot[s] = IK::Rotation(w);
         haveHand[s] = true;
-        if (rig.NodeTransform(FPBody::kBoneUpperArm[s], u) && rig.NodeTransform(FPBody::kBoneLowerArm[s], l)) {
-            rigShoulder[s] = glm::vec3(rigWorld * u[3]);
-            rigElbow[s] = glm::vec3(rigWorld * l[3]);
+        m_HandTarget[s] = handPos[s];
+        m_HaveHandTarget[s] = true;
+        if (gripRig->NodeTransform(FPBody::kBoneUpperArm[s], u) && gripRig->NodeTransform(FPBody::kBoneLowerArm[s], l)) {
+            rigShoulder[s] = glm::vec3(gripWorld * u[3]);
+            rigElbow[s] = glm::vec3(gripWorld * l[3]);
             haveRigElbow[s] = true;
         }
         for (const FingerNode& f : m_FingerList) {
             if (f.Hand != s) continue;
             glm::mat4 g(1.0f);
-            if (rig.NodeTransformAt(f.Node, g)) fingers.push_back({&f, glm::normalize(toModelRot * IK::Rotation(rigWorld * g))});
+            if (gripRig->NodeTransformAt(f.Node, g)) fingers.push_back({&f, glm::normalize(toModelRot * IK::Rotation(gripWorld * g))});
         }
     }
 
@@ -488,8 +462,8 @@ glm::vec3 NpcBody::HoldWeapon(World& world, entt::entity armsRig, entt::entity w
         }
         // The rig's arm shapes first, so the elbows bend the way the animation has them; the solve then only
         // fixes the hands.
-        if (driver) FirstPersonBodyCopyArmShape(m_ArmLinks, rig, w, pose, m_Set.ClavicleFollow);
-        else FirstPersonBodyCopyArmShape(m, rig, w, pose, parents, m_Set.ClavicleFollow);
+        if (driver) FirstPersonBodyCopyArmShape(m_ArmLinks, *gripRig, w, pose, m_Set.ClavicleFollow);
+        else FirstPersonBodyCopyArmShape(m, *gripRig, w, pose, parents, m_Set.ClavicleFollow);
         IK::ComputeGlobals(pose, parents, globals);
         const bool isSource = !sourceDone;
         sourceDone = true;
@@ -562,8 +536,11 @@ glm::vec3 NpcBody::HoldWeapon(World& world, entt::entity armsRig, entt::entity w
                         const glm::vec3 outward = s == 0 ? -kRight : kRight;
                         glm::vec3 pole = glm::vec3(0.0f, -1.0f, 0.0f) + outward * 0.5f;
                         pole -= axis * glm::dot(pole, axis);
-                        glm::vec3 aim = rigTrust > 0.0f ? glm::normalize(want) * rigTrust : glm::vec3(0.0f);
-                        if (glm::dot(pole, pole) > 1e-8f) aim += glm::normalize(pole) * (1.0f - rigTrust);
+                        // The support elbow hangs under the gun (kFirstPersonSupportHang of the way) while the hand is on it.
+                        const float hang = s == 0 ? kFirstPersonSupportHang * (1.0f - std::clamp(m_FreeHand, 0.0f, 1.0f)) : 0.0f;
+                        const float trust = rigTrust * (1.0f - hang);
+                        glm::vec3 aim = trust > 0.0f ? glm::normalize(want) * trust : glm::vec3(0.0f);
+                        if (glm::dot(pole, pole) > 1e-8f) aim += glm::normalize(pole) * (1.0f - trust);
                         if (glm::dot(aim, aim) > 1e-8f) {
                             const glm::vec3 aimTo = glm::normalize(glm::transpose(camToModel) * aim);
                             if (!m_HaveElbowAim[s]) { m_ElbowAim[s] = aimTo; m_HaveElbowAim[s] = true; }
@@ -801,8 +778,11 @@ NpcHoldReport NpcBody::MeasureHold(const World& world, entt::entity armsRig, con
         glm::vec3 a(0.0f), b(0.0f), c(0.0f);
         if (BoneWorld(FPBody::kBoneUpperArm[s], a) && BoneWorld(FPBody::kBoneLowerArm[s], b) && BoneWorld(FPBody::kBoneHand[s], c)) {
             r.Elbow[s] = torso.empty() ? -1.0f : FirstPersonBodyElbowGap(torso, a, b, c);
+            // Against the grip the arms reached for (the 3P clips' where the weapon has them - their support hand isn't the
+            // first-person rig's), else the rig's hand.
             glm::mat4 h(1.0f);
-            if (rig && rig->NodeTransform(FPBody::kBoneHand[s], h)) r.Hand[s] = glm::length(glm::vec3(world.ComposeWorldTransform(armsRig) * h[3]) - c);
+            if (m_HaveHandTarget[s]) r.Hand[s] = glm::length(m_HandTarget[s] - c);
+            else if (rig && rig->NodeTransform(FPBody::kBoneHand[s], h)) r.Hand[s] = glm::length(glm::vec3(world.ComposeWorldTransform(armsRig) * h[3]) - c);
         }
     }
     return r;

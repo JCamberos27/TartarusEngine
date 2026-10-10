@@ -337,6 +337,17 @@ void EditorLayer::UpdateLockViewToSelection(World& world, Camera& editorCamera) 
     if (!ComputeSelectionBounds(world, bmin, bmax)) { m_LockViewHasCentroid = false; return; }
     const glm::vec3 centroid = (bmin + bmax) * 0.5f;
 
+    // Only the selection moving carries the camera, not a different selection: picking another object jumped the
+    // camera by the distance between the two.
+    thread_local std::vector<entt::entity> selection;
+    selection.clear();
+    selection.push_back(m_Selected);
+    selection.insert(selection.end(), m_ExtraSelection.begin(), m_ExtraSelection.end());
+    if (selection != m_LockViewSelection) {
+        m_LockViewSelection = selection;
+        m_LockViewHasCentroid = false;
+    }
+
     if (m_LockViewHasCentroid) {
         const glm::vec3 delta = centroid - m_LockViewCentroid;
         if (std::isfinite(delta.x) && std::isfinite(delta.y) && std::isfinite(delta.z))
