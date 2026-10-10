@@ -1,4 +1,5 @@
 {
+  "folder": "assets/Characters/Quantum/Models/Clothing/Female/Balaclava",
   "guid": "a6f929e340879470",
   "materialRemap": {
     "M_Balaclava_Crime": "assets/Characters/Quantum/Materials/Clothing/Balaclava/M_Balaclava_Crime_Black.mat"

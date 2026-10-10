@@ -88,6 +88,28 @@ bool SolveTwoBone(Pose& pose, const std::vector<int>& parents, std::vector<glm::
                   int upper, int lower, int end, const glm::vec3& targetPos, const glm::quat* targetRot,
                   float weight, float swivel = 0.0f, const TwoBoneHint* hint = nullptr);
 
+// Twist bones. IK re-rolls a limb (a hand turned to a grip the clip never had) and leaves the roll at one joint: with
+// the skin weighted across the limb's twist bones, the wrist then wrings like a sweet wrapper. A limb segment's roll
+// beyond its bind pose is measured about the segment's own axis and spread over the segment's twist bones (children
+// of the segment), each by its share - how far along the segment it sits.
+struct TwistBone {
+    int Node = -1;
+    float Share = 0.0f; // 0 at the segment's root, 1 at its end
+};
+// The roll (radians) about `segment`'s axis (toward `end`, its child) of `end` relative to `segment`, beyond the bind
+// pose's: the forearm's share of a hand's turn.
+float EndRoll(const Pose& pose, const Pose& bind, int segment, int end);
+// The roll (radians) of `segment` itself about its axis (toward `end`) relative to its parent, beyond the bind pose's:
+// the upper arm's turn in the shoulder.
+float SegmentRoll(const Pose& pose, const Pose& bind, int segment, int end);
+// Each twist bone at its bind local, turned about the segment's axis by `roll` times its share (`carry`: a forearm's
+// twist bones carry the hand's roll) or by `roll` times (1 - share) the other way (`!carry`: an upper arm's undo its own
+// roll toward the shoulder).
+void SpreadTwist(Pose& pose, const Pose& bind, int segment, int end, const std::vector<TwistBone>& twists, float roll, bool carry);
+// The twist bones of `segment` (children whose names contain "twist", not "twistCor"), each with its share along the
+// segment toward `end`, from the bind pose.
+std::vector<TwistBone> FindTwistBones(const Pose& bind, const std::vector<int>& parents, const std::vector<std::string>& names, int segment, int end);
+
 // Per-bone share of a spread rotation over a chain of `count` bones (spine, neck). weights[0..count) are the
 // bones' relative weights (all equal = the old even spread); out[k] is the DIVISOR that bone applies to the whole
 // rotation, so an even spread gives `count` exactly (angle / out[k] = angle / count, bit for bit). A zero weight
@@ -148,6 +170,7 @@ struct FootSlideInput {
     glm::vec3 Pelvis{0.0f};      // the animated pelvis (world)
     float LegLength = 0.9f;      // thigh + calf (m), for the pelvis drop
     float PlantHeight = 0.05f;   // a foot within this of its own lowest height counts as planted (m)
+    float ClipSpeed = -1.0f;     // the playing gait's own ground speed when the animator knows it (m/s); < 0 = estimate it from the feet
     float Dt = 0.0f;
 };
 struct FootSlideOutput {

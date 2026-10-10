@@ -1094,12 +1094,13 @@
       "Idle",
       "Ready",
       "ADS",
-      "Cycling"
+      "Cycling",
+      "Shouldered"
     ],
     "pocket": [
+      -0.06,
       -0.045,
-      0.03,
-      0.05
+      0.03
     ],
     "maxShift": 0.3,
     "headTilt": 25.0,
@@ -1133,7 +1134,9 @@
     -0.016
   ],
   "spareMagazine": {
-    "bones": [],
+    "bones": [
+      "Shell"
+    ],
     "grabDistance": 0.21
   },
   "muzzle": {

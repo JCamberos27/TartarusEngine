@@ -503,6 +503,9 @@ FootSlideOutput FootSlide::Step(const FootSlideSettings& set, const FootSlideInp
     }
     for (int s = 0; s < 2; ++s) m_PrevRel[s] = rel[s];
     m_HavePrev = true;
+    // Known from the animator (a gait loop's blended travel at its play rate): exact where the feet's roll fools the estimate
+    // (a crouch walk's read 25% slow, and the stride was stretched to match).
+    if (in.ClipSpeed > 0.05f) m_ClipSpeed = in.ClipSpeed;
 
     const bool warp = set.StrideEnabled && !measureOnly;
     const float target = warp ? StrideScale(speed, m_ClipSpeed, set.StrideMin, set.StrideMax) : 1.0f;
@@ -603,6 +606,61 @@ FootSlideSettings FootSlideFrom(const FirstPersonBodyComponent& b) {
     s.StrideMax = b.StrideScaleMax;
     s.PelvisAdjust = b.StridePelvisAdjust;
     return s;
+}
+
+namespace {
+// The angle (radians) of `q`'s twist about unit `axis` (swing-twist decomposition), in (-pi, pi].
+float TwistAngle(const glm::quat& q, const glm::vec3& axis) {
+    const float along = glm::dot(glm::vec3(q.x, q.y, q.z), axis);
+    float a = 2.0f * std::atan2(along, q.w);
+    if (a > glm::pi<float>()) a -= glm::two_pi<float>();
+    else if (a <= -glm::pi<float>()) a += glm::two_pi<float>();
+    return a;
+}
+glm::vec3 SegmentAxis(const Pose& bind, int end) {
+    const glm::vec3 t = bind[end].T;
+    return glm::dot(t, t) > 1e-12f ? glm::normalize(t) : glm::vec3(1.0f, 0.0f, 0.0f);
+}
+} // namespace
+
+float EndRoll(const Pose& pose, const Pose& bind, int segment, int end) {
+    if (segment < 0 || end < 0 || end >= (int)pose.size() || end >= (int)bind.size()) return 0.0f;
+    // The end's turn off its bind, in the segment's frame.
+    const glm::quat delta = glm::normalize(pose[end].R * glm::inverse(bind[end].R));
+    return TwistAngle(delta, SegmentAxis(bind, end));
+}
+
+float SegmentRoll(const Pose& pose, const Pose& bind, int segment, int end) {
+    if (segment < 0 || end < 0 || segment >= (int)pose.size() || end >= (int)bind.size()) return 0.0f;
+    // The segment's turn off its bind, in its own bind frame.
+    const glm::quat delta = glm::normalize(glm::inverse(bind[segment].R) * pose[segment].R);
+    return TwistAngle(delta, SegmentAxis(bind, end));
+}
+
+void SpreadTwist(Pose& pose, const Pose& bind, int segment, int end, const std::vector<TwistBone>& twists, float roll, bool carry) {
+    if (segment < 0 || end < 0 || end >= (int)bind.size()) return;
+    const glm::vec3 axis = SegmentAxis(bind, end);
+    for (const TwistBone& t : twists) {
+        if (t.Node < 0 || t.Node >= (int)pose.size() || t.Node >= (int)bind.size()) continue;
+        const float amount = carry ? roll * t.Share : -roll * (1.0f - t.Share);
+        pose[t.Node].R = glm::normalize(glm::angleAxis(amount, axis) * bind[t.Node].R);
+    }
+}
+
+std::vector<TwistBone> FindTwistBones(const Pose& bind, const std::vector<int>& parents, const std::vector<std::string>& names, int segment, int end) {
+    std::vector<TwistBone> out;
+    if (segment < 0 || end < 0 || end >= (int)bind.size()) return out;
+    const glm::vec3 axis = SegmentAxis(bind, end);
+    const float length = glm::length(bind[end].T);
+    for (int i = 0; i < (int)parents.size() && i < (int)names.size() && i < (int)bind.size(); ++i) {
+        if (parents[i] != segment) continue;
+        std::string n = names[i];
+        for (char& c : n) c = (char)std::tolower((unsigned char)c);
+        if (n.find("twist") == std::string::npos || n.find("twistcor") != std::string::npos) continue;
+        const float along = length > 1e-6f ? std::clamp(glm::dot(bind[i].T, axis) / length, 0.0f, 1.0f) : 0.5f;
+        out.push_back({i, along});
+    }
+    return out;
 }
 
 } // namespace IK

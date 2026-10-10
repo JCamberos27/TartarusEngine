@@ -39,6 +39,25 @@ inline constexpr const char* kStopX = "StopX";           // Float: the braking d
 inline constexpr const char* kStopY = "StopY";
 inline constexpr const char* kCrouchDown = "CrouchDown"; // Trigger: stand -> crouch while still
 inline constexpr const char* kCrouchUp = "CrouchUp";     // Trigger: crouch -> stand while still
+// The richer graph (all optional: the body sets them and the graph may leave them unread).
+inline constexpr const char* kStartGait = "StartGait";             // Float: 0 walk, 1 jog, 2 run
+inline constexpr const char* kStopGait = "StopGait";
+inline constexpr const char* kStartTurn = "StartTurn";             // Float: a start that turns the body, + left, in 45 degree steps
+inline constexpr const char* kStartTurnAmount = "StartTurnAmount"; // Float: |StartTurn|, 1..4
+inline constexpr const char* kStartDistance = "StartDistance";     // Float: metres since the start (distance matching)
+inline constexpr const char* kStopDistance = "StopDistance";       // Float: metres still to go in the stop
+inline constexpr const char* kPivotDistance = "PivotDistance";     // Float: metres from the pivot's turnaround
+inline constexpr const char* kPivot = "Pivot";                     // Trigger: the travel reversed
+inline constexpr const char* kPivotX = "PivotX";                   // Float: the direction it was going
+inline constexpr const char* kPivotY = "PivotY";
+inline constexpr const char* kPivotGait = "PivotGait";
+inline constexpr const char* kStep = "Step";                       // Trigger: a tap, one small step
+inline constexpr const char* kStepX = "StepX";
+inline constexpr const char* kStepY = "StepY";
+inline constexpr const char* kFidget = "Fidget";                   // Trigger: an idle fidget
+inline constexpr const char* kFidgetIndex = "FidgetIndex";         // Float: which (an integer)
+inline constexpr const char* kSprintRate = "SprintRate";           // Float: the sprint loop's play rate
+inline constexpr float kSprintClipSpeed = 4.25f;                   // m/s the sprint clip (AM_Loco_Run_Fast_01) travels
 // Optional: how much faster than authored the gait plays (the Locomotion state's speed parameter), so the
 // feet keep up with a player moving faster than the clips travel (Player Run / Sprint Speed). 1 = authored.
 inline constexpr const char* kPlayRate = "PlayRate";
@@ -56,6 +75,14 @@ inline constexpr const char* kStateStopRun = "StopRun";
 inline constexpr const char* kStateCrouchLoco = "CrouchLoco";
 inline constexpr const char* kStateCrouchDown = "CrouchDown";
 inline constexpr const char* kStateCrouchUp = "CrouchUp";
+inline constexpr const char* kStateSprint = "Sprint";
+// Tags the body reads to know what kind of state plays (a graph may have several of each).
+inline constexpr const char* kTagStart = "Start";
+inline constexpr const char* kTagStartTurn = "StartTurn"; // a start whose yaw turns the body
+inline constexpr const char* kTagStop = "Stop";
+inline constexpr const char* kTagPivot = "Pivot";
+inline constexpr const char* kTagStep = "Step";
+inline constexpr const char* kTagFidget = "Fidget";
 
 // The tag foot IK reads: on the states where the feet are off the ground (Jump, Fall).
 inline constexpr const char* kTagAirborne = "Airborne";

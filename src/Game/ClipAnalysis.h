@@ -47,4 +47,9 @@ void Debounce(std::vector<char>& v, int minRun);
 Result Analyze(const Model& model, int clip, int rootNode, const RootMotionSettings& rm,
                const std::string footBones[2], const std::vector<std::string>& seamBones);
 
+// One line per clip for --clip-report: length, travel, heading change, the travel direction entering and leaving
+// (degrees off the start facing, 0 = forward, + right), entry / exit speeds, the farthest point along the entry
+// direction (a pivot's plant) and the distance travelled at tenths of the clip.
+void PrintReport(const Model& model, int clip, int rootNode, const std::string& name);
+
 } // namespace ClipAnalysis

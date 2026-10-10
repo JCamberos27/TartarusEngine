@@ -6,9 +6,9 @@
     "_AOMap": "",
     "_AlbedoMap": "",
     "_BaseColor": [
-      0.7,
-      0.48,
-      0.43
+      0.3,
+      0.12,
+      0.1
     ],
     "_DoubleSided": false,
     "_EmissiveColor": [
@@ -22,7 +22,7 @@
     "_MetallicMap": "",
     "_MetallicRoughnessMap": "",
     "_NormalMap": "",
-    "_Roughness": 0.45,
+    "_Roughness": 0.3,
     "_RoughnessMap": "",
     "_Triplanar": false,
     "_TriplanarScale": 1.0

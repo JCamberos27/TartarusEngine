@@ -778,9 +778,7 @@ struct FirstPersonBodyComponent {
     float FootTiltMax = 25.0f; // Foot Tilt Max
     float FootLockEaseIn = 0.04f; // Foot Lock Ease In
     float FootLockEaseOut = 0.08f; // Foot Lock Ease Out
-    float StairPopRise = 0.03f; // Stair Pop Rise
-    float StairPopRate = 2.5f; // Stair Pop Rate
-    float StairEase = 0.09f; // Stair Ease
+    float StairEase = 0.2f; // Stair Ease
     // --- Arm IK (Player body: elbow tracking and clearance) ---
     float ElbowEase = 0.06f; // Elbow Ease
     float ElbowMaxRate = 540.0f; // Elbow Max Rate (degrees/s)
@@ -937,6 +935,7 @@ struct AnimatorLayerRuntime {
         float Fade = 1.0f;         // 0..1 blend-in weight over the entries below
         float FadeDuration = 0.0f; // seconds for Fade 0 -> 1 (0 = instant)
         float PrevPhase = -1.0f;   // Phase before the last advance (root motion); -1 = just entered
+        bool Matched = false;      // distance matching has placed it at least once
     };
     std::vector<Item> Stack;
     int  Transition = -1;          // the transition whose crossfade is running, or -1

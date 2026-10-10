@@ -101,6 +101,12 @@ void ModelMesh::CreateGpu(const std::vector<ModelVertex>& vertices) {
     glVertexArrayAttribBinding(m_VAO, 4, 0);
 
     floatAttrib(5, 4, offsetof(ModelVertex, Weights));
+    // Influences 5-8 (MAX_BONE_INFLUENCE 8): the same arrays' second halves.
+    static_assert(MAX_BONE_INFLUENCE == 8, "the vertex layout carries two sets of four influences");
+    glEnableVertexArrayAttrib(m_VAO, 8);
+    glVertexArrayAttribIFormat(m_VAO, 8, 4, GL_INT, static_cast<GLuint>(offsetof(ModelVertex, BoneIDs) + 4 * sizeof(int)));
+    glVertexArrayAttribBinding(m_VAO, 8, 0);
+    floatAttrib(9, 4, offsetof(ModelVertex, Weights) + 4 * sizeof(float));
     floatAttrib(6, 1, offsetof(ModelVertex, TangentSign));
     floatAttrib(7, 4, offsetof(ModelVertex, Color)); // #113
 

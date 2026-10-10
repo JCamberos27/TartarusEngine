@@ -22,6 +22,7 @@
 #include "AnimatorLint.h"
 #include "RootMotion.h"
 #include "FirstPersonBody.h"
+#include "WeaponJankMeter.h"
 #include "FirstPersonBodyContract.h"
 #include "Curve.h"
 #include "IK.h"
@@ -1911,29 +1912,53 @@ void TestFirstPersonWeaponWizard() {
     CHECK(BuildFirstPersonController(set).Layers[0].FindState("Fire") >= 0);
 }
 
-// The standard body locomotion graph: the builder gives the tuned reference (14 states, 21 parameters,
-// 63 transitions), passes the lint and the body contract, and its clips are filled by role.
+// The standard body locomotion graph (tools/gen_body_locomotion.py): the builder gives the reference (28 states,
+// 38 parameters, 211 transitions), passes the lint and the body contract, and its clips are filled by role.
 void TestFirstPersonBodyController() {
     const std::vector<std::string> roles = FPBody::LocomotionRoles();
     CHECK(roles.size() > 40 && std::find(roles.begin(), roles.end(), std::string("Loco_Walk_Fwd")) != roles.end());
     AnimatorController c = FPBody::BuildLocomotionController([](const std::string& r) { return "clips/AM_" + r + ".fbx"; });
-    CHECK(c.Layers[0].States.size() == 14 && c.Parameters.size() == 21 && c.Layers[0].Transitions.size() == 63);
+    CHECK(c.Layers[0].States.size() == 28 && c.Parameters.size() == 38 && c.Layers[0].Transitions.size() == 211);
     // The gait plays at PlayRate (the body's, so the feet keep up with a player faster than the clips).
     CHECK(c.Layers[0].States[c.Layers[0].FindState("Locomotion")].SpeedParam == "PlayRate" &&
-          c.Layers[0].States[c.Layers[0].FindState("CrouchLoco")].SpeedParam.empty());
+          c.Layers[0].States[c.Layers[0].FindState("CrouchLoco")].SpeedParam == "PlayRate");
     CHECK(c.Layers[0].DefaultState == "Locomotion" && c.Layers[0].FindState("CrouchStop") >= 0);
-    // The tuned numbers survived: Stop leaves Locomotion at 0.36, the jog forward child sits at 3.264 m/s.
-    bool stop = false;
-    for (const auto& t : c.Layers[0].Transitions)
-        if (t.From == "Locomotion" && t.To == "Stop") stop = std::abs(t.Offset - 0.36f) < 1e-5f;
-    CHECK(stop);
+    // The starts, stops and pivots are distance matched to the capsule's travel; the loops aren't.
+    using DM = AnimatorController::State::DistanceMode;
+    const auto& states = c.Layers[0].States;
+    auto matched = [&](const char* name, const char* param, DM mode) {
+        const int i = c.Layers[0].FindState(name);
+        return i >= 0 && states[i].DistanceParam == param && states[i].Distance == mode && !states[i].Loop;
+    };
+    CHECK(matched("Start", "StartDistance", DM::Traveled) && matched("StartTurnL", "StartDistance", DM::Traveled) &&
+          matched("Stop", "StopDistance", DM::Remaining) && matched("StopWalk", "StopDistance", DM::Remaining) &&
+          matched("PivotJog", "PivotDistance", DM::Pivot) && matched("CrouchPivot", "PivotDistance", DM::Pivot));
+    CHECK(states[c.Layers[0].FindState("Locomotion")].DistanceParam.empty());
+    // A turning start's tree holds one side's clips only (each leads with that side's foot), so the sides never
+    // blend into each other; nor do the turns on the spot, whose angle the body keeps at 45 or more.
+    for (const char* side : {"L", "R"})
+        for (const char* name : {"StartTurn", "CrouchStartTurn"}) {
+            const auto& m = states[c.Layers[0].FindState(std::string(name) + side)].Motions[0];
+            bool own = m.Children.size() >= 4;
+            for (const auto& ch : m.Children) own = own && ch.Clip.find(std::string("_Start_Turn_") + side) != std::string::npos;
+            CHECK(own);
+        }
+    // Fidgets: one clip per whole index (the gun's ready stance at 0 and 1).
+    const auto& fidget = states[c.Layers[0].FindState("Fidget")].Motions[0];
+    for (int i = 0; i < (int)fidget.Children.size(); ++i) {
+        AnimatorParam p{"FidgetIndex", (int)AnimatorController::ParamType::Float, (float)i};
+        const auto w = AnimatorMotionWeights(fidget, {p});
+        CHECK(std::abs(w[i] - 1.0f) < 1e-5f);
+    }
+    CHECK(fidget.Children[0].Clip.find("Ready_Idle_02") != std::string::npos);
     const auto& loco = c.Layers[0].States[c.Layers[0].FindState("Locomotion")].Motions[0];
     CHECK(loco.Is2D() && loco.Children.size() == 18 && loco.Children[9].Clip == "clips/AM_Loco_Jog_Fwd.fbx" &&
           std::abs(loco.Children[9].ThresholdY - 3.264f) < 1e-4f);
     // Round trip through the file format, then the checks: nothing to report.
     AnimatorController back;
     CHECK(AnimatorController::FromJsonString(c.ToJsonString(), back));
-    CHECK(back.Layers[0].Transitions.size() == 63);
+    CHECK(back.Layers[0].Transitions.size() == 211 &&
+          back.Layers[0].States[back.Layers[0].FindState("Stop")].Distance == DM::Remaining);
     int problems = 0;
     for (const auto& i : AnimatorLint::Check(c)) problems += i.Severity != AnimatorLint::Level::Info;
     CHECK(problems == 0);
@@ -2176,8 +2201,8 @@ void TestFirstPersonBodyTuning() {
     CHECK(near(body.StartIdleTime, 0.25f) && near(body.StartMaxMove, 0.6f) && near(body.StopMinRunTime, 0.6f) && near(body.StopMinRunTimeCrouched, 0.7f) &&
           near(body.StopMinSpeed, 1.2f) && near(body.StopMinSpeedCrouched, 0.6f) && near(body.StopDebounce, 0.05f) && near(body.StopRunForward, 0.7f));
     CHECK(near(body.FootLockDrift, 0.12f) && near(body.FootPlantedHeight, 0.05f) && near(body.FootRayUp, 0.5f) && near(body.FootRayLength, 1.0f) &&
-          near(body.FootMaxRaise, 0.25f) && near(body.PelvisMaxRaise, 0.0f) && near(body.FootTiltMax, 25.0f) && near(body.StairPopRise, 0.03f) &&
-          near(body.StairPopRate, 2.5f) && near(body.StairEase, 0.09f) && near(body.AirborneDelay, 0.15f));
+          near(body.FootMaxRaise, 0.25f) && near(body.PelvisMaxRaise, 0.0f) && near(body.FootTiltMax, 25.0f) &&
+          near(body.StairEase, 0.2f) && near(body.AirborneDelay, 0.15f));
     CHECK(near(ctrl.JumpBufferTime, 0.12f) && near(ctrl.CoyoteTime, 0.10f));
     for (const RegisteredComponent& rc : ComponentRegistry::All()) {
         const bool isBody = std::string(rc.Meta.Name) == "First Person Body", isCtrl = std::string(rc.Meta.Name) == "First Person Controller";
@@ -2296,6 +2321,37 @@ void TestBlendTree2D() {
     // Foot IK: the pelvis drops to the lower foot (capped), rises a little when both are up.
     CHECK(near(FirstPersonBodyFootPelvis(-0.1f, 0.0f, 0.35f, 0.15f), -0.1f) && near(FirstPersonBodyFootPelvis(0.05f, -0.5f, 0.35f, 0.15f), -0.35f));
     CHECK(near(FirstPersonBodyFootPelvis(0.2f, 0.3f, 0.35f, 0.15f), 0.15f) && near(FirstPersonBodyFootPelvis(0.0f, 0.0f, 0.35f, 0.15f), 0.0f));
+    // Stairs: the ground as a ramp. A slope is fitted exactly; 20 cm steps on 40 cm treads under a 0.8 m window are a
+    // half slope, fitted within a quarter of it whichever way the edges fall (from the ends alone it read 0.27 or 0.53).
+    {
+        float h[16], height = 0.0f, slope = 0.0f;
+        for (int i = 0; i < 16; ++i) h[i] = 0.3f * (0.75f * ((float)i / 15.0f - 0.5f)) + 0.1f;
+        FirstPersonBodyGroundRamp(h, 16, 0.75f, height, slope);
+        CHECK(near(height, 0.1f) && near(slope, 0.3f));
+        float worst = 0.0f;
+        for (float shift = 0.0f; shift < 0.4f; shift += 0.01f) {
+            for (int i = 0; i < 16; ++i) h[i] = 0.2f * std::floor((0.8f * ((i + 0.5f) / 16.0f - 0.5f) + shift) / 0.4f);
+            FirstPersonBodyGroundRamp(h, 16, 0.75f, height, slope);
+            worst = std::max(worst, std::abs(slope - 0.5f));
+        }
+        CHECK(worst < 0.13f);
+    }
+    // The body's height spring: fed a ramp's rate it follows the ramp without lag; a step it takes smoothly (no
+    // overshoot, its acceleration bounded - its speed never jumps).
+    {
+        float y = 0.0f, v = 0.5f, t = 0.0f;
+        for (int i = 0; i < 120; ++i, t += 1.0f / 60.0f) FirstPersonBodyStepSpring(y, v, 0.5f * (t + 1.0f / 60.0f), 0.5f, 0.2f, 1.0f / 60.0f);
+        CHECK(std::abs(y - 0.5f * t) < 0.01f);
+        y = v = 0.0f;
+        float top = 0.0f, jump = 0.0f, last = 0.0f;
+        for (int i = 0; i < 120; ++i) {
+            FirstPersonBodyStepSpring(y, v, 0.2f, 0.0f, 0.2f, 1.0f / 60.0f);
+            top = std::max(top, y);
+            jump = std::max(jump, std::abs(v - last));
+            last = v;
+        }
+        CHECK(near(y, 0.2f) && top <= 0.2001f && jump * 60.0f < 20.5f); // at most w^2 * the step (w = 2 / 0.2 s)
+    }
     // The world gun's mesh keep-out: a gun through two head points is pushed down until both are 5 cm clear.
     {
         const std::vector<glm::vec3> headPoints = {glm::vec3(0.0f), glm::vec3(0.0f, 0.05f, 0.0f)};
@@ -3668,6 +3724,145 @@ void TestFirstPersonShotgunSet() {
               all.find("StopReload") != std::string::npos && all.find("Cycling") != std::string::npos &&
               all.find("'Cycle'") != std::string::npos);
         CHECK(all.find("Refill") == std::string::npos); // a tube has no magazine to refill
+    }
+}
+
+// The world body's hand anchor: on the gun within Near, on the body from Far, a smoothstep between; and a frame moved
+// part of the way by a rigid move - none of it, all of it, and half its turn at half its weight, its scale kept.
+void TestFirstPersonHandAnchor() {
+    CHECK(FirstPersonAnchorWeight(0.0f, 0.05f, 0.15f) == 0.0f);
+    CHECK(FirstPersonAnchorWeight(0.05f, 0.05f, 0.15f) == 0.0f);
+    CHECK(std::abs(FirstPersonAnchorWeight(0.10f, 0.05f, 0.15f) - 0.5f) < 1e-5f);
+    CHECK(FirstPersonAnchorWeight(0.15f, 0.05f, 0.15f) == 1.0f);
+    CHECK(FirstPersonAnchorWeight(0.40f, 0.05f, 0.15f) == 1.0f);
+    const glm::mat4 move = glm::translate(glm::mat4(1.0f), glm::vec3(0.0f, 0.0f, 0.3f)) *
+                           glm::mat4_cast(glm::angleAxis(glm::radians(40.0f), glm::vec3(1.0f, 0.0f, 0.0f)));
+    const glm::mat4 hand = glm::translate(glm::mat4(1.0f), glm::vec3(0.1f, 1.2f, -0.4f)) *
+                           glm::mat4_cast(glm::angleAxis(glm::radians(15.0f), glm::vec3(0.0f, 1.0f, 0.0f))) *
+                           glm::scale(glm::mat4(1.0f), glm::vec3(2.0f));
+    auto near = [](const glm::mat4& a, const glm::mat4& b) {
+        for (int c = 0; c < 4; ++c)
+            if (glm::length(a[c] - b[c]) > 1e-4f) return false;
+        return true;
+    };
+    CHECK(near(FirstPersonPartialMove(move, hand, 0.0f), hand));
+    CHECK(near(FirstPersonPartialMove(move, hand, 1.0f), move * hand));
+    const glm::mat4 half = FirstPersonPartialMove(move, hand, 0.5f);
+    CHECK(glm::length(glm::vec3(half[3]) - 0.5f * (glm::vec3(hand[3]) + glm::vec3((move * hand)[3]))) < 1e-4f);
+    CHECK(std::abs(glm::length(glm::vec3(half[0])) - 2.0f) < 1e-4f);
+    const glm::quat turned = IK::Rotation(half) * glm::inverse(IK::Rotation(hand));
+    CHECK(std::abs(glm::degrees(glm::angle(turned)) - 20.0f) < 0.01f);
+}
+
+// The third-person jank meter: a smooth ease is quiet, a one-frame step is one pop, a drift after the state has begun is a
+// settle, a hand off its grip is flagged, and a shot's kick isn't.
+void TestWeaponJankMeter() {
+    auto run = [](auto pos, auto setup) {
+        WeaponJankMeter m;
+        for (int i = 0; i < 120; ++i) {
+            WeaponJankFrame f;
+            f.Dt = 1.0f / 60.0f;
+            f.State = i < 60 ? "TacReload" : "Idle";
+            f.Resting = i >= 60;
+            f.GunPos = pos(i);
+            setup(f, i);
+            m.Push(f);
+        }
+        return m.Events();
+    };
+    auto none = [](WeaponJankFrame&, int) {};
+    // An ease in over 30 frames (smoothstep): no pop, and over before the Idle: no settle.
+    auto ease = run([](int i) { const float t = std::clamp(i / 30.0f, 0.0f, 1.0f); return glm::vec3(0.07f * t * t * (3.0f - 2.0f * t), 0, 0); }, none);
+    CHECK(ease.empty());
+    // A 2 cm step: a pop (one event though it disturbs two frames), at about 2 cm.
+    auto step = run([](int i) { return glm::vec3(i >= 20 ? 0.02f : 0.0f, 0, 0); }, none);
+    CHECK(step.size() == 1 && step[0].What == WeaponJankEvent::Kind::GunPop && step[0].Size > 1.5f && step[0].State == "TacReload");
+    // The same step flagged as a shot's kick: nothing.
+    auto kick = run([](int i) { return glm::vec3(i >= 20 ? 0.02f : 0.0f, 0, 0); }, [](WeaponJankFrame& f, int i) { f.Recoil = i >= 18 && i < 30; });
+    CHECK(kick.empty());
+    // 7 cm slid in slowly half a second into the Idle: a settle of about 7 cm.
+    auto slide = run([](int i) { const float t = std::clamp((i - 90) / 25.0f, 0.0f, 1.0f); return glm::vec3(0, 0.07f * t * t * (3.0f - 2.0f * t), 0); }, none);
+    bool settled = false;
+    for (const WeaponJankEvent& e : slide) settled = settled || (e.What == WeaponJankEvent::Kind::Settle && e.Size > 5.0f && e.State == "Idle");
+    CHECK(settled);
+    // The same slide in the reload (not a resting state): the action's own move, nothing.
+    auto inAction = run([](int i) { const float t = std::clamp((i - 20) / 25.0f, 0.0f, 1.0f); return glm::vec3(0, 0.07f * t * t * (3.0f - 2.0f * t), 0); }, none);
+    CHECK(inAction.empty());
+    // The left hand 3 cm off its grip for a stretch: one Grip event on that side.
+    auto grip = run([](int) { return glm::vec3(0.0f); }, [](WeaponJankFrame& f, int i) { if (i > 40 && i < 50) f.HandGap[0] = 0.03f; });
+    CHECK(grip.size() == 1 && grip[0].What == WeaponJankEvent::Kind::Grip && grip[0].Side == 0 && std::abs(grip[0].Size - 3.0f) < 0.01f);
+}
+
+// The shoulder lock (FirstPersonGunSeat), shared by the player's world body and the soldiers: a shouldered butt goes into
+// the pocket, a gun through the neck comes out of it, and the move is never more than Max Shift.
+void TestFirstPersonGunSeat() {
+    FirstPersonGunSeatBody body;
+    body.UpperL = glm::vec3(0.19f, 1.43f, 0.0f);
+    body.UpperR = glm::vec3(-0.19f, 1.43f, 0.0f);
+    body.Neck = glm::vec3(0.0f, 1.52f, 0.0f);
+    body.Head = glm::vec3(0.0f, 1.62f, 0.0f);
+    FirstPersonWorldGunInput gun;
+    gun.Pocket = glm::vec3(-0.06f, -0.045f, 0.03f);
+    gun.Shouldered = 1.0f;
+    gun.MeshClearance = 0.0f;
+    gun.NeckRadius = 0.09f;
+    gun.HeadRadius = 0.14f;
+    gun.GunLength = 0.45f;
+    gun.MaxShift = 0.3f;
+    const glm::vec3 up(0.0f, 1.0f, 0.0f);
+    const glm::vec3 right = glm::normalize(body.UpperR - body.UpperL);
+    const glm::vec3 front = glm::normalize(glm::cross(up, right));
+    const glm::vec3 pocket = body.UpperR + right * gun.Pocket.x + up * gun.Pocket.y + front * gun.Pocket.z;
+    // Shouldered, 5 cm over the pocket, pointing ahead and clear of the neck: seated, exactly.
+    gun.ButtWorld = pocket + up * 0.05f;
+    gun.ForwardWorld = front;
+    glm::vec3 shift = FirstPersonGunSeat(gun, body);
+    CHECK(glm::length(gun.ButtWorld + shift - pocket) < 1e-4f);
+    // Not shouldered: left where it is.
+    gun.Shouldered = 0.0f;
+    shift = FirstPersonGunSeat(gun, body);
+    CHECK(glm::length(shift) < 1e-5f);
+    // Through the neck (unshouldered): out of the neck sphere.
+    gun.ButtWorld = body.Neck - front * 0.1f;
+    shift = FirstPersonGunSeat(gun, body);
+    const glm::vec3 a = gun.ButtWorld + shift, b = a + front * gun.GunLength;
+    const float t = std::clamp(glm::dot(body.Neck - a, b - a) / glm::dot(b - a, b - a), 0.0f, 1.0f);
+    CHECK(glm::length(a + (b - a) * t - body.Neck) >= gun.NeckRadius - 1e-3f);
+    // Never more than Max Shift.
+    gun.Shouldered = 1.0f;
+    gun.ButtWorld = pocket + up * 2.0f;
+    gun.MaxShift = 0.1f;
+    CHECK(glm::length(FirstPersonGunSeat(gun, body)) <= 0.1f + 1e-5f);
+}
+
+// The third-person hold (FirstPersonPresentation::ThirdPersonGunCorrection): each weapon's controller plays an
+// "arms3p" clip wherever it plays an "arms" one - that clip's ThirdPerson/ *_A_3P_* version (tools/weapons/add_3p_track.py).
+void TestThirdPersonArmsTrack() {
+    for (const char* rel : {"assets/Weapons/AKS74U/AKS74U.controller", "assets/Weapons/Remington870/Remington870.controller"}) {
+        const std::string path = ProjectPaths::Resolve(rel);
+        AnimatorController ctrl;
+        if (!AnimatorController::LoadFile(path, ctrl)) {
+            std::printf("  (skipped: no %s)\n", path.c_str());
+            continue;
+        }
+        const bool has = std::find(ctrl.Tracks.begin(), ctrl.Tracks.end(), "arms3p") != ctrl.Tracks.end();
+        CHECK(has);
+        if (!has) continue;
+        const int arms = ctrl.TrackIndex("arms"), third = ctrl.TrackIndex("arms3p");
+        CHECK(arms != third);
+        for (const auto& layer : ctrl.Layers)
+            for (const auto& s : layer.States) {
+                const auto& a = s.MotionFor(arms);
+                const auto& b = s.MotionFor(third);
+                if (a.Clip.empty()) continue;
+                std::string want = a.Clip;
+                const size_t fp = want.find("/FirstPerson/"), tag = want.find("_A_FP_");
+                CHECK(fp != std::string::npos && tag != std::string::npos);
+                if (fp == std::string::npos || tag == std::string::npos) continue;
+                want.replace(tag, 6, "_A_3P_");
+                want.replace(fp, 13, "/ThirdPerson/");
+                CHECK(b.Clip == want);
+            }
     }
 }
 
@@ -5430,6 +5625,10 @@ int RunUnitTests(const char* filter) {
         {"AK additive ADS walking", TestAKAdditiveWalking},
         {"Sprint transition additive walk", TestSprintTransitionWalk},
         {"RemingtonController", TestRemingtonController},
+        {"ThirdPersonArmsTrack", TestThirdPersonArmsTrack},
+        {"FirstPersonGunSeat", TestFirstPersonGunSeat},
+        {"WeaponJankMeter", TestWeaponJankMeter},
+        {"FirstPersonHandAnchor", TestFirstPersonHandAnchor},
         {"FirstPersonAds", TestFirstPersonAds},
         {"BulletHoles", TestBulletHoles},
         {"ShellCasings", TestShellCasings},

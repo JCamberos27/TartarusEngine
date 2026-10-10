@@ -2,14 +2,14 @@
   "factorsScaleMaps": true,
   "matVersion": 2,
   "name": "M_Eye_Cornea",
-  "opacity": 0.06,
+  "opacity": 0.3,
   "properties": {
     "_AOMap": "",
     "_AlbedoMap": "",
     "_BaseColor": [
-      1.0,
-      1.0,
-      1.0
+      0.0,
+      0.0,
+      0.0
     ],
     "_DoubleSided": false,
     "_EmissiveColor": [
@@ -23,7 +23,7 @@
     "_MetallicMap": "",
     "_MetallicRoughnessMap": "",
     "_NormalMap": "",
-    "_Roughness": 0.02,
+    "_Roughness": 0.05,
     "_RoughnessMap": "",
     "_Triplanar": false,
     "_TriplanarScale": 1.0

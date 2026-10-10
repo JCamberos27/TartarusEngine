@@ -125,9 +125,10 @@ public:
     // `meshChecks` the drawn surfaces; then every piece's arms onto the rig's hands (the rig's arm shapes,
     // collarbone shrug, chest lean for a far hand, elbows in the rig's bend plane and swung clear of the
     // torso, fingers); then the head onto the stock on the sights. Returns the gun's shift (world).
-    // `gun` null (holstered, no weapon): the arms go back to the clips' pose.
+    // `gun` null (holstered, no weapon): the arms go back to the clips' pose. With `thirdPersonRig` (the weapon's 3P clips'
+    // pose) the hands, fingers and elbows are its grip on the gun at `gunSocket` rather than the rig's.
     glm::vec3 HoldWeapon(World& world, entt::entity armsRig, entt::entity weapon, const FirstPersonWorldGunInput* gun, const Camera& cam,
-                         float dt, bool meshChecks);
+                         float dt, bool meshChecks, const Model* thirdPersonRig = nullptr, const std::string& gunSocket = {});
     NpcHoldReport MeasureHold(const World& world, entt::entity armsRig, const glm::vec3& butt, const glm::vec3& muzzle) const;
     const NpcHoldReport& LastHold() const { return m_Hold; }
     glm::vec3 GunShift() const { return m_GunShift; } // the gun off where the rig holds it (world)
@@ -140,6 +141,8 @@ public:
     // `point` / `part` (a hitbox part, see NpcRagdoll) steer it by where the round struck; both optional.
     void Flinch(World& world, const glm::vec3& dirWorld, const glm::vec3* point = nullptr, int part = -1);
     // A hand signal with an order: the support hand leaves the gun and points along `dirWorld` for `seconds`.
+    // 0..1: the support hand is off the gun (a reload, a gun check) - its elbow then follows the clips, not hung under the gun.
+    void SetFreeHand(float weight) { m_FreeHand = weight; }
     void Signal(const glm::vec3& dirWorld, float seconds = 0.9f) { m_SignalDir = dirWorld; m_SignalLeft = seconds; }
     void CancelSignal() { m_SignalLeft = 0.0f; }
     bool Signalling() const { return m_SignalWeight > 0.05f; }
@@ -190,6 +193,17 @@ private:
     bool m_Turning = false;
     float m_TurnTime = 0.0f;
     float m_StillTime = 0.0f;
+    // Starts, stops, fidgets and the gait's rate trim (Tick).
+    float m_RateTrim = 1.0f, m_StartDistance = 0.0f, m_MoveFor = 0.0f, m_FidgetNext = 0.0f;
+    glm::vec2 m_LastDir{0.0f, 1.0f};
+    bool m_WasMoving = false, m_LastSprint = false;
+    std::uint32_t m_Random = 0;
+    float NextRandom() {
+        if (!m_Random) m_Random = (std::uint32_t)(reinterpret_cast<std::uintptr_t>(this) >> 4) | 1u; // each soldier its own
+        m_Random ^= m_Random << 13; m_Random ^= m_Random >> 17; m_Random ^= m_Random << 5;
+        return (float)(m_Random >> 8) / 16777216.0f;
+    }
+    FirstPersonArmTwist m_ArmTwist;
     bool m_WasCrouched = false;
     // Aim, sprung: the spine's pitch and twist (radians) with their rates, and the lean (eased).
     float m_AimPitch = 0.0f, m_AimTwist = 0.0f, m_Lean = 0.0f, m_AimWeight = 0.0f;
@@ -240,7 +254,7 @@ private:
     ArmBones m_DriverArm;
     std::vector<int> m_PieceParents; // scratch: a piece other than the driver's parents
     enum class Region { Head, Torso };
-    struct RegionPoint { glm::vec3 Pos; int Count; std::uint16_t Bone[4]; float Weight[4]; };
+    struct RegionPoint { glm::vec3 Pos; int Count; std::uint16_t Bone[MAX_BONE_INFLUENCE]; float Weight[MAX_BONE_INFLUENCE]; };
     struct RegionSkin { std::vector<int> Bones; std::vector<RegionPoint> Points; };
     struct SkinTables { RegionSkin Head, Torso; };
     // Per piece. The tables depend only on the mesh data, which every soldier wearing the piece shares: built once.
@@ -275,6 +289,9 @@ private:
     float m_CheekWeld = 0.0f;
     glm::vec3 m_SignalDir{0.0f};                              // world
     float m_SignalLeft = 0.0f, m_SignalWeight = 0.0f;
+    float m_FreeHand = 0.0f;                                 // SetFreeHand
+    glm::vec3 m_HandTarget[2]{};                             // HoldWeapon's hand targets this frame (world): the grip the arms reach for
+    bool m_HaveHandTarget[2] = {false, false};
     unsigned m_HoldFrame = 0;
     int m_HoldStagger = 0;                                   // which of every three frames this one checks the mesh
     glm::vec3 m_MeshPush{0.0f};                              // the gun's push out of the drawn head / torso, last checked

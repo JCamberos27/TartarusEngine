@@ -98,6 +98,16 @@ std::vector<Issue> Check(const AC& c) {
                     add(Level::Warning, "State '" + s.Name + "' uses '" + s.SpeedParam + "' (" + std::string(p->Type == AC::ParamType::Bool ? "Bool" : "Trigger") + ") as its speed.",
                         "A speed multiplier should be a Float.", li, si);
             }
+            if (!s.DistanceParam.empty()) {
+                const auto* p = Find(c, s.DistanceParam);
+                if (!p) add(Level::Error, "State '" + s.Name + "' has distance parameter '" + s.DistanceParam + "', which doesn't exist." + where,
+                            "Add the parameter or clear the field.", li, si);
+                else if (!IsNumeric(p->Type))
+                    add(Level::Warning, "State '" + s.Name + "' matches distance to '" + s.DistanceParam + "', which isn't a Float.",
+                        "Distance is in metres: make it a Float.", li, si);
+                if (s.Loop) add(Level::Warning, "State '" + s.Name + "' loops, so its distance parameter is ignored." + where,
+                                "Distance matching is for one-shot clips (starts, stops, pivots): untick Loop.", li, si);
+            }
             if (s.Speed <= 0.0f) add(Level::Warning, "State '" + s.Name + "' has speed " + std::to_string(s.Speed).substr(0, 5) + "." + where, "It never advances (or plays backwards).", li, si);
             bool anyMotion = false;
             for (int t = 0; t < (int)s.Motions.size() && t < (int)c.Tracks.size(); ++t) {
